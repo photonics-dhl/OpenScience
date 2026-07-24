@@ -1,0 +1,415 @@
+1.  16 32 150G
+
+冷启动阶段：1.4w
+
+可升级 IP固定
+
+一台服务器+一台数据库 后期 投入使用后考虑
+
+Cnq买服务器和报销
+
+钉钉
+
+2.  Claude的token，2000/月，劳务费，2.4w/年
+
+3.  电脑
+
+4.  Github共享
+
+5.  UI设计和开发
+
+6.  用户的agent用什么？优先国产，planA glm智谱140/月，planB minimax
+
+7.  专利！！！！Axriv，拥有专利才能定义首发权！
+
+8.  商业纠纷争议，cnq去查查
+
+9.  民科，假信息，如何甄别？设计一套安全系统：用户侧+内容侧
+
+    报销信息：
+
+1.  Minimax 一个月119
+
+Gitpub 不推陈出新
+
+OpenResearch 平淡
+
+Research OS 平淡，不知所云
+
+Metapaper
+
+OpenScholar
+
+MetaScience
+
+OpenScience
+
+项目定位：AI 时代的科研基础设施
+
+本网站是全球面向 AI 时代的新型科研基础设施，通过 AI Agent、新型结构化科研成果（SDF）、开放预印本机制、社区驱动评价体系，重新定义科研成果的生产、传播、评价和协作方式。科学不再是一次性发表的 PDF，而是持续演化的知识生命体。
+
+- 它不是：
+
+另一个传统论文数据库；
+
+另一个 arXiv；
+
+一个简单的 AI 写论文工具；
+
+一个科研社交网站。
+
+- 它希望成为：
+
+科学研究领域的 GitHub + AI Research OS。
+
+- 核心理念：
+
+Science is no longer published. It evolves.
+
+Beyond papers. Toward living research.
+
+新出版范式：从 Paper 到 Research Object
+
+传统科研出版模式的问题
+
+传统论文出版体系诞生于纸质时代，PDF是版式文档格式，不适合AI时代机器阅读，未来科研成果不应该只是一个PDF文件，而应该是一个：可理解、可复现、可讨论、可迭代、可连接的科研对象。
+
+传统PDF的问题：
+
+1.  AI读取困难
+
+2.  文本、代码、数据、图像分散
+
+3.  Supplementary Material独立存在
+
+4.  失败实验无法沉淀
+
+5.  研究过程不可见
+
+6.  论文版本迭代困难
+
+7.  社群讨论脱离论文本身
+
+    传统论文Paper.pdf 包括：Introduction+ Method+Result+Discussion Supplementary.pdf
+
+    Dataset.zip
+
+    Code.zip
+
+    GitHub link
+
+新出版范式：Research Object
+
+html输出（链接）+markdown输出（展示）
+
+需要一个生命周期的ID，状态演化的存储
+
+展示：点击ID，显示comment，显示目前状态
+
+以什么样的形式呈现？渐进式
+
+内嵌开源代码平台，matlab（太大，不要）和Python编译器，仿真交互平台，即时跑即时验证
+
+未来科研成果不再是一个 PDF 文件，而是一个：
+
+可理解、可复现、可讨论、可修改、可连接的科研对象。
+
+过去：
+
+Idea → Experiment → Paper → PDF → publication(※)→ Citation
+
+未来：
+
+Idea → AI Research Workspace (※)→ Research Object → Preprint → Community Evolution → Knowledge Network
+
+新型科研格式：SDF（Structured Document Format）
+
+平台采用结构化科研表达格式：
+
+候选名称：
+
+SDF：Structured Document Format
+
+ROF：Research Object Format
+
+REX：Research Exchange Format
+
+NEX：Nexus Exchange Format
+
+核心思想：
+
+让科研成果天然适合：AI 阅读，AI 推理，知识图谱构建，自动评价，自动关联。SDF 核心字段：
+
+下载链接，每一个子菜单都是下载链接，点击即下载，不点击就是预览
+
+作用域
+
+不能变成矩阵乘法，或者购买数据库，只展示最新版，稀疏采样，difference
+
+├── manuscript/ 输出一个结构化的展示
+
+│ ├── paper.md 放一个更详细的总结，原文
+
+│ ├── abstract.md
+
+│ └── references.json 标准参考文献格式，分类呈现
+
+│
+
+├── experiment/
+
+│ ├── experiment001/
+
+│ │ ├── protocol.yaml
+
+│ │ ├── data.csv
+
+│ │ ├── notebook.ipynb
+
+│ │ └── result.png
+
+│
+
+├── code/
+
+│ ├── model.py
+
+│ └── environment.yml
+
+│
+
+├── figures/
+
+│ ├── figure1.svg
+
+│ └── interactive.html
+
+│
+
+├── discussions/
+
+│ ├── reviewer_comments.md
+
+│ └── author_response.md
+
+│
+
+└── history/
+
+├── v1
+
+├── v2
+
+└── v3
+
+新的出版物格式核心功能：AI友好，超越文本，版本迭代
+
+第一次公开后，最快速的抢占首发权，可以增加实验，记录修改，社群讨论
+
+每个版本都有：
+
+- 时间
+
+- 修改内容
+
+- 作者
+
+- 数据变化
+
+- 结论变化
+
+  Negative Result Layer：即便失败的尝试也可以记录
+
+新预印本平台范式：
+
+平台核心变化
+
+传统arXiv允许提交预印本并查看不同版本，但格式是PDF，无法追踪版本间的变化，也无法标记修改。本平台彻底改变这一点：
+
+- **版本控制**：每篇论文像代码一样拥有完整的版本历史
+
+- **协作机制**：Fork、PR、Issues完整移植到学术场景
+
+- **开放透明**：审稿、讨论、修改全过程公开可追溯
+
+- **失败实验**：科研的成功和失败同样值得记录和分享
+
+论文像软件一样持续升级。
+
+GitHub 式科研协作机制
+
+AI 自动质量检测
+
+类似软件 CI/CD：
+
+提交研究后，AI 自动检查：
+
+完整性；
+
+查重；
+
+方法逻辑；
+
+统计合理性；
+
+图表规范；
+
+数据一致性；
+
+可复现性。
+
+AI 输出：
+
+通过
+
+⚠️需要修改
+
+❌存在问题
+
+但不替代人工判断。
+
+学术社群体系：
+
+Research Community
+
+每个 Research Object 都拥有自己的空间：可以评论
+
+课题组与实验室主页
+
+Labs 页面：类似小木虫？
+
+社区
+
+不同学科社区可以发帖子，类似BBS
+
+群聊
+
+需要建立两个域名，后续再增加
+
+未来评价体系重构（未来的工作）从“以刊评文”到“以文评文”
+
+当前体系：
+
+论文价值 ≈ 期刊影响因子
+
+未来：
+
+论文价值 = 内容质量 + 社区贡献 + 科学影响
+
+PII：论文影响指数
+
+后续再补充把
+
+C Factor：学者贡献指数
+
+未来评价科学家：
+
+不只是看论文数量。
+
+综合：
+
+C Factor =论文影响力+开放协作+社区贡献+同行服务+长期成长
+
+探索贡献指数
+
+鼓励高风险探索。
+
+衡量：未成功方向探索；失败实验贡献；新领域开拓。科学价值不再只属于成功结果。
+
+六、平台功能模块架构
+
+Layer 1：Personal Research Intelligence
+
+个人科研智能库。
+
+功能：
+
+文献智能管理
+
+PDF批量解析；
+
+自动结构化；
+
+语义搜索；
+
+文献地图；
+
+知识关联。
+
+个人知识库
+
+形成科研人员自己的：
+
+“第二大脑”。
+
+Layer 2：AI Research workshop
+
+科研生产环境。
+
+包括：现有功能即可，不过把AI生成pdf改为生成SDF，内嵌一个SDF编辑器
+
+**三种创作模式**：
+
+**模式一：可视化图谱编辑器（最直观）**
+
+- 左侧是传统大纲，右侧是知识图谱画布
+
+- 选中文本，右键标注为“问题定义”“核心洞察”等节点
+
+- 拖拽节点间连线，创建逻辑关系
+
+- 图谱实时渲染
+
+**模式二：LaTeX宏包标注（最精准）**
+
+- 在`.tex`源文件中使用`sdf`包命令（如`\sdfproblem{...}`）
+
+- 编译后PDF内嵌机器可读元数据
+
+- 适合已有LaTeX写作习惯的学者
+
+**模式三：AI辅助半自动生成（最高效）**
+
+- 用户正常写论文文本，AI后台实时分析
+
+- 自动识别并提取核心知识单元
+
+- 初步构建节点间关系
+
+- 生成图谱草案后提交用户审核修正（Human-in-the-loop）
+
+**SDF 2.0六大必填字段**：
+
+1. **Problem**（问题定义）——研究的具体科学/技术问题
+
+2. **Insight**（核心洞察）——核心思想、创新点或关键发现
+
+3. **Method**（方法）——研究方法、技术路线、实验设计
+
+4. **Results**（结果）——主要研究发现和结论
+
+5. **Limitations**（局限性）——研究局限、未解决的问题
+
+6. **Reproducibility**（可复现性）——数据、代码、材料获取方式
+
+**可选字段**：实验数据、关键图表、应用场景、相关工作、讨论与争议、版本历史（自动生成）
+
+**渐进式揭露**：新手用户先只填6个必填字段，其余折叠为“进阶选项”。
+
+Layer 4：Scientific Community
+
+Finding
+
+Explore
+
+Layer 5：AI Research Agent
+
+统一入口：
+
+一个聊天框控制整个科研流程。
+
+七、网站 UI 示意
+
+八、未来发展路线
+
+九、最终愿景
