@@ -25,7 +25,10 @@
     },
     "memory": {
       "command": "npx",
-      "args": ["-y", "@modelcontextprotocol/server-memory"]
+      "args": ["-y", "@modelcontextprotocol/server-memory"],
+      "env": {
+        "MEMORY_FILE_PATH": "E:/Miscellaneous/XGS/.memory/memory.jsonl"
+      }
     },
     "context7": {
       "command": "npx",
