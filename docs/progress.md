@@ -6,10 +6,11 @@
 | 任务 | 详情 |
 |---|---|
 | git push 打通 | 全权限 token（.env GITHUB_TOKEN_FULL_PERMISSION）推送 main 成功；原 GITHUB_TOKEN 确认为只读 |
-| Memory 存储迁移 | .mcp.json 增加 MEMORY_FILE_PATH=.memory/memory.jsonl；8 个实体从 npx 缓存迁移完成，重启 session 生效 |
+| Memory 存储迁移 | .mcp.json 增加 MEMORY_FILE_PATH=.memory/memory.jsonl；重启 session 生效 |
+| Memory 实体过滤 | 按用户要求只保留 3 个 XGS 实体（XGS项目环境配置 / task-master MiniMax 迁移 / XGS-Doc-Architecture）；其他项目 5 个实体留在原 npx 缓存存储，未动 |
 
 ### ⏳ Next Steps
-- [ ] 重启 session 后验证 memory 从新路径加载（read_graph 应有 8 实体）
+- [ ] 重启 session 后验证 memory 从新路径加载（read_graph 应有 3 个 XGS 实体）
 
 ### Key Decisions
 - server-memory 默认存储在包目录 dist/memory.jsonl（JSONL 格式）；迁移后随 git 备份
