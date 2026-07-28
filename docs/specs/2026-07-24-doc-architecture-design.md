@@ -18,7 +18,7 @@ XGS 项目（AI 时代科研基础设施平台，见 `方案0723.docx`）目前�
 
 ### 2.1 目录结构
 
-```
+```text
 E:/Miscellaneous/XGS/
 ├── AGENTS.md              # 项目规则总入口（含本分类规范，每会话自动注入）
 ├── project_index.md       # 活索引：路径 → 用途 → 状态（增删改文件必更新）

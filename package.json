@@ -10,8 +10,13 @@
   "scripts": {
     "build": "pnpm -r --if-present build",
     "typecheck": "pnpm -r --if-present typecheck",
-    "lint": "node scripts/verify-workspace.mjs",
+    "lint": "eslint . && node scripts/verify-workspace.mjs",
     "verify:workspace": "node scripts/verify-workspace.mjs",
+    "audit:knip": "knip",
+    "audit:dep": "depcruise packages apps --config .dependency-cruiser.cjs",
+    "audit:dup": "jscpd packages apps --min-tokens 50 --reporters console",
+    "audit:deps": "syncpack lint",
+    "docs:lint": "markdownlint-cli2 \"docs/**/*.md\" \"AGENTS.md\" \"project_index.md\"",
     "stack:up": "docker compose -f infra/compose/docker-compose.dev.yml up -d || docker-compose -f infra/compose/docker-compose.dev.yml up -d",
     "stack:down": "docker compose -f infra/compose/docker-compose.dev.yml down || docker-compose -f infra/compose/docker-compose.dev.yml down",
     "stack:ps": "docker compose -f infra/compose/docker-compose.dev.yml ps || docker-compose -f infra/compose/docker-compose.dev.yml ps",
@@ -20,11 +25,18 @@
     "test:integration": "pnpm stack:up && pnpm -r --if-present test:integration"
   },
   "devDependencies": {
+    "@eslint/js": "^9.39.5",
     "@prisma/client": "5.22.0",
     "@types/node": "20.14.10",
-    "eslint": "8.57.0",
+    "dependency-cruiser": "^18.1.0",
+    "eslint": "9.39.5",
+    "jscpd": "^5.0.14",
+    "knip": "^6.29.0",
+    "markdownlint-cli2": "^0.23.2",
     "prisma": "5.22.0",
-    "typescript": "5.5.4"
+    "syncpack": "^15.3.2",
+    "typescript": "5.5.4",
+    "typescript-eslint": "^8.65.0"
   },
   "engines": {
     "node": ">=20"

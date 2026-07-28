@@ -112,3 +112,12 @@ OpenScience 采用多 agent、多 session 协作，且用户明确要求：后�
 - TypeDoc：https://github.com/TypeStrong/typedoc
 - typedoc-plugin-markdown：https://typedoc-plugin-markdown.org/docs
 - Changesets：https://github.com/changesets/changesets
+
+## 2026-07-28 落地记录
+
+基线提交 `ce9da28` 后按本 ADR §4/§5 落地最小工具集（均为 root devDependencies，lockfile 入库）：
+
+- ESLint 9 + `@eslint/js` + `typescript-eslint`：`eslint.config.cjs` 升级为真正 flat config（js/ts recommended + 少量带注释的窄域豁免），`lint` = ESLint 全仓检查 + 结构校验，exit 0。
+- knip（`audit:knip`）、dependency-cruiser（`audit:dep`，禁循环依赖/跨包相对深引用，orphan 暂 warn）、jscpd（`audit:dup`）、syncpack（`audit:deps`，v15 用 `syncpack lint` 取代已废弃的 `list-mismatches`）、markdownlint-cli2（`docs:lint`，保留结构规则、豁免排版风格规则）。
+- 基线结论：0 重复代码块、0 依赖版本不一致、0 依赖错误；knip/depcruise 仅占位包预期噪声。
+- Serena / Semgrep MCP / ast-grep / lychee / Vale / TypeDoc / Changesets 等仍按 §4/§5 阶段后期评估，未安装。

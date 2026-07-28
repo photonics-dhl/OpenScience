@@ -136,7 +136,7 @@ volumes:
 
 - [ ] **Step 3: `.env.example` 追加**
 
-```
+```dotenv
 # --- P1A-2 dev stack (local development defaults only, NOT real secrets) ---
 POSTGRES_USER=openscience
 POSTGRES_PASSWORD=openscience_dev
@@ -1070,7 +1070,7 @@ Expected: 非零退出，输出含 `Refused`；数据库未被触碰。
 
 在 “Monorepo Layout & Commands（P1A-1）” 小节的常用命令行追加：
 
-```
+```markdown
 - 开发栈：`npx pnpm@9.15.0 stack:up|stack:down|stack:ps`（postgres/redis/minio，仅 127.0.0.1）；测试：`npx pnpm@9.15.0 test`（单测）、`npx pnpm@9.15.0 test:integration`（起栈+集成测试）。
 - 数据库迁移：`node packages/database/dist/migrate-cli.js deploy|status|reset-dev`（reset-dev 生产禁用；迁移归 `infra/migrations/`，每个迁移附 rollback.sql）。
 ```

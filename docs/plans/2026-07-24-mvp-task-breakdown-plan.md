@@ -185,6 +185,7 @@ Phase {{item}} 边界（见设计文档 §2.3 对应小节，不得越界起草�
 - [ ] **Step 2: 逐个验证 fragment 可解析**
 
 Run:
+
 ```bash
 python - <<'EOF'
 import json, glob
@@ -200,6 +201,7 @@ for f in sorted(glob.glob('.taskmaster/drafts/phase-*.json')):
     print(f, len(subs), 'subtasks OK')
 EOF
 ```
+
 预期：6 行 OK。失败则修复对应 fragment（resume 该起草 agent）。
 
 ---

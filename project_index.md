@@ -12,8 +12,9 @@
 | `.gitignore` | git 忽略规则（含 .env） | 活文档 |
 | `minimax_proxy.py` | MiniMax API 本地代理（上个 session 产物） | 活文档 |
 | `package.json` / `pnpm-workspace.yaml` / `pnpm-lock.yaml` | pnpm workspace 根配置与锁文件（P1A-1） | 活文档 |
-| `tsconfig.base.json` / `eslint.config.cjs` / `.npmrc` | 共享 TypeScript/ESLint/pnpm 基线（P1A-1） | 活文档 |
-| `scripts/verify-workspace.mjs` | Monorepo 结构校验脚本（当前 lint 入口） | 活文档 |
+| `tsconfig.base.json` / `eslint.config.cjs` / `.npmrc` | 共享 TypeScript/ESLint/pnpm 基线（P1A-1）；eslint.config.cjs 已升级为 ESLint 9 flat config（2026-07-28） | 活文档 |
+| `knip.json` / `.dependency-cruiser.cjs` / `.markdownlint-cli2.jsonc` | 卫生工具配置：knip（未用代码）、dependency-cruiser（依赖边界）、markdownlint（文档门禁）（2026-07-28 落地） | 活文档 |
+| `scripts/verify-workspace.mjs` | Monorepo 结构校验脚本（lint 的第二段，`verify:workspace` 入口） | 活文档 |
 | `apps/` | `web`/`api` 可启动空壳 + `agent-worker`/`science-worker`/`sandbox-controller` 空壳 | 骨架 |
 | `packages/` | 11 个领域包；database/storage 已实现 P1A-2（Prisma/Redis 客户端、迁移 runner、StorageAdapter + MinIO），其余占位 | 骨架 |
 | `.cursor/` | Cursor 编辑器配置 | 工具自管 |

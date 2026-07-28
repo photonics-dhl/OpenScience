@@ -1,0 +1,26 @@
+{
+  "$schema": "https://unpkg.com/knip@6/schema.json",
+  "workspaces": {
+    ".": {
+      "entry": ["scripts/*.mjs"],
+      "project": ["scripts/**/*.mjs"],
+      "ignoreDependencies": ["@prisma/client", "prisma"],
+      "ignoreBinaries": ["docker-compose"]
+    },
+    "apps/web": {
+      "project": ["app/**/*.{ts,tsx}", "*.{ts,mjs}"]
+    },
+    "apps/*": {
+      "entry": ["src/index.ts"],
+      "project": ["src/**/*.ts"]
+    },
+    "packages/database": {
+      "entry": ["src/index.ts", "src/migrate-cli.ts"],
+      "project": ["src/**/*.ts", "test/**/*.ts"]
+    },
+    "packages/*": {
+      "entry": ["src/index.ts"],
+      "project": ["src/**/*.ts", "test/**/*.ts"]
+    }
+  }
+}

@@ -1,5 +1,31 @@
 # OpenScience (XGS) 进度日志
 
+## 2026-07-28 — 基线提交 + 最小工具集落地
+
+### ✅ Completed
+| 任务 | 详情 |
+|---|---|
+| 基线提交 | `ce9da28`（chore: P1A-1 Monorepo 骨架 + P1A-2 数据基础基线提交，127 个文件；不含 .env / node_modules / dist） |
+| ESLint 9 | eslint 8→9 + `@eslint/js` + `typescript-eslint`；`eslint.config.cjs` 重写为 flat config（recommended + 4 处带注释窄域豁免：migrate-cli `require.resolve`、redis 空 error listener、.cjs 的 require、scripts Node 全局量）；`lint` = `eslint . && node scripts/verify-workspace.mjs`，exit 0 |
+| knip | `knip.json`（pnpm workspaces 配置）；`audit:knip` exit 0，仅剩占位包预期 hint（test 目录预留、.prisma 生成物） |
+| dependency-cruiser | `.dependency-cruiser.cjs`（no-circular / 禁跨包相对深引用 error，orphan warn）；`audit:dep` exit 0，0 errors / 13 orphan warnings（占位包入口，预期基线） |
+| jscpd | `audit:dup` exit 0，0 clones（20 文件 / 2942 tokens，0.00%） |
+| syncpack | `audit:deps`（v15 以 `syncpack lint` 取代已废弃 `list-mismatches`）exit 0，0 版本不一致；仅提示 root package.json 无 version 字段（private 包，无害） |
+| markdownlint | `.markdownlint-cli2.jsonc`（保结构规则，豁免 MD013/060/058/022/032/034/029 排版风格，各附一行理由）；修 5 个文档 7 处明显问题（MD056 表格内管道符转义、EOF 多余空行、5 处围栏补语言、2 处围栏补空行）；`docs:lint` exit 0，19 文件 0 issues |
+| 回归 | `build` / `typecheck` / `test` 全绿：单测 14/14（database 4 + storage 10） |
+
+### Key Decisions / 坑
+- syncpack v15 已废弃 `list-mismatches`，脚本用等价的 `syncpack lint`（报告中注明偏离）
+- `@eslint/js` 须与 eslint 同主版本（^9 配 9.39.5），初次解析到 ^10 产生 peer 冲突已纠正
+- knip 深层 peer warning（oxc-parser wasm 绑定）在 Windows x64 无害，走原生绑定
+- 全程零 git mutation、零业务源码改动；完整证据见 `.superpowers/sdd/tooling-setup-report.md`
+
+### ⏳ Next Steps
+- [ ] P1A-3：邀请码注册与邮箱验证 Auth（task-master 2.3，先 design gate）
+- [ ] 阿里云就绪后：云上 `npx pnpm@9.15.0 test:integration`（task-master 2.2），通过后置 done
+
+---
+
 ## 2026-07-28 — P1A-2 终审通过（fix wave 完成），本地阶段收尾
 
 ### ✅ Completed
@@ -25,7 +51,7 @@
 ### ✅ Completed
 | 任务 | 详情 |
 |---|---|
-| dev 栈 | `infra/compose/docker-compose.dev.yml`（postgres:16/redis:7/minio 固定 tag + minio-init 建 bucket）与 `stack:up|down|ps` 脚本已就位，端口仅 127.0.0.1；按用户指示本机未起栈 |
+| dev 栈 | `infra/compose/docker-compose.dev.yml`（postgres:16/redis:7/minio 固定 tag + minio-init 建 bucket）与 `stack:up\|down\|ps` 脚本已就位，端口仅 127.0.0.1；按用户指示本机未起栈 |
 | packages/database | Prisma 5.22 + 基线迁移 `app_meta`（含 rollback.sql 补偿）；`createPrismaClient`/`createRedisClient`；迁移 runner 生产守卫 |
 | packages/storage | StorageAdapter 接口 + MinIO 实现（put/get/head/delete + sha256 校验）；OSS 驱动预留抛 NotImplemented |
 | 测试证据 | 静态门禁全绿：`npx pnpm@9.15.0 build`/`typecheck` exit 0，`verify:workspace` = `WORKSPACE_STRUCTURE_OK`；单测 14/14 过（database 4 + storage 10，vitest run 全 passed）；生产守卫演示 `NODE_ENV=production node packages/database/dist/migrate-cli.js reset-dev` exit 1，输出 `Refused: migrate command "reset-dev" is destructive and forbidden when NODE_ENV=production` |

@@ -202,7 +202,7 @@ cd "E:/Miscellaneous/XGS" && git add AGENTS.md project_index.md docs/ && git com
 
 - [ ] **Step 1: 写 `.gitignore`**
 
-```
+```gitignore
 .env
 __pycache__/
 *.pyc
@@ -213,7 +213,7 @@ __pycache__/
 
 调用 `mcp__memory__create_entities`：
 
-```
+```yaml
 name: XGS-Doc-Architecture
 entityType: convention
 observations:
