@@ -1,0 +1,103 @@
+{
+  "phase": "1B",
+  "topTask": {
+    "localId": "P1B",
+    "title": "Phase 1B: SDF 与版本",
+    "description": "实现 SDF 六字段 Schema、三栏编辑器、Artifact/Blob 内容寻址存储、Commit/Manifest 增量版本、多类型 Diff、unique ID 与稳定 URL、私有/邀请/公开可见性（Spec §22 Phase 1B；依据 Spec §4–§7、§13、§15、§16、§17、§18）。不含 Hermes AI 提取与发布流程（Phase 1D）、不含 Branch/Fork/PR 协作交互（Phase 1C）。",
+    "priority": "high",
+    "details": "出口判据：受邀用户可在三栏编辑器完成内容输入与建议确认、产生增量 Commit 与可重建/可校验版本，获得 unique ID 与稳定 URL，且 v1-v2 九类确定性 diff 可计算、未变化 Blob 不重复存储。",
+    "testStrategy": "全部子任务完成 + Phase 级集成验证",
+    "subtasks": [
+      {
+        "localId": "P1B-1",
+        "title": "定义 SDF 六字段 JSON Schema 包",
+        "description": "在 packages/sdf-schema 中定义 SDF 六个必填字段（problem/insight/method/results/limitations/reproducibility）与可选字段的 JSON Schema，供前后端共用校验（Spec §5.1、§5.3、§2.2.1）。",
+        "details": "产出 packages/sdf-schema：core.json Schema、manifest.json 最小结构 Schema（schema/schemaVersion/objectId/versionId/version/visibility/contentHash/licenses/artifacts/parentVersion/forkedFrom 等字段，对齐 Spec §5.3 示例）；Schema 变更遵循语义化版本（Spec §5.3 MUST）；schemaVersion 初始 0.1.0；前后端通过同一包做合同校验。MUST 映射：§5.3“字段必须有 JSON Schema；Schema 变更遵循语义化版本”。\n验收: -",
+        "testStrategy": "单元测试：合法/非法 SDF 文档校验通过/拒绝用例（§21.1 单元层）；合同测试：前后端引用同一 Schema 包（§21.1 合同层）。",
+        "dependencies": ["P1A"],
+        "priority": "high"
+      },
+      {
+        "localId": "P1B-2",
+        "title": "建立 RO 与 SDF 数据模型及迁移",
+        "description": "建立 ResearchObject、SDFDocument、SDFNode 数据实体与数据库迁移，支持在个人 Workspace 创建私有 RO（Spec §15、§4.1、§3.2、验收主流程步骤 2）。",
+        "details": "实体覆盖 Spec §15 中 ResearchObject、SDFDocument、SDFNode（Blob/Artifact/Commit/Version 等见 P1B-3/4）；RO 状态机字段按 §4.1（draft/under_review/approved/published/revised/withdrawn/restricted/rejected/archived），MVP 内仅落地 draft 及后续阶段所需状态枚举，不实现 1C/1D 的流转逻辑；RO 归属 Workspace（§3.2）；迁移向前可部署、可回滚或有补偿步骤（§15 MUST）；提供 /research-objects、/sdf API 骨架（§16），写操作带幂等键与乐观锁（§16）。\n验收: 步骤2",
+        "testStrategy": "单元测试：状态枚举与归属规则（§21.1 单元层）；集成测试：迁移可上可下、创建 RO 落库（§21.1 集成层）；E2E 预备：受邀用户创建私有 RO（§21.2 步骤 2）。",
+        "dependencies": ["P1A"],
+        "priority": "high"
+      },
+      {
+        "localId": "P1B-3",
+        "title": "实现 Blob 内容寻址存储与上传管线",
+        "description": "实现以 SHA-256 为键的 Blob 存储与 Artifact 元数据（逻辑路径、MIME、大小、hash），接入 Phase 1A Storage Adapter，含上传分片、校验和、MIME 检测与病毒扫描（Spec §7.2、§13.1、§17）。",
+        "details": "产出 packages/storage 的 Blob 层：Blob 以 SHA-256 为键保存（§7.2.1 MUST）；Artifact 记录逻辑路径、MIME、大小、Blob hash（§7.2.2）；数据库只存元数据和对象键，不存大二进制（§13.1）；上传使用分片、校验和、MIME 检测与病毒扫描（§13.1、§17 MUST：上传文件类型检测、大小限制和恶意内容扫描）；相同内容 Blob 去重只存一次（§2.2.4、§7.1）；单文件大小等限制走后台可配置配额，不写死前端（§13.3；初始数值为 Spec §24 待确认项，需做成配置而非常量）。\n验收: 步骤14",
+        "testStrategy": "单元测试：哈希计算、去重逻辑（§21.1 单元层）；集成测试：上传→存储→读取回环、重复上传不产生新 Blob（§21.1 集成层）；安全测试：伪装 MIME/超限文件拒绝（§21.1 安全层、§17）。",
+        "dependencies": ["P1A", "P1B-2"],
+        "priority": "high"
+      },
+      {
+        "localId": "P1B-4",
+        "title": "实现 Commit/Manifest 增量版本引擎",
+        "description": "在 packages/versioning 实现 Commit、ChangeSet、Version、VersionManifest：版本可完整重建、可校验，未变化 Artifact 复用原 Blob，SDF 结构化变化用 RFC 6902 JSON Patch（Spec §7.1、§7.2、§2.2.3）。",
+        "details": "Version Manifest 保存版本对 Artifact 的引用（§7.2.3）；未改变 Artifact 继续引用原 Blob（§7.2.4 MUST）；SDF JSON 结构化变化使用 RFC 6902 JSON Patch（§7.2.5）；可生成小型逻辑检查点加速重建但相同 Blob 不重复保存（§7.2.7）；已公开版本永久不可原地修改，修改必须产生新版本（§2.2.3、§7.1 MUST，写入路径强制校验）；任意版本可完整重建并可校验（§7.1）；提供 /commits、/versions API（§16）；写操作记录审计日志（§17 MUST）。Commit 先挂在 RO 默认主线，完整 Branch 模型在 Phase 1C 落地，字段设计不得封死分支扩展（§19 约束）。\n验收: 步骤6,14",
+        "testStrategy": "单元测试：JSON Patch 应用/逆推、Manifest 重建、不可变校验（§21.1 单元层：diff/版本规则）；集成测试：创建 Commit→生成 Manifest→完整重建版本并校验哈希（§21.1 集成层）；E2E 预备：创建 Commit 和版本候选（§21.2 步骤 6）。",
+        "dependencies": ["P1B-1", "P1B-3"],
+        "priority": "high"
+      },
+      {
+        "localId": "P1B-5",
+        "title": "实现多类型确定性 Diff 服务",
+        "description": "实现 Spec §7.3 全部九类 Diff：文本、SDF 字段、结论变化摘要、作者/贡献者变化、引用变化、文件增删与哈希变化、表格数据摘要变化、代码 diff、许可证和可见性变化（Spec §7.1、§7.3）。",
+        "details": "确定性 diff 是事实来源，AI 自然语言摘要仅作展示层（§7.3，AI 摘要接入属 Phase 1D）；大型二进制文件不生成行级 diff，只显示哈希、大小、元数据和替换关系（§7.2.6 MUST）；差异展示必须区分文字、结构化字段、代码、数据、图表和结论变化（§7.1 MUST）；SDF 字段 diff 基于 P1B-4 的 RFC 6902 Patch；输出结构化 Diff 结果供编辑器版本导航与 Phase 1D 公开页 Versions & Diff 标签消费（§4.3）。\n验收: 步骤14",
+        "testStrategy": "单元测试：九类 diff 各至少一组夹具用例、大二进制仅元数据 diff（§21.1 单元层：diff）；集成测试：v1→v2 全量 diff 与存储去重联合验证（§21.1 集成层）；验收点：页面准确展示 v1-v2 diff 且未变化 Blob 不重复存储（§21.2 步骤 14，展示页面在 Phase 1D 完成）。",
+        "dependencies": ["P1B-4"],
+        "priority": "high"
+      },
+      {
+        "localId": "P1B-6",
+        "title": "实现标识层与时间戳服务",
+        "description": "实现内部 UUID v7/ULID、公开 RO ID（OSR-YYYY-NNNNNN 形式）、版本 ID、稳定 URL 与 UTC 时间戳+SHA-256 内容哈希（Spec §6.1、§6.2、§2.2.5）。",
+        "details": "内部主键 UUID v7 或 ULID，外部使用永久可读编号、版本号和稳定 URL（§2.2.5、§6.1）；公开 RO ID 形式 OSR-YYYY-NNNNNN、版本 ID 追加 -vN、URL /research/OSR-YYYY-NNNNNN/v/N（§6.1）；注意：ID 前缀属 Spec §24 待确认项（OpenScience 品牌、域名和 unique ID 前缀），前缀必须做成配置项，禁止写死；公开 ID 永不复用，撤回、删除或合并后 ID 仍指向状态说明页（§6.1 MUST，状态说明页 UI 在 Phase 1D）；MVP 时间戳由 UTC 数据库事务时间、版本 manifest 和 SHA-256 内容哈希构成，发布记录写入只追加审计日志（§6.2 MUST）；时间戳法律免责声明文案在发布/公开页展示（Phase 1D），本任务在 Identifier/Publication 数据上预留声明字段；DOI 为 Phase 2（§6.1、§19，不实现）。\n验收: 步骤9",
+        "testStrategy": "单元测试：ID 生成唯一性、版本号递增、URL 路由解析（§21.1 单元层：ID）；集成测试：发布记录只追加、ID 不复用（§21.1 集成层）；验收点：发布 v1 获得 unique ID、版本 ID、UTC 时间戳和哈希（§21.2 步骤 9，发布动作在 Phase 1D 触发）。",
+        "dependencies": ["P1B-4"],
+        "priority": "high"
+      },
+      {
+        "localId": "P1B-7",
+        "title": "实现 RO 可见性模型与 API 层权限强制",
+        "description": "实现 private/invite_only/public 三种可见性及 API 层授权检查，防止跨 Workspace 越权（Spec §4.2、§2.1.5、§3.3、§17）。",
+        "details": "可见性三态：private 仅 Workspace 授权成员、invite_only 持有效邀请或被指定账户、public 公众可见并可被搜索引擎索引（§4.2、§2.1.5）；权限采用 RBAC+资源归属检查，禁止仅前端隐藏按钮，API 必须做同样授权检查（§3.3 MUST）；防止跨 Workspace 越权（§17 MUST）；任何扩大可见范围的操作必须显式审批（§4.2 MUST）——审批流与 R0–R4 分级在 Phase 1D 落地，本任务实现可见性变更的请求/记录数据结构与阻断式校验；可见性变更写审计日志（§17）；Branch/Issue/PR 继承可见性规则在 Phase 1C 应用，模型字段预留。\n验收: 步骤2",
+        "testStrategy": "单元测试：可见性判定矩阵（§21.1 单元层：权限）；安全测试：跨 Workspace 访问、未受邀访问 invite_only、直接调 API 绕过前端的越权用例（§21.1 安全层：越权）；E2E 预备：私有 RO 仅本人可见（§21.2 步骤 2）。",
+        "dependencies": ["P1B-2"],
+        "priority": "high"
+      },
+      {
+        "localId": "P1B-8",
+        "title": "构建三栏 SDF 编辑器桌面端",
+        "description": "实现左侧大纲、中间编辑区、右侧 SDF/AI 面板的三栏编辑器，支持 Markdown/富文本正文、附件与版本导航（Spec §5.4、§2.5.2、验收主流程步骤 3）。",
+        "details": "左栏：章节大纲、实验、图表、数据、代码和版本导航；中栏：Markdown/富文本正文与附件编辑（附件走 P1B-3 上传管线）；右栏：六字段提取结果、AI 建议、引用、审核与关系图入口（§5.4、§2.5.2）；AI 提取结果必须以建议/差异形式展示、用户确认后才能写入 SDF（§5.4 MUST）——本任务实现建议/差异确认 UI 机制与本地数据通路，真实 AI 提取由 Phase 1D SDF Extractor 接入；编辑自动保存草稿，错误提示含重试、保存草稿和问题定位（§18.3）；版本导航消费 P1B-4/P1B-5 的版本与 diff 数据；中文优先、首日采用中英文国际化架构（§2.5.5）。\n验收: 步骤3,5",
+        "testStrategy": "单元测试：编辑器状态与草稿恢复逻辑（§21.1 单元层）；合同测试：编辑器与 /sdf API 的 Schema 合同（§21.1 合同层）；E2E：编辑器输入内容、以差异形式确认建议写入 SDF（§21.2 步骤 3、5，步骤 5 的 AI 来源在 Phase 1D 联调）。",
+        "dependencies": ["P1B-1", "P1B-2", "P1B-4"],
+        "priority": "high"
+      },
+      {
+        "localId": "P1B-9",
+        "title": "实现移动端分步/抽屉编辑器与可访问性",
+        "description": "移动端以抽屉和分步页面呈现三栏全部功能，不删除功能，并满足 WCAG AA 可访问性基线（Spec §5.4、§18.2、§18.3、§2.5.5）。",
+        "details": "移动端保留全部功能，通过抽屉和分步页面呈现三栏内容，不要求三栏同时显示（§5.4）；所有主要流程在移动端可完成，复杂三栏界面改为分步/抽屉而非删除功能（§18.2）；桌面和移动端功能一致（§2.5.5）；可访问性：键盘导航、明确焦点状态、语义化 HTML、图片 alt、WCAG AA 级对比度目标（§18.3）；大文件列表虚拟化、上传任务显示可恢复进度（§18.3）。\n验收: 步骤3",
+        "testStrategy": "E2E：移动端视口完成创建→编辑→确认建议→Commit 流程（§21.1 E2E 层、§21.2 步骤 3）；可访问性检查：键盘走查与对比度抽检（§18.3）。",
+        "dependencies": ["P1B-8"],
+        "priority": "medium"
+      },
+      {
+        "localId": "P1B-10",
+        "title": "实现 SDF 标准导出包生成与校验",
+        "description": "按推荐导出结构生成可下载标准文件包（manifest.json、manuscript/、sdf/、experiments/、code/、figures/、provenance/、versions/），导出包不依赖平台私有数据库即可读取（Spec §5.2、§5.3、§2.2.1）。",
+        "details": "SDF 同时具有数据库表达和可导出标准文件包（§2.2.1 MUST）；导出结构对齐 §5.2 目录树；manifest.json 按 §5.3 最小结构生成，contentHash 来自 P1B-6 哈希服务，licenses/authors 字段预留（许可选择交互在 Phase 1C，发布时填实）；导出包不得依赖平台私有数据库才能读取（§5.3 MUST）；导出内容从 Blob/Manifest 重建，验证与线上一致。\n验收: -",
+        "testStrategy": "集成测试：生成导出包→脱离数据库用纯文件读取校验 Schema 与哈希一致（§21.1 集成层）；单元测试：manifest 序列化字段完整性（§21.1 单元层）。",
+        "dependencies": ["P1B-1", "P1B-4", "P1B-6"],
+        "priority": "medium"
+      }
+    ]
+  }
+}

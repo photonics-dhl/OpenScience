@@ -48,7 +48,7 @@
       "args": ["-y", "--package=task-master-ai", "task-master-ai"],
       "env": {
         "TASK_MASTER_TOOLS": "standard",
-        "OPENAI_COMPATIBLE_API_KEY": "${MINIMAX_API_KEY}"
+        "OPENAI_COMPATIBLE_API_KEY": "sk-cp-cmwOPYr7vtHqdSJGbho2FM7zFyD2F6S6wQ5One8b51Ok6IEgwzELFdEXYR_f5duVsyGVq-0VBz_bay8BF9n4gBBmdkMAB5lwvSlGLt1Twhm2u-Xyz4v8T3A"
       }
     }
   }

@@ -1,0 +1,101 @@
+{
+  "phase": "1C",
+  "topTask": {
+    "localId": "P1C",
+    "title": "Phase 1C: GitHub 式科研协作（Branch/Fork/PR/Review/Merge、作者与 CRediT、许可、通知）",
+    "description": "建立 MVP 协作闭环：Branch、Issue、Fork、Pull Request、Review、Merge 的数据模型与基础交互（Spec §2.3、§8），作者组与 CRediT 贡献记录（§3.4），三类许可选择与 Fork 继承校验（§6.3），协作事件通知（§15、§16、§18.1）。对应里程碑 Spec §22 Phase 1C。服务于验收主流程 §21.2 步骤 8、11、12。Commit/版本存储底座由 P1B 提供，发布与 AI 审核属 P1D，不在本 Phase 范围。",
+    "priority": "high",
+    "subtasks": [
+      {
+        "localId": "P1C-1",
+        "title": "建立协作域数据模型与数据库迁移",
+        "description": "落地协作域核心实体：Branch、ForkRelation、Issue、PullRequest、Review、Comment、Author、Authorship、Contribution、LicenseAssignment、Notification（Spec §15 实体清单 MUST），为后续所有协作功能提供数据底座。",
+        "details": "在 P1A 的 PostgreSQL + 迁移框架上新增上述表：外键挂接 P1B 的 ResearchObject/Commit/Version；PullRequest 需含 §8.2 声明字段（变更的 SDF 字段与文件、是否改变方法/数据/核心结论、新增贡献者及 CRediT 角色、数据/代码许可、利益冲突、是否要求发布新版本）；Contribution 使用 CRediT 分类枚举（Conceptualization、Methodology、Software、Validation、Data Curation、Visualization、Writing、Supervision 等，§3.4）；LicenseAssignment 区分文字/代码/数据三类（§6.3）。迁移 MUST 向前可部署、可回滚或有补偿步骤，生产禁自动破坏性迁移（§15）。数据模型避免封死 Phase 2 扩展路径，但不实现 §19 功能（点赞/收藏/关注等字段不建）。\n验收: -",
+        "testStrategy": "单元测试：迁移 up/down 往返、枚举与必填约束；集成测试：与 ResearchObject/Commit 外键一致性（§21.1 单元+集成层）。",
+        "dependencies": ["P1B"],
+        "priority": "high"
+      },
+      {
+        "localId": "P1C-2",
+        "title": "实现 Branch 管理与可见性继承",
+        "description": "实现研究分支的创建、列表、切换与删除，承载'尚未进入主版本的研究方向或修改路线'（Spec §8 概念表）；分支 MUST 继承所属 RO 的可见性（§2.3 决策 3、§4.2）。",
+        "details": "模块 /branches（§16）：Branch 指向 RO 与 tip Commit（复用 P1B Commit/Manifest）；创建分支时校验调用者对该 RO 所在 Workspace 的权限（§17 防跨 Workspace 越权）；可见性不单独存储或强制等于 RO 可见性，任何扩大可见范围的操作必须显式审批（§4.2，审批机制占位即可，正式分级审批在 P1D）；关键资源使用幂等键和乐观锁（§16）。\n验收: 步骤11",
+        "testStrategy": "单元测试：可见性继承规则、越权创建拒绝；集成测试：分支指向 Commit 一致性；阶段验收点：另一用户可在 Fork 后创建 Branch（§21.2 步骤 11 前置）。",
+        "dependencies": ["P1C-1"],
+        "priority": "high"
+      },
+      {
+        "localId": "P1C-3",
+        "title": "实现 Issue 与评论基础交互",
+        "description": "实现 Issue（科学问题、方法质疑、复现失败、错误报告、改进建议，Spec §8 概念表）与 Comment 的创建、回复、状态流转，覆盖 MVP 社区范围中的 Issue 部分（§2.5 决策 4）。",
+        "details": "模块 /issues（§16）：Issue 支持 open/closed 状态与标签（最小集即可，类型标签对齐 §8 五种语义）；Comment 挂接 Issue/PR/Review（§15 Comment 实体，一处实现多处复用）；Issue 默认继承 RO 可见性（§4.2）；写操作记审计日志并限流（§17）。禁止提前实现 §19 的点赞、投票、Top Questions。\n验收: -",
+        "testStrategy": "单元测试：状态机与权限；合同测试：前后端 Schema（§21.1 单元+合同层）。",
+        "dependencies": ["P1C-1"],
+        "priority": "medium"
+      },
+      {
+        "localId": "P1C-4",
+        "title": "实现三类许可选择与继承规则",
+        "description": "实现文字（CC BY 4.0 / CC BY-NC 4.0 / All Rights Reserved）、代码（MIT / Apache-2.0 / GPL-3.0 / 不开源）、数据（CC0 / CC BY 4.0 / 自定义限制 / 不可下载）三类许可的分别选择（Spec §6.3、§2.2 决策 6），为 Fork 校验与发布（步骤 8）提供规则底座。",
+        "details": "LicenseAssignment 记录 RO 级与版本级许可；许可变更不得追溯覆盖已公开版本（§6.3）——公开版本的 LicenseAssignment 只读，变更生成新记录仅对后续版本生效；提供继承校验函数供 Fork/PR 调用。许可证展示文案属于 §24 待确认项（'公开内容的服务条款、隐私政策和许可证文案'）：代码中只使用标准许可证标识与名称，完整法律文案留配置位待确认，禁止自行撰写写死。\n验收: 步骤8",
+        "testStrategy": "单元测试：三类枚举完整性、已公开版本许可不可变规则、继承校验函数（§21.1 单元层）。",
+        "dependencies": ["P1C-1"],
+        "priority": "high"
+      },
+      {
+        "localId": "P1C-5",
+        "title": "实现 Fork 与来源关系及许可继承校验",
+        "description": "实现从特定公开版本 Fork 出独立衍生 RO（Spec §8.1）：新 RO 获得新 unique ID，永久保留来源对象、来源版本与内容哈希，来源许可与归属要求继续生效。",
+        "details": "ForkRelation 记录 source RO、source Version、内容哈希（§8.1、§15）；Fork 时复制该版本 Manifest 指向的 Blob 引用（内容寻址复用 P1B，不复制物理数据）；原作者不会自动成为新 RO 作者（§8.1）；Fork 作者不能移除来源关系（数据层无外键删除路径）；调用 P1C-4 的继承校验函数验证来源许可，不满足继承要求时阻断 Fork 或按来源许可限制新 RO 许可选项（§6.3）；仅允许 Fork public 版本（可见性规则 §4.2）。\n验收: 步骤11",
+        "testStrategy": "单元测试：来源关系不可移除、许可继承校验通过与拒绝用例；集成测试：Fork 后 Blob 引用共享、新 unique ID 生成（§21.1 单元+集成层）；阶段验收点：§21.2 步骤 11 的 Fork 环节。",
+        "dependencies": ["P1C-1", "P1C-4"],
+        "priority": "high"
+      },
+      {
+        "localId": "P1C-6",
+        "title": "实现 Pull Request 声明与提交流程",
+        "description": "实现向原 RO 提交变更的 PR 流程，PR MUST 完整声明 §8.2 清单：变更的 SDF 字段和文件、是否改变方法/数据/核心结论、新增贡献者及 CRediT 角色、数据/代码许可、利益冲突、自动检查结果、是否要求发布新版本。",
+        "details": "模块 /pull-requests（§16）：PR 关联源 Branch/Fork 与目标 Branch，声明字段在数据模型（P1C-1）基础上做提交时强制校验（缺项拒绝）；自动检查结果字段先存结构化占位（真实检查能力在 P1D 接入）；打开 PR 发出 pull_request.opened 事件（§16，事件可重试、消费者幂等）；PR 默认继承 RO 可见性（§4.2）；幂等键防重复提交，乐观锁防并发覆盖（§16）；PR 内展示变更 diff（复用 P1B §7.3 Diff 能力）。\n验收: 步骤11",
+        "testStrategy": "单元测试：声明字段强制校验、幂等键重放；合同测试：前后端 Schema；阶段验收点：§21.2 步骤 11 的提交 PR 环节。",
+        "dependencies": ["P1C-1", "P1C-2"],
+        "priority": "high"
+      },
+      {
+        "localId": "P1C-7",
+        "title": "实现作者组与 CRediT 贡献记录",
+        "description": "实现作者组确认作者名单、顺序与通讯作者，系统独立记录全部事实贡献者及 CRediT 角色（Spec §3.4、§2.3 决策 2），支撑验收步骤 8 的'确认作者'。",
+        "details": "Author/Authorship 承载作者名单、顺序、通讯作者标记，仅作者组可变更；Contribution 按时间追加记录所有事实贡献者及 CRediT 角色（§3.4 分类枚举），MUST 不可被作者名单变化抹除（数据层不提供级联删除）；系统禁止依据字数、Commit 数或 AI 估计自动决定署名（§3.4，不做任何自动排序逻辑）；创建者不自动获得永久第一作者或通讯作者地位；提供接口供 Merge 高风险审批（P1C-8）查询'是否新增作者或改变作者顺序'。\n验收: 步骤8",
+        "testStrategy": "单元测试：贡献记录不可抹除、作者组权限校验、无自动署名逻辑；阶段验收点：§21.2 步骤 8 确认作者环节（与 P1C-4 许可选择共同支撑）。",
+        "dependencies": ["P1C-1"],
+        "priority": "high"
+      },
+      {
+        "localId": "P1C-8",
+        "title": "实现 Review 与 Merge 流程及高风险确认",
+        "description": "实现对 PR 的逐项科学 Review 与 Merge 写入主分支（Spec §8.2、§8.3）；仅 Owner/Maintainer 可发起 Merge，改变作者、许可、核心结论或可见性的 Merge MUST 触发高风险确认。",
+        "details": "模块 /reviews（§16）：Review 支持对 PR 逐项（按 SDF 字段/文件）给出意见与结论；Merge 权限校验对齐 §3.3 角色（仅 Owner/Maintainer）；高风险判定：新增作者或改变作者顺序（§3.4，调 P1C-7 接口）、变更许可（P1C-4）、PR 声明'改变方法/数据/核心结论'（§8.2 字段）、扩大可见性（§4.2）——命中任一项必须显式高风险确认才允许 Merge；Merge 不修改历史公开版本，进入主分支后形成新草稿状态，发布新版本需作者确认（§8.3，发布动作本身在 P1D）；冲突由人类选择或重新编辑，AI 不得静默决定科学含义（§8.3，不做自动冲突解决）；Merge 完成发出 pull_request.merged 事件（§16）。\n验收: 步骤12",
+        "testStrategy": "单元测试：Merge 权限、四类高风险触发条件逐一覆盖；集成测试：Merge 后主分支新草稿与历史公开版本不可变；E2E：Review→Merge 流程（§21.1 E2E 层）；阶段验收点：§21.2 步骤 12。",
+        "dependencies": ["P1C-6", "P1C-7"],
+        "priority": "high"
+      },
+      {
+        "localId": "P1C-9",
+        "title": "实现协作通知、事件投递与审计",
+        "description": "实现 Notification 实体与协作事件通知（PR 打开/Merge、Review 请求、Issue 动态），支撑 Dashboard'通知与社区动态'（Spec §18.1、§15、§16）。",
+        "details": "消费 pull_request.opened / pull_request.merged 等事件生成 Notification（§16：事件必须可重试、消费者必须幂等——以事件 ID 去重）；通知含已读/未读状态与跳转链接；全部协作写操作（Issue/PR/Review/Merge/Fork/作者与许可变更）落 AuditLog（§17 MUST：全部写操作记录审计日志）；通知与协作接口限流（§17）；生产日志不记录论文全文等敏感内容（§17）。站内通知为 MVP 范围，邮件通知是否需要属 §24 待确认项，本任务只预留渠道抽象不写死。\n验收: -",
+        "testStrategy": "单元测试：消费者幂等（重复事件不重复通知）；集成测试：事件→通知链路、审计日志完整性（§21.1 单元+集成层）。",
+        "dependencies": ["P1C-6", "P1C-8"],
+        "priority": "medium"
+      },
+      {
+        "localId": "P1C-10",
+        "title": "实现 GitHub 式协作区域前端交互",
+        "description": "实现 Issue/PR/Review/Merge/Fork 的前端基础交互，协作区域采用 GitHub 式交互（Spec §2.5 决策 6），桌面与移动端功能一致（§2.5 决策 5）。",
+        "details": "在工作台内实现：Issue 列表与详情、PR 列表与详情（含声明字段表单、变更 diff 展示、Review 逐项意见界面）、Merge 高风险确认对话框（明示触发的风险项）、Fork 入口与来源关系展示、作者与 CRediT 编辑界面（仅作者组可用）；响应式实现，移动端功能不裁剪（§2.5）；可访问性对齐 WCAG AA（§18.3）；文案走国际化架构，中文优先（§2.5 决策 5）。公开 RO 页面的 Issues/PR 标签展示（§4.3）属 P1D 公开页范围，本任务只做登录态协作区域。\n验收: 步骤11,12",
+        "testStrategy": "合同测试：前后端 Schema（§21.1）；E2E：另一用户 Fork→Branch→PR、维护者 Review→Merge 全流程（§21.2 步骤 11、12）。",
+        "dependencies": ["P1C-3", "P1C-6", "P1C-8"],
+        "priority": "high"
+      }
+    ]
+  }
+}

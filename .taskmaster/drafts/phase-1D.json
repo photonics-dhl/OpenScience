@@ -1,0 +1,94 @@
+{
+  "phase": "1D",
+  "topTask": {
+    "localId": "P1D",
+    "title": "Phase 1D: Hermes 与发布",
+    "description": "建设 Hermes Agent 系统的 MVP 子集与公开发布闭环：AI Gateway 统一路由（MiniMax-M3 主模型 / 回退策略由 Gateway 配置管理）、异步任务通道、SDF Extractor（建议/差异形式，不直接写正文）、R0–R4 分级审批、AI 发布审核（硬阻断与警告分离）、申诉与 Moderator 队列、发布事务与公开页（含免责声明与审核摘要），并承接 MVP 搜索、综合 Dashboard 与只读知识图谱。依据 Spec §9、§11、§12.1、§18.1、§4.1–4.3、§6.2、§22 Phase 1D。",
+    "details": "Phase 出口判据：受邀用户可经 Hermes 完成 SDF AI 提取与确认、通过 AI 发布审核并发布 v1/v2、公众可查看公开页与 v1-v2 diff，且搜索、Dashboard、只读知识图谱可用（对应 Spec §21.2 步骤4,5,7,9,10,13,14）。",
+    "testStrategy": "全部子任务完成 + Phase 级集成验证",
+    "priority": "high",
+    "subtasks": [
+      {
+        "localId": "P1D-1",
+        "title": "实现 AI Gateway 统一路由与调用日志",
+        "description": "在 packages/ai-gateway 封装全部大模型调用：MiniMax-M3 为主模型，回退策略由 Gateway 配置管理（Spec §2.4-6、§9.3），为后续 Hermes 全部子 Agent 与 AI 审核提供唯一入口。",
+        "details": "要点：1) Provider SDK 只存在于 ai-gateway 包内，禁止散落业务代码（Spec §9.3）；2) 每次调用记录模型、版本、token、费用、延迟、错误与回退原因（Spec §9.3），日志脱敏，不得记录密钥与 Prompt 中的敏感附件（Spec §17）；3) JSON 结构化输出必须经 Schema 校验，失败时有限重试（Spec §9.3）；4) 流式响应与结构化输出使用独立通道（Spec §9.3）；5) 主模型失败按已配置回退策略切换并记录回退原因；6) API 密钥仅从环境变量读取（Spec §17）；7) AI 接口挂接限流（Spec §17）。待确认：MiniMax-M3 及回退模型的具体 API、模型 ID、结构化输出能力与价格（Spec §24），先以配置项占位，不得写死。涉及模块：packages/ai-gateway、apps/api。\n验收: -",
+        "testStrategy": "单元测试：路由选择、回退触发、Schema 校验失败重试次数上限；集成测试（Spec §21.1）：以 mock provider 验证调用日志字段完整与密钥不落日志。属底座能力，由步骤4/7 间接验收。",
+        "dependencies": ["P1A"],
+        "priority": "high"
+      },
+      {
+        "localId": "P1D-2",
+        "title": "搭建 Hermes 会话与异步任务通道",
+        "description": "实现 AgentSession/AgentTask 数据模型与异步执行管道：长任务异步执行（Spec §9.3），任务 ID + SSE/WebSocket 进度推送（Spec §16、§18.3 AI 任务显示可恢复进度），支撑 SDF 提取与 AI 审核等长耗时调用。",
+        "details": "要点：1) 新建 apps/agent-worker（Spec §14.1），消费队列执行 Hermes 任务；2) 实体覆盖 AgentSession、AgentTask、ToolApproval（Spec §15）；3) 任务事件可重试、消费者幂等（Spec §16）；4) 前端通过任务 ID 订阅进度，断线可恢复（Spec §16、§18.3）；5) Hermes 不得以“自主”为由绕过权限、发布确认或资源配额（Spec §9.1），任务执行前校验 Workspace 权限与 AI Credit 配额（§2.4-7，Credit 骨架来自 P1A）。涉及模块：apps/agent-worker、apps/api 的 /agent 模块、packages/domain。\n验收: -",
+        "testStrategy": "集成测试（Spec §21.1）：提交任务 → 异步完成 → 事件幂等重放不产生重复副作用；合同测试：前后端任务进度 Schema。属底座能力，由步骤4/7 间接验收。",
+        "dependencies": ["P1D-1", "P1A"],
+        "priority": "high"
+      },
+      {
+        "localId": "P1D-3",
+        "title": "实现 SDF Extractor 建议式提取与确认写入",
+        "description": "实现 SDF Extractor 子 Agent：从正文提取六字段与关系草案（Spec §9.2），提取结果以建议/差异形式展示，用户确认后才写入 SDF（Spec §5.4），支撑核心闭环的 AI 结构化 → 人工确认环节（Spec §2.1-2）。",
+        "details": "要点：1) 输出必须经 Gateway Schema 校验（六字段对应 packages/sdf-schema 的 JSON Schema，Spec §5.1、§5.3）；2) 禁止直接覆盖用户正文（Spec §9.2 禁止事项）；3) 编辑器右栏展示逐字段 diff，用户逐字段或整批接受/拒绝，确认后才落库（Spec §5.4）；4) 接受动作走 R1 级审批（复用 P1D-4 的统一 diff 批量批准）；5) 提取为长任务，走 P1D-2 异步通道并显示进度。涉及模块：apps/agent-worker、apps/web 编辑器右栏、packages/sdf-schema。\n验收: 步骤4,5",
+        "testStrategy": "单元测试：提取结果 Schema 校验与 diff 生成；E2E（Spec §21.1）：输入正文 → AI 提取六字段 → 审核并接受建议（对应验收主流程步骤4、5，Spec §21.2）。",
+        "dependencies": ["P1D-2", "P1B"],
+        "priority": "high"
+      },
+      {
+        "localId": "P1D-4",
+        "title": "实现 R0–R4 分级审批与统一确认交互",
+        "description": "实现 Hermes 写操作的 R0–R4 审批分级（Spec §9.4）：R0 自动执行、R1 批量 diff 一次批准、R2 任务内同类授权、R3 最终摘要+明确确认、R4 重新验证+逐项确认，兼顾安全性与交互速度（Spec §2.5-7）。",
+        "details": "要点：1) 每次确认必须说明将改变什么、作用范围、能否撤销、预计费用与预计耗时（Spec §9.4）；2) 已批准的同一批任务不得重复弹窗（Spec §9.4）；3) 支持批量预览、作用域授权（当前任务内同类操作）与撤销（Spec §2.5-7）；4) 审批记录落 ToolApproval 实体并写审计日志（Spec §15、§17）；5) Merge、发布、作者/许可/可见性变化归 R3，删除/所有权/密钥/安全设置归 R4（Spec §9.4），本 Phase 的发布确认（P1D-8）必须挂接 R3。涉及模块：apps/web Hermes 面板、apps/api /agent 模块、packages/domain。\n验收: 步骤5",
+        "testStrategy": "单元测试：分级判定与作用域授权匹配规则、同批去重；E2E：R1 批量批准 AI 建议（验收步骤5）、R3 发布确认弹窗包含五要素（Spec §21.2）。",
+        "dependencies": ["P1D-2"],
+        "priority": "high"
+      },
+      {
+        "localId": "P1D-5",
+        "title": "实现发布审核硬阻断检查管线",
+        "description": "实现 AI 发布审核的硬阻断层：仅对安全、完整性、恶意文件、隐私泄露和明显违规进行硬阻断（Spec §2.3-5、§11.1），审核未通过时禁止发布（Spec §2.3-4）。",
+        "details": "要点：逐项实现 Spec §11.1 七类硬阻断——必填字段缺失（对照 §5.1 六字段）、恶意代码/危险可执行内容（上传扫描结果联动，Spec §17）、高风险隐私泄露（身份证、密钥、访问令牌，公开前敏感信息扫描为 Spec §17 MUST）、明显违法或平台禁止内容、发布者权限无法确认、未选择许可证、版本哈希或 manifest 校验失败（对照 §7 存储模型）。任一硬阻断命中则发布请求被拒并生成审核记录（AIReview 实体，Spec §15）；审核完成发出 ai_review.completed 事件（Spec §16）。Safety Reviewer 类检查不替代申诉人工（Spec §9.2）。涉及模块：apps/agent-worker、apps/api /publications 模块。\n验收: 步骤7",
+        "testStrategy": "单元测试：七类硬阻断各至少一个命中/放行用例；E2E（Spec §21.1）：构造缺许可/缺字段的版本候选验证发布被拒，正常版本通过 AI 发布审核（验收步骤7，Spec §21.2）。",
+        "dependencies": ["P1D-2", "P1B", "P1C"],
+        "priority": "high"
+      },
+      {
+        "localId": "P1D-6",
+        "title": "实现发布审核警告层与结构化审核报告",
+        "description": "实现 AI 发布审核的警告层：方法逻辑、统计合理性、图表规范、数据一致性、可复现性、引用缺失、过度外推等问题以警告呈现，不替代作者判断（Spec §11.2、§2.3-5）。",
+        "details": "要点：1) 警告项覆盖 Spec §11.2 全部七类；2) AI 报告必须提供证据位置和不确定性说明，不得只输出单一分数（Spec §11.2）；3) Research Reviewer 不裁定研究一定正确/错误、Citation Checker 不伪造来源（Spec §9.2 禁止事项）；4) 警告不阻断发布，随版本存档并在公开页以“AI 审核摘要”形式展示（供 P1D-9 使用，Spec §4.3）；5) 报告结构化存储于 AIReview 实体（Spec §15）。涉及模块：apps/agent-worker、packages/ai-gateway、apps/api。\n验收: 步骤7",
+        "testStrategy": "单元测试：报告结构含证据位置与不确定性字段、无单一分数输出；E2E：含警告项的版本仍可发布且警告随审核记录可查（验收步骤7，Spec §21.2）。",
+        "dependencies": ["P1D-5"],
+        "priority": "medium"
+      },
+      {
+        "localId": "P1D-7",
+        "title": "实现审核申诉流程与 Moderator 队列",
+        "description": "实现发布审核失败后的申诉通道：生成稳定审核记录，用户可修改重审或提交申诉，申诉进入 Moderator 队列，人工结果和理由写入审计日志（Spec §11.3、§2.3-4）。",
+        "details": "要点：1) 审核失败后生成稳定可引用的审核记录（Spec §11.3）；2) 用户可选择修改后重审（重新走 P1D-5 管线）或提交申诉（Appeal 实体，Spec §15）；3) 申诉进入 Moderator 队列，仅 Moderator/Admin 角色可处理（角色模型来自 P1A，Spec §3.3）；4) 人工处理结果与理由写入审计日志（Spec §11.3、§17 全部写操作审计 MUST）；5) 发出 appeal.created 事件并触发通知（Spec §16，通知通道来自 P1C）。涉及模块：apps/api /reviews、/admin 模块、apps/web 审核记录与申诉页。\n验收: -",
+        "testStrategy": "集成测试（Spec §21.1）：申诉创建 → 队列可见性按角色隔离 → 人工处理结果落审计日志；合同测试：申诉 API Schema。验收主流程未含申诉步骤，按完整性要求覆盖。",
+        "dependencies": ["P1D-5", "P1C"],
+        "priority": "medium"
+      },
+      {
+        "localId": "P1D-8",
+        "title": "实现发布事务与状态机推进",
+        "description": "实现正式发布流程：作者确认公开后生成平台时间戳、RO unique ID 和版本 ID（Spec §2.1-6），状态机 draft → under_review → approved → published（Spec §4.1），已公开版本永久不可原地修改（Spec §2.2-3）。",
+        "details": "要点：1) 发布前置条件：AI 审核通过（P1D-5）、许可证已选且作者已确认（P1C 产物）、发布确认走 R3 审批（P1D-4）；2) 时间戳由 UTC 数据库事务时间、版本 manifest 与 SHA-256 内容哈希构成，发布记录写入只追加审计日志（Spec §6.2、§17）；3) 写入 Version、VersionManifest、Publication、Identifier 实体并发出 version.published 事件（Spec §15、§16）；4) 已公开版本任何修改必须产生新版本或勘误，禁止原地修改（Spec §2.2-3）；5) 状态机含 rejected/withdrawn/restricted 补充状态（Spec §4.1）；6) 平台仅声明“记录平台接收时间和版本哈希”，不承诺专利、著作权或司法存证效力（Spec §2.1-7、§6.2 声明文案）；7) 发布 v2 复用同一发布管线，须验证 parentVersion 链与新版本哈希、manifest 正确生成（对应 Spec §2.2-3 已公开版本不可原地修改、§7 增量版本）。涉及模块：apps/api /publications、/versions 模块、packages/versioning。\n验收: 步骤9,13",
+        "testStrategy": "单元测试：状态机非法迁移拒绝、已发布版本写入被拒；集成测试：发布事务的原子性与审计日志只追加；E2E（Spec §21.2 步骤9、13）：发布 v1 后获得 unique ID、版本 ID、UTC 时间戳和哈希；Merge 后作者发布 v2，验证 parentVersion 指向 v1 且生成新版本哈希与 manifest。",
+        "dependencies": ["P1D-5", "P1D-4", "P1B", "P1C"],
+        "priority": "high"
+      },
+      {
+        "localId": "P1D-9",
+        "title": "构建公开 RO 页面与必显信息",
+        "description": "构建公众可访问的公开 RO 页面：按严肃学术排版（Spec §18.2）展示 Spec §4.3 要求的全部必显信息，支撑验收主流程的公众查看环节（Spec §21.2 步骤10）。",
+        "details": "要点：1) 必显：标题、作者与身份状态、机构声明、摘要、许可、unique ID、版本 ID、发布时间、版本哈希、引用格式、AI 审核摘要及平台法律免责声明（Spec §4.3）；2) 页面含 §6.2 固定声明文案（时间戳不构成专利优先权/著作权/司法存证保证）；3) 一级标签覆盖 Overview、Manuscript、Methods & Experiments、Data & Code、Figures & Visualization、Versions & Diff、Issues、Pull Requests、Reviews & Discussions、Citations & Related Work（Spec §4.3，标签页可先以既有数据渲染，协作标签数据源来自 P1C）；4) public 可见性公众可访问并可被搜索引擎索引，private/invite_only 拒绝未授权访问（Spec §4.2）；5) 公开页优先 SSR/缓存，WCAG AA、移动端功能一致（Spec §18.3、§2.5-5）；6) URL 使用 /research/OSR-YYYY-NNNNNN/v/N 稳定结构（Spec §6.1）。待确认：平台服务条款、隐私政策与免责声明最终文案（Spec §24），先按 §6.2 原文与占位文案实现，文案定稿后替换。涉及模块：apps/web 公开页路由、apps/api /research-objects 公开读接口。\n验收: 步骤10",
+        "testStrategy": "合同测试：公开页数据 Schema；E2E（Spec §21.2 步骤10）：未登录公众访问公开页可见全部必显信息；安全测试：private/invite_only RO 的公开 URL 越权访问被拒（Spec §21.1）。",
+        "dependencies": ["P1D-8", "P1D-6"],
+        "priority": "high"
+      }
+    ]
+  }
+}

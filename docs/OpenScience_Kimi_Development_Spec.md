@@ -77,7 +77,7 @@ OpenScience 是面向 AI 时代的科研基础设施，目标是把一次性 PDF
 3. 主要开发环境在服务器；服务器购买前，Windows 本地仅承担轻量任务，后续可能迁移到 macOS。
 4. 技术栈：Next.js/TypeScript、Node.js API、Python Worker、PostgreSQL、Redis、S3 兼容存储、Docker。
 5. MVP 搜索采用 PostgreSQL 全文检索 + pgvector。
-6. 首版 AI 路由使用 GLM 为主模型，MiniMax 为回退模型。
+6. 首版 AI 路由使用 MiniMax-M3 为主模型；回退/兜底策略由 AI Gateway 配置管理，具体模型与触发条件见 ADR/运行配置，不在业务代码写死。
 7. 用户按月获得固定 AI Credit，管理员可追加。
 
 ### 2.5 UI 与交互
@@ -391,8 +391,8 @@ Hermes 是常驻页面的统一大 Agent，负责理解当前页面、用户意�
 
 ### 9.3 AI 路由
 
-- 主模型：GLM；
-- 回退：MiniMax；
+- 主模型：MiniMax-M3；
+- 回退：由 AI Gateway 配置管理，具体策略见 ADR/运行配置，不在业务代码写死；
 - 所有模型调用经统一 AI Gateway；
 - Gateway 记录模型、版本、token、费用、延迟、错误和回退原因；
 - Provider SDK 不能散落在业务代码中；
@@ -908,7 +908,7 @@ Kimi Code 已内置 Read、Bash、Grep 等能力，不需要为了“有更多�
 - 阿里云 ECS 最终规格、镜像和公网带宽；
 - 服务器年度预算与模型费用边界；
 - 正式实名认证供应商；
-- GLM/MiniMax 的具体 API、模型 ID、结构化输出和价格；
+- MiniMax-M3 及回退模型的具体 API、模型 ID、结构化输出和价格；
 - 中文分词在目标 PostgreSQL/RDS 环境中的实现；
 - DOI/Crossref 申请主体和运营资质；
 - OpenScience 品牌、域名和 unique ID 前缀；

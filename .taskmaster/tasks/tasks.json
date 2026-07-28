@@ -3,141 +3,838 @@
     "tasks": [
       {
         "id": "1",
-        "title": "Infrastructure Setup: Server, Database, and Domain Configuration",
-        "description": "Set up the foundational infrastructure including server deployment, database configuration, domain DNS setup, and scalable IP allocation for the research platform.",
-        "status": "pending",
+        "title": "Phase 0: 现有系统只读审计与目标架构决策",
+        "description": "对 Scholars Tea / AI Research Workshop 现有代码仓执行强制门禁式只读审计（Spec §22 Phase 0、§25、§20.1.2）：建立目录/依赖/服务/数据库/部署地图，形成可复用/重构/淘汰清单，评估安全与数据迁移风险，运行基准测试，产出 docs/CODEBASE_AUDIT.md 与 docs/adr/0001-target-architecture.md 草案。审计完成并经用户确认后才允许进入 Phase 1A（Spec §25 末段）。全程不修改业务代码（Spec §25.5）。",
+        "status": "done",
         "dependencies": [],
         "priority": "high",
-        "details": "**Implementation Details:**\n\n1. **Server Setup:**\n   - Procure and configure one primary server with static IP\n   - Set up operating system (Ubuntu 22.04 LTS recommended)\n   - Configure firewall rules and security groups\n   - Set up Docker and Docker Compose for containerized deployment\n\n2. **Database Configuration:**\n   - Install PostgreSQL 15+ for structured data (users, papers, versions)\n   - Configure PostgreSQL with:\n     - Connection pooling (pgBouncer)\n     - Replication settings for future scaling\n     - Full-text search extension (pg_trgm, GIN indexes)\n   - Set up Redis for caching, sessions, and real-time features\n   - Configure MongoDB for flexible document storage (SDF content, logs)\n\n3. **Domain Setup:**\n   - Register two primary domains (TLD recommendation: .com and .ai)\n   - Configure DNS A records pointing to server IP\n   - Set up subdomains:\n     - api.research-platform.com (backend API)\n     - app.research-platform.com (frontend)\n     - docs.research-platform.com (documentation)\n   - Configure SSL certificates via Let's Encrypt\n   - Set up nginx reverse proxy with load balancing ready\n\n4. **Deployment Pipeline:**\n   - Create Docker Compose stack for production\n   - Set up CI/CD runner for automated deployments\n   - Configure environment variables management\n   - Set up logging (ELK stack or Loki/Promtail/Grafana)\n\n5. **Monitoring:**\n   - Set up health check endpoints\n   - Configure server monitoring (CPU, RAM, disk, network)\n   - Set up alerting for critical infrastructure metrics",
-        "testStrategy": "1. Server connectivity test: Verify SSH access and network stability\n2. Database connectivity test: Run pg_isready, verify query performance with sample data\n3. DNS propagation test: Use dig/nslookup to verify domain resolution\n4. SSL certificate test: Verify HTTPS with SSL Labs rating\n5. Nginx reverse proxy test: Test all subdomain routing\n6. Health check test: curl /health endpoints for all services\n7. Load test: Simulate 100 concurrent users to verify infrastructure stability",
-        "subtasks": []
+        "details": "",
+        "testStrategy": "",
+        "subtasks": [
+          {
+            "id": "1.1",
+            "title": "定位 Scholars Tea / AI Research Workshop 现有代码仓并建立只读访问",
+            "description": "找到现有系统代码仓的真实位置与访问方式（当前不在本工作目录，是 Phase 0 的前置阻塞项，设计文档 §2.3）。确认仓库远程地址、分支、最近提交与可构建性；找不到则阻塞并向用户报告，不虚构审计结论（设计文档 §7 风险表）。",
+            "status": "done",
+            "dependencies": [],
+            "priority": "high",
+            "details": "向用户确认或在本机/服务器/远端托管平台定位 Scholars Tea 与 AI Research Workshop 仓库；记录仓库 URL、默认分支、最近活跃提交、许可证；以只读方式 clone 或挂载到审计工作区；核实 README 与启动脚本是否可运行。对应 Spec §25 首次执行指令的前置条件与 §24 待确认项『现有仓库的真实框架、依赖和数据库版本』。约束：只读访问，不修改业务代码（Spec §25.5），不读取/打印 .env 值（AGENTS.md 安全红线）。\n验收: -",
+            "testStrategy": "最小测试：仓库 clone 成功、`git log -5` 有输出、记录远程地址与分支清单。阶段验收点：无（审计底座任务，Spec §21.1 不适用）；产出作为 P0-2 及后续全部审计任务的输入。",
+            "parentId": "1"
+          },
+          {
+            "id": "1.2",
+            "title": "建立现有仓库目录、依赖、服务与部署地图",
+            "description": "按 Spec §25.1 建立目录结构、依赖清单、服务清单与部署地图，是后续分类与风险评估的事实基础；同时落实 §20.1.2『首次进入仓库必须执行代码审计，不得立即重构』。",
+            "status": "done",
+            "dependencies": [
+              "1.1"
+            ],
+            "priority": "high",
+            "details": "产出四张地图（写入审计工作区临时笔记，最终汇入 CODEBASE_AUDIT.md）：1) 目录地图：顶层目录职责、前后端/worker 边界；2) 依赖地图：package.json/requirements.txt 等清单、关键框架与版本（Next.js/Node/Python/DB 客户端等）；3) 服务地图：进程、端口、定时任务、WebSocket 端点、第三方 API 调用点；4) 部署地图：现有部署方式、服务器/域名/进程管理、CI 配置。每条结论必须引用具体文件路径或运行证据（Spec §25.7）。框架与版本实测结果回填 Spec §24『现有仓库的真实框架、依赖和数据库版本』待确认项。\n验收: -",
+            "testStrategy": "最小测试：四张地图每一节均带文件路径引用；随机抽 5 条结论人工核对路径存在。阶段验收点：无（底座任务）；地图完整性由 P0-8 汇总审计时复核。",
+            "parentId": "1"
+          },
+          {
+            "id": "1.3",
+            "title": "审计现有数据库结构、迁移与环境变量键清单",
+            "description": "按 Spec §25.1 建立数据库与环境变量地图，识别数据模型与迁移现状，为迁移风险评估（P0-6）与 ADR-0001 数据层决策提供依据；同时遵守 Spec §20.1.9『不得把生产 Secret、真实用户数据拉入上下文』。",
+            "status": "done",
+            "dependencies": [
+              "1.1"
+            ],
+            "priority": "high",
+            "details": "审计内容：1) 数据库类型与版本（PostgreSQL/MySQL/SQLite 等）、schema/迁移文件清单、核心表与关系；2) 是否已有用户、文章、社区等存量数据及其规模估算（用 COUNT 级统计，不导出记录内容）；3) 环境变量键名清单（只列键名与用途，严禁打印值，对应 AGENTS.md 红线与 Spec §20.1.9）；4) 现有数据与 Spec §15 目标实体（User、Workspace、ResearchObject 等）的差距初判。产出：数据库地图 + 环境变量键清单 + 存量数据规模说明，供 P0-6 迁移风险评估使用。\n验收: -",
+            "testStrategy": "最小测试：schema 地图与迁移文件一一对应可核对；环境变量清单只含键名（grep 验证无 value 泄漏）；数据规模只含行数统计。阶段验收点：对应 Spec §21.1 恢复测试的前置信息收集（备份现状记录），无直接验收步骤。",
+            "parentId": "1"
+          },
+          {
+            "id": "1.4",
+            "title": "识别 Hermes、认证、上传、社区、WebSocket、模型路由等关键现有模块",
+            "description": "按 Spec §25.2 找出与 Hermes、AI Workshop、认证、上传、社区、WebSocket、模型路由有关的现有模块，明确其代码位置与当前行为，是可复用性分类（P0-5）的直接输入。",
+            "status": "done",
+            "dependencies": [
+              "1.2"
+            ],
+            "priority": "high",
+            "details": "逐类定位并记录：1) Hermes/Agent 相关：对话、工具调用、任务编排代码；2) AI Workshop：AI 功能入口与 prompt 处理；3) 认证：登录/注册/session 实现方式；4) 上传：文件接收、存储落点、类型检查；5) 社区：帖子/评论/群聊类功能；6) WebSocket：实时通道用途与鉴权；7) 模型路由：Provider SDK 调用点、模型选择与回退逻辑（对照 Spec §9.3 目标：统一 AI Gateway、SDK 不散落业务代码）。每个模块记录：入口文件路径、对外接口、依赖、当前是否可用（以运行证据或测试为准）。\n验收: -",
+            "testStrategy": "最小测试：七类模块每类至少一条带路径的定位记录；『当前是否可用』结论附运行或测试证据，无证据标『未能验证』。阶段验收点：无（底座任务）。",
+            "parentId": "1"
+          },
+          {
+            "id": "1.5",
+            "title": "形成现有模块保留、局部重构、替换、待确认分类清单",
+            "description": "按 Spec §25.3 将全部现有模块按『保留 / 局部重构 / 替换 / 待确认』分类，落实 Spec §2.1.1『保留可复用模块但重新设计整体架构』，作为 ADR-0001 模块取舍的直接依据。",
+            "status": "done",
+            "dependencies": [
+              "1.4"
+            ],
+            "priority": "high",
+            "details": "基于 P0-2 地图与 P0-4 模块清单逐项分类，每条给出：分类结论、理由（对照 Spec 目标架构 §14.1 Monorepo 与 §2 已确认决策）、目标去向（对应 packages/* 或 apps/* 中的位置，或标记淘汰）、工作量初估。分类规则：与 Spec §19 Phase 2 清单重合的现有功能（如群聊、点赞）标『保留但冻结，不进 MVP』，禁止在 MVP 任务中复活；无法判断的标『待确认』并写明需要谁确认（Spec §24：不允许猜测写死）。\n验收: -",
+            "testStrategy": "最小测试：分类清单覆盖率 100%（P0-4 清单中每个模块有且仅有一个分类）；每条分类带 Spec 章节或架构理由引用。阶段验收点：无（底座任务）；清单由用户在 ADR-0001 评审时确认（P0-9）。",
+            "parentId": "1"
+          },
+          {
+            "id": "1.6",
+            "title": "评估现有系统安全风险与数据迁移风险",
+            "description": "按 Spec §25.4 标记安全风险、重复实现、失效功能和数据迁移风险；安全评估对照 Spec §17 MUST 清单逐条核查现状差距，迁移风险评估为 ADR-0001 数据迁移路线提供输入。",
+            "status": "done",
+            "dependencies": [
+              "1.3",
+              "1.4"
+            ],
+            "priority": "high",
+            "details": "两部分产出：1) 安全风险清单：对照 Spec §17 MUST 逐条核查现有实现（密钥是否入库/入仓、鉴权与越权、上传检测、限流、Session/CORS 配置、日志是否泄漏敏感信息），每项记录现状、差距、严重级别；同时标记重复实现与失效功能（§25.4）。2) 数据迁移风险：基于 P0-3 数据库地图，评估存量数据映射到 Spec §15 目标实体的缺口、迁移数据量、不可逆操作点、需要的备份前置；产出迁移风险清单，不写迁移方案细节（属 Phase 1A/ADR 范畴）。凭据相关结论只描述存放位置与形态，不记录值（Spec §20.1.9）。\n验收: -",
+            "testStrategy": "最小测试：Spec §17 MUST 每条均有『现状/差距/级别』三栏记录，无遗漏；迁移风险每条附数据量或表级证据。阶段验收点：对应 Spec §21.1 安全测试层的前置基线（现有风险台账），无直接验收步骤。",
+            "parentId": "1"
+          },
+          {
+            "id": "1.7",
+            "title": "运行现有测试套件并执行关键路径基准测试",
+            "description": "按 Spec §22 Phase 0『基准测试』要求，运行现有测试与关键路径性能测量，为『哪些模块值得保留』提供质量证据，也为重构后的性能对比建立基线。",
+            "status": "deferred",
+            "dependencies": [
+              "1.2"
+            ],
+            "priority": "medium",
+            "details": "1) 测试现状：跑通现有测试套件（单元/集成/E2E 视仓库现状），记录通过率、失败清单与失败原因初判；测试命令按 Spec §20.5 走白名单/询问权限。2) 基准测试：对关键路径（首页/核心读接口/上传/AI 调用各选代表）做轻量测量（响应时间、吞吐量级即可，不做全量压测），记录环境、方法与结果。3) 产出：测试报告 + 基准数据表，汇入 CODEBASE_AUDIT.md。约束：基准测试在现有系统的测试/开发环境执行，不触生产数据（Spec §20.1.9）；无法运行的部分如实记录『未能验证』，不得声称已完成（Spec §20.1.7）。\n验收: -",
+            "testStrategy": "最小测试：测试运行命令与原始输出存档；基准表每条含环境、方法、数值三要素。阶段验收点：对应 Spec §21.1 性能测试层的基线数据，无直接验收步骤。",
+            "parentId": "1"
+          },
+          {
+            "id": "1.8",
+            "title": "撰写 docs/CODEBASE_AUDIT.md 审计报告",
+            "description": "按 Spec §25.6 产出正式审计报告 docs/CODEBASE_AUDIT.md，汇总地图、分类、风险、基准全部结论，是 Phase 0 的核心交付物与 Phase 1A 的输入基线。",
+            "status": "done",
+            "dependencies": [
+              "1.5",
+              "1.6",
+              "1.7"
+            ],
+            "priority": "high",
+            "details": "报告结构：1) 仓库概况与目录/依赖/服务/部署地图（P0-2）；2) 数据库与环境变量地图（P0-3）；3) 关键模块清单（P0-4）；4) 保留/局部重构/替换/待确认分类清单（P0-5）；5) 安全风险与数据迁移风险（P0-6）；6) 测试与基准结果（P0-7）；7) 回填 Spec §24 中『现有仓库的真实框架、依赖和数据库版本』实测结论，其余 §24 项原样列为待确认。硬性要求：所有结论必须引用具体文件路径或运行证据（Spec §25.7）；报告写入产品 Monorepo 建成前的当前管理仓 docs/ 下，并在 project_index.md 登记（AGENTS.md 文档操作规则——登记动作由主 agent 在合并阶段执行，本任务只产出报告文件）。\n验收: -",
+            "testStrategy": "最小测试：报告七节齐全；抽查 10 条结论的路径/证据可追溯；§24 待确认项逐条列出无遗漏。阶段验收点：无（文档交付）；报告完整性是 P0-9 ADR-0001 评审的前置条件。",
+            "parentId": "1"
+          },
+          {
+            "id": "1.9",
+            "title": "起草 ADR-0001 目标架构并提交用户确认",
+            "description": "按 Spec §25.6 产出 docs/adr/0001-target-architecture.md 草案，落实 Spec §20.1.8『每个重大架构决定写入 docs/adr/』；经用户确认后 Phase 0 才算完成，是进入 Phase 1A 的唯一门禁（Spec §25 末段）。",
+            "status": "done",
+            "dependencies": [
+              "1.8"
+            ],
+            "priority": "high",
+            "details": "ADR-0001 内容：1) 目标架构决策：基于审计结论确定 Monorepo 模块边界（对照 Spec §14.1 示例，按 §14.1『具体目录必须在现有代码审计后调整；禁止为了匹配示例而无理由搬动稳定代码』裁剪）；2) 模块取舍：引用 P0-5 分类清单，明确保留/重构/替换的落地方式；3) 技术栈确认或偏离说明（对照 Spec §2.4.4：Next.js/TS、Node API、Python Worker、PostgreSQL、Redis、S3 兼容存储、Docker）；4) 数据迁移路线原则（引用 P0-6 风险清单，声明迁移必须向前可部署、可回滚或有补偿，Spec §15）；5) 待确认项清单：Spec §24 全部未决项原样列出并标注决策负责人，禁止猜测写死。草案提交用户审阅，记录确认结论；未确认前不启动任何 Phase 1A 任务。\n验收: -",
+            "testStrategy": "最小测试：ADR 五节齐全；每条架构决策可回溯到 CODEBASE_AUDIT.md 的具体结论；§24 待确认项逐条在列。阶段验收点：无（门禁文档）；用户书面确认 = Phase 0 完成判据（Spec §25）。",
+            "parentId": "1"
+          }
+        ],
+        "updatedAt": "2026-07-28T04:41:05.303Z"
       },
       {
         "id": "2",
-        "title": "GitHub Repository and Collaboration Infrastructure Setup",
-        "description": "Initialize GitHub repository structure, set up team access controls, branch protection rules, and collaboration workflows for the development team.",
-        "status": "pending",
+        "title": "Phase 1A: 平台底座（Monorepo、Auth/Workspace/RBAC、数据与存储基础、审计、CI/CD）",
+        "description": "搭建 MVP 平台底座：Monorepo 与模块边界（Spec §14.1）；Auth + 邀请码 + 邮箱验证（Spec §2.1、§3.1）；Workspace + RBAC 且 API 层强制授权（Spec §3.2、§3.3、§17）；PostgreSQL + Redis + Storage Adapter（Spec §13.1、§14.2、§15）；统一错误/日志/配置/审计（Spec §17）；AI Credit 账务骨架（Spec §2.4.7、§13.3）；CI/CD 与阿里云 ECS 部署（Spec §14.2、§17）。前置门禁：Phase 0 审计完成并经用户确认（Spec §22、§25）。本阶段不含 SDF/编辑器（1B）、协作（1C）、Hermes/发布（1D）、可视化沙箱（1E）及任何 §19 Phase 2 功能。",
+        "status": "in-progress",
         "dependencies": [
           "1"
         ],
         "priority": "high",
-        "details": "**Implementation Details:**\n\n1. **Repository Structure:**\n   - Create monorepo structure:\n     ```\n     /frontend          # React/Next.js application\n     /backend           # FastAPI/Node.js backend\n     /shared            # Shared types, utilities\n     /infrastructure    # Terraform/Docker configs\n     /docs              # Technical documentation\n     ```\n   - Initialize with .gitignore, README.md, LICENSE (AGPL-3.0 recommended)\n   - Set up GitHub Actions workflows\n\n2. **Access Control:**\n   - Configure team with appropriate roles\n   - Set up 2FA requirements for all collaborators\n   - Create CODEOWNERS file for code review requirements\n\n3. **Branch Strategy:**\n   - main: Production-ready code (protected)\n   - develop: Integration branch (protected)\n   - feature/*: Feature branches\n   - fix/*: Bug fix branches\n   - Branch protection: Require PR reviews, status checks passing\n\n4. **CI/CD Workflows:**\n   - Lint and type-check on PR\n   - Unit tests with coverage reports\n   - Integration tests\n   - Docker image build and push\n   - Preview deployment for PRs\n\n5. **DingTalk Integration:**\n   - Configure DingTalk webhook for GitHub notifications\n   - Set up team channel for commits, PRs, and CI status\n   - Configure alerts for failed builds",
-        "testStrategy": "1. Repository access test: Verify all team members can clone and push\n2. Branch protection test: Attempt direct push to main (should fail)\n3. PR workflow test: Create PR, verify required checks trigger\n4. CI/CD test: Verify pipeline runs on commit\n5. Notification test: Verify DingTalk receives GitHub events",
-        "subtasks": []
+        "details": "",
+        "testStrategy": "",
+        "subtasks": [
+          {
+            "id": "2.1",
+            "title": "初始化 Monorepo 骨架与模块边界",
+            "description": "按 Spec §14.1 推荐结构建立 pnpm Monorepo（apps/web、apps/api、packages/domain、packages/database、packages/auth、packages/storage、packages/config、packages/observability、packages/ui 等），技术栈对齐 Spec §2.4.4（Next.js/TypeScript、Node.js API、PostgreSQL、Redis、Docker），为后续 1B–1E 提供落点。",
+            "status": "done",
+            "dependencies": [
+              "1"
+            ],
+            "priority": "high",
+            "details": "实现要点：pnpm-workspace + 共享 tsconfig/eslint 基线；apps/api 采用模块化 REST 结构预留 §16 模块位（/auth、/workspaces、/usage、/admin 先行）；目录可据 Phase 0 审计结论调整（§14.1：禁止为匹配示例无理由搬动稳定代码）；模块边界规则写入 architecture-guard 对照清单（Provider SDK 不得散落业务代码，§9.3）；不实现任何业务功能，仅骨架与构建可跑通。MUST 映射：§2.4.4 技术栈；§14.1 Monorepo。验收: -",
+            "testStrategy": "最小测试：workspace 全量 build/typecheck/lint 通过；web 与 api 空壳可启动。阶段验收点：单元/构建层（Spec §21.1），为 CI 提供首个可跑流水线目标。",
+            "parentId": "2"
+          },
+          {
+            "id": "2.2",
+            "title": "搭建 PostgreSQL、Redis 与 Storage Adapter 数据基础",
+            "description": "建立数据库连接层、迁移机制与对象存储抽象：PostgreSQL + Redis（Spec §2.4.4、§14.2），迁移向前可部署、可回滚或有补偿（Spec §15），Storage Adapter 单机期使用本地 S3 兼容/MinIO 实现（Spec §13.1）。",
+            "status": "pending",
+            "dependencies": [
+              "2.1"
+            ],
+            "priority": "high",
+            "details": "实现要点：docker-compose 开发环境（postgres、redis、minio）；packages/database 提供连接池与迁移 runner，生产禁止自动破坏性迁移（§15 MUST）；packages/storage 定义 Storage Adapter 接口（put/get/delete/签名校验），数据库只存元数据与对象键、不存大二进制（§13.1）；迁移期可切换阿里云 OSS 的配置位预留但不实现 OSS 客户端（YAGNI）。MUST 映射：§13.1 存储层；§15 迁移规则。验收: -",
+            "testStrategy": "最小测试：迁移 up/down 集成测试；Storage Adapter 对 MinIO 的读写与错误路径集成测试（Spec §21.1 集成测试层）。阶段验收点：compose 一键起栈，迁移可重复执行且可回滚。",
+            "parentId": "2"
+          },
+          {
+            "id": "2.3",
+            "title": "实现邀请码注册与邮箱验证 Auth",
+            "description": "实现测试阶段注册闭环：注册需邀请码、邮箱验证后激活（Spec §2.1.3、§2.1.4），账户状态机 invited/email_verified/suspended/deleted（Spec §3.1），/auth API 模块（Spec §16）。这是验收主流程步骤1的直接支撑。",
+            "status": "pending",
+            "dependencies": [
+              "2.2"
+            ],
+            "priority": "high",
+            "details": "实现要点：Invitation 实体与邀请码生成/核销（管理员侧最小能力即可）；注册→invited→邮箱验证→email_verified；identity_verified 仅预留字段与状态位，第三方实名供应商为 §24 待确认项，不得猜测写死；Session/Cookie 安全配置与 §17 对齐（配合 P1A-8）；登录接口限流挂接点预留；密码哈希使用成熟算法（如 argon2/bcrypt，按现有依赖选型）。MUST 映射：§2.1.3 邀请码；§2.1.4 邮箱验证；§3.1 账户状态。验收: 步骤1",
+            "testStrategy": "最小测试：注册/验证/登录/状态迁移单元+集成测试；无邀请码与无效验证码的拒绝路径。阶段验收点：对应 §21.2 步骤1——受邀用户可注册并验证邮箱（E2E 层在本阶段先以 API 级用例覆盖，UI E2E 随 web 壳补齐）。",
+            "parentId": "2"
+          },
+          {
+            "id": "2.4",
+            "title": "实现 Workspace 模型与成员管理",
+            "description": "实现统一 Workspace 模型：每个用户自动拥有 Personal Workspace，可创建/加入 Team/Lab Workspace，个人与团队共用同一套数据模型（Spec §3.2）；提供 /workspaces API（Spec §16）。支撑验收步骤2中“个人 Workspace”部分。",
+            "status": "pending",
+            "dependencies": [
+              "2.3"
+            ],
+            "priority": "high",
+            "details": "实现要点：Workspace、Membership、Invitation（workspace 级邀请）实体；注册完成自动创建 Personal Workspace；RO 创建时选择 workspace 的归属字段预留（RO 实体本身属 1B）；所有权、存储额度、成员权限、审计以 Workspace 为边界（§3.2）；加入/移除成员、角色指派接口。MUST 映射：§3.2 Workspace 统一模型与自动 Personal Workspace。验收: 步骤2",
+            "testStrategy": "最小测试：自动建 Personal Workspace、成员增删、角色变更的集成测试；跨 workspace 数据隔离负向用例。阶段验收点：§21.2 步骤2 前置条件——验证邮箱用户拥有可用个人 Workspace（RO 创建由 1B 完成）。",
+            "parentId": "2"
+          },
+          {
+            "id": "2.5",
+            "title": "实现 RBAC 权限层并在 API 强制授权",
+            "description": "实现 Spec §3.3 角色表（Owner/Maintainer/Author/Contributor/Reviewer/Viewer/Moderator/Platform Admin）的 RBAC + 资源归属检查，授权必须在 API 层强制执行，禁止仅前端隐藏按钮（Spec §3.3、§17）。",
+            "status": "pending",
+            "dependencies": [
+              "2.4"
+            ],
+            "priority": "high",
+            "details": "实现要点：packages/auth 提供权限判定与 API 中间件/守卫；所有受保护端点统一走授权检查；防止跨 Workspace 越权（§17 MUST）——任何资源访问先解析 workspace 归属再判角色；前端仅消费权限结果做展示裁剪，不作为安全边界；为 1B–1D 的 RO/Branch/PR 等资源预留策略扩展点。MUST 映射：§3.3 RBAC + API 层授权；§17 防跨 Workspace 越权。验收: -",
+            "testStrategy": "最小测试：每个角色×关键动作的授权矩阵单元测试；越权访问负向集成测试（Spec §21.1 安全测试层的越权基线）。阶段验收点：未授权请求一律 403，测试证据留档。",
+            "parentId": "2"
+          },
+          {
+            "id": "2.6",
+            "title": "建立统一错误、日志、配置与审计底座",
+            "description": "建立 packages/config 与 packages/observability：统一错误格式、结构化日志、集中配置管理、AuditLog 实体与写操作审计（Spec §17：全部写操作记录审计日志；生产日志不得记录完整论文、密钥、身份证等敏感信息）。",
+            "status": "pending",
+            "dependencies": [
+              "2.1"
+            ],
+            "priority": "high",
+            "details": "实现要点：统一错误码/错误响应 Schema 供全部 API 模块使用；结构化日志（请求级 trace id）+ 敏感字段脱敏过滤器（§17 MUST）；配置集中读取环境变量，密钥仅来自服务器 Secret/环境变量、不进仓库（§17 MUST）；AuditLog 只追加写入，覆盖 auth/workspace/成员/权限等本阶段全部写操作；审计查询最小管理员接口（/admin 占位）。MUST 映射：§17 审计日志、密钥管理、日志脱敏。验收: -",
+            "testStrategy": "最小测试：写操作产生审计记录的集成测试；日志脱敏过滤器单元测试（构造含密钥样式字符串验证不落盘）。阶段验收点：§21.1 单元/集成层；抽查任意一条写路径均有审计行。",
+            "parentId": "2"
+          },
+          {
+            "id": "2.7",
+            "title": "实现配额策略与 AI Credit 账务骨架",
+            "description": "实现 UsageLedger 与 QuotaPolicy 骨架：用户按月获得固定 AI Credit、管理员可追加（Spec §2.4.7）；配额按用户等级/Workspace/文件类型配置且必须后台可配置、不写死前端（Spec §13.3、§15）。",
+            "status": "pending",
+            "dependencies": [
+              "2.4",
+              "2.6"
+            ],
+            "priority": "medium",
+            "details": "实现要点：QuotaPolicy（单文件大小、Workspace 总容量、单 RO 容量、月上传流量、AI Credit、Python 任务次数、并发任务数——字段按 §13.3 建模，本阶段仅建表与读写，执行点由 1B/1D/1E 挂接）；UsageLedger 只追加记账与月度 AI Credit 重置任务骨架；管理员追加 Credit 接口（走 P1A-5 授权与 P1A-6 审计）；初始具体数值为 §24 待确认项，配置留空默认值待运营决策，不得猜测写死。MUST 映射：§2.4.7 AI Credit；§13.3 配额可配置。验收: -",
+            "testStrategy": "最小测试：记账、月度重置、管理员追加的单元/集成测试；超额判定纯函数单元测试。阶段验收点：§21.1 单元层（配额属 §21.1 明列测试对象）；账务与审计记录一致。",
+            "parentId": "2"
+          },
+          {
+            "id": "2.8",
+            "title": "落实安全基线（限流、会话安全、管理后台强认证）",
+            "description": "落实 Spec §17 安全 MUST 中属平台底座的部分：登录等接口限流；Session、Cookie、CSRF、CORS、CSP 正确配置；管理后台启用更强认证。",
+            "status": "pending",
+            "dependencies": [
+              "2.3",
+              "2.6"
+            ],
+            "priority": "high",
+            "details": "实现要点：基于 Redis 的限流中间件，登录接口先行启用，发布/上传/AI/搜索/沙箱接口的限流挂接点随各 Phase 接入（§17 MUST）；Session/Cookie（HttpOnly/Secure/SameSite）、CSRF token、CORS 白名单、CSP 头的集中配置；管理后台（/admin）强制更强认证（如独立二次验证，方案记入 ADR）；上传恶意扫描、公开前敏感扫描、Sandbox 威胁模型分别属 1B/1D/1E，不在本任务。MUST 映射：§17 限流、会话安全、管理后台强认证。验收: -",
+            "testStrategy": "最小测试：限流触发/恢复集成测试；CSRF 缺失拒绝用例；安全响应头断言测试（Spec §21.1 安全测试层）。阶段验收点：安全基线检查清单逐项通过并留证据。",
+            "parentId": "2"
+          },
+          {
+            "id": "2.9",
+            "title": "建立 CI/CD 与阿里云 ECS 部署及备份",
+            "description": "建立 CI 流水线与单 ECS 部署：拓扑与网络分段对齐 Spec §14.2（public_net/app_net/data_net，数据库不绑公网，安全组仅 80/443 与受限运维入口）；数据库每日备份并定期恢复演练（Spec §17 MUST）；部署走仓库脚本化（Spec §20.4）。",
+            "status": "pending",
+            "dependencies": [
+              "2.2",
+              "2.6",
+              "2.8"
+            ],
+            "priority": "high",
+            "details": "实现要点：CI（build/typecheck/lint/最小测试）与镜像构建；compose 生产配置含网络分段与 nginx/caddy 反向代理；部署脚本填充管理仓 infra/scripts/deploy.sh 与 backup.sh 骨架（设计文档 §4.3 已占位），备份脚本每日 dump + 对象存储快照，docs/runbooks/backup-restore.md 记录恢复演练步骤并完成一次演练；ECS 最终规格/带宽为 §24 待确认项，脚本参数化不写死；部署与迁移属 Spec §20.5 询问级操作，脚本默认 dry-run 需 --confirm。MUST 映射：§14.2 网络与安全组；§17 每日备份与恢复演练。验收: -",
+            "testStrategy": "最小测试：CI 全绿；部署脚本 dry-run 校验；备份产出物执行一次真实恢复演练并记录（Spec §21.1 恢复测试层）。阶段验收点：邀请测试环境可从零部署且数据库可恢复。",
+            "parentId": "2"
+          }
+        ],
+        "updatedAt": "2026-07-28T04:41:41.928Z"
       },
       {
         "id": "3",
-        "title": "Core Research Object Model and Version Control System",
-        "description": "Design and implement the fundamental Research Object data model with version control capabilities similar to Git, including branches, commits, and history tracking.",
+        "title": "Phase 1B: SDF 与版本",
+        "description": "实现 SDF 六字段 Schema、三栏编辑器、Artifact/Blob 内容寻址存储、Commit/Manifest 增量版本、多类型 Diff、unique ID 与稳定 URL、私有/邀请/公开可见性（Spec §22 Phase 1B；依据 Spec §4–§7、§13、§15、§16、§17、§18）。不含 Hermes AI 提取与发布流程（Phase 1D）、不含 Branch/Fork/PR 协作交互（Phase 1C）。",
         "status": "pending",
         "dependencies": [
-          "1",
           "2"
         ],
         "priority": "high",
-        "details": "**Implementation Details:**\n\n1. **Data Models:**\n\n   ```python\n   # ResearchObject Model\n   class ResearchObject:\n       id: UUID\n       owner_id: UUID\n       title: str\n       abstract: str\n       current_version: str\n       created_at: datetime\n       updated_at: datetime\n       status: enum(public, draft, archived)\n       community_id: UUID (optional)\n       tags: list[str]\n       license: str\n       visibility: enum(public, private, unlisted)\n   \n   # Version Model (Git-like commits)\n   class Version:\n       id: UUID\n       research_object_id: UUID\n       version_hash: str  # SHA-256 of content\n       parent_hash: str (nullable)\n       branch: str\n       message: str\n       author_id: UUID\n       created_at: datetime\n       changes_summary: str\n       is_release: bool\n   \n   # Branch Model\n   class Branch:\n       id: UUID\n       research_object_id: UUID\n       name: str\n       head_version_id: UUID\n       is_default: bool\n       created_at: datetime\n   \n   # SDF Content Model\n   class SDFContent:\n       id: UUID\n       version_id: UUID\n       manuscript: JSON  # paper.md, abstract.md, references.json\n       experiment: JSON  # protocols, data, notebooks\n       code: JSON        # source files, environment\n       figures: JSON     # images, interactive visualizations\n       discussions: JSON # comments, responses\n       history: JSON     # version history metadata\n       metadata: JSON    # problem, insight, method, results, limitations, reproducibility\n   ```\n\n2. **Version Control Service:**\n   - Implement diff algorithm for comparing SDF versions\n   - Create content addressing system (hash-based)\n   - Implement branch operations (create, merge, delete)\n   - Build content storage with deduplication\n   - Implement rollback capabilities\n\n3. **API Endpoints:**\n   ```\n   POST   /api/v1/research-objects\n   GET    /api/v1/research-objects/{id}\n   PUT    /api/v1/research-objects/{id}\n   DELETE /api/v1/research-objects/{id}\n   \n   POST   /api/v1/research-objects/{id}/versions\n   GET    /api/v1/research-objects/{id}/versions\n   GET    /api/v1/research-objects/{id}/versions/{hash}\n   GET    /api/v1/research-objects/{id}/diff?from={hash}&to={hash}\n   \n   POST   /api/v1/research-objects/{id}/branches\n   GET    /api/v1/research-objects/{id}/branches\n   POST   /api/v1/research-objects/{id}/branches/{name}/merge\n   POST   /api/v1/research-objects/{id}/forks\n   GET    /api/v1/research-objects/{id}/forks\n   ```\n\n4. **Content Storage:**\n   - Implement content-addressable storage\n   - Support file uploads up to 100MB per file\n   - Store metadata in PostgreSQL\n   - Store actual content in object storage (MinIO/S3-compatible)\n   - Implement incremental storage for large files",
-        "testStrategy": "1. Unit tests: Test all model validations and relationships\n2. Version creation test: Create version, verify hash generation and parent linking\n3. Diff test: Compare two versions, verify correct diff output\n4. Branch test: Create branch, commit to branch, merge branches\n5. Fork test: Fork research object, verify independent versioning\n6. Rollback test: Revert to previous version, verify data integrity\n7. Concurrent edit test: Simulate simultaneous commits, verify no data loss\n8. API integration test: Test all endpoints with Postman/Supertest",
-        "subtasks": []
+        "details": "",
+        "testStrategy": "",
+        "subtasks": [
+          {
+            "id": "3.1",
+            "title": "定义 SDF 六字段 JSON Schema 包",
+            "description": "在 packages/sdf-schema 中定义 SDF 六个必填字段（problem/insight/method/results/limitations/reproducibility）与可选字段的 JSON Schema，供前后端共用校验（Spec §5.1、§5.3、§2.2.1）。",
+            "status": "pending",
+            "dependencies": [
+              "2"
+            ],
+            "priority": "high",
+            "details": "产出 packages/sdf-schema：core.json Schema、manifest.json 最小结构 Schema（schema/schemaVersion/objectId/versionId/version/visibility/contentHash/licenses/artifacts/parentVersion/forkedFrom 等字段，对齐 Spec §5.3 示例）；Schema 变更遵循语义化版本（Spec §5.3 MUST）；schemaVersion 初始 0.1.0；前后端通过同一包做合同校验。MUST 映射：§5.3“字段必须有 JSON Schema；Schema 变更遵循语义化版本”。\n验收: -",
+            "testStrategy": "单元测试：合法/非法 SDF 文档校验通过/拒绝用例（§21.1 单元层）；合同测试：前后端引用同一 Schema 包（§21.1 合同层）。",
+            "parentId": "3"
+          },
+          {
+            "id": "3.2",
+            "title": "建立 RO 与 SDF 数据模型及迁移",
+            "description": "建立 ResearchObject、SDFDocument、SDFNode 数据实体与数据库迁移，支持在个人 Workspace 创建私有 RO（Spec §15、§4.1、§3.2、验收主流程步骤 2）。",
+            "status": "pending",
+            "dependencies": [
+              "2"
+            ],
+            "priority": "high",
+            "details": "实体覆盖 Spec §15 中 ResearchObject、SDFDocument、SDFNode（Blob/Artifact/Commit/Version 等见 P1B-3/4）；RO 状态机字段按 §4.1（draft/under_review/approved/published/revised/withdrawn/restricted/rejected/archived），MVP 内仅落地 draft 及后续阶段所需状态枚举，不实现 1C/1D 的流转逻辑；RO 归属 Workspace（§3.2）；迁移向前可部署、可回滚或有补偿步骤（§15 MUST）；提供 /research-objects、/sdf API 骨架（§16），写操作带幂等键与乐观锁（§16）。\n验收: 步骤2",
+            "testStrategy": "单元测试：状态枚举与归属规则（§21.1 单元层）；集成测试：迁移可上可下、创建 RO 落库（§21.1 集成层）；E2E 预备：受邀用户创建私有 RO（§21.2 步骤 2）。",
+            "parentId": "3"
+          },
+          {
+            "id": "3.3",
+            "title": "实现 Blob 内容寻址存储与上传管线",
+            "description": "实现以 SHA-256 为键的 Blob 存储与 Artifact 元数据（逻辑路径、MIME、大小、hash），接入 Phase 1A Storage Adapter，含上传分片、校验和、MIME 检测与病毒扫描（Spec §7.2、§13.1、§17）。",
+            "status": "pending",
+            "dependencies": [
+              "2",
+              "3.2"
+            ],
+            "priority": "high",
+            "details": "产出 packages/storage 的 Blob 层：Blob 以 SHA-256 为键保存（§7.2.1 MUST）；Artifact 记录逻辑路径、MIME、大小、Blob hash（§7.2.2）；数据库只存元数据和对象键，不存大二进制（§13.1）；上传使用分片、校验和、MIME 检测与病毒扫描（§13.1、§17 MUST：上传文件类型检测、大小限制和恶意内容扫描）；相同内容 Blob 去重只存一次（§2.2.4、§7.1）；单文件大小等限制走后台可配置配额，不写死前端（§13.3；初始数值为 Spec §24 待确认项，需做成配置而非常量）。\n验收: 步骤14",
+            "testStrategy": "单元测试：哈希计算、去重逻辑（§21.1 单元层）；集成测试：上传→存储→读取回环、重复上传不产生新 Blob（§21.1 集成层）；安全测试：伪装 MIME/超限文件拒绝（§21.1 安全层、§17）。",
+            "parentId": "3"
+          },
+          {
+            "id": "3.4",
+            "title": "实现 Commit/Manifest 增量版本引擎",
+            "description": "在 packages/versioning 实现 Commit、ChangeSet、Version、VersionManifest：版本可完整重建、可校验，未变化 Artifact 复用原 Blob，SDF 结构化变化用 RFC 6902 JSON Patch（Spec §7.1、§7.2、§2.2.3）。",
+            "status": "pending",
+            "dependencies": [
+              "3.1",
+              "3.3"
+            ],
+            "priority": "high",
+            "details": "Version Manifest 保存版本对 Artifact 的引用（§7.2.3）；未改变 Artifact 继续引用原 Blob（§7.2.4 MUST）；SDF JSON 结构化变化使用 RFC 6902 JSON Patch（§7.2.5）；可生成小型逻辑检查点加速重建但相同 Blob 不重复保存（§7.2.7）；已公开版本永久不可原地修改，修改必须产生新版本（§2.2.3、§7.1 MUST，写入路径强制校验）；任意版本可完整重建并可校验（§7.1）；提供 /commits、/versions API（§16）；写操作记录审计日志（§17 MUST）。Commit 先挂在 RO 默认主线，完整 Branch 模型在 Phase 1C 落地，字段设计不得封死分支扩展（§19 约束）。\n验收: 步骤6,14",
+            "testStrategy": "单元测试：JSON Patch 应用/逆推、Manifest 重建、不可变校验（§21.1 单元层：diff/版本规则）；集成测试：创建 Commit→生成 Manifest→完整重建版本并校验哈希（§21.1 集成层）；E2E 预备：创建 Commit 和版本候选（§21.2 步骤 6）。",
+            "parentId": "3"
+          },
+          {
+            "id": "3.5",
+            "title": "实现多类型确定性 Diff 服务",
+            "description": "实现 Spec §7.3 全部九类 Diff：文本、SDF 字段、结论变化摘要、作者/贡献者变化、引用变化、文件增删与哈希变化、表格数据摘要变化、代码 diff、许可证和可见性变化（Spec §7.1、§7.3）。",
+            "status": "pending",
+            "dependencies": [
+              "3.4"
+            ],
+            "priority": "high",
+            "details": "确定性 diff 是事实来源，AI 自然语言摘要仅作展示层（§7.3，AI 摘要接入属 Phase 1D）；大型二进制文件不生成行级 diff，只显示哈希、大小、元数据和替换关系（§7.2.6 MUST）；差异展示必须区分文字、结构化字段、代码、数据、图表和结论变化（§7.1 MUST）；SDF 字段 diff 基于 P1B-4 的 RFC 6902 Patch；输出结构化 Diff 结果供编辑器版本导航与 Phase 1D 公开页 Versions & Diff 标签消费（§4.3）。\n验收: 步骤14",
+            "testStrategy": "单元测试：九类 diff 各至少一组夹具用例、大二进制仅元数据 diff（§21.1 单元层：diff）；集成测试：v1→v2 全量 diff 与存储去重联合验证（§21.1 集成层）；验收点：页面准确展示 v1-v2 diff 且未变化 Blob 不重复存储（§21.2 步骤 14，展示页面在 Phase 1D 完成）。",
+            "parentId": "3"
+          },
+          {
+            "id": "3.6",
+            "title": "实现标识层与时间戳服务",
+            "description": "实现内部 UUID v7/ULID、公开 RO ID（OSR-YYYY-NNNNNN 形式）、版本 ID、稳定 URL 与 UTC 时间戳+SHA-256 内容哈希（Spec §6.1、§6.2、§2.2.5）。",
+            "status": "pending",
+            "dependencies": [
+              "3.4"
+            ],
+            "priority": "high",
+            "details": "内部主键 UUID v7 或 ULID，外部使用永久可读编号、版本号和稳定 URL（§2.2.5、§6.1）；公开 RO ID 形式 OSR-YYYY-NNNNNN、版本 ID 追加 -vN、URL /research/OSR-YYYY-NNNNNN/v/N（§6.1）；注意：ID 前缀属 Spec §24 待确认项（OpenScience 品牌、域名和 unique ID 前缀），前缀必须做成配置项，禁止写死；公开 ID 永不复用，撤回、删除或合并后 ID 仍指向状态说明页（§6.1 MUST，状态说明页 UI 在 Phase 1D）；MVP 时间戳由 UTC 数据库事务时间、版本 manifest 和 SHA-256 内容哈希构成，发布记录写入只追加审计日志（§6.2 MUST）；时间戳法律免责声明文案在发布/公开页展示（Phase 1D），本任务在 Identifier/Publication 数据上预留声明字段；DOI 为 Phase 2（§6.1、§19，不实现）。\n验收: 步骤9",
+            "testStrategy": "单元测试：ID 生成唯一性、版本号递增、URL 路由解析（§21.1 单元层：ID）；集成测试：发布记录只追加、ID 不复用（§21.1 集成层）；验收点：发布 v1 获得 unique ID、版本 ID、UTC 时间戳和哈希（§21.2 步骤 9，发布动作在 Phase 1D 触发）。",
+            "parentId": "3"
+          },
+          {
+            "id": "3.7",
+            "title": "实现 RO 可见性模型与 API 层权限强制",
+            "description": "实现 private/invite_only/public 三种可见性及 API 层授权检查，防止跨 Workspace 越权（Spec §4.2、§2.1.5、§3.3、§17）。",
+            "status": "pending",
+            "dependencies": [
+              "3.2"
+            ],
+            "priority": "high",
+            "details": "可见性三态：private 仅 Workspace 授权成员、invite_only 持有效邀请或被指定账户、public 公众可见并可被搜索引擎索引（§4.2、§2.1.5）；权限采用 RBAC+资源归属检查，禁止仅前端隐藏按钮，API 必须做同样授权检查（§3.3 MUST）；防止跨 Workspace 越权（§17 MUST）；任何扩大可见范围的操作必须显式审批（§4.2 MUST）——审批流与 R0–R4 分级在 Phase 1D 落地，本任务实现可见性变更的请求/记录数据结构与阻断式校验；可见性变更写审计日志（§17）；Branch/Issue/PR 继承可见性规则在 Phase 1C 应用，模型字段预留。\n验收: 步骤2",
+            "testStrategy": "单元测试：可见性判定矩阵（§21.1 单元层：权限）；安全测试：跨 Workspace 访问、未受邀访问 invite_only、直接调 API 绕过前端的越权用例（§21.1 安全层：越权）；E2E 预备：私有 RO 仅本人可见（§21.2 步骤 2）。",
+            "parentId": "3"
+          },
+          {
+            "id": "3.8",
+            "title": "构建三栏 SDF 编辑器桌面端",
+            "description": "实现左侧大纲、中间编辑区、右侧 SDF/AI 面板的三栏编辑器，支持 Markdown/富文本正文、附件与版本导航（Spec §5.4、§2.5.2、验收主流程步骤 3）。",
+            "status": "pending",
+            "dependencies": [
+              "3.1",
+              "3.2",
+              "3.4"
+            ],
+            "priority": "high",
+            "details": "左栏：章节大纲、实验、图表、数据、代码和版本导航；中栏：Markdown/富文本正文与附件编辑（附件走 P1B-3 上传管线）；右栏：六字段提取结果、AI 建议、引用、审核与关系图入口（§5.4、§2.5.2）；AI 提取结果必须以建议/差异形式展示、用户确认后才能写入 SDF（§5.4 MUST）——本任务实现建议/差异确认 UI 机制与本地数据通路，真实 AI 提取由 Phase 1D SDF Extractor 接入；编辑自动保存草稿，错误提示含重试、保存草稿和问题定位（§18.3）；版本导航消费 P1B-4/P1B-5 的版本与 diff 数据；中文优先、首日采用中英文国际化架构（§2.5.5）。\n验收: 步骤3,5",
+            "testStrategy": "单元测试：编辑器状态与草稿恢复逻辑（§21.1 单元层）；合同测试：编辑器与 /sdf API 的 Schema 合同（§21.1 合同层）；E2E：编辑器输入内容、以差异形式确认建议写入 SDF（§21.2 步骤 3、5，步骤 5 的 AI 来源在 Phase 1D 联调）。",
+            "parentId": "3"
+          },
+          {
+            "id": "3.9",
+            "title": "实现移动端分步/抽屉编辑器与可访问性",
+            "description": "移动端以抽屉和分步页面呈现三栏全部功能，不删除功能，并满足 WCAG AA 可访问性基线（Spec §5.4、§18.2、§18.3、§2.5.5）。",
+            "status": "pending",
+            "dependencies": [
+              "3.8"
+            ],
+            "priority": "medium",
+            "details": "移动端保留全部功能，通过抽屉和分步页面呈现三栏内容，不要求三栏同时显示（§5.4）；所有主要流程在移动端可完成，复杂三栏界面改为分步/抽屉而非删除功能（§18.2）；桌面和移动端功能一致（§2.5.5）；可访问性：键盘导航、明确焦点状态、语义化 HTML、图片 alt、WCAG AA 级对比度目标（§18.3）；大文件列表虚拟化、上传任务显示可恢复进度（§18.3）。\n验收: 步骤3",
+            "testStrategy": "E2E：移动端视口完成创建→编辑→确认建议→Commit 流程（§21.1 E2E 层、§21.2 步骤 3）；可访问性检查：键盘走查与对比度抽检（§18.3）。",
+            "parentId": "3"
+          },
+          {
+            "id": "3.10",
+            "title": "实现 SDF 标准导出包生成与校验",
+            "description": "按推荐导出结构生成可下载标准文件包（manifest.json、manuscript/、sdf/、experiments/、code/、figures/、provenance/、versions/），导出包不依赖平台私有数据库即可读取（Spec §5.2、§5.3、§2.2.1）。",
+            "status": "pending",
+            "dependencies": [
+              "3.1",
+              "3.4",
+              "3.6"
+            ],
+            "priority": "medium",
+            "details": "SDF 同时具有数据库表达和可导出标准文件包（§2.2.1 MUST）；导出结构对齐 §5.2 目录树；manifest.json 按 §5.3 最小结构生成，contentHash 来自 P1B-6 哈希服务，licenses/authors 字段预留（许可选择交互在 Phase 1C，发布时填实）；导出包不得依赖平台私有数据库才能读取（§5.3 MUST）；导出内容从 Blob/Manifest 重建，验证与线上一致。\n验收: -",
+            "testStrategy": "集成测试：生成导出包→脱离数据库用纯文件读取校验 Schema 与哈希一致（§21.1 集成层）；单元测试：manifest 序列化字段完整性（§21.1 单元层）。",
+            "parentId": "3"
+          }
+        ]
       },
       {
         "id": "4",
-        "title": "SDF (Structured Document Format) Parser and Editor Implementation",
-        "description": "Build the core SDF format parser, validator, and web-based editor that supports all required fields (Problem, Insight, Method, Results, Limitations, Reproducibility) with real-time preview.",
+        "title": "Phase 1C: GitHub 式科研协作（Branch/Fork/PR/Review/Merge、作者与 CRediT、许可、通知）",
+        "description": "建立 MVP 协作闭环：Branch、Issue、Fork、Pull Request、Review、Merge 的数据模型与基础交互（Spec §2.3、§8），作者组与 CRediT 贡献记录（§3.4），三类许可选择与 Fork 继承校验（§6.3），协作事件通知（§15、§16、§18.1）。对应里程碑 Spec §22 Phase 1C。服务于验收主流程 §21.2 步骤 8、11、12。Commit/版本存储底座由 P1B 提供，发布与 AI 审核属 P1D，不在本 Phase 范围。",
         "status": "pending",
         "dependencies": [
           "3"
         ],
         "priority": "high",
-        "details": "**Implementation Details:**\n\n1. **SDF Schema Definition:**\n   ```yaml\n   # SDF v2.0 Schema\n   required_fields:\n     - problem: string (min 100 chars, max 5000)\n     - insight: string (min 50 chars, max 3000)\n     - method: string (min 200 chars, max 10000)\n     - results: string (min 100 chars, max 10000)\n     - limitations: string (min 50 chars, max 3000)\n     - reproducibility: string (min 100 chars, max 5000)\n   \n   optional_fields:\n     - title: string\n     - abstract: string\n     - keywords: list[string]\n     - authors: list[{name, affiliation, email, orcid}]\n     - funding: string\n     - acknowledgments: string\n     - references: list[{doi, url, citation}]\n     - supplementary_materials: list[{type, url, description}]\n     - data_availability: string\n     - code_availability: string\n     - ethics_statement: string\n     - conflict_of_interest: string\n   \n   structured_sections:\n     manuscript:\n       paper.md: markdown\n       abstract.md: markdown\n       references.json: json\n     experiment:\n       experiment001/:\n         protocol.yaml: yaml\n         data.csv: csv\n         notebook.ipynb: ipynb\n         result.png: binary\n     code:\n       model.py: python\n       environment.yml: yaml\n     figures:\n       figure1.svg: svg\n       interactive.html: html\n     discussions:\n       reviewer_comments.md: markdown\n       author_response.md: markdown\n   ```\n\n2. **Parser Implementation:**\n   - JSON Schema validation for SDF structure\n   - Markdown parser with custom extensions\n   - YAML parser for structured data\n   - IPynb parser for Jupyter notebooks\n   - CSV validator with schema checking\n   - Image format validation (PNG, SVG, JPEG)\n\n3. **SDF Editor Features:**\n   - Progressive disclosure UI (basic 6 fields first, advanced collapsed)\n   - Real-time Markdown preview\n   - Auto-save with debounce (2 seconds)\n   - Drag-and-drop file upload for code/data/figures\n   - Collaborative editing with WebSocket (Y.js CRDT)\n   - Version comparison view (side-by-side diff)\n   - Template system for common research types\n   - Citation manager with DOI/URL import\n   - LaTeX equation editor integration\n\n4. **Frontend Components:**\n   - SDFEditor.tsx: Main editor container\n   - FieldValidator.tsx: Per-field validation display\n   - FileUploader.tsx: Drag-drop file management\n   - MarkdownPreview.tsx: Live preview component\n   - DiffViewer.tsx: Version comparison\n   - CollaborativeCursor.tsx: Real-time collaboration indicators",
-        "testStrategy": "1. Schema validation test: Verify all required fields enforced\n2. Parser test: Parse valid SDF documents, verify structure preserved\n3. Editor save test: Auto-save functionality verification\n4. File upload test: Upload various file types, verify storage\n5. Preview test: Compare Markdown preview with expected output\n6. Progressive disclosure test: Verify UI state changes based on user progress\n7. Collaboration test: Two users edit simultaneously, verify sync\n8. Import test: Import from LaTeX/Word, verify conversion",
-        "subtasks": []
+        "details": "",
+        "testStrategy": "",
+        "subtasks": [
+          {
+            "id": "4.1",
+            "title": "建立协作域数据模型与数据库迁移",
+            "description": "落地协作域核心实体：Branch、ForkRelation、Issue、PullRequest、Review、Comment、Author、Authorship、Contribution、LicenseAssignment、Notification（Spec §15 实体清单 MUST），为后续所有协作功能提供数据底座。",
+            "status": "pending",
+            "dependencies": [
+              "3"
+            ],
+            "priority": "high",
+            "details": "在 P1A 的 PostgreSQL + 迁移框架上新增上述表：外键挂接 P1B 的 ResearchObject/Commit/Version；PullRequest 需含 §8.2 声明字段（变更的 SDF 字段与文件、是否改变方法/数据/核心结论、新增贡献者及 CRediT 角色、数据/代码许可、利益冲突、是否要求发布新版本）；Contribution 使用 CRediT 分类枚举（Conceptualization、Methodology、Software、Validation、Data Curation、Visualization、Writing、Supervision 等，§3.4）；LicenseAssignment 区分文字/代码/数据三类（§6.3）。迁移 MUST 向前可部署、可回滚或有补偿步骤，生产禁自动破坏性迁移（§15）。数据模型避免封死 Phase 2 扩展路径，但不实现 §19 功能（点赞/收藏/关注等字段不建）。\n验收: -",
+            "testStrategy": "单元测试：迁移 up/down 往返、枚举与必填约束；集成测试：与 ResearchObject/Commit 外键一致性（§21.1 单元+集成层）。",
+            "parentId": "4"
+          },
+          {
+            "id": "4.2",
+            "title": "实现 Branch 管理与可见性继承",
+            "description": "实现研究分支的创建、列表、切换与删除，承载'尚未进入主版本的研究方向或修改路线'（Spec §8 概念表）；分支 MUST 继承所属 RO 的可见性（§2.3 决策 3、§4.2）。",
+            "status": "pending",
+            "dependencies": [
+              "4.1"
+            ],
+            "priority": "high",
+            "details": "模块 /branches（§16）：Branch 指向 RO 与 tip Commit（复用 P1B Commit/Manifest）；创建分支时校验调用者对该 RO 所在 Workspace 的权限（§17 防跨 Workspace 越权）；可见性不单独存储或强制等于 RO 可见性，任何扩大可见范围的操作必须显式审批（§4.2，审批机制占位即可，正式分级审批在 P1D）；关键资源使用幂等键和乐观锁（§16）。\n验收: 步骤11",
+            "testStrategy": "单元测试：可见性继承规则、越权创建拒绝；集成测试：分支指向 Commit 一致性；阶段验收点：另一用户可在 Fork 后创建 Branch（§21.2 步骤 11 前置）。",
+            "parentId": "4"
+          },
+          {
+            "id": "4.3",
+            "title": "实现 Issue 与评论基础交互",
+            "description": "实现 Issue（科学问题、方法质疑、复现失败、错误报告、改进建议，Spec §8 概念表）与 Comment 的创建、回复、状态流转，覆盖 MVP 社区范围中的 Issue 部分（§2.5 决策 4）。",
+            "status": "pending",
+            "dependencies": [
+              "4.1"
+            ],
+            "priority": "medium",
+            "details": "模块 /issues（§16）：Issue 支持 open/closed 状态与标签（最小集即可，类型标签对齐 §8 五种语义）；Comment 挂接 Issue/PR/Review（§15 Comment 实体，一处实现多处复用）；Issue 默认继承 RO 可见性（§4.2）；写操作记审计日志并限流（§17）。禁止提前实现 §19 的点赞、投票、Top Questions。\n验收: -",
+            "testStrategy": "单元测试：状态机与权限；合同测试：前后端 Schema（§21.1 单元+合同层）。",
+            "parentId": "4"
+          },
+          {
+            "id": "4.4",
+            "title": "实现三类许可选择与继承规则",
+            "description": "实现文字（CC BY 4.0 / CC BY-NC 4.0 / All Rights Reserved）、代码（MIT / Apache-2.0 / GPL-3.0 / 不开源）、数据（CC0 / CC BY 4.0 / 自定义限制 / 不可下载）三类许可的分别选择（Spec §6.3、§2.2 决策 6），为 Fork 校验与发布（步骤 8）提供规则底座。",
+            "status": "pending",
+            "dependencies": [
+              "4.1"
+            ],
+            "priority": "high",
+            "details": "LicenseAssignment 记录 RO 级与版本级许可；许可变更不得追溯覆盖已公开版本（§6.3）——公开版本的 LicenseAssignment 只读，变更生成新记录仅对后续版本生效；提供继承校验函数供 Fork/PR 调用。许可证展示文案属于 §24 待确认项（'公开内容的服务条款、隐私政策和许可证文案'）：代码中只使用标准许可证标识与名称，完整法律文案留配置位待确认，禁止自行撰写写死。\n验收: 步骤8",
+            "testStrategy": "单元测试：三类枚举完整性、已公开版本许可不可变规则、继承校验函数（§21.1 单元层）。",
+            "parentId": "4"
+          },
+          {
+            "id": "4.5",
+            "title": "实现 Fork 与来源关系及许可继承校验",
+            "description": "实现从特定公开版本 Fork 出独立衍生 RO（Spec §8.1）：新 RO 获得新 unique ID，永久保留来源对象、来源版本与内容哈希，来源许可与归属要求继续生效。",
+            "status": "pending",
+            "dependencies": [
+              "4.1",
+              "4.4"
+            ],
+            "priority": "high",
+            "details": "ForkRelation 记录 source RO、source Version、内容哈希（§8.1、§15）；Fork 时复制该版本 Manifest 指向的 Blob 引用（内容寻址复用 P1B，不复制物理数据）；原作者不会自动成为新 RO 作者（§8.1）；Fork 作者不能移除来源关系（数据层无外键删除路径）；调用 P1C-4 的继承校验函数验证来源许可，不满足继承要求时阻断 Fork 或按来源许可限制新 RO 许可选项（§6.3）；仅允许 Fork public 版本（可见性规则 §4.2）。\n验收: 步骤11",
+            "testStrategy": "单元测试：来源关系不可移除、许可继承校验通过与拒绝用例；集成测试：Fork 后 Blob 引用共享、新 unique ID 生成（§21.1 单元+集成层）；阶段验收点：§21.2 步骤 11 的 Fork 环节。",
+            "parentId": "4"
+          },
+          {
+            "id": "4.6",
+            "title": "实现 Pull Request 声明与提交流程",
+            "description": "实现向原 RO 提交变更的 PR 流程，PR MUST 完整声明 §8.2 清单：变更的 SDF 字段和文件、是否改变方法/数据/核心结论、新增贡献者及 CRediT 角色、数据/代码许可、利益冲突、自动检查结果、是否要求发布新版本。",
+            "status": "pending",
+            "dependencies": [
+              "4.1",
+              "4.2"
+            ],
+            "priority": "high",
+            "details": "模块 /pull-requests（§16）：PR 关联源 Branch/Fork 与目标 Branch，声明字段在数据模型（P1C-1）基础上做提交时强制校验（缺项拒绝）；自动检查结果字段先存结构化占位（真实检查能力在 P1D 接入）；打开 PR 发出 pull_request.opened 事件（§16，事件可重试、消费者幂等）；PR 默认继承 RO 可见性（§4.2）；幂等键防重复提交，乐观锁防并发覆盖（§16）；PR 内展示变更 diff（复用 P1B §7.3 Diff 能力）。\n验收: 步骤11",
+            "testStrategy": "单元测试：声明字段强制校验、幂等键重放；合同测试：前后端 Schema；阶段验收点：§21.2 步骤 11 的提交 PR 环节。",
+            "parentId": "4"
+          },
+          {
+            "id": "4.7",
+            "title": "实现作者组与 CRediT 贡献记录",
+            "description": "实现作者组确认作者名单、顺序与通讯作者，系统独立记录全部事实贡献者及 CRediT 角色（Spec §3.4、§2.3 决策 2），支撑验收步骤 8 的'确认作者'。",
+            "status": "pending",
+            "dependencies": [
+              "4.1"
+            ],
+            "priority": "high",
+            "details": "Author/Authorship 承载作者名单、顺序、通讯作者标记，仅作者组可变更；Contribution 按时间追加记录所有事实贡献者及 CRediT 角色（§3.4 分类枚举），MUST 不可被作者名单变化抹除（数据层不提供级联删除）；系统禁止依据字数、Commit 数或 AI 估计自动决定署名（§3.4，不做任何自动排序逻辑）；创建者不自动获得永久第一作者或通讯作者地位；提供接口供 Merge 高风险审批（P1C-8）查询'是否新增作者或改变作者顺序'。\n验收: 步骤8",
+            "testStrategy": "单元测试：贡献记录不可抹除、作者组权限校验、无自动署名逻辑；阶段验收点：§21.2 步骤 8 确认作者环节（与 P1C-4 许可选择共同支撑）。",
+            "parentId": "4"
+          },
+          {
+            "id": "4.8",
+            "title": "实现 Review 与 Merge 流程及高风险确认",
+            "description": "实现对 PR 的逐项科学 Review 与 Merge 写入主分支（Spec §8.2、§8.3）；仅 Owner/Maintainer 可发起 Merge，改变作者、许可、核心结论或可见性的 Merge MUST 触发高风险确认。",
+            "status": "pending",
+            "dependencies": [
+              "4.6",
+              "4.7"
+            ],
+            "priority": "high",
+            "details": "模块 /reviews（§16）：Review 支持对 PR 逐项（按 SDF 字段/文件）给出意见与结论；Merge 权限校验对齐 §3.3 角色（仅 Owner/Maintainer）；高风险判定：新增作者或改变作者顺序（§3.4，调 P1C-7 接口）、变更许可（P1C-4）、PR 声明'改变方法/数据/核心结论'（§8.2 字段）、扩大可见性（§4.2）——命中任一项必须显式高风险确认才允许 Merge；Merge 不修改历史公开版本，进入主分支后形成新草稿状态，发布新版本需作者确认（§8.3，发布动作本身在 P1D）；冲突由人类选择或重新编辑，AI 不得静默决定科学含义（§8.3，不做自动冲突解决）；Merge 完成发出 pull_request.merged 事件（§16）。\n验收: 步骤12",
+            "testStrategy": "单元测试：Merge 权限、四类高风险触发条件逐一覆盖；集成测试：Merge 后主分支新草稿与历史公开版本不可变；E2E：Review→Merge 流程（§21.1 E2E 层）；阶段验收点：§21.2 步骤 12。",
+            "parentId": "4"
+          },
+          {
+            "id": "4.9",
+            "title": "实现协作通知、事件投递与审计",
+            "description": "实现 Notification 实体与协作事件通知（PR 打开/Merge、Review 请求、Issue 动态），支撑 Dashboard'通知与社区动态'（Spec §18.1、§15、§16）。",
+            "status": "pending",
+            "dependencies": [
+              "4.6",
+              "4.8"
+            ],
+            "priority": "medium",
+            "details": "消费 pull_request.opened / pull_request.merged 等事件生成 Notification（§16：事件必须可重试、消费者必须幂等——以事件 ID 去重）；通知含已读/未读状态与跳转链接；全部协作写操作（Issue/PR/Review/Merge/Fork/作者与许可变更）落 AuditLog（§17 MUST：全部写操作记录审计日志）；通知与协作接口限流（§17）；生产日志不记录论文全文等敏感内容（§17）。站内通知为 MVP 范围，邮件通知是否需要属 §24 待确认项，本任务只预留渠道抽象不写死。\n验收: -",
+            "testStrategy": "单元测试：消费者幂等（重复事件不重复通知）；集成测试：事件→通知链路、审计日志完整性（§21.1 单元+集成层）。",
+            "parentId": "4"
+          },
+          {
+            "id": "4.10",
+            "title": "实现 GitHub 式协作区域前端交互",
+            "description": "实现 Issue/PR/Review/Merge/Fork 的前端基础交互，协作区域采用 GitHub 式交互（Spec §2.5 决策 6），桌面与移动端功能一致（§2.5 决策 5）。",
+            "status": "pending",
+            "dependencies": [
+              "4.3",
+              "4.6",
+              "4.8"
+            ],
+            "priority": "high",
+            "details": "在工作台内实现：Issue 列表与详情、PR 列表与详情（含声明字段表单、变更 diff 展示、Review 逐项意见界面）、Merge 高风险确认对话框（明示触发的风险项）、Fork 入口与来源关系展示、作者与 CRediT 编辑界面（仅作者组可用）；响应式实现，移动端功能不裁剪（§2.5）；可访问性对齐 WCAG AA（§18.3）；文案走国际化架构，中文优先（§2.5 决策 5）。公开 RO 页面的 Issues/PR 标签展示（§4.3）属 P1D 公开页范围，本任务只做登录态协作区域。\n验收: 步骤11,12",
+            "testStrategy": "合同测试：前后端 Schema（§21.1）；E2E：另一用户 Fork→Branch→PR、维护者 Review→Merge 全流程（§21.2 步骤 11、12）。",
+            "parentId": "4"
+          }
+        ]
       },
       {
         "id": "5",
-        "title": "AI-Powered Quality Detection System (CI/CD for Research)",
-        "description": "Implement automated quality checks for submitted research objects including completeness, plagiarism detection, methodology validation, statistical checks, and reproducibility assessment.",
+        "title": "Phase 1D: Hermes 与发布",
+        "description": "建设 Hermes Agent 系统的 MVP 子集与公开发布闭环：AI Gateway 统一路由（MiniMax-M3 主模型 / 回退策略由 Gateway 配置管理）、异步任务通道、SDF Extractor（建议/差异形式，不直接写正文）、R0–R4 分级审批、AI 发布审核（硬阻断与警告分离）、申诉与 Moderator 队列、发布事务与公开页（含免责声明与审核摘要）。依据 Spec §9、§11、§4.1–4.3、§6.2、§22 Phase 1D。",
         "status": "pending",
         "dependencies": [
           "4"
         ],
         "priority": "high",
-        "details": "**Implementation Details:**\n\n1. **Quality Check Pipeline:**\n   ```python\n   # Quality Check Stages\n   class QualityCheckPipeline:\n       def run_all_checks(sdf_content) -> QualityReport:\n           return {\n               'completeness': self.check_completeness(sdf_content),\n               'plagiarism': self.check_plagiarism(sdf_content),\n               'methodology': self.check_methodology(sdf_content),\n               'statistics': self.check_statistics(sdf_content),\n               'format': self.check_format(sdf_content),\n               'data_consistency': self.check_data_consistency(sdf_content),\n               'reproducibility': self.check_reproducibility(sdf_content)\n           }\n   \n   # Completeness Check\n   def check_completeness(sdf):\n       # Verify all required SDF fields present\n       # Check minimum length requirements\n       # Verify required sections (manuscript, experiment, code)\n       # Return: {passed: bool, score: 0-100, issues: list}\n   \n   # Plagiarism Detection\n   def check_plagiarism(sdf):\n       # Text similarity with existing database (simhash/bm25)\n       # Cross-reference with arXiv, Semantic Scholar APIs\n       # Quote detection and citation verification\n       # Return: {passed: bool, similarity_score: float, flagged_sections: list}\n   \n   # Methodology Validation\n   def check_methodology(sdf):\n       # AI analysis of method description clarity\n       # Protocol completeness check\n       # Control group verification (for experimental research)\n       # Sample size justification check\n       # Return: {passed: bool, issues: list[str], suggestions: list[str]}\n   \n   # Statistical Checks\n   def check_statistics(sdf):\n       # Verify statistical test selection matches data type\n       # Check p-value reporting format\n       # Confidence interval validation\n       # Effect size reporting verification\n       # Common statistical errors detection\n       # Return: {passed: bool, warnings: list, errors: list}\n   \n   # Reproducibility Assessment\n   def check_reproducibility(sdf):\n       # Verify code environment specification\n       # Check data availability statement\n       # Validate random seed specification\n       # Verify dependencies documented\n       # Return: {passed: bool, reproducibility_score: float}\n   ```\n\n2. **AI Integration (Minimax API):**\n   - Use Minimax API for method analysis (119/month budget)\n   - Prompt engineering for scientific evaluation context\n   - Rate limiting and cost optimization\n   - Fallback to rule-based checks if API unavailable\n\n3. **Reporting System:**\n   ```json\n   {\n     \"status\": \"pass|warning|fail\",\n     \"overall_score\": 85,\n     \"checks\": [\n       {\n         \"name\": \"completeness\",\n         \"status\": \"pass\",\n         \"score\": 95,\n         \"issues\": []\n       },\n       {\n         \"name\": \"plagiarism\",\n         \"status\": \"pass\",\n         \"score\": 100,\n         \"issues\": []\n       },\n       {\n         \"name\": \"methodology\",\n         \"status\": \"warning\",\n         \"score\": 70,\n         \"issues\": [\"Missing sample size justification\"]\n       }\n     ],\n     \"recommendations\": [\n       \"Consider adding more detail to the methodology section\",\n       \"Verify statistical test assumptions\"\n     ]\n   }\n   ```\n\n4. **Async Processing:**\n   - Celery task queue for heavy checks\n   - Webhook notifications on completion\n   - Results cached for 24 hours\n   - Manual re-check trigger available",
-        "testStrategy": "1. Unit tests: Test each check function with known inputs\n2. Integration test: Run full pipeline, verify report generation\n3. Plagiarism test: Submit known duplicate content, verify detection\n4. Performance test: Verify checks complete within 60 seconds\n5. Cost test: Monitor Minimax API usage against budget\n6. Fallback test: Disable API, verify rule-based checks work\n7. Edge case test: Submit empty/invalid SDF, verify graceful error handling",
-        "subtasks": []
+        "details": "",
+        "testStrategy": "",
+        "subtasks": [
+          {
+            "id": "5.1",
+            "title": "实现 AI Gateway 统一路由与调用日志",
+            "description": "在 packages/ai-gateway 封装全部大模型调用：MiniMax-M3 为主模型，回退策略由 Gateway 配置管理（Spec §2.4-6、§9.3），为后续 Hermes 全部子 Agent 与 AI 审核提供唯一入口。",
+            "status": "pending",
+            "dependencies": [
+              "2"
+            ],
+            "priority": "high",
+            "details": "要点：1) Provider SDK 只存在于 ai-gateway 包内，禁止散落业务代码（Spec §9.3）；2) 每次调用记录模型、版本、token、费用、延迟、错误与回退原因（Spec §9.3），日志脱敏，不得记录密钥与 Prompt 中的敏感附件（Spec §17）；3) JSON 结构化输出必须经 Schema 校验，失败时有限重试（Spec §9.3）；4) 流式响应与结构化输出使用独立通道（Spec §9.3）；5) 主模型失败按已配置回退策略切换并记录回退原因；6) API 密钥仅从环境变量读取（Spec §17）；7) AI 接口挂接限流（Spec §17）。待确认：MiniMax-M3 及回退模型的具体 API、模型 ID、结构化输出能力与价格（Spec §24），先以配置项占位，不得写死。涉及模块：packages/ai-gateway、apps/api。\n验收: -",
+            "testStrategy": "单元测试：路由选择、回退触发、Schema 校验失败重试次数上限；集成测试（Spec §21.1）：以 mock provider 验证调用日志字段完整与密钥不落日志。属底座能力，由步骤4/7 间接验收。",
+            "parentId": "5"
+          },
+          {
+            "id": "5.2",
+            "title": "搭建 Hermes 会话与异步任务通道",
+            "description": "实现 AgentSession/AgentTask 数据模型与异步执行管道：长任务异步执行（Spec §9.3），任务 ID + SSE/WebSocket 进度推送（Spec §16、§18.3 AI 任务显示可恢复进度），支撑 SDF 提取与 AI 审核等长耗时调用。",
+            "status": "pending",
+            "dependencies": [
+              "5.1",
+              "2"
+            ],
+            "priority": "high",
+            "details": "要点：1) 新建 apps/agent-worker（Spec §14.1），消费队列执行 Hermes 任务；2) 实体覆盖 AgentSession、AgentTask、ToolApproval（Spec §15）；3) 任务事件可重试、消费者幂等（Spec §16）；4) 前端通过任务 ID 订阅进度，断线可恢复（Spec §16、§18.3）；5) Hermes 不得以“自主”为由绕过权限、发布确认或资源配额（Spec §9.1），任务执行前校验 Workspace 权限与 AI Credit 配额（§2.4-7，Credit 骨架来自 P1A）。涉及模块：apps/agent-worker、apps/api 的 /agent 模块、packages/domain。\n验收: -",
+            "testStrategy": "集成测试（Spec §21.1）：提交任务 → 异步完成 → 事件幂等重放不产生重复副作用；合同测试：前后端任务进度 Schema。属底座能力，由步骤4/7 间接验收。",
+            "parentId": "5"
+          },
+          {
+            "id": "5.3",
+            "title": "实现 SDF Extractor 建议式提取与确认写入",
+            "description": "实现 SDF Extractor 子 Agent：从正文提取六字段与关系草案（Spec §9.2），提取结果以建议/差异形式展示，用户确认后才写入 SDF（Spec §5.4），支撑核心闭环的 AI 结构化 → 人工确认环节（Spec §2.1-2）。",
+            "status": "pending",
+            "dependencies": [
+              "5.2",
+              "3"
+            ],
+            "priority": "high",
+            "details": "要点：1) 输出必须经 Gateway Schema 校验（六字段对应 packages/sdf-schema 的 JSON Schema，Spec §5.1、§5.3）；2) 禁止直接覆盖用户正文（Spec §9.2 禁止事项）；3) 编辑器右栏展示逐字段 diff，用户逐字段或整批接受/拒绝，确认后才落库（Spec §5.4）；4) 接受动作走 R1 级审批（复用 P1D-4 的统一 diff 批量批准）；5) 提取为长任务，走 P1D-2 异步通道并显示进度。涉及模块：apps/agent-worker、apps/web 编辑器右栏、packages/sdf-schema。\n验收: 步骤4,5",
+            "testStrategy": "单元测试：提取结果 Schema 校验与 diff 生成；E2E（Spec §21.1）：输入正文 → AI 提取六字段 → 审核并接受建议（对应验收主流程步骤4、5，Spec §21.2）。",
+            "parentId": "5"
+          },
+          {
+            "id": "5.4",
+            "title": "实现 R0–R4 分级审批与统一确认交互",
+            "description": "实现 Hermes 写操作的 R0–R4 审批分级（Spec §9.4）：R0 自动执行、R1 批量 diff 一次批准、R2 任务内同类授权、R3 最终摘要+明确确认、R4 重新验证+逐项确认，兼顾安全性与交互速度（Spec §2.5-7）。",
+            "status": "pending",
+            "dependencies": [
+              "5.2"
+            ],
+            "priority": "high",
+            "details": "要点：1) 每次确认必须说明将改变什么、作用范围、能否撤销、预计费用与预计耗时（Spec §9.4）；2) 已批准的同一批任务不得重复弹窗（Spec §9.4）；3) 支持批量预览、作用域授权（当前任务内同类操作）与撤销（Spec §2.5-7）；4) 审批记录落 ToolApproval 实体并写审计日志（Spec §15、§17）；5) Merge、发布、作者/许可/可见性变化归 R3，删除/所有权/密钥/安全设置归 R4（Spec §9.4），本 Phase 的发布确认（P1D-8）必须挂接 R3。涉及模块：apps/web Hermes 面板、apps/api /agent 模块、packages/domain。\n验收: 步骤5",
+            "testStrategy": "单元测试：分级判定与作用域授权匹配规则、同批去重；E2E：R1 批量批准 AI 建议（验收步骤5）、R3 发布确认弹窗包含五要素（Spec §21.2）。",
+            "parentId": "5"
+          },
+          {
+            "id": "5.5",
+            "title": "实现发布审核硬阻断检查管线",
+            "description": "实现 AI 发布审核的硬阻断层：仅对安全、完整性、恶意文件、隐私泄露和明显违规进行硬阻断（Spec §2.3-5、§11.1），审核未通过时禁止发布（Spec §2.3-4）。",
+            "status": "pending",
+            "dependencies": [
+              "5.2",
+              "3",
+              "4"
+            ],
+            "priority": "high",
+            "details": "要点：逐项实现 Spec §11.1 七类硬阻断——必填字段缺失（对照 §5.1 六字段）、恶意代码/危险可执行内容（上传扫描结果联动，Spec §17）、高风险隐私泄露（身份证、密钥、访问令牌，公开前敏感信息扫描为 Spec §17 MUST）、明显违法或平台禁止内容、发布者权限无法确认、未选择许可证、版本哈希或 manifest 校验失败（对照 §7 存储模型）。任一硬阻断命中则发布请求被拒并生成审核记录（AIReview 实体，Spec §15）；审核完成发出 ai_review.completed 事件（Spec §16）。Safety Reviewer 类检查不替代申诉人工（Spec §9.2）。涉及模块：apps/agent-worker、apps/api /publications 模块。\n验收: 步骤7",
+            "testStrategy": "单元测试：七类硬阻断各至少一个命中/放行用例；E2E（Spec §21.1）：构造缺许可/缺字段的版本候选验证发布被拒，正常版本通过 AI 发布审核（验收步骤7，Spec §21.2）。",
+            "parentId": "5"
+          },
+          {
+            "id": "5.6",
+            "title": "实现发布审核警告层与结构化审核报告",
+            "description": "实现 AI 发布审核的警告层：方法逻辑、统计合理性、图表规范、数据一致性、可复现性、引用缺失、过度外推等问题以警告呈现，不替代作者判断（Spec §11.2、§2.3-5）。",
+            "status": "pending",
+            "dependencies": [
+              "5.5"
+            ],
+            "priority": "medium",
+            "details": "要点：1) 警告项覆盖 Spec §11.2 全部七类；2) AI 报告必须提供证据位置和不确定性说明，不得只输出单一分数（Spec §11.2）；3) Research Reviewer 不裁定研究一定正确/错误、Citation Checker 不伪造来源（Spec §9.2 禁止事项）；4) 警告不阻断发布，随版本存档并在公开页以“AI 审核摘要”形式展示（供 P1D-9 使用，Spec §4.3）；5) 报告结构化存储于 AIReview 实体（Spec §15）。涉及模块：apps/agent-worker、packages/ai-gateway、apps/api。\n验收: 步骤7",
+            "testStrategy": "单元测试：报告结构含证据位置与不确定性字段、无单一分数输出；E2E：含警告项的版本仍可发布且警告随审核记录可查（验收步骤7，Spec §21.2）。",
+            "parentId": "5"
+          },
+          {
+            "id": "5.7",
+            "title": "实现审核申诉流程与 Moderator 队列",
+            "description": "实现发布审核失败后的申诉通道：生成稳定审核记录，用户可修改重审或提交申诉，申诉进入 Moderator 队列，人工结果和理由写入审计日志（Spec §11.3、§2.3-4）。",
+            "status": "pending",
+            "dependencies": [
+              "5.5",
+              "4"
+            ],
+            "priority": "medium",
+            "details": "要点：1) 审核失败后生成稳定可引用的审核记录（Spec §11.3）；2) 用户可选择修改后重审（重新走 P1D-5 管线）或提交申诉（Appeal 实体，Spec §15）；3) 申诉进入 Moderator 队列，仅 Moderator/Admin 角色可处理（角色模型来自 P1A，Spec §3.3）；4) 人工处理结果与理由写入审计日志（Spec §11.3、§17 全部写操作审计 MUST）；5) 发出 appeal.created 事件并触发通知（Spec §16，通知通道来自 P1C）。涉及模块：apps/api /reviews、/admin 模块、apps/web 审核记录与申诉页。\n验收: -",
+            "testStrategy": "集成测试（Spec §21.1）：申诉创建 → 队列可见性按角色隔离 → 人工处理结果落审计日志；合同测试：申诉 API Schema。验收主流程未含申诉步骤，按完整性要求覆盖。",
+            "parentId": "5"
+          },
+          {
+            "id": "5.8",
+            "title": "实现发布事务与状态机推进",
+            "description": "实现正式发布流程：作者确认公开后生成平台时间戳、RO unique ID 和版本 ID（Spec §2.1-6），状态机 draft → under_review → approved → published（Spec §4.1），已公开版本永久不可原地修改（Spec §2.2-3）。",
+            "status": "pending",
+            "dependencies": [
+              "5.5",
+              "5.4",
+              "3",
+              "4"
+            ],
+            "priority": "high",
+            "details": "要点：1) 发布前置条件：AI 审核通过（P1D-5）、许可证已选且作者已确认（P1C 产物）、发布确认走 R3 审批（P1D-4）；2) 时间戳由 UTC 数据库事务时间、版本 manifest 与 SHA-256 内容哈希构成，发布记录写入只追加审计日志（Spec §6.2、§17）；3) 写入 Version、VersionManifest、Publication、Identifier 实体并发出 version.published 事件（Spec §15、§16）；4) 已公开版本任何修改必须产生新版本或勘误，禁止原地修改（Spec §2.2-3）；5) 状态机含 rejected/withdrawn/restricted 补充状态（Spec §4.1）；6) 平台仅声明“记录平台接收时间和版本哈希”，不承诺专利、著作权或司法存证效力（Spec §2.1-7、§6.2 声明文案）；7) 发布 v2 复用同一发布管线，须验证 parentVersion 链与新版本哈希、manifest 正确生成（对应 Spec §2.2-3 已公开版本不可原地修改、§7 增量版本）。涉及模块：apps/api /publications、/versions 模块、packages/versioning。\n验收: 步骤9,13",
+            "testStrategy": "单元测试：状态机非法迁移拒绝、已发布版本写入被拒；集成测试：发布事务的原子性与审计日志只追加；E2E（Spec §21.2 步骤9、13）：发布 v1 后获得 unique ID、版本 ID、UTC 时间戳和哈希；Merge 后作者发布 v2，验证 parentVersion 指向 v1 且生成新版本哈希与 manifest。",
+            "parentId": "5"
+          },
+          {
+            "id": "5.9",
+            "title": "构建公开 RO 页面与必显信息",
+            "description": "构建公众可访问的公开 RO 页面：按严肃学术排版（Spec §18.2）展示 Spec §4.3 要求的全部必显信息，支撑验收主流程的公众查看环节（Spec §21.2 步骤10）。",
+            "status": "pending",
+            "dependencies": [
+              "5.8",
+              "5.6"
+            ],
+            "priority": "high",
+            "details": "要点：1) 必显：标题、作者与身份状态、机构声明、摘要、许可、unique ID、版本 ID、发布时间、版本哈希、引用格式、AI 审核摘要及平台法律免责声明（Spec §4.3）；2) 页面含 §6.2 固定声明文案（时间戳不构成专利优先权/著作权/司法存证保证）；3) 一级标签覆盖 Overview、Manuscript、Methods & Experiments、Data & Code、Figures & Visualization、Versions & Diff、Issues、Pull Requests、Reviews & Discussions、Citations & Related Work（Spec §4.3，标签页可先以既有数据渲染，协作标签数据源来自 P1C）；4) public 可见性公众可访问并可被搜索引擎索引，private/invite_only 拒绝未授权访问（Spec §4.2）；5) 公开页优先 SSR/缓存，WCAG AA、移动端功能一致（Spec §18.3、§2.5-5）；6) URL 使用 /research/OSR-YYYY-NNNNNN/v/N 稳定结构（Spec §6.1）。待确认：平台服务条款、隐私政策与免责声明最终文案（Spec §24），先按 §6.2 原文与占位文案实现，文案定稿后替换。涉及模块：apps/web 公开页路由、apps/api /research-objects 公开读接口。\n验收: 步骤10",
+            "testStrategy": "合同测试：公开页数据 Schema；E2E（Spec §21.2 步骤10）：未登录公众访问公开页可见全部必显信息；安全测试：private/invite_only RO 的公开 URL 越权访问被拒（Spec §21.1）。",
+            "parentId": "5"
+          }
+        ]
       },
       {
         "id": "6",
-        "title": "Personal Research Intelligence Layer Implementation",
-        "description": "Build the personal research intelligence layer with PDF parsing, automatic SDF generation, semantic search, literature mapping, and personal knowledge base features.",
+        "title": "Phase 1E: 轻量科学可视化",
+        "description": "实现 Hermes 概念可视化闭环与隔离沙箱执行：Visualization Planner 生成解释与 Python 脚本（Spec §9.2、§10.1），AST 策略检查（§10.3），Sandbox Controller + 隔离 Docker 网络（§10.3、§14.2），临时图片与 IndexedDB 保存（§13.2），自然语言修改脚本（§10.4），威胁模型与沙箱逃逸基线测试（§17、§21.1）。服务验收主流程步骤 15、16（Spec §21.2）。",
         "status": "pending",
         "dependencies": [
-          "4"
-        ],
-        "priority": "medium",
-        "details": "**Implementation Details:**\n\n1. **PDF Processing Pipeline:**\n   ```python\n   class PDFProcessor:\n       def process_batch(pdfs: list[File]) -> list[SDFDraft]:\n           # Step 1: Extract text using PyMuPDF/pdfplumber\n           # Step 2: Detect sections (Introduction, Method, Results, etc.)\n           # Step 3: Extract figures and tables\n           # Step 4: Identify citations and references\n           # Step 5: Generate SDF draft with AI assistance\n           # Step 6: Store original PDF and metadata\n   \n   # Section Detection\n   def detect_sections(text):\n       # Pattern matching for common section headers\n       # ML-based section classifier for non-standard formats\n       # Handle multi-language headers\n   \n   # Citation Extraction\n   def extract_citations(text):\n       # Regex patterns for various citation formats\n       # CrossRef API lookup for DOI resolution\n       # BibTeX parser for reference lists\n   ```\n\n2. **Literature Management:**\n   ```python\n   class LiteratureManager:\n       def semantic_search(query: str, filters: dict) -> list[Paper]:\n           # Embed query using sentence transformers\n           # Vector similarity search in Pinecone/Milvus\n           # Apply metadata filters (year, author, venue)\n           # Return ranked results with snippets\n       \n       def build_literature_map(papers: list[Paper]) -> KnowledgeGraph:\n           # Extract citation relationships\n           # Identify co-authorship networks\n           # Cluster by topic/keyword\n           # Generate visualization data\n       \n       def auto_tag(paper: Paper) -> list[str]:\n           # Keyword extraction\n           # Topic classification (arXiv categories)\n           # Domain-specific entity recognition\n   ```\n\n3. **Personal Knowledge Base:**\n   ```python\n   class PersonalKnowledgeBase:\n       def add_to_collection(paper: Paper, notes: str, tags: list[str])\n       def create_note(title: str, content: str, linked_papers: list[Paper])\n       def search(query: str) -> SearchResult  # Searches papers + notes\n       def get_recommendations(user_id: UUID) -> list[Paper]\n       def export_collection(format: str) -> File  # BibTeX, CSV, JSON\n   ```\n\n4. **Frontend Components:**\n   - PDFUploader.tsx: Batch upload with progress\n   - LiteratureDashboard.tsx: Personal library view\n   - SemanticSearch.tsx: Search interface with filters\n   - LiteratureMap.tsx: D3.js knowledge graph visualization\n   - KnowledgeGraph.tsx: Interactive citation network\n   - NotesEditor.tsx: Personal note-taking with linking\n\n5. **Storage:**\n   - PDF files in object storage (with extracted text cached)\n   - Embeddings in vector database (Pinecone/Milvus)\n   - User annotations in PostgreSQL\n   - Full-text search index in Elasticsearch",
-        "testStrategy": "1. PDF parsing test: Process standard papers, verify text extraction accuracy >95%\n2. Section detection test: Test with various paper formats\n3. Semantic search test: Query known papers, verify relevance ranking\n4. Literature map test: Build map for 100 papers, verify visualization renders\n5. Batch processing test: Upload 50 PDFs, verify parallel processing\n6. Knowledge base test: Add notes, verify search finds them\n7. Export test: Export collection in all formats, verify correctness",
-        "subtasks": []
-      },
-      {
-        "id": "7",
-        "title": "AI Research Workshop with Three Creation Modes",
-        "description": "Implement the AI Research Workshop with three SDF creation modes: Visual Graph Editor, LaTeX Macro Annotation, and AI-Assisted Semi-Automatic Generation.",
-        "status": "pending",
-        "dependencies": [
-          "4",
           "5"
         ],
         "priority": "high",
-        "details": "**Implementation Details:**\n\n1. **Mode 1: Visual Graph Editor:**\n   ```typescript\n   interface GraphEditorState {\n     nodes: Array<{\n       id: string;\n       type: 'problem' | 'insight' | 'method' | 'result' | 'limitation';\n       content: string;\n       position: { x: number; y: number };\n     }>;\n     edges: Array<{\n       source: string;\n       target: string;\n       label?: string;\n     }>;\n   }\n   \n   // Features:\n   // - Split view: Outline (left) + Graph canvas (right)\n   // - Right-click context menu to tag text as node type\n   // - Drag-and-drop node positioning\n   // - Edge creation by dragging between nodes\n   // - Real-time graph rendering with D3.js/React Flow\n   // - Auto-layout algorithm (dagre)\n   // - Export to SDF format\n   ```\n\n2. **Mode 2: LaTeX Macro Annotation:**\n   ```latex\n   % SDF LaTeX Package Commands\n   \\sdfproblem{Define the specific research question...}\n   \\sdfinsight{Our key discovery is...}\n   \\sdfmethod{We employed approach X...}\n   \\sdfresult{Results demonstrate...}\n   \\sdflimitation{This study has limitations...}\n   \\sdfreproducibility{Data available at...}\n   \n   % Environment for experiments\n   \\begin{sdfexperiment}{experiment001}\n     \\protocol{...}\n     \\datafile{data.csv}\n   \\end{sdfexperiment}\n   ```\n   \n   - Custom LaTeX package (sdf.sty) for Overleaf/local use\n   - Compiler that extracts SDF metadata from TeX\n   - PDF generation with embedded machine-readable metadata\n   - Import existing LaTeX projects and auto-tag sections\n\n3. **Mode 3: AI-Assisted Semi-Automatic:**\n   ```python\n   class AIResearchAssistant:\n       def analyze_writing(text: str) -> AnalysisResult:\n           # Real-time AI analysis as user types\n           # Identify potential SDF elements:\n           # - Problem statements (research questions)\n           # - Claims and insights\n           # - Method descriptions\n           # - Results and findings\n           # Return suggestions with confidence scores\n       \n       def generate_graph_draft(text: str) -> GraphStructure:\n           # Initial node extraction\n           # Relationship identification\n           # Generate draft for user review\n       \n       def suggest_improvements(sdf: SDF) -> list[Suggestion]:\n           # Identify missing sections\n           # Suggest additional context\n           # Flag potential issues\n   ```\n   \n   - WebSocket connection for real-time analysis\n   - Debounced analysis (pause while typing)\n   - Human-in-the-loop: All AI suggestions require approval\n   - Edit history tracking\n\n4. **SDF Editor Enhancements:**\n   - Mode switcher in toolbar\n   - Persistent mode preference per user\n   - Import/export between modes\n   - Collaborative editing support\n   - Offline mode with sync on reconnect\n\n5. **Frontend Components:**\n   - GraphEditor.tsx: Visual node-based editor\n   - LaTeXImporter.tsx: LaTeX file upload and parsing\n   - AIAssistantPanel.tsx: Sidebar with AI suggestions\n   - ModeSwitcher.tsx: Toggle between creation modes\n   - GraphRenderer.tsx: D3.js visualization\n   - OutlineEditor.tsx: Traditional document outline",
-        "testStrategy": "1. Graph editor test: Create nodes, connect them, verify SDF export\n2. LaTeX import test: Upload .tex file, verify SDF extraction\n3. LaTeX export test: Generate .tex from SDF, verify compilation\n4. AI mode test: Write text, verify real-time suggestions appear\n5. Mode switching test: Start in one mode, switch, verify content preserved\n6. Collaborative test: Two users edit simultaneously in any mode\n7. Offline test: Work offline, reconnect, verify sync",
-        "subtasks": []
-      },
-      {
-        "id": "8",
-        "title": "Scientific Community Features: Labs, Forums, and Messaging",
-        "description": "Build the scientific community layer including lab profiles, discipline-based forums, BBS-style discussions, and group messaging functionality.",
-        "status": "pending",
-        "dependencies": [
-          "3"
-        ],
-        "priority": "medium",
-        "details": "**Implementation Details:**\n\n1. **Lab Profiles:**\n   ```python\n   class Lab:\n       id: UUID\n       name: str\n       institution: str\n       head_id: UUID  # User reference\n       members: list[UUID]\n       description: str\n       research_areas: list[str]\n       publications: list[ResearchObject]\n       avatar_url: str\n       banner_url: str\n       website: str\n       social_links: dict\n       created_at: datetime\n       verified: bool\n   ```\n\n2. **Discipline Forums:**\n   ```python\n   class Forum:\n       id: UUID\n       discipline: str  # e.g., 'computer-science', 'biology'\n       subcategories: list[str]\n       moderators: list[UUID]\n   \n   class Post:\n       id: UUID\n       forum_id: UUID\n       author_id: UUID\n       title: str\n       content: str  # Markdown\n       tags: list[str]\n       is_pinned: bool\n       is_locked: bool\n       view_count: int\n       created_at: datetime\n       updated_at: datetime\n   \n   class Comment:\n       id: UUID\n       post_id: UUID\n       author_id: UUID\n       content: str\n       parent_id: UUID (nullable)  # For nested replies\n       upvotes: int\n       created_at: datetime\n   ```\n\n3. **Features:**\n   - Threaded discussions with Markdown support\n   - Code syntax highlighting\n   - LaTeX rendering for equations\n   - File attachments (images, PDFs)\n   - @mentions and notifications\n   - Search within forums\n   - Category filtering and sorting\n   - Moderation tools (pin, lock, delete, ban)\n\n4. **Group Messaging:**\n   ```python\n   class Group:\n       id: UUID\n       name: str\n       description: str\n       members: list[UUID]\n       is_private: bool\n       created_by: UUID\n       created_at: datetime\n   \n   class Message:\n       id: UUID\n       group_id: UUID\n       sender_id: UUID\n       content: str\n       attachments: list[dict]\n       created_at: datetime\n       edited_at: datetime (nullable)\n       is_deleted: bool\n   ```\n\n5. **Real-time Features:**\n   - WebSocket-based live chat\n   - Typing indicators\n   - Read receipts\n   - Online/offline status\n   - Message history pagination\n\n6. **Frontend Components:**\n   - LabProfile.tsx: Lab page with members and publications\n   - ForumList.tsx: Discipline/category navigation\n   - ThreadView.tsx: Post with nested comments\n   - CreatePost.tsx: Rich text editor for new posts\n   - GroupChat.tsx: Real-time messaging interface\n   - NotificationCenter.tsx: Activity notifications",
-        "testStrategy": "1. Lab creation test: Create lab, add members, verify permissions\n2. Forum post test: Create post, add comments, verify threading\n3. Search test: Search forums, verify relevance ranking\n4. Real-time test: Send message, verify instant delivery\n5. Moderation test: Pin/lock post, verify visibility changes\n6. Notification test: Trigger notification, verify delivery\n7. Attachment test: Upload file, verify storage and display",
-        "subtasks": []
-      },
-      {
-        "id": "9",
-        "title": "Unified AI Research Agent Interface",
-        "description": "Implement the unified AI Research Agent as a single chat interface that controls the entire research workflow, integrated with Minimax API for intelligent assistance.",
-        "status": "pending",
-        "dependencies": [
-          "6",
-          "7"
-        ],
-        "priority": "high",
-        "details": "**Implementation Details:**\n\n1. **Agent Architecture:**\n   ```python\n   class ResearchAgent:\n       def __init__(self, user_id: UUID):\n           self.user = user\n           self.context = AgentContext()  # Conversation history\n           self.tools = self._initialize_tools()\n       \n       def process_message(self, message: str) -> AgentResponse:\n           # Intent classification\n           intent = self.classify_intent(message)\n           \n           # Tool selection based on intent\n           tool = self.select_tool(intent)\n           \n           # Execute tool with context\n           result = self.execute_tool(tool, message)\n           \n           # Generate response\n           return self.generate_response(result)\n       \n       def _initialize_tools(self) -> dict:\n           return {\n               'search': LiteratureSearchTool(),\n               'write': SDFWritingTool(),\n               'analyze': DataAnalysisTool(),\n               'review': QualityCheckTool(),\n               'organize': KnowledgeBaseTool(),\n               'collaborate': CollaborationTool()\n           }\n   \n   # Available Commands\n   COMMANDS = [\n       '/search <query>     # Search literature'\n       '/write <topic>      # Start new SDF draft'\n       '/analyze <data>     # Analyze provided data'\n       '/review <id>        # Run quality checks'\n       '/suggest <topic>    # Get research suggestions'\n       '/connect <paper>    # Find related work'\n       '/export <format>    # Export current work'\n       '/help               # Show available commands'\n   ]\n   ```\n\n2. **Intent Classification:**\n   - Fine-tuned model on research assistant conversations\n   - Fallback to keyword matching if confidence low\n   - Context-aware suggestions\n   - Multi-intent detection for complex requests\n\n3. **Tool Integrations:**\n   - Literature search → Minimax API for intelligent query expansion\n   - Writing assistance → SDF editor integration\n   - Analysis → Statistical tools and visualization\n   - Review → Quality check pipeline\n   - Organization → Personal knowledge base\n   - Collaboration → Sharing and comment features\n\n4. **Chat Interface Features:**\n   - Markdown rendering with code highlighting\n   - Inline figure and table display\n   - SDF preview cards\n   - Citation quick-add\n   - Command autocomplete\n   - Conversation threading\n   - Session persistence\n   - Voice input support (Web Speech API)\n\n5. **Frontend Components:**\n   - AgentChat.tsx: Main chat interface\n   - MessageBubble.tsx: Different message types\n   - CommandPalette.tsx: Command search and execution\n   - SDFPreviewCard.tsx: Inline SDF display\n   - ToolResultDisplay.tsx: Structured tool outputs\n   - AgentSettings.tsx: Preferences and integrations\n\n6. **API Integration (Minimax):**\n   - Implement request queuing for rate limiting\n   - Cache common responses\n   - Token usage tracking and alerts\n   - Budget management per user\n   - Fallback responses for API errors",
-        "testStrategy": "1. Command test: Test all /commands, verify correct tool execution\n2. Intent classification test: Submit varied queries, verify correct routing\n3. Tool execution test: Verify each tool returns expected results\n4. Chat persistence test: Refresh page, verify conversation history\n5. API cost test: Monitor Minimax usage against 119/month budget\n6. Error handling test: Simulate API failure, verify graceful degradation\n7. Performance test: Verify response time <3 seconds for standard queries",
-        "subtasks": []
-      },
-      {
-        "id": "10",
-        "title": "Research Evaluation System: PII and C Factor Implementation",
-        "description": "Implement the next-generation research evaluation system including Paper Impact Index (PII) and Contributor Factor (C Factor) metrics, moving beyond journal-based metrics.",
-        "status": "pending",
-        "dependencies": [
-          "8",
-          "9"
-        ],
-        "priority": "low",
-        "details": "**Implementation Details:**\n\n1. **Paper Impact Index (PII):**\n   ```python\n   class PaperImpactIndex:\n       def calculate(research_object_id: UUID) -> float:\n           \"\"\"\n           PII = α × content_quality + β × community_engagement + γ × scientific_impact\n           \n           where:\n           - content_quality: Based on quality check scores\n           - community_engagement: Views, downloads, discussions, forks\n           - scientific_impact: Citations, adaptations, extensions\n           \"\"\"\n           \n           content_score = self.get_content_score(research_object_id)\n           engagement_score = self.get_engagement_score(research_object_id)\n           impact_score = self.get_impact_score(research_object_id)\n           \n           # Weights (configurable, default balanced)\n           weights = {'α': 0.3, 'β': 0.3, 'γ': 0.4}\n           \n           return (weights['α'] * content_score + \n                   weights['β'] * engagement_score + \n                   weights['γ'] * impact_score) * 100\n       \n       def get_engagement_score(roid: UUID) -> float:\n           # Views (normalized, time-decayed)\n           # Downloads\n           # Discussion replies\n           # Fork count\n           # Citation count (internal)\n           # Reuse in other research objects\n       \n       def get_impact_score(roid: UUID) -> float:\n           # External citations (CrossRef API)\n           # Media coverage mentions\n           # Policy document references\n           # Patent citations\n   ```\n\n2. **C Factor (Contributor Factor):**\n   ```python\n   class ContributorFactor:\n       def calculate(user_id: UUID, time_period: str = 'year') -> dict:\n           \"\"\"\n           C Factor = α × paper_impact + β × open_collaboration + \n                     γ × community_contribution + δ × peer_service + ε × growth\n           \"\"\"\n           \n           return {\n               'paper_impact': self.impact_component(user_id),\n               'collaboration': self.collab_component(user_id),\n               'community': self.community_component(user_id),\n               'peer_service': self.peer_service_component(user_id),\n               'growth': self.growth_component(user_id),\n               'overall': self.compute_overall(...)\n           }\n       \n       def impact_component(user_id):\n           # Sum of PII scores for user's papers\n           # Weighted by author position\n       \n       def collab_component(user_id):\n           # Forked projects contributed to\n           # Collaborative paper authorship\n           # Open dataset contributions\n       \n       def community_component(user_id):\n           # Forum posts and helpful answers\n           # Code reviews given\n           # Mentorship activities\n       \n       def peer_service_component(user_id):\n           # Reviews performed\n           # Editorial contributions\n           # Conference organization\n       \n       def growth_component(user_id):\n           # Year-over-year improvement\n           # New research areas explored\n           # Skill development indicators\n   ```\n\n3. **Exploration Contribution Index:**\n   ```python\n   class ExplorationIndex:\n       def measure_audacity(user_id: UUID) -> dict:\n           \"\"\"\n           Measures risk-taking and exploration in research\n           \"\"\"\n           \n           return {\n               'failed_experiments_shared': count,  # Credit for failed attempts\n               'novel_domains': count,\n               'paradigm_challenges': count,\n               'interdisciplinary_work': score\n           }\n   ```\n\n4. **Leaderboard and Profiles:**\n   - Global researcher rankings\n   - Field-specific rankings\n   - Time-filtered rankings (monthly, yearly, all-time)\n   - Researcher profile pages with all metrics\n   - Institution-level aggregation\n\n5. **Frontend Components:**\n   - MetricDashboard.tsx: Display all researcher metrics\n   - PIIBreakdown.tsx: Detailed PII component view\n   - CFactorChart.tsx: Radar chart for C Factor components\n   - Leaderboard.tsx: Ranked researcher list\n   - ResearcherProfile.tsx: Public profile with metrics",
-        "testStrategy": "1. PII calculation test: Verify formula with known inputs\n2. C Factor test: Calculate for user with varied activities\n3. Weight sensitivity test: Verify metric changes with weight adjustments\n4. Leaderboard test: Generate rankings, verify correct ordering\n5. Profile test: Display metrics for researcher with publications\n6. Time decay test: Verify older engagement counts less\n7. Export test: Export metrics in JSON/CSV format",
-        "subtasks": []
+        "details": "",
+        "testStrategy": "",
+        "subtasks": [
+          {
+            "id": "6.1",
+            "title": "实现 Visualization Planner 子 Agent 生成可视化方案",
+            "description": "用户在阅读笔记或资料时对概念（如电磁场传播、干涉、偏振）提问，Hermes 委派 Visualization Planner 生成自然语言解释、数学模型与假设、参数表和 Python 脚本规格（Spec §10.1、§10.2）。",
+            "status": "pending",
+            "dependencies": [
+              "5"
+            ],
+            "priority": "high",
+            "details": "在 agent-worker 中实现 Visualization Planner（Spec §9.2 子 Agent 表）：输出结构化 JSON（解释、模型假设、脚本、参数表、示意图/定量仿真标签、运行环境与依赖版本），经 AI Gateway 调用并做 Schema 校验重试（§9.3）。禁止事项映射：Planner 不直接执行系统命令，只产出代码规格交后续检查与沙箱执行（§9.2）。脚本仅允许使用白名单包（NumPy、SciPy、SymPy、Matplotlib、Pillow 等，§10.3）。MiniMax-M3 及回退模型具体模型 ID 与结构化输出参数按 §24 记为待确认，不写死。\n\n验收: 步骤15",
+            "testStrategy": "单元测试：Planner 输出通过 JSON Schema 校验、标签（示意图/定量仿真）字段齐全；合同测试：Planner 输出 Schema 与后续 AST 检查器输入契约一致；阶段验收点：步骤 15 中 Hermes 返回解释+脚本的环节可演示（§21.1 单元/合同层）。",
+            "parentId": "6"
+          },
+          {
+            "id": "6.2",
+            "title": "实现 Python AST 策略检查器拦截危险代码",
+            "description": "对 Planner 生成及用户修改后的脚本做 AST、依赖、资源和输出检查，阻断危险代码进入沙箱（Spec §9.2 Python Policy Checker、§10.3）。",
+            "status": "pending",
+            "dependencies": [
+              "2"
+            ],
+            "priority": "high",
+            "details": "在 science-worker 中实现 AST 策略检查（CPython ast 模块）：禁止 import/调用 os、subprocess、socket、ctypes，禁止动态安装（pip 等）与任意二进制执行；import 白名单仅 NumPy、SciPy、SymPy、Matplotlib、Pillow 等（§10.3）。禁止事项映射：Policy Checker 不拥有数据库凭据（§9.2），检查器进程自身也不注入任何数据库/对象存储密钥。检查失败返回结构化拒绝原因（位置+规则），供前端展示。\n\n验收: 步骤16",
+            "testStrategy": "单元测试：恶意样本集（import os、socket 连接、ctypes、__import__ 绕过、exec/eval 动态执行）全部被拒；白名单脚本全部通过；误报率抽查。对应 §21.1 安全测试层（Sandbox Escape 前置防线）。",
+            "parentId": "6"
+          },
+          {
+            "id": "6.3",
+            "title": "构建沙箱基础镜像与非 root 只读运行环境",
+            "description": "构建固定依赖版本的沙箱 Docker 基础镜像，落实非 root、只读根文件系统、临时目录等运行时约束（Spec §10.3）。",
+            "status": "pending",
+            "dependencies": [
+              "6.2"
+            ],
+            "priority": "high",
+            "details": "在 infra/sandbox/ 下维护 Dockerfile 与构建脚本：白名单包（NumPy、SciPy、SymPy、Matplotlib、Pillow）版本固定并记录清单；镜像内创建非 root 运行用户；运行时挂载只读根文件系统 + 受限 tmpfs 临时目录；预置 Matplotlib 无显示后端配置，输出仅允许写临时目录。具体依赖版本号属 §24 待确认事项（随环境实测锁定），先在 ADR 记录当前锁定值。\n\n验收: 步骤16",
+            "testStrategy": "集成测试：镜像内以非 root 身份运行示例脚本可产出 PNG；写根文件系统、读取 /etc 外宿主路径均失败；镜像内无数据库凭据等敏感文件。对应 §21.1 集成/安全测试层。",
+            "parentId": "6"
+          },
+          {
+            "id": "6.4",
+            "title": "实现 Sandbox Controller 与隔离 Docker 网络",
+            "description": "实现 sandbox-controller 服务，调度临时执行容器并落实全部资源与网络隔离限制（Spec §10.3、§14.1、§14.2）。",
+            "status": "pending",
+            "dependencies": [
+              "6.3"
+            ],
+            "priority": "high",
+            "details": "实现 apps/sandbox-controller：创建/监控/销毁一次性沙箱容器。限制映射（§10.3 全部）：30 秒超时、单核 CPU、1 GB 内存、非 root、只读根 FS、临时目录、进程数/文件数/输出大小上限、禁止公网/内网/云元数据访问、禁止挂载宿主目录与 Docker Socket、不注入数据库凭据、执行完成立即销毁容器。网络（§14.2）：单 ECS 阶段建独立 Docker Network（sandbox_control_net 用于调度），运行容器不加入 data_net、默认无外网；数据库不绑定公网。数据实体：SandboxJob、SandboxArtifact（§15）。生产开放前迁移独立 ECS 记为 §24/§23 风险跟踪项。\n\n验收: 步骤16",
+            "testStrategy": "集成测试：提交任务后容器按限制运行并到期销毁；安全测试：容器内尝试访问数据库网段、公网、云元数据地址（169.254.169.254）全部失败；资源压测验证超时/内存/输出截断生效。对应 §21.1 集成+安全测试层与步骤 16 验收点。",
+            "parentId": "6"
+          },
+          {
+            "id": "6.5",
+            "title": "实现 sandbox-jobs API、配额限流与完成事件",
+            "description": "对外提供 /sandbox-jobs 模块化 REST API，落实沙箱接口限流、Python 任务配额和 sandbox_job.completed 事件（Spec §16、§13.3、§17）。",
+            "status": "pending",
+            "dependencies": [
+              "6.4"
+            ],
+            "priority": "high",
+            "details": "API 模块 /sandbox-jobs（§16）：提交任务（幂等键）、任务 ID + SSE/WebSocket 进度查询、获取产物。配额（§13.3）：Python 任务次数、运行时间、并发任务数按用户等级/Workspace 配置，必须后台可配置不写死前端；配额初始具体数值按 §24 记为待确认。安全 MUST 映射（§17）：沙箱接口限流、全部写操作记审计日志、生产日志不记录脚本中的敏感附件内容；API 层做 RBAC + 资源归属检查，禁止跨 Workspace 越权（§3.3、§17）。事件：sandbox_job.completed 可重试、消费者幂等（§16）。\n\n验收: -",
+            "testStrategy": "集成测试：任务提交幂等（重复幂等键不重复执行）、进度推送、完成事件投递与重试；安全测试：越权访问他人任务被拒、限流生效；配额测试：超配额返回明确错误。对应 §21.1 集成/安全层。",
+            "parentId": "6"
+          },
+          {
+            "id": "6.6",
+            "title": "实现可视化结果展示与 IndexedDB 临时保存",
+            "description": "前端展示沙箱产出的 PNG/SVG 与解释内容，临时结果保存到 IndexedDB（默认 24 小时），支持保存到本设备或我的笔记（Spec §10.2、§13.2）。",
+            "status": "pending",
+            "dependencies": [
+              "6.5"
+            ],
+            "priority": "high",
+            "details": "Web 端（apps/web）实现可视化结果面板：展示自然语言解释、参数表、PNG/SVG、示意图/定量仿真标签、运行环境与依赖版本（§10.2）。IndexedDB 保存（§13.2）：临时可视化与脚本默认保存 24 小时；“保存到本设备”不占服务端长期存储；“保存到我的笔记”上传并支持跨设备；UI 明确提示浏览器清理/无痕/配额回收可能造成丢失；提供一键导出和清理。移动端功能一致，复杂面板用抽屉/分步呈现（§2.5、§18.2）。图片需 alt 文本（§18.3）。\n\n验收: 步骤15",
+            "testStrategy": "E2E（Playwright 测试环境）：请求可视化→查看图片→临时保存→24h 过期逻辑（可 mock 时钟）→导出/清理；移动端视口下功能可达。对应 §21.1 E2E 层与步骤 15 验收点。",
+            "parentId": "6"
+          },
+          {
+            "id": "6.7",
+            "title": "实现自然语言修改脚本的全流程重检机制",
+            "description": "用户可用自然语言要求修改脚本或参数，每次修改重新生成代码、展示 diff、重新策略检查并在新容器中执行（Spec §10.4）。",
+            "status": "pending",
+            "dependencies": [
+              "6.6"
+            ],
+            "priority": "high",
+            "details": "串联 Planner→Diff 展示→AST 检查→新沙箱容器的修改链路（§10.4）：每次修改由 Visualization Planner 重新生成代码，前端展示新旧脚本 diff，修改后脚本必须重新过 P1E-2 策略检查，执行必须创建全新容器；禁止复用可能已污染的容器（MUST 映射 §10.4 末句）。修改请求与重新检查结果记入会话与审计日志（§17）。该流程属 Hermes R1/R2 级审批交互，沿用 Phase 1D 的分级审批组件（§9.4）。\n\n验收: 步骤15",
+            "testStrategy": "E2E：自然语言修改参数→展示 diff→确认→新容器执行→新图片返回；安全测试：修改请求注入危险代码时被 AST 检查拦截；容器复用检测（两次执行容器 ID 不同）。对应 §21.1 E2E+安全层与步骤 15 验收点。",
+            "parentId": "6"
+          },
+          {
+            "id": "6.8",
+            "title": "编写沙箱威胁模型并执行逃逸基线测试",
+            "description": "单独维护 Sandbox 威胁模型文档，并建立可重复运行的沙箱逃逸基线测试集（Spec §17 MUST、§21.1 安全测试层）。",
+            "status": "pending",
+            "dependencies": [
+              "6.4"
+            ],
+            "priority": "high",
+            "details": "在 docs/threat-model/ 下编写沙箱威胁模型（§17：Sandbox 威胁模型单独维护）：资产（数据库凭据、其他用户文件、宿主、云元数据）、攻击面（恶意脚本、依赖包漏洞、容器逃逸、资源耗尽）、现有缓解（§10.3 全部限制+AST 检查+独立网络）与残余风险（单 ECS 阶段，生产开放前拆分独立 ECS，§23）。基线测试集：网络外联、内网/元数据探测、读取宿主路径、提权、fork 炸弹、内存炸弹、超大输出等用例全部失败为通过；纳入 CI 定期运行。测试证据作为步骤 16 验收材料。\n\n验收: 步骤16",
+            "testStrategy": "安全测试（§21.1 Sandbox Escape 基线）：上述用例在 CI 执行并留档；恢复演练：异常任务后无残留容器/网络。本任务自身即测试与文档任务，产出威胁模型文档+基线测试报告。",
+            "parentId": "6"
+          }
+        ]
       }
     ],
     "metadata": {
-      "created": "2026-07-24T13:45:55.638Z",
-      "updated": "2026-07-24T14:04:35.583Z",
-      "description": "Tasks for master context"
+      "version": "1.0.0",
+      "lastModified": "2026-07-28T04:41:41.929Z",
+      "taskCount": 6,
+      "completedCount": 1,
+      "tags": [
+        "master"
+      ]
     }
   }
 }

@@ -23,3 +23,17 @@ node_modules/
 
 # OS specific
 .DS_Store
+
+# Local isolated worktrees
+.worktrees/
+
+# Build outputs
+dist/
+.next/
+*.tsbuildinfo
+
+# Agent scratch (SDD workspace 等，过程产物不入库)
+.superpowers/
+
+# task-master 本地备份
+.taskmaster/tasks/*.bak-*

@@ -1,0 +1,83 @@
+{
+  "phase": "1E",
+  "topTask": {
+    "localId": "P1E",
+    "title": "Phase 1E: 轻量科学可视化",
+    "description": "实现 Hermes 概念可视化闭环与隔离沙箱执行：Visualization Planner 生成解释与 Python 脚本（Spec §9.2、§10.1），AST 策略检查（§10.3），Sandbox Controller + 隔离 Docker 网络（§10.3、§14.2），临时图片与 IndexedDB 保存（§13.2），自然语言修改脚本（§10.4），威胁模型与沙箱逃逸基线测试（§17、§21.1）。服务验收主流程步骤 15、16（Spec §21.2）。",
+    "priority": "high",
+    "subtasks": [
+      {
+        "localId": "P1E-1",
+        "title": "实现 Visualization Planner 子 Agent 生成可视化方案",
+        "description": "用户在阅读笔记或资料时对概念（如电磁场传播、干涉、偏振）提问，Hermes 委派 Visualization Planner 生成自然语言解释、数学模型与假设、参数表和 Python 脚本规格（Spec §10.1、§10.2）。",
+        "details": "在 agent-worker 中实现 Visualization Planner（Spec §9.2 子 Agent 表）：输出结构化 JSON（解释、模型假设、脚本、参数表、示意图/定量仿真标签、运行环境与依赖版本），经 AI Gateway 调用并做 Schema 校验重试（§9.3）。禁止事项映射：Planner 不直接执行系统命令，只产出代码规格交后续检查与沙箱执行（§9.2）。脚本仅允许使用白名单包（NumPy、SciPy、SymPy、Matplotlib、Pillow 等，§10.3）。MiniMax-M3 及回退模型具体模型 ID 与结构化输出参数按 §24 记为待确认，不写死。\n\n验收: 步骤15",
+        "testStrategy": "单元测试：Planner 输出通过 JSON Schema 校验、标签（示意图/定量仿真）字段齐全；合同测试：Planner 输出 Schema 与后续 AST 检查器输入契约一致；阶段验收点：步骤 15 中 Hermes 返回解释+脚本的环节可演示（§21.1 单元/合同层）。",
+        "dependencies": ["P1D"],
+        "priority": "high"
+      },
+      {
+        "localId": "P1E-2",
+        "title": "实现 Python AST 策略检查器拦截危险代码",
+        "description": "对 Planner 生成及用户修改后的脚本做 AST、依赖、资源和输出检查，阻断危险代码进入沙箱（Spec §9.2 Python Policy Checker、§10.3）。",
+        "details": "在 science-worker 中实现 AST 策略检查（CPython ast 模块）：禁止 import/调用 os、subprocess、socket、ctypes，禁止动态安装（pip 等）与任意二进制执行；import 白名单仅 NumPy、SciPy、SymPy、Matplotlib、Pillow 等（§10.3）。禁止事项映射：Policy Checker 不拥有数据库凭据（§9.2），检查器进程自身也不注入任何数据库/对象存储密钥。检查失败返回结构化拒绝原因（位置+规则），供前端展示。\n\n验收: 步骤16",
+        "testStrategy": "单元测试：恶意样本集（import os、socket 连接、ctypes、__import__ 绕过、exec/eval 动态执行）全部被拒；白名单脚本全部通过；误报率抽查。对应 §21.1 安全测试层（Sandbox Escape 前置防线）。",
+        "dependencies": ["P1A"],
+        "priority": "high"
+      },
+      {
+        "localId": "P1E-3",
+        "title": "构建沙箱基础镜像与非 root 只读运行环境",
+        "description": "构建固定依赖版本的沙箱 Docker 基础镜像，落实非 root、只读根文件系统、临时目录等运行时约束（Spec §10.3）。",
+        "details": "在 infra/sandbox/ 下维护 Dockerfile 与构建脚本：白名单包（NumPy、SciPy、SymPy、Matplotlib、Pillow）版本固定并记录清单；镜像内创建非 root 运行用户；运行时挂载只读根文件系统 + 受限 tmpfs 临时目录；预置 Matplotlib 无显示后端配置，输出仅允许写临时目录。具体依赖版本号属 §24 待确认事项（随环境实测锁定），先在 ADR 记录当前锁定值。\n\n验收: 步骤16",
+        "testStrategy": "集成测试：镜像内以非 root 身份运行示例脚本可产出 PNG；写根文件系统、读取 /etc 外宿主路径均失败；镜像内无数据库凭据等敏感文件。对应 §21.1 集成/安全测试层。",
+        "dependencies": ["P1E-2"],
+        "priority": "high"
+      },
+      {
+        "localId": "P1E-4",
+        "title": "实现 Sandbox Controller 与隔离 Docker 网络",
+        "description": "实现 sandbox-controller 服务，调度临时执行容器并落实全部资源与网络隔离限制（Spec §10.3、§14.1、§14.2）。",
+        "details": "实现 apps/sandbox-controller：创建/监控/销毁一次性沙箱容器。限制映射（§10.3 全部）：30 秒超时、单核 CPU、1 GB 内存、非 root、只读根 FS、临时目录、进程数/文件数/输出大小上限、禁止公网/内网/云元数据访问、禁止挂载宿主目录与 Docker Socket、不注入数据库凭据、执行完成立即销毁容器。网络（§14.2）：单 ECS 阶段建独立 Docker Network（sandbox_control_net 用于调度），运行容器不加入 data_net、默认无外网；数据库不绑定公网。数据实体：SandboxJob、SandboxArtifact（§15）。生产开放前迁移独立 ECS 记为 §24/§23 风险跟踪项。\n\n验收: 步骤16",
+        "testStrategy": "集成测试：提交任务后容器按限制运行并到期销毁；安全测试：容器内尝试访问数据库网段、公网、云元数据地址（169.254.169.254）全部失败；资源压测验证超时/内存/输出截断生效。对应 §21.1 集成+安全测试层与步骤 16 验收点。",
+        "dependencies": ["P1E-3"],
+        "priority": "high"
+      },
+      {
+        "localId": "P1E-5",
+        "title": "实现 sandbox-jobs API、配额限流与完成事件",
+        "description": "对外提供 /sandbox-jobs 模块化 REST API，落实沙箱接口限流、Python 任务配额和 sandbox_job.completed 事件（Spec §16、§13.3、§17）。",
+        "details": "API 模块 /sandbox-jobs（§16）：提交任务（幂等键）、任务 ID + SSE/WebSocket 进度查询、获取产物。配额（§13.3）：Python 任务次数、运行时间、并发任务数按用户等级/Workspace 配置，必须后台可配置不写死前端；配额初始具体数值按 §24 记为待确认。安全 MUST 映射（§17）：沙箱接口限流、全部写操作记审计日志、生产日志不记录脚本中的敏感附件内容；API 层做 RBAC + 资源归属检查，禁止跨 Workspace 越权（§3.3、§17）。事件：sandbox_job.completed 可重试、消费者幂等（§16）。\n\n验收: -",
+        "testStrategy": "集成测试：任务提交幂等（重复幂等键不重复执行）、进度推送、完成事件投递与重试；安全测试：越权访问他人任务被拒、限流生效；配额测试：超配额返回明确错误。对应 §21.1 集成/安全层。",
+        "dependencies": ["P1E-4"],
+        "priority": "high"
+      },
+      {
+        "localId": "P1E-6",
+        "title": "实现可视化结果展示与 IndexedDB 临时保存",
+        "description": "前端展示沙箱产出的 PNG/SVG 与解释内容，临时结果保存到 IndexedDB（默认 24 小时），支持保存到本设备或我的笔记（Spec §10.2、§13.2）。",
+        "details": "Web 端（apps/web）实现可视化结果面板：展示自然语言解释、参数表、PNG/SVG、示意图/定量仿真标签、运行环境与依赖版本（§10.2）。IndexedDB 保存（§13.2）：临时可视化与脚本默认保存 24 小时；“保存到本设备”不占服务端长期存储；“保存到我的笔记”上传并支持跨设备；UI 明确提示浏览器清理/无痕/配额回收可能造成丢失；提供一键导出和清理。移动端功能一致，复杂面板用抽屉/分步呈现（§2.5、§18.2）。图片需 alt 文本（§18.3）。\n\n验收: 步骤15",
+        "testStrategy": "E2E（Playwright 测试环境）：请求可视化→查看图片→临时保存→24h 过期逻辑（可 mock 时钟）→导出/清理；移动端视口下功能可达。对应 §21.1 E2E 层与步骤 15 验收点。",
+        "dependencies": ["P1E-5"],
+        "priority": "high"
+      },
+      {
+        "localId": "P1E-7",
+        "title": "实现自然语言修改脚本的全流程重检机制",
+        "description": "用户可用自然语言要求修改脚本或参数，每次修改重新生成代码、展示 diff、重新策略检查并在新容器中执行（Spec §10.4）。",
+        "details": "串联 Planner→Diff 展示→AST 检查→新沙箱容器的修改链路（§10.4）：每次修改由 Visualization Planner 重新生成代码，前端展示新旧脚本 diff，修改后脚本必须重新过 P1E-2 策略检查，执行必须创建全新容器；禁止复用可能已污染的容器（MUST 映射 §10.4 末句）。修改请求与重新检查结果记入会话与审计日志（§17）。该流程属 Hermes R1/R2 级审批交互，沿用 Phase 1D 的分级审批组件（§9.4）。\n\n验收: 步骤15",
+        "testStrategy": "E2E：自然语言修改参数→展示 diff→确认→新容器执行→新图片返回；安全测试：修改请求注入危险代码时被 AST 检查拦截；容器复用检测（两次执行容器 ID 不同）。对应 §21.1 E2E+安全层与步骤 15 验收点。",
+        "dependencies": ["P1E-6"],
+        "priority": "high"
+      },
+      {
+        "localId": "P1E-8",
+        "title": "编写沙箱威胁模型并执行逃逸基线测试",
+        "description": "单独维护 Sandbox 威胁模型文档，并建立可重复运行的沙箱逃逸基线测试集（Spec §17 MUST、§21.1 安全测试层）。",
+        "details": "在 docs/threat-model/ 下编写沙箱威胁模型（§17：Sandbox 威胁模型单独维护）：资产（数据库凭据、其他用户文件、宿主、云元数据）、攻击面（恶意脚本、依赖包漏洞、容器逃逸、资源耗尽）、现有缓解（§10.3 全部限制+AST 检查+独立网络）与残余风险（单 ECS 阶段，生产开放前拆分独立 ECS，§23）。基线测试集：网络外联、内网/元数据探测、读取宿主路径、提权、fork 炸弹、内存炸弹、超大输出等用例全部失败为通过；纳入 CI 定期运行。测试证据作为步骤 16 验收材料。\n\n验收: 步骤16",
+        "testStrategy": "安全测试（§21.1 Sandbox Escape 基线）：上述用例在 CI 执行并留档；恢复演练：异常任务后无残留容器/网络。本任务自身即测试与文档任务，产出威胁模型文档+基线测试报告。",
+        "dependencies": ["P1E-4"],
+        "priority": "high"
+      }
+    ]
+  }
+}

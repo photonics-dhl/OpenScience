@@ -1,0 +1,32 @@
+{
+  "name": "openscience",
+  "private": true,
+  "packageManager": "pnpm@9.15.0",
+  "workspaces": [
+    "apps/*",
+    "packages/*",
+    "infra/*"
+  ],
+  "scripts": {
+    "build": "pnpm -r --if-present build",
+    "typecheck": "pnpm -r --if-present typecheck",
+    "lint": "node scripts/verify-workspace.mjs",
+    "verify:workspace": "node scripts/verify-workspace.mjs",
+    "stack:up": "docker compose -f infra/compose/docker-compose.dev.yml up -d || docker-compose -f infra/compose/docker-compose.dev.yml up -d",
+    "stack:down": "docker compose -f infra/compose/docker-compose.dev.yml down || docker-compose -f infra/compose/docker-compose.dev.yml down",
+    "stack:ps": "docker compose -f infra/compose/docker-compose.dev.yml ps || docker-compose -f infra/compose/docker-compose.dev.yml ps",
+    "stack:logs": "docker compose -f infra/compose/docker-compose.dev.yml logs -f || docker-compose -f infra/compose/docker-compose.dev.yml logs -f",
+    "test": "pnpm -r --if-present test",
+    "test:integration": "pnpm stack:up && pnpm -r --if-present test:integration"
+  },
+  "devDependencies": {
+    "@prisma/client": "5.22.0",
+    "@types/node": "20.14.10",
+    "eslint": "8.57.0",
+    "prisma": "5.22.0",
+    "typescript": "5.5.4"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}
