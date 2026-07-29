@@ -690,7 +690,13 @@ export async function register(deps: AuthDeps, input: RegisterInput): Promise<Au
       const created = await tx.user.create({
         data: { email: input.email, passwordHash, displayName: input.displayName, status: 'invited' },
       });
-      await tx.invitation.update({ where: { id: invitation.id }, data: { usedBy: created.id, usedAt: at } });
+      const redeemed = await tx.invitation.updateMany({
+        where: { id: invitation.id, usedBy: null, revokedAt: null },
+        data: { usedBy: created.id, usedAt: at },
+      });
+      if (redeemed.count !== 1) {
+        throw new AuthError('INVITATION_INVALID', '邀请码已被使用');
+      }
       return created;
     });
     await issueVerificationCode(deps, user.id, input.email);
@@ -730,7 +736,7 @@ export async function verifyEmail(
   return { userId: updated.id, status: updated.status, sessionToken };
 }
 
-/** 防枚举：用户不存在或已验证时静默成功（与成功响应一致）；冷却中抛 RESEND_COOLDOWN。 */
+/** 防枚举：用户不存在、已验证或冷却中均静默成功（与成功响应一致，不发送）。RESEND_COOLDOWN 错误码保留备用。 */
 export async function resendCode(deps: AuthDeps, input: { email: string }): Promise<void> {
   const at = now(deps);
   const user = await deps.prisma.user.findUnique({ where: { email: input.email } });
@@ -740,10 +746,15 @@ export async function resendCode(deps: AuthDeps, input: { email: string }): Prom
     orderBy: { createdAt: 'desc' },
   });
   if (record && inCooldown(record.lastSentAt, at)) {
-    throw new AuthError('RESEND_COOLDOWN', '发送过于频繁，请稍后再试');
+    // 防枚举：冷却中也静默成功但不发送，外部行为与未知邮箱一致
+    return;
   }
   await issueVerificationCode(deps, user.id, input.email);
 }
+
+// 模块级常量：预计算的 argon2id 哈希（内容任意，仅用于抹平"用户不存在"路径的计时差）
+const DUMMY_PASSWORD_HASH =
+  '$argon2id$v=19$m=65536,p=4,t=3$oIwSLHTnNJ5fzX0eQexTUw$lVp0KMOgf6m8vqLfZWjaVQxaHa4TYcc6LwsIFGo9Fyg';
 
 export async function login(
   deps: AuthDeps,
@@ -751,7 +762,10 @@ export async function login(
 ): Promise<Required<AuthResult>> {
   const user = await deps.prisma.user.findUnique({ where: { email: input.email } });
   // 防枚举：邮箱不存在与密码错误完全同文案同错误码
-  if (!user) throw new AuthError('CREDENTIALS_INVALID', '邮箱或密码错误');
+  if (!user) {
+    await verifyPassword(DUMMY_PASSWORD_HASH, input.password); // 抹平计时侧信道，结果丢弃
+    throw new AuthError('CREDENTIALS_INVALID', '邮箱或密码错误');
+  }
   const ok = await verifyPassword(user.passwordHash, input.password);
   if (!ok) throw new AuthError('CREDENTIALS_INVALID', '邮箱或密码错误');
   if (user.status === 'invited') throw new AuthError('ACCOUNT_NOT_ACTIVE', '请先完成邮箱验证');
@@ -877,6 +891,16 @@ export function createFakePrisma(): { prisma: PrismaClient; db: FakeDb } {
         const row = db.invitations.find((i) => i.id === where.id);
         Object.assign(row, data);
         return row;
+      },
+      updateMany: async ({ where, data }: any) => {
+        let count = 0;
+        for (const i of db.invitations) {
+          if (i.id === where.id && (where.usedBy === undefined || i.usedBy === where.usedBy) && (where.revokedAt === undefined || i.revokedAt === where.revokedAt)) {
+            Object.assign(i, data);
+            count++;
+          }
+        }
+        return { count };
       },
     },
     emailVerification: {
@@ -1027,6 +1051,23 @@ describe('register', () => {
       register(deps, { invitationCode: 'TESTCODE1234567890AB', email: 'dup@example.com', password: 'passw0rd-x', displayName: 'D' }),
     ).rejects.toMatchObject({ code: 'EMAIL_ALREADY_REGISTERED' });
   });
+
+  it('rejects a second registration with the same invitation code (guarded redemption)', async () => {
+    const { deps, db } = makeDeps();
+    seedInvitation(db);
+    await register(deps, {
+      invitationCode: 'TESTCODE1234567890AB',
+      email: 'first@example.com',
+      password: 'passw0rd-x',
+      displayName: 'First',
+    });
+    await expect(
+      register(deps, { invitationCode: 'TESTCODE1234567890AB', email: 'second@example.com', password: 'passw0rd-x', displayName: 'S' }),
+    ).rejects.toMatchObject({ code: 'INVITATION_INVALID' });
+    // 串行场景：usedBy 已写入，assertInvitationRedeemable 在 user.create 之前拒绝，故第二个用户未创建；
+    // 并发竞态（两个事务都通过 assert 后才写 usedBy）由 guarded updateMany 的 count=0 兜底并回滚。
+    expect(db.users.filter((u) => u.email === 'second@example.com')).toHaveLength(0);
+  });
 });
 
 describe('verifyEmail', () => {
@@ -1092,11 +1133,14 @@ describe('resendCode', () => {
     expect(mailer.sent).toHaveLength(0);
   });
 
-  it('enforces the 60s cooldown and invalidates the old code on resend', async () => {
+  it('cooldown is silent (no throw, no send); resend after window invalidates the old code', async () => {
     const { deps, db, mailer } = makeDeps();
     seedInvitation(db);
     await register(deps, { invitationCode: 'TESTCODE1234567890AB', email: 'r@example.com', password: 'passw0rd-x', displayName: 'R' });
-    await expect(resendCode(deps, { email: 'r@example.com' })).rejects.toMatchObject({ code: 'RESEND_COOLDOWN' });
+    expect(mailer.sent).toHaveLength(1);
+    // 冷却中：静默成功、不发送，外部行为与未知邮箱一致（防枚举）
+    await resendCode(deps, { email: 'r@example.com' });
+    expect(mailer.sent).toHaveLength(1);
     // 越过冷却窗口后可重发，且旧码失效
     const later = new Date(NOW.getTime() + 61_000);
     deps.now = () => later;
@@ -1156,7 +1200,7 @@ describe('getCurrentUser', () => {
 - [ ] **Step 7: 构建并跑单测**
 
 Run: `npx pnpm@9.15.0 --filter @openscience/auth build && npx pnpm@9.15.0 --filter @openscience/auth typecheck && npx pnpm@9.15.0 --filter @openscience/auth test`
-Expected: 全绿（Task 2 的 15 + 本任务 14 = 29 个单测）。
+Expected: 全绿（Task 2 的 15 + 本任务 15 = 30 个单测）。
 
 ---
 
@@ -1317,6 +1361,10 @@ import { loadApiEnv } from './env';
 
 async function main(): Promise<void> {
   const env = loadApiEnv();
+  if (env.nodeEnv === 'production') {
+    // §24 邮件服务商未定：生产尚无真实 Mailer，拒绝带 outbox 启动（宁可快速失败也不静默吞邮件）
+    throw new Error('No production mailer configured (Spec §24 pending); refusing to start with DevOutboxMailer');
+  }
   const prisma = createPrismaClient({ datasourceUrl: env.databaseUrl });
   const redis = createRedisClient(env.redisUrl);
   // MAILER_DRIVER=smtp 预留：§24 邮件服务商未定，dev 一律 outbox 捕获。
@@ -1935,7 +1983,7 @@ SECURE_COOKIES=false
 - [ ] **Step 7: 全量本地门禁**
 
 Run: `npx pnpm@9.15.0 build && npx pnpm@9.15.0 typecheck && npx pnpm@9.15.0 lint && npx pnpm@9.15.0 test && npx pnpm@9.15.0 audit:knip && npx pnpm@9.15.0 audit:dep && npx pnpm@9.15.0 docs:lint`
-Expected: 全绿；单测总数 = P1A-2 的 14 + auth 29 + api 14 = 57。（audit:knip/audit:dep 对新包允许仅出现占位级 hint，不得有 error。）
+Expected: 全绿；单测总数 = P1A-2 的 14 + auth 30 + api 14 = 58。（audit:knip/audit:dep 对新包允许仅出现占位级 hint，不得有 error。）
 
 - [ ] **Step 8: `AGENTS.md` 常用命令行追加**
 
@@ -1965,6 +2013,7 @@ Expected: 全绿；单测总数 = P1A-2 的 14 + auth 29 + api 14 = 57。（audi
 
 ## Self-Review 记录
 
+- 2026-07-28 Task 3 评审后修订（用户裁决，代码块已同步为修复后版本）：① 邀请码核销改 guarded `updateMany` 原子防并发双核销；② resend 冷却改静默 202（消除 invited 状态枚举通道，`RESEND_COOLDOWN` 保留备用）；③ login 未知邮箱路径加 `DUMMY_PASSWORD_HASH` 抹平计时侧信道。
 - Spec 覆盖：spec §3 组件→Task 2/3/4/5；§4 数据模型→Task 1；§5 API 面→Task 5；§6 流程与安全→Task 3（验证码流/session/env 校验）；§7 测试→Task 2/3/4/5 单测 + Task 6 集成；§8 收尾→Task 6 Step 7-11。CLI 位置：spec §3 写 `scripts/invite.ts`，本计划落地为 `scripts/invite.mjs`（免编译直接运行，auth 包提供 `generateInvitationCode`），偏差已在此注明。
 - 占位符扫描：无 TBD/TODO；所有代码步骤含完整代码。Task 4 Step 11 的 routes 占位由 Task 5 Step 1 完整替换，属计划内接力，不是占位符缺口。
 - 类型一致性：`AuthDeps`/`AuthRouteDeps`/`BuildAppOptions`/`AuthResult`/`CurrentUser`/`SessionData`/`Mailer`/`MailMessage` 在定义任务与消费任务间签名一致；`AuthRouteDeps extends AuthDeps { secureCookies: boolean }` 在 Task 4 占位、Task 5 实现、Task 6 集成测试中一致；`openscience_session` cookie 名全局唯一一致；迁移目录名 `20260728010000_auth_baseline` 全局唯一一致。

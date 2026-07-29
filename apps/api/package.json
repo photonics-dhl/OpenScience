@@ -5,9 +5,19 @@
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "start": "node dist/index.js",
-    "typecheck": "tsc -p tsconfig.json --noEmit"
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run",
+    "test:integration": "vitest run --config vitest.integration.config.ts"
   },
   "dependencies": {
-    "fastify": "4.28.1"
+    "@fastify/cookie": "11",
+    "@openscience/auth": "workspace:^",
+    "@openscience/database": "workspace:^",
+    "fastify": "5.10.0",
+    "zod": "3"
+  },
+  "devDependencies": {
+    "@types/node": "20.14.10",
+    "vitest": "2"
   }
 }

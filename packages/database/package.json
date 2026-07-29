@@ -2,6 +2,8 @@
   "name": "@openscience/database",
   "private": true,
   "version": "0.0.0",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
   "scripts": {
     "generate": "prisma generate --schema ../../infra/schema.prisma",
     "build": "pnpm run generate && tsc -p tsconfig.json",

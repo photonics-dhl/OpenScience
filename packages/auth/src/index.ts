@@ -1,1 +1,39 @@
-export const placeholder = true;
+export { AuthError, type AuthErrorCode } from './errors';
+export { hashPassword, verifyPassword } from './password';
+export {
+  generateInvitationCode,
+  generateSessionToken,
+  generateVerificationCode,
+  hashVerificationCode,
+} from './tokens';
+export { assertInvitationRedeemable, invitationRejectReason, type InvitationRejectReason } from './invitations';
+export {
+  CODE_TTL_MS,
+  LOCK_MS,
+  MAX_ATTEMPTS,
+  RESEND_COOLDOWN_MS,
+  inCooldown,
+  isCodeExpired,
+  isLocked,
+  registerFailedAttempt,
+} from './verification';
+export {
+  SESSION_TTL_SECONDS,
+  createSession,
+  destroySession,
+  resolveSession,
+  type SessionData,
+} from './session';
+export { DevOutboxMailer, SmtpMailer, type Mailer, type MailMessage } from './mailer';
+export {
+  getCurrentUser,
+  login,
+  logout,
+  register,
+  resendCode,
+  verifyEmail,
+  type AuthDeps,
+  type AuthResult,
+  type CurrentUser,
+  type RegisterInput,
+} from './auth-service';

@@ -22,10 +22,13 @@
     "stack:ps": "docker compose -f infra/compose/docker-compose.dev.yml ps || docker-compose -f infra/compose/docker-compose.dev.yml ps",
     "stack:logs": "docker compose -f infra/compose/docker-compose.dev.yml logs -f || docker-compose -f infra/compose/docker-compose.dev.yml logs -f",
     "test": "pnpm -r --if-present test",
-    "test:integration": "pnpm stack:up && pnpm -r --if-present test:integration"
+    "test:integration": "pnpm stack:up && pnpm -r --if-present test:integration",
+    "invite": "node scripts/invite.mjs",
+    "api": "pnpm --filter @openscience/api start"
   },
   "devDependencies": {
     "@eslint/js": "^9.39.5",
+    "@openscience/auth": "workspace:*",
     "@prisma/client": "5.22.0",
     "@types/node": "20.14.10",
     "dependency-cruiser": "^18.1.0",

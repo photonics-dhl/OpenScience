@@ -1,11 +1,63 @@
 # OpenScience (XGS) 进度日志
 
+## 2026-07-28 — P1A-3 终审通过（fix wave 完成），本地阶段收尾
+
+### ✅ Completed
+
+| 任务 | 详情 |
+|---|---|
+| 终审 | 全范围 final review：无 Critical；1 Important（生产无真实 Mailer 时 outbox 静默吞邮件）+ 5 项 Minor fix-now；其余 6 项 parked |
+| fix wave | 单次修复：`apps/api/src/index.ts` 生产启动守卫（无 Mailer 即 throw，plan/spec 已同步）；两处 fake `updateMany` 守卫修正（`??` 对 null 也触发致守卫恒真）；cookie sameSite/path 断言 + logout 无 cookie 用例；集成测试 afterAll 补 mailOutbox 清理 + 用例 3 标题修正；AGENTS.md 概览段对齐 |
+| re-review | 6 项全 ADDRESSED；残留 1 项 plan 文档守卫写法不一致，controller 已同步；全门禁 exit 0，单测 59/59（58+logout 用例） |
+
+### Key Decisions / 坑
+
+- parked（后续）：邀请码模偏差（99 bit 熵）、env.test REDIS_URL 用例、`PORT=''`→0、`void main()` 无 catch、`--days Infinity`、verifyEmail 锁定/过期分支泄露待验证状态（register 409 本就是更大枚举面，登记接受）
+- 终审建议：云上集成测试补一个真并发用例（两请求同码注册，断言恰好一个 201）——guarded updateMany 的真实竞态分支只有真实 PG 能走到
+- SDD ledger：`.superpowers/sdd/2026-07-28-p1a-3-invitation-auth-plan/`（保留，云上续跑用）
+
+### ⏳ Next Steps
+
+- [ ] 用户批准后提交 P1A-3（plan Task 6 Step 11 检查点）
+- [ ] 阿里云就绪后：P1A-2 + P1A-3 集成测试一并执行（migrate deploy → `test:integration` ×3 个包），全绿后置 task-master 2.2/2.3 done
+- [ ] P1A-4：Workspace（task-master 2.4，先 design gate）
+
+---
+
+## 2026-07-28 — P1A-3 邀请码注册与邮箱验证本地完成，集成测试留待阿里云
+
+### ✅ Completed
+
+| 任务 | 详情 |
+|---|---|
+| 依据文档 | spec：`docs/specs/2026-07-28-p1a-3-invitation-auth-design.md`；plan：`docs/plans/2026-07-28-p1a-3-invitation-auth-plan.md` |
+| 迁移 2 | `infra/migrations/20260728010000_auth_baseline`（四表：User / Invitation / EmailVerification / MailOutbox，附 rollback.sql；本机未 deploy，待云上执行） |
+| packages/auth | 30 单测全绿：密码（argon2）、邀请码（含原子防并发核销）、邮箱验证码（6 位 + 限次 + 静默重发冷却）、session（Redis 7 天滑动过期）、DevOutboxMailer；登录未知邮箱路径加 DUMMY_PASSWORD_HASH 抹平计时侧信道 |
+| apps/api | Fastify `/auth` 路由（register/verify-email/resend-verification/login/logout/me）+ env 校验 + 错误映射，14 单测全绿；`openscience_session` HttpOnly cookie |
+| 邀请码 CLI | `scripts/invite.mjs`（create/list/revoke；root `npx pnpm@9.15.0 invite`）；无参演示 exit 64 + Usage（不需数据库） |
+| 云上集成测试 | `apps/api/test/auth.integration.test.ts` + `vitest.integration.config.ts` 已创建，本机仅验证 vitest 收集（3 用例列出）与 tsc strict 类型检查通过，未运行（需 Docker，留待阿里云） |
+| 测试证据 | 全量门禁 exit 0：build / typecheck / lint（ESLint + WORKSPACE_STRUCTURE_OK）/ test 单测 58/58（database 4 + storage 10 + auth 30 + api 14）/ audit:knip（仅占位 hint）/ audit:dep（0 errors，12 orphan warnings 占位基线）/ docs:lint 0 issues |
+
+### Key Decisions / 坑
+
+- Task 3 评审后三处安全加固已落地并反映在代码：① 邀请码核销改 guarded `updateMany` 原子操作防并发双核销；② resend 冷却改静默 202（消除 invited 状态枚举通道）；③ login 未知邮箱加 DUMMY_PASSWORD_HASH 抹平计时侧信道
+- 集成测试用例 2/3 断言放宽（400/409 之一、登录 200）因用例间共享用户状态，强断言已由单测覆盖；云上可按需拆用户收紧
+- 本机无 Docker（用户指示），迁移 2 未 deploy、集成测试未跑；task-master 2.3 按 test-gate 纪律保持 pending，不置 done
+
+### ⏳ Next Steps
+
+- [ ] 阿里云就绪后：云上 `node packages/database/dist/migrate-cli.js deploy` + `npx pnpm@9.15.0 --filter @openscience/api test:integration`，通过后置 task-master 2.3 done
+- [ ] P1A-4：Workspace（task-master 2.4，先 design gate）
+
+---
+
 ## 2026-07-28 — 基线提交 + 最小工具集落地
 
 ### ✅ Completed
 | 任务 | 详情 |
 |---|---|
 | 基线提交 | `ce9da28`（chore: P1A-1 Monorepo 骨架 + P1A-2 数据基础基线提交，127 个文件；不含 .env / node_modules / dist） |
+| 提交与推送 | 工具集提交 `79878c1`；`ce9da28`+`79878c1` 已推 origin/main（用户批准），工作树干净，git 单点丢失风险解除 |
 | ESLint 9 | eslint 8→9 + `@eslint/js` + `typescript-eslint`；`eslint.config.cjs` 重写为 flat config（recommended + 4 处带注释窄域豁免：migrate-cli `require.resolve`、redis 空 error listener、.cjs 的 require、scripts Node 全局量）；`lint` = `eslint . && node scripts/verify-workspace.mjs`，exit 0 |
 | knip | `knip.json`（pnpm workspaces 配置）；`audit:knip` exit 0，仅剩占位包预期 hint（test 目录预留、.prisma 生成物） |
 | dependency-cruiser | `.dependency-cruiser.cjs`（no-circular / 禁跨包相对深引用 error，orphan warn）；`audit:dep` exit 0，0 errors / 13 orphan warnings（占位包入口，预期基线） |

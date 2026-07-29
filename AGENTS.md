@@ -5,10 +5,11 @@ OpenScience：AI 时代科研基础设施平台（Research Object / SDF / 预印
 
 ## Monorepo Layout & Commands（P1A-1 起）
 - 根目录已是 pnpm workspace；pnpm 不全局安装，统一用 `npx pnpm@9.15.0 <cmd>`。
-- `apps/`：`web`/`api` 为可启动空壳；`agent-worker`/`science-worker`/`sandbox-controller` 为空壳入口。
-- `packages/`：`domain,database,auth,sdf-schema,versioning,storage,ai-gateway,search,ui,config,observability` 11 个包；database/storage 已含 P1A-2 实现，其余占位。
+- `apps/`：`api` 已含 Fastify `/auth` 实现（P1A-3）；`web` 为可启动空壳；`agent-worker`/`science-worker`/`sandbox-controller` 为空壳入口。
+- `packages/`：`domain,database,auth,sdf-schema,versioning,storage,ai-gateway,search,ui,config,observability` 11 个包；database/storage（P1A-2）+ auth（P1A-3）已实现，其余占位。
 - `infra/`：`compose` 已含 `docker-compose.dev.yml` 开发栈、`migrations` 已含基线迁移（含 rollback.sql）；`nginx/sandbox/scripts` 仍为占位/既有运维脚本。
 - 常用命令：`npx pnpm@9.15.0 install`、`npx pnpm@9.15.0 build`、`npx pnpm@9.15.0 typecheck`、`npx pnpm@9.15.0 lint`（ESLint 9 全仓检查 + `scripts/verify-workspace.mjs` 结构校验）。
+- API：`npx pnpm@9.15.0 api`（Fastify 起 127.0.0.1:3001）；邀请码 CLI：`node scripts/invite.mjs create|list|revoke`（或 `npx pnpm@9.15.0 invite ...`）。
 - 卫生审计：`npx pnpm@9.15.0 audit:knip`（未用文件/导出/依赖）、`audit:dep`（dependency-cruiser：循环依赖/跨包深引用/orphan 告警）、`audit:dup`（jscpd 重复代码）、`audit:deps`（syncpack 版本一致性）、`docs:lint`（markdownlint 文档门禁）。
 - 开发栈：`npx pnpm@9.15.0 stack:up|stack:down|stack:ps|stack:logs`（postgres/redis/minio，仅 127.0.0.1）；测试：`npx pnpm@9.15.0 test`（单测）、`npx pnpm@9.15.0 test:integration`（起栈+集成测试）。
 - 数据库迁移：`node packages/database/dist/migrate-cli.js deploy|status|reset-dev`（reset-dev 生产禁用；迁移归 `infra/migrations/`，每个迁移附 rollback.sql）。

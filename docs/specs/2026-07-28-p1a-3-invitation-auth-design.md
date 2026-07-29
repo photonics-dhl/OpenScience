@@ -49,7 +49,7 @@ infra/migrations/              迁移 2：users/invitations/email_verifications/
 scripts/                       invite.ts CLI（create/list/revoke，走 packages/database）
 ```
 
-边界规则：`packages/auth` 不 import fastify；路由层只做参数解析 → 调 service → 映射响应；session 数据只在 Redis 不落库；`mail_outbox` 为 dev 捕获通道，生产配 SMTP 后停用。plugins 只装 `@fastify/cookie`；CORS/CSRF/rate-limit 归 2.8，本任务只留挂载点注释。
+边界规则：`packages/auth` 不 import fastify；路由层只做参数解析 → 调 service → 映射响应；session 数据只在 Redis 不落库；`mail_outbox` 为 dev 捕获通道，生产配 SMTP 后停用；生产环境尚无真实 Mailer 时启动即 throw（2026-07-28 终审修订）。plugins 只装 `@fastify/cookie`；CORS/CSRF/rate-limit 归 2.8，本任务只留挂载点注释。
 
 ## 4. 数据模型（迁移 2，四张表）
 
@@ -66,7 +66,7 @@ scripts/                       invite.ts CLI（create/list/revoke，走 packages
 |---|---|---|---|
 | `POST /auth/register` | body `{ invitationCode, email, password, displayName }`；事务内核销邀请码 + 建 user（status=invited）+ 发验证码 | 201 `{ userId, status }` | 400 邀请码无效/已用/过期/吊销/邮箱不匹配；409 邮箱已注册 |
 | `POST /auth/verify-email` | body `{ email, code }`；通过 → status=email_verified + 发 session cookie | 200 `{ userId, status }` | 400 码错误（attempts+1，≥5 锁）；410 码过期；429 锁定中 |
-| `POST /auth/resend-code` | body `{ email }`；60s 冷却 | 202（统一响应，防枚举） | 429 冷却中（同样统一文案） |
+| `POST /auth/resend-code` | body `{ email }`；60s 冷却 | 202（统一响应，防枚举；冷却中同样 202 但不发送） | — |
 | `POST /auth/login` | body `{ email, password }`；仅 email_verified 可登；发 session cookie | 200 `{ userId, status }` | 401 凭据错误（统一文案，不区分邮箱不存在/密码错）；403 invited/suspended/deleted |
 | `POST /auth/logout` | 吊销 Redis token + 清 cookie | 204 | — |
 | `GET /auth/me` | 校验 cookie → 当前用户 | 200 `{ userId, email, status, displayName }` | 401 |
@@ -75,9 +75,11 @@ scripts/                       invite.ts CLI（create/list/revoke，走 packages
 
 ## 6. 流程与安全细节
 
-**注册闭环**：`register`（邀请码有效 + 邮箱未注册 → argon2id 哈希入库，status=invited，发码）→ 用户收码 → `verify-email`（对码 → status=email_verified，自动登录发 cookie）。一个邀请码只可用一次，核销与建用户在同一事务。
+**注册闭环**：`register`（邀请码有效 + 邮箱未注册 → argon2id 哈希入库，status=invited，发码）→ 用户收码 → `verify-email`（对码 → status=email_verified，自动登录发 cookie）。一个邀请码只可用一次，核销与建用户在同一事务，且核销用 guarded `updateMany`（`usedBy IS NULL` 条件）原子完成，防并发双核销（2026-07-28 终审修订）。
 
-**验证码流**（借鉴 Scholars Tea 防枚举/限流/冷却经验，ADR-001 可抽取模块，只借鉴设计不搬代码）：6 位数字、sha256 存库、10 分钟过期、同一邮箱 60s 重发冷却、连续 5 次错误锁 15 分钟；重发使旧码失效（同 user 只保留最新一条未验证记录）。
+**防枚举补强**（2026-07-28 终审修订）：login 未知邮箱路径执行一次 dummy argon2 校验抹平计时侧信道；resend 冷却期静默 202。
+
+**验证码流**（借鉴 Scholars Tea 防枚举/限流/冷却经验，ADR-001 可抽取模块，只借鉴设计不搬代码）：6 位数字、sha256 存库、10 分钟过期、同一邮箱 60s 重发冷却（冷却中静默 202 不发送，防枚举；2026-07-28 终审修订）、连续 5 次错误锁 15 分钟；重发使旧码失效（同 user 只保留最新一条未验证记录）。
 
 **Session / cookie**（Spec §17 对齐）：token = 32 字节随机 base64url；Redis key `sess:{token}` → `{ userId, status, createdAt }`，TTL 7 天滑动；cookie `HttpOnly; Secure; SameSite=Lax; Path=/`，dev 下 Secure 按 env 关闭（本机 http）。登录时把 status 快照进 session；`suspended` / `deleted` 即时被拒。`GET /auth/me` 与后续受保护端点统一走 `session.ts` 的 `requireSession`，2.5 RBAC 复用此挂载点。
 
