@@ -1,5 +1,30 @@
 # OpenScience (XGS) 进度日志
 
+## 2026-07-29 — P1A-4 Workspace design gate 通过（用户逐节确认）
+
+### ✅ Completed
+
+| 任务 | 详情 |
+|---|---|
+| P1A-3 提交状态核实 | P1A-3 已全部提交并推送：`e4e3bc9 feat: P1A-3 邀请码注册与邮箱验证 Auth`，main 与 origin/main 同步，工作树干净；上一份 handoff 的"未提交"风险已解除 |
+| P1A-4 design spec | `docs/specs/2026-07-29-p1a-4-workspace-design.md`：三张新表（workspaces/memberships/workspace_invitations + rollback）、`packages/domain` 首个领域模块、`/workspaces` 15 端点、最小内联权限检查（成员→404/角色→403）、9 项错误码；用户逐节确认（数据模型/领域逻辑/API/错误与测试） |
+
+### Key Decisions / 坑
+
+- Personal Workspace 在**邮箱验证通过时**创建，与用户状态迁移同事务；auth→domain 依赖用回调注入（`verifyEmail` 加可选 `onEmailVerified`）
+- 邀请机制：按邮箱邀请 + 显式 accept/decline；独立 `workspace_invitations` 表（不复用平台 invitations）；accept/decline 枚举面统一 404
+- Membership 角色全量 6 档（owner/maintainer/author/contributor/reviewer/viewer）；personal 空间纯单人不可邀请
+- 本任务只做最小内联权限检查，完整 RBAC 归 2.5；审计只留挂接点注释，接线归 2.6；不引入乐观锁（全部单资源短事务，spec §2 已记理由）
+- task-master 2.4 按 test-gate 纪律保持 pending，云上集成测试全绿后才置 done
+
+### ⏳ Next Steps
+
+- [ ] 用户审阅书面 spec 后：writing-plans 出 P1A-4 实施计划
+- [ ] 阿里云就绪后：migrate deploy + 三包（database/storage/api）集成测试，全绿后置 2.2/2.3/2.4 done
+- [ ] spec/plan 文档提交（需用户逐次批准）
+
+---
+
 ## 2026-07-28 — P1A-3 终审通过（fix wave 完成），本地阶段收尾
 
 ### ✅ Completed
