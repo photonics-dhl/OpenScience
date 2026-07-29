@@ -74,13 +74,13 @@ infra/migrations/              迁移 3：workspaces/memberships/workspace_invit
 
 ### 5.2 不变量（领域层强制）
 
-1. personal 空间：恰好一个成员（owner）；拒绝邀请、转让、退出、归档、移除成员、角色变更（错误码 `personal_workspace`，409）。
-2. team 空间：任何时候至少一个 owner——退出/移除/转让/降角色前检查"操作后剩余 owner ≥ 1"，否则 `last_owner`（409）。
-3. 归档的 team 空间：只读，拒绝邀请、成员变更、资料修改（`workspace_archived`，409）。
+1. personal 空间：恰好一个成员（owner）；拒绝邀请、转让、退出、归档、移除成员、角色变更（错误码 `PERSONAL_WORKSPACE`，409）。
+2. team 空间：任何时候至少一个 owner——退出/移除/转让/降角色前检查"操作后剩余 owner ≥ 1"，否则 `LAST_OWNER`（409）。
+3. 归档的 team 空间：只读，拒绝邀请、成员变更、资料修改（`WORKSPACE_ARCHIVED`，409）。
 
 ### 5.3 邀请状态机 `pending → accepted | declined | revoked | expired`
 
-- `invite`：仅 team、仅 owner/maintainer；受邀邮箱已注册且已是成员 → `already_member`（409）；已有同邮箱 pending 邀请 → `invitation_pending_exists`（409，提示可 revoke 后重发）；通知邮件写 MailOutbox（复用 P1A-3 Mailer 通道，无验证码无密钥）。
+- `invite`：仅 team、仅 owner/maintainer；受邀邮箱已注册且已是成员 → `ALREADY_MEMBER`（409）；已有同邮箱 pending 邀请 → `INVITATION_PENDING_EXISTS`（409，提示可 revoke 后重发）；通知邮件写 MailOutbox（复用 P1A-3 Mailer 通道，无验证码无密钥）。
 - `accept`：受邀者本人（session 用户邮箱与 invitation.email 经 citext 不区分大小写匹配）且 pending 且未过期 → 创建 Membership（预指派 role）+ 邀请转 accepted，同一事务。并发双 accept 由 `@@unique([workspaceId, userId])` 兜底，冲突视为幂等成功返回既有 membership。
 - `decline`：受邀者本人；`revoke`：owner/maintainer。
 - 过期惰性判定：读取时 `expiresAt < now` 视为 expired，不写后台任务。
@@ -88,7 +88,7 @@ infra/migrations/              迁移 3：workspaces/memberships/workspace_invit
 
 ### 5.4 转让所有权
 
-事务内三步：原 owner 降 maintainer、新 owner 升 owner、`workspaces.owner_id` 更新。拒绝转给非成员（`validation_error` 400）；拒绝 personal（`personal_workspace` 409）。
+事务内三步：原 owner 降 maintainer、新 owner 升 owner、`workspaces.owner_id` 更新。拒绝转给非成员（`VALIDATION_ERROR` 400）；拒绝 personal（`PERSONAL_WORKSPACE` 409）。
 
 ## 6. API 端点（`/workspaces` 模块）
 
@@ -123,19 +123,19 @@ POST   /workspaces/:id/transfer             转让所有权（仅 owner；body: 
 
 ## 7. 错误处理
 
-错误响应沿用 P1A-3 `{ error: { code, message } }` 形态：
+错误响应沿用 P1A-3 `{ error: { code, message } }` 形态（code 命名沿用 P1A-3 SCREAMING_SNAKE 约定）：
 
 | code | HTTP | 场景 |
 |---|---|---|
-| `unauthorized` | 401 | 无有效 session（沿用 P1A-3） |
-| `validation_error` | 400 | zod 校验失败（邮箱格式、非法 role、newOwnerId 非成员等） |
-| `forbidden` | 403 | 是成员但角色不足 |
-| `workspace_not_found` | 404 | 空间不存在或非成员；邀请 accept/decline 枚举面统一 404 |
-| `already_member` | 409 | 受邀邮箱已是成员 |
-| `invitation_pending_exists` | 409 | 同邮箱已有待邀 |
-| `last_owner` | 409 | 操作会破坏"至少一个 owner"不变量 |
-| `personal_workspace` | 409 | 对 personal 空间执行禁止操作 |
-| `workspace_archived` | 409 | 对已归档空间执行写操作 |
+| `SESSION_INVALID` | 401 | 无有效 session（沿用 P1A-3） |
+| `VALIDATION_ERROR` | 400 | zod 校验失败（邮箱格式、非法 role、newOwnerId 非成员等） |
+| `FORBIDDEN` | 403 | 是成员但角色不足 |
+| `WORKSPACE_NOT_FOUND` | 404 | 空间不存在或非成员；邀请 accept/decline 枚举面统一 404 |
+| `ALREADY_MEMBER` | 409 | 受邀邮箱已是成员 |
+| `INVITATION_PENDING_EXISTS` | 409 | 同邮箱已有待邀 |
+| `LAST_OWNER` | 409 | 操作会破坏"至少一个 owner"不变量 |
+| `PERSONAL_WORKSPACE` | 409 | 对 personal 空间执行禁止操作 |
+| `WORKSPACE_ARCHIVED` | 409 | 对已归档空间执行写操作 |
 
 ## 8. 测试策略
 
