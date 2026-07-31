@@ -37,3 +37,7 @@ dist/
 
 # task-master 本地备份
 .taskmaster/tasks/*.bak-*
+
+# MCP 配置含明文密钥，只留本机不入库（2026-07-31 起）
+.mcp.json
+.vscode/mcp.json
