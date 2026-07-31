@@ -17,6 +17,7 @@
 | 密钥不入库 | `.mcp.json` 移出 git 跟踪（`git rm --cached`），`.gitignore` 补 `.mcp.json` + `.vscode/mcp.json`；本地文件保留，kimi-code/Cursor/VS Code 均不受影响（commit `chore: .mcp.json 含明文密钥移出 git 跟踪`） |
 | VS Code MCP 修复 | npm 11.6.1 在 VS Code 环境跑 `npx --package` 报 `Cannot read properties of null (reading 'package')`；按 ADR-002 改为 `task-master-ai` 入 root devDependencies，`.vscode/mcp.json` 直连 `node node_modules/task-master-ai/dist/mcp-server.js`，绕过 npx/cmd 包装，已验证 server 正常启动 |
 | SSH 隧道修复 | `~/.ssh/config` Host 条目补域名别名 `openscience.428312321.xyz`（原仅 IP，域名连接匹配不到 IdentityFile 导致 Permission denied）；域名直连 SSH 已验证 |
+| Portainer 443 反代 | DNS `portainer.428312321.xyz` A 记录已建；云上 nginx 1.30.2 + acme.sh v3.1.3（gitee 镜像）+ cronie 续期守护；`infra/nginx/portainer.conf` 入库并部署 `/etc/nginx/conf.d/`；安全组放行 80/443 后 LE 证书已签发（standalone → install-cert 挂续期 reload）→ nginx enable --now；验证：80→301、443 200、/api/status 返回 v2.39.5。**面板入口：https://portainer.428312321.xyz（免 SSH 隧道）** |
 
 ### Key Decisions / 坑
 - 代码修复（未提交，待批准）：① `auth.integration.test.ts` repoRoot 少退一级（`__dirname`=apps/api/test 需三级到仓根），本机无 Docker 从未运行故未暴露；② database/storage 补上`test:integration` 脚本悬空的实体文件（vitest.integration.config.ts + 真实集成用例）；③ auth 包移除悬空 `test:integration` 脚本（真实闭环由 api 套件覆盖）

@@ -64,7 +64,7 @@
 | `infra/scripts/backup.sh` | 数据库/对象存储备份 | 骨架，Phase 1A 填充 |
 | `infra/scripts/deploy.sh` | 部署脚本 | 骨架，Phase 1A 填充 |
 | `infra/compose/` | `docker-compose.dev.yml` 开发栈（postgres:16/redis:7/minio + minio-init，端口仅 127.0.0.1，P1A-2） | 已就位（本机未起栈） |
-| `infra/nginx/` | 反向代理配置占位（P1A-1） | 骨架 |
+| `infra/nginx/` | 反代配置：`portainer.conf`（portainer.428312321.xyz → 127.0.0.1:9443，LE 证书 + WebSocket，2026-07-31） | 已部署云上并启用（https 已通） |
 | `infra/sandbox/` | 沙箱配置占位（P1A-1） | 骨架 |
 | `infra/migrations/` | Prisma 迁移（`20260728000000_baseline_app_meta` + `20260728010000_auth_baseline`（P1A-3 四表）+ `20260729010000_workspace_baseline`（P1A-4 三表），各附 rollback.sql） | 已实现，云上已 deploy（2026-07-31） |
 | `infra/schema.prisma` | Prisma schema（`app_meta` 基线模型，P1A-2） | 已实现 |
