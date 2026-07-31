@@ -38,6 +38,7 @@
     "markdownlint-cli2": "^0.23.2",
     "prisma": "5.22.0",
     "syncpack": "^15.3.2",
+    "task-master-ai": "^0.43.1",
     "typescript": "5.5.4",
     "typescript-eslint": "^8.65.0"
   },
