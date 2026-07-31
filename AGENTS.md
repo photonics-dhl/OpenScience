@@ -7,13 +7,20 @@ OpenScience：AI 时代科研基础设施平台（Research Object / SDF / 预印
 - 根目录已是 pnpm workspace；pnpm 不全局安装，统一用 `npx pnpm@9.15.0 <cmd>`。
 - `apps/`：`api` 已含 Fastify `/auth`（P1A-3）+ `/workspaces`（P1A-4）实现；`web` 为可启动空壳；`agent-worker`/`science-worker`/`sandbox-controller` 为空壳入口。
 - `packages/`：`domain,database,auth,sdf-schema,versioning,storage,ai-gateway,search,ui,config,observability` 11 个包；database/storage（P1A-2）+ auth（P1A-3）+ domain（P1A-4 workspace 领域模块）已实现，其余占位。
-- `infra/`：`compose` 已含 `docker-compose.dev.yml` 开发栈、`migrations` 已含基线迁移（含 rollback.sql）；`nginx/sandbox/scripts` 仍为占位/既有运维脚本。
+- `infra/`：`compose` 已含 `docker-compose.dev.yml` 开发栈、`migrations` 已含迁移 1–3（含 rollback.sql）；`nginx` 已含 `portainer.conf`（已部署云上）；`sandbox/scripts` 仍为占位/既有运维脚本。
 - 常用命令：`npx pnpm@9.15.0 install`、`npx pnpm@9.15.0 build`、`npx pnpm@9.15.0 typecheck`、`npx pnpm@9.15.0 lint`（ESLint 9 全仓检查 + `scripts/verify-workspace.mjs` 结构校验）。
 - API：`npx pnpm@9.15.0 api`（Fastify 起 127.0.0.1:3001）；邀请码 CLI：`node scripts/invite.mjs create|list|revoke`（或 `npx pnpm@9.15.0 invite ...`）。
 - 卫生审计：`npx pnpm@9.15.0 audit:knip`（未用文件/导出/依赖）、`audit:dep`（dependency-cruiser：循环依赖/跨包深引用/orphan 告警）、`audit:dup`（jscpd 重复代码）、`audit:deps`（syncpack 版本一致性）、`docs:lint`（markdownlint 文档门禁）。
 - 开发栈：`npx pnpm@9.15.0 stack:up|stack:down|stack:ps|stack:logs`（postgres/redis/minio，仅 127.0.0.1）；测试：`npx pnpm@9.15.0 test`（单测）、`npx pnpm@9.15.0 test:integration`（起栈+集成测试）。
 - 数据库迁移：`node packages/database/dist/migrate-cli.js deploy|status|reset-dev`（reset-dev 生产禁用；迁移归 `infra/migrations/`，每个迁移附 rollback.sql）。
 - 构建产物忽略：`dist/`、`.next/`、`*.tsbuildinfo`。
+
+## 云服务器（2026-07-31 上线）
+- 阿里云 ECS（Alibaba Cloud Linux 4），代码在 `/opt/openscience`；Node 22 + docker compose 插件 + nginx + acme.sh（cronie 续期）。
+- 远程操作只走 `infra/scripts/ssh-run.sh` / `checkup.sh`（项目专用密钥 `~/.ssh/id_ed25519_xgs`，服务器仅 publickey）。
+- DNS（Cloudflare，均 DNS-only）：`OpenScience.428312321.xyz`、`portainer.428312321.xyz` → 公网 IP；面板 `https://portainer.428312321.xyz`。
+- 安全组放行 22/80/443；dev 栈端口仅 127.0.0.1；云上写操作前需用户确认。
+- 集成测试在云上执行：`cd /opt/openscience && npx pnpm@9.15.0 test:integration`（新环境须先 build database 让 prisma generate 先跑）。
 
 ## 第一优先级：需求基线
 - **`docs/OpenScience_Kimi_Development_Spec.md` 是当前单一需求基线（Baseline v1.0, source of truth）**。任何实现工作必须先读它，不得根据零散聊天、旧方案（如已废弃的方案0723）或文件名猜测需求。
