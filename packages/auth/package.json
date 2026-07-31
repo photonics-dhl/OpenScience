@@ -7,8 +7,7 @@
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "test": "vitest run",
-    "test:integration": "vitest run --config vitest.integration.config.ts"
+    "test": "vitest run"
   },
   "dependencies": {
     "@prisma/client": "5.22.0",

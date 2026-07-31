@@ -1,5 +1,79 @@
 # OpenScience (XGS) 进度日志
 
+## 2026-07-31 — 阿里云收口完成：云上集成测试 9/9 全绿，2.2/2.3/2.4/2.10 置 done
+
+### ✅ Completed
+| 任务 | 详情 |
+|---|---|
+| 云上环境 | Alibaba Cloud Linux 4（148G/30G）；dnf 安装 `nodejs 22.23` + `docker-compose-plugin 2.26.1`；docker 已启动；代码 tar-over-ssh 同步至 `/opt/openscience`（排除 .env/.git/node_modules，密钥不上云） |
+| SSH 打通 | 项目专用密钥 `~/.ssh/id_ed25519_xgs`（comment `openscience-xgs-aliyun`），经用户在控制台 Workbench 装公钥后连通；`~/.ssh/config` 加 Host 条目，`checkup.sh`/`ssh-run.sh` 直接可用；巡检通过 |
+| Cloudflare DNS | `OpenScience.428312321.xyz` A → 阿里云公网 IP（DNS-only，即时生效，nslookup 验证） |
+| 迁移 deploy | 3 个迁移（baseline_app_meta / auth_baseline / workspace_baseline）云上全部 applied |
+| 集成测试 | 云上 `npx pnpm@9.15.0 test:integration` exit 0：**database 2/2**（PG SELECT 1 + 迁移落库 ≥3 + Redis ping/set/get/del）、**storage 1/1**（MinIO put/head/get/delete + sha256）、**api 6/6**（auth 3 + workspaces 3，含真实 PG 并发双 accept 竞态用例——P1A-3 终审建议已落实） |
+| task-master | 2.2 / 2.3 / 2.4 / 2.10 全部置 done；Phase 1A 剩 2.5–2.9 |
+
+### Key Decisions / 坑
+- 代码修复（未提交，待批准）：① `auth.integration.test.ts` repoRoot 少退一级（`__dirname`=apps/api/test 需三级到仓根），本机无 Docker 从未运行故未暴露；② database/storage 补上`test:integration` 脚本悬空的实体文件（vitest.integration.config.ts + 真实集成用例）；③ auth 包移除悬空 `test:integration` 脚本（真实闭环由 api 套件覆盖）
+- 首次递归 build 时 auth 先于 database 的 `prisma generate` 执行会报 `Invitation` 不存在——新环境 clone 后须先 build database（或全量重跑一次）；登记为已知坑
+- 服务器不装宝塔：与本仓 compose + infra/scripts 管理路线冲突且扩大攻击面；用户已知情，后续如需可视化再议 Portainer
+- 服务器密码在对话中明文出现过，建议用户在阿里云控制台轮换实例密码（SSH 已纯密钥）
+
+### ⏳ Next Steps
+- [ ] 用户批准后提交：P1A-4 实现 + 云上集成测试修复（一个 commit 或拆两个）
+- [ ] P1A-5：RBAC 权限矩阵（task-master 2.5，先 design gate）
+- [ ] parked：`.worktrees/p1a-1` 残留清理；P1A-3 终审 parked 项（见 07-28 条目）
+
+---
+
+## 2026-07-31 — 阿里云收口启动：DNS 已通，SSH 待用户装公钥
+
+### ✅ Completed
+| 任务 | 详情 |
+|---|---|
+| 状态对齐 | 2026-07-28 P1A-3 handoff 已被 07-29 条目超越：P1A-3 已提交推送（`e4e3bc9`）、P1A-4 本地完成（单测 107/107 全绿）；P1A-2/3/4 共同待办只剩云上集成测试 |
+| task-master 2.10 | 新增子任务「阿里云环境完善与云上集成测试收口（P1A-2/3/4）」，验收 = 三包集成测试全绿 + 2.2/2.3/2.4 置 done + DNS 生效 |
+| Cloudflare DNS | `OpenScience.428312321.xyz` A 记录 → 阿里云公网 IP 已创建（zone `428312321.xyz` active，proxied=false DNS-only，TTL auto）；`nslookup` 已解析到正确 IP，即时生效 |
+
+### Key Decisions / 坑
+- DNS 走 Cloudflare API token（.env `CLOUDFLARE_API_TOKEN_428xyz`，脚本内引用未打印）；proxied=false 保留全端口可用（SSH 等），后续要 CDN/TLS 代理可再开
+- SSH 卡点：服务器仅 publickey 认证（密码登录已禁，SSH_ASKPASS 也行不通）→ 已生成项目专用密钥 `~/.ssh/id_ed25519_xgs`（comment `openscience-xgs-aliyun`，无 passphrase 供 BatchMode 自动化）；需用户在阿里云控制台 Workbench/VNC 把新公钥装入 `/root/.ssh/authorized_keys`；known_hosts 主机密钥已 keyscan 录入，`~/.ssh/config` 已加 Host 条目（IdentityFile 指向新密钥，`ssh-run.sh`/`checkup.sh` 装完即可直接用）
+
+### ⏳ Next Steps
+- [ ] 用户安装新公钥（`id_ed25519_xgs.pub`）后：重跑 `checkup.sh` 巡检 → 云上起 dev 栈 → migrate deploy → 三包 `test:integration`（2.10 主体，云上写操作前逐项确认）
+- [ ] 全绿后置 task-master 2.2/2.3/2.4/2.10 done，进 P1A-5 RBAC design gate
+
+---
+
+## 2026-07-29 — P1A-4 Workspace 本地完成（全门禁绿），集成测试留待阿里云
+
+### ✅ Completed
+
+| 任务 | 详情 |
+|---|---|
+| 依据文档 | spec：`docs/specs/2026-07-29-p1a-4-workspace-design.md`；plan：`docs/plans/2026-07-29-p1a-4-workspace-plan.md` |
+| 迁移 3 | `infra/migrations/20260729010000_workspace_baseline`（三表：Workspace / Membership / WorkspaceInvitation + 部分唯一索引，附 rollback.sql；本机未 deploy，待云上执行） |
+| packages/domain | 首个领域模块（workspace：personal 创建/CRUD/成员/转让/邀请状态机），32 单测全绿；三条不变量（personal 拒绝操作/last_owner/归档只读）均有用例 |
+| packages/auth | `verifyEmail` 加可选 `onEmailVerified` 回调（同事务注入），2 回归用例全绿 |
+| apps/api | `/workspaces` 15 端点（最小内联权限：非成员 404/越权 403）+ 错误映射 8 码 + 401，14 单测全绿；`index.ts` 生产接线 `onEmailVerified` |
+| 云上集成测试 | `apps/api/test/workspaces.integration.test.ts` 已创建（3 用例：全流程/越权负向/并发双 accept），本机仅验证 vitest 收集与 tsc strict 类型，未运行（需 Docker，留待阿里云） |
+| 测试证据 | 全量门禁 exit 0：build / typecheck / lint（ESLint + WORKSPACE_STRUCTURE_OK）/ test 单测 107/107（database 4 + storage 10 + auth 32 + domain 32 + api 29）/ audit:knip（零新增 hint）/ audit:dep（0 errors，11 orphan warnings，domain 已接线不再是 orphan）/ audit:deps / audit:dup / docs:lint 0 issues |
+
+### Key Decisions / 坑
+
+- Personal Workspace 经 `onEmailVerified` 回调注入创建（auth→domain 无运行时耦合，失败整体回滚）；生产与集成测试 buildApp 均须带该接线
+- 错误处理平行于 AuthError：`WorkspaceError` + SCREAMING_SNAKE 8 码（对齐既有约定），api 侧 `WORKSPACE_ERROR_HTTP` Record 编译期强制全覆盖
+- fake prisma 在 domain/api 两处刻意复制（跨包不能引测试目录，P1A-3 同款模式），`audit:dup` 报告按既定裁决接受，不抽共享测试包（YAGNI）
+- 邀请预指派角色收窄为非 owner（zod `nonOwnerRoleSchema`），所有权只能经 transfer 产生；list 类查询逐行查关联（N+1 登记接受，1B 再改 include）
+- lint 收尾修正 4 处（domain 测试未用导入 + 3 处 `any` 标注），纯类型/导入清理无逻辑变更
+- task-master 2.4 按 test-gate 纪律保持 pending，云上集成测试全绿后才置 done
+
+### ⏳ Next Steps
+
+- [ ] 阿里云就绪后：`node packages/database/dist/migrate-cli.js deploy` + 三包（database/storage/api）`test:integration` 全绿，后置 task-master 2.2/2.3/2.4 done
+- [ ] P1A-5：RBAC 权限矩阵（先 design gate）
+
+---
+
 ## 2026-07-29 — P1A-4 Workspace design gate 通过（用户逐节确认）
 
 ### ✅ Completed

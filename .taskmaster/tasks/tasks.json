@@ -12,7 +12,7 @@
         "testStrategy": "",
         "subtasks": [
           {
-            "id": "1.1",
+            "id": 1,
             "title": "定位 Scholars Tea / AI Research Workshop 现有代码仓并建立只读访问",
             "description": "找到现有系统代码仓的真实位置与访问方式（当前不在本工作目录，是 Phase 0 的前置阻塞项，设计文档 §2.3）。确认仓库远程地址、分支、最近提交与可构建性；找不到则阻塞并向用户报告，不虚构审计结论（设计文档 §7 风险表）。",
             "status": "done",
@@ -23,7 +23,7 @@
             "parentId": "1"
           },
           {
-            "id": "1.2",
+            "id": 2,
             "title": "建立现有仓库目录、依赖、服务与部署地图",
             "description": "按 Spec §25.1 建立目录结构、依赖清单、服务清单与部署地图，是后续分类与风险评估的事实基础；同时落实 §20.1.2『首次进入仓库必须执行代码审计，不得立即重构』。",
             "status": "done",
@@ -36,7 +36,7 @@
             "parentId": "1"
           },
           {
-            "id": "1.3",
+            "id": 3,
             "title": "审计现有数据库结构、迁移与环境变量键清单",
             "description": "按 Spec §25.1 建立数据库与环境变量地图，识别数据模型与迁移现状，为迁移风险评估（P0-6）与 ADR-0001 数据层决策提供依据；同时遵守 Spec §20.1.9『不得把生产 Secret、真实用户数据拉入上下文』。",
             "status": "done",
@@ -49,7 +49,7 @@
             "parentId": "1"
           },
           {
-            "id": "1.4",
+            "id": 4,
             "title": "识别 Hermes、认证、上传、社区、WebSocket、模型路由等关键现有模块",
             "description": "按 Spec §25.2 找出与 Hermes、AI Workshop、认证、上传、社区、WebSocket、模型路由有关的现有模块，明确其代码位置与当前行为，是可复用性分类（P0-5）的直接输入。",
             "status": "done",
@@ -62,7 +62,7 @@
             "parentId": "1"
           },
           {
-            "id": "1.5",
+            "id": 5,
             "title": "形成现有模块保留、局部重构、替换、待确认分类清单",
             "description": "按 Spec §25.3 将全部现有模块按『保留 / 局部重构 / 替换 / 待确认』分类，落实 Spec §2.1.1『保留可复用模块但重新设计整体架构』，作为 ADR-0001 模块取舍的直接依据。",
             "status": "done",
@@ -75,7 +75,7 @@
             "parentId": "1"
           },
           {
-            "id": "1.6",
+            "id": 6,
             "title": "评估现有系统安全风险与数据迁移风险",
             "description": "按 Spec §25.4 标记安全风险、重复实现、失效功能和数据迁移风险；安全评估对照 Spec §17 MUST 清单逐条核查现状差距，迁移风险评估为 ADR-0001 数据迁移路线提供输入。",
             "status": "done",
@@ -89,7 +89,7 @@
             "parentId": "1"
           },
           {
-            "id": "1.7",
+            "id": 7,
             "title": "运行现有测试套件并执行关键路径基准测试",
             "description": "按 Spec §22 Phase 0『基准测试』要求，运行现有测试与关键路径性能测量，为『哪些模块值得保留』提供质量证据，也为重构后的性能对比建立基线。",
             "status": "deferred",
@@ -102,7 +102,7 @@
             "parentId": "1"
           },
           {
-            "id": "1.8",
+            "id": 8,
             "title": "撰写 docs/CODEBASE_AUDIT.md 审计报告",
             "description": "按 Spec §25.6 产出正式审计报告 docs/CODEBASE_AUDIT.md，汇总地图、分类、风险、基准全部结论，是 Phase 0 的核心交付物与 Phase 1A 的输入基线。",
             "status": "done",
@@ -117,7 +117,7 @@
             "parentId": "1"
           },
           {
-            "id": "1.9",
+            "id": 9,
             "title": "起草 ADR-0001 目标架构并提交用户确认",
             "description": "按 Spec §25.6 产出 docs/adr/0001-target-architecture.md 草案，落实 Spec §20.1.8『每个重大架构决定写入 docs/adr/』；经用户确认后 Phase 0 才算完成，是进入 Phase 1A 的唯一门禁（Spec §25 末段）。",
             "status": "done",
@@ -145,7 +145,7 @@
         "testStrategy": "",
         "subtasks": [
           {
-            "id": "2.1",
+            "id": 1,
             "title": "初始化 Monorepo 骨架与模块边界",
             "description": "按 Spec §14.1 推荐结构建立 pnpm Monorepo（apps/web、apps/api、packages/domain、packages/database、packages/auth、packages/storage、packages/config、packages/observability、packages/ui 等），技术栈对齐 Spec §2.4.4（Next.js/TypeScript、Node.js API、PostgreSQL、Redis、Docker），为后续 1B–1E 提供落点。",
             "status": "done",
@@ -158,46 +158,49 @@
             "parentId": "2"
           },
           {
-            "id": "2.2",
+            "id": 2,
             "title": "搭建 PostgreSQL、Redis 与 Storage Adapter 数据基础",
             "description": "建立数据库连接层、迁移机制与对象存储抽象：PostgreSQL + Redis（Spec §2.4.4、§14.2），迁移向前可部署、可回滚或有补偿（Spec §15），Storage Adapter 单机期使用本地 S3 兼容/MinIO 实现（Spec §13.1）。",
-            "status": "pending",
+            "status": "done",
             "dependencies": [
               "2.1"
             ],
             "priority": "high",
             "details": "实现要点：docker-compose 开发环境（postgres、redis、minio）；packages/database 提供连接池与迁移 runner，生产禁止自动破坏性迁移（§15 MUST）；packages/storage 定义 Storage Adapter 接口（put/get/delete/签名校验），数据库只存元数据与对象键、不存大二进制（§13.1）；迁移期可切换阿里云 OSS 的配置位预留但不实现 OSS 客户端（YAGNI）。MUST 映射：§13.1 存储层；§15 迁移规则。验收: -",
             "testStrategy": "最小测试：迁移 up/down 集成测试；Storage Adapter 对 MinIO 的读写与错误路径集成测试（Spec §21.1 集成测试层）。阶段验收点：compose 一键起栈，迁移可重复执行且可回滚。",
-            "parentId": "2"
+            "parentId": "2",
+            "updatedAt": "2026-07-31T11:08:56.538Z"
           },
           {
-            "id": "2.3",
+            "id": 3,
             "title": "实现邀请码注册与邮箱验证 Auth",
             "description": "实现测试阶段注册闭环：注册需邀请码、邮箱验证后激活（Spec §2.1.3、§2.1.4），账户状态机 invited/email_verified/suspended/deleted（Spec §3.1），/auth API 模块（Spec §16）。这是验收主流程步骤1的直接支撑。",
-            "status": "pending",
+            "status": "done",
             "dependencies": [
               "2.2"
             ],
             "priority": "high",
             "details": "实现要点：Invitation 实体与邀请码生成/核销（管理员侧最小能力即可）；注册→invited→邮箱验证→email_verified；identity_verified 仅预留字段与状态位，第三方实名供应商为 §24 待确认项，不得猜测写死；Session/Cookie 安全配置与 §17 对齐（配合 P1A-8）；登录接口限流挂接点预留；密码哈希使用成熟算法（如 argon2/bcrypt，按现有依赖选型）。MUST 映射：§2.1.3 邀请码；§2.1.4 邮箱验证；§3.1 账户状态。验收: 步骤1",
             "testStrategy": "最小测试：注册/验证/登录/状态迁移单元+集成测试；无邀请码与无效验证码的拒绝路径。阶段验收点：对应 §21.2 步骤1——受邀用户可注册并验证邮箱（E2E 层在本阶段先以 API 级用例覆盖，UI E2E 随 web 壳补齐）。",
-            "parentId": "2"
+            "parentId": "2",
+            "updatedAt": "2026-07-31T11:08:56.543Z"
           },
           {
-            "id": "2.4",
+            "id": 4,
             "title": "实现 Workspace 模型与成员管理",
             "description": "实现统一 Workspace 模型：每个用户自动拥有 Personal Workspace，可创建/加入 Team/Lab Workspace，个人与团队共用同一套数据模型（Spec §3.2）；提供 /workspaces API（Spec §16）。支撑验收步骤2中“个人 Workspace”部分。",
-            "status": "pending",
+            "status": "done",
             "dependencies": [
               "2.3"
             ],
             "priority": "high",
             "details": "实现要点：Workspace、Membership、Invitation（workspace 级邀请）实体；注册完成自动创建 Personal Workspace；RO 创建时选择 workspace 的归属字段预留（RO 实体本身属 1B）；所有权、存储额度、成员权限、审计以 Workspace 为边界（§3.2）；加入/移除成员、角色指派接口。MUST 映射：§3.2 Workspace 统一模型与自动 Personal Workspace。验收: 步骤2",
             "testStrategy": "最小测试：自动建 Personal Workspace、成员增删、角色变更的集成测试；跨 workspace 数据隔离负向用例。阶段验收点：§21.2 步骤2 前置条件——验证邮箱用户拥有可用个人 Workspace（RO 创建由 1B 完成）。",
-            "parentId": "2"
+            "parentId": "2",
+            "updatedAt": "2026-07-31T11:08:56.549Z"
           },
           {
-            "id": "2.5",
+            "id": 5,
             "title": "实现 RBAC 权限层并在 API 强制授权",
             "description": "实现 Spec §3.3 角色表（Owner/Maintainer/Author/Contributor/Reviewer/Viewer/Moderator/Platform Admin）的 RBAC + 资源归属检查，授权必须在 API 层强制执行，禁止仅前端隐藏按钮（Spec §3.3、§17）。",
             "status": "pending",
@@ -210,7 +213,7 @@
             "parentId": "2"
           },
           {
-            "id": "2.6",
+            "id": 6,
             "title": "建立统一错误、日志、配置与审计底座",
             "description": "建立 packages/config 与 packages/observability：统一错误格式、结构化日志、集中配置管理、AuditLog 实体与写操作审计（Spec §17：全部写操作记录审计日志；生产日志不得记录完整论文、密钥、身份证等敏感信息）。",
             "status": "pending",
@@ -223,7 +226,7 @@
             "parentId": "2"
           },
           {
-            "id": "2.7",
+            "id": 7,
             "title": "实现配额策略与 AI Credit 账务骨架",
             "description": "实现 UsageLedger 与 QuotaPolicy 骨架：用户按月获得固定 AI Credit、管理员可追加（Spec §2.4.7）；配额按用户等级/Workspace/文件类型配置且必须后台可配置、不写死前端（Spec §13.3、§15）。",
             "status": "pending",
@@ -237,7 +240,7 @@
             "parentId": "2"
           },
           {
-            "id": "2.8",
+            "id": 8,
             "title": "落实安全基线（限流、会话安全、管理后台强认证）",
             "description": "落实 Spec §17 安全 MUST 中属平台底座的部分：登录等接口限流；Session、Cookie、CSRF、CORS、CSP 正确配置；管理后台启用更强认证。",
             "status": "pending",
@@ -251,7 +254,7 @@
             "parentId": "2"
           },
           {
-            "id": "2.9",
+            "id": 9,
             "title": "建立 CI/CD 与阿里云 ECS 部署及备份",
             "description": "建立 CI 流水线与单 ECS 部署：拓扑与网络分段对齐 Spec §14.2（public_net/app_net/data_net，数据库不绑公网，安全组仅 80/443 与受限运维入口）；数据库每日备份并定期恢复演练（Spec §17 MUST）；部署走仓库脚本化（Spec §20.4）。",
             "status": "pending",
@@ -264,9 +267,20 @@
             "details": "实现要点：CI（build/typecheck/lint/最小测试）与镜像构建；compose 生产配置含网络分段与 nginx/caddy 反向代理；部署脚本填充管理仓 infra/scripts/deploy.sh 与 backup.sh 骨架（设计文档 §4.3 已占位），备份脚本每日 dump + 对象存储快照，docs/runbooks/backup-restore.md 记录恢复演练步骤并完成一次演练；ECS 最终规格/带宽为 §24 待确认项，脚本参数化不写死；部署与迁移属 Spec §20.5 询问级操作，脚本默认 dry-run 需 --confirm。MUST 映射：§14.2 网络与安全组；§17 每日备份与恢复演练。验收: -",
             "testStrategy": "最小测试：CI 全绿；部署脚本 dry-run 校验；备份产出物执行一次真实恢复演练并记录（Spec §21.1 恢复测试层）。阶段验收点：邀请测试环境可从零部署且数据库可恢复。",
             "parentId": "2"
+          },
+          {
+            "id": 10,
+            "title": "阿里云环境完善与云上集成测试收口（P1A-2/3/4）",
+            "description": "阿里云配置已写入 .env（公网ip/用户名/SSH端口/私网ip 等）。收口所有此前因\"本机无 Docker、待阿里云\"而挂起的工作：① SSH 连通验证 + checkup 巡检；② 云上起 dev 栈（postgres/redis/minio）；③ migrate deploy（迁移 1/2/3）；④ database/storage/api 三包 test:integration 全绿；⑤ 全绿后置 task-master 2.2/2.3/2.4 done。另：Cloudflare DNS OpenScience.428312321.xyz → 阿里云公网 IP（本 session 直接配置）。",
+            "details": "约束：不读/打印 .env 值（脚本编程方式引用）；部署/云上写操作执行前需用户确认（infra-runbook 第 6 条）；pnpm 一律 npx pnpm@9.15.0；迁移命令 node packages/database/dist/migrate-cli.js deploy|status；DATABASE_URL 须指向云上栈；guarded updateMany 真实竞态建议云上补并发用例（P1A-3 终审建议）；workspaces 集成测试 3 用例已在 apps/api/test/workspaces.integration.test.ts 待命。验收：三包集成测试全绿 + 2.2/2.3/2.4 置 done + DNS 解析生效（dig OpenScience.428312321.xyz 返回公网 IP）。",
+            "status": "done",
+            "dependencies": [],
+            "parentTaskId": 2,
+            "updatedAt": "2026-07-31T11:08:56.553Z",
+            "parentId": "undefined"
           }
         ],
-        "updatedAt": "2026-07-28T04:41:41.928Z"
+        "updatedAt": "2026-07-31T11:08:56.553Z"
       },
       {
         "id": "3",
@@ -281,7 +295,7 @@
         "testStrategy": "",
         "subtasks": [
           {
-            "id": "3.1",
+            "id": 1,
             "title": "定义 SDF 六字段 JSON Schema 包",
             "description": "在 packages/sdf-schema 中定义 SDF 六个必填字段（problem/insight/method/results/limitations/reproducibility）与可选字段的 JSON Schema，供前后端共用校验（Spec §5.1、§5.3、§2.2.1）。",
             "status": "pending",
@@ -294,7 +308,7 @@
             "parentId": "3"
           },
           {
-            "id": "3.2",
+            "id": 2,
             "title": "建立 RO 与 SDF 数据模型及迁移",
             "description": "建立 ResearchObject、SDFDocument、SDFNode 数据实体与数据库迁移，支持在个人 Workspace 创建私有 RO（Spec §15、§4.1、§3.2、验收主流程步骤 2）。",
             "status": "pending",
@@ -307,7 +321,7 @@
             "parentId": "3"
           },
           {
-            "id": "3.3",
+            "id": 3,
             "title": "实现 Blob 内容寻址存储与上传管线",
             "description": "实现以 SHA-256 为键的 Blob 存储与 Artifact 元数据（逻辑路径、MIME、大小、hash），接入 Phase 1A Storage Adapter，含上传分片、校验和、MIME 检测与病毒扫描（Spec §7.2、§13.1、§17）。",
             "status": "pending",
@@ -321,7 +335,7 @@
             "parentId": "3"
           },
           {
-            "id": "3.4",
+            "id": 4,
             "title": "实现 Commit/Manifest 增量版本引擎",
             "description": "在 packages/versioning 实现 Commit、ChangeSet、Version、VersionManifest：版本可完整重建、可校验，未变化 Artifact 复用原 Blob，SDF 结构化变化用 RFC 6902 JSON Patch（Spec §7.1、§7.2、§2.2.3）。",
             "status": "pending",
@@ -335,7 +349,7 @@
             "parentId": "3"
           },
           {
-            "id": "3.5",
+            "id": 5,
             "title": "实现多类型确定性 Diff 服务",
             "description": "实现 Spec §7.3 全部九类 Diff：文本、SDF 字段、结论变化摘要、作者/贡献者变化、引用变化、文件增删与哈希变化、表格数据摘要变化、代码 diff、许可证和可见性变化（Spec §7.1、§7.3）。",
             "status": "pending",
@@ -348,7 +362,7 @@
             "parentId": "3"
           },
           {
-            "id": "3.6",
+            "id": 6,
             "title": "实现标识层与时间戳服务",
             "description": "实现内部 UUID v7/ULID、公开 RO ID（OSR-YYYY-NNNNNN 形式）、版本 ID、稳定 URL 与 UTC 时间戳+SHA-256 内容哈希（Spec §6.1、§6.2、§2.2.5）。",
             "status": "pending",
@@ -361,7 +375,7 @@
             "parentId": "3"
           },
           {
-            "id": "3.7",
+            "id": 7,
             "title": "实现 RO 可见性模型与 API 层权限强制",
             "description": "实现 private/invite_only/public 三种可见性及 API 层授权检查，防止跨 Workspace 越权（Spec §4.2、§2.1.5、§3.3、§17）。",
             "status": "pending",
@@ -374,7 +388,7 @@
             "parentId": "3"
           },
           {
-            "id": "3.8",
+            "id": 8,
             "title": "构建三栏 SDF 编辑器桌面端",
             "description": "实现左侧大纲、中间编辑区、右侧 SDF/AI 面板的三栏编辑器，支持 Markdown/富文本正文、附件与版本导航（Spec §5.4、§2.5.2、验收主流程步骤 3）。",
             "status": "pending",
@@ -389,7 +403,7 @@
             "parentId": "3"
           },
           {
-            "id": "3.9",
+            "id": 9,
             "title": "实现移动端分步/抽屉编辑器与可访问性",
             "description": "移动端以抽屉和分步页面呈现三栏全部功能，不删除功能，并满足 WCAG AA 可访问性基线（Spec §5.4、§18.2、§18.3、§2.5.5）。",
             "status": "pending",
@@ -402,7 +416,7 @@
             "parentId": "3"
           },
           {
-            "id": "3.10",
+            "id": 10,
             "title": "实现 SDF 标准导出包生成与校验",
             "description": "按推荐导出结构生成可下载标准文件包（manifest.json、manuscript/、sdf/、experiments/、code/、figures/、provenance/、versions/），导出包不依赖平台私有数据库即可读取（Spec §5.2、§5.3、§2.2.1）。",
             "status": "pending",
@@ -431,7 +445,7 @@
         "testStrategy": "",
         "subtasks": [
           {
-            "id": "4.1",
+            "id": 1,
             "title": "建立协作域数据模型与数据库迁移",
             "description": "落地协作域核心实体：Branch、ForkRelation、Issue、PullRequest、Review、Comment、Author、Authorship、Contribution、LicenseAssignment、Notification（Spec §15 实体清单 MUST），为后续所有协作功能提供数据底座。",
             "status": "pending",
@@ -444,7 +458,7 @@
             "parentId": "4"
           },
           {
-            "id": "4.2",
+            "id": 2,
             "title": "实现 Branch 管理与可见性继承",
             "description": "实现研究分支的创建、列表、切换与删除，承载'尚未进入主版本的研究方向或修改路线'（Spec §8 概念表）；分支 MUST 继承所属 RO 的可见性（§2.3 决策 3、§4.2）。",
             "status": "pending",
@@ -457,7 +471,7 @@
             "parentId": "4"
           },
           {
-            "id": "4.3",
+            "id": 3,
             "title": "实现 Issue 与评论基础交互",
             "description": "实现 Issue（科学问题、方法质疑、复现失败、错误报告、改进建议，Spec §8 概念表）与 Comment 的创建、回复、状态流转，覆盖 MVP 社区范围中的 Issue 部分（§2.5 决策 4）。",
             "status": "pending",
@@ -470,7 +484,7 @@
             "parentId": "4"
           },
           {
-            "id": "4.4",
+            "id": 4,
             "title": "实现三类许可选择与继承规则",
             "description": "实现文字（CC BY 4.0 / CC BY-NC 4.0 / All Rights Reserved）、代码（MIT / Apache-2.0 / GPL-3.0 / 不开源）、数据（CC0 / CC BY 4.0 / 自定义限制 / 不可下载）三类许可的分别选择（Spec §6.3、§2.2 决策 6），为 Fork 校验与发布（步骤 8）提供规则底座。",
             "status": "pending",
@@ -483,7 +497,7 @@
             "parentId": "4"
           },
           {
-            "id": "4.5",
+            "id": 5,
             "title": "实现 Fork 与来源关系及许可继承校验",
             "description": "实现从特定公开版本 Fork 出独立衍生 RO（Spec §8.1）：新 RO 获得新 unique ID，永久保留来源对象、来源版本与内容哈希，来源许可与归属要求继续生效。",
             "status": "pending",
@@ -497,7 +511,7 @@
             "parentId": "4"
           },
           {
-            "id": "4.6",
+            "id": 6,
             "title": "实现 Pull Request 声明与提交流程",
             "description": "实现向原 RO 提交变更的 PR 流程，PR MUST 完整声明 §8.2 清单：变更的 SDF 字段和文件、是否改变方法/数据/核心结论、新增贡献者及 CRediT 角色、数据/代码许可、利益冲突、自动检查结果、是否要求发布新版本。",
             "status": "pending",
@@ -511,7 +525,7 @@
             "parentId": "4"
           },
           {
-            "id": "4.7",
+            "id": 7,
             "title": "实现作者组与 CRediT 贡献记录",
             "description": "实现作者组确认作者名单、顺序与通讯作者，系统独立记录全部事实贡献者及 CRediT 角色（Spec §3.4、§2.3 决策 2），支撑验收步骤 8 的'确认作者'。",
             "status": "pending",
@@ -524,7 +538,7 @@
             "parentId": "4"
           },
           {
-            "id": "4.8",
+            "id": 8,
             "title": "实现 Review 与 Merge 流程及高风险确认",
             "description": "实现对 PR 的逐项科学 Review 与 Merge 写入主分支（Spec §8.2、§8.3）；仅 Owner/Maintainer 可发起 Merge，改变作者、许可、核心结论或可见性的 Merge MUST 触发高风险确认。",
             "status": "pending",
@@ -538,7 +552,7 @@
             "parentId": "4"
           },
           {
-            "id": "4.9",
+            "id": 9,
             "title": "实现协作通知、事件投递与审计",
             "description": "实现 Notification 实体与协作事件通知（PR 打开/Merge、Review 请求、Issue 动态），支撑 Dashboard'通知与社区动态'（Spec §18.1、§15、§16）。",
             "status": "pending",
@@ -552,7 +566,7 @@
             "parentId": "4"
           },
           {
-            "id": "4.10",
+            "id": 10,
             "title": "实现 GitHub 式协作区域前端交互",
             "description": "实现 Issue/PR/Review/Merge/Fork 的前端基础交互，协作区域采用 GitHub 式交互（Spec §2.5 决策 6），桌面与移动端功能一致（§2.5 决策 5）。",
             "status": "pending",
@@ -581,7 +595,7 @@
         "testStrategy": "",
         "subtasks": [
           {
-            "id": "5.1",
+            "id": 1,
             "title": "实现 AI Gateway 统一路由与调用日志",
             "description": "在 packages/ai-gateway 封装全部大模型调用：MiniMax-M3 为主模型，回退策略由 Gateway 配置管理（Spec §2.4-6、§9.3），为后续 Hermes 全部子 Agent 与 AI 审核提供唯一入口。",
             "status": "pending",
@@ -594,7 +608,7 @@
             "parentId": "5"
           },
           {
-            "id": "5.2",
+            "id": 2,
             "title": "搭建 Hermes 会话与异步任务通道",
             "description": "实现 AgentSession/AgentTask 数据模型与异步执行管道：长任务异步执行（Spec §9.3），任务 ID + SSE/WebSocket 进度推送（Spec §16、§18.3 AI 任务显示可恢复进度），支撑 SDF 提取与 AI 审核等长耗时调用。",
             "status": "pending",
@@ -608,7 +622,7 @@
             "parentId": "5"
           },
           {
-            "id": "5.3",
+            "id": 3,
             "title": "实现 SDF Extractor 建议式提取与确认写入",
             "description": "实现 SDF Extractor 子 Agent：从正文提取六字段与关系草案（Spec §9.2），提取结果以建议/差异形式展示，用户确认后才写入 SDF（Spec §5.4），支撑核心闭环的 AI 结构化 → 人工确认环节（Spec §2.1-2）。",
             "status": "pending",
@@ -622,7 +636,7 @@
             "parentId": "5"
           },
           {
-            "id": "5.4",
+            "id": 4,
             "title": "实现 R0–R4 分级审批与统一确认交互",
             "description": "实现 Hermes 写操作的 R0–R4 审批分级（Spec §9.4）：R0 自动执行、R1 批量 diff 一次批准、R2 任务内同类授权、R3 最终摘要+明确确认、R4 重新验证+逐项确认，兼顾安全性与交互速度（Spec §2.5-7）。",
             "status": "pending",
@@ -635,7 +649,7 @@
             "parentId": "5"
           },
           {
-            "id": "5.5",
+            "id": 5,
             "title": "实现发布审核硬阻断检查管线",
             "description": "实现 AI 发布审核的硬阻断层：仅对安全、完整性、恶意文件、隐私泄露和明显违规进行硬阻断（Spec §2.3-5、§11.1），审核未通过时禁止发布（Spec §2.3-4）。",
             "status": "pending",
@@ -650,7 +664,7 @@
             "parentId": "5"
           },
           {
-            "id": "5.6",
+            "id": 6,
             "title": "实现发布审核警告层与结构化审核报告",
             "description": "实现 AI 发布审核的警告层：方法逻辑、统计合理性、图表规范、数据一致性、可复现性、引用缺失、过度外推等问题以警告呈现，不替代作者判断（Spec §11.2、§2.3-5）。",
             "status": "pending",
@@ -663,7 +677,7 @@
             "parentId": "5"
           },
           {
-            "id": "5.7",
+            "id": 7,
             "title": "实现审核申诉流程与 Moderator 队列",
             "description": "实现发布审核失败后的申诉通道：生成稳定审核记录，用户可修改重审或提交申诉，申诉进入 Moderator 队列，人工结果和理由写入审计日志（Spec §11.3、§2.3-4）。",
             "status": "pending",
@@ -677,7 +691,7 @@
             "parentId": "5"
           },
           {
-            "id": "5.8",
+            "id": 8,
             "title": "实现发布事务与状态机推进",
             "description": "实现正式发布流程：作者确认公开后生成平台时间戳、RO unique ID 和版本 ID（Spec §2.1-6），状态机 draft → under_review → approved → published（Spec §4.1），已公开版本永久不可原地修改（Spec §2.2-3）。",
             "status": "pending",
@@ -693,7 +707,7 @@
             "parentId": "5"
           },
           {
-            "id": "5.9",
+            "id": 9,
             "title": "构建公开 RO 页面与必显信息",
             "description": "构建公众可访问的公开 RO 页面：按严肃学术排版（Spec §18.2）展示 Spec §4.3 要求的全部必显信息，支撑验收主流程的公众查看环节（Spec §21.2 步骤10）。",
             "status": "pending",
@@ -721,7 +735,7 @@
         "testStrategy": "",
         "subtasks": [
           {
-            "id": "6.1",
+            "id": 1,
             "title": "实现 Visualization Planner 子 Agent 生成可视化方案",
             "description": "用户在阅读笔记或资料时对概念（如电磁场传播、干涉、偏振）提问，Hermes 委派 Visualization Planner 生成自然语言解释、数学模型与假设、参数表和 Python 脚本规格（Spec §10.1、§10.2）。",
             "status": "pending",
@@ -734,7 +748,7 @@
             "parentId": "6"
           },
           {
-            "id": "6.2",
+            "id": 2,
             "title": "实现 Python AST 策略检查器拦截危险代码",
             "description": "对 Planner 生成及用户修改后的脚本做 AST、依赖、资源和输出检查，阻断危险代码进入沙箱（Spec §9.2 Python Policy Checker、§10.3）。",
             "status": "pending",
@@ -747,7 +761,7 @@
             "parentId": "6"
           },
           {
-            "id": "6.3",
+            "id": 3,
             "title": "构建沙箱基础镜像与非 root 只读运行环境",
             "description": "构建固定依赖版本的沙箱 Docker 基础镜像，落实非 root、只读根文件系统、临时目录等运行时约束（Spec §10.3）。",
             "status": "pending",
@@ -760,7 +774,7 @@
             "parentId": "6"
           },
           {
-            "id": "6.4",
+            "id": 4,
             "title": "实现 Sandbox Controller 与隔离 Docker 网络",
             "description": "实现 sandbox-controller 服务，调度临时执行容器并落实全部资源与网络隔离限制（Spec §10.3、§14.1、§14.2）。",
             "status": "pending",
@@ -773,7 +787,7 @@
             "parentId": "6"
           },
           {
-            "id": "6.5",
+            "id": 5,
             "title": "实现 sandbox-jobs API、配额限流与完成事件",
             "description": "对外提供 /sandbox-jobs 模块化 REST API，落实沙箱接口限流、Python 任务配额和 sandbox_job.completed 事件（Spec §16、§13.3、§17）。",
             "status": "pending",
@@ -786,7 +800,7 @@
             "parentId": "6"
           },
           {
-            "id": "6.6",
+            "id": 6,
             "title": "实现可视化结果展示与 IndexedDB 临时保存",
             "description": "前端展示沙箱产出的 PNG/SVG 与解释内容，临时结果保存到 IndexedDB（默认 24 小时），支持保存到本设备或我的笔记（Spec §10.2、§13.2）。",
             "status": "pending",
@@ -799,7 +813,7 @@
             "parentId": "6"
           },
           {
-            "id": "6.7",
+            "id": 7,
             "title": "实现自然语言修改脚本的全流程重检机制",
             "description": "用户可用自然语言要求修改脚本或参数，每次修改重新生成代码、展示 diff、重新策略检查并在新容器中执行（Spec §10.4）。",
             "status": "pending",
@@ -812,7 +826,7 @@
             "parentId": "6"
           },
           {
-            "id": "6.8",
+            "id": 8,
             "title": "编写沙箱威胁模型并执行逃逸基线测试",
             "description": "单独维护 Sandbox 威胁模型文档，并建立可重复运行的沙箱逃逸基线测试集（Spec §17 MUST、§21.1 安全测试层）。",
             "status": "pending",
@@ -829,7 +843,7 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-07-28T04:41:41.929Z",
+      "lastModified": "2026-07-31T11:08:56.553Z",
       "taskCount": 6,
       "completedCount": 1,
       "tags": [

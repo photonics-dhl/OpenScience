@@ -5,7 +5,7 @@ import { DevOutboxMailer } from '@openscience/auth';
 import { createPrismaClient, createRedisClient } from '@openscience/database';
 import { buildApp } from '../src/app';
 
-const repoRoot = path.join(__dirname, '..', '..');
+const repoRoot = path.join(__dirname, '..', '..', '..');
 const prisma = createPrismaClient();
 const redis = createRedisClient();
 const mailer = new DevOutboxMailer(prisma);

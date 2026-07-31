@@ -16,8 +16,8 @@
 | `knip.json` / `.dependency-cruiser.cjs` / `.markdownlint-cli2.jsonc` | 卫生工具配置：knip（未用代码）、dependency-cruiser（依赖边界）、markdownlint（文档门禁）（2026-07-28 落地） | 活文档 |
 | `scripts/verify-workspace.mjs` | Monorepo 结构校验脚本（lint 的第二段，`verify:workspace` 入口） | 活文档 |
 | `scripts/invite.mjs` | 邀请码管理 CLI（create/list/revoke，P1A-3） | 活文档 |
-| `apps/` | `web` 可启动空壳；`api` 已含 Fastify `/auth` 实现（P1A-3）；`agent-worker`/`science-worker`/`sandbox-controller` 空壳 | 骨架 |
-| `packages/` | 11 个领域包；database/storage 已实现 P1A-2（Prisma/Redis 客户端、迁移 runner、StorageAdapter + MinIO）；auth 已实现 P1A-3（密码/邀请码/验证码/session/mailer），其余占位 | 骨架 |
+| `apps/` | `web` 可启动空壳；`api` 已含 Fastify `/auth`（P1A-3）+ `/workspaces`（P1A-4）实现；`agent-worker`/`science-worker`/`sandbox-controller` 空壳 | 骨架 |
+| `packages/` | 11 个领域包；database/storage 已实现 P1A-2（Prisma/Redis 客户端、迁移 runner、StorageAdapter + MinIO）；auth 已实现 P1A-3（密码/邀请码/验证码/session/mailer）；domain 已实现 P1A-4（workspace 领域模块），其余占位；database/storage/api 云上集成测试已全绿（2026-07-31） | 骨架 |
 | `.cursor/` | Cursor 编辑器配置 | 工具自管 |
 | `.taskmaster/` | task-master 任务状态 | 工具自管 |
 | `.memory/memory.jsonl` | Memory MCP 知识图谱存储（MEMORY_FILE_PATH 指定） | 工具自管，随 git 备份 |
@@ -33,13 +33,13 @@
 | `docs/specs/2026-07-24-mvp-task-breakdown-design.md` | MVP 任务拆解与工具配置设计（待用户审阅） | 活文档 |
 | `docs/specs/2026-07-28-p1a-2-data-foundation-design.md` | P1A-2 数据基础设计（PostgreSQL/Redis/Storage Adapter，已批准，代码已实现，集成测试待阿里云执行） | 活文档 |
 | `docs/specs/2026-07-28-p1a-3-invitation-auth-design.md` | P1A-3 邀请码注册与邮箱验证 Auth 设计（已批准，本地已实现，集成测试待阿里云） | 活文档 |
-| `docs/specs/2026-07-29-p1a-4-workspace-design.md` | P1A-4 Workspace 模型与成员管理设计（已批准，待出实施计划） | 活文档 |
+| `docs/specs/2026-07-29-p1a-4-workspace-design.md` | P1A-4 Workspace 模型与成员管理设计（已批准，本地已实现，集成测试待阿里云） | 活文档 |
 | `docs/plans/2026-07-24-doc-architecture-plan.md` | 文档架构落地实施计划 | 活文档 |
 | `docs/plans/2026-07-24-mvp-task-breakdown-plan.md` | MVP 任务拆解与工具配置实施计划（已批准，执行中） | 活文档 |
 | `docs/plans/2026-07-28-p1a-1-monorepo-skeleton-plan.md` | P1A-1 Monorepo 全量占位骨架实施计划（方案 A，已确认） | 活文档 |
 | `docs/plans/2026-07-28-p1a-2-data-foundation-plan.md` | P1A-2 数据基础实施计划（PostgreSQL/Redis/Storage Adapter） | 活文档 |
 | `docs/plans/2026-07-28-p1a-3-invitation-auth-plan.md` | P1A-3 邀请码注册与邮箱验证 Auth 实施计划（本地执行完毕，云上集成测试待执行） | 活文档 |
-| `docs/plans/2026-07-29-p1a-4-workspace-plan.md` | P1A-4 Workspace 模型与成员管理实施计划（7 task，待用户审阅后执行） | 活文档 |
+| `docs/plans/2026-07-29-p1a-4-workspace-plan.md` | P1A-4 Workspace 模型与成员管理实施计划（本地执行完毕，云上集成测试待阿里云） | 活文档 |
 | `docs/progress.md` | 进度日志，新条目置顶 | 活文档 |
 | `docs/handoff/` | 交接文档目录（阶段边界/换 agent/换电脑，必须入库） | 活文档 |
 | `docs/handoff/2026-07-28-before-p1a-2-handoff.md` | P1A-2 前交接：Phase 0 Accepted、P1A-1 done、下一任务 P1A-2 | 活文档 |
@@ -65,7 +65,7 @@
 | `infra/compose/` | `docker-compose.dev.yml` 开发栈（postgres:16/redis:7/minio + minio-init，端口仅 127.0.0.1，P1A-2） | 已就位（本机未起栈） |
 | `infra/nginx/` | 反向代理配置占位（P1A-1） | 骨架 |
 | `infra/sandbox/` | 沙箱配置占位（P1A-1） | 骨架 |
-| `infra/migrations/` | Prisma 迁移（`20260728000000_baseline_app_meta` + `20260728010000_auth_baseline`（P1A-3 四表），各附 rollback.sql） | 已实现，云上 deploy 待执行 |
+| `infra/migrations/` | Prisma 迁移（`20260728000000_baseline_app_meta` + `20260728010000_auth_baseline`（P1A-3 四表）+ `20260729010000_workspace_baseline`（P1A-4 三表），各附 rollback.sql） | 已实现，云上已 deploy（2026-07-31） |
 | `infra/schema.prisma` | Prisma schema（`app_meta` 基线模型，P1A-2） | 已实现 |
 
 ## .agents/skills/（项目级 Skills，Spec §20.3）
