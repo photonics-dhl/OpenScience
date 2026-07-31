@@ -227,3 +227,45 @@ describe('getCurrentUser', () => {
     expect(redis.store.size).toBe(0);
   });
 });
+
+describe('verifyEmail onEmailVerified 回调（P1A-4）', () => {
+  // 与既有 verifyEmail 用例相同的 seed 方式：seedInvitation + register + 从 mailer 取明文验证码
+  async function seedVerifiedFlowUser(
+    deps: AuthDeps,
+    db: ReturnType<typeof createFakePrisma>['db'],
+    mailer: { sent: Array<{ text: string }> },
+    email: string,
+  ) {
+    seedInvitation(db);
+    await register(deps, {
+      invitationCode: 'TESTCODE1234567890AB',
+      email,
+      password: 'passw0rd-x',
+      displayName: 'CB',
+    });
+    const plainCode = mailer.sent[mailer.sent.length - 1].text.match(/(\d{6})/)![1];
+    return { plainCode };
+  }
+
+  it('验证通过时在同事务内调用回调（tx + 用户信息）', async () => {
+    const { deps, db, mailer } = makeDeps();
+    const calls: Array<{ tx: unknown; user: { id: string; email: string; displayName: string } }> = [];
+    deps.onEmailVerified = async (tx, user) => {
+      calls.push({ tx, user });
+    };
+    const { plainCode } = await seedVerifiedFlowUser(deps, db, mailer, 'cb@example.com');
+    await verifyEmail(deps, { email: 'cb@example.com', code: plainCode });
+    expect(calls).toHaveLength(1);
+    expect(calls[0].user).toMatchObject({ email: 'cb@example.com' });
+    expect(calls[0].tx).toBe(deps.prisma); // fake $transaction 的 tx 即 prisma 自身
+  });
+
+  it('回调抛错时 verifyEmail 整体失败（真实 PG 由事务回滚，云上集成测试覆盖）', async () => {
+    const { deps, db, mailer } = makeDeps();
+    deps.onEmailVerified = async () => {
+      throw new Error('boom');
+    };
+    const { plainCode } = await seedVerifiedFlowUser(deps, db, mailer, 'cb2@example.com');
+    await expect(verifyEmail(deps, { email: 'cb2@example.com', code: plainCode })).rejects.toThrow('boom');
+  });
+});

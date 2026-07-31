@@ -34,6 +34,10 @@ model User {
   emailVerifications EmailVerification[]
   usedInvitations    Invitation[]       @relation("InvitationUsedBy")
 
+  ownedWorkspaces          Workspace[]           @relation("WorkspaceOwner")
+  memberships              Membership[]
+  sentWorkspaceInvitations WorkspaceInvitation[] @relation("WorkspaceInvitationInviter")
+
   @@map("users")
 }
 
@@ -77,4 +81,80 @@ model MailOutbox {
   createdAt DateTime @default(now()) @map("created_at")
 
   @@map("mail_outbox")
+}
+
+enum WorkspaceType {
+  personal
+  team
+}
+
+enum WorkspaceStatus {
+  active
+  archived
+}
+
+enum WorkspaceRole {
+  owner
+  maintainer
+  author
+  contributor
+  reviewer
+  viewer
+}
+
+enum WorkspaceInvitationStatus {
+  pending
+  accepted
+  declined
+  revoked
+  expired
+}
+
+model Workspace {
+  id          String               @id @default(uuid()) @db.Uuid
+  type        WorkspaceType
+  name        String
+  ownerId     String               @map("owner_id") @db.Uuid
+  status      WorkspaceStatus      @default(active)
+  createdAt   DateTime             @default(now()) @map("created_at")
+  updatedAt   DateTime             @updatedAt @map("updated_at")
+  owner       User                 @relation("WorkspaceOwner", fields: [ownerId], references: [id], onDelete: Restrict)
+  members     Membership[]
+  invitations WorkspaceInvitation[]
+
+  @@map("workspaces")
+}
+
+model Membership {
+  id          String        @id @default(uuid()) @db.Uuid
+  workspaceId String        @map("workspace_id") @db.Uuid
+  userId      String        @map("user_id") @db.Uuid
+  role        WorkspaceRole
+  createdAt   DateTime      @default(now()) @map("created_at")
+  updatedAt   DateTime      @updatedAt @map("updated_at")
+  workspace   Workspace     @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  user        User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([workspaceId, userId])
+  @@index([userId])
+  @@map("memberships")
+}
+
+model WorkspaceInvitation {
+  id            String                    @id @default(uuid()) @db.Uuid
+  workspaceId   String                    @map("workspace_id") @db.Uuid
+  email         String                    @db.Citext
+  role          WorkspaceRole
+  status        WorkspaceInvitationStatus @default(pending)
+  invitedBy     String                    @map("invited_by") @db.Uuid
+  expiresAt     DateTime                  @map("expires_at")
+  respondedAt   DateTime?                 @map("responded_at")
+  createdAt     DateTime                  @default(now()) @map("created_at")
+  updatedAt     DateTime                  @updatedAt @map("updated_at")
+  workspace     Workspace                 @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  invitedByUser User                      @relation("WorkspaceInvitationInviter", fields: [invitedBy], references: [id], onDelete: Restrict)
+
+  @@index([workspaceId])
+  @@index([email])
+  @@map("workspace_invitations")
 }

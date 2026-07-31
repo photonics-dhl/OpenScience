@@ -1,4 +1,4 @@
-import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
+import type { FastifyInstance, FastifyReply } from 'fastify';
 import { z } from 'zod';
 import {
   getCurrentUser,
@@ -9,12 +9,12 @@ import {
   verifyEmail,
   type AuthDeps,
 } from '@openscience/auth';
+import { SESSION_COOKIE, UNAUTHORIZED_BODY, sessionTokenFrom } from './session-guard';
 
 export interface AuthRouteDeps extends AuthDeps {
   secureCookies: boolean;
 }
 
-const SESSION_COOKIE = 'openscience_session';
 const SESSION_MAX_AGE_SECONDS = 7 * 24 * 3600;
 
 const passwordSchema = z
@@ -42,12 +42,6 @@ function setSessionCookie(reply: FastifyReply, token: string, secure: boolean): 
     maxAge: SESSION_MAX_AGE_SECONDS,
   });
 }
-
-function sessionTokenFrom(req: FastifyRequest): string | null {
-  return req.cookies[SESSION_COOKIE] ?? null;
-}
-
-const UNAUTHORIZED_BODY = { error: { code: 'SESSION_INVALID', message: '未登录' } };
 
 export function registerAuthRoutes(app: FastifyInstance, deps: AuthRouteDeps): void {
   app.post('/register', async (req, reply) => {

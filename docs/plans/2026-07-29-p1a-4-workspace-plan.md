@@ -1773,13 +1773,12 @@ import { requireCurrentUser } from './session-guard';
 
 export type WorkspaceRouteDeps = AuthDeps;
 
-const roleSchema = z.enum(['owner', 'maintainer', 'author', 'contributor', 'reviewer', 'viewer']);
 const nonOwnerRoleSchema = z.enum(['maintainer', 'author', 'contributor', 'reviewer', 'viewer']);
 const idParams = z.object({ id: z.string().uuid() });
 const invIdParams = z.object({ id: z.string().uuid(), invId: z.string().uuid() });
 const memberParams = z.object({ id: z.string().uuid(), userId: z.string().uuid() });
 const nameBody = z.object({ name: z.string().min(1).max(64) });
-const inviteBody = z.object({ email: z.string().email(), role: roleSchema });
+const inviteBody = z.object({ email: z.string().email(), role: nonOwnerRoleSchema });
 const changeRoleBody = z.object({ role: nonOwnerRoleSchema });
 const transferBody = z.object({ newOwnerId: z.string().uuid() });
 
@@ -2207,6 +2206,15 @@ describe('邀请闭环', () => {
     expect(mailer.sent.some((m) => m.to === 'c@example.com')).toBe(true);
   });
 
+  it('邀请预指派 owner → 400 VALIDATION_ERROR（所有权只能经 transfer 产生，2026-07-29 评审裁决）', async () => {
+    const { app, authed, loginAs } = await setup();
+    const t1 = await loginAs(U1, 'a@example.com');
+    const id = await createTeam(app, t1);
+    const res = await app.inject({ method: 'POST', url: `/workspaces/${id}/invitations`, ...authed(t1), payload: { email: 'c@example.com', role: 'owner' } });
+    expect(res.statusCode).toBe(400);
+    expect(res.json().error.code).toBe('VALIDATION_ERROR');
+  });
+
   it('受邀者可见待邀 → accept 201 → 出现在成员列表', async () => {
     const { app, authed, loginAs } = await setup();
     const t1 = await loginAs(U1, 'a@example.com');
@@ -2299,12 +2307,12 @@ describe('成员管理与不变量', () => {
 - [ ] **Step 11: 跑测试确认通过（先失败确认生效也可，路由已就绪则直接全绿）**
 
 Run: `npx pnpm@9.15.0 --filter @openscience/api test`
-Expected: PASS（既有基线 + 新增 13；执行时先记录 api 基线数再核对 +13）。
+Expected: PASS（既有基线 + 新增 14；执行时先记录 api 基线数再核对 +14）。
 
 - [ ] **Step 12: 全仓回归**
 
 Run: `npx pnpm@9.15.0 build && npx pnpm@9.15.0 test`
-Expected: exit 0；auth 32 + domain 32 + api（基线+13）+ database 4 + storage 10，其余包无回归。
+Expected: exit 0；auth 32 + domain 32 + api（基线+14）+ database 4 + storage 10，其余包无回归。
 
 ---
 
@@ -2517,7 +2525,7 @@ Run: `npx pnpm@9.15.0 lint`
 Expected: exit 0（ESLint + `WORKSPACE_STRUCTURE_OK`）。
 
 Run: `npx pnpm@9.15.0 test`
-Expected: exit 0；总数 = P1A-3 基线（59）+ 本计划新增（domain 32 + auth 2 + api 13 = 47）= 106；若基线数有出入，以"实际基线 + 47"核对。
+Expected: exit 0；总数 = P1A-3 基线（59）+ 本计划新增（domain 32 + auth 2 + api 14 = 48）= 107；若基线数有出入，以"实际基线 + 48"核对。
 
 Run: `npx pnpm@9.15.0 audit:knip`
 Expected: exit 0。若新增 unused-export hint（如 `INVITATION_TTL_MS`、type-only 导出未被跨包消费）：从 `packages/domain/src/index.ts` barrel 中移除未跨包使用的导出项后重跑，保持零新增 hint。
@@ -2542,7 +2550,7 @@ Expected: 0 issues。
    - `infra/migrations/` 行追加 `20260729010000_workspace_baseline`（P1A-4 三表）。
    - `docs/plans/` 表追加本计划行：`docs/plans/2026-07-29-p1a-4-workspace-plan.md` | P1A-4 Workspace 实施计划（本地执行，集成测试待阿里云） | 活文档。
 2. `AGENTS.md` 概览段：`apps/` 与 `packages/` 两行同步上述内容。
-3. `docs/progress.md` 置顶新条目：完成项（迁移 3 / domain 32 单测 / auth 回调 2 用例 / api 13 用例 / 全门禁证据命令）、Key Decisions（回调注入、平行 WorkspaceError + SCREAMING 码、fake 复制接受）、Next Steps（阿里云 migrate deploy + 三包 test:integration 全绿后置 2.2/2.3/2.4 done；P1A-5 RBAC 先 design gate）。
+3. `docs/progress.md` 置顶新条目：完成项（迁移 3 / domain 32 单测 / auth 回调 2 用例 / api 14 用例 / 全门禁证据命令）、Key Decisions（回调注入、平行 WorkspaceError + SCREAMING 码、fake 复制接受、邀请角色收窄为非 owner）、Next Steps（阿里云 migrate deploy + 三包 test:integration 全绿后置 2.2/2.3/2.4 done；P1A-5 RBAC 先 design gate）。
 
 - [ ] **Step 5: 提交检查点（需用户批准）**
 
@@ -2594,3 +2602,4 @@ task-master 2.4 保持 `pending`（test-gate：云上集成测试全绿后才置
 - maintainer 不能移除同级 maintainer（最小内联检查的明确规则，2.5 RBAC 矩阵可能细化）。
 - `packages/domain` 对 `@openscience/auth` 仅 type-only 依赖（Mailer），无运行时耦合。
 - fake prisma 在 domain/api 两处复制（跨包不能引测试目录），`audit:dup` 若报告按既有模式接受。
+- 邀请预指派角色收窄为非 owner（2026-07-29 Task 6 评审 ⚠️ 用户裁决）：邀请 zod 用 `nonOwnerRoleSchema`，所有权只能经 transfer 产生；spec §5.3/§6 已同步。

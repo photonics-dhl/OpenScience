@@ -1,5 +1,6 @@
 import { DevOutboxMailer } from '@openscience/auth';
 import { createPrismaClient, createRedisClient } from '@openscience/database';
+import { createPersonalWorkspace } from '@openscience/domain';
 import { buildApp } from './app';
 import { loadApiEnv } from './env';
 
@@ -17,6 +18,8 @@ async function main(): Promise<void> {
     prisma,
     redis,
     mailer,
+    // P1A-4：邮箱验证通过同事务创建 Personal Workspace（回调注入，避免 auth→domain 反向依赖）
+    onEmailVerified: (tx, user) => createPersonalWorkspace(tx, user),
     cookieSecret: env.cookieSecret,
     secureCookies: env.secureCookies,
   });

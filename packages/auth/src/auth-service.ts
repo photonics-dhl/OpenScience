@@ -1,4 +1,4 @@
-import type { PrismaClient } from '@prisma/client';
+import type { Prisma, PrismaClient } from '@prisma/client';
 import type { Redis } from 'ioredis';
 import { AuthError } from './errors';
 import { assertInvitationRedeemable } from './invitations';
@@ -14,6 +14,11 @@ export interface AuthDeps {
   mailer: Mailer;
   /** 测试注入时钟；默认系统时间。 */
   now?: () => Date;
+  /** 邮箱验证通过回调（同事务执行）：P1A-4 挂 Personal Workspace 创建；失败整体回滚。 */
+  onEmailVerified?: (
+    tx: Prisma.TransactionClient,
+    user: { id: string; email: string; displayName: string },
+  ) => Promise<void>;
 }
 
 export interface AuthResult {
@@ -114,7 +119,11 @@ export async function verifyEmail(
   }
   const updated = await deps.prisma.$transaction(async (tx) => {
     await tx.emailVerification.update({ where: { id: record.id }, data: { verifiedAt: at } });
-    return tx.user.update({ where: { id: user.id }, data: { status: 'email_verified' } });
+    const u = await tx.user.update({ where: { id: user.id }, data: { status: 'email_verified' } });
+    if (deps.onEmailVerified) {
+      await deps.onEmailVerified(tx, { id: u.id, email: u.email, displayName: u.displayName });
+    }
+    return u;
   });
   const sessionToken = await createSession(deps.redis, { userId: updated.id, status: updated.status });
   return { userId: updated.id, status: updated.status, sessionToken };

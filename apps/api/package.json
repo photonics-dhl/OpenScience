@@ -13,6 +13,7 @@
     "@fastify/cookie": "11",
     "@openscience/auth": "workspace:^",
     "@openscience/database": "workspace:^",
+    "@openscience/domain": "workspace:^",
     "fastify": "5.10.0",
     "zod": "3"
   },

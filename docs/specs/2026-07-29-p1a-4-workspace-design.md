@@ -80,7 +80,7 @@ infra/migrations/              迁移 3：workspaces/memberships/workspace_invit
 
 ### 5.3 邀请状态机 `pending → accepted | declined | revoked | expired`
 
-- `invite`：仅 team、仅 owner/maintainer；受邀邮箱已注册且已是成员 → `ALREADY_MEMBER`（409）；已有同邮箱 pending 邀请 → `INVITATION_PENDING_EXISTS`（409，提示可 revoke 后重发）；通知邮件写 MailOutbox（复用 P1A-3 Mailer 通道，无验证码无密钥）。
+- `invite`：仅 team、仅 owner/maintainer；预指派 role 不可为 `owner`（所有权只能经 transfer 产生，2026-07-29 评审裁决）；受邀邮箱已注册且已是成员 → `ALREADY_MEMBER`（409）；已有同邮箱 pending 邀请 → `INVITATION_PENDING_EXISTS`（409，提示可 revoke 后重发）；通知邮件写 MailOutbox（复用 P1A-3 Mailer 通道，无验证码无密钥）。
 - `accept`：受邀者本人（session 用户邮箱与 invitation.email 经 citext 不区分大小写匹配）且 pending 且未过期 → 创建 Membership（预指派 role）+ 邀请转 accepted，同一事务。并发双 accept 由 `@@unique([workspaceId, userId])` 兜底，冲突视为幂等成功返回既有 membership。
 - `decline`：受邀者本人；`revoke`：owner/maintainer。
 - 过期惰性判定：读取时 `expiresAt < now` 视为 expired，不写后台任务。
@@ -92,7 +92,7 @@ infra/migrations/              迁移 3：workspaces/memberships/workspace_invit
 
 ## 6. API 端点（`/workspaces` 模块）
 
-全部端点要求 session 认证（未认证 401）；请求体 zod 校验失败 400 `validation_error`。
+全部端点要求 session 认证（未认证 401）；请求体 zod 校验失败 400 `VALIDATION_ERROR`。
 
 ```text
 GET    /workspaces                          我加入的空间列表（含 personal）
@@ -102,7 +102,7 @@ PATCH  /workspaces/:id                      修改资料（name；owner/maintain
 POST   /workspaces/:id/archive              归档（仅 owner，仅 team）→ 204
 
 GET    /workspaces/:id/members              成员列表（成员可见）
-POST   /workspaces/:id/invitations          邀请（email + role；owner/maintainer）→ 202
+POST   /workspaces/:id/invitations          邀请（email + role；owner/maintainer；role 不可为 owner）→ 202
 DELETE /workspaces/:id/invitations/:invId   撤销待邀（owner/maintainer）→ 204
 GET    /workspaces/invitations              我收到的待邀列表（按 session 邮箱匹配）
 POST   /workspaces/invitations/:id/accept   接受 → 201 membership（重复 accept 幂等返回同一 membership）
