@@ -12,8 +12,10 @@ export async function buildApp(opts: BuildAppOptions): Promise<FastifyInstance> 
   const app = Fastify({ logger: false });
   await app.register(cookie, { secret: opts.cookieSecret });
 
-  app.setErrorHandler((err, _req, reply) => {
-    const { status, body } = httpStatusForError(err);
+  app.setErrorHandler((err, req, reply) => {
+    const { status, body } = httpStatusForError(err, String(req.id));
+    if (status >= 500) req.log.error({ err }, 'unhandled error');
+    else req.log.warn({ err: { code: body.error.code } }, 'request rejected');
     void reply.status(status).send(body);
   });
 

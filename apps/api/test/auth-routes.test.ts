@@ -138,7 +138,14 @@ describe('/auth routes', () => {
     const wrongPw = await app.inject({ method: 'POST', url: '/auth/login', payload: { email: 'u@example.com', password: 'wr0ngpass' } });
     expect(unknown.statusCode).toBe(401);
     expect(wrongPw.statusCode).toBe(401);
-    expect(unknown.json()).toEqual(wrongPw.json());
+    const unknownBody = unknown.json();
+    const wrongPwBody = wrongPw.json();
+    expect(unknownBody.error.requestId).toEqual(expect.any(String));
+    expect(wrongPwBody.error.requestId).toEqual(expect.any(String));
+    // 反枚举断言忽略逐请求变化的 requestId，其余字段必须完全一致
+    delete unknownBody.error.requestId;
+    delete wrongPwBody.error.requestId;
+    expect(unknownBody).toEqual(wrongPwBody);
   });
 
   it('resend-code returns the same 202 for unknown emails', async () => {

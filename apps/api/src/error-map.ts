@@ -1,5 +1,6 @@
 import { AuthError, type AuthErrorCode } from '@openscience/auth';
 import { WorkspaceError, type WorkspaceErrorCode } from '@openscience/domain';
+import { buildErrorBody, type ErrorBody } from '@openscience/observability';
 
 const AUTH_ERROR_HTTP: Record<AuthErrorCode, number> = {
   INVITATION_INVALID: 400,
@@ -24,20 +25,18 @@ const WORKSPACE_ERROR_HTTP: Record<WorkspaceErrorCode, number> = {
   VALIDATION_ERROR: 400,
 };
 
-export interface ErrorBody {
-  error: { code: string; message: string };
-}
+export type { ErrorBody };
 
-/** 统一错误映射（2.6 扩展为全局标准前的最小版：/auth + /workspaces）。 */
-export function httpStatusForError(err: unknown): { status: number; body: ErrorBody } {
+/** 统一错误映射（2.6 扩展为全局标准前的最小版：/auth + /workspaces）；requestId 三方串联（Spec §17）。 */
+export function httpStatusForError(err: unknown, requestId?: string): { status: number; body: ErrorBody } {
   if (err instanceof AuthError) {
-    return { status: AUTH_ERROR_HTTP[err.code], body: { error: { code: err.code, message: err.message } } };
+    return { status: AUTH_ERROR_HTTP[err.code], body: buildErrorBody(err.code, err.message, requestId) };
   }
   if (err instanceof WorkspaceError) {
-    return { status: WORKSPACE_ERROR_HTTP[err.code], body: { error: { code: err.code, message: err.message } } };
+    return { status: WORKSPACE_ERROR_HTTP[err.code], body: buildErrorBody(err.code, err.message, requestId) };
   }
   if ((err as { name?: string })?.name === 'ZodError') {
-    return { status: 400, body: { error: { code: 'VALIDATION_ERROR', message: '请求参数不合法' } } };
+    return { status: 400, body: buildErrorBody('VALIDATION_ERROR', '请求参数不合法', requestId) };
   }
-  return { status: 500, body: { error: { code: 'INTERNAL', message: '内部错误' } } };
+  return { status: 500, body: buildErrorBody('INTERNAL', '内部错误', requestId) };
 }

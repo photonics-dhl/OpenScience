@@ -3,10 +3,9 @@ import type { Membership } from '@prisma/client';
 import { z } from 'zod';
 import type { AuthDeps } from '@openscience/auth';
 import { can, type WorkspaceAction } from '@openscience/domain';
+import { buildErrorBody } from '@openscience/observability';
 import { requireCurrentUser } from './session-guard';
 
-const NOT_FOUND_BODY = { error: { code: 'WORKSPACE_NOT_FOUND', message: '空间不存在' } } as const;
-const FORBIDDEN_BODY = { error: { code: 'FORBIDDEN', message: '权限不足' } } as const;
 const idParam = z.object({ id: z.string().uuid() });
 
 declare module 'fastify' {
@@ -33,11 +32,11 @@ export function requireWorkspaceAction(deps: AuthDeps, action: WorkspaceAction):
       : null;
     if (!workspace || !membership) {
       // audit(2.6): authz.deny（workspace 不存在或非成员）
-      return reply.status(404).send(NOT_FOUND_BODY);
+      return reply.status(404).send(buildErrorBody('WORKSPACE_NOT_FOUND', '空间不存在', String(req.id)));
     }
     if (!can(membership.role, action)) {
       // audit(2.6): authz.deny（角色不足）
-      return reply.status(403).send(FORBIDDEN_BODY);
+      return reply.status(403).send(buildErrorBody('FORBIDDEN', '权限不足', String(req.id)));
     }
     req.workspaceMembership = membership;
   };

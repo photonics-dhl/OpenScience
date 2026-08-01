@@ -70,6 +70,9 @@ importers:
       '@openscience/domain':
         specifier: workspace:^
         version: link:../../packages/domain
+      '@openscience/observability':
+        specifier: workspace:^
+        version: link:../../packages/observability
       fastify:
         specifier: 5.10.0
         version: 5.10.0

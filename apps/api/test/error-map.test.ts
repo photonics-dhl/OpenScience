@@ -13,8 +13,8 @@ describe('httpStatusForError', () => {
   });
 
   it('keeps the unified error body shape', () => {
-    const { body } = httpStatusForError(new AuthError('CODE_INVALID', '验证码错误或已失效'));
-    expect(body).toEqual({ error: { code: 'CODE_INVALID', message: '验证码错误或已失效' } });
+    const { body } = httpStatusForError(new AuthError('CODE_INVALID', '验证码错误或已失效'), 'req-9');
+    expect(body).toEqual({ error: { code: 'CODE_INVALID', message: '验证码错误或已失效', requestId: 'req-9' } });
   });
 
   it('maps ZodError-shaped errors to 400 VALIDATION_ERROR', () => {

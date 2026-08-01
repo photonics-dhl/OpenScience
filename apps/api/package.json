@@ -15,6 +15,7 @@
     "@openscience/config": "workspace:^",
     "@openscience/database": "workspace:^",
     "@openscience/domain": "workspace:^",
+    "@openscience/observability": "workspace:^",
     "fastify": "5.10.0",
     "zod": "3"
   },
