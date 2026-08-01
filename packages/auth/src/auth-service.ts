@@ -1,5 +1,6 @@
 import type { Prisma, PrismaClient } from '@prisma/client';
 import type { Redis } from 'ioredis';
+import type { AuditContext, AuditEvent, AuditSink } from '@openscience/observability';
 import { AuthError } from './errors';
 import { assertInvitationRedeemable } from './invitations';
 import type { Mailer } from './mailer';
@@ -19,6 +20,18 @@ export interface AuthDeps {
     tx: Prisma.TransactionClient,
     user: { id: string; email: string; displayName: string },
   ) => Promise<void>;
+  /** 审计 sink；缺省为 no-op（P1A-6）。 */
+  audit?: AuditSink;
+}
+
+/** 写 auth 审计行；有 tx 时与业务行同事务。audit 缺省为 no-op。 */
+async function recordAuth(
+  deps: AuthDeps,
+  event: Omit<AuditEvent, 'requestId' | 'ip'>,
+  ctx: AuditContext,
+  tx?: Prisma.TransactionClient,
+): Promise<void> {
+  await deps.audit?.record({ ...event, requestId: ctx.requestId, ip: ctx.ip }, tx);
 }
 
 export interface AuthResult {
@@ -68,7 +81,7 @@ async function issueVerificationCode(deps: AuthDeps, userId: string, email: stri
   });
 }
 
-export async function register(deps: AuthDeps, input: RegisterInput): Promise<AuthResult> {
+export async function register(deps: AuthDeps, input: RegisterInput, ctx: AuditContext = {}): Promise<AuthResult> {
   const at = now(deps);
   const passwordHash = await hashPassword(input.password);
   try {
@@ -86,6 +99,7 @@ export async function register(deps: AuthDeps, input: RegisterInput): Promise<Au
       if (redeemed.count !== 1) {
         throw new AuthError('INVITATION_INVALID', '邀请码已被使用');
       }
+      await recordAuth(deps, { actorId: created.id, action: 'auth.register', targetType: 'user', targetId: created.id }, ctx, tx);
       return created;
     });
     await issueVerificationCode(deps, user.id, input.email);
@@ -101,6 +115,7 @@ export async function register(deps: AuthDeps, input: RegisterInput): Promise<Au
 export async function verifyEmail(
   deps: AuthDeps,
   input: { email: string; code: string },
+  ctx: AuditContext = {},
 ): Promise<Required<AuthResult>> {
   const at = now(deps);
   const user = await deps.prisma.user.findUnique({ where: { email: input.email } });
@@ -123,6 +138,7 @@ export async function verifyEmail(
     if (deps.onEmailVerified) {
       await deps.onEmailVerified(tx, { id: u.id, email: u.email, displayName: u.displayName });
     }
+    await recordAuth(deps, { actorId: u.id, action: 'auth.verify', targetType: 'user', targetId: u.id }, ctx, tx);
     return u;
   });
   const sessionToken = await createSession(deps.redis, { userId: updated.id, status: updated.status });
@@ -130,7 +146,7 @@ export async function verifyEmail(
 }
 
 /** 防枚举：用户不存在、已验证或冷却中均静默成功（与成功响应一致，不发送）。RESEND_COOLDOWN 错误码保留备用。 */
-export async function resendCode(deps: AuthDeps, input: { email: string }): Promise<void> {
+export async function resendCode(deps: AuthDeps, input: { email: string }, ctx: AuditContext = {}): Promise<void> {
   const at = now(deps);
   const user = await deps.prisma.user.findUnique({ where: { email: input.email } });
   if (!user || user.status !== 'invited') return;
@@ -143,6 +159,7 @@ export async function resendCode(deps: AuthDeps, input: { email: string }): Prom
     return;
   }
   await issueVerificationCode(deps, user.id, input.email);
+  await recordAuth(deps, { actorId: user.id, action: 'auth.resend', targetType: 'user', targetId: user.id }, ctx);
 }
 
 // 模块级常量：预计算的 argon2id 哈希（内容任意，仅用于抹平"用户不存在"路径的计时差）
@@ -152,25 +169,58 @@ const DUMMY_PASSWORD_HASH =
 export async function login(
   deps: AuthDeps,
   input: { email: string; password: string },
+  ctx: AuditContext = {},
 ): Promise<Required<AuthResult>> {
   const user = await deps.prisma.user.findUnique({ where: { email: input.email } });
   // 防枚举：邮箱不存在与密码错误完全同文案同错误码
   if (!user) {
     await verifyPassword(DUMMY_PASSWORD_HASH, input.password); // 抹平计时侧信道，结果丢弃
+    // 审计不记邮箱明文（防枚举信息泄露），actorId=null
+    await recordAuth(deps, { actorId: null, action: 'auth.login', metadata: { reason: 'credentials_invalid' } }, ctx);
     throw new AuthError('CREDENTIALS_INVALID', '邮箱或密码错误');
   }
   const ok = await verifyPassword(user.passwordHash, input.password);
-  if (!ok) throw new AuthError('CREDENTIALS_INVALID', '邮箱或密码错误');
-  if (user.status === 'invited') throw new AuthError('ACCOUNT_NOT_ACTIVE', '请先完成邮箱验证');
+  if (!ok) {
+    await recordAuth(
+      deps,
+      { actorId: user.id, action: 'auth.login', targetType: 'user', targetId: user.id, metadata: { reason: 'credentials_invalid' } },
+      ctx,
+    );
+    throw new AuthError('CREDENTIALS_INVALID', '邮箱或密码错误');
+  }
+  if (user.status === 'invited') {
+    await recordAuth(
+      deps,
+      { actorId: user.id, action: 'auth.login', targetType: 'user', targetId: user.id, metadata: { reason: 'account_not_active' } },
+      ctx,
+    );
+    throw new AuthError('ACCOUNT_NOT_ACTIVE', '请先完成邮箱验证');
+  }
   if (user.status === 'suspended' || user.status === 'deleted') {
+    await recordAuth(
+      deps,
+      { actorId: user.id, action: 'auth.login', targetType: 'user', targetId: user.id, metadata: { reason: 'account_not_active' } },
+      ctx,
+    );
     throw new AuthError('ACCOUNT_NOT_ACTIVE', '账户不可用');
   }
   const sessionToken = await createSession(deps.redis, { userId: user.id, status: user.status });
+  await recordAuth(deps, { actorId: user.id, action: 'auth.login', targetType: 'user', targetId: user.id }, ctx);
   return { userId: user.id, status: user.status, sessionToken };
 }
 
-export async function logout(deps: AuthDeps, sessionToken: string): Promise<void> {
+export async function logout(deps: AuthDeps, sessionToken: string, ctx: AuditContext = {}): Promise<void> {
+  // 幂等登出：无效/过期 token 不抛错（保持既有 API 契约：logout 永远成功并清 cookie），
+  // best-effort 销毁后直接返回——无效会话无可记之事，不记审计
+  let session;
+  try {
+    session = await resolveSession(deps.redis, sessionToken);
+  } catch {
+    await destroySession(deps.redis, sessionToken);
+    return;
+  }
   await destroySession(deps.redis, sessionToken);
+  await recordAuth(deps, { actorId: session.userId, action: 'auth.logout', targetType: 'user', targetId: session.userId }, ctx);
 }
 
 /** 会话校验 + 实时用户状态（suspended/deleted 即时拒并销毁会话）。2.5 RBAC 复用此入口。 */

@@ -10,6 +10,7 @@
     "test": "vitest run"
   },
   "dependencies": {
+    "@openscience/observability": "workspace:^",
     "@prisma/client": "5.22.0",
     "argon2": "^0.45.1",
     "ioredis": "5"
