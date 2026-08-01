@@ -175,7 +175,18 @@ importers:
         specifier: '2'
         version: 2.1.9(@types/node@20.14.10)
 
-  packages/observability: {}
+  packages/observability:
+    dependencies:
+      pino:
+        specifier: 9.14.0
+        version: 9.14.0
+    devDependencies:
+      '@types/node':
+        specifier: 20.14.10
+        version: 20.14.10
+      vitest:
+        specifier: '2'
+        version: 2.1.9(@types/node@20.14.10)
 
   packages/sdf-schema: {}
 

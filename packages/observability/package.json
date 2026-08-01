@@ -2,8 +2,18 @@
   "name": "@openscience/observability",
   "private": true,
   "version": "0.0.0",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
   "scripts": {
     "build": "tsc -p tsconfig.json",
-    "typecheck": "tsc -p tsconfig.json --noEmit"
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "pino": "9.14.0"
+  },
+  "devDependencies": {
+    "@types/node": "20.14.10",
+    "vitest": "2"
   }
 }
