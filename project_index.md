@@ -17,8 +17,8 @@
 | `knip.json` / `.dependency-cruiser.cjs` / `.markdownlint-cli2.jsonc` | 卫生工具配置：knip（未用代码）、dependency-cruiser（依赖边界）、markdownlint（文档门禁）（2026-07-28 落地） | 活文档 |
 | `scripts/verify-workspace.mjs` | Monorepo 结构校验脚本（lint 的第二段，`verify:workspace` 入口） | 活文档 |
 | `scripts/invite.mjs` | 邀请码管理 CLI（create/list/revoke，P1A-3） | 活文档 |
-| `apps/` | `web` 可启动空壳；`api` 已含 Fastify `/auth`（P1A-3）+ `/workspaces`（P1A-4）实现；`agent-worker`/`science-worker`/`sandbox-controller` 空壳 | 骨架 |
-| `packages/` | 11 个领域包；database/storage 已实现 P1A-2（Prisma/Redis 客户端、迁移 runner、StorageAdapter + MinIO）；auth 已实现 P1A-3（密码/邀请码/验证码/session/mailer）；domain 已实现 P1A-4（workspace 领域模块），其余占位；database/storage/api 云上集成测试已全绿（2026-07-31） | 骨架 |
+| `apps/` | `web` 可启动空壳；`api` 已含 Fastify `/auth`（P1A-3）+ `/workspaces`（P1A-4）+ RBAC preHandler 授权守卫（P1A-5）实现；`agent-worker`/`science-worker`/`sandbox-controller` 空壳 | 骨架 |
+| `packages/` | 11 个领域包；database/storage 已实现 P1A-2（Prisma/Redis 客户端、迁移 runner、StorageAdapter + MinIO）；auth 已实现 P1A-3（密码/邀请码/验证码/session/mailer）；domain 已实现 P1A-4（workspace 领域模块）+ P1A-5（动作×角色权限矩阵），其余占位；database/storage/api 云上集成测试 11/11 全绿（2026-08-01） | 骨架 |
 | `.cursor/` | Cursor 编辑器配置 | 工具自管 |
 | `.taskmaster/` | task-master 任务状态 | 工具自管 |
 | `.memory/memory.jsonl` | Memory MCP 知识图谱存储（MEMORY_FILE_PATH 指定） | 工具自管，随 git 备份 |
