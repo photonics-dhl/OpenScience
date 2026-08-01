@@ -165,3 +165,21 @@ model WorkspaceInvitation {
   @@index([email])
   @@map("workspace_invitations")
 }
+
+model AuditLog {
+  id          String   @id @default(uuid()) @db.Uuid
+  createdAt   DateTime @default(now()) @map("created_at")
+  actorId     String?  @map("actor_id") @db.Uuid
+  action      String
+  workspaceId String?  @map("workspace_id") @db.Uuid
+  targetType  String?  @map("target_type")
+  targetId    String?  @map("target_id")
+  metadata    Json?
+  requestId   String?  @map("request_id")
+  ip          String?
+
+  @@index([action])
+  @@index([workspaceId])
+  @@index([createdAt])
+  @@map("audit_logs")
+}
