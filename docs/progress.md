@@ -1,5 +1,29 @@
 # OpenScience (XGS) 进度日志
 
+## 2026-08-01 — P1A-5 RBAC 本地完成（全门禁绿），集成测试留待云上
+
+### ✅ Completed
+| 任务 | 详情 |
+|---|---|
+| design gate + spec + plan | `docs/specs/2026-08-01-p1a-5-rbac-design.md`（四节已确认）、`docs/plans/2026-08-01-p1a-5-rbac-plan.md`（5 任务 TDD）均已批准并登记索引 |
+| Task 1-4 实现与提交 | 迁移 4 `User.platformRole`（`d8365e9`）→ domain 动作×角色权限矩阵（`5e03493`）→ domain 角色检查收敛 `requireAction`（`ace9d04`）→ API 统一 preHandler 守卫（`f2dab74`） |
+| Task 5 本地部分（未提交） | `apps/api/test/workspaces.integration.test.ts` 追加「P1A-5 RBAC 守卫（云上）」2 用例（viewer PATCH→403 含守卫先于 body 校验、非成员→404、无 session→401）；`vitest list` 确认收集、不本机运行（无 Docker） |
+| 测试证据 | 全量门禁 exit 0：build / typecheck / lint（0 error，1 个已知 deferred warning）/ test 单测 **116/116**（database 4 + storage 10 + auth 32 + domain 36 + api 34）/ audit:knip / audit:dep（0 errors，11 orphan warnings 基线）/ audit:deps / audit:dup / docs:lint 0 issues |
+
+### Key Decisions / 坑
+- 权限判定落点从 task-master 2.5 原文「packages/auth」改为「packages/domain（workspace 模块）+ apps/api preHandler 守卫」，auth 包保持纯身份层——design gate 用户已确认的偏离，task-master 2.5 details 待修订
+- 守卫与 domain 双层各自查 membership（共源矩阵），双查开销已登记接受
+- Task 4 遗留 1 项 plan-mandated Minor（`workspace-guard.test.ts` unused eslint-disable 警告）deferred 到终审统一处理
+- knip 预存回归修复：`task-master-ai`（07-31 入 root devDependencies 供 `.mcp.json` MCP server 直连）被 audit:knip 判 unused 致 exit 1（基线 stash 验证与本次改动无关）；已在 `knip.json` root `ignoreDependencies` 补登，与 @prisma/client/prisma 同例，**knip.json 需纳入本次提交**
+
+### ⏳ Next Steps
+- [ ] 终审（requesting-code-review）
+- [ ] 提交待用户批准：集成测试文件 + progress/index + spec/plan + knip.json
+- [ ] 云上收口（逐项确认）：tar-over-ssh 同步 → install → build database → `migrate deploy`（迁移 4 落库）→ `test:integration`（预期 11/11 = 原 9 + 新 2）
+- [ ] 云上全绿后置 task-master 2.5 done，并回填 progress.md
+
+---
+
 ## 2026-07-31 — 阿里云收口完成：云上集成测试 9/9 全绿，2.2/2.3/2.4/2.10 置 done
 
 ### ✅ Completed

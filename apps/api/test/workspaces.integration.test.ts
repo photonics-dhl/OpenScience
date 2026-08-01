@@ -173,3 +173,71 @@ describe('P1A-4 Workspace 集成（云上）', () => {
     await app.close();
   });
 });
+
+describe('P1A-5 RBAC 守卫（云上）', () => {
+  it('viewer 成员 PATCH → 403；非法 body 也先 403（守卫先于 body 校验）', async () => {
+    const app = await makeApp();
+    const ownerCookie = await registerAndVerify(app, 'rbac-owner@example.com');
+    const team = await app.inject({
+      method: 'POST',
+      url: '/workspaces',
+      cookies: { openscience_session: ownerCookie },
+      payload: { name: 'RBAC Lab' },
+    });
+    const teamId = team.json().id;
+    const invited = await app.inject({
+      method: 'POST',
+      url: `/workspaces/${teamId}/invitations`,
+      cookies: { openscience_session: ownerCookie },
+      payload: { email: 'rbac-viewer@example.com', role: 'viewer' },
+    });
+    const viewerCookie = await registerAndVerify(app, 'rbac-viewer@example.com');
+    const accepted = await app.inject({
+      method: 'POST',
+      url: `/workspaces/invitations/${invited.json().invitationId}/accept`,
+      cookies: { openscience_session: viewerCookie },
+    });
+    expect(accepted.statusCode).toBe(201);
+
+    const denied = await app.inject({
+      method: 'PATCH',
+      url: `/workspaces/${teamId}`,
+      cookies: { openscience_session: viewerCookie },
+      payload: { name: 'x' },
+    });
+    expect(denied.statusCode).toBe(403);
+    expect(denied.json().error.code).toBe('FORBIDDEN');
+
+    const deniedBadBody = await app.inject({
+      method: 'PATCH',
+      url: `/workspaces/${teamId}`,
+      cookies: { openscience_session: viewerCookie },
+      payload: {},
+    });
+    expect(deniedBadBody.statusCode).toBe(403);
+    await app.close();
+  });
+
+  it('非成员 PATCH → 404；无 session PATCH → 401', async () => {
+    const app = await makeApp();
+    const ownerCookie = await registerAndVerify(app, 'rbac-owner2@example.com');
+    const team = await app.inject({
+      method: 'POST',
+      url: '/workspaces',
+      cookies: { openscience_session: ownerCookie },
+      payload: { name: 'RBAC Lab 2' },
+    });
+    const outsiderCookie = await registerAndVerify(app, 'rbac-outsider@example.com');
+    const res404 = await app.inject({
+      method: 'PATCH',
+      url: `/workspaces/${team.json().id}`,
+      cookies: { openscience_session: outsiderCookie },
+      payload: { name: 'x' },
+    });
+    expect(res404.statusCode).toBe(404);
+    expect(res404.json().error.code).toBe('WORKSPACE_NOT_FOUND');
+    const res401 = await app.inject({ method: 'PATCH', url: `/workspaces/${team.json().id}`, payload: { name: 'x' } });
+    expect(res401.statusCode).toBe(401);
+    await app.close();
+  });
+});
