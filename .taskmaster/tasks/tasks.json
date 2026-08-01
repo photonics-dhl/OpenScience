@@ -203,14 +203,15 @@
             "id": 5,
             "title": "实现 RBAC 权限层并在 API 强制授权",
             "description": "实现 Spec §3.3 角色表（Owner/Maintainer/Author/Contributor/Reviewer/Viewer/Moderator/Platform Admin）的 RBAC + 资源归属检查，授权必须在 API 层强制执行，禁止仅前端隐藏按钮（Spec §3.3、§17）。",
-            "status": "pending",
+            "status": "done",
             "dependencies": [
               "2.4"
             ],
             "priority": "high",
-            "details": "实现要点：packages/auth 提供权限判定与 API 中间件/守卫；所有受保护端点统一走授权检查；防止跨 Workspace 越权（§17 MUST）——任何资源访问先解析 workspace 归属再判角色；前端仅消费权限结果做展示裁剪，不作为安全边界；为 1B–1D 的 RO/Branch/PR 等资源预留策略扩展点。MUST 映射：§3.3 RBAC + API 层授权；§17 防跨 Workspace 越权。验收: -",
+            "details": "实现要点：packages/auth 提供权限判定与 API 中间件/守卫；所有受保护端点统一走授权检查；防止跨 Workspace 越权（§17 MUST）——任何资源访问先解析 workspace 归属再判角色；前端仅消费权限结果做展示裁剪，不作为安全边界；为 1B–1D 的 RO/Branch/PR 等资源预留策略扩展点。MUST 映射：§3.3 RBAC + API 层授权；§17 防跨 Workspace 越权。验收: -\n<info added on 2026-08-01T03:13:36.502Z>\n2026-08-01 design gate 裁决（用户确认）：权限矩阵与 requireAction 落 packages/domain（workspace 模块 permissions.ts），API preHandler 守卫在 apps/api/routes/workspace-guard.ts；auth 包保持纯身份层——对原 details「packages/auth 提供权限判定与 API 中间件/守卫」的偏离已获用户批准。平台角色经迁移 4 User.platformRole 预留（user/moderator/platform_admin，无消费方）。验收补充：矩阵 54 条笛卡尔积单测 + 守卫 5 单测 + 云上 2 集成用例（viewer 403/非成员 404/无 session 401）；本机 116 单测全绿，云上集成测试执行后才置 done。依据：docs/specs/2026-08-01-p1a-5-rbac-design.md + docs/plans/2026-08-01-p1a-5-rbac-plan.md。\n</info added on 2026-08-01T03:13:36.502Z>",
             "testStrategy": "最小测试：每个角色×关键动作的授权矩阵单元测试；越权访问负向集成测试（Spec §21.1 安全测试层的越权基线）。阶段验收点：未授权请求一律 403，测试证据留档。",
-            "parentId": "2"
+            "parentId": "2",
+            "updatedAt": "2026-08-01T03:39:20.412Z"
           },
           {
             "id": 6,
@@ -280,7 +281,7 @@
             "parentId": "undefined"
           }
         ],
-        "updatedAt": "2026-07-31T11:08:56.553Z"
+        "updatedAt": "2026-08-01T03:39:20.412Z"
       },
       {
         "id": "3",
@@ -843,7 +844,7 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-07-31T11:08:56.553Z",
+      "lastModified": "2026-08-01T03:39:20.412Z",
       "taskCount": 6,
       "completedCount": 1,
       "tags": [

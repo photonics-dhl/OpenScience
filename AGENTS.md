@@ -5,8 +5,8 @@ OpenScience：AI 时代科研基础设施平台（Research Object / SDF / 预印
 
 ## Monorepo Layout & Commands（P1A-1 起）
 - 根目录已是 pnpm workspace；pnpm 不全局安装，统一用 `npx pnpm@9.15.0 <cmd>`。
-- `apps/`：`api` 已含 Fastify `/auth`（P1A-3）+ `/workspaces`（P1A-4）实现；`web` 为可启动空壳；`agent-worker`/`science-worker`/`sandbox-controller` 为空壳入口。
-- `packages/`：`domain,database,auth,sdf-schema,versioning,storage,ai-gateway,search,ui,config,observability` 11 个包；database/storage（P1A-2）+ auth（P1A-3）+ domain（P1A-4 workspace 领域模块）已实现，其余占位。
+- `apps/`：`api` 已含 Fastify `/auth`（P1A-3）+ `/workspaces`（P1A-4）+ RBAC preHandler 授权守卫（P1A-5）实现；`web` 为可启动空壳；`agent-worker`/`science-worker`/`sandbox-controller` 为空壳入口。
+- `packages/`：`domain,database,auth,sdf-schema,versioning,storage,ai-gateway,search,ui,config,observability` 11 个包；database/storage（P1A-2）+ auth（P1A-3）+ domain（P1A-4 workspace 领域模块 + P1A-5 动作×角色权限矩阵）已实现，其余占位。
 - `infra/`：`compose` 已含 `docker-compose.dev.yml` 开发栈、`migrations` 已含迁移 1–3（含 rollback.sql）；`nginx` 已含 `portainer.conf`（已部署云上）；`sandbox/scripts` 仍为占位/既有运维脚本。
 - 常用命令：`npx pnpm@9.15.0 install`、`npx pnpm@9.15.0 build`、`npx pnpm@9.15.0 typecheck`、`npx pnpm@9.15.0 lint`（ESLint 9 全仓检查 + `scripts/verify-workspace.mjs` 结构校验）。
 - API：`npx pnpm@9.15.0 api`（Fastify 起 127.0.0.1:3001）；邀请码 CLI：`node scripts/invite.mjs create|list|revoke`（或 `npx pnpm@9.15.0 invite ...`）。
@@ -20,7 +20,7 @@ OpenScience：AI 时代科研基础设施平台（Research Object / SDF / 预印
 - 远程操作只走 `infra/scripts/ssh-run.sh` / `checkup.sh`（项目专用密钥 `~/.ssh/id_ed25519_xgs`，服务器仅 publickey）。
 - DNS（Cloudflare，均 DNS-only）：`OpenScience.428312321.xyz`、`portainer.428312321.xyz` → 公网 IP；面板 `https://portainer.428312321.xyz`。
 - 安全组放行 22/80/443；dev 栈端口仅 127.0.0.1；云上写操作前需用户确认。
-- 集成测试在云上执行：`cd /opt/openscience && npx pnpm@9.15.0 test:integration`（新环境须先 build database 让 prisma generate 先跑）。
+- 集成测试在云上执行：`cd /opt/openscience && npx pnpm@9.15.0 test:integration`（每次跑前必须**全量** `npx pnpm@9.15.0 build`——跨包 import 解析到目标包 dist，只 build database 会因 dist 过期致 500；2026-08-01 实证）。
 
 ## 第一优先级：需求基线
 - **`docs/OpenScience_Kimi_Development_Spec.md` 是当前单一需求基线（Baseline v1.0, source of truth）**。任何实现工作必须先读它，不得根据零散聊天、旧方案（如已废弃的方案0723）或文件名猜测需求。

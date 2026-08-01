@@ -1,5 +1,27 @@
 # OpenScience (XGS) 进度日志
 
+## 2026-08-01 — P1A-5 RBAC 云上收口完成：集成测试 11/11 全绿，task-master 2.5 置 done
+
+### ✅ Completed
+| 任务 | 详情 |
+|---|---|
+| 终审 | whole-branch review（87e426b..f4caf06）：Ready to merge = Yes；无 Critical/Important；3 项 deferred minor triage 为非阻塞（fix later ×2 / ship as-is ×1）；终审复跑 domain 36/36 + api 34/34 |
+| 提交与推送 | `f4caf06`（集成用例+文档+knip 修复）`f4ff738`（progress 修正），已 push origin/main；P1A-5 全部 6 commits 在库 |
+| 云上收口 | tar-over-ssh 同步（排除 .env/.git/node_modules/dist 等）→ install → `migrate deploy`（迁移 4 `20260801010000_user_platform_role` applied）→ 全量 build → `test:integration` **11/11 全绿**（database 2 + storage 1 + api 8，含 RBAC 新 2 用例：viewer PATCH→403 含守卫先于 body 校验、非成员→404、无 session→401） |
+| task-master | 2.5 置 done（details 已于本日早些时候同步修订）；Phase 1A 剩 2.6–2.9 |
+
+### Key Decisions / 坑
+- **云上集成测试前必须全量 build**：首轮 `test:integration` 3 用例 500/400 失败，根因是云上只 build 了 database（为 prisma generate），`packages/domain/dist` 停留在 07-31 不含 `can`——守卫 `import { can } from '@openscience/domain'` 解析到旧 dist 得 undefined，调用即 TypeError→500；通过的路由恰好都在 `can()` 之前短路（401/404）。教训：vitest 跑 TS 源，但跨包 import 解析到目标包 dist，云上/新环境必须先 `npx pnpm@9.15.0 build` 全量再跑集成测试；AGENTS.md 已同步修正
+- 调试路径：先看失败面（挂 invite 的 3 个全挂、不挂的全过）→ repro 脚本验证裸 prisma 链路正常 → 定位 dist 过期；未改任何业务代码
+- 云上遗留：`/tmp/repro-invite.mjs` 调试脚本待清理（rm 需 --confirm，下次云操作时顺手）
+
+### ⏳ Next Steps
+- [ ] 提交本次 progress/AGENTS 回填（需用户批准）并 push
+- [ ] P1A-6：审计日志（task-master 2.6，先 design gate）——RBAC 守卫与 domain 已留 `// audit(2.6)` 挂接点
+- [ ] parked：`.worktrees/p1a-1` 残留清理；P1A-3 终审 parked 项；终审 deferred minor ×3（角色穷尽性校验/eslint-disable/spec §3 示例缺 deps）
+
+---
+
 ## 2026-08-01 — P1A-5 RBAC 本地完成（全门禁绿），集成测试留待云上
 
 ### ✅ Completed
@@ -17,10 +39,10 @@
 - knip 预存回归修复：`task-master-ai`（07-31 入 root devDependencies 供 `.mcp.json` MCP server 直连）被 audit:knip 判 unused 致 exit 1（基线 stash 验证与本次改动无关）；已在 `knip.json` root `ignoreDependencies` 补登，与 @prisma/client/prisma 同例，**knip.json 需纳入本次提交**
 
 ### ⏳ Next Steps
-- [ ] 终审（requesting-code-review）
-- [ ] 提交待用户批准：集成测试文件 + progress/index + spec/plan + knip.json
-- [ ] 云上收口（逐项确认）：tar-over-ssh 同步 → install → build database → `migrate deploy`（迁移 4 落库）→ `test:integration`（预期 11/11 = 原 9 + 新 2）
-- [ ] 云上全绿后置 task-master 2.5 done，并回填 progress.md
+- [x] ~~终审（requesting-code-review）~~ 已完成（见 2026-08-01 收口条目）
+- [x] ~~提交待用户批准：集成测试文件 + progress/index + spec/plan + knip.json~~ 已提交 `f4caf06`
+- [x] ~~云上收口~~ 已完成，11/11 全绿（见 2026-08-01 收口条目）
+- [x] ~~云上全绿后置 task-master 2.5 done~~ 已置 done
 
 ---
 
