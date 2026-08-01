@@ -990,12 +990,12 @@ import { registerWorkspaceRoutes } from './routes/workspaces';
 
 export interface BuildAppOptions extends AuthRouteDeps {
   cookieSecret: string;
-  /** P1A-6：注入结构化 logger；缺省关闭（测试现状）。 */
-  logger?: Logger;
+  /** P1A-6：注入结构化 logger（fastify 5 实例须走 loggerInstance）；缺省关闭（测试现状）。 */
+  logger?: FastifyBaseLogger;
 }
 
 export async function buildApp(opts: BuildAppOptions): Promise<FastifyInstance> {
-  const app = Fastify({ logger: opts.logger ?? false });
+  const app = Fastify(opts.logger ? { loggerInstance: opts.logger } : { logger: false });
   // …其余不变（opts 已含 audit，经 AuthRouteDeps → AuthDeps 自动流入各路由）
 }
 ```

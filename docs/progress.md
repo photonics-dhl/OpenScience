@@ -1,5 +1,30 @@
 # OpenScience (XGS) 进度日志
 
+## 2026-08-01 — P1A-6 统一错误/日志/配置/审计底座完成：云上集成 15/15 全绿，task-master 2.6 置 done
+
+### ✅ Completed
+| 任务 | 详情 |
+|---|---|
+| design gate + spec + plan | `docs/specs/2026-08-01-p1a-6-audit-observability-design.md`（四节逐节确认）、`docs/plans/2026-08-01-p1a-6-audit-observability-plan.md`（9 任务 TDD，SDD 执行）；design gate 确认两处偏离：/admin 真查询接口（原文"占位"）、authz.deny 入审计 |
+| Task 1-4 | config 实装（api env 迁入 + `DEFAULT_DEV_*` 共源，`cd0d355`）→ observability pino 日志 + 双闸脱敏（`b984fa6`）→ 统一 ErrorBody + requestId 三方串联（`eec8981`）→ AuditLog 表（迁移 5 `20260801143000_audit_log` + rollback）+ prismaAuditSink（`7bbf043`） |
+| Task 5-8 | domain 11 处 workspace 写操作同事务审计（`3729ac0`）→ auth 5 函数审计（login 成败均记、失败只记原因码，`dade692`）→ API 装配（loggerInstance/ctx/authz.deny，`7b4dd0f`）→ `/admin/audit-logs`（platform_admin 首个消费方，游标分页，`31d55bc`） |
+| 终审 + fix wave | whole-branch review 2 Critical（实测复现）：sanitizeValue 无环保护（真 socket 请求即崩）+ Error 实例被掏空（500 丢栈）→ 一次 fix（WeakSet + Error 直通 + 真 HTTP 回归用例，`193e65a`）→ scoped re-review 3/3 ADDRESSED；deferred minor triage：fix-later ×3（session-guard 401 requestId / malformed cursor 400 / eslint-disable 清理），其余 ship-as-is |
+| 云上收口 | tar-over-ssh 同步（含 3 个陈旧删除文件手工清理：env.ts×2 + dev-defaults.ts）→ install+全量 build → 迁移 5 applied → `test:integration` **15/15 全绿**（database 2 + storage 1 + api 12：workspaces 5 + admin 4 + auth 3） |
+| task-master | 2.6 置 done（details 已记录两处偏离与架构落点）；Phase 1A 剩 2.7–2.9 |
+
+### Key Decisions / 坑
+- **AuditSink 接口放 observability 而非 domain**：domain → auth 依赖已存在（Mailer 类型），auth → domain 会成环；接口放叶子包 observability（type-only），实现 prismaAuditSink 放 database。新增依赖边 domain/auth→observability、database→observability/config，均无环
+- **fastify 5 注入 pino 实例必须用 `loggerInstance`**：`Fastify({ logger: <实例> })` 启动即抛 `FST_ERR_LOG_INVALID_LOGGER_CONFIG`；测试全绿是因为测试从不传 logger——终审实测抓出，已加真 socket 回归用例（`logger-injection.test.ts`）
+- **集成测试串行化（`fileParallelism: false`，`e8d69de`）**：api 集成文件共享同一 PG/Redis 且 afterAll 全表清理（每个文件假设独占干净库），3 文件并行时 admin 的 cleanup 抹掉 workspaces「并发双 accept」夹具（membership 被删 → 0 行），单文件跑全过、全量跑必挂；串行后稳定 15/15
+- **tar-over-ssh 不带删除语义**：云上残留已被本分支删除的 `apps/api/src/env.ts` 等 3 文件致 build 失败；本次手工 rm 清理（用户批准），后续部署脚本需考虑 `rsync --delete` 或等价机制
+- **knip 守门抓住残留依赖**：fix 后 api 不再直接 import pino（类型改 FastifyBaseLogger），`pino` 直接依赖变 unused → 移除（`90ddcbd`）
+
+### ⏳ Next Steps
+- [ ] P1A-7：配额/存储额度（task-master 2.7，先 design gate）
+- [ ] parked：终审 deferred minor ×3（fix-later：session-guard 401 requestId、malformed cursor 400、eslint-disable 清理）；`.worktrees/p1a-1` 残留；P1A-3 终审 parked 项；云上 `/tmp/repro-invite.mjs` 待清理
+
+---
+
 ## 2026-08-01 — 出网通道选型定案（SSH 隧道胜）+ 监控面板上线（Netdata + vnStat）
 
 ### ✅ Completed
