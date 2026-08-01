@@ -20,6 +20,9 @@ OpenScience：AI 时代科研基础设施平台（Research Object / SDF / 预印
 - 远程操作只走 `infra/scripts/ssh-run.sh` / `checkup.sh`（项目专用密钥 `~/.ssh/id_ed25519_xgs`，服务器仅 publickey）。
 - DNS（Cloudflare，均 DNS-only）：`OpenScience.428312321.xyz`、`portainer.428312321.xyz` → 公网 IP；面板 `https://portainer.428312321.xyz`。
 - 安全组放行 22/80/443；dev 栈端口仅 127.0.0.1；云上写操作前需用户确认。
+- 监控面板（2026-08-01）：统一入口导航 `https://portainer.428312321.xyz/nav/` → `/traffic/`（vnStat 流量账单）与 `/monitor/`（Netdata 实时）；basic_auth 账号 admin，凭据云上 `/etc/nginx/.htpasswd-monitor`（不入库）；runbook 见 `docs/runbooks/monitoring.md`。
+- **拉镜像必须走隧道**：daemon.json 镜像源全失效 + Docker Hub 被墙；dockerd 代理 drop-in 指向 `127.0.0.1:7890`（本机 v2ray 的 SSH 反向隧道），隧道断开则 pull 失败。其他命令用 `with-proxy <cmd>`（云上 `/usr/local/bin/`，隧道失效自动回落直连，源文件 `infra/scripts/with-proxy.sh`）。
+- **服务器已卸载 Tailscale 且勿再装**（2026-08-01 实测）：tailscaled 劫持 `100.64.0.0/10` 路由，撞阿里云 VPC 内部 DNS（100.100.2.x）致全机 DNS 瘫痪。
 - 集成测试在云上执行：`cd /opt/openscience && npx pnpm@9.15.0 test:integration`（每次跑前必须**全量** `npx pnpm@9.15.0 build`——跨包 import 解析到目标包 dist，只 build database 会因 dist 过期致 500；2026-08-01 实证）。
 
 ## 第一优先级：需求基线

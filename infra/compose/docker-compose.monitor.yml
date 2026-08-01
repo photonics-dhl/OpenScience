@@ -1,0 +1,62 @@
+# OpenScience 监控栈 —— Netdata 实时面板（P1A 运维补充，2026-08-01）
+#
+# 用途：服务器实时资源/流量面板，经 nginx 反代暴露于
+#   https://portainer.428312321.xyz/monitor/（basic_auth，见 infra/nginx/portainer.conf）
+# 月度流量账单（阿里云按量计费口径）由宿主机 vnStat 提供：
+#   https://portainer.428312321.xyz/traffic/（infra/scripts/traffic-report.sh 生成）
+#
+# 部署（云上，详见 docs/runbooks/monitoring.md）：
+#   docker compose -f /opt/monitor/docker-compose.monitor.yml up -d
+#
+# 安全：面板仅绑 127.0.0.1:19999，公网唯一入口为带 basic_auth 的 nginx 路径；
+# 容器通过 /host/proc、/host/sys 只读挂载采集宿主机指标，不共享宿主机网络命名空间。
+
+name: openscience-monitor
+
+services:
+  netdata:
+    image: netdata/netdata:stable
+    container_name: netdata
+    hostname: openscience-ecs
+    restart: unless-stopped
+    pid: host
+    ports:
+      - "127.0.0.1:19999:19999"
+    cap_add:
+      - SYS_PTRACE
+      - SYS_ADMIN
+    security_opt:
+      - apparmor:unconfined
+    volumes:
+      - netdataconfig:/etc/netdata
+      - netdatalib:/var/lib/netdata
+      - netdatacache:/var/cache/netdata
+      - /:/host/root:ro,rslave
+      - /etc/passwd:/host/etc/passwd:ro
+      - /etc/group:/host/etc/group:ro
+      - /etc/localtime:/etc/localtime:ro
+      - /proc:/host/proc:ro
+      - /sys:/host/sys:ro
+      - /etc/os-release:/host/etc/os-release:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+
+  # vnStat 流量记账：host 网络读宿主机网卡计数器，数据持久化到 vnstatdb 卷。
+  # 账单页由宿主机 cron 调 `docker exec vnstat vnstat --json` 渲染（infra/scripts/traffic-report.sh）。
+  vnstat:
+    image: alpine:3.20
+    container_name: vnstat
+    restart: unless-stopped
+    network_mode: host
+    entrypoint:
+      - sh
+      - -c
+      - sed -i 's/dl-cdn.alpinelinux.org/mirrors.aliyun.com/' /etc/apk/repositories
+        && apk add --no-cache vnstat >/dev/null && exec vnstatd --nodaemon
+    volumes:
+      - vnstatdb:/var/lib/vnstat
+
+volumes:
+  netdataconfig:
+  netdatalib:
+  netdatacache:
+  vnstatdb:

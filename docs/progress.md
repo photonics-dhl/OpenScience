@@ -1,5 +1,29 @@
 # OpenScience (XGS) 进度日志
 
+## 2026-08-01 — 出网通道选型定案（SSH 隧道胜）+ 监控面板上线（Netdata + vnStat）
+
+### ✅ Completed
+| 任务 | 详情 |
+|---|---|
+| 出网通道实测 | 直连基线：Docker Hub/HF 被墙、PyPI 极慢（12s）、GitHub/npm/MiniMax 正常；**SSH 反向隧道**（`ssh -R 7890` → 本机 v2ray）打通全部目标，吞吐 1.2–2.1MB/s 与直连持平；**Tailscale** 因本机 CGNAT 打洞失败纯走海外 DERP 中继（360ms+），实测吞吐仅 12–14KB/s，不成立 |
+| 稳定性 soak | 15 轮 × 2min：**SSH 隧道 15/15**（gstatic 1.19–1.27s、docker hub 1.38–1.45s，方差极小）；**Tailscale 13/15**（2 次 >15s 超时，延迟 2.2–10.1s 抖动剧烈）。选型定案：SSH 隧道 |
+| 监控面板上线 | `portainer.428312321.xyz/monitor/`（Netdata，274 charts 实时流式）+ `/traffic/`（vnStat 账单页，cron 每 5min 渲染）；basic_auth（账号 admin，凭据云上 `/etc/nginx/.htpasswd-monitor` 不入库）；Playwright 外网实测双面板通过 |
+| 收尾七项 | `/nav/` 统一导航页（三入口互跳）；basic_auth 改 admin；`with-proxy` 兜底脚本（隧道失效回落直连，云上 `/usr/local/bin/`）；Tailscale 完全卸载（包/服务/repo/状态目录）；云上 /tmp 调试残留 + 本机测试截图清理；`.gitignore` 加 `.playwright-mcp/` |
+
+### Key Decisions / 坑
+- **Tailscale 与阿里云内网系统性冲突**：tailscaled up 劫持 `100.64.0.0/10` 路由（tailnet 段），阿里云 VPC 内部 DNS（100.100.2.136/138）恰在该段 → 全机 DNS 瘫痪（yum/apk/内网服务全挂），策略路由优先级高于 main 表 /32 例外。已 `tailscale down` 恢复；结论：此服务器不宜跑 tailscaled
+- **dockerd 出网也要走隧道**：daemon.json 里 9 个 registry mirror 全部失效，直连 registry-1.docker.io 被墙 → dockerd systemd drop-in 代理（`127.0.0.1:7890`）+ restart dockerd（portainer restart=always 自恢复，dev 栈三容器无 restart 策略需手动 start）
+- **nginx 子路径反代 Netdata 两坑**：① `proxy_pass` URI 带变量时 nginx 不自动追加 query string，必须 `$ndpath$is_args$args`（症状：registry hello 400 "need to set an action"）② Connection 头需 map 映射，空 Upgrade 时不得发 "Connection: upgrade"
+- **服务器 nginx 仅 TLS 1.3**：Git Bash 自带 curl 握手必失败（exit 35），验证用浏览器/Playwright 或 `openssl s_client`
+- AL4 无 vnstat 包（EPEL 不兼容）→ alpine 容器跑 vnstatd（apk 走 mirrors.aliyun.com），host 网络读网卡计数器，数据卷 `vnstatdb`
+
+### ⏳ Next Steps
+- [ ] 待用户批准：仓库提交并 push（compose/traffic-report/with-proxy/nav/portainer.conf/runbook/AGENTS/索引/progress）
+- [ ] 隧道常驻化（当前隧道由本会话 ssh 进程维持；建议 Windows 计划任务开机自启，方案待定）
+- [ ] P1A-6：审计日志（task-master 2.6，先 design gate）
+
+---
+
 ## 2026-08-01 — P1A-5 RBAC 云上收口完成：集成测试 11/11 全绿，task-master 2.5 置 done
 
 ### ✅ Completed

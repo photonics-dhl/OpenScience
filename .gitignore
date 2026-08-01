@@ -41,3 +41,6 @@ dist/
 # MCP 配置含明文密钥，只留本机不入库（2026-07-31 起）
 .mcp.json
 .vscode/mcp.json
+
+# Playwright MCP 工具产物
+.playwright-mcp/

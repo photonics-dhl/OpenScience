@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<!-- OpenScience 服务器面板导航 —— 部署于 /var/www/nav/index.html，经 nginx /nav/ 暴露（basic_auth）。
+     入口书签：https://portainer.428312321.xyz/nav/ -->
+<html lang="zh">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>OpenScience 服务器导航</title>
+<style>
+  body{font-family:sans-serif;background:#141518;color:#e8e8e8;margin:0;padding:32px 20px;max-width:760px;margin:auto}
+  h1{font-size:22px;margin-bottom:4px}
+  .sub{color:#888;font-size:13px;margin-bottom:28px}
+  .cards{display:flex;flex-direction:column;gap:14px}
+  a.card{display:block;background:#1f2124;border:1px solid #2c2e33;border-radius:10px;padding:18px 22px;text-decoration:none;color:inherit;transition:border-color .15s}
+  a.card:hover{border-color:#3b82f6}
+  .t{font-size:17px;font-weight:600}
+  .d{color:#999;font-size:13px;margin-top:6px;line-height:1.5}
+  .u{color:#3b82f6;font-size:12px;margin-top:8px;font-family:monospace}
+</style>
+</head>
+<body>
+<h1>OpenScience 服务器导航</h1>
+<p class="sub">portainer.428312321.xyz · 统一 basic_auth（admin）</p>
+<div class="cards">
+  <a class="card" href="/traffic/">
+    <div class="t">📊 流量账单</div>
+    <div class="d">本月合计 / 上行 tx（阿里云计费口径）/ 近 14 天明细，每 5 分钟自动刷新（vnStat）</div>
+    <div class="u">/traffic/</div>
+  </a>
+  <a class="card" href="/monitor/">
+    <div class="t">📈 实时监控面板</div>
+    <div class="d">Netdata：CPU / 内存 / 磁盘 / 网络速率 / Docker 容器，秒级实时图表（首次打开点 Skip 跳过登录）</div>
+    <div class="u">/monitor/</div>
+  </a>
+  <a class="card" href="/">
+    <div class="t">🐳 Portainer 容器管理</div>
+    <div class="d">Docker 容器 / 镜像 / 卷 / Stack 管理（独立账号密码，非 basic_auth）</div>
+    <div class="u">/</div>
+  </a>
+</div>
+</body>
+</html>
