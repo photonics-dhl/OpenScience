@@ -3,6 +3,7 @@ import cookie from '@fastify/cookie';
 import { httpStatusForError } from './error-map';
 import { registerAuthRoutes, type AuthRouteDeps } from './routes/auth';
 import { registerWorkspaceRoutes } from './routes/workspaces';
+import { registerAdminRoutes } from './routes/admin';
 
 export interface BuildAppOptions extends AuthRouteDeps {
   cookieSecret: string;
@@ -25,5 +26,6 @@ export async function buildApp(opts: BuildAppOptions): Promise<FastifyInstance> 
   // CORS/CSRF/rate-limit 挂载点：2.8 安全基线统一接入（本任务不实现）。
   await app.register(async (instance) => registerAuthRoutes(instance, opts), { prefix: '/auth' });
   await app.register(async (instance) => registerWorkspaceRoutes(instance, opts), { prefix: '/workspaces' });
+  await app.register(async (instance) => registerAdminRoutes(instance, opts), { prefix: '/admin' });
   return app;
 }
