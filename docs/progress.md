@@ -18,8 +18,7 @@
 - AL4 无 vnstat 包（EPEL 不兼容）→ alpine 容器跑 vnstatd（apk 走 mirrors.aliyun.com），host 网络读网卡计数器，数据卷 `vnstatdb`
 
 ### ⏳ Next Steps
-- [ ] 待用户批准：仓库提交并 push（compose/traffic-report/with-proxy/nav/portainer.conf/runbook/AGENTS/索引/progress）
-- [ ] 隧道常驻化（当前隧道由本会话 ssh 进程维持；建议 Windows 计划任务开机自启，方案待定）
+- [ ] 待用户批准：提交隧道常驻化（proxy-tunnel.sh/.vbs + AGENTS/索引/progress）
 - [ ] P1A-6：审计日志（task-master 2.6，先 design gate）
 
 ---
