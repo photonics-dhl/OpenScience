@@ -2,7 +2,7 @@
   "master": {
     "tasks": [
       {
-        "id": "1",
+        "id": 1,
         "title": "Phase 0: 现有系统只读审计与目标架构决策",
         "description": "对 Scholars Tea / AI Research Workshop 现有代码仓执行强制门禁式只读审计（Spec §22 Phase 0、§25、§20.1.2）：建立目录/依赖/服务/数据库/部署地图，形成可复用/重构/淘汰清单，评估安全与数据迁移风险，运行基准测试，产出 docs/CODEBASE_AUDIT.md 与 docs/adr/0001-target-architecture.md 草案。审计完成并经用户确认后才允许进入 Phase 1A（Spec §25 末段）。全程不修改业务代码（Spec §25.5）。",
         "status": "done",
@@ -133,7 +133,7 @@
         "updatedAt": "2026-07-28T04:41:05.303Z"
       },
       {
-        "id": "2",
+        "id": 2,
         "title": "Phase 1A: 平台底座（Monorepo、Auth/Workspace/RBAC、数据与存储基础、审计、CI/CD）",
         "description": "搭建 MVP 平台底座：Monorepo 与模块边界（Spec §14.1）；Auth + 邀请码 + 邮箱验证（Spec §2.1、§3.1）；Workspace + RBAC 且 API 层强制授权（Spec §3.2、§3.3、§17）；PostgreSQL + Redis + Storage Adapter（Spec §13.1、§14.2、§15）；统一错误/日志/配置/审计（Spec §17）；AI Credit 账务骨架（Spec §2.4.7、§13.3）；CI/CD 与阿里云 ECS 部署（Spec §14.2、§17）。前置门禁：Phase 0 审计完成并经用户确认（Spec §22、§25）。本阶段不含 SDF/编辑器（1B）、协作（1C）、Hermes/发布（1D）、可视化沙箱（1E）及任何 §19 Phase 2 功能。",
         "status": "in-progress",
@@ -217,14 +217,15 @@
             "id": 6,
             "title": "建立统一错误、日志、配置与审计底座",
             "description": "建立 packages/config 与 packages/observability：统一错误格式、结构化日志、集中配置管理、AuditLog 实体与写操作审计（Spec §17：全部写操作记录审计日志；生产日志不得记录完整论文、密钥、身份证等敏感信息）。",
-            "status": "pending",
+            "status": "done",
             "dependencies": [
               "2.1"
             ],
             "priority": "high",
-            "details": "实现要点：统一错误码/错误响应 Schema 供全部 API 模块使用；结构化日志（请求级 trace id）+ 敏感字段脱敏过滤器（§17 MUST）；配置集中读取环境变量，密钥仅来自服务器 Secret/环境变量、不进仓库（§17 MUST）；AuditLog 只追加写入，覆盖 auth/workspace/成员/权限等本阶段全部写操作；审计查询最小管理员接口（/admin 占位）。MUST 映射：§17 审计日志、密钥管理、日志脱敏。验收: -",
+            "details": "实现要点：统一错误码/错误响应 Schema 供全部 API 模块使用；结构化日志（请求级 trace id）+ 敏感字段脱敏过滤器（§17 MUST）；配置集中读取环境变量，密钥仅来自服务器 Secret/环境变量、不进仓库（§17 MUST）；AuditLog 只追加写入，覆盖 auth/workspace/成员/权限等本阶段全部写操作；审计查询最小管理员接口（/admin 占位）。MUST 映射：§17 审计日志、密钥管理、日志脱敏。验收: -\n<info added on 2026-08-01T10:57:01.051Z>\n实现时间: 2026-08-01 (9 commits, 76f6b7e..e8d69de)\n\n设计门确认偏离原任务文本：(1) /admin/audit-logs 实现为真实查询端点，含 platform_admin 守卫（原任务文本为占位符）；(2) authz.deny 拒绝事件也纳入审计（原任务仅覆盖写操作）。\n\n架构设计：AuditSink 接口置于 observability (leaf pkg)，prismaAuditSink 实现于 database，domain/auth 写函数在同一个 $transaction 中记录审计（可选依赖，零影响默认行为）。配置管理：api 环境变量 + DEFAULT_DEV_* 常量集中化。\n\n云端状态：migration 5 已应用，集成测试 15/15 全绿。\n\n实施备注：fastify5 需要 loggerInstance 用于 pino 实例注入；api 集成测试序列化执行（fileParallelism:false），因文件共享同一 DB 且 afterAll 清理无作用域隔离。\n</info added on 2026-08-01T10:57:01.051Z>",
             "testStrategy": "最小测试：写操作产生审计记录的集成测试；日志脱敏过滤器单元测试（构造含密钥样式字符串验证不落盘）。阶段验收点：§21.1 单元/集成层；抽查任意一条写路径均有审计行。",
-            "parentId": "2"
+            "parentId": "2",
+            "updatedAt": "2026-08-01T10:56:37.181Z"
           },
           {
             "id": 7,
@@ -281,10 +282,10 @@
             "parentId": "undefined"
           }
         ],
-        "updatedAt": "2026-08-01T03:39:20.412Z"
+        "updatedAt": "2026-08-01T10:56:37.181Z"
       },
       {
-        "id": "3",
+        "id": 3,
         "title": "Phase 1B: SDF 与版本",
         "description": "实现 SDF 六字段 Schema、三栏编辑器、Artifact/Blob 内容寻址存储、Commit/Manifest 增量版本、多类型 Diff、unique ID 与稳定 URL、私有/邀请/公开可见性（Spec §22 Phase 1B；依据 Spec §4–§7、§13、§15、§16、§17、§18）。不含 Hermes AI 提取与发布流程（Phase 1D）、不含 Branch/Fork/PR 协作交互（Phase 1C）。",
         "status": "pending",
@@ -434,7 +435,7 @@
         ]
       },
       {
-        "id": "4",
+        "id": 4,
         "title": "Phase 1C: GitHub 式科研协作（Branch/Fork/PR/Review/Merge、作者与 CRediT、许可、通知）",
         "description": "建立 MVP 协作闭环：Branch、Issue、Fork、Pull Request、Review、Merge 的数据模型与基础交互（Spec §2.3、§8），作者组与 CRediT 贡献记录（§3.4），三类许可选择与 Fork 继承校验（§6.3），协作事件通知（§15、§16、§18.1）。对应里程碑 Spec §22 Phase 1C。服务于验收主流程 §21.2 步骤 8、11、12。Commit/版本存储底座由 P1B 提供，发布与 AI 审核属 P1D，不在本 Phase 范围。",
         "status": "pending",
@@ -584,7 +585,7 @@
         ]
       },
       {
-        "id": "5",
+        "id": 5,
         "title": "Phase 1D: Hermes 与发布",
         "description": "建设 Hermes Agent 系统的 MVP 子集与公开发布闭环：AI Gateway 统一路由（MiniMax-M3 主模型 / 回退策略由 Gateway 配置管理）、异步任务通道、SDF Extractor（建议/差异形式，不直接写正文）、R0–R4 分级审批、AI 发布审核（硬阻断与警告分离）、申诉与 Moderator 队列、发布事务与公开页（含免责声明与审核摘要）。依据 Spec §9、§11、§4.1–4.3、§6.2、§22 Phase 1D。",
         "status": "pending",
@@ -724,7 +725,7 @@
         ]
       },
       {
-        "id": "6",
+        "id": 6,
         "title": "Phase 1E: 轻量科学可视化",
         "description": "实现 Hermes 概念可视化闭环与隔离沙箱执行：Visualization Planner 生成解释与 Python 脚本（Spec §9.2、§10.1），AST 策略检查（§10.3），Sandbox Controller + 隔离 Docker 网络（§10.3、§14.2），临时图片与 IndexedDB 保存（§13.2），自然语言修改脚本（§10.4），威胁模型与沙箱逃逸基线测试（§17、§21.1）。服务验收主流程步骤 15、16（Spec §21.2）。",
         "status": "pending",
@@ -844,12 +845,14 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-08-01T03:39:20.412Z",
+      "lastModified": "2026-08-01T10:56:37.181Z",
       "taskCount": 6,
       "completedCount": 1,
       "tags": [
         "master"
-      ]
+      ],
+      "created": "2026-08-01T10:56:53.642Z",
+      "description": "Tasks for master context"
     }
   }
 }

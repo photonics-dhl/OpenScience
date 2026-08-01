@@ -11,8 +11,9 @@
 - Constraints: 同前（不读 .env；pnpm `npx pnpm@9.15.0`；本机不做 Docker；云上写操作/git mutation 逐次用户确认；云上集成测试前必须全量 build）。新增：**fastify 5 注入 pino 实例必须 `loggerInstance`**；**api 集成测试已串行化**（`fileParallelism: false`，共享库+全表清理模型下并行互抹夹具）
 - Open risks / parked:
   - tar-over-ssh 不带删除语义：本分支删除的 3 个文件在云上手 rm 才修复 build；后续部署需 `rsync --delete` 或等价（deploy.sh 仍骨架，归 2.9 CI/CD）
-  - 终审 deferred fix-later ×3：① session-guard 401 body 无 requestId ② malformed cursor→500（admin-only，可一行 zod refine）③ 2 处 unused eslint-disable（workspace-guard.test.ts P1A-5 遗留 + 已修 1 处）
-  - 既有 parked：`.worktrees/p1a-1` 残留；P1A-3 终审 parked 项；云上 `/tmp/repro-invite.mjs` 待清理；MiniMax 代理 key 在 git 历史（建议轮换）
-  - SDD workspace `.superpowers/sdd/2026-08-01-p1a-6-audit-observability-plan/`（ledger + briefs + reports，git-ignored，可删）
+  - ~~终审 deferred fix-later ×3~~ 已清（2026-08-01 遗留清理）：session-guard 401 带 requestId、malformed cursor→400（zod refine + 2 用例）、eslint-disable 清零（lint 0 warning）；root `workspaces` 收敛为 apps/*+packages/*（verify-workspace.mjs 依赖该字段，P1A-2「冗余」判定有误）
+  - ~~`.worktrees/p1a-1`~~ 已清理（worktree remove + 分支删除）；~~云上 `/tmp/repro-invite.mjs`~~ 已不存在
+  - 既有 parked：P1A-3 终审 parked 项（邀请码模偏差 99bit 熵、`PORT=''`→0、`void main()` 无 catch 等）；P1A-5 deferred ①（WorkspaceRole 穷尽性校验，1B 前补）；MiniMax 代理 key 在 git 历史（建议轮换，用户已知悉）
+  - SDD workspace `.superpowers/sdd/2026-08-01-p1a-6-audit-observability-plan/` 已删除
 - Next action: P1A-7 配额/存储额度（task-master 2.7）：brainstorming → design spec（用户逐节确认）→ writing-plans
 - Read first: `AGENTS.md` → 主 spec → `docs/progress.md` 置顶条目（P1A-6）→ `project_index.md` → task-master 任务 2 → `docs/specs|plans/2026-08-01-p1a-6-*`

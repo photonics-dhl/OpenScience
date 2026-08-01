@@ -21,7 +21,10 @@
 
 ### ⏳ Next Steps
 - [ ] P1A-7：配额/存储额度（task-master 2.7，先 design gate）
-- [ ] parked：终审 deferred minor ×3（fix-later：session-guard 401 requestId、malformed cursor 400、eslint-disable 清理）；`.worktrees/p1a-1` 残留；P1A-3 终审 parked 项；云上 `/tmp/repro-invite.mjs` 待清理
+- [x] ~~parked：终审 deferred minor ×3~~ 已清（2026-08-01 遗留清理：session-guard 401 带 requestId、malformed cursor→400 + 2 用例、eslint-disable 清零 lint 0 warning；root `workspaces` 收敛为 apps/*+packages/*——`scripts/verify-workspace.mjs:35` 依赖该字段，P1A-2「冗余」判定有误，infra/* 为死配置已删）
+- [x] ~~`.worktrees/p1a-1` 残留~~ 已清理（worktree remove + 分支删除，已合并 main 无丢失）
+- [x] ~~云上 `/tmp/repro-invite.mjs`~~ 已不存在（此前运维清理已带走）
+- [ ] parked：P1A-3 终审 parked 项（邀请码模偏差 99bit 熵、`PORT=''`→0、`void main()` 无 catch 等，归 P1A-3 范围后续处理）；P1A-5 deferred ①（WorkspaceRole 穷尽性校验，1B 扩展角色前补）③（spec §3 示例缺 deps，已随本次清理修正）
 
 ---
 

@@ -69,11 +69,11 @@ POST `/workspaces`（创建团队空间）、GET `/workspaces`（列自己的空
 ### API 守卫（新建 `apps/api/src/routes/workspace-guard.ts`）
 
 ```ts
-// 用法：在受保护路由上声明动作
-app.patch('/:id', { preHandler: guard.requireWorkspaceAction('workspace.update') }, handler)
+// 用法：在受保护路由上声明动作（deps 为 AuthDeps，含 prisma；P1A-6 起另含可选 audit）
+app.patch('/:id', { preHandler: guard.requireWorkspaceAction(deps, 'workspace.update') }, handler)
 ```
 
-- `requireWorkspaceAction(action)` 返回 preHandler：先走 `requireCurrentUser`（无 session → 401），再从 `:id` 参数解析 workspaceId → 查 membership → `can(membership.role, action)`。
+- `requireWorkspaceAction(deps, action)` 返回 preHandler：先走 `requireCurrentUser`（无 session → 401），再从 `:id` 参数解析 workspaceId → 查 membership → `can(membership.role, action)`。
 - 错误语义沿用 P1A-4：**空间不存在或非成员 → 404**（不泄露存在性）；**是成员但角色不足 → 403** `FORBIDDEN`；未登录 → 401 `SESSION_INVALID`。
 - C/D 类端点不挂此守卫，维持现状；B 类挂 `workspace.read` / `member.list`。
 - 守卫把解析出的 membership 挂到 `req` 上仅供日志/调试，domain 仍自行重查（domain 函数签名不变，改动最小）。
