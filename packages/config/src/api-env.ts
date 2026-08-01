@@ -1,4 +1,4 @@
-import { DEFAULT_DEV_DATABASE_URL, DEFAULT_DEV_REDIS_URL } from '@openscience/database';
+import { DEFAULT_DEV_DATABASE_URL, DEFAULT_DEV_REDIS_URL } from './dev-defaults';
 
 export interface ApiEnv {
   nodeEnv: string;

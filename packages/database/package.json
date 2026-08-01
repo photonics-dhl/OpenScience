@@ -13,6 +13,7 @@
     "test:integration": "vitest run --config vitest.integration.config.ts"
   },
   "dependencies": {
+    "@openscience/config": "workspace:^",
     "@prisma/client": "5.22.0",
     "ioredis": "5"
   },

@@ -1,5 +1,5 @@
+import { DEFAULT_DEV_DATABASE_URL } from '@openscience/config';
 import { PrismaClient } from '@prisma/client';
-import { DEFAULT_DEV_DATABASE_URL } from './dev-defaults';
 
 export interface CreatePrismaClientOptions {
   datasourceUrl?: string;

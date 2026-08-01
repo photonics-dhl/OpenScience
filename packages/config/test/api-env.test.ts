@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { loadApiEnv } from '../src/env';
+import { loadApiEnv } from '../src/api-env';
 
 describe('loadApiEnv', () => {
   it('throws in production when DATABASE_URL is missing', () => {

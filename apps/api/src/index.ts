@@ -1,8 +1,8 @@
 import { DevOutboxMailer } from '@openscience/auth';
+import { loadApiEnv } from '@openscience/config';
 import { createPrismaClient, createRedisClient } from '@openscience/database';
 import { createPersonalWorkspace } from '@openscience/domain';
 import { buildApp } from './app';
-import { loadApiEnv } from './env';
 
 async function main(): Promise<void> {
   const env = loadApiEnv();

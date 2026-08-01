@@ -1,6 +1,6 @@
 import { spawnSync } from 'node:child_process';
 import path from 'node:path';
-import { DEFAULT_DEV_DATABASE_URL } from './dev-defaults';
+import { DEFAULT_DEV_DATABASE_URL } from '@openscience/config';
 import { assertMigrateCommandAllowed, type MigrateCommand } from './migrate-guard';
 
 const COMMANDS: readonly MigrateCommand[] = ['deploy', 'status', 'reset-dev'];
