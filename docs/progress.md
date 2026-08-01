@@ -11,7 +11,7 @@
 | 测试证据 | 全量门禁 exit 0：build / typecheck / lint（0 error，1 个已知 deferred warning）/ test 单测 **116/116**（database 4 + storage 10 + auth 32 + domain 36 + api 34）/ audit:knip / audit:dep（0 errors，11 orphan warnings 基线）/ audit:deps / audit:dup / docs:lint 0 issues |
 
 ### Key Decisions / 坑
-- 权限判定落点从 task-master 2.5 原文「packages/auth」改为「packages/domain（workspace 模块）+ apps/api preHandler 守卫」，auth 包保持纯身份层——design gate 用户已确认的偏离，task-master 2.5 details 待修订
+- 权限判定落点从 task-master 2.5 原文「packages/auth」改为「packages/domain（workspace 模块）+ apps/api preHandler 守卫」，auth 包保持纯身份层——design gate 用户已确认的偏离，task-master 2.5 details 已同步修订（2026-08-01，追加 info）
 - 守卫与 domain 双层各自查 membership（共源矩阵），双查开销已登记接受
 - Task 4 遗留 1 项 plan-mandated Minor（`workspace-guard.test.ts` unused eslint-disable 警告）deferred 到终审统一处理
 - knip 预存回归修复：`task-master-ai`（07-31 入 root devDependencies 供 `.mcp.json` MCP server 直连）被 audit:knip 判 unused 致 exit 1（基线 stash 验证与本次改动无关）；已在 `knip.json` root `ignoreDependencies` 补登，与 @prisma/client/prisma 同例，**knip.json 需纳入本次提交**
