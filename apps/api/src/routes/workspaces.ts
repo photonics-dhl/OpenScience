@@ -19,6 +19,7 @@ import {
   updateWorkspace,
 } from '@openscience/domain';
 import { requireCurrentUser } from './session-guard';
+import { requireWorkspaceAction } from './workspace-guard';
 
 export type WorkspaceRouteDeps = AuthDeps;
 
@@ -68,14 +69,14 @@ export function registerWorkspaceRoutes(app: FastifyInstance, deps: WorkspaceRou
     return reply.status(204).send();
   });
 
-  app.get('/:id', async (req, reply) => {
+  app.get('/:id', { preHandler: requireWorkspaceAction(deps, 'workspace.read') }, async (req, reply) => {
     const user = await requireCurrentUser(deps, req, reply);
     if (!user) return;
     const { id } = idParams.parse(req.params);
     return reply.send(await getWorkspace(deps, user.userId, id));
   });
 
-  app.patch('/:id', async (req, reply) => {
+  app.patch('/:id', { preHandler: requireWorkspaceAction(deps, 'workspace.update') }, async (req, reply) => {
     const user = await requireCurrentUser(deps, req, reply);
     if (!user) return;
     const { id } = idParams.parse(req.params);
@@ -83,7 +84,7 @@ export function registerWorkspaceRoutes(app: FastifyInstance, deps: WorkspaceRou
     return reply.send(await updateWorkspace(deps, user.userId, id, body));
   });
 
-  app.post('/:id/archive', async (req, reply) => {
+  app.post('/:id/archive', { preHandler: requireWorkspaceAction(deps, 'workspace.archive') }, async (req, reply) => {
     const user = await requireCurrentUser(deps, req, reply);
     if (!user) return;
     const { id } = idParams.parse(req.params);
@@ -91,14 +92,14 @@ export function registerWorkspaceRoutes(app: FastifyInstance, deps: WorkspaceRou
     return reply.status(204).send();
   });
 
-  app.get('/:id/members', async (req, reply) => {
+  app.get('/:id/members', { preHandler: requireWorkspaceAction(deps, 'member.list') }, async (req, reply) => {
     const user = await requireCurrentUser(deps, req, reply);
     if (!user) return;
     const { id } = idParams.parse(req.params);
     return reply.send({ members: await listMembers(deps, user.userId, id) });
   });
 
-  app.post('/:id/invitations', async (req, reply) => {
+  app.post('/:id/invitations', { preHandler: requireWorkspaceAction(deps, 'invitation.create') }, async (req, reply) => {
     const user = await requireCurrentUser(deps, req, reply);
     if (!user) return;
     const { id } = idParams.parse(req.params);
@@ -107,7 +108,7 @@ export function registerWorkspaceRoutes(app: FastifyInstance, deps: WorkspaceRou
     return reply.status(202).send(result);
   });
 
-  app.delete('/:id/invitations/:invId', async (req, reply) => {
+  app.delete('/:id/invitations/:invId', { preHandler: requireWorkspaceAction(deps, 'invitation.revoke') }, async (req, reply) => {
     const user = await requireCurrentUser(deps, req, reply);
     if (!user) return;
     const { id, invId } = invIdParams.parse(req.params);
@@ -115,7 +116,7 @@ export function registerWorkspaceRoutes(app: FastifyInstance, deps: WorkspaceRou
     return reply.status(204).send();
   });
 
-  app.patch('/:id/members/:userId', async (req, reply) => {
+  app.patch('/:id/members/:userId', { preHandler: requireWorkspaceAction(deps, 'member.change_role') }, async (req, reply) => {
     const user = await requireCurrentUser(deps, req, reply);
     if (!user) return;
     const { id, userId } = memberParams.parse(req.params);
@@ -124,7 +125,7 @@ export function registerWorkspaceRoutes(app: FastifyInstance, deps: WorkspaceRou
     return reply.status(204).send();
   });
 
-  app.delete('/:id/members/:userId', async (req, reply) => {
+  app.delete('/:id/members/:userId', { preHandler: requireWorkspaceAction(deps, 'member.remove') }, async (req, reply) => {
     const user = await requireCurrentUser(deps, req, reply);
     if (!user) return;
     const { id, userId } = memberParams.parse(req.params);
@@ -140,7 +141,7 @@ export function registerWorkspaceRoutes(app: FastifyInstance, deps: WorkspaceRou
     return reply.status(204).send();
   });
 
-  app.post('/:id/transfer', async (req, reply) => {
+  app.post('/:id/transfer', { preHandler: requireWorkspaceAction(deps, 'workspace.transfer') }, async (req, reply) => {
     const user = await requireCurrentUser(deps, req, reply);
     if (!user) return;
     const { id } = idParams.parse(req.params);
