@@ -1,6 +1,7 @@
 import type { WorkspaceRole } from '@prisma/client';
 import { WorkspaceError } from './errors';
-import { requireActive, requireMembership, requireRole, requireTeam } from './helpers';
+import { requireActive, requireMembership, requireTeam } from './helpers';
+import { requireAction } from './permissions';
 import { now, type WorkspaceDeps } from './types';
 
 export const INVITATION_TTL_MS = 7 * 24 * 3600 * 1000;
@@ -31,7 +32,7 @@ export async function inviteMember(
   input: { workspaceId: string; email: string; role: WorkspaceRole },
 ): Promise<{ invitationId: string }> {
   const { workspace, membership } = await requireMembership(deps, input.workspaceId, userId);
-  requireRole(membership, ['owner', 'maintainer']);
+  requireAction(membership, 'invitation.create');
   requireTeam(workspace);
   requireActive(workspace);
 
@@ -144,7 +145,7 @@ export async function revokeInvitation(
   invitationId: string,
 ): Promise<void> {
   const { membership } = await requireMembership(deps, workspaceId, userId);
-  requireRole(membership, ['owner', 'maintainer']);
+  requireAction(membership, 'invitation.revoke');
   // audit(2.6): workspace.invitation.revoke
   const { count } = await deps.prisma.workspaceInvitation.updateMany({
     where: { id: invitationId, workspaceId, status: 'pending' },

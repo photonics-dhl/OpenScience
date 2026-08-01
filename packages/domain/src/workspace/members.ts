@@ -1,6 +1,7 @@
 import type { WorkspaceRole } from '@prisma/client';
 import { WorkspaceError } from './errors';
-import { requireActive, requireMembership, requireRole, requireTeam } from './helpers';
+import { requireActive, requireMembership, requireTeam } from './helpers';
+import { requireAction } from './permissions';
 import type { WorkspaceDeps } from './types';
 
 export interface MemberInfo {
@@ -32,7 +33,7 @@ export async function changeMemberRole(
   newRole: string,
 ): Promise<void> {
   const { workspace, membership } = await requireMembership(deps, workspaceId, userId);
-  requireRole(membership, ['owner']);
+  requireAction(membership, 'member.change_role');
   requireTeam(workspace);
   requireActive(workspace);
   if (newRole === 'owner') throw new WorkspaceError('VALIDATION_ERROR', '变更所有权请使用转让接口');
@@ -56,7 +57,7 @@ export async function removeMember(
   targetUserId: string,
 ): Promise<void> {
   const { workspace, membership } = await requireMembership(deps, workspaceId, userId);
-  requireRole(membership, ['owner', 'maintainer']);
+  requireAction(membership, 'member.remove');
   requireTeam(workspace);
   requireActive(workspace);
   const target = await deps.prisma.membership.findUnique({
@@ -91,7 +92,7 @@ export async function transferOwnership(
   newOwnerId: string,
 ): Promise<void> {
   const { workspace, membership } = await requireMembership(deps, workspaceId, userId);
-  requireRole(membership, ['owner']);
+  requireAction(membership, 'workspace.transfer');
   requireTeam(workspace);
   requireActive(workspace);
   const target = await deps.prisma.membership.findUnique({

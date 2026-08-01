@@ -1,4 +1,5 @@
-import { requireActive, requireMembership, requireRole, requireTeam, validateWorkspaceName } from './helpers';
+import { requireActive, requireMembership, requireTeam, validateWorkspaceName } from './helpers';
+import { requireAction } from './permissions';
 import type { WorkspaceDeps } from './types';
 
 export interface WorkspaceSummary {
@@ -57,7 +58,7 @@ export async function updateWorkspace(
   input: { name: string },
 ): Promise<WorkspaceSummary> {
   const { workspace, membership } = await requireMembership(deps, workspaceId, userId);
-  requireRole(membership, ['owner', 'maintainer']);
+  requireAction(membership, 'workspace.update');
   requireActive(workspace);
   const name = validateWorkspaceName(input.name);
   // audit(2.6): workspace.update
@@ -67,7 +68,7 @@ export async function updateWorkspace(
 
 export async function archiveWorkspace(deps: WorkspaceDeps, userId: string, workspaceId: string): Promise<void> {
   const { workspace, membership } = await requireMembership(deps, workspaceId, userId);
-  requireRole(membership, ['owner']);
+  requireAction(membership, 'workspace.archive');
   requireTeam(workspace);
   requireActive(workspace);
   // audit(2.6): workspace.archive

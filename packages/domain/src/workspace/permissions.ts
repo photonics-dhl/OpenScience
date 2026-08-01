@@ -41,7 +41,7 @@ export function can(role: WorkspaceRole, action: WorkspaceAction): boolean {
   return ROLE_PERMISSIONS[action].includes(role);
 }
 
-/** domain 纵深判定：角色不足抛 FORBIDDEN（与既有 requireRole 语义一致）。 */
+/** domain 纵深判定：角色不足抛 FORBIDDEN（与旧版 helpers 内联角色检查语义一致）。 */
 export function requireAction(membership: Pick<Membership, 'role'>, action: WorkspaceAction): void {
   if (!can(membership.role, action)) throw new WorkspaceError('FORBIDDEN', '权限不足');
 }

@@ -1,4 +1,4 @@
-import type { Workspace, Membership, WorkspaceRole } from '@prisma/client';
+import type { Workspace, Membership } from '@prisma/client';
 import { WorkspaceError } from './errors';
 import type { WorkspaceDeps } from './types';
 
@@ -15,10 +15,6 @@ export async function requireMembership(
   });
   if (!membership) throw new WorkspaceError('WORKSPACE_NOT_FOUND', '空间不存在');
   return { workspace, membership };
-}
-
-export function requireRole(membership: Membership, roles: WorkspaceRole[]): void {
-  if (!roles.includes(membership.role)) throw new WorkspaceError('FORBIDDEN', '权限不足');
 }
 
 export function requireActive(workspace: Workspace): void {
