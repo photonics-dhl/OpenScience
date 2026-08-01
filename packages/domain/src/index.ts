@@ -28,3 +28,4 @@ export {
   type AcceptResult,
   type InvitationInfo,
 } from './workspace/invitations';
+export { can, requireAction, ROLE_PERMISSIONS, WORKSPACE_ACTIONS, type WorkspaceAction } from './workspace/permissions';
