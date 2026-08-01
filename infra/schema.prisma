@@ -29,6 +29,7 @@ model User {
   passwordHash       String             @map("password_hash")
   displayName        String             @map("display_name")
   status             UserStatus         @default(invited)
+  platformRole       PlatformRole       @default(user) @map("platform_role")
   createdAt          DateTime           @default(now()) @map("created_at")
   updatedAt          DateTime           @updatedAt @map("updated_at")
   emailVerifications EmailVerification[]
@@ -91,6 +92,12 @@ enum WorkspaceType {
 enum WorkspaceStatus {
   active
   archived
+}
+
+enum PlatformRole {
+  user
+  moderator
+  platform_admin
 }
 
 enum WorkspaceRole {
