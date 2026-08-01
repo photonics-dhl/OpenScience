@@ -9,6 +9,7 @@
 | 稳定性 soak | 15 轮 × 2min：**SSH 隧道 15/15**（gstatic 1.19–1.27s、docker hub 1.38–1.45s，方差极小）；**Tailscale 13/15**（2 次 >15s 超时，延迟 2.2–10.1s 抖动剧烈）。选型定案：SSH 隧道 |
 | 监控面板上线 | `portainer.428312321.xyz/monitor/`（Netdata，274 charts 实时流式）+ `/traffic/`（vnStat 账单页，cron 每 5min 渲染）；basic_auth（账号 admin，凭据云上 `/etc/nginx/.htpasswd-monitor` 不入库）；Playwright 外网实测双面板通过 |
 | 收尾七项 | `/nav/` 统一导航页（三入口互跳）；basic_auth 改 admin；`with-proxy` 兜底脚本（隧道失效回落直连，云上 `/usr/local/bin/`）；Tailscale 完全卸载（包/服务/repo/状态目录）；云上 /tmp 调试残留 + 本机测试截图清理；`.gitignore` 加 `.playwright-mcp/` |
+| 隧道常驻化 | 本机 Windows 计划任务 `OpenScience-ProxyTunnel`（登录自启，vbs 隐藏窗口 → `proxy-tunnel.sh` 循环重连：15s 心跳/5s 重试/日志截断）；服务器杀会话实测 35s 内自愈；提交 `6ba730b`（监控+通道定案）`1bc62be`（隧道常驻化），均已 push origin/main |
 
 ### Key Decisions / 坑
 - **Tailscale 与阿里云内网系统性冲突**：tailscaled up 劫持 `100.64.0.0/10` 路由（tailnet 段），阿里云 VPC 内部 DNS（100.100.2.136/138）恰在该段 → 全机 DNS 瘫痪（yum/apk/内网服务全挂），策略路由优先级高于 main 表 /32 例外。已 `tailscale down` 恢复；结论：此服务器不宜跑 tailscaled
@@ -18,7 +19,6 @@
 - AL4 无 vnstat 包（EPEL 不兼容）→ alpine 容器跑 vnstatd（apk 走 mirrors.aliyun.com），host 网络读网卡计数器，数据卷 `vnstatdb`
 
 ### ⏳ Next Steps
-- [ ] 待用户批准：提交隧道常驻化（proxy-tunnel.sh/.vbs + AGENTS/索引/progress）
 - [ ] P1A-6：审计日志（task-master 2.6，先 design gate）
 
 ---
