@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { createSession } from '@openscience/auth';
+import type { AuditEvent, AuditSink } from '@openscience/observability';
 import { buildApp } from '../src/app';
 import { createFakeMailer, createFakePrisma, createFakeRedis } from './helpers/fakes';
 
@@ -9,11 +10,16 @@ const U1 = '11111111-1111-4111-8111-111111111111';
 const U2 = '22222222-2222-4222-8222-222222222222';
 const U3 = '33333333-3333-4333-8333-333333333333';
 
-async function setup() {
+function createRecordingAudit(): { audit: AuditSink; events: AuditEvent[] } {
+  const events: AuditEvent[] = [];
+  return { audit: { record: async (event) => { events.push(event); } }, events };
+}
+
+async function setup(audit?: AuditSink) {
   const { prisma, db } = createFakePrisma();
   const redis = createFakeRedis();
   const mailer = createFakeMailer();
-  const app = await buildApp({ prisma, redis, mailer, cookieSecret: 'test-secret', secureCookies: false });
+  const app = await buildApp({ prisma, redis, mailer, audit, cookieSecret: 'test-secret', secureCookies: false });
   const loginAs = async (userId: string, email: string, displayName = 'User'): Promise<string> => {
     db.users.push({ id: userId, email, displayName, passwordHash: 'x', status: 'email_verified', createdAt: new Date(), updatedAt: new Date() });
     return createSession(redis, { userId, status: 'email_verified' });
@@ -43,6 +49,19 @@ describe('/workspaces 认证与创建', () => {
     expect(created.json()).toMatchObject({ type: 'team', name: 'NLP Lab', role: 'owner' });
     const list = await app.inject({ method: 'GET', url: '/workspaces', ...authed(token) });
     expect(list.json().workspaces.map((w: any) => w.id)).toContain(created.json().id);
+  });
+
+  it('POST /workspaces 成功 → domain 审计事件经 deps.audit 流出（含 requestId）', async () => {
+    const { audit, events } = createRecordingAudit();
+    const { app, authed, loginAs } = await setup(audit);
+    const token = await loginAs(U1, 'a@example.com');
+    const created = await app.inject({ method: 'POST', url: '/workspaces', ...authed(token), payload: { name: 'Lab' } });
+    expect(created.statusCode).toBe(201);
+    const created_ = events.find((e) => e.action === 'workspace.create');
+    expect(created_).toBeDefined();
+    expect(created_?.actorId).toBe(U1);
+    expect(typeof created_?.requestId).toBe('string');
+    expect(created_?.requestId).not.toBe('');
   });
 });
 

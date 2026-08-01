@@ -1,4 +1,4 @@
-import Fastify, { type FastifyInstance } from 'fastify';
+import Fastify, { type FastifyBaseLogger, type FastifyInstance } from 'fastify';
 import cookie from '@fastify/cookie';
 import { httpStatusForError } from './error-map';
 import { registerAuthRoutes, type AuthRouteDeps } from './routes/auth';
@@ -6,10 +6,13 @@ import { registerWorkspaceRoutes } from './routes/workspaces';
 
 export interface BuildAppOptions extends AuthRouteDeps {
   cookieSecret: string;
+  /** P1A-6：注入结构化 logger（pino 实例满足 FastifyBaseLogger）；缺省关闭（测试现状）。 */
+  logger?: FastifyBaseLogger;
 }
 
 export async function buildApp(opts: BuildAppOptions): Promise<FastifyInstance> {
-  const app = Fastify({ logger: false });
+  // fastify 5：pino 实例必须走 loggerInstance（logger 仅接受配置对象，传实例抛 FST_ERR_LOG_INVALID_LOGGER_CONFIG）
+  const app = Fastify(opts.logger ? { loggerInstance: opts.logger } : { logger: false });
   await app.register(cookie, { secret: opts.cookieSecret });
 
   app.setErrorHandler((err, req, reply) => {

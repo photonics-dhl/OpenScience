@@ -1,4 +1,4 @@
-import type { FastifyInstance, FastifyReply } from 'fastify';
+import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { z } from 'zod';
 import {
   getCurrentUser,
@@ -9,10 +9,16 @@ import {
   verifyEmail,
   type AuthDeps,
 } from '@openscience/auth';
+import type { AuditContext } from '@openscience/observability';
 import { SESSION_COOKIE, UNAUTHORIZED_BODY, sessionTokenFrom } from './session-guard';
 
 export interface AuthRouteDeps extends AuthDeps {
   secureCookies: boolean;
+}
+
+/** P1A-6：请求级审计上下文（requestId/ip），随写操作尾参传入 domain/auth。 */
+function auditCtx(req: FastifyRequest): AuditContext {
+  return { requestId: String(req.id), ip: req.ip };
 }
 
 const SESSION_MAX_AGE_SECONDS = 7 * 24 * 3600;
@@ -46,33 +52,33 @@ function setSessionCookie(reply: FastifyReply, token: string, secure: boolean): 
 export function registerAuthRoutes(app: FastifyInstance, deps: AuthRouteDeps): void {
   app.post('/register', async (req, reply) => {
     const body = registerBody.parse(req.body);
-    const result = await register(deps, body);
+    const result = await register(deps, body, auditCtx(req));
     return reply.status(201).send({ userId: result.userId, status: result.status });
   });
 
   app.post('/verify-email', async (req, reply) => {
     const body = verifyBody.parse(req.body);
-    const result = await verifyEmail(deps, body);
+    const result = await verifyEmail(deps, body, auditCtx(req));
     setSessionCookie(reply, result.sessionToken, deps.secureCookies);
     return reply.send({ userId: result.userId, status: result.status });
   });
 
   app.post('/resend-code', async (req, reply) => {
     const body = emailBody.parse(req.body);
-    await resendCode(deps, body);
+    await resendCode(deps, body, auditCtx(req));
     return reply.status(202).send({ ok: true });
   });
 
   app.post('/login', async (req, reply) => {
     const body = loginBody.parse(req.body);
-    const result = await login(deps, body);
+    const result = await login(deps, body, auditCtx(req));
     setSessionCookie(reply, result.sessionToken, deps.secureCookies);
     return reply.send({ userId: result.userId, status: result.status });
   });
 
   app.post('/logout', async (req, reply) => {
     const token = sessionTokenFrom(req);
-    if (token) await logout(deps, token);
+    if (token) await logout(deps, token, auditCtx(req));
     void reply.clearCookie(SESSION_COOKIE, { path: '/' });
     return reply.status(204).send();
   });

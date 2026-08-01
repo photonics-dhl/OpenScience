@@ -1,4 +1,4 @@
-import type { FastifyInstance } from 'fastify';
+import type { FastifyInstance, FastifyRequest } from 'fastify';
 import { z } from 'zod';
 import type { AuthDeps } from '@openscience/auth';
 import {
@@ -18,10 +18,16 @@ import {
   transferOwnership,
   updateWorkspace,
 } from '@openscience/domain';
+import type { AuditContext } from '@openscience/observability';
 import { requireCurrentUser } from './session-guard';
 import { requireWorkspaceAction } from './workspace-guard';
 
 export type WorkspaceRouteDeps = AuthDeps;
+
+/** P1A-6：请求级审计上下文（requestId/ip），随写操作尾参传入 domain。读路由不传。 */
+function auditCtx(req: FastifyRequest): AuditContext {
+  return { requestId: String(req.id), ip: req.ip };
+}
 
 const nonOwnerRoleSchema = z.enum(['maintainer', 'author', 'contributor', 'reviewer', 'viewer']);
 const idParams = z.object({ id: z.string().uuid() });
@@ -43,7 +49,7 @@ export function registerWorkspaceRoutes(app: FastifyInstance, deps: WorkspaceRou
     const user = await requireCurrentUser(deps, req, reply);
     if (!user) return;
     const body = nameBody.parse(req.body);
-    const ws = await createTeamWorkspace(deps, { userId: user.userId, name: body.name });
+    const ws = await createTeamWorkspace(deps, { userId: user.userId, name: body.name }, auditCtx(req));
     return reply.status(201).send(ws);
   });
 
@@ -57,7 +63,7 @@ export function registerWorkspaceRoutes(app: FastifyInstance, deps: WorkspaceRou
     const user = await requireCurrentUser(deps, req, reply);
     if (!user) return;
     const { id } = idParams.parse(req.params);
-    const membership = await acceptInvitation(deps, { userId: user.userId, email: user.email }, id);
+    const membership = await acceptInvitation(deps, { userId: user.userId, email: user.email }, id, auditCtx(req));
     return reply.status(201).send(membership);
   });
 
@@ -65,7 +71,7 @@ export function registerWorkspaceRoutes(app: FastifyInstance, deps: WorkspaceRou
     const user = await requireCurrentUser(deps, req, reply);
     if (!user) return;
     const { id } = idParams.parse(req.params);
-    await declineInvitation(deps, { userId: user.userId, email: user.email }, id);
+    await declineInvitation(deps, { userId: user.userId, email: user.email }, id, auditCtx(req));
     return reply.status(204).send();
   });
 
@@ -81,14 +87,14 @@ export function registerWorkspaceRoutes(app: FastifyInstance, deps: WorkspaceRou
     if (!user) return;
     const { id } = idParams.parse(req.params);
     const body = nameBody.parse(req.body);
-    return reply.send(await updateWorkspace(deps, user.userId, id, body));
+    return reply.send(await updateWorkspace(deps, user.userId, id, body, auditCtx(req)));
   });
 
   app.post('/:id/archive', { preHandler: requireWorkspaceAction(deps, 'workspace.archive') }, async (req, reply) => {
     const user = await requireCurrentUser(deps, req, reply);
     if (!user) return;
     const { id } = idParams.parse(req.params);
-    await archiveWorkspace(deps, user.userId, id);
+    await archiveWorkspace(deps, user.userId, id, auditCtx(req));
     return reply.status(204).send();
   });
 
@@ -104,7 +110,7 @@ export function registerWorkspaceRoutes(app: FastifyInstance, deps: WorkspaceRou
     if (!user) return;
     const { id } = idParams.parse(req.params);
     const body = inviteBody.parse(req.body);
-    const result = await inviteMember(deps, user.userId, { workspaceId: id, email: body.email, role: body.role });
+    const result = await inviteMember(deps, user.userId, { workspaceId: id, email: body.email, role: body.role }, auditCtx(req));
     return reply.status(202).send(result);
   });
 
@@ -112,7 +118,7 @@ export function registerWorkspaceRoutes(app: FastifyInstance, deps: WorkspaceRou
     const user = await requireCurrentUser(deps, req, reply);
     if (!user) return;
     const { id, invId } = invIdParams.parse(req.params);
-    await revokeInvitation(deps, user.userId, id, invId);
+    await revokeInvitation(deps, user.userId, id, invId, auditCtx(req));
     return reply.status(204).send();
   });
 
@@ -121,7 +127,7 @@ export function registerWorkspaceRoutes(app: FastifyInstance, deps: WorkspaceRou
     if (!user) return;
     const { id, userId } = memberParams.parse(req.params);
     const body = changeRoleBody.parse(req.body);
-    await changeMemberRole(deps, user.userId, id, userId, body.role);
+    await changeMemberRole(deps, user.userId, id, userId, body.role, auditCtx(req));
     return reply.status(204).send();
   });
 
@@ -129,7 +135,7 @@ export function registerWorkspaceRoutes(app: FastifyInstance, deps: WorkspaceRou
     const user = await requireCurrentUser(deps, req, reply);
     if (!user) return;
     const { id, userId } = memberParams.parse(req.params);
-    await removeMember(deps, user.userId, id, userId);
+    await removeMember(deps, user.userId, id, userId, auditCtx(req));
     return reply.status(204).send();
   });
 
@@ -137,7 +143,7 @@ export function registerWorkspaceRoutes(app: FastifyInstance, deps: WorkspaceRou
     const user = await requireCurrentUser(deps, req, reply);
     if (!user) return;
     const { id } = idParams.parse(req.params);
-    await leaveWorkspace(deps, user.userId, id);
+    await leaveWorkspace(deps, user.userId, id, auditCtx(req));
     return reply.status(204).send();
   });
 
@@ -146,7 +152,7 @@ export function registerWorkspaceRoutes(app: FastifyInstance, deps: WorkspaceRou
     if (!user) return;
     const { id } = idParams.parse(req.params);
     const body = transferBody.parse(req.body);
-    await transferOwnership(deps, user.userId, id, body.newOwnerId);
+    await transferOwnership(deps, user.userId, id, body.newOwnerId, auditCtx(req));
     return reply.status(204).send();
   });
 }
