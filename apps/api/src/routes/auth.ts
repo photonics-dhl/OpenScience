@@ -10,7 +10,8 @@ import {
   type AuthDeps,
 } from '@openscience/auth';
 import type { AuditContext } from '@openscience/observability';
-import { SESSION_COOKIE, UNAUTHORIZED_BODY, sessionTokenFrom } from './session-guard';
+import { SESSION_COOKIE, sessionTokenFrom } from './session-guard';
+import { buildErrorBody } from '@openscience/observability';
 
 export interface AuthRouteDeps extends AuthDeps {
   secureCookies: boolean;
@@ -85,7 +86,7 @@ export function registerAuthRoutes(app: FastifyInstance, deps: AuthRouteDeps): v
 
   app.get('/me', async (req, reply) => {
     const token = sessionTokenFrom(req);
-    if (!token) return reply.status(401).send(UNAUTHORIZED_BODY);
+    if (!token) return reply.status(401).send(buildErrorBody('SESSION_INVALID', '未登录', String(req.id)));
     const me = await getCurrentUser(deps, token);
     return reply.send(me);
   });

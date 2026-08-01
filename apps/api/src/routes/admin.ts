@@ -11,7 +11,17 @@ const querySchema = z.object({
   actorId: z.string().uuid().optional(),
   from: z.string().datetime().optional(),
   to: z.string().datetime().optional(),
-  cursor: z.string().max(128).optional(),
+  cursor: z
+    .string()
+    .max(128)
+    .refine(
+      (c) => {
+        const i = c.indexOf('|');
+        return i > 0 && i < c.length - 1 && !Number.isNaN(new Date(c.slice(0, i)).getTime());
+      },
+      { message: 'cursor 格式应为 <createdAtISO>|<id>' },
+    )
+    .optional(),
   limit: z.coerce.number().int().min(1).max(200).optional(),
 });
 

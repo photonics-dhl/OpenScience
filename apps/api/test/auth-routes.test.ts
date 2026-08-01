@@ -125,7 +125,7 @@ describe('/auth routes', () => {
     const { app } = await makeApp();
     const res = await app.inject({ method: 'GET', url: '/auth/me' });
     expect(res.statusCode).toBe(401);
-    expect(res.json()).toEqual({ error: { code: 'SESSION_INVALID', message: '未登录' } });
+    expect(res.json()).toEqual({ error: { code: 'SESSION_INVALID', message: '未登录', requestId: expect.any(String) } });
   });
 
   it('login unknown email vs wrong password: identical status and body', async () => {

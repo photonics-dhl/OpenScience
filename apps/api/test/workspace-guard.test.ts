@@ -4,8 +4,6 @@ import type { AuditEvent, AuditSink } from '@openscience/observability';
 import { buildApp } from '../src/app';
 import { createFakeMailer, createFakePrisma, createFakeRedis } from './helpers/fakes';
 
-/* eslint-disable @typescript-eslint/no-explicit-any -- 测试 fake 刻意脱离完整类型 */
-
 const U1 = '11111111-1111-4111-8111-111111111111';
 const U2 = '22222222-2222-4222-8222-222222222222';
 

@@ -1,8 +1,8 @@
 import type { FastifyReply, FastifyRequest } from 'fastify';
 import { getCurrentUser, type AuthDeps, type CurrentUser } from '@openscience/auth';
+import { buildErrorBody } from '@openscience/observability';
 
 export const SESSION_COOKIE = 'openscience_session';
-export const UNAUTHORIZED_BODY = { error: { code: 'SESSION_INVALID', message: '未登录' } } as const;
 
 export function sessionTokenFrom(req: FastifyRequest): string | null {
   return req.cookies[SESSION_COOKIE] ?? null;
@@ -20,7 +20,7 @@ export async function requireCurrentUser(
 ): Promise<CurrentUser | null> {
   const token = sessionTokenFrom(req);
   if (!token) {
-    void reply.status(401).send(UNAUTHORIZED_BODY);
+    void reply.status(401).send(buildErrorBody('SESSION_INVALID', '未登录', String(req.id)));
     return null;
   }
   return getCurrentUser(deps, token);

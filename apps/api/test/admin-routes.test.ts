@@ -57,4 +57,39 @@ describe('P1A-6 /admin/audit-logs platform_admin 守卫', () => {
       take: 11,
     }));
   });
+
+  it('malformed cursor → 400 VALIDATION_ERROR（不落到 500）', async () => {
+    const { app, findMany, authed, loginAs } = await setup();
+    const token = await loginAs(ADMIN, 'admin@example.com', 'platform_admin');
+    for (const bad of ['no-separator', 'not-a-date|id-1', '2026-08-01T00:00:00.000Z|']) {
+      const res = await app.inject({
+        method: 'GET',
+        url: `/admin/audit-logs?cursor=${encodeURIComponent(bad)}`,
+        ...authed(token),
+      });
+      expect(res.statusCode).toBe(400);
+      expect(res.json().error.code).toBe('VALIDATION_ERROR');
+    }
+    expect(findMany).not.toHaveBeenCalled();
+  });
+
+  it('合法 cursor 透传：(createdAt,id) 倒序续查 where.OR', async () => {
+    const { app, findMany, authed, loginAs } = await setup();
+    const token = await loginAs(ADMIN, 'admin@example.com', 'platform_admin');
+    const cursor = '2026-08-01T00:00:00.000Z|id-49';
+    const res = await app.inject({
+      method: 'GET',
+      url: `/admin/audit-logs?cursor=${encodeURIComponent(cursor)}`,
+      ...authed(token),
+    });
+    expect(res.statusCode).toBe(200);
+    expect(findMany).toHaveBeenCalledWith(expect.objectContaining({
+      where: expect.objectContaining({
+        OR: [
+          { createdAt: { lt: new Date('2026-08-01T00:00:00.000Z') } },
+          { createdAt: new Date('2026-08-01T00:00:00.000Z'), id: { lt: 'id-49' } },
+        ],
+      }),
+    }));
+  });
 });
