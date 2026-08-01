@@ -30,12 +30,24 @@ export function redactSensitiveString(input: string): string {
   return out;
 }
 
-export function sanitizeValue(value: unknown): unknown {
+export function sanitizeValue(value: unknown, seen: WeakSet<object> = new WeakSet()): unknown {
   if (typeof value === 'string') return redactSensitiveString(value);
-  if (Array.isArray(value)) return value.map(sanitizeValue);
+  // Error 实例原样直通：message/stack 不可枚举，递归复制会掏空，交给 pino err serializer 处理。
+  if (value instanceof Error) return value;
+  if (Array.isArray(value)) {
+    if (seen.has(value)) return '[Circular]';
+    seen.add(value);
+    const out = value.map((v) => sanitizeValue(v, seen));
+    seen.delete(value);
+    return out;
+  }
   if (value !== null && typeof value === 'object') {
+    // 环检测：formatters.log 先于 serializers 执行，真实请求的 req/res 对象成环（socket.parser.socket）。
+    if (seen.has(value)) return '[Circular]';
+    seen.add(value);
     const out: Record<string, unknown> = {};
-    for (const [k, v] of Object.entries(value)) out[k] = sanitizeValue(v);
+    for (const [k, v] of Object.entries(value)) out[k] = sanitizeValue(v, seen);
+    seen.delete(value); // 递归结束后移除，避免兄弟节点误判
     return out;
   }
   return value;

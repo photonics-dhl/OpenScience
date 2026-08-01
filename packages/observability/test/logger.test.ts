@@ -42,4 +42,34 @@ describe('createLogger 脱敏（Spec §17 MUST）', () => {
     expect(row.msg).toBe('hello');
     expect(row.time).toBeTypeOf('number');
   });
+
+  it('sanitizeValue：自引用对象不抛栈溢出，环处输出 [Circular]', () => {
+    const obj: { a: number; self?: unknown } = { a: 1 };
+    obj.self = obj;
+    const out = sanitizeValue(obj) as { a: number; self: string };
+    expect(out.a).toBe(1);
+    expect(out.self).toBe('[Circular]');
+    // 兄弟节点不误判：同一对象在不同分支出现不算环
+    const shared = { x: 'hello' };
+    const out2 = sanitizeValue({ p: shared, q: shared }) as { p: { x: string }; q: { x: string } };
+    expect(out2.p.x).toBe('hello');
+    expect(out2.q.x).toBe('hello');
+    // 通过 logger 记录成环对象同样不抛
+    const { stream, lines } = capture();
+    const log = createLogger({ destination: stream });
+    expect(() => log.info({ obj }, 'cycle')).not.toThrow();
+    expect(lines()).toContain('[Circular]');
+  });
+
+  it('Error 实例直通：err 的 message/stack 不被掏空', () => {
+    const { stream, lines } = capture();
+    const log = createLogger({ destination: stream });
+    log.error({ err: new Error('boom') }, 'failed');
+    const out = lines();
+    expect(out).toContain('boom');
+    expect(out).toContain('at ');
+    const row = JSON.parse(out) as { err: { message: string; stack: string } };
+    expect(row.err.message).toBe('boom');
+    expect(row.err.stack).toBeTruthy();
+  });
 });
