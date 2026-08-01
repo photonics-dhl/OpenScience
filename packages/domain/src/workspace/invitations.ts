@@ -1,4 +1,6 @@
 import type { WorkspaceRole } from '@prisma/client';
+import type { AuditContext } from '@openscience/observability';
+import { recordAudit } from './audit';
 import { WorkspaceError } from './errors';
 import { requireActive, requireMembership, requireTeam } from './helpers';
 import { requireAction } from './permissions';
@@ -30,6 +32,7 @@ export async function inviteMember(
   deps: WorkspaceDeps,
   userId: string,
   input: { workspaceId: string; email: string; role: WorkspaceRole },
+  ctx: AuditContext = {},
 ): Promise<{ invitationId: string }> {
   const { workspace, membership } = await requireMembership(deps, input.workspaceId, userId);
   requireAction(membership, 'invitation.create');
@@ -48,15 +51,21 @@ export async function inviteMember(
   });
   if (pending) throw new WorkspaceError('INVITATION_PENDING_EXISTS', '该邮箱已有待处理邀请，可先撤销后重发');
 
-  // audit(2.6): workspace.invitation.create
-  const inv = await deps.prisma.workspaceInvitation.create({
-    data: {
-      workspaceId: input.workspaceId,
-      email: input.email,
-      role: input.role,
-      invitedBy: userId,
-      expiresAt: new Date(now(deps).getTime() + INVITATION_TTL_MS),
-    },
+  const inv = await deps.prisma.$transaction(async (tx) => {
+    const created = await tx.workspaceInvitation.create({
+      data: {
+        workspaceId: input.workspaceId,
+        email: input.email,
+        role: input.role,
+        invitedBy: userId,
+        expiresAt: new Date(now(deps).getTime() + INVITATION_TTL_MS),
+      },
+    });
+    await recordAudit(deps, tx, {
+      actorId: userId, action: 'workspace.invitation.create', workspaceId: input.workspaceId,
+      targetType: 'invitation', targetId: created.id, metadata: { role: input.role },
+    }, ctx);
+    return created;
   });
   await deps.mailer.send({
     to: input.email,
@@ -95,6 +104,7 @@ export async function acceptInvitation(
   deps: WorkspaceDeps,
   user: { userId: string; email: string },
   invitationId: string,
+  ctx: AuditContext = {},
 ): Promise<AcceptResult> {
   const at = now(deps);
   const inv = await deps.prisma.workspaceInvitation.findUnique({ where: { id: invitationId } });
@@ -111,12 +121,15 @@ export async function acceptInvitation(
       if (existing) return { id: existing.id, workspaceId: existing.workspaceId, userId: existing.userId, role: existing.role };
       throw NOT_FOUND();
     }
-    // audit(2.6): workspace.invitation.accept
     const m = await tx.membership.upsert({
       where: { workspaceId_userId: { workspaceId: inv.workspaceId, userId: user.userId } },
       create: { workspaceId: inv.workspaceId, userId: user.userId, role: inv.role },
       update: {},
     });
+    await recordAudit(deps, tx, {
+      actorId: user.userId, action: 'workspace.invitation.accept', workspaceId: inv.workspaceId,
+      targetType: 'invitation', targetId: inv.id, metadata: { role: inv.role },
+    }, ctx);
     return { id: m.id, workspaceId: m.workspaceId, userId: m.userId, role: m.role };
   });
 }
@@ -126,15 +139,21 @@ export async function declineInvitation(
   deps: WorkspaceDeps,
   user: { userId: string; email: string },
   invitationId: string,
+  ctx: AuditContext = {},
 ): Promise<void> {
   const inv = await deps.prisma.workspaceInvitation.findUnique({ where: { id: invitationId } });
   if (!inv || inv.email.toLowerCase() !== user.email.toLowerCase()) throw NOT_FOUND();
-  // audit(2.6): workspace.invitation.decline
-  const { count } = await deps.prisma.workspaceInvitation.updateMany({
-    where: { id: inv.id, status: 'pending' },
-    data: { status: 'declined', respondedAt: now(deps) },
+  await deps.prisma.$transaction(async (tx) => {
+    const { count } = await tx.workspaceInvitation.updateMany({
+      where: { id: inv.id, status: 'pending' },
+      data: { status: 'declined', respondedAt: now(deps) },
+    });
+    if (count !== 1) throw NOT_FOUND();
+    await recordAudit(deps, tx, {
+      actorId: user.userId, action: 'workspace.invitation.decline', workspaceId: inv.workspaceId,
+      targetType: 'invitation', targetId: inv.id, metadata: { role: inv.role },
+    }, ctx);
   });
-  if (count !== 1) throw NOT_FOUND();
 }
 
 /** 撤销邀请（owner/maintainer）：仅 pending 可撤。 */
@@ -143,13 +162,19 @@ export async function revokeInvitation(
   userId: string,
   workspaceId: string,
   invitationId: string,
+  ctx: AuditContext = {},
 ): Promise<void> {
   const { membership } = await requireMembership(deps, workspaceId, userId);
   requireAction(membership, 'invitation.revoke');
-  // audit(2.6): workspace.invitation.revoke
-  const { count } = await deps.prisma.workspaceInvitation.updateMany({
-    where: { id: invitationId, workspaceId, status: 'pending' },
-    data: { status: 'revoked', respondedAt: now(deps) },
+  await deps.prisma.$transaction(async (tx) => {
+    const { count } = await tx.workspaceInvitation.updateMany({
+      where: { id: invitationId, workspaceId, status: 'pending' },
+      data: { status: 'revoked', respondedAt: now(deps) },
+    });
+    if (count !== 1) throw NOT_FOUND();
+    await recordAudit(deps, tx, {
+      actorId: userId, action: 'workspace.invitation.revoke', workspaceId,
+      targetType: 'invitation', targetId: invitationId,
+    }, ctx);
   });
-  if (count !== 1) throw NOT_FOUND();
 }

@@ -1,4 +1,6 @@
 import type { WorkspaceRole } from '@prisma/client';
+import type { AuditContext } from '@openscience/observability';
+import { recordAudit } from './audit';
 import { WorkspaceError } from './errors';
 import { requireActive, requireMembership, requireTeam } from './helpers';
 import { requireAction } from './permissions';
@@ -31,6 +33,7 @@ export async function changeMemberRole(
   workspaceId: string,
   targetUserId: string,
   newRole: string,
+  ctx: AuditContext = {},
 ): Promise<void> {
   const { workspace, membership } = await requireMembership(deps, workspaceId, userId);
   requireAction(membership, 'member.change_role');
@@ -45,8 +48,14 @@ export async function changeMemberRole(
     const owners = await deps.prisma.membership.count({ where: { workspaceId, role: 'owner' } });
     if (owners <= 1) throw new WorkspaceError('LAST_OWNER', '空间至少保留一名 Owner');
   }
-  // audit(2.6): workspace.member.changeRole
-  await deps.prisma.membership.update({ where: { id: target.id }, data: { role: newRole as WorkspaceRole } });
+  const fromRole = target.role;
+  await deps.prisma.$transaction(async (tx) => {
+    await tx.membership.update({ where: { id: target.id }, data: { role: newRole as WorkspaceRole } });
+    await recordAudit(deps, tx, {
+      actorId: userId, action: 'workspace.member.changeRole', workspaceId,
+      targetType: 'user', targetId: targetUserId, metadata: { fromRole, toRole: newRole },
+    }, ctx);
+  });
 }
 
 /** 移除成员：owner 可移除任意非 owner；maintainer 只能移除普通成员；owner 不可被移除（先转让）。 */
@@ -55,6 +64,7 @@ export async function removeMember(
   userId: string,
   workspaceId: string,
   targetUserId: string,
+  ctx: AuditContext = {},
 ): Promise<void> {
   const { workspace, membership } = await requireMembership(deps, workspaceId, userId);
   requireAction(membership, 'member.remove');
@@ -68,20 +78,35 @@ export async function removeMember(
   if (membership.role === 'maintainer' && target.role === 'maintainer') {
     throw new WorkspaceError('FORBIDDEN', 'Maintainer 不能移除同级成员');
   }
-  // audit(2.6): workspace.member.remove
-  await deps.prisma.membership.delete({ where: { id: target.id } });
+  await deps.prisma.$transaction(async (tx) => {
+    await tx.membership.delete({ where: { id: target.id } });
+    await recordAudit(deps, tx, {
+      actorId: userId, action: 'workspace.member.remove', workspaceId,
+      targetType: 'user', targetId: targetUserId, metadata: { role: target.role },
+    }, ctx);
+  });
 }
 
 /** 主动退出：owner 退出后剩余 owner 必须 ≥1（否则须先转让）。 */
-export async function leaveWorkspace(deps: WorkspaceDeps, userId: string, workspaceId: string): Promise<void> {
+export async function leaveWorkspace(
+  deps: WorkspaceDeps,
+  userId: string,
+  workspaceId: string,
+  ctx: AuditContext = {},
+): Promise<void> {
   const { workspace, membership } = await requireMembership(deps, workspaceId, userId);
   requireTeam(workspace);
   if (membership.role === 'owner') {
     const owners = await deps.prisma.membership.count({ where: { workspaceId, role: 'owner' } });
     if (owners <= 1) throw new WorkspaceError('LAST_OWNER', 'Owner 退出前须先转让所有权');
   }
-  // audit(2.6): workspace.member.leave
-  await deps.prisma.membership.delete({ where: { id: membership.id } });
+  await deps.prisma.$transaction(async (tx) => {
+    await tx.membership.delete({ where: { id: membership.id } });
+    await recordAudit(deps, tx, {
+      actorId: userId, action: 'workspace.member.leave', workspaceId,
+      targetType: 'user', targetId: userId, metadata: { role: membership.role },
+    }, ctx);
+  });
 }
 
 /** 转让所有权（仅 owner，team）：原 owner 降 maintainer、新 owner 升任、ownerId 更新，三步同事务。 */
@@ -90,6 +115,7 @@ export async function transferOwnership(
   userId: string,
   workspaceId: string,
   newOwnerId: string,
+  ctx: AuditContext = {},
 ): Promise<void> {
   const { workspace, membership } = await requireMembership(deps, workspaceId, userId);
   requireAction(membership, 'workspace.transfer');
@@ -99,10 +125,13 @@ export async function transferOwnership(
     where: { workspaceId_userId: { workspaceId, userId: newOwnerId } },
   });
   if (!target) throw new WorkspaceError('VALIDATION_ERROR', '新 Owner 必须是空间成员');
-  // audit(2.6): workspace.transfer
   await deps.prisma.$transaction(async (tx) => {
     await tx.membership.update({ where: { id: membership.id }, data: { role: 'maintainer' } });
     await tx.membership.update({ where: { id: target.id }, data: { role: 'owner' } });
     await tx.workspace.update({ where: { id: workspaceId }, data: { ownerId: newOwnerId } });
+    await recordAudit(deps, tx, {
+      actorId: userId, action: 'workspace.transfer', workspaceId,
+      targetType: 'user', targetId: newOwnerId, metadata: { newOwnerId },
+    }, ctx);
   });
 }

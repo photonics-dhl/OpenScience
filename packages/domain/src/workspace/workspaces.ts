@@ -1,3 +1,5 @@
+import type { AuditContext } from '@openscience/observability';
+import { recordAudit } from './audit';
 import { requireActive, requireMembership, requireTeam, validateWorkspaceName } from './helpers';
 import { requireAction } from './permissions';
 import type { WorkspaceDeps } from './types';
@@ -28,11 +30,18 @@ export async function listMyWorkspaces(deps: WorkspaceDeps, userId: string): Pro
 export async function createTeamWorkspace(
   deps: WorkspaceDeps,
   input: { userId: string; name: string },
+  ctx: AuditContext = {},
 ): Promise<WorkspaceSummary> {
   const name = validateWorkspaceName(input.name);
-  // audit(2.6): workspace.create
-  const ws = await deps.prisma.workspace.create({
-    data: { type: 'team', name, ownerId: input.userId, members: { create: { userId: input.userId, role: 'owner' } } },
+  const ws = await deps.prisma.$transaction(async (tx) => {
+    const created = await tx.workspace.create({
+      data: { type: 'team', name, ownerId: input.userId, members: { create: { userId: input.userId, role: 'owner' } } },
+    });
+    await recordAudit(deps, tx, {
+      actorId: input.userId, action: 'workspace.create', workspaceId: created.id,
+      targetType: 'workspace', targetId: created.id, metadata: { name },
+    }, ctx);
+    return created;
   });
   return { id: ws.id, type: ws.type, name: ws.name, status: ws.status, role: 'owner', createdAt: ws.createdAt };
 }
@@ -56,21 +65,38 @@ export async function updateWorkspace(
   userId: string,
   workspaceId: string,
   input: { name: string },
+  ctx: AuditContext = {},
 ): Promise<WorkspaceSummary> {
   const { workspace, membership } = await requireMembership(deps, workspaceId, userId);
   requireAction(membership, 'workspace.update');
   requireActive(workspace);
   const name = validateWorkspaceName(input.name);
-  // audit(2.6): workspace.update
-  const ws = await deps.prisma.workspace.update({ where: { id: workspaceId }, data: { name } });
+  const ws = await deps.prisma.$transaction(async (tx) => {
+    const u = await tx.workspace.update({ where: { id: workspaceId }, data: { name } });
+    await recordAudit(deps, tx, {
+      actorId: userId, action: 'workspace.update', workspaceId,
+      targetType: 'workspace', targetId: workspaceId, metadata: { name },
+    }, ctx);
+    return u;
+  });
   return { id: ws.id, type: ws.type, name: ws.name, status: ws.status, role: membership.role, createdAt: ws.createdAt };
 }
 
-export async function archiveWorkspace(deps: WorkspaceDeps, userId: string, workspaceId: string): Promise<void> {
+export async function archiveWorkspace(
+  deps: WorkspaceDeps,
+  userId: string,
+  workspaceId: string,
+  ctx: AuditContext = {},
+): Promise<void> {
   const { workspace, membership } = await requireMembership(deps, workspaceId, userId);
   requireAction(membership, 'workspace.archive');
   requireTeam(workspace);
   requireActive(workspace);
-  // audit(2.6): workspace.archive
-  await deps.prisma.workspace.update({ where: { id: workspaceId }, data: { status: 'archived' } });
+  await deps.prisma.$transaction(async (tx) => {
+    await tx.workspace.update({ where: { id: workspaceId }, data: { status: 'archived' } });
+    await recordAudit(deps, tx, {
+      actorId: userId, action: 'workspace.archive', workspaceId,
+      targetType: 'workspace', targetId: workspaceId, metadata: { status: 'archived' },
+    }, ctx);
+  });
 }
