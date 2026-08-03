@@ -1,0 +1,64 @@
+import type { FastifyInstance } from 'fastify';
+import type { Redis } from '@openscience/database';
+import { rateLimitHit } from '@openscience/database';
+import type { AuditSink } from '@openscience/observability';
+import { buildErrorBody } from '@openscience/observability';
+
+export interface RouteRule {
+  limit: number;
+  windowSec: number;
+}
+
+/**
+ * 限流路由 → 档位声明表（P1A-8 挂接点）。
+ * 后续 Phase（1B 发布/上传、1D 搜索、1E 沙箱、AI 调用）接入限流时**只加表行 + 依赖档位**，
+ * 中间件零改动。key = 完整路径（含 prefix）。
+ */
+export const RATE_LIMIT_ROUTES: Record<string, RouteRule> = {
+  '/auth/login': { limit: 5, windowSec: 60 },
+  '/auth/register': { limit: 5, windowSec: 600 },
+  '/auth/resend-code': { limit: 3, windowSec: 300 },
+  '/auth/verify-email': { limit: 10, windowSec: 300 },
+};
+
+export interface RegisterRateLimitOptions {
+  redis: Redis;
+  audit?: AuditSink;
+  enabled: boolean;
+  /** env 覆盖 login 档位（生产可调）。 */
+  loginLimit?: number;
+  loginWindowSec?: number;
+}
+
+/** 注册限流 preHandler：命中声明表路由先过 Redis 固定窗口；超限 429 + Retry-After + 审计。 */
+export function registerRateLimit(app: FastifyInstance, opts: RegisterRateLimitOptions): void {
+  if (!opts.enabled) return;
+  const rules: Record<string, RouteRule> = {
+    ...RATE_LIMIT_ROUTES,
+    '/auth/login': {
+      limit: opts.loginLimit ?? RATE_LIMIT_ROUTES['/auth/login'].limit,
+      windowSec: opts.loginWindowSec ?? RATE_LIMIT_ROUTES['/auth/login'].windowSec,
+    },
+  };
+
+  app.addHook('preHandler', async (req, reply) => {
+    const path = req.url.split('?')[0];
+    const rule = rules[path];
+    if (!rule) return;
+    const r = await rateLimitHit(opts.redis, { ip: req.ip, route: path, windowSec: rule.windowSec, limit: rule.limit });
+    if (!r.allowed) {
+      await opts.audit?.record({
+        actorId: null,
+        action: 'security.rate.limited',
+        metadata: { route: path, limit: rule.limit, windowSec: rule.windowSec },
+        requestId: String(req.id),
+        ip: req.ip,
+      });
+      void reply
+        .header('retry-after', String(r.resetInSec))
+        .status(429)
+        .send(buildErrorBody('RATE_LIMITED', '请求过于频繁，请稍后重试', String(req.id)));
+      return reply;
+    }
+  });
+}

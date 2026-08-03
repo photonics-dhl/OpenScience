@@ -1,5 +1,7 @@
+import Redis, { type Redis as RedisType } from 'ioredis';
 import { DEFAULT_DEV_REDIS_URL } from '@openscience/config';
-import Redis from 'ioredis';
+
+export type { RedisType as Redis };
 
 /**
  * 创建 ioredis 连接。默认挂空 error listener，避免 redis 不可用/重连时

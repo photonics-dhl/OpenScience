@@ -33,4 +33,30 @@ describe('loadApiEnv', () => {
   it('rejects a non-numeric PORT', () => {
     expect(() => loadApiEnv({ PORT: 'abc' })).toThrow(/PORT/);
   });
+
+  // P1A-8：限流 + CORS env
+  it('dev 缺省：限流开、login 5/60、CORS 空（同源）', () => {
+    const env = loadApiEnv({});
+    expect(env.rateLimitEnabled).toBe(true);
+    expect(env.rateLimitLoginLimit).toBe(5);
+    expect(env.rateLimitLoginWindowSec).toBe(60);
+    expect(env.allowedOrigins).toEqual([]);
+  });
+
+  it('ALLOWED_ORIGINS 逗号串 → 数组', () => {
+    const env = loadApiEnv({ ALLOWED_ORIGINS: 'https://a.example.com, https://b.example.com' });
+    expect(env.allowedOrigins).toEqual(['https://a.example.com', 'https://b.example.com']);
+  });
+
+  it('RATE_LIMIT_* 可覆盖', () => {
+    const env = loadApiEnv({ RATE_LIMIT_LOGIN_LIMIT: '10', RATE_LIMIT_LOGIN_WINDOW_SEC: '120', RATE_LIMIT_ENABLED: 'false' });
+    expect(env.rateLimitLoginLimit).toBe(10);
+    expect(env.rateLimitLoginWindowSec).toBe(120);
+    expect(env.rateLimitEnabled).toBe(false);
+  });
+
+  it('RATE_LIMIT_* 非法值 → 快速失败', () => {
+    expect(() => loadApiEnv({ RATE_LIMIT_LOGIN_LIMIT: 'abc' })).toThrow(/RATE_LIMIT_LOGIN_LIMIT/);
+    expect(() => loadApiEnv({ RATE_LIMIT_LOGIN_WINDOW_SEC: 'abc' })).toThrow(/RATE_LIMIT_LOGIN_WINDOW_SEC/);
+  });
 });

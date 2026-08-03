@@ -43,6 +43,10 @@ export function httpStatusForError(err: unknown, requestId?: string): { status: 
   if (err instanceof UsageError) {
     return { status: USAGE_ERROR_HTTP[err.code], body: buildErrorBody(err.code, err.message, requestId) };
   }
+  // @fastify/csrf-protection 校验失败：403 而非 500（FastifyError.code = FST_CSRF_INVALID_TOKEN / FST_CSRF_MISSING_SECRET）
+  if (typeof (err as { code?: unknown }).code === 'string' && (err as { code: string }).code.startsWith('FST_CSRF')) {
+    return { status: 403, body: buildErrorBody('CSRF_INVALID', 'CSRF token 校验失败', requestId) };
+  }
   if ((err as { name?: string })?.name === 'ZodError') {
     return { status: 400, body: buildErrorBody('VALIDATION_ERROR', '请求参数不合法', requestId) };
   }
