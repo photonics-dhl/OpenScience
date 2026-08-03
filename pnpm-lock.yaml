@@ -221,7 +221,18 @@ importers:
         specifier: '2'
         version: 2.1.9(@types/node@20.14.10)
 
-  packages/sdf-schema: {}
+  packages/sdf-schema:
+    dependencies:
+      ajv:
+        specifier: ^8
+        version: 8.20.0
+      ajv-formats:
+        specifier: ^3
+        version: 3.0.1(ajv@8.20.0)
+    devDependencies:
+      vitest:
+        specifier: ^2
+        version: 2.1.9(@types/node@20.14.10)
 
   packages/search: {}
 

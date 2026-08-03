@@ -4,6 +4,14 @@
   "version": "0.0.0",
   "scripts": {
     "build": "tsc -p tsconfig.json",
-    "typecheck": "tsc -p tsconfig.json --noEmit"
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "ajv": "^8",
+    "ajv-formats": "^3"
+  },
+  "devDependencies": {
+    "vitest": "^2"
   }
 }
