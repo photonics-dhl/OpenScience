@@ -31,6 +31,10 @@ jobs:
       - name: Install
         run: npx pnpm@9.15.0 install --frozen-lockfile
 
+      - name: Generate Prisma client
+        # auth/domain 等包 import @prisma/client 类型，需 database generate 先生成（CI 干净环境无缓存）
+        run: npx pnpm@9.15.0 --filter @openscience/database generate
+
       - name: Build
         run: npx pnpm@9.15.0 build
 
