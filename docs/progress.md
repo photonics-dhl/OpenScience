@@ -1,5 +1,30 @@
 # OpenScience (XGS) 进度日志
 
+## 2026-08-03 — P1B-1 SDF Schema 包完成：core + manifest JSON Schema + ajv 校验，task-master 3.1 done
+
+### ✅ Completed
+| 任务 | 详情 |
+|---|---|
+| design gate | 两决策 + 实证测试：手写 JSON Schema draft-07 + ajv（非 zod）；additionalProperties 宽容（技术债务） |
+| core Schema | `core.ts`：六必填字段（§5.1）+ SDF_CORE_FIELDS 常量 + SdfCore 类型；`schemaVersion const 0.1.0` |
+| manifest Schema | `manifest.ts`：§5.3 全字段 + objectId/versionId OSR pattern + visibility 三态 + licenses 三类 + SdfManifest 类型 |
+| 校验 | `validate.ts`：ajv draft-07 + ajv-formats，模块级编译缓存，结构化错误；validateSdfCore/validateManifest |
+| 测试 | core 6 + manifest 8 = 14，本地门禁全绿（build/typecheck/lint 0/audit 无新增/docs 0） |
+| task-master 3.1 | done + details（决策/落点/坑） |
+
+### Key Decisions / 坑
+- **手写 JSON Schema + ajv**（§5.3 规范要求 JSON Schema 文件，§5.2 目录树 core.json 即数据文件；非 zod）
+- **additionalProperties 宽容 = 技术债务**（实证三场景：空壳可选字段放行未定型数据、严格 false 误伤 draft_meta 等附加键、宽容兼容未来字段）——0.1.0 六字段 required 严格 + 附加键容忍；**0.2.0 可选字段定型时收紧 additionalProperties:false**（§5.3 语义化版本）
+- **可选字段不预置**：§5.1 只给名字无结构，0.1.0 猜结构比没有更危险，升级版本时逐个加
+- **ajv 默认不开 format** 需 ajv-formats（publishedAt date-time）；as const Schema 不能 cast JSONSchemaType
+- 测试用 `SDF_CORE_FIELDS` 常量遍历断言缺字段（非硬编码六名）
+
+### ⏳ Next Steps
+- [x] ~~P1B-1 SDF Schema~~ 完成（2026-08-03）：14 测试，3.1 done
+- [ ] **P1B-2（task-master 3.2）**：RO/SDFDocument/SDFNode 数据模型 + 迁移，/research-objects + /sdf API 骨架（步骤 2）
+- [ ] parked：P1A-3 终审项、P1A-5 deferred ①、/admin TOTP 上线路障、**SDF Schema additionalProperties 债务（0.2.0 收紧）**
+
+---
 ## 2026-08-03 — P1A-9 CI/CD 部署完成：生产栈上线 + 备份/恢复演练 + QQ SMTP，task-master 2.9 done
 
 ### ✅ Completed

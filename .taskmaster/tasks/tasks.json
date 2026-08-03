@@ -291,7 +291,7 @@
         "id": 3,
         "title": "Phase 1B: SDF 与版本",
         "description": "实现 SDF 六字段 Schema、三栏编辑器、Artifact/Blob 内容寻址存储、Commit/Manifest 增量版本、多类型 Diff、unique ID 与稳定 URL、私有/邀请/公开可见性（Spec §22 Phase 1B；依据 Spec §4–§7、§13、§15、§16、§17、§18）。不含 Hermes AI 提取与发布流程（Phase 1D）、不含 Branch/Fork/PR 协作交互（Phase 1C）。",
-        "status": "pending",
+        "status": "in-progress",
         "dependencies": [
           "2"
         ],
@@ -303,14 +303,15 @@
             "id": 1,
             "title": "定义 SDF 六字段 JSON Schema 包",
             "description": "在 packages/sdf-schema 中定义 SDF 六个必填字段（problem/insight/method/results/limitations/reproducibility）与可选字段的 JSON Schema，供前后端共用校验（Spec §5.1、§5.3、§2.2.1）。",
-            "status": "pending",
+            "status": "done",
             "dependencies": [
               "2"
             ],
             "priority": "high",
-            "details": "产出 packages/sdf-schema：core.json Schema、manifest.json 最小结构 Schema（schema/schemaVersion/objectId/versionId/version/visibility/contentHash/licenses/artifacts/parentVersion/forkedFrom 等字段，对齐 Spec §5.3 示例）；Schema 变更遵循语义化版本（Spec §5.3 MUST）；schemaVersion 初始 0.1.0；前后端通过同一包做合同校验。MUST 映射：§5.3“字段必须有 JSON Schema；Schema 变更遵循语义化版本”。\n验收: -",
+            "details": "产出 packages/sdf-schema：core.json Schema、manifest.json 最小结构 Schema（schema/schemaVersion/objectId/versionId/version/visibility/contentHash/licenses/artifacts/parentVersion/forkedFrom 等字段，对齐 Spec §5.3 示例）；Schema 变更遵循语义化版本（Spec §5.3 MUST）；schemaVersion 初始 0.1.0；前后端通过同一包做合同校验。MUST 映射：§5.3“字段必须有 JSON Schema；Schema 变更遵循语义化版本”。\n验收: -\n<info added on 2026-08-03T15:16:40.671Z>\n2026-08-03 done。\n\n两决策（design gate + 实证测试）：手写 JSON Schema draft-07 + ajv（非 zod）；additionalProperties 宽容（技术债务——实证对比空壳 vs 严格：空壳放行未定型数据、严格误伤 draft_meta，0.1.0 宽容 + 可选字段不预置，0.2.0 收紧）。\n\n落点：packages/sdf-schema core.ts（六字段 + SDF_CORE_FIELDS + SdfCore 类型）、manifest.ts（§5.3 全字段 + OSR pattern + visibility 三态 + licenses 三类）、validate.ts（ajv + ajv-formats，模块级缓存）。测试 14（core 6 + manifest 8）。\n\n坑：ajv 默认不开 format 需 ajv-formats；as const Schema 不能 cast JSONSchemaType。\n\n验收：合同测试前后端引用同一包——导出完整性验证过，web/api 后续 Phase 接入。\n</info added on 2026-08-03T15:16:40.671Z>",
             "testStrategy": "单元测试：合法/非法 SDF 文档校验通过/拒绝用例（§21.1 单元层）；合同测试：前后端引用同一 Schema 包（§21.1 合同层）。",
-            "parentId": "3"
+            "parentId": "3",
+            "updatedAt": "2026-08-03T15:16:26.152Z"
           },
           {
             "id": 2,
@@ -435,7 +436,8 @@
             "testStrategy": "集成测试：生成导出包→脱离数据库用纯文件读取校验 Schema 与哈希一致（§21.1 集成层）；单元测试：manifest 序列化字段完整性（§21.1 单元层）。",
             "parentId": "3"
           }
-        ]
+        ],
+        "updatedAt": "2026-08-03T15:16:26.152Z"
       },
       {
         "id": 4,
@@ -848,13 +850,13 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-08-03T13:12:27.430Z",
+      "lastModified": "2026-08-03T15:16:26.152Z",
       "taskCount": 6,
       "completedCount": 2,
       "tags": [
         "master"
       ],
-      "created": "2026-08-03T13:12:33.480Z",
+      "created": "2026-08-03T15:16:31.689Z",
       "description": "Tasks for master context"
     }
   }
