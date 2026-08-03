@@ -87,3 +87,4 @@ export {
 export type { VersionSnapshot } from '@openscience/versioning';
 export { compareVersions } from './diff/comparisons';
 export type { DiffResult } from '@openscience/diff';
+export { assignPublicId, computeContentSha256, type AssignPublicIdResult } from './identity/identifiers';

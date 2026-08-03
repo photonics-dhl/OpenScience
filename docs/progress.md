@@ -1,5 +1,31 @@
 # OpenScience (XGS) 进度日志
 
+## 2026-08-04 — P1B-6 标识层与时间戳服务完成：packages/identity + 迁移 10 + /research 公开 URL，云上 50/50，task-master 3.6 done
+
+### ✅ Completed
+| 任务 | 详情 |
+|---|---|
+| design gate | 五决策：UUID v7 手写/publicId 发布时分配/公开 ID 全局递增/公开 URL 仅 public/内容哈希排序聚合 |
+| packages/identity | uuid7（RFC 9562 手写）+ public-id（OSR-YYYY-NNNNNN 生成/解析 + 版本 ID -vN + 稳定 URL） |
+| migration 10 | research_objects.public_id + versions.public_version_id（unique）+ identifiers/publications 表（legal_disclaimer 预留 §6.2）+ rollback |
+| config | publicIdPrefix env（PUBLIC_ID_PREFIX 缺省 OSR，§24 配置项禁写死） |
+| domain | assignPublicId（发布时分配 + updateMany 并发安全 + ID 永不复用 §6.1）+ computeContentSha256（§6.2 哈希聚合） |
+| API | GET /research/:publicId + /research/:publicId/v/:versionNo（匿名 public 可见，private 404） |
+| 测试 | identity 11 + domain 6 + api 集成 5 = 22 新增；本地门禁全绿；**云上集成 50/50**（新增 P1B-6 5 + 既有 45） |
+| task-master 3.6 | done + details |
+
+### Key Decisions / 坑
+- **五决策**：UUID v7（§6.1 内部主键，可排序）；publicId 发布时分配（P1B-7 触发）；OSR-YYYY-NNNNNN（年 + 全局 seq，前缀配置化）；/research/* 仅 public 匿名；contentSha256 排序聚合
+- **ID 永不复用**（§6.1）：assignPublicId 同 RO 复用，updateMany where publicId=null 并发安全
+- **时间戳**（§6.2）：Publication 只追加 + legal_disclaimer 字段预留
+- fake Prisma 需同步 identifier count/create；research 路由多余 import 移除
+
+### ⏳ Next Steps
+- [x] ~~P1B-6 标识层~~ 完成（2026-08-04）：packages/identity + 云上 50/50，3.6 done
+- [ ] **P1B-7（task-master 3.7）**：Version 发布状态机（draft→published，§4.1、§2.3.4）
+- [ ] parked：P1A-3 终审项、P1A-5 deferred ①、/admin TOTP 上线路障、SDF Schema 债务（0.2.0）、病毒扫描实装（P1B-8）、大文件分片（P1B-后续）、AI diff 摘要（Phase 1D）
+
+---
 ## 2026-08-04 — P1B-5 多类型确定性 Diff 服务完成：packages/diff 九类 diff + comparison API，云上 45/45，task-master 3.5 done
 
 ### ✅ Completed

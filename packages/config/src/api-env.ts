@@ -29,6 +29,8 @@ export interface ApiEnv {
     secretKey: string;
     bucket: string;
   };
+  /** P1B-6：公开 ID 前缀（§6.1 OSR-YYYY-NNNNNN；§24 待确认项，配置而非常量）。 */
+  publicIdPrefix: string;
 }
 
 const DEV_RATE_LIMIT_LOGIN_LIMIT = 5;
@@ -90,6 +92,12 @@ export function loadApiEnv(env: NodeJS.ProcessEnv = process.env): ApiEnv {
     bucket: env.S3_BUCKET ?? 'openscience-dev',
   };
 
+  // P1B-6：公开 ID 前缀（§24 待确认，配置化）
+  const publicIdPrefix = (env.PUBLIC_ID_PREFIX ?? 'OSR').trim().toUpperCase();
+  if (!/^[A-Z0-9]{2,8}$/.test(publicIdPrefix)) {
+    throw new Error(`PUBLIC_ID_PREFIX must be 2-8 uppercase alphanumeric, got "${publicIdPrefix}"`);
+  }
+
   return {
     nodeEnv,
     port,
@@ -110,5 +118,6 @@ export function loadApiEnv(env: NodeJS.ProcessEnv = process.env): ApiEnv {
     smtpUser,
     smtpPass,
     storage,
+    publicIdPrefix,
   };
 }

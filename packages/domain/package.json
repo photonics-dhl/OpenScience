@@ -12,6 +12,7 @@
   "dependencies": {
     "@openscience/auth": "workspace:^",
     "@openscience/diff": "workspace:^",
+    "@openscience/identity": "workspace:^",
     "@openscience/observability": "workspace:^",
     "@openscience/sdf-schema": "workspace:^",
     "@openscience/storage": "workspace:^",

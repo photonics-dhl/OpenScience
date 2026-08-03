@@ -213,6 +213,9 @@ importers:
       '@openscience/diff':
         specifier: workspace:^
         version: link:../diff
+      '@openscience/identity':
+        specifier: workspace:^
+        version: link:../identity
       '@openscience/observability':
         specifier: workspace:^
         version: link:../observability
@@ -231,6 +234,15 @@ importers:
       file-type:
         specifier: ^22.0.1
         version: 22.0.1
+    devDependencies:
+      '@types/node':
+        specifier: 20.14.10
+        version: 20.14.10
+      vitest:
+        specifier: '2'
+        version: 2.1.9(@types/node@20.14.10)
+
+  packages/identity:
     devDependencies:
       '@types/node':
         specifier: 20.14.10

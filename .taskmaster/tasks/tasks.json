@@ -375,14 +375,15 @@
             "id": 6,
             "title": "实现标识层与时间戳服务",
             "description": "实现内部 UUID v7/ULID、公开 RO ID（OSR-YYYY-NNNNNN 形式）、版本 ID、稳定 URL 与 UTC 时间戳+SHA-256 内容哈希（Spec §6.1、§6.2、§2.2.5）。",
-            "status": "pending",
+            "status": "done",
             "dependencies": [
               "3.4"
             ],
             "priority": "high",
-            "details": "内部主键 UUID v7 或 ULID，外部使用永久可读编号、版本号和稳定 URL（§2.2.5、§6.1）；公开 RO ID 形式 OSR-YYYY-NNNNNN、版本 ID 追加 -vN、URL /research/OSR-YYYY-NNNNNN/v/N（§6.1）；注意：ID 前缀属 Spec §24 待确认项（OpenScience 品牌、域名和 unique ID 前缀），前缀必须做成配置项，禁止写死；公开 ID 永不复用，撤回、删除或合并后 ID 仍指向状态说明页（§6.1 MUST，状态说明页 UI 在 Phase 1D）；MVP 时间戳由 UTC 数据库事务时间、版本 manifest 和 SHA-256 内容哈希构成，发布记录写入只追加审计日志（§6.2 MUST）；时间戳法律免责声明文案在发布/公开页展示（Phase 1D），本任务在 Identifier/Publication 数据上预留声明字段；DOI 为 Phase 2（§6.1、§19，不实现）。\n验收: 步骤9",
+            "details": "内部主键 UUID v7 或 ULID，外部使用永久可读编号、版本号和稳定 URL（§2.2.5、§6.1）；公开 RO ID 形式 OSR-YYYY-NNNNNN、版本 ID 追加 -vN、URL /research/OSR-YYYY-NNNNNN/v/N（§6.1）；注意：ID 前缀属 Spec §24 待确认项（OpenScience 品牌、域名和 unique ID 前缀），前缀必须做成配置项，禁止写死；公开 ID 永不复用，撤回、删除或合并后 ID 仍指向状态说明页（§6.1 MUST，状态说明页 UI 在 Phase 1D）；MVP 时间戳由 UTC 数据库事务时间、版本 manifest 和 SHA-256 内容哈希构成，发布记录写入只追加审计日志（§6.2 MUST）；时间戳法律免责声明文案在发布/公开页展示（Phase 1D），本任务在 Identifier/Publication 数据上预留声明字段；DOI 为 Phase 2（§6.1、§19，不实现）。\n验收: 步骤9\n<info added on 2026-08-03T23:48:21.526Z>\nP1B-6 标识层与时间戳服务完成（2026-08-04）：\n\n**决策（design gate）**：\n1. UUID v7 手写（RFC 9562，Node 20 无内置）\n2. publicId 发布时分配（draft 无，P1B-7 触发）\n3. 公开 ID 序列 = RO 创建年 + 全局递增\n4. /research/* 仅 public RO 匿名可见，private 404\n5. contentSha256 = Manifest entries 按 logicalPath 排序拼接 blobSha256 再 SHA-256\n\n**落点**：\n- 新包 packages/identity：uuid7（48bit 时间戳 + RFC 9562 位）+ public-id（generatePublicId OSR-YYYY-NNNNNN / parsePublicId / versionPublicId -vN / researchUrl / parseVersionId）\n- 迁移 10：research_objects.public_id + versions.public_version_id（unique）+ identifiers/publications 表（legal_disclaimer 预留 §6.2）\n- config：publicIdPrefix env（PUBLIC_ID_PREFIX 缺省 OSR，§24 配置项禁写死）\n- domain：assignPublicId（发布时分配 + updateMany where publicId=null 并发安全 + ID 永不复用 §6.1）+ computeContentSha256（§6.2 哈希聚合）\n- api：GET /research/:publicId + /research/:publicId/v/:versionNo（匿名 public 可见，private 404）\n- 测试：identity 11 + domain identity 6 + api 集成 5 = 22 新增\n\n**验收**：本地门禁全绿；云上集成 50/50（新增 P1B-6 5 + 既有 45）；迁移 10 applied；3.6 done\n\n**坑**：\n1. fake Prisma 需同步 identifier count/create\n2. research 路由 import computeContentSha256 未用（Publication 表存哈希，路由只读）→ 移除\n3. Prisma format 缩进变化导致 Edit 匹配失败（读文件取精确文本）\n4. assignPublicId 并发安全：updateMany where publicId=null 保证只分配一次\n</info added on 2026-08-03T23:48:21.526Z>",
             "testStrategy": "单元测试：ID 生成唯一性、版本号递增、URL 路由解析（§21.1 单元层：ID）；集成测试：发布记录只追加、ID 不复用（§21.1 集成层）；验收点：发布 v1 获得 unique ID、版本 ID、UTC 时间戳和哈希（§21.2 步骤 9，发布动作在 Phase 1D 触发）。",
-            "parentId": "3"
+            "parentId": "3",
+            "updatedAt": "2026-08-03T23:48:00.260Z"
           },
           {
             "id": 7,
@@ -441,7 +442,7 @@
             "parentId": "3"
           }
         ],
-        "updatedAt": "2026-08-03T23:20:41.065Z"
+        "updatedAt": "2026-08-03T23:48:00.260Z"
       },
       {
         "id": 4,
@@ -854,13 +855,13 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-08-03T23:20:41.066Z",
+      "lastModified": "2026-08-03T23:48:00.261Z",
       "taskCount": 6,
       "completedCount": 2,
       "tags": [
         "master"
       ],
-      "created": "2026-08-03T23:20:47.593Z",
+      "created": "2026-08-03T23:48:05.692Z",
       "description": "Tasks for master context"
     }
   }

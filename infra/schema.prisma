@@ -261,6 +261,7 @@ model ResearchObject {
   status      RoStatus     @default(draft)
   visibility  RoVisibility @default(private)
   version     Int          @default(1) // 乐观锁（§16）；P1B-4 版本引擎推进
+  publicId    String?      @unique @map("public_id") // 公开 RO ID（§6.1），发布时分配（P1B-7），draft 无
   createdBy   String       @map("created_by") @db.Uuid
   createdAt   DateTime     @default(now()) @map("created_at")
   updatedAt   DateTime     @updatedAt @map("updated_at")
@@ -271,6 +272,7 @@ model ResearchObject {
   branches    Branch[]
   commits     Commit[]     @relation("CommitResearchObject")
   versions    Version[]    @relation("VersionResearchObject")
+  identifiers Identifier[]
 
   @@index([workspaceId])
   @@map("research_objects")
@@ -403,12 +405,14 @@ model Version {
   researchObjectId String        @map("research_object_id") @db.Uuid
   commitId         String        @map("commit_id") @db.Uuid
   versionNo        Int           @map("version_no") // RO 内递增版本号（外部可读，§2.2 原则 5）
+  publicVersionId  String?       @unique @map("public_version_id") // OSR-YYYY-NNNNNN-vN（§6.1），发布时分配
   status           VersionStatus @default(draft) // P1B-7 发布状态机
   createdAt        DateTime      @default(now()) @map("created_at")
 
   researchObject ResearchObject   @relation("VersionResearchObject", fields: [researchObjectId], references: [id], onDelete: Cascade)
   commit         Commit           @relation(fields: [commitId], references: [id], onDelete: Restrict)
   manifest       VersionManifest?
+  publications   Publication[]
 
   @@unique([researchObjectId, versionNo])
   @@index([researchObjectId])
@@ -439,4 +443,32 @@ model ManifestEntry {
   @@unique([manifestId, logicalPath])
   @@index([manifestId])
   @@map("manifest_entries")
+}
+
+// --- P1B-6：标识层与时间戳服务（§6.1 公开 ID + §6.2 时间戳/哈希 + §15 Identifier/Publication）---
+
+model Identifier {
+  id               String   @id @default(uuid()) @db.Uuid
+  researchObjectId String   @map("research_object_id") @db.Uuid
+  publicId         String   @unique @map("public_id") // OSR-YYYY-NNNNNN（§6.1）
+  issuedAt         DateTime @map("issued_at")
+  legalDisclaimer  String?  @map("legal_disclaimer") // §6.2 免责声明文案预留（Phase 1D 展示）
+
+  researchObject ResearchObject @relation(fields: [researchObjectId], references: [id], onDelete: Cascade)
+
+  @@map("identifiers")
+}
+
+model Publication {
+  id              String   @id @default(uuid()) @db.Uuid
+  versionId       String   @map("version_id") @db.Uuid
+  publicVersionId String   @unique @map("public_version_id") // OSR-YYYY-NNNNNN-vN（§6.1）
+  contentSha256   String   @map("content_sha256") // 版本内容哈希（§6.2，Manifest 排序聚合）
+  publishedAt     DateTime @map("published_at") // UTC 事务时间
+  legalDisclaimer String?  @map("legal_disclaimer") // §6.2 免责声明预留
+
+  version Version @relation(fields: [versionId], references: [id], onDelete: Cascade)
+
+  @@index([versionId])
+  @@map("publications")
 }
