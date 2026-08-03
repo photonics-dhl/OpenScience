@@ -25,6 +25,17 @@ async function main(): Promise<void> {
     cookieSecret: env.cookieSecret,
     secureCookies: env.secureCookies,
     logger,
+    // P1A-8：生产启用安全基线——限流（登录 5/min）+ helmet 安全头 + CSRF + CORS 白名单；
+    // dev 不传则 buildApp 缺省关闭（测试现状）。CORS 白名单空 = 同源策略。
+    trustProxy: env.nodeEnv === 'production',
+    rateLimitEnabled: env.rateLimitEnabled,
+    rateLimit: { loginLimit: env.rateLimitLoginLimit, loginWindowSec: env.rateLimitLoginWindowSec },
+    security: {
+      allowedOrigins: env.allowedOrigins,
+      csrf: true,
+      cors: env.allowedOrigins.length > 0,
+      helmet: true,
+    },
   });
   // 生产容器绑 0.0.0.0（docker 发布端口连容器 eth0；compose 已限制宿主 127.0.0.1:3001，外部不可达）；
   // dev 绑 127.0.0.1（本机直连）。

@@ -50,7 +50,9 @@ services:
     restart: unless-stopped
 
   api:
-    image: node:22-alpine
+    # node:22（debian bookworm full，含 openssl3）—— Prisma engine 与 cloud host build 的
+    # debian-openssl-3.0.x 匹配；slim/alpine 缺 openssl 运行时致 engine 加载失败（P1A-9 实证）
+    image: node:22
     # 暴露 127.0.0.1:3001 到 host（nginx 反代）；不绑 0.0.0.0
     ports:
       - "127.0.0.1:3001:3001"

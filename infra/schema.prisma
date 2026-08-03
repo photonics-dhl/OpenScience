@@ -1,5 +1,7 @@
 generator client {
-  provider = "prisma-client-js"
+  provider      = "prisma-client-js"
+  // P1A-9：生产 api 容器 node:22-alpine（musl）需 linux-musl engine；本地/云上集成走 native
+  binaryTargets = ["native", "linux-musl"]
 }
 
 datasource db {

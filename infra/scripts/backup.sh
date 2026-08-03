@@ -38,7 +38,7 @@ DATE="$(date +%F)"
 DUMP_FILE="$DUMP_DIR/db-$DATE.sql"
 
 # pg_dump：经生产 postgres 容器导出；内容不向 stdout 输出（Spec §20.1-9）
-docker compose -f "$COMPOSE_FILE" exec -T postgres \
+docker compose --env-file "$REMOTE_ROOT/.env.prod" -f "$COMPOSE_FILE" exec -T postgres \
   pg_dump -U "$DB_USER" -d "$DB_NAME" > "$DUMP_FILE"
 
 # 校验 dump 非空
