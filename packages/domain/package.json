@@ -14,6 +14,7 @@
     "@openscience/observability": "workspace:^",
     "@openscience/sdf-schema": "workspace:^",
     "@openscience/storage": "workspace:^",
+    "@openscience/versioning": "workspace:^",
     "@prisma/client": "5.22.0",
     "file-type": "^22.0.1"
   },

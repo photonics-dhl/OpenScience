@@ -78,3 +78,10 @@ export {
   createArtifact, getArtifact,
   type ArtifactDeps, type CreateArtifactInput, type CreateArtifactResult, type ArtifactDetail,
 } from './artifact/artifacts';
+export { CommitError, type CommitErrorCode } from './commit/errors';
+export {
+  createCommit, getVersion, rebuildVersion,
+  type CreateCommitInput, type CreateCommitResult, type VersionDetail,
+  type ArtifactReference,
+} from './commit/commits';
+export type { VersionSnapshot } from '@openscience/versioning';

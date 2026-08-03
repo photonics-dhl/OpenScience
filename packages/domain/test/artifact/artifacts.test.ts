@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { createHash } from 'node:crypto';
+import { Readable } from 'node:stream';
 import type { StorageAdapter } from '@openscience/storage';
 import type { AuditSink } from '@openscience/observability';
 import { createFakePrisma, seedUser } from '../helpers/fakes';
@@ -23,7 +24,7 @@ function memoryStorage(): StorageAdapter & { store: Map<string, { body: Buffer }
     getObject: async (key: string) => {
       const hit = store.get(key);
       if (!hit) throw new Error(`Object not found: ${key}`);
-      return { body: Buffer.toWeb(hit.body) as unknown as NodeJS.ReadableStream, size: hit.body.length };
+      return { body: Readable.from([hit.body]), size: hit.body.length };
     },
     headObject: async (key: string) => {
       const hit = store.get(key);

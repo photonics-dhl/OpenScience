@@ -9,6 +9,7 @@ import { registerAdminUsageRoutes } from './routes/admin-usage';
 import { registerUsageRoutes } from './routes/usage';
 import { registerResearchObjectRoutes } from './routes/research-objects';
 import { registerArtifactRoutes } from './routes/artifacts';
+import { registerCommitRoutes } from './routes/commits';
 import { registerRateLimit } from './security/rate-limit';
 import { registerSecurity, type SecurityOptions } from './security/security';
 
@@ -75,6 +76,7 @@ export async function buildApp(opts: BuildAppOptions): Promise<FastifyInstance> 
   if (opts.storage) {
     const storage = opts.storage;
     await app.register(async (instance) => registerArtifactRoutes(instance, { ...opts, storage }), {});
+    await app.register(async (instance) => registerCommitRoutes(instance, { ...opts, storage }), {});
   }
   return app;
 }

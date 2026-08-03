@@ -16,11 +16,17 @@ interface FakeDb {
   sdfNodes: any[];
   blobs: any[];
   artifacts: any[];
+  branches: any[];
+  commits: any[];
+  changesets: any[];
+  versions: any[];
+  versionManifests: any[];
+  manifestEntries: any[];
 }
 
 /** 内存版 Prisma 子集：覆盖 workspace 领域用到的调用面。 */
 export function createFakePrisma(): { prisma: PrismaClient; db: FakeDb } {
-  const db: FakeDb = { users: [], workspaces: [], memberships: [], workspaceInvitations: [], mailOutbox: [], quotaPolicies: [], usageLedger: [], researchObjects: [], sdfDocuments: [], sdfNodes: [], blobs: [], artifacts: [] };
+  const db: FakeDb = { users: [], workspaces: [], memberships: [], workspaceInvitations: [], mailOutbox: [], quotaPolicies: [], usageLedger: [], researchObjects: [], sdfDocuments: [], sdfNodes: [], blobs: [], artifacts: [], branches: [], commits: [], changesets: [], versions: [], versionManifests: [], manifestEntries: [] };
   let seq = 0;
   const nextId = () => `00000000-0000-4000-8000-${String(++seq).padStart(12, '0')}`;
   const p2002 = () => {
@@ -251,6 +257,12 @@ export function createFakePrisma(): { prisma: PrismaClient; db: FakeDb } {
         }
         return { count };
       },
+      update: async ({ where, data }: any) => {
+        const r = db.researchObjects.find((row) => row.id === where.id);
+        if (!r) return null;
+        Object.assign(r, data);
+        return r;
+      },
     },
     sdfDocument: {
       findUnique: async ({ where }: any) =>
@@ -300,6 +312,82 @@ export function createFakePrisma(): { prisma: PrismaClient; db: FakeDb } {
       create: async ({ data }: any) => {
         const row = { id: nextId(), createdAt: new Date(), ...data };
         db.artifacts.push(row);
+        return row;
+      },
+    },
+    branch: {
+      findFirst: async ({ where }: any) =>
+        db.branches.find(
+          (b) =>
+            (where.researchObjectId === undefined || b.researchObjectId === where.researchObjectId) &&
+            (where.name === undefined || b.name === where.name),
+        ) ?? null,
+      create: async ({ data }: any) => {
+        const row = { id: nextId(), isDefault: false, createdAt: new Date(), ...data };
+        db.branches.push(row);
+        return row;
+      },
+    },
+    commit: {
+      findUnique: async ({ where }: any) =>
+        db.commits.find((c) => (where.id ? c.id === where.id : c.idempotencyKey === where.idempotencyKey)) ?? null,
+      findFirst: async ({ where, orderBy }: any) => {
+        const rows = db.commits.filter(
+          (c) =>
+            (where.branchId === undefined || c.branchId === where.branchId) &&
+            (where.researchObjectId === undefined || c.researchObjectId === where.researchObjectId),
+        );
+        if (orderBy?.createdAt === 'desc') rows.sort((a, b) => b.createdAt - a.createdAt);
+        return rows[0] ?? null;
+      },
+      create: async ({ data }: any) => {
+        const row = { id: nextId(), createdAt: new Date(), ...data };
+        delete row.changesets;
+        db.commits.push(row);
+        if (data.changesets?.create) {
+          for (const cs of data.changesets.create) {
+            db.changesets.push({ id: nextId(), commitId: row.id, createdAt: new Date(), ...cs });
+          }
+        }
+        return row;
+      },
+    },
+    version: {
+      findFirst: async ({ where, orderBy }: any) => {
+        const rows = db.versions.filter(
+          (v) =>
+            (where.researchObjectId === undefined || v.researchObjectId === where.researchObjectId) &&
+            (where.commitId === undefined || v.commitId === where.commitId),
+        );
+        if (orderBy?.versionNo === 'desc') rows.sort((a, b) => b.versionNo - a.versionNo);
+        return rows[0] ?? null;
+      },
+      findUnique: async ({ where, include }: any) => {
+        const row = db.versions.find((v) => v.id === where.id) ?? null;
+        if (!row || !include?.researchObject) return row;
+        return { ...row, researchObject: db.researchObjects.find((r) => r.id === row.researchObjectId) ?? null };
+      },
+      create: async ({ data }: any) => {
+        const row = { id: nextId(), status: 'draft', createdAt: new Date(), ...data };
+        db.versions.push(row);
+        return row;
+      },
+    },
+    versionManifest: {
+      findUnique: async ({ where, include }: any) => {
+        const row = db.versionManifests.find((m) => m.versionId === where.versionId) ?? null;
+        if (!row || !include?.entries) return row;
+        return { ...row, entries: db.manifestEntries.filter((e) => e.manifestId === row.id) };
+      },
+      create: async ({ data }: any) => {
+        const row = { id: nextId(), createdAt: new Date(), ...data };
+        delete row.entries;
+        db.versionManifests.push(row);
+        if (data.entries?.create) {
+          for (const e of data.entries.create) {
+            db.manifestEntries.push({ id: nextId(), manifestId: row.id, createdAt: new Date(), ...e });
+          }
+        }
         return row;
       },
     },

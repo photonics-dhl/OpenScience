@@ -1,5 +1,31 @@
 # OpenScience (XGS) 进度日志
 
+## 2026-08-04 — P1B-4 Commit/Manifest 版本引擎完成：迁移 9 + /commits /versions API，云上 41/41，task-master 3.4 done
+
+### ✅ Completed
+| 任务 | 详情 |
+|---|---|
+| design gate | 五决策：ChangeSet 单 op / 初始 core 基准 / Version 仅 draft / Branch 表建 default main / artifact diff 自动算 |
+| migration 9 | branches/commits/changesets/versions(version_no + VersionStatus)/version_manifests/manifest_entries 六表 + rollback |
+| versioning 包 | patch.ts（fast-json-patch@3.1.1 applySdfPatch/diffSdfCore/validatePatch）+ manifest.ts（rebuildCore/buildSnapshot）；补 main/types + test |
+| domain | commit/：errors + createCommit（乐观锁/幂等/公开不可变/Manifest 生成）/getVersion/rebuildVersion（blob sha256 校验） |
+| API | POST /research-objects/:id/commits（Idempotency-Key）+ GET /versions/:id + /rebuild；error-map CommitError |
+| 测试 | versioning 13 + domain commit 9 + api 集成 6 = 28 新增；本地门禁全绿；**云上集成 41/41**（新增 P1B-4 6 + 既有 35） |
+| task-master 3.4 | done + details |
+
+### Key Decisions / 坑
+- **五决策**：ChangeSet 存单 op（§7.2.5 RFC 6902 apply 链）；初始 core = SdfDocument.coreJson 基准；Version 仅 draft（P1B-7 发布）；Branch 表建 default main（Phase 1C 扩展）；artifact 传完整集合 diff 自动算增删改（§7.2.4 复用 Blob）
+- **公开不可变**（§2.2.3）：最新版本 published → commit 409 VERSION_PUBLISHED
+- fake researchObject 缺 update 方法（只 updateMany，createCommit 用 update）
+- Buffer.toWeb 不可 for-await 迭代（fake getObject 改 Readable.from）
+- Operation[] → Prisma InputJsonValue 需 as unknown as 双转换
+
+### ⏳ Next Steps
+- [x] ~~P1B-4 版本引擎~~ 完成（2026-08-04）：迁移 9 + 云上 41/41，3.4 done
+- [ ] **P1B-5（task-master 3.5）**：大文件分片上传 + 幂等键实装（§13.1 上传分片）
+- [ ] parked：P1A-3 终审项、P1A-5 deferred ①、/admin TOTP 上线路障、SDF Schema 债务（0.2.0）、病毒扫描实装（P1B-8）、Version 发布状态机（P1B-7）
+
+---
 ## 2026-08-04 — P1B-3 Blob 内容寻址存储 + 上传管线完成：迁移 8 + /artifacts API，云上 35/35，task-master 3.3 done
 
 ### ✅ Completed

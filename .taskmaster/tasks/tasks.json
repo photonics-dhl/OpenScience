@@ -346,15 +346,16 @@
             "id": 4,
             "title": "实现 Commit/Manifest 增量版本引擎",
             "description": "在 packages/versioning 实现 Commit、ChangeSet、Version、VersionManifest：版本可完整重建、可校验，未变化 Artifact 复用原 Blob，SDF 结构化变化用 RFC 6902 JSON Patch（Spec §7.1、§7.2、§2.2.3）。",
-            "status": "pending",
+            "status": "done",
             "dependencies": [
               "3.1",
               "3.3"
             ],
             "priority": "high",
-            "details": "Version Manifest 保存版本对 Artifact 的引用（§7.2.3）；未改变 Artifact 继续引用原 Blob（§7.2.4 MUST）；SDF JSON 结构化变化使用 RFC 6902 JSON Patch（§7.2.5）；可生成小型逻辑检查点加速重建但相同 Blob 不重复保存（§7.2.7）；已公开版本永久不可原地修改，修改必须产生新版本（§2.2.3、§7.1 MUST，写入路径强制校验）；任意版本可完整重建并可校验（§7.1）；提供 /commits、/versions API（§16）；写操作记录审计日志（§17 MUST）。Commit 先挂在 RO 默认主线，完整 Branch 模型在 Phase 1C 落地，字段设计不得封死分支扩展（§19 约束）。\n验收: 步骤6,14",
+            "details": "Version Manifest 保存版本对 Artifact 的引用（§7.2.3）；未改变 Artifact 继续引用原 Blob（§7.2.4 MUST）；SDF JSON 结构化变化使用 RFC 6902 JSON Patch（§7.2.5）；可生成小型逻辑检查点加速重建但相同 Blob 不重复保存（§7.2.7）；已公开版本永久不可原地修改，修改必须产生新版本（§2.2.3、§7.1 MUST，写入路径强制校验）；任意版本可完整重建并可校验（§7.1）；提供 /commits、/versions API（§16）；写操作记录审计日志（§17 MUST）。Commit 先挂在 RO 默认主线，完整 Branch 模型在 Phase 1C 落地，字段设计不得封死分支扩展（§19 约束）。\n验收: 步骤6,14\n<info added on 2026-08-03T23:00:28.691Z>\nP1B-4 Commit/Manifest 增量版本引擎完成（2026-08-04）：\n\n决策（design gate）：\n1. ChangeSet 存单 op（RFC 6902 apply 链重建）\n2. 初始 core = RO 创建时 SdfDocument.coreJson 基准\n3. Version 仅 draft（published 归 P1B-7 发布状态机）\n4. Branch 表就建（default main，Phase 1C 扩展）\n5. artifact 变更传完整集合，diff 自动算增删改\n\n落点：\n- 迁移 9：branches/commits/changesets/versions(version_no+VersionStatus enum)/version_manifests/manifest_entries 六表 + rollback\n- versioning 包：patch.ts（fast-json-patch@3.1.1 CJS applySdfPatch/diffSdfCore/validatePatch）+ manifest.ts（rebuildCore/buildSnapshot）；补 main/types + test script + vitest 配置\n- domain commit/：errors（CONCURRENT_UPDATE/VERSION_PUBLISHED/DUPLICATE_IDEMPOTENCY_KEY）+ commits.ts（createCommit 乐观锁+幂等+公开不可变+Manifest 生成 / getVersion / rebuildVersion 校验 blob sha256）\n- api：POST /research-objects/:id/commits（Idempotency-Key 头）+ GET /versions/:id + GET /versions/:id/rebuild；error-map CommitError 映射\n- 测试：versioning 13 + domain commit 9 + api 集成 6 = 28 新增\n\n验收：本地门禁全绿；云上集成 41/41（新增 P1B-4 6 + 既有 35）；迁移 9 applied + rollback 演练；3.4 done\n\n坑：\n1. fake researchObject 缺 update 方法（fake 只实现 updateMany，createCommit 用 update）\n2. Buffer.toWeb 返回的 ReadableStream 不可 for-await 迭代（fake getObject 改用 Readable.from）\n3. Operation[] 不能直接 cast Prisma.InputJsonValue（需 as unknown as 双转换）\n4. versioning/storage 包缺 main/types（P1B-3 修 storage，P1B-4 建 versioning 时直接补上）\n</info added on 2026-08-03T23:00:28.691Z>",
             "testStrategy": "单元测试：JSON Patch 应用/逆推、Manifest 重建、不可变校验（§21.1 单元层：diff/版本规则）；集成测试：创建 Commit→生成 Manifest→完整重建版本并校验哈希（§21.1 集成层）；E2E 预备：创建 Commit 和版本候选（§21.2 步骤 6）。",
-            "parentId": "3"
+            "parentId": "3",
+            "updatedAt": "2026-08-03T23:00:13.392Z"
           },
           {
             "id": 5,
@@ -439,7 +440,7 @@
             "parentId": "3"
           }
         ],
-        "updatedAt": "2026-08-03T17:08:13.359Z"
+        "updatedAt": "2026-08-03T23:00:13.392Z"
       },
       {
         "id": 4,
@@ -852,13 +853,13 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-08-03T17:08:13.359Z",
+      "lastModified": "2026-08-03T23:00:13.392Z",
       "taskCount": 6,
       "completedCount": 2,
       "tags": [
         "master"
       ],
-      "created": "2026-08-03T17:08:20.881Z",
+      "created": "2026-08-03T23:00:20.072Z",
       "description": "Tasks for master context"
     }
   }
