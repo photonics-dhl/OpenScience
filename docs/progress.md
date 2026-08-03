@@ -1,5 +1,31 @@
 # OpenScience (XGS) 进度日志
 
+## 2026-08-03 — P1B-2 RO/SDF 数据模型完成：迁移 7 + API 骨架，云上集成 26/26，task-master 3.2 done
+
+### ✅ Completed
+| 任务 | 详情 |
+|---|---|
+| design gate | 三决策：UUID v4 沿用（v7 归 P1B-6）、SDFNode 固定六型枚举、visibility 本任务建（private 默认） |
+| migration 7 | research_objects/sdf_documents/sdf_nodes + RoStatus 9 枚举/RoVisibility/SdfNodeType + rollback |
+| Prisma | 三 model + Workspace/User 关系；RO.version 乐观锁字段（与 P1B-4 版本引擎复用） |
+| domain | research-object/：types（常量）/errors/research-objects（create/get/update 乐观锁）/sdf（validateSdfCore 合同 + 乐观锁） |
+| API | /research-objects POST/GET/PATCH + /sdf GET/PUT；error-map ResearchObjectError（CONCURRENT_UPDATE→409） |
+| 测试 | domain 18 新增（创建原子/乐观锁 409/合同校验/越权 404）；本地门禁全绿；**云上集成 26/26**（新增 P1B-2 5 + 既有 21） |
+| task-master 3.2 | done + details |
+
+### Key Decisions / 坑
+- **三决策**：UUID v4（一致性）；SDFNode 固定六型（对齐 SDF_CORE_FIELDS）；visibility 字段 P1B-2 建（P1B-7 只加强制不迁移）
+- **RO.version = 乐观锁 = 版本引擎版本号**（§16 复用同一字段，P1B-4 推进）
+- **sdf-schema P1B-1 漏 main/types**：消费方（domain）测试才发现，已补（P1B-1 只自测没暴露）
+- domain 测试子目录相对路径坑（../src → ../../src）
+- create RO 同事务建 RO + SDFDocument + 六 node（原子）+ 审计
+
+### ⏳ Next Steps
+- [x] ~~P1B-2 数据模型~~ 完成（2026-08-03）：迁移 7 + 云上 26/26，3.2 done
+- [ ] **P1B-3（task-master 3.3）**：Blob 内容寻址存储 + 上传管线（SHA-256 键 + Artifact 元数据 + 分片/校验/MIME/病毒扫描，步骤 14）
+- [ ] parked：P1A-3 终审项、P1A-5 deferred ①、/admin TOTP 上线路障、SDF Schema additionalProperties 债务（0.2.0）
+
+---
 ## 2026-08-03 — P1B-1 SDF Schema 包完成：core + manifest JSON Schema + ajv 校验，task-master 3.1 done
 
 ### ✅ Completed

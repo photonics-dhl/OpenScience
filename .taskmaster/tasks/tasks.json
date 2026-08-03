@@ -317,14 +317,15 @@
             "id": 2,
             "title": "建立 RO 与 SDF 数据模型及迁移",
             "description": "建立 ResearchObject、SDFDocument、SDFNode 数据实体与数据库迁移，支持在个人 Workspace 创建私有 RO（Spec §15、§4.1、§3.2、验收主流程步骤 2）。",
-            "status": "pending",
+            "status": "done",
             "dependencies": [
               "2"
             ],
             "priority": "high",
-            "details": "实体覆盖 Spec §15 中 ResearchObject、SDFDocument、SDFNode（Blob/Artifact/Commit/Version 等见 P1B-3/4）；RO 状态机字段按 §4.1（draft/under_review/approved/published/revised/withdrawn/restricted/rejected/archived），MVP 内仅落地 draft 及后续阶段所需状态枚举，不实现 1C/1D 的流转逻辑；RO 归属 Workspace（§3.2）；迁移向前可部署、可回滚或有补偿步骤（§15 MUST）；提供 /research-objects、/sdf API 骨架（§16），写操作带幂等键与乐观锁（§16）。\n验收: 步骤2",
+            "details": "实体覆盖 Spec §15 中 ResearchObject、SDFDocument、SDFNode（Blob/Artifact/Commit/Version 等见 P1B-3/4）；RO 状态机字段按 §4.1（draft/under_review/approved/published/revised/withdrawn/restricted/rejected/archived），MVP 内仅落地 draft 及后续阶段所需状态枚举，不实现 1C/1D 的流转逻辑；RO 归属 Workspace（§3.2）；迁移向前可部署、可回滚或有补偿步骤（§15 MUST）；提供 /research-objects、/sdf API 骨架（§16），写操作带幂等键与乐观锁（§16）。\n验收: 步骤2\n<info added on 2026-08-03T15:46:55.174Z>\n2026-08-03 done. 三决策（design gate）：主键 UUID v4 沿用（对齐现有 6 表，v7 归 P1B-6）；SDFNode 固定六型枚举（对齐 P1B-1 SDF_CORE_FIELDS）；visibility 本任务建（private 默认，P1B-7 只加强制）。\n落点：迁移 7（research_objects/sdf_documents/sdf_nodes + RoStatus 9 枚举/RoVisibility/SdfNodeType）+ Prisma 三 model；domain/research-object/（types/errors/research-objects create/get/update 乐观锁/sdf validateSdfCore 合同 + 乐观锁）；api /research-objects POST/GET/PATCH + /sdf GET/PUT；error-map ResearchObjectError（CONCURRENT_UPDATE→409）。RO.version 乐观锁字段与 P1B-4 版本引擎版本号复用同一字段。\n云上集成 26/26（新增 P1B-2 5：创建原子/乐观锁 409/SDF 读写/越权 404/401）。坑：sdf-schema P1B-1 漏 main/types 字段（消费方测试发现，已补）；domain test 子目录相对路径 ../src→../../src。\n</info added on 2026-08-03T15:46:55.174Z>",
             "testStrategy": "单元测试：状态枚举与归属规则（§21.1 单元层）；集成测试：迁移可上可下、创建 RO 落库（§21.1 集成层）；E2E 预备：受邀用户创建私有 RO（§21.2 步骤 2）。",
-            "parentId": "3"
+            "parentId": "3",
+            "updatedAt": "2026-08-03T15:46:25.621Z"
           },
           {
             "id": 3,
@@ -437,7 +438,7 @@
             "parentId": "3"
           }
         ],
-        "updatedAt": "2026-08-03T15:16:26.152Z"
+        "updatedAt": "2026-08-03T15:46:25.621Z"
       },
       {
         "id": 4,
@@ -850,13 +851,13 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-08-03T15:16:26.152Z",
+      "lastModified": "2026-08-03T15:46:25.621Z",
       "taskCount": 6,
       "completedCount": 2,
       "tags": [
         "master"
       ],
-      "created": "2026-08-03T15:16:31.689Z",
+      "created": "2026-08-03T15:46:31.381Z",
       "description": "Tasks for master context"
     }
   }
