@@ -13,7 +13,9 @@
     "@openscience/auth": "workspace:^",
     "@openscience/observability": "workspace:^",
     "@openscience/sdf-schema": "workspace:^",
-    "@prisma/client": "5.22.0"
+    "@openscience/storage": "workspace:^",
+    "@prisma/client": "5.22.0",
+    "file-type": "^22.0.1"
   },
   "devDependencies": {
     "@types/node": "20.14.10",

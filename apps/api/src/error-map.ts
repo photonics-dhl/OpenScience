@@ -1,5 +1,5 @@
 import { AuthError, type AuthErrorCode } from '@openscience/auth';
-import { ResearchObjectError, UsageError, WorkspaceError, type WorkspaceErrorCode } from '@openscience/domain';
+import { ArtifactError, ResearchObjectError, UsageError, WorkspaceError, type WorkspaceErrorCode } from '@openscience/domain';
 import { buildErrorBody, type ErrorBody } from '@openscience/observability';
 
 const AUTH_ERROR_HTTP: Record<AuthErrorCode, number> = {
@@ -37,6 +37,14 @@ const RESEARCH_OBJECT_ERROR_HTTP: Record<ResearchObjectError['code'], number> = 
   CONCURRENT_UPDATE: 409, // 乐观锁冲突（§16）
 };
 
+const ARTIFACT_ERROR_HTTP: Record<ArtifactError['code'], number> = {
+  ARTIFACT_NOT_FOUND: 404,
+  FORBIDDEN: 403,
+  VALIDATION_ERROR: 400,
+  FILE_TOO_LARGE: 413, // 超配额（§13.3）
+  MALICIOUS_FILE: 451, // 病毒扫描不通过（§17，P1B-8 实装）
+};
+
 export type { ErrorBody };
 
 /** 统一错误映射（2.6 扩展为全局标准前的最小版：/auth + /workspaces + /usage）；requestId 三方串联（Spec §17）。 */
@@ -52,6 +60,9 @@ export function httpStatusForError(err: unknown, requestId?: string): { status: 
   }
   if (err instanceof ResearchObjectError) {
     return { status: RESEARCH_OBJECT_ERROR_HTTP[err.code], body: buildErrorBody(err.code, err.message, requestId) };
+  }
+  if (err instanceof ArtifactError) {
+    return { status: ARTIFACT_ERROR_HTTP[err.code], body: buildErrorBody(err.code, err.message, requestId) };
   }
   // @fastify/csrf-protection 校验失败：403 而非 500（FastifyError.code = FST_CSRF_INVALID_TOKEN / FST_CSRF_MISSING_SECRET）
   if (typeof (err as { code?: unknown }).code === 'string' && (err as { code: string }).code.startsWith('FST_CSRF')) {

@@ -14,11 +14,13 @@ interface FakeDb {
   researchObjects: any[];
   sdfDocuments: any[];
   sdfNodes: any[];
+  blobs: any[];
+  artifacts: any[];
 }
 
 /** 内存版 Prisma 子集：覆盖 workspace 领域用到的调用面。 */
 export function createFakePrisma(): { prisma: PrismaClient; db: FakeDb } {
-  const db: FakeDb = { users: [], workspaces: [], memberships: [], workspaceInvitations: [], mailOutbox: [], quotaPolicies: [], usageLedger: [], researchObjects: [], sdfDocuments: [], sdfNodes: [] };
+  const db: FakeDb = { users: [], workspaces: [], memberships: [], workspaceInvitations: [], mailOutbox: [], quotaPolicies: [], usageLedger: [], researchObjects: [], sdfDocuments: [], sdfNodes: [], blobs: [], artifacts: [] };
   let seq = 0;
   const nextId = () => `00000000-0000-4000-8000-${String(++seq).padStart(12, '0')}`;
   const p2002 = () => {
@@ -277,6 +279,28 @@ export function createFakePrisma(): { prisma: PrismaClient; db: FakeDb } {
         );
         Object.assign(node, data);
         return node;
+      },
+    },
+    blob: {
+      upsert: async ({ where, create, update }: any) => {
+        const existing = db.blobs.find((b) => b.sha256 === where.sha256);
+        if (existing) return { ...existing, ...update };
+        const row = { createdAt: new Date(), ...create };
+        db.blobs.push(row);
+        return row;
+      },
+      findUnique: async ({ where }: any) => db.blobs.find((b) => b.sha256 === where.sha256) ?? null,
+    },
+    artifact: {
+      findUnique: async ({ where, include }: any) => {
+        const row = db.artifacts.find((a) => a.id === where.id) ?? null;
+        if (!row || !include?.blob) return row;
+        return { ...row, blob: db.blobs.find((b) => b.sha256 === row.blobSha256) ?? null };
+      },
+      create: async ({ data }: any) => {
+        const row = { id: nextId(), createdAt: new Date(), ...data };
+        db.artifacts.push(row);
+        return row;
       },
     },
     $transaction: async (fn: (tx: unknown) => Promise<unknown>) => fn(prisma),

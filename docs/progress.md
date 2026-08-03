@@ -1,5 +1,34 @@
 # OpenScience (XGS) 进度日志
 
+## 2026-08-04 — P1B-3 Blob 内容寻址存储 + 上传管线完成：迁移 8 + /artifacts API，云上 35/35，task-master 3.3 done
+
+### ✅ Completed
+| 任务 | 详情 |
+|---|---|
+| design gate | 五决策：Blob 存储键分段 / logicalPath 非唯一 / MIME 失败允许上传 / file-type dynamic import / 配额只读不扣费 |
+| migration 8 | blobs（sha256 主键 + storage_key + size）+ artifacts（logical_path/mime_type/size/blob_sha256/uploaded_by/workspace_id）+ rollback |
+| Prisma | Blob + Artifact model + User/Workspace 关联 |
+| storage | blob.ts：putBlob 去重（§7.1）/getBlob/headBlob/deleteBlob/getBlobStorageKey（分段键）；补 package.json main/types（P1A-2 漏，本任务暴露） |
+| domain | artifact/：errors/mime（file-type@22 dynamic import）/quota（复用 resolvePolicy）/scan（占位）/artifacts（createArtifact 管线 + getArtifact） |
+| API | /artifacts/upload POST（multipart）+ /artifacts/:id/download GET；error-map FILE_TOO_LARGE=413/MALICIOUS_FILE=451；app.ts storage 注入（缺省不注册） |
+| config | api-env 加 storage（S3_* env） |
+| 测试 | storage 9 + domain 11 + api 集成 6 = 26 新增；本地门禁全绿；**云上集成 35/35**（新增 P1B-3 6 + 既有 29） |
+| task-master 3.3 | done + details |
+
+### Key Decisions / 坑
+- **五决策**：Blob 存储键 `blobs/<h2>/<h4>/<sha256>`；Artifact.logicalPath 非唯一（P1B-4 Manifest 去重）；MIME 失败允许上传（mimeType=null + 审计）；file-type ESM-only 用 dynamic import（全仓 esnext 破坏 CJS）；配额只读不扣费（P1B-6 记账）
+- **detectMimeType 消费 Readable 流 → putBlob 再读空流 size=0**（集成测试抓到，改先统一转 Buffer）
+- **MinIO 对象持久化跨测试运行** → afterAll 需删对象（DB 清行不够），否则 alreadyExists 误命中
+- **限流测试跨运行残留（P1A-8 存量 flaky）**：rl key 窗口 3600s，前置清 key 修
+- storage package.json 缺 main/types（P1A-2 从未被消费，P1B-3 首次暴露）
+- cloud-sync 需 .cloud-sync-env（从 .env 中文键生成，本机临时重建）
+
+### ⏳ Next Steps
+- [x] ~~P1B-3 Blob 存储~~ 完成（2026-08-04）：迁移 8 + 云上 35/35，3.3 done
+- [ ] **P1B-4（task-master 3.4）**：版本引擎 + Version Manifest 引用 Artifact（§16、§7.2.3）
+- [ ] parked：P1A-3 终审项、P1A-5 deferred ①、/admin TOTP 上线路障、SDF Schema 债务（0.2.0）、病毒扫描实装（P1B-8）、大文件分片（P1B-5）
+
+---
 ## 2026-08-03 — P1B-2 RO/SDF 数据模型完成：迁移 7 + API 骨架，云上集成 26/26，task-master 3.2 done
 
 ### ✅ Completed

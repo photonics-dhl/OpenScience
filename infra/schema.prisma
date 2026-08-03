@@ -26,21 +26,22 @@ enum UserStatus {
 }
 
 model User {
-  id                 String             @id @default(uuid()) @db.Uuid
-  email              String             @unique @db.Citext
-  passwordHash       String             @map("password_hash")
-  displayName        String             @map("display_name")
-  status             UserStatus         @default(invited)
-  platformRole       PlatformRole       @default(user) @map("platform_role")
-  createdAt          DateTime           @default(now()) @map("created_at")
-  updatedAt          DateTime           @updatedAt @map("updated_at")
+  id                 String              @id @default(uuid()) @db.Uuid
+  email              String              @unique @db.Citext
+  passwordHash       String              @map("password_hash")
+  displayName        String              @map("display_name")
+  status             UserStatus          @default(invited)
+  platformRole       PlatformRole        @default(user) @map("platform_role")
+  createdAt          DateTime            @default(now()) @map("created_at")
+  updatedAt          DateTime            @updatedAt @map("updated_at")
   emailVerifications EmailVerification[]
-  usedInvitations    Invitation[]       @relation("InvitationUsedBy")
+  usedInvitations    Invitation[]        @relation("InvitationUsedBy")
 
   ownedWorkspaces          Workspace[]           @relation("WorkspaceOwner")
   memberships              Membership[]
   sentWorkspaceInvitations WorkspaceInvitation[] @relation("WorkspaceInvitationInviter")
   createdResearchObjects   ResearchObject[]      @relation("ResearchObjectCreator")
+  uploadedArtifacts        Artifact[]            @relation("ArtifactUploader")
 
   @@map("users")
 }
@@ -121,17 +122,18 @@ enum WorkspaceInvitationStatus {
 }
 
 model Workspace {
-  id          String               @id @default(uuid()) @db.Uuid
-  type        WorkspaceType
-  name        String
-  ownerId     String               @map("owner_id") @db.Uuid
-  status      WorkspaceStatus      @default(active)
-  createdAt   DateTime             @default(now()) @map("created_at")
-  updatedAt   DateTime             @updatedAt @map("updated_at")
-  owner       User                 @relation("WorkspaceOwner", fields: [ownerId], references: [id], onDelete: Restrict)
-  members     Membership[]
-  invitations WorkspaceInvitation[]
+  id              String                @id @default(uuid()) @db.Uuid
+  type            WorkspaceType
+  name            String
+  ownerId         String                @map("owner_id") @db.Uuid
+  status          WorkspaceStatus       @default(active)
+  createdAt       DateTime              @default(now()) @map("created_at")
+  updatedAt       DateTime              @updatedAt @map("updated_at")
+  owner           User                  @relation("WorkspaceOwner", fields: [ownerId], references: [id], onDelete: Restrict)
+  members         Membership[]
+  invitations     WorkspaceInvitation[]
   researchObjects ResearchObject[]
+  artifacts       Artifact[]
 
   @@map("workspaces")
 }
@@ -252,50 +254,82 @@ enum SdfNodeType {
 }
 
 model ResearchObject {
-  id            String        @id @default(uuid()) @db.Uuid
-  workspaceId   String        @map("workspace_id") @db.Uuid
-  title         String
-  status        RoStatus      @default(draft)
-  visibility    RoVisibility  @default(private)
-  version       Int           @default(1) // 乐观锁（§16）；P1B-4 版本引擎推进
-  createdBy     String        @map("created_by") @db.Uuid
-  createdAt     DateTime      @default(now()) @map("created_at")
-  updatedAt     DateTime      @updatedAt @map("updated_at")
+  id          String       @id @default(uuid()) @db.Uuid
+  workspaceId String       @map("workspace_id") @db.Uuid
+  title       String
+  status      RoStatus     @default(draft)
+  visibility  RoVisibility @default(private)
+  version     Int          @default(1) // 乐观锁（§16）；P1B-4 版本引擎推进
+  createdBy   String       @map("created_by") @db.Uuid
+  createdAt   DateTime     @default(now()) @map("created_at")
+  updatedAt   DateTime     @updatedAt @map("updated_at")
 
-  workspace     Workspace     @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-  creator       User          @relation("ResearchObjectCreator", fields: [createdBy], references: [id], onDelete: Restrict)
-  sdfDocument   SdfDocument?
+  workspace   Workspace    @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  creator     User         @relation("ResearchObjectCreator", fields: [createdBy], references: [id], onDelete: Restrict)
+  sdfDocument SdfDocument?
 
   @@index([workspaceId])
   @@map("research_objects")
 }
 
 model SdfDocument {
-  id                String        @id @default(uuid()) @db.Uuid
-  researchObjectId  String        @map("research_object_id") @db.Uuid
-  coreJson          Json          @map("core_json") // SdfCore 结构（P1B-1 validateSdfCore 校验）
-  createdAt         DateTime      @default(now()) @map("created_at")
-  updatedAt         DateTime      @updatedAt @map("updated_at")
+  id               String   @id @default(uuid()) @db.Uuid
+  researchObjectId String   @map("research_object_id") @db.Uuid
+  coreJson         Json     @map("core_json") // SdfCore 结构（P1B-1 validateSdfCore 校验）
+  createdAt        DateTime @default(now()) @map("created_at")
+  updatedAt        DateTime @updatedAt @map("updated_at")
 
-  researchObject    ResearchObject @relation(fields: [researchObjectId], references: [id], onDelete: Cascade)
-  nodes             SdfNode[]
+  researchObject ResearchObject @relation(fields: [researchObjectId], references: [id], onDelete: Cascade)
+  nodes          SdfNode[]
 
   @@unique([researchObjectId])
   @@map("sdf_documents")
 }
 
 model SdfNode {
-  id              String       @id @default(uuid()) @db.Uuid
-  sdfDocumentId   String       @map("sdf_document_id") @db.Uuid
-  nodeType        SdfNodeType  @map("node_type")
-  content         String       @default("")
-  sortOrder       Int          @default(0) @map("sort_order")
-  createdAt       DateTime     @default(now()) @map("created_at")
-  updatedAt       DateTime     @updatedAt @map("updated_at")
+  id            String      @id @default(uuid()) @db.Uuid
+  sdfDocumentId String      @map("sdf_document_id") @db.Uuid
+  nodeType      SdfNodeType @map("node_type")
+  content       String      @default("")
+  sortOrder     Int         @default(0) @map("sort_order")
+  createdAt     DateTime    @default(now()) @map("created_at")
+  updatedAt     DateTime    @updatedAt @map("updated_at")
 
-  sdfDocument     SdfDocument  @relation(fields: [sdfDocumentId], references: [id], onDelete: Cascade)
+  sdfDocument SdfDocument @relation(fields: [sdfDocumentId], references: [id], onDelete: Cascade)
 
   @@unique([sdfDocumentId, nodeType])
   @@index([sdfDocumentId])
   @@map("sdf_nodes")
+}
+
+// --- P1B-3：Blob 内容寻址存储 + Artifact 元数据（§7.2.1 内容寻址 + §7.2.2 元数据 + §13.1 数据库只存元数据/对象键）---
+
+model Blob {
+  sha256     String   @id @db.Char(64) // SHA-256 hex，内容寻址主键（去重，§7.1）
+  storageKey String   @map("storage_key") // 对象存储路径（`blobs/<h2>/<h4>/<sha256>` 分段）
+  size       BigInt // 字节数
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  artifacts Artifact[]
+
+  @@map("blobs")
+}
+
+model Artifact {
+  id          String   @id @default(uuid()) @db.Uuid
+  logicalPath String   @map("logical_path") // 用户视角路径（非唯一，P1B-4 Version Manifest 再去重）
+  mimeType    String?  @map("mime_type") // MIME 检测结果（失败 = null，允许上传）
+  size        BigInt // 字节数（冗余，免 join Blob）
+  blobSha256  String   @map("blob_sha256") @db.Char(64) // 指向 Blob（内容寻址）
+  uploadedBy  String   @map("uploaded_by") @db.Uuid // 上传者（审计，§17）
+  workspaceId String   @map("workspace_id") @db.Uuid // 所属 Workspace（越权防护，§17）
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  blob      Blob      @relation(fields: [blobSha256], references: [sha256], onDelete: Restrict)
+  uploader  User      @relation("ArtifactUploader", fields: [uploadedBy], references: [id], onDelete: Restrict)
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId])
+  @@index([blobSha256])
+  @@map("artifacts")
 }

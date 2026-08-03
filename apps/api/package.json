@@ -14,11 +14,13 @@
     "@fastify/cors": "^10",
     "@fastify/csrf-protection": "^7",
     "@fastify/helmet": "^13",
+    "@fastify/multipart": "^9",
     "@openscience/auth": "workspace:^",
     "@openscience/config": "workspace:^",
     "@openscience/database": "workspace:^",
     "@openscience/domain": "workspace:^",
     "@openscience/observability": "workspace:^",
+    "@openscience/storage": "workspace:^",
     "fastify": "5.10.0",
     "zod": "3"
   },

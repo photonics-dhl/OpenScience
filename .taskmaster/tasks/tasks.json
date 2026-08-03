@@ -331,15 +331,16 @@
             "id": 3,
             "title": "实现 Blob 内容寻址存储与上传管线",
             "description": "实现以 SHA-256 为键的 Blob 存储与 Artifact 元数据（逻辑路径、MIME、大小、hash），接入 Phase 1A Storage Adapter，含上传分片、校验和、MIME 检测与病毒扫描（Spec §7.2、§13.1、§17）。",
-            "status": "pending",
+            "status": "done",
             "dependencies": [
               "2",
               "3.2"
             ],
             "priority": "high",
-            "details": "产出 packages/storage 的 Blob 层：Blob 以 SHA-256 为键保存（§7.2.1 MUST）；Artifact 记录逻辑路径、MIME、大小、Blob hash（§7.2.2）；数据库只存元数据和对象键，不存大二进制（§13.1）；上传使用分片、校验和、MIME 检测与病毒扫描（§13.1、§17 MUST：上传文件类型检测、大小限制和恶意内容扫描）；相同内容 Blob 去重只存一次（§2.2.4、§7.1）；单文件大小等限制走后台可配置配额，不写死前端（§13.3；初始数值为 Spec §24 待确认项，需做成配置而非常量）。\n验收: 步骤14",
+            "details": "产出 packages/storage 的 Blob 层：Blob 以 SHA-256 为键保存（§7.2.1 MUST）；Artifact 记录逻辑路径、MIME、大小、Blob hash（§7.2.2）；数据库只存元数据和对象键，不存大二进制（§13.1）；上传使用分片、校验和、MIME 检测与病毒扫描（§13.1、§17 MUST：上传文件类型检测、大小限制和恶意内容扫描）；相同内容 Blob 去重只存一次（§2.2.4、§7.1）；单文件大小等限制走后台可配置配额，不写死前端（§13.3；初始数值为 Spec §24 待确认项，需做成配置而非常量）。\n验收: 步骤14\n<info added on 2026-08-03T17:08:31.139Z>\nP1B-3 Blob 内容寻址存储与上传管线完成（2026-08-04）\n\n决策（design gate）：\n1. Blob 存储键分段 blobs/<sha256[0:2]>/<sha256[2:4]>/<sha256>（避免单目录千万文件）\n2. Artifact.logicalPath 非唯一（P1B-4 Version Manifest 再去重）\n3. MIME 检测失败允许上传（mimeType=null + 审计）\n4. file-type@22 ESM-only 用 dynamic import（非全仓 esnext，CJS 兼容）\n5. 配额只读不扣费（P1B-6 接入 UsageLedger）\n\n落点：\n- 迁移 8：blobs（sha256 主键 + storage_key + size）+ artifacts（logical_path/mime_type/size/blob_sha256/uploaded_by/workspace_id）+ rollback\n- storage：blob.ts（putBlob 去重/getBlob/headBlob/deleteBlob/getBlobStorageKey），补 storage package.json main/types（P1A-2 漏，本任务 domain 依赖暴露）\n- domain：artifact/（errors/mime/quota/scan/artifacts）+ ArtifactDeps（WorkspaceDeps + storage）\n- api：/artifacts/upload POST（multipart）+ /artifacts/:id/download GET；error-map FILE_TOO_LARGE=413/MALICIOUS_FILE=451；app.ts storage 注入（缺省不注册，旧测试零影响）\n- config：api-env 加 storage（S3_* env）\n- 测试：storage blob 9 + domain artifact 11 + api 集成 6 = 26 新增\n\n验收：本地门禁全绿（build/typecheck/lint/audit）；云上集成 35/35（新增 P1B-3 6 + 既有 29）；迁移 8 applied + rollback 演练通过；3.3 done\n\n坑：\n1. detectMimeType 消费 Readable 流 → putBlob 再读空流 size=0（集成测试抓到，改先统一转 Buffer）\n2. MinIO 对象持久化跨测试运行 → afterAll 需删对象（DB 清行不够），否则 alreadyExists 误命中\n3. 限流测试跨运行残留（P1A-8 存量 flaky）：rl:<ip>:<route>:<window> 窗口 3600s，前置清 key 修\n4. storage package.json 缺 main/types（P1A-2 从未被消费，P1B-3 首次暴露）\n5. dynamic import file-type（全仓 esnext 会破坏 CJS 运行时）\n</info added on 2026-08-03T17:08:31.139Z>",
             "testStrategy": "单元测试：哈希计算、去重逻辑（§21.1 单元层）；集成测试：上传→存储→读取回环、重复上传不产生新 Blob（§21.1 集成层）；安全测试：伪装 MIME/超限文件拒绝（§21.1 安全层、§17）。",
-            "parentId": "3"
+            "parentId": "3",
+            "updatedAt": "2026-08-03T17:08:13.359Z"
           },
           {
             "id": 4,
@@ -438,7 +439,7 @@
             "parentId": "3"
           }
         ],
-        "updatedAt": "2026-08-03T15:46:25.621Z"
+        "updatedAt": "2026-08-03T17:08:13.359Z"
       },
       {
         "id": 4,
@@ -851,13 +852,13 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-08-03T15:46:25.621Z",
+      "lastModified": "2026-08-03T17:08:13.359Z",
       "taskCount": 6,
       "completedCount": 2,
       "tags": [
         "master"
       ],
-      "created": "2026-08-03T15:46:31.381Z",
+      "created": "2026-08-03T17:08:20.881Z",
       "description": "Tasks for master context"
     }
   }

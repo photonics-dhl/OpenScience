@@ -19,6 +19,16 @@ export interface ApiEnv {
   smtpPort: number;
   smtpUser: string;
   smtpPass: string;
+  /** P1B-3：对象存储（StorageAdapter）S3_* env（缺省 dev MinIO，127.0.0.1:9000）。 */
+  storage: {
+    driver: 'minio' | 'oss';
+    endPoint: string;
+    port: number;
+    useSSL: boolean;
+    accessKey: string;
+    secretKey: string;
+    bucket: string;
+  };
 }
 
 const DEV_RATE_LIMIT_LOGIN_LIMIT = 5;
@@ -65,6 +75,21 @@ export function loadApiEnv(env: NodeJS.ProcessEnv = process.env): ApiEnv {
     if (!smtpPass) throw new Error('SMTP_PASS is required when MAILER_DRIVER=smtp');
   }
 
+  // P1B-3：对象存储（P1A-2 storageConfigFromEnv 同源，S3_* env）
+  const rawDriver = env.S3_DRIVER ?? 'minio';
+  if (rawDriver !== 'minio' && rawDriver !== 'oss') {
+    throw new Error(`S3_DRIVER must be 'minio' or 'oss', got "${env.S3_DRIVER}"`);
+  }
+  const storage: ApiEnv['storage'] = {
+    driver: rawDriver,
+    endPoint: env.S3_ENDPOINT ?? '127.0.0.1',
+    port: Number(env.S3_PORT ?? '9000'),
+    useSSL: env.S3_USE_SSL === 'true',
+    accessKey: env.S3_ACCESS_KEY ?? 'minioadmin',
+    secretKey: env.S3_SECRET_KEY ?? 'openscience_minio_dev',
+    bucket: env.S3_BUCKET ?? 'openscience-dev',
+  };
+
   return {
     nodeEnv,
     port,
@@ -84,5 +109,6 @@ export function loadApiEnv(env: NodeJS.ProcessEnv = process.env): ApiEnv {
     smtpPort,
     smtpUser,
     smtpPass,
+    storage,
   };
 }

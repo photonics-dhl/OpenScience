@@ -1,5 +1,6 @@
 import Fastify, { type FastifyBaseLogger, type FastifyInstance } from 'fastify';
 import cookie from '@fastify/cookie';
+import type { StorageAdapter } from '@openscience/storage';
 import { httpStatusForError } from './error-map';
 import { registerAuthRoutes, type AuthRouteDeps } from './routes/auth';
 import { registerWorkspaceRoutes } from './routes/workspaces';
@@ -7,6 +8,7 @@ import { registerAdminRoutes } from './routes/admin';
 import { registerAdminUsageRoutes } from './routes/admin-usage';
 import { registerUsageRoutes } from './routes/usage';
 import { registerResearchObjectRoutes } from './routes/research-objects';
+import { registerArtifactRoutes } from './routes/artifacts';
 import { registerRateLimit } from './security/rate-limit';
 import { registerSecurity, type SecurityOptions } from './security/security';
 
@@ -22,6 +24,8 @@ export interface BuildAppOptions extends AuthRouteDeps {
   security?: Partial<SecurityOptions>;
   /** P1A-8：限流总开关。缺省关（测试现状，集成测试显式开）。 */
   rateLimitEnabled?: boolean;
+  /** P1B-3：对象存储（/artifacts 上传下载）。缺省 undefined = 不注册 artifacts 路由（旧测试零影响）。 */
+  storage?: StorageAdapter;
 }
 
 export async function buildApp(opts: BuildAppOptions): Promise<FastifyInstance> {
@@ -68,5 +72,9 @@ export async function buildApp(opts: BuildAppOptions): Promise<FastifyInstance> 
   await app.register(async (instance) => registerAdminUsageRoutes(instance, opts), { prefix: '/admin' });
   await app.register(async (instance) => registerUsageRoutes(instance, opts), { prefix: '/usage' });
   await app.register(async (instance) => registerResearchObjectRoutes(instance, opts), {});
+  if (opts.storage) {
+    const storage = opts.storage;
+    await app.register(async (instance) => registerArtifactRoutes(instance, { ...opts, storage }), {});
+  }
   return app;
 }

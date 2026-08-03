@@ -2,6 +2,7 @@ import { DevOutboxMailer, SmtpMailer } from '@openscience/auth';
 import { loadApiEnv } from '@openscience/config';
 import { createPrismaAuditSink, createPrismaClient, createRedisClient } from '@openscience/database';
 import { createPersonalWorkspace } from '@openscience/domain';
+import { createStorageAdapter } from '@openscience/storage';
 import { createLogger } from '@openscience/observability';
 import { buildApp } from './app';
 
@@ -13,11 +14,14 @@ async function main(): Promise<void> {
   const mailer = env.mailerDriver === 'smtp'
     ? new SmtpMailer({ host: env.smtpHost, port: env.smtpPort, user: env.smtpUser, pass: env.smtpPass })
     : new DevOutboxMailer(prisma);
+  // P1B-3：对象存储（S3_* env，dev 缺省 MinIO 127.0.0.1:9000）
+  const storage = createStorageAdapter(env.storage);
   const logger = createLogger({ level: env.nodeEnv === 'production' ? 'info' : 'debug' });
   const app = await buildApp({
     prisma,
     redis,
     mailer,
+    storage,
     // P1A-6：审计落库（domain/auth 写操作 + authz.deny 经 deps.audit 流出）
     audit: createPrismaAuditSink(prisma),
     // P1A-4：邮箱验证通过同事务创建 Personal Workspace（回调注入，避免 auth→domain 反向依赖）

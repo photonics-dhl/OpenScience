@@ -66,6 +66,9 @@ describe('P1A-8 安全基线（云上）', () => {
     // 用不存在的账号打 login——429 在密码校验前触发，不依赖真实账号；
     // 前 2 次 auth 层 401/200 均可（密码错 401 或成功 200），只需断言非 429
     const headers = { 'x-forwarded-for': '203.0.113.10' }; // 唯一 XFF → 独立限流桶
+    // 清该桶历史计数：限流 key rl:<ip>:<route>:<window> 窗口 3600s 跨运行残留 → hit1 误 429（2026-08-04 实证）
+    const staleKeys = await redis.keys('rl:203.0.113.10:*');
+    if (staleKeys.length) await redis.del(...staleKeys);
     const payload = { email: 'rate-limit@example.com', password: 'Passw0rd123' };
     const hit1 = await app.inject({ method: 'POST', url: '/auth/login', payload, headers });
     const hit2 = await app.inject({ method: 'POST', url: '/auth/login', payload, headers });

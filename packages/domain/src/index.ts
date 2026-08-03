@@ -70,3 +70,11 @@ export {
   getSdfDocument, updateSdfDocument,
   type SdfDocumentView, type UpdateSdfInput,
 } from './research-object/sdf';
+export { ArtifactError, type ArtifactErrorCode } from './artifact/errors';
+export { detectMimeType } from './artifact/mime';
+export { checkUploadQuota, UPLOAD_MAX_FILE_RESOURCE } from './artifact/quota';
+export { scanFile, type ScanResult } from './artifact/scan';
+export {
+  createArtifact, getArtifact,
+  type ArtifactDeps, type CreateArtifactInput, type CreateArtifactResult, type ArtifactDetail,
+} from './artifact/artifacts';
