@@ -1,5 +1,36 @@
 # OpenScience (XGS) 进度日志
 
+## 2026-08-03 — P1A-7 配额/AI Credit 账务骨架本地完成：门禁全绿，云上集成待执行
+
+### ✅ Completed
+| 任务 | 详情 |
+|---|---|
+| design gate + spec + plan | `docs/specs/2026-08-03-p1a-7-quota-credits-design.md`（逐节确认：AI Credit 累积余额 B/行级 policy/流水统一账本/保守占位 seed）、`docs/plans/2026-08-03-p1a-7-quota-credits-plan.md`（9 任务 TDD） |
+| Task 1 | migration 6 `20260803000000_quota_usage`（quota_policies + usage_ledger，UNIQUE scope+scopeKey+resource / idempotency_key）+ Prisma model（schema String 非 enum，对齐 SQL TEXT） |
+| Task 2-5 | domain `src/usage/`：policies.ts（workspace→user_level→global 三层回退，未命中 null）、ledger.ts（只追加 SUM(delta)、recordEntry period 校验、topupCredit 同事务+审计）、grants.ts（月度授予纯函数+applyMonthlyGrants 幂等）、limits.ts（checkLimit 纯函数） |
+| Task 6 | `scripts/seed-quota.mjs`（幂等 upsert，--dry-run/--confirm）+ `src/usage/seed-data.ts` 占位值集中一处；root package.json 加 `@openscience/domain` devDep（seed 脚本解析） |
+| Task 7 | `/admin/quota-policies`（GET/PUT）、`/admin/credits`（POST，Idempotency-Key 防重）、`/admin/usage`（GET）；admin.ts 抽 `requirePlatformAdmin` 复用；usage 写操作同事务审计（quota.policy.upsert / quota.credit.topup） |
+| Task 8 | `/usage` 用户侧聚合（user 级资源 user_level→global + workspace 级资源逐空间）+ `getUsageSnapshot`；error-map 加 UsageError 映射 |
+| 本地门禁 | build/typecheck/lint(0)/单测 domain 83+api 39/audit:dep 0 errors/audit:knip 0 unused/audit:dup 31（+2 集成测试样板，容忍）/docs:lint 0 全绿 |
+| 云上收口 | tar-over-ssh 同步（`scripts/cloud-sync.mjs` 固化，SSH 经 `ssh-run.sh`）→ install+全量 build → migration 6 applied → seed-quota 8/8（幂等重跑不增行）→ `test:integration` **17/17 全绿**（database 2 + storage 1 + api 14：workspaces 5 + admin 4 + auth 3 + usage 5）；云上残留 `.npmrc` 手工 rm（tar 无删除语义，用户确认）；task-master 2.7 置 done |
+
+### Key Decisions / 坑
+- **AI Credit 累积余额（用户选 B）**：余额 = ledger 全量 SUM(delta)；monthly_grant 每月 +N 不清零；policy(ai_credit) 语义 = 每月授予量非余额上限；不设 cap
+- **行级 policy**：一资源一行，三层回退；未命中返回 null（无限制，不做 0 误判）
+- **占位值不进 migration**：走 seed 脚本幂等 upsert，数值集中 `seed-data.ts`，§24 定案改一处
+- **`usage_ledger.idempotency_key` UNIQUE** 支撑 admin topup 重试幂等（§16 幂等键）；P2002 → UsageError.DUPLICATE_IDEMPOTENCY_KEY → 409
+- **fake prisma 扩展**：quotaPolicy/usageLedger/user.findMany/aggregate；user.findMany `notIn` 过滤初始实现 bug（`u.status === where.status` 恒 false）已修
+- **knip 抓 unused export**：`getUsageByPeriod` 无消费方 → 从 index 移除导出（保留实现+测试，未来挂接）
+- **Prisma unique where 对 nullable scopeKey** 期望 string → admin-usage.ts 显式 cast
+- **Prisma upsert 复合唯一键不接受 nullable `scope_key`**：seed 脚本 + admin-usage.ts 原用 `upsert` 均抛 `Argument scopeKey must not be null` → 改 `findFirst` + `create/update`（保留 null 语义，spec §2.1 不变）
+- **迁移 6 的 scope/kind 用 String 而非 Prisma enum**：对齐 SQL TEXT，app 层 zod 校验（z.enum）
+
+### ⏳ Next Steps
+- [x] ~~云上收口~~ 完成（2026-08-03）：migration 6 applied + seed 8/8 + 集成 17/17 全绿；task-master 2.7 done
+- [ ] P1A-8：安全基线（限流、会话安全、管理后台强认证）
+- [ ] parked 不变：P1A-3 终审项、P1A-5 deferred ①
+
+---
 ## 2026-08-01 — P1A-6 统一错误/日志/配置/审计底座完成：云上集成 15/15 全绿，task-master 2.6 置 done
 
 ### ✅ Completed

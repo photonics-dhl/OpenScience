@@ -17,6 +17,8 @@
 | `knip.json` / `.dependency-cruiser.cjs` / `.markdownlint-cli2.jsonc` | 卫生工具配置：knip（未用代码）、dependency-cruiser（依赖边界）、markdownlint（文档门禁）（2026-07-28 落地） | 活文档 |
 | `scripts/verify-workspace.mjs` | Monorepo 结构校验脚本（lint 的第二段，`verify:workspace` 入口） | 活文档 |
 | `scripts/invite.mjs` | 邀请码管理 CLI（create/list/revoke，P1A-3） | 活文档 |
+| `scripts/seed-quota.mjs` | 配额占位值幂等 upsert CLI（--dry-run/--confirm，P1A-7，数值集中 `packages/domain/src/usage/seed-data.ts`） | 活文档 |
+| `scripts/cloud-sync.mjs` | 云上同步（tar-over-ssh，排除 .env/.git/node_modules/dist，P1A-7 固化） | 活文档 |
 | `apps/` | `web` 可启动空壳；`api` 已含 Fastify `/auth`（P1A-3）+ `/workspaces`（P1A-4）+ RBAC preHandler 授权守卫（P1A-5）实现；`agent-worker`/`science-worker`/`sandbox-controller` 空壳 | 骨架 |
 | `packages/` | 11 个领域包；database/storage 已实现 P1A-2（Prisma/Redis 客户端、迁移 runner、StorageAdapter + MinIO）；auth 已实现 P1A-3（密码/邀请码/验证码/session/mailer）；domain 已实现 P1A-4（workspace 领域模块）+ P1A-5（动作×角色权限矩阵），其余占位；database/storage/api 云上集成测试 11/11 全绿（2026-08-01） | 骨架 |
 | `.cursor/` | Cursor 编辑器配置 | 工具自管 |
@@ -37,6 +39,7 @@
 | `docs/specs/2026-07-29-p1a-4-workspace-design.md` | P1A-4 Workspace 模型与成员管理设计（已批准，代码已实现，云上集成测试已全绿 2026-07-31） | 活文档 |
 | `docs/specs/2026-08-01-p1a-5-rbac-design.md` | P1A-5 RBAC 权限矩阵设计（已批准，代码已实现，云上集成测试 11/11 全绿 2026-08-01） | 活文档 |
 | `docs/specs/2026-08-01-p1a-6-audit-observability-design.md` | P1A-6 统一错误/日志/配置/审计底座设计（已批准，代码已实现，云上集成 15/15 全绿 2026-08-01） | 活文档 |
+| `docs/specs/2026-08-03-p1a-7-quota-credits-design.md` | P1A-7 配额策略与 AI Credit 账务骨架设计（design gate 已确认，代码已实现，云上集成 17/17 全绿 2026-08-03） | 活文档 |
 | `docs/plans/2026-07-24-doc-architecture-plan.md` | 文档架构落地实施计划 | 活文档 |
 | `docs/plans/2026-07-24-mvp-task-breakdown-plan.md` | MVP 任务拆解与工具配置实施计划（已批准，执行中） | 活文档 |
 | `docs/plans/2026-07-28-p1a-1-monorepo-skeleton-plan.md` | P1A-1 Monorepo 全量占位骨架实施计划（方案 A，已确认） | 活文档 |
@@ -45,6 +48,7 @@
 | `docs/plans/2026-07-29-p1a-4-workspace-plan.md` | P1A-4 Workspace 模型与成员管理实施计划（本地执行完毕，云上集成测试已全绿 2026-07-31） | 活文档 |
 | `docs/plans/2026-08-01-p1a-5-rbac-plan.md` | P1A-5 RBAC 权限矩阵实施计划（已执行完毕，云上 11/11 全绿，task-master 2.5 done 2026-08-01） | 活文档 |
 | `docs/plans/2026-08-01-p1a-6-audit-observability-plan.md` | P1A-6 统一错误/日志/配置/审计底座实施计划（已执行完毕，云上 15/15 全绿，task-master 2.6 done 2026-08-01） | 活文档 |
+| `docs/plans/2026-08-03-p1a-7-quota-credits-plan.md` | P1A-7 配额策略与 AI Credit 账务骨架实施计划（已执行完毕，云上 17/17 全绿，task-master 2.7 done 2026-08-03） | 活文档 |
 | `docs/progress.md` | 进度日志，新条目置顶 | 活文档 |
 | `docs/handoff/` | 交接文档目录（阶段边界/换 agent/换电脑，必须入库） | 活文档 |
 | `docs/handoff/2026-07-28-before-p1a-2-handoff.md` | P1A-2 前交接：Phase 0 Accepted、P1A-1 done、下一任务 P1A-2 | 活文档 |
@@ -53,7 +57,8 @@
 | `docs/handoff/2026-07-31-p1a-2-3-4-cloud-done-handoff.md` | P1A-2/3/4 云上收口交接：集成测试 9/9 全绿、云环境/DNS/Portainer 就绪，下一任务 P1A-5 RBAC design gate | 活文档 |
 | `docs/handoff/2026-08-01-p1a-5-cloud-done-handoff.md` | P1A-5 RBAC 云上收口交接：集成测试 11/11 全绿、2.5 done，下一任务 P1A-6 审计日志 design gate | 活文档（主交接） |
 | `docs/handoff/2026-08-01-ops-monitoring-proxy-handoff.md` | 运维底座补充交接：SSH 隧道定案+常驻化、监控面板（/nav/ /traffic/ /monitor/）、Tailscale 卸载禁令 | 活文档 |
-| `docs/handoff/2026-08-01-p1a-6-audit-observability-done-handoff.md` | P1A-6 统一错误/日志/配置/审计底座收口交接：云上集成 15/15 全绿、2.6 done，下一任务 P1A-7 design gate | 活文档（当前最新） |
+| `docs/handoff/2026-08-01-p1a-6-audit-observability-done-handoff.md` | P1A-6 统一错误/日志/配置/审计底座收口交接：云上集成 15/15 全绿、2.6 done，下一任务 P1A-7 design gate | 活文档 |
+| `docs/handoff/2026-08-03-p1a-7-quota-credits-done-handoff.md` | P1A-7 配额/AI Credit 账务骨架收口交接：云上集成 17/17 全绿、seed 8/8、2.7 done，下一任务 P1A-8 安全基线 design gate | 活文档（当前最新） |
 | `docs/CODEBASE_AUDIT.md` | Phase 0 Scholars Tea 只读审计报告（地图/模块分类/风险登记/迁移含义） | 活文档 |
 | `docs/proposals/` | 方案/脑暴稿 | 空（旧方案0723已废弃不归档） |
 | `docs/decisions/` | 决策记录 ADR | ADR-001 已接受；ADR-002 已建 |

@@ -231,15 +231,16 @@
             "id": 7,
             "title": "实现配额策略与 AI Credit 账务骨架",
             "description": "实现 UsageLedger 与 QuotaPolicy 骨架：用户按月获得固定 AI Credit、管理员可追加（Spec §2.4.7）；配额按用户等级/Workspace/文件类型配置且必须后台可配置、不写死前端（Spec §13.3、§15）。",
-            "status": "pending",
+            "status": "done",
             "dependencies": [
               "2.4",
               "2.6"
             ],
             "priority": "medium",
-            "details": "实现要点：QuotaPolicy（单文件大小、Workspace 总容量、单 RO 容量、月上传流量、AI Credit、Python 任务次数、并发任务数——字段按 §13.3 建模，本阶段仅建表与读写，执行点由 1B/1D/1E 挂接）；UsageLedger 只追加记账与月度 AI Credit 重置任务骨架；管理员追加 Credit 接口（走 P1A-5 授权与 P1A-6 审计）；初始具体数值为 §24 待确认项，配置留空默认值待运营决策，不得猜测写死。MUST 映射：§2.4.7 AI Credit；§13.3 配额可配置。验收: -",
+            "details": "实现要点：QuotaPolicy（单文件大小、Workspace 总容量、单 RO 容量、月上传流量、AI Credit、Python 任务次数、并发任务数——字段按 §13.3 建模，本阶段仅建表与读写，执行点由 1B/1D/1E 挂接）；UsageLedger 只追加记账与月度 AI Credit 重置任务骨架；管理员追加 Credit 接口（走 P1A-5 授权与 P1A-6 审计）；初始具体数值为 §24 待确认项，配置留空默认值待运营决策，不得猜测写死。MUST 映射：§2.4.7 AI Credit；§13.3 配额可配置。验收: -\n<info added on 2026-08-03T08:46:02.536Z>\nImplementation completed: 2026-08-03.\n\nDesign gate confirmed four decisions: (1) AI Credit cumulative balance B (balance = SUM(delta) of all ledger entries, monthly_grant adds +N each month without reset, no cap); (2) QuotaPolicy row-level (scope=global|user_level|workspace, three-layer fallback workspace→user_level→global, null=unlimited on no match); (3) admin topup via unified usage_ledger transaction (kind=admin_topup); (4) seed values via idempotent upsert scripts (scripts/seed-quota.mjs, values centralized in packages/domain/src/usage/seed-data.ts), not in migrations.\n\nArchitecture: domain/src/usage/ module added (policies/ledger/grants/limits/snapshot/seed-data subdirectories), no new package created. Migration 6 for quota_policies+usage_ledger (idempotency_key UNIQUE for replay protection). API endpoints: /admin/quota-policies GET+PUT, /admin/credits POST (Idempotency-Key), /admin/usage GET, /usage for user-side getUsageSnapshot. admin.ts extracted requirePlatformAdmin for reuse.\n\nKnown issues resolved: Prisma upsert with composite unique keys does not accept nullable scope_key → changed to findFirst+create/update pattern in both seed scripts and admin-usage.ts, fake operations added findFirst/create/update.\n\nCloud status: Migration 6 applied, seed 8/8 global policies created. Integration tests 17/17 all green (API 14 = first 12 + usage 5). Local gate all green (domain 83 + API 39 unit tests).\n</info added on 2026-08-03T08:46:02.536Z>",
             "testStrategy": "最小测试：记账、月度重置、管理员追加的单元/集成测试；超额判定纯函数单元测试。阶段验收点：§21.1 单元层（配额属 §21.1 明列测试对象）；账务与审计记录一致。",
-            "parentId": "2"
+            "parentId": "2",
+            "updatedAt": "2026-08-03T08:45:41.848Z"
           },
           {
             "id": 8,
@@ -282,7 +283,7 @@
             "parentId": "undefined"
           }
         ],
-        "updatedAt": "2026-08-01T10:56:37.181Z"
+        "updatedAt": "2026-08-03T08:45:41.848Z"
       },
       {
         "id": 3,
@@ -845,13 +846,13 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-08-01T10:56:37.181Z",
+      "lastModified": "2026-08-03T08:45:41.849Z",
       "taskCount": 6,
       "completedCount": 1,
       "tags": [
         "master"
       ],
-      "created": "2026-08-01T10:56:53.642Z",
+      "created": "2026-08-03T08:45:47.565Z",
       "description": "Tasks for master context"
     }
   }

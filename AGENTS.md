@@ -5,11 +5,11 @@ OpenScience：AI 时代科研基础设施平台（Research Object / SDF / 预印
 
 ## Monorepo Layout & Commands（P1A-1 起）
 - 根目录已是 pnpm workspace；pnpm 不全局安装，统一用 `npx pnpm@9.15.0 <cmd>`。
-- `apps/`：`api` 已含 Fastify `/auth`（P1A-3）+ `/workspaces`（P1A-4）+ RBAC preHandler 授权守卫（P1A-5）+ `/admin/audit-logs`（P1A-6，platform_admin 守卫）实现；`web` 为可启动空壳；`agent-worker`/`science-worker`/`sandbox-controller` 为空壳入口。
-- `packages/`：`domain,database,auth,sdf-schema,versioning,storage,ai-gateway,search,ui,config,observability` 11 个包；database/storage（P1A-2）+ auth（P1A-3）+ domain（P1A-4 workspace 领域模块 + P1A-5 动作×角色权限矩阵）+ config/observability（P1A-6：env 与 dev 常量共源、pino 日志双闸脱敏、统一 ErrorBody、AuditSink 接口）已实现，其余占位。
-- `infra/`：`compose` 已含 `docker-compose.dev.yml` 开发栈、`migrations` 已含迁移 1–5（含 rollback.sql；5 = audit_log）；`nginx` 已含 `portainer.conf`（已部署云上）；`sandbox/scripts` 仍为占位/既有运维脚本。
+- `apps/`：`api` 已含 Fastify `/auth`（P1A-3）+ `/workspaces`（P1A-4）+ RBAC preHandler 授权守卫（P1A-5）+ `/admin/audit-logs`（P1A-6，platform_admin 守卫）+ `/usage` 与 `/admin/quota-policies`、`/admin/credits`、`/admin/usage`（P1A-7，配额/AI Credit 账务）实现；`web` 为可启动空壳；`agent-worker`/`science-worker`/`sandbox-controller` 为空壳入口。
+- `packages/`：`domain,database,auth,sdf-schema,versioning,storage,ai-gateway,search,ui,config,observability` 11 个包；database/storage（P1A-2）+ auth（P1A-3）+ domain（P1A-4 workspace 领域模块 + P1A-5 动作×角色权限矩阵 + P1A-7 usage 模块：policies/ledger/grants/limits/snapshot/seed-data）+ config/observability（P1A-6：env 与 dev 常量共源、pino 日志双闸脱敏、统一 ErrorBody、AuditSink 接口）已实现，其余占位。
+- `infra/`：`compose` 已含 `docker-compose.dev.yml` 开发栈、`migrations` 已含迁移 1–6（含 rollback.sql；5 = audit_log，6 = quota_policies + usage_ledger）；`nginx` 已含 `portainer.conf`（已部署云上）；`sandbox/scripts` 仍为占位/既有运维脚本。
 - 常用命令：`npx pnpm@9.15.0 install`、`npx pnpm@9.15.0 build`、`npx pnpm@9.15.0 typecheck`、`npx pnpm@9.15.0 lint`（ESLint 9 全仓检查 + `scripts/verify-workspace.mjs` 结构校验）。
-- API：`npx pnpm@9.15.0 api`（Fastify 起 127.0.0.1:3001）；邀请码 CLI：`node scripts/invite.mjs create|list|revoke`（或 `npx pnpm@9.15.0 invite ...`）。
+- API：`npx pnpm@9.15.0 api`（Fastify 起 127.0.0.1:3001）；邀请码 CLI：`node scripts/invite.mjs create|list|revoke`（或 `npx pnpm@9.15.0 invite ...`）；配额 seed CLI：`node scripts/seed-quota.mjs --dry-run|--confirm`（P1A-7 占位值幂等 upsert，数值集中 `packages/domain/src/usage/seed-data.ts`）。
 - 卫生审计：`npx pnpm@9.15.0 audit:knip`（未用文件/导出/依赖）、`audit:dep`（dependency-cruiser：循环依赖/跨包深引用/orphan 告警）、`audit:dup`（jscpd 重复代码）、`audit:deps`（syncpack 版本一致性）、`docs:lint`（markdownlint 文档门禁）。
 - 开发栈：`npx pnpm@9.15.0 stack:up|stack:down|stack:ps|stack:logs`（postgres/redis/minio，仅 127.0.0.1）；测试：`npx pnpm@9.15.0 test`（单测）、`npx pnpm@9.15.0 test:integration`（起栈+集成测试）。
 - 数据库迁移：`node packages/database/dist/migrate-cli.js deploy|status|reset-dev`（reset-dev 生产禁用；迁移归 `infra/migrations/`，每个迁移附 rollback.sql）。
