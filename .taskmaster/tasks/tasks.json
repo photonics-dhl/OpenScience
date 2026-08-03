@@ -136,7 +136,7 @@
         "id": 2,
         "title": "Phase 1A: 平台底座（Monorepo、Auth/Workspace/RBAC、数据与存储基础、审计、CI/CD）",
         "description": "搭建 MVP 平台底座：Monorepo 与模块边界（Spec §14.1）；Auth + 邀请码 + 邮箱验证（Spec §2.1、§3.1）；Workspace + RBAC 且 API 层强制授权（Spec §3.2、§3.3、§17）；PostgreSQL + Redis + Storage Adapter（Spec §13.1、§14.2、§15）；统一错误/日志/配置/审计（Spec §17）；AI Credit 账务骨架（Spec §2.4.7、§13.3）；CI/CD 与阿里云 ECS 部署（Spec §14.2、§17）。前置门禁：Phase 0 审计完成并经用户确认（Spec §22、§25）。本阶段不含 SDF/编辑器（1B）、协作（1C）、Hermes/发布（1D）、可视化沙箱（1E）及任何 §19 Phase 2 功能。",
-        "status": "in-progress",
+        "status": "done",
         "dependencies": [
           "1"
         ],
@@ -261,16 +261,17 @@
             "id": 9,
             "title": "建立 CI/CD 与阿里云 ECS 部署及备份",
             "description": "建立 CI 流水线与单 ECS 部署：拓扑与网络分段对齐 Spec §14.2（public_net/app_net/data_net，数据库不绑公网，安全组仅 80/443 与受限运维入口）；数据库每日备份并定期恢复演练（Spec §17 MUST）；部署走仓库脚本化（Spec §20.4）。",
-            "status": "pending",
+            "status": "done",
             "dependencies": [
               "2.2",
               "2.6",
               "2.8"
             ],
             "priority": "high",
-            "details": "实现要点：CI（build/typecheck/lint/最小测试）与镜像构建；compose 生产配置含网络分段与 nginx/caddy 反向代理；部署脚本填充管理仓 infra/scripts/deploy.sh 与 backup.sh 骨架（设计文档 §4.3 已占位），备份脚本每日 dump + 对象存储快照，docs/runbooks/backup-restore.md 记录恢复演练步骤并完成一次演练；ECS 最终规格/带宽为 §24 待确认项，脚本参数化不写死；部署与迁移属 Spec §20.5 询问级操作，脚本默认 dry-run 需 --confirm。MUST 映射：§14.2 网络与安全组；§17 每日备份与恢复演练。验收: -",
+            "details": "实现要点：CI（build/typecheck/lint/最小测试）与镜像构建；compose 生产配置含网络分段与 nginx/caddy 反向代理；部署脚本填充管理仓 infra/scripts/deploy.sh 与 backup.sh 骨架（设计文档 §4.3 已占位），备份脚本每日 dump + 对象存储快照，docs/runbooks/backup-restore.md 记录恢复演练步骤并完成一次演练；ECS 最终规格/带宽为 §24 待确认项，脚本参数化不写死；部署与迁移属 Spec §20.5 询问级操作，脚本默认 dry-run 需 --confirm。MUST 映射：§14.2 网络与安全组；§17 每日备份与恢复演练。验收: -\n<info added on 2026-08-03T13:12:45.903Z>\n2026-08-03 完成。三决策：GitHub Actions CI、仅 PostgreSQL dump 备份、临时库恢复演练。QQ SMTP 真发（§3 偏离，用户确认：nodemailer 实装 SmtpMailer + MAILER_DRIVER=smtp，P1A-3 生产启动阻塞解除）。\n落点：.github/workflows/ci.yml（build/typecheck/lint/test）；docker-compose.prod.yml（data_net/app_net 分段，数据服务不绑公网，api node:22）；deploy.sh（dry-run+--confirm 8 步链）；backup.sh（pg_dump 保留 7 轮 + cron 0 3）；backup-restore.md 四节+演练日志；schema binaryTargets +linux-musl。\n云上实证：生产栈 up（postgres/redis/api healthy）、迁移 6 applied、seed 8/8、HTTPS 反代 + /admin basic_auth + CSP/nosniff + 限流 429/Retry-After、备份 24K + 恢复演练行数一致、邮件真发链路通（register→auth.register 审计）。\n坑：cert HTTP-01 被阿里云拦（403）→ 改 DNS-01（Cloudflare API，CF_Token）；Prisma alpine/musl 缺 openssl → node:22；安全基线此前未在生产接线 → index.ts 补 trustProxy/限流/helmet/CSRF/CORS；invite/migrate 需容器内跑（postgres 容器 DNS）。\n</info added on 2026-08-03T13:12:45.903Z>",
             "testStrategy": "最小测试：CI 全绿；部署脚本 dry-run 校验；备份产出物执行一次真实恢复演练并记录（Spec §21.1 恢复测试层）。阶段验收点：邀请测试环境可从零部署且数据库可恢复。",
-            "parentId": "2"
+            "parentId": "2",
+            "updatedAt": "2026-08-03T13:12:27.429Z"
           },
           {
             "id": 10,
@@ -284,7 +285,7 @@
             "parentId": "undefined"
           }
         ],
-        "updatedAt": "2026-08-03T10:38:47.299Z"
+        "updatedAt": "2026-08-03T13:12:27.429Z"
       },
       {
         "id": 3,
@@ -847,13 +848,13 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-08-03T10:38:47.300Z",
+      "lastModified": "2026-08-03T13:12:27.430Z",
       "taskCount": 6,
-      "completedCount": 1,
+      "completedCount": 2,
       "tags": [
         "master"
       ],
-      "created": "2026-08-03T10:38:51.474Z",
+      "created": "2026-08-03T13:12:33.480Z",
       "description": "Tasks for master context"
     }
   }

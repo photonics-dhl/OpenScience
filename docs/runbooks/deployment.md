@@ -39,8 +39,9 @@ ssh-run.sh "cd /opt/openscience && node scripts/seed-quota.mjs --confirm"   # P1
 
 ```bash
 # 1) 上传 nginx 配置到 /etc/nginx/conf.d/openscience.conf（经 ssh-run.sh 或 scp）
-# 2) 签发/安装证书：
-#    ~/.acme.sh/acme.sh --issue -d OpenScience.428312321.xyz --standalone --server letsencrypt
+# 2) 签发证书——用 DNS-01（Cloudflare API），HTTP-01 被阿里云 403 拦（2026-08-03 实证）：
+#    export CF_Token=<token> CF_Zone_ID=<zone-id>
+#    ~/.acme.sh/acme.sh --issue -d OpenScience.428312321.xyz --dns dns_cf --server letsencrypt
 #    ~/.acme.sh/acme.sh --install-cert -d OpenScience.428312321.xyz \
 #      --key-file /etc/nginx/ssl/openscience/key.pem \
 #      --fullchain-file /etc/nginx/ssl/openscience/fullchain.pem \

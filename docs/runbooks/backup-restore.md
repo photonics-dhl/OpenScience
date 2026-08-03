@@ -60,4 +60,4 @@ docker rm -f openscience-restore-test
 
 | 日期 | 演练内容 | dump 行数 vs 生产 | 结果 |
 |---|---|---|---|
-| （P1A-9 Task 8 执行后填） | 临时库导入 + 行数对比 | 一致 | 通过 |
+| 2026-08-03 | 临时库导入 db-2026-08-03.sql（24K） | users=0/workspaces=0 一致，migrations=6 | 通过 |

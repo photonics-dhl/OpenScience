@@ -1,5 +1,35 @@
 # OpenScience (XGS) 进度日志
 
+## 2026-08-03 — P1A-9 CI/CD 部署完成：生产栈上线 + 备份/恢复演练 + QQ SMTP，task-master 2.9 done
+
+### ✅ Completed
+| 任务 | 详情 |
+|---|---|
+| design gate + spec + plan | `docs/specs/2026-08-03-p1a-9-cicd-deploy-backup-design.md`（三决策 + QQ SMTP 偏离）、`docs/plans/2026-08-03-p1a-9-cicd-deploy-backup-plan.md`（9 任务 TDD） |
+| Task 1-2 | SmtpMailer 实装（nodemailer QQ SMTP 真发）+ config mailerDriver/SMTP env + index.ts 生产启动阻塞解除（P1A-3 throw 移除） |
+| Task 3 | `docker-compose.prod.yml`：data_net（postgres/redis 无端口映射，不绑公网）+ app_net（api 127.0.0.1:3001）双网卡，生产零默认值 |
+| Task 4 | `.github/workflows/ci.yml`：GitHub Actions，build/typecheck/lint/test |
+| Task 5-6 | `deploy.sh`（dry-run + --confirm 8 步链）+ `backup.sh`（pg_dump 保留 7 轮）+ backup-restore.md 四节 |
+| 云上部署 | 生产栈 up（postgres/redis/api healthy）→ 迁移 6 applied（容器内跑）→ seed 8/8 → HTTPS 反代 + /admin basic_auth + 安全头 + 限流 429/Retry-After → 备份 24K + 恢复演练行数一致 + cron 0 3 → QQ SMTP 真发链路通 |
+| task-master 2.9 | done + details（三决策/落点/坑） |
+
+### Key Decisions / 坑
+- **三决策**：GitHub Actions CI（免自建 runner）；仅 PostgreSQL dump（对象存储快照后置）；临时库恢复演练（不碰生产）
+- **QQ SMTP 真发**（§3 偏离）：nodemailer 实装 SmtpMailer，MAILER_DRIVER=smtp 缺省，P1A-3「生产拒绝启动」阻塞解除；邮件真发不吞不丢
+- **cert HTTP-01 被阿里云拦**（403）→ 改 **DNS-01**（Cloudflare API，CF_Token，绕开 80 端口）
+- **Prisma alpine/musl 缺 openssl** → api image 用 node:22（debian），schema binaryTargets +linux-musl
+- **安全基线生产接线缺口**：index.ts 此前没传 trustProxy/限流/helmet/CSRF/CORS（P1A-8 仅测试接线）→ 补全生产启用
+- **invite/migrate 需容器内跑**（生产 postgres 无端口映射，宿主机 `postgres:5432` 解析不到）
+- **api 生产绑 0.0.0.0**（容器内 nginx 反代可达），compose 限宿主 127.0.0.1 外部不可达
+- **backup.sh 需 --env-file .env.prod**（compose 插值 POSTGRES_*）
+
+### ⏳ Next Steps
+- [x] ~~P1A-9 CI/CD~~ 完成（2026-08-03）：生产上线，2.9 done
+- [ ] **Phase 1A 剩余收口**：deploy.sh 全自动 runbook 验证、CI 首跑确认（Actions 页面，本机不可见）
+- [ ] **P1A-10+（1B 起）**：Research Object / 上传 / AI Gateway / 发布 等业务 Phase（task-master 3.x）
+- [ ] parked：P1A-3 终审项、P1A-5 deferred ①、/admin TOTP 上线路障（ADR-003）
+
+---
 ## 2026-08-03 — P1A-8 安全基线完成：限流/CSRF/CORS/helmet/trustProxy/nginx 强认证，云上集成 21/21 全绿
 
 ### ✅ Completed
@@ -24,7 +54,7 @@
 
 ### ⏳ Next Steps
 - [x] ~~P1A-8 安全基线~~ 完成（2026-08-03）：云上集成 21/21，2.8 done
-- [ ] **P1A-9：CI/CD 部署（task-master 2.9）**：deploy.sh 填充（含 nginx openscience.conf 部署 + htpasswd 生成步骤）、cloud-sync 补删除语义、月度 Credit 授予 Cron 调度
+- [x] ~~P1A-9 CI/CD~~ 完成（2026-08-03）：生产上线，2.9 done
 - [ ] parked 不变：P1A-3 终审项、P1A-5 deferred ①；新增上线路障：**/admin TOTP 二次验证**（web 有 UI 后补，ADR-003）
 
 ---
