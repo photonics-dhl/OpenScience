@@ -1,4 +1,4 @@
-import { DevOutboxMailer } from '@openscience/auth';
+import { DevOutboxMailer, SmtpMailer } from '@openscience/auth';
 import { loadApiEnv } from '@openscience/config';
 import { createPrismaAuditSink, createPrismaClient, createRedisClient } from '@openscience/database';
 import { createPersonalWorkspace } from '@openscience/domain';
@@ -7,14 +7,12 @@ import { buildApp } from './app';
 
 async function main(): Promise<void> {
   const env = loadApiEnv();
-  if (env.nodeEnv === 'production') {
-    // §24 邮件服务商未定：生产尚无真实 Mailer，拒绝带 outbox 启动（宁可快速失败也不静默吞邮件）
-    throw new Error('No production mailer configured (Spec §24 pending); refusing to start with DevOutboxMailer');
-  }
   const prisma = createPrismaClient({ datasourceUrl: env.databaseUrl });
   const redis = createRedisClient(env.redisUrl);
-  // MAILER_DRIVER=smtp 预留：§24 邮件服务商未定，dev 一律 outbox 捕获。
-  const mailer = new DevOutboxMailer(prisma);
+  // P1A-9 §3：mailer 驱动（dev 缺省 outbox 捕获；生产 smtp 真发，QQ SMTP env 缺失已在 loadApiEnv 快速失败）
+  const mailer = env.mailerDriver === 'smtp'
+    ? new SmtpMailer({ host: env.smtpHost, port: env.smtpPort, user: env.smtpUser, pass: env.smtpPass })
+    : new DevOutboxMailer(prisma);
   const logger = createLogger({ level: env.nodeEnv === 'production' ? 'info' : 'debug' });
   const app = await buildApp({
     prisma,
@@ -28,7 +26,9 @@ async function main(): Promise<void> {
     secureCookies: env.secureCookies,
     logger,
   });
-  await app.listen({ port: env.port, host: '127.0.0.1' });
+  // 生产容器绑 0.0.0.0（docker 发布端口连容器 eth0；compose 已限制宿主 127.0.0.1:3001，外部不可达）；
+  // dev 绑 127.0.0.1（本机直连）。
+  await app.listen({ port: env.port, host: env.nodeEnv === 'production' ? '0.0.0.0' : '127.0.0.1' });
   app.log.info({ port: env.port, nodeEnv: env.nodeEnv }, 'API listening');
 }
 

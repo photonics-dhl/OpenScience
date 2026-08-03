@@ -13,6 +13,12 @@ export interface ApiEnv {
   rateLimitEnabled: boolean;
   rateLimitLoginLimit: number;
   rateLimitLoginWindowSec: number;
+  /** P1A-9：mailer 驱动（smtp 真发 / outbox dev 捕获）；dev 缺省 outbox，生产缺省 smtp。 */
+  mailerDriver: 'smtp' | 'outbox';
+  smtpHost: string;
+  smtpPort: number;
+  smtpUser: string;
+  smtpPass: string;
 }
 
 const DEV_RATE_LIMIT_LOGIN_LIMIT = 5;
@@ -43,6 +49,22 @@ export function loadApiEnv(env: NodeJS.ProcessEnv = process.env): ApiEnv {
     throw new Error(`RATE_LIMIT_LOGIN_WINDOW_SEC must be a positive integer, got "${env.RATE_LIMIT_LOGIN_WINDOW_SEC}"`);
   }
 
+  // P1A-9：mailer 驱动（dev 缺省 outbox 不阻塞本地；生产缺省 smtp 真发，缺 SMTP env 快速失败）
+  const mailerDriver = (env.MAILER_DRIVER ?? (nodeEnv === 'production' ? 'smtp' : 'outbox')) as 'smtp' | 'outbox';
+  if (mailerDriver !== 'smtp' && mailerDriver !== 'outbox') {
+    throw new Error(`MAILER_DRIVER must be 'smtp' or 'outbox', got "${env.MAILER_DRIVER}"`);
+  }
+  const smtpHost = env.SMTP_HOST ?? '';
+  const smtpPort = Number(env.SMTP_PORT ?? '465');
+  const smtpUser = env.SMTP_USER ?? '';
+  const smtpPass = env.SMTP_PASS ?? '';
+  if (mailerDriver === 'smtp') {
+    if (!smtpHost) throw new Error('SMTP_HOST is required when MAILER_DRIVER=smtp');
+    if (!smtpPort) throw new Error('SMTP_PORT is required when MAILER_DRIVER=smtp');
+    if (!smtpUser) throw new Error('SMTP_USER is required when MAILER_DRIVER=smtp');
+    if (!smtpPass) throw new Error('SMTP_PASS is required when MAILER_DRIVER=smtp');
+  }
+
   return {
     nodeEnv,
     port,
@@ -57,5 +79,10 @@ export function loadApiEnv(env: NodeJS.ProcessEnv = process.env): ApiEnv {
     rateLimitEnabled: env.RATE_LIMIT_ENABLED !== 'false',
     rateLimitLoginLimit,
     rateLimitLoginWindowSec,
+    mailerDriver,
+    smtpHost,
+    smtpPort,
+    smtpUser,
+    smtpPass,
   };
 }

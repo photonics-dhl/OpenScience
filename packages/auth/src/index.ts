@@ -24,7 +24,7 @@ export {
   resolveSession,
   type SessionData,
 } from './session';
-export { DevOutboxMailer, SmtpMailer, type Mailer, type MailMessage } from './mailer';
+export { DevOutboxMailer, SmtpMailer, type Mailer, type MailMessage, type SmtpConfig } from './mailer';
 export {
   getCurrentUser,
   login,

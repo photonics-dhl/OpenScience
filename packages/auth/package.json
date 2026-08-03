@@ -13,10 +13,12 @@
     "@openscience/observability": "workspace:^",
     "@prisma/client": "5.22.0",
     "argon2": "^0.45.1",
-    "ioredis": "5"
+    "ioredis": "5",
+    "nodemailer": "^6"
   },
   "devDependencies": {
     "@types/node": "20.14.10",
+    "@types/nodemailer": "^6",
     "vitest": "2"
   }
 }

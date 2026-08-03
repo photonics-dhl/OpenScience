@@ -2,6 +2,8 @@ import { describe, expect, it } from 'vitest';
 import { loadApiEnv } from '../src/api-env';
 
 describe('loadApiEnv', () => {
+  const PROD_SMTP = { SMTP_HOST: 'smtp.qq.com', SMTP_PORT: '465', SMTP_USER: 'a@qq.com', SMTP_PASS: 'code' };
+
   it('throws in production when DATABASE_URL is missing', () => {
     expect(() => loadApiEnv({ NODE_ENV: 'production' })).toThrow(/DATABASE_URL/);
   });
@@ -18,6 +20,7 @@ describe('loadApiEnv', () => {
       DATABASE_URL: 'postgresql://x',
       REDIS_URL: 'redis://x',
       COOKIE_SECRET: 's3cret',
+      ...PROD_SMTP,
     });
     expect(env.secureCookies).toBe(true);
   });
@@ -58,5 +61,35 @@ describe('loadApiEnv', () => {
   it('RATE_LIMIT_* 非法值 → 快速失败', () => {
     expect(() => loadApiEnv({ RATE_LIMIT_LOGIN_LIMIT: 'abc' })).toThrow(/RATE_LIMIT_LOGIN_LIMIT/);
     expect(() => loadApiEnv({ RATE_LIMIT_LOGIN_WINDOW_SEC: 'abc' })).toThrow(/RATE_LIMIT_LOGIN_WINDOW_SEC/);
+  });
+
+  // P1A-9：SMTP env + MAILER_DRIVER
+  it('dev 缺省 mailerDriver=outbox（无 SMTP env 不炸）', () => {
+    const env = loadApiEnv({});
+    expect(env.mailerDriver).toBe('outbox');
+    expect(env.smtpHost).toBe('');
+  });
+
+  it('MAILER_DRIVER=smtp + SMTP env 完整 → 字段就位', () => {
+    const env = loadApiEnv({
+      MAILER_DRIVER: 'smtp',
+      SMTP_HOST: 'smtp.qq.com',
+      SMTP_PORT: '465',
+      SMTP_USER: 'openscience@qq.com',
+      SMTP_PASS: 'auth-code',
+    });
+    expect(env.mailerDriver).toBe('smtp');
+    expect(env.smtpHost).toBe('smtp.qq.com');
+    expect(env.smtpPort).toBe(465);
+    expect(env.smtpUser).toBe('openscience@qq.com');
+    expect(env.smtpPass).toBe('auth-code');
+  });
+
+  it('生产缺省 mailerDriver=smtp；smtp 缺 SMTP env → 快速失败', () => {
+    const base = { NODE_ENV: 'production', DATABASE_URL: 'postgresql://x', REDIS_URL: 'redis://x', COOKIE_SECRET: 's3cret' };
+    expect(loadApiEnv({ ...base, ...PROD_SMTP }).mailerDriver).toBe('smtp');
+    expect(() => loadApiEnv({ ...base, MAILER_DRIVER: 'smtp' })).toThrow(/SMTP_HOST/);
+    // smtpPort 有默认 465，给 host 后下一个缺失是 SMTP_USER
+    expect(() => loadApiEnv({ ...base, MAILER_DRIVER: 'smtp', SMTP_HOST: 'smtp.qq.com' })).toThrow(/SMTP_USER/);
   });
 });
