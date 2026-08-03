@@ -1,0 +1,44 @@
+name: CI
+
+# P1A-9 §1：build/typecheck/lint/单测门禁（push + PR main）。
+# 集成测试不进 CI（需真实 PG/Redis，云上跑，保持现状）。
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  gate:
+    name: Build / Typecheck / Lint / Test
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9.15.0
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install
+        run: npx pnpm@9.15.0 install --frozen-lockfile
+
+      - name: Build
+        run: npx pnpm@9.15.0 build
+
+      - name: Typecheck
+        run: npx pnpm@9.15.0 typecheck
+
+      - name: Lint
+        run: npx pnpm@9.15.0 lint
+
+      - name: Unit tests
+        run: npx pnpm@9.15.0 test

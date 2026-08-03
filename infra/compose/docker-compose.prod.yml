@@ -1,0 +1,88 @@
+# OpenScience 生产栈（P1A-9）—— 单 ECS，网络分段对齐 Spec §14.2
+#
+# 网络拓扑：
+#   data_net : postgres + redis（内部互联，**不绑公网端口**，数据库不得绑定公网地址）
+#   app_net  : api（暴露 127.0.0.1:3001 到 host，nginx 反代）
+#   api 双网卡（app_net + data_net）→ 仅 API 可达数据服务
+#
+# 生产纪律：
+#   - 零默认值：DB/redis/cookie/SMTP 全从 env_file（/opt/openscience/.env.prod，云上生成不入库）
+#   - 代码经 deploy.sh 同步到 /opt/openscience，api 容器 volume 挂载源码目录跑 dist
+#   - minio 不进生产 compose（dev 栈已跑；真实对象存储 §24/后续 Phase）
+#
+# 用法：
+#   docker compose -f docker-compose.prod.yml up -d
+#   前置：/opt/openscience/.env.prod 存在，代码已同步并全量 build
+
+name: openscience-prod
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    # 无 ports 映射：仅 data_net 内部可达，不绑公网（§14.2）
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:?POSTGRES_USER required}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD required}
+      POSTGRES_DB: ${POSTGRES_DB:-openscience}
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+    networks:
+      - data_net
+    restart: unless-stopped
+
+  redis:
+    image: redis:7-alpine
+    # 无 ports 映射：仅 data_net 内部可达
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+    networks:
+      - data_net
+    restart: unless-stopped
+
+  api:
+    image: node:22-alpine
+    # 暴露 127.0.0.1:3001 到 host（nginx 反代）；不绑 0.0.0.0
+    ports:
+      - "127.0.0.1:3001:3001"
+    working_dir: /opt/openscience/apps/api
+    volumes:
+      - /opt/openscience:/opt/openscience
+    command: ["node", "dist/index.js"]
+    env_file:
+      - /opt/openscience/.env.prod
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:3001/auth/me || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+      start_period: 10s
+    networks:
+      - app_net
+      - data_net
+    restart: unless-stopped
+
+networks:
+  data_net:
+    driver: bridge
+    internal: false
+  app_net:
+    driver: bridge
+
+volumes:
+  postgres-data:
+  redis-data:
