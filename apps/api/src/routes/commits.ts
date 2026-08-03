@@ -2,7 +2,7 @@ import type { FastifyInstance, FastifyRequest } from 'fastify';
 import { z } from 'zod';
 import type { AuthDeps } from '@openscience/auth';
 import type { StorageAdapter } from '@openscience/storage';
-import { createCommit, getVersion, rebuildVersion } from '@openscience/domain';
+import { compareVersions, createCommit, getVersion, rebuildVersion } from '@openscience/domain';
 import type { AuditContext } from '@openscience/observability';
 import { requireCurrentUser } from './session-guard';
 
@@ -66,5 +66,15 @@ export function registerCommitRoutes(app: FastifyInstance, deps: CommitRouteDeps
     if (!user) return;
     const { id } = versionIdParams.parse(req.params);
     return reply.send({ version: await rebuildVersion(deps, { userId: user.userId, versionId: id }) });
+  });
+
+  app.get('/versions/:from/comparison', async (req, reply) => {
+    const user = await requireCurrentUser(deps, req, reply);
+    if (!user) return;
+    const { from } = z.object({ from: z.string().uuid() }).parse(req.params);
+    const query = z.object({ to: z.string().uuid() }).parse(req.query);
+    return reply.send({
+      diff: await compareVersions(deps, { userId: user.userId, fromVersionId: from, toVersionId: query.to }),
+    });
   });
 }

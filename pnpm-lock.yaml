@@ -192,11 +192,27 @@ importers:
         specifier: '2'
         version: 2.1.9(@types/node@20.14.10)
 
+  packages/diff:
+    dependencies:
+      '@openscience/versioning':
+        specifier: workspace:^
+        version: link:../versioning
+    devDependencies:
+      '@types/node':
+        specifier: 20.14.10
+        version: 20.14.10
+      vitest:
+        specifier: '2'
+        version: 2.1.9(@types/node@20.14.10)
+
   packages/domain:
     dependencies:
       '@openscience/auth':
         specifier: workspace:^
         version: link:../auth
+      '@openscience/diff':
+        specifier: workspace:^
+        version: link:../diff
       '@openscience/observability':
         specifier: workspace:^
         version: link:../observability

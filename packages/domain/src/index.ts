@@ -85,3 +85,5 @@ export {
   type ArtifactReference,
 } from './commit/commits';
 export type { VersionSnapshot } from '@openscience/versioning';
+export { compareVersions } from './diff/comparisons';
+export type { DiffResult } from '@openscience/diff';

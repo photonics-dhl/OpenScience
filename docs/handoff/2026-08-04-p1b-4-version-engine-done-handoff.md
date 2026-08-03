@@ -11,5 +11,5 @@
   - task-master 3.4 done + details
 - Constraints: 同前。新增：versioning/storage 包需 main/types（P1B-4 建 versioning 直接补上）；fake Prisma 需同步新增 model（researchObject.update 缺）。
 - Open risks / parked: Version 发布状态机（P1B-7）；大文件分片 + 幂等键实装（P1B-5）；病毒扫描（P1B-8）；逻辑检查点（P1B-6）；完整分支模型（Phase 1C）；P1A-3 终审项、P1A-5 deferred ①、/admin TOTP、SDF Schema 债务（0.2.0）。
-- Next action: P1B-5 大文件分片上传（task-master 3.5）：分片断点续传 + 幂等键实装（§13.1 上传分片），changeSet 幂等键迁移加列。
+- Next action: P1B-5 多类型确定性 Diff 服务（task-master 3.5）：§7.3 九类 diff（文本/SDF 字段/结论/作者/引用/文件增删哈希/表格/代码/许可证可见性），§7.2.6 大二进制仅元数据 diff，输出结构化 Diff 结果供编辑器版本导航与 Phase 1D 公开页消费。
 - Read first: `AGENTS.md` → 主 spec → `docs/progress.md` 置顶条目（P1B-4）→ `project_index.md` → task-master 任务 3.5 → `docs/specs|plans/2026-08-04-p1b-4-*`

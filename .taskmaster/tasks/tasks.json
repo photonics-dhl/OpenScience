@@ -361,14 +361,15 @@
             "id": 5,
             "title": "实现多类型确定性 Diff 服务",
             "description": "实现 Spec §7.3 全部九类 Diff：文本、SDF 字段、结论变化摘要、作者/贡献者变化、引用变化、文件增删与哈希变化、表格数据摘要变化、代码 diff、许可证和可见性变化（Spec §7.1、§7.3）。",
-            "status": "pending",
+            "status": "done",
             "dependencies": [
               "3.4"
             ],
             "priority": "high",
-            "details": "确定性 diff 是事实来源，AI 自然语言摘要仅作展示层（§7.3，AI 摘要接入属 Phase 1D）；大型二进制文件不生成行级 diff，只显示哈希、大小、元数据和替换关系（§7.2.6 MUST）；差异展示必须区分文字、结构化字段、代码、数据、图表和结论变化（§7.1 MUST）；SDF 字段 diff 基于 P1B-4 的 RFC 6902 Patch；输出结构化 Diff 结果供编辑器版本导航与 Phase 1D 公开页 Versions & Diff 标签消费（§4.3）。\n验收: 步骤14",
+            "details": "确定性 diff 是事实来源，AI 自然语言摘要仅作展示层（§7.3，AI 摘要接入属 Phase 1D）；大型二进制文件不生成行级 diff，只显示哈希、大小、元数据和替换关系（§7.2.6 MUST）；差异展示必须区分文字、结构化字段、代码、数据、图表和结论变化（§7.1 MUST）；SDF 字段 diff 基于 P1B-4 的 RFC 6902 Patch；输出结构化 Diff 结果供编辑器版本导航与 Phase 1D 公开页 Versions & Diff 标签消费（§4.3）。\n验收: 步骤14\n<info added on 2026-08-03T23:20:53.215Z>\n决策（design gate）：\n1. 不引 diff 库，自写简单 LCS 行 diff（大文本 P1B-后续换 Myers/diff 库）\n2. 大二进制阈值 1MB（LARGE_BINARY_THRESHOLD 常量）\n3. CSV/TSV 文本直接行级 diff + 摘要\n4. 作者/引用由 input 传入（Phase 1C 建表后接入）\n5. diff 端点成员可看（同 getVersion）\n\n落点：\n- 新包 packages/diff：types（DiffType 九类/LineHunk/DiffChange/DiffResult）+ lines（LCS 行 diff）+ text-code/sdf/authors-citations/file/table/license + computeDiff 聚合\n- domain：compareVersions（读两 Manifest + Blob size → computeDiff，不读对象存储内容 §7.2.6）\n- api：GET /versions/:from/comparison?to=:to（并入 commits 路由）\n- 测试：diff 22 + domain compareVersions 4 + api 集成 4 = 30 新增\n\n验收：本地门禁全绿；云上集成 45/45（新增 P1B-5 4 + 既有 41）；3.5 done\n\n坑：\n1. LCS hunk 构建公共行不应单独成 hunk（flush 只在有增删时触发）\n2. loadBlobSizes 误写 fromManifest.map（应为 fromManifest.entries.map）\n3. CSV 行数断言笔误（表头算行）\n4. computeDiff 的 diffCode 未接（Phase 1D 接 Blob 内容后启用，lint 移除 import）\n</info added on 2026-08-03T23:20:53.215Z>",
             "testStrategy": "单元测试：九类 diff 各至少一组夹具用例、大二进制仅元数据 diff（§21.1 单元层：diff）；集成测试：v1→v2 全量 diff 与存储去重联合验证（§21.1 集成层）；验收点：页面准确展示 v1-v2 diff 且未变化 Blob 不重复存储（§21.2 步骤 14，展示页面在 Phase 1D 完成）。",
-            "parentId": "3"
+            "parentId": "3",
+            "updatedAt": "2026-08-03T23:20:41.065Z"
           },
           {
             "id": 6,
@@ -440,7 +441,7 @@
             "parentId": "3"
           }
         ],
-        "updatedAt": "2026-08-03T23:00:13.392Z"
+        "updatedAt": "2026-08-03T23:20:41.065Z"
       },
       {
         "id": 4,
@@ -853,13 +854,13 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-08-03T23:00:13.392Z",
+      "lastModified": "2026-08-03T23:20:41.066Z",
       "taskCount": 6,
       "completedCount": 2,
       "tags": [
         "master"
       ],
-      "created": "2026-08-03T23:00:20.072Z",
+      "created": "2026-08-03T23:20:47.593Z",
       "description": "Tasks for master context"
     }
   }

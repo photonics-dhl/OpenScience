@@ -1,5 +1,30 @@
 # OpenScience (XGS) 进度日志
 
+## 2026-08-04 — P1B-5 多类型确定性 Diff 服务完成：packages/diff 九类 diff + comparison API，云上 45/45，task-master 3.5 done
+
+### ✅ Completed
+| 任务 | 详情 |
+|---|---|
+| design gate | 五决策：不引 diff 库（LCS）/大二进制 1MB/CSV 行 diff/作者引用 input 传入/成员鉴权 |
+| packages/diff | types（DiffType 九类）+ lines（LCS 行 diff）+ text-code/sdf/authors-citations/file/table/license + computeDiff 聚合 |
+| domain | compareVersions（读两 Manifest + Blob size → computeDiff，不读对象内容 §7.2.6） |
+| API | GET /versions/:from/comparison?to=:to |
+| 测试 | diff 22 + domain 4 + api 集成 4 = 30 新增；本地门禁全绿；**云上集成 45/45**（新增 P1B-5 4 + 既有 41） |
+| task-master 3.5 | done + details |
+
+### Key Decisions / 坑
+- **五决策**：§7.3 九类 diff 全部落地（文本/SDF 字段 RFC 6902/结论/作者/引用/文件增删哈希/表格/代码/许可证可见性）；§7.2.6 大二进制 >1MB 仅元数据（metadata_only）；确定性 diff 是事实来源，AI 摘要 Phase 1D
+- **§7.1 差异区分**：DiffType 枚举区分文字/结构化/代码/数据/图表/结论
+- LCS hunk 公共行不单独成 hunk（flush 只增删时触发）
+- loadBlobSizes 误写 fromManifest.map（应为 entries.map）
+- computeDiff 的 diffCode Phase 1D 接 Blob 内容后启用
+
+### ⏳ Next Steps
+- [x] ~~P1B-5 Diff 服务~~ 完成（2026-08-04）：packages/diff 九类 + 云上 45/45，3.5 done
+- [ ] **P1B-6（task-master 3.6）**：待任务清单（读 task-master 3.6）
+- [ ] parked：P1A-3 终审项、P1A-5 deferred ①、/admin TOTP 上线路障、SDF Schema 债务（0.2.0）、病毒扫描实装（P1B-8）、Version 发布状态机（P1B-7）、大文件分片上传（P1B-后续）、AI diff 摘要（Phase 1D）
+
+---
 ## 2026-08-04 — P1B-4 Commit/Manifest 版本引擎完成：迁移 9 + /commits /versions API，云上 41/41，task-master 3.4 done
 
 ### ✅ Completed
@@ -22,8 +47,8 @@
 
 ### ⏳ Next Steps
 - [x] ~~P1B-4 版本引擎~~ 完成（2026-08-04）：迁移 9 + 云上 41/41，3.4 done
-- [ ] **P1B-5（task-master 3.5）**：大文件分片上传 + 幂等键实装（§13.1 上传分片）
-- [ ] parked：P1A-3 终审项、P1A-5 deferred ①、/admin TOTP 上线路障、SDF Schema 债务（0.2.0）、病毒扫描实装（P1B-8）、Version 发布状态机（P1B-7）
+- [ ] **P1B-5（task-master 3.5）**：多类型确定性 Diff 服务（§7.3 九类：文本/SDF 字段/结论/作者/引用/文件增删哈希/表格/代码/许可证可见性，§7.2.6 大二进制仅元数据 diff）
+- [ ] parked：P1A-3 终审项、P1A-5 deferred ①、/admin TOTP 上线路障、SDF Schema 债务（0.2.0）、病毒扫描实装（P1B-8）、Version 发布状态机（P1B-7）、大文件分片上传（P1B-后续）
 
 ---
 ## 2026-08-04 — P1B-3 Blob 内容寻址存储 + 上传管线完成：迁移 8 + /artifacts API，云上 35/35，task-master 3.3 done
