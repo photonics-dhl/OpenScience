@@ -28,6 +28,7 @@
   "devDependencies": {
     "@eslint/js": "^9.39.5",
     "@openscience/auth": "workspace:*",
+    "@openscience/domain": "workspace:*",
     "@prisma/client": "5.22.0",
     "@types/node": "20.14.10",
     "dependency-cruiser": "^18.1.0",

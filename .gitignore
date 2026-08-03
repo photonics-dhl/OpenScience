@@ -40,6 +40,9 @@ dist/
 
 # MCP 配置含明文密钥，只留本机不入库（2026-07-31 起）
 .mcp.json
+
+# npx 噪音 stderr（npm warn 等，2026-08-03 起）
+npx_stderr.txt
 .vscode/mcp.json
 
 # Playwright MCP 工具产物

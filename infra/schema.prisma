@@ -183,3 +183,37 @@ model AuditLog {
   @@index([createdAt])
   @@map("audit_logs")
 }
+
+model QuotaPolicy {
+  id         String   @id @default(uuid()) @db.Uuid
+  scope      String
+  scopeKey   String?  @map("scope_key")
+  resource   String
+  limitValue BigInt   @map("limit_value")
+  updatedBy  String?  @map("updated_by") @db.Uuid
+  createdAt  DateTime @default(now()) @map("created_at")
+  updatedAt  DateTime @updatedAt @map("updated_at")
+
+  @@unique([scope, scopeKey, resource])
+  @@index([resource])
+  @@map("quota_policies")
+}
+
+model UsageLedger {
+  id             String   @id @default(uuid()) @db.Uuid
+  userId         String?  @map("user_id") @db.Uuid
+  workspaceId    String?  @map("workspace_id") @db.Uuid
+  resource       String
+  delta          BigInt
+  kind           String
+  period         String?
+  reason         String?
+  idempotencyKey String?  @unique @map("idempotency_key")
+  metadata       Json?
+  createdAt      DateTime @default(now()) @map("created_at")
+
+  @@index([userId, resource, createdAt])
+  @@index([workspaceId, resource, createdAt])
+  @@index([resource, period])
+  @@map("usage_ledger")
+}
