@@ -40,6 +40,7 @@ model User {
   ownedWorkspaces          Workspace[]           @relation("WorkspaceOwner")
   memberships              Membership[]
   sentWorkspaceInvitations WorkspaceInvitation[] @relation("WorkspaceInvitationInviter")
+  createdResearchObjects   ResearchObject[]      @relation("ResearchObjectCreator")
 
   @@map("users")
 }
@@ -130,6 +131,7 @@ model Workspace {
   owner       User                 @relation("WorkspaceOwner", fields: [ownerId], references: [id], onDelete: Restrict)
   members     Membership[]
   invitations WorkspaceInvitation[]
+  researchObjects ResearchObject[]
 
   @@map("workspaces")
 }
@@ -218,4 +220,82 @@ model UsageLedger {
   @@index([workspaceId, resource, createdAt])
   @@index([resource, period])
   @@map("usage_ledger")
+}
+
+// --- P1B-2：Research Object / SDF 数据实体（§15、§4.1、§4.2、§5.1）---
+
+enum RoStatus {
+  draft
+  under_review
+  approved
+  published
+  revised
+  withdrawn
+  restricted
+  rejected
+  archived
+}
+
+enum RoVisibility {
+  private
+  invite_only
+  public
+}
+
+enum SdfNodeType {
+  problem
+  insight
+  method
+  results
+  limitations
+  reproducibility
+}
+
+model ResearchObject {
+  id            String        @id @default(uuid()) @db.Uuid
+  workspaceId   String        @map("workspace_id") @db.Uuid
+  title         String
+  status        RoStatus      @default(draft)
+  visibility    RoVisibility  @default(private)
+  version       Int           @default(1) // 乐观锁（§16）；P1B-4 版本引擎推进
+  createdBy     String        @map("created_by") @db.Uuid
+  createdAt     DateTime      @default(now()) @map("created_at")
+  updatedAt     DateTime      @updatedAt @map("updated_at")
+
+  workspace     Workspace     @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  creator       User          @relation("ResearchObjectCreator", fields: [createdBy], references: [id], onDelete: Restrict)
+  sdfDocument   SdfDocument?
+
+  @@index([workspaceId])
+  @@map("research_objects")
+}
+
+model SdfDocument {
+  id                String        @id @default(uuid()) @db.Uuid
+  researchObjectId  String        @map("research_object_id") @db.Uuid
+  coreJson          Json          @map("core_json") // SdfCore 结构（P1B-1 validateSdfCore 校验）
+  createdAt         DateTime      @default(now()) @map("created_at")
+  updatedAt         DateTime      @updatedAt @map("updated_at")
+
+  researchObject    ResearchObject @relation(fields: [researchObjectId], references: [id], onDelete: Cascade)
+  nodes             SdfNode[]
+
+  @@unique([researchObjectId])
+  @@map("sdf_documents")
+}
+
+model SdfNode {
+  id              String       @id @default(uuid()) @db.Uuid
+  sdfDocumentId   String       @map("sdf_document_id") @db.Uuid
+  nodeType        SdfNodeType  @map("node_type")
+  content         String       @default("")
+  sortOrder       Int          @default(0) @map("sort_order")
+  createdAt       DateTime     @default(now()) @map("created_at")
+  updatedAt       DateTime     @updatedAt @map("updated_at")
+
+  sdfDocument     SdfDocument  @relation(fields: [sdfDocumentId], references: [id], onDelete: Cascade)
+
+  @@unique([sdfDocumentId, nodeType])
+  @@index([sdfDocumentId])
+  @@map("sdf_nodes")
 }

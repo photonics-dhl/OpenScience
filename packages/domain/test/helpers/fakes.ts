@@ -11,11 +11,14 @@ interface FakeDb {
   mailOutbox: any[];
   quotaPolicies: any[];
   usageLedger: any[];
+  researchObjects: any[];
+  sdfDocuments: any[];
+  sdfNodes: any[];
 }
 
 /** 内存版 Prisma 子集：覆盖 workspace 领域用到的调用面。 */
 export function createFakePrisma(): { prisma: PrismaClient; db: FakeDb } {
-  const db: FakeDb = { users: [], workspaces: [], memberships: [], workspaceInvitations: [], mailOutbox: [], quotaPolicies: [], usageLedger: [] };
+  const db: FakeDb = { users: [], workspaces: [], memberships: [], workspaceInvitations: [], mailOutbox: [], quotaPolicies: [], usageLedger: [], researchObjects: [], sdfDocuments: [], sdfNodes: [] };
   let seq = 0;
   const nextId = () => `00000000-0000-4000-8000-${String(++seq).padStart(12, '0')}`;
   const p2002 = () => {
@@ -211,6 +214,69 @@ export function createFakePrisma(): { prisma: PrismaClient; db: FakeDb } {
         );
         const sum = rows.reduce((acc, r) => acc + Number(r[_sum.delta ? 'delta' : '']), 0);
         return { _sum: { delta: sum } };
+      },
+    },
+    researchObject: {
+      findUnique: async ({ where, include }: any) => {
+        const ro = db.researchObjects.find((r) => r.id === where.id) ?? null;
+        if (!ro || !include?.sdfDocument) return ro;
+        const doc = db.sdfDocuments.find((d) => d.researchObjectId === ro.id);
+        return { ...ro, sdfDocument: doc ? { ...doc, nodes: db.sdfNodes.filter((n) => n.sdfDocumentId === doc.id) } : null };
+      },
+      create: async ({ data }: any) => {
+        const row = {
+          id: nextId(), status: 'draft', visibility: 'private', version: 1,
+          createdAt: new Date(), updatedAt: new Date(),
+          workspaceId: data.workspaceId, title: data.title, createdBy: data.createdBy,
+        };
+        db.researchObjects.push(row);
+        if (data.sdfDocument?.create) {
+          const doc = { id: nextId(), researchObjectId: row.id, coreJson: data.sdfDocument.create.coreJson, createdAt: new Date(), updatedAt: new Date() };
+          db.sdfDocuments.push(doc);
+          for (const n of data.sdfDocument.create.nodes?.create ?? []) {
+            db.sdfNodes.push({ id: nextId(), sdfDocumentId: doc.id, createdAt: new Date(), updatedAt: new Date(), ...n });
+          }
+        }
+        return row;
+      },
+      updateMany: async ({ where, data }: any) => {
+        let count = 0;
+        for (const r of db.researchObjects) {
+          if (r.id === where.id && (where.version === undefined || r.version === where.version)) {
+            Object.assign(r, data);
+            count++;
+          }
+        }
+        return { count };
+      },
+    },
+    sdfDocument: {
+      findUnique: async ({ where }: any) =>
+        db.sdfDocuments.find((d) =>
+          where.researchObjectId ? d.researchObjectId === where.researchObjectId : d.id === where.id,
+        ) ?? null,
+      update: async ({ where, data }: any) => {
+        const doc = db.sdfDocuments.find((d) =>
+          where.researchObjectId ? d.researchObjectId === where.researchObjectId : d.id === where.id,
+        );
+        Object.assign(doc, data);
+        return doc;
+      },
+    },
+    sdfNode: {
+      findMany: async ({ where }: any) =>
+        db.sdfNodes.filter((n) =>
+          (where.sdfDocumentId === undefined || n.sdfDocumentId === where.sdfDocumentId) &&
+          (where.nodeType === undefined || n.nodeType === where.nodeType),
+        ),
+      update: async ({ where, data }: any) => {
+        const node = db.sdfNodes.find((n) =>
+          where.sdfDocumentId_nodeType
+            ? n.sdfDocumentId === where.sdfDocumentId_nodeType.sdfDocumentId && n.nodeType === where.sdfDocumentId_nodeType.nodeType
+            : n.id === where.id,
+        );
+        Object.assign(node, data);
+        return node;
       },
     },
     $transaction: async (fn: (tx: unknown) => Promise<unknown>) => fn(prisma),

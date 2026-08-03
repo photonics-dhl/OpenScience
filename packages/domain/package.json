@@ -12,6 +12,7 @@
   "dependencies": {
     "@openscience/auth": "workspace:^",
     "@openscience/observability": "workspace:^",
+    "@openscience/sdf-schema": "workspace:^",
     "@prisma/client": "5.22.0"
   },
   "devDependencies": {

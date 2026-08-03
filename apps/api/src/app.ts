@@ -6,6 +6,7 @@ import { registerWorkspaceRoutes } from './routes/workspaces';
 import { registerAdminRoutes } from './routes/admin';
 import { registerAdminUsageRoutes } from './routes/admin-usage';
 import { registerUsageRoutes } from './routes/usage';
+import { registerResearchObjectRoutes } from './routes/research-objects';
 import { registerRateLimit } from './security/rate-limit';
 import { registerSecurity, type SecurityOptions } from './security/security';
 
@@ -66,5 +67,6 @@ export async function buildApp(opts: BuildAppOptions): Promise<FastifyInstance> 
   await app.register(async (instance) => registerAdminRoutes(instance, opts), { prefix: '/admin' });
   await app.register(async (instance) => registerAdminUsageRoutes(instance, opts), { prefix: '/admin' });
   await app.register(async (instance) => registerUsageRoutes(instance, opts), { prefix: '/usage' });
+  await app.register(async (instance) => registerResearchObjectRoutes(instance, opts), {});
   return app;
 }

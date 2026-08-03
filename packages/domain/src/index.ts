@@ -57,3 +57,16 @@ export {
 export { checkLimit, type CheckLimitInput, type CheckLimitResult } from './usage/limits';
 export { GLOBAL_DEFAULT_POLICIES, type SeedQuotaPolicy } from './usage/seed-data';
 export { getUsageSnapshot, type UsageSnapshot, type UsageSnapshotItem } from './usage/snapshot';
+export {
+  RO_STATUSES, RO_VISIBILITIES, SDF_NODE_TYPES,
+  type RoStatus, type RoVisibility, type SdfNodeType,
+} from './research-object/types';
+export { ResearchObjectError, type ResearchObjectErrorCode } from './research-object/errors';
+export {
+  createResearchObject, getResearchObject, updateResearchObject,
+  type CreateResearchObjectInput, type ResearchObjectSummary, type ResearchObjectDetail, type UpdateResearchObjectInput,
+} from './research-object/research-objects';
+export {
+  getSdfDocument, updateSdfDocument,
+  type SdfDocumentView, type UpdateSdfInput,
+} from './research-object/sdf';
