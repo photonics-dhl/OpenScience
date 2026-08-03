@@ -1,5 +1,33 @@
 # OpenScience (XGS) 进度日志
 
+## 2026-08-03 — P1A-8 安全基线完成：限流/CSRF/CORS/helmet/trustProxy/nginx 强认证，云上集成 21/21 全绿
+
+### ✅ Completed
+| 任务 | 详情 |
+|---|---|
+| design gate + spec + plan | `docs/specs/2026-08-03-p1a-8-security-baseline-design.md`（逐节确认四决策）、`docs/plans/2026-08-03-p1a-8-security-baseline-plan.md`（8 任务 TDD） |
+| Task 1 | `database/rate-limit.ts` Redis 固定窗口纯函数（INCR+EXPIRE 同 multi 原子，fail-open） |
+| Task 2 | `config/api-env.ts` +4 env：allowedOrigins（逗号串→数组）/rateLimitEnabled/rateLimitLoginLimit/rateLimitLoginWindowSec |
+| Task 3 | `api/security/rate-limit.ts` Fastify 封装（RATE_LIMIT_ROUTES 声明表=挂接点，429+Retry-After+审计 security.rate.limited） |
+| Task 4 | `api/security/security.ts` CSRF 双提交（@fastify/csrf-protection，/csrf-token 端点）+ CORS 白名单（@fastify/cors）+ helmet 全套头；error-map FST_CSRF*→403 CSRF_INVALID |
+| Task 5 | `app.ts` trustProxy 构造选项（生产 1/dev 0） |
+| Task 6 | `infra/nginx/openscience.conf`（API 反代 + /admin basic_auth + XFF 透传）+ `ADR-003-admin-strong-auth`（nginx basic_auth 双层，TOTP 列上线路障）+ 部署 runbook 填充 |
+| 本地门禁 | build/typecheck/lint(0)/单测 database 12+config 9+api 50/audit:knip 无新增 unused/audit:dep 0 errors/docs:lint 0 全绿 |
+| 云上收口 | cloud-sync → install+全量 build → `test:integration` **21/21 全绿**（新增 security 4：限流 429+Retry-After+审计、CSRF 403/通过、helmet 头、trustProxy + 既有 17 回归）；task-master 2.8 置 done |
+
+### Key Decisions / 坑
+- **四决策**：限流手写 Redis 固定窗口（不引 @fastify/rate-limit）；CSRF @fastify/csrf-protection 双提交（HMAC 模式，cookie 存 secret + x-csrf-token 头）；安全头 @fastify/helmet（CSP default-src 'none'）；/admin nginx basic_auth + platform_admin + 审计双层（TOTP 上线路障，ADR-003）
+- **trustProxy 是限流前置**：云上经 nginx，不信任代理则 req.ip 全 127.0.0.1 → 全站共享单桶；生产 trustProxy:1 + nginx 透传 XFF
+- **@fastify/csrf-protection 错误名是 FastifyError 非 FST_CSRF***：error-map 须匹配 `code` 前缀而非 `name`
+- **集成测试 Redis 桶隔离**（P1A-7 共享库教训 Redis 版）：server 端 key 空间全局共享，独立 redis client 不隔离限流桶 → 所有用例 trustProxy:true + 唯一 X-Forwarded-For → 独立桶（也验证 trustProxy 真实价值）
+- **限流 fail-open**：Redis 不可用放行 + 审计 warning，不因限流依赖打挂服务
+
+### ⏳ Next Steps
+- [x] ~~P1A-8 安全基线~~ 完成（2026-08-03）：云上集成 21/21，2.8 done
+- [ ] **P1A-9：CI/CD 部署（task-master 2.9）**：deploy.sh 填充（含 nginx openscience.conf 部署 + htpasswd 生成步骤）、cloud-sync 补删除语义、月度 Credit 授予 Cron 调度
+- [ ] parked 不变：P1A-3 终审项、P1A-5 deferred ①；新增上线路障：**/admin TOTP 二次验证**（web 有 UI 后补，ADR-003）
+
+---
 ## 2026-08-03 — P1A-7 配额/AI Credit 账务骨架本地完成：门禁全绿，云上集成待执行
 
 ### ✅ Completed

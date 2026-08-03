@@ -246,15 +246,16 @@
             "id": 8,
             "title": "落实安全基线（限流、会话安全、管理后台强认证）",
             "description": "落实 Spec §17 安全 MUST 中属平台底座的部分：登录等接口限流；Session、Cookie、CSRF、CORS、CSP 正确配置；管理后台启用更强认证。",
-            "status": "pending",
+            "status": "done",
             "dependencies": [
               "2.3",
               "2.6"
             ],
             "priority": "high",
-            "details": "实现要点：基于 Redis 的限流中间件，登录接口先行启用，发布/上传/AI/搜索/沙箱接口的限流挂接点随各 Phase 接入（§17 MUST）；Session/Cookie（HttpOnly/Secure/SameSite）、CSRF token、CORS 白名单、CSP 头的集中配置；管理后台（/admin）强制更强认证（如独立二次验证，方案记入 ADR）；上传恶意扫描、公开前敏感扫描、Sandbox 威胁模型分别属 1B/1D/1E，不在本任务。MUST 映射：§17 限流、会话安全、管理后台强认证。验收: -",
+            "details": "实现要点：基于 Redis 的限流中间件，登录接口先行启用，发布/上传/AI/搜索/沙箱接口的限流挂接点随各 Phase 接入（§17 MUST）；Session/Cookie（HttpOnly/Secure/SameSite）、CSRF token、CORS 白名单、CSP 头的集中配置；管理后台（/admin）强制更强认证（如独立二次验证，方案记入 ADR）；上传恶意扫描、公开前敏感扫描、Sandbox 威胁模型分别属 1B/1D/1E，不在本任务。MUST 映射：§17 限流、会话安全、管理后台强认证。验收: -\n<info added on 2026-08-03T10:39:03.501Z>\n2026-08-03 done。\n\n四决策（design gate）：限流手写 Redis 固定窗口、CSRF @fastify/csrf-protection 双提交、安全头 @fastify/helmet、/admin nginx basic_auth（ADR-003，TOTP 列上线路障）。\n\n落点：database/rate-limit.ts（INCR+EXPIRE 原子，fail-open）；api/security/（限流封装 RATE_LIMIT_ROUTES 挂接点 + security.ts CSRF/CORS/helmet + /csrf-token 端点）；config +4 env；app.ts trustProxy:1 生产；error-map FST_CSRF*→403；infra/nginx/openscience.conf。\n\n云上集成 21/21 全绿（新增 security 4 + 既有 17 回归）。坑：Redis server 端 key 空间全局共享，集成测试独立 client 不隔离限流桶，须 trustProxy + 唯一 XFF 隔离（同 P1A-7 共享库教训）。依赖 +3 全 fastify 官方插件。\n\n验收：限流中间件对 /login 等接口生效，Redis key 原子操作验证；CSRF token 端点正常返回，双提交校验返回 403；@fastify/helmet 默认安全头集生效；/admin 路径 nginx basic_auth 生效；trustProxy:1 后 XFF 解析正确；环境变量 RATE_LIMIT_*、CSRF_*、HELMET_*、ADMIN_BASIC_AUTH_* 配置完整；集成测试 21 项全部通过。\n</info added on 2026-08-03T10:39:03.501Z>",
             "testStrategy": "最小测试：限流触发/恢复集成测试；CSRF 缺失拒绝用例；安全响应头断言测试（Spec §21.1 安全测试层）。阶段验收点：安全基线检查清单逐项通过并留证据。",
-            "parentId": "2"
+            "parentId": "2",
+            "updatedAt": "2026-08-03T10:38:47.299Z"
           },
           {
             "id": 9,
@@ -283,7 +284,7 @@
             "parentId": "undefined"
           }
         ],
-        "updatedAt": "2026-08-03T08:45:41.848Z"
+        "updatedAt": "2026-08-03T10:38:47.299Z"
       },
       {
         "id": 3,
@@ -846,13 +847,13 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-08-03T08:45:41.849Z",
+      "lastModified": "2026-08-03T10:38:47.300Z",
       "taskCount": 6,
       "completedCount": 1,
       "tags": [
         "master"
       ],
-      "created": "2026-08-03T08:45:47.565Z",
+      "created": "2026-08-03T10:38:51.474Z",
       "description": "Tasks for master context"
     }
   }

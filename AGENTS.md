@@ -5,9 +5,9 @@ OpenScience：AI 时代科研基础设施平台（Research Object / SDF / 预印
 
 ## Monorepo Layout & Commands（P1A-1 起）
 - 根目录已是 pnpm workspace；pnpm 不全局安装，统一用 `npx pnpm@9.15.0 <cmd>`。
-- `apps/`：`api` 已含 Fastify `/auth`（P1A-3）+ `/workspaces`（P1A-4）+ RBAC preHandler 授权守卫（P1A-5）+ `/admin/audit-logs`（P1A-6，platform_admin 守卫）+ `/usage` 与 `/admin/quota-policies`、`/admin/credits`、`/admin/usage`（P1A-7，配额/AI Credit 账务）实现；`web` 为可启动空壳；`agent-worker`/`science-worker`/`sandbox-controller` 为空壳入口。
-- `packages/`：`domain,database,auth,sdf-schema,versioning,storage,ai-gateway,search,ui,config,observability` 11 个包；database/storage（P1A-2）+ auth（P1A-3）+ domain（P1A-4 workspace 领域模块 + P1A-5 动作×角色权限矩阵 + P1A-7 usage 模块：policies/ledger/grants/limits/snapshot/seed-data）+ config/observability（P1A-6：env 与 dev 常量共源、pino 日志双闸脱敏、统一 ErrorBody、AuditSink 接口）已实现，其余占位。
-- `infra/`：`compose` 已含 `docker-compose.dev.yml` 开发栈、`migrations` 已含迁移 1–6（含 rollback.sql；5 = audit_log，6 = quota_policies + usage_ledger）；`nginx` 已含 `portainer.conf`（已部署云上）；`sandbox/scripts` 仍为占位/既有运维脚本。
+- `apps/`：`api` 已含 Fastify `/auth`（P1A-3）+ `/workspaces`（P1A-4）+ RBAC preHandler 授权守卫（P1A-5）+ `/admin/audit-logs`（P1A-6，platform_admin 守卫）+ `/usage` 与 `/admin/quota-policies`、`/admin/credits`、`/admin/usage`（P1A-7，配额/AI Credit 账务）+ 安全基线 `src/security/`（P1A-8：限流 RATE_LIMIT_ROUTES 挂接点 + CSRF/CORS/helmet + /csrf-token + trustProxy）实现；`web` 可启动空壳；`agent-worker`/`science-worker`/`sandbox-controller` 空壳。
+- `packages/`：`domain,database,auth,sdf-schema,versioning,storage,ai-gateway,search,ui,config,observability` 11 个包；database/storage（P1A-2）+ database rate-limit.ts（P1A-8 限流）+ auth（P1A-3）+ domain（P1A-4 workspace 领域模块 + P1A-5 动作×角色权限矩阵 + P1A-7 usage 模块：policies/ledger/grants/limits/snapshot/seed-data）+ config/observability（P1A-6：env 与 dev 常量共源、pino 日志双闸脱敏、统一 ErrorBody、AuditSink 接口 + P1A-8 allowedOrigins/rateLimit*）已实现，其余占位。
+- `infra/`：`compose` 已含 `docker-compose.dev.yml` 开发栈、`migrations` 已含迁移 1–6（含 rollback.sql；5 = audit_log，6 = quota_policies + usage_ledger）；`nginx` 已含 `portainer.conf`（已部署云上）+ `openscience.conf`（API 反代，P1A-8，待 2.9 部署）；`sandbox/scripts` 仍为占位/既有运维脚本。
 - 常用命令：`npx pnpm@9.15.0 install`、`npx pnpm@9.15.0 build`、`npx pnpm@9.15.0 typecheck`、`npx pnpm@9.15.0 lint`（ESLint 9 全仓检查 + `scripts/verify-workspace.mjs` 结构校验）。
 - API：`npx pnpm@9.15.0 api`（Fastify 起 127.0.0.1:3001）；邀请码 CLI：`node scripts/invite.mjs create|list|revoke`（或 `npx pnpm@9.15.0 invite ...`）；配额 seed CLI：`node scripts/seed-quota.mjs --dry-run|--confirm`（P1A-7 占位值幂等 upsert，数值集中 `packages/domain/src/usage/seed-data.ts`）。
 - 卫生审计：`npx pnpm@9.15.0 audit:knip`（未用文件/导出/依赖）、`audit:dep`（dependency-cruiser：循环依赖/跨包深引用/orphan 告警）、`audit:dup`（jscpd 重复代码）、`audit:deps`（syncpack 版本一致性）、`docs:lint`（markdownlint 文档门禁）。
@@ -23,7 +23,8 @@ OpenScience：AI 时代科研基础设施平台（Research Object / SDF / 预印
 - 监控面板（2026-08-01）：统一入口导航 `https://portainer.428312321.xyz/nav/` → `/traffic/`（vnStat 流量账单）与 `/monitor/`（Netdata 实时）；basic_auth 账号 admin，凭据云上 `/etc/nginx/.htpasswd-monitor`（不入库）；runbook 见 `docs/runbooks/monitoring.md`。
 - **拉镜像必须走隧道**：daemon.json 镜像源全失效 + Docker Hub 被墙；dockerd 代理 drop-in 指向 `127.0.0.1:7890`（本机 v2ray 的 SSH 反向隧道），隧道断开则 pull 失败。其他命令用 `with-proxy <cmd>`（云上 `/usr/local/bin/`，隧道失效自动回落直连，源文件 `infra/scripts/with-proxy.sh`）。隧道由本机 Windows 计划任务 `OpenScience-ProxyTunnel` 常驻（登录自启 + 断线 5s 重连，源文件 `infra/scripts/proxy-tunnel.{sh,vbs}`，日志 `%USERPROFILE%\proxy-tunnel.log`）。
 - **服务器已卸载 Tailscale 且勿再装**（2026-08-01 实测）：tailscaled 劫持 `100.64.0.0/10` 路由，撞阿里云 VPC 内部 DNS（100.100.2.x）致全机 DNS 瘫痪。
-- 集成测试在云上执行：`cd /opt/openscience && npx pnpm@9.15.0 test:integration`（每次跑前必须**全量** `npx pnpm@9.15.0 build`——跨包 import 解析到目标包 dist，只 build database 会因 dist 过期致 500；2026-08-01 实证）。
+- 集成测试在云上执行：`cd /opt/openscience && npx pnpm@9.15.0 test:integration`（每次跑前必须**全量** `npx pnpm@9.15.0 build`——跨包 import 解析到目标包 dist，只 build database 会因 dist 过期致 500；2026-08-01 实证）。**集成测试限流桶隔离**：Redis server 端 key 空间全局共享，须 trustProxy:true + 用例唯一 X-Forwarded-For 独立桶（P1A-8 实证）。
+- API 反代 `infra/nginx/openscience.conf`（P1A-8 已就位，**待 2.9 部署**）：OpenScience.428312321.xyz → 127.0.0.1:3001，/admin 前缀 nginx basic_auth（凭据 `/etc/nginx/.htpasswd-admin` 云上生成不入库）；部署见 docs/runbooks/deployment.md。
 
 ## 第一优先级：需求基线
 - **`docs/OpenScience_Kimi_Development_Spec.md` 是当前单一需求基线（Baseline v1.0, source of truth）**。任何实现工作必须先读它，不得根据零散聊天、旧方案（如已废弃的方案0723）或文件名猜测需求。

@@ -19,8 +19,8 @@
 | `scripts/invite.mjs` | 邀请码管理 CLI（create/list/revoke，P1A-3） | 活文档 |
 | `scripts/seed-quota.mjs` | 配额占位值幂等 upsert CLI（--dry-run/--confirm，P1A-7，数值集中 `packages/domain/src/usage/seed-data.ts`） | 活文档 |
 | `scripts/cloud-sync.mjs` | 云上同步（tar-over-ssh，排除 .env/.git/node_modules/dist，P1A-7 固化） | 活文档 |
-| `apps/` | `web` 可启动空壳；`api` 已含 Fastify `/auth`（P1A-3）+ `/workspaces`（P1A-4）+ RBAC preHandler 授权守卫（P1A-5）实现；`agent-worker`/`science-worker`/`sandbox-controller` 空壳 | 骨架 |
-| `packages/` | 11 个领域包；database/storage 已实现 P1A-2（Prisma/Redis 客户端、迁移 runner、StorageAdapter + MinIO）；auth 已实现 P1A-3（密码/邀请码/验证码/session/mailer）；domain 已实现 P1A-4（workspace 领域模块）+ P1A-5（动作×角色权限矩阵）+ P1A-7（usage 模块：policies/ledger/grants/limits/snapshot/seed-data）；config/observability 已实现 P1A-6（env 共源、日志脱敏、统一 ErrorBody、AuditSink）；其余占位；database/storage/api 云上集成测试 17/17 全绿（2026-08-03） | 已实现（P1A-7 起） |
+| `apps/` | `web` 可启动空壳；`api` 已含 Fastify `/auth`（P1A-3）+ `/workspaces`（P1A-4）+ RBAC preHandler 授权守卫（P1A-5）+ `/admin/audit-logs`（P1A-6，platform_admin 守卫）+ `/usage` 与 `/admin/quota-policies`、`/admin/credits`、`/admin/usage`（P1A-7，配额/AI Credit 账务）+ 安全基线 `src/security/`（P1A-8：限流封装 RATE_LIMIT_ROUTES 挂接点 + CSRF/CORS/helmet 集中注册 + /csrf-token + trustProxy）；`agent-worker`/`science-worker`/`sandbox-controller` 空壳 | 骨架 |
+| `packages/` | 11 个领域包；database/storage 已实现 P1A-2（Prisma/Redis 客户端、迁移 runner、StorageAdapter + MinIO）；database 已加 P1A-8 `rate-limit.ts`（Redis 固定窗口）；auth 已实现 P1A-3（密码/邀请码/验证码/session/mailer）；domain 已实现 P1A-4（workspace 领域模块）+ P1A-5（动作×角色权限矩阵）+ P1A-7（usage 模块：policies/ledger/grants/limits/snapshot/seed-data）；config/observability 已实现 P1A-6（env 共源、日志脱敏、统一 ErrorBody、AuditSink）+ P1A-8（+allowedOrigins/rateLimitEnabled/rateLimitLogin*）；其余占位；database/storage/api 云上集成测试 21/21 全绿（2026-08-03） | 已实现（P1A-7 起） |
 | `.cursor/` | Cursor 编辑器配置 | 工具自管 |
 | `.taskmaster/` | task-master 任务状态 | 工具自管 |
 | `.memory/memory.jsonl` | Memory MCP 知识图谱存储（MEMORY_FILE_PATH 指定） | 工具自管，随 git 备份 |
@@ -40,6 +40,7 @@
 | `docs/specs/2026-08-01-p1a-5-rbac-design.md` | P1A-5 RBAC 权限矩阵设计（已批准，代码已实现，云上集成测试 11/11 全绿 2026-08-01） | 活文档 |
 | `docs/specs/2026-08-01-p1a-6-audit-observability-design.md` | P1A-6 统一错误/日志/配置/审计底座设计（已批准，代码已实现，云上集成 15/15 全绿 2026-08-01） | 活文档 |
 | `docs/specs/2026-08-03-p1a-7-quota-credits-design.md` | P1A-7 配额策略与 AI Credit 账务骨架设计（design gate 已确认，代码已实现，云上集成 17/17 全绿 2026-08-03） | 活文档 |
+| `docs/specs/2026-08-03-p1a-8-security-baseline-design.md` | P1A-8 安全基线设计（design gate 逐节已确认，代码已实现，云上集成 21/21 全绿 2026-08-03） | 活文档 |
 | `docs/plans/2026-07-24-doc-architecture-plan.md` | 文档架构落地实施计划 | 活文档 |
 | `docs/plans/2026-07-24-mvp-task-breakdown-plan.md` | MVP 任务拆解与工具配置实施计划（已批准，执行中） | 活文档 |
 | `docs/plans/2026-07-28-p1a-1-monorepo-skeleton-plan.md` | P1A-1 Monorepo 全量占位骨架实施计划（方案 A，已确认） | 活文档 |
@@ -49,6 +50,7 @@
 | `docs/plans/2026-08-01-p1a-5-rbac-plan.md` | P1A-5 RBAC 权限矩阵实施计划（已执行完毕，云上 11/11 全绿，task-master 2.5 done 2026-08-01） | 活文档 |
 | `docs/plans/2026-08-01-p1a-6-audit-observability-plan.md` | P1A-6 统一错误/日志/配置/审计底座实施计划（已执行完毕，云上 15/15 全绿，task-master 2.6 done 2026-08-01） | 活文档 |
 | `docs/plans/2026-08-03-p1a-7-quota-credits-plan.md` | P1A-7 配额策略与 AI Credit 账务骨架实施计划（已执行完毕，云上 17/17 全绿，task-master 2.7 done 2026-08-03） | 活文档 |
+| `docs/plans/2026-08-03-p1a-8-security-baseline-plan.md` | P1A-8 安全基线实施计划（已执行完毕，云上 21/21 全绿，task-master 2.8 done 2026-08-03） | 活文档 |
 | `docs/progress.md` | 进度日志，新条目置顶 | 活文档 |
 | `docs/handoff/` | 交接文档目录（阶段边界/换 agent/换电脑，必须入库） | 活文档 |
 | `docs/handoff/2026-07-28-before-p1a-2-handoff.md` | P1A-2 前交接：Phase 0 Accepted、P1A-1 done、下一任务 P1A-2 | 活文档 |
@@ -58,13 +60,15 @@
 | `docs/handoff/2026-08-01-p1a-5-cloud-done-handoff.md` | P1A-5 RBAC 云上收口交接：集成测试 11/11 全绿、2.5 done，下一任务 P1A-6 审计日志 design gate | 活文档（主交接） |
 | `docs/handoff/2026-08-01-ops-monitoring-proxy-handoff.md` | 运维底座补充交接：SSH 隧道定案+常驻化、监控面板（/nav/ /traffic/ /monitor/）、Tailscale 卸载禁令 | 活文档 |
 | `docs/handoff/2026-08-01-p1a-6-audit-observability-done-handoff.md` | P1A-6 统一错误/日志/配置/审计底座收口交接：云上集成 15/15 全绿、2.6 done，下一任务 P1A-7 design gate | 活文档 |
-| `docs/handoff/2026-08-03-p1a-7-quota-credits-done-handoff.md` | P1A-7 配额/AI Credit 账务骨架收口交接：云上集成 17/17 全绿、seed 8/8、2.7 done，下一任务 P1A-8 安全基线 design gate | 活文档（当前最新） |
+| `docs/handoff/2026-08-03-p1a-7-quota-credits-done-handoff.md` | P1A-7 配额/AI Credit 账务骨架收口交接：云上集成 17/17 全绿、seed 8/8、2.7 done，下一任务 P1A-8 安全基线 design gate | 活文档 |
+| `docs/handoff/2026-08-03-p1a-8-security-baseline-done-handoff.md` | P1A-8 安全基线收口交接：云上集成 21/21 全绿、2.8 done，下一任务 P1A-9 CI/CD design gate | 活文档（当前最新） |
 | `docs/CODEBASE_AUDIT.md` | Phase 0 Scholars Tea 只读审计报告（地图/模块分类/风险登记/迁移含义） | 活文档 |
 | `docs/proposals/` | 方案/脑暴稿 | 空（旧方案0723已废弃不归档） |
 | `docs/decisions/` | 决策记录 ADR | ADR-001 已接受；ADR-002 已建 |
 | `docs/decisions/ADR-001-target-architecture.md` | 目标架构决策：选择性抽取 Scholars Tea，按 Baseline 重建平台底座 | 活文档（已接受） |
 | `docs/decisions/ADR-002-agent-tooling-portability.md` | Agent 工具能力与可迁移性决策（项目内安装/密钥不入库/分阶段工具候选） | 活文档 |
-| `docs/runbooks/deployment.md` | 部署 runbook（四节骨架，Phase 1A 填充） | 骨架 |
+| `docs/decisions/ADR-003-admin-strong-auth.md` | 管理后台强认证决策：nginx basic_auth 双层 + TOTP 列上线路障（P1A-8） | 活文档 |
+| `docs/runbooks/deployment.md` | 部署 runbook（P1A-8 已填充 API 反代/htpasswd/验证步骤；deploy.sh 自动化归 2.9） | 部分填充 |
 | `docs/runbooks/backup-restore.md` | 备份与恢复 runbook（四节骨架，Phase 1A 填充） | 骨架 |
 | `docs/runbooks/incident.md` | 故障响应 runbook（四节骨架，Phase 1A 填充） | 骨架 |
 | `docs/runbooks/monitoring.md` | 监控面板 runbook（Netdata + vnStat，同域 /monitor/ /traffic/ 路径，2026-08-01） | 已上线 |
@@ -81,7 +85,7 @@
 | `infra/scripts/proxy-tunnel.sh` / `proxy-tunnel.vbs` | 本机侧 SSH 反向隧道常驻（Windows 计划任务 `OpenScience-ProxyTunnel` 登录自启 + 断线重连，2026-08-01） | 已启用 |
 | `infra/scripts/deploy.sh` | 部署脚本 | 骨架，Phase 1A 填充 |
 | `infra/compose/` | `docker-compose.dev.yml` 开发栈（postgres:16/redis:7/minio + minio-init，端口仅 127.0.0.1，P1A-2）；`docker-compose.monitor.yml` 监控栈（netdata + vnstat，2026-08-01） | 已就位（本机未起栈）；监控栈已部署云上 |
-| `infra/nginx/` | 反代配置：`portainer.conf`（portainer.428312321.xyz → 127.0.0.1:9443，LE 证书 + WebSocket，2026-07-31；2026-08-01 追加 /nav/ 导航页、/monitor/→Netdata、/traffic/→vnStat 账单页，basic_auth） | 已部署云上并启用（https 已通） |
+| `infra/nginx/` | 反代配置：`portainer.conf`（portainer.428312321.xyz → 127.0.0.1:9443，LE 证书 + WebSocket，2026-07-31；2026-08-01 追加 /nav/ 导航页、/monitor/→Netdata、/traffic/→vnStat 账单页，basic_auth）+ `openscience.conf`（OpenScience.428312321.xyz → 127.0.0.1:3001，P1A-8：/admin basic_auth + XFF 透传） | portainer.conf 已部署云上并启用；openscience.conf 待 2.9 部署 |
 | `infra/www/` | `nav/index.html` 服务器面板导航静态页（/var/www/nav，2026-08-01） | 已部署云上 |
 | `infra/sandbox/` | 沙箱配置占位（P1A-1） | 骨架 |
 | `infra/migrations/` | Prisma 迁移（`20260728000000_baseline_app_meta` + `20260728010000_auth_baseline`（P1A-3 四表）+ `20260729010000_workspace_baseline`（P1A-4 三表）+ `20260801010000_user_platform_role`（P1A-5）+ `20260801143000_audit_log`（P1A-6）+ `20260803000000_quota_usage`（P1A-7），各附 rollback.sql） | 已实现，云上已 deploy（迁移 1–6，2026-08-03） |
