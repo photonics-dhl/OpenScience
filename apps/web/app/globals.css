@@ -38,6 +38,78 @@ body {
   padding: 16px 24px;
 }
 
+/* 响应式：移动/平板单栏 + 抽屉（§5.4/§18.2） */
+.desktop-only { display: grid; }
+.mobile-only { display: none; }
+.mobile-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px;
+  background: var(--color-panel);
+  border-bottom: 1px solid var(--color-border);
+}
+.mobile-tabs {
+  display: flex;
+  flex: 1;
+  justify-content: center;
+  gap: 4px;
+}
+.mobile-tab {
+  padding: 6px 12px;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  font-size: 13px;
+  cursor: pointer;
+}
+.mobile-tab.active {
+  background: #dbeafe;
+  color: var(--color-accent);
+  font-weight: 600;
+}
+.mobile-body { height: calc(100vh - 48px); overflow-y: auto; }
+@media (max-width: 1023.98px) {
+  .desktop-only { display: none; }
+  .mobile-only { display: block; }
+  .editor-layout { display: block; }
+}
+
+/* 抽屉（§18.3 focus trap + Esc） */
+.drawer-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.4);
+  z-index: 100;
+}
+.drawer {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 300px;
+  max-width: 85vw;
+  background: var(--color-panel);
+  box-shadow: 0 0 20px rgba(0, 0, 0, 0.2);
+  padding: 16px;
+  overflow-y: auto;
+}
+.drawer-left { left: 0; }
+.drawer-right { right: 0; }
+.drawer-close {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  font-size: 18px;
+  line-height: 1;
+  padding: 4px 10px;
+}
+
+/* 焦点状态（§18.3） */
+:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 2px;
+}
+
 /* 大纲 */
 .pane-title {
   font-size: 12px;
@@ -160,6 +232,10 @@ body {
 .version-item:hover {
   background: var(--color-bg);
 }
+.version-item.active {
+  background: #dbeafe;
+  color: var(--color-accent);
+}
 
 /* 附件 */
 .artifact-list {
@@ -169,6 +245,29 @@ body {
   font-size: 13px;
   padding: 4px 0;
   color: var(--color-muted);
+}
+.progress-bar {
+  position: relative;
+  height: 18px;
+  background: var(--color-bg);
+  border: 1px solid var(--color-border);
+  border-radius: 4px;
+  overflow: hidden;
+  margin-top: 4px;
+}
+.progress-fill {
+  height: 100%;
+  background: var(--color-accent);
+  transition: width 0.2s;
+}
+.progress-bar span {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  color: var(--color-text);
 }
 
 /* 错误面板 */

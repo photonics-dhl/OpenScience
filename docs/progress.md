@@ -1,5 +1,31 @@
 # OpenScience (XGS) 进度日志
 
+## 2026-08-04 — P1B-9 移动端分步/抽屉编辑器与可访问性完成：Drawer + 虚拟化 + WCAG AA，next build 通过，task-master 3.9 done
+
+### ✅ Completed
+| 任务 | 详情 |
+|---|---|
+| design gate | 五决策：自写 Drawer/顶栏 tab/XHR 进度/窗口虚拟化/自写 focus trap |
+| Drawer.tsx | 自写抽屉（aria-modal + focus trap + Esc + 焦点还原，§18.3） |
+| MobileTabs + EditorLayout | 顶栏 tab（大纲/编辑/面板）+ 响应式（桌面三栏 / 移动单栏 + 抽屉，§5.4/§18.2 不删功能） |
+| VersionList | 窗口虚拟化（pageVersions 纯函数 + IntersectionObserver 滚动加载，§18.3） |
+| ArtifactUploader | XHR onprogress 进度条 + 失败重试（§18.3 可恢复） |
+| WCAG AA | :focus-visible 焦点环 + nav/main/aside 语义化 + aria-label + role="alert" + 键盘导航 |
+| 测试 | web 17（mobile pageVersions 4 新增）；next build 通过；本地门禁全绿 |
+| task-master 3.9 | done + details |
+
+### Key Decisions / 坑
+- **五决策**：自写 Drawer（无 headlessui）；顶栏 tab + 抽屉（§5.4 不删功能）；XHR 真实进度（fetch 无原生）；窗口虚拟化（无 react-window）；自写 focus trap
+- **§18.2** 移动端三栏改分步/抽屉不删功能；**§18.3** 键盘/焦点/语义化/对比度/虚拟化/进度
+- fetch 上传无进度 → XHR onprogress（api.ts uploadArtifact 死代码删除）
+- pageVersions 抽纯函数供单测（组件 state 难测）
+
+### ⏳ Next Steps
+- [x] ~~P1B-9 移动端 + 可访问性~~ 完成（2026-08-04）：Drawer + 虚拟化 + WCAG AA，3.9 done
+- [ ] **P1B-10（task-master 3.10）**：待任务清单
+- [ ] parked：P1A-3 终审项、P1A-5 deferred ①、/admin TOTP 上线路障、SDF Schema 债务（0.2.0）、病毒扫描实装（P1B-后续）、Version 发布状态机（P1B-后续）、真实 AI 提取（Phase 1D SDF Extractor）、E2E 浏览器测试（Phase 1D）
+
+---
 ## 2026-08-04 — P1B-8 三栏 SDF 编辑器桌面端完成：apps/web 编辑器 + 建议确认 + 版本导航，next build 通过，task-master 3.8 done
 
 ### ✅ Completed

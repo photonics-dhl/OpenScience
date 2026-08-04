@@ -195,7 +195,7 @@ export default function EditorPage({ params }: { params: { id: string } }) {
         </div>
       )}
       {errorMsg && (
-        <div className="error-panel">
+        <div className="error-panel" role="alert">
           {errorMsg}
           <div className="error-actions">
             <button className="btn" onClick={() => setErrorMsg(null)}>{t('common.cancel')}</button>

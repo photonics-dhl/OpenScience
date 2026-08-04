@@ -74,21 +74,6 @@ export async function updateSdf(roId: string, version: number, core: SdfCore): P
   return request(`/api/sdf/${roId}`, { method: 'PUT', body: JSON.stringify({ version, core }) });
 }
 
-/** 上传附件（P1B-3 管线，multipart）。 */
-export async function uploadArtifact(workspaceId: string, logicalPath: string, file: File): Promise<{ artifact: { artifactId: string; blobSha256: string; size: number } }> {
-  const form = new FormData();
-  form.append('workspaceId', workspaceId);
-  form.append('logicalPath', logicalPath);
-  form.append('file', file, file.name);
-  const res = await fetch('/api/artifacts/upload', { method: 'POST', credentials: 'include', body: form });
-  if (!res.ok) {
-    let body: ApiErrorBody | undefined;
-    try { body = await res.json() as ApiErrorBody; } catch { /* 非 JSON */ }
-    throw new ApiClientError(body?.error?.code ?? 'UNKNOWN', body?.error?.message ?? `上传失败 ${res.status}`, res.status);
-  }
-  return res.json() as Promise<{ artifact: { artifactId: string; blobSha256: string; size: number } }>;
-}
-
 /** 查版本列表（P1B-4）。 */
 export async function listVersions(roId: string): Promise<{ versions: VersionSummary[] }> {
   return request(`/api/research-objects/${roId}/versions`);

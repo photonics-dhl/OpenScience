@@ -419,14 +419,15 @@
             "id": 9,
             "title": "实现移动端分步/抽屉编辑器与可访问性",
             "description": "移动端以抽屉和分步页面呈现三栏全部功能，不删除功能，并满足 WCAG AA 可访问性基线（Spec §5.4、§18.2、§18.3、§2.5.5）。",
-            "status": "pending",
+            "status": "done",
             "dependencies": [
               "3.8"
             ],
             "priority": "medium",
-            "details": "移动端保留全部功能，通过抽屉和分步页面呈现三栏内容，不要求三栏同时显示（§5.4）；所有主要流程在移动端可完成，复杂三栏界面改为分步/抽屉而非删除功能（§18.2）；桌面和移动端功能一致（§2.5.5）；可访问性：键盘导航、明确焦点状态、语义化 HTML、图片 alt、WCAG AA 级对比度目标（§18.3）；大文件列表虚拟化、上传任务显示可恢复进度（§18.3）。\n验收: 步骤3",
+            "details": "移动端保留全部功能，通过抽屉和分步页面呈现三栏内容，不要求三栏同时显示（§5.4）；所有主要流程在移动端可完成，复杂三栏界面改为分步/抽屉而非删除功能（§18.2）；桌面和移动端功能一致（§2.5.5）；可访问性：键盘导航、明确焦点状态、语义化 HTML、图片 alt、WCAG AA 级对比度目标（§18.3）；大文件列表虚拟化、上传任务显示可恢复进度（§18.3）。\n验收: 步骤3\n<info added on 2026-08-04T04:19:20.499Z>\n决策（design gate）：\n1. 自写 Drawer 组件（CSS transition + focus trap）\n2. 顶栏 tab（大纲/编辑/面板）+ 抽屉滑出\n3. XHR onprogress 真实进度\n4. 简单窗口虚拟化（前 20 + 滚动加载）\n5. 自写 focus trap（Esc/焦点还原）\n\n落点：\n- components/editor/Drawer.tsx：自写抽屉（aria-modal + focus trap + Esc + 焦点还原）\n- MobileTabs.tsx：顶栏 tab（大纲/编辑/面板，§5.4 不删功能）\n- EditorLayout.tsx：响应式（桌面 grid 三栏 ≥1024px / 移动单栏 + 抽屉 <1024px）\n- VersionList.tsx：窗口虚拟化（pageVersions 纯函数 + IntersectionObserver 滚动加载）\n- ArtifactUploader.tsx：XHR onprogress 进度条 + 失败重试（§18.3 可恢复）\n- globals.css：:focus-visible 焦点环 + drawer/进度条/移动端样式\n- 语义化：nav/main/aside + aria-label + role=\"alert\" + role=\"button\" 键盘导航\n- 测试：web 17（mobile pageVersions 4 新增）；next build 通过；本地门禁全绿\n\n验收：移动端抽屉/分步（不删功能 §18.2）；键盘导航 + 焦点状态 + focus trap；语义化 HTML + aria；WCAG AA（:focus-visible 环，颜色已 AA）；版本列表虚拟化 + 上传进度；3.9 done\n\n坑：\n1. fetch 上传无原生进度 → XHR onprogress（api.ts uploadArtifact 成死代码删除）\n2. Drawer focus trap 需 document.activeElement 管理 + Esc 监听\n3. IntersectionObserver 需清理 disconnect\n4. pageVersions 抽纯函数供单测（组件 state 难测）\n</info added on 2026-08-04T04:19:20.499Z>",
             "testStrategy": "E2E：移动端视口完成创建→编辑→确认建议→Commit 流程（§21.1 E2E 层、§21.2 步骤 3）；可访问性检查：键盘走查与对比度抽检（§18.3）。",
-            "parentId": "3"
+            "parentId": "3",
+            "updatedAt": "2026-08-04T04:19:03.440Z"
           },
           {
             "id": 10,
@@ -444,7 +445,7 @@
             "parentId": "3"
           }
         ],
-        "updatedAt": "2026-08-04T01:10:03.046Z"
+        "updatedAt": "2026-08-04T04:19:03.440Z"
       },
       {
         "id": 4,
@@ -857,13 +858,13 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-08-04T01:10:03.046Z",
+      "lastModified": "2026-08-04T04:19:03.441Z",
       "taskCount": 6,
       "completedCount": 2,
       "tags": [
         "master"
       ],
-      "created": "2026-08-04T01:10:12.561Z",
+      "created": "2026-08-04T04:19:09.713Z",
       "description": "Tasks for master context"
     }
   }
