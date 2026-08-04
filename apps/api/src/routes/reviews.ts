@@ -2,7 +2,7 @@ import type { FastifyInstance, FastifyRequest } from 'fastify';
 import { z } from 'zod';
 import { getCurrentUser, type AuthDeps } from '@openscience/auth';
 import type { StorageAdapter } from '@openscience/storage';
-import { createReview, listReviews, mergePullRequest, REVIEW_VERDICTS } from '@openscience/domain';
+import { createReview, listReviews, mergePullRequest, getPublicationReview, runPublicationReview, REVIEW_VERDICTS } from '@openscience/domain';
 import type { AuditContext } from '@openscience/observability';
 import { requireCurrentUser, sessionTokenFrom } from './session-guard';
 
@@ -70,5 +70,20 @@ export function registerReviewRoutes(app: FastifyInstance, deps: ReviewRouteDeps
       auditCtx(req),
     );
     return reply.send({ merge: result });
+  });
+
+  // P1D-5：发布审核硬阻断（§11.1 七类 + §15 AIReview）
+  app.post('/versions/:versionId/review', async (req, reply) => {
+    const user = await requireCurrentUser(deps, req, reply);
+    if (!user) return;
+    const { versionId } = z.object({ versionId: z.string().uuid() }).parse(req.params);
+    return reply.send({ review: await runPublicationReview(deps, { versionId, userId: user.userId }, auditCtx(req)) });
+  });
+
+  app.get('/versions/:versionId/review', async (req, reply) => {
+    const user = await requireCurrentUser(deps, req, reply);
+    if (!user) return;
+    const { versionId } = z.object({ versionId: z.string().uuid() }).parse(req.params);
+    return reply.send({ review: await getPublicationReview(deps, { versionId, userId: user.userId }) });
   });
 }

@@ -683,7 +683,7 @@
             "id": 5,
             "title": "实现发布审核硬阻断检查管线",
             "description": "实现 AI 发布审核的硬阻断层：仅对安全、完整性、恶意文件、隐私泄露和明显违规进行硬阻断（Spec §2.3-5、§11.1），审核未通过时禁止发布（Spec §2.3-4）。",
-            "status": "pending",
+            "status": "done",
             "dependencies": [
               "5.2",
               "3",
@@ -692,7 +692,8 @@
             "priority": "high",
             "details": "要点：逐项实现 Spec §11.1 七类硬阻断——必填字段缺失（对照 §5.1 六字段）、恶意代码/危险可执行内容（上传扫描结果联动，Spec §17）、高风险隐私泄露（身份证、密钥、访问令牌，公开前敏感信息扫描为 Spec §17 MUST）、明显违法或平台禁止内容、发布者权限无法确认、未选择许可证、版本哈希或 manifest 校验失败（对照 §7 存储模型）。任一硬阻断命中则发布请求被拒并生成审核记录（AIReview 实体，Spec §15）；审核完成发出 ai_review.completed 事件（Spec §16）。Safety Reviewer 类检查不替代申诉人工（Spec §9.2）。涉及模块：apps/agent-worker、apps/api /publications 模块。\n验收: 步骤7",
             "testStrategy": "单元测试：七类硬阻断各至少一个命中/放行用例；E2E（Spec §21.1）：构造缺许可/缺字段的版本候选验证发布被拒，正常版本通过 AI 发布审核（验收步骤7，Spec §21.2）。",
-            "parentId": "5"
+            "parentId": "5",
+            "updatedAt": "2026-08-04T12:26:22.875Z"
           },
           {
             "id": 6,
@@ -752,7 +753,7 @@
             "parentId": "5"
           }
         ],
-        "updatedAt": "2026-08-04T12:08:12.801Z"
+        "updatedAt": "2026-08-04T12:26:22.875Z"
       },
       {
         "id": "6",
@@ -875,7 +876,7 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-08-04T12:08:12.802Z",
+      "lastModified": "2026-08-04T12:26:22.875Z",
       "taskCount": 6,
       "completedCount": 4,
       "tags": [

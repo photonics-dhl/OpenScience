@@ -295,6 +295,7 @@ model ResearchObject {
   contributions      Contribution[]
   licenseAssignments LicenseAssignment[]
   agentSessions       AgentSession[]
+  aiReviews           AiReview[]
 
   @@index([workspaceId])
   @@map("research_objects")
@@ -442,6 +443,7 @@ model Version {
   publications       Publication[]
   forkSources        ForkRelation[]
   licenseAssignments LicenseAssignment[]
+  aiReview           AiReview?
 
   @@unique([researchObjectId, versionNo])
   @@index([researchObjectId])
@@ -801,4 +803,23 @@ enum AgentTaskStatus {
   running
   succeeded
   failed
+}
+
+// --- P1D-5：AI 发布审核记录（§15 AIReview + §11.1 硬阻断 + §11.3 稳定可引用）---
+
+model AiReview {
+  id               String   @id @default(uuid()) @db.Uuid
+  versionId        String   @unique @map("version_id") @db.Uuid
+  researchObjectId String   @map("research_object_id") @db.Uuid
+  status           String // passed / blocked
+  hardBlocks       Json     @default("[]") @map("hard_blocks")
+  warnings         Json     @default("[]")
+  verdict          String   @default("")
+  createdAt        DateTime @default(now()) @map("created_at")
+
+  version        Version        @relation(fields: [versionId], references: [id], onDelete: Cascade)
+  researchObject ResearchObject @relation(fields: [researchObjectId], references: [id], onDelete: Cascade)
+
+  @@index([researchObjectId])
+  @@map("ai_reviews")
 }

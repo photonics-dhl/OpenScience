@@ -38,11 +38,12 @@ interface FakeDb {
   agentSessions: any[];
   agentTasks: any[];
   toolApprovals: any[];
+  aiReviews: any[];
 }
 
 /** 内存版 Prisma 子集：覆盖 workspace 领域用到的调用面。 */
 export function createFakePrisma(): { prisma: PrismaClient; db: FakeDb } {
-  const db: FakeDb = { users: [], workspaces: [], memberships: [], workspaceInvitations: [], mailOutbox: [], quotaPolicies: [], usageLedger: [], researchObjects: [], sdfDocuments: [], sdfNodes: [], blobs: [], artifacts: [], branches: [], commits: [], changesets: [], versions: [], versionManifests: [], manifestEntries: [], identifiers: [], publications: [], visibilityGrants: [], visibilityRequests: [], pullRequests: [], issues: [], comments: [], reviews: [], licenseAssignments: [], forkRelations: [], notifications: [], authors: [], contributions: [], agentSessions: [], agentTasks: [], toolApprovals: [] };
+  const db: FakeDb = { users: [], workspaces: [], memberships: [], workspaceInvitations: [], mailOutbox: [], quotaPolicies: [], usageLedger: [], researchObjects: [], sdfDocuments: [], sdfNodes: [], blobs: [], artifacts: [], branches: [], commits: [], changesets: [], versions: [], versionManifests: [], manifestEntries: [], identifiers: [], publications: [], visibilityGrants: [], visibilityRequests: [], pullRequests: [], issues: [], comments: [], reviews: [], licenseAssignments: [], forkRelations: [], notifications: [], authors: [], contributions: [], agentSessions: [], agentTasks: [], toolApprovals: [], aiReviews: [] };
   let seq = 0;
   const nextId = () => `00000000-0000-4000-8000-${String(++seq).padStart(12, '0')}`;
   const p2002 = () => {
@@ -425,8 +426,21 @@ export function createFakePrisma(): { prisma: PrismaClient; db: FakeDb } {
       },
       findUnique: async ({ where, include }: any) => {
         const row = db.versions.find((v) => v.id === where.id) ?? null;
-        if (!row || !include?.researchObject) return row;
-        return { ...row, researchObject: db.researchObjects.find((r) => r.id === row.researchObjectId) ?? null };
+        if (!row) return null;
+        const out: any = { ...row };
+        if (include?.researchObject) {
+          const ro = db.researchObjects.find((r) => r.id === row.researchObjectId) ?? null;
+          out.researchObject = ro
+            ? { ...ro, sdfDocument: db.sdfDocuments.find((d) => d.researchObjectId === ro.id) ?? null }
+            : null;
+        }
+        if (include?.manifest) {
+          const manifest = db.versionManifests.find((m) => m.versionId === row.id) ?? null;
+          out.manifest = manifest
+            ? { ...manifest, entries: db.manifestEntries.filter((e) => e.manifestId === manifest.id) }
+            : null;
+        }
+        return out;
       },
       create: async ({ data }: any) => {
         const row = { id: nextId(), status: 'draft', createdAt: new Date(), ...data };
@@ -630,6 +644,19 @@ export function createFakePrisma(): { prisma: PrismaClient; db: FakeDb } {
         row.updatedAt = new Date();
         return { ...row };
       },
+    },
+    aiReview: {
+      upsert: async ({ where, create, update }: any) => {
+        const existing = db.aiReviews.find((r) => r.versionId === where.versionId);
+        if (existing) {
+          Object.assign(existing, update);
+          return { ...existing };
+        }
+        const row = { id: nextId(), hardBlocks: [], warnings: [], createdAt: new Date(), ...create };
+        db.aiReviews.push(row);
+        return { ...row };
+      },
+      findUnique: async ({ where }: any) => db.aiReviews.find((r) => r.versionId === where.versionId) ?? null,
     },
     pullRequest: {
       count: async ({ where }: any) =>

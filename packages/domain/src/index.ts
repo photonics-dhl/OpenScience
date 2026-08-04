@@ -135,6 +135,15 @@ export {
   REVIEW_VERDICTS,
   type ReviewVerdict, type ReviewItem, type ReviewView, type HighRiskDetail,
 } from './review/reviews';
+export {
+  checkCoreCompleteness, checkMaliciousArtifact, checkSensitiveContent, checkProhibitedContent,
+  DANGEROUS_EXTENSIONS, DANGEROUS_MIME, SENSITIVE_PATTERNS, PROHIBITED_KEYWORDS,
+  type HardBlock,
+} from './review/blocking';
+export {
+  runPublicationReview, getPublicationReview,
+  type PublicationReviewView,
+} from './review/publish-review';
 export { NotificationError, type NotificationErrorCode } from './notification/errors';
 export {
   notify, listNotifications, markNotificationRead,
