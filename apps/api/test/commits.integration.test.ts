@@ -245,12 +245,13 @@ describe('P1B-4 /commits + /versions（云上，真 MinIO）', () => {
     // 直接改 DB 状态为 published（P1B-7 发布状态机未实装，测试模拟已发布）
     await prisma.version.update({ where: { id: c1.json().commit.versionId }, data: { status: 'published' } });
 
+    // §2.2-3：新 commit 产生增量版本（versionNo=2）合法，不原地修改已发布版本
     const c2 = await app.inject({
       method: 'POST', url: `/research-objects/${ro.id}/commits`, cookies: { openscience_session: cookie },
       payload: { message: 'v2', version: 2 },
     });
-    expect(c2.statusCode).toBe(409);
-    expect(c2.json().error.code).toBe('VERSION_PUBLISHED');
+    expect(c2.statusCode).toBe(201);
+    expect(c2.json().commit.versionNo).toBe(2);
     await app.close();
   });
 });

@@ -728,7 +728,7 @@
             "id": 8,
             "title": "实现发布事务与状态机推进",
             "description": "实现正式发布流程：作者确认公开后生成平台时间戳、RO unique ID 和版本 ID（Spec §2.1-6），状态机 draft → under_review → approved → published（Spec §4.1），已公开版本永久不可原地修改（Spec §2.2-3）。",
-            "status": "pending",
+            "status": "done",
             "dependencies": [
               "5.5",
               "5.4",
@@ -738,7 +738,8 @@
             "priority": "high",
             "details": "要点：1) 发布前置条件：AI 审核通过（P1D-5）、许可证已选且作者已确认（P1C 产物）、发布确认走 R3 审批（P1D-4）；2) 时间戳由 UTC 数据库事务时间、版本 manifest 与 SHA-256 内容哈希构成，发布记录写入只追加审计日志（Spec §6.2、§17）；3) 写入 Version、VersionManifest、Publication、Identifier 实体并发出 version.published 事件（Spec §15、§16）；4) 已公开版本任何修改必须产生新版本或勘误，禁止原地修改（Spec §2.2-3）；5) 状态机含 rejected/withdrawn/restricted 补充状态（Spec §4.1）；6) 平台仅声明“记录平台接收时间和版本哈希”，不承诺专利、著作权或司法存证效力（Spec §2.1-7、§6.2 声明文案）；7) 发布 v2 复用同一发布管线，须验证 parentVersion 链与新版本哈希、manifest 正确生成（对应 Spec §2.2-3 已公开版本不可原地修改、§7 增量版本）。涉及模块：apps/api /publications、/versions 模块、packages/versioning。\n验收: 步骤9,13",
             "testStrategy": "单元测试：状态机非法迁移拒绝、已发布版本写入被拒；集成测试：发布事务的原子性与审计日志只追加；E2E（Spec §21.2 步骤9、13）：发布 v1 后获得 unique ID、版本 ID、UTC 时间戳和哈希；Merge 后作者发布 v2，验证 parentVersion 指向 v1 且生成新版本哈希与 manifest。",
-            "parentId": "5"
+            "parentId": "5",
+            "updatedAt": "2026-08-04T13:48:30.579Z"
           },
           {
             "id": 9,
@@ -755,7 +756,7 @@
             "parentId": "5"
           }
         ],
-        "updatedAt": "2026-08-04T13:23:31.865Z"
+        "updatedAt": "2026-08-04T13:48:30.579Z"
       },
       {
         "id": "6",
@@ -878,7 +879,7 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-08-04T13:23:31.865Z",
+      "lastModified": "2026-08-04T13:48:30.579Z",
       "taskCount": 6,
       "completedCount": 4,
       "tags": [

@@ -16,6 +16,7 @@ import { registerLicenseRoutes } from './routes/licenses';
 import { registerForkRoutes } from './routes/forks';
 import { registerPrRoutes } from './routes/prs';
 import { registerReviewRoutes } from './routes/reviews';
+import { registerPublicationRoutes } from './routes/publications';
 import { registerAuthorRoutes } from './routes/authors';
 import { registerNotificationRoutes } from './routes/notifications';
 import { registerAgentRoutes } from './routes/agent';
@@ -101,6 +102,7 @@ export async function buildApp(opts: BuildAppOptions): Promise<FastifyInstance> 
     await app.register(async (instance) => registerForkRoutes(instance, { ...opts, storage }), {});
     await app.register(async (instance) => registerPrRoutes(instance, { ...opts, storage }), {});
     await app.register(async (instance) => registerReviewRoutes(instance, { ...opts, storage }), {});
+    await app.register(async (instance) => registerPublicationRoutes(instance, { ...opts, storage }), {});
   }
   return app;
 }

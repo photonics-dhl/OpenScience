@@ -448,6 +448,11 @@ export function createFakePrisma(): { prisma: PrismaClient; db: FakeDb } {
         db.versions.push(row);
         return row;
       },
+      update: async ({ where, data }: any) => {
+        const row = db.versions.find((v) => v.id === where.id);
+        Object.assign(row, data);
+        return { ...row };
+      },
       count: async ({ where }: any) =>
         db.versions.filter((v) => (where.researchObjectId === undefined || v.researchObjectId === where.researchObjectId)).length,
       findMany: async ({ where }: any) =>
@@ -478,6 +483,15 @@ export function createFakePrisma(): { prisma: PrismaClient; db: FakeDb } {
         db.identifiers.push(row);
         return row;
       },
+    },
+    publication: {
+      create: async ({ data }: any) => {
+        const row = { id: nextId(), ...data };
+        db.publications.push(row);
+        return row;
+      },
+      findFirst: async ({ where }: any) =>
+        db.publications.find((p) => (where.versionId === undefined || p.versionId === where.versionId)) ?? null,
     },
     visibilityGrant: {
       findUnique: async ({ where }: any) =>

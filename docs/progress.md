@@ -1,30 +1,32 @@
 # OpenScience (XGS) 进度日志
 
-## 2026-08-04 — P1D-7 审核申诉流程与 Moderator 队列完成：迁移 17 + /appeals，云上 97/97，task-master 5.7 done
+## 2026-08-04 — P1D-8 发布事务与状态机推进完成：迁移 18 + /publications，云上 99/99，task-master 5.8 done
 
 ### ✅ Completed
 | 任务 | 详情 |
 |---|---|
-| design gate | 五决策：迁移 17 / blocked 才可申诉 / 角色隔离 / 事件通知 / 重审与申诉并存 |
-| migration 17 | appeals（versionId + aiReviewId + reason + status + resolution Json + moderatorId + resolvedAt）+ rollback |
-| domain appeal/ | createAppeal（blocked 校验 + 幂等去重 + appeal.created 通知 + 审计）+ listAppeals（moderator 队列 / appellant 自己）+ resolveAppeal（moderator/platform_admin + resolution + 审计） |
-| API | POST /appeals + GET /appeals + POST /appeals/:id/resolve |
-| 测试 | domain 单测 7 新增（268 总全绿）+ 集成 2 新增；**云上集成 97/97**（新增 P1D-7 2 + 既有 95）；迁移 17 applied |
-| task-master 5.7 | done |
+| design gate | 五决策：迁移 18 / 三重前置 / status+publish 端点 / parentVersion 链 / 幂等+不可变 |
+| migration 18 | VersionStatus 枚举扩展（8 态 §4.1）+ Version.parentVersionId + rollback |
+| domain publish/ | transitionVersionStatus（§4.1 状态机表 + 终态禁变更）+ publishVersion（AI 审核 passed + 许可齐全 + R3 确认 + assignPublicId 内联 + Publication UTC 时间戳/哈希/免责声明 + version.published 事件 + 审计只追加 + 幂等） |
+| API | POST /versions/:id/status + POST /versions/:id/publish |
+| 测试 | domain 单测 7 新增（275 总全绿）+ 集成 2 新增；**云上集成 99/99**（新增 P1D-8 2 + 既有 97）；迁移 18 applied |
+| task-master 5.8 | done |
 
 ### Key Decisions / 坑
-- **§11.3**：AIReview 稳定记录 + blocked 后申诉 + 修改重审（P1D-5 管线 upsert 覆盖）
-- **§3.3 角色隔离**：platformRole ∈ {moderator, platform_admin} 看全部 pending 队列；appellant 仅自己
-- **人工处理审计（§17）**：resolveAppeal 落 appeal.resolve + resolution {decision, note}
-- **§16**：appeal.created 通知（P1C-9 通道）
-- **坑**：fake appeal 需 support findFirst/findMany/update；moderator 判定查 user.platformRole
+- **三重前置（§2.3-4）**：AI 审核 passed（P1D-5）+ 许可齐全（§6.3）+ R3 确认（§9.4）缺一拒绝
+- **内容哈希（§6.2）**：coreJson + entries 共同参与（computeContentSha256 只算 entries，空 entries 版本哈希相同 → 改 corePart+entryPart）
+- **ID 分配内联**：外层事务已开，避免 assignPublicId 嵌套事务（P1C-5 坑复用）
+- **§6.2 免责声明**：LEGAL_DISCLAIMER 固定文案（不承诺专利/著作权/司法存证）
+- **关键语义修正**：P1B-4 createCommit 原「latestVersion published → 拒绝」**过度严格**——§2.2-3 允许新 commit 产生增量版本（不原地修改）；移除拒绝，已公开不可变由发布管线保证
+- **坑**：`/** */` 注释 Prisma 非法；删 published 检查后 latestVersion 变量仍被下游 diff 用（需保留声明）
 
 ### ⏳ Next Steps
-- [x] ~~P1D-7 申诉流程~~ 完成（2026-08-04）：迁移 17 + /appeals，云上 97/97，5.7 done
-- [ ] **P1D-8（task-master 5.8）**：发布事务与状态机推进（§4.1 draft→under_review→approved→published + 时间戳/unique ID/哈希 + version.published 事件 + 不可变）
+- [x] ~~P1D-8 发布事务~~ 完成（2026-08-04）：迁移 18 + /publications，云上 99/99，5.8 done
+- [ ] **P1D-9（task-master 5.9）**：公开 RO 页面与必显信息（§4.3 十标签 + 必显信息 + 免责声明 + public 可索引/private 拒绝 + SSR + /research/OSR/v/N）
 - [ ] parked：P1A-3 终审项、P1A-5 deferred ①、/admin TOTP 上线路障、SDF Schema 债务（0.2.0）、病毒扫描实装（P1B-后续）、Version 发布状态机（P1B-后续）
 
 ---
+
 ## 2026-08-04 — P1D-1 AI Gateway 统一路由与调用日志完成：ai-gateway 包，云上 86/86，task-master 5.1 done
 
 ### ✅ Completed

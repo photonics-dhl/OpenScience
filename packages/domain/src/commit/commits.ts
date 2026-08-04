@@ -91,15 +91,12 @@ export async function createCommit(
     throw new CommitError('CONCURRENT_UPDATE', '版本冲突，请刷新后重试');
   }
 
-  // 公开不可变（§2.2.3）：最新版本已 published → 拒绝原地修改
+  // §2.2-3 不可原地修改：commit 总是产生新版本（versionNo=RO.version 递增），永不修改已发布版本行；
+  // 「已公开不可变」由 publishVersion/发布管线保证（P1D-8），新 commit 生成增量版本合法。
   const latestVersion = await deps.prisma.version.findFirst({
     where: { researchObjectId: ro.id },
     orderBy: { versionNo: 'desc' },
   });
-  if (latestVersion && latestVersion.status === 'published') {
-    throw new CommitError('VERSION_PUBLISHED', '已发布版本不可修改，请创建新版本');
-  }
-
   // 默认 main 分支（P1C-2 多分支扩展：指定 branchId 则落到目标分支）
   let branch: { id: string; name: string; headCommitId: string | null };
   if (input.branchId) {

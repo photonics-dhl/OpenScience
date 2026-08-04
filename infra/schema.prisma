@@ -426,9 +426,13 @@ model ChangeSet {
 
 enum VersionStatus {
   draft
+  under_review
+  approved
   published
   revised
   withdrawn
+  rejected
+  restricted
 }
 
 model Version {
@@ -438,6 +442,8 @@ model Version {
   versionNo        Int           @map("version_no") // RO 内递增版本号（外部可读，§2.2 原则 5）
   publicVersionId  String?       @unique @map("public_version_id") // OSR-YYYY-NNNNNN-vN（§6.1），发布时分配
   status           VersionStatus @default(draft) // P1B-7 发布状态机
+  // P1D-8：父版本（v2→v1，§2.2-3 增量版本链）
+  parentVersionId  String?       @map("parent_version_id") @db.Uuid
   createdAt        DateTime      @default(now()) @map("created_at")
 
   researchObject     ResearchObject      @relation("VersionResearchObject", fields: [researchObjectId], references: [id], onDelete: Cascade)
@@ -448,6 +454,8 @@ model Version {
   licenseAssignments LicenseAssignment[]
   aiReview           AiReview?
   appeals            Appeal[]
+  parentVersion      Version?            @relation("VersionParent", fields: [parentVersionId], references: [id], onDelete: SetNull)
+  childVersions      Version[]           @relation("VersionParent")
 
   @@unique([researchObjectId, versionNo])
   @@index([researchObjectId])

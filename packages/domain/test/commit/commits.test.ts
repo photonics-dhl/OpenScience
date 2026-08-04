@@ -103,13 +103,13 @@ describe('createCommit（§7.2.3 Manifest + §7.2.5 JSON Patch + §16 乐观锁/
     ).rejects.toThrow(/提交说明/);
   });
 
-  it('公开版本（published）→ VERSION_PUBLISHED（§2.2.3 不可变）', async () => {
+  it('已发布后新 commit → 产生新版本（§2.2-3 增量版本合法，不原地修改）', async () => {
     const { deps, db, user, ro } = await makeRo();
-    await createCommit(deps, { researchObjectId: ro.id, userId: user.id, message: 'v1', version: 1 });
+    const v1 = await createCommit(deps, { researchObjectId: ro.id, userId: user.id, message: 'v1', version: 1 });
     db.versions[0].status = 'published';
-    await expect(
-      createCommit(deps, { researchObjectId: ro.id, userId: user.id, message: 'v2', version: 2 }),
-    ).rejects.toThrow(/已发布/);
+    const v2 = await createCommit(deps, { researchObjectId: ro.id, userId: user.id, message: 'v2', version: 2 });
+    expect(v2.versionNo).toBe(2);
+    expect(v1.versionNo).toBe(1);
   });
 });
 
