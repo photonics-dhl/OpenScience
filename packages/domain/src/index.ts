@@ -94,3 +94,6 @@ export {
   requestVisibilityChange, grantVisibility, isVisibilityExpansion,
   type VisibilityChangeResult,
 } from './visibility/requests';
+export { buildExportPackage, classifyArtifact, type ExportFile } from './export/packager';
+export { validateExportPackage, type ExportValidationResult } from './export/validate';
+export { buildManifest, type BuildManifestInput } from './export/manifest';

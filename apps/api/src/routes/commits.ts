@@ -1,8 +1,9 @@
 import type { FastifyInstance, FastifyRequest } from 'fastify';
 import { z } from 'zod';
+import { createRequire } from 'node:module';
 import type { AuthDeps } from '@openscience/auth';
 import type { StorageAdapter } from '@openscience/storage';
-import { compareVersions, createCommit, getVersion, rebuildVersion } from '@openscience/domain';
+import { buildExportPackage, compareVersions, createCommit, getVersion, rebuildVersion } from '@openscience/domain';
 import type { AuditContext } from '@openscience/observability';
 import { requireCurrentUser } from './session-guard';
 
@@ -76,5 +77,23 @@ export function registerCommitRoutes(app: FastifyInstance, deps: CommitRouteDeps
     return reply.send({
       diff: await compareVersions(deps, { userId: user.userId, fromVersionId: from, toVersionId: query.to }),
     });
+  });
+
+  // P1B-10：SDF 标准导出包下载（§5.2 目录树 + §5.3 manifest，zip）
+  app.get('/versions/:id/export', async (req, reply) => {
+    const user = await requireCurrentUser(deps, req, reply);
+    if (!user) return;
+    const { id } = versionIdParams.parse(req.params);
+    const files = await buildExportPackage(deps, { userId: user.userId, versionId: id });
+    // archiver 是 CJS 函数导出，@types 只有类 → createRequire 加载（api 编译为 CJS，__dirname 可用）
+    const localRequire = createRequire(__dirname);
+    const archiver = localRequire('archiver') as (format: 'zip', opts?: { zlib?: { level: number } }) => { append: (buf: Buffer, meta: { name: string }) => void; finalize: () => Promise<void> };
+    const archive = archiver('zip', { zlib: { level: 9 } });
+    for (const f of files) archive.append(f.content, { name: `open-science-object/${f.path}` });
+    await archive.finalize();
+    return reply
+      .header('Content-Type', 'application/zip')
+      .header('Content-Disposition', 'attachment; filename="open-science-object.zip"')
+      .send(archive);
   });
 }

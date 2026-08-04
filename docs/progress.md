@@ -1,5 +1,28 @@
 # OpenScience (XGS) 进度日志
 
+## 2026-08-04 — P1B-10 SDF 标准导出包生成与校验完成：export API + 脱库校验，云上 58/58，task-master 3.10 done
+
+### ✅ Completed
+| 任务 | 详情 |
+|---|---|
+| design gate | 五决策：zip/附件归位/archiver/成员可导出/paper.md 汇编 |
+| domain export/ | manifest.ts（§5.3 序列化 + contentHash）+ packager.ts（buildExportPackage 重建 §5.2 目录树 + classifyArtifact）+ validate.ts（脱库校验 §5.3 MUST） |
+| API | GET /versions/:id/export（archiver zip 流 + Content-Disposition） |
+| 测试 | domain export 9 + api 集成 3 = 12 新增；本地门禁全绿；**云上集成 58/58**（新增 P1B-10 3 + 既有 55） |
+| task-master 3.10 | done + details |
+
+### Key Decisions / 坑
+- **五决策**：zip（archiver）；附件按扩展名归位 figures/code/artifacts；成员可导出 + public 公开；paper.md 六字段汇编
+- **§2.2.1** SDF 数据库表达 + 可导出文件包；**§5.3 MUST** 不依赖平台 DB 可读
+- **§5.3 contentHash** = P1B-6 computeContentSha256 排序聚合
+- archiver CJS 函数 vs @types 类 → createRequire(__dirname)；validate 返回 { ok } 非 { valid }；manifest.objectId 需 OSR ID（测试先 assignPublicId）
+
+### ⏳ Next Steps
+- [x] ~~P1B-10 导出包~~ 完成（2026-08-04）：export API + 云上 58/58，3.10 done
+- [ ] **P1B-11（task-master 3.11）**：待任务清单
+- [ ] parked：P1A-3 终审项、P1A-5 deferred ①、/admin TOTP 上线路障、SDF Schema 债务（0.2.0）、病毒扫描实装（P1B-后续）、Version 发布状态机（P1B-后续）、真实 AI 提取（Phase 1D SDF Extractor）、experiments/code 附件归位填充（Phase 1D）
+
+---
 ## 2026-08-04 — P1B-9 移动端分步/抽屉编辑器与可访问性完成：Drawer + 虚拟化 + WCAG AA，next build 通过，task-master 3.9 done
 
 ### ✅ Completed
