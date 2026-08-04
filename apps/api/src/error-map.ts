@@ -1,5 +1,5 @@
 import { AuthError, type AuthErrorCode } from '@openscience/auth';
-import { ArtifactError, BranchError, CommitError, IssueError, ResearchObjectError, UsageError, VisibilityError, WorkspaceError, type WorkspaceErrorCode } from '@openscience/domain';
+import { ArtifactError, BranchError, CommitError, IssueError, LicenseError, ResearchObjectError, UsageError, VisibilityError, WorkspaceError, type WorkspaceErrorCode } from '@openscience/domain';
 import { buildErrorBody, type ErrorBody } from '@openscience/observability';
 
 const AUTH_ERROR_HTTP: Record<AuthErrorCode, number> = {
@@ -80,6 +80,14 @@ const ISSUE_ERROR_HTTP: Record<IssueError['code'], number> = {
   CROSS_RO_COMMENT: 400, // 评论归属跨 RO
 };
 
+const LICENSE_ERROR_HTTP: Record<LicenseError['code'], number> = {
+  RESEARCH_OBJECT_NOT_FOUND: 404,
+  FORBIDDEN: 403,
+  VALIDATION_ERROR: 400,
+  VERSION_PUBLISHED: 409, // 已公开版本许可只读（§6.3）
+  INVALID_LICENSE_ID: 400, // 目录外标识
+};
+
 export type { ErrorBody };
 
 /** 统一错误映射（2.6 扩展为全局标准前的最小版：/auth + /workspaces + /usage）；requestId 三方串联（Spec §17）。 */
@@ -110,6 +118,9 @@ export function httpStatusForError(err: unknown, requestId?: string): { status: 
   }
   if (err instanceof IssueError) {
     return { status: ISSUE_ERROR_HTTP[err.code], body: buildErrorBody(err.code, err.message, requestId) };
+  }
+  if (err instanceof LicenseError) {
+    return { status: LICENSE_ERROR_HTTP[err.code], body: buildErrorBody(err.code, err.message, requestId) };
   }
   // @fastify/csrf-protection 校验失败：403 而非 500（FastifyError.code = FST_CSRF_INVALID_TOKEN / FST_CSRF_MISSING_SECRET）
   if (typeof (err as { code?: unknown }).code === 'string' && (err as { code: string }).code.startsWith('FST_CSRF')) {

@@ -107,6 +107,12 @@ export {
   type IssueKind, type IssueStatus, type IssueSummary, type IssueDetail,
   type CreateIssueInput, type CreateCommentInput,
 } from './issue/issues';
+export { LICENSE_TYPES, LICENSE_CATALOG, type LicenseType, type LicenseOption } from './license/catalog';
+export { LicenseError, type LicenseErrorCode } from './license/errors';
+export {
+  setLicenses, getEffectiveLicenses, setVersionLicenses, validateLicenseInheritance,
+  type Licenses, type LicenseAssignmentView, type LicenseInheritanceResult, type LicenseInheritanceViolation,
+} from './license/licenses';
 export { buildExportPackage, classifyArtifact, type ExportFile } from './export/packager';
 export { validateExportPackage, type ExportValidationResult } from './export/validate';
 export { buildManifest, type BuildManifestInput } from './export/manifest';

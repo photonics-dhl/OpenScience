@@ -30,11 +30,12 @@ interface FakeDb {
   issues: any[];
   comments: any[];
   reviews: any[];
+  licenseAssignments: any[];
 }
 
 /** 内存版 Prisma 子集：覆盖 workspace 领域用到的调用面。 */
 export function createFakePrisma(): { prisma: PrismaClient; db: FakeDb } {
-  const db: FakeDb = { users: [], workspaces: [], memberships: [], workspaceInvitations: [], mailOutbox: [], quotaPolicies: [], usageLedger: [], researchObjects: [], sdfDocuments: [], sdfNodes: [], blobs: [], artifacts: [], branches: [], commits: [], changesets: [], versions: [], versionManifests: [], manifestEntries: [], identifiers: [], publications: [], visibilityGrants: [], visibilityRequests: [], pullRequests: [], issues: [], comments: [], reviews: [] };
+  const db: FakeDb = { users: [], workspaces: [], memberships: [], workspaceInvitations: [], mailOutbox: [], quotaPolicies: [], usageLedger: [], researchObjects: [], sdfDocuments: [], sdfNodes: [], blobs: [], artifacts: [], branches: [], commits: [], changesets: [], versions: [], versionManifests: [], manifestEntries: [], identifiers: [], publications: [], visibilityGrants: [], visibilityRequests: [], pullRequests: [], issues: [], comments: [], reviews: [], licenseAssignments: [] };
   let seq = 0;
   const nextId = () => `00000000-0000-4000-8000-${String(++seq).padStart(12, '0')}`;
   const p2002 = () => {
@@ -540,6 +541,31 @@ export function createFakePrisma(): { prisma: PrismaClient; db: FakeDb } {
           (where.issueId === undefined || c.issueId === where.issueId) &&
           (where.prId === undefined || c.prId === where.prId),
         ).length,
+    },
+    licenseAssignment: {
+      findFirst: async ({ where }: any) =>
+        db.licenseAssignments.find(
+          (l) =>
+            (where.researchObjectId === undefined || l.researchObjectId === where.researchObjectId) &&
+            ((where.versionId ?? null) === (l.versionId ?? null)) &&
+            (where.licenseType === undefined || l.licenseType === where.licenseType),
+        ) ?? null,
+      findMany: async ({ where }: any) =>
+        db.licenseAssignments.filter(
+          (l) =>
+            (where.researchObjectId === undefined || l.researchObjectId === where.researchObjectId) &&
+            ((where.versionId ?? null) === (l.versionId ?? null)),
+        ),
+      create: async ({ data }: any) => {
+        const row = { id: nextId(), createdAt: new Date(), ...data };
+        db.licenseAssignments.push(row);
+        return row;
+      },
+      update: async ({ where, data }: any) => {
+        const row = db.licenseAssignments.find((l) => l.id === where.id);
+        Object.assign(row, data);
+        return row;
+      },
     },
     $transaction: async (fn: (tx: unknown) => Promise<unknown>) => fn(prisma),
   };

@@ -389,3 +389,79 @@ describe('P1C-3 Issue 与评论（云上，无新迁移）', () => {
     await app.close();
   });
 });
+
+describe('P1C-4 三类许可（云上，无新迁移）', () => {
+  it('选择三类许可 → 有效值 + 幂等重放 + 审计（§6.3/§17）', async () => {
+    const app = await makeApp();
+    const cookie = await registerAndVerify(app, 'l1@example.com');
+    const wsId = await getPersonalWorkspace('l1@example.com');
+    const createRo = await app.inject({ method: 'POST', url: '/research-objects', cookies: { openscience_session: cookie }, payload: { workspaceId: wsId, title: 'License RO' } });
+    const ro = createRo.json().researchObject;
+
+    const put = await app.inject({ method: 'PUT', url: `/research-objects/${ro.id}/licenses`, cookies: { openscience_session: cookie }, payload: { text: 'CC-BY-4.0', code: 'MIT', data: 'CC0-1.0' } });
+    expect(put.statusCode).toBe(200);
+    expect(put.json().assignments).toHaveLength(3);
+
+    // 幂等重放
+    await app.inject({ method: 'PUT', url: `/research-objects/${ro.id}/licenses`, cookies: { openscience_session: cookie }, payload: { text: 'CC-BY-4.0', code: 'MIT', data: 'CC0-1.0' } });
+    const get = await app.inject({ method: 'GET', url: `/research-objects/${ro.id}/licenses`, cookies: { openscience_session: cookie } });
+    expect(get.json().licenses).toEqual({ licenses: { text: 'CC-BY-4.0', code: 'MIT', data: 'CC0-1.0' }, source: 'ro' });
+
+    // 审计
+    const auditCount = await prisma.auditLog.count({ where: { action: 'license.upsert', targetId: ro.id } });
+    expect(auditCount).toBe(2); // 两次 PUT
+    await app.close();
+  });
+
+  it('非法许可标识 → 400（§6.3 目录外）', async () => {
+    const app = await makeApp();
+    const cookie = await registerAndVerify(app, 'l2@example.com');
+    const wsId = await getPersonalWorkspace('l2@example.com');
+    const createRo = await app.inject({ method: 'POST', url: '/research-objects', cookies: { openscience_session: cookie }, payload: { workspaceId: wsId, title: 'Bad License RO' } });
+    const ro = createRo.json().researchObject;
+    const put = await app.inject({ method: 'PUT', url: `/research-objects/${ro.id}/licenses`, cookies: { openscience_session: cookie }, payload: { text: 'CC-BY-4.0', code: 'BSD-NOPE', data: 'CC0-1.0' } });
+    expect(put.statusCode).toBe(400);
+    await app.close();
+  });
+
+  it('已公开版本许可只读 → 409；draft 版本可设并覆盖 RO 级（§6.3）', async () => {
+    const app = await makeApp();
+    const cookie = await registerAndVerify(app, 'l3@example.com');
+    const wsId = await getPersonalWorkspace('l3@example.com');
+    const createRo = await app.inject({ method: 'POST', url: '/research-objects', cookies: { openscience_session: cookie }, payload: { workspaceId: wsId, title: 'Immutable License RO' } });
+    const ro = createRo.json().researchObject;
+    await app.inject({ method: 'PUT', url: `/research-objects/${ro.id}/licenses`, cookies: { openscience_session: cookie }, payload: { text: 'CC-BY-4.0', code: 'MIT', data: 'CC0-1.0' } });
+
+    // commit 建版本，直接 DB 置 published（§6.3 已公开不可变）
+    const commit = await app.inject({ method: 'POST', url: `/research-objects/${ro.id}/commits`, cookies: { openscience_session: cookie }, payload: { message: 'v1', version: 1 } });
+    const versionId = commit.json().commit.versionId;
+    await prisma.version.update({ where: { id: versionId }, data: { status: 'published' } });
+
+    // 已公开 → 409
+    const pub = await app.inject({ method: 'PUT', url: `/research-objects/${ro.id}/licenses/${versionId}`, cookies: { openscience_session: cookie }, payload: { text: 'CC-BY-4.0', code: 'GPL-3.0', data: 'CC0-1.0' } });
+    expect(pub.statusCode).toBe(409);
+
+    // draft 版本可设 → 覆盖 RO 级（code GPL）
+    await prisma.version.update({ where: { id: versionId }, data: { status: 'draft' } });
+    const draft = await app.inject({ method: 'PUT', url: `/research-objects/${ro.id}/licenses/${versionId}`, cookies: { openscience_session: cookie }, payload: { text: 'CC-BY-4.0', code: 'GPL-3.0', data: 'CC0-1.0' } });
+    expect(draft.statusCode).toBe(200);
+    const eff = await app.inject({ method: 'GET', url: `/research-objects/${ro.id}/licenses/${versionId}`, cookies: { openscience_session: cookie } });
+    expect(eff.json().licenses.licenses.code).toBe('GPL-3.0');
+    expect(eff.json().licenses.source).toBe('version');
+    await app.close();
+  });
+
+  it('public RO 匿名可读许可（§4.2 继承）', async () => {
+    const app = await makeApp();
+    const cookie = await registerAndVerify(app, 'l4@example.com');
+    const wsId = await getPersonalWorkspace('l4@example.com');
+    const createRo = await app.inject({ method: 'POST', url: '/research-objects', cookies: { openscience_session: cookie }, payload: { workspaceId: wsId, title: 'Public License RO' } });
+    const ro = createRo.json().researchObject;
+    await app.inject({ method: 'PUT', url: `/research-objects/${ro.id}/licenses`, cookies: { openscience_session: cookie }, payload: { text: 'CC-BY-4.0', code: 'MIT', data: 'CC0-1.0' } });
+    await prisma.researchObject.update({ where: { id: ro.id }, data: { visibility: 'public' } }); // 绕过扩大审批
+    const anon = await app.inject({ method: 'GET', url: `/research-objects/${ro.id}/licenses` });
+    expect(anon.statusCode).toBe(200);
+    expect(anon.json().licenses.licenses.text).toBe('CC-BY-4.0');
+    await app.close();
+  });
+});

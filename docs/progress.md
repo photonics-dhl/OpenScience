@@ -1,29 +1,29 @@
 # OpenScience (XGS) 进度日志
 
-## 2026-08-04 — P1C-3 Issue 与评论基础交互完成：/issues API + 限流，云上 67/67，task-master 4.3 done
+## 2026-08-04 — P1C-4 三类许可选择与继承规则完成：/licenses API + 继承校验底座，云上 71/71，task-master 4.4 done
 
 ### ✅ Completed
 | 任务 | 详情 |
 |---|---|
-| design gate | 五决策：作者或成员关 issue / 多态本期仅 issueId / 状态幂等 / 限流 2 行 / 评论仅创建+列表 |
-| 迁移 | 无（Issue/Comment/IssueKind 模型 P1C-1 迁移 12 已建） |
-| domain issue/ | createIssue/listIssues/getIssue/updateIssueStatus/createComment + 三 FK 至多一个 + 归属同 RO（CROSS_RO_COMMENT）+ 状态机 open/closed 幂等 |
-| API | /issues 5 端点（嵌套）+ rate-limit 中间件支持 `:param` 路径键（正则匹配）+ RATE_LIMIT_ROUTES 加 issues 20/60s + comments 30/60s |
-| 测试 | domain 单测 14 新增（184 总全绿）+ 集成 4 新增（collab 12/12）；**云上集成 67/67**（新增 P1C-3 4 + 既有 63） |
-| task-master 4.3 | done |
+| design gate | 五决策：单 PUT 全量/版本级未公开可设/domain 层不可变/全兼容矩阵/文案 config 占位 |
+| 迁移 | 无（LicenseAssignment 实体 P1C-1 迁移 12 已建） |
+| domain license/ | catalog.ts（LICENSE_CATALOG 3+4+4 + 校验）+ licenses.ts（setLicenses/getEffectiveLicenses/setVersionLicenses/validateLicenseInheritance 全兼容矩阵） |
+| API | /licenses 5 端点（GET/PUT RO 级 + GET/PUT 版本级 + GET /licenses/catalog） |
+| 测试 | domain 单测 12 新增（196 总全绿）+ 集成 4 新增（collab 16/16）；**云上集成 71/71**（新增 P1C-4 4 + 既有 67） |
+| task-master 4.4 | done |
 
 ### Key Decisions / 坑
-- **可见性继承（§4.2）**：Issue/Comment 零存储，读 canAccessRo（public 匿名可读）、写 requireMembership（非成员 404）
-- **状态机（Q1/Q3）**：作者本人 或 非 viewer 成员可关；同状态幂等（直接成功 + 审计）；无版本号
-- **Comment 多态（§15）**：issueId/prId/reviewId 三选一 + 归属同 RO（Review 经 pr 归属 RO）；PR/Review 未实现，API 层仅暴露 issueId
-- **限流（§17）**：RATE_LIMIT_ROUTES 声明表加 2 行；**中间件升级正则匹配 `:param` 键**（否则 /research-objects/:id/issues 永不命中）
-- **§19 禁止**：点赞/投票/Top Questions 未实现（登记）
-- **坑**：private→public 属扩大被 P1B-7 审批阻断（202）——集成测试直接 DB 置 public 绕过审批验证继承
+- **目录（§6.3）**：text 3（CC-BY/CC-BY-NC/ARR）+ code 4（MIT/Apache/GPL/专有）+ data 4（CC0/CC-BY/CUSTOM/禁下载）；仅标准标识 + 名称，法律文案 §24 留配置位
+- **已公开不可变（§6.3）**：setVersionLicenses 查 version.status，published → VERSION_PUBLISHED（409）；draft 可设覆盖 RO 级
+- **继承矩阵（§8.1 底座）**：可加严不可放宽——ARR/专有/NO-DOWNLOAD/CUSTOM 仅同值、GPL 不可改宽松、CC-BY-NC 不可去 NC、CC0/CC-BY 可任意；供 P1C-5 Fork/P1C-6 PR 调用
+- **幂等**：@@unique([roId, versionId, licenseType])，但 Prisma upsert 复合键含 null 不接受 → findFirst + update/create 分支
+- **有效许可读取**：getEffectiveLicenses 版本级优先回退 RO 级（§5.3 manifest.licenses 结构）
+- **坑**：markdownlint MD040 裸 ``` 需语言标注；license 单测 unused db
 
 ### ⏳ Next Steps
-- [x] ~~P1C-3 Issue 与评论~~ 完成（2026-08-04）：/issues API + 限流，云上 67/67，4.3 done
-- [ ] **P1C-4（task-master 4.4）**：许可选择（§6.3 三类许可 + LicenseAssignment 实体）
-- [ ] parked：P1A-3 终审项、P1A-5 deferred ①、/admin TOTP 上线路障、SDF Schema 债务（0.2.0）、病毒扫描实装（P1B-后续）、Version 发布状态机（P1B-后续）、真实 AI 提取（Phase 1D）、协作剩余 7 子任务（P1C-4~10）
+- [x] ~~P1C-4 许可选择~~ 完成（2026-08-04）：/licenses API + 继承校验，云上 71/71，4.4 done
+- [ ] **P1C-5（task-master 4.5）**：Fork（§8.1 来源保留/继承校验/unique ID，ForkRelation 实体）
+- [ ] parked：P1A-3 终审项、P1A-5 deferred ①、/admin TOTP 上线路障、SDF Schema 债务（0.2.0）、病毒扫描实装（P1B-后续）、Version 发布状态机（P1B-后续）、真实 AI 提取（Phase 1D）、协作剩余 6 子任务（P1C-5~10）
 
 ---
 ## 2026-08-04 — P1B-10 SDF 标准导出包生成与校验完成：export API + 脱库校验，云上 58/58，task-master 3.10 done

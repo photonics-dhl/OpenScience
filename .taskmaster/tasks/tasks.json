@@ -506,14 +506,15 @@
             "id": 4,
             "title": "实现三类许可选择与继承规则",
             "description": "实现文字（CC BY 4.0 / CC BY-NC 4.0 / All Rights Reserved）、代码（MIT / Apache-2.0 / GPL-3.0 / 不开源）、数据（CC0 / CC BY 4.0 / 自定义限制 / 不可下载）三类许可的分别选择（Spec §6.3、§2.2 决策 6），为 Fork 校验与发布（步骤 8）提供规则底座。",
-            "status": "pending",
+            "status": "done",
             "dependencies": [
               "4.1"
             ],
             "priority": "high",
             "details": "LicenseAssignment 记录 RO 级与版本级许可；许可变更不得追溯覆盖已公开版本（§6.3）——公开版本的 LicenseAssignment 只读，变更生成新记录仅对后续版本生效；提供继承校验函数供 Fork/PR 调用。许可证展示文案属于 §24 待确认项（'公开内容的服务条款、隐私政策和许可证文案'）：代码中只使用标准许可证标识与名称，完整法律文案留配置位待确认，禁止自行撰写写死。\n验收: 步骤8",
             "testStrategy": "单元测试：三类枚举完整性、已公开版本许可不可变规则、继承校验函数（§21.1 单元层）。",
-            "parentId": "4"
+            "parentId": "4",
+            "updatedAt": "2026-08-04T08:08:30.383Z"
           },
           {
             "id": 5,
@@ -600,7 +601,7 @@
             "parentId": "4"
           }
         ],
-        "updatedAt": "2026-08-04T07:01:57.627Z"
+        "updatedAt": "2026-08-04T08:08:30.383Z"
       },
       {
         "id": "5",
@@ -863,7 +864,7 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-08-04T07:01:57.627Z",
+      "lastModified": "2026-08-04T08:08:30.384Z",
       "taskCount": 6,
       "completedCount": 3,
       "tags": [
