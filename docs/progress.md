@@ -1,28 +1,27 @@
 # OpenScience (XGS) 进度日志
 
-## 2026-08-04 — P1D-5 发布审核硬阻断检查管线完成：迁移 16 + 七类硬阻断，云上 94/94，task-master 5.5 done
+## 2026-08-04 — P1D-6 发布审核警告层与结构化审核报告完成：review.analyze handler，云上 95/95，task-master 5.6 done
 
 ### ✅ Completed
 | 任务 | 详情 |
 |---|---|
-| design gate | 五决策：迁移 16 / 恶意代码扩展名黑名单 / Notification 事件 / 成员触发 / POST+GET review |
-| migration 16 | ai_reviews（versionId @unique + status + hardBlocks/warnings Json）+ rollback |
-| domain review/blocking.ts | 纯函数：checkCoreCompleteness（§5.1 六字段）/checkMaliciousArtifact（§11.1 危险扩展名+MIME）/checkSensitiveContent（§17 身份证/密钥/令牌）/checkProhibitedContent |
-| domain review/publish-review.ts | runPublicationReview（七类 + AIReview upsert + 事件 + 审计）+ getPublicationReview（§11.3 稳定记录） |
-| API | POST/GET /versions/:versionId/review |
-| 测试 | domain 单测 8 新增（261 总全绿）+ 集成 2 新增；**云上集成 94/94**（新增 P1D-5 2 + 既有 92）；迁移 16 applied |
-| task-master 5.5 | done |
+| design gate | 五决策：AiWarning Schema / worker handler / AIReview.warnings 存储 / 不阻断 / 异步入队 |
+| agent-worker reviewer.ts | AiWarningGuard（§11.2 七类 + evidence/uncertainty/suggestion 校验）+ reviewAnalyzeHandler（completeStructured + saveWarnings） |
+| domain | saveWarnings（AIReview.warnings upsert 独立 status）+ getPublicationReview 返回 warnings |
+| API | POST /versions/:id/review 同步硬阻断 + 异步入队 review.analyze |
+| 测试 | worker 单测 4 新增（8 总）+ 集成 1 新增；**云上集成 95/95**（新增 P1D-6 1 + 既有 94） |
+| task-master 5.6 | done |
 
 ### Key Decisions / 坑
-- **七类硬阻断（§11.1）**：缺字段（版本 manifest core）/ 恶意代码 / 隐私泄露 / 违法内容 / 权限无法确认（非创建者）/ 缺许可 / manifest 缺失
-- **AIReview（§15）**：versionId 唯一 + upsert 幂等 + 稳定可引用（§11.3 申诉）
-- **事件（§16）**：ai_review.completed Notification
-- **Safety Reviewer 不替代人工（§9.2）**：登记
-- **坑**：core 应读**版本 manifest coreJson**（§7.2.3 快照）而非 sdfDocument（commit 不更新 sdfDocument）；fake version.findUnique 需 manifest include；entries 空 = 纯文本版本合法（仅校验 coreJson 存在）
+- **§11.2 七类警告**：method_logic/statistical/figure_spec/data_consistency/reproducibility/missing_citation/overreach
+- **结构化报告**：evidence（证据位置）+ uncertainty（不确定性）必须，**无单一分数**；prompt 约束不裁定对错/不伪造来源（§9.2）
+- **不阻断（§11.2）**：warnings 更新不动 status（含警告版本仍可发布）
+- **触发（Q5）**：POST /versions/:id/review 同步硬阻断 + 异步入队 analyze（不阻塞响应）
+- **坑**：saveWarnings 需轻量 deps（AgentDeps 无 storage）；路由异步入队任务在测试队列里 → poll 需逐项消费直至目标任务完成
 
 ### ⏳ Next Steps
-- [x] ~~P1D-5 发布审核硬阻断~~ 完成（2026-08-04）：迁移 16 + 七类，云上 94/94，5.5 done
-- [ ] **P1D-6（task-master 5.6）**：发布审核警告层与结构化审核报告（§11.2 七类警告 + 证据位置 + 不确定性）
+- [x] ~~P1D-6 警告层~~ 完成（2026-08-04）：review.analyze handler，云上 95/95，5.6 done
+- [ ] **P1D-7（task-master 5.7）**：审核申诉流程与 Moderator 队列（§11.3 稳定记录 + Appeal + 人工处理审计）
 - [ ] parked：P1A-3 终审项、P1A-5 deferred ①、/admin TOTP 上线路障、SDF Schema 债务（0.2.0）、病毒扫描实装（P1B-后续）、Version 发布状态机（P1B-后续）
 
 ---

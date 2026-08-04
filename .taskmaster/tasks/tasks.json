@@ -699,14 +699,15 @@
             "id": 6,
             "title": "实现发布审核警告层与结构化审核报告",
             "description": "实现 AI 发布审核的警告层：方法逻辑、统计合理性、图表规范、数据一致性、可复现性、引用缺失、过度外推等问题以警告呈现，不替代作者判断（Spec §11.2、§2.3-5）。",
-            "status": "pending",
+            "status": "done",
             "dependencies": [
               "5.5"
             ],
             "priority": "medium",
             "details": "要点：1) 警告项覆盖 Spec §11.2 全部七类；2) AI 报告必须提供证据位置和不确定性说明，不得只输出单一分数（Spec §11.2）；3) Research Reviewer 不裁定研究一定正确/错误、Citation Checker 不伪造来源（Spec §9.2 禁止事项）；4) 警告不阻断发布，随版本存档并在公开页以“AI 审核摘要”形式展示（供 P1D-9 使用，Spec §4.3）；5) 报告结构化存储于 AIReview 实体（Spec §15）。涉及模块：apps/agent-worker、packages/ai-gateway、apps/api。\n验收: 步骤7",
             "testStrategy": "单元测试：报告结构含证据位置与不确定性字段、无单一分数输出；E2E：含警告项的版本仍可发布且警告随审核记录可查（验收步骤7，Spec §21.2）。",
-            "parentId": "5"
+            "parentId": "5",
+            "updatedAt": "2026-08-04T12:44:20.595Z"
           },
           {
             "id": 7,
@@ -753,7 +754,7 @@
             "parentId": "5"
           }
         ],
-        "updatedAt": "2026-08-04T12:26:22.875Z"
+        "updatedAt": "2026-08-04T12:44:20.595Z"
       },
       {
         "id": "6",
@@ -876,7 +877,7 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-08-04T12:26:22.875Z",
+      "lastModified": "2026-08-04T12:44:20.596Z",
       "taskCount": 6,
       "completedCount": 4,
       "tags": [

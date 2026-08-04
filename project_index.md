@@ -103,6 +103,8 @@
 | `docs/plans/2026-08-04-p1d-4-approval-plan.md` | P1D-4 R0-R4 分级审批与统一确认实施计划（已执行完毕，云上 92/92，task-master 5.4 done 2026-08-04） | 活文档 |
 | `docs/specs/2026-08-04-p1d-5-publish-review-design.md` | P1D-5 发布审核硬阻断管线设计（design gate 已确认：五决策，代码已实现 2026-08-04） | 活文档 |
 | `docs/plans/2026-08-04-p1d-5-publish-review-plan.md` | P1D-5 发布审核硬阻断管线实施计划（已执行完毕，云上 94/94，task-master 5.5 done 2026-08-04） | 活文档 |
+| `docs/specs/2026-08-04-p1d-6-warnings-design.md` | P1D-6 发布审核警告层与结构化报告设计（design gate 已确认：五决策，代码已实现 2026-08-04） | 活文档 |
+| `docs/plans/2026-08-04-p1d-6-warnings-plan.md` | P1D-6 发布审核警告层与结构化报告实施计划（已执行完毕，云上 95/95，task-master 5.6 done 2026-08-04） | 活文档 |
 | `docs/progress.md` | 进度日志，新条目置顶 | 活文档 |
 | `docs/handoff/` | 交接文档目录（阶段边界/换 agent/换电脑，必须入库） | 活文档 |
 | `docs/handoff/2026-07-28-before-p1a-2-handoff.md` | P1A-2 前交接：Phase 0 Accepted、P1A-1 done、下一任务 P1A-2 | 活文档 |
@@ -139,7 +141,8 @@
 | `docs/handoff/2026-08-04-p1d-2-agent-tasks-done-handoff.md` | P1D-2 异步任务通道收口交接：迁移 15 + agent-worker，云上 88/88，5.2 done，下一任务 P1D-3 SDF Extractor | 活文档 |
 | `docs/handoff/2026-08-04-p1d-3-extractor-done-handoff.md` | P1D-3 SDF Extractor 收口交接：worker handler + 编辑器通路，云上 90/90，5.3 done，下一任务 P1D-4 R0-R4 审批 | 活文档 |
 | `docs/handoff/2026-08-04-p1d-4-approval-done-handoff.md` | P1D-4 R0-R4 审批收口交接：approval domain + /agent/approvals，云上 92/92，5.4 done，下一任务 P1D-5 发布审核 | 活文档 |
-| `docs/handoff/2026-08-04-p1d-5-publish-review-done-handoff.md` | P1D-5 发布审核硬阻断收口交接：迁移 16 + 七类硬阻断，云上 94/94，5.5 done，下一任务 P1D-6 警告层 | 活文档（当前最新） |
+| `docs/handoff/2026-08-04-p1d-5-publish-review-done-handoff.md` | P1D-5 发布审核硬阻断收口交接：迁移 16 + 七类硬阻断，云上 94/94，5.5 done，下一任务 P1D-6 警告层 | 活文档 |
+| `docs/handoff/2026-08-04-p1d-6-warnings-done-handoff.md` | P1D-6 警告层收口交接：review.analyze handler，云上 95/95，5.6 done，下一任务 P1D-7 申诉流程 | 活文档（当前最新） |
 | `docs/CODEBASE_AUDIT.md` | Phase 0 Scholars Tea 只读审计报告（地图/模块分类/风险登记/迁移含义） | 活文档 |
 | `docs/proposals/` | 方案/脑暴稿 | 空（旧方案0723已废弃不归档） |
 | `docs/decisions/` | 决策记录 ADR | ADR-001 已接受；ADR-002 已建 |

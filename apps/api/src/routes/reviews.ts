@@ -2,7 +2,7 @@ import type { FastifyInstance, FastifyRequest } from 'fastify';
 import { z } from 'zod';
 import { getCurrentUser, type AuthDeps } from '@openscience/auth';
 import type { StorageAdapter } from '@openscience/storage';
-import { createReview, listReviews, mergePullRequest, getPublicationReview, runPublicationReview, REVIEW_VERDICTS } from '@openscience/domain';
+import { createReview, listReviews, mergePullRequest, getPublicationReview, runPublicationReview, createAgentSession, submitAgentTask, REVIEW_VERDICTS } from '@openscience/domain';
 import type { AuditContext } from '@openscience/observability';
 import { requireCurrentUser, sessionTokenFrom } from './session-guard';
 
@@ -72,12 +72,23 @@ export function registerReviewRoutes(app: FastifyInstance, deps: ReviewRouteDeps
     return reply.send({ merge: result });
   });
 
-  // P1D-5：发布审核硬阻断（§11.1 七类 + §15 AIReview）
+  // P1D-5/6：发布审核（§11.1 硬阻断 + §11.2 警告层）
   app.post('/versions/:versionId/review', async (req, reply) => {
     const user = await requireCurrentUser(deps, req, reply);
     if (!user) return;
     const { versionId } = z.object({ versionId: z.string().uuid() }).parse(req.params);
-    return reply.send({ review: await runPublicationReview(deps, { versionId, userId: user.userId }, auditCtx(req)) });
+    // 同步：七类硬阻断（§11.1）
+    const review = await runPublicationReview(deps, { versionId, userId: user.userId }, auditCtx(req));
+    // 异步：异步入队 review.analyze（§11.2 警告层，不阻断）
+    void (async () => {
+      try {
+        const version = await deps.prisma.version.findUnique({ where: { id: versionId }, include: { manifest: true } });
+        const coreText = JSON.stringify(version?.manifest?.coreJson ?? {});
+        const session = await createAgentSession(deps, { userId: user.userId, kind: 'review' });
+        await submitAgentTask(deps, { sessionId: session.id, userId: user.userId, kind: 'review.analyze', payload: { versionId, coreText } });
+      } catch { /* 异步分析失败不阻塞审核响应 */ }
+    })();
+    return reply.send({ review });
   });
 
   app.get('/versions/:versionId/review', async (req, reply) => {

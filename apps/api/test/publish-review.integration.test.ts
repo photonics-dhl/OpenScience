@@ -1,9 +1,11 @@
-import { afterAll, describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { execFileSync } from 'node:child_process';
 import path from 'node:path';
 import { DevOutboxMailer } from '@openscience/auth';
 import { createPrismaAuditSink, createPrismaClient, createRedisClient } from '@openscience/database';
-import { createPersonalWorkspace } from '@openscience/domain';
+import { createPersonalWorkspace, createAgentSession, submitAgentTask, getAgentTask, AGENT_TASK_QUEUE } from '@openscience/domain';
+import { createHandlers, createPollOnce } from '@openscience/agent-worker';
+import type { AiGateway } from '@openscience/ai-gateway';
 import { createStorageAdapter, storageConfigFromEnv } from '@openscience/storage';
 import { buildApp } from '../src/app';
 
@@ -49,7 +51,15 @@ async function getPersonalWorkspace(email: string): Promise<string> {
   return (await prisma.workspace.findFirst({ where: { type: 'personal', ownerId: user!.id } }))!.id;
 }
 
+beforeAll(async () => {
+  // 清队列残留（防 poll 消费陈旧任务 id）
+  await redis.del(AGENT_TASK_QUEUE);
+  await redis.del(`${AGENT_TASK_QUEUE}:processing`);
+});
+
 afterAll(async () => {
+  await redis.del(AGENT_TASK_QUEUE);
+  await redis.del(`${AGENT_TASK_QUEUE}:processing`);
   await prisma.aiReview.deleteMany();
   await prisma.notification.deleteMany();
   await prisma.licenseAssignment.deleteMany();
@@ -123,6 +133,54 @@ describe('P1D-5 发布审核硬阻断（云上，迁移 16）', () => {
     const review = await app.inject({ method: 'POST', url: `/versions/${versionId}/review`, cookies: { openscience_session: cookie } });
     expect(review.json().review.status).toBe('blocked');
     expect(review.json().review.hardBlocks.some((b: { code: string }) => b.code === 'sensitive_leak')).toBe(true);
+    await app.close();
+  });
+
+  it('P1D-6 警告层：含警告版本 status 仍 passed（§11.2 不阻断）', async () => {
+    const app = await makeApp();
+    const cookie = await registerAndVerify(app, 'p6@example.com');
+    const wsId = await getPersonalWorkspace('p6@example.com');
+    const createRo = await app.inject({ method: 'POST', url: '/research-objects', cookies: { openscience_session: cookie }, payload: { workspaceId: wsId, title: 'P6 RO' } });
+    const ro = createRo.json().researchObject;
+    await app.inject({ method: 'PUT', url: `/research-objects/${ro.id}/licenses`, cookies: { openscience_session: cookie }, payload: { text: 'CC-BY-4.0', code: 'MIT', data: 'CC0-1.0' } });
+    const commit = await app.inject({ method: 'POST', url: `/research-objects/${ro.id}/commits`, cookies: { openscience_session: cookie }, payload: { message: 'v1', version: 1, sdfCore: { schemaVersion: '0.1.0', problem: 'P', insight: 'I', method: 'M', results: 'R', limitations: 'L', reproducibility: 'RP' } } });
+    const versionId = commit.json().commit.versionId;
+
+    // 硬阻断 passed（可发布）
+    const review = await app.inject({ method: 'POST', url: `/versions/${versionId}/review`, cookies: { openscience_session: cookie } });
+    expect(review.json().review.status).toBe('passed');
+
+    // mock gateway 注入 worker → review.analyze 生成警告 → warnings 落库
+    const deps = { prisma, redis, mailer: { send: async () => undefined } };
+    const user = await prisma.user.findUnique({ where: { email: 'p6@example.com' } });
+    await prisma.usageLedger.create({ data: { userId: user!.id, resource: 'ai_credit', delta: 100, kind: 'grant' } });
+    const mockProvider = { name: 'mock', complete: async () => ({ text: JSON.stringify([
+      { id: 'w1', category: 'overreach', evidence: '§results 第 3 段', uncertainty: '样本量小，无法确认普适性', suggestion: '补充局限说明' },
+    ]), usage: { inputTokens: 2, outputTokens: 2 }, model: 'mock' }) };
+    const gateway = new (await import('@openscience/ai-gateway')).AiGateway({ providers: [mockProvider], logger: console }) as AiGateway;
+    const handlers = createHandlers(gateway);
+    const pollOnce = await createPollOnce(handlers);
+    const session = await createAgentSession(deps, { userId: user!.id, kind: 'review' });
+    const task = await submitAgentTask(deps, { sessionId: session.id, userId: user!.id, kind: 'review.analyze', payload: { versionId, coreText: '研究正文……' } });
+    // 消费队列直至本任务完成（队列可能含路由异步入队的 analyze，逐项消费）
+    for (let i = 0; i < 5; i++) {
+      await pollOnce(deps);
+      const cur = await getAgentTask(deps, { userId: user!.id, taskId: task.id });
+      if (cur.status === 'succeeded' || cur.status === 'failed') break;
+    }
+    const done = await getAgentTask(deps, { userId: user!.id, taskId: task.id });
+    expect(done.status).toBe('succeeded');
+
+    // 警告随审核记录可查（§11.2 随版本存档 + §15 AIReview.warnings）
+    const saved = await app.inject({ method: 'GET', url: `/versions/${versionId}/review`, cookies: { openscience_session: cookie } });
+    expect(saved.json().review.warnings).toHaveLength(1);
+    const w = saved.json().review.warnings[0];
+    // 结构化：证据位置 + 不确定性，无单一分数（§11.2）
+    expect(w.evidence).toContain('§results');
+    expect(w.uncertainty).toBeTruthy();
+    expect(typeof w.score).toBe('undefined');
+    // 不阻断：status 仍 passed
+    expect(saved.json().review.status).toBe('passed');
     await app.close();
   });
 });

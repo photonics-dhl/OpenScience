@@ -137,3 +137,22 @@ export async function getPublicationReview(
     verdict: review.verdict, createdAt: review.createdAt,
   };
 }
+
+/** P1D-6：保存警告报告（§11.2 + §15 AIReview.warnings）；不阻断（status 独立）。 */
+export async function saveWarnings(
+  deps: { prisma: ArtifactDeps['prisma'] },
+  input: { versionId: string; warnings: unknown[] },
+): Promise<void> {
+  const version = await deps.prisma.version.findUnique({ where: { id: input.versionId } });
+  if (!version) throw new Error('版本不存在');
+  await deps.prisma.aiReview.upsert({
+    where: { versionId: input.versionId },
+    create: {
+      versionId: input.versionId,
+      researchObjectId: version.researchObjectId,
+      status: 'passed',
+      warnings: input.warnings as never,
+    },
+    update: { warnings: input.warnings as never },
+  });
+}

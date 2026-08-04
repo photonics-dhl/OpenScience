@@ -141,7 +141,7 @@ export {
   type HardBlock,
 } from './review/blocking';
 export {
-  runPublicationReview, getPublicationReview,
+  runPublicationReview, getPublicationReview, saveWarnings,
   type PublicationReviewView,
 } from './review/publish-review';
 export { NotificationError, type NotificationErrorCode } from './notification/errors';
