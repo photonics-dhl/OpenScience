@@ -669,14 +669,15 @@
             "id": 4,
             "title": "实现 R0–R4 分级审批与统一确认交互",
             "description": "实现 Hermes 写操作的 R0–R4 审批分级（Spec §9.4）：R0 自动执行、R1 批量 diff 一次批准、R2 任务内同类授权、R3 最终摘要+明确确认、R4 重新验证+逐项确认，兼顾安全性与交互速度（Spec §2.5-7）。",
-            "status": "pending",
+            "status": "done",
             "dependencies": [
               "5.2"
             ],
             "priority": "high",
             "details": "要点：1) 每次确认必须说明将改变什么、作用范围、能否撤销、预计费用与预计耗时（Spec §9.4）；2) 已批准的同一批任务不得重复弹窗（Spec §9.4）；3) 支持批量预览、作用域授权（当前任务内同类操作）与撤销（Spec §2.5-7）；4) 审批记录落 ToolApproval 实体并写审计日志（Spec §15、§17）；5) Merge、发布、作者/许可/可见性变化归 R3，删除/所有权/密钥/安全设置归 R4（Spec §9.4），本 Phase 的发布确认（P1D-8）必须挂接 R3。涉及模块：apps/web Hermes 面板、apps/api /agent 模块、packages/domain。\n验收: 步骤5",
             "testStrategy": "单元测试：分级判定与作用域授权匹配规则、同批去重；E2E：R1 批量批准 AI 建议（验收步骤5）、R3 发布确认弹窗包含五要素（Spec §21.2）。",
-            "parentId": "5"
+            "parentId": "5",
+            "updatedAt": "2026-08-04T12:08:12.801Z"
           },
           {
             "id": 5,
@@ -751,7 +752,7 @@
             "parentId": "5"
           }
         ],
-        "updatedAt": "2026-08-04T11:45:59.954Z"
+        "updatedAt": "2026-08-04T12:08:12.801Z"
       },
       {
         "id": "6",
@@ -874,7 +875,7 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-08-04T11:45:59.954Z",
+      "lastModified": "2026-08-04T12:08:12.802Z",
       "taskCount": 6,
       "completedCount": 4,
       "tags": [

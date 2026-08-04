@@ -19,7 +19,7 @@
 | `scripts/invite.mjs` | 邀请码管理 CLI（create/list/revoke，P1A-3） | 活文档 |
 | `scripts/seed-quota.mjs` | 配额占位值幂等 upsert CLI（--dry-run/--confirm，P1A-7，数值集中 `packages/domain/src/usage/seed-data.ts`） | 活文档 |
 | `scripts/cloud-sync.mjs` | 云上同步（tar-over-ssh，排除 .env/.git/node_modules/dist，P1A-7 固化） | 活文档 |
-| `apps/` | `web` 已实现三栏 SDF 编辑器（P1B-8）+ 移动端抽屉/分步 + WCAG AA（P1B-9）+ **协作区域单页 /research-objects/[id]/collab（P1C-10）+ AI 提取按钮/进度条（P1D-3）**（lib/api + editor-state + suggestions + components/editor + components/collab + i18n 中英）；`api` 已含 Fastify `/auth`（P1A-3）+ `/workspaces`（P1A-4）+ RBAC preHandler 授权守卫（P1A-5）+ `/admin/audit-logs`（P1A-6）+ `/usage` 与 `/admin/quota-policies`、`/admin/credits`、`/admin/usage`（P1A-7）+ 安全基线 `src/security/`（P1A-8）+ **`/research-objects` + `/sdf`（P1B-2）** + **`/artifacts`（P1B-3）** + **`/commits` + `/versions` + comparison（P1B-4/5）** + **`/research/:publicId` 公开 URL（P1B-6）** + **`/visibility` + `/visibility-grants`（P1B-7）** + **`/versions/:id/export`（P1B-10 zip）** + **`/research-objects/:id/branches`（P1C-2，4 端点）** + **`/research-objects/:id/issues`（P1C-3，5 端点）** + **`/research-objects/:id/licenses`（P1C-4，4 端点）+ `/licenses/catalog`** + **`/research-objects/:id/forks`（P1C-5，2 端点）** + **`/research-objects/:id/pull-requests`（P1C-6，3 端点）** + **`/research-objects/:id/authors` + `/contributions`（P1C-7，5 端点）** + **`/pull-requests/:prId/reviews` + `/merge`（P1C-8，3 端点）** + **`/notifications`（P1C-9，2 端点）** + **`/agent/sessions` + `/agent/tasks`（P1D-2，4 端点）**；`agent-worker` 已实现队列消费者（P1D-2）；`science-worker`/`sandbox-controller` 空壳 | 骨架 |
+| `apps/` | `web` 已实现三栏 SDF 编辑器（P1B-8）+ 移动端抽屉/分步 + WCAG AA（P1B-9）+ **协作区域单页 /research-objects/[id]/collab（P1C-10）+ AI 提取按钮/进度条（P1D-3）**（lib/api + editor-state + suggestions + components/editor + components/collab + i18n 中英）；`api` 已含 Fastify `/auth`（P1A-3）+ `/workspaces`（P1A-4）+ RBAC preHandler 授权守卫（P1A-5）+ `/admin/audit-logs`（P1A-6）+ `/usage` 与 `/admin/quota-policies`、`/admin/credits`、`/admin/usage`（P1A-7）+ 安全基线 `src/security/`（P1A-8）+ **`/research-objects` + `/sdf`（P1B-2）** + **`/artifacts`（P1B-3）** + **`/commits` + `/versions` + comparison（P1B-4/5）** + **`/research/:publicId` 公开 URL（P1B-6）** + **`/visibility` + `/visibility-grants`（P1B-7）** + **`/versions/:id/export`（P1B-10 zip）** + **`/research-objects/:id/branches`（P1C-2，4 端点）** + **`/research-objects/:id/issues`（P1C-3，5 端点）** + **`/research-objects/:id/licenses`（P1C-4，4 端点）+ `/licenses/catalog`** + **`/research-objects/:id/forks`（P1C-5，2 端点）** + **`/research-objects/:id/pull-requests`（P1C-6，3 端点）** + **`/research-objects/:id/authors` + `/contributions`（P1C-7，5 端点）** + **`/pull-requests/:prId/reviews` + `/merge`（P1C-8，3 端点）** + **`/notifications`（P1C-9，2 端点）** + **`/agent/sessions` + `/agent/tasks` + `/agent/approvals`（P1D-2/4，8 端点）**；`agent-worker` 已实现队列消费者 + sdf.extract（P1D-2/3）；`science-worker`/`sandbox-controller` 空壳 | 骨架 |
 | `packages/` | 11 个领域包 + **diff 包（P1B-5）+ identity 包（P1B-6）+ ai-gateway 包（P1D-1，AI 统一路由/回退/日志）**；database/storage 已实现 P1A-2；storage 已加 P1B-3 `blob.ts`；versioning 已实现 P1B-4；identity 已实现 P1B-6；database 已加 P1A-8 `rate-limit.ts`；auth 已实现 P1A-3 + P1A-9；domain 已实现 P1A-4/5/7 + P1B-2/3/4/5/6/7/10（research-object/artifact/commit/diff/identity/visibility/export）+ **P1C-1~10（collab 全模块）**；config 已加 P1B-3 storage + P1B-6 publicIdPrefix + P1D-1 ai env；sdf-schema 已实现 P1B-1；其余占位；云上集成 88/88 全绿（2026-08-04），Phase 1B/1C/1D-1/2 完成 | 已实现 |
 | `.cursor/` | Cursor 编辑器配置 | 工具自管 |
 | `.taskmaster/` | task-master 任务状态 | 工具自管 |
@@ -99,6 +99,8 @@
 | `docs/plans/2026-08-04-p1d-2-agent-tasks-plan.md` | P1D-2 Hermes 会话与异步任务通道实施计划（已执行完毕，云上 88/88，task-master 5.2 done 2026-08-04） | 活文档 |
 | `docs/specs/2026-08-04-p1d-3-extractor-design.md` | P1D-3 SDF Extractor 建议式提取设计（design gate 已确认：五决策，代码已实现 2026-08-04） | 活文档 |
 | `docs/plans/2026-08-04-p1d-3-extractor-plan.md` | P1D-3 SDF Extractor 建议式提取实施计划（已执行完毕，云上 90/90，task-master 5.3 done 2026-08-04） | 活文档 |
+| `docs/specs/2026-08-04-p1d-4-approval-design.md` | P1D-4 R0-R4 分级审批与统一确认设计（design gate 已确认：五决策，代码已实现 2026-08-04） | 活文档 |
+| `docs/plans/2026-08-04-p1d-4-approval-plan.md` | P1D-4 R0-R4 分级审批与统一确认实施计划（已执行完毕，云上 92/92，task-master 5.4 done 2026-08-04） | 活文档 |
 | `docs/progress.md` | 进度日志，新条目置顶 | 活文档 |
 | `docs/handoff/` | 交接文档目录（阶段边界/换 agent/换电脑，必须入库） | 活文档 |
 | `docs/handoff/2026-07-28-before-p1a-2-handoff.md` | P1A-2 前交接：Phase 0 Accepted、P1A-1 done、下一任务 P1A-2 | 活文档 |
@@ -133,7 +135,8 @@
 | `docs/handoff/2026-08-04-p1c-10-collab-frontend-done-handoff.md` | P1C-10 协作前端收口交接：collab 单页 + tab，next build 通过，4.10 done，**Phase 1C 完成**，下一任务 Phase 1D Hermes | 活文档 |
 | `docs/handoff/2026-08-04-p1d-1-ai-gateway-done-handoff.md` | P1D-1 AI Gateway 收口交接：ai-gateway 包，云上 86/86，5.1 done，下一任务 P1D-2 异步任务通道 | 活文档 |
 | `docs/handoff/2026-08-04-p1d-2-agent-tasks-done-handoff.md` | P1D-2 异步任务通道收口交接：迁移 15 + agent-worker，云上 88/88，5.2 done，下一任务 P1D-3 SDF Extractor | 活文档 |
-| `docs/handoff/2026-08-04-p1d-3-extractor-done-handoff.md` | P1D-3 SDF Extractor 收口交接：worker handler + 编辑器通路，云上 90/90，5.3 done，下一任务 P1D-4 R0-R4 审批 | 活文档（当前最新） |
+| `docs/handoff/2026-08-04-p1d-3-extractor-done-handoff.md` | P1D-3 SDF Extractor 收口交接：worker handler + 编辑器通路，云上 90/90，5.3 done，下一任务 P1D-4 R0-R4 审批 | 活文档 |
+| `docs/handoff/2026-08-04-p1d-4-approval-done-handoff.md` | P1D-4 R0-R4 审批收口交接：approval domain + /agent/approvals，云上 92/92，5.4 done，下一任务 P1D-5 发布审核 | 活文档（当前最新） |
 | `docs/CODEBASE_AUDIT.md` | Phase 0 Scholars Tea 只读审计报告（地图/模块分类/风险登记/迁移含义） | 活文档 |
 | `docs/proposals/` | 方案/脑暴稿 | 空（旧方案0723已废弃不归档） |
 | `docs/decisions/` | 决策记录 ADR | ADR-001 已接受；ADR-002 已建 |

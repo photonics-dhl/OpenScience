@@ -147,6 +147,11 @@ export {
   AGENT_TASK_QUEUE, AI_CREDIT_RESOURCE,
   type AgentDeps, type AgentTaskView, type AgentSessionView, type AgentTaskStatus,
 } from './agent/agent';
+export { ApprovalError, type ApprovalErrorCode } from './approval/errors';
+export {
+  approvalLevel, buildConfirmation, createApproval, approveApproval, rejectApproval, revokeApproval, listPendingApprovals,
+  type ApprovalLevel, type ApprovalStatus, type ConfirmationSpec, type ApprovalView, type CreateApprovalInput,
+} from './approval/approvals';
 export { buildExportPackage, classifyArtifact, type ExportFile } from './export/packager';
 export { validateExportPackage, type ExportValidationResult } from './export/validate';
 export { buildManifest, type BuildManifestInput } from './export/manifest';

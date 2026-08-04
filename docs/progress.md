@@ -1,27 +1,27 @@
 # OpenScience (XGS) 进度日志
 
-## 2026-08-04 — P1D-3 SDF Extractor 建议式提取完成：worker handler + 编辑器通路，云上 90/90，task-master 5.3 done
+## 2026-08-04 — P1D-4 R0-R4 分级审批与统一确认交互完成：approval domain + /agent/approvals，云上 92/92，task-master 5.4 done
 
 ### ✅ Completed
 | 任务 | 详情 |
 |---|---|
-| design gate | 五决策：worker sdf.extract handler / 建议存任务 result / 复用 P1B-8 草稿确认 / 轮询进度 / 按钮触发 |
-| agent-worker extractor.ts | sdfCoreGuard（六字段 + schemaVersion const 校验 §5.1/§5.3）+ extractHandler（completeStructured + 不写 SDF §9.2） |
-| worker 重构 | createHandlers(gateway) + createPollOnce（handler 注册表 + 注入 gateway） |
-| 前端 | lib/api submitExtractTask/getAgentTask + lib/suggestions coreToSuggestions（逐字段 diff §5.4）+ SuggestionsPanel「AI 提取」按钮 + 进度条 + 轮询 |
-| 测试 | agent-worker 单测 4 + web 3 新增（32 总）；**云上集成 90/90**（新增 P1D-3 2 + 既有 88） |
-| task-master 5.3 | done |
+| design gate | 五决策：approvalLevel 纯函数 / ToolApproval 状态机含撤销 / buildConfirmation 五要素 / owner 权限 / 挂接登记 |
+| 迁移 | 无（ToolApproval 表 P1D-2 迁移 15 已建） |
+| domain approval/ | approvalLevel（R0-R4 映射 + 未知→R3 安全默认）+ buildConfirmation（§9.4 五要素 i18n）+ createApproval（R0 自动 + 同批去重）/approveApproval/rejectApproval/revokeApproval（状态机 + owner 校验 + 审计）/listPendingApprovals |
+| API | GET /agent/approvals/pending + POST /:id/{approve,reject,revoke} |
+| 测试 | domain 单测 10 新增（253 总全绿）+ 集成 2 新增；**云上集成 92/92**（新增 P1D-4 2 + 既有 90） |
+| task-master 5.4 | done |
 
 ### Key Decisions / 坑
-- **提取不写 SDF（§9.2）**：extractHandler 只产出 core 建议，用户确认后经前端 updateSdf 落库
-- **Schema 校验（§9.3）**：sdfCoreGuard 对齐 sdf-schema coreSchema（schemaVersion const '0.1.0' + 六字段 string）
-- **确认写入（§5.4）**：coreToSuggestions → SuggestionsPanel 逐字段 apply → 草稿（P1B-8）→ updateSdf
-- **R1 挂接**：整批批准升级 P1D-4
-- **坑**：createPollOnce 重构破坏 agent.integration（pollOnce 直 import → createPollOnce）；`while(true)` no-constant-condition 不报但 eslint-disable unused 报
+- **分级（Q1，§9.4）**：R0 读自动 / R1 草稿批量 / R2 协作任务内 / R3 Merge·发布·作者·许可·可见性 / R4 删除·所有权·密钥；未知 → R3
+- **五要素（Q3）**：what/scope/reversible/estCost/estTime（buildConfirmation i18n 模板，中文优先）
+- **同批去重（§9.4）**：同 task+scope approved → 返回既有不重复弹窗
+- **撤销（§2.5-7）**：approved → revoked（状态机含）
+- **坑**：approvalLevel 返回 number 需 as ApprovalLevel 断言；fake toolApproval update 需模仿 Prisma undefined 忽略（否则 scope 被覆盖）
 
 ### ⏳ Next Steps
-- [x] ~~P1D-3 SDF Extractor~~ 完成（2026-08-04）：worker + 编辑器通路，云上 90/90，5.3 done
-- [ ] **P1D-4（task-master 5.4）**：R0-R4 分级审批与统一确认交互（§9.4）
+- [x] ~~P1D-4 R0-R4 审批~~ 完成（2026-08-04）：approval domain，云上 92/92，5.4 done
+- [ ] **P1D-5（task-master 5.5）**：发布审核硬阻断检查管线（§11.1 七类硬阻断 + AIReview 实体）
 - [ ] parked：P1A-3 终审项、P1A-5 deferred ①、/admin TOTP 上线路障、SDF Schema 债务（0.2.0）、病毒扫描实装（P1B-后续）、Version 发布状态机（P1B-后续）
 
 ---

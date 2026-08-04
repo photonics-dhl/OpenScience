@@ -1,7 +1,7 @@
 import type { FastifyInstance, FastifyRequest } from 'fastify';
 import { z } from 'zod';
 import type { AuthDeps } from '@openscience/auth';
-import { createAgentSession, getAgentTask, listAgentSessions, submitAgentTask } from '@openscience/domain';
+import { createAgentSession, getAgentTask, listAgentSessions, submitAgentTask, approveApproval, listPendingApprovals, rejectApproval, revokeApproval } from '@openscience/domain';
 import type { AuditContext } from '@openscience/observability';
 import { requireCurrentUser } from './session-guard';
 
@@ -73,5 +73,34 @@ export function registerAgentRoutes(app: FastifyInstance, deps: AgentRouteDeps):
     if (!user) return;
     const { id } = z.object({ id: z.string().uuid() }).parse(req.params);
     return reply.send({ task: await getAgentTask(deps, { userId: user.userId, taskId: id }) });
+  });
+
+  // P1D-4：R0-R4 审批（§9.4 + §15 ToolApproval）
+  app.get('/agent/approvals/pending', async (req, reply) => {
+    const user = await requireCurrentUser(deps, req, reply);
+    if (!user) return;
+    return reply.send({ approvals: await listPendingApprovals(deps, { userId: user.userId }) });
+  });
+
+  app.post('/agent/approvals/:id/approve', async (req, reply) => {
+    const user = await requireCurrentUser(deps, req, reply);
+    if (!user) return;
+    const { id } = z.object({ id: z.string().uuid() }).parse(req.params);
+    const body = z.object({ scopeGrant: z.string().max(200).optional() }).parse(req.body ?? {});
+    return reply.send({ approval: await approveApproval(deps, { userId: user.userId, approvalId: id, scopeGrant: body.scopeGrant }, auditCtx(req)) });
+  });
+
+  app.post('/agent/approvals/:id/reject', async (req, reply) => {
+    const user = await requireCurrentUser(deps, req, reply);
+    if (!user) return;
+    const { id } = z.object({ id: z.string().uuid() }).parse(req.params);
+    return reply.send({ approval: await rejectApproval(deps, { userId: user.userId, approvalId: id }, auditCtx(req)) });
+  });
+
+  app.post('/agent/approvals/:id/revoke', async (req, reply) => {
+    const user = await requireCurrentUser(deps, req, reply);
+    if (!user) return;
+    const { id } = z.object({ id: z.string().uuid() }).parse(req.params);
+    return reply.send({ approval: await revokeApproval(deps, { userId: user.userId, approvalId: id }, auditCtx(req)) });
   });
 }

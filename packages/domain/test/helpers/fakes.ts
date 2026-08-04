@@ -37,11 +37,12 @@ interface FakeDb {
   contributions: any[];
   agentSessions: any[];
   agentTasks: any[];
+  toolApprovals: any[];
 }
 
 /** 内存版 Prisma 子集：覆盖 workspace 领域用到的调用面。 */
 export function createFakePrisma(): { prisma: PrismaClient; db: FakeDb } {
-  const db: FakeDb = { users: [], workspaces: [], memberships: [], workspaceInvitations: [], mailOutbox: [], quotaPolicies: [], usageLedger: [], researchObjects: [], sdfDocuments: [], sdfNodes: [], blobs: [], artifacts: [], branches: [], commits: [], changesets: [], versions: [], versionManifests: [], manifestEntries: [], identifiers: [], publications: [], visibilityGrants: [], visibilityRequests: [], pullRequests: [], issues: [], comments: [], reviews: [], licenseAssignments: [], forkRelations: [], notifications: [], authors: [], contributions: [], agentSessions: [], agentTasks: [] };
+  const db: FakeDb = { users: [], workspaces: [], memberships: [], workspaceInvitations: [], mailOutbox: [], quotaPolicies: [], usageLedger: [], researchObjects: [], sdfDocuments: [], sdfNodes: [], blobs: [], artifacts: [], branches: [], commits: [], changesets: [], versions: [], versionManifests: [], manifestEntries: [], identifiers: [], publications: [], visibilityGrants: [], visibilityRequests: [], pullRequests: [], issues: [], comments: [], reviews: [], licenseAssignments: [], forkRelations: [], notifications: [], authors: [], contributions: [], agentSessions: [], agentTasks: [], toolApprovals: [] };
   let seq = 0;
   const nextId = () => `00000000-0000-4000-8000-${String(++seq).padStart(12, '0')}`;
   const p2002 = () => {
@@ -578,6 +579,55 @@ export function createFakePrisma(): { prisma: PrismaClient; db: FakeDb } {
       update: async ({ where, data }: any) => {
         const row = db.agentTasks.find((t) => t.id === where.id);
         Object.assign(row, data, { updatedAt: new Date() });
+        return { ...row };
+      },
+      findMany: async ({ where, include }: any) => {
+        let rows = db.agentTasks.filter((t) =>
+          (where.session === undefined || (where.session.userId === undefined || db.agentSessions.find((s) => s.id === t.sessionId)?.userId === where.session.userId)),
+        );
+        if (include?.approvals) {
+          rows = rows.filter((t) => db.toolApprovals.some((a) => a.taskId === t.id && a.status === (include.approvals.where?.status ?? a.status)));
+          rows = rows.map((t) => ({
+            ...t,
+            approvals: db.toolApprovals.filter((a) => a.taskId === t.id && a.status === (include.approvals.where?.status ?? a.status)),
+          }));
+        }
+        return rows;
+      },
+    },
+    toolApproval: {
+      create: async ({ data }: any) => {
+        const row = { id: nextId(), status: 'pending', prompt: {}, createdAt: new Date(), updatedAt: new Date(), ...data };
+        db.toolApprovals.push(row);
+        return row;
+      },
+      findUnique: async ({ where, include }: any) => {
+        const row = db.toolApprovals.find((a) => a.id === where.id) ?? null;
+        if (!row) return null;
+        if (include?.task) {
+          const task = db.agentTasks.find((t) => t.id === row.taskId) ?? null;
+          return {
+            ...row,
+            task: task
+              ? { ...task, session: db.agentSessions.find((s) => s.id === task.sessionId) ?? null }
+              : null,
+          };
+        }
+        return { ...row };
+      },
+      findFirst: async ({ where }: any) =>
+        db.toolApprovals.find((a) =>
+          (where.taskId === undefined || a.taskId === where.taskId) &&
+          (where.scope === undefined || a.scope === where.scope) &&
+          (where.status === undefined || a.status === where.status),
+        ) ?? null,
+      update: async ({ where, data }: any) => {
+        const row = db.toolApprovals.find((a) => a.id === where.id);
+        // Prisma 语义：undefined 字段忽略（fake 需对齐，否则 scope:undefined 覆盖）
+        for (const [k, v] of Object.entries(data)) {
+          if (v !== undefined) row[k] = v;
+        }
+        row.updatedAt = new Date();
         return { ...row };
       },
     },
