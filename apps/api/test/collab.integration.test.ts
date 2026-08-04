@@ -300,3 +300,92 @@ describe('P1C-2 分支管理（云上，无新迁移）', () => {
     await app.close();
   });
 });
+
+describe('P1C-3 Issue 与评论（云上，无新迁移）', () => {
+  it('Issue 全生命周期：创建 → 列表（kind 过滤）→ 评论 → 关闭 → 重开 → 详情含评论', async () => {
+    const app = await makeApp();
+    const cookie = await registerAndVerify(app, 'i1@example.com');
+    const wsId = await getPersonalWorkspace('i1@example.com');
+    const createRo = await app.inject({ method: 'POST', url: '/research-objects', cookies: { openscience_session: cookie }, payload: { workspaceId: wsId, title: 'Issue RO' } });
+    const ro = createRo.json().researchObject;
+
+    // 创建（§8 五类语义）
+    const ci = await app.inject({ method: 'POST', url: `/research-objects/${ro.id}/issues`, cookies: { openscience_session: cookie }, payload: { title: '方法质疑', kind: 'method_repro', body: '复现不了' } });
+    expect(ci.statusCode).toBe(201);
+    const issue = ci.json().issue;
+    expect(issue.status).toBe('open');
+
+    // 列表 + kind 过滤
+    await app.inject({ method: 'POST', url: `/research-objects/${ro.id}/issues`, cookies: { openscience_session: cookie }, payload: { title: '建议', kind: 'suggestion' } });
+    const all = await app.inject({ method: 'GET', url: `/research-objects/${ro.id}/issues`, cookies: { openscience_session: cookie } });
+    expect(all.json().issues).toHaveLength(2);
+    const filtered = await app.inject({ method: 'GET', url: `/research-objects/${ro.id}/issues?kind=method_repro`, cookies: { openscience_session: cookie } });
+    expect(filtered.json().issues).toHaveLength(1);
+
+    // 评论
+    const cc = await app.inject({ method: 'POST', url: `/research-objects/${ro.id}/issues/${issue.id}/comments`, cookies: { openscience_session: cookie }, payload: { body: '我来看看' } });
+    expect(cc.statusCode).toBe(201);
+
+    // 关闭 → 重开
+    const close = await app.inject({ method: 'PATCH', url: `/research-objects/${ro.id}/issues/${issue.id}`, cookies: { openscience_session: cookie }, payload: { status: 'closed' } });
+    expect(close.json().issue.status).toBe('closed');
+    const reopen = await app.inject({ method: 'PATCH', url: `/research-objects/${ro.id}/issues/${issue.id}`, cookies: { openscience_session: cookie }, payload: { status: 'open' } });
+    expect(reopen.json().issue.status).toBe('open');
+
+    // 详情含评论
+    const detail = await app.inject({ method: 'GET', url: `/research-objects/${ro.id}/issues/${issue.id}`, cookies: { openscience_session: cookie } });
+    expect(detail.json().issue.comments).toHaveLength(1);
+    await app.close();
+  });
+
+  it('可见性继承：public RO 匿名可读 Issue 列表', async () => {
+    const app = await makeApp();
+    const cookie = await registerAndVerify(app, 'i2@example.com');
+    const wsId = await getPersonalWorkspace('i2@example.com');
+    const createRo = await app.inject({ method: 'POST', url: '/research-objects', cookies: { openscience_session: cookie }, payload: { workspaceId: wsId, title: 'Public Issue RO' } });
+    const ro = createRo.json().researchObject;
+    // 直接 DB 置 public（private→public 属扩大，P1B-7 审批流会 202 阻断；测试环境绕过审批验证继承）
+    await prisma.researchObject.update({ where: { id: ro.id }, data: { visibility: 'public' } });
+    await app.inject({ method: 'POST', url: `/research-objects/${ro.id}/issues`, cookies: { openscience_session: cookie }, payload: { title: '公开讨论', kind: 'question' } });
+    const anon = await app.inject({ method: 'GET', url: `/research-objects/${ro.id}/issues` });
+    expect(anon.statusCode).toBe(200);
+    expect(anon.json().issues).toHaveLength(1);
+    await app.close();
+  });
+
+  it('越权：非成员创建 Issue → 404（§17）', async () => {
+    const app = await makeApp();
+    const cookieA = await registerAndVerify(app, 'i3a@example.com');
+    const cookieB = await registerAndVerify(app, 'i3b@example.com');
+    const wsA = await getPersonalWorkspace('i3a@example.com');
+    const createRo = await app.inject({ method: 'POST', url: '/research-objects', cookies: { openscience_session: cookieA }, payload: { workspaceId: wsA, title: 'Access Issue RO' } });
+    const ro = createRo.json().researchObject;
+    const ci = await app.inject({ method: 'POST', url: `/research-objects/${ro.id}/issues`, cookies: { openscience_session: cookieB }, payload: { title: '越权', kind: 'question' } });
+    expect(ci.statusCode).toBe(404);
+    await app.close();
+  });
+
+  it('写操作审计：issue.create / comment.create / issue.status_changed 落 audit_logs（§17）', async () => {
+    const app = await makeApp();
+    const cookie = await registerAndVerify(app, 'i4@example.com');
+    const wsId = await getPersonalWorkspace('i4@example.com');
+    const createRo = await app.inject({ method: 'POST', url: '/research-objects', cookies: { openscience_session: cookie }, payload: { workspaceId: wsId, title: 'Audit Issue RO' } });
+    const ro = createRo.json().researchObject;
+    const ci = await app.inject({ method: 'POST', url: `/research-objects/${ro.id}/issues`, cookies: { openscience_session: cookie }, payload: { title: '审计', kind: 'bug_report' } });
+    const issue = ci.json().issue;
+    await app.inject({ method: 'POST', url: `/research-objects/${ro.id}/issues/${issue.id}/comments`, cookies: { openscience_session: cookie }, payload: { body: '审计评论' } });
+    await app.inject({ method: 'PATCH', url: `/research-objects/${ro.id}/issues/${issue.id}`, cookies: { openscience_session: cookie }, payload: { status: 'closed' } });
+
+    const actions = await prisma.auditLog.findMany({
+      where: { targetId: issue.id },
+      select: { action: true },
+    });
+    const set = new Set(actions.map((a) => a.action));
+    expect(set.has('issue.create')).toBe(true);
+    expect(set.has('issue.status_changed')).toBe(true);
+    // comment 的 targetId 是 comment.id 非 issue.id → 直接查 action 存在
+    const commentAudit = await prisma.auditLog.count({ where: { action: 'comment.create' } });
+    expect(commentAudit).toBeGreaterThan(0);
+    await app.close();
+  });
+});

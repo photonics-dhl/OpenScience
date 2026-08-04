@@ -19,6 +19,9 @@ export const RATE_LIMIT_ROUTES: Record<string, RouteRule> = {
   '/auth/register': { limit: 5, windowSec: 600 },
   '/auth/resend-code': { limit: 3, windowSec: 300 },
   '/auth/verify-email': { limit: 10, windowSec: 300 },
+  // P1C-3：协作写入限流（§17 + task 4.3 要求；key=完整路径）
+  '/research-objects/:id/issues': { limit: 20, windowSec: 60 },
+  '/research-objects/:id/issues/:issueId/comments': { limit: 30, windowSec: 60 },
 };
 
 export interface RegisterRateLimitOptions {
@@ -41,9 +44,16 @@ export function registerRateLimit(app: FastifyInstance, opts: RegisterRateLimitO
     },
   };
 
+  // 键支持 `:param` 段（如 /research-objects/:id/issues）→ 转正则（P1C-3 路径参数路由限流）
+  const compiled = Object.entries(rules).map(([path, rule]) => ({
+    rule,
+    regex: new RegExp('^' + path.replace(/:[A-Za-z0-9_]+/g, '[^/]+') + '$'),
+  }));
+
   app.addHook('preHandler', async (req, reply) => {
     const path = req.url.split('?')[0];
-    const rule = rules[path];
+    const matched = compiled.find(({ regex }) => regex.test(path));
+    const rule = matched?.rule;
     if (!rule) return;
     const r = await rateLimitHit(opts.redis, { ip: req.ip, route: path, windowSec: rule.windowSec, limit: rule.limit });
     if (!r.allowed) {

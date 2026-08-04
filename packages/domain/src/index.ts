@@ -100,6 +100,13 @@ export {
   BRANCH_NAME_PATTERN,
   type BranchTip, type BranchDetail, type CreateBranchInput, type DeleteBranchInput, type SwitchBranchInput,
 } from './branch/branches';
+export { IssueError, type IssueErrorCode } from './issue/errors';
+export {
+  createIssue, listIssues, getIssue, updateIssueStatus, createComment,
+  ISSUE_KINDS, ISSUE_STATUSES,
+  type IssueKind, type IssueStatus, type IssueSummary, type IssueDetail,
+  type CreateIssueInput, type CreateCommentInput,
+} from './issue/issues';
 export { buildExportPackage, classifyArtifact, type ExportFile } from './export/packager';
 export { validateExportPackage, type ExportValidationResult } from './export/validate';
 export { buildManifest, type BuildManifestInput } from './export/manifest';

@@ -27,11 +27,14 @@ interface FakeDb {
   visibilityGrants: any[];
   visibilityRequests: any[];
   pullRequests: any[];
+  issues: any[];
+  comments: any[];
+  reviews: any[];
 }
 
 /** 内存版 Prisma 子集：覆盖 workspace 领域用到的调用面。 */
 export function createFakePrisma(): { prisma: PrismaClient; db: FakeDb } {
-  const db: FakeDb = { users: [], workspaces: [], memberships: [], workspaceInvitations: [], mailOutbox: [], quotaPolicies: [], usageLedger: [], researchObjects: [], sdfDocuments: [], sdfNodes: [], blobs: [], artifacts: [], branches: [], commits: [], changesets: [], versions: [], versionManifests: [], manifestEntries: [], identifiers: [], publications: [], visibilityGrants: [], visibilityRequests: [], pullRequests: [] };
+  const db: FakeDb = { users: [], workspaces: [], memberships: [], workspaceInvitations: [], mailOutbox: [], quotaPolicies: [], usageLedger: [], researchObjects: [], sdfDocuments: [], sdfNodes: [], blobs: [], artifacts: [], branches: [], commits: [], changesets: [], versions: [], versionManifests: [], manifestEntries: [], identifiers: [], publications: [], visibilityGrants: [], visibilityRequests: [], pullRequests: [], issues: [], comments: [], reviews: [] };
   let seq = 0;
   const nextId = () => `00000000-0000-4000-8000-${String(++seq).padStart(12, '0')}`;
   const p2002 = () => {
@@ -467,6 +470,75 @@ export function createFakePrisma(): { prisma: PrismaClient; db: FakeDb } {
                 (o.sourceBranchId === undefined || pr.sourceBranchId === o.sourceBranchId) &&
                 (o.targetBranchId === undefined || pr.targetBranchId === o.targetBranchId),
               )),
+        ).length,
+      findFirst: async ({ where }: any) =>
+        db.pullRequests.find((pr) =>
+          (where.id === undefined || pr.id === where.id) &&
+          (where.researchObjectId === undefined || pr.researchObjectId === where.researchObjectId),
+        ) ?? null,
+    },
+    review: {
+      findFirst: async ({ where, include }: any) => {
+        const row = db.reviews.find((r) => r.id === where.id) ?? null;
+        if (!row || !include?.pr) return row;
+        const pr = db.pullRequests.find((p) => p.id === row.prId);
+        return { ...row, pr: pr ? { researchObjectId: pr.researchObjectId } : null };
+      },
+    },
+    issue: {
+      create: async ({ data }: any) => {
+        const row = { id: nextId(), status: 'open', createdAt: new Date(), updatedAt: new Date(), ...data };
+        db.issues.push(row);
+        return row;
+      },
+      findMany: async ({ where, include, orderBy }: any) => {
+        const rows = db.issues.filter(
+          (i) =>
+            (where.researchObjectId === undefined || i.researchObjectId === where.researchObjectId) &&
+            (where.kind === undefined || i.kind === where.kind) &&
+            (where.status === undefined || i.status === where.status),
+        );
+        if (orderBy?.createdAt === 'desc') rows.sort((a, b) => b.createdAt - a.createdAt);
+        return rows.map((i) => ({
+          ...i,
+          _count: include?._count?.select?.comments ? { comments: db.comments.filter((c) => c.issueId === i.id).length } : undefined,
+        }));
+      },
+      findFirst: async ({ where, include }: any) => {
+        const row = db.issues.find(
+          (i) =>
+            (where.id === undefined || i.id === where.id) &&
+            (where.researchObjectId === undefined || i.researchObjectId === where.researchObjectId),
+        ) ?? null;
+        if (!row || !include) return row;
+        const comments = db.comments
+          .filter((c) => c.issueId === row.id)
+          .sort((a, b) => a.createdAt - b.createdAt);
+        const commentRows = include.comments?.include?.author
+          ? comments.map((c) => ({ ...c, author: { id: c.authorId } }))
+          : comments;
+        return {
+          ...row,
+          comments: commentRows,
+          _count: { comments: comments.length },
+        };
+      },
+      update: async ({ where, data }: any) => {
+        const row = db.issues.find((i) => i.id === where.id);
+        Object.assign(row, data, { updatedAt: new Date() });
+        return row;
+      },
+    },
+    comment: {
+      create: async ({ data }: any) => {
+        const row = { id: nextId(), createdAt: new Date(), ...data };
+        db.comments.push(row);
+        return row;
+      },
+      count: async ({ where }: any) =>
+        db.comments.filter((c) =>
+          (where.issueId === undefined || c.issueId === where.issueId) &&
+          (where.prId === undefined || c.prId === where.prId),
         ).length,
     },
     $transaction: async (fn: (tx: unknown) => Promise<unknown>) => fn(prisma),

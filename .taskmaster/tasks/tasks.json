@@ -492,14 +492,15 @@
             "id": 3,
             "title": "实现 Issue 与评论基础交互",
             "description": "实现 Issue（科学问题、方法质疑、复现失败、错误报告、改进建议，Spec §8 概念表）与 Comment 的创建、回复、状态流转，覆盖 MVP 社区范围中的 Issue 部分（§2.5 决策 4）。",
-            "status": "pending",
+            "status": "done",
             "dependencies": [
               "4.1"
             ],
             "priority": "medium",
             "details": "模块 /issues（§16）：Issue 支持 open/closed 状态与标签（最小集即可，类型标签对齐 §8 五种语义）；Comment 挂接 Issue/PR/Review（§15 Comment 实体，一处实现多处复用）；Issue 默认继承 RO 可见性（§4.2）；写操作记审计日志并限流（§17）。禁止提前实现 §19 的点赞、投票、Top Questions。\n验收: -",
             "testStrategy": "单元测试：状态机与权限；合同测试：前后端 Schema（§21.1 单元+合同层）。",
-            "parentId": "4"
+            "parentId": "4",
+            "updatedAt": "2026-08-04T07:01:57.627Z"
           },
           {
             "id": 4,
@@ -599,7 +600,7 @@
             "parentId": "4"
           }
         ],
-        "updatedAt": "2026-08-04T06:48:01.189Z"
+        "updatedAt": "2026-08-04T07:01:57.627Z"
       },
       {
         "id": "5",
@@ -862,7 +863,7 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-08-04T06:48:01.189Z",
+      "lastModified": "2026-08-04T07:01:57.627Z",
       "taskCount": 6,
       "completedCount": 3,
       "tags": [
