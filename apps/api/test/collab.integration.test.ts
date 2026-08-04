@@ -818,3 +818,60 @@ describe('P1C-8 Review 与 Merge（云上，无新迁移）', () => {
     await app.close();
   });
 });
+
+describe('P1C-9 协作通知（云上，无新迁移）', () => {
+  it('事件→通知链路：建 PR → pull_request.opened → GET /notifications 可见 → markRead（§16/§18.1）', async () => {
+    const app = await makeApp();
+    const cookie = await registerAndVerify(app, 'n1@example.com');
+    const wsId = await getPersonalWorkspace('n1@example.com');
+    const userId = await getUserId('n1@example.com');
+    const createRo = await app.inject({ method: 'POST', url: '/research-objects', cookies: { openscience_session: cookie }, payload: { workspaceId: wsId, title: 'Notif RO' } });
+    const ro = createRo.json().researchObject;
+    await app.inject({ method: 'PUT', url: `/research-objects/${ro.id}/licenses`, cookies: { openscience_session: cookie }, payload: { text: 'CC-BY-4.0', code: 'MIT', data: 'CC0-1.0' } });
+    await app.inject({ method: 'POST', url: `/research-objects/${ro.id}/commits`, cookies: { openscience_session: cookie }, payload: { message: 'v1', version: 1 } });
+    const cb = await app.inject({ method: 'POST', url: `/research-objects/${ro.id}/branches`, cookies: { openscience_session: cookie }, payload: { name: 'feature/n' } });
+    const feature = cb.json().branch;
+    const list = await app.inject({ method: 'GET', url: `/research-objects/${ro.id}/branches`, cookies: { openscience_session: cookie } });
+    const main = list.json().branches.find((b: { name: string }) => b.name === 'main');
+    const pr = await app.inject({ method: 'POST', url: `/research-objects/${ro.id}/pull-requests`, cookies: { openscience_session: cookie }, payload: { sourceBranchId: feature.id, targetBranchId: main.id, title: 'x', changedSdfFields: ['method'], changedFiles: ['f.md'], changesMethod: false, changesData: false, changesConclusion: false, newContributors: [], dataLicense: 'CC0-1.0', codeLicense: 'MIT', conflictOfInterest: '无', autoChecks: {}, requestsRelease: false } });
+    expect(pr.statusCode).toBe(201);
+
+    // 通知可见（§18.1）
+    const notifs = await app.inject({ method: 'GET', url: '/notifications', cookies: { openscience_session: cookie } });
+    expect(notifs.statusCode).toBe(200);
+    const opened = notifs.json().notifications.find((n: { type: string }) => n.type === 'pull_request.opened');
+    expect(opened).toBeDefined();
+
+    // markRead + 幂等
+    const read = await app.inject({ method: 'POST', url: `/notifications/${opened.id}/read`, cookies: { openscience_session: cookie } });
+    expect(read.statusCode).toBe(200);
+    expect(read.json().notification.read).toBe(true);
+    const readAgain = await app.inject({ method: 'POST', url: `/notifications/${opened.id}/read`, cookies: { openscience_session: cookie } });
+    expect(readAgain.statusCode).toBe(200);
+
+    // 审计 notification.read
+    const audit = await prisma.auditLog.count({ where: { action: 'notification.read' } });
+    expect(audit).toBeGreaterThan(0);
+    await app.close();
+  });
+
+  it('Issue 动态通知 + 他人通知不可见（§15/§18.1）', async () => {
+    const app = await makeApp();
+    const cookieA = await registerAndVerify(app, 'n2a@example.com');
+    const cookieB = await registerAndVerify(app, 'n2b@example.com');
+    const wsA = await getPersonalWorkspace('n2a@example.com');
+    const userIdA = await getUserId('n2a@example.com');
+    const createRo = await app.inject({ method: 'POST', url: '/research-objects', cookies: { openscience_session: cookieA }, payload: { workspaceId: wsA, title: 'Notif RO2' } });
+    const ro = createRo.json().researchObject;
+    await app.inject({ method: 'POST', url: `/research-objects/${ro.id}/issues`, cookies: { openscience_session: cookieA }, payload: { title: '问题', kind: 'question' } });
+
+    // A 看到 issue.updated（RO 创建者）
+    const notifsA = await app.inject({ method: 'GET', url: '/notifications', cookies: { openscience_session: cookieA } });
+    expect(notifsA.json().notifications.some((n: { type: string }) => n.type === 'issue.updated')).toBe(true);
+
+    // B（他人）看不到 A 的通知
+    const notifsB = await app.inject({ method: 'GET', url: '/notifications', cookies: { openscience_session: cookieB } });
+    expect(notifsB.json().notifications).toHaveLength(0);
+    await app.close();
+  });
+});

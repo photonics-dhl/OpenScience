@@ -1,28 +1,29 @@
 # OpenScience (XGS) 进度日志
 
-## 2026-08-04 — P1C-8 Review 与 Merge 流程及高风险确认完成：/reviews API，云上 82/82，task-master 4.8 done
+## 2026-08-04 — P1C-9 协作通知、事件投递与审计完成：/notifications API，云上 84/84，task-master 4.9 done
 
 ### ✅ Completed
 | 任务 | 详情 |
 |---|---|
-| design gate | 五决策：空间成员可 Review / Merge fast-forward + 新草稿 / 409 高风险确认 / 作者合并 append / 扩大可见性不适用 |
-| 迁移 | 无（Review 实体 P1C-1 迁移 12 已建） |
-| domain review/ | createReview（verdict/items 校验 + append-only）+ listReviews + assessHighRisk（四类）+ mergePullRequest（Owner/Maintainer + 高风险确认 + source tip→target + 新草稿 + 作者合并 + 许可应用 + merged 事件） |
-| API | POST/GET /reviews + POST /merge（confirmHighRisk） |
-| 测试 | domain 单测 11 新增（230 总全绿）+ 集成 3 新增（collab 27/27）；**云上集成 82/82**（新增 P1C-8 3 + 既有 79） |
-| task-master 4.8 | done |
+| design gate | 五决策：消费者幂等依赖事件源 / Issue 动态通知 / payload link / 渠道抽象 / 已读 API |
+| 迁移 | 无（Notification 实体 P1C-1 迁移 12 已建） |
+| domain notification/ | notify（渠道分发）+ listNotifications（未读优先 + 分页）+ markNotificationRead（仅本人 + 幂等）+ channels.ts（InApp + Email §24 占位） |
+| issue 补 | createIssue 发 issue.updated 通知（payload 含 link） |
+| API | GET /notifications + POST /notifications/:id/read |
+| 测试 | domain 单测 8 新增（238 总全绿）+ 集成 2 新增（collab 29/29）；**云上集成 84/84**（新增 P1C-9 2 + 既有 82） |
+| task-master 4.9 | done |
 
 ### Key Decisions / 坑
-- **§8.3 Merge 权限**：仅 Owner/Maintainer（membership.role ∈ {owner, maintainer}）
-- **四类高风险**：新增作者（getAuthorChangeInfo 对比）/ 变更许可（P1C-4）/ changesMethod/Data/Conclusion true / 扩大可见性（不适用，走 P1B-7）
-- **Merge 语义（Q2）**：source tip commit → target 分支（fast-forward）+ 新草稿版本（versionNo 递增）+ PR merged + 作者合并 append + 许可应用 + pull_request.merged 事件
-- **无自动冲突解决（§8.3）**：人类选择/重新编辑
-- **坑**：`tx.version.create` 传了 **version id 而非 commit id** → FK 违约 500（真 PG 暴露，本地 fake 无 FK 检查）；`entries.create` 空数组 Prisma 报错 → 条件省略；zod newContributors min(1) 放宽可空（PR 可无新增贡献者）
+- **消费者幂等（Q1）**：依赖事件源幂等（PR idempotencyKey → 通知单次），零迁移；未来外部事件（P1D-2）加 eventId 唯一列
+- **渠道抽象（Q4）**：NotificationChannel 接口 + InAppChannel（写行）+ EmailChannel 占位（§24 待确认，不写死）
+- **已读（Q5）**：GET /notifications（未读优先 + skip/take）+ POST /:id/read（仅本人 404 + 幂等 + 审计）
+- **审计核对（§17）**：Issue/PR/Review/Fork/作者/许可全部已落 AuditLog ✓；补 notification.read
+- **坑**：`_message` 前缀不被 eslint 忽略 → `void message`；NotificationMessage type re-export 从 channels
 
 ### ⏳ Next Steps
-- [x] ~~P1C-8 Review/Merge~~ 完成（2026-08-04）：/reviews API + 高风险确认，云上 82/82，4.8 done
-- [ ] **P1C-9（task-master 4.9）**：通知（Notification 实体 + 事件 → 通知投递，§16）
-- [ ] parked：P1A-3 终审项、P1A-5 deferred ①、/admin TOTP 上线路障、SDF Schema 债务（0.2.0）、病毒扫描实装（P1B-后续）、Version 发布状态机（P1B-后续）、真实 AI 提取（Phase 1D）、协作剩余 2 子任务（P1C-9~10）
+- [x] ~~P1C-9 通知~~ 完成（2026-08-04）：/notifications API，云上 84/84，4.9 done
+- [ ] **P1C-10（task-master 4.10）**：协作前端（Issue/PR/Review 列表页 + 分支切换 + 通知中心，§18 协作区域 GitHub 式）
+- [ ] parked：P1A-3 终审项、P1A-5 deferred ①、/admin TOTP 上线路障、SDF Schema 债务（0.2.0）、病毒扫描实装（P1B-后续）、Version 发布状态机（P1B-后续）、真实 AI 提取（Phase 1D）、协作剩余 1 子任务（P1C-10）
 
 ---
 ## 2026-08-04 — P1B-10 SDF 标准导出包生成与校验完成：export API + 脱库校验，云上 58/58，task-master 3.10 done

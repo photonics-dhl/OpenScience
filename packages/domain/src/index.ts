@@ -135,6 +135,12 @@ export {
   REVIEW_VERDICTS,
   type ReviewVerdict, type ReviewItem, type ReviewView, type HighRiskDetail,
 } from './review/reviews';
+export { NotificationError, type NotificationErrorCode } from './notification/errors';
+export {
+  notify, listNotifications, markNotificationRead,
+  type NotificationView, type NotificationChannel, type NotificationMessage,
+} from './notification/notifications';
+export { InAppChannel, EmailChannel } from './notification/channels';
 export { buildExportPackage, classifyArtifact, type ExportFile } from './export/packager';
 export { validateExportPackage, type ExportValidationResult } from './export/validate';
 export { buildManifest, type BuildManifestInput } from './export/manifest';

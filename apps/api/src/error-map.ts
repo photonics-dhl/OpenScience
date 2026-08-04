@@ -1,5 +1,5 @@
 import { AuthError, type AuthErrorCode } from '@openscience/auth';
-import { ArtifactError, AuthorError, BranchError, CommitError, ForkError, IssueError, LicenseError, PrError, ResearchObjectError, ReviewError, UsageError, VisibilityError, WorkspaceError, type WorkspaceErrorCode } from '@openscience/domain';
+import { ArtifactError, AuthorError, BranchError, CommitError, ForkError, IssueError, LicenseError, NotificationError, PrError, ResearchObjectError, ReviewError, UsageError, VisibilityError, WorkspaceError, type WorkspaceErrorCode } from '@openscience/domain';
 import { buildErrorBody, type ErrorBody } from '@openscience/observability';
 
 const AUTH_ERROR_HTTP: Record<AuthErrorCode, number> = {
@@ -122,6 +122,11 @@ const REVIEW_ERROR_HTTP: Record<ReviewError['code'], number> = {
   HIGH_RISK_CONFIRMATION_REQUIRED: 409, // 高风险需显式确认（§8.3）
 };
 
+const NOTIFICATION_ERROR_HTTP: Record<NotificationError['code'], number> = {
+  NOTIFICATION_NOT_FOUND: 404,
+  FORBIDDEN: 403,
+};
+
 export type { ErrorBody };
 
 /** 统一错误映射（2.6 扩展为全局标准前的最小版：/auth + /workspaces + /usage）；requestId 三方串联（Spec §17）。 */
@@ -167,6 +172,9 @@ export function httpStatusForError(err: unknown, requestId?: string): { status: 
   }
   if (err instanceof ReviewError) {
     return { status: REVIEW_ERROR_HTTP[err.code], body: buildErrorBody(err.code, err.message, requestId) };
+  }
+  if (err instanceof NotificationError) {
+    return { status: NOTIFICATION_ERROR_HTTP[err.code], body: buildErrorBody(err.code, err.message, requestId) };
   }
   // @fastify/csrf-protection 校验失败：403 而非 500（FastifyError.code = FST_CSRF_INVALID_TOKEN / FST_CSRF_MISSING_SECRET）
   if (typeof (err as { code?: unknown }).code === 'string' && (err as { code: string }).code.startsWith('FST_CSRF')) {

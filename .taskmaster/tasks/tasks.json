@@ -579,7 +579,7 @@
             "id": 9,
             "title": "实现协作通知、事件投递与审计",
             "description": "实现 Notification 实体与协作事件通知（PR 打开/Merge、Review 请求、Issue 动态），支撑 Dashboard'通知与社区动态'（Spec §18.1、§15、§16）。",
-            "status": "pending",
+            "status": "done",
             "dependencies": [
               "4.6",
               "4.8"
@@ -587,7 +587,8 @@
             "priority": "medium",
             "details": "消费 pull_request.opened / pull_request.merged 等事件生成 Notification（§16：事件必须可重试、消费者必须幂等——以事件 ID 去重）；通知含已读/未读状态与跳转链接；全部协作写操作（Issue/PR/Review/Merge/Fork/作者与许可变更）落 AuditLog（§17 MUST：全部写操作记录审计日志）；通知与协作接口限流（§17）；生产日志不记录论文全文等敏感内容（§17）。站内通知为 MVP 范围，邮件通知是否需要属 §24 待确认项，本任务只预留渠道抽象不写死。\n验收: -",
             "testStrategy": "单元测试：消费者幂等（重复事件不重复通知）；集成测试：事件→通知链路、审计日志完整性（§21.1 单元+集成层）。",
-            "parentId": "4"
+            "parentId": "4",
+            "updatedAt": "2026-08-04T09:42:49.494Z"
           },
           {
             "id": 10,
@@ -605,7 +606,7 @@
             "parentId": "4"
           }
         ],
-        "updatedAt": "2026-08-04T09:27:57.770Z"
+        "updatedAt": "2026-08-04T09:42:49.494Z"
       },
       {
         "id": "5",
@@ -868,7 +869,7 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-08-04T09:27:57.770Z",
+      "lastModified": "2026-08-04T09:42:49.494Z",
       "taskCount": 6,
       "completedCount": 3,
       "tags": [

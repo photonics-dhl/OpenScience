@@ -600,10 +600,25 @@ export function createFakePrisma(): { prisma: PrismaClient; db: FakeDb } {
         db.notifications.push(row);
         return row;
       },
-      findMany: async ({ where }: any) =>
-        db.notifications.filter(
-          (n) => (where.userId === undefined || n.userId === where.userId) && (where.type === undefined || n.type === where.type),
-        ),
+      findMany: async ({ where, orderBy, skip, take }: any) => {
+        let rows = db.notifications.filter(
+          (n) =>
+            (where.userId === undefined || n.userId === where.userId) &&
+            (where.type === undefined || n.type === where.type) &&
+            (where.read === undefined || n.read === where.read),
+        );
+        if (orderBy?.[0]?.createdAt === 'desc') rows.sort((a, b) => b.createdAt - a.createdAt);
+        if (orderBy?.[0]?.read === 'asc') rows.sort((a, b) => (a.read ? 1 : 0) - (b.read ? 1 : 0));
+        if (skip) rows = rows.slice(skip);
+        if (take !== undefined) rows = rows.slice(0, take);
+        return rows;
+      },
+      findUnique: async ({ where }: any) => db.notifications.find((n) => n.id === where.id) ?? null,
+      update: async ({ where, data }: any) => {
+        const row = db.notifications.find((n) => n.id === where.id);
+        Object.assign(row, data);
+        return row;
+      },
     },
     review: {
       findFirst: async ({ where, include }: any) => {

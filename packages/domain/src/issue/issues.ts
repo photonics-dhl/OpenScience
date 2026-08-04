@@ -2,6 +2,7 @@ import type { AuditContext, AuditEvent } from '@openscience/observability';
 import { requireMembership } from '../workspace/helpers';
 import { canAccessRo } from '../visibility/access';
 import type { WorkspaceDeps } from '../workspace/types';
+import { notify } from '../notification/notifications';
 import { IssueError } from './errors';
 
 export const ISSUE_KINDS = ['question', 'method_repro', 'failure', 'bug_report', 'suggestion'] as const;
@@ -86,6 +87,14 @@ export async function createIssue(
     targetType: 'issue', targetId: issue.id,
     metadata: { researchObjectId: ro.id, kind: input.kind },
   }, ctx);
+
+  // P1C-9：Issue 动态通知（§18.1 Dashboard + Q2）
+  await notify(deps, {
+    userId: ro.createdBy,
+    type: 'issue.updated',
+    payload: { issueId: issue.id, researchObjectId: ro.id, kind: input.kind, link: `/research-objects/${ro.id}/issues/${issue.id}` },
+  });
+
   return { ...issue, kind: issue.kind as IssueKind, status: issue.status as IssueStatus, commentCount: 0 };
 }
 
