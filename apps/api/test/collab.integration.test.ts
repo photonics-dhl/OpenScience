@@ -824,7 +824,6 @@ describe('P1C-9 协作通知（云上，无新迁移）', () => {
     const app = await makeApp();
     const cookie = await registerAndVerify(app, 'n1@example.com');
     const wsId = await getPersonalWorkspace('n1@example.com');
-    const userId = await getUserId('n1@example.com');
     const createRo = await app.inject({ method: 'POST', url: '/research-objects', cookies: { openscience_session: cookie }, payload: { workspaceId: wsId, title: 'Notif RO' } });
     const ro = createRo.json().researchObject;
     await app.inject({ method: 'PUT', url: `/research-objects/${ro.id}/licenses`, cookies: { openscience_session: cookie }, payload: { text: 'CC-BY-4.0', code: 'MIT', data: 'CC0-1.0' } });
@@ -860,7 +859,6 @@ describe('P1C-9 协作通知（云上，无新迁移）', () => {
     const cookieA = await registerAndVerify(app, 'n2a@example.com');
     const cookieB = await registerAndVerify(app, 'n2b@example.com');
     const wsA = await getPersonalWorkspace('n2a@example.com');
-    const userIdA = await getUserId('n2a@example.com');
     const createRo = await app.inject({ method: 'POST', url: '/research-objects', cookies: { openscience_session: cookieA }, payload: { workspaceId: wsA, title: 'Notif RO2' } });
     const ro = createRo.json().researchObject;
     await app.inject({ method: 'POST', url: `/research-objects/${ro.id}/issues`, cookies: { openscience_session: cookieA }, payload: { title: '问题', kind: 'question' } });

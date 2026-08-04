@@ -40,6 +40,127 @@
     "diffTitle": "Change diff",
     "noSuggestions": "No AI suggestions",
     "commitMessage": "Commit message",
-    "commit": "Create commit"
+    "commit": "Create commit",
+    "yes": "Yes",
+    "no": "No"
+  },
+  "collab": {
+    "title": "Collaboration",
+    "navLabel": "Collaboration tabs",
+    "contentLabel": "Collaboration content",
+    "tab": {
+      "issues": "Issues",
+      "prs": "Pull Requests",
+      "branches": "Branches",
+      "fork": "Fork",
+      "authors": "Authors",
+      "notifications": "Notifications"
+    },
+    "issue": {
+      "newTitle": "New issue title",
+      "kind": "Type",
+      "kind.question": "Question",
+      "kind.method_repro": "Reproduction",
+      "kind.failure": "Failure",
+      "kind.bug_report": "Bug report",
+      "kind.suggestion": "Suggestion",
+      "status.open": "Open",
+      "status.closed": "Closed",
+      "create": "Create issue",
+      "empty": "No issues",
+      "noBody": "(no body)",
+      "comments": "Comments",
+      "addComment": "Add comment",
+      "comment": "Comment",
+      "close": "Close",
+      "reopen": "Reopen"
+    },
+    "pr": {
+      "new": "New pull request",
+      "title": "PR title",
+      "source": "Source branch",
+      "target": "Target branch",
+      "changedFiles": "Changed files (comma-separated)",
+      "changedSdfFields": "Changed SDF fields (comma-separated)",
+      "changesMethod": "Changes method",
+      "changesData": "Changes data",
+      "changesConclusion": "Changes conclusion",
+      "create": "Create PR",
+      "empty": "No pull requests",
+      "noBody": "(no body)",
+      "status.open": "Open",
+      "status.merged": "Merged",
+      "status.rejected": "Rejected",
+      "declaration": "Change declaration",
+      "diff": "Change diff",
+      "noDiff": "No diff",
+      "requestsRelease": "Requests new release",
+      "merge": "Merge"
+    },
+    "review": {
+      "title": "Review",
+      "verdict": "Verdict",
+      "verdict.approve": "Approve",
+      "verdict.requestChanges": "Request changes",
+      "verdict.comment": "Comment",
+      "body": "Review comment",
+      "submit": "Submit review"
+    },
+    "highRisk": {
+      "title": "High-risk merge confirmation",
+      "description": "This merge involves high-risk changes that require explicit confirmation:",
+      "cancel": "Cancel",
+      "confirm": "Confirm merge"
+    },
+    "branches": {
+      "new": "New branch name",
+      "create": "Create branch"
+    },
+    "fork": {
+      "title": "Fork this research object",
+      "description": "Create an independent derived RO from the current public version, preserving the source relation.",
+      "action": "Fork",
+      "done": "Fork complete, new RO:",
+      "source": "Source relation",
+      "sourceRo": "Source RO",
+      "sourceVersion": "Source version",
+      "contentHash": "Content hash",
+      "sourcePermanent": "Source relation is permanently preserved (§8.1) and cannot be removed."
+    },
+    "authors": {
+      "title": "Author list",
+      "corresponding": "Corresponding",
+      "empty": "Author list not confirmed yet (§3.4)",
+      "edit": "Edit authors",
+      "userId": "User ID"
+    },
+    "contributions": {
+      "title": "Factual contributions (CRediT)",
+      "role": "Contribution role",
+      "add": "Add contribution"
+    },
+    "credit": {
+      "conceptualization": "Conceptualization",
+      "methodology": "Methodology",
+      "software": "Software",
+      "validation": "Validation",
+      "data_curation": "Data curation",
+      "visualization": "Visualization",
+      "writing": "Writing",
+      "supervision": "Supervision",
+      "investigation": "Investigation",
+      "resources": "Resources",
+      "project_administration": "Project administration",
+      "funding_acquisition": "Funding acquisition"
+    },
+    "notifications": {
+      "title": "Notifications",
+      "empty": "No notifications",
+      "markRead": "Mark as read",
+      "view": "View",
+      "type.pull_request.opened": "Pull request opened",
+      "type.pull_request.merged": "Pull request merged",
+      "type.issue.updated": "Issue updated"
+    }
   }
 }

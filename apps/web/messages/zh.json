@@ -40,6 +40,127 @@
     "diffTitle": "变更差异",
     "noSuggestions": "暂无 AI 建议",
     "commitMessage": "提交说明",
-    "commit": "创建提交"
+    "commit": "创建提交",
+    "yes": "是",
+    "no": "否"
+  },
+  "collab": {
+    "title": "协作",
+    "navLabel": "协作标签",
+    "contentLabel": "协作内容",
+    "tab": {
+      "issues": "问题",
+      "prs": "拉取请求",
+      "branches": "分支",
+      "fork": "Fork",
+      "authors": "作者",
+      "notifications": "通知"
+    },
+    "issue": {
+      "newTitle": "新问题标题",
+      "kind": "类型",
+      "kind.question": "提问",
+      "kind.method_repro": "复现问题",
+      "kind.failure": "失败",
+      "kind.bug_report": "错误报告",
+      "kind.suggestion": "建议",
+      "status.open": "开启",
+      "status.closed": "关闭",
+      "create": "创建问题",
+      "empty": "暂无问题",
+      "noBody": "（无正文）",
+      "comments": "评论",
+      "addComment": "添加评论",
+      "comment": "评论",
+      "close": "关闭",
+      "reopen": "重新开启"
+    },
+    "pr": {
+      "new": "新建拉取请求",
+      "title": "PR 标题",
+      "source": "源分支",
+      "target": "目标分支",
+      "changedFiles": "变更文件（逗号分隔）",
+      "changedSdfFields": "变更 SDF 字段（逗号分隔）",
+      "changesMethod": "改变方法",
+      "changesData": "改变数据",
+      "changesConclusion": "改变核心结论",
+      "create": "创建 PR",
+      "empty": "暂无拉取请求",
+      "noBody": "（无正文）",
+      "status.open": "开启",
+      "status.merged": "已合并",
+      "status.rejected": "已拒绝",
+      "declaration": "变更声明",
+      "diff": "变更差异",
+      "noDiff": "暂无差异",
+      "requestsRelease": "要求发布新版本",
+      "merge": "合并"
+    },
+    "review": {
+      "title": "评审",
+      "verdict": "结论",
+      "verdict.approve": "通过",
+      "verdict.requestChanges": "请求修改",
+      "verdict.comment": "评论",
+      "body": "评审意见",
+      "submit": "提交评审"
+    },
+    "highRisk": {
+      "title": "高风险合并确认",
+      "description": "此合并涉及以下高风险变更，需显式确认：",
+      "cancel": "取消",
+      "confirm": "确认合并"
+    },
+    "branches": {
+      "new": "新分支名",
+      "create": "创建分支"
+    },
+    "fork": {
+      "title": "Fork 此研究对象",
+      "description": "从当前公开版本创建独立衍生 RO，保留来源关系。",
+      "action": "Fork",
+      "done": "Fork 完成，新 RO：",
+      "source": "来源关系",
+      "sourceRo": "来源 RO",
+      "sourceVersion": "来源版本",
+      "contentHash": "内容哈希",
+      "sourcePermanent": "来源关系永久保留（§8.1），不可移除。"
+    },
+    "authors": {
+      "title": "作者名单",
+      "corresponding": "通讯",
+      "empty": "尚未确认作者名单（§3.4）",
+      "edit": "编辑作者",
+      "userId": "用户 ID"
+    },
+    "contributions": {
+      "title": "事实贡献（CRediT）",
+      "role": "贡献角色",
+      "add": "添加贡献"
+    },
+    "credit": {
+      "conceptualization": "概念化",
+      "methodology": "方法",
+      "software": "软件",
+      "validation": "验证",
+      "data_curation": "数据整理",
+      "visualization": "可视化",
+      "writing": "写作",
+      "supervision": "监督",
+      "investigation": "调研",
+      "resources": "资源",
+      "project_administration": "项目管理",
+      "funding_acquisition": "资金获取"
+    },
+    "notifications": {
+      "title": "通知",
+      "empty": "暂无通知",
+      "markRead": "标为已读",
+      "view": "查看",
+      "type.pull_request.opened": "拉取请求已打开",
+      "type.pull_request.merged": "拉取请求已合并",
+      "type.issue.updated": "问题动态"
+    }
   }
 }

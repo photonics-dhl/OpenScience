@@ -452,7 +452,7 @@
         "id": "4",
         "title": "Phase 1C: GitHub 式科研协作（Branch/Fork/PR/Review/Merge、作者与 CRediT、许可、通知）",
         "description": "建立 MVP 协作闭环：Branch、Issue、Fork、Pull Request、Review、Merge 的数据模型与基础交互（Spec §2.3、§8），作者组与 CRediT 贡献记录（§3.4），三类许可选择与 Fork 继承校验（§6.3），协作事件通知（§15、§16、§18.1）。对应里程碑 Spec §22 Phase 1C。服务于验收主流程 §21.2 步骤 8、11、12。Commit/版本存储底座由 P1B 提供，发布与 AI 审核属 P1D，不在本 Phase 范围。",
-        "status": "in-progress",
+        "status": "done",
         "dependencies": [
           "3"
         ],
@@ -594,7 +594,7 @@
             "id": 10,
             "title": "实现 GitHub 式协作区域前端交互",
             "description": "实现 Issue/PR/Review/Merge/Fork 的前端基础交互，协作区域采用 GitHub 式交互（Spec §2.5 决策 6），桌面与移动端功能一致（§2.5 决策 5）。",
-            "status": "pending",
+            "status": "done",
             "dependencies": [
               "4.3",
               "4.6",
@@ -603,10 +603,11 @@
             "priority": "high",
             "details": "在工作台内实现：Issue 列表与详情、PR 列表与详情（含声明字段表单、变更 diff 展示、Review 逐项意见界面）、Merge 高风险确认对话框（明示触发的风险项）、Fork 入口与来源关系展示、作者与 CRediT 编辑界面（仅作者组可用）；响应式实现，移动端功能不裁剪（§2.5）；可访问性对齐 WCAG AA（§18.3）；文案走国际化架构，中文优先（§2.5 决策 5）。公开 RO 页面的 Issues/PR 标签展示（§4.3）属 P1D 公开页范围，本任务只做登录态协作区域。\n验收: 步骤11,12",
             "testStrategy": "合同测试：前后端 Schema（§21.1）；E2E：另一用户 Fork→Branch→PR、维护者 Review→Merge 全流程（§21.2 步骤 11、12）。",
-            "parentId": "4"
+            "parentId": "4",
+            "updatedAt": "2026-08-04T10:20:07.172Z"
           }
         ],
-        "updatedAt": "2026-08-04T09:42:49.494Z"
+        "updatedAt": "2026-08-04T10:20:07.172Z"
       },
       {
         "id": "5",
@@ -869,9 +870,9 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-08-04T09:42:49.494Z",
+      "lastModified": "2026-08-04T10:20:07.172Z",
       "taskCount": 6,
-      "completedCount": 3,
+      "completedCount": 4,
       "tags": [
         "master"
       ]

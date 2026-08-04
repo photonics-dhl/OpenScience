@@ -1,29 +1,29 @@
 # OpenScience (XGS) 进度日志
 
-## 2026-08-04 — P1C-9 协作通知、事件投递与审计完成：/notifications API，云上 84/84，task-master 4.9 done
+## 2026-08-04 — P1C-10 GitHub 式协作区域前端完成：collab 单页 + tab，next build 通过，task-master 4.10 done，**Phase 1C 全部完成**
 
 ### ✅ Completed
 | 任务 | 详情 |
 |---|---|
-| design gate | 五决策：消费者幂等依赖事件源 / Issue 动态通知 / payload link / 渠道抽象 / 已读 API |
-| 迁移 | 无（Notification 实体 P1C-1 迁移 12 已建） |
-| domain notification/ | notify（渠道分发）+ listNotifications（未读优先 + 分页）+ markNotificationRead（仅本人 + 幂等）+ channels.ts（InApp + Email §24 占位） |
-| issue 补 | createIssue 发 issue.updated 通知（payload 含 link） |
-| API | GET /notifications + POST /notifications/:id/read |
-| 测试 | domain 单测 8 新增（238 总全绿）+ 集成 2 新增（collab 29/29）；**云上集成 84/84**（新增 P1C-9 2 + 既有 82） |
-| task-master 4.9 | done |
+| design gate | 五决策：单页 + tab / 每域组件对 / lib/api.ts 扩展 / 权限显示 / 高风险对话框 |
+| lib/api.ts | 协作端点全封装（issues/prs/branches/fork/authors/contributions/notifications/reviews/merge） |
+| 组件 | CollabTabs + IssueList/Detail + PrList/Detail（声明表单 + diff + Review + Merge）+ ForkPanel + AuthorsPanel + NotificationsPanel + HighRiskDialog（role=dialog + reasons） |
+| 页面 | /research-objects/[id]/collab（tab 切换 + 高风险 confirm 事件桥接） |
+| i18n | collab 命名空间中英（zh/en 键对齐测试） |
+| 测试 | 前端 25/25（collab-state 6 + i18n 2 + 既有 17）；**next build 通过**；云上集成 84/84 不回退 |
+| task-master 4.10 | done — **Phase 1C 10/10 全部完成** |
 
 ### Key Decisions / 坑
-- **消费者幂等（Q1）**：依赖事件源幂等（PR idempotencyKey → 通知单次），零迁移；未来外部事件（P1D-2）加 eventId 唯一列
-- **渠道抽象（Q4）**：NotificationChannel 接口 + InAppChannel（写行）+ EmailChannel 占位（§24 待确认，不写死）
-- **已读（Q5）**：GET /notifications（未读优先 + skip/take）+ POST /:id/read（仅本人 404 + 幂等 + 审计）
-- **审计核对（§17）**：Issue/PR/Review/Fork/作者/许可全部已落 AuditLog ✓；补 notification.read
-- **坑**：`_message` 前缀不被 eslint 忽略 → `void message`；NotificationMessage type re-export 从 channels
+- **单页 + tab（Q1）**：GitHub 式协作区域，移动端横向滚动 tab 不裁剪（§2.5 决策 5）
+- **高风险对话框（Q5）**：后端 409 reasons → HighRiskDialog（role=dialog + focus + Esc）→ confirmHighRisk 重试；confirm 事件桥接（CustomEvent 通知 PrDetail）
+- **作者组编辑（Q4）**：前端 fetch author-change-info 判 ok → canEdit；Merge 按钮后端 403 提示
+- **i18n（§2.5 决策 5）**：collab 命名空间中英 + 键对齐测试
+- **坑**：collab 页相对路径 4 级（../../../..）；`n.payload.link &&` unknown → ReactNode 类型错（typeof 守卫）；`request<T>` 被 markdownlint MD033 当 inline HTML（反引号包）
 
 ### ⏳ Next Steps
-- [x] ~~P1C-9 通知~~ 完成（2026-08-04）：/notifications API，云上 84/84，4.9 done
-- [ ] **P1C-10（task-master 4.10）**：协作前端（Issue/PR/Review 列表页 + 分支切换 + 通知中心，§18 协作区域 GitHub 式）
-- [ ] parked：P1A-3 终审项、P1A-5 deferred ①、/admin TOTP 上线路障、SDF Schema 债务（0.2.0）、病毒扫描实装（P1B-后续）、Version 发布状态机（P1B-后续）、真实 AI 提取（Phase 1D）、协作剩余 1 子任务（P1C-10）
+- [x] ~~P1C-10 协作前端~~ 完成（2026-08-04）：collab 单页，next build 通过，4.10 done
+- [ ] **Phase 1D（task-master 5）**：Hermes Agent 系统——AI Gateway 统一路由 + 异步任务通道 + SDF Extractor + R0-R4 审批 + 发布审核 + 公开页
+- [ ] parked：P1A-3 终审项、P1A-5 deferred ①、/admin TOTP 上线路障、SDF Schema 债务（0.2.0）、病毒扫描实装（P1B-后续）、Version 发布状态机（P1B-后续）、真实 AI 提取（Phase 1D）
 
 ---
 ## 2026-08-04 — P1B-10 SDF 标准导出包生成与校验完成：export API + 脱库校验，云上 58/58，task-master 3.10 done

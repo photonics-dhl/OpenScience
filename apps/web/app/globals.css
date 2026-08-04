@@ -318,3 +318,238 @@ body {
   gap: 10px;
   margin-bottom: 8px;
 }
+
+/* ===== P1C-10 协作区域（§18.2 GitHub 式）===== */
+.collab-page {
+  max-width: 1080px;
+  margin: 0 auto;
+  padding: 16px;
+}
+.collab-tabs {
+  display: flex;
+  gap: 4px;
+  border-bottom: 2px solid var(--color-border);
+  overflow-x: auto; /* 移动端横向滚动，功能不裁剪（§2.5） */
+  margin-bottom: 16px;
+}
+.collab-tab {
+  padding: 8px 14px;
+  background: none;
+  border: none;
+  border-bottom: 2px solid transparent;
+  cursor: pointer;
+  white-space: nowrap;
+  font: inherit;
+}
+.collab-tab.active {
+  border-bottom-color: #2563eb;
+  color: #2563eb;
+  font-weight: 600;
+}
+.collab-content {
+  min-height: 300px;
+}
+.collab-panel {
+  padding: 4px 0;
+}
+.collab-create {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 12px;
+  flex-wrap: wrap;
+}
+.collab-create input,
+.collab-create select {
+  padding: 6px 8px;
+  border-radius: 6px;
+  border: 1px solid var(--color-border);
+  font: inherit;
+}
+.collab-create input {
+  min-width: 200px;
+}
+.collab-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.collab-list li {
+  border-bottom: 1px solid var(--color-border);
+}
+.collab-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  width: 100%;
+  padding: 10px 8px;
+  background: none;
+  border: none;
+  cursor: pointer;
+  font: inherit;
+  text-align: left;
+}
+.collab-row:hover {
+  background: var(--color-bg);
+}
+.collab-row-title {
+  font-weight: 500;
+}
+.collab-row-meta {
+  color: #64748b;
+  font-size: 0.85em;
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+.collab-empty {
+  padding: 16px;
+  color: #94a3b8;
+  text-align: center;
+}
+.issue-badge {
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 0.75em;
+  font-weight: 600;
+}
+.issue-open, .pr-open {
+  background: #dcfce7;
+  color: #166534;
+}
+.issue-closed, .pr-merged {
+  background: #ede9fe;
+  color: #4c1d95;
+}
+.pr-rejected {
+  background: #fee2e2;
+  color: #991b1b;
+}
+.collab-detail-title {
+  margin: 12px 0 4px;
+}
+.collab-meta {
+  color: #64748b;
+  display: flex;
+  gap: 10px;
+  margin-bottom: 8px;
+}
+.collab-body {
+  white-space: pre-wrap;
+  margin-bottom: 12px;
+}
+.collab-decl {
+  list-style: none;
+  padding: 0;
+  font-size: 0.9em;
+}
+.collab-comments {
+  margin-top: 16px;
+}
+.collab-comment {
+  border-left: 3px solid var(--color-border);
+  padding: 6px 10px;
+  margin-bottom: 8px;
+}
+.collab-comment-author {
+  font-weight: 600;
+  font-size: 0.85em;
+  color: #475569;
+}
+.collab-diff {
+  background: var(--color-bg);
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  padding: 10px;
+  font-size: 0.8em;
+  overflow-x: auto;
+  max-height: 240px;
+}
+.collab-form {
+  margin-bottom: 12px;
+}
+.high-risk-dialog {
+  background: #fff;
+  border-radius: 12px;
+  padding: 24px;
+  max-width: 460px;
+  width: 90%;
+}
+.high-risk-title {
+  margin-top: 0;
+  color: #b91c1c;
+}
+.high-risk-reasons {
+  background: #fef2f2;
+  border-radius: 8px;
+  padding: 12px 24px;
+  color: #991b1b;
+}
+.dialog-actions {
+  display: flex;
+  gap: 10px;
+  justify-content: flex-end;
+  margin-top: 16px;
+}
+.btn-danger {
+  background: #dc2626;
+  color: #fff;
+}
+.btn-danger:hover {
+  background: #b91c1c;
+}
+.collab-check {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.9em;
+}
+.collab-dl dt {
+  font-weight: 600;
+  font-size: 0.85em;
+  color: #64748b;
+  margin-top: 8px;
+}
+.collab-dl dd {
+  margin: 2px 0 0;
+  word-break: break-all;
+}
+.collab-hash {
+  font-family: monospace;
+  font-size: 0.8em;
+}
+.collab-note {
+  color: #64748b;
+  font-size: 0.85em;
+}
+.collab-success {
+  background: #dcfce7;
+  color: #166534;
+  border-radius: 8px;
+  padding: 10px;
+}
+.collab-authors {
+  margin-bottom: 12px;
+}
+.collab-author-row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  margin-bottom: 6px;
+}
+.collab-notif {
+  padding: 10px 8px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+}
+.collab-notif.unread {
+  background: #eff6ff;
+}
+.collab-link {
+  color: #2563eb;
+  font-size: 0.85em;
+}
+.collab-actions {
+  margin-top: 16px;
+}
