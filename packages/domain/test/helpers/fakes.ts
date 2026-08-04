@@ -39,11 +39,12 @@ interface FakeDb {
   agentTasks: any[];
   toolApprovals: any[];
   aiReviews: any[];
+  appeals: any[];
 }
 
 /** 内存版 Prisma 子集：覆盖 workspace 领域用到的调用面。 */
 export function createFakePrisma(): { prisma: PrismaClient; db: FakeDb } {
-  const db: FakeDb = { users: [], workspaces: [], memberships: [], workspaceInvitations: [], mailOutbox: [], quotaPolicies: [], usageLedger: [], researchObjects: [], sdfDocuments: [], sdfNodes: [], blobs: [], artifacts: [], branches: [], commits: [], changesets: [], versions: [], versionManifests: [], manifestEntries: [], identifiers: [], publications: [], visibilityGrants: [], visibilityRequests: [], pullRequests: [], issues: [], comments: [], reviews: [], licenseAssignments: [], forkRelations: [], notifications: [], authors: [], contributions: [], agentSessions: [], agentTasks: [], toolApprovals: [], aiReviews: [] };
+  const db: FakeDb = { users: [], workspaces: [], memberships: [], workspaceInvitations: [], mailOutbox: [], quotaPolicies: [], usageLedger: [], researchObjects: [], sdfDocuments: [], sdfNodes: [], blobs: [], artifacts: [], branches: [], commits: [], changesets: [], versions: [], versionManifests: [], manifestEntries: [], identifiers: [], publications: [], visibilityGrants: [], visibilityRequests: [], pullRequests: [], issues: [], comments: [], reviews: [], licenseAssignments: [], forkRelations: [], notifications: [], authors: [], contributions: [], agentSessions: [], agentTasks: [], toolApprovals: [], aiReviews: [], appeals: [] };
   let seq = 0;
   const nextId = () => `00000000-0000-4000-8000-${String(++seq).padStart(12, '0')}`;
   const p2002 = () => {
@@ -657,6 +658,31 @@ export function createFakePrisma(): { prisma: PrismaClient; db: FakeDb } {
         return { ...row };
       },
       findUnique: async ({ where }: any) => db.aiReviews.find((r) => r.versionId === where.versionId) ?? null,
+    },
+    appeal: {
+      create: async ({ data }: any) => {
+        const row = { id: nextId(), status: 'pending', resolvedAt: null, createdAt: new Date(), ...data };
+        db.appeals.push(row);
+        return row;
+      },
+      findFirst: async ({ where }: any) =>
+        db.appeals.find((a) =>
+          (where.versionId === undefined || a.versionId === where.versionId) &&
+          (where.status === undefined || a.status === where.status),
+        ) ?? null,
+      findUnique: async ({ where }: any) => db.appeals.find((a) => a.id === where.id) ?? null,
+      findMany: async ({ where, orderBy }: any) => {
+        const rows = db.appeals.filter((a) =>
+          (where.appellantId === undefined || a.appellantId === where.appellantId),
+        );
+        if (orderBy?.createdAt === 'desc') rows.sort((a, b) => b.createdAt - a.createdAt);
+        return rows;
+      },
+      update: async ({ where, data }: any) => {
+        const row = db.appeals.find((a) => a.id === where.id);
+        Object.assign(row, data);
+        return { ...row };
+      },
     },
     pullRequest: {
       count: async ({ where }: any) =>

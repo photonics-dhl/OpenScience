@@ -1,5 +1,162 @@
 # OpenScience (XGS) 进度日志
 
+## 2026-08-04 — P1D-7 审核申诉流程与 Moderator 队列完成：迁移 17 + /appeals，云上 97/97，task-master 5.7 done
+
+### ✅ Completed
+| 任务 | 详情 |
+|---|---|
+| design gate | 五决策：迁移 17 / blocked 才可申诉 / 角色隔离 / 事件通知 / 重审与申诉并存 |
+| migration 17 | appeals（versionId + aiReviewId + reason + status + resolution Json + moderatorId + resolvedAt）+ rollback |
+| domain appeal/ | createAppeal（blocked 校验 + 幂等去重 + appeal.created 通知 + 审计）+ listAppeals（moderator 队列 / appellant 自己）+ resolveAppeal（moderator/platform_admin + resolution + 审计） |
+| API | POST /appeals + GET /appeals + POST /appeals/:id/resolve |
+| 测试 | domain 单测 7 新增（268 总全绿）+ 集成 2 新增；**云上集成 97/97**（新增 P1D-7 2 + 既有 95）；迁移 17 applied |
+| task-master 5.7 | done |
+
+### Key Decisions / 坑
+- **§11.3**：AIReview 稳定记录 + blocked 后申诉 + 修改重审（P1D-5 管线 upsert 覆盖）
+- **§3.3 角色隔离**：platformRole ∈ {moderator, platform_admin} 看全部 pending 队列；appellant 仅自己
+- **人工处理审计（§17）**：resolveAppeal 落 appeal.resolve + resolution {decision, note}
+- **§16**：appeal.created 通知（P1C-9 通道）
+- **坑**：fake appeal 需 support findFirst/findMany/update；moderator 判定查 user.platformRole
+
+### ⏳ Next Steps
+- [x] ~~P1D-7 申诉流程~~ 完成（2026-08-04）：迁移 17 + /appeals，云上 97/97，5.7 done
+- [ ] **P1D-8（task-master 5.8）**：发布事务与状态机推进（§4.1 draft→under_review→approved→published + 时间戳/unique ID/哈希 + version.published 事件 + 不可变）
+- [ ] parked：P1A-3 终审项、P1A-5 deferred ①、/admin TOTP 上线路障、SDF Schema 债务（0.2.0）、病毒扫描实装（P1B-后续）、Version 发布状态机（P1B-后续）
+
+---
+## 2026-08-04 — P1D-1 AI Gateway 统一路由与调用日志完成：ai-gateway 包，云上 86/86，task-master 5.1 done
+
+### ✅ Completed
+| 任务 | 详情 |
+|---|---|
+| design gate | 五决策：fetch 直连 / 配置化回退 / audit 日志脱敏 / 手写 schema 守卫 / 流式占位 |
+| ai-gateway 包 | provider.ts（Provider 接口 + OpenAiCompatProvider fetch 直连）+ gateway.ts（AiGateway：路由/回退/调用日志/completeStructured/stream）+ errors.ts |
+| config | ApiEnv.ai（enabled/baseUrl/apiKey/primaryModel/fallbackModels，§24 占位） |
+| 测试 | ai-gateway 单测 9 新增（9/9 绿）+ 集成 2 新增；**云上集成 86/86**（新增 P1D-1 2 + 既有 84） |
+| task-master 5.1 | done |
+
+### Key Decisions / 坑
+- **fetch 直连（Q1）**：OpenAI 兼容 /chat/completions，零 SDK 依赖 + 可 mock；60s 超时
+- **回退（Q2）**：providers 列表，primary 失败逐级回退 + fallbackReason 记录；全败 → ALL_PROVIDERS_FAILED
+- **调用日志（Q3）**：deps.audit（action='ai.gateway.call'，字段：provider/model/inputTokens/outputTokens/latencyMs/error/fallbackReason）+ **脱敏**（只记元数据，绝不记 prompt/密钥，§17）
+- **结构化（Q4）**：completeStructured + 手写 SchemaGuard + 重试上限 2
+- **流式（Q5）**：stream() 接口占位（STREAM_NOT_IMPLEMENTED，5.3 实装）
+- **坑**：apps/api 需加 @openscience/ai-gateway 依赖（集成测试 import 失败）；`_opts`/`_message` 不被 eslint 忽略 → void
+
+### ⏳ Next Steps
+- [x] ~~P1D-1 AI Gateway~~ 完成（2026-08-04）：ai-gateway 包，云上 86/86，5.1 done
+- [ ] **P1D-2（task-master 5.2）**：Hermes 会话与异步任务通道（AgentSession/AgentTask + 队列 + SSE 进度）
+- [ ] parked：P1A-3 终审项、P1A-5 deferred ①、/admin TOTP 上线路障、SDF Schema 债务（0.2.0）、病毒扫描实装（P1B-后续）、Version 发布状态机（P1B-后续）
+
+---
+
+## 2026-08-04 — P1D-2 Hermes 会话与异步任务通道完成：迁移 15 + agent-worker，云上 88/88，task-master 5.2 done
+
+### ✅ Completed
+| 任务 | 详情 |
+|---|---|
+| design gate | 五决策：三表迁移 / Redis List 队列 / 轮询进度 / worker handler 注册表 / 配额校验 |
+| migration 15 | agent_sessions/agent_tasks/tool_approvals + AgentTaskStatus 枚举 + rollback |
+| domain agent/ | createAgentSession/submitAgentTask（幂等键 + AI Credit 配额 §9.1）/getAgentTask/listAgentSessions/markTaskProgress（状态机 + 终态幂等 skip） |
+| agent-worker | pollOnce（BRPOPLPUSH Redis 队列 + handler 注册表 + markTaskProgress）+ 主循环 |
+| API | POST/GET /agent/sessions + POST /agent/tasks + GET /agent/tasks/:id |
+| 测试 | domain 单测 5 新增（243 总全绿）+ 集成 2 新增；**云上集成 88/88**（新增 P1D-2 2 + 既有 86）；迁移 15 applied |
+| task-master 5.2 | done |
+
+### Key Decisions / 坑
+- **队列（Q2）**：Redis List BRPOPLPUSH + processing 队列（崩溃恢复）；agent-worker poll 消费
+- **消费者幂等（§16）**：任务状态机 pending→running→succeeded 单向前进；succeeded 后重放 → skip（不重复副作用）
+- **进度（Q3）**：轮询 API（DB 进度，断线恢复天然）；SSE 5.3 增强
+- **配额（Q5，§9.1）**：submitAgentTask 时 getBalance(ai_credit) ≤ 0 → INSUFFICIENT_CREDIT 409
+- **坑**：Redis 队列跨运行持久化 → 陈旧任务 id poll 消费（findUnique null）→ beforeAll/afterAll 清 agent:queue；ai-gateway audit record 需 await（fire-and-forget 竞态 → 测试 undefined）；domain 需 ioredis type dep
+
+### ⏳ Next Steps
+- [x] ~~P1D-2 异步任务通道~~ 完成（2026-08-04）：迁移 15 + agent-worker，云上 88/88，5.2 done
+- [ ] **P1D-3（task-master 5.3）**：SDF Extractor 建议式提取与确认写入（§9.2 + §5.4）
+- [ ] parked：P1A-3 终审项、P1A-5 deferred ①、/admin TOTP 上线路障、SDF Schema 债务（0.2.0）、病毒扫描实装（P1B-后续）、Version 发布状态机（P1B-后续）
+
+---
+
+## 2026-08-04 — P1D-3 SDF Extractor 建议式提取完成：worker handler + 编辑器通路，云上 90/90，task-master 5.3 done
+
+### ✅ Completed
+| 任务 | 详情 |
+|---|---|
+| design gate | 五决策：worker sdf.extract handler / 建议存任务 result / 复用 P1B-8 草稿确认 / 轮询进度 / 按钮触发 |
+| agent-worker extractor.ts | sdfCoreGuard（六字段 + schemaVersion const 校验 §5.1/§5.3）+ extractHandler（completeStructured + 不写 SDF §9.2） |
+| worker 重构 | createHandlers(gateway) + createPollOnce（handler 注册表 + 注入 gateway） |
+| 前端 | lib/api submitExtractTask/getAgentTask + lib/suggestions coreToSuggestions（逐字段 diff §5.4）+ SuggestionsPanel「AI 提取」按钮 + 进度条 + 轮询 |
+| 测试 | agent-worker 单测 4 + web 3 新增（32 总）；**云上集成 90/90**（新增 P1D-3 2 + 既有 88） |
+| task-master 5.3 | done |
+
+### Key Decisions / 坑
+- **提取不写 SDF（§9.2）**：extractHandler 只产出 core 建议，用户确认后经前端 updateSdf 落库
+- **Schema 校验（§9.3）**：sdfCoreGuard 对齐 sdf-schema coreSchema（schemaVersion const '0.1.0' + 六字段 string）
+- **确认写入（§5.4）**：coreToSuggestions → SuggestionsPanel 逐字段 apply → 草稿（P1B-8）→ updateSdf
+- **R1 挂接**：整批批准升级 P1D-4
+- **坑**：createPollOnce 重构破坏 agent.integration（pollOnce 直 import → createPollOnce）；`while(true)` no-constant-condition 不报但 eslint-disable unused 报
+
+### ⏳ Next Steps
+- [x] ~~P1D-3 SDF Extractor~~ 完成（2026-08-04）：worker + 编辑器通路，云上 90/90，5.3 done
+- [ ] **P1D-4（task-master 5.4）**：R0-R4 分级审批与统一确认交互（§9.4）
+- [ ] parked：P1A-3 终审项、P1A-5 deferred ①、/admin TOTP 上线路障、SDF Schema 债务（0.2.0）、病毒扫描实装（P1B-后续）、Version 发布状态机（P1B-后续）
+
+---
+
+## 2026-08-04 — P1D-4 R0-R4 分级审批与统一确认交互完成：approval domain + /agent/approvals，云上 92/92，task-master 5.4 done
+
+### ✅ Completed
+| 任务 | 详情 |
+|---|---|
+| design gate | 五决策：approvalLevel 纯函数 / ToolApproval 状态机含撤销 / buildConfirmation 五要素 / owner 权限 / 挂接登记 |
+| 迁移 | 无（ToolApproval 表 P1D-2 迁移 15 已建） |
+| domain approval/ | approvalLevel（R0-R4 映射 + 未知→R3 安全默认）+ buildConfirmation（§9.4 五要素 i18n）+ createApproval（R0 自动 + 同批去重）/approveApproval/rejectApproval/revokeApproval（状态机 + owner 校验 + 审计）/listPendingApprovals |
+| API | GET /agent/approvals/pending + POST /:id/{approve,reject,revoke} |
+| 测试 | domain 单测 10 新增（253 总全绿）+ 集成 2 新增；**云上集成 92/92**（新增 P1D-4 2 + 既有 90） |
+| task-master 5.4 | done |
+
+### Key Decisions / 坑
+- **分级（Q1，§9.4）**：R0 读自动 / R1 草稿批量 / R2 协作任务内 / R3 Merge·发布·作者·许可·可见性 / R4 删除·所有权·密钥；未知 → R3
+- **五要素（Q3）**：what/scope/reversible/estCost/estTime（buildConfirmation i18n 模板，中文优先）
+- **同批去重（§9.4）**：同 task+scope approved → 返回既有不重复弹窗
+- **撤销（§2.5-7）**：approved → revoked（状态机含）
+- **坑**：approvalLevel 返回 number 需 as ApprovalLevel 断言；fake toolApproval update 需模仿 Prisma undefined 忽略（否则 scope 被覆盖）
+
+### ⏳ Next Steps
+- [x] ~~P1D-4 R0-R4 审批~~ 完成（2026-08-04）：approval domain，云上 92/92，5.4 done
+- [ ] **P1D-5（task-master 5.5）**：发布审核硬阻断检查管线（§11.1 七类硬阻断 + AIReview 实体）
+- [ ] parked：P1A-3 终审项、P1A-5 deferred ①、/admin TOTP 上线路障、SDF Schema 债务（0.2.0）、病毒扫描实装（P1B-后续）、Version 发布状态机（P1B-后续）
+
+---
+
+## 2026-08-04 — P1D-5 发布审核硬阻断检查管线完成：迁移 16 + 七类硬阻断，云上 94/94，task-master 5.5 done
+
+### ✅ Completed
+| 任务 | 详情 |
+|---|---|
+| design gate | 五决策：迁移 16 / 恶意代码扩展名黑名单 / Notification 事件 / 成员触发 / POST+GET review |
+| migration 16 | ai_reviews（versionId @unique + status + hardBlocks/warnings Json）+ rollback |
+| domain review/blocking.ts | 纯函数：checkCoreCompleteness（§5.1 六字段）/checkMaliciousArtifact（§11.1 危险扩展名+MIME）/checkSensitiveContent（§17 身份证/密钥/令牌）/checkProhibitedContent |
+| domain review/publish-review.ts | runPublicationReview（七类 + AIReview upsert + 事件 + 审计）+ getPublicationReview（§11.3 稳定记录） |
+| API | POST/GET /versions/:versionId/review |
+| 测试 | domain 单测 8 新增（261 总全绿）+ 集成 2 新增；**云上集成 94/94**（新增 P1D-5 2 + 既有 92）；迁移 16 applied |
+| task-master 5.5 | done |
+
+### Key Decisions / 坑
+- **七类硬阻断（§11.1）**：缺字段（版本 manifest core）/ 恶意代码 / 隐私泄露 / 违法内容 / 权限无法确认（非创建者）/ 缺许可 / manifest 缺失
+- **AIReview（§15）**：versionId 唯一 + upsert 幂等 + 稳定可引用（§11.3 申诉）
+- **事件（§16）**：ai_review.completed Notification
+- **Safety Reviewer 不替代人工（§9.2）**：登记
+- **坑**：core 应读**版本 manifest coreJson**（§7.2.3 快照）而非 sdfDocument（commit 不更新 sdfDocument）；fake version.findUnique 需 manifest include；entries 空 = 纯文本版本合法（仅校验 coreJson 存在）
+
+### ⏳ Next Steps
+- [x] ~~P1D-5 发布审核硬阻断~~ 完成（2026-08-04）：迁移 16 + 七类，云上 94/94，5.5 done
+- [ ] **P1D-6（task-master 5.6）**：发布审核警告层与结构化审核报告（§11.2 七类警告 + 证据位置 + 不确定性）
+- [ ] parked：P1A-3 终审项、P1A-5 deferred ①、/admin TOTP 上线路障、SDF Schema 债务（0.2.0）、病毒扫描实装（P1B-后续）、Version 发布状态机（P1B-后续）
+
+---
+
 ## 2026-08-04 — P1D-6 发布审核警告层与结构化审核报告完成：review.analyze handler，云上 95/95，task-master 5.6 done
 
 ### ✅ Completed
@@ -23,6 +180,8 @@
 - [x] ~~P1D-6 警告层~~ 完成（2026-08-04）：review.analyze handler，云上 95/95，5.6 done
 - [ ] **P1D-7（task-master 5.7）**：审核申诉流程与 Moderator 队列（§11.3 稳定记录 + Appeal + 人工处理审计）
 - [ ] parked：P1A-3 终审项、P1A-5 deferred ①、/admin TOTP 上线路障、SDF Schema 债务（0.2.0）、病毒扫描实装（P1B-后续）、Version 发布状态机（P1B-后续）
+
+---
 
 ---
 ## 2026-08-04 — P1B-10 SDF 标准导出包生成与校验完成：export API + 脱库校验，云上 58/58，task-master 3.10 done

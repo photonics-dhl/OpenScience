@@ -713,7 +713,7 @@
             "id": 7,
             "title": "实现审核申诉流程与 Moderator 队列",
             "description": "实现发布审核失败后的申诉通道：生成稳定审核记录，用户可修改重审或提交申诉，申诉进入 Moderator 队列，人工结果和理由写入审计日志（Spec §11.3、§2.3-4）。",
-            "status": "pending",
+            "status": "done",
             "dependencies": [
               "5.5",
               "4"
@@ -721,7 +721,8 @@
             "priority": "medium",
             "details": "要点：1) 审核失败后生成稳定可引用的审核记录（Spec §11.3）；2) 用户可选择修改后重审（重新走 P1D-5 管线）或提交申诉（Appeal 实体，Spec §15）；3) 申诉进入 Moderator 队列，仅 Moderator/Admin 角色可处理（角色模型来自 P1A，Spec §3.3）；4) 人工处理结果与理由写入审计日志（Spec §11.3、§17 全部写操作审计 MUST）；5) 发出 appeal.created 事件并触发通知（Spec §16，通知通道来自 P1C）。涉及模块：apps/api /reviews、/admin 模块、apps/web 审核记录与申诉页。\n验收: -",
             "testStrategy": "集成测试（Spec §21.1）：申诉创建 → 队列可见性按角色隔离 → 人工处理结果落审计日志；合同测试：申诉 API Schema。验收主流程未含申诉步骤，按完整性要求覆盖。",
-            "parentId": "5"
+            "parentId": "5",
+            "updatedAt": "2026-08-04T13:23:31.865Z"
           },
           {
             "id": 8,
@@ -754,7 +755,7 @@
             "parentId": "5"
           }
         ],
-        "updatedAt": "2026-08-04T12:44:20.595Z"
+        "updatedAt": "2026-08-04T13:23:31.865Z"
       },
       {
         "id": "6",
@@ -877,7 +878,7 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-08-04T12:44:20.596Z",
+      "lastModified": "2026-08-04T13:23:31.865Z",
       "taskCount": 6,
       "completedCount": 4,
       "tags": [

@@ -161,6 +161,11 @@ export {
   approvalLevel, buildConfirmation, createApproval, approveApproval, rejectApproval, revokeApproval, listPendingApprovals,
   type ApprovalLevel, type ApprovalStatus, type ConfirmationSpec, type ApprovalView, type CreateApprovalInput,
 } from './approval/approvals';
+export { AppealError, type AppealErrorCode } from './appeal/errors';
+export {
+  createAppeal, listAppeals, resolveAppeal,
+  type AppealView,
+} from './appeal/appeals';
 export { buildExportPackage, classifyArtifact, type ExportFile } from './export/packager';
 export { validateExportPackage, type ExportValidationResult } from './export/validate';
 export { buildManifest, type BuildManifestInput } from './export/manifest';

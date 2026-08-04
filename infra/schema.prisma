@@ -55,6 +55,8 @@ model User {
   notifications            Notification[]
   agentSessions            AgentSession[]
   agentApprovals           ToolApproval[]        @relation("ToolApprover")
+  appealsFiled             Appeal[]              @relation("Appellant")
+  appealsModerated         Appeal[]              @relation("Moderator")
 
   @@map("users")
 }
@@ -296,6 +298,7 @@ model ResearchObject {
   licenseAssignments LicenseAssignment[]
   agentSessions       AgentSession[]
   aiReviews           AiReview[]
+  appeals             Appeal[]
 
   @@index([workspaceId])
   @@map("research_objects")
@@ -444,6 +447,7 @@ model Version {
   forkSources        ForkRelation[]
   licenseAssignments LicenseAssignment[]
   aiReview           AiReview?
+  appeals            Appeal[]
 
   @@unique([researchObjectId, versionNo])
   @@index([researchObjectId])
@@ -819,7 +823,34 @@ model AiReview {
 
   version        Version        @relation(fields: [versionId], references: [id], onDelete: Cascade)
   researchObject ResearchObject @relation(fields: [researchObjectId], references: [id], onDelete: Cascade)
+  appeals        Appeal[]
 
   @@index([researchObjectId])
   @@map("ai_reviews")
+}
+
+// --- P1D-7：审核申诉与 Moderator 队列（§11.3 + §15 Appeal + §16 appeal.created）---
+
+model Appeal {
+  id               String   @id @default(uuid()) @db.Uuid
+  versionId        String   @map("version_id") @db.Uuid
+  researchObjectId String   @map("research_object_id") @db.Uuid
+  aiReviewId       String   @map("ai_review_id") @db.Uuid
+  appellantId      String   @map("appellant_id") @db.Uuid
+  reason           String
+  status           String   @default("pending") // pending / resolved / rejected
+  moderatorId      String?  @map("moderator_id") @db.Uuid
+  resolution       Json?
+  createdAt        DateTime @default(now()) @map("created_at")
+  resolvedAt       DateTime? @map("resolved_at")
+
+  version        Version        @relation(fields: [versionId], references: [id], onDelete: Cascade)
+  researchObject ResearchObject @relation(fields: [researchObjectId], references: [id], onDelete: Cascade)
+  aiReview       AiReview       @relation(fields: [aiReviewId], references: [id], onDelete: Restrict)
+  appellant      User           @relation("Appellant", fields: [appellantId], references: [id], onDelete: Restrict)
+  moderator      User?          @relation("Moderator", fields: [moderatorId], references: [id], onDelete: SetNull)
+
+  @@index([versionId])
+  @@index([status])
+  @@map("appeals")
 }
