@@ -403,16 +403,17 @@
             "id": 8,
             "title": "构建三栏 SDF 编辑器桌面端",
             "description": "实现左侧大纲、中间编辑区、右侧 SDF/AI 面板的三栏编辑器，支持 Markdown/富文本正文、附件与版本导航（Spec §5.4、§2.5.2、验收主流程步骤 3）。",
-            "status": "pending",
+            "status": "done",
             "dependencies": [
               "3.1",
               "3.2",
               "3.4"
             ],
             "priority": "high",
-            "details": "左栏：章节大纲、实验、图表、数据、代码和版本导航；中栏：Markdown/富文本正文与附件编辑（附件走 P1B-3 上传管线）；右栏：六字段提取结果、AI 建议、引用、审核与关系图入口（§5.4、§2.5.2）；AI 提取结果必须以建议/差异形式展示、用户确认后才能写入 SDF（§5.4 MUST）——本任务实现建议/差异确认 UI 机制与本地数据通路，真实 AI 提取由 Phase 1D SDF Extractor 接入；编辑自动保存草稿，错误提示含重试、保存草稿和问题定位（§18.3）；版本导航消费 P1B-4/P1B-5 的版本与 diff 数据；中文优先、首日采用中英文国际化架构（§2.5.5）。\n验收: 步骤3,5",
+            "details": "左栏：章节大纲、实验、图表、数据、代码和版本导航；中栏：Markdown/富文本正文与附件编辑（附件走 P1B-3 上传管线）；右栏：六字段提取结果、AI 建议、引用、审核与关系图入口（§5.4、§2.5.2）；AI 提取结果必须以建议/差异形式展示、用户确认后才能写入 SDF（§5.4 MUST）——本任务实现建议/差异确认 UI 机制与本地数据通路，真实 AI 提取由 Phase 1D SDF Extractor 接入；编辑自动保存草稿，错误提示含重试、保存草稿和问题定位（§18.3）；版本导航消费 P1B-4/P1B-5 的版本与 diff 数据；中文优先、首日采用中英文国际化架构（§2.5.5）。\n验收: 步骤3,5\n<info added on 2026-08-04T01:10:27.257Z>\n完成时间：2026-08-04\n\n**设计决策（Design Gates）**：\n1. Markdown（react-markdown + remark-gfm，§5.4 Markdown 先行）\n2. next-intl（中英资源文件，中文优先 §2.5.5）\n3. React Context + useReducer（草稿单一职责）\n4. localStorage 草稿（§18.3 自动保存）\n5. AI 建议右栏预置演示（Phase 1D extractor 接同通路）\n\n**落点**：\n- apps/web：lib/api.ts（fetch 封装对接现有 API）+ lib/editor-state.ts（reducer + 草稿持久化）+ lib/suggestions.ts（建议状态机 + diff 应用）\n- components/editor/：EditorLayout（三栏 240+300px）+ OutlinePanel（六字段大纲 + 版本导航）+ CoreEditor（Markdown 六字段编辑 + 预览切换）+ SuggestionsPanel（建议 diff 卡片）+ ArtifactUploader（P1B-3 管线）\n- app/research-objects/[id]/edit/page.tsx：主页面整合（草稿恢复横幅 + 错误面板 + 保存/提交 + 版本导航 diff）\n- i18n：messages/zh.json + en.json（界面文案全走 useTranslations）\n\n**验收通过**：\n- next build 通过\n- 三栏布局 + Markdown + 附件\n- §5.4 建议确认才写 SDF（应用→草稿→保存 PATCH）\n- 版本导航（P1B-4/5 diff）\n- 草稿自动保存 + 错误提示\n- i18n 中英\n\n**测试**：web 13（reducer 4 + 草稿 4 + 建议 4 + 合同 1）；next build 通过；本地门禁全绿\n\n**坑**：\n1. page 组件相对路径 4 层（app/research-objects/[id]/edit → ../../../../components）\n2. knip web project 缺 components/lib 导致 react-markdown 误报 → knip.json 加 project glob\n3. ApiClientError/ApiErrorBody 非 export（knip unused export）\n4. localStorage node 测试需 mock（globalThis.localStorage）\n5. edit_field 的 schemaVersion 守卫类型无重叠 → 删（Omit 已保证）\n</info added on 2026-08-04T01:10:27.257Z>",
             "testStrategy": "单元测试：编辑器状态与草稿恢复逻辑（§21.1 单元层）；合同测试：编辑器与 /sdf API 的 Schema 合同（§21.1 合同层）；E2E：编辑器输入内容、以差异形式确认建议写入 SDF（§21.2 步骤 3、5，步骤 5 的 AI 来源在 Phase 1D 联调）。",
-            "parentId": "3"
+            "parentId": "3",
+            "updatedAt": "2026-08-04T01:10:03.046Z"
           },
           {
             "id": 9,
@@ -443,7 +444,7 @@
             "parentId": "3"
           }
         ],
-        "updatedAt": "2026-08-04T00:16:56.927Z"
+        "updatedAt": "2026-08-04T01:10:03.046Z"
       },
       {
         "id": 4,
@@ -856,13 +857,13 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-08-04T00:16:56.927Z",
+      "lastModified": "2026-08-04T01:10:03.046Z",
       "taskCount": 6,
       "completedCount": 2,
       "tags": [
         "master"
       ],
-      "created": "2026-08-04T00:17:03.191Z",
+      "created": "2026-08-04T01:10:12.561Z",
       "description": "Tasks for master context"
     }
   }

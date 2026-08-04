@@ -19,7 +19,7 @@
 | `scripts/invite.mjs` | 邀请码管理 CLI（create/list/revoke，P1A-3） | 活文档 |
 | `scripts/seed-quota.mjs` | 配额占位值幂等 upsert CLI（--dry-run/--confirm，P1A-7，数值集中 `packages/domain/src/usage/seed-data.ts`） | 活文档 |
 | `scripts/cloud-sync.mjs` | 云上同步（tar-over-ssh，排除 .env/.git/node_modules/dist，P1A-7 固化） | 活文档 |
-| `apps/` | `web` 可启动空壳；`api` 已含 Fastify `/auth`（P1A-3）+ `/workspaces`（P1A-4）+ RBAC preHandler 授权守卫（P1A-5）+ `/admin/audit-logs`（P1A-6）+ `/usage` 与 `/admin/quota-policies`、`/admin/credits`、`/admin/usage`（P1A-7）+ 安全基线 `src/security/`（P1A-8）+ **`/research-objects` + `/sdf`（P1B-2）** + **`/artifacts`（P1B-3）** + **`/commits` + `/versions` + comparison（P1B-4/5）** + **`/research/:publicId` 公开 URL（P1B-6）** + **`/visibility` + `/visibility-grants`（P1B-7）**；`agent-worker`/`science-worker`/`sandbox-controller` 空壳 | 骨架 |
+| `apps/` | `web` 已实现三栏 SDF 编辑器（P1B-8：lib/api + editor-state + suggestions + components/editor 五组件 + app/research-objects/[id]/edit + i18n 中英）；`api` 已含 Fastify `/auth`（P1A-3）+ `/workspaces`（P1A-4）+ RBAC preHandler 授权守卫（P1A-5）+ `/admin/audit-logs`（P1A-6）+ `/usage` 与 `/admin/quota-policies`、`/admin/credits`、`/admin/usage`（P1A-7）+ 安全基线 `src/security/`（P1A-8）+ **`/research-objects` + `/sdf`（P1B-2）** + **`/artifacts`（P1B-3）** + **`/commits` + `/versions` + comparison（P1B-4/5）** + **`/research/:publicId` 公开 URL（P1B-6）** + **`/visibility` + `/visibility-grants`（P1B-7）**；`agent-worker`/`science-worker`/`sandbox-controller` 空壳 | 骨架 |
 | `packages/` | 11 个领域包 + **diff 包（P1B-5）+ identity 包（P1B-6）**；database/storage 已实现 P1A-2；storage 已加 P1B-3 `blob.ts`；versioning 已实现 P1B-4；identity 已实现 P1B-6；database 已加 P1A-8 `rate-limit.ts`；auth 已实现 P1A-3 + P1A-9；domain 已实现 P1A-4/5/7 + P1B-2/3/4/5/6/7（research-object/artifact/commit/diff/identity/visibility）；config 已加 P1B-3 storage + P1B-6 publicIdPrefix；sdf-schema 已实现 P1B-1；其余占位；云上集成 55/55 全绿（2026-08-04） | 已实现 |
 | `.cursor/` | Cursor 编辑器配置 | 工具自管 |
 | `.taskmaster/` | task-master 任务状态 | 工具自管 |
@@ -67,6 +67,8 @@
 | `docs/plans/2026-08-04-p1b-6-identity-service-plan.md` | P1B-6 标识层与时间戳服务实施计划（已执行完毕，云上 50/50，task-master 3.6 done 2026-08-04） | 活文档 |
 | `docs/specs/2026-08-04-p1b-7-visibility-permissions-design.md` | P1B-7 RO 可见性模型与 API 权限强制设计（design gate 已确认：五决策，代码已实现 2026-08-04） | 活文档 |
 | `docs/plans/2026-08-04-p1b-7-visibility-permissions-plan.md` | P1B-7 RO 可见性模型与 API 权限强制实施计划（已执行完毕，云上 55/55，task-master 3.7 done 2026-08-04） | 活文档 |
+| `docs/specs/2026-08-04-p1b-8-sdf-editor-design.md` | P1B-8 三栏 SDF 编辑器桌面端设计（design gate 已确认：五决策，代码已实现 2026-08-04） | 活文档 |
+| `docs/plans/2026-08-04-p1b-8-sdf-editor-plan.md` | P1B-8 三栏 SDF 编辑器桌面端实施计划（已执行完毕，next build 通过，task-master 3.8 done 2026-08-04） | 活文档 |
 | `docs/progress.md` | 进度日志，新条目置顶 | 活文档 |
 | `docs/handoff/` | 交接文档目录（阶段边界/换 agent/换电脑，必须入库） | 活文档 |
 | `docs/handoff/2026-07-28-before-p1a-2-handoff.md` | P1A-2 前交接：Phase 0 Accepted、P1A-1 done、下一任务 P1A-2 | 活文档 |
@@ -85,7 +87,8 @@
 | `docs/handoff/2026-08-04-p1b-4-version-engine-done-handoff.md` | P1B-4 Commit/Manifest 版本引擎收口交接：迁移 9 + /commits /versions API，云上 41/41，3.4 done，下一任务 P1B-5 Diff 服务 | 活文档 |
 | `docs/handoff/2026-08-04-p1b-5-diff-service-done-handoff.md` | P1B-5 多类型确定性 Diff 服务收口交接：packages/diff 九类 + comparison API，云上 45/45，3.5 done，下一任务 P1B-6 标识层 | 活文档 |
 | `docs/handoff/2026-08-04-p1b-6-identity-service-done-handoff.md` | P1B-6 标识层与时间戳服务收口交接：packages/identity + 迁移 10 + /research URL，云上 50/50，3.6 done，下一任务 P1B-7 可见性 | 活文档 |
-| `docs/handoff/2026-08-04-p1b-7-visibility-done-handoff.md` | P1B-7 RO 可见性模型收口交接：迁移 11 + 三态矩阵 + 扩大审批记录，云上 55/55，3.7 done，下一任务 P1B-8 | 活文档（当前最新） |
+| `docs/handoff/2026-08-04-p1b-7-visibility-done-handoff.md` | P1B-7 RO 可见性模型收口交接：迁移 11 + 三态矩阵 + 扩大审批记录，云上 55/55，3.7 done，下一任务 P1B-8 编辑器 | 活文档 |
+| `docs/handoff/2026-08-04-p1b-8-sdf-editor-done-handoff.md` | P1B-8 三栏 SDF 编辑器收口交接：apps/web 三栏 + 建议确认 + 版本导航，next build 通过，3.8 done，下一任务 P1B-9 | 活文档（当前最新） |
 | `docs/CODEBASE_AUDIT.md` | Phase 0 Scholars Tea 只读审计报告（地图/模块分类/风险登记/迁移含义） | 活文档 |
 | `docs/proposals/` | 方案/脑暴稿 | 空（旧方案0723已废弃不归档） |
 | `docs/decisions/` | 决策记录 ADR | ADR-001 已接受；ADR-002 已建 |

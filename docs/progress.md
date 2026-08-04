@@ -1,5 +1,30 @@
 # OpenScience (XGS) 进度日志
 
+## 2026-08-04 — P1B-8 三栏 SDF 编辑器桌面端完成：apps/web 编辑器 + 建议确认 + 版本导航，next build 通过，task-master 3.8 done
+
+### ✅ Completed
+| 任务 | 详情 |
+|---|---|
+| design gate | 五决策：Markdown/react-markdown + next-intl + useReducer + localStorage 草稿 + 预置建议 |
+| web 基础设施 | lib/api.ts（fetch 封装对接现有 API）+ lib/editor-state.ts（reducer + 草稿）+ lib/suggestions.ts（建议状态机） |
+| 三栏布局 | EditorLayout（240+300px）+ OutlinePanel（六字段大纲 + 版本导航）+ CoreEditor（Markdown 六字段 + 预览）+ SuggestionsPanel（建议 diff 卡片）+ ArtifactUploader（P1B-3 管线） |
+| 主页面 | app/research-objects/[id]/edit：草稿恢复横幅 + 错误面板 + 保存/提交 + 版本 diff 导航 |
+| i18n | messages/zh.json + en.json（§2.5.5 中文优先，文案全走 useTranslations） |
+| 测试 | web 13（reducer 4 + 草稿 4 + 建议 4 + 合同 1）；next build 通过；本地门禁全绿 |
+| task-master 3.8 | done + details |
+
+### Key Decisions / 坑
+- **五决策**：Markdown（§5.4 Markdown 先行）；next-intl（§2.5.5 中文优先）；useReducer 草稿；localStorage（§18.3 自动保存）；预置建议（Phase 1D extractor 接同通路）
+- **§5.4 MUST 建议确认**：应用 → 写草稿（不直接写 SDF）→ 保存 PATCH 落库
+- **§18.3 错误提示**：重试/保存草稿/问题定位
+- page 组件相对路径 4 层；knip web project 加 components/lib glob；localStorage node 测试 mock
+
+### ⏳ Next Steps
+- [x] ~~P1B-8 编辑器~~ 完成（2026-08-04）：apps/web 三栏 + next build，3.8 done
+- [ ] **P1B-9（task-master 3.9）**：待任务清单
+- [ ] parked：P1A-3 终审项、P1A-5 deferred ①、/admin TOTP 上线路障、SDF Schema 债务（0.2.0）、病毒扫描实装（P1B-后续）、Version 发布状态机（P1B-后续）、真实 AI 提取（Phase 1D SDF Extractor）
+
+---
 ## 2026-08-04 — P1B-7 RO 可见性模型与 API 权限强制完成：迁移 11 + 三态矩阵 + 扩大审批记录，云上 55/55，task-master 3.7 done
 
 ### ✅ Completed

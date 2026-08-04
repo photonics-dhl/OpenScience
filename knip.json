@@ -8,7 +8,7 @@
       "ignoreBinaries": ["docker-compose"]
     },
     "apps/web": {
-      "project": ["app/**/*.{ts,tsx}", "*.{ts,mjs}"]
+      "project": ["app/**/*.{ts,tsx}", "components/**/*.{ts,tsx}", "lib/**/*.{ts,tsx}", "*.{ts,mjs}"]
     },
     "apps/*": {
       "entry": ["src/index.ts"],
