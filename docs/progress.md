@@ -1,27 +1,28 @@
 # OpenScience (XGS) 进度日志
 
-## 2026-08-04 — P1D-1 AI Gateway 统一路由与调用日志完成：ai-gateway 包，云上 86/86，task-master 5.1 done
+## 2026-08-04 — P1D-2 Hermes 会话与异步任务通道完成：迁移 15 + agent-worker，云上 88/88，task-master 5.2 done
 
 ### ✅ Completed
 | 任务 | 详情 |
 |---|---|
-| design gate | 五决策：fetch 直连 / 配置化回退 / audit 日志脱敏 / 手写 schema 守卫 / 流式占位 |
-| ai-gateway 包 | provider.ts（Provider 接口 + OpenAiCompatProvider fetch 直连）+ gateway.ts（AiGateway：路由/回退/调用日志/completeStructured/stream）+ errors.ts |
-| config | ApiEnv.ai（enabled/baseUrl/apiKey/primaryModel/fallbackModels，§24 占位） |
-| 测试 | ai-gateway 单测 9 新增（9/9 绿）+ 集成 2 新增；**云上集成 86/86**（新增 P1D-1 2 + 既有 84） |
-| task-master 5.1 | done |
+| design gate | 五决策：三表迁移 / Redis List 队列 / 轮询进度 / worker handler 注册表 / 配额校验 |
+| migration 15 | agent_sessions/agent_tasks/tool_approvals + AgentTaskStatus 枚举 + rollback |
+| domain agent/ | createAgentSession/submitAgentTask（幂等键 + AI Credit 配额 §9.1）/getAgentTask/listAgentSessions/markTaskProgress（状态机 + 终态幂等 skip） |
+| agent-worker | pollOnce（BRPOPLPUSH Redis 队列 + handler 注册表 + markTaskProgress）+ 主循环 |
+| API | POST/GET /agent/sessions + POST /agent/tasks + GET /agent/tasks/:id |
+| 测试 | domain 单测 5 新增（243 总全绿）+ 集成 2 新增；**云上集成 88/88**（新增 P1D-2 2 + 既有 86）；迁移 15 applied |
+| task-master 5.2 | done |
 
 ### Key Decisions / 坑
-- **fetch 直连（Q1）**：OpenAI 兼容 /chat/completions，零 SDK 依赖 + 可 mock；60s 超时
-- **回退（Q2）**：providers 列表，primary 失败逐级回退 + fallbackReason 记录；全败 → ALL_PROVIDERS_FAILED
-- **调用日志（Q3）**：deps.audit（action='ai.gateway.call'，字段：provider/model/inputTokens/outputTokens/latencyMs/error/fallbackReason）+ **脱敏**（只记元数据，绝不记 prompt/密钥，§17）
-- **结构化（Q4）**：completeStructured + 手写 SchemaGuard + 重试上限 2
-- **流式（Q5）**：stream() 接口占位（STREAM_NOT_IMPLEMENTED，5.3 实装）
-- **坑**：apps/api 需加 @openscience/ai-gateway 依赖（集成测试 import 失败）；`_opts`/`_message` 不被 eslint 忽略 → void
+- **队列（Q2）**：Redis List BRPOPLPUSH + processing 队列（崩溃恢复）；agent-worker poll 消费
+- **消费者幂等（§16）**：任务状态机 pending→running→succeeded 单向前进；succeeded 后重放 → skip（不重复副作用）
+- **进度（Q3）**：轮询 API（DB 进度，断线恢复天然）；SSE 5.3 增强
+- **配额（Q5，§9.1）**：submitAgentTask 时 getBalance(ai_credit) ≤ 0 → INSUFFICIENT_CREDIT 409
+- **坑**：Redis 队列跨运行持久化 → 陈旧任务 id poll 消费（findUnique null）→ beforeAll/afterAll 清 agent:queue；ai-gateway audit record 需 await（fire-and-forget 竞态 → 测试 undefined）；domain 需 ioredis type dep
 
 ### ⏳ Next Steps
-- [x] ~~P1D-1 AI Gateway~~ 完成（2026-08-04）：ai-gateway 包，云上 86/86，5.1 done
-- [ ] **P1D-2（task-master 5.2）**：Hermes 会话与异步任务通道（AgentSession/AgentTask + 队列 + SSE 进度）
+- [x] ~~P1D-2 异步任务通道~~ 完成（2026-08-04）：迁移 15 + agent-worker，云上 88/88，5.2 done
+- [ ] **P1D-3（task-master 5.3）**：SDF Extractor 建议式提取与确认写入（§9.2 + §5.4）
 - [ ] parked：P1A-3 终审项、P1A-5 deferred ①、/admin TOTP 上线路障、SDF Schema 债务（0.2.0）、病毒扫描实装（P1B-后续）、Version 发布状态机（P1B-后续）
 
 ---

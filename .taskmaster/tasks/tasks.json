@@ -639,7 +639,7 @@
             "id": 2,
             "title": "搭建 Hermes 会话与异步任务通道",
             "description": "实现 AgentSession/AgentTask 数据模型与异步执行管道：长任务异步执行（Spec §9.3），任务 ID + SSE/WebSocket 进度推送（Spec §16、§18.3 AI 任务显示可恢复进度），支撑 SDF 提取与 AI 审核等长耗时调用。",
-            "status": "pending",
+            "status": "done",
             "dependencies": [
               "5.1",
               "2"
@@ -647,7 +647,8 @@
             "priority": "high",
             "details": "要点：1) 新建 apps/agent-worker（Spec §14.1），消费队列执行 Hermes 任务；2) 实体覆盖 AgentSession、AgentTask、ToolApproval（Spec §15）；3) 任务事件可重试、消费者幂等（Spec §16）；4) 前端通过任务 ID 订阅进度，断线可恢复（Spec §16、§18.3）；5) Hermes 不得以“自主”为由绕过权限、发布确认或资源配额（Spec §9.1），任务执行前校验 Workspace 权限与 AI Credit 配额（§2.4-7，Credit 骨架来自 P1A）。涉及模块：apps/agent-worker、apps/api 的 /agent 模块、packages/domain。\n验收: -",
             "testStrategy": "集成测试（Spec §21.1）：提交任务 → 异步完成 → 事件幂等重放不产生重复副作用；合同测试：前后端任务进度 Schema。属底座能力，由步骤4/7 间接验收。",
-            "parentId": "5"
+            "parentId": "5",
+            "updatedAt": "2026-08-04T11:13:48.736Z"
           },
           {
             "id": 3,
@@ -749,7 +750,7 @@
             "parentId": "5"
           }
         ],
-        "updatedAt": "2026-08-04T10:45:03.765Z"
+        "updatedAt": "2026-08-04T11:13:48.736Z"
       },
       {
         "id": "6",
@@ -872,7 +873,7 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-08-04T10:45:03.766Z",
+      "lastModified": "2026-08-04T11:13:48.736Z",
       "taskCount": 6,
       "completedCount": 4,
       "tags": [

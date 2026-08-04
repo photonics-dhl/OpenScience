@@ -18,7 +18,8 @@
     "@openscience/storage": "workspace:^",
     "@openscience/versioning": "workspace:^",
     "@prisma/client": "5.22.0",
-    "file-type": "^22.0.1"
+    "file-type": "^22.0.1",
+    "ioredis": "5"
   },
   "devDependencies": {
     "@types/node": "20.14.10",

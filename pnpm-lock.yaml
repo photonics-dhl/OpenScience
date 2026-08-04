@@ -54,7 +54,21 @@ importers:
         specifier: ^8.65.0
         version: 8.65.0(eslint@9.39.5(jiti@2.7.0))(typescript@5.5.4)
 
-  apps/agent-worker: {}
+  apps/agent-worker:
+    dependencies:
+      '@openscience/database':
+        specifier: workspace:^
+        version: link:../../packages/database
+      '@openscience/domain':
+        specifier: workspace:^
+        version: link:../../packages/domain
+    devDependencies:
+      '@types/node':
+        specifier: 20.14.10
+        version: 20.14.10
+      vitest:
+        specifier: '2'
+        version: 2.1.9(@types/node@20.14.10)
 
   apps/api:
     dependencies:
@@ -104,6 +118,9 @@ importers:
         specifier: '3'
         version: 3.25.76
     devDependencies:
+      '@openscience/agent-worker':
+        specifier: workspace:^
+        version: link:../agent-worker
       '@types/archiver':
         specifier: ^8.0.0
         version: 8.0.0
@@ -269,6 +286,9 @@ importers:
       file-type:
         specifier: ^22.0.1
         version: 22.0.1
+      ioredis:
+        specifier: '5'
+        version: 5.11.1
     devDependencies:
       '@types/node':
         specifier: 20.14.10

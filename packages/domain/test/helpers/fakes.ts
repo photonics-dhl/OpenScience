@@ -35,11 +35,13 @@ interface FakeDb {
   notifications: any[];
   authors: any[];
   contributions: any[];
+  agentSessions: any[];
+  agentTasks: any[];
 }
 
 /** 内存版 Prisma 子集：覆盖 workspace 领域用到的调用面。 */
 export function createFakePrisma(): { prisma: PrismaClient; db: FakeDb } {
-  const db: FakeDb = { users: [], workspaces: [], memberships: [], workspaceInvitations: [], mailOutbox: [], quotaPolicies: [], usageLedger: [], researchObjects: [], sdfDocuments: [], sdfNodes: [], blobs: [], artifacts: [], branches: [], commits: [], changesets: [], versions: [], versionManifests: [], manifestEntries: [], identifiers: [], publications: [], visibilityGrants: [], visibilityRequests: [], pullRequests: [], issues: [], comments: [], reviews: [], licenseAssignments: [], forkRelations: [], notifications: [], authors: [], contributions: [] };
+  const db: FakeDb = { users: [], workspaces: [], memberships: [], workspaceInvitations: [], mailOutbox: [], quotaPolicies: [], usageLedger: [], researchObjects: [], sdfDocuments: [], sdfNodes: [], blobs: [], artifacts: [], branches: [], commits: [], changesets: [], versions: [], versionManifests: [], manifestEntries: [], identifiers: [], publications: [], visibilityGrants: [], visibilityRequests: [], pullRequests: [], issues: [], comments: [], reviews: [], licenseAssignments: [], forkRelations: [], notifications: [], authors: [], contributions: [], agentSessions: [], agentTasks: [] };
   let seq = 0;
   const nextId = () => `00000000-0000-4000-8000-${String(++seq).padStart(12, '0')}`;
   const p2002 = () => {
@@ -536,6 +538,47 @@ export function createFakePrisma(): { prisma: PrismaClient; db: FakeDb } {
         const row = { id: nextId(), createdAt: new Date(), ...data };
         db.contributions.push(row);
         return row;
+      },
+    },
+    agentSession: {
+      create: async ({ data }: any) => {
+        const row = { id: nextId(), status: 'active', createdAt: new Date(), updatedAt: new Date(), ...data };
+        db.agentSessions.push(row);
+        return row;
+      },
+      findUnique: async ({ where }: any) => {
+        const row = db.agentSessions.find((s) => s.id === where.id) ?? null;
+        if (!row) return null;
+        return { ...row };
+      },
+      findMany: async ({ where, orderBy }: any) => {
+        const rows = db.agentSessions.filter((s) => (where.userId === undefined || s.userId === where.userId));
+        if (orderBy?.createdAt === 'desc') rows.sort((a, b) => b.createdAt - a.createdAt);
+        return rows;
+      },
+    },
+    agentTask: {
+      create: async ({ data }: any) => {
+        if (data.idempotencyKey && db.agentTasks.some((t) => t.idempotencyKey === data.idempotencyKey)) throw p2002();
+        const row = { id: nextId(), status: 'pending', progress: 0, createdAt: new Date(), updatedAt: new Date(), ...data };
+        db.agentTasks.push(row);
+        return row;
+      },
+      findUnique: async ({ where, include }: any) => {
+        const row = db.agentTasks.find((t) =>
+          (where.id ? t.id === where.id : t.idempotencyKey === where.idempotencyKey),
+        ) ?? null;
+        if (!row) return null;
+        if (include?.session) {
+          const session = db.agentSessions.find((s) => s.id === row.sessionId) ?? null;
+          return { ...row, session };
+        }
+        return { ...row };
+      },
+      update: async ({ where, data }: any) => {
+        const row = db.agentTasks.find((t) => t.id === where.id);
+        Object.assign(row, data, { updatedAt: new Date() });
+        return { ...row };
       },
     },
     pullRequest: {

@@ -65,7 +65,7 @@ export class AiGateway {
           temperature: opts.temperature,
           maxTokens: opts.maxTokens,
         });
-        this.record({
+        await this.record({
           provider: provider.name,
           model: result.model,
           inputTokens: result.usage.inputTokens,
@@ -77,7 +77,7 @@ export class AiGateway {
         return result;
       } catch (e) {
         lastError = e;
-        this.record({
+        await this.record({
           provider: provider.name,
           model: provider.name,
           inputTokens: 0,
@@ -124,9 +124,9 @@ export class AiGateway {
     throw new AiGatewayError('STREAM_NOT_IMPLEMENTED', '流式通道在 P1D-3 实装（§9.3 独立通道）');
   }
 
-  /** 调用日志（§17 脱敏：仅元数据）。 */
-  private record(log: GatewayCallLog): void {
-    void this.audit?.record({
+  /** 调用日志（§17 脱敏：仅元数据）。await 保证审计落库后再返回（测试确定性）。 */
+  private async record(log: GatewayCallLog): Promise<void> {
+    await this.audit?.record({
       actorId: null,
       action: 'ai.gateway.call',
       targetType: 'ai_gateway',

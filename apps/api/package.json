@@ -29,6 +29,7 @@
   "devDependencies": {
     "@types/archiver": "^8.0.0",
     "@types/node": "20.14.10",
+    "@openscience/agent-worker": "workspace:^",
     "vitest": "2"
   }
 }

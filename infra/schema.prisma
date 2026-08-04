@@ -53,6 +53,8 @@ model User {
   authorEntries            Author[]              @relation("AuthorEntry")
   contributions            Contribution[]        @relation("ContributionUser")
   notifications            Notification[]
+  agentSessions            AgentSession[]
+  agentApprovals           ToolApproval[]        @relation("ToolApprover")
 
   @@map("users")
 }
@@ -292,6 +294,7 @@ model ResearchObject {
   authors            Author[]
   contributions      Contribution[]
   licenseAssignments LicenseAssignment[]
+  agentSessions       AgentSession[]
 
   @@index([workspaceId])
   @@map("research_objects")
@@ -732,4 +735,70 @@ model Notification {
 
   @@index([userId, read])
   @@map("notifications")
+}
+
+// --- P1D-2：Hermes 会话与异步任务（§15 AgentSession/AgentTask/ToolApproval + §9.3 长任务异步）---
+
+model AgentSession {
+  id               String    @id @default(uuid()) @db.Uuid
+  userId           String    @map("user_id") @db.Uuid
+  researchObjectId String?   @map("research_object_id") @db.Uuid
+  kind             String
+  title            String    @default("")
+  status           String    @default("active")
+  createdAt        DateTime  @default(now()) @map("created_at")
+  updatedAt        DateTime  @updatedAt @map("updated_at")
+
+  user           User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  researchObject ResearchObject? @relation(fields: [researchObjectId], references: [id], onDelete: Cascade)
+  tasks          AgentTask[]
+
+  @@index([userId])
+  @@map("agent_sessions")
+}
+
+model AgentTask {
+  id              String          @id @default(uuid()) @db.Uuid
+  sessionId       String          @map("session_id") @db.Uuid
+  kind            String
+  status          AgentTaskStatus @default(pending)
+  progress        Int             @default(0)
+  payload         Json            @default("{}")
+  result          Json?
+  error           String?
+  // §16 幂等键：同 key 重发 → 返回既有任务（不重复执行）
+  idempotencyKey  String?         @unique @map("idempotency_key")
+  createdAt       DateTime        @default(now()) @map("created_at")
+  updatedAt       DateTime        @updatedAt @map("updated_at")
+
+  session AgentSession  @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  approvals ToolApproval[]
+
+  @@index([sessionId])
+  @@map("agent_tasks")
+}
+
+model ToolApproval {
+  id         String   @id @default(uuid()) @db.Uuid
+  taskId     String   @map("task_id") @db.Uuid
+  level      String // R0-R4（§9.4，P1D-4 审批分级）
+  scope      String   @default("")
+  status     String   @default("pending") // pending/approved/rejected
+  prompt     Json     @default("{}")
+  approvedBy String?  @map("approved_by") @db.Uuid
+  createdAt  DateTime @default(now()) @map("created_at")
+  updatedAt  DateTime @updatedAt @map("updated_at")
+
+  task     AgentTask @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  approver User?     @relation("ToolApprover", fields: [approvedBy], references: [id], onDelete: SetNull)
+
+  @@index([taskId])
+  @@map("tool_approvals")
+}
+
+enum AgentTaskStatus {
+  pending
+  running
+  succeeded
+  failed
 }

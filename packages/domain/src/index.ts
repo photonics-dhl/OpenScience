@@ -141,6 +141,12 @@ export {
   type NotificationView, type NotificationChannel, type NotificationMessage,
 } from './notification/notifications';
 export { InAppChannel, EmailChannel } from './notification/channels';
+export { AgentError, type AgentErrorCode } from './agent/errors';
+export {
+  createAgentSession, submitAgentTask, getAgentTask, listAgentSessions, markTaskProgress,
+  AGENT_TASK_QUEUE, AI_CREDIT_RESOURCE,
+  type AgentDeps, type AgentTaskView, type AgentSessionView, type AgentTaskStatus,
+} from './agent/agent';
 export { buildExportPackage, classifyArtifact, type ExportFile } from './export/packager';
 export { validateExportPackage, type ExportValidationResult } from './export/validate';
 export { buildManifest, type BuildManifestInput } from './export/manifest';
