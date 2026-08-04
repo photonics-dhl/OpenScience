@@ -31,6 +31,14 @@ export interface ApiEnv {
   };
   /** P1B-6：公开 ID 前缀（§6.1 OSR-YYYY-NNNNNN；§24 待确认项，配置而非常量）。 */
   publicIdPrefix: string;
+  /** P1D-1：AI Gateway（§9.3 + §24 待确认：MiniMax-M3 及回退模型配置，先占位不写死）。 */
+  ai: {
+    enabled: boolean;
+    baseUrl: string;
+    apiKey: string;
+    primaryModel: string;
+    fallbackModels: string[];
+  };
 }
 
 const DEV_RATE_LIMIT_LOGIN_LIMIT = 5;
@@ -98,6 +106,16 @@ export function loadApiEnv(env: NodeJS.ProcessEnv = process.env): ApiEnv {
     throw new Error(`PUBLIC_ID_PREFIX must be 2-8 uppercase alphanumeric, got "${publicIdPrefix}"`);
   }
 
+  // P1D-1：AI Gateway 配置（§24 待确认：MiniMax-M3 及回退模型具体 API/ID，先占位）
+  const aiEnabled = env.AI_ENABLED === 'true';
+  const ai = {
+    enabled: aiEnabled,
+    baseUrl: env.MINIMAX_BASE_URL ?? 'https://api.minimax.io/v1',
+    apiKey: env.MINIMAX_API_KEY ?? '',
+    primaryModel: env.MINIMAX_MODEL ?? 'MiniMax-M3',
+    fallbackModels: (env.AI_FALLBACK_MODELS ?? '').split(',').map((s) => s.trim()).filter((s) => s.length > 0),
+  };
+
   return {
     nodeEnv,
     port,
@@ -119,5 +137,6 @@ export function loadApiEnv(env: NodeJS.ProcessEnv = process.env): ApiEnv {
     smtpPass,
     storage,
     publicIdPrefix,
+    ai,
   };
 }

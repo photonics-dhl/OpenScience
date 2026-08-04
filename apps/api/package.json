@@ -15,6 +15,7 @@
     "@fastify/csrf-protection": "^7",
     "@fastify/helmet": "^13",
     "@fastify/multipart": "^9",
+    "@openscience/ai-gateway": "workspace:^",
     "@openscience/auth": "workspace:^",
     "@openscience/config": "workspace:^",
     "@openscience/database": "workspace:^",

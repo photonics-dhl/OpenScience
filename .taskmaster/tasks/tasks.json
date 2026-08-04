@@ -613,7 +613,7 @@
         "id": "5",
         "title": "Phase 1D: Hermes 与发布",
         "description": "建设 Hermes Agent 系统的 MVP 子集与公开发布闭环：AI Gateway 统一路由（MiniMax-M3 主模型 / 回退策略由 Gateway 配置管理）、异步任务通道、SDF Extractor（建议/差异形式，不直接写正文）、R0–R4 分级审批、AI 发布审核（硬阻断与警告分离）、申诉与 Moderator 队列、发布事务与公开页（含免责声明与审核摘要）。依据 Spec §9、§11、§4.1–4.3、§6.2、§22 Phase 1D。",
-        "status": "pending",
+        "status": "in-progress",
         "dependencies": [
           "4"
         ],
@@ -625,14 +625,15 @@
             "id": 1,
             "title": "实现 AI Gateway 统一路由与调用日志",
             "description": "在 packages/ai-gateway 封装全部大模型调用：MiniMax-M3 为主模型，回退策略由 Gateway 配置管理（Spec §2.4-6、§9.3），为后续 Hermes 全部子 Agent 与 AI 审核提供唯一入口。",
-            "status": "pending",
+            "status": "done",
             "dependencies": [
               "2"
             ],
             "priority": "high",
             "details": "要点：1) Provider SDK 只存在于 ai-gateway 包内，禁止散落业务代码（Spec §9.3）；2) 每次调用记录模型、版本、token、费用、延迟、错误与回退原因（Spec §9.3），日志脱敏，不得记录密钥与 Prompt 中的敏感附件（Spec §17）；3) JSON 结构化输出必须经 Schema 校验，失败时有限重试（Spec §9.3）；4) 流式响应与结构化输出使用独立通道（Spec §9.3）；5) 主模型失败按已配置回退策略切换并记录回退原因；6) API 密钥仅从环境变量读取（Spec §17）；7) AI 接口挂接限流（Spec §17）。待确认：MiniMax-M3 及回退模型的具体 API、模型 ID、结构化输出能力与价格（Spec §24），先以配置项占位，不得写死。涉及模块：packages/ai-gateway、apps/api。\n验收: -",
             "testStrategy": "单元测试：路由选择、回退触发、Schema 校验失败重试次数上限；集成测试（Spec §21.1）：以 mock provider 验证调用日志字段完整与密钥不落日志。属底座能力，由步骤4/7 间接验收。",
-            "parentId": "5"
+            "parentId": "5",
+            "updatedAt": "2026-08-04T10:45:03.765Z"
           },
           {
             "id": 2,
@@ -747,7 +748,8 @@
             "testStrategy": "合同测试：公开页数据 Schema；E2E（Spec §21.2 步骤10）：未登录公众访问公开页可见全部必显信息；安全测试：private/invite_only RO 的公开 URL 越权访问被拒（Spec §21.1）。",
             "parentId": "5"
           }
-        ]
+        ],
+        "updatedAt": "2026-08-04T10:45:03.765Z"
       },
       {
         "id": "6",
@@ -870,7 +872,7 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-08-04T10:20:07.172Z",
+      "lastModified": "2026-08-04T10:45:03.766Z",
       "taskCount": 6,
       "completedCount": 4,
       "tags": [

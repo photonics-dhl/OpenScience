@@ -1,29 +1,28 @@
 # OpenScience (XGS) 进度日志
 
-## 2026-08-04 — P1C-10 GitHub 式协作区域前端完成：collab 单页 + tab，next build 通过，task-master 4.10 done，**Phase 1C 全部完成**
+## 2026-08-04 — P1D-1 AI Gateway 统一路由与调用日志完成：ai-gateway 包，云上 86/86，task-master 5.1 done
 
 ### ✅ Completed
 | 任务 | 详情 |
 |---|---|
-| design gate | 五决策：单页 + tab / 每域组件对 / lib/api.ts 扩展 / 权限显示 / 高风险对话框 |
-| lib/api.ts | 协作端点全封装（issues/prs/branches/fork/authors/contributions/notifications/reviews/merge） |
-| 组件 | CollabTabs + IssueList/Detail + PrList/Detail（声明表单 + diff + Review + Merge）+ ForkPanel + AuthorsPanel + NotificationsPanel + HighRiskDialog（role=dialog + reasons） |
-| 页面 | /research-objects/[id]/collab（tab 切换 + 高风险 confirm 事件桥接） |
-| i18n | collab 命名空间中英（zh/en 键对齐测试） |
-| 测试 | 前端 25/25（collab-state 6 + i18n 2 + 既有 17）；**next build 通过**；云上集成 84/84 不回退 |
-| task-master 4.10 | done — **Phase 1C 10/10 全部完成** |
+| design gate | 五决策：fetch 直连 / 配置化回退 / audit 日志脱敏 / 手写 schema 守卫 / 流式占位 |
+| ai-gateway 包 | provider.ts（Provider 接口 + OpenAiCompatProvider fetch 直连）+ gateway.ts（AiGateway：路由/回退/调用日志/completeStructured/stream）+ errors.ts |
+| config | ApiEnv.ai（enabled/baseUrl/apiKey/primaryModel/fallbackModels，§24 占位） |
+| 测试 | ai-gateway 单测 9 新增（9/9 绿）+ 集成 2 新增；**云上集成 86/86**（新增 P1D-1 2 + 既有 84） |
+| task-master 5.1 | done |
 
 ### Key Decisions / 坑
-- **单页 + tab（Q1）**：GitHub 式协作区域，移动端横向滚动 tab 不裁剪（§2.5 决策 5）
-- **高风险对话框（Q5）**：后端 409 reasons → HighRiskDialog（role=dialog + focus + Esc）→ confirmHighRisk 重试；confirm 事件桥接（CustomEvent 通知 PrDetail）
-- **作者组编辑（Q4）**：前端 fetch author-change-info 判 ok → canEdit；Merge 按钮后端 403 提示
-- **i18n（§2.5 决策 5）**：collab 命名空间中英 + 键对齐测试
-- **坑**：collab 页相对路径 4 级（../../../..）；`n.payload.link &&` unknown → ReactNode 类型错（typeof 守卫）；`request<T>` 被 markdownlint MD033 当 inline HTML（反引号包）
+- **fetch 直连（Q1）**：OpenAI 兼容 /chat/completions，零 SDK 依赖 + 可 mock；60s 超时
+- **回退（Q2）**：providers 列表，primary 失败逐级回退 + fallbackReason 记录；全败 → ALL_PROVIDERS_FAILED
+- **调用日志（Q3）**：deps.audit（action='ai.gateway.call'，字段：provider/model/inputTokens/outputTokens/latencyMs/error/fallbackReason）+ **脱敏**（只记元数据，绝不记 prompt/密钥，§17）
+- **结构化（Q4）**：completeStructured + 手写 SchemaGuard + 重试上限 2
+- **流式（Q5）**：stream() 接口占位（STREAM_NOT_IMPLEMENTED，5.3 实装）
+- **坑**：apps/api 需加 @openscience/ai-gateway 依赖（集成测试 import 失败）；`_opts`/`_message` 不被 eslint 忽略 → void
 
 ### ⏳ Next Steps
-- [x] ~~P1C-10 协作前端~~ 完成（2026-08-04）：collab 单页，next build 通过，4.10 done
-- [ ] **Phase 1D（task-master 5）**：Hermes Agent 系统——AI Gateway 统一路由 + 异步任务通道 + SDF Extractor + R0-R4 审批 + 发布审核 + 公开页
-- [ ] parked：P1A-3 终审项、P1A-5 deferred ①、/admin TOTP 上线路障、SDF Schema 债务（0.2.0）、病毒扫描实装（P1B-后续）、Version 发布状态机（P1B-后续）、真实 AI 提取（Phase 1D）
+- [x] ~~P1D-1 AI Gateway~~ 完成（2026-08-04）：ai-gateway 包，云上 86/86，5.1 done
+- [ ] **P1D-2（task-master 5.2）**：Hermes 会话与异步任务通道（AgentSession/AgentTask + 队列 + SSE 进度）
+- [ ] parked：P1A-3 终审项、P1A-5 deferred ①、/admin TOTP 上线路障、SDF Schema 债务（0.2.0）、病毒扫描实装（P1B-后续）、Version 发布状态机（P1B-后续）
 
 ---
 ## 2026-08-04 — P1B-10 SDF 标准导出包生成与校验完成：export API + 脱库校验，云上 58/58，task-master 3.10 done

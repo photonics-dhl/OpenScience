@@ -73,6 +73,9 @@ importers:
       '@fastify/multipart':
         specifier: ^9
         version: 9.4.0
+      '@openscience/ai-gateway':
+        specifier: workspace:^
+        version: link:../../packages/ai-gateway
       '@openscience/auth':
         specifier: workspace:^
         version: link:../../packages/auth
@@ -149,7 +152,18 @@ importers:
         specifier: '2'
         version: 2.1.9(@types/node@20.14.10)
 
-  packages/ai-gateway: {}
+  packages/ai-gateway:
+    dependencies:
+      '@openscience/observability':
+        specifier: workspace:^
+        version: link:../observability
+    devDependencies:
+      '@types/node':
+        specifier: 20.14.10
+        version: 20.14.10
+      vitest:
+        specifier: '2'
+        version: 2.1.9(@types/node@20.14.10)
 
   packages/auth:
     dependencies:
