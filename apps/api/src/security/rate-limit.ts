@@ -22,6 +22,8 @@ export const RATE_LIMIT_ROUTES: Record<string, RouteRule> = {
   // P1C-3：协作写入限流（§17 + task 4.3 要求；key=完整路径）
   '/research-objects/:id/issues': { limit: 20, windowSec: 60 },
   '/research-objects/:id/issues/:issueId/comments': { limit: 30, windowSec: 60 },
+  // P1C-6：PR 创建限流（§17）
+  '/research-objects/:id/pull-requests': { limit: 20, windowSec: 60 },
 };
 
 export interface RegisterRateLimitOptions {

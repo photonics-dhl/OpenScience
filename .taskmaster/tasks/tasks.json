@@ -535,7 +535,7 @@
             "id": 6,
             "title": "实现 Pull Request 声明与提交流程",
             "description": "实现向原 RO 提交变更的 PR 流程，PR MUST 完整声明 §8.2 清单：变更的 SDF 字段和文件、是否改变方法/数据/核心结论、新增贡献者及 CRediT 角色、数据/代码许可、利益冲突、自动检查结果、是否要求发布新版本。",
-            "status": "pending",
+            "status": "done",
             "dependencies": [
               "4.1",
               "4.2"
@@ -543,7 +543,8 @@
             "priority": "high",
             "details": "模块 /pull-requests（§16）：PR 关联源 Branch/Fork 与目标 Branch，声明字段在数据模型（P1C-1）基础上做提交时强制校验（缺项拒绝）；自动检查结果字段先存结构化占位（真实检查能力在 P1D 接入）；打开 PR 发出 pull_request.opened 事件（§16，事件可重试、消费者幂等）；PR 默认继承 RO 可见性（§4.2）；幂等键防重复提交，乐观锁防并发覆盖（§16）；PR 内展示变更 diff（复用 P1B §7.3 Diff 能力）。\n验收: 步骤11",
             "testStrategy": "单元测试：声明字段强制校验、幂等键重放；合同测试：前后端 Schema；阶段验收点：§21.2 步骤 11 的提交 PR 环节。",
-            "parentId": "4"
+            "parentId": "4",
+            "updatedAt": "2026-08-04T08:49:53.194Z"
           },
           {
             "id": 7,
@@ -602,7 +603,7 @@
             "parentId": "4"
           }
         ],
-        "updatedAt": "2026-08-04T08:28:59.775Z"
+        "updatedAt": "2026-08-04T08:49:53.194Z"
       },
       {
         "id": "5",
@@ -865,7 +866,7 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-08-04T08:28:59.779Z",
+      "lastModified": "2026-08-04T08:49:53.194Z",
       "taskCount": 6,
       "completedCount": 3,
       "tags": [

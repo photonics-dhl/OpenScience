@@ -1,29 +1,29 @@
 # OpenScience (XGS) 进度日志
 
-## 2026-08-04 — P1C-5 Fork 与来源关系及许可继承完成：/forks API + Blob 共享，云上 74/74，task-master 4.5 done
+## 2026-08-04 — P1C-6 Pull Request 声明与提交流程完成：/pull-requests API + 迁移 14，云上 77/77，task-master 4.6 done
 
 ### ✅ Completed
 | 任务 | 详情 |
 |---|---|
-| design gate | 五决策：源版本无需 published / 单事务 Blob 引用复刻 / 许可默认复制显式覆盖须校验 / 来源只读 / 新 RO private 起步 |
-| 迁移 | 无（ForkRelation 实体 P1C-1 迁移 12 已建，唯一 + Restrict 来源不可移除） |
-| domain fork/ | forkResearchObject（单事务：新 RO + sdf 快照 + artifact 复制同 blobSha256 + initial commit + manifest + ForkRelation §6.2 哈希 + 许可继承 + unique ID 内联分配）+ getForkSource（只读） |
-| API | POST /research-objects/:id/forks + GET /research-objects/:id/fork-source |
-| 测试 | domain 单测 5 新增（201 总全绿）+ 集成 3 新增（collab 19/19）；**云上集成 74/74**（新增 P1C-5 3 + 既有 71） |
-| task-master 4.5 | done |
+| design gate | 五决策：domain 声明强制校验 / 分支 diff 复用 / 许可继承校验 / Notification 事件占位 / 迁移 14 幂等键 |
+| migration 14 | pull_requests.idempotency_key @unique（additive）+ rollback |
+| domain pr/ | createPullRequest（§8.2 全声明强制校验 + 幂等重放 + 许可继承 + Notification + 审计）+ listPullRequests/getPullRequest（含 §7.3 分支 diff） |
+| API | POST/GET /research-objects/:id/pull-requests + GET /:prId + RATE_LIMIT 加行 |
+| 测试 | domain 单测 8 新增（209 总全绿）+ 集成 3 新增（collab 22/22）；**云上集成 77/77**（新增 P1C-6 3 + 既有 74） |
+| task-master 4.6 | done |
 
 ### Key Decisions / 坑
-- **§8.1 来源永久保留**：ForkRelation forkedRoId 唯一 + 三 FK Restrict（无删除路径，P1C-1 已测）
-- **Blob 引用共享（§7.1）**：fork 复制 artifact 行同 blobSha256，物理 Blob MinIO 内容寻址共享不复制数据
-- **许可继承（§6.3 + P1C-4）**：默认复制源有效许可；显式覆盖须 validateLicenseInheritance 通过，放宽 → INHERITANCE_VIOLATION 409
-- **仅 public 源（§4.2）**：private/invite_only → SOURCE_NOT_PUBLIC（404 不泄露）
-- **unique ID（§6.1）**：generatePublicId + updateMany where publicId=null 并发安全
-- **坑（关键）**：**Prisma 嵌套事务——fork 外层 $transaction + assignPublicId 内层 $transaction → 真 PG 报错 500**；本地 fake $transaction 无嵌套检测故单测过、云上崩。修复：fork 内联分配 publicId（不调 assignPublicId）
+- **§8.2 强制校验（Q1）**：domain 层创建时全字段必填 + changedFiles/SdfFields 非空 + CRediT 角色合法 + data/codeLicense 目录校验 + conflictOfInterest 非空
+- **分支 diff（Q2）**：getPullRequest 用 compareVersions（target tip → source tip 版本），无版本 → null
+- **许可继承（Q3）**：validateLicenseInheritance(源RO, {text: 源.text, code: PR.code, data: PR.data})，违反 409
+- **事件（Q4）**：pull_request.opened 落 Notification 行（type + payload），P1D-2 接队列幂等重放
+- **幂等（Q5）**：迁移 14 idempotency_key @unique；重发同 key → 返回既有 PR
+- **坑**：zod contributor.userId 需 UUID（'u' → 400 非 404）；集成测试 PR_DECL 用合法 UUID
 
 ### ⏳ Next Steps
-- [x] ~~P1C-5 Fork~~ 完成（2026-08-04）：/forks API + Blob 共享，云上 74/74，4.5 done
-- [ ] **P1C-6（task-master 4.6）**：Pull Request（§8.2 全声明 + §8.1 许可继承 + 分支 diff）
-- [ ] parked：P1A-3 终审项、P1A-5 deferred ①、/admin TOTP 上线路障、SDF Schema 债务（0.2.0）、病毒扫描实装（P1B-后续）、Version 发布状态机（P1B-后续）、真实 AI 提取（Phase 1D）、协作剩余 5 子任务（P1C-6~10）
+- [x] ~~P1C-6 Pull Request~~ 完成（2026-08-04）：/pull-requests API + 迁移 14，云上 77/77，4.6 done
+- [ ] **P1C-7（task-master 4.7）**：作者与 CRediT（§3.4 作者组决定署名 + 事实贡献者独立记录）
+- [ ] parked：P1A-3 终审项、P1A-5 deferred ①、/admin TOTP 上线路障、SDF Schema 债务（0.2.0）、病毒扫描实装（P1B-后续）、Version 发布状态机（P1B-后续）、真实 AI 提取（Phase 1D）、协作剩余 4 子任务（P1C-7~10）
 
 ---
 ## 2026-08-04 — P1B-10 SDF 标准导出包生成与校验完成：export API + 脱库校验，云上 58/58，task-master 3.10 done

@@ -621,6 +621,8 @@ model PullRequest {
   requestsRelease    Boolean  @map("requests_release")
   status             String   @default("open") // open/merged/rejected
   authorId           String   @map("author_id") @db.Uuid
+  // P1C-6：幂等键（§16 防重复提交）；重发同 key → 返回既有 PR。
+  idempotencyKey     String?  @unique @map("idempotency_key")
   createdAt          DateTime @default(now()) @map("created_at")
 
   researchObject ResearchObject @relation(fields: [researchObjectId], references: [id], onDelete: Cascade)

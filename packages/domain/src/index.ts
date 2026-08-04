@@ -118,6 +118,12 @@ export {
   forkResearchObject, getForkSource,
   type ForkSourceDetail, type ForkResult, type ForkResearchObjectInput,
 } from './fork/forks';
+export { PrError, type PrErrorCode } from './pr/errors';
+export {
+  createPullRequest, listPullRequests, getPullRequest,
+  CREDIT_ROLES,
+  type CreditRole, type NewContributor, type CreatePullRequestInput, type PullRequestDetail,
+} from './pr/prs';
 export { buildExportPackage, classifyArtifact, type ExportFile } from './export/packager';
 export { validateExportPackage, type ExportValidationResult } from './export/validate';
 export { buildManifest, type BuildManifestInput } from './export/manifest';

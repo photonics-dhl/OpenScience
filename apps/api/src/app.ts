@@ -14,6 +14,7 @@ import { registerBranchRoutes } from './routes/branches';
 import { registerIssueRoutes } from './routes/issues';
 import { registerLicenseRoutes } from './routes/licenses';
 import { registerForkRoutes } from './routes/forks';
+import { registerPrRoutes } from './routes/prs';
 import { registerResearchRoutes } from './routes/research';
 import { registerRateLimit } from './security/rate-limit';
 import { registerSecurity, type SecurityOptions } from './security/security';
@@ -89,6 +90,7 @@ export async function buildApp(opts: BuildAppOptions): Promise<FastifyInstance> 
     await app.register(async (instance) => registerArtifactRoutes(instance, { ...opts, storage }), {});
     await app.register(async (instance) => registerCommitRoutes(instance, { ...opts, storage }), {});
     await app.register(async (instance) => registerForkRoutes(instance, { ...opts, storage }), {});
+    await app.register(async (instance) => registerPrRoutes(instance, { ...opts, storage }), {});
   }
   return app;
 }

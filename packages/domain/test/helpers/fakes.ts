@@ -32,11 +32,12 @@ interface FakeDb {
   reviews: any[];
   licenseAssignments: any[];
   forkRelations: any[];
+  notifications: any[];
 }
 
 /** 内存版 Prisma 子集：覆盖 workspace 领域用到的调用面。 */
 export function createFakePrisma(): { prisma: PrismaClient; db: FakeDb } {
-  const db: FakeDb = { users: [], workspaces: [], memberships: [], workspaceInvitations: [], mailOutbox: [], quotaPolicies: [], usageLedger: [], researchObjects: [], sdfDocuments: [], sdfNodes: [], blobs: [], artifacts: [], branches: [], commits: [], changesets: [], versions: [], versionManifests: [], manifestEntries: [], identifiers: [], publications: [], visibilityGrants: [], visibilityRequests: [], pullRequests: [], issues: [], comments: [], reviews: [], licenseAssignments: [], forkRelations: [] };
+  const db: FakeDb = { users: [], workspaces: [], memberships: [], workspaceInvitations: [], mailOutbox: [], quotaPolicies: [], usageLedger: [], researchObjects: [], sdfDocuments: [], sdfNodes: [], blobs: [], artifacts: [], branches: [], commits: [], changesets: [], versions: [], versionManifests: [], manifestEntries: [], identifiers: [], publications: [], visibilityGrants: [], visibilityRequests: [], pullRequests: [], issues: [], comments: [], reviews: [], licenseAssignments: [], forkRelations: [], notifications: [] };
   let seq = 0;
   const nextId = () => `00000000-0000-4000-8000-${String(++seq).padStart(12, '0')}`;
   const p2002 = () => {
@@ -491,11 +492,51 @@ export function createFakePrisma(): { prisma: PrismaClient; db: FakeDb } {
                 (o.targetBranchId === undefined || pr.targetBranchId === o.targetBranchId),
               )),
         ).length,
-      findFirst: async ({ where }: any) =>
-        db.pullRequests.find((pr) =>
+      findFirst: async ({ where, include }: any) => {
+        const row = db.pullRequests.find((pr) =>
           (where.id === undefined || pr.id === where.id) &&
-          (where.researchObjectId === undefined || pr.researchObjectId === where.researchObjectId),
-        ) ?? null,
+          (where.researchObjectId === undefined || pr.researchObjectId === where.researchObjectId) &&
+          (where.status === undefined || pr.status === where.status),
+        ) ?? null;
+        if (!row || !include?._count) return row;
+        return { ...row, _count: { comments: db.comments.filter((c) => c.prId === row.id).length } };
+      },
+      findUnique: async ({ where, include }: any) => {
+        const row = db.pullRequests.find((pr) =>
+          (where.id ? pr.id === where.id : pr.idempotencyKey === where.idempotencyKey),
+        ) ?? null;
+        if (!row || !include?._count) return row;
+        return { ...row, _count: { comments: db.comments.filter((c) => c.prId === row.id).length } };
+      },
+      findMany: async ({ where, include, orderBy }: any) => {
+        const rows = db.pullRequests.filter(
+          (pr) =>
+            (where.researchObjectId === undefined || pr.researchObjectId === where.researchObjectId) &&
+            (where.status === undefined || pr.status === where.status),
+        );
+        if (orderBy?.createdAt === 'desc') rows.sort((a, b) => b.createdAt - a.createdAt);
+        return rows.map((pr) => ({
+          ...pr,
+          _count: include?._count ? { comments: db.comments.filter((c) => c.prId === pr.id).length } : undefined,
+        }));
+      },
+      create: async ({ data }: any) => {
+        if (data.idempotencyKey && db.pullRequests.some((pr) => pr.idempotencyKey === data.idempotencyKey)) throw p2002();
+        const row = { id: nextId(), status: 'open', createdAt: new Date(), ...data };
+        db.pullRequests.push(row);
+        return row;
+      },
+    },
+    notification: {
+      create: async ({ data }: any) => {
+        const row = { id: nextId(), read: false, createdAt: new Date(), ...data };
+        db.notifications.push(row);
+        return row;
+      },
+      findMany: async ({ where }: any) =>
+        db.notifications.filter(
+          (n) => (where.userId === undefined || n.userId === where.userId) && (where.type === undefined || n.type === where.type),
+        ),
     },
     review: {
       findFirst: async ({ where, include }: any) => {

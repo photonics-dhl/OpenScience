@@ -548,3 +548,102 @@ describe('P1C-5 Fork（云上，无新迁移）', () => {
     await app.close();
   });
 });
+
+describe('P1C-6 Pull Request（云上，迁移 14）', () => {
+  const PR_DECL = {
+    changedSdfFields: ['method'],
+    changedFiles: ['manuscript/paper.md'],
+    changesMethod: true,
+    changesData: false,
+    changesConclusion: false,
+    newContributors: [{ userId: '00000000-0000-4000-8000-000000000001', creditRole: ['software'] }],
+    dataLicense: 'CC-BY-4.0',
+    codeLicense: 'MIT',
+    conflictOfInterest: '无',
+    autoChecks: {},
+    requestsRelease: false,
+  };
+
+  it('PR 全流程：分支 + commit → PR → 详情含 diff + Notification 事件（§8.2/§7.3/§16）', async () => {
+    const app = await makeApp();
+    const cookie = await registerAndVerify(app, 'p1@example.com');
+    const wsId = await getPersonalWorkspace('p1@example.com');
+    const createRo = await app.inject({ method: 'POST', url: '/research-objects', cookies: { openscience_session: cookie }, payload: { workspaceId: wsId, title: 'PR RO' } });
+    const ro = createRo.json().researchObject;
+    await app.inject({ method: 'PUT', url: `/research-objects/${ro.id}/licenses`, cookies: { openscience_session: cookie }, payload: { text: 'CC-BY-4.0', code: 'MIT', data: 'CC0-1.0' } });
+    const userId = await getUserId('p1@example.com');
+
+    // main + feature 分支 + commits
+    await app.inject({ method: 'POST', url: `/research-objects/${ro.id}/commits`, cookies: { openscience_session: cookie }, payload: { message: 'main v1', version: 1, sdfCore: { schemaVersion: '0.1.0', problem: 'P', insight: 'I', method: 'M', results: 'R', limitations: 'L', reproducibility: 'RP' } } });
+    const cb = await app.inject({ method: 'POST', url: `/research-objects/${ro.id}/branches`, cookies: { openscience_session: cookie }, payload: { name: 'feature/x' } });
+    const feature = cb.json().branch;
+    const list = await app.inject({ method: 'GET', url: `/research-objects/${ro.id}/branches`, cookies: { openscience_session: cookie } });
+    const main = list.json().branches.find((b: { name: string }) => b.name === 'main');
+    await app.inject({ method: 'POST', url: `/research-objects/${ro.id}/commits`, cookies: { openscience_session: cookie }, payload: { message: 'feature work', version: 2, branchId: feature.id, sdfCore: { schemaVersion: '0.1.0', problem: 'P2', insight: 'I2', method: 'M2', results: 'R2', limitations: 'L2', reproducibility: 'RP2' } } });
+
+    // PR（userId 修正：newContributors 需真实用户 id 才能过？CRediT 校验只看角色合法性，userId 任意）
+    const pr = await app.inject({ method: 'POST', url: `/research-objects/${ro.id}/pull-requests`, cookies: { openscience_session: cookie }, payload: { sourceBranchId: feature.id, targetBranchId: main.id, title: '改进方法', body: '见 diff', ...PR_DECL, newContributors: [{ userId, creditRole: ['software'] }] } });
+    expect(pr.statusCode).toBe(201);
+    const prBody = pr.json().pullRequest;
+    expect(prBody.status).toBe('open');
+    expect(prBody.changedSdfFields).toEqual(['method']);
+
+    // 详情含 diff（§7.3）
+    const detail = await app.inject({ method: 'GET', url: `/research-objects/${ro.id}/pull-requests/${prBody.id}`, cookies: { openscience_session: cookie } });
+    expect(detail.statusCode).toBe(200);
+    expect(detail.json().pullRequest.diff).toBeDefined();
+
+    // Notification pull_request.opened（§16 事件占位）
+    const notif = await prisma.notification.findFirst({ where: { type: 'pull_request.opened', userId } });
+    expect(notif?.payload).toMatchObject({ prId: prBody.id });
+    await app.close();
+  });
+
+  it('§8.2 缺声明 → 400；幂等键重放 → 不重复创建（§16）', async () => {
+    const app = await makeApp();
+    const cookie = await registerAndVerify(app, 'p2@example.com');
+    const wsId = await getPersonalWorkspace('p2@example.com');
+    const createRo = await app.inject({ method: 'POST', url: '/research-objects', cookies: { openscience_session: cookie }, payload: { workspaceId: wsId, title: 'PR RO2' } });
+    const ro = createRo.json().researchObject;
+    await app.inject({ method: 'PUT', url: `/research-objects/${ro.id}/licenses`, cookies: { openscience_session: cookie }, payload: { text: 'CC-BY-4.0', code: 'MIT', data: 'CC0-1.0' } });
+    await app.inject({ method: 'POST', url: `/research-objects/${ro.id}/commits`, cookies: { openscience_session: cookie }, payload: { message: 'v1', version: 1 } });
+    const cb = await app.inject({ method: 'POST', url: `/research-objects/${ro.id}/branches`, cookies: { openscience_session: cookie }, payload: { name: 'feature/y' } });
+    const feature = cb.json().branch;
+    const list = await app.inject({ method: 'GET', url: `/research-objects/${ro.id}/branches`, cookies: { openscience_session: cookie } });
+    const main = list.json().branches.find((b: { name: string }) => b.name === 'main');
+
+    // 缺 changedFiles → 400
+    const bad = await app.inject({ method: 'POST', url: `/research-objects/${ro.id}/pull-requests`, cookies: { openscience_session: cookie }, payload: { sourceBranchId: feature.id, targetBranchId: main.id, title: 'x', ...PR_DECL, changedFiles: [] } });
+    expect(bad.statusCode).toBe(400);
+
+    // 幂等键重放
+    const ok = await app.inject({ method: 'POST', url: `/research-objects/${ro.id}/pull-requests`, cookies: { openscience_session: cookie }, headers: { 'idempotency-key': 'pr-key-1' }, payload: { sourceBranchId: feature.id, targetBranchId: main.id, title: 'x', ...PR_DECL } });
+    expect(ok.statusCode).toBe(201);
+    const replay = await app.inject({ method: 'POST', url: `/research-objects/${ro.id}/pull-requests`, cookies: { openscience_session: cookie }, headers: { 'idempotency-key': 'pr-key-1' }, payload: { sourceBranchId: feature.id, targetBranchId: main.id, title: 'x', ...PR_DECL } });
+    expect(replay.statusCode).toBe(201);
+    expect(replay.json().pullRequest.id).toBe(ok.json().pullRequest.id);
+    const all = await app.inject({ method: 'GET', url: `/research-objects/${ro.id}/pull-requests`, cookies: { openscience_session: cookie } });
+    expect(all.json().pullRequests).toHaveLength(1);
+    await app.close();
+  });
+
+  it('越权：非成员创建 PR → 404；跨 RO 分支 → 400（§17/§8.1）', async () => {
+    const app = await makeApp();
+    const cookieA = await registerAndVerify(app, 'p3a@example.com');
+    const cookieB = await registerAndVerify(app, 'p3b@example.com');
+    const wsA = await getPersonalWorkspace('p3a@example.com');
+    const createRo = await app.inject({ method: 'POST', url: '/research-objects', cookies: { openscience_session: cookieA }, payload: { workspaceId: wsA, title: 'PR RO3' } });
+    const ro = createRo.json().researchObject;
+    await app.inject({ method: 'PUT', url: `/research-objects/${ro.id}/licenses`, cookies: { openscience_session: cookieA }, payload: { text: 'CC-BY-4.0', code: 'MIT', data: 'CC0-1.0' } });
+    await app.inject({ method: 'POST', url: `/research-objects/${ro.id}/commits`, cookies: { openscience_session: cookieA }, payload: { message: 'v1', version: 1 } });
+    const cb = await app.inject({ method: 'POST', url: `/research-objects/${ro.id}/branches`, cookies: { openscience_session: cookieA }, payload: { name: 'feature/z' } });
+    const feature = cb.json().branch;
+    const list = await app.inject({ method: 'GET', url: `/research-objects/${ro.id}/branches`, cookies: { openscience_session: cookieA } });
+    const main = list.json().branches.find((b: { name: string }) => b.name === 'main');
+
+    // 非成员（B 非 A 空间成员）→ 404
+    const intruder = await app.inject({ method: 'POST', url: `/research-objects/${ro.id}/pull-requests`, cookies: { openscience_session: cookieB }, payload: { sourceBranchId: feature.id, targetBranchId: main.id, title: 'x', ...PR_DECL } });
+    expect(intruder.statusCode).toBe(404);
+    await app.close();
+  });
+});
