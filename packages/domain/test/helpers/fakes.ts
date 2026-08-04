@@ -33,11 +33,13 @@ interface FakeDb {
   licenseAssignments: any[];
   forkRelations: any[];
   notifications: any[];
+  authors: any[];
+  contributions: any[];
 }
 
 /** 内存版 Prisma 子集：覆盖 workspace 领域用到的调用面。 */
 export function createFakePrisma(): { prisma: PrismaClient; db: FakeDb } {
-  const db: FakeDb = { users: [], workspaces: [], memberships: [], workspaceInvitations: [], mailOutbox: [], quotaPolicies: [], usageLedger: [], researchObjects: [], sdfDocuments: [], sdfNodes: [], blobs: [], artifacts: [], branches: [], commits: [], changesets: [], versions: [], versionManifests: [], manifestEntries: [], identifiers: [], publications: [], visibilityGrants: [], visibilityRequests: [], pullRequests: [], issues: [], comments: [], reviews: [], licenseAssignments: [], forkRelations: [], notifications: [] };
+  const db: FakeDb = { users: [], workspaces: [], memberships: [], workspaceInvitations: [], mailOutbox: [], quotaPolicies: [], usageLedger: [], researchObjects: [], sdfDocuments: [], sdfNodes: [], blobs: [], artifacts: [], branches: [], commits: [], changesets: [], versions: [], versionManifests: [], manifestEntries: [], identifiers: [], publications: [], visibilityGrants: [], visibilityRequests: [], pullRequests: [], issues: [], comments: [], reviews: [], licenseAssignments: [], forkRelations: [], notifications: [], authors: [], contributions: [] };
   let seq = 0;
   const nextId = () => `00000000-0000-4000-8000-${String(++seq).padStart(12, '0')}`;
   const p2002 = () => {
@@ -477,6 +479,51 @@ export function createFakePrisma(): { prisma: PrismaClient; db: FakeDb } {
         if (db.forkRelations.some((f) => f.forkedRoId === data.forkedRoId)) throw p2002();
         const row = { id: nextId(), createdAt: new Date(), ...data };
         db.forkRelations.push(row);
+        return row;
+      },
+    },
+    author: {
+      findMany: async ({ where, include, orderBy }: any) => {
+        const rows = db.authors.filter(
+          (a) => (where.researchObjectId === undefined || a.researchObjectId === where.researchObjectId),
+        );
+        if (orderBy?.sortOrder === 'asc') rows.sort((a, b) => a.sortOrder - b.sortOrder);
+        return rows.map((a) => {
+          const user = db.users.find((u) => u.id === a.userId);
+          return include?.user ? { ...a, user: { id: a.userId, displayName: user?.displayName ?? a.userId } } : a;
+        });
+      },
+      createMany: async ({ data }: any) => {
+        for (const d of Array.isArray(data) ? data : [data]) {
+          db.authors.push({ id: nextId(), isCorresponding: false, createdAt: new Date(), ...d });
+        }
+        return { count: Array.isArray(data) ? data.length : 1 };
+      },
+      deleteMany: async ({ where }: any) => {
+        const before = db.authors.length;
+        db.authors = db.authors.filter((a) => a.researchObjectId !== where.researchObjectId);
+        return { count: before - db.authors.length };
+      },
+    },
+    contribution: {
+      findFirst: async ({ where }: any) =>
+        db.contributions.find(
+          (c) =>
+            (where.researchObjectId === undefined || c.researchObjectId === where.researchObjectId) &&
+            (where.userId === undefined || c.userId === where.userId) &&
+            (where.creditRole === undefined || c.creditRole === where.creditRole),
+        ) ?? null,
+      findMany: async ({ where, orderBy, select }: any) => {
+        const rows = db.contributions.filter(
+          (c) => (where.researchObjectId === undefined || c.researchObjectId === where.researchObjectId),
+        );
+        if (orderBy?.createdAt === 'asc') rows.sort((a, b) => a.createdAt - b.createdAt);
+        if (select?.userId) return rows.map((c) => ({ userId: c.userId }));
+        return rows;
+      },
+      create: async ({ data }: any) => {
+        const row = { id: nextId(), createdAt: new Date(), ...data };
+        db.contributions.push(row);
         return row;
       },
     },

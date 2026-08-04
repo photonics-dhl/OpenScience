@@ -124,6 +124,11 @@ export {
   CREDIT_ROLES,
   type CreditRole, type NewContributor, type CreatePullRequestInput, type PullRequestDetail,
 } from './pr/prs';
+export { AuthorError, type AuthorErrorCode } from './authorship/errors';
+export {
+  setAuthors, listAuthors, addContribution, listContributions, getAuthorChangeInfo,
+  type AuthorEntryInput, type AuthorView, type AuthorChangeInfo,
+} from './authorship/authors';
 export { buildExportPackage, classifyArtifact, type ExportFile } from './export/packager';
 export { validateExportPackage, type ExportValidationResult } from './export/validate';
 export { buildManifest, type BuildManifestInput } from './export/manifest';

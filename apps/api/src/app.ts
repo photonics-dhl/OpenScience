@@ -15,6 +15,7 @@ import { registerIssueRoutes } from './routes/issues';
 import { registerLicenseRoutes } from './routes/licenses';
 import { registerForkRoutes } from './routes/forks';
 import { registerPrRoutes } from './routes/prs';
+import { registerAuthorRoutes } from './routes/authors';
 import { registerResearchRoutes } from './routes/research';
 import { registerRateLimit } from './security/rate-limit';
 import { registerSecurity, type SecurityOptions } from './security/security';
@@ -84,6 +85,7 @@ export async function buildApp(opts: BuildAppOptions): Promise<FastifyInstance> 
   await app.register(async (instance) => registerBranchRoutes(instance, opts), {});
   await app.register(async (instance) => registerIssueRoutes(instance, opts), {});
   await app.register(async (instance) => registerLicenseRoutes(instance, opts), {});
+  await app.register(async (instance) => registerAuthorRoutes(instance, opts), {});
   await app.register(async (instance) => registerResearchRoutes(instance, opts), {});
   if (opts.storage) {
     const storage = opts.storage;

@@ -647,3 +647,64 @@ describe('P1C-6 Pull Request（云上，迁移 14）', () => {
     await app.close();
   });
 });
+
+describe('P1C-7 作者组与 CRediT（云上，无新迁移）', () => {
+  it('作者全流程：创建者建名单 → 排序/通讯 → 贡献追加 → change-info（§3.4/§2.3 决策 2）', async () => {
+    const app = await makeApp();
+    const cookieA = await registerAndVerify(app, 'au1a@example.com');
+    const cookieB = await registerAndVerify(app, 'au1b@example.com');
+    const wsA = await getPersonalWorkspace('au1a@example.com');
+    const userIdA = await getUserId('au1a@example.com');
+    const userIdB = await getUserId('au1b@example.com');
+    const createRo = await app.inject({ method: 'POST', url: '/research-objects', cookies: { openscience_session: cookieA }, payload: { workspaceId: wsA, title: 'Author RO' } });
+    const ro = createRo.json().researchObject;
+
+    // 创建者建名单（collab B 需是空间成员——个人空间不行，用 A 建两人名单）
+    const put = await app.inject({ method: 'PUT', url: `/research-objects/${ro.id}/authors`, cookies: { openscience_session: cookieA }, payload: { authors: [{ userId: userIdA, isCorresponding: true }, { userId: userIdB }] } });
+    expect(put.statusCode).toBe(200);
+    expect(put.json().authors).toHaveLength(2);
+    expect(put.json().authors[0].isCorresponding).toBe(true);
+
+    // 排序替换
+    const reorder = await app.inject({ method: 'PUT', url: `/research-objects/${ro.id}/authors`, cookies: { openscience_session: cookieA }, payload: { authors: [{ userId: userIdB }, { userId: userIdA, isCorresponding: true }] } });
+    expect(reorder.json().authors.map((a: { userId: string }) => a.userId)).toEqual([userIdB, userIdA]);
+
+    // 通讯超一人 → 409
+    const multi = await app.inject({ method: 'PUT', url: `/research-objects/${ro.id}/authors`, cookies: { openscience_session: cookieA }, payload: { authors: [{ userId: userIdA, isCorresponding: true }, { userId: userIdB, isCorresponding: true }] } });
+    expect(multi.statusCode).toBe(409);
+
+    // 贡献追加（A 添加自己的 CRediT）
+    const contrib = await app.inject({ method: 'POST', url: `/research-objects/${ro.id}/contributions`, cookies: { openscience_session: cookieA }, payload: { creditRole: 'conceptualization' } });
+    expect(contrib.statusCode).toBe(201);
+    const list = await app.inject({ method: 'GET', url: `/research-objects/${ro.id}/contributions`, cookies: { openscience_session: cookieA } });
+    expect(list.json().contributions).toHaveLength(1);
+
+    // change-info（§3.4 Merge 高风险审批查询）
+    const info = await app.inject({ method: 'GET', url: `/research-objects/${ro.id}/author-change-info`, cookies: { openscience_session: cookieA } });
+    expect(info.json().info.authors.map((a: { userId: string }) => a.userId)).toEqual([userIdB, userIdA]);
+    expect(info.json().info.contributorIds).toContain(userIdA);
+    await app.close();
+  });
+
+  it('非成员变更作者 → 404；public 匿名可读作者（§3.4/§4.2/§17）', async () => {
+    const app = await makeApp();
+    const cookieA = await registerAndVerify(app, 'au2a@example.com');
+    const cookieB = await registerAndVerify(app, 'au2b@example.com');
+    const wsA = await getPersonalWorkspace('au2a@example.com');
+    const userIdA = await getUserId('au2a@example.com');
+    const createRo = await app.inject({ method: 'POST', url: '/research-objects', cookies: { openscience_session: cookieA }, payload: { workspaceId: wsA, title: 'Author RO2' } });
+    const ro = createRo.json().researchObject;
+
+    // 非成员（B 非 A 空间成员）→ 404（§17 requireMembership）
+    const intruder = await app.inject({ method: 'PUT', url: `/research-objects/${ro.id}/authors`, cookies: { openscience_session: cookieB }, payload: { authors: [{ userId: userIdA }] } });
+    expect(intruder.statusCode).toBe(404);
+
+    // public 匿名可读作者
+    await app.inject({ method: 'PUT', url: `/research-objects/${ro.id}/authors`, cookies: { openscience_session: cookieA }, payload: { authors: [{ userId: userIdA }] } });
+    await prisma.researchObject.update({ where: { id: ro.id }, data: { visibility: 'public' } });
+    const anon = await app.inject({ method: 'GET', url: `/research-objects/${ro.id}/authors` });
+    expect(anon.statusCode).toBe(200);
+    expect(anon.json().authors).toHaveLength(1);
+    await app.close();
+  });
+});

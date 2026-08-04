@@ -19,8 +19,8 @@
 | `scripts/invite.mjs` | 邀请码管理 CLI（create/list/revoke，P1A-3） | 活文档 |
 | `scripts/seed-quota.mjs` | 配额占位值幂等 upsert CLI（--dry-run/--confirm，P1A-7，数值集中 `packages/domain/src/usage/seed-data.ts`） | 活文档 |
 | `scripts/cloud-sync.mjs` | 云上同步（tar-over-ssh，排除 .env/.git/node_modules/dist，P1A-7 固化） | 活文档 |
-| `apps/` | `web` 已实现三栏 SDF 编辑器（P1B-8）+ 移动端抽屉/分步 + WCAG AA（P1B-9）（lib/api + editor-state + suggestions + components/editor 七组件 + app/research-objects/[id]/edit + i18n 中英）；`api` 已含 Fastify `/auth`（P1A-3）+ `/workspaces`（P1A-4）+ RBAC preHandler 授权守卫（P1A-5）+ `/admin/audit-logs`（P1A-6）+ `/usage` 与 `/admin/quota-policies`、`/admin/credits`、`/admin/usage`（P1A-7）+ 安全基线 `src/security/`（P1A-8）+ **`/research-objects` + `/sdf`（P1B-2）** + **`/artifacts`（P1B-3）** + **`/commits` + `/versions` + comparison（P1B-4/5）** + **`/research/:publicId` 公开 URL（P1B-6）** + **`/visibility` + `/visibility-grants`（P1B-7）** + **`/versions/:id/export`（P1B-10 zip）** + **`/research-objects/:id/branches`（P1C-2，4 端点）** + **`/research-objects/:id/issues`（P1C-3，5 端点）** + **`/research-objects/:id/licenses`（P1C-4，4 端点）+ `/licenses/catalog`** + **`/research-objects/:id/forks`（P1C-5，2 端点）** + **`/research-objects/:id/pull-requests`（P1C-6，3 端点）**；`agent-worker`/`science-worker`/`sandbox-controller` 空壳 | 骨架 |
-| `packages/` | 11 个领域包 + **diff 包（P1B-5）+ identity 包（P1B-6）**；database/storage 已实现 P1A-2；storage 已加 P1B-3 `blob.ts`；versioning 已实现 P1B-4；identity 已实现 P1B-6；database 已加 P1A-8 `rate-limit.ts`；auth 已实现 P1A-3 + P1A-9；domain 已实现 P1A-4/5/7 + P1B-2/3/4/5/6/7/10（research-object/artifact/commit/diff/identity/visibility/export）+ **P1C-1（collab 枚举）+ P1C-2（branch 模块）+ P1C-3（issue 模块）+ P1C-4（license 模块）+ P1C-5（fork 模块）+ P1C-6（pr 模块）**；config 已加 P1B-3 storage + P1B-6 publicIdPrefix；sdf-schema 已实现 P1B-1；其余占位；云上集成 77/77 全绿（2026-08-04） | 已实现 |
+| `apps/` | `web` 已实现三栏 SDF 编辑器（P1B-8）+ 移动端抽屉/分步 + WCAG AA（P1B-9）（lib/api + editor-state + suggestions + components/editor 七组件 + app/research-objects/[id]/edit + i18n 中英）；`api` 已含 Fastify `/auth`（P1A-3）+ `/workspaces`（P1A-4）+ RBAC preHandler 授权守卫（P1A-5）+ `/admin/audit-logs`（P1A-6）+ `/usage` 与 `/admin/quota-policies`、`/admin/credits`、`/admin/usage`（P1A-7）+ 安全基线 `src/security/`（P1A-8）+ **`/research-objects` + `/sdf`（P1B-2）** + **`/artifacts`（P1B-3）** + **`/commits` + `/versions` + comparison（P1B-4/5）** + **`/research/:publicId` 公开 URL（P1B-6）** + **`/visibility` + `/visibility-grants`（P1B-7）** + **`/versions/:id/export`（P1B-10 zip）** + **`/research-objects/:id/branches`（P1C-2，4 端点）** + **`/research-objects/:id/issues`（P1C-3，5 端点）** + **`/research-objects/:id/licenses`（P1C-4，4 端点）+ `/licenses/catalog`** + **`/research-objects/:id/forks`（P1C-5，2 端点）** + **`/research-objects/:id/pull-requests`（P1C-6，3 端点）** + **`/research-objects/:id/authors` + `/contributions`（P1C-7，5 端点）**；`agent-worker`/`science-worker`/`sandbox-controller` 空壳 | 骨架 |
+| `packages/` | 11 个领域包 + **diff 包（P1B-5）+ identity 包（P1B-6）**；database/storage 已实现 P1A-2；storage 已加 P1B-3 `blob.ts`；versioning 已实现 P1B-4；identity 已实现 P1B-6；database 已加 P1A-8 `rate-limit.ts`；auth 已实现 P1A-3 + P1A-9；domain 已实现 P1A-4/5/7 + P1B-2/3/4/5/6/7/10（research-object/artifact/commit/diff/identity/visibility/export）+ **P1C-1（collab 枚举）+ P1C-2（branch 模块）+ P1C-3（issue 模块）+ P1C-4（license 模块）+ P1C-5（fork 模块）+ P1C-6（pr 模块）+ P1C-7（authorship 模块）**；config 已加 P1B-3 storage + P1B-6 publicIdPrefix；sdf-schema 已实现 P1B-1；其余占位；云上集成 79/79 全绿（2026-08-04） | 已实现 |
 | `.cursor/` | Cursor 编辑器配置 | 工具自管 |
 | `.taskmaster/` | task-master 任务状态 | 工具自管 |
 | `.memory/memory.jsonl` | Memory MCP 知识图谱存储（MEMORY_FILE_PATH 指定） | 工具自管，随 git 备份 |
@@ -85,6 +85,8 @@
 | `docs/plans/2026-08-04-p1c-5-fork-plan.md` | P1C-5 Fork 与来源关系及许可继承校验实施计划（已执行完毕，云上 74/74，task-master 4.5 done 2026-08-04） | 活文档 |
 | `docs/specs/2026-08-04-p1c-6-pr-design.md` | P1C-6 Pull Request 声明与提交流程设计（design gate 已确认：五决策，代码已实现 2026-08-04） | 活文档 |
 | `docs/plans/2026-08-04-p1c-6-pr-plan.md` | P1C-6 Pull Request 声明与提交流程实施计划（已执行完毕，云上 77/77，task-master 4.6 done 2026-08-04） | 活文档 |
+| `docs/specs/2026-08-04-p1c-7-authors-design.md` | P1C-7 作者组与 CRediT 贡献记录设计（design gate 已确认：五决策，代码已实现 2026-08-04） | 活文档 |
+| `docs/plans/2026-08-04-p1c-7-authors-plan.md` | P1C-7 作者组与 CRediT 贡献记录实施计划（已执行完毕，云上 79/79，task-master 4.7 done 2026-08-04） | 活文档 |
 | `docs/progress.md` | 进度日志，新条目置顶 | 活文档 |
 | `docs/handoff/` | 交接文档目录（阶段边界/换 agent/换电脑，必须入库） | 活文档 |
 | `docs/handoff/2026-07-28-before-p1a-2-handoff.md` | P1A-2 前交接：Phase 0 Accepted、P1A-1 done、下一任务 P1A-2 | 活文档 |
@@ -112,7 +114,8 @@
 | `docs/handoff/2026-08-04-p1c-3-issue-comment-done-handoff.md` | P1C-3 Issue 与评论收口交接：/issues API + 限流，云上 67/67，4.3 done，下一任务 P1C-4 许可选择 | 活文档 |
 | `docs/handoff/2026-08-04-p1c-4-license-done-handoff.md` | P1C-4 三类许可收口交接：/licenses API + 继承校验，云上 71/71，4.4 done，下一任务 P1C-5 Fork | 活文档 |
 | `docs/handoff/2026-08-04-p1c-5-fork-done-handoff.md` | P1C-5 Fork 收口交接：/forks API + Blob 共享，云上 74/74，4.5 done，下一任务 P1C-6 Pull Request | 活文档 |
-| `docs/handoff/2026-08-04-p1c-6-pr-done-handoff.md` | P1C-6 Pull Request 收口交接：/pull-requests API + 迁移 14，云上 77/77，4.6 done，下一任务 P1C-7 作者/CRediT | 活文档（当前最新） |
+| `docs/handoff/2026-08-04-p1c-6-pr-done-handoff.md` | P1C-6 Pull Request 收口交接：/pull-requests API + 迁移 14，云上 77/77，4.6 done，下一任务 P1C-7 作者/CRediT | 活文档 |
+| `docs/handoff/2026-08-04-p1c-7-authors-done-handoff.md` | P1C-7 作者组与 CRediT 收口交接：/authors API，云上 79/79，4.7 done，下一任务 P1C-8 Review/Merge | 活文档（当前最新） |
 | `docs/CODEBASE_AUDIT.md` | Phase 0 Scholars Tea 只读审计报告（地图/模块分类/风险登记/迁移含义） | 活文档 |
 | `docs/proposals/` | 方案/脑暴稿 | 空（旧方案0723已废弃不归档） |
 | `docs/decisions/` | 决策记录 ADR | ADR-001 已接受；ADR-002 已建 |

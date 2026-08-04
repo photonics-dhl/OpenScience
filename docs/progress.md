@@ -1,29 +1,28 @@
 # OpenScience (XGS) 进度日志
 
-## 2026-08-04 — P1C-6 Pull Request 声明与提交流程完成：/pull-requests API + 迁移 14，云上 77/77，task-master 4.6 done
+## 2026-08-04 — P1C-7 作者组与 CRediT 贡献记录完成：/authors API，云上 79/79，task-master 4.7 done
 
 ### ✅ Completed
 | 任务 | 详情 |
 |---|---|
-| design gate | 五决策：domain 声明强制校验 / 分支 diff 复用 / 许可继承校验 / Notification 事件占位 / 迁移 14 幂等键 |
-| migration 14 | pull_requests.idempotency_key @unique（additive）+ rollback |
-| domain pr/ | createPullRequest（§8.2 全声明强制校验 + 幂等重放 + 许可继承 + Notification + 审计）+ listPullRequests/getPullRequest（含 §7.3 分支 diff） |
-| API | POST/GET /research-objects/:id/pull-requests + GET /:prId + RATE_LIMIT 加行 |
-| 测试 | domain 单测 8 新增（209 总全绿）+ 集成 3 新增（collab 22/22）；**云上集成 77/77**（新增 P1C-6 3 + 既有 74） |
-| task-master 4.6 | done |
+| design gate | 五决策：作者组 = Author∪创建者 / 全量替换 / Contribution 幂等 / 空间成员可加贡献 / change-info 查询 |
+| 迁移 | 无（Author/Contribution 实体 P1C-1 迁移 12 已建，Restrict 不可抹除） |
+| domain authorship/ | setAuthors（全量替换 + 通讯至多一人 + 作者组权限）+ listAuthors/addContribution（append-only 幂等）/listContributions/getAuthorChangeInfo |
+| API | GET/PUT /research-objects/:id/authors + POST/GET /contributions + GET /author-change-info |
+| 测试 | domain 单测 10 新增（219 总全绿）+ 集成 2 新增（collab 24/24）；**云上集成 79/79**（新增 P1C-7 2 + 既有 77） |
+| task-master 4.7 | done |
 
 ### Key Decisions / 坑
-- **§8.2 强制校验（Q1）**：domain 层创建时全字段必填 + changedFiles/SdfFields 非空 + CRediT 角色合法 + data/codeLicense 目录校验 + conflictOfInterest 非空
-- **分支 diff（Q2）**：getPullRequest 用 compareVersions（target tip → source tip 版本），无版本 → null
-- **许可继承（Q3）**：validateLicenseInheritance(源RO, {text: 源.text, code: PR.code, data: PR.data})，违反 409
-- **事件（Q4）**：pull_request.opened 落 Notification 行（type + payload），P1D-2 接队列幂等重放
-- **幂等（Q5）**：迁移 14 idempotency_key @unique；重发同 key → 返回既有 PR
-- **坑**：zod contributor.userId 需 UUID（'u' → 400 非 404）；集成测试 PR_DECL 用合法 UUID
+- **作者组（Q1，§3.4）**：Author 表用户 ∪ RO 创建者；空名单创建者独属；非作者组变更 → 403
+- **无自动署名（§3.4）**：创建者不自动第一作者/通讯；无字数/Commit 计数自动排序（实现无任何自动逻辑）
+- **全量替换（Q2）**：顺序 = 数组序；通讯至多一人（MULTIPLE_CORRESPONDING 409）
+- **Contribution（Q3/Q4）**：append-only 不可删（数据层 Restrict 兜底）+ 同 user+role 幂等 + 空间成员可加（factual record §2.3 决策 2）
+- **Merge 审批查询（Q5）**：getAuthorChangeInfo 返回 authors + contributorIds（P1C-8 对比新增作者/改序）
 
 ### ⏳ Next Steps
-- [x] ~~P1C-6 Pull Request~~ 完成（2026-08-04）：/pull-requests API + 迁移 14，云上 77/77，4.6 done
-- [ ] **P1C-7（task-master 4.7）**：作者与 CRediT（§3.4 作者组决定署名 + 事实贡献者独立记录）
-- [ ] parked：P1A-3 终审项、P1A-5 deferred ①、/admin TOTP 上线路障、SDF Schema 债务（0.2.0）、病毒扫描实装（P1B-后续）、Version 发布状态机（P1B-后续）、真实 AI 提取（Phase 1D）、协作剩余 4 子任务（P1C-7~10）
+- [x] ~~P1C-7 作者与 CRediT~~ 完成（2026-08-04）：/authors API，云上 79/79，4.7 done
+- [ ] **P1C-8（task-master 4.8）**：Review/Merge（§8.3 Owner/Maintainer 审批 + 高风险作者变更 + 状态流转）
+- [ ] parked：P1A-3 终审项、P1A-5 deferred ①、/admin TOTP 上线路障、SDF Schema 债务（0.2.0）、病毒扫描实装（P1B-后续）、Version 发布状态机（P1B-后续）、真实 AI 提取（Phase 1D）、协作剩余 3 子任务（P1C-8~10）
 
 ---
 ## 2026-08-04 — P1B-10 SDF 标准导出包生成与校验完成：export API + 脱库校验，云上 58/58，task-master 3.10 done
