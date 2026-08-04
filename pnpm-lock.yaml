@@ -56,12 +56,18 @@ importers:
 
   apps/agent-worker:
     dependencies:
+      '@openscience/ai-gateway':
+        specifier: workspace:^
+        version: link:../../packages/ai-gateway
       '@openscience/database':
         specifier: workspace:^
         version: link:../../packages/database
       '@openscience/domain':
         specifier: workspace:^
         version: link:../../packages/domain
+      '@openscience/sdf-schema':
+        specifier: workspace:^
+        version: link:../../packages/sdf-schema
     devDependencies:
       '@types/node':
         specifier: 20.14.10

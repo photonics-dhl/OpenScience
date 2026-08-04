@@ -8,16 +8,40 @@ export default function SuggestionsPanel({
   suggestions,
   onApply,
   onDismiss,
+  onExtract,
+  extracting,
+  extractProgress,
+  extractError,
 }: {
   suggestions: AiSuggestion[];
   onApply: (id: string) => void;
   onDismiss: (id: string) => void;
+  /** P1D-3：触发 AI 提取（§9.3 异步长任务）。 */
+  onExtract?: () => void;
+  extracting?: boolean;
+  extractProgress?: number;
+  extractError?: string | null;
 }) {
   const t = useTranslations('editor');
 
   return (
     <div>
       <h3 className="pane-title">{t('suggestions')}</h3>
+      {/* P1D-3：AI 提取入口（§5.4 提取为长任务，显示进度 §18.3） */}
+      {onExtract && (
+        <div className="suggestion-extract">
+          <button className="btn btn-primary" onClick={onExtract} disabled={extracting}>
+            {extracting ? t('extracting') : t('extract')}
+          </button>
+          {extracting && extractProgress !== undefined && (
+            <div className="progress-bar" role="progressbar" aria-valuenow={extractProgress} aria-valuemin={0} aria-valuemax={100}>
+              <div className="progress-fill" style={{ width: `${extractProgress}%` }} />
+              <span className="progress-label">{extractProgress}%</span>
+            </div>
+          )}
+          {extractError && <div className="error-panel" role="alert">{extractError}</div>}
+        </div>
+      )}
       {suggestions.length === 0 && <p className="pane-meta">{t('noSuggestions')}</p>}
       {suggestions.map((s) => (
         <div key={s.id} className="suggestion-card">

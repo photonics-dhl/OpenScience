@@ -654,7 +654,7 @@
             "id": 3,
             "title": "实现 SDF Extractor 建议式提取与确认写入",
             "description": "实现 SDF Extractor 子 Agent：从正文提取六字段与关系草案（Spec §9.2），提取结果以建议/差异形式展示，用户确认后才写入 SDF（Spec §5.4），支撑核心闭环的 AI 结构化 → 人工确认环节（Spec §2.1-2）。",
-            "status": "pending",
+            "status": "done",
             "dependencies": [
               "5.2",
               "3"
@@ -662,7 +662,8 @@
             "priority": "high",
             "details": "要点：1) 输出必须经 Gateway Schema 校验（六字段对应 packages/sdf-schema 的 JSON Schema，Spec §5.1、§5.3）；2) 禁止直接覆盖用户正文（Spec §9.2 禁止事项）；3) 编辑器右栏展示逐字段 diff，用户逐字段或整批接受/拒绝，确认后才落库（Spec §5.4）；4) 接受动作走 R1 级审批（复用 P1D-4 的统一 diff 批量批准）；5) 提取为长任务，走 P1D-2 异步通道并显示进度。涉及模块：apps/agent-worker、apps/web 编辑器右栏、packages/sdf-schema。\n验收: 步骤4,5",
             "testStrategy": "单元测试：提取结果 Schema 校验与 diff 生成；E2E（Spec §21.1）：输入正文 → AI 提取六字段 → 审核并接受建议（对应验收主流程步骤4、5，Spec §21.2）。",
-            "parentId": "5"
+            "parentId": "5",
+            "updatedAt": "2026-08-04T11:45:59.954Z"
           },
           {
             "id": 4,
@@ -750,7 +751,7 @@
             "parentId": "5"
           }
         ],
-        "updatedAt": "2026-08-04T11:13:48.736Z"
+        "updatedAt": "2026-08-04T11:45:59.954Z"
       },
       {
         "id": "6",
@@ -873,7 +874,7 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-08-04T11:13:48.736Z",
+      "lastModified": "2026-08-04T11:45:59.954Z",
       "taskCount": 6,
       "completedCount": 4,
       "tags": [

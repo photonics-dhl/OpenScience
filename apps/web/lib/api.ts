@@ -255,3 +255,37 @@ export async function listNotifications(unreadOnly = false): Promise<{ notificat
 export async function markNotificationRead(id: string): Promise<{ notification: NotificationView }> {
   return request(`/api/notifications/${id}/read`, { method: 'POST' });
 }
+
+// ===== P1D-3：SDF Extractor 异步提取 =====
+
+export interface AgentTaskView {
+  id: string;
+  sessionId: string;
+  kind: string;
+  status: 'pending' | 'running' | 'succeeded' | 'failed';
+  progress: number;
+  result: Record<string, unknown> | null;
+  error: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+/** 建 Hermes 会话 + 提交 sdf.extract 任务（§9.3 异步 + §16 幂等）。 */
+export async function submitExtractTask(roId: string, manuscriptText: string): Promise<{ task: AgentTaskView }> {
+  const session = await request<{ session: { id: string } }>('/api/agent/sessions', {
+    method: 'POST',
+    body: JSON.stringify({ researchObjectId: roId, kind: 'extract', title: 'SDF 提取' }),
+  });
+  const task = await request<{ task: AgentTaskView }>('/api/agent/tasks', {
+    method: 'POST',
+    body: JSON.stringify({ sessionId: session.session.id, kind: 'sdf.extract', payload: { manuscriptText } }),
+  });
+  return task;
+}
+
+/** 轮询任务进度（§18.3 可恢复）。 */
+export async function getAgentTask(roId: string, taskId: string): Promise<{ task: AgentTaskView }> {
+  void roId;
+  return request(`/api/agent/tasks/${taskId}`);
+}
+

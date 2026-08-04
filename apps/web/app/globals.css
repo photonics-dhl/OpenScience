@@ -553,3 +553,30 @@ body {
 .collab-actions {
   margin-top: 16px;
 }
+
+/* ===== P1D-3 AI 提取（§5.4 + §18.3 进度）===== */
+.suggestion-extract {
+  margin-bottom: 12px;
+}
+.progress-bar {
+  position: relative;
+  height: 18px;
+  background: var(--color-border);
+  border-radius: 999px;
+  overflow: hidden;
+  margin-top: 8px;
+}
+.progress-fill {
+  height: 100%;
+  background: #2563eb;
+  transition: width 0.3s;
+}
+.progress-label {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.7em;
+  color: #0f172a;
+}

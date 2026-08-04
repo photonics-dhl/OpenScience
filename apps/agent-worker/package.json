@@ -10,8 +10,10 @@
     "test": "vitest run"
   },
   "dependencies": {
+    "@openscience/ai-gateway": "workspace:^",
     "@openscience/database": "workspace:^",
-    "@openscience/domain": "workspace:^"
+    "@openscience/domain": "workspace:^",
+    "@openscience/sdf-schema": "workspace:^"
   },
   "devDependencies": {
     "@types/node": "20.14.10",

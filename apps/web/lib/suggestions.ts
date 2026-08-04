@@ -58,3 +58,20 @@ export function demoSuggestions(currentCore: SdfCore): AiSuggestion[] {
   }
   return list;
 }
+
+/**
+ * P1D-3：Extractor 结果 core → AiSuggestion[]（§5.4 逐字段 diff 展示）。
+ * 仅非空且与当前不同的字段产出建议；source='extractor'。
+ */
+export function coreToSuggestions(core: SdfCore, currentCore: SdfCore): AiSuggestion[] {
+  const fields = ['problem', 'insight', 'method', 'results', 'limitations', 'reproducibility'] as const;
+  const list: AiSuggestion[] = [];
+  for (const field of fields) {
+    const suggestion = (core[field] ?? '').trim();
+    const before = (currentCore[field] ?? '').trim();
+    if (!suggestion || suggestion === before) continue;
+    list.push({ id: `extract-${field}`, field, suggestion, before, status: 'pending', source: 'extractor' });
+  }
+  return list;
+}
+

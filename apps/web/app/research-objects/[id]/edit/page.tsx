@@ -9,9 +9,11 @@ import SuggestionsPanel from '../../../../components/editor/SuggestionsPanel';
 import ArtifactUploader from '../../../../components/editor/ArtifactUploader';
 import {
   createCommit,
+  getAgentTask,
   getResearchObject,
   getVersionDiff,
   listVersions,
+  submitExtractTask,
   updateSdf,
   type ArtifactReference,
   type SdfCore,
@@ -26,6 +28,7 @@ import {
 } from '../../../../lib/editor-state';
 import {
   applySuggestionsToCore,
+  coreToSuggestions,
   demoSuggestions,
   suggestionReducer,
 } from '../../../../lib/suggestions';
@@ -52,7 +55,11 @@ export default function EditorPage({ params }: { params: { id: string } }) {
   const [saving, setSaving] = useState(false);
   const [committing, setCommitting] = useState(false);
   const [commitMsg, setCommitMsg] = useState('');
+  // P1D-3：AI 提取状态（§5.4 + §18.3 进度可恢复）
+  const [extracting, setExtracting] = useState(false);
+  const [extractProgress, setExtractProgress] = useState(0);
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const pollTimer = useRef<ReturnType<typeof setInterval> | null>(null);
 
   // 加载 RO + SDF + 版本
   useEffect(() => {
@@ -89,6 +96,13 @@ export default function EditorPage({ params }: { params: { id: string } }) {
     return () => { if (saveTimer.current) clearTimeout(saveTimer.current); };
   }, [state.core, state.dirty, roId]);
 
+  // 卸载时清提取轮询（§18.3）
+  useEffect(() => {
+    return () => {
+      if (pollTimer.current) clearInterval(pollTimer.current);
+    };
+  }, []);
+
   // 预置建议（Phase 1D extractor 接同通路）
   useEffect(() => {
     dispatchSuggestions({ type: 'reset' });
@@ -110,6 +124,42 @@ export default function EditorPage({ params }: { params: { id: string } }) {
 
   function dismissSuggestion(id: string) {
     dispatchSuggestions({ type: 'dismiss', id });
+  }
+
+  /** P1D-3：AI 提取（§9.3 异步长任务 + §18.3 轮询进度）。提取只产出建议，不写 SDF（§9.2）。 */
+  async function handleExtract() {
+    setExtracting(true);
+    setExtractProgress(0);
+    setErrorMsg(null);
+    try {
+      const { task } = await submitExtractTask(roId, Object.values(state.core).join('\n\n'));
+      pollTimer.current = setInterval(async () => {
+        try {
+          const cur = await getAgentTask(roId, task.id);
+          setExtractProgress(cur.task.progress ?? 0);
+          if (cur.task.status === 'succeeded') {
+            if (pollTimer.current) clearInterval(pollTimer.current);
+            const core = cur.task.result?.core as SdfCore | undefined;
+            if (core) {
+              dispatchSuggestions({ type: 'reset' });
+              for (const s of coreToSuggestions(core, state.core)) dispatchSuggestions({ type: 'add', suggestion: s });
+            }
+            setExtracting(false);
+          } else if (cur.task.status === 'failed') {
+            if (pollTimer.current) clearInterval(pollTimer.current);
+            setErrorMsg(cur.task.error ?? 'AI 提取失败');
+            setExtracting(false);
+          }
+        } catch (e) {
+          if (pollTimer.current) clearInterval(pollTimer.current);
+          setErrorMsg(e instanceof Error ? e.message : String(e));
+          setExtracting(false);
+        }
+      }, 1500);
+    } catch (e) {
+      setErrorMsg(e instanceof Error ? e.message : String(e));
+      setExtracting(false);
+    }
   }
 
   /** 保存到 SDF（乐观锁，§16）。 */
@@ -224,6 +274,9 @@ export default function EditorPage({ params }: { params: { id: string } }) {
             suggestions={suggestions}
             onApply={applySuggestion}
             onDismiss={dismissSuggestion}
+            onExtract={handleExtract}
+            extracting={extracting}
+            extractProgress={extractProgress}
           />
         }
       />

@@ -1,7 +1,7 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { createPrismaClient, createRedisClient } from '@openscience/database';
 import { createAgentSession, submitAgentTask, getAgentTask, AGENT_TASK_QUEUE } from '@openscience/domain';
-import { pollOnce } from '@openscience/agent-worker';
+import { createHandlers, createPollOnce } from '@openscience/agent-worker';
 
 /**
  * P1D-2 集成测试（云上执行）：真 PG/Redis 队列。
@@ -11,12 +11,17 @@ import { pollOnce } from '@openscience/agent-worker';
 const prisma = createPrismaClient();
 const redis = createRedisClient();
 
+let pollOnce: (deps: unknown) => Promise<boolean>;
+
 beforeAll(async () => {
   // 清队列 + DB 残留（防跨运行 poll 陈旧任务 id）
   await redis.del(AGENT_TASK_QUEUE);
   await redis.del(`${AGENT_TASK_QUEUE}:processing`);
   await prisma.agentTask.deleteMany();
   await prisma.agentSession.deleteMany();
+  // worker 消费者（demo.echo handler；gateway 仅 sdf.extract 用，此处 stub）
+  const handlers = createHandlers({} as never);
+  pollOnce = await createPollOnce(handlers);
 });
 
 afterAll(async () => {
@@ -51,7 +56,7 @@ describe('P1D-2 Hermes 异步任务通道（云上，迁移 15）', () => {
     const done = await getAgentTask(deps, { userId: user.id, taskId: task.id });
     expect(done.status).toBe('succeeded');
     expect(done.progress).toBe(100);
-    expect(done.result).toMatchObject({ echoed: 'ping' });
+    expect(done.result).toMatchObject({ echoed: true });
 
     // §16 幂等重放：已完成任务再 poll → skip（不重复执行/不覆盖）
     const replay = await pollOnce(deps);

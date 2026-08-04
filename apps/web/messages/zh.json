@@ -39,6 +39,8 @@
     "draftFound": "检测到未保存的草稿",
     "diffTitle": "变更差异",
     "noSuggestions": "暂无 AI 建议",
+    "extract": "AI 提取",
+    "extracting": "提取中…",
     "commitMessage": "提交说明",
     "commit": "创建提交",
     "yes": "是",

@@ -39,6 +39,8 @@
     "draftFound": "Unsaved draft found",
     "diffTitle": "Change diff",
     "noSuggestions": "No AI suggestions",
+    "extract": "AI Extract",
+    "extracting": "Extracting…",
     "commitMessage": "Commit message",
     "commit": "Create commit",
     "yes": "Yes",
