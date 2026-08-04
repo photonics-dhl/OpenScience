@@ -1,29 +1,29 @@
 # OpenScience (XGS) 进度日志
 
-## 2026-08-04 — P1C-4 三类许可选择与继承规则完成：/licenses API + 继承校验底座，云上 71/71，task-master 4.4 done
+## 2026-08-04 — P1C-5 Fork 与来源关系及许可继承完成：/forks API + Blob 共享，云上 74/74，task-master 4.5 done
 
 ### ✅ Completed
 | 任务 | 详情 |
 |---|---|
-| design gate | 五决策：单 PUT 全量/版本级未公开可设/domain 层不可变/全兼容矩阵/文案 config 占位 |
-| 迁移 | 无（LicenseAssignment 实体 P1C-1 迁移 12 已建） |
-| domain license/ | catalog.ts（LICENSE_CATALOG 3+4+4 + 校验）+ licenses.ts（setLicenses/getEffectiveLicenses/setVersionLicenses/validateLicenseInheritance 全兼容矩阵） |
-| API | /licenses 5 端点（GET/PUT RO 级 + GET/PUT 版本级 + GET /licenses/catalog） |
-| 测试 | domain 单测 12 新增（196 总全绿）+ 集成 4 新增（collab 16/16）；**云上集成 71/71**（新增 P1C-4 4 + 既有 67） |
-| task-master 4.4 | done |
+| design gate | 五决策：源版本无需 published / 单事务 Blob 引用复刻 / 许可默认复制显式覆盖须校验 / 来源只读 / 新 RO private 起步 |
+| 迁移 | 无（ForkRelation 实体 P1C-1 迁移 12 已建，唯一 + Restrict 来源不可移除） |
+| domain fork/ | forkResearchObject（单事务：新 RO + sdf 快照 + artifact 复制同 blobSha256 + initial commit + manifest + ForkRelation §6.2 哈希 + 许可继承 + unique ID 内联分配）+ getForkSource（只读） |
+| API | POST /research-objects/:id/forks + GET /research-objects/:id/fork-source |
+| 测试 | domain 单测 5 新增（201 总全绿）+ 集成 3 新增（collab 19/19）；**云上集成 74/74**（新增 P1C-5 3 + 既有 71） |
+| task-master 4.5 | done |
 
 ### Key Decisions / 坑
-- **目录（§6.3）**：text 3（CC-BY/CC-BY-NC/ARR）+ code 4（MIT/Apache/GPL/专有）+ data 4（CC0/CC-BY/CUSTOM/禁下载）；仅标准标识 + 名称，法律文案 §24 留配置位
-- **已公开不可变（§6.3）**：setVersionLicenses 查 version.status，published → VERSION_PUBLISHED（409）；draft 可设覆盖 RO 级
-- **继承矩阵（§8.1 底座）**：可加严不可放宽——ARR/专有/NO-DOWNLOAD/CUSTOM 仅同值、GPL 不可改宽松、CC-BY-NC 不可去 NC、CC0/CC-BY 可任意；供 P1C-5 Fork/P1C-6 PR 调用
-- **幂等**：@@unique([roId, versionId, licenseType])，但 Prisma upsert 复合键含 null 不接受 → findFirst + update/create 分支
-- **有效许可读取**：getEffectiveLicenses 版本级优先回退 RO 级（§5.3 manifest.licenses 结构）
-- **坑**：markdownlint MD040 裸 ``` 需语言标注；license 单测 unused db
+- **§8.1 来源永久保留**：ForkRelation forkedRoId 唯一 + 三 FK Restrict（无删除路径，P1C-1 已测）
+- **Blob 引用共享（§7.1）**：fork 复制 artifact 行同 blobSha256，物理 Blob MinIO 内容寻址共享不复制数据
+- **许可继承（§6.3 + P1C-4）**：默认复制源有效许可；显式覆盖须 validateLicenseInheritance 通过，放宽 → INHERITANCE_VIOLATION 409
+- **仅 public 源（§4.2）**：private/invite_only → SOURCE_NOT_PUBLIC（404 不泄露）
+- **unique ID（§6.1）**：generatePublicId + updateMany where publicId=null 并发安全
+- **坑（关键）**：**Prisma 嵌套事务——fork 外层 $transaction + assignPublicId 内层 $transaction → 真 PG 报错 500**；本地 fake $transaction 无嵌套检测故单测过、云上崩。修复：fork 内联分配 publicId（不调 assignPublicId）
 
 ### ⏳ Next Steps
-- [x] ~~P1C-4 许可选择~~ 完成（2026-08-04）：/licenses API + 继承校验，云上 71/71，4.4 done
-- [ ] **P1C-5（task-master 4.5）**：Fork（§8.1 来源保留/继承校验/unique ID，ForkRelation 实体）
-- [ ] parked：P1A-3 终审项、P1A-5 deferred ①、/admin TOTP 上线路障、SDF Schema 债务（0.2.0）、病毒扫描实装（P1B-后续）、Version 发布状态机（P1B-后续）、真实 AI 提取（Phase 1D）、协作剩余 6 子任务（P1C-5~10）
+- [x] ~~P1C-5 Fork~~ 完成（2026-08-04）：/forks API + Blob 共享，云上 74/74，4.5 done
+- [ ] **P1C-6（task-master 4.6）**：Pull Request（§8.2 全声明 + §8.1 许可继承 + 分支 diff）
+- [ ] parked：P1A-3 终审项、P1A-5 deferred ①、/admin TOTP 上线路障、SDF Schema 债务（0.2.0）、病毒扫描实装（P1B-后续）、Version 发布状态机（P1B-后续）、真实 AI 提取（Phase 1D）、协作剩余 5 子任务（P1C-6~10）
 
 ---
 ## 2026-08-04 — P1B-10 SDF 标准导出包生成与校验完成：export API + 脱库校验，云上 58/58，task-master 3.10 done

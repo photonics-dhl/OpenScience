@@ -13,6 +13,7 @@ import { registerCommitRoutes } from './routes/commits';
 import { registerBranchRoutes } from './routes/branches';
 import { registerIssueRoutes } from './routes/issues';
 import { registerLicenseRoutes } from './routes/licenses';
+import { registerForkRoutes } from './routes/forks';
 import { registerResearchRoutes } from './routes/research';
 import { registerRateLimit } from './security/rate-limit';
 import { registerSecurity, type SecurityOptions } from './security/security';
@@ -31,6 +32,8 @@ export interface BuildAppOptions extends AuthRouteDeps {
   rateLimitEnabled?: boolean;
   /** P1B-3：对象存储（/artifacts 上传下载）。缺省 undefined = 不注册 artifacts 路由（旧测试零影响）。 */
   storage?: StorageAdapter;
+  /** P1B-6：公开 ID 前缀（PUBLIC_ID_PREFIX env，§24）。缺省 'OSR'。 */
+  publicIdPrefix?: string;
 }
 
 export async function buildApp(opts: BuildAppOptions): Promise<FastifyInstance> {
@@ -85,6 +88,7 @@ export async function buildApp(opts: BuildAppOptions): Promise<FastifyInstance> 
     const storage = opts.storage;
     await app.register(async (instance) => registerArtifactRoutes(instance, { ...opts, storage }), {});
     await app.register(async (instance) => registerCommitRoutes(instance, { ...opts, storage }), {});
+    await app.register(async (instance) => registerForkRoutes(instance, { ...opts, storage }), {});
   }
   return app;
 }

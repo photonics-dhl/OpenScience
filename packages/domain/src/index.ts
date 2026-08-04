@@ -113,6 +113,11 @@ export {
   setLicenses, getEffectiveLicenses, setVersionLicenses, validateLicenseInheritance,
   type Licenses, type LicenseAssignmentView, type LicenseInheritanceResult, type LicenseInheritanceViolation,
 } from './license/licenses';
+export { ForkError, type ForkErrorCode } from './fork/errors';
+export {
+  forkResearchObject, getForkSource,
+  type ForkSourceDetail, type ForkResult, type ForkResearchObjectInput,
+} from './fork/forks';
 export { buildExportPackage, classifyArtifact, type ExportFile } from './export/packager';
 export { validateExportPackage, type ExportValidationResult } from './export/validate';
 export { buildManifest, type BuildManifestInput } from './export/manifest';

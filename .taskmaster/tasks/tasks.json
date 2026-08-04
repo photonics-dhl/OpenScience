@@ -520,7 +520,7 @@
             "id": 5,
             "title": "实现 Fork 与来源关系及许可继承校验",
             "description": "实现从特定公开版本 Fork 出独立衍生 RO（Spec §8.1）：新 RO 获得新 unique ID，永久保留来源对象、来源版本与内容哈希，来源许可与归属要求继续生效。",
-            "status": "pending",
+            "status": "done",
             "dependencies": [
               "4.1",
               "4.4"
@@ -528,7 +528,8 @@
             "priority": "high",
             "details": "ForkRelation 记录 source RO、source Version、内容哈希（§8.1、§15）；Fork 时复制该版本 Manifest 指向的 Blob 引用（内容寻址复用 P1B，不复制物理数据）；原作者不会自动成为新 RO 作者（§8.1）；Fork 作者不能移除来源关系（数据层无外键删除路径）；调用 P1C-4 的继承校验函数验证来源许可，不满足继承要求时阻断 Fork 或按来源许可限制新 RO 许可选项（§6.3）；仅允许 Fork public 版本（可见性规则 §4.2）。\n验收: 步骤11",
             "testStrategy": "单元测试：来源关系不可移除、许可继承校验通过与拒绝用例；集成测试：Fork 后 Blob 引用共享、新 unique ID 生成（§21.1 单元+集成层）；阶段验收点：§21.2 步骤 11 的 Fork 环节。",
-            "parentId": "4"
+            "parentId": "4",
+            "updatedAt": "2026-08-04T08:28:59.775Z"
           },
           {
             "id": 6,
@@ -601,7 +602,7 @@
             "parentId": "4"
           }
         ],
-        "updatedAt": "2026-08-04T08:08:30.383Z"
+        "updatedAt": "2026-08-04T08:28:59.775Z"
       },
       {
         "id": "5",
@@ -864,7 +865,7 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-08-04T08:08:30.384Z",
+      "lastModified": "2026-08-04T08:28:59.779Z",
       "taskCount": 6,
       "completedCount": 3,
       "tags": [

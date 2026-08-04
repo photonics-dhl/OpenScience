@@ -465,3 +465,86 @@ describe('P1C-4 三类许可（云上，无新迁移）', () => {
     await app.close();
   });
 });
+
+describe('P1C-5 Fork（云上，无新迁移）', () => {
+  it('Fork 全流程：public RO + commit → 另一用户 fork → publicId + ForkRelation + Blob 引用共享 + 许可复制（§8.1/§7.1/§6.3）', async () => {
+    const app = await makeApp();
+    const cookieA = await registerAndVerify(app, 'f1a@example.com');
+    const cookieB = await registerAndVerify(app, 'f1b@example.com');
+    const wsA = await getPersonalWorkspace('f1a@example.com');
+    const wsB = await getPersonalWorkspace('f1b@example.com');
+
+    // 源 RO：public + 许可 + commit + artifact
+    const createRo = await app.inject({ method: 'POST', url: '/research-objects', cookies: { openscience_session: cookieA }, payload: { workspaceId: wsA, title: 'Fork Source' } });
+    const ro = createRo.json().researchObject;
+    await prisma.researchObject.update({ where: { id: ro.id }, data: { visibility: 'public' } }); // 绕过扩大审批
+    await app.inject({ method: 'PUT', url: `/research-objects/${ro.id}/licenses`, cookies: { openscience_session: cookieA }, payload: { text: 'CC-BY-4.0', code: 'MIT', data: 'CC0-1.0' } });
+
+    // 上传 artifact（multipart）+ commit（version=1 必须）
+    const boundary = `----fork${Date.now()}`;
+    const csv = Buffer.from('a,b\n1,2\n');
+    const parts = Buffer.concat([
+      Buffer.from(`--${boundary}\r\nContent-Disposition: form-data; name="workspaceId"\r\n\r\n${wsA}\r\n`),
+      Buffer.from(`--${boundary}\r\nContent-Disposition: form-data; name="logicalPath"\r\n\r\ndata/a.csv\r\n`),
+      Buffer.from(`--${boundary}\r\nContent-Disposition: form-data; name="file"; filename="a.csv"\r\nContent-Type: text/csv\r\n\r\n`),
+      csv,
+      Buffer.from(`\r\n--${boundary}--\r\n`),
+    ]);
+    const upload = await app.inject({ method: 'POST', url: '/artifacts/upload', cookies: { openscience_session: cookieA }, payload: parts, headers: { 'content-type': `multipart/form-data; boundary=${boundary}` } });
+    expect(upload.statusCode).toBe(201);
+    const artifactId = upload.json().artifact.artifactId;
+
+    const commit = await app.inject({ method: 'POST', url: `/research-objects/${ro.id}/commits`, cookies: { openscience_session: cookieA }, payload: { message: 'v1', version: 1, artifacts: [{ logicalPath: 'data/a.csv', artifactId }] } });
+    expect(commit.statusCode).toBe(201);
+
+    // Fork（另一用户）
+    const fork = await app.inject({ method: 'POST', url: `/research-objects/${ro.id}/forks`, cookies: { openscience_session: cookieB }, payload: { workspaceId: wsB } });
+    expect(fork.statusCode).toBe(201);
+    const forked = fork.json();
+    expect(forked.researchObject.publicId).toMatch(/^OSR-\d{4}-\d{6}$/);
+
+    // ForkRelation 来源保留
+    const forkSource = await app.inject({ method: 'GET', url: `/research-objects/${forked.researchObject.id}/fork-source`, cookies: { openscience_session: cookieB } });
+    expect(forkSource.json().forkSource.sourceRoId).toBe(ro.id);
+
+    // Blob 引用共享（§7.1）：fork manifest entry blobSha256 = 源 artifact blobSha256
+    const forkVersion = await prisma.version.findFirst({ where: { researchObjectId: forked.researchObject.id } });
+    const forkManifest = await prisma.versionManifest.findUnique({ where: { versionId: forkVersion!.id }, include: { entries: true } });
+    const srcArtifact = await prisma.artifact.findUnique({ where: { id: artifactId } });
+    expect(forkManifest!.entries[0].blobSha256).toBe(srcArtifact!.blobSha256);
+
+    // 许可复制（§8.1 来源许可继续生效）
+    const forkedLicenses = await prisma.licenseAssignment.findMany({ where: { researchObjectId: forked.researchObject.id } });
+    expect(forkedLicenses).toHaveLength(3);
+    await app.close();
+  });
+
+  it('非 public 源 fork → 404（§4.2 仅 public 可 fork + §17 不泄露）', async () => {
+    const app = await makeApp();
+    const cookieA = await registerAndVerify(app, 'f2a@example.com');
+    const cookieB = await registerAndVerify(app, 'f2b@example.com');
+    const wsA = await getPersonalWorkspace('f2a@example.com');
+    const wsB = await getPersonalWorkspace('f2b@example.com');
+    const createRo = await app.inject({ method: 'POST', url: '/research-objects', cookies: { openscience_session: cookieA }, payload: { workspaceId: wsA, title: 'Private Source' } });
+    const ro = createRo.json().researchObject;
+    const fork = await app.inject({ method: 'POST', url: `/research-objects/${ro.id}/forks`, cookies: { openscience_session: cookieB }, payload: { workspaceId: wsB } });
+    expect(fork.statusCode).toBe(404);
+    await app.close();
+  });
+
+  it('许可继承阻断：源 ARR → 显式放宽 CC-BY → 409（§6.3）', async () => {
+    const app = await makeApp();
+    const cookieA = await registerAndVerify(app, 'f3a@example.com');
+    const cookieB = await registerAndVerify(app, 'f3b@example.com');
+    const wsA = await getPersonalWorkspace('f3a@example.com');
+    const wsB = await getPersonalWorkspace('f3b@example.com');
+    const createRo = await app.inject({ method: 'POST', url: '/research-objects', cookies: { openscience_session: cookieA }, payload: { workspaceId: wsA, title: 'ARR Source' } });
+    const ro = createRo.json().researchObject;
+    await prisma.researchObject.update({ where: { id: ro.id }, data: { visibility: 'public' } });
+    await app.inject({ method: 'PUT', url: `/research-objects/${ro.id}/licenses`, cookies: { openscience_session: cookieA }, payload: { text: 'ALL-RIGHTS-RESERVED', code: 'MIT', data: 'CC0-1.0' } });
+    await app.inject({ method: 'POST', url: `/research-objects/${ro.id}/commits`, cookies: { openscience_session: cookieA }, payload: { message: 'v1', version: 1 } });
+    const fork = await app.inject({ method: 'POST', url: `/research-objects/${ro.id}/forks`, cookies: { openscience_session: cookieB }, payload: { workspaceId: wsB, licenses: { text: 'CC-BY-4.0', code: 'MIT', data: 'CC0-1.0' } } });
+    expect(fork.statusCode).toBe(409);
+    await app.close();
+  });
+});
