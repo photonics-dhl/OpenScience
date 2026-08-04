@@ -26,11 +26,12 @@ interface FakeDb {
   publications: any[];
   visibilityGrants: any[];
   visibilityRequests: any[];
+  pullRequests: any[];
 }
 
 /** 内存版 Prisma 子集：覆盖 workspace 领域用到的调用面。 */
 export function createFakePrisma(): { prisma: PrismaClient; db: FakeDb } {
-  const db: FakeDb = { users: [], workspaces: [], memberships: [], workspaceInvitations: [], mailOutbox: [], quotaPolicies: [], usageLedger: [], researchObjects: [], sdfDocuments: [], sdfNodes: [], blobs: [], artifacts: [], branches: [], commits: [], changesets: [], versions: [], versionManifests: [], manifestEntries: [], identifiers: [], publications: [], visibilityGrants: [], visibilityRequests: [] };
+  const db: FakeDb = { users: [], workspaces: [], memberships: [], workspaceInvitations: [], mailOutbox: [], quotaPolicies: [], usageLedger: [], researchObjects: [], sdfDocuments: [], sdfNodes: [], blobs: [], artifacts: [], branches: [], commits: [], changesets: [], versions: [], versionManifests: [], manifestEntries: [], identifiers: [], publications: [], visibilityGrants: [], visibilityRequests: [], pullRequests: [] };
   let seq = 0;
   const nextId = () => `00000000-0000-4000-8000-${String(++seq).padStart(12, '0')}`;
   const p2002 = () => {
@@ -320,16 +321,44 @@ export function createFakePrisma(): { prisma: PrismaClient; db: FakeDb } {
       },
     },
     branch: {
-      findFirst: async ({ where }: any) =>
-        db.branches.find(
+      findFirst: async ({ where, include }: any) => {
+        const row = db.branches.find(
           (b) =>
             (where.researchObjectId === undefined || b.researchObjectId === where.researchObjectId) &&
+            (where.id === undefined || b.id === where.id) &&
             (where.name === undefined || b.name === where.name),
-        ) ?? null,
-      create: async ({ data }: any) => {
+        ) ?? null;
+        if (!row || !include) return row;
+        const commits = db.commits
+          .filter((c) => c.branchId === row.id)
+          .sort((a, b) => b.createdAt - a.createdAt)
+          .slice(0, include.commits?.take ?? 1);
+        return { ...row, commits, _count: { commits: db.commits.filter((c) => c.branchId === row.id).length } };
+      },
+      findMany: async ({ where, include, orderBy }: any) => {
+        const rows = db.branches.filter(
+          (b) => (where.researchObjectId === undefined || b.researchObjectId === where.researchObjectId),
+        );
+        if (orderBy?.[0]?.isDefault === 'desc') rows.sort((a, b) => (b.isDefault ? 1 : 0) - (a.isDefault ? 1 : 0));
+        return rows.map((b) => {
+          const commits = db.commits
+            .filter((c) => c.branchId === b.id)
+            .sort((a, c2) => c2.createdAt - a.createdAt)
+            .slice(0, include?.commits?.take ?? 1);
+          return { ...b, commits, _count: { commits: db.commits.filter((c) => c.branchId === b.id).length } };
+        });
+      },
+      create: async ({ data, include }: any) => {
         const row = { id: nextId(), isDefault: false, createdAt: new Date(), ...data };
+        if (db.branches.some((b) => b.researchObjectId === row.researchObjectId && b.name === row.name)) throw p2002();
         db.branches.push(row);
-        return row;
+        if (!include) return row;
+        const commits = db.commits.filter((c) => c.branchId === row.id).slice(0, include.commits?.take ?? 1);
+        return { ...row, commits, _count: { commits: db.commits.filter((c) => c.branchId === row.id).length } };
+      },
+      delete: async ({ where }: any) => {
+        const idx = db.branches.findIndex((b) => b.id === where.id);
+        return db.branches.splice(idx, 1)[0];
       },
     },
     commit: {
@@ -344,6 +373,8 @@ export function createFakePrisma(): { prisma: PrismaClient; db: FakeDb } {
         if (orderBy?.createdAt === 'desc') rows.sort((a, b) => b.createdAt - a.createdAt);
         return rows[0] ?? null;
       },
+      count: async ({ where }: any) =>
+        db.commits.filter((c) => (where.branchId === undefined || c.branchId === where.branchId)).length,
       create: async ({ data }: any) => {
         const row = { id: nextId(), createdAt: new Date(), ...data };
         delete row.changesets;
@@ -424,6 +455,19 @@ export function createFakePrisma(): { prisma: PrismaClient; db: FakeDb } {
         db.visibilityRequests.push(row);
         return row;
       },
+    },
+    pullRequest: {
+      count: async ({ where }: any) =>
+        db.pullRequests.filter(
+          (pr) =>
+            (where.sourceBranchId === undefined || pr.sourceBranchId === where.sourceBranchId) &&
+            (where.targetBranchId === undefined || pr.targetBranchId === where.targetBranchId) &&
+            (where.OR === undefined ||
+              where.OR.some((o: any) =>
+                (o.sourceBranchId === undefined || pr.sourceBranchId === o.sourceBranchId) &&
+                (o.targetBranchId === undefined || pr.targetBranchId === o.targetBranchId),
+              )),
+        ).length,
     },
     $transaction: async (fn: (tx: unknown) => Promise<unknown>) => fn(prisma),
   };

@@ -103,6 +103,7 @@ afterAll(async () => {
   await prisma.versionManifest.deleteMany();
   await prisma.version.deleteMany();
   await prisma.changeSet.deleteMany();
+  await prisma.branch.updateMany({ data: { headCommitId: null } }); // 迁移 13 锚点断开
   await prisma.commit.deleteMany();
   await prisma.branch.deleteMany();
   await prisma.artifact.deleteMany();

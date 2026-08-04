@@ -366,6 +366,8 @@ model Branch {
   researchObjectId String   @map("research_object_id") @db.Uuid
   name             String // 默认 "main"；Phase 1C 分支扩展
   isDefault        Boolean  @default(false) @map("is_default")
+  // P1C-2：分支起点 Commit（可选，§21.2 步骤 11 Fork 后建分支锚点）。新分支首个 commit 的 parent = 锚点。
+  headCommitId     String?  @map("head_commit_id") @db.Uuid
   createdAt        DateTime @default(now()) @map("created_at")
 
   researchObject ResearchObject @relation(fields: [researchObjectId], references: [id], onDelete: Cascade)
@@ -375,6 +377,7 @@ model Branch {
 
   @@unique([researchObjectId, name])
   @@index([researchObjectId])
+  @@index([headCommitId])
   @@map("branches")
 }
 

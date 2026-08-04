@@ -1,25 +1,29 @@
 # OpenScience (XGS) 进度日志
 
-## 2026-08-04 — P1C-1 协作域数据模型完成：迁移 12（11 实体 + 3 枚举）+ Prisma，云上 62/62，task-master 4.1 done
+## 2026-08-04 — P1C-2 Branch 管理与可见性继承完成：迁移 13（headCommitId 锚点）+ /branches API，云上 63/63，task-master 4.2 done
 
 ### ✅ Completed
 | 任务 | 详情 |
 |---|---|
-| design gate | 五决策：PR 声明内联/Comment 多态/CreditRole 14 项/License 字符串/Notification Json |
-| migration 12 | fork_relations/issues/pull_requests（§8.2 全声明）/reviews/comments/authors/contributions/license_assignments/notifications + IssueKind/ReviewVerdict/CreditRole 枚举 + rollback |
-| Prisma | 11 model + ResearchObject/User/Branch/Version 命名关系 |
-| 测试 | domain 枚举 4 + api 集成 4 = 8 新增；本地门禁全绿；**云上集成 62/62**（新增 P1C-1 4 + 既有 58） |
-| task-master 4.1 | done + details |
+| design gate | 五决策：三规则禁删/零存储可见性继承/headCommitId 锚点/嵌套 API/无状态切换 |
+| migration 13 | branches.head_commit_id（additive，Fork 后建分支锚点，§21.2 步骤 11 前置）+ rollback |
+| domain branch/ | branches.ts（create/list/delete/switch + 幂等唯一约束 + 三规则删除保护 + canAccessRo 读门禁 + requireMembership 写门禁）+ errors.ts |
+| commit 扩展 | createCommit 支持 branchId（多分支落点）+ 空分支 parent 回退 head_commit_id 锚点 |
+| API | /branches 4 端点（GET/POST /research-objects/:id/branches + DELETE + switch） |
+| 测试 | domain 单测 16 新增（170 总全绿）+ 集成 4 新增（collab 8/8）；**云上集成 63/63**（新增 P1C-2 4 + 既有 59）；迁移 13 applied |
+| task-master 4.2 | done |
 
 ### Key Decisions / 坑
-- **五决策**：PR 声明内联（§8.2）；Comment 三可空外键（§15 多态）；CreditRole 14 项（§3.4）；License 标准标识（§6.3/§24）；Notification payload Json
-- **§3.4 不可抹除**：Contribution Restrict 无删除路径；**§8.1** ForkRelation 唯一
-- Prisma 命名关系歧义需 @relation；comments FK 依赖 reviews 建表顺序；archiver knip ignore；RO 创建无 default branch（commit 才建）
+- **可见性继承（§2.3 决策 3）零存储**：Branch 不存 visibility，读走 canAccessRo（public 匿名可读）、写走 requireMembership（非成员 404）；分支无法自身扩大可见范围，扩大仅在 RO 层（P1B-7 已审批）
+- **三规则禁删（§3.4）**：default 禁删 + 有 Commit 禁删 + 被 PR 引用禁删；数据层 Commit.branchId / head_commit_id Restrict 双保险
+- **Q3 锚点**：headCommitId 校验同 RO（跨 RO → CROSS_RO_COMMIT），落 branch.head_commit_id；createCommit 空分支 parent 取锚点
+- **幂等**：@@unique([roId, name]) 天然幂等，重发同名 → NAME_EXISTS（409）而非重复建
+- **坑**：Prisma `/** */` 注释非法（须 `//`）；迁移 13 锚点 FK 使既有 6 个集成 afterAll 的 commit.deleteMany 被 Restrict 挡——统一先 `branch.updateMany({headCommitId:null})` 断开
 
 ### ⏳ Next Steps
-- [x] ~~P1C-1 协作数据模型~~ 完成（2026-08-04）：迁移 12 + 云上 62/62，4.1 done
-- [ ] **P1C-2（task-master 4.2）**：Branch 管理与可见性继承
-- [ ] parked：P1A-3 终审项、P1A-5 deferred ①、/admin TOTP 上线路障、SDF Schema 债务（0.2.0）、病毒扫描实装（P1B-后续）、Version 发布状态机（P1B-后续）、真实 AI 提取（Phase 1D）、协作剩余 9 子任务（P1C-2~10）
+- [x] ~~P1C-2 Branch 管理~~ 完成（2026-08-04）：迁移 13 + /branches API，云上 63/63，4.2 done
+- [ ] **P1C-3（task-master 4.3）**：Issue/评论（§8 概念表、§15 Issue/Comment 实体，/issues API §16）
+- [ ] parked：P1A-3 终审项、P1A-5 deferred ①、/admin TOTP 上线路障、SDF Schema 债务（0.2.0）、病毒扫描实装（P1B-后续）、Version 发布状态机（P1B-后续）、真实 AI 提取（Phase 1D）、协作剩余 8 子任务（P1C-3~10）
 
 ---
 ## 2026-08-04 — P1B-10 SDF 标准导出包生成与校验完成：export API + 脱库校验，云上 58/58，task-master 3.10 done

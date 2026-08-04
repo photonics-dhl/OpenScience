@@ -1,5 +1,5 @@
 import { AuthError, type AuthErrorCode } from '@openscience/auth';
-import { ArtifactError, CommitError, ResearchObjectError, UsageError, VisibilityError, WorkspaceError, type WorkspaceErrorCode } from '@openscience/domain';
+import { ArtifactError, BranchError, CommitError, ResearchObjectError, UsageError, VisibilityError, WorkspaceError, type WorkspaceErrorCode } from '@openscience/domain';
 import { buildErrorBody, type ErrorBody } from '@openscience/observability';
 
 const AUTH_ERROR_HTTP: Record<AuthErrorCode, number> = {
@@ -61,6 +61,17 @@ const VISIBILITY_ERROR_HTTP: Record<VisibilityError['code'], number> = {
   REQUEST_PENDING: 409, // 扩大可见性已请求待审批（§4.2）
 };
 
+const BRANCH_ERROR_HTTP: Record<BranchError['code'], number> = {
+  RESEARCH_OBJECT_NOT_FOUND: 404,
+  FORBIDDEN: 403,
+  VALIDATION_ERROR: 400,
+  NAME_EXISTS: 409, // §16 幂等：同名分支冲突
+  DEFAULT_BRANCH: 403, // 主分支禁删
+  BRANCH_HAS_COMMITS: 403, // 有 Commit 禁删（§3.4）
+  BRANCH_IN_USE: 403, // 被 PR 引用禁删（§8.2）
+  CROSS_RO_COMMIT: 400, // 起点 Commit 跨 RO
+};
+
 export type { ErrorBody };
 
 /** 统一错误映射（2.6 扩展为全局标准前的最小版：/auth + /workspaces + /usage）；requestId 三方串联（Spec §17）。 */
@@ -85,6 +96,9 @@ export function httpStatusForError(err: unknown, requestId?: string): { status: 
   }
   if (err instanceof VisibilityError) {
     return { status: VISIBILITY_ERROR_HTTP[err.code], body: buildErrorBody(err.code, err.message, requestId) };
+  }
+  if (err instanceof BranchError) {
+    return { status: BRANCH_ERROR_HTTP[err.code], body: buildErrorBody(err.code, err.message, requestId) };
   }
   // @fastify/csrf-protection 校验失败：403 而非 500（FastifyError.code = FST_CSRF_INVALID_TOKEN / FST_CSRF_MISSING_SECRET）
   if (typeof (err as { code?: unknown }).code === 'string' && (err as { code: string }).code.startsWith('FST_CSRF')) {

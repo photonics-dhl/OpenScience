@@ -20,6 +20,7 @@ const versionIdParams = z.object({ id: z.string().uuid() });
 const commitBody = z.object({
   message: z.string().min(1).max(500),
   version: z.number().int().positive(),
+  branchId: z.string().uuid().optional(), // P1C-2：目标分支（缺省 main）
   sdfCore: z.record(z.string(), z.unknown()).optional(),
   artifacts: z
     .array(z.object({ logicalPath: z.string().min(1).max(1024), artifactId: z.string().uuid() }))
@@ -46,6 +47,7 @@ export function registerCommitRoutes(app: FastifyInstance, deps: CommitRouteDeps
         userId: user.userId,
         message: body.message,
         version: body.version,
+        branchId: body.branchId,
         sdfCore: body.sdfCore,
         artifacts: body.artifacts,
         idempotencyKey: typeof idempotencyKey === 'string' ? idempotencyKey : undefined,

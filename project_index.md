@@ -19,8 +19,8 @@
 | `scripts/invite.mjs` | 邀请码管理 CLI（create/list/revoke，P1A-3） | 活文档 |
 | `scripts/seed-quota.mjs` | 配额占位值幂等 upsert CLI（--dry-run/--confirm，P1A-7，数值集中 `packages/domain/src/usage/seed-data.ts`） | 活文档 |
 | `scripts/cloud-sync.mjs` | 云上同步（tar-over-ssh，排除 .env/.git/node_modules/dist，P1A-7 固化） | 活文档 |
-| `apps/` | `web` 已实现三栏 SDF 编辑器（P1B-8）+ 移动端抽屉/分步 + WCAG AA（P1B-9）（lib/api + editor-state + suggestions + components/editor 七组件 + app/research-objects/[id]/edit + i18n 中英）；`api` 已含 Fastify `/auth`（P1A-3）+ `/workspaces`（P1A-4）+ RBAC preHandler 授权守卫（P1A-5）+ `/admin/audit-logs`（P1A-6）+ `/usage` 与 `/admin/quota-policies`、`/admin/credits`、`/admin/usage`（P1A-7）+ 安全基线 `src/security/`（P1A-8）+ **`/research-objects` + `/sdf`（P1B-2）** + **`/artifacts`（P1B-3）** + **`/commits` + `/versions` + comparison（P1B-4/5）** + **`/research/:publicId` 公开 URL（P1B-6）** + **`/visibility` + `/visibility-grants`（P1B-7）** + **`/versions/:id/export`（P1B-10 zip）**；`agent-worker`/`science-worker`/`sandbox-controller` 空壳 | 骨架 |
-| `packages/` | 11 个领域包 + **diff 包（P1B-5）+ identity 包（P1B-6）**；database/storage 已实现 P1A-2；storage 已加 P1B-3 `blob.ts`；versioning 已实现 P1B-4；identity 已实现 P1B-6；database 已加 P1A-8 `rate-limit.ts`；auth 已实现 P1A-3 + P1A-9；domain 已实现 P1A-4/5/7 + P1B-2/3/4/5/6/7/10（research-object/artifact/commit/diff/identity/visibility/export）+ **P1C-1（collab 枚举）**；config 已加 P1B-3 storage + P1B-6 publicIdPrefix；sdf-schema 已实现 P1B-1；其余占位；云上集成 62/62 全绿（2026-08-04） | 已实现 |
+| `apps/` | `web` 已实现三栏 SDF 编辑器（P1B-8）+ 移动端抽屉/分步 + WCAG AA（P1B-9）（lib/api + editor-state + suggestions + components/editor 七组件 + app/research-objects/[id]/edit + i18n 中英）；`api` 已含 Fastify `/auth`（P1A-3）+ `/workspaces`（P1A-4）+ RBAC preHandler 授权守卫（P1A-5）+ `/admin/audit-logs`（P1A-6）+ `/usage` 与 `/admin/quota-policies`、`/admin/credits`、`/admin/usage`（P1A-7）+ 安全基线 `src/security/`（P1A-8）+ **`/research-objects` + `/sdf`（P1B-2）** + **`/artifacts`（P1B-3）** + **`/commits` + `/versions` + comparison（P1B-4/5）** + **`/research/:publicId` 公开 URL（P1B-6）** + **`/visibility` + `/visibility-grants`（P1B-7）** + **`/versions/:id/export`（P1B-10 zip）** + **`/research-objects/:id/branches`（P1C-2，4 端点）**；`agent-worker`/`science-worker`/`sandbox-controller` 空壳 | 骨架 |
+| `packages/` | 11 个领域包 + **diff 包（P1B-5）+ identity 包（P1B-6）**；database/storage 已实现 P1A-2；storage 已加 P1B-3 `blob.ts`；versioning 已实现 P1B-4；identity 已实现 P1B-6；database 已加 P1A-8 `rate-limit.ts`；auth 已实现 P1A-3 + P1A-9；domain 已实现 P1A-4/5/7 + P1B-2/3/4/5/6/7/10（research-object/artifact/commit/diff/identity/visibility/export）+ **P1C-1（collab 枚举）+ P1C-2（branch 模块）**；config 已加 P1B-3 storage + P1B-6 publicIdPrefix；sdf-schema 已实现 P1B-1；其余占位；云上集成 63/63 全绿（2026-08-04） | 已实现 |
 | `.cursor/` | Cursor 编辑器配置 | 工具自管 |
 | `.taskmaster/` | task-master 任务状态 | 工具自管 |
 | `.memory/memory.jsonl` | Memory MCP 知识图谱存储（MEMORY_FILE_PATH 指定） | 工具自管，随 git 备份 |
@@ -75,6 +75,8 @@
 | `docs/plans/2026-08-04-p1b-10-sdf-export-plan.md` | P1B-10 SDF 标准导出包生成与校验实施计划（已执行完毕，云上 58/58，task-master 3.10 done 2026-08-04） | 活文档 |
 | `docs/specs/2026-08-04-p1c-1-collab-model-design.md` | P1C-1 协作域数据模型与迁移设计（design gate 已确认：五决策，代码已实现 2026-08-04） | 活文档 |
 | `docs/plans/2026-08-04-p1c-1-collab-model-plan.md` | P1C-1 协作域数据模型与迁移实施计划（已执行完毕，云上 62/62，task-master 4.1 done 2026-08-04） | 活文档 |
+| `docs/specs/2026-08-04-p1c-2-branch-management-design.md` | P1C-2 Branch 管理与可见性继承设计（design gate 已确认：五决策，代码已实现 2026-08-04） | 活文档 |
+| `docs/plans/2026-08-04-p1c-2-branch-management-plan.md` | P1C-2 Branch 管理与可见性继承实施计划（已执行完毕，云上 63/63，task-master 4.2 done 2026-08-04） | 活文档 |
 | `docs/progress.md` | 进度日志，新条目置顶 | 活文档 |
 | `docs/handoff/` | 交接文档目录（阶段边界/换 agent/换电脑，必须入库） | 活文档 |
 | `docs/handoff/2026-07-28-before-p1a-2-handoff.md` | P1A-2 前交接：Phase 0 Accepted、P1A-1 done、下一任务 P1A-2 | 活文档 |
@@ -97,7 +99,8 @@
 | `docs/handoff/2026-08-04-p1b-8-sdf-editor-done-handoff.md` | P1B-8 三栏 SDF 编辑器收口交接：apps/web 三栏 + 建议确认 + 版本导航，next build 通过，3.8 done，下一任务 P1B-9 移动端 | 活文档 |
 | `docs/handoff/2026-08-04-p1b-9-mobile-a11y-done-handoff.md` | P1B-9 移动端分步/抽屉编辑器与可访问性收口交接：Drawer + 虚拟化 + WCAG AA，next build 通过，3.9 done，下一任务 P1B-10 导出包 | 活文档 |
 | `docs/handoff/2026-08-04-p1b-10-sdf-export-done-handoff.md` | P1B-10 SDF 标准导出包收口交接：export API + 脱库校验，云上 58/58，3.10 done，下一任务 P1C-1 协作模型 | 活文档 |
-| `docs/handoff/2026-08-04-p1c-1-collab-model-done-handoff.md` | P1C-1 协作域数据模型收口交接：迁移 12 + 11 实体，云上 62/62，4.1 done，下一任务 P1C-2 Branch 管理 | 活文档（当前最新） |
+| `docs/handoff/2026-08-04-p1c-1-collab-model-done-handoff.md` | P1C-1 协作域数据模型收口交接：迁移 12 + 11 实体，云上 62/62，4.1 done，下一任务 P1C-2 Branch 管理 | 活文档 |
+| `docs/handoff/2026-08-04-p1c-2-branch-done-handoff.md` | P1C-2 Branch 管理收口交接：迁移 13 + /branches API，云上 63/63，4.2 done，下一任务 P1C-3 Issue/评论 | 活文档（当前最新） |
 | `docs/CODEBASE_AUDIT.md` | Phase 0 Scholars Tea 只读审计报告（地图/模块分类/风险登记/迁移含义） | 活文档 |
 | `docs/proposals/` | 方案/脑暴稿 | 空（旧方案0723已废弃不归档） |
 | `docs/decisions/` | 决策记录 ADR | ADR-001 已接受；ADR-002 已建 |
@@ -124,7 +127,7 @@
 | `infra/nginx/` | 反代配置：`portainer.conf`（portainer.428312321.xyz → 127.0.0.1:9443，LE 证书 + WebSocket，2026-07-31；2026-08-01 追加 /nav/ 导航页、/monitor/→Netdata、/traffic/→vnStat 账单页，basic_auth）+ `openscience.conf`（OpenScience.428312321.xyz → 127.0.0.1:3001，P1A-8：/admin basic_auth + XFF 透传） | 均已部署云上并启用（openscience.conf 2026-08-03） |
 | `infra/www/` | `nav/index.html` 服务器面板导航静态页（/var/www/nav，2026-08-01） | 已部署云上 |
 | `infra/sandbox/` | 沙箱配置占位（P1A-1） | 骨架 |
-| `infra/migrations/` | Prisma 迁移（`20260728000000_baseline_app_meta` + `20260728010000_auth_baseline`（P1A-3 四表）+ `20260729010000_workspace_baseline`（P1A-4 三表）+ `20260801010000_user_platform_role`（P1A-5）+ `20260801143000_audit_log`（P1A-6）+ `20260803000000_quota_usage`（P1A-7）+ `20260803150000_research_object`（P1B-2）+ `20260804000000_blob_artifact`（P1B-3）+ `20260804010000_version_engine`（P1B-4）+ `20260804020000_identity`（P1B-6）+ `20260804030000_visibility`（P1B-7）+ `20260804040000_collab`（P1C-1，11 实体 + 3 枚举），各附 rollback.sql） | 已实现，云上已 deploy（迁移 1–12，2026-08-04） |
+| `infra/migrations/` | Prisma 迁移（`20260728000000_baseline_app_meta` + `20260728010000_auth_baseline`（P1A-3 四表）+ `20260729010000_workspace_baseline`（P1A-4 三表）+ `20260801010000_user_platform_role`（P1A-5）+ `20260801143000_audit_log`（P1A-6）+ `20260803000000_quota_usage`（P1A-7）+ `20260803150000_research_object`（P1B-2）+ `20260804000000_blob_artifact`（P1B-3）+ `20260804010000_version_engine`（P1B-4）+ `20260804020000_identity`（P1B-6）+ `20260804030000_visibility`（P1B-7）+ `20260804040000_collab`（P1C-1，11 实体 + 3 枚举）+ `20260804050000_branch_head`（P1C-2，head_commit_id 锚点），各附 rollback.sql） | 已实现，云上已 deploy（迁移 1–13，2026-08-04） |
 | `infra/schema.prisma` | Prisma schema（`app_meta` 基线模型，P1A-2） | 已实现 |
 
 ## .agents/skills/（项目级 Skills，Spec §20.3）

@@ -2,7 +2,7 @@
   "master": {
     "tasks": [
       {
-        "id": 1,
+        "id": "1",
         "title": "Phase 0: 现有系统只读审计与目标架构决策",
         "description": "对 Scholars Tea / AI Research Workshop 现有代码仓执行强制门禁式只读审计（Spec §22 Phase 0、§25、§20.1.2）：建立目录/依赖/服务/数据库/部署地图，形成可复用/重构/淘汰清单，评估安全与数据迁移风险，运行基准测试，产出 docs/CODEBASE_AUDIT.md 与 docs/adr/0001-target-architecture.md 草案。审计完成并经用户确认后才允许进入 Phase 1A（Spec §25 末段）。全程不修改业务代码（Spec §25.5）。",
         "status": "done",
@@ -133,7 +133,7 @@
         "updatedAt": "2026-07-28T04:41:05.303Z"
       },
       {
-        "id": 2,
+        "id": "2",
         "title": "Phase 1A: 平台底座（Monorepo、Auth/Workspace/RBAC、数据与存储基础、审计、CI/CD）",
         "description": "搭建 MVP 平台底座：Monorepo 与模块边界（Spec §14.1）；Auth + 邀请码 + 邮箱验证（Spec §2.1、§3.1）；Workspace + RBAC 且 API 层强制授权（Spec §3.2、§3.3、§17）；PostgreSQL + Redis + Storage Adapter（Spec §13.1、§14.2、§15）；统一错误/日志/配置/审计（Spec §17）；AI Credit 账务骨架（Spec §2.4.7、§13.3）；CI/CD 与阿里云 ECS 部署（Spec §14.2、§17）。前置门禁：Phase 0 审计完成并经用户确认（Spec §22、§25）。本阶段不含 SDF/编辑器（1B）、协作（1C）、Hermes/发布（1D）、可视化沙箱（1E）及任何 §19 Phase 2 功能。",
         "status": "done",
@@ -288,7 +288,7 @@
         "updatedAt": "2026-08-03T13:12:27.429Z"
       },
       {
-        "id": 3,
+        "id": "3",
         "title": "Phase 1B: SDF 与版本",
         "description": "实现 SDF 六字段 Schema、三栏编辑器、Artifact/Blob 内容寻址存储、Commit/Manifest 增量版本、多类型 Diff、unique ID 与稳定 URL、私有/邀请/公开可见性（Spec §22 Phase 1B；依据 Spec §4–§7、§13、§15、§16、§17、§18）。不含 Hermes AI 提取与发布流程（Phase 1D）、不含 Branch/Fork/PR 协作交互（Phase 1C）。",
         "status": "done",
@@ -449,7 +449,7 @@
         "updatedAt": "2026-08-04T05:06:37.957Z"
       },
       {
-        "id": 4,
+        "id": "4",
         "title": "Phase 1C: GitHub 式科研协作（Branch/Fork/PR/Review/Merge、作者与 CRediT、许可、通知）",
         "description": "建立 MVP 协作闭环：Branch、Issue、Fork、Pull Request、Review、Merge 的数据模型与基础交互（Spec §2.3、§8），作者组与 CRediT 贡献记录（§3.4），三类许可选择与 Fork 继承校验（§6.3），协作事件通知（§15、§16、§18.1）。对应里程碑 Spec §22 Phase 1C。服务于验收主流程 §21.2 步骤 8、11、12。Commit/版本存储底座由 P1B 提供，发布与 AI 审核属 P1D，不在本 Phase 范围。",
         "status": "in-progress",
@@ -478,14 +478,15 @@
             "id": 2,
             "title": "实现 Branch 管理与可见性继承",
             "description": "实现研究分支的创建、列表、切换与删除，承载'尚未进入主版本的研究方向或修改路线'（Spec §8 概念表）；分支 MUST 继承所属 RO 的可见性（§2.3 决策 3、§4.2）。",
-            "status": "pending",
+            "status": "done",
             "dependencies": [
               "4.1"
             ],
             "priority": "high",
             "details": "模块 /branches（§16）：Branch 指向 RO 与 tip Commit（复用 P1B Commit/Manifest）；创建分支时校验调用者对该 RO 所在 Workspace 的权限（§17 防跨 Workspace 越权）；可见性不单独存储或强制等于 RO 可见性，任何扩大可见范围的操作必须显式审批（§4.2，审批机制占位即可，正式分级审批在 P1D）；关键资源使用幂等键和乐观锁（§16）。\n验收: 步骤11",
             "testStrategy": "单元测试：可见性继承规则、越权创建拒绝；集成测试：分支指向 Commit 一致性；阶段验收点：另一用户可在 Fork 后创建 Branch（§21.2 步骤 11 前置）。",
-            "parentId": "4"
+            "parentId": "4",
+            "updatedAt": "2026-08-04T06:48:01.189Z"
           },
           {
             "id": 3,
@@ -598,10 +599,10 @@
             "parentId": "4"
           }
         ],
-        "updatedAt": "2026-08-04T06:11:59.429Z"
+        "updatedAt": "2026-08-04T06:48:01.189Z"
       },
       {
-        "id": 5,
+        "id": "5",
         "title": "Phase 1D: Hermes 与发布",
         "description": "建设 Hermes Agent 系统的 MVP 子集与公开发布闭环：AI Gateway 统一路由（MiniMax-M3 主模型 / 回退策略由 Gateway 配置管理）、异步任务通道、SDF Extractor（建议/差异形式，不直接写正文）、R0–R4 分级审批、AI 发布审核（硬阻断与警告分离）、申诉与 Moderator 队列、发布事务与公开页（含免责声明与审核摘要）。依据 Spec §9、§11、§4.1–4.3、§6.2、§22 Phase 1D。",
         "status": "pending",
@@ -741,7 +742,7 @@
         ]
       },
       {
-        "id": 6,
+        "id": "6",
         "title": "Phase 1E: 轻量科学可视化",
         "description": "实现 Hermes 概念可视化闭环与隔离沙箱执行：Visualization Planner 生成解释与 Python 脚本（Spec §9.2、§10.1），AST 策略检查（§10.3），Sandbox Controller + 隔离 Docker 网络（§10.3、§14.2），临时图片与 IndexedDB 保存（§13.2），自然语言修改脚本（§10.4），威胁模型与沙箱逃逸基线测试（§17、§21.1）。服务验收主流程步骤 15、16（Spec §21.2）。",
         "status": "pending",
@@ -861,14 +862,12 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-08-04T06:11:59.430Z",
+      "lastModified": "2026-08-04T06:48:01.189Z",
       "taskCount": 6,
       "completedCount": 3,
       "tags": [
         "master"
-      ],
-      "created": "2026-08-04T06:12:07.308Z",
-      "description": "Tasks for master context"
+      ]
     }
   }
 }

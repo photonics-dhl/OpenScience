@@ -21,6 +21,8 @@ export interface CreateCommitInput {
   message: string;
   /** 乐观锁：必须匹配当前 RO.version（§16）。 */
   version: number;
+  /** P1C-2：目标分支 id（缺省 = 默认 main 分支，§8 Branch 语义）。 */
+  branchId?: string;
   /** 目标 SDF core（完整；diff 自动计算，§7.2.5）。缺省 = 不改 SDF。 */
   sdfCore?: Record<string, unknown>;
   /** 目标 artifact 完整集合（diff 自动算增删改）。缺省 = 不产生 artifact 变化。 */
@@ -98,19 +100,32 @@ export async function createCommit(
     throw new CommitError('VERSION_PUBLISHED', '已发布版本不可修改，请创建新版本');
   }
 
-  // 默认 main 分支（Phase 1C 多分支扩展；无则建）
-  let branch = await deps.prisma.branch.findFirst({ where: { researchObjectId: ro.id, name: DEFAULT_BRANCH } });
-  if (!branch) {
-    branch = await deps.prisma.branch.create({
-      data: { researchObjectId: ro.id, name: DEFAULT_BRANCH, isDefault: true },
-    });
+  // 默认 main 分支（P1C-2 多分支扩展：指定 branchId 则落到目标分支）
+  let branch: { id: string; name: string; headCommitId: string | null };
+  if (input.branchId) {
+    const target = await deps.prisma.branch.findFirst({ where: { id: input.branchId, researchObjectId: ro.id } });
+    if (!target) throw new CommitError('VALIDATION_ERROR', '目标分支不存在');
+    branch = { id: target.id, name: target.name, headCommitId: target.headCommitId };
+  } else {
+    const existing = await deps.prisma.branch.findFirst({ where: { researchObjectId: ro.id, name: DEFAULT_BRANCH } });
+    if (existing) {
+      branch = { id: existing.id, name: existing.name, headCommitId: existing.headCommitId };
+    } else {
+      const created = await deps.prisma.branch.create({
+        data: { researchObjectId: ro.id, name: DEFAULT_BRANCH, isDefault: true },
+      });
+      branch = { id: created.id, name: created.name, headCommitId: created.headCommitId };
+    }
   }
 
-  // 父 Commit = 该分支最近一个
-  const parentCommit = await deps.prisma.commit.findFirst({
+  // 父 Commit = 该分支最近一个；空分支回退分支起点锚点（head_commit_id，P1C-2 §21.2 步骤 11）
+  let parentCommit = await deps.prisma.commit.findFirst({
     where: { branchId: branch.id },
     orderBy: { createdAt: 'desc' },
   });
+  if (!parentCommit && branch.headCommitId) {
+    parentCommit = await deps.prisma.commit.findUnique({ where: { id: branch.headCommitId } });
+  }
 
   // SDF diff（§7.2.5）
   const currentCore = (ro.sdfDocument?.coreJson as Record<string, unknown>) ?? {};

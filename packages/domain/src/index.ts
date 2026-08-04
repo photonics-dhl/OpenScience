@@ -94,6 +94,12 @@ export {
   requestVisibilityChange, grantVisibility, isVisibilityExpansion,
   type VisibilityChangeResult,
 } from './visibility/requests';
+export { BranchError, type BranchErrorCode } from './branch/errors';
+export {
+  createBranch, listBranches, deleteBranch, switchBranch,
+  BRANCH_NAME_PATTERN,
+  type BranchTip, type BranchDetail, type CreateBranchInput, type DeleteBranchInput, type SwitchBranchInput,
+} from './branch/branches';
 export { buildExportPackage, classifyArtifact, type ExportFile } from './export/packager';
 export { validateExportPackage, type ExportValidationResult } from './export/validate';
 export { buildManifest, type BuildManifestInput } from './export/manifest';

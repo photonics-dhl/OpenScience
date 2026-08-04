@@ -8,9 +8,10 @@ import { createStorageAdapter, storageConfigFromEnv } from '@openscience/storage
 import { buildApp } from '../src/app';
 
 /**
- * P1C-1 集成测试（云上执行）：真 PG/Redis/MinIO。
+ * P1C-1/P1C-2 集成测试（云上执行）：真 PG/Redis/MinIO。
  * 前置：dev 栈已起，迁移 12 已 deploy。
- * 用例：协作实体外键一致性 / ForkRelation 唯一 / Contribution 无删除路径 / PR 声明字段约束。
+ * P1C-1：协作实体外键一致性 / ForkRelation 唯一 / Contribution 无删除路径 / PR 声明字段约束。
+ * P1C-2：Branch 管理——tip 推进 / 独立 commit 链 / 删除保护 / 越权 / headCommitId 锚点。
  */
 
 const prisma = createPrismaClient();
@@ -80,6 +81,8 @@ afterAll(async () => {
   await prisma.versionManifest.deleteMany();
   await prisma.version.deleteMany();
   await prisma.changeSet.deleteMany();
+  // 迁移 13 锚点：branch.head_commit_id → commit（Restrict），先断开再删 commit
+  await prisma.branch.updateMany({ data: { headCommitId: null } });
   await prisma.commit.deleteMany();
   await prisma.branch.deleteMany();
   await prisma.artifact.deleteMany();
@@ -213,6 +216,87 @@ describe('P1C-1 协作域数据模型（云上，迁移 12）', () => {
     expect(pr.changesMethod).toBe(true);
     expect(pr.dataLicense).toBe('CC-BY-4.0');
     expect(pr.requestsRelease).toBe(false);
+    await app.close();
+  });
+});
+
+describe('P1C-2 分支管理（云上，无新迁移）', () => {
+  it('分支列表含 tipCommit；commit 到指定分支后 tip 推进 + 独立 commit 链', async () => {
+    const app = await makeApp();
+    const cookie = await registerAndVerify(app, 'b1@example.com');
+    const wsId = await getPersonalWorkspace('b1@example.com');
+    const createRo = await app.inject({ method: 'POST', url: '/research-objects', cookies: { openscience_session: cookie }, payload: { workspaceId: wsId, title: 'Branch RO' } });
+    const ro = createRo.json().researchObject;
+
+    // main 首 commit（建默认分支）
+    const c1 = await app.inject({ method: 'POST', url: `/research-objects/${ro.id}/commits`, cookies: { openscience_session: cookie }, payload: { message: 'main v1', version: 1 } });
+    expect(c1.statusCode).toBe(201);
+    const mainCommitId = c1.json().commit.commitId;
+
+    // 创建 feature 分支（起点 = main 首 commit）
+    const cb = await app.inject({ method: 'POST', url: `/research-objects/${ro.id}/branches`, cookies: { openscience_session: cookie }, payload: { name: 'feature/x', headCommitId: mainCommitId } });
+    expect(cb.statusCode).toBe(201);
+    const branch = cb.json().branch;
+    expect(branch.isDefault).toBe(false);
+    expect(branch.commitCount).toBe(0);
+
+    // 新分支 commit（version=2，branchId=feature）
+    const c2 = await app.inject({ method: 'POST', url: `/research-objects/${ro.id}/commits`, cookies: { openscience_session: cookie }, payload: { message: 'feature work', version: 2, branchId: branch.id } });
+    expect(c2.statusCode).toBe(201);
+
+    // 列表：feature 分支 tip = 新 commit；main 分支 tip 仍为主首 commit
+    const list = await app.inject({ method: 'GET', url: `/research-objects/${ro.id}/branches`, cookies: { openscience_session: cookie } });
+    expect(list.statusCode).toBe(200);
+    const branches = list.json().branches;
+    const main = branches.find((b: { name: string }) => b.name === 'main');
+    const feature = branches.find((b: { name: string }) => b.name === 'feature/x');
+    expect(main.tipCommit.id).toBe(mainCommitId);
+    expect(feature.tipCommit.id).toBe(c2.json().commit.commitId);
+    expect(feature.commitCount).toBe(1);
+    await app.close();
+  });
+
+  it('有 Commit 的分支删除 → 403（§3.4 不可抹除）', async () => {
+    const app = await makeApp();
+    const cookie = await registerAndVerify(app, 'b2@example.com');
+    const wsId = await getPersonalWorkspace('b2@example.com');
+    const createRo = await app.inject({ method: 'POST', url: '/research-objects', cookies: { openscience_session: cookie }, payload: { workspaceId: wsId, title: 'Delete RO' } });
+    const ro = createRo.json().researchObject;
+    await app.inject({ method: 'POST', url: `/research-objects/${ro.id}/commits`, cookies: { openscience_session: cookie }, payload: { message: 'v1', version: 1 } });
+    const list = await app.inject({ method: 'GET', url: `/research-objects/${ro.id}/branches`, cookies: { openscience_session: cookie } });
+    const main = list.json().branches[0];
+    const del = await app.inject({ method: 'DELETE', url: `/research-objects/${ro.id}/branches/${main.id}`, cookies: { openscience_session: cookie } });
+    expect(del.statusCode).toBe(403);
+    await app.close();
+  });
+
+  it('非成员创建分支 → 404（§17 越权防护）', async () => {
+    const app = await makeApp();
+    // RO 属 b3a，b3b 为独立个人空间（非成员）
+    const cookieA = await registerAndVerify(app, 'b3a@example.com');
+    const cookieB = await registerAndVerify(app, 'b3b@example.com');
+    const wsA = await getPersonalWorkspace('b3a@example.com');
+    const createRo = await app.inject({ method: 'POST', url: '/research-objects', cookies: { openscience_session: cookieA }, payload: { workspaceId: wsA, title: 'Access RO' } });
+    const ro = createRo.json().researchObject;
+    const cb = await app.inject({ method: 'POST', url: `/research-objects/${ro.id}/branches`, cookies: { openscience_session: cookieB }, payload: { name: 'feature/intruder' } });
+    expect(cb.statusCode).toBe(404);
+    await app.close();
+  });
+
+  it('headCommitId 锚点：新分支首个 commit 的 parentCommitId = 起点（Fork 分支验收前置，§21.2 步骤 11）', async () => {
+    const app = await makeApp();
+    const cookie = await registerAndVerify(app, 'b4@example.com');
+    const wsId = await getPersonalWorkspace('b4@example.com');
+    const createRo = await app.inject({ method: 'POST', url: '/research-objects', cookies: { openscience_session: cookie }, payload: { workspaceId: wsId, title: 'Anchor RO' } });
+    const ro = createRo.json().researchObject;
+    const c1 = await app.inject({ method: 'POST', url: `/research-objects/${ro.id}/commits`, cookies: { openscience_session: cookie }, payload: { message: 'base', version: 1 } });
+    const baseCommitId = c1.json().commit.commitId;
+
+    const cb = await app.inject({ method: 'POST', url: `/research-objects/${ro.id}/branches`, cookies: { openscience_session: cookie }, payload: { name: 'feature/anchored', headCommitId: baseCommitId } });
+    const branch = cb.json().branch;
+    const c2 = await app.inject({ method: 'POST', url: `/research-objects/${ro.id}/commits`, cookies: { openscience_session: cookie }, payload: { message: 'on feature', version: 2, branchId: branch.id } });
+    const commitRow = await prisma.commit.findUnique({ where: { id: c2.json().commit.commitId } });
+    expect(commitRow!.parentCommitId).toBe(baseCommitId);
     await app.close();
   });
 });
