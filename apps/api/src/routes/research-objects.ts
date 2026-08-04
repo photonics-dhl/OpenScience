@@ -2,9 +2,12 @@ import type { FastifyInstance, FastifyRequest } from 'fastify';
 import { z } from 'zod';
 import type { AuthDeps } from '@openscience/auth';
 import {
+  canAccessRo,
   createResearchObject,
   getResearchObject,
   getSdfDocument,
+  grantVisibility,
+  requestVisibilityChange,
   updateResearchObject,
   updateSdfDocument,
 } from '@openscience/domain';
@@ -57,6 +60,11 @@ export function registerResearchObjectRoutes(app: FastifyInstance, deps: Researc
     const user = await requireCurrentUser(deps, req, reply);
     if (!user) return;
     const { id } = roIdParams.parse(req.params);
+    // P1B-7：可见性访问判定（§4.2 invite_only grant 非成员可读；private 仅成员）
+    const access = await canAccessRo(deps, { researchObjectId: id, userId: user.userId });
+    if (access !== 'granted') {
+      return reply.status(404).send({ error: { code: 'NOT_FOUND', message: '未找到' } });
+    }
     return reply.send({ researchObject: await getResearchObject(deps, { userId: user.userId, roId: id }) });
   });
 
@@ -91,5 +99,29 @@ export function registerResearchObjectRoutes(app: FastifyInstance, deps: Researc
       auditCtx(req),
     );
     return reply.send({ sdf });
+  });
+
+  // P1B-7：可见性变更（§4.2 扩大需显式审批 → 阻断 + VisibilityRequest）
+  app.post('/research-objects/:id/visibility', async (req, reply) => {
+    const user = await requireCurrentUser(deps, req, reply);
+    if (!user) return;
+    const { id } = roIdParams.parse(req.params);
+    const body = z.object({ toVisibility: z.enum(['private', 'invite_only', 'public']) }).parse(req.body);
+    const result = await requestVisibilityChange(
+      deps,
+      { userId: user.userId, researchObjectId: id, toVisibility: body.toVisibility },
+      auditCtx(req),
+    );
+    return reply.status(result.applied ? 200 : 202).send({ visibility: result });
+  });
+
+  // P1B-7：invite_only 指定账户（§4.2）
+  app.post('/research-objects/:id/visibility-grants', async (req, reply) => {
+    const user = await requireCurrentUser(deps, req, reply);
+    if (!user) return;
+    const { id } = roIdParams.parse(req.params);
+    const body = z.object({ granteeId: z.string().uuid() }).parse(req.body);
+    await grantVisibility(deps, { userId: user.userId, researchObjectId: id, granteeId: body.granteeId }, auditCtx(req));
+    return reply.status(201).send({ granted: true });
   });
 }

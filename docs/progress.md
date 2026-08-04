@@ -1,5 +1,31 @@
 # OpenScience (XGS) 进度日志
 
+## 2026-08-04 — P1B-7 RO 可见性模型与 API 权限强制完成：迁移 11 + 三态矩阵 + 扩大审批记录，云上 55/55，task-master 3.7 done
+
+### ✅ Completed
+| 任务 | 详情 |
+|---|---|
+| design gate | 五决策：VisibilityGrant 表/扩大阻断+请求/public 可索引/匿名 public/变更幂等 |
+| migration 11 | visibility_grants（ro+grantee 唯一）+ visibility_requests（from/to_visibility + status）+ rollback |
+| domain | visibility/：errors + access（canAccessRo 三态矩阵 §4.2 + requireRoAccess 越权 404）+ requests（requestVisibilityChange 缩小应用/扩大阻断+请求/幂等 + grantVisibility） |
+| API | GET /research-objects/:id 改 canAccessRo + POST /:id/visibility（扩大 202/缩小 200）+ POST /:id/visibility-grants；error-map VisibilityError（REQUEST_PENDING=409） |
+| 读操作改造 | getResearchObject/getSdfDocument 用 requireRoAccess（invite_only grant 可读） |
+| 测试 | domain visibility 10 + api 集成 5 = 15 新增；本地门禁全绿；**云上集成 55/55**（新增 P1B-7 5 + 既有 50） |
+| task-master 3.7 | done + details |
+
+### Key Decisions / 坑
+- **五决策**：invite_only 用 VisibilityGrant（§4.2 指定账户）；扩大可见性立即阻断 + VisibilityRequest(pending)（§4.2 显式审批，审批流 Phase 1D）；public 可索引；/research/* 仅 public 匿名；变更幂等
+- **§3.3 API 层强制**：所有资源路由统一走可见性判定，禁仅前端隐藏
+- **§17 越权防护**：跨 Workspace/invite_only 未 grant/绕过前端 → 404
+- GET 路由 canAccessRo + domain requireMembership 双层冲突 → domain 读操作改 requireRoAccess
+- 测试断言 /空间不存在/ → /研究对象不存在/（VisibilityError）
+
+### ⏳ Next Steps
+- [x] ~~P1B-7 可见性~~ 完成（2026-08-04）：迁移 11 + 云上 55/55，3.7 done
+- [ ] **P1B-8（task-master 3.8）**：待任务清单
+- [ ] parked：P1A-3 终审项、P1A-5 deferred ①、/admin TOTP 上线路障、SDF Schema 债务（0.2.0）、病毒扫描实装（P1B-8）、Version 发布状态机（P1B-后续）、大文件分片（P1B-后续）、AI diff 摘要（Phase 1D）
+
+---
 ## 2026-08-04 — P1B-6 标识层与时间戳服务完成：packages/identity + 迁移 10 + /research 公开 URL，云上 50/50，task-master 3.6 done
 
 ### ✅ Completed

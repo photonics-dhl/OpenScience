@@ -389,14 +389,15 @@
             "id": 7,
             "title": "实现 RO 可见性模型与 API 层权限强制",
             "description": "实现 private/invite_only/public 三种可见性及 API 层授权检查，防止跨 Workspace 越权（Spec §4.2、§2.1.5、§3.3、§17）。",
-            "status": "pending",
+            "status": "done",
             "dependencies": [
               "3.2"
             ],
             "priority": "high",
-            "details": "可见性三态：private 仅 Workspace 授权成员、invite_only 持有效邀请或被指定账户、public 公众可见并可被搜索引擎索引（§4.2、§2.1.5）；权限采用 RBAC+资源归属检查，禁止仅前端隐藏按钮，API 必须做同样授权检查（§3.3 MUST）；防止跨 Workspace 越权（§17 MUST）；任何扩大可见范围的操作必须显式审批（§4.2 MUST）——审批流与 R0–R4 分级在 Phase 1D 落地，本任务实现可见性变更的请求/记录数据结构与阻断式校验；可见性变更写审计日志（§17）；Branch/Issue/PR 继承可见性规则在 Phase 1C 应用，模型字段预留。\n验收: 步骤2",
+            "details": "可见性三态：private 仅 Workspace 授权成员、invite_only 持有效邀请或被指定账户、public 公众可见并可被搜索引擎索引（§4.2、§2.1.5）；权限采用 RBAC+资源归属检查，禁止仅前端隐藏按钮，API 必须做同样授权检查（§3.3 MUST）；防止跨 Workspace 越权（§17 MUST）；任何扩大可见范围的操作必须显式审批（§4.2 MUST）——审批流与 R0–R4 分级在 Phase 1D 落地，本任务实现可见性变更的请求/记录数据结构与阻断式校验；可见性变更写审计日志（§17）；Branch/Issue/PR 继承可见性规则在 Phase 1C 应用，模型字段预留。\n验收: 步骤2\n<info added on 2026-08-04T00:17:40.744Z>\nP1B-7 RO 可见性模型与 API 权限强制完成（2026-08-04）：\n\n决策（design gate）：\n1. invite_only 用 VisibilityGrant 表（指定账户，RO 级独立）\n2. 扩大可见性立即阻断 + VisibilityRequest(pending)（§4.2 显式审批，审批流 Phase 1D）\n3. public 即可索引，不另设字段\n4. /research/* public 匿名，invite_only/private 404\n5. 变更同 toVisibility 幂等\n\n落点：\n- 迁移 11：visibility_grants（ro+grantee 唯一）+ visibility_requests（from/to_visibility + status）+ rollback\n- domain visibility/：errors + access（canAccessRo 三态矩阵 §4.2 + requireRoAccess 越权 404）+ requests（requestVisibilityChange 缩小应用/扩大阻断+请求/幂等 + grantVisibility）\n- api：GET /research-objects/:id 改 canAccessRo + POST /:id/visibility（扩大 202/缩小 200）+ POST /:id/visibility-grants；error-map VisibilityError（REQUEST_PENDING=409）\n- domain 读操作改造：getResearchObject/getSdfDocument 用 requireRoAccess（invite_only grant 可读）\n- 测试：domain visibility 10 + api 集成 5 = 15 新增\n\n验收：本地门禁全绿；云上集成 55/55（新增 P1B-7 5 + 既有 50）；迁移 11 applied；3.7 done\n\n坑：\n1. GET /research-objects 路由 canAccessRo 通过后，getResearchObject 内部仍 requireMembership 拦截 grant 非成员 → 双层判定冲突，domain 读操作改 requireRoAccess\n2. research-objects.test 断言 /空间不存在/ 改 /研究对象不存在/（VisibilityError 消息）\n3. seedOutsider 类型 any → ReturnType<typeof createFakePrisma>['db']（lint）\n</info added on 2026-08-04T00:17:40.744Z>",
             "testStrategy": "单元测试：可见性判定矩阵（§21.1 单元层：权限）；安全测试：跨 Workspace 访问、未受邀访问 invite_only、直接调 API 绕过前端的越权用例（§21.1 安全层：越权）；E2E 预备：私有 RO 仅本人可见（§21.2 步骤 2）。",
-            "parentId": "3"
+            "parentId": "3",
+            "updatedAt": "2026-08-04T00:16:56.927Z"
           },
           {
             "id": 8,
@@ -442,7 +443,7 @@
             "parentId": "3"
           }
         ],
-        "updatedAt": "2026-08-03T23:48:00.260Z"
+        "updatedAt": "2026-08-04T00:16:56.927Z"
       },
       {
         "id": 4,
@@ -855,13 +856,13 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-08-03T23:48:00.261Z",
+      "lastModified": "2026-08-04T00:16:56.927Z",
       "taskCount": 6,
       "completedCount": 2,
       "tags": [
         "master"
       ],
-      "created": "2026-08-03T23:48:05.692Z",
+      "created": "2026-08-04T00:17:03.191Z",
       "description": "Tasks for master context"
     }
   }

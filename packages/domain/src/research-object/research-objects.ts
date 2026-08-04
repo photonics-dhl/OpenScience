@@ -2,6 +2,7 @@ import type { AuditContext } from '@openscience/observability';
 import { SDF_CORE_FIELDS } from '@openscience/sdf-schema';
 import { recordAudit } from '../workspace/audit';
 import { requireMembership } from '../workspace/helpers';
+import { requireRoAccess } from '../visibility/access';
 import type { WorkspaceDeps } from '../workspace/types';
 import { ResearchObjectError } from './errors';
 import { SDF_NODE_TYPES, type RoStatus, type RoVisibility } from './types';
@@ -139,7 +140,7 @@ export async function updateResearchObject(
   return { id: result.id, workspaceId: result.workspaceId, title: result.title, status: result.status, visibility: result.visibility, version: result.version, createdAt: result.createdAt };
 }
 
-/** 查 RO 详情（成员 + SDFDocument + nodes）。非成员/不存在 → 404。 */
+/** 查 RO 详情（可见性判定 §4.2：成员/invite_only grant/public 可读 + SDFDocument + nodes）。非成员且非 grant → 404。 */
 export async function getResearchObject(
   deps: WorkspaceDeps,
   input: { userId: string; roId: string },
@@ -149,8 +150,8 @@ export async function getResearchObject(
     include: { sdfDocument: { include: { nodes: true } } },
   });
   if (!ro) throw new ResearchObjectError('RESEARCH_OBJECT_NOT_FOUND', '研究对象不存在');
-  // 权限：RO 归属 workspace，校验调用者是该 workspace 成员（跨 workspace 越权 → 404）
-  await requireMembership(deps, ro.workspaceId, input.userId);
+  // 权限（P1B-7）：可见性判定（§4.2），invite_only grant 非成员可读；跨 Workspace 越权 → 404
+  await requireRoAccess(deps, { researchObjectId: input.roId, userId: input.userId });
 
   const core = (ro.sdfDocument?.coreJson as Record<string, string>) ?? {};
   return {

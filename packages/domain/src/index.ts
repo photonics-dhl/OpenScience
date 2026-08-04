@@ -88,3 +88,9 @@ export type { VersionSnapshot } from '@openscience/versioning';
 export { compareVersions } from './diff/comparisons';
 export type { DiffResult } from '@openscience/diff';
 export { assignPublicId, computeContentSha256, type AssignPublicIdResult } from './identity/identifiers';
+export { VisibilityError, type VisibilityErrorCode } from './visibility/errors';
+export { canAccessRo, requireRoAccess, type RoAccess } from './visibility/access';
+export {
+  requestVisibilityChange, grantVisibility, isVisibilityExpansion,
+  type VisibilityChangeResult,
+} from './visibility/requests';

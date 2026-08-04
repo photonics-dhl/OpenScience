@@ -2,6 +2,7 @@ import type { AuditContext } from '@openscience/observability';
 import { validateSdfCore } from '@openscience/sdf-schema';
 import { recordAudit } from '../workspace/audit';
 import { requireMembership } from '../workspace/helpers';
+import { requireRoAccess } from '../visibility/access';
 import type { WorkspaceDeps } from '../workspace/types';
 import { ResearchObjectError } from './errors';
 import { SDF_NODE_TYPES } from './types';
@@ -19,7 +20,7 @@ export interface UpdateSdfInput {
   core: Record<string, string>;
 }
 
-/** 查 SDFDocument（成员 + core + nodes）。 */
+/** 查 SDFDocument（可见性判定 §4.2：成员/invite_only grant 可读 + core + nodes）。 */
 export async function getSdfDocument(
   deps: WorkspaceDeps,
   input: { userId: string; roId: string },
@@ -29,7 +30,7 @@ export async function getSdfDocument(
     include: { sdfDocument: { include: { nodes: true } } },
   });
   if (!ro) throw new ResearchObjectError('RESEARCH_OBJECT_NOT_FOUND', '研究对象不存在');
-  await requireMembership(deps, ro.workspaceId, input.userId);
+  await requireRoAccess(deps, { researchObjectId: input.roId, userId: input.userId });
   if (!ro.sdfDocument) throw new ResearchObjectError('VALIDATION_ERROR', 'SDF 文档不存在');
 
   return {

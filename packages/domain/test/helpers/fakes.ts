@@ -24,11 +24,13 @@ interface FakeDb {
   manifestEntries: any[];
   identifiers: any[];
   publications: any[];
+  visibilityGrants: any[];
+  visibilityRequests: any[];
 }
 
 /** 内存版 Prisma 子集：覆盖 workspace 领域用到的调用面。 */
 export function createFakePrisma(): { prisma: PrismaClient; db: FakeDb } {
-  const db: FakeDb = { users: [], workspaces: [], memberships: [], workspaceInvitations: [], mailOutbox: [], quotaPolicies: [], usageLedger: [], researchObjects: [], sdfDocuments: [], sdfNodes: [], blobs: [], artifacts: [], branches: [], commits: [], changesets: [], versions: [], versionManifests: [], manifestEntries: [], identifiers: [], publications: [] };
+  const db: FakeDb = { users: [], workspaces: [], memberships: [], workspaceInvitations: [], mailOutbox: [], quotaPolicies: [], usageLedger: [], researchObjects: [], sdfDocuments: [], sdfNodes: [], blobs: [], artifacts: [], branches: [], commits: [], changesets: [], versions: [], versionManifests: [], manifestEntries: [], identifiers: [], publications: [], visibilityGrants: [], visibilityRequests: [] };
   let seq = 0;
   const nextId = () => `00000000-0000-4000-8000-${String(++seq).padStart(12, '0')}`;
   const p2002 = () => {
@@ -398,6 +400,28 @@ export function createFakePrisma(): { prisma: PrismaClient; db: FakeDb } {
       create: async ({ data }: any) => {
         const row = { id: nextId(), ...data };
         db.identifiers.push(row);
+        return row;
+      },
+    },
+    visibilityGrant: {
+      findUnique: async ({ where }: any) =>
+        db.visibilityGrants.find(
+          (g) => g.researchObjectId === where.researchObjectId_granteeId.researchObjectId && g.granteeId === where.researchObjectId_granteeId.granteeId,
+        ) ?? null,
+      upsert: async ({ where, create, update }: any) => {
+        const existing = db.visibilityGrants.find(
+          (g) => g.researchObjectId === where.researchObjectId_granteeId.researchObjectId && g.granteeId === where.researchObjectId_granteeId.granteeId,
+        );
+        if (existing) return { ...existing, ...update };
+        const row = { id: nextId(), createdAt: new Date(), ...create };
+        db.visibilityGrants.push(row);
+        return row;
+      },
+    },
+    visibilityRequest: {
+      create: async ({ data }: any) => {
+        const row = { id: nextId(), status: 'pending', createdAt: new Date(), ...data };
+        db.visibilityRequests.push(row);
         return row;
       },
     },

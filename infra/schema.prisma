@@ -43,6 +43,9 @@ model User {
   createdResearchObjects   ResearchObject[]      @relation("ResearchObjectCreator")
   uploadedArtifacts        Artifact[]            @relation("ArtifactUploader")
   authoredCommits          Commit[]
+  grantedVisibilityGrants  VisibilityGrant[]     @relation("VisibilityGranter")
+  receivedVisibilityGrants VisibilityGrant[]     @relation("VisibilityGrantee")
+  visibilityRequests       VisibilityRequest[]   @relation("VisibilityRequester")
 
   @@map("users")
 }
@@ -266,13 +269,15 @@ model ResearchObject {
   createdAt   DateTime     @default(now()) @map("created_at")
   updatedAt   DateTime     @updatedAt @map("updated_at")
 
-  workspace   Workspace    @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-  creator     User         @relation("ResearchObjectCreator", fields: [createdBy], references: [id], onDelete: Restrict)
-  sdfDocument SdfDocument?
-  branches    Branch[]
-  commits     Commit[]     @relation("CommitResearchObject")
-  versions    Version[]    @relation("VersionResearchObject")
-  identifiers Identifier[]
+  workspace          Workspace           @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  creator            User                @relation("ResearchObjectCreator", fields: [createdBy], references: [id], onDelete: Restrict)
+  sdfDocument        SdfDocument?
+  branches           Branch[]
+  commits            Commit[]            @relation("CommitResearchObject")
+  versions           Version[]           @relation("VersionResearchObject")
+  identifiers        Identifier[]
+  visibilityGrants   VisibilityGrant[]
+  visibilityRequests VisibilityRequest[]
 
   @@index([workspaceId])
   @@map("research_objects")
@@ -471,4 +476,38 @@ model Publication {
 
   @@index([versionId])
   @@map("publications")
+}
+
+// --- P1B-7：RO 可见性模型（§4.2 三态 + §4.2 扩大显式审批记录 + §17 越权防护）---
+
+model VisibilityGrant {
+  id               String   @id @default(uuid()) @db.Uuid
+  researchObjectId String   @map("research_object_id") @db.Uuid
+  granteeId        String   @map("grantee_id") @db.Uuid // 被指定账户（invite_only 可见）
+  grantedBy        String   @map("granted_by") @db.Uuid
+  createdAt        DateTime @default(now()) @map("created_at")
+
+  researchObject ResearchObject @relation(fields: [researchObjectId], references: [id], onDelete: Cascade)
+  grantee        User           @relation("VisibilityGrantee", fields: [granteeId], references: [id], onDelete: Cascade)
+  granter        User           @relation("VisibilityGranter", fields: [grantedBy], references: [id], onDelete: Restrict)
+
+  @@unique([researchObjectId, granteeId])
+  @@index([researchObjectId])
+  @@map("visibility_grants")
+}
+
+model VisibilityRequest {
+  id               String       @id @default(uuid()) @db.Uuid
+  researchObjectId String       @map("research_object_id") @db.Uuid
+  requestedBy      String       @map("requested_by") @db.Uuid
+  fromVisibility   RoVisibility @map("from_visibility")
+  toVisibility     RoVisibility @map("to_visibility")
+  status           String       @default("pending") // pending → approved/rejected（Phase 1D 审批流）
+  createdAt        DateTime     @default(now()) @map("created_at")
+
+  researchObject ResearchObject @relation(fields: [researchObjectId], references: [id], onDelete: Cascade)
+  requester      User           @relation("VisibilityRequester", fields: [requestedBy], references: [id], onDelete: Restrict)
+
+  @@index([researchObjectId])
+  @@map("visibility_requests")
 }

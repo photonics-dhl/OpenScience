@@ -76,7 +76,7 @@ describe('getResearchObject', () => {
     const { deps, db, user } = makeDeps();
     const ro = await createResearchObject(deps, { workspaceId: 'ws-1', userId: user.id, title: 'Secret' });
     const outsider = seedUser(db, { id: 'outsider' });
-    await expect(getResearchObject(deps, { userId: outsider.id, roId: ro.id })).rejects.toThrow(/空间不存在/);
+    await expect(getResearchObject(deps, { userId: outsider.id, roId: ro.id })).rejects.toThrow(/研究对象不存在/);
   });
 });
 
