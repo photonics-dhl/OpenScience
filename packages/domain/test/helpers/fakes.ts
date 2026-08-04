@@ -383,6 +383,8 @@ export function createFakePrisma(): { prisma: PrismaClient; db: FakeDb } {
       },
       count: async ({ where }: any) =>
         db.commits.filter((c) => (where.branchId === undefined || c.branchId === where.branchId)).length,
+      findMany: async ({ where }: any) =>
+        db.commits.filter((c) => (where.branchId === undefined || c.branchId === where.branchId)),
       create: async ({ data }: any) => {
         const row = { id: nextId(), createdAt: new Date(), ...data };
         delete row.changesets;
@@ -392,6 +394,11 @@ export function createFakePrisma(): { prisma: PrismaClient; db: FakeDb } {
             db.changesets.push({ id: nextId(), commitId: row.id, createdAt: new Date(), ...cs });
           }
         }
+        return row;
+      },
+      update: async ({ where, data }: any) => {
+        const row = db.commits.find((c) => c.id === where.id);
+        Object.assign(row, data);
         return row;
       },
     },
@@ -423,6 +430,10 @@ export function createFakePrisma(): { prisma: PrismaClient; db: FakeDb } {
         db.versions.push(row);
         return row;
       },
+      count: async ({ where }: any) =>
+        db.versions.filter((v) => (where.researchObjectId === undefined || v.researchObjectId === where.researchObjectId)).length,
+      findMany: async ({ where }: any) =>
+        db.versions.filter((v) => (where.researchObjectId === undefined || v.researchObjectId === where.researchObjectId)),
     },
     versionManifest: {
       findUnique: async ({ where, include }: any) => {
@@ -552,8 +563,17 @@ export function createFakePrisma(): { prisma: PrismaClient; db: FakeDb } {
         const row = db.pullRequests.find((pr) =>
           (where.id ? pr.id === where.id : pr.idempotencyKey === where.idempotencyKey),
         ) ?? null;
-        if (!row || !include?._count) return row;
-        return { ...row, _count: { comments: db.comments.filter((c) => c.prId === row.id).length } };
+        if (!row) return null;
+        const out: any = { ...row };
+        if (include?._count) out._count = { comments: db.comments.filter((c) => c.prId === row.id).length };
+        if (include?.researchObject) out.researchObject = db.researchObjects.find((r) => r.id === row.researchObjectId) ?? null;
+        if (include?.targetBranch) out.targetBranch = db.branches.find((b) => b.id === row.targetBranchId) ?? null;
+        return out;
+      },
+      update: async ({ where, data }: any) => {
+        const row = db.pullRequests.find((pr) => pr.id === where.id);
+        Object.assign(row, data);
+        return row;
       },
       findMany: async ({ where, include, orderBy }: any) => {
         const rows = db.pullRequests.filter(
@@ -591,6 +611,18 @@ export function createFakePrisma(): { prisma: PrismaClient; db: FakeDb } {
         if (!row || !include?.pr) return row;
         const pr = db.pullRequests.find((p) => p.id === row.prId);
         return { ...row, pr: pr ? { researchObjectId: pr.researchObjectId } : null };
+      },
+      findMany: async ({ where, orderBy }: any) => {
+        const rows = db.reviews.filter(
+          (r) => (where.prId === undefined || r.prId === where.prId),
+        );
+        if (orderBy?.createdAt === 'desc') rows.sort((a, b) => b.createdAt - a.createdAt);
+        return rows;
+      },
+      create: async ({ data }: any) => {
+        const row = { id: nextId(), items: [], body: '', createdAt: new Date(), ...data };
+        db.reviews.push(row);
+        return row;
       },
     },
     issue: {

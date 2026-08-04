@@ -28,7 +28,7 @@ const createBody = z.object({
   changesMethod: z.boolean(),
   changesData: z.boolean(),
   changesConclusion: z.boolean(),
-  newContributors: z.array(contributor).min(1),
+  newContributors: z.array(contributor), // 可空：PR 可无新增贡献者（§8.2「声明新增贡献者」）
   dataLicense: z.string().min(1).max(64),
   codeLicense: z.string().min(1).max(64),
   conflictOfInterest: z.string().min(1).max(500),

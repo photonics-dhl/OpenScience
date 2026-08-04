@@ -1,28 +1,28 @@
 # OpenScience (XGS) 进度日志
 
-## 2026-08-04 — P1C-7 作者组与 CRediT 贡献记录完成：/authors API，云上 79/79，task-master 4.7 done
+## 2026-08-04 — P1C-8 Review 与 Merge 流程及高风险确认完成：/reviews API，云上 82/82，task-master 4.8 done
 
 ### ✅ Completed
 | 任务 | 详情 |
 |---|---|
-| design gate | 五决策：作者组 = Author∪创建者 / 全量替换 / Contribution 幂等 / 空间成员可加贡献 / change-info 查询 |
-| 迁移 | 无（Author/Contribution 实体 P1C-1 迁移 12 已建，Restrict 不可抹除） |
-| domain authorship/ | setAuthors（全量替换 + 通讯至多一人 + 作者组权限）+ listAuthors/addContribution（append-only 幂等）/listContributions/getAuthorChangeInfo |
-| API | GET/PUT /research-objects/:id/authors + POST/GET /contributions + GET /author-change-info |
-| 测试 | domain 单测 10 新增（219 总全绿）+ 集成 2 新增（collab 24/24）；**云上集成 79/79**（新增 P1C-7 2 + 既有 77） |
-| task-master 4.7 | done |
+| design gate | 五决策：空间成员可 Review / Merge fast-forward + 新草稿 / 409 高风险确认 / 作者合并 append / 扩大可见性不适用 |
+| 迁移 | 无（Review 实体 P1C-1 迁移 12 已建） |
+| domain review/ | createReview（verdict/items 校验 + append-only）+ listReviews + assessHighRisk（四类）+ mergePullRequest（Owner/Maintainer + 高风险确认 + source tip→target + 新草稿 + 作者合并 + 许可应用 + merged 事件） |
+| API | POST/GET /reviews + POST /merge（confirmHighRisk） |
+| 测试 | domain 单测 11 新增（230 总全绿）+ 集成 3 新增（collab 27/27）；**云上集成 82/82**（新增 P1C-8 3 + 既有 79） |
+| task-master 4.8 | done |
 
 ### Key Decisions / 坑
-- **作者组（Q1，§3.4）**：Author 表用户 ∪ RO 创建者；空名单创建者独属；非作者组变更 → 403
-- **无自动署名（§3.4）**：创建者不自动第一作者/通讯；无字数/Commit 计数自动排序（实现无任何自动逻辑）
-- **全量替换（Q2）**：顺序 = 数组序；通讯至多一人（MULTIPLE_CORRESPONDING 409）
-- **Contribution（Q3/Q4）**：append-only 不可删（数据层 Restrict 兜底）+ 同 user+role 幂等 + 空间成员可加（factual record §2.3 决策 2）
-- **Merge 审批查询（Q5）**：getAuthorChangeInfo 返回 authors + contributorIds（P1C-8 对比新增作者/改序）
+- **§8.3 Merge 权限**：仅 Owner/Maintainer（membership.role ∈ {owner, maintainer}）
+- **四类高风险**：新增作者（getAuthorChangeInfo 对比）/ 变更许可（P1C-4）/ changesMethod/Data/Conclusion true / 扩大可见性（不适用，走 P1B-7）
+- **Merge 语义（Q2）**：source tip commit → target 分支（fast-forward）+ 新草稿版本（versionNo 递增）+ PR merged + 作者合并 append + 许可应用 + pull_request.merged 事件
+- **无自动冲突解决（§8.3）**：人类选择/重新编辑
+- **坑**：`tx.version.create` 传了 **version id 而非 commit id** → FK 违约 500（真 PG 暴露，本地 fake 无 FK 检查）；`entries.create` 空数组 Prisma 报错 → 条件省略；zod newContributors min(1) 放宽可空（PR 可无新增贡献者）
 
 ### ⏳ Next Steps
-- [x] ~~P1C-7 作者与 CRediT~~ 完成（2026-08-04）：/authors API，云上 79/79，4.7 done
-- [ ] **P1C-8（task-master 4.8）**：Review/Merge（§8.3 Owner/Maintainer 审批 + 高风险作者变更 + 状态流转）
-- [ ] parked：P1A-3 终审项、P1A-5 deferred ①、/admin TOTP 上线路障、SDF Schema 债务（0.2.0）、病毒扫描实装（P1B-后续）、Version 发布状态机（P1B-后续）、真实 AI 提取（Phase 1D）、协作剩余 3 子任务（P1C-8~10）
+- [x] ~~P1C-8 Review/Merge~~ 完成（2026-08-04）：/reviews API + 高风险确认，云上 82/82，4.8 done
+- [ ] **P1C-9（task-master 4.9）**：通知（Notification 实体 + 事件 → 通知投递，§16）
+- [ ] parked：P1A-3 终审项、P1A-5 deferred ①、/admin TOTP 上线路障、SDF Schema 债务（0.2.0）、病毒扫描实装（P1B-后续）、Version 发布状态机（P1B-后续）、真实 AI 提取（Phase 1D）、协作剩余 2 子任务（P1C-9~10）
 
 ---
 ## 2026-08-04 — P1B-10 SDF 标准导出包生成与校验完成：export API + 脱库校验，云上 58/58，task-master 3.10 done

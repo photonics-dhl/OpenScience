@@ -129,6 +129,12 @@ export {
   setAuthors, listAuthors, addContribution, listContributions, getAuthorChangeInfo,
   type AuthorEntryInput, type AuthorView, type AuthorChangeInfo,
 } from './authorship/authors';
+export { ReviewError, type ReviewErrorCode } from './review/errors';
+export {
+  createReview, listReviews, mergePullRequest, assessHighRisk,
+  REVIEW_VERDICTS,
+  type ReviewVerdict, type ReviewItem, type ReviewView, type HighRiskDetail,
+} from './review/reviews';
 export { buildExportPackage, classifyArtifact, type ExportFile } from './export/packager';
 export { validateExportPackage, type ExportValidationResult } from './export/validate';
 export { buildManifest, type BuildManifestInput } from './export/manifest';

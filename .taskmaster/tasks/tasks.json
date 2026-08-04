@@ -564,7 +564,7 @@
             "id": 8,
             "title": "实现 Review 与 Merge 流程及高风险确认",
             "description": "实现对 PR 的逐项科学 Review 与 Merge 写入主分支（Spec §8.2、§8.3）；仅 Owner/Maintainer 可发起 Merge，改变作者、许可、核心结论或可见性的 Merge MUST 触发高风险确认。",
-            "status": "pending",
+            "status": "done",
             "dependencies": [
               "4.6",
               "4.7"
@@ -572,7 +572,8 @@
             "priority": "high",
             "details": "模块 /reviews（§16）：Review 支持对 PR 逐项（按 SDF 字段/文件）给出意见与结论；Merge 权限校验对齐 §3.3 角色（仅 Owner/Maintainer）；高风险判定：新增作者或改变作者顺序（§3.4，调 P1C-7 接口）、变更许可（P1C-4）、PR 声明'改变方法/数据/核心结论'（§8.2 字段）、扩大可见性（§4.2）——命中任一项必须显式高风险确认才允许 Merge；Merge 不修改历史公开版本，进入主分支后形成新草稿状态，发布新版本需作者确认（§8.3，发布动作本身在 P1D）；冲突由人类选择或重新编辑，AI 不得静默决定科学含义（§8.3，不做自动冲突解决）；Merge 完成发出 pull_request.merged 事件（§16）。\n验收: 步骤12",
             "testStrategy": "单元测试：Merge 权限、四类高风险触发条件逐一覆盖；集成测试：Merge 后主分支新草稿与历史公开版本不可变；E2E：Review→Merge 流程（§21.1 E2E 层）；阶段验收点：§21.2 步骤 12。",
-            "parentId": "4"
+            "parentId": "4",
+            "updatedAt": "2026-08-04T09:27:57.770Z"
           },
           {
             "id": 9,
@@ -604,7 +605,7 @@
             "parentId": "4"
           }
         ],
-        "updatedAt": "2026-08-04T08:58:01.144Z"
+        "updatedAt": "2026-08-04T09:27:57.770Z"
       },
       {
         "id": "5",
@@ -867,7 +868,7 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-08-04T08:58:01.144Z",
+      "lastModified": "2026-08-04T09:27:57.770Z",
       "taskCount": 6,
       "completedCount": 3,
       "tags": [

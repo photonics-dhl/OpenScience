@@ -652,7 +652,7 @@ describe('P1C-7 作者组与 CRediT（云上，无新迁移）', () => {
   it('作者全流程：创建者建名单 → 排序/通讯 → 贡献追加 → change-info（§3.4/§2.3 决策 2）', async () => {
     const app = await makeApp();
     const cookieA = await registerAndVerify(app, 'au1a@example.com');
-    const cookieB = await registerAndVerify(app, 'au1b@example.com');
+    await registerAndVerify(app, 'au1b@example.com');
     const wsA = await getPersonalWorkspace('au1a@example.com');
     const userIdA = await getUserId('au1a@example.com');
     const userIdB = await getUserId('au1b@example.com');
@@ -705,6 +705,116 @@ describe('P1C-7 作者组与 CRediT（云上，无新迁移）', () => {
     const anon = await app.inject({ method: 'GET', url: `/research-objects/${ro.id}/authors` });
     expect(anon.statusCode).toBe(200);
     expect(anon.json().authors).toHaveLength(1);
+    await app.close();
+  });
+});
+
+describe('P1C-8 Review 与 Merge（云上，无新迁移）', () => {
+  const PR_DECL = {
+    changedSdfFields: ['method'],
+    changedFiles: ['manuscript/paper.md'],
+    changesMethod: false,
+    changesData: false,
+    changesConclusion: false,
+    newContributors: [],
+    dataLicense: 'CC0-1.0',
+    codeLicense: 'MIT',
+    conflictOfInterest: '无',
+    autoChecks: {},
+    requestsRelease: false,
+  };
+
+  async function setupRoWithPr(app: Awaited<ReturnType<typeof makeApp>>, email: string) {
+    const cookie = await registerAndVerify(app, email);
+    const wsId = await getPersonalWorkspace(email);
+    const createRo = await app.inject({ method: 'POST', url: '/research-objects', cookies: { openscience_session: cookie }, payload: { workspaceId: wsId, title: 'Merge RO' } });
+    const ro = createRo.json().researchObject;
+    const userId = await getUserId(email);
+    await app.inject({ method: 'PUT', url: `/research-objects/${ro.id}/licenses`, cookies: { openscience_session: cookie }, payload: { text: 'CC-BY-4.0', code: 'MIT', data: 'CC0-1.0' } });
+    await app.inject({ method: 'POST', url: `/research-objects/${ro.id}/commits`, cookies: { openscience_session: cookie }, payload: { message: 'main v1', version: 1, sdfCore: { schemaVersion: '0.1.0', problem: 'P', insight: 'I', method: 'M', results: 'R', limitations: 'L', reproducibility: 'RP' } } });
+    const cb = await app.inject({ method: 'POST', url: `/research-objects/${ro.id}/branches`, cookies: { openscience_session: cookie }, payload: { name: 'feature/x' } });
+    const feature = cb.json().branch;
+    const list = await app.inject({ method: 'GET', url: `/research-objects/${ro.id}/branches`, cookies: { openscience_session: cookie } });
+    const main = list.json().branches.find((b: { name: string }) => b.name === 'main');
+    await app.inject({ method: 'POST', url: `/research-objects/${ro.id}/commits`, cookies: { openscience_session: cookie }, payload: { message: 'feature work', version: 2, branchId: feature.id, sdfCore: { schemaVersion: '0.1.0', problem: 'P2', insight: 'I2', method: 'M2', results: 'R2', limitations: 'L2', reproducibility: 'RP2' } } });
+    const pr = await app.inject({ method: 'POST', url: `/research-objects/${ro.id}/pull-requests`, cookies: { openscience_session: cookie }, payload: { sourceBranchId: feature.id, targetBranchId: main.id, title: '改进', ...PR_DECL } });
+    return { cookie, ro, feature, main, pr: pr.json().pullRequest, userId, wsId };
+  }
+
+  it('Review→Merge 全流程：Review → Merge(owner, 低风险) → PR merged + 新草稿 + 事件（§8.2/§8.3/§16）', async () => {
+    const app = await makeApp();
+    const { cookie, ro, pr } = await setupRoWithPr(app, 'rv1@example.com');
+
+    // Review（approve + items）
+    const review = await app.inject({ method: 'POST', url: `/research-objects/${ro.id}/pull-requests/${pr.id}/reviews`, cookies: { openscience_session: cookie }, payload: { verdict: 'approve', body: '方法合理', items: [{ path: 'method', kind: 'clarity', comment: '补充细节' }] } });
+    expect(review.statusCode).toBe(201);
+    const reviews = await app.inject({ method: 'GET', url: `/research-objects/${ro.id}/pull-requests/${pr.id}/reviews`, cookies: { openscience_session: cookie } });
+    expect(reviews.json().reviews).toHaveLength(1);
+
+    // Merge（owner，低风险 → 无需确认）
+    const merge = await app.inject({ method: 'POST', url: `/research-objects/${ro.id}/pull-requests/${pr.id}/merge`, cookies: { openscience_session: cookie }, payload: { confirmHighRisk: false } });
+    expect(merge.statusCode).toBe(200);
+    expect(merge.json().merge.status).toBe('merged');
+    expect(merge.json().merge.highRisk.highRisk).toBe(false);
+
+    // 新草稿版本（versionNo 递增，draft）
+    const versions = await prisma.version.findMany({ where: { researchObjectId: ro.id } });
+    expect(versions.some((v) => v.status === 'draft' && v.versionNo > 1)).toBe(true);
+
+    // pull_request.merged 事件
+    const notif = await prisma.notification.findFirst({ where: { type: 'pull_request.merged' } });
+    expect(notif?.payload).toMatchObject({ prId: pr.id });
+    await app.close();
+  });
+
+  it('高风险 Merge 无确认 → 409；确认后 → 通过（§8.3）', async () => {
+    const app = await makeApp();
+    const { cookie, ro, feature, main } = await setupRoWithPr(app, 'rv2@example.com');
+    const highRiskPr = await app.inject({ method: 'POST', url: `/research-objects/${ro.id}/pull-requests`, cookies: { openscience_session: cookie }, payload: { sourceBranchId: feature.id, targetBranchId: main.id, title: '改结论', ...PR_DECL, changesConclusion: true } });
+    const prId = highRiskPr.json().pullRequest.id;
+
+    const noConfirm = await app.inject({ method: 'POST', url: `/research-objects/${ro.id}/pull-requests/${prId}/merge`, cookies: { openscience_session: cookie }, payload: { confirmHighRisk: false } });
+    expect(noConfirm.statusCode).toBe(409);
+    expect(noConfirm.json().error.code).toBe('HIGH_RISK_CONFIRMATION_REQUIRED');
+
+    const confirm = await app.inject({ method: 'POST', url: `/research-objects/${ro.id}/pull-requests/${prId}/merge`, cookies: { openscience_session: cookie }, payload: { confirmHighRisk: true } });
+    expect(confirm.statusCode).toBe(200);
+    expect(confirm.json().merge.status).toBe('merged');
+    await app.close();
+  });
+
+  it('越权：非 owner 无法 Merge；历史公开版本不变（§8.3/§2.2.3）', async () => {
+    const app = await makeApp();
+    const cookieA = await registerAndVerify(app, 'rv3a@example.com');
+    const cookieB = await registerAndVerify(app, 'rv3b@example.com');
+    const wsA = await getPersonalWorkspace('rv3a@example.com');
+    const createRo = await app.inject({ method: 'POST', url: '/research-objects', cookies: { openscience_session: cookieA }, payload: { workspaceId: wsA, title: 'Merge RO3' } });
+    const ro = createRo.json().researchObject;
+    await app.inject({ method: 'PUT', url: `/research-objects/${ro.id}/licenses`, cookies: { openscience_session: cookieA }, payload: { text: 'CC-BY-4.0', code: 'MIT', data: 'CC0-1.0' } });
+    const c1 = await app.inject({ method: 'POST', url: `/research-objects/${ro.id}/commits`, cookies: { openscience_session: cookieA }, payload: { message: 'v1', version: 1 } });
+    // 历史公开版本（§2.2.3 不可变）
+    const v1Id = c1.json().commit.versionId;
+    await prisma.version.update({ where: { id: v1Id }, data: { status: 'published' } });
+    const cb = await app.inject({ method: 'POST', url: `/research-objects/${ro.id}/branches`, cookies: { openscience_session: cookieA }, payload: { name: 'feature/y' } });
+    const feature = cb.json().branch;
+    const list = await app.inject({ method: 'GET', url: `/research-objects/${ro.id}/branches`, cookies: { openscience_session: cookieA } });
+    const main = list.json().branches.find((b: { name: string }) => b.name === 'main');
+    const pr = await app.inject({ method: 'POST', url: `/research-objects/${ro.id}/pull-requests`, cookies: { openscience_session: cookieA }, payload: { sourceBranchId: feature.id, targetBranchId: main.id, title: 'x', ...PR_DECL } });
+    const prId = pr.json().pullRequest.id;
+
+    // B 非 A 空间成员 → merge 404（§17 requireMembership 先挡）
+    const intruder = await app.inject({ method: 'POST', url: `/research-objects/${ro.id}/pull-requests/${prId}/merge`, cookies: { openscience_session: cookieB }, payload: { confirmHighRisk: false } });
+    expect(intruder.statusCode).toBe(404);
+
+    // owner merge
+    const merge = await app.inject({ method: 'POST', url: `/research-objects/${ro.id}/pull-requests/${prId}/merge`, cookies: { openscience_session: cookieA }, payload: { confirmHighRisk: false } });
+    expect(merge.statusCode).toBe(200);
+
+    // 历史公开版本不可变（§2.2.3）：v1 coreJson 未被 merge 改动
+    const v1 = await prisma.version.findUnique({ where: { id: v1Id } });
+    expect(v1!.status).toBe('published');
+    const v1Manifest = await prisma.versionManifest.findUnique({ where: { versionId: v1Id } });
+    expect(v1Manifest!.coreJson).toBeDefined();
     await app.close();
   });
 });
