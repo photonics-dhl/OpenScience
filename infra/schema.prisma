@@ -46,6 +46,13 @@ model User {
   grantedVisibilityGrants  VisibilityGrant[]     @relation("VisibilityGranter")
   receivedVisibilityGrants VisibilityGrant[]     @relation("VisibilityGrantee")
   visibilityRequests       VisibilityRequest[]   @relation("VisibilityRequester")
+  authoredIssues           Issue[]               @relation("IssueAuthor")
+  authoredPullRequests     PullRequest[]         @relation("PRAuthor")
+  authoredComments         Comment[]             @relation("CommentAuthor")
+  authoredReviews          Review[]              @relation("Reviewer")
+  authorEntries            Author[]              @relation("AuthorEntry")
+  contributions            Contribution[]        @relation("ContributionUser")
+  notifications            Notification[]
 
   @@map("users")
 }
@@ -278,6 +285,13 @@ model ResearchObject {
   identifiers        Identifier[]
   visibilityGrants   VisibilityGrant[]
   visibilityRequests VisibilityRequest[]
+  forkResults        ForkRelation[]      @relation("ForkResult")
+  forkSources        ForkRelation[]      @relation("ForkSource")
+  issues             Issue[]
+  pullRequests       PullRequest[]
+  authors            Author[]
+  contributions      Contribution[]
+  licenseAssignments LicenseAssignment[]
 
   @@index([workspaceId])
   @@map("research_objects")
@@ -356,6 +370,8 @@ model Branch {
 
   researchObject ResearchObject @relation(fields: [researchObjectId], references: [id], onDelete: Cascade)
   commits        Commit[]
+  sourcePrs      PullRequest[]  @relation("PRSourceBranch")
+  targetPrs      PullRequest[]  @relation("PRTargetBranch")
 
   @@unique([researchObjectId, name])
   @@index([researchObjectId])
@@ -414,10 +430,12 @@ model Version {
   status           VersionStatus @default(draft) // P1B-7 发布状态机
   createdAt        DateTime      @default(now()) @map("created_at")
 
-  researchObject ResearchObject   @relation("VersionResearchObject", fields: [researchObjectId], references: [id], onDelete: Cascade)
-  commit         Commit           @relation(fields: [commitId], references: [id], onDelete: Restrict)
-  manifest       VersionManifest?
-  publications   Publication[]
+  researchObject     ResearchObject      @relation("VersionResearchObject", fields: [researchObjectId], references: [id], onDelete: Cascade)
+  commit             Commit              @relation(fields: [commitId], references: [id], onDelete: Restrict)
+  manifest           VersionManifest?
+  publications       Publication[]
+  forkSources        ForkRelation[]
+  licenseAssignments LicenseAssignment[]
 
   @@unique([researchObjectId, versionNo])
   @@index([researchObjectId])
@@ -510,4 +528,203 @@ model VisibilityRequest {
 
   @@index([researchObjectId])
   @@map("visibility_requests")
+}
+
+// --- P1C-1：协作域数据模型（§15 实体 + §8.2 PR 声明 + §3.4 CRediT + §6.3 三类许可）---
+
+enum IssueKind {
+  question
+  method_repro
+  failure
+  bug_report
+  suggestion
+}
+
+enum ReviewVerdict {
+  approve
+  request_changes
+  comment
+}
+
+enum CreditRole {
+  conceptualization
+  methodology
+  software
+  validation
+  data_curation
+  visualization
+  writing
+  supervision
+  investigation
+  resources
+  project_administration
+  funding_acquisition
+}
+
+model ForkRelation {
+  id                String   @id @default(uuid()) @db.Uuid
+  forkedRoId        String   @map("forked_ro_id") @db.Uuid
+  sourceRoId        String   @map("source_ro_id") @db.Uuid
+  sourceVersionId   String   @map("source_version_id") @db.Uuid
+  sourceContentHash String   @map("source_content_hash") // §8.1 内容哈希
+  createdAt         DateTime @default(now()) @map("created_at")
+
+  forkedRo      ResearchObject @relation("ForkResult", fields: [forkedRoId], references: [id], onDelete: Restrict)
+  sourceRo      ResearchObject @relation("ForkSource", fields: [sourceRoId], references: [id], onDelete: Restrict)
+  sourceVersion Version        @relation(fields: [sourceVersionId], references: [id], onDelete: Restrict)
+
+  @@unique([forkedRoId]) // 一 RO 至多一个来源（§8.1 不可移除）
+  @@index([sourceRoId])
+  @@map("fork_relations")
+}
+
+model Issue {
+  id               String    @id @default(uuid()) @db.Uuid
+  researchObjectId String    @map("research_object_id") @db.Uuid
+  title            String
+  body             String    @default("")
+  kind             IssueKind @default(question) // §8 五类语义
+  status           String    @default("open") // open/closed
+  authorId         String    @map("author_id") @db.Uuid
+  createdAt        DateTime  @default(now()) @map("created_at")
+  updatedAt        DateTime  @updatedAt @map("updated_at")
+
+  researchObject ResearchObject @relation(fields: [researchObjectId], references: [id], onDelete: Cascade)
+  author         User           @relation("IssueAuthor", fields: [authorId], references: [id], onDelete: Restrict)
+  comments       Comment[]
+
+  @@index([researchObjectId])
+  @@map("issues")
+}
+
+model PullRequest {
+  id                 String   @id @default(uuid()) @db.Uuid
+  researchObjectId   String   @map("research_object_id") @db.Uuid
+  sourceBranchId     String   @map("source_branch_id") @db.Uuid
+  targetBranchId     String   @map("target_branch_id") @db.Uuid
+  title              String
+  body               String   @default("")
+  // §8.2 声明字段
+  changedSdfFields   Json     @map("changed_sdf_fields")
+  changedFiles       Json     @map("changed_files")
+  changesMethod      Boolean  @map("changes_method")
+  changesData        Boolean  @map("changes_data")
+  changesConclusion  Boolean  @map("changes_conclusion")
+  newContributors    Json     @map("new_contributors") // [{ userId, creditRole[] }]
+  dataLicense        String   @map("data_license")
+  codeLicense        String   @map("code_license")
+  conflictOfInterest String   @map("conflict_of_interest")
+  autoChecks         Json     @default("{}") @map("auto_checks") // 结构化占位（真实检查 P1D）
+  requestsRelease    Boolean  @map("requests_release")
+  status             String   @default("open") // open/merged/rejected
+  authorId           String   @map("author_id") @db.Uuid
+  createdAt          DateTime @default(now()) @map("created_at")
+
+  researchObject ResearchObject @relation(fields: [researchObjectId], references: [id], onDelete: Cascade)
+  sourceBranch   Branch         @relation("PRSourceBranch", fields: [sourceBranchId], references: [id], onDelete: Restrict)
+  targetBranch   Branch         @relation("PRTargetBranch", fields: [targetBranchId], references: [id], onDelete: Restrict)
+  author         User           @relation("PRAuthor", fields: [authorId], references: [id], onDelete: Restrict)
+  reviews        Review[]
+  comments       Comment[]
+
+  @@index([researchObjectId])
+  @@index([sourceBranchId])
+  @@map("pull_requests")
+}
+
+model Review {
+  id         String        @id @default(uuid()) @db.Uuid
+  prId       String        @map("pr_id") @db.Uuid
+  reviewerId String        @map("reviewer_id") @db.Uuid
+  verdict    ReviewVerdict
+  body       String        @default("")
+  items      Json          @default("[]") // 逐项意见 [{ path, kind, comment }]
+  createdAt  DateTime      @default(now()) @map("created_at")
+
+  pr       PullRequest @relation(fields: [prId], references: [id], onDelete: Cascade)
+  reviewer User        @relation("Reviewer", fields: [reviewerId], references: [id], onDelete: Restrict)
+  Comment  Comment[]
+
+  @@index([prId])
+  @@map("reviews")
+}
+
+model Comment {
+  id        String   @id @default(uuid()) @db.Uuid
+  issueId   String?  @map("issue_id") @db.Uuid // 多态：Issue/PR/Review（§15 一处实现）
+  prId      String?  @map("pr_id") @db.Uuid
+  reviewId  String?  @map("review_id") @db.Uuid
+  authorId  String   @map("author_id") @db.Uuid
+  body      String
+  createdAt DateTime @default(now()) @map("created_at")
+
+  issue  Issue?       @relation(fields: [issueId], references: [id], onDelete: Cascade)
+  pr     PullRequest? @relation(fields: [prId], references: [id], onDelete: Cascade)
+  review Review?      @relation(fields: [reviewId], references: [id], onDelete: Cascade)
+  author User         @relation("CommentAuthor", fields: [authorId], references: [id], onDelete: Restrict)
+
+  @@index([issueId])
+  @@index([prId])
+  @@index([reviewId])
+  @@map("comments")
+}
+
+model Author {
+  id               String   @id @default(uuid()) @db.Uuid
+  researchObjectId String   @map("research_object_id") @db.Uuid
+  userId           String   @map("user_id") @db.Uuid
+  sortOrder        Int      @map("sort_order") // 作者顺序（作者组确认，§3.4）
+  isCorresponding  Boolean  @default(false) @map("is_corresponding")
+  createdAt        DateTime @default(now()) @map("created_at")
+
+  researchObject ResearchObject @relation(fields: [researchObjectId], references: [id], onDelete: Cascade)
+  user           User           @relation("AuthorEntry", fields: [userId], references: [id], onDelete: Restrict)
+
+  @@unique([researchObjectId, userId])
+  @@index([researchObjectId])
+  @@map("authors")
+}
+
+model Contribution {
+  id               String     @id @default(uuid()) @db.Uuid
+  researchObjectId String     @map("research_object_id") @db.Uuid
+  userId           String     @map("user_id") @db.Uuid
+  creditRole       CreditRole @map("credit_role")
+  createdAt        DateTime   @default(now()) @map("created_at") // 按时间追加（§3.4 不可抹除）
+
+  researchObject ResearchObject @relation(fields: [researchObjectId], references: [id], onDelete: Restrict)
+  user           User           @relation("ContributionUser", fields: [userId], references: [id], onDelete: Restrict)
+
+  @@index([researchObjectId])
+  @@map("contributions")
+}
+
+model LicenseAssignment {
+  id               String   @id @default(uuid()) @db.Uuid
+  researchObjectId String   @map("research_object_id") @db.Uuid
+  versionId        String?  @map("version_id") @db.Uuid // null = RO 级，非空 = 版本级（§6.3）
+  licenseType      String   @map("license_type") // text/code/data
+  licenseId        String   @map("license_id") // CC-BY-4.0/MIT/CC0（§24 配置位，标准标识）
+  createdAt        DateTime @default(now()) @map("created_at")
+
+  researchObject ResearchObject @relation(fields: [researchObjectId], references: [id], onDelete: Cascade)
+  version        Version?       @relation(fields: [versionId], references: [id], onDelete: Cascade)
+
+  @@unique([researchObjectId, versionId, licenseType])
+  @@index([researchObjectId])
+  @@map("license_assignments")
+}
+
+model Notification {
+  id        String   @id @default(uuid()) @db.Uuid
+  userId    String   @map("user_id") @db.Uuid
+  type      String // pull_request.opened / merged / review.requested / issue.updated
+  payload   Json
+  read      Boolean  @default(false)
+  createdAt DateTime @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, read])
+  @@map("notifications")
 }

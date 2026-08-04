@@ -452,7 +452,7 @@
         "id": 4,
         "title": "Phase 1C: GitHub 式科研协作（Branch/Fork/PR/Review/Merge、作者与 CRediT、许可、通知）",
         "description": "建立 MVP 协作闭环：Branch、Issue、Fork、Pull Request、Review、Merge 的数据模型与基础交互（Spec §2.3、§8），作者组与 CRediT 贡献记录（§3.4），三类许可选择与 Fork 继承校验（§6.3），协作事件通知（§15、§16、§18.1）。对应里程碑 Spec §22 Phase 1C。服务于验收主流程 §21.2 步骤 8、11、12。Commit/版本存储底座由 P1B 提供，发布与 AI 审核属 P1D，不在本 Phase 范围。",
-        "status": "pending",
+        "status": "in-progress",
         "dependencies": [
           "3"
         ],
@@ -464,14 +464,15 @@
             "id": 1,
             "title": "建立协作域数据模型与数据库迁移",
             "description": "落地协作域核心实体：Branch、ForkRelation、Issue、PullRequest、Review、Comment、Author、Authorship、Contribution、LicenseAssignment、Notification（Spec §15 实体清单 MUST），为后续所有协作功能提供数据底座。",
-            "status": "pending",
+            "status": "done",
             "dependencies": [
               "3"
             ],
             "priority": "high",
-            "details": "在 P1A 的 PostgreSQL + 迁移框架上新增上述表：外键挂接 P1B 的 ResearchObject/Commit/Version；PullRequest 需含 §8.2 声明字段（变更的 SDF 字段与文件、是否改变方法/数据/核心结论、新增贡献者及 CRediT 角色、数据/代码许可、利益冲突、是否要求发布新版本）；Contribution 使用 CRediT 分类枚举（Conceptualization、Methodology、Software、Validation、Data Curation、Visualization、Writing、Supervision 等，§3.4）；LicenseAssignment 区分文字/代码/数据三类（§6.3）。迁移 MUST 向前可部署、可回滚或有补偿步骤，生产禁自动破坏性迁移（§15）。数据模型避免封死 Phase 2 扩展路径，但不实现 §19 功能（点赞/收藏/关注等字段不建）。\n验收: -",
+            "details": "在 P1A 的 PostgreSQL + 迁移框架上新增上述表：外键挂接 P1B 的 ResearchObject/Commit/Version；PullRequest 需含 §8.2 声明字段（变更的 SDF 字段与文件、是否改变方法/数据/核心结论、新增贡献者及 CRediT 角色、数据/代码许可、利益冲突、是否要求发布新版本）；Contribution 使用 CRediT 分类枚举（Conceptualization、Methodology、Software、Validation、Data Curation、Visualization、Writing、Supervision 等，§3.4）；LicenseAssignment 区分文字/代码/数据三类（§6.3）。迁移 MUST 向前可部署、可回滚或有补偿步骤，生产禁自动破坏性迁移（§15）。数据模型避免封死 Phase 2 扩展路径，但不实现 §19 功能（点赞/收藏/关注等字段不建）。\n验收: -\n<info added on 2026-08-04T06:12:22.994Z>\nP1C-1 协作域数据模型与迁移完成（2026-08-04）：\n\n决策（design gate）：\n1. PR 声明字段内联（Json + Boolean 标量）\n2. Comment 三可空外键多态（issueId/prId/reviewId）\n3. CreditRole 14 项完整 CRediT\n4. License 标准标识字符串（CC-BY-4.0/MIT/CC0，§24 配置位）\n5. Notification payload Json（无强 FK）\n\n落点：\n- 迁移 12：fork_relations（唯一 forkedRoId + Restrict 无删除路径）/issues/pull_requests（§8.2 全声明字段）/reviews/comments（多态）/authors/contributions（Restrict 不可抹除）/license_assignments（版本级可空）/notifications + 3 枚举（IssueKind 5/ReviewVerdict 3/CreditRole 12）+ rollback\n- Prisma 11 model + 关系（ResearchObject/User/Branch/Version 命名关系避免歧义）\n- 测试：domain 枚举 4 + api 集成 4 = 8 新增\n\n验收：本地门禁全绿；云上集成 62/62（新增 P1C-1 4 + 既有 58）；迁移 12 applied；4.1 done\n\n坑：\n1. Prisma 命名关系歧义：User 的 Issue/PullRequest/Author/Contribution 多关系需 @relation 命名\n2. comments FK 引用 reviews → reviews 表需在 comments 前建（SQL 顺序）\n3. archiver createRequire 动态加载 knip 不追踪 → knip.json ignoreDependencies\n4. RO 创建后无 default branch（P1B-4 commit 才建）→ PR 测试需先 commit\n</info added on 2026-08-04T06:12:22.994Z>",
             "testStrategy": "单元测试：迁移 up/down 往返、枚举与必填约束；集成测试：与 ResearchObject/Commit 外键一致性（§21.1 单元+集成层）。",
-            "parentId": "4"
+            "parentId": "4",
+            "updatedAt": "2026-08-04T06:11:59.429Z"
           },
           {
             "id": 2,
@@ -596,7 +597,8 @@
             "testStrategy": "合同测试：前后端 Schema（§21.1）；E2E：另一用户 Fork→Branch→PR、维护者 Review→Merge 全流程（§21.2 步骤 11、12）。",
             "parentId": "4"
           }
-        ]
+        ],
+        "updatedAt": "2026-08-04T06:11:59.429Z"
       },
       {
         "id": 5,
@@ -859,13 +861,13 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-08-04T05:06:37.958Z",
+      "lastModified": "2026-08-04T06:11:59.430Z",
       "taskCount": 6,
       "completedCount": 3,
       "tags": [
         "master"
       ],
-      "created": "2026-08-04T05:06:44.191Z",
+      "created": "2026-08-04T06:12:07.308Z",
       "description": "Tasks for master context"
     }
   }

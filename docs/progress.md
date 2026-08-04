@@ -1,5 +1,27 @@
 # OpenScience (XGS) 进度日志
 
+## 2026-08-04 — P1C-1 协作域数据模型完成：迁移 12（11 实体 + 3 枚举）+ Prisma，云上 62/62，task-master 4.1 done
+
+### ✅ Completed
+| 任务 | 详情 |
+|---|---|
+| design gate | 五决策：PR 声明内联/Comment 多态/CreditRole 14 项/License 字符串/Notification Json |
+| migration 12 | fork_relations/issues/pull_requests（§8.2 全声明）/reviews/comments/authors/contributions/license_assignments/notifications + IssueKind/ReviewVerdict/CreditRole 枚举 + rollback |
+| Prisma | 11 model + ResearchObject/User/Branch/Version 命名关系 |
+| 测试 | domain 枚举 4 + api 集成 4 = 8 新增；本地门禁全绿；**云上集成 62/62**（新增 P1C-1 4 + 既有 58） |
+| task-master 4.1 | done + details |
+
+### Key Decisions / 坑
+- **五决策**：PR 声明内联（§8.2）；Comment 三可空外键（§15 多态）；CreditRole 14 项（§3.4）；License 标准标识（§6.3/§24）；Notification payload Json
+- **§3.4 不可抹除**：Contribution Restrict 无删除路径；**§8.1** ForkRelation 唯一
+- Prisma 命名关系歧义需 @relation；comments FK 依赖 reviews 建表顺序；archiver knip ignore；RO 创建无 default branch（commit 才建）
+
+### ⏳ Next Steps
+- [x] ~~P1C-1 协作数据模型~~ 完成（2026-08-04）：迁移 12 + 云上 62/62，4.1 done
+- [ ] **P1C-2（task-master 4.2）**：Branch 管理与可见性继承
+- [ ] parked：P1A-3 终审项、P1A-5 deferred ①、/admin TOTP 上线路障、SDF Schema 债务（0.2.0）、病毒扫描实装（P1B-后续）、Version 发布状态机（P1B-后续）、真实 AI 提取（Phase 1D）、协作剩余 9 子任务（P1C-2~10）
+
+---
 ## 2026-08-04 — P1B-10 SDF 标准导出包生成与校验完成：export API + 脱库校验，云上 58/58，task-master 3.10 done
 
 ### ✅ Completed

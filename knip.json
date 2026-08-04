@@ -7,6 +7,9 @@
       "ignoreDependencies": ["@prisma/client", "prisma", "task-master-ai"],
       "ignoreBinaries": ["docker-compose"]
     },
+    "apps/api": {
+      "ignoreDependencies": ["archiver", "@types/archiver"]
+    },
     "apps/web": {
       "project": ["app/**/*.{ts,tsx}", "components/**/*.{ts,tsx}", "lib/**/*.{ts,tsx}", "*.{ts,mjs}"]
     },
