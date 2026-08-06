@@ -24,6 +24,9 @@ export const RATE_LIMIT_ROUTES: Record<string, RouteRule> = {
   '/research-objects/:id/issues/:issueId/comments': { limit: 30, windowSec: 60 },
   // P1C-6：PR 创建限流（§17）
   '/research-objects/:id/pull-requests': { limit: 20, windowSec: 60 },
+  // P1D-9：公开只读防爬（匿名高频抓取保护；宽松档位，SSR/索引流量勿误伤）
+  '/research/:publicId': { limit: 60, windowSec: 60 },
+  '/research/:publicId/v/:versionNo': { limit: 120, windowSec: 60 },
 };
 
 export interface RegisterRateLimitOptions {

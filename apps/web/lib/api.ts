@@ -15,7 +15,7 @@ interface ApiErrorBody {
   error: { code: string; message: string };
 }
 
-class ApiClientError extends Error {
+export class ApiClientError extends Error {
   constructor(
     readonly code: string,
     message: string,
@@ -287,5 +287,34 @@ export async function submitExtractTask(roId: string, manuscriptText: string): P
 export async function getAgentTask(roId: string, taskId: string): Promise<{ task: AgentTaskView }> {
   void roId;
   return request(`/api/agent/tasks/${taskId}`);
+}
+
+// ===== P1D-9：公开页数据（§4.3 必显）=====
+
+export interface PublicResearchVersion {
+  publicId: string;
+  title: string;
+  url: string;
+  visibility: string;
+  version: {
+    versionNo: number;
+    publicVersionId: string;
+    status: string;
+    publishedAt: string | null;
+    contentSha256: string | null;
+    legalDisclaimer: string | null;
+    core: Record<string, string>;
+  };
+  authors: Array<{ displayName: string; identityStatus: string; isCorresponding: boolean; affiliation: string | null; sortOrder: number }>;
+  contributions: Array<{ displayName: string; creditRole: string }>;
+  licenses: Record<string, string>;
+  aiReview: { status: string; hardBlocks: unknown[]; warnings: unknown[] } | null;
+  citation: string;
+  artifactPaths: Array<{ logicalPath: string; blobSha256: string }>;
+}
+
+/** 公开页版本详情（§4.3 必显 + 十标签数据；匿名可访问 public）。 */
+export async function getPublicResearchVersion(publicId: string, versionNo: number): Promise<{ research: PublicResearchVersion }> {
+  return request(`/api/research/${publicId}/v/${versionNo}`);
 }
 

@@ -42,24 +42,52 @@ export function registerResearchRoutes(app: FastifyInstance, deps: ResearchRoute
     }
     const version = await deps.prisma.version.findFirst({
       where: { researchObjectId: ro.id, versionNo },
-      include: { manifest: { include: { entries: true } }, publications: true },
+      include: { manifest: { include: { entries: true } }, publications: true, aiReview: true },
     });
     if (!version) {
       return reply.status(404).send({ error: { code: 'NOT_FOUND', message: '版本未找到' } });
     }
     const publication = version.publications[0] ?? null;
+    // P1D-9：§4.3 必显数据聚合
+    const [authors, contributions, licenses] = await Promise.all([
+      deps.prisma.author.findMany({
+        where: { researchObjectId: ro.id },
+        orderBy: { sortOrder: 'asc' },
+        include: { user: { select: { displayName: true, status: true } } },
+      }),
+      deps.prisma.contribution.findMany({
+        where: { researchObjectId: ro.id },
+        orderBy: { createdAt: 'asc' },
+        include: { user: { select: { displayName: true } } },
+      }),
+      deps.prisma.licenseAssignment.findMany({ where: { researchObjectId: ro.id, versionId: null } }),
+    ]);
+    const core = (version.manifest?.coreJson ?? {}) as Record<string, string>;
+    const citation = `${authors.map((a) => a.user.displayName).join(', ')}. ${ro.title}. ${publicId}-v${versionNo}. ${ro.createdAt.getUTCFullYear()}.`;
+
     return reply.send({
-      version: {
-        publicVersionId: version.publicVersionId ?? `${publicId}-v${versionNo}`,
-        versionNo,
+      research: {
+        publicId,
         title: ro.title,
-        publishedAt: publication?.publishedAt ?? null,
-        contentSha256: publication?.contentSha256 ?? null,
-        core: version.manifest?.coreJson ?? {},
-        artifacts: (version.manifest?.entries ?? []).map((e) => ({
-          logicalPath: e.logicalPath,
-          blobSha256: e.blobSha256,
-        })),
+        url: `/research/${publicId}/v/${versionNo}`,
+        visibility: ro.visibility,
+        version: {
+          versionNo,
+          publicVersionId: publication?.publicVersionId ?? version.publicVersionId ?? `${publicId}-v${versionNo}`,
+          status: version.status,
+          publishedAt: publication?.publishedAt ?? null,
+          contentSha256: publication?.contentSha256 ?? null,
+          legalDisclaimer: publication?.legalDisclaimer ?? null,
+          core,
+        },
+        authors: authors.map((a) => ({ displayName: a.user.displayName, identityStatus: a.user.status, isCorresponding: a.isCorresponding, affiliation: a.affiliation, sortOrder: a.sortOrder })),
+        contributions: contributions.map((c) => ({ displayName: c.user.displayName, creditRole: c.creditRole })),
+        licenses: Object.fromEntries(licenses.map((l) => [l.licenseType, l.licenseId])),
+        aiReview: version.aiReview
+          ? { status: version.aiReview.status, hardBlocks: version.aiReview.hardBlocks, warnings: version.aiReview.warnings }
+          : null,
+        citation,
+        artifactPaths: (version.manifest?.entries ?? []).map((e) => ({ logicalPath: e.logicalPath, blobSha256: e.blobSha256 })),
       },
     });
   });

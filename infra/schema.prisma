@@ -697,6 +697,7 @@ model Author {
   userId           String   @map("user_id") @db.Uuid
   sortOrder        Int      @map("sort_order") // 作者顺序（作者组确认，§3.4）
   isCorresponding  Boolean  @default(false) @map("is_corresponding")
+  affiliation      String?  // P1D-9：机构声明（§4.3 公开页必显）
   createdAt        DateTime @default(now()) @map("created_at")
 
   researchObject ResearchObject @relation(fields: [researchObjectId], references: [id], onDelete: Cascade)
