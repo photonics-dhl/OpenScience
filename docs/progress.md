@@ -1,5 +1,84 @@
 # OpenScience (XGS) 进度日志
 
+## 2026-08-06 — 🎉 MVP (Phase 0-1E) 全部完成！P1E-8 沙箱威胁模型与逃逸基线测试交付
+
+### ✅ Phase 1E 轻量科学可视化完成
+
+| 任务 | 状态 | 提交 | 详情 |
+|------|------|------|------|
+| P1E-1 | ✅ | dc04c04 | Visualization Planner 子 Agent |
+| P1E-2 | ✅ | 1b6aa17 | Python AST 策略检查器（白名单模块+黑名单函数） |
+| P1E-3 | ✅ | adffb60, 6c50561 | 沙箱基础镜像（Python 3.11 + 科学计算库） |
+| P1E-4 | ✅ | ac8e362 | Sandbox Controller 与隔离 Docker 网络 |
+| P1E-5 | ✅ | a6f6f88 | Sandbox Jobs API 与三维配额系统 |
+| P1E-6 | ✅ | ddb21f2 | 可视化结果展示与 IndexedDB 临时存储 |
+| P1E-7 | ✅ | 2ba9965, 9a41364 | 自然语言修改脚本与 diff 展示 + 自动任务切换 |
+| P1E-8 | ✅ | 52ff62e | 沙箱威胁模型文档与逃逸基线测试 |
+
+### P1E-8 交付物
+
+**安全文档**（3 个，~2800 行）：
+1. **[sandbox-threat-model.md](security/sandbox-threat-model.md)** (942 行)
+   - STRIDE 威胁模型：6 大威胁类型（Spoofing/Tampering/Repudiation/Information Disclosure/DoS/Privilege Escalation）
+   - 5 类具体攻击场景：网络突破/容器逃逸/资源耗尽/策略绕过/数据泄露
+   - 多层防御（7 层）+ 残留风险评估（高/中/低）
+   - 缓解路线图：P0 生产前必做 / P1 短期改进 / P2 中期改进
+   - 事件响应流程：容器逃逸/DoS 检测与响应
+
+2. **[sandbox-security-statement.md](security/sandbox-security-statement.md)** (469 行)
+   - 安全承诺：6 大安全措施（网络隔离/资源限制/文件系统/权限/生命周期/审计）
+   - 16 项基线测试：网络 3 + 资源 3 + 文件系统 2 + 逃逸 4 + 策略绕过 4
+   - 用户责任与禁止行为
+   - 法律免责声明（待法律团队审核）
+   - 漏洞报告流程（负责任披露 + 90 天保密期）
+
+3. **[production-security-checklist.md](security/production-security-checklist.md)** (661 行)
+   - P0 生产前必做（5 大类）：独立 ECS/镜像扫描/监控告警/安全测试/法律审核
+   - P1 短期改进：AST 引擎/并发限制/事件响应/CVE 监控
+   - P2 中期改进：gVisor/AppArmor/外部日志归档/定期审查
+   - 检查清单记录表 + 风险接受签字确认
+
+**基线测试扩展**：
+- [sandbox-escape.test.ts](../apps/science-worker/test/sandbox-escape.test.ts) (230 行)
+  - 容器逃逸组（4 项）：Docker socket/特权提升/capabilities/设备节点
+  - 策略绕过组（4 项）：动态导入/Base64/字符串拼接/pickle 反序列化
+  - 防御验证：综合安全约束验证
+
+**文档更新**：
+- README.md: 添加安全文档入口（🔒 安全文档部分）
+
+### 🏆 MVP 里程碑
+
+**已完成 Phase**：
+- ✅ Phase 0: 现有系统审计
+- ✅ Phase 1A: 平台底座（Auth/Workspace/RBAC/配额/审计/CI/CD）
+- ✅ Phase 1B: SDF 与版本（Schema/编辑器/存储/版本引擎/Diff/可见性）
+- ✅ Phase 1C: 协作（Branch/Issue/PR/Review/作者组/许可/通知）
+- ✅ Phase 1D: Hermes 与发布（AI Gateway/异步任务/Extractor/审核/申诉/审批/发布/公开页）
+- ✅ Phase 1E: 轻量科学可视化（Planner/AST 检查/沙箱/作业 API/展示/修改/威胁模型）
+
+**统计数据**：
+- 总提交数：100+ commits
+- 数据库迁移：19 个 migrations
+- API 端点：50+ endpoints
+- 测试覆盖：99/99 云上集成测试
+- 文档：20+ 设计文档，10+ 计划文档
+
+### ⏳ Next Steps
+
+**生产前必做（P0）**：
+- [ ] 独立 ECS 部署（沙箱与数据库物理隔离，§23 风险 5）
+- [ ] 法律团队审核免责声明（责任限制/管辖法律条款）
+- [ ] 第三方渗透测试
+- [ ] 所有安全测试在 Docker 环境验证（16 项基线测试）
+- [ ] 容器镜像安全扫描（Trivy/Clair 集成 CI）
+- [ ] 监控告警配置（作业失败率/Docker daemon/审计日志）
+
+**Phase 2 占位（不在 MVP 范围）**：
+- Spec §19 功能清单：高级协作/高级可视化/企业版功能
+
+---
+
 ## 2026-08-04 — P1D-8 发布事务与状态机推进完成：迁移 18 + /publications，云上 99/99，task-master 5.8 done
 
 ### ✅ Completed
