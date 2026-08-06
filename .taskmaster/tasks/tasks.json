@@ -884,12 +884,179 @@
           }
         ],
         "updatedAt": "2026-08-06T08:09:28.752Z"
+      },
+      {
+        "id": "7",
+        "title": "Phase 2A: 前端视觉系统（P0 地基收尾 + P1 首页视觉原型）",
+        "description": "按已定稿 spec docs/specs/2026-08-06-frontend-visual-system-design.md 与计划 docs/plans/2026-08-06-frontend-p0-p1-plan.md 执行：Tailwind v4/shadcn/token/字体底座，首页 Header+Hero+#latest 原型，EvolvingRoSymbol 两版变体三尺寸截图供用户拍板冻结 token。三方定稿见 docs/proposals/2026-08-06-frontend-design-direction-v1.md 文末 v2 终稿决策层 D1-D9。",
+        "status": "in-progress",
+        "dependencies": [
+          "6"
+        ],
+        "priority": "high",
+        "details": "全局约束：文案零硬编码全走 landing.* i18n；prefers-reduced-motion 全静态；暖橙仅表 diff；不引入 Three.js/Live2D/双主题切换；每 Task commit 前问用户。验收门=Task 11 用户选定变体+冻结 token。P2（GET /explore+四阶段面板）及以后待 P1 验收后另出计划。",
+        "testStrategy": "vitest 单测（token 对比度/符号组件断言/i18n 对称）+ next build/typecheck + Playwright 三尺寸截图人工验收",
+        "subtasks": [
+          {
+            "id": 1,
+            "title": "Tailwind v4 接入（不破坏现有 globals.css）",
+            "description": "apps/web 装 tailwindcss@^4 + @tailwindcss/postcss，建 postcss.config.mjs，globals.css 头加 @import tailwindcss；build 通过 + 公开页/协作页样式回归核对；preflight 破坏则降级为 theme+utilities 两层导入。对应 plan Task 1。",
+            "status": "done",
+            "dependencies": [],
+            "priority": "high",
+            "details": "",
+            "testStrategy": "next build 通过；next dev 人工核对 /research/[publicId] 与协作页无样式崩塌",
+            "parentId": "7",
+            "updatedAt": "2026-08-06T13:48:44.768Z"
+          },
+          {
+            "id": 2,
+            "title": "设计 token 层 + WCAG AA 对比度门禁",
+            "description": "spec §3 token 落 apps/web/app/tokens.css（:root + @theme 映射）；test/tokens-contrast.test.ts 纯函数算对比度，6 组配对 ≥4.5，颜色从 tokens.css 正则读出防漂移；不过则调 token 明度并回写 spec。对应 plan Task 2。",
+            "status": "pending",
+            "dependencies": [
+              "7.1"
+            ],
+            "priority": "high",
+            "details": "",
+            "testStrategy": "vitest 对比度门禁全过；typecheck 绿",
+            "parentId": "7",
+            "updatedAt": "2026-08-06T13:34:42.917Z"
+          },
+          {
+            "id": 3,
+            "title": "标题字体 Noto Serif SC + LocaleSwitcher 样式收尾",
+            "description": "layout.tsx 用 next/font/google Noto_Serif_SC（600/900，swap，--font-display）；globals.css 加 body 系统栈与 .font-display；LocaleSwitcher 补 token 化样式（清偿地基遗留）；检查首屏字体分片体积 >150KB 则改手工子集并更新 spec §5。对应 plan Task 3。",
+            "status": "pending",
+            "dependencies": [
+              "7.2"
+            ],
+            "priority": "high",
+            "details": "",
+            "testStrategy": "build 通过；next start 网络面板字体分片体积达标",
+            "parentId": "7",
+            "updatedAt": "2026-08-06T13:34:42.917Z"
+          },
+          {
+            "id": 4,
+            "title": "shadcn/ui 底座（button/card/badge/skeleton）",
+            "description": "apps/web 装 cva/clsx/tailwind-merge/@radix-ui/react-slot/lucide-react；手写 lib/utils.ts cn 与 components.json；copy-in 四组件并把默认色改引用 @theme token。对应 plan Task 4。",
+            "status": "pending",
+            "dependencies": [
+              "7.3"
+            ],
+            "priority": "high",
+            "details": "",
+            "testStrategy": "typecheck + test + build 全绿",
+            "parentId": "7",
+            "updatedAt": "2026-08-06T13:34:42.917Z"
+          },
+          {
+            "id": 5,
+            "title": "落地页 i18n 文案 landing.* 命名空间",
+            "description": "messages/zh.json 与 en.json 加 landing 命名空间（nav 四项/hero title+subtitle+双 CTA+hermesStatus/latest.title+empty），zh/en 对称。对应 plan Task 5。",
+            "status": "pending",
+            "dependencies": [
+              "7.4"
+            ],
+            "priority": "high",
+            "details": "",
+            "testStrategy": "现有 i18n 键对称门禁自动覆盖，vitest 过",
+            "parentId": "7",
+            "updatedAt": "2026-08-06T13:34:42.917Z"
+          },
+          {
+            "id": 6,
+            "title": "Landing SiteHeader 组件",
+            "description": "components/landing/SiteHeader.tsx（client）：左 logo+wordmark，右 探索/创建/关于/登录 + LocaleSwitcher；scrollY>24 切 bg-hero-bg/80 backdrop-blur（passive listener）；语义 header/nav、焦点可见。对应 plan Task 6。",
+            "status": "pending",
+            "dependencies": [
+              "7.5"
+            ],
+            "priority": "high",
+            "details": "",
+            "testStrategy": "typecheck + build 过",
+            "parentId": "7",
+            "updatedAt": "2026-08-06T13:34:42.917Z"
+          },
+          {
+            "id": 7,
+            "title": "EvolvingRoSymbol 核心符号组件（两版变体）",
+            "description": "components/landing/evolving-ro-symbol.tsx：六面楔形=SDF 六节点（problem/insight/method/results/limitations/reproducibility），中心开放缺口，三层描边辉光（filter 区域 ±35%），历史轮廓 1.06/1.12 倍低透明，蓝色轨迹一次分支 merge + 单暖橙 diff 节点；variant=sculptural|interface；动效仅 opacity/transform，reduced-motion 全静态，aria-hidden。测试断言 6 data-facet/1 data-diff-node/aria-hidden/reduced-motion 无动画。对应 plan Task 7。",
+            "status": "pending",
+            "dependencies": [
+              "7.6"
+            ],
+            "priority": "high",
+            "details": "",
+            "testStrategy": "vitest 组件断言全过；build 过",
+            "parentId": "7",
+            "updatedAt": "2026-08-06T13:34:42.917Z"
+          },
+          {
+            "id": 8,
+            "title": "Hero 区块 + 落地页组装",
+            "description": "components/landing/Hero.tsx + app/page.tsx 替换占位：min-h-screen 左文案右符号（searchParams.symbol=a|b），主 CTA→/#latest 次 CTA→/login?next=/research-objects/new，Hermes 状态 pill（非第三 CTA），底部露出 #latest；全部文案走 landing 命名空间。对应 plan Task 8。",
+            "status": "pending",
+            "dependencies": [
+              "7.7"
+            ],
+            "priority": "high",
+            "details": "",
+            "testStrategy": "build + next start 冒烟：zh 默认、Accept-Language en 切换正确",
+            "parentId": "7",
+            "updatedAt": "2026-08-06T13:34:42.917Z"
+          },
+          {
+            "id": 9,
+            "title": "#latest 区块（skeleton 版）",
+            "description": "components/landing/LatestResearch.tsx：标题 + 3 张 skeleton RO Card（标题/作者行/版本 badge/更新时间/计数/许可占位版式即最终 RoCard 版式）+ 空态文案；注释标明 P2 接 GET /explore。对应 plan Task 9。",
+            "status": "pending",
+            "dependencies": [
+              "7.8"
+            ],
+            "priority": "high",
+            "details": "",
+            "testStrategy": "build + 视觉走查",
+            "parentId": "7",
+            "updatedAt": "2026-08-06T13:34:42.917Z"
+          },
+          {
+            "id": 10,
+            "title": "Playwright 三尺寸截图脚本",
+            "description": "apps/web 装 playwright devDep + script shots；test/visual/shots.mjs 对 ?symbol=a|b 各截 1440×900/1920×1080/390×844（deviceScaleFactor 2）+ reducedMotion 组，输出 test/visual/out/（gitignore）。对应 plan Task 10。",
+            "status": "pending",
+            "dependencies": [
+              "7.9"
+            ],
+            "priority": "high",
+            "details": "",
+            "testStrategy": "8+ 张截图产出且人工可读",
+            "parentId": "7",
+            "updatedAt": "2026-08-06T13:34:42.917Z"
+          },
+          {
+            "id": 11,
+            "title": "用户验收门（P1 出口）",
+            "description": "向用户展示两变体×三尺寸截图；用户选定符号变体后冻结 token（最终值回写 spec §3 去方向值标注）；project_index.md + progress.md 同步 + check-docs-sync + docs:lint 全绿。对应 plan Task 11。",
+            "status": "pending",
+            "dependencies": [
+              "7.10"
+            ],
+            "priority": "high",
+            "details": "",
+            "testStrategy": "用户拍板记录 + 文档门禁全绿",
+            "parentId": "7",
+            "updatedAt": "2026-08-06T13:34:42.917Z"
+          }
+        ],
+        "updatedAt": "2026-08-06T13:48:44.768Z"
       }
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-08-06T08:09:28.752Z",
-      "taskCount": 6,
+      "lastModified": "2026-08-06T13:48:44.769Z",
+      "taskCount": 7,
       "completedCount": 6,
       "tags": [
         "master"
