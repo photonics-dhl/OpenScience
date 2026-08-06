@@ -15,6 +15,7 @@
 | `package.json` / `pnpm-workspace.yaml` / `pnpm-lock.yaml` | pnpm workspace 根配置与锁文件（P1A-1）；`task-master-ai` 已入 root devDependencies（2026-07-31，VS Code MCP 直连用） | 活文档 |
 | `apps/web/components.json` | shadcn/ui `new-york` 配置（Task 7.4，cssVariables + 本地 aliases） | 活文档 |
 | `apps/web/components/ui/{button,card,badge,skeleton}.tsx` | shadcn/ui 基础组件（Task 7.4，token 化默认表面） | 活文档 |
+| `apps/web/components/landing/SiteHeader.tsx` | Landing 页站点 Header（Task 7.6，i18n 导航、滚动模糊背景、LocaleSwitcher） | 活文档 |
 | `apps/web/lib/utils.ts` | `cn` class merge 工具（Task 7.4） | 活文档 |
 | `apps/web/test/ui-components.test.ts` | Task 7.4 storyless server-rendering assertion（43 web tests total after review fix） | 活文档 |
 | `apps/web/vitest.config.ts` | Vitest Node 环境与 `@/` alias 解析（Task 7.4 review fix） | 活文档 |

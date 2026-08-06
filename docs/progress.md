@@ -1,5 +1,13 @@
 # OpenScience (XGS) 进度日志
 
+## 2026-08-06（补十六）— 前端 P0/P1 Task 7.6 Landing SiteHeader
+
+- **状态**：Task 7.6 已实现并完成 fix round 1，task-master 已置 `done`；reviewer scoped re-review clean，未创建 commit。
+- **实现**：新增 `apps/web/components/landing/SiteHeader.tsx`，包含语义 header/nav、landing.nav.* 文案、四个指定 href、logo + OpenScience wordmark、现有 LocaleSwitcher、滚动超过 24px 后的 token 化深色模糊背景、passive listener cleanup 与可见焦点状态；窄屏下 header/nav 分行并允许导航换行，避免英文横向溢出。
+- **集成风险**：按 brief 保留 `app/layout.tsx` 不变，因此全局 LocaleSwitcher 与 SiteHeader 内 LocaleSwitcher 会同时存在，待后续 landing page assembly 处理。
+- **验证**：web typecheck、web build、web 全套测试 43/43、`git diff --check` 全部通过；详细报告见 `.superpowers/sdd/2026-08-06-frontend-p0-p1-plan/task-6-report.md`。
+- **下一步**：用户确认后提交 `feat(web): landing site header`，再进入 Task 7.7 EvolvingRoSymbol。
+
 ## 2026-08-06（补十五）— 前端 P0/P1 Task 7.5 审查收口
 
 - **状态**：Task 7.5 落地页 `landing.*` i18n 命名空间已实现，task-master 7.5 已置 `done`；reviewer clean，当前等待用户确认 commit。

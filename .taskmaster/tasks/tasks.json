@@ -969,7 +969,7 @@
             "id": 6,
             "title": "Landing SiteHeader 组件",
             "description": "components/landing/SiteHeader.tsx（client）：左 logo+wordmark，右 探索/创建/关于/登录 + LocaleSwitcher；scrollY>24 切 bg-hero-bg/80 backdrop-blur（passive listener）；语义 header/nav、焦点可见。对应 plan Task 6。",
-            "status": "pending",
+            "status": "done",
             "dependencies": [
               "7.5"
             ],
@@ -977,7 +977,7 @@
             "details": "",
             "testStrategy": "typecheck + build 过",
             "parentId": "7",
-            "updatedAt": "2026-08-06T13:34:42.917Z"
+            "updatedAt": "2026-08-06T15:22:25.925Z"
           },
           {
             "id": 7,
@@ -1050,12 +1050,12 @@
             "updatedAt": "2026-08-06T13:34:42.917Z"
           }
         ],
-        "updatedAt": "2026-08-06T15:11:18.029Z"
+        "updatedAt": "2026-08-06T15:22:25.925Z"
       }
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-08-06T15:11:18.029Z",
+      "lastModified": "2026-08-06T15:22:25.925Z",
       "taskCount": 7,
       "completedCount": 6,
       "tags": [
