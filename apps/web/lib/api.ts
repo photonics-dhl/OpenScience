@@ -325,6 +325,7 @@ export interface SandboxJobView {
   workspaceId: string;
   script: string;
   status: 'pending' | 'running' | 'completed' | 'failed' | 'timeout';
+  context?: SandboxJobContext | null;
   result: {
     success: boolean;
     stdout?: string;
@@ -409,9 +410,15 @@ export async function modifyScript(
   return res.json();
 }
 
+export interface SandboxJobContext {
+  visualizationType?: 'plot' | 'simulation' | 'diagram';
+  description?: string;
+}
+
 export interface CreateSandboxJobRequest {
   workspaceId: string;
   script: string;
+  context?: SandboxJobContext;
 }
 
 export interface CreateSandboxJobResponse {

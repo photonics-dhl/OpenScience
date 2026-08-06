@@ -54,7 +54,7 @@ CREATE INDEX IF NOT EXISTS idx_sandbox_artifacts_job ON sandbox_artifacts(job_id
 -- P1E-5 沙箱配额 seed：三档（free/pro/team）× 三类资源 = 9 条策略
 -- 存在性守卫：已 seed 过（含云上手工执行 14 号文件的场景）则跳过
 INSERT INTO quota_policies (id, scope, scope_key, resource, limit_value, created_at, updated_at)
-SELECT gen_random_uuid(), v.scope_key, v.resource, v.limit_value, NOW(), NOW()
+SELECT gen_random_uuid(), 'user_level', v.scope_key, v.resource, v.limit_value, NOW(), NOW()
 FROM (VALUES
   ('free', 'python_task_count', 3),
   ('free', 'concurrent_tasks', 1),

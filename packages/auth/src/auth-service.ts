@@ -45,6 +45,8 @@ export interface CurrentUser {
   email: string;
   displayName: string;
   status: string;
+  /** 配额 user_level 档位（users.level，free/pro/team；迁移 21 起入库，默认 free）。 */
+  level: string;
 }
 
 export interface RegisterInput {
@@ -232,5 +234,5 @@ export async function getCurrentUser(deps: AuthDeps, sessionToken: string): Prom
     throw new AuthError('SESSION_INVALID', '会话已失效');
   }
   if (user.status === 'invited') throw new AuthError('ACCOUNT_NOT_ACTIVE', '请先完成邮箱验证');
-  return { userId: user.id, email: user.email, displayName: user.displayName, status: user.status };
+  return { userId: user.id, email: user.email, displayName: user.displayName, status: user.status, level: user.level };
 }

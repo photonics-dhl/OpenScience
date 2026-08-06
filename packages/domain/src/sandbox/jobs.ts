@@ -1,12 +1,19 @@
-import type { PrismaClient } from '@prisma/client';
+import { Prisma, type PrismaClient } from '@prisma/client';
 import { randomUUID } from 'node:crypto';
 
 export type SandboxJobStatus = 'pending' | 'running' | 'completed' | 'failed' | 'timeout' | 'cancelled';
+
+/** P1E-5 §2.1：作业上下文（随创建请求透传，可选）。 */
+export interface SandboxJobContext {
+  visualizationType?: 'plot' | 'simulation' | 'diagram';
+  description?: string;
+}
 
 export interface CreateSandboxJobInput {
   workspaceId: string;
   userId: string;
   script: string;
+  context?: SandboxJobContext;
   idempotencyKey?: string;
 }
 
@@ -25,9 +32,26 @@ export interface SandboxJob {
   script: string;
   status: SandboxJobStatus;
   result: SandboxJobResult | null;
+  context: SandboxJobContext | null;
   createdAt: Date;
   completedAt: Date | null;
 }
+
+/**
+ * $queryRaw 不做列名转换：snake_case 列必须显式别名成 camelCase，
+ * 否则 job.workspaceId/createdAt 等运行时为 undefined（2026-08-06 实证修复）。
+ */
+const JOB_COLUMNS = Prisma.raw(`
+  id,
+  workspace_id AS "workspaceId",
+  user_id AS "userId",
+  script,
+  status,
+  result,
+  context,
+  created_at AS "createdAt",
+  completed_at AS "completedAt"
+`);
 
 /**
  * P1E-5 §21.2-17: 创建沙箱作业（支持幂等性键）。
@@ -43,7 +67,7 @@ export async function createSandboxJob(
   if (input.idempotencyKey) {
     const cutoff = new Date(Date.now() - 24 * 60 * 60 * 1000);
     const existing = await deps.prisma.$queryRaw<SandboxJob[]>`
-      SELECT * FROM sandbox_jobs
+      SELECT ${JOB_COLUMNS} FROM sandbox_jobs
       WHERE workspace_id = ${input.workspaceId}::uuid
         AND result->>'idempotencyKey' = ${input.idempotencyKey}
         AND created_at > ${cutoff}
@@ -56,7 +80,7 @@ export async function createSandboxJob(
 
   // 创建新作业
   const job = await deps.prisma.$queryRaw<SandboxJob[]>`
-    INSERT INTO sandbox_jobs (id, workspace_id, user_id, script, status, result, created_at)
+    INSERT INTO sandbox_jobs (id, workspace_id, user_id, script, status, result, context, created_at)
     VALUES (
       ${randomUUID()}::uuid,
       ${input.workspaceId}::uuid,
@@ -64,9 +88,10 @@ export async function createSandboxJob(
       ${input.script},
       'pending'::sandbox_job_status,
       ${input.idempotencyKey ? JSON.stringify({ idempotencyKey: input.idempotencyKey }) : null}::jsonb,
+      ${input.context ? JSON.stringify(input.context) : null}::jsonb,
       NOW()
     )
-    RETURNING *
+    RETURNING ${JOB_COLUMNS}
   `;
 
   return job[0];
@@ -80,7 +105,7 @@ export async function getSandboxJob(
   jobId: string,
 ): Promise<(SandboxJob & { artifacts: Array<{ id: string; filename: string; mimeType: string; size: number }> }) | null> {
   const job = await deps.prisma.$queryRaw<SandboxJob[]>`
-    SELECT * FROM sandbox_jobs WHERE id = ${jobId}::uuid LIMIT 1
+    SELECT ${JOB_COLUMNS} FROM sandbox_jobs WHERE id = ${jobId}::uuid LIMIT 1
   `;
   if (job.length === 0) return null;
 
@@ -105,7 +130,7 @@ export async function listSandboxJobsByWorkspace(
   const offset = input.offset ?? 0;
 
   const jobs = await deps.prisma.$queryRaw<SandboxJob[]>`
-    SELECT * FROM sandbox_jobs
+    SELECT ${JOB_COLUMNS} FROM sandbox_jobs
     WHERE workspace_id = ${input.workspaceId}::uuid
     ORDER BY created_at DESC
     LIMIT ${limit} OFFSET ${offset}
@@ -138,13 +163,17 @@ export async function updateSandboxJobStatus(
 
 /**
  * P1E-5: 获取 artifact 二进制数据。
+ * 2026-08-06：加 jobId 过滤——artifact 必须属于指定 job，防同 workspace 成员跨 job 猜测下载。
  */
 export async function getSandboxArtifact(
   deps: { prisma: PrismaClient },
+  jobId: string,
   artifactId: string,
 ): Promise<{ filename: string; mimeType: string; data: Buffer } | null> {
   const artifact = await deps.prisma.$queryRaw<Array<{ filename: string; mime_type: string; data: Buffer }>>`
-    SELECT filename, mime_type, data FROM sandbox_artifacts WHERE id = ${artifactId}::uuid LIMIT 1
+    SELECT filename, mime_type, data FROM sandbox_artifacts
+    WHERE id = ${artifactId}::uuid AND job_id = ${jobId}::uuid
+    LIMIT 1
   `;
   if (artifact.length === 0) return null;
 

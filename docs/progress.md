@@ -1,5 +1,16 @@
 # OpenScience (XGS) 进度日志
 
+## 2026-08-06（补二）— P1E-5 遗留四项修复：artifact 归属过滤、users.level 配额档、context 字段、迁移 21
+
+### 修复内容
+- **getSandboxArtifact 加 jobId 过滤**（`packages/domain/src/sandbox/jobs.ts`）：签名改 `(deps, jobId, artifactId)`，SQL 加 `AND job_id = ...`，防同 workspace 成员跨 job 猜测下载；路由调用点同步。
+- **jobs.ts $queryRaw 列名对齐**（顺带修的潜伏 bug）：`SELECT *`/`RETURNING *` 返回 snake_case 键，camelCase 字段（workspaceId/createdAt 等）运行时为 undefined（路由 GET 会 500）；全部改显式列清单 + `AS "camelCase"` 别名。
+- **users.level 配额档**（修复 4）：User 表本无 level 列（集成测试 `level: 'free'` 一直引用不存在字段）；迁移 21 `ALTER TABLE users ADD COLUMN level TEXT NOT NULL DEFAULT 'free'` + schema.prisma 同步；`CurrentUser` 加 `level`，`getCurrentUser` 选出；`/sandbox-jobs` 创建时 `userLevel: user.level` 传回 `checkPythonTaskQuota`，恢复 user_level 回退层。
+- **context 字段**（修复 3）：迁移 21 加 `sandbox_jobs.context JSONB`；domain `createSandboxJob` 入参/落库、路由 schema/GET 响应、前端 `CreateSandboxJobRequest`/`SandboxJobView` 全链路透传。
+- **限流核实**（修复 2，无需改码）：`RATE_LIMIT_ROUTES['/sandbox-jobs'] = 10/60s` 已配置，`rate-limit.ts` keyGen 用 `ip + route`（P1A-8 统一做法），不依赖 `req.user`，限流真实生效；设计文档 §4.1 的 `req.user.id` keyGen 是未实现的设想。
+- **迁移 20 INSERT 缺列 bug（顺带修）**：quota seed 的 INSERT 目标 7 列、SELECT 仅 6 表达式且 scope 列错位，deploy 必报 42601；已补 `'user_level'` 常量（迁移 20 从未 commit/apply，改动安全）。
+- 迁移 20–21 均待云上 deploy（云上写操作需用户确认）。
+
 ## 2026-08-06（补）— 交接复查：AGENTS.md 补更、迁移 20 规整、docs-sync 门禁脚本落地
 
 ### 背景

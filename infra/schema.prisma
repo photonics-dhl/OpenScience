@@ -32,6 +32,8 @@ model User {
   displayName        String              @map("display_name")
   status             UserStatus          @default(invited)
   platformRole       PlatformRole        @default(user) @map("platform_role")
+  /// 配额 user_level 档位（free/pro/team，P1E-5 迁移 21；resolvePolicy 的 userLevel 来源）
+  level              String              @default("free")
   createdAt          DateTime            @default(now()) @map("created_at")
   updatedAt          DateTime            @updatedAt @map("updated_at")
   emailVerifications EmailVerification[]

@@ -21,6 +21,13 @@ export type SandboxJobsRouteDeps = AuthDeps;
 const createJobSchema = z.object({
   workspaceId: z.string().uuid(),
   script: z.string().min(1).max(50000),
+  // P1E-5 §2.1：作业上下文（可选），随作业落库并在 GET 响应带回
+  context: z
+    .object({
+      visualizationType: z.enum(['plot', 'simulation', 'diagram']).optional(),
+      description: z.string().max(2000).optional(),
+    })
+    .optional(),
 });
 
 const jobIdParams = z.object({
@@ -92,16 +99,17 @@ export function registerSandboxJobsRoutes(app: FastifyInstance, deps: SandboxJob
     const user = await requireCurrentUser(deps, req, reply);
     if (!user) return;
 
-    const { workspaceId, script } = createJobSchema.parse(req.body);
+    const { workspaceId, script, context } = createJobSchema.parse(req.body);
     if (!(await requireWorkspaceMembership(deps, user, workspaceId, req, reply))) return;
 
     const idempotencyKey = req.headers['idempotency-key'] as string | undefined;
 
-    // 配额检查（CurrentUser 无 level 字段，userLevel 省略 → resolvePolicy 走 workspace → global 回退）
+    // 配额检查（userLevel 取自 CurrentUser.level → users.level，迁移 21 起恢复 user_level 档维度）
     const currentMonth = new Date().toISOString().slice(0, 7); // 'YYYY-MM'
     try {
       await checkPythonTaskQuota(deps, {
         workspaceId,
+        userLevel: user.level,
         userId: user.userId,
         currentMonth,
       });
@@ -117,6 +125,7 @@ export function registerSandboxJobsRoutes(app: FastifyInstance, deps: SandboxJob
       workspaceId,
       userId: user.userId,
       script,
+      context,
       idempotencyKey,
     });
 
@@ -152,6 +161,7 @@ export function registerSandboxJobsRoutes(app: FastifyInstance, deps: SandboxJob
         script: job.script,
         status: job.status,
         result: job.result,
+        context: job.context,
         createdAt: job.createdAt.toISOString(),
         completedAt: job.completedAt?.toISOString() ?? null,
         artifacts: job.artifacts,
@@ -216,7 +226,7 @@ export function registerSandboxJobsRoutes(app: FastifyInstance, deps: SandboxJob
       }
       if (!(await requireWorkspaceMembership(deps, user, job.workspaceId, req, reply))) return;
 
-      const artifact = await getSandboxArtifact(deps, artifactId);
+      const artifact = await getSandboxArtifact(deps, jobId, artifactId);
       if (!artifact) {
         return reply.status(404).send(buildErrorBody('NOT_FOUND', 'Artifact 未找到', String(req.id)));
       }
