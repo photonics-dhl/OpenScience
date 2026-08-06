@@ -318,3 +318,60 @@ export async function getPublicResearchVersion(publicId: string, versionNo: numb
   return request(`/api/research/${publicId}/v/${versionNo}`);
 }
 
+// ===== P1E-6：沙箱任务查询与产物下载 =====
+
+export interface SandboxJobView {
+  id: string;
+  workspaceId: string;
+  script: string;
+  status: 'pending' | 'running' | 'completed' | 'failed' | 'timeout';
+  result: {
+    success: boolean;
+    stdout?: string;
+    stderr?: string;
+    timeout?: boolean;
+    runtimeSeconds: number;
+  } | null;
+  artifacts: Array<{
+    id: string;
+    filename: string;
+    mimeType: string;
+    size: number;
+  }>;
+  createdAt: string;
+  completedAt?: string;
+}
+
+/** 查询沙箱任务状态（P1E-5 已实现 GET /sandbox-jobs/:id）。 */
+export async function getSandboxJob(jobId: string): Promise<{ job: SandboxJobView }> {
+  return request(`/api/sandbox-jobs/${jobId}`);
+}
+
+/** 下载沙箱产物（P1E-5 已实现 GET /sandbox-jobs/:id/artifacts/:artifactId）。 */
+export async function downloadArtifact(jobId: string, artifactId: string): Promise<Blob> {
+  const res = await fetch(`/api/sandbox-jobs/${jobId}/artifacts/${artifactId}`, {
+    credentials: 'include',
+  });
+  if (!res.ok) {
+    throw new ApiClientError('DOWNLOAD_FAILED', `下载失败 ${res.status}`, res.status);
+  }
+  return res.blob();
+}
+
+/** 轮询任务直到完成（最多 35 秒，§10.3 沙箱 30s + 5s 缓冲）。 */
+export async function pollSandboxJob(jobId: string, maxWaitMs = 35000): Promise<SandboxJobView> {
+  const startTime = Date.now();
+  const pollInterval = 500; // 500ms
+
+  while (Date.now() - startTime < maxWaitMs) {
+    const { job } = await getSandboxJob(jobId);
+    if (job.status === 'completed' || job.status === 'failed' || job.status === 'timeout') {
+      return job;
+    }
+    await new Promise((resolve) => setTimeout(resolve, pollInterval));
+  }
+
+  throw new Error('任务轮询超时');
+}
+
+

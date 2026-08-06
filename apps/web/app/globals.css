@@ -1037,3 +1037,140 @@ body {
 .pub-placeholder {
   color: #94a3b8;
 }
+
+/* P1E-6: Visualization Result Component */
+.visualization-result {
+  border: 1px solid #ddd;
+  border-radius: 8px;
+  padding: 1rem;
+  max-width: 800px;
+  margin: 0 auto;
+  background: #fff;
+}
+
+.visualization-result .header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1rem;
+}
+
+.visualization-result .close-btn {
+  padding: 0.25rem 0.75rem;
+  background: #f5f5f5;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.visualization-result .close-btn:hover {
+  background: #e0e0e0;
+}
+
+.visualization-result .status {
+  display: flex;
+  gap: 1rem;
+  margin-bottom: 1rem;
+  font-size: 0.875rem;
+}
+
+.visualization-result .badge {
+  padding: 0.25rem 0.5rem;
+  border-radius: 4px;
+  font-weight: 500;
+}
+
+.visualization-result .badge.completed {
+  background: #d4edda;
+  color: #155724;
+}
+
+.visualization-result .badge.failed {
+  background: #f8d7da;
+  color: #721c24;
+}
+
+.visualization-result .badge.timeout {
+  background: #fff3cd;
+  color: #856404;
+}
+
+.visualization-result .badge.pending,
+.visualization-result .badge.running {
+  background: #d1ecf1;
+  color: #0c5460;
+}
+
+.visualization-result .artifacts {
+  margin-bottom: 1rem;
+}
+
+.visualization-result .artifact {
+  margin-bottom: 1rem;
+}
+
+.visualization-result .artifact img {
+  max-width: 100%;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  margin-bottom: 0.5rem;
+  display: block;
+}
+
+.visualization-result .download-btn {
+  width: 100%;
+  padding: 0.5rem;
+  background: #007bff;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 0.875rem;
+}
+
+.visualization-result .download-btn:hover {
+  background: #0056b3;
+}
+
+.visualization-result .script,
+.visualization-result .environment,
+.visualization-result .logs {
+  margin-bottom: 1rem;
+  border: 1px solid #e0e0e0;
+  border-radius: 4px;
+  padding: 0.5rem;
+}
+
+.visualization-result summary {
+  cursor: pointer;
+  font-weight: 500;
+  padding: 0.5rem;
+}
+
+.visualization-result summary:hover {
+  background: #f5f5f5;
+}
+
+.visualization-result pre {
+  background: #f5f5f5;
+  padding: 1rem;
+  border-radius: 4px;
+  overflow-x: auto;
+  font-size: 0.875rem;
+}
+
+.visualization-result .stderr {
+  color: #d32f2f;
+}
+
+.visualization-result .loading,
+.visualization-result .error {
+  padding: 2rem;
+  text-align: center;
+  color: #666;
+}
+
+.visualization-result .error {
+  color: #d32f2f;
+}
+
