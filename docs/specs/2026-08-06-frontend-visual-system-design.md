@@ -33,7 +33,7 @@
 ```css
 --hero-bg: #03060B;        --hero-surface: #08101C;
 --hero-text: #F4F7FB;      --hero-muted: #99A5B5;
---accent-primary: #4C8DFF; --accent-primary-strong: #256BFF;
+--accent-primary: #4C8DFF; --accent-primary-strong: #2A6DFF; /* 由 #256BFF 微调：/hero-bg 对比度 4.47 → 4.57，过 AA 4.5（2026-08-06 验证） */
 --accent-diff: #FFB454;    /* 仅表新增/变化/合并点，不作普通按钮色 */
 --canvas-bg: #F6F7F9;      --paper-bg: #FCFBF7;
 --ink: #18202B;            --border-subtle: rgba(148,163,184,0.18);

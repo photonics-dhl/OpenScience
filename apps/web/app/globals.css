@@ -4,6 +4,7 @@
    引入 preflight 会造成可见样式回归。详见 .superpowers/sdd/2026-08-06-frontend-p0-p1-plan/task-1-report.md */
 @import 'tailwindcss/theme';
 @import 'tailwindcss/utilities';
+@import './tokens.css';
 
 :root {
   --color-border: #e2e8f0;

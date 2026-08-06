@@ -913,7 +913,7 @@
             "id": 2,
             "title": "设计 token 层 + WCAG AA 对比度门禁",
             "description": "spec §3 token 落 apps/web/app/tokens.css（:root + @theme 映射）；test/tokens-contrast.test.ts 纯函数算对比度，6 组配对 ≥4.5，颜色从 tokens.css 正则读出防漂移；不过则调 token 明度并回写 spec。对应 plan Task 2。",
-            "status": "pending",
+            "status": "done",
             "dependencies": [
               "7.1"
             ],
@@ -921,7 +921,7 @@
             "details": "",
             "testStrategy": "vitest 对比度门禁全过；typecheck 绿",
             "parentId": "7",
-            "updatedAt": "2026-08-06T13:34:42.917Z"
+            "updatedAt": "2026-08-06T13:58:33.561Z"
           },
           {
             "id": 3,
@@ -1050,12 +1050,12 @@
             "updatedAt": "2026-08-06T13:34:42.917Z"
           }
         ],
-        "updatedAt": "2026-08-06T13:48:44.768Z"
+        "updatedAt": "2026-08-06T13:58:33.561Z"
       }
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-08-06T13:48:44.769Z",
+      "lastModified": "2026-08-06T13:58:33.561Z",
       "taskCount": 7,
       "completedCount": 6,
       "tags": [

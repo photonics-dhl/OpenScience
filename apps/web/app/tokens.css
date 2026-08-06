@@ -1,0 +1,20 @@
+/* 视觉 token 层（Task 2）：spec §3 变量落 :root，并用 Tailwind v4 @theme 暴露为工具类。
+   值经 WCAG AA 对比度验证（test/tokens-contrast.test.ts 门禁，配对 ≥4.5）。
+   调整记录：accent-primary-strong #256BFF → #2A6DFF（/hero-bg 4.47 → 4.57），spec §3 已同步。 */
+:root {
+  --hero-bg: #03060b; --hero-surface: #08101c;
+  --hero-text: #f4f7fb; --hero-muted: #99a5b5;
+  --accent-primary: #4c8dff; --accent-primary-strong: #2a6dff;
+  --accent-diff: #ffb454;
+  --canvas-bg: #f6f7f9; --paper-bg: #fcfbf7;
+  --ink: #18202b; --border-subtle: rgba(148, 163, 184, 0.18);
+}
+@theme {
+  --color-hero-bg: var(--hero-bg); --color-hero-surface: var(--hero-surface);
+  --color-hero-text: var(--hero-text); --color-hero-muted: var(--hero-muted);
+  --color-accent-primary: var(--accent-primary);
+  --color-accent-primary-strong: var(--accent-primary-strong);
+  --color-accent-diff: var(--accent-diff);
+  --color-canvas-bg: var(--canvas-bg); --color-paper-bg: var(--paper-bg);
+  --color-ink: var(--ink); --color-border-subtle: var(--border-subtle);
+}
