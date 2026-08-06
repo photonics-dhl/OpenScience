@@ -763,7 +763,7 @@
         "id": "6",
         "title": "Phase 1E: 轻量科学可视化",
         "description": "实现 Hermes 概念可视化闭环与隔离沙箱执行：Visualization Planner 生成解释与 Python 脚本（Spec §9.2、§10.1），AST 策略检查（§10.3），Sandbox Controller + 隔离 Docker 网络（§10.3、§14.2），临时图片与 IndexedDB 保存（§13.2），自然语言修改脚本（§10.4），威胁模型与沙箱逃逸基线测试（§17、§21.1）。服务验收主流程步骤 15、16（Spec §21.2）。",
-        "status": "pending",
+        "status": "in-progress",
         "dependencies": [
           "5"
         ],
@@ -775,27 +775,29 @@
             "id": 1,
             "title": "实现 Visualization Planner 子 Agent 生成可视化方案",
             "description": "用户在阅读笔记或资料时对概念（如电磁场传播、干涉、偏振）提问，Hermes 委派 Visualization Planner 生成自然语言解释、数学模型与假设、参数表和 Python 脚本规格（Spec §10.1、§10.2）。",
-            "status": "pending",
+            "status": "done",
             "dependencies": [
               "5"
             ],
             "priority": "high",
             "details": "在 agent-worker 中实现 Visualization Planner（Spec §9.2 子 Agent 表）：输出结构化 JSON（解释、模型假设、脚本、参数表、示意图/定量仿真标签、运行环境与依赖版本），经 AI Gateway 调用并做 Schema 校验重试（§9.3）。禁止事项映射：Planner 不直接执行系统命令，只产出代码规格交后续检查与沙箱执行（§9.2）。脚本仅允许使用白名单包（NumPy、SciPy、SymPy、Matplotlib、Pillow 等，§10.3）。MiniMax-M3 及回退模型具体模型 ID 与结构化输出参数按 §24 记为待确认，不写死。\n\n验收: 步骤15",
             "testStrategy": "单元测试：Planner 输出通过 JSON Schema 校验、标签（示意图/定量仿真）字段齐全；合同测试：Planner 输出 Schema 与后续 AST 检查器输入契约一致；阶段验收点：步骤 15 中 Hermes 返回解释+脚本的环节可演示（§21.1 单元/合同层）。",
-            "parentId": "6"
+            "parentId": "6",
+            "updatedAt": "2026-08-06T04:43:45.383Z"
           },
           {
             "id": 2,
             "title": "实现 Python AST 策略检查器拦截危险代码",
             "description": "对 Planner 生成及用户修改后的脚本做 AST、依赖、资源和输出检查，阻断危险代码进入沙箱（Spec §9.2 Python Policy Checker、§10.3）。",
-            "status": "pending",
+            "status": "in-progress",
             "dependencies": [
               "2"
             ],
             "priority": "high",
             "details": "在 science-worker 中实现 AST 策略检查（CPython ast 模块）：禁止 import/调用 os、subprocess、socket、ctypes，禁止动态安装（pip 等）与任意二进制执行；import 白名单仅 NumPy、SciPy、SymPy、Matplotlib、Pillow 等（§10.3）。禁止事项映射：Policy Checker 不拥有数据库凭据（§9.2），检查器进程自身也不注入任何数据库/对象存储密钥。检查失败返回结构化拒绝原因（位置+规则），供前端展示。\n\n验收: 步骤16",
             "testStrategy": "单元测试：恶意样本集（import os、socket 连接、ctypes、__import__ 绕过、exec/eval 动态执行）全部被拒；白名单脚本全部通过；误报率抽查。对应 §21.1 安全测试层（Sandbox Escape 前置防线）。",
-            "parentId": "6"
+            "parentId": "6",
+            "updatedAt": "2026-08-06T04:45:40.669Z"
           },
           {
             "id": 3,
@@ -875,12 +877,13 @@
             "testStrategy": "安全测试（§21.1 Sandbox Escape 基线）：上述用例在 CI 执行并留档；恢复演练：异常任务后无残留容器/网络。本任务自身即测试与文档任务，产出威胁模型文档+基线测试报告。",
             "parentId": "6"
           }
-        ]
+        ],
+        "updatedAt": "2026-08-06T04:45:40.669Z"
       }
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-08-06T04:29:04.252Z",
+      "lastModified": "2026-08-06T04:45:40.669Z",
       "taskCount": 6,
       "completedCount": 5,
       "tags": [
