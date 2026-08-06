@@ -20,6 +20,7 @@ CREATE TABLE sandbox_jobs (
   script TEXT NOT NULL,
   status sandbox_job_status NOT NULL DEFAULT 'pending',
   result JSONB,
+  runtime_seconds INTEGER,
   created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
   completed_at TIMESTAMP WITH TIME ZONE,
 

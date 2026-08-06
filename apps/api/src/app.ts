@@ -22,6 +22,7 @@ import { registerNotificationRoutes } from './routes/notifications';
 import { registerAgentRoutes } from './routes/agent';
 import { registerAppealRoutes } from './routes/appeals';
 import { registerResearchRoutes } from './routes/research';
+import { registerSandboxJobsRoutes } from './routes/sandbox-jobs';
 import { registerRateLimit } from './security/rate-limit';
 import { registerSecurity, type SecurityOptions } from './security/security';
 
@@ -95,6 +96,7 @@ export async function buildApp(opts: BuildAppOptions): Promise<FastifyInstance> 
   await app.register(async (instance) => registerAgentRoutes(instance, opts), {});
   await app.register(async (instance) => registerAppealRoutes(instance, opts), {});
   await app.register(async (instance) => registerResearchRoutes(instance, opts), {});
+  await app.register(async (instance) => registerSandboxJobsRoutes(instance, opts), {});
   if (opts.storage) {
     const storage = opts.storage;
     await app.register(async (instance) => registerArtifactRoutes(instance, { ...opts, storage }), {});

@@ -27,6 +27,8 @@ export const RATE_LIMIT_ROUTES: Record<string, RouteRule> = {
   // P1D-9：公开只读防爬（匿名高频抓取保护；宽松档位，SSR/索引流量勿误伤）
   '/research/:publicId': { limit: 60, windowSec: 60 },
   '/research/:publicId/v/:versionNo': { limit: 120, windowSec: 60 },
+  // P1E-5：沙箱作业创建限流（§21.2-17）
+  '/sandbox-jobs': { limit: 10, windowSec: 60 },
 };
 
 export interface RegisterRateLimitOptions {

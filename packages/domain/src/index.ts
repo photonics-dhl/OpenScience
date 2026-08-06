@@ -174,3 +174,12 @@ export {
 export { buildExportPackage, classifyArtifact, type ExportFile } from './export/packager';
 export { validateExportPackage, type ExportValidationResult } from './export/validate';
 export { buildManifest, type BuildManifestInput } from './export/manifest';
+export {
+  createSandboxJob, getSandboxJob, getSandboxArtifact, listSandboxJobsByWorkspace, updateSandboxJobStatus,
+  type SandboxJob, type SandboxJobStatus, type SandboxJobResult, type CreateSandboxJobInput,
+} from './sandbox/jobs';
+export {
+  checkPythonTaskQuota, SandboxQuotaError,
+  PYTHON_TASK_COUNT_RESOURCE, PYTHON_RUNTIME_SECONDS_RESOURCE, CONCURRENT_TASKS_RESOURCE,
+} from './sandbox/quota';
+export { onSandboxJobCompleted } from './sandbox/events';
