@@ -1,5 +1,15 @@
 # OpenScience (XGS) 进度日志
 
+## 2026-08-06（补十一）— 前端 P0/P1 开工：7.1–7.3 完成（SDD 模式），交接 GPT 续作
+
+- **执行模式**：subagent-driven-development——每 Task 派 implementer + reviewer 双审，审查干净后问用户 commit；台账 `.superpowers/sdd/2026-08-06-frontend-p0-p1-plan/progress.md`。
+- **7.1 Tailwind v4**（`2bacb65`）：postcss 接入；关键决策=走 theme+utilities 降级导入（无 preflight），因协作/公开页多处裸 h3/h4/ul 依赖 UA 默认样式，审查抽查成立。
+- **7.2 token + WCAG 门禁**（`fd46359`）：tokens.css 11 变量 + @theme 映射；对比度测试从 tokens.css 正则取色（防漂移）；`--accent-primary-strong` #256BFF→#2A6DFF（4.47→4.57 最小调整，审查复算证实）并同步 spec §3。
+- **7.3 字体 + LocaleSwitcher**（`61d19a4`）：Noto Serif SC 600/900 + swap + `--font-display`；关键决策=`preload:false`（next/font 对 google CJK 只登记 latin 子集，preload 需 subsets:['latin'] 会丢 CJK 字形；保留 202 条 unicode-range 分片按需加载，首屏 preload 0KB）；LocaleSwitcher token 化样式（逻辑不动）。
+- **task-master**：任务 7 登记（11 子任务，与 plan 一一对应），7.1–7.3 done。
+- **遗留 minor（台账记录，终审复核）**：惰性 utility 4 条；LocaleSwitcher 浅色页面对比度（P3 产品壳解决）；tokens 正则健壮性。
+- **交接**：token 预算原因，7.4–7.11 移交 GPT 执行，交接文档 `docs/handoff/2026-08-06-frontend-p0-p1-sdd-handoff.md`。
+
 ## 2026-08-06（补十）— 前端设计方向 v2 定稿（用户 × GPT × Kimi 三方）
 
 - **输入**：GPT handoff v2（`docs/user_ideas/OpenScience-Kimi-Handoff-v2.zip`，含 HANDOFF.md + hero 参考图）与 `docs/user_ideas/主页原型图.png`（1672×941 art-direction 稿）。

@@ -166,6 +166,7 @@
 | `docs/handoff/2026-08-04-p1d-6-warnings-done-handoff.md` | P1D-6 警告层收口交接：review.analyze handler，云上 95/95，5.6 done，下一任务 P1D-7 申诉流程 | 活文档 |
 | `docs/handoff/2026-08-04-p1d-8-publish-done-handoff.md` | P1D-8 发布事务收口交接：迁移 18 + /publications，云上 99/99，5.8 done，下一任务 P1D-9 公开页 | 活文档 |
 | `docs/handoff/2026-08-06-mvp-complete-handoff.md` | MVP（Phase 0-1E）完成交接：6/6 Phase done、99/99 云上测试、P1E-8 威胁模型交付，下一步生产安全检查清单 P0 | 活文档（当前最新） |
+| `docs/handoff/2026-08-06-frontend-p0-p1-sdd-handoff.md` | 前端 P0/P1 SDD 执行交接：7.1–7.3 done（2bacb65/fd46359/61d19a4），7.4–7.11 移交 GPT；含工作流/约束/遗留 minor/验收门 | 活文档（执行中） |
 | `docs/CODEBASE_AUDIT.md` | Phase 0 Scholars Tea 只读审计报告（地图/模块分类/风险登记/迁移含义） | 活文档 |
 | `docs/proposals/` | 方案/脑暴稿 | 含前端设计方向 v1（旧方案0723已废弃不归档） |
 | `docs/proposals/2026-08-06-frontend-design-direction-v1.md` | 前端整体设计方向（三方讨论稿，文末「v2 终稿决策层」D1–D9 效力最高：符号=Evolving RO 映射 SDF 六节点/纯 SVG 辉光/三套视觉+token/Live2D 一步到位/分期 P0–P4，下一步转 specs+plan） | **已定稿 v2** |
