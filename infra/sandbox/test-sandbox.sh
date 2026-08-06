@@ -55,10 +55,9 @@ echo
 
 # Test 5: Test Matplotlib plot generation
 echo "[5/5] Testing Matplotlib plot generation..."
-mkdir -p /tmp/sandbox-test
-docker run --rm -v /tmp/sandbox-test:/sandbox "$IMAGE" python3 -c "
+CONTAINER_ID=$(docker run -d "$IMAGE" python3 -c "
 import matplotlib
-matplotlib.use('Agg')  # Non-interactive backend
+matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 import numpy as np
 
@@ -70,14 +69,18 @@ plt.title('Test Plot: sin(x)')
 plt.xlabel('x')
 plt.ylabel('sin(x)')
 plt.grid(True)
-plt.savefig('/sandbox/test-plot.png', dpi=100)
+plt.savefig('/tmp/test-plot.png', dpi=100)
 print('✓ Plot generated successfully')
-"
+" && sleep 1)
 
-if [ -f /tmp/sandbox-test/test-plot.png ]; then
-  SIZE=$(stat -c%s /tmp/sandbox-test/test-plot.png 2>/dev/null || stat -f%z /tmp/sandbox-test/test-plot.png 2>/dev/null || echo "0")
-  echo "✓ Plot file created: /tmp/sandbox-test/test-plot.png ($SIZE bytes)"
-  rm -rf /tmp/sandbox-test
+docker wait "$CONTAINER_ID" > /dev/null
+docker cp "$CONTAINER_ID":/tmp/test-plot.png /tmp/sandbox-test-plot.png 2>/dev/null
+docker rm "$CONTAINER_ID" > /dev/null
+
+if [ -f /tmp/sandbox-test-plot.png ]; then
+  SIZE=$(stat -c%s /tmp/sandbox-test-plot.png 2>/dev/null || stat -f%z /tmp/sandbox-test-plot.png 2>/dev/null || echo "0")
+  echo "✓ Plot file created: /tmp/sandbox-test-plot.png ($SIZE bytes)"
+  rm -f /tmp/sandbox-test-plot.png
 else
   echo "✗ Plot file not created"
   exit 1

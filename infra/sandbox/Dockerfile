@@ -10,6 +10,8 @@ RUN useradd -m -u 1000 -s /bin/bash sandbox
 # Install fixed dependency versions
 # Versions locked for reproducibility and security audit
 RUN pip install --no-cache-dir \
+    -i https://mirrors.aliyun.com/pypi/simple/ \
+    --trusted-host mirrors.aliyun.com \
     numpy==1.26.4 \
     scipy==1.12.0 \
     sympy==1.12 \
