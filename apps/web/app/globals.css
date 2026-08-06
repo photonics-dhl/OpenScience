@@ -1403,3 +1403,12 @@ body {
 }
 
 
+
+/* ===== Task 3: 正文系统字体栈 + 标题衬线工具类（追加，不覆盖上方已有 body 其他属性） ===== */
+body {
+  font-family: system-ui, -apple-system, 'PingFang SC', 'Microsoft YaHei', 'Noto Sans SC', sans-serif;
+}
+
+.font-display {
+  font-family: var(--font-display), 'Songti SC', serif;
+}

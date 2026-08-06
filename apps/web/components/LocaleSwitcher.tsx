@@ -21,6 +21,7 @@ export default function LocaleSwitcher({ locale }: { locale: Locale }) {
       aria-label={t('language')}
       value={locale}
       onChange={(e) => handleChange(e.target.value)}
+      className="h-9 cursor-pointer rounded-md border border-border-subtle bg-transparent px-2 text-sm text-hero-muted transition-colors hover:text-hero-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-primary focus-visible:ring-offset-2 focus-visible:ring-offset-hero-bg [&>option]:bg-hero-surface [&>option]:text-hero-text"
     >
       {SUPPORTED_LOCALES.map((l) => (
         <option key={l} value={l}>

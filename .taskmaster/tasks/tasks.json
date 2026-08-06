@@ -927,7 +927,7 @@
             "id": 3,
             "title": "标题字体 Noto Serif SC + LocaleSwitcher 样式收尾",
             "description": "layout.tsx 用 next/font/google Noto_Serif_SC（600/900，swap，--font-display）；globals.css 加 body 系统栈与 .font-display；LocaleSwitcher 补 token 化样式（清偿地基遗留）；检查首屏字体分片体积 >150KB 则改手工子集并更新 spec §5。对应 plan Task 3。",
-            "status": "pending",
+            "status": "done",
             "dependencies": [
               "7.2"
             ],
@@ -935,7 +935,7 @@
             "details": "",
             "testStrategy": "build 通过；next start 网络面板字体分片体积达标",
             "parentId": "7",
-            "updatedAt": "2026-08-06T13:34:42.917Z"
+            "updatedAt": "2026-08-06T14:11:17.750Z"
           },
           {
             "id": 4,
@@ -1050,12 +1050,12 @@
             "updatedAt": "2026-08-06T13:34:42.917Z"
           }
         ],
-        "updatedAt": "2026-08-06T13:58:33.561Z"
+        "updatedAt": "2026-08-06T14:11:17.750Z"
       }
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-08-06T13:58:33.561Z",
+      "lastModified": "2026-08-06T14:11:17.750Z",
       "taskCount": 7,
       "completedCount": 6,
       "tags": [
