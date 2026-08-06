@@ -1,5 +1,11 @@
 # OpenScience (XGS) 进度日志
 
+## 2026-08-06（补四）— 迁移 19/20/21 云上 deploy 完成（生产库已验证）
+
+- 容器内 `migrate deploy` 成功：迁移 20（sandbox_jobs）+ 21（sandbox_job_context + users.level）应用完成，并顺带补上此前漏 deploy 的 19（author_affiliation）——生产库此前实际停在 18。
+- 生产库直查验证：`sandbox_jobs.context` / `sandbox_artifacts` / `users.level` 列均在，`user_level` 配额 9 行（free/pro/team × 3 资源）落库。
+- 至此迁移 1–21 全部云上生效。**遗留**：生产 compose 仍无 science-worker 常驻服务（用户选择本次只上迁移），沙箱作业执行链要真正跑起来需后续走 infra-runbook 流程加服务。
+
 ## 2026-08-06（补三）— science-worker 执行链接线 + updateSandboxJobStatus 合并写
 
 ### 排查结论
