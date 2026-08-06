@@ -59,7 +59,7 @@ describe('P1E-1: Visualization Planner', () => {
         completeStructured: vi.fn().mockResolvedValue({
           explanation: '电磁波干涉是两束相干光波叠加产生明暗条纹的现象...',
           modelAssumptions: '假设平面波、单色光、无衍射效应...',
-          script: 'import numpy as np\nimport matplotlib.pyplot as plt\n# 生成干涉图样\nplt.savefig("/tmp/sandbox/output.png")',
+          script: 'import numpy as np\nimport matplotlib.pyplot as plt\n# 生成干涉图样\nplt.savefig("/output/output.png")',
           parameters: {
             wavelength: { value: 500, description: '波长(nm)' },
             distance: { value: 1.0, description: '屏距(m)' },

@@ -59,7 +59,7 @@ import matplotlib.pyplot as plt
 x = np.linspace(0, 10, 100)
 y = np.sin(x)
 plt.plot(x, y)
-plt.savefig('/tmp/output.png')
+plt.savefig('/output/output.png')  # 产物约定：写入 /output（tmpfs，OUTPUT_DIR env），执行后被收集落库
 print('Plot saved')
 `;
 

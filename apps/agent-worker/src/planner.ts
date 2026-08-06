@@ -60,7 +60,7 @@ export async function visualizationPlanHandler(
       content: `你是科学可视化规划器。用户提出科学概念问题，你生成完整可视化方案：
 1. explanation：自然语言解释（200-500 字）
 2. modelAssumptions：数学模型与假设（说明物理/数学前提）
-3. script：Python 脚本（仅允许 import numpy/scipy/sympy/matplotlib/PIL；禁止 os/subprocess/socket/ctypes/eval/exec/__import__；产出 PNG 到 /tmp/sandbox/output.png）
+3. script：Python 脚本（仅允许 import numpy/scipy/sympy/matplotlib/PIL；禁止 os/subprocess/socket/ctypes/eval/exec/__import__；所有产出文件必须写入 /output 目录（环境变量 OUTPUT_DIR 已置为 /output），如 plt.savefig('/output/output.png')——只有写入该目录的文件才会被收集为产物返回给用户）
 4. parameters：参数表（JSON 对象，每项含 value 和 description）
 5. visualizationType：'schematic'（示意图）或 'quantitative'（定量仿真）
 6. dependencies：依赖版本列表（如 ["numpy==1.26.0", "matplotlib==3.8.2"]）
