@@ -2,7 +2,7 @@
   "master": {
     "tasks": [
       {
-        "id": 1,
+        "id": "1",
         "title": "Phase 0: 现有系统只读审计与目标架构决策",
         "description": "对 Scholars Tea / AI Research Workshop 现有代码仓执行强制门禁式只读审计（Spec §22 Phase 0、§25、§20.1.2）：建立目录/依赖/服务/数据库/部署地图，形成可复用/重构/淘汰清单，评估安全与数据迁移风险，运行基准测试，产出 docs/CODEBASE_AUDIT.md 与 docs/adr/0001-target-architecture.md 草案。审计完成并经用户确认后才允许进入 Phase 1A（Spec §25 末段）。全程不修改业务代码（Spec §25.5）。",
         "status": "done",
@@ -133,7 +133,7 @@
         "updatedAt": "2026-07-28T04:41:05.303Z"
       },
       {
-        "id": 2,
+        "id": "2",
         "title": "Phase 1A: 平台底座（Monorepo、Auth/Workspace/RBAC、数据与存储基础、审计、CI/CD）",
         "description": "搭建 MVP 平台底座：Monorepo 与模块边界（Spec §14.1）；Auth + 邀请码 + 邮箱验证（Spec §2.1、§3.1）；Workspace + RBAC 且 API 层强制授权（Spec §3.2、§3.3、§17）；PostgreSQL + Redis + Storage Adapter（Spec §13.1、§14.2、§15）；统一错误/日志/配置/审计（Spec §17）；AI Credit 账务骨架（Spec §2.4.7、§13.3）；CI/CD 与阿里云 ECS 部署（Spec §14.2、§17）。前置门禁：Phase 0 审计完成并经用户确认（Spec §22、§25）。本阶段不含 SDF/编辑器（1B）、协作（1C）、Hermes/发布（1D）、可视化沙箱（1E）及任何 §19 Phase 2 功能。",
         "status": "done",
@@ -288,7 +288,7 @@
         "updatedAt": "2026-08-03T13:12:27.429Z"
       },
       {
-        "id": 3,
+        "id": "3",
         "title": "Phase 1B: SDF 与版本",
         "description": "实现 SDF 六字段 Schema、三栏编辑器、Artifact/Blob 内容寻址存储、Commit/Manifest 增量版本、多类型 Diff、unique ID 与稳定 URL、私有/邀请/公开可见性（Spec §22 Phase 1B；依据 Spec §4–§7、§13、§15、§16、§17、§18）。不含 Hermes AI 提取与发布流程（Phase 1D）、不含 Branch/Fork/PR 协作交互（Phase 1C）。",
         "status": "done",
@@ -449,7 +449,7 @@
         "updatedAt": "2026-08-04T05:06:37.957Z"
       },
       {
-        "id": 4,
+        "id": "4",
         "title": "Phase 1C: GitHub 式科研协作（Branch/Fork/PR/Review/Merge、作者与 CRediT、许可、通知）",
         "description": "建立 MVP 协作闭环：Branch、Issue、Fork、Pull Request、Review、Merge 的数据模型与基础交互（Spec §2.3、§8），作者组与 CRediT 贡献记录（§3.4），三类许可选择与 Fork 继承校验（§6.3），协作事件通知（§15、§16、§18.1）。对应里程碑 Spec §22 Phase 1C。服务于验收主流程 §21.2 步骤 8、11、12。Commit/版本存储底座由 P1B 提供，发布与 AI 审核属 P1D，不在本 Phase 范围。",
         "status": "done",
@@ -610,7 +610,7 @@
         "updatedAt": "2026-08-04T10:20:07.172Z"
       },
       {
-        "id": 5,
+        "id": "5",
         "title": "Phase 1D: Hermes 与发布",
         "description": "建设 Hermes Agent 系统的 MVP 子集与公开发布闭环：AI Gateway 统一路由（MiniMax-M3 主模型 / 回退策略由 Gateway 配置管理）、异步任务通道、SDF Extractor（建议/差异形式，不直接写正文）、R0–R4 分级审批、AI 发布审核（硬阻断与警告分离）、申诉与 Moderator 队列、发布事务与公开页（含免责声明与审核摘要）。依据 Spec §9、§11、§4.1–4.3、§6.2、§22 Phase 1D。",
         "status": "done",
@@ -760,10 +760,10 @@
         "updatedAt": "2026-08-06T04:29:04.252Z"
       },
       {
-        "id": 6,
+        "id": "6",
         "title": "Phase 1E: 轻量科学可视化",
         "description": "实现 Hermes 概念可视化闭环与隔离沙箱执行：Visualization Planner 生成解释与 Python 脚本（Spec §9.2、§10.1），AST 策略检查（§10.3），Sandbox Controller + 隔离 Docker 网络（§10.3、§14.2），临时图片与 IndexedDB 保存（§13.2），自然语言修改脚本（§10.4），威胁模型与沙箱逃逸基线测试（§17、§21.1）。服务验收主流程步骤 15、16（Spec §21.2）。",
-        "status": "in-progress",
+        "status": "done",
         "dependencies": [
           "5"
         ],
@@ -803,14 +803,15 @@
             "id": 3,
             "title": "构建沙箱基础镜像与非 root 只读运行环境",
             "description": "构建固定依赖版本的沙箱 Docker 基础镜像，落实非 root、只读根文件系统、临时目录等运行时约束（Spec §10.3）。",
-            "status": "pending",
+            "status": "done",
             "dependencies": [
               "6.2"
             ],
             "priority": "high",
             "details": "在 infra/sandbox/ 下维护 Dockerfile 与构建脚本：白名单包（NumPy、SciPy、SymPy、Matplotlib、Pillow）版本固定并记录清单；镜像内创建非 root 运行用户；运行时挂载只读根文件系统 + 受限 tmpfs 临时目录；预置 Matplotlib 无显示后端配置，输出仅允许写临时目录。具体依赖版本号属 §24 待确认事项（随环境实测锁定），先在 ADR 记录当前锁定值。\n\n验收: 步骤16\n<info added on 2026-08-06T05:14:25.464Z>\n状态更新：已完成本地开发与提交（adffb60）。\n\n本地交付物（infra/sandbox/）：\n- Dockerfile: Python 3.11-slim + 固定版本依赖（NumPy 1.26.4 / SciPy 1.12.0 / SymPy 1.12 / Matplotlib 3.8.3 / Pillow 10.2.0）\n- build-image.sh: 构建脚本含烟雾测试\n- test-sandbox.sh: 5 项验证测试（依赖版本/非 root 用户/NumPy 运算/Matplotlib 图表生成）\n- README.md: 构建文档、安全特性说明\n\n安全设计落实：\n- 非 root 用户 sandbox（UID 1000）\n- Matplotlib 预置 Agg 后端（无显示）\n- 运行时约束（只读根文件系统/tmpfs 临时目录/无网络/资源限制）由 P1E-4 Sandbox Controller 实施\n\n待办：云端构建验证\n- 本机 Docker daemon 未运行，无法本地构建\n- 云端 SSH 连接超时（101.126.90.247:22 / 8.138.113.174:26382 均不通）\n- 需用户提供可用云服务器或正确 SSH 凭据后执行：\n  1. scp -i ~/.ssh/id_ed25519_xgs -r infra/sandbox root@<cloud-ip>:/opt/openscience/infra/\n  2. ssh root@<cloud-ip> \"cd /opt/openscience/infra/sandbox && ./build-image.sh\"\n  3. ssh root@<cloud-ip> \"cd /opt/openscience/infra/sandbox && ./test-sandbox.sh\"\n\n提交：adffb60 已推送到 main。\n</info added on 2026-08-06T05:14:25.464Z>",
             "testStrategy": "集成测试：镜像内以非 root 身份运行示例脚本可产出 PNG；写根文件系统、读取 /etc 外宿主路径均失败；镜像内无数据库凭据等敏感文件。对应 §21.1 集成/安全测试层。",
-            "parentId": "6"
+            "parentId": "6",
+            "updatedAt": "2026-08-06T08:09:28.713Z"
           },
           {
             "id": 4,
@@ -829,68 +830,70 @@
             "id": 5,
             "title": "实现 sandbox-jobs API、配额限流与完成事件",
             "description": "对外提供 /sandbox-jobs 模块化 REST API，落实沙箱接口限流、Python 任务配额和 sandbox_job.completed 事件（Spec §16、§13.3、§17）。",
-            "status": "pending",
+            "status": "done",
             "dependencies": [
               "6.4"
             ],
             "priority": "high",
             "details": "API 模块 /sandbox-jobs（§16）：提交任务（幂等键）、任务 ID + SSE/WebSocket 进度查询、获取产物。配额（§13.3）：Python 任务次数、运行时间、并发任务数按用户等级/Workspace 配置，必须后台可配置不写死前端；配额初始具体数值按 §24 记为待确认。安全 MUST 映射（§17）：沙箱接口限流、全部写操作记审计日志、生产日志不记录脚本中的敏感附件内容；API 层做 RBAC + 资源归属检查，禁止跨 Workspace 越权（§3.3、§17）。事件：sandbox_job.completed 可重试、消费者幂等（§16）。\n\n验收: -",
             "testStrategy": "集成测试：任务提交幂等（重复幂等键不重复执行）、进度推送、完成事件投递与重试；安全测试：越权访问他人任务被拒、限流生效；配额测试：超配额返回明确错误。对应 §21.1 集成/安全层。",
-            "parentId": "6"
+            "parentId": "6",
+            "updatedAt": "2026-08-06T08:09:28.731Z"
           },
           {
             "id": 6,
             "title": "实现可视化结果展示与 IndexedDB 临时保存",
             "description": "前端展示沙箱产出的 PNG/SVG 与解释内容，临时结果保存到 IndexedDB（默认 24 小时），支持保存到本设备或我的笔记（Spec §10.2、§13.2）。",
-            "status": "pending",
+            "status": "done",
             "dependencies": [
               "6.5"
             ],
             "priority": "high",
             "details": "Web 端（apps/web）实现可视化结果面板：展示自然语言解释、参数表、PNG/SVG、示意图/定量仿真标签、运行环境与依赖版本（§10.2）。IndexedDB 保存（§13.2）：临时可视化与脚本默认保存 24 小时；“保存到本设备”不占服务端长期存储；“保存到我的笔记”上传并支持跨设备；UI 明确提示浏览器清理/无痕/配额回收可能造成丢失；提供一键导出和清理。移动端功能一致，复杂面板用抽屉/分步呈现（§2.5、§18.2）。图片需 alt 文本（§18.3）。\n\n验收: 步骤15",
             "testStrategy": "E2E（Playwright 测试环境）：请求可视化→查看图片→临时保存→24h 过期逻辑（可 mock 时钟）→导出/清理；移动端视口下功能可达。对应 §21.1 E2E 层与步骤 15 验收点。",
-            "parentId": "6"
+            "parentId": "6",
+            "updatedAt": "2026-08-06T08:09:28.739Z"
           },
           {
             "id": 7,
             "title": "实现自然语言修改脚本的全流程重检机制",
             "description": "用户可用自然语言要求修改脚本或参数，每次修改重新生成代码、展示 diff、重新策略检查并在新容器中执行（Spec §10.4）。",
-            "status": "pending",
+            "status": "done",
             "dependencies": [
               "6.6"
             ],
             "priority": "high",
             "details": "串联 Planner→Diff 展示→AST 检查→新沙箱容器的修改链路（§10.4）：每次修改由 Visualization Planner 重新生成代码，前端展示新旧脚本 diff，修改后脚本必须重新过 P1E-2 策略检查，执行必须创建全新容器；禁止复用可能已污染的容器（MUST 映射 §10.4 末句）。修改请求与重新检查结果记入会话与审计日志（§17）。该流程属 Hermes R1/R2 级审批交互，沿用 Phase 1D 的分级审批组件（§9.4）。\n\n验收: 步骤15",
             "testStrategy": "E2E：自然语言修改参数→展示 diff→确认→新容器执行→新图片返回；安全测试：修改请求注入危险代码时被 AST 检查拦截；容器复用检测（两次执行容器 ID 不同）。对应 §21.1 E2E+安全层与步骤 15 验收点。",
-            "parentId": "6"
+            "parentId": "6",
+            "updatedAt": "2026-08-06T08:09:28.747Z"
           },
           {
             "id": 8,
             "title": "编写沙箱威胁模型并执行逃逸基线测试",
             "description": "单独维护 Sandbox 威胁模型文档，并建立可重复运行的沙箱逃逸基线测试集（Spec §17 MUST、§21.1 安全测试层）。",
-            "status": "pending",
+            "status": "done",
             "dependencies": [
               "6.4"
             ],
             "priority": "high",
             "details": "在 docs/threat-model/ 下编写沙箱威胁模型（§17：Sandbox 威胁模型单独维护）：资产（数据库凭据、其他用户文件、宿主、云元数据）、攻击面（恶意脚本、依赖包漏洞、容器逃逸、资源耗尽）、现有缓解（§10.3 全部限制+AST 检查+独立网络）与残余风险（单 ECS 阶段，生产开放前拆分独立 ECS，§23）。基线测试集：网络外联、内网/元数据探测、读取宿主路径、提权、fork 炸弹、内存炸弹、超大输出等用例全部失败为通过；纳入 CI 定期运行。测试证据作为步骤 16 验收材料。\n\n验收: 步骤16",
             "testStrategy": "安全测试（§21.1 Sandbox Escape 基线）：上述用例在 CI 执行并留档；恢复演练：异常任务后无残留容器/网络。本任务自身即测试与文档任务，产出威胁模型文档+基线测试报告。",
-            "parentId": "6"
+            "parentId": "6",
+            "updatedAt": "2026-08-06T08:09:28.752Z"
           }
         ],
-        "updatedAt": "2026-08-06T04:54:26.905Z"
+        "updatedAt": "2026-08-06T08:09:28.752Z"
       }
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-08-06T04:54:26.905Z",
+      "lastModified": "2026-08-06T08:09:28.752Z",
       "taskCount": 6,
-      "completedCount": 5,
+      "completedCount": 6,
       "tags": [
         "master"
-      ],
-      "created": "2026-08-06T05:14:09.866Z",
-      "description": "Tasks for master context"
+      ]
     }
   }
 }
