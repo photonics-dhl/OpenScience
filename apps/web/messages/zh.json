@@ -8,7 +8,8 @@
     "loading": "加载中…",
     "error": "出错了",
     "back": "返回",
-    "version": "版本"
+    "version": "版本",
+    "language": "语言"
   },
   "editor": {
     "title": "SDF 编辑器",
@@ -163,6 +164,69 @@
       "type.pull_request.opened": "拉取请求已打开",
       "type.pull_request.merged": "拉取请求已合并",
       "type.issue.updated": "问题动态"
+    }
+  },
+  "public": {
+    "loading": "加载中...",
+    "unpublished": "未发布",
+    "none": "无",
+    "copy": "复制",
+    "copied": "✓ 已复制",
+    "notFound": {
+      "title": "未找到",
+      "body": "该公开版本不存在或不可访问。"
+    },
+    "rateLimited": {
+      "title": "请求过于频繁",
+      "body": "请稍后重试。"
+    },
+    "unavailable": {
+      "title": "暂时不可用",
+      "body": "服务暂时出错，请稍后重试。"
+    },
+    "authors": "作者",
+    "correspondingAuthor": "通讯作者",
+    "contributions": "贡献",
+    "abstract": "摘要",
+    "coreFields": "核心字段",
+    "insight": "核心洞察",
+    "method": "方法",
+    "results": "结果",
+    "limitations": "局限性",
+    "reproducibility": "可复现性",
+    "license": "许可证",
+    "licenseType": {
+      "text": "文字",
+      "code": "代码",
+      "data": "数据"
+    },
+    "versionInfo": "版本信息",
+    "versionId": "版本 ID",
+    "publishedAt": "发布时间",
+    "versionHash": "版本哈希",
+    "copyFullHash": "复制完整哈希",
+    "citation": "引用格式",
+    "copyCitation": "复制引用",
+    "aiReview": "AI 审核摘要",
+    "status": "状态",
+    "passed": "通过",
+    "hardBlocks": "硬阻断项 ({count})",
+    "warnings": "警告项 ({count})",
+    "legalDisclaimer": "法律免责声明",
+    "comingSoon": "该功能将在 Phase 1C 上线。",
+    "tabsAriaLabel": "研究对象标签",
+    "selectAriaLabel": "选择标签",
+    "tab": {
+      "overview": "概览",
+      "manuscript": "文稿",
+      "methods": "方法与实验",
+      "data": "数据与代码",
+      "figures": "图表与可视化",
+      "versions": "版本与差异",
+      "issues": "问题",
+      "pull-requests": "拉取请求",
+      "reviews": "评审与讨论",
+      "citations": "引用与相关工作"
     }
   }
 }

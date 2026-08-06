@@ -8,7 +8,8 @@
     "loading": "Loading…",
     "error": "Error",
     "back": "Back",
-    "version": "Version"
+    "version": "Version",
+    "language": "Language"
   },
   "editor": {
     "title": "SDF Editor",
@@ -163,6 +164,69 @@
       "type.pull_request.opened": "Pull request opened",
       "type.pull_request.merged": "Pull request merged",
       "type.issue.updated": "Issue updated"
+    }
+  },
+  "public": {
+    "loading": "Loading...",
+    "unpublished": "Unpublished",
+    "none": "None",
+    "copy": "Copy",
+    "copied": "✓ Copied",
+    "notFound": {
+      "title": "Not found",
+      "body": "This public version does not exist or is not accessible."
+    },
+    "rateLimited": {
+      "title": "Too many requests",
+      "body": "Please try again later."
+    },
+    "unavailable": {
+      "title": "Temporarily unavailable",
+      "body": "Something went wrong. Please try again later."
+    },
+    "authors": "Authors",
+    "correspondingAuthor": "Corresponding author",
+    "contributions": "Contributions",
+    "abstract": "Abstract",
+    "coreFields": "Core fields",
+    "insight": "Core insight",
+    "method": "Method",
+    "results": "Results",
+    "limitations": "Limitations",
+    "reproducibility": "Reproducibility",
+    "license": "Licenses",
+    "licenseType": {
+      "text": "Text",
+      "code": "Code",
+      "data": "Data"
+    },
+    "versionInfo": "Version info",
+    "versionId": "Version ID",
+    "publishedAt": "Published at",
+    "versionHash": "Version hash",
+    "copyFullHash": "Copy full hash",
+    "citation": "Citation",
+    "copyCitation": "Copy citation",
+    "aiReview": "AI review summary",
+    "status": "Status",
+    "passed": "Passed",
+    "hardBlocks": "Hard blocks ({count})",
+    "warnings": "Warnings ({count})",
+    "legalDisclaimer": "Legal disclaimer",
+    "comingSoon": "This feature is coming soon in Phase 1C.",
+    "tabsAriaLabel": "Research object tabs",
+    "selectAriaLabel": "Select tab",
+    "tab": {
+      "overview": "Overview",
+      "manuscript": "Manuscript",
+      "methods": "Methods & Experiments",
+      "data": "Data & Code",
+      "figures": "Figures & Visualization",
+      "versions": "Versions & Diff",
+      "issues": "Issues",
+      "pull-requests": "Pull Requests",
+      "reviews": "Reviews & Discussions",
+      "citations": "Citations & Related Work"
     }
   }
 }

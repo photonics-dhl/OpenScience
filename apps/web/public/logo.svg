@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 64" role="img" aria-label="OpenScience">
+  <rect width="64" height="64" rx="14" fill="#0b1220"/>
+  <path d="M10 32h12l6-14 8 28 6-14h12" fill="none" stroke="#4dd0e1" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/>
+  <text x="80" y="42" font-family="system-ui, -apple-system, 'Segoe UI', sans-serif" font-size="28" font-weight="600" fill="#0b1220">OpenScience</text>
+</svg>

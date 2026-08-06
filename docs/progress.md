@@ -1,5 +1,20 @@
 # OpenScience (XGS) 进度日志
 
+## 2026-08-06（补九）— 前端地基三修：next-intl 接通 + 公开页文案 i18n + 静态资产
+
+- **next-intl 接通**（修「14 文件 useTranslations 无 Provider」P0 坑）：采用 v4 无 locale 路由方案——`next.config.mjs` 包 `createNextIntlPlugin`；新增 `apps/web/i18n/request.ts`（getRequestConfig，cookie `NEXT_LOCALE` → Accept-Language → 默认 zh）+ `i18n/locale.ts`（client 安全的常量/解析器，避免 server-only 依赖进 client bundle）；`app/layout.tsx` 改 async server component，`getLocale`/`getMessages` + `NextIntlClientProvider` 包 children，`<html lang>` 按 locale 输出；新增 `components/LocaleSwitcher.tsx`（写 cookie + router.refresh）。
+- **公开页文案 i18n**：`messages/zh.json`/`en.json` 新增 `public` 命名空间（错误态/复制按钮/概览页各节/AI 审核/标签导航，约 40 键，zh/en 对称）；`components/public/PublicVersionPage.tsx`、`TabNavigation.tsx` 全部硬编码文案改 `useTranslations('public')`（原英文 TAB_LABELS 一并收编为 `public.tab.*`）。
+- **静态资产与 metadata**：新建 `apps/web/public/`——手写极简 SVG：`favicon.svg`（脉冲线深色圆角方块）、`logo.svg`（脉冲标 + 字标）、`og-image.svg`（1200×630 占位）；`public/hermes/README.md` 记录 Hermes Live2D（wanko 模型）待从 Scholar's Tea 迁移且须保留出处。`layout.tsx` metadata 换真实 title/description（中文为主）+ favicon/OG 引用 + `metadataBase`。
+- **验证**：vitest 34/34（含 i18n zh/en 键对称门禁）；`next build` 通过；`next start` 冒烟：默认 zh-CN、Accept-Language en 生效、公开页 SSR 输出 i18n 文案（研究对象标签）无抛错。
+- **遗留**：LocaleSwitcher 无样式（globals.css 未动，P2A 统一处理）；`/research/[publicId]` 页面本体仍是占位。
+
+## 2026-08-06（补八）— 前端设计方向 v1 讨论稿产出（进入网页设计规划阶段）
+
+- **产出**：`docs/proposals/2026-08-06-frontend-design-direction-v1.md`（三方讨论稿 v1），含审美定位（学术工程感）、色彩/字体/符号、IA 页面地图、三套视觉具体化、动效 L0–L3 分级、Hermes Live2D 陪伴形象、技术底座决策、10 个开放问题、P2A–P2E 分期草案。
+- **调研输入**：竞品分析 docx（pandoc 提取，34 竞品全为战略/IA 层启发无视觉观察）、moonshot.cn 交互风格、微信文章（scroll-world + img2threejs 两个 agent skill 项目）、nyblnet/bento（明文 JSON + morph 转场 + Fraunces/Instrument Sans 字体）、SPJ 期刊模板、GitHub 设计 skill 生态（结论：引 Tailwind v4+shadcn/ui 底座 + Playwright MCP 截图闭环 + vercel-labs 两 skill，否 Figma/21st.dev/v0 类）。
+- **摸底发现（P0 地基坑）**：i18n provider 疑似未接线（14 文件 useTranslations 无 NextIntlClientProvider，运行时即抛错）；公开页文案硬编码中文违反自家 frontend-design skill 第 11 条；无 public/ 静态资产；1397 行单文件全局 CSS。
+- **下一步**：用户与 GPT 讨论 v1 → 回稿迭代 v2 → 定稿后转 `docs/specs/` 正式 spec + 拆 plan。
+
 ## 2026-08-06（补七）— 测试链路修通：沙箱安全基线 19/19 + api 集成 104/104 云上全绿
 
 - **测试脚本修复**：science-worker `test:integration` 原为匹配不到测试的 jest 残骸（pnpm -r 遇错即停，api 套件从未被执行）；拆分后 Docker 用例走 test:integration、纯单测本地 29/29 首绿。
