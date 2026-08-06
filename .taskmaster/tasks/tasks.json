@@ -613,7 +613,7 @@
         "id": "5",
         "title": "Phase 1D: Hermes 与发布",
         "description": "建设 Hermes Agent 系统的 MVP 子集与公开发布闭环：AI Gateway 统一路由（MiniMax-M3 主模型 / 回退策略由 Gateway 配置管理）、异步任务通道、SDF Extractor（建议/差异形式，不直接写正文）、R0–R4 分级审批、AI 发布审核（硬阻断与警告分离）、申诉与 Moderator 队列、发布事务与公开页（含免责声明与审核摘要）。依据 Spec §9、§11、§4.1–4.3、§6.2、§22 Phase 1D。",
-        "status": "in-progress",
+        "status": "done",
         "dependencies": [
           "4"
         ],
@@ -745,7 +745,7 @@
             "id": 9,
             "title": "构建公开 RO 页面与必显信息",
             "description": "构建公众可访问的公开 RO 页面：按严肃学术排版（Spec §18.2）展示 Spec §4.3 要求的全部必显信息，支撑验收主流程的公众查看环节（Spec §21.2 步骤10）。",
-            "status": "pending",
+            "status": "done",
             "dependencies": [
               "5.8",
               "5.6"
@@ -753,10 +753,11 @@
             "priority": "high",
             "details": "要点：1) 必显：标题、作者与身份状态、机构声明、摘要、许可、unique ID、版本 ID、发布时间、版本哈希、引用格式、AI 审核摘要及平台法律免责声明（Spec §4.3）；2) 页面含 §6.2 固定声明文案（时间戳不构成专利优先权/著作权/司法存证保证）；3) 一级标签覆盖 Overview、Manuscript、Methods & Experiments、Data & Code、Figures & Visualization、Versions & Diff、Issues、Pull Requests、Reviews & Discussions、Citations & Related Work（Spec §4.3，标签页可先以既有数据渲染，协作标签数据源来自 P1C）；4) public 可见性公众可访问并可被搜索引擎索引，private/invite_only 拒绝未授权访问（Spec §4.2）；5) 公开页优先 SSR/缓存，WCAG AA、移动端功能一致（Spec §18.3、§2.5-5）；6) URL 使用 /research/OSR-YYYY-NNNNNN/v/N 稳定结构（Spec §6.1）。待确认：平台服务条款、隐私政策与免责声明最终文案（Spec §24），先按 §6.2 原文与占位文案实现，文案定稿后替换。涉及模块：apps/web 公开页路由、apps/api /research-objects 公开读接口。\n验收: 步骤10",
             "testStrategy": "合同测试：公开页数据 Schema；E2E（Spec §21.2 步骤10）：未登录公众访问公开页可见全部必显信息；安全测试：private/invite_only RO 的公开 URL 越权访问被拒（Spec §21.1）。",
-            "parentId": "5"
+            "parentId": "5",
+            "updatedAt": "2026-08-06T04:29:04.252Z"
           }
         ],
-        "updatedAt": "2026-08-04T13:48:30.579Z"
+        "updatedAt": "2026-08-06T04:29:04.252Z"
       },
       {
         "id": "6",
@@ -879,9 +880,9 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-08-04T13:48:30.579Z",
+      "lastModified": "2026-08-06T04:29:04.252Z",
       "taskCount": 6,
-      "completedCount": 4,
+      "completedCount": 5,
       "tags": [
         "master"
       ]

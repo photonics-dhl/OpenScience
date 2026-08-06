@@ -3,6 +3,7 @@ import { AiGateway, OpenAiCompatProvider } from '@openscience/ai-gateway';
 import { markTaskProgress, AGENT_TASK_QUEUE, type AgentDeps } from '@openscience/domain';
 import { extractHandler } from './extractor';
 import { reviewAnalyzeHandler } from './reviewer';
+import { visualizationPlanHandler } from './planner';
 
 /** 任务处理器注册表（Q4：kind → 执行函数）。 */
 export type TaskHandler = (deps: AgentDeps, task: { id: string; payload: Record<string, unknown> }) => Promise<Record<string, unknown>>;
@@ -16,6 +17,7 @@ export function createHandlers(gateway: AiGateway): Record<string, TaskHandler> 
     },
     'sdf.extract': async (_deps, task) => extractHandler(gateway, task),
     'review.analyze': async (deps, task) => reviewAnalyzeHandler(gateway, deps, task),
+    'visualization.plan': async (_deps, task) => visualizationPlanHandler(gateway, task), // P1E-1
   };
 }
 
