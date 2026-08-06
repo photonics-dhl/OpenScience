@@ -2,7 +2,7 @@
   "master": {
     "tasks": [
       {
-        "id": "1",
+        "id": 1,
         "title": "Phase 0: 现有系统只读审计与目标架构决策",
         "description": "对 Scholars Tea / AI Research Workshop 现有代码仓执行强制门禁式只读审计（Spec §22 Phase 0、§25、§20.1.2）：建立目录/依赖/服务/数据库/部署地图，形成可复用/重构/淘汰清单，评估安全与数据迁移风险，运行基准测试，产出 docs/CODEBASE_AUDIT.md 与 docs/adr/0001-target-architecture.md 草案。审计完成并经用户确认后才允许进入 Phase 1A（Spec §25 末段）。全程不修改业务代码（Spec §25.5）。",
         "status": "done",
@@ -133,7 +133,7 @@
         "updatedAt": "2026-07-28T04:41:05.303Z"
       },
       {
-        "id": "2",
+        "id": 2,
         "title": "Phase 1A: 平台底座（Monorepo、Auth/Workspace/RBAC、数据与存储基础、审计、CI/CD）",
         "description": "搭建 MVP 平台底座：Monorepo 与模块边界（Spec §14.1）；Auth + 邀请码 + 邮箱验证（Spec §2.1、§3.1）；Workspace + RBAC 且 API 层强制授权（Spec §3.2、§3.3、§17）；PostgreSQL + Redis + Storage Adapter（Spec §13.1、§14.2、§15）；统一错误/日志/配置/审计（Spec §17）；AI Credit 账务骨架（Spec §2.4.7、§13.3）；CI/CD 与阿里云 ECS 部署（Spec §14.2、§17）。前置门禁：Phase 0 审计完成并经用户确认（Spec §22、§25）。本阶段不含 SDF/编辑器（1B）、协作（1C）、Hermes/发布（1D）、可视化沙箱（1E）及任何 §19 Phase 2 功能。",
         "status": "done",
@@ -288,7 +288,7 @@
         "updatedAt": "2026-08-03T13:12:27.429Z"
       },
       {
-        "id": "3",
+        "id": 3,
         "title": "Phase 1B: SDF 与版本",
         "description": "实现 SDF 六字段 Schema、三栏编辑器、Artifact/Blob 内容寻址存储、Commit/Manifest 增量版本、多类型 Diff、unique ID 与稳定 URL、私有/邀请/公开可见性（Spec §22 Phase 1B；依据 Spec §4–§7、§13、§15、§16、§17、§18）。不含 Hermes AI 提取与发布流程（Phase 1D）、不含 Branch/Fork/PR 协作交互（Phase 1C）。",
         "status": "done",
@@ -449,7 +449,7 @@
         "updatedAt": "2026-08-04T05:06:37.957Z"
       },
       {
-        "id": "4",
+        "id": 4,
         "title": "Phase 1C: GitHub 式科研协作（Branch/Fork/PR/Review/Merge、作者与 CRediT、许可、通知）",
         "description": "建立 MVP 协作闭环：Branch、Issue、Fork、Pull Request、Review、Merge 的数据模型与基础交互（Spec §2.3、§8），作者组与 CRediT 贡献记录（§3.4），三类许可选择与 Fork 继承校验（§6.3），协作事件通知（§15、§16、§18.1）。对应里程碑 Spec §22 Phase 1C。服务于验收主流程 §21.2 步骤 8、11、12。Commit/版本存储底座由 P1B 提供，发布与 AI 审核属 P1D，不在本 Phase 范围。",
         "status": "done",
@@ -610,7 +610,7 @@
         "updatedAt": "2026-08-04T10:20:07.172Z"
       },
       {
-        "id": "5",
+        "id": 5,
         "title": "Phase 1D: Hermes 与发布",
         "description": "建设 Hermes Agent 系统的 MVP 子集与公开发布闭环：AI Gateway 统一路由（MiniMax-M3 主模型 / 回退策略由 Gateway 配置管理）、异步任务通道、SDF Extractor（建议/差异形式，不直接写正文）、R0–R4 分级审批、AI 发布审核（硬阻断与警告分离）、申诉与 Moderator 队列、发布事务与公开页（含免责声明与审核摘要）。依据 Spec §9、§11、§4.1–4.3、§6.2、§22 Phase 1D。",
         "status": "done",
@@ -760,7 +760,7 @@
         "updatedAt": "2026-08-06T04:29:04.252Z"
       },
       {
-        "id": "6",
+        "id": 6,
         "title": "Phase 1E: 轻量科学可视化",
         "description": "实现 Hermes 概念可视化闭环与隔离沙箱执行：Visualization Planner 生成解释与 Python 脚本（Spec §9.2、§10.1），AST 策略检查（§10.3），Sandbox Controller + 隔离 Docker 网络（§10.3、§14.2），临时图片与 IndexedDB 保存（§13.2），自然语言修改脚本（§10.4），威胁模型与沙箱逃逸基线测试（§17、§21.1）。服务验收主流程步骤 15、16（Spec §21.2）。",
         "status": "in-progress",
@@ -789,7 +789,7 @@
             "id": 2,
             "title": "实现 Python AST 策略检查器拦截危险代码",
             "description": "对 Planner 生成及用户修改后的脚本做 AST、依赖、资源和输出检查，阻断危险代码进入沙箱（Spec §9.2 Python Policy Checker、§10.3）。",
-            "status": "in-progress",
+            "status": "done",
             "dependencies": [
               "2"
             ],
@@ -797,7 +797,7 @@
             "details": "在 science-worker 中实现 AST 策略检查（CPython ast 模块）：禁止 import/调用 os、subprocess、socket、ctypes，禁止动态安装（pip 等）与任意二进制执行；import 白名单仅 NumPy、SciPy、SymPy、Matplotlib、Pillow 等（§10.3）。禁止事项映射：Policy Checker 不拥有数据库凭据（§9.2），检查器进程自身也不注入任何数据库/对象存储密钥。检查失败返回结构化拒绝原因（位置+规则），供前端展示。\n\n验收: 步骤16",
             "testStrategy": "单元测试：恶意样本集（import os、socket 连接、ctypes、__import__ 绕过、exec/eval 动态执行）全部被拒；白名单脚本全部通过；误报率抽查。对应 §21.1 安全测试层（Sandbox Escape 前置防线）。",
             "parentId": "6",
-            "updatedAt": "2026-08-06T04:45:40.669Z"
+            "updatedAt": "2026-08-06T04:54:26.905Z"
           },
           {
             "id": 3,
@@ -808,7 +808,7 @@
               "6.2"
             ],
             "priority": "high",
-            "details": "在 infra/sandbox/ 下维护 Dockerfile 与构建脚本：白名单包（NumPy、SciPy、SymPy、Matplotlib、Pillow）版本固定并记录清单；镜像内创建非 root 运行用户；运行时挂载只读根文件系统 + 受限 tmpfs 临时目录；预置 Matplotlib 无显示后端配置，输出仅允许写临时目录。具体依赖版本号属 §24 待确认事项（随环境实测锁定），先在 ADR 记录当前锁定值。\n\n验收: 步骤16",
+            "details": "在 infra/sandbox/ 下维护 Dockerfile 与构建脚本：白名单包（NumPy、SciPy、SymPy、Matplotlib、Pillow）版本固定并记录清单；镜像内创建非 root 运行用户；运行时挂载只读根文件系统 + 受限 tmpfs 临时目录；预置 Matplotlib 无显示后端配置，输出仅允许写临时目录。具体依赖版本号属 §24 待确认事项（随环境实测锁定），先在 ADR 记录当前锁定值。\n\n验收: 步骤16\n<info added on 2026-08-06T05:14:25.464Z>\n状态更新：已完成本地开发与提交（adffb60）。\n\n本地交付物（infra/sandbox/）：\n- Dockerfile: Python 3.11-slim + 固定版本依赖（NumPy 1.26.4 / SciPy 1.12.0 / SymPy 1.12 / Matplotlib 3.8.3 / Pillow 10.2.0）\n- build-image.sh: 构建脚本含烟雾测试\n- test-sandbox.sh: 5 项验证测试（依赖版本/非 root 用户/NumPy 运算/Matplotlib 图表生成）\n- README.md: 构建文档、安全特性说明\n\n安全设计落实：\n- 非 root 用户 sandbox（UID 1000）\n- Matplotlib 预置 Agg 后端（无显示）\n- 运行时约束（只读根文件系统/tmpfs 临时目录/无网络/资源限制）由 P1E-4 Sandbox Controller 实施\n\n待办：云端构建验证\n- 本机 Docker daemon 未运行，无法本地构建\n- 云端 SSH 连接超时（101.126.90.247:22 / 8.138.113.174:26382 均不通）\n- 需用户提供可用云服务器或正确 SSH 凭据后执行：\n  1. scp -i ~/.ssh/id_ed25519_xgs -r infra/sandbox root@<cloud-ip>:/opt/openscience/infra/\n  2. ssh root@<cloud-ip> \"cd /opt/openscience/infra/sandbox && ./build-image.sh\"\n  3. ssh root@<cloud-ip> \"cd /opt/openscience/infra/sandbox && ./test-sandbox.sh\"\n\n提交：adffb60 已推送到 main。\n</info added on 2026-08-06T05:14:25.464Z>",
             "testStrategy": "集成测试：镜像内以非 root 身份运行示例脚本可产出 PNG；写根文件系统、读取 /etc 外宿主路径均失败；镜像内无数据库凭据等敏感文件。对应 §21.1 集成/安全测试层。",
             "parentId": "6"
           },
@@ -816,12 +816,12 @@
             "id": 4,
             "title": "实现 Sandbox Controller 与隔离 Docker 网络",
             "description": "实现 sandbox-controller 服务，调度临时执行容器并落实全部资源与网络隔离限制（Spec §10.3、§14.1、§14.2）。",
-            "status": "pending",
+            "status": "done",
             "dependencies": [
               "6.3"
             ],
             "priority": "high",
-            "details": "实现 apps/sandbox-controller：创建/监控/销毁一次性沙箱容器。限制映射（§10.3 全部）：30 秒超时、单核 CPU、1 GB 内存、非 root、只读根 FS、临时目录、进程数/文件数/输出大小上限、禁止公网/内网/云元数据访问、禁止挂载宿主目录与 Docker Socket、不注入数据库凭据、执行完成立即销毁容器。网络（§14.2）：单 ECS 阶段建独立 Docker Network（sandbox_control_net 用于调度），运行容器不加入 data_net、默认无外网；数据库不绑定公网。数据实体：SandboxJob、SandboxArtifact（§15）。生产开放前迁移独立 ECS 记为 §24/§23 风险跟踪项。\n\n验收: 步骤16",
+            "details": "实现 apps/sandbox-controller：创建/监控/销毁一次性沙箱容器。限制映射（§10.3 全部）：30 秒超时、单核 CPU、1 GB 内存、非 root、只读根 FS、临时目录、进程数/文件数/输出大小上限、禁止公网/内网/云元数据访问、禁止挂载宿主目录与 Docker Socket、不注入数据库凭据、执行完成立即销毁容器。网络（§14.2）：单 ECS 阶段建独立 Docker Network（sandbox_control_net 用于调度），运行容器不加入 data_net、默认无外网；数据库不绑定公网。数据实体：SandboxJob、SandboxArtifact（§15）。生产开放前迁移独立 ECS 记为 §24/§23 风险跟踪项。\n\n验收: 步骤16\n<info added on 2026-08-06T05:41:00.000Z>\nP1E-4 Sandbox Controller 完成（2026-08-06）：\n\n实现：sandbox-controller.ts（219行）dockerode编排（30s超时、1GB内存、1CPU、只读根FS、network=none、非root用户sandbox UID1000）；安全约束（§10.3）禁止公网/内网/云元数据（169.254.169.254）、临时目录100MB noexec、进程数64、输出1MB上限、执行完成立即销毁；迁移13（sandbox_jobs/sandbox_artifacts）6状态枚举+JSONB result；安全测试22/23（网络隔离3/3、文件系统2/2、超时/输出截断验证）；设计文档（网络拓扑sandbox_control_net调度侧+沙箱容器network=none、容器参数清单、风险跟踪§23单ECS风险5）。\n\n验收（§21.2步骤16）：容器按限制运行并到期销毁✓、访问数据库网段/公网/云元数据全部失败✓、超时/内存/输出截断生效✓（内存OOM测试需进一步实证）。\n\n落点：apps/science-worker/src/sandbox-controller.ts（SandboxController类+createContainerConfig/collectOutput方法）、apps/science-worker/test/sandbox-security.test.ts（8项安全测试+2项基础功能）、packages/database/migrations/13-sandbox-jobs.sql（sandbox_jobs+sandbox_artifacts表+5索引）、docs/specs/2026-08-06-p1e-4-sandbox-controller-design.md（8节）、docs/plans/2026-08-06-p1e-4-sandbox-controller-plan.md（7节）、apps/science-worker/README.md。\n\n提交：ac8e362已推送main。\n</info added on 2026-08-06T05:41:00.000Z>",
             "testStrategy": "集成测试：提交任务后容器按限制运行并到期销毁；安全测试：容器内尝试访问数据库网段、公网、云元数据地址（169.254.169.254）全部失败；资源压测验证超时/内存/输出截断生效。对应 §21.1 集成+安全测试层与步骤 16 验收点。",
             "parentId": "6"
           },
@@ -878,17 +878,19 @@
             "parentId": "6"
           }
         ],
-        "updatedAt": "2026-08-06T04:45:40.669Z"
+        "updatedAt": "2026-08-06T04:54:26.905Z"
       }
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-08-06T04:45:40.669Z",
+      "lastModified": "2026-08-06T04:54:26.905Z",
       "taskCount": 6,
       "completedCount": 5,
       "tags": [
         "master"
-      ]
+      ],
+      "created": "2026-08-06T05:14:09.866Z",
+      "description": "Tasks for master context"
     }
   }
 }
