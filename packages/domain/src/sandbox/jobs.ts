@@ -140,7 +140,32 @@ export async function listSandboxJobsByWorkspace(
 }
 
 /**
+ * P1E-5: 原子认领下一个 pending 作业（science-worker 轮询入口）。
+ * UPDATE ... FOR UPDATE SKIP LOCKED：多 worker 并发安全，认领即置 running。
+ */
+export async function claimNextPendingSandboxJob(
+  deps: { prisma: PrismaClient },
+): Promise<SandboxJob | null> {
+  const claimed = await deps.prisma.$queryRaw<SandboxJob[]>`
+    UPDATE sandbox_jobs
+    SET status = 'running'::sandbox_job_status
+    WHERE id = (
+      SELECT id FROM sandbox_jobs
+      WHERE status = 'pending'::sandbox_job_status
+      ORDER BY created_at
+      LIMIT 1
+      FOR UPDATE SKIP LOCKED
+    )
+    RETURNING ${JOB_COLUMNS}
+  `;
+  return claimed[0] ?? null;
+}
+
+/**
  * P1E-5: 更新沙箱作业状态与结果。
+ * - result 为合并写（COALESCE + ||）：保留创建时存入的 idempotencyKey 等既有键，
+ *   不再整体覆盖（2026-08-06 修复）。
+ * - result 缺省（纯状态推进）时不动 result 列。
  */
 export async function updateSandboxJobStatus(
   deps: { prisma: PrismaClient },
@@ -152,13 +177,22 @@ export async function updateSandboxJobStatus(
 ): Promise<void> {
   const completedAt = ['completed', 'failed', 'timeout', 'cancelled'].includes(input.status) ? new Date() : null;
 
-  await deps.prisma.$executeRaw`
-    UPDATE sandbox_jobs
-    SET status = ${input.status}::sandbox_job_status,
-        result = ${input.result ? JSON.stringify(input.result) : null}::jsonb,
-        completed_at = ${completedAt}
-    WHERE id = ${input.jobId}::uuid
-  `;
+  if (input.result) {
+    await deps.prisma.$executeRaw`
+      UPDATE sandbox_jobs
+      SET status = ${input.status}::sandbox_job_status,
+          result = COALESCE(result, '{}'::jsonb) || ${JSON.stringify(input.result)}::jsonb,
+          completed_at = ${completedAt}
+      WHERE id = ${input.jobId}::uuid
+    `;
+  } else {
+    await deps.prisma.$executeRaw`
+      UPDATE sandbox_jobs
+      SET status = ${input.status}::sandbox_job_status,
+          completed_at = ${completedAt}
+      WHERE id = ${input.jobId}::uuid
+    `;
+  }
 }
 
 /**

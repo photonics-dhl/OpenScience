@@ -1,5 +1,13 @@
 # OpenScience (XGS) 进度日志
 
+## 2026-08-06（补三）— science-worker 执行链接线 + updateSandboxJobStatus 合并写
+
+### 排查结论
+- **执行链未接线**：`apps/science-worker/src/index.ts` 此前只有 `export const placeholder = true`，POST /sandbox-jobs 落库后无任何消费者（全仓 grep 证实 `updateSandboxJobStatus`/`onSandboxJobCompleted` 仅被 domain 自身与测试引用）。设计文档数据流图（创建任务 → SandboxController → 状态/记账/审计）从未落地。
+- **已修复**：science-worker 新增注入式 `pollOnce`（接缝参照 agent-worker createPollOnce）：`claimNextPendingSandboxJob`（domain 新增，UPDATE ... FOR UPDATE SKIP LOCKED 原子认领置 running，多 worker 安全）→ `SandboxController.execute` → `updateSandboxJobStatus` + `onSandboxJobCompleted`（审计 + UsageLedger 记账）；`main()` 串行轮询，空闲/异常退避 2s；ESM 入口用 `import.meta.url` 守卫（本包 `"type": "module"`，无 require.main）。
+- **updateSandboxJobStatus 合并写**：result 改 `COALESCE(result,'{}'::jsonb) || 新结果`，保留创建时存入的 idempotencyKey；result 缺省（纯状态推进）时不再动 result 列（旧逻辑会写成 null 连带冲掉幂等键）。选合并写而非新列，无需迁移 22。
+- **单测**：`apps/science-worker/test/job-runner.test.ts` 7 例（无作业退避 / completed / timeout / failed / 执行器异常兜底 / 截断标记 / exitCode 推导），全 mock 接缝，不依赖 Docker。
+
 ## 2026-08-06（补二）— P1E-5 遗留四项修复：artifact 归属过滤、users.level 配额档、context 字段、迁移 21
 
 ### 修复内容

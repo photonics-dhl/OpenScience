@@ -176,6 +176,7 @@ export { validateExportPackage, type ExportValidationResult } from './export/val
 export { buildManifest, type BuildManifestInput } from './export/manifest';
 export {
   createSandboxJob, getSandboxJob, getSandboxArtifact, listSandboxJobsByWorkspace, updateSandboxJobStatus,
+  claimNextPendingSandboxJob,
   type SandboxJob, type SandboxJobStatus, type SandboxJobResult, type CreateSandboxJobInput,
 } from './sandbox/jobs';
 export {

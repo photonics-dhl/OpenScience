@@ -147,6 +147,12 @@ importers:
 
   apps/science-worker:
     dependencies:
+      '@openscience/database':
+        specifier: workspace:^
+        version: link:../../packages/database
+      '@openscience/domain':
+        specifier: workspace:^
+        version: link:../../packages/domain
       dockerode:
         specifier: ^5.0.1
         version: 5.0.1
