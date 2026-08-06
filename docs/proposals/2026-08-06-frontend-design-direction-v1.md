@@ -1,7 +1,7 @@
 # OpenScience 前端整体设计方向 v1（三方讨论稿）
 
-> 状态：**v1 草案，待用户 × GPT × Kimi 三方讨论后迭代 v2，直至定稿**。定稿后将转为正式 design spec（`docs/specs/`）并拆解实施计划。
-> 日期：2026-08-06 · 作者：Kimi · 讨论轮次：v1
+> 状态：**v2 已定稿（2026-08-06，用户 × GPT × Kimi 三方）**。定稿决策见文末「## v2 终稿决策层」，**该节效力高于上文 v1.x 各节**；上文保留作历史脉络。下一步：据终稿转正式 design spec（`docs/specs/`）并拆解实施计划。
+> 日期：2026-08-06 · 作者：Kimi · 讨论轮次：v1 → v1.1 → v2（定稿）
 
 ## 0. 本文档的定位
 
@@ -177,9 +177,87 @@ Figma MCP 类（无 Figma 工作流）、21st.dev Magic（云依赖 + 风格不�
 
 ---
 
+## v2 终稿决策层（2026-08-06 三方定稿）
+
+> 本节是三方讨论（用户 × GPT handoff v2 × Kimi grill-me 逐分支确认）后的**最终决策**，效力高于上文 v1.x 各节；上文与之冲突处以本节为准。GPT 交接全文见 `docs/user_ideas/handoff-v2-extract/OpenScience-Kimi-Handoff-v2/HANDOFF.md`，首页 art-direction 参考图 `docs/user_ideas/主页原型图.png`（禁止直接作上线资产）。
+
+### D1 视觉定位
+
+**Monumental Scholarly Intelligence（纪念碑感学术智能）**：Moonshot 式克制、尺度与单一强符号，叠加开放科学的结构化/可验证/可演化。首页"震撼、简约、AI 原生"；进入产品回归高效率与长阅读舒适。取代 v1 的"学术工程感"单一表述（两者不冲突，v2 更精确）。
+
+### D2 核心符号：Evolving Research Object
+
+- 取消"飞秒脉冲/棱镜"全站主符号（过偏光学、缺平台辨识度）。主符号 = 六面组成、中心开放的持续演化研究对象；细薄历史轮廓表 provenance；蓝色智能轨迹（Hermes 驱动）穿过对象并产生一次分支后 merge；唯一暖橙节点只表 diff。
+- **六面语义定稿：映射真实 SDF 六节点类型**——`problem / insight / method / results / limitations / reproducibility`（`infra/schema.prisma:317` `SdfNodeType` 实证），数量与结构天然吻合，不采用 GPT 猜测的内容六类（论述/数据/代码…），不为画面改数据模型。
+- **资产路线定稿：纯 SVG 手工构建 + 分层辉光**（同色路径 3–4 层：锐核+内辉+外 bloom，feGaussianBlur/feMerge 或叠加 drop-shadow；`mix-blend-mode: screen` 叠光；feTurbulence 细噪点）。环境氛围允许 copy-in 1–2 个现成组件（Magic UI / Aceternity Spotlight 量级），核心符号本身不依赖组件库。原型图仅作 art-direction。
+- 动效：8–12s 极轻呼吸；轨迹 4–6s 扫一次后留低亮；橙点只短暂增强一次；历史轮廓视差 ≤4px；`prefers-reduced-motion` 全静态。动画只调 opacity/transform，不动 blur 半径（滤镜每帧重光栅）。
+- 首版做**两版变体**（更雕塑化 / 更界面化，其余变量一致），Playwright 截 1440×900、1920×1080、390×844 三尺寸由用户拍板后冻结 token。
+
+### D3 首页信息架构（定稿）
+
+- Header：左 wordmark；右 `探索 / 创建 / 关于 / 登录`；首屏透明、滚后模糊深栏；无 SaaS 多级导航。
+- Hero：主标题「让研究，持续演化。」+ 说明「将论文、数据、代码与讨论，组织为开放、可验证、可演化的研究对象。」；CTA `探索研究`（→ 首页 #latest）/ `创建研究对象`（→ 登录/邀请说明，邀请制不显示虚假可用）。
+- 区块顺序（只三个）：①最新研究（真实 feed）→ ②四阶段演化面板（同一 RO 贯穿 创建→Hermes 解析→Diff→合并发布；桌面可点 stepper + layout morph，空闲自动推进一次后停；移动端滑动卡片；**禁止 scroll-jacking**）→ ③Hermes 与你共同研究（上下文理解/证据检查/审批，非"万能 AI"罗列）+ 开放但可信（身份/版本/许可/评审/provenance，可合并为同一信任区块）。不做 Bento 功能大全。
+- **「最新研究」定稿：feed 嵌首页第二屏，新增轻量公共端点** `GET /explore`（返回统一 RO Card 字段：标题/作者与认证状态/当前版本/更新时间/演化与讨论计数/许可），走 api-contract 流程；独立列表页/搜索后置。
+
+### D4 三套页面视觉系统与 token（按 GPT v2 定稿）
+
+| 场景 | 视觉策略 |
+|---|---|
+| 落地页 Hero | 近黑暗场（`--hero-bg:#03060B`）、纪念碑尺度、极简内容 |
+| Dashboard/编辑器 | 深色导航外壳 + 浅色内容画布（`--canvas-bg:#F6F7F9`） |
+| 公开 RO | 纸白（`--paper-bg:#FCFBF7`）、学术出版排版、近零动效 |
+| 协作区 | 跟随外壳、高密度表格列表 |
+
+主色 `--accent-primary:#4C8DFF`（激光青蓝方向，v1 开放问题 1 落定）；暖橙 `#FFB454` 只表 diff/新增/合并点；禁大面积紫渐变。token 冻结前过 WCAG AA 对比度验证；双主题首版仅 token 结构预留不实装。三者共享 spacing/radius/状态色/交互逻辑，不共享背景与密度。
+
+### D5 Ultrafast Science 元素（定稿）
+
+**符号通用 + 内容层露出**：主视觉符号保持平台通用，不绑光学意象；期刊露出走内容层（footer/about/专刊 collection 页）；允许一处克制彩蛋（如脉冲波形加载动画）。v1 §3.4 的使用边界问题以此结案——视觉层不使用期刊品牌元素，合作深度问题不再阻塞设计。
+
+### D6 Hermes（定稿：Live2D 一步到位 + 风险缓释）
+
+- 形象沿用 Scholar's Tea wanko，**同一 AI 宇宙为有意为之**（v1 开放问题 3 结案）。
+- **首版即 Live2D**，不做静态过渡版；风险缓释五条：①root layout 常驻单 iframe 实例，复用 Scholar's Tea iframe+离线 pixi6 架构与 postMessage mood 协议；②懒加载——hero 关键路径零 pixi，load 后 + 1.5s 再从右下角出现，LCP 前后实测对比超预算则 feature-flag 降级；③首曝场景=Dashboard/登录后页面，首页 hero 接入排在性能验证通过后；④`prefers-reduced-motion` 与加载失败统一回退静态立绘 SVG；⑤全站单 PIXI 实例（验收硬指标）。
+- 三模式契约按 GPT：陪伴（活泼、随机小动作）/ 研究（区分事实/来源/推断/建议、明示不确定性、高影响修改给可预览 diff）/ 审批（R0–R4 决定介入强度，停止玩笑，展示对象/范围/影响/可恢复性）。活泼约束不等于学术轻佻。
+
+### D7 字体（定稿）
+
+首屏主标题思源宋体**子集化自托管 woff2**（仅落地页实际字符集，preload + `font-display: swap`）；UI/正文走系统字体栈（PingFang/雅黑/Noto 回退链）；Fraunces 与思源黑体自托管均暂缓（不为字体方案破坏中英一致性）。
+
+### D8 分期路线图（定稿，取代 v1 §12 与 GPT §11 原序）
+
+- **P0 地基收尾**：Tailwind/shadcn/token/字体底座（i18n provider、messages 迁移、public 资产已完成）。
+- **P1 首页视觉原型**：Header+Hero+#latest 衔接，真实 DOM + SVG 符号两版变体，三尺寸截图用户确认。
+- **P2 首页全内容**：`GET /explore` 端点 + 真实 feed、四阶段演化面板、Hermes 与信任区块。
+- **P3 产品壳与核心页面**：Dashboard/登录注册、编辑器/协作区/公开 RO 三套视觉重构、Hermes 全局状态机 + R0–R4 + **Live2D 集成（首曝 Dashboard）**。
+- **P4 增强**：Evolution Tree morph、首页 hero Live2D 曝光（性能验证后）、完整双主题、更高级 Hero 动效（如需 Three.js 先出包体/内存/LCP 数据与决策记录）。
+
+### D9 沿用不改的 GPT 验收标准
+
+视觉：3 秒读出"一个持续演化的研究对象"；320px 仍认出开放结构与蓝/橙分支合并；首屏单一主焦点；禁月球/星空/发光大脑/文档堆/紫渐变模板元素。内容：CTA 全真、feed 真实或明确 skeleton、文案全走 i18n、RO Card 跨页复用。工程：WCAG AA、键盘可达、reduced-motion 完整、动效失败页面仍可用、LCP ≤2.5s、单 PIXI 实例。
+
+### v1 开放问题结案对照
+
+| # | 问题 | 结案 |
+|---|---|---|
+| 1 | 主色/暗色主线 | D4：蓝主色+暖橙 diff；工作台深壳浅布 |
+| 2 | 期刊元素边界 | D5：符号通用+内容层露出 |
+| 3 | Hermes 撞脸 | D6：有意同一 AI 宇宙 |
+| 4 | 落地页优先级 | D3+D8：邀请制仍做落地页，P1 先行，无 scroll-jacking |
+| 5 | 中文字体体积 | D7：宋体子集化+系统正文 |
+| 6 | Dashboard 首版取舍 | 移交 P3 实施计划细化 |
+| 7 | 搜索先后端 | D3：feed 先行，搜索后置 |
+| 8 | Hermes 介入深度 | D6：Live2D 一步到位+缓释 |
+| 9 | 移动端对齐度 | GPT §10：功能一致，编辑器改分步/抽屉 |
+| 10 | 双主题程度 | D4：token 预留，不实装 |
+
+---
+
 ## 讨论纪要
 
 （每轮三方意见追加在此，最新置顶）
 
+- **v2（2026-08-06，三方定稿）**：输入 = GPT handoff v2（`docs/user_ideas/OpenScience-Kimi-Handoff-v2.zip`，含 HANDOFF.md 与 hero 参考图）+ 主页原型图。Kimi 校验代码库后发现两点并已纳入定稿：①SDF 真实六节点类型与 GPT 猜测的内容六类不符 → D2 语义映射修正；②API 无公开 RO 列表端点 → D3 新增 `GET /explore`。Kimi 完成"AI poster 质感的纯前端复现"调研（SVG 分层辉光/copy-in 生态）→ D2 资产路线。用户经 grill-me 逐分支确认 D1–D9，其中对 GPT handoff 的两处主动修正：Live2D 从 P4 提前到 P3（一步到位+风险缓释）、六面语义改映射真实 SDF 节点。详见上方「v2 终稿决策层」。
 - **v1（2026-08-06, Kimi）**：初版。基于竞品分析报告、moonshot.cn、scroll-world/img2threejs、nyblnet/bento、SPJ 期刊模板、GitHub 设计 skill 生态调研。
 - **v1.1（2026-08-06, Kimi）**：§7 Hermes Live2D 改写为实证方案——完成 Scholar's Tea 项目调研（`Z:/data/home/zju321/321/DHL/scholars_tea`）：wanko 官方免费模型许可可商用、iframe+pixi6 隔离架构、mood 双层映射与陪伴感配方可直接迁移；§11 问题 3 相应收窄为品牌差异化问题。

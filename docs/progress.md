@@ -1,5 +1,15 @@
 # OpenScience (XGS) 进度日志
 
+## 2026-08-06（补十）— 前端设计方向 v2 定稿（用户 × GPT × Kimi 三方）
+
+- **输入**：GPT handoff v2（`docs/user_ideas/OpenScience-Kimi-Handoff-v2.zip`，含 HANDOFF.md + hero 参考图）与 `docs/user_ideas/主页原型图.png`（1672×941 art-direction 稿）。
+- **Kimi 代码库校验两发现**：①SDF 真实六节点类型为 problem/insight/method/results/limitations/reproducibility（`infra/schema.prisma` SdfNodeType），与 GPT 猜测的内容六类不符 → 六面语义改映射真实节点；②API 无公开 RO 列表端点 → 定稿新增 `GET /explore` 轻量公共端点（走 api-contract）。
+- **调研**：AI poster 质感纯前端复现可行（SVG 分层辉光 3–4 层 feGaussianBlur/feMerge、mix-blend-mode 叠光、feTurbulence 噪点；动效只调 opacity/transform）；copy-in 生态（Magic UI/Aceternity，与 shadcn 同模式）仅用于氛围、不用于核心符号。
+- **grill-me 逐分支定稿 D1–D9**：D1 定位 Monumental Scholarly Intelligence；D2 符号=Evolving RO（SDF 六节点语义+纯 SVG+两版变体）；D3 首页 IA（hero 文案/双 CTA/feed 嵌首页+新端点/四阶段面板禁 scroll-jacking）；D4 三套视觉+token 按 GPT（蓝主色 #4C8DFF、暖橙仅 diff、WCAG 验证后冻结）；D5 期刊元素=符号通用+内容层露出；D6 Hermes Live2D 一步到位+五条缓释（iframe 常驻单实例/懒加载/首曝 Dashboard/reduced-motion 回退/单 PIXI）；D7 思源宋子集自托管+系统正文；D8 分期 P0–P4（Live2D 从 GPT P4 提前到 P3）；D9 沿用 GPT 验收标准（3 秒识符号/LCP≤2.5s/WCAG AA 等）。v1 的 10 个开放问题全部结案。
+- **落档**：`docs/proposals/2026-08-06-frontend-design-direction-v1.md` 头部状态改 v2 定稿，文末新增「v2 终稿决策层」（效力高于 v1.x 各节）+ 讨论纪要 v2 条目。
+- **执行方案**：正式 spec `docs/specs/2026-08-06-frontend-visual-system-design.md`（定稿版，无历史脉络）+ P0/P1 实施计划 `docs/plans/2026-08-06-frontend-p0-p1-plan.md`（11 Task：Tailwind v4→token+WCAG 门禁→字体→shadcn→i18n→Header→EvolvingRoSymbol 两变体→Hero→#latest→Playwright 三尺寸截图→用户验收门；P2+ 待 P1 验收后另出计划）。
+- **下一步**：用户审 spec/plan → 选执行方式（subagent-driven 或 inline）→ 开工 P0 Task 1。
+
 ## 2026-08-06（补九）— 前端地基三修：next-intl 接通 + 公开页文案 i18n + 静态资产
 
 - **next-intl 接通**（修「14 文件 useTranslations 无 Provider」P0 坑）：采用 v4 无 locale 路由方案——`next.config.mjs` 包 `createNextIntlPlugin`；新增 `apps/web/i18n/request.ts`（getRequestConfig，cookie `NEXT_LOCALE` → Accept-Language → 默认 zh）+ `i18n/locale.ts`（client 安全的常量/解析器，避免 server-only 依赖进 client bundle）；`app/layout.tsx` 改 async server component，`getLocale`/`getMessages` + `NextIntlClientProvider` 包 children，`<html lang>` 按 locale 输出；新增 `components/LocaleSwitcher.tsx`（写 cookie + router.refresh）。
