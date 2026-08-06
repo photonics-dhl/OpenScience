@@ -54,7 +54,7 @@ export async function checkPythonAST(script: string): Promise<ASTCheckResult> {
       try {
         const result = JSON.parse(stdout) as ASTCheckResult;
         resolve(result);
-      } catch (err) {
+      } catch {
         reject(new Error(`Failed to parse AST checker output: ${stdout}`));
       }
     });

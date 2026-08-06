@@ -16,6 +16,7 @@
 | `tsconfig.base.json` / `eslint.config.cjs` / `.npmrc` | 共享 TypeScript/ESLint/pnpm 基线（P1A-1）；eslint.config.cjs 已升级为 ESLint 9 flat config（2026-07-28） | 活文档 |
 | `knip.json` / `.dependency-cruiser.cjs` / `.markdownlint-cli2.jsonc` | 卫生工具配置：knip（未用代码）、dependency-cruiser（依赖边界）、markdownlint（文档门禁）（2026-07-28 落地） | 活文档 |
 | `scripts/verify-workspace.mjs` | Monorepo 结构校验脚本（lint 的第二段，`verify:workspace` 入口） | 活文档 |
+| `scripts/docs/check-docs-sync.mjs` | 文档同步门禁（索引路径存在性 + docs 反向登记 + AGENTS 迁移数一致性；lint 第三段，`audit:docs-sync` 入口，2026-08-06） | 活文档 |
 | `scripts/invite.mjs` | 邀请码管理 CLI（create/list/revoke，P1A-3） | 活文档 |
 | `scripts/seed-quota.mjs` | 配额占位值幂等 upsert CLI（--dry-run/--confirm，P1A-7，数值集中 `packages/domain/src/usage/seed-data.ts`） | 活文档 |
 | `scripts/cloud-sync.mjs` | 云上同步（tar-over-ssh，排除 .env/.git/node_modules/dist，P1A-7 固化） | 活文档 |
@@ -109,6 +110,20 @@
 | `docs/plans/2026-08-04-p1d-7-appeal-plan.md` | P1D-7 审核申诉流程与 Moderator 队列实施计划（已执行完毕，云上 97/97，task-master 5.7 done 2026-08-04） | 活文档 |
 | `docs/specs/2026-08-04-p1d-8-publish-design.md` | P1D-8 发布事务与状态机推进设计（design gate 已确认：五决策，代码已实现 2026-08-04） | 活文档 |
 | `docs/plans/2026-08-04-p1d-8-publish-plan.md` | P1D-8 发布事务与状态机推进实施计划（已执行完毕，云上 99/99，task-master 5.8 done 2026-08-04） | 活文档 |
+| `docs/specs/2026-08-04-p1d-9-public-page-design.md` | P1D-9 公开 RO 页面设计（design gate 已确认：五决策，代码已实现 2026-08-05） | 活文档 |
+| `docs/plans/2026-08-04-p1d-9-public-page-plan.md` | P1D-9 公开 RO 页面实施计划（已执行完毕，next build 通过，task-master 5.9 done，Phase 1D 完成 2026-08-05） | 活文档 |
+| `docs/specs/2026-08-06-p1e-4-sandbox-controller-design.md` | P1E-4 Sandbox Controller 与隔离 Docker 网络设计（design gate 已确认，代码已实现 2026-08-06） | 活文档 |
+| `docs/plans/2026-08-06-p1e-4-sandbox-controller-plan.md` | P1E-4 Sandbox Controller 实施计划（已执行完毕，task-master 6.4 done 2026-08-06） | 活文档 |
+| `docs/specs/2026-08-06-p1e-5-sandbox-jobs-api-design.md` | P1E-5 Sandbox Jobs API、配额限流与完成事件设计（design gate 已确认，代码已实现 2026-08-06） | 活文档 |
+| `docs/plans/2026-08-06-p1e-5-sandbox-jobs-api-plan.md` | P1E-5 Sandbox Jobs API 实施计划（已执行完毕，云上集成测试通过，task-master 6.5 done 2026-08-06） | 活文档 |
+| `docs/specs/2026-08-06-p1e-6-visualization-display-design.md` | P1E-6 可视化结果展示与 IndexedDB 临时存储设计（design gate 已确认，代码已实现 2026-08-06） | 活文档 |
+| `docs/plans/2026-08-06-p1e-6-visualization-display-plan.md` | P1E-6 可视化结果展示实施计划（已执行完毕，task-master 6.6 done 2026-08-06） | 活文档 |
+| `docs/specs/2026-08-06-p1e-7-script-modification-design.md` | P1E-7 自然语言修改脚本与 diff 展示设计（design gate 已确认，代码已实现 2026-08-06） | 活文档 |
+| `docs/plans/2026-08-06-p1e-7-script-modification-plan.md` | P1E-7 脚本修改与 diff 实施计划（已执行完毕，task-master 6.7 done 2026-08-06） | 活文档 |
+| `docs/security/sandbox-threat-model.md` | 沙箱威胁模型（STRIDE + 8 类攻击向量 + 残留风险 + 缓解路线图，P1E-8） | 活文档 |
+| `docs/security/sandbox-security-statement.md` | 沙箱安全承诺与免责声明（P1E-8，待法律审核） | 活文档 |
+| `docs/security/production-security-checklist.md` | 生产安全检查清单（P0/P1/P2 三级，P0 为上线阻断项，P1E-8） | 活文档 |
+| `docs/project-index-p1e-supplement.md` | P1E 索引补充草稿（内容已合并入本索引 2026-08-06；注意其 P1E-1/2 设计文档条目为登记错误，实际不存在） | 已合并，留存快照 |
 | `docs/progress.md` | 进度日志，新条目置顶 | 活文档 |
 | `docs/handoff/` | 交接文档目录（阶段边界/换 agent/换电脑，必须入库） | 活文档 |
 | `docs/handoff/2026-07-28-before-p1a-2-handoff.md` | P1A-2 前交接：Phase 0 Accepted、P1A-1 done、下一任务 P1A-2 | 活文档 |
@@ -147,8 +162,8 @@
 | `docs/handoff/2026-08-04-p1d-4-approval-done-handoff.md` | P1D-4 R0-R4 审批收口交接：approval domain + /agent/approvals，云上 92/92，5.4 done，下一任务 P1D-5 发布审核 | 活文档 |
 | `docs/handoff/2026-08-04-p1d-5-publish-review-done-handoff.md` | P1D-5 发布审核硬阻断收口交接：迁移 16 + 七类硬阻断，云上 94/94，5.5 done，下一任务 P1D-6 警告层 | 活文档 |
 | `docs/handoff/2026-08-04-p1d-6-warnings-done-handoff.md` | P1D-6 警告层收口交接：review.analyze handler，云上 95/95，5.6 done，下一任务 P1D-7 申诉流程 | 活文档 |
-| `docs/handoff/2026-08-04-p1d-7-appeal-done-handoff.md` | P1D-7 申诉流程收口交接：迁移 17 + /appeals，云上 97/97，5.7 done，下一任务 P1D-8 发布事务 | 活文档 |
-| `docs/handoff/2026-08-04-p1d-8-publish-done-handoff.md` | P1D-8 发布事务收口交接：迁移 18 + /publications，云上 99/99，5.8 done，下一任务 P1D-9 公开页 | 活文档（当前最新） |
+| `docs/handoff/2026-08-04-p1d-8-publish-done-handoff.md` | P1D-8 发布事务收口交接：迁移 18 + /publications，云上 99/99，5.8 done，下一任务 P1D-9 公开页 | 活文档 |
+| `docs/handoff/2026-08-06-mvp-complete-handoff.md` | MVP（Phase 0-1E）完成交接：6/6 Phase done、99/99 云上测试、P1E-8 威胁模型交付，下一步生产安全检查清单 P0 | 活文档（当前最新） |
 | `docs/CODEBASE_AUDIT.md` | Phase 0 Scholars Tea 只读审计报告（地图/模块分类/风险登记/迁移含义） | 活文档 |
 | `docs/proposals/` | 方案/脑暴稿 | 空（旧方案0723已废弃不归档） |
 | `docs/decisions/` | 决策记录 ADR | ADR-001 已接受；ADR-002 已建 |
@@ -175,7 +190,7 @@
 | `infra/nginx/` | 反代配置：`portainer.conf`（portainer.428312321.xyz → 127.0.0.1:9443，LE 证书 + WebSocket，2026-07-31；2026-08-01 追加 /nav/ 导航页、/monitor/→Netdata、/traffic/→vnStat 账单页，basic_auth）+ `openscience.conf`（OpenScience.428312321.xyz → 127.0.0.1:3001，P1A-8：/admin basic_auth + XFF 透传） | 均已部署云上并启用（openscience.conf 2026-08-03） |
 | `infra/www/` | `nav/index.html` 服务器面板导航静态页（/var/www/nav，2026-08-01） | 已部署云上 |
 | `infra/sandbox/` | 沙箱配置占位（P1A-1） | 骨架 |
-| `infra/migrations/` | Prisma 迁移（`20260728000000_baseline_app_meta` + `20260728010000_auth_baseline`（P1A-3 四表）+ `20260729010000_workspace_baseline`（P1A-4 三表）+ `20260801010000_user_platform_role`（P1A-5）+ `20260801143000_audit_log`（P1A-6）+ `20260803000000_quota_usage`（P1A-7）+ `20260803150000_research_object`（P1B-2）+ `20260804000000_blob_artifact`（P1B-3）+ `20260804010000_version_engine`（P1B-4）+ `20260804020000_identity`（P1B-6）+ `20260804030000_visibility`（P1B-7）+ `20260804040000_collab`（P1C-1，11 实体 + 3 枚举）+ `20260804050000_branch_head`（P1C-2，head_commit_id 锚点）+ `20260804060000_pr_idempotency`（P1C-6，idempotency_key）+ `20260804070000_agent_tasks`（P1D-2，三表 + 枚举），各附 rollback.sql） | 已实现，云上已 deploy（迁移 1–15，2026-08-04） |
+| `infra/migrations/` | Prisma 迁移 1–20（`20260728000000_baseline_app_meta` + `20260728010000_auth_baseline`（P1A-3 四表）+ `20260729010000_workspace_baseline`（P1A-4 三表）+ `20260801010000_user_platform_role`（P1A-5）+ `20260801143000_audit_log`（P1A-6）+ `20260803000000_quota_usage`（P1A-7）+ `20260803150000_research_object`（P1B-2）+ `20260804000000_blob_artifact`（P1B-3）+ `20260804010000_version_engine`（P1B-4）+ `20260804020000_identity`（P1B-6）+ `20260804030000_visibility`（P1B-7）+ `20260804040000_collab`（P1C-1，11 实体 + 3 枚举）+ `20260804050000_branch_head`（P1C-2，head_commit_id 锚点）+ `20260804060000_pr_idempotency`（P1C-6，idempotency_key）+ `20260804070000_agent_tasks`（P1D-2，三表 + 枚举）+ `20260804080000_ai_reviews`（P1D-5/6）+ `20260804090000_appeals`（P1D-7）+ `20260804100000_publish_state`（P1D-8）+ `20260806010000_author_affiliation`（P1D-9）+ `20260806020000_sandbox_jobs`（P1E-4/5，幂等规整版，2026-08-06 自 packages/database/migrations/ 游离 SQL 收编），各附 rollback.sql） | 已实现，云上已 deploy（迁移 1–19；20 待云上 deploy） |
 | `infra/schema.prisma` | Prisma schema（`app_meta` 基线模型，P1A-2） | 已实现 |
 
 ## .agents/skills/（项目级 Skills，Spec §20.3）

@@ -1,3 +1,5 @@
+-- DEPRECATED → 已规整为 infra/migrations/20260806020000_sandbox_jobs/migration.sql（2026-08-06）
+-- 本文件不再由任何工具链应用，仅留存为历史快照，勿再手工执行。
 -- Seed: P1E-5 Python Sandbox Quota Policies
 -- Created: 2026-08-06
 -- Purpose: 三档配额（free/pro/team）× 三类资源（任务数/并发数/运行时）= 9 条策略

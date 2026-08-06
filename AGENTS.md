@@ -2,15 +2,16 @@
 
 ## Overview
 OpenScience：AI 时代科研基础设施平台（Research Object / SDF / 预印本 + 社区评价）。工作目录 `E:/Miscellaneous/XGS`。
+当前状态：**MVP（Phase 0/1A/1B/1C/1D/1E）已完成（2026-08-06）**，进入生产前准备；主交接 `docs/handoff/2026-08-06-mvp-complete-handoff.md`，下一步为 `docs/security/production-security-checklist.md` 的 P0 项。
 
 ## Monorepo Layout & Commands（P1A-1 起）
 - 根目录已是 pnpm workspace；pnpm 不全局安装，统一用 `npx pnpm@9.15.0 <cmd>`。
-- `apps/`：`api` 已含 Fastify `/auth`（P1A-3）+ `/workspaces`（P1A-4）+ RBAC preHandler 授权守卫（P1A-5）+ `/admin/audit-logs`（P1A-6，platform_admin 守卫）+ `/usage` 与 `/admin/quota-policies`、`/admin/credits`、`/admin/usage`（P1A-7，配额/AI Credit 账务）+ 安全基线 `src/security/`（P1A-8：限流 RATE_LIMIT_ROUTES 挂接点 + CSRF/CORS/helmet + /csrf-token + trustProxy）+ `/research-objects` + `/sdf`（P1B-2：RO 创建/查询/乐观锁更新 + SDF 读写）实现；`web` 可启动空壳；`agent-worker`/`science-worker`/`sandbox-controller` 空壳。
-- `packages/`：`domain,database,auth,sdf-schema,versioning,storage,ai-gateway,search,ui,config,observability` 11 个包；database/storage（P1A-2）+ database rate-limit.ts（P1A-8 限流）+ auth（P1A-3 + P1A-9 QQ SMTP）+ domain（P1A-4 workspace + P1A-5 权限矩阵 + P1A-7 usage + **P1B-2 research-object：RO/SDF/乐观锁/合同校验**）+ config/observability（P1A-6 + P1A-8）+ sdf-schema（P1B-1：core/manifest JSON Schema + ajv，additionalProperties 宽容债务 0.2.0 收紧）已实现，其余占位。
-- `infra/`：`compose` 已含 `docker-compose.dev.yml` 开发栈、`docker-compose.monitor.yml` 监控栈、`docker-compose.prod.yml` 生产栈（P1A-9，data_net/app_net 分段，已部署云上）；`migrations` 已含迁移 1–7（含 rollback.sql；5 = audit_log，6 = quota_policies + usage_ledger，7 = research_object + sdf_documents + sdf_nodes）；`nginx` 已含 `portainer.conf`（已部署云上）+ `openscience.conf`（已部署云上，/admin basic_auth）；`scripts/deploy.sh` + `backup.sh`（P1A-9 填充）；`sandbox/scripts` 仍为占位/既有运维脚本。
+- `apps/`：`api` 已含 50+ Fastify 端点——平台底座（`/auth` P1A-3、`/workspaces` P1A-4、RBAC 守卫 P1A-5、`/admin/audit-logs` P1A-6、配额/账务 P1A-7、安全基线 `src/security/` P1A-8）+ RO/SDF/版本（`/research-objects`、`/sdf`、`/artifacts`、`/commits`、`/versions`、comparison、导出 zip，P1B）+ 协作（branches/issues/licenses/forks/pull-requests/authors/reviews/notifications，P1C）+ Hermes 与发布（agent-approvals、审核、申诉、publications、公开页，P1D）+ `/sandbox-jobs`（P1E-5）；`web` 已实现三栏 SDF 编辑器（P1B-8）+ 移动端抽屉/WCAG AA（P1B-9）+ 协作单页（P1C-10）+ 公开 RO 页（P1D-9）+ 沙箱可视化组件（P1E-6/7）；`agent-worker` 队列消费者 + sdf.extract + review.analyze（P1D）；`science-worker` 沙箱执行完整实现（dockerode 编排 + AST 策略检查 + 16 项安全基线测试，P1E）；`sandbox-controller` 仍为空壳（功能落在 science-worker）。
+- `packages/`：13 个包。已实现：`database`/`storage`（P1A-2，含 rate-limit P1A-8、迁移 CLI）、`auth`（P1A-3 + P1A-9 QQ SMTP）、`domain`（workspace P1A-4、权限矩阵 P1A-5、usage P1A-7、research-object P1B-2、协作/审批/发布域 P1C/P1D、sandbox P1E）、`config`/`observability`（P1A-6/8）、`sdf-schema`（P1B-1，additionalProperties 宽容债务 0.2.0 收紧）、`diff`（P1B-5 九类确定性 diff）、`versioning`（P1B-4 manifest/patch）、`identity`（P1B-6 public-id/uuid7）、`ai-gateway`（P1D-1 统一路由 + 调用日志）；仍占位：`search`、`ui`。
+- `infra/`：`compose` 已含 `docker-compose.dev.yml` 开发栈、`docker-compose.monitor.yml` 监控栈、`docker-compose.prod.yml` 生产栈（P1A-9，data_net/app_net 分段，已部署云上）；`migrations` 已含迁移 1–20（prisma 格式，含 rollback.sql；20 = sandbox_jobs 幂等规整版，19 = author_affiliation，18 = publish_state，17 = appeals，16 = ai_reviews，15 = agent_tasks，7 = research_object + sdf_documents + sdf_nodes）；沙箱表原始 SQL 留存于 `packages/database/migrations/`（13/14，已标 DEPRECATED，勿再手工执行）；`nginx` 已含 `portainer.conf` + `openscience.conf`（均部署云上，/admin basic_auth）；`scripts/deploy.sh` + `backup.sh`（P1A-9）；`sandbox/` 已含沙箱基础镜像 Dockerfile + 构建/测试脚本 + README（P1E-3，Python 3.11-slim + 科学计算库 + 非 root）。
 - 常用命令：`npx pnpm@9.15.0 install`、`npx pnpm@9.15.0 build`、`npx pnpm@9.15.0 typecheck`、`npx pnpm@9.15.0 lint`（ESLint 9 全仓检查 + `scripts/verify-workspace.mjs` 结构校验）。
 - API：`npx pnpm@9.15.0 api`（Fastify 起 127.0.0.1:3001）；邀请码 CLI：`node scripts/invite.mjs create|list|revoke`（或 `npx pnpm@9.15.0 invite ...`）；配额 seed CLI：`node scripts/seed-quota.mjs --dry-run|--confirm`（P1A-7 占位值幂等 upsert，数值集中 `packages/domain/src/usage/seed-data.ts`）。
-- 卫生审计：`npx pnpm@9.15.0 audit:knip`（未用文件/导出/依赖）、`audit:dep`（dependency-cruiser：循环依赖/跨包深引用/orphan 告警）、`audit:dup`（jscpd 重复代码）、`audit:deps`（syncpack 版本一致性）、`docs:lint`（markdownlint 文档门禁）。
+- 卫生审计：`npx pnpm@9.15.0 audit:knip`（未用文件/导出/依赖）、`audit:dep`（dependency-cruiser：循环依赖/跨包深引用/orphan 告警）、`audit:dup`（jscpd 重复代码）、`audit:deps`（syncpack 版本一致性）、`docs:lint`（markdownlint 文档门禁）、`audit:docs-sync`（`scripts/docs/check-docs-sync.mjs`：索引路径存在性 + 文档反向登记 + AGENTS 迁移数一致性，已挂入 lint 与 CI）。
 - 开发栈：`npx pnpm@9.15.0 stack:up|stack:down|stack:ps|stack:logs`（postgres/redis/minio，仅 127.0.0.1）；测试：`npx pnpm@9.15.0 test`（单测）、`npx pnpm@9.15.0 test:integration`（起栈+集成测试）。
 - 数据库迁移：`node packages/database/dist/migrate-cli.js deploy|status|reset-dev`（reset-dev 生产禁用；迁移归 `infra/migrations/`，每个迁移附 rollback.sql）。
 - 构建产物忽略：`dist/`、`.next/`、`*.tsbuildinfo`。
@@ -41,6 +42,7 @@ OpenScience：AI 时代科研基础设施平台（Research Object / SDF / 预印
 | 决策记录 | `docs/decisions/` | `ADR-NNN-<主题>.md`（NNN 递增） |
 | 进度日志 | `docs/progress.md` | 单文件，新条目置顶 |
 | 交接 handoff | `docs/handoff/` | `YYYY-MM-DD-<主题>-handoff.md`（阶段边界/换 agent/换电脑时写） |
+| 安全文档 | `docs/security/` | `<主题>.md`（威胁模型/检查清单/声明，P1E-8 起） |
 
 登记例外：`docs/OpenScience_Kimi_Development_Spec.md`（需求基线，原地保留）。
 

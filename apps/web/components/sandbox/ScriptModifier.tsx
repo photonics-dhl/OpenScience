@@ -7,7 +7,6 @@ import { modifyScript, createSandboxJob } from '@/lib/api';
 interface Props {
   jobId: string;
   workspaceId: string;
-  currentScript: string;
   onClose: () => void;
   onModifyComplete: (newJobId: string) => void;
 }
@@ -15,7 +14,6 @@ interface Props {
 export default function ScriptModifier({
   jobId,
   workspaceId,
-  currentScript,
   onClose,
   onModifyComplete,
 }: Props) {
@@ -46,8 +44,8 @@ export default function ScriptModifier({
     setError(null);
 
     try {
-      // 创建新 sandbox job
-      const result = await createSandboxJob({ script: preview.newScript });
+      // 创建新 sandbox job（workspaceId 由 props 传入，对齐 POST /sandbox-jobs body）
+      const result = await createSandboxJob({ workspaceId, script: preview.newScript });
       onModifyComplete(result.job.id);
       onClose();
     } catch (err) {

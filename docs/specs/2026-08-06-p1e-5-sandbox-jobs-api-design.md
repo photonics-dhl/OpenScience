@@ -35,6 +35,7 @@
 ### 2.1 POST /sandbox-jobs (提交任务)
 
 **请求**:
+
 ```typescript
 POST /sandbox-jobs
 Headers:
@@ -53,6 +54,7 @@ Body:
 ```
 
 **响应**:
+
 ```typescript
 {
   "id": "uuid",
@@ -69,6 +71,7 @@ Body:
 ### 2.2 GET /sandbox-jobs/:id (查询任务)
 
 **响应**:
+
 ```typescript
 {
   "id": "uuid",
@@ -97,7 +100,8 @@ Body:
 ### 2.3 GET /sandbox-jobs/:id/artifacts/:artifactId (下载产物)
 
 **响应**:
-```
+
+```http
 Content-Type: image/png
 Content-Disposition: attachment; filename="plot.png"
 Content-Length: 12345
@@ -186,7 +190,8 @@ const RATE_LIMIT_ROUTES = [
 ```
 
 **错误响应**:
-```
+
+```http
 429 Too Many Requests
 Retry-After: 42
 X-RateLimit-Limit: 10
@@ -201,6 +206,7 @@ X-RateLimit-Reset: 1720234567
 ### 5.1 sandbox_job.completed 事件
 
 **事件结构**:
+
 ```typescript
 {
   "event": "sandbox_job.completed",
@@ -219,6 +225,7 @@ X-RateLimit-Reset: 1720234567
 ### 5.2 事件投递机制
 
 **简化方案（MVP）**: 任务完成后同步调用回调
+
 ```typescript
 async function onJobCompleted(job: SandboxJob) {
   // 1. 更新任务状态
@@ -290,7 +297,7 @@ await auditLog.write({
 
 ## 7. 数据流
 
-```
+```text
 ┌────────┐  POST /sandbox-jobs   ┌─────────────┐
 │ Client │ ───────────────────▶ │ API         │
 └────────┘  (Idempotency-Key)    │ /sandbox-   │

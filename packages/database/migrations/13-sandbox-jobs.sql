@@ -1,3 +1,5 @@
+-- DEPRECATED → 已规整为 infra/migrations/20260806020000_sandbox_jobs/migration.sql（2026-08-06）
+-- 本文件不再由任何工具链应用，仅留存为历史快照，勿再手工执行。
 -- Migration 13: Sandbox Jobs
 -- Created: 2026-08-06
 -- Purpose: P1E-4 Sandbox Controller data model (Spec §10.3, §15)

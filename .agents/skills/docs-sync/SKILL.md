@@ -46,7 +46,7 @@ description: Use when creating/modifying project files, changing task status, sw
 
 ## 自动化边界
 
-当前为半自动：同步动作由 agent 按本清单执行；`check-docs-sync.mjs` 与 CI gate 在 Phase 1A 后补。脚本只能验证存在性/一致性/泄露样式，不能替代人工判断该写什么。
+半自动 + 门禁：同步动作由 agent 按本清单执行；`scripts/docs/check-docs-sync.mjs` 已实现（2026-08-06，检查索引路径存在性 / docs 目录反向登记 / AGENTS 迁移数一致性）并挂入根 `lint` 第三段（CI 自动覆盖），独立入口 `npx pnpm@9.15.0 audit:docs-sync`。脚本只能验证存在性/一致性/泄露样式，不能替代人工判断该写什么。
 
 ## Red Flags
 

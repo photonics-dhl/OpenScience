@@ -1,5 +1,21 @@
 # OpenScience (XGS) 进度日志
 
+## 2026-08-06（补）— 交接复查：AGENTS.md 补更、迁移 20 规整、docs-sync 门禁脚本落地
+
+### 背景
+MVP 交接复查发现两类文档失真：AGENTS.md 自 P1B-2（1e859df，08-03）后未随收口更新；索引存在幻影条目。
+
+### 修复内容
+- **AGENTS.md 补更至 MVP 现状**：apps（api 50+ 端点全谱系 / web 四块前端 / agent-worker / science-worker）、packages（13 包，search/ui 仍占位）、infra（迁移 1–20、sandbox 镜像）、Overview 加 MVP 状态、文档分类表补 docs/security/。
+- **沙箱迁移规整**：`packages/database/migrations/13,14`（游离于 prisma 流程外）→ 收编为 `infra/migrations/20260806020000_sandbox_jobs/`（幂等写法：IF NOT EXISTS / duplicate_object 捕获 / seed 存在性守卫，云上无论是否手工建过表均可安全 deploy）+ rollback.sql；原文件标 DEPRECATED 留存。
+- **docs-sync 门禁脚本**：`scripts/docs/check-docs-sync.mjs`（检查 A 索引路径存在性 / B docs 目录反向登记 / C AGENTS 迁移数一致性），挂入根 `lint` 第三段（CI 自动覆盖）+ `audit:docs-sync` 独立入口。
+- **脚本首跑检出并已修**：P1D-7 handoff 幻影登记（索引删行）、docs/proposals/ 目录缺失（补 .gitkeep）、AGENTS 迁移数漂移（1–19 → 1–20）。
+- **P1E 补充索引勘误**：p1e-1/2 设计文档条目为幻影（已标注移除）；迁移路径登记错误（已改为实际路径）。
+
+### 遗留
+- 迁移 20 尚未云上 deploy（云上写操作需用户确认）。
+- 若云上曾手工执行过 13/14 号 SQL，`migrate deploy` 因幂等写法可直接通过。
+
 ## 2026-08-06 — 🎉 MVP (Phase 0-1E) 全部完成！P1E-8 沙箱威胁模型与逃逸基线测试交付
 
 ### ✅ Phase 1E 轻量科学可视化完成

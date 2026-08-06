@@ -1,5 +1,8 @@
 # Project Index 更新 - P1E Phase 完成
 
+> **已合并（2026-08-06）**：以下内容已登记入 `project_index.md`，本文件留存为快照，后续以 `project_index.md` 为准。
+> 勘误：原列出的 `p1e-1-visualization-planner-design.md` 与 `p1e-2-ast-policy-design.md` 实际不存在（P1E-1/2 无独立设计文档），已从登记中移除。
+
 补充到 `project_index.md` 的 P1D-9 和 P1E 相关条目：
 
 ## docs/specs/ 补充
@@ -7,8 +10,8 @@
 | 路径 | 用途 | 状态 |
 |---|---|---|
 | `docs/specs/2026-08-04-p1d-9-public-page-design.md` | P1D-9 公开 RO 页面设计（design gate 已确认：五决策，代码已实现 2026-08-05） | 活文档 |
-| `docs/specs/2026-08-06-p1e-1-visualization-planner-design.md` | P1E-1 Visualization Planner 子 Agent 设计（design gate 已确认，代码已实现 2026-08-06） | 活文档 |
-| `docs/specs/2026-08-06-p1e-2-ast-policy-design.md` | P1E-2 Python AST 策略检查器设计（design gate 已确认，代码已实现 2026-08-06） | 活文档 |
+| ~~`docs/specs/2026-08-06-p1e-1-visualization-planner-design.md`~~ | 登记错误：文件不存在（P1E-1 无独立设计文档） | ❌ 已移除 |
+| ~~`docs/specs/2026-08-06-p1e-2-ast-policy-design.md`~~ | 登记错误：文件不存在（P1E-2 无独立设计文档） | ❌ 已移除 |
 | `docs/specs/2026-08-06-p1e-4-sandbox-controller-design.md` | P1E-4 Sandbox Controller 与隔离 Docker 网络设计（design gate 已确认，代码已实现 2026-08-06） | 活文档 |
 | `docs/specs/2026-08-06-p1e-5-sandbox-jobs-api-design.md` | P1E-5 Sandbox Jobs API、配额限流与完成事件设计（design gate 已确认，代码已实现 2026-08-06） | 活文档 |
 | `docs/specs/2026-08-06-p1e-6-visualization-display-design.md` | P1E-6 可视化结果展示与 IndexedDB 临时存储设计（design gate 已确认，代码已实现 2026-08-06） | 活文档 |
@@ -74,7 +77,7 @@
 
 ## infra/migrations/ 补充（P1E-5）
 
-- `20260806000000_sandbox_jobs`: sandbox_jobs + sandbox_artifacts 表 + SandboxJobStatus 枚举（pending/running/completed/failed/timeout）
+- ~~`20260806000000_sandbox_jobs`~~ 登记错误：实际文件为 `packages/database/migrations/13-sandbox-jobs.sql` + `14-sandbox-quota-policies.sql`（sandbox_jobs + sandbox_artifacts 表 + SandboxJobStatus 枚举）。**注意**：这两个 SQL 游离在 prisma migrate 流程（`infra/migrations/`）之外，需规整（2026-08-06 交接核实）。
 
 ## .claude/plans/ 新增
 

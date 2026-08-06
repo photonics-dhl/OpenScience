@@ -189,7 +189,6 @@ export default function VisualizationResult({ jobId, workspaceId, onClose }: Pro
         <ScriptModifier
           jobId={currentJobId}
           workspaceId={workspaceId}
-          currentScript={job.script}
           onClose={() => setShowModifier(false)}
           onModifyComplete={(newJobId) => {
             setShowModifier(false);

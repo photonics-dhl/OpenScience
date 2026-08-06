@@ -61,13 +61,11 @@ export class SandboxController {
       const waitPromise = container.wait();
 
       let result: { StatusCode: number };
-      let timedOut = false;
 
       try {
         result = await Promise.race([waitPromise, timeoutPromise]);
       } catch (error) {
         if (error instanceof Error && error.message === 'TIMEOUT') {
-          timedOut = true;
           // Kill container on timeout
           await container.kill().catch(() => {});
           return {
@@ -167,7 +165,7 @@ export class SandboxController {
       }
 
       return output;
-    } catch (error) {
+    } catch {
       return '';
     }
   }

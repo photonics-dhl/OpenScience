@@ -33,7 +33,7 @@
 
 ### 2.1 组件分层
 
-```
+```text
 ┌─────────────────────────────────────────────────────┐
 │ apps/web/components/sandbox/VisualizationResult.tsx │  React 组件
 │  - 展示图片、脚本、参数表、环境信息                 │
@@ -67,7 +67,7 @@
 
 ### 2.2 数据流
 
-```
+```text
 用户提问 "如何理解近场衰减？"
     ↓
 Hermes 生成 Python 脚本 + 调用 POST /sandbox-jobs
@@ -138,7 +138,7 @@ interface CachedJobResult {
 ### 3.3 TTL 策略
 
 - **默认 TTL**: 24 小时（86400000 ms）
-- **清理时机**: 
+- **清理时机**:
   1. 页面加载时调用 `deleteExpired()`
   2. 每次 `putJobResult` 时触发清理（防止无限增长）
 - **超过存储配额**:

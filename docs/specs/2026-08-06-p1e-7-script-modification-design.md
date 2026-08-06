@@ -20,7 +20,7 @@
 
 ### 1.1 用户场景
 
-```
+```text
 用户在 VisualizationResult 组件中查看已完成的可视化结果
   ↓
 点击"修改脚本"按钮，弹出 ScriptModifier 对话框

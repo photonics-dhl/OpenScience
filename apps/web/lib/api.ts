@@ -410,6 +410,7 @@ export async function modifyScript(
 }
 
 export interface CreateSandboxJobRequest {
+  workspaceId: string;
   script: string;
 }
 
