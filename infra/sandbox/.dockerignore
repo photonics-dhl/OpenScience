@@ -1,0 +1,19 @@
+# P1E-3: Docker build ignore patterns
+
+# Exclude test outputs
+test-output/
+*.png
+*.jpg
+*.pdf
+
+# Exclude documentation
+README.md
+*.md
+
+# Exclude test scripts
+test-*.sh
+*.test.py
+
+# Exclude git
+.git/
+.gitkeep
