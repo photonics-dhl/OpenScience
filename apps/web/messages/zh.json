@@ -228,5 +228,24 @@
       "reviews": "评审与讨论",
       "citations": "引用与相关工作"
     }
+  },
+  "landing": {
+    "nav": {
+      "explore": "探索",
+      "create": "创建",
+      "about": "关于",
+      "login": "登录"
+    },
+    "hero": {
+      "title": "让研究，持续演化。",
+      "subtitle": "将论文、数据、代码与讨论，组织为开放、可验证、可演化的研究对象。",
+      "ctaExplore": "探索研究",
+      "ctaCreate": "创建研究对象",
+      "hermesStatus": "Hermes 正在解析"
+    },
+    "latest": {
+      "title": "最新研究",
+      "empty": "暂无公开研究，敬请期待。"
+    }
   }
 }

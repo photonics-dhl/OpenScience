@@ -1,5 +1,12 @@
 # OpenScience (XGS) 进度日志
 
+## 2026-08-06（补十五）— 前端 P0/P1 Task 7.5 审查收口
+
+- **状态**：Task 7.5 落地页 `landing.*` i18n 命名空间已实现，task-master 7.5 已置 `done`；reviewer clean，当前等待用户确认 commit。
+- **实现**：`apps/web/messages/zh.json` 与 `apps/web/messages/en.json` 新增对称 11 键，覆盖 nav、hero、Hermes 状态与 latest 空态；未改组件或依赖。
+- **验证**：focused i18n 2/2、web 全套 43/43、JSON 语义检查、`git diff --check` 通过；reviewer 独立确认两份消息叶键集合均为 201 且无无关改动。
+- **下一步**：用户确认后提交 `feat(web): landing i18n messages`，再进入 Task 7.6 SiteHeader。
+
 ## 2026-08-06（补十四）— 前端 P0/P1 Task 7.4 审查收口
 
 - **状态**：Task 7.4 `shadcn/ui` 底座已实现并提交，任务 reviewer 双审通过；task-master 7.4 已置 `done`。

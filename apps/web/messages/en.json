@@ -228,5 +228,24 @@
       "reviews": "Reviews & Discussions",
       "citations": "Citations & Related Work"
     }
+  },
+  "landing": {
+    "nav": {
+      "explore": "Explore",
+      "create": "Create",
+      "about": "About",
+      "login": "Log in"
+    },
+    "hero": {
+      "title": "Let research keep evolving.",
+      "subtitle": "Bring papers, data, code, and discussion together as open, verifiable, evolving research objects.",
+      "ctaExplore": "Explore research",
+      "ctaCreate": "Create research object",
+      "hermesStatus": "Hermes is parsing"
+    },
+    "latest": {
+      "title": "Latest research",
+      "empty": "No public research yet. Stay tuned."
+    }
   }
 }

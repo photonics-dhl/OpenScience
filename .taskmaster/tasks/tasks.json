@@ -955,7 +955,7 @@
             "id": 5,
             "title": "落地页 i18n 文案 landing.* 命名空间",
             "description": "messages/zh.json 与 en.json 加 landing 命名空间（nav 四项/hero title+subtitle+双 CTA+hermesStatus/latest.title+empty），zh/en 对称。对应 plan Task 5。",
-            "status": "pending",
+            "status": "done",
             "dependencies": [
               "7.4"
             ],
@@ -963,7 +963,7 @@
             "details": "",
             "testStrategy": "现有 i18n 键对称门禁自动覆盖，vitest 过",
             "parentId": "7",
-            "updatedAt": "2026-08-06T13:34:42.917Z"
+            "updatedAt": "2026-08-06T15:11:18.029Z"
           },
           {
             "id": 6,
@@ -1050,12 +1050,12 @@
             "updatedAt": "2026-08-06T13:34:42.917Z"
           }
         ],
-        "updatedAt": "2026-08-06T14:58:01.528Z"
+        "updatedAt": "2026-08-06T15:11:18.029Z"
       }
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-08-06T14:58:01.529Z",
+      "lastModified": "2026-08-06T15:11:18.029Z",
       "taskCount": 7,
       "completedCount": 6,
       "tags": [
