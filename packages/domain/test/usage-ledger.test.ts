@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { createFakePrisma } from './helpers/fakes';
-import { getBalance, recordEntry, UsageError } from '../src/usage/ledger';
+import { getBalance, getUsageByPeriod, recordEntry, UsageError } from '../src/usage/ledger';
 
 describe('usage_ledger 只追加记账', () => {
   it('授予 + 消费符号约定：SUM(delta) 为当前余额', async () => {
@@ -50,5 +50,18 @@ describe('usage_ledger 只追加记账', () => {
   it('空账本余额为 0', async () => {
     const { prisma } = createFakePrisma();
     expect(await getBalance({ prisma }, { userId: 'u-nobody', resource: 'ai_credit' })).toBe(0);
+  });
+
+  it('getUsageByPeriod：按 period 过滤聚合（P1A-7 预留，挂接前先锁行为）', async () => {
+    const { prisma } = createFakePrisma();
+    await prisma.$transaction(async (tx) => {
+      await recordEntry(tx, { userId: 'u1', resource: 'ai_credit', delta: 500, kind: 'monthly_grant', period: '2026-08' });
+      await recordEntry(tx, { userId: 'u1', resource: 'ai_credit', delta: 300, kind: 'monthly_grant', period: '2026-07' });
+      await recordEntry(tx, { userId: 'u1', resource: 'ai_credit', delta: -30, kind: 'consume', reason: 'SDF 提取' });
+    });
+    // 指定 period：只聚合该期流水
+    expect(await getUsageByPeriod({ prisma }, { userId: 'u1', resource: 'ai_credit', period: '2026-08' })).toBe(500);
+    // 不带 period：退化为全量聚合（同 getBalance）
+    expect(await getUsageByPeriod({ prisma }, { userId: 'u1', resource: 'ai_credit' })).toBe(770);
   });
 });

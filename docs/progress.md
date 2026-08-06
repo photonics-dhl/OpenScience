@@ -1,5 +1,22 @@
 # OpenScience (XGS) 进度日志
 
+## 2026-08-06（补六）— 卫生审计清零：syncpack 版本对齐 + knip 杂项修复
+
+- **audit:deps（syncpack）**：science-worker 的 @types/node/typescript 版本与全仓对齐；14 个包 vitest `2` → `^2` 统一（syncpack fix），`audit:deps` 转绿。
+- **audit:knip 清零**（除豁免项）：ioredis 补进 apps/api devDependencies（原靠 hoist）；`@types/diff`（diff@9 自带类型）与 `fake-indexeddb`（无引用）移除；agent-worker 测试跨包深引用改为 `@openscience/domain/test-helpers` 子路径导出（domain package.json 新增 exports 映射，已确认全仓无其他深引用）；5 个 unused exports/types 分诊——`WARNING_CATEGORIES`/`getUsageByPeriod`/`UsagePeriodQuery` 为计划内预留（补了 usage-ledger period 过滤测试 + fake 保真度），`PolicyViolation`/`HighRiskState` 去 export。
+- **audit:dep（depcruise）**：6 个 orphan 均为占位/待接线文件（search/ui/sandbox-controller/sandbox-cache 等），warn 级设计内。
+- **audit:dup（jscpd）**：7.79%（178 clones），信息级无门禁，不在本轮范围。
+- knip 剩余 3 个 unused files = 待接线的沙箱前端组件（ScriptModifier/VisualizationResult/sandbox-cache），留给前端设计阶段接线，属预期。
+
+## 2026-08-06（补五）— 技术债清零：schema 模型补齐、产物落库闭环、完成事件接通知
+
+### 修复内容
+- **schema.prisma 漂移**：补 `model SandboxJob`/`SandboxArtifact`/`enum SandboxJobStatus`（严格对齐迁移 20/21 DDL；memberships 复合 FK 因列序与 prisma 唯一键相反，仅 DB 侧强制不建模）；User/Workspace 加反向关系。仅 `prisma generate`，不走 migrate dev/db push。`sandbox-jobs.integration.test.ts` 的 `prisma.sandboxJob` 自此名正言顺。
+- **产物落库闭环（P1E-6 缺口）**：P1E-4 设计文档只定义了 SandboxArtifact 数据模型（§4.2），未规定产出机制。采用最简约定：脚本写产物到容器 `/output`（tmpfs 挂载 + `OUTPUT_DIR` env），执行完 `getArchive` 拉 tar → 自研最小 ustar 解包（`artifact-collector.ts`，无新依赖）→ `createSandboxArtifacts` 落库（先于状态写回）。收集失败返回空不炸作业。
+- **完成事件接通知（P1C-9）**：`onSandboxJobCompleted` 同事务补 `notification.create`（type `sandbox_job.completed`，payload 带 status 区分成功/失败/超时，对齐 §16 点分风格）。
+- **auth fake 补 level**：`fakes.ts` user.create 默认 `level: 'free'`，CurrentUser.level 单测有真实值。
+- **单测新增 15 例**（job-runner 8 + artifact-collector 7，全 mock 接缝，不依赖 Docker）。
+
 ## 2026-08-06（补四）— 迁移 19/20/21 云上 deploy 完成（生产库已验证）
 
 - 容器内 `migrate deploy` 成功：迁移 20（sandbox_jobs）+ 21（sandbox_job_context + users.level）应用完成，并顺带补上此前漏 deploy 的 19（author_affiliation）——生产库此前实际停在 18。

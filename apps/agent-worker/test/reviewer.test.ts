@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { AiGateway, Provider } from '@openscience/ai-gateway';
-import { aiWarningGuard, reviewAnalyzeHandler } from '../src/reviewer';
-import { createFakePrisma, seedUser } from '../../packages/domain/test/helpers/fakes';
+import { aiWarningGuard, reviewAnalyzeHandler, WARNING_CATEGORIES } from '../src/reviewer';
+import { createFakePrisma, seedUser } from '@openscience/domain/test-helpers';
 
 const WARNINGS = [
   {
@@ -24,8 +24,9 @@ describe('aiWarningGuard（§11.2 结构化报告 + §9.3 Schema 校验）', () 
   });
 
   it('七类枚举完整（§11.2）', () => {
-    const cats = ['method_logic', 'statistical', 'figure_spec', 'data_consistency', 'reproducibility', 'missing_citation', 'overreach'];
-    expect(aiWarningGuard(cats.map((category) => ({ id: 'w', category, evidence: 'e', uncertainty: 'u', suggestion: 's' })))).toBe(true);
+    // 直接消费 WARNING_CATEGORIES（消除重复字面量，防枚举漂移）
+    expect(aiWarningGuard(WARNING_CATEGORIES.map((category) => ({ id: 'w', category, evidence: 'e', uncertainty: 'u', suggestion: 's' })))).toBe(true);
+    expect(WARNING_CATEGORIES).toHaveLength(7);
   });
 });
 

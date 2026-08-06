@@ -4,16 +4,19 @@ import {
   claimNextPendingSandboxJob,
   updateSandboxJobStatus,
   onSandboxJobCompleted,
+  createSandboxArtifacts,
+  type NewSandboxArtifact,
   type SandboxJob,
   type SandboxJobResult,
   type SandboxJobStatus,
 } from '@openscience/domain';
 import { SandboxController, type SandboxResult } from './sandbox-controller.js';
 
-/** 一次执行的终态结果（状态 + 写回 result JSONB 的内容）。 */
+/** 一次执行的终态结果（状态 + 写回 result JSONB 的内容 + 收集到的产物）。 */
 export interface JobExecution {
   status: SandboxJobStatus;
   result: SandboxJobResult;
+  artifacts: NewSandboxArtifact[];
 }
 
 /**
@@ -27,7 +30,7 @@ export interface ScienceWorkerDeps {
   markJobFailed: (job: SandboxJob, message: string) => Promise<void>;
 }
 
-/** SandboxResult → 作业终态映射（timeout 优先于 success/failed）。 */
+/** SandboxResult → 作业终态映射（timeout 优先于 success/failed；产物透传）。 */
 export function mapSandboxResult(raw: SandboxResult, runtimeSeconds: number): JobExecution {
   const status: SandboxJobStatus = raw.timeout ? 'timeout' : raw.success ? 'completed' : 'failed';
   return {
@@ -39,6 +42,7 @@ export function mapSandboxResult(raw: SandboxResult, runtimeSeconds: number): Jo
       runtimeSeconds,
       truncated: (raw.output ?? '').includes('(output truncated'),
     },
+    artifacts: raw.artifacts ?? [],
   };
 }
 
@@ -73,7 +77,11 @@ async function main(): Promise<void> {
   const deps: ScienceWorkerDeps = {
     claimNextJob: () => claimNextPendingSandboxJob({ prisma }),
     executeScript: (script) => controller.execute(script),
-    finalizeJob: async (job, { status, result }) => {
+    finalizeJob: async (job, { status, result, artifacts }) => {
+      // 产物先于状态写回：GET 作业详情时 artifacts 与终态一致可见
+      if (artifacts.length > 0) {
+        await createSandboxArtifacts({ prisma }, job.id, artifacts);
+      }
       await updateSandboxJobStatus({ prisma }, { jobId: job.id, status, result });
       await onSandboxJobCompleted({ prisma }, { job: { ...job, status }, result, actorId: job.userId });
     },

@@ -30,8 +30,8 @@
   "devDependencies": {
     "@openscience/agent-worker": "workspace:^",
     "@types/archiver": "^8.0.0",
-    "@types/diff": "^8.0.0",
     "@types/node": "20.14.10",
-    "vitest": "2"
+    "ioredis": "5",
+    "vitest": "^2"
   }
 }

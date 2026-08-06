@@ -176,8 +176,9 @@ export { validateExportPackage, type ExportValidationResult } from './export/val
 export { buildManifest, type BuildManifestInput } from './export/manifest';
 export {
   createSandboxJob, getSandboxJob, getSandboxArtifact, listSandboxJobsByWorkspace, updateSandboxJobStatus,
-  claimNextPendingSandboxJob,
+  claimNextPendingSandboxJob, createSandboxArtifacts,
   type SandboxJob, type SandboxJobStatus, type SandboxJobResult, type CreateSandboxJobInput,
+  type SandboxJobContext, type NewSandboxArtifact,
 } from './sandbox/jobs';
 export {
   checkPythonTaskQuota, SandboxQuotaError,

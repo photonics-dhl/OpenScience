@@ -82,6 +82,22 @@ describe('science-worker 执行链 pollOnce（mock 接缝，不依赖 Docker/DB�
     expect(execution.result.exitCode).toBe(2);
   });
 
+  it('执行产物透传给 finalizeJob', async () => {
+    const artifact = { filename: 'plot.png', mimeType: 'image/png', size: 3, data: Buffer.from([1, 2, 3]) };
+    const deps = makeDeps({
+      executeScript: jest.fn<ScienceWorkerDeps['executeScript']>().mockResolvedValue({
+        success: true,
+        output: 'ok',
+        exitCode: 0,
+        artifacts: [artifact],
+      }),
+    });
+    await pollOnce(deps);
+    const [, execution] = deps.finalizeJob.mock.calls[0];
+    expect(execution.artifacts).toHaveLength(1);
+    expect(execution.artifacts[0].filename).toBe('plot.png');
+  });
+
   it('执行器抛异常 → markJobFailed 兜底，返回 true 不抛出', async () => {
     const deps = makeDeps({
       executeScript: jest.fn<ScienceWorkerDeps['executeScript']>().mockRejectedValue(new Error('docker daemon down')),

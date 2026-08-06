@@ -55,6 +55,7 @@ model User {
   authorEntries            Author[]              @relation("AuthorEntry")
   contributions            Contribution[]        @relation("ContributionUser")
   notifications            Notification[]
+  sandboxJobs              SandboxJob[]
   agentSessions            AgentSession[]
   agentApprovals           ToolApproval[]        @relation("ToolApprover")
   appealsFiled             Appeal[]              @relation("Appellant")
@@ -151,6 +152,7 @@ model Workspace {
   invitations     WorkspaceInvitation[]
   researchObjects ResearchObject[]
   artifacts       Artifact[]
+  sandboxJobs     SandboxJob[]
 
   @@map("workspaces")
 }
@@ -239,6 +241,57 @@ model UsageLedger {
   @@index([workspaceId, resource, createdAt])
   @@index([resource, period])
   @@map("usage_ledger")
+}
+
+// --- P1E-4/5：Python 沙箱作业（§10.3/§15；DDL 事实源 = 迁移 20/21，本模型为补齐登记，勿 migrate dev/db push）---
+// 注：迁移 20 的复合外键 (user_id, workspace_id) → memberships 仅 DB 侧强制，此处不建 prisma relation
+//（memberships 复合唯一键顺序为 (workspaceId, userId)，与 FK 列序相反，避免漂移不建模）。
+
+enum SandboxJobStatus {
+  pending
+  running
+  completed
+  failed
+  timeout
+  cancelled
+}
+
+model SandboxJob {
+  id             String              @id @default(uuid()) @db.Uuid
+  workspaceId    String              @map("workspace_id") @db.Uuid
+  userId         String              @map("user_id") @db.Uuid
+  script         String
+  status         SandboxJobStatus    @default(pending)
+  result         Json?
+  context        Json?
+  runtimeSeconds Int?                @map("runtime_seconds")
+  createdAt      DateTime            @default(now()) @map("created_at")
+  completedAt    DateTime?           @map("completed_at")
+
+  workspace Workspace         @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  user      User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  artifacts SandboxArtifact[]
+
+  @@index([workspaceId], map: "idx_sandbox_jobs_workspace")
+  @@index([userId], map: "idx_sandbox_jobs_user")
+  @@index([status], map: "idx_sandbox_jobs_status")
+  @@index([createdAt], map: "idx_sandbox_jobs_created")
+  @@map("sandbox_jobs")
+}
+
+model SandboxArtifact {
+  id        String   @id @default(uuid()) @db.Uuid
+  jobId     String   @map("job_id") @db.Uuid
+  filename  String
+  mimeType  String   @map("mime_type")
+  size      Int
+  data      Bytes
+  createdAt DateTime @default(now()) @map("created_at")
+
+  job SandboxJob @relation(fields: [jobId], references: [id], onDelete: Cascade)
+
+  @@index([jobId], map: "idx_sandbox_artifacts_job")
+  @@map("sandbox_artifacts")
 }
 
 // --- P1B-2：Research Object / SDF 数据实体（§15、§4.1、§4.2、§5.1）---

@@ -1,4 +1,5 @@
 import Docker from 'dockerode';
+import { collectArtifacts, type CollectedArtifact } from './artifact-collector.js';
 
 export interface SandboxConfig {
   image: string;
@@ -16,6 +17,8 @@ export interface SandboxResult {
   error?: string;
   exitCode?: number;
   timeout?: boolean;
+  /** 容器 /output 目录收集到的产物文件（P1E-6；超时被杀时不收集）。 */
+  artifacts?: CollectedArtifact[];
 }
 
 export class SandboxController {
@@ -80,12 +83,16 @@ export class SandboxController {
       // Collect output
       const output = await this.collectOutput(container);
 
+      // Collect artifacts from /output（P1E-6 产物闭环：脚本约定写入 /output，执行完收集落库）
+      const artifacts = await collectArtifacts(container);
+
       return {
         success: result.StatusCode === 0,
         output: result.StatusCode === 0 ? output : undefined,
         error: result.StatusCode !== 0 ? output : undefined,
         exitCode: result.StatusCode,
-        timeout: false
+        timeout: false,
+        artifacts
       };
 
     } catch (error) {
@@ -113,7 +120,8 @@ export class SandboxController {
       // Environment (Spec §10.3 不注入数据库凭据)
       Env: [
         'PYTHONUNBUFFERED=1',
-        'MPLBACKEND=Agg'  // Force non-interactive backend
+        'MPLBACKEND=Agg',  // Force non-interactive backend
+        'OUTPUT_DIR=/output'  // P1E-6 产物目录约定（脚本据此写产物）
       ],
 
       HostConfig: {
@@ -130,7 +138,8 @@ export class SandboxController {
         // Filesystem isolation (Spec §10.3 只读根 FS + 临时目录)
         ReadonlyRootfs: true,
         Tmpfs: {
-          '/tmp': `size=${this.config.tmpfsSize},noexec`  // 100MB, no execute
+          '/tmp': `size=${this.config.tmpfsSize},noexec`,  // 100MB, no execute
+          '/output': `size=${this.config.tmpfsSize}`       // P1E-6 产物目录（约定：脚本写产物到此）
         },
 
         // Network isolation (Spec §10.3 禁止公网/内网/云元数据访问)

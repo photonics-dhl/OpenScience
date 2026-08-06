@@ -28,7 +28,7 @@ export function createFakePrisma(): { prisma: PrismaClient; db: FakeDb } {
           err.code = 'P2002';
           throw err;
         }
-        const row = { id: nextId(), createdAt: new Date(), updatedAt: new Date(), ...data };
+        const row = { id: nextId(), level: 'free', createdAt: new Date(), updatedAt: new Date(), ...data };
         db.users.push(row);
         return row;
       },

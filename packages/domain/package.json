@@ -4,6 +4,10 @@
   "version": "0.0.0",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
+  "exports": {
+    ".": { "types": "./dist/index.d.ts", "default": "./dist/index.js" },
+    "./test-helpers": { "types": "./test/helpers/fakes.ts", "default": "./test/helpers/fakes.ts" }
+  },
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "typecheck": "tsc -p tsconfig.json --noEmit",
@@ -23,6 +27,6 @@
   },
   "devDependencies": {
     "@types/node": "20.14.10",
-    "vitest": "2"
+    "vitest": "^2"
   }
 }

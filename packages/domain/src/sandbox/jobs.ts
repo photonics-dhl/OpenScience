@@ -196,6 +196,37 @@ export async function updateSandboxJobStatus(
 }
 
 /**
+ * P1E-6: 批量写入作业产物（science-worker 执行收集后落库）。
+ */
+export interface NewSandboxArtifact {
+  filename: string;
+  mimeType: string;
+  size: number;
+  data: Buffer;
+}
+
+export async function createSandboxArtifacts(
+  deps: { prisma: PrismaClient },
+  jobId: string,
+  artifacts: NewSandboxArtifact[],
+): Promise<void> {
+  for (const artifact of artifacts) {
+    await deps.prisma.$executeRaw`
+      INSERT INTO sandbox_artifacts (id, job_id, filename, mime_type, size, data, created_at)
+      VALUES (
+        ${randomUUID()}::uuid,
+        ${jobId}::uuid,
+        ${artifact.filename},
+        ${artifact.mimeType},
+        ${artifact.size},
+        ${artifact.data},
+        NOW()
+      )
+    `;
+  }
+}
+
+/**
  * P1E-5: 获取 artifact 二进制数据。
  * 2026-08-06：加 jobId 过滤——artifact 必须属于指定 job，防同 workspace 成员跨 job 猜测下载。
  */

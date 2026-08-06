@@ -2,7 +2,8 @@
 
 export type CollabTab = 'issues' | 'prs' | 'branches' | 'fork' | 'authors' | 'notifications';
 
-export interface HighRiskState {
+/** 高危操作确认框状态（仅 CollabState 内部字段类型）。 */
+interface HighRiskState {
   open: boolean;
   prId: string | null;
   reasons: string[];

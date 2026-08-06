@@ -9,7 +9,8 @@ import { fileURLToPath } from 'url';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
-export interface PolicyViolation {
+/** 单条策略违规（ASTCheckResult.violations 的元素类型；仅内部结构，外部消费走 ASTCheckResult）。 */
+interface PolicyViolation {
   line: number;
   message: string;
   code: string;

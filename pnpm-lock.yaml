@@ -73,7 +73,7 @@ importers:
         specifier: 20.14.10
         version: 20.14.10
       vitest:
-        specifier: '2'
+        specifier: ^2
         version: 2.1.9(@types/node@20.14.10)
 
   apps/api:
@@ -133,14 +133,14 @@ importers:
       '@types/archiver':
         specifier: ^8.0.0
         version: 8.0.0
-      '@types/diff':
-        specifier: ^8.0.0
-        version: 8.0.0
       '@types/node':
         specifier: 20.14.10
         version: 20.14.10
+      ioredis:
+        specifier: '5'
+        version: 5.11.1
       vitest:
-        specifier: '2'
+        specifier: ^2
         version: 2.1.9(@types/node@20.14.10)
 
   apps/sandbox-controller: {}
@@ -164,7 +164,7 @@ importers:
         specifier: ^4.0.1
         version: 4.0.1
       '@types/node':
-        specifier: ^20.10.0
+        specifier: 20.14.10
         version: 20.14.10
       jest:
         specifier: ^29.7.0
@@ -173,7 +173,7 @@ importers:
         specifier: ^29.1.1
         version: 29.4.12(@babel/core@7.29.7)(@jest/transform@29.7.0)(@jest/types@29.6.3)(babel-jest@29.7.0(@babel/core@7.29.7))(jest-util@29.7.0)(jest@29.7.0(@types/node@20.14.10))(typescript@5.5.4)
       typescript:
-        specifier: ^5.3.3
+        specifier: 5.5.4
         version: 5.5.4
 
   apps/web:
@@ -206,11 +206,8 @@ importers:
       '@types/react-dom':
         specifier: 18.3.0
         version: 18.3.0
-      fake-indexeddb:
-        specifier: ^6.2.5
-        version: 6.2.5
       vitest:
-        specifier: '2'
+        specifier: ^2
         version: 2.1.9(@types/node@20.14.10)
 
   packages/ai-gateway:
@@ -223,7 +220,7 @@ importers:
         specifier: 20.14.10
         version: 20.14.10
       vitest:
-        specifier: '2'
+        specifier: ^2
         version: 2.1.9(@types/node@20.14.10)
 
   packages/auth:
@@ -251,7 +248,7 @@ importers:
         specifier: ^6
         version: 6.4.24
       vitest:
-        specifier: '2'
+        specifier: ^2
         version: 2.1.9(@types/node@20.14.10)
 
   packages/config:
@@ -260,7 +257,7 @@ importers:
         specifier: 20.14.10
         version: 20.14.10
       vitest:
-        specifier: '2'
+        specifier: ^2
         version: 2.1.9(@types/node@20.14.10)
 
   packages/database:
@@ -285,7 +282,7 @@ importers:
         specifier: 5.22.0
         version: 5.22.0
       vitest:
-        specifier: '2'
+        specifier: ^2
         version: 2.1.9(@types/node@20.14.10)
 
   packages/diff:
@@ -298,7 +295,7 @@ importers:
         specifier: 20.14.10
         version: 20.14.10
       vitest:
-        specifier: '2'
+        specifier: ^2
         version: 2.1.9(@types/node@20.14.10)
 
   packages/domain:
@@ -338,7 +335,7 @@ importers:
         specifier: 20.14.10
         version: 20.14.10
       vitest:
-        specifier: '2'
+        specifier: ^2
         version: 2.1.9(@types/node@20.14.10)
 
   packages/identity:
@@ -347,7 +344,7 @@ importers:
         specifier: 20.14.10
         version: 20.14.10
       vitest:
-        specifier: '2'
+        specifier: ^2
         version: 2.1.9(@types/node@20.14.10)
 
   packages/observability:
@@ -363,7 +360,7 @@ importers:
         specifier: 20.14.10
         version: 20.14.10
       vitest:
-        specifier: '2'
+        specifier: ^2
         version: 2.1.9(@types/node@20.14.10)
 
   packages/sdf-schema:
@@ -391,7 +388,7 @@ importers:
         specifier: 20.14.10
         version: 20.14.10
       vitest:
-        specifier: '2'
+        specifier: ^2
         version: 2.1.9(@types/node@20.14.10)
 
   packages/ui: {}
@@ -406,7 +403,7 @@ importers:
         specifier: 20.14.10
         version: 20.14.10
       vitest:
-        specifier: '2'
+        specifier: ^2
         version: 2.1.9(@types/node@20.14.10)
 
 packages:
@@ -2622,10 +2619,6 @@ packages:
   '@types/debug@4.1.13':
     resolution: {integrity: sha512-KSVgmQmzMwPlmtljOomayoR89W4FynCAi3E8PPs7vmDVPe84hT+vGPKkJfThkmXs0x0jAaa9U8uW8bbfyS2fWw==}
 
-  '@types/diff@8.0.0':
-    resolution: {integrity: sha512-o7jqJM04gfaYrdCecCVMbZhNdG6T1MHg/oQoRFdERLV+4d+V7FijhiEAbFu0Usww84Yijk9yH58U4Jk4HbtzZw==}
-    deprecated: This is a stub types definition. diff provides its own type definitions, so you do not need this installed.
-
   '@types/docker-modem@3.0.6':
     resolution: {integrity: sha512-yKpAGEuKRSS8wwx0joknWxsmLha78wNMe9R2S3UNsVOkZded8UqOrV8KoeDXoXsjndxwyF3eIhyClGbO1SEhEg==}
 
@@ -3857,10 +3850,6 @@ packages:
     resolution: {integrity: sha512-GDhU9ntwuKyGXdZBUgTIe+vXnWj0fppUEtMDL0+idd5Sta8TGpHssn/eusA9mrPr9qNDym6SxAYZjNvCn/9RBg==}
     engines: {node: '>= 10.17.0'}
     hasBin: true
-
-  fake-indexeddb@6.2.5:
-    resolution: {integrity: sha512-CGnyrvbhPlWYMngksqrSSUT1BAVP49dZocrHuK0SvtR0D5TMs5wP0o3j7jexDJW01KSadjBp1M/71o/KR3nD1w==}
-    engines: {node: '>=18'}
 
   fast-decode-uri-component@1.0.1:
     resolution: {integrity: sha512-WKgKWg5eUxvRZGwW8FvfbaH7AXSh2cL+3j5fMGzUMCxWBJ3dV3a7Wz8y2f/uQ0e3B6WmodD3oS54jTQ9HVTIIg==}
@@ -9270,10 +9259,6 @@ snapshots:
     dependencies:
       '@types/ms': 2.1.0
 
-  '@types/diff@8.0.0':
-    dependencies:
-      diff: 9.0.0
-
   '@types/docker-modem@3.0.6':
     dependencies:
       '@types/node': 20.14.10
@@ -10681,8 +10666,6 @@ snapshots:
       '@types/yauzl': 2.10.3
     transitivePeerDependencies:
       - supports-color
-
-  fake-indexeddb@6.2.5: {}
 
   fast-decode-uri-component@1.0.1: {}
 

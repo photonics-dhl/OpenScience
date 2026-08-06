@@ -236,7 +236,8 @@ export function createFakePrisma(): { prisma: PrismaClient; db: FakeDb } {
           (r) =>
             (where.userId === undefined || r.userId === where.userId) &&
             (where.workspaceId === undefined || r.workspaceId === where.workspaceId) &&
-            (where.resource === undefined || r.resource === where.resource),
+            (where.resource === undefined || r.resource === where.resource) &&
+            (where.period === undefined || r.period === where.period),
         );
         const sum = rows.reduce((acc, r) => acc + Number(r[_sum.delta ? 'delta' : '']), 0);
         return { _sum: { delta: sum } };
