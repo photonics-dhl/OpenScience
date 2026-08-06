@@ -409,4 +409,39 @@ export async function modifyScript(
   return res.json();
 }
 
+export interface CreateSandboxJobRequest {
+  script: string;
+}
+
+export interface CreateSandboxJobResponse {
+  job: {
+    id: string;
+    status: string;
+    createdAt: string;
+  };
+}
+
+/** 创建新的沙箱作业（P1E-5 POST /sandbox-jobs） */
+export async function createSandboxJob(
+  request: CreateSandboxJobRequest
+): Promise<CreateSandboxJobResponse> {
+  const res = await fetch('/api/sandbox-jobs', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(request),
+    credentials: 'include',
+  });
+
+  if (!res.ok) {
+    const error = await res.json().catch(() => ({ error: { message: 'Network error' } }));
+    throw new ApiClientError(
+      error.error?.code || 'CREATE_FAILED',
+      error.error?.message || 'Create sandbox job failed',
+      res.status
+    );
+  }
+
+  return res.json();
+}
+
 

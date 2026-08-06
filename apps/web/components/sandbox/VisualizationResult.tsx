@@ -13,6 +13,7 @@ interface Props {
 }
 
 export default function VisualizationResult({ jobId, workspaceId, onClose }: Props) {
+  const [currentJobId, setCurrentJobId] = useState(jobId);
   const [job, setJob] = useState<SandboxJobView | null>(null);
   const [artifacts, setArtifacts] = useState<Array<{ id: string; blob: Blob; filename: string }>>([]);
   const [loading, setLoading] = useState(true);
@@ -22,8 +23,11 @@ export default function VisualizationResult({ jobId, workspaceId, onClose }: Pro
   useEffect(() => {
     async function loadJob() {
       try {
+        setLoading(true);
+        setError(null);
+
         // 1. 尝试从 IndexedDB 读取
-        const cached = await getJobResult(jobId);
+        const cached = await getJobResult(currentJobId);
         if (cached) {
           setJob({
             id: cached.jobId,
@@ -45,7 +49,7 @@ export default function VisualizationResult({ jobId, workspaceId, onClose }: Pro
         }
 
         // 2. 轮询任务直到完成
-        const completedJob = await pollSandboxJob(jobId);
+        const completedJob = await pollSandboxJob(currentJobId);
         setJob(completedJob);
 
         // 3. 下载所有产物
@@ -53,7 +57,7 @@ export default function VisualizationResult({ jobId, workspaceId, onClose }: Pro
           completedJob.artifacts.map(async (a) => ({
             id: a.id,
             filename: a.filename,
-            blob: await downloadArtifact(jobId, a.id),
+            blob: await downloadArtifact(currentJobId, a.id),
           }))
         );
         setArtifacts(blobs);
@@ -91,7 +95,7 @@ export default function VisualizationResult({ jobId, workspaceId, onClose }: Pro
     }
 
     loadJob();
-  }, [jobId, workspaceId]);
+  }, [currentJobId, workspaceId]);
 
   function handleDownload(blob: Blob, filename: string) {
     const url = URL.createObjectURL(blob);
@@ -183,14 +187,14 @@ export default function VisualizationResult({ jobId, workspaceId, onClose }: Pro
       {/* 修改对话框 */}
       {showModifier && (
         <ScriptModifier
-          jobId={jobId}
+          jobId={currentJobId}
           workspaceId={workspaceId}
           currentScript={job.script}
           onClose={() => setShowModifier(false)}
-          onModifyComplete={(newScript) => {
+          onModifyComplete={(newJobId) => {
             setShowModifier(false);
-            // TODO: P1E-7 增强 - 自动创建新 job 并展示新结果
-            alert('修改成功！新脚本:\n\n' + newScript.slice(0, 200) + '...\n\n刷新页面以查看完整更新。');
+            // 切换到新任务
+            setCurrentJobId(newJobId);
           }}
         />
       )}

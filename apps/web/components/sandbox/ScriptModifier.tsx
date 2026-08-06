@@ -2,14 +2,14 @@
 
 import { useState } from 'react';
 import type { ModifyScriptResponse } from '@/lib/api';
-import { modifyScript } from '@/lib/api';
+import { modifyScript, createSandboxJob } from '@/lib/api';
 
 interface Props {
   jobId: string;
   workspaceId: string;
   currentScript: string;
   onClose: () => void;
-  onModifyComplete: (newScript: string) => void;
+  onModifyComplete: (newJobId: string) => void;
 }
 
 export default function ScriptModifier({
@@ -22,6 +22,7 @@ export default function ScriptModifier({
   const [prompt, setPrompt] = useState('');
   const [preview, setPreview] = useState<ModifyScriptResponse | null>(null);
   const [loading, setLoading] = useState(false);
+  const [executing, setExecuting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   async function handleGeneratePreview() {
@@ -39,10 +40,21 @@ export default function ScriptModifier({
     }
   }
 
-  function handleExecute() {
+  async function handleExecute() {
     if (!preview) return;
-    onModifyComplete(preview.newScript);
-    onClose();
+    setExecuting(true);
+    setError(null);
+
+    try {
+      // 创建新 sandbox job
+      const result = await createSandboxJob({ script: preview.newScript });
+      onModifyComplete(result.job.id);
+      onClose();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : '执行失败');
+    } finally {
+      setExecuting(false);
+    }
   }
 
   return (
@@ -65,11 +77,11 @@ export default function ScriptModifier({
               onChange={(e) => setPrompt(e.target.value)}
               placeholder="例如: 将曲线颜色改为红色, 增加标题, 调整 x 轴标签"
               rows={3}
-              disabled={loading}
+              disabled={loading || executing}
             />
             <button
               onClick={handleGeneratePreview}
-              disabled={!prompt.trim() || loading}
+              disabled={!prompt.trim() || loading || executing}
               className="preview-btn"
             >
               {loading ? '生成中...' : '生成预览'}
@@ -108,9 +120,10 @@ export default function ScriptModifier({
               {preview.policyResult.allowed && (
                 <button
                   onClick={handleExecute}
+                  disabled={executing}
                   className="execute-btn"
                 >
-                  确认执行
+                  {executing ? '创建新任务中...' : '确认执行'}
                 </button>
               )}
             </div>
