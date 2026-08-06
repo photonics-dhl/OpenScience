@@ -13,6 +13,11 @@
 | `.gitignore` | git 忽略规则（含 .env） | 活文档 |
 | `minimax_proxy.py` | MiniMax API 本地代理（上个 session 产物） | 活文档 |
 | `package.json` / `pnpm-workspace.yaml` / `pnpm-lock.yaml` | pnpm workspace 根配置与锁文件（P1A-1）；`task-master-ai` 已入 root devDependencies（2026-07-31，VS Code MCP 直连用） | 活文档 |
+| `apps/web/components.json` | shadcn/ui `new-york` 配置（Task 7.4，cssVariables + 本地 aliases） | 活文档 |
+| `apps/web/components/ui/{button,card,badge,skeleton}.tsx` | shadcn/ui 基础组件（Task 7.4，token 化默认表面） | 活文档 |
+| `apps/web/lib/utils.ts` | `cn` class merge 工具（Task 7.4） | 活文档 |
+| `apps/web/test/ui-components.test.ts` | Task 7.4 storyless server-rendering assertion（43 web tests total after review fix） | 活文档 |
+| `apps/web/vitest.config.ts` | Vitest Node 环境与 `@/` alias 解析（Task 7.4 review fix） | 活文档 |
 | `tsconfig.base.json` / `eslint.config.cjs` / `.npmrc` | 共享 TypeScript/ESLint/pnpm 基线（P1A-1）；eslint.config.cjs 已升级为 ESLint 9 flat config（2026-07-28） | 活文档 |
 | `knip.json` / `.dependency-cruiser.cjs` / `.markdownlint-cli2.jsonc` | 卫生工具配置：knip（未用代码）、dependency-cruiser（依赖边界）、markdownlint（文档门禁）（2026-07-28 落地） | 活文档 |
 | `scripts/verify-workspace.mjs` | Monorepo 结构校验脚本（lint 的第二段，`verify:workspace` 入口） | 活文档 |

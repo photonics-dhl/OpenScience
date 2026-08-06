@@ -1,5 +1,26 @@
 # OpenScience (XGS) 进度日志
 
+## 2026-08-06（补十四）— 前端 P0/P1 Task 7.4 审查收口
+
+- **状态**：Task 7.4 `shadcn/ui` 底座已实现并提交，任务 reviewer 双审通过；task-master 7.4 已置 `done`。
+- **实现**：新增 `components.json`、`lib/utils.ts`、`button`/`card`/`badge`/`skeleton` 四组件、`ui-components.test.ts`；`CardTitle` ref 类型与 `<h3>` 对齐，Vitest 增加 `@/` alias。
+- **验证**：web focused render 1/1、web 全套 43/43、web typecheck/build、全仓 lint（含 workspace/docs-sync）、`audit:docs-sync`、`docs:lint`（146 文件 0 issues）全部通过。为清除基线遗留的 MD012，修复 handoff 工作副本末尾多余空行。
+- **审查**：初审 2 个 Important 已在 fix round 1 修复，scoped re-review 无新 Critical/Important；提交为 `feat(web): add shadcn ui base components`。
+
+## 2026-08-06（补十三）— Task 7.4 Round 1 review findings fixed
+
+- **修复**：`CardTitle` ref 类型改为 `HTMLHeadingElement`；新增 `apps/web/test/ui-components.test.ts`，用 `react-dom/server` 实际渲染并断言 Button/Card/Badge/Skeleton；Vitest 增加既有 `@/` alias 解析，Skeleton 补显式 React runtime import。
+- **验证**：web `typecheck` 通过；web `test` 9 files / 43 tests 通过；web `build` 通过；`audit:docs-sync` = `DOCS_SYNC_OK`；`git diff --check` 通过。
+- **报告**：fix wave 已追加到 `.superpowers/sdd/2026-08-06-frontend-p0-p1-plan/task-4-report.md`；无 commit。
+
+## 2026-08-06（补十二）— 前端 P0/P1 Task 7.4 shadcn/ui 底座完成
+
+- **实现**：`apps/web` 新增 shadcn/ui `new-york` 配置、`cn` 工具，以及 `button`、`card`、`badge`、`skeleton` 四个基础组件；新增五个 runtime dependencies，未修改现有页面行为或 CSS。
+- **Token 约束**：组件默认表面使用现有 `paper-bg`/`canvas-bg`/`ink`/`hero-*`/`accent-*`/`border-subtle` Tailwind v4 token；未引入 slate/zinc 默认色或 preflight。
+- **验证**：`npx pnpm@9.15.0 typecheck`、`test`、`build` 全部通过；web 单测 42/42；`git diff --check` 通过。构建仅有既存 next-intl cache warnings。
+- **测试说明**：未新增 storyless render assertion，因为当前 `apps/web/vitest.config.ts` 是 Node 环境且未提供 DOM renderer；未引入新测试框架。详细报告：`.superpowers/sdd/2026-08-06-frontend-p0-p1-plan/task-4-report.md`。
+- **下一步**：controller review 未提交 diff。
+
 ## 2026-08-06（补十一）— 前端 P0/P1 开工：7.1–7.3 完成（SDD 模式），交接 GPT 续作
 
 - **执行模式**：subagent-driven-development——每 Task 派 implementer + reviewer 双审，审查干净后问用户 commit；台账 `.superpowers/sdd/2026-08-06-frontend-p0-p1-plan/progress.md`。

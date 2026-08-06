@@ -941,7 +941,7 @@
             "id": 4,
             "title": "shadcn/ui 底座（button/card/badge/skeleton）",
             "description": "apps/web 装 cva/clsx/tailwind-merge/@radix-ui/react-slot/lucide-react；手写 lib/utils.ts cn 与 components.json；copy-in 四组件并把默认色改引用 @theme token。对应 plan Task 4。",
-            "status": "pending",
+            "status": "done",
             "dependencies": [
               "7.3"
             ],
@@ -949,7 +949,7 @@
             "details": "",
             "testStrategy": "typecheck + test + build 全绿",
             "parentId": "7",
-            "updatedAt": "2026-08-06T13:34:42.917Z"
+            "updatedAt": "2026-08-06T14:58:01.528Z"
           },
           {
             "id": 5,
@@ -1050,12 +1050,12 @@
             "updatedAt": "2026-08-06T13:34:42.917Z"
           }
         ],
-        "updatedAt": "2026-08-06T14:11:17.750Z"
+        "updatedAt": "2026-08-06T14:58:01.528Z"
       }
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-08-06T14:11:17.750Z",
+      "lastModified": "2026-08-06T14:58:01.529Z",
       "taskCount": 7,
       "completedCount": 6,
       "tags": [
