@@ -22,6 +22,7 @@ type MockedDeps = { [K in keyof ScienceWorkerDeps]: jest.MockedFunction<ScienceW
 function makeDeps(overrides: Partial<ScienceWorkerDeps> = {}): MockedDeps {
   return {
     claimNextJob: jest.fn<ScienceWorkerDeps['claimNextJob']>().mockResolvedValue(makeJob()),
+    checkScript: jest.fn<ScienceWorkerDeps['checkScript']>().mockResolvedValue({ valid: true, violations: [] }),
     executeScript: jest.fn<ScienceWorkerDeps['executeScript']>().mockResolvedValue({ success: true, output: '1\n', exitCode: 0 }),
     finalizeJob: jest.fn<ScienceWorkerDeps['finalizeJob']>().mockResolvedValue(undefined),
     markJobFailed: jest.fn<ScienceWorkerDeps['markJobFailed']>().mockResolvedValue(undefined),
@@ -96,6 +97,23 @@ describe('science-worker 执行链 pollOnce（mock 接缝，不依赖 Docker/DB�
     const [, execution] = deps.finalizeJob.mock.calls[0];
     expect(execution.artifacts).toHaveLength(1);
     expect(execution.artifacts[0].filename).toBe('plot.png');
+  });
+
+  it('策略违规 → 不执行，直接 markJobFailed（P1E-2 静态检查接入执行链）', async () => {
+    const deps = makeDeps({
+      checkScript: jest.fn<ScienceWorkerDeps['checkScript']>().mockResolvedValue({
+        valid: false,
+        violations: [{ line: 1, message: '禁止导入模块: os', code: 'import os' }],
+      }),
+    });
+    const didWork = await pollOnce(deps);
+    expect(didWork).toBe(true);
+    expect(deps.executeScript).not.toHaveBeenCalled();
+    expect(deps.finalizeJob).not.toHaveBeenCalled();
+    expect(deps.markJobFailed).toHaveBeenCalledTimes(1);
+    const [, message] = deps.markJobFailed.mock.calls[0];
+    expect(message).toContain('策略违规');
+    expect(message).toContain('禁止导入模块: os');
   });
 
   it('执行器抛异常 → markJobFailed 兜底，返回 true 不抛出', async () => {

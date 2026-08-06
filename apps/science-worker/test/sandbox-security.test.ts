@@ -59,7 +59,10 @@ except Exception as e:
 import numpy as np
 try:
     # Try to allocate 2 GB (should fail with 1 GB limit)
+    # 修正：np.zeros 走 calloc 惰性零页，不写页就不占 RSS、永远不会触发 OOM；
+    # 必须实际写入（fill）把 2GB 提交进物理内存，cgroup 1GB 限制才会杀伤进程
     huge_array = np.zeros((256, 1024, 1024), dtype=np.float64)
+    huge_array.fill(1.0)
     print('FAIL: Memory limit not enforced')
 except MemoryError:
     print('PASS: Memory limit enforced')

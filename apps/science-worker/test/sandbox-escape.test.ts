@@ -104,8 +104,10 @@ except (PermissionError, OSError):
 import os
 
 # Test mknod (create device node)
+import stat
 try:
-    os.mknod('/tmp/devhack', 0o600 | os.stat.S_IFBLK, os.makedev(8, 1))
+    # 修正：S_IFBLK 等常量在 stat 模块，os.stat 是内置函数（原写法 AttributeError 在 try 外语义上未覆盖）
+    os.mknod('/tmp/devhack', 0o600 | stat.S_IFBLK, os.makedev(8, 1))
     print('FAIL: mknod allowed (device node created)')
 except (PermissionError, OSError):
     print('PASS: mknod blocked')

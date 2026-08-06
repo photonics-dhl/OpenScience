@@ -1,5 +1,13 @@
 # OpenScience (XGS) 进度日志
 
+## 2026-08-06（补七）— 测试链路修通：沙箱安全基线 19/19 + api 集成 104/104 云上全绿
+
+- **测试脚本修复**：science-worker `test:integration` 原为匹配不到测试的 jest 残骸（pnpm -r 遇错即停，api 套件从未被执行）；拆分后 Docker 用例走 test:integration、纯单测本地 29/29 首绿。
+- **沙箱安全基线 5 败修复**（P1E-8 门槛首跑）：pickle/动态导入/getattr 绕过 3 例根因=静态 AST 黑名单未接入执行链——补双层纵深（pollOnce 静态拒收 + 容器内运行时前言中和 os.system/pickle 族；实证 eval/exec/compile 不能中和，CPython import 机制依赖）；内存测试 payload 错（np.zeros 惰性零页不占 RSS，补 .fill(1.0) 真触发 OOM）；设备节点测试 `os.stat.S_IFBLK` 笔误改 `stat.S_IFBLK`。
+- **api 集成 3 败修复**：sandbox-jobs 测试字段名错（kind→type + 补 ownerId，该文件从未真正运行过）；research 断言过期（P1D-9 改 {research:{version}} 包装，测试没跟上）；配额 2 败根因=其他测试文件 afterAll `quotaPolicy.deleteMany()` 全表清理误杀迁移 20 seed 行（实现无错，测试改自建夹具+精确回收）。
+- **最终证据**：云上 `sandbox-(security|escape)` 19/19 过；api 集成 21 文件 104/104 过（无 skipped）。
+- **结构性隐患（已记 Memory）**：集成测试全表 cleanup 惯例会误杀任何 seed 依赖；P1D-9 未跑 research 测试说明集成套件缺 CI 强制门禁（需 Docker 环境）。
+
 ## 2026-08-06（补六）— 卫生审计清零：syncpack 版本对齐 + knip 杂项修复
 
 - **audit:deps（syncpack）**：science-worker 的 @types/node/typescript 版本与全仓对齐；14 个包 vitest `2` → `^2` 统一（syncpack fix），`audit:deps` 转绿。

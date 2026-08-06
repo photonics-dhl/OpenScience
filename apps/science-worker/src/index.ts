@@ -11,6 +11,7 @@ import {
   type SandboxJobStatus,
 } from '@openscience/domain';
 import { SandboxController, type SandboxResult } from './sandbox-controller.js';
+import { checkPythonAST, type ASTCheckResult } from './ast-checker.js';
 
 /** 一次执行的终态结果（状态 + 写回 result JSONB 的内容 + 收集到的产物）。 */
 export interface JobExecution {
@@ -25,6 +26,8 @@ export interface JobExecution {
  */
 export interface ScienceWorkerDeps {
   claimNextJob: () => Promise<SandboxJob | null>;
+  /** P1E-2 静态策略检查（AST 白/黑名单）；违规脚本不执行。 */
+  checkScript: (script: string) => Promise<ASTCheckResult>;
   executeScript: (script: string) => Promise<SandboxResult>;
   finalizeJob: (job: SandboxJob, execution: JobExecution) => Promise<void>;
   markJobFailed: (job: SandboxJob, message: string) => Promise<void>;
@@ -47,8 +50,8 @@ export function mapSandboxResult(raw: SandboxResult, runtimeSeconds: number): Jo
 }
 
 /**
- * P1E-4/5 执行链单步：认领一个 pending 作业 → 沙箱执行 → 写回状态/结果 + 完成事件。
- * 返回 false 表示无待执行作业（调用方退避）。执行异常兜底为 failed，不抛出。
+ * P1E-4/5 执行链单步：认领 → AST 策略检查（P1E-2）→ 沙箱执行 → 写回状态/结果 + 完成事件。
+ * 返回 false 表示无待执行作业（调用方退避）。策略违规与执行异常均兜底为 failed，不抛出。
  */
 export async function pollOnce(deps: ScienceWorkerDeps): Promise<boolean> {
   const job = await deps.claimNextJob();
@@ -56,6 +59,14 @@ export async function pollOnce(deps: ScienceWorkerDeps): Promise<boolean> {
 
   const startedAt = Date.now();
   try {
+    // P1E-2 静态策略检查：违规脚本不进沙箱，直接置 failed（纵深：运行时另有 RUNTIME_POLICY_PREAMBLE）
+    const policy = await deps.checkScript(job.script);
+    if (!policy.valid) {
+      const detail = policy.violations.map((v) => `L${v.line}: ${v.message}`).join('; ');
+      await deps.markJobFailed(job, `策略违规（未执行）: ${detail}`.slice(0, 1000));
+      return true;
+    }
+
     const raw = await deps.executeScript(job.script);
     const execution = mapSandboxResult(raw, Math.round((Date.now() - startedAt) / 1000));
     await deps.finalizeJob(job, execution);
@@ -76,6 +87,7 @@ async function main(): Promise<void> {
 
   const deps: ScienceWorkerDeps = {
     claimNextJob: () => claimNextPendingSandboxJob({ prisma }),
+    checkScript: (script) => checkPythonAST(script),
     executeScript: (script) => controller.execute(script),
     finalizeJob: async (job, { status, result, artifacts }) => {
       // 产物先于状态写回：GET 作业详情时 artifacts 与终态一致可见

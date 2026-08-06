@@ -37,7 +37,8 @@ beforeAll(async () => {
   const workspace = await prisma.workspace.create({
     data: {
       name: 'Sandbox Test Workspace',
-      kind: 'personal',
+      type: 'personal',
+      ownerId: testUserId,
     },
   });
   testWorkspaceId = workspace.id;
@@ -49,10 +50,25 @@ beforeAll(async () => {
       role: 'owner',
     },
   });
+
+  // 本测试依赖 user_level=free 的沙箱配额策略（3/月、并发 1、900s/月）。
+  // 迁移 20 的 seed 会被其他集成文件 afterAll 的 quotaPolicy.deleteMany() 全表清理抹掉
+  //（2026-08-06 云上实证：quota_policies 0 行 → resolvePolicy null → 配额永不触发），
+  // 故自建夹具，afterAll 按行精确回收。
+  for (const [resource, limitValue] of [
+    ['python_task_count', 3],
+    ['concurrent_tasks', 1],
+    ['python_runtime_seconds', 900],
+  ] as const) {
+    await prisma.quotaPolicy.create({
+      data: { scope: 'user_level', scopeKey: 'free', resource, limitValue },
+    });
+  }
 });
 
 afterAll(async () => {
-  // 清理测试数据
+  // 清理测试数据（含 beforeAll 自建的 free 档配额策略行）
+  await prisma.quotaPolicy.deleteMany({ where: { scope: 'user_level', scopeKey: 'free' } });
   await prisma.sandboxJob.deleteMany({ where: { workspaceId: testWorkspaceId } });
   await prisma.membership.deleteMany({ where: { workspaceId: testWorkspaceId } });
   await prisma.workspace.delete({ where: { id: testWorkspaceId } });

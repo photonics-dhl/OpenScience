@@ -1,6 +1,26 @@
 import Docker from 'dockerode';
 import { collectArtifacts, type CollectedArtifact } from './artifact-collector.js';
 
+/**
+ * P1E-8 运行时策略层（AST 静态检查之外的纵深防御）。
+ * 背景：check_ast.py 的静态黑名单可被 __import__/getattr/字符串拼接/反序列化绕过
+ * （sandbox-escape 基线 Test 13/15/16 实证）。本前言与用户脚本在同一 python -c 进程内
+ * 先行中和危险函数：os.system/popen/spawn/exec/fork/kill 族、pickle 序列化族。
+ * 设计约束（2026-08-06 实证）：不能中和 builtins eval/exec/compile 或 marshal——
+ * CPython import 机制（_compile_bytecode/exec_module/.pyc 读取）与 stdlib namedtuple
+ * 都调用它们，补丁会炸掉所有后续 import。补丁随容器销毁，无宿主副作用；
+ * subprocess.run 走 _posixsubprocess C 扩展（不经 os.fork/exec Python 包装），不受影响。
+ */
+const RUNTIME_POLICY_PREAMBLE = `import os as _o, pickle as _p
+def _blocked(*a, **k):
+    raise PermissionError('disabled by sandbox runtime policy')
+for _n in ('system', 'popen', 'spawnl', 'spawnlp', 'spawnlpe', 'spawnv', 'spawnvp', 'spawnvpe', 'execl', 'execlp', 'execlpe', 'execv', 'execvp', 'execvpe', 'fork', 'forkpty', 'kill', 'killpg'):
+    if hasattr(_o, _n):
+        setattr(_o, _n, _blocked)
+for _n in ('load', 'loads', 'dump', 'dumps'):
+    setattr(_p, _n, _blocked)
+del _o, _p, _n, _blocked`;
+
 export interface SandboxConfig {
   image: string;
   timeout: number;
@@ -112,7 +132,8 @@ export class SandboxController {
   private createContainerConfig(script: string): Docker.ContainerCreateOptions {
     return {
       Image: this.config.image,
-      Cmd: ['python3', '-c', script],
+      // P1E-8：运行时策略前言 + 用户脚本同进程执行（见 RUNTIME_POLICY_PREAMBLE 注释）
+      Cmd: ['python3', '-c', RUNTIME_POLICY_PREAMBLE + '\n' + script],
 
       // User: non-root (Spec §10.3 非 root)
       User: 'sandbox',  // UID 1000 from P1E-3 Dockerfile

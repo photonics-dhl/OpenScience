@@ -109,7 +109,8 @@ describe('P1B-6 /research 公开 URL + 标识（云上）', () => {
 
     const vView = await app.inject({ method: 'GET', url: `/research/${idResult.publicId}/v/1` });
     expect(vView.statusCode).toBe(200);
-    expect(vView.json().version.publicVersionId).toBe(`${idResult.publicId}-v1`);
+    // P1D-9（302163d）起响应聚合进 research 包装（§4.3 必显），version 为其子对象
+    expect(vView.json().research.version.publicVersionId).toBe(`${idResult.publicId}-v1`);
     void v1;
     await app.close();
   });
