@@ -1174,3 +1174,224 @@ body {
   color: #d32f2f;
 }
 
+/* ============================================================
+   P1E-7: Script Modifier Styles
+   ============================================================ */
+
+/* 对话框遮罩 */
+.script-modifier-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 1000;
+}
+
+/* 对话框主体 */
+.script-modifier {
+  background: white;
+  border-radius: 8px;
+  width: 90%;
+  max-width: 800px;
+  max-height: 90vh;
+  overflow: auto;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+.modifier-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.modifier-header h2 {
+  margin: 0;
+  font-size: 1.3em;
+}
+
+.close-btn {
+  background: none;
+  border: none;
+  font-size: 1.5em;
+  cursor: pointer;
+  color: var(--color-muted);
+  padding: 0;
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.close-btn:hover {
+  color: var(--color-text);
+}
+
+.modifier-body {
+  padding: 20px;
+}
+
+/* 修改意图输入 */
+.prompt-section {
+  margin-bottom: 20px;
+}
+
+.prompt-section label {
+  display: block;
+  margin-bottom: 8px;
+  font-weight: 600;
+}
+
+.prompt-section textarea {
+  width: 100%;
+  padding: 10px;
+  border: 1px solid var(--color-border);
+  border-radius: 4px;
+  font-family: inherit;
+  font-size: 0.95em;
+  resize: vertical;
+}
+
+.preview-btn,
+.execute-btn,
+.modify-btn {
+  padding: 10px 20px;
+  border: none;
+  border-radius: 4px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.preview-btn {
+  background: #2563eb;
+  color: white;
+  margin-top: 10px;
+}
+
+.preview-btn:hover:not(:disabled) {
+  background: #1e40af;
+}
+
+.preview-btn:disabled {
+  background: #9ca3af;
+  cursor: not-allowed;
+}
+
+/* 预览区域 */
+.preview-section {
+  margin-top: 16px;
+}
+
+/* 策略检查结果 */
+.policy-check {
+  padding: 12px;
+  border-radius: 4px;
+  margin-bottom: 16px;
+}
+
+.policy-check.allowed {
+  background: #d4edda;
+  border: 1px solid #c3e6cb;
+  color: #155724;
+}
+
+.policy-check.blocked {
+  background: #f8d7da;
+  border: 1px solid #f5c6cb;
+  color: #721c24;
+}
+
+.policy-check ul {
+  margin: 8px 0 0 0;
+  padding-left: 20px;
+}
+
+/* Diff 展示 */
+.diff-viewer {
+  background: #f8f9fa;
+  border: 1px solid var(--color-border);
+  border-radius: 4px;
+  padding: 16px;
+  margin-bottom: 16px;
+}
+
+.diff-viewer h3 {
+  margin-top: 0;
+  margin-bottom: 12px;
+  font-size: 1.1em;
+}
+
+.diff-viewer pre {
+  background: white;
+  padding: 12px;
+  border-radius: 4px;
+  overflow-x: auto;
+  font-size: 0.85em;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  word-break: break-all;
+  font-family: 'Courier New', Courier, monospace;
+}
+
+/* 执行按钮 */
+.execute-btn {
+  background: #16a34a;
+  color: white;
+  width: 100%;
+}
+
+.execute-btn:hover:not(:disabled) {
+  background: #15803d;
+}
+
+.execute-btn:disabled {
+  background: #9ca3af;
+  cursor: not-allowed;
+}
+
+/* 结果操作区 */
+.result-actions {
+  margin-top: 20px;
+  padding-top: 16px;
+  border-top: 1px solid var(--color-border);
+  text-align: center;
+}
+
+.modify-btn {
+  background: #2563eb;
+  color: white;
+}
+
+.modify-btn:hover {
+  background: #1e40af;
+}
+
+/* 移动端适配 */
+@media (max-width: 768px) {
+  .script-modifier {
+    width: 95%;
+    max-height: 95vh;
+  }
+
+  .modifier-header h2 {
+    font-size: 1.1em;
+  }
+
+  .prompt-section textarea {
+    font-size: 0.9em;
+  }
+
+  .diff-viewer pre {
+    font-size: 0.75em;
+  }
+}
+
+

@@ -374,4 +374,39 @@ export async function pollSandboxJob(jobId: string, maxWaitMs = 35000): Promise<
   throw new Error('任务轮询超时');
 }
 
+// ===== P1E-7：脚本修改与 diff 预览 =====
+
+export interface ModifyScriptRequest {
+  prompt: string;
+}
+
+export interface ModifyScriptResponse {
+  newScript: string;
+  diff: string;
+  policyResult: {
+    allowed: boolean;
+    violations: string[];
+  };
+}
+
+/** 生成修改后的脚本预览（带 diff 和策略检查） */
+export async function modifyScript(
+  jobId: string,
+  request: ModifyScriptRequest
+): Promise<ModifyScriptResponse> {
+  const res = await fetch(`/api/sandbox-jobs/${jobId}/modify`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(request),
+    credentials: 'include',
+  });
+
+  if (!res.ok) {
+    const error = await res.json().catch(() => ({ error: { message: 'Network error' } }));
+    throw new Error(error.error?.message || 'Modify script failed');
+  }
+
+  return res.json();
+}
+
 

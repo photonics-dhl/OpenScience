@@ -1,11 +1,14 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import type { PrismaClient } from '@prisma/client';
+import { createTwoFilesPatch } from 'diff';
 import {
   createSandboxJob,
   getSandboxJob,
   getSandboxArtifact,
   listSandboxJobsByWorkspace,
+  checkPythonScript,
+  modifyScriptStub,
   type SandboxJob,
 } from '@openscience/domain';
 import { checkPythonTaskQuota, SandboxQuotaError } from '@openscience/domain';
@@ -30,6 +33,10 @@ const artifactParams = z.object({
 const listQuerySchema = z.object({
   limit: z.coerce.number().int().min(1).max(100).optional(),
   offset: z.coerce.number().int().min(0).optional(),
+});
+
+const modifyJobSchema = z.object({
+  prompt: z.string().min(1).max(2000),
 });
 
 /**
@@ -134,6 +141,52 @@ export function registerSandboxJobsRoutes(app: FastifyInstance, deps: SandboxJob
           completedAt: job.completedAt?.toISOString() ?? null,
           artifacts: job.artifacts,
         },
+      });
+    },
+  );
+
+  // POST /sandbox-jobs/:jobId/modify - 生成修改预览（P1E-7）
+  app.post<{ Params: z.infer<typeof jobIdParams>; Body: z.infer<typeof modifyJobSchema> }>(
+    '/sandbox-jobs/:jobId/modify',
+    {
+      preHandler: [
+        // @ts-expect-error
+        app.authenticate,
+        // @ts-expect-error
+        app.checkWorkspaceAccess,
+      ],
+    },
+    async (req, reply) => {
+      const { jobId } = jobIdParams.parse(req.params);
+      const { prompt } = modifyJobSchema.parse(req.body);
+      const workspaceId = (req as any).workspaceId;
+
+      // 1. 获取原作业脚本
+      const job = await getSandboxJob(deps, jobId);
+      if (!job || job.workspaceId !== workspaceId) {
+        return reply.status(404).send({ error: { code: 'NOT_FOUND', message: '作业未找到' } });
+      }
+
+      // 2. 调用 stub AI 修改脚本 (TODO: P1D-2 替换为 Hermes Gateway)
+      const newScript = modifyScriptStub(job.script, prompt);
+
+      // 3. 计算 diff
+      const diffResult = createTwoFilesPatch(
+        'original.py',
+        'modified.py',
+        job.script,
+        newScript,
+        '',
+        '',
+      );
+
+      // 4. 策略检查 (TODO: P1E-3 替换为完整 AST 分析)
+      const policyResult = checkPythonScript(newScript);
+
+      return reply.send({
+        newScript,
+        diff: diffResult,
+        policyResult,
       });
     },
   );

@@ -183,3 +183,4 @@ export {
   PYTHON_TASK_COUNT_RESOURCE, PYTHON_RUNTIME_SECONDS_RESOURCE, CONCURRENT_TASKS_RESOURCE,
 } from './sandbox/quota';
 export { onSandboxJobCompleted } from './sandbox/events';
+export { checkPythonScript, modifyScriptStub, type PolicyCheckResult } from './sandbox';

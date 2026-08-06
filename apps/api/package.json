@@ -23,13 +23,15 @@
     "@openscience/observability": "workspace:^",
     "@openscience/storage": "workspace:^",
     "archiver": "^7",
+    "diff": "^9.0.0",
     "fastify": "5.10.0",
     "zod": "3"
   },
   "devDependencies": {
-    "@types/archiver": "^8.0.0",
-    "@types/node": "20.14.10",
     "@openscience/agent-worker": "workspace:^",
+    "@types/archiver": "^8.0.0",
+    "@types/diff": "^8.0.0",
+    "@types/node": "20.14.10",
     "vitest": "2"
   }
 }

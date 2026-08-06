@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import type { SandboxJobView } from '@/lib/api';
 import { downloadArtifact, pollSandboxJob } from '@/lib/api';
 import { getJobResult, putJobResult } from '@/lib/indexeddb/sandbox-cache';
+import ScriptModifier from './ScriptModifier';
 
 interface Props {
   jobId: string;
@@ -16,6 +17,7 @@ export default function VisualizationResult({ jobId, workspaceId, onClose }: Pro
   const [artifacts, setArtifacts] = useState<Array<{ id: string; blob: Blob; filename: string }>>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [showModifier, setShowModifier] = useState(false);
 
   useEffect(() => {
     async function loadJob() {
@@ -167,6 +169,30 @@ export default function VisualizationResult({ jobId, workspaceId, onClose }: Pro
           {job.result.stdout && <pre className="stdout">{job.result.stdout}</pre>}
           {job.result.stderr && <pre className="stderr">{job.result.stderr}</pre>}
         </details>
+      )}
+
+      {/* 底部操作区 */}
+      {!loading && job.status === 'completed' && (
+        <div className="result-actions">
+          <button onClick={() => setShowModifier(true)} className="modify-btn">
+            修改脚本
+          </button>
+        </div>
+      )}
+
+      {/* 修改对话框 */}
+      {showModifier && (
+        <ScriptModifier
+          jobId={jobId}
+          workspaceId={workspaceId}
+          currentScript={job.script}
+          onClose={() => setShowModifier(false)}
+          onModifyComplete={(newScript) => {
+            setShowModifier(false);
+            // TODO: P1E-7 增强 - 自动创建新 job 并展示新结果
+            alert('修改成功！新脚本:\n\n' + newScript.slice(0, 200) + '...\n\n刷新页面以查看完整更新。');
+          }}
+        />
       )}
     </div>
   );
