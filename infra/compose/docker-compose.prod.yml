@@ -85,7 +85,7 @@ services:
     working_dir: /opt/openscience/apps/web
     volumes:
       - /opt/openscience:/opt/openscience
-    command: ["npx", "pnpm@9.15.0", "--filter", "@openscience/web", "start"]
+    command: ["npm", "run", "start"]
     env_file:
       - /opt/openscience/.env.prod
     networks:

@@ -20,7 +20,7 @@ module.exports = [
     rules: { '@typescript-eslint/no-require-imports': 'off' },
   },
   {
-    files: ['scripts/**/*.mjs'],
+    files: ['scripts/**/*.mjs', 'apps/*/scripts/**/*.mjs'],
     // 运维脚本运行在 Node 上；手工声明所需全局量，避免仅为 console/process 引入 globals 依赖
     languageOptions: {
       globals: { console: 'readonly', process: 'readonly' },
