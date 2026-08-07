@@ -7,7 +7,7 @@
 |---|---|---|
 | `AGENTS.md` | 项目规则总入口（基线指引/分类规范/Memory/工具可迁移性/索引/安全红线） | 活文档 |
 | `project_index.md` | 本索引 | 活文档 |
-| `.mcp.json` | 项目级 MCP 配置（kimi-code/Cursor；含明文 MiniMax key）；2026-08-07 追加 `figma`（mcp-remote 桥接 `https://mcp.figma.com/mcp`，OAuth 授权，走本机 7890 代理，Task 10）+ `shadcn`（`npx shadcn@latest mcp` 组件注册表查询，无需 key）；2026-08-08 审计确认配置存在但当前 Codex 会话未加载 Figma/shadcn MCP | 活文档，**本机持有，已移出 git 跟踪**（2026-07-31） |
+| `.mcp.json` | 项目级 MCP 配置（kimi-code/Cursor；含明文 MiniMax key）；2026-08-08 精简为 10 个：保留 `semantic-scholar` 作为唯一学术检索，移除重复 `paper-search`；保留 `figma`（OAuth）、`shadcn`、`task-master-ai`、`github`、`mermaid`、`context7`、`tavily-search`、`memory`、`fetch`；重启 Codex 后启用 | 活文档，**本机持有，已移出 git 跟踪**（2026-07-31） |
 | `.vscode/mcp.json` | VS Code MCP 配置（task-master-ai 直连 node_modules 本地入口） | 活文档，**本机持有，不入库**（含 key） |
 | `.env` / `.env.example` | 密钥 / 密钥模板 | 只读，禁打印 |
 | `.gitignore` | git 忽略规则（含 .env） | 活文档 |

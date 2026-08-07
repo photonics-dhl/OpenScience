@@ -1,5 +1,11 @@
 # OpenScience (XGS) 进度日志
 
+## 2026-08-08（MCP 精简）— 保留产品工作流所需的 10 个 server，等待一次重启启用
+
+- **配置调整**：`.mcp.json` 从 11 个降至 10 个 server；移除与 `semantic-scholar` 重复的 `paper-search`，避免同类 academic MCP 重叠和上下文开销。
+- **保留能力**：`figma`（设计源/MCP）、`shadcn`（组件注册表）、`task-master-ai`（任务记录）、`github`（仓库协作）、`mermaid`（图表）、`context7`（技术文档）、`tavily-search`（网络检索）、`semantic-scholar`（学术检索）、`memory`（跨会话记忆）、`fetch`（REST/API 获取）。
+- **验证**：JSON 解析通过，`server_count=10`；未读取或打印任何密钥值。下一步为 Figma Professional OAuth 完成后重启 Codex，使配置一次性加载。
+
 ## 2026-08-08（工具审计）— docs-sync 与基础执行环境已验证
 
 - **docs-sync**：`npx pnpm@9.15.0 audit:docs-sync` → `DOCS_SYNC_OK`；工作区无未提交变更后开始审计。
