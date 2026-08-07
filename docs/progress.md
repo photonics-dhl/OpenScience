@@ -1,5 +1,12 @@
 # OpenScience (XGS) 进度日志
 
+## 2026-08-08 — 产品级网页设计方向 A 定稿，正式 spec 已写入
+
+- **用户确认**：采用 `Monumental Scholarly Intelligence` 作为完整产品设计基线；融合期刊策展层的编辑叙事与研究工作区效率，保留深色工作区/浅色 Public RO 双表面体系。
+- **产品闭环**：明确 invite-only 候补、邮箱绑定邀请码、Dashboard 首屏、Hermes 证据与不确定性、草稿/不可变版本、RO unique ID 演化、双重引用、社区 review、Live2D/Hermes 共用状态、Ultrafast Science 策展和宽松分层许可。
+- **正式 spec**：`docs/specs/2026-08-08-openscience-product-web-design.md`，定义信息架构、状态模型、媒体 provenance、响应式/无障碍、Figma 六屏交付与验收门槛；尚未修改业务代码。
+- **下一步**：请用户审阅正式 spec；通过后使用 `writing-plans` 拆分 Figma foundations、统一 RO workspace、Public RO/Explore、Editorial Curator、Hermes/Live2D 和质量验收计划。
+
 ## 2026-08-07（补七）— 一并 commit/push + Hero 重设计 v2：布局比例、视频融合、核心思想条，已上生产
 
 - **Commit/push**：用户确认后 Task 8+9 全部改动单笔提交 `15c939e`（feat(web): design system tokens + hero loop video & entrance motion）并推送 GitHub（Basic 头方案）。
