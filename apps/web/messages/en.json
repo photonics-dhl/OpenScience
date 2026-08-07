@@ -241,7 +241,13 @@
       "subtitle": "Bring papers, data, code, and discussion together as open, verifiable, evolving research objects.",
       "ctaExplore": "Explore research",
       "ctaCreate": "Create research object",
-      "hermesStatus": "Hermes is parsing"
+      "hermesStatus": "Hermes is parsing",
+      "pillar1Title": "Structured",
+      "pillar1Desc": "Papers, data, and code parsed into queryable SDF structures",
+      "pillar2Title": "Verifiable",
+      "pillar2Desc": "Experiments re-run in sandboxes — every claim is checkable",
+      "pillar3Title": "Self-evolving",
+      "pillar3Desc": "Hermes curates and reviews, so research keeps evolving"
     },
     "latest": {
       "title": "Latest research",

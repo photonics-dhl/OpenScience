@@ -241,7 +241,13 @@
       "subtitle": "将论文、数据、代码与讨论，组织为开放、可验证、可演化的研究对象。",
       "ctaExplore": "探索研究",
       "ctaCreate": "创建研究对象",
-      "hermesStatus": "Hermes 正在解析"
+      "hermesStatus": "Hermes 正在解析",
+      "pillar1Title": "结构化",
+      "pillar1Desc": "论文、数据、代码，解析为可查询的 SDF 结构",
+      "pillar2Title": "可验证",
+      "pillar2Desc": "沙箱中重跑实验，每个结论都可复核",
+      "pillar3Title": "自进化",
+      "pillar3Desc": "Hermes 持续组织与评审，让研究不断演化"
     },
     "latest": {
       "title": "最新研究",

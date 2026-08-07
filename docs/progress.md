@@ -1,5 +1,17 @@
 # OpenScience (XGS) 进度日志
 
+## 2026-08-07（补七）— 一并 commit/push + Hero 重设计 v2：布局比例、视频融合、核心思想条，已上生产
+
+- **Commit/push**：用户确认后 Task 8+9 全部改动单笔提交 `15c939e`（feat(web): design system tokens + hero loop video & entrance motion）并推送 GitHub（Basic 头方案）。
+- **设计工具**：`.mcp.json` 追加 `shadcn` MCP（组件注册表查询，无需 key，重启 session 生效）；`figma` MCP 仍待用户开 Professional Dev seat + 重启 OAuth。ui-expert-mcp/Playwright/ffmpeg 已具备。职能划分定论：设计工具全部装本机（author-time），服务器只做运行时——构建产物经 cloud-sync + 远端 build + compose restart 上生产，服务器不装任何设计工具。
+- **Hero 重设计 v2**（用户反馈：布局比例失调、视频与其他元素割裂、缺体现核心思想的文字元素）：
+  - **融合**：符号容器放大至 `h-[min(118vh,1360px)]`、`right-[-16%]`，mask 羽化加深（black 45%→74%），视频加 `contrast-[1.08] saturate-[1.06]` 压掉近黑底色（消除 screen 混合下的方形边界），符号背后加 accent 径向光晕（rgba(42,109,255,0.18) blur-2xl）把符号"渗"进背景。
+  - **核心思想条**：hero 底部新增三柱条——`01 结构化`（SDF 可查询结构）/`02 可验证`（沙箱重跑）/`03 自进化`（Hermes 评审演化），mono 序号 + display 标题 + muted 描述，顶部分隔细线；i18n 新 key `hero.pillar{1,2,3}{Title,Desc}`（zh/en）。
+  - **布局比例**：容器改两段式 flex-col——内容区 `flex-1 justify-center` 垂直居中，三柱条钉底。
+  - **坑**：三柱条初版 `absolute bottom-0` 被 LatestResearch 的 `-mt-24/-mt-28` 叠印遮盖（elementFromPoint 实测命中下一 section），改 in-flow + 容器 `pb-32/lg:pb-36` 让出叠印区。
+- **验证**：build/typecheck 绿；本地 3100 双视口截图迭代三轮（v1 方框边残留 → v2 CTA 碰撞 → v3 成立）；生产部署后实测：桌面 1440×900 与移动 390×844 截图符合预期，video 播放中（ro-loop.webm，t=5s）。
+- **下一步**：等用户确认 commit 本轮（Hero v2 + i18n + index）；Task 10 Figma 待 seat/OAuth；Task 11 全站收口。
+
 ## 2026-08-07（补六）— Task 9 动效层完成：Hero 循环视频 + CSS 进入动效，已上生产
 
 - **视频管线**：用户用 Gemini 按分镜 prompt 生成 `docs/user_ideas/generated_figures/video/video1.mp4`（1280×720/24fps/10s，figD1 六面板 Hermes 枢纽版）。本机 scoop 装 ffmpeg 9.0（一次性素材加工，非项目依赖）处理：首尾 1s xfade 叠化消循环接缝（原片末帧仍在亮态、直循有跳切）→ 中央 720² 裁切（顺带去掉右下角 Gemini ✦ 水印）→ 三产物入 `apps/web/public/hero/`：`ro-loop.webm`（VP9 crf34，715KB）/`ro-loop.mp4`（H.264 crf23 faststart 兜底，1.0MB）/`ro-loop-poster.webp`（首帧，31KB）。
