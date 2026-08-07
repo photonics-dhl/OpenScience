@@ -17,6 +17,12 @@
       "es2022"
     ],
     "allowJs": true,
+    "baseUrl": ".",
+    "paths": {
+      "@/*": [
+        "./*"
+      ]
+    },
     "incremental": true,
     "resolveJsonModule": true,
     "isolatedModules": true
@@ -25,6 +31,9 @@
     "next-env.d.ts",
     "app/**/*.ts",
     "app/**/*.tsx",
+    "components/**/*.ts",
+    "components/**/*.tsx",
+    "lib/**/*.ts",
     ".next/types/**/*.ts"
   ],
   "exclude": [

@@ -983,7 +983,7 @@
             "id": 7,
             "title": "EvolvingRoSymbol 核心符号组件（两版变体）",
             "description": "components/landing/evolving-ro-symbol.tsx：六面楔形=SDF 六节点（problem/insight/method/results/limitations/reproducibility），中心开放缺口，三层描边辉光（filter 区域 ±35%），历史轮廓 1.06/1.12 倍低透明，蓝色轨迹一次分支 merge + 单暖橙 diff 节点；variant=sculptural|interface；动效仅 opacity/transform，reduced-motion 全静态，aria-hidden。测试断言 6 data-facet/1 data-diff-node/aria-hidden/reduced-motion 无动画。对应 plan Task 7。",
-            "status": "pending",
+            "status": "done",
             "dependencies": [
               "7.6"
             ],
@@ -991,13 +991,13 @@
             "details": "",
             "testStrategy": "vitest 组件断言全过；build 过",
             "parentId": "7",
-            "updatedAt": "2026-08-06T13:34:42.917Z"
+            "updatedAt": "2026-08-06T16:57:33.085Z"
           },
           {
             "id": 8,
             "title": "Hero 区块 + 落地页组装",
             "description": "components/landing/Hero.tsx + app/page.tsx 替换占位：min-h-screen 左文案右符号（searchParams.symbol=a|b），主 CTA→/#latest 次 CTA→/login?next=/research-objects/new，Hermes 状态 pill（非第三 CTA），底部露出 #latest；全部文案走 landing 命名空间。对应 plan Task 8。",
-            "status": "pending",
+            "status": "done",
             "dependencies": [
               "7.7"
             ],
@@ -1005,13 +1005,13 @@
             "details": "",
             "testStrategy": "build + next start 冒烟：zh 默认、Accept-Language en 切换正确",
             "parentId": "7",
-            "updatedAt": "2026-08-06T13:34:42.917Z"
+            "updatedAt": "2026-08-06T16:57:33.085Z"
           },
           {
             "id": 9,
             "title": "#latest 区块（skeleton 版）",
             "description": "components/landing/LatestResearch.tsx：标题 + 3 张 skeleton RO Card（标题/作者行/版本 badge/更新时间/计数/许可占位版式即最终 RoCard 版式）+ 空态文案；注释标明 P2 接 GET /explore。对应 plan Task 9。",
-            "status": "pending",
+            "status": "done",
             "dependencies": [
               "7.8"
             ],
@@ -1019,13 +1019,13 @@
             "details": "",
             "testStrategy": "build + 视觉走查",
             "parentId": "7",
-            "updatedAt": "2026-08-06T13:34:42.917Z"
+            "updatedAt": "2026-08-06T16:57:33.085Z"
           },
           {
             "id": 10,
             "title": "Playwright 三尺寸截图脚本",
             "description": "apps/web 装 playwright devDep + script shots；test/visual/shots.mjs 对 ?symbol=a|b 各截 1440×900/1920×1080/390×844（deviceScaleFactor 2）+ reducedMotion 组，输出 test/visual/out/（gitignore）。对应 plan Task 10。",
-            "status": "pending",
+            "status": "done",
             "dependencies": [
               "7.9"
             ],
@@ -1033,7 +1033,7 @@
             "details": "",
             "testStrategy": "8+ 张截图产出且人工可读",
             "parentId": "7",
-            "updatedAt": "2026-08-06T13:34:42.917Z"
+            "updatedAt": "2026-08-06T16:57:33.085Z"
           },
           {
             "id": 11,
@@ -1050,12 +1050,12 @@
             "updatedAt": "2026-08-06T13:34:42.917Z"
           }
         ],
-        "updatedAt": "2026-08-06T15:22:25.925Z"
+        "updatedAt": "2026-08-06T16:57:33.085Z"
       }
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-08-06T15:22:25.925Z",
+      "lastModified": "2026-08-06T16:57:33.085Z",
       "taskCount": 7,
       "completedCount": 6,
       "tags": [

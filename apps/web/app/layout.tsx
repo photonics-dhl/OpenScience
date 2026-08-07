@@ -3,7 +3,6 @@ import type { ReactNode } from "react";
 import { Noto_Serif_SC } from "next/font/google";
 import { NextIntlClientProvider } from "next-intl";
 import { getLocale, getMessages } from "next-intl/server";
-import LocaleSwitcher from "../components/LocaleSwitcher";
 import type { Locale } from "../i18n/locale";
 import "./globals.css";
 
@@ -39,7 +38,6 @@ export default async function RootLayout({ children }: { children: ReactNode }) 
     <html lang={locale === "zh" ? "zh-CN" : "en"} className={displaySerif.variable}>
       <body>
         <NextIntlClientProvider messages={messages}>
-          <LocaleSwitcher locale={locale} />
           {children}
         </NextIntlClientProvider>
       </body>

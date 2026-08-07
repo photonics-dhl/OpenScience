@@ -1,5 +1,19 @@
 # OpenScience (XGS) 进度日志
 
+## 2026-08-07 — 前端 P0/P1 Landing 页面组装与部署准备
+
+- **状态**：Landing 首页已部署到生产域名；两版 `EvolvingRoSymbol` 可由 `?symbol=a|b` 切换；生产拓扑已补 Web 服务与 nginx 分流；本地代码作为本次收口 commit 入库，尚未 push。
+- **实现**：`apps/web/app/page.tsx` 替换占位；新增 `Hero.tsx`、`LatestResearch.tsx` 与 Playwright 截图脚本；`app/layout.tsx` 移除全局 LocaleSwitcher，避免 Header 内控件重复；`infra/compose/docker-compose.prod.yml` 增加 `web` 服务（127.0.0.1:3000），`infra/nginx/openscience.conf` 根路径转 Web、API/auth/admin 等路径转 Fastify。
+- **验证**：web typecheck、web tests 50/50、web build、全仓 lint、docs-sync、docs:lint 通过；本地 `next start -p 3002` 返回 200；Playwright 8 张截图已生成于 `apps/web/test/visual/out/`（gitignored），人工检查桌面与移动无明显重叠/空白，移动端 latest 提示露出；云上 install + 全量 build 通过，`openscience-prod-web-1` Up，服务器与 Playwright 均验证 `https://openscience.428312321.xyz/` 返回 200 且包含新首页内容，`/auth/me` 仍经 nginx 分流到 API 返回 401。
+- **下一步**：提交当前落地页与部署配置改动；如需对外同步，执行 git push。
+
+## 2026-08-06（补十七）— 前端 P0/P1 Task 7.7 EvolvingRoSymbol
+
+- **状态**：Task 7.7 已实现并完成本地验证，未创建 commit。
+- **实现**：新增 server-safe `apps/web/components/landing/evolving-ro-symbol.tsx`，提供 `sculptural`/`interface` 两种变体；六个 SDF facet、三层蓝色轮廓辉光、历史轮廓、中心轨迹/分支/合流与单个橙色 diff node；`prefers-reduced-motion` 下不输出动画 class/style。
+- **测试**：新增 `apps/web/test/evolving-ro-symbol.test.tsx`；Vitest 配置扩展为发现 `.test.tsx`。Review fix 后补充轨迹拓扑与 SVG 层级断言；focused 7/7、web 全套 50/50、web typecheck/build 全部通过。
+- **下一步**：进入 Task 7.8 Hero assembly；用户确认后再按既定节奏提交。
+
 ## 2026-08-06（补十六）— 前端 P0/P1 Task 7.6 Landing SiteHeader
 
 - **状态**：Task 7.6 已实现并完成 fix round 1，task-master 已置 `done`；reviewer scoped re-review clean，未创建 commit。

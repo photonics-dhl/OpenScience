@@ -16,9 +16,15 @@
 | `apps/web/components.json` | shadcn/ui `new-york` 配置（Task 7.4，cssVariables + 本地 aliases） | 活文档 |
 | `apps/web/components/ui/{button,card,badge,skeleton}.tsx` | shadcn/ui 基础组件（Task 7.4，token 化默认表面） | 活文档 |
 | `apps/web/components/landing/SiteHeader.tsx` | Landing 页站点 Header（Task 7.6，i18n 导航、滚动模糊背景、LocaleSwitcher） | 活文档 |
+| `apps/web/components/landing/Hero.tsx` | Landing 页 Hero（Task 7.8，i18n 文案、CTA、EvolvingRoSymbol 变体承载） | 活文档 |
+| `apps/web/components/landing/LatestResearch.tsx` | Landing 页 #latest skeleton（Task 7.9，P2 接 GET /explore） | 活文档 |
+| `apps/web/components/landing/evolving-ro-symbol.tsx` | Landing 页 Evolving RO Symbol（Task 7.7，server-safe SVG，两种变体、六面 SDF 结构、减弱动效支持） | 活文档 |
 | `apps/web/lib/utils.ts` | `cn` class merge 工具（Task 7.4） | 活文档 |
-| `apps/web/test/ui-components.test.ts` | Task 7.4 storyless server-rendering assertion（43 web tests total after review fix） | 活文档 |
-| `apps/web/vitest.config.ts` | Vitest Node 环境与 `@/` alias 解析（Task 7.4 review fix） | 活文档 |
+| `apps/web/test/ui-components.test.ts` | Task 7.4 storyless server-rendering assertion（50 web tests total after Task 7.7 review fix） | 活文档 |
+| `apps/web/test/evolving-ro-symbol.test.tsx` | Task 7.7 Evolving RO Symbol server-rendering、变体、动效与 SVG 层级断言 | 活文档 |
+| `apps/web/test/visual/shots.mjs` | Landing 视觉截图脚本（Task 7.10，两变体、三尺寸、reduced-motion） | 活文档 |
+| `apps/web/.gitignore` | web 局部生成物忽略（Task 7.10 截图输出 `test/visual/out/` 不入库） | 活文档 |
+| `apps/web/vitest.config.ts` | Vitest Node 环境、`@/` alias 解析与 `.ts/.tsx` 测试发现（Task 7.4/7.7） | 活文档 |
 | `tsconfig.base.json` / `eslint.config.cjs` / `.npmrc` | 共享 TypeScript/ESLint/pnpm 基线（P1A-1）；eslint.config.cjs 已升级为 ESLint 9 flat config（2026-07-28） | 活文档 |
 | `knip.json` / `.dependency-cruiser.cjs` / `.markdownlint-cli2.jsonc` | 卫生工具配置：knip（未用代码）、dependency-cruiser（依赖边界）、markdownlint（文档门禁）（2026-07-28 落地） | 活文档 |
 | `scripts/verify-workspace.mjs` | Monorepo 结构校验脚本（lint 的第二段，`verify:workspace` 入口） | 活文档 |

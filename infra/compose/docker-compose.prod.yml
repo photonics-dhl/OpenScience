@@ -2,7 +2,7 @@
 #
 # 网络拓扑：
 #   data_net : postgres + redis（内部互联，**不绑公网端口**，数据库不得绑定公网地址）
-#   app_net  : api（暴露 127.0.0.1:3001 到 host，nginx 反代）
+#   app_net  : web（127.0.0.1:3000）+ api（127.0.0.1:3001），nginx 分流反代
 #   api 双网卡（app_net + data_net）→ 仅 API 可达数据服务
 #
 # 生产纪律：
@@ -76,6 +76,20 @@ services:
     networks:
       - app_net
       - data_net
+    restart: unless-stopped
+
+  web:
+    image: node:22
+    ports:
+      - "127.0.0.1:3000:3000"
+    working_dir: /opt/openscience/apps/web
+    volumes:
+      - /opt/openscience:/opt/openscience
+    command: ["npx", "pnpm@9.15.0", "--filter", "@openscience/web", "start"]
+    env_file:
+      - /opt/openscience/.env.prod
+    networks:
+      - app_net
     restart: unless-stopped
 
 networks:
