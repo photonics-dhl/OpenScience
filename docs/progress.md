@@ -1,5 +1,14 @@
 # OpenScience (XGS) 进度日志
 
+## 2026-08-08（工具审计）— docs-sync 与基础执行环境已验证
+
+- **docs-sync**：`npx pnpm@9.15.0 audit:docs-sync` → `DOCS_SYNC_OK`；工作区无未提交变更后开始审计。
+- **基础运行时**：Node `v24.11.0`、pnpm `9.15.0`、git `2.52.0`、rg `15.0.0`、FFmpeg `9.0`、ImageMagick 可用；`npx pnpm@9.15.0 typecheck` 与全仓 `test` 通过（apps/web 58、packages/domain 276、apps/api 50、science-worker 29 等）。
+- **MCP/插件**：项目 `.mcp.json` 已登记 11 个 server，Task Master MCP server 可启动并注册 7 个 core tools；当前 Codex 会话实际工具清单未暴露 Figma、shadcn、Task Master 或 Playwright MCP，不能把配置文件当作已加载能力。
+- **Figma 前置**：Figma remote MCP 配置存在，但 Professional Dev seat/OAuth 与 Codex session reload 仍是执行 Task 1 的前置条件。
+- **Playwright**：浏览器缓存存在（Chromium/headless shell），`npx --no-install playwright --version` 可运行；但 root/web package 未锁定 `@playwright/test` 或 `playwright` 依赖，跨机/离线执行不保证。执行视觉任务前应将项目依赖和浏览器安装纳入 Task 1/6 门禁。
+- **工具问题**：health skill 的 WSL 采集脚本因本机路径转换（`wsl: Failed to translate 'Z:\\Dirac\\scripts'`）无法运行；未修改全局配置，保留为环境风险，后续若需要完整 health audit 先修复脚本路径调用。
+
 ## 2026-08-08 — 产品级网页设计方向 A 定稿，正式 spec 已写入
 
 - **用户确认**：采用 `Monumental Scholarly Intelligence` 作为完整产品设计基线；融合期刊策展层的编辑叙事与研究工作区效率，保留深色工作区/浅色 Public RO 双表面体系。
