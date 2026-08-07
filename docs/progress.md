@@ -7,6 +7,13 @@
 - **正式 spec**：`docs/specs/2026-08-08-openscience-product-web-design.md`，定义信息架构、状态模型、媒体 provenance、响应式/无障碍、Figma 六屏交付与验收门槛；尚未修改业务代码。
 - **下一步**：请用户审阅正式 spec；通过后使用 `writing-plans` 拆分 Figma foundations、统一 RO workspace、Public RO/Explore、Editorial Curator、Hermes/Live2D 和质量验收计划。
 
+## 2026-08-08（续）— 实施计划完成，拆为六个可独立验收任务
+
+- **计划**：`docs/plans/2026-08-08-openscience-product-web-plan.md` 已完成并与已批准 spec 对齐。
+- **六任务**：Figma foundations/六屏原型；Dashboard + 统一 RO Workspace；创建/Hermes 证据/版本/任务中心；Public RO + Explore + Artifact provenance；Ultrafast Science Editorial Curator + Collection；Hermes/Live2D bridge + 视觉回归/无障碍/性能/生产验收。
+- **复用策略**：复用现有 Landing、SDF editor、collab、Public RO、API/domain；Task Master 10–12 映射到计划中的 Task 1/4/6，不创建重复路线。
+- **下一步**：用户选择执行方式（subagent-driven 或 inline execution）；Figma 专业版开通后先执行 Task 1。
+
 ## 2026-08-07（补七）— 一并 commit/push + Hero 重设计 v2：布局比例、视频融合、核心思想条，已上生产
 
 - **Commit/push**：用户确认后 Task 8+9 全部改动单笔提交 `15c939e`（feat(web): design system tokens + hero loop video & entrance motion）并推送 GitHub（Basic 头方案）。
