@@ -1,5 +1,49 @@
 # OpenScience (XGS) 进度日志
 
+## 2026-08-07（补四）— Landing 全部改动 commit + Web 品质管线立项（Task 8–12）
+
+- **Commit**：用户批准后拆三笔——`481b5c4` feat(web) landing 完整版（生成资产/EvolutionPanel/HermesBand/TrustBand/符号 stage 化/i18n/测试，19 文件 +837）；`182181f` chore（eslint 覆盖 apps/*/scripts、prod web `npm run start`）；docs 批（本日志 + project_index 补登记 EvolutionPanel/HermesBand/hero 资产/新计划 + 计划文档 + tasks.json + 用户素材 figA/figB/v2 交接解包件）。未 push。
+- **立项**：用户拍板做产品级全站品质（不只主页）。产出 `docs/plans/2026-08-07-web-quality-pipeline-plan.md`——Task 8 设计系统固化（token 补全 + shadcn 原语双表面）→ 9 动效层（framer-motion + Hero 循环视觉，Gemini 图生视频优先）→ 10 Figma 设计上游 + 远程 MCP + Code Connect → 11 全站一致性（三套视觉 × 公开 RO/工作台/About/auth/Explore）→ 12 视觉回归门禁（shots.mjs → CI）+ 闲置资产清理。tasks.json 已追加 Task 8–12（parse_prd append 实际写入但回包超时，依赖手工对齐为 8←7、9←8、10←8、11←[9,10]、12←11）。
+- **Figma 决策**：用户认为产品级需要 Figma，同意。核实：远程 MCP 全计划可用但免费档仅 6 calls/月不可用，实际需 Professional Dev seat（$12/月，200 calls/day）；Code Connect 是生产级输出前置（否则生成代码绕过设计系统）。Figma 侧待用户操作：开通 seat、OAuth 授权。
+- **对账外部推荐清单**：跳过 Vercel/Supabase/Webflow/Framer（与自有 ECS+Docker+Postgres 架构冲突）；Playwright/GitHub MCP、Next/Tailwind/shadcn 底座、Lucide 均已具备；真缺口 = 动效层、Figma 环节、视觉回归门禁。
+- **下一步**：Task 8 开工；等用户 Figma seat/OAuth（Task 10）；api 容器 unhealthy 仍待查。
+
+## 2026-08-07（补三）— Landing 全区块补齐：四阶段演化面板 + Hermes 区块（P2 页面部分）
+
+- **起因**：用户指出首页仍不达预期、缺核心思想元素。复盘根因：P0/P1 计划 11 个 Task 只覆盖 Header+Hero+#latest 原型，承载概念的「四阶段演化面板」「Hermes 区块」划在 P2 且一直未排期——把原型当成了成品页。本轮按 v2 定稿 §4 补齐整页（GET /explore 后端端点仍待 P2 另排）。
+- **新增**：`EvolutionPanel.tsx`（client）——四阶段 stepper（创建→Hermes 解析→协作 Diff→合并发布），同一 SVG 符号随阶段 morph（`EvolvingRoSymbol` 新增 `stage` prop：create=环 0.35 暗+problem 面亮+隐轨迹；parse=主轨迹；diff=分支/merge/橙点；publish/默认=全亮），组 opacity CSS 600ms 过渡，挂载后 2.6s 步进自动推进一轮即停（v2：禁循环禁 scroll-jacking），点击即接管；移动端横向 snap 滑动卡片。`HermesBand.tsx`——上下文理解/证据检查/分级审批三卡（v2 §4.5 的 Hermes 面，非"万能 AI"罗列）。
+- **Hero 再升级**：符号放大到 h=108vh（max 1200px）右 -12% 越界；新增 v0.1/v0.2/v0.3 版本标签（font-mono 10px、hero-muted/40，沿符号左弧排布，provenance 暗示，aria-hidden）；标题 xl:text-8xl；SiteHeader 容器 max-w-7xl→max-w-none（超宽屏导航贴边）。
+- **LatestResearch 去浮盒**：删掉 32px 圆角大边框容器，改平铺分隔线 band。
+- **坑**：EvolutionPanel 桌面 grid 未显式 `grid-cols-1` 时，auto 轨道取 max-content 导致移动端 stepper 把 body 撑出横向滚动条（scrollWidth 952）；改 `grid-cols-1`（minmax(0,1fr)）+ 子项 min-w-0 修复，实测 scrollWidth 375 ≤ 390。
+- **验证**：web 56/56（符号 stage 新增 3 断言、landing 结构锁 evolution/hermes 模块）、typecheck、build（首包 108 kB）、全仓 lint + docs-sync 全绿；本地 1440×900/390×844 与生产整页截图一致。生产已部署。未 commit。
+- **下一步**：用户验收整页 → commit；GET /explore 真实 feed（P2 后端）；api 容器 unhealthy 排查仍未做。
+
+## 2026-08-07（补二）— Hero 质感层上线：Gemini 资产 screen 混合合成
+
+- **资产**：用户用 Gemini Plus 按项目 prompt 自生成 `figA.png`（玻璃楔形环符号，1254² 纯黑底，自带橙点 diff/轨道环/历史轮廓）与 `figB.png`（氛围底，1672×941）；入库 `apps/web/public/hero/ro-symbol.{png,webp}`（webp 104KB）与 `hero-ambient.{png,webp}`（webp 8KB），PNG 为源文件。
+- **合成方案**：figB 全幅 cover 氛围底 → 左侧文案可读性渐变 veil → figA `mix-blend-screen` 消黑底 + 径向 mask 羽化（black 60%→transparent 88%，首版 56%/77% 会切出直线边已修）+ 12s 呼吸动效（globals.css 追加 `hero-symbol-breathe`，reduced-motion 不加载）；移动端同一资产居中。SVG 版 `evolving-ro-symbol.tsx` 保留（后续四阶段面板复用），Hero 不再引用。
+- **验证**：web 53/53、typecheck、build 全绿；本地 1440×900/390×844 截图确认；云上 build + restart web 后生产桌面/移动截图确认一致（过程中一次 public:000 为云上 DNS 解析抖动，重试 200）。
+- **部署**：cloud-sync → 云上 `next build` → restart web；生产已上线玻璃环版本。未 commit。
+
+## 2026-08-07（补）— Landing Hero 结构层重做上线：环形楔形几何 + 去假数据 + 全暗场
+
+- **背景**：用户对已上线首页美感不达标（对照 Moonshot 与 v2 定稿差距大）。实测调研：moonshot.cn 营销站 = Rive/预渲染视频 + 大图 + 真实 DOM（非 Three.js）；Linear/Terax 类 = 单一 WebGL shader 面（OGL 级小库）。结论：质感靠预制资产，语义靠真实 DOM/SVG。
+- **路线定稿（用户确认）**：分层混合——SVG 精确环形几何（结构层）+ 用户用 Gemini Plus 按项目 prompt 自生成玻璃质感贴图（质感层，待供图）+ SVG 蓝色轨迹/橙点 diff（语义层）；GLSL 氛围背景可选后置。prompt 已交付用户（主符号 1:1 纯黑底 / 氛围 16:9 / interface 变体）。
+- **实现**：`evolving-ro-symbol.tsx` 从手摆四边形重写为计算几何——6 个 52° 环扇楔形（8° 缺口）、内外半径 330/158 开放中心、楔形顺序=研究周期顺时针（problem→reproducibility）；轨迹改为主轨迹穿中心 + 右下缺口处分支 merge 成泪滴环、橙点 diff 落在楔形缺口（60°, r≈244）；辉光降不透明度（0.78→0.55 / 0.38→0.22）+ 玻璃填充加 accent 淡蓝渐变。`Hero.tsx` 弃用 bitmap 全幅背景（`generate-landing-hero.mjs`/`public/hero/landing-hero.png` 自此闲置待清理，knip 会报），符号改为真实 DOM 右侧越界排布（h=92vh）；标题 i18n 加显式 `\n` 锁定两行（whitespace-pre-line），修复"化。"孤行；CTA 主按钮加蓝色光晕、次按钮毛玻璃。`LatestResearch` 删除全部假数据（latest.cards.* 文案同步删除）改纯 skeleton+空态。`TrustBand` 从纸白改深色延续（hero-surface 卡片）。
+- **验证**：符号测试 8/8（轨迹期望值更新 + 新增环形几何断言 A330/A158 ≥18）；web 全套 53/53、typecheck、build（首包 101 kB）、全仓 lint + docs-sync 全绿；本地/生产 Playwright 截图（1440×900、390×844）确认构图与移动端顺序。
+- **部署**：cloud-sync → 云上 `next build` → restart web 容器；隧道实测存活（经隧道 registry 401=可达）；生产 https://openscience.428312321.xyz/ 200 已上线新版。未 commit。
+- **注意**：`openscience-prod-api-1` 容器显示 unhealthy（已 3 天），本轮未处理，待查。
+- **下一步**：等用户 Gemini 生成质感层资产 → 合成（screen 混合/裁切）→ 三尺寸截图验收 → token 冻结（Task 7.11）；P2 接 GET /explore 真实 feed；查 api 容器 unhealthy。
+
+## 2026-08-07 — Landing 首页视觉重做、入口修复与生产部署
+
+- **状态**：针对生产页“视觉未达规划、子入口失效”的问题完成重做并部署到生产，尚未 commit / push。
+- **实现**：Hero 改为全幅 bitmap 主视觉背景（`apps/web/public/hero/landing-hero.png`，由 `apps/web/scripts/generate-landing-hero.mjs` 本地生成，不直接使用原型图）；`#latest` 改成真实深色内容带 section；新增 `#trust` 信任区；Header 的“探索/关于”现在落到真实 section；新增 landing 结构回归测试锁定 `hero/latest/trust` 三模块与锚点。
+- **工具取舍**：GitHub 社区方向调研后试装 `motion`，build 实测首页首包 106 kB → 156 kB，收益不抵成本，已撤回依赖并改用 CSS transition；未引入 Three.js / Live2D / pixi。
+- **部署修复**：首次重建 web 容器后生产首页 502；定位为 `docker-compose.prod.yml` 中 web command 使用 `npx pnpm@9.15.0 ...`，新容器内需联网/确认 pnpm，Next 未真正启动。已改为 `npm run start`，使用 `apps/web` 本地 `next` binary 启动，重建后容器日志显示 Next ready。
+- **验证**：focused landing test 2/2、web 全套 52/52、web typecheck、web build 通过；build 后首页首包 6.82 kB / First Load JS 106 kB；全仓 lint/docs 门禁通过；云上全量 build 通过；生产 `https://openscience.428312321.xyz/` 返回 200，SSR 含 `hero/latest/trust` 模块与 `landing-hero` 资产；`/auth/me` 仍返回 401；Playwright 生产桌面 1440×900 与移动 390×844 截图确认无横向溢出，`#latest` 与 `#trust` 均存在且 `#latest` 首屏可见。
+- **下一步**：本轮上线版仍未达到最终审美标准；继续专门做视觉质量迭代（构图、字体节奏、真实内容密度、动效/图像资产），用户确认后再 commit/push。
+
 ## 2026-08-07 — 前端 P0/P1 Landing 页面组装与部署准备
 
 - **状态**：Landing 首页已部署到生产域名；两版 `EvolvingRoSymbol` 可由 `?symbol=a|b` 切换；生产拓扑已补 Web 服务与 nginx 分流；本地代码作为本次收口 commit 入库，尚未 push。

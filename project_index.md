@@ -15,13 +15,20 @@
 | `package.json` / `pnpm-workspace.yaml` / `pnpm-lock.yaml` | pnpm workspace 根配置与锁文件（P1A-1）；`task-master-ai` 已入 root devDependencies（2026-07-31，VS Code MCP 直连用） | 活文档 |
 | `apps/web/components.json` | shadcn/ui `new-york` 配置（Task 7.4，cssVariables + 本地 aliases） | 活文档 |
 | `apps/web/components/ui/{button,card,badge,skeleton}.tsx` | shadcn/ui 基础组件（Task 7.4，token 化默认表面） | 活文档 |
-| `apps/web/components/landing/SiteHeader.tsx` | Landing 页站点 Header（Task 7.6，i18n 导航、滚动模糊背景、LocaleSwitcher） | 活文档 |
-| `apps/web/components/landing/Hero.tsx` | Landing 页 Hero（Task 7.8，i18n 文案、CTA、EvolvingRoSymbol 变体承载） | 活文档 |
-| `apps/web/components/landing/LatestResearch.tsx` | Landing 页 #latest skeleton（Task 7.9，P2 接 GET /explore） | 活文档 |
-| `apps/web/components/landing/evolving-ro-symbol.tsx` | Landing 页 Evolving RO Symbol（Task 7.7，server-safe SVG，两种变体、六面 SDF 结构、减弱动效支持） | 活文档 |
+| `apps/web/components/landing/SiteHeader.tsx` | Landing 页站点 Header（i18n 导航、滚动模糊背景、真实 `#latest/#trust` 入口） | 活文档 |
+| `apps/web/components/landing/Hero.tsx` | Landing 页 Hero（全幅 bitmap 主视觉、i18n 文案、双 CTA、symbol 变体标记） | 活文档 |
+| `apps/web/components/landing/LatestResearch.tsx` | Landing 页 `#latest` 深色内容带（真实锚点、三张 RO preview，占位至 P2 `GET /explore`） | 活文档 |
+| `apps/web/components/landing/TrustBand.tsx` | Landing 页 `#trust` 信任区（版本/provenance、许可作者贡献、AI+人工复核三支柱） | 活文档 |
+| `apps/web/components/landing/EvolutionPanel.tsx` | Landing 页四阶段演化面板（create/parse/diff/publish stage morph + 自动演示一轮即停，2026-08-07） | 活文档 |
+| `apps/web/components/landing/HermesBand.tsx` | Landing 页 Hermes 能力带（上下文/证据/审批三卡，2026-08-07） | 活文档 |
+| `apps/web/components/landing/evolving-ro-symbol.tsx` | Landing 页 Evolving RO Symbol（Task 7.7，server-safe SVG，两种变体、六面 SDF 结构、减弱动效支持；2026-08-07 重写为计算环形楔形几何 + stage prop） | 活文档 |
+| `apps/web/public/hero/{ro-symbol,hero-ambient}.{png,webp}` | Landing Hero 生成资产（figA 玻璃楔形环 + figB 氛围底，Gemini 生成，源 `docs/user_ideas/figA.png`/`figB.png`，2026-08-07） | 活文档 |
+| `apps/web/public/hero/landing-hero.png` | Landing Hero bitmap 主视觉资产（本地 Playwright 生成，已被生成资产路线取代，Task 12 待清理） | 活文档 |
+| `apps/web/scripts/generate-landing-hero.mjs` | Landing Hero bitmap 生成脚本（Playwright 渲染 SVG/HTML 合成图至 public/hero） | 活文档 |
 | `apps/web/lib/utils.ts` | `cn` class merge 工具（Task 7.4） | 活文档 |
 | `apps/web/test/ui-components.test.ts` | Task 7.4 storyless server-rendering assertion（50 web tests total after Task 7.7 review fix） | 活文档 |
 | `apps/web/test/evolving-ro-symbol.test.tsx` | Task 7.7 Evolving RO Symbol server-rendering、变体、动效与 SVG 层级断言 | 活文档 |
+| `apps/web/test/landing-page.test.tsx` | Landing 页面结构回归测试（`#latest/#trust` 真 section + data module 标记，52 web tests total） | 活文档 |
 | `apps/web/test/visual/shots.mjs` | Landing 视觉截图脚本（Task 7.10，两变体、三尺寸、reduced-motion） | 活文档 |
 | `apps/web/.gitignore` | web 局部生成物忽略（Task 7.10 截图输出 `test/visual/out/` 不入库） | 活文档 |
 | `apps/web/vitest.config.ts` | Vitest Node 环境、`@/` alias 解析与 `.ts/.tsx` 测试发现（Task 7.4/7.7） | 活文档 |
@@ -134,6 +141,8 @@
 | `docs/plans/2026-08-06-p1e-7-script-modification-plan.md` | P1E-7 脚本修改与 diff 实施计划（已执行完毕，task-master 6.7 done 2026-08-06） | 活文档 |
 | `docs/specs/2026-08-06-frontend-visual-system-design.md` | 前端视觉系统设计 spec（三方定稿正式版：定位/符号/token/三套视觉/字体/IA/Hermes/分期/验收，源出设计方向稿 v2 终稿决策层） | 已定稿 |
 | `docs/plans/2026-08-06-frontend-p0-p1-plan.md` | 前端 P0 地基收尾 + P1 首页视觉原型实施计划（11 Task：Tailwind v4/token+WCAG 门禁/字体/shadcn/i18n/Header/EvolvingRoSymbol 两变体/Hero/#latest/Playwright 三尺寸截图/用户验收门） | 待执行 |
+| `docs/superpowers/plans/2026-08-07-homepage-rework.md` | Landing 首页视觉重做计划（主视觉 bitmap、真实 latest/trust 模块、入口修复、截图验收） | 已完成（2026-08-07，commit 481b5c4） |
+| `docs/plans/2026-08-07-web-quality-pipeline-plan.md` | Web 品质管线实施计划（Task 8 设计系统固化 → 9 动效层 → 10 Figma+MCP → 11 全站一致性 → 12 视觉回归门禁，2026-08-07 用户拍板） | 待执行 |
 | `docs/security/sandbox-threat-model.md` | 沙箱威胁模型（STRIDE + 8 类攻击向量 + 残留风险 + 缓解路线图，P1E-8） | 活文档 |
 | `docs/security/sandbox-security-statement.md` | 沙箱安全承诺与免责声明（P1E-8，待法律审核） | 活文档 |
 | `docs/security/production-security-checklist.md` | 生产安全检查清单（P0/P1/P2 三级，P0 为上线阻断项，P1E-8） | 活文档 |
@@ -206,7 +215,7 @@
 | `infra/scripts/with-proxy.sh` | 代理兜底包装：隧道可用走 v2ray、失效回落直连（云上 `/usr/local/bin/with-proxy`，2026-08-01） | 已部署云上 |
 | `infra/scripts/proxy-tunnel.sh` / `proxy-tunnel.vbs` | 本机侧 SSH 反向隧道常驻（Windows 计划任务 `OpenScience-ProxyTunnel` 登录自启 + 断线重连，2026-08-01） | 已启用 |
 | `infra/scripts/deploy.sh` | 部署脚本 | 骨架，Phase 1A 填充 |
-| `infra/compose/` | `docker-compose.dev.yml` 开发栈（postgres:16/redis:7/minio + minio-init，端口仅 127.0.0.1，P1A-2）；`docker-compose.monitor.yml` 监控栈（netdata + vnstat，2026-08-01）；`docker-compose.prod.yml` 生产栈（data_net/app_net 分段，数据服务不绑公网，api node:22，P1A-9） | dev 本机未起栈；监控栈已部署云上；生产栈已部署云上（2026-08-03） |
+| `infra/compose/` | `docker-compose.dev.yml` 开发栈（postgres:16/redis:7/minio + minio-init，端口仅 127.0.0.1，P1A-2）；`docker-compose.monitor.yml` 监控栈（netdata + vnstat，2026-08-01）；`docker-compose.prod.yml` 生产栈（data_net/app_net 分段，数据服务不绑公网，api node:22、web node:22，web 通过 `npm run start` 使用 apps/web 本地 next binary 启动，P1A-9） | dev 本机未起栈；监控栈已部署云上；生产栈已部署云上（2026-08-03） |
 | `infra/nginx/` | 反代配置：`portainer.conf`（portainer.428312321.xyz → 127.0.0.1:9443，LE 证书 + WebSocket，2026-07-31；2026-08-01 追加 /nav/ 导航页、/monitor/→Netdata、/traffic/→vnStat 账单页，basic_auth）+ `openscience.conf`（OpenScience.428312321.xyz → 127.0.0.1:3001，P1A-8：/admin basic_auth + XFF 透传） | 均已部署云上并启用（openscience.conf 2026-08-03） |
 | `infra/www/` | `nav/index.html` 服务器面板导航静态页（/var/www/nav，2026-08-01） | 已部署云上 |
 | `infra/sandbox/` | 沙箱配置占位（P1A-1） | 骨架 |
