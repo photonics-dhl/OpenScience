@@ -61,6 +61,7 @@ const pairs: Array<[string, string]> = [
   ['ink', 'canvas-bg'],
   ['ink', 'paper-bg'],
   ['accent-primary-strong', 'hero-bg'],
+  ['hero-text', 'state-danger'],
 ];
 
 describe('视觉 token WCAG AA 对比度门禁（spec §3）', () => {
@@ -77,7 +78,9 @@ describe('视觉 token WCAG AA 对比度门禁（spec §3）', () => {
   it('@theme 映射覆盖全部颜色变量（--color-* 引用对应 :root 变量）', () => {
     const themeMatch = css.match(/@theme\s*\{([\s\S]*?)\}/);
     expect(themeMatch).not.toBeNull();
-    for (const name of tokens.keys()) {
+    for (const [name, value] of tokens) {
+      // 仅颜色变量要求 --color-* 映射；结构 token（motion-*/z-* 等）不进颜色命名空间
+      if (!/^(#|rgb)/.test(value)) continue;
       expect(themeMatch![1]).toContain(`--color-${name}: var(--${name})`);
     }
   });

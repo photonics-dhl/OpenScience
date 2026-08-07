@@ -3,15 +3,18 @@ import { cva, type VariantProps } from 'class-variance-authority';
 
 import { cn } from '@/lib/utils';
 
+/* 双表面机制（Task 8）：默认纸白；祖先挂 .surface-dark 切换深色。destructive 用 state-danger，
+   accent-diff 仅表 diff（spec §3 红线）。 */
 const badgeVariants = cva(
-  'inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-semibold transition-colors focus:outline-none focus:ring-2 focus:ring-accent-primary focus:ring-offset-2 focus:ring-offset-paper-bg',
+  'inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-semibold transition-colors duration-(--motion-fast) ease-standard focus:outline-none focus:ring-2 focus:ring-accent-primary focus:ring-offset-2 focus:ring-offset-paper-bg [.surface-dark_&]:focus:ring-offset-hero-bg',
   {
     variants: {
       variant: {
         default: 'border-transparent bg-accent-primary-strong text-hero-text',
-        secondary: 'border-transparent bg-canvas-bg text-ink',
-        destructive: 'border-transparent bg-accent-diff text-hero-bg',
-        outline: 'text-ink',
+        secondary:
+          'border-transparent bg-canvas-bg text-ink [.surface-dark_&]:bg-hero-surface [.surface-dark_&]:text-hero-muted',
+        destructive: 'border-transparent bg-state-danger text-hero-text',
+        outline: 'text-ink [.surface-dark_&]:text-hero-text',
       },
     },
     defaultVariants: {

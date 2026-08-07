@@ -1,6 +1,7 @@
 /* 视觉 token 层（Task 2）：spec §3 变量落 :root，并用 Tailwind v4 @theme 暴露为工具类。
    值经 WCAG AA 对比度验证（test/tokens-contrast.test.ts 门禁，配对 ≥4.5）。
-   调整记录：accent-primary-strong #256BFF → #2A6DFF（/hero-bg 4.47 → 4.57），spec §3 已同步。 */
+   调整记录：accent-primary-strong #256BFF → #2A6DFF（/hero-bg 4.47 → 4.57），spec §3 已同步。
+   Task 8 追加：结构 token（动效/半径/阴影/层级/z-index）+ 状态色，spec §3.1。 */
 :root {
   --hero-bg: #03060b; --hero-surface: #08101c;
   --hero-text: #f4f7fb; --hero-muted: #99a5b5;
@@ -8,6 +9,17 @@
   --accent-diff: #ffb454;
   --canvas-bg: #f6f7f9; --paper-bg: #fcfbf7;
   --ink: #18202b; --border-subtle: rgba(148, 163, 184, 0.18);
+  /* 状态色：accent-diff 仅表 diff，危险操作用 state-danger（spec §3 红线）。
+     #b91c1c 而非 #dc2626：hero-text 白字压其上需 AA 4.5（4.32 不达标 → 5.8，门禁实测） */
+  --state-danger: #b91c1c;
+  /* 动效时长（spec §2.2：hover/focus ≤200ms；呼吸 8–12s；扫描 4–6s） */
+  --motion-fast: 200ms;
+  --motion-breathe: 12s;
+  --motion-scan: 6s;
+  /* z-index 层级（升序，禁止组件内随意写 z-*） */
+  --z-header: 40;
+  --z-overlay: 50;
+  --z-modal: 60;
 }
 @theme {
   --color-hero-bg: var(--hero-bg); --color-hero-surface: var(--hero-surface);
@@ -17,4 +29,12 @@
   --color-accent-diff: var(--accent-diff);
   --color-canvas-bg: var(--canvas-bg); --color-paper-bg: var(--paper-bg);
   --color-ink: var(--ink); --color-border-subtle: var(--border-subtle);
+  --color-state-danger: var(--state-danger);
+  /* 结构 token（Task 8）：三套视觉共享 radius/阴影/动效，不共享背景与密度 */
+  --radius-card: 0.75rem;
+  --shadow-card: 0 1px 2px rgb(3 6 11 / 0.06);
+  --shadow-overlay: 0 8px 30px rgb(3 6 11 / 0.16);
+  /* 动效曲线（Task 9 framer-motion 以同值镜像，保持全站一致） */
+  --ease-standard: cubic-bezier(0.2, 0, 0, 1);
+  --ease-entrance: cubic-bezier(0.16, 1, 0.3, 1);
 }

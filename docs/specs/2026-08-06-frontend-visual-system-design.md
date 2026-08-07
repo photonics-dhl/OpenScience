@@ -41,6 +41,23 @@
 
 禁大面积紫色渐变。双主题首版仅 token 结构预留，不实装切换。
 
+### 3.1 结构 token 与双表面机制（Task 8 落稿）
+
+颜色之外的共享结构 token（spec §4：三套视觉共享 spacing/radius/状态/交互，不共享背景与密度），单一事实源 `apps/web/app/tokens.css`：
+
+```css
+--state-danger: #B91C1C;   /* 危险操作色；accent-diff 仅表 diff，禁止作 destructive 用 */
+--motion-fast: 200ms;      /* hover/focus 过渡上限（§2.2） */
+--motion-breathe: 12s;     /* 呼吸/结构张力 8–12s */
+--motion-scan: 6s;         /* 轨迹扫描 4–6s */
+--radius-card: 0.75rem;    --shadow-card / --shadow-overlay;   /* 卡片近无阴影、浮层一道 */
+--ease-standard: cubic-bezier(0.2,0,0,1);  --ease-entrance: cubic-bezier(0.16,1,0.3,1);  /* framer-motion 同值镜像 */
+--z-header: 40; --z-overlay: 50; --z-modal: 60;
+```
+
+- **双表面机制**：原语默认纸白表面（公开 RO）；任一祖先挂 `.surface-dark` 类即整体切换深色表面（landing/工作台），组件内用 `[.surface-dark_&]:` 任意变体覆盖，server-safe、无 JS 开关。Dialog 因 Portal 脱离祖先链，用 `surface="dark"` prop 显式指定。
+- shadcn/ui 原语（`components/ui/`）：button / card / badge / skeleton / input / dialog，全部双表面化；WCAG 门禁新增 hero-text/state-danger 配对。
+
 ## 4. 三套页面视觉系统
 
 | 场景 | 视觉策略 | 目的 |

@@ -1,5 +1,26 @@
 # OpenScience (XGS) 进度日志
 
+## 2026-08-07（补六）— Task 9 动效层完成：Hero 循环视频 + CSS 进入动效，已上生产
+
+- **视频管线**：用户用 Gemini 按分镜 prompt 生成 `docs/user_ideas/generated_figures/video/video1.mp4`（1280×720/24fps/10s，figD1 六面板 Hermes 枢纽版）。本机 scoop 装 ffmpeg 9.0（一次性素材加工，非项目依赖）处理：首尾 1s xfade 叠化消循环接缝（原片末帧仍在亮态、直循有跳切）→ 中央 720² 裁切（顺带去掉右下角 Gemini ✦ 水印）→ 三产物入 `apps/web/public/hero/`：`ro-loop.webm`（VP9 crf34，715KB）/`ro-loop.mp4`（H.264 crf23 faststart 兜底，1.0MB）/`ro-loop-poster.webp`（首帧，31KB）。
+- **Hero 接入**：桌面 `<video autoplay muted loop playsInline poster>`（webm 优先）+ `motion-reduce` 下隐藏视频改渲染 poster Image；移动端静态 poster（省流量）。video 继承 mix-blend-screen + 径向 mask，旧 `ro-symbol.webp` 不再被引用（Task 12 待清理）。
+- **进入动效（零依赖路线，弃 framer-motion）**：globals.css 新增 `landing-reveal`（fade+translateY 24px，0.7s var(--ease-entrance)）与 `landing-symbol-in`（纯淡入 1.2s），全部 `prefers-reduced-motion: no-preference` 门控；Hero 徽章/标题/副文/CTA inline animationDelay 60–300ms stagger。滚动进入用自写 `in-view.tsx`（IntersectionObserver，-12% rootMargin，一次即停），CSS 侧 `html.js` 门控（layout 一行 inline script 加 js 类）——无 JS 时内容始终可见，SEO/降级安全。弃 framer-motion 理由：纯进入动画 CSS 等价且 SSR/reduced-motion 零风险，首包仅 +1kB（108→109kB，门 <30kB）。
+- **验证**：web 58/58、typecheck、build、全仓 lint+docs-sync 全绿；本地 1440×900/390×844 截图；reduced-motion 仿真实测视频隐藏暂停、poster 显示；生产部署后实测 video 播放中、`landing-reveal` 激活、4 个 landing-inview 滚动触发正常。
+- **部署坑**：云上 `pnpm install` 直连 registry 网络失败（管道 tail 掩盖退出码，build 才报 @radix-ui/react-dialog 缺失）——云上联网命令必须 `with-proxy` 且不吞退出码；install 后 build 7.8s 过（cpu-features 可选原生依赖 gyp 失败无害）。
+- **下一步**：等用户确认后一并 commit（Task 8 + 9，用户指定）；Task 10 Figma 待用户开 seat + 重启 session OAuth。
+
+## 2026-08-07（补五）— Push 完成 + Task 8 设计系统固化（token 补全 + 原语双表面）
+
+- **Push**：`c82759f..baefcc4` 已推 GitHub。坑：`.env` 两个 token 走 `Authorization: Bearer` 均被拒（extraHeader Bearer 对 PAT 无效），改 `x-access-token:<tok>` base64 的 Basic 头成功；值需 tr 掉引号。
+- **Task 8 完成**（计划 docs/plans/2026-08-07-web-quality-pipeline-plan.md）：
+  - `tokens.css` 补结构 token：`--state-danger:#B91C1C`（初取 #DC2626 实测 hero-text 白字对比 4.32 不达标，换 #B91C1C 达 5.8）、`--motion-fast/breathe/scan`（spec §2.2 上限值）、`--radius-card`、`--shadow-card/overlay`、`--ease-standard/entrance`（Task 9 framer-motion 同值镜像预留）、`--z-header/overlay/modal`。
+  - **双表面机制**：原语默认纸白；祖先挂 `.surface-dark` 类整体切深色（`[.surface-dark_&]:` 任意变体，server-safe 无 JS）；Dialog 因 Portal 断链用 `surface="dark"` prop。规格落 spec §3.1。
+  - **修契约违约**：button/badge 的 `destructive` 原用 accent-diff（违反"暖橙仅表 diff"），改 state-danger。
+  - 新增原语 `input.tsx`、`dialog.tsx`（@radix-ui/react-dialog 入 web deps）。
+  - 测试：ui-components 加双表面/state-danger 断言；tokens-contrast 门禁加 hero-text/state-danger 配对、@theme 映射检查改为仅约束颜色值变量（结构 token 不进 --color-* 命名空间）。web 58/58、typecheck、build 全绿；产物 CSS 实测 `.surface-dark` 后代选择器、`rounded-card`/`shadow-card`/`ease-standard`/`z-(--z-modal)`/`duration-(--motion-fast)` 均生成。
+- **注意**：原语尚未被任何页面引用（grep 无业务引用）， landing 视觉零变化，无需部署；Task 11 全站收口时统一接入。
+- **下一步**：Task 9 动效层（framer-motion + Hero 循环视觉，Gemini 图生视频 prompt 待交付用户）。
+
 ## 2026-08-07（补四）— Landing 全部改动 commit + Web 品质管线立项（Task 8–12）
 
 - **Commit**：用户批准后拆三笔——`481b5c4` feat(web) landing 完整版（生成资产/EvolutionPanel/HermesBand/TrustBand/符号 stage 化/i18n/测试，19 文件 +837）；`182181f` chore（eslint 覆盖 apps/*/scripts、prod web `npm run start`）；docs 批（本日志 + project_index 补登记 EvolutionPanel/HermesBand/hero 资产/新计划 + 计划文档 + tasks.json + 用户素材 figA/figB/v2 交接解包件）。未 push。

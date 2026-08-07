@@ -1053,38 +1053,40 @@
         "updatedAt": "2026-08-06T16:57:33.085Z"
       },
       {
-        "id": 8,
+        "id": "8",
         "title": "Design System Consolidation (Token Completion + Shadcn Primitives)",
         "description": "Complete the design token system as the single source of truth in tokens.css. Add missing tokens for spacing scale, elevation/shadow, motion duration/easing, and z-index layers. Generate shadcn primitives (Button/Card/Badge/Dialog/Input) with two surface states: dark mode for landing/workspace and paper white for public RO pages. Ensure i18n linting and docs-sync are synchronized.",
-        "status": "pending",
+        "status": "done",
         "dependencies": [
           "7"
         ],
         "priority": "high",
         "details": "Implementation Details:\n\n1. Token Completion in `apps/web/app/tokens.css`:\n   - Spacing scale: add 0.5, 1.5, 2.5, 3 steps alongside existing 1-4\n   - Elevation/shadow: define sm/md/lg/xl shadow tokens using warm-toned shadows (no purple gradients)\n   - Motion tokens: `--motion-duration-fast: 150ms`, `--motion-duration-normal: 300ms`, `--motion-duration-slow: 500ms`\n   - Easing tokens: `--ease-out-expo: cubic-bezier(0.16, 1, 0.3, 1)`, `--ease-in-out-smooth: cubic-bezier(0.65, 0, 0.35, 1)`\n   - Z-index layers: `--z-dropdown: 50`, `--z-modal: 100`, `--z-toast: 150`, `--z-tooltip: 200`\n\n2. Shadcn Primitive Generation:\n   - Use existing shadcn generator with radix-slot/cva/clsx/tailwind-merge\n   - Generate: Button, Card, Badge, Dialog, Input, Select, Tabs\n   - For each primitive, create `.dark` variant class using tailwind-merge for dark surfaces\n   - Use `--color-background`, `--color-foreground` CSS variables for theming\n   - Warm orange #FFB454 reserved for diff indicators only\n\n3. i18n Gate:\n   - Add custom lint rule to detect hardcoded strings outside i18n calls\n   - Enforce `landing.*` and `public.*` namespace usage\n   - zh/en symmetry check in pre-commit hook\n\nPseudo-code for token structure:\n```css\n:root {\n  /* Spacing */\n  --spacing-0-5: 0.125rem; /* 2px */\n  --spacing-1: 0.25rem; /* 4px */\n  --spacing-1-5: 0.375rem; /* 6px */\n  --spacing-2: 0.5rem; /* 8px */\n  /* ... existing 2-4 ... */\n  \n  /* Elevation */\n  --shadow-sm: 0 1px 2px rgba(255, 180, 84, 0.05);\n  --shadow-md: 0 4px 6px -1px rgba(255, 180, 84, 0.08);\n  --shadow-lg: 0 10px 15px -3px rgba(255, 180, 84, 0.1);\n  \n  /* Motion */\n  --motion-duration-fast: 150ms;\n  --motion-duration-normal: 300ms;\n  --motion-duration-slow: 500ms;\n  --ease-out-expo: cubic-bezier(0.16, 1, 0.3, 1);\n}\n```",
         "testStrategy": "Validation Approach:\n\n1. Token Table Documentation:\n   - Generate markdown table from tokens.css using custom script\n   - Verify all tokens have descriptions and usage examples\n   - Check no token references purple (#8B5CF6 or similar) directly\n\n2. Primitives Storyless Rendering Test:\n   - Create Playwright test: `test/components/primitives.spec.ts`\n   - Test each primitive in both surface states (dark/light)\n   - Verify CSS custom properties apply correctly\n   - Screenshot comparison for visual regression baseline\n\n3. CI Gate:\n   - `pnpm typecheck` - no TypeScript errors\n   - `pnpm lint` - no ESLint violations including i18n rules\n   - `pnpm test` - all unit tests pass\n   - `pnpm build` - successful production build\n\n4. Surface State Verification:\n   - Dark surface: landing page with `--color-background: #0a0a0f`\n   - Light surface: public RO with `--color-background: #fafafa`\n   - Verify no token bleeds between surfaces",
-        "subtasks": []
+        "subtasks": [],
+        "updatedAt": "2026-08-07T10:50:30.238Z"
       },
       {
-        "id": 9,
+        "id": "9",
         "title": "Animation Layer Implementation (Framer Motion + Hero Loop Visual)",
         "description": "Install framer-motion and implement animation layer across the application. This includes Hero title stagger entrance, EvolutionPanel stage transitions, card hover/enter animations, and HermesBand amber scanning line with evolve pulse - all using easing tokens. Hero main visual loops via Gemini video generation or OGL shader fallback. Full prefers-reduced-motion support.",
-        "status": "pending",
+        "status": "done",
         "dependencies": [
-          8
+          "8"
         ],
         "priority": "high",
         "details": "Implementation Details:\n\n1. Framer Motion Installation:\n   - `pnpm add framer-motion`\n   - Configure with MotionConfig provider wrapping app\n   - Use lazy loading boundary to keep initial bundle < 30kB\n\n2. Animation Components:\n   - HeroTitle: Stagger entrance with 100ms delay between words\n     ```tsx\n     const words = title.split(' ');\n     return (\n       <motion.div>\n         {words.map((word, i) => (\n           <motion.span\n             key={i}\n             initial={{ opacity: 0, y: 20 }}\n             animate={{ opacity: 1, y: 0 }}\n             transition={{ \n               duration: 0.5,\n               delay: i * 0.1,\n               ease: 'var(--ease-out-expo)'\n             }}\n           />\n         ))}\n       </motion.div>\n     );\n     ```\n   - EvolutionPanel: Stage transition with crossfade and scale\n   - CardHover: Scale 1.02 + shadow elevation on hover\n   - HermesBand: Amber pulse animation using motion keyframes\n\n3. Motion Token Integration:\n   - All animations reference CSS custom properties\n   - Create `useMotionToken()` hook for consistent timing\n   - Export `motionVariants` factory for common patterns\n\n4. Reduced Motion Support:\n   ```tsx\n   const prefersReducedMotion = useReducedMotion();\n   const transition = prefersReducedMotion \n     ? { duration: 0 }\n     : { duration: 0.3, ease: 'var(--ease-out-expo)' };\n   ```\n\n5. Hero Loop Visual:\n   - Primary: Gemini video generation (8-12s loop, webm/mp4 + poster)\n   - Fallback: OGL shader on lazy-loaded canvas\n   - Reduced-motion: Display static poster image only\n   - Poster fallback: `public/hero/landing-hero.png`\n\n6. Bundle Optimization:\n   - Dynamic import for framer-motion heavy components\n   - Tree-shake unused motion utilities\n   - Code-split Hero animation into separate chunk",
         "testStrategy": "Validation Approach:\n\n1. Animation Performance Test:\n   - Playwright test across desktop (1440px) and mobile (375px) viewports\n   - Measure animation frame rate with Chrome DevTools\n   - Verify no layout shift (CLS < 0.1) during animations\n   - Check console for animation-related warnings/errors\n\n2. Reduced Motion Test:\n   ```typescript\n   test('reduced motion - no animations', async ({ page }) => {\n     await page.emulateMedia({ reducedMotion: 'reduce' });\n     await page.goto('/');\n     // Verify no motion elements are animating\n     const animations = await page.evaluate(() => {\n       return document.getAnimations().filter(a => a.playState === 'running');\n     });\n     expect(animations.length).toBe(0);\n   });\n   ```\n\n3. Bundle Size Test:\n   - `pnpm build` and verify framer-motion chunk < 30kB gzipped\n   - Use webpack-bundle-analyzer to confirm lazy loading\n\n4. Hero Visual Fallback Test:\n   - Test with `prefers-reduced-motion: reduce` media query\n   - Verify static poster displays instead of video/shader\n   - Test video playback on supported browsers\n\n5. Cross-Browser Test:\n   - Chrome, Firefox, Safari - verify animation consistency\n   - Test on actual mobile devices if possible",
-        "subtasks": []
+        "subtasks": [],
+        "updatedAt": "2026-08-07T13:49:13.370Z"
       },
       {
-        "id": 10,
+        "id": "10",
         "title": "Figma Design Upstream + MCP Integration",
         "description": "Establish Figma as the design source for landing and public RO pages. Provision Professional Dev seat ($12/month) for remote MCP access. Configure .mcp.json with Figma remote MCP endpoint. Implement Code Connect to map Figma components to apps/web/components/ui/* primitives. Ensure AI can read design structure and generate code referencing real components.",
         "status": "pending",
         "dependencies": [
-          8
+          "8"
         ],
         "priority": "medium",
         "details": "Implementation Details:\n\n1. Figma File Setup:\n   - Create `web-design-system.fig` as canonical design source\n   - Match variable names to tokens.css exactly (e.g., `--spacing-2`)\n   - Organize components using same structure as `apps/web/components/ui/`\n   - Document spacing/typography using Figma variables\n\n2. Dev Seat Provisioning:\n   - Upgrade to Professional plan ($12/month)\n   - Enable 200 calls/day remote MCP access\n   - Note: Free tier (6 calls/month) insufficient for production use\n\n3. MCP Configuration (`project/.mcp.json`):\n   ```json\n   {\n     \"mcpServers\": {\n       \"figma\": {\n         \"command\": \"npx\",\n         \"args\": [\"-y\", \"@modelcontextprotocol/server-figma\", \"--access-token\", \"${FIGMA_ACCESS_TOKEN}\"]\n       }\n     }\n   }\n   ```\n   - Environment variable: `FIGMA_ACCESS_TOKEN`\n   - Endpoint: `https://mcp.figma.com/mcp` (OAuth)\n\n4. Code Connect Implementation:\n   - Install Figma Code Connect plugin\n   - Map each Figma component to corresponding React component\n   - Ensure props interface matches Figma variant properties\n   - Code without Code Connect bypasses design system - prohibited for production\n\n5. Design-to-Code Workflow:\n   - AI reads Figma via MCP to get spacing/typography/variables\n   - Generates code using `apps/web/components/ui/*` primitives\n   - Human reviews generated code against design spec\n   - Code Connect ensures generated code references real components\n\n6. Documentation Requirements:\n   - Update `project_index.md` with MCP configuration changes\n   - Create ADR for tool portability (MCP servers can be swapped)\n   - Document Figma variable naming conventions",
@@ -1092,7 +1094,7 @@
         "subtasks": []
       },
       {
-        "id": 11,
+        "id": "11",
         "title": "Full Site Consistency Closure (Three Visual Systems × All Entry Points)",
         "description": "Close consistency gaps across all entry points following the three visual zones: landing dark mode, public RO paper white, and workspace deep dark shell. Update public RO pages, workspace SDF editor, About/auth pages, and Explore entry. Establish Playwright screenshot baselines for all five entry points.",
         "status": "pending",
@@ -1106,7 +1108,7 @@
         "subtasks": []
       },
       {
-        "id": 12,
+        "id": "12",
         "title": "Visual Regression Gate (shots.mjs → CI Integration)",
         "description": "Extend apps/web/test/visual/shots.mjs to cover fixed 5 viewports × key page collection. Output both baseline and comparison screenshots. Integrate into lint/CI pipeline to trigger comparison on visual changes. Clean up deprecated assets: apps/web/scripts/generate-landing-hero.mjs and public/hero/landing-hero.png.",
         "status": "pending",
@@ -1120,9 +1122,13 @@
       }
     ],
     "metadata": {
-      "created": "2026-08-07T10:20:07.679Z",
-      "updated": "2026-08-07T10:20:07.679Z",
-      "description": "Tasks for master context"
+      "version": "1.0.0",
+      "lastModified": "2026-08-07T13:49:13.370Z",
+      "taskCount": 12,
+      "completedCount": 8,
+      "tags": [
+        "master"
+      ]
     }
   }
 }

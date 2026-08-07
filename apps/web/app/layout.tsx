@@ -37,6 +37,12 @@ export default async function RootLayout({ children }: { children: ReactNode }) 
   return (
     <html lang={locale === "zh" ? "zh-CN" : "en"} className={displaySerif.variable}>
       <body>
+        {/* Task 9：JS 可用性标记，CSS 滚动进入动效以 html.js 门控（无 JS 时内容始终可见） */}
+        <script
+          dangerouslySetInnerHTML={{
+            __html: "document.documentElement.classList.add('js')",
+          }}
+        />
         <NextIntlClientProvider messages={messages}>
           {children}
         </NextIntlClientProvider>

@@ -7,26 +7,29 @@
 |---|---|---|
 | `AGENTS.md` | 项目规则总入口（基线指引/分类规范/Memory/工具可迁移性/索引/安全红线） | 活文档 |
 | `project_index.md` | 本索引 | 活文档 |
-| `.mcp.json` | 项目级 MCP 配置（kimi-code/Cursor；含明文 MiniMax key） | 活文档，**本机持有，已移出 git 跟踪**（2026-07-31） |
+| `.mcp.json` | 项目级 MCP 配置（kimi-code/Cursor；含明文 MiniMax key）；2026-08-07 追加 `figma`（mcp-remote 桥接 `https://mcp.figma.com/mcp`，OAuth 授权，走本机 7890 代理，Task 10） | 活文档，**本机持有，已移出 git 跟踪**（2026-07-31） |
 | `.vscode/mcp.json` | VS Code MCP 配置（task-master-ai 直连 node_modules 本地入口） | 活文档，**本机持有，不入库**（含 key） |
 | `.env` / `.env.example` | 密钥 / 密钥模板 | 只读，禁打印 |
 | `.gitignore` | git 忽略规则（含 .env） | 活文档 |
 | `minimax_proxy.py` | MiniMax API 本地代理（上个 session 产物） | 活文档 |
 | `package.json` / `pnpm-workspace.yaml` / `pnpm-lock.yaml` | pnpm workspace 根配置与锁文件（P1A-1）；`task-master-ai` 已入 root devDependencies（2026-07-31，VS Code MCP 直连用） | 活文档 |
 | `apps/web/components.json` | shadcn/ui `new-york` 配置（Task 7.4，cssVariables + 本地 aliases） | 活文档 |
-| `apps/web/components/ui/{button,card,badge,skeleton}.tsx` | shadcn/ui 基础组件（Task 7.4，token 化默认表面） | 活文档 |
+| `apps/web/app/tokens.css` | 视觉 token 单一事实源（Task 2 颜色 + WCAG 门禁；Task 8 追加结构 token：state-danger/motion-*/radius-card/shadow-*/ease-*/z-*，spec §3.1） | 活文档 |
+| `apps/web/components/ui/{button,card,badge,skeleton,input,dialog}.tsx` | shadcn/ui 基础组件（Task 7.4；Task 8 双表面化：祖先 `.surface-dark` 切换深色，destructive 改 state-danger，新增 input/dialog） | 活文档 |
 | `apps/web/components/landing/SiteHeader.tsx` | Landing 页站点 Header（i18n 导航、滚动模糊背景、真实 `#latest/#trust` 入口） | 活文档 |
-| `apps/web/components/landing/Hero.tsx` | Landing 页 Hero（全幅 bitmap 主视觉、i18n 文案、双 CTA、symbol 变体标记） | 活文档 |
+| `apps/web/components/landing/Hero.tsx` | Landing 页 Hero（ro-loop 无缝循环视频主视觉 + poster/reduced-motion 降级、i18n 文案、双 CTA、landing-reveal 进入 stagger） | 活文档 |
 | `apps/web/components/landing/LatestResearch.tsx` | Landing 页 `#latest` 深色内容带（真实锚点、三张 RO preview，占位至 P2 `GET /explore`） | 活文档 |
 | `apps/web/components/landing/TrustBand.tsx` | Landing 页 `#trust` 信任区（版本/provenance、许可作者贡献、AI+人工复核三支柱） | 活文档 |
 | `apps/web/components/landing/EvolutionPanel.tsx` | Landing 页四阶段演化面板（create/parse/diff/publish stage morph + 自动演示一轮即停，2026-08-07） | 活文档 |
 | `apps/web/components/landing/HermesBand.tsx` | Landing 页 Hermes 能力带（上下文/证据/审批三卡，2026-08-07） | 活文档 |
 | `apps/web/components/landing/evolving-ro-symbol.tsx` | Landing 页 Evolving RO Symbol（Task 7.7，server-safe SVG，两种变体、六面 SDF 结构、减弱动效支持；2026-08-07 重写为计算环形楔形几何 + stage prop） | 活文档 |
-| `apps/web/public/hero/{ro-symbol,hero-ambient}.{png,webp}` | Landing Hero 生成资产（figA 玻璃楔形环 + figB 氛围底，Gemini 生成，源 `docs/user_ideas/figA.png`/`figB.png`，2026-08-07） | 活文档 |
+| `apps/web/components/landing/in-view.tsx` | Landing 滚动进入触发器（IntersectionObserver 加 `landing-inview--seen` 播 landing-reveal；html.js 门控无 JS 可见、reduced-motion 直过，Task 9） | 活文档 |
+| `apps/web/public/hero/ro-loop.{webm,mp4}` + `ro-loop-poster.webp` | Landing Hero 循环视频资产（Gemini 图生视频 video1.mp4 → ffmpeg 首尾 1s 叠化无缝循环 + 中央方形裁切去水印；webm 715KB/mp4 1.0MB/poster 31KB，2026-08-07） | 活文档 |
+| `apps/web/public/hero/{ro-symbol,hero-ambient}.{png,webp}` | Landing Hero 生成资产（figA 玻璃楔形环 + figB 氛围底，Gemini 生成，源 `docs/user_ideas/figA.png`/`figB.png`；ro-symbol 自 Task 9 起不再被引用，Task 12 待清理，hero-ambient 仍作氛围底） | 活文档 |
 | `apps/web/public/hero/landing-hero.png` | Landing Hero bitmap 主视觉资产（本地 Playwright 生成，已被生成资产路线取代，Task 12 待清理） | 活文档 |
 | `apps/web/scripts/generate-landing-hero.mjs` | Landing Hero bitmap 生成脚本（Playwright 渲染 SVG/HTML 合成图至 public/hero） | 活文档 |
 | `apps/web/lib/utils.ts` | `cn` class merge 工具（Task 7.4） | 活文档 |
-| `apps/web/test/ui-components.test.ts` | Task 7.4 storyless server-rendering assertion（50 web tests total after Task 7.7 review fix） | 活文档 |
+| `apps/web/test/ui-components.test.ts` | 原语 storyless server-rendering 断言（Task 7.4；Task 8 追加双表面 `.surface-dark` 与 state-danger 断言） | 活文档 |
 | `apps/web/test/evolving-ro-symbol.test.tsx` | Task 7.7 Evolving RO Symbol server-rendering、变体、动效与 SVG 层级断言 | 活文档 |
 | `apps/web/test/landing-page.test.tsx` | Landing 页面结构回归测试（`#latest/#trust` 真 section + data module 标记，52 web tests total） | 活文档 |
 | `apps/web/test/visual/shots.mjs` | Landing 视觉截图脚本（Task 7.10，两变体、三尺寸、reduced-motion） | 活文档 |
@@ -195,6 +198,7 @@
 | `docs/user_ideas/OpenScience-Kimi-Handoff-v2.zip` | 用户×GPT 讨论交接 v2（HANDOFF.md + hero 参考图；已解压至 handoff-v2-extract/ 并入设计方向 v2 定稿） | 只读原件 |
 | `docs/user_ideas/handoff-v2-extract/` | 上述 zip 的解压工作副本（HANDOFF.md + assets/openscience-homepage-hero-v3.png） | 工作副本 |
 | `docs/user_ideas/主页原型图.png` | 首页 art-direction 参考图（1672×941，Evolving RO 六面环+暗场 hero；禁止直接作上线资产） | 只读原件 |
+| `docs/user_ideas/generated_figures/` | Gemini 生成素材目录（figA/figB/figD1 等图 + `video/video1.mp4` 图生视频源；figD1 六面板 Hermes 枢纽版为用户选定方向，video1 已加工为 public/hero/ro-loop.* 上线资产） | 只读原件 |
 | `docs/decisions/` | 决策记录 ADR | ADR-001 已接受；ADR-002 已建 |
 | `docs/decisions/ADR-001-target-architecture.md` | 目标架构决策：选择性抽取 Scholars Tea，按 Baseline 重建平台底座 | 活文档（已接受） |
 | `docs/decisions/ADR-002-agent-tooling-portability.md` | Agent 工具能力与可迁移性决策（项目内安装/密钥不入库/分阶段工具候选） | 活文档 |
