@@ -237,7 +237,7 @@
       "login": "Log in"
     },
     "hero": {
-      "title": "Let research keep evolving.",
+      "title": "Let research\nkeep evolving.",
       "subtitle": "Bring papers, data, code, and discussion together as open, verifiable, evolving research objects.",
       "ctaExplore": "Explore research",
       "ctaCreate": "Create research object",
@@ -246,6 +246,59 @@
     "latest": {
       "title": "Latest research",
       "empty": "No public research yet. Stay tuned."
+    },
+    "evolution": {
+      "title": "How research evolves",
+      "stages": {
+        "create": {
+          "name": "Create the object",
+          "desc": "Papers, data, code, and discussion converge into one object."
+        },
+        "parse": {
+          "name": "Hermes parses",
+          "desc": "AI extracts structure into verifiable knowledge facets."
+        },
+        "diff": {
+          "name": "Collaborate & diff",
+          "desc": "Collaborators propose changes; every change stays visible."
+        },
+        "publish": {
+          "name": "Merge & publish",
+          "desc": "Merge into a new version, published with full provenance."
+        }
+      }
+    },
+    "hermes": {
+      "title": "Hermes researches with you",
+      "subtitle": "Not an all-purpose assistant — a collaborator that understands context, checks evidence, and respects boundaries.",
+      "items": {
+        "context": {
+          "name": "Context awareness",
+          "desc": "Reads every version and discussion of the RO; answers from the object itself."
+        },
+        "evidence": {
+          "name": "Evidence checking",
+          "desc": "Separates fact, source, and inference — uncertainty stated explicitly."
+        },
+        "approval": {
+          "name": "Graded approval",
+          "desc": "High-impact actions come with previewable diffs; R0–R4 sets intervention strength."
+        }
+      }
+    },
+    "trust": {
+      "title": "Open, but trusted.",
+      "subtitle": "Versions, licenses, reviews, and evidence stay traceable.",
+      "pillars": {
+        "one": "Version and provenance are preserved",
+        "two": "Licenses, authors, and contributions are explicit",
+        "three": "AI review and human review run in parallel"
+      },
+      "descriptions": {
+        "one": "Version chains and provenance stay easy to trace.",
+        "two": "Authors, licenses, and contribution boundaries are explicit.",
+        "three": "AI review and human review run in parallel with evidence preserved."
+      }
     }
   }
 }

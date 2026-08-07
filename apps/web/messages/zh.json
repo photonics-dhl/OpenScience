@@ -237,7 +237,7 @@
       "login": "登录"
     },
     "hero": {
-      "title": "让研究，持续演化。",
+      "title": "让研究，\n持续演化。",
       "subtitle": "将论文、数据、代码与讨论，组织为开放、可验证、可演化的研究对象。",
       "ctaExplore": "探索研究",
       "ctaCreate": "创建研究对象",
@@ -246,6 +246,59 @@
     "latest": {
       "title": "最新研究",
       "empty": "暂无公开研究，敬请期待。"
+    },
+    "evolution": {
+      "title": "研究如何演化",
+      "stages": {
+        "create": {
+          "name": "创建研究对象",
+          "desc": "论文、数据、代码与讨论，汇入同一个对象。"
+        },
+        "parse": {
+          "name": "Hermes 解析",
+          "desc": "AI 提取结构，形成可验证的知识面。"
+        },
+        "diff": {
+          "name": "协作与 Diff",
+          "desc": "协作者提出修改，每一处变化清晰可查。"
+        },
+        "publish": {
+          "name": "合并与发布",
+          "desc": "合并为新版本公开发布，保留完整溯源。"
+        }
+      }
+    },
+    "hermes": {
+      "title": "Hermes 与你共同研究",
+      "subtitle": "不是万能助手，而是懂上下文、查证据、守边界的合作者。",
+      "items": {
+        "context": {
+          "name": "上下文理解",
+          "desc": "理解 RO 的全部版本与讨论，回答基于对象本身。"
+        },
+        "evidence": {
+          "name": "证据检查",
+          "desc": "区分事实、来源与推断，不确定性明确标注。"
+        },
+        "approval": {
+          "name": "分级审批",
+          "desc": "高影响操作先给出可预览 diff，R0–R4 决定介入强度。"
+        }
+      }
+    },
+    "trust": {
+      "title": "开放，但可信。",
+      "subtitle": "版本、许可、评审和证据都可追踪。",
+      "pillars": {
+        "one": "版本与 provenance 全记录",
+        "two": "许可、作者与贡献明确",
+        "three": "AI 审核与人工复核并行"
+      },
+      "descriptions": {
+        "one": "版本链与 provenance 清晰可追踪。",
+        "two": "作者、许可与贡献边界公开明确。",
+        "three": "AI 审核与人工审核并行，保留证据。"
+      }
     }
   }
 }

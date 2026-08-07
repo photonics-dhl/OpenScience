@@ -108,14 +108,24 @@ describe('EvolvingRoSymbol', () => {
     expect(markup).toContain('data-trajectory-junction="branch"');
     expect(markup).toContain('data-trajectory-junction="merge"');
     expect(markup).toContain(
-      'data-trajectory="branch" d="M360 390 C420 320 472 270 525 225"',
+      'data-trajectory="branch" d="M470 405 C490 472 506 542 522 611"',
     );
     expect(markup).toContain(
-      'data-trajectory="merge" d="M525 225 C562 275 548 350 440 410"',
+      'data-trajectory="merge" d="M522 611 C546 542 560 474 566 406"',
     );
     expect(markup).toContain('data-diff-node="branch"');
-    expect(markup).toContain('cx="360" cy="390"');
-    expect(markup).toContain('cx="440" cy="410"');
+    expect(markup).toContain('cx="470" cy="405"');
+    expect(markup).toContain('cx="566" cy="406"');
+    expect(markup).toContain('cx="522" cy="611"');
+  });
+
+  it('builds every facet as an annular wedge around an open center', () => {
+    const markup = renderSymbol();
+
+    // six wedges => six outer arcs on the outer radius per visible layer
+    expect(markup.match(/A330 330 0 0 1/g)?.length).toBeGreaterThanOrEqual(18);
+    // and six closing arcs on the inner radius (open center hole)
+    expect(markup.match(/A158 158 0 0 0/g)?.length).toBeGreaterThanOrEqual(18);
   });
 
   it('renders the required historical outlines and three visible outline layers per facet', () => {
@@ -134,5 +144,32 @@ describe('EvolvingRoSymbol', () => {
     expect(markup.match(/x="-35%" y="-35%" width="170%" height="170%"/g)).toHaveLength(
       2,
     );
+  });
+
+  it('dims the ring and hides the trajectory in the create stage', () => {
+    const markup = renderSymbol({ stage: 'create' });
+
+    expect(markup).not.toContain('data-diff-node="branch"');
+    expect(markup).not.toContain('data-trajectory="branch"');
+    expect(markup).toContain('opacity:0.35');
+    // the problem facet stays lit as the starting point
+    expect(markup).toContain('data-facet="problem"');
+  });
+
+  it('shows only the main trajectory in the parse stage', () => {
+    const markup = renderSymbol({ stage: 'parse' });
+
+    expect(markup).toContain('data-trajectory="main"');
+    expect(markup).not.toContain('data-trajectory="branch"');
+    expect(markup).not.toContain('data-diff-node');
+    expect(markup).toContain('opacity:0.75');
+  });
+
+  it('emphasizes branch, merge, and the diff node in the diff stage', () => {
+    const markup = renderSymbol({ stage: 'diff' });
+
+    expect(markup).toContain('data-trajectory="branch"');
+    expect(markup).toContain('data-trajectory="merge"');
+    expect(markup.match(/data-diff-node="/g)).toHaveLength(1);
   });
 });

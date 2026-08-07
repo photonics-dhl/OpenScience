@@ -1412,3 +1412,15 @@ body {
 .font-display {
   font-family: var(--font-display), 'Songti SC', serif;
 }
+
+/* ===== Landing hero 符号呼吸动效（仅 opacity/transform 级；reduced-motion 不加载） ===== */
+@keyframes hero-symbol-breathe {
+  from { transform: scale(1); }
+  to { transform: scale(1.015); }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .hero-symbol-breathe {
+    animation: hero-symbol-breathe 12s ease-in-out infinite alternate;
+  }
+}

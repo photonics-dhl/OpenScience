@@ -1,16 +1,13 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { useLocale, useTranslations } from 'next-intl';
-import LocaleSwitcher from '../LocaleSwitcher';
-import type { Locale } from '../../i18n/locale';
+import { useTranslations } from 'next-intl';
 
 const linkClassName =
   'whitespace-nowrap rounded-sm px-1 py-1.5 text-xs text-hero-muted no-underline transition-colors hover:text-hero-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-primary focus-visible:ring-offset-2 focus-visible:ring-offset-hero-bg sm:px-2 sm:text-sm';
 
 export default function SiteHeader() {
   const t = useTranslations('landing');
-  const locale = useLocale() as Locale;
   const [isScrolled, setIsScrolled] = useState(false);
 
   useEffect(() => {
@@ -32,7 +29,7 @@ export default function SiteHeader() {
         isScrolled ? 'bg-hero-bg/80 backdrop-blur' : 'bg-transparent'
       }`}
     >
-      <div className="mx-auto flex w-full max-w-7xl flex-wrap items-center gap-y-3 px-5 py-4 sm:flex-nowrap sm:justify-between sm:px-6">
+      <div className="mx-auto flex w-full max-w-none flex-wrap items-center gap-y-3 px-5 py-4 sm:flex-nowrap sm:justify-between sm:px-6 lg:px-10">
         <a
           href="/"
           aria-label="OpenScience"
@@ -57,10 +54,12 @@ export default function SiteHeader() {
             <a href="/#trust" className={linkClassName}>
               {t('nav.about')}
             </a>
-            <a href="/login" className={linkClassName}>
+            <a
+              href="/login"
+              className="inline-flex items-center gap-2 rounded-full border border-border-subtle px-4 py-2 text-sm text-hero-text transition-colors hover:border-hero-text/30 hover:bg-white/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-primary focus-visible:ring-offset-2 focus-visible:ring-offset-hero-bg"
+            >
               {t('nav.login')}
             </a>
-            <LocaleSwitcher locale={locale} />
           </div>
         </nav>
       </div>
