@@ -1,5 +1,13 @@
 # OpenScience (XGS) 进度日志
 
+## 2026-08-08（产品网页 Task 1 / v3 路线只读预检）— 原生确定性母版可直接复用
+
+- **代码证据**：`apps/web/components/landing/Hero.tsx` 已把 ambient、左侧可读性 veil、右侧 RO loop/poster、版本标签、CTA 与移动端/reduced-motion 回退分层；`apps/web/scripts/generate-landing-hero.mjs` 已能以 SVG + Playwright 确定性输出原生主视觉，不需要让图片模型控制整幅构图。
+- **资产证据**：`hero-ambient`、`landing-hero.png`、`ro-loop-poster.webp` 与对应视频均已版本化存在。现有 ambient 的星尘感需要移除或降级，但 RO 位置、蓝色证据线和橙色 diff 语义可复用。
+- **Figma 证据**：过渡文件 master `37:2` 的深色 Workspace、纸白 Public RO、Ultrafast Science 策展三表面已经建立统一 RO ID/版本叙事；下一步应精修暗色主视觉材料与证据汇入，不需要重做整体产品方向。
+- **边界**：本预检只读取本地代码/资产和 Figma 截图；未修改代码或 Figma，未加载 `.env`，未调用 MiniMax。路线 1（原生确定性母版）仍是推荐项，但必须等待用户选择后才实施。
+- **⏳ 下一步**：用户从路线 1/2/3 中确认 v3 策略；确认前不生成新资产、不导入 rejected v2。
+
 ## 2026-08-08（产品网页 Task 1 / v2.1 静态验收）— 调用成功，视觉拒绝
 
 - **单次恢复调用**：提交 `2ebd1ae` 后按计划执行一次中国区 `image-01` 请求；key1 成功，未触发 key2、未重试。产出 1280×720 PNG（SHA-256 `5C159F116C5AA4FC0E57F816F07C73705B17BBBED0F4A87F20C9086F8A61DF7A`）和脱敏 provenance。

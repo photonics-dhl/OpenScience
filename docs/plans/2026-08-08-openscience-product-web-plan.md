@@ -78,6 +78,7 @@
   Result: the key1 CN call produced a valid 1280×720 PNG and safe sidecar, but the image failed gates 1, 3, 5, 6 and 7 and the no-particles/centered-subject/rectangular-vignette constraints. Retain it as a rejected exploration; Step 7.7 and video remain blocked pending a newly approved v3 direction.
 - [ ] **Step 7.7: Build and review the native composite**
   Only after the raw background passes, import it into Figma `03 Patterns` behind the existing exact RO asset. Add native artifact summaries, blue evidence path, one orange version change, RO ID and version anchors. Capture desktop 1440×900 and mobile 390×844 frames; require the 3-second reading “different research materials enter one continuously evolving RO.” User approval completes Step 7.
+  Current gate: v2 raw background was rejected, so it cannot be imported. A read-only audit confirms the existing layered `Hero.tsx`, deterministic SVG/Playwright generator, RO loop/poster and Figma master `37:2` can support a fully native deterministic composite. Await user selection of the v3 route before revising this step; no further paid generation is authorized.
 - [ ] **Step 8: Create component families**
   Map Button, Card, Badge, Input, Dialog, Tabs, RO Card, SDF Node, Artifact Card, Review Row, Version Diff and Hermes Rail to existing or newly approved `apps/web/components/ui/*` primitives.
 - [ ] **Step 9: Prototype the six screens**

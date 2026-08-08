@@ -75,7 +75,7 @@
 | `docs/specs/2026-08-08-openscience-product-web-design.md` | 产品级网页设计 spec（Monumental Scholarly Intelligence + Living Research Observatory；统一 RO 工作流、Hermes/Live2D、Public RO、Ultrafast Science 策展、许可/版本与 MiniMax 资产边界；方向已批准，§11 增补待复核） | 活文档 |
 | `docs/plans/2026-08-08-openscience-product-web-plan.md` | 产品级网页实现计划（Figma 六屏、Dashboard/Workspace、创建/Hermes/版本、Public RO/Explore、Editorial Curator、Live2D/质量门禁六任务；用户已确认 spec） | 活文档 |
 | `docs/decisions/ADR-004-figma-account-ownership-and-migration.md` | Figma 临时/长期账号所有权、双 OAuth 隔离、canonical 设计稿迁移与验收决策 | Accepted |
-| `docs/handoff/2026-08-08-product-web-tooling-handoff.md` | 产品网页工具前置交接（Codex 10 MCP、双 Figma OAuth、迁移 ADR、重启后验证顺序） | 当前 handoff |
+| `docs/handoff/2026-08-08-product-web-tooling-handoff.md` | 产品网页 Task 1 当前交接（工具/Figma 基础、MiniMax v1/v2 rejected 证据、v3 原生确定性路线预检与下一选择门） | 当前 handoff |
 | `docs/design-assets/prompts/2026-08-08-living-research-observatory-v1.md` | Living Research Observatory 静态背景活设计；v2.1 `Precision Evidence Chamber` 锁定证据汇入四区布局、生成/原生分层、MiniMax 正负 prompt、八项拒绝门与视频边界；最终 API 组合长度 1440 字符并已获用户批准 | 活文档，v2.1 已批准 |
 | `docs/design-assets/generated/openscience-observatory-v1.png` / `.provenance.json` | MiniMax `image-01` 中国区生成的 1280×720 探索图及脱敏 provenance；因植物状六节点与产品视觉/语义不一致被用户拒绝，仅保留为可追溯失败样本，不得导入 Figma 或派生视频 | Rejected exploration |
 | `docs/design-assets/generated/openscience-evidence-chamber-v2.png` / `.provenance.json` | MiniMax `image-01` 中国区 key1 生成的 1280×720 v2.1 背景及脱敏 provenance；因居中隧道/发光台座/粒子/硬黑边与移动裁切不满足八项门禁而拒绝，不得导入 Figma 或派生视频 | Rejected exploration |
