@@ -1,5 +1,11 @@
 # OpenScience (XGS) 进度日志
 
+## 2026-08-08（产品网页 Task 1 / Step 8 第三批组件）— 用户确认通过
+
+- **批准结论**：用户明确回复“确认”，SDF Node、Artifact Card、Review Row 的状态颜色、真实 artifact 字段与可逆 review 契约通过批次门。
+- **解锁范围**：允许继续最后两组 Version Diff、Hermes Rail；完成后回收 Step 8 总体验收并同步组件缺口。
+- **⏳ 下一步**：在 Figma `02 Components` 串行建立 Version Diff 与 Hermes Rail，随后运行全量组件集合审计。
+
 ## 2026-08-08（产品网页 Task 1 / Step 8 第三批组件）— SDF Node、Artifact Card、Review Row 已建立
 
 - **Figma 交付**：`02 Components` 新增 wrapper `82:7`；SDF Node `82:67`（Idle/Active/Verified/Blocked × Paper/Dark 8 variants）、Artifact Card `82:112`（Paper/Data/Code × Paper/Dark 6 variants）、Review Row `82:151`（Open/Accepted/Needs changes × Paper/Dark 6 variants）。

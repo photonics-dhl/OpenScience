@@ -37,9 +37,10 @@
   - Step 8 第二批已完成：wrapper `78:7`，Dialog `78:33`、Tabs `78:116`、RO Card `78:173`；结构审计通过，本地截图为 `docs/design-assets/figma/2026-08-08-step8-navigation-domain-v1.png`。Tabs 明确保留 `ui/tabs.tsx` code gap，未修改网页代码。
   - 用户已明确确认 Step 8 第二批；SDF Node、Artifact Card、Review Row 第三批解锁，Version Diff 与 Hermes Rail 继续留到下一检查点。
   - Step 8 第三批已完成：wrapper `82:7`，SDF Node `82:67`、Artifact Card `82:112`、Review Row `82:151`；结构审计通过，本地截图为 `docs/design-assets/figma/2026-08-08-step8-research-workflow-v1.png`。本批没有 accent-diff 橙色。
+  - 用户已明确确认 Step 8 第三批；Version Diff 与 Hermes Rail 最后一批解锁，随后进行 Step 8 全量组件审计。
 - **Constraints:** 不打印 `.env`；MCP 总数保持 ≤10；Figma 代码 token 是 canonical；`use_figma` 写入严格串行；每个组件完成后截图并由用户确认；长期账号仍是未来 canonical owner。
 - **Open risks:** 长期账号只有 starter/View；Button 的 Destructive/Icon 子集合尚未创建；Playwright 尚未作为项目依赖锁定；Figma 过渡文件仍待迁移。Figma MCP 后续写入继续严格串行。
-- **Next action:** 先让用户确认 SDF Node/Artifact Card/Review Row 第三批截图；若确认，继续 Version Diff 与 Hermes Rail，随后回收 Step 8 总体验收。不得提前修改网页代码或调用 MiniMax。
+- **Next action:** 串行建立 Version Diff 与 Hermes Rail 最后一批并截图审计；通过后回收 Step 8 总体验收，记录 Tabs code gap 与 domain implementation backlog。不得提前修改网页代码或调用 MiniMax。
 - **Execution checkpoint:** 双 key 客户端、区域修复、安全 provenance 与 v2 prompt-file CLI 已完成；Figma `37:2` 视觉母版已建立。`openscience-observatory-v1.png` 被用户判定与项目风格不一致，根因是 prompt 违反 spec §11.2，让模型同时承担材料纹理与六节点产品语义。不得导入 v1 或生成其视频版本。
 - **v2 recovery result:** 旧 2013 长度问题已解决；`openscience-evidence-chamber-v2.png` 与 `.provenance.json` 已由 key1 中国区调用产出且 provenance 安全。视觉门失败，文件只作可追溯失败样本，不得进入 Figma/H3。下一次付费生成必须先批准新的 v3 方向和版本化输出名。
 - **Approved responsibility reset:** 用户接受推荐项 A：下一张生成资产优先服务 Landing / Workspace 暗色主视觉。复用现有精确蓝色玻璃六面 RO 环作为原生前景；MiniMax 仅生成深墨科研空间、材料质感和受控光场，不生成节点、ID、SDF、轨迹、diff 或 UI。
