@@ -1,6 +1,6 @@
 # Handoff — 2026-08-08 Product Web Tooling
 
-- **Current goal:** Task 1 Step 9 第二检查点已获确认；第三检查点 skeleton 已在 canonical 建立，继续串行完成 Public RO + Ultrafast Science Collection 内容。
+- **Current goal:** Task 1 Step 9 第三检查点 Public RO 已完成并固化本地证据；继续串行完成 Ultrafast Science Collection。
 - **Done:**
   - 产品设计 spec：`docs/specs/2026-08-08-openscience-product-web-design.md`。
   - 实施计划：`docs/plans/2026-08-08-openscience-product-web-plan.md`，用户选择 subagent-driven，但要求前置工具齐全后再执行。
@@ -53,7 +53,9 @@
   - 最终结构审计：Dashboard 87 nodes / 10 local instances，Workspace 144 nodes / 15 local instances；两屏 1440×900，0 image fills、0 gradients、0 semantic overflow、0 structural sibling overlap，批准字体 only，操作目标至少 44px；唯一橙色 owner 为 Version Diff `2045:85`。
   - 两条真实 prototype reaction 已验证：Auth/Create `2020:10` → Dashboard `2031:10`，Dashboard `2036:17` → RO Workspace `2031:11`，均为 200ms dissolve。Landing `2010:24` → Auth/Create 因第一批 screen 仍嵌套在 Frame wrapper 中而被 Figma 拒绝（Debug UUID `e2c24bcb-14d1-42a0-abaf-eae1e7caeab8`）；无部分写入，不得盲目重试或未审查地改造已批准第一批结构。
   - 第二检查点本地恢复截图：`docs/design-assets/figma/2026-08-09-step9-{dashboard,ro-workspace,cockpit-states}-v1.png`；尺寸 1440×900 / 1440×900 / 2960×220，短期 asset URL 未写入仓库；用户已明确回复“确认”，第三检查点解锁。
-  - 第三检查点已启动：顶层 Section `2069:99`，Public RO `2069:100`、Ultrafast Science Collection `2069:101`、state/interaction rail `2069:102`；当前仅为精确 1440×900 / 1440×900 / 2960×220 空骨架，后续内容严格串行写入。
+  - 第三检查点已启动：顶层 Section `2069:99`，Public RO `2069:100`、Ultrafast Science Collection `2069:101`、state/interaction rail `2069:102`；Public RO 已填充，其余节点后续严格串行写入。
+  - Public RO `2069:100` 已完成：复用纸张母版 `37:104` 与 Tabs/RO Card/Artifact/Button 本地实例，覆盖稳定 RO ID、v0.4、Insight、版本引用、许可、媒体 provenance 与期刊精选免责声明；审计为 1440×900、84 nodes、5 instances、0 image fill、0 gradient、批准字体 only、操作目标至少 44px。
+  - Public RO 本地恢复截图：`docs/design-assets/figma/2026-08-09-step9-public-ro-v1.png`，SHA-256 `9893460E328DE5AF02D488668AD4A64A3C29760661EAB20557B4720B2A210F1E`；短期 asset URL 未写入仓库。
 - **Constraints:** 不打印 `.env`；MCP 总数保持 ≤10；Figma 代码 token 是 canonical；`use_figma` 写入严格串行；每个组件完成后截图并由用户确认；后续新增设计和 Code Connect 只允许使用 `gjhowMG7cG4clKwvhvF08E`。
 - **Open risks:** Public RO/Collection 尚未建立，Landing → Auth/Create 原型入口仍因 Figma destination rejection 待修，因此 Step 9 仍为部分完成。MCP 不暴露文件 owner 字段；Code Connect 仍被 student tier plan gate 阻塞；Button 的 Destructive/Icon 子集合尚未创建；Playwright 尚未作为项目依赖锁定。Figma MCP 后续写入继续严格串行。
 - **Next action:** 只在 canonical `04 Screens` 建立 Public RO + Ultrafast Science Collection 第三批；Step 9 收尾时修复 Landing 入口并运行完整 prototype/state/visual audit。

@@ -12,6 +12,8 @@
 - **安全与范围**：未读取 `.env`，未调用 MiniMax、未生成视频、未修改网页代码或 Code Connect；Step 9 仍为部分完成，不提前勾选。
 - **用户门禁**：用户已于本轮明确回复“确认”；Dashboard + RO Workspace 视觉基线冻结，第三检查点 Public RO + Ultrafast Science Collection 解锁。
 - **第三检查点启动**：canonical `04 Screens` 已建立顶层 Section `2069:99`、Public RO 空画板 `2069:100`、Ultrafast Science Collection 空画板 `2069:101` 与状态/交互条 `2069:102`；三者尺寸/位置门通过，内容将分屏串行写入，避免 API 中断丢失整批工作。
+- **Public RO 完成**：`2069:100` 已采用批准的纸张学术阅读面，左侧复用母版 `37:104` 呈现标题、作者、RO ID、v0.4、Insight、figure/provenance 与具体版本引用；右侧使用 Tabs、Published RO Card、许可/引用契约和 Public Media Artifact，明确 `Published on OpenScience`、作者声明许可与 `Selected by Ultrafast Science · editorial curation ≠ peer-review approval`。
+- **Public RO 审计与证据**：1440×900、84 nodes、5 local instances、0 image fills、0 gradients，字体仅 Noto Sans SC / Noto Serif SC / Roboto Mono，命名操作目标均至少 44px。本地截图 `docs/design-assets/figma/2026-08-09-step9-public-ro-v1.png`，SHA-256 `9893460E328DE5AF02D488668AD4A64A3C29760661EAB20557B4720B2A210F1E`。
 - **⏳ 下一步**：只在 canonical `04 Screens` 建立 Public RO + Ultrafast Science Collection，并在 Step 9 收尾时处理 Landing → Auth/Create 原型入口与全量审计。
 
 ## 2026-08-08（产品网页 Task 1 / Step 9 第一检查点）— Landing + Auth/Create 已获用户确认
