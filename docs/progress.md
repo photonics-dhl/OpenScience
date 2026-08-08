@@ -1,5 +1,11 @@
 # OpenScience (XGS) 进度日志
 
+## 2026-08-08（产品网页 Task 1 / Step 8 第二批组件）— 用户确认通过
+
+- **批准结论**：用户明确回复“确认”，Dialog、Tabs、RO Card 的视觉、surface/context 关系、Tabs code gap 标注和 RO 生命周期契约通过批次门。
+- **解锁范围**：允许继续第三批 SDF Node、Artifact Card、Review Row；Version Diff 与 Hermes Rail 仍保留到下一检查点。
+- **⏳ 下一步**：在 Figma `02 Components` 串行建立第三批三组组件，完成后保存截图、结构审计并同步 handoff。
+
 ## 2026-08-08（产品网页 Task 1 / Step 8 第二批组件）— Dialog、Tabs、RO Card 已建立
 
 - **Figma 交付**：`02 Components` 新增 wrapper `78:7`；Dialog `78:33`（Paper/Dark 2 surfaces）、Tabs `78:116`（Overview/SDF/Artifacts/Versions × Paper/Dark 8 variants）、RO Card `78:173`（Draft/Review/Published × Paper/Dark 6 variants）。
