@@ -222,9 +222,14 @@ export default function EditorPage({ params }: { params: { id: string } }) {
   }
 
   return (
-    <div>
+    <div className="workspace-cockpit" data-cockpit="workspace">
       <div className="toolbar">
-        <span className="toolbar-title">{t('title')}</span>
+        <div className="workspace-chrome">
+          <span className="eyebrow">RO WORKSPACE</span>
+          <span className="toolbar-title">{t('title')}</span>
+          <span className="workspace-ro-id">{roId}</span>
+          <span className="badge badge-blue">v{state.version}</span>
+        </div>
         <button className="btn" onClick={handleSave} disabled={saving || !state.dirty}>
           {saving ? t('common.saving') ?? '…' : t('saveToSdf')}
         </button>

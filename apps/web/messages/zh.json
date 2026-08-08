@@ -11,6 +11,13 @@
     "version": "版本",
     "language": "语言"
   },
+  "dashboard": {
+    "title": "研究驾驶舱",
+    "hermesReady": "Hermes 已就绪",
+    "nextAction": { "eyebrow": "唯一下一步行动", "title": "确认方法段落的证据锚点", "description": "Hermes 已将材料整理为可审阅的 SDF 草稿。确认来源位置后，才会进入下一次版本提交。", "cta": "进入 RO 工作区", "progress": "处理进度 68% · 可随时恢复" },
+    "ro": { "draft": "私有草稿", "title": "非平衡光子晶体中的自适应测量", "updated": "刚刚由 Hermes 更新", "versioned": "可回溯版本" },
+    "tasks": { "eyebrow": "任务中心", "extract": "确认证据锚点", "extractMeta": "方法 · 进行中", "review": "查看 AI 结构建议", "reviewMeta": "3 条待确认", "publish": "准备公开版本", "publishMeta": "权限 · 未开始" }
+  },
   "editor": {
     "title": "SDF 编辑器",
     "outline": "大纲",

@@ -1,5 +1,12 @@
 # OpenScience (XGS) 进度日志
 
+## 2026-08-09（产品网页 Task 2 / 首个网页实现切片）— Dashboard + Landing evidence field
+
+- **✅ 已完成**：把用户确认的 Figma 六屏语义映射到现有 Next.js；新增 `/dashboard` action-first 驾驶舱，展示唯一下一步行动、稳定 RO ID `OS-RO-01J8YF7Q`、v0.4 草稿、Hermes 状态与任务轨；现有编辑页增加 `workspace-cockpit` chrome，贯穿 RO ID/版本。
+- **✅ 动效边界**：Landing Hero 新增 `EvidenceField`，18 个确定性蓝色粒子和两条低对比证据轨迹，仅为 `aria-hidden` 环境层；`prefers-reduced-motion` 停止漂移，产品语义仍由原生文本、RO 版本和证据字段承载。未调用 MiniMax、未读取 `.env`、未新增图片/视频。
+- **✅ 验证**：`@openscience/web` Vitest 12 files / 64 tests passed；typecheck passed；Next production build passed；Playwright 1440×900 截图已人工检查 `/dashboard` 与 Landing。
+- **⏳ 下一步**：接入 Dashboard 真实 API 状态与 Public RO/Collection 入口，补 workspace 交互截图和移动端回归；Figma Landing → Auth/Create direct-child 补链仍作为独立维护项。
+
 ## 2026-08-09（产品网页 Task 1 / Step 9 第二检查点）— Dashboard + RO Workspace 已获用户确认
 
 - **Figma 交付**：只在长期账号 canonical 文件 `gjhowMG7cG4clKwvhvF08E` 的 `04 Screens` 新增顶层 Section `2057:99`、Dashboard `2031:10`、RO Workspace `2031:11` 与状态/交互契约条 `2031:12`；施工期 wrapper/row `2031:8`、`2031:9` 已在原型约束诊断后移除。旧过渡源、空 probe、已批准母版 `60:7` 和第一检查点结构未修改。
@@ -17,7 +24,8 @@
 - **第三检查点状态与真实路径**：`2069:102` 覆盖 Public RO、Collection、许可/媒体/access、reduced-motion 和原型契约。`04 Screens` 现有 5 条真实 reaction：Auth/Create → Dashboard、Dashboard → Workspace、Dashboard `2033:12` → Public RO、Public RO `2076:152` → Collection、Collection `2074:129` → Public RO；均使用 200ms dissolve，生产 reduced-motion 使用 instant cut。
 - **最终审计**：Public RO 1440×900 / 86 nodes / 6 instances，Collection 1440×900 / 71 nodes / 4 instances，状态条 2960×220 / 13 nodes；三者均 0 image fills、0 gradients、批准字体 only，命名操作目标均至少 44px。母版 `37:2` 仍为 1440×1600。
 - **本地恢复证据**：`docs/design-assets/figma/2026-08-09-step9-{public-ro,ultrafast-collection,public-states}-v1.png`；SHA-256 分别为 `353682255D974CB928A176A7B7CC88B596F95A7970D95B578CA40B9259832307`、`4A10AEB018F55076E12E6F37A1F9F280AA9E324BD988F83CB53B0398BAF81082`、`48848406C183903F426CC0181E9F96BFE3C8C6931F215AB9A87718320FC909B1`。
-- **⏳ 下一步**：等待用户确认第三检查点视觉；通过后只处理 Landing → Auth/Create 的 Section/direct-child 结构方案与 Step 9 六屏全量 prototype/state/visual audit，不提前进入网页代码。
+- **✅ 用户门禁**：用户已确认第三检查点 Public RO + Ultrafast Science Collection；本轮进入网页实现，不再等待 Figma 结构补链。
+- **⏳ 下一步**：将已批准六屏语义映射到现有 Next.js，先实现 Landing evidence field、Dashboard 驾驶舱与 RO Workspace chrome，再做页面级测试、截图与 docs-sync；Landing → Auth/Create 的 Figma direct-child 补链保留为独立后续项。
 
 ## 2026-08-08（产品网页 Task 1 / Step 9 第一检查点）— Landing + Auth/Create 已获用户确认
 

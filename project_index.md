@@ -22,6 +22,9 @@
 | `apps/web/components/ui/{button,card,badge,skeleton,input,dialog}.tsx` | shadcn/ui 基础组件（Task 7.4；Task 8 双表面化：祖先 `.surface-dark` 切换深色，destructive 改 state-danger，新增 input/dialog） | 活文档 |
 | `apps/web/components/landing/SiteHeader.tsx` | Landing 页站点 Header（i18n 导航、滚动模糊背景、真实 `#latest/#trust` 入口） | 活文档 |
 | `apps/web/components/landing/Hero.tsx` | Landing 页 Hero（ro-loop 无缝循环视频主视觉 + poster/reduced-motion 降级、i18n 文案、双 CTA、landing-reveal 进入 stagger；2026-08-07 v2：符号放大 118vh + 光晕 + 深羽化 mask + contrast 滤镜消方框感，底部三柱核心思想条 01 结构化/02 可验证/03 自进化） | 活文档 |
+| `apps/web/components/landing/EvidenceField.tsx` | Landing/驾驶舱共用的确定性证据环境层：18 个 aria-hidden 蓝色粒子与两条低对比轨迹，支持 reduced-motion 静态降级（Task 2 首个网页切片，2026-08-09） | 活文档 |
+| `apps/web/app/dashboard/page.tsx` | Dashboard 入口，承载 action-first Research Cockpit（稳定 RO ID、Hermes 状态、任务中心；Task 2 首个网页切片，2026-08-09） | 活文档 |
+| `apps/web/components/dashboard/DashboardShell.tsx` | Dashboard 科研驾驶舱交互壳：唯一下一步行动、RO focus card、任务 rail、workspace 路由入口与受控证据层 | 活文档 |
 | `apps/web/components/landing/LatestResearch.tsx` | Landing 页 `#latest` 深色内容带（真实锚点、三张 RO preview，占位至 P2 `GET /explore`） | 活文档 |
 | `apps/web/components/landing/TrustBand.tsx` | Landing 页 `#trust` 信任区（版本/provenance、许可作者贡献、AI+人工复核三支柱） | 活文档 |
 | `apps/web/components/landing/EvolutionPanel.tsx` | Landing 页四阶段演化面板（create/parse/diff/publish stage morph + 自动演示一轮即停，2026-08-07） | 活文档 |

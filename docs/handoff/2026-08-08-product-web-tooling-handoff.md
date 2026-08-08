@@ -1,7 +1,9 @@
 # Handoff — 2026-08-08 Product Web Tooling
 
-- **Current goal:** Task 1 Step 9 第三检查点 Public RO + Ultrafast Science Collection 已完成并固化本地证据；等待用户视觉确认。
+- **Current goal:** Task 1 Step 9 第三检查点 Public RO + Ultrafast Science Collection 已获用户确认，进入网页实现切片。
 - **Done:**
+  - 2026-08-09 网页首个实现切片已完成：新增 `apps/web/app/dashboard/page.tsx` 与 `DashboardShell`，Landing/驾驶舱复用 `EvidenceField` 受控粒子层，现有编辑页加入 `workspace-cockpit` 头部上下文；中文/英文消息入口已登记。
+  - 验证证据：web Vitest 12 files / 64 tests、typecheck、production build、Playwright 1440×900 `/dashboard` 与 Landing 截图均通过；`docs:lint` 0 issues；`audit:docs-sync` DOCS_SYNC_OK。
   - 产品设计 spec：`docs/specs/2026-08-08-openscience-product-web-design.md`。
   - 实施计划：`docs/plans/2026-08-08-openscience-product-web-plan.md`，用户选择 subagent-driven，但要求前置工具齐全后再执行。
   - 项目 `.mcp.json` 与 Codex `C:/Users/Mac/.codex/config.toml` 均配置 10 个 MCP：semantic-scholar、github、mermaid、memory、context7、tavily-search、figma-temp、figma-primary、shadcn、task-master-ai。
@@ -60,8 +62,8 @@
   - 第三检查点审计：Public RO 1440×900 / 86 nodes / 6 instances，Collection 1440×900 / 71 nodes / 4 instances，状态条 2960×220 / 13 nodes；0 image fill、0 gradient、批准字体 only、操作目标至少 44px。
   - 本地恢复截图：`docs/design-assets/figma/2026-08-09-step9-{public-ro,ultrafast-collection,public-states}-v1.png`；SHA-256 分别为 `353682255D974CB928A176A7B7CC88B596F95A7970D95B578CA40B9259832307`、`4A10AEB018F55076E12E6F37A1F9F280AA9E324BD988F83CB53B0398BAF81082`、`48848406C183903F426CC0181E9F96BFE3C8C6931F215AB9A87718320FC909B1`；短期 asset URL 未写入仓库。
 - **Constraints:** 不打印 `.env`；MCP 总数保持 ≤10；Figma 代码 token 是 canonical；`use_figma` 写入严格串行；每个组件完成后截图并由用户确认；后续新增设计和 Code Connect 只允许使用 `gjhowMG7cG4clKwvhvF08E`。
-- **Open risks:** 第三检查点等待用户视觉确认；Landing → Auth/Create 原型入口仍需把已批准的 entry screens 从 Frame wrapper 安全转换为 Section/direct-child 结构，之后才可完成六屏闭环，因此 Step 9 仍为部分完成。MCP 不暴露文件 owner 字段；Code Connect 仍被 student tier plan gate 阻塞；Button 的 Destructive/Icon 子集合尚未创建；Playwright 尚未作为项目依赖锁定。
-- **Next action:** 用户确认第三检查点后，设计并审查 entry batch 的结构转换，补 Landing → Auth/Create；随后运行六屏完整 prototype/state/visual audit并回收 Step 9。
+- **Open risks:** Landing → Auth/Create 原型入口仍需把已批准的 entry screens 从 Frame wrapper 安全转换为 Section/direct-child 结构，作为独立 Figma 后续项；MCP 不暴露文件 owner 字段；Code Connect 仍被 student tier plan gate 阻塞；Button 的 Destructive/Icon 子集合尚未创建；Playwright 尚未作为项目依赖锁定。
+- **Next action:** 为 workspace shell 写失败测试并接入稳定 `roId/versionId/workspaceId/mode/permission` 上下文；随后补 Dashboard 真实 API 的 loading/error/empty、Public RO/Collection 入口与 390×844 回归。Figma entry batch 结构转换仍独立处理。
 - **Execution checkpoint:** 双 key 客户端、区域修复、安全 provenance 与 v2 prompt-file CLI 已完成；Figma `37:2` 视觉母版已建立。`openscience-observatory-v1.png` 被用户判定与项目风格不一致，根因是 prompt 违反 spec §11.2，让模型同时承担材料纹理与六节点产品语义。不得导入 v1 或生成其视频版本。
 - **v2 recovery result:** 旧 2013 长度问题已解决；`openscience-evidence-chamber-v2.png` 与 `.provenance.json` 已由 key1 中国区调用产出且 provenance 安全。视觉门失败，文件只作可追溯失败样本，不得进入 Figma/H3。下一次付费生成必须先批准新的 v3 方向和版本化输出名。
 - **Approved responsibility reset:** 用户接受推荐项 A：下一张生成资产优先服务 Landing / Workspace 暗色主视觉。复用现有精确蓝色玻璃六面 RO 环作为原生前景；MiniMax 仅生成深墨科研空间、材料质感和受控光场，不生成节点、ID、SDF、轨迹、diff 或 UI。

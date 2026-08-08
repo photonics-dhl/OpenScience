@@ -2,6 +2,7 @@ import Image from 'next/image';
 import { useTranslations } from 'next-intl';
 
 import { Button } from '../ui/button';
+import EvidenceField from './EvidenceField';
 
 type HeroProps = {
   symbolVariant: 'sculptural' | 'interface';
@@ -21,6 +22,7 @@ export default function Hero({ symbolVariant }: HeroProps) {
         aria-hidden="true"
         className="pointer-events-none absolute inset-0 bg-[url('/hero/hero-ambient.webp')] bg-cover bg-center"
       />
+      <EvidenceField />
       {/* Legibility veil: darker left for copy, fade to base at the bottom */}
       <div
         aria-hidden="true"

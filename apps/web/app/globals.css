@@ -1409,6 +1409,76 @@ body {
   font-family: var(--font-ui);
 }
 
+/* Product cockpit surfaces: procedural evidence field is environmental only. */
+.evidence-field {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+  opacity: .72;
+  z-index: 0;
+}
+.evidence-field__trace {
+  position: absolute;
+  width: 52vw;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(76,141,255,.42), transparent);
+  transform-origin: left center;
+  animation: evidence-trace 8s var(--ease-standard) infinite;
+}
+.evidence-field__trace--one { left: 22%; top: 48%; transform: rotate(-13deg); }
+.evidence-field__trace--two { left: 36%; top: 68%; transform: rotate(-28deg); animation-delay: -3s; opacity: .5; }
+.evidence-field__particle {
+  position: absolute;
+  border-radius: 999px;
+  background: #74a7ff;
+  box-shadow: 0 0 14px rgba(76,141,255,.72);
+  animation: evidence-drift 7s var(--ease-standard) infinite alternate;
+}
+@keyframes evidence-trace { 0%, 100% { opacity: .18; transform: scaleX(.72) rotate(-13deg); } 50% { opacity: .7; transform: scaleX(1) rotate(-13deg); } }
+@keyframes evidence-drift { from { transform: translate3d(0, 10px, 0); opacity: .18; } to { transform: translate3d(14px, -12px, 0); opacity: .82; } }
+.cockpit-shell { position: relative; min-height: 100vh; overflow: hidden; background: var(--hero-bg); color: var(--hero-text); }
+.cockpit-shell__inner { position: relative; z-index: 1; max-width: 1440px; margin: 0 auto; padding: 112px 32px 64px; }
+.cockpit-header { display:flex; align-items:flex-end; justify-content:space-between; gap:24px; margin-bottom:38px; }
+.cockpit-header h1 { margin:8px 0 0; font: 700 clamp(2rem, 4vw, 4rem)/1.05 var(--font-display); letter-spacing:-.04em; }
+.eyebrow { color: var(--hero-muted); font: 500 .68rem/1.3 var(--font-mono); letter-spacing:.16em; text-transform:uppercase; }
+.cockpit-header__status { display:flex; align-items:center; gap:8px; color:var(--hero-muted); font-size:.82rem; }
+.status-dot { width:8px; height:8px; border-radius:50%; background:var(--accent-primary); box-shadow:0 0 16px var(--accent-primary); }
+.cockpit-grid { display:grid; grid-template-columns: minmax(0,1.35fr) minmax(260px,.9fr) minmax(230px,.7fr); gap:16px; }
+.next-action-panel, .ro-focus-card, .task-rail { border:1px solid var(--border-subtle); background:rgba(8,16,28,.82); backdrop-filter:blur(18px); border-radius:18px; padding:26px; }
+.next-action-panel { min-height:340px; display:flex; flex-direction:column; justify-content:flex-end; box-shadow:0 24px 80px rgba(0,0,0,.24); }
+.next-action-panel h2, .ro-focus-card h2 { margin:10px 0; font: 600 clamp(1.35rem,2.2vw,2.2rem)/1.15 var(--font-display); }
+.next-action-panel p { max-width:42ch; color:var(--hero-muted); line-height:1.75; }
+.button-primary { display:inline-flex; align-items:center; justify-content:center; width:max-content; min-height:44px; margin-top:20px; padding:0 18px; border-radius:10px; background:var(--accent-primary-strong); color:#fff; font-weight:600; text-decoration:none; transition:transform var(--motion-fast) var(--ease-standard), box-shadow var(--motion-fast) var(--ease-standard); }
+.button-primary:hover { transform:translateY(-2px); box-shadow:0 12px 32px rgba(42,109,255,.34); }
+.action-progress { height:3px; margin-top:28px; background:rgba(148,163,184,.16); overflow:hidden; border-radius:99px; }
+.action-progress span { display:block; height:100%; background:var(--accent-primary); box-shadow:0 0 16px rgba(76,141,255,.8); }
+.next-action-panel small, .ro-focus-card__footer, .task-item small { color:var(--hero-muted); font-size:.72rem; }
+.ro-focus-card__top, .ro-focus-card__footer, .task-rail__heading { display:flex; align-items:center; justify-content:space-between; gap:12px; }
+.badge { display:inline-flex; align-items:center; min-height:24px; padding:0 9px; border-radius:99px; font:500 .68rem/1 var(--font-mono); }
+.badge-blue { color:#b9d2ff; background:rgba(76,141,255,.14); border:1px solid rgba(76,141,255,.3); }
+.badge-muted { color:var(--hero-muted); background:rgba(148,163,184,.1); }
+.mono, .workspace-ro-id { font-family:var(--font-mono); font-size:.72rem; letter-spacing:.06em; }
+.ro-focus-card { min-height:340px; display:flex; flex-direction:column; }
+.ro-focus-card__id { color:#8eb7ff; }
+.evidence-ledger { display:grid; grid-template-columns:repeat(3,1fr); gap:8px; margin:36px 0 auto; color:var(--hero-muted); font:500 .64rem var(--font-mono); }
+.evidence-ledger span { border-top:1px solid rgba(76,141,255,.5); padding-top:8px; }
+.task-rail { min-height:340px; }
+.task-rail__heading { margin-bottom:18px; }
+.task-item { display:grid; grid-template-columns:24px 1fr 8px; align-items:start; gap:10px; padding:16px 0; border-top:1px solid rgba(148,163,184,.12); }
+.task-index { color:var(--hero-muted); font:500 .7rem var(--font-mono); }
+.task-item strong { display:block; font-size:.85rem; font-weight:600; }
+.task-item small { display:block; margin-top:5px; }
+.task-state { width:8px; height:8px; margin-top:4px; border-radius:50%; background:rgba(148,163,184,.35); }
+.task-item--active .task-state { background:var(--accent-primary); box-shadow:0 0 12px rgba(76,141,255,.8); }
+.workspace-cockpit { min-height:100vh; background:var(--canvas-bg); color:var(--ink); }
+.workspace-cockpit .toolbar { display:flex; align-items:center; gap:16px; padding:14px 20px; background:#07101d; color:var(--hero-text); border-bottom:1px solid rgba(148,163,184,.2); }
+.workspace-chrome { display:flex; align-items:center; gap:12px; margin-right:auto; }
+.workspace-cockpit .toolbar-title { color:var(--hero-text); }
+.workspace-cockpit .workspace-ro-id { color:#8eb7ff; }
+@media (max-width: 900px) { .cockpit-grid { grid-template-columns:1fr; } .cockpit-shell__inner { padding:96px 20px 40px; } .cockpit-header { align-items:flex-start; flex-direction:column; } }
+@media (prefers-reduced-motion: reduce) { .evidence-field__trace, .evidence-field__particle { animation:none; } .evidence-field { opacity:.45; } .button-primary:hover { transform:none; } }
+
 .font-display {
   font-family: var(--font-display), 'Songti SC', serif;
 }
