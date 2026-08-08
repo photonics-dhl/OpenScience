@@ -5,13 +5,14 @@
 - **当前修订：** v2.1 已批准；API 组合长度 1440 字符
 - **目标表面：** Landing / Workspace 暗色主视觉
 - **生成模型：** MiniMax `image-01`，中国区
-- **生成状态：** 尚未调用 API
+- **生成状态：** v2.1 已生成但未通过静态验收；仅保留为 rejected exploration
 - **产品依据：** `docs/specs/2026-08-08-openscience-product-web-design.md` §11.1–11.3
 
 ## 修订记录
 
 - v1 要求模型同时生成材料场和六节点 RO，输出退化为植物状抽象图，未通过用户审美门。`docs/design-assets/generated/openscience-observatory-v1.png` 只保留为有 provenance 的失败样本，不得导入 Figma 或派生视频。
 - v2 将生成层限制为背景空间、材料微纹理、定向光与反射。六节点 RO、证据轨迹、RO ID、版本、artifact、SDF 和 Hermes 状态全部由 Figma、SVG 或 HTML 原生叠加。
+- v2.1 将最终 API prompt 压缩到 1440 字符并由用户批准。中国区 `image-01` 由 key1 成功生成 `openscience-evidence-chamber-v2.png`，但原图出现居中对称隧道、发光矩形台座、漂浮粒子、左侧高亮结构及上下硬黑边，未通过静态门 1、3、5、6、7 和负向约束；不得导入 Figma 或派生视频。
 
 ## 画面职责
 

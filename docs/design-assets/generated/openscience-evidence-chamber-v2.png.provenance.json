@@ -1,0 +1,12 @@
+{
+  "generatedAt": "2026-08-08T11:49:46.831Z",
+  "host": "api.minimaxi.com",
+  "intendedSurface": "Landing / Workspace dark hero ambient background",
+  "keySlot": "key1",
+  "localAssetPath": "docs/design-assets/generated/openscience-evidence-chamber-v2.png",
+  "model": "image-01",
+  "postProcessing": "none",
+  "prompt": "Generate only a full-bleed 16:9 ambient background for a premium scientific research product. No foreground subject, symbol, interface, diagram, or data.\n\nShow a precision evidence chamber: near-black #03060b space, #08101c depth, black anodized metal, smoked optical glass, micro-etched surfaces, and sparse translucent optical films. Keep 70% quiet.\n\nAsymmetric layout: keep the left 40% almost empty for copy. In the middle 38–62%, suggest a narrow, low-contrast material corridor with faint grain, film refraction, and elongated cool reflections directed left-to-right, without beams or routes. Keep the right 54–100% deep and layered for later compositing of an existing blue-glass object; depict no object or halo. Fade the bottom 72–100% into #03060b with no visible boundary.\n\nUse one cool light direction and low-chroma steel-blue reflections. Surfaces are crisp, restrained, and physically plausible. No orange.\n\nConstraints to avoid:\nNo ring, circle, hexagon, polygon loop, six-part or radial form, node, network, connection line, orbit, flower, petal, neuron, brain, DNA, galaxy, planet, stars, particles, lens flare, hologram, HUD, dashboard, UI frame, card, icon, logo, watermark, text, formula, document, code, chart, graph, microscopy result, fabricated data, orange, purple gradient, cyberpunk neon, watercolor, etching, paper, steampunk, centered subject, second focal point, camera-motion effect, or rectangular vignette.",
+  "region": "cn",
+  "requestId": null
+}

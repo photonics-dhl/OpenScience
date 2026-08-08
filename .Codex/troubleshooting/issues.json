@@ -42,15 +42,15 @@
       "id": "issue-003",
       "title": "MiniMax image prompt exceeded the API character limit",
       "date": "2026-08-08",
-      "status": "in_progress",
+      "status": "resolved",
       "tags": [
         "troubleshooting/api",
         "troubleshooting/validation"
       ],
       "description": "The first approved v2 China-region image request returned HTTP 200 with MiniMax status 2013 because the combined prompt exceeded the image API limit. No image or provenance sidecar was created, and key2 was not selected.",
       "root_cause": "The approved positive and negative Markdown blocks produced a 2018-character API prompt. The image API requires the prompt to be shorter than 1500 characters, but the local manifest builder and execution plan validated section presence without validating the final combined length.",
-      "solution": "Completed Steps 7.4a–7.4b: enforce a tested preflight limit of at most 1499 characters, compress the approved wording to a 1440-character final payload without changing the generated/native layer boundary, and obtain user approval of the exact text. Remaining: run one explicit recovery request.",
-      "verification": "Local contract verified: `node --test scripts/design/minimax-client.test.mjs scripts/design/prompt-manifest.test.mjs scripts/design/generate-minimax-image.test.mjs` passes 23/23, including 1499 accepted and 1500 rejected before credential/network work. The approved live Markdown builds to 1440 characters. Pending: the recovery request must either produce the versioned asset or stop on the next official error without automatic retry.",
+      "solution": "Completed Steps 7.4a–7.4b: enforce a tested preflight limit of at most 1499 characters, compress the approved wording to a 1440-character final payload without changing the generated/native layer boundary, obtain user approval of the exact text, and run one explicit China-region recovery request.",
+      "verification": "Local contract passes 23/23, including 1499 accepted and 1500 rejected before credential/network work. The approved live Markdown builds to 1440 characters. The single recovery request succeeded with key1 and produced the versioned PNG plus safe sidecar, proving the 2013 length issue is resolved. The image was independently rejected by the visual gates; that is a design-quality outcome, not recurrence of the length defect.",
       "files": [
         "scripts/design/prompt-manifest.mjs",
         "scripts/design/generate-minimax-image.mjs",

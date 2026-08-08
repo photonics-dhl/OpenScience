@@ -78,6 +78,7 @@
 | `docs/handoff/2026-08-08-product-web-tooling-handoff.md` | 产品网页工具前置交接（Codex 10 MCP、双 Figma OAuth、迁移 ADR、重启后验证顺序） | 当前 handoff |
 | `docs/design-assets/prompts/2026-08-08-living-research-observatory-v1.md` | Living Research Observatory 静态背景活设计；v2.1 `Precision Evidence Chamber` 锁定证据汇入四区布局、生成/原生分层、MiniMax 正负 prompt、八项拒绝门与视频边界；最终 API 组合长度 1440 字符并已获用户批准 | 活文档，v2.1 已批准 |
 | `docs/design-assets/generated/openscience-observatory-v1.png` / `.provenance.json` | MiniMax `image-01` 中国区生成的 1280×720 探索图及脱敏 provenance；因植物状六节点与产品视觉/语义不一致被用户拒绝，仅保留为可追溯失败样本，不得导入 Figma 或派生视频 | Rejected exploration |
+| `docs/design-assets/generated/openscience-evidence-chamber-v2.png` / `.provenance.json` | MiniMax `image-01` 中国区 key1 生成的 1280×720 v2.1 背景及脱敏 provenance；因居中隧道/发光台座/粒子/硬黑边与移动裁切不满足八项门禁而拒绝，不得导入 Figma 或派生视频 | Rejected exploration |
 | `docs/specs/2026-08-04-p1b-3-blob-artifact-upload-design.md` | P1B-3 Blob 内容寻址存储与上传管线设计（design gate 已确认：五决策，代码已实现 2026-08-04） | 活文档 |
 | `docs/plans/2026-07-24-doc-architecture-plan.md` | 文档架构落地实施计划 | 活文档 |
 | `docs/plans/2026-07-24-mvp-task-breakdown-plan.md` | MVP 任务拆解与工具配置实施计划（已批准，执行中） | 活文档 |

@@ -1,5 +1,13 @@
 # OpenScience (XGS) 进度日志
 
+## 2026-08-08（产品网页 Task 1 / v2.1 静态验收）— 调用成功，视觉拒绝
+
+- **单次恢复调用**：提交 `2ebd1ae` 后按计划执行一次中国区 `image-01` 请求；key1 成功，未触发 key2、未重试。产出 1280×720 PNG（SHA-256 `5C159F116C5AA4FC0E57F816F07C73705B17BBBED0F4A87F20C9086F8A61DF7A`）和脱敏 provenance。
+- **provenance 门**：sidecar 记录 `model=image-01`、`region=cn`、`keySlot=key1`、1440 字符 prompt 和真实 intended surface；不含远程 URL、签名查询参数或 key 值。
+- **静态拒绝门**：左侧存在高亮玻璃/金属结构；画面形成居中对称隧道及发光矩形台座；有漂浮粒子；上下为可见硬黑边；中心焦点会与原生 RO 竞争，移动端中心裁切也不安静。未通过门 1、3、5、6、7，并违反 no-particles、centered-subject 和 rectangular-vignette 约束。
+- **处置**：`openscience-evidence-chamber-v2.png` 与 sidecar 作为可追溯 rejected exploration 保留；不得导入 Figma、不得派生 H3 视频、不得在未批准 v3 方向前再次付费生成。
+- **⏳ 下一步**：向用户展示原图与逐门结论，重新锁定 v3 的生成策略；优先考虑降低模型构图自由度或改为原生 CSS/SVG 材料场，而不是继续追加负向词。
+
 ## 2026-08-08（产品网页 Task 1 / v2.1 prompt 批准）— 1440 字符，恢复调用尚未执行
 
 - **用户确认**：用户以选择 `1` 确认上轮展示的 v2.1 精确正负提示词；活跃 Markdown 已原地更新，未新建第二份 prompt。

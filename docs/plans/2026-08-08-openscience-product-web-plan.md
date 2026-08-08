@@ -65,7 +65,7 @@
   Add tests to `scripts/design/prompt-manifest.test.mjs` proving the final combined prompt accepts exactly 1499 characters and rejects 1500 with `Combined MiniMax image prompt must be fewer than 1500 characters`. The rejection must happen before credential or network work. Implement the smallest validation in `prompt-manifest.mjs`, rerun the 21-test baseline plus the new boundary cases, review and commit before another live call.
 - [x] **Step 7.4b: Compress and approve the v2 prompt**
   Reduced the final combined payload from 2018 to 1440 characters while preserving the approved four-zone composition, generated/native responsibility boundary, no-orange rule and prohibited semantic geometry. The user approved the exact revised text; the API was not called during this step.
-- [ ] **Step 7.5: Generate one v2 China-region background**
+- [x] **Step 7.5: Generate one v2 China-region background**
   The first call stopped on official status 2013 because the combined prompt was 2018 characters; it produced no file and did not switch keys. After Steps 7.4a–7.4b pass, confirm `docs/design-assets/generated/openscience-evidence-chamber-v2.png` and its sidecar do not exist, then run one explicit recovery command from the isolated worktree:
 
   ```powershell
@@ -73,8 +73,9 @@
   ```
 
   Expected: key1 succeeds, or key2 is used only after official status `1008`. Any auth, parameter, safety, rate-limit, network or server error stops the step without automatic retry or prompt mutation.
-- [ ] **Step 7.6: Inspect the raw background against all eight gates**
+- [x] **Step 7.6: Inspect the raw background against all eight gates**
   Open the PNG at original resolution and verify every item in the approved v2 prompt document: quiet left 0–40%, no semantic geometry, one light direction, no orange/text/data/UI, seamless `#03060b` edges, no competing focal point and safe 390×844 crop. Verify the sidecar contains model/region/key slot/time/intended surface but no remote URL or query parameter. A single failure marks v2 rejected and blocks Figma/video.
+  Result: the key1 CN call produced a valid 1280×720 PNG and safe sidecar, but the image failed gates 1, 3, 5, 6 and 7 and the no-particles/centered-subject/rectangular-vignette constraints. Retain it as a rejected exploration; Step 7.7 and video remain blocked pending a newly approved v3 direction.
 - [ ] **Step 7.7: Build and review the native composite**
   Only after the raw background passes, import it into Figma `03 Patterns` behind the existing exact RO asset. Add native artifact summaries, blue evidence path, one orange version change, RO ID and version anchors. Capture desktop 1440×900 and mobile 390×844 frames; require the 3-second reading “different research materials enter one continuously evolving RO.” User approval completes Step 7.
 - [ ] **Step 8: Create component families**
