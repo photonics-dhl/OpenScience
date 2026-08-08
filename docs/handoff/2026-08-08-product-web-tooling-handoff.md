@@ -28,6 +28,8 @@
 - **Approved composition:** 用户批准「证据汇入」：右侧原生精确 RO 环为品牌锚点，左侧研究材料沿蓝色路径汇入，橙色只表达一次版本变化。下一步分段确认布局、材料语言与验收门，再原地修订 prompt；确认前不得调用生成 API。
 - **Approved layout/layer boundary:** 16:9 四区布局为左侧 0–40% 文案留白、中部 38–62% 证据走廊、右侧 54–105% 原生 RO、底部 72–100% 收回 hero base。MiniMax 只负责空间/微纹理/光/反射；所有产品语义保持 Figma/SVG/HTML 原生。下一步确认材料与光线语言。
 - **Approved material/light language:** `Precision Evidence Chamber` 使用深墨基底、黑色阳极氧化金属、烟熏光学玻璃、微蚀刻表面与少量半透明薄膜；单一冷光由左中指向右侧 RO，70% 安静暗场。亮蓝和全部橙色保留原生层；生成层禁止语义几何、假数据/UI、纸张手绘、紫色霓虹和随机粒子。下一步确认叙事、拒绝门与视频运动边界。
+- **Approved narrative/gates:** 原生层按 artifact 汇入、蓝色路径、六面响应、单个橙色变化、RO ID/版本锚点讲述故事；背景通过八项静态拒绝门后才可导入。H3 如启用，只生成固定镜头的低亮冷色反射，所有语义动画保持原生。
+- **Written design checkpoint:** 现有 prompt 文件已原地重写为 v2 待复核稿，未创建重复文档、未调用 API。下一步必须先由用户复核 `docs/design-assets/prompts/2026-08-08-living-research-observatory-v1.md`；批准后才更新执行计划并生成 `openscience-evidence-chamber-v2.png`。
 - **Attempt 1 result:** worktree 内不存在 `.env`，Node 在发起 HTTP 前退出；无 API 请求、无费用、无 key 切换。恢复命令必须让 Node 直接加载主工作区 `E:/Miscellaneous/XGS/.env`，不得复制或打印该文件。
 - **Attempt 2 result/root cause:** Node 成功加载主工作区 `.env`，但客户端未匹配新 key1/key2 的变量命名，在本地配置校验阶段退出；仍无 API 请求或费用。下一步先用测试覆盖常见 `_1/_2`、`KEY1/KEY2` 别名，再做单次重试。
 - **Attempt 3 result/blocker:** 别名修复后请求已到达 MiniMax，返回 HTTP `200` + `base_resp.status_code=2049` (`invalid api key`)，槽位 `key1`。按策略认证错误不得切换 key2；未生成资产、未写 provenance、未继续重试。恢复条件是用户修正 key1 后重新执行同一版本化命令。
