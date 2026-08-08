@@ -1,5 +1,12 @@
 # OpenScience (XGS) 进度日志
 
+## 2026-08-08（产品网页 Task 1 / MiniMax 中国区生成）— 双 key 有效，首张静态资产等待审美门
+
+- **根因定论**：key1 与 key2 均为有效的中国区 Token Plan Subscription Key；此前 `2049 invalid api key` 是把 CN key 发送到 global `api.minimax.io` 所致。中国区只读验证应使用 `api.minimaxi.com` / `www.minimaxi.com`，图片生成使用 `https://api.minimaxi.com/v1/image_generation`。
+- **单次生成成功**：按 key1 优先策略显式传入 `--region cn`，`image-01` 成功生成 1280×720 静态科研证据场 `docs/design-assets/generated/openscience-observatory-v1.png`；未触发 key2，未执行视频生成。素材为暖白纸张底、克制青绿色证据轨迹、橙色版本痕迹与右侧开放六节点结构，保留可叠加真实 Figma UI 的负空间。
+- **安全收尾**：`b655257` 将 provenance 改为白名单字段，禁止持久化远程图片 URL、查询参数或临时签名，并原地脱敏已有 sidecar。`node --test scripts/design/minimax-client.test.mjs scripts/design/generate-minimax-image.test.mjs` 为 14/14，签名 URL 敏感扫描干净。
+- **⏳ 下一步**：由用户审美确认该图是否作为低对比度材料层；批准后才导入 Figma `03 Patterns` 的 `Living Research Observatory` 母版并启动 H3 视频动效门，未批准则一次只改一个 prompt 变量。
+
 ## 2026-08-08（产品网页 Task 1 / MiniMax 设计资产客户端）— 可复用静态生成边界已就绪
 
 - **TDD 证据**：先新增 `scripts/design/minimax-client.test.mjs`，`node --test scripts/design/minimax-client.test.mjs` 预期 RED（`ERR_MODULE_NOT_FOUND`，客户端尚未存在）；最小实现后同一命令 GREEN，7/7 通过且不发出网络请求。
@@ -20,6 +27,8 @@
 - **生成尝试 3 / 外部证据**：别名修复后真实请求到达 MiniMax，返回 HTTP `200`、官方 `2049 invalid api key`，槽位为 `key1`。按已批准策略不切换 key2、不重试认证错误；没有资产或 provenance 产物。下一步需先修正 key1，再重新执行单次 live generation。
 - **Token Plan 诊断闭环**：官方 Token Plan 文档确认支持的统一额度覆盖图片/视频，且应使用 Billing > Token Plan 的 Team 专属 Subscription Key。使用 key1 调官方只读 `/v1/token_plan/remains` 仍返回 `2049`；本地脱敏检查确认 key 无 `Bearer` 前缀、外层空白、引号或换行。根因收敛为 Subscription Key 已失效/重置、复制错误，或不属于当前有席位/额度的 Team；修复后应先验证 remains 返回状态 0，再重试图片生成。
 - **Key2 只读验证**：经用户明确授权，使用 `MINIMAX_API_KEY2` 调同一 Token Plan remains 接口；HTTP `200`、官方状态仍为 `2049 invalid api key`。key2 本地格式同样无 Bearer 前缀/空白/引号/换行，未执行任何图片或视频生成。结论：两项存储值均需从有效 Team 的 Billing > Token Plan 页面重新复制或 reset。
+- **区域根因更正（取代上一结论）**：用户确认 key2 有效后重新核对官方 Token Plan 区域规则，发现中国区应使用 `api.minimaxi.com`，而此前所有验证都错误发送到全球 `api.minimax.io`。key2 调 `api.minimaxi.com/v1/models` 返回 HTTP 200 与模型数据，调 `www.minimaxi.com/v1/token_plan/remains` 返回 HTTP 200、状态 0 与计划数据；key2 有效。根因是 CN Subscription Key 与 global endpoint 不匹配，不是 key 失效。下一步以 TDD 为生成器增加 `cn/global` host 选择，再执行单次图片生成。
+- **区域修复完成**：`658cafe` 以 TDD 增加显式 `--region cn|global`、中国区 `api.minimaxi.com` 图像 host 与 region/host provenance，相关测试 12/12。随后 key1 的中国区 remains 也返回 HTTP 200、状态 0 与计划数据；两把 key 均有效。下一步仅执行一次 `--region cn` 的版本化 `image-01` 请求，key1 优先且仅官方 1008 才切 key2。
 
 ## 2026-08-08（产品网页 Task 1 / Figma Phase 1–3）— Foundations 完成，Button 视觉检查待确认
 
