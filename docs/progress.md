@@ -1,12 +1,12 @@
 # OpenScience (XGS) 进度日志
 
-## 2026-08-08（产品网页视觉母版）— 「科研观测台」方向批准，书面增补待复核
+## 2026-08-08（产品网页视觉母版）— 「科研观测台」方向批准，进入静态资产与 Figma 母版
 
 - **审美复盘**：现有 Button specimen 结构合格但仍偏设计系统说明书；已有视觉素材在简化线框与蓝色科幻装置之间摇摆，缺少统一的学术编辑气质、真实信息密度和材料层次。
 - **方向批准**：用户批准 `Living Research Observatory`（科研观测台）作为 `Monumental Scholarly Intelligence` 的具体表达：学术编辑设计为主体，克制的 RO 演化装置作为品牌记忆。
-- **资产策略**：静态概念图候选为 MiniMax `image-01`；静态母版通过后再以 `MiniMax-Hailuo-2.3` 生成 6 秒、1080P 动效母版。生成模型只负责科研空间、纹理、poster/视频母版；文字、节点、图表和 UI 保持原生可编辑。
+- **资产策略**：静态概念图候选为 MiniMax `image-01`；静态母版通过后优先尝试官方当前最新的 `MiniMax-H3` 视频接口（无权限时才记录原因并回退 `MiniMax-Hailuo-2.3`），目标 5–6 秒、2K/1080P 动效母版。生成模型只负责科研空间、纹理、poster/视频母版；文字、节点、图表和 UI 保持原生可编辑。
 - **密钥策略**：设计资产生成严格按 key1 → key2 有序回退；仅明确额度/余额类错误允许切 key2。不得读取、打印或记录密钥值；该规则不改变产品运行时 AI Gateway。
-- **Spec 同步**：上述规则已增补至 `docs/specs/2026-08-08-openscience-product-web-design.md` §11.1–11.3，等待用户复核后进入 Figma 母版和首张静态概念资产。
+- **Spec 同步**：上述规则已增补至 `docs/specs/2026-08-08-openscience-product-web-design.md` §11.1–11.3，用户已复核确认；下一步先完成双 key 路由测试、静态概念资产和跨 Landing/Workspace/Public RO 的 Figma 母版。
 
 ## 2026-08-08（产品网页 Task 1 / Figma Phase 1–3）— Foundations 完成，Button 视觉检查待确认
 
