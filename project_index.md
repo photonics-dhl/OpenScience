@@ -9,7 +9,7 @@
 | `project_index.md` | 本索引 | 活文档 |
 | `.mcp.json` | 项目级 MCP 配置（kimi-code/Cursor）；2026-08-08 保持 10 个：`semantic-scholar`、`github`、`mermaid`、`memory`、`context7`、`tavily-search`、`figma-temp`、`figma-primary`、`shadcn`、`task-master-ai`；双 Figma 直接使用官方 remote URL，过渡期移除低价值 `fetch` | 活文档，**本机持有，已移出 git 跟踪**（2026-07-31） |
 | `.Codex/troubleshooting/issues.json` | 项目工具/MCP/API 故障的结构化问题库；含 issue-003 MiniMax image prompt 1500 字符本地契约缺口；不记录账号、密钥、OAuth URL 或 token | 活文档 |
-| [OpenScience Web Design System](https://www.figma.com/design/rWS3seZaDMdlnSljqktMDp) | 产品网页 Figma 过渡设计源；4 collections / 85 variables / 9 text styles / 2 effect styles 与六页结构已建立；Button 主集合已完成结构审计；全局展示语言将按已批准的 `Living Research Observatory` 母版重构，长期账号获得 Edit/Full 并完成 ADR-004 验收后迁移为 canonical | Task 1 visual master in progress |
+| [OpenScience Web Design System](https://www.figma.com/design/rWS3seZaDMdlnSljqktMDp) | 产品网页 Figma 过渡设计源；4 collections / 85 variables / 9 text styles / 2 effect styles 与六页结构已建立；Button 主集合已完成结构审计；`03 Patterns` 已完成 v3 原生桌面 `60:7` 与移动 `60:8` 母版，等待用户视觉确认；长期账号获得 Edit/Full 并完成 ADR-004 验收后迁移为 canonical | Task 1 visual master awaiting approval |
 | `.vscode/mcp.json` | VS Code MCP 配置（task-master-ai 直连 node_modules 本地入口） | 活文档，**本机持有，不入库**（含 key） |
 | `.env` / `.env.example` | 密钥 / 密钥模板 | 只读，禁打印 |
 | `.gitignore` | git 忽略规则（含 .env） | 活文档 |
@@ -79,6 +79,7 @@
 | `docs/design-assets/prompts/2026-08-08-living-research-observatory-v1.md` | Living Research Observatory 静态背景活设计；v2.1 `Precision Evidence Chamber` 锁定证据汇入四区布局、生成/原生分层、MiniMax 正负 prompt、八项拒绝门与视频边界；最终 API 组合长度 1440 字符并已获用户批准 | 活文档，v2.1 已批准 |
 | `docs/design-assets/generated/openscience-observatory-v1.png` / `.provenance.json` | MiniMax `image-01` 中国区生成的 1280×720 探索图及脱敏 provenance；因植物状六节点与产品视觉/语义不一致被用户拒绝，仅保留为可追溯失败样本，不得导入 Figma 或派生视频 | Rejected exploration |
 | `docs/design-assets/generated/openscience-evidence-chamber-v2.png` / `.provenance.json` | MiniMax `image-01` 中国区 key1 生成的 1280×720 v2.1 背景及脱敏 provenance；因居中隧道/发光台座/粒子/硬黑边与移动裁切不满足八项门禁而拒绝，不得导入 Figma 或派生视频 | Rejected exploration |
+| `docs/design-assets/figma/2026-08-08-native-v3-{desktop,mobile}.png` | Figma `03 Patterns` 路线 1 原生母版的本地验收截图（1440×900 / 390×844）；保存用于 API 中断恢复、视觉确认与后续实现对照，不含生成式背景 | Awaiting user visual approval |
 | `docs/specs/2026-08-04-p1b-3-blob-artifact-upload-design.md` | P1B-3 Blob 内容寻址存储与上传管线设计（design gate 已确认：五决策，代码已实现 2026-08-04） | 活文档 |
 | `docs/plans/2026-07-24-doc-architecture-plan.md` | 文档架构落地实施计划 | 活文档 |
 | `docs/plans/2026-07-24-mvp-task-breakdown-plan.md` | MVP 任务拆解与工具配置实施计划（已批准，执行中） | 活文档 |

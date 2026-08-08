@@ -1084,14 +1084,15 @@
         "id": "10",
         "title": "Figma Design Upstream + MCP Integration",
         "description": "Establish Figma as the design source for landing and public RO pages. Provision Professional Dev seat ($12/month) for remote MCP access. Configure .mcp.json with Figma remote MCP endpoint. Implement Code Connect to map Figma components to apps/web/components/ui/* primitives. Ensure AI can read design structure and generate code referencing real components.",
-        "status": "pending",
+        "status": "in-progress",
         "dependencies": [
           "8"
         ],
         "priority": "medium",
         "details": "Implementation Details:\n\n1. Figma File Setup:\n   - Create `web-design-system.fig` as canonical design source\n   - Match variable names to tokens.css exactly (e.g., `--spacing-2`)\n   - Organize components using same structure as `apps/web/components/ui/`\n   - Document spacing/typography using Figma variables\n\n2. Dev Seat Provisioning:\n   - Upgrade to Professional plan ($12/month)\n   - Enable 200 calls/day remote MCP access\n   - Note: Free tier (6 calls/month) insufficient for production use\n\n3. MCP Configuration (`project/.mcp.json`):\n   ```json\n   {\n     \"mcpServers\": {\n       \"figma\": {\n         \"command\": \"npx\",\n         \"args\": [\"-y\", \"@modelcontextprotocol/server-figma\", \"--access-token\", \"${FIGMA_ACCESS_TOKEN}\"]\n       }\n     }\n   }\n   ```\n   - Environment variable: `FIGMA_ACCESS_TOKEN`\n   - Endpoint: `https://mcp.figma.com/mcp` (OAuth)\n\n4. Code Connect Implementation:\n   - Install Figma Code Connect plugin\n   - Map each Figma component to corresponding React component\n   - Ensure props interface matches Figma variant properties\n   - Code without Code Connect bypasses design system - prohibited for production\n\n5. Design-to-Code Workflow:\n   - AI reads Figma via MCP to get spacing/typography/variables\n   - Generates code using `apps/web/components/ui/*` primitives\n   - Human reviews generated code against design spec\n   - Code Connect ensures generated code references real components\n\n6. Documentation Requirements:\n   - Update `project_index.md` with MCP configuration changes\n   - Create ADR for tool portability (MCP servers can be swapped)\n   - Document Figma variable naming conventions",
         "testStrategy": "Validation Approach:\n\n1. MCP Connectivity Test:\n   - Verify Figma MCP server responds to ping\n   - Test variable retrieval: fetch `--spacing-2` value from Figma\n   - Compare retrieved values against tokens.css\n\n2. Code Connect Verification:\n   - Export Figma component to code\n   - Verify generated code imports from `apps/web/components/ui/`\n   - Check generated props match component interfaces\n   - Validate generated code passes TypeScript check\n\n3. AI Workflow Test:\n   - Prompt AI to generate landing section from Figma reference\n   - Verify generated code uses existing primitives\n   - Ensure no hardcoded styles (should use tokens)\n   - Validate i18n keys are used (not hardcoded strings)\n\n4. Documentation Audit:\n   - Confirm `.mcp.json` changes logged in `project_index.md`\n   - Verify ADR created for tool portability\n   - Check Figma variable names match tokens.css 1:1\n\n5. Security Check:\n   - Verify `FIGMA_ACCESS_TOKEN` stored in secrets, not repo\n   - Test MCP calls respect rate limits (200/day)\n   - Audit Figma file permissions",
-        "subtasks": []
+        "subtasks": [],
+        "updatedAt": "2026-08-08T12:52:19.565Z"
       },
       {
         "id": "11",
@@ -1123,7 +1124,7 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-08-07T13:49:13.370Z",
+      "lastModified": "2026-08-08T12:52:19.565Z",
       "taskCount": 12,
       "completedCount": 8,
       "tags": [

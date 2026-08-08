@@ -1,5 +1,14 @@
 # OpenScience (XGS) 进度日志
 
+## 2026-08-08（产品网页 Task 1 / Figma v3 原生母版）— 双尺寸已完成，等待视觉确认
+
+- **Figma 交付**：`03 Patterns` 新增统一包裹节点 `60:2`、桌面 `60:7`（1440×900）与移动 `60:8`（390×844）。桌面把早期花瓣式 RO 改为证据账本，原生呈现 unique ID、六类 SDF、连续度、`v0.4` 与单一 diff；移动端按 spec 独立重排，并将三类 artifact 修正为纵向 evidence ingress。
+- **截图证据**：`docs/design-assets/figma/2026-08-08-native-v3-desktop.png`（SHA-256 `4A967111ED83550114EE2F97DD0E5F85E409C7CEE9C896862CA95EACE552AA23`）与 `2026-08-08-native-v3-mobile.png`（SHA-256 `E984375BD057A8A29E02D0FDFB74AB8C257F01A901A0B7152155EFA5506DDFB8`）已本地固化，避免依赖短期 Figma asset URL。
+- **结构门禁**：两端均为 0 图片填充、0 占位节点、0 语义内容越界、0 小触控目标；字体限定 Noto Serif SC / Noto Sans SC / Roboto Mono；每端恰有 1 个橙色版本差异点。移动端仅无语义模糊环境光被主动裁切。
+- **任务状态**：Task Master 的 `10 Figma Design Upstream + MCP Integration` 已由 `pending` 更新为 `in-progress`；视觉批准、组件映射与 Code Connect 尚未完成，因此未标记 done。
+- **安全与范围**：未读取 `.env`、未调用 MiniMax、未导入 rejected v1/v2、未修改网页代码。Figma 写入严格串行，并在每次主要修订后截图复核。
+- **⏳ 下一步**：请用户对桌面/移动截图做视觉确认；批准后才勾选计划 Step 7.7，并进入组件家族与六屏原型，网页实现仍不提前开始。
+
 ## 2026-08-08（产品网页 Task 1 / v3 路线批准）— Figma 原生母版已解锁
 
 - **用户决策**：用户回复 `1`，正式批准路线 1 与产品设计 spec §11.4；整幅 AI 背景退出交付链，v3 使用 Figma/CSS/SVG 原生确定性母版。
