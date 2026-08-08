@@ -4,6 +4,7 @@ import test from 'node:test';
 import {
   chooseAssetKey,
   createMiniMaxImageClient,
+  createSafeImageProvenance,
   getImageGenerationUrl,
   getAssetKeys,
   isQuotaExhausted,
@@ -98,6 +99,52 @@ test('getImageGenerationUrl maps the approved MiniMax regions', () => {
   assert.equal(getImageGenerationUrl('cn'), 'https://api.minimaxi.com/v1/image_generation');
   assert.equal(getImageGenerationUrl('global'), 'https://api.minimax.io/v1/image_generation');
   assert.throws(() => getImageGenerationUrl('moon'), /Invalid MiniMax region/);
+});
+
+test('safe provenance excludes remote image URLs and URL query parameters', () => {
+  const provenance = createSafeImageProvenance({
+    generatedAt: '2026-08-08T00:00:00.000Z',
+    host: 'api.minimaxi.com',
+    imageUrl: 'https://image.example.test/asset.png?transient=query-value',
+    intendedSurface: 'cross-surface Figma visual master',
+    keySlot: 'key2',
+    localAssetPath: 'docs/design-assets/generated/observatory.png',
+    model: 'image-01',
+    postProcessing: 'none',
+    prompt: 'scholarly evidence field',
+    region: 'cn',
+    requestId: 'request-789',
+  });
+
+  assert.deepEqual(provenance, {
+    generatedAt: '2026-08-08T00:00:00.000Z',
+    host: 'api.minimaxi.com',
+    intendedSurface: 'cross-surface Figma visual master',
+    keySlot: 'key2',
+    localAssetPath: 'docs/design-assets/generated/observatory.png',
+    model: 'image-01',
+    postProcessing: 'none',
+    prompt: 'scholarly evidence field',
+    region: 'cn',
+    requestId: 'request-789',
+  });
+  assert.doesNotMatch(JSON.stringify(provenance), /imageUrl|\?/);
+});
+
+test('safe provenance records an unavailable request ID as null', () => {
+  const provenance = createSafeImageProvenance({
+    generatedAt: '2026-08-08T00:00:00.000Z',
+    host: 'api.minimaxi.com',
+    intendedSurface: 'cross-surface Figma visual master',
+    keySlot: 'key1',
+    localAssetPath: 'docs/design-assets/generated/observatory.png',
+    model: 'image-01',
+    postProcessing: 'none',
+    prompt: 'scholarly evidence field',
+    region: 'cn',
+  });
+
+  assert.equal(JSON.parse(JSON.stringify(provenance)).requestId, null);
 });
 
 test('image client sends the constrained image request and returns redacted success data', async () => {

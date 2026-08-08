@@ -43,6 +43,32 @@ export function getImageGenerationUrl(region) {
   return url;
 }
 
+export function createSafeImageProvenance({
+  generatedAt,
+  host,
+  intendedSurface,
+  keySlot,
+  localAssetPath,
+  model,
+  postProcessing,
+  prompt,
+  region,
+  requestId,
+}) {
+  return {
+    generatedAt,
+    host,
+    intendedSurface,
+    keySlot,
+    localAssetPath,
+    model,
+    postProcessing,
+    prompt,
+    region,
+    requestId: requestId ?? null,
+  };
+}
+
 export function isQuotaExhausted(value) {
   const statusCode = value?.base_resp?.status_code ?? value?.minimaxStatusCode;
   return statusCode === 1008;

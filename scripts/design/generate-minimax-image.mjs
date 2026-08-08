@@ -3,6 +3,7 @@ import { dirname, relative, resolve, sep } from 'node:path';
 
 import {
   createMiniMaxImageClient,
+  createSafeImageProvenance,
   getAssetKeys,
   getImageGenerationUrl,
 } from './minimax-client.mjs';
@@ -63,31 +64,40 @@ async function main() {
   const image = await downloadImage(result.imageUrls[0]);
   const generatedAt = new Date().toISOString();
   const sidecarPath = `${outputPath}.provenance.json`;
+  const provenance = createSafeImageProvenance({
+    generatedAt,
+    host: new URL(imageGenerationUrl).host,
+    intendedSurface: 'cross-surface Figma visual master',
+    keySlot: result.keySlot,
+    localAssetPath: relative(process.cwd(), outputPath).replaceAll('\\', '/'),
+    model: result.model,
+    postProcessing: 'none',
+    prompt,
+    region,
+    requestId: result.requestId,
+  });
 
   await mkdir(dirname(outputPath), { recursive: true });
   await writeFile(outputPath, image, { flag: 'wx' });
   await writeFile(
     sidecarPath,
     `${JSON.stringify(
-      {
-        generatedAt,
-        host: new URL(imageGenerationUrl).host,
-        imageUrl: result.imageUrls[0],
-        intendedSurface: 'cross-surface Figma visual master',
-        keySlot: result.keySlot,
-        model: result.model,
-        postProcessing: 'none',
-        prompt,
-        region,
-        requestId: result.requestId,
-      },
+      provenance,
       null,
       2,
     )}\n`,
     { flag: 'wx' },
   );
 
-  console.log(JSON.stringify({ host: new URL(imageGenerationUrl).host, outputPath, region, sidecarPath, ...result }));
+  console.log(JSON.stringify({
+    host: provenance.host,
+    keySlot: provenance.keySlot,
+    model: provenance.model,
+    outputPath,
+    region: provenance.region,
+    requestId: provenance.requestId,
+    sidecarPath,
+  }));
 }
 
 main().catch((error) => {
