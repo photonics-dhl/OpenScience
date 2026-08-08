@@ -1,5 +1,17 @@
 # OpenScience (XGS) 进度日志
 
+## 2026-08-09（产品网页 Task 1 / Step 9 第二检查点）— Dashboard + RO Workspace 已建立，等待用户确认
+
+- **Figma 交付**：只在长期账号 canonical 文件 `gjhowMG7cG4clKwvhvF08E` 的 `04 Screens` 新增顶层 Section `2057:99`、Dashboard `2031:10`、RO Workspace `2031:11` 与状态/交互契约条 `2031:12`；施工期 wrapper/row `2031:8`、`2031:9` 已在原型约束诊断后移除。旧过渡源、空 probe、已批准母版 `60:7` 和第一检查点结构未修改。
+- **Dashboard 科研驾驶舱**：首屏聚焦唯一下一步行动、当前 RO、稳定 ID `OS-RO-01J8YF7Q`、v0.4 私有草稿、Hermes 处理、review/permission 与版本发布结果；普通浏览和社交噪声不进入 actionable task rail，并保留授权只读样例入口。
+- **统一 RO Workspace**：同一 RO ID、版本与 Hermes session 贯穿三栏工作台；左栏为 SDF outline/evidence ingress，中栏为 Method 编辑、source anchors、artifact 与 v0.3→v0.4 diff，右栏为 Hermes approval、object context、review、permission/provenance 和任务中心。蓝色继续表达证据/进行中，橙色只表达版本变化。
+- **组件与状态契约**：两屏复用 Tabs、RO Card、SDF Node、Artifact Card、Review Row、Version Diff、Hermes Rail 与 Button 本地实例；状态条覆盖 Dashboard/Workspace 的 default、empty、loading、error、success、permission、reduced-motion、a11y、mobile 与 prototype route 规则。
+- **最终结构审计**：Dashboard 87 nodes / 10 local instances，Workspace 144 nodes / 15 local instances；两屏均为 1440×900，0 image fills、0 gradients、0 semantic overflow、0 structural sibling overlap，字体仅 Noto Serif SC / Noto Sans SC / Roboto Mono，所有命名操作目标至少 44px。Dashboard 0 orange；Workspace 的三处橙色 paint 均归属于唯一 Version Diff instance `2045:85`。
+- **真实原型路径**：`2020:10` Auth/Create 主 CTA 以 200ms dissolve 导向 Dashboard `2031:10`；`2036:17` Dashboard “进入 RO 工作区”导向 Workspace `2031:11`。Landing `2010:24` → Auth/Create 的补链被 Figma 拒绝，Debug UUID `e2c24bcb-14d1-42a0-abaf-eae1e7caeab8`；原因是第一批屏幕仍嵌套在 Frame wrapper 中，而 NAVIGATE destination 要求同页顶层/Section 直接子 frame。无部分写入，本轮不改造已批准第一批结构，作为 Step 9 明确待办。
+- **本地恢复证据**：`docs/design-assets/figma/2026-08-09-step9-{dashboard,ro-workspace,cockpit-states}-v1.png`；尺寸分别为 1440×900、1440×900、2960×220，SHA-256 分别为 `8CA0A9CD53CE025C17EBCC9450F15901DADBB9696AE4D221395C824646547746`、`7B828927D44F3B1065FF2F34418FD5FE9D0EB3ABBA4129CAA99C6A27B5A88015`、`F83FE395C2D12F9EE2A53936F86C4FD613259C5CBFF389DEE7CB85E41EEA8981`。
+- **安全与范围**：未读取 `.env`，未调用 MiniMax、未生成视频、未修改网页代码或 Code Connect；Step 9 仍为部分完成，不提前勾选。
+- **⏳ 下一步**：等待用户确认第二检查点视觉；通过后继续 Public RO + Ultrafast Science Collection，并在 Step 9 收尾时修复 Landing → Auth/Create 原型入口与全量审计。
+
 ## 2026-08-08（产品网页 Task 1 / Step 9 第一检查点）— Landing + Auth/Create 已获用户确认
 
 - **Figma 交付**：只在长期账号 canonical 文件 `gjhowMG7cG4clKwvhvF08E` 的 `04 Screens` 写入 wrapper `2009:3`、屏幕行 `2009:4`、状态契约条 `2009:5`；Landing 为 `2010:2`，Auth/Create 为 `2012:4`。旧过渡源与空 probe 未修改。

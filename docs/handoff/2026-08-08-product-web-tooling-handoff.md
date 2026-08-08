@@ -1,6 +1,6 @@
 # Handoff — 2026-08-08 Product Web Tooling
 
-- **Current goal:** Task 1 Step 9 第一检查点已获用户确认；只在长期账号 canonical 文件中继续 Dashboard + RO Workspace 第二检查点。
+- **Current goal:** Task 1 Step 9 第二检查点 Dashboard + RO Workspace 已建立并固化本地证据；等待用户确认后继续 Public RO + Ultrafast Science Collection。
 - **Done:**
   - 产品设计 spec：`docs/specs/2026-08-08-openscience-product-web-design.md`。
   - 实施计划：`docs/plans/2026-08-08-openscience-product-web-plan.md`，用户选择 subagent-driven，但要求前置工具齐全后再执行。
@@ -49,9 +49,13 @@
   - 第一检查点审计通过：两屏 1440×900；0 image fills / 0 gradients / Auth 0 orange / 0 semantic overflow；Button/Input 实例复用；操作高度至少 44px；字体仅 Noto Serif SC / Noto Sans SC / Roboto Mono。关键处理披露已从 9px 调整到 10px、592×45，三行无溢出。
   - 本地恢复截图：`docs/design-assets/figma/2026-08-08-step9-entry-{landing,auth-create,states}-v1.png`。没有把临时 Figma asset URL 写入文档。
   - 用户已明确确认 Landing + Auth/Create 第一检查点；该视觉基线冻结，Dashboard + RO Workspace 第二检查点解锁。
+  - Step 9 第二检查点已写入 canonical `04 Screens`：顶层 Section `2057:99`、Dashboard `2031:10`、RO Workspace `2031:11`、state/interaction rail `2031:12`。施工期 wrapper/row `2031:8`、`2031:9` 已移除；Dashboard 只呈现可行动研究任务；Workspace 以同一 RO ID/version/Hermes session 串联 SDF、artifact、diff、review 与 permission/provenance。
+  - 最终结构审计：Dashboard 87 nodes / 10 local instances，Workspace 144 nodes / 15 local instances；两屏 1440×900，0 image fills、0 gradients、0 semantic overflow、0 structural sibling overlap，批准字体 only，操作目标至少 44px；唯一橙色 owner 为 Version Diff `2045:85`。
+  - 两条真实 prototype reaction 已验证：Auth/Create `2020:10` → Dashboard `2031:10`，Dashboard `2036:17` → RO Workspace `2031:11`，均为 200ms dissolve。Landing `2010:24` → Auth/Create 因第一批 screen 仍嵌套在 Frame wrapper 中而被 Figma 拒绝（Debug UUID `e2c24bcb-14d1-42a0-abaf-eae1e7caeab8`）；无部分写入，不得盲目重试或未审查地改造已批准第一批结构。
+  - 第二检查点本地恢复截图：`docs/design-assets/figma/2026-08-09-step9-{dashboard,ro-workspace,cockpit-states}-v1.png`；尺寸 1440×900 / 1440×900 / 2960×220，短期 asset URL 未写入仓库。
 - **Constraints:** 不打印 `.env`；MCP 总数保持 ≤10；Figma 代码 token 是 canonical；`use_figma` 写入严格串行；每个组件完成后截图并由用户确认；后续新增设计和 Code Connect 只允许使用 `gjhowMG7cG4clKwvhvF08E`。
-- **Open risks:** Dashboard/RO Workspace、Public RO/Collection 与真实点击目标尚未建立，因此 Step 9 仍为部分完成。MCP 不暴露文件 owner 字段；Code Connect 仍被 student tier plan gate 阻塞；Button 的 Destructive/Icon 子集合尚未创建；Playwright 尚未作为项目依赖锁定。Figma MCP 后续写入继续严格串行。
-- **Next action:** 在 canonical `04 Screens` 建立 Dashboard + RO Workspace 第二批屏幕；随后补 Landing/Auth/Create → Dashboard 的真实 prototype destination，截图、审计并立即 docs-sync。
+- **Open risks:** 第二检查点等待用户视觉确认；Public RO/Collection 尚未建立，Landing → Auth/Create 原型入口仍因 Figma destination rejection 待修，因此 Step 9 仍为部分完成。MCP 不暴露文件 owner 字段；Code Connect 仍被 student tier plan gate 阻塞；Button 的 Destructive/Icon 子集合尚未创建；Playwright 尚未作为项目依赖锁定。Figma MCP 后续写入继续严格串行。
+- **Next action:** 用户确认 Dashboard + RO Workspace 后，只在 canonical `04 Screens` 建立 Public RO + Ultrafast Science Collection 第三批；Step 9 收尾时修复 Landing 入口并运行完整 prototype/state/visual audit。
 - **Execution checkpoint:** 双 key 客户端、区域修复、安全 provenance 与 v2 prompt-file CLI 已完成；Figma `37:2` 视觉母版已建立。`openscience-observatory-v1.png` 被用户判定与项目风格不一致，根因是 prompt 违反 spec §11.2，让模型同时承担材料纹理与六节点产品语义。不得导入 v1 或生成其视频版本。
 - **v2 recovery result:** 旧 2013 长度问题已解决；`openscience-evidence-chamber-v2.png` 与 `.provenance.json` 已由 key1 中国区调用产出且 provenance 安全。视觉门失败，文件只作可追溯失败样本，不得进入 Figma/H3。下一次付费生成必须先批准新的 v3 方向和版本化输出名。
 - **Approved responsibility reset:** 用户接受推荐项 A：下一张生成资产优先服务 Landing / Workspace 暗色主视觉。复用现有精确蓝色玻璃六面 RO 环作为原生前景；MiniMax 仅生成深墨科研空间、材料质感和受控光场，不生成节点、ID、SDF、轨迹、diff 或 UI。
