@@ -1,6 +1,6 @@
 # Handoff — 2026-08-08 Product Web Tooling
 
-- **Current goal:** 执行产品网页计划 Task 1；Figma Foundations 与跨三表面 `Living Research Observatory` 视觉母版已完成；首张 `image-01` 静态资产未通过用户审美门，当前重新锁定“生成材料层 vs 原生产品语义层”的职责边界。
+- **Current goal:** 执行产品网页计划 Task 1；v2 `Precision Evidence Chamber` 的 prompt manifest/脱敏 provenance 预处理已提交，等待控制方决定是否进入单次付费生成。
 - **Done:**
   - 产品设计 spec：`docs/specs/2026-08-08-openscience-product-web-design.md`。
   - 实施计划：`docs/plans/2026-08-08-openscience-product-web-plan.md`，用户选择 subagent-driven，但要求前置工具齐全后再执行。
@@ -21,15 +21,16 @@
   - MiniMax 静态资产客户端已完成：显式支持 `cn/global` 区域，key1 优先（现有运行时 key 仅兼容为 key1），仅 HTTP 成功的官方 `1008` 余额不足切 key2；生成 CLI 仅以 Node `--env-file` 进程环境取值，拒绝覆盖并写白名单 provenance。客户端与 CLI 测试合计 14/14。
   - key1 与 key2 均已通过中国区只读端点验证；此前 global 端点的 `2049` 是区域错配，不是 key 失效。首张素材已由 key1 在中国区成功生成：`docs/design-assets/generated/openscience-observatory-v1.png`（1280×720）及其脱敏 sidecar；未触发 key2、未生成视频。
   - `b655257` 已移除 provenance 中的远程下载 URL 与临时签名查询参数，并加入回归测试；敏感扫描干净。
+  - Step 7.1–7.4 已完成：`scripts/design/prompt-manifest.mjs` 从批准 Markdown 合并正负 prompt block；CLI 需要 `--prompt-file` 和 `--intended-surface`，拒绝 inline `--prompt`，并把调用方用途写入安全 sidecar。`node --test scripts/design/minimax-client.test.mjs scripts/design/prompt-manifest.test.mjs scripts/design/generate-minimax-image.test.mjs` 为 19/19，无网络调用。
 - **Constraints:** 不打印 `.env`；MCP 总数保持 ≤10；Figma 代码 token 是 canonical；`use_figma` 写入严格串行；每个组件完成后截图并由用户确认；长期账号仍是未来 canonical owner。
 - **Open risks:** 长期账号只有 starter/View；Button 的 Destructive/Icon 子集合尚未创建；Playwright 尚未作为项目依赖锁定；Figma 过渡文件仍待迁移。
-- **Execution checkpoint:** 双 key 客户端、区域修复与安全 provenance 已完成；Figma `37:2` 视觉母版已建立。`openscience-observatory-v1.png` 被用户判定与项目风格不一致，根因是 prompt 违反 spec §11.2，让模型同时承担材料纹理与六节点产品语义。下一步先完成职责选择和三方案比较；不得导入 v1 或生成其视频版本。
+- **Execution checkpoint:** 双 key 客户端、区域修复、安全 provenance 与 v2 prompt-file CLI 已完成；Figma `37:2` 视觉母版已建立。`openscience-observatory-v1.png` 被用户判定与项目风格不一致，根因是 prompt 违反 spec §11.2，让模型同时承担材料纹理与六节点产品语义。不得导入 v1 或生成其视频版本。
 - **Approved responsibility reset:** 用户接受推荐项 A：下一张生成资产优先服务 Landing / Workspace 暗色主视觉。复用现有精确蓝色玻璃六面 RO 环作为原生前景；MiniMax 仅生成深墨科研空间、材料质感和受控光场，不生成节点、ID、SDF、轨迹、diff 或 UI。
 - **Approved composition:** 用户批准「证据汇入」：右侧原生精确 RO 环为品牌锚点，左侧研究材料沿蓝色路径汇入，橙色只表达一次版本变化。下一步分段确认布局、材料语言与验收门，再原地修订 prompt；确认前不得调用生成 API。
 - **Approved layout/layer boundary:** 16:9 四区布局为左侧 0–40% 文案留白、中部 38–62% 证据走廊、右侧 54–105% 原生 RO、底部 72–100% 收回 hero base。MiniMax 只负责空间/微纹理/光/反射；所有产品语义保持 Figma/SVG/HTML 原生。下一步确认材料与光线语言。
 - **Approved material/light language:** `Precision Evidence Chamber` 使用深墨基底、黑色阳极氧化金属、烟熏光学玻璃、微蚀刻表面与少量半透明薄膜；单一冷光由左中指向右侧 RO，70% 安静暗场。亮蓝和全部橙色保留原生层；生成层禁止语义几何、假数据/UI、纸张手绘、紫色霓虹和随机粒子。下一步确认叙事、拒绝门与视频运动边界。
 - **Approved narrative/gates:** 原生层按 artifact 汇入、蓝色路径、六面响应、单个橙色变化、RO ID/版本锚点讲述故事；背景通过八项静态拒绝门后才可导入。H3 如启用，只生成固定镜头的低亮冷色反射，所有语义动画保持原生。
-- **Written design approved / execution plan updated:** 用户已批准 v2 prompt 活文档。官方图片字段没有独立 `negative_prompt`，而当前 CLI 仍硬编码旧 intended surface；计划 Step 7.1–7.4 已加入 TDD 修复：从 `--prompt-file` 合并正负区块，要求 `--intended-surface` 并写真实 provenance。完成与提交后才允许 Step 7.5 单次生成 `openscience-evidence-chamber-v2.png`。
+- **Written design approved / prompt-manifest committed:** 用户已批准 v2 prompt 活文档。官方图片字段没有独立 `negative_prompt`；Step 7.1–7.4 已以 TDD 完成：从 `--prompt-file` 合并正负区块，要求 `--intended-surface`、拒绝 inline `--prompt` 并写真实 provenance。仅在该切片提交后才允许 Step 7.5 单次生成 `openscience-evidence-chamber-v2.png`。
 - **Attempt 1 result:** worktree 内不存在 `.env`，Node 在发起 HTTP 前退出；无 API 请求、无费用、无 key 切换。恢复命令必须让 Node 直接加载主工作区 `E:/Miscellaneous/XGS/.env`，不得复制或打印该文件。
 - **Attempt 2 result/root cause:** Node 成功加载主工作区 `.env`，但客户端未匹配新 key1/key2 的变量命名，在本地配置校验阶段退出；仍无 API 请求或费用。下一步先用测试覆盖常见 `_1/_2`、`KEY1/KEY2` 别名，再做单次重试。
 - **Attempt 3 result/blocker:** 别名修复后请求已到达 MiniMax，返回 HTTP `200` + `base_resp.status_code=2049` (`invalid api key`)，槽位 `key1`。按策略认证错误不得切换 key2；未生成资产、未写 provenance、未继续重试。恢复条件是用户修正 key1 后重新执行同一版本化命令。

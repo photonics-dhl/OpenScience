@@ -1,4 +1,4 @@
-import { mkdir, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { dirname, relative, resolve, sep } from 'node:path';
 
 import {
@@ -7,6 +7,7 @@ import {
   getAssetKeys,
   getImageGenerationUrl,
 } from './minimax-client.mjs';
+import { buildImagePrompt } from './prompt-manifest.mjs';
 
 function readOption(name) {
   const index = process.argv.indexOf(name);
@@ -19,6 +20,12 @@ function requireOption(name) {
     throw new Error(`Missing required option: ${name}`);
   }
   return value;
+}
+
+function rejectOption(name) {
+  if (process.argv.includes(name)) {
+    throw new Error(`Unsupported option: ${name}`);
+  }
 }
 
 function requireRegion() {
@@ -53,11 +60,14 @@ async function downloadImage(imageUrl) {
 }
 
 async function main() {
+  rejectOption('--prompt');
   const outputPath = assertGeneratedAssetPath(requireOption('--output'));
-  const prompt = requireOption('--prompt');
+  const promptFile = requireOption('--prompt-file');
+  const intendedSurface = requireOption('--intended-surface');
   const region = requireRegion();
   const imageGenerationUrl = getImageGenerationUrl(region);
   const aspectRatio = readOption('--aspect-ratio') ?? '16:9';
+  const prompt = buildImagePrompt(await readFile(promptFile, 'utf8'));
   const keys = getAssetKeys(process.env);
   const client = createMiniMaxImageClient({ fetch: globalThis.fetch, imageGenerationUrl });
   const result = await client.generateWithFallback({ aspectRatio, prompt, ...keys });
@@ -67,7 +77,7 @@ async function main() {
   const provenance = createSafeImageProvenance({
     generatedAt,
     host: new URL(imageGenerationUrl).host,
-    intendedSurface: 'cross-surface Figma visual master',
+    intendedSurface,
     keySlot: result.keySlot,
     localAssetPath: relative(process.cwd(), outputPath).replaceAll('\\', '/'),
     model: result.model,

@@ -1,5 +1,12 @@
 # OpenScience (XGS) 进度日志
 
+## 2026-08-08（产品网页 Task 1 / v2 prompt manifest）— 付费生成前的输入与 provenance 边界已提交
+
+- **TDD 证据**：新增 manifest/CLI 契约后，`node --test scripts/design/minimax-client.test.mjs scripts/design/prompt-manifest.test.mjs scripts/design/generate-minimax-image.test.mjs` 先 RED（缺少 `prompt-manifest.mjs`，CLI 仍要求旧 `--prompt`），最小实现后 GREEN，19/19 通过。
+- **批准 prompt 单一事实源**：`scripts/design/prompt-manifest.mjs` 只提取批准 Markdown 中 `## MiniMax Prompt` 与 `## Negative Prompt` 下的首个 `text` fenced block，按官方图片 API 的单一 `prompt` 约束合并；缺少任一块时固定失败。
+- **CLI/provenance 边界**：生成器要求显式 `--prompt-file` 与 `--intended-surface`，在环境或网络工作之前拒绝缺项，并明确拒绝 inline `--prompt`。组合后的 prompt 发送给客户端，调用方提供的 intended surface 写入脱敏 sidecar。
+- **安全与范围**：本切片没有读取 `.env`、没有网络/API 调用、没有生成资产、没有触碰 Figma；下一步仅可按计划 Step 7.5 执行一次批准的中国区 v2 生成。
+
 ## 2026-08-08（产品网页 Task 1 / 静态资产审美门）— v1 被拒绝，回到产品语义重新锁定
 
 - **用户结论**：`openscience-observatory-v1.png` 与既有 OpenScience 视觉系统不一致，不能只追求抽象科研质感，生成资产必须直接服务产品网页计划。
