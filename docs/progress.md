@@ -1,5 +1,15 @@
 # OpenScience (XGS) 进度日志
 
+## 2026-08-08（产品网页 Task 1 / Figma canonical 迁移验收）— 长期账号副本通过 parity，Step 9 解锁
+
+- **canonical 文件**：用户在长期账号下手动复制最新设计，新文件为 `gjhowMG7cG4clKwvhvF08E`；自本 checkpoint 起作为唯一设计事实源。旧源 `rWS3seZaDMdlnSljqktMDp` 与空探针 `PBUlumyHBVXfMHgdopH0aB` 只读保留，不再承载新增设计或 Code Connect。
+- **账号与写权限**：`figma-primary whoami` 确认为长期账号，目标 Team 席位为 Full；在 `00 Cover` 创建后立即删除 1×1 probe，前后 child count 均为 0，证明可编辑且画布净零变化。
+- **迁移 parity**：源/副本均为 6 pages、4 collections / 85 variables、9 text styles、2 effect styles、12 component sets / 96 variants；关键 nodes `60:2`、`60:7`、`60:8` 名称与 1974×1044、1440×900、390×844 尺寸一致；字体集合均为 Noto Sans SC / Noto Serif SC / Roboto Mono，image fill count 均为 0；prototype 均为 0 reactions / 0 flow starts。
+- **Code Connect 限制**：源/副本的官方 `get_code_connect_map` 都返回 plan gate，要求 Organization/Enterprise 的 Dev 或 Full seat；长期账号当前是 student tier 的 Full。不能声称映射已迁移或为空，该限制单独阻塞 Step 11，不阻塞 Step 9。
+- **门禁结论**：ADR-004 的可检查迁移门通过，实施计划 Step 9 仍为未开始，但已允许只在 canonical 文件中启动六屏原型。
+- **安全与范围**：未读取 `.env`，未打印账号凭据/OAuth token，未修改网页代码；Figma 唯一写动作是已回滚的净零探针。
+- **⏳ 下一步**：在 canonical 文件 `gjhowMG7cG4clKwvhvF08E` 启动 Step 9，先建立 Landing、Auth/Create、Dashboard、RO Workspace、Public RO、Ultrafast Science Collection 六屏的页面骨架与点击流。
+
 ## 2026-08-08（产品网页 Task 1 / Step 8 完成与 Figma 迁移门）— 组件获批，Step 9 暂停
 
 - **用户确认**：用户明确确认 Version Diff、Hermes Rail 与 Step 8 全量审计结果；实施计划 Step 8 已勾选完成。

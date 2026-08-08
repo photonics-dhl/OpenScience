@@ -26,14 +26,24 @@ Codex、Kimi/Cursor 等客户端还使用不同 MCP 配置源。项目 `.mcp.jso
 5. 更新项目登记的 canonical Figma file key/link，并保留原文件为只读迁移来源，直至两轮代码同步验证完成。
 6. 将临时账号降为 Viewer 或移除；撤销 `figma-temp` OAuth，删除本地临时账号密码变量并轮换曾暴露的临时密码。
 
-## Current Transitional Source
+## Current Canonical Source
+
+- canonical 设计文件：`OpenScience Web Design System (Copy)`
+- 文件地址：<https://www.figma.com/design/gjhowMG7cG4clKwvhvF08E>
+- 长期账号验证：`figma-primary` 重新鉴权后对应长期账号；目标 Team 席位为 Full。MCP 不暴露文件 owner 字段，因此所有权依据是用户在长期账号下完成复制；可编辑性由长期账号净零写探针独立验证。
+- 迁移 parity（2026-08-08）：副本与过渡源逐项一致——6 pages、4 variable collections / 85 variables、9 text styles、2 effect styles、12 component sets / 96 variants；关键 master nodes `60:2`、`60:7`、`60:8` 的名称与尺寸一致；字体集合均为 Noto Sans SC / Noto Serif SC / Roboto Mono，均无 image fill；prototype 均为 0 reactions / 0 flow starts。
+- 写权限探针：在 `00 Cover` 创建 1×1 临时 frame 后立即删除，前后 child count 均为 0，证明长期账号具备写权限且画布净零变化。
+- Code Connect 边界：官方 `get_code_connect_map` 在源/副本上均拒绝请求，要求 Organization/Enterprise 的 Dev 或 Full seat；长期账号虽为 Full，但当前 tier 是 student。因而不能证明映射为空或迁移一致；该缺口单独阻塞 Step 11，不阻塞 Step 9 画布设计。
+- 状态：该文件自本 checkpoint 起作为唯一 canonical 设计事实源；Step 9 可在此文件继续。旧源与空 migration probe 均不得用于新增设计或 Code Connect。
+
+## Retained Migration Sources
 
 - 过渡设计文件：`OpenScience Web Design System`
 - 文件地址：<https://www.figma.com/design/rWS3seZaDMdlnSljqktMDp>
-- 当前所有权：临时账号 Team；长期账号升级后，`figma-primary` 已能在目标 Team 创建文件，但官方 `whoami` 仍回报 View，且读取过渡文件明确返回“没有 edit access”。
+- 当前所有权：临时账号 Team；仅保留为只读迁移来源，直至两轮代码同步验证完成。
 - 写权限探针：长期账号已成功创建空目标文件 `OpenScience Web Design System — Canonical`（file key `PBUlumyHBVXfMHgdopH0aB`）。该文件目前只是迁移探针，不含设计内容，不得在 parity 验收前登记为 canonical。
 - MCP 边界：官方 remote MCP 支持原生画布写入，但不提供 share、duplicate、move 或 ownership-transfer 工具，并限制单次输出 20KB；不得用截图、SVG 扁平化或分块重绘冒充保留 variables/components/prototype 的迁移。
-- 状态：Task 1 Step 8 已完成并获用户确认（12 component sets / 96 variants）；Step 9 在迁移前暂停。过渡地址仍是唯一设计事实源，直到长期账号获得 Editor、在目标 Team 完成 duplicate/move 并通过全量对照。
+- 状态：Task 1 Step 8 已完成并获用户确认（12 component sets / 96 variants）；迁移门已通过，旧源和空探针均不是 canonical。
 
 ## Verification Gate
 
@@ -46,13 +56,14 @@ Codex、Kimi/Cursor 等客户端还使用不同 MCP 配置源。项目 `.mcp.jso
 ## 2026-08-08 Migration Checkpoint
 
 1. 双 OAuth 身份仍隔离：`figma-temp` 对应临时账号，`figma-primary` 对应长期账号。
-2. 长期账号创建空 Design 文件成功，说明目标 Team 写入路径可用；`whoami` 的 View 回报可能尚未反映实际升级，但不能代替源文件 edit 检查。
-3. 长期账号访问过渡源时被明确拒绝 edit；迁移当前唯一外部前置是源所有者在 Figma UI 将长期账号设为 Editor。
-4. 获得 Editor 后优先使用 Figma UI 的 Move/Duplicate 保留完整文件语义；完成后对照 6 pages、4 variable collections、85 variables、9 text styles、2 effect styles、12 component sets、96 variants、关键 master nodes 和 prototype links。
-5. 空目标探针不删除、不作为 canonical；若 UI duplicate 产生新 file key，以通过 parity 的新文件为准，并更新本 ADR、project index、handoff 和 Code Connect。
+2. 长期账号升级已生效：`figma-primary whoami` 回报目标 Team 为 Full；用户已在 Figma UI 手动复制最新设计，产生新 file key `gjhowMG7cG4clKwvhvF08E`。
+3. 可检查的源/副本 parity 已通过：页面、variables、styles、component sets/variants、关键 master node 名称与尺寸全部一致；prototype 均为 0 reactions / 0 flow starts。Code Connect 因当前 plan tier 被官方接口拒绝，保持未验证。
+4. 长期账号净零写探针通过；新副本正式成为 canonical，Step 9 迁移门解除。
+5. 空目标探针不删除、不作为 canonical；旧源只读保留，直至后续两轮代码同步验证完成。
 
 ## Consequences
 
 - 需要分别完成两次浏览器 OAuth；账号密码写入 `.env` 不等同于认证完成。
 - 过渡期会保留两个 Figma MCP server，占用一个额外 MCP 名额，因此移除低价值的 `fetch` server，维持总数 10。
 - 迁移完成后可以禁用或移除 `figma-temp`，恢复一个 MCP 名额。
+- 当前 student tier 的 Full seat 足以继续画布设计，但不满足官方 Code Connect API 的 Organization/Enterprise 门槛；Step 11 前需升级到满足条件的 plan/seat，或经 ADR 明确选择不使用 Code Connect 的替代交付。

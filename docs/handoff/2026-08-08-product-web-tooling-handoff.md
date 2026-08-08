@@ -1,6 +1,6 @@
 # Handoff — 2026-08-08 Product Web Tooling
 
-- **Current goal:** Task 1 Step 8 已获用户最终确认并完成；按用户要求，Step 9 暂停，先把 Figma 过渡源迁移到长期账号并通过 ADR-004 parity。
+- **Current goal:** Task 1 Step 8 与 Figma canonical 迁移均已完成；下一步只在长期账号 canonical 文件中执行 Step 9 六屏原型。
 - **Done:**
   - 产品设计 spec：`docs/specs/2026-08-08-openscience-product-web-design.md`。
   - 实施计划：`docs/plans/2026-08-08-openscience-product-web-plan.md`，用户选择 subagent-driven，但要求前置工具齐全后再执行。
@@ -10,7 +10,7 @@
   - Figma 已按官方 Codex 接法改为两个原生远程 URL server（`figma-temp`、`figma-primary`）；`mcp-remote` 在动态客户端注册阶段持续 403，已停用。账号密码仅存本地 `.env`，不得读取、打印或写入 Git。
   - 2026-08-08 已通过官方 Codex CLI 分别完成两个 server 的浏览器 OAuth；`codex mcp list` 均显示 `enabled / OAuth`。Mermaid 已在重启后的当前会话正常暴露工具。
   - 重启后两个 Figma server 均暴露 26 个官方工具。首次 `whoami` 发现 browser session 复用导致两者同为临时账号；已仅重绑 `figma-primary`，并由全新 ephemeral 客户端确认其为长期账号身份。
-  - 最终 App 重启后并行 `whoami` 通过：temp=`Ran`、primary=`zju`，email 前缀分别匹配且互不相同。临时账号有 Full 席位；长期账号目前只有 starter/View，尚不能作为 Team/Project 的可编辑 canonical owner。
+  - 最终 App 重启后双账号身份隔离通过；长期账号升级后，`figma-primary whoami` 已回报目标 Team 为 Full。
   - 账号迁移决策：`docs/decisions/ADR-004-figma-account-ownership-and-migration.md`。
   - 已在临时 Full team 创建过渡设计文件 `OpenScience Web Design System`：<https://www.figma.com/design/rWS3seZaDMdlnSljqktMDp>。
   - 用户授权隔离分支 `codex/product-web-task1`；代码 token 已用 TDD 补齐 spacing/radius/type/tracking，并通过 Web 13/13 token tests、typecheck、production build。
@@ -43,9 +43,11 @@
   - 用户已明确确认 Version Diff、Hermes Rail 与 Step 8 全量审计；计划 Step 8 已完成。
   - 长期账号 `figma-primary` 已成功创建空目标文件 `PBUlumyHBVXfMHgdopH0aB`，证明目标 Team 写入可用；但长期账号访问过渡源时被官方 MCP 明确拒绝 edit。空目标只是 migration probe，不是 canonical。
   - 官方 MCP 没有 share/duplicate/move/ownership-transfer 工具，且 20KB 输出限制使结构化跨文件克隆不具备保真性；禁止用截图/SVG 扁平化替代 variables/components/prototype 迁移。
-- **Constraints:** 不打印 `.env`；MCP 总数保持 ≤10；Figma 代码 token 是 canonical；`use_figma` 写入严格串行；每个组件完成后截图并由用户确认；长期账号仍是未来 canonical owner。
-- **Open risks:** 过渡源尚未向长期账号授予 Editor；空目标 probe 不是 canonical；Button 的 Destructive/Icon 子集合尚未创建；Playwright 尚未作为项目依赖锁定。Figma MCP 后续写入继续严格串行。
-- **Next action:** 用户在 Figma UI 将过渡源共享给长期账号并设为 Editor；随后复核 edit、由长期账号 Move/Duplicate 到目标 Team，并对照 6 pages / 4 collections / 85 variables / 9 text styles / 2 effect styles / 12 sets / 96 variants / master nodes / prototype links。通过前不启动 Step 9。
+  - 用户已在长期账号下手动复制最新设计：<https://www.figma.com/design/gjhowMG7cG4clKwvhvF08E>。`figma-primary` 源/副本 parity 通过：6 pages、4 collections / 85 variables、9 text styles、2 effect styles、12 sets / 96 variants、master nodes `60:2` / `60:7` / `60:8` 均一致；prototype 均为 0 reactions / 0 flow starts。
+  - canonical 副本净零写探针通过：`00 Cover` 临时 1×1 frame 创建后立即删除，前后 child count 均为 0。该文件已登记为唯一 canonical；旧源与空 probe 只读保留。
+- **Constraints:** 不打印 `.env`；MCP 总数保持 ≤10；Figma 代码 token 是 canonical；`use_figma` 写入严格串行；每个组件完成后截图并由用户确认；后续新增设计和 Code Connect 只允许使用 `gjhowMG7cG4clKwvhvF08E`。
+- **Open risks:** MCP 不暴露文件 owner 字段，所有权由用户在长期账号下复制的事实与 Full 席位/可编辑探针共同证明；官方 Code Connect 接口要求 Organization/Enterprise Dev 或 Full seat，当前 student tier Full 被拒绝，Step 11 尚不可执行；Button 的 Destructive/Icon 子集合尚未创建；Playwright 尚未作为项目依赖锁定。Figma MCP 后续写入继续严格串行。
+- **Next action:** 在 canonical 文件 `gjhowMG7cG4clKwvhvF08E` 启动 Step 9；先建立六屏页面骨架和主点击流，再分批截图、视觉确认和 docs-sync。
 - **Execution checkpoint:** 双 key 客户端、区域修复、安全 provenance 与 v2 prompt-file CLI 已完成；Figma `37:2` 视觉母版已建立。`openscience-observatory-v1.png` 被用户判定与项目风格不一致，根因是 prompt 违反 spec §11.2，让模型同时承担材料纹理与六节点产品语义。不得导入 v1 或生成其视频版本。
 - **v2 recovery result:** 旧 2013 长度问题已解决；`openscience-evidence-chamber-v2.png` 与 `.provenance.json` 已由 key1 中国区调用产出且 provenance 安全。视觉门失败，文件只作可追溯失败样本，不得进入 Figma/H3。下一次付费生成必须先批准新的 v3 方向和版本化输出名。
 - **Approved responsibility reset:** 用户接受推荐项 A：下一张生成资产优先服务 Landing / Workspace 暗色主视觉。复用现有精确蓝色玻璃六面 RO 环作为原生前景；MiniMax 仅生成深墨科研空间、材料质感和受控光场，不生成节点、ID、SDF、轨迹、diff 或 UI。
