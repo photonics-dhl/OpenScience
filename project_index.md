@@ -81,6 +81,7 @@
 | `docs/design-assets/generated/openscience-evidence-chamber-v2.png` / `.provenance.json` | MiniMax `image-01` 中国区 key1 生成的 1280×720 v2.1 背景及脱敏 provenance；因居中隧道/发光台座/粒子/硬黑边与移动裁切不满足八项门禁而拒绝，不得导入 Figma 或派生视频 | Rejected exploration |
 | `docs/design-assets/figma/2026-08-08-native-v3-{desktop,mobile}.png` | Figma `03 Patterns` 路线 1 原生母版的本地验收截图（1440×900 / 390×844）；保存用于 API 中断恢复、视觉确认与后续实现对照，不含生成式背景 | User-approved baseline |
 | `docs/design-assets/figma/2026-08-08-step8-core-primitives-v1.png` | Figma `02 Components` 首批 Card/Badge/Input 双表面与状态集合截图；作为组件批次视觉确认与 API 对账证据 | User-approved component baseline |
+| `docs/design-assets/figma/2026-08-08-step8-navigation-domain-v1.png` | Figma `02 Components` 第二批 Dialog/Tabs/RO Card 组件契约截图；含双表面、导航 active 状态与 RO 生命周期 | Awaiting batch visual approval |
 | `docs/specs/2026-08-04-p1b-3-blob-artifact-upload-design.md` | P1B-3 Blob 内容寻址存储与上传管线设计（design gate 已确认：五决策，代码已实现 2026-08-04） | 活文档 |
 | `docs/plans/2026-07-24-doc-architecture-plan.md` | 文档架构落地实施计划 | 活文档 |
 | `docs/plans/2026-07-24-mvp-task-breakdown-plan.md` | MVP 任务拆解与工具配置实施计划（已批准，执行中） | 活文档 |

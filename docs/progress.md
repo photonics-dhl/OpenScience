@@ -1,5 +1,14 @@
 # OpenScience (XGS) 进度日志
 
+## 2026-08-08（产品网页 Task 1 / Step 8 第二批组件）— Dialog、Tabs、RO Card 已建立
+
+- **Figma 交付**：`02 Components` 新增 wrapper `78:7`；Dialog `78:33`（Paper/Dark 2 surfaces）、Tabs `78:116`（Overview/SDF/Artifacts/Versions × Paper/Dark 8 variants）、RO Card `78:173`（Draft/Review/Published × Paper/Dark 6 variants）。
+- **接口诚实性**：Dialog 只映射现有 `DialogContent surface`；风险等级由组合内容表达，不新增虚假 prop。Tabs 明标 `ui/tabs.tsx` code gap。RO Card 是待实现 domain contract，unique ID 在三状态与两表面保持不变。
+- **视觉与语义修复**：展示板由 1780 增至 1900 px，避免底部 RO Card/说明拥挤；Draft 灰点从 `Diff` 改名 `Status Anchor`，橙色继续仅表示 Review/Published 快照变化。
+- **审计**：3 个 Component Set 的 variant/property 数量正确；0 图片填充、0 placeholder、0 wrapper 越界；字体仅 Noto Sans SC / Noto Serif SC / Roboto Mono。
+- **本地证据**：`docs/design-assets/figma/2026-08-08-step8-navigation-domain-v1.png`，SHA-256 `A845FA89B43D55EEE9262FA5C3EE22BC8493934CC5207595F576D7F6CA621B5B`。
+- **⏳ 下一步**：用户确认第二批视觉后，继续 SDF Node、Artifact Card、Review Row；Version Diff 与 Hermes Rail 保持下一检查点。
+
 ## 2026-08-08（产品网页 Task 1 / Step 8 首批组件）— 用户确认通过
 
 - **批准结论**：用户明确回复“确认”，Card、Badge、Input 的视觉、双表面关系与属性契约通过批次门。
