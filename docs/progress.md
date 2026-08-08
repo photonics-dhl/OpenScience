@@ -7,7 +7,7 @@
 - **TDD 证据**：新增契约先出现 4 个预期失败，再实现为 13/13 通过；`npx pnpm@9.15.0 --filter @openscience/web typecheck` 与 `build` 均通过。
 - **Figma Foundations**：过渡设计源现有 4 个集合、85 个 variables、13 条 alias、9 个 Text Styles、2 个 Effect Styles；审计为 `ALL_SCOPES=0`、缺失 Web code syntax=0、broken alias=0。
 - **文件结构**：建立 `00 Cover`、`01 Foundations`、`02 Components`、`03 Patterns`、`04 Screens`、`99 Archive` 六页。
-- **Button 检查点**：主集合按 React API 建立 30 variants（5 variant × 3 size × 2 disabled）并暴露 Label 属性；首次截图发现 Secondary 与展示底板同色，已将 specimen 底板改为 `paper-bg`，第二次截图结构、对比和裁切检查通过。等待用户确认后继续 Destructive/Icon 与下一组件。
+- **Button 检查点**：主集合按 React API 建立 30 variants（5 variant × 3 size × 2 disabled）并暴露 Label 属性。用户确认功能结构但认为美感不足后，specimen 重构为深色科研仪器 hero + 五种 CSS interaction states + 5×6 属性矩阵 + Code Contract；加入语义化 RO 六节点轨道/证据线/diff node，未改变组件 API。结构审计为 30 variants、5 states、0 overlap、0 duplicate top-level name，等待用户确认新版美感。
 
 ## 2026-08-08（产品网页 Task 1 / Figma Phase 0）— 过渡文件创建与 discovery 完成
 
