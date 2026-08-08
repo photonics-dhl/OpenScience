@@ -14,6 +14,10 @@
 - **资产策略**：静态概念图候选为 MiniMax `image-01`；静态母版通过后优先尝试官方当前最新的 `MiniMax-H3` 视频接口（无权限时才记录原因并回退 `MiniMax-Hailuo-2.3`），目标 5–6 秒、2K/1080P 动效母版。生成模型只负责科研空间、纹理、poster/视频母版；文字、节点、图表和 UI 保持原生可编辑。
 - **密钥策略**：设计资产生成严格按 key1 → key2 有序回退；仅明确额度/余额类错误允许切 key2。不得读取、打印或记录密钥值；该规则不改变产品运行时 AI Gateway。
 - **Spec 同步**：上述规则已增补至 `docs/specs/2026-08-08-openscience-product-web-design.md` §11.1–11.3，用户已复核确认；下一步先完成双 key 路由测试、静态概念资产和跨 Landing/Workspace/Public RO 的 Figma 母版。
+- **静态生成门**：Figma 母版已完成并通过内部截图几何检查；MiniMax 客户端切片 `6fc04a1` 已通过任务级审查。当前准备一次 `image-01` 生成尝试，输出使用新版本路径与 provenance sidecar，不覆盖已有资产。
+- **生成尝试 1**：隔离 worktree 内无 `.env`，Node 在本地启动阶段退出，未到达 MiniMax、未扣费、未触发 key2。下一次由 Node 直接加载主工作区 `E:/Miscellaneous/XGS/.env`，不复制、不读取或回显文件内容。
+- **生成尝试 2 / 根因**：Node 已加载主工作区 `.env`，但客户端未匹配新 key1/key2 的变量命名，仍在本地配置校验阶段退出；未发出 API 请求。根因是环境变量命名契约不兼容，不是 key 有效性或 MiniMax 服务问题；下一步以 TDD 增加常见 `_1/_2` 与 `KEY1/KEY2` 别名。
+- **生成尝试 3 / 外部证据**：别名修复后真实请求到达 MiniMax，返回 HTTP `200`、官方 `2049 invalid api key`，槽位为 `key1`。按已批准策略不切换 key2、不重试认证错误；没有资产或 provenance 产物。下一步需先修正 key1，再重新执行单次 live generation。
 
 ## 2026-08-08（产品网页 Task 1 / Figma Phase 1–3）— Foundations 完成，Button 视觉检查待确认
 

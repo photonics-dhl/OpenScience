@@ -50,7 +50,7 @@
 - [x] **Step 5: Implement the minimal asset client**
   Implement an injected-fetch client for `POST https://api.minimax.io/v1/image_generation` with model `image-01`, `aspect_ratio`, `response_format=url`, and one prompt per call. Load environment values only through the Node process environment (`node --env-file=.env`); never read, print or log `.env`. Return `{ keySlot, requestId, imageUrls, model }`, and redact all thrown errors. Keep the fallback classifier separate from HTTP transport so tests do not need network access.
 - [x] **Step 6: Run the routing tests and verify GREEN**
-  Run `node --test scripts/design/minimax-client.test.mjs` again; then run one live generation with a versioned output path under `docs/design-assets/generated/`. Persist the exact prompt, model, key slot, request ID, generation timestamp, post-processing and intended surface in a sidecar file without the key value.
+  Run `node --test scripts/design/minimax-client.test.mjs` again; then run one live generation with a versioned output path under `docs/design-assets/generated/`. Persist the exact prompt, model, key slot, request ID, generation timestamp, post-processing and intended surface in a sidecar file without the key value. Current live attempt reached MiniMax but stopped on official `2049 invalid api key`; no asset was written.
 - [ ] **Step 7: Inspect and approve the static asset**
   View the generated image at original resolution. Reject any watermark, logo, readable fake text, generic galaxy/brain motif, excessive neon, malformed RO geometry or composition that cannot host real UI overlays. Iterate with one prompt change at a time; do not generate video until the user approves the static concept.
 - [ ] **Step 8: Create component families**

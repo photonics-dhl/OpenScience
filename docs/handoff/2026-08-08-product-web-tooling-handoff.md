@@ -1,6 +1,6 @@
 # Handoff — 2026-08-08 Product Web Tooling
 
-- **Current goal:** 执行产品网页计划 Task 1；Figma Foundations 已完成；用户已复核批准 `Living Research Observatory`（科研观测台）书面增补，当前进入双 key 路由测试、静态概念资产和跨三表面的 Figma 视觉母版。
+- **Current goal:** 执行产品网页计划 Task 1；Figma Foundations 与跨三表面 `Living Research Observatory` 视觉母版已完成；当前执行一次 `image-01` 静态资产生成并等待审美门。
 - **Done:**
   - 产品设计 spec：`docs/specs/2026-08-08-openscience-product-web-design.md`。
   - 实施计划：`docs/plans/2026-08-08-openscience-product-web-plan.md`，用户选择 subagent-driven，但要求前置工具齐全后再执行。
@@ -21,5 +21,8 @@
   - MiniMax 静态资产客户端已完成：`scripts/design/minimax-client.mjs` 与 7 个 Node 无网络测试，RED 为缺失模块、GREEN 为 7/7。key1 优先（现有运行时 key 仅兼容为 key1），仅 HTTP 成功的官方 `1008` 余额不足切 key2；生成 CLI 仅以 Node `--env-file` 进程环境取值，拒绝覆盖并写脱敏 provenance。
 - **Constraints:** 不打印 `.env`；MCP 总数保持 ≤10；Figma 代码 token 是 canonical；`use_figma` 写入严格串行；每个组件完成后截图并由用户确认；长期账号仍是未来 canonical owner。
 - **Open risks:** 长期账号只有 starter/View；Button 的 Destructive/Icon 子集合尚未创建；Playwright 尚未作为项目依赖锁定；Figma 过渡文件仍待迁移。
-- **Next action:** 由控制方在用户授权后用 `scripts/design/generate-minimax-image.mjs` 生成一张 `image-01` 静态科研证据场；用户审美确认后导入 Figma 视觉母版，再尝试最新 H3 视频接口；静态/动效母版通过后才恢复 Button family 与后续组件。
+- **Execution checkpoint:** 双 key 客户端实现与审查已完成；Figma `37:2` 视觉母版已建立并修复两个截图缺陷。下一步用 `scripts/design/generate-minimax-image.mjs` 生成一张 `image-01` 静态科研证据场；若调用失败，先记录 HTTP/MiniMax code 与 slot，不重复扣费、不自动改视觉方向。静态资产通过用户审美门后才导入 Figma，并尝试最新 H3 视频接口。
+- **Attempt 1 result:** worktree 内不存在 `.env`，Node 在发起 HTTP 前退出；无 API 请求、无费用、无 key 切换。恢复命令必须让 Node 直接加载主工作区 `E:/Miscellaneous/XGS/.env`，不得复制或打印该文件。
+- **Attempt 2 result/root cause:** Node 成功加载主工作区 `.env`，但客户端未匹配新 key1/key2 的变量命名，在本地配置校验阶段退出；仍无 API 请求或费用。下一步先用测试覆盖常见 `_1/_2`、`KEY1/KEY2` 别名，再做单次重试。
+- **Attempt 3 result/blocker:** 别名修复后请求已到达 MiniMax，返回 HTTP `200` + `base_resp.status_code=2049` (`invalid api key`)，槽位 `key1`。按策略认证错误不得切换 key2；未生成资产、未写 provenance、未继续重试。恢复条件是用户修正 key1 后重新执行同一版本化命令。
 - **Read first:** `AGENTS.md` → `docs/OpenScience_Kimi_Development_Spec.md` → `docs/progress.md` → `project_index.md` → product web spec/plan → ADR-004 → 本 handoff。
