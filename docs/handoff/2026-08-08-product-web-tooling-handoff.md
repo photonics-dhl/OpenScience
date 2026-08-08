@@ -26,6 +26,7 @@
   - Step 7.4b 已完成：用户以选择 `1` 批准精确 v2.1 文本；实际组合长度为 1440 字符（正向 921、负向 495），保留 59 字符余量。此步未加载 `.env`、未调用 API、未触碰 Figma。
   - Step 7.5–7.6 已完成：单次中国区请求由 key1 成功生成 1280×720 v2.1 PNG 与安全 sidecar，未使用 key2、未重试；原图因居中隧道/发光矩形台座/粒子/硬黑边/移动裁切失败被登记为 rejected exploration。
   - v3 路线只读预检已完成：现有 `Hero.tsx` 已分离 ambient/veil/RO loop/poster/版本标签/移动与 reduced-motion，`generate-landing-hero.mjs` 可确定性生成 SVG 母版，Figma master `37:2` 已统一三种产品表面；路线 1 可复用这些基础，不需要整幅 AI 背景。
+  - v3 路线 1 已写成 product web spec §11.4 的待批准切片：含 1440×900/390×844 构图、七层语义所有权、4.2 秒一次性动效和十项拒绝门；尚未改 Figma/代码，也未授权下一次生成。
 - **Constraints:** 不打印 `.env`；MCP 总数保持 ≤10；Figma 代码 token 是 canonical；`use_figma` 写入严格串行；每个组件完成后截图并由用户确认；长期账号仍是未来 canonical owner。
 - **Open risks:** 长期账号只有 starter/View；Button 的 Destructive/Icon 子集合尚未创建；Playwright 尚未作为项目依赖锁定；Figma 过渡文件仍待迁移；v3 路线仍待用户从 1/2/3 中选择，确认前不得修改 Figma 或再次付费生成。
 - **Execution checkpoint:** 双 key 客户端、区域修复、安全 provenance 与 v2 prompt-file CLI 已完成；Figma `37:2` 视觉母版已建立。`openscience-observatory-v1.png` 被用户判定与项目风格不一致，根因是 prompt 违反 spec §11.2，让模型同时承担材料纹理与六节点产品语义。不得导入 v1 或生成其视频版本。

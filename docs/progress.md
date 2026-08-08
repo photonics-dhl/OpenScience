@@ -1,5 +1,13 @@
 # OpenScience (XGS) 进度日志
 
+## 2026-08-08（产品网页 Task 1 / v3 原生母版设计切片）— 精确 spec 待批准
+
+- **设计切片**：在唯一产品设计 spec §11.4 写入路线 1 的可实施版本：1440×900 四区坐标、390×844 独立重排、七层语义所有权、4.2 秒一次性证据汇入时间轴和十项静态/响应式/无障碍/性能拒绝门。
+- **关键修正**：整幅 AI 背景退出交付链；现有 RO loop/poster、unique ID、artifact、SDF、路径、版本和 CTA 均保持原生。当前 `hero-ambient` 的星点/星尘不得进入 v3；被拒绝的 MiniMax v1/v2 只保留 provenance。
+- **产品叙事**：桌面与移动均必须在无动画时读出“真实 artifact → 同一个 RO → v0.4 新版本”；Live2D/Hermes 只复用同一高亮 intent，不建立第二套状态。
+- **范围**：本步骤只修改设计/计划/进度/索引/handoff 文档；未改代码或 Figma，未加载 `.env`，未调用 API。
+- **⏳ 下一步**：用户选择路线 1 并批准 §11.4 后，才把该切片转成 Figma `03 Patterns` 原生母版与桌面/移动截图；批准前不实施。
+
 ## 2026-08-08（产品网页 Task 1 / v3 路线只读预检）— 原生确定性母版可直接复用
 
 - **代码证据**：`apps/web/components/landing/Hero.tsx` 已把 ambient、左侧可读性 veil、右侧 RO loop/poster、版本标签、CTA 与移动端/reduced-motion 回退分层；`apps/web/scripts/generate-landing-hero.mjs` 已能以 SVG + Playwright 确定性输出原生主视觉，不需要让图片模型控制整幅构图。
