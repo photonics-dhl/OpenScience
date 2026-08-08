@@ -1,5 +1,12 @@
 # OpenScience (XGS) 进度日志
 
+## 2026-08-08（Figma 最终工具门禁）— 双身份通过，长期账号编辑席位待开通
+
+- **工具加载**：重启后 `figma-temp` 与 `figma-primary` 各暴露 26 个官方工具，共 52 个；两边 `whoami` 均成功。
+- **身份验证**：两个 email 不同且分别匹配预期账号前缀；临时账号 handle 为 `Ran`，长期账号 handle 为 `zju`，双 OAuth 不再串号。
+- **席位验证**：临时账号拥有 Full 席位（student tier）；长期账号当前唯一 plan 为 starter tier + View 席位，没有 Team/Project 编辑席位。
+- **结论**：Figma MCP 工具门禁通过，但长期账号暂不能作为可编辑 canonical owner。开始 Task 1 前需二选一：为长期账号开通 Full/Edit 席位并直接创建 canonical 文件，或按 ADR-004 先在临时 Full 账号制作、同步邀请长期账号并在席位开通后迁移。
+
 ## 2026-08-08（Figma 双账号隔离验证）— 浏览器会话复用已纠正
 
 - **发现**：重启后两个 Figma MCP 均加载，各暴露 26 个官方工具；但首次并行 `whoami` 返回同一临时账号，说明 `figma-primary` 授权时复用了浏览器现有身份。

@@ -31,7 +31,7 @@
       "description": "Both figma-temp and figma-primary authenticated successfully, but their whoami calls returned the same temporary-account identity.",
       "root_cause": "The second browser OAuth flow reused the Figma account already signed in to the default browser. Separate MCP server names isolate stored credentials, but they do not choose different browser identities automatically.",
       "solution": "Log out only figma-primary, switch the default browser to the long-term Figma account, then run `codex mcp login figma-primary` again. Leave figma-temp credentials unchanged.",
-      "verification": "A fresh ephemeral Codex client called only figma-primary.whoami and confirmed the authenticated email has the long-term account prefix; its handle and plan count differ from figma-temp. The active App session still needs a restart to discard its old in-memory client.",
+      "verification": "After restarting the Codex App, parallel whoami calls confirmed figma-temp and figma-primary have different emails and the expected account prefixes. The temporary account handle is Ran; the long-term account handle is zju.",
       "files": [
         "C:/Users/Mac/.codex/config.toml",
         "docs/decisions/ADR-004-figma-account-ownership-and-migration.md"
