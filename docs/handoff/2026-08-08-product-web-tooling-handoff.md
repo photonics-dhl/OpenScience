@@ -1,6 +1,6 @@
 # Handoff — 2026-08-08 Product Web Tooling
 
-- **Current goal:** 执行产品网页计划 Task 1；Figma Foundations 已完成，Button specimen 已完成品牌化重构，等待新版视觉确认。
+- **Current goal:** 执行产品网页计划 Task 1；Figma Foundations 已完成；用户已批准从组件说明书式页面升级为 `Living Research Observatory`（科研观测台）视觉母版，书面增补待复核。
 - **Done:**
   - 产品设计 spec：`docs/specs/2026-08-08-openscience-product-web-design.md`。
   - 实施计划：`docs/plans/2026-08-08-openscience-product-web-plan.md`，用户选择 subagent-driven，但要求前置工具齐全后再执行。
@@ -16,7 +16,9 @@
   - 用户授权隔离分支 `codex/product-web-task1`；代码 token 已用 TDD 补齐 spacing/radius/type/tracking，并通过 Web 13/13 token tests、typecheck、production build。
   - Figma Phase 1 audit：4 collections / 85 variables / 13 aliases / 9 text styles / 2 effect styles；0 `ALL_SCOPES`、0 缺失 Web code syntax、0 broken aliases。
   - Figma 六页结构已建立；Button 主集合已创建 30 variants + Label property。用户认为首版工程感偏重后，展示页已重构为深色科研仪器 hero、五种交互状态、5×6 属性矩阵与 Code Contract；结构审计 0 overlap/0 duplicate。
+  - 用户进一步指出整体美感仍不足；复盘确认问题是全局美术方向而非单一 Button。已批准以学术编辑设计为主体、克制 RO 演化装置为品牌记忆的「科研观测台」母版，并写入产品 web spec §11.1–11.3。
+  - MiniMax 资产路线已锁定：`image-01` 先做静态科研场概念图，通过后才用 `MiniMax-Hailuo-2.3` 做 6 秒 1080P 动效母版。设计资产工具按 key1 → key2 有序回退，仅额度/余额类错误可切换；不得输出 key。
 - **Constraints:** 不打印 `.env`；MCP 总数保持 ≤10；Figma 代码 token 是 canonical；`use_figma` 写入严格串行；每个组件完成后截图并由用户确认；长期账号仍是未来 canonical owner。
 - **Open risks:** 长期账号只有 starter/View；Button 的 Destructive/Icon 子集合尚未创建；Playwright 尚未作为项目依赖锁定；Figma 过渡文件仍待迁移。
-- **Next action:** 用户确认品牌化 Button specimen → 完成 Button Destructive/Icon → 按依赖顺序继续 Badge/Input/Card/Dialog/Tabs 与科研域组件，并沿用同一展示语言。
+- **Next action:** 用户复核新增视觉 spec → 先制作跨 Landing/Workspace/Public RO 的 Figma 视觉母版与一张 MiniMax 静态概念资产 → 母版审美验收后再完成 Button family 和后续组件，避免批量复制旧展示语言。
 - **Read first:** `AGENTS.md` → `docs/OpenScience_Kimi_Development_Spec.md` → `docs/progress.md` → `project_index.md` → product web spec/plan → ADR-004 → 本 handoff。
