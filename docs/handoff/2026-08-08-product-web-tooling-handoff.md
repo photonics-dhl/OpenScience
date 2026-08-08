@@ -1,6 +1,6 @@
 # Handoff — 2026-08-08 Product Web Tooling
 
-- **Current goal:** 执行产品网页计划 Task 1；v3 路线 1 的 1440×900 与 390×844 Figma 原生母版已经完成并通过结构审计，当前等待用户视觉确认；网页代码继续保持门禁。
+- **Current goal:** 执行产品网页计划 Task 1；v3 路线 1 双尺寸母版已获用户视觉确认，Step 7.7 完成，当前进入 Step 8 组件家族对账与构建；网页代码继续保持门禁。
 - **Done:**
   - 产品设计 spec：`docs/specs/2026-08-08-openscience-product-web-design.md`。
   - 实施计划：`docs/plans/2026-08-08-openscience-product-web-plan.md`，用户选择 subagent-driven，但要求前置工具齐全后再执行。
@@ -31,9 +31,10 @@
   - Figma `03 Patterns` 已新增路线 1 包裹节点 `60:2`、桌面 `60:7` 与移动 `60:8`。桌面采用原生 evidence-ledger RO；移动是独立重排，并在审计后把 PAPER/DATA/CODE 修正为纵向 evidence ingress。
   - 双尺寸结构审计通过：0 图片填充、0 placeholder、0 语义越界、0 小于 44 px 的操作目标，字体限定 Noto Serif SC / Noto Sans SC / Roboto Mono，每端恰有 1 个橙色 diff。截图已固化至 `docs/design-assets/figma/2026-08-08-native-v3-{desktop,mobile}.png`，不再依赖短期 Figma asset URL。
   - Task Master `10 Figma Design Upstream + MCP Integration` 已同步为 `in-progress`；需等视觉批准、组件映射与 Code Connect 完成后才可标记 done。
+  - 用户已审阅本地桌面/移动截图并明确回复“确认”；product spec §11.4.6 与计划 Step 7.7 已同步为通过，Step 8/9 解锁。网页实现仍需等待六屏原型门。
 - **Constraints:** 不打印 `.env`；MCP 总数保持 ≤10；Figma 代码 token 是 canonical；`use_figma` 写入严格串行；每个组件完成后截图并由用户确认；长期账号仍是未来 canonical owner。
-- **Open risks:** 用户尚未视觉批准 v3 双尺寸截图；长期账号只有 starter/View；Button 的 Destructive/Icon 子集合尚未创建；Playwright 尚未作为项目依赖锁定；Figma 过渡文件仍待迁移。Figma MCP 后续写入继续严格串行。
-- **Next action:** 先让用户审阅两张本地截图；若批准，勾选 Task 1 Step 7.7 并继续 Step 8 组件家族与 Step 9 六屏原型；若未批准，只按用户指出的单一视觉变量迭代母版，不改网页代码、不调用 MiniMax。
+- **Open risks:** 长期账号只有 starter/View；Button 的 Destructive/Icon 子集合尚未创建；Playwright 尚未作为项目依赖锁定；Figma 过渡文件仍待迁移。Figma MCP 后续写入继续严格串行。
+- **Next action:** 读取 Figma `02 Components` 与 `apps/web/components/ui/*` 的实际接口，完成 Step 8 缺口表；优先建立被六屏共同消费的 RO Card、SDF Node、Artifact Card、Review Row、Version Diff 与 Hermes Rail，再截图审计。不得提前修改网页代码或调用 MiniMax。
 - **Execution checkpoint:** 双 key 客户端、区域修复、安全 provenance 与 v2 prompt-file CLI 已完成；Figma `37:2` 视觉母版已建立。`openscience-observatory-v1.png` 被用户判定与项目风格不一致，根因是 prompt 违反 spec §11.2，让模型同时承担材料纹理与六节点产品语义。不得导入 v1 或生成其视频版本。
 - **v2 recovery result:** 旧 2013 长度问题已解决；`openscience-evidence-chamber-v2.png` 与 `.provenance.json` 已由 key1 中国区调用产出且 provenance 安全。视觉门失败，文件只作可追溯失败样本，不得进入 Figma/H3。下一次付费生成必须先批准新的 v3 方向和版本化输出名。
 - **Approved responsibility reset:** 用户接受推荐项 A：下一张生成资产优先服务 Landing / Workspace 暗色主视觉。复用现有精确蓝色玻璃六面 RO 环作为原生前景；MiniMax 仅生成深墨科研空间、材料质感和受控光场，不生成节点、ID、SDF、轨迹、diff 或 UI。

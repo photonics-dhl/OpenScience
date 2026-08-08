@@ -1,5 +1,12 @@
 # OpenScience (XGS) 进度日志
 
+## 2026-08-08（产品网页 Task 1 / Figma v3 原生母版）— 用户视觉确认通过
+
+- **批准结论**：用户审阅 1440×900 桌面与 390×844 移动截图后明确回复“确认”；产品设计 spec §11.4.6 与实施计划 Step 7.7 已由待验收更新为完成。
+- **解锁范围**：允许继续 Step 8 组件家族和 Step 9 六屏原型；网页代码仍等待 Figma 组件契约与六屏原型复核，不因本次确认提前启动。
+- **事实源**：Figma 节点保持 wrapper `60:2`、desktop `60:7`、mobile `60:8`；本地证据保持 `docs/design-assets/figma/2026-08-08-native-v3-{desktop,mobile}.png`。
+- **⏳ 下一步**：对账 Figma 现有 Button 集合、代码 `apps/web/components/ui/*` primitives 与计划要求的 Card/Badge/Input/Dialog/Tabs/RO Card/SDF Node/Artifact Card/Review Row/Version Diff/Hermes Rail，先形成缺口再串行构建。
+
 ## 2026-08-08（产品网页 Task 1 / Figma v3 原生母版）— 双尺寸已完成，等待视觉确认
 
 - **Figma 交付**：`03 Patterns` 新增统一包裹节点 `60:2`、桌面 `60:7`（1440×900）与移动 `60:8`（390×844）。桌面把早期花瓣式 RO 改为证据账本，原生呈现 unique ID、六类 SDF、连续度、`v0.4` 与单一 diff；移动端按 spec 独立重排，并将三类 artifact 修正为纵向 evidence ingress。
