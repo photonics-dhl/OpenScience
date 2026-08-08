@@ -1,6 +1,6 @@
 # Handoff — 2026-08-08 Product Web Tooling
 
-- **Current goal:** 执行产品网页计划 Task 1；Figma Foundations、跨三表面 `Living Research Observatory` 视觉母版与首张 `image-01` 静态资产已完成；当前等待用户审美门，通过后导入 Figma 并进入 H3 视频动效门。
+- **Current goal:** 执行产品网页计划 Task 1；Figma Foundations 与跨三表面 `Living Research Observatory` 视觉母版已完成；首张 `image-01` 静态资产未通过用户审美门，当前重新锁定“生成材料层 vs 原生产品语义层”的职责边界。
 - **Done:**
   - 产品设计 spec：`docs/specs/2026-08-08-openscience-product-web-design.md`。
   - 实施计划：`docs/plans/2026-08-08-openscience-product-web-plan.md`，用户选择 subagent-driven，但要求前置工具齐全后再执行。
@@ -23,7 +23,7 @@
   - `b655257` 已移除 provenance 中的远程下载 URL 与临时签名查询参数，并加入回归测试；敏感扫描干净。
 - **Constraints:** 不打印 `.env`；MCP 总数保持 ≤10；Figma 代码 token 是 canonical；`use_figma` 写入严格串行；每个组件完成后截图并由用户确认；长期账号仍是未来 canonical owner。
 - **Open risks:** 长期账号只有 starter/View；Button 的 Destructive/Icon 子集合尚未创建；Playwright 尚未作为项目依赖锁定；Figma 过渡文件仍待迁移。
-- **Execution checkpoint:** 双 key 客户端、区域修复、安全 provenance 与首张静态资产均已完成；Figma `37:2` 视觉母版已建立并修复两个截图缺陷。下一步先让用户审美确认本地 PNG；通过后才导入 Figma，并尝试最新 H3 视频接口。
+- **Execution checkpoint:** 双 key 客户端、区域修复与安全 provenance 已完成；Figma `37:2` 视觉母版已建立。`openscience-observatory-v1.png` 被用户判定与项目风格不一致，根因是 prompt 违反 spec §11.2，让模型同时承担材料纹理与六节点产品语义。下一步先完成职责选择和三方案比较；不得导入 v1 或生成其视频版本。
 - **Attempt 1 result:** worktree 内不存在 `.env`，Node 在发起 HTTP 前退出；无 API 请求、无费用、无 key 切换。恢复命令必须让 Node 直接加载主工作区 `E:/Miscellaneous/XGS/.env`，不得复制或打印该文件。
 - **Attempt 2 result/root cause:** Node 成功加载主工作区 `.env`，但客户端未匹配新 key1/key2 的变量命名，在本地配置校验阶段退出；仍无 API 请求或费用。下一步先用测试覆盖常见 `_1/_2`、`KEY1/KEY2` 别名，再做单次重试。
 - **Attempt 3 result/blocker:** 别名修复后请求已到达 MiniMax，返回 HTTP `200` + `base_resp.status_code=2049` (`invalid api key`)，槽位 `key1`。按策略认证错误不得切换 key2；未生成资产、未写 provenance、未继续重试。恢复条件是用户修正 key1 后重新执行同一版本化命令。
@@ -32,5 +32,5 @@
 - **Superseded key2 diagnostic:** 用户明确要求验证 key2；实际来源为 `MINIMAX_API_KEY2`。global endpoint 返回的 `2049` 只证明区域不匹配；下方中国区验证已确认 key2 有效。
 - **Correction / actual root cause:** 上述 global endpoint 的 `2049` 不能证明 key 无效。用户确认后按官方区域规则改测中国区：key2 调 `api.minimaxi.com/v1/models` 返回 HTTP 200 与模型数据，调 `www.minimaxi.com/v1/token_plan/remains` 返回 HTTP 200、状态 0 与计划数据。key2 是有效的 CN Subscription Key；根因是生成器把中国区 key 错发到 `api.minimax.io`。恢复步骤改为：TDD 增加 cn/global host 选择 → 中国区使用 `https://api.minimaxi.com/v1/image_generation` → 单次 image-01 生成。
 - **Region fix checkpoint:** `658cafe` 已加入 `--region cn|global` 和中国区图像 host，测试 12/12；key1 调中国区 remains 同样为 HTTP 200、状态 0、有计划数据，因此 key1/key2 均有效。恢复命令应显式传 `--region cn`，先 key1，只有官方 1008 才切 key2；输出固定为新版本文件与 provenance sidecar。
-- **Generation result:** key1 通过中国区 `image-01` 成功生成 `docs/design-assets/generated/openscience-observatory-v1.png`（1280×720）及脱敏 sidecar；未触发 key2。原始响应中的临时签名 URL 未保留，安全修复后测试 14/14；下一步是用户审美确认，不得提前生成视频。
+- **Generation result / rejected exploration:** key1 通过中国区 `image-01` 成功生成 `docs/design-assets/generated/openscience-observatory-v1.png`（1280×720）及脱敏 sidecar；未触发 key2。用户拒绝该视觉：抽象植物状六节点与现有 3D RO 环、精密科研仪器暗面及产品语义不一致。文件仅作可追溯失败样本，不得导入 Figma 或派生视频。
 - **Read first:** `AGENTS.md` → `docs/OpenScience_Kimi_Development_Spec.md` → `docs/progress.md` → `project_index.md` → product web spec/plan → ADR-004 → 本 handoff。

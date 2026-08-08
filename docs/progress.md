@@ -1,5 +1,12 @@
 # OpenScience (XGS) 进度日志
 
+## 2026-08-08（产品网页 Task 1 / 静态资产审美门）— v1 被拒绝，回到产品语义重新锁定
+
+- **用户结论**：`openscience-observatory-v1.png` 与既有 OpenScience 视觉系统不一致，不能只追求抽象科研质感，生成资产必须直接服务产品网页计划。
+- **根因**：v1 prompt 同时要求模型生成“材料场”和“六节点 RO 结构”，与产品 spec §11.2 的职责边界冲突。模型由此把不可妥协的六节点语义退化成植物状抽象图，也没有表达 RO unique ID、SDF 元数据、版本锚点及跨 Landing / Workspace / Public RO / Ultrafast Science 的连续关系。
+- **处置**：v1 保留为有 provenance 的 rejected exploration，不导入 Figma、不生成其视频版本。下一轮先确认生成层职责；默认修正方向是 MiniMax 只生成可裁切的科研材料/证据纹理，精确六节点、ID、SDF、轨迹和 diff 全部由 Figma/SVG 原生叠加。
+- **⏳ 下一步**：完成一次视觉职责选择与 3 方案比较，用户批准修订设计后才原地更新 prompt 并进行下一次单图生成。
+
 ## 2026-08-08（产品网页 Task 1 / MiniMax 中国区生成）— 双 key 有效，首张静态资产等待审美门
 
 - **根因定论**：key1 与 key2 均为有效的中国区 Token Plan Subscription Key；此前 `2049 invalid api key` 是把 CN key 发送到 global `api.minimax.io` 所致。中国区只读验证应使用 `api.minimaxi.com` / `www.minimaxi.com`，图片生成使用 `https://api.minimaxi.com/v1/image_generation`。

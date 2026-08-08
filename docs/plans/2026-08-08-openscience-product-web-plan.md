@@ -52,7 +52,7 @@
 - [x] **Step 6: Run the routing tests and verify GREEN**
   Run the client and CLI tests again; then run one live generation with a versioned output path under `docs/design-assets/generated/`. Persist the exact prompt, model, region, key slot, request ID, generation timestamp, post-processing and intended surface in a sidecar file without the key value or remote signed URL. Completed through the China-region endpoint with key1; `openscience-observatory-v1.png` and its sanitized sidecar exist, and the combined test suite passes 14/14.
 - [ ] **Step 7: Inspect and approve the static asset**
-  View the generated image at original resolution. Reject any watermark, logo, readable fake text, generic galaxy/brain motif, excessive neon, malformed RO geometry or composition that cannot host real UI overlays. Iterate with one prompt change at a time; do not generate video until the user approves the static concept.
+  View the generated image at original resolution. Reject any watermark, logo, readable fake text, generic galaxy/brain motif, excessive neon, malformed RO geometry or composition that cannot host real UI overlays. v1 was rejected because the prompt let the model generate product-semantic six-node geometry, producing a plant-like form disconnected from the existing RO system. Re-lock the generated layer as subordinate material/texture before another single-image iteration; do not generate video until the user approves the static concept.
 - [ ] **Step 8: Create component families**
   Map Button, Card, Badge, Input, Dialog, Tabs, RO Card, SDF Node, Artifact Card, Review Row, Version Diff and Hermes Rail to existing or newly approved `apps/web/components/ui/*` primitives.
 - [ ] **Step 9: Prototype the six screens**

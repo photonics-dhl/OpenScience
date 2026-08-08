@@ -76,7 +76,7 @@
 | `docs/decisions/ADR-004-figma-account-ownership-and-migration.md` | Figma 临时/长期账号所有权、双 OAuth 隔离、canonical 设计稿迁移与验收决策 | Accepted |
 | `docs/handoff/2026-08-08-product-web-tooling-handoff.md` | 产品网页工具前置交接（Codex 10 MCP、双 Figma OAuth、迁移 ADR、重启后验证顺序） | 当前 handoff |
 | `docs/design-assets/prompts/2026-08-08-living-research-observatory-v1.md` | Living Research Observatory 静态概念资产提示清单（stylized-concept、原生 Figma 叠层留白、禁用元素与审美拒绝门） | 活文档 |
-| `docs/design-assets/generated/openscience-observatory-v1.png` / `.provenance.json` | MiniMax `image-01` 中国区生成的 1280×720 Living Research Observatory 静态材料层及脱敏 provenance；等待用户审美批准后方可导入 Figma | 审美门待确认 |
+| `docs/design-assets/generated/openscience-observatory-v1.png` / `.provenance.json` | MiniMax `image-01` 中国区生成的 1280×720 探索图及脱敏 provenance；因植物状六节点与产品视觉/语义不一致被用户拒绝，仅保留为可追溯失败样本，不得导入 Figma 或派生视频 | Rejected exploration |
 | `docs/specs/2026-08-04-p1b-3-blob-artifact-upload-design.md` | P1B-3 Blob 内容寻址存储与上传管线设计（design gate 已确认：五决策，代码已实现 2026-08-04） | 活文档 |
 | `docs/plans/2026-07-24-doc-architecture-plan.md` | 文档架构落地实施计划 | 活文档 |
 | `docs/plans/2026-07-24-mvp-task-breakdown-plan.md` | MVP 任务拆解与工具配置实施计划（已批准，执行中） | 活文档 |
