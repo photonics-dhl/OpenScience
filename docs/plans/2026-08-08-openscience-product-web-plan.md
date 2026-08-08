@@ -41,15 +41,15 @@
 
 - [x] **Step 1: Build the Figma variable inventory**
   Mirror color, type, spacing, radius, elevation, motion and z-index tokens from `apps/web/app/tokens.css`. Use the existing token names as the canonical variable names; do not introduce a second naming scheme.
-- [ ] **Step 2: Lock the visual master before component expansion**
+- [x] **Step 2: Lock the visual master before component expansion**
   Build one Figma master board spanning three surfaces: a dark Landing/workbench slice, a paper-white Public RO slice and a compact Ultrafast Science editorial slice. Reuse the six-node RO symbol, RO unique ID, blue evidence trajectory and orange diff mark; include real-looking metadata fields, version anchors and artifact provenance labels. The board must pass the 3-second comprehension test (“one evolving research object”), must not use purple gradients/space backgrounds/opaque pseudo-text, and must show how one RO moves between all three surfaces.
-- [ ] **Step 3: Write the failing MiniMax key-routing tests**
+- [x] **Step 3: Write the failing MiniMax key-routing tests**
   Add Node `node:test` cases for `chooseAssetKey` and `isQuotaExhausted`: key1 is selected first; only MiniMax `base_resp.status_code=1008` or an explicitly documented balance/quota error selects key2; 1002 rate limit, 1004/2049 auth, 1026 safety, 2013 invalid parameters and network errors do not silently switch keys; missing both keys fails with a redacted diagnostic.
-- [ ] **Step 4: Run the key-routing tests and verify RED**
+- [x] **Step 4: Run the key-routing tests and verify RED**
   Run `node --test scripts/design/minimax-client.test.mjs`. The new tests must fail because the routing helpers do not exist yet; fix test setup errors until the failure is specifically about the missing helpers.
-- [ ] **Step 5: Implement the minimal asset client**
+- [x] **Step 5: Implement the minimal asset client**
   Implement an injected-fetch client for `POST https://api.minimax.io/v1/image_generation` with model `image-01`, `aspect_ratio`, `response_format=url`, and one prompt per call. Load environment values only through the Node process environment (`node --env-file=.env`); never read, print or log `.env`. Return `{ keySlot, requestId, imageUrls, model }`, and redact all thrown errors. Keep the fallback classifier separate from HTTP transport so tests do not need network access.
-- [ ] **Step 6: Run the routing tests and verify GREEN**
+- [x] **Step 6: Run the routing tests and verify GREEN**
   Run `node --test scripts/design/minimax-client.test.mjs` again; then run one live generation with a versioned output path under `docs/design-assets/generated/`. Persist the exact prompt, model, key slot, request ID, generation timestamp, post-processing and intended surface in a sidecar file without the key value.
 - [ ] **Step 7: Inspect and approve the static asset**
   View the generated image at original resolution. Reject any watermark, logo, readable fake text, generic galaxy/brain motif, excessive neon, malformed RO geometry or composition that cannot host real UI overlays. Iterate with one prompt change at a time; do not generate video until the user approves the static concept.
