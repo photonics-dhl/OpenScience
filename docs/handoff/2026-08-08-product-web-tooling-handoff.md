@@ -1,6 +1,6 @@
 # Handoff — 2026-08-08 Product Web Tooling
 
-- **Current goal:** Task 1 Step 8 与 Figma canonical 迁移均已完成；下一步只在长期账号 canonical 文件中执行 Step 9 六屏原型。
+- **Current goal:** Task 1 Step 9 第一检查点已完成；等待 Landing + Auth/Create 视觉确认后，只在长期账号 canonical 文件中继续 Dashboard + RO Workspace。
 - **Done:**
   - 产品设计 spec：`docs/specs/2026-08-08-openscience-product-web-design.md`。
   - 实施计划：`docs/plans/2026-08-08-openscience-product-web-plan.md`，用户选择 subagent-driven，但要求前置工具齐全后再执行。
@@ -45,9 +45,12 @@
   - 官方 MCP 没有 share/duplicate/move/ownership-transfer 工具，且 20KB 输出限制使结构化跨文件克隆不具备保真性；禁止用截图/SVG 扁平化替代 variables/components/prototype 迁移。
   - 用户已在长期账号下手动复制最新设计：<https://www.figma.com/design/gjhowMG7cG4clKwvhvF08E>。`figma-primary` 源/副本 parity 通过：6 pages、4 collections / 85 variables、9 text styles、2 effect styles、12 sets / 96 variants、master nodes `60:2` / `60:7` / `60:8` 均一致；prototype 均为 0 reactions / 0 flow starts。
   - canonical 副本净零写探针通过：`00 Cover` 临时 1×1 frame 创建后立即删除，前后 child count 均为 0。该文件已登记为唯一 canonical；旧源与空 probe 只读保留。
+  - Step 9 第一检查点已写入 canonical `04 Screens`：wrapper `2009:3`、screen row `2009:4`、state rail `2009:5`、Landing `2010:2`、Auth/Create `2012:4`。Landing 精确克隆已批准母版 `60:7`；Auth/Create 完成材料优先、邀请身份、provenance、稳定 provisional RO ID、Hermes/空白六字段、处理范围确认与候补路径。
+  - 第一检查点审计通过：两屏 1440×900；0 image fills / 0 gradients / Auth 0 orange / 0 semantic overflow；Button/Input 实例复用；操作高度至少 44px；字体仅 Noto Serif SC / Noto Sans SC / Roboto Mono。关键处理披露已从 9px 调整到 10px、592×45，三行无溢出。
+  - 本地恢复截图：`docs/design-assets/figma/2026-08-08-step9-entry-{landing,auth-create,states}-v1.png`。没有把临时 Figma asset URL 写入文档。
 - **Constraints:** 不打印 `.env`；MCP 总数保持 ≤10；Figma 代码 token 是 canonical；`use_figma` 写入严格串行；每个组件完成后截图并由用户确认；后续新增设计和 Code Connect 只允许使用 `gjhowMG7cG4clKwvhvF08E`。
-- **Open risks:** MCP 不暴露文件 owner 字段，所有权由用户在长期账号下复制的事实与 Full 席位/可编辑探针共同证明；官方 Code Connect 接口要求 Organization/Enterprise Dev 或 Full seat，当前 student tier Full 被拒绝，Step 11 尚不可执行；Button 的 Destructive/Icon 子集合尚未创建；Playwright 尚未作为项目依赖锁定。Figma MCP 后续写入继续严格串行。
-- **Next action:** 在 canonical 文件 `gjhowMG7cG4clKwvhvF08E` 启动 Step 9；先建立六屏页面骨架和主点击流，再分批截图、视觉确认和 docs-sync。
+- **Open risks:** 第一检查点尚待用户视觉确认；Dashboard/RO Workspace、Public RO/Collection 与真实点击目标尚未建立，因此 Step 9 仍为部分完成。MCP 不暴露文件 owner 字段；Code Connect 仍被 student tier plan gate 阻塞；Button 的 Destructive/Icon 子集合尚未创建；Playwright 尚未作为项目依赖锁定。Figma MCP 后续写入继续严格串行。
+- **Next action:** 用户确认第一检查点后，在 canonical `04 Screens` 建立 Dashboard + RO Workspace 第二批屏幕；随后补 Landing/Auth/Create → Dashboard 的真实 prototype destination，截图、审计并立即 docs-sync。
 - **Execution checkpoint:** 双 key 客户端、区域修复、安全 provenance 与 v2 prompt-file CLI 已完成；Figma `37:2` 视觉母版已建立。`openscience-observatory-v1.png` 被用户判定与项目风格不一致，根因是 prompt 违反 spec §11.2，让模型同时承担材料纹理与六节点产品语义。不得导入 v1 或生成其视频版本。
 - **v2 recovery result:** 旧 2013 长度问题已解决；`openscience-evidence-chamber-v2.png` 与 `.provenance.json` 已由 key1 中国区调用产出且 provenance 安全。视觉门失败，文件只作可追溯失败样本，不得进入 Figma/H3。下一次付费生成必须先批准新的 v3 方向和版本化输出名。
 - **Approved responsibility reset:** 用户接受推荐项 A：下一张生成资产优先服务 Landing / Workspace 暗色主视觉。复用现有精确蓝色玻璃六面 RO 环作为原生前景；MiniMax 仅生成深墨科研空间、材料质感和受控光场，不生成节点、ID、SDF、轨迹、diff 或 UI。

@@ -9,7 +9,7 @@
 | `project_index.md` | 本索引 | 活文档 |
 | `.mcp.json` | 项目级 MCP 配置（kimi-code/Cursor）；2026-08-08 保持 10 个：`semantic-scholar`、`github`、`mermaid`、`memory`、`context7`、`tavily-search`、`figma-temp`、`figma-primary`、`shadcn`、`task-master-ai`；双 Figma 直接使用官方 remote URL，过渡期移除低价值 `fetch` | 活文档，**本机持有，已移出 git 跟踪**（2026-07-31） |
 | `.Codex/troubleshooting/issues.json` | 项目工具/MCP/API 故障的结构化问题库；含 issue-003 MiniMax image prompt 1500 字符本地契约缺口；不记录账号、密钥、OAuth URL 或 token | 活文档 |
-| [OpenScience Web Design System — canonical](https://www.figma.com/design/gjhowMG7cG4clKwvhvF08E) | 长期账号 Full 席位下的产品网页唯一设计事实源；2026-08-08 手动复制后经 `figma-primary` 对照 6 pages、4 collections / 85 variables、9 text styles、2 effect styles、12 component sets / 96 variants、关键 master nodes 与空 prototype，净零写探针通过；Code Connect 因 student tier 未验证 | Canonical, Step 9 target |
+| [OpenScience Web Design System — canonical](https://www.figma.com/design/gjhowMG7cG4clKwvhvF08E) | 长期账号 Full 席位下的产品网页唯一设计事实源；迁移 parity 与净零写探针通过；Step 9 第一检查点已在 `04 Screens` 建立 Landing `2010:2`、Auth/Create `2012:4` 与六态契约 `2009:5`，其余四屏与点击流待续；Code Connect 因 student tier 未验证 | Canonical, Step 9 in progress |
 | [OpenScience Web Design System — transitional](https://www.figma.com/design/rWS3seZaDMdlnSljqktMDp) | 临时账号的原始过渡设计源；与 canonical parity 已通过，仅只读保留至两轮代码同步验证完成；不得继续设计或用于 Code Connect | Retained migration source |
 | [OpenScience Web Design System — migration probe](https://www.figma.com/design/PBUlumyHBVXfMHgdopH0aB) | `figma-primary` 在长期账号目标 Team 成功创建的空文件，用于证明写权限；不含设计内容，未通过 ADR-004 parity，不得作为 canonical 或供 Code Connect 使用 | Empty probe, not canonical |
 | `.vscode/mcp.json` | VS Code MCP 配置（task-master-ai 直连 node_modules 本地入口） | 活文档，**本机持有，不入库**（含 key） |
@@ -86,6 +86,7 @@
 | `docs/design-assets/figma/2026-08-08-step8-navigation-domain-v1.png` | Figma `02 Components` 第二批 Dialog/Tabs/RO Card 组件契约截图；含双表面、导航 active 状态与 RO 生命周期 | User-approved component baseline |
 | `docs/design-assets/figma/2026-08-08-step8-research-workflow-v1.png` | Figma `02 Components` 第三批 SDF Node/Artifact Card/Review Row 状态集合截图；含真实 artifact、可逆 review 状态与危险色边界 | User-approved component baseline |
 | `docs/design-assets/figma/2026-08-08-step8-change-hermes-v1.png` | Figma `02 Components` 最后一批 Version Diff/Hermes Rail 截图；含版本变化颜色所有权与 Hermes/Live2D 共用状态契约 | User-approved component baseline |
+| `docs/design-assets/figma/2026-08-08-step9-entry-{landing,auth-create,states}-v1.png` | Figma canonical `04 Screens` 的 Step 9 第一检查点本地截图：Landing、Auth/Create 与六态产品契约；用于 API 中断恢复、视觉确认和后续原型对照 | Awaiting user visual approval |
 | `docs/specs/2026-08-04-p1b-3-blob-artifact-upload-design.md` | P1B-3 Blob 内容寻址存储与上传管线设计（design gate 已确认：五决策，代码已实现 2026-08-04） | 活文档 |
 | `docs/plans/2026-07-24-doc-architecture-plan.md` | 文档架构落地实施计划 | 活文档 |
 | `docs/plans/2026-07-24-mvp-task-breakdown-plan.md` | MVP 任务拆解与工具配置实施计划（已批准，执行中） | 活文档 |
