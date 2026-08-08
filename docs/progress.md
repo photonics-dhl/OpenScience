@@ -1,5 +1,13 @@
 # OpenScience (XGS) 进度日志
 
+## 2026-08-08（Figma OAuth 登录完成）— enabled 与 authenticated 状态已分离验证
+
+- **现象**：重启后 Mermaid 已正常加载，但 `figma-temp`、`figma-primary` 显示 enabled 且 auth failed，当前工具目录没有 Figma。
+- **根因**：Codex 已正确读取两个原生 remote URL，但 `enabled` 只表示配置启用，不会自动完成 OAuth；官方 CLI 显示两个 server 均为 `Not logged in`。
+- **修复**：分别执行官方 `codex mcp login figma-temp` 与 `codex mcp login figma-primary`，两个浏览器 OAuth 都成功完成；未读取 `.env`，未记录授权 URL、账号或 token。
+- **验证**：`codex mcp list` 显示两个 Figma server 均为 `enabled / OAuth`；两个流程使用独立 OAuth 客户端和回调。Mermaid 工具 `generate_mermaid_diagram` 已在当前会话可调用。
+- **剩余门禁**：当前 App 工具清单在会话启动时固定，需再重启一次；之后使用两个账号各自专属测试文件验证没有串号，再确认长期账号为 canonical owner。
+
 ## 2026-08-08（Figma 原生 MCP 修正）— 停用代理注册路径，等待一次重启认证
 
 - **复现**：移除 profile header 并隔离 `MCP_REMOTE_CONFIG_DIR` 后，`mcp-remote` 仍在 Figma 动态客户端注册阶段返回 HTTP 403，故根因不是账号或 token 目录。

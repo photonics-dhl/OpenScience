@@ -1,0 +1,24 @@
+{
+  "issues": [
+    {
+      "id": "issue-001",
+      "title": "Figma MCP enabled but OAuth authentication unavailable",
+      "date": "2026-08-08",
+      "status": "resolved",
+      "tags": [
+        "troubleshooting/mcp",
+        "troubleshooting/auth"
+      ],
+      "description": "Codex listed figma-temp and figma-primary as enabled, but neither produced a ready MCP client and the UI reported authentication failure.",
+      "root_cause": "A remote MCP entry being enabled does not perform OAuth login. Both servers were correctly configured but remained in the Not logged in state; the Codex App did not complete the explicit login flow.",
+      "solution": "Use the official Codex CLI against the shared config: run `codex mcp login figma-temp` and `codex mcp login figma-primary`, completing each browser authorization with the intended Figma account.",
+      "verification": "`codex mcp list` reports both Figma servers as enabled with Auth=OAuth. A fresh Codex App session is still required to expose their tools, and account separation must be checked with account-exclusive test files.",
+      "files": [
+        "C:/Users/Mac/.codex/config.toml",
+        "docs/decisions/ADR-004-figma-account-ownership-and-migration.md"
+      ],
+      "prevention": "After adding an OAuth HTTP MCP, check `codex mcp list`; if it says Not logged in, run `codex mcp login <server-name>` before restarting the client. Never equate enabled with authenticated."
+    }
+  ],
+  "last_updated": "2026-08-08"
+}
