@@ -18,7 +18,8 @@
   - Figma 六页结构已建立；Button 主集合已创建 30 variants + Label property。用户认为首版工程感偏重后，展示页已重构为深色科研仪器 hero、五种交互状态、5×6 属性矩阵与 Code Contract；结构审计 0 overlap/0 duplicate。
   - 用户进一步指出整体美感仍不足；复盘确认问题是全局美术方向而非单一 Button。已批准以学术编辑设计为主体、克制 RO 演化装置为品牌记忆的「科研观测台」母版，并写入产品 web spec §11.1–11.3。
   - MiniMax 资产路线已锁定：`image-01` 先做静态科研场概念图，通过后优先尝试官方当前最新的 `MiniMax-H3` 视频接口（无权限时才记录原因并回退 `MiniMax-Hailuo-2.3`），目标 5–6 秒、2K/1080P 动效母版。设计资产工具按 key1 → key2 有序回退，仅额度/余额类错误可切换；不得输出 key。
+  - MiniMax 静态资产客户端已完成：`scripts/design/minimax-client.mjs` 与 7 个 Node 无网络测试，RED 为缺失模块、GREEN 为 7/7。key1 优先（现有运行时 key 仅兼容为 key1），仅 HTTP 成功的官方 `1008` 余额不足切 key2；生成 CLI 仅以 Node `--env-file` 进程环境取值，拒绝覆盖并写脱敏 provenance。
 - **Constraints:** 不打印 `.env`；MCP 总数保持 ≤10；Figma 代码 token 是 canonical；`use_figma` 写入严格串行；每个组件完成后截图并由用户确认；长期账号仍是未来 canonical owner。
 - **Open risks:** 长期账号只有 starter/View；Button 的 Destructive/Icon 子集合尚未创建；Playwright 尚未作为项目依赖锁定；Figma 过渡文件仍待迁移。
-- **Next action:** 先按更新后的 Task 1 写双 key 路由测试并生成一张 `image-01` 静态科研证据场；用户审美确认后导入 Figma 视觉母版，再尝试最新 H3 视频接口；静态/动效母版通过后才恢复 Button family 与后续组件。
+- **Next action:** 由控制方在用户授权后用 `scripts/design/generate-minimax-image.mjs` 生成一张 `image-01` 静态科研证据场；用户审美确认后导入 Figma 视觉母版，再尝试最新 H3 视频接口；静态/动效母版通过后才恢复 Button family 与后续组件。
 - **Read first:** `AGENTS.md` → `docs/OpenScience_Kimi_Development_Spec.md` → `docs/progress.md` → `project_index.md` → product web spec/plan → ADR-004 → 本 handoff。

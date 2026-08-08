@@ -1,5 +1,12 @@
 # OpenScience (XGS) 进度日志
 
+## 2026-08-08（产品网页 Task 1 / MiniMax 设计资产客户端）— 可复用静态生成边界已就绪
+
+- **TDD 证据**：先新增 `scripts/design/minimax-client.test.mjs`，`node --test scripts/design/minimax-client.test.mjs` 预期 RED（`ERR_MODULE_NOT_FOUND`，客户端尚未存在）；最小实现后同一命令 GREEN，7/7 通过且不发出网络请求。
+- **客户端边界**：`scripts/design/minimax-client.mjs` 固定调用 `image-01` 的单图 URL 接口；key1 优先，既有运行时 key 仅兼容为 key1；只有 HTTP 成功响应中 MiniMax `base_resp.status_code=1008` 才尝试 key2。授权、限流、参数、安全、网络、解析和质量错误均不切换，所有结果/错误仅保留脱敏槽位和官方诊断。
+- **安全 CLI 与提示清单**：`scripts/design/generate-minimax-image.mjs` 只经 Node 进程环境接收凭据、拒绝覆盖，输出限定在 `docs/design-assets/generated/` 并写不含密钥的 provenance；`docs/design-assets/prompts/2026-08-08-living-research-observatory-v1.md` 锁定 `stylized-concept` 约束与拒绝门。本切片未进行付费生成、未创建资产、未触碰 Figma。
+- **⏳ 下一步**：由控制方决定是否显式运行一次 live generation，原图须经审美批准后才能导入 Figma 母版。
+
 ## 2026-08-08（产品网页视觉母版）— 「科研观测台」方向批准，进入静态资产与 Figma 母版
 
 - **审美复盘**：现有 Button specimen 结构合格但仍偏设计系统说明书；已有视觉素材在简化线框与蓝色科幻装置之间摇摆，缺少统一的学术编辑气质、真实信息密度和材料层次。
