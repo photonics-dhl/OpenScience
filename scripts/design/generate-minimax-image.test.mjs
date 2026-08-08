@@ -87,3 +87,48 @@ test('CLI rejects inline prompts so the approved prompt file remains the source 
   assert.match(result.stderr, /Unsupported option: --prompt/);
   assert.equal(result.stdout, '');
 });
+
+test('CLI rejects an unapproved prompt file before credential or network work', () => {
+  const result = spawnSync(
+    process.execPath,
+    [
+      'scripts/design/generate-minimax-image.mjs',
+      '--output',
+      'docs/design-assets/generated/unapproved-prompt-file-test.png',
+      '--prompt-file',
+      'scripts/design/prompt-manifest.mjs',
+      '--intended-surface',
+      'Landing / Workspace dark hero ambient background',
+      '--region',
+      'cn',
+    ],
+    { encoding: 'utf8', env: {} },
+  );
+
+  assert.equal(result.status, 1);
+  assert.match(result.stderr, /Prompt file must be the approved design manifest/);
+  assert.equal(result.stdout, '');
+});
+
+test('CLI rejects inline prompt assignments before credential or network work', () => {
+  const result = spawnSync(
+    process.execPath,
+    [
+      'scripts/design/generate-minimax-image.mjs',
+      '--output',
+      'docs/design-assets/generated/inline-prompt-assignment-test.png',
+      '--prompt-file',
+      'docs/design-assets/prompts/2026-08-08-living-research-observatory-v1.md',
+      '--intended-surface',
+      'Landing / Workspace dark hero ambient background',
+      '--region',
+      'cn',
+      '--prompt=unapproved inline prompt',
+    ],
+    { encoding: 'utf8', env: {} },
+  );
+
+  assert.equal(result.status, 1);
+  assert.match(result.stderr, /Unsupported option: --prompt/);
+  assert.equal(result.stdout, '');
+});

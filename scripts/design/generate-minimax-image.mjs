@@ -9,6 +9,10 @@ import {
 } from './minimax-client.mjs';
 import { buildImagePrompt } from './prompt-manifest.mjs';
 
+const approvedPromptFile = resolve(
+  'docs/design-assets/prompts/2026-08-08-living-research-observatory-v1.md',
+);
+
 function readOption(name) {
   const index = process.argv.indexOf(name);
   return index >= 0 ? process.argv[index + 1] : undefined;
@@ -23,7 +27,7 @@ function requireOption(name) {
 }
 
 function rejectOption(name) {
-  if (process.argv.includes(name)) {
+  if (process.argv.some((argument) => argument === name || argument.startsWith(`${name}=`))) {
     throw new Error(`Unsupported option: ${name}`);
   }
 }
@@ -46,6 +50,14 @@ function assertGeneratedAssetPath(outputPath) {
   return resolvedOutput;
 }
 
+function assertApprovedPromptFile(promptFile) {
+  const resolvedPromptFile = resolve(promptFile);
+  if (resolvedPromptFile !== approvedPromptFile) {
+    throw new Error('Prompt file must be the approved design manifest');
+  }
+  return resolvedPromptFile;
+}
+
 async function downloadImage(imageUrl) {
   let response;
   try {
@@ -62,7 +74,7 @@ async function downloadImage(imageUrl) {
 async function main() {
   rejectOption('--prompt');
   const outputPath = assertGeneratedAssetPath(requireOption('--output'));
-  const promptFile = requireOption('--prompt-file');
+  const promptFile = assertApprovedPromptFile(requireOption('--prompt-file'));
   const intendedSurface = requireOption('--intended-surface');
   const region = requireRegion();
   const imageGenerationUrl = getImageGenerationUrl(region);
