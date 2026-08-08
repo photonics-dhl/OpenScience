@@ -1,11 +1,18 @@
 # OpenScience (XGS) 进度日志
 
+## 2026-08-08（产品网页 Task 1 / v2 生成长度门）— 官方 2013，未产出资产
+
+- **实现审查完成**：Step 7.1–7.4 提交 `e731720`，task reviewer 发现任意 prompt 路径与 `--prompt=...` 两项问题；fix round 1 提交 `f8aad63` 后 scoped re-review 全部 `ADDRESSED`。主会话复验 21/21，`docs:lint` 0 问题、`DOCS_SYNC_OK`、敏感扫描干净。
+- **单次调用结果**：按批准命令向中国区 `image-01` 发出一次请求，key1 返回 HTTP 200 + MiniMax `2013 invalid params`，诊断为 prompt 必须少于 1500 字符。未切 key2、未自动重试、未生成 PNG 或 provenance sidecar。
+- **根因**：批准 Markdown 的正负区块合并后为 2018 字符，超出严格上限 519；manifest/CLI 只验证区块和来源，没有在加载凭据/发出请求前验证最终 payload 长度。
+- **恢复门**：先以 TDD 增加 1499 接受、1500 拒绝的本地长度契约，再把 prompt 压缩到不超过 1499 字符并由用户复核。两项通过前禁止第二次请求。
+
 ## 2026-08-08（产品网页 Task 1 / v2 prompt manifest）— 付费生成前的输入与 provenance 边界已提交
 
-- **TDD 证据**：新增 manifest/CLI 契约后，`node --test scripts/design/minimax-client.test.mjs scripts/design/prompt-manifest.test.mjs scripts/design/generate-minimax-image.test.mjs` 先 RED（缺少 `prompt-manifest.mjs`，CLI 仍要求旧 `--prompt`），最小实现后 GREEN，19/19 通过。
+- **TDD 证据**：新增 manifest/CLI 契约后，`node --test scripts/design/minimax-client.test.mjs scripts/design/prompt-manifest.test.mjs scripts/design/generate-minimax-image.test.mjs` 先 RED（缺少 `prompt-manifest.mjs`，CLI 仍要求旧 `--prompt`），最小实现后 GREEN；review fix 后为 21/21。
 - **批准 prompt 单一事实源**：`scripts/design/prompt-manifest.mjs` 只提取批准 Markdown 中 `## MiniMax Prompt` 与 `## Negative Prompt` 下的首个 `text` fenced block，按官方图片 API 的单一 `prompt` 约束合并；缺少任一块时固定失败。
 - **CLI/provenance 边界**：生成器要求显式 `--prompt-file` 与 `--intended-surface`，在环境或网络工作之前拒绝缺项，并明确拒绝 inline `--prompt`。组合后的 prompt 发送给客户端，调用方提供的 intended surface 写入脱敏 sidecar。
-- **安全与范围**：本切片没有读取 `.env`、没有网络/API 调用、没有生成资产、没有触碰 Figma；下一步仅可按计划 Step 7.5 执行一次批准的中国区 v2 生成。
+- **安全与范围**：本切片没有读取 `.env`、没有网络/API 调用、没有生成资产、没有触碰 Figma；任意 prompt 路径和两种 inline prompt 形式均在读取/凭据/网络前拒绝。后续真实调用因长度契约停止，见最新条目。
 
 ## 2026-08-08（产品网页 Task 1 / 静态资产审美门）— v1 被拒绝，回到产品语义重新锁定
 

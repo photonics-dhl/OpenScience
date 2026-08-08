@@ -37,6 +37,27 @@
         "docs/decisions/ADR-004-figma-account-ownership-and-migration.md"
       ],
       "prevention": "Before authorizing a second server for the same OAuth endpoint, switch the browser to the intended account. Verify both identities with whoami in fresh clients before creating canonical assets."
+    },
+    {
+      "id": "issue-003",
+      "title": "MiniMax image prompt exceeded the API character limit",
+      "date": "2026-08-08",
+      "status": "in_progress",
+      "tags": [
+        "troubleshooting/api",
+        "troubleshooting/validation"
+      ],
+      "description": "The first approved v2 China-region image request returned HTTP 200 with MiniMax status 2013 because the combined prompt exceeded the image API limit. No image or provenance sidecar was created, and key2 was not selected.",
+      "root_cause": "The approved positive and negative Markdown blocks produced a 2018-character API prompt. The image API requires the prompt to be shorter than 1500 characters, but the local manifest builder and execution plan validated section presence without validating the final combined length.",
+      "solution": "Add a tested preflight limit of at most 1499 characters before credential or network work. Compress the approved wording without changing the generated/native layer boundary, obtain user approval for the revised text, and then run one explicit recovery request.",
+      "verification": "Pending: local tests must accept 1499 characters and reject 1500 before credentials/network; the approved prompt must measure at most 1499; the recovery request must either produce the versioned asset or stop on the next official error without automatic retry.",
+      "files": [
+        "scripts/design/prompt-manifest.mjs",
+        "scripts/design/generate-minimax-image.mjs",
+        "docs/design-assets/prompts/2026-08-08-living-research-observatory-v1.md",
+        "docs/plans/2026-08-08-openscience-product-web-plan.md"
+      ],
+      "prevention": "Treat provider payload limits as local API contracts. Validate the final serialized prompt, not only its source sections, before loading credentials or making paid requests."
     }
   ],
   "last_updated": "2026-08-08"

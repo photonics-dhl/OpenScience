@@ -61,8 +61,12 @@
   Create `scripts/design/prompt-manifest.mjs` with a pure `buildImagePrompt(markdown)` function that extracts the first fenced text block below each required heading and returns `${positive}\n\nConstraints to avoid:\n${negative}`. Modify the CLI to read only the explicit `--prompt-file`, require `--intended-surface`, pass the combined string as the API `prompt`, and persist the caller-provided intended surface in the safe sidecar. Keep `--prompt` unsupported for this design workflow so the approved Markdown remains the single source of truth.
 - [x] **Step 7.4: Run the prompt/client suite and verify GREEN**
   Run the same three-test command. Expected: all tests PASS with zero network calls. Then run `git diff --check` and scan the staged diff for key values, signed URLs, credential identifiers and signature query parameters. Commit the client slice before any paid generation.
+- [ ] **Step 7.4a: Add the provider prompt-length contract with TDD**
+  Add tests to `scripts/design/prompt-manifest.test.mjs` proving the final combined prompt accepts exactly 1499 characters and rejects 1500 with `Combined MiniMax image prompt must be fewer than 1500 characters`. The rejection must happen before credential or network work. Implement the smallest validation in `prompt-manifest.mjs`, rerun the 21-test baseline plus the new boundary cases, review and commit before another live call.
+- [ ] **Step 7.4b: Compress and approve the v2 prompt**
+  Reduce the combined positive and negative blocks from 2018 to at most 1499 characters without changing the approved four-zone composition, generated/native responsibility boundary, no-orange rule or prohibited semantic geometry. Record the measured final length, obtain user approval of the exact revised Markdown, and commit it separately. Do not call the API in this step.
 - [ ] **Step 7.5: Generate one v2 China-region background**
-  Confirm `docs/design-assets/generated/openscience-evidence-chamber-v2.png` and its sidecar do not exist, then run exactly one command from the isolated worktree:
+  The first call stopped on official status 2013 because the combined prompt was 2018 characters; it produced no file and did not switch keys. After Steps 7.4a–7.4b pass, confirm `docs/design-assets/generated/openscience-evidence-chamber-v2.png` and its sidecar do not exist, then run one explicit recovery command from the isolated worktree:
 
   ```powershell
   node --env-file=E:/Miscellaneous/XGS/.env scripts/design/generate-minimax-image.mjs --region cn --aspect-ratio 16:9 --prompt-file docs/design-assets/prompts/2026-08-08-living-research-observatory-v1.md --intended-surface "Landing / Workspace dark hero ambient background" --output docs/design-assets/generated/openscience-evidence-chamber-v2.png

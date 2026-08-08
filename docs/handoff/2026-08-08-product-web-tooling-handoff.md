@@ -1,6 +1,6 @@
 # Handoff — 2026-08-08 Product Web Tooling
 
-- **Current goal:** 执行产品网页计划 Task 1；v2 `Precision Evidence Chamber` 的 prompt manifest/脱敏 provenance 预处理已提交，等待控制方决定是否进入单次付费生成。
+- **Current goal:** 执行产品网页计划 Task 1；v2 `Precision Evidence Chamber` 首次调用因官方 1500 字符限制返回 2013，当前先补本地长度门并复核压缩 prompt，禁止自动重试。
 - **Done:**
   - 产品设计 spec：`docs/specs/2026-08-08-openscience-product-web-design.md`。
   - 实施计划：`docs/plans/2026-08-08-openscience-product-web-plan.md`，用户选择 subagent-driven，但要求前置工具齐全后再执行。
@@ -21,10 +21,11 @@
   - MiniMax 静态资产客户端已完成：显式支持 `cn/global` 区域，key1 优先（现有运行时 key 仅兼容为 key1），仅 HTTP 成功的官方 `1008` 余额不足切 key2；生成 CLI 仅以 Node `--env-file` 进程环境取值，拒绝覆盖并写白名单 provenance。客户端与 CLI 测试合计 14/14。
   - key1 与 key2 均已通过中国区只读端点验证；此前 global 端点的 `2049` 是区域错配，不是 key 失效。首张素材已由 key1 在中国区成功生成：`docs/design-assets/generated/openscience-observatory-v1.png`（1280×720）及其脱敏 sidecar；未触发 key2、未生成视频。
   - `b655257` 已移除 provenance 中的远程下载 URL 与临时签名查询参数，并加入回归测试；敏感扫描干净。
-  - Step 7.1–7.4 已完成：`scripts/design/prompt-manifest.mjs` 从批准 Markdown 合并正负 prompt block；CLI 需要 `--prompt-file` 和 `--intended-surface`，拒绝 inline `--prompt`，并把调用方用途写入安全 sidecar。`node --test scripts/design/minimax-client.test.mjs scripts/design/prompt-manifest.test.mjs scripts/design/generate-minimax-image.test.mjs` 为 19/19，无网络调用。
+  - Step 7.1–7.4 已完成并通过 task review：`e731720` 实现 prompt manifest 与真实 intended surface，`f8aad63` 限制唯一批准路径并拒绝两种 inline prompt；主会话复验 21/21，无网络测试全部通过。
 - **Constraints:** 不打印 `.env`；MCP 总数保持 ≤10；Figma 代码 token 是 canonical；`use_figma` 写入严格串行；每个组件完成后截图并由用户确认；长期账号仍是未来 canonical owner。
 - **Open risks:** 长期账号只有 starter/View；Button 的 Destructive/Icon 子集合尚未创建；Playwright 尚未作为项目依赖锁定；Figma 过渡文件仍待迁移。
 - **Execution checkpoint:** 双 key 客户端、区域修复、安全 provenance 与 v2 prompt-file CLI 已完成；Figma `37:2` 视觉母版已建立。`openscience-observatory-v1.png` 被用户判定与项目风格不一致，根因是 prompt 违反 spec §11.2，让模型同时承担材料纹理与六节点产品语义。不得导入 v1 或生成其视频版本。
+- **v2 live attempt / blocker:** 中国区 key1 请求返回 HTTP 200 + `2013 invalid params`，因为合并 prompt 为 2018 字符，而接口要求少于 1500。未切 key2、未重试、未创建 v2 PNG/sidecar。恢复前必须新增本地 1499/1500 长度测试并获得用户对压缩文本的批准。
 - **Approved responsibility reset:** 用户接受推荐项 A：下一张生成资产优先服务 Landing / Workspace 暗色主视觉。复用现有精确蓝色玻璃六面 RO 环作为原生前景；MiniMax 仅生成深墨科研空间、材料质感和受控光场，不生成节点、ID、SDF、轨迹、diff 或 UI。
 - **Approved composition:** 用户批准「证据汇入」：右侧原生精确 RO 环为品牌锚点，左侧研究材料沿蓝色路径汇入，橙色只表达一次版本变化。下一步分段确认布局、材料语言与验收门，再原地修订 prompt；确认前不得调用生成 API。
 - **Approved layout/layer boundary:** 16:9 四区布局为左侧 0–40% 文案留白、中部 38–62% 证据走廊、右侧 54–105% 原生 RO、底部 72–100% 收回 hero base。MiniMax 只负责空间/微纹理/光/反射；所有产品语义保持 Figma/SVG/HTML 原生。下一步确认材料与光线语言。
