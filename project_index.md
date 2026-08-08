@@ -86,7 +86,7 @@
 | `docs/design-assets/figma/2026-08-08-step8-navigation-domain-v1.png` | Figma `02 Components` 第二批 Dialog/Tabs/RO Card 组件契约截图；含双表面、导航 active 状态与 RO 生命周期 | User-approved component baseline |
 | `docs/design-assets/figma/2026-08-08-step8-research-workflow-v1.png` | Figma `02 Components` 第三批 SDF Node/Artifact Card/Review Row 状态集合截图；含真实 artifact、可逆 review 状态与危险色边界 | User-approved component baseline |
 | `docs/design-assets/figma/2026-08-08-step8-change-hermes-v1.png` | Figma `02 Components` 最后一批 Version Diff/Hermes Rail 截图；含版本变化颜色所有权与 Hermes/Live2D 共用状态契约 | User-approved component baseline |
-| `docs/design-assets/figma/2026-08-08-step9-entry-{landing,auth-create,states}-v1.png` | Figma canonical `04 Screens` 的 Step 9 第一检查点本地截图：Landing、Auth/Create 与六态产品契约；用于 API 中断恢复、视觉确认和后续原型对照 | Awaiting user visual approval |
+| `docs/design-assets/figma/2026-08-08-step9-entry-{landing,auth-create,states}-v1.png` | Figma canonical `04 Screens` 的 Step 9 第一检查点本地截图：Landing、Auth/Create 与六态产品契约；用于 API 中断恢复、视觉确认和后续原型对照 | User-approved Step 9 baseline |
 | `docs/specs/2026-08-04-p1b-3-blob-artifact-upload-design.md` | P1B-3 Blob 内容寻址存储与上传管线设计（design gate 已确认：五决策，代码已实现 2026-08-04） | 活文档 |
 | `docs/plans/2026-07-24-doc-architecture-plan.md` | 文档架构落地实施计划 | 活文档 |
 | `docs/plans/2026-07-24-mvp-task-breakdown-plan.md` | MVP 任务拆解与工具配置实施计划（已批准，执行中） | 活文档 |

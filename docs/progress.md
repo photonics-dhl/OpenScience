@@ -1,6 +1,6 @@
 # OpenScience (XGS) 进度日志
 
-## 2026-08-08（产品网页 Task 1 / Step 9 第一检查点）— Landing + Auth/Create canonical 原型完成，待用户视觉确认
+## 2026-08-08（产品网页 Task 1 / Step 9 第一检查点）— Landing + Auth/Create 已获用户确认
 
 - **Figma 交付**：只在长期账号 canonical 文件 `gjhowMG7cG4clKwvhvF08E` 的 `04 Screens` 写入 wrapper `2009:3`、屏幕行 `2009:4`、状态契约条 `2009:5`；Landing 为 `2010:2`，Auth/Create 为 `2012:4`。旧过渡源与空 probe 未修改。
 - **Landing 保真复用**：`2010:2` 从用户已批准的 `03 Patterns` 母版 `60:7` 精确克隆；源母版保持 1440×900、节点结构与名称不变。Landing 继续以稳定 RO ID、PAPER/DATA/CODE 证据汇入、六段研究对象和单一版本变化语义讲述产品主张。
@@ -9,7 +9,8 @@
 - **结构审计**：两屏均为 1440×900；0 图片填充、0 渐变、Auth/Create 0 橙色、0 语义溢出、按钮最小 44px、字体仅 Noto Serif SC / Noto Sans SC / Roboto Mono；复用 Button/Input 本地实例，157 个节点绑定本地变量。Landing 仅保留已批准的裁切氛围 bloom 与版本 diff 橙色。
 - **本地恢复证据**：`docs/design-assets/figma/2026-08-08-step9-entry-{landing,auth-create,states}-v1.png`；远程短期截图 URL 未写入仓库。
 - **安全与范围**：未读取 `.env`，未调用 MiniMax、未生成视频、未新增 Code Connect、未修改网页代码；Task Master 任务 10 维持 `in-progress`，完整设计事实仍以 product web spec / plan / Figma canonical 为准。
-- **⏳ 下一步**：等待用户确认第一检查点视觉；确认后只在 `04 Screens` 继续 Dashboard + RO Workspace，并在第二检查点建立主 CTA 的真实原型目标。Step 9 仍为部分完成，不提前勾选。
+- **用户门禁**：用户已于本轮明确回复“确认”；Landing + Auth/Create 视觉基线冻结，第二检查点 Dashboard + RO Workspace 解锁。
+- **⏳ 下一步**：只在 `04 Screens` 继续 Dashboard + RO Workspace，并在第二检查点建立主 CTA 的真实原型目标。Step 9 仍为部分完成，不提前勾选。
 
 ## 2026-08-08（产品网页 Task 1 / Figma canonical 迁移验收）— 长期账号副本通过 parity，Step 9 解锁
 
