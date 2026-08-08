@@ -9,8 +9,9 @@
   - Mermaid 已通过独立 MCP 握手列出 `generate_mermaid_diagram`，npm 缓存已预热，等待下次 Codex 重载。
   - Figma 已按官方 Codex 接法改为两个原生远程 URL server（`figma-temp`、`figma-primary`）；`mcp-remote` 在动态客户端注册阶段持续 403，已停用。账号密码仅存本地 `.env`，不得读取、打印或写入 Git。
   - 2026-08-08 已通过官方 Codex CLI 分别完成两个 server 的浏览器 OAuth；`codex mcp list` 均显示 `enabled / OAuth`。Mermaid 已在重启后的当前会话正常暴露工具。
+  - 重启后两个 Figma server 均暴露 26 个官方工具。首次 `whoami` 发现 browser session 复用导致两者同为临时账号；已仅重绑 `figma-primary`，并由全新 ephemeral 客户端确认其为长期账号身份。
   - 账号迁移决策：`docs/decisions/ADR-004-figma-account-ownership-and-migration.md`。
 - **Constraints:** 不打印 `.env`；Figma 密码不用于 MCP 自动登录；OAuth 必须浏览器交互；MCP 总数保持 ≤10；任务实现暂未启动。
-- **Open risks:** 当前 App 会话在 OAuth 完成前启动，Figma 工具目录尚未刷新；两个浏览器授权是否确实使用了不同 Figma 账号仍需用专属文件实测；Playwright 尚未作为项目依赖锁定。
-- **Next action:** 再重启 Codex → 检查两个 Figma 工具已出现 → 用账号专属测试文件验证不串号；若 token 或账号被复用则切换为两个独立 Codex profile → 再执行计划 Task 1。
+- **Open risks:** 当前 App 会话仍持有重绑前的 `figma-primary` in-memory client；Playwright 尚未作为项目依赖锁定。
+- **Next action:** 最后重启一次 Codex → 并行 `whoami` 确认 temp/primary 身份不同 → 在长期账号 Team/Project 建立 canonical Figma 文件 → 执行计划 Task 1。
 - **Read first:** `AGENTS.md` → `docs/OpenScience_Kimi_Development_Spec.md` → `docs/progress.md` → `project_index.md` → product web spec/plan → ADR-004 → 本 handoff。

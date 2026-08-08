@@ -1,5 +1,12 @@
 # OpenScience (XGS) 进度日志
 
+## 2026-08-08（Figma 双账号隔离验证）— 浏览器会话复用已纠正
+
+- **发现**：重启后两个 Figma MCP 均加载，各暴露 26 个官方工具；但首次并行 `whoami` 返回同一临时账号，说明 `figma-primary` 授权时复用了浏览器现有身份。
+- **修复**：仅撤销 `figma-primary` 本地 OAuth，用户将默认浏览器切换到长期账号后重新授权；`figma-temp` 保持不变。
+- **验证**：全新、只读、ephemeral Codex 客户端调用 `figma-primary.whoami`，确认邮箱属于长期账号前缀，handle 与 plan 数也和临时账号不同；未输出或记录完整邮箱、授权 URL、state 或 token。
+- **当前状态**：双账号 credential 已隔离且身份正确；本对话仍持有重启前的 primary 客户端缓存，需要最后一次重启刷新 App 工具连接。
+
 ## 2026-08-08（Figma OAuth 登录完成）— enabled 与 authenticated 状态已分离验证
 
 - **现象**：重启后 Mermaid 已正常加载，但 `figma-temp`、`figma-primary` 显示 enabled 且 auth failed，当前工具目录没有 Figma。
