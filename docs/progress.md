@@ -7,6 +7,13 @@
 - **事实源**：Figma 节点保持 wrapper `60:2`、desktop `60:7`、mobile `60:8`；本地证据保持 `docs/design-assets/figma/2026-08-08-native-v3-{desktop,mobile}.png`。
 - **⏳ 下一步**：对账 Figma 现有 Button 集合、代码 `apps/web/components/ui/*` primitives 与计划要求的 Card/Badge/Input/Dialog/Tabs/RO Card/SDF Node/Artifact Card/Review Row/Version Diff/Hermes Rail，先形成缺口再串行构建。
 
+## 2026-08-08（产品网页 Task 1 / Step 8 首批组件）— Card、Badge、Input 已建立，等待批次确认
+
+- **Figma 交付**：`02 Components` 新增 wrapper `76:7`；Card `76:25`（Paper/Dark 2 contexts）、Badge `76:44`（Default/Secondary/Destructive/Outline × Paper/Dark 8 variants）、Input `76:61`（Default/Focus/Disabled × Paper/Dark 6 variants）。真实代码 API 未被扩展，Context 只记录 CSS surface ancestry。
+- **审计**：组件集合数量与属性定义可读取；0 图片填充、0 placeholder、0 wrapper 越界；字体仅 Noto Sans SC / Noto Serif SC / Roboto Mono。Badge 的橙色未用于任何状态，保持 diff 专属语义。
+- **本地证据**：`docs/design-assets/figma/2026-08-08-step8-core-primitives-v1.png`，SHA-256 `8D38FF236A06DBA8F5C3EE56153A192660EE454952D1D4D1F5AC491E50B17356`。
+- **⏳ 下一步**：用户确认这一批视觉后，继续 Dialog、Tabs 与 RO/Artifact/Review/Version/Hermes domain families；确认前不增加组件数量。
+
 ## 2026-08-08（产品网页 Task 1 / Figma v3 原生母版）— 双尺寸已完成，等待视觉确认
 
 - **Figma 交付**：`03 Patterns` 新增统一包裹节点 `60:2`、桌面 `60:7`（1440×900）与移动 `60:8`（390×844）。桌面把早期花瓣式 RO 改为证据账本，原生呈现 unique ID、六类 SDF、连续度、`v0.4` 与单一 diff；移动端按 spec 独立重排，并将三类 artifact 修正为纵向 evidence ingress。
