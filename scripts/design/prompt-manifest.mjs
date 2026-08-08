@@ -22,5 +22,10 @@ export function buildImagePrompt(markdown) {
     throw new Error('Prompt manifest is missing MiniMax Prompt or Negative Prompt');
   }
 
-  return `${positive}\n\nConstraints to avoid:\n${negative}`;
+  const prompt = `${positive}\n\nConstraints to avoid:\n${negative}`;
+  if (prompt.length >= 1500) {
+    throw new Error('Combined MiniMax image prompt must be fewer than 1500 characters');
+  }
+
+  return prompt;
 }

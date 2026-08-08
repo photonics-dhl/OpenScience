@@ -1,5 +1,12 @@
 # OpenScience (XGS) 进度日志
 
+## 2026-08-08（产品网页 Task 1 / MiniMax 长度 preflight）— 本地契约已提交，等待 prompt 压缩批准
+
+- **TDD 证据**：先在 `scripts/design/prompt-manifest.test.mjs` 增加 final combined prompt 的边界用例；`node --test scripts/design/prompt-manifest.test.mjs` 预期 RED（1500 字符未抛出异常），最小实现后 `node --test scripts/design/minimax-client.test.mjs scripts/design/prompt-manifest.test.mjs scripts/design/generate-minimax-image.test.mjs` GREEN，23/23。
+- **本地 API 契约**：`buildImagePrompt` 在合并正负区块后，准确接受 1499 字符并在 1500 字符时以 `Combined MiniMax image prompt must be fewer than 1500 characters` 失败。该纯函数发生在 CLI 加载 key、构造 client 和任何 HTTP 调用之前。
+- **范围与安全**：未读取或打印 `.env`，未发出网络/API 请求，未修改批准的 prompt Markdown，也未触碰 Figma。Step 7.4b（压缩、记录长度、用户批准）及后续步骤仍未开始。
+- **⏳ 下一步**：仅执行 Step 7.4b：在保持批准责任边界的前提下压缩 prompt 至最多 1499 字符，并由用户复核精确文本；批准前禁止新的 live call。
+
 ## 2026-08-08（产品网页 Task 1 / v2 生成长度门）— 官方 2013，未产出资产
 
 - **实现审查完成**：Step 7.1–7.4 提交 `e731720`，task reviewer 发现任意 prompt 路径与 `--prompt=...` 两项问题；fix round 1 提交 `f8aad63` 后 scoped re-review 全部 `ADDRESSED`。主会话复验 21/21，`docs:lint` 0 问题、`DOCS_SYNC_OK`、敏感扫描干净。

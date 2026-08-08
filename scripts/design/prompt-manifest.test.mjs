@@ -20,6 +20,25 @@ No orange light.
 \`\`\`
 `;
 
+function promptManifestWithCombinedLength(length) {
+  const prefix = '\n\nConstraints to avoid:\n';
+  const negative = 'n';
+  const positive = 'p'.repeat(length - prefix.length - negative.length);
+
+  return `## MiniMax Prompt
+
+\`\`\`text
+${positive}
+\`\`\`
+
+## Negative Prompt
+
+\`\`\`text
+${negative}
+\`\`\`
+`;
+}
+
 test('buildImagePrompt combines the approved positive and negative blocks in order', () => {
   assert.equal(
     buildImagePrompt(approvedPromptManifest),
@@ -35,5 +54,16 @@ test('buildImagePrompt rejects a manifest without both required prompt sections'
   assert.throws(
     () => buildImagePrompt('## Negative Prompt\n\n```text\nNo interface.\n```'),
     /Prompt manifest is missing MiniMax Prompt or Negative Prompt/,
+  );
+});
+
+test('buildImagePrompt accepts a final combined prompt of exactly 1499 characters', () => {
+  assert.equal(buildImagePrompt(promptManifestWithCombinedLength(1499)).length, 1499);
+});
+
+test('buildImagePrompt rejects a final combined prompt of 1500 characters', () => {
+  assert.throws(
+    () => buildImagePrompt(promptManifestWithCombinedLength(1500)),
+    (error) => error.message === 'Combined MiniMax image prompt must be fewer than 1500 characters',
   );
 });
