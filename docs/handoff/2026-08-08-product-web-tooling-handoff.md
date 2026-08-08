@@ -25,4 +25,6 @@
 - **Attempt 1 result:** worktree 内不存在 `.env`，Node 在发起 HTTP 前退出；无 API 请求、无费用、无 key 切换。恢复命令必须让 Node 直接加载主工作区 `E:/Miscellaneous/XGS/.env`，不得复制或打印该文件。
 - **Attempt 2 result/root cause:** Node 成功加载主工作区 `.env`，但客户端未匹配新 key1/key2 的变量命名，在本地配置校验阶段退出；仍无 API 请求或费用。下一步先用测试覆盖常见 `_1/_2`、`KEY1/KEY2` 别名，再做单次重试。
 - **Attempt 3 result/blocker:** 别名修复后请求已到达 MiniMax，返回 HTTP `200` + `base_resp.status_code=2049` (`invalid api key`)，槽位 `key1`。按策略认证错误不得切换 key2；未生成资产、未写 provenance、未继续重试。恢复条件是用户修正 key1 后重新执行同一版本化命令。
+- **Token Plan root cause:** 官方文档确认 Token Plan 支持资源可覆盖图片/视频，但认证必须使用 Billing > Token Plan 中当前 Team 的 Subscription Key。key1 调只读 `https://www.minimax.io/v1/token_plan/remains` 同样返回 `2049`，且本地脱敏格式检查无 Bearer 前缀/空白/引号/换行；因此不是 host、模型或 payload 问题。恢复步骤：在有有效 Token Plan seat/Credits 的 Team 中复制或 reset Subscription Key → 更新本机 key1 → 先验证 remains 状态 0 → 再执行 image-01 单次生成。
+- **Key source diagnostic:** 本次实际选中的环境变量是 `MINIMAX_API_KEY1`（key1）；没有读取或记录其值，也未使用 key2。客户端优先级为 `MINIMAX_DESIGN_ASSET_KEY_1` → `MINIMAX_API_KEY_1` → `MINIMAX_API_KEY1` → `MINIMAX_API_KEY`。
 - **Read first:** `AGENTS.md` → `docs/OpenScience_Kimi_Development_Spec.md` → `docs/progress.md` → `project_index.md` → product web spec/plan → ADR-004 → 本 handoff。
