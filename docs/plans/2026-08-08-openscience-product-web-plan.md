@@ -28,12 +28,14 @@
 **Files / artifacts:**
 - Create/update Figma file: `web-design-system.fig`（Figma Professional workspace）
 - Create: `scripts/design/minimax-client.mjs`, `scripts/design/minimax-client.test.mjs`
-- Create: `docs/design-assets/prompts/2026-08-08-living-research-observatory-v1.md`
-- Create: `docs/design-assets/generated/`（仅保留通过审美门的源图、poster、视频及 provenance sidecar）
+- Create: `scripts/design/prompt-manifest.mjs`, `scripts/design/prompt-manifest.test.mjs`
+- Modify: `scripts/design/generate-minimax-image.mjs`, `scripts/design/generate-minimax-image.test.mjs`
+- Create/update: `docs/design-assets/prompts/2026-08-08-living-research-observatory-v1.md`
+- Create/update: `docs/design-assets/generated/`（保留获批源图、poster、视频及安全 sidecar；被拒绝资产仅在已有 provenance 且项目禁止删除时登记保留）
 - Modify: `apps/web/app/tokens.css`, `apps/web/app/globals.css`（仅在 token 对齐验证发现差异时）
 - Create/update: `docs/decisions/ADR-004-figma-account-ownership-and-migration.md`
 - Modify: `project_index.md`, `docs/progress.md`
-- Test: `apps/web/test/tokens-contrast.test.ts`, `scripts/design/minimax-client.test.mjs`, Figma variable audit checklist
+- Test: `apps/web/test/tokens-contrast.test.ts`, `scripts/design/{minimax-client,prompt-manifest,generate-minimax-image}.test.mjs`, Figma variable audit checklist
 
 **Interfaces:**
 - Consumes: approved product spec §11.1–11.3, existing token names, shadcn primitives, current Hero/Editor/Public RO screenshots and existing generated figure references.
@@ -51,14 +53,32 @@
   Implement an injected-fetch client for `POST https://api.minimax.io/v1/image_generation` with model `image-01`, `aspect_ratio`, `response_format=url`, and one prompt per call. Load environment values only through the Node process environment (`node --env-file=.env`); never read, print or log `.env`. Return `{ keySlot, requestId, imageUrls, model }`, and redact all thrown errors. Keep the fallback classifier separate from HTTP transport so tests do not need network access.
 - [x] **Step 6: Run the routing tests and verify GREEN**
   Run the client and CLI tests again; then run one live generation with a versioned output path under `docs/design-assets/generated/`. Persist the exact prompt, model, region, key slot, request ID, generation timestamp, post-processing and intended surface in a sidecar file without the key value or remote signed URL. Completed through the China-region endpoint with key1; `openscience-observatory-v1.png` and its sanitized sidecar exist, and the combined test suite passes 14/14.
-- [ ] **Step 7: Inspect and approve the static asset**
-  View the generated image at original resolution. Reject any watermark, logo, readable fake text, generic galaxy/brain motif, excessive neon, malformed RO geometry or composition that cannot host real UI overlays. v1 was rejected because the prompt let the model generate product-semantic six-node geometry, producing a plant-like form disconnected from the existing RO system. Re-lock the generated layer as subordinate material/texture before another single-image iteration; do not generate video until the user approves the static concept.
+- [ ] **Step 7.1: Write failing prompt-manifest and provenance tests**
+  Add `scripts/design/prompt-manifest.test.mjs` with a Markdown fixture containing `## MiniMax Prompt` and `## Negative Prompt`. Assert that `buildImagePrompt(markdown)` returns both sections in order and throws `Prompt manifest is missing MiniMax Prompt or Negative Prompt` when either section is absent. Extend `generate-minimax-image.test.mjs` to assert that the CLI rejects a missing `--prompt-file` or `--intended-surface` before credential/network work. The MiniMax image API has no separate `negative_prompt` field, so both sections must become one `prompt` string; official field reference: <https://platform.minimax.io/docs/api-reference/image-generation-t2i>.
+- [ ] **Step 7.2: Run the new tests and verify RED**
+  Run `node --test scripts/design/minimax-client.test.mjs scripts/design/prompt-manifest.test.mjs scripts/design/generate-minimax-image.test.mjs`. Expected: FAIL because `prompt-manifest.mjs`, `--prompt-file` and required `--intended-surface` do not exist. No test may load `.env` or make a network request.
+- [ ] **Step 7.3: Implement prompt-file loading and truthful provenance**
+  Create `scripts/design/prompt-manifest.mjs` with a pure `buildImagePrompt(markdown)` function that extracts the first fenced text block below each required heading and returns `${positive}\n\nConstraints to avoid:\n${negative}`. Modify the CLI to read only the explicit `--prompt-file`, require `--intended-surface`, pass the combined string as the API `prompt`, and persist the caller-provided intended surface in the safe sidecar. Keep `--prompt` unsupported for this design workflow so the approved Markdown remains the single source of truth.
+- [ ] **Step 7.4: Run the prompt/client suite and verify GREEN**
+  Run the same three-test command. Expected: all tests PASS with zero network calls. Then run `git diff --check` and scan the staged diff for key values, signed URLs, credential identifiers and signature query parameters. Commit the client slice before any paid generation.
+- [ ] **Step 7.5: Generate one v2 China-region background**
+  Confirm `docs/design-assets/generated/openscience-evidence-chamber-v2.png` and its sidecar do not exist, then run exactly one command from the isolated worktree:
+
+  ```powershell
+  node --env-file=E:/Miscellaneous/XGS/.env scripts/design/generate-minimax-image.mjs --region cn --aspect-ratio 16:9 --prompt-file docs/design-assets/prompts/2026-08-08-living-research-observatory-v1.md --intended-surface "Landing / Workspace dark hero ambient background" --output docs/design-assets/generated/openscience-evidence-chamber-v2.png
+  ```
+
+  Expected: key1 succeeds, or key2 is used only after official status `1008`. Any auth, parameter, safety, rate-limit, network or server error stops the step without automatic retry or prompt mutation.
+- [ ] **Step 7.6: Inspect the raw background against all eight gates**
+  Open the PNG at original resolution and verify every item in the approved v2 prompt document: quiet left 0–40%, no semantic geometry, one light direction, no orange/text/data/UI, seamless `#03060b` edges, no competing focal point and safe 390×844 crop. Verify the sidecar contains model/region/key slot/time/intended surface but no remote URL or query parameter. A single failure marks v2 rejected and blocks Figma/video.
+- [ ] **Step 7.7: Build and review the native composite**
+  Only after the raw background passes, import it into Figma `03 Patterns` behind the existing exact RO asset. Add native artifact summaries, blue evidence path, one orange version change, RO ID and version anchors. Capture desktop 1440×900 and mobile 390×844 frames; require the 3-second reading “different research materials enter one continuously evolving RO.” User approval completes Step 7.
 - [ ] **Step 8: Create component families**
   Map Button, Card, Badge, Input, Dialog, Tabs, RO Card, SDF Node, Artifact Card, Review Row, Version Diff and Hermes Rail to existing or newly approved `apps/web/components/ui/*` primitives.
 - [ ] **Step 9: Prototype the six screens**
   Create clickable flows for Landing, Auth/Create, Dashboard, RO Workspace, Public RO and Ultrafast Science Collection. Include empty, loading, error, success, permission and reduced-motion notes.
 - [ ] **Step 10: Add the approved motion master**
-  After static approval, call the official MiniMax H3 video API first, requesting a 5–6 second 2K/1080P evidence-trajectory loop; if the account lacks H3 access, record the official error and use Hailuo 2.3. Store poster, video, prompt and provenance sidecar together; add static/reduced-motion fallbacks before any Figma or web reference.
+  After the raw background and native composite are both approved, decide whether generated motion is still necessary. If approved, call the current official H3 video API for a fixed-camera 5–6 second loop containing only one low-light cool reflection moving left-to-right and fading behind the native RO; if the account lacks H3 access, record the official error before considering Hailuo 2.3. RO geometry, blue path, SDF response, version anchors and orange diff remain native CSS/SVG/Figma animation. Store poster, video, prompt and safe provenance together; `prefers-reduced-motion` uses the approved static background.
 - [ ] **Step 11: Configure Code Connect**
   Connect Figma components to exact exports in `apps/web/components/ui/*`; document any component whose API must change before implementation.
 - [ ] **Step 12: Validate design-source parity**
