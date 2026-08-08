@@ -26,6 +26,13 @@ Codex、Kimi/Cursor 等客户端还使用不同 MCP 配置源。项目 `.mcp.jso
 5. 更新项目登记的 canonical Figma file key/link，并保留原文件为只读迁移来源，直至两轮代码同步验证完成。
 6. 将临时账号降为 Viewer 或移除；撤销 `figma-temp` OAuth，删除本地临时账号密码变量并轮换曾暴露的临时密码。
 
+## Current Transitional Source
+
+- 过渡设计文件：`OpenScience Web Design System`
+- 文件地址：<https://www.figma.com/design/rWS3seZaDMdlnSljqktMDp>
+- 当前所有权：临时账号的 `501428005's team`（Full seat）；长期账号当前为 starter/View，尚未具备可编辑 canonical owner 条件。
+- 状态：Task 1 Phase 0 discovery 进行中；迁移完成前该地址仅为 transitional source，不得标记为最终 canonical。
+
 ## Verification Gate
 
 - 两个 MCP server 均能独立完成 `tools/list`；分别切换浏览器 Figma 会话后，访问仅对对应账号可见的测试文件，以确认没有串号或 token 复用。

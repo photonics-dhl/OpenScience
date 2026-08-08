@@ -1,6 +1,6 @@
 # Handoff — 2026-08-08 Product Web Tooling
 
-- **Current goal:** 在执行产品级网页计划前完成 Codex MCP 加载、双 Figma OAuth 和长期账号设计稿迁移准备。
+- **Current goal:** 执行产品网页计划 Task 1；当前处于 Figma design-system Phase 0 discovery 的用户批准门禁。
 - **Done:**
   - 产品设计 spec：`docs/specs/2026-08-08-openscience-product-web-design.md`。
   - 实施计划：`docs/plans/2026-08-08-openscience-product-web-plan.md`，用户选择 subagent-driven，但要求前置工具齐全后再执行。
@@ -12,7 +12,8 @@
   - 重启后两个 Figma server 均暴露 26 个官方工具。首次 `whoami` 发现 browser session 复用导致两者同为临时账号；已仅重绑 `figma-primary`，并由全新 ephemeral 客户端确认其为长期账号身份。
   - 最终 App 重启后并行 `whoami` 通过：temp=`Ran`、primary=`zju`，email 前缀分别匹配且互不相同。临时账号有 Full 席位；长期账号目前只有 starter/View，尚不能作为 Team/Project 的可编辑 canonical owner。
   - 账号迁移决策：`docs/decisions/ADR-004-figma-account-ownership-and-migration.md`。
-- **Constraints:** 不打印 `.env`；Figma 密码不用于 MCP 自动登录；OAuth 必须浏览器交互；MCP 总数保持 ≤10；任务实现暂未启动。
-- **Open risks:** 长期账号只有 starter/View 席位；若现在直接开始，只能先用临时 Full 账号承载可编辑设计资产并承担后续迁移。Playwright 尚未作为项目依赖锁定。
-- **Next action:** 确认长期账号 Full/Edit 席位开通时点；若暂未开通，按 ADR-004 使用临时 Full 账号开始 Task 1，并从第一天保留长期账号协作与迁移清单。
+  - 已在临时 Full team 创建过渡设计文件 `OpenScience Web Design System`：<https://www.figma.com/design/rWS3seZaDMdlnSljqktMDp>。Phase 0 确认文件为空，代码有 51 个 CSS token；Figma 预计映射 49 variables + 2 effect styles。
+- **Constraints:** 不打印 `.env`；MCP 总数保持 ≤10；Figma 代码 token 是 canonical，不在 Figma 发明第二套 token；所有 `use_figma` 写入严格串行并按 phase 验证。
+- **Open risks:** 长期账号只有 starter/View；代码缺少 spacing 与完整 typography/radius token，必须先补齐再创建 Figma foundations；Playwright 尚未作为项目依赖锁定。
+- **Next action:** 用户批准 Phase 0 gap resolution → 补齐 `tokens.css` 的 spacing/type/radius/z-index 真源及测试 → 创建 Figma collections/variables/styles。
 - **Read first:** `AGENTS.md` → `docs/OpenScience_Kimi_Development_Spec.md` → `docs/progress.md` → `project_index.md` → product web spec/plan → ADR-004 → 本 handoff。

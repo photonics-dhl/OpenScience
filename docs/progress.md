@@ -1,5 +1,14 @@
 # OpenScience (XGS) 进度日志
 
+## 2026-08-08（产品网页 Task 1 / Figma Phase 0）— 过渡文件创建与 discovery 完成
+
+- **设计源创建**：用户确认后，在临时 Full 席位的 `501428005's team` 创建 `OpenScience Web Design System`：<https://www.figma.com/design/rWS3seZaDMdlnSljqktMDp>；该文件是 transitional source，不是最终 canonical。
+- **Figma 空态审计**：文件仅有空白 `Page 1`；0 collection、0 variable、0 local style、0 component。`Noto Serif SC` 与 `Noto Sans SC` 所需字重均可用。
+- **代码 token 审计**：`tokens.css` 35 个变量、`globals.css` 16 个变量，共 51；其中 39 个颜色、2 个阴影、3 个 motion duration、2 个 easing、3 个 z-index、1 个 radius、1 个 font stack。映射后预计 49 个 Figma variable + 2 个 Effect Style。
+- **组件审计**：已有 Button/Card/Badge/Input/Dialog；Tabs、RO Card、SDF Node、Artifact Card、Review Row、Version Diff、Hermes Rail 尚无统一 `components/ui` primitive。
+- **库审计**：文件未订阅库；Simple Design System 有 Button 等候选，但 token/API/所有权模型与本项目不一致，建议本地重建，只把库作为结构参考或图标来源。
+- **阻塞决策**：代码真源缺少 spacing、完整 typography/radius token，且 drawer 仍写死 `z-index: 100`。Phase 1 前需批准先补齐代码 token，再镜像到 Figma，避免在 Figma 发明第二套命名。
+
 ## 2026-08-08（Figma 最终工具门禁）— 双身份通过，长期账号编辑席位待开通
 
 - **工具加载**：重启后 `figma-temp` 与 `figma-primary` 各暴露 26 个官方工具，共 52 个；两边 `whoami` 均成功。
