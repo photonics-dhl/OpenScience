@@ -5,6 +5,7 @@
 - **用户结论**：`openscience-observatory-v1.png` 与既有 OpenScience 视觉系统不一致，不能只追求抽象科研质感，生成资产必须直接服务产品网页计划。
 - **根因**：v1 prompt 同时要求模型生成“材料场”和“六节点 RO 结构”，与产品 spec §11.2 的职责边界冲突。模型由此把不可妥协的六节点语义退化成植物状抽象图，也没有表达 RO unique ID、SDF 元数据、版本锚点及跨 Landing / Workspace / Public RO / Ultrafast Science 的连续关系。
 - **处置**：v1 保留为有 provenance 的 rejected exploration，不导入 Figma、不生成其视频版本。下一轮先确认生成层职责；默认修正方向是 MiniMax 只生成可裁切的科研材料/证据纹理，精确六节点、ID、SDF、轨迹和 diff 全部由 Figma/SVG 原生叠加。
+- **职责选择已确认**：用户接受推荐项 A，下一张资产首先服务 Landing / Workspace 暗色主视觉。现有精确蓝色玻璃六面 RO 环继续作为原生品牌锚点；MiniMax 不再生成 RO 几何，只提供与其匹配的深墨科研空间、材料质感和受控光场。
 - **⏳ 下一步**：完成一次视觉职责选择与 3 方案比较，用户批准修订设计后才原地更新 prompt 并进行下一次单图生成。
 
 ## 2026-08-08（产品网页 Task 1 / MiniMax 中国区生成）— 双 key 有效，首张静态资产等待审美门
