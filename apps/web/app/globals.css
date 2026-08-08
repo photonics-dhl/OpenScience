@@ -23,7 +23,7 @@
   --color-rejected-text: #991b1b;
   --color-warn-bg: #fef9c3;
   --color-warn-text: #854d0e;
-  --font-sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'PingFang SC', 'Microsoft YaHei', sans-serif;
+  --font-sans: var(--font-ui);
 }
 
 * {
@@ -97,7 +97,7 @@ body {
   position: fixed;
   inset: 0;
   background: rgba(15, 23, 42, 0.4);
-  z-index: 100;
+  z-index: var(--z-overlay);
 }
 .drawer {
   position: absolute;
@@ -1406,7 +1406,7 @@ body {
 
 /* ===== Task 3: 正文系统字体栈 + 标题衬线工具类（追加，不覆盖上方已有 body 其他属性） ===== */
 body {
-  font-family: system-ui, -apple-system, 'PingFang SC', 'Microsoft YaHei', 'Noto Sans SC', sans-serif;
+  font-family: var(--font-ui);
 }
 
 .font-display {

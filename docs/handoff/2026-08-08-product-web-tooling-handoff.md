@@ -1,6 +1,6 @@
 # Handoff — 2026-08-08 Product Web Tooling
 
-- **Current goal:** 执行产品网页计划 Task 1；当前处于 Figma design-system Phase 0 discovery 的用户批准门禁。
+- **Current goal:** 执行产品网页计划 Task 1；Figma Foundations 已完成，当前处于 Button 主集合视觉检查的用户确认门禁。
 - **Done:**
   - 产品设计 spec：`docs/specs/2026-08-08-openscience-product-web-design.md`。
   - 实施计划：`docs/plans/2026-08-08-openscience-product-web-plan.md`，用户选择 subagent-driven，但要求前置工具齐全后再执行。
@@ -12,8 +12,11 @@
   - 重启后两个 Figma server 均暴露 26 个官方工具。首次 `whoami` 发现 browser session 复用导致两者同为临时账号；已仅重绑 `figma-primary`，并由全新 ephemeral 客户端确认其为长期账号身份。
   - 最终 App 重启后并行 `whoami` 通过：temp=`Ran`、primary=`zju`，email 前缀分别匹配且互不相同。临时账号有 Full 席位；长期账号目前只有 starter/View，尚不能作为 Team/Project 的可编辑 canonical owner。
   - 账号迁移决策：`docs/decisions/ADR-004-figma-account-ownership-and-migration.md`。
-  - 已在临时 Full team 创建过渡设计文件 `OpenScience Web Design System`：<https://www.figma.com/design/rWS3seZaDMdlnSljqktMDp>。Phase 0 确认文件为空，代码有 51 个 CSS token；Figma 预计映射 49 variables + 2 effect styles。
-- **Constraints:** 不打印 `.env`；MCP 总数保持 ≤10；Figma 代码 token 是 canonical，不在 Figma 发明第二套 token；所有 `use_figma` 写入严格串行并按 phase 验证。
-- **Open risks:** 长期账号只有 starter/View；代码缺少 spacing 与完整 typography/radius token，必须先补齐再创建 Figma foundations；Playwright 尚未作为项目依赖锁定。
-- **Next action:** 用户批准 Phase 0 gap resolution → 补齐 `tokens.css` 的 spacing/type/radius/z-index 真源及测试 → 创建 Figma collections/variables/styles。
+  - 已在临时 Full team 创建过渡设计文件 `OpenScience Web Design System`：<https://www.figma.com/design/rWS3seZaDMdlnSljqktMDp>。
+  - 用户授权隔离分支 `codex/product-web-task1`；代码 token 已用 TDD 补齐 spacing/radius/type/tracking，并通过 Web 13/13 token tests、typecheck、production build。
+  - Figma Phase 1 audit：4 collections / 85 variables / 13 aliases / 9 text styles / 2 effect styles；0 `ALL_SCOPES`、0 缺失 Web code syntax、0 broken aliases。
+  - Figma 六页结构已建立；Button 主集合已创建 30 variants + Label property，二次视觉检查通过，等待用户确认后继续。
+- **Constraints:** 不打印 `.env`；MCP 总数保持 ≤10；Figma 代码 token 是 canonical；`use_figma` 写入严格串行；每个组件完成后截图并由用户确认；长期账号仍是未来 canonical owner。
+- **Open risks:** 长期账号只有 starter/View；Button 的 Destructive/Icon 子集合尚未创建；Playwright 尚未作为项目依赖锁定；Figma 过渡文件仍待迁移。
+- **Next action:** 用户确认 Button 主集合视觉检查 → 完成 Button Destructive/Icon → 按依赖顺序继续 Badge/Input/Card/Dialog/Tabs 与科研域组件。
 - **Read first:** `AGENTS.md` → `docs/OpenScience_Kimi_Development_Spec.md` → `docs/progress.md` → `project_index.md` → product web spec/plan → ADR-004 → 本 handoff。

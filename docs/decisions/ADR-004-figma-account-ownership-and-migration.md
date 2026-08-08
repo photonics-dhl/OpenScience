@@ -31,7 +31,7 @@ Codex、Kimi/Cursor 等客户端还使用不同 MCP 配置源。项目 `.mcp.jso
 - 过渡设计文件：`OpenScience Web Design System`
 - 文件地址：<https://www.figma.com/design/rWS3seZaDMdlnSljqktMDp>
 - 当前所有权：临时账号的 `501428005's team`（Full seat）；长期账号当前为 starter/View，尚未具备可编辑 canonical owner 条件。
-- 状态：Task 1 Phase 0 discovery 进行中；迁移完成前该地址仅为 transitional source，不得标记为最终 canonical。
+- 状态：Task 1 Figma Foundations 已完成（4 collections / 85 variables / 9 text styles / 2 effect styles），Button 主集合进入视觉确认；迁移完成前该地址仅为 transitional source，不得标记为最终 canonical。
 
 ## Verification Gate
 

@@ -7,6 +7,7 @@ import path from 'node:path';
  *  L = 0.2126R + 0.7152G + 0.0722B；ratio = (L1+0.05)/(L2+0.05)。 */
 
 const css = readFileSync(path.join(__dirname, '../app/tokens.css'), 'utf8');
+const globalsCss = readFileSync(path.join(__dirname, '../app/globals.css'), 'utf8');
 
 /** 解析 :root 块中的 --name: value; 变量（仅取 :root，忽略 @theme 的 var() 引用）。 */
 function parseRootVars(source: string): Map<string, string> {
@@ -45,6 +46,20 @@ function contrastRatio(fgHex: string, bgHex: string): number {
 }
 
 const tokens = parseRootVars(css);
+
+function parseThemeVars(source: string): Map<string, string> {
+  const themeMatch = source.match(/@theme\s*\{([\s\S]*?)\}/);
+  if (!themeMatch) throw new Error('tokens.css 缺少 @theme 块');
+  const vars = new Map<string, string>();
+  const re = /--([\w-]+)\s*:\s*([^;]+);/g;
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(themeMatch[1])) !== null) {
+    vars.set(m[1], m[2].trim());
+  }
+  return vars;
+}
+
+const themeTokens = parseThemeVars(css);
 
 function token(name: string): string {
   const value = tokens.get(name);
@@ -94,4 +109,72 @@ describe('视觉 token WCAG AA 对比度门禁（spec §3）', () => {
       ).toBeGreaterThanOrEqual(4.5);
     });
   }
+});
+
+describe('Figma foundations 与网页 token 契约', () => {
+  it('提供批准的 2–64px 间距刻度', () => {
+    const expected = new Map([
+      ['spacing-2', '0.125rem'],
+      ['spacing-4', '0.25rem'],
+      ['spacing-8', '0.5rem'],
+      ['spacing-12', '0.75rem'],
+      ['spacing-16', '1rem'],
+      ['spacing-24', '1.5rem'],
+      ['spacing-32', '2rem'],
+      ['spacing-48', '3rem'],
+      ['spacing-64', '4rem'],
+    ]);
+
+    for (const [name, value] of expected) {
+      expect(themeTokens.get(name), `--${name} 应为 ${value}`).toBe(value);
+    }
+  });
+
+  it('提供 compact/control/card/pill 四级圆角', () => {
+    const expected = new Map([
+      ['radius-compact', '0.25rem'],
+      ['radius-control', '0.375rem'],
+      ['radius-card', '0.75rem'],
+      ['radius-pill', '9999px'],
+    ]);
+
+    for (const [name, value] of expected) {
+      expect(themeTokens.get(name), `--${name} 应为 ${value}`).toBe(value);
+    }
+  });
+
+  it('提供双字体族与九级中英文学术排版刻度', () => {
+    expect(tokens.get('font-display')).toBe("'Noto Serif SC', 'Songti SC', serif");
+    expect(tokens.get('font-ui')).toBe(
+      "'Noto Sans SC', system-ui, -apple-system, 'PingFang SC', 'Microsoft YaHei', sans-serif",
+    );
+
+    const expected = new Map([
+      ['type-display-xl', ['4rem', '4.5rem']],
+      ['type-display-lg', ['3rem', '3.5rem']],
+      ['type-heading-xl', ['2.25rem', '2.75rem']],
+      ['type-heading-lg', ['1.75rem', '2.25rem']],
+      ['type-heading-md', ['1.375rem', '1.875rem']],
+      ['type-body-lg', ['1.125rem', '1.875rem']],
+      ['type-body-md', ['1rem', '1.625rem']],
+      ['type-body-sm', ['0.875rem', '1.375rem']],
+      ['type-label-sm', ['0.75rem', '1.125rem']],
+    ]);
+
+    for (const [name, [size, lineHeight]] of expected) {
+      expect(tokens.get(`${name}-size`), `--${name}-size 应为 ${size}`).toBe(size);
+      expect(tokens.get(`${name}-line-height`), `--${name}-line-height 应为 ${lineHeight}`).toBe(lineHeight);
+    }
+
+    expect(tokens.get('tracking-display')).toBe('-0.02em');
+    expect(tokens.get('tracking-heading')).toBe('-0.01em');
+    expect(tokens.get('tracking-body')).toBe('0em');
+    expect(tokens.get('tracking-label')).toBe('0.04em');
+  });
+
+  it('drawer 使用统一 overlay 层级而非局部硬编码', () => {
+    const drawerOverlay = globalsCss.match(/\.drawer-overlay\s*\{([\s\S]*?)\}/);
+    expect(drawerOverlay, '.drawer-overlay 规则缺失').not.toBeNull();
+    expect(drawerOverlay![1]).toMatch(/z-index\s*:\s*var\(--z-overlay\)\s*;/);
+  });
 });

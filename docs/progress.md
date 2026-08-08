@@ -1,5 +1,14 @@
 # OpenScience (XGS) 进度日志
 
+## 2026-08-08（产品网页 Task 1 / Figma Phase 1–3）— Foundations 完成，Button 视觉检查待确认
+
+- **隔离执行**：用户授权创建 `.worktrees/product-web-task1`，当前分支 `codex/product-web-task1`，基线提交 `2ed0c50`。
+- **代码 token 真源**：`apps/web/app/tokens.css` 新增 9 级 spacing、4 级 radius、Noto Serif/Sans 双字体族、9 级字号/行高和 4 级 tracking；`globals.css` 的 drawer 改用 `--z-overlay`，正文统一消费 `--font-ui`。
+- **TDD 证据**：新增契约先出现 4 个预期失败，再实现为 13/13 通过；`npx pnpm@9.15.0 --filter @openscience/web typecheck` 与 `build` 均通过。
+- **Figma Foundations**：过渡设计源现有 4 个集合、85 个 variables、13 条 alias、9 个 Text Styles、2 个 Effect Styles；审计为 `ALL_SCOPES=0`、缺失 Web code syntax=0、broken alias=0。
+- **文件结构**：建立 `00 Cover`、`01 Foundations`、`02 Components`、`03 Patterns`、`04 Screens`、`99 Archive` 六页。
+- **Button 检查点**：主集合按 React API 建立 30 variants（5 variant × 3 size × 2 disabled）并暴露 Label 属性；首次截图发现 Secondary 与展示底板同色，已将 specimen 底板改为 `paper-bg`，第二次截图结构、对比和裁切检查通过。等待用户确认后继续 Destructive/Icon 与下一组件。
+
 ## 2026-08-08（产品网页 Task 1 / Figma Phase 0）— 过渡文件创建与 discovery 完成
 
 - **设计源创建**：用户确认后，在临时 Full 席位的 `501428005's team` 创建 `OpenScience Web Design System`：<https://www.figma.com/design/rWS3seZaDMdlnSljqktMDp>；该文件是 transitional source，不是最终 canonical。
