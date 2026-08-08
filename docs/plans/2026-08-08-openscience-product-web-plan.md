@@ -63,8 +63,8 @@
   Run the same three-test command. Expected: all tests PASS with zero network calls. Then run `git diff --check` and scan the staged diff for key values, signed URLs, credential identifiers and signature query parameters. Commit the client slice before any paid generation.
 - [x] **Step 7.4a: Add the provider prompt-length contract with TDD**
   Add tests to `scripts/design/prompt-manifest.test.mjs` proving the final combined prompt accepts exactly 1499 characters and rejects 1500 with `Combined MiniMax image prompt must be fewer than 1500 characters`. The rejection must happen before credential or network work. Implement the smallest validation in `prompt-manifest.mjs`, rerun the 21-test baseline plus the new boundary cases, review and commit before another live call.
-- [ ] **Step 7.4b: Compress and approve the v2 prompt**
-  Reduce the combined positive and negative blocks from 2018 to at most 1499 characters without changing the approved four-zone composition, generated/native responsibility boundary, no-orange rule or prohibited semantic geometry. Record the measured final length, obtain user approval of the exact revised Markdown, and commit it separately. Do not call the API in this step.
+- [x] **Step 7.4b: Compress and approve the v2 prompt**
+  Reduced the final combined payload from 2018 to 1440 characters while preserving the approved four-zone composition, generated/native responsibility boundary, no-orange rule and prohibited semantic geometry. The user approved the exact revised text; the API was not called during this step.
 - [ ] **Step 7.5: Generate one v2 China-region background**
   The first call stopped on official status 2013 because the combined prompt was 2018 characters; it produced no file and did not switch keys. After Steps 7.4a–7.4b pass, confirm `docs/design-assets/generated/openscience-evidence-chamber-v2.png` and its sidecar do not exist, then run one explicit recovery command from the isolated worktree:
 

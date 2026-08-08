@@ -2,7 +2,7 @@
 
 ## 状态
 
-- **当前修订：** v2 设计已批准；v2.1 API 长度修订待复核
+- **当前修订：** v2.1 已批准；API 组合长度 1440 字符
 - **目标表面：** Landing / Workspace 暗色主视觉
 - **生成模型：** MiniMax `image-01`，中国区
 - **生成状态：** 尚未调用 API
@@ -45,19 +45,19 @@
 ## MiniMax Prompt
 
 ```text
-Generate only a full-bleed 16:9 ambient background plate for a premium scientific research product. Do not create a foreground subject, symbol, interface, diagram, or data visualization.
+Generate only a full-bleed 16:9 ambient background for a premium scientific research product. No foreground subject, symbol, interface, diagram, or data.
 
-The environment is the interior atmosphere of a precision evidence chamber: near-black deep ink space, black anodized metal, smoked optical glass, fine micro-etched surfaces, and a few restrained translucent optical-film layers. Keep approximately seventy percent of the frame quiet and dark.
+Show a precision evidence chamber: near-black #03060b space, #08101c depth, black anodized metal, smoked optical glass, micro-etched surfaces, and sparse translucent optical films. Keep 70% quiet.
 
-Composition is asymmetric. Keep the left forty percent almost empty and close to #03060b for readable product copy. In the middle, create a narrow low-contrast material corridor with subtle optical-film refraction, faint micro-grain and elongated cool reflections moving visually from mid-left toward the right, without drawing a visible beam, line, route, network or node. Keep the right side deep and spatially layered, suitable for compositing a large existing blue-glass object later, but do not depict that object or any surrounding halo geometry. Fade the bottom smoothly back to #03060b with no visible image boundary.
+Asymmetric layout: keep the left 40% almost empty for copy. In the middle 38–62%, suggest a narrow, low-contrast material corridor with faint grain, film refraction, and elongated cool reflections directed left-to-right, without beams or routes. Keep the right 54–100% deep and layered for later compositing of an existing blue-glass object; depict no object or halo. Fade the bottom 72–100% into #03060b with no visible boundary.
 
-Use low-chroma steel-blue reflections over a #03060b and #08101c palette. Lighting is controlled and directional, like high-end precision scientific instrument photography. Surfaces are crisp, restrained and physically plausible. No orange is present anywhere in the generated image.
+Use one cool light direction and low-chroma steel-blue reflections. Surfaces are crisp, restrained, and physically plausible. No orange.
 ```
 
 ## Negative Prompt
 
 ```text
-No research-object symbol, ring, circle, hexagon, polygon loop, six-part structure, radial arrangement, node, network, connection line, orbit, flower, petal, neuron, brain, DNA, galaxy, planet, star field, particle cloud, lens flare, hologram, gaming HUD, dashboard, interface frame, card, icon, logo, watermark, typography, formula, document page, code, chart, graph, microscopy result, fabricated scientific data, orange light, purple gradient, cyberpunk neon, watercolor, etching, archival paper, steampunk, centered subject, second focal point, camera-motion effect or visible rectangular vignette.
+No ring, circle, hexagon, polygon loop, six-part or radial form, node, network, connection line, orbit, flower, petal, neuron, brain, DNA, galaxy, planet, stars, particles, lens flare, hologram, HUD, dashboard, UI frame, card, icon, logo, watermark, text, formula, document, code, chart, graph, microscopy result, fabricated data, orange, purple gradient, cyberpunk neon, watercolor, etching, paper, steampunk, centered subject, second focal point, camera-motion effect, or rectangular vignette.
 ```
 
 ## 静态验收门

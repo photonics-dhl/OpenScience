@@ -1,5 +1,13 @@
 # OpenScience (XGS) 进度日志
 
+## 2026-08-08（产品网页 Task 1 / v2.1 prompt 批准）— 1440 字符，恢复调用尚未执行
+
+- **用户确认**：用户以选择 `1` 确认上轮展示的 v2.1 精确正负提示词；活跃 Markdown 已原地更新，未新建第二份 prompt。
+- **长度证据**：实际 `buildImagePrompt` 组合结果为 1440 字符（正向 921、负向 495，另含固定连接文本），低于 MiniMax 严格 1500 字符上限并保留 59 字符余量。
+- **设计边界**：继续锁定四区构图、生成/原生职责分离、70% 安静暗场、单一冷光和无橙色；RO、SDF、ID、版本、artifact、路径及 UI 仍由原生图层承担。
+- **安全状态**：本步骤未加载 `.env`、未发出 API 请求、未生成文件、未切换 key，也未触碰 Figma。
+- **⏳ 下一步**：提交本次唯一输入变更后，重新确认 v2 PNG/sidecar 不存在，再按计划 Step 7.5 只执行一次中国区恢复调用；任何非 1008 错误立即停止。
+
 ## 2026-08-08（产品网页 Task 1 / MiniMax 长度 preflight）— 本地契约已提交，等待 prompt 压缩批准
 
 - **TDD 证据**：先在 `scripts/design/prompt-manifest.test.mjs` 增加 final combined prompt 的边界用例；`node --test scripts/design/prompt-manifest.test.mjs` 预期 RED（1500 字符未抛出异常），最小实现后 `node --test scripts/design/minimax-client.test.mjs scripts/design/prompt-manifest.test.mjs scripts/design/generate-minimax-image.test.mjs` GREEN，23/23。
