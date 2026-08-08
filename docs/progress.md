@@ -1,5 +1,13 @@
 # OpenScience (XGS) 进度日志
 
+## 2026-08-08（产品网页 Task 1 / Step 8 最后一批组件）— Version Diff、Hermes Rail 已建立，全量审计通过
+
+- **Figma 交付**：`02 Components` 新增 wrapper `86:7`；Version Diff `86:47`（Added/Removed/Changed × Paper/Dark 6 variants）、Hermes Rail `86:106`（Idle/Working/Approval/Complete × Paper/Dark 8 variants）。Hermes 与 Live2D 共用同一 intent/status/permission/version 模型。
+- **全量组件审计**：`02 Components` 共 12 个预期 Component Set、96 个 variants；0 missing、0 duplicate set name、0 图片填充、0 placeholder。字体仍限定 Noto Sans SC / Noto Serif SC / Roboto Mono。
+- **颜色语义修复**：旧 Button specimen 的 `29:8 ro-node-1` 从 accent-diff 橙色改为 evidence 蓝并更名 `evidence-node`；余下所有 accent-diff owner 均属于 diff/change 语义。Version Diff 仅 Changed 使用橙色，Added 使用证据蓝，Removed 使用危险红。
+- **本地证据**：`docs/design-assets/figma/2026-08-08-step8-change-hermes-v1.png`，SHA-256 `247F71E29B2768C2F93191036F178B4E0753B5FC8BDB6C2A3AF6A5B648CDCD8C`。
+- **⏳ 下一步**：用户确认最后一批视觉后，勾选 Step 8 完成并进入 Step 9 六屏原型；Tabs 与新 domain components 的代码实现仍作为后续 implementation backlog，不在 Figma 阶段提前修改。
+
 ## 2026-08-08（产品网页 Task 1 / Step 8 第三批组件）— 用户确认通过
 
 - **批准结论**：用户明确回复“确认”，SDF Node、Artifact Card、Review Row 的状态颜色、真实 artifact 字段与可逆 review 契约通过批次门。
