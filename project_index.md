@@ -9,7 +9,7 @@
 | `project_index.md` | 本索引 | 活文档 |
 | `.mcp.json` | 项目级 MCP 配置（kimi-code/Cursor）；2026-08-08 保持 10 个：`semantic-scholar`、`github`、`mermaid`、`memory`、`context7`、`tavily-search`、`figma-temp`、`figma-primary`、`shadcn`、`task-master-ai`；双 Figma 直接使用官方 remote URL，过渡期移除低价值 `fetch` | 活文档，**本机持有，已移出 git 跟踪**（2026-07-31） |
 | `.Codex/troubleshooting/issues.json` | 项目工具/MCP/API 故障的结构化问题库；含 issue-003 MiniMax image prompt 1500 字符本地契约缺口；不记录账号、密钥、OAuth URL 或 token | 活文档 |
-| [OpenScience Web Design System — canonical](https://www.figma.com/design/gjhowMG7cG4clKwvhvF08E) | 长期账号 Full 席位下的产品网页唯一设计事实源；迁移 parity 与净零写探针通过；Step 9 已建立 Landing `2010:2`、Auth/Create `2012:4`、Dashboard `2031:10`、RO Workspace `2031:11` 及两批状态契约，Auth→Dashboard→Workspace 真实路径已连通；其余两屏与 Landing 入口补链待续；Code Connect 因 student tier 未验证 | Canonical, Step 9 in progress |
+| [OpenScience Web Design System — canonical](https://www.figma.com/design/gjhowMG7cG4clKwvhvF08E) | 长期账号 Full 席位下的产品网页唯一设计事实源；迁移 parity 与净零写探针通过；Step 9 已建立前四屏，Auth→Dashboard→Workspace 真实路径已连通；第三检查点 Section `2069:99` 与 Public RO `2069:100`、Collection `2069:101`、状态条 `2069:102` 空骨架已建立并等待串行填充；Code Connect 因 student tier 未验证 | Canonical, Step 9 in progress |
 | [OpenScience Web Design System — transitional](https://www.figma.com/design/rWS3seZaDMdlnSljqktMDp) | 临时账号的原始过渡设计源；与 canonical parity 已通过，仅只读保留至两轮代码同步验证完成；不得继续设计或用于 Code Connect | Retained migration source |
 | [OpenScience Web Design System — migration probe](https://www.figma.com/design/PBUlumyHBVXfMHgdopH0aB) | `figma-primary` 在长期账号目标 Team 成功创建的空文件，用于证明写权限；不含设计内容，未通过 ADR-004 parity，不得作为 canonical 或供 Code Connect 使用 | Empty probe, not canonical |
 | `.vscode/mcp.json` | VS Code MCP 配置（task-master-ai 直连 node_modules 本地入口） | 活文档，**本机持有，不入库**（含 key） |

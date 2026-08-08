@@ -11,6 +11,7 @@
 - **本地恢复证据**：`docs/design-assets/figma/2026-08-09-step9-{dashboard,ro-workspace,cockpit-states}-v1.png`；尺寸分别为 1440×900、1440×900、2960×220，SHA-256 分别为 `8CA0A9CD53CE025C17EBCC9450F15901DADBB9696AE4D221395C824646547746`、`7B828927D44F3B1065FF2F34418FD5FE9D0EB3ABBA4129CAA99C6A27B5A88015`、`F83FE395C2D12F9EE2A53936F86C4FD613259C5CBFF389DEE7CB85E41EEA8981`。
 - **安全与范围**：未读取 `.env`，未调用 MiniMax、未生成视频、未修改网页代码或 Code Connect；Step 9 仍为部分完成，不提前勾选。
 - **用户门禁**：用户已于本轮明确回复“确认”；Dashboard + RO Workspace 视觉基线冻结，第三检查点 Public RO + Ultrafast Science Collection 解锁。
+- **第三检查点启动**：canonical `04 Screens` 已建立顶层 Section `2069:99`、Public RO 空画板 `2069:100`、Ultrafast Science Collection 空画板 `2069:101` 与状态/交互条 `2069:102`；三者尺寸/位置门通过，内容将分屏串行写入，避免 API 中断丢失整批工作。
 - **⏳ 下一步**：只在 canonical `04 Screens` 建立 Public RO + Ultrafast Science Collection，并在 Step 9 收尾时处理 Landing → Auth/Create 原型入口与全量审计。
 
 ## 2026-08-08（产品网页 Task 1 / Step 9 第一检查点）— Landing + Auth/Create 已获用户确认
