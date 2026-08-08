@@ -1,5 +1,13 @@
 # OpenScience (XGS) 进度日志
 
+## 2026-08-08（产品网页 Task 1 / Step 8 第三批组件）— SDF Node、Artifact Card、Review Row 已建立
+
+- **Figma 交付**：`02 Components` 新增 wrapper `82:7`；SDF Node `82:67`（Idle/Active/Verified/Blocked × Paper/Dark 8 variants）、Artifact Card `82:112`（Paper/Data/Code × Paper/Dark 6 variants）、Review Row `82:151`（Open/Accepted/Needs changes × Paper/Dark 6 variants）。
+- **语义边界**：SDF Blocked 与 Review Needs changes 使用 `state-danger`；本批不使用 accent-diff 橙色，避免把版本变化与审阅风险混为一谈。Artifact 文件名沿用真实 `source.pdf`、`transient-absorption.csv`、`fit_decay.py`。
+- **审计**：3 个 Component Set 属性与 variant 数量正确；0 图片填充、0 placeholder、0 wrapper 越界；字体仅 Noto Sans SC / Noto Serif SC / Roboto Mono；橙色 diff 节点数量为 0。
+- **本地证据**：`docs/design-assets/figma/2026-08-08-step8-research-workflow-v1.png`，SHA-256 `4542D644E053D28E2F3974FFBEBF62FC5CD279E4DA86A5F11B55380188149D89`。
+- **⏳ 下一步**：用户确认第三批视觉后，继续 Version Diff 与 Hermes Rail；随后回收 Step 8 组件总体验收并进入六屏原型准备。
+
 ## 2026-08-08（产品网页 Task 1 / Step 8 第二批组件）— 用户确认通过
 
 - **批准结论**：用户明确回复“确认”，Dialog、Tabs、RO Card 的视觉、surface/context 关系、Tabs code gap 标注和 RO 生命周期契约通过批次门。
