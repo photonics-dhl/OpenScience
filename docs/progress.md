@@ -13,8 +13,11 @@
 - **用户门禁**：用户已于本轮明确回复“确认”；Dashboard + RO Workspace 视觉基线冻结，第三检查点 Public RO + Ultrafast Science Collection 解锁。
 - **第三检查点启动**：canonical `04 Screens` 已建立顶层 Section `2069:99`、Public RO 空画板 `2069:100`、Ultrafast Science Collection 空画板 `2069:101` 与状态/交互条 `2069:102`；三者尺寸/位置门通过，内容将分屏串行写入，避免 API 中断丢失整批工作。
 - **Public RO 完成**：`2069:100` 已采用批准的纸张学术阅读面，左侧复用母版 `37:104` 呈现标题、作者、RO ID、v0.4、Insight、figure/provenance 与具体版本引用；右侧使用 Tabs、Published RO Card、许可/引用契约和 Public Media Artifact，明确 `Published on OpenScience`、作者声明许可与 `Selected by Ultrafast Science · editorial curation ≠ peer-review approval`。
-- **Public RO 审计与证据**：1440×900、84 nodes、5 local instances、0 image fills、0 gradients，字体仅 Noto Sans SC / Noto Serif SC / Roboto Mono，命名操作目标均至少 44px。本地截图 `docs/design-assets/figma/2026-08-09-step9-public-ro-v1.png`，SHA-256 `9893460E328DE5AF02D488668AD4A64A3C29760661EAB20557B4720B2A210F1E`。
-- **⏳ 下一步**：只在 canonical `04 Screens` 建立 Public RO + Ultrafast Science Collection，并在 Step 9 收尾时处理 Landing → Auth/Create 原型入口与全量审计。
+- **Collection 完成**：`2069:101` 复用批准的 `37:143` 期刊编辑母版，展示 journal → volume/issue → section → selected work 层级；右侧以同一 `OS-RO-01J8YF7Q` / v0.4 呈现 Published RO Card、编辑说明、SDF/许可/媒体 readiness 与 `Editorial Curator · scoped` 权限。精选明确是 editorial overlay，不替代作者事实、社区 review 或 RO 演化历史。
+- **第三检查点状态与真实路径**：`2069:102` 覆盖 Public RO、Collection、许可/媒体/access、reduced-motion 和原型契约。`04 Screens` 现有 5 条真实 reaction：Auth/Create → Dashboard、Dashboard → Workspace、Dashboard `2033:12` → Public RO、Public RO `2076:152` → Collection、Collection `2074:129` → Public RO；均使用 200ms dissolve，生产 reduced-motion 使用 instant cut。
+- **最终审计**：Public RO 1440×900 / 86 nodes / 6 instances，Collection 1440×900 / 71 nodes / 4 instances，状态条 2960×220 / 13 nodes；三者均 0 image fills、0 gradients、批准字体 only，命名操作目标均至少 44px。母版 `37:2` 仍为 1440×1600。
+- **本地恢复证据**：`docs/design-assets/figma/2026-08-09-step9-{public-ro,ultrafast-collection,public-states}-v1.png`；SHA-256 分别为 `353682255D974CB928A176A7B7CC88B596F95A7970D95B578CA40B9259832307`、`4A10AEB018F55076E12E6F37A1F9F280AA9E324BD988F83CB53B0398BAF81082`、`48848406C183903F426CC0181E9F96BFE3C8C6931F215AB9A87718320FC909B1`。
+- **⏳ 下一步**：等待用户确认第三检查点视觉；通过后只处理 Landing → Auth/Create 的 Section/direct-child 结构方案与 Step 9 六屏全量 prototype/state/visual audit，不提前进入网页代码。
 
 ## 2026-08-08（产品网页 Task 1 / Step 9 第一检查点）— Landing + Auth/Create 已获用户确认
 
