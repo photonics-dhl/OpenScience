@@ -27,4 +27,5 @@
 - **Attempt 3 result/blocker:** 别名修复后请求已到达 MiniMax，返回 HTTP `200` + `base_resp.status_code=2049` (`invalid api key`)，槽位 `key1`。按策略认证错误不得切换 key2；未生成资产、未写 provenance、未继续重试。恢复条件是用户修正 key1 后重新执行同一版本化命令。
 - **Token Plan root cause:** 官方文档确认 Token Plan 支持资源可覆盖图片/视频，但认证必须使用 Billing > Token Plan 中当前 Team 的 Subscription Key。key1 调只读 `https://www.minimax.io/v1/token_plan/remains` 同样返回 `2049`，且本地脱敏格式检查无 Bearer 前缀/空白/引号/换行；因此不是 host、模型或 payload 问题。恢复步骤：在有有效 Token Plan seat/Credits 的 Team 中复制或 reset Subscription Key → 更新本机 key1 → 先验证 remains 状态 0 → 再执行 image-01 单次生成。
 - **Key source diagnostic:** 本次实际选中的环境变量是 `MINIMAX_API_KEY1`（key1）；没有读取或记录其值，也未使用 key2。客户端优先级为 `MINIMAX_DESIGN_ASSET_KEY_1` → `MINIMAX_API_KEY_1` → `MINIMAX_API_KEY1` → `MINIMAX_API_KEY`。
+- **Key2 diagnostic:** 用户明确要求验证 key2；实际来源为 `MINIMAX_API_KEY2`。只读 `token_plan/remains` 返回 HTTP `200` + `2049 invalid api key`，本地脱敏格式检查无 Bearer 前缀/空白/引号/换行。未执行生成、未消耗媒体额度。key1/key2 均需替换或 reset 为有效 Team Subscription Key 后再验证。
 - **Read first:** `AGENTS.md` → `docs/OpenScience_Kimi_Development_Spec.md` → `docs/progress.md` → `project_index.md` → product web spec/plan → ADR-004 → 本 handoff。

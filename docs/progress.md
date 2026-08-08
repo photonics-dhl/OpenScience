@@ -19,6 +19,7 @@
 - **生成尝试 2 / 根因**：Node 已加载主工作区 `.env`，但客户端未匹配新 key1/key2 的变量命名，仍在本地配置校验阶段退出；未发出 API 请求。根因是环境变量命名契约不兼容，不是 key 有效性或 MiniMax 服务问题；下一步以 TDD 增加常见 `_1/_2` 与 `KEY1/KEY2` 别名。
 - **生成尝试 3 / 外部证据**：别名修复后真实请求到达 MiniMax，返回 HTTP `200`、官方 `2049 invalid api key`，槽位为 `key1`。按已批准策略不切换 key2、不重试认证错误；没有资产或 provenance 产物。下一步需先修正 key1，再重新执行单次 live generation。
 - **Token Plan 诊断闭环**：官方 Token Plan 文档确认支持的统一额度覆盖图片/视频，且应使用 Billing > Token Plan 的 Team 专属 Subscription Key。使用 key1 调官方只读 `/v1/token_plan/remains` 仍返回 `2049`；本地脱敏检查确认 key 无 `Bearer` 前缀、外层空白、引号或换行。根因收敛为 Subscription Key 已失效/重置、复制错误，或不属于当前有席位/额度的 Team；修复后应先验证 remains 返回状态 0，再重试图片生成。
+- **Key2 只读验证**：经用户明确授权，使用 `MINIMAX_API_KEY2` 调同一 Token Plan remains 接口；HTTP `200`、官方状态仍为 `2049 invalid api key`。key2 本地格式同样无 Bearer 前缀/空白/引号/换行，未执行任何图片或视频生成。结论：两项存储值均需从有效 Team 的 Billing > Token Plan 页面重新复制或 reset。
 
 ## 2026-08-08（产品网页 Task 1 / Figma Phase 1–3）— Foundations 完成，Button 视觉检查待确认
 
