@@ -1,10 +1,26 @@
 # OpenScience (XGS) 进度日志
 
+## 2026-08-08（Figma 原生 MCP 修正）— 停用代理注册路径，等待一次重启认证
+
+- **复现**：移除 profile header 并隔离 `MCP_REMOTE_CONFIG_DIR` 后，`mcp-remote` 仍在 Figma 动态客户端注册阶段返回 HTTP 403，故根因不是账号或 token 目录。
+- **官方接法**：Figma 的 Codex 安装说明要求直接添加 `https://mcp.figma.com/mcp`，由 Codex 原生远程 MCP 客户端完成 OAuth。
+- **修正**：Codex `config.toml` 与项目 `.mcp.json` 中的 `figma-temp`、`figma-primary` 均改为原生 `url` 配置；保留不同 server 名，并将双账号隔离列为重启后必须实测的门禁。
+- **Mermaid**：使用 MCP SDK 完成真实握手，成功列出 `generate_mermaid_diagram`；包缓存已预热，等待 Codex 下次加载。
+- **下一步**：重启 Codex，分别认证两个 Figma server，并用账号专属文件验证 token 不串号；如同 endpoint token 被复用，则改用两个独立 Codex profile。
+
+## 2026-08-08（Figma OAuth 修正）— 双账号隔离从请求 header 改为独立 token 目录
+
+- **复现**：`figma-temp` 通过 `mcp-remote` 初始化时，Figma 动态客户端注册返回 HTTP 403；错误发生在浏览器 OAuth 之前。
+- **根因**：用于区分账号的自定义 `X-OpenScience-Figma-Profile` header 被带入 Figma 注册请求，Figma 拒绝该请求；因此两个 Figma MCP 在 Codex 中均未 ready。
+- **修正（已由上方条目取代）**：曾移除自定义 header 并分别设置 `MCP_REMOTE_CONFIG_DIR`，但 `mcp-remote` 仍被 Figma 拒绝；最终改用 Codex 原生 remote URL。
+- **Memory**：本地 memory JSONL 发现 4 个旧实体缺少 schema 字段，已无删除地补齐 `entityType`/`observations`；Memory MCP 搜索恢复，并新增产品网页设计与 Figma 所有权两条 `XGS-` 索引记忆。
+- **下一步（已由上方条目更新）**：重启后走 Codex 原生 OAuth 并验证双账号；Mermaid 已完成独立握手验证。
+
 ## 2026-08-08（Codex MCP 修正）— 配置源对齐与 Figma 双账号迁移准备完成
 
 - **根因**：重启后当前会话仍无 Figma/shadcn/Task Master 工具；审计确认 `C:/Users/Mac/.codex/config.toml` 原有 `mcp_servers=0`，项目 `.mcp.json` 不会自动加载进 Codex Desktop。
 - **修正**：在 Codex `config.toml` 和项目 `.mcp.json` 对齐配置 10 个 MCP：semantic-scholar、github、mermaid、memory、context7、tavily-search、figma-temp、figma-primary、shadcn、task-master-ai；JSON/TOML 解析均通过。
-- **双 Figma**：两个 server 使用不同 `X-OpenScience-Figma-Profile` header，使 `mcp-remote` 按 URL+header 生成独立 OAuth 缓存；临时/长期账号凭据已按用户要求写入本机 `.env`，未读取或回显现有 `.env`，不入 Git。
+- **双 Figma（已由后续条目修正）**：profile header 与 `mcp-remote` 方案均被 Figma 动态客户端注册拒绝；最终改为 Codex 原生 remote URL。临时/长期账号凭据已按用户要求写入本机 `.env`，未读取或回显现有 `.env`，不入 Git。
 - **迁移决策**：新增 `docs/decisions/ADR-004-figma-account-ownership-and-migration.md`；长期账号为 canonical owner，临时账号只做过渡编辑，迁移采用目标 Team 移动/复制 + `.fig` 备份 + variables/components/prototype/Code Connect 对照验收。
 - **下一步**：再次重启 Codex，实际检查 10 MCP 工具；分别完成两个 Figma 浏览器 OAuth 并核对身份；工具前置齐全后才启动 subagent-driven Task 1。
 

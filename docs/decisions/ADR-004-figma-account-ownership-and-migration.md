@@ -13,7 +13,7 @@ Codex、Kimi/Cursor 等客户端还使用不同 MCP 配置源。项目 `.mcp.jso
 
 1. **长期账号是唯一设计资产所有者。** 环境变量 `FIGMA_PRIMARY_ACCOUNT_EMAIL` 指向长期账号；临时账号只用于当前 Professional 能力和过渡编辑。
 2. **账号密码只存本机 `.env`。** 不进入 Git、ADR、日志、截图、MCP 参数或 Code Connect 配置。Figma MCP 使用浏览器 OAuth，不能读取账号密码变量。
-3. **两个 OAuth 会话独立。** MCP server 名称使用 `figma-temp` 与 `figma-primary`；`mcp-remote` 分别携带不同的 `X-OpenScience-Figma-Profile` header，使 OAuth token storage 生成不同缓存键。
+3. **使用 Codex 原生远程 MCP OAuth。** MCP server 名称使用 `figma-temp` 与 `figma-primary`，两者都直接配置 `url = "https://mcp.figma.com/mcp"`，并按 server 名分别发起浏览器认证。不得使用 `mcp-remote` 代替 Codex 原生客户端，也不得通过自定义请求 header 隔离：两种代理尝试都在 Figma 动态客户端注册阶段返回 403。双账号是否真正按 server 名隔离必须通过重启后的身份检查确认；若 Codex 复用同一 endpoint 的 token，则改用两个独立 Codex profile，而不是伪造协议 header。
 4. **Canonical 文件最终位于长期账号拥有的 Team/Project。** 临时账号创建的文件从第一天就邀请长期账号为可编辑成员；长期账号具备目标 Team/Project 后，将文件移动或复制到该空间，以目标空间中的文件作为唯一事实源。
 5. **迁移不依赖单一平台动作。** 每个重要里程碑同时保留 `.fig` 导出备份、关键屏幕 PDF/PNG、变量表和组件/Code Connect 映射清单。若账号间不能直接转移所有权，使用“目标账号复制到目标 Team + 对照验收”路线。
 
@@ -28,7 +28,7 @@ Codex、Kimi/Cursor 等客户端还使用不同 MCP 配置源。项目 `.mcp.jso
 
 ## Verification Gate
 
-- 两个 MCP server 均能独立完成 `tools/list`，且返回的账号身份与 server profile 一致。
+- 两个 MCP server 均能独立完成 `tools/list`；分别切换浏览器 Figma 会话后，访问仅对对应账号可见的测试文件，以确认没有串号或 token 复用。
 - 长期账号能在目标 Team 中编辑、分享和恢复 canonical 文件。
 - 六个关键屏幕、variables、components、prototype 和 Code Connect 在迁移前后数量与命名一致。
 - 代码生成只引用目标文件 key，不再依赖临时账号链接。
