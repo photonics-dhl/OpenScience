@@ -72,7 +72,7 @@
 | `docs/specs/2026-08-03-p1a-9-cicd-deploy-backup-design.md` | P1A-9 CI/CD 与 ECS 部署及备份设计（design gate 已确认：GitHub Actions/仅 PG dump/临时库演练 + QQ SMTP 偏离，生产已上线 2026-08-03） | 活文档 |
 | `docs/specs/2026-08-03-p1b-1-sdf-schema-design.md` | P1B-1 SDF 六字段 core + manifest JSON Schema 设计（design gate 已确认：手写 JSON Schema + ajv，additionalProperties 宽容债务，代码已实现 2026-08-03） | 活文档 |
 | `docs/specs/2026-08-03-p1b-2-ro-sdf-model-design.md` | P1B-2 RO/SDF 数据模型设计（design gate 已确认：三实体 + 迁移 7 + API 骨架，代码已实现 2026-08-03） | 活文档 |
-| `docs/specs/2026-08-08-openscience-product-web-design.md` | 产品级网页设计 spec（Monumental Scholarly Intelligence + Living Research Observatory；统一 RO 工作流、Hermes/Live2D、Public RO、Ultrafast Science 策展、许可/版本与 MiniMax 资产边界；§11.4 含待批准的 v3 原生母版桌面/移动/图层/动效/拒绝门） | 活文档，§11.4 待批准 |
+| `docs/specs/2026-08-08-openscience-product-web-design.md` | 产品级网页设计 spec（Monumental Scholarly Intelligence + Living Research Observatory；统一 RO 工作流、Hermes/Live2D、Public RO、Ultrafast Science 策展、许可/版本与 MiniMax 资产边界；§11.4 为已批准的 v3 原生母版桌面/移动/图层/动效/拒绝门） | 活文档，§11.4 已批准 |
 | `docs/plans/2026-08-08-openscience-product-web-plan.md` | 产品级网页实现计划（Figma 六屏、Dashboard/Workspace、创建/Hermes/版本、Public RO/Explore、Editorial Curator、Live2D/质量门禁六任务；用户已确认 spec） | 活文档 |
 | `docs/decisions/ADR-004-figma-account-ownership-and-migration.md` | Figma 临时/长期账号所有权、双 OAuth 隔离、canonical 设计稿迁移与验收决策 | Accepted |
 | `docs/handoff/2026-08-08-product-web-tooling-handoff.md` | 产品网页 Task 1 当前交接（工具/Figma 基础、MiniMax v1/v2 rejected 证据、v3 原生确定性路线预检与下一选择门） | 当前 handoff |
