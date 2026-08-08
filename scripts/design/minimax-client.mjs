@@ -10,7 +10,11 @@ class RedactedMiniMaxError extends Error {
 }
 
 export function chooseAssetKey(env) {
-  const key = env.MINIMAX_DESIGN_ASSET_KEY_1 || env.MINIMAX_API_KEY;
+  const key =
+    env.MINIMAX_DESIGN_ASSET_KEY_1 ||
+    env.MINIMAX_API_KEY_1 ||
+    env.MINIMAX_API_KEY1 ||
+    env.MINIMAX_API_KEY;
   if (!key) {
     throw new RedactedMiniMaxError('MiniMax design asset key is not configured');
   }
@@ -20,7 +24,10 @@ export function chooseAssetKey(env) {
 
 export function getAssetKeys(env) {
   const key1 = chooseAssetKey(env).key;
-  const key2 = env.MINIMAX_DESIGN_ASSET_KEY_2;
+  const key2 =
+    env.MINIMAX_DESIGN_ASSET_KEY_2 ||
+    env.MINIMAX_API_KEY_2 ||
+    env.MINIMAX_API_KEY2;
   return { key1, key2 };
 }
 

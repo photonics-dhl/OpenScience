@@ -4,6 +4,7 @@ import test from 'node:test';
 import {
   chooseAssetKey,
   createMiniMaxImageClient,
+  getAssetKeys,
   isQuotaExhausted,
 } from './minimax-client.mjs';
 
@@ -22,6 +23,54 @@ test('chooseAssetKey uses the existing runtime key only as key1 compatibility', 
   assert.deepEqual(
     chooseAssetKey({ MINIMAX_API_KEY: 'runtime-compatibility-key' }),
     { key: 'runtime-compatibility-key', keySlot: 'key1' },
+  );
+});
+
+test('chooseAssetKey honors common key1 aliases in documented precedence order', () => {
+  assert.deepEqual(
+    chooseAssetKey({
+      MINIMAX_API_KEY: 'k0',
+      MINIMAX_API_KEY1: 'k1a',
+      MINIMAX_API_KEY_1: 'k1b',
+      MINIMAX_DESIGN_ASSET_KEY_1: 'k1c',
+    }),
+    { key: 'k1c', keySlot: 'key1' },
+  );
+  assert.deepEqual(
+    chooseAssetKey({
+      MINIMAX_API_KEY: 'k0',
+      MINIMAX_API_KEY1: 'k1a',
+      MINIMAX_API_KEY_1: 'k1b',
+    }),
+    { key: 'k1b', keySlot: 'key1' },
+  );
+  assert.deepEqual(
+    chooseAssetKey({ MINIMAX_API_KEY: 'k0', MINIMAX_API_KEY1: 'k1a' }),
+    { key: 'k1a', keySlot: 'key1' },
+  );
+});
+
+test('getAssetKeys honors common key2 aliases in documented precedence order', () => {
+  assert.deepEqual(
+    getAssetKeys({
+      MINIMAX_API_KEY: 'k0',
+      MINIMAX_API_KEY2: 'k2a',
+      MINIMAX_API_KEY_2: 'k2b',
+      MINIMAX_DESIGN_ASSET_KEY_2: 'k2c',
+    }),
+    { key1: 'k0', key2: 'k2c' },
+  );
+  assert.deepEqual(
+    getAssetKeys({
+      MINIMAX_API_KEY: 'k0',
+      MINIMAX_API_KEY2: 'k2a',
+      MINIMAX_API_KEY_2: 'k2b',
+    }),
+    { key1: 'k0', key2: 'k2b' },
+  );
+  assert.deepEqual(
+    getAssetKeys({ MINIMAX_API_KEY: 'k0', MINIMAX_API_KEY2: 'k2a' }),
+    { key1: 'k0', key2: 'k2a' },
   );
 });
 
