@@ -28,7 +28,7 @@
 **Files / artifacts:**
 - Create/update Figma file: `web-design-system.fig`（Figma Professional workspace）
 - Modify: `apps/web/app/tokens.css`, `apps/web/app/globals.css`（仅在 token 对齐验证发现差异时）
-- Create: `docs/decisions/ADR-003-figma-code-connect-design-source.md`
+- Create/update: `docs/decisions/ADR-004-figma-account-ownership-and-migration.md`
 - Modify: `project_index.md`, `docs/progress.md`
 - Test: `apps/web/test/tokens-contrast.test.ts`, Figma variable audit checklist
 
@@ -45,7 +45,7 @@
 - [ ] **Step 4: Configure Code Connect**
   Connect Figma components to exact exports in `apps/web/components/ui/*`; document any component whose API must change before implementation.
 - [ ] **Step 5: Validate design-source parity**
-  Compare Figma variables to `tokens.css`, run `npx pnpm@9.15.0 test -- apps/web/test/tokens-contrast.test.ts`, and record any approved deviations in ADR-003.
+  Compare Figma variables to `tokens.css`, run `npx pnpm@9.15.0 test -- apps/web/test/tokens-contrast.test.ts`, and record account ownership, migration and approved source deviations in ADR-004.
 - [ ] **Step 6: Review six-screen prototype**
   Capture desktop and mobile frames, verify the full create-to-public flow is clickable, then update docs-sync files and commit the design-source baseline.
 
@@ -192,4 +192,3 @@
 - Task 5 depends on Public RO contracts but can be deployed behind the scoped curator role.
 - Task 6 is the final integration and quality gate; it must not be used to hide missing behavior from Tasks 2–5.
 - Existing Task Master items 10–12 map primarily to Tasks 1, 4 and 6; update their details/status rather than creating duplicate tasks.
-

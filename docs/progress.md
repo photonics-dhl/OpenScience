@@ -1,5 +1,13 @@
 # OpenScience (XGS) 进度日志
 
+## 2026-08-08（Codex MCP 修正）— 配置源对齐与 Figma 双账号迁移准备完成
+
+- **根因**：重启后当前会话仍无 Figma/shadcn/Task Master 工具；审计确认 `C:/Users/Mac/.codex/config.toml` 原有 `mcp_servers=0`，项目 `.mcp.json` 不会自动加载进 Codex Desktop。
+- **修正**：在 Codex `config.toml` 和项目 `.mcp.json` 对齐配置 10 个 MCP：semantic-scholar、github、mermaid、memory、context7、tavily-search、figma-temp、figma-primary、shadcn、task-master-ai；JSON/TOML 解析均通过。
+- **双 Figma**：两个 server 使用不同 `X-OpenScience-Figma-Profile` header，使 `mcp-remote` 按 URL+header 生成独立 OAuth 缓存；临时/长期账号凭据已按用户要求写入本机 `.env`，未读取或回显现有 `.env`，不入 Git。
+- **迁移决策**：新增 `docs/decisions/ADR-004-figma-account-ownership-and-migration.md`；长期账号为 canonical owner，临时账号只做过渡编辑，迁移采用目标 Team 移动/复制 + `.fig` 备份 + variables/components/prototype/Code Connect 对照验收。
+- **下一步**：再次重启 Codex，实际检查 10 MCP 工具；分别完成两个 Figma 浏览器 OAuth 并核对身份；工具前置齐全后才启动 subagent-driven Task 1。
+
 ## 2026-08-08（MCP 精简）— 保留产品工作流所需的 10 个 server，等待一次重启启用
 
 - **配置调整**：`.mcp.json` 从 11 个降至 10 个 server；移除与 `semantic-scholar` 重复的 `paper-search`，避免同类 academic MCP 重叠和上下文开销。

@@ -177,4 +177,3 @@ Figma 专业版开通后，先建立 variables、tokens、组件和响应式断�
 4. Editorial Curator 与 Ultrafast Science Collection。
 5. Hermes/Live2D 状态桥接、任务中心与高风险确认。
 6. 视觉回归、无障碍、媒体性能和生产验收。
-
