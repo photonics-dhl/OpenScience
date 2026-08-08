@@ -26,6 +26,7 @@
 - **Execution checkpoint:** 双 key 客户端、区域修复与安全 provenance 已完成；Figma `37:2` 视觉母版已建立。`openscience-observatory-v1.png` 被用户判定与项目风格不一致，根因是 prompt 违反 spec §11.2，让模型同时承担材料纹理与六节点产品语义。下一步先完成职责选择和三方案比较；不得导入 v1 或生成其视频版本。
 - **Approved responsibility reset:** 用户接受推荐项 A：下一张生成资产优先服务 Landing / Workspace 暗色主视觉。复用现有精确蓝色玻璃六面 RO 环作为原生前景；MiniMax 仅生成深墨科研空间、材料质感和受控光场，不生成节点、ID、SDF、轨迹、diff 或 UI。
 - **Approved composition:** 用户批准「证据汇入」：右侧原生精确 RO 环为品牌锚点，左侧研究材料沿蓝色路径汇入，橙色只表达一次版本变化。下一步分段确认布局、材料语言与验收门，再原地修订 prompt；确认前不得调用生成 API。
+- **Approved layout/layer boundary:** 16:9 四区布局为左侧 0–40% 文案留白、中部 38–62% 证据走廊、右侧 54–105% 原生 RO、底部 72–100% 收回 hero base。MiniMax 只负责空间/微纹理/光/反射；所有产品语义保持 Figma/SVG/HTML 原生。下一步确认材料与光线语言。
 - **Attempt 1 result:** worktree 内不存在 `.env`，Node 在发起 HTTP 前退出；无 API 请求、无费用、无 key 切换。恢复命令必须让 Node 直接加载主工作区 `E:/Miscellaneous/XGS/.env`，不得复制或打印该文件。
 - **Attempt 2 result/root cause:** Node 成功加载主工作区 `.env`，但客户端未匹配新 key1/key2 的变量命名，在本地配置校验阶段退出；仍无 API 请求或费用。下一步先用测试覆盖常见 `_1/_2`、`KEY1/KEY2` 别名，再做单次重试。
 - **Attempt 3 result/blocker:** 别名修复后请求已到达 MiniMax，返回 HTTP `200` + `base_resp.status_code=2049` (`invalid api key`)，槽位 `key1`。按策略认证错误不得切换 key2；未生成资产、未写 provenance、未继续重试。恢复条件是用户修正 key1 后重新执行同一版本化命令。
