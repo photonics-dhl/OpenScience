@@ -1,5 +1,14 @@
 # OpenScience (XGS) 进度日志
 
+## 2026-08-08（产品网页 Task 1 / Step 8 完成与 Figma 迁移门）— 组件获批，Step 9 暂停
+
+- **用户确认**：用户明确确认 Version Diff、Hermes Rail 与 Step 8 全量审计结果；实施计划 Step 8 已勾选完成。
+- **长期账号写入探针**：`figma-primary` 身份正确，并成功在长期账号目标 Team 创建空 Design 文件 `PBUlumyHBVXfMHgdopH0aB`，证明目标侧可以写入。该文件当前为空且仅作迁移探针，不是 canonical。
+- **阻塞根因**：长期账号访问过渡源 `rWS3seZaDMdlnSljqktMDp` 时官方 MCP 明确返回无 edit access；官方 MCP 不提供 share/duplicate/move/ownership-transfer，且不能以截图或扁平 SVG 保真迁移 variables/components/prototype。
+- **门禁**：Step 9 六屏原型暂停。需要源所有者在 Figma UI 将长期账号设为 Editor，再由长期账号 Move/Duplicate 到目标 Team；之后对照 6 pages、4 collections、85 variables、9 text styles、2 effect styles、12 sets、96 variants 与关键 master nodes。
+- **安全与范围**：未读取 `.env`，未打印密码/OAuth token，未删除或修改过渡源；空目标文件保留为可恢复探针。
+- **⏳ 下一步**：用户完成一次 Figma UI Editor 共享后通知本会话；先复核 edit，再完成 duplicate/move 与全量 parity，迁移通过前不继续设计。
+
 ## 2026-08-08（产品网页 Task 1 / Step 8 最后一批组件）— Version Diff、Hermes Rail 已建立，全量审计通过
 
 - **Figma 交付**：`02 Components` 新增 wrapper `86:7`；Version Diff `86:47`（Added/Removed/Changed × Paper/Dark 6 variants）、Hermes Rail `86:106`（Idle/Working/Approval/Complete × Paper/Dark 8 variants）。Hermes 与 Live2D 共用同一 intent/status/permission/version 模型。

@@ -9,7 +9,8 @@
 | `project_index.md` | 本索引 | 活文档 |
 | `.mcp.json` | 项目级 MCP 配置（kimi-code/Cursor）；2026-08-08 保持 10 个：`semantic-scholar`、`github`、`mermaid`、`memory`、`context7`、`tavily-search`、`figma-temp`、`figma-primary`、`shadcn`、`task-master-ai`；双 Figma 直接使用官方 remote URL，过渡期移除低价值 `fetch` | 活文档，**本机持有，已移出 git 跟踪**（2026-07-31） |
 | `.Codex/troubleshooting/issues.json` | 项目工具/MCP/API 故障的结构化问题库；含 issue-003 MiniMax image prompt 1500 字符本地契约缺口；不记录账号、密钥、OAuth URL 或 token | 活文档 |
-| [OpenScience Web Design System](https://www.figma.com/design/rWS3seZaDMdlnSljqktMDp) | 产品网页 Figma 过渡设计源；4 collections / 85 variables / 9 text styles / 2 effect styles 与六页结构已建立；Button 主集合已完成结构审计；`03 Patterns` v3 原生桌面 `60:7` 与移动 `60:8` 母版已获用户视觉批准，进入组件家族；长期账号获得 Edit/Full 并完成 ADR-004 验收后迁移为 canonical | Task 1 Step 8 in progress |
+| [OpenScience Web Design System — transitional](https://www.figma.com/design/rWS3seZaDMdlnSljqktMDp) | 产品网页 Figma 过渡设计源；6 pages、4 collections / 85 variables / 9 text styles / 2 effect styles、12 component sets / 96 variants；v3 双尺寸母版与 Step 8 组件均获用户批准；长期账号仍无源文件 edit access | Sole design source pending migration |
+| [OpenScience Web Design System — migration probe](https://www.figma.com/design/PBUlumyHBVXfMHgdopH0aB) | `figma-primary` 在长期账号目标 Team 成功创建的空文件，用于证明写权限；不含设计内容，未通过 ADR-004 parity，不得作为 canonical 或供 Code Connect 使用 | Empty probe, not canonical |
 | `.vscode/mcp.json` | VS Code MCP 配置（task-master-ai 直连 node_modules 本地入口） | 活文档，**本机持有，不入库**（含 key） |
 | `.env` / `.env.example` | 密钥 / 密钥模板 | 只读，禁打印 |
 | `.gitignore` | git 忽略规则（含 .env） | 活文档 |

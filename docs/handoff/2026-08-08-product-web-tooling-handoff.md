@@ -1,6 +1,6 @@
 # Handoff — 2026-08-08 Product Web Tooling
 
-- **Current goal:** 执行产品网页计划 Task 1；v3 路线 1 双尺寸母版已获用户视觉确认，Step 7.7 完成，当前进入 Step 8 组件家族对账与构建；网页代码继续保持门禁。
+- **Current goal:** Task 1 Step 8 已获用户最终确认并完成；按用户要求，Step 9 暂停，先把 Figma 过渡源迁移到长期账号并通过 ADR-004 parity。
 - **Done:**
   - 产品设计 spec：`docs/specs/2026-08-08-openscience-product-web-design.md`。
   - 实施计划：`docs/plans/2026-08-08-openscience-product-web-plan.md`，用户选择 subagent-driven，但要求前置工具齐全后再执行。
@@ -40,9 +40,12 @@
   - 用户已明确确认 Step 8 第三批；Version Diff 与 Hermes Rail 最后一批解锁，随后进行 Step 8 全量组件审计。
   - Step 8 最后一批已完成：wrapper `86:7`，Version Diff `86:47`、Hermes Rail `86:106`；全量 `02 Components` 审计为 12 sets / 96 variants / 0 missing / 0 duplicate / 0 image fill / 0 placeholder。本地截图 `docs/design-assets/figma/2026-08-08-step8-change-hermes-v1.png` 已固化。
   - 颜色语义已收口：旧 Button specimen `29:8` 从橙色 `ro-node-1` 改为蓝色 `evidence-node`；余下 accent-diff owner 全部属于 diff/change。Step 8 仍等待最后一批用户确认，不提前标记完成。
+  - 用户已明确确认 Version Diff、Hermes Rail 与 Step 8 全量审计；计划 Step 8 已完成。
+  - 长期账号 `figma-primary` 已成功创建空目标文件 `PBUlumyHBVXfMHgdopH0aB`，证明目标 Team 写入可用；但长期账号访问过渡源时被官方 MCP 明确拒绝 edit。空目标只是 migration probe，不是 canonical。
+  - 官方 MCP 没有 share/duplicate/move/ownership-transfer 工具，且 20KB 输出限制使结构化跨文件克隆不具备保真性；禁止用截图/SVG 扁平化替代 variables/components/prototype 迁移。
 - **Constraints:** 不打印 `.env`；MCP 总数保持 ≤10；Figma 代码 token 是 canonical；`use_figma` 写入严格串行；每个组件完成后截图并由用户确认；长期账号仍是未来 canonical owner。
-- **Open risks:** 长期账号只有 starter/View；Button 的 Destructive/Icon 子集合尚未创建；Playwright 尚未作为项目依赖锁定；Figma 过渡文件仍待迁移。Figma MCP 后续写入继续严格串行。
-- **Next action:** 先让用户确认 Version Diff/Hermes Rail 最后一批截图；确认后勾选 Step 8 并进入 Step 9 六屏原型信息架构与画板搭建。Tabs code gap 与 domain implementation backlog 保留到代码阶段。不得提前修改网页代码或调用 MiniMax。
+- **Open risks:** 过渡源尚未向长期账号授予 Editor；空目标 probe 不是 canonical；Button 的 Destructive/Icon 子集合尚未创建；Playwright 尚未作为项目依赖锁定。Figma MCP 后续写入继续严格串行。
+- **Next action:** 用户在 Figma UI 将过渡源共享给长期账号并设为 Editor；随后复核 edit、由长期账号 Move/Duplicate 到目标 Team，并对照 6 pages / 4 collections / 85 variables / 9 text styles / 2 effect styles / 12 sets / 96 variants / master nodes / prototype links。通过前不启动 Step 9。
 - **Execution checkpoint:** 双 key 客户端、区域修复、安全 provenance 与 v2 prompt-file CLI 已完成；Figma `37:2` 视觉母版已建立。`openscience-observatory-v1.png` 被用户判定与项目风格不一致，根因是 prompt 违反 spec §11.2，让模型同时承担材料纹理与六节点产品语义。不得导入 v1 或生成其视频版本。
 - **v2 recovery result:** 旧 2013 长度问题已解决；`openscience-evidence-chamber-v2.png` 与 `.provenance.json` 已由 key1 中国区调用产出且 provenance 安全。视觉门失败，文件只作可追溯失败样本，不得进入 Figma/H3。下一次付费生成必须先批准新的 v3 方向和版本化输出名。
 - **Approved responsibility reset:** 用户接受推荐项 A：下一张生成资产优先服务 Landing / Workspace 暗色主视觉。复用现有精确蓝色玻璃六面 RO 环作为原生前景；MiniMax 仅生成深墨科研空间、材料质感和受控光场，不生成节点、ID、SDF、轨迹、diff 或 UI。
