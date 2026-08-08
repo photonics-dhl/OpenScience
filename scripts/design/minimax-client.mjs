@@ -1,5 +1,9 @@
-const IMAGE_GENERATION_URL = 'https://api.minimax.io/v1/image_generation';
 const IMAGE_MODEL = 'image-01';
+
+const IMAGE_GENERATION_URLS = {
+  cn: 'https://api.minimaxi.com/v1/image_generation',
+  global: 'https://api.minimax.io/v1/image_generation',
+};
 
 class RedactedMiniMaxError extends Error {
   constructor(message, details = {}) {
@@ -31,6 +35,14 @@ export function getAssetKeys(env) {
   return { key1, key2 };
 }
 
+export function getImageGenerationUrl(region) {
+  const url = IMAGE_GENERATION_URLS[region];
+  if (!url) {
+    throw new RedactedMiniMaxError('Invalid MiniMax region');
+  }
+  return url;
+}
+
 export function isQuotaExhausted(value) {
   const statusCode = value?.base_resp?.status_code ?? value?.minimaxStatusCode;
   return statusCode === 1008;
@@ -56,11 +68,14 @@ async function parseResponse(response) {
   }
 }
 
-export function createMiniMaxImageClient({ fetch }) {
+export function createMiniMaxImageClient({
+  fetch,
+  imageGenerationUrl = getImageGenerationUrl('global'),
+}) {
   async function generate({ aspectRatio, key, keySlot, prompt }) {
     let response;
     try {
-      response = await fetch(IMAGE_GENERATION_URL, {
+      response = await fetch(imageGenerationUrl, {
         body: JSON.stringify({
           aspect_ratio: aspectRatio,
           model: IMAGE_MODEL,

@@ -1,7 +1,11 @@
 import { mkdir, writeFile } from 'node:fs/promises';
 import { dirname, relative, resolve, sep } from 'node:path';
 
-import { createMiniMaxImageClient, getAssetKeys } from './minimax-client.mjs';
+import {
+  createMiniMaxImageClient,
+  getAssetKeys,
+  getImageGenerationUrl,
+} from './minimax-client.mjs';
 
 function readOption(name) {
   const index = process.argv.indexOf(name);
@@ -14,6 +18,14 @@ function requireOption(name) {
     throw new Error(`Missing required option: ${name}`);
   }
   return value;
+}
+
+function requireRegion() {
+  const region = requireOption('--region');
+  if (region !== 'cn' && region !== 'global') {
+    throw new Error('Invalid --region; expected cn or global');
+  }
+  return region;
 }
 
 function assertGeneratedAssetPath(outputPath) {
@@ -42,9 +54,11 @@ async function downloadImage(imageUrl) {
 async function main() {
   const outputPath = assertGeneratedAssetPath(requireOption('--output'));
   const prompt = requireOption('--prompt');
+  const region = requireRegion();
+  const imageGenerationUrl = getImageGenerationUrl(region);
   const aspectRatio = readOption('--aspect-ratio') ?? '16:9';
   const keys = getAssetKeys(process.env);
-  const client = createMiniMaxImageClient({ fetch: globalThis.fetch });
+  const client = createMiniMaxImageClient({ fetch: globalThis.fetch, imageGenerationUrl });
   const result = await client.generateWithFallback({ aspectRatio, prompt, ...keys });
   const image = await downloadImage(result.imageUrls[0]);
   const generatedAt = new Date().toISOString();
@@ -57,12 +71,14 @@ async function main() {
     `${JSON.stringify(
       {
         generatedAt,
+        host: new URL(imageGenerationUrl).host,
         imageUrl: result.imageUrls[0],
         intendedSurface: 'cross-surface Figma visual master',
         keySlot: result.keySlot,
         model: result.model,
         postProcessing: 'none',
         prompt,
+        region,
         requestId: result.requestId,
       },
       null,
@@ -71,7 +87,7 @@ async function main() {
     { flag: 'wx' },
   );
 
-  console.log(JSON.stringify({ outputPath, sidecarPath, ...result }));
+  console.log(JSON.stringify({ host: new URL(imageGenerationUrl).host, outputPath, region, sidecarPath, ...result }));
 }
 
 main().catch((error) => {

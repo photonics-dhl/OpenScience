@@ -4,6 +4,7 @@ import test from 'node:test';
 import {
   chooseAssetKey,
   createMiniMaxImageClient,
+  getImageGenerationUrl,
   getAssetKeys,
   isQuotaExhausted,
 } from './minimax-client.mjs';
@@ -93,6 +94,12 @@ test('isQuotaExhausted accepts only the MiniMax insufficient-balance status', ()
   assert.equal(isQuotaExhausted(new Error('network unavailable')), false);
 });
 
+test('getImageGenerationUrl maps the approved MiniMax regions', () => {
+  assert.equal(getImageGenerationUrl('cn'), 'https://api.minimaxi.com/v1/image_generation');
+  assert.equal(getImageGenerationUrl('global'), 'https://api.minimax.io/v1/image_generation');
+  assert.throws(() => getImageGenerationUrl('moon'), /Invalid MiniMax region/);
+});
+
 test('image client sends the constrained image request and returns redacted success data', async () => {
   const calls = [];
   const client = createMiniMaxImageClient({
@@ -131,6 +138,33 @@ test('image client sends the constrained image request and returns redacted succ
     response_format: 'url',
     n: 1,
   });
+});
+
+test('image client uses the caller-selected image-generation URL', async () => {
+  const calls = [];
+  const client = createMiniMaxImageClient({
+    fetch: async (url) => {
+      calls.push(url);
+      return new Response(
+        JSON.stringify({
+          base_resp: { status_code: 0 },
+          request_id: 'request-cn',
+          data: { image_urls: ['https://example.test/generated.png'] },
+        }),
+        { status: 200, headers: { 'content-type': 'application/json' } },
+      );
+    },
+    imageGenerationUrl: getImageGenerationUrl('cn'),
+  });
+
+  await client.generate({
+    aspectRatio: '16:9',
+    key: 'k1',
+    keySlot: 'key1',
+    prompt: 'scholarly material evidence trajectory',
+  });
+
+  assert.deepEqual(calls, ['https://api.minimaxi.com/v1/image_generation']);
 });
 
 test('image client switches from key1 to key2 only for MiniMax status 1008', async () => {
