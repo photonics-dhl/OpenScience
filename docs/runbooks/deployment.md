@@ -11,6 +11,7 @@
 - [ ] 巡检基线 `infra/scripts/checkup.sh` 无告警
 - [ ] 备份确认（`docs/runbooks/backup-restore.md`）
 - [ ] P1A-8 追加：API 反代 `infra/nginx/openscience.conf` 的 SSL 证书已签发（`~/.acme.sh`）
+- **Healthcheck note (2026-08-09)**：生产 API 使用 `node:22` 镜像，不含 `wget`；compose 已改用 Node 内置 `fetch` 请求 `/auth/me`，预期未登录状态 `401` 即为健康。
 
 ## 2. 执行步骤
 

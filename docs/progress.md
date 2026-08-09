@@ -1,5 +1,11 @@
 # OpenScience (XGS) 进度日志
 
+## 2026-08-09（生产部署前置修复）— API healthcheck runtime mismatch
+
+- **根因**：生产 `openscience-prod-api-1` 日志显示请求正常，宿主机 `curl http://127.0.0.1:3001/auth/me` 返回 `401`；容器 unhealthy 的唯一健康探针失败原因是 `node:22` 镜像没有 `wget`，而 compose healthcheck 使用了 `wget -qO-`。
+- **✅ 修复**：`infra/compose/docker-compose.prod.yml` 改为 API 容器内置 Node `fetch`，只有 `/auth/me` 返回 401 才判定 healthy；不改变 API 业务路由或认证策略。
+- **⏳ 下一步**：提交该生产修复后，使用部署 runbook 同步当前 release、全量 build、重启生产栈并验证 API healthy、Web、Nginx 和公网 HTTP 状态。
+
 ## 2026-08-09（产品网页可访问闭环）— Workspace overview 与协作 i18n 修复
 
 - **根因审计**：逐路 Playwright 发现 `/research-objects/[id]/workspace` 缺少 route，点击概览必然 404；协作消息把 next-intl 分段路径存成含点号的扁平 key，导致 `MISSING_MESSAGE` 与原始 key 暴露。公开页在无 API 时已使用 not-found/unavailable 状态，不是路由 404。

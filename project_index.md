@@ -236,7 +236,7 @@
 | `docs/decisions/ADR-001-target-architecture.md` | 目标架构决策：选择性抽取 Scholars Tea，按 Baseline 重建平台底座 | 活文档（已接受） |
 | `docs/decisions/ADR-002-agent-tooling-portability.md` | Agent 工具能力与可迁移性决策（项目内安装/密钥不入库/分阶段工具候选） | 活文档 |
 | `docs/decisions/ADR-003-admin-strong-auth.md` | 管理后台强认证决策：nginx basic_auth 双层 + TOTP 列上线路障（P1A-8） | 活文档 |
-| `docs/runbooks/deployment.md` | 部署 runbook（已填充：cloud-sync/迁移/seed/nginx/验证；deploy.sh 自动化 + DNS-01 证书已实证 2026-08-03） | 已填充 |
+| `docs/runbooks/deployment.md` | 部署 runbook（已填充：cloud-sync/迁移/seed/nginx/验证；deploy.sh 自动化 + DNS-01 证书已实证 2026-08-03；2026-08-09 补 API node:22 无 wget 的 healthcheck 说明） | 已填充 |
 | `docs/runbooks/backup-restore.md` | 备份与恢复 runbook（四节骨架，Phase 1A 填充） | 骨架 |
 | `docs/runbooks/incident.md` | 故障响应 runbook（四节骨架，Phase 1A 填充） | 骨架 |
 | `docs/runbooks/monitoring.md` | 监控面板 runbook（Netdata + vnStat，同域 /monitor/ /traffic/ 路径，2026-08-01） | 已上线 |
@@ -252,7 +252,7 @@
 | `infra/scripts/with-proxy.sh` | 代理兜底包装：隧道可用走 v2ray、失效回落直连（云上 `/usr/local/bin/with-proxy`，2026-08-01） | 已部署云上 |
 | `infra/scripts/proxy-tunnel.sh` / `proxy-tunnel.vbs` | 本机侧 SSH 反向隧道常驻（Windows 计划任务 `OpenScience-ProxyTunnel` 登录自启 + 断线重连，2026-08-01） | 已启用 |
 | `infra/scripts/deploy.sh` | 部署脚本 | 骨架，Phase 1A 填充 |
-| `infra/compose/` | `docker-compose.dev.yml` 开发栈（postgres:16/redis:7/minio + minio-init，端口仅 127.0.0.1，P1A-2）；`docker-compose.monitor.yml` 监控栈（netdata + vnstat，2026-08-01）；`docker-compose.prod.yml` 生产栈（data_net/app_net 分段，数据服务不绑公网，api node:22、web node:22，web 通过 `npm run start` 使用 apps/web 本地 next binary 启动，P1A-9） | dev 本机未起栈；监控栈已部署云上；生产栈已部署云上（2026-08-03） |
+| `infra/compose/` | `docker-compose.dev.yml` 开发栈（postgres:16/redis:7/minio + minio-init，端口仅 127.0.0.1，P1A-2）；`docker-compose.monitor.yml` 监控栈（netdata + vnstat，2026-08-01）；`docker-compose.prod.yml` 生产栈（data_net/app_net 分段，数据服务不绑公网，api node:22、web node:22，API healthcheck 使用 Node fetch 适配无 wget 镜像，web 通过 `npm run start` 使用 apps/web 本地 next binary 启动，P1A-9） | dev 本机未起栈；监控栈已部署云上；生产栈已部署云上（2026-08-03），待本轮修复部署 |
 | `infra/nginx/` | 反代配置：`portainer.conf`（portainer.428312321.xyz → 127.0.0.1:9443，LE 证书 + WebSocket，2026-07-31；2026-08-01 追加 /nav/ 导航页、/monitor/→Netdata、/traffic/→vnStat 账单页，basic_auth）+ `openscience.conf`（OpenScience.428312321.xyz → 127.0.0.1:3001，P1A-8：/admin basic_auth + XFF 透传） | 均已部署云上并启用（openscience.conf 2026-08-03） |
 | `infra/www/` | `nav/index.html` 服务器面板导航静态页（/var/www/nav，2026-08-01） | 已部署云上 |
 | `infra/sandbox/` | 沙箱配置占位（P1A-1） | 骨架 |
