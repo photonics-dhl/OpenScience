@@ -47,6 +47,7 @@ npx_stderr.txt
 
 # Playwright MCP 工具产物
 .playwright-mcp/
+test-results/
 
 # cloud-sync 服务器凭据（本机生成不入库，同 .mcp.json 模式）
 .cloud-sync-env
