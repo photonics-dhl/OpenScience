@@ -7,6 +7,7 @@
 - **TDD 证据**：`docker-compose.prod.test.mjs` 先因没有对象存储服务而红；新增仅 `data_net` 的 object-storage、`seaweed-data`、健康依赖和 API/worker S3 endpoint 后 1/1 通过。
 - **安全边界**：无宿主端口；access/secret 仅服务器生成；测试账号密码未进入命令、脚本或日志；首次失败产生的测试 RO 保留并明确标记，未做未经批准的删除。
 - **下一步**：同步服务器，备份 `.env.prod` 后生成缺失 S3 Secret，拉取并记录镜像 digest，验证 compose/health/put-head-get，再重跑真实 ingestion。
+- **服务器准备证据**：`.env.prod` 可恢复备份存在，S3 必需字段 3/3（值未输出）；SeaweedFS 4.41 已拉取并固定 digest `sha256:43b768...d771d`，服务器 `docker compose config --quiet` 通过。
 
 ## 2026-08-09（生产 parser 闭环验收）— ⏳ 真实 fixture 本地门禁已通过
 

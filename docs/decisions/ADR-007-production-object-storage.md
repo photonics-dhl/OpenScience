@@ -15,7 +15,7 @@
 2. 服务仅加入 `data_net`，不映射宿主端口；API 与 agent-worker 通过 `object-storage:8333` 访问。
 3. 数据写入独立命名卷 `seaweed-data`；S3 access key、secret key 与 bucket 只在服务器 `.env.prod` 生成，不进入 Git、日志或 Agent 上下文。
 4. 业务层继续复用 `packages/storage` 的 S3-compatible adapter。现有类名 `MinioStorageAdapter` 是 SDK 实现细节，不代表生产服务必须是 MinIO；后续重命名应作为无行为变更的独立重构。
-5. 镜像先固定版本，再在服务器拉取后记录 registry digest；上线必须通过 compose config、容器 health、put/head/get、真实 ingestion 和备份恢复门禁。
+5. 镜像固定为 `4.41@sha256:43b768cd62b00d132439cda881b93fd1adebf1b315e996e794087743821d771d`；上线必须通过 compose config、容器 health、put/head/get、真实 ingestion 和备份恢复门禁。
 
 ## Alternatives considered
 
