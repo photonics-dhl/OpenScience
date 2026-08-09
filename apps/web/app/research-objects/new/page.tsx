@@ -8,7 +8,7 @@ import { useEffect, useState, type FormEvent } from 'react';
 
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { createResearchObjectWithMaterials, listMyWorkspaces, type WorkspaceApi } from '@/lib/api';
+import { createResearchObjectWithMaterials, listMyWorkspaces, type MaterialImportCheckpoint, type WorkspaceApi } from '@/lib/api';
 
 export default function NewResearchObjectPage() {
   const t = useTranslations('createResearch');
@@ -19,6 +19,7 @@ export default function NewResearchObjectPage() {
   const [workspaceId, setWorkspaceId] = useState('');
   const [title, setTitle] = useState('');
   const [materials, setMaterials] = useState<File[]>([]);
+  const [importCheckpoint, setImportCheckpoint] = useState<MaterialImportCheckpoint>();
   const [pending, setPending] = useState(false);
   const [error, setError] = useState('');
 
@@ -44,7 +45,14 @@ export default function NewResearchObjectPage() {
         setError(t('materialsRequired'));
         return;
       }
-      const result = await createResearchObjectWithMaterials({ workspaceId, title }, materials);
+      const result = await createResearchObjectWithMaterials(
+        { workspaceId, title },
+        materials,
+        undefined,
+        importCheckpoint,
+        setImportCheckpoint,
+      );
+      setImportCheckpoint(undefined);
       router.push(`/research-objects/${result.researchObject.id}/edit`);
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : t('error'));

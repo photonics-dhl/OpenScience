@@ -79,6 +79,7 @@ import {
   getDashboardOverview,
   loginWithPassword,
   requestSignupCode,
+  planMaterialLogicalPaths,
   safeReturnTo,
 } from '../lib/api';
 import { LoginForm } from '../components/auth/LoginForm';
@@ -122,6 +123,44 @@ describe('auth API contract', () => {
       }),
       expect.any(String),
     );
+  });
+
+  it('deterministically disambiguates duplicate source filenames before upload', () => {
+    const files = [new File(['a'], 'paper.pdf'), new File(['b'], 'paper.pdf'), new File(['c'], 'paper (2).pdf')];
+    expect(planMaterialLogicalPaths(files)).toEqual(['paper.pdf', 'paper (2).pdf', 'paper (2) (2).pdf']);
+  });
+
+  it('resumes from the last import checkpoint without creating a second RO or re-uploading completed files', async () => {
+    const materials = [new File(['paper'], 'paper.md'), new File(['figure'], 'figure.png')];
+    const create = vi.fn().mockResolvedValue({ researchObject: { id: 'ro-1', workspaceId: 'ws-1', version: 1 } });
+    const firstUpload = vi
+      .fn()
+      .mockResolvedValueOnce({ logicalPath: 'paper.md', artifactId: 'artifact-1' })
+      .mockRejectedValueOnce(new Error('network interrupted'));
+    let checkpoint: Parameters<typeof createResearchObjectWithMaterials>[3] = undefined;
+
+    await expect(createResearchObjectWithMaterials(
+      { workspaceId: 'ws-1', title: 'Recovered study' },
+      materials,
+      { create, upload: firstUpload, commit: vi.fn() },
+      undefined,
+      (next) => { checkpoint = next; },
+    )).rejects.toThrow('network interrupted');
+
+    const resumedUpload = vi.fn().mockResolvedValue({ logicalPath: 'figure.png', artifactId: 'artifact-2' });
+    const commit = vi.fn().mockResolvedValue({ commit: { commitId: 'commit-1' } });
+    await createResearchObjectWithMaterials(
+      { workspaceId: 'ws-1', title: 'Recovered study' },
+      materials,
+      { create, upload: resumedUpload, commit },
+      checkpoint,
+      (next) => { checkpoint = next; },
+    );
+
+    expect(create).toHaveBeenCalledTimes(1);
+    expect(resumedUpload).toHaveBeenCalledTimes(1);
+    expect(resumedUpload).toHaveBeenCalledWith('ws-1', materials[1], 'figure.png');
+    expect(commit).toHaveBeenCalledOnce();
   });
 
   it('loads dashboard research and actionable tasks from real API routes', async () => {

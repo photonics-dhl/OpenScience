@@ -1,12 +1,13 @@
 # OpenScience (XGS) 进度日志
 
-## 2026-08-09（研究者导入闭环 Task 2）— Fix round 2，等待最终复审
+## 2026-08-09（研究者导入闭环 Task 2）— Fix round 3，等待最终复审
 
 - **资料入口闭环**：`mode=import` 现在强制选择至少一份资料；创建 RO 后逐文件走现有受 CSRF 保护的 `/artifacts/upload`，再把全部 Artifact 引用写入首个不可变 Commit。`mode=blank` 不再显示伪上传控件。桌面/移动 Playwright 均实际选择 Markdown + PNG，并断言两次上传和 Commit 引用，4/4 通过。
 - **注册反枚举**：已验证账号与未注册账号统一执行 challenge + 邮件投递路径；SMTP 失败失效 challenge、写脱敏审计并仍返回通用 202，避免通过状态码或明显分支时延枚举账号。并发/失败安全 auth focused 23/23。
 - **真实跨进程证据**：新增独立 Playwright 门禁，启动编译后的 Fastify auth 路由和真实 Next dev server，经 `/api` rewrite 完成请求验证码、确认注册、会话 Cookie 与 `/auth/me`，1/1 通过，不再以 route mock 代替前后端契约。
 - **迁移前向安全**：active challenge partial unique index 从原 signup table migration 拆为独立 `20260809025000_signup_challenge_active_unique`，即使某环境已应用早期 migration 22，也能通过后续 deploy 获得约束。
-- **状态**：Task 2 仍未自行标记 complete；等待同一独立审查者对 fix round 2 做 scoped re-review。Task 3 实现继续暂停。
+- **修复复审遗留**：导入路径现在对同名文件做确定性消歧；页面保留 import checkpoint、已创建 RO、已上传 Artifact 与稳定 create/commit 幂等键，网络中断重试不会创建第二个 RO 或重复上传已完成文件。迁移 23 先按邮箱保留最新 active challenge、消费其余重复行，再建 partial unique index；新增 SQL 顺序门禁测试。
+- **状态**：Task 2 仍未自行标记 complete；等待同一独立审查者对 fix round 3 做 scoped re-review。Task 3 实现继续暂停。
 
 ## 2026-08-09（研究者导入闭环 Task 2 复审）— 撤销完成标记，进入修复轮次
 

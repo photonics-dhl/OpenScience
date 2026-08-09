@@ -218,12 +218,12 @@ export async function listMyWorkspaces(): Promise<WorkspaceApi[]> {
   return result.workspaces;
 }
 
-export async function createResearchObject(input: { workspaceId: string; title: string }): Promise<{
+export async function createResearchObject(input: { workspaceId: string; title: string }, idempotencyKey = crypto.randomUUID()): Promise<{
   researchObject: { id: string; workspaceId: string; version: number };
 }> {
   return request('/api/research-objects', {
     method: 'POST',
-    headers: { 'idempotency-key': crypto.randomUUID() },
+    headers: { 'idempotency-key': idempotencyKey },
     body: JSON.stringify(input),
   });
 }
@@ -232,13 +232,14 @@ export async function createResearchObject(input: { workspaceId: string; title: 
 export async function uploadArtifactFile(
   workspaceId: string,
   file: File,
+  logicalPath = file.name,
   onProgress?: (percent: number) => void,
 ): Promise<ArtifactReference> {
   const xhr = new XMLHttpRequest();
   await prepareProtectedXhr(xhr, 'POST', '/api/artifacts/upload');
   const body = new FormData();
   body.append('workspaceId', workspaceId);
-  body.append('logicalPath', file.name);
+  body.append('logicalPath', logicalPath);
   body.append('file', file, file.name);
 
   return new Promise((resolve, reject) => {
@@ -271,8 +272,40 @@ const EMPTY_SDF_CORE: SdfCore = {
 
 interface MaterialImportDeps {
   create: typeof createResearchObject;
-  upload: (workspaceId: string, file: File) => Promise<ArtifactReference>;
+  upload: (workspaceId: string, file: File, logicalPath: string) => Promise<ArtifactReference>;
   commit: typeof createCommit;
+}
+
+export interface MaterialImportCheckpoint {
+  importId: string;
+  workspaceId: string;
+  title: string;
+  researchObject?: { id: string; workspaceId: string; version: number };
+  uploaded: Array<ArtifactReference & { fingerprint: string }>;
+}
+
+function splitExtension(filename: string): { stem: string; extension: string } {
+  const dot = filename.lastIndexOf('.');
+  return dot > 0 ? { stem: filename.slice(0, dot), extension: filename.slice(dot) } : { stem: filename, extension: '' };
+}
+
+/** Produce manifest-safe, stable paths even when selected files share a basename. */
+export function planMaterialLogicalPaths(materials: readonly File[]): string[] {
+  const used = new Set<string>();
+  return materials.map((file) => {
+    const original = file.name;
+    if (!used.has(original)) { used.add(original); return original; }
+    const { stem, extension } = splitExtension(original);
+    let suffix = 2;
+    let candidate = `${stem} (${suffix})${extension}`;
+    while (used.has(candidate)) candidate = `${stem} (${++suffix})${extension}`;
+    used.add(candidate);
+    return candidate;
+  });
+}
+
+function materialFingerprint(file: File): string {
+  return `${file.size}:${file.lastModified}:${file.type}`;
 }
 
 /** Create an RO and persist every selected source file in its first immutable commit. */
@@ -280,15 +313,41 @@ export async function createResearchObjectWithMaterials(
   input: { workspaceId: string; title: string },
   materials: readonly File[],
   deps: MaterialImportDeps = { create: createResearchObject, upload: uploadArtifactFile, commit: createCommit },
+  prior?: MaterialImportCheckpoint,
+  onCheckpoint?: (checkpoint: MaterialImportCheckpoint) => void,
 ): Promise<{ researchObject: { id: string; workspaceId: string; version: number } }> {
-  const created = await deps.create(input);
+  const matchesPrior = prior?.workspaceId === input.workspaceId && prior.title === input.title;
+  let checkpoint: MaterialImportCheckpoint = matchesPrior
+    ? { ...prior, uploaded: [...prior.uploaded] }
+    : { importId: crypto.randomUUID(), workspaceId: input.workspaceId, title: input.title, uploaded: [] };
+  if (!checkpoint.researchObject) {
+    const created = await deps.create(input, `${checkpoint.importId}:create`);
+    checkpoint = { ...checkpoint, researchObject: created.researchObject };
+    onCheckpoint?.(checkpoint);
+  }
+  const researchObject = checkpoint.researchObject;
+  if (!researchObject) throw new Error('Material import checkpoint is missing its research object');
+  const created = { researchObject };
   if (materials.length === 0) return created;
+  const logicalPaths = planMaterialLogicalPaths(materials);
   const artifacts: ArtifactReference[] = [];
-  for (const file of materials) artifacts.push(await deps.upload(input.workspaceId, file));
+  for (const [index, file] of materials.entries()) {
+    const logicalPath = logicalPaths[index];
+    const fingerprint = materialFingerprint(file);
+    const completed = checkpoint.uploaded.find((item) => item.logicalPath === logicalPath && item.fingerprint === fingerprint);
+    if (completed) {
+      artifacts.push({ logicalPath: completed.logicalPath, artifactId: completed.artifactId });
+      continue;
+    }
+    const uploaded = await deps.upload(input.workspaceId, file, logicalPath);
+    artifacts.push(uploaded);
+    checkpoint = { ...checkpoint, uploaded: [...checkpoint.uploaded, { ...uploaded, logicalPath, fingerprint }] };
+    onCheckpoint?.(checkpoint);
+  }
   await deps.commit(
     created.researchObject.id,
     { message: `Import ${materials.length} source material${materials.length === 1 ? '' : 's'}`, version: created.researchObject.version, sdfCore: EMPTY_SDF_CORE, artifacts },
-    crypto.randomUUID(),
+    `${checkpoint.importId}:commit`,
   );
   return created;
 }
