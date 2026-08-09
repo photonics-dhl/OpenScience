@@ -44,6 +44,18 @@ export function registerAccount(input: {
   });
 }
 
+export function requestSignupCode(input: { email: string; displayName: string }) {
+  return apiRequest<{ ok: boolean }>('/api/auth/request-signup-code', {
+    method: 'POST', body: JSON.stringify(input),
+  });
+}
+
+export function confirmSignup(input: { email: string; displayName: string; code: string; password: string }) {
+  return apiRequest<{ userId: string; status: string }>('/api/auth/confirm-signup', {
+    method: 'POST', body: JSON.stringify(input),
+  });
+}
+
 export function verifyAccount(input: { email: string; code: string }) {
   return apiRequest<{ userId: string; status: string }>('/api/auth/verify-email', {
     method: 'POST',

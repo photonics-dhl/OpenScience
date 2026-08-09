@@ -1566,6 +1566,13 @@ body {
 .auth-form { width:min(100%,460px); }
 .auth-form__pair { display:grid; grid-template-columns:1fr 1fr; gap:14px; }
 .auth-form__pair label { min-width:0; }
+.auth-stepper { display:flex; gap:18px; margin:2px 0 20px; color:#64748b; font:600 .68rem var(--font-ui); letter-spacing:.08em; text-transform:uppercase; }
+.auth-stepper span { padding-bottom:8px; border-bottom:1px solid rgba(148,163,184,.22); }
+.auth-stepper .is-active { color:#dbeafe; border-color:#5f95ff; }
+.auth-stepper .is-done { color:#8db4ff; }
+.auth-email-chip { display:flex; align-items:center; justify-content:space-between; gap:14px; padding:12px 14px; border:1px solid rgba(120,160,225,.28); border-radius:10px; background:rgba(34,72,130,.16); color:#dbeafe; font:.82rem var(--font-ui); }
+.auth-email-chip button,.auth-link-button { border:0; background:none; color:#8db4ff; cursor:pointer; font:600 .76rem var(--font-ui); }
+.auth-link-button { width:max-content; margin-top:-8px; }
 .auth-form--register .auth-form__heading,
 .auth-form--register > label:first-of-type,
 .auth-form--register > .auth-field-help,

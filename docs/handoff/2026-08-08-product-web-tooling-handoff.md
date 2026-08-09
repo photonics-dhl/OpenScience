@@ -1,5 +1,13 @@
 # Handoff — 2026-08-08 Product Web Tooling
 
+## 2026-08-09 — 验证码注册切片（当前交接）
+
+- **状态**：代码与本地验证完成，尚未部署本轮改动。
+- **已完成**：公共注册从邀请码改为邮箱验证码两步流程；新增 `SignupChallenge` 数据模型/迁移、API 两端点、Web 两步表单与中英文消息；兼容保留旧邀请码 `/auth/register`。
+- **安全约束**：请求验证码接口对已存在邮箱保持 202；challenge 只保存哈希，含 TTL、发送冷却、错误尝试锁定、消费标记；邮件异常映射为 `VERIFICATION_DELIVERY_FAILED`。
+- **验证证据**：`@openscience/auth` focused 20/20、Web 17 files/85 tests、全仓 `build`、`docs:lint` 0、`audit:docs-sync` 通过。
+- **待执行**：`cloud-sync` → ECS 全量 install/build → API 容器内执行迁移（显式 DATABASE_URL）→ compose `--force-recreate` → 公网路由 smoke。不得在生产执行 destructive integration suite；不读取或打印 `.env`。
+
 - **Current goal:** 执行 `docs/plans/2026-08-09-product-auth-create-flow-plan.md`，先完成同源 API/CSRF、身份、真实 Dashboard 与首个 RO 生产闭环，再继续产品网页 Task 3–6。
 - **Production status:** Release `3b5a34e` 已部署并通过公网验收；API healthcheck healthy，Web 新容器已 force-recreate。
 - **Production gate:** 部署前已定位 API unhealthy 根因：compose healthcheck 调用镜像不存在的 wget；当前工作树已改为 Node fetch，待提交并按 runbook 部署。

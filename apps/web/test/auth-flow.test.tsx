@@ -40,15 +40,15 @@ describe('identity surfaces', () => {
     expect(markup).toContain('aria-live="polite"');
   });
 
-  it('requires invitation identity and explains the password policy', async () => {
+  it('offers email-code registration and explains the password policy', async () => {
     const { default: RegisterForm } = await import('../components/auth/RegisterForm');
     const markup = renderToStaticMarkup(createElement(RegisterForm, { nextPath: '/research-objects/new' }));
 
     expect(markup).toContain('data-auth-form="register"');
-    expect(markup).toContain('name="invitationCode"');
     expect(markup).toContain('name="displayName"');
-    expect(markup).toContain('autoComplete="new-password"');
-    expect(markup).toContain('passwordHelp');
+    expect(markup).toContain('name="email"');
+    expect(markup).toContain('requestCode');
+    expect(markup).toContain('steps.request');
     expect(markup).toContain('href="/login?next=%2Fresearch-objects%2Fnew"');
   });
 

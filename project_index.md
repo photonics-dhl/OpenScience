@@ -267,7 +267,7 @@
 | `infra/nginx/` | 反代配置：`portainer.conf`（portainer.428312321.xyz → 127.0.0.1:9443，LE 证书 + WebSocket，2026-07-31；2026-08-01 追加 /nav/ 导航页、/monitor/→Netdata、/traffic/→vnStat 账单页，basic_auth）+ `openscience.conf`（OpenScience.428312321.xyz → 127.0.0.1:3001，P1A-8：/admin basic_auth + XFF 透传；`/api/` strip-prefix） | 线上为 3b5a34e；strip-prefix 修复 1ab4b6d 待身份切片部署 |
 | `infra/www/` | `nav/index.html` 服务器面板导航静态页（/var/www/nav，2026-08-01） | 已部署云上 |
 | `infra/sandbox/` | 沙箱配置占位（P1A-1） | 骨架 |
-| `infra/migrations/` | Prisma 迁移 1–22（含 `20260809010000_ro_create_idempotency`：research_objects.idempotency_key，可回滚；此前 1–21 保持不变） | 22 已写入，待本地/生产迁移验收 |
+| `infra/migrations/` | Prisma 迁移 1–23（含 `20260809010000_ro_create_idempotency` 与 `20260809020000_signup_challenges`；均可回滚） | 23 已写入，待服务器执行 |
 | `infra/schema.prisma` | Prisma schema（`app_meta` 基线模型，P1A-2；2026-08-06 补 `SandboxJob`/`SandboxArtifact`/`SandboxJobStatus`，对齐迁移 20/21 DDL，P1E） | 已实现 |
 
 ## .agents/skills/（项目级 Skills，Spec §20.3）
