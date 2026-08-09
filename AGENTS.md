@@ -66,6 +66,11 @@ OpenScience：AI 时代科研基础设施平台（Research Object / SDF / 预印
 - 密钥只来自本机 `.env` 或服务器 Secret；仓库只提交 `.env.example`/模板，不提交真实 key
 - 新增/移除工具能力必须登记 `project_index.md`；影响流程时更新 AGENTS 或 ADR（见 `docs/decisions/ADR-002-agent-tooling-portability.md`）
 
+## Deployment Acceptance Rule
+
+- 有部署目标的功能优先在服务器完成最终部署与验收；本地用于代码编写、单元/构建门禁和安全预检，不能以本地通过替代服务器运行证据。
+- 服务器是生产功能的最终应用场景；交付证据至少包含服务器 build、迁移状态、目标容器状态、运行时依赖加载和公网/内网健康检查。
+
 ## Index Maintenance Rules
 - 创建/修改/移动文件后更新 `project_index.md`
 

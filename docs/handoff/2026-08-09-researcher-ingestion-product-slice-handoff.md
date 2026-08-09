@@ -6,7 +6,7 @@
 - **Constraints:** 不读取/打印 `.env`；代码 token 为 canonical；不在 Task 1 实现 Auth、Dashboard、ingestion API、Hermes 业务页或 Workspace。
 - **Open risks:** 迁移 22–25 均未部署；Task 3 尚存在实际 MIME/恶意扫描与 extractor payload 漂移；隔离 integration 尚未实跑。原 integration teardown 已改为隔离数据库守卫+按测试用户清理，禁止连接生产库执行。浏览器仍有既存 next-intl dotted-key 警告；Code Connect 仍受套餐门禁。
 - **Next action:** 先关闭 Task 3 安全上传阻断，再实现可恢复 dispatch + worker 原子 claim 和真实 Artifact 多格式解析；新一轮独立复审通过后才允许云上备份、apply 迁移 22–25 与隔离 integration。
-- **Deployment checkpoint:** server sync/build was attempted after explicit deployment request. New worker code/dependencies reached `/opt/openscience`, but production containers and migrations remain unchanged because stale source files from older releases break Next build. A clean, backed-up release-directory switch requires explicit authorization before moving the current server code tree.
+- **Deployment checkpoint:** clean server release switch completed after explicit authorization. Previous code is recoverable at `/opt/openscience-backup-20260809-2218`; database backup was created before applying the remaining migrations. API/Web/agent-worker are running; parser runtime loaded in the worker container; public home=200 and unauthenticated auth=401.
 
 Task 3 初版 hardening 已加入 batch request digest、multipart truncated 拒绝和 retry 原子 claim，但深度复审证明当前实现不可发布。Hermes Session/Task 幂等重放的 user/session/kind/payload 绑定已用红绿测试修复；其余阻断见 progress 顶部，migration 25 保持未部署。
 
