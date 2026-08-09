@@ -76,6 +76,16 @@ describe('getResearchObject', () => {
     expect(rows.map((row) => row.title)).toEqual(['Second', 'First']);
   });
 
+  it('相同幂等键重放 → 返回同一 RO 且不重复创建', async () => {
+    const { deps, db, user } = makeDeps();
+    const input = { workspaceId: 'ws-1', userId: user.id, title: 'Replay safe', idempotencyKey: 'import-1:create' };
+    const first = await createResearchObject(deps, input);
+    const replay = await createResearchObject(deps, input);
+    expect(replay.id).toBe(first.id);
+    expect(db.researchObjects).toHaveLength(1);
+    expect(db.sdfDocuments).toHaveLength(1);
+  });
+
   it('成员查详情（RO + core + nodes）', async () => {
     const { deps, user } = makeDeps();
     const ro = await createResearchObject(deps, { workspaceId: 'ws-1', userId: user.id, title: 'Detail' });

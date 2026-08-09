@@ -253,7 +253,7 @@ export function createFakePrisma(): { prisma: PrismaClient; db: FakeDb } {
         return rows.slice(0, take ?? rows.length);
       },
       findUnique: async ({ where, include }: any) => {
-        const ro = db.researchObjects.find((r) => r.id === where.id) ?? null;
+        const ro = db.researchObjects.find((r) => where.id ? r.id === where.id : r.idempotencyKey === where.idempotencyKey) ?? null;
         if (!ro || !include?.sdfDocument) return ro;
         const doc = db.sdfDocuments.find((d) => d.researchObjectId === ro.id);
         return { ...ro, sdfDocument: doc ? { ...doc, nodes: db.sdfNodes.filter((n) => n.sdfDocumentId === doc.id) } : null };
@@ -262,7 +262,7 @@ export function createFakePrisma(): { prisma: PrismaClient; db: FakeDb } {
         const row = {
           id: nextId(), status: 'draft', visibility: 'private', version: 1,
           createdAt: new Date(), updatedAt: new Date(),
-          workspaceId: data.workspaceId, title: data.title, createdBy: data.createdBy,
+          workspaceId: data.workspaceId, title: data.title, createdBy: data.createdBy, idempotencyKey: data.idempotencyKey,
         };
         db.researchObjects.push(row);
         if (data.sdfDocument?.create) {
@@ -332,7 +332,7 @@ export function createFakePrisma(): { prisma: PrismaClient; db: FakeDb } {
     },
     artifact: {
       findUnique: async ({ where, include }: any) => {
-        const row = db.artifacts.find((a) => a.id === where.id) ?? null;
+        const row = db.artifacts.find((a) => where.id ? a.id === where.id : a.idempotencyKey === where.idempotencyKey) ?? null;
         if (!row || !include?.blob) return row;
         return { ...row, blob: db.blobs.find((b) => b.sha256 === row.blobSha256) ?? null };
       },

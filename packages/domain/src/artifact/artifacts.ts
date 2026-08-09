@@ -22,6 +22,7 @@ export interface CreateArtifactInput {
   mimeType?: string;
   uploadedBy: string;
   workspaceId: string;
+  idempotencyKey?: string;
 }
 
 export interface CreateArtifactResult {
@@ -57,6 +58,23 @@ export async function createArtifact(
   await requireMembership(deps, input.workspaceId, input.uploadedBy);
 
   const logicalPath = normalizeLogicalPath(input.logicalPath);
+
+  if (input.idempotencyKey) {
+    const existing = await deps.prisma.artifact.findUnique({ where: { idempotencyKey: input.idempotencyKey } });
+    if (existing) {
+      if (existing.workspaceId !== input.workspaceId || existing.uploadedBy !== input.uploadedBy || existing.logicalPath !== logicalPath) {
+        throw new ArtifactError('VALIDATION_ERROR', '幂等键已用于其他请求');
+      }
+      return {
+        artifactId: existing.id,
+        logicalPath: existing.logicalPath,
+        mimeType: existing.mimeType,
+        size: Number(existing.size),
+        blobSha256: existing.blobSha256,
+        alreadyExists: true,
+      };
+    }
+  }
 
   // 统一先转 Buffer（P1B-3 小文件单次上传）：MIME 检测会消费流，后续 putBlob 复用同一 buffer 避免读空流。
   const content = Buffer.isBuffer(input.content) ? input.content : await streamToBuffer(input.content);
@@ -94,6 +112,7 @@ export async function createArtifact(
         blobSha256: blob.sha256,
         uploadedBy: input.uploadedBy,
         workspaceId: input.workspaceId,
+        idempotencyKey: input.idempotencyKey,
       },
     });
     await recordAudit(

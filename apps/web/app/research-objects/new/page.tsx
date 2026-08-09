@@ -10,6 +10,8 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { createResearchObjectWithMaterials, listMyWorkspaces, type MaterialImportCheckpoint, type WorkspaceApi } from '@/lib/api';
 
+const IMPORT_CHECKPOINT_KEY = 'openscience.material-import-checkpoint';
+
 export default function NewResearchObjectPage() {
   const t = useTranslations('createResearch');
   const router = useRouter();
@@ -35,6 +37,20 @@ export default function NewResearchObjectPage() {
     return () => { active = false; };
   }, [t]);
 
+  useEffect(() => {
+    try {
+      const saved = window.localStorage.getItem(IMPORT_CHECKPOINT_KEY);
+      if (saved) setImportCheckpoint(JSON.parse(saved) as MaterialImportCheckpoint);
+    } catch {
+      window.localStorage.removeItem(IMPORT_CHECKPOINT_KEY);
+    }
+  }, []);
+
+  function persistCheckpoint(checkpoint: MaterialImportCheckpoint) {
+    setImportCheckpoint(checkpoint);
+    window.localStorage.setItem(IMPORT_CHECKPOINT_KEY, JSON.stringify(checkpoint));
+  }
+
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!workspaceId) return;
@@ -50,9 +66,10 @@ export default function NewResearchObjectPage() {
         materials,
         undefined,
         importCheckpoint,
-        setImportCheckpoint,
+        persistCheckpoint,
       );
       setImportCheckpoint(undefined);
+      window.localStorage.removeItem(IMPORT_CHECKPOINT_KEY);
       router.push(`/research-objects/${result.researchObject.id}/edit`);
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : t('error'));

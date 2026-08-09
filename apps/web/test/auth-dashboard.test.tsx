@@ -159,7 +159,7 @@ describe('auth API contract', () => {
 
     expect(create).toHaveBeenCalledTimes(1);
     expect(resumedUpload).toHaveBeenCalledTimes(1);
-    expect(resumedUpload).toHaveBeenCalledWith('ws-1', materials[1], 'figure.png');
+    expect(resumedUpload).toHaveBeenCalledWith('ws-1', materials[1], 'figure.png', expect.stringMatching(/:upload:1$/));
     expect(commit).toHaveBeenCalledOnce();
   });
 

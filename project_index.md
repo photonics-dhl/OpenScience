@@ -242,7 +242,7 @@
 | `infra/nginx/` | 反代配置：`portainer.conf`（portainer.428312321.xyz → 127.0.0.1:9443，LE 证书 + WebSocket，2026-07-31；2026-08-01 追加 /nav/ 导航页、/monitor/→Netdata、/traffic/→vnStat 账单页，basic_auth）+ `openscience.conf`（OpenScience.428312321.xyz → 127.0.0.1:3001，P1A-8：/admin basic_auth + XFF 透传） | 均已部署云上并启用（openscience.conf 2026-08-03） |
 | `infra/www/` | `nav/index.html` 服务器面板导航静态页（/var/www/nav，2026-08-01） | 已部署云上 |
 | `infra/sandbox/` | 沙箱配置占位（P1A-1） | 骨架 |
-| `infra/migrations/` | Prisma 迁移 1–23（既有 1–21 + `20260809020000_signup_challenges` 挑战表 + `20260809025000_signup_challenge_active_unique` 单 active challenge 前向约束），各附 rollback.sql | 迁移 1–21 已云上 deploy；22–23 待本切片部署 |
+| `infra/migrations/` | Prisma 迁移 1–24（既有 1–21 + signup challenge 两迁移 + `20260809033000_ingestion_idempotency` RO/Artifact 重放安全），各附 rollback.sql | 迁移 1–21 已云上 deploy；22–24 待本切片部署 |
 | `infra/schema.prisma` | Prisma schema（`app_meta` 基线模型，P1A-2；2026-08-06 补 `SandboxJob`/`SandboxArtifact`/`SandboxJobStatus`，对齐迁移 20/21 DDL，P1E） | 已实现 |
 
 ## .agents/skills/（项目级 Skills，Spec §20.3）

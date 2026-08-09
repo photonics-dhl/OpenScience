@@ -11,6 +11,7 @@ export interface CreateResearchObjectInput {
   workspaceId: string;
   userId: string;
   title: string;
+  idempotencyKey?: string;
   /** 可选初始 SDF core（缺省用空六字段文档）。 */
   sdf?: {
     core: Record<string, string>;
@@ -82,12 +83,23 @@ export async function createResearchObject(
   if (!title || title.length > 200) throw new ResearchObjectError('VALIDATION_ERROR', '标题长度需为 1-200 字符');
   const core = input.sdf?.core ?? emptyCore();
 
+  if (input.idempotencyKey) {
+    const existing = await deps.prisma.researchObject.findUnique({ where: { idempotencyKey: input.idempotencyKey } });
+    if (existing) {
+      if (existing.workspaceId !== input.workspaceId || existing.createdBy !== input.userId || existing.title !== title) {
+        throw new ResearchObjectError('VALIDATION_ERROR', '幂等键已用于其他请求');
+      }
+      return { id: existing.id, workspaceId: existing.workspaceId, title: existing.title, status: existing.status, visibility: existing.visibility, version: existing.version, createdAt: existing.createdAt };
+    }
+  }
+
   const ro = await deps.prisma.$transaction(async (tx) => {
     const created = await tx.researchObject.create({
       data: {
         workspaceId: input.workspaceId,
         title,
         createdBy: input.userId,
+        idempotencyKey: input.idempotencyKey,
         sdfDocument: {
           create: {
             coreJson: core as object,

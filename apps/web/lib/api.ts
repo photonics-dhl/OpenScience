@@ -233,10 +233,12 @@ export async function uploadArtifactFile(
   workspaceId: string,
   file: File,
   logicalPath = file.name,
+  idempotencyKey?: string,
   onProgress?: (percent: number) => void,
 ): Promise<ArtifactReference> {
   const xhr = new XMLHttpRequest();
   await prepareProtectedXhr(xhr, 'POST', '/api/artifacts/upload');
+  if (idempotencyKey) xhr.setRequestHeader('idempotency-key', idempotencyKey);
   const body = new FormData();
   body.append('workspaceId', workspaceId);
   body.append('logicalPath', logicalPath);
@@ -272,7 +274,7 @@ const EMPTY_SDF_CORE: SdfCore = {
 
 interface MaterialImportDeps {
   create: typeof createResearchObject;
-  upload: (workspaceId: string, file: File, logicalPath: string) => Promise<ArtifactReference>;
+  upload: (workspaceId: string, file: File, logicalPath: string, idempotencyKey: string) => Promise<ArtifactReference>;
   commit: typeof createCommit;
 }
 
@@ -339,7 +341,7 @@ export async function createResearchObjectWithMaterials(
       artifacts.push({ logicalPath: completed.logicalPath, artifactId: completed.artifactId });
       continue;
     }
-    const uploaded = await deps.upload(input.workspaceId, file, logicalPath);
+    const uploaded = await deps.upload(input.workspaceId, file, logicalPath, `${checkpoint.importId}:upload:${index}`);
     artifacts.push(uploaded);
     checkpoint = { ...checkpoint, uploaded: [...checkpoint.uploaded, { ...uploaded, logicalPath, fingerprint }] };
     onCheckpoint?.(checkpoint);
