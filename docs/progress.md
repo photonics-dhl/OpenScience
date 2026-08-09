@@ -1516,3 +1516,24 @@ MVP 交接复查发现两类文档失真：AGENTS.md 自 P1B-2（1e859df，08-03
 - 开发阶段无用户，视觉切片通过服务器真实环境后直接替换，不设长期 preview 双 UI。
 
 ---
+## 2026-08-10 — Optical Editorial v3 实施计划与 Task Master 同步完成
+
+### ✅ Completed
+
+| Task | Details |
+|---|---|
+| 完整实施计划 | `docs/plans/2026-08-10-optical-editorial-frontend-plan.md` 拆为 15 个可验证垂直任务；旧 2026-08-08 计划标记 DEPRECATED。 |
+| Task Master re-baseline | 新增 `optical-editorial-v3` tag：15 tasks、42 条依赖、0 invalid；`next` 正确返回 Task 1。旧 master Task 7/7.11/10/11/12 已 cancelled，防止误执行旧 Evolving RO/Figma-first/card-grid 方向。 |
+| 解析故障处理 | `parse_prd` 300 秒超时且任务文件未变；按标准 tag JSON 写入并由 Task Master CLI `list`、`validate-dependencies`、`next` 三重验证。 |
+
+### ⏳ Next Steps
+
+- [ ] 执行 Task 1：从 `codex/researcher-ingestion` 建立 `codex/optical-editorial-v3` 独立工作树并带入设计/计划文档；
+- [ ] 全量 test/build/docs gate 通过后开始 Task 2 社区依赖审计与 v3 foundations。
+
+### Key Decisions
+
+- 新计划覆盖所有已确认页面、功能和服务器验收，不把 Figma 或成功 build 单独视为完成。
+- Task Master 使用独立 tag，旧 master 历史保留但不再作为前端执行真源。
+
+---

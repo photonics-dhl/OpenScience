@@ -2,7 +2,7 @@
   "master": {
     "tasks": [
       {
-        "id": "1",
+        "id": 1,
         "title": "Phase 0: 现有系统只读审计与目标架构决策",
         "description": "对 Scholars Tea / AI Research Workshop 现有代码仓执行强制门禁式只读审计（Spec §22 Phase 0、§25、§20.1.2）：建立目录/依赖/服务/数据库/部署地图，形成可复用/重构/淘汰清单，评估安全与数据迁移风险，运行基准测试，产出 docs/CODEBASE_AUDIT.md 与 docs/adr/0001-target-architecture.md 草案。审计完成并经用户确认后才允许进入 Phase 1A（Spec §25 末段）。全程不修改业务代码（Spec §25.5）。",
         "status": "done",
@@ -133,7 +133,7 @@
         "updatedAt": "2026-07-28T04:41:05.303Z"
       },
       {
-        "id": "2",
+        "id": 2,
         "title": "Phase 1A: 平台底座（Monorepo、Auth/Workspace/RBAC、数据与存储基础、审计、CI/CD）",
         "description": "搭建 MVP 平台底座：Monorepo 与模块边界（Spec §14.1）；Auth + 邀请码 + 邮箱验证（Spec §2.1、§3.1）；Workspace + RBAC 且 API 层强制授权（Spec §3.2、§3.3、§17）；PostgreSQL + Redis + Storage Adapter（Spec §13.1、§14.2、§15）；统一错误/日志/配置/审计（Spec §17）；AI Credit 账务骨架（Spec §2.4.7、§13.3）；CI/CD 与阿里云 ECS 部署（Spec §14.2、§17）。前置门禁：Phase 0 审计完成并经用户确认（Spec §22、§25）。本阶段不含 SDF/编辑器（1B）、协作（1C）、Hermes/发布（1D）、可视化沙箱（1E）及任何 §19 Phase 2 功能。",
         "status": "done",
@@ -288,7 +288,7 @@
         "updatedAt": "2026-08-03T13:12:27.429Z"
       },
       {
-        "id": "3",
+        "id": 3,
         "title": "Phase 1B: SDF 与版本",
         "description": "实现 SDF 六字段 Schema、三栏编辑器、Artifact/Blob 内容寻址存储、Commit/Manifest 增量版本、多类型 Diff、unique ID 与稳定 URL、私有/邀请/公开可见性（Spec §22 Phase 1B；依据 Spec §4–§7、§13、§15、§16、§17、§18）。不含 Hermes AI 提取与发布流程（Phase 1D）、不含 Branch/Fork/PR 协作交互（Phase 1C）。",
         "status": "done",
@@ -449,7 +449,7 @@
         "updatedAt": "2026-08-04T05:06:37.957Z"
       },
       {
-        "id": "4",
+        "id": 4,
         "title": "Phase 1C: GitHub 式科研协作（Branch/Fork/PR/Review/Merge、作者与 CRediT、许可、通知）",
         "description": "建立 MVP 协作闭环：Branch、Issue、Fork、Pull Request、Review、Merge 的数据模型与基础交互（Spec §2.3、§8），作者组与 CRediT 贡献记录（§3.4），三类许可选择与 Fork 继承校验（§6.3），协作事件通知（§15、§16、§18.1）。对应里程碑 Spec §22 Phase 1C。服务于验收主流程 §21.2 步骤 8、11、12。Commit/版本存储底座由 P1B 提供，发布与 AI 审核属 P1D，不在本 Phase 范围。",
         "status": "done",
@@ -610,7 +610,7 @@
         "updatedAt": "2026-08-04T10:20:07.172Z"
       },
       {
-        "id": "5",
+        "id": 5,
         "title": "Phase 1D: Hermes 与发布",
         "description": "建设 Hermes Agent 系统的 MVP 子集与公开发布闭环：AI Gateway 统一路由（MiniMax-M3 主模型 / 回退策略由 Gateway 配置管理）、异步任务通道、SDF Extractor（建议/差异形式，不直接写正文）、R0–R4 分级审批、AI 发布审核（硬阻断与警告分离）、申诉与 Moderator 队列、发布事务与公开页（含免责声明与审核摘要）。依据 Spec §9、§11、§4.1–4.3、§6.2、§22 Phase 1D。",
         "status": "done",
@@ -760,7 +760,7 @@
         "updatedAt": "2026-08-06T04:29:04.252Z"
       },
       {
-        "id": "6",
+        "id": 6,
         "title": "Phase 1E: 轻量科学可视化",
         "description": "实现 Hermes 概念可视化闭环与隔离沙箱执行：Visualization Planner 生成解释与 Python 脚本（Spec §9.2、§10.1），AST 策略检查（§10.3），Sandbox Controller + 隔离 Docker 网络（§10.3、§14.2），临时图片与 IndexedDB 保存（§13.2），自然语言修改脚本（§10.4），威胁模型与沙箱逃逸基线测试（§17、§21.1）。服务验收主流程步骤 15、16（Spec §21.2）。",
         "status": "done",
@@ -886,7 +886,7 @@
         "updatedAt": "2026-08-06T08:09:28.752Z"
       },
       {
-        "id": "7",
+        "id": 7,
         "title": "Phase 2A: 前端视觉系统（P0 地基收尾 + P1 首页视觉原型）",
         "description": "按已定稿 spec docs/specs/2026-08-06-frontend-visual-system-design.md 与计划 docs/plans/2026-08-06-frontend-p0-p1-plan.md 执行：Tailwind v4/shadcn/token/字体底座，首页 Header+Hero+#latest 原型，EvolvingRoSymbol 两版变体三尺寸截图供用户拍板冻结 token。三方定稿见 docs/proposals/2026-08-06-frontend-design-direction-v1.md 文末 v2 终稿决策层 D1-D9。",
         "status": "in-progress",
@@ -1039,7 +1039,7 @@
             "id": 11,
             "title": "用户验收门（P1 出口）",
             "description": "向用户展示两变体×三尺寸截图；用户选定符号变体后冻结 token（最终值回写 spec §3 去方向值标注）；project_index.md + progress.md 同步 + check-docs-sync + docs:lint 全绿。对应 plan Task 11。",
-            "status": "pending",
+            "status": "cancelled",
             "dependencies": [
               "7.10"
             ],
@@ -1047,13 +1047,13 @@
             "details": "",
             "testStrategy": "用户拍板记录 + 文档门禁全绿",
             "parentId": "7",
-            "updatedAt": "2026-08-06T13:34:42.917Z"
+            "updatedAt": "2026-08-09T21:58:26.797Z"
           }
         ],
-        "updatedAt": "2026-08-06T16:57:33.085Z"
+        "updatedAt": "2026-08-09T21:58:26.797Z"
       },
       {
-        "id": "8",
+        "id": 8,
         "title": "Design System Consolidation (Token Completion + Shadcn Primitives)",
         "description": "Complete the design token system as the single source of truth in tokens.css. Add missing tokens for spacing scale, elevation/shadow, motion duration/easing, and z-index layers. Generate shadcn primitives (Button/Card/Badge/Dialog/Input) with two surface states: dark mode for landing/workspace and paper white for public RO pages. Ensure i18n linting and docs-sync are synchronized.",
         "status": "done",
@@ -1067,7 +1067,7 @@
         "updatedAt": "2026-08-07T10:50:30.238Z"
       },
       {
-        "id": "9",
+        "id": 9,
         "title": "Animation Layer Implementation (Framer Motion + Hero Loop Visual)",
         "description": "Install framer-motion and implement animation layer across the application. This includes Hero title stagger entrance, EvolutionPanel stage transitions, card hover/enter animations, and HermesBand amber scanning line with evolve pulse - all using easing tokens. Hero main visual loops via Gemini video generation or OGL shader fallback. Full prefers-reduced-motion support.",
         "status": "done",
@@ -1081,23 +1081,24 @@
         "updatedAt": "2026-08-07T13:49:13.370Z"
       },
       {
-        "id": "10",
+        "id": 10,
         "title": "Figma Design Upstream + MCP Integration",
         "description": "Establish Figma as the design source for landing and public RO pages. Provision Professional Dev seat ($12/month) for remote MCP access. Configure .mcp.json with Figma remote MCP endpoint. Implement Code Connect to map Figma components to apps/web/components/ui/* primitives. Ensure AI can read design structure and generate code referencing real components.",
-        "status": "pending",
+        "status": "cancelled",
         "dependencies": [
           "8"
         ],
         "priority": "medium",
         "details": "Implementation Details:\n\n1. Figma File Setup:\n   - Create `web-design-system.fig` as canonical design source\n   - Match variable names to tokens.css exactly (e.g., `--spacing-2`)\n   - Organize components using same structure as `apps/web/components/ui/`\n   - Document spacing/typography using Figma variables\n\n2. Dev Seat Provisioning:\n   - Upgrade to Professional plan ($12/month)\n   - Enable 200 calls/day remote MCP access\n   - Note: Free tier (6 calls/month) insufficient for production use\n\n3. MCP Configuration (`project/.mcp.json`):\n   ```json\n   {\n     \"mcpServers\": {\n       \"figma\": {\n         \"command\": \"npx\",\n         \"args\": [\"-y\", \"@modelcontextprotocol/server-figma\", \"--access-token\", \"${FIGMA_ACCESS_TOKEN}\"]\n       }\n     }\n   }\n   ```\n   - Environment variable: `FIGMA_ACCESS_TOKEN`\n   - Endpoint: `https://mcp.figma.com/mcp` (OAuth)\n\n4. Code Connect Implementation:\n   - Install Figma Code Connect plugin\n   - Map each Figma component to corresponding React component\n   - Ensure props interface matches Figma variant properties\n   - Code without Code Connect bypasses design system - prohibited for production\n\n5. Design-to-Code Workflow:\n   - AI reads Figma via MCP to get spacing/typography/variables\n   - Generates code using `apps/web/components/ui/*` primitives\n   - Human reviews generated code against design spec\n   - Code Connect ensures generated code references real components\n\n6. Documentation Requirements:\n   - Update `project_index.md` with MCP configuration changes\n   - Create ADR for tool portability (MCP servers can be swapped)\n   - Document Figma variable naming conventions",
         "testStrategy": "Validation Approach:\n\n1. MCP Connectivity Test:\n   - Verify Figma MCP server responds to ping\n   - Test variable retrieval: fetch `--spacing-2` value from Figma\n   - Compare retrieved values against tokens.css\n\n2. Code Connect Verification:\n   - Export Figma component to code\n   - Verify generated code imports from `apps/web/components/ui/`\n   - Check generated props match component interfaces\n   - Validate generated code passes TypeScript check\n\n3. AI Workflow Test:\n   - Prompt AI to generate landing section from Figma reference\n   - Verify generated code uses existing primitives\n   - Ensure no hardcoded styles (should use tokens)\n   - Validate i18n keys are used (not hardcoded strings)\n\n4. Documentation Audit:\n   - Confirm `.mcp.json` changes logged in `project_index.md`\n   - Verify ADR created for tool portability\n   - Check Figma variable names match tokens.css 1:1\n\n5. Security Check:\n   - Verify `FIGMA_ACCESS_TOKEN` stored in secrets, not repo\n   - Test MCP calls respect rate limits (200/day)\n   - Audit Figma file permissions",
-        "subtasks": []
+        "subtasks": [],
+        "updatedAt": "2026-08-09T21:58:26.803Z"
       },
       {
-        "id": "11",
+        "id": 11,
         "title": "Full Site Consistency Closure (Three Visual Systems × All Entry Points)",
         "description": "Close consistency gaps across all entry points following the three visual zones: landing dark mode, public RO paper white, and workspace deep dark shell. Update public RO pages, workspace SDF editor, About/auth pages, and Explore entry. Establish Playwright screenshot baselines for all five entry points.",
-        "status": "pending",
+        "status": "cancelled",
         "dependencies": [
           "9",
           "10"
@@ -1105,30 +1106,272 @@
         "priority": "high",
         "details": "Implementation Details:\n\n1. Public RO Pages (Paper White Surface):\n   - Apply token-based typography: `--font-sans`, `--text-sm`, `--text-base`\n   - Card components: white background, subtle warm shadow\n   - Author row: consistent spacing, avatar sizing\n   - Navigation: paper white variant with proper contrast\n   - Replace any hardcoded `#ffffff` with `var(--color-background)`\n\n2. Workspace SDF Editor (Deep Dark Shell):\n   - Dark shell wrapper with `--color-background: #0a0a0f`\n   - Editor canvas maintains own contrast context\n   - Toolbar uses dark surface tokens\n   - Status bar with proper z-index layering\n   - Ensure no light-mode leakage into editor\n\n3. About/Auth Pages (Current Bare Styles):\n   - Apply landing dark mode tokens\n   - Add proper Card wrappers with elevation\n   - Form inputs use Input primitive with dark variant\n   - Buttons use Button primitive\n   - Consistent form field spacing via token\n\n4. Explore Entry (Empty State + P2 Backend Feed):\n   - Empty state: use i18n keys `explore.empty.title`, `explore.empty.description`\n   - Loading state: skeleton using Card primitive\n   - Feed integration: P2 priority for `GET /explore` backend\n   - Card grid using consistent spacing token\n   - Filter/sort controls using Input/Select primitives\n\n5. Token Enforcement:\n   - No direct color values outside tokens.css\n   - All spacing via spacing tokens\n   - Typography via type tokens\n   - ESLint rule: no hardcoded `#[0-9a-fA-F]{3,6}` in component files\n\n6. Screenshot Baseline Setup:\n   ```typescript\n   // test/visual/baselines.spec.ts\n   const entryPoints = [\n     { name: 'landing', url: '/', viewport: 'desktop' },\n     { name: 'public-ro', url: '/ro', viewport: 'desktop' },\n     { name: 'workspace', url: '/workspace', viewport: 'desktop' },\n     { name: 'about', url: '/about', viewport: 'mobile' },\n     { name: 'explore', url: '/explore', viewport: 'mobile' }\n   ];\n   ```\n   - Generate baseline screenshots in both viewports\n   - Store in `test/visual/baselines/` directory",
         "testStrategy": "Validation Approach:\n\n1. Visual Consistency Test:\n   - Run Playwright screenshot comparison against baselines\n   - Use `playwright-visual-regression` or `pixelmatch`\n   - Fail CI if any pixel difference exceeds threshold (1%)\n   - Test both desktop (1440x900) and mobile (375x667) viewports\n\n2. Token Usage Audit:\n   - ESLint rule check: no hardcoded color values\n   - Grep component files for `#[0-9a-fA-F]{3,6}` patterns\n   - Verify all spacing uses token variables\n   - Check typography tokens applied correctly\n\n3. i18n Symmetry Test:\n   - Compare zh and en translation files\n   - Verify all five entry points have complete translations\n   - Check for placeholder/hardcoded strings\n   - Validate translation keys match i18n namespace rules\n\n4. Surface Isolation Test:\n   - Landing dark mode: verify no white backgrounds\n   - Public RO: verify no dark backgrounds\n   - Workspace: verify consistent dark shell\n   - Check no token bleed between zones\n\n5. Entry Point Coverage:\n   - Confirm all five entry points render correctly\n   - Test navigation between zones\n   - Verify Explore feed displays when backend ready\n   - Check empty states match i18n specifications",
-        "subtasks": []
+        "subtasks": [],
+        "updatedAt": "2026-08-09T21:58:26.810Z"
       },
       {
-        "id": "12",
+        "id": 12,
         "title": "Visual Regression Gate (shots.mjs → CI Integration)",
         "description": "Extend apps/web/test/visual/shots.mjs to cover fixed 5 viewports × key page collection. Output both baseline and comparison screenshots. Integrate into lint/CI pipeline to trigger comparison on visual changes. Clean up deprecated assets: apps/web/scripts/generate-landing-hero.mjs and public/hero/landing-hero.png.",
-        "status": "pending",
+        "status": "cancelled",
         "dependencies": [
           "11"
         ],
         "priority": "medium",
         "details": "Implementation Details:\n\n1. shots.mjs Enhancement:\n   ```javascript\n   // apps/web/test/visual/shots.mjs\n   const viewports = [\n     { name: 'mobile-small', width: 320, height: 568 },\n     { name: 'mobile', width: 375, height: 667 },\n     { name: 'tablet', width: 768, height: 1024 },\n     { name: 'desktop', width: 1440, height: 900 },\n     { name: 'desktop-wide', width: 1920, height: 1080 }\n   ];\n   \n   const pages = [\n     '/',           // landing\n     '/ro',         // public RO\n     '/workspace',  // workspace\n     '/about',      // about\n     '/explore'     // explore\n   ];\n   \n   // Generate baseline + comparison output\n   // Store in test/visual/baselines/ and test/visual/comparisons/\n   ```\n\n2. CI Integration:\n   - Add GitHub Actions workflow step:\n   ```yaml\n   - name: Visual Regression\n     run: node apps/web/test/visual/shots.mjs\n     env:\n       BASELINE_MODE: ${{ github.event_name == 'pull_request' && 'compare' || 'baseline' }}\n   ```\n   - On PR: generate comparison, fail if diff > threshold\n   - On main: update baselines automatically\n\n3. Output Structure:\n   ```\n   test/visual/\n   ├── baselines/\n   │   ├── mobile-320/\n   │   ├── mobile-375/\n   │   ├── tablet/\n   │   ├── desktop/\n   │   └── desktop-wide/\n   │       ├── landing.png\n   │       ├── public-ro.png\n   │       └── ...\n   ├── comparisons/\n   │   └── pr-XXX/\n   │       ├── landing.diff.png\n   │       └── ...\n   └── shots.mjs\n   ```\n\n4. Asset Cleanup:\n   - Identify `apps/web/scripts/generate-landing-hero.mjs`\n   - Identify `public/hero/landing-hero.png`\n   - These are deprecated (knip reports unused)\n   - Require user approval before deletion\n   - Document in cleanup ADR\n\n5. Threshold Configuration:\n   - Perceptual hash threshold: 5% difference max\n   - Pixel diff threshold: 1% difference max\n   - Ignore anti-aliased text edges (2px tolerance)\n   - Ignore timestamps in dynamic content\n\n6. Documentation Sync:\n   - Update `AGENTS/project_index/progress`\n   - Log visual regression setup completion\n   - Document viewport configuration",
         "testStrategy": "Validation Approach:\n\n1. CI Pipeline Test:\n   - Create test PR with visual change\n   - Verify comparison workflow triggers\n   - Check comparison images generated correctly\n   - Confirm CI fails when visual diff exceeds threshold\n   - Verify baseline update workflow on main branch\n\n2. Screenshot Quality Test:\n   - Manual review of baseline screenshots\n   - Verify all five viewports render correctly\n   - Check no truncated content or overflow\n   - Validate consistent capture timing (no loading spinners)\n\n3. Diff Detection Test:\n   - Create intentional visual change\n   - Run shots.mjs in compare mode\n   - Verify diff is detected and highlighted\n   - Check diff image clearly shows changed areas\n\n4. Asset Cleanup Verification:\n   - Run knip to verify no new unused asset warnings\n   - Confirm deprecated files identified\n   - Verify cleanup documented and awaiting approval\n\n5. Documentation Audit:\n   - Check `AGENTS/project_index/progress` updated\n   - Verify progress log reflects Task 12 completion\n   - Confirm ADR created for asset cleanup\n   - Update README if visual regression docs needed",
+        "subtasks": [],
+        "updatedAt": "2026-08-09T21:58:26.816Z"
+      }
+    ],
+    "metadata": {
+      "version": "1.0.0",
+      "lastModified": "2026-08-09T21:58:26.816Z",
+      "taskCount": 12,
+      "completedCount": 8,
+      "tags": [
+        "master"
+      ],
+      "created": "2026-08-09T21:58:31.395Z",
+      "description": "Tasks for master context",
+      "updated": "2026-08-09T21:58:31.395Z"
+    }
+  },
+  "optical-editorial-v3": {
+    "tasks": [
+      {
+        "id": 1,
+        "title": "建立最新生产能力上的 Optical Editorial 独立执行基线",
+        "description": "从 codex/researcher-ingestion 的 cbcb60c 创建 codex/optical-editorial-v3 工作树，带入 main 的 b0b3969 设计文档，保留已验证注册、Hermes ingestion、OCR、ClamAV、备份恢复与服务器证据。",
+        "status": "pending",
+        "dependencies": [],
+        "priority": "high",
+        "details": "计划 Task 1。使用 using-git-worktrees；核对 dirty files；只解决文档冲突；跑 test/build/docs:lint/audit:docs-sync；不得把 .memory 或 docs/user_ideas 未跟踪原件误提交。",
+        "testStrategy": "git worktree/branch/hash 证据；npx pnpm@9.15.0 test、build、docs:lint、audit:docs-sync 全绿。",
+        "subtasks": []
+      },
+      {
+        "id": 2,
+        "title": "审计社区依赖并建立 V3 Optical Editorial Foundations",
+        "description": "审核字体、halftone/displacement 技术的许可证、包体、SSR、降级和 ECS 安装要求，建立 monochrome + vermilion tokens、字体角色、半径和 motion 真源。",
+        "status": "pending",
+        "dependencies": [
+          "1"
+        ],
+        "priority": "high",
+        "details": "计划 Task 2。修改 tokens.css/globals/layout/package/lock；新增 ADR-005 和 optical-foundations tests；优先 Canvas2D+CSS/SVG，拒绝 hosted/不可锁定 runtime。",
+        "testStrategy": "先观察 tokens tests RED，再 GREEN；AA 配色、禁蓝紫装饰 token、typecheck/build/docs gates。",
+        "subtasks": []
+      },
+      {
+        "id": 3,
+        "title": "实现共享品牌、Wordmark 与四种产品 Surface Shell",
+        "description": "建立 OpenScience. 文字标识、O. favicon、Public/Identity/Dashboard/Workspace shells，使用规则线和背景色阶代替 Card 容器。",
+        "status": "pending",
+        "dependencies": [
+          "2"
+        ],
+        "priority": "high",
+        "details": "计划 Task 3。新增 components/brand 与 components/shell；主 landmark、skip link、8px action radius、双语文案。",
+        "testStrategy": "surface-shells render RED/GREEN；i18n symmetry；typecheck/build；无 Card dependency。",
+        "subtasks": []
+      },
+      {
+        "id": 4,
+        "title": "以 DOM Typography + Optical Field 重做 Landing",
+        "description": "用 Science evolves./科学，持续演化。非对称混排替换 Evolving RO 环，Canvas/WebGL 只承担局部折射、半色调和证据粒子。",
+        "status": "pending",
+        "dependencies": [
+          "3"
+        ],
+        "priority": "high",
+        "details": "计划 Task 4。真实 DOM headline；160-200px 作用半径；8-14px 位移；400-600ms 回弹；移动 ≤35% 密度；Create/Explore 真实路由。",
+        "testStrategy": "landing RED/GREEN；1440x900、1920x1080、390x844 normal/reduced-motion screenshots；AI-slop gate。",
+        "subtasks": []
+      },
+      {
+        "id": 5,
+        "title": "将 RO Workspace 重构为稳定三工作平面",
+        "description": "建立 19/56/25 Outline/Editor/Evidence-Hermes 布局、单行 ObjectHeader、编号 SDF Node、EvidenceSnippet 与 Before/After proposal。",
+        "status": "pending",
+        "dependencies": [
+          "3"
+        ],
+        "priority": "high",
+        "details": "计划 Task 5。不改持久化契约；只给 active node 朱红点；移动端 bottom navigation/sheets 功能等价；高风险全屏 review。",
+        "testStrategy": "workspace shell RED/GREEN；keyboard/focus/320px overflow；真实测试 RO 三视口截图。",
+        "subtasks": []
+      },
+      {
+        "id": 6,
+        "title": "将 Public RO 重构为可引用纸面阅读表面",
+        "description": "建立 760px 阅读列 + 280px metadata rail，优先标题、作者、身份、版本、许可、引用和 Insight，保留 print/PDF 与 provenance。",
+        "status": "pending",
+        "dependencies": [
+          "3"
+        ],
+        "priority": "high",
+        "details": "计划 Task 6。复用现有 public API；不发明质量分；SDF 状态含文本；Figure 用 academic caption 而非媒体 Card。",
+        "testStrategy": "public render/contract RED/GREEN；typecheck/build；desktop/mobile/print evidence。",
+        "subtasks": []
+      },
+      {
+        "id": 7,
+        "title": "将验证码注册与登录融入 Research Identity 体验",
+        "description": "保留独立 Sign in 与 Create-intent returnTo 两条路径，重构为 Optical Editorial 身份页，不改真实 signup-code/session 契约。",
+        "status": "pending",
+        "dependencies": [
+          "3"
+        ],
+        "priority": "high",
+        "details": "计划 Task 7。两步验证码、紧凑字段、安全 returnTo、可重试错误和焦点转移；保留 signup-live real Fastify E2E。",
+        "testStrategy": "auth component RED/GREEN；stubbed E2E + compiled Next/real Fastify signup E2E；desktop/mobile states。",
+        "subtasks": []
+      },
+      {
+        "id": 8,
+        "title": "完成 PDF/Word/TeX/Markdown/图片/数据/代码混合 Evidence Intake",
+        "description": "实现本地预选、材料角色、主文稿、逐文件进度和 scan→upload→parse/OCR→SDF map→review 的真实闭环。",
+        "status": "pending",
+        "dependencies": [
+          "7"
+        ],
+        "priority": "high",
+        "details": "计划 Task 8。未认证/未提交不得上传；保留 ClamAV/OCR/ingestion/confirm 契约；blocked、retry 与 needs_review 明确。",
+        "testStrategy": "Evidence Intake RED/GREEN；mixed batch、blocked file、OCR-to-review Playwright。",
+        "subtasks": []
+      },
+      {
+        "id": 9,
+        "title": "重构 Dashboard 并将 Hermes/Live2D 绑定真实任务",
+        "description": "以 Continue Research 和待确认队列替代统计 Hero/Card 网格，建立 Hermes 六态和 Visual/Task 同一 deep link。",
+        "status": "pending",
+        "dependencies": [
+          "3",
+          "8"
+        ],
+        "priority": "high",
+        "details": "计划 Task 9。全站单 Live2D、LCP 后加载、审批静止、失败/reduced-motion 静态 fallback。",
+        "testStrategy": "dashboard/hermes RED/GREEN；empty/loading/error/active/approval screenshots；one-instance assertion。",
+        "subtasks": []
+      },
+      {
+        "id": 10,
+        "title": "交付 Explore Research Index 与可追溯启动语料",
+        "description": "实现编号式 Research Index、搜索/筛选和公开 API，导入 6 个完整 Demonstration RO 与 12-18 个轻量真实来源索引。",
+        "status": "pending",
+        "dependencies": [
+          "4",
+          "6"
+        ],
+        "priority": "high",
+        "details": "计划 Task 10。使用 api-contract/security-review；仅在必要时 migration；seed 幂等且不删除；每项记录来源、许可、日期、provenance。",
+        "testStrategy": "API pagination/visibility contracts；UI search/filter/active row；seed dry-run + explicit non-destructive confirmation。",
+        "subtasks": []
+      },
+      {
+        "id": 11,
+        "title": "交付 Ultrafast Science Collection 与 scoped Editorial Curator",
+        "description": "在 Public RO 事实身份上增加期刊策展层，支持候选、媒体、编辑说明、排序、排期和 draft→internal review→scheduled→published。",
+        "status": "pending",
+        "dependencies": [
+          "6",
+          "10"
+        ],
+        "priority": "high",
+        "details": "计划 Task 11。绑定 researchObjectId+selected version；Selected by 不等于同行评审；角色权限 scoped；需要时走 API/migration/security skills。",
+        "testStrategy": "authorization/immutable snapshot/public label integration；editorial state/UI render tests。",
+        "subtasks": []
+      },
+      {
+        "id": 12,
+        "title": "补齐协作、版本、发布、Sandbox 与其余产品表面一致性",
+        "description": "建立实际路由/状态矩阵，用 WorkspaceShell 与研究领域组件覆盖 Overview/SDF/Files/Versions/Collaboration/Publish/Sandbox/Settings。",
+        "status": "pending",
+        "dependencies": [
+          "5",
+          "6",
+          "7",
+          "8",
+          "9",
+          "10",
+          "11"
+        ],
+        "priority": "high",
+        "details": "计划 Task 12。不得改写已工作业务调用；补齐 loading/empty/error/permission/mobile；所有 copy i18n；高风险 Review Changes。",
+        "testStrategy": "product-surface-matrix must cover every actual route/state；mobile parity；existing collab/sandbox tests。",
+        "subtasks": []
+      },
+      {
+        "id": 13,
+        "title": "重建长期账号 Figma Canonical 与真实组件映射",
+        "description": "建立 V3 foundations、排版 specimen、grid、motion/reduced-motion 注释和所有核心页面结构/状态，变量与 tokens.css 一一对应。",
+        "status": "pending",
+        "dependencies": [
+          "2",
+          "3",
+          "4",
+          "5",
+          "6",
+          "7",
+          "8",
+          "9",
+          "10",
+          "11",
+          "12"
+        ],
+        "priority": "medium",
+        "details": "计划 Task 13。先验证长期 owner/canonical；只映射真实组件；Optical Field 仍由浏览器拥有；Code Connect 限制不阻塞交付。",
+        "testStrategy": "Figma/code token diff；组件映射清单；browser screenshots 对照；OAuth/token 不入文档。",
+        "subtasks": []
+      },
+      {
+        "id": 14,
+        "title": "建立视觉回归、无障碍与性能发布门禁",
+        "description": "为所有 canonical route/state 建立确定性三视口截图、keyboard/reduced-motion/accessibility E2E 与 LCP/bundle/runtime 检查。",
+        "status": "pending",
+        "dependencies": [
+          "4",
+          "5",
+          "6",
+          "7",
+          "8",
+          "9",
+          "10",
+          "11",
+          "12",
+          "13"
+        ],
+        "priority": "high",
+        "details": "计划 Task 14。Canvas 固定 clock/seed；普通 PR 不自动更新 baseline；运行全仓 test/build/typecheck/lint/docs/audit 门禁和人工 AI-slop gate。",
+        "testStrategy": "manifest RED/GREEN；1440x900/1920x1080/390x844；WCAG AA；LCP≤2.5s；全量 gates。",
+        "subtasks": []
+      },
+      {
+        "id": 15,
+        "title": "直接部署 ECS 并证明完整产品旅程",
+        "description": "构建不可变镜像并直接替换开发期服务器页面，保留上一 tag；在真实服务完成从 Landing 到 Editorial Collection 的完整旅程。",
+        "status": "pending",
+        "dependencies": [
+          "14"
+        ],
+        "priority": "high",
+        "details": "计划 Task 15。cloud-sync 不带 secrets/screenshots；健康/TLS/API/worker/ClamAV/storage 门禁；失败立即 rollback 且任务保持 in-progress。",
+        "testStrategy": "landing→auth→dashboard→mixed intake→OCR/parse→Hermes confirm→workspace→version→publish→public→explore→selection；server screenshots/LCP/mobile/keyboard evidence。",
         "subtasks": []
       }
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-08-07T13:49:13.370Z",
-      "taskCount": 12,
-      "completedCount": 8,
+      "lastModified": "2026-08-10T08:30:00.000Z",
+      "taskCount": 15,
+      "completedCount": 0,
       "tags": [
-        "master"
-      ]
+        "optical-editorial-v3"
+      ],
+      "description": "Approved Optical Editorial Instrument frontend rebaseline and server delivery program",
+      "created": "2026-08-09T21:58:31.395Z",
+      "updated": "2026-08-09T21:58:31.395Z"
     }
   }
 }

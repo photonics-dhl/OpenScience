@@ -71,7 +71,8 @@
 | `docs/specs/2026-08-03-p1b-2-ro-sdf-model-design.md` | P1B-2 RO/SDF 数据模型设计（design gate 已确认：三实体 + 迁移 7 + API 骨架，代码已实现 2026-08-03） | 活文档 |
 | `docs/specs/2026-08-08-openscience-product-web-design.md` | 产品级网页设计 spec（方向 A：Monumental Scholarly Intelligence；统一 RO 工作流、Hermes/Live2D、Public RO、Ultrafast Science 策展、许可与版本模型；用户已批准，待书面审阅） | 活文档 |
 | `docs/specs/2026-08-10-optical-editorial-rebaseline-design.md` | 前端视觉重构 spec：Art Direction v3 Optical Editorial Instrument 为视觉真源，Masterplan v2 保留业务结构；三联屏浏览器优先、双表面、Evidence Intake、启动示范语料与服务器验收门 | 用户已确认设计章节，待书面审阅 |
-| `docs/plans/2026-08-08-openscience-product-web-plan.md` | 产品级网页实现计划（Figma 六屏、Dashboard/Workspace、创建/Hermes/版本、Public RO/Explore、Editorial Curator、Live2D/质量门禁六任务；2026-08-09 进入前端 re-baseline，待按垂直切片重排验收） | 活文档 |
+| `docs/plans/2026-08-08-openscience-product-web-plan.md` | 旧产品级网页实现计划；2026-08-10 被 Optical Editorial v3 计划取代，仅保留历史 | DEPRECATED |
+| `docs/plans/2026-08-10-optical-editorial-frontend-plan.md` | Optical Editorial v3 完整实施计划：15 Task 覆盖生产基线、foundations、三联屏、Auth/Intake/Dashboard/Hermes、Explore/启动语料、Editorial、其余产品面、Figma、质量门禁与 ECS E2E | 当前执行计划 |
 | `docs/superpowers/specs/2026-08-09-researcher-ingestion-product-slice-design.md` | 研究者第一条产品级前端闭环设计：注册、Dashboard、资料导入、Hermes 证据确认、RO Workspace；待用户审阅 | 设计 spec |
 | `docs/superpowers/plans/2026-08-09-researcher-ingestion-product-slice-plan.md` | 研究者导入闭环实施计划：基础视觉、Auth/Dashboard、多格式上传、Hermes 证据、RO Workspace、浏览器验收与生产部署 | 待执行 |
 | `docs/decisions/ADR-004-figma-account-ownership-and-migration.md` | Figma 临时/长期账号所有权、双 OAuth 隔离、canonical 设计稿迁移与验收决策 | Accepted |
