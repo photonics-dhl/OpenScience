@@ -24,7 +24,7 @@
 | `GET /research-objects` / `GET /agent/tasks` | Dashboard 真实数据合同：仅成员 Workspace 的 RO 与当前用户 AgentTask，可按 actionable 过滤 | 活接口 |
 | `apps/web/test/auth-dashboard.test.tsx` / `apps/web/test/e2e/auth-dashboard.spec.ts` | Auth/Dashboard 单元合同与 clean-browser 桌面/移动 E2E；实际选择多文件并断言 Artifact→Commit 引用 | 活文档 |
 | `apps/web/playwright{,.signup}.config.ts` / `apps/web/test/e2e/signup-live.spec.ts` / `apps/api/test/support/signup-smoke-server.mjs` | 可重复浏览器门禁；signup smoke 启动编译 Fastify auth 路由和真实 Next rewrite，验证验证码、Cookie 与 `/auth/me`，不使用 API route mock | 测试工具 |
-| `packages/database/test/signup-challenge-migration.test.ts` | migration 23 SQL 顺序门禁：先清理重复 active challenge，再创建 partial unique index | 测试工具 |
+| `packages/database/test/signup-challenge-migration{,.integration}.test.ts` | migration 23 SQL 顺序门禁与真实 PostgreSQL 预存重复 active challenge 收敛验收 | 测试工具 |
 | `apps/web/lib/api.ts` / `apps/web/next.config.mjs` / `infra/nginx/openscience.conf` | web 同源 `/api` 传输层：开发 rewrite、生产反代、受保护写请求 CSRF 获取与一次刷新重试 | 活文档 |
 | `apps/web/test/ingestion-foundations.test.ts` / `apps/web/test/visual/ingestion-shots.mjs` / `apps/web/app/{%5Fvisual,_visual}/ingestion-foundations/page.tsx` | 研究者导入视觉地基 TDD 合同与 1440/768/375 三视口浏览器截图门禁；脚本访问仅开发态可用的真实编译原语预览 | 活文档 |
 | `apps/web/components/landing/SiteHeader.tsx` | Landing 页站点 Header（i18n 导航、滚动模糊背景、真实 `#latest/#trust` 入口） | 活文档 |

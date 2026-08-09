@@ -7,6 +7,7 @@
 - **真实跨进程证据**：新增独立 Playwright 门禁，启动编译后的 Fastify auth 路由和真实 Next dev server，经 `/api` rewrite 完成请求验证码、确认注册、会话 Cookie 与 `/auth/me`，1/1 通过，不再以 route mock 代替前后端契约。
 - **迁移前向安全**：active challenge partial unique index 从原 signup table migration 拆为独立 `20260809025000_signup_challenge_active_unique`，即使某环境已应用早期 migration 22，也能通过后续 deploy 获得约束。
 - **修复复审遗留**：导入路径现在对同名文件做确定性消歧；页面保留 import checkpoint、已创建 RO、已上传 Artifact 与稳定 create/commit 幂等键，网络中断重试不会创建第二个 RO 或重复上传已完成文件。迁移 23 先按邮箱保留最新 active challenge、消费其余重复行，再建 partial unique index；新增 SQL 顺序门禁测试。
+- **云上迁移验收**：另增真实 PostgreSQL integration test，在事务内预置重复 active rows、执行收敛 SQL 与唯一索引、断言只保留最新行后回滚；需在云上 migration 23 deploy 后执行。
 - **状态**：Task 2 仍未自行标记 complete；等待同一独立审查者对 fix round 3 做 scoped re-review。Task 3 实现继续暂停。
 
 ## 2026-08-09（研究者导入闭环 Task 2 复审）— 撤销完成标记，进入修复轮次
