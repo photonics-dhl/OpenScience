@@ -1629,3 +1629,27 @@ MVP 交接复查发现两类文档失真：AGENTS.md 自 P1B-2（1e859df，08-03
 - 放弃旧方案0723，避免新旧需求互相干扰
 
 ---
+## 2026-08-10 — Optical Editorial 前端重构设计门禁完成
+
+### ✅ Completed
+
+| Task | Details |
+|---|---|
+| 参考资源审计 | 分析 `docs/user_ideas/8.10/` 的六张视觉参考图、Masterplan v2、Art Direction v3、设计系统图与实现资料；确认 v3 覆盖旧蓝紫宇宙视觉。 |
+| 设计 grill-me | 用户逐项确认视觉宪法、三表面、双入口身份流、Hermes 角色、Evidence Intake、三联屏、Figma/浏览器职责、启动语料与动效语法。 |
+| 新设计 spec | `docs/specs/2026-08-10-optical-editorial-rebaseline-design.md` 已写入，尚未开始代码实现。 |
+
+### ⏳ Next Steps
+
+- [ ] 用户审阅并确认新设计 spec；
+- [ ] 进入 writing-plans，建立浏览器优先的 Phase 0/三联屏实现计划；
+- [ ] 在服务器直接部署每个已验收垂直切片，保留上一镜像回滚。
+
+### Key Decisions
+
+- Art Direction v3 是视觉唯一真源；Masterplan v2 继续负责业务结构与交互语义。
+- 首页以 `Science evolves.`/`科学，持续演化。` 光学混排为品牌记忆；个人工作区使用抽象深空间仪器感；Public RO 使用纸面阅读表面。
+- Figma 管规则与状态，浏览器管真实光学媒介；不再用 Figma 静态图层冒充最终动态效果。
+- 开发阶段无用户，视觉切片通过服务器真实环境后直接替换，不设长期 preview 双 UI。
+
+---
