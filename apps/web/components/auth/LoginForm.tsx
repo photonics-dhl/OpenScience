@@ -91,3 +91,6 @@ export function LoginForm({ returnTo }: LoginFormProps) {
     </section>
   );
 }
+
+// Compatibility export for a pre-existing server-side /login route during rolling sync.
+export default LoginForm;
