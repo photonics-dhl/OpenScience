@@ -39,12 +39,12 @@ function Dropzone({
         disabled && 'cursor-not-allowed opacity-55',
         className,
       )}
+      {...props}
       onDragOver={(event) => event.preventDefault()}
       onDrop={(event) => {
         event.preventDefault();
         emitFiles(event.dataTransfer.files);
       }}
-      {...props}
     >
       <input
         className="sr-only"

@@ -37,6 +37,7 @@ import { StatusBadge } from '../components/ui/status-badge';
 
 const tokensCss = readFileSync(path.join(__dirname, '../app/tokens.css'), 'utf8');
 const globalsCss = readFileSync(path.join(__dirname, '../app/globals.css'), 'utf8');
+const visualScript = readFileSync(path.join(__dirname, './visual/ingestion-shots.mjs'), 'utf8');
 
 function parseRootTokens(source: string): Map<string, string> {
   const root = source.match(/:root\s*\{([\s\S]*?)\}/)?.[1];
@@ -200,5 +201,10 @@ describe('researcher ingestion foundations', () => {
         reject: expect.any(String),
       });
     }
+  });
+
+  it('captures the real compiled primitive preview instead of a hand-written mock', () => {
+    expect(visualScript).toContain('/_visual/ingestion-foundations');
+    expect(visualScript).not.toContain('page.setContent');
   });
 });
