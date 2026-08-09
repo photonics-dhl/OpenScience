@@ -19,6 +19,12 @@ Task 3 初版 hardening 已加入 batch request digest、multipart truncated 拒
 - 内容安全补充：入口已对 PDF/Office/ZIP/图片做服务端 signature 检查，对 Markdown/TeX/SVG 做 UTF-8/主动内容检查；Artifact 层增加 EICAR/PE/明显归档路径快速阻断。该扫描明确不是完整 AV，生产 quarantine/ClamAV adapter 尚未接入。
 - **Read first:** `AGENTS.md` → `docs/OpenScience_Kimi_Development_Spec.md` → 本 handoff → `docs/progress.md` → `project_index.md` → researcher ingestion design/plan。
 
+## Latest verification
+
+- Commit `de29f81` adds the Artifact→Blob worker bridge and deterministic Markdown/TeX parser; `1a6d1c0` adds content signatures and fast blocking checks.
+- Full `test`, `build`, `lint`, `docs:lint`, `audit:docs-sync`, and `git diff --check` passed on 2026-08-09; worktree is clean.
+- This slice remains blocked for production deployment until controlled PDF/Office/image parsers, quarantine/AV scanning, failure taxonomy/audit completeness, and isolated infrastructure integration evidence are complete.
+
 ## Task 2 fix round 3/5
 
 - Auth/Dashboard 前端已实现：验证码注册、登录、安全 returnTo、新用户/回访用户 Dashboard 状态与可行动 Hermes 任务。

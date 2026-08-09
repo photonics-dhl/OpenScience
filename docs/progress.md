@@ -9,6 +9,7 @@
 - **继续修正**：ingestion 写入现在复用明确角色门禁（Owner/Maintainer/Author/Contributor）与 active Workspace 检查；multipart 在授权后逐 chunk 限制 250 MB、并发门禁为 1；参数化 URL 使用模板 bucket；AgentTask 增加 `dispatched_at`，submit/replay/ingestion association/worker CAS claim 具备可恢复 dispatch 基础，retry dispatch 失败回滚为 `failed_retryable`。新增 focused domain 30/30、agent-worker 15/15。
 - **内容边界**：新增服务端 PDF/Office/ZIP/图片签名、UTF-8/主动 SVG 文本校验，以及 EICAR/PE/明显归档路径穿越快速阻断；这不是完整 AV 扫描，quarantine + ClamAV 类引擎仍是生产门禁。
 - **worker 桥接**：新增 Artifact→Blob→解析器路径；Markdown/TeX 进入 Hermes 正文提取，PDF/Office/图片在未挂载受控解析器时明确返回 `needs_review`，不再因 payload 只有 ID 而必然抛出“缺少正文”。
+- **本轮门禁**：全仓 `test`、`build`、`lint`、`docs:lint`、`audit:docs-sync` 均通过；工作树干净。该证据仍不等同于生产 AV、二进制 parser 或隔离 PG/Redis/MinIO 验收。
 - **验证证据**：修复前全仓 test、build、lint、docs lint、docs-sync 均通过，但深度复审证明“测试绿不等于合同完整”；后续必须增加权限、内容伪装、流式上限、队列 claim/outbox 与真实 Artifact extraction 门禁后重新跑全量。
 - **下一步**：挂载受控 PDF/DOC/DOCX/ZIP/图片解析器与完整 quarantine/AV adapter；增加跨服务 upload→worker→needs_review 与隔离数据库 migration/rollback 证据。未通过新一轮独立复审前不触碰云上迁移。
 
