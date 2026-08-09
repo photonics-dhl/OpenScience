@@ -26,7 +26,7 @@
 | `apps/web/playwright{,.signup}.config.ts` / `apps/web/test/e2e/signup-live.spec.ts` / `apps/api/test/support/signup-smoke-server.mjs` | 可重复浏览器门禁；signup smoke 启动编译 Fastify auth 路由和真实 Next rewrite，验证验证码、Cookie 与 `/auth/me`，不使用 API route mock | 测试工具 |
 | `packages/domain/src/ingestion/` / `apps/api/src/routes/ingestion.ts` | 多格式 ingestion 格式策略、批次/任务状态机、Artifact + AgentTask 异步边界，以及 consent/status/retry API；已补写权限、bounded multipart、模板限流和 dispatch/CAS 基础 | 执行中 |
 | `apps/agent-worker/src/{ingestion-parser,parser-self-test,index}.ts` | Artifact→Blob→Hermes 桥接：Markdown/TeX 确定性解码；通过受控 adapter 接入 `pdf-parse` PDF 文本与 Mammoth DOCX 文本；self-test 用无用户数据的真实 PDF/OOXML fixture 验证部署运行时；超限/解析失败/未支持格式显式进入 `needs_review` | 执行中 |
-| `packages/domain/test/ingestion-service.test.ts` / `apps/api/test/ingestion.integration.test.ts` | PDF/DOCX/TeX/Markdown/图片、consent、越权、幂等恢复、worker 状态同步与云上真实 PG/Redis/MinIO 合同 | 测试工具 |
+| `packages/domain/test/ingestion-service.test.ts` / `apps/api/test/ingestion.integration.test.ts` | PDF/DOCX/TeX/Markdown/图片、consent、越权、幂等恢复、worker 状态同步与云上真实 PG/Redis/S3-compatible storage 合同 | 测试工具 |
 | `packages/database/test/signup-challenge-migration{,.integration}.test.ts` | migration 23 SQL 顺序门禁与真实 PostgreSQL 预存重复 active challenge 收敛验收 | 测试工具 |
 | `apps/web/lib/api.ts` / `apps/web/next.config.mjs` / `infra/nginx/openscience.conf` | web 同源 `/api` 传输层：开发 rewrite、生产反代、受保护写请求 CSRF 获取与一次刷新重试 | 活文档 |
 | `apps/web/test/ingestion-foundations.test.ts` / `apps/web/test/visual/ingestion-shots.mjs` / `apps/web/app/{%5Fvisual,_visual}/ingestion-foundations/page.tsx` | 研究者导入视觉地基 TDD 合同与 1440/768/375 三视口浏览器截图门禁；脚本访问仅开发态可用的真实编译原语预览 | 活文档 |
@@ -89,6 +89,7 @@
 | `docs/decisions/ADR-004-figma-account-ownership-and-migration.md` | Figma 临时/长期账号所有权、双 OAuth 隔离、canonical 设计稿迁移与验收决策 | Accepted |
 | `docs/decisions/ADR-005-public-email-code-registration.md` | 公开邮箱验证码注册取代邀请码门禁；legacy invitation 仅兼容，规定限流/审计/并发与失败安全 | Accepted |
 | `docs/decisions/ADR-006-ingestion-parser-and-ocr-strategy.md` | PDF/DOCX 受控解析、图片本地 OCR 优先与 MiniMax fallback 边界；any2pdf 仅用于未来导出 | Accepted |
+| `docs/decisions/ADR-007-production-object-storage.md` | 生产对象存储选择 SeaweedFS 4.41 S3 模式；拒绝归档的 MinIO legacy binary，新 Secret/内网/卷/备份边界 | Accepted |
 | `docs/handoff/2026-08-08-product-web-tooling-handoff.md` | 产品网页工具前置交接（Codex 10 MCP、双 Figma OAuth、迁移 ADR、重启后验证顺序） | 当前 handoff |
 | `docs/specs/2026-08-04-p1b-3-blob-artifact-upload-design.md` | P1B-3 Blob 内容寻址存储与上传管线设计（design gate 已确认：五决策，代码已实现 2026-08-04） | 活文档 |
 | `docs/plans/2026-07-24-doc-architecture-plan.md` | 文档架构落地实施计划 | 活文档 |
@@ -242,7 +243,7 @@
 | `infra/scripts/with-proxy.sh` | 代理兜底包装：隧道可用走 v2ray、失效回落直连（云上 `/usr/local/bin/with-proxy`，2026-08-01） | 已部署云上 |
 | `infra/scripts/proxy-tunnel.sh` / `proxy-tunnel.vbs` | 本机侧 SSH 反向隧道常驻（Windows 计划任务 `OpenScience-ProxyTunnel` 登录自启 + 断线重连，2026-08-01） | 已启用 |
 | `infra/scripts/deploy.sh` | 部署脚本 | 骨架，Phase 1A 填充 |
-| `infra/compose/` | `docker-compose.dev.yml` 开发栈；`docker-compose.monitor.yml` 监控栈；`docker-compose.prod.yml` 生产栈（data_net/app_net 分段，api/web/agent-worker node:22，worker 不暴露端口，P1A-9 + ingestion） | 生产已部署云上；API healthy、Web/worker Up（2026-08-09） |
+| `infra/compose/` | dev/monitor/prod compose；生产栈 data/app 分段，API/Web/worker + SeaweedFS 4.41 S3（仅 data_net、`seaweed-data` 卷）；`docker-compose.prod.test.mjs` 固化私有端口/凭据/健康依赖合同 | S3 变更待部署；既有 API/Web/worker 运行中（2026-08-09） |
 | `infra/nginx/` | 反代配置：`portainer.conf`（portainer.428312321.xyz → 127.0.0.1:9443，LE 证书 + WebSocket，2026-07-31；2026-08-01 追加 /nav/ 导航页、/monitor/→Netdata、/traffic/→vnStat 账单页，basic_auth）+ `openscience.conf`（OpenScience.428312321.xyz → 127.0.0.1:3001，P1A-8：/admin basic_auth + XFF 透传） | 均已部署云上并启用（openscience.conf 2026-08-03） |
 | `infra/www/` | `nav/index.html` 服务器面板导航静态页（/var/www/nav，2026-08-01） | 已部署云上 |
 | `infra/sandbox/` | 沙箱配置占位（P1A-1） | 骨架 |

@@ -1,14 +1,14 @@
 # OpenScience 生产栈（P1A-9）—— 单 ECS，网络分段对齐 Spec §14.2
 #
 # 网络拓扑：
-#   data_net : postgres + redis（内部互联，**不绑公网端口**，数据库不得绑定公网地址）
+#   data_net : postgres + redis + S3-compatible object storage（内部互联，均不绑公网端口）
 #   app_net  : web（127.0.0.1:3000）+ api（127.0.0.1:3001），nginx 分流反代
 #   api 双网卡（app_net + data_net）→ 仅 API 可达数据服务
 #
 # 生产纪律：
-#   - 零默认值：DB/redis/cookie/SMTP 全从 env_file（/opt/openscience/.env.prod，云上生成不入库）
+#   - 零默认值：DB/redis/cookie/SMTP/S3 凭据全从 env_file（/opt/openscience/.env.prod，云上生成不入库）
 #   - 代码经 deploy.sh 同步到 /opt/openscience，api 容器 volume 挂载源码目录跑 dist
-#   - minio 不进生产 compose（dev 栈已跑；真实对象存储 §24/后续 Phase）
+#   - 对象存储使用 SeaweedFS 单节点 S3 模式；仅 data_net 可达，数据落命名卷
 #
 # 用法：
 #   docker compose -f docker-compose.prod.yml up -d
@@ -49,6 +49,26 @@ services:
       - data_net
     restart: unless-stopped
 
+  object-storage:
+    # SeaweedFS 4.41：活跃维护的 Apache-2.0 S3-compatible store；不暴露宿主端口。
+    image: chrislusf/seaweedfs:4.41
+    command: ["mini", "-dir=/data"]
+    environment:
+      AWS_ACCESS_KEY_ID: ${S3_ACCESS_KEY:?S3_ACCESS_KEY required}
+      AWS_SECRET_ACCESS_KEY: ${S3_SECRET_KEY:?S3_SECRET_KEY required}
+      S3_BUCKET: ${S3_BUCKET:?S3_BUCKET required}
+    volumes:
+      - seaweed-data:/data
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1:9333/cluster/status"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 20s
+    networks:
+      - data_net
+    restart: unless-stopped
+
   api:
     # node:22（debian bookworm full，含 openssl3）—— Prisma engine 与 cloud host build 的
     # debian-openssl-3.0.x 匹配；slim/alpine 缺 openssl 运行时致 engine 加载失败（P1A-9 实证）
@@ -62,10 +82,17 @@ services:
     command: ["node", "dist/index.js"]
     env_file:
       - /opt/openscience/.env.prod
+    environment:
+      S3_DRIVER: minio
+      S3_ENDPOINT: object-storage
+      S3_PORT: "8333"
+      S3_USE_SSL: "false"
     depends_on:
       postgres:
         condition: service_healthy
       redis:
+        condition: service_healthy
+      object-storage:
         condition: service_healthy
     healthcheck:
       test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3001/auth/me').then(r=>process.exit(r.status===401?0:1)).catch(()=>process.exit(1))"]
@@ -87,10 +114,17 @@ services:
     command: ["node", "dist/index.js"]
     env_file:
       - /opt/openscience/.env.prod
+    environment:
+      S3_DRIVER: minio
+      S3_ENDPOINT: object-storage
+      S3_PORT: "8333"
+      S3_USE_SSL: "false"
     depends_on:
       postgres:
         condition: service_healthy
       redis:
+        condition: service_healthy
+      object-storage:
         condition: service_healthy
     networks:
       - app_net
@@ -121,3 +155,4 @@ networks:
 volumes:
   postgres-data:
   redis-data:
+  seaweed-data:

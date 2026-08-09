@@ -9,6 +9,8 @@
 - [ ] 目标 release ref 已 CI 绿灯（lint/typecheck/unit/build）
 - [ ] 云上集成测试已全绿（`test:integration`，跑前全量 `build`）
 - [ ] `agent-worker` 解析服务已包含在生产 compose，且 parser 依赖可在服务器 release 目录解析
+- [ ] `object-storage` 使用固定版本/摘要，仅在 `data_net`，`seaweed-data` 命名卷存在
+- [ ] `.env.prod` 已有 `S3_ACCESS_KEY`、`S3_SECRET_KEY`、`S3_BUCKET`；只检查变量名存在，不输出值
 - [ ] 巡检基线 `infra/scripts/checkup.sh` 无告警
 - [ ] 备份确认（`docs/runbooks/backup-restore.md`）
 - [ ] P1A-8 追加：API 反代 `infra/nginx/openscience.conf` 的 SSL 证书已签发（`~/.acme.sh`）
@@ -40,7 +42,32 @@ ssh-run.sh "cd /opt/openscience && node scripts/seed-quota.mjs --confirm"   # P1
 
 生产栈数据库没有宿主端口映射，实际执行必须通过 API 容器，并从服务器 `.env.prod` 注入容器内 `DATABASE_URL`；`infra/scripts/deploy.sh` 已封装该路径。
 
-### 2.4 API 反代配置（首次上线或变更时）
+### 2.4 初始化生产对象存储（首次）
+
+```bash
+# 1) 可恢复备份 Secret 文件；不输出任何值
+cp -a /opt/openscience/.env.prod \
+  "/opt/openscience/.env.prod.pre-s3-$(date +%Y%m%d-%H%M%S)"
+
+# 2) 缺失时在服务器生成凭据；umask 保证新文件/追加内容仅 owner 可读
+umask 077
+grep -q '^S3_ACCESS_KEY=' /opt/openscience/.env.prod || \
+  printf 'S3_ACCESS_KEY=%s\n' "$(openssl rand -hex 16)" >> /opt/openscience/.env.prod
+grep -q '^S3_SECRET_KEY=' /opt/openscience/.env.prod || \
+  printf 'S3_SECRET_KEY=%s\n' "$(openssl rand -hex 32)" >> /opt/openscience/.env.prod
+grep -q '^S3_BUCKET=' /opt/openscience/.env.prod || \
+  printf 'S3_BUCKET=openscience-prod\n' >> /opt/openscience/.env.prod
+chmod 600 /opt/openscience/.env.prod
+
+# 3) 经既有代理隧道拉镜像，再验证 compose；命令不得回显 resolved env
+with-proxy docker pull chrislusf/seaweedfs:4.41
+docker compose --env-file /opt/openscience/.env.prod \
+  -f /opt/openscience/infra/compose/docker-compose.prod.yml config --quiet
+```
+
+回滚：恢复刚创建的 `.env.prod.pre-s3-*`，切回上一 release compose；`seaweed-data` 卷保留，未经用户明确批准不得删除。
+
+### 2.5 API 反代配置（首次上线或变更时）
 
 ```bash
 # 1) 上传 nginx 配置到 /etc/nginx/conf.d/openscience.conf（经 ssh-run.sh 或 scp）
@@ -58,25 +85,25 @@ ssh-run.sh "cd /opt/openscience && node scripts/seed-quota.mjs --confirm"   # P1
 #    nginx -t && systemctl reload nginx
 ```
 
-### 2.5 启动 API（systemd 或 nohup）
+### 2.6 启动 API（systemd 或 nohup）
 
 ```bash
 # 服务单元（见 infra/ 说明）；env 从服务器 Secret 注入，不入库
 ssh-run.sh "systemctl restart openscience-api"
 ```
 
-### 2.6 验证 Hermes worker
+### 2.7 验证对象存储与 Hermes worker
 
 ```bash
-ssh-run.sh "cd /opt/openscience && docker compose --env-file /opt/openscience/.env.prod -f infra/compose/docker-compose.prod.yml ps api web agent-worker postgres redis"
+ssh-run.sh "cd /opt/openscience && docker compose --env-file /opt/openscience/.env.prod -f infra/compose/docker-compose.prod.yml ps api web agent-worker object-storage postgres redis"
 ssh-run.sh "cd /opt/openscience && docker compose --env-file /opt/openscience/.env.prod -f infra/compose/docker-compose.prod.yml logs --tail=100 agent-worker"
 ```
 
-预期：`agent-worker` 为 `Up`，日志出现启动行，不出现 `Cannot find module`、Prisma schema 或 Redis 连接错误。
+预期：`object-storage` 与 API 为 `healthy`，`agent-worker` 为 `Up`；worker 日志出现启动行，不出现模块、Prisma、Redis 或 Storage 连接错误。
 
 ## 3. 回滚步骤
 
-- 代码回滚：`node scripts/cloud-sync.mjs` 同步旧 release ref，重新 install + build，重启服务。
+- 代码回滚：`node scripts/cloud-sync.mjs` 同步旧 release ref，重新 install + build，重启服务；对象卷保留。
 - nginx 回滚：恢复上一版 `openscience.conf`（`cp` 备份），`nginx -t && systemctl reload nginx`。
 - 迁移回滚：`node packages/database/dist/migrate-cli.js status` 确认；破坏性迁移先备份（`docs/runbooks/backup-restore.md`）。
 - 判定：`checkup.sh` 复跑 + API 健康检查（见 §4）。
@@ -88,4 +115,5 @@ ssh-run.sh "cd /opt/openscience && docker compose --env-file /opt/openscience/.e
 - 安全响应头：`curl -sI https://OpenScience.428312321.xyz/auth/me` → 含 `X-Content-Type-Options: nosniff`、CSP `default-src 'none'`
 - 限流：连续打 `/auth/login` 5+ 次 → 429 + `Retry-After`
 - 巡检复跑：`infra/scripts/checkup.sh` 无新增告警
-- worker 验证：按 §2.6 执行，确认 parser 依赖在服务器可加载；图片 OCR 服务未通过独立验收前不得解除生产门禁。
+- 对象存储：运行 adapter put/head/get smoke，输出仅 pass/fail；不得输出凭据、object 内容或 endpoint 值。
+- worker 验证：按 §2.7 执行，确认 parser 依赖在服务器可加载；图片 OCR 服务未通过独立验收前不得解除生产门禁。
