@@ -20,9 +20,10 @@
 | `apps/web/components/ui/{button,card,badge,skeleton,input,dialog,status-badge,progress-rail,dropzone,evidence-card}.tsx` | UI 基础组件；后四项为研究者导入 Task 1 稳定原语（双语、WCAG、reduced-motion、固定任务状态占位） | 活文档 |
 | `apps/web/app/auth/{register,login}/page.tsx` / `apps/web/components/auth/{SignupCodeForm,LoginForm}.tsx` | 邮箱验证码注册与登录页面/表单；无邀请码字段，安全 returnTo 与可访问错误反馈 | 活文档 |
 | `apps/web/app/dashboard/page.tsx` / `apps/web/components/dashboard/` | 研究驾驶舱：最近 RO、导入/创建、可行动 Hermes 任务和研究列表 | 活文档 |
-| `apps/web/app/research-objects/new/page.tsx` | Dashboard 两个主 CTA 的真实落点：Workspace、标题、可选多格式资料与 RO 创建；后续 Task 3/4 接上传解析 | 活文档 |
+| `apps/web/app/research-objects/new/page.tsx` | Dashboard 两个主 CTA 的真实落点：blank 创建 RO；import 强制选择多格式资料，逐文件持久化 Artifact 并写入首个不可变 Commit；Task 3 接异步解析状态 | 活文档 |
 | `GET /research-objects` / `GET /agent/tasks` | Dashboard 真实数据合同：仅成员 Workspace 的 RO 与当前用户 AgentTask，可按 actionable 过滤 | 活接口 |
-| `apps/web/test/auth-dashboard.test.tsx` / `apps/web/test/e2e/auth-dashboard.spec.ts` | Auth/Dashboard 单元合同与 clean-browser 桌面/移动 E2E | 活文档 |
+| `apps/web/test/auth-dashboard.test.tsx` / `apps/web/test/e2e/auth-dashboard.spec.ts` | Auth/Dashboard 单元合同与 clean-browser 桌面/移动 E2E；实际选择多文件并断言 Artifact→Commit 引用 | 活文档 |
+| `apps/web/playwright{,.signup}.config.ts` / `apps/web/test/e2e/signup-live.spec.ts` / `apps/api/test/support/signup-smoke-server.mjs` | 可重复浏览器门禁；signup smoke 启动编译 Fastify auth 路由和真实 Next rewrite，验证验证码、Cookie 与 `/auth/me`，不使用 API route mock | 测试工具 |
 | `apps/web/lib/api.ts` / `apps/web/next.config.mjs` / `infra/nginx/openscience.conf` | web 同源 `/api` 传输层：开发 rewrite、生产反代、受保护写请求 CSRF 获取与一次刷新重试 | 活文档 |
 | `apps/web/test/ingestion-foundations.test.ts` / `apps/web/test/visual/ingestion-shots.mjs` / `apps/web/app/{%5Fvisual,_visual}/ingestion-foundations/page.tsx` | 研究者导入视觉地基 TDD 合同与 1440/768/375 三视口浏览器截图门禁；脚本访问仅开发态可用的真实编译原语预览 | 活文档 |
 | `apps/web/components/landing/SiteHeader.tsx` | Landing 页站点 Header（i18n 导航、滚动模糊背景、真实 `#latest/#trust` 入口） | 活文档 |
@@ -240,7 +241,7 @@
 | `infra/nginx/` | 反代配置：`portainer.conf`（portainer.428312321.xyz → 127.0.0.1:9443，LE 证书 + WebSocket，2026-07-31；2026-08-01 追加 /nav/ 导航页、/monitor/→Netdata、/traffic/→vnStat 账单页，basic_auth）+ `openscience.conf`（OpenScience.428312321.xyz → 127.0.0.1:3001，P1A-8：/admin basic_auth + XFF 透传） | 均已部署云上并启用（openscience.conf 2026-08-03） |
 | `infra/www/` | `nav/index.html` 服务器面板导航静态页（/var/www/nav，2026-08-01） | 已部署云上 |
 | `infra/sandbox/` | 沙箱配置占位（P1A-1） | 骨架 |
-| `infra/migrations/` | Prisma 迁移 1–22（既有 1–21 + `20260809020000_signup_challenges` 邮箱验证码注册挑战表），各附 rollback.sql | 迁移 1–21 已云上 deploy；22 待本切片部署 |
+| `infra/migrations/` | Prisma 迁移 1–23（既有 1–21 + `20260809020000_signup_challenges` 挑战表 + `20260809025000_signup_challenge_active_unique` 单 active challenge 前向约束），各附 rollback.sql | 迁移 1–21 已云上 deploy；22–23 待本切片部署 |
 | `infra/schema.prisma` | Prisma schema（`app_meta` 基线模型，P1A-2；2026-08-06 补 `SandboxJob`/`SandboxArtifact`/`SandboxJobStatus`，对齐迁移 20/21 DDL，P1E） | 已实现 |
 
 ## .agents/skills/（项目级 Skills，Spec §20.3）

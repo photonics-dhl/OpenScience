@@ -218,12 +218,79 @@ export async function listMyWorkspaces(): Promise<WorkspaceApi[]> {
   return result.workspaces;
 }
 
-export async function createResearchObject(input: { workspaceId: string; title: string }): Promise<{ researchObject: { id: string } }> {
+export async function createResearchObject(input: { workspaceId: string; title: string }): Promise<{
+  researchObject: { id: string; workspaceId: string; version: number };
+}> {
   return request('/api/research-objects', {
     method: 'POST',
     headers: { 'idempotency-key': crypto.randomUUID() },
     body: JSON.stringify(input),
   });
+}
+
+/** Upload one source artifact while preserving browser multipart boundaries. */
+export async function uploadArtifactFile(
+  workspaceId: string,
+  file: File,
+  onProgress?: (percent: number) => void,
+): Promise<ArtifactReference> {
+  const xhr = new XMLHttpRequest();
+  await prepareProtectedXhr(xhr, 'POST', '/api/artifacts/upload');
+  const body = new FormData();
+  body.append('workspaceId', workspaceId);
+  body.append('logicalPath', file.name);
+  body.append('file', file, file.name);
+
+  return new Promise((resolve, reject) => {
+    xhr.upload.onprogress = (event) => {
+      if (event.lengthComputable) onProgress?.(Math.round((event.loaded / event.total) * 100));
+    };
+    xhr.onerror = () => reject(new ApiClientError('UPLOAD_FAILED', `上传失败：${file.name}`, 0));
+    xhr.onload = () => {
+      let parsed: { artifact?: { artifactId: string; logicalPath: string }; error?: { code?: string; message?: string } } = {};
+      try { parsed = JSON.parse(xhr.responseText) as typeof parsed; } catch { /* handled below */ }
+      if (xhr.status >= 200 && xhr.status < 300 && parsed.artifact) {
+        resolve({ artifactId: parsed.artifact.artifactId, logicalPath: parsed.artifact.logicalPath });
+        return;
+      }
+      reject(new ApiClientError(parsed.error?.code ?? 'UPLOAD_FAILED', parsed.error?.message ?? `上传失败：${file.name}`, xhr.status));
+    };
+    xhr.send(body);
+  });
+}
+
+const EMPTY_SDF_CORE: SdfCore = {
+  schemaVersion: '0.1.0',
+  problem: '',
+  insight: '',
+  method: '',
+  results: '',
+  limitations: '',
+  reproducibility: '',
+};
+
+interface MaterialImportDeps {
+  create: typeof createResearchObject;
+  upload: (workspaceId: string, file: File) => Promise<ArtifactReference>;
+  commit: typeof createCommit;
+}
+
+/** Create an RO and persist every selected source file in its first immutable commit. */
+export async function createResearchObjectWithMaterials(
+  input: { workspaceId: string; title: string },
+  materials: readonly File[],
+  deps: MaterialImportDeps = { create: createResearchObject, upload: uploadArtifactFile, commit: createCommit },
+): Promise<{ researchObject: { id: string; workspaceId: string; version: number } }> {
+  const created = await deps.create(input);
+  if (materials.length === 0) return created;
+  const artifacts: ArtifactReference[] = [];
+  for (const file of materials) artifacts.push(await deps.upload(input.workspaceId, file));
+  await deps.commit(
+    created.researchObject.id,
+    { message: `Import ${materials.length} source material${materials.length === 1 ? '' : 's'}`, version: created.researchObject.version, sdfCore: EMPTY_SDF_CORE, artifacts },
+    crypto.randomUUID(),
+  );
+  return created;
 }
 
 /** 查 RO 详情（含 SDF core）。 */

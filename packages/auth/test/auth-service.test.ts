@@ -138,20 +138,32 @@ describe('email-code signup', () => {
     expect(db.signupChallenges[0].lockedUntil).not.toBeNull();
   });
 
-  it('invalidates and audits an unsent challenge so an immediate retry can deliver', async () => {
+  it('keeps the public response generic and invalidates an unsent challenge so an immediate retry can deliver', async () => {
     const { deps, db, mailer } = makeDeps();
     const auditEvents: Array<{ action: string }> = [];
     deps.audit = { record: async (event) => void auditEvents.push({ action: event.action }) };
     deps.mailer = { send: async () => { throw new Error('smtp unavailable'); } };
-    await expect(requestSignupCode(deps, { email: 'retry-delivery@example.com' })).rejects.toMatchObject({
-      code: 'VERIFICATION_DELIVERY_FAILED',
-    });
+    await expect(requestSignupCode(deps, { email: 'retry-delivery@example.com' })).resolves.toBeUndefined();
     expect(db.signupChallenges[0].consumedAt).not.toBeNull();
     expect(auditEvents).toContainEqual({ action: 'auth.signup_code.delivery_failed' });
 
     deps.mailer = mailer;
     await expect(requestSignupCode(deps, { email: 'retry-delivery@example.com' })).resolves.toBeUndefined();
     expect(mailer.sent).toHaveLength(1);
+  });
+
+  it('uses the same challenge and mail path for an already-active email', async () => {
+    const { deps, db, mailer } = makeDeps();
+    db.users.push({
+      id: 'active-user', email: 'active@example.com', passwordHash: 'unused', displayName: 'Active',
+      status: 'email_verified', createdAt: NOW, updatedAt: NOW,
+    });
+
+    await expect(requestSignupCode(deps, { email: 'active@example.com' })).resolves.toBeUndefined();
+
+    expect(db.signupChallenges).toHaveLength(1);
+    expect(mailer.sent).toHaveLength(1);
+    expect(mailer.sent[0].to).toBe('active@example.com');
   });
 
   it('migrates an existing invited account through the public code flow', async () => {

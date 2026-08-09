@@ -129,8 +129,6 @@ export async function register(deps: AuthDeps, input: RegisterInput, ctx: AuditC
 export async function requestSignupCode(deps: AuthDeps, input: SignupCodeRequest, ctx: AuditContext = {}): Promise<void> {
   const email = input.email.trim().toLowerCase();
   const at = now(deps);
-  const existingUser = await deps.prisma.user.findUnique({ where: { email } });
-  if (existingUser && existingUser.status !== 'invited') return;
   const previous = await deps.prisma.signupChallenge.findFirst({ where: { email, consumedAt: null }, orderBy: { createdAt: 'desc' } });
   if (previous && inCooldown(previous.lastSentAt, at)) return;
   const code = generateVerificationCode();
@@ -152,13 +150,15 @@ export async function requestSignupCode(deps: AuthDeps, input: SignupCodeRequest
   }
   try {
     await deps.mailer.send({ to: email, subject: 'OpenScience 注册验证码', text: `你的 OpenScience 注册验证码是 ${code}，10 分钟内有效。` });
-  } catch (error) {
+  } catch {
     await deps.prisma.signupChallenge.updateMany({
       where: { id: challenge.id, consumedAt: null },
       data: { expiresAt: at, consumedAt: at },
     });
     await recordAuth(deps, { actorId: null, action: 'auth.signup_code.delivery_failed', metadata: { channel: 'email' } }, ctx);
-    throw new AuthError('VERIFICATION_DELIVERY_FAILED', '验证码发送失败，请稍后重试', error);
+    // Public response remains 202 for every address and mail-provider state. The
+    // failed challenge is already consumed and the operational failure is audited.
+    return;
   }
   await recordAuth(deps, { actorId: null, action: 'auth.signup_code.request', metadata: { channel: 'email' } }, ctx);
 }

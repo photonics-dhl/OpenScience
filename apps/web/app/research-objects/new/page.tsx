@@ -1,21 +1,24 @@
 'use client';
 
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { useTranslations } from 'next-intl';
 import * as React from 'react';
 import { useEffect, useState, type FormEvent } from 'react';
 
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { createResearchObject, listMyWorkspaces, type WorkspaceApi } from '@/lib/api';
+import { createResearchObjectWithMaterials, listMyWorkspaces, type WorkspaceApi } from '@/lib/api';
 
 export default function NewResearchObjectPage() {
   const t = useTranslations('createResearch');
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const mode = searchParams.get('mode') === 'blank' ? 'blank' : 'import';
   const [workspaces, setWorkspaces] = useState<WorkspaceApi[]>([]);
   const [workspaceId, setWorkspaceId] = useState('');
   const [title, setTitle] = useState('');
+  const [materials, setMaterials] = useState<File[]>([]);
   const [pending, setPending] = useState(false);
   const [error, setError] = useState('');
 
@@ -37,7 +40,11 @@ export default function NewResearchObjectPage() {
     setPending(true);
     setError('');
     try {
-      const result = await createResearchObject({ workspaceId, title });
+      if (mode === 'import' && materials.length === 0) {
+        setError(t('materialsRequired'));
+        return;
+      }
+      const result = await createResearchObjectWithMaterials({ workspaceId, title }, materials);
       router.push(`/research-objects/${result.researchObject.id}/edit`);
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : t('error'));
@@ -67,11 +74,20 @@ export default function NewResearchObjectPage() {
                 {t('researchTitle')}
                 <Input name="title" required maxLength={200} value={title} onChange={(event) => setTitle(event.target.value)} />
               </label>
-              <label className="grid gap-2 text-sm font-medium">
-                {t('materials')}
-                <Input type="file" name="materials" multiple accept=".pdf,.docx,.tex,.zip,.md,.markdown,.png,.jpg,.jpeg,.webp,.svg" />
-                <span className="text-xs font-normal text-workbench-muted">{t('materialsHint')}</span>
-              </label>
+              {mode === 'import' ? (
+                <label className="grid gap-2 text-sm font-medium">
+                  {t('materials')}
+                  <Input
+                    type="file"
+                    name="materials"
+                    required
+                    multiple
+                    accept=".pdf,.doc,.docx,.tex,.zip,.md,.markdown,.png,.jpg,.jpeg,.webp,.svg"
+                    onChange={(event) => setMaterials(Array.from(event.target.files ?? []))}
+                  />
+                  <span className="text-xs font-normal text-workbench-muted">{t('materialsHint')}</span>
+                </label>
+              ) : null}
               {error ? <p role="alert" className="text-sm text-red-300">{error}</p> : null}
               <Button size="lg" type="submit" disabled={pending || !workspaceId}>{pending ? t('creating') : t('create')}</Button>
             </form>

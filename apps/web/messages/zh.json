@@ -407,6 +407,7 @@
     "researchTitle": "研究标题",
     "materials": "原始资料（可选）",
     "materialsHint": "支持 PDF、DOCX、TeX/ZIP、Markdown 与常见科研图片；创建后进入上传处理。",
+    "materialsRequired": "请至少选择一份源文件后再开始导入。",
     "create": "创建 Research Object",
     "creating": "正在创建…",
     "error": "无法创建 Research Object。",

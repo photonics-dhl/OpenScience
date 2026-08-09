@@ -49,6 +49,7 @@ const translations: Record<string, string> = {
   'createResearch.researchTitle': 'Research title',
   'createResearch.materials': 'Source materials',
   'createResearch.materialsHint': 'PDF, DOCX, TeX, Markdown and images',
+  'createResearch.materialsRequired': 'Choose at least one source file',
   'createResearch.create': 'Create research object',
   'createResearch.evidenceTitle': 'Evidence before automation',
   'createResearch.evidenceBody': 'Evidence remains traceable.',
@@ -68,10 +69,12 @@ vi.mock('next-intl', () => ({
 const replace = vi.fn();
 vi.mock('next/navigation', () => ({
   useRouter: () => ({ replace, refresh: vi.fn(), push: vi.fn() }),
+  useSearchParams: () => new URLSearchParams('mode=import'),
 }));
 
 import {
   confirmSignup,
+  createResearchObjectWithMaterials,
   getCurrentUser,
   getDashboardOverview,
   loginWithPassword,
@@ -92,6 +95,35 @@ afterEach(() => {
 });
 
 describe('auth API contract', () => {
+  it('attaches every selected source file to the initial research-object commit', async () => {
+    const create = vi.fn().mockResolvedValue({ researchObject: { id: 'ro-1', workspaceId: 'ws-1', version: 1 } });
+    const upload = vi
+      .fn()
+      .mockResolvedValueOnce({ logicalPath: 'paper.pdf', artifactId: 'artifact-1' })
+      .mockResolvedValueOnce({ logicalPath: 'figure.png', artifactId: 'artifact-2' });
+    const commit = vi.fn().mockResolvedValue({ commit: { commitId: 'commit-1' } });
+    const materials = [new File(['paper'], 'paper.pdf'), new File(['figure'], 'figure.png')];
+
+    await createResearchObjectWithMaterials(
+      { workspaceId: 'ws-1', title: 'Imported study' },
+      materials,
+      { create, upload, commit },
+    );
+
+    expect(upload).toHaveBeenCalledTimes(2);
+    expect(commit).toHaveBeenCalledWith(
+      'ro-1',
+      expect.objectContaining({
+        version: 1,
+        artifacts: [
+          { logicalPath: 'paper.pdf', artifactId: 'artifact-1' },
+          { logicalPath: 'figure.png', artifactId: 'artifact-2' },
+        ],
+      }),
+      expect.any(String),
+    );
+  });
+
   it('loads dashboard research and actionable tasks from real API routes', async () => {
     const fetchMock = vi
       .fn()

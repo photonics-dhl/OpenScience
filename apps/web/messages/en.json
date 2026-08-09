@@ -407,6 +407,7 @@
     "researchTitle": "Research title",
     "materials": "Source materials (optional)",
     "materialsHint": "PDF, DOCX, TeX/ZIP, Markdown and common research images. Upload processing continues in the next step.",
+    "materialsRequired": "Choose at least one source file to start an import.",
     "create": "Create research object",
     "creating": "Creating…",
     "error": "The research object could not be created.",
