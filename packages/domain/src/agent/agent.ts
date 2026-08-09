@@ -3,7 +3,7 @@ import { isDeepStrictEqual } from 'node:util';
 import type { AuditContext } from '@openscience/observability';
 import { requireMembership } from '../workspace/helpers';
 import { recordAudit } from '../workspace/audit';
-import { getBalance } from '../usage/ledger';
+import { getBalance, recordEntry } from '../usage/ledger';
 import type { WorkspaceDeps } from '../workspace/types';
 import { AgentError } from './errors';
 
@@ -258,7 +258,7 @@ export async function markTaskProgress(
   deps: AgentDeps,
   input: { taskId: string; status: AgentTaskStatus; progress?: number; result?: Record<string, unknown>; error?: string | null },
 ): Promise<AgentTaskView> {
-  const task = await deps.prisma.agentTask.findUnique({ where: { id: input.taskId } });
+  const task = await deps.prisma.agentTask.findUnique({ where: { id: input.taskId }, include: { session: true } });
   if (!task) throw new AgentError('RESEARCH_OBJECT_NOT_FOUND', '任务不存在');
   const from = task.status as AgentTaskStatus;
 
@@ -278,14 +278,28 @@ export async function markTaskProgress(
     throw new AgentError('ILLEGAL_TRANSITION', `任务状态 ${from} → ${input.status} 非法`);
   }
 
-  const updated = await deps.prisma.agentTask.update({
-    where: { id: task.id },
-    data: {
-      status: input.status,
-      ...(input.progress !== undefined ? { progress: input.progress } : {}),
-      ...(input.result !== undefined ? { result: input.result as never } : {}),
-      ...(input.error !== undefined ? { error: input.error } : {}),
-    },
+  const updated = await deps.prisma.$transaction(async (tx) => {
+    const row = await tx.agentTask.update({
+      where: { id: task.id },
+      data: {
+        status: input.status,
+        ...(input.progress !== undefined ? { progress: input.progress } : {}),
+        ...(input.result !== undefined ? { result: input.result as never } : {}),
+        ...(input.error !== undefined ? { error: input.error } : {}),
+      },
+    });
+    if (input.status === 'succeeded') {
+      await recordEntry(tx, {
+        userId: task.session.userId,
+        resource: AI_CREDIT_RESOURCE,
+        delta: -1,
+        kind: 'consume',
+        reason: `Agent task ${task.kind}`,
+        idempotencyKey: `agent-task-consume:${task.id}`,
+        metadata: { taskId: task.id, kind: task.kind },
+      });
+    }
+    return row;
   });
   await syncIngestionState(deps, task.id, input.status, input.error);
   return taskToView(updated);

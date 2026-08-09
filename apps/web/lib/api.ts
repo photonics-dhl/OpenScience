@@ -740,4 +740,19 @@ export async function createSandboxJob(
   });
 }
 
+export interface IngestionTaskDetail {
+  task: { id: string; artifactId: string; logicalPath: string; state: string; retryCount: number; error: string | null; agentTaskId: string | null; result: Record<string, unknown> | null };
+  batchId: string;
+  researchObjectId: string;
+  version: number;
+}
+
+export async function getIngestionTask(taskId: string): Promise<IngestionTaskDetail> {
+  return apiRequest(`/api/ingestion/tasks/${taskId}`);
+}
+
+export async function confirmIngestionTask(taskId: string, input: { version: number; core: SdfCore }): Promise<{ task: IngestionTaskDetail['task']; sdf: { core: SdfCore } }> {
+  return apiRequest(`/api/ingestion/${taskId}/confirm`, { method: 'POST', body: JSON.stringify(input) });
+}
+
 

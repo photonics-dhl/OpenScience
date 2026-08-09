@@ -62,7 +62,7 @@ describe('AgentSession/AgentTask（§15 + §16 幂等 + §9.1 配额）', () => 
   });
 
   it('lists only the current user actionable tasks with RO context', async () => {
-    const { deps, user, ro } = await makeDeps();
+    const { deps, user, ro, db } = await makeDeps();
     const session = await createAgentSession(deps, { userId: user.id, researchObjectId: ro.id, kind: 'extract' });
     const task = await submitAgentTask(deps, { sessionId: session.id, userId: user.id, kind: 'sdf.extract', payload: {} });
     const rows = await listAgentTasks(deps, { userId: user.id, actionableOnly: true });
@@ -159,7 +159,7 @@ describe('AgentSession/AgentTask（§15 + §16 幂等 + §9.1 配额）', () => 
   });
 
   it('任务状态机：非法迁移拒绝 + 终态幂等', async () => {
-    const { deps, user, ro } = await makeDeps();
+    const { deps, user, ro, db } = await makeDeps();
     const session = await createAgentSession(deps, { userId: user.id, researchObjectId: ro.id, kind: 'extract' });
     const task = await submitAgentTask(deps, { sessionId: session.id, userId: user.id, kind: 'x', payload: {} });
     // pending → succeeded 非法（需经 running）
@@ -170,6 +170,7 @@ describe('AgentSession/AgentTask（§15 + §16 幂等 + §9.1 配额）', () => 
     await markTaskProgress(deps, { taskId: task.id, status: 'running', progress: 50 });
     const done = await markTaskProgress(deps, { taskId: task.id, status: 'succeeded', progress: 100, result: { ok: true } });
     expect(done.status).toBe('succeeded');
+    expect(db.usageLedger.filter((entry) => entry.idempotencyKey === `agent-task-consume:${task.id}`)).toHaveLength(1);
     // 终态重放 → skip（§16 幂等，不抛错不覆盖）
     const replay = await markTaskProgress(deps, { taskId: task.id, status: 'running', progress: 10 });
     expect(replay.status).toBe('succeeded');

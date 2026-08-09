@@ -1,5 +1,13 @@
 # OpenScience (XGS) 进度日志
 
+## 2026-08-10（Hermes review/confirm 与计费流水）— ⏳ 本地门禁通过，待服务器发布验收
+
+- **Review/confirm**：新增 `GET /ingestion/tasks/:taskId` 返回脱敏建议、任务状态和 RO 版本；新增 `POST /ingestion/:taskId/confirm`，校验 SDF core + 乐观锁后写入 SDF、推进 `needs_review → confirmed`。Web 新增 `/research-objects/[id]/hermes?task=...` 六字段确认界面，支持编辑建议后创建新版本。
+- **计费**：AgentTask 成功状态与 `ai_credit` `consume` 流水放入同一事务，幂等键 `agent-task-consume:<taskId>`，每个成功 AI task 消耗 1 credit；重放不会重复扣费。domain agent focused 11/11。
+- **备份**：`infra/scripts/backup.sh` 新增 `--objects`，对 SeaweedFS Docker volume 创建非破坏 tar 快照；runbook 已同步恢复说明。
+- **门禁**：全量 test/build、docs:lint、audit:docs-sync 均通过。
+- **下一步**：同步并部署 API/Web/domain 到 ECS，使用已存在 needs_review 任务做确认 API 真实验收；随后接入 AV quarantine 与本地 OCR/远端 fallback。
+
 ## 2026-08-10（生产 Token Plan 区域切换与结构化提取修复）— ✅ 真实 ingestion 闭环通过
 
 - **区域根因已验证**：同一组 Token Plan Subscription Key 在国际入口 `api.minimax.io/anthropic` 均返回 401；按 MiniMax 国内官方 Quick Start 切换 `api.minimaxi.com/anthropic` 后，key1/key2 均返回 200 和非空文本。服务器 `.env.prod` 已保留可恢复备份并切换区域，worker 已重建。

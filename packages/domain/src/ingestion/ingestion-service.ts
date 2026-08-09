@@ -6,6 +6,7 @@ import { createAgentSession, dispatchAgentTask, submitAgentTask, type AgentDeps 
 import { requireActive, requireMembership } from '../workspace/helpers';
 import { WorkspaceError } from '../workspace/errors';
 import { recordAudit } from '../workspace/audit';
+import { updateSdfDocument } from '../research-object/sdf';
 import { IngestionError } from './errors';
 import { assertIngestionContent, assertSupportedIngestionFile } from './format-policy';
 import type { IngestionBatchView, IngestionFileInput, IngestionTaskView } from './ingestion-types';
@@ -136,6 +137,16 @@ export async function getIngestionBatch(
   };
 }
 
+export async function getIngestionTask(
+  deps: IngestionDeps,
+  input: { userId: string; taskId: string },
+): Promise<{ task: IngestionTaskView & { result: Record<string, unknown> | null }; batchId: string; researchObjectId: string; version: number }> {
+  const task = await deps.prisma.ingestionTask.findUnique({ where: { id: input.taskId }, include: { artifact: true, agentTask: true, batch: { include: { researchObject: true }, } } });
+  if (!task) throw new IngestionError('INGESTION_NOT_FOUND', 'Ingestion task not found');
+  await requireMembership(deps, task.batch.researchObject.workspaceId, input.userId);
+  return { task: { ...taskToView(task), result: task.agentTask ? (task.agentTask.result as Record<string, unknown> | null) : null }, batchId: task.batchId, researchObjectId: task.batch.researchObjectId, version: task.batch.researchObject.version };
+}
+
 export async function retryIngestionTask(
   deps: IngestionDeps,
   input: { userId: string; taskId: string },
@@ -165,6 +176,25 @@ export async function retryIngestionTask(
     }
   }
   return taskToView(updated);
+}
+
+/** 将 Hermes 建议写入 SDF，并把 ingestion task 从 needs_review 推进为 confirmed。 */
+export async function confirmIngestionTask(
+  deps: IngestionDeps,
+  input: { userId: string; taskId: string; version: number; core: Record<string, string> },
+  ctx: AuditContext = {},
+): Promise<{ task: IngestionTaskView; sdf: Awaited<ReturnType<typeof updateSdfDocument>> }> {
+  const task = await deps.prisma.ingestionTask.findUnique({
+    where: { id: input.taskId }, include: { artifact: true, batch: { include: { researchObject: true } } },
+  });
+  if (!task) throw new IngestionError('INGESTION_NOT_FOUND', 'Ingestion task not found');
+  await authorizeIngestionWrite(deps, { userId: input.userId, researchObjectId: task.batch.researchObject.id });
+  if (task.state !== 'needs_review') throw new IngestionError('INGESTION_NOT_RETRYABLE', 'Only tasks awaiting review can be confirmed');
+  const sdf = await updateSdfDocument(deps, { userId: input.userId, roId: task.batch.researchObject.id, version: input.version, core: input.core }, ctx);
+  const updated = await deps.prisma.ingestionTask.updateMany({ where: { id: task.id, state: 'needs_review' }, data: { state: 'confirmed', error: null } });
+  if (updated.count !== 1) throw new IngestionError('INGESTION_NOT_RETRYABLE', 'Task changed while confirming');
+  const confirmed = await deps.prisma.ingestionTask.findUniqueOrThrow({ where: { id: task.id }, include: { artifact: true } });
+  return { task: taskToView(confirmed), sdf };
 }
 
 function taskToView(task: {
