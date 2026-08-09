@@ -29,6 +29,10 @@
 | `apps/web/components/dashboard/DashboardShell.tsx` | Dashboard 科研驾驶舱交互壳：真实 session/workspace/RO/notification 数据流，loading/error/empty/ready 恢复状态，唯一下一步行动与 Workspace 路由入口 | 活文档 |
 | `apps/web/lib/api.ts` | Web 同源 API transport；CSRF 写请求保护，并提供 workspace/成员范围 RO 列表摘要合同 | 活文档 |
 | `apps/api/src/routes/research-objects.ts` | RO CRUD 与成员范围摘要列表路由：`GET /research-objects?workspaceId=<uuid>` | 活文档 |
+| `apps/web/app/research-objects/new/page.tsx` | 首个 RO 创建入口 | 活文档 |
+| `apps/web/components/create/CreateResearchObjectFlow.tsx` | 空白六字段 / 材料提取双模式创建流程，披露确认与 UUID 导航 | 活文档 |
+| `apps/web/lib/create-flow.ts` | 创建流程纯验证合同 | 活文档 |
+| `infra/migrations/20260809010000_ro_create_idempotency/` | ResearchObject 幂等键可空唯一迁移及 rollback | 待本地/生产执行 |
 | `apps/web/components/workspace/WorkspaceContext.tsx` | 统一 RO Workspace 上下文契约：`roId`、`versionId`、`workspaceId`、`mode`、`permission` | 活文档 |
 | `apps/web/components/workspace/WorkspaceModeNav.tsx` | Workspace 六模式桌面导航与移动端入口：overview / sdf / artifacts / versions / collaboration / public | 活文档 |
 | `apps/web/components/workspace/HermesRail.tsx` | Hermes 当前上下文与写入前确认提示轨；只呈现状态，不直接触发高风险写入 | 活文档 |
@@ -262,7 +266,7 @@
 | `infra/nginx/` | 反代配置：`portainer.conf`（portainer.428312321.xyz → 127.0.0.1:9443，LE 证书 + WebSocket，2026-07-31；2026-08-01 追加 /nav/ 导航页、/monitor/→Netdata、/traffic/→vnStat 账单页，basic_auth）+ `openscience.conf`（OpenScience.428312321.xyz → 127.0.0.1:3001，P1A-8：/admin basic_auth + XFF 透传；`/api/` strip-prefix） | 线上为 3b5a34e；strip-prefix 修复 1ab4b6d 待身份切片部署 |
 | `infra/www/` | `nav/index.html` 服务器面板导航静态页（/var/www/nav，2026-08-01） | 已部署云上 |
 | `infra/sandbox/` | 沙箱配置占位（P1A-1） | 骨架 |
-| `infra/migrations/` | Prisma 迁移 1–20（`20260728000000_baseline_app_meta` + `20260728010000_auth_baseline`（P1A-3 四表）+ `20260729010000_workspace_baseline`（P1A-4 三表）+ `20260801010000_user_platform_role`（P1A-5）+ `20260801143000_audit_log`（P1A-6）+ `20260803000000_quota_usage`（P1A-7）+ `20260803150000_research_object`（P1B-2）+ `20260804000000_blob_artifact`（P1B-3）+ `20260804010000_version_engine`（P1B-4）+ `20260804020000_identity`（P1B-6）+ `20260804030000_visibility`（P1B-7）+ `20260804040000_collab`（P1C-1，11 实体 + 3 枚举）+ `20260804050000_branch_head`（P1C-2，head_commit_id 锚点）+ `20260804060000_pr_idempotency`（P1C-6，idempotency_key）+ `20260804070000_agent_tasks`（P1D-2，三表 + 枚举）+ `20260804080000_ai_reviews`（P1D-5/6）+ `20260804090000_appeals`（P1D-7）+ `20260804100000_publish_state`（P1D-8）+ `20260806010000_author_affiliation`（P1D-9）+ `20260806020000_sandbox_jobs`（P1E-4/5，幂等规整版，2026-08-06 自 packages/database/migrations/ 游离 SQL 收编）+ `20260806030000_sandbox_job_context`（P1E-5 收尾，sandbox_jobs.context + users.level），各附 rollback.sql） | 已实现，云上已 deploy（迁移 1–21 全量，2026-08-06） |
+| `infra/migrations/` | Prisma 迁移 1–22（含 `20260809010000_ro_create_idempotency`：research_objects.idempotency_key，可回滚；此前 1–21 保持不变） | 22 已写入，待本地/生产迁移验收 |
 | `infra/schema.prisma` | Prisma schema（`app_meta` 基线模型，P1A-2；2026-08-06 补 `SandboxJob`/`SandboxArtifact`/`SandboxJobStatus`，对齐迁移 20/21 DDL，P1E） | 已实现 |
 
 ## .agents/skills/（项目级 Skills，Spec §20.3）

@@ -164,9 +164,11 @@
 - Consumes: authenticated user, personal workspace, `POST /api/research-objects`, and the six SDF core field names.
 - Produces: `createResearchObject(input, idempotencyKey)` and navigation to `/research-objects/<uuid>/workspace`.
 
-- [ ] **Step 1: Write failing create-flow tests**
+- [x] **Step 1: Write failing create-flow tests**
 
   Cover title-required validation, blank-six-field mode, pasted-material mode, explicit Hermes data-processing disclosure, unchecked consent blocking extraction but not blank creation, double-submit prevention, recoverable API errors, and successful navigation using the returned UUID.
+
+  Initial validation RED/GREEN slice is complete (3/3). UI interaction and API idempotency coverage remain open.
 
 - [ ] **Step 2: Run the focused test and verify RED**
 

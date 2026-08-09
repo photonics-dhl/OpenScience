@@ -97,3 +97,10 @@
 - 已完成成员范围 RO 摘要合同与真实 Dashboard 数据流。`GET /research-objects?workspaceId=<uuid>` 通过 membership guard、排除 archived、`updatedAt desc`，不返回 SDF；Dashboard 已接入 `/auth/me`、`/workspaces`、RO 列表和 unread notifications，覆盖 loading/error/retry/empty/ready，真实 UUID 导航到 Workspace。
 - 验证：domain 13/13、Web 82/82、Web/API typecheck、全仓 build 通过。API integration test 已写入成员/越权/归档/无 SDF 断言，但 Docker Desktop 未运行，未伪称通过。
 - 下一步：Task 4 先写 `/research-objects/new` RED 测试，加入首个 RO 幂等创建迁移与空白/材料提取两条流程；完成后继续同步本 handoff、progress、project_index。
+
+## 2026-08-09 产品闭环 Task 4 checkpoint
+
+- 已新增 `/research-objects/new`、`CreateResearchObjectFlow`、`create-flow` 验证合同和 `createResearchObject` Web API；空白六字段与材料提取共用同一真实 UUID Workspace 导航。
+- 材料模式的 Hermes 处理披露是硬门；每次写请求携带 CSRF 与 `Idempotency-Key`。ResearchObject 幂等迁移 `20260809010000_ro_create_idempotency` 已写 forward/rollback 并登记，尚未在数据库执行。
+- 验证：create-flow 3/3、全仓 build 通过；Docker Desktop 未运行，因此迁移 deploy、服务端重复请求与真实 E2E 尚未声称通过。
+- 下一步：补 UI interaction/API idempotency tests；Docker 恢复后执行 migration status/deploy 与完整邀请注册→验证→登录→创建→Workspace 验收，再继续 Hermes/版本/发布/Public RO/Editorial/Live2D 剩余计划。

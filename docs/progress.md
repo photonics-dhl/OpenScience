@@ -7,6 +7,14 @@
 - **✅ 验证**：Web 全量 82/82、Web/API typecheck、全仓 build 通过；API 集成测试已加入成员/越权/归档/无 SDF 断言，但本机 Docker Desktop 未运行，待开发数据库栈可用后执行。
 - **⏳ 下一步**：Task 4 实现首个 RO 引导创建（空白六字段/材料提取、Hermes 披露确认、幂等创建）并接入 `/research-objects/new` → Workspace。
 
+## 2026-08-09（产品闭环 Task 4 开始）— 首个 RO 创建入口已落地
+
+- **✅ 创建入口**：新增 `/research-objects/new` 与 `CreateResearchObjectFlow`；空白六字段和材料提取两种模式共享同一 RO → Workspace 路径。
+- **✅ 安全产品约束**：材料模式必须勾选 Hermes 数据处理披露；前端验证覆盖标题、材料、披露三类错误；写请求携带 CSRF 与每次尝试的 `Idempotency-Key`。
+- **✅ 数据层前置**：ResearchObject 新增可空唯一 `idempotency_key`，迁移 `20260809010000_ro_create_idempotency` 含 rollback；空白创建不会要求材料披露。
+- **✅ 验证**：create-flow validation 3/3、全仓 build 通过；数据库迁移执行与真实创建 E2E 待 Docker/数据库栈恢复后继续。
+- **⏳ 下一步**：补齐创建 UI interaction tests、服务端幂等重复请求测试，并在本地栈可用后完成 Register/Verify/Login → Create → Workspace E2E。
+
 ## 2026-08-09（产品闭环 Task 2）— 邀请身份流程已实现
 
 - **✅ 身份闭环**：新增 `/login`、`/register`、`/verify-email`，真实连接注册、验证、重发、登录、登出和 `/auth/me`；会话仍由 HTTP-only Cookie 管理。

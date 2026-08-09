@@ -39,6 +39,7 @@
     "ro": { "draft": "私有草稿", "title": "非平衡光子晶体中的自适应测量", "updated": "刚刚由 Hermes 更新", "versioned": "可回溯版本" },
     "tasks": { "eyebrow": "Task center", "extract": "Confirm evidence anchors", "extractMeta": "Method · in progress", "review": "Review AI structure suggestions", "reviewMeta": "{count} pending", "publish": "Prepare public version", "publishMeta": "Permissions · not started" }
   },
+  "create": { "eyebrow": "New Research Object", "title": "Bring your research into a traceable field", "description": "Establish a stable RO identity first, then evolve its SDF, materials, versions, and review trail.", "fields": { "title": "Research object title", "material": "Paste material (sent to Hermes only after confirmation)" }, "mode": { "legend": "Where should we begin?", "blank": "Blank six-field SDF", "material": "Extract a first draft from material" }, "disclosure": "I allow Hermes to process this material and understand that the extraction will be written to this RO draft.", "actions": { "create": "Create and enter workspace", "creating": "Establishing your research field…" }, "errors": { "title": "Add a title first.", "material": "Paste the material to extract.", "disclosure": "Confirm the Hermes material-processing disclosure.", "session": "Your session expired. Please sign in again.", "unknown": "We could not create this yet. Please retry." } },
   "workspace": {
     "title": "RO Workspace",
     "privateDraft": "Private draft",

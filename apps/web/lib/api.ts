@@ -55,6 +55,14 @@ export async function listResearchObjects(workspaceId: string): Promise<{ resear
   return apiRequest(`/api/research-objects?workspaceId=${encodeURIComponent(workspaceId)}`);
 }
 
+export async function createResearchObject(input: { workspaceId: string; title: string; sdf?: { core: Record<string, string> } }, idempotencyKey: string): Promise<{ researchObject: Omit<ResearchObjectSummary, 'publicId' | 'updatedAt'> }> {
+  return apiRequest('/api/research-objects', {
+    method: 'POST',
+    headers: { 'idempotency-key': idempotencyKey },
+    body: JSON.stringify(input),
+  });
+}
+
 export interface VersionSummary {
   versionId: string;
   versionNo: number;

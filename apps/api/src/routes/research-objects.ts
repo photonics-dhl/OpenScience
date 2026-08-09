@@ -57,9 +57,10 @@ export function registerResearchObjectRoutes(app: FastifyInstance, deps: Researc
     if (!user) return;
     const body = createBody.parse(req.body);
     // 幂等键：同 Idempotency-Key + workspaceId + title 防重（简化：唯一约束由 domain 层未来加，先靠业务重查）
+    const idempotencyKey = typeof req.headers['idempotency-key'] === 'string' ? req.headers['idempotency-key'].trim() : undefined;
     const ro = await createResearchObject(
       deps,
-      { workspaceId: body.workspaceId, userId: user.userId, title: body.title, sdf: body.sdf },
+      { workspaceId: body.workspaceId, userId: user.userId, title: body.title, sdf: body.sdf, idempotencyKey: idempotencyKey || undefined },
       auditCtx(req),
     );
     return reply.status(201).send({ researchObject: ro });

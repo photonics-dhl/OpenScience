@@ -15,6 +15,7 @@ export interface CreateResearchObjectInput {
   sdf?: {
     core: Record<string, string>;
   };
+  idempotencyKey?: string;
 }
 
 export interface ResearchObjectSummary {
@@ -55,6 +56,13 @@ export async function createResearchObject(
 ): Promise<ResearchObjectSummary> {
   const { workspace } = await requireMembership(deps, input.workspaceId, input.userId);
   void workspace;
+  if (input.idempotencyKey) {
+    const existing = await deps.prisma.researchObject.findUnique({ where: { idempotencyKey: input.idempotencyKey } });
+    if (existing) {
+      if (existing.workspaceId !== input.workspaceId) throw new ResearchObjectError('RESEARCH_OBJECT_NOT_FOUND', '研究对象不存在');
+      return { id: existing.id, workspaceId: existing.workspaceId, title: existing.title, status: existing.status, visibility: existing.visibility, version: existing.version, createdAt: existing.createdAt };
+    }
+  }
   const title = input.title.trim();
   if (!title || title.length > 200) throw new ResearchObjectError('VALIDATION_ERROR', '标题长度需为 1-200 字符');
   const core = input.sdf?.core ?? emptyCore();
@@ -65,6 +73,7 @@ export async function createResearchObject(
         workspaceId: input.workspaceId,
         title,
         createdBy: input.userId,
+        idempotencyKey: input.idempotencyKey,
         sdfDocument: {
           create: {
             coreJson: core as object,

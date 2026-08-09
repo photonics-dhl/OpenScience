@@ -331,6 +331,7 @@ model ResearchObject {
   visibility  RoVisibility @default(private)
   version     Int          @default(1) // 乐观锁（§16）；P1B-4 版本引擎推进
   publicId    String?      @unique @map("public_id") // 公开 RO ID（§6.1），发布时分配（P1B-7），draft 无
+  idempotencyKey String?   @unique @map("idempotency_key")
   createdBy   String       @map("created_by") @db.Uuid
   createdAt   DateTime     @default(now()) @map("created_at")
   updatedAt   DateTime     @updatedAt @map("updated_at")
