@@ -250,6 +250,17 @@ export function createFakePrisma(): { prisma: PrismaClient; db: FakeDb } {
         const doc = db.sdfDocuments.find((d) => d.researchObjectId === ro.id);
         return { ...ro, sdfDocument: doc ? { ...doc, nodes: db.sdfNodes.filter((n) => n.sdfDocumentId === doc.id) } : null };
       },
+      findMany: async ({ where, orderBy, select }: any) => {
+        let rows = db.researchObjects.filter((r) =>
+          (where.workspaceId === undefined || r.workspaceId === where.workspaceId) &&
+          (where.status?.not === undefined || r.status !== where.status.not),
+        );
+        if (orderBy?.updatedAt === 'desc') rows = [...rows].sort((a, b) => b.updatedAt - a.updatedAt);
+        if (!select) return rows;
+        return rows.map((row) => Object.fromEntries(
+          Object.entries(select).filter(([, include]) => include).map(([key]) => [key, row[key] ?? null]),
+        ));
+      },
       create: async ({ data }: any) => {
         const row = {
           id: nextId(), status: 'draft', visibility: 'private', version: 1,

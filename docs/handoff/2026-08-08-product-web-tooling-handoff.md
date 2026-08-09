@@ -91,3 +91,9 @@
 - **Region fix checkpoint:** `658cafe` 已加入 `--region cn|global` 和中国区图像 host，测试 12/12；key1 调中国区 remains 同样为 HTTP 200、状态 0、有计划数据，因此 key1/key2 均有效。恢复命令应显式传 `--region cn`，先 key1，只有官方 1008 才切 key2；输出固定为新版本文件与 provenance sidecar。
 - **Generation result / rejected exploration:** key1 通过中国区 `image-01` 成功生成 `docs/design-assets/generated/openscience-observatory-v1.png`（1280×720）及脱敏 sidecar；未触发 key2。用户拒绝该视觉：抽象植物状六节点与现有 3D RO 环、精密科研仪器暗面及产品语义不一致。文件仅作可追溯失败样本，不得导入 Figma 或派生视频。
 - **Read first:** `AGENTS.md` → `docs/OpenScience_Kimi_Development_Spec.md` → `docs/progress.md` → `project_index.md` → product web spec/plan → ADR-004 → 本 handoff。
+
+## 2026-08-09 产品闭环 Task 3 checkpoint
+
+- 已完成成员范围 RO 摘要合同与真实 Dashboard 数据流。`GET /research-objects?workspaceId=<uuid>` 通过 membership guard、排除 archived、`updatedAt desc`，不返回 SDF；Dashboard 已接入 `/auth/me`、`/workspaces`、RO 列表和 unread notifications，覆盖 loading/error/retry/empty/ready，真实 UUID 导航到 Workspace。
+- 验证：domain 13/13、Web 82/82、Web/API typecheck、全仓 build 通过。API integration test 已写入成员/越权/归档/无 SDF 断言，但 Docker Desktop 未运行，未伪称通过。
+- 下一步：Task 4 先写 `/research-objects/new` RED 测试，加入首个 RO 幂等创建迁移与空白/材料提取两条流程；完成后继续同步本 handoff、progress、project_index。

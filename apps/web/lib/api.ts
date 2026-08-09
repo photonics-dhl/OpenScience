@@ -29,11 +29,30 @@ export class ApiClientError extends Error {
 export interface ResearchObjectSummary {
   id: string;
   workspaceId: string;
+  publicId: string | null;
   title: string;
   status: string;
   visibility: 'private' | 'invite_only' | 'public';
   version: number;
   createdAt: string;
+  updatedAt: string;
+}
+
+export interface WorkspaceSummary {
+  id: string;
+  type: string;
+  name: string;
+  status: string;
+  role: string;
+  createdAt: string;
+}
+
+export async function listWorkspaces(): Promise<{ workspaces: WorkspaceSummary[] }> {
+  return apiRequest('/api/workspaces');
+}
+
+export async function listResearchObjects(workspaceId: string): Promise<{ researchObjects: ResearchObjectSummary[] }> {
+  return apiRequest(`/api/research-objects?workspaceId=${encodeURIComponent(workspaceId)}`);
 }
 
 export interface VersionSummary {

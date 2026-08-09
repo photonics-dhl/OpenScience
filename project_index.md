@@ -26,7 +26,9 @@
 | `apps/web/app/dashboard/page.tsx` | Dashboard 入口，承载 action-first Research Cockpit（稳定 RO ID、Hermes 状态、任务中心；Task 2 首个网页切片，2026-08-09） | 活文档 |
 | `apps/web/app/{login,register,verify-email}/page.tsx` + `components/auth/` + `lib/auth.ts` | 邀请注册、邮箱验证、登录/登出、HTTP-only session 客户端与观测台身份 UI（6540d2d） | 活文档 |
 | `apps/web/test/auth-flow.test.tsx` | 安全 next 跳转、错误码脱敏映射和三身份表单可访问性合同 | 已实现（6540d2d） |
-| `apps/web/components/dashboard/DashboardShell.tsx` | Dashboard 科研驾驶舱交互壳：唯一下一步行动、RO focus card、任务 rail、workspace 路由入口与受控证据层 | 活文档 |
+| `apps/web/components/dashboard/DashboardShell.tsx` | Dashboard 科研驾驶舱交互壳：真实 session/workspace/RO/notification 数据流，loading/error/empty/ready 恢复状态，唯一下一步行动与 Workspace 路由入口 | 活文档 |
+| `apps/web/lib/api.ts` | Web 同源 API transport；CSRF 写请求保护，并提供 workspace/成员范围 RO 列表摘要合同 | 活文档 |
+| `apps/api/src/routes/research-objects.ts` | RO CRUD 与成员范围摘要列表路由：`GET /research-objects?workspaceId=<uuid>` | 活文档 |
 | `apps/web/components/workspace/WorkspaceContext.tsx` | 统一 RO Workspace 上下文契约：`roId`、`versionId`、`workspaceId`、`mode`、`permission` | 活文档 |
 | `apps/web/components/workspace/WorkspaceModeNav.tsx` | Workspace 六模式桌面导航与移动端入口：overview / sdf / artifacts / versions / collaboration / public | 活文档 |
 | `apps/web/components/workspace/HermesRail.tsx` | Hermes 当前上下文与写入前确认提示轨；只呈现状态，不直接触发高风险写入 | 活文档 |

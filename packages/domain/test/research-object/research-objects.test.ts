@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { AuditSink } from '@openscience/observability';
 import { createFakePrisma, createFakeMailer, seedUser } from '../helpers/fakes';
-import { createResearchObject, getResearchObject, updateResearchObject } from '../../src/research-object/research-objects';
+import { createResearchObject, getResearchObject, listResearchObjects, updateResearchObject } from '../../src/research-object/research-objects';
 import { SDF_NODE_TYPES } from '../../src/research-object/types';
 
 function makeDeps(audit?: AuditSink) {
@@ -77,6 +77,31 @@ describe('getResearchObject', () => {
     const ro = await createResearchObject(deps, { workspaceId: 'ws-1', userId: user.id, title: 'Secret' });
     const outsider = seedUser(db, { id: 'outsider' });
     await expect(getResearchObject(deps, { userId: outsider.id, roId: ro.id })).rejects.toThrow(/研究对象不存在/);
+  });
+});
+
+describe('listResearchObjects', () => {
+  it('仅返回成员空间的非归档摘要，并按最近更新排序', async () => {
+    const { deps, db, user } = makeDeps();
+    const older = await createResearchObject(deps, { workspaceId: 'ws-1', userId: user.id, title: 'Older' });
+    const newer = await createResearchObject(deps, { workspaceId: 'ws-1', userId: user.id, title: 'Newer' });
+    db.researchObjects.find((row) => row.id === older.id).updatedAt = new Date('2026-08-01T00:00:00Z');
+    db.researchObjects.find((row) => row.id === newer.id).updatedAt = new Date('2026-08-02T00:00:00Z');
+    db.researchObjects.push({
+      id: 'archived-ro', workspaceId: 'ws-1', title: 'Archived', status: 'archived', visibility: 'private',
+      version: 1, createdAt: new Date('2026-07-01T00:00:00Z'), updatedAt: new Date('2026-08-03T00:00:00Z'),
+    });
+
+    const rows = await listResearchObjects(deps, { workspaceId: 'ws-1', userId: user.id });
+
+    expect(rows.map((row) => row.title)).toEqual(['Newer', 'Older']);
+    expect(rows[0]).not.toHaveProperty('sdf');
+  });
+
+  it('非成员不能枚举空间内 RO', async () => {
+    const { deps, db } = makeDeps();
+    const outsider = seedUser(db, { id: 'list-outsider' });
+    await expect(listResearchObjects(deps, { workspaceId: 'ws-1', userId: outsider.id })).rejects.toThrow(/空间不存在/);
   });
 });
 

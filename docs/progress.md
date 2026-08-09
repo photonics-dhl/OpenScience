@@ -1,5 +1,12 @@
 # OpenScience (XGS) 进度日志
 
+## 2026-08-09（产品闭环 Task 3）— Dashboard 已接入真实会话与研究数据
+
+- **✅ API 合同**：新增 `GET /research-objects?workspaceId=<uuid>`；当前用户必须是工作区成员，归档 RO 排除，按 `updatedAt desc` 排序，仅返回摘要字段，不包含 SDF 正文；domain tests 13/13 通过。
+- **✅ Web 数据流**：Dashboard 依次恢复 `/auth/me`、个人/首个 active workspace、成员范围 RO 列表与未读通知；401 安全跳转登录，loading/error/retry/empty/ready 状态均可见，真实 RO 使用 UUID 进入统一 Workspace，不再把 Figma 样例当成用户数据。
+- **✅ 验证**：Web 全量 82/82、Web/API typecheck、全仓 build 通过；API 集成测试已加入成员/越权/归档/无 SDF 断言，但本机 Docker Desktop 未运行，待开发数据库栈可用后执行。
+- **⏳ 下一步**：Task 4 实现首个 RO 引导创建（空白六字段/材料提取、Hermes 披露确认、幂等创建）并接入 `/research-objects/new` → Workspace。
+
 ## 2026-08-09（产品闭环 Task 2）— 邀请身份流程已实现
 
 - **✅ 身份闭环**：新增 `/login`、`/register`、`/verify-email`，真实连接注册、验证、重发、登录、登出和 `/auth/me`；会话仍由 HTTP-only Cookie 管理。

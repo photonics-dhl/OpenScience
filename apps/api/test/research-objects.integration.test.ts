@@ -169,4 +169,25 @@ describe('P1B-2 RO/SDF（云上）', () => {
     expect(res.statusCode).toBe(401);
     await app.close();
   });
+
+  it('Dashboard 列表只返回成员工作区的非归档 RO 摘要', async () => {
+    const app = await makeApp();
+    const cookieA = await registerAndVerify(app, 'dashboard-list-a@example.com');
+    const cookieB = await registerAndVerify(app, 'dashboard-list-b@example.com');
+    const wsA = await getPersonalWorkspace('dashboard-list-a@example.com');
+    const first = await app.inject({ method: 'POST', url: '/research-objects', cookies: { openscience_session: cookieA }, payload: { workspaceId: wsA, title: 'Visible first' } });
+    const second = await app.inject({ method: 'POST', url: '/research-objects', cookies: { openscience_session: cookieA }, payload: { workspaceId: wsA, title: 'Visible second' } });
+    const archived = await app.inject({ method: 'POST', url: '/research-objects', cookies: { openscience_session: cookieA }, payload: { workspaceId: wsA, title: 'Archived' } });
+    const archivedRo = archived.json().researchObject;
+    await app.inject({ method: 'PATCH', url: `/research-objects/${archivedRo.id}`, cookies: { openscience_session: cookieA }, payload: { version: 1, status: 'archived' } });
+
+    const list = await app.inject({ method: 'GET', url: `/research-objects?workspaceId=${wsA}`, cookies: { openscience_session: cookieA } });
+    expect(list.statusCode).toBe(200);
+    expect(list.json().researchObjects.map((ro: { title: string }) => ro.title)).toEqual(['Visible second', 'Visible first']);
+    expect(list.json().researchObjects[0].sdf).toBeUndefined();
+
+    const outsider = await app.inject({ method: 'GET', url: `/research-objects?workspaceId=${wsA}`, cookies: { openscience_session: cookieB } });
+    expect(outsider.statusCode).toBe(404);
+    await app.close();
+  });
 });

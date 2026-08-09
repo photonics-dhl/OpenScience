@@ -106,7 +106,7 @@
 - Modify: `packages/domain/src/research-object/research-objects.ts`
 - Modify: `packages/domain/src/research-object/index.ts`
 - Modify: `apps/api/src/routes/research-objects.ts`
-- Modify: `apps/api/test/research-objects.test.ts`
+- Modify: `apps/api/test/research-objects.integration.test.ts`
 - Modify: `apps/web/lib/api.ts`
 - Modify: `apps/web/components/dashboard/DashboardShell.tsx`
 - Modify: `apps/web/app/dashboard/page.tsx`
@@ -116,27 +116,31 @@
 - Consumes: `GET /api/auth/me` and `GET /api/workspaces`.
 - Produces: `GET /research-objects?workspaceId=<uuid>` with membership enforcement and `listResearchObjects(workspaceId)` for the Web client.
 
-- [ ] **Step 1: Write failing API authorization tests**
+- [x] **Step 1: Write failing API authorization tests**
 
   Cover personal-workspace listing, non-member anti-enumeration response, archived RO exclusion, deterministic `updatedAt desc` ordering, and omission of SDF bodies from list responses.
 
 - [ ] **Step 2: Run the API test and verify RED**
 
+  Test authored. Local execution is pending because Docker Desktop is unavailable; the integration config correctly excludes this test from the unit command.
+
   Run the focused API test and require 404 or missing-handler failure.
 
-- [ ] **Step 3: Implement the domain query and thin route**
+- [x] **Step 3: Implement the domain query and thin route**
 
   Add a membership-scoped domain query returning only `id`, `workspaceId`, `title`, `status`, `visibility`, `version`, `publicId`, `createdAt`, and `updatedAt`. Validate `workspaceId` as UUID and require the current user before querying.
 
-- [ ] **Step 4: Write failing Dashboard state tests**
+- [x] **Step 4: Write failing Dashboard state tests**
 
   Cover unauthenticated redirect to `/login?next=/dashboard`, loading, API error with retry, empty workspace with Create CTA, and a real RO card whose link uses its UUID rather than the design-sample ID.
 
-- [ ] **Step 5: Implement real Dashboard orchestration**
+- [x] **Step 5: Implement real Dashboard orchestration**
 
   Resolve session → personal workspace → RO list → actionable notifications. Keep the approved cockpit composition, but render the sample RO only in an explicitly labelled read-only sample block when the real list is empty.
 
-- [ ] **Step 6: Verify and commit**
+- [x] **Step 6: Verify and commit**
+
+  Domain 13/13, Web 82/82, Web/API typecheck and full workspace build passed. API integration remains environment-gated until Docker is available.
 
   Run focused domain/API/Web tests, typecheck affected workspaces, and commit as `feat(product): connect dashboard research data`.
 

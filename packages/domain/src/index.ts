@@ -63,8 +63,8 @@ export {
 } from './research-object/types';
 export { ResearchObjectError, type ResearchObjectErrorCode } from './research-object/errors';
 export {
-  createResearchObject, getResearchObject, updateResearchObject,
-  type CreateResearchObjectInput, type ResearchObjectSummary, type ResearchObjectDetail, type UpdateResearchObjectInput,
+  createResearchObject, getResearchObject, listResearchObjects, updateResearchObject,
+  type CreateResearchObjectInput, type ResearchObjectSummary, type ResearchObjectDetail, type ResearchObjectListItem, type UpdateResearchObjectInput,
 } from './research-object/research-objects';
 export {
   getSdfDocument, updateSdfDocument,

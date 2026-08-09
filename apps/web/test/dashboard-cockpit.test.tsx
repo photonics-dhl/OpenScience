@@ -27,16 +27,54 @@ vi.mock('next-intl', () => ({
 }));
 
 describe('research cockpit surface', () => {
-  it('renders an action-first dashboard with stable RO context', async () => {
-    const { default: DashboardShell } = await import('../components/dashboard/DashboardShell');
-    const markup = renderToStaticMarkup(createElement(DashboardShell));
+  it('renders an action-first dashboard from authenticated research data', async () => {
+    const { DashboardView } = await import('../components/dashboard/DashboardShell');
+    const markup = renderToStaticMarkup(createElement(DashboardView, {
+      state: {
+        kind: 'ready',
+        user: { userId: 'user-1', email: 'researcher@example.com', displayName: 'Ada', status: 'active', level: 'researcher' },
+        workspace: { id: 'workspace-1', type: 'personal', name: 'Ada Research', status: 'active', role: 'owner', createdAt: '2026-08-09T00:00:00.000Z' },
+        researchObjects: [{
+          id: '11111111-1111-4111-8111-111111111111', workspaceId: 'workspace-1', publicId: null,
+          title: 'Adaptive measurement in photonic systems', status: 'draft', visibility: 'private',
+          version: 4, createdAt: '2026-08-08T00:00:00.000Z', updatedAt: '2026-08-09T00:00:00.000Z',
+        }],
+        notifications: [],
+      },
+    }));
 
     expect(markup).toContain('data-cockpit="dashboard"');
-    expect(markup).toContain('OS-RO-01J8YF7Q');
+    expect(markup).toContain('Adaptive measurement in photonic systems');
+    expect(markup).not.toContain('OS-RO-01J8YF7Q');
     expect(markup).toContain('data-next-action');
     expect(markup).toContain('进入 RO 工作区');
-    expect(markup).toContain('href="/research-objects/OS-RO-01J8YF7Q/workspace"');
+    expect(markup).toContain('href="/research-objects/11111111-1111-4111-8111-111111111111/workspace"');
     expect(markup).toContain('data-task-rail');
+  });
+
+  it('offers first-RO creation when the authenticated workspace is empty', async () => {
+    const { DashboardView } = await import('../components/dashboard/DashboardShell');
+    const markup = renderToStaticMarkup(createElement(DashboardView, {
+      state: {
+        kind: 'empty',
+        user: { userId: 'user-1', email: 'researcher@example.com', displayName: 'Ada', status: 'active', level: 'researcher' },
+        workspace: { id: 'workspace-1', type: 'personal', name: 'Ada Research', status: 'active', role: 'owner', createdAt: '2026-08-09T00:00:00.000Z' },
+      },
+    }));
+
+    expect(markup).toContain('data-dashboard-state="empty"');
+    expect(markup).toContain('href="/research-objects/new"');
+  });
+
+  it('shows a recoverable error state', async () => {
+    const { DashboardView } = await import('../components/dashboard/DashboardShell');
+    const markup = renderToStaticMarkup(createElement(DashboardView, {
+      state: { kind: 'error' },
+      onRetry: () => undefined,
+    }));
+
+    expect(markup).toContain('data-dashboard-state="error"');
+    expect(markup).toContain('type="button"');
   });
 
   it('keeps procedural evidence particles decorative and deterministic', async () => {

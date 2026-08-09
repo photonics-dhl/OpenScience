@@ -29,10 +29,15 @@
   },
   "dashboard": {
     "title": "研究驾驶舱",
+    "welcome": "欢迎回来，{name}",
     "hermesReady": "Hermes 已就绪",
+    "loading": { "eyebrow": "连接研究现场", "title": "正在载入你的研究对象", "description": "正在恢复工作区、RO 与待处理任务。" },
+    "error": { "eyebrow": "连接中断", "title": "研究现场暂时不可用", "description": "你的数据没有改变。连接恢复后可以继续。", "retry": "重新连接" },
+    "empty": { "eyebrow": "第一件研究对象", "title": "从一个可追溯的 RO 开始", "description": "创建空白 SDF，或交给 Hermes 从材料中提取第一版结构。", "cta": "创建第一个 RO" },
+    "workspace": { "eyebrow": "个人研究工作区", "ready": "工作区已准备好，等待你的第一个 Research Object。" },
     "nextAction": { "eyebrow": "唯一下一步行动", "title": "确认方法段落的证据锚点", "description": "Hermes 已将材料整理为可审阅的 SDF 草稿。确认来源位置后，才会进入下一次版本提交。", "cta": "进入 RO 工作区", "progress": "处理进度 68% · 可随时恢复" },
     "ro": { "draft": "私有草稿", "title": "非平衡光子晶体中的自适应测量", "updated": "刚刚由 Hermes 更新", "versioned": "可回溯版本" },
-    "tasks": { "eyebrow": "任务中心", "extract": "确认证据锚点", "extractMeta": "方法 · 进行中", "review": "查看 AI 结构建议", "reviewMeta": "3 条待确认", "publish": "准备公开版本", "publishMeta": "权限 · 未开始" }
+    "tasks": { "eyebrow": "任务中心", "extract": "确认证据锚点", "extractMeta": "方法 · 进行中", "review": "查看 AI 结构建议", "reviewMeta": "{count} 条待确认", "publish": "准备公开版本", "publishMeta": "权限 · 未开始" }
   },
   "workspace": {
     "title": "RO 工作区",

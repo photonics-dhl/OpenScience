@@ -31,6 +31,11 @@ export interface ResearchObjectDetail extends ResearchObjectSummary {
   sdf: { core: Record<string, string>; nodes: Array<{ nodeType: string; content: string }> };
 }
 
+export interface ResearchObjectListItem extends ResearchObjectSummary {
+  publicId: string | null;
+  updatedAt: Date;
+}
+
 /** 空六字段文档（§5.1）。 */
 function emptyCore(): Record<string, string> {
   const core: Record<string, string> = { schemaVersion: '0.1.0' };
@@ -86,6 +91,29 @@ export async function createResearchObject(
   });
 
   return { id: ro.id, workspaceId: ro.workspaceId, title: ro.title, status: ro.status, visibility: ro.visibility, version: ro.version, createdAt: ro.createdAt };
+}
+
+/** Dashboard list: membership-scoped summaries only; archived objects stay out of the active cockpit. */
+export async function listResearchObjects(
+  deps: WorkspaceDeps,
+  input: { workspaceId: string; userId: string },
+): Promise<ResearchObjectListItem[]> {
+  await requireMembership(deps, input.workspaceId, input.userId);
+  return deps.prisma.researchObject.findMany({
+    where: { workspaceId: input.workspaceId, status: { not: 'archived' } },
+    orderBy: { updatedAt: 'desc' },
+    select: {
+      id: true,
+      workspaceId: true,
+      title: true,
+      status: true,
+      visibility: true,
+      version: true,
+      publicId: true,
+      createdAt: true,
+      updatedAt: true,
+    },
+  });
 }
 
 export interface UpdateResearchObjectInput {
