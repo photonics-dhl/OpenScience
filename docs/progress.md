@@ -1,5 +1,17 @@
 # OpenScience (XGS) 进度日志
 
+## 2026-08-10（Optical Editorial v3 Task 4）— ✅ Landing 品牌媒介完成
+
+- **真实 DOM 品牌记忆**：Landing 已替换为非对称 `Science evolves.` / `科学，持续演化。` 排版；可访问标题不依赖 Canvas，朱红只保留在句点与主动作，Create/Explore/Login 均指向真实路由。
+- **局部 Optical Field**：Canvas 仅承担 `aria-hidden` 的半色调证据粒子与指针局部扰动；作用半径 160–200px、位移 8–14px、500ms 回弹，移动端密度 32%。按住时短暂出现无文字的 SDF 证据线层；坐标以标题容器计算，尺寸由 ResizeObserver 缓存，IntersectionObserver 在离屏时暂停 RAF。
+- **真实 Explore**：新增 `/explore` 公开索引入口，以明确空状态等待 Task 10 启动语料；Landing 不再把产品原则伪装成“最新研究”，也移除了 `OS / 00—∞`、`RO / SDF / v∞` 等无意义 HUD。
+- **浏览器审美验收**：已抓取 1440×900、1920×1080、390×844 的 normal/reduced-motion 证据。正常 A/B 指针状态哈希不同；reduced-motion A/B 哈希一致。额外验证英文 320px `scrollWidth=clientWidth=320`、标题可选择、只有一个 main、Canvas 对辅助技术隐藏且浏览器 console 无错误；按住与 650ms 回弹画面哈希不同。
+- **环境纠偏**：发现 3002 被旧版服务占用并返回旧 Landing，未把旧截图误判为新版结果；改用干净 3012 端口重跑生产构建。视觉脚本现支持 `VISUAL_BASE_URL`，避免后续端口污染。
+- **审查修正**：独立 reviewer 两轮指出并验证了回弹、离屏 RAF、320px 英文、真实 Explore、朱红层级等问题；末轮补齐 reduced-motion 的静态 click/hold 与 pointercancel/blur 释放，并让导航显式支持 dark/paper tone。
+- **可访问性实测**：reduced-motion 初始帧与按住帧哈希不同，pointercancel 后精确恢复初始哈希；Explore 纸面导航实测 Explore/Create 5.34:1、Login 15.07:1，达到 WCAG AA。
+- **门禁**：Landing/Optical/i18n focused 12/12、全 Web 116/116、typecheck、Next production build 通过；视觉证据位于 `apps/web/test/visual/out/`（忽略目录，不入 Git）。
+- **下一步**：执行 Task Master `optical-editorial-v3` Task 5，重构 RO Workspace 为 19/56/25 三稳定工作平面，并用真实测试 RO 做桌面/移动浏览器验收。
+
 ## 2026-08-10（Optical Editorial v3 Task 3）— ✅ 品牌与产品 Shell 完成
 
 - **品牌原语**：新增纯文字 `OpenScience.` wordmark，朱红句点独立可测；compact 变体为 `O.`。favicon 已从旧青色波形替换为黑/纸白/朱红的几何 `O.`，未引入图片 logo。

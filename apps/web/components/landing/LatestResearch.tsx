@@ -1,54 +1,28 @@
 import { useTranslations } from 'next-intl';
 
-// P2 will replace the skeletons with real cards from GET /explore.
-// Until then: no fabricated titles, versions, or counts — pure skeleton.
-const skeletonCount = 3;
-
 export default function LatestResearch() {
   const t = useTranslations('landing');
+  const items = [t('latest.item1'), t('latest.item2'), t('latest.item3')];
+  const itemLabels = [t('latest.label1'), t('latest.label2'), t('latest.label3')];
 
   return (
-    <section
-      id="latest"
-      data-landing-module="latest"
-      className="relative z-10 -mt-24 bg-hero-bg px-5 pb-16 pt-0 text-hero-text sm:px-6 lg:-mt-28 lg:pb-20"
-    >
-      <div className="mx-auto w-full max-w-7xl border-t border-white/8 pt-10">
-        <div className="mb-8 flex flex-wrap items-end justify-between gap-4">
-          <h2 className="font-display text-3xl font-semibold leading-tight text-hero-text sm:text-4xl">
+    <section className="surface-evidence px-4 py-16 sm:px-6 lg:px-8 lg:py-24" data-landing-module="principles" id="principles">
+      <div className="mx-auto max-w-[112rem]">
+        <div className="grid gap-8 border-b border-os-rule-paper pb-8 lg:grid-cols-[0.8fr_1.2fr] lg:items-end">
+          <h2 className="m-0 font-editorial text-[clamp(3.2rem,7vw,7.8rem)] font-normal leading-[0.9] tracking-[-0.065em] text-os-ink">
             {t('latest.title')}
           </h2>
-          <p className="max-w-sm text-sm leading-6 text-hero-muted sm:text-right">
-            {t('latest.empty')}
-          </p>
+          <p className="m-0 max-w-lg text-base leading-7 text-os-muted-paper lg:justify-self-end">{t('latest.empty')}</p>
         </div>
-
-        <div
-          aria-hidden="true"
-          className="grid gap-4 lg:grid-cols-3"
-          data-latest-skeleton="true"
-        >
-          {Array.from({ length: skeletonCount }, (_, index) => (
-            <div
-              key={index}
-              className="rounded-[28px] border border-white/8 bg-white/[0.03] p-5"
-            >
-              <div className="mb-4 flex items-center justify-between gap-3">
-                <div className="h-3 w-24 rounded-full bg-white/12" />
-                <div className="h-5 w-10 rounded-full bg-white/8" />
-              </div>
-              <div className="mb-4 h-28 rounded-[18px] border border-white/6 bg-white/[0.04]" />
-              <div className="space-y-2.5">
-                <div className="h-3.5 w-3/4 rounded-full bg-white/12" />
-                <div className="h-3 w-1/2 rounded-full bg-white/8" />
-                <div className="flex gap-2 pt-1">
-                  <div className="h-2.5 w-16 rounded-full bg-white/8" />
-                  <div className="h-2.5 w-20 rounded-full bg-white/6" />
-                </div>
-              </div>
-            </div>
+        <ol className="m-0 list-none p-0">
+          {items.map((item, index) => (
+            <li className="grid gap-3 border-b border-os-rule-paper py-6 sm:grid-cols-[5rem_1fr_auto] sm:items-baseline" key={item}>
+              <span className="font-data text-xs text-os-muted-paper">0{index + 1}</span>
+              <span className="font-editorial text-2xl tracking-[-0.025em] text-os-ink sm:text-4xl">{item}</span>
+              <span className="font-data text-[10px] uppercase tracking-[0.15em] text-os-muted-paper">{itemLabels[index]}</span>
+            </li>
           ))}
-        </div>
+        </ol>
       </div>
     </section>
   );

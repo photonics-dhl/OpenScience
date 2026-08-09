@@ -85,11 +85,11 @@
 
 **Interfaces:** Produces `OpticalHeadline({locale,reducedMotion})`, pure `sampleOpticalField(pointer,viewport,now): OpticalSample`; Canvas stays `aria-hidden` and never owns text.
 
-- [ ] Write failing tests for real DOM English/Chinese headlines, Create/Explore routes, one vermilion marker, deterministic bounds and static reduced-motion mode.
-- [ ] Verify RED because the old symmetrical ring renders.
-- [ ] Implement asymmetric DOM typography first; pass static 1440×900 and 390×844 AI-slop review before Canvas.
-- [ ] Implement 160–200px pointer radius, 8–14px maximum visual displacement, 400–600ms recovery and ≤35% mobile density.
-- [ ] Capture 1440×900, 1920×1080 and 390×844 normal/reduced motion; commit `feat(web): replace landing with optical editorial medium`.
+- [x] Write failing tests for real DOM English/Chinese headlines, Create/Explore routes, one vermilion marker, deterministic bounds and static reduced-motion mode.
+- [x] Verify RED because the old symmetrical ring renders.
+- [x] Implement asymmetric DOM typography first; pass static 1440×900 and 390×844 AI-slop review before Canvas.
+- [x] Implement 160–200px pointer radius, 8–14px maximum visual displacement, 400–600ms recovery and ≤35% mobile density.
+- [x] Capture 1440×900, 1920×1080 and 390×844 normal/reduced motion; commit `feat(web): replace landing with optical editorial medium`.
 
 ### Task 5: Rebuild RO Workspace as Three Stable Work Planes
 

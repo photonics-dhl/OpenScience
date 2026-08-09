@@ -241,11 +241,16 @@
       "login": "登录"
     },
     "hero": {
+      "kicker": "研究，作为持续演化的对象",
+      "context": "OpenScience / 科研对象",
       "title": "让研究，\n持续演化。",
       "subtitle": "将论文、数据、代码与讨论，组织为开放、可验证、可演化的研究对象。",
       "ctaExplore": "探索研究",
       "ctaCreate": "创建研究对象",
       "hermesStatus": "Hermes 正在解析",
+      "metaObject": "科研对象",
+      "metaStructure": "SDF 元数据",
+      "metaVersion": "版本溯源",
       "pillar1Title": "结构化",
       "pillar1Desc": "论文、数据、代码，解析为可查询的 SDF 结构",
       "pillar2Title": "可验证",
@@ -254,8 +259,14 @@
       "pillar3Desc": "Hermes 持续组织与评审，让研究不断演化"
     },
     "latest": {
-      "title": "最新研究",
-      "empty": "暂无公开研究，敬请期待。"
+      "title": "公共记录，而非信息流",
+      "empty": "OpenScience 先让研究对象清晰可读，再争取注意力：来源、结构与变化始终相连。",
+      "item1": "原始证据始终随对象保留",
+      "item2": "结构化内容始终可检查",
+      "item3": "每个版本始终可引用",
+      "label1": "证据",
+      "label2": "结构",
+      "label3": "引用"
     },
     "evolution": {
       "title": "研究如何演化",
@@ -473,5 +484,12 @@
       "confidence": "置信度",
       "source": "证据来源"
     }
+  },
+  "explore": {
+    "eyebrow": "公开研究索引",
+    "title": "值得检验的研究。",
+    "description": "通过验证的公开科研对象将在这里呈现，并保留其证据、SDF 结构、版本、许可与评审历史。",
+    "empty": "启动合集正在准备中；平台不会把占位论文伪装成真实研究。",
+    "create": "创建科研对象"
   }
 }

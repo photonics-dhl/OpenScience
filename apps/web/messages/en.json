@@ -241,11 +241,16 @@
       "login": "Log in"
     },
     "hero": {
+      "kicker": "Research, as a living object",
+      "context": "OpenScience / Research Objects",
       "title": "Let research\nkeep evolving.",
       "subtitle": "Bring papers, data, code, and discussion together as open, verifiable, evolving research objects.",
       "ctaExplore": "Explore research",
       "ctaCreate": "Create research object",
       "hermesStatus": "Hermes is parsing",
+      "metaObject": "Research Object",
+      "metaStructure": "SDF metadata",
+      "metaVersion": "Version provenance",
       "pillar1Title": "Structured",
       "pillar1Desc": "Papers, data, and code parsed into queryable SDF structures",
       "pillar2Title": "Verifiable",
@@ -254,8 +259,14 @@
       "pillar3Desc": "Hermes curates and reviews, so research keeps evolving"
     },
     "latest": {
-      "title": "Latest research",
-      "empty": "No public research yet. Stay tuned."
+      "title": "A public record, not a feed",
+      "empty": "OpenScience keeps the object legible before it asks for attention: source, structure, and change remain connected.",
+      "item1": "Original evidence stays attached",
+      "item2": "Structure remains inspectable",
+      "item3": "Every version stays citable",
+      "label1": "Evidence",
+      "label2": "Structure",
+      "label3": "Citation"
     },
     "evolution": {
       "title": "How research evolves",
@@ -473,5 +484,12 @@
       "confidence": "Confidence",
       "source": "Evidence source"
     }
+  },
+  "explore": {
+    "eyebrow": "Public research index",
+    "title": "Research worth inspecting.",
+    "description": "Verified public Research Objects will appear here with their evidence, SDF structure, versions, licenses, and review history intact.",
+    "empty": "The launch collection is being prepared. No placeholder papers are presented as real research.",
+    "create": "Create a Research Object"
   }
 }

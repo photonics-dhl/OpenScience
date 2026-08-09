@@ -9,12 +9,13 @@
   - Task 1 完成：新工作树 `E:/Miscellaneous/XGS/.worktrees/optical-editorial-v3` / branch `codex/optical-editorial-v3`；Prisma generate → full build → full test 全绿（Web 92、Domain 313、API 58、Agent Worker 24、Science Worker 29）。
   - Task 2 完成：ADR-009 决定 Canvas 2D + SVG/CSS 原生 Optical Field（无新增运行时依赖）；Bricolage Grotesque、Bodoni Moda、Noto Serif SC、IBM Plex Mono 以 next/font 构建期自托管；v3 黑/纸白/朱红 tokens、0/4/8px 半径、motion/字体角色与 AA/禁蓝紫门禁已落地。聚焦 24/24、全 Web 99/99、typecheck/build 通过；review 后修正朱红控件黑字与双表面 focus 对比度。
   - Task 3 完成：`OpenScience.`/`O.` 品牌原语与 Public/Identity/Dashboard/Workspace 四类无 Card shell 已落地；单一 main、skip link、19/56/25 Workspace 平面、8px action/press/reduced-motion、中英文 shell 文案均有测试。focused 9/9、全 Web 108/108、typecheck/build 通过。
+  - Task 4 完成：Landing 已替换为真实 DOM `Science evolves.` / `科学，持续演化。` 与原生 Canvas Optical Field；Create/Explore/Login 真实路由、160–200px 局部作用半径、8–14px 位移、500ms 回弹、按住证据层、离屏暂停、移动 32% 密度及 reduced-motion 静态交互均已落地。全 Web 116/116、typecheck/build 通过；1440/1920/390 normal/reduced 截图完成，英文 320px 无溢出；Explore 纸面导航对比度 5.34:1/15.07:1。
 - Constraints:
   - 不读取/打印 `.env`；不把效果图伪数据投入生产。
   - 视觉核心必须由可访问 DOM + 自有轻量 Canvas/WebGL 媒介层实现；第三方库只作受控局部依赖。
   - 开发阶段无用户，验收通过后直接替换服务器页面；保留上一镜像以便回滚。
 - Open risks:
-  - v3 foundations 与共享 shell 已编码，但实际页面尚未替换；Figma canonical 需要按 v3 新建 foundations，旧文件不再作为视觉裁决源。
+  - Landing 已完成浏览器替换；Workspace、Public RO 与其余产品页仍需按同一语言逐项替换。Figma canonical 需要按 v3 新建 foundations，旧文件不再作为视觉裁决源。
   - 启动 6 个完整 Demonstration RO 与 12–18 个索引条目尚未采集/登记。
-- Next action: 执行 Task Master `optical-editorial-v3` Task 4；先以失败测试定义 DOM 标题、纯函数 Optical Field 与 reduced-motion，再替换 Landing 并做浏览器截图审美验收。
+- Next action: 执行 Task Master `optical-editorial-v3` Task 5；先以失败测试定义 ObjectHeader、19/56/25 三平面、六个 SDF 节点、证据与 Before/After proposal，再保持持久化契约不变地替换 Workspace，并用真实测试 RO 做浏览器验收。
 - Read first: `AGENTS.md` → `docs/OpenScience_Kimi_Development_Spec.md` → `docs/progress.md` → `project_index.md` → `docs/specs/2026-08-10-optical-editorial-rebaseline-design.md` → `docs/user_ideas/8.10/OpenScience_Art_Direction_v3.md`。

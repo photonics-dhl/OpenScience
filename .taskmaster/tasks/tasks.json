@@ -1183,7 +1183,7 @@
         "id": "4",
         "title": "以 DOM Typography + Optical Field 重做 Landing",
         "description": "用 Science evolves./科学，持续演化。非对称混排替换 Evolving RO 环，Canvas/WebGL 只承担局部折射、半色调和证据粒子。",
-        "status": "in-progress",
+        "status": "done",
         "dependencies": [
           "3"
         ],
@@ -1191,20 +1191,21 @@
         "details": "计划 Task 4。真实 DOM headline；160-200px 作用半径；8-14px 位移；400-600ms 回弹；移动 ≤35% 密度；Create/Explore 真实路由。",
         "testStrategy": "landing RED/GREEN；1440x900、1920x1080、390x844 normal/reduced-motion screenshots；AI-slop gate。",
         "subtasks": [],
-        "updatedAt": "2026-08-09T22:49:27.542Z"
+        "updatedAt": "2026-08-09T23:33:49.640Z"
       },
       {
         "id": "5",
         "title": "将 RO Workspace 重构为稳定三工作平面",
         "description": "建立 19/56/25 Outline/Editor/Evidence-Hermes 布局、单行 ObjectHeader、编号 SDF Node、EvidenceSnippet 与 Before/After proposal。",
-        "status": "pending",
+        "status": "in-progress",
         "dependencies": [
           "3"
         ],
         "priority": "high",
         "details": "计划 Task 5。不改持久化契约；只给 active node 朱红点；移动端 bottom navigation/sheets 功能等价；高风险全屏 review。",
         "testStrategy": "workspace shell RED/GREEN；keyboard/focus/320px overflow；真实测试 RO 三视口截图。",
-        "subtasks": []
+        "subtasks": [],
+        "updatedAt": "2026-08-09T23:33:54.044Z"
       },
       {
         "id": "6",
@@ -1367,9 +1368,9 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-08-09T22:49:27.543Z",
+      "lastModified": "2026-08-09T23:33:54.044Z",
       "taskCount": 15,
-      "completedCount": 3,
+      "completedCount": 4,
       "tags": [
         "optical-editorial-v3"
       ]
