@@ -1,5 +1,13 @@
 # OpenScience (XGS) 进度日志
 
+## 2026-08-10（Optical Editorial v3 Task 3）— ✅ 品牌与产品 Shell 完成
+
+- **品牌原语**：新增纯文字 `OpenScience.` wordmark，朱红句点独立可测；compact 变体为 `O.`。favicon 已从旧青色波形替换为黑/纸白/朱红的几何 `O.`，未引入图片 logo。
+- **四类 surface shell**：Public、Identity、Dashboard、Workspace 均只有一个 focusable `#main-content`，提供可见 skip link；Workspace 固定 19/56/25 三平面，移动端自然串联。所有结构使用背景色阶与规则线，不依赖 Card 或 glass/backdrop blur。
+- **交互与 i18n**：Shell 导航动作统一 8px 半径、active 位移和 reduced-motion 取消位移；新增中英文对称的 skip/navigation 文案键。
+- **TDD/门禁**：缺失组件 RED；动作反馈补测再次 RED；最终 focused 9/9、全 Web 108/108、typecheck、Next production build 通过。
+- **下一步**：执行 Task Master `optical-editorial-v3` Task 4，替换 Landing 为真实 DOM 中英混排 + pointer-local Canvas Optical Field，并在 1440×900/390×844 浏览器截图中做首轮审美裁决。
+
 ## 2026-08-10（Optical Editorial v3 Task 2）— ✅ 视觉地基完成
 
 - **官方取证与 ADR**：MDN `feDisplacementMap`、`requestAnimationFrame`、`prefers-reduced-motion` 以及 Google Fonts 官方 OFL 记录均直达返回 200；内置 search 端点 404 后降级为官方 URL 直连。新增 `ADR-009`（原计划 ADR-005 已被邮箱验证码注册占用），决定不新增视觉运行时依赖，使用 Canvas 2D + SVG/CSS，静态 poster 与 reduced-motion 保底。

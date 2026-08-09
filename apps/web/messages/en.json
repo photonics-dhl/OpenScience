@@ -11,6 +11,10 @@
     "version": "Version",
     "language": "Language"
   },
+  "shell": {
+    "skipToContent": "Skip to research content",
+    "primaryNavigation": "Primary navigation"
+  },
   "editor": {
     "title": "SDF Editor",
     "outline": "Outline",

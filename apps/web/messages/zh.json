@@ -11,6 +11,10 @@
     "version": "版本",
     "language": "语言"
   },
+  "shell": {
+    "skipToContent": "跳到科研内容",
+    "primaryNavigation": "主导航"
+  },
   "editor": {
     "title": "SDF 编辑器",
     "outline": "大纲",

@@ -73,11 +73,11 @@
 
 **Interfaces:** Produces `OpenScienceWordmark({compact?, tone:'dark'|'paper'})` and shell components with one main landmark and skip-link target.
 
-- [ ] Write failing assertions for `OpenScience.` with separate vermilion stop, one `main`, focusable skip link and no `Card` dependency.
-- [ ] Verify RED with the focused test.
-- [ ] Implement wordmark, `O.` favicon and four rule/background-step shells; buttons use 8px radius and active press feedback.
-- [ ] Add symmetric i18n keys; run i18n, focused tests, typecheck and build.
-- [ ] Commit `feat(web): add optical editorial product shells`.
+- [x] Write failing assertions for `OpenScience.` with separate vermilion stop, one `main`, focusable skip link and no `Card` dependency.
+- [x] Verify RED with the focused test.
+- [x] Implement wordmark, `O.` favicon and four rule/background-step shells; buttons use 8px radius and active press feedback.
+- [x] Add symmetric i18n keys; run i18n, focused tests, typecheck and build.
+- [x] Commit `feat(web): add optical editorial product shells`.
 
 ### Task 4: Replace Landing with the Optical Editorial Brand Medium
 

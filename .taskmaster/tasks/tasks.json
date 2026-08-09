@@ -1169,7 +1169,7 @@
         "id": "3",
         "title": "实现共享品牌、Wordmark 与四种产品 Surface Shell",
         "description": "建立 OpenScience. 文字标识、O. favicon、Public/Identity/Dashboard/Workspace shells，使用规则线和背景色阶代替 Card 容器。",
-        "status": "in-progress",
+        "status": "done",
         "dependencies": [
           "2"
         ],
@@ -1177,20 +1177,21 @@
         "details": "计划 Task 3。新增 components/brand 与 components/shell；主 landmark、skip link、8px action radius、双语文案。",
         "testStrategy": "surface-shells render RED/GREEN；i18n symmetry；typecheck/build；无 Card dependency。",
         "subtasks": [],
-        "updatedAt": "2026-08-09T22:30:39.609Z"
+        "updatedAt": "2026-08-09T22:49:18.413Z"
       },
       {
         "id": "4",
         "title": "以 DOM Typography + Optical Field 重做 Landing",
         "description": "用 Science evolves./科学，持续演化。非对称混排替换 Evolving RO 环，Canvas/WebGL 只承担局部折射、半色调和证据粒子。",
-        "status": "pending",
+        "status": "in-progress",
         "dependencies": [
           "3"
         ],
         "priority": "high",
         "details": "计划 Task 4。真实 DOM headline；160-200px 作用半径；8-14px 位移；400-600ms 回弹；移动 ≤35% 密度；Create/Explore 真实路由。",
         "testStrategy": "landing RED/GREEN；1440x900、1920x1080、390x844 normal/reduced-motion screenshots；AI-slop gate。",
-        "subtasks": []
+        "subtasks": [],
+        "updatedAt": "2026-08-09T22:49:27.542Z"
       },
       {
         "id": "5",
@@ -1366,9 +1367,9 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-08-09T22:30:39.609Z",
+      "lastModified": "2026-08-09T22:49:27.543Z",
       "taskCount": 15,
-      "completedCount": 2,
+      "completedCount": 3,
       "tags": [
         "optical-editorial-v3"
       ]
