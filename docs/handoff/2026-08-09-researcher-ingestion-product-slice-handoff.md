@@ -26,6 +26,7 @@ Task 3 初版 hardening 已加入 batch request digest、multipart truncated 拒
 - This slice remains blocked for production deployment until controlled PDF/Office/image parsers, quarantine/AV scanning, failure taxonomy/audit completeness, and isolated infrastructure integration evidence are complete.
 - Failure taxonomy now maps worker errors prefixed `[blocked]` to `failed_blocked`; only non-blocked failures remain `failed_retryable` and eligible for retry.
 - Controlled adapters now include `pdf-parse@2.4.5` and `mammoth@1.12.0`; parser input is capped at 20 MiB and parser exceptions become `needs_review`. Realistic PDF/DOCX fixtures and production AV/quarantine remain open.
+- ADR-006 records that `any2pdf` is an export-only MIT component; OCR remains local-engine-first with MiniMax as consented fallback.
 
 ## Task 2 fix round 3/5
 
