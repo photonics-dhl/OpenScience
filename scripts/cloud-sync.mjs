@@ -5,7 +5,9 @@ import os from 'node:os';
 import path from 'node:path';
 import { readFileSync } from 'node:fs';
 
-const cfg = JSON.parse(readFileSync(path.join(process.cwd(), '.cloud-sync-env'), 'utf8'));
+const sourceRoot = process.env.XGS_SOURCE_ROOT ? path.resolve(process.env.XGS_SOURCE_ROOT) : process.cwd();
+const configRoot = process.env.XGS_CONFIG_ROOT ? path.resolve(process.env.XGS_CONFIG_ROOT) : process.cwd();
+const cfg = JSON.parse(readFileSync(path.join(configRoot, '.cloud-sync-env'), 'utf8'));
 const key = cfg.key.replace(/^~/, os.homedir());
 
 const EXCLUDES = [
@@ -22,7 +24,7 @@ const ENTRIES = [
 ];
 
 const tarArgs = ['czf', '-', ...EXCLUDES.map((e) => `--exclude=${e}`), ...ENTRIES];
-const tar = spawn('tar', tarArgs, { cwd: process.cwd() });
+const tar = spawn('tar', tarArgs, { cwd: sourceRoot });
 const remote = `cd /opt/openscience && tar -xzf - --overwrite`;
 const ssh = spawn('ssh', ['-o', 'BatchMode=yes', '-o', 'ConnectTimeout=20', '-i', key, '-p', String(cfg.port), `${cfg.user}@${cfg.host}`, remote], { cwd: process.cwd() });
 

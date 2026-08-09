@@ -20,7 +20,8 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
-ENV_FILE="$PROJECT_ROOT/.env"
+CONFIG_ROOT="${XGS_CONFIG_ROOT:-$PROJECT_ROOT}"
+ENV_FILE="$CONFIG_ROOT/.env"
 
 # --- 参数解析 ---
 CONFIRM=0
@@ -99,7 +100,7 @@ log "=== 执行部署（--confirm）==="
 
 # 1. 同步（复用 cloud-sync 逻辑：tar 流式经 ssh）
 log "[1] 同步代码..."
-node "$PROJECT_ROOT/scripts/cloud-sync.mjs" || { echo "同步失败" >&2; exit 1; }
+XGS_SOURCE_ROOT="$PROJECT_ROOT" XGS_CONFIG_ROOT="$CONFIG_ROOT" node "$PROJECT_ROOT/scripts/cloud-sync.mjs" || { echo "同步失败" >&2; exit 1; }
 
 # 2. build
 if [ "$SKIP_BUILD" -ne 1 ]; then
@@ -110,10 +111,10 @@ fi
 # 3. 迁移
 if [ "$SKIP_MIGRATE" -ne 1 ]; then
   log "[3] 迁移 deploy..."
-  run_remote "cd $REMOTE_ROOT && node packages/database/dist/migrate-cli.js deploy" || exit 1
+  run_remote "cd $REMOTE_ROOT && docker compose --env-file $PROD_ENV -f $COMPOSE_FILE exec -T -e DATABASE_URL=\$(grep '^DATABASE_URL=' $PROD_ENV | cut -d= -f2-) -w $REMOTE_ROOT api node packages/database/dist/migrate-cli.js deploy" || exit 1
   # seed 占位值（幂等）
   log "[4] seed-quota..."
-  run_remote "cd $REMOTE_ROOT && node scripts/seed-quota.mjs --confirm" || exit 1
+  run_remote "cd $REMOTE_ROOT && docker compose --env-file $PROD_ENV -f $COMPOSE_FILE exec -T -e DATABASE_URL=\$(grep '^DATABASE_URL=' $PROD_ENV | cut -d= -f2-) -w $REMOTE_ROOT api node scripts/seed-quota.mjs --confirm" || exit 1
 fi
 
 # 4. 生产栈

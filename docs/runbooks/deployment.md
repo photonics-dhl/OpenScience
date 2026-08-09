@@ -20,6 +20,7 @@
 ```bash
 node scripts/cloud-sync.mjs
 # tar-over-ssh 同步到 /opt/openscience；排除 .env/.git/node_modules/dist
+# 隔离 worktree 部署时设置 XGS_CONFIG_ROOT=/e/Miscellaneous/XGS，服务器配置与 release 源码分离。
 ```
 
 ### 2.2 安装依赖 + 全量构建（云上）
@@ -35,6 +36,8 @@ ssh-run.sh "cd /opt/openscience && npx pnpm@9.15.0 install && npx pnpm@9.15.0 bu
 ssh-run.sh "cd /opt/openscience && node packages/database/dist/migrate-cli.js deploy"
 ssh-run.sh "cd /opt/openscience && node scripts/seed-quota.mjs --confirm"   # P1A-7 配额占位值
 ```
+
+生产栈数据库没有宿主端口映射，实际执行必须通过 API 容器，并从服务器 `.env.prod` 注入容器内 `DATABASE_URL`；`infra/scripts/deploy.sh` 已封装该路径。
 
 ### 2.4 API 反代配置（首次上线或变更时）
 
