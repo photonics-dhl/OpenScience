@@ -25,6 +25,11 @@
 | `apps/web/components/landing/EvidenceField.tsx` | Landing/驾驶舱共用的确定性证据环境层：18 个 aria-hidden 蓝色粒子与两条低对比轨迹，支持 reduced-motion 静态降级（Task 2 首个网页切片，2026-08-09） | 活文档 |
 | `apps/web/app/dashboard/page.tsx` | Dashboard 入口，承载 action-first Research Cockpit（稳定 RO ID、Hermes 状态、任务中心；Task 2 首个网页切片，2026-08-09） | 活文档 |
 | `apps/web/components/dashboard/DashboardShell.tsx` | Dashboard 科研驾驶舱交互壳：唯一下一步行动、RO focus card、任务 rail、workspace 路由入口与受控证据层 | 活文档 |
+| `apps/web/components/workspace/WorkspaceContext.tsx` | 统一 RO Workspace 上下文契约：`roId`、`versionId`、`workspaceId`、`mode`、`permission` | 活文档 |
+| `apps/web/components/workspace/WorkspaceModeNav.tsx` | Workspace 六模式桌面导航与移动端入口：overview / sdf / artifacts / versions / collaboration / public | 活文档 |
+| `apps/web/components/workspace/HermesRail.tsx` | Hermes 当前上下文与写入前确认提示轨；只呈现状态，不直接触发高风险写入 | 活文档 |
+| `apps/web/components/workspace/RoWorkspaceShell.tsx` | 统一 RO 工作台外壳，包裹既有 SDF 编辑器并提供桌面/移动导航与权限标识 | 活文档 |
+| `apps/web/test/workspace-shell.test.tsx` | Workspace shell TDD 合同：稳定上下文、六模式 parity、只读/审批状态 | 活文档 |
 | `apps/web/components/landing/LatestResearch.tsx` | Landing 页 `#latest` 深色内容带（真实锚点、三张 RO preview，占位至 P2 `GET /explore`） | 活文档 |
 | `apps/web/components/landing/TrustBand.tsx` | Landing 页 `#trust` 信任区（版本/provenance、许可作者贡献、AI+人工复核三支柱） | 活文档 |
 | `apps/web/components/landing/EvolutionPanel.tsx` | Landing 页四阶段演化面板（create/parse/diff/publish stage morph + 自动演示一轮即停，2026-08-07） | 活文档 |

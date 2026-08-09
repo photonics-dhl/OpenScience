@@ -1,5 +1,12 @@
 # OpenScience (XGS) 进度日志
 
+## 2026-08-09（产品网页 Task 2 / Workspace shell）— RO 上下文与移动端 parity
+
+- **✅ 已完成**：新增 `WorkspaceContext`、`WorkspaceModeNav`、`HermesRail`、`RoWorkspaceShell`；现有 `/research-objects/[id]/edit` 现在由统一 shell 包裹，稳定传递 `roId`、`versionId`、`workspaceId`、`mode=sdf`、`permission=edit`。
+- **✅ 六模式**：桌面和移动端同时提供概览、SDF 编辑、材料、版本、协作、公开页六个入口；移动端使用固定底栏，不删除功能。Hermes 轨显示当前上下文并明确写入前确认边界。
+- **✅ 回归与视觉**：Workspace shell 专测 2/2；全量 Web 13 files / 66 tests；typecheck、production build 通过；Playwright 390×844 / 1440×900 截图检查通过。编辑器 API 404 错误状态仍可见且错误取消文案已补齐 i18n。
+- **⏳ 下一步**：把 `workspaceId` 从加载占位接到真实权限/协作上下文，增加 overview route 的真实摘要和 Public RO/Collection 链接；随后补 loading/empty/permission 交互测试。
+
 ## 2026-08-09（产品网页 Task 2 / 首个网页实现切片）— Dashboard + Landing evidence field
 
 - **✅ 已完成**：把用户确认的 Figma 六屏语义映射到现有 Next.js；新增 `/dashboard` action-first 驾驶舱，展示唯一下一步行动、稳定 RO ID `OS-RO-01J8YF7Q`、v0.4 草稿、Hermes 状态与任务轨；现有编辑页增加 `workspace-cockpit` chrome，贯穿 RO ID/版本。

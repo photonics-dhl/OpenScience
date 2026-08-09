@@ -125,14 +125,18 @@
 - [x] **Step 2: Implement Dashboard cockpit**
   2026-08-09 新增 `/dashboard` 与 `DashboardShell`；真实 API 接入、loading/error/empty 分支留给下一切片。
   Render next action first, then current RO progress, task inbox and secondary metrics. Support empty, loading, error and no-invite/waitlist states without social-feed noise.
-- [ ] **Step 3: Write failing workspace shell tests**
+- [x] **Step 3: Write failing workspace shell tests**
+  2026-08-09 `apps/web/test/workspace-shell.test.tsx` 覆盖稳定上下文、六模式桌面/移动 parity、只读权限与 Hermes approval。
   Assert all six modes, stable RO/version context, permission-aware actions, desktop rail and mobile bottom navigation.
-- [ ] **⏳ Step 4: Implement unified shell**
+- [x] **Step 4: Implement unified shell**
+  2026-08-09 新增 `components/workspace/*` 并包裹既有编辑页；编辑器数据流与独立 URL 保持不变。
   2026-08-09 先给既有编辑页加 `workspace-cockpit` chrome，未替换编辑器数据流；共享 workspace mode/permission/Hermes rail 仍待后续实现。
   Wrap existing editor/collab pages with the shared RO shell; preserve independent URLs while keeping mode, version and Hermes context continuous.
-- [ ] **Step 5: Add responsive and accessibility behavior**
+- [x] **Step 5: Add responsive and accessibility behavior**
+  2026-08-09 移动端六模式固定底栏、语义 nav/aria labels、reduced-motion 继承全局门控；完整焦点恢复与高风险确认仍随真实动作接入。
   Use bottom navigation and Hermes bottom sheet on mobile, semantic landmarks, focus restoration, keyboard navigation and full-screen high-risk confirmations.
-- [ ] **Step 6: Verify**
+- [x] **Step 6: Verify**
+  2026-08-09 shell 专测、全量 web 测试、typecheck、production build 与 390×844 / 1440×900 截图均通过。
   Run `npx pnpm@9.15.0 test -- apps/web/test/dashboard.test.tsx apps/web/test/workspace-shell.test.tsx apps/web/test/mobile.test.ts`, then capture 390×844 and 1440×900 screenshots.
 
 ## Task 3: Create Flow, Hermes Evidence, Versioning and Task Center

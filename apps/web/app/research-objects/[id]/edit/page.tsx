@@ -7,6 +7,7 @@ import OutlinePanel from '../../../../components/editor/OutlinePanel';
 import CoreEditor from '../../../../components/editor/CoreEditor';
 import SuggestionsPanel from '../../../../components/editor/SuggestionsPanel';
 import ArtifactUploader from '../../../../components/editor/ArtifactUploader';
+import RoWorkspaceShell from '../../../../components/workspace/RoWorkspaceShell';
 import {
   createCommit,
   getAgentTask,
@@ -222,14 +223,15 @@ export default function EditorPage({ params }: { params: { id: string } }) {
   }
 
   return (
-    <div className="workspace-cockpit" data-cockpit="workspace">
+    <RoWorkspaceShell context={{
+      roId,
+      versionId: `v${state.version}`,
+      workspaceId: workspaceId || 'loading',
+      mode: 'sdf',
+      permission: 'edit',
+    }}>
       <div className="toolbar">
-        <div className="workspace-chrome">
-          <span className="eyebrow">RO WORKSPACE</span>
-          <span className="toolbar-title">{t('title')}</span>
-          <span className="workspace-ro-id">{roId}</span>
-          <span className="badge badge-blue">v{state.version}</span>
-        </div>
+        <span className="toolbar-title">{t('title')}</span>
         <button className="btn" onClick={handleSave} disabled={saving || !state.dirty}>
           {saving ? t('common.saving') ?? '…' : t('saveToSdf')}
         </button>
@@ -285,6 +287,6 @@ export default function EditorPage({ params }: { params: { id: string } }) {
           />
         }
       />
-    </div>
+    </RoWorkspaceShell>
   );
 }

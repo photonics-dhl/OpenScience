@@ -18,6 +18,15 @@
     "ro": { "draft": "私有草稿", "title": "非平衡光子晶体中的自适应测量", "updated": "刚刚由 Hermes 更新", "versioned": "可回溯版本" },
     "tasks": { "eyebrow": "任务中心", "extract": "确认证据锚点", "extractMeta": "方法 · 进行中", "review": "查看 AI 结构建议", "reviewMeta": "3 条待确认", "publish": "准备公开版本", "publishMeta": "权限 · 未开始" }
   },
+  "workspace": {
+    "title": "RO Workspace",
+    "privateDraft": "Private draft",
+    "editable": "Editable",
+    "readOnly": "Read-only scope",
+    "hermesReady": "Hermes ready",
+    "mode": { "overview": "Overview", "sdf": "SDF editor", "artifacts": "Artifacts", "versions": "Versions", "collaboration": "Collaboration", "public": "Public RO" },
+    "hermes": { "title": "Hermes tasks", "context": "Current context", "approval": "Confirmation required before write" }
+  },
   "editor": {
     "title": "SDF Editor",
     "outline": "Outline",
@@ -52,7 +61,8 @@
     "commitMessage": "Commit message",
     "commit": "Create commit",
     "yes": "Yes",
-    "no": "No"
+    "no": "No",
+    "common": { "cancel": "Cancel", "saving": "Saving…" }
   },
   "collab": {
     "title": "Collaboration",
