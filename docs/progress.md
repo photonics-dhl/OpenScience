@@ -1,5 +1,14 @@
 # OpenScience (XGS) 进度日志
 
+## 2026-08-10（Optical Editorial v3 Task 2）— ✅ 视觉地基完成
+
+- **官方取证与 ADR**：MDN `feDisplacementMap`、`requestAnimationFrame`、`prefers-reduced-motion` 以及 Google Fonts 官方 OFL 记录均直达返回 200；内置 search 端点 404 后降级为官方 URL 直连。新增 `ADR-009`（原计划 ADR-005 已被邮箱验证码注册占用），决定不新增视觉运行时依赖，使用 Canvas 2D + SVG/CSS，静态 poster 与 reduced-motion 保底。
+- **字体系统**：`next/font` 接入 Bricolage Grotesque（展示）、Bodoni Moda（编辑衬线）、Noto Serif SC（中文）、IBM Plex Mono（数据）；生产构建自有源分发，无浏览器第三方字体请求。
+- **视觉 token**：落地 `--os-black-*`、paper/ink/vermilion/confirmed、规则线、0/4/8px 半径、语义 motion 与字体角色；旧组件所需 token 只保留为 canonical token alias。旧蓝色/深蓝驾驶舱 token 已从 `tokens.css` 清除。
+- **TDD 与回归**：初始聚焦测试得到 14 个预期 RED；review 修复补测后聚焦 24/24、全 Web 99/99。旧 ingestion AA 测试补充 CSS alias 递归解析，并据真实 2.85:1 证据把双表面 focus ring 调为中性灰，黑/纸均达到非文本 3:1；朱红主按钮改用黑字。
+- **构建门禁**：Web typecheck 与 Next production build 已通过；Bodoni fallback metric warning 已通过显式关闭不可靠自动 override 消除。
+- **下一步**：执行 Task Master `optical-editorial-v3` Task 3，建立无卡片墙的 Wordmark 与 Public/Identity/Dashboard/Workspace 四类共享 shell；继续 RED → GREEN → browser → docs-sync。
+
 ## 2026-08-10（Hermes review/confirm 与计费流水）— ⏳ 本地门禁通过，待服务器发布验收
 
 - **Review/confirm**：新增 `GET /ingestion/tasks/:taskId` 返回脱敏建议、任务状态和 RO 版本；新增 `POST /ingestion/:taskId/confirm`，校验 SDF core + 乐观锁后写入 SDF、推进 `needs_review → confirmed`。Web 新增 `/research-objects/[id]/hermes?task=...` 六字段确认界面，支持编辑建议后创建新版本。

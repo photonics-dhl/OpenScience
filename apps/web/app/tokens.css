@@ -1,40 +1,37 @@
-/* 视觉 token 层（Task 2）：spec §3 变量落 :root，并用 Tailwind v4 @theme 暴露为工具类。
-   值经 WCAG AA 对比度验证（test/tokens-contrast.test.ts 门禁，配对 ≥4.5）。
-   调整记录：accent-primary-strong #256BFF → #2A6DFF（/hero-bg 4.47 → 4.57），spec §3 已同步。
-   Task 8 追加：结构 token（动效/半径/阴影/层级/z-index）+ 状态色，spec §3.1。 */
+/* Optical Editorial Instrument v3 — canonical browser/Figma token contract.
+   Core palette comes from the approved 2026-08-10 art direction; derived muted/rule
+   steps are identified below and must be mirrored in Figma. Legacy aliases
+   remain temporarily because pre-v3 surfaces still consume them during migration. */
 :root {
-  --hero-bg: #03060b; --hero-surface: #08101c;
-  --hero-text: #f4f7fb; --hero-muted: #99a5b5;
-  --accent-primary: #4c8dff; --accent-primary-strong: #2a6dff;
-  --accent-diff: #ffb454;
-  --canvas-bg: #f6f7f9; --paper-bg: #fcfbf7;
-  --ink: #18202b; --border-subtle: rgba(148, 163, 184, 0.18);
-  /* Researcher ingestion foundations: a quiet deep-blue cockpit around paper evidence.
-     accent-diff remains the sole amber accent and is reserved for proposed changes. */
-  --workbench-bg: #07111f;
-  --workbench-surface: #0d1b2d;
-  --workbench-elevated: #13243a;
-  --workbench-text: #f4f7fb;
-  --workbench-muted: #a9b5c5;
-  --evidence-paper: #fcfbf7;
-  --evidence-ink: #18202b;
-  --evidence-muted: #596474;
-  --evidence-border: #d8d6ce;
-  --focus-ring: #4c8dff;
-  --status-neutral-bg: #e8edf3;
-  --status-neutral-text: #344154;
-  --status-info-bg: #dbeafe;
-  --status-info-text: #1e3a8a;
-  --status-warning-bg: #fef3c7;
-  --status-warning-text: #78350f;
-  --status-success-bg: #dcfce7;
-  --status-success-text: #166534;
-  --status-danger-bg: #fee2e2;
-  --status-danger-text: #991b1b;
-  /* 状态色：accent-diff 仅表 diff，危险操作用 state-danger（spec §3 红线）。
-     #b91c1c 而非 #dc2626：hero-text 白字压其上需 AA 4.5（4.32 不达标 → 5.8，门禁实测） */
-  --state-danger: #b91c1c;
-  /* Canonical spacing, type, and radius names mirrored into Figma variables. */
+  /* Three surfaces: optical black, instrument black and warm paper. */
+  --os-black-0: #050606;
+  --os-black-1: #0a0b0b;
+  --os-black-2: #111312;
+  --os-paper: #f1eee7;
+  --os-ink: #191a18;
+  /* Derived AA-muted step; source white.1 remains --os-paper for primary text. */
+  --os-muted-dark: #9b9d98;
+  --os-muted-paper: #5f625e;
+  --os-vermilion: #ff4e22;
+  --os-confirmed: #85b77d;
+  /* Derived rules use the canonical foregrounds at low alpha. */
+  --os-rule-dark: rgb(241 238 231 / 0.18);
+  --os-rule-paper: rgb(25 26 24 / 0.2);
+
+  /* Typography roles. next/font supplies the first four variables at <html>. */
+  --font-display-grotesk: var(--font-bricolage), 'Arial Narrow', sans-serif;
+  --font-editorial-serif: var(--font-bodoni), 'Times New Roman', serif;
+  --font-cjk-serif: var(--font-noto-serif-sc), 'Songti SC', serif;
+  --font-ui: var(--font-bricolage), system-ui, 'PingFang SC', sans-serif;
+  --font-data: var(--font-ibm-plex-mono), 'Cascadia Mono', monospace;
+
+  /* A restrained shape vocabulary: editorial rules first, containers second. */
+  --radius-flat: 0px;
+  --radius-control: 4px;
+  --radius-panel: 8px;
+  --radius-card: var(--radius-panel);
+  --radius-pill: 9999px;
+
   --space-1: 0.25rem;
   --space-2: 0.5rem;
   --space-3: 0.75rem;
@@ -45,32 +42,85 @@
   --font-size-sm: 0.875rem;
   --font-size-base: 1rem;
   --font-size-lg: 1.125rem;
-  --radius-control: 0.5rem;
-  --radius-card: 0.75rem;
-  --radius-pill: 9999px;
-  --shadow-card: 0 1px 2px rgb(3 6 11 / 0.06);
-  --shadow-evidence: 0 8px 24px rgb(24 32 43 / 0.08);
-  --shadow-overlay: 0 8px 30px rgb(3 6 11 / 0.16);
-  /* 动效时长（spec §2.2：hover/focus ≤200ms；呼吸 8–12s；扫描 4–6s） */
-  --motion-fast: 200ms;
-  --motion-breathe: 12s;
-  --motion-scan: 6s;
+
+  /* Semantic motion: focus, reveal, scan and long optical drift. */
+  --motion-fast: 160ms;
+  --motion-focus: 180ms;
+  --motion-reveal: 560ms;
+  --motion-scan: 4.8s;
+  --motion-breathe: 10s;
+  --ease-optical: cubic-bezier(0.16, 1, 0.3, 1);
   --ease-standard: cubic-bezier(0.2, 0, 0, 1);
-  --ease-entrance: cubic-bezier(0.16, 1, 0.3, 1);
-  /* z-index 层级（升序，禁止组件内随意写 z-*） */
+  --ease-entrance: var(--ease-optical);
+
+  --shadow-card: 0 1px 0 rgb(25 26 24 / 0.08);
+  --shadow-evidence: 0 16px 48px rgb(5 6 6 / 0.12);
+  --shadow-overlay: 0 24px 72px rgb(5 6 6 / 0.32);
   --z-header: 40;
   --z-overlay: 50;
   --z-modal: 60;
+
+  /* Temporary aliases for verified legacy UI during vertical-slice replacement. */
+  --hero-bg: var(--os-black-0);
+  --hero-surface: var(--os-black-1);
+  --hero-text: var(--os-paper);
+  --hero-muted: var(--os-muted-dark);
+  --accent-primary: var(--os-vermilion);
+  --accent-primary-strong: var(--os-vermilion);
+  --accent-diff: var(--os-vermilion);
+  --canvas-bg: var(--os-paper);
+  --paper-bg: var(--os-paper);
+  --ink: var(--os-ink);
+  --border-subtle: var(--os-rule-dark);
+  --workbench-bg: var(--os-black-0);
+  --workbench-surface: var(--os-black-1);
+  --workbench-elevated: var(--os-black-2);
+  --workbench-text: var(--os-paper);
+  --workbench-muted: var(--os-muted-dark);
+  --evidence-paper: var(--os-paper);
+  --evidence-ink: var(--os-ink);
+  --evidence-muted: var(--os-muted-paper);
+  --evidence-border: var(--os-rule-paper);
+  /* Neutral focus remains >=3:1 on both black and paper; vermilion is too light on paper. */
+  --focus-ring: #777a76;
+  --status-neutral-bg: var(--os-paper);
+  --status-neutral-text: var(--os-ink);
+  --status-info-bg: var(--os-paper);
+  --status-info-text: var(--os-ink);
+  --status-warning-bg: var(--os-paper);
+  --status-warning-text: var(--os-ink);
+  --status-success-bg: var(--os-confirmed);
+  --status-success-text: var(--os-black-0);
+  --status-danger-bg: var(--os-paper);
+  --status-danger-text: var(--state-danger);
+  --state-danger: #b42318;
 }
+
 @theme {
-  --color-hero-bg: var(--hero-bg); --color-hero-surface: var(--hero-surface);
-  --color-hero-text: var(--hero-text); --color-hero-muted: var(--hero-muted);
+  --color-os-black-0: var(--os-black-0);
+  --color-os-black-1: var(--os-black-1);
+  --color-os-black-2: var(--os-black-2);
+  --color-os-paper: var(--os-paper);
+  --color-os-ink: var(--os-ink);
+  --color-os-muted-dark: var(--os-muted-dark);
+  --color-os-muted-paper: var(--os-muted-paper);
+  --color-os-vermilion: var(--os-vermilion);
+  --color-os-confirmed: var(--os-confirmed);
+  --color-os-rule-dark: var(--os-rule-dark);
+  --color-os-rule-paper: var(--os-rule-paper);
+  --color-state-danger: var(--state-danger);
+
+  --color-hero-bg: var(--hero-bg);
+  --color-hero-surface: var(--hero-surface);
+  --color-hero-text: var(--hero-text);
+  --color-hero-muted: var(--hero-muted);
   --color-accent-primary: var(--accent-primary);
   --color-accent-primary-strong: var(--accent-primary-strong);
   --color-accent-diff: var(--accent-diff);
-  --color-canvas-bg: var(--canvas-bg); --color-paper-bg: var(--paper-bg);
-  --color-ink: var(--ink); --color-border-subtle: var(--border-subtle);
-  --color-state-danger: var(--state-danger);
+  --color-canvas-bg: var(--canvas-bg);
+  --color-paper-bg: var(--paper-bg);
+  --color-ink: var(--ink);
+  --color-border-subtle: var(--border-subtle);
   --color-workbench-bg: var(--workbench-bg);
   --color-workbench-surface: var(--workbench-surface);
   --color-workbench-elevated: var(--workbench-elevated);
@@ -91,20 +141,20 @@
   --color-status-success-text: var(--status-success-text);
   --color-status-danger-bg: var(--status-danger-bg);
   --color-status-danger-text: var(--status-danger-text);
-  /* 结构 token（Task 8）：三套视觉共享 radius/阴影/动效，不共享背景与密度 */
-  --radius-control: 0.5rem;
-  --radius-card: 0.75rem;
+
+  --font-display: var(--font-display-grotesk);
+  --font-editorial: var(--font-editorial-serif);
+  --font-mono: var(--font-data);
+  --radius-control: 4px;
+  --radius-panel: 8px;
+  --radius-card: 8px;
   --radius-pill: 9999px;
-  --shadow-card: 0 1px 2px rgb(3 6 11 / 0.06);
-  --shadow-evidence: 0 8px 24px rgb(24 32 43 / 0.08);
-  --shadow-overlay: 0 8px 30px rgb(3 6 11 / 0.16);
   --spacing-os-1: 0.25rem;
   --spacing-os-2: 0.5rem;
   --spacing-os-3: 0.75rem;
   --spacing-os-4: 1rem;
   --spacing-os-6: 1.5rem;
   --spacing-os-8: 2rem;
-  /* 动效曲线（Task 9 framer-motion 以同值镜像，保持全站一致） */
   --ease-standard: cubic-bezier(0.2, 0, 0, 1);
   --ease-entrance: cubic-bezier(0.16, 1, 0.3, 1);
 }

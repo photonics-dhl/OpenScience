@@ -7,12 +7,13 @@
   - 新 spec：`docs/specs/2026-08-10-optical-editorial-rebaseline-design.md`。
   - 新计划：`docs/plans/2026-08-10-optical-editorial-frontend-plan.md`，15 Task 完整覆盖；Task Master `optical-editorial-v3` tag 已验证 15 tasks / 42 valid dependencies，旧 master 视觉任务已 cancelled。
   - Task 1 完成：新工作树 `E:/Miscellaneous/XGS/.worktrees/optical-editorial-v3` / branch `codex/optical-editorial-v3`；Prisma generate → full build → full test 全绿（Web 92、Domain 313、API 58、Agent Worker 24、Science Worker 29）。
+  - Task 2 完成：ADR-009 决定 Canvas 2D + SVG/CSS 原生 Optical Field（无新增运行时依赖）；Bricolage Grotesque、Bodoni Moda、Noto Serif SC、IBM Plex Mono 以 next/font 构建期自托管；v3 黑/纸白/朱红 tokens、0/4/8px 半径、motion/字体角色与 AA/禁蓝紫门禁已落地。聚焦 24/24、全 Web 99/99、typecheck/build 通过；review 后修正朱红控件黑字与双表面 focus 对比度。
 - Constraints:
   - 不读取/打印 `.env`；不把效果图伪数据投入生产。
   - 视觉核心必须由可访问 DOM + 自有轻量 Canvas/WebGL 媒介层实现；第三方库只作受控局部依赖。
   - 开发阶段无用户，验收通过后直接替换服务器页面；保留上一镜像以便回滚。
 - Open risks:
-  - 新视觉尚未编码；Figma canonical 需要按 v3 新建 foundations，旧文件不再作为视觉裁决源。
+  - v3 foundations 已编码，但共享 shell 与实际页面尚未替换；Figma canonical 需要按 v3 新建 foundations，旧文件不再作为视觉裁决源。
   - 启动 6 个完整 Demonstration RO 与 12–18 个索引条目尚未采集/登记。
-- Next action: 执行 Task Master `optical-editorial-v3` Task 2；先用官方仓库/包注册表核验字体与 Optical Field 候选，再以失败测试建立 v3 tokens/foundations。
+- Next action: 执行 Task Master `optical-editorial-v3` Task 3；先以失败测试建立 `OpenScienceWordmark` 与四类语义 shell，再做浏览器级结构验收。
 - Read first: `AGENTS.md` → `docs/OpenScience_Kimi_Development_Spec.md` → `docs/progress.md` → `project_index.md` → `docs/specs/2026-08-10-optical-editorial-rebaseline-design.md` → `docs/user_ideas/8.10/OpenScience_Art_Direction_v3.md`。

@@ -61,7 +61,7 @@ function Dropzone({
       <span className="max-w-xl text-sm leading-6 text-workbench-muted">
         {hint ?? t('dropzone.hint')}
       </span>
-      <span className="rounded-control bg-accent-primary-strong px-4 py-2 text-sm font-semibold text-hero-text transition-transform duration-(--motion-fast) group-active:scale-[0.98] motion-reduce:transform-none motion-reduce:transition-none">
+      <span className="rounded-control bg-accent-primary-strong px-4 py-2 text-sm font-semibold text-os-black-0 transition-transform duration-(--motion-fast) group-active:scale-[0.98] motion-reduce:transform-none motion-reduce:transition-none">
         {t('dropzone.browse')}
       </span>
     </label>

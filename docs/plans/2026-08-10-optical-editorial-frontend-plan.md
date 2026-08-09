@@ -48,24 +48,24 @@
 
 **Interfaces:** Consumes `cbcb60c` on `codex/researcher-ingestion` and `b0b3969` on `main`; produces isolated `codex/optical-editorial-v3` with production ingestion plus approved design/plan documents.
 
-- [ ] Verify `git status --short`, `git worktree list` and both hashes; record unrelated dirty files without staging them.
-- [ ] Use `using-git-worktrees` to create `codex/optical-editorial-v3` from `codex/researcher-ingestion`.
-- [ ] Cherry-pick `b0b3969`; retain newer production evidence when resolving documentation-only conflicts.
-- [ ] Run `npx pnpm@9.15.0 --filter @openscience/database generate`, then `build`, `test`, `docs:lint` and `audit:docs-sync`; fresh worktrees have neither Prisma Client nor cross-package `dist` outputs before this order.
-- [ ] Commit only reconciliation changes: `docs: establish optical editorial execution baseline`.
+- [x] Verify `git status --short`, `git worktree list` and both hashes; record unrelated dirty files without staging them.
+- [x] Use `using-git-worktrees` to create `codex/optical-editorial-v3` from `codex/researcher-ingestion`.
+- [x] Cherry-pick `b0b3969`; retain newer production evidence when resolving documentation-only conflicts.
+- [x] Run `npx pnpm@9.15.0 --filter @openscience/database generate`, then `build`, `test`, `docs:lint` and `audit:docs-sync`; fresh worktrees have neither Prisma Client nor cross-package `dist` outputs before this order.
+- [x] Commit only reconciliation changes: `docs: establish optical editorial execution baseline`.
 
 ### Task 2: Audit Community Dependencies and Implement V3 Foundations
 
-**Files:** Modify `apps/web/app/tokens.css`, `globals.css`, `layout.tsx`, `apps/web/package.json`, `pnpm-lock.yaml`, `apps/web/test/tokens-contrast.test.ts`; create `docs/decisions/ADR-005-optical-runtime-and-fonts.md`, `apps/web/test/optical-foundations.test.ts`.
+**Files:** Modify `apps/web/app/tokens.css`, `globals.css`, `layout.tsx`, `apps/web/package.json`, `pnpm-lock.yaml`, `apps/web/test/tokens-contrast.test.ts`; create `docs/decisions/ADR-009-optical-runtime-and-fonts.md`, `apps/web/test/optical-foundations.test.ts`.
 
 **Interfaces:** Produces `--os-black-0`, `--os-black-1`, `--os-paper`, `--os-ink`, `--os-vermilion`, `--os-confirmed`, `--os-rule-dark`, `--os-rule-paper`, motion and font-role variables.
 
-- [ ] Research current official repositories/registries for one lightweight displacement/halftone option and approved fonts; record license, runtime cost, SSR support, reduced-motion fallback and ECS requirements in ADR-005.
-- [ ] Prefer Canvas 2D + CSS/SVG filters if they satisfy the contract; reject unpinned or hosted runtimes.
-- [ ] Add failing tests requiring v3 variables, forbidding decorative blue/violet tokens and asserting AA pairs.
-- [ ] Run `npx pnpm@9.15.0 --filter @openscience/web test -- tokens-contrast optical-foundations`; verify RED.
-- [ ] Implement monochrome/vermilion variables, 0/4/8px radius scale, typography roles and motion tokens; retain legacy aliases only while consumed.
-- [ ] Re-run focused tests and typecheck; commit `feat(web): establish optical editorial foundations`.
+- [x] Research current official repositories/registries for one lightweight displacement/halftone option and approved fonts; record license, runtime cost, SSR support, reduced-motion fallback and ECS requirements in ADR-009 (`ADR-005` was already assigned to public email registration).
+- [x] Prefer Canvas 2D + CSS/SVG filters if they satisfy the contract; reject unpinned or hosted runtimes.
+- [x] Add failing tests requiring v3 variables, forbidding decorative blue/violet tokens and asserting AA pairs.
+- [x] Run `npx pnpm@9.15.0 --filter @openscience/web test -- tokens-contrast optical-foundations`; verify RED.
+- [x] Implement monochrome/vermilion variables, 0/4/8px radius scale, typography roles and motion tokens; retain legacy aliases only while consumed.
+- [x] Re-run focused tests and typecheck; commit `feat(web): establish optical editorial foundations`.
 
 ### Task 3: Build Shared Brand and Surface Shells
 

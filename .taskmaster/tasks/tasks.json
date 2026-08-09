@@ -1155,27 +1155,29 @@
         "id": "2",
         "title": "审计社区依赖并建立 V3 Optical Editorial Foundations",
         "description": "审核字体、halftone/displacement 技术的许可证、包体、SSR、降级和 ECS 安装要求，建立 monochrome + vermilion tokens、字体角色、半径和 motion 真源。",
-        "status": "pending",
+        "status": "done",
         "dependencies": [
           "1"
         ],
         "priority": "high",
-        "details": "计划 Task 2。修改 tokens.css/globals/layout/package/lock；新增 ADR-005 和 optical-foundations tests；优先 Canvas2D+CSS/SVG，拒绝 hosted/不可锁定 runtime。",
+        "details": "计划 Task 2。修改 tokens.css/globals/layout；新增 ADR-009 和 optical-foundations tests；采用 Canvas2D+CSS/SVG，拒绝 hosted/不可锁定 runtime。ADR-005 已被邮箱验证码注册占用。",
         "testStrategy": "先观察 tokens tests RED，再 GREEN；AA 配色、禁蓝紫装饰 token、typecheck/build/docs gates。",
-        "subtasks": []
+        "subtasks": [],
+        "updatedAt": "2026-08-09T22:30:30.589Z"
       },
       {
         "id": "3",
         "title": "实现共享品牌、Wordmark 与四种产品 Surface Shell",
         "description": "建立 OpenScience. 文字标识、O. favicon、Public/Identity/Dashboard/Workspace shells，使用规则线和背景色阶代替 Card 容器。",
-        "status": "pending",
+        "status": "in-progress",
         "dependencies": [
           "2"
         ],
         "priority": "high",
         "details": "计划 Task 3。新增 components/brand 与 components/shell；主 landmark、skip link、8px action radius、双语文案。",
         "testStrategy": "surface-shells render RED/GREEN；i18n symmetry；typecheck/build；无 Card dependency。",
-        "subtasks": []
+        "subtasks": [],
+        "updatedAt": "2026-08-09T22:30:39.609Z"
       },
       {
         "id": "4",
@@ -1364,9 +1366,9 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-08-09T22:16:23.553Z",
+      "lastModified": "2026-08-09T22:30:39.609Z",
       "taskCount": 15,
-      "completedCount": 1,
+      "completedCount": 2,
       "tags": [
         "optical-editorial-v3"
       ]

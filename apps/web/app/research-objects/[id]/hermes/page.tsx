@@ -49,7 +49,7 @@ export default function HermesReviewPage() {
         <section className="mt-8 grid gap-4 md:grid-cols-2">
           {fields.map((field) => <label key={field} className="rounded-card border border-white/10 bg-workbench-surface p-5"><span className="text-xs font-semibold uppercase tracking-[0.14em] text-workbench-muted">{field}</span><textarea value={core[field]} onChange={(event) => setCore({ ...core, [field]: event.target.value })} rows={5} className="mt-3 w-full resize-y rounded-control border border-white/10 bg-workbench-bg p-3 text-sm leading-6 text-workbench-text outline-none focus:border-accent-primary" /></label>)}
         </section>
-        <footer className="mt-6 flex flex-wrap items-center justify-between gap-4 rounded-card border border-white/10 bg-workbench-surface p-5"><p className="text-sm text-workbench-muted">{saved ? '已确认并写入新版本。' : complete ? '六项内容已填写，可以确认。' : '请补齐所有字段后确认。'}</p><button type="button" disabled={!complete || saving || saved} onClick={confirm} className="rounded-control bg-accent-primary px-5 py-3 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-40">{saving ? '正在写入…' : saved ? '已确认' : '确认并创建版本'}</button></footer>
+        <footer className="mt-6 flex flex-wrap items-center justify-between gap-4 rounded-card border border-white/10 bg-workbench-surface p-5"><p className="text-sm text-workbench-muted">{saved ? '已确认并写入新版本。' : complete ? '六项内容已填写，可以确认。' : '请补齐所有字段后确认。'}</p><button type="button" disabled={!complete || saving || saved} onClick={confirm} className="rounded-control bg-accent-primary px-5 py-3 text-sm font-semibold text-os-black-0 disabled:cursor-not-allowed disabled:opacity-40">{saving ? '正在写入…' : saved ? '已确认' : '确认并创建版本'}</button></footer>
       </>}
     </div>
   </main>;

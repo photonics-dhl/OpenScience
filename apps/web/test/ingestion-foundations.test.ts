@@ -50,6 +50,15 @@ function parseRootTokens(source: string): Map<string, string> {
   return result;
 }
 
+function resolveToken(tokens: Map<string, string>, name: string, seen = new Set<string>()): string {
+  if (seen.has(name)) throw new Error(`circular CSS token alias: --${name}`);
+  const value = tokens.get(name);
+  if (!value) throw new Error(`missing CSS token: --${name}`);
+  const alias = value.match(/^var\(--([\w-]+)\)$/)?.[1];
+  if (!alias) return value;
+  return resolveToken(tokens, alias, new Set([...seen, name]));
+}
+
 function luminance(hex: string): number {
   const value = Number.parseInt(hex.slice(1), 16);
   const channels = [(value >> 16) & 255, (value >> 8) & 255, value & 255].map((channel) => {
@@ -156,11 +165,11 @@ describe('researcher ingestion foundations', () => {
     ] as const;
 
     for (const [foreground, background] of pairs) {
-      expect(contrast(tokens.get(foreground)!, tokens.get(background)!)).toBeGreaterThanOrEqual(4.5);
+      expect(contrast(resolveToken(tokens, foreground), resolveToken(tokens, background))).toBeGreaterThanOrEqual(4.5);
     }
     for (const background of ['workbench-bg', 'evidence-paper']) {
       expect(
-        contrast(tokens.get('focus-ring')!, tokens.get(background)!),
+        contrast(resolveToken(tokens, 'focus-ring'), resolveToken(tokens, background)),
         `focus-ring must remain visible against ${background}`,
       ).toBeGreaterThanOrEqual(3);
     }
