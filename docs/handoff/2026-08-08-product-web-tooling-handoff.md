@@ -72,7 +72,7 @@
   - 本地恢复截图：`docs/design-assets/figma/2026-08-09-step9-{public-ro,ultrafast-collection,public-states}-v1.png`；SHA-256 分别为 `353682255D974CB928A176A7B7CC88B596F95A7970D95B578CA40B9259832307`、`4A10AEB018F55076E12E6F37A1F9F280AA9E324BD988F83CB53B0398BAF81082`、`48848406C183903F426CC0181E9F96BFE3C8C6931F215AB9A87718320FC909B1`；短期 asset URL 未写入仓库。
 - **Constraints:** 不打印 `.env`；MCP 总数保持 ≤10；Figma 代码 token 是 canonical；`use_figma` 写入严格串行；每个组件完成后截图并由用户确认；后续新增设计和 Code Connect 只允许使用 `gjhowMG7cG4clKwvhvF08E`。
 - **Open risks:** Landing → Auth/Create 原型入口仍需把已批准的 entry screens 从 Frame wrapper 安全转换为 Section/direct-child 结构，作为独立 Figma 后续项；MCP 不暴露文件 owner 字段；Code Connect 仍被 student tier plan gate 阻塞；Button 的 Destructive/Icon 子集合尚未创建；Playwright 尚未作为项目依赖锁定。
-- **Next action:** 从新计划 Task 1 开始：先以 RED 测试证明 `/api` 前缀和 CSRF 客户端缺口，再实现 Nginx strip-prefix、Next dev rewrite 与统一 `apiRequest`。Figma entry batch 结构转换仍独立处理。
+- **Next action:** Task 1 已由 `1ab4b6d` 完成；从 Task 2 身份页 RED 测试开始，实现邀请注册、邮箱验证、登录、登出与安全 next 跳转。Figma entry batch 结构转换仍独立处理。
 - **Execution checkpoint:** 双 key 客户端、区域修复、安全 provenance 与 v2 prompt-file CLI 已完成；Figma `37:2` 视觉母版已建立。`openscience-observatory-v1.png` 被用户判定与项目风格不一致，根因是 prompt 违反 spec §11.2，让模型同时承担材料纹理与六节点产品语义。不得导入 v1 或生成其视频版本。
 - **v2 recovery result:** 旧 2013 长度问题已解决；`openscience-evidence-chamber-v2.png` 与 `.provenance.json` 已由 key1 中国区调用产出且 provenance 安全。视觉门失败，文件只作可追溯失败样本，不得进入 Figma/H3。下一次付费生成必须先批准新的 v3 方向和版本化输出名。
 - **Approved responsibility reset:** 用户接受推荐项 A：下一张生成资产优先服务 Landing / Workspace 暗色主视觉。复用现有精确蓝色玻璃六面 RO 环作为原生前景；MiniMax 仅生成深墨科研空间、材料质感和受控光场，不生成节点、ID、SDF、轨迹、diff 或 UI。

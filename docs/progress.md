@@ -1,5 +1,13 @@
 # OpenScience (XGS) 进度日志
 
+## 2026-08-09（产品闭环 Task 1）— 同源 API 与 CSRF transport 已实现
+
+- **✅ RED → GREEN**：新增 `apps/web/test/api-client-contract.test.ts`；先验证 5 项预期失败，再实现后 6/6 通过。
+- **✅ Web transport**：`apps/web/lib/api.ts` 导出统一 `apiRequest`，自动维护内存 CSRF token、保护写请求、对 CSRF 403 只刷新重试一次；沙箱写入也收口到该 transport。
+- **✅ 路由修复**：`infra/nginx/openscience.conf` 的 `/api/` 使用尾斜杠 strip-prefix；`apps/web/next.config.mjs` 增加本地 `/api/:path*` rewrite。
+- **✅ 验证**：Web focused test 6/6、Web typecheck 通过，`git diff --check` 通过；提交 `1ab4b6d`。
+- **⏳ 下一步**：进入 Task 2，先写身份页面失败测试，再实现邀请注册、邮箱验证、登录、登出和安全 next 跳转。
+
 ## 2026-08-09（产品闭环规划）— 身份与首个 RO 生产纵切片
 
 - **✅ 基线恢复**：复核已批准产品 spec 与六阶段网页计划；确认后端身份、Workspace、RO 能力已存在，前端仍缺登录/注册/验证和真实数据编排。

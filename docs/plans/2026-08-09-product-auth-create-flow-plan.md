@@ -35,25 +35,25 @@
 - Consumes: Fastify routes such as `/auth/me`, `/workspaces`, `/research-objects`, and `/csrf-token`.
 - Produces: `apiRequest<T>(path, init?)`, `getCsrfToken()`, and the browser contract `/api/<fastify-path>`.
 
-- [ ] **Step 1: Write the failing routing and CSRF tests**
+- [x] **Step 1: Write the failing routing and CSRF tests**
 
   Assert that production Nginx strips `/api/`, local Next rewrites `/api/:path*` to the API origin, GET requests do not fetch CSRF, and POST/PUT/PATCH/DELETE requests outside `/auth/*` attach `x-csrf-token` obtained from `/api/csrf-token`.
 
-- [ ] **Step 2: Run the focused test and verify RED**
+- [x] **Step 2: Run the focused test and verify RED**
 
   Run `npx pnpm@9.15.0 --filter @openscience/web test -- api-client-contract.test.ts` and require failure against the current private `request` helper and non-stripping proxy.
 
-- [ ] **Step 3: Implement the API transport**
+- [x] **Step 3: Implement the API transport**
 
   Export a single `apiRequest<T>` helper, cache only the in-memory CSRF token, clear and refetch it once after a CSRF 403, keep `credentials: 'include'`, and preserve `ApiClientError` parsing. Configure `proxy_pass http://127.0.0.1:3001/;` for `/api/` and a local Next rewrite whose destination is `${API_ORIGIN ?? 'http://127.0.0.1:3001'}/:path*`.
 
-- [ ] **Step 4: Verify transport and configuration**
+- [x] **Step 4: Verify transport and configuration**
 
   Run the focused test, Web typecheck, `nginx -t` through the deployment dry-run path, and `git diff --check`.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
-  Commit message: `fix(web): connect same-origin api transport`.
+  Commit: `1ab4b6d fix(web): connect same-origin api transport`.
 
 ### Task 2: Registration, verification, login, logout, and session UI
 
