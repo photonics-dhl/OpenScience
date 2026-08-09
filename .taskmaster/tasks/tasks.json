@@ -1140,18 +1140,19 @@
   "optical-editorial-v3": {
     "tasks": [
       {
-        "id": 1,
+        "id": "1",
         "title": "建立最新生产能力上的 Optical Editorial 独立执行基线",
         "description": "从 codex/researcher-ingestion 的 cbcb60c 创建 codex/optical-editorial-v3 工作树，带入 main 的 b0b3969 设计文档，保留已验证注册、Hermes ingestion、OCR、ClamAV、备份恢复与服务器证据。",
-        "status": "pending",
+        "status": "done",
         "dependencies": [],
         "priority": "high",
         "details": "计划 Task 1。使用 using-git-worktrees；核对 dirty files；只解决文档冲突；跑 test/build/docs:lint/audit:docs-sync；不得把 .memory 或 docs/user_ideas 未跟踪原件误提交。",
         "testStrategy": "git worktree/branch/hash 证据；npx pnpm@9.15.0 test、build、docs:lint、audit:docs-sync 全绿。",
-        "subtasks": []
+        "subtasks": [],
+        "updatedAt": "2026-08-09T22:16:23.553Z"
       },
       {
-        "id": 2,
+        "id": "2",
         "title": "审计社区依赖并建立 V3 Optical Editorial Foundations",
         "description": "审核字体、halftone/displacement 技术的许可证、包体、SSR、降级和 ECS 安装要求，建立 monochrome + vermilion tokens、字体角色、半径和 motion 真源。",
         "status": "pending",
@@ -1164,7 +1165,7 @@
         "subtasks": []
       },
       {
-        "id": 3,
+        "id": "3",
         "title": "实现共享品牌、Wordmark 与四种产品 Surface Shell",
         "description": "建立 OpenScience. 文字标识、O. favicon、Public/Identity/Dashboard/Workspace shells，使用规则线和背景色阶代替 Card 容器。",
         "status": "pending",
@@ -1177,7 +1178,7 @@
         "subtasks": []
       },
       {
-        "id": 4,
+        "id": "4",
         "title": "以 DOM Typography + Optical Field 重做 Landing",
         "description": "用 Science evolves./科学，持续演化。非对称混排替换 Evolving RO 环，Canvas/WebGL 只承担局部折射、半色调和证据粒子。",
         "status": "pending",
@@ -1190,7 +1191,7 @@
         "subtasks": []
       },
       {
-        "id": 5,
+        "id": "5",
         "title": "将 RO Workspace 重构为稳定三工作平面",
         "description": "建立 19/56/25 Outline/Editor/Evidence-Hermes 布局、单行 ObjectHeader、编号 SDF Node、EvidenceSnippet 与 Before/After proposal。",
         "status": "pending",
@@ -1203,7 +1204,7 @@
         "subtasks": []
       },
       {
-        "id": 6,
+        "id": "6",
         "title": "将 Public RO 重构为可引用纸面阅读表面",
         "description": "建立 760px 阅读列 + 280px metadata rail，优先标题、作者、身份、版本、许可、引用和 Insight，保留 print/PDF 与 provenance。",
         "status": "pending",
@@ -1216,7 +1217,7 @@
         "subtasks": []
       },
       {
-        "id": 7,
+        "id": "7",
         "title": "将验证码注册与登录融入 Research Identity 体验",
         "description": "保留独立 Sign in 与 Create-intent returnTo 两条路径，重构为 Optical Editorial 身份页，不改真实 signup-code/session 契约。",
         "status": "pending",
@@ -1229,7 +1230,7 @@
         "subtasks": []
       },
       {
-        "id": 8,
+        "id": "8",
         "title": "完成 PDF/Word/TeX/Markdown/图片/数据/代码混合 Evidence Intake",
         "description": "实现本地预选、材料角色、主文稿、逐文件进度和 scan→upload→parse/OCR→SDF map→review 的真实闭环。",
         "status": "pending",
@@ -1242,7 +1243,7 @@
         "subtasks": []
       },
       {
-        "id": 9,
+        "id": "9",
         "title": "重构 Dashboard 并将 Hermes/Live2D 绑定真实任务",
         "description": "以 Continue Research 和待确认队列替代统计 Hero/Card 网格，建立 Hermes 六态和 Visual/Task 同一 deep link。",
         "status": "pending",
@@ -1256,7 +1257,7 @@
         "subtasks": []
       },
       {
-        "id": 10,
+        "id": "10",
         "title": "交付 Explore Research Index 与可追溯启动语料",
         "description": "实现编号式 Research Index、搜索/筛选和公开 API，导入 6 个完整 Demonstration RO 与 12-18 个轻量真实来源索引。",
         "status": "pending",
@@ -1270,7 +1271,7 @@
         "subtasks": []
       },
       {
-        "id": 11,
+        "id": "11",
         "title": "交付 Ultrafast Science Collection 与 scoped Editorial Curator",
         "description": "在 Public RO 事实身份上增加期刊策展层，支持候选、媒体、编辑说明、排序、排期和 draft→internal review→scheduled→published。",
         "status": "pending",
@@ -1284,7 +1285,7 @@
         "subtasks": []
       },
       {
-        "id": 12,
+        "id": "12",
         "title": "补齐协作、版本、发布、Sandbox 与其余产品表面一致性",
         "description": "建立实际路由/状态矩阵，用 WorkspaceShell 与研究领域组件覆盖 Overview/SDF/Files/Versions/Collaboration/Publish/Sandbox/Settings。",
         "status": "pending",
@@ -1303,7 +1304,7 @@
         "subtasks": []
       },
       {
-        "id": 13,
+        "id": "13",
         "title": "重建长期账号 Figma Canonical 与真实组件映射",
         "description": "建立 V3 foundations、排版 specimen、grid、motion/reduced-motion 注释和所有核心页面结构/状态，变量与 tokens.css 一一对应。",
         "status": "pending",
@@ -1326,7 +1327,7 @@
         "subtasks": []
       },
       {
-        "id": 14,
+        "id": "14",
         "title": "建立视觉回归、无障碍与性能发布门禁",
         "description": "为所有 canonical route/state 建立确定性三视口截图、keyboard/reduced-motion/accessibility E2E 与 LCP/bundle/runtime 检查。",
         "status": "pending",
@@ -1348,7 +1349,7 @@
         "subtasks": []
       },
       {
-        "id": 15,
+        "id": "15",
         "title": "直接部署 ECS 并证明完整产品旅程",
         "description": "构建不可变镜像并直接替换开发期服务器页面，保留上一 tag；在真实服务完成从 Landing 到 Editorial Collection 的完整旅程。",
         "status": "pending",
@@ -1363,15 +1364,12 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-08-10T08:30:00.000Z",
+      "lastModified": "2026-08-09T22:16:23.553Z",
       "taskCount": 15,
-      "completedCount": 0,
+      "completedCount": 1,
       "tags": [
         "optical-editorial-v3"
-      ],
-      "description": "Approved Optical Editorial Instrument frontend rebaseline and server delivery program",
-      "created": "2026-08-09T21:58:31.395Z",
-      "updated": "2026-08-09T21:58:31.395Z"
+      ]
     }
   }
 }

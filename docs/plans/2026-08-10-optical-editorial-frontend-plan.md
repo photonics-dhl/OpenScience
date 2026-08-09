@@ -51,7 +51,7 @@
 - [ ] Verify `git status --short`, `git worktree list` and both hashes; record unrelated dirty files without staging them.
 - [ ] Use `using-git-worktrees` to create `codex/optical-editorial-v3` from `codex/researcher-ingestion`.
 - [ ] Cherry-pick `b0b3969`; retain newer production evidence when resolving documentation-only conflicts.
-- [ ] Run `npx pnpm@9.15.0 test`, `build`, `docs:lint` and `audit:docs-sync`.
+- [ ] Run `npx pnpm@9.15.0 --filter @openscience/database generate`, then `build`, `test`, `docs:lint` and `audit:docs-sync`; fresh worktrees have neither Prisma Client nor cross-package `dist` outputs before this order.
 - [ ] Commit only reconciliation changes: `docs: establish optical editorial execution baseline`.
 
 ### Task 2: Audit Community Dependencies and Implement V3 Foundations

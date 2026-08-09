@@ -1674,3 +1674,24 @@ MVP 交接复查发现两类文档失真：AGENTS.md 自 P1B-2（1e859df，08-03
 - Task Master 使用独立 tag，旧 master 历史保留但不再作为前端执行真源。
 
 ---
+## 2026-08-10 — Optical Editorial v3 Task 1 生产能力基线完成
+
+### ✅ Completed
+
+| Task | Details |
+|---|---|
+| 独立工作树 | `E:/Miscellaneous/XGS/.worktrees/optical-editorial-v3`，branch `codex/optical-editorial-v3`，基于 `cbcb60c` 并带入设计/计划提交 `71d0e19`、`a0f91c0`。 |
+| 新环境构建顺序 | 首次 test 因缺少 `@openscience/versioning/dist` 与 Prisma Client 失败；确认是 fresh-worktree setup，不是产品回归。改为 database generate → full build → full test 后全绿。 |
+| 基线证据 | Web 92/92、Domain 313/313、API 58/58、Agent Worker 24/24、Science Worker 29/29；其余 config/identity/observability/sdf/storage/versioning/ai-gateway/auth/database/diff 包均通过。Next production build 完成。 |
+
+### ⏳ Next Steps
+
+- [ ] Task Master `optical-editorial-v3` Task 2：调研社区 Optical Field/字体方案，建立 v3 foundations 与 ADR-005；
+- [ ] 严格 TDD：token/foundation tests RED 后再修改生产 token。
+
+### Key Decisions
+
+- 新工作树固定初始化顺序为 `pnpm install → prisma generate → full build → full test`。
+- 不把 CJS/Vite、ts-jest experimental 既有 warning 冒充失败，也不在本视觉任务顺手重构无关测试配置。
+
+---
