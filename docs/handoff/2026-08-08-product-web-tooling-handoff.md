@@ -1,5 +1,13 @@
 # Handoff — 2026-08-08 Product Web Tooling
 
+## 2026-08-09 追加：产品前端 re-baseline（当前交接点）
+
+- **触发原因**：注册流程已实测成功，但用户指出页面视觉不达标、Hermes 多格式导入等产品模块缺失，需要停止零散开发并重做产品级交付基线。
+- **当前事实**：后端 Phase 1A–1E/API/测试较完整；前端仍只有 Landing、公开 RO、协作、编辑器路由，缺登录/注册、Dashboard、Hermes 工作台、Explore、Editorial Curator 等产品入口。编辑器已有通用 ArtifactUploader，但尚未提供 Hermes 面向 PDF/Word/TeX/Markdown/图片的导入、解析、证据回链和任务状态闭环。
+- **Figma 状态**：通过 `figma-primary` 只读核验，用户复制文件 `gjhowMG7cG4clKwvhvF08E` 仅含空 `00 Cover` 页面；过渡文件 `rWS3seZaDMdlnSljqktMDp` 也处于空态。Figma MCP 已加载并可调用，但尚未成为可审查的 canonical 设计源。
+- **根因判断**：工具存在，但此前工作流把 OAuth/账号/局部 Figma 写入当成了设计完成；没有执行“Figma foundations → Code Connect → 代码实现 → Playwright 截图 → 人工审美门禁”的闭环。Task Master 的后端任务完成度不能代表产品前端完成度。
+- **下一步门禁**：用户确认 re-baseline 后，先完成信息架构、状态矩阵和六屏 Figma canonical；然后按垂直切片实现 Auth、Dashboard/Hermes 导入、RO Workspace、Public/Explore、Editorial Curator；每片通过真实 API、三视口视觉回归、WCAG/性能和人工审美验收后才进入下一片。
+
 - **Current goal:** 执行产品网页计划 Task 1；当前处于 Figma design-system Phase 0 discovery 的用户批准门禁。
 - **Done:**
   - 产品设计 spec：`docs/specs/2026-08-08-openscience-product-web-design.md`。

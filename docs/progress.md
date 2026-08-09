@@ -1,5 +1,20 @@
 # OpenScience (XGS) 进度日志
 
+## 2026-08-09（产品前端与设计闭环审计）— 重新基线化，暂停零散视觉开发
+
+- **用户反馈**：注册已成功，但注册页视觉明显不达产品级；要求核对原方案落实度、补齐 Hermes 多格式上传，并明确 Task Master 与产品计划的关系。
+- **事实核验**：当前仓库的后端 Phase 1A–1E 能力和 API/集成测试较完整；但 `apps/web/app` 只有 Landing、公开 RO、协作和编辑器路由，没有独立的登录/注册、Dashboard、Hermes 工作台、Explore、Editorial Curator 页面。`ArtifactUploader` 只存在于编辑器组件，尚未形成 Hermes 的 PDF/Word/TeX/Markdown/图片导入流程。
+- **Figma 核验**：用户提供的复制文件 `gjhowMG7cG4clKwvhvF08E` 仅有 `00 Cover` 空页面（顶层页面 1 个，Cover 画布尺寸为 0×0）；过渡文件 `rWS3seZaDMdlnSljqktMDp` 同样仍为空态。由此可见，Figma 工具已可调用，但设计源、代码实现和视觉验收没有形成闭环，不能把此前的“工具门禁/局部节点写入”视为六屏产品设计完成。
+- **判断**：用户关于“之前计划没有充分落实”的判断基本正确；更准确地说，Task Master 主要记录了后端垂直基础设施完成项，早期 P1A-3 计划明确排除了 web 注册页，后续产品网页计划停留在 Figma discovery/局部 Landing 原型，导致产品级前端交付被高估。
+- **前进方向**：将当前工作切换为“产品前端 re-baseline”：①先冻结信息架构与核心用户旅程；②以 Figma canonical foundations + 六个可验收屏幕为视觉上游；③按登录/注册→Dashboard→Hermes 导入→RO Workspace→Public RO/Explore→期刊策展的垂直切片实现；④每个切片必须有真实 API、空/加载/错误/成功状态、Playwright 三视口截图和人工审美签字；⑤完成后再接 Live2D/Hermes 共享状态与高级动效。
+- **下一步**：先提交 re-baseline 计划与差距矩阵供用户确认；确认后再写代码，不继续堆叠孤立页面或装饰性动效。
+
+## 2026-08-09（研究者导入闭环设计）— 设计 spec 已写入，等待审阅
+
+- **设计产出**：`docs/superpowers/specs/2026-08-09-researcher-ingestion-product-slice-design.md`，固定 Dashboard 优先级、七条路由、PDF/DOCX/TeX/Markdown/图片导入状态、Hermes 六节点证据确认、素材许可证和浏览器验收门禁。
+- **设计决策**：Dashboard 回访用户优先“继续最近研究”；新用户自动切换为“导入第一份资料”；“上传资料/创建 RO”保持同等权重。
+- **阻塞门禁**：spec 需用户审阅通过后，才能进入 writing-plans 和前端实现；当前未修改业务代码。
+
 ## 2026-08-08（产品网页 Task 1 / Figma Phase 0）— 过渡文件创建与 discovery 完成
 
 - **设计源创建**：用户确认后，在临时 Full 席位的 `501428005's team` 创建 `OpenScience Web Design System`：<https://www.figma.com/design/rWS3seZaDMdlnSljqktMDp>；该文件是 transitional source，不是最终 canonical。
