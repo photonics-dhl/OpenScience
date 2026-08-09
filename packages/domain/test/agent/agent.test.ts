@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { createFakePrisma, seedUser } from '../helpers/fakes';
 import { createResearchObject } from '../../src/research-object/research-objects';
-import { createAgentSession, submitAgentTask, getAgentTask, listAgentTasks, markTaskProgress } from '../../src/agent/agent';
+import { claimAgentTask, createAgentSession, submitAgentTask, getAgentTask, listAgentTasks, markTaskProgress } from '../../src/agent/agent';
 
 /** 内存 Redis fake（队列：agent:queue）。 */
 function fakeRedis() {
@@ -72,12 +72,73 @@ describe('AgentSession/AgentTask（§15 + §16 幂等 + §9.1 配额）', () => 
   });
 
   it('幂等键重放 → 返回既有任务（§16 不重复）', async () => {
-    const { deps, user, ro } = await makeDeps();
+    const { deps, user, ro, redis } = await makeDeps();
     const session = await createAgentSession(deps, { userId: user.id, researchObjectId: ro.id, kind: 'extract' });
     const input = { sessionId: session.id, userId: user.id, kind: 'demo.echo', payload: { message: 'x' }, idempotencyKey: 'k1' };
     const first = await submitAgentTask(deps, input);
     const replay = await submitAgentTask(deps, input);
     expect(replay.id).toBe(first.id);
+    expect(redis.lists.get('agent:queue')).toEqual([first.id]);
+  });
+
+  it('Redis dispatch 失败后重放可恢复同一 pending 任务', async () => {
+    const { deps, user, ro, redis, db } = await makeDeps();
+    const session = await createAgentSession(deps, { userId: user.id, researchObjectId: ro.id, kind: 'extract' });
+    const originalLpush = redis.lpush;
+    let firstAttempt = true;
+    redis.lpush = async (key: string, value: string) => {
+      if (firstAttempt) {
+        firstAttempt = false;
+        throw new Error('redis unavailable');
+      }
+      return originalLpush(key, value);
+    };
+    const input = { sessionId: session.id, userId: user.id, kind: 'demo.echo', payload: {}, idempotencyKey: 'recover-dispatch' };
+    await expect(submitAgentTask(deps, input)).rejects.toThrow(/redis unavailable/);
+    expect(db.agentTasks).toHaveLength(1);
+    const replay = await submitAgentTask(deps, input);
+    expect(redis.lists.get('agent:queue')).toEqual([replay.id]);
+  });
+
+  it('worker CAS claim 只允许一个消费者执行任务', async () => {
+    const { deps, user, ro } = await makeDeps();
+    const session = await createAgentSession(deps, { userId: user.id, researchObjectId: ro.id, kind: 'extract' });
+    const task = await submitAgentTask(deps, { sessionId: session.id, userId: user.id, kind: 'demo.echo', payload: {} });
+    expect((await claimAgentTask(deps, task.id))?.status).toBe('running');
+    expect(await claimAgentTask(deps, task.id)).toBeNull();
+  });
+
+  it('任务幂等键不能跨 Hermes 会话重放', async () => {
+    const { deps, user, ro } = await makeDeps();
+    const firstSession = await createAgentSession(deps, { userId: user.id, researchObjectId: ro.id, kind: 'extract' });
+    const secondSession = await createAgentSession(deps, { userId: user.id, researchObjectId: ro.id, kind: 'extract' });
+    await submitAgentTask(deps, {
+      sessionId: firstSession.id, userId: user.id, kind: 'demo.echo', payload: { message: 'first' }, idempotencyKey: 'shared-task-key',
+    });
+    await expect(submitAgentTask(deps, {
+      sessionId: secondSession.id, userId: user.id, kind: 'demo.echo', payload: { message: 'second' }, idempotencyKey: 'shared-task-key',
+    })).rejects.toThrow(/幂等键/);
+  });
+
+  it('会话并发 P2002 恢复不能返回其他用户的会话', async () => {
+    const { deps, db, user, ro } = await makeDeps();
+    const outsider = seedUser(db, { id: 'session-outsider' });
+    db.agentSessions.push({
+      id: 'outsider-session', userId: outsider.id, researchObjectId: null, kind: 'ingestion', title: '', status: 'active',
+      idempotencyKey: 'raced-session-key', createdAt: new Date(), updatedAt: new Date(),
+    });
+    const prisma = (deps as { prisma: { agentSession: { findUnique: (args: unknown) => Promise<unknown> } } }).prisma;
+    const originalFindUnique = prisma.agentSession.findUnique;
+    let lookupCount = 0;
+    prisma.agentSession.findUnique = async (args: unknown) => {
+      lookupCount += 1;
+      if (lookupCount === 1) return null;
+      return originalFindUnique(args);
+    };
+
+    await expect(createAgentSession(deps, {
+      userId: user.id, researchObjectId: ro.id, kind: 'ingestion', idempotencyKey: 'raced-session-key',
+    })).rejects.toThrow(/幂等键/);
   });
 
   it('AI Credit 不足 → INSUFFICIENT_CREDIT（§9.1）', async () => {

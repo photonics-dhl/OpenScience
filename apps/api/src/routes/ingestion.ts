@@ -1,35 +1,51 @@
 import type { FastifyInstance, FastifyRequest } from 'fastify';
 import multipart from '@fastify/multipart';
 import { z } from 'zod';
-import { streamToBuffer } from '@openscience/storage';
-import { createIngestionBatch, getIngestionBatch, IngestionError, retryIngestionTask, type IngestionDeps } from '@openscience/domain';
+import { authorizeIngestionWrite, createIngestionBatch, getIngestionBatch, IngestionError, retryIngestionTask, type IngestionDeps } from '@openscience/domain';
 import type { AuditContext } from '@openscience/observability';
 import { requireCurrentUser } from './session-guard';
 
 const MAX_UPLOAD_BYTES = 100 * 1024 * 1024;
 const MAX_BATCH_BYTES = 250 * 1024 * 1024;
+let activeIngestions = 0;
+
+async function boundedBuffer(stream: AsyncIterable<Buffer | Uint8Array | string>, currentBytes: number): Promise<{ content: Buffer; totalBytes: number }> {
+  const chunks: Buffer[] = [];
+  let size = currentBytes;
+  for await (const chunk of stream) {
+    const buffer = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
+    size += buffer.length;
+    if (size > MAX_BATCH_BYTES) throw new IngestionError('FILE_TOO_LARGE', 'Ingestion batch exceeds 250 MB');
+    chunks.push(buffer);
+  }
+  return { content: Buffer.concat(chunks), totalBytes: size };
+}
 
 function auditCtx(req: FastifyRequest): AuditContext {
   return { requestId: String(req.id), ip: req.ip };
 }
 
 export function registerIngestionRoutes(app: FastifyInstance, deps: IngestionDeps): void {
-  void app.register(multipart, { limits: { fileSize: MAX_UPLOAD_BYTES, files: 20 } });
+  void app.register(multipart, { limits: { fileSize: MAX_UPLOAD_BYTES, files: 20, fields: 1, parts: 21 } });
 
   app.post('/research-objects/:id/ingest', async (req, reply) => {
     const user = await requireCurrentUser(deps, req, reply);
     if (!user) return;
     const { id } = z.object({ id: z.string().uuid() }).parse(req.params);
+    await authorizeIngestionWrite(deps, { userId: user.userId, researchObjectId: id });
+    if (activeIngestions > 0) throw new IngestionError('INGESTION_BUSY', 'Another ingestion is already being processed');
+    activeIngestions += 1;
+    try {
     const idempotencyKey = z.string().min(1).max(200).optional().parse(req.headers['idempotency-key']);
     let processingConsent = false;
     let totalBytes = 0;
     const files: Array<{ filename: string; content: Buffer; mimeType?: string }> = [];
     for await (const part of req.parts()) {
       if (part.type === 'file') {
-        const content = await streamToBuffer(part.file);
+        const bounded = await boundedBuffer(part.file as AsyncIterable<Buffer>, totalBytes);
+        const content = bounded.content;
         if (part.file.truncated) throw new IngestionError('FILE_TOO_LARGE', 'Individual file exceeds 100 MB');
-        totalBytes += content.length;
-        if (totalBytes > MAX_BATCH_BYTES) throw new IngestionError('VALIDATION_ERROR', 'Ingestion batch exceeds 250 MB');
+        totalBytes = bounded.totalBytes;
         files.push({ filename: part.filename, content, mimeType: part.mimetype });
       } else if (part.fieldname === 'processingConsent') {
         processingConsent = part.value === 'true';
@@ -39,6 +55,9 @@ export function registerIngestionRoutes(app: FastifyInstance, deps: IngestionDep
       userId: user.userId, researchObjectId: id, processingConsent, files, idempotencyKey,
     }, auditCtx(req));
     return reply.status(202).send({ batchId: batch.batchId, artifacts: batch.tasks.map((task) => ({ artifactId: task.artifactId, logicalPath: task.logicalPath })), tasks: batch.tasks });
+    } finally {
+      activeIngestions -= 1;
+    }
   });
 
   app.get('/ingestion/:batchId', async (req, reply) => {

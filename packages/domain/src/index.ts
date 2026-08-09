@@ -152,7 +152,7 @@ export {
 export { InAppChannel, EmailChannel } from './notification/channels';
 export { AgentError, type AgentErrorCode } from './agent/errors';
 export {
-  createAgentSession, submitAgentTask, getAgentTask, listAgentSessions, listAgentTasks, markTaskProgress,
+  claimAgentTask, createAgentSession, dispatchAgentTask, submitAgentTask, getAgentTask, listAgentSessions, listAgentTasks, markTaskProgress,
   AGENT_TASK_QUEUE, AI_CREDIT_RESOURCE,
   type AgentDeps, type AgentTaskView, type AgentSessionView, type AgentTaskStatus,
 } from './agent/agent';
@@ -189,4 +189,4 @@ export { checkPythonScript, modifyScriptStub, type PolicyCheckResult } from './s
 export { IngestionError, type IngestionErrorCode } from './ingestion/errors';
 export { INGESTION_EXTENSIONS, assertSupportedIngestionFile } from './ingestion/format-policy';
 export { INGESTION_TASK_STATES, type IngestionTaskState, type IngestionFileInput, type IngestionTaskView, type IngestionBatchView } from './ingestion/ingestion-types';
-export { createIngestionBatch, getIngestionBatch, retryIngestionTask, type IngestionDeps } from './ingestion/ingestion-service';
+export { authorizeIngestionWrite, createIngestionBatch, getIngestionBatch, retryIngestionTask, type IngestionDeps } from './ingestion/ingestion-service';

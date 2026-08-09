@@ -112,6 +112,37 @@ describe('registerRateLimit（Fastify 封装）', () => {
     await app.close();
   });
 
+  it.each([
+    ['/research-objects/:id/ingest', '/research-objects/ro-1/ingest', 5],
+    ['/ingestion/:taskId/retry', '/ingestion/task-1/retry', 10],
+  ])('%s 参数路由超过上传档位后返回 429', async (route, url, limit) => {
+    const f = makeFakeRedis();
+    const { sink } = makeAudit();
+    const app = Fastify({ logger: false });
+    await app.register(cookie, { secret: 'test-secret' });
+    await registerRateLimit(app, { redis: f as never, audit: sink, enabled: true });
+    app.post(route, async () => ({ ok: true }));
+    for (let hit = 0; hit < limit; hit++) {
+      expect((await app.inject({ method: 'POST', url })).statusCode).toBe(200);
+    }
+    expect((await app.inject({ method: 'POST', url })).statusCode).toBe(429);
+    await app.close();
+  });
+
+  it('不同 RO UUID 共享同一 ingestion 路由限流桶', async () => {
+    const f = makeFakeRedis();
+    const { sink } = makeAudit();
+    const app = Fastify({ logger: false });
+    await app.register(cookie, { secret: 'test-secret' });
+    await registerRateLimit(app, { redis: f as never, audit: sink, enabled: true });
+    app.post('/research-objects/:id/ingest', async () => ({ ok: true }));
+    for (let hit = 0; hit < 5; hit++) {
+      expect((await app.inject({ method: 'POST', url: `/research-objects/00000000-0000-4000-8000-00000000000${hit}/ingest` })).statusCode).toBe(200);
+    }
+    expect((await app.inject({ method: 'POST', url: '/research-objects/00000000-0000-4000-8000-000000000099/ingest' })).statusCode).toBe(429);
+    await app.close();
+  });
+
   it('RATE_LIMIT_ROUTES 声明表含登录档位（挂接点）', () => {
     expect(RATE_LIMIT_ROUTES['/auth/login']).toBeDefined();
     expect(RATE_LIMIT_ROUTES['/auth/login'].windowSec).toBe(60);

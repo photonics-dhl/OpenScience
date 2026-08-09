@@ -2,14 +2,29 @@ import { createHash, randomUUID } from 'node:crypto';
 import type { StorageAdapter } from '@openscience/storage';
 import type { AuditContext } from '@openscience/observability';
 import { createArtifact } from '../artifact/artifacts';
-import { AGENT_TASK_QUEUE, createAgentSession, submitAgentTask, type AgentDeps } from '../agent/agent';
-import { requireMembership } from '../workspace/helpers';
+import { createAgentSession, dispatchAgentTask, submitAgentTask, type AgentDeps } from '../agent/agent';
+import { requireActive, requireMembership } from '../workspace/helpers';
+import { WorkspaceError } from '../workspace/errors';
 import { recordAudit } from '../workspace/audit';
 import { IngestionError } from './errors';
 import { assertSupportedIngestionFile } from './format-policy';
 import type { IngestionBatchView, IngestionFileInput, IngestionTaskView } from './ingestion-types';
 
 export type IngestionDeps = AgentDeps & { storage: StorageAdapter };
+
+const INGESTION_WRITE_ROLES = new Set(['owner', 'maintainer', 'author', 'contributor']);
+
+export async function authorizeIngestionWrite(
+  deps: IngestionDeps,
+  input: { userId: string; researchObjectId: string },
+) {
+  const ro = await deps.prisma.researchObject.findUnique({ where: { id: input.researchObjectId } });
+  if (!ro) throw new IngestionError('INGESTION_NOT_FOUND', 'Research object not found');
+  const { workspace, membership } = await requireMembership(deps, ro.workspaceId, input.userId);
+  requireActive(workspace);
+  if (!INGESTION_WRITE_ROLES.has(membership.role)) throw new WorkspaceError('FORBIDDEN', '权限不足');
+  return { researchObject: ro, workspace, membership };
+}
 
 export async function createIngestionBatch(
   deps: IngestionDeps,
@@ -19,14 +34,13 @@ export async function createIngestionBatch(
   if (!input.processingConsent) throw new IngestionError('PROCESSING_CONSENT_REQUIRED', 'Processing consent is required');
   if (input.files.length === 0) throw new IngestionError('VALIDATION_ERROR', 'At least one file is required');
   input.files.forEach((file) => assertSupportedIngestionFile(file.filename, file.mimeType));
+  const logicalPaths = planLogicalPaths(input.files.map((file) => file.filename));
 
-  const ro = await deps.prisma.researchObject.findUnique({ where: { id: input.researchObjectId } });
-  if (!ro) throw new IngestionError('INGESTION_NOT_FOUND', 'Research object not found');
-  await requireMembership(deps, ro.workspaceId, input.userId);
+  const { researchObject: ro } = await authorizeIngestionWrite(deps, input);
 
   const stableKey = input.idempotencyKey ?? randomUUID();
-  const requestDigest = createHash('sha256').update(JSON.stringify(input.files.map((file) => ({
-    filename: file.filename, mimeType: file.mimeType ?? null,
+  const requestDigest = createHash('sha256').update(JSON.stringify(input.files.map((file, index) => ({
+    filename: logicalPaths[index], mimeType: file.mimeType ?? null,
     sha256: createHash('sha256').update(file.content).digest('hex'),
   })))).digest('hex');
   let batch = await deps.prisma.ingestionBatch.findUnique({ where: { idempotencyKey: stableKey } });
@@ -59,13 +73,13 @@ export async function createIngestionBatch(
 
   for (const [index, file] of input.files.entries()) {
     const artifact = await createArtifact(deps, {
-      logicalPath: file.filename, content: file.content, mimeType: file.mimeType,
+      logicalPath: logicalPaths[index], content: file.content,
       uploadedBy: input.userId, workspaceId: ro.workspaceId, idempotencyKey: `${stableKey}:artifact:${index}`,
     }, ctx);
     const agentTask = await submitAgentTask(deps, {
       sessionId, userId: input.userId, kind: 'sdf.extract',
       payload: { artifactId: artifact.artifactId, researchObjectId: ro.id },
-      idempotencyKey: `${stableKey}:extract:${index}`,
+      idempotencyKey: `${stableKey}:extract:${index}`, dispatch: false,
     }, ctx);
     const existingTask = await deps.prisma.ingestionTask.findUnique({
       where: { batchId_artifactId: { batchId: batch.id, artifactId: artifact.artifactId } },
@@ -77,6 +91,7 @@ export async function createIngestionBatch(
         if ((error as { code?: string }).code !== 'P2002') throw error;
       });
     }
+    await dispatchAgentTask(deps, agentTask.id);
   }
 
   await recordAudit(deps, deps.prisma, {
@@ -84,6 +99,23 @@ export async function createIngestionBatch(
     targetType: 'ingestion_batch', targetId: batch.id, metadata: { researchObjectId: ro.id, fileCount: input.files.length },
   }, ctx);
   return getIngestionBatch(deps, { userId: input.userId, batchId: batch.id });
+}
+
+function planLogicalPaths(filenames: string[]): string[] {
+  const used = new Set<string>();
+  return filenames.map((filename) => {
+    if (!filename || filename.length > 255 || filename.includes('/') || filename.includes('\\') || filename.includes('..') || filename.startsWith('.')) {
+      throw new IngestionError('VALIDATION_ERROR', 'Invalid ingestion filename');
+    }
+    const dot = filename.lastIndexOf('.');
+    const stem = dot > 0 ? filename.slice(0, dot) : filename;
+    const extension = dot > 0 ? filename.slice(dot) : '';
+    let candidate = filename;
+    let suffix = 2;
+    while (used.has(candidate)) candidate = `${stem} (${suffix++})${extension}`;
+    used.add(candidate);
+    return candidate;
+  });
 }
 
 export async function getIngestionBatch(
@@ -109,7 +141,7 @@ export async function retryIngestionTask(
     where: { id: input.taskId }, include: { artifact: true, batch: { include: { researchObject: true } } },
   });
   if (!task) throw new IngestionError('INGESTION_NOT_FOUND', 'Ingestion task not found');
-  await requireMembership(deps, task.batch.researchObject.workspaceId, input.userId);
+  await authorizeIngestionWrite(deps, { userId: input.userId, researchObjectId: task.batch.researchObject.id });
   if (task.state !== 'failed_retryable') throw new IngestionError('INGESTION_NOT_RETRYABLE', 'Only retryable failures can be retried');
   const claimed = await deps.prisma.ingestionTask.updateMany({
     where: { id: task.id, state: 'failed_retryable' }, data: { state: 'queued', retryCount: { increment: 1 }, error: null },
@@ -117,7 +149,18 @@ export async function retryIngestionTask(
   if (claimed.count !== 1) throw new IngestionError('INGESTION_NOT_RETRYABLE', 'Only retryable failures can be retried');
   const updated = await deps.prisma.ingestionTask.findUnique({ where: { id: task.id }, include: { artifact: true } });
   if (!updated) throw new IngestionError('INGESTION_NOT_FOUND', 'Ingestion task not found');
-  if (updated.agentTaskId) await deps.redis.lpush(AGENT_TASK_QUEUE, updated.agentTaskId);
+  if (updated.agentTaskId) {
+    await deps.prisma.agentTask.update({ where: { id: updated.agentTaskId }, data: { dispatchedAt: null } });
+    try {
+      await dispatchAgentTask(deps, updated.agentTaskId);
+    } catch (error) {
+      await deps.prisma.ingestionTask.updateMany({
+        where: { id: updated.id, state: 'queued' },
+        data: { state: 'failed_retryable', error: 'Queue dispatch unavailable' },
+      });
+      throw error;
+    }
+  }
   return taskToView(updated);
 }
 

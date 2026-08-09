@@ -143,6 +143,7 @@ const INGESTION_ERROR_HTTP: Record<IngestionError['code'], number> = {
   UNSUPPORTED_INGESTION_FORMAT: 415,
   INGESTION_NOT_RETRYABLE: 409,
   FILE_TOO_LARGE: 413,
+  INGESTION_BUSY: 429,
   VALIDATION_ERROR: 400,
 };
 
@@ -238,6 +239,9 @@ export function httpStatusForError(err: unknown, requestId?: string): { status: 
   // @fastify/csrf-protection 校验失败：403 而非 500（FastifyError.code = FST_CSRF_INVALID_TOKEN / FST_CSRF_MISSING_SECRET）
   if (typeof (err as { code?: unknown }).code === 'string' && (err as { code: string }).code.startsWith('FST_CSRF')) {
     return { status: 403, body: buildErrorBody('CSRF_INVALID', 'CSRF token 校验失败', requestId) };
+  }
+  if (['FST_REQ_FILE_TOO_LARGE', 'FST_REQ_PARTS_LIMIT', 'FST_REQ_FIELDS_LIMIT'].includes(String((err as { code?: unknown }).code))) {
+    return { status: 413, body: buildErrorBody('FILE_TOO_LARGE', '上传内容超过限制', requestId) };
   }
   if ((err as { name?: string })?.name === 'ZodError') {
     return { status: 400, body: buildErrorBody('VALIDATION_ERROR', '请求参数不合法', requestId) };

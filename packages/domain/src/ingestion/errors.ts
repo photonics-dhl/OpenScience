@@ -4,6 +4,7 @@ export type IngestionErrorCode =
   | 'UNSUPPORTED_INGESTION_FORMAT'
   | 'INGESTION_NOT_RETRYABLE'
   | 'FILE_TOO_LARGE'
+  | 'INGESTION_BUSY'
   | 'VALIDATION_ERROR';
 
 export class IngestionError extends Error {

@@ -1,6 +1,6 @@
 import { createPrismaClient, createRedisClient } from '@openscience/database';
 import { AiGateway, OpenAiCompatProvider } from '@openscience/ai-gateway';
-import { markTaskProgress, AGENT_TASK_QUEUE, type AgentDeps } from '@openscience/domain';
+import { claimAgentTask, markTaskProgress, AGENT_TASK_QUEUE, type AgentDeps } from '@openscience/domain';
 import { extractHandler } from './extractor';
 import { reviewAnalyzeHandler } from './reviewer';
 import { visualizationPlanHandler } from './planner';
@@ -38,10 +38,7 @@ export async function createPollOnce(handlers: Record<string, TaskHandler>): Pro
     try {
       const task = await deps.prisma.agentTask.findUnique({ where: { id: taskId } });
       if (!task) return true;
-      // 消费者幂等：已完成（succeeded）→ skip（§16 重放不重复副作用）
-      if (task.status === 'succeeded') return true;
-
-      await markTaskProgress(deps, { taskId, status: 'running', progress: 10 });
+      if (!await claimAgentTask(deps, taskId)) return true;
       const handler = handlers[task.kind] ?? handlers['demo.echo'];
       const result = await handler(deps, { id: task.id, payload: (task.payload ?? {}) as Record<string, unknown> });
       await markTaskProgress(deps, { taskId, status: 'succeeded', progress: 100, result });

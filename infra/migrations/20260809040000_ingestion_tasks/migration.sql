@@ -4,6 +4,7 @@ CREATE TYPE "IngestionTaskState" AS ENUM (
 
 ALTER TABLE "agent_sessions" ADD COLUMN "idempotency_key" TEXT;
 CREATE UNIQUE INDEX "agent_sessions_idempotency_key_key" ON "agent_sessions"("idempotency_key");
+ALTER TABLE "agent_tasks" ADD COLUMN "dispatched_at" TIMESTAMP(3);
 
 CREATE TABLE "ingestion_batches" (
   "id" UUID NOT NULL DEFAULT gen_random_uuid(),

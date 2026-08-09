@@ -1,6 +1,6 @@
 import { execFileSync } from 'node:child_process';
 import path from 'node:path';
-import { afterAll, describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { DevOutboxMailer } from '@openscience/auth';
 import { createPrismaAuditSink, createPrismaClient, createRedisClient } from '@openscience/database';
 import { createPersonalWorkspace, createResearchObject } from '@openscience/domain';
@@ -12,6 +12,14 @@ const redis = createRedisClient();
 const mailer = new DevOutboxMailer(prisma);
 const storage = createStorageAdapter(storageConfigFromEnv());
 const repoRoot = path.resolve(__dirname, '../../..');
+let createdUserId: string | null = null;
+
+beforeAll(() => {
+  const databaseUrl = new URL(process.env.DATABASE_URL ?? 'postgresql://invalid/invalid');
+  if (process.env.NODE_ENV !== 'test' || !/(test|integration)/i.test(databaseUrl.pathname)) {
+    throw new Error('Refusing ingestion integration test outside an isolated test database');
+  }
+});
 
 function field(boundary: string, name: string, value: string): Buffer {
   return Buffer.from(`--${boundary}\r\nContent-Disposition: form-data; name="${name}"\r\n\r\n${value}\r\n`);
@@ -43,23 +51,27 @@ async function register(app: Awaited<ReturnType<typeof buildApp>>, email: string
 }
 
 afterAll(async () => {
-  await prisma.ingestionTask.deleteMany();
-  await prisma.ingestionBatch.deleteMany();
-  await prisma.agentTask.deleteMany();
-  await prisma.agentSession.deleteMany();
-  await prisma.artifact.deleteMany();
-  await prisma.blob.deleteMany();
-  await prisma.auditLog.deleteMany();
-  await prisma.usageLedger.deleteMany();
-  await prisma.sdfNode.deleteMany();
-  await prisma.sdfDocument.deleteMany();
-  await prisma.researchObject.deleteMany();
-  await prisma.membership.deleteMany();
-  await prisma.workspace.deleteMany();
-  await prisma.emailVerification.deleteMany();
-  await prisma.mailOutbox.deleteMany();
-  await prisma.invitation.deleteMany();
-  await prisma.user.deleteMany();
+  if (createdUserId) {
+    const batches = await prisma.ingestionBatch.findMany({ where: { userId: createdUserId }, select: { id: true } });
+    const sessions = await prisma.agentSession.findMany({ where: { userId: createdUserId }, select: { id: true } });
+    const batchIds = batches.map(({ id }) => id);
+    const sessionIds = sessions.map(({ id }) => id);
+    await prisma.ingestionTask.deleteMany({ where: { batchId: { in: batchIds } } });
+    await prisma.ingestionBatch.deleteMany({ where: { id: { in: batchIds } } });
+    await prisma.agentTask.deleteMany({ where: { sessionId: { in: sessionIds } } });
+    await prisma.agentSession.deleteMany({ where: { id: { in: sessionIds } } });
+    await prisma.artifact.deleteMany({ where: { uploadedBy: createdUserId } });
+    await prisma.auditLog.deleteMany({ where: { actorId: createdUserId } });
+    await prisma.usageLedger.deleteMany({ where: { userId: createdUserId } });
+    const documents = await prisma.sdfDocument.findMany({ where: { researchObject: { createdBy: createdUserId } }, select: { id: true } });
+    await prisma.sdfNode.deleteMany({ where: { sdfDocumentId: { in: documents.map(({ id }) => id) } } });
+    await prisma.sdfDocument.deleteMany({ where: { id: { in: documents.map(({ id }) => id) } } });
+    await prisma.researchObject.deleteMany({ where: { createdBy: createdUserId } });
+    await prisma.membership.deleteMany({ where: { userId: createdUserId } });
+    await prisma.workspace.deleteMany({ where: { ownerId: createdUserId } });
+    await prisma.emailVerification.deleteMany({ where: { userId: createdUserId } });
+    await prisma.user.delete({ where: { id: createdUserId } });
+  }
   await Promise.all([prisma.$disconnect(), redis.quit()]);
 });
 
@@ -68,6 +80,7 @@ describe('ingestion API (real PostgreSQL/Redis/MinIO)', () => {
     const app = await buildApp({ prisma, redis, mailer, storage, audit: createPrismaAuditSink(prisma), onEmailVerified: (tx, user) => createPersonalWorkspace(tx, user), cookieSecret: 'integration-secret', secureCookies: false });
     const email = `ingestion-${Date.now()}@example.com`;
     const account = await register(app, email);
+    createdUserId = account.userId;
     await prisma.usageLedger.create({ data: { userId: account.userId, resource: 'ai_credit', delta: 100n, kind: 'grant', reason: 'integration' } });
     const ro = await createResearchObject({ prisma, mailer }, { workspaceId: account.workspaceId, userId: account.userId, title: 'Ingestion integration' });
 

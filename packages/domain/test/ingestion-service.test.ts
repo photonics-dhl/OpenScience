@@ -2,7 +2,7 @@ import { Readable } from 'node:stream';
 import { describe, expect, it, vi } from 'vitest';
 import type { StorageAdapter } from '@openscience/storage';
 import { createFakePrisma, seedUser } from './helpers/fakes';
-import { createIngestionBatch, getIngestionBatch, retryIngestionTask } from '../src/ingestion/ingestion-service';
+import { authorizeIngestionWrite, createIngestionBatch, getIngestionBatch, retryIngestionTask } from '../src/ingestion/ingestion-service';
 import { markTaskProgress } from '../src/agent/agent';
 
 function makeDeps() {
@@ -58,11 +58,52 @@ describe('multi-format ingestion service', () => {
     })).rejects.toMatchObject({ code: 'UNSUPPORTED_INGESTION_FORMAT' });
   });
 
+  it('does not persist an untrusted browser MIME as detected metadata', async () => {
+    const { deps, db, user } = makeDeps();
+    await createIngestionBatch(deps, {
+      userId: user.id, researchObjectId: 'ro-1', processingConsent: true,
+      files: [{ ...file('notes.md'), mimeType: 'text/markdown' }],
+    });
+    expect(db.artifacts[0].mimeType).toBeNull();
+  });
+
+  it('disambiguates duplicate filenames and rejects path-like names before creating a batch', async () => {
+    const { deps, db, user } = makeDeps();
+    const result = await createIngestionBatch(deps, {
+      userId: user.id, researchObjectId: 'ro-1', processingConsent: true,
+      files: [file('paper.pdf'), file('paper.pdf')],
+    });
+    expect(result.tasks.map((task) => task.logicalPath)).toEqual(['paper.pdf', 'paper (2).pdf']);
+    await expect(createIngestionBatch(deps, {
+      userId: user.id, researchObjectId: 'ro-1', processingConsent: true, files: [file('../paper.pdf')],
+    })).rejects.toMatchObject({ code: 'VALIDATION_ERROR' });
+    expect(db.ingestionBatches).toHaveLength(1);
+  });
+
   it('enforces workspace membership on create and read', async () => {
     const { deps, db, user } = makeDeps();
     const result = await createIngestionBatch(deps, { userId: user.id, researchObjectId: 'ro-1', processingConsent: true, files: [file('paper.pdf')] });
     const outsider = seedUser(db, { id: 'outsider' });
     await expect(getIngestionBatch(deps, { userId: outsider.id, batchId: result.batchId })).rejects.toThrow(/空间不存在/);
+  });
+
+  it.each(['viewer', 'reviewer'])('rejects %s ingestion writes', async (role) => {
+    const { deps, db, user } = makeDeps();
+    db.memberships[0].role = role;
+    await expect(authorizeIngestionWrite(deps, { userId: user.id, researchObjectId: 'ro-1' }))
+      .rejects.toMatchObject({ code: 'FORBIDDEN' });
+    await expect(createIngestionBatch(deps, {
+      userId: user.id, researchObjectId: 'ro-1', processingConsent: true, files: [file('notes.md')],
+    })).rejects.toMatchObject({ code: 'FORBIDDEN' });
+    expect(db.ingestionBatches).toHaveLength(0);
+  });
+
+  it('rejects writes to an archived workspace', async () => {
+    const { deps, db, user } = makeDeps();
+    db.workspaces[0].status = 'archived';
+    await expect(authorizeIngestionWrite(deps, { userId: user.id, researchObjectId: 'ro-1' }))
+      .rejects.toMatchObject({ code: 'WORKSPACE_ARCHIVED' });
+    expect(db.ingestionBatches).toHaveLength(0);
   });
 
   it('retries only failed_retryable tasks and requeues the existing agent task', async () => {
@@ -77,6 +118,16 @@ describe('multi-format ingestion service', () => {
     await expect(retryIngestionTask(deps, { userId: user.id, taskId: task.id })).rejects.toMatchObject({ code: 'INGESTION_NOT_RETRYABLE' });
   });
 
+  it('retry dispatch 失败会恢复 failed_retryable 状态', async () => {
+    const { deps, db, user, redis } = makeDeps();
+    const result = await createIngestionBatch(deps, { userId: user.id, researchObjectId: 'ro-1', processingConsent: true, files: [file('paper.pdf')] });
+    const task = db.ingestionTasks.find((row) => row.id === result.tasks[0].id)!;
+    task.state = 'failed_retryable';
+    redis.lpush.mockRejectedValueOnce(new Error('redis unavailable'));
+    await expect(retryIngestionTask(deps, { userId: user.id, taskId: task.id })).rejects.toThrow(/redis unavailable/);
+    expect(task.state).toBe('failed_retryable');
+  });
+
   it('resumes the same batch idempotently without duplicating artifacts, sessions, or tasks', async () => {
     const { deps, db, user } = makeDeps();
     const input = { userId: user.id, researchObjectId: 'ro-1', processingConsent: true, files: [file('paper.pdf')], idempotencyKey: 'stable-batch' };
@@ -88,6 +139,17 @@ describe('multi-format ingestion service', () => {
     expect(db.agentTasks).toHaveLength(1);
     expect(db.artifacts).toHaveLength(1);
     expect(db.ingestionTasks).toHaveLength(1);
+  });
+
+  it('creates the ingestion association before dispatching its AgentTask', async () => {
+    const { deps, db, user, redis } = makeDeps();
+    redis.lpush.mockImplementation(async (_queue, agentTaskId) => {
+      expect(db.ingestionTasks.some((task) => task.agentTaskId === agentTaskId)).toBe(true);
+      return 1;
+    });
+    await createIngestionBatch(deps, {
+      userId: user.id, researchObjectId: 'ro-1', processingConsent: true, files: [file('notes.md')],
+    });
   });
 
   it('rejects reuse of a batch key for a different material set', async () => {

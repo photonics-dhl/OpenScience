@@ -602,7 +602,7 @@ export function createFakePrisma(): { prisma: PrismaClient; db: FakeDb } {
     agentTask: {
       create: async ({ data }: any) => {
         if (data.idempotencyKey && db.agentTasks.some((t) => t.idempotencyKey === data.idempotencyKey)) throw p2002();
-        const row = { id: nextId(), status: 'pending', progress: 0, createdAt: new Date(), updatedAt: new Date(), ...data };
+        const row = { id: nextId(), status: 'pending', progress: 0, dispatchedAt: null, createdAt: new Date(), updatedAt: new Date(), ...data };
         db.agentTasks.push(row);
         return row;
       },
@@ -621,6 +621,15 @@ export function createFakePrisma(): { prisma: PrismaClient; db: FakeDb } {
         const row = db.agentTasks.find((t) => t.id === where.id);
         Object.assign(row, data, { updatedAt: new Date() });
         return { ...row };
+      },
+      updateMany: async ({ where, data }: any) => {
+        const rows = db.agentTasks.filter((task) =>
+          (where.id === undefined || task.id === where.id) &&
+          (where.dispatchedAt === undefined || task.dispatchedAt === where.dispatchedAt) &&
+          (where.status?.in === undefined || where.status.in.includes(task.status)),
+        );
+        rows.forEach((row) => Object.assign(row, data, { updatedAt: new Date() }));
+        return { count: rows.length };
       },
       findMany: async ({ where, include }: any) => {
         let rows = db.agentTasks.filter((t) =>
