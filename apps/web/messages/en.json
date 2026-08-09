@@ -11,6 +11,22 @@
     "version": "Version",
     "language": "Language"
   },
+  "auth": {
+    "mode": "Identity / Research access",
+    "home": "Back to OpenScience home",
+    "principles": { "label": "OpenScience identity principles", "invite": "Invite-bound identity", "traceable": "Traceable contribution", "history": "Persistent RO history" },
+    "page": {
+      "login": { "eyebrow": "Research identity", "title": "Return to your research", "description": "Continue the same Research Object, version chain, and review context." },
+      "register": { "eyebrow": "Invite access", "title": "Build a traceable research identity", "description": "Your invitation is bound to your email. Verification creates your personal research workspace." },
+      "verify": { "eyebrow": "Email verification", "title": "Confirm your research identity", "description": "The code activates only this invitation and personal workspace." }
+    },
+    "fields": { "invitationCode": "Invitation code", "displayName": "Name", "email": "Email", "password": "Password", "code": "Six-digit code" },
+    "actions": { "signIn": "Sign in", "signingIn": "Signing in…", "register": "Create invited account", "createAccount": "Create account", "creating": "Creating…", "verify": "Verify and enter workspace", "verifying": "Verifying…", "resend": "Resend verification code" },
+    "login": { "eyebrow": "Return to your research", "title": "Sign in to OpenScience", "description": "Continue your Research Objects, versions, and review context.", "noAccount": "Have an invitation but no account yet?" },
+    "register": { "eyebrow": "Invited researcher", "title": "Establish your research identity", "description": "Your invitation is bound to your email; verification creates a personal workspace.", "passwordHelp": "Use at least 8 characters with both a letter and a number.", "hasAccount": "Already registered?" },
+    "verify": { "eyebrow": "Identity verification", "title": "Check your email", "description": "We sent a six-digit code to", "resent": "A new verification code has been sent." },
+    "errors": { "invitationInvalid": "This invitation is invalid, used, or expired.", "invitationEmailMismatch": "This invitation is not bound to that email.", "accountNotActive": "Verify your email before signing in.", "invalidCredentials": "The email or password is incorrect.", "codeInvalid": "The code is incorrect or has too many failed attempts.", "codeExpired": "The code expired. Request a new one.", "rateLimited": "Too many attempts. Try again later.", "unknown": "The request could not be completed. Please retry." }
+  },
   "dashboard": {
     "title": "Research cockpit",
     "hermesReady": "Hermes ready",

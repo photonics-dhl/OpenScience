@@ -48,7 +48,7 @@ export default function SiteHeader() {
             <a href="/#latest" className={linkClassName}>
               {t('nav.explore')}
             </a>
-            <a href="/login?next=/research-objects/new" className={linkClassName}>
+            <a href="/register?next=/research-objects/new" className={linkClassName}>
               {t('nav.create')}
             </a>
             <a href="/#trust" className={linkClassName}>

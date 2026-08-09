@@ -128,7 +128,7 @@ export default function Hero({ symbolVariant }: HeroProps) {
               variant="outline"
               className="min-w-44 rounded-md border-hero-muted/40 bg-hero-surface/40 text-base text-hero-text backdrop-blur hover:bg-hero-surface"
             >
-              <a href="/login?next=/research-objects/new">{t('hero.ctaCreate')}</a>
+              <a href="/register?next=/research-objects/new">{t('hero.ctaCreate')}</a>
             </Button>
           </div>
         </div>
