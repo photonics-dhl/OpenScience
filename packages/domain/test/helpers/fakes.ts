@@ -40,11 +40,13 @@ interface FakeDb {
   toolApprovals: any[];
   aiReviews: any[];
   appeals: any[];
+  ingestionBatches: any[];
+  ingestionTasks: any[];
 }
 
 /** 内存版 Prisma 子集：覆盖 workspace 领域用到的调用面。 */
 export function createFakePrisma(): { prisma: PrismaClient; db: FakeDb } {
-  const db: FakeDb = { users: [], workspaces: [], memberships: [], workspaceInvitations: [], mailOutbox: [], quotaPolicies: [], usageLedger: [], researchObjects: [], sdfDocuments: [], sdfNodes: [], blobs: [], artifacts: [], branches: [], commits: [], changesets: [], versions: [], versionManifests: [], manifestEntries: [], identifiers: [], publications: [], visibilityGrants: [], visibilityRequests: [], pullRequests: [], issues: [], comments: [], reviews: [], licenseAssignments: [], forkRelations: [], notifications: [], authors: [], contributions: [], agentSessions: [], agentTasks: [], toolApprovals: [], aiReviews: [], appeals: [] };
+  const db: FakeDb = { users: [], workspaces: [], memberships: [], workspaceInvitations: [], mailOutbox: [], quotaPolicies: [], usageLedger: [], researchObjects: [], sdfDocuments: [], sdfNodes: [], blobs: [], artifacts: [], branches: [], commits: [], changesets: [], versions: [], versionManifests: [], manifestEntries: [], identifiers: [], publications: [], visibilityGrants: [], visibilityRequests: [], pullRequests: [], issues: [], comments: [], reviews: [], licenseAssignments: [], forkRelations: [], notifications: [], authors: [], contributions: [], agentSessions: [], agentTasks: [], toolApprovals: [], aiReviews: [], appeals: [], ingestionBatches: [], ingestionTasks: [] };
   let seq = 0;
   const nextId = () => `00000000-0000-4000-8000-${String(++seq).padStart(12, '0')}`;
   const p2002 = () => {
@@ -635,6 +637,59 @@ export function createFakePrisma(): { prisma: PrismaClient; db: FakeDb } {
           }));
         }
         return rows;
+      },
+    },
+    ingestionBatch: {
+      create: async ({ data }: any) => {
+        if (data.idempotencyKey && db.ingestionBatches.some((batch) => batch.idempotencyKey === data.idempotencyKey)) throw p2002();
+        const row = { id: nextId(), createdAt: new Date(), updatedAt: new Date(), ...data };
+        db.ingestionBatches.push(row);
+        return row;
+      },
+      findUnique: async ({ where, include }: any) => {
+        const row = db.ingestionBatches.find((batch) => where.id ? batch.id === where.id : batch.idempotencyKey === where.idempotencyKey) ?? null;
+        if (!row || !include) return row;
+        const researchObject = db.researchObjects.find((ro) => ro.id === row.researchObjectId) ?? null;
+        let tasks = db.ingestionTasks.filter((task) => task.batchId === row.id);
+        if (include.tasks?.orderBy?.createdAt === 'asc') tasks = tasks.sort((a, b) => a.createdAt - b.createdAt);
+        if (include.tasks?.include?.artifact) tasks = tasks.map((task) => ({ ...task, artifact: db.artifacts.find((artifact) => artifact.id === task.artifactId) }));
+        return { ...row, researchObject, tasks };
+      },
+      update: async ({ where, data }: any) => {
+        const row = db.ingestionBatches.find((batch) => batch.id === where.id);
+        Object.assign(row, data, { updatedAt: new Date() });
+        return { ...row };
+      },
+    },
+    ingestionTask: {
+      create: async ({ data }: any) => {
+        const row = { id: nextId(), state: 'queued', retryCount: 0, error: null, createdAt: new Date(), updatedAt: new Date(), ...data };
+        db.ingestionTasks.push(row);
+        return row;
+      },
+      findUnique: async ({ where, include }: any) => {
+        const row = db.ingestionTasks.find((task) => where.id
+          ? task.id === where.id
+          : task.batchId === where.batchId_artifactId?.batchId && task.artifactId === where.batchId_artifactId?.artifactId) ?? null;
+        if (!row || !include) return row;
+        const batch = db.ingestionBatches.find((candidate) => candidate.id === row.batchId) ?? null;
+        const researchObject = batch ? db.researchObjects.find((ro) => ro.id === batch.researchObjectId) : null;
+        return {
+          ...row,
+          artifact: db.artifacts.find((artifact) => artifact.id === row.artifactId),
+          batch: batch ? { ...batch, researchObject } : null,
+        };
+      },
+      update: async ({ where, data, include }: any) => {
+        const row = db.ingestionTasks.find((task) => task.id === where.id);
+        const retryCount = data.retryCount?.increment ? row.retryCount + data.retryCount.increment : (data.retryCount ?? row.retryCount);
+        Object.assign(row, { ...data, retryCount, updatedAt: new Date() });
+        return include?.artifact ? { ...row, artifact: db.artifacts.find((artifact) => artifact.id === row.artifactId) } : { ...row };
+      },
+      updateMany: async ({ where, data }: any) => {
+        const rows = db.ingestionTasks.filter((task) => task.agentTaskId === where.agentTaskId);
+        rows.forEach((row) => Object.assign(row, data, { updatedAt: new Date() }));
+        return { count: rows.length };
       },
     },
     toolApproval: {

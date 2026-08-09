@@ -43,6 +43,7 @@ model User {
   memberships              Membership[]
   sentWorkspaceInvitations WorkspaceInvitation[] @relation("WorkspaceInvitationInviter")
   createdResearchObjects   ResearchObject[]      @relation("ResearchObjectCreator")
+  ingestionBatches         IngestionBatch[]
   uploadedArtifacts        Artifact[]            @relation("ArtifactUploader")
   authoredCommits          Commit[]
   grantedVisibilityGrants  VisibilityGrant[]     @relation("VisibilityGranter")
@@ -371,6 +372,7 @@ model ResearchObject {
   agentSessions      AgentSession[]
   aiReviews          AiReview[]
   appeals            Appeal[]
+  ingestionBatches   IngestionBatch[]
 
   @@index([workspaceId])
   @@map("research_objects")
@@ -433,6 +435,7 @@ model Artifact {
   blob      Blob      @relation(fields: [blobSha256], references: [sha256], onDelete: Restrict)
   uploader  User      @relation("ArtifactUploader", fields: [uploadedBy], references: [id], onDelete: Restrict)
   workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  ingestionTasks IngestionTask[]
 
   @@index([workspaceId])
   @@index([blobSha256])
@@ -840,6 +843,7 @@ model AgentSession {
   user           User            @relation(fields: [userId], references: [id], onDelete: Cascade)
   researchObject ResearchObject? @relation(fields: [researchObjectId], references: [id], onDelete: Cascade)
   tasks          AgentTask[]
+  ingestionBatch IngestionBatch?
 
   @@index([userId])
   @@map("agent_sessions")
@@ -861,6 +865,7 @@ model AgentTask {
 
   session   AgentSession   @relation(fields: [sessionId], references: [id], onDelete: Cascade)
   approvals ToolApproval[]
+  ingestionTask IngestionTask?
 
   @@index([sessionId])
   @@map("agent_tasks")
@@ -889,6 +894,56 @@ enum AgentTaskStatus {
   running
   succeeded
   failed
+}
+
+enum IngestionTaskState {
+  queued
+  uploading
+  stored
+  parsing
+  needs_review
+  confirmed
+  written
+  failed_retryable
+  failed_blocked
+}
+
+model IngestionBatch {
+  id               String   @id @default(uuid()) @db.Uuid
+  researchObjectId String   @map("research_object_id") @db.Uuid
+  userId           String   @map("user_id") @db.Uuid
+  agentSessionId   String?  @unique @map("agent_session_id") @db.Uuid
+  idempotencyKey   String?  @unique @map("idempotency_key")
+  createdAt        DateTime @default(now()) @map("created_at")
+  updatedAt        DateTime @updatedAt @map("updated_at")
+
+  researchObject ResearchObject  @relation(fields: [researchObjectId], references: [id], onDelete: Cascade)
+  user           User            @relation(fields: [userId], references: [id], onDelete: Restrict)
+  agentSession   AgentSession?   @relation(fields: [agentSessionId], references: [id], onDelete: SetNull)
+  tasks          IngestionTask[]
+
+  @@index([researchObjectId])
+  @@map("ingestion_batches")
+}
+
+model IngestionTask {
+  id          String             @id @default(uuid()) @db.Uuid
+  batchId     String             @map("batch_id") @db.Uuid
+  artifactId  String             @map("artifact_id") @db.Uuid
+  agentTaskId String?            @unique @map("agent_task_id") @db.Uuid
+  state       IngestionTaskState @default(queued)
+  retryCount  Int                @default(0) @map("retry_count")
+  error       String?
+  createdAt   DateTime           @default(now()) @map("created_at")
+  updatedAt   DateTime           @updatedAt @map("updated_at")
+
+  batch    IngestionBatch @relation(fields: [batchId], references: [id], onDelete: Cascade)
+  artifact Artifact       @relation(fields: [artifactId], references: [id], onDelete: Restrict)
+  agentTask AgentTask?     @relation(fields: [agentTaskId], references: [id], onDelete: SetNull)
+
+  @@unique([batchId, artifactId])
+  @@index([batchId])
+  @@map("ingestion_tasks")
 }
 
 // --- P1D-5：AI 发布审核记录（§15 AIReview + §11.1 硬阻断 + §11.3 稳定可引用）---

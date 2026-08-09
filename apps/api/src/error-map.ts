@@ -1,5 +1,5 @@
 import { AuthError, type AuthErrorCode } from '@openscience/auth';
-import { AgentError, AppealError, ApprovalError, ArtifactError, AuthorError, BranchError, CommitError, ForkError, IssueError, LicenseError, NotificationError, PrError, PublishError, ResearchObjectError, ReviewError, UsageError, VisibilityError, WorkspaceError, type WorkspaceErrorCode } from '@openscience/domain';
+import { AgentError, AppealError, ApprovalError, ArtifactError, AuthorError, BranchError, CommitError, ForkError, IngestionError, IssueError, LicenseError, NotificationError, PrError, PublishError, ResearchObjectError, ReviewError, UsageError, VisibilityError, WorkspaceError, type WorkspaceErrorCode } from '@openscience/domain';
 import { buildErrorBody, type ErrorBody } from '@openscience/observability';
 
 const AUTH_ERROR_HTTP: Record<AuthErrorCode, number> = {
@@ -137,6 +137,14 @@ const AGENT_ERROR_HTTP: Record<AgentError['code'], number> = {
   ILLEGAL_TRANSITION: 409, // 任务状态机非法迁移
 };
 
+const INGESTION_ERROR_HTTP: Record<IngestionError['code'], number> = {
+  INGESTION_NOT_FOUND: 404,
+  PROCESSING_CONSENT_REQUIRED: 400,
+  UNSUPPORTED_INGESTION_FORMAT: 415,
+  INGESTION_NOT_RETRYABLE: 409,
+  VALIDATION_ERROR: 400,
+};
+
 const APPROVAL_ERROR_HTTP: Record<ApprovalError['code'], number> = {
   NOT_FOUND: 404,
   FORBIDDEN: 403,
@@ -213,6 +221,9 @@ export function httpStatusForError(err: unknown, requestId?: string): { status: 
   }
   if (err instanceof AgentError) {
     return { status: AGENT_ERROR_HTTP[err.code], body: buildErrorBody(err.code, err.message, requestId) };
+  }
+  if (err instanceof IngestionError) {
+    return { status: INGESTION_ERROR_HTTP[err.code], body: buildErrorBody(err.code, err.message, requestId) };
   }
   if (err instanceof ApprovalError) {
     return { status: APPROVAL_ERROR_HTTP[err.code], body: buildErrorBody(err.code, err.message, requestId) };

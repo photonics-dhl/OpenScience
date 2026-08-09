@@ -186,3 +186,7 @@ export {
 } from './sandbox/quota';
 export { onSandboxJobCompleted } from './sandbox/events';
 export { checkPythonScript, modifyScriptStub, type PolicyCheckResult } from './sandbox';
+export { IngestionError, type IngestionErrorCode } from './ingestion/errors';
+export { INGESTION_EXTENSIONS, assertSupportedIngestionFile } from './ingestion/format-policy';
+export { INGESTION_TASK_STATES, type IngestionTaskState, type IngestionFileInput, type IngestionTaskView, type IngestionBatchView } from './ingestion/ingestion-types';
+export { createIngestionBatch, getIngestionBatch, retryIngestionTask, type IngestionDeps } from './ingestion/ingestion-service';

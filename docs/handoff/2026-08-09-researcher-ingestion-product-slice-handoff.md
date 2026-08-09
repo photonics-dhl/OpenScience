@@ -1,11 +1,11 @@
 # Handoff — 2026-08-09 researcher ingestion product slice
 
-- **Current goal:** 完成研究者导入产品切片；Task 1、Task 2 已完成且独立复审 READY，Task 3 多格式 ingestion pipeline 启动。
+- **Current goal:** 完成研究者导入产品切片；Task 1–2 已完成，Task 3 多格式 ingestion pipeline 已实现并等待独立复审。
 - **Done:** 四个 UI 原语、设计 token、Figma foundations 与三视口门禁；邮箱验证码注册、登录、真实 Dashboard；同源 `/api`/CSRF；多文件 Artifact 上传后写入首个不可变 Commit；真实 Next→Fastify 验证码注册 smoke。
 - **Figma IDs:** components `StatusBadge 101:38`、`ProgressRail 101:43`、`Dropzone 101:51`、`EvidenceCard 101:57`；screens `101:69`、`101:73`、`101:77`、`101:81`、`101:85`、`101:89`；file key `rWS3seZaDMdlnSljqktMDp`。
 - **Constraints:** 不读取/打印 `.env`；代码 token 为 canonical；不在 Task 1 实现 Auth、Dashboard、ingestion API、Hermes 业务页或 Workspace。
-- **Open risks:** 迁移 22–24 均未部署，Task 3 还会新增迁移，必须统一在云上迁移门禁验证；浏览器测试暴露既存 next-intl dotted-key 警告；Code Connect 仍受套餐门禁。
-- **Next action:** 按 Task 3 brief 先写 PDF/DOCX/TeX/Markdown/图片、consent、授权与 retry 的红态测试，再实现 ingestion batch/task 与 AgentTask 异步边界。
+- **Open risks:** 迁移 22–25 均未部署，Task 3 的真实 PG/Redis/MinIO integration 必须在云上迁移门禁验证；浏览器测试暴露既存 next-intl dotted-key 警告；Code Connect 仍受套餐门禁。
+- **Next action:** 运行 Task 3 全量门禁并做独立 scoped review；通过后在云上备份、apply 迁移 22–25、执行 ingestion integration，再进入 Task 4 Hermes evidence confirmation。
 - **Read first:** `AGENTS.md` → `docs/OpenScience_Kimi_Development_Spec.md` → 本 handoff → `docs/progress.md` → `project_index.md` → researcher ingestion design/plan。
 
 ## Task 2 fix round 3/5

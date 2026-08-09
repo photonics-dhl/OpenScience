@@ -75,10 +75,10 @@
 - `POST /ingestion/:taskId/retry` retries only retryable failures.
 - Supported extensions/MIME policy is centralized in `format-policy.ts`; unsupported files return a typed error.
 
-- [ ] **Step 1: Write failing API/domain tests for PDF, DOCX, TeX, Markdown, image acceptance; unsupported-type rejection; consent requirement; workspace authorization; retry semantics.**
-- [ ] **Step 2: Run focused tests to verify the new route and task model fail.**
-- [ ] **Step 3: Add the idempotent ingestion task model and service, reusing existing Artifact storage and quota/security guards.**
-- [ ] **Step 4: Register the route and enqueue extraction jobs without exposing provider credentials or raw file contents in logs.**
+- [x] **Step 1: Write failing API/domain tests for PDF, DOCX, TeX, Markdown, image acceptance; unsupported-type rejection; consent requirement; workspace authorization; retry semantics.**
+- [x] **Step 2: Run focused tests to verify the new route and task model fail.**
+- [x] **Step 3: Add the idempotent ingestion task model and service, reusing existing Artifact storage and quota/security guards.**
+- [x] **Step 4: Register the route and enqueue extraction jobs without exposing provider credentials or raw file contents in logs.**
 - [ ] **Step 5: Apply the migration in the cloud staging/production runbook only after build and integration gates pass.**
 - [ ] **Step 6: Sync docs and commit `feat(api): add multi-format ingestion tasks`.**
 

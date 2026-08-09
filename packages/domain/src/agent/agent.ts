@@ -204,6 +204,7 @@ export async function markTaskProgress(
     if (input.progress !== undefined && input.progress >= (task.progress ?? 0)) {
       await deps.prisma.agentTask.update({ where: { id: task.id }, data: { progress: input.progress } });
     }
+    await syncIngestionState(deps, task.id, input.status, input.error);
     return taskToView(task);
   }
 
@@ -220,7 +221,21 @@ export async function markTaskProgress(
       ...(input.error !== undefined ? { error: input.error } : {}),
     },
   });
+  await syncIngestionState(deps, task.id, input.status, input.error);
   return taskToView(updated);
+}
+
+async function syncIngestionState(
+  deps: AgentDeps,
+  agentTaskId: string,
+  status: AgentTaskStatus,
+  error?: string | null,
+): Promise<void> {
+  const state = status === 'running' ? 'parsing' : status === 'succeeded' ? 'needs_review' : status === 'failed' ? 'failed_retryable' : 'queued';
+  await deps.prisma.ingestionTask.updateMany({
+    where: { agentTaskId },
+    data: { state, ...(status === 'failed' ? { error: error ?? 'Extraction failed' } : { error: null }) },
+  });
 }
 
 function taskToView(task: {

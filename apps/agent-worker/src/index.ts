@@ -47,9 +47,8 @@ export async function createPollOnce(handlers: Record<string, TaskHandler>): Pro
       await markTaskProgress(deps, { taskId, status: 'succeeded', progress: 100, result });
       return true;
     } catch (e) {
-      await deps.prisma.agentTask.update({
-        where: { id: taskId },
-        data: { status: 'failed', error: e instanceof Error ? e.message.slice(0, 1000) : String(e) },
+      await markTaskProgress(deps, {
+        taskId, status: 'failed', error: e instanceof Error ? e.message.slice(0, 1000) : String(e),
       }).catch(() => undefined);
       return true;
     } finally {

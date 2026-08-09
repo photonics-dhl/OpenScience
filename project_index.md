@@ -24,6 +24,8 @@
 | `GET /research-objects` / `GET /agent/tasks` | Dashboard 真实数据合同：仅成员 Workspace 的 RO 与当前用户 AgentTask，可按 actionable 过滤 | 活接口 |
 | `apps/web/test/auth-dashboard.test.tsx` / `apps/web/test/e2e/auth-dashboard.spec.ts` | Auth/Dashboard 单元合同与 clean-browser 桌面/移动 E2E；实际选择多文件并断言 Artifact→Commit 引用 | 活文档 |
 | `apps/web/playwright{,.signup}.config.ts` / `apps/web/test/e2e/signup-live.spec.ts` / `apps/api/test/support/signup-smoke-server.mjs` | 可重复浏览器门禁；signup smoke 启动编译 Fastify auth 路由和真实 Next rewrite，验证验证码、Cookie 与 `/auth/me`，不使用 API route mock | 测试工具 |
+| `packages/domain/src/ingestion/` / `apps/api/src/routes/ingestion.ts` | 多格式 ingestion 格式策略、批次/任务状态机、Artifact + AgentTask 异步边界，以及 consent/status/retry API | 执行中 |
+| `packages/domain/test/ingestion-service.test.ts` / `apps/api/test/ingestion.integration.test.ts` | PDF/DOCX/TeX/Markdown/图片、consent、越权、幂等恢复、worker 状态同步与云上真实 PG/Redis/MinIO 合同 | 测试工具 |
 | `packages/database/test/signup-challenge-migration{,.integration}.test.ts` | migration 23 SQL 顺序门禁与真实 PostgreSQL 预存重复 active challenge 收敛验收 | 测试工具 |
 | `apps/web/lib/api.ts` / `apps/web/next.config.mjs` / `infra/nginx/openscience.conf` | web 同源 `/api` 传输层：开发 rewrite、生产反代、受保护写请求 CSRF 获取与一次刷新重试 | 活文档 |
 | `apps/web/test/ingestion-foundations.test.ts` / `apps/web/test/visual/ingestion-shots.mjs` / `apps/web/app/{%5Fvisual,_visual}/ingestion-foundations/page.tsx` | 研究者导入视觉地基 TDD 合同与 1440/768/375 三视口浏览器截图门禁；脚本访问仅开发态可用的真实编译原语预览 | 活文档 |
@@ -242,7 +244,7 @@
 | `infra/nginx/` | 反代配置：`portainer.conf`（portainer.428312321.xyz → 127.0.0.1:9443，LE 证书 + WebSocket，2026-07-31；2026-08-01 追加 /nav/ 导航页、/monitor/→Netdata、/traffic/→vnStat 账单页，basic_auth）+ `openscience.conf`（OpenScience.428312321.xyz → 127.0.0.1:3001，P1A-8：/admin basic_auth + XFF 透传） | 均已部署云上并启用（openscience.conf 2026-08-03） |
 | `infra/www/` | `nav/index.html` 服务器面板导航静态页（/var/www/nav，2026-08-01） | 已部署云上 |
 | `infra/sandbox/` | 沙箱配置占位（P1A-1） | 骨架 |
-| `infra/migrations/` | Prisma 迁移 1–24（既有 1–21 + signup challenge 两迁移 + `20260809033000_ingestion_idempotency` RO/Artifact 重放安全），各附 rollback.sql | 迁移 1–21 已云上 deploy；22–24 待本切片部署 |
+| `infra/migrations/` | Prisma 迁移 1–25（既有 1–21 + signup challenge 两迁移 + ingestion 幂等与 `20260809040000_ingestion_tasks` 批次/任务状态机），各附 rollback.sql | 迁移 1–21 已云上 deploy；22–25 待本切片部署 |
 | `infra/schema.prisma` | Prisma schema（`app_meta` 基线模型，P1A-2；2026-08-06 补 `SandboxJob`/`SandboxArtifact`/`SandboxJobStatus`，对齐迁移 20/21 DDL，P1E） | 已实现 |
 
 ## .agents/skills/（项目级 Skills，Spec §20.3）
