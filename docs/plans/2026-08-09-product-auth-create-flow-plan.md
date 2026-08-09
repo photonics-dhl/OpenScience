@@ -76,29 +76,29 @@
 - Consumes: `POST /api/auth/register`, `POST /api/auth/verify-email`, `POST /api/auth/resend-code`, `POST /api/auth/login`, `POST /api/auth/logout`, and `GET /api/auth/me`.
 - Produces: `registerAccount`, `verifyAccount`, `loginAccount`, `logoutAccount`, `getCurrentUser`, and three accessible identity pages.
 
-- [ ] **Step 1: Write failing identity-flow tests**
+- [x] **Step 1: Write failing identity-flow tests**
 
   Cover field labels, invite code requirement, password policy help, verification-code resend, error-code mapping, safe `next` redirect restricted to same-origin paths, submitting state, and keyboard-visible validation summaries.
 
-- [ ] **Step 2: Run the focused test and verify RED**
+- [x] **Step 2: Run the focused test and verify RED**
 
   Run `npx pnpm@9.15.0 --filter @openscience/web test -- auth-flow.test.tsx` and require module/route failures.
 
-- [ ] **Step 3: Implement the API adapters and pages**
+- [x] **Step 3: Implement the API adapters and pages**
 
   Keep forms as client components within a shared dark observatory identity shell. On registration success route to `/verify-email?email=<encoded-email>&next=<safe-path>`; on verification or login success route to the safe `next` value or `/dashboard`. Map `INVITATION_INVALID`, `INVITATION_EMAIL_MISMATCH`, `ACCOUNT_NOT_ACTIVE`, `INVALID_CREDENTIALS`, `CODE_INVALID`, `CODE_EXPIRED`, and rate-limit errors to concise bilingual messages without exposing server internals.
 
-- [ ] **Step 4: Connect Landing identity entry points**
+- [x] **Step 4: Connect Landing identity entry points**
 
   Make Log in route to `/login`; make Create route to `/register?next=/research-objects/new`; retain Explore as an anonymous path.
 
-- [ ] **Step 5: Verify identity UI**
+- [x] **Step 5: Verify identity UI**
 
   Run focused tests, all Web tests, Web typecheck, and a Playwright keyboard smoke covering Login → Register → Verify navigation without submitting credentials.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
-  Commit message: `feat(web): add invited identity flow`.
+  Commit: `6540d2d feat(web): add invited identity flow`.
 
 ### Task 3: Authenticated Dashboard data contract
 

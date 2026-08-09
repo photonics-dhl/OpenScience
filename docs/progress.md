@@ -1,5 +1,14 @@
 # OpenScience (XGS) 进度日志
 
+## 2026-08-09（产品闭环 Task 2）— 邀请身份流程已实现
+
+- **✅ 身份闭环**：新增 `/login`、`/register`、`/verify-email`，真实连接注册、验证、重发、登录、登出和 `/auth/me`；会话仍由 HTTP-only Cookie 管理。
+- **✅ 安全与恢复**：`safeNextPath` 阻断外部/协议相对跳转；服务器错误码映射为中英双语可恢复提示，不暴露后端诊断；表单包含提交锁、`aria-live` 与浏览器 autocomplete。
+- **✅ 产品视觉**：身份页沿用深墨 Living Research Observatory，桌面为研究命题与身份表单双栏，移动端重排为价值 → 身份表单；Landing 创建入口改为受邀注册。
+- **✅ TDD / 构建**：身份测试先 5/5 RED 后 5/5 GREEN；全量 Web 80/80、typecheck、Next build 通过。三个身份路由浏览器状态均 200、无 `MISSING_MESSAGE`、无 console error；键盘焦点可达字段。
+- **✅ 提交**：`6540d2d feat(web): add invited identity flow`。
+- **⏳ 下一步**：Task 3 增加成员范围内的 RO 列表合同，并把 Dashboard 的 Figma 样例替换为真实会话、Workspace、RO 和 actionable notifications 数据。
+
 ## 2026-08-09（产品闭环 Task 1）— 同源 API 与 CSRF transport 已实现
 
 - **✅ RED → GREEN**：新增 `apps/web/test/api-client-contract.test.ts`；先验证 5 项预期失败，再实现后 6/6 通过。

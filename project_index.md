@@ -24,6 +24,8 @@
 | `apps/web/components/landing/Hero.tsx` | Landing 页 Hero（ro-loop 无缝循环视频主视觉 + poster/reduced-motion 降级、i18n 文案、双 CTA、landing-reveal 进入 stagger；2026-08-07 v2：符号放大 118vh + 光晕 + 深羽化 mask + contrast 滤镜消方框感，底部三柱核心思想条 01 结构化/02 可验证/03 自进化） | 活文档 |
 | `apps/web/components/landing/EvidenceField.tsx` | Landing/驾驶舱共用的确定性证据环境层：18 个 aria-hidden 蓝色粒子与两条低对比轨迹，支持 reduced-motion 静态降级（Task 2 首个网页切片，2026-08-09） | 活文档 |
 | `apps/web/app/dashboard/page.tsx` | Dashboard 入口，承载 action-first Research Cockpit（稳定 RO ID、Hermes 状态、任务中心；Task 2 首个网页切片，2026-08-09） | 活文档 |
+| `apps/web/app/{login,register,verify-email}/page.tsx` + `components/auth/` + `lib/auth.ts` | 邀请注册、邮箱验证、登录/登出、HTTP-only session 客户端与观测台身份 UI（6540d2d） | 活文档 |
+| `apps/web/test/auth-flow.test.tsx` | 安全 next 跳转、错误码脱敏映射和三身份表单可访问性合同 | 已实现（6540d2d） |
 | `apps/web/components/dashboard/DashboardShell.tsx` | Dashboard 科研驾驶舱交互壳：唯一下一步行动、RO focus card、任务 rail、workspace 路由入口与受控证据层 | 活文档 |
 | `apps/web/components/workspace/WorkspaceContext.tsx` | 统一 RO Workspace 上下文契约：`roId`、`versionId`、`workspaceId`、`mode`、`permission` | 活文档 |
 | `apps/web/components/workspace/WorkspaceModeNav.tsx` | Workspace 六模式桌面导航与移动端入口：overview / sdf / artifacts / versions / collaboration / public | 活文档 |
