@@ -78,6 +78,25 @@ services:
       - data_net
     restart: unless-stopped
 
+  agent-worker:
+    # Hermes ingestion consumer; no host port, only app/data network access.
+    image: node:22
+    working_dir: /opt/openscience/apps/agent-worker
+    volumes:
+      - /opt/openscience:/opt/openscience
+    command: ["node", "dist/index.js"]
+    env_file:
+      - /opt/openscience/.env.prod
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - app_net
+      - data_net
+    restart: unless-stopped
+
   web:
     image: node:22
     ports:

@@ -8,6 +8,7 @@
 
 - [ ] 目标 release ref 已 CI 绿灯（lint/typecheck/unit/build）
 - [ ] 云上集成测试已全绿（`test:integration`，跑前全量 `build`）
+- [ ] `agent-worker` 解析服务已包含在生产 compose，且 parser 依赖可在服务器 release 目录解析
 - [ ] 巡检基线 `infra/scripts/checkup.sh` 无告警
 - [ ] 备份确认（`docs/runbooks/backup-restore.md`）
 - [ ] P1A-8 追加：API 反代 `infra/nginx/openscience.conf` 的 SSL 证书已签发（`~/.acme.sh`）
@@ -60,6 +61,15 @@ ssh-run.sh "cd /opt/openscience && node scripts/seed-quota.mjs --confirm"   # P1
 ssh-run.sh "systemctl restart openscience-api"
 ```
 
+### 2.6 验证 Hermes worker
+
+```bash
+ssh-run.sh "cd /opt/openscience && docker compose --env-file /opt/openscience/.env.prod -f infra/compose/docker-compose.prod.yml ps api web agent-worker postgres redis"
+ssh-run.sh "cd /opt/openscience && docker compose --env-file /opt/openscience/.env.prod -f infra/compose/docker-compose.prod.yml logs --tail=100 agent-worker"
+```
+
+预期：`agent-worker` 为 `Up`，日志出现启动行，不出现 `Cannot find module`、Prisma schema 或 Redis 连接错误。
+
 ## 3. 回滚步骤
 
 - 代码回滚：`node scripts/cloud-sync.mjs` 同步旧 release ref，重新 install + build，重启服务。
@@ -74,3 +84,4 @@ ssh-run.sh "systemctl restart openscience-api"
 - 安全响应头：`curl -sI https://OpenScience.428312321.xyz/auth/me` → 含 `X-Content-Type-Options: nosniff`、CSP `default-src 'none'`
 - 限流：连续打 `/auth/login` 5+ 次 → 429 + `Retry-After`
 - 巡检复跑：`infra/scripts/checkup.sh` 无新增告警
+- worker 验证：按 §2.6 执行，确认 parser 依赖在服务器可加载；图片 OCR 服务未通过独立验收前不得解除生产门禁。
