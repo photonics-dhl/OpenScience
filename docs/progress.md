@@ -1,5 +1,11 @@
 # OpenScience (XGS) 进度日志
 
+## 2026-08-09（生产部署诊断）— Web 容器未重建导致公网仍为旧前端
+
+- **部署尝试 2**：API healthcheck 修复后生产栈启动成功，API 变为 healthy；公网 `/` 200，但新 `/dashboard` 与 `/workspace` 仍 404。
+- **根因**：Web 容器使用源码 volume，`docker compose up -d` 未检测到配置变化而复用旧容器/Next 进程；远端新 build 的 `.next` 未被当前进程重新加载。
+- **✅ 修复**：`deploy.sh` 生产栈命令改为显式 `--env-file ... up -d --force-recreate`，保证 Web/API 都从本次构建产物启动；待提交后重试公网验收。
+
 ## 2026-08-09（生产部署诊断）— compose env-file 缺失
 
 - **部署尝试**：同步代码与远端全量 build 成功；生产栈启动在 compose 插值阶段停止，错误为 `POSTGRES_PASSWORD required`。没有重启容器、没有执行迁移、没有改变数据库。

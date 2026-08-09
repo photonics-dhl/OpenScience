@@ -251,7 +251,7 @@
 | `infra/scripts/traffic-report.sh` | vnStat JSON → 流量账单静态页渲染（cron 每 5min，2026-08-01） | 已部署云上 |
 | `infra/scripts/with-proxy.sh` | 代理兜底包装：隧道可用走 v2ray、失效回落直连（云上 `/usr/local/bin/with-proxy`，2026-08-01） | 已部署云上 |
 | `infra/scripts/proxy-tunnel.sh` / `proxy-tunnel.vbs` | 本机侧 SSH 反向隧道常驻（Windows 计划任务 `OpenScience-ProxyTunnel` 登录自启 + 断线重连，2026-08-01） | 已启用 |
-| `infra/scripts/deploy.sh` | 部署脚本：同步、全量 build、可选迁移、生产 compose、nginx 验证；显式传入 `/opt/openscience/.env.prod` 避免生产变量插值为空（2026-08-09） | Phase 1A，待本轮生产重试 |
+| `infra/scripts/deploy.sh` | 部署脚本：同步、全量 build、可选迁移、生产 compose、nginx 验证；显式传入 `/opt/openscience/.env.prod` 并 `--force-recreate` 确保新 `.next` 生效（2026-08-09） | Phase 1A，待本轮生产重试 |
 | `infra/compose/` | `docker-compose.dev.yml` 开发栈（postgres:16/redis:7/minio + minio-init，端口仅 127.0.0.1，P1A-2）；`docker-compose.monitor.yml` 监控栈（netdata + vnstat，2026-08-01）；`docker-compose.prod.yml` 生产栈（data_net/app_net 分段，数据服务不绑公网，api node:22、web node:22，API healthcheck 使用 Node fetch 适配无 wget 镜像，web 通过 `npm run start` 使用 apps/web 本地 next binary 启动，P1A-9） | dev 本机未起栈；监控栈已部署云上；生产栈已部署云上（2026-08-03），待本轮修复部署 |
 | `infra/nginx/` | 反代配置：`portainer.conf`（portainer.428312321.xyz → 127.0.0.1:9443，LE 证书 + WebSocket，2026-07-31；2026-08-01 追加 /nav/ 导航页、/monitor/→Netdata、/traffic/→vnStat 账单页，basic_auth）+ `openscience.conf`（OpenScience.428312321.xyz → 127.0.0.1:3001，P1A-8：/admin basic_auth + XFF 透传） | 均已部署云上并启用（openscience.conf 2026-08-03） |
 | `infra/www/` | `nav/index.html` 服务器面板导航静态页（/var/www/nav，2026-08-01） | 已部署云上 |

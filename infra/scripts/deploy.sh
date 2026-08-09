@@ -118,7 +118,7 @@ fi
 
 # 4. 生产栈
 log "[5] 生产栈 up..."
-run_remote "cd $REMOTE_ROOT && docker compose --env-file $PROD_ENV -f $COMPOSE_FILE up -d" || exit 1
+run_remote "cd $REMOTE_ROOT && docker compose --env-file $PROD_ENV -f $COMPOSE_FILE up -d --force-recreate" || exit 1
 
 # 5. nginx 反代 + /admin basic_auth（P1A-8）
 log "[6] nginx 反代部署..."
