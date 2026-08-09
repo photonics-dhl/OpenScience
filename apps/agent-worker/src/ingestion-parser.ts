@@ -1,8 +1,31 @@
 import { extname } from 'node:path';
+import { PDFParse } from 'pdf-parse';
+import mammoth from 'mammoth';
 
 export type ParsedIngestion =
-  | { status: 'ready'; text: string; format: 'md' | 'tex' }
+  | { status: 'ready'; text: string; format: string }
   | { status: 'needs_review'; format: string; reason: string };
+
+export interface IngestionAdapters {
+  pdf?: (content: Buffer) => Promise<string>;
+  docx?: (content: Buffer) => Promise<string>;
+}
+
+export function createDefaultIngestionAdapters(): IngestionAdapters {
+  return {
+    pdf: async (content) => {
+      const parser = new PDFParse({ data: content });
+      try {
+        return (await parser.getText()).text;
+      } finally {
+        await parser.destroy();
+      }
+    },
+    docx: async (content) => (await mammoth.extractRawText({ buffer: content })).value,
+  };
+}
+
+const MAX_PARSER_INPUT = 20 * 1024 * 1024;
 
 /**
  * 将已通过上传内容门禁的 Blob 转成 Hermes 可消费的正文。
@@ -21,4 +44,26 @@ export function parseIngestion(filename: string, content: Buffer): ParsedIngesti
     format: extension.slice(1) || 'unknown',
     reason: 'binary-parser-not-mounted',
   };
+}
+
+/** Controlled binary parser seam. Adapters are injected by the worker composition root. */
+export async function parseIngestionWithAdapters(
+  filename: string,
+  content: Buffer,
+  adapters: IngestionAdapters,
+): Promise<ParsedIngestion> {
+  if (content.byteLength > MAX_PARSER_INPUT) {
+    return { status: 'needs_review', format: extname(filename).slice(1).toLowerCase() || 'unknown', reason: 'parser-input-too-large' };
+  }
+  const extension = extname(filename).toLowerCase();
+  const adapter = extension === '.pdf' ? adapters.pdf : extension === '.docx' ? adapters.docx : undefined;
+  if (!adapter) return parseIngestion(filename, content);
+  let text: string;
+  try {
+    text = (await adapter(content)).trim();
+  } catch {
+    return { status: 'needs_review', format: extension.slice(1), reason: 'parser-failed' };
+  }
+  if (!text) return { status: 'needs_review', format: extension.slice(1), reason: 'empty-parsed-text' };
+  return { status: 'ready', text, format: extension.slice(1) };
 }

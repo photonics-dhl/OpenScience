@@ -11,6 +11,7 @@
 - **worker 桥接**：新增 Artifact→Blob→解析器路径；Markdown/TeX 进入 Hermes 正文提取，PDF/Office/图片在未挂载受控解析器时明确返回 `needs_review`，不再因 payload 只有 ID 而必然抛出“缺少正文”。
 - **本轮门禁**：全仓 `test`、`build`、`lint`、`docs:lint`、`audit:docs-sync` 均通过；工作树干净。该证据仍不等同于生产 AV、二进制 parser 或隔离 PG/Redis/MinIO 验收。
 - **失败分类**：永久阻断错误使用 `[blocked]` 标记并同步为 `failed_blocked`；该状态不会进入普通 retry 路径，新增 agent 状态机回归测试通过。
+- **二进制 parser**：worker 已接入受控 `pdf-parse@2.4.5` 与 `mammoth@1.12.0` adapter；PDF/DOCX 解析失败或超过 20 MiB parser 输入上限时转为 `needs_review`，不让解析异常打崩消费循环。当前仍需真实 PDF/DOCX fixtures、图片 OCR 策略与生产 quarantine/AV。
 - **验证证据**：修复前全仓 test、build、lint、docs lint、docs-sync 均通过，但深度复审证明“测试绿不等于合同完整”；后续必须增加权限、内容伪装、流式上限、队列 claim/outbox 与真实 Artifact extraction 门禁后重新跑全量。
 - **下一步**：挂载受控 PDF/DOC/DOCX/ZIP/图片解析器与完整 quarantine/AV adapter；增加跨服务 upload→worker→needs_review 与隔离数据库 migration/rollback 证据。未通过新一轮独立复审前不触碰云上迁移。
 

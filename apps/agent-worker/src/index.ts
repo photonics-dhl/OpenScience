@@ -3,12 +3,12 @@ import { AiGateway, OpenAiCompatProvider } from '@openscience/ai-gateway';
 import { claimAgentTask, markTaskProgress, AGENT_TASK_QUEUE, type AgentDeps } from '@openscience/domain';
 import { createStorageAdapter, getBlob, storageConfigFromEnv, streamToBuffer, type StorageAdapter } from '@openscience/storage';
 import { extractHandler } from './extractor';
-import { parseIngestion } from './ingestion-parser';
+import { createDefaultIngestionAdapters, parseIngestion, parseIngestionWithAdapters, type IngestionAdapters } from './ingestion-parser';
 import { reviewAnalyzeHandler } from './reviewer';
 import { visualizationPlanHandler } from './planner';
 
 /** 任务处理器注册表（Q4：kind → 执行函数）。 */
-export type WorkerDeps = AgentDeps & { storage?: StorageAdapter };
+export type WorkerDeps = AgentDeps & { storage?: StorageAdapter; ingestionAdapters?: IngestionAdapters };
 export type TaskHandler = (deps: WorkerDeps, task: { id: string; payload: Record<string, unknown> }) => Promise<Record<string, unknown>>;
 
 /** 构造处理器注册表（P1D-3 挂 sdf.extract；后续 5.5 审核等挂接）。 */
@@ -25,7 +25,10 @@ export function createHandlers(gateway: AiGateway): Record<string, TaskHandler> 
       const artifact = await deps.prisma.artifact.findUnique({ where: { id: artifactId } });
       if (!artifact) throw new Error('Artifact 不存在');
       const blob = await getBlob(deps.storage, artifact.blobSha256);
-      const parsed = parseIngestion(artifact.logicalPath, await streamToBuffer(blob.body));
+      const bytes = await streamToBuffer(blob.body);
+      const parsed = deps.ingestionAdapters
+        ? await parseIngestionWithAdapters(artifact.logicalPath, bytes, deps.ingestionAdapters)
+        : parseIngestion(artifact.logicalPath, bytes);
       if (parsed.status === 'needs_review') return { status: parsed.status, format: parsed.format, reason: parsed.reason };
       return extractHandler(gateway, { payload: { manuscriptText: parsed.text } });
     },
@@ -73,7 +76,7 @@ async function main(): Promise<void> {
   const prisma = createPrismaClient();
   const redis = createRedisClient();
   const storage = createStorageAdapter(storageConfigFromEnv());
-  const deps: WorkerDeps = { prisma, redis, storage, mailer: { send: async () => undefined } };
+  const deps: WorkerDeps = { prisma, redis, storage, ingestionAdapters: createDefaultIngestionAdapters(), mailer: { send: async () => undefined } };
   // Gateway（§24 占位：AI_ENABLED=false 时懒加载；生产 env 注入密钥，§17）
   const gateway = buildGateway();
   const handlers = createHandlers(gateway);
