@@ -31,7 +31,7 @@ export default function NewResearchObjectPage() {
       .then((rows) => {
         if (!active) return;
         setWorkspaces(rows);
-        setWorkspaceId(rows[0]?.id ?? '');
+        setWorkspaceId((current) => current || rows[0]?.id || '');
       })
       .catch((cause) => active && setError(cause instanceof Error ? cause.message : t('error')));
     return () => { active = false; };
@@ -40,11 +40,18 @@ export default function NewResearchObjectPage() {
   useEffect(() => {
     try {
       const saved = window.localStorage.getItem(IMPORT_CHECKPOINT_KEY);
-      if (saved) setImportCheckpoint(JSON.parse(saved) as MaterialImportCheckpoint);
+      if (saved) {
+        const checkpoint = JSON.parse(saved) as MaterialImportCheckpoint;
+        if (checkpoint.mode === mode) {
+          setImportCheckpoint(checkpoint);
+          setTitle(checkpoint.title);
+          setWorkspaceId(checkpoint.workspaceId);
+        }
+      }
     } catch {
       window.localStorage.removeItem(IMPORT_CHECKPOINT_KEY);
     }
-  }, []);
+  }, [mode]);
 
   function persistCheckpoint(checkpoint: MaterialImportCheckpoint) {
     setImportCheckpoint(checkpoint);
@@ -62,7 +69,7 @@ export default function NewResearchObjectPage() {
         return;
       }
       const result = await createResearchObjectWithMaterials(
-        { workspaceId, title },
+        { workspaceId, title, mode },
         materials,
         undefined,
         importCheckpoint,

@@ -1,4 +1,5 @@
 import type { Readable } from 'node:stream';
+import { createHash } from 'node:crypto';
 import type { StorageAdapter } from '@openscience/storage';
 import { getBlobStorageKey, putBlob, streamToBuffer } from '@openscience/storage';
 import type { AuditContext } from '@openscience/observability';
@@ -59,25 +60,24 @@ export async function createArtifact(
 
   const logicalPath = normalizeLogicalPath(input.logicalPath);
 
-  if (input.idempotencyKey) {
-    const existing = await deps.prisma.artifact.findUnique({ where: { idempotencyKey: input.idempotencyKey } });
-    if (existing) {
-      if (existing.workspaceId !== input.workspaceId || existing.uploadedBy !== input.uploadedBy || existing.logicalPath !== logicalPath) {
-        throw new ArtifactError('VALIDATION_ERROR', '幂等键已用于其他请求');
-      }
-      return {
-        artifactId: existing.id,
-        logicalPath: existing.logicalPath,
-        mimeType: existing.mimeType,
-        size: Number(existing.size),
-        blobSha256: existing.blobSha256,
-        alreadyExists: true,
-      };
-    }
-  }
-
   // 统一先转 Buffer（P1B-3 小文件单次上传）：MIME 检测会消费流，后续 putBlob 复用同一 buffer 避免读空流。
   const content = Buffer.isBuffer(input.content) ? input.content : await streamToBuffer(input.content);
+  const contentSha256 = createHash('sha256').update(content).digest('hex');
+
+  const replayExisting = async () => {
+    if (!input.idempotencyKey) return null;
+    const existing = await deps.prisma.artifact.findUnique({ where: { idempotencyKey: input.idempotencyKey } });
+    if (!existing) return null;
+    if (existing.workspaceId !== input.workspaceId || existing.uploadedBy !== input.uploadedBy || existing.logicalPath !== logicalPath || existing.blobSha256 !== contentSha256) {
+      throw new ArtifactError('VALIDATION_ERROR', '幂等键已用于其他文件内容');
+    }
+    return {
+      artifactId: existing.id, logicalPath: existing.logicalPath, mimeType: existing.mimeType,
+      size: Number(existing.size), blobSha256: existing.blobSha256, alreadyExists: true,
+    };
+  };
+  const replay = await replayExisting();
+  if (replay) return replay;
 
   // 配额（§13.3）
   await checkUploadQuota(deps, { workspaceId: input.workspaceId, fileSize: content.length });
@@ -98,7 +98,9 @@ export async function createArtifact(
   // 内容寻址去重（§7.1）+ 入库
   const blob = await putBlob(deps.storage, content);
 
-  const created = await deps.prisma.$transaction(async (tx) => {
+  let created;
+  try {
+    created = await deps.prisma.$transaction(async (tx) => {
     await tx.blob.upsert({
       where: { sha256: blob.sha256 },
       create: { sha256: blob.sha256, storageKey: getBlobStorageKey(blob.sha256), size: BigInt(blob.size) },
@@ -125,7 +127,14 @@ export async function createArtifact(
       ctx,
     );
     return artifact;
-  });
+    });
+  } catch (error) {
+    if ((error as { code?: string }).code === 'P2002' && input.idempotencyKey) {
+      const concurrentReplay = await replayExisting();
+      if (concurrentReplay) return concurrentReplay;
+    }
+    throw error;
+  }
 
   return {
     artifactId: created.id,

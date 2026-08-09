@@ -280,6 +280,8 @@ interface MaterialImportDeps {
 
 export interface MaterialImportCheckpoint {
   importId: string;
+  mode: 'blank' | 'import';
+  materialSetId: string;
   workspaceId: string;
   title: string;
   researchObject?: { id: string; workspaceId: string; version: number };
@@ -306,22 +308,34 @@ export function planMaterialLogicalPaths(materials: readonly File[]): string[] {
   });
 }
 
-function materialFingerprint(file: File): string {
-  return `${file.size}:${file.lastModified}:${file.type}`;
+async function sha256Hex(data: BufferSource): Promise<string> {
+  const digest = await crypto.subtle.digest('SHA-256', data);
+  return Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, '0')).join('');
+}
+
+async function materialFingerprint(file: File): Promise<string> {
+  return sha256Hex(await file.arrayBuffer());
 }
 
 /** Create an RO and persist every selected source file in its first immutable commit. */
 export async function createResearchObjectWithMaterials(
-  input: { workspaceId: string; title: string },
+  input: { workspaceId: string; title: string; mode?: 'blank' | 'import' },
   materials: readonly File[],
   deps: MaterialImportDeps = { create: createResearchObject, upload: uploadArtifactFile, commit: createCommit },
   prior?: MaterialImportCheckpoint,
   onCheckpoint?: (checkpoint: MaterialImportCheckpoint) => void,
 ): Promise<{ researchObject: { id: string; workspaceId: string; version: number } }> {
-  const matchesPrior = prior?.workspaceId === input.workspaceId && prior.title === input.title;
+  const mode = input.mode ?? (materials.length > 0 ? 'import' : 'blank');
+  const logicalPaths = planMaterialLogicalPaths(materials);
+  const fingerprints = await Promise.all(materials.map(materialFingerprint));
+  const materialSetId = await sha256Hex(new TextEncoder().encode(JSON.stringify(
+    logicalPaths.map((logicalPath, index) => ({ logicalPath, sha256: fingerprints[index] })),
+  )));
+  const matchesPrior = prior?.workspaceId === input.workspaceId && prior.title === input.title
+    && prior.mode === mode && prior.materialSetId === materialSetId;
   let checkpoint: MaterialImportCheckpoint = matchesPrior
     ? { ...prior, uploaded: [...prior.uploaded] }
-    : { importId: crypto.randomUUID(), workspaceId: input.workspaceId, title: input.title, uploaded: [] };
+    : { importId: crypto.randomUUID(), mode, materialSetId, workspaceId: input.workspaceId, title: input.title, uploaded: [] };
   if (!checkpoint.researchObject) {
     const created = await deps.create(input, `${checkpoint.importId}:create`);
     checkpoint = { ...checkpoint, researchObject: created.researchObject };
@@ -331,17 +345,16 @@ export async function createResearchObjectWithMaterials(
   if (!researchObject) throw new Error('Material import checkpoint is missing its research object');
   const created = { researchObject };
   if (materials.length === 0) return created;
-  const logicalPaths = planMaterialLogicalPaths(materials);
   const artifacts: ArtifactReference[] = [];
   for (const [index, file] of materials.entries()) {
     const logicalPath = logicalPaths[index];
-    const fingerprint = materialFingerprint(file);
+    const fingerprint = fingerprints[index];
     const completed = checkpoint.uploaded.find((item) => item.logicalPath === logicalPath && item.fingerprint === fingerprint);
     if (completed) {
       artifacts.push({ logicalPath: completed.logicalPath, artifactId: completed.artifactId });
       continue;
     }
-    const uploaded = await deps.upload(input.workspaceId, file, logicalPath, `${checkpoint.importId}:upload:${index}`);
+    const uploaded = await deps.upload(input.workspaceId, file, logicalPath, `${checkpoint.importId}:upload:${index}:${fingerprint}`);
     artifacts.push(uploaded);
     checkpoint = { ...checkpoint, uploaded: [...checkpoint.uploaded, { ...uploaded, logicalPath, fingerprint }] };
     onCheckpoint?.(checkpoint);

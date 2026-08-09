@@ -159,8 +159,33 @@ describe('auth API contract', () => {
 
     expect(create).toHaveBeenCalledTimes(1);
     expect(resumedUpload).toHaveBeenCalledTimes(1);
-    expect(resumedUpload).toHaveBeenCalledWith('ws-1', materials[1], 'figure.png', expect.stringMatching(/:upload:1$/));
+    expect(resumedUpload).toHaveBeenCalledWith('ws-1', materials[1], 'figure.png', expect.stringMatching(/:upload:1:[a-f0-9]{64}$/));
     expect(commit).toHaveBeenCalledOnce();
+  });
+
+  it('starts a new import when a reselected same-name file has different content', async () => {
+    const create = vi.fn()
+      .mockResolvedValueOnce({ researchObject: { id: 'ro-old', workspaceId: 'ws-1', version: 1 } })
+      .mockResolvedValueOnce({ researchObject: { id: 'ro-new', workspaceId: 'ws-1', version: 1 } });
+    let checkpoint: Parameters<typeof createResearchObjectWithMaterials>[3] = undefined;
+    await expect(createResearchObjectWithMaterials(
+      { workspaceId: 'ws-1', title: 'Same title', mode: 'import' },
+      [new File(['old'], 'paper.md')],
+      { create, upload: vi.fn().mockRejectedValue(new Error('offline')), commit: vi.fn() },
+      undefined,
+      (next) => { checkpoint = next; },
+    )).rejects.toThrow('offline');
+
+    const upload = vi.fn().mockResolvedValue({ logicalPath: 'paper.md', artifactId: 'artifact-new' });
+    await createResearchObjectWithMaterials(
+      { workspaceId: 'ws-1', title: 'Same title', mode: 'import' },
+      [new File(['new'], 'paper.md')],
+      { create, upload, commit: vi.fn().mockResolvedValue({ commit: { commitId: 'commit-new' } }) },
+      checkpoint,
+    );
+
+    expect(create).toHaveBeenCalledTimes(2);
+    expect(upload).toHaveBeenCalledWith('ws-1', expect.any(File), 'paper.md', expect.stringMatching(/:upload:0:[a-f0-9]{64}$/));
   });
 
   it('loads dashboard research and actionable tasks from real API routes', async () => {

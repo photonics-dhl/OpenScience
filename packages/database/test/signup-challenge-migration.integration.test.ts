@@ -9,6 +9,7 @@ const migrationSql = readFileSync(
   resolve(process.cwd(), '../../infra/migrations/20260809025000_signup_challenge_active_unique/migration.sql'),
   'utf8',
 );
+const migrationStatements = migrationSql.split(/;\s*(?:\r?\n|$)/).map((statement) => statement.trim()).filter(Boolean);
 
 afterAll(async () => prisma.$disconnect());
 
@@ -29,7 +30,7 @@ describe('signup active-challenge migration (real PostgreSQL)', () => {
         'INSERT INTO "signup_challenges" ("id","email","code_hash","expires_at","last_sent_at") VALUES ($1,$2,$3,CURRENT_TIMESTAMP + interval \'10 minutes\',CURRENT_TIMESTAMP)',
         newer, email, 'newer-hash',
       );
-      await tx.$executeRawUnsafe(migrationSql);
+      for (const statement of migrationStatements) await tx.$executeRawUnsafe(statement);
       const active = await tx.$queryRawUnsafe<Array<{ id: string }>>('SELECT "id" FROM "signup_challenges" WHERE "email" = $1 AND "consumed_at" IS NULL', email);
       expect(active).toEqual([{ id: newer }]);
       throw new Error(rollback);

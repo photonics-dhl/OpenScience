@@ -83,7 +83,8 @@ export async function createResearchObject(
   if (!title || title.length > 200) throw new ResearchObjectError('VALIDATION_ERROR', '标题长度需为 1-200 字符');
   const core = input.sdf?.core ?? emptyCore();
 
-  if (input.idempotencyKey) {
+  const replayExisting = async () => {
+    if (!input.idempotencyKey) return null;
     const existing = await deps.prisma.researchObject.findUnique({ where: { idempotencyKey: input.idempotencyKey } });
     if (existing) {
       if (existing.workspaceId !== input.workspaceId || existing.createdBy !== input.userId || existing.title !== title) {
@@ -91,9 +92,14 @@ export async function createResearchObject(
       }
       return { id: existing.id, workspaceId: existing.workspaceId, title: existing.title, status: existing.status, visibility: existing.visibility, version: existing.version, createdAt: existing.createdAt };
     }
-  }
+    return null;
+  };
+  const replay = await replayExisting();
+  if (replay) return replay;
 
-  const ro = await deps.prisma.$transaction(async (tx) => {
+  let ro;
+  try {
+    ro = await deps.prisma.$transaction(async (tx) => {
     const created = await tx.researchObject.create({
       data: {
         workspaceId: input.workspaceId,
@@ -123,7 +129,14 @@ export async function createResearchObject(
       ctx,
     );
     return created;
-  });
+    });
+  } catch (error) {
+    if ((error as { code?: string }).code === 'P2002' && input.idempotencyKey) {
+      const concurrentReplay = await replayExisting();
+      if (concurrentReplay) return concurrentReplay;
+    }
+    throw error;
+  }
 
   return { id: ro.id, workspaceId: ro.workspaceId, title: ro.title, status: ro.status, visibility: ro.visibility, version: ro.version, createdAt: ro.createdAt };
 }
