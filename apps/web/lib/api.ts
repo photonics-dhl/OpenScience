@@ -224,13 +224,14 @@ export async function listWorkspaces(): Promise<{ workspaces: WorkspaceApi[] }> 
   return { workspaces: await listMyWorkspaces() };
 }
 
-export async function createResearchObject(input: { workspaceId: string; title: string }, idempotencyKey = crypto.randomUUID()): Promise<{
+export async function createResearchObject(input: { workspaceId: string; title: string; sdf?: unknown }, idempotencyKey = crypto.randomUUID()): Promise<{
   researchObject: { id: string; workspaceId: string; version: number };
 }> {
+  const { workspaceId, title } = input;
   return request('/api/research-objects', {
     method: 'POST',
     headers: { 'idempotency-key': idempotencyKey },
-    body: JSON.stringify(input),
+    body: JSON.stringify({ workspaceId, title }),
   });
 }
 
