@@ -60,7 +60,7 @@ export class AiGateway {
       const isPrimary = i === this.primaryIndex;
       try {
         const result = await provider.complete({
-          model: provider.name,
+          model: provider.model,
           messages,
           temperature: opts.temperature,
           maxTokens: opts.maxTokens,
@@ -79,7 +79,7 @@ export class AiGateway {
         lastError = e;
         await this.record({
           provider: provider.name,
-          model: provider.name,
+          model: provider.model,
           inputTokens: 0,
           outputTokens: 0,
           latencyMs: Date.now() - start,

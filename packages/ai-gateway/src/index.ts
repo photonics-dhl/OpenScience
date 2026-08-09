@@ -7,6 +7,7 @@ export {
 } from './gateway';
 export {
   OpenAiCompatProvider,
+  AnthropicCompatProvider,
   type Provider,
   type ProviderConfig,
   type ProviderResult,

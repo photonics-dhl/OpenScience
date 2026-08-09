@@ -1,5 +1,5 @@
 import { createPrismaClient, createRedisClient } from '@openscience/database';
-import { AiGateway, OpenAiCompatProvider } from '@openscience/ai-gateway';
+import { AiGateway, AnthropicCompatProvider, OpenAiCompatProvider } from '@openscience/ai-gateway';
 import { claimAgentTask, markTaskProgress, AGENT_TASK_QUEUE, type AgentDeps } from '@openscience/domain';
 import { createStorageAdapter, getBlob, storageConfigFromEnv, streamToBuffer, type StorageAdapter } from '@openscience/storage';
 import { extractHandler } from './extractor';
@@ -93,15 +93,28 @@ async function main(): Promise<void> {
 }
 
 /** 从 env 构造 Gateway（AI_ENABLED=false 或缺密钥 → 占位 gateway，sdf.extract 会失败；§24 待确认）。 */
-function buildGateway() {
-  const baseUrl = process.env.MINIMAX_BASE_URL ?? 'https://api.minimax.io/v1';
-  const apiKey = process.env.MINIMAX_API_KEY ?? '';
-  const primaryModel = process.env.MINIMAX_MODEL ?? 'MiniMax-M3';
-  const fallbackModels = (process.env.AI_FALLBACK_MODELS ?? '').split(',').map((s) => s.trim()).filter(Boolean);
-  const providers = [
-    new OpenAiCompatProvider(primaryModel, { baseUrl, apiKey, model: primaryModel }),
-    ...fallbackModels.map((m) => new OpenAiCompatProvider(m, { baseUrl, apiKey, model: m })),
-  ];
+export function buildGateway(env: NodeJS.ProcessEnv = process.env, fetcher: typeof fetch = globalThis.fetch): AiGateway {
+  const primaryModel = env.MINIMAX_MODEL ?? 'MiniMax-M3';
+  const fallbackModels = (env.AI_FALLBACK_MODELS ?? '').split(',').map((s) => s.trim()).filter(Boolean);
+  const models = [primaryModel, ...fallbackModels];
+  const keys = [env.MINIMAX_API_KEY, env.MINIMAX_API_KEY_2].filter(
+    (key, index, all): key is string => Boolean(key) && all.indexOf(key) === index,
+  );
+  const configuredKeys = keys.length > 0 ? keys : [''];
+  const providers = configuredKeys.flatMap((apiKey, keyIndex) => {
+    const configuredMode = env.MINIMAX_API_MODE ?? 'auto';
+    const tokenPlan = configuredMode === 'anthropic' || (configuredMode === 'auto' && apiKey.startsWith('sk-cp-'));
+    const baseUrl = tokenPlan
+      ? env.MINIMAX_TOKEN_PLAN_BASE_URL ?? 'https://api.minimax.io/anthropic'
+      : env.MINIMAX_BASE_URL ?? 'https://api.minimax.io/v1';
+    return models.map((model, modelIndex) => {
+      const name = `minimax-key-${keyIndex + 1}-model-${modelIndex + 1}`;
+      const config = { baseUrl, apiKey, model };
+      return tokenPlan
+        ? new AnthropicCompatProvider(name, config, fetcher)
+        : new OpenAiCompatProvider(name, config, fetcher);
+    });
+  });
   return new AiGateway({ providers, logger: console });
 }
 

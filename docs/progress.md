@@ -1,5 +1,13 @@
 # OpenScience (XGS) 进度日志
 
+## 2026-08-10（生产 ingestion 基础链路与 MiniMax Token Plan 根因）— ⏳ 协议红绿完成，待部署重试
+
+- **生产证据**：当月授信批处理通过既有 domain 函数执行，`granted=2, skipped=0`；真实测试得到 CSRF=200、RO=201、ingest=202、Blob HEAD=present，worker 从队列进入 `failed_retryable`。一次性 session 已在 `finally` 销毁，测试 RO/Artifact 按不删除规则保留。
+- **根因收敛**：worker 脱敏探针显示未注入 AI 配置；MiniMax 官方最新文档进一步证明 Token Plan Subscription Key 应走 Anthropic Messages Quick Start，且与普通 pay-as-you-go API Key 不可互换。既有 worker 固定 OpenAI `/chat/completions`，调用方式确实不完整。
+- **TDD**：新增 Token Plan provider 测试先因 constructor 缺失失败；实现 `/anthropic/v1/messages`、`x-api-key`、system/text/usage 映射后 ai-gateway 10/10。worker 双 key 测试先因 `buildGateway` 缺失失败；实现自动协议识别与 key1→key2 回退后 1/1。
+- **架构修复**：Provider `name` 与 `model` 分离；日志仅记录 `minimax-key-N-model-N` 槽位和模型元数据，不记录 key、prompt 或响应正文。ADR-008 记录 Token Plan 仅作受控内测、正式多用户生产应迁移 pay-as-you-go。
+- **下一步**：全量门禁、提交、同步服务器；不读取/打印本机 `.env`，通过进程管道把 key1/key2 写入服务器 Secret，重建 worker，再对既有 `failed_retryable` 任务走正式 retry API 并验证 `needs_review/succeeded`。
+
 ## 2026-08-09（注册后 AI Credit 补齐）— ⏳ 本地红绿通过，待生产 E2E
 
 - **生产阻断**：SeaweedFS 上线后，真实 ingestion 从原先的 500 存储错误推进到 409 `INSUFFICIENT_CREDIT`；根因是邮箱确认事务只创建 Personal Workspace，没有为当月新用户执行既有月度授信规则。
