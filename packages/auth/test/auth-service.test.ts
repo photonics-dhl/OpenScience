@@ -42,6 +42,17 @@ async function seedVerifiedUser(deps: AuthDeps, db: ReturnType<typeof createFake
 }
 
 describe('register', () => {
+  it('surfaces verification delivery failure without pretending registration rolled back', async () => {
+    const { deps, db } = makeDeps();
+    seedInvitation(db);
+    deps.mailer.send = async () => { throw new Error('smtp unavailable'); };
+    await expect(register(deps, {
+      invitationCode: 'TESTCODE1234567890AB', email: 'mail-failure@example.com', password: 'passw0rd-x', displayName: 'Mail Failure',
+    })).rejects.toMatchObject({ code: 'VERIFICATION_DELIVERY_FAILED' });
+    expect(db.users).toHaveLength(1);
+    expect(db.users[0].status).toBe('invited');
+  });
+
   it('redeems a valid invitation and sends a verification code', async () => {
     const { deps, db, mailer } = makeDeps();
     seedInvitation(db);

@@ -21,11 +21,11 @@
       "verify": { "eyebrow": "邮箱验证", "title": "确认研究身份", "description": "验证码只用于激活当前邀请和个人工作区。" }
     },
     "fields": { "invitationCode": "邀请码", "displayName": "姓名", "email": "邮箱", "password": "密码", "code": "六位验证码" },
-    "actions": { "signIn": "登录", "signingIn": "正在登录…", "register": "创建受邀账户", "createAccount": "创建账户", "creating": "正在创建…", "verify": "验证并进入工作区", "verifying": "正在验证…", "resend": "重新发送验证码" },
+    "actions": { "signIn": "登录", "signingIn": "正在登录…", "register": "创建受邀账户", "createAccount": "创建账户", "creating": "正在创建…", "verify": "验证并进入工作区", "verifying": "正在验证…", "resend": "重新发送验证码", "openVerification": "打开邮箱验证页" },
     "login": { "eyebrow": "返回研究现场", "title": "登录 OpenScience", "description": "继续你的 Research Object、版本与审阅上下文。", "noAccount": "已有邀请码但尚未创建账户？" },
     "register": { "eyebrow": "受邀研究者", "title": "建立研究身份", "description": "邀请码与邮箱绑定；验证后自动建立个人工作区。", "passwordHelp": "至少 8 位，并同时包含字母和数字。", "hasAccount": "已经完成注册？" },
     "verify": { "eyebrow": "身份验证", "title": "检查你的邮箱", "description": "我们已发送六位验证码至", "resent": "新的验证码已发送。" },
-    "errors": { "invitationInvalid": "邀请码不存在、已使用或已过期。", "invitationEmailMismatch": "该邀请码与当前邮箱不匹配。", "accountNotActive": "请先完成邮箱验证。", "invalidCredentials": "邮箱或密码不正确。", "codeInvalid": "验证码不正确或尝试次数过多。", "codeExpired": "验证码已过期，请重新发送。", "rateLimited": "操作过于频繁，请稍后再试。", "unknown": "暂时无法完成请求，请稍后重试。" }
+    "errors": { "invitationInvalid": "邀请码不存在、已使用或已过期。", "invitationEmailMismatch": "该邀请码与当前邮箱不匹配。", "accountNotActive": "请先完成邮箱验证。", "invalidCredentials": "邮箱或密码不正确。", "codeInvalid": "验证码不正确或尝试次数过多。", "codeExpired": "验证码已过期，请重新发送。", "rateLimited": "操作过于频繁，请稍后再试。", "verificationDeliveryFailed": "账户已建立，但验证码发送失败。请前往验证页重新发送。", "unknown": "暂时无法完成请求，请稍后重试。" }
   },
   "dashboard": {
     "title": "研究驾驶舱",

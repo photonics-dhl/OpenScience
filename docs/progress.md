@@ -36,6 +36,12 @@
 - **✅ 邮件投递**：服务器 API 容器使用现有 `@openscience/auth` `SmtpMailer`，向用户指定的测试邮箱发送了一次性 OpenScience 邀请；终端、日志和文档均未输出邀请码或验证码。
 - **⏳ 待用户动作**：从收件箱打开 `/register`，完成邀请码注册与邮箱验证码验证；随后我继续做真实 Dashboard → 创建 RO → Workspace → 登出/再登录验收。
 
+## 2026-08-09（身份错误恢复与视觉收敛）
+
+- **✅ 根因修复**：注册事务成功但验证码 SMTP 投递失败时，旧流程把已建立的 invited 账户误呈现为泛化错误；新增 `VERIFICATION_DELIVERY_FAILED`（503）和“打开邮箱验证页”恢复入口，避免用户重复消耗邀请码。
+- **✅ 视觉重做首片**：Auth/Create 复用仓库已有 `ro-symbol.webp` 作为唯一品牌焦点；姓名/邮箱并排、表单更紧凑，移动端保持功能 parity，避免通用长表单墙。
+- **⏳ 下一步**：服务器部署该修复并继续 Dashboard/Workspace/Public RO 的同一品牌语法收敛。
+
 ## 2026-08-09（产品闭环 Task 2）— 邀请身份流程已实现
 
 - **✅ 身份闭环**：新增 `/login`、`/register`、`/verify-email`，真实连接注册、验证、重发、登录、登出和 `/auth/me`；会话仍由 HTTP-only Cookie 管理。

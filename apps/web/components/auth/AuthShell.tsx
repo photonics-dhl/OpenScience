@@ -25,6 +25,10 @@ export default function AuthShell({ eyebrow, title, description, modeLabel, home
       </header>
       <section className="auth-observatory__layout">
         <div className="auth-thesis">
+          <div className="auth-thesis__visual" aria-hidden="true">
+            <img src="/hero/ro-symbol.webp" alt="" />
+            <span className="auth-thesis__visual-label">RO / evolving research object</span>
+          </div>
           <span className="eyebrow">{eyebrow}</span>
           <h1>{title}</h1>
           <p>{description}</p>

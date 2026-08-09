@@ -104,7 +104,11 @@ export async function register(deps: AuthDeps, input: RegisterInput, ctx: AuditC
       await recordAuth(deps, { actorId: created.id, action: 'auth.register', targetType: 'user', targetId: created.id }, ctx, tx);
       return created;
     });
-    await issueVerificationCode(deps, user.id, input.email);
+    try {
+      await issueVerificationCode(deps, user.id, input.email);
+    } catch (error) {
+      throw new AuthError('VERIFICATION_DELIVERY_FAILED', '验证码发送失败，请稍后重试', error);
+    }
     return { userId: user.id, status: user.status };
   } catch (err) {
     if ((err as { code?: string })?.code === 'P2002') {

@@ -21,6 +21,7 @@ const AUTH_ERROR_KEYS: Record<string, string> = {
   CODE_INVALID: 'errors.codeInvalid',
   CODE_EXPIRED: 'errors.codeExpired',
   RATE_LIMITED: 'errors.rateLimited',
+  VERIFICATION_DELIVERY_FAILED: 'errors.verificationDeliveryFailed',
 };
 
 export function authErrorKey(code: string): string {

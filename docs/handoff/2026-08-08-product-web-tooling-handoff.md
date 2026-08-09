@@ -123,3 +123,9 @@
 
 - 已用服务器现有 `@openscience/auth` `SmtpMailer` 向用户指定的测试邮箱发送一次性邀请；没有记录或输出邀请码/验证码。
 - 下一步等待收件箱完成 `/register` → `/verify-email`，然后继续真实会话与首个 RO 的公网验收；不要在聊天中粘贴验证码或密码。
+
+## 2026-08-09 身份错误恢复与视觉 checkpoint
+
+- 根因：注册事务成功后验证码 SMTP 投递异常，旧 UI 将其泛化为“请求无法完成”；现已新增 `VERIFICATION_DELIVERY_FAILED` 503 映射，并提供直接打开验证页的恢复入口。
+- Auth/Create 首片已改为复用现有 `ro-symbol.webp` 六节点品牌资产，姓名/邮箱并排，桌面/移动端均减少长表单感；该资产是仓库既有设计资产，不是新增随机生成图。
+- 待部署并在服务器公网复验；然后继续把同一 RO/证据/版本语法推广到 Dashboard、Workspace 和 Public RO。
