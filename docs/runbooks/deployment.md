@@ -1,6 +1,6 @@
 # Runbook: 部署（Deployment）
 
-> 状态：部分填充（P1A-8 补 API 反代 + /admin basic_auth 部署步骤；CI/CD 自动化归 2.9 填充 deploy.sh）。
+> 状态：已用于 2026-08-09 生产上线（P1A-8 API 反代 + /admin basic_auth；deploy.sh 同步/全量 build/force-recreate/验证）。
 > 格式遵循 `.agents/skills/infra-runbook/SKILL.md` 四节强制要求。
 > 部署属 Spec §20.5"询问"级操作：执行前需用户确认，必须走 `infra/scripts/deploy.sh` + CI/CD，禁止手工改服务器代码。
 

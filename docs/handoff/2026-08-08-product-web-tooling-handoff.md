@@ -1,6 +1,7 @@
 # Handoff — 2026-08-08 Product Web Tooling
 
 - **Current goal:** 前端路由可访问闭环已补齐；下一阶段需在真实 API/数据库可用时做主流程 E2E。
+- **Production status:** Release `3b5a34e` 已部署并通过公网验收；API healthcheck healthy，Web 新容器已 force-recreate。
 - **Production gate:** 部署前已定位 API unhealthy 根因：compose healthcheck 调用镜像不存在的 wget；当前工作树已改为 Node fetch，待提交并按 runbook 部署。
 - **Deploy attempt:** 同步与远端 build 已通过；compose 启动因脚本遗漏 `--env-file /opt/openscience/.env.prod` 停止，未重启/迁移/改库；脚本已修复，待重新部署。
 - **Deploy attempt 2:** API healthcheck 修复后变 healthy，但 Web 容器复用旧 Next 进程导致公网仍为旧路由；部署脚本已改为 `--force-recreate`，待第三次部署验证公网新路由。
@@ -11,6 +12,7 @@
   - Task 2 验证：workspace 专测 2/2、全量 Web 13 files / 66 tests、typecheck、production build、Playwright 390×844 / 1440×900 均通过。
   - 2026-08-09 route closure：新增 Workspace overview route/component；Dashboard CTA 进入 overview；Collaboration 接入统一 shell；修复 collab 扁平 i18n 动态 key 与原始 key 暴露。
   - Route closure 验证：Web 14 files / 69 tests、typecheck、production build、docs lint/docs-sync 通过；七路 Playwright reduced-motion smoke 全部 HTTP 200、0 `MISSING_MESSAGE`、0 原始 i18n key，`FRONTEND_ROUTE_SMOKE_OK`。
+  - 线上证据：`https://OpenScience.428312321.xyz/`、`/dashboard`、`/research-objects/OS-RO-01J8YF7Q/workspace`、`/research-objects/OS-RO-01J8YF7Q/collab` 均 HTTP 200；ECS checkup 显示 API/Postgres/Redis healthy、Nginx active。
   - 产品设计 spec：`docs/specs/2026-08-08-openscience-product-web-design.md`。
   - 实施计划：`docs/plans/2026-08-08-openscience-product-web-plan.md`，用户选择 subagent-driven，但要求前置工具齐全后再执行。
   - 项目 `.mcp.json` 与 Codex `C:/Users/Mac/.codex/config.toml` 均配置 10 个 MCP：semantic-scholar、github、mermaid、memory、context7、tavily-search、figma-temp、figma-primary、shadcn、task-master-ai。

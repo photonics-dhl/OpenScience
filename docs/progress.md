@@ -1,5 +1,13 @@
 # OpenScience (XGS) 进度日志
 
+## 2026-08-09（生产上线）— 前端路由闭环已部署到 ECS
+
+- **✅ Release**：以 `3b5a34e` 执行 `infra/scripts/deploy.sh --confirm --skip-migrate`；代码同步、远端 19-workspace install、全量 build、生产栈 `--force-recreate`、Nginx `nginx -t && reload` 均通过。
+- **✅ 线上容器**：API / Postgres / Redis healthy；Web 新容器已重建并运行新 Next build；磁盘 9% 使用率、内存可用约 28GiB，Nginx active。
+- **✅ 公网验收**：Playwright reduced-motion 访问 `https://OpenScience.428312321.xyz/`、`/dashboard`、`/research-objects/OS-RO-01J8YF7Q/workspace`、`/research-objects/OS-RO-01J8YF7Q/collab` 均 HTTP 200；无 `MISSING_MESSAGE`，线上 Dashboard/Workspace 新路由已实际可见。
+- **安全边界**：本轮跳过数据库迁移（无 schema 变更）；未读取/打印 `.env`、未上传密钥；`/auth/me` 与 `/admin` 保持未登录 `401`。
+- **⏳ 下一步**：启动真实用户验收与 API-backed E2E；公开发布前仍需真实数据、登录、创建 RO、保存版本、权限和 Public RO 发布链路验证。
+
 ## 2026-08-09（生产部署诊断）— Web 容器未重建导致公网仍为旧前端
 
 - **部署尝试 2**：API healthcheck 修复后生产栈启动成功，API 变为 healthy；公网 `/` 200，但新 `/dashboard` 与 `/workspace` 仍 404。
