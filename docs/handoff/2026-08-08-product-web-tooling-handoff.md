@@ -1,5 +1,13 @@
 # Handoff — 2026-08-08 Product Web Tooling
 
+## 2026-08-09 — 验证码注册生产故障已修复
+
+- 根因是生产 Nginx 配置漂移：活动 `proxy_pass` 未带尾斜杠，`/api/auth/*` 在路由匹配前被 CSRF 拦截。
+- 已将 `deploy.sh` 从 create-if-missing 改为每次部署对账配置，服务器 `nginx -t` + reload 通过；公网申请验证码已返回 202。
+- 已补旧 invited 测试账户迁移：申请新 signup challenge，确认时更新原用户的密码/姓名/状态并创建会话，不重复创建 User。
+- 验证：Auth 21/21、routing contract 7/7、Web 86/86、全仓 build；故障登记 `.Codex/troubleshooting/issues.json` issue-004。
+- 下一步：等待用户输入最新邮件验证码完成 confirm-signup，禁止读取或记录验证码。
+
 ## 2026-08-09 — 验证码注册切片（当前交接）
 
 - **状态**：代码与本地验证完成，尚未部署本轮改动。

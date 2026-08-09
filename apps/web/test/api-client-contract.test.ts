@@ -15,6 +15,12 @@ describe('same-origin API routing contract', () => {
     expect(nginx).toMatch(/location \/api\/\s*\{[\s\S]*?proxy_pass http:\/\/127\.0\.0\.1:3001\/;/);
   });
 
+  it('reconciles the active nginx config on every production deployment', () => {
+    const deploy = readFileSync(resolve(repoRoot, 'infra/scripts/deploy.sh'), 'utf8');
+    expect(deploy).toContain('install -m 0644 $REMOTE_ROOT/infra/nginx/openscience.conf $NGINX_CONF');
+    expect(deploy).not.toContain('test -f $NGINX_CONF || cp');
+  });
+
   it('rewrites /api routes to Fastify during local Next development', () => {
     const config = readFileSync(resolve(process.cwd(), 'next.config.mjs'), 'utf8');
     expect(config).toContain("source: '/api/:path*'");

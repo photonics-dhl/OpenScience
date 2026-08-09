@@ -58,7 +58,29 @@
         "docs/plans/2026-08-08-openscience-product-web-plan.md"
       ],
       "prevention": "Treat provider payload limits as local API contracts. Validate the final serialized prompt, not only its source sections, before loading credentials or making paid requests."
+    },
+    {
+      "id": "issue-004",
+      "title": "Public signup was blocked by stale Nginx API path rewriting",
+      "date": "2026-08-09",
+      "status": "resolved",
+      "tags": [
+        "troubleshooting/auth",
+        "troubleshooting/deployment"
+      ],
+      "description": "The production registration UI repeatedly showed the generic retry error when requesting an email signup code.",
+      "root_cause": "The repository Nginx config used a trailing slash on proxy_pass to strip the browser-only /api prefix, but deploy.sh copied that config only when the target file did not exist. The active server config therefore retained /api, and Fastify's global CSRF hook rejected the request before the exempt /auth route could match.",
+      "solution": "Reconcile openscience.conf on every deployment, validate with nginx -t, reload Nginx, and allow legacy invited accounts to receive and confirm a new signup challenge without creating a duplicate user.",
+      "verification": "The active nginx -T output now contains the trailing-slash API proxy; a real public request-signup-code call returned HTTP 202 and completed without a delivery error. Auth regression tests pass 21/21 and the routing contract passes 7/7.",
+      "files": [
+        "infra/scripts/deploy.sh",
+        "infra/nginx/openscience.conf",
+        "apps/web/test/api-client-contract.test.ts",
+        "packages/auth/src/auth-service.ts",
+        "packages/auth/test/auth-service.test.ts"
+      ],
+      "prevention": "Deployment must reconcile versioned runtime configuration instead of using create-if-missing semantics. Keep the active Nginx route contract in automated tests and verify nginx -T after deployment."
     }
   ],
-  "last_updated": "2026-08-08"
+  "last_updated": "2026-08-09"
 }

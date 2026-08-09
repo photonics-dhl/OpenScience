@@ -24,7 +24,7 @@
 | `apps/web/components/landing/Hero.tsx` | Landing 页 Hero（ro-loop 无缝循环视频主视觉 + poster/reduced-motion 降级、i18n 文案、双 CTA、landing-reveal 进入 stagger；2026-08-07 v2：符号放大 118vh + 光晕 + 深羽化 mask + contrast 滤镜消方框感，底部三柱核心思想条 01 结构化/02 可验证/03 自进化） | 活文档 |
 | `apps/web/components/landing/EvidenceField.tsx` | Landing/驾驶舱共用的确定性证据环境层：18 个 aria-hidden 蓝色粒子与两条低对比轨迹，支持 reduced-motion 静态降级（Task 2 首个网页切片，2026-08-09） | 活文档 |
 | `apps/web/app/dashboard/page.tsx` | Dashboard 入口，承载 action-first Research Cockpit（稳定 RO ID、Hermes 状态、任务中心；Task 2 首个网页切片，2026-08-09） | 活文档 |
-| `apps/web/app/{login,register,verify-email}/page.tsx` + `components/auth/` + `lib/auth.ts` | 邀请注册、邮箱验证、登录/登出、HTTP-only session 客户端与观测台身份 UI（6540d2d） | 活文档 |
+| `apps/web/app/{login,register,verify-email}/page.tsx` + `components/auth/` + `lib/auth.ts` | 邮箱验证码注册、旧邀请验证兼容、登录/登出、HTTP-only session 客户端与观测台身份 UI | 活文档 |
 | `apps/web/test/auth-flow.test.tsx` | 安全 next 跳转、错误码脱敏映射和三身份表单可访问性合同 | 已实现（6540d2d） |
 | `apps/web/components/dashboard/DashboardShell.tsx` | Dashboard 科研驾驶舱交互壳：真实 session/workspace/RO/notification 数据流，loading/error/empty/ready 恢复状态，唯一下一步行动与 Workspace 路由入口 | 活文档 |
 | `apps/web/lib/api.ts` | Web 同源 API transport；CSRF 写请求保护，并提供 workspace/成员范围 RO 列表摘要合同 | 活文档 |
@@ -267,7 +267,7 @@
 | `infra/nginx/` | 反代配置：`portainer.conf`（portainer.428312321.xyz → 127.0.0.1:9443，LE 证书 + WebSocket，2026-07-31；2026-08-01 追加 /nav/ 导航页、/monitor/→Netdata、/traffic/→vnStat 账单页，basic_auth）+ `openscience.conf`（OpenScience.428312321.xyz → 127.0.0.1:3001，P1A-8：/admin basic_auth + XFF 透传；`/api/` strip-prefix） | 线上为 3b5a34e；strip-prefix 修复 1ab4b6d 待身份切片部署 |
 | `infra/www/` | `nav/index.html` 服务器面板导航静态页（/var/www/nav，2026-08-01） | 已部署云上 |
 | `infra/sandbox/` | 沙箱配置占位（P1A-1） | 骨架 |
-| `infra/migrations/` | Prisma 迁移 1–23（含 `20260809010000_ro_create_idempotency` 与 `20260809020000_signup_challenges`；均可回滚） | 23 已写入，待服务器执行 |
+| `infra/migrations/` | Prisma 迁移 1–23（含 `20260809010000_ro_create_idempotency` 与 `20260809020000_signup_challenges`；均可回滚） | 23 已在生产执行 |
 | `infra/schema.prisma` | Prisma schema（`app_meta` 基线模型，P1A-2；2026-08-06 补 `SandboxJob`/`SandboxArtifact`/`SandboxJobStatus`，对齐迁移 20/21 DDL，P1E） | 已实现 |
 
 ## .agents/skills/（项目级 Skills，Spec §20.3）
