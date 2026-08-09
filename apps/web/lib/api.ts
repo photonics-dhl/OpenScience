@@ -218,6 +218,9 @@ export async function listMyWorkspaces(): Promise<WorkspaceApi[]> {
   return result.workspaces;
 }
 
+/** Compatibility alias for a legacy create-flow route retained during rolling server sync. */
+export const listWorkspaces = listMyWorkspaces;
+
 export async function createResearchObject(input: { workspaceId: string; title: string }, idempotencyKey = crypto.randomUUID()): Promise<{
   researchObject: { id: string; workspaceId: string; version: number };
 }> {
