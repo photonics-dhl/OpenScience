@@ -95,6 +95,21 @@ model EmailVerification {
   @@map("email_verifications")
 }
 
+model SignupChallenge {
+  id          String    @id @default(uuid()) @db.Uuid
+  email       String    @db.Citext
+  codeHash    String    @map("code_hash")
+  attempts    Int       @default(0)
+  lockedUntil DateTime? @map("locked_until")
+  expiresAt   DateTime  @map("expires_at")
+  lastSentAt  DateTime  @map("last_sent_at")
+  consumedAt  DateTime? @map("consumed_at")
+  createdAt   DateTime  @default(now()) @map("created_at")
+
+  @@index([email, createdAt])
+  @@map("signup_challenges")
+}
+
 model MailOutbox {
   id        String   @id @default(uuid()) @db.Uuid
   toEmail   String   @map("to_email") @db.Citext

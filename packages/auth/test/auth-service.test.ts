@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { AuthError } from '../src/errors';
-import { getCurrentUser, login, register, resendCode, verifyEmail, type AuthDeps } from '../src/auth-service';
+import { confirmSignup, getCurrentUser, login, register, requestSignupCode, resendCode, verifyEmail, type AuthDeps } from '../src/auth-service';
 import { hashPassword } from '../src/password';
 import { createFakeMailer, createFakePrisma, createFakeRedis } from './helpers/fakes';
 
@@ -99,6 +99,27 @@ describe('register', () => {
     // 串行场景：usedBy 已写入，assertInvitationRedeemable 在 user.create 之前拒绝，故第二个用户未创建；
     // 并发竞态（两个事务都通过 assert 后才写 usedBy）由 guarded updateMany 的 count=0 兜底并回滚。
     expect(db.users.filter((u) => u.email === 'second@example.com')).toHaveLength(0);
+  });
+});
+
+describe('email-code signup', () => {
+  it('requests a code without creating a user, then confirms into a verified user', async () => {
+    const { deps, db, mailer } = makeDeps();
+    await requestSignupCode(deps, { email: 'apply@example.com', displayName: 'Applicant' });
+    expect(db.users).toHaveLength(0);
+    expect(mailer.sent[0].text).toMatch(/\d{6}/);
+    const code = mailer.sent[0].text.match(/(\d{6})/)![1];
+    const result = await confirmSignup(deps, { email: 'apply@example.com', displayName: 'Applicant', password: 'passw0rd-x', code });
+    expect(result.status).toBe('email_verified');
+    expect(db.users[0].status).toBe('email_verified');
+    expect(db.signupChallenges[0].consumedAt).not.toBeNull();
+  });
+
+  it('rejects an invalid signup code without creating a user', async () => {
+    const { deps, db } = makeDeps();
+    await requestSignupCode(deps, { email: 'invalid-code@example.com', displayName: 'Applicant' });
+    await expect(confirmSignup(deps, { email: 'invalid-code@example.com', displayName: 'Applicant', password: 'passw0rd-x', code: '000000' })).rejects.toMatchObject({ code: 'CODE_INVALID' });
+    expect(db.users).toHaveLength(0);
   });
 });
 

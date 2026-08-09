@@ -9,11 +9,12 @@ interface FakeDb {
   invitations: any[];
   emailVerifications: any[];
   mailOutbox: any[];
+  signupChallenges: any[];
 }
 
 /** 内存版 Prisma 子集：仅覆盖 auth-service 用到的调用面。 */
 export function createFakePrisma(): { prisma: PrismaClient; db: FakeDb } {
-  const db: FakeDb = { users: [], invitations: [], emailVerifications: [], mailOutbox: [] };
+  const db: FakeDb = { users: [], invitations: [], emailVerifications: [], mailOutbox: [], signupChallenges: [] };
   let seq = 0;
   const nextId = () => `00000000-0000-4000-8000-${String(++seq).padStart(12, '0')}`;
 
@@ -86,6 +87,11 @@ export function createFakePrisma(): { prisma: PrismaClient; db: FakeDb } {
         }
         return { count };
       },
+    },
+    signupChallenge: {
+      findFirst: async ({ where }: any) => db.signupChallenges.filter((c) => c.email.toLowerCase() === where.email.toLowerCase() && c.consumedAt === null).sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())[0] ?? null,
+      create: async ({ data }: any) => { const row = { id: nextId(), attempts: 0, lockedUntil: null, consumedAt: null, createdAt: new Date(), ...data }; db.signupChallenges.push(row); return row; },
+      updateMany: async ({ where, data }: any) => { let count = 0; for (const c of db.signupChallenges) if (c.id === where.id && (where.consumedAt === undefined || c.consumedAt === where.consumedAt)) { Object.assign(c, data); count++; } return { count }; },
     },
     mailOutbox: {
       create: async ({ data }: any) => {
