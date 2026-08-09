@@ -49,15 +49,44 @@ export interface ArtifactReference {
   artifactId: string;
 }
 
-async function request<T>(path: string, init?: RequestInit): Promise<T> {
+let csrfToken: string | null = null;
+
+function isProtectedWrite(path: string, init?: RequestInit): boolean {
+  const method = (init?.method ?? 'GET').toUpperCase();
+  return !['GET', 'HEAD', 'OPTIONS'].includes(method) && !path.startsWith('/api/auth/');
+}
+
+async function getCsrfToken(): Promise<string> {
+  if (csrfToken) return csrfToken;
+  const res = await fetch('/api/csrf-token', { credentials: 'include' });
+  if (!res.ok) throw new ApiClientError('CSRF_TOKEN_FAILED', `无法建立安全会话 ${res.status}`, res.status);
+  const body = await res.json() as { csrfToken: string };
+  csrfToken = body.csrfToken;
+  return csrfToken;
+}
+
+function isCsrfFailure(status: number, body?: ApiErrorBody): boolean {
+  return status === 403 && (body?.error.code.startsWith('FST_CSRF_') === true || body?.error.code.startsWith('CSRF_') === true);
+}
+
+/** Same-origin browser transport. Protected writes automatically carry the API CSRF token. */
+export async function apiRequest<T>(path: string, init?: RequestInit, csrfRetry = true): Promise<T> {
+  const headers = Object.fromEntries(new Headers(init?.headers).entries());
+  if (!headers['content-type']) headers['content-type'] = 'application/json';
+  if (isProtectedWrite(path, init)) headers['x-csrf-token'] = await getCsrfToken();
+
   const res = await fetch(path, {
-    credentials: 'include',
-    headers: { 'content-type': 'application/json', ...(init?.headers ?? {}) },
     ...init,
+    credentials: 'include',
+    headers,
   });
   if (!res.ok) {
     let body: ApiErrorBody | undefined;
     try { body = await res.json() as ApiErrorBody; } catch { /* 非 JSON */ }
+    if (csrfRetry && isProtectedWrite(path, init) && isCsrfFailure(res.status, body)) {
+      csrfToken = null;
+      return apiRequest<T>(path, init, false);
+    }
     throw new ApiClientError(body?.error?.code ?? 'UNKNOWN', body?.error?.message ?? `请求失败 ${res.status}`, res.status);
   }
   if (res.status === 204) return undefined as T;
@@ -66,17 +95,17 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 
 /** 查 RO 详情（含 SDF core）。 */
 export async function getResearchObject(id: string): Promise<{ researchObject: ResearchObjectSummary & { sdf: { core: SdfCore; nodes: unknown[] } } }> {
-  return request(`/api/research-objects/${id}`);
+  return apiRequest(`/api/research-objects/${id}`);
 }
 
 /** 更新 SDF（乐观锁 version，§16）。 */
 export async function updateSdf(roId: string, version: number, core: SdfCore): Promise<{ sdf: { core: SdfCore } }> {
-  return request(`/api/sdf/${roId}`, { method: 'PUT', body: JSON.stringify({ version, core }) });
+  return apiRequest(`/api/sdf/${roId}`, { method: 'PUT', body: JSON.stringify({ version, core }) });
 }
 
 /** 查版本列表（P1B-4）。 */
 export async function listVersions(roId: string): Promise<{ versions: VersionSummary[] }> {
-  return request(`/api/research-objects/${roId}/versions`);
+  return apiRequest(`/api/research-objects/${roId}/versions`);
 }
 
 /** 创建提交（P1B-4，乐观锁 + 幂等）。 */
@@ -85,7 +114,7 @@ export async function createCommit(
   input: { message: string; version: number; sdfCore: SdfCore; artifacts: ArtifactReference[] },
   idempotencyKey?: string,
 ): Promise<{ commit: { commitId: string; versionId: string; versionNo: number } }> {
-  return request(`/api/research-objects/${roId}/commits`, {
+  return apiRequest(`/api/research-objects/${roId}/commits`, {
     method: 'POST',
     headers: idempotencyKey ? { 'idempotency-key': idempotencyKey } : undefined,
     body: JSON.stringify(input),
@@ -94,7 +123,7 @@ export async function createCommit(
 
 /** 版本 diff（P1B-5）。 */
 export async function getVersionDiff(fromVersionId: string, toVersionId: string): Promise<{ diff: unknown }> {
-  return request(`/api/versions/${fromVersionId}/comparison?to=${toVersionId}`);
+  return apiRequest(`/api/versions/${fromVersionId}/comparison?to=${toVersionId}`);
 }
 
 // ===== P1C-10：协作 API client（P1C-2~9 端点封装）=====
@@ -120,19 +149,19 @@ export async function listIssues(roId: string, kind?: string, status?: string): 
   const q = new URLSearchParams();
   if (kind) q.set('kind', kind);
   if (status) q.set('status', status);
-  return request(`/api/research-objects/${roId}/issues${q.size ? `?${q}` : ''}`);
+  return apiRequest(`/api/research-objects/${roId}/issues${q.size ? `?${q}` : ''}`);
 }
 export async function getIssue(roId: string, issueId: string): Promise<{ issue: IssueSummary & { comments: Comment[] } }> {
-  return request(`/api/research-objects/${roId}/issues/${issueId}`);
+  return apiRequest(`/api/research-objects/${roId}/issues/${issueId}`);
 }
 export async function createIssue(roId: string, input: { title: string; kind: string; body?: string }): Promise<{ issue: IssueSummary }> {
-  return request(`/api/research-objects/${roId}/issues`, { method: 'POST', body: JSON.stringify(input) });
+  return apiRequest(`/api/research-objects/${roId}/issues`, { method: 'POST', body: JSON.stringify(input) });
 }
 export async function updateIssueStatus(roId: string, issueId: string, status: string): Promise<{ issue: IssueSummary }> {
-  return request(`/api/research-objects/${roId}/issues/${issueId}`, { method: 'PATCH', body: JSON.stringify({ status }) });
+  return apiRequest(`/api/research-objects/${roId}/issues/${issueId}`, { method: 'PATCH', body: JSON.stringify({ status }) });
 }
 export async function createComment(roId: string, issueId: string, body: string): Promise<{ comment: Comment }> {
-  return request(`/api/research-objects/${roId}/issues/${issueId}/comments`, { method: 'POST', body: JSON.stringify({ body }) });
+  return apiRequest(`/api/research-objects/${roId}/issues/${issueId}/comments`, { method: 'POST', body: JSON.stringify({ body }) });
 }
 
 export interface BranchSummary {
@@ -143,10 +172,10 @@ export interface BranchSummary {
   tipCommit: { id: string; message: string; createdAt: string } | null;
 }
 export async function listBranches(roId: string): Promise<{ branches: BranchSummary[] }> {
-  return request(`/api/research-objects/${roId}/branches`);
+  return apiRequest(`/api/research-objects/${roId}/branches`);
 }
 export async function createBranch(roId: string, name: string, headCommitId?: string): Promise<{ branch: BranchSummary }> {
-  return request(`/api/research-objects/${roId}/branches`, { method: 'POST', body: JSON.stringify({ name, headCommitId }) });
+  return apiRequest(`/api/research-objects/${roId}/branches`, { method: 'POST', body: JSON.stringify({ name, headCommitId }) });
 }
 
 export interface PullRequestDetail {
@@ -190,23 +219,23 @@ export interface PrInput {
 }
 export async function listPullRequests(roId: string, status?: string): Promise<{ pullRequests: Array<Omit<PullRequestDetail, 'diff'>> }> {
   const q = status ? `?status=${status}` : '';
-  return request(`/api/research-objects/${roId}/pull-requests${q}`);
+  return apiRequest(`/api/research-objects/${roId}/pull-requests${q}`);
 }
 export async function getPullRequest(roId: string, prId: string): Promise<{ pullRequest: PullRequestDetail }> {
-  return request(`/api/research-objects/${roId}/pull-requests/${prId}`);
+  return apiRequest(`/api/research-objects/${roId}/pull-requests/${prId}`);
 }
 export async function createPullRequest(roId: string, input: PrInput, idempotencyKey?: string): Promise<{ pullRequest: PullRequestDetail }> {
-  return request(`/api/research-objects/${roId}/pull-requests`, {
+  return apiRequest(`/api/research-objects/${roId}/pull-requests`, {
     method: 'POST',
     headers: idempotencyKey ? { 'idempotency-key': idempotencyKey } : undefined,
     body: JSON.stringify(input),
   });
 }
 export async function mergePullRequest(roId: string, prId: string, confirmHighRisk: boolean): Promise<{ merge: { prId: string; status: string; highRisk: { highRisk: boolean; reasons: string[] } } }> {
-  return request(`/api/research-objects/${roId}/pull-requests/${prId}/merge`, { method: 'POST', body: JSON.stringify({ confirmHighRisk }) });
+  return apiRequest(`/api/research-objects/${roId}/pull-requests/${prId}/merge`, { method: 'POST', body: JSON.stringify({ confirmHighRisk }) });
 }
 export async function createReview(roId: string, prId: string, input: { verdict: string; body?: string; items?: Array<{ path: string; kind: string; comment: string }> }): Promise<{ review: unknown }> {
-  return request(`/api/research-objects/${roId}/pull-requests/${prId}/reviews`, { method: 'POST', body: JSON.stringify(input) });
+  return apiRequest(`/api/research-objects/${roId}/pull-requests/${prId}/reviews`, { method: 'POST', body: JSON.stringify(input) });
 }
 
 export interface ForkSource {
@@ -216,10 +245,10 @@ export interface ForkSource {
   sourceContentHash: string;
 }
 export async function forkResearchObject(roId: string, workspaceId: string): Promise<{ researchObject: { id: string; publicId: string }; forkRelation: ForkSource }> {
-  return request(`/api/research-objects/${roId}/forks`, { method: 'POST', body: JSON.stringify({ workspaceId }) });
+  return apiRequest(`/api/research-objects/${roId}/forks`, { method: 'POST', body: JSON.stringify({ workspaceId }) });
 }
 export async function getForkSource(roId: string): Promise<{ forkSource: ForkSource | null }> {
-  return request(`/api/research-objects/${roId}/fork-source`);
+  return apiRequest(`/api/research-objects/${roId}/fork-source`);
 }
 
 export interface Author {
@@ -229,16 +258,16 @@ export interface Author {
   isCorresponding: boolean;
 }
 export async function getAuthors(roId: string): Promise<{ authors: Author[] }> {
-  return request(`/api/research-objects/${roId}/authors`);
+  return apiRequest(`/api/research-objects/${roId}/authors`);
 }
 export async function setAuthors(roId: string, authors: Array<{ userId: string; isCorresponding?: boolean }>): Promise<{ authors: Author[] }> {
-  return request(`/api/research-objects/${roId}/authors`, { method: 'PUT', body: JSON.stringify({ authors }) });
+  return apiRequest(`/api/research-objects/${roId}/authors`, { method: 'PUT', body: JSON.stringify({ authors }) });
 }
 export async function addContribution(roId: string, creditRole: string): Promise<{ contribution: unknown }> {
-  return request(`/api/research-objects/${roId}/contributions`, { method: 'POST', body: JSON.stringify({ creditRole }) });
+  return apiRequest(`/api/research-objects/${roId}/contributions`, { method: 'POST', body: JSON.stringify({ creditRole }) });
 }
 export async function getContributions(roId: string): Promise<{ contributions: Array<{ id: string; userId: string; creditRole: string }> }> {
-  return request(`/api/research-objects/${roId}/contributions`);
+  return apiRequest(`/api/research-objects/${roId}/contributions`);
 }
 
 export interface NotificationView {
@@ -250,10 +279,10 @@ export interface NotificationView {
 }
 export async function listNotifications(unreadOnly = false): Promise<{ notifications: NotificationView[] }> {
   const q = unreadOnly ? '?unreadOnly=true' : '';
-  return request(`/api/notifications${q}`);
+  return apiRequest(`/api/notifications${q}`);
 }
 export async function markNotificationRead(id: string): Promise<{ notification: NotificationView }> {
-  return request(`/api/notifications/${id}/read`, { method: 'POST' });
+  return apiRequest(`/api/notifications/${id}/read`, { method: 'POST' });
 }
 
 // ===== P1D-3：SDF Extractor 异步提取 =====
@@ -272,11 +301,11 @@ export interface AgentTaskView {
 
 /** 建 Hermes 会话 + 提交 sdf.extract 任务（§9.3 异步 + §16 幂等）。 */
 export async function submitExtractTask(roId: string, manuscriptText: string): Promise<{ task: AgentTaskView }> {
-  const session = await request<{ session: { id: string } }>('/api/agent/sessions', {
+  const session = await apiRequest<{ session: { id: string } }>('/api/agent/sessions', {
     method: 'POST',
     body: JSON.stringify({ researchObjectId: roId, kind: 'extract', title: 'SDF 提取' }),
   });
-  const task = await request<{ task: AgentTaskView }>('/api/agent/tasks', {
+  const task = await apiRequest<{ task: AgentTaskView }>('/api/agent/tasks', {
     method: 'POST',
     body: JSON.stringify({ sessionId: session.session.id, kind: 'sdf.extract', payload: { manuscriptText } }),
   });
@@ -286,7 +315,7 @@ export async function submitExtractTask(roId: string, manuscriptText: string): P
 /** 轮询任务进度（§18.3 可恢复）。 */
 export async function getAgentTask(roId: string, taskId: string): Promise<{ task: AgentTaskView }> {
   void roId;
-  return request(`/api/agent/tasks/${taskId}`);
+  return apiRequest(`/api/agent/tasks/${taskId}`);
 }
 
 // ===== P1D-9：公开页数据（§4.3 必显）=====
@@ -315,7 +344,7 @@ export interface PublicResearchVersion {
 
 /** 公开页版本详情（§4.3 必显 + 十标签数据；匿名可访问 public）。 */
 export async function getPublicResearchVersion(publicId: string, versionNo: number): Promise<{ research: PublicResearchVersion }> {
-  return request(`/api/research/${publicId}/v/${versionNo}`);
+  return apiRequest(`/api/research/${publicId}/v/${versionNo}`);
 }
 
 // ===== P1E-6：沙箱任务查询与产物下载 =====
@@ -345,7 +374,7 @@ export interface SandboxJobView {
 
 /** 查询沙箱任务状态（P1E-5 已实现 GET /sandbox-jobs/:id）。 */
 export async function getSandboxJob(jobId: string): Promise<{ job: SandboxJobView }> {
-  return request(`/api/sandbox-jobs/${jobId}`);
+  return apiRequest(`/api/sandbox-jobs/${jobId}`);
 }
 
 /** 下载沙箱产物（P1E-5 已实现 GET /sandbox-jobs/:id/artifacts/:artifactId）。 */
@@ -395,19 +424,10 @@ export async function modifyScript(
   jobId: string,
   request: ModifyScriptRequest
 ): Promise<ModifyScriptResponse> {
-  const res = await fetch(`/api/sandbox-jobs/${jobId}/modify`, {
+  return apiRequest<ModifyScriptResponse>(`/api/sandbox-jobs/${jobId}/modify`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(request),
-    credentials: 'include',
   });
-
-  if (!res.ok) {
-    const error = await res.json().catch(() => ({ error: { message: 'Network error' } }));
-    throw new Error(error.error?.message || 'Modify script failed');
-  }
-
-  return res.json();
 }
 
 export interface SandboxJobContext {
@@ -433,23 +453,10 @@ export interface CreateSandboxJobResponse {
 export async function createSandboxJob(
   request: CreateSandboxJobRequest
 ): Promise<CreateSandboxJobResponse> {
-  const res = await fetch('/api/sandbox-jobs', {
+  return apiRequest<CreateSandboxJobResponse>('/api/sandbox-jobs', {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(request),
-    credentials: 'include',
   });
-
-  if (!res.ok) {
-    const error = await res.json().catch(() => ({ error: { message: 'Network error' } }));
-    throw new ApiClientError(
-      error.error?.code || 'CREATE_FAILED',
-      error.error?.message || 'Create sandbox job failed',
-      res.status
-    );
-  }
-
-  return res.json();
 }
 
 
