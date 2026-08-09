@@ -12,5 +12,5 @@
     "MD024": { "siblings_only": true }, // 允许不同日期章节下同名小节（如多个「### ✅ Completed」），仍禁止同节重复标题
     "MD029": false // 审计文档跨小节连续编号（7. 接 1.-6.）为有意风格，markdownlint 不支持非 1 起始的升序列表
   },
-  "ignores": ["**/node_modules/**", "**/.worktrees/**"]
+  "ignores": ["**/node_modules/**", "**/.worktrees/**", "docs/user_ideas/8.10/**"]
 }
