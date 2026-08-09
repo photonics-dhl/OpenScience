@@ -112,3 +112,8 @@
 - 幂等创建已补并发唯一键竞争回读，重复提交不会退化为 500；domain focused tests 13/13 通过。
 - 未完成项：真实邀请邮箱注册/验证/登录→创建→Workspace E2E（不打印任何凭据）；Hermes/版本/发布/Public RO/Editorial/Live2D 仍按主产品计划推进。
 - Dashboard 已补退出登录动作（HTTP-only session 清除后返回登录），创建页的失效会话提示可恢复。
+
+## 2026-08-09 运行时验收决策
+
+- 用户确认：不再与本机 Docker 环境较劲，服务器部署环境作为唯一数据库/Redis/对象存储集成验收环境。
+- 后续切片严格执行 cloud-sync → 远端全量 build → migration status/deploy（如有）→ compose force-recreate → 公网巡检；本机仅做静态门禁和无网络单测，不在生产运行会清理数据的集成测试。

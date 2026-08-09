@@ -24,6 +24,12 @@
 - **✅ 并发安全**：幂等创建在唯一键竞争时回读胜者，重复提交不会因 P2002 泄漏为 500。
 - **⏳ 下一步**：补真实邀请邮箱 E2E（不提交任何邀请码/密码/验证码），随后继续 Hermes 证据确认、不可变版本、发布 preflight、Public RO、Editorial Curator 与 Live2D bridge。
 
+## 2026-08-09（运行时验收策略）— 以服务器部署为唯一集成环境
+
+- **✅ 决策**：本机 Docker 不再作为推进门禁；本机仅运行无网络单测、typecheck、build 和文档门禁。
+- **✅ 服务器流程**：所有需要数据库/Redis/对象存储的验证统一在 ECS 执行：cloud-sync → 远端全量 build → migration status/deploy → compose `--force-recreate` → 公网 health/route smoke。禁止在生产库直接运行会清理数据的 integration suite。
+- **⏳ 下一步**：沿用该流程继续 Hermes、版本、发布和 Public RO 产品切片。
+
 ## 2026-08-09（产品闭环 Task 2）— 邀请身份流程已实现
 
 - **✅ 身份闭环**：新增 `/login`、`/register`、`/verify-email`，真实连接注册、验证、重发、登录、登出和 `/auth/me`；会话仍由 HTTP-only Cookie 管理。
