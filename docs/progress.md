@@ -28,6 +28,7 @@
 
 - **✅ 决策**：本机 Docker 不再作为推进门禁；本机仅运行无网络单测、typecheck、build 和文档门禁。
 - **✅ 服务器流程**：所有需要数据库/Redis/对象存储的验证统一在 ECS 执行：cloud-sync → 远端全量 build → migration status/deploy → compose `--force-recreate` → 公网 health/route smoke。禁止在生产库直接运行会清理数据的 integration suite。
+- **✅ 状态核验**：生产 migration status 必须在 API 容器内注入 `/opt/openscience/.env.prod` 的 `DATABASE_URL`；容器内核验显示数据库 schema up to date，宿主机默认 `127.0.0.1:5432` 的结果不具备生产证据效力。
 - **⏳ 下一步**：沿用该流程继续 Hermes、版本、发布和 Public RO 产品切片。
 
 ## 2026-08-09（产品闭环 Task 2）— 邀请身份流程已实现
