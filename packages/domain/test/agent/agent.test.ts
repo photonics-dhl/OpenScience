@@ -175,4 +175,17 @@ describe('AgentSession/AgentTask（§15 + §16 幂等 + §9.1 配额）', () => 
     expect(replay.status).toBe('succeeded');
     expect(replay.progress).toBe(100);
   });
+
+  it('永久阻断错误同步为 failed_blocked，不允许普通 retry', async () => {
+    const { deps, user, ro, db } = await makeDeps();
+    const session = await createAgentSession(deps, { userId: user.id, researchObjectId: ro.id, kind: 'ingestion' });
+    const task = await submitAgentTask(deps, { sessionId: session.id, userId: user.id, kind: 'sdf.extract', payload: {} });
+    db.ingestionTasks.push({
+      id: 'ingestion-task-1', batchId: 'batch-1', artifactId: 'artifact-1', agentTaskId: task.id,
+      state: 'parsing', retryCount: 0, error: null, createdAt: new Date(), updatedAt: new Date(),
+    });
+    await markTaskProgress(deps, { taskId: task.id, status: 'running' });
+    await markTaskProgress(deps, { taskId: task.id, status: 'failed', error: '[blocked] parser rejected unsafe content' });
+    expect(db.ingestionTasks[0].state).toBe('failed_blocked');
+  });
 });

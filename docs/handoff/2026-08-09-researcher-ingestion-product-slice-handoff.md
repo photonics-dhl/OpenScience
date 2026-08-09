@@ -24,6 +24,7 @@ Task 3 初版 hardening 已加入 batch request digest、multipart truncated 拒
 - Commit `de29f81` adds the Artifact→Blob worker bridge and deterministic Markdown/TeX parser; `1a6d1c0` adds content signatures and fast blocking checks.
 - Full `test`, `build`, `lint`, `docs:lint`, `audit:docs-sync`, and `git diff --check` passed on 2026-08-09; worktree is clean.
 - This slice remains blocked for production deployment until controlled PDF/Office/image parsers, quarantine/AV scanning, failure taxonomy/audit completeness, and isolated infrastructure integration evidence are complete.
+- Failure taxonomy now maps worker errors prefixed `[blocked]` to `failed_blocked`; only non-blocked failures remain `failed_retryable` and eligible for retry.
 
 ## Task 2 fix round 3/5
 

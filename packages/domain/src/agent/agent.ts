@@ -297,7 +297,13 @@ async function syncIngestionState(
   status: AgentTaskStatus,
   error?: string | null,
 ): Promise<void> {
-  const state = status === 'running' ? 'parsing' : status === 'succeeded' ? 'needs_review' : status === 'failed' ? 'failed_retryable' : 'queued';
+  const state = status === 'running'
+    ? 'parsing'
+    : status === 'succeeded'
+      ? 'needs_review'
+      : status === 'failed'
+        ? (error?.startsWith('[blocked]') ? 'failed_blocked' : 'failed_retryable')
+        : 'queued';
   await deps.prisma.ingestionTask.updateMany({
     where: { agentTaskId },
     data: { state, ...(status === 'failed' ? { error: error ?? 'Extraction failed' } : { error: null }) },
