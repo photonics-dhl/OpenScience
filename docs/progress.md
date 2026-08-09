@@ -1,5 +1,13 @@
 # OpenScience (XGS) 进度日志
 
+## 2026-08-09（服务器 ingestion worker 部署）— ⛔ 等待干净 release 切换授权
+
+- **服务器巡检**：磁盘 9%、内存充足，现有 API/Web/PostgreSQL/Redis 健康；生产 compose 原先没有 `agent-worker`。
+- **部署准备**：生产 compose 已增加不暴露端口的 `agent-worker`；部署脚本支持 worktree 源码与主工作区服务器配置分离，并修正生产迁移必须经 API 容器执行。
+- **云上证据**：新依赖与 worker dist 已同步；当前生产迁移状态显示 26 个迁移中 3 个待应用（signup unique、ingestion idempotency、ingestion tasks）。迁移未执行，生产容器未切换。
+- **阻断**：既有 tar-over-ssh 只覆盖不删除，服务器残留旧 `/login`、旧 create/dashboard 源码，导致云上 Next build 继续编译已不属于当前 release 的文件。继续添加兼容 alias 会污染当前架构。
+- **下一步**：用户明确批准后，先把现有 `/opt/openscience` 源码做可恢复备份，再部署到干净 release 目录、保留 `.env.prod` 与数据卷，完成 build→迁移→compose 切换→worker/API 健康验收。
+
 ## 2026-08-09（研究者导入闭环 Task 3 深度复审）— ⛔ 撤回完成状态，禁止部署
 
 - **复审结论**：安全与架构独立审查均为 BLOCK；migration 25 和 ingestion 入口不得部署。现有 `sdf.extract` 仅接受 `manuscriptText`，而 ingestion 只提交 Artifact/RO ID，真实任务会必然失败。
