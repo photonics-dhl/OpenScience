@@ -32,6 +32,7 @@
 | `apps/web/app/research-objects/new/page.tsx` | 首个 RO 创建入口 | 活文档 |
 | `apps/web/components/create/CreateResearchObjectFlow.tsx` | 空白六字段 / 材料提取双模式创建流程，披露确认与 UUID 导航 | 活文档 |
 | `apps/web/lib/create-flow.ts` | 创建流程纯验证合同 | 活文档 |
+| `docs/specs/2026-08-09-email-code-registration-design.md` | 已批准的邮箱验证码注册设计：challenge → confirm → User/Workspace | 活文档 |
 | `infra/migrations/20260809010000_ro_create_idempotency/` | ResearchObject 幂等键可空唯一迁移及 rollback | 待本地/生产执行 |
 | `apps/web/components/workspace/WorkspaceContext.tsx` | 统一 RO Workspace 上下文契约：`roId`、`versionId`、`workspaceId`、`mode`、`permission` | 活文档 |
 | `apps/web/components/workspace/WorkspaceModeNav.tsx` | Workspace 六模式桌面导航与移动端入口：overview / sdf / artifacts / versions / collaboration / public | 活文档 |

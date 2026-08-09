@@ -2,7 +2,7 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use `executing-plans` to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Deliver the first authenticated production journey: invited user registration or login, verified session, real Dashboard data, and creation of a private Research Object that opens in the unified workspace.
+**Goal:** Deliver the first authenticated production journey: email-code registration or login, verified session, real Dashboard data, and creation of a private Research Object that opens in the unified workspace.
 
 **Architecture:** Keep Fastify as the only API authority and Next.js as the browser surface. Browser calls use a stable same-origin `/api/*` namespace; Nginx strips the prefix in production and Next rewrites it during local development. Authentication remains an HTTP-only session cookie, while non-authenticated write requests obtain and attach the existing double-submit CSRF token. Domain logic stays in `packages/domain`; routes only validate, authorize, and map HTTP.
 
