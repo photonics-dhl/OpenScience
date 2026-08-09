@@ -82,7 +82,7 @@ export async function createArtifact(
   // 配额（§13.3）
   await checkUploadQuota(deps, { workspaceId: input.workspaceId, fileSize: content.length });
 
-  // 病毒扫描（§17 MUST，P1B-3 占位）
+  // 快速恶意内容阻断；完整生产扫描仍需 quarantine + ClamAV 类引擎（§17）
   const scan = await scanFile(content);
   if (!scan.safe) {
     throw new ArtifactError('MALICIOUS_FILE', `检测到恶意内容${scan.threat ? `: ${scan.threat}` : ''}`);

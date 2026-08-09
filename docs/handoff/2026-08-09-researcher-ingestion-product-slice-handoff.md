@@ -16,6 +16,7 @@ Task 3 初版 hardening 已加入 batch request digest、multipart truncated 拒
 - 队列：migration 25 增加 `agent_tasks.dispatched_at`；AgentTask replay 只由未 dispatch 任务重新投递；IngestionTask 关联先于 dispatch；worker 以 DB CAS claim `pending|failed → running`；retry dispatch 失败恢复 `failed_retryable`。
 - 证据：domain ingestion/agent 30/30；agent-worker 15/15；本轮变更后的全仓 build 尚待再次执行。
 - 未关闭：worker 仍未读取 Artifact/Blob，现有 `sdf.extract` 只接受 `manuscriptText`；真实 MIME/魔数与恶意扫描仍需 adapter；integration test 已加隔离数据库守卫与按测试用户清理，但仍待隔离 PG/Redis/MinIO 实跑。
+- 内容安全补充：入口已对 PDF/Office/ZIP/图片做服务端 signature 检查，对 Markdown/TeX/SVG 做 UTF-8/主动内容检查；Artifact 层增加 EICAR/PE/明显归档路径快速阻断。该扫描明确不是完整 AV，生产 quarantine/ClamAV adapter 尚未接入。
 - **Read first:** `AGENTS.md` → `docs/OpenScience_Kimi_Development_Spec.md` → 本 handoff → `docs/progress.md` → `project_index.md` → researcher ingestion design/plan。
 
 ## Task 2 fix round 3/5

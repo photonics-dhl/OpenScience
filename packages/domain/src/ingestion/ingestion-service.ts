@@ -7,7 +7,7 @@ import { requireActive, requireMembership } from '../workspace/helpers';
 import { WorkspaceError } from '../workspace/errors';
 import { recordAudit } from '../workspace/audit';
 import { IngestionError } from './errors';
-import { assertSupportedIngestionFile } from './format-policy';
+import { assertIngestionContent, assertSupportedIngestionFile } from './format-policy';
 import type { IngestionBatchView, IngestionFileInput, IngestionTaskView } from './ingestion-types';
 
 export type IngestionDeps = AgentDeps & { storage: StorageAdapter };
@@ -33,7 +33,10 @@ export async function createIngestionBatch(
 ): Promise<IngestionBatchView> {
   if (!input.processingConsent) throw new IngestionError('PROCESSING_CONSENT_REQUIRED', 'Processing consent is required');
   if (input.files.length === 0) throw new IngestionError('VALIDATION_ERROR', 'At least one file is required');
-  input.files.forEach((file) => assertSupportedIngestionFile(file.filename, file.mimeType));
+  input.files.forEach((file) => {
+    assertSupportedIngestionFile(file.filename, file.mimeType);
+    assertIngestionContent(file.filename, file.content);
+  });
   const logicalPaths = planLogicalPaths(input.files.map((file) => file.filename));
 
   const { researchObject: ro } = await authorizeIngestionWrite(deps, input);

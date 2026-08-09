@@ -27,7 +27,17 @@ function makeDeps() {
   return { db, user, deps: { prisma, storage, redis } as never, redis };
 }
 
-const file = (filename: string) => ({ filename, content: Buffer.from(`content:${filename}`) });
+const file = (filename: string) => {
+  const extension = filename.slice(filename.lastIndexOf('.')).toLowerCase();
+  const content = extension === '.pdf' ? Buffer.from('%PDF-1.7\nresearch evidence')
+    : extension === '.png' ? Buffer.concat([Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]), Buffer.from('image')])
+      : extension === '.jpg' || extension === '.jpeg' ? Buffer.concat([Buffer.from([255, 216, 255]), Buffer.from('image')])
+        : extension === '.webp' ? Buffer.concat([Buffer.from('RIFF0000WEBP'), Buffer.from('image')])
+          : extension === '.doc' ? Buffer.concat([Buffer.from([0xd0, 0xcf, 0x11, 0xe0, 0xa1, 0xb1, 0x1a, 0xe1]), Buffer.from('word')])
+            : extension === '.docx' || extension === '.zip' ? Buffer.concat([Buffer.from([0x50, 0x4b, 0x03, 0x04]), Buffer.from('zip')])
+              : Buffer.from(`content:${filename}`);
+  return { filename, content };
+};
 
 describe('multi-format ingestion service', () => {
   it.each(['paper.pdf', 'paper.docx', 'source.tex', 'notes.md', 'figure.png'])('accepts %s and queues extraction without raw content in payload', async (filename) => {
@@ -56,6 +66,28 @@ describe('multi-format ingestion service', () => {
       userId: user.id, researchObjectId: 'ro-1', processingConsent: true,
       files: [{ ...file('paper.pdf'), mimeType: 'application/x-msdownload' }],
     })).rejects.toMatchObject({ code: 'UNSUPPORTED_INGESTION_FORMAT' });
+  });
+
+  it.each([
+    ['paper.pdf', Buffer.from('not a pdf')],
+    ['figure.png', Buffer.from('not an image')],
+    ['notes.md', Buffer.from('unsafe\u0000text')],
+    ['figure.svg', Buffer.from('<svg><script>alert(1)</script></svg>')],
+    ['paper.docx', Buffer.from('MZ\u0000executable')],
+  ])('rejects content masquerading as %s', async (filename, content) => {
+    const { deps, user } = makeDeps();
+    await expect(createIngestionBatch(deps, {
+      userId: user.id, researchObjectId: 'ro-1', processingConsent: true, files: [{ filename, content }],
+    })).rejects.toMatchObject({ code: 'UNSUPPORTED_INGESTION_FORMAT' });
+  });
+
+  it('blocks the EICAR test signature before creating an Artifact', async () => {
+    const { deps, db, user } = makeDeps();
+    await expect(createIngestionBatch(deps, {
+      userId: user.id, researchObjectId: 'ro-1', processingConsent: true,
+      files: [{ filename: 'notes.md', content: Buffer.from('X5O!P%@AP[4\\PZX54(P^)7CC)7}$EICAR-STANDARD-ANTIVIRUS-TEST-FILE!$H+H*') }],
+    })).rejects.toMatchObject({ code: 'MALICIOUS_FILE' });
+    expect(db.artifacts).toHaveLength(0);
   });
 
   it('does not persist an untrusted browser MIME as detected metadata', async () => {
