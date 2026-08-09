@@ -2,6 +2,9 @@ CREATE TYPE "IngestionTaskState" AS ENUM (
   'queued', 'uploading', 'stored', 'parsing', 'needs_review', 'confirmed', 'written', 'failed_retryable', 'failed_blocked'
 );
 
+ALTER TABLE "agent_sessions" ADD COLUMN "idempotency_key" TEXT;
+CREATE UNIQUE INDEX "agent_sessions_idempotency_key_key" ON "agent_sessions"("idempotency_key");
+
 CREATE TABLE "ingestion_batches" (
   "id" UUID NOT NULL DEFAULT gen_random_uuid(),
   "research_object_id" UUID NOT NULL,

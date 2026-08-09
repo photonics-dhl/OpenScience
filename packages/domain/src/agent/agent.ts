@@ -72,7 +72,7 @@ export async function listAgentTasks(
  */
 export async function createAgentSession(
   deps: AgentDeps,
-  input: { userId: string; researchObjectId?: string; kind: string; title?: string },
+  input: { userId: string; researchObjectId?: string; kind: string; title?: string; idempotencyKey?: string },
   ctx: AuditContext = {},
 ): Promise<AgentSessionView> {
   if (input.researchObjectId) {
@@ -80,8 +80,23 @@ export async function createAgentSession(
     if (!ro) throw new AgentError('RESEARCH_OBJECT_NOT_FOUND', '研究对象不存在');
     await requireMembership(deps, ro.workspaceId, input.userId);
   }
+  if (input.idempotencyKey) {
+    const existing = await deps.prisma.agentSession.findUnique({ where: { idempotencyKey: input.idempotencyKey } });
+    if (existing) {
+      if (existing.userId !== input.userId || existing.researchObjectId !== (input.researchObjectId ?? null) || existing.kind !== input.kind) {
+        throw new AgentError('VALIDATION_ERROR', '幂等键已用于其他 Hermes 会话');
+      }
+      return { id: existing.id, researchObjectId: existing.researchObjectId, kind: existing.kind, title: existing.title, status: existing.status, createdAt: existing.createdAt };
+    }
+  }
   const session = await deps.prisma.agentSession.create({
-    data: { userId: input.userId, researchObjectId: input.researchObjectId ?? null, kind: input.kind, title: input.title ?? '' },
+    data: { userId: input.userId, researchObjectId: input.researchObjectId ?? null, kind: input.kind, title: input.title ?? '', idempotencyKey: input.idempotencyKey },
+  }).catch(async (error: unknown) => {
+    if ((error as { code?: string }).code === 'P2002' && input.idempotencyKey) {
+      const existing = await deps.prisma.agentSession.findUnique({ where: { idempotencyKey: input.idempotencyKey } });
+      if (existing) return existing;
+    }
+    throw error;
   });
   await recordAudit(deps, deps.prisma, {
     actorId: input.userId, action: 'agent.session.create', targetType: 'agent_session', targetId: session.id,

@@ -51,7 +51,7 @@ export async function createIngestionBatch(
   let sessionId = batch.agentSessionId;
   if (!sessionId) {
     const session = await createAgentSession(deps, {
-      userId: input.userId, researchObjectId: ro.id, kind: 'ingestion', title: `Ingestion ${batch.id}`,
+      userId: input.userId, researchObjectId: ro.id, kind: 'ingestion', title: `Ingestion ${batch.id}`, idempotencyKey: `${stableKey}:session`,
     }, ctx);
     batch = await deps.prisma.ingestionBatch.update({ where: { id: batch.id }, data: { agentSessionId: session.id } });
     sessionId = session.id;

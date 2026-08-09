@@ -583,12 +583,13 @@ export function createFakePrisma(): { prisma: PrismaClient; db: FakeDb } {
     },
     agentSession: {
       create: async ({ data }: any) => {
+        if (data.idempotencyKey && db.agentSessions.some((session) => session.idempotencyKey === data.idempotencyKey)) throw p2002();
         const row = { id: nextId(), status: 'active', createdAt: new Date(), updatedAt: new Date(), ...data };
         db.agentSessions.push(row);
         return row;
       },
       findUnique: async ({ where }: any) => {
-        const row = db.agentSessions.find((s) => s.id === where.id) ?? null;
+        const row = db.agentSessions.find((s) => where.id ? s.id === where.id : s.idempotencyKey === where.idempotencyKey) ?? null;
         if (!row) return null;
         return { ...row };
       },
