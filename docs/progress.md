@@ -1,5 +1,11 @@
 # OpenScience (XGS) 进度日志
 
+## 2026-08-09（生产部署诊断）— compose env-file 缺失
+
+- **部署尝试**：同步代码与远端全量 build 成功；生产栈启动在 compose 插值阶段停止，错误为 `POSTGRES_PASSWORD required`。没有重启容器、没有执行迁移、没有改变数据库。
+- **根因**：`infra/scripts/deploy.sh` 调用生产 compose 时遗漏 `--env-file /opt/openscience/.env.prod`，而服务器生产栈依赖该文件做变量插值。
+- **✅ 修复**：部署脚本现在显式传 `--env-file $PROD_ENV`；runbook 已同步。下一步重新执行 dry-run 与 confirm 部署，然后验证容器健康和公网入口。
+
 ## 2026-08-09（生产部署前置修复）— API healthcheck runtime mismatch
 
 - **根因**：生产 `openscience-prod-api-1` 日志显示请求正常，宿主机 `curl http://127.0.0.1:3001/auth/me` 返回 `401`；容器 unhealthy 的唯一健康探针失败原因是 `node:22` 镜像没有 `wget`，而 compose healthcheck 使用了 `wget -qO-`。

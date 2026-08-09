@@ -2,6 +2,7 @@
 
 - **Current goal:** 前端路由可访问闭环已补齐；下一阶段需在真实 API/数据库可用时做主流程 E2E。
 - **Production gate:** 部署前已定位 API unhealthy 根因：compose healthcheck 调用镜像不存在的 wget；当前工作树已改为 Node fetch，待提交并按 runbook 部署。
+- **Deploy attempt:** 同步与远端 build 已通过；compose 启动因脚本遗漏 `--env-file /opt/openscience/.env.prod` 停止，未重启/迁移/改库；脚本已修复，待重新部署。
 - **Done:**
   - 2026-08-09 网页首个实现切片已完成：新增 `apps/web/app/dashboard/page.tsx` 与 `DashboardShell`，Landing/驾驶舱复用 `EvidenceField` 受控粒子层，现有编辑页加入 `workspace-cockpit` 头部上下文；中文/英文消息入口已登记。
   - 验证证据：web Vitest 12 files / 64 tests、typecheck、production build、Playwright 1440×900 `/dashboard` 与 Landing 截图均通过；`docs:lint` 0 issues；`audit:docs-sync` DOCS_SYNC_OK。

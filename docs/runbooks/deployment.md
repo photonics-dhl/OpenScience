@@ -29,6 +29,8 @@ ssh-run.sh "cd /opt/openscience && npx pnpm@9.15.0 install && npx pnpm@9.15.0 bu
 # 跨包 import 解析到目标包 dist，必须全量 build（AGENTS.md 坑）
 ```
 
+生产 compose 命令必须显式带 `--env-file /opt/openscience/.env.prod`；`infra/scripts/deploy.sh` 已固定传入该文件，避免变量插值在部署时为空。
+
 ### 2.3 迁移部署 + seed（如需）
 
 ```bash
