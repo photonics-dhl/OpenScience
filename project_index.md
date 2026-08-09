@@ -65,7 +65,7 @@
 | `scripts/docs/check-docs-sync.mjs` | 文档同步门禁（索引路径存在性 + docs 反向登记 + AGENTS 迁移数一致性；lint 第三段，`audit:docs-sync` 入口，2026-08-06） | 活文档 |
 | `scripts/invite.mjs` | 邀请码管理 CLI（create/list/revoke，P1A-3） | 活文档 |
 | `scripts/seed-quota.mjs` | 配额占位值幂等 upsert CLI（--dry-run/--confirm，P1A-7，数值集中 `packages/domain/src/usage/seed-data.ts`） | 活文档 |
-| `scripts/cloud-sync.mjs` | 云上同步（tar-over-ssh，排除 .env/.git/node_modules/dist，P1A-7 固化） | 活文档 |
+| `scripts/cloud-sync.mjs` | 云上同步（tar-over-ssh，排除 .env/.git/node_modules/dist；兼容 Windows OpenSSH key 路径） | 活文档 |
 | `scripts/design/minimax-client.mjs` / `minimax-client.test.mjs` | MiniMax `image-01` 设计资产客户端与无网络 Node 测试；显式选择 cn/global host，key1→key2 仅在官方余额不足码 1008 回退，运行时 `MINIMAX_API_KEY` 仅作 key1 兼容 | 活文档 |
 | `scripts/design/prompt-manifest.mjs` / `prompt-manifest.test.mjs` | 设计资产批准 Markdown 的纯提示解析器与无网络 Node 测试；将 `MiniMax Prompt` 和 `Negative Prompt` 的首个 text 区块合并为图片 API 的单一 prompt，并在最终 payload 少于 1500 字符时才接受（1499 接受、1500 固定诊断拒绝） | 活文档 |
 | `scripts/design/generate-minimax-image.mjs` / `generate-minimax-image.test.mjs` | 显式 `node --env-file` 调用的设计资产生成 CLI 与区域校验测试；仅接受必填 `--prompt-file` 和 `--intended-surface`，拒绝 inline `--prompt`，只接受 `docs/design-assets/generated` 内的新输出，provenance 使用白名单且不保留远程 URL/签名查询参数，不读取或记录 `.env` | 活文档 |

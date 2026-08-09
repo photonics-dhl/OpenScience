@@ -6,7 +6,13 @@ import path from 'node:path';
 import { readFileSync } from 'node:fs';
 
 const cfg = JSON.parse(readFileSync(path.join(process.cwd(), '.cloud-sync-env'), 'utf8'));
-const key = cfg.key.replace(/^~/, os.homedir());
+const configuredKey = cfg.key.replace(/^~/, os.homedir());
+// On Windows, `ssh` is the WSL shim; give it a WSL-mounted path instead of
+// the `/c/...` form that WSL cannot resolve when Node runs from PowerShell.
+const windowsKey = configuredKey.replace(/^\/([a-zA-Z])\//, '$1:/').replaceAll('/', '\\');
+const key = process.platform === 'win32' && (/^[A-Za-z]:[\\/]/.test(windowsKey) || /^\/[a-zA-Z]\//.test(configuredKey))
+  ? windowsKey
+  : configuredKey;
 
 const EXCLUDES = [
   '.git', 'node_modules', 'dist', '.next', '.env', '.cloud-sync-env', '.memory', '.superpowers',

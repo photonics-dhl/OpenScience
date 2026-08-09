@@ -15,6 +15,13 @@
 - **✅ 验证**：create-flow validation 3/3、全仓 build 通过；数据库迁移执行与真实创建 E2E 待 Docker/数据库栈恢复后继续。
 - **⏳ 下一步**：补齐创建 UI interaction tests、服务端幂等重复请求测试，并在本地栈可用后完成 Register/Verify/Login → Create → Workspace E2E。
 
+## 2026-08-09（产品闭环 Task 4 生产部署）— 首个 RO 入口已上线
+
+- **✅ 生产迁移**：生产数据库已应用 `20260809010000_ro_create_idempotency`；生产栈四容器均为 running，并使用 `--force-recreate` 载入新 Web/API 构建。
+- **✅ 公网巡检**：`/auth/me` 匿名 401、`/dashboard` 200、`/research-objects/new` 200；安全头包含 CSP `default-src 'none'` 与 `X-Content-Type-Options: nosniff`。
+- **✅ 工具修复**：`scripts/cloud-sync.mjs` 兼容 Windows Node → Windows OpenSSH 的 key 路径，避免部署同步误报成功但未认证。
+- **⏳ 下一步**：补真实邀请邮箱 E2E（不提交任何邀请码/密码/验证码），随后继续 Hermes 证据确认、不可变版本、发布 preflight、Public RO、Editorial Curator 与 Live2D bridge。
+
 ## 2026-08-09（产品闭环 Task 2）— 邀请身份流程已实现
 
 - **✅ 身份闭环**：新增 `/login`、`/register`、`/verify-email`，真实连接注册、验证、重发、登录、登出和 `/auth/me`；会话仍由 HTTP-only Cookie 管理。

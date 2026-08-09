@@ -104,3 +104,9 @@
 - 材料模式的 Hermes 处理披露是硬门；每次写请求携带 CSRF 与 `Idempotency-Key`。ResearchObject 幂等迁移 `20260809010000_ro_create_idempotency` 已写 forward/rollback 并登记，尚未在数据库执行。
 - 验证：create-flow 3/3、全仓 build 通过；Docker Desktop 未运行，因此迁移 deploy、服务端重复请求与真实 E2E 尚未声称通过。
 - 下一步：补 UI interaction/API idempotency tests；Docker 恢复后执行 migration status/deploy 与完整邀请注册→验证→登录→创建→Workspace 验收，再继续 Hermes/版本/发布/Public RO/Editorial/Live2D 剩余计划。
+
+## 2026-08-09 生产部署 checkpoint
+
+- `bfe53d6` 已通过 Windows Node → OpenSSH 路径兼容的 cloud-sync 同步到 ECS；远端 install + 全仓 build 成功。
+- 生产已应用迁移 22（`20260809010000_ro_create_idempotency`），四个 prod 容器 running，`--force-recreate` 已完成。公网只读巡检：`/auth/me` 401、`/dashboard` 200、`/research-objects/new` 200；CSP 与 `nosniff` 安全头存在。
+- 未完成项：真实邀请邮箱注册/验证/登录→创建→Workspace E2E（不打印任何凭据）；Hermes/版本/发布/Public RO/Editorial/Live2D 仍按主产品计划推进。
