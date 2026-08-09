@@ -1,5 +1,13 @@
 # OpenScience (XGS) 进度日志
 
+## 2026-08-09（产品闭环规划）— 身份与首个 RO 生产纵切片
+
+- **✅ 基线恢复**：复核已批准产品 spec 与六阶段网页计划；确认后端身份、Workspace、RO 能力已存在，前端仍缺登录/注册/验证和真实数据编排。
+- **✅ 根因审计**：网页请求统一使用 `/api/*`，生产 Nginx 当前未剥离 `/api` 前缀，导致真实 API-backed 页面请求落到 Fastify 不存在的 `/api/...` 路由；该修复被列为纵切片 Task 1。
+- **✅ 实施计划**：新增 `docs/plans/2026-08-09-product-auth-create-flow-plan.md`，按同源 API/CSRF → 身份页面 → 真实 Dashboard → 创建 RO → 本地与生产 E2E 五个独立门推进。
+- **✅ 基线门禁**：隔离 worktree `codex/product-web-task1` 的 Web 测试 69/69、Web typecheck 通过，工作树在规划前干净。
+- **⏳ 下一步**：按 TDD 执行 Task 1，同步修复生产 Nginx 前缀剥离、开发 rewrite 与 CSRF API client；通过检查点后继续身份 UI。
+
 ## 2026-08-09（生产上线）— 前端路由闭环已部署到 ECS
 
 - **✅ Release**：以 `3b5a34e` 执行 `infra/scripts/deploy.sh --confirm --skip-migrate`；代码同步、远端 19-workspace install、全量 build、生产栈 `--force-recreate`、Nginx `nginx -t && reload` 均通过。

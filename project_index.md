@@ -87,6 +87,7 @@
 | `docs/specs/2026-08-03-p1b-2-ro-sdf-model-design.md` | P1B-2 RO/SDF 数据模型设计（design gate 已确认：三实体 + 迁移 7 + API 骨架，代码已实现 2026-08-03） | 活文档 |
 | `docs/specs/2026-08-08-openscience-product-web-design.md` | 产品级网页设计 spec（Monumental Scholarly Intelligence + Living Research Observatory；统一 RO 工作流、Hermes/Live2D、Public RO、Ultrafast Science 策展、许可/版本与 MiniMax 资产边界；§11.4 为已批准的 v3 原生母版桌面/移动/图层/动效/拒绝门） | 活文档，§11.4 已批准 |
 | `docs/plans/2026-08-08-openscience-product-web-plan.md` | 产品级网页实现计划（Figma 六屏、Dashboard/Workspace、创建/Hermes/版本、Public RO/Explore、Editorial Curator、Live2D/质量门禁六任务；用户已确认 spec） | 活文档 |
+| `docs/plans/2026-08-09-product-auth-create-flow-plan.md` | 生产身份与首个 RO 纵切片计划（同源 API/CSRF、邀请注册/验证/登录、真实 Dashboard、创建 RO、生产 E2E） | 执行中 |
 | `docs/decisions/ADR-004-figma-account-ownership-and-migration.md` | Figma 临时/长期账号所有权、双 OAuth 隔离、canonical 设计稿迁移与验收决策 | Accepted |
 | `docs/handoff/2026-08-08-product-web-tooling-handoff.md` | 产品网页 Task 1 当前交接（工具/Figma 基础、MiniMax v1/v2 rejected 证据、v3 原生确定性路线预检与下一选择门） | 当前 handoff |
 | `docs/design-assets/prompts/2026-08-08-living-research-observatory-v1.md` | Living Research Observatory 静态背景活设计；v2.1 `Precision Evidence Chamber` 锁定证据汇入四区布局、生成/原生分层、MiniMax 正负 prompt、八项拒绝门与视频边界；最终 API 组合长度 1440 字符并已获用户批准 | 活文档，v2.1 已批准 |
