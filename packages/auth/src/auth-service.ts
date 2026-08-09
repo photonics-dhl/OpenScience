@@ -131,7 +131,7 @@ export async function requestSignupCode(deps: AuthDeps, input: SignupCodeRequest
   const email = input.email.trim().toLowerCase();
   const at = now(deps);
   const existingUser = await deps.prisma.user.findUnique({ where: { email } });
-  if (existingUser) return;
+  if (existingUser && existingUser.status !== 'invited') return;
   const previous = await deps.prisma.signupChallenge.findFirst({ where: { email, consumedAt: null }, orderBy: { createdAt: 'desc' } });
   if (previous && inCooldown(previous.lastSentAt, at)) return;
   const code = generateVerificationCode();
@@ -151,6 +151,8 @@ export async function requestSignupCode(deps: AuthDeps, input: SignupCodeRequest
 export async function confirmSignup(deps: AuthDeps, input: SignupConfirmation, ctx: AuditContext = {}): Promise<Required<AuthResult>> {
   const email = input.email.trim().toLowerCase();
   const at = now(deps);
+  const existingUser = await deps.prisma.user.findUnique({ where: { email } });
+  if (existingUser && existingUser.status !== 'invited') throw new AuthError('CODE_INVALID', '验证码错误或已失效');
   const challenge = await deps.prisma.signupChallenge.findFirst({ where: { email, consumedAt: null }, orderBy: { createdAt: 'desc' } });
   if (!challenge) throw new AuthError('CODE_INVALID', '验证码错误或已失效');
   if (isLocked(challenge.lockedUntil, at)) throw new AuthError('CODE_LOCKED', '尝试次数过多，请稍后再试');
@@ -164,7 +166,9 @@ export async function confirmSignup(deps: AuthDeps, input: SignupConfirmation, c
     const user = await deps.prisma.$transaction(async (tx) => {
       const redeemed = await tx.signupChallenge.updateMany({ where: { id: challenge.id, consumedAt: null }, data: { consumedAt: at } });
       if (redeemed.count !== 1) throw new AuthError('CODE_INVALID', '验证码错误或已失效');
-      const created = await tx.user.create({ data: { email, passwordHash, displayName: input.displayName.trim(), status: 'email_verified' } });
+      const created = existingUser
+        ? await tx.user.update({ where: { id: existingUser.id }, data: { passwordHash, displayName: input.displayName.trim(), status: 'email_verified' } })
+        : await tx.user.create({ data: { email, passwordHash, displayName: input.displayName.trim(), status: 'email_verified' } });
       await deps.onEmailVerified?.(tx, { id: created.id, email: created.email, displayName: created.displayName });
       await recordAuth(deps, { actorId: created.id, action: 'auth.signup_code.confirm', targetType: 'user', targetId: created.id }, ctx, tx);
       return created;

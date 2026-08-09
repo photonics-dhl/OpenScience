@@ -121,6 +121,19 @@ describe('email-code signup', () => {
     await expect(confirmSignup(deps, { email: 'invalid-code@example.com', displayName: 'Applicant', password: 'passw0rd-x', code: '000000' })).rejects.toMatchObject({ code: 'CODE_INVALID' });
     expect(db.users).toHaveLength(0);
   });
+
+  it('migrates an existing invited account through the public code flow', async () => {
+    const { deps, db, mailer } = makeDeps();
+    db.users.push({ id: 'legacy-user', email: 'legacy@example.com', passwordHash: await hashPassword('old-passw0rd'), displayName: 'Legacy', status: 'invited', createdAt: NOW, updatedAt: NOW });
+    await requestSignupCode(deps, { email: 'legacy@example.com', displayName: 'Migrated' });
+    expect(mailer.sent).toHaveLength(1);
+    const code = mailer.sent[0].text.match(/(\d{6})/)![1];
+    const result = await confirmSignup(deps, { email: 'legacy@example.com', displayName: 'Migrated', password: 'new-passw0rd1', code });
+    expect(result.status).toBe('email_verified');
+    expect(db.users).toHaveLength(1);
+    expect(db.users[0]).toMatchObject({ id: 'legacy-user', displayName: 'Migrated', status: 'email_verified' });
+    await expect(login(deps, { email: 'legacy@example.com', password: 'new-passw0rd1' })).resolves.toMatchObject({ status: 'email_verified' });
+  });
 });
 
 describe('verifyEmail', () => {
