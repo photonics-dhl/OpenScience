@@ -15,6 +15,11 @@
 - **设计决策**：Dashboard 回访用户优先“继续最近研究”；新用户自动切换为“导入第一份资料”；“上传资料/创建 RO”保持同等权重。
 - **阻塞门禁**：spec 需用户审阅通过后，才能进入 writing-plans 和前端实现；当前未修改业务代码。
 
+## 2026-08-09（研究者导入闭环实施计划）— 计划已写入，等待执行方式选择
+
+- **计划产出**：`docs/superpowers/plans/2026-08-09-researcher-ingestion-product-slice-plan.md`，拆为 6 个可独立验收任务：视觉基础、Auth/Dashboard、导入 API、Hermes 证据、Workspace/Live2D、浏览器与生产门禁。
+- **执行门禁**：每个任务要求 focused tests、真实浏览器验证、docs-sync；当前未修改业务代码。
+
 ## 2026-08-08（产品网页 Task 1 / Figma Phase 0）— 过渡文件创建与 discovery 完成
 
 - **设计源创建**：用户确认后，在临时 Full 席位的 `501428005's team` 创建 `OpenScience Web Design System`：<https://www.figma.com/design/rWS3seZaDMdlnSljqktMDp>；该文件是 transitional source，不是最终 canonical。
