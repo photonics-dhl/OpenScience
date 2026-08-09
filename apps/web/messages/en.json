@@ -27,6 +27,18 @@
     "mode": { "overview": "Overview", "sdf": "SDF editor", "artifacts": "Artifacts", "versions": "Versions", "collaboration": "Collaboration", "public": "Public RO" },
     "hermes": { "title": "Hermes tasks", "context": "Current context", "approval": "Confirmation required before write" }
   },
+  "workspaceOverview": {
+    "title": "Research object overview",
+    "connectionPending": "Waiting for research object service",
+    "connectionHint": "The workspace is reachable; live summary data will appear when the service reconnects.",
+    "openEditor": "Open SDF editor",
+    "openCollab": "Open collaboration",
+    "openPublic": "View public RO",
+    "identity": "Stable identity",
+    "version": "Current version",
+    "permission": "Access scope",
+    "readOnly": "Read-only scope"
+  },
   "editor": {
     "title": "SDF Editor",
     "outline": "Outline",
@@ -68,6 +80,7 @@
     "title": "Collaboration",
     "navLabel": "Collaboration tabs",
     "contentLabel": "Collaboration content",
+    "common": { "save": "Save", "cancel": "Cancel", "back": "Back", "loading": "Loading…", "yes": "Yes", "no": "No" },
     "tab": {
       "issues": "Issues",
       "prs": "Pull Requests",
@@ -78,14 +91,8 @@
     },
     "issue": {
       "newTitle": "New issue title",
-      "kind": "Type",
-      "kind.question": "Question",
-      "kind.method_repro": "Reproduction",
-      "kind.failure": "Failure",
-      "kind.bug_report": "Bug report",
-      "kind.suggestion": "Suggestion",
-      "status.open": "Open",
-      "status.closed": "Closed",
+      "kind": { "label": "Type", "question": "Question", "method_repro": "Reproduction", "failure": "Failure", "bug_report": "Bug report", "suggestion": "Suggestion" },
+      "status": { "open": "Open", "closed": "Closed" },
       "create": "Create issue",
       "empty": "No issues",
       "noBody": "(no body)",
@@ -108,9 +115,7 @@
       "create": "Create PR",
       "empty": "No pull requests",
       "noBody": "(no body)",
-      "status.open": "Open",
-      "status.merged": "Merged",
-      "status.rejected": "Rejected",
+      "status": { "open": "Open", "merged": "Merged", "rejected": "Rejected" },
       "declaration": "Change declaration",
       "diff": "Change diff",
       "noDiff": "No diff",
@@ -119,10 +124,7 @@
     },
     "review": {
       "title": "Review",
-      "verdict": "Verdict",
-      "verdict.approve": "Approve",
-      "verdict.requestChanges": "Request changes",
-      "verdict.comment": "Comment",
+      "verdict": { "label": "Verdict", "approve": "Approve", "requestChanges": "Request changes", "comment": "Comment" },
       "body": "Review comment",
       "submit": "Submit review"
     },
@@ -178,9 +180,7 @@
       "empty": "No notifications",
       "markRead": "Mark as read",
       "view": "View",
-      "type.pull_request.opened": "Pull request opened",
-      "type.pull_request.merged": "Pull request merged",
-      "type.issue.updated": "Issue updated"
+      "type": { "pull_request": { "opened": "Pull request opened", "merged": "Pull request merged" }, "issue": { "updated": "Issue updated" } }
     }
   },
   "public": {

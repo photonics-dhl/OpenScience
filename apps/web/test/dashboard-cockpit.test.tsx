@@ -35,6 +35,7 @@ describe('research cockpit surface', () => {
     expect(markup).toContain('OS-RO-01J8YF7Q');
     expect(markup).toContain('data-next-action');
     expect(markup).toContain('进入 RO 工作区');
+    expect(markup).toContain('href="/research-objects/OS-RO-01J8YF7Q/workspace"');
     expect(markup).toContain('data-task-rail');
   });
 

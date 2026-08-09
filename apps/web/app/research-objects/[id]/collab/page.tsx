@@ -11,6 +11,7 @@ import ForkPanel from '../../../../components/collab/ForkPanel';
 import AuthorsPanel from '../../../../components/collab/AuthorsPanel';
 import NotificationsPanel from '../../../../components/collab/NotificationsPanel';
 import HighRiskDialog from '../../../../components/collab/HighRiskDialog';
+import RoWorkspaceShell from '../../../../components/workspace/RoWorkspaceShell';
 
 /** P1C-10 协作区域单页（§2.5 决策 6 GitHub 式 + §18.2 + §18.3 WCAG AA）。 */
 export default function CollabPage({ params }: { params: { id: string } }) {
@@ -51,7 +52,14 @@ export default function CollabPage({ params }: { params: { id: string } }) {
   }, [roId]);
 
   return (
-    <div className="collab-page">
+    <RoWorkspaceShell context={{
+      roId,
+      versionId: 'v0.4',
+      workspaceId: workspaceId || 'loading',
+      mode: 'collaboration',
+      permission: isAuthor ? 'edit' : 'comment',
+    }}>
+      <div className="collab-page">
       <div className="toolbar">
         <span className="toolbar-title">{t('title')}</span>
       </div>
@@ -94,7 +102,8 @@ export default function CollabPage({ params }: { params: { id: string } }) {
           }
         }}
       />
-    </div>
+      </div>
+    </RoWorkspaceShell>
   );
 }
 

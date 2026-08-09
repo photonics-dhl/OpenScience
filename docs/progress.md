@@ -1,5 +1,14 @@
 # OpenScience (XGS) 进度日志
 
+## 2026-08-09（产品网页可访问闭环）— Workspace overview 与协作 i18n 修复
+
+- **根因审计**：逐路 Playwright 发现 `/research-objects/[id]/workspace` 缺少 route，点击概览必然 404；协作消息把 next-intl 分段路径存成含点号的扁平 key，导致 `MISSING_MESSAGE` 与原始 key 暴露。公开页在无 API 时已使用 not-found/unavailable 状态，不是路由 404。
+- **✅ 路由闭环**：新增 `/research-objects/[id]/workspace` 与 `WorkspaceOverview`，即使 API 未运行也显示明确的只读/等待连接状态，并保留 SDF 编辑、协作、公开页入口；Dashboard 主 CTA 改为先进入 overview。
+- **✅ 上下文连续**：协作页现在也由 `RoWorkspaceShell` 包裹，`mode=collaboration`、RO ID、版本、workspace 与权限状态不会在 Editor → Collaboration 切换时丢失。
+- **✅ i18n**：collab issue/pr/review/notification 动态路径改为嵌套 JSON，补 `collab.common`；新增合同测试覆盖 next-intl 分段解析，浏览器不再出现 `MISSING_MESSAGE` 或原始翻译 key。
+- **✅ 验证**：Web 14 files / 69 tests、typecheck、production build、docs lint（0 issues）、docs-sync 均通过；Playwright reduced-motion 七路 smoke 覆盖 Landing、Dashboard、Workspace、Editor、Collaboration、Public RO、fixed version，全部 HTTP 200、0 `MISSING_MESSAGE`、0 原始 i18n key，输出 `FRONTEND_ROUTE_SMOKE_OK`。
+- **⏳ 下一步**：真实 API 服务恢复后做带数据库的登录→创建→编辑→发布 E2E，不把无后端数据伪装成已发布研究。
+
 ## 2026-08-09（产品网页 Task 2 / Workspace shell）— RO 上下文与移动端 parity
 
 - **✅ 已完成**：新增 `WorkspaceContext`、`WorkspaceModeNav`、`HermesRail`、`RoWorkspaceShell`；现有 `/research-objects/[id]/edit` 现在由统一 shell 包裹，稳定传递 `roId`、`versionId`、`workspaceId`、`mode=sdf`、`permission=edit`。

@@ -27,6 +27,18 @@
     "mode": { "overview": "概览", "sdf": "SDF 编辑", "artifacts": "材料", "versions": "版本", "collaboration": "协作", "public": "公开页" },
     "hermes": { "title": "Hermes 任务", "context": "当前上下文", "approval": "写入前需要确认" }
   },
+  "workspaceOverview": {
+    "title": "研究对象概览",
+    "connectionPending": "等待研究对象服务连接",
+    "connectionHint": "工作区入口可访问；连接恢复后会填充实时摘要。",
+    "openEditor": "打开 SDF 编辑器",
+    "openCollab": "进入协作区",
+    "openPublic": "查看公开页",
+    "identity": "稳定身份",
+    "version": "当前版本",
+    "permission": "访问范围",
+    "readOnly": "只读范围"
+  },
   "editor": {
     "title": "SDF 编辑器",
     "outline": "大纲",
@@ -68,6 +80,7 @@
     "title": "协作",
     "navLabel": "协作标签",
     "contentLabel": "协作内容",
+    "common": { "save": "保存", "cancel": "取消", "back": "返回", "loading": "加载中…", "yes": "是", "no": "否" },
     "tab": {
       "issues": "问题",
       "prs": "拉取请求",
@@ -78,14 +91,8 @@
     },
     "issue": {
       "newTitle": "新问题标题",
-      "kind": "类型",
-      "kind.question": "提问",
-      "kind.method_repro": "复现问题",
-      "kind.failure": "失败",
-      "kind.bug_report": "错误报告",
-      "kind.suggestion": "建议",
-      "status.open": "开启",
-      "status.closed": "关闭",
+      "kind": { "label": "类型", "question": "提问", "method_repro": "复现问题", "failure": "失败", "bug_report": "错误报告", "suggestion": "建议" },
+      "status": { "open": "开启", "closed": "关闭" },
       "create": "创建问题",
       "empty": "暂无问题",
       "noBody": "（无正文）",
@@ -108,9 +115,7 @@
       "create": "创建 PR",
       "empty": "暂无拉取请求",
       "noBody": "（无正文）",
-      "status.open": "开启",
-      "status.merged": "已合并",
-      "status.rejected": "已拒绝",
+      "status": { "open": "开启", "merged": "已合并", "rejected": "已拒绝" },
       "declaration": "变更声明",
       "diff": "变更差异",
       "noDiff": "暂无差异",
@@ -119,10 +124,7 @@
     },
     "review": {
       "title": "评审",
-      "verdict": "结论",
-      "verdict.approve": "通过",
-      "verdict.requestChanges": "请求修改",
-      "verdict.comment": "评论",
+      "verdict": { "label": "结论", "approve": "通过", "requestChanges": "请求修改", "comment": "评论" },
       "body": "评审意见",
       "submit": "提交评审"
     },
@@ -178,9 +180,7 @@
       "empty": "暂无通知",
       "markRead": "标为已读",
       "view": "查看",
-      "type.pull_request.opened": "拉取请求已打开",
-      "type.pull_request.merged": "拉取请求已合并",
-      "type.issue.updated": "问题动态"
+      "type": { "pull_request": { "opened": "拉取请求已打开", "merged": "拉取请求已合并" }, "issue": { "updated": "问题动态" } }
     }
   },
   "public": {

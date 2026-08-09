@@ -137,6 +137,7 @@
   Use bottom navigation and Hermes bottom sheet on mobile, semantic landmarks, focus restoration, keyboard navigation and full-screen high-risk confirmations.
 - [x] **Step 6: Verify**
   2026-08-09 shell 专测、全量 web 测试、typecheck、production build 与 390×844 / 1440×900 截图均通过。
+  Route-closure checkpoint (2026-08-09): `/research-objects/[id]/workspace` overview 已新增，Dashboard CTA 与 Collaboration 均保持同一 `RoWorkspaceShell` 上下文；collab next-intl 动态键改为嵌套消息结构。无 API 时页面显示可恢复状态，不伪造真实数据。
   Run `npx pnpm@9.15.0 test -- apps/web/test/dashboard.test.tsx apps/web/test/workspace-shell.test.tsx apps/web/test/mobile.test.ts`, then capture 390×844 and 1440×900 screenshots.
 
 ## Task 3: Create Flow, Hermes Evidence, Versioning and Task Center

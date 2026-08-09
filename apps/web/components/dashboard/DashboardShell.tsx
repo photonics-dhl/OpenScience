@@ -22,7 +22,7 @@ export default function DashboardShell() {
             <span className="eyebrow">{t('nextAction.eyebrow')}</span>
             <h2>{t('nextAction.title')}</h2>
             <p>{t('nextAction.description')}</p>
-            <Link className="button button-primary" href={`/research-objects/${roId}/edit`}>{t('nextAction.cta')}</Link>
+            <Link className="button button-primary" href={`/research-objects/${roId}/workspace`}>{t('nextAction.cta')}</Link>
             <div className="action-progress"><span style={{ width: '68%' }} /></div>
             <small>{t('nextAction.progress')}</small>
           </article>

@@ -11,6 +11,13 @@ function flattenKeys(obj: Record<string, unknown>, prefix = ''): string[] {
   );
 }
 
+function nestedValue(obj: Record<string, unknown>, key: string): unknown {
+  return key.split('.').reduce<unknown>((value, segment) =>
+    typeof value === 'object' && value !== null
+      ? (value as Record<string, unknown>)[segment]
+      : undefined, obj);
+}
+
 const zh = JSON.parse(readFileSync(path.join(__dirname, '../messages/zh.json'), 'utf8')) as Record<string, unknown>;
 const en = JSON.parse(readFileSync(path.join(__dirname, '../messages/en.json'), 'utf8')) as Record<string, unknown>;
 
@@ -29,5 +36,16 @@ describe('i18n 键对齐（zh/en，§2.5 决策 5）', () => {
     expect(zhCollab.tab).toBeDefined();
     expect(zhCollab.highRisk.confirm).toBeDefined();
     expect(zhCollab.credit.software).toBeDefined();
+  });
+
+  it('collab 动态路径都能由 next-intl 分段解析', () => {
+    for (const key of [
+      'collab.issue.kind.question',
+      'collab.issue.status.open',
+      'collab.pr.status.merged',
+      'collab.review.verdict.requestChanges',
+      'collab.notifications.type.pull_request.opened',
+      'collab.common.cancel',
+    ]) expect(nestedValue(zh, key)).toEqual(expect.any(String));
   });
 });

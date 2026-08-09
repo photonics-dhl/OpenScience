@@ -1,7 +1,7 @@
 import * as React from 'react';
 import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
-import { describe, expect, it, vi } from 'vitest';
+import { beforeAll, describe, expect, it, vi } from 'vitest';
 
 vi.mock('next-intl', () => ({
   useTranslations: () => (key: string) => ({
@@ -23,6 +23,7 @@ vi.mock('next-intl', () => ({
 }));
 
 describe('unified RO workspace shell', () => {
+  beforeAll(() => vi.stubGlobal('React', React));
   const context = {
     roId: 'OS-RO-01J8YF7Q',
     versionId: 'v0.4',
@@ -53,5 +54,14 @@ describe('unified RO workspace shell', () => {
     expect(markup).toContain('只读范围');
     expect(markup).toContain('data-hermes-approval="required"');
     expect(markup).toContain('workspace-mobile-nav');
+  });
+
+  it('keeps collaboration inside the same RO workspace context', async () => {
+    const { default: CollabPage } = await import('../app/research-objects/[id]/collab/page');
+    const markup = renderToStaticMarkup(createElement(CollabPage, { params: { id: 'OS-RO-01J8YF7Q' } }));
+
+    expect(markup).toContain('data-workspace-shell');
+    expect(markup).toContain('data-active-mode="collaboration"');
+    expect(markup).toContain('OS-RO-01J8YF7Q');
   });
 });

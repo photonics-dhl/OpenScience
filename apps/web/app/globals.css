@@ -1488,6 +1488,18 @@ body {
 .workspace-hermes-rail small { margin-top:2px; color:var(--hero-muted); font:500 .66rem/1.2 var(--font-mono); }
 .workspace-approval-note { color:#9cbcf0; font-size:.68rem; }
 .workspace-shell-body { min-width:0; }
+.workspace-overview { min-height:calc(100vh - 170px); padding:72px clamp(20px,7vw,112px) 96px; background:var(--hero-bg); color:var(--hero-text); }
+.workspace-overview__hero { max-width:720px; }
+.workspace-overview__hero h1 { margin:12px 0 16px; font:700 clamp(2rem,5vw,4.5rem)/1.05 var(--font-display); letter-spacing:-.045em; }
+.workspace-overview__status { display:flex; align-items:center; gap:9px; color:#b7c9e7; font-size:.9rem; }
+.workspace-overview__hint { max-width:48ch; color:var(--hero-muted); line-height:1.8; }
+.workspace-overview__grid { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:12px; max-width:980px; margin-top:54px; }
+.workspace-overview__card { display:flex; min-height:126px; flex-direction:column; justify-content:space-between; gap:12px; padding:18px; border:1px solid var(--border-subtle); border-radius:14px; background:rgba(8,16,28,.72); }
+.workspace-overview__card strong { color:#dce8ff; font-size:1rem; }
+.workspace-overview__card small { color:var(--hero-muted); font-size:.72rem; }
+.workspace-overview__actions { display:flex; flex-wrap:wrap; gap:10px; margin-top:30px; }
+.button-secondary { display:inline-flex; min-height:44px; align-items:center; justify-content:center; padding:0 16px; border:1px solid rgba(148,163,184,.3); border-radius:10px; color:var(--hero-text); font-size:.82rem; text-decoration:none; }
+.button-secondary:hover { border-color:rgba(76,141,255,.7); background:rgba(76,141,255,.1); }
 .workspace-mobile-nav { display:none; }
 .workspace-cockpit .toolbar { display:flex; align-items:center; gap:16px; padding:14px 20px; background:#07101d; color:var(--hero-text); border-bottom:1px solid rgba(148,163,184,.2); }
 .workspace-chrome { display:flex; align-items:center; gap:12px; margin-right:auto; }
@@ -1511,6 +1523,8 @@ body {
   .workspace-cockpit .toolbar-title { min-width:0; color:var(--hero-text); font-size:.82rem; line-height:1.2; white-space:nowrap; }
   .workspace-cockpit .toolbar input { width:100% !important; min-width:0; box-sizing:border-box; }
   .workspace-cockpit .toolbar .btn { min-width:0; padding:7px 9px; font-size:.72rem; white-space:nowrap; }
+  .workspace-overview { min-height:calc(100vh - 140px); padding:48px 20px 88px; }
+  .workspace-overview__grid { grid-template-columns:1fr; margin-top:36px; }
 }
 @media (prefers-reduced-motion: reduce) { .evidence-field__trace, .evidence-field__particle { animation:none; } .evidence-field { opacity:.45; } .button-primary:hover { transform:none; } }
 
