@@ -29,6 +29,15 @@ export type SchemaGuard<T> = (value: unknown) => value is T;
 
 const MAX_STRUCTURED_RETRIES = 2; // §9.3 失败有限重试
 
+function parseStructuredJson(text: string): unknown {
+  const cleaned = text.replace(/<think>[\s\S]*?<\/think>/gi, '').replace(/```(?:json)?\s*([\s\S]*?)```/gi, '$1').trim();
+  try { return JSON.parse(cleaned); } catch { /* providers may append a short explanation */ }
+  const start = cleaned.indexOf('{');
+  const end = cleaned.lastIndexOf('}');
+  if (start >= 0 && end > start) return JSON.parse(cleaned.slice(start, end + 1));
+  throw new Error('structured output is not JSON');
+}
+
 /**
  * AI Gateway 统一入口（§9.3）：
  * - complete：primary 失败逐级回退（fallbackReason 记录）→ 全败抛错
@@ -102,7 +111,7 @@ export class AiGateway {
     for (let attempt = 0; attempt <= MAX_STRUCTURED_RETRIES; attempt++) {
       try {
         const result = await this.complete(messages, { temperature: opts.temperature, maxTokens: 4096 });
-        const parsed: unknown = JSON.parse(result.text);
+        const parsed: unknown = parseStructuredJson(result.text);
         if (!guard(parsed)) {
           throw new AiGatewayError('SCHEMA_VALIDATION', `结构化输出未通过 Schema 校验（第 ${attempt + 1} 次）`);
         }

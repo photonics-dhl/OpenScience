@@ -1,5 +1,14 @@
 # OpenScience (XGS) 进度日志
 
+## 2026-08-10（生产 Token Plan 区域切换与结构化提取修复）— ✅ 真实 ingestion 闭环通过
+
+- **区域根因已验证**：同一组 Token Plan Subscription Key 在国际入口 `api.minimax.io/anthropic` 均返回 401；按 MiniMax 国内官方 Quick Start 切换 `api.minimaxi.com/anthropic` 后，key1/key2 均返回 200 和非空文本。服务器 `.env.prod` 已保留可恢复备份并切换区域，worker 已重建。
+- **实时证据**：worker 脱敏配置为 AI enabled、双 key、`auto`、`MiniMax-M3`；生产 provider probe 输出 `PROVIDER_PROBE_OK`，模型调用耗时约 1.2 秒。
+- **正式重试**：登录后重新获取 CSRF cookie/token，`POST /ingestion/:taskId/retry` 返回 200，任务已进入 `parsing`；worker 已成功调用 MiniMax，但模型返回的 thinking/markdown 包裹导致原始 JSON.parse 校验失败。
+- **代码修复（TDD）**：`AiGateway.completeStructured` 现在剥离 `<think>` 和 markdown JSON fence，并从附带说明中提取 JSON 对象后继续 SchemaGuard；新增回归测试，ai-gateway 11/11、全量 build 通过。
+- **最终验收**：全量服务器 build 通过并重建 worker；登录后按真实 CSRF 流程执行正式 retry，HTTP 200，状态依次为 `failed_retryable → parsing → needs_review`。`needs_review` 是预期的人机确认状态，证明上传、SeaweedFS、Redis、worker、MiniMax、结构化 SchemaGuard 与状态映射端到端可用。
+- **下一步**：进入下一生产切片：真实 OCR/AV quarantine、AgentTask `consume` 流水、对象存储非破坏备份/恢复演练；前端需要把 `needs_review` 建议展示与确认写入流程做成可操作界面。
+
 ## 2026-08-10（生产 ingestion 基础链路与 MiniMax Token Plan 根因）— ⏳ 协议红绿完成，待部署重试
 
 - **生产证据**：当月授信批处理通过既有 domain 函数执行，`granted=2, skipped=0`；真实测试得到 CSRF=200、RO=201、ingest=202、Blob HEAD=present，worker 从队列进入 `failed_retryable`。一次性 session 已在 `finally` 销毁，测试 RO/Artifact 按不删除规则保留。

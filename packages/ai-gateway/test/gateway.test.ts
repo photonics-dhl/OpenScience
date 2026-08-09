@@ -152,4 +152,11 @@ describe('AnthropicCompatProvider（MiniMax Token Plan）', () => {
       max_tokens: 2048,
     });
   });
+
+  it('剥离 MiniMax thinking 与 markdown fence 后通过', async () => {
+    const text = '<think>internal</think>```json\n{"method":"m"}\n```';
+    const gw = new AiGateway({ providers: [fakeProvider('p', async () => OK(text))] });
+    const out = await gw.completeStructured((v): v is { method: string } => typeof v === 'object' && v !== null && typeof (v as { method?: unknown }).method === 'string', [{ role: 'user', content: 'x' }]);
+    expect(out.method).toBe('m');
+  });
 });

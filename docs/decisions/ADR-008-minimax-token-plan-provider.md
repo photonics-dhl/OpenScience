@@ -6,7 +6,7 @@
 
 ## Context
 
-生产 ingestion 已证明 Artifact 上传、SeaweedFS Blob、Redis dispatch 与 worker claim 可达，但 Hermes SDF 提取进入 `failed_retryable`。脱敏检查发现 worker 未配置 AI；进一步核对 MiniMax 最新官方文档后确认：Token Plan 的 Subscription Key 与普通 pay-as-you-go API Key 不可互换，Token Plan Quick Start 使用 Anthropic Messages 协议与 `https://api.minimax.io/anthropic`，而既有 Gateway 只实现 OpenAI `/chat/completions`。
+生产 ingestion 已证明 Artifact 上传、SeaweedFS Blob、Redis dispatch 与 worker claim 可达，但 Hermes SDF 提取进入 `failed_retryable`。脱敏检查发现 worker 未配置 AI；进一步核对 MiniMax 最新官方文档后确认：Token Plan 的 Subscription Key 与普通 pay-as-you-go API Key 不可互换，Token Plan Quick Start 使用 Anthropic Messages 协议，而既有 Gateway 只实现 OpenAI `/chat/completions`。账号区域必须匹配 API 域名：国内账号使用 `https://api.minimaxi.com/anthropic`，国际账号使用 `https://api.minimax.io/anthropic`；服务器通过 `MINIMAX_TOKEN_PLAN_BASE_URL` 显式选择，避免 401 区域误判。
 
 官方依据：
 
