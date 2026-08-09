@@ -8,6 +8,13 @@
 - **验证证据**：`@openscience/auth` focused 20/20、Web 17 files/85 tests、全仓 `build`、`docs:lint` 0、`audit:docs-sync` 通过。
 - **待执行**：`cloud-sync` → ECS 全量 install/build → API 容器内执行迁移（显式 DATABASE_URL）→ compose `--force-recreate` → 公网路由 smoke。不得在生产执行 destructive integration suite；不读取或打印 `.env`。
 
+### 部署结果
+
+- 本轮已完成 ECS 同步、串行构建、迁移 `20260809020000_signup_challenges` 与生产容器强制重建。
+- 生产迁移 status：23 migrations，schema up to date。
+- 公网 `/register`、`/verify-email`、`/dashboard` HTTP 200；未带 CSRF 的 signup 写请求返回 403。
+- 下一位 agent 只需等待用户完成邮箱验证码注册，记录真实成功/失败（不得记录验证码），再继续产品视觉迭代。
+
 - **Current goal:** 执行 `docs/plans/2026-08-09-product-auth-create-flow-plan.md`，先完成同源 API/CSRF、身份、真实 Dashboard 与首个 RO 生产闭环，再继续产品网页 Task 3–6。
 - **Production status:** Release `3b5a34e` 已部署并通过公网验收；API healthcheck healthy，Web 新容器已 force-recreate。
 - **Production gate:** 部署前已定位 API unhealthy 根因：compose healthcheck 调用镜像不存在的 wget；当前工作树已改为 Node fetch，待提交并按 runbook 部署。

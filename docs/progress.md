@@ -8,6 +8,13 @@
 - **✅ 验证**：auth focused 20/20、web 17 files / 85 tests、全仓 build、docs:lint 0、audit:docs-sync DOCS_SYNC_OK。
 - **⏳ 下一步**：同步并部署 ECS，执行迁移、重建容器及公网 `/register`/API smoke；随后用测试邮箱完成一次真实验证码注册验收（不在日志记录验证码）。
 
+## 2026-08-09（产品闭环 Task 5 生产部署）— 验证码注册已上线
+
+- **✅ 部署**：代码同步至 ECS；因 workspace 并行构建存在 Prisma generate 竞态，改为 database → auth → api → web 串行构建后成功；生产栈已 `--force-recreate`。
+- **✅ 迁移**：API 容器内应用 `20260809020000_signup_challenges`，随后 status 报告 23 migrations、schema up to date。
+- **✅ 公网验收**：`/register`、`/verify-email`、`/dashboard` 均 HTTP 200；无 CSRF 的 signup 请求被 403 拦截，说明写接口安全门仍生效。
+- **⏳ 下一步**：用户在邮箱收到验证码后完成真实两步注册；再根据截图做视觉微调，继续保留旧账号验证入口作为迁移兼容路径。
+
 ## 2026-08-09（产品闭环 Task 3）— Dashboard 已接入真实会话与研究数据
 
 - **✅ API 合同**：新增 `GET /research-objects?workspaceId=<uuid>`；当前用户必须是工作区成员，归档 RO 排除，按 `updatedAt desc` 排序，仅返回摘要字段，不包含 SDF 正文；domain tests 13/13 通过。
