@@ -67,7 +67,9 @@ export async function createResearchObject(
   if (!title || title.length > 200) throw new ResearchObjectError('VALIDATION_ERROR', '标题长度需为 1-200 字符');
   const core = input.sdf?.core ?? emptyCore();
 
-  const ro = await deps.prisma.$transaction(async (tx) => {
+  let ro;
+  try {
+    ro = await deps.prisma.$transaction(async (tx) => {
     const created = await tx.researchObject.create({
       data: {
         workspaceId: input.workspaceId,
@@ -96,8 +98,17 @@ export async function createResearchObject(
       },
       ctx,
     );
-    return created;
-  });
+      return created;
+    });
+  } catch (error) {
+    // Two concurrent retries may race before the unique index is visible.
+    // Resolve the winner and return it, preserving idempotent client semantics.
+    if (input.idempotencyKey && (error as { code?: string }).code === 'P2002') {
+      const existing = await deps.prisma.researchObject.findUnique({ where: { idempotencyKey: input.idempotencyKey } });
+      if (existing && existing.workspaceId === input.workspaceId) return { id: existing.id, workspaceId: existing.workspaceId, title: existing.title, status: existing.status, visibility: existing.visibility, version: existing.version, createdAt: existing.createdAt };
+    }
+    throw error;
+  }
 
   return { id: ro.id, workspaceId: ro.workspaceId, title: ro.title, status: ro.status, visibility: ro.visibility, version: ro.version, createdAt: ro.createdAt };
 }

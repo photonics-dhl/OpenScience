@@ -20,6 +20,7 @@
 - **✅ 生产迁移**：生产数据库已应用 `20260809010000_ro_create_idempotency`；生产栈四容器均为 running，并使用 `--force-recreate` 载入新 Web/API 构建。
 - **✅ 公网巡检**：`/auth/me` 匿名 401、`/dashboard` 200、`/research-objects/new` 200；安全头包含 CSP `default-src 'none'` 与 `X-Content-Type-Options: nosniff`。
 - **✅ 工具修复**：`scripts/cloud-sync.mjs` 兼容 Windows Node → Windows OpenSSH 的 key 路径，避免部署同步误报成功但未认证。
+- **✅ 并发安全**：幂等创建在唯一键竞争时回读胜者，重复提交不会因 P2002 泄漏为 500。
 - **⏳ 下一步**：补真实邀请邮箱 E2E（不提交任何邀请码/密码/验证码），随后继续 Hermes 证据确认、不可变版本、发布 preflight、Public RO、Editorial Curator 与 Live2D bridge。
 
 ## 2026-08-09（产品闭环 Task 2）— 邀请身份流程已实现

@@ -109,4 +109,5 @@
 
 - `bfe53d6` 已通过 Windows Node → OpenSSH 路径兼容的 cloud-sync 同步到 ECS；远端 install + 全仓 build 成功。
 - 生产已应用迁移 22（`20260809010000_ro_create_idempotency`），四个 prod 容器 running，`--force-recreate` 已完成。公网只读巡检：`/auth/me` 401、`/dashboard` 200、`/research-objects/new` 200；CSP 与 `nosniff` 安全头存在。
+- 幂等创建已补并发唯一键竞争回读，重复提交不会退化为 500；domain focused tests 13/13 通过。
 - 未完成项：真实邀请邮箱注册/验证/登录→创建→Workspace E2E（不打印任何凭据）；Hermes/版本/发布/Public RO/Editorial/Live2D 仍按主产品计划推进。
