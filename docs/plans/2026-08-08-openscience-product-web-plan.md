@@ -1,5 +1,6 @@
-# OpenScience Product Web Implementation Plan
+# DEPRECATED — OpenScience Product Web Implementation Plan
 
+> 2026-08-10 被 `docs/plans/2026-08-10-optical-editorial-frontend-plan.md` 取代。本文只保留历史规划，不得继续据此创建视觉任务。
 > **For agentic workers:** REQUIRED SUB-SKILL: Use `superpowers:subagent-driven-development` (recommended) or `superpowers:executing-plans` to implement this plan task-by-task. Each task ends with an independent verification gate.
 
 **Goal:** 将已批准的 OpenScience 产品级网页设计落地为统一的 RO 研究工作流、公共研究页、Ultrafast Science 策展层和 Hermes/Live2D 入口，并用 Figma、Playwright、WCAG 和性能门禁形成可持续交付链。
