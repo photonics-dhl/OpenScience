@@ -7,6 +7,7 @@ export type AuthErrorCode =
   | 'RESEND_COOLDOWN'
   | 'CREDENTIALS_INVALID'
   | 'ACCOUNT_NOT_ACTIVE'
+  | 'VERIFICATION_DELIVERY_FAILED'
   | 'SESSION_INVALID';
 
 export class AuthError extends Error {

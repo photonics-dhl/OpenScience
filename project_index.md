@@ -21,6 +21,7 @@
 | `apps/web/app/auth/{register,login}/page.tsx` / `apps/web/components/auth/{SignupCodeForm,LoginForm}.tsx` | 邮箱验证码注册与登录页面/表单；无邀请码字段，安全 returnTo 与可访问错误反馈 | 活文档 |
 | `apps/web/app/dashboard/page.tsx` / `apps/web/components/dashboard/` | 研究驾驶舱：最近 RO、导入/创建、可行动 Hermes 任务和研究列表 | 活文档 |
 | `apps/web/test/auth-dashboard.test.tsx` / `apps/web/test/e2e/auth-dashboard.spec.ts` | Auth/Dashboard 单元合同与 clean-browser 桌面/移动 E2E | 活文档 |
+| `apps/web/lib/api.ts` / `apps/web/next.config.mjs` / `infra/nginx/openscience.conf` | web 同源 `/api` 传输层：开发 rewrite、生产反代、受保护写请求 CSRF 获取与一次刷新重试 | 活文档 |
 | `apps/web/test/ingestion-foundations.test.ts` / `apps/web/test/visual/ingestion-shots.mjs` / `apps/web/app/{%5Fvisual,_visual}/ingestion-foundations/page.tsx` | 研究者导入视觉地基 TDD 合同与 1440/768/375 三视口浏览器截图门禁；脚本访问仅开发态可用的真实编译原语预览 | 活文档 |
 | `apps/web/components/landing/SiteHeader.tsx` | Landing 页站点 Header（i18n 导航、滚动模糊背景、真实 `#latest/#trust` 入口） | 活文档 |
 | `apps/web/components/landing/Hero.tsx` | Landing 页 Hero（ro-loop 无缝循环视频主视觉 + poster/reduced-motion 降级、i18n 文案、双 CTA、landing-reveal 进入 stagger；2026-08-07 v2：符号放大 118vh + 光晕 + 深羽化 mask + contrast 滤镜消方框感，底部三柱核心思想条 01 结构化/02 可验证/03 自进化） | 活文档 |
@@ -236,7 +237,7 @@
 | `infra/nginx/` | 反代配置：`portainer.conf`（portainer.428312321.xyz → 127.0.0.1:9443，LE 证书 + WebSocket，2026-07-31；2026-08-01 追加 /nav/ 导航页、/monitor/→Netdata、/traffic/→vnStat 账单页，basic_auth）+ `openscience.conf`（OpenScience.428312321.xyz → 127.0.0.1:3001，P1A-8：/admin basic_auth + XFF 透传） | 均已部署云上并启用（openscience.conf 2026-08-03） |
 | `infra/www/` | `nav/index.html` 服务器面板导航静态页（/var/www/nav，2026-08-01） | 已部署云上 |
 | `infra/sandbox/` | 沙箱配置占位（P1A-1） | 骨架 |
-| `infra/migrations/` | Prisma 迁移 1–20（`20260728000000_baseline_app_meta` + `20260728010000_auth_baseline`（P1A-3 四表）+ `20260729010000_workspace_baseline`（P1A-4 三表）+ `20260801010000_user_platform_role`（P1A-5）+ `20260801143000_audit_log`（P1A-6）+ `20260803000000_quota_usage`（P1A-7）+ `20260803150000_research_object`（P1B-2）+ `20260804000000_blob_artifact`（P1B-3）+ `20260804010000_version_engine`（P1B-4）+ `20260804020000_identity`（P1B-6）+ `20260804030000_visibility`（P1B-7）+ `20260804040000_collab`（P1C-1，11 实体 + 3 枚举）+ `20260804050000_branch_head`（P1C-2，head_commit_id 锚点）+ `20260804060000_pr_idempotency`（P1C-6，idempotency_key）+ `20260804070000_agent_tasks`（P1D-2，三表 + 枚举）+ `20260804080000_ai_reviews`（P1D-5/6）+ `20260804090000_appeals`（P1D-7）+ `20260804100000_publish_state`（P1D-8）+ `20260806010000_author_affiliation`（P1D-9）+ `20260806020000_sandbox_jobs`（P1E-4/5，幂等规整版，2026-08-06 自 packages/database/migrations/ 游离 SQL 收编）+ `20260806030000_sandbox_job_context`（P1E-5 收尾，sandbox_jobs.context + users.level），各附 rollback.sql） | 已实现，云上已 deploy（迁移 1–21 全量，2026-08-06） |
+| `infra/migrations/` | Prisma 迁移 1–22（既有 1–21 + `20260809020000_signup_challenges` 邮箱验证码注册挑战表），各附 rollback.sql | 迁移 1–21 已云上 deploy；22 待本切片部署 |
 | `infra/schema.prisma` | Prisma schema（`app_meta` 基线模型，P1A-2；2026-08-06 补 `SandboxJob`/`SandboxArtifact`/`SandboxJobStatus`，对齐迁移 20/21 DDL，P1E） | 已实现 |
 
 ## .agents/skills/（项目级 Skills，Spec §20.3）

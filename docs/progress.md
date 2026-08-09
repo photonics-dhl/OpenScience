@@ -1,12 +1,12 @@
 # OpenScience (XGS) 进度日志
 
-## 2026-08-09（研究者导入闭环 Task 2）— Auth 与 Dashboard 前端完成
+## 2026-08-09（研究者导入闭环 Task 2）— Auth、Dashboard 与真实注册契约完成
 
 - **页面**：新增 `/auth/register`、`/auth/login`、`/dashboard`，验证码注册不再包含邀请码字段；Dashboard 对新用户突出首份资料导入，对回访用户突出最近 RO，并保留上传与空白创建的同等主操作。
 - **组件**：新增 SignupCodeForm、LoginForm、ContinueResearch、ImportStage、HermesTaskRail、ResearchList；Dashboard 只显示可行动 Hermes 任务。
-- **验证**：`auth-dashboard.test.tsx` 10/10，Playwright clean-browser flow 4/4（注册键盘流程、安全重定向、桌面与 375px 导航），web typecheck/build 通过。
-- **已知基线缺口**：当前分支尚未合入生产已经部署的 `/auth/request-signup-code` 与 `/auth/confirm-signup` 后端提交；部署前必须补齐并跑真实 API 集成验证，不能只依赖 E2E route mock。
-- **下一步**：补齐验证码注册后端契约并完成 Task 2 审查；通过后进入 Task 3 多格式导入。
+- **真实契约**：恢复 `POST /auth/request-signup-code`、`POST /auth/confirm-signup`、`signup_challenges` 迁移与 legacy invited-account 兼容；web 统一走同源 `/api`，受保护写请求自动获取/刷新 CSRF token，开发 rewrite 与生产 nginx 均保持同一路径语义。安全复核进一步把 CSRF 豁免收紧到无会话公开认证写入，`/auth/logout` 等会话变更继续受保护。
+- **验证**：`auth-dashboard.test.tsx` 10/10、`api-client-contract.test.ts` 8/8、API `auth-routes.test.ts` 6/6、API security 6/6；Playwright clean-browser flow 4/4（注册键盘流程、安全重定向、桌面与 375px 导航）；`npx pnpm@9.15.0 build` 全仓通过。API 首次未收集用例的根因是仅运行 Prisma generate 而缺少 `@openscience/database` dist，按正式 package build 顺序补齐后通过，不属于业务失败。
+- **下一步**：进入 Task 3，多格式资料导入必须接真实 storage/artifact/RO/Hermes API，并覆盖 PDF、DOCX、TeX/ZIP、Markdown 与常见图片的校验、进度、失败恢复。
 
 ## 2026-08-09（研究者导入闭环 Task 1）— 视觉地基与浏览器门禁完成，Code Connect 受套餐阻断
 

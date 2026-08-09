@@ -69,20 +69,63 @@ export interface ArtifactReference {
   artifactId: string;
 }
 
-async function request<T>(path: string, init?: RequestInit): Promise<T> {
+let csrfToken: string | null = null;
+
+const PUBLIC_AUTH_WRITES = new Set([
+  '/api/auth/request-signup-code',
+  '/api/auth/confirm-signup',
+  '/api/auth/register',
+  '/api/auth/verify-email',
+  '/api/auth/resend-code',
+  '/api/auth/login',
+]);
+
+function isProtectedWrite(path: string, init?: RequestInit): boolean {
+  const method = (init?.method ?? 'GET').toUpperCase();
+  return !['GET', 'HEAD', 'OPTIONS'].includes(method) && !PUBLIC_AUTH_WRITES.has(path.split('?')[0] ?? path);
+}
+
+async function getCsrfToken(): Promise<string> {
+  if (csrfToken) return csrfToken;
+  const res = await fetch('/api/csrf-token', { credentials: 'include' });
+  if (!res.ok) throw new ApiClientError('CSRF_TOKEN_FAILED', `无法建立安全会话 ${res.status}`, res.status);
+  const body = await res.json() as { csrfToken: string };
+  csrfToken = body.csrfToken;
+  return csrfToken;
+}
+
+function isCsrfFailure(status: number, body?: ApiErrorBody): boolean {
+  return status === 403 && (
+    body?.error.code.startsWith('FST_CSRF_') === true
+    || body?.error.code.startsWith('CSRF_') === true
+  );
+}
+
+/** Same-origin browser transport. Protected writes carry the API CSRF token. */
+export async function apiRequest<T>(path: string, init?: RequestInit, csrfRetry = true): Promise<T> {
+  const headers = Object.fromEntries(new Headers(init?.headers).entries());
+  if (!headers['content-type']) headers['content-type'] = 'application/json';
+  if (isProtectedWrite(path, init)) headers['x-csrf-token'] = await getCsrfToken();
+
   const res = await fetch(path, {
-    credentials: 'include',
-    headers: { 'content-type': 'application/json', ...(init?.headers ?? {}) },
     ...init,
+    credentials: 'include',
+    headers,
   });
   if (!res.ok) {
     let body: ApiErrorBody | undefined;
     try { body = await res.json() as ApiErrorBody; } catch { /* 非 JSON */ }
+    if (csrfRetry && isProtectedWrite(path, init) && isCsrfFailure(res.status, body)) {
+      csrfToken = null;
+      return apiRequest<T>(path, init, false);
+    }
     throw new ApiClientError(body?.error?.code ?? 'UNKNOWN', body?.error?.message ?? `请求失败 ${res.status}`, res.status);
   }
   if (res.status === 204) return undefined as T;
   return res.json() as Promise<T>;
 }
+
+const request = apiRequest;
 
 /** Keep post-auth navigation on this origin and out of auth-loop routes. */
 export function safeReturnTo(value: string | null | undefined): string {
@@ -489,25 +532,12 @@ export interface CreateSandboxJobResponse {
 
 /** 创建新的沙箱作业（P1E-5 POST /sandbox-jobs） */
 export async function createSandboxJob(
-  request: CreateSandboxJobRequest
+  input: CreateSandboxJobRequest
 ): Promise<CreateSandboxJobResponse> {
-  const res = await fetch('/api/sandbox-jobs', {
+  return apiRequest('/api/sandbox-jobs', {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(request),
-    credentials: 'include',
+    body: JSON.stringify(input),
   });
-
-  if (!res.ok) {
-    const error = await res.json().catch(() => ({ error: { message: 'Network error' } }));
-    throw new ApiClientError(
-      error.error?.code || 'CREATE_FAILED',
-      error.error?.message || 'Create sandbox job failed',
-      res.status
-    );
-  }
-
-  return res.json();
 }
 
 

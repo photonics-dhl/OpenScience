@@ -25,6 +25,8 @@ async function makeApp(opts: { secureCookies?: boolean; allowedOrigins?: string[
   app.get('/public', async () => ({ ok: true }));
   // /auth 豁免路径
   app.post('/auth/login', async () => ({ ok: true }));
+  // 带会话副作用的 auth 路径仍须保护
+  app.post('/auth/logout', async () => ({ ok: true }));
   return app;
 }
 
@@ -52,6 +54,16 @@ describe('registerSecurity（CSRF/CORS/helmet）', () => {
       payload: { x: 1 },
     });
     expect(res.statusCode).toBe(200);
+    await app.close();
+  });
+
+  it('CSRF 开启：公开登录豁免，但注销无 token 被拒绝', async () => {
+    const app = await makeApp({ csrf: true });
+    const login = await app.inject({ method: 'POST', url: '/auth/login' });
+    const logout = await app.inject({ method: 'POST', url: '/auth/logout' });
+    expect(login.statusCode).toBe(200);
+    expect(logout.statusCode).toBe(403);
+    expect(logout.json().error.code).toBe('CSRF_INVALID');
     await app.close();
   });
 

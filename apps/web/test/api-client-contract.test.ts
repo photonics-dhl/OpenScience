@@ -105,6 +105,23 @@ describe('apiRequest CSRF contract', () => {
     );
   });
 
+  it('protects session-changing auth writes such as logout', async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(new Response(JSON.stringify({ csrfToken: 'signed-csrf-token' }), { status: 200 }))
+      .mockResolvedValueOnce(new Response(null, { status: 204 }));
+    vi.stubGlobal('fetch', fetchMock);
+    const { apiRequest } = await import('../lib/api');
+
+    await apiRequest('/api/auth/logout', { method: 'POST' });
+
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      2,
+      '/api/auth/logout',
+      expect.objectContaining({ headers: expect.objectContaining({ 'x-csrf-token': 'signed-csrf-token' }) }),
+    );
+  });
+
   it('routes sandbox writes through the same CSRF transport', async () => {
     const fetchMock = vi
       .fn()

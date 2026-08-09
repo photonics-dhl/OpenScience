@@ -13,9 +13,18 @@ export interface SecurityOptions {
   helmet: boolean;
 }
 
-/** 写操作豁免集：/auth/* 公开认证路径（登录/注册/验证码 CSRF 无意义——校验 token 需先有会话）。 */
+const PUBLIC_AUTH_WRITES = new Set([
+  '/auth/request-signup-code',
+  '/auth/confirm-signup',
+  '/auth/register',
+  '/auth/verify-email',
+  '/auth/resend-code',
+  '/auth/login',
+]);
+
+/** 仅无会话的公开认证写入豁免；logout 等会话变更仍受 CSRF 保护。 */
 function isWriteRoute(req: FastifyRequest): boolean {
-  if (req.url.startsWith('/auth/')) return false;
+  if (PUBLIC_AUTH_WRITES.has(req.url.split('?')[0] ?? req.url)) return false;
   return req.method === 'POST' || req.method === 'PUT' || req.method === 'PATCH' || req.method === 'DELETE';
 }
 
