@@ -211,6 +211,7 @@ export interface WorkspaceApi {
   name: string;
   type: string;
   role: string;
+  status?: string;
 }
 
 export async function listMyWorkspaces(): Promise<WorkspaceApi[]> {
