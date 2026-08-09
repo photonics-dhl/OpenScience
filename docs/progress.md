@@ -1,5 +1,14 @@
 # OpenScience (XGS) 进度日志
 
+## 2026-08-09（研究者导入闭环 Task 1）— 视觉地基与浏览器门禁完成，Code Connect 受套餐阻断
+
+- **代码地基**：新增 `StatusBadge`、`ProgressRail`、`Dropzone`、`EvidenceCard` 四个稳定原语；`tokens.css` 补齐深蓝工作台、纸白证据、状态、focus、spacing/type/radius token，`globals.css` 增加双表面与 reduced-motion RO-node 规则，并把 drawer z-index 收口到 token。
+- **测试证据**：TDD 红态先因四个组件缺失而失败；实现后 `npx pnpm@9.15.0 --filter @openscience/web test -- ingestion-foundations.test.ts tokens-contrast.test.ts ui-components.test.ts` 为 18/18，web typecheck 通过。
+- **浏览器截图**：`E:/Miscellaneous/XGS/.worktrees/researcher-ingestion/.playwright-mcp/ingestion-foundations/{desktop-1440x900,tablet-768x1024,mobile-375x812}.png`；人工复核确认三视口无横向溢出，375px 下 Confirm/Edit/Reject 全部可见，无泛化渐变背景，唯一 amber 用于 diff/RO 节点强调。
+- **Figma**：过渡设计源 `rWS3seZaDMdlnSljqktMDp` 新增 30 个 ingestion variables + `Shadow/Evidence`、四个 canonical components（`StatusBadge` `101:38`、`ProgressRail` `101:43`、`Dropzone` `101:51`、`EvidenceCard` `101:57`）与六屏 skeleton（`101:69`、`101:73`、`101:77`、`101:81`、`101:85`、`101:89`）；metadata 校验尺寸/层级通过。
+- **已知阻断**：Figma 官方拒绝 Code Connect 写入，明确要求 Organization/Enterprise + Dev/Full seat；当前 Professional 临时 workspace 无法满足，故未伪造映射。Task 2 可消费代码原语继续，但正式 Code Connect 必须先升级套餐/席位并发布 library。
+- **下一步**：由主 session 评审 Task 1 commit；确认后才进入 Task 2 Auth/Dashboard，不在本任务提前实现业务页面。
+
 ## 2026-08-09（产品前端与设计闭环审计）— 重新基线化，暂停零散视觉开发
 
 - **用户反馈**：注册已成功，但注册页视觉明显不达产品级；要求核对原方案落实度、补齐 Hermes 多格式上传，并明确 Task Master 与产品计划的关系。

@@ -306,5 +306,58 @@
         "three": "AI review and human review run in parallel with evidence preserved."
       }
     }
+  },
+  "ingestion": {
+    "status": {
+      "queued": "Queued",
+      "uploading": "Uploading",
+      "stored": "Stored",
+      "parsing": "Parsing evidence",
+      "needs_review": "Needs review",
+      "confirmed": "Confirmed",
+      "written": "Written to draft",
+      "failed_retryable": "Retry available",
+      "failed_blocked": "Blocked",
+      "missing": "Missing",
+      "inferred": "Inferred",
+      "rejected": "Rejected"
+    },
+    "statusDescription": {
+      "queued": "Waiting for an available processing slot.",
+      "uploading": "Keeping the upload recoverable while bytes are transferred.",
+      "stored": "The artifact is stored and ready for analysis.",
+      "parsing": "Hermes is locating claims, methods, and source anchors.",
+      "needs_review": "Evidence is ready for your decisions.",
+      "confirmed": "All proposed fields in this batch are confirmed.",
+      "written": "Confirmed evidence has been written to the RO draft.",
+      "failed_retryable": "Processing stopped safely and can be retried.",
+      "failed_blocked": "Processing needs a change before it can continue."
+    },
+    "confidence": {
+      "high": "High confidence",
+      "medium": "Medium confidence",
+      "low": "Low confidence"
+    },
+    "progress": {
+      "label": "Research material processing",
+      "count": "{current} of {total} fields"
+    },
+    "actions": {
+      "retry": "Retry",
+      "confirm": "Confirm",
+      "edit": "Edit",
+      "reject": "Reject",
+      "skip": "Skip"
+    },
+    "dropzone": {
+      "label": "Add research materials",
+      "hint": "PDF, DOCX, TeX, Markdown, PNG, JPEG, WebP or SVG",
+      "browse": "Choose files"
+    },
+    "evidence": {
+      "field": "SDF field",
+      "confidence": "Confidence",
+      "source": "Evidence source"
+    }
   }
 }

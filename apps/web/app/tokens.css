@@ -9,13 +9,54 @@
   --accent-diff: #ffb454;
   --canvas-bg: #f6f7f9; --paper-bg: #fcfbf7;
   --ink: #18202b; --border-subtle: rgba(148, 163, 184, 0.18);
+  /* Researcher ingestion foundations: a quiet deep-blue cockpit around paper evidence.
+     accent-diff remains the sole amber accent and is reserved for proposed changes. */
+  --workbench-bg: #07111f;
+  --workbench-surface: #0d1b2d;
+  --workbench-elevated: #13243a;
+  --workbench-text: #f4f7fb;
+  --workbench-muted: #a9b5c5;
+  --evidence-paper: #fcfbf7;
+  --evidence-ink: #18202b;
+  --evidence-muted: #596474;
+  --evidence-border: #d8d6ce;
+  --focus-ring: #4c8dff;
+  --status-neutral-bg: #e8edf3;
+  --status-neutral-text: #344154;
+  --status-info-bg: #dbeafe;
+  --status-info-text: #1e3a8a;
+  --status-warning-bg: #fef3c7;
+  --status-warning-text: #78350f;
+  --status-success-bg: #dcfce7;
+  --status-success-text: #166534;
+  --status-danger-bg: #fee2e2;
+  --status-danger-text: #991b1b;
   /* 状态色：accent-diff 仅表 diff，危险操作用 state-danger（spec §3 红线）。
      #b91c1c 而非 #dc2626：hero-text 白字压其上需 AA 4.5（4.32 不达标 → 5.8，门禁实测） */
   --state-danger: #b91c1c;
+  /* Canonical spacing, type, and radius names mirrored into Figma variables. */
+  --space-1: 0.25rem;
+  --space-2: 0.5rem;
+  --space-3: 0.75rem;
+  --space-4: 1rem;
+  --space-6: 1.5rem;
+  --space-8: 2rem;
+  --font-size-xs: 0.75rem;
+  --font-size-sm: 0.875rem;
+  --font-size-base: 1rem;
+  --font-size-lg: 1.125rem;
+  --radius-control: 0.5rem;
+  --radius-card: 0.75rem;
+  --radius-pill: 9999px;
+  --shadow-card: 0 1px 2px rgb(3 6 11 / 0.06);
+  --shadow-evidence: 0 8px 24px rgb(24 32 43 / 0.08);
+  --shadow-overlay: 0 8px 30px rgb(3 6 11 / 0.16);
   /* 动效时长（spec §2.2：hover/focus ≤200ms；呼吸 8–12s；扫描 4–6s） */
   --motion-fast: 200ms;
   --motion-breathe: 12s;
   --motion-scan: 6s;
+  --ease-standard: cubic-bezier(0.2, 0, 0, 1);
+  --ease-entrance: cubic-bezier(0.16, 1, 0.3, 1);
   /* z-index 层级（升序，禁止组件内随意写 z-*） */
   --z-header: 40;
   --z-overlay: 50;
@@ -30,10 +71,39 @@
   --color-canvas-bg: var(--canvas-bg); --color-paper-bg: var(--paper-bg);
   --color-ink: var(--ink); --color-border-subtle: var(--border-subtle);
   --color-state-danger: var(--state-danger);
+  --color-workbench-bg: var(--workbench-bg);
+  --color-workbench-surface: var(--workbench-surface);
+  --color-workbench-elevated: var(--workbench-elevated);
+  --color-workbench-text: var(--workbench-text);
+  --color-workbench-muted: var(--workbench-muted);
+  --color-evidence-paper: var(--evidence-paper);
+  --color-evidence-ink: var(--evidence-ink);
+  --color-evidence-muted: var(--evidence-muted);
+  --color-evidence-border: var(--evidence-border);
+  --color-focus-ring: var(--focus-ring);
+  --color-status-neutral-bg: var(--status-neutral-bg);
+  --color-status-neutral-text: var(--status-neutral-text);
+  --color-status-info-bg: var(--status-info-bg);
+  --color-status-info-text: var(--status-info-text);
+  --color-status-warning-bg: var(--status-warning-bg);
+  --color-status-warning-text: var(--status-warning-text);
+  --color-status-success-bg: var(--status-success-bg);
+  --color-status-success-text: var(--status-success-text);
+  --color-status-danger-bg: var(--status-danger-bg);
+  --color-status-danger-text: var(--status-danger-text);
   /* 结构 token（Task 8）：三套视觉共享 radius/阴影/动效，不共享背景与密度 */
+  --radius-control: 0.5rem;
   --radius-card: 0.75rem;
+  --radius-pill: 9999px;
   --shadow-card: 0 1px 2px rgb(3 6 11 / 0.06);
+  --shadow-evidence: 0 8px 24px rgb(24 32 43 / 0.08);
   --shadow-overlay: 0 8px 30px rgb(3 6 11 / 0.16);
+  --spacing-os-1: 0.25rem;
+  --spacing-os-2: 0.5rem;
+  --spacing-os-3: 0.75rem;
+  --spacing-os-4: 1rem;
+  --spacing-os-6: 1.5rem;
+  --spacing-os-8: 2rem;
   /* 动效曲线（Task 9 framer-motion 以同值镜像，保持全站一致） */
   --ease-standard: cubic-bezier(0.2, 0, 0, 1);
   --ease-entrance: cubic-bezier(0.16, 1, 0.3, 1);

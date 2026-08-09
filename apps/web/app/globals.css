@@ -97,7 +97,7 @@ body {
   position: fixed;
   inset: 0;
   background: rgba(15, 23, 42, 0.4);
-  z-index: 100;
+  z-index: var(--z-overlay);
 }
 .drawer {
   position: absolute;
@@ -123,8 +123,42 @@ body {
 
 /* 焦点状态（§18.3） */
 :focus-visible {
-  outline: 2px solid var(--color-accent);
+  outline: 2px solid var(--focus-ring);
   outline-offset: 2px;
+}
+
+/* Researcher ingestion surfaces share stable semantic layers with the Figma
+   foundations. Workbench backgrounds are solid hierarchy steps, not generic
+   decorative gradients; evidence remains an ink-on-paper reading surface. */
+.surface-workbench {
+  color: var(--workbench-text);
+  background: var(--workbench-bg);
+  color-scheme: dark;
+}
+
+.surface-evidence {
+  color: var(--evidence-ink);
+  background: var(--evidence-paper);
+  color-scheme: light;
+}
+
+@keyframes ro-node-confirm {
+  0%, 100% { transform: scale(1); opacity: 1; }
+  45% { transform: scale(1.035); opacity: 0.82; }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .ro-node-motion {
+    animation: ro-node-confirm var(--motion-fast) var(--ease-entrance) 1;
+    transform-origin: center;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ro-node-motion {
+    animation: none;
+    transition: none;
+  }
 }
 
 /* 大纲 */
