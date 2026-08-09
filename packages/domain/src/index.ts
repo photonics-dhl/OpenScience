@@ -51,8 +51,10 @@ export {
 export {
   generateMonthlyGrants,
   applyMonthlyGrants,
+  ensureMonthlyGrantForUser,
   MONTHLY_GRANT_RESOURCE,
   MONTHLY_PERIOD_REGEX,
+  type MonthlyGrantResult,
 } from './usage/grants';
 export { checkLimit, type CheckLimitInput, type CheckLimitResult } from './usage/limits';
 export { GLOBAL_DEFAULT_POLICIES, type SeedQuotaPolicy } from './usage/seed-data';

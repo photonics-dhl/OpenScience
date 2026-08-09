@@ -1,5 +1,14 @@
 # OpenScience (XGS) 进度日志
 
+## 2026-08-09（注册后 AI Credit 补齐）— ⏳ 本地红绿通过，待生产 E2E
+
+- **生产阻断**：SeaweedFS 上线后，真实 ingestion 从原先的 500 存储错误推进到 409 `INSUFFICIENT_CREDIT`；根因是邮箱确认事务只创建 Personal Workspace，没有为当月新用户执行既有月度授信规则。
+- **既有决策复用**：未新增额度常量；注册补发读取 `ai_credit` 生效 policy，保持“每月 +N、累积不清零”。默认 seed 当前为 500，但运营修改 policy 后注册流程会自动采用新值。
+- **TDD 证据**：`workspace-personal.test.ts` 先以 `expected [] to have a length of 1` 失败；实现单用户当期 grant 后 5/5 通过，usage/workspace focused 合计 19/19。
+- **幂等边界**：账本 key 为 `monthly-ai-credit:<userId>:<YYYY-MM>`；Personal Workspace 已存在时仍会补齐当月 grant，同月重复回调不会重复发放；无 policy 时不阻断注册。
+- **未关闭债务**：AgentTask 当前只校验 AI Credit 余额，尚未按实际模型成本写 `consume` 流水；本轮只恢复新用户可用性，不将其表述为完整计费。
+- **下一步**：全量门禁后部署 API/domain；通过同一领域函数为已授权测试账号幂等补发当期 grant，再跑 Markdown 上传→S3→Redis→worker→Blob/解析状态真实链路。
+
 ## 2026-08-09（生产对象存储根因与修复设计）— ⏳ compose 红绿完成
 
 - **真实 E2E 根因**：一次性测试 session 按真实 `email_verified` 合同建立后，CSRF=200、创建 RO=201、ingest=500；脱敏探针确认 S3 配置 `0/7`、endpoint class=loopback、`StorageUnavailableError`。生产上传此前必然失败。

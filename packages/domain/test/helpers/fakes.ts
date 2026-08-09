@@ -213,6 +213,7 @@ export function createFakePrisma(): { prisma: PrismaClient; db: FakeDb } {
     },
     usageLedger: {
       create: async ({ data }: any) => {
+        if (data.idempotencyKey && db.usageLedger.some((row) => row.idempotencyKey === data.idempotencyKey)) throw p2002();
         const row = { id: nextId(), createdAt: new Date(), ...data };
         db.usageLedger.push(row);
         return row;

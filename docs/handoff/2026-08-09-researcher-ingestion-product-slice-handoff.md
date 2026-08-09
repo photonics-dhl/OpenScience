@@ -1,11 +1,11 @@
 # Handoff — 2026-08-09 researcher ingestion product slice
 
-- **Current goal:** 完成研究者导入产品切片；Task 1–2 已完成，Task 3 正在部署生产 S3 对象存储并重跑 upload→worker→Blob 端到端证据。
+- **Current goal:** 完成研究者导入产品切片；Task 1–2 已完成，Task 3 已部署生产 S3，正在关闭新用户当月 AI Credit 与 upload→worker→Blob 真实端到端证据。
 - **Done:** 四个 UI 原语、设计 token、Figma foundations 与三视口门禁；邮箱验证码注册、登录、真实 Dashboard；同源 `/api`/CSRF；多文件 Artifact 上传后写入首个不可变 Commit；真实 Next→Fastify 验证码注册 smoke；生产 API/Web/agent-worker 与迁移已部署。
 - **Figma IDs:** components `StatusBadge 101:38`、`ProgressRail 101:43`、`Dropzone 101:51`、`EvidenceCard 101:57`；screens `101:69`、`101:73`、`101:77`、`101:81`、`101:85`、`101:89`；file key `rWS3seZaDMdlnSljqktMDp`。
 - **Constraints:** 不读取/打印 `.env`；代码 token 为 canonical；不在 Task 1 实现 Auth、Dashboard、ingestion API、Hermes 业务页或 Workspace。
-- **Open risks:** S3 修复尚未部署；对象卷备份/恢复、生产 AV/quarantine 与图片 OCR 未实现；隔离 integration 尚未实跑。首次 E2E 失败产生一条明确标记的测试 RO，无 Artifact。浏览器仍有既存 next-intl dotted-key 警告；Code Connect 仍受套餐门禁。
-- **Next action:** 部署 ADR-007 的 SeaweedFS S3 service，生成服务器 Secret 并通过 health/adapter smoke；随后重跑授权测试账号 ingestion E2E。
+- **Open risks:** 对象卷备份/恢复、生产 AV/quarantine 与图片 OCR 未实现；隔离 integration 尚未实跑；AgentTask 尚未写实际 `consume` 流水。失败尝试产生的明确测试 RO 均保留。浏览器仍有既存 next-intl dotted-key 警告；Code Connect 仍受套餐门禁。
+- **Next action:** 部署注册当月 grant 修复，以同一领域函数为授权测试账号幂等补发，再重跑 Markdown ingestion E2E；随后补对象存储非破坏备份。
 - **Deployment checkpoint:** clean server release switch completed after explicit authorization. Previous code is recoverable at `/opt/openscience-backup-20260809-2218`; database backup was created before applying the remaining migrations. API/Web/agent-worker are running; parser runtime loaded in the worker container; public home=200 and unauthenticated auth=401.
 
 ## Production parser acceptance checkpoint
@@ -19,6 +19,12 @@
 - Real API flow reached CSRF 200 and RO creation 201, then ingestion returned 500 before dispatch.
 - Redacted runtime probe: no S3 env fields, loopback fallback, `StorageUnavailableError`; this is the confirmed root cause.
 - ADR-007 selects private SeaweedFS 4.41 S3 mode instead of the archived/unmaintained MinIO community binary line. Compose contract test passed after a verified red state.
+
+## Registration credit checkpoint
+
+- Storage deployment moved the real ingestion failure from 500 to 409 `INSUFFICIENT_CREDIT`, proving the next blocker is onboarding credit rather than S3 reachability.
+- `createPersonalWorkspace` now ensures the current UTC month's `ai_credit` grant from the active policy even when the workspace already exists. The deterministic ledger key prevents duplicate grants.
+- TDD red was an empty ledger after workspace creation; focused workspace/usage tests are 19/19 green. Production deployment and the authorized-account E2E remain the next gate.
 
 Task 3 初版 hardening 已加入 batch request digest、multipart truncated 拒绝和 retry 原子 claim，但深度复审证明当前实现不可发布。Hermes Session/Task 幂等重放的 user/session/kind/payload 绑定已用红绿测试修复；其余阻断见 progress 顶部，migration 25 保持未部署。
 
