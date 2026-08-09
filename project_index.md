@@ -81,8 +81,8 @@
 | `docs/specs/2026-08-08-openscience-product-web-design.md` | 产品级网页设计 spec（方向 A：Monumental Scholarly Intelligence；统一 RO 工作流、Hermes/Live2D、Public RO、Ultrafast Science 策展、许可与版本模型；用户已批准，待书面审阅） | 活文档 |
 | `docs/plans/2026-08-08-openscience-product-web-plan.md` | 产品级网页实现计划（Figma 六屏、Dashboard/Workspace、创建/Hermes/版本、Public RO/Explore、Editorial Curator、Live2D/质量门禁六任务；2026-08-09 进入前端 re-baseline，待按垂直切片重排验收） | 活文档 |
 | `docs/superpowers/specs/2026-08-09-researcher-ingestion-product-slice-design.md` | 研究者第一条产品级前端闭环设计：注册、Dashboard、资料导入、Hermes 证据确认、RO Workspace；待用户审阅 | 设计 spec |
-| `docs/superpowers/plans/2026-08-09-researcher-ingestion-product-slice-plan.md` | 研究者导入闭环实施计划：基础视觉、Auth/Dashboard、多格式上传、Hermes 证据、RO Workspace、浏览器验收与生产部署；Task 1 完成，Task 2 修复轮次，Task 3 仅预检 | 执行中 |
-| `docs/handoff/2026-08-09-researcher-ingestion-product-slice-handoff.md` | 研究者导入闭环活交接；Task 1 代码/Figma/截图/Code Connect 阻断证据，下一步 Task 2 | 活文档 |
+| `docs/superpowers/plans/2026-08-09-researcher-ingestion-product-slice-plan.md` | 研究者导入闭环实施计划：基础视觉、Auth/Dashboard、多格式上传、Hermes 证据、RO Workspace、浏览器验收与生产部署；Task 1–2 完成，Task 3 启动 | 执行中 |
+| `docs/handoff/2026-08-09-researcher-ingestion-product-slice-handoff.md` | 研究者导入闭环活交接；Task 1–2 完成与复审证据，当前进入 Task 3 | 活文档 |
 | `docs/decisions/ADR-004-figma-account-ownership-and-migration.md` | Figma 临时/长期账号所有权、双 OAuth 隔离、canonical 设计稿迁移与验收决策 | Accepted |
 | `docs/decisions/ADR-005-public-email-code-registration.md` | 公开邮箱验证码注册取代邀请码门禁；legacy invitation 仅兼容，规定限流/审计/并发与失败安全 | Accepted |
 | `docs/handoff/2026-08-08-product-web-tooling-handoff.md` | 产品网页工具前置交接（Codex 10 MCP、双 Figma OAuth、迁移 ADR、重启后验证顺序） | 当前 handoff |

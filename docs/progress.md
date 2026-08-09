@@ -1,6 +1,6 @@
 # OpenScience (XGS) 进度日志
 
-## 2026-08-09（研究者导入闭环 Task 2）— Fix round 5，等待最终复审
+## 2026-08-09（研究者导入闭环 Task 2）— ✅ 最终复审通过，Task 3 启动
 
 - **资料入口闭环**：`mode=import` 现在强制选择至少一份资料；创建 RO 后逐文件走现有受 CSRF 保护的 `/artifacts/upload`，再把全部 Artifact 引用写入首个不可变 Commit。`mode=blank` 不再显示伪上传控件。桌面/移动 Playwright 均实际选择 Markdown + PNG，并断言两次上传和 Commit 引用，4/4 通过。
 - **注册反枚举**：已验证账号与未注册账号统一执行 challenge + 邮件投递路径；SMTP 失败失效 challenge、写脱敏审计并仍返回通用 202，避免通过状态码或明显分支时延枚举账号。并发/失败安全 auth focused 23/23。
@@ -10,7 +10,8 @@
 - **云上迁移验收**：另增真实 PostgreSQL integration test，在事务内预置重复 active rows、直接读取并执行 migration 23 源文件、断言只保留最新行后回滚；需在云上 migration 23 deploy 后执行。
 - **最终复审遗留与修复**：复审确认前述问题已关闭，但发现客户端稳定 key 未被服务端兑现。新增 migration 24，为 RO 与 Artifact 建可空唯一幂等键；Fastify 透传 header，domain 重放返回原对象；每个上传使用稳定 import/index key；checkpoint 写入 localStorage，刷新后可恢复。新增 RO/Artifact 重放测试，证明响应丢失后的同 key 请求不重复落库。
 - **内容身份收口**：文件 fingerprint 升级为浏览器 SHA-256；checkpoint 绑定导入模式、完整 logicalPath + digest 材料集合，并恢复 title/workspace；不同内容即使同名也启动新 import。服务端读取实际内容后核对 digest，同 key 不同内容明确拒绝；RO/Artifact 捕获并发唯一冲突并返回赢家对象。migration 23 实库测试按语句执行实际源文件，避免 prepared statement 多语句限制。
-- **状态**：Task 2 仍未自行标记 complete；等待同一独立审查者对 fix round 5 做 scoped re-review。Task 3 实现继续暂停。
+- **最终复审**：独立审查 `6296343..3cd0c79` 给出 `READY`，SHA-256 材料身份、同名异内容、并发 P2002 replay、checkpoint 批次绑定、migration 23 源 SQL 执行与文档同步全部关闭；Task 2 正式完成。
+- **下一步**：Task 3 启动多格式 Artifact ingestion contract、批次/任务状态机与异步 Hermes extraction 队列。迁移按当前最新 24 之后新增，云上实库 apply 仍是部署门禁。
 
 ## 2026-08-09（研究者导入闭环 Task 2 复审）— 撤销完成标记，进入修复轮次
 

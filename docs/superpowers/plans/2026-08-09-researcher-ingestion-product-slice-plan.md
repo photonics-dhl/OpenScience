@@ -53,12 +53,12 @@
 - Consumes existing `/auth/request-signup-code`, `/auth/confirm-signup`, `/auth/login`, `/auth/me` endpoints.
 - Produces a route-safe authenticated shell that redirects unauthenticated users to `/auth/login` and preserves the intended return path.
 
-- [ ] **Step 1: Add failing contract tests for registration, login, redirect, first-use empty state, recent RO state, and actionable Hermes task state.**
-- [ ] **Step 2: Run the focused web tests and confirm they fail because the routes/components do not exist.**
-- [ ] **Step 3: Implement the code-based auth forms with resend cooldown, accessible errors, password rules, and no invitation-code field.**
-- [ ] **Step 4: Implement Dashboard utility layout with “continue research” as the returning-user primary and import/create as equal primary actions.**
-- [ ] **Step 5: Run Playwright in a clean browser at desktop and mobile widths; verify keyboard-only registration and dashboard navigation.**
-- [ ] **Step 6: Sync docs and commit `feat(web): add auth and dashboard shell`.**
+- [x] **Step 1: Add failing contract tests for registration, login, redirect, first-use empty state, recent RO state, and actionable Hermes task state.**
+- [x] **Step 2: Run the focused web tests and confirm they fail because the routes/components do not exist.**
+- [x] **Step 3: Implement the code-based auth forms with resend cooldown, accessible errors, password rules, and no invitation-code field.**
+- [x] **Step 4: Implement Dashboard utility layout with “continue research” as the returning-user primary and import/create as equal primary actions.**
+- [x] **Step 5: Run Playwright in a clean browser at desktop and mobile widths; verify keyboard-only registration and dashboard navigation.**
+- [x] **Step 6: Sync docs and commit `feat(web): add auth and dashboard shell`.**
 
 ### Task 3: Multi-format artifact ingestion contract and pipeline
 
@@ -67,7 +67,7 @@
 - Create: `apps/api/src/routes/ingestion.ts`
 - Create: `apps/api/test/ingestion.integration.test.ts`, `packages/domain/test/ingestion-service.test.ts`
 - Modify: `apps/api/src/app.ts`, `packages/domain/src/index.ts`, `infra/schema.prisma`
-- Create: `infra/migrations/20260809030000_ingestion_tasks/migration.sql`, `infra/migrations/20260809030000_ingestion_tasks/rollback.sql`
+- Create: `infra/migrations/20260809040000_ingestion_tasks/migration.sql`, `infra/migrations/20260809040000_ingestion_tasks/rollback.sql`
 
 **Interfaces:**
 - `POST /research-objects/:id/ingest` accepts multipart files plus `processingConsent` and returns `{ batchId, artifacts, tasks }`.
