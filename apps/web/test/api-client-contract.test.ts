@@ -138,4 +138,41 @@ describe('apiRequest CSRF contract', () => {
       expect.objectContaining({ headers: expect.objectContaining({ 'x-csrf-token': 'signed-csrf-token' }) }),
     );
   });
+
+  it('routes script modification through the same CSRF transport', async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(new Response(JSON.stringify({ csrfToken: 'signed-csrf-token' }), { status: 200 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ newScript: 'print(2)', diff: '+2', policyResult: { allowed: true, violations: [] } }), { status: 200 }));
+    vi.stubGlobal('fetch', fetchMock);
+    const { modifyScript } = await import('../lib/api');
+
+    await modifyScript('job-1', { prompt: 'Change the value' });
+
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      2,
+      '/api/sandbox-jobs/job-1/modify',
+      expect.objectContaining({ headers: expect.objectContaining({ 'x-csrf-token': 'signed-csrf-token' }) }),
+    );
+  });
+
+  it('prepares multipart XHR uploads with credentials and CSRF without forcing JSON content type', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify({ csrfToken: 'signed-csrf-token' }), { status: 200 }),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+    const xhr = {
+      open: vi.fn(),
+      setRequestHeader: vi.fn(),
+      withCredentials: false,
+    };
+    const { prepareProtectedXhr } = await import('../lib/api');
+
+    await prepareProtectedXhr(xhr, 'POST', '/api/artifacts/upload');
+
+    expect(xhr.open).toHaveBeenCalledWith('POST', '/api/artifacts/upload');
+    expect(xhr.withCredentials).toBe(true);
+    expect(xhr.setRequestHeader).toHaveBeenCalledWith('x-csrf-token', 'signed-csrf-token');
+    expect(xhr.setRequestHeader).not.toHaveBeenCalledWith('content-type', expect.any(String));
+  });
 });

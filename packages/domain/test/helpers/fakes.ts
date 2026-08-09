@@ -244,6 +244,14 @@ export function createFakePrisma(): { prisma: PrismaClient; db: FakeDb } {
       },
     },
     researchObject: {
+      findMany: async ({ where, orderBy, take }: any) => {
+        const userId = where?.workspace?.members?.some?.userId;
+        let rows = db.researchObjects.filter((row) =>
+          !userId || db.memberships.some((membership) => membership.workspaceId === row.workspaceId && membership.userId === userId),
+        );
+        if (orderBy?.updatedAt === 'desc') rows = rows.sort((a, b) => b.updatedAt.getTime() - a.updatedAt.getTime());
+        return rows.slice(0, take ?? rows.length);
+      },
       findUnique: async ({ where, include }: any) => {
         const ro = db.researchObjects.find((r) => r.id === where.id) ?? null;
         if (!ro || !include?.sdfDocument) return ro;
@@ -615,6 +623,10 @@ export function createFakePrisma(): { prisma: PrismaClient; db: FakeDb } {
         let rows = db.agentTasks.filter((t) =>
           (where.session === undefined || (where.session.userId === undefined || db.agentSessions.find((s) => s.id === t.sessionId)?.userId === where.session.userId)),
         );
+        if (where.status?.in) rows = rows.filter((task) => where.status.in.includes(task.status));
+        if (include?.session) {
+          rows = rows.map((task) => ({ ...task, session: db.agentSessions.find((session) => session.id === task.sessionId) }));
+        }
         if (include?.approvals) {
           rows = rows.filter((t) => db.toolApprovals.some((a) => a.taskId === t.id && a.status === (include.approvals.where?.status ?? a.status)));
           rows = rows.map((t) => ({

@@ -2,7 +2,7 @@
 
 import { useRef, useState } from 'react';
 import { useTranslations } from 'next-intl';
-import type { ArtifactReference } from '../../lib/api';
+import { prepareProtectedXhr, type ArtifactReference } from '../../lib/api';
 
 interface UploadJob {
   logicalPath: string;
@@ -25,13 +25,17 @@ export default function ArtifactUploader({
   const fileRef = useRef<HTMLInputElement>(null);
   const [jobs, setJobs] = useState<UploadJob[]>([]);
 
-  function upload(file: File) {
+  async function upload(file: File) {
     const logicalPath = file.name;
     const xhr = new XMLHttpRequest();
     setJobs((prev) => [...prev, { logicalPath, progress: 0, state: 'uploading' }]);
 
-    xhr.open('POST', '/api/artifacts/upload');
-    xhr.withCredentials = true;
+    try {
+      await prepareProtectedXhr(xhr, 'POST', '/api/artifacts/upload');
+    } catch {
+      setJobs((prev) => prev.map((job) => (job.logicalPath === logicalPath ? { ...job, state: 'error' } : job)));
+      return;
+    }
     xhr.upload.onprogress = (e) => {
       if (e.lengthComputable) {
         const pct = Math.round((e.loaded / e.total) * 100);
@@ -70,7 +74,7 @@ export default function ArtifactUploader({
         ref={fileRef}
         type="file"
         data-testid="artifact-input"
-        onChange={(e) => { const f = e.target.files?.[0]; if (f) upload(f); }}
+        onChange={(e) => { const f = e.target.files?.[0]; if (f) void upload(f); }}
         aria-label={t('uploadArtifact')}
       />
       <div className="artifact-list">

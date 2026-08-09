@@ -16,6 +16,8 @@ export interface RouteRule {
  */
 export const RATE_LIMIT_ROUTES: Record<string, RouteRule> = {
   '/auth/login': { limit: 5, windowSec: 60 },
+  '/auth/request-signup-code': { limit: 3, windowSec: 300 },
+  '/auth/confirm-signup': { limit: 10, windowSec: 300 },
   '/auth/register': { limit: 5, windowSec: 600 },
   '/auth/resend-code': { limit: 3, windowSec: 300 },
   '/auth/verify-email': { limit: 10, windowSec: 300 },

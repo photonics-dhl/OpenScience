@@ -45,6 +45,27 @@ export interface AgentSessionView {
   createdAt: Date;
 }
 
+export interface AgentTaskListItem extends AgentTaskView {
+  researchObjectId: string | null;
+}
+
+/** Dashboard task rail: caller-owned tasks with their RO context. */
+export async function listAgentTasks(
+  deps: AgentDeps,
+  input: { userId: string; actionableOnly?: boolean },
+): Promise<AgentTaskListItem[]> {
+  const rows = await deps.prisma.agentTask.findMany({
+    where: {
+      session: { userId: input.userId },
+      ...(input.actionableOnly ? { status: { in: ['pending', 'running', 'failed'] } } : {}),
+    },
+    include: { session: true },
+    orderBy: { updatedAt: 'desc' },
+    take: 20,
+  });
+  return rows.map((task) => ({ ...taskToView(task), researchObjectId: task.session.researchObjectId }));
+}
+
 /**
  * 建 Hermes 会话（§15 AgentSession）：
  * - researchObject 归属 workspace 成员校验（§17 越权）

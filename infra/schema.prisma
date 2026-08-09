@@ -107,6 +107,7 @@ model SignupChallenge {
   createdAt   DateTime  @default(now()) @map("created_at")
 
   @@index([email, createdAt])
+  // Partial unique index for one active challenge/email is defined in migration SQL.
   @@map("signup_challenges")
 }
 

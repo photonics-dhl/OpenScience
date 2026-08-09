@@ -105,7 +105,7 @@ describe('register', () => {
 describe('email-code signup', () => {
   it('requests a code without creating a user, then confirms into a verified user', async () => {
     const { deps, db, mailer } = makeDeps();
-    await requestSignupCode(deps, { email: 'apply@example.com', displayName: 'Applicant' });
+    await requestSignupCode(deps, { email: 'apply@example.com' });
     expect(db.users).toHaveLength(0);
     expect(mailer.sent[0].text).toMatch(/\d{6}/);
     const code = mailer.sent[0].text.match(/(\d{6})/)![1];
@@ -117,15 +117,47 @@ describe('email-code signup', () => {
 
   it('rejects an invalid signup code without creating a user', async () => {
     const { deps, db } = makeDeps();
-    await requestSignupCode(deps, { email: 'invalid-code@example.com', displayName: 'Applicant' });
+    await requestSignupCode(deps, { email: 'invalid-code@example.com' });
     await expect(confirmSignup(deps, { email: 'invalid-code@example.com', displayName: 'Applicant', password: 'passw0rd-x', code: '000000' })).rejects.toMatchObject({ code: 'CODE_INVALID' });
     expect(db.users).toHaveLength(0);
+  });
+
+  it('counts concurrent wrong confirmations atomically and locks after five attempts', async () => {
+    const { deps, db } = makeDeps();
+    await requestSignupCode(deps, { email: 'parallel-wrong@example.com' });
+    const attempts = Array.from({ length: 5 }, () =>
+      confirmSignup(deps, {
+        email: 'parallel-wrong@example.com',
+        displayName: 'Applicant',
+        password: 'passw0rd-x',
+        code: '000000',
+      }).catch((error: AuthError) => error.code),
+    );
+    await expect(Promise.all(attempts)).resolves.toEqual(Array(5).fill('CODE_INVALID'));
+    expect(db.signupChallenges[0].attempts).toBe(5);
+    expect(db.signupChallenges[0].lockedUntil).not.toBeNull();
+  });
+
+  it('invalidates and audits an unsent challenge so an immediate retry can deliver', async () => {
+    const { deps, db, mailer } = makeDeps();
+    const auditEvents: Array<{ action: string }> = [];
+    deps.audit = { record: async (event) => void auditEvents.push({ action: event.action }) };
+    deps.mailer = { send: async () => { throw new Error('smtp unavailable'); } };
+    await expect(requestSignupCode(deps, { email: 'retry-delivery@example.com' })).rejects.toMatchObject({
+      code: 'VERIFICATION_DELIVERY_FAILED',
+    });
+    expect(db.signupChallenges[0].consumedAt).not.toBeNull();
+    expect(auditEvents).toContainEqual({ action: 'auth.signup_code.delivery_failed' });
+
+    deps.mailer = mailer;
+    await expect(requestSignupCode(deps, { email: 'retry-delivery@example.com' })).resolves.toBeUndefined();
+    expect(mailer.sent).toHaveLength(1);
   });
 
   it('migrates an existing invited account through the public code flow', async () => {
     const { deps, db, mailer } = makeDeps();
     db.users.push({ id: 'legacy-user', email: 'legacy@example.com', passwordHash: await hashPassword('old-passw0rd'), displayName: 'Legacy', status: 'invited', createdAt: NOW, updatedAt: NOW });
-    await requestSignupCode(deps, { email: 'legacy@example.com', displayName: 'Migrated' });
+    await requestSignupCode(deps, { email: 'legacy@example.com' });
     expect(mailer.sent).toHaveLength(1);
     const code = mailer.sent[0].text.match(/(\d{6})/)![1];
     const result = await confirmSignup(deps, { email: 'legacy@example.com', displayName: 'Migrated', password: 'new-passw0rd1', code });

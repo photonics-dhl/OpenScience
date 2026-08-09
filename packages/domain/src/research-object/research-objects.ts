@@ -31,6 +31,34 @@ export interface ResearchObjectDetail extends ResearchObjectSummary {
   sdf: { core: Record<string, string>; nodes: Array<{ nodeType: string; content: string }> };
 }
 
+export interface ResearchObjectListItem extends ResearchObjectSummary {
+  publicId: string | null;
+  updatedAt: Date;
+}
+
+/** Dashboard list: only ROs from workspaces where the caller is a member. */
+export async function listResearchObjects(
+  deps: WorkspaceDeps,
+  input: { userId: string; limit?: number },
+): Promise<ResearchObjectListItem[]> {
+  const rows = await deps.prisma.researchObject.findMany({
+    where: { workspace: { members: { some: { userId: input.userId } } } },
+    orderBy: { updatedAt: 'desc' },
+    take: Math.min(Math.max(input.limit ?? 20, 1), 100),
+  });
+  return rows.map((row) => ({
+    id: row.id,
+    workspaceId: row.workspaceId,
+    title: row.title,
+    status: row.status,
+    visibility: row.visibility,
+    version: row.version,
+    publicId: row.publicId,
+    createdAt: row.createdAt,
+    updatedAt: row.updatedAt,
+  }));
+}
+
 /** 空六字段文档（§5.1）。 */
 function emptyCore(): Record<string, string> {
   const core: Record<string, string> = { schemaVersion: '0.1.0' };

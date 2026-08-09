@@ -5,7 +5,7 @@ import { buildApp } from '../src/app';
 /* eslint-disable @typescript-eslint/no-explicit-any -- 测试 fake 刻意脱离完整类型 */
 
 function makeFakeDeps() {
-  const db: any = { users: [], invitations: [], emailVerifications: [], mailOutbox: [] };
+  const db: any = { users: [], invitations: [], emailVerifications: [], mailOutbox: [], signupChallenges: [] };
   let seq = 0;
   const nextId = () => `id-${++seq}`;
   const prisma: any = {
@@ -46,6 +46,27 @@ function makeFakeDeps() {
         Object.assign(db.emailVerifications.find((v: any) => v.id === where.id), data),
       updateMany: async () => ({ count: 0 }),
     },
+    signupChallenge: {
+      findFirst: async ({ where }: any) =>
+        db.signupChallenges
+          .filter((challenge: any) => challenge.email === where.email && challenge.consumedAt === null)
+          .sort((a: any, b: any) => b.createdAt.getTime() - a.createdAt.getTime())[0] ?? null,
+      create: async ({ data }: any) => {
+        const row = { id: nextId(), attempts: 0, lockedUntil: null, consumedAt: null, createdAt: new Date(), ...data };
+        db.signupChallenges.push(row);
+        return row;
+      },
+      updateMany: async ({ where, data }: any) => {
+        let count = 0;
+        for (const challenge of db.signupChallenges) {
+          if (challenge.id === where.id && (where.consumedAt === undefined || challenge.consumedAt === where.consumedAt)) {
+            Object.assign(challenge, data);
+            count++;
+          }
+        }
+        return { count };
+      },
+    },
     mailOutbox: { create: async ({ data }: any) => ({ id: nextId(), ...data }) },
     $transaction: async (fn: any) => fn(prisma),
   };
@@ -57,13 +78,15 @@ function makeFakeDeps() {
     expire: async () => 1,
   };
   const sent: Array<{ to: string; subject: string; text: string }> = [];
+  const verified: Array<{ id: string; email: string; displayName: string }> = [];
   const deps: AuthDeps & { secureCookies: boolean } = {
     prisma,
     redis,
     mailer: { send: async (m: any) => void sent.push(m) },
+    onEmailVerified: async (_tx, user) => void verified.push(user),
   };
   (deps as any).secureCookies = false;
-  return { deps, db, sent, store };
+  return { deps, db, sent, store, verified };
 }
 
 async function makeApp() {
@@ -73,6 +96,40 @@ async function makeApp() {
 }
 
 describe('/auth routes', () => {
+  it('request-signup-code accepts the web wrapper email-only payload', async () => {
+    const { app, sent } = await makeApp();
+    const res = await app.inject({
+      method: 'POST',
+      url: '/auth/request-signup-code',
+      payload: { email: 'researcher@example.com' },
+    });
+    expect(res.statusCode).toBe(202);
+    expect(res.json()).toEqual({ ok: true });
+    expect(sent).toHaveLength(1);
+  });
+
+  it('request then confirm signup creates a verified session and invokes workspace provisioning', async () => {
+    const { app, sent, verified } = await makeApp();
+    const requested = await app.inject({
+      method: 'POST',
+      url: '/auth/request-signup-code',
+      payload: { email: 'full-flow@example.com' },
+    });
+    expect(requested.statusCode).toBe(202);
+    const code = sent[0].text.match(/(\d{6})/)?.[1];
+    expect(code).toBeTruthy();
+
+    const confirmed = await app.inject({
+      method: 'POST',
+      url: '/auth/confirm-signup',
+      payload: { email: 'full-flow@example.com', code, password: 'passw0rd-x', displayName: 'Full Flow' },
+    });
+    expect(confirmed.statusCode).toBe(201);
+    expect(confirmed.json()).toMatchObject({ status: 'email_verified' });
+    expect(confirmed.cookies.find((cookie) => cookie.name === 'openscience_session')).toBeDefined();
+    expect(verified).toEqual([expect.objectContaining({ email: 'full-flow@example.com' })]);
+  });
+
   it('rejects invalid register bodies with 400 VALIDATION_ERROR', async () => {
     const { app } = await makeApp();
     const res = await app.inject({

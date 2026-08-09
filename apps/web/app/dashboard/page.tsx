@@ -11,7 +11,9 @@ import { ContinueResearch } from '@/components/dashboard/ContinueResearch';
 import { HermesTaskRail } from '@/components/dashboard/HermesTaskRail';
 import { ImportStage } from '@/components/dashboard/ImportStage';
 import { ResearchList } from '@/components/dashboard/ResearchList';
-import { ApiClientError, getCurrentUser, type CurrentUser } from '@/lib/api';
+import { ApiClientError, getCurrentUser, getDashboardOverview, type CurrentUser } from '@/lib/api';
+import type { DashboardResearch } from '@/components/dashboard/ResearchList';
+import type { DashboardTask } from '@/components/dashboard/HermesTaskRail';
 import type { Locale } from '@/i18n/locale';
 
 export default function DashboardPage() {
@@ -19,13 +21,35 @@ export default function DashboardPage() {
   const locale = useLocale() as Locale;
   const router = useRouter();
   const [user, setUser] = useState<CurrentUser | null>(null);
+  const [researchObjects, setResearchObjects] = useState<DashboardResearch[]>([]);
+  const [tasks, setTasks] = useState<DashboardTask[]>([]);
   const [error, setError] = useState('');
 
   useEffect(() => {
     let active = true;
-    getCurrentUser()
-      .then((currentUser) => {
-        if (active) setUser(currentUser);
+    Promise.all([getCurrentUser(), getDashboardOverview()])
+      .then(([currentUser, overview]) => {
+        if (!active) return;
+        setUser(currentUser);
+        const mappedResearch = overview.researchObjects.map((research) => ({
+          id: research.id,
+          publicId: research.publicId ?? `DRAFT-${research.id.slice(0, 8)}`,
+          title: research.title,
+          versionNo: research.version,
+          status: research.status,
+          pendingCount: overview.tasks.filter((task) => task.researchObjectId === research.id).length,
+        }));
+        setResearchObjects(mappedResearch);
+        setTasks(overview.tasks
+          .filter((task) => task.researchObjectId)
+          .map((task) => ({
+            id: task.id,
+            researchObjectId: task.researchObjectId as string,
+            title: task.kind,
+            status: task.status === 'pending' ? 'queued' : task.status === 'failed' ? 'failed_retryable' : 'running',
+            current: task.progress,
+            total: 100,
+          })));
       })
       .catch((cause) => {
         if (!active) return;
@@ -93,16 +117,16 @@ export default function DashboardPage() {
         </header>
 
         <div className="lg:col-span-7">
-          <ContinueResearch research={null} />
+          <ContinueResearch research={researchObjects[0] ?? null} />
         </div>
         <div className="lg:col-span-5">
           <ImportStage />
         </div>
         <div className="lg:col-span-8">
-          <ResearchList researchObjects={[]} />
+          <ResearchList researchObjects={researchObjects} />
         </div>
         <div className="lg:col-span-4">
-          <HermesTaskRail tasks={[]} />
+          <HermesTaskRail tasks={tasks} />
         </div>
       </main>
     </div>

@@ -85,13 +85,27 @@ function isProtectedWrite(path: string, init?: RequestInit): boolean {
   return !['GET', 'HEAD', 'OPTIONS'].includes(method) && !PUBLIC_AUTH_WRITES.has(path.split('?')[0] ?? path);
 }
 
-async function getCsrfToken(): Promise<string> {
+export async function getCsrfToken(): Promise<string> {
   if (csrfToken) return csrfToken;
   const res = await fetch('/api/csrf-token', { credentials: 'include' });
   if (!res.ok) throw new ApiClientError('CSRF_TOKEN_FAILED', `无法建立安全会话 ${res.status}`, res.status);
   const body = await res.json() as { csrfToken: string };
   csrfToken = body.csrfToken;
   return csrfToken;
+}
+
+interface ProtectedXhr {
+  open(method: string, url: string): void;
+  setRequestHeader(name: string, value: string): void;
+  withCredentials: boolean;
+}
+
+/** Prepare progress-capable multipart XHR without overriding its browser-generated boundary. */
+export async function prepareProtectedXhr(xhr: ProtectedXhr, method: string, path: string): Promise<void> {
+  const token = await getCsrfToken();
+  xhr.open(method, path);
+  xhr.withCredentials = true;
+  xhr.setRequestHeader('x-csrf-token', token);
 }
 
 function isCsrfFailure(status: number, body?: ApiErrorBody): boolean {
@@ -163,6 +177,53 @@ export async function loginWithPassword(input: {
 
 export async function getCurrentUser(): Promise<CurrentUser> {
   return request('/api/auth/me');
+}
+
+export interface DashboardResearchApi {
+  id: string;
+  publicId: string | null;
+  title: string;
+  version: number;
+  status: string;
+}
+
+export interface DashboardTaskApi {
+  id: string;
+  researchObjectId: string | null;
+  kind: string;
+  status: 'pending' | 'running' | 'failed' | 'succeeded';
+  progress: number;
+}
+
+export async function getDashboardOverview(): Promise<{
+  researchObjects: DashboardResearchApi[];
+  tasks: DashboardTaskApi[];
+}> {
+  const [research, agent] = await Promise.all([
+    request<{ researchObjects: DashboardResearchApi[] }>('/api/research-objects?limit=20'),
+    request<{ tasks: DashboardTaskApi[] }>('/api/agent/tasks?actionable=true'),
+  ]);
+  return { researchObjects: research.researchObjects, tasks: agent.tasks };
+}
+
+export interface WorkspaceApi {
+  id: string;
+  name: string;
+  type: string;
+  role: string;
+}
+
+export async function listMyWorkspaces(): Promise<WorkspaceApi[]> {
+  const result = await request<{ workspaces: WorkspaceApi[] }>('/api/workspaces');
+  return result.workspaces;
+}
+
+export async function createResearchObject(input: { workspaceId: string; title: string }): Promise<{ researchObject: { id: string } }> {
+  return request('/api/research-objects', {
+    method: 'POST',
+    headers: { 'idempotency-key': crypto.randomUUID() },
+    body: JSON.stringify(input),
+  });
 }
 
 /** 查 RO 详情（含 SDF core）。 */
@@ -494,21 +555,12 @@ export interface ModifyScriptResponse {
 /** 生成修改后的脚本预览（带 diff 和策略检查） */
 export async function modifyScript(
   jobId: string,
-  request: ModifyScriptRequest
+  input: ModifyScriptRequest
 ): Promise<ModifyScriptResponse> {
-  const res = await fetch(`/api/sandbox-jobs/${jobId}/modify`, {
+  return apiRequest(`/api/sandbox-jobs/${jobId}/modify`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(request),
-    credentials: 'include',
+    body: JSON.stringify(input),
   });
-
-  if (!res.ok) {
-    const error = await res.json().catch(() => ({ error: { message: 'Network error' } }));
-    throw new Error(error.error?.message || 'Modify script failed');
-  }
-
-  return res.json();
 }
 
 export interface SandboxJobContext {

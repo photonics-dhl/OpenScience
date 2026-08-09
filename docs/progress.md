@@ -1,12 +1,26 @@
 # OpenScience (XGS) 进度日志
 
-## 2026-08-09（研究者导入闭环 Task 2）— Auth、Dashboard 与真实注册契约完成
+## 2026-08-09（研究者导入闭环 Task 2 复审）— 撤销完成标记，进入修复轮次
+
+- **复审结论**：Task 2 暂不通过。真实注册首请求存在 web/Fastify payload 漂移；Dashboard 仍固定为空数组；主 CTA 指向未实现路由；新 signup 路由缺限流与原子 attempt；SMTP 失败残留 challenge；部分 protected writes 绕过 CSRF。
+- **决策裁定**：公开邮箱验证码注册是用户明确的新产品决策，优先于旧 baseline 的测试期邀请码描述；本轮更新 canonical spec/ADR，不回退邀请制。
+- **执行纪律**：Task 3 只完成 schema 路径和迁移顺序预检，暂停实现；Task 2 必须增加真实 web-wrapper→Fastify 合同测试、非 mock 注册 smoke、真实 Dashboard 数据与可达 `/research-objects/new` 后才能重新完成。
+- **Fix round 1 实现**：email-only 请求与 Fastify schema 已统一；新 signup 路由限流；challenge 单邮箱 active 唯一、错误 attempt CAS 计数、SMTP 失败失效并脱敏审计；全部 protected writes（含 script modify、multipart XHR）接入 CSRF；Dashboard 从成员 RO/当前用户 AgentTask API 取值；新增可达 `/research-objects/new` 创建/资料入口；baseline + ADR-005 确认公开邮箱验证码注册。
+- **当前证据**：auth 22/22、domain RO/Agent 18/18、API auth/security/rate-limit 20/20、web Auth/Dashboard/transport 22/22、Playwright 桌面/移动 4/4；Prisma schema valid；全仓 build 通过。仍需独立 scoped re-review，未提前恢复 Task 2 complete。
+
+## 2026-08-09（研究者导入闭环 Task 3）— 迁移与 schema 路径预检（实现暂停）
+
+- **计划校正**：仓库 Prisma 单一事实源为 `infra/schema.prisma`，不是旧计划中的 `packages/database/prisma/schema.prisma`；已存在 signup migration `20260809020000`，因此 ingestion migration 顺延为 `20260809030000_ingestion_tasks`，避免生产前向迁移乱序。
+- **边界确认**：二进制继续走 Storage Adapter/Blob，数据库仅保存 batch/task/artifact 关联与状态元数据；解析仍复用异步 AgentTask/worker，不在 API 请求中同步调用模型。
+- **下一步**：Task 2 复审通过后，才按校正后的 Task 3 brief 写 PDF、DOCX、TeX/ZIP、Markdown、图片、同意、越权与 retry 的红态合同测试。
+
+## 2026-08-09（研究者导入闭环 Task 2）— Auth/Dashboard 初版（后续复审撤销完成）
 
 - **页面**：新增 `/auth/register`、`/auth/login`、`/dashboard`，验证码注册不再包含邀请码字段；Dashboard 对新用户突出首份资料导入，对回访用户突出最近 RO，并保留上传与空白创建的同等主操作。
 - **组件**：新增 SignupCodeForm、LoginForm、ContinueResearch、ImportStage、HermesTaskRail、ResearchList；Dashboard 只显示可行动 Hermes 任务。
-- **真实契约**：恢复 `POST /auth/request-signup-code`、`POST /auth/confirm-signup`、`signup_challenges` 迁移与 legacy invited-account 兼容；web 统一走同源 `/api`，受保护写请求自动获取/刷新 CSRF token，开发 rewrite 与生产 nginx 均保持同一路径语义。安全复核进一步把 CSRF 豁免收紧到无会话公开认证写入，`/auth/logout` 等会话变更继续受保护。
+- **真实契约**：恢复 `POST /auth/request-signup-code`、`POST /auth/confirm-signup`、`signup_challenges` 迁移与 legacy invited-account 兼容；web 统一走同源 `/api`，受保护写请求自动获取/刷新 CSRF token，开发 rewrite 与生产 nginx 均保持同一路径语义。安全复核进一步把 CSRF 豁免收紧到无会话公开认证写入，`/auth/logout` 等会话变更继续受保护；本条的完成措辞已由顶部复审条目修正。
 - **验证**：`auth-dashboard.test.tsx` 10/10、`api-client-contract.test.ts` 8/8、API `auth-routes.test.ts` 6/6、API security 6/6；Playwright clean-browser flow 4/4（注册键盘流程、安全重定向、桌面与 375px 导航）；`npx pnpm@9.15.0 build` 全仓通过。API 首次未收集用例的根因是仅运行 Prisma generate 而缺少 `@openscience/database` dist，按正式 package build 顺序补齐后通过，不属于业务失败。
-- **下一步**：进入 Task 3，多格式资料导入必须接真实 storage/artifact/RO/Hermes API，并覆盖 PDF、DOCX、TeX/ZIP、Markdown 与常见图片的校验、进度、失败恢复。
+- **后续修正**：本条验证只能证明局部合同/模拟浏览器流程，不能证明真实前后端闭环；以顶部 Task 2 复审条目为准。
 
 ## 2026-08-09（研究者导入闭环 Task 1）— 视觉地基与浏览器门禁完成，Code Connect 受套餐阻断
 

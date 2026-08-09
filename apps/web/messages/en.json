@@ -398,6 +398,24 @@
       "retry": "Reload"
     }
   },
+  "createResearch": {
+    "back": "Dashboard",
+    "title": "Create a research object",
+    "description": "Start with a blank structured object or attach source material. Files remain evidence; Hermes proposes structure only after storage.",
+    "workspace": "Workspace",
+    "workspaceLoading": "Loading workspaces…",
+    "researchTitle": "Research title",
+    "materials": "Source materials (optional)",
+    "materialsHint": "PDF, DOCX, TeX/ZIP, Markdown and common research images. Upload processing continues in the next step.",
+    "create": "Create research object",
+    "creating": "Creating…",
+    "error": "The research object could not be created.",
+    "evidenceTitle": "Evidence before automation",
+    "evidenceBody": "The original artifact, extraction proposal and your decisions remain separate and traceable.",
+    "stepStore": "Store source artifacts with content hashes",
+    "stepParse": "Locate claims, methods and source anchors",
+    "stepConfirm": "You confirm every SDF write"
+  },
   "ingestion": {
     "status": {
       "queued": "Queued",

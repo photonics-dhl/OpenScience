@@ -398,6 +398,24 @@
       "retry": "重新加载"
     }
   },
+  "createResearch": {
+    "back": "返回研究驾驶舱",
+    "title": "创建 Research Object",
+    "description": "从空白结构开始，或附加原始研究资料。文件始终作为证据保留；Hermes 只在安全存储后提出结构建议。",
+    "workspace": "工作空间",
+    "workspaceLoading": "正在加载工作空间…",
+    "researchTitle": "研究标题",
+    "materials": "原始资料（可选）",
+    "materialsHint": "支持 PDF、DOCX、TeX/ZIP、Markdown 与常见科研图片；创建后进入上传处理。",
+    "create": "创建 Research Object",
+    "creating": "正在创建…",
+    "error": "无法创建 Research Object。",
+    "evidenceTitle": "先保留证据，再进行自动化",
+    "evidenceBody": "原始 Artifact、提取建议与您的决定保持分离并可追溯。",
+    "stepStore": "以内容哈希保存原始资料",
+    "stepParse": "定位主张、方法与来源锚点",
+    "stepConfirm": "每一项 SDF 写入都由您确认"
+  },
   "ingestion": {
     "status": {
       "queued": "排队中",

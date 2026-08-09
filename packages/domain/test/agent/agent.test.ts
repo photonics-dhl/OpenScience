@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { createFakePrisma, seedUser } from '../helpers/fakes';
 import { createResearchObject } from '../../src/research-object/research-objects';
-import { createAgentSession, submitAgentTask, getAgentTask, markTaskProgress } from '../../src/agent/agent';
+import { createAgentSession, submitAgentTask, getAgentTask, listAgentTasks, markTaskProgress } from '../../src/agent/agent';
 
 /** 内存 Redis fake（队列：agent:queue）。 */
 function fakeRedis() {
@@ -59,6 +59,16 @@ describe('AgentSession/AgentTask（§15 + §16 幂等 + §9.1 配额）', () => 
 
     const view = await getAgentTask(deps, { userId: user.id, taskId: task.id });
     expect(view.kind).toBe('demo.echo');
+  });
+
+  it('lists only the current user actionable tasks with RO context', async () => {
+    const { deps, user, ro } = await makeDeps();
+    const session = await createAgentSession(deps, { userId: user.id, researchObjectId: ro.id, kind: 'extract' });
+    const task = await submitAgentTask(deps, { sessionId: session.id, userId: user.id, kind: 'sdf.extract', payload: {} });
+    const rows = await listAgentTasks(deps, { userId: user.id, actionableOnly: true });
+    expect(rows).toEqual([
+      expect.objectContaining({ id: task.id, researchObjectId: ro.id, status: 'pending' }),
+    ]);
   });
 
   it('幂等键重放 → 返回既有任务（§16 不重复）', async () => {

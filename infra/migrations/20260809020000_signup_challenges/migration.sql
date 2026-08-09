@@ -13,3 +13,7 @@ CREATE TABLE "signup_challenges" (
 );
 
 CREATE INDEX "signup_challenges_email_created_at_idx" ON "signup_challenges"("email", "created_at");
+
+-- Exactly one unconsumed challenge may own delivery for a normalized CITEXT email.
+CREATE UNIQUE INDEX "signup_challenges_one_active_email_idx"
+ON "signup_challenges"("email") WHERE "consumed_at" IS NULL;

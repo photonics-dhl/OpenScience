@@ -41,8 +41,12 @@ const registerBody = z.object({
 const verifyBody = z.object({ email: z.string().email(), code: z.string().regex(/^\d{6}$/) });
 const emailBody = z.object({ email: z.string().email() });
 const loginBody = z.object({ email: z.string().email(), password: z.string().min(1) });
-const signupRequestBody = z.object({ email: z.string().email(), displayName: z.string().min(1).max(64) });
-const signupConfirmBody = signupRequestBody.extend({ code: z.string().regex(/^\d{6}$/), password: passwordSchema });
+const signupRequestBody = z.object({ email: z.string().email() });
+const signupConfirmBody = signupRequestBody.extend({
+  code: z.string().regex(/^\d{6}$/),
+  password: passwordSchema,
+  displayName: z.string().min(1).max(64),
+});
 
 function setSessionCookie(reply: FastifyReply, token: string, secure: boolean): void {
   void reply.setCookie(SESSION_COOKIE, token, {

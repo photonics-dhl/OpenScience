@@ -95,6 +95,23 @@ describe('registerRateLimit（Fastify 封装）', () => {
     await app.close();
   });
 
+  it.each([
+    ['/auth/request-signup-code', 3],
+    ['/auth/confirm-signup', 10],
+  ])('%s 超过验证码档位后返回 429', async (path, limit) => {
+    const f = makeFakeRedis();
+    const { sink } = makeAudit();
+    const app = Fastify({ logger: false });
+    await app.register(cookie, { secret: 'test-secret' });
+    await registerRateLimit(app, { redis: f as never, audit: sink, enabled: true });
+    app.post(path, async () => ({ ok: true }));
+    for (let hit = 0; hit < limit; hit++) {
+      expect((await app.inject({ method: 'POST', url: path })).statusCode).toBe(200);
+    }
+    expect((await app.inject({ method: 'POST', url: path })).statusCode).toBe(429);
+    await app.close();
+  });
+
   it('RATE_LIMIT_ROUTES 声明表含登录档位（挂接点）', () => {
     expect(RATE_LIMIT_ROUTES['/auth/login']).toBeDefined();
     expect(RATE_LIMIT_ROUTES['/auth/login'].windowSec).toBe(60);

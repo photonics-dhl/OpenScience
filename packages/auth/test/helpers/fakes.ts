@@ -90,8 +90,28 @@ export function createFakePrisma(): { prisma: PrismaClient; db: FakeDb } {
     },
     signupChallenge: {
       findFirst: async ({ where }: any) => db.signupChallenges.filter((c) => c.email.toLowerCase() === where.email.toLowerCase() && c.consumedAt === null).sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())[0] ?? null,
-      create: async ({ data }: any) => { const row = { id: nextId(), attempts: 0, lockedUntil: null, consumedAt: null, createdAt: new Date(), ...data }; db.signupChallenges.push(row); return row; },
-      updateMany: async ({ where, data }: any) => { let count = 0; for (const c of db.signupChallenges) if (c.id === where.id && (where.consumedAt === undefined || c.consumedAt === where.consumedAt)) { Object.assign(c, data); count++; } return { count }; },
+      create: async ({ data }: any) => {
+        if (db.signupChallenges.some((c) => c.email.toLowerCase() === data.email.toLowerCase() && c.consumedAt === null)) {
+          const err = new Error('Unique constraint failed') as Error & { code: string };
+          err.code = 'P2002';
+          throw err;
+        }
+        const row = { id: nextId(), attempts: 0, lockedUntil: null, consumedAt: null, createdAt: new Date(), ...data };
+        db.signupChallenges.push(row);
+        return row;
+      },
+      updateMany: async ({ where, data }: any) => {
+        let count = 0;
+        for (const c of db.signupChallenges) {
+          if (c.id === where.id
+            && (where.consumedAt === undefined || c.consumedAt === where.consumedAt)
+            && (where.attempts === undefined || c.attempts === where.attempts)) {
+            Object.assign(c, data);
+            count++;
+          }
+        }
+        return { count };
+      },
     },
     mailOutbox: {
       create: async ({ data }: any) => {

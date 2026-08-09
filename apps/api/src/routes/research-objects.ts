@@ -7,6 +7,7 @@ import {
   getResearchObject,
   getSdfDocument,
   grantVisibility,
+  listResearchObjects,
   requestVisibilityChange,
   updateResearchObject,
   updateSdfDocument,
@@ -43,6 +44,13 @@ const sdfBody = z.object({
 
 /** P1B-2：/research-objects + /sdf API 骨架（幂等键 + 乐观锁 + 审计，§16/§17）。 */
 export function registerResearchObjectRoutes(app: FastifyInstance, deps: ResearchObjectRouteDeps): void {
+  app.get('/research-objects', async (req, reply) => {
+    const user = await requireCurrentUser(deps, req, reply);
+    if (!user) return;
+    const { limit } = z.object({ limit: z.coerce.number().int().min(1).max(100).default(20) }).parse(req.query);
+    return reply.send({ researchObjects: await listResearchObjects(deps, { userId: user.userId, limit }) });
+  });
+
   app.post('/research-objects', async (req, reply) => {
     const user = await requireCurrentUser(deps, req, reply);
     if (!user) return;

@@ -63,7 +63,7 @@ export {
 } from './research-object/types';
 export { ResearchObjectError, type ResearchObjectErrorCode } from './research-object/errors';
 export {
-  createResearchObject, getResearchObject, updateResearchObject,
+  createResearchObject, getResearchObject, listResearchObjects, updateResearchObject,
   type CreateResearchObjectInput, type ResearchObjectSummary, type ResearchObjectDetail, type UpdateResearchObjectInput,
 } from './research-object/research-objects';
 export {
@@ -152,7 +152,7 @@ export {
 export { InAppChannel, EmailChannel } from './notification/channels';
 export { AgentError, type AgentErrorCode } from './agent/errors';
 export {
-  createAgentSession, submitAgentTask, getAgentTask, listAgentSessions, markTaskProgress,
+  createAgentSession, submitAgentTask, getAgentTask, listAgentSessions, listAgentTasks, markTaskProgress,
   AGENT_TASK_QUEUE, AI_CREDIT_RESOURCE,
   type AgentDeps, type AgentTaskView, type AgentSessionView, type AgentTaskStatus,
 } from './agent/agent';

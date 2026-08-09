@@ -41,6 +41,20 @@ const translations: Record<string, string> = {
   'dashboard.research.empty': 'No research objects yet.',
   'dashboard.research.search': 'Search research objects',
   'dashboard.research.status.draft': 'Draft',
+  'createResearch.back': 'Dashboard',
+  'createResearch.title': 'Create a research object',
+  'createResearch.description': 'Start with a blank structured object or attach source material.',
+  'createResearch.workspace': 'Workspace',
+  'createResearch.workspaceLoading': 'Loading workspaces…',
+  'createResearch.researchTitle': 'Research title',
+  'createResearch.materials': 'Source materials',
+  'createResearch.materialsHint': 'PDF, DOCX, TeX, Markdown and images',
+  'createResearch.create': 'Create research object',
+  'createResearch.evidenceTitle': 'Evidence before automation',
+  'createResearch.evidenceBody': 'Evidence remains traceable.',
+  'createResearch.stepStore': 'Store source artifacts',
+  'createResearch.stepParse': 'Locate evidence',
+  'createResearch.stepConfirm': 'Confirm every write',
 };
 
 vi.mock('next-intl', () => ({
@@ -59,6 +73,7 @@ vi.mock('next/navigation', () => ({
 import {
   confirmSignup,
   getCurrentUser,
+  getDashboardOverview,
   loginWithPassword,
   requestSignupCode,
   safeReturnTo,
@@ -69,6 +84,7 @@ import { ContinueResearch } from '../components/dashboard/ContinueResearch';
 import { HermesTaskRail } from '../components/dashboard/HermesTaskRail';
 import { ImportStage } from '../components/dashboard/ImportStage';
 import { ResearchList } from '../components/dashboard/ResearchList';
+import NewResearchObjectPage from '../app/research-objects/new/page';
 
 afterEach(() => {
   vi.unstubAllGlobals();
@@ -76,6 +92,20 @@ afterEach(() => {
 });
 
 describe('auth API contract', () => {
+  it('loads dashboard research and actionable tasks from real API routes', async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(new Response(JSON.stringify({ researchObjects: [{ id: 'ro-1', title: 'Real RO', publicId: null, version: 1, status: 'draft' }] }), { status: 200 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ tasks: [{ id: 'task-1', researchObjectId: 'ro-1', kind: 'sdf.extract', status: 'pending', progress: 10 }] }), { status: 200 }));
+    vi.stubGlobal('fetch', fetchMock);
+    await expect(getDashboardOverview()).resolves.toMatchObject({
+      researchObjects: [{ id: 'ro-1' }],
+      tasks: [{ id: 'task-1' }],
+    });
+    expect(fetchMock).toHaveBeenNthCalledWith(1, '/api/research-objects?limit=20', expect.any(Object));
+    expect(fetchMock).toHaveBeenNthCalledWith(2, '/api/agent/tasks?actionable=true', expect.any(Object));
+  });
+
   it('requests and confirms code signup without sending an invitation code', async () => {
     const fetchMock = vi
       .fn()
@@ -179,6 +209,13 @@ describe('code-based auth forms', () => {
 });
 
 describe('dashboard product states', () => {
+  it('renders a reachable creation/import destination for both dashboard actions', () => {
+    const markup = renderToStaticMarkup(createElement(NewResearchObjectPage));
+    expect(markup).toContain('Create a research object');
+    expect(markup).toContain('name="title"');
+    expect(markup).toContain('type="file"');
+  });
+
   it('makes first-use import the primary continuation', () => {
     const markup = renderToStaticMarkup(createElement(ContinueResearch, { research: null }));
 

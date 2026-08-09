@@ -1,7 +1,7 @@
 import type { FastifyInstance, FastifyRequest } from 'fastify';
 import { z } from 'zod';
 import type { AuthDeps } from '@openscience/auth';
-import { createAgentSession, getAgentTask, listAgentSessions, submitAgentTask, approveApproval, listPendingApprovals, rejectApproval, revokeApproval } from '@openscience/domain';
+import { createAgentSession, getAgentTask, listAgentSessions, listAgentTasks, submitAgentTask, approveApproval, listPendingApprovals, rejectApproval, revokeApproval } from '@openscience/domain';
 import type { AuditContext } from '@openscience/observability';
 import { requireCurrentUser } from './session-guard';
 
@@ -47,6 +47,13 @@ export function registerAgentRoutes(app: FastifyInstance, deps: AgentRouteDeps):
     const user = await requireCurrentUser(deps, req, reply);
     if (!user) return;
     return reply.send({ sessions: await listAgentSessions(deps, { userId: user.userId }) });
+  });
+
+  app.get('/agent/tasks', async (req, reply) => {
+    const user = await requireCurrentUser(deps, req, reply);
+    if (!user) return;
+    const { actionable } = z.object({ actionable: z.enum(['true', 'false']).default('true') }).parse(req.query);
+    return reply.send({ tasks: await listAgentTasks(deps, { userId: user.userId, actionableOnly: actionable === 'true' }) });
   });
 
   app.post('/agent/tasks', async (req, reply) => {

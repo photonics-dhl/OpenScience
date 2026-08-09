@@ -66,8 +66,8 @@
 - Create: `packages/domain/src/ingestion/{ingestion-types,ingestion-service,format-policy}.ts`
 - Create: `apps/api/src/routes/ingestion.ts`
 - Create: `apps/api/test/ingestion.integration.test.ts`, `packages/domain/test/ingestion-service.test.ts`
-- Modify: `apps/api/src/app.ts`, `packages/domain/src/index.ts`, `packages/database/prisma/schema.prisma`
-- Create: `infra/migrations/20260809000000_ingestion_tasks/migration.sql`, `infra/migrations/20260809000000_ingestion_tasks/rollback.sql`
+- Modify: `apps/api/src/app.ts`, `packages/domain/src/index.ts`, `infra/schema.prisma`
+- Create: `infra/migrations/20260809030000_ingestion_tasks/migration.sql`, `infra/migrations/20260809030000_ingestion_tasks/rollback.sql`
 
 **Interfaces:**
 - `POST /research-objects/:id/ingest` accepts multipart files plus `processingConsent` and returns `{ batchId, artifacts, tasks }`.

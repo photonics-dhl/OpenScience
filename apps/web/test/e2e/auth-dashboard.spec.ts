@@ -15,6 +15,15 @@ async function mockAuthenticatedUser(page: Page) {
       }),
     });
   });
+  await page.route('**/api/research-objects?limit=20', async (route) => {
+    await route.fulfill({ contentType: 'application/json', body: JSON.stringify({ researchObjects: [] }) });
+  });
+  await page.route('**/api/agent/tasks?actionable=true', async (route) => {
+    await route.fulfill({ contentType: 'application/json', body: JSON.stringify({ tasks: [] }) });
+  });
+  await page.route('**/api/workspaces', async (route) => {
+    await route.fulfill({ contentType: 'application/json', body: JSON.stringify({ workspaces: [{ id: 'workspace-1', name: 'Personal workspace', type: 'personal', role: 'owner' }] }) });
+  });
 }
 
 test('registration is keyboard-operable and restores the intended return path', async ({ page }) => {
@@ -86,5 +95,8 @@ for (const viewport of [
     );
     const overflow = await page.evaluate(() => document.documentElement.scrollWidth > window.innerWidth);
     expect(overflow).toBe(false);
+    await page.locator('[data-action-priority="primary"]').filter({ hasText: /upload materials/i }).click();
+    await expect(page).toHaveURL(`${baseUrl}/research-objects/new?mode=import`);
+    await expect(page.getByRole('heading', { name: /create a research object/i })).toBeVisible();
   });
 }
