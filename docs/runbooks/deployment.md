@@ -83,7 +83,7 @@ ssh-run.sh "cd /opt/openscience && docker compose --env-file /opt/openscience/.e
 
 ## 4. 验证命令
 
-- API 健康：`curl -sI https://OpenScience.428312321.xyz/auth/me` → 401（未登录，服务在）
+- API 健康：compose healthcheck 以 `/auth/me` 的 401 为健康；`curl -sI https://OpenScience.428312321.xyz/auth/me` → 401（未登录，服务在）
 - /admin 强认证：`curl -sI -u <admin-user> https://OpenScience.428312321.xyz/admin/` → basic_auth 放行后 401（API 层判未登录）或 200/403
 - 安全响应头：`curl -sI https://OpenScience.428312321.xyz/auth/me` → 含 `X-Content-Type-Options: nosniff`、CSP `default-src 'none'`
 - 限流：连续打 `/auth/login` 5+ 次 → 429 + `Retry-After`

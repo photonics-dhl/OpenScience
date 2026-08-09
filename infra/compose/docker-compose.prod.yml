@@ -68,7 +68,7 @@ services:
       redis:
         condition: service_healthy
     healthcheck:
-      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:3001/auth/me || exit 1"]
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3001/auth/me').then(r=>process.exit(r.status===401?0:1)).catch(()=>process.exit(1))"]
       interval: 10s
       timeout: 5s
       retries: 6
