@@ -26,6 +26,26 @@ export class ApiClientError extends Error {
   }
 }
 
+export interface CurrentUser {
+  userId: string;
+  email: string;
+  displayName: string;
+  status: string;
+  level: string;
+}
+
+export interface AuthResult {
+  userId: string;
+  status: string;
+}
+
+export interface ConfirmSignupInput {
+  email: string;
+  code: string;
+  password: string;
+  displayName: string;
+}
+
 export interface ResearchObjectSummary {
   id: string;
   workspaceId: string;
@@ -62,6 +82,44 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   }
   if (res.status === 204) return undefined as T;
   return res.json() as Promise<T>;
+}
+
+/** Keep post-auth navigation on this origin and out of auth-loop routes. */
+export function safeReturnTo(value: string | null | undefined): string {
+  if (!value || !value.startsWith('/') || value.startsWith('//')) return '/dashboard';
+  const pathname = value.split(/[?#]/, 1)[0];
+  if (pathname === '/auth/login' || pathname === '/auth/register') return '/dashboard';
+  return value;
+}
+
+/** Request a verification code without collecting an invitation code in the product UI. */
+export async function requestSignupCode(input: { email: string }): Promise<{ ok: true }> {
+  return request('/api/auth/request-signup-code', {
+    method: 'POST',
+    body: JSON.stringify(input),
+  });
+}
+
+/** Confirm the code and finish account creation in one explicit step. */
+export async function confirmSignup(input: ConfirmSignupInput): Promise<AuthResult> {
+  return request('/api/auth/confirm-signup', {
+    method: 'POST',
+    body: JSON.stringify(input),
+  });
+}
+
+export async function loginWithPassword(input: {
+  email: string;
+  password: string;
+}): Promise<AuthResult> {
+  return request('/api/auth/login', {
+    method: 'POST',
+    body: JSON.stringify(input),
+  });
+}
+
+export async function getCurrentUser(): Promise<CurrentUser> {
+  return request('/api/auth/me');
 }
 
 /** 查 RO 详情（含 SDF core）。 */

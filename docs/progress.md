@@ -1,5 +1,13 @@
 # OpenScience (XGS) 进度日志
 
+## 2026-08-09（研究者导入闭环 Task 2）— Auth 与 Dashboard 前端完成
+
+- **页面**：新增 `/auth/register`、`/auth/login`、`/dashboard`，验证码注册不再包含邀请码字段；Dashboard 对新用户突出首份资料导入，对回访用户突出最近 RO，并保留上传与空白创建的同等主操作。
+- **组件**：新增 SignupCodeForm、LoginForm、ContinueResearch、ImportStage、HermesTaskRail、ResearchList；Dashboard 只显示可行动 Hermes 任务。
+- **验证**：`auth-dashboard.test.tsx` 10/10，Playwright clean-browser flow 4/4（注册键盘流程、安全重定向、桌面与 375px 导航），web typecheck/build 通过。
+- **已知基线缺口**：当前分支尚未合入生产已经部署的 `/auth/request-signup-code` 与 `/auth/confirm-signup` 后端提交；部署前必须补齐并跑真实 API 集成验证，不能只依赖 E2E route mock。
+- **下一步**：补齐验证码注册后端契约并完成 Task 2 审查；通过后进入 Task 3 多格式导入。
+
 ## 2026-08-09（研究者导入闭环 Task 1）— 视觉地基与浏览器门禁完成，Code Connect 受套餐阻断
 
 - **代码地基**：新增 `StatusBadge`、`ProgressRail`、`Dropzone`、`EvidenceCard` 四个稳定原语；`tokens.css` 补齐深蓝工作台、纸白证据、状态、focus、spacing/type/radius token，`globals.css` 增加双表面与 reduced-motion RO-node 规则，并把 drawer z-index 收口到 token。

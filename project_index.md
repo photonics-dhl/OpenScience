@@ -18,6 +18,9 @@
 | `apps/web/components.json` | shadcn/ui `new-york` 配置（Task 7.4，cssVariables + 本地 aliases） | 活文档 |
 | `apps/web/app/tokens.css` | 视觉 token 单一事实源（Task 2/8；2026-08-09 Task 1 补 ingestion workbench/evidence/status/focus/spacing/type/radius，与 Figma variables 同名） | 活文档 |
 | `apps/web/components/ui/{button,card,badge,skeleton,input,dialog,status-badge,progress-rail,dropzone,evidence-card}.tsx` | UI 基础组件；后四项为研究者导入 Task 1 稳定原语（双语、WCAG、reduced-motion、固定任务状态占位） | 活文档 |
+| `apps/web/app/auth/{register,login}/page.tsx` / `apps/web/components/auth/{SignupCodeForm,LoginForm}.tsx` | 邮箱验证码注册与登录页面/表单；无邀请码字段，安全 returnTo 与可访问错误反馈 | 活文档 |
+| `apps/web/app/dashboard/page.tsx` / `apps/web/components/dashboard/` | 研究驾驶舱：最近 RO、导入/创建、可行动 Hermes 任务和研究列表 | 活文档 |
+| `apps/web/test/auth-dashboard.test.tsx` / `apps/web/test/e2e/auth-dashboard.spec.ts` | Auth/Dashboard 单元合同与 clean-browser 桌面/移动 E2E | 活文档 |
 | `apps/web/test/ingestion-foundations.test.ts` / `apps/web/test/visual/ingestion-shots.mjs` / `apps/web/app/{%5Fvisual,_visual}/ingestion-foundations/page.tsx` | 研究者导入视觉地基 TDD 合同与 1440/768/375 三视口浏览器截图门禁；脚本访问仅开发态可用的真实编译原语预览 | 活文档 |
 | `apps/web/components/landing/SiteHeader.tsx` | Landing 页站点 Header（i18n 导航、滚动模糊背景、真实 `#latest/#trust` 入口） | 活文档 |
 | `apps/web/components/landing/Hero.tsx` | Landing 页 Hero（ro-loop 无缝循环视频主视觉 + poster/reduced-motion 降级、i18n 文案、双 CTA、landing-reveal 进入 stagger；2026-08-07 v2：符号放大 118vh + 光晕 + 深羽化 mask + contrast 滤镜消方框感，底部三柱核心思想条 01 结构化/02 可验证/03 自进化） | 活文档 |

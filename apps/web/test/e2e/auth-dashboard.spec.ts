@@ -1,0 +1,90 @@
+import { expect, test, type Page } from 'playwright/test';
+
+const baseUrl = process.env.WEB_BASE_URL ?? 'http://127.0.0.1:3000';
+
+async function mockAuthenticatedUser(page: Page) {
+  await page.route('**/api/auth/me', async (route) => {
+    await route.fulfill({
+      contentType: 'application/json',
+      body: JSON.stringify({
+        userId: 'user-1',
+        email: 'researcher@example.com',
+        displayName: 'Ada Researcher',
+        status: 'email_verified',
+        level: 'free',
+      }),
+    });
+  });
+}
+
+test('registration is keyboard-operable and restores the intended return path', async ({ page }) => {
+  await page.route('**/api/auth/request-signup-code', async (route) => {
+    expect(await route.request().postDataJSON()).toEqual({ email: 'researcher@example.com' });
+    await route.fulfill({ status: 202, contentType: 'application/json', body: JSON.stringify({ ok: true }) });
+  });
+  await page.route('**/api/auth/confirm-signup', async (route) => {
+    expect(await route.request().postDataJSON()).toEqual({
+      email: 'researcher@example.com',
+      code: '123456',
+      password: 'Method123',
+      displayName: 'Ada Researcher',
+    });
+    await route.fulfill({
+      contentType: 'application/json',
+      body: JSON.stringify({ userId: 'user-1', status: 'email_verified' }),
+    });
+  });
+  await mockAuthenticatedUser(page);
+
+  await page.goto(`${baseUrl}/auth/register?returnTo=%2Fdashboard`);
+  await expect(page.getByLabel(/invite|invitation/i)).toHaveCount(0);
+
+  await page.getByLabel(/display name/i).focus();
+  await page.keyboard.type('Ada Researcher');
+  await page.keyboard.press('Tab');
+  await page.keyboard.type('researcher@example.com');
+  await page.keyboard.press('Tab');
+  await page.keyboard.type('Method123');
+  await page.keyboard.press('Enter');
+
+  await page.getByLabel(/verification code/i).focus();
+  await page.keyboard.type('123456');
+  await page.keyboard.press('Enter');
+  await expect(page).toHaveURL(`${baseUrl}/dashboard`);
+});
+
+test('unauthenticated dashboard redirects safely to login', async ({ page }) => {
+  await page.route('**/api/auth/me', async (route) => {
+    await route.fulfill({
+      status: 401,
+      contentType: 'application/json',
+      body: JSON.stringify({ error: { code: 'SESSION_INVALID', message: 'Not signed in' } }),
+    });
+  });
+
+  await page.goto(`${baseUrl}/dashboard`);
+  await expect(page).toHaveURL(`${baseUrl}/auth/login?returnTo=%2Fdashboard`);
+});
+
+for (const viewport of [
+  { name: 'desktop', width: 1440, height: 900 },
+  { name: 'mobile', width: 375, height: 812 },
+]) {
+  test(`dashboard navigation remains complete at ${viewport.name} width`, async ({ page }) => {
+    await page.setViewportSize(viewport);
+    await mockAuthenticatedUser(page);
+    await page.goto(`${baseUrl}/dashboard`);
+
+    await expect(page.getByRole('heading', { name: /research dashboard/i })).toBeVisible();
+    await expect(page.locator('[data-action-priority="primary"]').filter({ hasText: /upload materials/i })).toHaveAttribute(
+      'href',
+      '/research-objects/new?mode=import',
+    );
+    await expect(page.getByRole('link', { name: /create blank ro/i })).toHaveAttribute(
+      'href',
+      '/research-objects/new?mode=blank',
+    );
+    const overflow = await page.evaluate(() => document.documentElement.scrollWidth > window.innerWidth);
+    expect(overflow).toBe(false);
+  });
+}

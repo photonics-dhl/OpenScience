@@ -307,6 +307,97 @@
       }
     }
   },
+  "auth": {
+    "register": {
+      "title": "Create your research account",
+      "description": "Use your personal or institutional email. No invitation field is required here.",
+      "displayName": "Display name",
+      "email": "Email",
+      "password": "Password",
+      "passwordHint": "Use at least 8 characters with a letter and a number.",
+      "passwordError": {
+        "length": "Password must be at least 8 characters.",
+        "letter": "Password must include a letter.",
+        "number": "Password must include a number."
+      },
+      "requestCode": "Send verification code",
+      "sending": "Sending…",
+      "code": "Verification code",
+      "codeSent": "We sent a code to {email}",
+      "confirm": "Create account",
+      "confirming": "Creating account…",
+      "resend": "Resend code",
+      "resendIn": "Resend in {seconds}s",
+      "haveAccount": "Already have an account?",
+      "login": "Log in"
+    },
+    "login": {
+      "title": "Welcome back",
+      "description": "Return to your research workspace and continue your latest work.",
+      "email": "Email",
+      "password": "Password",
+      "submit": "Log in",
+      "signingIn": "Signing in…",
+      "noAccount": "New to OpenScience?",
+      "register": "Create account"
+    },
+    "errors": {
+      "generic": "We could not complete that action. Please try again."
+    }
+  },
+  "dashboard": {
+    "eyebrow": "Personal workspace",
+    "title": "Research dashboard",
+    "welcome": "{name}, continue from your latest research context or begin a new research object.",
+    "loading": "Restoring your research context…",
+    "context": {
+      "navigation": "Dashboard utilities",
+      "help": "Help"
+    },
+    "continue": {
+      "title": "Continue research",
+      "emptyTitle": "Import your first research material",
+      "emptyBody": "Hermes preserves source evidence before proposing SDF fields for your confirmation.",
+      "open": "Continue research",
+      "version": "Version {version}",
+      "pending": "{count} items need attention"
+    },
+    "import": {
+      "eyebrow": "New research context",
+      "title": "Start a research object",
+      "description": "Bring existing material or begin with a blank structured object.",
+      "upload": "Upload materials",
+      "blank": "Create blank RO"
+    },
+    "hermes": {
+      "title": "Hermes tasks",
+      "empty": "No tasks need your attention.",
+      "review": "Review evidence",
+      "retry": "Retry task",
+      "view": "View progress",
+      "progress": "{current} of {total} fields"
+    },
+    "research": {
+      "title": "Your research",
+      "empty": "No research objects yet.",
+      "noResults": "No research objects match your search.",
+      "search": "Search research objects",
+      "version": "v{version}",
+      "status": {
+        "draft": "Draft",
+        "under_review": "Under review",
+        "approved": "Approved",
+        "published": "Published",
+        "revised": "Revised",
+        "archived": "Archived"
+      }
+    },
+    "errors": {
+      "title": "Dashboard unavailable",
+      "load": "We could not restore your research context.",
+      "retry": "Reload"
+    }
+  },
   "ingestion": {
     "status": {
       "queued": "Queued",
