@@ -186,7 +186,7 @@
 
   Run focused tests, Web test/typecheck/build, affected API tests, and commit as `feat(product): create first research object`.
 
-### Task 5: Local integration, production deployment, and acceptance
+### Task 5: Server integration, production deployment, and acceptance
 
 **Files:**
 - Create: `apps/web/test/e2e/auth-create.spec.ts`
@@ -199,9 +199,9 @@
 - Consumes: the complete identity and create-flow surface from Tasks 1–4.
 - Produces: repeatable browser acceptance evidence and a production release reference.
 
-- [ ] **Step 1: Run local integration with a disposable invited account**
+- [ ] **Step 1: Run server integration with a disposable invited account**
 
-  Start the development data stack, create a disposable invitation through `node scripts/invite.mjs create`, and drive Register → Verify → Dashboard → Create blank RO → Workspace. Capture only generated IDs and HTTP status in test output; never print invitation codes, passwords, cookies, or verification codes.
+  Use the ECS runtime as the integration environment. Create a disposable invitation through `node scripts/invite.mjs create` only when a test recipient is explicitly available, and drive Register → Verify → Dashboard → Create blank RO → Workspace. Capture only generated IDs and HTTP status in test output; never print invitation codes, passwords, cookies, or verification codes.
 
 - [ ] **Step 2: Run the full release gate**
 
@@ -209,11 +209,11 @@
 
 - [ ] **Step 3: Deploy through the production runbook**
 
-  Confirm a fresh database backup, then use `infra/scripts/deploy.sh <release> --confirm` so migration `20260809010000_ro_create_idempotency` is applied before the containers are force-recreated. Verify migration status, Nginx syntax, API health, and unauthenticated 401 boundaries. Roll back the release without rolling back the additive nullable column unless the migration itself fails before any production RO uses it.
+  Confirm a fresh database backup, then use the server deployment flow so migration `20260809010000_ro_create_idempotency` is applied before the containers are force-recreated. Verify migration status from inside the API container with the production `DATABASE_URL`, Nginx syntax, API health, and unauthenticated 401 boundaries. Roll back the release without rolling back the additive nullable column unless the migration itself fails before any production RO uses it. **Status:** migration and anonymous route smoke completed on ECS.
 
 - [ ] **Step 4: Execute production browser acceptance**
 
-  With an explicitly disposable production invitation, verify registration, email verification, session persistence after reload, Dashboard empty state, first RO creation, Workspace load, logout, and login again. Redact account identifiers from committed evidence.
+  With an explicitly disposable production invitation and a confirmed recipient, verify registration, email verification, session persistence after reload, Dashboard empty state, first RO creation, Workspace load, logout, and login again. Redact account identifiers from committed evidence. **Pending:** recipient-specific email E2E.
 
 - [ ] **Step 5: Synchronize project records and commit**
 
