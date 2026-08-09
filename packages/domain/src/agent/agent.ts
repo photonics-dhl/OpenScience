@@ -137,10 +137,10 @@ export async function submitAgentTask(
       payload: input.payload as never,
       idempotencyKey: input.idempotencyKey,
     },
-  }).catch((e: unknown) => {
+  }).catch(async (e: unknown) => {
     if (typeof (e as { code?: unknown })?.code === 'string' && (e as { code: string }).code === 'P2002') {
-      const dup = deps.prisma.agentTask.findUnique({ where: { idempotencyKey: input.idempotencyKey ?? '' } });
-      void dup;
+      const dup = await deps.prisma.agentTask.findUnique({ where: { idempotencyKey: input.idempotencyKey ?? '' } });
+      if (dup) return dup;
       throw new AgentError('DUPLICATE_IDEMPOTENCY_KEY', '幂等键重复（§16）', e);
     }
     throw e;

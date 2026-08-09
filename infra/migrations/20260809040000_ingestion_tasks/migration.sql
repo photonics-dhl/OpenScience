@@ -8,6 +8,7 @@ CREATE TABLE "ingestion_batches" (
   "user_id" UUID NOT NULL,
   "agent_session_id" UUID,
   "idempotency_key" TEXT,
+  "request_digest" CHAR(64) NOT NULL,
   "created_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
   "updated_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
   CONSTRAINT "ingestion_batches_pkey" PRIMARY KEY ("id"),

@@ -687,8 +687,15 @@ export function createFakePrisma(): { prisma: PrismaClient; db: FakeDb } {
         return include?.artifact ? { ...row, artifact: db.artifacts.find((artifact) => artifact.id === row.artifactId) } : { ...row };
       },
       updateMany: async ({ where, data }: any) => {
-        const rows = db.ingestionTasks.filter((task) => task.agentTaskId === where.agentTaskId);
-        rows.forEach((row) => Object.assign(row, data, { updatedAt: new Date() }));
+        const rows = db.ingestionTasks.filter((task) =>
+          (where.agentTaskId === undefined || task.agentTaskId === where.agentTaskId) &&
+          (where.id === undefined || task.id === where.id) &&
+          (where.state === undefined || task.state === where.state),
+        );
+        rows.forEach((row) => {
+          const retryCount = data.retryCount?.increment ? row.retryCount + data.retryCount.increment : (data.retryCount ?? row.retryCount);
+          Object.assign(row, { ...data, retryCount, updatedAt: new Date() });
+        });
         return { count: rows.length };
       },
     },

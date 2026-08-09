@@ -6,6 +6,8 @@
 - **Constraints:** 不读取/打印 `.env`；代码 token 为 canonical；不在 Task 1 实现 Auth、Dashboard、ingestion API、Hermes 业务页或 Workspace。
 - **Open risks:** 迁移 22–25 均未部署，Task 3 的真实 PG/Redis/MinIO integration 必须在云上迁移门禁验证；浏览器测试暴露既存 next-intl dotted-key 警告；Code Connect 仍受套餐门禁。
 - **Next action:** 运行 Task 3 全量门禁并做独立 scoped review；通过后在云上备份、apply 迁移 22–25、执行 ingestion integration，再进入 Task 4 Hermes evidence confirmation。
+
+Task 3 hardening 已加入 batch request digest、扩展名/MIME 双校验、multipart truncated 拒绝、并发 AgentTask replay 恢复与 retry 原子 claim；不得在这些门禁复审前部署 migration 25。
 - **Read first:** `AGENTS.md` → `docs/OpenScience_Kimi_Development_Spec.md` → 本 handoff → `docs/progress.md` → `project_index.md` → researcher ingestion design/plan。
 
 ## Task 2 fix round 3/5

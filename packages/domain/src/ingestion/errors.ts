@@ -3,6 +3,7 @@ export type IngestionErrorCode =
   | 'PROCESSING_CONSENT_REQUIRED'
   | 'UNSUPPORTED_INGESTION_FORMAT'
   | 'INGESTION_NOT_RETRYABLE'
+  | 'FILE_TOO_LARGE'
   | 'VALIDATION_ERROR';
 
 export class IngestionError extends Error {

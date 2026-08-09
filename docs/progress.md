@@ -2,11 +2,11 @@
 
 ## 2026-08-09（研究者导入闭环 Task 3）— 多格式 ingestion pipeline，等待独立复审
 
-- **格式与安全合同**：集中允许 PDF、DOC/DOCX、TeX/ZIP、Markdown、PNG/JPEG/WebP/SVG；multipart 单文件 100 MB、单批 250 MB、最多 20 文件；未同意 `processingConsent`、无文件、未知扩展或越权均在写入前拒绝。
+- **格式与安全合同**：集中校验 PDF、DOC/DOCX、TeX/ZIP、Markdown、PNG/JPEG/WebP/SVG 的扩展名与 MIME；multipart 单文件 100 MB（含 truncated 检测）、单批 250 MB、最多 20 文件；未同意 `processingConsent`、无文件、格式不匹配或越权均在写入前拒绝。
 - **持久化状态机**：新增 migration 25（`20260809040000_ingestion_tasks`），只保存 IngestionBatch/IngestionTask/Artifact/AgentTask 关系与九态元数据；二进制仍只走 Blob/Storage Adapter。
 - **异步 Hermes 边界**：每个 Artifact 创建 `sdf.extract` AgentTask 并入既有 Redis 队列，payload 仅含 ID；worker 的 pending/running/succeeded/failed 映射为 queued/parsing/needs_review/failed_retryable，不在 API 同步调用 provider。
-- **恢复与重试**：batch、Artifact、AgentTask、IngestionTask 分层稳定幂等；响应丢失可从部分 batch 继续；仅 `failed_retryable` 可重排既有 AgentTask。
-- **证据**：domain ingestion + agent focused 17/17，agent-worker 15/15，domain/API/worker typecheck 通过；真实 PG/Redis/MinIO integration 已写，待云上迁移 22–25 后执行。
+- **恢复与重试**：batch 的 request digest 绑定有序文件名/MIME/内容 SHA-256；Artifact、AgentTask、IngestionTask 分层稳定幂等；响应丢失可从部分 batch 继续；仅一个并发调用可原子 claim `failed_retryable` 并重排既有 AgentTask。
+- **证据**：domain ingestion + agent focused 19/19，agent-worker 15/15，domain/API/worker typecheck 通过；真实 PG/Redis/MinIO integration 已写，待云上迁移 22–25 后执行。
 - **状态**：实现尚未自行标记完成；等待全量门禁与独立 scoped review。
 
 ## 2026-08-09（研究者导入闭环 Task 2）— ✅ 最终复审通过，Task 3 启动

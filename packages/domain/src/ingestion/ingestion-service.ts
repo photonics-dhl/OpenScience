@@ -1,4 +1,4 @@
-import { randomUUID } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import type { StorageAdapter } from '@openscience/storage';
 import type { AuditContext } from '@openscience/observability';
 import { createArtifact } from '../artifact/artifacts';
@@ -18,21 +18,25 @@ export async function createIngestionBatch(
 ): Promise<IngestionBatchView> {
   if (!input.processingConsent) throw new IngestionError('PROCESSING_CONSENT_REQUIRED', 'Processing consent is required');
   if (input.files.length === 0) throw new IngestionError('VALIDATION_ERROR', 'At least one file is required');
-  input.files.forEach((file) => assertSupportedIngestionFile(file.filename));
+  input.files.forEach((file) => assertSupportedIngestionFile(file.filename, file.mimeType));
 
   const ro = await deps.prisma.researchObject.findUnique({ where: { id: input.researchObjectId } });
   if (!ro) throw new IngestionError('INGESTION_NOT_FOUND', 'Research object not found');
   await requireMembership(deps, ro.workspaceId, input.userId);
 
   const stableKey = input.idempotencyKey ?? randomUUID();
+  const requestDigest = createHash('sha256').update(JSON.stringify(input.files.map((file) => ({
+    filename: file.filename, mimeType: file.mimeType ?? null,
+    sha256: createHash('sha256').update(file.content).digest('hex'),
+  })))).digest('hex');
   let batch = await deps.prisma.ingestionBatch.findUnique({ where: { idempotencyKey: stableKey } });
-  if (batch && (batch.userId !== input.userId || batch.researchObjectId !== ro.id)) {
+  if (batch && (batch.userId !== input.userId || batch.researchObjectId !== ro.id || batch.requestDigest !== requestDigest)) {
     throw new IngestionError('VALIDATION_ERROR', 'Idempotency key belongs to another ingestion request');
   }
   if (!batch) {
     try {
       batch = await deps.prisma.ingestionBatch.create({
-        data: { researchObjectId: ro.id, userId: input.userId, idempotencyKey: stableKey },
+        data: { researchObjectId: ro.id, userId: input.userId, idempotencyKey: stableKey, requestDigest },
       });
     } catch (error) {
       if ((error as { code?: string }).code === 'P2002') {
@@ -40,6 +44,9 @@ export async function createIngestionBatch(
       }
       if (!batch) throw error;
     }
+  }
+  if (batch.userId !== input.userId || batch.researchObjectId !== ro.id || batch.requestDigest !== requestDigest) {
+    throw new IngestionError('VALIDATION_ERROR', 'Idempotency key belongs to another ingestion request');
   }
   let sessionId = batch.agentSessionId;
   if (!sessionId) {
@@ -104,9 +111,12 @@ export async function retryIngestionTask(
   if (!task) throw new IngestionError('INGESTION_NOT_FOUND', 'Ingestion task not found');
   await requireMembership(deps, task.batch.researchObject.workspaceId, input.userId);
   if (task.state !== 'failed_retryable') throw new IngestionError('INGESTION_NOT_RETRYABLE', 'Only retryable failures can be retried');
-  const updated = await deps.prisma.ingestionTask.update({
-    where: { id: task.id }, data: { state: 'queued', retryCount: { increment: 1 }, error: null }, include: { artifact: true },
+  const claimed = await deps.prisma.ingestionTask.updateMany({
+    where: { id: task.id, state: 'failed_retryable' }, data: { state: 'queued', retryCount: { increment: 1 }, error: null },
   });
+  if (claimed.count !== 1) throw new IngestionError('INGESTION_NOT_RETRYABLE', 'Only retryable failures can be retried');
+  const updated = await deps.prisma.ingestionTask.findUnique({ where: { id: task.id }, include: { artifact: true } });
+  if (!updated) throw new IngestionError('INGESTION_NOT_FOUND', 'Ingestion task not found');
   if (updated.agentTaskId) await deps.redis.lpush(AGENT_TASK_QUEUE, updated.agentTaskId);
   return taskToView(updated);
 }

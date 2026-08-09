@@ -50,6 +50,14 @@ describe('multi-format ingestion service', () => {
     await expect(createIngestionBatch(deps, { userId: user.id, researchObjectId: 'ro-1', processingConsent: true, files: [file('malware.exe')] })).rejects.toMatchObject({ code: 'UNSUPPORTED_INGESTION_FORMAT' });
   });
 
+  it('rejects a supported extension with an executable MIME mismatch', async () => {
+    const { deps, user } = makeDeps();
+    await expect(createIngestionBatch(deps, {
+      userId: user.id, researchObjectId: 'ro-1', processingConsent: true,
+      files: [{ ...file('paper.pdf'), mimeType: 'application/x-msdownload' }],
+    })).rejects.toMatchObject({ code: 'UNSUPPORTED_INGESTION_FORMAT' });
+  });
+
   it('enforces workspace membership on create and read', async () => {
     const { deps, db, user } = makeDeps();
     const result = await createIngestionBatch(deps, { userId: user.id, researchObjectId: 'ro-1', processingConsent: true, files: [file('paper.pdf')] });
@@ -80,6 +88,13 @@ describe('multi-format ingestion service', () => {
     expect(db.agentTasks).toHaveLength(1);
     expect(db.artifacts).toHaveLength(1);
     expect(db.ingestionTasks).toHaveLength(1);
+  });
+
+  it('rejects reuse of a batch key for a different material set', async () => {
+    const { deps, user } = makeDeps();
+    const base = { userId: user.id, researchObjectId: 'ro-1', processingConsent: true, idempotencyKey: 'stable-batch' };
+    await createIngestionBatch(deps, { ...base, files: [file('paper.pdf')] });
+    await expect(createIngestionBatch(deps, { ...base, files: [file('changed.md')] })).rejects.toMatchObject({ code: 'VALIDATION_ERROR' });
   });
 
   it('mirrors worker progress into stable ingestion states', async () => {

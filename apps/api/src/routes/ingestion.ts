@@ -27,6 +27,7 @@ export function registerIngestionRoutes(app: FastifyInstance, deps: IngestionDep
     for await (const part of req.parts()) {
       if (part.type === 'file') {
         const content = await streamToBuffer(part.file);
+        if (part.file.truncated) throw new IngestionError('FILE_TOO_LARGE', 'Individual file exceeds 100 MB');
         totalBytes += content.length;
         if (totalBytes > MAX_BATCH_BYTES) throw new IngestionError('VALIDATION_ERROR', 'Ingestion batch exceeds 250 MB');
         files.push({ filename: part.filename, content, mimeType: part.mimetype });

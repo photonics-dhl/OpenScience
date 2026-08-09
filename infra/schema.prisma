@@ -914,6 +914,7 @@ model IngestionBatch {
   userId           String   @map("user_id") @db.Uuid
   agentSessionId   String?  @unique @map("agent_session_id") @db.Uuid
   idempotencyKey   String?  @unique @map("idempotency_key")
+  requestDigest    String   @map("request_digest") @db.Char(64)
   createdAt        DateTime @default(now()) @map("created_at")
   updatedAt        DateTime @updatedAt @map("updated_at")
 
