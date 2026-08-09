@@ -15,7 +15,7 @@ Task 3 初版 hardening 已加入 batch request digest、multipart truncated 拒
 - 内存/限流：multipart 使用逐 chunk 聚合上限、`files=20`/`fields=1`/`parts=21`，单进程并发 ingestion=1；路由参数限流改用模板 bucket；Fastify multipart 限制映射为 413。
 - 队列：migration 25 增加 `agent_tasks.dispatched_at`；AgentTask replay 只由未 dispatch 任务重新投递；IngestionTask 关联先于 dispatch；worker 以 DB CAS claim `pending|failed → running`；retry dispatch 失败恢复 `failed_retryable`。
 - 证据：domain ingestion/agent 30/30；agent-worker 15/15；本轮变更后的全仓 build 尚待再次执行。
-- 未关闭：worker 仍未读取 Artifact/Blob，现有 `sdf.extract` 只接受 `manuscriptText`；真实 MIME/魔数与恶意扫描仍需 adapter；integration test 已加隔离数据库守卫与按测试用户清理，但仍待隔离 PG/Redis/MinIO 实跑。
+- 已补桥接：worker 读取 Artifact/Blob；Markdown/TeX 走确定性 UTF-8 解码后进入 `sdf.extract`，PDF/Office/图片无受控解析器时返回 `needs_review`，避免二进制伪装成正文。未关闭：生产级二进制 parser 与完整 AV/quarantine adapter；integration test 已加隔离数据库守卫与按测试用户清理，但仍待隔离 PG/Redis/MinIO 实跑。
 - 内容安全补充：入口已对 PDF/Office/ZIP/图片做服务端 signature 检查，对 Markdown/TeX/SVG 做 UTF-8/主动内容检查；Artifact 层增加 EICAR/PE/明显归档路径快速阻断。该扫描明确不是完整 AV，生产 quarantine/ClamAV adapter 尚未接入。
 - **Read first:** `AGENTS.md` → `docs/OpenScience_Kimi_Development_Spec.md` → 本 handoff → `docs/progress.md` → `project_index.md` → researcher ingestion design/plan。
 

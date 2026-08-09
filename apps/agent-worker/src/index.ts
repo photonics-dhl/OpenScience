@@ -1,12 +1,15 @@
 import { createPrismaClient, createRedisClient } from '@openscience/database';
 import { AiGateway, OpenAiCompatProvider } from '@openscience/ai-gateway';
 import { claimAgentTask, markTaskProgress, AGENT_TASK_QUEUE, type AgentDeps } from '@openscience/domain';
+import { createStorageAdapter, getBlob, storageConfigFromEnv, streamToBuffer, type StorageAdapter } from '@openscience/storage';
 import { extractHandler } from './extractor';
+import { parseIngestion } from './ingestion-parser';
 import { reviewAnalyzeHandler } from './reviewer';
 import { visualizationPlanHandler } from './planner';
 
 /** 任务处理器注册表（Q4：kind → 执行函数）。 */
-export type TaskHandler = (deps: AgentDeps, task: { id: string; payload: Record<string, unknown> }) => Promise<Record<string, unknown>>;
+export type WorkerDeps = AgentDeps & { storage?: StorageAdapter };
+export type TaskHandler = (deps: WorkerDeps, task: { id: string; payload: Record<string, unknown> }) => Promise<Record<string, unknown>>;
 
 /** 构造处理器注册表（P1D-3 挂 sdf.extract；后续 5.5 审核等挂接）。 */
 export function createHandlers(gateway: AiGateway): Record<string, TaskHandler> {
@@ -15,7 +18,17 @@ export function createHandlers(gateway: AiGateway): Record<string, TaskHandler> 
       await sleep(300);
       return { echoed: true };
     },
-    'sdf.extract': async (_deps, task) => extractHandler(gateway, task),
+    'sdf.extract': async (deps, task) => {
+      const artifactId = typeof task.payload.artifactId === 'string' ? task.payload.artifactId : null;
+      if (!artifactId) return extractHandler(gateway, task);
+      if (!deps.storage) throw new Error('缺少对象存储适配器，无法读取 Artifact');
+      const artifact = await deps.prisma.artifact.findUnique({ where: { id: artifactId } });
+      if (!artifact) throw new Error('Artifact 不存在');
+      const blob = await getBlob(deps.storage, artifact.blobSha256);
+      const parsed = parseIngestion(artifact.logicalPath, await streamToBuffer(blob.body));
+      if (parsed.status === 'needs_review') return { status: parsed.status, format: parsed.format, reason: parsed.reason };
+      return extractHandler(gateway, { payload: { manuscriptText: parsed.text } });
+    },
     'review.analyze': async (deps, task) => reviewAnalyzeHandler(gateway, deps, task),
     'visualization.plan': async (_deps, task) => visualizationPlanHandler(gateway, task), // P1E-1
   };
@@ -29,8 +42,8 @@ export async function sleep(ms: number): Promise<void> {
  * P1D-2/3 agent-worker 消费者（§14.1 + §9.3 长任务异步 + §16 幂等）：
  * 轮询 Redis 队列 → handler 执行 → markTaskProgress（状态机前进，succeeded 后重放 skip）。
  */
-export async function createPollOnce(handlers: Record<string, TaskHandler>): Promise<(deps: AgentDeps) => Promise<boolean>> {
-  return async function pollOnce(deps: AgentDeps): Promise<boolean> {
+export async function createPollOnce(handlers: Record<string, TaskHandler>): Promise<(deps: WorkerDeps) => Promise<boolean>> {
+  return async function pollOnce(deps: WorkerDeps): Promise<boolean> {
     // BRPOPLPUSH：原子弹出 → 处理中队列（崩溃恢复用）
     const taskId = await deps.redis.brpoplpush(AGENT_TASK_QUEUE, `${AGENT_TASK_QUEUE}:processing`, 1);
     if (!taskId) return false;
@@ -59,7 +72,8 @@ export async function createPollOnce(handlers: Record<string, TaskHandler>): Pro
 async function main(): Promise<void> {
   const prisma = createPrismaClient();
   const redis = createRedisClient();
-  const deps: AgentDeps = { prisma, redis, mailer: { send: async () => undefined } };
+  const storage = createStorageAdapter(storageConfigFromEnv());
+  const deps: WorkerDeps = { prisma, redis, storage, mailer: { send: async () => undefined } };
   // Gateway（§24 占位：AI_ENABLED=false 时懒加载；生产 env 注入密钥，§17）
   const gateway = buildGateway();
   const handlers = createHandlers(gateway);

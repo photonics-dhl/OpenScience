@@ -13,7 +13,8 @@
     "@openscience/ai-gateway": "workspace:^",
     "@openscience/database": "workspace:^",
     "@openscience/domain": "workspace:^",
-    "@openscience/sdf-schema": "workspace:^"
+    "@openscience/sdf-schema": "workspace:^",
+    "@openscience/storage": "workspace:^"
   },
   "devDependencies": {
     "@types/node": "20.14.10",

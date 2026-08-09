@@ -68,6 +68,9 @@ importers:
       '@openscience/sdf-schema':
         specifier: workspace:^
         version: link:../../packages/sdf-schema
+      '@openscience/storage':
+        specifier: workspace:^
+        version: link:../../packages/storage
     devDependencies:
       '@types/node':
         specifier: 20.14.10
