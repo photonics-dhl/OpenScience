@@ -1,13 +1,13 @@
 # Handoff — 2026-08-09 researcher ingestion product slice
 
-> **Update 2026-08-10:** MiniMax domestic Token Plan endpoint, review/confirm, transactional consume, Tesseract worker image and ClamAV service are deployed; EICAR is fail-closed. Object snapshot restore has been verified into an isolated volume; only a real OCR image fixture remains as evidence.
+> **Update 2026-08-10:** MiniMax domestic Token Plan endpoint, review/confirm, transactional consume, Tesseract worker image and ClamAV service are deployed; EICAR is fail-closed. Object snapshot restore and deterministic PNG OCR text matching are both verified.
 
-- **Current goal:** review/confirm、consume、对象备份、Tesseract runtime 与 ClamAV fail-closed 已在服务器验收；补真实图片 OCR fixture 和对象快照恢复演练。
+- **Current goal:** 研究者 ingestion 生产切片的 review/confirm、consume、对象备份恢复、Tesseract OCR 与 ClamAV 已完成服务器验收。
 - **Done:** 四个 UI 原语、设计 token、Figma foundations 与三视口门禁；邮箱验证码注册、登录、真实 Dashboard；同源 `/api`/CSRF；多文件 Artifact 上传后写入首个不可变 Commit；真实 Next→Fastify 验证码注册 smoke；生产 API/Web/agent-worker 与迁移已部署。
 - **Figma IDs:** components `StatusBadge 101:38`、`ProgressRail 101:43`、`Dropzone 101:51`、`EvidenceCard 101:57`；screens `101:69`、`101:73`、`101:77`、`101:81`、`101:85`、`101:89`；file key `rWS3seZaDMdlnSljqktMDp`。
 - **Constraints:** 不读取/打印 `.env`；代码 token 为 canonical；不在 Task 1 实现 Auth、Dashboard、ingestion API、Hermes 业务页或 Workspace。
 - **Open risks:** 生产 AV/quarantine 与图片 OCR 未实现；隔离 integration 尚未实跑；备份脚本已支持对象卷快照但尚未完成服务器恢复演练。失败尝试产生的明确测试 RO 均保留。浏览器仍有既存 next-intl dotted-key 警告；Code Connect 仍受套餐门禁。
-- **Next action:** 使用真实图片材料做一次 OCR 文本匹配；随后关闭本轮 ingestion 生产切片，进入发布/评审 UI 细化。恢复卷 `openscience-restore-1786305623` 保留，未经批准不删除。
+- **Next action:** 关闭本轮 ingestion 生产切片，进入发布/评审 UI 细化；恢复卷 `openscience-restore-1786305623` 保留，未经批准不删除。
 - **Deployment checkpoint:** clean server release switch completed after explicit authorization. Previous code is recoverable at `/opt/openscience-backup-20260809-2218`; database backup was created before applying the remaining migrations. API/Web/agent-worker are running; parser runtime loaded in the worker container; public home=200 and unauthenticated auth=401.
 
 ## Production parser acceptance checkpoint

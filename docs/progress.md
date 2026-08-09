@@ -14,7 +14,7 @@
 - **本地 OCR**：worker 新增受控 Tesseract stdin adapter，支持 PNG/JPEG/WebP/TIFF，60 秒超时和 4 MiB 输出上限；agent-worker 24/24。专用镜像安装 `eng+chi_sim`，不依赖 MiniMax。
 - **生产 AV**：新增私有 `clamav/clamav:stable` 服务与 clamd INSTREAM 客户端；Blob 在解析/OCR/AI 前扫描，命中或扫描器异常均以 `[blocked]` 进入 `failed_blocked`，不降级绕过。ClamAV 数据卷持久化且无宿主端口。
 - **服务器验收**：专用 worker 镜像已构建并切换；Tesseract 5.3.0 可用，`eng/chi_sim/osd` 语言包存在；ClamAV healthy，EICAR 探针返回 `CLAMAV_EICAR_BLOCKED=true`。旧 worker 已安全替换，MiniMax 配置保持不变。
-- **最终证据**：对象快照已在新隔离 volume `openscience-restore-1786305623` 解包，恢复卷包含 92 个文件；生产 SeaweedFS 卷未被修改。Tesseract 运行时和语言包已通过服务器探针，真实图片 fixture 将在上传 UI 测试材料就绪后补做文本匹配。
+- **最终证据**：对象快照已在新隔离 volume `openscience-restore-1786305623` 解包，恢复卷包含 92 个文件；生产 SeaweedFS 卷未被修改。服务器内生成确定性 PNG 文字 fixture，真实生产 parser 返回 `OCR_TEXT_FIXTURE status=ready text_nonempty=true`；Tesseract OCR→文本闭环通过。
 
 ## 2026-08-10（生产 Token Plan 区域切换与结构化提取修复）— ✅ 真实 ingestion 闭环通过
 
