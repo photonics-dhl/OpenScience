@@ -12,9 +12,11 @@ import { loginWithPassword, safeReturnTo } from '@/lib/api';
 
 export interface LoginFormProps {
   returnTo?: string | null;
+  /** Compatibility prop for the legacy /login route retained during rolling sync. */
+  nextPath?: string | null;
 }
 
-export function LoginForm({ returnTo }: LoginFormProps) {
+export function LoginForm({ returnTo, nextPath }: LoginFormProps) {
   const t = useTranslations('auth');
   const router = useRouter();
   const [email, setEmail] = useState('');
@@ -28,7 +30,7 @@ export function LoginForm({ returnTo }: LoginFormProps) {
     setError('');
     try {
       await loginWithPassword({ email, password });
-      router.replace(safeReturnTo(returnTo));
+      router.replace(safeReturnTo(returnTo ?? nextPath));
       router.refresh();
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : t('errors.generic'));
