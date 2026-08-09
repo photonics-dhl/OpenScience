@@ -1,5 +1,12 @@
 # OpenScience (XGS) 进度日志
 
+## 2026-08-09（生产 parser 闭环验收）— ⏳ 真实 fixture 本地门禁已通过
+
+- **诊断边界**：生产容器与 worker 均保持运行；只读数据库/对象存储探针返回 `STORAGE_PROBE_NO_ARTIFACT`，说明当前生产库没有可用于 Blob head 验证的 Artifact，不能把它误判为存储故障。
+- **TDD 证据**：新增 production parser self-test 前，focused test 因 `parser-self-test` 模块不存在而红；实现后使用无用户数据的真实 PDF/OOXML DOCX fixture，`ingestion-parser.test.ts` 7/7 通过。
+- **实现**：`apps/agent-worker/src/parser-self-test.ts` 复用生产 `pdf-parse`/Mammoth composition，成功条件要求两种格式都提取到确定性正文；CLI 仅输出通过/失败标记，不输出文件正文、配置或 Secret。
+- **下一步**：全量构建并同步到 ECS，在 worker 容器运行同一 self-test；随后用已授权测试账号保留一份明确标记的测试 RO/Artifact，验证上传→Redis→worker→Blob→解析状态闭环。
+
 ## 2026-08-09（服务器 ingestion worker 部署）— ✅ 干净 release 已切换
 
 - **服务器巡检**：磁盘 9%、内存充足，现有 API/Web/PostgreSQL/Redis 健康；生产 compose 原先没有 `agent-worker`。

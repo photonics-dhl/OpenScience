@@ -1,12 +1,18 @@
 # Handoff — 2026-08-09 researcher ingestion product slice
 
-- **Current goal:** 完成研究者导入产品切片；Task 1–2 已完成，Task 3 深度复审为 BLOCK，正在重建安全上传与可靠队列合同。
-- **Done:** 四个 UI 原语、设计 token、Figma foundations 与三视口门禁；邮箱验证码注册、登录、真实 Dashboard；同源 `/api`/CSRF；多文件 Artifact 上传后写入首个不可变 Commit；真实 Next→Fastify 验证码注册 smoke。
+- **Current goal:** 完成研究者导入产品切片；Task 1–2 已完成，Task 3 已部署基础 pipeline，正在补生产真实 fixture 与 upload→worker→Blob 端到端证据。
+- **Done:** 四个 UI 原语、设计 token、Figma foundations 与三视口门禁；邮箱验证码注册、登录、真实 Dashboard；同源 `/api`/CSRF；多文件 Artifact 上传后写入首个不可变 Commit；真实 Next→Fastify 验证码注册 smoke；生产 API/Web/agent-worker 与迁移已部署。
 - **Figma IDs:** components `StatusBadge 101:38`、`ProgressRail 101:43`、`Dropzone 101:51`、`EvidenceCard 101:57`；screens `101:69`、`101:73`、`101:77`、`101:81`、`101:85`、`101:89`；file key `rWS3seZaDMdlnSljqktMDp`。
 - **Constraints:** 不读取/打印 `.env`；代码 token 为 canonical；不在 Task 1 实现 Auth、Dashboard、ingestion API、Hermes 业务页或 Workspace。
-- **Open risks:** 迁移 22–25 均未部署；Task 3 尚存在实际 MIME/恶意扫描与 extractor payload 漂移；隔离 integration 尚未实跑。原 integration teardown 已改为隔离数据库守卫+按测试用户清理，禁止连接生产库执行。浏览器仍有既存 next-intl dotted-key 警告；Code Connect 仍受套餐门禁。
-- **Next action:** 先关闭 Task 3 安全上传阻断，再实现可恢复 dispatch + worker 原子 claim 和真实 Artifact 多格式解析；新一轮独立复审通过后才允许云上备份、apply 迁移 22–25 与隔离 integration。
+- **Open risks:** 生产库当前无 Artifact，尚未证明对象存储 Blob 可被 worker 读取；生产 AV/quarantine 与图片 OCR 未实现；隔离 integration 尚未实跑。原 integration teardown 已改为隔离数据库守卫+按测试用户清理，禁止连接生产库执行。浏览器仍有既存 next-intl dotted-key 警告；Code Connect 仍受套餐门禁。
+- **Next action:** 部署并运行真实 PDF/DOCX parser self-test，再用授权测试账号完成上传→Redis→worker→Blob→解析 E2E；根据证据修复生产对象存储或任务状态问题。
 - **Deployment checkpoint:** clean server release switch completed after explicit authorization. Previous code is recoverable at `/opt/openscience-backup-20260809-2218`; database backup was created before applying the remaining migrations. API/Web/agent-worker are running; parser runtime loaded in the worker container; public home=200 and unauthenticated auth=401.
+
+## Production parser acceptance checkpoint
+
+- Production read-only probe found no Artifact rows, so storage reachability remains unproven rather than failed.
+- Added `apps/agent-worker/src/parser-self-test.ts` with deterministic, non-user PDF and DOCX fixtures; it invokes the same default adapters as the worker composition root and emits only a redacted pass/fail marker.
+- TDD evidence: focused test first failed on the missing module, then passed 7/7 after implementation. Server execution is the immediate next gate.
 
 Task 3 初版 hardening 已加入 batch request digest、multipart truncated 拒绝和 retry 原子 claim，但深度复审证明当前实现不可发布。Hermes Session/Task 幂等重放的 user/session/kind/payload 绑定已用红绿测试修复；其余阻断见 progress 顶部，migration 25 保持未部署。
 

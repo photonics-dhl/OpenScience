@@ -25,7 +25,7 @@
 | `apps/web/test/auth-dashboard.test.tsx` / `apps/web/test/e2e/auth-dashboard.spec.ts` | Auth/Dashboard 单元合同与 clean-browser 桌面/移动 E2E；实际选择多文件并断言 Artifact→Commit 引用 | 活文档 |
 | `apps/web/playwright{,.signup}.config.ts` / `apps/web/test/e2e/signup-live.spec.ts` / `apps/api/test/support/signup-smoke-server.mjs` | 可重复浏览器门禁；signup smoke 启动编译 Fastify auth 路由和真实 Next rewrite，验证验证码、Cookie 与 `/auth/me`，不使用 API route mock | 测试工具 |
 | `packages/domain/src/ingestion/` / `apps/api/src/routes/ingestion.ts` | 多格式 ingestion 格式策略、批次/任务状态机、Artifact + AgentTask 异步边界，以及 consent/status/retry API；已补写权限、bounded multipart、模板限流和 dispatch/CAS 基础 | 执行中 |
-| `apps/agent-worker/src/ingestion-parser.ts` / `apps/agent-worker/src/index.ts` | Artifact→Blob→Hermes 桥接：Markdown/TeX 确定性解码；通过受控 adapter 接入 `pdf-parse` PDF 文本与 Mammoth DOCX 文本；超限/解析失败/未支持格式显式进入 `needs_review` | 执行中 |
+| `apps/agent-worker/src/{ingestion-parser,parser-self-test,index}.ts` | Artifact→Blob→Hermes 桥接：Markdown/TeX 确定性解码；通过受控 adapter 接入 `pdf-parse` PDF 文本与 Mammoth DOCX 文本；self-test 用无用户数据的真实 PDF/OOXML fixture 验证部署运行时；超限/解析失败/未支持格式显式进入 `needs_review` | 执行中 |
 | `packages/domain/test/ingestion-service.test.ts` / `apps/api/test/ingestion.integration.test.ts` | PDF/DOCX/TeX/Markdown/图片、consent、越权、幂等恢复、worker 状态同步与云上真实 PG/Redis/MinIO 合同 | 测试工具 |
 | `packages/database/test/signup-challenge-migration{,.integration}.test.ts` | migration 23 SQL 顺序门禁与真实 PostgreSQL 预存重复 active challenge 收敛验收 | 测试工具 |
 | `apps/web/lib/api.ts` / `apps/web/next.config.mjs` / `infra/nginx/openscience.conf` | web 同源 `/api` 传输层：开发 rewrite、生产反代、受保护写请求 CSRF 获取与一次刷新重试 | 活文档 |

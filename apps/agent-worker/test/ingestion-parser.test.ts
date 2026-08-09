@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { createDefaultIngestionAdapters, parseIngestion, parseIngestionWithAdapters } from '../src/ingestion-parser';
+import { runParserSelfTest } from '../src/parser-self-test';
 
 describe('parseIngestion', () => {
   it('解码 markdown 与 tex', () => {
@@ -31,5 +32,14 @@ describe('parseIngestion', () => {
   it('默认 DOCX adapter 对损坏容器返回 needs_review', async () => {
     const result = await parseIngestionWithAdapters('paper.docx', Buffer.from('PK\\x03\\x04'), createDefaultIngestionAdapters());
     expect(result).toMatchObject({ status: 'needs_review', format: 'docx', reason: 'parser-failed' });
+  });
+});
+
+describe('production parser self-test', () => {
+  it('extracts deterministic text from realistic PDF and DOCX fixtures', async () => {
+    await expect(runParserSelfTest()).resolves.toEqual({
+      pdf: { format: 'pdf', status: 'ready', textMatched: true },
+      docx: { format: 'docx', status: 'ready', textMatched: true },
+    });
   });
 });
