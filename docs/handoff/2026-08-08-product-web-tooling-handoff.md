@@ -118,3 +118,8 @@
 - 用户确认：不再与本机 Docker 环境较劲，服务器部署环境作为唯一数据库/Redis/对象存储集成验收环境。
 - 后续切片严格执行 cloud-sync → 远端全量 build → migration status/deploy（如有）→ compose force-recreate → 公网巡检；本机仅做静态门禁和无网络单测，不在生产运行会清理数据的集成测试。
 - 生产状态已重新核验：在 API 容器内显式注入 `.env.prod` 的 `DATABASE_URL` 后显示 `Database schema is up to date!`；宿主机默认 localhost status 不再作为证据。
+
+## 2026-08-09 公网邀请测试 checkpoint
+
+- 已用服务器现有 `@openscience/auth` `SmtpMailer` 向用户指定的测试邮箱发送一次性邀请；没有记录或输出邀请码/验证码。
+- 下一步等待收件箱完成 `/register` → `/verify-email`，然后继续真实会话与首个 RO 的公网验收；不要在聊天中粘贴验证码或密码。

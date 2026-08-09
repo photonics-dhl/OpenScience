@@ -31,6 +31,11 @@
 - **✅ 状态核验**：生产 migration status 必须在 API 容器内注入 `/opt/openscience/.env.prod` 的 `DATABASE_URL`；容器内核验显示数据库 schema up to date，宿主机默认 `127.0.0.1:5432` 的结果不具备生产证据效力。
 - **⏳ 下一步**：沿用该流程继续 Hermes、版本、发布和 Public RO 产品切片。
 
+## 2026-08-09（公网邀请测试）— 测试邀请已发送
+
+- **✅ 邮件投递**：服务器 API 容器使用现有 `@openscience/auth` `SmtpMailer`，向用户指定的测试邮箱发送了一次性 OpenScience 邀请；终端、日志和文档均未输出邀请码或验证码。
+- **⏳ 待用户动作**：从收件箱打开 `/register`，完成邀请码注册与邮箱验证码验证；随后我继续做真实 Dashboard → 创建 RO → Workspace → 登出/再登录验收。
+
 ## 2026-08-09（产品闭环 Task 2）— 邀请身份流程已实现
 
 - **✅ 身份闭环**：新增 `/login`、`/register`、`/verify-email`，真实连接注册、验证、重发、登录、登出和 `/auth/me`；会话仍由 HTTP-only Cookie 管理。
