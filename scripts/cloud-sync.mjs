@@ -7,6 +7,10 @@ import { readFileSync } from 'node:fs';
 
 const sourceRoot = process.env.XGS_SOURCE_ROOT ? path.resolve(process.env.XGS_SOURCE_ROOT) : process.cwd();
 const configRoot = process.env.XGS_CONFIG_ROOT ? path.resolve(process.env.XGS_CONFIG_ROOT) : process.cwd();
+const remoteRoot = process.env.XGS_REMOTE_ROOT ?? '/opt/openscience';
+if (!/^\/opt\/openscience(?:-[A-Za-z0-9._-]+)?$/.test(remoteRoot)) {
+  throw new Error('XGS_REMOTE_ROOT must stay under an explicit /opt/openscience release path');
+}
 const cfg = JSON.parse(readFileSync(path.join(configRoot, '.cloud-sync-env'), 'utf8'));
 const key = cfg.key.replace(/^~/, os.homedir());
 
@@ -25,7 +29,7 @@ const ENTRIES = [
 
 const tarArgs = ['czf', '-', ...EXCLUDES.map((e) => `--exclude=${e}`), ...ENTRIES];
 const tar = spawn('tar', tarArgs, { cwd: sourceRoot });
-const remote = `cd /opt/openscience && tar -xzf - --overwrite`;
+const remote = `mkdir -p ${remoteRoot} && cd ${remoteRoot} && tar -xzf - --overwrite`;
 const ssh = spawn('ssh', ['-o', 'BatchMode=yes', '-o', 'ConnectTimeout=20', '-i', key, '-p', String(cfg.port), `${cfg.user}@${cfg.host}`, remote], { cwd: process.cwd() });
 
 tar.stdout.pipe(ssh.stdin);

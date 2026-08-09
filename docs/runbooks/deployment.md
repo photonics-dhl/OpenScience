@@ -21,6 +21,7 @@
 node scripts/cloud-sync.mjs
 # tar-over-ssh 同步到 /opt/openscience；排除 .env/.git/node_modules/dist
 # 隔离 worktree 部署时设置 XGS_CONFIG_ROOT=/e/Miscellaneous/XGS，服务器配置与 release 源码分离。
+# 干净 release 预部署时设置 XGS_REMOTE_ROOT=/opt/openscience-next，先在 staging 目录 build 再切换。
 ```
 
 ### 2.2 安装依赖 + 全量构建（云上）
