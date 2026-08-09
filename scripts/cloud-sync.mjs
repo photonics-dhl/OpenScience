@@ -22,6 +22,7 @@ const EXCLUDES = [
 
 const ENTRIES = [
   'AGENTS.md', 'README.md', 'package.json', 'pnpm-workspace.yaml', 'pnpm-lock.yaml',
+  'tsconfig.base.json',
   'eslint.config.cjs', 'knip.json', '.dependency-cruiser.cjs', '.markdownlint-cli2.jsonc',
   '.gitignore', '.gitattributes',
   'apps', 'packages', 'infra', 'scripts', 'docs', 'project_index.md',
