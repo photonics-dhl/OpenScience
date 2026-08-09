@@ -6,9 +6,10 @@ import { extractHandler } from './extractor';
 import { createDefaultIngestionAdapters, parseIngestion, parseIngestionWithAdapters, type IngestionAdapters } from './ingestion-parser';
 import { reviewAnalyzeHandler } from './reviewer';
 import { visualizationPlanHandler } from './planner';
+import { createClamAvScanner, type MalwareScanner } from './clamav';
 
 /** 任务处理器注册表（Q4：kind → 执行函数）。 */
-export type WorkerDeps = AgentDeps & { storage?: StorageAdapter; ingestionAdapters?: IngestionAdapters };
+export type WorkerDeps = AgentDeps & { storage?: StorageAdapter; ingestionAdapters?: IngestionAdapters; malwareScanner?: MalwareScanner };
 export type TaskHandler = (deps: WorkerDeps, task: { id: string; payload: Record<string, unknown> }) => Promise<Record<string, unknown>>;
 
 /** 构造处理器注册表（P1D-3 挂 sdf.extract；后续 5.5 审核等挂接）。 */
@@ -26,6 +27,7 @@ export function createHandlers(gateway: AiGateway): Record<string, TaskHandler> 
       if (!artifact) throw new Error('Artifact 不存在');
       const blob = await getBlob(deps.storage, artifact.blobSha256);
       const bytes = await streamToBuffer(blob.body);
+      if (deps.malwareScanner) await deps.malwareScanner(bytes);
       const parsed = deps.ingestionAdapters
         ? await parseIngestionWithAdapters(artifact.logicalPath, bytes, deps.ingestionAdapters)
         : parseIngestion(artifact.logicalPath, bytes);
@@ -76,7 +78,11 @@ async function main(): Promise<void> {
   const prisma = createPrismaClient();
   const redis = createRedisClient();
   const storage = createStorageAdapter(storageConfigFromEnv());
-  const deps: WorkerDeps = { prisma, redis, storage, ingestionAdapters: createDefaultIngestionAdapters(), mailer: { send: async () => undefined } };
+  const deps: WorkerDeps = {
+    prisma, redis, storage, ingestionAdapters: createDefaultIngestionAdapters(),
+    malwareScanner: process.env.CLAMAV_HOST ? createClamAvScanner(process.env.CLAMAV_HOST, Number(process.env.CLAMAV_PORT ?? 3310)) : undefined,
+    mailer: { send: async () => undefined },
+  };
   // Gateway（§24 占位：AI_ENABLED=false 时懒加载；生产 env 注入密钥，§17）
   const gateway = buildGateway();
   const handlers = createHandlers(gateway);

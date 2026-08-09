@@ -8,6 +8,13 @@
 - **门禁**：全量 test/build、docs:lint、audit:docs-sync 均通过。
 - **下一步**：同步并部署 API/Web/domain 到 ECS，使用已存在 needs_review 任务做确认 API 真实验收；随后接入 AV quarantine 与本地 OCR/远端 fallback。
 
+### 服务器验收与 OCR/AV 增量
+
+- **生产已验收**：数据库备份 116K、SeaweedFS 对象卷快照 36K；confirm API 返回 200，任务 `needs_review → confirmed`，写入 7 个 SDF 字段；独立成功任务 smoke 为 `succeeded` 且仅 1 条 consume 流水。
+- **本地 OCR**：worker 新增受控 Tesseract stdin adapter，支持 PNG/JPEG/WebP/TIFF，60 秒超时和 4 MiB 输出上限；agent-worker 24/24。专用镜像安装 `eng+chi_sim`，不依赖 MiniMax。
+- **生产 AV**：新增私有 `clamav/clamav:stable` 服务与 clamd INSTREAM 客户端；Blob 在解析/OCR/AI 前扫描，命中或扫描器异常均以 `[blocked]` 进入 `failed_blocked`，不降级绕过。ClamAV 数据卷持久化且无宿主端口。
+- **待验收**：服务器构建 OCR worker 镜像、拉取 ClamAV 并验证健康/EICAR 阻断与真实图片 OCR；之后补对象快照恢复演练。
+
 ## 2026-08-10（生产 Token Plan 区域切换与结构化提取修复）— ✅ 真实 ingestion 闭环通过
 
 - **区域根因已验证**：同一组 Token Plan Subscription Key 在国际入口 `api.minimax.io/anthropic` 均返回 401；按 MiniMax 国内官方 Quick Start 切换 `api.minimaxi.com/anthropic` 后，key1/key2 均返回 200 和非空文本。服务器 `.env.prod` 已保留可恢复备份并切换区域，worker 已重建。

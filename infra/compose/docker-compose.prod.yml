@@ -105,9 +105,26 @@ services:
       - data_net
     restart: unless-stopped
 
+  malware-scanner:
+    image: clamav/clamav:stable
+    volumes:
+      - clamav-data:/var/lib/clamav
+    healthcheck:
+      test: ["CMD", "clamdscan", "--ping", "1"]
+      interval: 30s
+      timeout: 10s
+      retries: 20
+      start_period: 120s
+    networks:
+      - data_net
+    restart: unless-stopped
+
   agent-worker:
     # Hermes ingestion consumer; no host port, only app/data network access.
-    image: node:22
+    build:
+      context: ../..
+      dockerfile: apps/agent-worker/Dockerfile
+    image: openscience-agent-worker:2026-08-10
     working_dir: /opt/openscience/apps/agent-worker
     volumes:
       - /opt/openscience:/opt/openscience
@@ -119,12 +136,17 @@ services:
       S3_ENDPOINT: object-storage
       S3_PORT: "8333"
       S3_USE_SSL: "false"
+      TESSERACT_LANGS: eng+chi_sim
+      CLAMAV_HOST: malware-scanner
+      CLAMAV_PORT: "3310"
     depends_on:
       postgres:
         condition: service_healthy
       redis:
         condition: service_healthy
       object-storage:
+        condition: service_healthy
+      malware-scanner:
         condition: service_healthy
     networks:
       - app_net
@@ -156,3 +178,4 @@ volumes:
   postgres-data:
   redis-data:
   seaweed-data:
+  clamav-data:

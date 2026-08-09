@@ -24,6 +24,11 @@ describe('parseIngestion', () => {
     await expect(parseIngestionWithAdapters('paper.pdf', Buffer.alloc(20 * 1024 * 1024 + 1), adapters)).resolves.toMatchObject({ status: 'needs_review', reason: 'parser-input-too-large' });
   });
 
+  it('图片优先使用本地 OCR adapter', async () => {
+    const adapters = { image: async () => 'Measured signal and fitted curve' };
+    await expect(parseIngestionWithAdapters('figure.png', Buffer.from('\x89PNG\r\n\x1a\n'), adapters)).resolves.toMatchObject({ status: 'ready', format: 'png', text: 'Measured signal and fitted curve' });
+  });
+
   it('默认 PDF adapter 对损坏文件返回 needs_review 而不是把 worker 打崩', async () => {
     const result = await parseIngestionWithAdapters('paper.pdf', Buffer.from('%PDF-1.7'), createDefaultIngestionAdapters());
     expect(result).toMatchObject({ status: 'needs_review', format: 'pdf', reason: 'parser-failed' });

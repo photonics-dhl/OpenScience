@@ -1,4 +1,5 @@
 import { extname } from 'node:path';
+import { spawn } from 'node:child_process';
 import { PDFParse } from 'pdf-parse';
 import mammoth from 'mammoth';
 
@@ -9,6 +10,24 @@ export type ParsedIngestion =
 export interface IngestionAdapters {
   pdf?: (content: Buffer) => Promise<string>;
   docx?: (content: Buffer) => Promise<string>;
+  image?: (content: Buffer) => Promise<string>;
+}
+
+async function tesseractOcr(content: Buffer): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const child = spawn(process.env.TESSERACT_BIN ?? 'tesseract', ['stdin', 'stdout', '-l', process.env.TESSERACT_LANGS ?? 'eng+chi_sim'], { stdio: ['pipe', 'pipe', 'ignore'] });
+    const chunks: Buffer[] = [];
+    let size = 0;
+    const timer = setTimeout(() => { child.kill('SIGKILL'); reject(new Error('OCR timeout')); }, 60_000);
+    child.stdout.on('data', (chunk: Buffer) => {
+      size += chunk.length;
+      if (size > 4 * 1024 * 1024) { child.kill('SIGKILL'); reject(new Error('OCR output too large')); return; }
+      chunks.push(chunk);
+    });
+    child.once('error', reject);
+    child.once('close', (code) => { clearTimeout(timer); if (code === 0) resolve(Buffer.concat(chunks).toString('utf8')); else reject(new Error(`OCR exited ${code}`)); });
+    child.stdin.end(content);
+  });
 }
 
 export function createDefaultIngestionAdapters(): IngestionAdapters {
@@ -22,6 +41,7 @@ export function createDefaultIngestionAdapters(): IngestionAdapters {
       }
     },
     docx: async (content) => (await mammoth.extractRawText({ buffer: content })).value,
+    image: tesseractOcr,
   };
 }
 
@@ -56,7 +76,13 @@ export async function parseIngestionWithAdapters(
     return { status: 'needs_review', format: extname(filename).slice(1).toLowerCase() || 'unknown', reason: 'parser-input-too-large' };
   }
   const extension = extname(filename).toLowerCase();
-  const adapter = extension === '.pdf' ? adapters.pdf : extension === '.docx' ? adapters.docx : undefined;
+  const adapter = extension === '.pdf'
+    ? adapters.pdf
+    : extension === '.docx'
+      ? adapters.docx
+      : ['.png', '.jpg', '.jpeg', '.webp', '.tif', '.tiff'].includes(extension)
+        ? adapters.image
+        : undefined;
   if (!adapter) return parseIngestion(filename, content);
   let text: string;
   try {
