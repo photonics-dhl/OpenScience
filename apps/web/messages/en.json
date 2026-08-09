@@ -30,6 +30,7 @@
   "dashboard": {
     "title": "Research cockpit",
     "welcome": "Welcome back, {name}",
+    "logout": "Sign out",
     "hermesReady": "Hermes ready",
     "loading": { "eyebrow": "Reconnecting to your research", "title": "Loading your Research Objects", "description": "Restoring your workspace, RO history, and pending tasks." },
     "error": { "eyebrow": "Connection interrupted", "title": "Your research is temporarily unavailable", "description": "Nothing has changed in your data. Continue when the connection returns.", "retry": "Reconnect" },

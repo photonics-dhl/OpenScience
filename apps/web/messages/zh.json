@@ -30,6 +30,7 @@
   "dashboard": {
     "title": "研究驾驶舱",
     "welcome": "欢迎回来，{name}",
+    "logout": "退出登录",
     "hermesReady": "Hermes 已就绪",
     "loading": { "eyebrow": "连接研究现场", "title": "正在载入你的研究对象", "description": "正在恢复工作区、RO 与待处理任务。" },
     "error": { "eyebrow": "连接中断", "title": "研究现场暂时不可用", "description": "你的数据没有改变。连接恢复后可以继续。", "retry": "重新连接" },

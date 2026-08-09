@@ -27,7 +27,7 @@ export function selectPrimaryWorkspace(workspaces: WorkspaceSummary[]): Workspac
     ?? workspaces.find((workspace) => workspace.status === 'active');
 }
 
-export function DashboardView({ state, onRetry }: { state: DashboardState; onRetry?: () => void }) {
+export function DashboardView({ state, onRetry, onLogout }: { state: DashboardState; onRetry?: () => void; onLogout?: () => void }) {
   const t = useTranslations('dashboard');
   const context = state.kind === 'empty' || state.kind === 'ready' ? state : null;
   const primaryRo = state.kind === 'ready' ? state.researchObjects[0] : undefined;
@@ -42,7 +42,7 @@ export function DashboardView({ state, onRetry }: { state: DashboardState; onRet
             <span className="eyebrow">OpenScience / research cockpit</span>
             <h1>{context ? t('welcome', { name: context.user.displayName }) : t('title')}</h1>
           </div>
-          <div className="cockpit-header__status"><span className="status-dot" />{t('hermesReady')}</div>
+          <div className="cockpit-header__status"><span className="status-dot" />{t('hermesReady')}{onLogout && <button className="dashboard-logout" type="button" onClick={onLogout}>{t('logout')}</button>}</div>
         </header>
 
         {state.kind === 'loading' && (
@@ -126,5 +126,5 @@ export default function DashboardShell() {
   }, [router]);
 
   React.useEffect(() => { void load(); }, [load]);
-  return <DashboardView state={state} onRetry={() => void load()} />;
+  return <DashboardView state={state} onRetry={() => void load()} onLogout={async () => { await (await import('../../lib/auth')).logoutAccount(); router.replace('/login?next=/dashboard'); }} />;
 }
