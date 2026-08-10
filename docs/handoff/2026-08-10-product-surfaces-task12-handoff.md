@@ -6,7 +6,7 @@
 
 ## 状态
 
-Task 12 页面 `c05145b`、Nginx 修复 `ab90a9d`、版本列表 API `c30848b` 已部署 ECS。七个 RO 表面与 Settings 真实账号/390px 验收通过，仅 Collaboration 残留的 dotted i18n key 已本地修复，待最终部署复验后关闭 Task 12。Task 11 的 Ultrafast Science 精选闭环仍在线且不应回退。
+Task 12 已完成并部署。页面 `c05145b`、Nginx 修复 `ab90a9d`、版本列表 API `c30848b`、Collaboration i18n `7f7121e` 均在线；七个 RO 表面与 Settings 的真实账号/390px 验收通过，Collaboration 390/1440 console error 均为 0。Task 11 的 Ultrafast Science 精选闭环仍在线且不应回退。
 
 ## 已完成
 
@@ -25,9 +25,9 @@ Task 12 页面 `c05145b`、Nginx 修复 `ab90a9d`、版本列表 API `c30848b` �
 
 ## 下一步
 
-1. 提交 Collaboration i18n 嵌套键修复并使用 `deploy.sh --confirm --skip-migrate <ref>` 部署；无需数据库迁移。
-2. 登录测试账号只读复验 Collaboration console error=0，并抽查全部七个 RO 表面与 Settings。
-3. 同步生产证据、Task Master，将 Task 12 标记 done，进入 Task 13。
+1. 执行 Task 13：验证长期 Figma owner/canonical，建立 V3 tokens、components、screens 与真实代码映射。
+2. Task 14 把本轮临时浏览器脚本升级为确定性 route/state/viewport manifest、键盘、reduced-motion、LCP 门禁。
+3. Task 15 重跑完整 Landing → Auth → Intake → Hermes → Workspace → Publish → Public → Explore → Collection 生产旅程。
 3. 以 1440 与 390 视口检查页面溢出、console error、Publish R3 Dialog 和 Sandbox 结果。
 4. 把真实服务器证据补入 `docs/progress.md`，再将 Task 12 标记 done，进入 Task 13 Figma canonical map。
 

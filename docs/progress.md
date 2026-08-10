@@ -1,12 +1,13 @@
 # OpenScience (XGS) 进度日志
 
-## 2026-08-10（Task 12 产品表面矩阵与首批工作区路由）— ⏳ 本地完成，待 ECS 验收
+## 2026-08-10（Task 12 产品表面矩阵与完整工作区路由）— ✅ ECS 上线
 
 - **矩阵先行**：新增 `apps/web/lib/product-surfaces.ts` 与 `apps/web/test/product-surface-matrix.test.ts`，锁定 Overview、SDF、Files、Versions、Collaboration、Publish、Sandbox、Settings 八个产品表面，以及 loading/empty/error/forbidden/ready、移动等价和风险等级声明。
 - **真实路由**：新增 `/research-objects/[id]/{overview,files,versions,publish,sandbox}` 与 `/settings`；Publish 使用真实版本列表、三类许可、同步发布审核、版本状态机和 Radix R3 确认；Files 使用真实 Artifact 上传并通过 commit 绑定版本；Sandbox 使用真实 server job + 输出下载/脚本修改链；Settings 使用 `/auth/me` 与真实 logout。
 - **统一导航**：新增 `ResearchWorkspaceNav`、`ResearchSurfaceShell`；编辑器移除 Overview/Publish 禁用占位，协作页和 Sandbox 结果面板接入 Optical Editorial 规则线表面；中英文案对称。
 - **门禁**：Web 全量测试 150/150、Next production build、typecheck、i18n JSON 与 product matrix 全绿；尚未部署本批 web 代码。
-- **下一步**：提交后按部署 runbook 同步 ECS，验证登录态下八个真实入口、未登录 `/settings`/workspace 401/重定向、390px 无溢出与浏览器无 console error；完成后关闭 Task 12 并转 Task 13。
+- **生产结论**：`c05145b`、`ab90a9d`、`c30848b`、`7f7121e` 依次上线；真实账号 Dashboard → 七个 RO 表面 + Settings 全部 HTTP 200。390px 全表面统一导航/overflow/console gate 通过；Collaboration 追加 1440px 复验同样为 200、overflow=0、console error=0。
+- **下一步**：Task 13 验证长期 Figma owner/canonical，在不覆盖浏览器真实 Optical Field 的前提下建立 tokens/components/screens 映射；随后 Task 14 固化视觉、无障碍、性能发布门禁。
 
 ### ECS 登录入口阻断与修复
 

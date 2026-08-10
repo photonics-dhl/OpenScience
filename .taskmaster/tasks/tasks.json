@@ -1298,7 +1298,7 @@
         "id": "12",
         "title": "补齐协作、版本、发布、Sandbox 与其余产品表面一致性",
         "description": "建立实际路由/状态矩阵，用 WorkspaceShell 与研究领域组件覆盖 Overview/SDF/Files/Versions/Collaboration/Publish/Sandbox/Settings。",
-        "status": "pending",
+        "status": "done",
         "dependencies": [
           "5",
           "6",
@@ -1309,9 +1309,10 @@
           "11"
         ],
         "priority": "high",
-        "details": "计划 Task 12。不得改写已工作业务调用；补齐 loading/empty/error/permission/mobile；所有 copy i18n；高风险 Review Changes。",
+        "details": "Task 12 已完成并部署 ECS。八表面 route/state matrix 与五态/权限/移动声明生效；新增 Overview、Files、Versions、Publish、Sandbox、Settings 真实路由，Collaboration/Editor 统一 WorkspaceShell；Files commit、版本列表/diff、许可+审核+R3 发布、server sandbox、auth logout 均使用真实 API。生产验收同时修复 Nginx auth Web/API 路由冲突、缺失版本列表 API 与 next-intl dotted keys。390/1440 浏览器导航、overflow、console gate 通过。",
         "testStrategy": "product-surface-matrix must cover every actual route/state；mobile parity；existing collab/sandbox tests。",
-        "subtasks": []
+        "subtasks": [],
+        "updatedAt": "2026-08-10T14:00:00.000Z"
       },
       {
         "id": "13",
@@ -1374,9 +1375,9 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-08-10T09:25:00.000Z",
+      "lastModified": "2026-08-10T14:00:00.000Z",
       "taskCount": 15,
-      "completedCount": 8,
+      "completedCount": 11,
       "tags": [
         "optical-editorial-v3"
       ]

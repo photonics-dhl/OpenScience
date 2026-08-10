@@ -187,10 +187,12 @@ Accepted 2026-08-10: migration 26 and production build deployed after a 208K bac
 
 **Interfaces:** Produces a route/state matrix for Overview, SDF, Files, Versions, Collaboration, Publish, sandbox and settings where present.
 
-- [ ] Generate matrix from actual routes; fail if a route lacks surface, mobile, loading, empty, error and permission declarations.
-- [ ] Apply WorkspaceShell/research primitives without rewriting working business calls.
-- [ ] Replace placeholder/hard-coded copy with symmetric i18n.
-- [ ] Verify mobile parity and high-risk Review Changes; commit `feat(web): close optical editorial product surfaces`.
+- [x] Generate matrix from actual routes; fail if a route lacks surface, mobile, loading, empty, error and permission declarations.
+- [x] Apply WorkspaceShell/research primitives without rewriting working business calls.
+- [x] Replace placeholder/hard-coded copy with symmetric i18n.
+- [x] Verify mobile parity and high-risk Review Changes; commit `feat(web): close optical editorial product surfaces`.
+
+Accepted 2026-08-10: eight-surface route/state matrix, real Overview/Files/Versions/Publish/Sandbox/Settings routes and unified Collaboration/Editor navigation are deployed. Production browser acceptance with the test account passes at 390/1440 with navigation present, zero overflow and zero console errors. Deployment discovery also closed the Nginx `/auth/login` routing conflict, missing version-list API and next-intl dotted-key defect. Task 12 is complete.
 
 ### Task 13: Rebuild Figma Canonical Foundations and Component Mapping
 
