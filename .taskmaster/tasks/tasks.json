@@ -1274,10 +1274,10 @@
           "6"
         ],
         "priority": "high",
-        "details": "计划 Task 10。本地 API/index/corpus/seeder 与全部门禁已完成。首次 ECS deploy 的 backup/sync/full build/migration/quota seed 成功，Compose up 因 deploy.sh 漏传 .env.prod 在解析阶段安全退出、原容器持续运行；infra deploy RED/GREEN 已修。待重放服务切换、--confirm demo seed/replay 与 live route 验收后关闭。",
+        "details": "计划 Task 10。本地 API/index/corpus/seeder 与全部门禁已完成。ECS backup/sync/full build/migration/quota seed/Compose up 已通过；服务器 dry-run 暴露 POSIX file:/// 主入口判断静默不执行，已改为 pathToFileURL 并加回归测试。待重同步、--confirm demo seed/replay 与 live route 验收后关闭。",
         "testStrategy": "API pagination/visibility contracts；UI search/filter/active row；seed dry-run + explicit non-destructive confirmation。",
         "subtasks": [],
-        "updatedAt": "2026-08-10T11:28:00.000Z"
+        "updatedAt": "2026-08-10T11:35:00.000Z"
       },
       {
         "id": "11",

@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 import { createHash } from 'node:crypto';
-import { fileURLToPath } from 'node:url';
+import { pathToFileURL } from 'node:url';
 
 import { DEMO_RESEARCH_CORPUS } from './demo-research-corpus.mjs';
 
@@ -151,7 +151,7 @@ async function main() {
   await seedConfirmed(plan);
 }
 
-if (process.argv[1] && fileURLToPath(import.meta.url) === fileURLToPath(new URL(`file:///${process.argv[1].replace(/\\/g, '/')}`))) {
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   main().catch((error) => {
     console.error(error instanceof Error ? error.message : String(error));
     process.exitCode = 1;
