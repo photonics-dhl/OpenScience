@@ -1678,6 +1678,55 @@ body {
   --os-optical-displacement: 0px;
 }
 
+.os-optical-headline-axis {
+  display: block;
+  line-height: .84;
+}
+
+.os-optical-science,
+.os-optical-evolves {
+  display: block;
+  letter-spacing: 0;
+}
+
+.os-optical-science {
+  font-size: 4.7rem;
+  font-weight: 650;
+}
+
+.os-optical-evolves {
+  margin-left: 14vw;
+  padding-bottom: .13em;
+  font-size: 5.2rem;
+  font-style: italic;
+  font-weight: 440;
+}
+
+@media (min-width: 640px) {
+  .os-optical-science { font-size: 7rem; }
+  .os-optical-evolves { margin-left: 18vw; font-size: 7.6rem; }
+}
+
+@media (min-width: 1024px) {
+  .os-optical-science { font-size: 9rem; }
+  .os-optical-evolves { font-size: 9.8rem; }
+}
+
+@media (min-width: 1280px) {
+  .os-optical-headline-axis {
+    display: flex;
+    align-items: baseline;
+    white-space: nowrap;
+  }
+  .os-optical-science { font-size: 10.5rem; }
+  .os-optical-evolves { margin-left: -.045em; font-size: 10.5rem; }
+}
+
+@media (min-width: 1600px) {
+  .os-optical-science,
+  .os-optical-evolves { font-size: 12.5rem; }
+}
+
 [data-optical-text-base='true'] {
   -webkit-mask-image: radial-gradient(circle var(--os-optical-radius) at var(--os-optical-x) var(--os-optical-y), rgb(0 0 0 / calc(1 - var(--os-optical-focus))) 0 45%, rgb(0 0 0 / .8) 64%, #000 79%);
   mask-image: radial-gradient(circle var(--os-optical-radius) at var(--os-optical-x) var(--os-optical-y), rgb(0 0 0 / calc(1 - var(--os-optical-focus))) 0 45%, rgb(0 0 0 / .8) 64%, #000 79%);
@@ -1704,30 +1753,6 @@ body {
   transition: opacity 220ms ease-out;
 }
 
-.optical-cursor-ring {
-  width: calc(var(--os-optical-radius) * 2);
-  height: calc(var(--os-optical-radius) * 2);
-  left: calc(var(--os-optical-x) - var(--os-optical-radius));
-  top: calc(var(--os-optical-y) - var(--os-optical-radius));
-  border: 1px solid rgb(241 239 234 / .17);
-  border-radius: 50%;
-  opacity: var(--os-optical-focus);
-  transition: opacity var(--motion-fast) ease;
-}
-
-.optical-cursor-ring::before {
-  content: '';
-  position: absolute;
-  left: 50%;
-  top: 50%;
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  transform: translate(-50%, -50%);
-  background: var(--os-vermilion);
-  box-shadow: 0 0 14px rgb(255 78 34 / .7);
-}
-
 @media (max-width: 760px) {
   [data-optical-text-stage='true'] { --os-optical-radius: 105px; }
 }
@@ -1738,8 +1763,7 @@ body {
     mask-image: none;
   }
   [data-optical-text-distorted='true'],
-  .optical-diffraction-aperture,
-  .optical-cursor-ring { display: none; }
+  .optical-diffraction-aperture { display: none; }
 }
 
 /* Hermes is an original optical guide, not a bundled third-party character.
@@ -1837,6 +1861,14 @@ body {
 :lang(zh) .font-editorial,
 :lang(zh-CN) .font-editorial {
   font-family: var(--font-cjk-serif);
+}
+
+.font-editorial-latin {
+  font-family: var(--font-editorial-serif), "Times New Roman", serif;
+}
+
+.font-editorial-cjk {
+  font-family: var(--font-cjk-serif), "Songti SC", serif;
 }
 
 .font-data {
