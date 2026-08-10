@@ -1188,10 +1188,10 @@
           "3"
         ],
         "priority": "high",
-        "details": "计划 Task 4，2026-08-10 经两次回归纠正后以 80c8312 为唯一接受基线，不恢复 v3 禁用的 RO loop/六节点圆环/Evolution-Hermes-Trust 卡片段。真实 DOM headline 保留一个 h1 与一个 aria-hidden 折射层；Bodoni 字形安全区防止 evolves 下缘裁切；指针使用 target/current 时间插值，160-200px 作用半径、8-14px 位移、400-600ms 回弹；固定孔径与衍射波前位于两词交界；移动 ≤35% 密度。下一屏为 OPEN RO paper surface + N1-N6 SDF anatomy，真实 /explore 入口，不伪造公开研究数据。",
+        "details": "已于 2026-08-11 在 codex/optical-editorial-v3 完成。以 80c8312 为唯一接受基线，不恢复 v3 禁用的 RO loop/六节点圆环/Evolution-Hermes-Trust 卡片段。真实 DOM headline 保留一个 h1 与一个 aria-hidden 折射层；Bodoni 字形安全区防止 evolves 下缘裁切；指针使用 target/current 时间插值；固定孔径与衍射波前位于两词交界；粒子核心以狭缝为中心并由指针轻微牵引，文字滤镜保留底层可读性。下一屏为 OPEN RO paper surface + N1-N6 SDF anatomy，真实 /explore 入口，不伪造公开研究数据。focused 18/18、Web 157/157、截图/构建/lint/docs-sync 全通过。",
         "testStrategy": "TDD RED/GREEN 锁定字形安全区、时间插值、对称衍射波前、单一 h1 与 Open RO 六节点；浏览器逐帧断言 optical x 单调接近目标且不瞬移，SVG displacement scale>5；1440x900、1920x1080、390x844 normal/reduced-motion 与 Open RO full-page screenshots；overflow/console/reduced-motion gate。",
         "subtasks": [],
-        "updatedAt": "2026-08-10T08:08:00.000Z"
+        "updatedAt": "2026-08-11T02:10:00.000Z"
       },
       {
         "id": "5",
@@ -1370,10 +1370,10 @@
           "14"
         ],
         "priority": "high",
-        "details": "计划 Task 15。cloud-sync 不带 secrets/screenshots；健康/TLS/API/worker/ClamAV/storage 门禁；失败立即 rollback 且任务保持 in-progress。",
+        "details": "已于 2026-08-11 以 release 99f16862389605d7552ac8d092ee5c8942c4e5c1 部署。cloud-sync 不带 secrets/screenshots；部署前备份 BACKUP_OK size=276K files=7/7；ECS 全量 install/build、生产栈重启、Nginx -t、线上 Chromium 三视口 normal/reduced/Open RO smoke 均通过。",
         "testStrategy": "landing→auth→dashboard→mixed intake→OCR/parse→Hermes confirm→workspace→version→publish→public→explore→selection；server screenshots/LCP/mobile/keyboard evidence。",
         "subtasks": [],
-        "updatedAt": "2026-08-10T16:10:43.514Z"
+        "updatedAt": "2026-08-11T02:10:00.000Z"
       }
     ],
     "metadata": {

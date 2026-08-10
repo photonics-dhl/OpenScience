@@ -59,7 +59,7 @@
 | `apps/web/lib/utils.ts` | `cn` class merge 工具（Task 7.4） | 活文档 |
 | `apps/web/test/ui-components.test.ts` | 原语 storyless server-rendering 断言（Task 7.4；Task 8 追加双表面 `.surface-dark` 与 state-danger 断言） | 活文档 |
 | `apps/web/test/evolving-ro-symbol.test.tsx` | Task 7.7 Evolving RO Symbol server-rendering、变体、动效与 SVG 层级断言 | 活文档 |
-| `apps/web/components/brand/{OpticalHeadline,OpticalField}.tsx` / `apps/web/lib/optical-field/*.ts` | Optical Editorial Landing 品牌媒介：单一可访问 DOM 标题 + glyph safe zone；frame-time target/current 指针缓动、base lens mask、SVG 局部位移、Canvas 半色调/证据粒子及两词交界固定狭缝衍射波前；桌面 160–200px/移动 105–120px 与 reduced-motion 降级 | 活文档 |
+| `apps/web/components/brand/{OpticalHeadline,OpticalField}.tsx` / `apps/web/lib/optical-field/*.ts` | Optical Editorial Landing 品牌媒介：单一可访问 DOM 标题 + glyph safe zone；frame-time target/current 指针缓动、可读底层 mask、受限 SVG 局部位移、Canvas 纵向半色调/证据粒子及两词交界固定狭缝衍射波前；桌面 180–220px/移动 90–115px 与 reduced-motion 降级 | 2026-08-11 增量优化已部署 |
 | `apps/web/app/explore/page.tsx` / `apps/web/components/explore/ResearchIndex.tsx` / `apps/web/test/{explore-index.test.tsx,e2e/explore-index.spec.ts}` | Optical Editorial 公开 Research Index：编号式 paper rows、query/SDF field/artifact 筛选、cursor load-more、真实 Public RO link 与 1440/390 无 Card browser gate | 活文档 |
 | `packages/domain/src/explore/explore.ts` / `apps/api/src/routes/explore.ts` / `apps/api/test/explore-routes.test.ts` | 匿名 `GET /explore` 合同；仅 public+published，稳定 publicId cursor，有界 query/limit 与关系筛选，返回 SDF/artifact/author provenance 摘要 | 活接口 |
 | `packages/domain/src/editorial/` / `apps/api/src/routes/{editorial,admin-editorial}.ts` | Ultrafast Science 策展域：版本绑定快照、媒体 provenance、draft→internal_review→scheduled→published 状态机、platform_admin scoped API 与公开过滤 | ECS 已部署并完成真实 published/audit 验收（2026-08-10） |
@@ -68,7 +68,7 @@
 | `apps/web/test/{landing-page,optical-field,landing-motion-policy}.test.ts{,x}` | Landing 基线/路由/单一标题/朱红记忆点、glyph safe zone、指针时间插值、对称狭缝衍射波前、Open RO 六节点与 reduced-motion 回归门禁 | 活文档 |
 | `apps/web/components/public/{PublicVersionPage,CitationRail,ProvenanceCaption,TabNavigation}.tsx` / `apps/web/app/research/[publicId]/**` | Public RO warm-paper 760/280 阅读 surface、持续对象/不可变版本引用、六 SDF 文本状态、SSR route 与 print provenance | 活文档 |
 | `apps/web/test/public-reading-surface.test.tsx` / `apps/web/test/visual/public-reading-shots.mjs` / `apps/web/app/visual-public-reading/page.tsx` | Public RO render contract 与 1440/390/print production browser gate；visual route 仅为确定性验收夹具 | 活文档 |
-| `apps/web/test/visual/shots.mjs` | Landing 视觉截图脚本：可配置 `VISUAL_BASE_URL`，输出目录固定相对脚本解析（不依赖 cwd），等待字体就绪，两指针状态、1440/1920/390 三尺寸、Open RO 全页及 reduced-motion | 活文档 |
+| `apps/web/test/visual/shots.mjs` | Landing 视觉截图脚本：可配置 `VISUAL_BASE_URL`，输出目录固定相对脚本解析（不依赖 cwd），等待字体就绪，两指针状态、1440/1920/390 三尺寸、Open RO 全页及 reduced-motion；元素字体读取走页面 window，Lint-safe | 线上 smoke 通过（2026-08-11） |
 | `apps/web/.gitignore` | web 局部生成物忽略（Task 7.10 截图输出 `test/visual/out/` 不入库） | 活文档 |
 | `apps/web/vitest.config.ts` | Vitest Node 环境、`@/` alias 解析与 `.ts/.tsx` 测试发现（Task 7.4/7.7） | 活文档 |
 | `tsconfig.base.json` / `eslint.config.cjs` / `.npmrc` | 共享 TypeScript/ESLint/pnpm 基线（P1A-1）；eslint.config.cjs 已升级为 ESLint 9 flat config（2026-07-28） | 活文档 |

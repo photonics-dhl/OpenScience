@@ -1,5 +1,13 @@
 # OpenScience (XGS) 进度日志
 
+## 2026-08-11（Landing 增量优化）— ✅ 已实现并部署
+
+- **实现**：在 `codex/optical-editorial-v3` 完成 Hero 单轴排版、Science/evolves 光学交互、固定狭缝衍射/半色调粒子场、Open RO 六层第二屏；保留现有入口、API、Hermes、RO 与上传/认证流程。
+- **视觉收口**：粒子核心改为以狭缝为中心、指针轻微牵引的纵向椭圆场；文字滤镜保留可读底层并限制叠影，桌面/移动/减少动效均通过截图门禁。
+- **工程门禁**：Web 157/157 tests、typecheck、production build、root lint、docs:lint、audit:docs-sync 全部通过；补齐 intentional html hydration delta 与视觉脚本 ESLint 合同。
+- **部署**：部署前 `BACKUP_OK size=276K files=7/7`；release `99f1686` 已通过 ECS cloud-sync、远端全量 install/build、生产栈重启、nginx `-t`；线上 Chromium 1440/1920/390 normal/reduced/open-RO smoke 全部通过。
+- **下一步**：继续按产品表面矩阵推进已有 Dashboard/Workspace/Public RO/Hermes 的细节优化；任何新范围先写 spec/plan 并同步 Task Master，不在本轮扩张后端或数据模型。
+
 ## 2026-08-11（Landing 增量优化实施计划）— 计划已写入，等待执行方式
 
 - **计划产出**：`docs/superpowers/plans/2026-08-11-landing-incremental-optimization-plan.md`，共 6 个可验收任务：契约测试、Hero 排版与入口层级、双层光学粒子场、Open RO 第二屏、全量本地产品门禁、ECS 部署验收。
