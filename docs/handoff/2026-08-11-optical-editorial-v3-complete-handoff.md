@@ -2,7 +2,7 @@
 
 ## Status
 
-All 15 Optical Editorial v3 Task Master tasks are complete in the isolated worktree. The previously deployed product journey remains active on ECS; the final Hermes visual refinement is verified locally and is the next server deployment unit.
+All 15 Optical Editorial v3 Task Master tasks are complete. Release `0c79aa2` is built and active on ECS, including the final Hermes visual refinement. Product implementation is complete; the only remaining acceptance is the user's visual judgment of the deployed surfaces.
 
 ## Final Task 9 Result
 
@@ -20,6 +20,13 @@ All 15 Optical Editorial v3 Task Master tasks are complete in the isolated workt
 - Product release browser matrix: 27/27 passed across eight surfaces, three viewports and reduced motion.
 - Screenshots are ignored evidence under `apps/web/test/visual/out/`; they are not deployment inputs.
 
-## Deployment Next Step
+## Production Evidence
 
-Deploy the final code/docs commit using the project deployment script, verify the remote Hermes source hash, service health and authenticated Dashboard at desktop/mobile. Do not publish the Wanko binary unless ADR-010's operator acceptance gate is separately satisfied.
+- Pre-deploy database backup: 272K, retention 7/7.
+- ECS full workspace build, required service restart and Nginx validation passed.
+- Local and remote Hermes source SHA-256 match.
+- API, PostgreSQL, Redis, SeaweedFS and ClamAV are healthy; worker critical-error count is zero.
+- Landing, Login, Explore, Ultrafast Science Collection and canonical Public RO return 200.
+- Production Dashboard Chromium at 1440×900 and 390×844 returns 200 with zero overflow/errors and proves the original renderer, scanning state, same deep link, single instance and pointer response.
+
+Do not publish the Wanko binary unless ADR-010's operator acceptance gate is separately satisfied. Future product work starts from user visual feedback or a new registered task, not from the completed v3 backlog.

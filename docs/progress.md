@@ -6,7 +6,9 @@
 - **诚实标记**：移除会把 fallback 冒充运行时的 `data-live2d-instance`，改为 `data-hermes-renderer="original-vector"` + 单实例标记；未复制 Wanko、`.moc3`、Pixi 或 Cubism Core。
 - **许可决策**：ADR-010 根据 2026-08-11 官方 Free Material Agreement 与原始 Wanko ReadMe，确认 agent 不得代运营主体作资格/接受声明；Wanko 保留可替换 adapter，但启用前必须记录运营主体、适用类别、当时有效许可接受、署名、用途和终止响应。
 - **门禁**：Hermes 4/4 unit；六态 + loading/error + 1440/390 browser 2/2；Web 26 files / 155 tests；typecheck、production build；八表面三视口 + reduced-motion release matrix 27/27 全绿。Dashboard first-load JS 128 kB，无新增视觉依赖。
-- **Task Master**：Optical Editorial v3 15/15 done。下一步只剩将本最终 refinement 部署 ECS 并复验远端 hash/服务/真实 Dashboard，不再有未登记产品任务。
+- **ECS 最终发布**：部署前巡检通过，数据库备份 `BACKUP_OK size=272K files=7/7`；`0c79aa2` 全量 workspace build 后重启 API/Web/agent-worker，Nginx 校验通过。远端 Hermes source SHA-256 与本地一致；API healthy、数据/对象/恶意软件服务 healthy、worker 关键错误 0。
+- **生产浏览器**：Landing、Login、Explore、Collection、Public RO 均 200；生产 Dashboard 无用户数据夹具在 1440×900/390×844 均 200、overflow 0、browser errors 0，并确认原创 renderer、scanning、同一 deep link、单实例、指针响应及无伪 Live2D 标记。
+- **Task Master**：Optical Editorial v3 15/15 done，无未登记产品任务；仅等待用户对已部署 Landing、Workspace/Public RO 与本轮 Dashboard 的最终审美接受。
 
 ## 2026-08-11（Task 15 Optical Editorial v3 生产验收）— ✅ ECS 已上线
 

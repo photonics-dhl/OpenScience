@@ -132,3 +132,12 @@ ssh-run.sh "cd /opt/openscience && docker compose --env-file /opt/openscience/.e
 - Real-browser flow: sign-in, Dashboard, seven RO product surfaces, three-format Intake, async `needs_review`, Hermes confirmation, version creation and Publish-ready surface passed. The synthetic acceptance object must not be publicly published.
 
 Current infrastructure uses pinned base/worker images with bind-mounted application code. Until a dedicated immutable-image migration is implemented, the verified Git ref plus remote source hash is the rollback anchor; do not describe the Web/API deployment as a per-release immutable image.
+
+### 5.1 Final Hermes refinement (2026-08-11)
+
+- Release ref: `0c79aa2`; pre-deploy database backup: 272K, 7/7 retention.
+- No schema change; deployment used `--skip-migrate` and still performed full workspace build.
+- Remote `HermesVisualAdapter.tsx` SHA-256 matched the local release source after activation.
+- API/Web/agent-worker restarted; API and all data dependencies healthy; worker critical-error count 0.
+- Server-side TLS probes for Landing, Login, Explore, Collection and Public RO returned 200.
+- Chromium against the public domain verified Dashboard 1440×900 and 390×844 with status 200, overflow 0 and browser errors 0. The browser requests used synthetic route fixtures and created no production records; the preceding Task 15 acceptance remains the real-account product-journey evidence.
