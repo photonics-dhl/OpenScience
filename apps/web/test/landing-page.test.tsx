@@ -32,6 +32,12 @@ vi.mock('next-intl', () => ({
       'openRo.node4': 'Results',
       'openRo.node5': 'Limitations',
       'openRo.node6': 'Reproducibility',
+      'openRo.node1Summary': 'The question and scope the object claims to address.',
+      'openRo.node2Summary': 'The central contribution separated from supporting evidence.',
+      'openRo.node3Summary': 'The procedure, materials, and assumptions used to produce the result.',
+      'openRo.node4Summary': 'The observations and outputs that support the stated conclusion.',
+      'openRo.node5Summary': 'Known constraints, uncertainty, and claims the evidence does not support.',
+      'openRo.node6Summary': 'The data, code, environment, and steps needed to reproduce the work.',
       'trust.title': 'Open, but trusted.',
       'trust.subtitle': 'Versions, licenses, reviews, and evidence stay traceable.',
     };
@@ -123,6 +129,9 @@ describe('Optical Editorial landing page', () => {
     expect(markup).toContain('data-landing-module="open-ro"');
     expect(markup).toContain('data-open-ro-index="true"');
     expect(markup.match(/data-sdf-node=/g)).toHaveLength(6);
+    expect(markup.match(/data-sdf-node-summary=/g) ?? []).toHaveLength(6);
+    expect(markup.match(/tabindex="0"/g)?.length ?? 0).toBeGreaterThanOrEqual(6);
+    expect(markup).toContain('data-open-ro-density="calm"');
     expect(markup).toContain('Open Research Object');
     expect(markup).toContain('href="/explore"');
     expect(markup).not.toContain('data-landing-module="principles"');

@@ -350,11 +350,17 @@
       "action": "打开公开科研索引",
       "stableId": "稳定身份",
       "node1": "问题",
+      "node1Summary": "研究对象试图回答的问题、范围与边界。",
       "node2": "洞见",
+      "node2Summary": "与支撑证据明确区分的核心贡献。",
       "node3": "方法",
+      "node3Summary": "产生结果所使用的步骤、材料与假设。",
       "node4": "结果",
+      "node4Summary": "支撑结论的观察、数据与输出。",
       "node5": "局限",
-      "node6": "可复现性"
+      "node5Summary": "已知约束、不确定性和证据不能支持的主张。",
+      "node6": "可复现性",
+      "node6Summary": "复现研究所需的数据、代码、环境与步骤。"
     },
     "evolution": {
       "title": "研究如何演化",

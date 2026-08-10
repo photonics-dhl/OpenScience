@@ -350,11 +350,17 @@
       "action": "Open the public research index",
       "stableId": "Stable identity",
       "node1": "Problem",
+      "node1Summary": "The question and scope the object claims to address.",
       "node2": "Insight",
+      "node2Summary": "The central contribution separated from supporting evidence.",
       "node3": "Method",
+      "node3Summary": "The procedure, materials, and assumptions used to produce the result.",
       "node4": "Results",
+      "node4Summary": "The observations and outputs that support the stated conclusion.",
       "node5": "Limitations",
-      "node6": "Reproducibility"
+      "node5Summary": "Known constraints, uncertainty, and claims the evidence does not support.",
+      "node6": "Reproducibility",
+      "node6Summary": "The data, code, environment, and steps needed to reproduce the work."
     },
     "evolution": {
       "title": "How research evolves",
