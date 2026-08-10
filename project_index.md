@@ -55,8 +55,8 @@
 | `apps/web/components/brand/{OpticalHeadline,OpticalField}.tsx` / `apps/web/lib/optical-field/*.ts` | Optical Editorial Landing 品牌媒介：单一可访问 DOM 标题 + glyph safe zone；frame-time target/current 指针缓动、base lens mask、SVG 局部位移、Canvas 半色调/证据粒子及两词交界固定狭缝衍射波前；桌面 160–200px/移动 105–120px 与 reduced-motion 降级 | 活文档 |
 | `apps/web/app/explore/page.tsx` / `apps/web/components/explore/ResearchIndex.tsx` / `apps/web/test/{explore-index.test.tsx,e2e/explore-index.spec.ts}` | Optical Editorial 公开 Research Index：编号式 paper rows、query/SDF field/artifact 筛选、cursor load-more、真实 Public RO link 与 1440/390 无 Card browser gate | 活文档 |
 | `packages/domain/src/explore/explore.ts` / `apps/api/src/routes/explore.ts` / `apps/api/test/explore-routes.test.ts` | 匿名 `GET /explore` 合同；仅 public+published，稳定 publicId cursor，有界 query/limit 与关系筛选，返回 SDF/artifact/author provenance 摘要 | 活接口 |
-| `packages/domain/src/editorial/` / `apps/api/src/routes/{editorial,admin-editorial}.ts` | Ultrafast Science 策展域：版本绑定快照、媒体 provenance、draft→internal_review→scheduled→published 状态机、platform_admin scoped API 与公开过滤 | 本地实现；待 ECS migration/live 验收（2026-08-10） |
-| `apps/web/components/editorial/EditorialCollection.tsx` / `apps/web/app/collections/[slug]` / `apps/web/app/editorial/curator` | 纸面期刊精选阅读页与管理员策展工作台；媒体/视频预览、来源说明、非同行评审公开标签；管理 API 走 Nginx Basic Auth `/admin/*` | 本地实现；待 ECS/live 验收（2026-08-10） |
+| `packages/domain/src/editorial/` / `apps/api/src/routes/{editorial,admin-editorial}.ts` | Ultrafast Science 策展域：版本绑定快照、媒体 provenance、draft→internal_review→scheduled→published 状态机、platform_admin scoped API 与公开过滤 | ECS 已部署并完成真实 published/audit 验收（2026-08-10） |
+| `apps/web/components/editorial/EditorialCollection.tsx` / `apps/web/app/collections/[slug]` / `apps/web/app/editorial/curator` | 纸面期刊精选阅读页与管理员策展工作台；媒体/视频预览、来源说明、非同行评审公开标签；管理 API 走 Nginx Basic Auth `/admin/*` | ECS HTTPS desktop/mobile gate 通过（2026-08-10） |
 | `scripts/{demo-research-corpus,seed-demo-research}.{mjs,test.mjs}` | 6 完整 + 12 轻量启动语料清单与默认 dry-run seeder；Git license blob evidence、source idempotency、无删除、完整项内容寻址 provenance artifact | ECS 已 confirmed seed/replay；18 demo RO + 6 provenance artifacts（2026-08-10） |
 | `apps/web/test/{landing-page,optical-field,landing-motion-policy}.test.ts{,x}` | Landing 基线/路由/单一标题/朱红记忆点、glyph safe zone、指针时间插值、对称狭缝衍射波前、Open RO 六节点与 reduced-motion 回归门禁 | 活文档 |
 | `apps/web/components/public/{PublicVersionPage,CitationRail,ProvenanceCaption,TabNavigation}.tsx` / `apps/web/app/research/[publicId]/**` | Public RO warm-paper 760/280 阅读 surface、持续对象/不可变版本引用、六 SDF 文本状态、SSR route 与 print provenance | 活文档 |
@@ -270,11 +270,11 @@
 | `infra/scripts/with-proxy.sh` | 代理兜底包装：隧道可用走 v2ray、失效回落直连（云上 `/usr/local/bin/with-proxy`，2026-08-01） | 已部署云上 |
 | `infra/scripts/proxy-tunnel.sh` / `proxy-tunnel.vbs` | 本机侧 SSH 反向隧道常驻（Windows 计划任务 `OpenScience-ProxyTunnel` 登录自启 + 断线重连，2026-08-01） | 已启用 |
 | `infra/scripts/deploy.sh` | 部署脚本 | 骨架，Phase 1A 填充 |
-| `infra/compose/` | dev/monitor/prod compose；生产栈 data/app 分段，API/Web/worker + SeaweedFS 4.41 S3；Web SSR 以 `API_ORIGIN=http://api:3001` 走 app_net 并依赖 API healthy；合同测试固化私有端口/凭据/健康依赖 | Editorial SSR transport 待重部署（2026-08-10） |
+| `infra/compose/` | dev/monitor/prod compose；生产栈 data/app 分段，API/Web/worker + SeaweedFS 4.41 S3；Web SSR 以 `API_ORIGIN=http://api:3001` 走 app_net 并依赖 API healthy；合同测试固化私有端口/凭据/健康依赖 | ECS 已重部署并通过 SSR live gate（2026-08-10） |
 | `infra/nginx/` | 反代配置：`portainer.conf`（portainer.428312321.xyz → 127.0.0.1:9443，LE 证书 + WebSocket，2026-07-31；2026-08-01 追加 /nav/ 导航页、/monitor/→Netdata、/traffic/→vnStat 账单页，basic_auth）+ `openscience.conf`（OpenScience.428312321.xyz → 127.0.0.1:3001，P1A-8：/admin basic_auth + XFF 透传） | 均已部署云上并启用（openscience.conf 2026-08-03） |
 | `infra/www/` | `nav/index.html` 服务器面板导航静态页（/var/www/nav，2026-08-01） | 已部署云上 |
 | `infra/sandbox/` | 沙箱配置占位（P1A-1） | 骨架 |
-| `infra/migrations/` | Prisma 迁移 1–26（含 26 = `editorial_collections/editorial_selections` + rollback；既有 1–25 为 auth/ingestion 状态链），各附 rollback.sql | 1–25 已云上 deploy；26 待本切片部署 |
+| `infra/migrations/` | Prisma 迁移 1–26（含 26 = `editorial_collections/editorial_selections` + rollback；既有 1–25 为 auth/ingestion 状态链），各附 rollback.sql | 1–26 已云上 deploy（2026-08-10） |
 | `infra/schema.prisma` | Prisma schema（`app_meta` 基线模型，P1A-2；2026-08-06 补 `SandboxJob`/`SandboxArtifact`/`SandboxJobStatus`，对齐迁移 20/21 DDL，P1E） | 已实现 |
 
 ## .agents/skills/（项目级 Skills，Spec §20.3）

@@ -1,18 +1,20 @@
 # OpenScience (XGS) 进度日志
 
-## 2026-08-10（Task 11 Editorial Curator 本地切片）— ⏳ API/UI 完成，待迁移与 ECS 验收
+## 2026-08-10（Task 11 Editorial Curator）— ✅ ECS 全流程上线
 
 - **数据合同**：migration 26 新增 `editorial_collections` 与 `editorial_selections`；精选固定 `researchObjectId + versionId`，保存 title/publicId/versionNo/SDF 快照，媒体必须提供 HTTPS URL、alt、credit、licenseId、sourceUrl。published selection 不可编辑，源 RO/version 仍须 public/published 才公开显示。
 - **状态机与权限**：`draft → internal_review → scheduled → published`，平台管理员独占策展写入；普通用户/普通 moderator 不能访问候选或队列。公开文案明确“Editorial selection, not peer-review acceptance”。
 - **接口与页面**：匿名 `GET /editorial/collections/:slug`；管理员候选、队列、创建、编辑、状态推进 API；公开 `/collections/[slug]` 纸面期刊页；`/editorial/curator` 管理工作台可选已发布版本、录入编辑说明与媒体 provenance、推进全流程。管理请求走 Nginx Basic Auth `/admin/editorial/*`，再叠加应用 `platform_admin` 与 CSRF。
 - **门禁**：全仓 test 通过（Web 147/147；新增 domain 4/4、API route 3/3）；root typecheck/build、Prisma validate（dummy non-secret URL）、Next production build、lint、docs:lint 0、docs-sync、Nginx/deploy/seed Node tests 8/8、敏感差异扫描全部通过。
-- **下一步**：完整门禁与安全审查 → 服务器备份 → migration 26 deploy → 应用重启 → 用平台管理员真实 session 建立一条精选并推进 published → HTTPS collection/admin 页面验收。
+- **生产闭环**：backup 208K（7/7）、migration 26、服务器全量 build、应用/Nginx 切换完成；测试账号升级为 `platform_admin`，真实 demo v1 依次推进四态至 `published`，DB 为 1 条 published selection / 4 条 editorial audit。
+- **HTTPS/browser gate**：公开 collection API 200；`/collections/ultrafast-science` 桌面/390px 均 200、1 个 exact-version link、非同行评审声明与中文描述可见、overflow=0、console errors=0；`/editorial/curator` 与 `/admin/editorial/*` 未认证均 401。
+- **下一步**：Task 12 先建立真实 route/state matrix，再统一 Collaboration、Versions、Publish、Sandbox 与 Settings 等剩余产品面；Task 9 Live2D 许可门禁独立保留。
 
 ### ECS SSR transport follow-up
 
 - migration 26、完整服务器 build、应用切换与一条真实 `published` 精选均成功；内部 Fastify collection API 返回 200。
 - 生产浏览器发现 collection 页面落入 unavailable：Web 容器未配置 `API_ORIGIN`，Next server request 默认访问容器自身 `127.0.0.1:3001` 并得到 `ECONNREFUSED`。这也影响既有 Public RO 的 server rendering，不能作为 Task 11 特例绕过。
-- Compose 现显式设置 Web `API_ORIGIN=http://api:3001` 并等待 API healthy；新增合同测试。待重同步、服务重建与 live screenshot 后关闭。
+- Compose 现显式设置 Web `API_ORIGIN=http://api:3001` 并等待 API healthy；重部署后 Web 容器到 API 200，公开 Collection 与既有 Public RO 的 SSR transport 已恢复。
 
 ## 2026-08-10（Task 10 Explore 与启动语料）— ✅ ECS 已上线并完成 live 验收
 

@@ -179,6 +179,8 @@ Checkpoint 2026-08-10: anonymous cursor API, numbered paper index, search/field/
 
 Checkpoint 2026-08-10: migration 26, immutable version-bound editorial selections, scoped curator APIs, public `/collections/[slug]` and curator `/editorial/curator` are implemented. Admin requests use the Nginx Basic Auth `/admin/editorial/*` prefix plus application role and CSRF. Domain 4/4, API 3/3, Web 1/1, typechecks and Next build pass. ECS migration and real admin→published flow remain before acceptance.
 
+Accepted 2026-08-10: migration 26 and production build deployed after a 208K backup. A real public demo version completed all four states and produced four audit rows. Production collection/API/browser gates pass at 1440/390 with exact-version link, localized disclosure, zero overflow/errors; unauthenticated curator/admin requests return 401. Task 11 is complete.
+
 ### Task 12: Close Visual Consistency Across Remaining Product Surfaces
 
 **Files:** Modify collaboration route/components, sandbox components and actual Versions/Collaboration/Publish routes found by audit; create `test/product-surface-matrix.test.ts`.

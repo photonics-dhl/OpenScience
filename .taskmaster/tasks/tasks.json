@@ -1283,16 +1283,16 @@
         "id": "11",
         "title": "交付 Ultrafast Science Collection 与 scoped Editorial Curator",
         "description": "在 Public RO 事实身份上增加期刊策展层，支持候选、媒体、编辑说明、排序、排期和 draft→internal review→scheduled→published。",
-        "status": "in-progress",
+        "status": "done",
         "dependencies": [
           "6",
           "10"
         ],
         "priority": "high",
-        "details": "计划 Task 11。migration 26、server full build 与真实 selection 四态推进至 published 已完成。首次外部 page 验收定位 Web SSR 未配置 API_ORIGIN（容器内默认 127.0.0.1:3001 ECONNREFUSED）；Compose 已补 http://api:3001 + API healthy dependency 与合同测试。待重部署和 public collection/browser/admin gate 验收后关闭。",
+        "details": "计划 Task 11 已完成。backup 208K、migration 26、server full build、Web SSR API_ORIGIN 修复与重部署；测试账号 platform_admin，真实 demo exact version 完成 draft→internal_review→scheduled→published，4 audit rows。生产 collection API 200；desktop/390 exact-version link/disclosure/localized/overflow/console gate 全过；curator/admin 未认证均 401。",
         "testStrategy": "authorization/immutable snapshot/public label integration；editorial state/UI render tests。",
         "subtasks": [],
-        "updatedAt": "2026-08-10T12:30:00.000Z"
+        "updatedAt": "2026-08-10T13:00:00.000Z"
       },
       {
         "id": "12",

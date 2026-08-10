@@ -1,6 +1,6 @@
 # Handoff — 2026-08-10 Optical Editorial 前端重构
 
-- Current goal: Task 11 Editorial Curator 本地 API/domain/UI 已完成；下一步做完整门禁、ECS migration 26 与真实管理员全流程验收。Task 9 仍仅因 Live2D 许可门禁保持 in-progress。
+- Current goal: Task 11 已完成 ECS 全流程验收；下一步执行 Task 12 剩余产品面一致性。Task 9 仍仅因 Live2D 许可门禁保持 in-progress。
 - Done:
   - 审计 `docs/user_ideas/8.10/` 资源；确认 `OpenScience_Art_Direction_v3.md` 覆盖旧视觉，Masterplan v2 保留产品结构。
   - 完成 27 项 grill-me 设计决策：三种表面、双入口身份流、Hermes/Live2D、Evidence Intake、三联屏、启动语料、Figma/浏览器职责、动效、部署方式均已确认。
@@ -28,6 +28,7 @@
   - Task 10 最终 ECS/live 验收：应用服务切换后 API `/explore?limit=50` 返回 18 items，`field=method` 返回 18；Web `/explore` 与 `/research/OSR-DEMO-000001` 均 200；DB 为 18 demo ROs + 6 provenance artifacts。生产 Chromium 1440/390：18 真实链接、overflow=0、console errors=0。Task 10 已关闭。
   - Task 11 本地实现：migration 26 `editorial_collections/editorial_selections`（含 rollback 与 Ultrafast Science 系统 collection）；版本绑定快照、媒体 provenance、安全 HTTPS 校验、四态状态机、published immutable、平台管理员 scoped 守卫已落地。匿名 collection API、admin candidates/queue/create/update/transition API 与 `/collections/[slug]`、`/editorial/curator` 页面已完成；管理 API 保持 Nginx Basic Auth `/admin/*` + platform_admin + CSRF 三层门禁；domain 4/4、API 3/3、Web 1/1、typecheck/build 全绿。
   - Task 11 首次 ECS 复核：backup 208K、migration 26、server full build、Nginx/app restart、真实 selection 四态推进至 published 均成功；内部 API 200。外部 page 仍显示 unavailable，定位为 Web 容器缺 `API_ORIGIN` 而回落到容器自身 127.0.0.1:3001。Compose 已补 `http://api:3001` + API healthy dependency 与 RED/GREEN 合同测试，待重部署和浏览器验收。
+  - Task 11 最终验收：Web SSR transport 重部署后容器内 API 200；生产 DB 1 published selection / 4 editorial audits，测试账号为 platform_admin。HTTPS collection 桌面/390px 均 200、exact-version link=1、localized disclosure=1、overflow=0、console errors=0；curator/admin unauthenticated=401。Task 11 已关闭。
   - Task 5 完成：RO Workspace 已建立独立 56px Global Nav / 64px Object Header / 44px Mode Tabs 与 19/56/25 单实例三工作面；六个 SDF 节点、Artifact rule rows、source/scope-bearing Before/After proposals、可折叠 evidence 与 Radix 全屏高影响审查均已落地。移动三面切换不卸载状态，Data/Versions 模式按钮会先切换到对应工作面再滚动锚点，320px 提交/上下文可用且无溢出。Extractor provenance 诚实标记为当前 SDF 聚合，未实现的 Overview/Publish 明确禁用。Web 121/121、typecheck/build、focused ESLint、1440/390/320 production browser 门禁通过，reviewer APPROVE。
   - Task 6 完成：Public RO 改为 warm-paper 760/280 阅读 surface；identity/license/continuing-object citation/immutable-version citation/Insight 先于 deep tabs，六个 SDF 文本状态、作者身份/通讯作者、发布时间/哈希、AI review、artifact provenance、学术 captions 与 print retention 已落地。公开对象稳定 URL 通过 server absolute API transport 解析 latest version，版本 URL 使用 exact version；Web 127/127、typecheck/build、1440/390/print browser gate 通过。独立复审的 1 Critical + 6 Important + 2 Minor 均已修正。
 - Constraints:
@@ -39,5 +40,5 @@
   - next-intl 开发/E2E 日志仍报告旧 `collab` dotted keys；登记至 Task 12，不阻断当前认证流程。
   - Wanko sample 不是无条件开源资产；其随附许可说明区分一般/小规模与中大型主体。确认项目适用类别并接受当前协议前，只能发布静态 Hermes fallback。
   - 启动语料已写入 ECS 并通过 replay；公开路由必须在应用进程切换后再声称上线。
-- Next action: 完整 monorepo/test-gate/security review → ECS backup → migration 26 deploy → restart app services → platform-admin create→internal_review→scheduled→published with a real public version → HTTPS collection/admin/browser evidence; then proceed Task 12. Task 9 的 Live2D 许可风险独立保留。
+- Next action: Task 12 audit actual routes → generate route/state matrix → rebuild remaining Collaboration/Versions/Publish/Sandbox/Settings surfaces → mobile/error/permission browser gates → ECS deploy. Task 9 的 Live2D 许可风险独立保留。
 - Read first: `AGENTS.md` → `docs/OpenScience_Kimi_Development_Spec.md` → `docs/progress.md` → `project_index.md` → `docs/specs/2026-08-10-optical-editorial-rebaseline-design.md` → `docs/user_ideas/8.10/OpenScience_Art_Direction_v3.md`。
