@@ -62,7 +62,7 @@ describe('AgentSession/AgentTask（§15 + §16 幂等 + §9.1 配额）', () => 
   });
 
   it('lists only the current user actionable tasks with RO context', async () => {
-    const { deps, user, ro, db } = await makeDeps();
+    const { deps, user, ro } = await makeDeps();
     const session = await createAgentSession(deps, { userId: user.id, researchObjectId: ro.id, kind: 'extract' });
     const task = await submitAgentTask(deps, { sessionId: session.id, userId: user.id, kind: 'sdf.extract', payload: {} });
     const rows = await listAgentTasks(deps, { userId: user.id, actionableOnly: true });
