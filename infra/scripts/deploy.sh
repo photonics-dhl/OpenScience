@@ -90,7 +90,7 @@ if [ "$CONFIRM" -ne 1 ]; then
   [ "$SKIP_BUILD" -eq 1 ] || plan "2. install + 全量 build（跨包 import 需全量）"
   [ "$SKIP_MIGRATE" -eq 1 ] || plan "3. migrate deploy + status 验证"
   [ "$SKIP_MIGRATE" -eq 1 ] || plan "4. seed-quota --confirm（幂等）"
-  plan "5. 生产栈：docker compose -f $COMPOSE_FILE up -d"
+  plan "5. 生产栈：docker compose --env-file $PROD_ENV -f $COMPOSE_FILE up -d"
   plan "6. nginx：$NGINX_CONF 部署（nginx -t + reload）+ htpasswd-admin（首次）"
   plan "7. 验证：curl /auth/me 401、/admin basic_auth、安全头"
   exit 0
@@ -119,7 +119,7 @@ fi
 
 # 4. 生产栈
 log "[5] 生产栈 up..."
-run_remote "cd $REMOTE_ROOT && docker compose -f $COMPOSE_FILE up -d" || exit 1
+run_remote "cd $REMOTE_ROOT && docker compose --env-file $PROD_ENV -f $COMPOSE_FILE up -d" || exit 1
 
 # 5. nginx 反代 + /admin basic_auth（P1A-8）
 log "[6] nginx 反代部署..."

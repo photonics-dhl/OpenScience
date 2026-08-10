@@ -1845,3 +1845,8 @@ MVP 交接复查发现两类文档失真：AGENTS.md 自 P1B-2（1e859df，08-03
 - **可重复 seed**：`scripts/seed-demo-research.mjs` 默认 dry-run，`--confirm` 才写 PostgreSQL/对象存储；使用稳定 source idempotency key，不删除，catalog 身份不可登录。现有 schema 已足够，未创建 migration。
 - **证据**：seed/corpus Node tests 6/6；Web 146/146；Domain 324/324；API 59/59；三包 typecheck；production build；Explore Playwright desktop/mobile 2/2。开发 E2E 仍记录既有 Google font 下载 fallback 与旧 collab dotted-key 警告，生产构建成功；后者继续归 Task 12。
 - **下一步**：提交 Task 10 本地实现，按服务器优先原则部署；在 ECS 先 dry-run、备份/健康门禁后 `--confirm`，再验证 18 条公开索引、6 个 provenance artifact、筛选与公共 RO 页面，并以 replay 证明幂等后关闭 Task 10。
+## 2026-08-10（Task 10 ECS 部署阻断修复）— ⏳ env-file 传播已修，待重放服务切换
+
+- **现场证据**：生产备份 `BACKUP_OK`；源码同步、服务器全量 build、25 migrations 状态与 quota seed 均成功。服务切换在 Compose 解析阶段因 `deploy.sh` 的 `up` 命令遗漏 `--env-file /opt/openscience/.env.prod` 而退出；既有容器继续运行，无停机、无数据迁移、无 demo seed。
+- **根因与修复**：同一脚本的 migrate/seed 已传 `--env-file`，仅 `up` 路径漏传。新增 `infra/scripts/deploy.test.mjs` RED 复现并修正单一命令；Node test 与 `bash -n` 通过。
+- **下一步**：提交修复后同步新 release，使用 `--skip-build --skip-migrate` 重放已通过的后半程，再执行 demo seed dry-run/confirm/replay/live gate。
