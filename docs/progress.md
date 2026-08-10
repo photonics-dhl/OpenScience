@@ -1,5 +1,13 @@
 # OpenScience (XGS) 进度日志
 
+## 2026-08-11（首页增量优化设计门禁）— 已确认范围，等待用户审阅书面设计
+
+- **用户纠正**：线上已有登录、Explore、Dashboard、创建、编辑器、公开 RO、版本、协作和 Hermes 相关流程；本轮目标是优化当前布局与交互，不重新探索或重构系统功能。
+- **线上核验**：服务器路由 `/`、`/login`、`/explore`、`/dashboard`、`/research-objects/new`、`/research-objects` 均返回 200；生产 Web/API/Worker/Postgres/Redis/对象存储/病毒扫描容器均运行中。
+- **设计更新**：`docs/specs/2026-08-10-optical-editorial-rebaseline-design.md` 新增“本轮增量优化边界”，明确保留现有风格、素材、API、数据模型和流程；首页入口为 Explore 主、Create 次、Sign in 独立；移除虚构首页元数据；保留粒子光学交互；Hermes 全局可唤起、Live2D 只在面板内出现。
+- **当前门禁**：设计文档已完成自检，等待用户书面审阅；未修改业务代码。
+- **下一步**：用户审阅通过后，编写仅针对现有 Landing 的实施计划，先做真实服务器三视口验收，再把规则传播到已有页面。
+
 ## 2026-08-11（Optical Editorial v3 Task 9）— ✅ 15/15 收口
 
 - **Hermes 正式 renderer**：将旧静态人像替换为原创 Optical Guide；单 SVG/CSS 实例按 `idle/guiding/scanning/suggesting/awaiting_approval/failed` 映射真实 ingestion 状态，加载后提供有阻尼的指针凝视、轨道/节点/扫描/故障反馈，审批与 reduced-motion 保持静止。
@@ -336,7 +344,6 @@
 - **Figma**：过渡设计源 `rWS3seZaDMdlnSljqktMDp` 新增 30 个 ingestion variables + `Shadow/Evidence`、四个 canonical components（`StatusBadge` `101:38`、`ProgressRail` `101:43`、`Dropzone` `101:51`、`EvidenceCard` `101:57`）与六屏 skeleton（`101:69`、`101:73`、`101:77`、`101:81`、`101:85`、`101:89`）；metadata 校验尺寸/层级通过。
 - **已知阻断**：Figma 官方拒绝 Code Connect 写入，明确要求 Organization/Enterprise + Dev/Full seat；当前 Professional 临时 workspace 无法满足，故未伪造映射。Task 2 可消费代码原语继续，但正式 Code Connect 必须先升级套餐/席位并发布 library。
 - **下一步**：由主 session 评审 Task 1 commit；确认后才进入 Task 2 Auth/Dashboard，不在本任务提前实现业务页面。
-
 ## 2026-08-09（产品前端与设计闭环审计）— 重新基线化，暂停零散视觉开发
 
 - **用户反馈**：注册已成功，但注册页视觉明显不达产品级；要求核对原方案落实度、补齐 Hermes 多格式上传，并明确 Task Master 与产品计划的关系。
