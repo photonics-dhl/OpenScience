@@ -134,10 +134,10 @@
 
 **Interfaces:** Produces `IntakeMaterial {localId,file,role:'manuscript'|'figure'|'data'|'code'|'supplement',primary,status,progress,artifactId?,taskId?,errorCode?}`; consumes existing upload/ingestion/OCR/ClamAV/confirmation routes.
 
-- [ ] Write failing tests for PDF/Word/TeX-ZIP/Markdown/image/data/code, one optional primary manuscript, pre-auth local-only state, per-file progress, retry and `needs_review`.
-- [ ] Verify RED; implement queue/roles without uploading before auth and explicit submit.
-- [ ] Bind real `scan → upload → parse/OCR → SDF map → review` states; never fake progress.
-- [ ] Add E2E for mixed batch, blocked file and OCR-to-review; commit `feat(web): complete evidence intake workflow`.
+- [x] Write failing tests for PDF/Word/TeX-ZIP/Markdown/image/data/code, one optional primary manuscript, pre-auth local-only state, per-file progress, retry and `needs_review`.
+- [x] Verify RED; implement queue/roles without uploading before auth and explicit submit.
+- [x] Bind real `scan → upload → parse/OCR → SDF map → review` states; never fake progress.
+- [x] Add E2E for mixed batch, blocked file and OCR-to-review; commit `feat(web): complete evidence intake workflow`.
 
 ### Task 9: Rebuild Dashboard and Connect Hermes/Live2D to Tasks
 

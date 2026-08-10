@@ -143,7 +143,10 @@ const request = apiRequest;
 
 /** Keep post-auth navigation on this origin and out of auth-loop routes. */
 export function safeReturnTo(value: string | null | undefined): string {
-  if (!value || /[\\\u0000-\u001f\u007f]/.test(value)) return '/dashboard';
+  if (!value || Array.from(value).some((character) => {
+    const code = character.charCodeAt(0);
+    return character === '\\' || code < 32 || code === 127;
+  })) return '/dashboard';
   const trustedOrigin = 'https://openscience.invalid';
   try {
     const target = new URL(value, trustedOrigin);
@@ -751,6 +754,69 @@ export interface IngestionTaskDetail {
   batchId: string;
   researchObjectId: string;
   version: number;
+}
+
+export type IngestionTaskState = 'queued' | 'uploading' | 'stored' | 'parsing' | 'needs_review' | 'confirmed' | 'written' | 'failed_retryable' | 'failed_blocked';
+
+export interface IngestionTaskSummary {
+  id: string;
+  artifactId: string;
+  logicalPath: string;
+  state: IngestionTaskState;
+  retryCount: number;
+  error: string | null;
+  agentTaskId: string | null;
+}
+
+export interface IngestionBatch {
+  batchId: string;
+  researchObjectId: string;
+  tasks: IngestionTaskSummary[];
+}
+
+export interface StartIngestionResult extends IngestionBatch {
+  artifacts: ArtifactReference[];
+}
+
+export async function startIngestionBatch(
+  researchObjectId: string,
+  files: File[],
+  idempotencyKey: string,
+  onProgress?: (percent: number) => void,
+): Promise<StartIngestionResult> {
+  const xhr = new XMLHttpRequest();
+  await prepareProtectedXhr(xhr, 'POST', `/api/research-objects/${researchObjectId}/ingest`);
+  xhr.setRequestHeader('idempotency-key', idempotencyKey);
+  const body = new FormData();
+  body.append('processingConsent', 'true');
+  for (const file of files) body.append('file', file, file.name);
+
+  return new Promise((resolve, reject) => {
+    xhr.upload.onprogress = (event) => {
+      if (event.lengthComputable) onProgress?.(Math.round((event.loaded / event.total) * 100));
+    };
+    xhr.onerror = () => reject(new ApiClientError('INGESTION_UPLOAD_FAILED', 'Research materials could not be uploaded', 0));
+    xhr.onload = () => {
+      let parsed: StartIngestionResult | ApiErrorBody | undefined;
+      try { parsed = JSON.parse(xhr.responseText) as StartIngestionResult | ApiErrorBody; } catch { /* handled below */ }
+      if (xhr.status >= 200 && xhr.status < 300 && parsed && 'batchId' in parsed) {
+        resolve(parsed);
+        return;
+      }
+      const error = parsed && 'error' in parsed ? parsed.error : undefined;
+      reject(new ApiClientError(error?.code ?? 'INGESTION_UPLOAD_FAILED', error?.message ?? 'Research materials could not be uploaded', xhr.status));
+    };
+    xhr.send(body);
+  });
+}
+
+export async function getIngestionBatch(batchId: string): Promise<IngestionBatch> {
+  return apiRequest(`/api/ingestion/${batchId}`);
+}
+
+export async function retryIngestionTask(taskId: string): Promise<IngestionTaskSummary> {
+  const result = await apiRequest<{ task: IngestionTaskSummary }>(`/api/ingestion/${taskId}/retry`, { method: 'POST' });
+  return result.task;
 }
 
 export async function getIngestionTask(taskId: string): Promise<IngestionTaskDetail> {

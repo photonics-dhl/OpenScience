@@ -175,4 +175,20 @@ describe('apiRequest CSRF contract', () => {
     expect(xhr.setRequestHeader).toHaveBeenCalledWith('x-csrf-token', 'signed-csrf-token');
     expect(xhr.setRequestHeader).not.toHaveBeenCalledWith('content-type', expect.any(String));
   });
+
+  it('polls and retries ingestion through the protected API contract', async () => {
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(new Response(JSON.stringify({ batchId: 'batch-1', researchObjectId: 'ro-1', tasks: [] }), { status: 200 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ csrfToken: 'signed-csrf-token' }), { status: 200 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ task: { id: 'task-1', state: 'queued' } }), { status: 200 }));
+    vi.stubGlobal('fetch', fetchMock);
+    const { getIngestionBatch, retryIngestionTask } = await import('../lib/api');
+
+    await expect(getIngestionBatch('batch-1')).resolves.toMatchObject({ batchId: 'batch-1' });
+    await expect(retryIngestionTask('task-1')).resolves.toMatchObject({ id: 'task-1', state: 'queued' });
+    expect(fetchMock).toHaveBeenNthCalledWith(3, '/api/ingestion/task-1/retry', expect.objectContaining({
+      method: 'POST',
+      headers: expect.objectContaining({ 'x-csrf-token': 'signed-csrf-token' }),
+    }));
+  });
 });

@@ -109,8 +109,7 @@ for (const viewport of [
   { name: 'mobile', width: 375, height: 812 },
 ]) {
   test(`dashboard navigation remains complete at ${viewport.name} width`, async ({ page }) => {
-    let uploaded = 0;
-    let committedArtifacts: unknown[] = [];
+    let uploadedBody = '';
     await page.setViewportSize(viewport);
     await mockAuthenticatedUser(page);
     await page.route('**/api/csrf-token', async (route) => {
@@ -124,18 +123,22 @@ for (const viewport of [
         body: JSON.stringify({ researchObject: { id: 'ro-created', workspaceId: 'workspace-1', version: 1 } }),
       });
     });
-    await page.route('**/api/artifacts/upload', async (route) => {
-      uploaded += 1;
-      const name = uploaded === 1 ? 'paper.md' : 'figure.png';
+    const tasks = [
+      { id: 'task-paper', artifactId: 'artifact-paper', logicalPath: 'paper.md', state: 'needs_review', retryCount: 0, error: null, agentTaskId: 'agent-paper' },
+      { id: 'task-figure', artifactId: 'artifact-figure', logicalPath: 'figure.png', state: 'needs_review', retryCount: 0, error: null, agentTaskId: 'agent-figure' },
+      { id: 'task-data', artifactId: 'artifact-data', logicalPath: 'measurements.csv', state: 'needs_review', retryCount: 0, error: null, agentTaskId: 'agent-data' },
+      { id: 'task-code', artifactId: 'artifact-code', logicalPath: 'analysis.py', state: 'needs_review', retryCount: 0, error: null, agentTaskId: 'agent-code' },
+    ];
+    await page.route('**/api/research-objects/ro-created/ingest', async (route) => {
+      uploadedBody = route.request().postDataBuffer()?.toString('utf8') ?? '';
       await route.fulfill({
-        status: 201,
+        status: 202,
         contentType: 'application/json',
-        body: JSON.stringify({ artifact: { artifactId: `artifact-${uploaded}`, logicalPath: name } }),
+        body: JSON.stringify({ batchId: 'batch-1', researchObjectId: 'ro-created', artifacts: tasks.map(({ artifactId, logicalPath }) => ({ artifactId, logicalPath })), tasks }),
       });
     });
-    await page.route('**/api/research-objects/ro-created/commits', async (route) => {
-      committedArtifacts = (await route.request().postDataJSON()).artifacts;
-      await route.fulfill({ status: 201, contentType: 'application/json', body: JSON.stringify({ commit: { commitId: 'commit-1' } }) });
+    await page.route('**/api/ingestion/batch-1', async (route) => {
+      await route.fulfill({ contentType: 'application/json', body: JSON.stringify({ batchId: 'batch-1', researchObjectId: 'ro-created', tasks }) });
     });
     await page.goto(`${baseUrl}/dashboard`);
 
@@ -154,16 +157,38 @@ for (const viewport of [
     await expect(page).toHaveURL(`${baseUrl}/research-objects/new?mode=import`);
     await expect(page.getByRole('heading', { name: /create a research object/i })).toBeVisible();
     await page.getByLabel(/research title/i).fill('Imported study');
-    await page.getByLabel(/source materials/i).setInputFiles([
+    await page.getByLabel(/choose files/i).setInputFiles([
       { name: 'paper.md', mimeType: 'text/markdown', buffer: Buffer.from('# evidence') },
       { name: 'figure.png', mimeType: 'image/png', buffer: Buffer.from('png') },
+      { name: 'measurements.csv', mimeType: 'text/csv', buffer: Buffer.from('x,y\n1,2') },
+      { name: 'analysis.py', mimeType: 'text/x-python', buffer: Buffer.from('print(1)') },
     ]);
     await page.getByRole('button', { name: /create research object/i }).click();
-    await expect(page).toHaveURL(`${baseUrl}/research-objects/ro-created/edit`);
-    expect(uploaded).toBe(2);
-    expect(committedArtifacts).toEqual([
-      { logicalPath: 'paper.md', artifactId: 'artifact-1' },
-      { logicalPath: 'figure.png', artifactId: 'artifact-2' },
-    ]);
+    await expect(page.getByText(/evidence is ready for review/i)).toBeVisible();
+    await expect(page.getByRole('link', { name: /paper.md/i })).toHaveAttribute('href', '/research-objects/ro-created/hermes?task=task-paper');
+    for (const filename of ['paper.md', 'figure.png', 'measurements.csv', 'analysis.py']) expect(uploadedBody).toContain(filename);
+    const finalOverflow = await page.evaluate(() => document.documentElement.scrollWidth > window.innerWidth);
+    expect(finalOverflow).toBe(false);
   });
 }
+
+test('a server-blocked material remains visible without a retry action', async ({ page }) => {
+  await mockAuthenticatedUser(page);
+  await page.route('**/api/csrf-token', async (route) => {
+    await route.fulfill({ contentType: 'application/json', body: JSON.stringify({ csrfToken: 'test-csrf' }) });
+  });
+  await page.route('**/api/research-objects', async (route) => {
+    await route.fulfill({ status: 201, contentType: 'application/json', body: JSON.stringify({ researchObject: { id: 'ro-blocked', workspaceId: 'workspace-1', version: 1 } }) });
+  });
+  await page.route('**/api/research-objects/ro-blocked/ingest', async (route) => {
+    await route.fulfill({ status: 415, contentType: 'application/json', body: JSON.stringify({ error: { code: 'MALICIOUS_FILE', message: 'Security scan blocked this file' } }) });
+  });
+
+  await page.goto(`${baseUrl}/research-objects/new?mode=import`);
+  await page.getByLabel(/research title/i).fill('Blocked evidence study');
+  await page.getByLabel(/choose files/i).setInputFiles({ name: 'unsafe.svg', mimeType: 'image/svg+xml', buffer: Buffer.from('<svg><script /></svg>') });
+  await page.getByRole('button', { name: /create research object/i }).click();
+  await expect(page.getByText('Security scan blocked this file').first()).toBeVisible();
+  await expect(page.getByText(/KB · Blocked/)).toBeVisible();
+  await expect(page.getByRole('button', { name: /^retry$/i })).toHaveCount(0);
+});

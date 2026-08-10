@@ -20,14 +20,14 @@
 | `apps/web/components/ui/{button,card,badge,skeleton,input,dialog,status-badge,progress-rail,dropzone,evidence-card}.tsx` | UI 基础组件；后四项为研究者导入 Task 1 稳定原语（双语、WCAG、reduced-motion、固定任务状态占位） | 活文档 |
 | `apps/web/app/auth/{register,login}/page.tsx` / `apps/web/components/auth/{ResearchIdentityPanel,SignupCodeForm,LoginForm}.tsx` | Optical Editorial Research Identity 双平面；邮箱验证码注册与独立登录共用真实 session 契约，无邀请码字段；受信 origin `returnTo`、OTP 自动聚焦、可重试错误与中英 i18n | 活文档 |
 | `apps/web/app/dashboard/page.tsx` / `apps/web/components/dashboard/` | 研究驾驶舱：最近 RO、导入/创建、可行动 Hermes 任务和研究列表 | 活文档 |
-| `apps/web/app/research-objects/new/page.tsx` | Dashboard 两个主 CTA 的真实落点：blank 创建 RO；import 强制选择多格式资料，重复文件名确定性消歧，逐文件持久化 Artifact 并写入首个不可变 Commit；页面 checkpoint 支持中断恢复，Task 3 接异步解析状态 | 活文档 |
+| `apps/web/app/research-objects/new/page.tsx` / `apps/web/components/intake/*.tsx` | Optical Editorial Evidence Intake：blank 直接进入 SDF；import 在明确提交前仅本地编排 manuscript/figure/data/code/supplement 与可选主稿，提交后连接真实 ingest batch、逐任务轮询、blocked/retry 与 needs_review→Hermes deep link | 活文档 |
 | `GET /research-objects` / `GET /agent/tasks` | Dashboard 真实数据合同：仅成员 Workspace 的 RO 与当前用户 AgentTask，可按 actionable 过滤 | 活接口 |
 | `apps/web/test/auth-dashboard.test.tsx` / `apps/web/test/e2e/auth-dashboard.spec.ts` | Auth/Dashboard 单元合同与 clean-browser 桌面/移动 E2E；实际选择多文件并断言 Artifact→Commit 引用 | 活文档 |
 | `apps/web/playwright{,.signup}.config.ts` / `apps/web/test/e2e/signup-live.spec.ts` / `apps/api/test/support/signup-smoke-server.mjs` | 可重复浏览器门禁；signup smoke 启动编译 Fastify auth 路由和真实 Next rewrite，验证验证码、Cookie 与 `/auth/me`，不使用 API route mock | 测试工具 |
 | `packages/domain/src/ingestion/` / `apps/api/src/routes/ingestion.ts` | 多格式 ingestion 格式策略、批次/任务状态机、Artifact + AgentTask 异步边界，以及 consent/status/retry API；已补写权限、bounded multipart、模板限流和 dispatch/CAS 基础 | 执行中 |
 | `packages/domain/src/workspace/personal.ts` / `packages/domain/src/usage/grants.ts` | 邮箱确认事务创建 Personal Workspace，并按生效 policy 幂等补齐当前 UTC 月 AI Credit；月度批处理复用同一单用户授信原语 | 已实现，待生产 E2E（2026-08-09） |
 | `apps/agent-worker/src/{ingestion-parser,parser-self-test,index}.ts` | Artifact→Blob→Hermes 桥接：Markdown/TeX 确定性解码；通过受控 adapter 接入 `pdf-parse` PDF 文本与 Mammoth DOCX 文本；self-test 用无用户数据的真实 PDF/OOXML fixture 验证部署运行时；超限/解析失败/未支持格式显式进入 `needs_review` | 执行中 |
-| `packages/domain/test/ingestion-service.test.ts` / `apps/api/test/ingestion.integration.test.ts` | PDF/DOCX/TeX/Markdown/图片、consent、越权、幂等恢复、worker 状态同步与云上真实 PG/Redis/S3-compatible storage 合同 | 测试工具 |
+| `packages/domain/test/ingestion-service.test.ts` / `apps/api/test/ingestion.integration.test.ts` / `apps/web/test/evidence-intake.test.ts` | PDF/DOCX/TeX-ZIP/Markdown/图片/CSV/TSV/JSON/YAML/Notebook/Python/R、consent、越权、幂等恢复、worker 状态同步、Intake role/primary/progress 与真实存储合同 | 测试工具 |
 | `packages/database/test/signup-challenge-migration{,.integration}.test.ts` | migration 23 SQL 顺序门禁与真实 PostgreSQL 预存重复 active challenge 收敛验收 | 测试工具 |
 | `apps/web/lib/api.ts` / `apps/web/next.config.mjs` / `infra/nginx/openscience.conf` | web 同源 `/api` 传输层：开发 rewrite、生产反代、受保护写请求 CSRF 获取与一次刷新重试 | 活文档 |
 | `apps/web/test/ingestion-foundations.test.ts` / `apps/web/test/visual/ingestion-shots.mjs` / `apps/web/app/{%5Fvisual,_visual}/ingestion-foundations/page.tsx` | 研究者导入视觉地基 TDD 合同与 1440/768/375 三视口浏览器截图门禁；脚本访问仅开发态可用的真实编译原语预览 | 活文档 |

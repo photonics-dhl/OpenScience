@@ -3,6 +3,7 @@ import { IngestionError } from './errors';
 
 export const INGESTION_EXTENSIONS = new Set([
   '.pdf', '.doc', '.docx', '.tex', '.zip', '.md', '.markdown', '.png', '.jpg', '.jpeg', '.webp', '.svg',
+  '.csv', '.tsv', '.json', '.yaml', '.yml', '.ipynb', '.py', '.r',
 ]);
 
 const MIME_BY_EXTENSION: Record<string, Set<string>> = {
@@ -18,7 +19,19 @@ const MIME_BY_EXTENSION: Record<string, Set<string>> = {
   '.jpeg': new Set(['image/jpeg']),
   '.webp': new Set(['image/webp']),
   '.svg': new Set(['image/svg+xml', 'text/xml', 'application/xml']),
+  '.csv': new Set(['text/csv', 'application/csv', 'text/plain']),
+  '.tsv': new Set(['text/tab-separated-values', 'text/plain']),
+  '.json': new Set(['application/json', 'text/json', 'text/plain']),
+  '.yaml': new Set(['application/yaml', 'application/x-yaml', 'text/yaml', 'text/x-yaml', 'text/plain']),
+  '.yml': new Set(['application/yaml', 'application/x-yaml', 'text/yaml', 'text/x-yaml', 'text/plain']),
+  '.ipynb': new Set(['application/json', 'application/x-ipynb+json', 'text/plain']),
+  '.py': new Set(['text/x-python', 'text/plain']),
+  '.r': new Set(['text/x-r-source', 'text/plain']),
 };
+
+const UTF8_TEXT_EXTENSIONS = new Set([
+  '.md', '.markdown', '.tex', '.svg', '.csv', '.tsv', '.json', '.yaml', '.yml', '.ipynb', '.py', '.r',
+]);
 
 export function assertSupportedIngestionFile(filename: string, mimeType?: string): void {
   const extension = extname(filename).toLowerCase();
@@ -45,11 +58,14 @@ export function assertIngestionContent(filename: string, content: Buffer): void 
   if (['.doc', '.docx', '.zip'].includes(extension) && !isZipOrCompoundDocument(content, extension)) {
     throw new IngestionError('UNSUPPORTED_INGESTION_FORMAT', 'Document container signature does not match filename');
   }
-  if (['.md', '.markdown', '.tex', '.svg'].includes(extension)) {
+  if (UTF8_TEXT_EXTENSIONS.has(extension)) {
     let text: string;
     try { text = new TextDecoder('utf-8', { fatal: true }).decode(content); }
     catch { throw new IngestionError('UNSUPPORTED_INGESTION_FORMAT', 'Text content is not valid UTF-8'); }
-    if (text.includes('\u0000') || /<script\b|on[a-z]+\s*=|<!DOCTYPE|\b(?:href|src)\s*=\s*["'](?:https?:|data:)/i.test(text)) {
+    if (text.includes('\u0000')) {
+      throw new IngestionError('UNSUPPORTED_INGESTION_FORMAT', 'Unsafe text content is not accepted');
+    }
+    if (['.md', '.markdown', '.tex', '.svg'].includes(extension) && /<script\b|on[a-z]+\s*=|<!DOCTYPE|\b(?:href|src)\s*=\s*["'](?:https?:|data:)/i.test(text)) {
       throw new IngestionError('UNSUPPORTED_INGESTION_FORMAT', 'Active or unsafe text content is not accepted');
     }
   }

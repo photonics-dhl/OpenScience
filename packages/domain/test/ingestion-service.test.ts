@@ -40,7 +40,10 @@ const file = (filename: string) => {
 };
 
 describe('multi-format ingestion service', () => {
-  it.each(['paper.pdf', 'paper.docx', 'source.tex', 'notes.md', 'figure.png'])('accepts %s and queues extraction without raw content in payload', async (filename) => {
+  it.each([
+    'paper.pdf', 'paper.docx', 'source.tex', 'notes.md', 'figure.png',
+    'measurements.csv', 'metadata.json', 'workflow.yaml', 'analysis.ipynb', 'fit.py', 'statistics.r',
+  ])('accepts %s and queues extraction without raw content in payload', async (filename) => {
     const { deps, db, user } = makeDeps();
     const result = await createIngestionBatch(deps, { userId: user.id, researchObjectId: 'ro-1', processingConsent: true, files: [file(filename)], idempotencyKey: `batch:${filename}` });
     expect(result.tasks).toHaveLength(1);
@@ -72,6 +75,8 @@ describe('multi-format ingestion service', () => {
     ['paper.pdf', Buffer.from('not a pdf')],
     ['figure.png', Buffer.from('not an image')],
     ['notes.md', Buffer.from('unsafe\u0000text')],
+    ['measurements.csv', Buffer.from('unsafe\u0000text')],
+    ['analysis.ipynb', Buffer.from('MZ\u0000executable')],
     ['figure.svg', Buffer.from('<svg><script>alert(1)</script></svg>')],
     ['paper.docx', Buffer.from('MZ\u0000executable')],
   ])('rejects content masquerading as %s', async (filename, content) => {

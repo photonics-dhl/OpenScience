@@ -1,5 +1,15 @@
 # OpenScience (XGS) 进度日志
 
+## 2026-08-10（Optical Editorial v3 Task 8）— ✅ Mixed-Material Evidence Intake 完成
+
+- **占位流程退役**：`/research-objects/new` 不再使用“创建 RO → 分文件 Artifact upload → 立即 commit”的旧双 Card 流程；新页面以黑纸、规则线、朱红动作构成 Research Identity + Evidence Intake 编辑面，blank 与 import 两条真实路径继续等权可达。
+- **本地编排与格式**：文件在用户明确提交前只存在浏览器内存；支持 PDF/Word/TeX-ZIP/Markdown/常见图片、CSV/TSV、JSON/YAML、Notebook、Python/R。材料可标记 manuscript/figure/data/code/supplement，并可选择零个或一个主文稿；数据/代码仍按 UTF-8/NUL/MZ/MIME/ClamAV 安全边界处理，不执行上传代码。
+- **真实异步状态**：新增受 CSRF 保护的 multipart ingest client、batch polling 与 task retry；上传进度取自 XHR bytes，后续状态只映射 API 的 queued/stored/parsing/needs_review/confirmed/written/failed 状态，不用定时器伪造进度。`needs_review` 直接链接同一 RO/task 的 Hermes，checkpoint 可在刷新后恢复已上传批次。
+- **失败恢复**：恶意/格式/超限错误进入 `failed_blocked` 且不显示错误重试；worker retryable task 调真实 retry endpoint；网络上传失败复用已创建 RO，避免重复对象。
+- **视觉审查**：Chromium 1440 与 390px 实际材料队列截图完成；390px `scrollWidth=innerWidth=390`，移除浏览器默认白色按钮底并将非文稿的禁用主稿单选替换为“支持证据”文本。3019 已切换至最新 production build，HTTP 200。
+- **门禁**：TDD RED 已分别证实缺格式、缺 intake model、缺 poll/retry；全 Web 141/141、全 Domain 321/321、Playwright 6/6、Web/Domain typecheck、Next production build 与 `git diff --check` 通过。上传安全自审确认 API 层成员权限、CSRF、显式 consent、100/250MB 限制、MIME/签名/ClamAV 与日志无原始文件内容边界均沿用。
+- **下一步**：Task Master `optical-editorial-v3` Task 9 已启动；重构 Dashboard 为 Continue Research + actionable confirmations，并让 Hermes visual/task 共享真实 deep link 与六态。
+
 ## 2026-08-10（Optical Editorial v3 Task 4 + Task 7）— ✅ Landing 封版与 Research Identity 完成
 
 - **Landing 交互抛光**：用户确认交互基本可用后，将 pointer optical tracking time constant 收紧为 58ms；保留 `80c8312` 非对称主构图、Bodoni glyph safe zone、固定狭缝衍射、N1–N6 `OPEN RO.` 第二屏和 reduced-motion 降级，不恢复 v3 禁用的 RO loop/轨道/视频/卡片段。

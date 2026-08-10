@@ -591,6 +591,55 @@
       "field": "SDF 字段",
       "confidence": "置信度",
       "source": "证据来源"
+    },
+    "intake": {
+      "title": "编排证据集合",
+      "localOnly": "在您明确创建 Research Object 前，文件只保留在当前设备。",
+      "dropTitle": "将原始材料放入工作集合",
+      "formats": "PDF · Word · TeX/ZIP · Markdown · 图片 · CSV/TSV · JSON/YAML · Notebook · Python/R",
+      "browse": "选择文件",
+      "remove": "移除",
+      "retry": "重试",
+      "retryUpload": "重试上传",
+      "primary": "主文稿",
+      "supporting": "支持证据",
+      "clearPrimary": "取消主文稿",
+      "progressLabel": "材料处理进度",
+      "provenance": "每份原件都作为不可变 Artifact 保留，并记录源文件名与内容哈希。",
+      "consent": "提交即授权本批材料进行安全扫描、解析/OCR 与 SDF 建议生成。",
+      "submitNote": "在您审阅并确认建议前，系统不会把任何 SDF 字段写入草稿。",
+      "blankNote": "空白 RO 不附带源证据；您可以在之后随时补充材料。",
+      "titlePlaceholder": "准确的研究工作标题",
+      "blankTitle": "先建立结构，而不是先上传文件。",
+      "blankBody": "直接进入六字段 SDF 草稿，在科研对象准备好时再附加证据。",
+      "openDraft": "打开草稿",
+      "reviewReady": "证据已可审阅",
+      "roles": {
+        "manuscript": "文稿",
+        "figure": "图像",
+        "data": "数据",
+        "code": "代码",
+        "supplement": "补充材料"
+      },
+      "stage": {
+        "scan": "扫描",
+        "upload": "上传",
+        "parse": "解析 / OCR",
+        "map": "SDF 映射",
+        "review": "审阅"
+      },
+      "status": {
+        "local": "仅本地",
+        "uploading": "上传中",
+        "queued": "排队中",
+        "stored": "已保存",
+        "parsing": "解析 / OCR 中",
+        "needs_review": "待审阅",
+        "confirmed": "已确认",
+        "written": "已写入",
+        "failed_retryable": "可重试",
+        "failed_blocked": "已阻断"
+      }
     }
   },
   "explore": {

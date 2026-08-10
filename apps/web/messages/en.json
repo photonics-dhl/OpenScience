@@ -591,6 +591,55 @@
       "field": "SDF field",
       "confidence": "Confidence",
       "source": "Evidence source"
+    },
+    "intake": {
+      "title": "Arrange the evidence set",
+      "localOnly": "Files remain on this device until you explicitly create the Research Object.",
+      "dropTitle": "Drop source material into the working set",
+      "formats": "PDF · Word · TeX/ZIP · Markdown · images · CSV/TSV · JSON/YAML · Notebook · Python/R",
+      "browse": "Choose files",
+      "remove": "Remove",
+      "retry": "Retry",
+      "retryUpload": "Retry upload",
+      "primary": "Primary manuscript",
+      "supporting": "Supporting evidence",
+      "clearPrimary": "Clear primary manuscript",
+      "progressLabel": "Material processing progress",
+      "provenance": "Every original remains an immutable Artifact with its source name and content hash.",
+      "consent": "Submitting authorizes security scanning, parsing/OCR, and SDF proposal generation for this batch.",
+      "submitNote": "No SDF field is written from these materials until you review and confirm the proposal.",
+      "blankNote": "A blank RO starts without source evidence; material can be attached later.",
+      "titlePlaceholder": "A precise working title",
+      "blankTitle": "Begin with structure, not files.",
+      "blankBody": "Open the six-field SDF draft immediately and attach evidence whenever the research object is ready for it.",
+      "openDraft": "Open draft",
+      "reviewReady": "Evidence is ready for review",
+      "roles": {
+        "manuscript": "Manuscript",
+        "figure": "Figure",
+        "data": "Data",
+        "code": "Code",
+        "supplement": "Supplement"
+      },
+      "stage": {
+        "scan": "Scan",
+        "upload": "Upload",
+        "parse": "Parse / OCR",
+        "map": "SDF map",
+        "review": "Review"
+      },
+      "status": {
+        "local": "Local only",
+        "uploading": "Uploading",
+        "queued": "Queued",
+        "stored": "Stored",
+        "parsing": "Parsing / OCR",
+        "needs_review": "Needs review",
+        "confirmed": "Confirmed",
+        "written": "Written",
+        "failed_retryable": "Retry available",
+        "failed_blocked": "Blocked"
+      }
     }
   },
   "explore": {

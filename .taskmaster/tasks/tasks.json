@@ -1239,20 +1239,21 @@
         "id": "8",
         "title": "完成 PDF/Word/TeX/Markdown/图片/数据/代码混合 Evidence Intake",
         "description": "实现本地预选、材料角色、主文稿、逐文件进度和 scan→upload→parse/OCR→SDF map→review 的真实闭环。",
-        "status": "pending",
+        "status": "done",
         "dependencies": [
           "7"
         ],
         "priority": "high",
         "details": "计划 Task 8。未认证/未提交不得上传；保留 ClamAV/OCR/ingestion/confirm 契约；blocked、retry 与 needs_review 明确。",
         "testStrategy": "Evidence Intake RED/GREEN；mixed batch、blocked file、OCR-to-review Playwright。",
-        "subtasks": []
+        "subtasks": [],
+        "updatedAt": "2026-08-10T09:25:00.000Z"
       },
       {
         "id": "9",
         "title": "重构 Dashboard 并将 Hermes/Live2D 绑定真实任务",
         "description": "以 Continue Research 和待确认队列替代统计 Hero/Card 网格，建立 Hermes 六态和 Visual/Task 同一 deep link。",
-        "status": "pending",
+        "status": "in-progress",
         "dependencies": [
           "3",
           "8"
@@ -1260,7 +1261,8 @@
         "priority": "high",
         "details": "计划 Task 9。全站单 Live2D、LCP 后加载、审批静止、失败/reduced-motion 静态 fallback。",
         "testStrategy": "dashboard/hermes RED/GREEN；empty/loading/error/active/approval screenshots；one-instance assertion。",
-        "subtasks": []
+        "subtasks": [],
+        "updatedAt": "2026-08-10T09:25:00.000Z"
       },
       {
         "id": "10",
@@ -1370,9 +1372,9 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-08-10T08:08:00.000Z",
+      "lastModified": "2026-08-10T09:25:00.000Z",
       "taskCount": 15,
-      "completedCount": 7,
+      "completedCount": 8,
       "tags": [
         "optical-editorial-v3"
       ]
