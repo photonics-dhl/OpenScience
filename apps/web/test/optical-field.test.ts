@@ -18,9 +18,11 @@ describe('pointer-local optical field model', () => {
       1_250,
     );
     expect(sample.origin).toEqual({ x: 720, y: 360 });
-    expect(sample.radius).toBeCloseTo(187.2, 5);
-    expect(sample.displacement).toBeCloseTo(13.846953858, 5);
+    expect(sample.radius).toBeCloseTo(208.8, 5);
+    expect(sample.displacement).toBeCloseTo(43.795938478, 5);
     expect(sample.evidence).toBe(1);
+    expect(sample.ambientSpacing).toBe(26);
+    expect(sample.coreSpacing).toBe(6);
   });
 
   it('stays within the optimized desktop optical envelope', () => {
@@ -38,13 +40,15 @@ describe('pointer-local optical field model', () => {
     expect(textDisplacementScale(sample)).toBeLessThanOrEqual(44);
   });
 
-  it('caps mobile density at 35% while retaining a static focal origin', () => {
+  it('caps mobile density while retaining a static focal origin and tap-scale core', () => {
     const sample = sampleOpticalField(null, { width: 390, height: 844, dpr: 3 }, 0);
     expect(sample.density).toBeLessThanOrEqual(0.35);
-    expect(sample.radius).toBeGreaterThanOrEqual(105);
-    expect(sample.radius).toBeLessThanOrEqual(120);
+    expect(sample.radius).toBeGreaterThanOrEqual(90);
+    expect(sample.radius).toBeLessThanOrEqual(115);
     expect(sample.origin.x).toBe(195);
-    expect(sample.origin.y).toBeCloseTo(354.48, 8);
+    expect(sample.origin.y).toBeCloseTo(388.24, 8);
+    expect(sample.ambientSpacing).toBe(32);
+    expect(sample.coreSpacing).toBe(10);
   });
 
   it('masks the readable base layer inside the local distortion lens', () => {
@@ -57,8 +61,8 @@ describe('pointer-local optical field model', () => {
     const pointer = { x: 120, y: 100, lastActiveAt: 1_000, pressed: false };
     const viewport = { width: 1_000, height: 600, dpr: 1 };
     expect(sampleOpticalField(pointer, viewport, 1_000).origin).toEqual({ x: 120, y: 100 });
-    expect(sampleOpticalField(pointer, viewport, 1_325).origin).toEqual({ x: 310, y: 176 });
-    expect(sampleOpticalField(pointer, viewport, 1_650).origin).toEqual({ x: 500, y: 252 });
+    expect(sampleOpticalField(pointer, viewport, 1_325).origin).toEqual({ x: 310, y: 188 });
+    expect(sampleOpticalField(pointer, viewport, 1_650).origin).toEqual({ x: 500, y: 276 });
   });
 
   it('suspends animation offscreen and caches layout through observers', () => {

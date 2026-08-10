@@ -15,7 +15,9 @@ export interface OpticalViewport {
 }
 
 export interface OpticalSample {
+  ambientSpacing: number;
   aperture: OpticalPoint;
+  coreSpacing: number;
   density: number;
   displacement: number;
   evidence: number;
@@ -73,8 +75,8 @@ export function sampleOpticalField(
 ): OpticalSample {
   const mobile = viewport.width < 640;
   const phase = (now % 6_283) / 1_000;
-  const restingOrigin = { x: viewport.width * 0.5, y: viewport.height * 0.42 };
-  const recovery = pointer ? clamp((now - pointer.lastActiveAt) / 500, 0, 1) : 1;
+  const restingOrigin = { x: viewport.width * 0.5, y: viewport.height * 0.46 };
+  const recovery = pointer ? clamp((now - pointer.lastActiveAt) / 650, 0, 1) : 1;
   const easedRecovery = recovery * recovery * (3 - 2 * recovery);
   const origin = pointer
     ? {
@@ -84,12 +86,14 @@ export function sampleOpticalField(
     : restingOrigin;
 
   return {
-    aperture: { x: viewport.width * 0.5, y: viewport.height * 0.42 },
-    density: mobile ? 0.32 : clamp(viewport.width / 1_440, 0.58, 1),
-    displacement: 11 + Math.sin(phase) * 3,
-    evidence: pointer?.pressed ? 1 : Math.max(0, 1 - recovery) * 0.82,
+    ambientSpacing: mobile ? 32 : 26,
+    aperture: restingOrigin,
+    coreSpacing: mobile ? 10 : 6,
+    density: mobile ? 0.3 : clamp(viewport.width / 1_440, 0.62, 1),
+    displacement: mobile ? 17 : 40 + Math.sin(phase) * 4,
+    evidence: pointer?.pressed ? 1 : Math.max(0, 1 - recovery) * 0.9,
     origin,
     phase,
-    radius: mobile ? clamp(viewport.width * 0.27, 105, 120) : clamp(viewport.width * 0.13, 160, 200),
+    radius: mobile ? clamp(viewport.width * 0.27, 90, 115) : clamp(viewport.width * 0.145, 180, 220),
   };
 }

@@ -1671,7 +1671,7 @@ body {
    these layers only reveal a pointer-local instrument effect. */
 [data-optical-text-stage='true'] {
   --os-optical-x: 50%;
-  --os-optical-y: 42%;
+  --os-optical-y: 46%;
   --os-optical-radius: 180px;
   --os-optical-focus: 0;
   --os-optical-chroma: 0;
@@ -1742,7 +1742,7 @@ body {
 .optical-diffraction-aperture {
   position: absolute;
   left: calc(50% - 1px);
-  top: calc(42% - 22px);
+  top: calc(46% - 22px);
   width: 2px;
   height: 44px;
   border-radius: 999px;
