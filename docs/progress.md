@@ -1,5 +1,13 @@
 # OpenScience (XGS) 进度日志
 
+## 2026-08-11（Optical Editorial v3 Task 9）— ✅ 15/15 收口
+
+- **Hermes 正式 renderer**：将旧静态人像替换为原创 Optical Guide；单 SVG/CSS 实例按 `idle/guiding/scanning/suggesting/awaiting_approval/failed` 映射真实 ingestion 状态，加载后提供有阻尼的指针凝视、轨道/节点/扫描/故障反馈，审批与 reduced-motion 保持静止。
+- **诚实标记**：移除会把 fallback 冒充运行时的 `data-live2d-instance`，改为 `data-hermes-renderer="original-vector"` + 单实例标记；未复制 Wanko、`.moc3`、Pixi 或 Cubism Core。
+- **许可决策**：ADR-010 根据 2026-08-11 官方 Free Material Agreement 与原始 Wanko ReadMe，确认 agent 不得代运营主体作资格/接受声明；Wanko 保留可替换 adapter，但启用前必须记录运营主体、适用类别、当时有效许可接受、署名、用途和终止响应。
+- **门禁**：Hermes 4/4 unit；六态 + loading/error + 1440/390 browser 2/2；Web 26 files / 155 tests；typecheck、production build；八表面三视口 + reduced-motion release matrix 27/27 全绿。Dashboard first-load JS 128 kB，无新增视觉依赖。
+- **Task Master**：Optical Editorial v3 15/15 done。下一步只剩将本最终 refinement 部署 ECS 并复验远端 hash/服务/真实 Dashboard，不再有未登记产品任务。
+
 ## 2026-08-11（Task 15 Optical Editorial v3 生产验收）— ✅ ECS 已上线
 
 - **备份与回滚**：部署前数据库备份 `BACKUP_OK size=232K files=7/7`；旧远端 OpticalField SHA-256 与 `53d5cbf` 一致，作为可重建 rollback ref。新远端 SHA-256 与本地 `f5bb6e7` 文件完全一致。

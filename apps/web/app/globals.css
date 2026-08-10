@@ -1742,6 +1742,90 @@ body {
   .optical-cursor-ring { display: none; }
 }
 
+/* Hermes is an original optical guide, not a bundled third-party character.
+   Pointer gaze stays compositor-only; approval and reduced-motion are still. */
+.hermes-visual {
+  --hermes-gaze-x: 0px;
+  --hermes-gaze-y: 0px;
+  background:
+    radial-gradient(circle at 50% 48%, rgb(255 78 34 / .055), transparent 31%),
+    linear-gradient(90deg, transparent 49.8%, rgb(241 238 231 / .045) 50%, transparent 50.2%);
+}
+
+.hermes-gaze {
+  transform: translate3d(var(--hermes-gaze-x), var(--hermes-gaze-y), 0);
+  transform-origin: 180px 177px;
+  transition: transform 420ms var(--ease-optical);
+}
+
+.hermes-orbit,
+.hermes-nodes,
+.hermes-pupil,
+.hermes-wave,
+.hermes-scan {
+  transform-box: fill-box;
+  transform-origin: center;
+}
+
+@keyframes hermes-orbit-drift {
+  to { transform: rotate(360deg); }
+}
+
+@keyframes hermes-breathe {
+  0%, 100% { opacity: .72; transform: scale(.98); }
+  50% { opacity: 1; transform: scale(1.035); }
+}
+
+@keyframes hermes-node-signal {
+  0%, 65%, 100% { opacity: .34; transform: scale(.72); }
+  18% { opacity: 1; transform: scale(1.8); }
+}
+
+@keyframes hermes-scan-pass {
+  from { transform: translateY(0); opacity: 0; }
+  18%, 82% { opacity: 1; }
+  to { transform: translateY(142px); opacity: 0; }
+}
+
+@keyframes hermes-fault {
+  0%, 92%, 100% { transform: translateX(0); opacity: 1; }
+  94% { transform: translateX(-3px); opacity: .58; }
+  97% { transform: translateX(2px); }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .hermes-visual[data-motion='responsive'] .hermes-orbit {
+    animation: hermes-orbit-drift 28s linear infinite;
+  }
+
+  .hermes-visual[data-hermes-state='idle'] .hermes-pupil,
+  .hermes-visual[data-hermes-state='guiding'] .hermes-pupil {
+    animation: hermes-breathe 4.8s ease-in-out infinite;
+  }
+
+  .hermes-visual[data-hermes-state='suggesting'] .hermes-nodes circle,
+  .hermes-visual[data-hermes-state='guiding'] .hermes-nodes circle {
+    animation: hermes-node-signal 2.7s ease-in-out infinite;
+  }
+
+  .hermes-visual[data-hermes-state='scanning'] .hermes-scan {
+    animation: hermes-scan-pass 2.3s var(--ease-optical) infinite;
+  }
+
+  .hermes-visual[data-hermes-state='failed'] .hermes-gaze {
+    animation: hermes-fault 3.6s steps(1, end) infinite;
+  }
+}
+
+.hermes-visual[data-hermes-state='awaiting_approval'] .hermes-pupil {
+  fill: #ff4e22;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .hermes-gaze { transition: none; }
+  .hermes-portrait * { animation: none !important; }
+}
+
 .font-display {
   font-family: var(--font-display-grotesk);
 }

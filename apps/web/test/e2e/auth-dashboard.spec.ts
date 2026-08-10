@@ -194,13 +194,14 @@ test('dashboard binds Hermes portrait and queue to the same real approval task',
   await page.goto(`${baseUrl}/dashboard`);
   const href = `/research-objects/${task.researchObjectId}/hermes?task=${task.id}`;
   await expect(page.locator(`[href="${href}"]`)).toHaveCount(2);
-  await expect(page.locator('[data-live2d-instance]')).toHaveCount(1);
+  await expect(page.locator('[data-hermes-instance]')).toHaveCount(1);
+  await expect(page.locator('[data-live2d-instance]')).toHaveCount(0);
   await expect(page.locator('[data-hermes-fallback="static"]')).toHaveAttribute('data-motion', 'still');
   await expect(page.locator('.rounded-card')).toHaveCount(0);
   await page.screenshot({ path: 'test/visual/out/dashboard-approval-desktop.png', fullPage: true });
   await page.setViewportSize({ width: 390, height: 844 });
   await page.reload();
-  await expect(page.locator('[data-live2d-instance]')).toHaveCount(1);
+  await expect(page.locator('[data-hermes-instance]')).toHaveCount(1);
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(390);
   await page.screenshot({ path: 'test/visual/out/dashboard-approval-mobile.png', fullPage: true });
 });

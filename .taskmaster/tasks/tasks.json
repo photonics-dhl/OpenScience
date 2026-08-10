@@ -889,7 +889,7 @@
         "id": 7,
         "title": "Phase 2A: 前端视觉系统（P0 地基收尾 + P1 首页视觉原型）",
         "description": "按已定稿 spec docs/specs/2026-08-06-frontend-visual-system-design.md 与计划 docs/plans/2026-08-06-frontend-p0-p1-plan.md 执行：Tailwind v4/shadcn/token/字体底座，首页 Header+Hero+#latest 原型，EvolvingRoSymbol 两版变体三尺寸截图供用户拍板冻结 token。三方定稿见 docs/proposals/2026-08-06-frontend-design-direction-v1.md 文末 v2 终稿决策层 D1-D9。",
-        "status": "in-progress",
+        "status": "done",
         "dependencies": [
           "6"
         ],
@@ -1259,10 +1259,10 @@
           "8"
         ],
         "priority": "high",
-        "details": "计划 Task 9。Dashboard 无 Card/统计 Hero 已完成，新增 caller-owned GET /ingestion?actionable=true，Visual/row 共用真实 IngestionTask deep link，审批静止与静态 fallback 已过 1440/390 浏览器门禁。真实 Wanko 二进制仍受 Live2D 免费素材许可主体资格/接受确认门禁约束；确认前不部署、不把 fallback 冒充 runtime。",
+        "details": "计划 Task 9 已完成。Dashboard 无 Card/统计 Hero；caller-owned GET /ingestion?actionable=true；Visual/row 共用真实 IngestionTask deep link；原创 Optical Guide 单实例实现六态、指针凝视、审批/reduced 静止，空/加载/错误/活动/审批 1440/390 门禁通过。ADR-010 禁止把原创 renderer 冒充 Live2D；Wanko 仅在运营主体完成许可资格/接受记录后作为可替换 renderer 启用。",
         "testStrategy": "dashboard/hermes RED/GREEN；empty/loading/error/active/approval screenshots；one-instance assertion。",
         "subtasks": [],
-        "updatedAt": "2026-08-10T10:40:00.000Z"
+        "updatedAt": "2026-08-10T16:27:00.000Z"
       },
       {
         "id": "10",
@@ -1378,9 +1378,9 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-08-10T16:10:43.514Z",
+      "lastModified": "2026-08-10T16:27:00.000Z",
       "taskCount": 15,
-      "completedCount": 14,
+      "completedCount": 15,
       "tags": [
         "optical-editorial-v3"
       ]

@@ -147,10 +147,10 @@
 
 - [x] Write failing tests for one Continue Research action, row-based RO list, actionable confirmations, deep-link equality, approval stillness and static fallback.
 - [x] Verify RED; implement without statistics hero or card grid.
-- [ ] Load one Live2D instance after LCP; provide static failure/reduced-motion fallback.
-- [ ] Capture empty/loading/error/active/approval states; commit `feat(web): rebuild dashboard and hermes task guidance`.
+- [x] Load one original Hermes visual instance after page load; keep the renderer boundary Live2D-compatible and require ADR-010 operator/license acceptance before any third-party binary is deployed.
+- [x] Capture empty/loading/error/active/approval states; commit `feat(web): rebuild dashboard and hermes task guidance`.
 
-Checkpoint 2026-08-10: Dashboard now consumes caller-owned `IngestionTask` IDs through `GET /ingestion?actionable=true`; approval desktop/mobile browser evidence and the static Hermes fallback pass. Wanko binaries remain undeployed until the project records acceptance of the applicable Live2D free-material license and confirms entity-size eligibility; Task 9 therefore remains in progress.
+Accepted 2026-08-11: Dashboard consumes caller-owned `IngestionTask` IDs through `GET /ingestion?actionable=true`; visual/queue deep links, six states, pointer gaze, approval/reduced stillness, empty/loading/error/active/approval browser evidence and the single original renderer pass. ADR-010 supersedes the unsafe assumption that the agent can accept Wanko terms for the operator; Wanko remains a replaceable licensed renderer and its binaries remain undeployed.
 
 ### Task 10: Deliver Explore and the Provenance-Safe Launch Corpus
 

@@ -3,8 +3,8 @@ const tseslint = require('typescript-eslint');
 
 module.exports = [
   {
-    // .worktrees 是本地隔离工作区（gitignored 副本）；.agents 是 agent skill 自带脚本，均非产品源码
-    ignores: ['**/dist/**', '**/node_modules/**', '**/.next/**', 'infra/**', '**/.worktrees/**', '.agents/**'],
+    // .worktrees 是本地隔离工作区；.agents/.superpowers 是 agent skill 与临时验收脚本，均非产品源码
+    ignores: ['**/dist/**', '**/node_modules/**', '**/.next/**', 'infra/**', '**/.worktrees/**', '.agents/**', '.superpowers/**'],
   },
   js.configs.recommended,
   ...tseslint.configs.recommended,
