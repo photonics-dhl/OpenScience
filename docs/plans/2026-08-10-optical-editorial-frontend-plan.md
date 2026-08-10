@@ -110,11 +110,11 @@
 
 **Interfaces:** Preserves existing API fields; produces 760px reading column + 280px metadata rail and distinct continuing-RO/version citations.
 
-- [ ] Write failing tests placing identity/license/citation/Insight before deep tabs, requiring text SDF states and print landmarks.
-- [ ] Verify RED; implement paper surface and academic captions with no dark workspace frame.
-- [ ] Add print CSS retaining citation/provenance and removing interactive chrome.
-- [ ] Run contract/render/typecheck/build and capture desktop/mobile/print evidence.
-- [ ] Commit `feat(web): rebuild public research object reading`.
+- [x] Write failing tests placing identity/license/citation/Insight before deep tabs, requiring text SDF states and print landmarks.
+- [x] Verify RED; implement paper surface and academic captions with no dark workspace frame.
+- [x] Add print CSS retaining citation/provenance and removing interactive chrome.
+- [x] Run contract/render/typecheck/build and capture desktop/mobile/print evidence.
+- [x] Commit `feat(web): rebuild public research object reading`.
 
 ### Task 7: Integrate Auth into the Research Identity Experience
 

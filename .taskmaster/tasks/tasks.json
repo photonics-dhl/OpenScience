@@ -1211,7 +1211,7 @@
         "id": "6",
         "title": "将 Public RO 重构为可引用纸面阅读表面",
         "description": "建立 760px 阅读列 + 280px metadata rail，优先标题、作者、身份、版本、许可、引用和 Insight，保留 print/PDF 与 provenance。",
-        "status": "in-progress",
+        "status": "done",
         "dependencies": [
           "3"
         ],
@@ -1219,7 +1219,7 @@
         "details": "计划 Task 6。复用现有 public API；不发明质量分；SDF 状态含文本；Figure 用 academic caption 而非媒体 Card。",
         "testStrategy": "public render/contract RED/GREEN；typecheck/build；desktop/mobile/print evidence。",
         "subtasks": [],
-        "updatedAt": "2026-08-10T00:44:48.306Z"
+        "updatedAt": "2026-08-10T01:54:41.834Z"
       },
       {
         "id": "7",
@@ -1232,7 +1232,8 @@
         "priority": "high",
         "details": "计划 Task 7。两步验证码、紧凑字段、安全 returnTo、可重试错误和焦点转移；保留 signup-live real Fastify E2E。",
         "testStrategy": "auth component RED/GREEN；stubbed E2E + compiled Next/real Fastify signup E2E；desktop/mobile states。",
-        "subtasks": []
+        "subtasks": [],
+        "updatedAt": "2026-08-10T01:46:57.630Z"
       },
       {
         "id": "8",
@@ -1369,9 +1370,9 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-08-10T00:44:48.306Z",
+      "lastModified": "2026-08-10T01:54:41.834Z",
       "taskCount": 15,
-      "completedCount": 5,
+      "completedCount": 6,
       "tags": [
         "optical-editorial-v3"
       ]

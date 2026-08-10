@@ -1692,6 +1692,29 @@ MVP 交接复查发现两类文档失真：AGENTS.md 自 P1B-2（1e859df，08-03
 - 不把 cyan 色散作为品牌焦点；它仅在指针局部以低透明度出现，唯一高权重焦点仍为 vermilion。
 
 ---
+## 2026-08-10 — Optical Editorial v3 Task 6：Public RO 可引用纸面阅读完成
+
+### ✅ Completed
+
+| Area | Evidence |
+|---|---|
+| 纸面阅读层 | `PublicReadingSurface` 使用 760px 阅读列 + 280px metadata rail；标题、作者、长期 RO ID、版本 ID、许可证、Insight 和引用在深层导航前完成证明。 |
+| 引用与来源 | 新增 `CitationRail` / `ProvenanceCaption`；明确区分 continuing object (`OSR-*`) 与 immutable version (`OSR-*-vN`)；六个 SDF 字段使用 `confirmed` / `empty` 文本状态。 |
+| SSR 与路由 | `/research/:publicId` 和 `/research/:publicId/v/:versionNo` 在服务器获取现有 public API 数据并直接渲染阅读 surface，保留既有 metadata/visibility 合同。 |
+| 打印与响应式 | print CSS 删除 deep navigation / copy chrome，但保留 citation 与 provenance；production browser gate 覆盖 1440×900、390×844、print，无横向溢出或运行时 console error。 |
+| 验证 | Web 19 files / 127 tests；typecheck；production build；`shots:public` 均通过。截图：`apps/web/test/visual/out/public-reading-{1440x900,390x844,print}.png`。独立复审提出的 SSR transport、latest version、provenance、citation、i18n、mobile hierarchy 均已修正并重新验证。 |
+
+### ⏳ Next Steps
+
+- [ ] Task 7：Auth Research Identity，保留验证码注册、登录和 `safeReturnTo` 契约；
+- [ ] Task 8：Mixed-material Evidence Intake 完整队列与真实上传状态。
+
+### Key Decisions
+
+- Public RO 不复用暗色 Workspace frame；长读正文使用 warm paper / editorial serif / academic captions。
+- 稳定 RO URL 与版本 URL 都可引用，但文案与结构必须明确其“持续对象”与“不可变版本”的语义差异。
+
+---
 ## 2026-08-10 — Optical Editorial 前端重构设计门禁完成
 
 ### ✅ Completed

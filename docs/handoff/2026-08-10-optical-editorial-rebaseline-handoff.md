@@ -12,12 +12,13 @@
   - Task 4 完成：Landing 已替换为真实 DOM `Science evolves.` / `科学，持续演化。` 与原生 Canvas Optical Field；Create/Explore/Login 真实路由、160–200px 局部作用半径、8–14px 位移、500ms 回弹、按住证据层、离屏暂停、移动 32% 密度及 reduced-motion 静态交互均已落地。全 Web 116/116、typecheck/build 通过；1440/1920/390 normal/reduced 截图完成，英文 320px 无溢出；Explore 纸面导航对比度 5.34:1/15.07:1。
   - Task 4 follow-up 完成：依据 `docs/user_ideas/8.10/OpenScience_Text_Distortion_Demo.html` 补齐真实文字的 pointer-local SVG displacement、mask falloff、chromatic focus、vermilion cursor ring；base DOM 仍可选择/可访问，focused landing + optical-field 11/11、typecheck、production build 通过。
   - Task 5 完成：RO Workspace 已建立独立 56px Global Nav / 64px Object Header / 44px Mode Tabs 与 19/56/25 单实例三工作面；六个 SDF 节点、Artifact rule rows、source/scope-bearing Before/After proposals、可折叠 evidence 与 Radix 全屏高影响审查均已落地。移动三面切换不卸载状态，Data/Versions 模式按钮会先切换到对应工作面再滚动锚点，320px 提交/上下文可用且无溢出。Extractor provenance 诚实标记为当前 SDF 聚合，未实现的 Overview/Publish 明确禁用。Web 121/121、typecheck/build、focused ESLint、1440/390/320 production browser 门禁通过，reviewer APPROVE。
+  - Task 6 完成：Public RO 改为 warm-paper 760/280 阅读 surface；identity/license/continuing-object citation/immutable-version citation/Insight 先于 deep tabs，六个 SDF 文本状态、作者身份/通讯作者、发布时间/哈希、AI review、artifact provenance、学术 captions 与 print retention 已落地。公开对象稳定 URL 通过 server absolute API transport 解析 latest version，版本 URL 使用 exact version；Web 127/127、typecheck/build、1440/390/print browser gate 通过。独立复审的 1 Critical + 6 Important + 2 Minor 均已修正。
 - Constraints:
   - 不读取/打印 `.env`；不把效果图伪数据投入生产。
   - 视觉核心必须由可访问 DOM + 自有轻量 Canvas/WebGL 媒介层实现；第三方库只作受控局部依赖。
   - 开发阶段无用户，验收通过后直接替换服务器页面；保留上一镜像以便回滚。
 - Open risks:
-  - Landing 与 Workspace 已完成浏览器替换；Public RO 与其余产品页仍需按同一语言逐项替换。Figma canonical 需要按 v3 新建 foundations，旧文件不再作为视觉裁决源。
+  - Landing、Workspace 与 Public RO 已完成浏览器替换；Auth、Dashboard、Intake 与其余产品页仍需按同一语言逐项替换。Figma canonical 需要按 v3 新建 foundations，旧文件不再作为视觉裁决源。
   - 启动 6 个完整 Demonstration RO 与 12–18 个索引条目尚未采集/登记。
-- Next action: 执行 Task Master `optical-editorial-v3` Task 6；重构 Public RO 为可引用纸面 surface，先证明身份/许可/引用/Insight，再实现 760px 阅读列 + 280px metadata rail、版本 citation 区分与打印 provenance 门禁。
+- Next action: 执行 Task Master `optical-editorial-v3` Task 7；将验证码注册与登录整合进 Research Identity surface，保留 `safeReturnTo` 与真实 session 合同。
 - Read first: `AGENTS.md` → `docs/OpenScience_Kimi_Development_Spec.md` → `docs/progress.md` → `project_index.md` → `docs/specs/2026-08-10-optical-editorial-rebaseline-design.md` → `docs/user_ideas/8.10/OpenScience_Art_Direction_v3.md`。

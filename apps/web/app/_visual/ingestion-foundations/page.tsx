@@ -3,10 +3,14 @@
 import { Dropzone } from '@/components/ui/dropzone';
 import { EvidenceCard } from '@/components/ui/evidence-card';
 import { ProgressRail } from '@/components/ui/progress-rail';
+import { useSearchParams } from 'next/navigation';
+import PublicReadingVisualPage from '../public-reading/page';
 
 const ignore = () => undefined;
 
 export default function IngestionFoundationsPreview() {
+  const searchParams = useSearchParams();
+  if (searchParams.get('surface') === 'public-reading') return <PublicReadingVisualPage />;
   return (
     <main
       className="min-h-screen bg-workbench-bg px-4 py-3 text-workbench-text sm:px-8 sm:py-8 lg:px-14 lg:py-12"

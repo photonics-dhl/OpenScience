@@ -53,6 +53,8 @@
 | `apps/web/components/brand/{OpticalHeadline,OpticalField}.tsx` / `apps/web/lib/optical-field/*.ts` | Optical Editorial Landing 品牌媒介：真实 DOM 双语标题、Canvas 局部半色调/证据粒子、pointer-local SVG 文字位移/色散/焦点环、160–200px 指针扰动与 reduced-motion 静态降级 | 活文档 |
 | `apps/web/app/explore/page.tsx` | 真实 `/explore` 公开索引入口；启动语料进入前显示诚实空状态，不以产品原则伪装研究数据 | 活文档 |
 | `apps/web/test/landing-page.test.tsx` / `apps/web/test/optical-field.test.ts` | Landing DOM/路由/朱红记忆点与 Optical Field 确定性边界、移动密度、静态降级回归门禁 | 活文档 |
+| `apps/web/components/public/{PublicVersionPage,CitationRail,ProvenanceCaption,TabNavigation}.tsx` / `apps/web/app/research/[publicId]/**` | Public RO warm-paper 760/280 阅读 surface、持续对象/不可变版本引用、六 SDF 文本状态、SSR route 与 print provenance | 活文档 |
+| `apps/web/test/public-reading-surface.test.tsx` / `apps/web/test/visual/public-reading-shots.mjs` / `apps/web/app/visual-public-reading/page.tsx` | Public RO render contract 与 1440/390/print production browser gate；visual route 仅为确定性验收夹具 | 活文档 |
 | `apps/web/test/visual/shots.mjs` | Landing 视觉截图脚本：可配置 `VISUAL_BASE_URL`，等待字体就绪，两指针状态、1440/1920/390 三尺寸及 reduced-motion | 活文档 |
 | `apps/web/.gitignore` | web 局部生成物忽略（Task 7.10 截图输出 `test/visual/out/` 不入库） | 活文档 |
 | `apps/web/vitest.config.ts` | Vitest Node 环境、`@/` alias 解析与 `.ts/.tsx` 测试发现（Task 7.4/7.7） | 活文档 |

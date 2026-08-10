@@ -1,9 +1,12 @@
 'use client';
+import * as React from 'react';
 import { getPublicResearchVersion, ApiClientError } from '../../lib/api';
 import { LEGAL_DISCLAIMER_DEFAULT, LICENSE_NAMES } from '../../lib/constants';
 import { useEffect, useState } from 'react';
 import { useTranslations } from 'next-intl';
 import { TabNavigation, ComingSoonTab, type TabId } from './TabNavigation';
+import { CitationRail } from './CitationRail';
+import { ProvenanceCaption } from './ProvenanceCaption';
 
 type PublicResearch = Awaited<ReturnType<typeof getPublicResearchVersion>>['research'];
 
@@ -48,7 +51,8 @@ function CopyButton({ text, label }: { text: string; label?: string }) {
   );
 }
 
-function OverviewTab({ research }: { research: PublicResearch }) {
+/** @deprecated Kept as a compatibility export while downstream embeds migrate to PublicReadingSurface. */
+export function LegacyOverviewTab({ research }: { research: PublicResearch }) {
   const t = useTranslations('public');
   const r = research;
   const disclaimer = r.version.legalDisclaimer || LEGAL_DISCLAIMER_DEFAULT;
@@ -190,6 +194,85 @@ function OverviewTab({ research }: { research: PublicResearch }) {
   );
 }
 
+const PUBLIC_SDF_NODES = [
+  ['problem', 'problem'],
+  ['insight', 'insight'],
+  ['method', 'method'],
+  ['results', 'results'],
+  ['limitations', 'limitations'],
+  ['reproducibility', 'reproducibility'],
+] as const;
+
+export function PublicReadingSurface({ research, activeTab = 'overview', onTabChange = () => undefined }: { research: PublicResearch; activeTab?: TabId; onTabChange?: (tab: TabId) => void }) {
+  const t = useTranslations('public');
+  const version = research.version;
+  const disclaimer = version.legalDisclaimer || t('legalDisclaimerDefault');
+  const objectCitation = research.citation.replace(version.publicVersionId, research.publicId);
+  const publishedAt = version.publishedAt?.slice(0, 10) ?? t('unpublished');
+  const hashShort = version.contentSha256 ? `${version.contentSha256.slice(0, 8)}…${version.contentSha256.slice(-8)}` : t('unpublished');
+  return (
+    <div className="pub-reading-surface" data-public-reading-surface="true">
+      <div className="pub-reading-layout">
+        <article className="pub-reading-column" data-public-reading-column="true">
+          <header className="pub-reading-identity" data-public-identity="true">
+            <p className="pub-kicker">{t('researchObject')}</p>
+            <h1>{research.title}</h1>
+            <p className="pub-version-id">{research.publicId} · {version.publicVersionId}</p>
+            <div className="pub-author-line">
+              {research.authors.map((author) => <span key={`${author.displayName}-${author.sortOrder}`} data-corresponding-author={author.isCorresponding ? 'true' : undefined}>
+                {author.displayName}{author.affiliation ? `, ${author.affiliation}` : ''} · {author.identityStatus}{author.isCorresponding ? ` · ${t('correspondingAuthor')}` : ''}
+              </span>)}
+            </div>
+            <div className="pub-license-line" data-public-license="true">
+              <span>{t('license')}</span>
+              <span>{Object.entries(research.licenses).map(([type, id]) => `${t(`licenseType.${type}`)}: ${LICENSE_NAMES[id] || id}`).join(' · ')}</span>
+            </div>
+          </header>
+
+          <section className="pub-reading-insight" data-sdf-node="insight" data-sdf-state={version.core.insight ? 'confirmed' : 'empty'}>
+            <p className="pub-kicker">{t('insight')}</p>
+            <p>{version.core.insight || t('none')}</p>
+          </section>
+
+          <section className="pub-reading-abstract" aria-labelledby="public-abstract-heading">
+            <h2 id="public-abstract-heading">{t('abstract')}</h2>
+            <p>{version.core.problem || t('none')}</p>
+          </section>
+
+          <section className="pub-reading-sdf" aria-labelledby="public-sdf-heading">
+            <h2 id="public-sdf-heading">{t('coreFields')}</h2>
+            {PUBLIC_SDF_NODES.filter(([key]) => key !== 'insight').map(([key, label]) => {
+              const value = version.core[key];
+              return <section key={key} data-sdf-node={key} data-sdf-state={value ? 'confirmed' : 'empty'}>
+                <h3>{t(label)}</h3><p>{value || t('none')}</p>
+              </section>;
+            })}
+          </section>
+
+          <section className="pub-reading-citation" data-public-citation="true" data-print-landmark="citation">
+            <h2>{t('citation')}</h2>
+            <p>{research.citation}</p>
+            <ProvenanceCaption label={t('versionId')} value={version.publicVersionId} landmark="provenance" />
+            <ProvenanceCaption label={t('publishedAt')} value={publishedAt} landmark="provenance" />
+            <ProvenanceCaption label={t('versionHash')} value={hashShort} landmark="provenance" />
+          </section>
+          {research.aiReview && <section className="pub-reading-review" data-ai-review={research.aiReview.status}>
+            <h2>{t('aiReview')}</h2><p>{t('status')}: {research.aiReview.status === 'passed' ? t('passed') : research.aiReview.status}</p>
+          </section>}
+          {research.artifactPaths.length > 0 && <section className="pub-reading-artifacts" data-print-landmark="provenance">
+            <h2>{t('artifactProvenance')}</h2>
+            {research.artifactPaths.map((artifact) => <ProvenanceCaption key={`${artifact.logicalPath}-${artifact.blobSha256}`} label={artifact.logicalPath} value={`${artifact.blobSha256.slice(0, 8)}…${artifact.blobSha256.slice(-8)}`} landmark="provenance" />)}
+          </section>}
+          <footer className="pub-disclaimer" data-print-landmark="provenance"><h3>{t('legalDisclaimer')}</h3><p>{disclaimer}</p></footer>
+        </article>
+        <CitationRail publicId={research.publicId} versionId={version.publicVersionId} objectCitation={objectCitation} versionCitation={research.citation} />
+      </div>
+      <div data-public-deep-navigation="true" className="pub-reading-tabs"><TabNavigation activeTab={activeTab} onTabChange={onTabChange} /></div>
+      {activeTab !== 'overview' && <ComingSoonTab tabName={t(`tab.${activeTab}`)} />}
+    </div>
+  );
+}
+
 export default function PublicVersionPage({ publicId, versionNo }: { publicId: string; versionNo: number }) {
   const t = useTranslations('public');
   const [research, setResearch] = useState<PublicResearch | null>(null);
@@ -214,10 +297,7 @@ export default function PublicVersionPage({ publicId, versionNo }: { publicId: s
 
   return (
     <main className="pub-page-tabbed">
-      <TabNavigation activeTab={activeTab} onTabChange={setActiveTab} />
-
-      {activeTab === 'overview' && <OverviewTab research={research} />}
-      {activeTab !== 'overview' && <ComingSoonTab tabName={t(`tab.${activeTab}`)} />}
+      <PublicReadingSurface research={research} activeTab={activeTab} onTabChange={setActiveTab} />
     </main>
   );
 }
