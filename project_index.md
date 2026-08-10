@@ -53,7 +53,9 @@
 | `apps/web/test/ui-components.test.ts` | 原语 storyless server-rendering 断言（Task 7.4；Task 8 追加双表面 `.surface-dark` 与 state-danger 断言） | 活文档 |
 | `apps/web/test/evolving-ro-symbol.test.tsx` | Task 7.7 Evolving RO Symbol server-rendering、变体、动效与 SVG 层级断言 | 活文档 |
 | `apps/web/components/brand/{OpticalHeadline,OpticalField}.tsx` / `apps/web/lib/optical-field/*.ts` | Optical Editorial Landing 品牌媒介：单一可访问 DOM 标题 + glyph safe zone；frame-time target/current 指针缓动、base lens mask、SVG 局部位移、Canvas 半色调/证据粒子及两词交界固定狭缝衍射波前；桌面 160–200px/移动 105–120px 与 reduced-motion 降级 | 活文档 |
-| `apps/web/app/explore/page.tsx` | 真实 `/explore` 公开索引入口；启动语料进入前显示诚实空状态，不以产品原则伪装研究数据 | 活文档 |
+| `apps/web/app/explore/page.tsx` / `apps/web/components/explore/ResearchIndex.tsx` / `apps/web/test/{explore-index.test.tsx,e2e/explore-index.spec.ts}` | Optical Editorial 公开 Research Index：编号式 paper rows、query/SDF field/artifact 筛选、cursor load-more、真实 Public RO link 与 1440/390 无 Card browser gate | 活文档 |
+| `packages/domain/src/explore/explore.ts` / `apps/api/src/routes/explore.ts` / `apps/api/test/explore-routes.test.ts` | 匿名 `GET /explore` 合同；仅 public+published，稳定 publicId cursor，有界 query/limit 与关系筛选，返回 SDF/artifact/author provenance 摘要 | 活接口 |
+| `scripts/{demo-research-corpus,seed-demo-research}.{mjs,test.mjs}` | 6 完整 + 12 轻量启动语料清单与默认 dry-run seeder；Git license blob evidence、source idempotency、无删除、完整项内容寻址 provenance artifact | 部署前门禁通过，待 ECS confirm/replay |
 | `apps/web/test/{landing-page,optical-field,landing-motion-policy}.test.ts{,x}` | Landing 基线/路由/单一标题/朱红记忆点、glyph safe zone、指针时间插值、对称狭缝衍射波前、Open RO 六节点与 reduced-motion 回归门禁 | 活文档 |
 | `apps/web/components/public/{PublicVersionPage,CitationRail,ProvenanceCaption,TabNavigation}.tsx` / `apps/web/app/research/[publicId]/**` | Public RO warm-paper 760/280 阅读 surface、持续对象/不可变版本引用、六 SDF 文本状态、SSR route 与 print provenance | 活文档 |
 | `apps/web/test/public-reading-surface.test.tsx` / `apps/web/test/visual/public-reading-shots.mjs` / `apps/web/app/visual-public-reading/page.tsx` | Public RO render contract 与 1440/390/print production browser gate；visual route 仅为确定性验收夹具 | 活文档 |
@@ -99,6 +101,7 @@
 | `docs/specs/2026-08-03-p1b-2-ro-sdf-model-design.md` | P1B-2 RO/SDF 数据模型设计（design gate 已确认：三实体 + 迁移 7 + API 骨架，代码已实现 2026-08-03） | 活文档 |
 | `docs/specs/2026-08-08-openscience-product-web-design.md` | 产品级网页设计 spec（方向 A：Monumental Scholarly Intelligence；统一 RO 工作流、Hermes/Live2D、Public RO、Ultrafast Science 策展、许可与版本模型；用户已批准，待书面审阅） | 活文档 |
 | `docs/specs/2026-08-10-optical-editorial-rebaseline-design.md` | 前端视觉重构 spec：Art Direction v3 Optical Editorial Instrument 为视觉真源，Masterplan v2 保留业务结构；三联屏浏览器优先、双表面、Evidence Intake、启动示范语料与服务器验收门 | 用户已确认设计章节，待书面审阅 |
+| `docs/data/launch-research-corpus.md` | 18 条公开启动语料的范围、免责声明、真实来源、上游许可证证据与 ECS seed 操作边界 | 活文档；本地完成，待生产 seed |
 | `docs/plans/2026-08-08-openscience-product-web-plan.md` | 旧产品级网页实现计划；2026-08-10 被 Optical Editorial v3 计划取代，仅保留历史 | DEPRECATED |
 | `docs/plans/2026-08-10-optical-editorial-frontend-plan.md` | Optical Editorial v3 完整实施计划：15 Task 覆盖生产基线、foundations、三联屏、Auth/Intake/Dashboard/Hermes、Explore/启动语料、Editorial、其余产品面、Figma、质量门禁与 ECS E2E | 当前执行计划 |
 | `docs/superpowers/specs/2026-08-09-researcher-ingestion-product-slice-design.md` | 研究者第一条产品级前端闭环设计：注册、Dashboard、资料导入、Hermes 证据确认、RO Workspace；待用户审阅 | 设计 spec |

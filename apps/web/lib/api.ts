@@ -217,6 +217,40 @@ export async function getDashboardOverview(): Promise<{
   return { researchObjects: research.researchObjects, tasks: ingestion.tasks };
 }
 
+export interface ResearchIndexItemApi {
+  publicId: string;
+  title: string;
+  url: string;
+  latestVersion: number;
+  publishedAt: string | null;
+  updatedAt: string;
+  insight: string | null;
+  fields: string[];
+  artifactTypes: string[];
+  authors: string[];
+}
+
+export interface ResearchIndexPageApi {
+  items: ResearchIndexItemApi[];
+  nextCursor: string | null;
+}
+
+export async function getExploreIndex(input: {
+  query?: string;
+  cursor?: string;
+  limit?: number;
+  field?: string;
+  artifactType?: string;
+} = {}): Promise<ResearchIndexPageApi> {
+  const params = new URLSearchParams();
+  if (input.query) params.set('query', input.query);
+  params.set('limit', String(input.limit ?? 20));
+  if (input.field) params.set('field', input.field);
+  if (input.artifactType) params.set('artifactType', input.artifactType);
+  if (input.cursor) params.set('cursor', input.cursor);
+  return request(`/api/explore?${params.toString()}`);
+}
+
 export interface WorkspaceApi {
   id: string;
   name: string;

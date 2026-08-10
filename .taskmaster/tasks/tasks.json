@@ -1268,15 +1268,16 @@
         "id": "10",
         "title": "交付 Explore Research Index 与可追溯启动语料",
         "description": "实现编号式 Research Index、搜索/筛选和公开 API，导入 6 个完整 Demonstration RO 与 12-18 个轻量真实来源索引。",
-        "status": "pending",
+        "status": "in-progress",
         "dependencies": [
           "4",
           "6"
         ],
         "priority": "high",
-        "details": "计划 Task 10。使用 api-contract/security-review；仅在必要时 migration；seed 幂等且不删除；每项记录来源、许可、日期、provenance。",
+        "details": "计划 Task 10。2026-08-10 本地检查点：无需 migration；匿名 cursor API、编号式 paper index、搜索/字段/素材筛选、6 完整 + 12 轻量来源清单、默认 dry-run 且不删除的幂等 seeder 已完成。Web 146/146、Domain 324/324、API 59/59、seed 6/6 与 1440/390 browser gate 通过；待 ECS 部署、--confirm seed/replay 与 live route 验收后关闭。",
         "testStrategy": "API pagination/visibility contracts；UI search/filter/active row；seed dry-run + explicit non-destructive confirmation。",
-        "subtasks": []
+        "subtasks": [],
+        "updatedAt": "2026-08-10T11:20:00.000Z"
       },
       {
         "id": "11",

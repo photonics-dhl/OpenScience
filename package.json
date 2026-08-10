@@ -24,6 +24,7 @@
     "test": "pnpm -r --if-present test",
     "test:integration": "pnpm stack:up && pnpm -r --if-present test:integration",
     "invite": "node scripts/invite.mjs",
+    "seed:demo-research": "node scripts/seed-demo-research.mjs",
     "api": "pnpm --filter @openscience/api start"
   },
   "devDependencies": {

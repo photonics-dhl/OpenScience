@@ -1837,3 +1837,11 @@ MVP 交接复查发现两类文档失真：AGENTS.md 自 P1B-2（1e859df，08-03
 - 不把 CJS/Vite、ts-jest experimental 既有 warning 冒充失败，也不在本视觉任务顺手重构无关测试配置。
 
 ---
+## 2026-08-10（Optical Editorial v3 Task 10 本地检查点）— ⏳ Research Index 完成，待 ECS seed/live gate
+
+- **公开 Explore 合同**：新增匿名只读 `GET /explore`，仅返回 `public + published` RO；支持长度有界的 query、稳定 `publicId` cursor、limit、SDF field 与 artifact type 筛选，私有对象测试隔离。
+- **纸面 Research Index**：`/explore` 从诚实空状态升级为编号式 editorial index；桌面/390px 搜索筛选、真实 Public RO link、无 Card、无横向溢出均通过。复看截图后移除整行默认链接下划线，并把 native beveled controls 收敛为规则线输入和自绘下拉提示。
+- **可信启动语料**：登记 6 个完整 demonstration + 12 个轻量真实来源；许可证文件以 Git blob SHA 固定证据。完整记录仅存平台生成的 provenance Markdown，不复制或假称托管上游数据，且明确不代表上游作者投稿或科学复现。
+- **可重复 seed**：`scripts/seed-demo-research.mjs` 默认 dry-run，`--confirm` 才写 PostgreSQL/对象存储；使用稳定 source idempotency key，不删除，catalog 身份不可登录。现有 schema 已足够，未创建 migration。
+- **证据**：seed/corpus Node tests 6/6；Web 146/146；Domain 324/324；API 59/59；三包 typecheck；production build；Explore Playwright desktop/mobile 2/2。开发 E2E 仍记录既有 Google font 下载 fallback 与旧 collab dotted-key 警告，生产构建成功；后者继续归 Task 12。
+- **下一步**：提交 Task 10 本地实现，按服务器优先原则部署；在 ECS 先 dry-run、备份/健康门禁后 `--confirm`，再验证 18 条公开索引、6 个 provenance artifact、筛选与公共 RO 页面，并以 replay 证明幂等后关闭 Task 10。

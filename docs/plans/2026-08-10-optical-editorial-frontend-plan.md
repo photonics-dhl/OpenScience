@@ -158,11 +158,13 @@ Checkpoint 2026-08-10: Dashboard now consumes caller-owned `IngestionTask` IDs t
 
 **Interfaces:** `GET /explore?query=&cursor=&limit=&field=&artifactType=` returns `{items:ResearchIndexItem[],nextCursor:string|null}`; seeder is idempotent by source identifier and never deletes.
 
-- [ ] Use `api-contract`, and `database-migration` only if schema change is necessary; run `security-review` before public exposure.
-- [ ] Curate six full Demonstration ROs and 12–18 index entries from license-compatible primary sources; record source, license, retrieval date and provenance.
-- [ ] Write failing API pagination/visibility and UI index/search/filter tests.
-- [ ] Implement the least backend surface and numbered editorial index, not cards/infinite social feed.
+- [x] Use `api-contract`, and `database-migration` only if schema change is necessary; run `security-review` before public exposure.
+- [x] Curate six full Demonstration ROs and 12–18 index entries from license-compatible primary sources; record source, license, retrieval date and provenance.
+- [x] Write failing API pagination/visibility and UI index/search/filter tests.
+- [x] Implement the least backend surface and numbered editorial index, not cards/infinite social feed.
 - [ ] Run seed dry-run, then explicit non-destructive confirmation; commit `feat(explore): add research index and launch corpus`.
+
+Checkpoint 2026-08-10: anonymous cursor API, numbered paper index, search/field/artifact filters, 6 complete + 12 lightweight verified-source records, default-dry-run idempotent seeder and desktop/mobile browser evidence pass locally. No schema change was required. Final checkbox remains open until ECS deploy, confirmed seed replay and live public-route verification complete.
 
 ### Task 11: Deliver Ultrafast Science Collections and Editorial Curator
 

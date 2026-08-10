@@ -1,6 +1,7 @@
 import { getTranslations } from 'next-intl/server';
 
 import SiteHeader from '@/components/landing/SiteHeader';
+import { ResearchIndex } from '@/components/explore/ResearchIndex';
 import { PublicShell } from '@/components/shell/PublicShell';
 
 export default async function ExplorePage() {
@@ -25,12 +26,7 @@ export default async function ExplorePage() {
             </h1>
             <p className="m-0 max-w-xl text-lg leading-8 text-os-muted-paper lg:justify-self-end">{t('description')}</p>
           </div>
-          <div className="grid gap-8 py-10 sm:grid-cols-[1fr_auto] sm:items-center">
-            <p className="m-0 max-w-2xl font-editorial text-2xl leading-9 text-os-ink">{t('empty')}</p>
-            <a className="inline-flex min-h-12 items-center justify-between gap-8 rounded-panel bg-os-vermilion px-5 font-semibold text-os-black-0" href="/research-objects/new">
-              {t('create')} <span aria-hidden="true">↗</span>
-            </a>
-          </div>
+          <ResearchIndex />
         </div>
       </section>
     </PublicShell>

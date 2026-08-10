@@ -247,13 +247,76 @@ export function createFakePrisma(): { prisma: PrismaClient; db: FakeDb } {
       },
     },
     researchObject: {
-      findMany: async ({ where, orderBy, take }: any) => {
+      findMany: async ({ where, include, orderBy, take }: any) => {
         const userId = where?.workspace?.members?.some?.userId;
         let rows = db.researchObjects.filter((row) =>
           !userId || db.memberships.some((membership) => membership.workspaceId === row.workspaceId && membership.userId === userId),
         );
+        const matchesText = (value: string, filter: any) => {
+          if (!filter) return true;
+          if (filter.contains !== undefined) return value.toLocaleLowerCase().includes(String(filter.contains).toLocaleLowerCase());
+          if (filter.endsWith !== undefined) return value.toLocaleLowerCase().endsWith(String(filter.endsWith).toLocaleLowerCase());
+          if (filter.not?.endsWith !== undefined) return !value.toLocaleLowerCase().endsWith(String(filter.not.endsWith).toLocaleLowerCase());
+          return true;
+        };
+        const matchesEntry = (entry: any, condition: any): boolean =>
+          (condition.OR === undefined || condition.OR.some((part: any) => matchesEntry(entry, part))) &&
+          (condition.AND === undefined || condition.AND.every((part: any) => matchesEntry(entry, part))) &&
+          matchesText(entry.logicalPath, condition.logicalPath);
+        const versionsFor = (row: any) => db.versions.filter((version) => version.researchObjectId === row.id);
+        const matchesVersionSome = (row: any, condition: any) => versionsFor(row).some((version) => {
+          if (condition.status !== undefined && version.status !== condition.status) return false;
+          const manifest = db.versionManifests.find((candidate) => candidate.versionId === version.id);
+          const entrySome = condition.manifest?.is?.entries?.some;
+          return !entrySome || (!!manifest && db.manifestEntries.some((entry) => entry.manifestId === manifest.id && matchesEntry(entry, entrySome)));
+        });
+        const matchesClause = (row: any, clause: any): boolean => {
+          if (clause.OR) return clause.OR.some((part: any) => matchesClause(row, part));
+          if (clause.title && !matchesText(row.title, clause.title)) return false;
+          if (clause.versions?.some && !matchesVersionSome(row, clause.versions.some)) return false;
+          const nodeSome = clause.sdfDocument?.nodes?.some;
+          if (nodeSome) {
+            const document = db.sdfDocuments.find((candidate) => candidate.researchObjectId === row.id);
+            const nodes = document ? db.sdfNodes.filter((node) => node.sdfDocumentId === document.id) : [];
+            if (!nodes.some((node) =>
+              (nodeSome.nodeType === undefined || node.nodeType === nodeSome.nodeType) &&
+              matchesText(node.content, nodeSome.content),
+            )) return false;
+          }
+          return true;
+        };
+        rows = rows.filter((row) =>
+          (where?.visibility === undefined || row.visibility === where.visibility) &&
+          (where?.publicId?.not === undefined || row.publicId !== where.publicId.not) &&
+          (where?.publicId?.gt === undefined || row.publicId > where.publicId.gt) &&
+          (!where?.versions?.some || matchesVersionSome(row, where.versions.some)) &&
+          (!where?.AND || where.AND.every((clause: any) => matchesClause(row, clause))),
+        );
         if (orderBy?.updatedAt === 'desc') rows = rows.sort((a, b) => b.updatedAt.getTime() - a.updatedAt.getTime());
-        return rows.slice(0, take ?? rows.length);
+        if (orderBy?.publicId === 'asc') rows = rows.sort((a, b) => a.publicId.localeCompare(b.publicId));
+        rows = rows.slice(0, take ?? rows.length);
+        if (!include) return rows;
+        return rows.map((row) => {
+          const sdfDocument = db.sdfDocuments.find((document) => document.researchObjectId === row.id);
+          const nodes = sdfDocument
+            ? db.sdfNodes.filter((node) => node.sdfDocumentId === sdfDocument.id).toSorted((a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0))
+            : [];
+          let versions = versionsFor(row).filter((version) => !include.versions?.where?.status || version.status === include.versions.where.status);
+          if (include.versions?.orderBy?.versionNo === 'desc') versions = versions.toSorted((a, b) => b.versionNo - a.versionNo);
+          versions = versions.slice(0, include.versions?.take ?? versions.length).map((version) => {
+            const manifest = db.versionManifests.find((candidate) => candidate.versionId === version.id);
+            return {
+              ...version,
+              manifest: manifest ? { ...manifest, entries: db.manifestEntries.filter((entry) => entry.manifestId === manifest.id) } : null,
+              publications: db.publications.filter((publication) => publication.versionId === version.id),
+            };
+          });
+          const authors = db.authors
+            .filter((author) => author.researchObjectId === row.id)
+            .toSorted((a, b) => a.sortOrder - b.sortOrder)
+            .map((author) => ({ ...author, user: db.users.find((user) => user.id === author.userId) }));
+          return { ...row, sdfDocument: sdfDocument ? { ...sdfDocument, nodes } : null, versions, authors };
+        });
       },
       findUnique: async ({ where, include }: any) => {
         const ro = db.researchObjects.find((r) => where.id ? r.id === where.id : r.idempotencyKey === where.idempotencyKey) ?? null;

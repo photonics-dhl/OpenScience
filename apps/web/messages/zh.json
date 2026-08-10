@@ -646,7 +646,21 @@
     "eyebrow": "公开研究索引",
     "title": "值得检验的研究。",
     "description": "通过验证的公开科研对象将在这里呈现，并保留其证据、SDF 结构、版本、许可与评审历史。",
-    "empty": "启动合集正在准备中；平台不会把占位论文伪装成真实研究。",
-    "create": "创建科研对象"
+    "empty": "当前索引条件下没有公开 Research Object。",
+    "create": "创建科研对象",
+    "indexLabel": "已发布 Research Object 索引",
+    "search": "搜索标题或 SDF 证据",
+    "field": "SDF 字段",
+    "artifactType": "Artifact 类型",
+    "allFields": "全部 SDF 字段",
+    "allArtifacts": "全部 Artifact",
+    "apply": "应用筛选",
+    "loading": "正在读取公开索引…",
+    "error": "暂时无法加载公开索引。",
+    "loadMore": "继续浏览索引",
+    "unknownAuthor": "作者记录待补充",
+    "noArtifacts": "暂无 Artifact",
+    "fields": { "problem": "问题", "insight": "洞见", "method": "方法", "results": "结果", "limitations": "局限", "reproducibility": "可复现性" },
+    "artifacts": { "document": "文档", "image": "图片", "data": "数据", "code": "代码", "video": "视频", "other": "其他" }
   }
 }

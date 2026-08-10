@@ -646,7 +646,21 @@
     "eyebrow": "Public research index",
     "title": "Research worth inspecting.",
     "description": "Verified public Research Objects will appear here with their evidence, SDF structure, versions, licenses, and review history intact.",
-    "empty": "The launch collection is being prepared. No placeholder papers are presented as real research.",
-    "create": "Create a Research Object"
+    "empty": "No public Research Objects match this index view.",
+    "create": "Create a Research Object",
+    "indexLabel": "Published Research Object index",
+    "search": "Search title or SDF evidence",
+    "field": "SDF field",
+    "artifactType": "Artifact type",
+    "allFields": "All SDF fields",
+    "allArtifacts": "All artifacts",
+    "apply": "Apply filters",
+    "loading": "Reading the public index…",
+    "error": "The public index could not be loaded.",
+    "loadMore": "Continue index",
+    "unknownAuthor": "Author record pending",
+    "noArtifacts": "No artifacts",
+    "fields": { "problem": "Problem", "insight": "Insight", "method": "Method", "results": "Results", "limitations": "Limitations", "reproducibility": "Reproducibility" },
+    "artifacts": { "document": "Documents", "image": "Images", "data": "Data", "code": "Code", "video": "Video", "other": "Other" }
   }
 }
