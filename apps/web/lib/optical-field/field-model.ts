@@ -23,6 +23,10 @@ export interface OpticalSample {
   radius: number;
 }
 
+export function textDisplacementScale(sample: OpticalSample) {
+  return sample.evidence * sample.displacement;
+}
+
 function clamp(value: number, minimum: number, maximum: number) {
   return Math.min(maximum, Math.max(minimum, value));
 }
@@ -56,9 +60,9 @@ export function sampleOpticalField(
   return {
     density: mobile ? 0.32 : clamp(viewport.width / 1_440, 0.58, 1),
     displacement: 11 + Math.sin(phase) * 3,
-    evidence: pointer?.pressed ? 1 : Math.max(0, 1 - recovery) * 0.22,
+    evidence: pointer?.pressed ? 1 : Math.max(0, 1 - recovery) * 0.82,
     origin,
     phase,
-    radius: clamp(viewport.width * 0.13, 160, 200),
+    radius: mobile ? clamp(viewport.width * 0.27, 105, 120) : clamp(viewport.width * 0.13, 160, 200),
   };
 }

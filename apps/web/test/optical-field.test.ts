@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { readFileSync } from 'node:fs';
 
-import { releaseOpticalInteraction, sampleOpticalField } from '../lib/optical-field/field-model';
+import { releaseOpticalInteraction, sampleOpticalField, textDisplacementScale } from '../lib/optical-field/field-model';
 
 describe('pointer-local optical field model', () => {
   it('pins a known active sample instead of only comparing the function to itself', () => {
@@ -27,13 +27,23 @@ describe('pointer-local optical field model', () => {
     expect(sample.displacement).toBeGreaterThanOrEqual(8);
     expect(sample.displacement).toBeLessThanOrEqual(14);
     expect(sample.density).toBeLessThanOrEqual(1);
+    expect(sample.evidence).toBeGreaterThanOrEqual(0.8);
+    expect(textDisplacementScale(sample)).toBeLessThanOrEqual(14);
   });
 
   it('caps mobile density at 35% while retaining a static focal origin', () => {
     const sample = sampleOpticalField(null, { width: 390, height: 844, dpr: 3 }, 0);
     expect(sample.density).toBeLessThanOrEqual(0.35);
+    expect(sample.radius).toBeGreaterThanOrEqual(105);
+    expect(sample.radius).toBeLessThanOrEqual(120);
     expect(sample.origin.x).toBe(195);
     expect(sample.origin.y).toBeCloseTo(354.48, 8);
+  });
+
+  it('masks the readable base layer inside the local distortion lens', () => {
+    const css = readFileSync(new URL('../app/globals.css', import.meta.url), 'utf8');
+    expect(css).toContain("[data-optical-text-base='true']");
+    expect(css).toContain('calc(1 - var(--os-optical-focus))');
   });
 
   it('returns to the static origin within the 500ms recovery window', () => {

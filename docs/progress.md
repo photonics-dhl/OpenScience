@@ -1,5 +1,15 @@
 # OpenScience (XGS) 进度日志
 
+## 2026-08-10（Optical Editorial v3 Task 4 回归）— ✅ 完整 Landing 原型与真实文字交互恢复
+
+- **用户验收结论**：主屏 `Science evolves` 在当前主站没有交互，且原型页的核心视觉和后续叙事模块被替换成纯文字页面；此前“交互已完成”的表述混淆了隔离工作树代码状态与已部署状态。
+- **根因证据**：`80c8312` 将 Landing 整页重构并移除了 RO loop/ambient 视觉以及 Evolution/Hermes/Trust 三个模块；`ea882b9` 的文字局部折射只存在于未部署工作树。Task Master `optical-editorial-v3` Task 4 已从 done 重新置为 in-progress。
+- **纠正结果**：恢复用户认可的 RO loop/ambient 主视觉、移动 poster 与 Evolution/Hermes/Trust 完整叙事；SVG/Canvas pointer-local 交互只叠加到原 `Science evolves` 可访问 DOM 标题，不再以纯文字媒介替换整页。补齐 base-layer lens mask，桌面 160–200px、移动 105–120px，运行时位移严格保持 8–14px。
+- **真实运行时根因**：本工作树遗留 `next dev -p 3010` 与生产构建共用 `.next`，把生产 manifest 改回开发态，导致浏览器 `main-app.js` 404、客户端完全未 hydration；已停止该明确冲突进程并用干净生产 build/start 验证。
+- **审查修复**：Evolution reduced-motion 初始即静止，且运行中切换到 reduced-motion 会立即取消已有定时器；loop video 仅桌面非 reduced-motion 挂载，移动/reduced-motion 不发起视频请求；Task Master 已改为“保留完整原型”；视觉脚本直接断言 pointer 局部坐标、SVG scale、视频请求策略、初始/运行时 reduced-motion 静止、overflow/console 与下半页三个模块。
+- **门禁**：聚焦 14/14、全 Web 130/130、typecheck、production build 与 `shots` 通过；1440/1920/390 normal/reduced-motion、1440/390 full-page 浏览器证据位于忽略目录 `apps/web/test/visual/out/`。独立 reviewer 最终 APPROVE，无 Critical/Important；Task Master `optical-editorial-v3` Task 4 已重新置为 done。
+- **下一步**：继续 Task 7 Auth Research Identity；部署仍需按服务器操作流程单独执行，当前修复尚未声称已进入 ECS。
+
 ## 2026-08-10（Optical Editorial v3 Task 5）— ✅ RO Workspace 三稳定工作面完成
 
 - **独立产品层级**：Workspace 由 56px Global Nav、64px Object Header、44px Mode Tabs 与 19/56/25 三工作面组成；对象标题、RO ID、版本、可见性、保存状态和提交动作不再挤入全局导航。Overview/Publish 尚无真实 surface，已明确渲染为 `aria-disabled`，不伪装成链接。

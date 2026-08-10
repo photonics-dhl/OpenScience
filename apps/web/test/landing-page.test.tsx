@@ -46,15 +46,19 @@ describe('Optical Editorial landing page', () => {
     return renderToStaticMarkup(await Page());
   }
 
-  it('renders the bilingual brand memory as accessible DOM text', async () => {
+  it('keeps the complete visual prototype around the interactive bilingual headline', async () => {
     const markup = await renderLandingPage();
     const text = markup.replace(/<[^>]+>/g, '');
     expect(text).toContain('Science');
     expect(text).toContain('evolves.');
     expect(text).toContain('科学，持续演化。');
     expect(markup.match(/data-vermilion-marker=/g)).toHaveLength(1);
+    expect(markup).toContain('data-hero-loop-policy="desktop-motion-only"');
     expect(markup).not.toContain('<video');
-    expect(markup).not.toContain('ro-loop');
+    expect(markup).toContain('ro-loop-poster.webp');
+    expect(markup).toContain('data-landing-module="evolution"');
+    expect(markup).toContain('data-landing-module="hermes"');
+    expect(markup).toContain('data-landing-module="trust"');
   });
 
   it('keeps Create, Explore and standalone login as real destinations', async () => {

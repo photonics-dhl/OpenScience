@@ -6,6 +6,7 @@ import { renderOpticalField } from '@/lib/optical-field/canvas-renderer';
 import {
   releaseOpticalInteraction,
   sampleOpticalField,
+  textDisplacementScale,
   type OpticalInteraction,
   type OpticalViewport,
 } from '@/lib/optical-field/field-model';
@@ -58,7 +59,7 @@ function OpticalField({ reducedMotion = false }: OpticalFieldProps) {
         stage.style.setProperty('--os-optical-displacement', `${sample.displacement}px`);
         stage.style.setProperty('--os-optical-chroma', `${(sample.evidence * 0.62).toFixed(3)}`);
       }
-      if (displace) displace.setAttribute('scale', `${sample.evidence * sample.displacement * 2.8}`);
+      if (displace) displace.setAttribute('scale', `${textDisplacementScale(sample)}`);
     };
 
     const shouldReduceMotion = () => reducedMotion || media.matches;

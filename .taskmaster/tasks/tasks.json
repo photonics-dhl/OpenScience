@@ -1181,17 +1181,17 @@
       },
       {
         "id": "4",
-        "title": "以 DOM Typography + Optical Field 重做 Landing",
-        "description": "用 Science evolves./科学，持续演化。非对称混排替换 Evolving RO 环，Canvas/WebGL 只承担局部折射、半色调和证据粒子。",
+        "title": "在完整 Landing 原型上增强 DOM Typography + Optical Field",
+        "description": "保留 RO loop/ambient 主视觉和 Evolution/Hermes/Trust 叙事，以 Science evolves./科学，持续演化。可访问 DOM 标题增强原型；Canvas/SVG 只承担局部折射、半色调和证据粒子，不再用纯文字替换整页。",
         "status": "done",
         "dependencies": [
           "3"
         ],
         "priority": "high",
-        "details": "计划 Task 4。真实 DOM headline；160-200px 作用半径；8-14px 位移；400-600ms 回弹；移动 ≤35% 密度；Create/Explore 真实路由。Follow-up：依据 8.10 Text Distortion Demo 增加 pointer-local SVG displacement、mask falloff、chromatic focus 与 vermilion focus ring，base DOM 仍可选择/可访问。",
-        "testStrategy": "landing RED/GREEN；1440x900、1920x1080、390x844 normal/reduced-motion screenshots；AI-slop gate。",
+        "details": "计划 Task 4。以既有完整 Landing 原型为基底；真实 DOM headline；160-200px 作用半径；8-14px 位移；400-600ms 回弹；移动 ≤35% 密度；Create/Explore 真实路由。依据 8.10 Text Distortion Demo 增加 pointer-local SVG displacement、mask falloff、chromatic focus 与 vermilion focus ring，base DOM 仍可选择/可访问。桌面非 reduced-motion 才挂载 loop video；移动/reduced-motion 只加载 poster。",
+        "testStrategy": "landing RED/GREEN；浏览器直接断言 pointer 写入局部坐标且 SVG displacement scale>5；1440x900、1920x1080、390x844 normal/reduced-motion 与 below-fold modules screenshots；overflow/console/reduced-motion gate。",
         "subtasks": [],
-        "updatedAt": "2026-08-10T09:06:00.000Z"
+        "updatedAt": "2026-08-10T03:12:54.785Z"
       },
       {
         "id": "5",
@@ -1370,7 +1370,7 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-08-10T01:54:41.834Z",
+      "lastModified": "2026-08-10T03:12:54.785Z",
       "taskCount": 15,
       "completedCount": 6,
       "tags": [

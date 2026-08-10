@@ -1678,6 +1678,11 @@ body {
   --os-optical-displacement: 0px;
 }
 
+[data-optical-text-base='true'] {
+  -webkit-mask-image: radial-gradient(circle var(--os-optical-radius) at var(--os-optical-x) var(--os-optical-y), rgb(0 0 0 / calc(1 - var(--os-optical-focus))) 0 45%, rgb(0 0 0 / .8) 64%, #000 79%);
+  mask-image: radial-gradient(circle var(--os-optical-radius) at var(--os-optical-x) var(--os-optical-y), rgb(0 0 0 / calc(1 - var(--os-optical-focus))) 0 45%, rgb(0 0 0 / .8) 64%, #000 79%);
+}
+
 [data-optical-text-distorted='true'] {
   filter: url('#os-local-distortion');
   -webkit-mask-image: radial-gradient(circle var(--os-optical-radius) at var(--os-optical-x) var(--os-optical-y), #000 0 42%, rgb(0 0 0 / .92) 57%, transparent 82%);
@@ -1723,6 +1728,10 @@ body {
 }
 
 @media (prefers-reduced-motion: reduce) {
+  [data-optical-text-base='true'] {
+    -webkit-mask-image: none;
+    mask-image: none;
+  }
   [data-optical-text-distorted='true'],
   [data-optical-text-chromatic='true'],
   .optical-cursor-ring { display: none; }

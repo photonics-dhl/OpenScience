@@ -79,9 +79,9 @@
 - [x] Add symmetric i18n keys; run i18n, focused tests, typecheck and build.
 - [x] Commit `feat(web): add optical editorial product shells`.
 
-### Task 4: Replace Landing with the Optical Editorial Brand Medium
+### Task 4: Enhance the Existing Landing Prototype with the Optical Editorial Medium
 
-**Files:** Replace `components/landing/{Hero,SiteHeader,LatestResearch}.tsx`, `app/page.tsx`, `test/landing-page.test.tsx`; create `components/brand/{OpticalHeadline,OpticalField}.tsx`, `lib/optical-field/{field-model,canvas-renderer}.ts`; modify catalogs and `test/visual/shots.mjs`.
+**Files:** Preserve and enhance `components/landing/{Hero,SiteHeader,LatestResearch,EvolutionPanel,HermesBand,TrustBand}.tsx`, `app/page.tsx`, `test/landing-page.test.tsx`; create `components/brand/{OpticalHeadline,OpticalField}.tsx`, `lib/optical-field/{field-model,canvas-renderer}.ts`; modify catalogs and `test/visual/shots.mjs`.
 
 **Interfaces:** Produces `OpticalHeadline({locale,reducedMotion})`, pure `sampleOpticalField(pointer,viewport,now): OpticalSample`; Canvas stays `aria-hidden` and never owns text.
 
@@ -91,6 +91,7 @@
 - [x] Implement 160–200px pointer radius, 8–14px maximum visual displacement, 400–600ms recovery and ≤35% mobile density.
 - [x] Follow-up optical text pass: keep the headline as selectable DOM text while adding pointer-local SVG displacement, chromatic focus, mask falloff and a vermilion focus ring from `OpenScience_Text_Distortion_Demo.html`.
 - [x] Capture 1440×900, 1920×1080 and 390×844 normal/reduced motion; commit `feat(web): replace landing with optical editorial medium`.
+- [x] Regression correction: restore the approved RO loop/ambient visual prototype and Evolution/Hermes/Trust narrative modules, then apply the local text interaction to its original `Science evolves` headline instead of replacing the page with typography alone. Browser gate must directly assert local SVG displacement, desktop-only video policy, reduced-motion static evolution and below-fold module visibility.
 
 ### Task 5: Rebuild RO Workspace as Three Stable Work Planes
 
