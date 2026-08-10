@@ -91,6 +91,7 @@ export default function DashboardPage() {
         <div className="ml-auto flex items-center justify-end gap-3">
           <span className="hidden font-mono text-[0.68rem] uppercase tracking-[0.12em] text-os-muted-dark sm:inline">{user?.displayName}</span>
           <LocaleSwitcher locale={locale} />
+          <Link className="text-xs text-os-muted-dark hover:text-os-paper focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-os-vermilion" href="/settings">{t('context.settings')}</Link>
           <Link className="text-xs text-os-muted-dark hover:text-os-paper focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-os-vermilion" href="/#about">{t('context.help')}</Link>
         </div>
       )}

@@ -43,9 +43,10 @@ describe('Optical Editorial Research Object workspace', () => {
     expect(markup.match(/data-object-header=/g)).toHaveLength(1);
     expect(markup).toContain('data-object-context-bar="true"');
     expect(markup).toContain('data-workspace-mode-tabs="true"');
-    expect(markup.match(/aria-disabled="true"/g)).toHaveLength(2);
-    expect(markup).toContain('data-mode-target="data"');
-    expect(markup).toContain('data-mode-target="versions"');
+    expect(markup).not.toContain('aria-disabled="true"');
+    expect(markup).toContain('data-research-workspace-nav="true"');
+    expect(markup).toContain('/research-objects/OSR-2026-0017/files');
+    expect(markup).toContain('/research-objects/OSR-2026-0017/versions');
     expect(markup).toContain('Ultrafast carrier dynamics');
     expect(markup).toContain('v4');
     expect(markup).toContain('data-workspace-plane="19"');

@@ -1,5 +1,13 @@
 # OpenScience (XGS) 进度日志
 
+## 2026-08-10（Task 12 产品表面矩阵与首批工作区路由）— ⏳ 本地完成，待 ECS 验收
+
+- **矩阵先行**：新增 `apps/web/lib/product-surfaces.ts` 与 `apps/web/test/product-surface-matrix.test.ts`，锁定 Overview、SDF、Files、Versions、Collaboration、Publish、Sandbox、Settings 八个产品表面，以及 loading/empty/error/forbidden/ready、移动等价和风险等级声明。
+- **真实路由**：新增 `/research-objects/[id]/{overview,files,versions,publish,sandbox}` 与 `/settings`；Publish 使用真实版本列表、三类许可、同步发布审核、版本状态机和 Radix R3 确认；Files 使用真实 Artifact 上传并通过 commit 绑定版本；Sandbox 使用真实 server job + 输出下载/脚本修改链；Settings 使用 `/auth/me` 与真实 logout。
+- **统一导航**：新增 `ResearchWorkspaceNav`、`ResearchSurfaceShell`；编辑器移除 Overview/Publish 禁用占位，协作页和 Sandbox 结果面板接入 Optical Editorial 规则线表面；中英文案对称。
+- **门禁**：Web 全量测试 150/150、Next production build、typecheck、i18n JSON 与 product matrix 全绿；尚未部署本批 web 代码。
+- **下一步**：提交后按部署 runbook 同步 ECS，验证登录态下八个真实入口、未登录 `/settings`/workspace 401/重定向、390px 无溢出与浏览器无 console error；完成后关闭 Task 12 并转 Task 13。
+
 ## 2026-08-10（Task 11 Editorial Curator）— ✅ ECS 全流程上线
 
 - **数据合同**：migration 26 新增 `editorial_collections` 与 `editorial_selections`；精选固定 `researchObjectId + versionId`，保存 title/publicId/versionNo/SDF 快照，媒体必须提供 HTTPS URL、alt、credit、licenseId、sourceUrl。published selection 不可编辑，源 RO/version 仍须 public/published 才公开显示。

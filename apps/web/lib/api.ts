@@ -217,6 +217,10 @@ export async function getDashboardOverview(): Promise<{
   return { researchObjects: research.researchObjects, tasks: ingestion.tasks };
 }
 
+export async function logout(): Promise<void> {
+  await request('/api/auth/logout', { method: 'POST' });
+}
+
 export interface ResearchIndexItemApi {
   publicId: string;
   title: string;
@@ -524,6 +528,46 @@ export async function createCommit(
 /** 版本 diff（P1B-5）。 */
 export async function getVersionDiff(fromVersionId: string, toVersionId: string): Promise<{ diff: unknown }> {
   return request(`/api/versions/${fromVersionId}/comparison?to=${toVersionId}`);
+}
+
+export interface LicenseSet {
+  text: string;
+  code: string;
+  data: string;
+}
+
+export interface PublicationReview {
+  id: string;
+  versionId: string;
+  status: 'passed' | 'blocked';
+  hardBlocks: Array<{ code: string; reason: string }>;
+  warnings: unknown[];
+  verdict: string;
+  createdAt: string;
+}
+
+export async function getLicenses(roId: string, versionId?: string): Promise<{ licenses: LicenseSet | null; source: 'version' | 'ro' | 'none' }> {
+  return request(`/api/research-objects/${roId}/licenses${versionId ? `/${versionId}` : ''}`);
+}
+
+export async function setVersionLicenses(roId: string, versionId: string, licenses: LicenseSet): Promise<void> {
+  await request(`/api/research-objects/${roId}/licenses/${versionId}`, { method: 'PUT', body: JSON.stringify(licenses) });
+}
+
+export async function runPublicationReview(versionId: string): Promise<{ review: PublicationReview }> {
+  return request(`/api/versions/${versionId}/review`, { method: 'POST' });
+}
+
+export async function getPublicationReview(versionId: string): Promise<{ review: PublicationReview | null }> {
+  return request(`/api/versions/${versionId}/review`);
+}
+
+export async function transitionVersionStatus(versionId: string, status: string): Promise<{ version: { id: string; status: string } }> {
+  return request(`/api/versions/${versionId}/status`, { method: 'POST', body: JSON.stringify({ status }) });
+}
+
+export async function publishVersion(versionId: string): Promise<{ published: { versionId: string; publicId: string; publicVersionId: string; publishedAt: string; status: string } }> {
+  return request(`/api/versions/${versionId}/publish`, { method: 'POST', body: JSON.stringify({ r3Confirmed: true }) });
 }
 
 // ===== P1C-10：协作 API client（P1C-2~9 端点封装）=====

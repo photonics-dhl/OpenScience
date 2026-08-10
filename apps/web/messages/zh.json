@@ -124,6 +124,9 @@
   },
   "collab": {
     "title": "协作",
+    "description": "在不丢失 Research Object 身份的前提下讨论证据、分支变更、作者关系与发布意图。",
+    "loading": "正在加载协作状态…",
+    "error": "协作页面暂时无法加载。",
     "navLabel": "协作标签",
     "contentLabel": "协作内容",
     "tab": {
@@ -475,7 +478,8 @@
     "loading": "正在恢复研究上下文…",
     "context": {
       "navigation": "工作台工具",
-      "help": "帮助"
+      "help": "帮助",
+      "settings": "设置"
     },
     "continue": {
       "title": "继续研究",
@@ -662,6 +666,18 @@
     "noArtifacts": "暂无 Artifact",
     "fields": { "problem": "问题", "insight": "洞见", "method": "方法", "results": "结果", "limitations": "局限", "reproducibility": "可复现性" },
     "artifacts": { "document": "文档", "image": "图片", "data": "数据", "code": "代码", "video": "视频", "other": "其他" }
+  },
+  "productSurfaces": {
+    "navigation": "科研对象导航", "skip": "跳到产品内容", "objectMap": "SDF 结构图", "integrity": "完整性", "integrityBody": "每个动作都绑定到 Research Object 的具体版本与证据链。",
+    "fields": { "problem": "问题", "insight": "洞见", "method": "方法", "results": "结果", "limitations": "局限", "reproducibility": "可复现性" },
+    "state": { "loadingBody": "正在读取科研对象与版本历史…", "errorTitle": "页面暂时无法加载", "forbiddenTitle": "该工作区为私有" },
+    "nav": { "overview": "概览", "sdf": "SDF", "files": "文件", "versions": "版本", "collaboration": "协作", "publish": "发布", "sandbox": "沙箱" },
+    "overview": { "kicker": "对象概览", "title": "概览", "body": "安静地呈现这个 Research Object 的主张、证据和当前版本状态。", "status": "对象状态", "visibility": "可见性", "history": "已记录版本", "emptyTitle": "结构仍然开放", "emptyBody": "从六个 SDF 字段开始，再为每项主张绑定可检查的证据。", "continue": "打开 SDF 编辑器", "inspect": "查看版本" },
+    "versions": { "kicker": "版本历史", "title": "版本", "body": "快照是不可变记录。选择两个版本，比较确切的 SDF 与证据清单。", "compare": "比较", "emptyTitle": "还没有已提交版本", "emptyBody": "在 SDF 编辑器或文件页面创建第一次提交。", "diff": "确定性比较" },
+    "files": { "kicker": "证据存储", "title": "文件", "body": "上传论文、数据、代码、图片或视频。只有创建提交后，文件才会成为版本的一部分。", "provenance": "证据来源", "provenanceBody": "上传会记录内容哈希与逻辑路径；提交会把它绑定到不可变的 Research Object 版本。", "defaultCommit": "绑定证据", "commitMessage": "提交说明", "attaching": "正在创建提交…", "attach": "绑定到新版本", "empty": "请先在上方选择文件。", "committed": "证据已提交，新版本已经出现在版本页面。" },
+    "sandbox": { "kicker": "可复现实验", "title": "沙箱", "body": "在服务器上运行受边界约束的科研脚本，检查输出，并把执行环境保留在 Research Object 旁。", "context": "Research Object 可视化", "environment": "执行环境", "script": "Python 脚本", "starting": "启动中…", "run": "在沙箱运行", "notFound": "没有找到这个沙箱任务。", "result": "可视化结果", "close": "关闭", "runtime": "运行时间", "download": "下载到本设备", "viewScript": "查看 Python 脚本", "logs": "执行日志", "modify": "修改脚本", "previewError": "无法生成修改预览。", "executeError": "无法创建修改后的任务。", "modifyPrompt": "描述你想要的修改", "modifyPlaceholder": "例如：改变曲线颜色、添加标题或调整 x 轴标签。", "previewing": "正在生成预览…", "preview": "生成预览", "policyPassed": "策略检查通过", "policyBlocked": "策略检查阻断", "diff": "脚本差异", "confirmExecute": "确认执行" },
+    "publish": { "kicker": "发布控制", "title": "发布", "body": "发布是高影响操作：选择版本、记录三类许可、通过发布审核，再确认不可变的公开记录。", "permanence": "公开记录", "permanenceBody": "已发布版本会获得稳定公开 ID、UTC 时间戳和内容哈希，不能原地修改。", "version": "要发布的版本", "licenses": "许可", "license": { "text": "正文", "code": "代码", "data": "数据" }, "checking": "正在审核…", "review": "保存许可并审核", "action": "审阅变更", "readiness": "发布就绪度", "notReviewed": "尚未审核", "reviewStatus": { "passed": "审核通过", "blocked": "发布被阻断" }, "emptyTitle": "还没有可发布版本", "emptyBody": "先创建一个提交版本，再进入发布控制。", "published": "已发布公开版本", "confirmTitle": "确认不可变发布", "confirmBody": "这是 R3 操作。所选版本、许可、时间戳和内容哈希将成为公开记录。", "cancel": "取消", "confirm": "发布版本", "close": "关闭审阅" },
+    "settings": { "navigation": "账户设置", "skip": "跳到设置内容", "kicker": "账户 / 偏好", "title": "设置", "body": "管理 OpenScience 的身份、语言和会话。", "identity": "科研身份", "name": "显示名称", "email": "邮箱", "level": "访问级别", "preferences": "偏好", "language": "语言", "signOut": "退出登录" }
   },
   "editorial": {
     "edition": "期刊精选 · 第一期",

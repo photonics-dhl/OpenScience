@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { useTranslations } from 'next-intl';
 import type { SandboxJobView } from '@/lib/api';
 import { downloadArtifact, pollSandboxJob } from '@/lib/api';
 import { getJobResult, putJobResult } from '@/lib/indexeddb/sandbox-cache';
@@ -13,6 +14,7 @@ interface Props {
 }
 
 export default function VisualizationResult({ jobId, workspaceId, onClose }: Props) {
+  const t = useTranslations('productSurfaces');
   const [currentJobId, setCurrentJobId] = useState(jobId);
   const [job, setJob] = useState<SandboxJobView | null>(null);
   const [artifacts, setArtifacts] = useState<Array<{ id: string; blob: Blob; filename: string }>>([]);
@@ -107,42 +109,42 @@ export default function VisualizationResult({ jobId, workspaceId, onClose }: Pro
   }
 
   if (loading) {
-    return <div className="loading">加载中...</div>;
+    return <div className="border-l border-os-rule-dark py-10 pl-5 text-sm text-os-muted-dark" data-surface-state="loading">{t('state.loadingBody')}</div>;
   }
 
   if (error) {
-    return <div className="error">错误: {error}</div>;
+    return <div className="border-l-2 border-os-vermilion py-4 pl-4 text-sm text-os-paper" data-surface-state="error" role="alert">{error}</div>;
   }
 
   if (!job) {
-    return <div className="error">任务未找到</div>;
+    return <div className="border-l border-os-rule-dark py-10 pl-5 text-sm text-os-muted-dark" data-surface-state="empty">{t('sandbox.notFound')}</div>;
   }
 
   return (
-    <div className="visualization-result">
-      <div className="header">
-        <h3>可视化结果</h3>
+    <div className="border-t border-os-rule-dark pt-6" data-sandbox-result="true">
+      <div className="flex items-center justify-between gap-4">
+        <h3 className="font-editorial text-3xl font-normal text-os-paper">{t('sandbox.result')}</h3>
         {onClose && (
-          <button onClick={onClose} className="close-btn">
-            关闭
+            <button onClick={onClose} className="min-h-9 rounded-panel border border-os-rule-dark px-3 text-xs text-os-paper">
+            {t('sandbox.close')}
           </button>
         )}
       </div>
 
       {/* 状态 */}
-      <div className="status">
-        <span className={`badge ${job.status}`}>{job.status}</span>
-        {job.result && <span>运行时间: {job.result.runtimeSeconds}s</span>}
+      <div className="mt-4 flex flex-wrap gap-4 text-xs text-os-muted-dark">
+        <span className="border border-os-rule-dark px-2 py-1 font-data uppercase">{job.status}</span>
+        {job.result && <span>{t('sandbox.runtime')}: {job.result.runtimeSeconds}s</span>}
       </div>
 
       {/* 产物展示 */}
       {artifacts.length > 0 && (
-        <div className="artifacts">
+        <div className="mt-6 grid gap-4 sm:grid-cols-2">
           {artifacts.map((artifact) => (
-            <div key={artifact.id} className="artifact">
-              <img src={URL.createObjectURL(artifact.blob)} alt={artifact.filename} />
-              <button onClick={() => handleDownload(artifact.blob, artifact.filename)} className="download-btn">
-                保存到本设备
+            <div key={artifact.id} className="border border-os-rule-dark p-3">
+              <img className="h-auto w-full" src={URL.createObjectURL(artifact.blob)} alt={artifact.filename} />
+              <button onClick={() => handleDownload(artifact.blob, artifact.filename)} className="mt-3 min-h-9 rounded-panel border border-os-rule-dark px-3 text-xs text-os-paper">
+                {t('sandbox.download')}
               </button>
             </div>
           ))}
@@ -150,26 +152,26 @@ export default function VisualizationResult({ jobId, workspaceId, onClose }: Pro
       )}
 
       {/* Python 脚本 */}
-      <details className="script">
-        <summary>查看 Python 脚本</summary>
+      <details className="mt-6 border-y border-os-rule-dark py-4 text-sm">
+        <summary className="cursor-pointer text-os-paper">{t('sandbox.viewScript')}</summary>
         <pre>
           <code>{job.script}</code>
         </pre>
       </details>
 
       {/* 运行环境 */}
-      <details className="environment">
-        <summary>运行环境</summary>
+      <details className="border-b border-os-rule-dark py-4 text-sm">
+        <summary className="cursor-pointer text-os-paper">{t('sandbox.environment')}</summary>
         <ul>
-          <li>Python: 3.11</li>
-          <li>numpy, matplotlib, scipy</li>
+          <li className="mt-3 text-os-muted-dark">Python: 3.11</li>
+          <li className="text-os-muted-dark">numpy, matplotlib, scipy</li>
         </ul>
       </details>
 
       {/* 输出日志 */}
       {job.result && (job.result.stdout || job.result.stderr) && (
-        <details className="logs">
-          <summary>执行日志</summary>
+        <details className="border-b border-os-rule-dark py-4 text-sm">
+          <summary className="cursor-pointer text-os-paper">{t('sandbox.logs')}</summary>
           {job.result.stdout && <pre className="stdout">{job.result.stdout}</pre>}
           {job.result.stderr && <pre className="stderr">{job.result.stderr}</pre>}
         </details>
@@ -177,9 +179,9 @@ export default function VisualizationResult({ jobId, workspaceId, onClose }: Pro
 
       {/* 底部操作区 */}
       {!loading && job.status === 'completed' && (
-        <div className="result-actions">
-          <button onClick={() => setShowModifier(true)} className="modify-btn">
-            修改脚本
+        <div className="mt-6">
+          <button onClick={() => setShowModifier(true)} className="min-h-10 rounded-panel bg-os-paper px-4 text-sm font-semibold text-os-black-0">
+            {t('sandbox.modify')}
           </button>
         </div>
       )}

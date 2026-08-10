@@ -35,6 +35,9 @@
 | `apps/web/components/brand/OpenScienceWordmark.tsx` / `apps/web/components/shell/*.tsx` / `apps/web/test/surface-shells.test.tsx` | Optical Editorial 品牌与 Public/Identity/Dashboard/Workspace 四类无 Card shell；单一 main、skip link、19/56/25 工作区平面与动作反馈门禁 | 活文档 |
 | `apps/web/components/hermes/{HermesRail,HermesVisualAdapter,hermes-state}.ts(x)` / `apps/web/test/hermes-state.test.tsx` | Dashboard Hermes 六态、真实 IngestionTask 同链入口、审批静止与静态 fallback；Wanko runtime 受许可门禁暂未部署 | 活实现（Task 9 in-progress） |
 | `apps/web/components/research/*.tsx` / `apps/web/components/editor/*.tsx` / `apps/web/app/research-objects/[id]/edit/page.tsx` | Optical Editorial RO Workspace：56/64/44px 产品层级、19/56/25 单实例工作面、六节点 SDF、Evidence/Before-After proposal、Artifact rule row、Radix 高影响审查与移动功能等价 | 活文档 |
+| `apps/web/lib/product-surfaces.ts` / `apps/web/test/product-surface-matrix.test.ts` | Task 12 产品表面真源：Overview/SDF/Files/Versions/Collaboration/Publish/Sandbox/Settings 的真实路由、权限、五态、移动等价与风险声明 | 活文档；本地门禁通过，待 ECS 验收 |
+| `apps/web/components/research/ResearchWorkspaceNav.tsx` / `ResearchSurfaceShell.tsx` | Research Object 统一工作区导航与三平面产品外壳；编辑器禁用模式已替换为真实页面入口 | 活实现；Task 12 |
+| `apps/web/app/research-objects/[id]/{overview,files,versions,publish,sandbox}/page.tsx` / `apps/web/app/settings/page.tsx` | Task 12 真实产品表面：对象概览、证据文件提交、版本比较、许可/审核/R3 发布、服务器沙箱、账户设置/退出登录 | 活实现；本地门禁通过，待 ECS 验收 |
 | `apps/web/test/workspace-shell.test.tsx` / `apps/web/test/visual/workspace-shots.mjs` | RO Workspace 结构/证据/风险合同与 1440/390/320 production browser 门禁；校验三面状态保持、无溢出、console、focus trap/Escape/焦点恢复 | 测试工具 |
 | `apps/web/components/landing/SiteHeader.tsx` | Landing 页极简 i18n 导航；提供真实 `/explore`、`/research-objects/new`、`/auth/login` 入口与 dark/paper 双表面样式 | 活文档 |
 | `apps/web/components/landing/Hero.tsx` | Landing 页 Hero：以 `80c8312` pre-distortion 非对称 `Science evolves.` 构图为接受基线；无旧 RO loop/六节点媒体/卡片叙事，保留真实 Create/Explore 与底部三项对象语义 | 活文档 |
@@ -90,6 +93,7 @@
 | `docs/OpenScience_Kimi_Development_Spec.docx` | 基线的 docx 原件 | 只读原件 |
 | `docs/OpenScience_Kimi_Starter_Pack.zip` | 开发启动包 | 只读原件 |
 | `docs/user_ideas/8.10/OpenScience_Art_Direction_v3.md` | Optical Editorial Instrument 唯一视觉真源；覆盖 Masterplan v2 的蓝紫宇宙、六节点圆环与卡片化视觉 | 活文档；从设计 handoff ZIP 原文恢复（2026-08-10） |
+| `docs/handoff/2026-08-10-product-surfaces-task12-handoff.md` | Task 12 产品表面矩阵与真实工作区路由交接；记录本地门禁、部署证据待补和下一步 Task 13 | 活交接 |
 | `docs/specs/2026-07-24-doc-architecture-design.md` | 文档架构设计 spec（已批准） | 活文档 |
 | `docs/specs/2026-07-24-mvp-task-breakdown-design.md` | MVP 任务拆解与工具配置设计（待用户审阅） | 活文档 |
 | `docs/specs/2026-07-28-p1a-2-data-foundation-design.md` | P1A-2 数据基础设计（PostgreSQL/Redis/Storage Adapter，已批准，代码已实现，集成测试待阿里云执行） | 活文档 |
