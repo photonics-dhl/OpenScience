@@ -1197,7 +1197,7 @@
         "id": "5",
         "title": "将 RO Workspace 重构为稳定三工作平面",
         "description": "建立 19/56/25 Outline/Editor/Evidence-Hermes 布局、单行 ObjectHeader、编号 SDF Node、EvidenceSnippet 与 Before/After proposal。",
-        "status": "in-progress",
+        "status": "done",
         "dependencies": [
           "3"
         ],
@@ -1205,20 +1205,21 @@
         "details": "计划 Task 5。不改持久化契约；只给 active node 朱红点；移动端 bottom navigation/sheets 功能等价；高风险全屏 review。",
         "testStrategy": "workspace shell RED/GREEN；keyboard/focus/320px overflow；真实测试 RO 三视口截图。",
         "subtasks": [],
-        "updatedAt": "2026-08-09T23:33:54.044Z"
+        "updatedAt": "2026-08-10T00:44:48.287Z"
       },
       {
         "id": "6",
         "title": "将 Public RO 重构为可引用纸面阅读表面",
         "description": "建立 760px 阅读列 + 280px metadata rail，优先标题、作者、身份、版本、许可、引用和 Insight，保留 print/PDF 与 provenance。",
-        "status": "pending",
+        "status": "in-progress",
         "dependencies": [
           "3"
         ],
         "priority": "high",
         "details": "计划 Task 6。复用现有 public API；不发明质量分；SDF 状态含文本；Figure 用 academic caption 而非媒体 Card。",
         "testStrategy": "public render/contract RED/GREEN；typecheck/build；desktop/mobile/print evidence。",
-        "subtasks": []
+        "subtasks": [],
+        "updatedAt": "2026-08-10T00:44:48.306Z"
       },
       {
         "id": "7",
@@ -1368,9 +1369,9 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-08-09T23:33:54.044Z",
+      "lastModified": "2026-08-10T00:44:48.306Z",
       "taskCount": 15,
-      "completedCount": 4,
+      "completedCount": 5,
       "tags": [
         "optical-editorial-v3"
       ]

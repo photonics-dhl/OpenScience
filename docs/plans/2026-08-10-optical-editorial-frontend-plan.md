@@ -97,11 +97,11 @@
 
 **Interfaces:** Produces `19% / minmax(0,56%) / 25%` grid; ObjectHeader receives ID/title/version/visibility/save state/action; proposals require source, scope and review callback.
 
-- [ ] Write failing tests for one ObjectHeader, three desktop planes, six numbered SDF nodes, source-bearing proposals, collapsible evidence and mobile functional parity.
-- [ ] Verify RED; implement presentation without changing persistence calls.
-- [ ] Replace card/pill statuses with rules, weight and mono metadata; only the active node has vermilion.
-- [ ] Test keyboard order, 320px overflow, focus return and full-screen high-risk review.
-- [ ] Capture a real test RO; commit `feat(web): rebuild research object workspace`.
+- [x] Write failing tests for one ObjectHeader, three desktop planes, six numbered SDF nodes, source-bearing proposals, collapsible evidence and mobile functional parity.
+- [x] Verify RED; implement presentation without changing persistence calls.
+- [x] Replace card/pill statuses with rules, weight and mono metadata; only the active node has vermilion.
+- [x] Test keyboard order, 320px overflow, focus return and full-screen high-risk review.
+- [x] Capture a real-shaped test RO through compiled API contracts; commit `feat(web): rebuild research object workspace`.
 
 ### Task 6: Rebuild Public RO as a Citable Paper Surface
 

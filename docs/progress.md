@@ -1,5 +1,17 @@
 # OpenScience (XGS) 进度日志
 
+## 2026-08-10（Optical Editorial v3 Task 5）— ✅ RO Workspace 三稳定工作面完成
+
+- **独立产品层级**：Workspace 由 56px Global Nav、64px Object Header、44px Mode Tabs 与 19/56/25 三工作面组成；对象标题、RO ID、版本、可见性、保存状态和提交动作不再挤入全局导航。Overview/Publish 尚无真实 surface，已明确渲染为 `aria-disabled`，不伪装成链接。
+- **研究编辑结构**：六个 SDF 节点以 01–06 编号，只有当前节点使用朱红；左栏保留大纲/版本，中央保留 SDF 编辑和 Artifact 上传，右栏采用带来源、范围、Before/After 与审批动作的 Hermes proposal，并用可折叠 EvidenceSnippet 保留证据位置。
+- **证据真实性**：当前 `sdf.extract` 接收的是 SDF 聚合文本，因此建议明确标记“当前 SDF 聚合内容”；只有调用方实际提供 artifact/page/span locator 时才展示素材定位，不根据附件数量猜测 provenance。演示建议已从产品运行时移除。
+- **高影响审查**：Results/Reproducibility 建议进入 Radix 全屏审查；浏览器实测 Shift+Tab 不逃逸、Escape 关闭、焦点回到触发按钮。保存错误与其他加载/提取错误分离，不再错误污染 save state。
+- **移动功能等价**：三个工作面保持单实例挂载，以底部三模式切换显隐；390/320px 实测跨面编辑状态不丢、提交说明可用、无横向溢出。对象标题/版本/保存状态在窄屏仍保留紧凑上下文。
+- **模式导航纠偏**：Data/Versions 不再依赖隐藏面板的 URL 锚点；按钮先切换到中央/左侧工作面，再滚动到 Artifacts/Versions，移动端真实门禁覆盖该路径。
+- **i18n 与视觉**：可见性、保存、版本、Artifact、Hermes/SDF 标签与 Workspace modes 全部中英文对称；规则线、字体层级和朱红动作替代 Card/pill 墙。
+- **门禁**：Web 18 files / 121 tests、typecheck、production build、focused ESLint、`git diff --check` 全通过；`shots:workspace` 通过 1440×900、390×844、320×720，含移动 Outline/Evidence 分面、状态保持、console 与 focus 门禁；独立 reviewer 最终 APPROVE。
+- **下一步**：执行 Task Master `optical-editorial-v3` Task 6，重构 Public RO 为 760px 可引用纸面阅读列 + 280px metadata rail，并完成 print/citation/provenance 浏览器验收。
+
 ## 2026-08-10（Optical Editorial v3 Task 4）— ✅ Landing 品牌媒介完成
 
 - **真实 DOM 品牌记忆**：Landing 已替换为非对称 `Science evolves.` / `科学，持续演化。` 排版；可访问标题不依赖 Canvas，朱红只保留在句点与主动作，Create/Explore/Login 均指向真实路由。

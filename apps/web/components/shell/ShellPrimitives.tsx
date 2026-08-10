@@ -23,27 +23,37 @@ function SkipLink({ children, tone }: SkipLinkProps) {
 }
 
 interface ShellHeaderProps {
+  actionsKind?: 'group' | 'navigation';
   actions?: React.ReactNode;
+  compactBrandOnMobile?: boolean;
   navigationLabel?: string;
   tone: 'dark' | 'paper';
 }
 
-function ShellHeader({ actions, navigationLabel, tone }: ShellHeaderProps) {
+function ShellHeader({ actions, actionsKind = 'navigation', compactBrandOnMobile = false, navigationLabel, tone }: ShellHeaderProps) {
   return (
     <header
       className={cn(
-        'flex min-h-14 items-center justify-between gap-6 border-b px-4 sm:px-6 lg:px-8',
+        'flex min-h-14 min-w-0 items-center justify-between gap-3 overflow-hidden border-b px-4 sm:gap-6 sm:px-6 lg:px-8',
         tone === 'dark' ? 'border-os-rule-dark' : 'border-os-rule-paper',
       )}
     >
-      <OpenScienceWordmark tone={tone} />
-      {actions ? (
-        <nav
-          aria-label={navigationLabel}
-          className="[&_a]:rounded-panel [&_button]:rounded-panel [&_a]:active:translate-y-px [&_button]:active:translate-y-px motion-reduce:[&_a]:transform-none motion-reduce:[&_button]:transform-none"
+      {compactBrandOnMobile ? (
+        <>
+          <span className="hidden sm:inline-flex"><OpenScienceWordmark tone={tone} /></span>
+          <span className="inline-flex sm:hidden"><OpenScienceWordmark compact tone={tone} /></span>
+        </>
+      ) : <OpenScienceWordmark tone={tone} />}
+      {actions ? actionsKind === 'navigation' ? (
+        <nav aria-label={navigationLabel}
+          className="min-w-0 flex-1 [&_a]:rounded-panel [&_button]:rounded-panel [&_a]:active:translate-y-px [&_button]:active:translate-y-px motion-reduce:[&_a]:transform-none motion-reduce:[&_button]:transform-none"
         >
           {actions}
         </nav>
+      ) : (
+        <div aria-label={navigationLabel} className="min-w-0 flex-1" role="group">
+          {actions}
+        </div>
       ) : null}
     </header>
   );

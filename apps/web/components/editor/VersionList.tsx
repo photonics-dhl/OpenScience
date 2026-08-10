@@ -42,20 +42,20 @@ export default function VersionList({
 
   return (
     <div>
-      <h3 className="pane-title">{t('versions')}</h3>
+      <h3 className="m-0 border-b border-os-rule-dark pb-3 font-data text-[10px] uppercase tracking-[0.14em] text-os-muted-dark">{t('versions')}</h3>
       {shown.map((v) => (
-        <div
+        <button
           key={v.versionId}
-          className={`version-item ${activeVersionId === v.versionId ? 'active' : ''}`}
+          className={activeVersionId === v.versionId
+            ? 'flex min-h-11 w-full items-center justify-between border-x-0 border-b border-t-0 border-os-rule-dark bg-transparent p-0 text-left font-data text-xs text-os-paper'
+            : 'flex min-h-11 w-full items-center justify-between border-x-0 border-b border-t-0 border-os-rule-dark bg-transparent p-0 text-left font-data text-xs text-os-muted-dark'}
           onClick={() => onSelect(v.versionId)}
-          role="button"
-          tabIndex={0}
-          onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') onSelect(v.versionId); }}
+          type="button"
         >
-          v{v.versionNo} · {v.status}
-        </div>
+          <span>v{v.versionNo}</span><span className="uppercase">{t(`versionStatus.${v.status}`)}</span>
+        </button>
       ))}
-      {limit < versions.length && <div ref={sentinelRef} className="pane-meta" aria-hidden>…</div>}
+      {limit < versions.length && <div ref={sentinelRef} className="py-3 text-center text-os-muted-dark" aria-hidden>…</div>}
     </div>
   );
 }

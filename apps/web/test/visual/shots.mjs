@@ -1,3 +1,5 @@
+/* global document, process */
+
 import { chromium } from 'playwright';
 import { mkdir } from 'node:fs/promises';
 import path from 'node:path';
