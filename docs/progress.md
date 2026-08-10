@@ -1,5 +1,11 @@
 # OpenScience (XGS) 进度日志
 
+## 2026-08-11（Landing 增量优化实施计划）— 计划已写入，等待执行方式
+
+- **计划产出**：`docs/superpowers/plans/2026-08-11-landing-incremental-optimization-plan.md`，共 6 个可验收任务：契约测试、Hero 排版与入口层级、双层光学粒子场、Open RO 第二屏、全量本地产品门禁、ECS 部署验收。
+- **事实边界**：执行目标分支为 `codex/optical-editorial-v3`；直接复用现有 `OpticalHeadline`、`OpticalField`、Open RO、Playwright release gate 和 ECS 脚本，不修改后端、Schema、上传、认证或 Hermes 运行时。
+- **下一步**：用户选择执行方式后，在隔离 worktree 中按 TDD 执行；每个任务独立提交，生产写入前运行 checkup 和远程数据库备份。
+
 ## 2026-08-11（首页增量优化设计门禁）— 已确认范围，等待用户审阅书面设计
 
 - **用户纠正**：线上已有登录、Explore、Dashboard、创建、编辑器、公开 RO、版本、协作和 Hermes 相关流程；本轮目标是优化当前布局与交互，不重新探索或重构系统功能。
