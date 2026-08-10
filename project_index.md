@@ -74,7 +74,7 @@
 | `packages/ai-gateway/src/provider.ts` / `apps/agent-worker/src/index.ts` | 普通 MiniMax OpenAI-compatible 与 Token Plan Anthropic-compatible provider；实际 model ID 与日志槽位分离，key1→key2 配置化回退；结构化输出兼容 thinking/fenced JSON | 已部署；国内 Token Plan 探针与生产 ingestion `needs_review` 闭环通过（2026-08-10） |
 | `packages/domain/src/ingestion/ingestion-service.ts` / `apps/api/src/routes/ingestion.ts` / `apps/web/app/research-objects/[id]/hermes/page.tsx` | Hermes ingestion 建议读取、SDF 六字段人工确认、乐观锁写入与 `needs_review → confirmed` 状态流 | 本地实现，待服务器验收（2026-08-10） |
 | `infra/scripts/backup.sh` / `docs/runbooks/backup-restore.md` | PostgreSQL + SeaweedFS volume 非破坏备份入口（`--db`/`--objects`） | 已实现，待服务器恢复演练（2026-08-10） |
-| `infra/scripts/deploy.sh` / `infra/scripts/deploy.test.mjs` | ECS dry-run/confirmed release 部署；所有 production Compose 路径强制同一 `.env.prod`，回归门禁防止对象存储 Secret 在 `up` 阶段丢失 | 活脚本；2026-08-10 生产现场修复 |
+| `infra/scripts/deploy.sh` / `infra/scripts/deploy.test.mjs` | ECS dry-run/confirmed release 部署；所有 production Compose 路径强制同一 `.env.prod`；栈收敛后只重启 bind-mounted `api/web/agent-worker` 以切换 release，数据服务保持运行 | 活脚本；2026-08-10 生产现场修复 |
 | `apps/agent-worker/Dockerfile` / `apps/agent-worker/src/clamav.ts` / `apps/agent-worker/src/ingestion-parser.ts` | Tesseract `eng+chi_sim` 本地图片 OCR；ClamAV INSTREAM fail-closed 扫描；MiniMax 不作为默认 OCR | 本地实现，待服务器镜像/恶意样本/图片验收（2026-08-10） |
 | `.cursor/` | Cursor 编辑器配置 | 工具自管 |
 | `.taskmaster/` | task-master 任务状态 | 工具自管 |

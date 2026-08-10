@@ -1,6 +1,6 @@
 # Handoff — 2026-08-10 Optical Editorial 前端重构
 
-- Current goal: Task 10 Explore/启动语料已完成本地实现与浏览器门禁，当前等待提交并部署 ECS、显式 seed 与 live 验收；Task 9 仍仅因 Live2D 许可门禁保持 in-progress。
+- Current goal: Task 10 的 18 条启动语料已在 ECS confirmed seed 且 replay 幂等；当前修复 bind-mounted 应用进程未随 release 切换的问题，待 live 验收；Task 9 仍仅因 Live2D 许可门禁保持 in-progress。
 - Done:
   - 审计 `docs/user_ideas/8.10/` 资源；确认 `OpenScience_Art_Direction_v3.md` 覆盖旧视觉，Masterplan v2 保留产品结构。
   - 完成 27 项 grill-me 设计决策：三种表面、双入口身份流、Hermes/Live2D、Evidence Intake、三联屏、启动语料、Figma/浏览器职责、动效、部署方式均已确认。
@@ -24,6 +24,7 @@
   - Task 10 首次 ECS deploy：生产备份、同步、全量 build、迁移 status、quota seed 已通过；Compose `up` 因 deploy script 唯一路径漏传 `.env.prod` 在解析前退出，原容器持续运行。已用 `infra/scripts/deploy.test.mjs` RED/GREEN 修复，下一次只重放同步与服务切换，不重复已通过 build/migrate。
   - Task 10 ECS seed 入口复核：Linux 容器 dry-run 首次静默退出，根因是脚本手写 `file:///` 主入口判断在 POSIX 产生四斜杠。已改为 `pathToFileURL(process.argv[1]).href`，增加跨平台测试；数据库确认仍未写入，待同步重试。
   - Task 10 ECS confirm 复核：dry-run 修复后，确认阶段暴露根脚本无法解析 `@openscience/storage` workspace alias；失败发生在 catalog/对象存储/数据库写入前。已切换至 `../packages/storage/dist/index.js`，待同步重试。
+  - Task 10 ECS seed 已完成：`--confirm` 创建 18 条，replay 返回 18 条 `EXISTS`，证明稳定幂等。随后内部探针仍得到 API/Web `/explore` 404，定位为 bind-mounted 源码更新后 `docker compose up -d` 不会重启配置未变化的长期 Node 进程。部署脚本现显式仅重启 `api web agent-worker`，数据服务保持运行；合同测试 2/2 与 shell 语法门禁通过，待同步切换与 live 验收。
   - Task 5 完成：RO Workspace 已建立独立 56px Global Nav / 64px Object Header / 44px Mode Tabs 与 19/56/25 单实例三工作面；六个 SDF 节点、Artifact rule rows、source/scope-bearing Before/After proposals、可折叠 evidence 与 Radix 全屏高影响审查均已落地。移动三面切换不卸载状态，Data/Versions 模式按钮会先切换到对应工作面再滚动锚点，320px 提交/上下文可用且无溢出。Extractor provenance 诚实标记为当前 SDF 聚合，未实现的 Overview/Publish 明确禁用。Web 121/121、typecheck/build、focused ESLint、1440/390/320 production browser 门禁通过，reviewer APPROVE。
   - Task 6 完成：Public RO 改为 warm-paper 760/280 阅读 surface；identity/license/continuing-object citation/immutable-version citation/Insight 先于 deep tabs，六个 SDF 文本状态、作者身份/通讯作者、发布时间/哈希、AI review、artifact provenance、学术 captions 与 print retention 已落地。公开对象稳定 URL 通过 server absolute API transport 解析 latest version，版本 URL 使用 exact version；Web 127/127、typecheck/build、1440/390/print browser gate 通过。独立复审的 1 Critical + 6 Important + 2 Minor 均已修正。
 - Constraints:
@@ -34,6 +35,6 @@
   - Landing、Workspace、Public RO、Auth 与 Intake 已完成浏览器替换；Dashboard 与其余产品页仍需按同一语言逐项替换。Figma canonical 需要按 v3 新建 foundations，旧文件不再作为视觉裁决源。
   - next-intl 开发/E2E 日志仍报告旧 `collab` dotted keys；登记至 Task 12，不阻断当前认证流程。
   - Wanko sample 不是无条件开源资产；其随附许可说明区分一般/小规模与中大型主体。确认项目适用类别并接受当前协议前，只能发布静态 Hermes fallback。
-  - 启动语料已经采集/登记但尚未写入 ECS；生产 seed 前必须保留默认 dry-run、备份与显式 `--confirm` 门禁。
-- Next action: commit Task 10 local checkpoint → ECS source deploy/full build → seed dry-run → explicit confirmed seed → replay/idempotency/live `/explore` + public RO verification → docs sync/close Task 10；随后进入 Task 11 Editorial Curator。Task 9 的 Live2D 许可风险独立保留。
+  - 启动语料已写入 ECS 并通过 replay；公开路由必须在应用进程切换后再声称上线。
+- Next action: commit release-process fix → ECS `--skip-build --skip-migrate` 同步并仅重启应用进程 → live `/explore` + public RO + 数据数量验证 → docs sync/close Task 10；随后进入 Task 11 Editorial Curator。Task 9 的 Live2D 许可风险独立保留。
 - Read first: `AGENTS.md` → `docs/OpenScience_Kimi_Development_Spec.md` → `docs/progress.md` → `project_index.md` → `docs/specs/2026-08-10-optical-editorial-rebaseline-design.md` → `docs/user_ideas/8.10/OpenScience_Art_Direction_v3.md`。

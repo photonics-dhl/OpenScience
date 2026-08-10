@@ -42,6 +42,8 @@ ssh-run.sh "cd /opt/openscience && node scripts/seed-quota.mjs --confirm"   # P1
 
 生产栈数据库没有宿主端口映射，实际执行必须通过 API 容器，并从服务器 `.env.prod` 注入容器内 `DATABASE_URL`；`infra/scripts/deploy.sh` 已封装该路径。
 
+生产应用源码与构建产物以 bind mount 进入长期运行容器。`docker compose up -d` 在 Compose 配置未变化时不会切换 Node 进程，因此 `deploy.sh` 会在栈收敛后显式重启 `api web agent-worker`；PostgreSQL、Redis 与对象存储不在该重启集合中。禁止以仅同步文件或仅执行 `up -d` 作为发布完成证据，必须继续完成内部 live route 探针。
+
 ### 2.4 初始化生产对象存储（首次）
 
 ```bash

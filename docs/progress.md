@@ -1,5 +1,12 @@
 # OpenScience (XGS) 进度日志
 
+## 2026-08-10（Task 10 ECS release process 修复）— ⏳ 应用重启门禁已补，待线上切换
+
+- **现场证据**：18 条启动语料已完成 confirmed seed 与幂等 replay，但 ECS 内部探针仍得到 API `/explore` 404、Web `/explore` 404；服务器源码和 `.next` 已更新，运行进程仍是发布前版本。
+- **根因与修复**：生产容器长期运行且源码/构建产物使用 bind mount；Compose 配置未变化时 `up -d` 不会重启 Node 进程。部署脚本现于 `up -d` 后只重启 `api web agent-worker`，不重启 PostgreSQL、Redis 或对象存储，并增加静态合同测试及 dry-run 提示。
+- **证据**：`node --test infra/scripts/deploy.test.mjs` 2/2、Git Bash 语法检查、`git diff --check` 通过。
+- **下一步**：提交并以 `--skip-build --skip-migrate` 同步，轮询应用健康，再执行 live Explore/API/public RO 与 seed 数量验收。
+
 ## 2026-08-10（Task 10 ECS seed 入口修复）— ⏳ POSIX 主入口已修，待重同步
 
 - **现场证据**：Compose 服务切换已成功；首次服务器 dry-run 命令退出 0 但无输出。直接容器检查确认 `scripts/seed-demo-research.mjs` 已同步，Linux 路径下手写 `file:///` 比较导致 `main()` 未执行，数据库仍未写入。

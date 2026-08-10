@@ -91,6 +91,7 @@ if [ "$CONFIRM" -ne 1 ]; then
   [ "$SKIP_MIGRATE" -eq 1 ] || plan "3. migrate deploy + status 验证"
   [ "$SKIP_MIGRATE" -eq 1 ] || plan "4. seed-quota --confirm（幂等）"
   plan "5. 生产栈：docker compose --env-file $PROD_ENV -f $COMPOSE_FILE up -d"
+  plan "5b. 重启 bind-mounted 应用进程：api web agent-worker（不重启数据服务）"
   plan "6. nginx：$NGINX_CONF 部署（nginx -t + reload）+ htpasswd-admin（首次）"
   plan "7. 验证：curl /auth/me 401、/admin basic_auth、安全头"
   exit 0
@@ -120,6 +121,11 @@ fi
 # 4. 生产栈
 log "[5] 生产栈 up..."
 run_remote "cd $REMOTE_ROOT && docker compose --env-file $PROD_ENV -f $COMPOSE_FILE up -d" || exit 1
+
+# 源码与构建产物通过 bind mount 同步到长期运行的容器。Compose 配置未变化时，
+# `up -d` 不会重启这些进程，因此显式重启应用服务以切换到本次 release；数据服务保持运行。
+log "[5b] 重启 bind-mounted 应用进程..."
+run_remote "cd $REMOTE_ROOT && docker compose --env-file $PROD_ENV -f $COMPOSE_FILE restart api web agent-worker" || exit 1
 
 # 5. nginx 反代 + /admin basic_auth（P1A-8）
 log "[6] nginx 反代部署..."
