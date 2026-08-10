@@ -1728,15 +1728,15 @@ body {
 }
 
 [data-optical-text-base='true'] {
-  -webkit-mask-image: radial-gradient(circle var(--os-optical-radius) at var(--os-optical-x) var(--os-optical-y), rgb(0 0 0 / calc(1 - var(--os-optical-focus))) 0 45%, rgb(0 0 0 / .8) 64%, #000 79%);
-  mask-image: radial-gradient(circle var(--os-optical-radius) at var(--os-optical-x) var(--os-optical-y), rgb(0 0 0 / calc(1 - var(--os-optical-focus))) 0 45%, rgb(0 0 0 / .8) 64%, #000 79%);
+  -webkit-mask-image: radial-gradient(circle var(--os-optical-radius) at var(--os-optical-x) var(--os-optical-y), rgb(0 0 0 / calc(1 - var(--os-optical-focus) * .55)) 0 45%, rgb(0 0 0 / .86) 64%, #000 79%);
+  mask-image: radial-gradient(circle var(--os-optical-radius) at var(--os-optical-x) var(--os-optical-y), rgb(0 0 0 / calc(1 - var(--os-optical-focus) * .55)) 0 45%, rgb(0 0 0 / .86) 64%, #000 79%);
 }
 
 [data-optical-text-distorted='true'] {
   filter: url('#os-local-distortion');
   -webkit-mask-image: radial-gradient(circle var(--os-optical-radius) at var(--os-optical-x) var(--os-optical-y), #000 0 42%, rgb(0 0 0 / .92) 57%, transparent 82%);
   mask-image: radial-gradient(circle var(--os-optical-radius) at var(--os-optical-x) var(--os-optical-y), #000 0 42%, rgb(0 0 0 / .92) 57%, transparent 82%);
-  opacity: var(--os-optical-focus);
+  opacity: calc(var(--os-optical-focus) * .68);
 }
 
 .optical-diffraction-aperture {

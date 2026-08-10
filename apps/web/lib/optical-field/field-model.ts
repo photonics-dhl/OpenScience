@@ -52,7 +52,7 @@ export function sampleDiffractionWavefront(
 }
 
 export function textDisplacementScale(sample: OpticalSample) {
-  return sample.evidence * sample.displacement;
+  return sample.evidence * sample.displacement * 0.6;
 }
 
 function clamp(value: number, minimum: number, maximum: number) {

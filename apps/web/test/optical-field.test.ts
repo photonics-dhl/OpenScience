@@ -37,7 +37,8 @@ describe('pointer-local optical field model', () => {
     expect(sample.displacement).toBeLessThanOrEqual(44);
     expect(sample.density).toBeLessThanOrEqual(1);
     expect(sample.evidence).toBeGreaterThanOrEqual(0.8);
-    expect(textDisplacementScale(sample)).toBeLessThanOrEqual(44);
+    expect(textDisplacementScale(sample)).toBeGreaterThan(15);
+    expect(textDisplacementScale(sample)).toBeLessThanOrEqual(23);
   });
 
   it('caps mobile density while retaining a static focal origin and tap-scale core', () => {
@@ -54,7 +55,8 @@ describe('pointer-local optical field model', () => {
   it('masks the readable base layer inside the local distortion lens', () => {
     const css = readFileSync(new URL('../app/globals.css', import.meta.url), 'utf8');
     expect(css).toContain("[data-optical-text-base='true']");
-    expect(css).toContain('calc(1 - var(--os-optical-focus))');
+    expect(css).toContain('calc(1 - var(--os-optical-focus) * .55)');
+    expect(css).toContain('calc(var(--os-optical-focus) * .68)');
   });
 
   it('returns to the aperture in the 650ms recovery window', () => {

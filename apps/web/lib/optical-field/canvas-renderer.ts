@@ -7,19 +7,30 @@ function renderParticleLayer(
   spacing: number,
   coreOnly: boolean,
 ) {
-  const minimumX = coreOnly ? Math.max(spacing / 2, sample.origin.x - sample.radius) : spacing / 2;
-  const maximumX = coreOnly ? Math.min(viewport.width, sample.origin.x + sample.radius) : viewport.width;
-  const minimumY = coreOnly ? Math.max(spacing / 2, sample.origin.y - sample.radius) : spacing / 2;
-  const maximumY = coreOnly ? Math.min(viewport.height, sample.origin.y + sample.radius) : viewport.height;
+  const center = coreOnly
+    ? {
+        x: sample.aperture.x + (sample.origin.x - sample.aperture.x) * 0.28,
+        y: sample.aperture.y + (sample.origin.y - sample.aperture.y) * 0.28,
+      }
+    : sample.origin;
+  const radiusX = coreOnly ? sample.radius * 0.62 : sample.radius;
+  const radiusY = coreOnly ? sample.radius * 1.25 : sample.radius;
+  const minimumX = coreOnly ? Math.max(spacing / 2, center.x - radiusX) : spacing / 2;
+  const maximumX = coreOnly ? Math.min(viewport.width, center.x + radiusX) : viewport.width;
+  const minimumY = coreOnly ? Math.max(spacing / 2, center.y - radiusY) : spacing / 2;
+  const maximumY = coreOnly ? Math.min(viewport.height, center.y + radiusY) : viewport.height;
 
   context.fillStyle = coreOnly ? 'rgba(241, 238, 231, 0.58)' : 'rgba(241, 238, 231, 0.12)';
   for (let y = minimumY; y < maximumY; y += spacing) {
     for (let x = minimumX; x < maximumX; x += spacing) {
-      const dx = x - sample.origin.x;
-      const dy = y - sample.origin.y;
+      const dx = x - center.x;
+      const dy = y - center.y;
       const distance = Math.hypot(dx, dy);
-      if (coreOnly && distance > sample.radius) continue;
-      const influence = Math.max(0, 1 - distance / sample.radius);
+      const normalizedDistance = coreOnly
+        ? Math.hypot(dx / radiusX, dy / radiusY)
+        : distance / sample.radius;
+      if (normalizedDistance > 1) continue;
+      const influence = Math.max(0, 1 - normalizedDistance);
       const radialX = distance ? dx / distance : 0;
       const radialY = distance ? dy / distance : 0;
       const ripple = Math.sin(sample.phase * 2.2 + distance * 0.055) * influence * (coreOnly ? 7 : 2);
@@ -120,20 +131,6 @@ export function renderOpticalField(
   renderParticleLayer(context, sample, viewport, sample.ambientSpacing, false);
   renderApertureCurtain(context, sample, viewport);
   renderParticleLayer(context, sample, viewport, sample.coreSpacing, true);
-
-  if (sample.evidence > 0.01) {
-    context.globalAlpha = sample.evidence;
-    context.strokeStyle = 'rgba(241, 238, 231, 0.72)';
-    const width = sample.radius * 0.84;
-    for (let row = -2; row <= 2; row += 1) {
-      const y = sample.origin.y + row * 12;
-      context.beginPath();
-      context.moveTo(sample.origin.x - width / 2, y);
-      context.lineTo(sample.origin.x + width * (0.14 + (row + 2) * 0.08), y);
-      context.stroke();
-    }
-    context.globalAlpha = 1;
-  }
 
   renderDiffractionField(context, sample, width < 640);
 }
