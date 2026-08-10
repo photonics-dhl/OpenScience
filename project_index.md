@@ -40,6 +40,8 @@
 | `apps/web/components/research/ResearchWorkspaceNav.tsx` / `ResearchSurfaceShell.tsx` | Research Object 统一工作区导航与三平面产品外壳；编辑器禁用模式已替换为真实页面入口 | 活实现；Task 12 |
 | `apps/web/app/research-objects/[id]/{overview,files,versions,publish,sandbox}/page.tsx` / `apps/web/app/settings/page.tsx` | Task 12 真实产品表面：对象概览、证据文件提交、版本比较、许可/审核/R3 发布、服务器沙箱、账户设置/退出登录 | ECS 已部署并通过真实账号验收 |
 | `apps/web/test/workspace-shell.test.tsx` / `apps/web/test/visual/workspace-shots.mjs` | RO Workspace 结构/证据/风险合同与 1440/390/320 production browser 门禁；校验三面状态保持、无溢出、console、focus trap/Escape/焦点恢复 | 测试工具 |
+| `apps/web/test/visual/product-release-manifest.mjs` / `apps/web/test/e2e/product-release.spec.ts` / `apps/web/playwright.release.config.ts` | Task 14 八表面 × 三视口 + reduced-motion 的 27 案 production browser 发布门禁；固定 Optical Field 时钟，检查 landmark/focus/overflow/error/LCP/transfer/DOM，CI 上传忽略目录证据 | 发布门禁 |
+| `apps/web/test/e2e/start-release-api.mjs` | 发布门禁专用的无用户数据 mock API，只为 canonical Public RO/Collection SSR 提供稳定数据；生产旅程不得使用 | 测试工具 |
 | `apps/web/components/landing/SiteHeader.tsx` | Landing 页极简 i18n 导航；提供真实 `/explore`、`/research-objects/new`、`/auth/login` 入口与 dark/paper 双表面样式 | 活文档 |
 | `apps/web/components/landing/Hero.tsx` | Landing 页 Hero：以 `80c8312` pre-distortion 非对称 `Science evolves.` 构图为接受基线；无旧 RO loop/六节点媒体/卡片叙事，保留真实 Create/Explore 与底部三项对象语义 | 活文档 |
 | `apps/web/components/landing/HeroLoopMedia.tsx` / `apps/web/lib/landing-motion.ts` | Landing 动效资源策略：loop video 仅桌面非 reduced-motion 挂载；移动/reduced-motion 只加载 poster；Evolution reduced-motion 禁止自动轮播 | 活文档 |
@@ -125,6 +127,7 @@
 | `docs/handoff/2026-08-08-product-web-tooling-handoff.md` | 产品网页工具前置交接（Codex 10 MCP、双 Figma OAuth、迁移 ADR、重启后验证顺序） | 当前 handoff |
 | `docs/handoff/2026-08-10-optical-editorial-rebaseline-handoff.md` | Optical Editorial v3 前端重构交接：27 项 grill-me 决策、三联屏浏览器优先路线、服务器直接验收 | 当前 handoff |
 | `docs/handoff/2026-08-10-figma-canonical-task13-handoff.md` | Task 13 长期账号 canonical、节点审计、文档门禁与 Task 14 接续说明 | 活交接 |
+| `docs/handoff/2026-08-10-product-release-gate-task14-handoff.md` | Task 14 27 案浏览器矩阵、全仓门禁、既有审计债务与 ECS Task 15 接续 | 当前 handoff |
 | `docs/specs/2026-08-04-p1b-3-blob-artifact-upload-design.md` | P1B-3 Blob 内容寻址存储与上传管线设计（design gate 已确认：五决策，代码已实现 2026-08-04） | 活文档 |
 | `docs/plans/2026-07-24-doc-architecture-plan.md` | 文档架构落地实施计划 | 活文档 |
 | `docs/plans/2026-07-24-mvp-task-breakdown-plan.md` | MVP 任务拆解与工具配置实施计划（已批准，执行中） | 活文档 |
@@ -265,6 +268,7 @@
 | `docs/runbooks/backup-restore.md` | 备份与恢复 runbook（四节骨架，Phase 1A 填充） | 骨架 |
 | `docs/runbooks/incident.md` | 故障响应 runbook（四节骨架，Phase 1A 填充） | 骨架 |
 | `docs/runbooks/monitoring.md` | 监控面板 runbook（Netdata + vnStat，同域 /monitor/ /traffic/ 路径，2026-08-01） | 已上线 |
+| `docs/runbooks/visual-release.md` | Optical Editorial production-build 视觉/无障碍/性能发布门禁：命令、覆盖矩阵、预算、CI 证据与人工审美拒绝项 | 活 runbook |
 
 ## infra/
 | 路径 | 用途 | 状态 |

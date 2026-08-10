@@ -214,11 +214,13 @@ Accepted 2026-08-10: the long-term account owns the canonical file. The isolated
 
 **Interfaces:** Captures 1440×900, 1920×1080 and 390×844 with deterministic Canvas clock/seed.
 
-- [ ] Write failing manifest tests requiring every canonical route/state/viewport and reduced-motion capture.
-- [ ] Implement deterministic screenshots with font readiness, network idle and stable demo IDs; never auto-update baselines on ordinary PRs.
-- [ ] Add keyboard landmark/focus, reduced-motion and LCP/bundle/runtime measurements.
-- [ ] Run test, E2E, typecheck, build, lint, docs gates, knip, dependency, duplication and dependency-version audits.
-- [ ] Perform full-width and 390px AI-slop/manual aesthetic gate; commit `test(web): install product visual release gate`.
+- [x] Write failing manifest tests requiring every canonical route/state/viewport and reduced-motion capture.
+- [x] Implement deterministic screenshots with font readiness, network idle and stable demo IDs; never auto-update baselines on ordinary PRs.
+- [x] Add keyboard landmark/focus, reduced-motion and LCP/bundle/runtime measurements.
+- [x] Run test, E2E, typecheck, build, lint, docs gates, knip, dependency, duplication and dependency-version audits.
+- [x] Perform full-width and 390px AI-slop/manual aesthetic gate; commit `test(web): install product visual release gate`.
+
+Accepted 2026-08-10: 27 production-build browser cases cover eight canonical surfaces at 1440×900, 1920×1080 and 390×844, plus Landing reduced motion at all three sizes. Each case gates one `main`/`h1`, horizontal overflow, form names, keyboard focus, browser errors, DOM/transfer/LCP budgets and deterministic Canvas time. Full tests, typecheck, build, lint and the release E2E pass. Knip and dependency-cruiser still report explicitly documented pre-existing repository debt; this change adds no new finding and does not silently auto-update visual evidence.
 
 ### Task 15: Deploy Directly to ECS and Prove the Complete Journey
 

@@ -12,6 +12,12 @@ import {
   type OpticalViewport,
 } from '@/lib/optical-field/field-model';
 
+declare global {
+  interface Window {
+    __OPENSCIENCE_VISUAL_CLOCK__?: number;
+  }
+}
+
 export interface OpticalFieldProps {
   reducedMotion?: boolean;
 }
@@ -63,7 +69,8 @@ function OpticalField({ reducedMotion = false }: OpticalFieldProps) {
         pointerRef.current = { ...target, ...point };
       }
       previousFrameAt = now;
-      const sample = sampleOpticalField(pointerRef.current, size, now);
+      const visualClock = window.__OPENSCIENCE_VISUAL_CLOCK__;
+      const sample = sampleOpticalField(pointerRef.current, size, visualClock ?? now);
       renderOpticalField(context, sample, size);
       if (stage) {
         stage.style.setProperty('--os-optical-pointer-x', `${pointerRef.current?.x ?? sample.origin.x}px`);

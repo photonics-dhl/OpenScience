@@ -46,3 +46,19 @@ jobs:
 
       - name: Unit tests
         run: npx pnpm@9.15.0 test
+
+      - name: Install release browser
+        run: npx pnpm@9.15.0 --filter @openscience/web exec playwright install --with-deps chromium
+
+      - name: Product visual release gate
+        run: npx pnpm@9.15.0 --filter @openscience/web test:release
+
+      - name: Upload visual release evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: optical-editorial-release-evidence
+          path: |
+            apps/web/test/visual/out/product-release
+          if-no-files-found: error
+          retention-days: 14

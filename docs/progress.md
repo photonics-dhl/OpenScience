@@ -1,5 +1,15 @@
 # OpenScience (XGS) 进度日志
 
+## 2026-08-10（Task 14 产品发布质量门禁）— ✅ 27 个生产浏览器案例通过
+
+- **统一 manifest**：八个 canonical surface 均覆盖 1440×900、1920×1080、390×844；Landing 另覆盖三个 reduced-motion 案例，共 27 个，不再依赖四份各自为政的截图脚本作为发布判断。
+- **确定性**：production build 下等待 network idle 与 `document.fonts.ready`，固定 Optical Field 测试时钟、稳定 demo IDs，并在截图前暂停 CSS/Web Animations；普通 PR 不自动接受或更新视觉基线。
+- **功能门禁**：每案检查单一 `main`/`h1`、零横向溢出、表单可访问名称、skip-link/键盘焦点、零 console/page error，以及 LCP `≤4000ms`、资源传输 `≤3.5MB`、DOM `≤1800`。
+- **浏览器证据**：27/27 Playwright 通过；人工复核 Landing、Auth、Dashboard、Workspace、Public RO、Explore/Intake/Collection 的桌面与移动截图，未见旧 AI 卡片墙、测试焦点残留或表面风格断裂。
+- **全仓门禁**：单测通过（Web 154/154；其余 workspace 全绿）、typecheck、build、lint、`DOCS_SYNC_OK`、syncpack 通过。Knip 仍报告 8 个旧未用文件/旧导出，dependency-cruiser 仍报告旧 hero generator 的 dev-dependency 边界，jscpd 记录既有 6.20% token 重复；本任务未新增这些债务，也未删除用户文件。
+- **CI**：安装 Chromium，运行 `test:release`，无论成功失败均上传 14 天 visual report、screenshots 与 traces。
+- **下一步**：Task 15 只通过项目 SSH/deploy 脚本同步到 ECS，记录 rollback tag，执行真实注册/登录→Dashboard→Intake→Hermes→Workspace→版本/发布→Public/Explore/Collection 全旅程。
+
 ## 2026-08-10（Task 13 Figma canonical）— ✅ 长期账号验收完成
 
 - **所有权**：用户手工复制的 `gjhowMG7cG4clKwvhvF08E` 已由长期项目账号持有；`figma-primary` OAuth、Full seat、文件读写和回读审计均通过。旧 `rWS3…` 文件降级为历史迁移来源。

@@ -10,6 +10,7 @@
     "test": "vitest run",
     "test:e2e": "playwright test --config playwright.config.ts",
     "test:e2e:signup": "playwright test --config playwright.signup.config.ts",
+    "test:release": "playwright test product-release.spec.ts --config playwright.release.config.ts",
     "shots": "node test/visual/shots.mjs",
     "shots:workspace": "node test/visual/workspace-shots.mjs",
     "shots:public": "node test/visual/public-reading-shots.mjs"

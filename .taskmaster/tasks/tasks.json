@@ -1342,7 +1342,7 @@
         "id": "14",
         "title": "建立视觉回归、无障碍与性能发布门禁",
         "description": "为所有 canonical route/state 建立确定性三视口截图、keyboard/reduced-motion/accessibility E2E 与 LCP/bundle/runtime 检查。",
-        "status": "pending",
+        "status": "done",
         "dependencies": [
           "4",
           "5",
@@ -1358,7 +1358,8 @@
         "priority": "high",
         "details": "计划 Task 14。Canvas 固定 clock/seed；普通 PR 不自动更新 baseline；运行全仓 test/build/typecheck/lint/docs/audit 门禁和人工 AI-slop gate。",
         "testStrategy": "manifest RED/GREEN；1440x900/1920x1080/390x844；WCAG AA；LCP≤2.5s；全量 gates。",
-        "subtasks": []
+        "subtasks": [],
+        "updatedAt": "2026-08-10T15:46:34.562Z"
       },
       {
         "id": "15",
@@ -1376,9 +1377,9 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-08-10T15:10:11.184Z",
+      "lastModified": "2026-08-10T15:46:34.563Z",
       "taskCount": 15,
-      "completedCount": 12,
+      "completedCount": 13,
       "tags": [
         "optical-editorial-v3"
       ]
