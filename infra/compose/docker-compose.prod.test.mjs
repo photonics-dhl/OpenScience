@@ -21,3 +21,11 @@ test('production compose provides private persistent S3-compatible storage', asy
   assert.match(service, /networks:\n\s+- data_net/);
   assert.doesNotMatch(service, /- app_net/);
 });
+
+test('Next server-side public reads use the API service on the app network', async () => {
+  const compose = (await readFile(composeUrl, 'utf8')).replaceAll('\r\n', '\n');
+  const web = compose.split('\n  web:\n', 2)[1]?.split('\nnetworks:\n', 1)[0] ?? '';
+  assert.match(web, /environment:\n\s+API_ORIGIN: http:\/\/api:3001/);
+  assert.match(web, /depends_on:\n\s+api:\n\s+condition: service_healthy/);
+  assert.match(web, /networks:\n\s+- app_net/);
+});

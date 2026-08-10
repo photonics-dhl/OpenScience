@@ -8,6 +8,12 @@
 - **门禁**：全仓 test 通过（Web 147/147；新增 domain 4/4、API route 3/3）；root typecheck/build、Prisma validate（dummy non-secret URL）、Next production build、lint、docs:lint 0、docs-sync、Nginx/deploy/seed Node tests 8/8、敏感差异扫描全部通过。
 - **下一步**：完整门禁与安全审查 → 服务器备份 → migration 26 deploy → 应用重启 → 用平台管理员真实 session 建立一条精选并推进 published → HTTPS collection/admin 页面验收。
 
+### ECS SSR transport follow-up
+
+- migration 26、完整服务器 build、应用切换与一条真实 `published` 精选均成功；内部 Fastify collection API 返回 200。
+- 生产浏览器发现 collection 页面落入 unavailable：Web 容器未配置 `API_ORIGIN`，Next server request 默认访问容器自身 `127.0.0.1:3001` 并得到 `ECONNREFUSED`。这也影响既有 Public RO 的 server rendering，不能作为 Task 11 特例绕过。
+- Compose 现显式设置 Web `API_ORIGIN=http://api:3001` 并等待 API healthy；新增合同测试。待重同步、服务重建与 live screenshot 后关闭。
+
 ## 2026-08-10（Task 10 Explore 与启动语料）— ✅ ECS 已上线并完成 live 验收
 
 - **现场证据**：18 条启动语料 confirmed seed，replay `created=0 existing=18`；部署脚本补齐 bind-mounted `api web agent-worker` 应用重启（数据服务未重启）。

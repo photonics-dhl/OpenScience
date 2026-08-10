@@ -1289,7 +1289,7 @@
           "10"
         ],
         "priority": "high",
-        "details": "计划 Task 11。本地实现完成：migration 26 additive collection/selection + rollback；固定 researchObjectId/versionId 与 title/publicId/versionNo/SDF 快照；HTTPS media provenance；platform_admin scoped candidates/queue/create/update/transition API；公开 /collections/[slug] 与 /editorial/curator，管理请求保留 Nginx Basic Auth /admin/* + platform_admin + CSRF。domain 4/4、API 3/3、Web 1/1、typecheck/build 通过。待 ECS migration/live admin→published 验收。",
+        "details": "计划 Task 11。migration 26、server full build 与真实 selection 四态推进至 published 已完成。首次外部 page 验收定位 Web SSR 未配置 API_ORIGIN（容器内默认 127.0.0.1:3001 ECONNREFUSED）；Compose 已补 http://api:3001 + API healthy dependency 与合同测试。待重部署和 public collection/browser/admin gate 验收后关闭。",
         "testStrategy": "authorization/immutable snapshot/public label integration；editorial state/UI render tests。",
         "subtasks": [],
         "updatedAt": "2026-08-10T12:30:00.000Z"

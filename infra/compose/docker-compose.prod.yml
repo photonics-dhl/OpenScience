@@ -163,6 +163,11 @@ services:
     command: ["npm", "run", "start"]
     env_file:
       - /opt/openscience/.env.prod
+    environment:
+      API_ORIGIN: http://api:3001
+    depends_on:
+      api:
+        condition: service_healthy
     networks:
       - app_net
     restart: unless-stopped

@@ -270,7 +270,7 @@
 | `infra/scripts/with-proxy.sh` | 代理兜底包装：隧道可用走 v2ray、失效回落直连（云上 `/usr/local/bin/with-proxy`，2026-08-01） | 已部署云上 |
 | `infra/scripts/proxy-tunnel.sh` / `proxy-tunnel.vbs` | 本机侧 SSH 反向隧道常驻（Windows 计划任务 `OpenScience-ProxyTunnel` 登录自启 + 断线重连，2026-08-01） | 已启用 |
 | `infra/scripts/deploy.sh` | 部署脚本 | 骨架，Phase 1A 填充 |
-| `infra/compose/` | dev/monitor/prod compose；生产栈 data/app 分段，API/Web/worker + SeaweedFS 4.41 S3（仅 data_net、`seaweed-data` 卷）；`docker-compose.prod.test.mjs` 固化私有端口/凭据/健康依赖合同 | S3 变更待部署；既有 API/Web/worker 运行中（2026-08-09） |
+| `infra/compose/` | dev/monitor/prod compose；生产栈 data/app 分段，API/Web/worker + SeaweedFS 4.41 S3；Web SSR 以 `API_ORIGIN=http://api:3001` 走 app_net 并依赖 API healthy；合同测试固化私有端口/凭据/健康依赖 | Editorial SSR transport 待重部署（2026-08-10） |
 | `infra/nginx/` | 反代配置：`portainer.conf`（portainer.428312321.xyz → 127.0.0.1:9443，LE 证书 + WebSocket，2026-07-31；2026-08-01 追加 /nav/ 导航页、/monitor/→Netdata、/traffic/→vnStat 账单页，basic_auth）+ `openscience.conf`（OpenScience.428312321.xyz → 127.0.0.1:3001，P1A-8：/admin basic_auth + XFF 透传） | 均已部署云上并启用（openscience.conf 2026-08-03） |
 | `infra/www/` | `nav/index.html` 服务器面板导航静态页（/var/www/nav，2026-08-01） | 已部署云上 |
 | `infra/sandbox/` | 沙箱配置占位（P1A-1） | 骨架 |
