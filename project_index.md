@@ -18,7 +18,7 @@
 | `apps/web/components.json` | shadcn/ui `new-york` 配置（Task 7.4，cssVariables + 本地 aliases） | 活文档 |
 | `apps/web/app/tokens.css` | 视觉 token 单一事实源（Task 2/8；2026-08-09 Task 1 补 ingestion workbench/evidence/status/focus/spacing/type/radius，与 Figma variables 同名） | 活文档 |
 | `apps/web/components/ui/{button,card,badge,skeleton,input,dialog,status-badge,progress-rail,dropzone,evidence-card}.tsx` | UI 基础组件；后四项为研究者导入 Task 1 稳定原语（双语、WCAG、reduced-motion、固定任务状态占位） | 活文档 |
-| `apps/web/app/auth/{register,login}/page.tsx` / `apps/web/components/auth/{SignupCodeForm,LoginForm}.tsx` | 邮箱验证码注册与登录页面/表单；无邀请码字段，安全 returnTo 与可访问错误反馈 | 活文档 |
+| `apps/web/app/auth/{register,login}/page.tsx` / `apps/web/components/auth/{ResearchIdentityPanel,SignupCodeForm,LoginForm}.tsx` | Optical Editorial Research Identity 双平面；邮箱验证码注册与独立登录共用真实 session 契约，无邀请码字段；受信 origin `returnTo`、OTP 自动聚焦、可重试错误与中英 i18n | 活文档 |
 | `apps/web/app/dashboard/page.tsx` / `apps/web/components/dashboard/` | 研究驾驶舱：最近 RO、导入/创建、可行动 Hermes 任务和研究列表 | 活文档 |
 | `apps/web/app/research-objects/new/page.tsx` | Dashboard 两个主 CTA 的真实落点：blank 创建 RO；import 强制选择多格式资料，重复文件名确定性消歧，逐文件持久化 Artifact 并写入首个不可变 Commit；页面 checkpoint 支持中断恢复，Task 3 接异步解析状态 | 活文档 |
 | `GET /research-objects` / `GET /agent/tasks` | Dashboard 真实数据合同：仅成员 Workspace 的 RO 与当前用户 AgentTask，可按 actionable 过滤 | 活接口 |
@@ -35,10 +35,10 @@
 | `apps/web/components/brand/OpenScienceWordmark.tsx` / `apps/web/components/shell/*.tsx` / `apps/web/test/surface-shells.test.tsx` | Optical Editorial 品牌与 Public/Identity/Dashboard/Workspace 四类无 Card shell；单一 main、skip link、19/56/25 工作区平面与动作反馈门禁 | 活文档 |
 | `apps/web/components/research/*.tsx` / `apps/web/components/editor/*.tsx` / `apps/web/app/research-objects/[id]/edit/page.tsx` | Optical Editorial RO Workspace：56/64/44px 产品层级、19/56/25 单实例工作面、六节点 SDF、Evidence/Before-After proposal、Artifact rule row、Radix 高影响审查与移动功能等价 | 活文档 |
 | `apps/web/test/workspace-shell.test.tsx` / `apps/web/test/visual/workspace-shots.mjs` | RO Workspace 结构/证据/风险合同与 1440/390/320 production browser 门禁；校验三面状态保持、无溢出、console、focus trap/Escape/焦点恢复 | 测试工具 |
-| `apps/web/components/landing/SiteHeader.tsx` | Landing 页站点 Header（i18n 导航、滚动模糊背景、真实 `#latest/#trust` 入口） | 活文档 |
-| `apps/web/components/landing/Hero.tsx` | Landing 页 Hero（保留 ro-loop 无缝循环视频/ambient 主视觉与 poster/reduced-motion 降级，在原型 `Science evolves` 标题上叠加 pointer-local OpticalHeadline；i18n 文案、双 CTA、底部三柱核心思想条） | 活文档 |
+| `apps/web/components/landing/SiteHeader.tsx` | Landing 页极简 i18n 导航；提供真实 `/explore`、`/research-objects/new`、`/auth/login` 入口与 dark/paper 双表面样式 | 活文档 |
+| `apps/web/components/landing/Hero.tsx` | Landing 页 Hero：以 `80c8312` pre-distortion 非对称 `Science evolves.` 构图为接受基线；无旧 RO loop/六节点媒体/卡片叙事，保留真实 Create/Explore 与底部三项对象语义 | 活文档 |
 | `apps/web/components/landing/HeroLoopMedia.tsx` / `apps/web/lib/landing-motion.ts` | Landing 动效资源策略：loop video 仅桌面非 reduced-motion 挂载；移动/reduced-motion 只加载 poster；Evolution reduced-motion 禁止自动轮播 | 活文档 |
-| `apps/web/components/landing/LatestResearch.tsx` | Landing 页 `#latest` 深色内容带（真实锚点、三张 RO preview，占位至 P2 `GET /explore`） | 活文档 |
+| `apps/web/components/landing/LatestResearch.tsx` | Landing 下滑第二屏（legacy 文件名）：paper `OPEN RO.` 构图、稳定身份说明、N1–N6 六层 SDF anatomy 与真实 `/explore` 入口；不虚构公开研究数据 | 活文档 |
 | `apps/web/components/landing/TrustBand.tsx` | Landing 页 `#trust` 信任区（版本/provenance、许可作者贡献、AI+人工复核三支柱） | 活文档 |
 | `apps/web/components/landing/EvolutionPanel.tsx` | Landing 页四阶段演化面板（create/parse/diff/publish stage morph + 自动演示一轮即停，2026-08-07） | 活文档 |
 | `apps/web/components/landing/HermesBand.tsx` | Landing 页 Hermes 能力带（上下文/证据/审批三卡，2026-08-07） | 活文档 |
@@ -51,12 +51,12 @@
 | `apps/web/lib/utils.ts` | `cn` class merge 工具（Task 7.4） | 活文档 |
 | `apps/web/test/ui-components.test.ts` | 原语 storyless server-rendering 断言（Task 7.4；Task 8 追加双表面 `.surface-dark` 与 state-danger 断言） | 活文档 |
 | `apps/web/test/evolving-ro-symbol.test.tsx` | Task 7.7 Evolving RO Symbol server-rendering、变体、动效与 SVG 层级断言 | 活文档 |
-| `apps/web/components/brand/{OpticalHeadline,OpticalField}.tsx` / `apps/web/lib/optical-field/*.ts` | Optical Editorial Landing 品牌媒介：真实 DOM 双语标题（editorial/sculptural 两种布局）、base lens mask + Canvas 半色调/证据粒子、pointer-local SVG 文字位移/色散/焦点环、桌面 160–200px/移动 105–120px 与 reduced-motion 静态降级 | 活文档 |
+| `apps/web/components/brand/{OpticalHeadline,OpticalField}.tsx` / `apps/web/lib/optical-field/*.ts` | Optical Editorial Landing 品牌媒介：单一可访问 DOM 标题 + glyph safe zone；frame-time target/current 指针缓动、base lens mask、SVG 局部位移、Canvas 半色调/证据粒子及两词交界固定狭缝衍射波前；桌面 160–200px/移动 105–120px 与 reduced-motion 降级 | 活文档 |
 | `apps/web/app/explore/page.tsx` | 真实 `/explore` 公开索引入口；启动语料进入前显示诚实空状态，不以产品原则伪装研究数据 | 活文档 |
-| `apps/web/test/{landing-page,optical-field,landing-motion-policy}.test.ts{,x}` | Landing 完整原型/路由/朱红记忆点、Optical Field 位移/半径/base mask 与视频/reduced-motion 资源策略回归门禁 | 活文档 |
+| `apps/web/test/{landing-page,optical-field,landing-motion-policy}.test.ts{,x}` | Landing 基线/路由/单一标题/朱红记忆点、glyph safe zone、指针时间插值、对称狭缝衍射波前、Open RO 六节点与 reduced-motion 回归门禁 | 活文档 |
 | `apps/web/components/public/{PublicVersionPage,CitationRail,ProvenanceCaption,TabNavigation}.tsx` / `apps/web/app/research/[publicId]/**` | Public RO warm-paper 760/280 阅读 surface、持续对象/不可变版本引用、六 SDF 文本状态、SSR route 与 print provenance | 活文档 |
 | `apps/web/test/public-reading-surface.test.tsx` / `apps/web/test/visual/public-reading-shots.mjs` / `apps/web/app/visual-public-reading/page.tsx` | Public RO render contract 与 1440/390/print production browser gate；visual route 仅为确定性验收夹具 | 活文档 |
-| `apps/web/test/visual/shots.mjs` | Landing 视觉截图脚本：可配置 `VISUAL_BASE_URL`，等待字体就绪，两指针状态、1440/1920/390 三尺寸及 reduced-motion | 活文档 |
+| `apps/web/test/visual/shots.mjs` | Landing 视觉截图脚本：可配置 `VISUAL_BASE_URL`，输出目录固定相对脚本解析（不依赖 cwd），等待字体就绪，两指针状态、1440/1920/390 三尺寸、Open RO 全页及 reduced-motion | 活文档 |
 | `apps/web/.gitignore` | web 局部生成物忽略（Task 7.10 截图输出 `test/visual/out/` 不入库） | 活文档 |
 | `apps/web/vitest.config.ts` | Vitest Node 环境、`@/` alias 解析与 `.ts/.tsx` 测试发现（Task 7.4/7.7） | 活文档 |
 | `tsconfig.base.json` / `eslint.config.cjs` / `.npmrc` | 共享 TypeScript/ESLint/pnpm 基线（P1A-1）；eslint.config.cjs 已升级为 ESLint 9 flat config（2026-07-28） | 活文档 |
@@ -83,6 +83,7 @@
 | `docs/OpenScience_Kimi_Development_Spec.md` | **需求基线 Baseline v1.0（source of truth）** | 活文档，登记例外，禁移动/改名 |
 | `docs/OpenScience_Kimi_Development_Spec.docx` | 基线的 docx 原件 | 只读原件 |
 | `docs/OpenScience_Kimi_Starter_Pack.zip` | 开发启动包 | 只读原件 |
+| `docs/user_ideas/8.10/OpenScience_Art_Direction_v3.md` | Optical Editorial Instrument 唯一视觉真源；覆盖 Masterplan v2 的蓝紫宇宙、六节点圆环与卡片化视觉 | 活文档；从设计 handoff ZIP 原文恢复（2026-08-10） |
 | `docs/specs/2026-07-24-doc-architecture-design.md` | 文档架构设计 spec（已批准） | 活文档 |
 | `docs/specs/2026-07-24-mvp-task-breakdown-design.md` | MVP 任务拆解与工具配置设计（待用户审阅） | 活文档 |
 | `docs/specs/2026-07-28-p1a-2-data-foundation-design.md` | P1A-2 数据基础设计（PostgreSQL/Redis/Storage Adapter，已批准，代码已实现，集成测试待阿里云执行） | 活文档 |

@@ -1,6 +1,6 @@
 # Handoff — 2026-08-10 Optical Editorial 前端重构
 
-- Current goal: 修正 Landing 方向回归：恢复用户认可的完整视觉原型，只在原 `Science evolves` 上增强局部光学交互，并在浏览器验收后部署。
+- Current goal: Task 4 Landing 与 Task 7 Research Identity 已封版，继续 Task 8 Mixed-Material Evidence Intake，连接真实 ingest → parse/OCR → SDF review 状态机。
 - Done:
   - 审计 `docs/user_ideas/8.10/` 资源；确认 `OpenScience_Art_Direction_v3.md` 覆盖旧视觉，Masterplan v2 保留产品结构。
   - 完成 27 项 grill-me 设计决策：三种表面、双入口身份流、Hermes/Live2D、Evidence Intake、三联屏、启动语料、Figma/浏览器职责、动效、部署方式均已确认。
@@ -11,8 +11,13 @@
   - Task 3 完成：`OpenScience.`/`O.` 品牌原语与 Public/Identity/Dashboard/Workspace 四类无 Card shell 已落地；单一 main、skip link、19/56/25 Workspace 平面、8px action/press/reduced-motion、中英文 shell 文案均有测试。focused 9/9、全 Web 108/108、typecheck/build 通过。
   - Task 4 完成：Landing 已替换为真实 DOM `Science evolves.` / `科学，持续演化。` 与原生 Canvas Optical Field；Create/Explore/Login 真实路由、160–200px 局部作用半径、8–14px 位移、500ms 回弹、按住证据层、离屏暂停、移动 32% 密度及 reduced-motion 静态交互均已落地。全 Web 116/116、typecheck/build 通过；1440/1920/390 normal/reduced 截图完成，英文 320px 无溢出；Explore 纸面导航对比度 5.34:1/15.07:1。
   - Task 4 follow-up 完成：依据 `docs/user_ideas/8.10/OpenScience_Text_Distortion_Demo.html` 补齐真实文字的 pointer-local SVG displacement、mask falloff、chromatic focus、vermilion cursor ring；base DOM 仍可选择/可访问，focused landing + optical-field 11/11、typecheck、production build 通过。
-  - Task 4 已于用户验收后重新打开：确认 `80c8312` 误把“原型增强”做成 Landing 整页替换，移除了 RO loop/ambient 视觉与 Evolution/Hermes/Trust 模块；`ea882b9` 又未部署，因此主站既没有旧原型，也看不到新文字交互。修复必须以旧原型为基底。
-  - Task 4 回归修复已完成并通过独立复审：完整原型、RO loop/移动 poster、Evolution/Hermes/Trust 已恢复；客户端 hydration 冲突根因已定位为同工作树残留 `next dev` 改写 `.next`；干净生产浏览器门禁现直接断言 pointer 坐标与 SVG displacement。移动半径 105–120px、运行时位移 8–14px；Evolution 会响应运行中的 reduced-motion 切换并取消自动推进，视频流量策略已补齐。reviewer 最终 APPROVE，无 Critical/Important；Task Master Task 4 已置 done。
+  - Task 4 第一次回归结论已被用户再次纠正：`01966eb` 恢复 RO loop/六节点媒体是错误方向；`OpenScience_Art_Direction_v3.md` 明确禁止该视觉，不能用“找回功能”替代新版审美基线。
+  - Task 4 二次重开：Git 已确认文字动效前最后可接受点为 `80c8312`。当前 Landing 恢复其大尺度非对称排版 + Canvas Optical Field，移除旧媒体和 Evolution/Hermes/Trust 卡片段；三个 `<h1>` 已收敛为一个语义标题 + 一个 `aria-hidden` 局部折射层。3019 生产预览 HTTP 200，等待用户视觉确认；Task Master Task 4 为 in-progress。
+  - 视觉真源登记修复：此前 `OpenScience_Art_Direction_v3.md` 只在 `OpenScience_Design_Handoff_v2.zip` 内，活文档引用路径实际不存在；原文现已落到 `docs/user_ideas/8.10/`。
+  - Task 4 三项视觉纠偏：明确狭缝原型为 `ChatGPT Image 2026年8月10日 01_30_19 (1).png`；`evolves.` 增加 Bodoni glyph safe zone，pointer 改为 frame-time target/current 插值，Canvas 在两词交界新增固定孔径/衍射扇面/干涉波前。原 `LatestResearch` 三原则占位改为 paper `OPEN RO.` + N1–N6 SDF anatomy + `/explore` 真实入口。focused 15/15、typecheck/build/shots 通过；Chromium 逐帧坐标单调缓动，3019 HTTP 200。Task 4 仍 in-progress，待用户视觉验收。
+  - Task 4 独立复审：实现无 Critical；reviewer 发现固定 `16ms` 逐帧断言可能在繁忙 runner 假失败。视觉门禁已改为等待实际 rAF 诊断坐标变化，并区分平滑指针坐标与含静止回归的显示坐标；连续 3 轮完整 shots 通过。SiteHeader 过时索引同时修正。
+  - Task 4 最终封版：用户确认交互基本可用，pointer tracking time constant 收紧为 58ms；复审无剩余 finding，Task Master/plan 置 done。
+  - Task 7 完成：Research Identity 注册/登录两平面上线；真实验证码/登录/session/returnTo 契约保持不变，OTP 自动聚焦、503 可重试错误与 en/zh 文案落地。复审发现并修复反斜杠开放重定向、硬编码英文和伪行为测试；最终 APPROVE。全 Web 135/135、stubbed E2E 5/5、real Fastify signup 1/1、typecheck/build 通过。
   - Task 5 完成：RO Workspace 已建立独立 56px Global Nav / 64px Object Header / 44px Mode Tabs 与 19/56/25 单实例三工作面；六个 SDF 节点、Artifact rule rows、source/scope-bearing Before/After proposals、可折叠 evidence 与 Radix 全屏高影响审查均已落地。移动三面切换不卸载状态，Data/Versions 模式按钮会先切换到对应工作面再滚动锚点，320px 提交/上下文可用且无溢出。Extractor provenance 诚实标记为当前 SDF 聚合，未实现的 Overview/Publish 明确禁用。Web 121/121、typecheck/build、focused ESLint、1440/390/320 production browser 门禁通过，reviewer APPROVE。
   - Task 6 完成：Public RO 改为 warm-paper 760/280 阅读 surface；identity/license/continuing-object citation/immutable-version citation/Insight 先于 deep tabs，六个 SDF 文本状态、作者身份/通讯作者、发布时间/哈希、AI review、artifact provenance、学术 captions 与 print retention 已落地。公开对象稳定 URL 通过 server absolute API transport 解析 latest version，版本 URL 使用 exact version；Web 127/127、typecheck/build、1440/390/print browser gate 通过。独立复审的 1 Critical + 6 Important + 2 Minor 均已修正。
 - Constraints:
@@ -20,7 +25,8 @@
   - 视觉核心必须由可访问 DOM + 自有轻量 Canvas/WebGL 媒介层实现；第三方库只作受控局部依赖。
   - 开发阶段无用户，验收通过后直接替换服务器页面；保留上一镜像以便回滚。
 - Open risks:
-  - Landing、Workspace 与 Public RO 已完成浏览器替换；Auth、Dashboard、Intake 与其余产品页仍需按同一语言逐项替换。Figma canonical 需要按 v3 新建 foundations，旧文件不再作为视觉裁决源。
+  - Landing、Workspace、Public RO 与 Auth 已完成浏览器替换；Dashboard、Intake 与其余产品页仍需按同一语言逐项替换。Figma canonical 需要按 v3 新建 foundations，旧文件不再作为视觉裁决源。
+  - next-intl 开发/E2E 日志仍报告旧 `collab` dotted keys；登记至 Task 12，不阻断当前认证流程。
   - 启动 6 个完整 Demonstration RO 与 12–18 个索引条目尚未采集/登记。
-- Next action: 执行 Task 7 Auth Research Identity；服务器部署按 Task 15 与生产 runbook 单独执行，本次 Landing 回归修复尚未部署 ECS。
+- Next action: Task 8 先以 TDD 建立 `IntakeMaterial` 队列/角色/主文稿与真实 ingest API client，再替换 `/research-objects/new` 占位上传流程；上传安全、失败重试和 `needs_review` 必须可操作。
 - Read first: `AGENTS.md` → `docs/OpenScience_Kimi_Development_Spec.md` → `docs/progress.md` → `project_index.md` → `docs/specs/2026-08-10-optical-editorial-rebaseline-design.md` → `docs/user_ideas/8.10/OpenScience_Art_Direction_v3.md`。

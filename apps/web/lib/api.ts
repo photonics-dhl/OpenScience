@@ -143,10 +143,16 @@ const request = apiRequest;
 
 /** Keep post-auth navigation on this origin and out of auth-loop routes. */
 export function safeReturnTo(value: string | null | undefined): string {
-  if (!value || !value.startsWith('/') || value.startsWith('//')) return '/dashboard';
-  const pathname = value.split(/[?#]/, 1)[0];
-  if (pathname === '/auth/login' || pathname === '/auth/register') return '/dashboard';
-  return value;
+  if (!value || /[\\\u0000-\u001f\u007f]/.test(value)) return '/dashboard';
+  const trustedOrigin = 'https://openscience.invalid';
+  try {
+    const target = new URL(value, trustedOrigin);
+    if (target.origin !== trustedOrigin) return '/dashboard';
+    if (target.pathname === '/auth/login' || target.pathname === '/auth/register') return '/dashboard';
+    return `${target.pathname}${target.search}${target.hash}`;
+  } catch {
+    return '/dashboard';
+  }
 }
 
 /** Request a verification code without collecting an invitation code in the product UI. */

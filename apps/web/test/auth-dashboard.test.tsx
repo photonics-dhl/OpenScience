@@ -83,6 +83,7 @@ import {
   safeReturnTo,
 } from '../lib/api';
 import { LoginForm } from '../components/auth/LoginForm';
+import { ResearchIdentityPanel } from '../components/auth/ResearchIdentityPanel';
 import { SignupCodeForm, validateSignupPassword } from '../components/auth/SignupCodeForm';
 import { ContinueResearch } from '../components/dashboard/ContinueResearch';
 import { HermesTaskRail } from '../components/dashboard/HermesTaskRail';
@@ -278,6 +279,8 @@ describe('auth API contract', () => {
     expect(safeReturnTo('/dashboard?focus=tasks')).toBe('/dashboard?focus=tasks');
     expect(safeReturnTo('https://attacker.example/steal')).toBe('/dashboard');
     expect(safeReturnTo('//attacker.example/steal')).toBe('/dashboard');
+    expect(safeReturnTo('/\\attacker.example/steal')).toBe('/dashboard');
+    expect(safeReturnTo('/\u0000attacker.example/steal')).toBe('/dashboard');
     expect(safeReturnTo('/auth/login')).toBe('/dashboard');
   });
 });
@@ -302,6 +305,26 @@ describe('code-based auth forms', () => {
     expect(login).toContain('autoComplete="current-password"');
     expect(login).toContain('aria-live="polite"');
   });
+
+  it('uses the rule-based research identity surface instead of a generic auth card', () => {
+    const context = renderToStaticMarkup(createElement(ResearchIdentityPanel, {
+      eyebrow: 'Research identity / 01',
+      title: 'Evidence begins with a verifiable author.',
+      description: 'The same identity follows every version and review.',
+      intent: 'create',
+      tagline: 'Identity, provenance, continuity',
+    }));
+    const signup = renderToStaticMarkup(createElement(SignupCodeForm, { returnTo: '/research-objects/new' }));
+    const login = renderToStaticMarkup(createElement(LoginForm, { returnTo: '/dashboard' }));
+
+    expect(context).toContain('data-research-identity-context="create"');
+    expect(context).toContain('font-editorial');
+    expect(signup).toContain('data-auth-flow="signup-code"');
+    expect(login).toContain('data-auth-flow="login"');
+    expect(signup).not.toContain('rounded-card');
+    expect(login).not.toContain('rounded-card');
+  });
+
 });
 
 describe('dashboard product states', () => {

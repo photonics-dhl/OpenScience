@@ -56,10 +56,39 @@ test('registration is keyboard-operable and restores the intended return path', 
   await page.keyboard.type('Method123');
   await page.keyboard.press('Enter');
 
-  await page.getByLabel(/verification code/i).focus();
+  const verificationCode = page.getByLabel(/verification code/i);
+  await expect(verificationCode).toBeFocused();
   await page.keyboard.type('123456');
   await page.keyboard.press('Enter');
   await expect(page).toHaveURL(`${baseUrl}/dashboard`);
+});
+
+test('signup request failure remains visible and can be retried without losing the form', async ({ page }) => {
+  let attempts = 0;
+  await page.route('**/api/auth/request-signup-code', async (route) => {
+    attempts += 1;
+    if (attempts === 1) {
+      await route.fulfill({
+        status: 503,
+        contentType: 'application/json',
+        body: JSON.stringify({ error: { code: 'MAIL_UNAVAILABLE', message: 'Mail delivery is temporarily unavailable' } }),
+      });
+      return;
+    }
+    await route.fulfill({ status: 202, contentType: 'application/json', body: JSON.stringify({ ok: true }) });
+  });
+
+  await page.goto(`${baseUrl}/auth/register?returnTo=%2Fdashboard`);
+  await page.getByLabel(/display name/i).fill('Ada Researcher');
+  await page.getByLabel(/^email$/i).fill('researcher@example.com');
+  await page.getByLabel(/^password$/i).fill('Method123');
+  const submit = page.getByRole('button', { name: /send verification code/i });
+  await submit.click();
+  await expect(page.locator('[data-auth-error-retryable="true"] [role="alert"]')).toContainText('Mail delivery is temporarily unavailable');
+  await expect(submit).toBeEnabled();
+  await submit.click();
+  await expect(page.getByLabel(/verification code/i)).toBeFocused();
+  expect(attempts).toBe(2);
 });
 
 test('unauthenticated dashboard redirects safely to login', async ({ page }) => {

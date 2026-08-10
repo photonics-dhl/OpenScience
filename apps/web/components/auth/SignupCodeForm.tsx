@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useTranslations } from 'next-intl';
 import * as React from 'react';
-import { useEffect, useState, type FormEvent } from 'react';
+import { useEffect, useRef, useState, type FormEvent } from 'react';
 
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -37,12 +37,17 @@ export function SignupCodeForm({ returnTo }: SignupCodeFormProps) {
   const [cooldown, setCooldown] = useState(0);
   const [pending, setPending] = useState(false);
   const [error, setError] = useState('');
+  const codeInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     if (cooldown <= 0) return;
     const timer = window.setTimeout(() => setCooldown((value) => Math.max(0, value - 1)), 1000);
     return () => window.clearTimeout(timer);
   }, [cooldown]);
+
+  useEffect(() => {
+    if (stage === 'code') codeInputRef.current?.focus();
+  }, [stage]);
 
   async function sendCode() {
     await requestSignupCode({ email });
@@ -97,22 +102,23 @@ export function SignupCodeForm({ returnTo }: SignupCodeFormProps) {
   }
 
   return (
-    <section className="w-full max-w-xl rounded-card border border-white/10 bg-workbench-surface p-6 shadow-overlay sm:p-9">
-      <p className="mb-3 text-xs font-semibold uppercase tracking-[0.18em] text-accent-primary">
-        OpenScience
+    <section className="w-full max-w-2xl" data-auth-flow="signup-code">
+      <p className="mb-5 border-b border-os-rule-dark pb-4 font-mono text-[0.65rem] uppercase tracking-[0.24em] text-os-vermilion">
+        {t('identity.verificationEyebrow')}
       </p>
-      <h1 className="font-display text-3xl font-semibold tracking-tight text-workbench-text sm:text-4xl">
+      <h1 className="max-w-[12ch] font-editorial text-[clamp(2.8rem,5vw,5.6rem)] font-normal leading-[0.92] tracking-[-0.055em] text-workbench-text">
         {t('register.title')}
       </h1>
-      <p className="mt-3 max-w-md text-sm leading-6 text-workbench-muted">
+      <p className="mt-5 max-w-md text-sm leading-7 text-workbench-muted">
         {t('register.description')}
       </p>
 
       {stage === 'details' ? (
-        <form className="mt-8 grid gap-5" onSubmit={handleDetails}>
-          <label className="grid gap-2 text-sm font-medium text-workbench-text">
+        <form className="mt-10 grid gap-7" onSubmit={handleDetails}>
+          <label className="grid gap-2 font-mono text-[0.68rem] uppercase tracking-[0.18em] text-workbench-muted">
             {t('register.displayName')}
             <Input
+              className="h-12 rounded-none border-0 border-b border-os-rule-dark bg-transparent px-0 font-sans text-base normal-case tracking-normal focus-visible:border-os-paper focus-visible:ring-0 [.surface-dark_&]:bg-transparent"
               name="displayName"
               autoComplete="name"
               required
@@ -121,9 +127,10 @@ export function SignupCodeForm({ returnTo }: SignupCodeFormProps) {
               onChange={(event) => setDisplayName(event.target.value)}
             />
           </label>
-          <label className="grid gap-2 text-sm font-medium text-workbench-text">
+          <label className="grid gap-2 font-mono text-[0.68rem] uppercase tracking-[0.18em] text-workbench-muted">
             {t('register.email')}
             <Input
+              className="h-12 rounded-none border-0 border-b border-os-rule-dark bg-transparent px-0 font-sans text-base normal-case tracking-normal focus-visible:border-os-paper focus-visible:ring-0 [.surface-dark_&]:bg-transparent"
               name="email"
               type="email"
               autoComplete="email"
@@ -132,9 +139,10 @@ export function SignupCodeForm({ returnTo }: SignupCodeFormProps) {
               onChange={(event) => setEmail(event.target.value)}
             />
           </label>
-          <label className="grid gap-2 text-sm font-medium text-workbench-text">
+          <label className="grid gap-2 font-mono text-[0.68rem] uppercase tracking-[0.18em] text-workbench-muted">
             {t('register.password')}
             <Input
+              className="h-12 rounded-none border-0 border-b border-os-rule-dark bg-transparent px-0 font-sans text-base normal-case tracking-normal focus-visible:border-os-paper focus-visible:ring-0 [.surface-dark_&]:bg-transparent"
               name="password"
               type="password"
               autoComplete="new-password"
@@ -148,18 +156,22 @@ export function SignupCodeForm({ returnTo }: SignupCodeFormProps) {
           <p id="signup-password-hint" className="-mt-3 text-xs leading-5 text-workbench-muted">
             {t('register.passwordHint')}
           </p>
-          <Button type="submit" size="lg" disabled={pending}>
+          <Button className="min-h-12 rounded-panel bg-os-vermilion text-os-black-0 active:translate-y-px" type="submit" size="lg" disabled={pending}>
             {pending ? t('register.sending') : t('register.requestCode')}
           </Button>
         </form>
       ) : (
-        <form className="mt-8 grid gap-5" onSubmit={handleConfirmation}>
-          <div className="rounded-control border border-white/10 bg-workbench-bg p-3 text-sm text-workbench-muted">
+        <form className="mt-10 grid gap-7" onSubmit={handleConfirmation}>
+          <div className="border-y border-os-rule-dark py-4 font-mono text-xs leading-6 text-workbench-muted">
             {t('register.codeSent', { email })}
           </div>
-          <label className="grid gap-2 text-sm font-medium text-workbench-text">
+          <label className="grid gap-2 font-mono text-[0.68rem] uppercase tracking-[0.18em] text-workbench-muted">
             {t('register.code')}
             <Input
+              ref={codeInputRef}
+              autoFocus
+              data-code-focus-target="true"
+              className="h-16 rounded-none border-0 border-b border-os-rule-dark bg-transparent px-0 font-mono text-2xl tracking-[0.42em] focus-visible:border-os-paper focus-visible:ring-0 [.surface-dark_&]:bg-transparent"
               name="code"
               inputMode="numeric"
               autoComplete="one-time-code"
@@ -170,7 +182,7 @@ export function SignupCodeForm({ returnTo }: SignupCodeFormProps) {
               onChange={(event) => setCode(event.target.value.replace(/\D/g, ''))}
             />
           </label>
-          <Button type="submit" size="lg" disabled={pending || code.length !== 6}>
+          <Button className="min-h-12 rounded-panel bg-os-vermilion text-os-black-0 active:translate-y-px" type="submit" size="lg" disabled={pending || code.length !== 6}>
             {pending ? t('register.confirming') : t('register.confirm')}
           </Button>
           <Button type="button" variant="ghost" disabled={cooldown > 0 || pending} onClick={handleResend}>
@@ -179,14 +191,14 @@ export function SignupCodeForm({ returnTo }: SignupCodeFormProps) {
         </form>
       )}
 
-      <div className="min-h-8 pt-4" aria-live="polite">
+      <div className="min-h-8 pt-5" aria-live="polite" data-auth-error-retryable="true">
         {error ? (
-          <p role="alert" className="rounded-control bg-status-danger-bg px-3 py-2 text-sm text-status-danger-text">
+          <p role="alert" className="border-l border-status-danger-text py-2 pl-4 text-sm text-status-danger-text">
             {error}
           </p>
         ) : null}
       </div>
-      <p className="mt-3 text-center text-sm text-workbench-muted">
+      <p className="mt-4 border-t border-os-rule-dark pt-5 text-sm text-workbench-muted">
         {t('register.haveAccount')}{' '}
         <Link className="font-semibold text-accent-primary hover:underline" href={`/auth/login?returnTo=${encodeURIComponent(safeReturnTo(returnTo))}`}>
           {t('register.login')}

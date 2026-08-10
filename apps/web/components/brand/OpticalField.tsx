@@ -6,6 +6,7 @@ import { renderOpticalField } from '@/lib/optical-field/canvas-renderer';
 import {
   releaseOpticalInteraction,
   sampleOpticalField,
+  smoothOpticalPoint,
   textDisplacementScale,
   type OpticalInteraction,
   type OpticalViewport,
@@ -18,6 +19,7 @@ export interface OpticalFieldProps {
 function OpticalField({ reducedMotion = false }: OpticalFieldProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const pointerRef = useRef<OpticalInteraction | null>(null);
+  const targetRef = useRef<OpticalInteraction | null>(null);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -31,6 +33,7 @@ function OpticalField({ reducedMotion = false }: OpticalFieldProps) {
     let frame = 0;
     let stopped = false;
     let visible = true;
+    let previousFrameAt = 0;
     let size: OpticalViewport = { width: 1, height: 1, dpr: 1 };
 
     const measure = () => {
@@ -49,15 +52,26 @@ function OpticalField({ reducedMotion = false }: OpticalFieldProps) {
     };
 
     const draw = (now: number) => {
+      const target = targetRef.current;
+      if (target) {
+        const current = pointerRef.current ?? {
+          ...target,
+          x: size.width * 0.5,
+          y: size.height * 0.42,
+        };
+        const point = smoothOpticalPoint(current, target, previousFrameAt ? now - previousFrameAt : 16);
+        pointerRef.current = { ...target, ...point };
+      }
+      previousFrameAt = now;
       const sample = sampleOpticalField(pointerRef.current, size, now);
       renderOpticalField(context, sample, size);
       if (stage) {
+        stage.style.setProperty('--os-optical-pointer-x', `${pointerRef.current?.x ?? sample.origin.x}px`);
         stage.style.setProperty('--os-optical-x', `${sample.origin.x}px`);
         stage.style.setProperty('--os-optical-y', `${sample.origin.y}px`);
         stage.style.setProperty('--os-optical-radius', `${sample.radius}px`);
         stage.style.setProperty('--os-optical-focus', sample.evidence.toFixed(3));
         stage.style.setProperty('--os-optical-displacement', `${sample.displacement}px`);
-        stage.style.setProperty('--os-optical-chroma', `${(sample.evidence * 0.62).toFixed(3)}`);
       }
       if (displace) displace.setAttribute('scale', `${textDisplacementScale(sample)}`);
     };
@@ -76,12 +90,12 @@ function OpticalField({ reducedMotion = false }: OpticalFieldProps) {
       else frame = window.requestAnimationFrame(animate);
     };
 
-    const updatePointer = (event: PointerEvent, pressed = pointerRef.current?.pressed ?? false) => {
+    const updatePointer = (event: PointerEvent, pressed = targetRef.current?.pressed ?? false) => {
       const bounds = canvas.getBoundingClientRect();
       const x = event.clientX - bounds.left;
       const y = event.clientY - bounds.top;
       if (x < 0 || y < 0 || x > bounds.width || y > bounds.height) return;
-      pointerRef.current = { x, y, lastActiveAt: performance.now(), pressed };
+      targetRef.current = { x, y, lastActiveAt: performance.now(), pressed };
     };
     const onPointerMove = (event: PointerEvent) => updatePointer(event);
     const onPointerDown = (event: PointerEvent) => {
@@ -91,7 +105,8 @@ function OpticalField({ reducedMotion = false }: OpticalFieldProps) {
     const releasePointer = () => {
       const now = performance.now();
       const staticMode = shouldReduceMotion();
-      pointerRef.current = releaseOpticalInteraction(pointerRef.current, now, staticMode);
+      targetRef.current = releaseOpticalInteraction(targetRef.current, now, staticMode);
+      if (staticMode) pointerRef.current = null;
       if (staticMode) draw(0);
     };
     const onVisibility = () => {
@@ -113,6 +128,7 @@ function OpticalField({ reducedMotion = false }: OpticalFieldProps) {
     window.addEventListener('pointerup', releasePointer, { passive: true });
     window.addEventListener('pointercancel', releasePointer, { passive: true });
     window.addEventListener('blur', releasePointer);
+    stage?.addEventListener('pointerleave', releasePointer, { passive: true });
     document.addEventListener('visibilitychange', onVisibility);
     media.addEventListener('change', start);
     resizeObserver.observe(canvas.parentElement ?? canvas);
@@ -128,6 +144,7 @@ function OpticalField({ reducedMotion = false }: OpticalFieldProps) {
       window.removeEventListener('pointerup', releasePointer);
       window.removeEventListener('pointercancel', releasePointer);
       window.removeEventListener('blur', releasePointer);
+      stage?.removeEventListener('pointerleave', releasePointer);
       document.removeEventListener('visibilitychange', onVisibility);
       media.removeEventListener('change', start);
       resizeObserver.disconnect();
@@ -142,6 +159,7 @@ function OpticalField({ reducedMotion = false }: OpticalFieldProps) {
       data-optical-field="true"
     >
       <canvas className="absolute inset-0 h-full w-full opacity-80 motion-reduce:opacity-45" ref={canvasRef} />
+      <div className="optical-diffraction-aperture" data-diffraction-aperture="true" />
     </div>
   );
 }

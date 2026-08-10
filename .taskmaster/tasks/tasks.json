@@ -1182,16 +1182,16 @@
       {
         "id": "4",
         "title": "在完整 Landing 原型上增强 DOM Typography + Optical Field",
-        "description": "保留 RO loop/ambient 主视觉和 Evolution/Hermes/Trust 叙事，以 Science evolves./科学，持续演化。可访问 DOM 标题增强原型；Canvas/SVG 只承担局部折射、半色调和证据粒子，不再用纯文字替换整页。",
+        "description": "以用户确认的 80c8312 pre-distortion Optical Editorial 构图为基线；Science evolves./科学，持续演化。保持单一可访问 DOM 标题，Canvas/SVG 实现局部折射、固定狭缝衍射与半色调场，下一屏以 paper surface 展示 Open RO 六层 SDF 结构。",
         "status": "done",
         "dependencies": [
           "3"
         ],
         "priority": "high",
-        "details": "计划 Task 4。以既有完整 Landing 原型为基底；真实 DOM headline；160-200px 作用半径；8-14px 位移；400-600ms 回弹；移动 ≤35% 密度；Create/Explore 真实路由。依据 8.10 Text Distortion Demo 增加 pointer-local SVG displacement、mask falloff、chromatic focus 与 vermilion focus ring，base DOM 仍可选择/可访问。桌面非 reduced-motion 才挂载 loop video；移动/reduced-motion 只加载 poster。",
-        "testStrategy": "landing RED/GREEN；浏览器直接断言 pointer 写入局部坐标且 SVG displacement scale>5；1440x900、1920x1080、390x844 normal/reduced-motion 与 below-fold modules screenshots；overflow/console/reduced-motion gate。",
+        "details": "计划 Task 4，2026-08-10 经两次回归纠正后以 80c8312 为唯一接受基线，不恢复 v3 禁用的 RO loop/六节点圆环/Evolution-Hermes-Trust 卡片段。真实 DOM headline 保留一个 h1 与一个 aria-hidden 折射层；Bodoni 字形安全区防止 evolves 下缘裁切；指针使用 target/current 时间插值，160-200px 作用半径、8-14px 位移、400-600ms 回弹；固定孔径与衍射波前位于两词交界；移动 ≤35% 密度。下一屏为 OPEN RO paper surface + N1-N6 SDF anatomy，真实 /explore 入口，不伪造公开研究数据。",
+        "testStrategy": "TDD RED/GREEN 锁定字形安全区、时间插值、对称衍射波前、单一 h1 与 Open RO 六节点；浏览器逐帧断言 optical x 单调接近目标且不瞬移，SVG displacement scale>5；1440x900、1920x1080、390x844 normal/reduced-motion 与 Open RO full-page screenshots；overflow/console/reduced-motion gate。",
         "subtasks": [],
-        "updatedAt": "2026-08-10T03:12:54.785Z"
+        "updatedAt": "2026-08-10T08:08:00.000Z"
       },
       {
         "id": "5",
@@ -1225,7 +1225,7 @@
         "id": "7",
         "title": "将验证码注册与登录融入 Research Identity 体验",
         "description": "保留独立 Sign in 与 Create-intent returnTo 两条路径，重构为 Optical Editorial 身份页，不改真实 signup-code/session 契约。",
-        "status": "pending",
+        "status": "done",
         "dependencies": [
           "3"
         ],
@@ -1233,7 +1233,7 @@
         "details": "计划 Task 7。两步验证码、紧凑字段、安全 returnTo、可重试错误和焦点转移；保留 signup-live real Fastify E2E。",
         "testStrategy": "auth component RED/GREEN；stubbed E2E + compiled Next/real Fastify signup E2E；desktop/mobile states。",
         "subtasks": [],
-        "updatedAt": "2026-08-10T01:46:57.630Z"
+        "updatedAt": "2026-08-10T08:08:00.000Z"
       },
       {
         "id": "8",
@@ -1370,9 +1370,9 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-08-10T03:12:54.785Z",
+      "lastModified": "2026-08-10T08:08:00.000Z",
       "taskCount": 15,
-      "completedCount": 6,
+      "completedCount": 7,
       "tags": [
         "optical-editorial-v3"
       ]

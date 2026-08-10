@@ -351,6 +351,19 @@
       "label2": "Structure",
       "label3": "Citation"
     },
+    "openRo": {
+      "eyebrow": "Open Research Object",
+      "title": "One object. Six inspectable evidence layers.",
+      "description": "Papers, data, code, and discussion remain bound to one stable identity, with source and version intact through every change.",
+      "action": "Open the public research index",
+      "stableId": "Stable identity",
+      "node1": "Problem",
+      "node2": "Insight",
+      "node3": "Method",
+      "node4": "Results",
+      "node5": "Limitations",
+      "node6": "Reproducibility"
+    },
     "evolution": {
       "title": "How research evolves",
       "stages": {
@@ -406,6 +419,18 @@
     }
   },
   "auth": {
+    "identity": {
+      "skipToForm": "Skip to identity form",
+      "loginEyebrow": "Identity / sign in",
+      "verificationEyebrow": "Identity / verification",
+      "tagline": "Identity · provenance · continuity",
+      "createEyebrow": "Research identity / 01",
+      "createTitle": "Evidence begins with a verifiable author.",
+      "createDescription": "Your identity follows each research object, version, contribution, and review without claiming ownership of the science for you.",
+      "returnEyebrow": "Research identity / return",
+      "returnTitle": "Return to the work, not a feed.",
+      "returnDescription": "Continue the latest research object and resolve only the tasks that need your judgment."
+    },
     "register": {
       "title": "Create your research account",
       "description": "Use your personal or institutional email. No invitation field is required here.",

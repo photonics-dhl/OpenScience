@@ -1690,13 +1690,18 @@ body {
   opacity: var(--os-optical-focus);
 }
 
-[data-optical-text-chromatic='true'] {
-  color: transparent;
-  mix-blend-mode: screen;
-  opacity: var(--os-optical-chroma);
-  text-shadow: -2px 0 rgb(255 78 34 / .75), 2px 0 rgb(87 184 204 / .65);
-  -webkit-mask-image: radial-gradient(circle calc(var(--os-optical-radius) * .8) at var(--os-optical-x) var(--os-optical-y), #000 0 25%, transparent 76%);
-  mask-image: radial-gradient(circle calc(var(--os-optical-radius) * .8) at var(--os-optical-x) var(--os-optical-y), #000 0 25%, transparent 76%);
+.optical-diffraction-aperture {
+  position: absolute;
+  left: calc(50% - 1px);
+  top: calc(42% - 22px);
+  width: 2px;
+  height: 44px;
+  border-radius: 999px;
+  background: linear-gradient(to bottom, transparent, rgb(241 238 231 / .92) 35%, rgb(241 238 231 / .92) 65%, transparent);
+  box-shadow: 0 0 22px rgb(241 238 231 / .38);
+  opacity: calc(.36 + var(--os-optical-focus) * .58);
+  transform: scaleY(calc(.85 + var(--os-optical-focus) * .3));
+  transition: opacity 220ms ease-out;
 }
 
 .optical-cursor-ring {
@@ -1733,7 +1738,7 @@ body {
     mask-image: none;
   }
   [data-optical-text-distorted='true'],
-  [data-optical-text-chromatic='true'],
+  .optical-diffraction-aperture,
   .optical-cursor-ring { display: none; }
 }
 

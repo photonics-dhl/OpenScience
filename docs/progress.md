@@ -1,5 +1,32 @@
 # OpenScience (XGS) 进度日志
 
+## 2026-08-10（Optical Editorial v3 Task 4 + Task 7）— ✅ Landing 封版与 Research Identity 完成
+
+- **Landing 交互抛光**：用户确认交互基本可用后，将 pointer optical tracking time constant 收紧为 58ms；保留 `80c8312` 非对称主构图、Bodoni glyph safe zone、固定狭缝衍射、N1–N6 `OPEN RO.` 第二屏和 reduced-motion 降级，不恢复 v3 禁用的 RO loop/轨道/视频/卡片段。
+- **Research Identity**：注册/登录页改为 `IdentityShell` 两平面、规则线与 Editorial Serif 构图；保留 `request-signup-code`、`confirm-signup`、login/cookie 与 Create-intent `returnTo`，验证码阶段自动聚焦，503 后错误可读且可重试；新增文案全部进入 en/zh 对称目录。
+- **安全修复**：`safeReturnTo` 以受信 origin 解析并拒绝反斜杠、ASCII 控制字符、跨 origin 与 auth-loop；回归覆盖 `/\\attacker.example` 与 NUL 变体。
+- **证据**：focused 27/27；全 Web 135/135；stubbed Playwright 5/5；compiled Next + real Fastify signup 1/1；typecheck/build、桌面/移动无横向溢出、`git diff --check` 通过；独立复审最终 APPROVE。3019 已切换至最新 production build，HTTP 200。
+- **已知非阻断债务**：next-intl 在开发/E2E 日志仍报告旧 `collab` dotted keys；不影响本轮认证成功，但必须在 Task 12 统一修复。
+- **下一步**：执行 Task 8 Mixed-Material Evidence Intake，使用真实 ingest/batch/task/retry/confirm 契约，不再沿用“创建 RO 后只上传并 commit”的占位流程。
+
+## 2026-08-10（Optical Editorial v3 Task 4 三项视觉纠偏）— ⏳ 3019 等待用户验收
+
+- **原型定位**：用户所指“文字穿过狭缝的衍射”已确认对应 `docs/user_ideas/8.10/ChatGPT Image 2026年8月10日 01_30_19 (1).png`。此前实现只有 pointer-local turbulence displacement 与点阵圆场，没有狭缝、衍射扇面或干涉波前；不得再把“局部扭曲”描述成“狭缝衍射”。
+- **根因与修复**：`OpticalHeadline` 的 `.78` 行高没有为 Bodoni 斜体下伸部保留字形安全区，且 Hero `overflow-hidden` 会在不同栅格化环境裁切下缘；现为 `evolves.` 增加显式 glyph safe zone 并调整行高。`OpticalField` 原先直接绑定原始 pointer 坐标；现采用 frame-time target/current 指数插值，并在两词交界建立固定孔径、对称衍射射线与波前。
+- **Open RO 第二屏**：`LatestResearch.tsx` 之前实际渲染三条产品原则，属于占位；现改为 paper surface `OPEN RO.` 构图、稳定 RO identity 说明、N1–N6 六层 SDF anatomy 和真实 `/explore` 入口，不虚构论文或公开数据。
+- **TDD/浏览器证据**：新增四项断言先得到预期 RED（缺 `smoothOpticalPoint` / `sampleDiffractionWavefront` / glyph safe zone / Open RO），现 focused 15/15、全 Web 133/133；Web typecheck、production build、visual shots 通过。Chromium 1440 指针横移逐帧 `x=486.07 → 713.92 → 921.21 < target 1100.8`，字形 bottom 569.6 < Hero bottom 959.6，Open RO 节点 6；3019 HTTP 200。截图脚本输出目录改为相对脚本文件解析，避免从仓库根运行时误写根 `test/`。
+- **独立复审纠偏**：reviewer 未发现实现层 Critical；指出固定 `16ms` 的浏览器逐帧门禁会在繁忙 CI 偶发没有新 rAF，以及 SiteHeader 索引过时。门禁现改为 `polling: 'raf'` 等待实际诊断坐标变化，并分离 `--os-optical-pointer-x`（target/current 插值层）与 `--os-optical-x`（含静止回归的显示层）；连续 3 轮完整 shots 均通过。SiteHeader 索引已同步。
+- **任务状态**：Task Master `optical-editorial-v3` Task 4 仍为 `in-progress`，但已清除错误的 RO loop/chromatic/video 描述并登记本轮真实验收策略；用户确认实际观感前不提交、不标记 done。
+
+## 2026-08-10（Optical Editorial v3 Task 4 二次重开）— ⏳ 回到用户确认的 pre-distortion 基线
+
+- **用户纠正**：最近两次 Landing 修正均属倒退；正确参考点是文字动效修改前的版本，而不是更旧的六节点媒体原型，也不是三层标题叠加后的文字重影。
+- **Git 证据**：`80c8312` 是文字动效提交 `ea882b9` 的直接前置版本；其 Landing 使用非对称大尺度排版 + Canvas Optical Field，没有 `ro-loop`/视频。`ea882b9` 复制三层完整 `<h1>` 叠加 SVG filter；`01966eb` 又恢复了 v3 明确禁用的旧六节点媒体与卡片模块。
+- **当前修正**：仅恢复 `80c8312` 的 Landing 构图，不回滚已完成的 Workspace/Public RO；移除 Landing 上的旧媒体、Evolution/Hermes/Trust 卡片段和 chromatic 第三标题层，保留一个可访问 `<h1>` 与一个 `aria-hidden` 局部折射层。
+- **视觉真源修复**：`OpenScience_Art_Direction_v3.md` 之前只存在于 handoff ZIP，活 spec 却指向不存在的普通文件；现已将原文落到登记路径，明确其覆盖 Masterplan v2 的旧视觉。
+- **回归与预览**：Landing 测试先以“缺 v3 marker / 3 个 h1”得到预期 RED，现 focused 12/12、全 Web 130/130、typecheck、production build、Chromium 1440/1920/390 normal/reduced-motion 通过。`127.0.0.1:3019` 返回 HTTP 200 且含 v3 marker，等待用户视觉检查后再做精修与提交。
+- **任务状态**：Task Master `optical-editorial-v3` Task 4 已重新置为 in-progress；不得在用户确认前再次标记 done。
+
 ## 2026-08-10（Optical Editorial v3 Task 4 回归）— ✅ 完整 Landing 原型与真实文字交互恢复
 
 - **用户验收结论**：主屏 `Science evolves` 在当前主站没有交互，且原型页的核心视觉和后续叙事模块被替换成纯文字页面；此前“交互已完成”的表述混淆了隔离工作树代码状态与已部署状态。

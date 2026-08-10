@@ -4,8 +4,9 @@ import { chromium } from 'playwright';
 import assert from 'node:assert/strict';
 import { mkdir } from 'node:fs/promises';
 import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 
-const outDir = path.resolve('test/visual/out');
+const outDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), 'out');
 const baseUrl = process.env.VISUAL_BASE_URL ?? 'http://127.0.0.1:3002';
 await mkdir(outDir, { recursive: true });
 
@@ -28,25 +29,44 @@ for (const testCase of cases) {
     reducedMotion: testCase.reducedMotion,
   });
   const runtimeErrors = [];
-  const loopRequests = [];
   page.on('pageerror', (error) => runtimeErrors.push(error.message));
   page.on('console', (message) => {
     if (message.type() === 'error') runtimeErrors.push(message.text());
   });
-  page.on('request', (request) => {
-    if (request.url().includes('/hero/ro-loop.')) loopRequests.push(request.url());
-  });
   await page.goto(`${baseUrl}/`, { waitUntil: 'networkidle' });
   await page.evaluate(() => document.fonts.ready.then(() => true));
   assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth), true, 'landing must not overflow horizontally');
+  assert.equal(await page.locator('h1').count(), 1, 'landing must expose one semantic headline');
   if (testCase.reducedMotion === 'no-preference') {
     const stage = page.locator('[data-optical-text-stage="true"]');
     const bounds = await stage.boundingBox();
     assert(bounds, 'interactive headline stage must be visible');
-    const x = bounds.x + bounds.width * (testCase.symbol === 'a' ? 0.3 : 0.7);
+    const targetFactor = testCase.symbol === 'a' ? 0.3 : 0.7;
+    const startFactor = testCase.symbol === 'a' ? 0.7 : 0.3;
     const y = bounds.y + bounds.height * 0.46;
-    await page.mouse.move(x, y);
-    await page.waitForTimeout(40);
+    await page.mouse.move(bounds.x + bounds.width * startFactor, y);
+    await page.waitForTimeout(120);
+    await page.mouse.move(bounds.x + bounds.width * targetFactor, y);
+    const readOpticalX = () => stage.evaluate((element) => Number.parseFloat(element.style.getPropertyValue('--os-optical-pointer-x')));
+    const waitForNextOpticalX = async (previous) => {
+      await page.waitForFunction(
+        ({ value }) => {
+          const element = document.querySelector('[data-optical-text-stage="true"]');
+          const current = Number.parseFloat(element?.style.getPropertyValue('--os-optical-pointer-x') ?? 'NaN');
+          return Number.isFinite(current) && current !== value;
+        },
+        { value: previous },
+        { polling: 'raf', timeout: 2_000 },
+      );
+      return readOpticalX();
+    };
+    const firstX = await readOpticalX();
+    const secondX = await waitForNextOpticalX(firstX);
+    const thirdX = await waitForNextOpticalX(secondX);
+    const targetX = bounds.width * targetFactor;
+    assert(Math.abs(firstX - targetX) > 1, 'pointer target must not be applied in a single frame');
+    assert(Math.abs(secondX - targetX) < Math.abs(firstX - targetX), 'optical origin must ease toward the pointer target');
+    assert(Math.abs(thirdX - targetX) < Math.abs(secondX - targetX), 'optical origin must keep converging monotonically');
     const interaction = await stage.evaluate((element) => ({
       opticalX: element.style.getPropertyValue('--os-optical-x'),
       scale: Number(element.querySelector('[data-optical-displace="true"]')?.getAttribute('scale') ?? 0),
@@ -54,30 +74,14 @@ for (const testCase of cases) {
     assert(interaction.opticalX.endsWith('px'), 'pointer must drive a pixel-local optical origin');
     assert(interaction.scale > 5, 'pointer movement must visibly activate text displacement');
   }
-  const expectsLoop = testCase.width >= 1024 && testCase.reducedMotion === 'no-preference';
-  assert.equal(loopRequests.length > 0, expectsLoop, 'loop video requests must follow the desktop motion policy');
-  if (testCase.reducedMotion === 'reduce') {
-    const activeBefore = await page.locator('[data-landing-module="evolution"] [aria-pressed="true"]').textContent();
-    await page.waitForTimeout(2800);
-    const activeAfter = await page.locator('[data-landing-module="evolution"] [aria-pressed="true"]').textContent();
-    assert.equal(activeAfter, activeBefore, 'reduced-motion evolution must remain static');
-  }
   await page.screenshot({
     path: path.join(outDir, `${testCase.symbol}-${testCase.width}x${testCase.height}${testCase.reducedMotion === 'reduce' ? '-reduced' : ''}.png`),
   });
-  if (testCase.symbol === 'b' && testCase.width === 1440 && testCase.reducedMotion === 'no-preference') {
-    const activeBefore = await page.locator('[data-landing-module="evolution"] [aria-pressed="true"]').textContent();
-    await page.emulateMedia({ reducedMotion: 'reduce' });
-    await page.waitForTimeout(2800);
-    const activeAfter = await page.locator('[data-landing-module="evolution"] [aria-pressed="true"]').textContent();
-    assert.equal(activeAfter, activeBefore, 'runtime reduced-motion switch must cancel evolution auto-advance');
-  }
   if (testCase.symbol === 'a' && testCase.reducedMotion === 'no-preference' && [390, 1440].includes(testCase.width)) {
-    for (const moduleName of ['evolution', 'hermes', 'trust']) {
-      const module = page.locator(`[data-landing-module="${moduleName}"]`);
-      await module.scrollIntoViewIfNeeded();
-      assert.equal(await module.isVisible(), true, `${moduleName} must remain visible below the fold`);
-    }
+    const openRo = page.locator('[data-landing-module="open-ro"]');
+    await openRo.scrollIntoViewIfNeeded();
+    assert.equal(await openRo.isVisible(), true, 'Open RO anatomy must remain visible below the fold');
+    assert.equal(await openRo.locator('[data-sdf-node]').count(), 6, 'Open RO anatomy must expose all six SDF layers');
     await page.screenshot({
       fullPage: true,
       path: path.join(outDir, `a-${testCase.width}x${testCase.height}-full.png`),

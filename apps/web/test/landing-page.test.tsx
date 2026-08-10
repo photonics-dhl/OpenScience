@@ -21,6 +21,17 @@ vi.mock('next-intl', () => ({
       'latest.item1': 'Original evidence stays attached',
       'latest.item2': 'Structure remains inspectable',
       'latest.item3': 'Every version stays citable',
+      'openRo.eyebrow': 'Open Research Object',
+      'openRo.title': 'One object. Six evidence layers.',
+      'openRo.description': 'Research remains connected under one stable identity.',
+      'openRo.action': 'Open the public index',
+      'openRo.stableId': 'Stable identity',
+      'openRo.node1': 'Problem',
+      'openRo.node2': 'Insight',
+      'openRo.node3': 'Method',
+      'openRo.node4': 'Results',
+      'openRo.node5': 'Limitations',
+      'openRo.node6': 'Reproducibility',
       'trust.title': 'Open, but trusted.',
       'trust.subtitle': 'Versions, licenses, reviews, and evidence stay traceable.',
     };
@@ -46,19 +57,20 @@ describe('Optical Editorial landing page', () => {
     return renderToStaticMarkup(await Page());
   }
 
-  it('keeps the complete visual prototype around the interactive bilingual headline', async () => {
+  it('uses the pre-distortion Optical Editorial composition without legacy media', async () => {
     const markup = await renderLandingPage();
     const text = markup.replace(/<[^>]+>/g, '');
     expect(text).toContain('Science');
     expect(text).toContain('evolves.');
     expect(text).toContain('科学，持续演化。');
     expect(markup.match(/data-vermilion-marker=/g)).toHaveLength(1);
-    expect(markup).toContain('data-hero-loop-policy="desktop-motion-only"');
+    expect(markup).toContain('data-landing-art-direction="optical-editorial-v3"');
     expect(markup).not.toContain('<video');
-    expect(markup).toContain('ro-loop-poster.webp');
-    expect(markup).toContain('data-landing-module="evolution"');
-    expect(markup).toContain('data-landing-module="hermes"');
-    expect(markup).toContain('data-landing-module="trust"');
+    expect(markup).not.toContain('ro-loop');
+    expect(markup).not.toContain('data-hero-loop-policy');
+    expect(markup).not.toContain('data-landing-module="evolution"');
+    expect(markup).not.toContain('data-landing-module="hermes"');
+    expect(markup).not.toContain('data-landing-module="trust"');
   });
 
   it('keeps Create, Explore and standalone login as real destinations', async () => {
@@ -83,15 +95,26 @@ describe('Optical Editorial landing page', () => {
     expect(markup).not.toContain('OS / 00—∞');
   });
 
-  it('keeps the optical text as real DOM while adding local distortion layers', async () => {
+  it('keeps one semantic headline while the optical field carries interaction', async () => {
     const markup = await renderLandingPage();
     expect(markup).toContain('data-optical-text-stage="true"');
     expect(markup).toContain('data-optical-text-base="true"');
     expect(markup).toContain('data-optical-text-distorted="true"');
-    expect(markup).toContain('data-optical-text-chromatic="true"');
     expect(markup).toContain('id="os-local-distortion"');
-    expect(markup).toContain('MOVE POINTER ACROSS THE TYPE');
+    expect(markup.match(/<h1\b/g)).toHaveLength(1);
     expect(markup.match(/data-vermilion-marker=/g)).toHaveLength(1);
+    expect(markup).toContain('data-optical-glyph-safe-zone="true"');
+    expect(markup).toContain('data-diffraction-aperture="true"');
+  });
+
+  it('uses the next viewport for a complete Open RO anatomy instead of principle placeholders', async () => {
+    const markup = await renderLandingPage();
+    expect(markup).toContain('data-landing-module="open-ro"');
+    expect(markup).toContain('data-open-ro-index="true"');
+    expect(markup.match(/data-sdf-node=/g)).toHaveLength(6);
+    expect(markup).toContain('Open Research Object');
+    expect(markup).toContain('href="/explore"');
+    expect(markup).not.toContain('data-landing-module="principles"');
   });
 
   it('renders the Explore index with paper-tone navigation', async () => {

@@ -351,6 +351,19 @@
       "label2": "结构",
       "label3": "引用"
     },
+    "openRo": {
+      "eyebrow": "开放科研对象",
+      "title": "一个对象，六层可检验证据。",
+      "description": "论文、数据、代码与讨论始终绑定同一个稳定身份，并在每次演化中保留来源与版本。",
+      "action": "打开公开科研索引",
+      "stableId": "稳定身份",
+      "node1": "问题",
+      "node2": "洞见",
+      "node3": "方法",
+      "node4": "结果",
+      "node5": "局限",
+      "node6": "可复现性"
+    },
     "evolution": {
       "title": "研究如何演化",
       "stages": {
@@ -406,6 +419,18 @@
     }
   },
   "auth": {
+    "identity": {
+      "skipToForm": "跳转到身份表单",
+      "loginEyebrow": "科研身份 / 登录",
+      "verificationEyebrow": "科研身份 / 验证",
+      "tagline": "身份 · 来源 · 连续性",
+      "createEyebrow": "科研身份 / 01",
+      "createTitle": "证据，从可验证的作者开始。",
+      "createDescription": "同一身份贯穿研究对象、版本、贡献与审阅；平台记录事实，但不替你裁定成果归属。",
+      "returnEyebrow": "科研身份 / 返回",
+      "returnTitle": "回到研究，而不是信息流。",
+      "returnDescription": "继续最近的研究对象，只处理真正需要你判断的任务。"
+    },
     "register": {
       "title": "创建科研账户",
       "description": "使用个人或机构邮箱获取验证码，无需在此填写邀请码。",

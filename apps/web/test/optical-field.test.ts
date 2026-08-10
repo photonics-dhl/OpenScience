@@ -1,7 +1,14 @@
 import { describe, expect, it } from 'vitest';
 import { readFileSync } from 'node:fs';
 
-import { releaseOpticalInteraction, sampleOpticalField, textDisplacementScale } from '../lib/optical-field/field-model';
+import {
+  releaseOpticalInteraction,
+  sampleDiffractionWavefront,
+  sampleOpticalField,
+  smoothOpticalPoint,
+  textDisplacementScale,
+  OPTICAL_POINTER_RESPONSE_MS,
+} from '../lib/optical-field/field-model';
 
 describe('pointer-local optical field model', () => {
   it('pins a known active sample instead of only comparing the function to itself', () => {
@@ -68,5 +75,36 @@ describe('pointer-local optical field model', () => {
       pressed: false,
     });
     expect(releaseOpticalInteraction(held, 1_100, true)).toBeNull();
+  });
+
+  it('eases toward pointer targets instead of binding the field directly to mousemove', () => {
+    const current = { x: 0, y: 0 };
+    const target = { x: 100, y: 50 };
+    const first = smoothOpticalPoint(current, target, 16);
+    const second = smoothOpticalPoint(first, target, 16);
+
+    expect(first.x).toBeGreaterThan(0);
+    expect(first.x).toBeLessThan(100);
+    expect(first.y).toBeGreaterThan(0);
+    expect(second.x).toBeGreaterThan(first.x);
+    expect(second.x).toBeLessThan(100);
+  });
+
+  it('uses a responsive optical tracking constant without snapping to the target', () => {
+    expect(OPTICAL_POINTER_RESPONSE_MS).toBe(58);
+    const first = smoothOpticalPoint({ x: 0, y: 0 }, { x: 100, y: 0 }, 16);
+    expect(first.x).toBeGreaterThan(20);
+    expect(first.x).toBeLessThan(100);
+  });
+
+  it('builds a slit diffraction wavefront that spreads symmetrically from the aperture', () => {
+    const aperture = { x: 500, y: 250 };
+    const upper = sampleDiffractionWavefront(aperture, 3, -1, 0);
+    const lower = sampleDiffractionWavefront(aperture, 3, 1, 0);
+
+    expect(upper.x).toBeGreaterThan(aperture.x);
+    expect(lower.x).toBe(upper.x);
+    expect(upper.y).toBeLessThan(aperture.y);
+    expect(lower.y - aperture.y).toBeCloseTo(aperture.y - upper.y, 5);
   });
 });

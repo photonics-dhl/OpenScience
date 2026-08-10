@@ -91,7 +91,7 @@
 - [x] Implement 160–200px pointer radius, 8–14px maximum visual displacement, 400–600ms recovery and ≤35% mobile density.
 - [x] Follow-up optical text pass: keep the headline as selectable DOM text while adding pointer-local SVG displacement, chromatic focus, mask falloff and a vermilion focus ring from `OpenScience_Text_Distortion_Demo.html`.
 - [x] Capture 1440×900, 1920×1080 and 390×844 normal/reduced motion; commit `feat(web): replace landing with optical editorial medium`.
-- [x] Regression correction: restore the approved RO loop/ambient visual prototype and Evolution/Hermes/Trust narrative modules, then apply the local text interaction to its original `Science evolves` headline instead of replacing the page with typography alone. Browser gate must directly assert local SVG displacement, desktop-only video policy, reduced-motion static evolution and below-fold module visibility.
+- [x] Regression correction: restore the approved `80c8312` Optical Editorial composition, keep one semantic headline plus one decorative distortion layer, add glyph safety, frame-time interpolation, fixed slit diffraction and a complete paper `OPEN RO.` second screen; do not restore the v3-prohibited RO loop, orbit, video or card narrative modules.
 
 ### Task 5: Rebuild RO Workspace as Three Stable Work Planes
 
@@ -123,10 +123,10 @@
 
 **Interfaces:** Preserves `request-signup-code`, `confirm-signup`, `login`, `safeReturnTo` and cookies; supports standalone sign-in and Create-intent return.
 
-- [ ] Add failing tests for two-step code registration, compact fields, safe returnTo, standalone sign-in, retryable errors and focus transfer.
-- [ ] Verify RED; implement IdentityShell brand/form planes.
-- [ ] Run stubbed E2E and compiled Next + real Fastify signup E2E; require successful session assertion.
-- [ ] Capture desktop/mobile error and success; commit `feat(web): integrate research identity auth experience`.
+- [x] Add failing tests for two-step code registration, compact fields, safe returnTo, standalone sign-in, retryable errors and focus transfer.
+- [x] Verify RED; implement IdentityShell brand/form planes.
+- [x] Run stubbed E2E and compiled Next + real Fastify signup E2E; require successful session assertion.
+- [x] Capture desktop/mobile error and success; commit `feat(web): integrate research identity auth experience`.
 
 ### Task 8: Complete the Mixed-Material Evidence Intake
 
