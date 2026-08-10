@@ -46,7 +46,7 @@ export function renderProvenanceArtifact(record) {
 async function seedConfirmed(plan) {
   if (!process.env.DATABASE_URL) throw new Error('DATABASE_URL is required with --confirm');
   const [{ PrismaClient }, storageModule] = await Promise.all([
-    import('@prisma/client'), import('@openscience/storage'),
+    import('@prisma/client'), import('../packages/storage/dist/index.js'),
   ]);
   const prisma = new PrismaClient();
   const storage = storageModule.createStorageAdapter(storageModule.storageConfigFromEnv());

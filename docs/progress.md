@@ -6,6 +6,12 @@
 - **根因与修复**：改用 Node `pathToFileURL(process.argv[1]).href`，并新增跨平台入口回归测试；本地 Node tests 需重新通过后再同步。
 - **下一步**：同步此修复，重跑服务器 dry-run → `--confirm` → replay，并查询公开 index/RO 数量。
 
+## 2026-08-10（Task 10 ECS seed runtime 修复）— ⏳ workspace package 入口已修，待重同步
+
+- **现场证据**：服务器 dry-run 已输出 18 条；`--confirm` 在动态导入阶段因根脚本无法解析 workspace alias `@openscience/storage` 退出，发生在 catalog/对象存储/数据库写入之前。
+- **根因与修复**：seeder 改用仓库内 `../packages/storage/dist/index.js` 运行时入口，并扩展跨平台/运行时入口测试。
+- **下一步**：同步后重跑确认写入、replay 与 live public index。
+
 ## 2026-08-10（Optical Editorial v3 Task 9 检查点）— ⏳ Dashboard 完成，Live2D 许可门禁待确认
 
 - **真实任务契约**：修正 Dashboard 把 `AgentTask.id` 传给只接受 `IngestionTask.id` 的 Hermes 页面这一阻断；新增登录态 `GET /ingestion?actionable=true`，领域层只查询 caller-owned batch，返回真实 task/RO/title/logicalPath/state，外部用户结果为空。无需数据库迁移。

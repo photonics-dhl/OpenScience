@@ -32,5 +32,6 @@ test('CLI is dry-run by default and does not require database or storage', () =>
 test('CLI entry detection is portable across Windows and POSIX paths', async () => {
   const source = await import('node:fs/promises').then((fs) => fs.readFile(new URL('./seed-demo-research.mjs', import.meta.url), 'utf8'));
   assert.match(source, /pathToFileURL\(process\.argv\[1\]\)\.href/);
+  assert.match(source, /\.\.\/packages\/storage\/dist\/index\.js/);
   assert.equal(source.includes('file:///'), false);
 });
