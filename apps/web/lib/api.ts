@@ -251,6 +251,80 @@ export async function getExploreIndex(input: {
   return request(`/api/explore?${params.toString()}`);
 }
 
+export interface EditorialMediaApi {
+  type: 'image' | 'video';
+  url: string;
+  alt: string;
+  credit: string;
+  licenseId: string;
+  sourceUrl: string;
+}
+
+export interface EditorialSelectionApi {
+  id: string;
+  collectionId: string;
+  researchObjectId: string;
+  versionId: string;
+  selectedBy: string;
+  title: string;
+  publicId: string;
+  versionNo: number;
+  sdf: Record<string, unknown>;
+  note: string;
+  media: EditorialMediaApi[];
+  sortOrder: number;
+  state: 'draft' | 'internal_review' | 'scheduled' | 'published';
+  scheduledAt: string | null;
+  publishedAt: string | null;
+  disclosure: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface EditorialCollectionApi {
+  id: string;
+  slug: string;
+  title: string;
+  description: string;
+  selections: EditorialSelectionApi[];
+}
+
+export async function getEditorialCollection(slug: string): Promise<EditorialCollectionApi> {
+  const result = await request<{ collection: EditorialCollectionApi }>(`/api/editorial/collections/${encodeURIComponent(slug)}`);
+  return result.collection;
+}
+
+export interface EditorialCandidateApi {
+  publicId: string;
+  title: string;
+  versionId: string;
+  versionNo: number;
+}
+
+export async function getEditorialCandidates(): Promise<EditorialCandidateApi[]> {
+  const result = await request<{ candidates: EditorialCandidateApi[] }>('/admin/editorial/candidates');
+  return result.candidates;
+}
+
+export async function getAdminEditorialCollection(slug: string): Promise<EditorialCollectionApi> {
+  const result = await request<{ collection: EditorialCollectionApi }>(`/admin/editorial/collections/${encodeURIComponent(slug)}/selections`);
+  return result.collection;
+}
+
+export async function createEditorialSelectionApi(slug: string, input: { versionId: string; note?: string; media?: EditorialMediaApi[] }): Promise<EditorialSelectionApi> {
+  const result = await request<{ selection: EditorialSelectionApi }>(`/admin/editorial/collections/${encodeURIComponent(slug)}/selections`, {
+    method: 'POST', body: JSON.stringify(input),
+  });
+  return result.selection;
+}
+
+export async function transitionEditorialSelectionApi(id: string, state: EditorialSelectionApi['state'], scheduledAt?: string): Promise<EditorialSelectionApi> {
+  const result = await request<{ selection: EditorialSelectionApi }>(`/admin/editorial/selections/${id}/transition`, {
+    method: 'POST', body: JSON.stringify({ state, scheduledAt }),
+  });
+  return result.selection;
+}
+
 export interface WorkspaceApi {
   id: string;
   name: string;

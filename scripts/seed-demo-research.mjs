@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 import { createHash } from 'node:crypto';
+import { Buffer } from 'node:buffer';
 import { pathToFileURL } from 'node:url';
 
 import { DEMO_RESEARCH_CORPUS } from './demo-research-corpus.mjs';

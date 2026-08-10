@@ -24,6 +24,8 @@ import { registerAgentRoutes } from './routes/agent';
 import { registerAppealRoutes } from './routes/appeals';
 import { registerResearchRoutes } from './routes/research';
 import { registerExploreRoutes } from './routes/explore';
+import { registerEditorialRoutes } from './routes/editorial';
+import { registerAdminEditorialRoutes } from './routes/admin-editorial';
 import { registerSandboxJobsRoutes } from './routes/sandbox-jobs';
 import { registerRateLimit } from './security/rate-limit';
 import { registerSecurity, type SecurityOptions } from './security/security';
@@ -88,6 +90,7 @@ export async function buildApp(opts: BuildAppOptions): Promise<FastifyInstance> 
   await app.register(async (instance) => registerWorkspaceRoutes(instance, opts), { prefix: '/workspaces' });
   await app.register(async (instance) => registerAdminRoutes(instance, opts), { prefix: '/admin' });
   await app.register(async (instance) => registerAdminUsageRoutes(instance, opts), { prefix: '/admin' });
+  await app.register(async (instance) => registerAdminEditorialRoutes(instance, opts), { prefix: '/admin' });
   await app.register(async (instance) => registerUsageRoutes(instance, opts), { prefix: '/usage' });
   await app.register(async (instance) => registerResearchObjectRoutes(instance, opts), {});
   await app.register(async (instance) => registerBranchRoutes(instance, opts), {});
@@ -99,6 +102,7 @@ export async function buildApp(opts: BuildAppOptions): Promise<FastifyInstance> 
   await app.register(async (instance) => registerAppealRoutes(instance, opts), {});
   await app.register(async (instance) => registerResearchRoutes(instance, opts), {});
   await app.register(async (instance) => registerExploreRoutes(instance, opts), {});
+  await app.register(async (instance) => registerEditorialRoutes(instance, opts), {});
   await app.register(async (instance) => registerSandboxJobsRoutes(instance, opts), {});
   if (opts.storage) {
     const storage = opts.storage;

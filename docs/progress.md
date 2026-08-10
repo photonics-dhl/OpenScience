@@ -1,5 +1,13 @@
 # OpenScience (XGS) 进度日志
 
+## 2026-08-10（Task 11 Editorial Curator 本地切片）— ⏳ API/UI 完成，待迁移与 ECS 验收
+
+- **数据合同**：migration 26 新增 `editorial_collections` 与 `editorial_selections`；精选固定 `researchObjectId + versionId`，保存 title/publicId/versionNo/SDF 快照，媒体必须提供 HTTPS URL、alt、credit、licenseId、sourceUrl。published selection 不可编辑，源 RO/version 仍须 public/published 才公开显示。
+- **状态机与权限**：`draft → internal_review → scheduled → published`，平台管理员独占策展写入；普通用户/普通 moderator 不能访问候选或队列。公开文案明确“Editorial selection, not peer-review acceptance”。
+- **接口与页面**：匿名 `GET /editorial/collections/:slug`；管理员候选、队列、创建、编辑、状态推进 API；公开 `/collections/[slug]` 纸面期刊页；`/editorial/curator` 管理工作台可选已发布版本、录入编辑说明与媒体 provenance、推进全流程。管理请求走 Nginx Basic Auth `/admin/editorial/*`，再叠加应用 `platform_admin` 与 CSRF。
+- **门禁**：全仓 test 通过（Web 147/147；新增 domain 4/4、API route 3/3）；root typecheck/build、Prisma validate（dummy non-secret URL）、Next production build、lint、docs:lint 0、docs-sync、Nginx/deploy/seed Node tests 8/8、敏感差异扫描全部通过。
+- **下一步**：完整门禁与安全审查 → 服务器备份 → migration 26 deploy → 应用重启 → 用平台管理员真实 session 建立一条精选并推进 published → HTTPS collection/admin 页面验收。
+
 ## 2026-08-10（Task 10 Explore 与启动语料）— ✅ ECS 已上线并完成 live 验收
 
 - **现场证据**：18 条启动语料 confirmed seed，replay `created=0 existing=18`；部署脚本补齐 bind-mounted `api web agent-worker` 应用重启（数据服务未重启）。

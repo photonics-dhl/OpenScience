@@ -1283,15 +1283,16 @@
         "id": "11",
         "title": "交付 Ultrafast Science Collection 与 scoped Editorial Curator",
         "description": "在 Public RO 事实身份上增加期刊策展层，支持候选、媒体、编辑说明、排序、排期和 draft→internal review→scheduled→published。",
-        "status": "pending",
+        "status": "in-progress",
         "dependencies": [
           "6",
           "10"
         ],
         "priority": "high",
-        "details": "计划 Task 11。绑定 researchObjectId+selected version；Selected by 不等于同行评审；角色权限 scoped；需要时走 API/migration/security skills。",
+        "details": "计划 Task 11。本地实现完成：migration 26 additive collection/selection + rollback；固定 researchObjectId/versionId 与 title/publicId/versionNo/SDF 快照；HTTPS media provenance；platform_admin scoped candidates/queue/create/update/transition API；公开 /collections/[slug] 与 /editorial/curator，管理请求保留 Nginx Basic Auth /admin/* + platform_admin + CSRF。domain 4/4、API 3/3、Web 1/1、typecheck/build 通过。待 ECS migration/live admin→published 验收。",
         "testStrategy": "authorization/immutable snapshot/public label integration；editorial state/UI render tests。",
-        "subtasks": []
+        "subtasks": [],
+        "updatedAt": "2026-08-10T12:30:00.000Z"
       },
       {
         "id": "12",

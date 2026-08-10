@@ -61,6 +61,7 @@ model User {
   agentApprovals           ToolApproval[]        @relation("ToolApprover")
   appealsFiled             Appeal[]              @relation("Appellant")
   appealsModerated         Appeal[]              @relation("Moderator")
+  selectedEditorialEntries EditorialSelection[] @relation("EditorialSelector")
 
   @@map("users")
 }
@@ -373,6 +374,7 @@ model ResearchObject {
   aiReviews          AiReview[]
   appeals            Appeal[]
   ingestionBatches   IngestionBatch[]
+  editorialSelections EditorialSelection[]
 
   @@index([workspaceId])
   @@map("research_objects")
@@ -532,6 +534,7 @@ model Version {
   appeals            Appeal[]
   parentVersion      Version?            @relation("VersionParent", fields: [parentVersionId], references: [id], onDelete: SetNull)
   childVersions      Version[]           @relation("VersionParent")
+  editorialSelections EditorialSelection[]
 
   @@unique([researchObjectId, versionNo])
   @@index([researchObjectId])
@@ -590,6 +593,60 @@ model Publication {
 
   @@index([versionId])
   @@map("publications")
+}
+
+// --- Optical Editorial v3 Task 11：期刊策展层（不改变 RO/Version 事实身份）---
+
+enum EditorialSelectionState {
+  draft
+  internal_review
+  scheduled
+  published
+}
+
+model EditorialCollection {
+  id          String   @id @default(uuid()) @db.Uuid
+  slug        String   @unique
+  title       String
+  description String
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  selections EditorialSelection[]
+
+  @@map("editorial_collections")
+}
+
+model EditorialSelection {
+  id                   String                  @id @default(uuid()) @db.Uuid
+  collectionId         String                  @map("collection_id") @db.Uuid
+  researchObjectId     String                  @map("research_object_id") @db.Uuid
+  versionId            String                  @map("version_id") @db.Uuid
+  selectedBy           String                  @map("selected_by") @db.Uuid
+  titleSnapshot        String                  @map("title_snapshot")
+  publicIdSnapshot     String                  @map("public_id_snapshot")
+  versionNoSnapshot    Int                     @map("version_no_snapshot")
+  sdfSnapshot          Json                    @map("sdf_snapshot")
+  note                 String                  @default("")
+  media                Json                    @default("[]")
+  disclosure           String
+  sortOrder            Int                     @default(0) @map("sort_order")
+  state                EditorialSelectionState @default(draft)
+  scheduledAt          DateTime?               @map("scheduled_at")
+  publishedAt          DateTime?               @map("published_at")
+  createdAt            DateTime                @default(now()) @map("created_at")
+  updatedAt            DateTime                @updatedAt @map("updated_at")
+
+  collection     EditorialCollection @relation(fields: [collectionId], references: [id], onDelete: Cascade)
+  researchObject ResearchObject      @relation(fields: [researchObjectId], references: [id], onDelete: Restrict)
+  version        Version             @relation(fields: [versionId], references: [id], onDelete: Restrict)
+  selector       User                @relation("EditorialSelector", fields: [selectedBy], references: [id], onDelete: Restrict)
+
+  @@unique([collectionId, researchObjectId, versionId])
+  @@index([collectionId, state, sortOrder])
+  @@index([researchObjectId])
+  @@index([versionId])
+  @@map("editorial_selections")
 }
 
 // --- P1B-7：RO 可见性模型（§4.2 三态 + §4.2 扩大显式审批记录 + §17 越权防护）---

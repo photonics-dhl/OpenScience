@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
+import { URL } from 'node:url';
 
 import { buildSeedPlan, renderProvenanceArtifact } from './seed-demo-research.mjs';
 

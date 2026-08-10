@@ -1,4 +1,5 @@
 import type { PublicResearchVersion } from './api';
+import type { EditorialCollectionApi } from './api';
 
 export class PublicServerApiError extends Error {
   constructor(public readonly status: number, message: string) {
@@ -24,4 +25,8 @@ export async function getLatestPublicResearchVersion(publicId: string) {
   const overview = await serverRequest<{ research: { latestVersion: number | null } }>(`/research/${encodeURIComponent(publicId)}`);
   if (!overview.research.latestVersion) throw new PublicServerApiError(404, 'No public version');
   return getServerPublicResearchVersion(publicId, overview.research.latestVersion);
+}
+
+export function getPublicEditorialCollection(slug: string) {
+  return serverRequest<{ collection: EditorialCollectionApi }>(`/editorial/collections/${encodeURIComponent(slug)}`);
 }

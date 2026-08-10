@@ -191,5 +191,12 @@ export { checkPythonScript, modifyScriptStub, type PolicyCheckResult } from './s
 export { IngestionError, type IngestionErrorCode } from './ingestion/errors';
 export { EXPLORE_ARTIFACT_TYPES, classifyExploreArtifact, listPublicResearchIndex, type ExploreArtifactType, type ResearchIndexItem, type ResearchIndexPage } from './explore/explore';
 export { INGESTION_EXTENSIONS, assertSupportedIngestionFile } from './ingestion/format-policy';
+export { EditorialError, type EditorialErrorCode } from './editorial/errors';
+export {
+  EDITORIAL_DISCLOSURE, EDITORIAL_STATES, assertEditorialRole, assertEditorialTransition,
+  validateEditorialMedia, buildEditorialSnapshot, createEditorialSelection, updateEditorialSelection,
+  transitionEditorialSelection, listEditorialSelections, getPublicEditorialCollection,
+  type EditorialState, type EditorialMedia, type EditorialSelectionView, type EditorialCollectionView,
+} from './editorial/editorial';
 export { INGESTION_TASK_STATES, type ActionableIngestionTaskView, type IngestionTaskState, type IngestionFileInput, type IngestionTaskView, type IngestionBatchView } from './ingestion/ingestion-types';
 export { authorizeIngestionWrite, confirmIngestionTask, createIngestionBatch, getIngestionBatch, getIngestionTask, listActionableIngestionTasks, retryIngestionTask, type IngestionDeps } from './ingestion/ingestion-service';

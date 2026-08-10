@@ -172,10 +172,12 @@ Checkpoint 2026-08-10: anonymous cursor API, numbered paper index, search/field/
 
 **Interfaces:** Selections bind `researchObjectId` + version and include selectedBy/selectedAt/note/media/schedule; scoped Editorial Curator never implies peer-review acceptance.
 
-- [ ] Use `api-contract`, `database-migration` and `security-review` if existing models cannot represent selection safely.
-- [ ] Write failing scoped authorization, immutable snapshot and public-label tests.
-- [ ] Write failing UI tests for media provenance, ordering, preview and draft → internal review → scheduled → published.
-- [ ] Implement API/domain and both pages; commit `feat(editorial): add ultrafast science curation`.
+- [x] Use `api-contract`, `database-migration` and `security-review`; migration 26 is additive and has rollback.
+- [x] Write failing scoped authorization, immutable snapshot and public-label tests.
+- [x] Write failing UI tests for media provenance, ordering, preview and draft → internal review → scheduled → published.
+- [x] Implement API/domain and both pages; local implementation checkpoint complete.
+
+Checkpoint 2026-08-10: migration 26, immutable version-bound editorial selections, scoped curator APIs, public `/collections/[slug]` and curator `/editorial/curator` are implemented. Admin requests use the Nginx Basic Auth `/admin/editorial/*` prefix plus application role and CSRF. Domain 4/4, API 3/3, Web 1/1, typechecks and Next build pass. ECS migration and real admin→published flow remain before acceptance.
 
 ### Task 12: Close Visual Consistency Across Remaining Product Surfaces
 

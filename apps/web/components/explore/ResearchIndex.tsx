@@ -35,7 +35,6 @@ export function ResearchIndex({ initialPage }: { initialPage?: ResearchIndexPage
   useEffect(() => {
     if (initialPage === undefined) void load();
     // Initial public fetch only; subsequent requests are explicit form actions.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   return (

@@ -1,5 +1,5 @@
 import { AuthError, type AuthErrorCode } from '@openscience/auth';
-import { AgentError, AppealError, ApprovalError, ArtifactError, AuthorError, BranchError, CommitError, ForkError, IngestionError, IssueError, LicenseError, NotificationError, PrError, PublishError, ResearchObjectError, ReviewError, UsageError, VisibilityError, WorkspaceError, type WorkspaceErrorCode } from '@openscience/domain';
+import { AgentError, AppealError, ApprovalError, ArtifactError, AuthorError, BranchError, CommitError, EditorialError, ForkError, IngestionError, IssueError, LicenseError, NotificationError, PrError, PublishError, ResearchObjectError, ReviewError, UsageError, VisibilityError, WorkspaceError, type WorkspaceErrorCode } from '@openscience/domain';
 import { buildErrorBody, type ErrorBody } from '@openscience/observability';
 
 const AUTH_ERROR_HTTP: Record<AuthErrorCode, number> = {
@@ -172,10 +172,23 @@ const PUBLISH_ERROR_HTTP: Record<PublishError['code'], number> = {
   ILLEGAL_TRANSITION: 409,
 };
 
+const EDITORIAL_ERROR_HTTP: Record<EditorialError['code'], number> = {
+  NOT_FOUND: 404,
+  FORBIDDEN: 403,
+  VERSION_NOT_PUBLIC: 409,
+  DUPLICATE_SELECTION: 409,
+  INVALID_MEDIA: 400,
+  ILLEGAL_TRANSITION: 409,
+  IMMUTABLE_SELECTION: 409,
+};
+
 export type { ErrorBody };
 
 /** 统一错误映射（2.6 扩展为全局标准前的最小版：/auth + /workspaces + /usage）；requestId 三方串联（Spec §17）。 */
 export function httpStatusForError(err: unknown, requestId?: string): { status: number; body: ErrorBody } {
+  if (err instanceof EditorialError) {
+    return { status: EDITORIAL_ERROR_HTTP[err.code], body: buildErrorBody(err.code, err.message, requestId) };
+  }
   if (err instanceof AuthError) {
     return { status: AUTH_ERROR_HTTP[err.code], body: buildErrorBody(err.code, err.message, requestId) };
   }
