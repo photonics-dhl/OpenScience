@@ -7,7 +7,7 @@ import { vi } from 'vitest';
 
 vi.mock('next-intl', () => ({
   useTranslations: () => (key: string, values?: { count?: number }) => key === 'mediaCount' ? `${values?.count ?? 0} media / evidence` : ({
-    edition: 'Journal selection · v1', eyebrow: 'Ultrafast Science / Selected Research', descriptionSuffix: 'Every entry remains versioned.',
+    edition: 'Journal selection · v1', eyebrow: 'Ultrafast Science / Selected Research', description: 'Every entry remains versioned.', noMedia: 'Version evidence linked',
     empty: 'The first issue is being composed.', defaultNote: 'Selected Research Object.', selected: 'Selected editorially', read: 'Read the object', source: 'source',
     editorialNote: 'Editorial note', disclosure: 'Editorial selection, not peer-review acceptance.', browse: 'Browse the full Research Index',
   } as Record<string, string>)[key] ?? key,

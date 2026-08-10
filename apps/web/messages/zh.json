@@ -666,10 +666,11 @@
   "editorial": {
     "edition": "期刊精选 · 第一期",
     "eyebrow": "Ultrafast Science / 精选研究",
-    "descriptionSuffix": "每条内容仍是独立版本化的 Research Object，并保留其 SDF、证据、许可和评审历史。",
+    "description": "以期刊策展方式组织版本化的 OpenScience Research Object；每条内容仍保留其 SDF、证据、许可和评审历史。",
     "empty": "第一期内容正在编排中。",
     "defaultNote": "一个按确切版本保存、具备明确证据与来源链的精选 Research Object。",
     "mediaCount": "{count} 项媒体 / 证据",
+    "noMedia": "已绑定版本证据",
     "selected": "编辑精选",
     "read": "阅读科研对象",
     "source": "来源",

@@ -666,10 +666,11 @@
   "editorial": {
     "edition": "Journal selection · v1",
     "eyebrow": "Ultrafast Science / Selected Research",
-    "descriptionSuffix": "Every entry remains a versioned Research Object with its own SDF, evidence, licence and review history.",
+    "description": "A journal-curated reading layer over versioned OpenScience Research Objects. Every entry retains its SDF, evidence, licence and review history.",
     "empty": "The first issue is being composed.",
     "defaultNote": "A selected Research Object, preserved as a citable version with explicit evidence and provenance.",
     "mediaCount": "{count} media / evidence",
+    "noMedia": "Version evidence linked",
     "selected": "Selected editorially",
     "read": "Read the object",
     "source": "source",

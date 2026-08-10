@@ -17,7 +17,7 @@ export function EditorialCollection({ collection }: { collection: EditorialColle
             <p className="mb-5 font-data text-xs uppercase tracking-[0.2em] text-os-vermilion">{t('eyebrow')}</p>
             <h1 className="m-0 max-w-5xl font-editorial text-[clamp(4rem,10vw,10.5rem)] font-normal leading-[0.82] tracking-[-0.07em]">{collection.title}</h1>
           </div>
-          <p className="m-0 max-w-xl text-lg leading-8 text-os-muted-paper">{collection.description} {t('descriptionSuffix')}</p>
+          <p className="m-0 max-w-xl text-lg leading-8 text-os-muted-paper">{t('description')}</p>
         </header>
         <div className="grid gap-10 py-10 lg:grid-cols-[minmax(0,1fr)_18rem]">
           <ol className="m-0 list-none p-0">
@@ -32,7 +32,7 @@ export function EditorialCollection({ collection }: { collection: EditorialColle
                     <span className="mt-5 block font-data text-[0.65rem] uppercase tracking-[0.16em] text-os-muted-paper">{selection.publicId} · v{selection.versionNo}</span>
                   </span>
                   <span className="grid content-start gap-3 font-data text-[0.65rem] uppercase tracking-[0.12em] text-os-muted-paper lg:text-right">
-                    <span>{t('mediaCount', { count: selection.media.length })}</span>
+                    <span>{selection.media.length ? t('mediaCount', { count: selection.media.length }) : t('noMedia')}</span>
                     <span>{t('selected')}</span>
                     <span className="text-os-vermilion">{t('read')} ↗</span>
                   </span>
