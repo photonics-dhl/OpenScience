@@ -82,6 +82,17 @@ describe('Optical Editorial landing page', () => {
     expect(renderToStaticMarkup(await ExplorePage())).toContain('data-explore-index="true"');
   });
 
+  it('keeps the optimized hero hierarchy without fabricated metadata', async () => {
+    const markup = await renderLandingPage();
+    expect(markup).toContain('data-hero-action="primary"');
+    expect(markup).toContain('data-hero-action="secondary"');
+    expect(markup.indexOf('href="/explore"')).toBeLessThan(markup.indexOf('href="/research-objects/new"'));
+    expect(markup).not.toContain('data-hero-metadata-legend');
+    expect(markup).not.toContain('optical-cursor-ring');
+    expect(markup).toContain('font-editorial-latin');
+    expect(markup).toContain('font-editorial-cjk');
+  });
+
   it('uses the shared public shell and a decorative-only optical field', async () => {
     const markup = await renderLandingPage();
     expect(markup).toContain('data-os-surface="public"');

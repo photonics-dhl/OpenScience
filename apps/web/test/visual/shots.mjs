@@ -37,6 +37,14 @@ for (const testCase of cases) {
   await page.evaluate(() => document.fonts.ready.then(() => true));
   assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth), true, 'landing must not overflow horizontally');
   assert.equal(await page.locator('h1').count(), 1, 'landing must expose one semantic headline');
+  const headline = page.locator('[data-optical-text-base="true"]');
+  const evolves = page.locator('[data-optical-evolves="true"]').first();
+  const fontFamily = await evolves.evaluate((node) => getComputedStyle(node).fontFamily);
+  assert.match(fontFamily, /Bodoni|editorial/i, 'evolves must use the Latin editorial face');
+  assert.equal(await page.locator('.optical-cursor-ring').count(), 0, 'large cursor ring must be removed');
+  if (testCase.width >= 1280) {
+    assert.equal(await headline.getAttribute('data-headline-layout'), 'single-axis');
+  }
   if (testCase.reducedMotion === 'no-preference') {
     const stage = page.locator('[data-optical-text-stage="true"]');
     const bounds = await stage.boundingBox();
