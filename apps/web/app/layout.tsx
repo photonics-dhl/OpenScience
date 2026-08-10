@@ -62,6 +62,7 @@ export default async function RootLayout({ children }: { children: ReactNode }) 
 
   return (
     <html
+      suppressHydrationWarning
       lang={locale === "zh" ? "zh-CN" : "en"}
       className={`${displayGrotesk.variable} ${editorialSerif.variable} ${dataMono.variable} ${cjkSerif.variable}`}
     >

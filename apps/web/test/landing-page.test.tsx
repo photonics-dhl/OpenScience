@@ -1,4 +1,5 @@
 import * as React from 'react';
+import { readFileSync } from 'node:fs';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { beforeAll, describe, expect, it, vi } from 'vitest';
 
@@ -62,6 +63,12 @@ describe('Optical Editorial landing page', () => {
     const { default: Page } = await import('../app/page');
     return renderToStaticMarkup(await Page());
   }
+
+  it('declares the intentional pre-hydration html class mutation', () => {
+    const layoutSource = readFileSync(new URL('../app/layout.tsx', import.meta.url), 'utf8');
+    expect(layoutSource).toContain('<html\n      suppressHydrationWarning');
+    expect(layoutSource).toContain("document.documentElement.classList.add('js')");
+  });
 
   it('uses the pre-distortion Optical Editorial composition without legacy media', async () => {
     const markup = await renderLandingPage();
