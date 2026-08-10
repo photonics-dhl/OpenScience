@@ -11,3 +11,9 @@ test('curator page obtains the admin Basic Auth realm before loading the web wor
 test('admin APIs retain the same realm and terminate at Fastify', () => {
   assert.match(source, /location \/admin\/ \{[\s\S]*?auth_basic "openscience-admin";[\s\S]*?proxy_pass http:\/\/127\.0\.0\.1:3001;/);
 });
+
+test('browser auth pages reach Next while the direct auth API remains on Fastify', () => {
+  assert.match(source, /location = \/auth\/login \{[\s\S]*?proxy_pass http:\/\/127\.0\.0\.1:3000;/);
+  assert.match(source, /location = \/auth\/register \{[\s\S]*?proxy_pass http:\/\/127\.0\.0\.1:3000;/);
+  assert.match(source, /location ~ \^\/\(auth\|agent\|sandbox-jobs\|versions\)\(\/\|\$\) \{[\s\S]*?proxy_pass http:\/\/127\.0\.0\.1:3001;/);
+});

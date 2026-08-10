@@ -8,6 +8,12 @@
 - **门禁**：Web 全量测试 150/150、Next production build、typecheck、i18n JSON 与 product matrix 全绿；尚未部署本批 web 代码。
 - **下一步**：提交后按部署 runbook 同步 ECS，验证登录态下八个真实入口、未登录 `/settings`/workspace 401/重定向、390px 无溢出与浏览器无 console error；完成后关闭 Task 12 并转 Task 13。
 
+### ECS 登录入口阻断与修复
+
+- `c05145b` 已在 ECS 全量构建并切换，公开 Landing/Explore/Settings/Collection 均可由 Chromium 读取且 390px 无横向溢出；生产 route manifest 包含五个新 RO 路由和 Settings。
+- 登录浏览器验收发现 `/auth/login` 被旧 Nginx `^/(auth|...)` API 兼容正则转发到 Fastify，返回 404；根因不是 React 页面或账号，而是 Web/API 同路径冲突。
+- 已以 TDD 增加精确 `/auth/login`、`/auth/register` → Next 路由，保留其他 `/auth/*` → Fastify；Nginx/deploy Node tests 5/5。待提交并重新部署后继续真实登录态七个 RO 表面验收。
+
 ## 2026-08-10（Task 11 Editorial Curator）— ✅ ECS 全流程上线
 
 - **数据合同**：migration 26 新增 `editorial_collections` 与 `editorial_selections`；精选固定 `researchObjectId + versionId`，保存 title/publicId/versionNo/SDF 快照，媒体必须提供 HTTPS URL、alt、credit、licenseId、sourceUrl。published selection 不可编辑，源 RO/version 仍须 public/published 才公开显示。

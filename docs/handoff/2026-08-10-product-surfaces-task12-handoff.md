@@ -6,7 +6,7 @@
 
 ## 状态
 
-Task 12 的本地实现已完成，尚未把本批 web 代码部署到 ECS。Task 11 的 Ultrafast Science 精选闭环仍在线且不应回退。
+Task 12 的页面代码 `c05145b` 已部署 ECS；真实登录验收发现并修复 Nginx `/auth/login|register` 被 API 正则截获的问题。Nginx 修复尚待提交和第二次部署。Task 11 的 Ultrafast Science 精选闭环仍在线且不应回退。
 
 ## 已完成
 
@@ -25,8 +25,8 @@ Task 12 的本地实现已完成，尚未把本批 web 代码部署到 ECS。Tas
 
 ## 下一步
 
-1. 提交本批代码，使用 `infra/scripts/deploy.sh --confirm --skip-migrate <ref>` 同步 ECS；不执行迁移。
-2. 登录测试账号验证 Dashboard → 任一 RO → 八个表面；匿名检查 settings 与 workspace 权限门禁。
+1. 提交 Nginx 精确路由修复，使用 `infra/scripts/deploy.sh --confirm --skip-build --skip-migrate <ref>` 同步 ECS 并通过 `nginx -t`；本次只改反代配置。
+2. 登录测试账号验证 Dashboard → 任一 RO → 七个 RO 表面；匿名检查 settings 与 workspace 权限门禁。
 3. 以 1440 与 390 视口检查页面溢出、console error、Publish R3 Dialog 和 Sandbox 结果。
 4. 把真实服务器证据补入 `docs/progress.md`，再将 Task 12 标记 done，进入 Task 13 Figma canonical map。
 
