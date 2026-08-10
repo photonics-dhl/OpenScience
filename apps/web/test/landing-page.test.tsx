@@ -79,6 +79,17 @@ describe('Optical Editorial landing page', () => {
     expect(markup).not.toContain('OS / 00—∞');
   });
 
+  it('keeps the optical text as real DOM while adding local distortion layers', async () => {
+    const markup = await renderLandingPage();
+    expect(markup).toContain('data-optical-text-stage="true"');
+    expect(markup).toContain('data-optical-text-base="true"');
+    expect(markup).toContain('data-optical-text-distorted="true"');
+    expect(markup).toContain('data-optical-text-chromatic="true"');
+    expect(markup).toContain('id="os-local-distortion"');
+    expect(markup).toContain('MOVE POINTER ACROSS THE TYPE');
+    expect(markup.match(/data-vermilion-marker=/g)).toHaveLength(1);
+  });
+
   it('renders the Explore index with paper-tone navigation', async () => {
     const { default: ExplorePage } = await import('../app/explore/page');
     const markup = renderToStaticMarkup(await ExplorePage());

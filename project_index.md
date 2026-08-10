@@ -50,7 +50,7 @@
 | `apps/web/lib/utils.ts` | `cn` class merge 工具（Task 7.4） | 活文档 |
 | `apps/web/test/ui-components.test.ts` | 原语 storyless server-rendering 断言（Task 7.4；Task 8 追加双表面 `.surface-dark` 与 state-danger 断言） | 活文档 |
 | `apps/web/test/evolving-ro-symbol.test.tsx` | Task 7.7 Evolving RO Symbol server-rendering、变体、动效与 SVG 层级断言 | 活文档 |
-| `apps/web/components/brand/{OpticalHeadline,OpticalField}.tsx` / `apps/web/lib/optical-field/*.ts` | Optical Editorial Landing 品牌媒介：真实 DOM 双语标题、Canvas 局部半色调/证据粒子、160–200px 指针扰动与 reduced-motion 静态降级 | 活文档 |
+| `apps/web/components/brand/{OpticalHeadline,OpticalField}.tsx` / `apps/web/lib/optical-field/*.ts` | Optical Editorial Landing 品牌媒介：真实 DOM 双语标题、Canvas 局部半色调/证据粒子、pointer-local SVG 文字位移/色散/焦点环、160–200px 指针扰动与 reduced-motion 静态降级 | 活文档 |
 | `apps/web/app/explore/page.tsx` | 真实 `/explore` 公开索引入口；启动语料进入前显示诚实空状态，不以产品原则伪装研究数据 | 活文档 |
 | `apps/web/test/landing-page.test.tsx` / `apps/web/test/optical-field.test.ts` | Landing DOM/路由/朱红记忆点与 Optical Field 确定性边界、移动密度、静态降级回归门禁 | 活文档 |
 | `apps/web/test/visual/shots.mjs` | Landing 视觉截图脚本：可配置 `VISUAL_BASE_URL`，等待字体就绪，两指针状态、1440/1920/390 三尺寸及 reduced-motion | 活文档 |

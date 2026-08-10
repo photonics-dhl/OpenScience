@@ -1188,10 +1188,10 @@
           "3"
         ],
         "priority": "high",
-        "details": "计划 Task 4。真实 DOM headline；160-200px 作用半径；8-14px 位移；400-600ms 回弹；移动 ≤35% 密度；Create/Explore 真实路由。",
+        "details": "计划 Task 4。真实 DOM headline；160-200px 作用半径；8-14px 位移；400-600ms 回弹；移动 ≤35% 密度；Create/Explore 真实路由。Follow-up：依据 8.10 Text Distortion Demo 增加 pointer-local SVG displacement、mask falloff、chromatic focus 与 vermilion focus ring，base DOM 仍可选择/可访问。",
         "testStrategy": "landing RED/GREEN；1440x900、1920x1080、390x844 normal/reduced-motion screenshots；AI-slop gate。",
         "subtasks": [],
-        "updatedAt": "2026-08-09T23:33:49.640Z"
+        "updatedAt": "2026-08-10T09:06:00.000Z"
       },
       {
         "id": "5",

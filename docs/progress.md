@@ -1670,6 +1670,28 @@ MVP 交接复查发现两类文档失真：AGENTS.md 自 P1B-2（1e859df，08-03
 - 放弃旧方案0723，避免新旧需求互相干扰
 
 ---
+## 2026-08-10 — Optical Editorial v3 Task 4 follow-up：文字局部光学交互补齐
+
+### ✅ Completed
+
+| Area | Evidence |
+|---|---|
+| 原型对齐 | 读取 `docs/user_ideas/8.10/OpenScience_Text_Distortion_Demo.html`，确认差异是文字层缺少 pointer-local mask / displacement / chromatic focus，而非仅点阵背景。 |
+| 真实文字层 | `apps/web/components/brand/OpticalHeadline.tsx` 保留一个可选择、可访问的 DOM base layer，另加 `data-optical-text-distorted` 与 `data-optical-text-chromatic` 局部呈现层；朱红 marker 只保留一处。 |
+| 运行时联动 | `apps/web/components/brand/OpticalField.tsx` 将焦点坐标、半径、位移、证据强度同步到 stage CSS variables，并驱动 `#os-local-distortion` SVG filter；reduced-motion 隐藏非必要层。 |
+| 视觉测试 | `apps/web/test/landing-page.test.tsx` 新增真实 DOM / distortion layer / filter / hint 契约；landing + optical-field 11/11 通过，web typecheck 与 production build 通过。 |
+
+### ⏳ Next Steps
+
+- [ ] 在当前编译产物可用的浏览器验收环境重新截取 Landing 三视口，并检查 pointer move / press / leave / reduced-motion 状态；
+- [ ] 继续 Task Master `optical-editorial-v3` Task 6：Public RO citable paper surface。
+
+### Key Decisions
+
+- 光学效果只影响文字副本和证据媒介，不把 Canvas 当作文字来源；SSR、选中、屏幕阅读器和索引仍依赖 base DOM。
+- 不把 cyan 色散作为品牌焦点；它仅在指针局部以低透明度出现，唯一高权重焦点仍为 vermilion。
+
+---
 ## 2026-08-10 — Optical Editorial 前端重构设计门禁完成
 
 ### ✅ Completed

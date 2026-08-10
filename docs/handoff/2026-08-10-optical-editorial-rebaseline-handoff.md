@@ -10,6 +10,7 @@
   - Task 2 完成：ADR-009 决定 Canvas 2D + SVG/CSS 原生 Optical Field（无新增运行时依赖）；Bricolage Grotesque、Bodoni Moda、Noto Serif SC、IBM Plex Mono 以 next/font 构建期自托管；v3 黑/纸白/朱红 tokens、0/4/8px 半径、motion/字体角色与 AA/禁蓝紫门禁已落地。聚焦 24/24、全 Web 99/99、typecheck/build 通过；review 后修正朱红控件黑字与双表面 focus 对比度。
   - Task 3 完成：`OpenScience.`/`O.` 品牌原语与 Public/Identity/Dashboard/Workspace 四类无 Card shell 已落地；单一 main、skip link、19/56/25 Workspace 平面、8px action/press/reduced-motion、中英文 shell 文案均有测试。focused 9/9、全 Web 108/108、typecheck/build 通过。
   - Task 4 完成：Landing 已替换为真实 DOM `Science evolves.` / `科学，持续演化。` 与原生 Canvas Optical Field；Create/Explore/Login 真实路由、160–200px 局部作用半径、8–14px 位移、500ms 回弹、按住证据层、离屏暂停、移动 32% 密度及 reduced-motion 静态交互均已落地。全 Web 116/116、typecheck/build 通过；1440/1920/390 normal/reduced 截图完成，英文 320px 无溢出；Explore 纸面导航对比度 5.34:1/15.07:1。
+  - Task 4 follow-up 完成：依据 `docs/user_ideas/8.10/OpenScience_Text_Distortion_Demo.html` 补齐真实文字的 pointer-local SVG displacement、mask falloff、chromatic focus、vermilion cursor ring；base DOM 仍可选择/可访问，focused landing + optical-field 11/11、typecheck、production build 通过。
   - Task 5 完成：RO Workspace 已建立独立 56px Global Nav / 64px Object Header / 44px Mode Tabs 与 19/56/25 单实例三工作面；六个 SDF 节点、Artifact rule rows、source/scope-bearing Before/After proposals、可折叠 evidence 与 Radix 全屏高影响审查均已落地。移动三面切换不卸载状态，Data/Versions 模式按钮会先切换到对应工作面再滚动锚点，320px 提交/上下文可用且无溢出。Extractor provenance 诚实标记为当前 SDF 聚合，未实现的 Overview/Publish 明确禁用。Web 121/121、typecheck/build、focused ESLint、1440/390/320 production browser 门禁通过，reviewer APPROVE。
 - Constraints:
   - 不读取/打印 `.env`；不把效果图伪数据投入生产。

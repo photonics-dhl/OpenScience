@@ -89,6 +89,7 @@
 - [x] Verify RED because the old symmetrical ring renders.
 - [x] Implement asymmetric DOM typography first; pass static 1440×900 and 390×844 AI-slop review before Canvas.
 - [x] Implement 160–200px pointer radius, 8–14px maximum visual displacement, 400–600ms recovery and ≤35% mobile density.
+- [x] Follow-up optical text pass: keep the headline as selectable DOM text while adding pointer-local SVG displacement, chromatic focus, mask falloff and a vermilion focus ring from `OpenScience_Text_Distortion_Demo.html`.
 - [x] Capture 1440×900, 1920×1080 and 390×844 normal/reduced motion; commit `feat(web): replace landing with optical editorial medium`.
 
 ### Task 5: Rebuild RO Workspace as Three Stable Work Planes

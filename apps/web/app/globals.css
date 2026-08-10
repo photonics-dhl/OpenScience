@@ -1443,6 +1443,67 @@ body {
   font-family: var(--font-ui);
 }
 
+/* Local optical typography: the DOM headline remains the readable source;
+   these layers only reveal a pointer-local instrument effect. */
+[data-optical-text-stage='true'] {
+  --os-optical-x: 50%;
+  --os-optical-y: 42%;
+  --os-optical-radius: 180px;
+  --os-optical-focus: 0;
+  --os-optical-chroma: 0;
+  --os-optical-displacement: 0px;
+}
+
+[data-optical-text-distorted='true'] {
+  filter: url('#os-local-distortion');
+  -webkit-mask-image: radial-gradient(circle var(--os-optical-radius) at var(--os-optical-x) var(--os-optical-y), #000 0 42%, rgb(0 0 0 / .92) 57%, transparent 82%);
+  mask-image: radial-gradient(circle var(--os-optical-radius) at var(--os-optical-x) var(--os-optical-y), #000 0 42%, rgb(0 0 0 / .92) 57%, transparent 82%);
+  opacity: var(--os-optical-focus);
+}
+
+[data-optical-text-chromatic='true'] {
+  color: transparent;
+  mix-blend-mode: screen;
+  opacity: var(--os-optical-chroma);
+  text-shadow: -2px 0 rgb(255 78 34 / .75), 2px 0 rgb(87 184 204 / .65);
+  -webkit-mask-image: radial-gradient(circle calc(var(--os-optical-radius) * .8) at var(--os-optical-x) var(--os-optical-y), #000 0 25%, transparent 76%);
+  mask-image: radial-gradient(circle calc(var(--os-optical-radius) * .8) at var(--os-optical-x) var(--os-optical-y), #000 0 25%, transparent 76%);
+}
+
+.optical-cursor-ring {
+  width: calc(var(--os-optical-radius) * 2);
+  height: calc(var(--os-optical-radius) * 2);
+  left: calc(var(--os-optical-x) - var(--os-optical-radius));
+  top: calc(var(--os-optical-y) - var(--os-optical-radius));
+  border: 1px solid rgb(241 239 234 / .17);
+  border-radius: 50%;
+  opacity: var(--os-optical-focus);
+  transition: opacity var(--motion-fast) ease;
+}
+
+.optical-cursor-ring::before {
+  content: '';
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  transform: translate(-50%, -50%);
+  background: var(--os-vermilion);
+  box-shadow: 0 0 14px rgb(255 78 34 / .7);
+}
+
+@media (max-width: 760px) {
+  [data-optical-text-stage='true'] { --os-optical-radius: 105px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  [data-optical-text-distorted='true'],
+  [data-optical-text-chromatic='true'],
+  .optical-cursor-ring { display: none; }
+}
+
 .font-display {
   font-family: var(--font-display-grotesk);
 }

@@ -25,6 +25,8 @@ function OpticalField({ reducedMotion = false }: OpticalFieldProps) {
     if (!context) return;
 
     const media = window.matchMedia('(prefers-reduced-motion: reduce)');
+    const stage = canvas.closest<HTMLElement>('[data-optical-text-stage="true"]');
+    const displace = stage?.querySelector<SVGElement>('[data-optical-displace="true"]');
     let frame = 0;
     let stopped = false;
     let visible = true;
@@ -46,7 +48,17 @@ function OpticalField({ reducedMotion = false }: OpticalFieldProps) {
     };
 
     const draw = (now: number) => {
-      renderOpticalField(context, sampleOpticalField(pointerRef.current, size, now), size);
+      const sample = sampleOpticalField(pointerRef.current, size, now);
+      renderOpticalField(context, sample, size);
+      if (stage) {
+        stage.style.setProperty('--os-optical-x', `${sample.origin.x}px`);
+        stage.style.setProperty('--os-optical-y', `${sample.origin.y}px`);
+        stage.style.setProperty('--os-optical-radius', `${sample.radius}px`);
+        stage.style.setProperty('--os-optical-focus', sample.evidence.toFixed(3));
+        stage.style.setProperty('--os-optical-displacement', `${sample.displacement}px`);
+        stage.style.setProperty('--os-optical-chroma', `${(sample.evidence * 0.62).toFixed(3)}`);
+      }
+      if (displace) displace.setAttribute('scale', `${sample.evidence * sample.displacement * 2.8}`);
     };
 
     const shouldReduceMotion = () => reducedMotion || media.matches;
