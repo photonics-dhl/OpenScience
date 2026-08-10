@@ -200,11 +200,13 @@ Accepted 2026-08-10: eight-surface route/state matrix, real Overview/Files/Versi
 
 **Interfaces:** Figma variables map 1:1 to tokens; runtime Optical Field remains browser-owned.
 
-- [ ] Verify long-term owner/canonical file before writes; never expose OAuth/session material.
-- [ ] Create `01 Foundations / V3 Optical Editorial`, typography specimen, grids, motion and reduced-motion notes.
-- [ ] Build structural frames/states for Landing, Workspace, Public, Auth, Dashboard, Intake, Explore and Collection.
-- [ ] Map only real components and document Code Connect limits without blocking delivery.
-- [ ] Compare Figma tokens, code tokens and browser screenshots; commit `docs(figma): register optical editorial canonical map`.
+- [x] Verify long-term owner/canonical file before writes; never expose OAuth/session material.
+- [x] Create `01 Foundations / V3 Optical Editorial`, typography specimen, grids, motion and reduced-motion notes.
+- [x] Build structural frames/states for Landing, Workspace, Public, Auth, Dashboard, Intake, Explore and Collection.
+- [x] Map only real components and document Code Connect limits without blocking delivery.
+- [x] Compare Figma tokens, code tokens and browser screenshots; commit `docs(figma): register optical editorial canonical map`.
+
+Accepted 2026-08-10: the long-term account owns the canonical file. The isolated V3 namespace contains 44 Web-scoped variables, 9 text styles, 3 effects, four real component sets and an eight-surface route/state matrix. Browser Canvas remains the Optical Field runtime truth; no static Figma layer is presented as the production interaction.
 
 ### Task 14: Install Visual, Accessibility and Performance Release Gates
 

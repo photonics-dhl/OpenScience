@@ -2,6 +2,7 @@
 
 **状态：** Accepted  
 **日期：** 2026-08-08
+**修订：** 2026-08-10（长期账号 canonical 验收完成）
 
 ## Context
 
@@ -26,20 +27,22 @@ Codex、Kimi/Cursor 等客户端还使用不同 MCP 配置源。项目 `.mcp.jso
 5. 更新项目登记的 canonical Figma file key/link，并保留原文件为只读迁移来源，直至两轮代码同步验证完成。
 6. 将临时账号降为 Viewer 或移除；撤销 `figma-temp` OAuth，删除本地临时账号密码变量并轮换曾暴露的临时密码。
 
-## Current Transitional Source
+## Current Canonical Source
 
-- 过渡设计文件：`OpenScience Web Design System`
-- 文件地址：<https://www.figma.com/design/rWS3seZaDMdlnSljqktMDp>
-- 当前所有权：临时账号的 `501428005's team`（Full seat）；长期账号当前为 starter/View，尚未具备可编辑 canonical owner 条件。
-- 状态：Task 1 Phase 0 discovery 进行中；迁移完成前该地址仅为 transitional source，不得标记为最终 canonical。
+- Canonical 文件：`OpenScience Web Design System (Copy)`
+- 文件地址：<https://www.figma.com/design/gjhowMG7cG4clKwvhvF08E>
+- 当前所有权：长期项目账号，已通过 `figma-primary` OAuth 身份、Full seat 和实际写入能力验收。
+- 状态：2026-08-10 已建立独立的 `V3 / *` variables、styles、foundations、真实组件集与八表面结构矩阵；节点映射见 `docs/design/optical-editorial-figma-map.md`。
+- 原过渡文件 `rWS3seZaDMdlnSljqktMDp` 仅保留为历史迁移来源，不得再作为代码或设计同步目标。
 
 ## Verification Gate
 
-- 两个 MCP server 均能独立完成 `tools/list`；分别切换浏览器 Figma 会话后，访问仅对对应账号可见的测试文件，以确认没有串号或 token 复用。
-- 长期账号能在目标 Team 中编辑、分享和恢复 canonical 文件。
-- 六个关键屏幕、variables、components、prototype 和 Code Connect 在迁移前后数量与命名一致。
-- 代码生成只引用目标文件 key，不再依赖临时账号链接。
-- 仓库和 Git 历史中不存在账号密码或 OAuth token。
+- [x] 两个 MCP server 均能独立加载；`figma-primary` 已在长期账号会话中完成身份与文件访问核验。
+- [x] 长期账号能编辑 canonical 文件；V3 foundations、components 和 screens 均由该会话写入并回读。
+- [x] Canonical 内含 44 个 Web-scoped variables、9 个 text styles、3 个 effect styles、4 个真实组件集和 8 个产品表面；详细 ID 与限制有仓库映射。
+- [x] 项目登记只将目标文件 key 作为 canonical；旧文件降级为历史迁移来源。
+- [x] 文档与差异不记录账号、密码、OAuth token 或 session material。
+- [ ] `.fig` 离线导出与关键屏幕 PDF/PNG 归档仍作为发布前韧性任务，不阻塞浏览器实现与 Task 14 门禁。
 
 ## Consequences
 

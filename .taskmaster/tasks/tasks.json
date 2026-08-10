@@ -1318,7 +1318,7 @@
         "id": "13",
         "title": "重建长期账号 Figma Canonical 与真实组件映射",
         "description": "建立 V3 foundations、排版 specimen、grid、motion/reduced-motion 注释和所有核心页面结构/状态，变量与 tokens.css 一一对应。",
-        "status": "pending",
+        "status": "done",
         "dependencies": [
           "2",
           "3",
@@ -1335,7 +1335,8 @@
         "priority": "medium",
         "details": "计划 Task 13。先验证长期 owner/canonical；只映射真实组件；Optical Field 仍由浏览器拥有；Code Connect 限制不阻塞交付。",
         "testStrategy": "Figma/code token diff；组件映射清单；browser screenshots 对照；OAuth/token 不入文档。",
-        "subtasks": []
+        "subtasks": [],
+        "updatedAt": "2026-08-10T15:10:11.184Z"
       },
       {
         "id": "14",
@@ -1375,9 +1376,9 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-08-10T14:00:00.000Z",
+      "lastModified": "2026-08-10T15:10:11.184Z",
       "taskCount": 15,
-      "completedCount": 11,
+      "completedCount": 12,
       "tags": [
         "optical-editorial-v3"
       ]

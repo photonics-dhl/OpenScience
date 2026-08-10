@@ -1,5 +1,14 @@
 # OpenScience (XGS) 进度日志
 
+## 2026-08-10（Task 13 Figma canonical）— ✅ 长期账号验收完成
+
+- **所有权**：用户手工复制的 `gjhowMG7cG4clKwvhvF08E` 已由长期项目账号持有；`figma-primary` OAuth、Full seat、文件读写和回读审计均通过。旧 `rWS3…` 文件降级为历史迁移来源。
+- **V3 foundations**：建立四个独立 collection，共 44 个与 `apps/web/app/tokens.css` 对应的 Web-scoped variables；另有 9 个 text styles、3 个 effect styles。审计结果为 `ALL_SCOPES=0`、缺失 Web syntax `=0`。
+- **真实映射**：建立 StatusBadge、Dropzone、ProgressRail、EvidenceCard 四个 component set；只登记真实 React 路径和可表达 variant，不伪造浏览器原生 input、next-intl、回调、计算进度或 Canvas Optical Field 的 Code Connect 能力。
+- **八表面**：Landing、Workspace、Public、Auth、Dashboard、Intake、Explore、Collection 均有 route/shell/anatomy/state 结构帧；Collection 明确包含 SDF metadata 与图片/视频媒体。
+- **历史说明**：本日志 2026-08-08 对复制文件“仅有空 Cover”的记录是当时快照，现已由本条 canonical 写入与回读证据取代。
+- **下一步**：执行 Task 14，将确定性三视口截图、reduced-motion、键盘/焦点、性能预算和人工审美审查安装为发布门禁。
+
 ## 2026-08-10（Task 12 产品表面矩阵与完整工作区路由）— ✅ ECS 上线
 
 - **矩阵先行**：新增 `apps/web/lib/product-surfaces.ts` 与 `apps/web/test/product-surface-matrix.test.ts`，锁定 Overview、SDF、Files、Versions、Collaboration、Publish、Sandbox、Settings 八个产品表面，以及 loading/empty/error/forbidden/ready、移动等价和风险等级声明。
