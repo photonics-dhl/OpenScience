@@ -1,11 +1,12 @@
 # OpenScience (XGS) 进度日志
 
-## 2026-08-10（Task 10 ECS release process 修复）— ⏳ 应用重启门禁已补，待线上切换
+## 2026-08-10（Task 10 Explore 与启动语料）— ✅ ECS 已上线并完成 live 验收
 
-- **现场证据**：18 条启动语料已完成 confirmed seed 与幂等 replay，但 ECS 内部探针仍得到 API `/explore` 404、Web `/explore` 404；服务器源码和 `.next` 已更新，运行进程仍是发布前版本。
-- **根因与修复**：生产容器长期运行且源码/构建产物使用 bind mount；Compose 配置未变化时 `up -d` 不会重启 Node 进程。部署脚本现于 `up -d` 后只重启 `api web agent-worker`，不重启 PostgreSQL、Redis 或对象存储，并增加静态合同测试及 dry-run 提示。
-- **证据**：`node --test infra/scripts/deploy.test.mjs` 2/2、Git Bash 语法检查、`git diff --check` 通过。
-- **下一步**：提交并以 `--skip-build --skip-migrate` 同步，轮询应用健康，再执行 live Explore/API/public RO 与 seed 数量验收。
+- **现场证据**：18 条启动语料 confirmed seed，replay `created=0 existing=18`；部署脚本补齐 bind-mounted `api web agent-worker` 应用重启（数据服务未重启）。
+- **Live gate**：ECS API `/explore?limit=50` HTTP 200 / 18 items，`field=method` HTTP 200 / 18 items；Web `/explore` 与 `/research/OSR-DEMO-000001` HTTP 200；PostgreSQL demo RO=18、provenance Artifact=6。
+- **浏览器证据**：生产 HTTPS Chromium 1440/390 均 HTTP 200、18 个真实研究链接、scroll overflow=0、console errors=0；截图 `apps/web/test/visual/out/explore-live-{desktop,mobile}.png`（ignored）。
+- **门禁**：deploy contract 2/2、docs:lint 0、audit:docs-sync `DOCS_SYNC_OK`、shell syntax、git diff --check 通过。
+- **下一步**：进入 Task 11 Ultrafast Science Collection / scoped Editorial Curator；Task 9 Live2D 许可门禁独立保留。
 
 ## 2026-08-10（Task 10 ECS seed 入口修复）— ⏳ POSIX 主入口已修，待重同步
 

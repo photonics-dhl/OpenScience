@@ -1268,16 +1268,16 @@
         "id": "10",
         "title": "交付 Explore Research Index 与可追溯启动语料",
         "description": "实现编号式 Research Index、搜索/筛选和公开 API，导入 6 个完整 Demonstration RO 与 12-18 个轻量真实来源索引。",
-        "status": "in-progress",
+        "status": "done",
         "dependencies": [
           "4",
           "6"
         ],
         "priority": "high",
-        "details": "计划 Task 10。本地 API/index/corpus/seeder 与全部门禁已完成；ECS 已 confirmed seed 18 条且 replay 全部 EXISTS。内部探针仍返回 API/Web /explore 404，根因是 bind-mounted release 仅 up -d 不会重启配置未变化的 Node 进程；deploy.sh 已补只重启 api/web/agent-worker 的合同门禁，待同步切换与 live route/public RO/数量验收后关闭。",
+        "details": "计划 Task 10。匿名 cursor API、编号式 Research Index、query/field/artifact 筛选、6 个完整 + 12 个轻量 license-verified source records、默认 dry-run/显式确认/幂等 seeder 已完成。ECS backup、同步、18 条 confirmed seed、replay（18 EXISTS）、bind-mounted 应用进程切换与 live gate 完成：API 18 items，DB 18 demo RO + 6 provenance artifacts，生产 HTTPS Explore/public RO 桌面与移动均 200、无溢出/console error。",
         "testStrategy": "API pagination/visibility contracts；UI search/filter/active row；seed dry-run + explicit non-destructive confirmation。",
         "subtasks": [],
-        "updatedAt": "2026-08-10T11:42:00.000Z"
+        "updatedAt": "2026-08-10T12:10:00.000Z"
       },
       {
         "id": "11",
