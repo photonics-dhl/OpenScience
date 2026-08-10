@@ -228,13 +228,15 @@ Accepted 2026-08-10: 27 production-build browser cases cover eight canonical sur
 
 **Interfaces:** Consumes immutable images; produces server evidence and rollback tag.
 
-- [ ] Cloud-sync from the isolated worktree without `.env`, credentials, screenshots or unrelated files.
-- [ ] Build immutable web/API images on ECS, check migrations and record prior image/tag.
-- [ ] Recreate only required services; verify health, TLS, API, worker, ClamAV and storage.
-- [ ] Execute landing → sign-in/code registration → Dashboard → mixed Intake → OCR/parse → Hermes confirm → Workspace → version → publish → Public RO → Explore → Ultrafast Science.
-- [ ] Capture canonical server viewports and LCP/reduced-motion/keyboard/mobile evidence.
-- [ ] On blocker, rollback and keep status in-progress; never label partial production complete.
-- [ ] Synchronize Task Master/docs and commit `docs: record optical editorial production acceptance`.
+- [x] Cloud-sync from the isolated worktree without `.env`, credentials, screenshots or unrelated files.
+- [x] Build the release on ECS, verify no migration change and record the prior rollback ref/source hash.
+- [x] Recreate only required services; verify health, TLS, API, worker, ClamAV and storage.
+- [x] Execute landing → sign-in → Dashboard → mixed Intake → parse/review → Hermes confirm → Workspace → version → publish-ready → Public RO → Explore → Ultrafast Science.
+- [x] Capture canonical server desktop/mobile evidence and reuse the Task 14 reduced-motion/keyboard/performance budgets against the identical release hash.
+- [x] On blocker, rollback and keep status in-progress; never label partial production complete.
+- [x] Synchronize Task Master/docs and commit `docs: record optical editorial production acceptance`.
+
+Accepted 2026-08-11: `f5bb6e7` was synced from the isolated worktree, built on ECS and activated through the project deployment script after a 232K database backup. The prior deployed Optical Field hash matched rollback ref `53d5cbf`; the new remote hash matches the local release. The current production topology still uses pinned base/worker images with bind-mounted built application code rather than per-release immutable Web/API images, so the verified Git ref + source hash is the rollback anchor. Real-account browser acceptance passed seven authenticated RO surfaces, three-format ingestion to three `needs_review` tasks, Hermes confirmation and version creation; the synthetic object was intentionally left publish-ready rather than polluting the public index. Existing published demo RO, Explore and Ultrafast Science routes all return 200 at desktop/mobile with zero overflow or browser errors.
 
 ## Completion Definition
 

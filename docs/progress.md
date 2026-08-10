@@ -1,5 +1,16 @@
 # OpenScience (XGS) 进度日志
 
+## 2026-08-11（Task 15 Optical Editorial v3 生产验收）— ✅ ECS 已上线
+
+- **备份与回滚**：部署前数据库备份 `BACKUP_OK size=232K files=7/7`；旧远端 OpticalField SHA-256 与 `53d5cbf` 一致，作为可重建 rollback ref。新远端 SHA-256 与本地 `f5bb6e7` 文件完全一致。
+- **部署**：隔离 worktree 通过 `XGS_CONFIG_ROOT` 使用主配置，cloud-sync 排除 `.env`、`.git`、依赖、构建物、screenshots、Task Master 与 agent 状态；ECS 全量 install/build 后仅重启 api/web/agent-worker，Nginx `-t` 通过。
+- **服务**：API healthy；PostgreSQL、Redis、SeaweedFS 4.41、ClamAV healthy；Web/agent-worker running；worker 最近 15 分钟 fatal/uncaught/module/connection-refused 计数 0。
+- **真实账号旅程**：登录→科研工作台→7 个 authenticated RO surface 均 HTTP 200；Markdown + 有效 PNG + CSV 真实上传后 3/3 进入 `needs_review`；Hermes 六字段页可编辑并确认生成新版本；Versions 与 Publish ready 页均 200。为避免污染公开索引，没有公开发布合成验收对象。
+- **公开旅程**：Landing、Explore、Ultrafast Science Collection、`OSR-DEMO-000001` 均 200；1440/390 production Chromium 验收无横向溢出、无 console/page error，Optical Field 单实例且 Open RO 六层完整。
+- **安全**：测试账号凭据只作为一次性进程环境注入，不写仓库、文档或截图；验收输出不包含邮箱、密码、session、RO ID 或 task ID。`.env` 未读取/打印。
+- **基础设施偏差**：现有 compose 使用 pinned base/worker image + bind-mounted application build，并非每个 release 独立 Web/API image；本轮以 Git ref + 源文件哈希作为可验证回滚锚点。后续基础设施计划应单独迁移 immutable application images，不把该架构债务伪装成已完成。
+- **下一步**：回到唯一未闭环的 Task Master Task 9，处理 Hermes Live2D 许可/资产门禁；若无法合法部署 Wanko runtime，保持静态 Hermes fallback 并明确产品级替代方案。
+
 ## 2026-08-10（Task 14 产品发布质量门禁）— ✅ 27 个生产浏览器案例通过
 
 - **统一 manifest**：八个 canonical surface 均覆盖 1440×900、1920×1080、390×844；Landing 另覆盖三个 reduced-motion 案例，共 27 个，不再依赖四份各自为政的截图脚本作为发布判断。

@@ -128,6 +128,7 @@
 | `docs/handoff/2026-08-10-optical-editorial-rebaseline-handoff.md` | Optical Editorial v3 前端重构交接：27 项 grill-me 决策、三联屏浏览器优先路线、服务器直接验收 | 当前 handoff |
 | `docs/handoff/2026-08-10-figma-canonical-task13-handoff.md` | Task 13 长期账号 canonical、节点审计、文档门禁与 Task 14 接续说明 | 活交接 |
 | `docs/handoff/2026-08-10-product-release-gate-task14-handoff.md` | Task 14 27 案浏览器矩阵、全仓门禁、既有审计债务与 ECS Task 15 接续 | 当前 handoff |
+| `docs/handoff/2026-08-11-optical-editorial-production-acceptance-handoff.md` | `f5bb6e7` ECS 部署、回滚 ref/hash、真实账号 ingestion→Hermes→version 与公开路由验收 | 当前生产 handoff |
 | `docs/specs/2026-08-04-p1b-3-blob-artifact-upload-design.md` | P1B-3 Blob 内容寻址存储与上传管线设计（design gate 已确认：五决策，代码已实现 2026-08-04） | 活文档 |
 | `docs/plans/2026-07-24-doc-architecture-plan.md` | 文档架构落地实施计划 | 活文档 |
 | `docs/plans/2026-07-24-mvp-task-breakdown-plan.md` | MVP 任务拆解与工具配置实施计划（已批准，执行中） | 活文档 |

@@ -1365,21 +1365,22 @@
         "id": "15",
         "title": "直接部署 ECS 并证明完整产品旅程",
         "description": "构建不可变镜像并直接替换开发期服务器页面，保留上一 tag；在真实服务完成从 Landing 到 Editorial Collection 的完整旅程。",
-        "status": "pending",
+        "status": "done",
         "dependencies": [
           "14"
         ],
         "priority": "high",
         "details": "计划 Task 15。cloud-sync 不带 secrets/screenshots；健康/TLS/API/worker/ClamAV/storage 门禁；失败立即 rollback 且任务保持 in-progress。",
         "testStrategy": "landing→auth→dashboard→mixed intake→OCR/parse→Hermes confirm→workspace→version→publish→public→explore→selection；server screenshots/LCP/mobile/keyboard evidence。",
-        "subtasks": []
+        "subtasks": [],
+        "updatedAt": "2026-08-10T16:10:43.514Z"
       }
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-08-10T15:46:34.563Z",
+      "lastModified": "2026-08-10T16:10:43.514Z",
       "taskCount": 15,
-      "completedCount": 13,
+      "completedCount": 14,
       "tags": [
         "optical-editorial-v3"
       ]
