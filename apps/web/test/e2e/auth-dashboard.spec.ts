@@ -2,7 +2,10 @@ import { expect, test, type Page } from 'playwright/test';
 
 const baseUrl = process.env.WEB_BASE_URL ?? 'http://127.0.0.1:3010';
 
-async function mockAuthenticatedUser(page: Page) {
+async function mockAuthenticatedUser(page: Page, options: {
+  researchObjects?: unknown[];
+  tasks?: unknown[];
+} = {}) {
   await page.route('**/api/auth/me', async (route) => {
     await route.fulfill({
       contentType: 'application/json',
@@ -16,10 +19,10 @@ async function mockAuthenticatedUser(page: Page) {
     });
   });
   await page.route('**/api/research-objects?limit=20', async (route) => {
-    await route.fulfill({ contentType: 'application/json', body: JSON.stringify({ researchObjects: [] }) });
+    await route.fulfill({ contentType: 'application/json', body: JSON.stringify({ researchObjects: options.researchObjects ?? [] }) });
   });
-  await page.route('**/api/agent/tasks?actionable=true', async (route) => {
-    await route.fulfill({ contentType: 'application/json', body: JSON.stringify({ tasks: [] }) });
+  await page.route('**/api/ingestion?actionable=true', async (route) => {
+    await route.fulfill({ contentType: 'application/json', body: JSON.stringify({ tasks: options.tasks ?? [] }) });
   });
   await page.route('**/api/workspaces', async (route) => {
     await route.fulfill({ contentType: 'application/json', body: JSON.stringify({ workspaces: [{ id: 'workspace-1', name: 'Personal workspace', type: 'personal', role: 'owner' }] }) });
@@ -171,6 +174,36 @@ for (const viewport of [
     expect(finalOverflow).toBe(false);
   });
 }
+
+test('dashboard binds Hermes portrait and queue to the same real approval task', async ({ page }) => {
+  const task = {
+    id: 'ingestion-review-1',
+    researchObjectId: 'ro-1',
+    researchTitle: 'Transient-state spectroscopy',
+    logicalPath: 'paper.pdf',
+    state: 'needs_review',
+    retryCount: 0,
+    error: null,
+  };
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await mockAuthenticatedUser(page, {
+    researchObjects: [{ id: 'ro-1', publicId: 'OSR-2026-000123', title: task.researchTitle, version: 3, status: 'draft' }],
+    tasks: [task],
+  });
+
+  await page.goto(`${baseUrl}/dashboard`);
+  const href = `/research-objects/${task.researchObjectId}/hermes?task=${task.id}`;
+  await expect(page.locator(`[href="${href}"]`)).toHaveCount(2);
+  await expect(page.locator('[data-live2d-instance]')).toHaveCount(1);
+  await expect(page.locator('[data-hermes-fallback="static"]')).toHaveAttribute('data-motion', 'still');
+  await expect(page.locator('.rounded-card')).toHaveCount(0);
+  await page.screenshot({ path: 'test/visual/out/dashboard-approval-desktop.png', fullPage: true });
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.reload();
+  await expect(page.locator('[data-live2d-instance]')).toHaveCount(1);
+  expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(390);
+  await page.screenshot({ path: 'test/visual/out/dashboard-approval-mobile.png', fullPage: true });
+});
 
 test('a server-blocked material remains visible without a retry action', async ({ page }) => {
   await mockAuthenticatedUser(page);

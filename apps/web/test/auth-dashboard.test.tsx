@@ -193,14 +193,14 @@ describe('auth API contract', () => {
     const fetchMock = vi
       .fn()
       .mockResolvedValueOnce(new Response(JSON.stringify({ researchObjects: [{ id: 'ro-1', title: 'Real RO', publicId: null, version: 1, status: 'draft' }] }), { status: 200 }))
-      .mockResolvedValueOnce(new Response(JSON.stringify({ tasks: [{ id: 'task-1', researchObjectId: 'ro-1', kind: 'sdf.extract', status: 'pending', progress: 10 }] }), { status: 200 }));
+      .mockResolvedValueOnce(new Response(JSON.stringify({ tasks: [{ id: 'task-1', researchObjectId: 'ro-1', researchTitle: 'Real RO', logicalPath: 'paper.pdf', state: 'queued', retryCount: 0, error: null }] }), { status: 200 }));
     vi.stubGlobal('fetch', fetchMock);
     await expect(getDashboardOverview()).resolves.toMatchObject({
       researchObjects: [{ id: 'ro-1' }],
       tasks: [{ id: 'task-1' }],
     });
     expect(fetchMock).toHaveBeenNthCalledWith(1, '/api/research-objects?limit=20', expect.any(Object));
-    expect(fetchMock).toHaveBeenNthCalledWith(2, '/api/agent/tasks?actionable=true', expect.any(Object));
+    expect(fetchMock).toHaveBeenNthCalledWith(2, '/api/ingestion?actionable=true', expect.any(Object));
   });
 
   it('requests and confirms code signup without sending an invitation code', async () => {

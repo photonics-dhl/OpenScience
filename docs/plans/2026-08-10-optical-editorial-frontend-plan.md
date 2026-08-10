@@ -145,10 +145,12 @@
 
 **Interfaces:** Produces `HermesVisualState = 'idle'|'guiding'|'scanning'|'suggesting'|'awaiting_approval'|'failed'`; visual and task entry share the same task/RO URL.
 
-- [ ] Write failing tests for one Continue Research action, row-based RO list, actionable confirmations, deep-link equality, approval stillness and static fallback.
-- [ ] Verify RED; implement without statistics hero or card grid.
+- [x] Write failing tests for one Continue Research action, row-based RO list, actionable confirmations, deep-link equality, approval stillness and static fallback.
+- [x] Verify RED; implement without statistics hero or card grid.
 - [ ] Load one Live2D instance after LCP; provide static failure/reduced-motion fallback.
 - [ ] Capture empty/loading/error/active/approval states; commit `feat(web): rebuild dashboard and hermes task guidance`.
+
+Checkpoint 2026-08-10: Dashboard now consumes caller-owned `IngestionTask` IDs through `GET /ingestion?actionable=true`; approval desktop/mobile browser evidence and the static Hermes fallback pass. Wanko binaries remain undeployed until the project records acceptance of the applicable Live2D free-material license and confirms entity-size eligibility; Task 9 therefore remains in progress.
 
 ### Task 10: Deliver Explore and the Provenance-Safe Launch Corpus
 

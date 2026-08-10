@@ -95,6 +95,15 @@ describe('ingestion API (real PostgreSQL/Redis/MinIO)', () => {
     const status = await app.inject({ method: 'GET', url: `/ingestion/${accepted.json().batchId}`, cookies: { openscience_session: account.cookie } });
     expect(status.statusCode).toBe(200);
     expect(status.json().tasks[0]).toMatchObject({ state: 'queued', logicalPath: 'paper.pdf' });
+    const actionable = await app.inject({ method: 'GET', url: '/ingestion?actionable=true', cookies: { openscience_session: account.cookie } });
+    expect(actionable.statusCode).toBe(200);
+    expect(actionable.json().tasks[0]).toMatchObject({
+      id: accepted.json().tasks[0].id,
+      researchObjectId: ro.id,
+      researchTitle: 'Ingestion integration',
+      logicalPath: 'paper.pdf',
+      state: 'queued',
+    });
     await app.close();
   });
 });

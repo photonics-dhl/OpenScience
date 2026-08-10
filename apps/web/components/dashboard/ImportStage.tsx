@@ -1,11 +1,10 @@
 'use client';
 
 import Link from 'next/link';
-import { FilePlus2, Upload } from 'lucide-react';
+import { ArrowUpRight } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import * as React from 'react';
 
-import { Button } from '@/components/ui/button';
 
 export interface ImportStageProps {
   compact?: boolean;
@@ -15,31 +14,27 @@ export function ImportStage({ compact = false }: ImportStageProps) {
   const t = useTranslations('dashboard');
 
   return (
-    <section className="rounded-card border border-white/10 bg-workbench-elevated p-5 sm:p-6" aria-labelledby="import-stage-title">
-      <p className="text-xs font-semibold uppercase tracking-[0.16em] text-workbench-muted">
+    <section className="border-t border-os-rule-dark pt-5" aria-labelledby="import-stage-title">
+      <p className="font-mono text-[0.68rem] uppercase tracking-[0.22em] text-os-muted-dark">
         {t('import.eyebrow')}
       </p>
-      <h2 id="import-stage-title" className="mt-2 text-xl font-semibold text-workbench-text">
+      <h2 id="import-stage-title" className="mt-2 text-xl font-medium text-os-paper">
         {t('import.title')}
       </h2>
       {!compact ? (
-        <p className="mt-2 max-w-lg text-sm leading-6 text-workbench-muted">
+        <p className="mt-2 max-w-lg text-sm leading-6 text-os-muted-dark">
           {t('import.description')}
         </p>
       ) : null}
-      <nav className="mt-5 grid gap-3 sm:grid-cols-2" aria-label={t('import.title')}>
-        <Button className="w-full" size="lg" asChild>
-          <Link href="/research-objects/new?mode=import" data-action-priority="primary">
-            <Upload className="mr-2 h-4 w-4" aria-hidden="true" />
+      <nav className="mt-5 grid border-y border-os-rule-dark sm:grid-cols-2 sm:divide-x sm:divide-os-rule-dark" aria-label={t('import.title')}>
+          <Link className="group flex items-center justify-between px-1 py-4 text-sm font-medium text-os-paper outline-none hover:text-os-vermilion focus-visible:ring-2 focus-visible:ring-os-vermilion sm:pr-5" href="/research-objects/new?mode=import" data-action-priority="primary">
             {t('import.upload')}
+            <ArrowUpRight className="h-4 w-4 transition-transform group-hover:-translate-y-0.5 group-hover:translate-x-0.5 motion-reduce:transform-none" aria-hidden="true" />
           </Link>
-        </Button>
-        <Button className="w-full" size="lg" asChild>
-          <Link href="/research-objects/new?mode=blank" data-action-priority="primary">
-            <FilePlus2 className="mr-2 h-4 w-4" aria-hidden="true" />
+          <Link className="group flex items-center justify-between px-1 py-4 text-sm font-medium text-os-paper outline-none hover:text-os-vermilion focus-visible:ring-2 focus-visible:ring-os-vermilion sm:pl-5" href="/research-objects/new?mode=blank" data-action-priority="primary">
             {t('import.blank')}
+            <ArrowUpRight className="h-4 w-4 transition-transform group-hover:-translate-y-0.5 group-hover:translate-x-0.5 motion-reduce:transform-none" aria-hidden="true" />
           </Link>
-        </Button>
       </nav>
     </section>
   );

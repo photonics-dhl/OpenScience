@@ -198,21 +198,23 @@ export interface DashboardResearchApi {
 
 export interface DashboardTaskApi {
   id: string;
-  researchObjectId: string | null;
-  kind: string;
-  status: 'pending' | 'running' | 'failed' | 'succeeded';
-  progress: number;
+  researchObjectId: string;
+  researchTitle: string;
+  logicalPath: string;
+  state: IngestionTaskState;
+  retryCount: number;
+  error: string | null;
 }
 
 export async function getDashboardOverview(): Promise<{
   researchObjects: DashboardResearchApi[];
   tasks: DashboardTaskApi[];
 }> {
-  const [research, agent] = await Promise.all([
+  const [research, ingestion] = await Promise.all([
     request<{ researchObjects: DashboardResearchApi[] }>('/api/research-objects?limit=20'),
-    request<{ tasks: DashboardTaskApi[] }>('/api/agent/tasks?actionable=true'),
+    request<{ tasks: DashboardTaskApi[] }>('/api/ingestion?actionable=true'),
   ]);
-  return { researchObjects: research.researchObjects, tasks: agent.tasks };
+  return { researchObjects: research.researchObjects, tasks: ingestion.tasks };
 }
 
 export interface WorkspaceApi {

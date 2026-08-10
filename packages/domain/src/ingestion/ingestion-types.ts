@@ -25,3 +25,8 @@ export interface IngestionBatchView {
   researchObjectId: string;
   tasks: IngestionTaskView[];
 }
+
+export interface ActionableIngestionTaskView extends IngestionTaskView {
+  researchObjectId: string;
+  researchTitle: string;
+}

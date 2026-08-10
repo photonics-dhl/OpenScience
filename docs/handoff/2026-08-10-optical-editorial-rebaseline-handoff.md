@@ -1,6 +1,6 @@
 # Handoff — 2026-08-10 Optical Editorial 前端重构
 
-- Current goal: Task 8 Mixed-Material Evidence Intake 已完成，继续 Task 9 Dashboard + Hermes/Live2D 真实任务引导。
+- Current goal: Task 9 Dashboard 与真实 ingestion task 引导已完成；Live2D 生产启用受免费素材许可主体资格/接受确认门禁约束。可并行前进至依赖已满足的 Task 10 Explore。
 - Done:
   - 审计 `docs/user_ideas/8.10/` 资源；确认 `OpenScience_Art_Direction_v3.md` 覆盖旧视觉，Masterplan v2 保留产品结构。
   - 完成 27 项 grill-me 设计决策：三种表面、双入口身份流、Hermes/Live2D、Evidence Intake、三联屏、启动语料、Figma/浏览器职责、动效、部署方式均已确认。
@@ -19,6 +19,7 @@
   - Task 4 最终封版：用户确认交互基本可用，pointer tracking time constant 收紧为 58ms；复审无剩余 finding，Task Master/plan 置 done。
   - Task 7 完成：Research Identity 注册/登录两平面上线；真实验证码/登录/session/returnTo 契约保持不变，OTP 自动聚焦、503 可重试错误与 en/zh 文案落地。复审发现并修复反斜杠开放重定向、硬编码英文和伪行为测试；最终 APPROVE。全 Web 135/135、stubbed E2E 5/5、real Fastify signup 1/1、typecheck/build 通过。
   - Task 8 完成：Evidence Intake 支持 PDF/Word/TeX-ZIP/Markdown/图片/CSV/TSV/JSON/YAML/Notebook/Python/R，本地预选、材料角色与可选单一主稿；显式提交后走真实 CSRF multipart ingest、batch poll、task retry 和 needs_review→Hermes deep link。网络失败复用 RO，安全阻断无 retry。全 Web 141/141、全 Domain 321/321、Playwright 6/6、typecheck/build、1440/390 浏览器审美门禁通过；3019 为最新 production preview。
+  - Task 9 检查点：Dashboard 改为无 Card 的规则线工作台；新增 caller-owned `GET /ingestion?actionable=true`，修复 AgentTask/IngestionTask ID 串用，Hermes Visual/queue 使用同一真实确认 deep link。六态、审批静止、静态 fallback、1440/390 与 Playwright 7/7 通过；真实 Wanko 资产因 Live2D 许可主体资格尚未形成项目确认而未部署，Task 9 保持 in-progress。
   - Task 5 完成：RO Workspace 已建立独立 56px Global Nav / 64px Object Header / 44px Mode Tabs 与 19/56/25 单实例三工作面；六个 SDF 节点、Artifact rule rows、source/scope-bearing Before/After proposals、可折叠 evidence 与 Radix 全屏高影响审查均已落地。移动三面切换不卸载状态，Data/Versions 模式按钮会先切换到对应工作面再滚动锚点，320px 提交/上下文可用且无溢出。Extractor provenance 诚实标记为当前 SDF 聚合，未实现的 Overview/Publish 明确禁用。Web 121/121、typecheck/build、focused ESLint、1440/390/320 production browser 门禁通过，reviewer APPROVE。
   - Task 6 完成：Public RO 改为 warm-paper 760/280 阅读 surface；identity/license/continuing-object citation/immutable-version citation/Insight 先于 deep tabs，六个 SDF 文本状态、作者身份/通讯作者、发布时间/哈希、AI review、artifact provenance、学术 captions 与 print retention 已落地。公开对象稳定 URL 通过 server absolute API transport 解析 latest version，版本 URL 使用 exact version；Web 127/127、typecheck/build、1440/390/print browser gate 通过。独立复审的 1 Critical + 6 Important + 2 Minor 均已修正。
 - Constraints:
@@ -28,6 +29,7 @@
 - Open risks:
   - Landing、Workspace、Public RO、Auth 与 Intake 已完成浏览器替换；Dashboard 与其余产品页仍需按同一语言逐项替换。Figma canonical 需要按 v3 新建 foundations，旧文件不再作为视觉裁决源。
   - next-intl 开发/E2E 日志仍报告旧 `collab` dotted keys；登记至 Task 12，不阻断当前认证流程。
+  - Wanko sample 不是无条件开源资产；其随附许可说明区分一般/小规模与中大型主体。确认项目适用类别并接受当前协议前，只能发布静态 Hermes fallback。
   - 启动 6 个完整 Demonstration RO 与 12–18 个索引条目尚未采集/登记。
-- Next action: Task 9 先写 Hermes 六态、单一 Continue Research、row-based RO list、confirmation deep-link equality 与 one-Live2D-instance RED tests，再替换 Dashboard；不得恢复统计 Hero 或 Card grid。
+- Next action: 若许可门禁暂不决策，先执行 Task 10 Explore Research Index 与可追溯启动语料；Task 9 保留为 in-progress，待明确 Live2D 许可后补单实例运行时和完整状态截图。
 - Read first: `AGENTS.md` → `docs/OpenScience_Kimi_Development_Spec.md` → `docs/progress.md` → `project_index.md` → `docs/specs/2026-08-10-optical-editorial-rebaseline-design.md` → `docs/user_ideas/8.10/OpenScience_Art_Direction_v3.md`。

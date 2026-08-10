@@ -21,7 +21,7 @@
 | `apps/web/app/auth/{register,login}/page.tsx` / `apps/web/components/auth/{ResearchIdentityPanel,SignupCodeForm,LoginForm}.tsx` | Optical Editorial Research Identity 双平面；邮箱验证码注册与独立登录共用真实 session 契约，无邀请码字段；受信 origin `returnTo`、OTP 自动聚焦、可重试错误与中英 i18n | 活文档 |
 | `apps/web/app/dashboard/page.tsx` / `apps/web/components/dashboard/` | 研究驾驶舱：最近 RO、导入/创建、可行动 Hermes 任务和研究列表 | 活文档 |
 | `apps/web/app/research-objects/new/page.tsx` / `apps/web/components/intake/*.tsx` | Optical Editorial Evidence Intake：blank 直接进入 SDF；import 在明确提交前仅本地编排 manuscript/figure/data/code/supplement 与可选主稿，提交后连接真实 ingest batch、逐任务轮询、blocked/retry 与 needs_review→Hermes deep link | 活文档 |
-| `GET /research-objects` / `GET /agent/tasks` | Dashboard 真实数据合同：仅成员 Workspace 的 RO 与当前用户 AgentTask，可按 actionable 过滤 | 活接口 |
+| `GET /research-objects` / `GET /ingestion?actionable=true` | Dashboard 真实数据合同：仅成员 Workspace 的 RO 与当前用户创建的 IngestionTask；Hermes deep link 使用真实 ingestion task ID | 活接口 |
 | `apps/web/test/auth-dashboard.test.tsx` / `apps/web/test/e2e/auth-dashboard.spec.ts` | Auth/Dashboard 单元合同与 clean-browser 桌面/移动 E2E；实际选择多文件并断言 Artifact→Commit 引用 | 活文档 |
 | `apps/web/playwright{,.signup}.config.ts` / `apps/web/test/e2e/signup-live.spec.ts` / `apps/api/test/support/signup-smoke-server.mjs` | 可重复浏览器门禁；signup smoke 启动编译 Fastify auth 路由和真实 Next rewrite，验证验证码、Cookie 与 `/auth/me`，不使用 API route mock | 测试工具 |
 | `packages/domain/src/ingestion/` / `apps/api/src/routes/ingestion.ts` | 多格式 ingestion 格式策略、批次/任务状态机、Artifact + AgentTask 异步边界，以及 consent/status/retry API；已补写权限、bounded multipart、模板限流和 dispatch/CAS 基础 | 执行中 |
@@ -33,6 +33,7 @@
 | `apps/web/test/ingestion-foundations.test.ts` / `apps/web/test/visual/ingestion-shots.mjs` / `apps/web/app/{%5Fvisual,_visual}/ingestion-foundations/page.tsx` | 研究者导入视觉地基 TDD 合同与 1440/768/375 三视口浏览器截图门禁；脚本访问仅开发态可用的真实编译原语预览 | 活文档 |
 | `apps/web/app/tokens.css` / `apps/web/app/layout.tsx` / `apps/web/test/{tokens-contrast,optical-foundations}.test.ts` | Optical Editorial v3 视觉地基：黑/纸白/朱红 token、0/4/8px 半径、四字体角色、语义 motion、AA/禁蓝紫/降级门禁 | 活文档 |
 | `apps/web/components/brand/OpenScienceWordmark.tsx` / `apps/web/components/shell/*.tsx` / `apps/web/test/surface-shells.test.tsx` | Optical Editorial 品牌与 Public/Identity/Dashboard/Workspace 四类无 Card shell；单一 main、skip link、19/56/25 工作区平面与动作反馈门禁 | 活文档 |
+| `apps/web/components/hermes/{HermesRail,HermesVisualAdapter,hermes-state}.ts(x)` / `apps/web/test/hermes-state.test.tsx` | Dashboard Hermes 六态、真实 IngestionTask 同链入口、审批静止与静态 fallback；Wanko runtime 受许可门禁暂未部署 | 活实现（Task 9 in-progress） |
 | `apps/web/components/research/*.tsx` / `apps/web/components/editor/*.tsx` / `apps/web/app/research-objects/[id]/edit/page.tsx` | Optical Editorial RO Workspace：56/64/44px 产品层级、19/56/25 单实例工作面、六节点 SDF、Evidence/Before-After proposal、Artifact rule row、Radix 高影响审查与移动功能等价 | 活文档 |
 | `apps/web/test/workspace-shell.test.tsx` / `apps/web/test/visual/workspace-shots.mjs` | RO Workspace 结构/证据/风险合同与 1440/390/320 production browser 门禁；校验三面状态保持、无溢出、console、focus trap/Escape/焦点恢复 | 测试工具 |
 | `apps/web/components/landing/SiteHeader.tsx` | Landing 页极简 i18n 导航；提供真实 `/explore`、`/research-objects/new`、`/auth/login` 入口与 dark/paper 双表面样式 | 活文档 |

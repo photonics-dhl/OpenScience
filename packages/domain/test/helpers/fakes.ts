@@ -691,6 +691,27 @@ export function createFakePrisma(): { prisma: PrismaClient; db: FakeDb } {
           batch: batch ? { ...batch, researchObject } : null,
         };
       },
+      findMany: async ({ where, include, orderBy, take }: any) => {
+        let rows = db.ingestionTasks.filter((task) => {
+          const batch = db.ingestionBatches.find((candidate) => candidate.id === task.batchId);
+          return (where?.batch?.userId === undefined || batch?.userId === where.batch.userId) &&
+            (where?.state?.in === undefined || where.state.in.includes(task.state));
+        });
+        if (orderBy?.updatedAt === 'desc') {
+          rows = rows.toSorted((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime());
+        }
+        if (take !== undefined) rows = rows.slice(0, take);
+        if (!include) return rows;
+        return rows.map((row) => {
+          const batch = db.ingestionBatches.find((candidate) => candidate.id === row.batchId) ?? null;
+          const researchObject = batch ? db.researchObjects.find((ro) => ro.id === batch.researchObjectId) ?? null : null;
+          return {
+            ...row,
+            artifact: db.artifacts.find((artifact) => artifact.id === row.artifactId),
+            batch: batch ? { ...batch, researchObject } : null,
+          };
+        });
+      },
       update: async ({ where, data, include }: any) => {
         const row = db.ingestionTasks.find((task) => task.id === where.id);
         const retryCount = data.retryCount?.increment ? row.retryCount + data.retryCount.increment : (data.retryCount ?? row.retryCount);

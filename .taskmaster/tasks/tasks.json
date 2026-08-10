@@ -1259,10 +1259,10 @@
           "8"
         ],
         "priority": "high",
-        "details": "计划 Task 9。全站单 Live2D、LCP 后加载、审批静止、失败/reduced-motion 静态 fallback。",
+        "details": "计划 Task 9。Dashboard 无 Card/统计 Hero 已完成，新增 caller-owned GET /ingestion?actionable=true，Visual/row 共用真实 IngestionTask deep link，审批静止与静态 fallback 已过 1440/390 浏览器门禁。真实 Wanko 二进制仍受 Live2D 免费素材许可主体资格/接受确认门禁约束；确认前不部署、不把 fallback 冒充 runtime。",
         "testStrategy": "dashboard/hermes RED/GREEN；empty/loading/error/active/approval screenshots；one-instance assertion。",
         "subtasks": [],
-        "updatedAt": "2026-08-10T09:25:00.000Z"
+        "updatedAt": "2026-08-10T10:40:00.000Z"
       },
       {
         "id": "10",

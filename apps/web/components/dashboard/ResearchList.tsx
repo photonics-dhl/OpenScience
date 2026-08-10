@@ -33,22 +33,22 @@ export function ResearchList({ researchObjects }: ResearchListProps) {
   }, [query, researchObjects]);
 
   return (
-    <section className="rounded-card border border-white/10 bg-workbench-surface p-5 sm:p-6" aria-labelledby="research-list-title">
+    <section className="border-t border-os-rule-dark pt-5" aria-labelledby="research-list-title">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <p className="text-xs font-semibold uppercase tracking-[0.16em] text-workbench-muted">
-            Research objects
+          <p className="font-mono text-[0.68rem] uppercase tracking-[0.22em] text-os-muted-dark">
+            Index / Research objects
           </p>
-          <h2 id="research-list-title" className="mt-1 text-xl font-semibold text-workbench-text">
+          <h2 id="research-list-title" className="mt-2 text-xl font-medium text-os-paper">
             {t('research.title')}
           </h2>
         </div>
         {researchObjects.length > 0 ? (
-          <label className="relative block w-full sm:max-w-xs">
+          <label className="relative block w-full border-b border-os-rule-dark sm:max-w-xs">
             <span className="sr-only">{t('research.search')}</span>
             <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-workbench-muted" aria-hidden="true" />
             <Input
-              className="pl-9"
+              className="rounded-none border-0 bg-transparent pl-9 shadow-none focus-visible:ring-0"
               type="search"
               placeholder={t('research.search')}
               value={query}
@@ -59,26 +59,26 @@ export function ResearchList({ researchObjects }: ResearchListProps) {
       </div>
 
       {visible.length === 0 ? (
-        <p className="mt-6 rounded-control border border-dashed border-white/15 bg-workbench-bg px-4 py-7 text-center text-sm text-workbench-muted">
+        <p className="mt-6 border-y border-os-rule-dark px-4 py-7 text-center text-sm text-os-muted-dark">
           {researchObjects.length === 0 ? t('research.empty') : t('research.noResults')}
         </p>
       ) : (
-        <ul className="mt-5 divide-y divide-white/10" aria-label={t('research.title')}>
+        <ul className="mt-5 list-none divide-y divide-os-rule-dark border-y border-os-rule-dark p-0" aria-label={t('research.title')}>
           {visible.map((research) => (
             <li key={research.id}>
               <Link
                 href={`/research-objects/${research.id}/edit`}
-                className="group grid gap-2 px-1 py-4 outline-none sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center focus-visible:ring-2 focus-visible:ring-focus-ring"
+                className="group grid gap-2 px-1 py-4 outline-none sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center focus-visible:ring-2 focus-visible:ring-os-vermilion"
               >
                 <span className="min-w-0">
-                  <span className="block truncate font-medium text-workbench-text group-hover:text-accent-primary">
+                  <span className="block truncate font-medium text-os-paper group-hover:text-os-vermilion">
                     {research.title}
                   </span>
-                  <span className="mt-1 block text-xs text-workbench-muted">
+                  <span className="mt-1 block font-mono text-[0.68rem] text-os-muted-dark">
                     {research.publicId} · {t('research.version', { version: research.versionNo })}
                   </span>
                 </span>
-                <span className="text-sm text-workbench-muted">
+                <span className="font-mono text-[0.68rem] uppercase tracking-[0.1em] text-os-muted-dark">
                   {t(`research.status.${research.status}`)}
                 </span>
               </Link>

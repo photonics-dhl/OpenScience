@@ -2,7 +2,7 @@ import { Readable } from 'node:stream';
 import { describe, expect, it, vi } from 'vitest';
 import type { StorageAdapter } from '@openscience/storage';
 import { createFakePrisma, seedUser } from './helpers/fakes';
-import { authorizeIngestionWrite, createIngestionBatch, getIngestionBatch, retryIngestionTask } from '../src/ingestion/ingestion-service';
+import { authorizeIngestionWrite, createIngestionBatch, getIngestionBatch, listActionableIngestionTasks, retryIngestionTask } from '../src/ingestion/ingestion-service';
 import { markTaskProgress } from '../src/agent/agent';
 
 function makeDeps() {
@@ -122,6 +122,23 @@ describe('multi-format ingestion service', () => {
     const result = await createIngestionBatch(deps, { userId: user.id, researchObjectId: 'ro-1', processingConsent: true, files: [file('paper.pdf')] });
     const outsider = seedUser(db, { id: 'outsider' });
     await expect(getIngestionBatch(deps, { userId: outsider.id, batchId: result.batchId })).rejects.toThrow(/空间不存在/);
+  });
+
+  it('lists the caller-owned ingestion task id and RO context for dashboard review links', async () => {
+    const { deps, db, user } = makeDeps();
+    const result = await createIngestionBatch(deps, { userId: user.id, researchObjectId: 'ro-1', processingConsent: true, files: [file('paper.pdf')] });
+    db.ingestionTasks[0].state = 'needs_review';
+
+    await expect(listActionableIngestionTasks(deps, { userId: user.id })).resolves.toEqual([
+      expect.objectContaining({
+        id: result.tasks[0].id,
+        researchObjectId: 'ro-1',
+        researchTitle: 'Study',
+        logicalPath: 'paper.pdf',
+        state: 'needs_review',
+      }),
+    ]);
+    await expect(listActionableIngestionTasks(deps, { userId: 'another-user' })).resolves.toEqual([]);
   });
 
   it.each(['viewer', 'reviewer'])('rejects %s ingestion writes', async (role) => {

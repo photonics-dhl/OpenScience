@@ -1,5 +1,14 @@
 # OpenScience (XGS) 进度日志
 
+## 2026-08-10（Optical Editorial v3 Task 9 检查点）— ⏳ Dashboard 完成，Live2D 许可门禁待确认
+
+- **真实任务契约**：修正 Dashboard 把 `AgentTask.id` 传给只接受 `IngestionTask.id` 的 Hermes 页面这一阻断；新增登录态 `GET /ingestion?actionable=true`，领域层只查询 caller-owned batch，返回真实 task/RO/title/logicalPath/state，外部用户结果为空。无需数据库迁移。
+- **Optical Editorial Dashboard**：统计 Hero、圆角 Card 网格和状态 pill 已退役；现在以单一 Continue Research、规则线 RO 索引、Evidence Intake 双入口、Hermes portrait/queue 构成。Visual 与 task row 共用同一个 `/research-objects/:ro/hermes?task=:ingestionTaskId`。
+- **Hermes 六态**：`idle/guiding/scanning/suggesting/awaiting_approval/failed` 从真实 ingestion state 推导；审批态静止，reduced-motion/失败保留静态矢量回退，移动 390px 无横向溢出。截图审查后移除浏览器默认列表标记，避免 `1. 01` 重复。
+- **许可门禁**：候选 Wanko 随附声明允许一般用户/小规模事业者接受 Live2D 免费素材协议后商用，中大型主体仅限非公开测试。主体资格和协议接受尚未形成项目决策，因此本检查点未复制/部署模型二进制，也未把静态 fallback 声称为真实 Live2D。
+- **证据**：Domain ingestion focused 35/35；Web 22 files / 144 tests；Dashboard/Auth Playwright 7/7；Web/Domain/API typecheck 与 Next production build通过；1440/390 approval screenshot、one-mount、same-link、approval-still、no-card 与 overflow 门禁通过。开发 E2E 仍输出既有 `collab` dotted-key warning，留在 Task 12 统一修复。
+- **下一步**：完成 Live2D 许可决策与 LCP 后单实例运行时，补 empty/loading/error/active 状态截图后关闭 Task 9；不影响先行执行依赖已满足的 Task 10 Explore/启动语料。
+
 ## 2026-08-10（Optical Editorial v3 Task 8）— ✅ Mixed-Material Evidence Intake 完成
 
 - **占位流程退役**：`/research-objects/new` 不再使用“创建 RO → 分文件 Artifact upload → 立即 commit”的旧双 Card 流程；新页面以黑纸、规则线、朱红动作构成 Research Identity + Evidence Intake 编辑面，blank 与 import 两条真实路径继续等权可达。

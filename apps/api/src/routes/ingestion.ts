@@ -1,7 +1,7 @@
 import type { FastifyInstance, FastifyRequest } from 'fastify';
 import multipart from '@fastify/multipart';
 import { z } from 'zod';
-import { authorizeIngestionWrite, confirmIngestionTask, createIngestionBatch, getIngestionBatch, getIngestionTask, IngestionError, retryIngestionTask, type IngestionDeps } from '@openscience/domain';
+import { authorizeIngestionWrite, confirmIngestionTask, createIngestionBatch, getIngestionBatch, getIngestionTask, IngestionError, listActionableIngestionTasks, retryIngestionTask, type IngestionDeps } from '@openscience/domain';
 import type { AuditContext } from '@openscience/observability';
 import { requireCurrentUser } from './session-guard';
 
@@ -58,6 +58,13 @@ export function registerIngestionRoutes(app: FastifyInstance, deps: IngestionDep
     } finally {
       activeIngestions -= 1;
     }
+  });
+
+  app.get('/ingestion', async (req, reply) => {
+    const user = await requireCurrentUser(deps, req, reply);
+    if (!user) return;
+    z.object({ actionable: z.enum(['true']).optional() }).parse(req.query);
+    return reply.send({ tasks: await listActionableIngestionTasks(deps, { userId: user.userId }) });
   });
 
   app.get('/ingestion/:batchId', async (req, reply) => {

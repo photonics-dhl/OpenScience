@@ -190,5 +190,5 @@ export { onSandboxJobCompleted } from './sandbox/events';
 export { checkPythonScript, modifyScriptStub, type PolicyCheckResult } from './sandbox';
 export { IngestionError, type IngestionErrorCode } from './ingestion/errors';
 export { INGESTION_EXTENSIONS, assertSupportedIngestionFile } from './ingestion/format-policy';
-export { INGESTION_TASK_STATES, type IngestionTaskState, type IngestionFileInput, type IngestionTaskView, type IngestionBatchView } from './ingestion/ingestion-types';
-export { authorizeIngestionWrite, confirmIngestionTask, createIngestionBatch, getIngestionBatch, getIngestionTask, retryIngestionTask, type IngestionDeps } from './ingestion/ingestion-service';
+export { INGESTION_TASK_STATES, type ActionableIngestionTaskView, type IngestionTaskState, type IngestionFileInput, type IngestionTaskView, type IngestionBatchView } from './ingestion/ingestion-types';
+export { authorizeIngestionWrite, confirmIngestionTask, createIngestionBatch, getIngestionBatch, getIngestionTask, listActionableIngestionTasks, retryIngestionTask, type IngestionDeps } from './ingestion/ingestion-service';

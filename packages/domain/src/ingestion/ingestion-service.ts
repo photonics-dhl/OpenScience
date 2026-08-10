@@ -9,7 +9,7 @@ import { recordAudit } from '../workspace/audit';
 import { updateSdfDocument } from '../research-object/sdf';
 import { IngestionError } from './errors';
 import { assertIngestionContent, assertSupportedIngestionFile } from './format-policy';
-import type { IngestionBatchView, IngestionFileInput, IngestionTaskView } from './ingestion-types';
+import type { ActionableIngestionTaskView, IngestionBatchView, IngestionFileInput, IngestionTaskView } from './ingestion-types';
 
 export type IngestionDeps = AgentDeps & { storage: StorageAdapter };
 
@@ -145,6 +145,31 @@ export async function getIngestionTask(
   if (!task) throw new IngestionError('INGESTION_NOT_FOUND', 'Ingestion task not found');
   await requireMembership(deps, task.batch.researchObject.workspaceId, input.userId);
   return { task: { ...taskToView(task), result: task.agentTask ? (task.agentTask.result as Record<string, unknown> | null) : null }, batchId: task.batchId, researchObjectId: task.batch.researchObjectId, version: task.batch.researchObject.version };
+}
+
+const ACTIONABLE_INGESTION_STATES = [
+  'queued', 'uploading', 'stored', 'parsing', 'needs_review', 'failed_retryable', 'failed_blocked',
+] as const;
+
+/** Lists only the caller's current ingestion work so Dashboard links use real IngestionTask ids. */
+export async function listActionableIngestionTasks(
+  deps: IngestionDeps,
+  input: { userId: string },
+): Promise<ActionableIngestionTaskView[]> {
+  const tasks = await deps.prisma.ingestionTask.findMany({
+    where: {
+      batch: { userId: input.userId },
+      state: { in: [...ACTIONABLE_INGESTION_STATES] },
+    },
+    include: { artifact: true, batch: { include: { researchObject: true } } },
+    orderBy: { updatedAt: 'desc' },
+    take: 20,
+  });
+  return tasks.map((task) => ({
+    ...taskToView(task),
+    researchObjectId: task.batch.researchObjectId,
+    researchTitle: task.batch.researchObject.title,
+  }));
 }
 
 export async function retryIngestionTask(
