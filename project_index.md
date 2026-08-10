@@ -35,6 +35,7 @@
 | `apps/web/components/brand/OpenScienceWordmark.tsx` / `apps/web/components/shell/*.tsx` / `apps/web/test/surface-shells.test.tsx` | Optical Editorial 品牌与 Public/Identity/Dashboard/Workspace 四类无 Card shell；单一 main、skip link、19/56/25 工作区平面与动作反馈门禁 | 活文档 |
 | `apps/web/components/hermes/{HermesRail,HermesVisualAdapter,hermes-state}.ts(x)` / `apps/web/test/hermes-state.test.tsx` | Dashboard Hermes 六态、真实 IngestionTask 同链入口、审批静止与静态 fallback；Wanko runtime 受许可门禁暂未部署 | 活实现（Task 9 in-progress） |
 | `apps/web/components/research/*.tsx` / `apps/web/components/editor/*.tsx` / `apps/web/app/research-objects/[id]/edit/page.tsx` | Optical Editorial RO Workspace：56/64/44px 产品层级、19/56/25 单实例工作面、六节点 SDF、Evidence/Before-After proposal、Artifact rule row、Radix 高影响审查与移动功能等价 | 活文档 |
+| `packages/domain/src/commit/commits.ts` / `apps/api/src/routes/commits.ts` | Commit、版本详情/重建/比较及成员受控的 `GET /research-objects/:id/versions` 降序摘要；供 Editor、Overview、Versions、Publish 共用 | 活接口；Task 12 补齐版本列表合同 |
 | `apps/web/lib/product-surfaces.ts` / `apps/web/test/product-surface-matrix.test.ts` | Task 12 产品表面真源：Overview/SDF/Files/Versions/Collaboration/Publish/Sandbox/Settings 的真实路由、权限、五态、移动等价与风险声明 | 活文档；本地门禁通过，待 ECS 验收 |
 | `apps/web/components/research/ResearchWorkspaceNav.tsx` / `ResearchSurfaceShell.tsx` | Research Object 统一工作区导航与三平面产品外壳；编辑器禁用模式已替换为真实页面入口 | 活实现；Task 12 |
 | `apps/web/app/research-objects/[id]/{overview,files,versions,publish,sandbox}/page.tsx` / `apps/web/app/settings/page.tsx` | Task 12 真实产品表面：对象概览、证据文件提交、版本比较、许可/审核/R3 发布、服务器沙箱、账户设置/退出登录 | 活实现；本地门禁通过，待 ECS 验收 |

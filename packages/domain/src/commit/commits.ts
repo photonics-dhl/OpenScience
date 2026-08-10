@@ -47,6 +47,14 @@ export interface VersionDetail {
   snapshot: VersionSnapshot;
 }
 
+export interface VersionSummary {
+  versionId: string;
+  versionNo: number;
+  status: string;
+  commitId: string;
+  createdAt: Date;
+}
+
 const DEFAULT_BRANCH = 'main';
 
 /**
@@ -246,6 +254,29 @@ export async function getVersion(
     createdAt: version.createdAt,
     snapshot,
   };
+}
+
+/** 列出 RO 的不可变版本摘要。成员校验先于查询，避免泄露私有版本存在性。 */
+export async function listVersions(
+  deps: ArtifactDeps,
+  input: { researchObjectId: string; userId: string },
+): Promise<VersionSummary[]> {
+  const ro = await deps.prisma.researchObject.findUnique({ where: { id: input.researchObjectId } });
+  if (!ro) throw new CommitError('RESEARCH_OBJECT_NOT_FOUND', '研究对象不存在');
+  await requireMembership(deps, ro.workspaceId, input.userId);
+  const rows = await deps.prisma.version.findMany({
+    where: { researchObjectId: ro.id },
+    orderBy: { versionNo: 'desc' },
+  });
+  return rows
+    .map((version) => ({
+      versionId: version.id,
+      versionNo: version.versionNo,
+      status: version.status,
+      commitId: version.commitId,
+      createdAt: version.createdAt,
+    }))
+    .sort((a, b) => b.versionNo - a.versionNo);
 }
 
 /** 完整重建版本快照（§7.1 可重建可校验）：Manifest core 快照 + entries。 */

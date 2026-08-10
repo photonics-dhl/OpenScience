@@ -14,6 +14,12 @@
 - 登录浏览器验收发现 `/auth/login` 被旧 Nginx `^/(auth|...)` API 兼容正则转发到 Fastify，返回 404；根因不是 React 页面或账号，而是 Web/API 同路径冲突。
 - 已以 TDD 增加精确 `/auth/login`、`/auth/register` → Next 路由，保留其他 `/auth/*` → Fastify；Nginx/deploy Node tests 5/5。待提交并重新部署后继续真实登录态七个 RO 表面验收。
 
+### ECS 版本列表合同阻断与修复
+
+- Nginx 修复上线后，真实测试账号可登录 Dashboard；Files、Collaboration、Sandbox、Settings 进入成功且 390px 无溢出。
+- Overview、Versions、Publish 的共同依赖 `GET /research-objects/:id/versions` 返回 404。审计确认 Web client 早已声明 `listVersions()`，但 Fastify 与 domain 从未实现该读接口；旧编辑器在 RO 已加载后仅显示局部错误，因此历史门禁漏报。
+- 已按成员权限先行、私有对象不泄露、`versionNo desc` 最小摘要合同补齐 domain/API，新增 domain 单测与 API 集成断言；focused domain 10/10、Domain/API typecheck 通过。待全量门禁、提交和 ECS 重部署。
+
 ## 2026-08-10（Task 11 Editorial Curator）— ✅ ECS 全流程上线
 
 - **数据合同**：migration 26 新增 `editorial_collections` 与 `editorial_selections`；精选固定 `researchObjectId + versionId`，保存 title/publicId/versionNo/SDF 快照，媒体必须提供 HTTPS URL、alt、credit、licenseId、sourceUrl。published selection 不可编辑，源 RO/version 仍须 public/published 才公开显示。
