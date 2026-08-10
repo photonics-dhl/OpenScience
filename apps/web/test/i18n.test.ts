@@ -30,4 +30,16 @@ describe('i18n 键对齐（zh/en，§2.5 决策 5）', () => {
     expect(zhCollab.highRisk.confirm).toBeDefined();
     expect(zhCollab.credit.software).toBeDefined();
   });
+
+  it('does not encode next-intl paths as literal dotted keys', () => {
+    for (const messages of [zh, en]) {
+      const visit = (value: Record<string, unknown>) => {
+        for (const [key, child] of Object.entries(value)) {
+          expect(key).not.toContain('.');
+          if (typeof child === 'object' && child !== null) visit(child as Record<string, unknown>);
+        }
+      };
+      visit(messages);
+    }
+  });
 });

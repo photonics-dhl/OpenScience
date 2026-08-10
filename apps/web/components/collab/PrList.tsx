@@ -234,7 +234,7 @@ export function PrDetail({
               <section aria-label={t('review.title')}>
                 <h4>{t('review.title')}</h4>
                 <div className="collab-create">
-                  <select aria-label={t('review.verdict')} value={reviewVerdict} onChange={(e) => setReviewVerdict(e.target.value)}>
+                  <select aria-label={t('review.verdictLabel')} value={reviewVerdict} onChange={(e) => setReviewVerdict(e.target.value)}>
                     <option value="approve">{t('review.verdict.approve')}</option>
                     <option value="request_changes">{t('review.verdict.requestChanges')}</option>
                     <option value="comment">{t('review.verdict.comment')}</option>

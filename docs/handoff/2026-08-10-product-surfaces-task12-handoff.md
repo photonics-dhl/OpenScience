@@ -6,7 +6,7 @@
 
 ## 状态
 
-Task 12 的页面代码 `c05145b` 与 Nginx 修复 `ab90a9d` 已部署 ECS。真实登录恢复后又发现版本列表 API 长期缺失；domain/API 修复与测试已完成，尚待全量门禁、提交和第三次部署。Task 11 的 Ultrafast Science 精选闭环仍在线且不应回退。
+Task 12 页面 `c05145b`、Nginx 修复 `ab90a9d`、版本列表 API `c30848b` 已部署 ECS。七个 RO 表面与 Settings 真实账号/390px 验收通过，仅 Collaboration 残留的 dotted i18n key 已本地修复，待最终部署复验后关闭 Task 12。Task 11 的 Ultrafast Science 精选闭环仍在线且不应回退。
 
 ## 已完成
 
@@ -25,9 +25,9 @@ Task 12 的页面代码 `c05145b` 与 Nginx 修复 `ab90a9d` 已部署 ECS。真
 
 ## 下一步
 
-1. 全量 test/typecheck/build/docs gates 后提交版本列表 API 修复。
-2. 使用 `infra/scripts/deploy.sh --confirm --skip-migrate <ref>` 全量服务器 build；无需数据库迁移。
-3. 登录测试账号验证 Dashboard → 任一 RO → 七个 RO 表面；匿名检查 settings 与 workspace 权限门禁。
+1. 提交 Collaboration i18n 嵌套键修复并使用 `deploy.sh --confirm --skip-migrate <ref>` 部署；无需数据库迁移。
+2. 登录测试账号只读复验 Collaboration console error=0，并抽查全部七个 RO 表面与 Settings。
+3. 同步生产证据、Task Master，将 Task 12 标记 done，进入 Task 13。
 3. 以 1440 与 390 视口检查页面溢出、console error、Publish R3 Dialog 和 Sandbox 结果。
 4. 把真实服务器证据补入 `docs/progress.md`，再将 Task 12 标记 done，进入 Task 13 Figma canonical map。
 

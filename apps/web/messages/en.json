@@ -139,14 +139,9 @@
     },
     "issue": {
       "newTitle": "New issue title",
-      "kind": "Type",
-      "kind.question": "Question",
-      "kind.method_repro": "Reproduction",
-      "kind.failure": "Failure",
-      "kind.bug_report": "Bug report",
-      "kind.suggestion": "Suggestion",
-      "status.open": "Open",
-      "status.closed": "Closed",
+      "kindLabel": "Type",
+      "kind": { "question": "Question", "method_repro": "Reproduction", "failure": "Failure", "bug_report": "Bug report", "suggestion": "Suggestion" },
+      "status": { "open": "Open", "closed": "Closed" },
       "create": "Create issue",
       "empty": "No issues",
       "noBody": "(no body)",
@@ -169,9 +164,7 @@
       "create": "Create PR",
       "empty": "No pull requests",
       "noBody": "(no body)",
-      "status.open": "Open",
-      "status.merged": "Merged",
-      "status.rejected": "Rejected",
+      "status": { "open": "Open", "merged": "Merged", "rejected": "Rejected" },
       "declaration": "Change declaration",
       "diff": "Change diff",
       "noDiff": "No diff",
@@ -180,10 +173,8 @@
     },
     "review": {
       "title": "Review",
-      "verdict": "Verdict",
-      "verdict.approve": "Approve",
-      "verdict.requestChanges": "Request changes",
-      "verdict.comment": "Comment",
+      "verdictLabel": "Verdict",
+      "verdict": { "approve": "Approve", "requestChanges": "Request changes", "comment": "Comment" },
       "body": "Review comment",
       "submit": "Submit review"
     },
@@ -239,9 +230,7 @@
       "empty": "No notifications",
       "markRead": "Mark as read",
       "view": "View",
-      "type.pull_request.opened": "Pull request opened",
-      "type.pull_request.merged": "Pull request merged",
-      "type.issue.updated": "Issue updated"
+      "type": { "pull_request": { "opened": "Pull request opened", "merged": "Pull request merged" }, "issue": { "updated": "Issue updated" } }
     }
   },
   "public": {

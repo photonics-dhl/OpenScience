@@ -20,6 +20,12 @@
 - Overview、Versions、Publish 的共同依赖 `GET /research-objects/:id/versions` 返回 404。审计确认 Web client 早已声明 `listVersions()`，但 Fastify 与 domain 从未实现该读接口；旧编辑器在 RO 已加载后仅显示局部错误，因此历史门禁漏报。
 - 已按成员权限先行、私有对象不泄露、`versionNo desc` 最小摘要合同补齐 domain/API，新增 domain 单测与 API 集成断言；focused domain 10/10、Domain/API typecheck 通过。待全量门禁、提交和 ECS 重部署。
 
+### ECS 七表面验收与 Collaboration i18n 收口
+
+- `c30848b` 已完成 ECS 全量构建和应用切换；真实账号下 Overview/Edit/Files/Versions/Publish/Sandbox/Settings 均 HTTP 200、统一导航存在、390px overflow=0、console error=0；无版本对象正确进入 empty state。
+- Collaboration 功能与布局正常，但浏览器捕获 10 条 `MISSING_MESSAGE`：旧消息把 `issue.kind.question` 等 next-intl 路径写成 JSON 扁平 dotted key。已把 issue/pr/review/notification 结构改为嵌套键，标签冲突改为 `kindLabel`/`verdictLabel`，并新增全消息树禁止 literal dotted key 门禁。
+- focused i18n/collab 9/9、Web typecheck/build 通过；待提交、部署后复验 Collaboration console error=0，随后关闭 Task 12。
+
 ## 2026-08-10（Task 11 Editorial Curator）— ✅ ECS 全流程上线
 
 - **数据合同**：migration 26 新增 `editorial_collections` 与 `editorial_selections`；精选固定 `researchObjectId + versionId`，保存 title/publicId/versionNo/SDF 快照，媒体必须提供 HTTPS URL、alt、credit、licenseId、sourceUrl。published selection 不可编辑，源 RO/version 仍须 public/published 才公开显示。

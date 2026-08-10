@@ -139,14 +139,9 @@
     },
     "issue": {
       "newTitle": "新问题标题",
-      "kind": "类型",
-      "kind.question": "提问",
-      "kind.method_repro": "复现问题",
-      "kind.failure": "失败",
-      "kind.bug_report": "错误报告",
-      "kind.suggestion": "建议",
-      "status.open": "开启",
-      "status.closed": "关闭",
+      "kindLabel": "类型",
+      "kind": { "question": "提问", "method_repro": "复现问题", "failure": "失败", "bug_report": "错误报告", "suggestion": "建议" },
+      "status": { "open": "开启", "closed": "关闭" },
       "create": "创建问题",
       "empty": "暂无问题",
       "noBody": "（无正文）",
@@ -169,9 +164,7 @@
       "create": "创建 PR",
       "empty": "暂无拉取请求",
       "noBody": "（无正文）",
-      "status.open": "开启",
-      "status.merged": "已合并",
-      "status.rejected": "已拒绝",
+      "status": { "open": "开启", "merged": "已合并", "rejected": "已拒绝" },
       "declaration": "变更声明",
       "diff": "变更差异",
       "noDiff": "暂无差异",
@@ -180,10 +173,8 @@
     },
     "review": {
       "title": "评审",
-      "verdict": "结论",
-      "verdict.approve": "通过",
-      "verdict.requestChanges": "请求修改",
-      "verdict.comment": "评论",
+      "verdictLabel": "结论",
+      "verdict": { "approve": "通过", "requestChanges": "请求修改", "comment": "评论" },
       "body": "评审意见",
       "submit": "提交评审"
     },
@@ -239,9 +230,7 @@
       "empty": "暂无通知",
       "markRead": "标为已读",
       "view": "查看",
-      "type.pull_request.opened": "拉取请求已打开",
-      "type.pull_request.merged": "拉取请求已合并",
-      "type.issue.updated": "问题动态"
+      "type": { "pull_request": { "opened": "拉取请求已打开", "merged": "拉取请求已合并" }, "issue": { "updated": "问题动态" } }
     }
   },
   "public": {
