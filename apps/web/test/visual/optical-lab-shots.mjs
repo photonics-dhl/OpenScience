@@ -186,20 +186,92 @@ for (const testCase of cases) {
         contexts: [],
         instancedDraws: 0,
         instancedDrawErrors: [],
+        instancedDrawInkStates: [],
         preInstancedDrawErrors: [],
         pointDrawArrays: 0,
       };
       window.__OPTICAL_LAB_TEST_FIXED_RAF_TIME__ = null;
       window.__OPTICAL_LAB_TEST_RAF_CALLBACKS__ = 0;
+      window.__OPTICAL_LAB_TEST_CONTROLLED_RAF_CALLBACKS__ = 0;
+      window.__OPTICAL_LAB_TEST_CONTROLLED_RENDERER_FRAMES__ = 0;
+      window.__OPTICAL_LAB_TEST_HELD_RAF_CALLBACKS__ = 0;
       window.__OPTICAL_LAB_TEST_LAST_POINTER_AT__ = null;
+      window.__OPTICAL_LAB_TEST_POINTER_NOW_READS__ = 0;
+      let controlledRendererFrameBudget = 0;
+      let holdRaf = false;
+      let forcedPointerNow = null;
+      let nextHeldRafId = -1;
+      const heldRafs = new Map();
       const requestAnimationFrame = window.requestAnimationFrame.bind(window);
-      window.requestAnimationFrame = (callback) => requestAnimationFrame((timestamp) => {
-        window.__OPTICAL_LAB_TEST_RAF_CALLBACKS__ += 1;
-        const fixedTimestamp = window.__OPTICAL_LAB_TEST_FIXED_RAF_TIME__;
-        callback(Number.isFinite(fixedTimestamp) ? fixedTimestamp : timestamp);
+      const cancelAnimationFrame = window.cancelAnimationFrame.bind(window);
+      const performanceNow = performance.now.bind(performance);
+      Object.defineProperty(performance, 'now', {
+        configurable: true,
+        value: () => {
+          if (Number.isFinite(forcedPointerNow)) {
+            window.__OPTICAL_LAB_TEST_POINTER_NOW_READS__ += 1;
+            return forcedPointerNow;
+          }
+          return performanceNow();
+        },
       });
+      window.__OPTICAL_LAB_TEST_CONTROL_RAF__ = (timestamp, frameCount) => {
+        window.__OPTICAL_LAB_TEST_FIXED_RAF_TIME__ = timestamp;
+        controlledRendererFrameBudget = frameCount;
+        holdRaf = false;
+      };
+      window.__OPTICAL_LAB_TEST_RELEASE_RAF__ = () => {
+        window.__OPTICAL_LAB_TEST_FIXED_RAF_TIME__ = null;
+        controlledRendererFrameBudget = 0;
+        holdRaf = false;
+        const queued = [...heldRafs.values()];
+        heldRafs.clear();
+        for (const callback of queued) window.requestAnimationFrame(callback);
+      };
+      window.__OPTICAL_LAB_TEST_RAF_STATE__ = () => ({
+        controlledRendererFrameBudget,
+        fixedTimestamp: window.__OPTICAL_LAB_TEST_FIXED_RAF_TIME__,
+        heldRafCount: heldRafs.size,
+        holdRaf,
+      });
+      window.requestAnimationFrame = (callback) => {
+        if (holdRaf) {
+          const heldId = nextHeldRafId;
+          nextHeldRafId -= 1;
+          heldRafs.set(heldId, callback);
+          window.__OPTICAL_LAB_TEST_HELD_RAF_CALLBACKS__ += 1;
+          return heldId;
+        }
+        let nativeId = 0;
+        nativeId = requestAnimationFrame((timestamp) => {
+          if (holdRaf) {
+            heldRafs.set(nativeId, callback);
+            window.__OPTICAL_LAB_TEST_HELD_RAF_CALLBACKS__ += 1;
+            return;
+          }
+          window.__OPTICAL_LAB_TEST_RAF_CALLBACKS__ += 1;
+          const fixedTimestamp = window.__OPTICAL_LAB_TEST_FIXED_RAF_TIME__;
+          if (Number.isFinite(fixedTimestamp) && controlledRendererFrameBudget > 0) {
+            window.__OPTICAL_LAB_TEST_CONTROLLED_RAF_CALLBACKS__ += 1;
+            callback(fixedTimestamp);
+            return;
+          }
+          callback(timestamp);
+        });
+        return nativeId;
+      };
+      window.cancelAnimationFrame = (id) => {
+        if (heldRafs.delete(id)) return;
+        cancelAnimationFrame(id);
+      };
       window.addEventListener('pointermove', () => {
-        window.__OPTICAL_LAB_TEST_LAST_POINTER_AT__ = performance.now();
+        const pointerAt = performanceNow();
+        window.__OPTICAL_LAB_TEST_LAST_POINTER_AT__ = pointerAt;
+        window.__OPTICAL_LAB_TEST_POINTER_NOW_READS__ = 0;
+        forcedPointerNow = pointerAt;
+        setTimeout(() => {
+          forcedPointerNow = null;
+        }, 0);
       }, { capture: true, passive: true });
       const original = HTMLCanvasElement.prototype.getContext;
       const canvasIds = new WeakMap();
@@ -208,7 +280,9 @@ for (const testCase of cases) {
         if (!context || context.__opticalLabInstrumented) return context;
         context.__opticalLabInstrumented = true;
         if (!canvasIds.has(canvas)) canvasIds.set(canvas, nextCanvasId++);
-        const record = { canvasId: canvasIds.get(canvas), created: {}, deleted: {}, type };
+        const canvasId = canvasIds.get(canvas);
+        canvas.__opticalLabTestCanvasId = canvasId;
+        const record = { canvasId, created: {}, deleted: {}, type };
         window.__OPTICAL_LAB_GL_TRACKER__.contexts.push(record);
         for (const resource of ['Shader', 'Program', 'Buffer', 'Texture', 'Framebuffer', 'Query']) {
           const createName = `create${resource}`;
@@ -244,6 +318,18 @@ for (const testCase of cases) {
           const drawError = context.getError();
           window.__OPTICAL_LAB_GL_TRACKER__.instancedDraws += 1;
           window.__OPTICAL_LAB_GL_TRACKER__.instancedDrawErrors.push(drawError);
+          queueMicrotask(() => {
+            const stage = document.querySelector('[data-optical-lab-candidate-stage="true"]');
+            window.__OPTICAL_LAB_GL_TRACKER__.instancedDrawInkStates.push(stage?.getAttribute('data-optical-ink') ?? null);
+          });
+          if (
+            Number.isFinite(window.__OPTICAL_LAB_TEST_FIXED_RAF_TIME__)
+            && controlledRendererFrameBudget > 0
+          ) {
+            controlledRendererFrameBudget -= 1;
+            window.__OPTICAL_LAB_TEST_CONTROLLED_RENDERER_FRAMES__ += 1;
+            if (controlledRendererFrameBudget === 0) holdRaf = true;
+          }
           return result;
         };
         if (typeof context.drawArraysInstanced === 'function') {
@@ -311,6 +397,7 @@ for (const testCase of cases) {
   await diagnostics.waitFor({ state: 'visible' });
   const mode = await diagnostics.getAttribute('data-render-mode');
   const contextStatus = await diagnostics.getAttribute('data-context-status');
+  const marker = page.locator('[data-optical-lab-evolves="true"] > span');
   let restingTopology = null;
   let targetTopology = null;
   if (
@@ -321,12 +408,27 @@ for (const testCase of cases) {
   ) {
     assert.equal(mode, 'dom-static', `${testCase.name} must use the stable DOM/static fallback`);
     assert.equal(await page.locator('canvas[data-optical-lab-canvas="true"]').count(), 0, `${testCase.name} must not start a GPU loop`);
+    assert.equal(
+      await marker.evaluate((node) => getComputedStyle(node).color),
+      'rgb(255, 78, 34)',
+      `${testCase.name} DOM fallback must keep the vermilion period visible`,
+    );
   } else {
     if (testCase.forceContext === 'webgl1' || testCase.forceContext === 'webgl2-init-failure') {
       assert.equal(mode, 'webgl1', `${testCase.name} must continue on WebGL1`);
     }
     else assert.match(mode ?? '', /^webgl[12]$/, 'desktop must choose a viable WebGL path');
     assert.equal(contextStatus, 'ready', 'desktop context must become ready');
+    const gpuMarkerStyle = await marker.evaluate((node) => ({
+      color: getComputedStyle(node).color,
+      selectionColor: getComputedStyle(node, '::selection').color,
+    }));
+    assert.equal(gpuMarkerStyle.color, 'rgba(0, 0, 0, 0)', `${testCase.name} GPU ink must hide the DOM period`);
+    assert.equal(
+      gpuMarkerStyle.selectionColor,
+      'rgb(255, 78, 34)',
+      `${testCase.name} GPU ink must preserve vermilion marker selection`,
+    );
     assert.equal(
       await page.locator('h1[data-optical-lab-semantic-title="true"]').evaluate((node) => node.scrollWidth <= node.clientWidth + 1),
       true,
@@ -338,6 +440,11 @@ for (const testCase of cases) {
     }, undefined, { timeout: 5_000 });
     const initialDrawEvidence = await page.evaluate(() => window.__OPTICAL_LAB_GL_TRACKER__);
     assert(initialDrawEvidence.instancedDrawErrors.length > 0, `${testCase.name} must record an instanced particle draw`);
+    assert.equal(
+      initialDrawEvidence.instancedDrawInkStates[0],
+      'gpu',
+      `${testCase.name} must switch to GPU ink immediately after the first complete particle draw`,
+    );
     assert(
       initialDrawEvidence.instancedDrawErrors.every((error) => error === 0),
       `${testCase.name} instanced particle draw returned GL errors: ${JSON.stringify(initialDrawEvidence.instancedDrawErrors)}`,
@@ -405,7 +512,7 @@ for (const testCase of cases) {
     const pointerFrames = new Map();
     for (const [position, factor] of [['left', 0.22], ['slit', 0.58], ['right', 0.82]]) {
       await page.evaluate(() => {
-        window.__OPTICAL_LAB_TEST_FIXED_RAF_TIME__ = null;
+        window.__OPTICAL_LAB_TEST_RELEASE_RAF__();
       });
       await page.mouse.move(initialBounds.x + 8, initialBounds.y + 8);
       await page.waitForTimeout(700);
@@ -418,11 +525,16 @@ for (const testCase of cases) {
         const lastPointerAt = window.__OPTICAL_LAB_TEST_LAST_POINTER_AT__;
         if (!Number.isFinite(lastPointerAt)) throw new Error('Optical Lab pointer timestamp was not recorded.');
         const fixedTimestamp = lastPointerAt + 150;
-        window.__OPTICAL_LAB_TEST_FIXED_RAF_TIME__ = fixedTimestamp;
+        window.__OPTICAL_LAB_TEST_CONTROL_RAF__(fixedTimestamp, 1);
         return {
           callbackCount: window.__OPTICAL_LAB_TEST_RAF_CALLBACKS__,
+          controlledCallbackCount: window.__OPTICAL_LAB_TEST_CONTROLLED_RAF_CALLBACKS__,
+          controlledRendererFrameCount: window.__OPTICAL_LAB_TEST_CONTROLLED_RENDERER_FRAMES__,
+          drawCount: window.__OPTICAL_LAB_GL_TRACKER__.instancedDraws,
           fixedTimestamp,
+          heldCallbackCount: window.__OPTICAL_LAB_TEST_HELD_RAF_CALLBACKS__,
           lastPointerAt,
+          pointerNowReads: window.__OPTICAL_LAB_TEST_POINTER_NOW_READS__,
         };
       });
       let screenshot;
@@ -432,10 +544,25 @@ for (const testCase of cases) {
           150,
           `${testCase.name}/${position} must sample exactly 150ms after the real pointer event`,
         );
-        await page.waitForFunction(
-          (callbackCount) => window.__OPTICAL_LAB_TEST_RAF_CALLBACKS__ >= callbackCount + 2,
-          controlledSample.callbackCount,
-        );
+        try {
+          await page.waitForFunction(
+            ({ controlledRendererFrameCount, drawCount }) => (
+              window.__OPTICAL_LAB_TEST_CONTROLLED_RENDERER_FRAMES__ >= controlledRendererFrameCount + 1
+              && window.__OPTICAL_LAB_GL_TRACKER__.instancedDraws >= drawCount + 1
+            ),
+            controlledSample,
+            { polling: 10, timeout: 3_000 },
+          );
+        } catch (error) {
+          const clockEvidence = await page.evaluate(() => ({
+            callbackCount: window.__OPTICAL_LAB_TEST_RAF_CALLBACKS__,
+            controlledCallbackCount: window.__OPTICAL_LAB_TEST_CONTROLLED_RAF_CALLBACKS__,
+            controlledRendererFrameCount: window.__OPTICAL_LAB_TEST_CONTROLLED_RENDERER_FRAMES__,
+            drawCount: window.__OPTICAL_LAB_GL_TRACKER__.instancedDraws,
+            state: window.__OPTICAL_LAB_TEST_RAF_STATE__(),
+          }));
+          throw new Error(`${testCase.name}/${position} controlled renderer frame timed out: ${JSON.stringify(clockEvidence)}`, { cause: error });
+        }
         const current = await diagnostics.evaluate((node) => ({
           apertureX: Number(node.getAttribute('data-aperture-x')),
           mode: node.getAttribute('data-render-mode'),
@@ -443,9 +570,38 @@ for (const testCase of cases) {
         assert(Math.abs(current.apertureX - 0.58) < 0.0001, `${position} frame must retain the fixed slit`);
         assert.equal(current.mode, mode, `${position} frame must not change renderer mode`);
         screenshot = await stage.screenshot({ path: path.join(outDir, `${testCase.name}-${position}-150ms.png`) });
+        const heldEvidence = await page.evaluate(() => ({
+          callbackCount: window.__OPTICAL_LAB_TEST_RAF_CALLBACKS__,
+          controlledCallbackCount: window.__OPTICAL_LAB_TEST_CONTROLLED_RAF_CALLBACKS__,
+          controlledRendererFrameCount: window.__OPTICAL_LAB_TEST_CONTROLLED_RENDERER_FRAMES__,
+          drawCount: window.__OPTICAL_LAB_GL_TRACKER__.instancedDraws,
+          heldCallbackCount: window.__OPTICAL_LAB_TEST_HELD_RAF_CALLBACKS__,
+        }));
+        assert(
+          controlledSample.pointerNowReads >= 1,
+          `${testCase.name}/${position} renderer must read the captured pointer event timestamp`,
+        );
+        assert(
+          heldEvidence.controlledCallbackCount > controlledSample.controlledCallbackCount,
+          `${testCase.name}/${position} must execute a fixed-time RAF callback`,
+        );
+        assert.equal(
+          heldEvidence.controlledRendererFrameCount - controlledSample.controlledRendererFrameCount,
+          1,
+          `${testCase.name}/${position} must execute exactly one authorized fixed-time renderer frame`,
+        );
+        assert.equal(
+          heldEvidence.drawCount - controlledSample.drawCount,
+          1,
+          `${testCase.name}/${position} must render exactly one controlled 150ms particle frame during capture`,
+        );
+        assert(
+          heldEvidence.heldCallbackCount > controlledSample.heldCallbackCount,
+          `${testCase.name}/${position} must hold the renderer's queued follow-up RAF during capture`,
+        );
       } finally {
         await page.evaluate(() => {
-          window.__OPTICAL_LAB_TEST_FIXED_RAF_TIME__ = null;
+          window.__OPTICAL_LAB_TEST_RELEASE_RAF__();
         });
       }
       const decoded = await decodeScreenshot(page, screenshot);
@@ -518,23 +674,91 @@ for (const testCase of cases) {
     assert(Math.abs(finalBounds.width - initialBounds.width) < 1, 'pointer frames must not resize candidate width');
     assert(Math.abs(finalBounds.height - initialBounds.height) < 1, 'pointer frames must not resize candidate height');
 
-    const recovery = await page.evaluate(async () => {
+    const recoveryBefore = await page.evaluate(() => {
       const canvas = document.querySelector('canvas[data-optical-lab-canvas="true"]');
+      const tracker = window.__OPTICAL_LAB_GL_TRACKER__;
       if (!(canvas instanceof HTMLCanvasElement)) return { tested: false };
+      const canvasId = canvas.__opticalLabTestCanvasId;
+      const context = tracker.contexts.findLast((entry) => entry.canvasId === canvasId);
+      if (!context) return { tested: false };
       const gl = canvas.getContext('webgl2') ?? canvas.getContext('webgl');
       const lose = gl?.getExtension('WEBGL_lose_context');
       if (!lose) return { tested: false };
+      window.__OPTICAL_LAB_TEST_CONTEXT_LOSS_EXTENSION__ = lose;
+      const before = {
+        canvasId,
+        contextCount: tracker.contexts.length,
+        created: { ...context.created },
+        drawCount: tracker.instancedDraws,
+        drawErrorCount: tracker.instancedDrawErrors.length,
+        tested: true,
+      };
       lose.loseContext();
-      await new Promise((resolve) => setTimeout(resolve, 80));
-      const lost = document.querySelector('[data-optical-lab-diagnostics="true"]')?.getAttribute('data-context-status');
-      lose.restoreContext();
-      await new Promise((resolve) => setTimeout(resolve, 500));
-      const restored = document.querySelector('[data-optical-lab-diagnostics="true"]')?.getAttribute('data-context-status');
-      return { tested: true, lost, restored };
+      return before;
     });
-    assert.equal(recovery.tested, true, `${testCase.name} cannot verify context loss because WEBGL_lose_context is unavailable`);
-    assert.equal(recovery.lost, 'lost', 'context loss must expose a DOM fallback state');
-    assert.equal(recovery.restored, 'ready', 'context restoration must reinitialize the renderer');
+    assert.equal(recoveryBefore.tested, true, `${testCase.name} cannot verify context loss because WEBGL_lose_context is unavailable`);
+    await page.waitForFunction(() => (
+      document.querySelector('[data-optical-lab-diagnostics="true"]')?.getAttribute('data-context-status') === 'lost'
+    ), undefined, { polling: 10, timeout: 3_000 });
+    const lost = await diagnostics.getAttribute('data-context-status');
+    await page.evaluate(() => window.__OPTICAL_LAB_TEST_CONTEXT_LOSS_EXTENSION__.restoreContext());
+    await page.waitForFunction((before) => {
+      const diagnostics = document.querySelector('[data-optical-lab-diagnostics="true"]');
+      const canvas = document.querySelector('canvas[data-optical-lab-canvas="true"]');
+      const tracker = window.__OPTICAL_LAB_GL_TRACKER__;
+      return diagnostics?.getAttribute('data-context-status') === 'ready'
+        && canvas?.__opticalLabTestCanvasId !== before.canvasId
+        && tracker.contexts.length > before.contextCount
+        && tracker.instancedDraws > before.drawCount
+        && tracker.instancedDrawErrors.length > before.drawErrorCount;
+    }, recoveryBefore, { polling: 10, timeout: 5_000 });
+    const recoveryAfter = await page.evaluate((before) => {
+      const canvas = document.querySelector('canvas[data-optical-lab-canvas="true"]');
+      const tracker = window.__OPTICAL_LAB_GL_TRACKER__;
+      return {
+        canvasId: canvas?.__opticalLabTestCanvasId ?? null,
+        contexts: tracker.contexts.map((context) => ({
+          canvasId: context.canvasId,
+          created: { ...context.created },
+          deleted: { ...context.deleted },
+          type: context.type,
+        })),
+        drawCount: tracker.instancedDraws,
+        freshDrawErrors: tracker.instancedDrawErrors.slice(before.drawErrorCount),
+        restored: document.querySelector('[data-optical-lab-diagnostics="true"]')?.getAttribute('data-context-status'),
+      };
+    }, recoveryBefore);
+    const newContexts = recoveryAfter.contexts.slice(recoveryBefore.contextCount);
+    const newContext = newContexts.find((context) => context.canvasId === recoveryAfter.canvasId);
+    const oldContext = recoveryAfter.contexts.find((context) => context.canvasId === recoveryBefore.canvasId);
+    assert.equal(lost, 'lost', 'context loss must expose a DOM fallback state');
+    assert.equal(recoveryAfter.restored, 'ready', 'context restoration must reinitialize the renderer');
+    assert(newContext, `${testCase.name} restoration must create a new tracked GL context for the restored canvas`);
+    assert.notEqual(recoveryAfter.canvasId, recoveryBefore.canvasId, `${testCase.name} restoration must mount a fresh canvas`);
+    assert(oldContext, `${testCase.name} loss must retain the old context resource ledger`);
+    assert.deepEqual(oldContext.created, recoveryBefore.created, `${testCase.name} old context must not allocate after loss`);
+    for (const [resource, created] of Object.entries(recoveryBefore.created)) {
+      assert.equal(
+        oldContext.deleted[resource] ?? 0,
+        created,
+        `${testCase.name} context restoration leaked old ${resource}`,
+      );
+    }
+    assert(recoveryAfter.drawCount > recoveryBefore.drawCount, `${testCase.name} restoration must issue a fresh instanced draw`);
+    assert(recoveryAfter.freshDrawErrors.length > 0, `${testCase.name} restoration must record a fresh instanced draw error`);
+    assert(
+      recoveryAfter.freshDrawErrors.every((error) => error === 0),
+      `${testCase.name} restored instanced draw returned GL errors: ${JSON.stringify(recoveryAfter.freshDrawErrors)}`,
+    );
+    const restoredFrame = await decodeScreenshot(
+      page,
+      await stage.screenshot({ path: path.join(outDir, `${testCase.name}-restored.png`) }),
+    );
+    const restoredTopology = analyzeOpticalTopology(restoredFrame, .58);
+    assert(
+      restoredTopology.verticalCurtainCoverage > 0 && restoredTopology.verticalCurtainSpread > 0,
+      `${testCase.name} restoration must render a nonzero particle curtain: ${JSON.stringify(restoredTopology)}`,
+    );
     await page.waitForFunction(() => {
       const value = document.querySelector('[data-optical-lab-diagnostics="true"]')?.getAttribute('data-gpu-frame-ms');
       return value !== null && value !== 'unavailable' && Number(value) >= 0;

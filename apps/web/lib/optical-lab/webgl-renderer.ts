@@ -621,7 +621,7 @@ function initializeOpticalLabWebGLRenderer(
     const cpuFrameMs = performance.now() - cpuStarted;
     metrics.record(now, cpuFrameMs, latestGpuMs);
     frameIndex += 1;
-    if (frameIndex % 10 === 0) {
+    if (frameIndex === 1 || frameIndex % 10 === 0) {
       const bounds = stage.getBoundingClientRect();
       const stableBounds = `${bounds.x.toFixed(1)},${bounds.y.toFixed(1)},${bounds.width.toFixed(1)},${bounds.height.toFixed(1)}`;
       const snapshot = metrics.snapshot({ height: bounds.height, width: bounds.width, x: bounds.x, y: bounds.y });

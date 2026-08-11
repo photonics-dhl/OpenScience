@@ -152,7 +152,8 @@
   color: var(--os-vermilion);
 }
 
-.candidate[data-optical-ink='gpu'] .headline {
+.candidate[data-optical-ink='gpu'] .headline,
+.candidate[data-optical-ink='gpu'] .headline * {
   color: transparent;
 }
 
@@ -160,6 +161,10 @@
 .candidate[data-optical-ink='gpu'] .headline *::selection {
   color: var(--os-paper);
   background: rgb(255 78 34 / .42);
+}
+
+.candidate[data-optical-ink='gpu'] .headline .marker::selection {
+  color: var(--os-vermilion);
 }
 
 .clientSlot,
