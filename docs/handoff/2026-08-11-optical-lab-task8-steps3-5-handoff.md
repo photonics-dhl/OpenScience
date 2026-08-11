@@ -2,7 +2,7 @@
 
 ## Status
 
-Task 8 Steps 3–5 and Candidate B local engineering acceptance are complete on `codex/optical-editorial-v3`, but the user has now rejected Candidate B's visual result as too far from the `Science evolves.` reference. The isolated Lab remains available only at `/_visual/optical-lab`; production `/` and its Canvas renderer remain unchanged. Task Master Task 4 remains `in-progress`.
+Task 8 Steps 3–5 and Candidate B local engineering acceptance are complete on `codex/optical-editorial-v3`, but the user rejected Candidate B's visual result as too far from the `Science evolves.` reference. The user has now approved the replacement design and its eight-task implementation plan. The isolated Lab remains available only at `/_visual/optical-lab`; production `/` and its Canvas renderer remain unchanged. Task Master Task 4 remains `in-progress`.
 
 Candidate B commits: model `40b2668`, material/gate `217fcd3`, review fixes `db68475` and `af08251`, browser-global lint fix `ded8011`. Earlier Candidate A commits `8485dac` and `a0509ef` remain history. The Lab has **not** been deployed.
 
@@ -19,7 +19,9 @@ Candidate B commits: model `40b2668`, material/gate `217fcd3`, review fixes `db6
 
 Candidate B is engineering-valid but aesthetically rejected. Original-resolution evidence remains useful lifecycle and regression history, but its small title, isolated point curtain, weak focus and thin rightward emission do not reproduce the reference's composition or material quality. It must not replace production `/` or be called visually accepted.
 
-The user approved a replacement design section by section: OGL WebGL2 multi-pass rendering; a 1672×941 title contract spanning `x=2.2%–95.7%` and `y=35.8%–60%`; a fixed 58% type/aperture seam; intact glyph, dissolution, full-height curtain, 4–6vw caustic and right-only emission layers; flowmap-driven 1–2px whole-line follow with a 4px local cap and 650ms exact recovery; and a pre-rendered high-fidelity static fallback for WebGL1/reduced motion. The active design is `docs/specs/2026-08-11-optical-lab-high-fidelity-design.md`, pending written review.
+The user approved a replacement design section by section and in final written review: OGL WebGL2 multi-pass rendering; a 1672×941 title contract spanning `x=2.2%–95.7%` and `y=35.8%–60%`; a fixed 58% type/aperture seam; intact glyph, dissolution, full-height curtain, 4–6vw caustic and right-only emission layers; flowmap-driven 1–2px whole-line follow with a 4px local cap and 650ms exact recovery; and a pre-rendered high-fidelity static fallback for WebGL1/reduced motion. The active design is `docs/specs/2026-08-11-optical-lab-high-fidelity-design.md`; the active implementation plan is `docs/superpowers/plans/2026-08-11-optical-lab-high-fidelity-reconstruction-plan.md`.
+
+The plan fixes the reproducible asset path: `ogl@1.0.11` is the only new runtime dependency, `msdf-bmfont-xml@2.8.0` is a project-pinned development generator, selected Google Fonts TTF/OFL sources and SHA-256 manifests are committed, and the browser never downloads fonts at runtime. It has hard user stops after the native-size typography specimen and after the complete resting material. Pointer response and fallback promotion cannot begin before those approvals.
 
 ## Server preflight
 
@@ -52,9 +54,10 @@ Next App Router treats `_visual` as a private folder. The actual route therefore
 
 ## Pending
 
-1. User reviews the written high-fidelity spec; after approval, invoke `writing-plans` and start with a typography-only full-size specimen gate.
-2. Amend ADR-009 in the implementation plan because the approved design replaces the dependency-free native experiment with OGL inside the isolated Lab.
-3. Preserve Candidate B lifecycle/cleanup evidence while replacing its visual formulas; headless SwiftShader is not real-device performance proof.
-4. Do not deploy or replace production `/` without a later explicit plan and authorization.
+1. User chooses Subagent-Driven or Inline Execution for the approved implementation plan.
+2. Start Task 1 with the typography-only 1672×941 specimen RED; do not implement OGL particles or post-processing until the user selects and approves a shipping font specimen.
+3. Amend ADR-009 in Task 2 because the approved design replaces the dependency-free native experiment with OGL inside the isolated Lab.
+4. Preserve Candidate B lifecycle/cleanup evidence while replacing its visual formulas; headless SwiftShader is not real-device performance proof.
+5. Do not deploy or replace production `/` without a later explicit plan and authorization.
 
 No ECS, compose, API, schema, authentication, upload, Hermes or production Landing change is part of this handoff.

@@ -1,12 +1,20 @@
 # OpenScience (XGS) 进度日志
 
+## 2026-08-11（Optical Lab 高保真重构计划）— ✅ 设计确认，待选择执行方式
+
+- **书面确认**：用户确认 `docs/specs/2026-08-11-optical-lab-high-fidelity-design.md`，忠实原型、OGL WebGL2 多通道、静态高保真降级与轻量 flowmap 交互边界不再开放漂移。
+- **实施计划**：新增 `docs/superpowers/plans/2026-08-11-optical-lab-high-fidelity-reconstruction-plan.md`，8 个 TDD task 覆盖全尺寸字体样张、固定版本 OGL/MSDF 资产、WebGL2 生命周期、MSDF 排版、五层静止光场、4px 内 flowmap、静态降级/预算及最终验收。
+- **硬验收点**：Task 1 全尺寸字体样张必须先获用户批准，才可进入粒子/后处理；Task 5 静止材质必须先获批准，才可加入鼠标响应与推广静态 fallback；最终批准仍不授权替换生产 `/` 或部署 ECS。
+- **当前边界**：本轮只写计划并同步文档，没有修改 Web 实现、依赖、锁文件、生产 Landing、API/schema/auth/Hermes，也没有部署。
+- **下一步**：用户选择 Subagent-Driven（推荐）或 Inline Execution；执行从 Task 1 的真实 RED 与 1672×941 字体样张开始。
+
 ## 2026-08-11（Optical Lab 高保真重构设计）— ⏳ 分段确认，待书面复核
 
 - **用户裁决**：Candidate B 虽工程门禁全绿，但标题比例、粒子层次、焦散与合成材质离 `Science evolves.` 原型过远，视觉上显得廉价，正式拒绝为审美基线；选择“忠实原型”方向 A。
 - **技术调研**：核对 OGL 的 MSDF、Mouse Flowmap、GPGPU particles、RenderTarget/Bloom/Fluid Distortion，及 Three.js + Troika + postprocessing、VFX-JS、Curtains.js、PixiJS 的适用边界；最新版 Three.js WebGLRenderer 已为 WebGL2-only。用户确认采用 OGL WebGL2 多通道重构，WebGL1/低性能环境使用高保真静态降级。
 - **已确认设计**：1672×941 下标题约占 `x=2.2%–95.7%`、`y=35.8%–60%`，基线约 54.2%，两套字体和固定 aperture 在 58% 相接；静止态由完整字形、字形溶解、全高粒子幕、4–6vw 窄焦散和仅向右射流五层组成；鼠标只以 flowmap 做 1–2px 整行跟随、局部不超过 4px、650ms 无 bounce 归零。
 - **文档**：新增 `docs/specs/2026-08-11-optical-lab-high-fidelity-design.md`，Candidate B spec 标记 DEPRECATED；生产 `/`、ECS、API、schema、auth 与 Hermes 均未修改或部署。
-- **下一步**：用户书面复核新 spec；批准后调用 writing-plans，第一实施门只做全尺寸字体 specimen，未通过人工排版验收前不得进入粒子或后处理实现。
+- **后续状态**：用户已书面确认，新实施计划已建立；第一实施门仍只做全尺寸字体 specimen，未通过人工排版验收前不得进入粒子或后处理实现。
 
 ## 2026-08-11（Optical Lab Candidate B 最终复审）— ✅ Important 修复，待 Step 6 用户选择
 
