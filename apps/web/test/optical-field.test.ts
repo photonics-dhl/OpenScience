@@ -23,7 +23,7 @@ describe('pointer-local optical field model', () => {
     expect(sample.evidence).toBe(1);
     expect(sample.ambientSpacing).toBe(26);
     expect(sample.coreSpacing).toBe(6);
-    expect(sample.aperture).toEqual({ x: 835.1999999999999, y: 414 });
+    expect(sample.aperture).toEqual({ x: 720, y: 414 });
   });
 
   it('keeps the diffraction aperture fixed while the pointer becomes a local field origin', () => {
@@ -32,7 +32,7 @@ describe('pointer-local optical field model', () => {
       { width: 1440, height: 900, dpr: 1 },
       500,
     );
-    expect(sample.aperture).toEqual({ x: 835.1999999999999, y: 414 });
+    expect(sample.aperture).toEqual({ x: 720, y: 414 });
     expect(sample.origin).toEqual({ x: 180, y: 160 });
   });
 
@@ -75,8 +75,8 @@ describe('pointer-local optical field model', () => {
     const pointer = { x: 120, y: 100, lastActiveAt: 1_000, pressed: false };
     const viewport = { width: 1_000, height: 600, dpr: 1 };
     expect(sampleOpticalField(pointer, viewport, 1_000).origin).toEqual({ x: 120, y: 100 });
-    expect(sampleOpticalField(pointer, viewport, 1_325).origin).toEqual({ x: 350, y: 188 });
-    expect(sampleOpticalField(pointer, viewport, 1_650).origin).toEqual({ x: 580, y: 276 });
+    expect(sampleOpticalField(pointer, viewport, 1_325).origin).toEqual({ x: 310, y: 188 });
+    expect(sampleOpticalField(pointer, viewport, 1_650).origin).toEqual({ x: 500, y: 276 });
   });
 
   it('suspends animation offscreen and caches layout through observers', () => {
@@ -130,6 +130,7 @@ describe('pointer-local optical field model', () => {
     const source = readFileSync(new URL('../lib/optical-field/canvas-renderer.ts', import.meta.url), 'utf8');
     expect(source).toContain('coreOnly ? sample.aperture');
     expect(source).toContain('sample.origin');
-    expect(source).toContain('viewport.height * 0.42');
+    expect(source).toContain('Math.exp(-Math.abs(baseDx)');
+    expect(source).not.toContain('context.ellipse(aperture.x + 2');
   });
 });

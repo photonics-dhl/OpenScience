@@ -8,30 +8,20 @@ function renderParticleLayer(
   coreOnly: boolean,
 ) {
   const center = coreOnly ? sample.aperture : sample.origin;
-  const radiusX = coreOnly ? sample.radius * 1.08 : sample.radius;
-  const radiusY = coreOnly ? viewport.height * 0.42 : sample.radius;
+  const radiusX = coreOnly ? sample.radius * 0.58 : sample.radius;
   const minimumX = coreOnly ? Math.max(spacing / 2, center.x - radiusX) : spacing / 2;
   const maximumX = coreOnly ? Math.min(viewport.width, center.x + radiusX) : viewport.width;
-  const minimumY = coreOnly ? Math.max(spacing / 2, center.y - radiusY) : spacing / 2;
-  const maximumY = coreOnly ? Math.min(viewport.height, center.y + radiusY) : viewport.height;
+  const minimumY = spacing / 2;
+  const maximumY = viewport.height;
 
-  context.fillStyle = coreOnly ? 'rgba(241, 238, 231, 0.58)' : 'rgba(241, 238, 231, 0.12)';
+  context.fillStyle = 'rgba(241, 238, 231, 0.12)';
   for (let y = minimumY; y < maximumY; y += spacing) {
     for (let x = minimumX; x < maximumX; x += spacing) {
       const baseDx = x - center.x;
-      const baseDy = y - center.y;
-      const distance = Math.hypot(baseDx, baseDy);
       const influenceDx = x - sample.origin.x;
       const influenceDy = y - sample.origin.y;
       const influenceDistance = Math.hypot(influenceDx, influenceDy);
-      const baselineDistance = coreOnly
-        ? Math.hypot(baseDx / radiusX, baseDy / radiusY)
-        : distance / sample.radius;
-      if (baselineDistance > 1) continue;
-      const baselineInfluence = Math.max(0, 1 - baselineDistance);
-      const normalizedDistance = coreOnly
-        ? Math.hypot(influenceDx / sample.radius, influenceDy / sample.radius)
-        : distance / sample.radius;
+      const normalizedDistance = influenceDistance / sample.radius;
       if (!coreOnly && normalizedDistance > 1) continue;
       const influence = Math.max(0, 1 - normalizedDistance);
       const radialX = influenceDistance ? influenceDx / influenceDistance : 0;
@@ -39,11 +29,12 @@ function renderParticleLayer(
       const ripple = Math.sin(sample.phase * 2.2 + influenceDistance * 0.055) * influence * (coreOnly ? 7 : 2);
       const strength = coreOnly ? sample.displacement : sample.displacement * 0.16;
       const offset = influence * influence * strength;
-      const radius = coreOnly ? 0.62 + influence * 1.25 : 0.52 + influence * 0.42;
-
-      const alpha = coreOnly
-        ? 0.055 + baselineInfluence * 0.25 + influence * 0.32
-        : 0.055 + influence * 0.46;
+      const baseline = coreOnly
+        ? Math.exp(-Math.abs(baseDx) / (radiusX * 0.58)) * (0.38 + 0.62 * Math.max(0, 1 - Math.abs(y - sample.aperture.y) / (viewport.height * 0.62)))
+        : 1;
+      const radius = coreOnly ? 0.45 + baseline * 0.72 + influence * 1.15 : 0.52 + influence * 0.42;
+      const alpha = coreOnly ? 0.028 + baseline * 0.22 + influence * 0.26 : 0.055 + influence * 0.46;
+      if (alpha < 0.04) continue;
       context.fillStyle = `rgba(241, 238, 231, ${alpha})`;
       context.beginPath();
       context.arc(
@@ -81,7 +72,7 @@ function renderApertureCurtain(context: CanvasRenderingContext2D, sample: Optica
 function renderDiffractionField(context: CanvasRenderingContext2D, sample: OpticalSample, mobile: boolean) {
   const { aperture } = sample;
   const intensity = 0.24 + sample.evidence * 0.56;
-  const reach = mobile ? 5 : 8;
+  const reach = mobile ? 9 : 17;
   const slitHalfHeight = mobile ? 15 : 23;
   const baffleHeight = mobile ? 72 : 112;
 
@@ -100,22 +91,13 @@ function renderDiffractionField(context: CanvasRenderingContext2D, sample: Optic
   for (let step = 0; step <= reach; step += 1) {
     const upper = sampleDiffractionWavefront(aperture, step, -1, sample.phase);
     const lower = sampleDiffractionWavefront(aperture, step, 1, sample.phase);
-    const alpha = Math.max(0.05, 0.34 - step * 0.03);
+    const alpha = Math.max(0.025, 0.18 - step * 0.009);
     context.strokeStyle = `rgba(241, 238, 231, ${alpha})`;
     context.beginPath();
     context.moveTo(aperture.x + 2, aperture.y);
     context.quadraticCurveTo(upper.x - 12, aperture.y, upper.x, upper.y);
     context.moveTo(aperture.x + 2, aperture.y);
     context.quadraticCurveTo(lower.x - 12, aperture.y, lower.x, lower.y);
-    context.stroke();
-  }
-
-  context.strokeStyle = 'rgba(241, 238, 231, 0.2)';
-  for (let band = 1; band <= (mobile ? 3 : 5); band += 1) {
-    const radiusX = band * (mobile ? 22 : 31);
-    const radiusY = band * (mobile ? 34 : 48);
-    context.beginPath();
-    context.ellipse(aperture.x + 2, aperture.y, radiusX, radiusY, 0, -Math.PI / 2, Math.PI / 2);
     context.stroke();
   }
 

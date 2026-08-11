@@ -1670,7 +1670,7 @@ body {
 /* Local optical typography: the DOM headline remains the readable source;
    these layers only reveal a pointer-local instrument effect. */
 [data-optical-text-stage='true'] {
-  --os-optical-x: 58%;
+  --os-optical-x: 50%;
   --os-optical-y: 46%;
   --os-optical-radius: 180px;
   --os-optical-focus: 0;
@@ -1679,18 +1679,15 @@ body {
 }
 
 .os-optical-headline-axis {
-  display: inline-flex;
-  align-items: baseline;
-  white-space: nowrap;
+  display: block;
   line-height: .84;
 }
 
 .os-optical-science,
 .os-optical-evolves {
+  display: block;
   letter-spacing: 0;
 }
-
-.os-optical-gap { display: inline-block; width: .16em; }
 
 .os-optical-science {
   font-size: 4.7rem;
@@ -1698,6 +1695,7 @@ body {
 }
 
 .os-optical-evolves {
+  margin-left: 14vw;
   padding-bottom: .13em;
   font-size: 5.2rem;
   font-style: italic;
@@ -1706,7 +1704,7 @@ body {
 
 @media (min-width: 640px) {
   .os-optical-science { font-size: 7rem; }
-  .os-optical-evolves { font-size: 7.6rem; }
+  .os-optical-evolves { margin-left: 18vw; font-size: 7.6rem; }
 }
 
 @media (min-width: 1024px) {
@@ -1715,8 +1713,13 @@ body {
 }
 
 @media (min-width: 1280px) {
+  .os-optical-headline-axis {
+    display: flex;
+    align-items: baseline;
+    white-space: nowrap;
+  }
   .os-optical-science { font-size: 10.5rem; }
-  .os-optical-evolves { font-size: 10.5rem; }
+  .os-optical-evolves { margin-left: -.045em; font-size: 10.5rem; }
 }
 
 @media (min-width: 1600px) {
@@ -1725,21 +1728,21 @@ body {
 }
 
 [data-optical-text-base='true'] {
-  -webkit-mask-image: radial-gradient(ellipse calc(var(--os-optical-radius) * .82) calc(var(--os-optical-radius) * 1.22) at var(--os-optical-x) var(--os-optical-y), rgb(0 0 0 / calc(1 - var(--os-optical-focus))) 0 34%, rgb(0 0 0 / .24) 56%, #000 82%);
-  mask-image: radial-gradient(ellipse calc(var(--os-optical-radius) * .82) calc(var(--os-optical-radius) * 1.22) at var(--os-optical-x) var(--os-optical-y), rgb(0 0 0 / calc(1 - var(--os-optical-focus))) 0 34%, rgb(0 0 0 / .24) 56%, #000 82%);
+  -webkit-mask-image: radial-gradient(ellipse calc(var(--os-optical-radius) * .58) calc(var(--os-optical-radius) * 1.08) at var(--os-optical-x) var(--os-optical-y), rgb(0 0 0 / calc(1 - var(--os-optical-focus))) 0 34%, rgb(0 0 0 / .24) 56%, #000 82%);
+  mask-image: radial-gradient(ellipse calc(var(--os-optical-radius) * .58) calc(var(--os-optical-radius) * 1.08) at var(--os-optical-x) var(--os-optical-y), rgb(0 0 0 / calc(1 - var(--os-optical-focus))) 0 34%, rgb(0 0 0 / .24) 56%, #000 82%);
 }
 
 [data-optical-text-distorted='true'] {
   filter: url('#os-local-distortion');
-  -webkit-mask-image: radial-gradient(ellipse calc(var(--os-optical-radius) * .82) calc(var(--os-optical-radius) * 1.22) at var(--os-optical-x) var(--os-optical-y), #000 0 34%, rgb(0 0 0 / .96) 57%, transparent 84%);
-  mask-image: radial-gradient(ellipse calc(var(--os-optical-radius) * .82) calc(var(--os-optical-radius) * 1.22) at var(--os-optical-x) var(--os-optical-y), #000 0 34%, rgb(0 0 0 / .96) 57%, transparent 84%);
+  -webkit-mask-image: radial-gradient(ellipse calc(var(--os-optical-radius) * .58) calc(var(--os-optical-radius) * 1.08) at var(--os-optical-x) var(--os-optical-y), #000 0 34%, rgb(0 0 0 / .96) 57%, transparent 84%);
+  mask-image: radial-gradient(ellipse calc(var(--os-optical-radius) * .58) calc(var(--os-optical-radius) * 1.08) at var(--os-optical-x) var(--os-optical-y), #000 0 34%, rgb(0 0 0 / .96) 57%, transparent 84%);
   opacity: calc(var(--os-optical-focus) * .96);
   mix-blend-mode: normal;
 }
 
 .optical-diffraction-aperture {
   position: absolute;
-  left: calc(58% - 1px);
+  left: calc(50% - 1px);
   top: calc(46% - 22px);
   width: 2px;
   height: 44px;
@@ -1752,10 +1755,6 @@ body {
 }
 
 @media (max-width: 760px) {
-  .os-optical-headline-axis { white-space: normal; display: block; }
-  .os-optical-science,
-  .os-optical-evolves { display: block; }
-  .os-optical-gap { display: none; }
   [data-optical-text-stage='true'] { --os-optical-radius: 105px; }
 }
 

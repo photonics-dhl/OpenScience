@@ -75,7 +75,7 @@ export function sampleOpticalField(
 ): OpticalSample {
   const mobile = viewport.width < 640;
   const phase = (now % 6_283) / 1_000;
-  const restingOrigin = { x: viewport.width * (mobile ? 0.5 : 0.58), y: viewport.height * 0.46 };
+  const restingOrigin = { x: viewport.width * 0.5, y: viewport.height * 0.46 };
   const recovery = pointer ? clamp((now - pointer.lastActiveAt) / 650, 0, 1) : 1;
   const easedRecovery = recovery * recovery * (3 - 2 * recovery);
   const origin = pointer

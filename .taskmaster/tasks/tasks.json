@@ -1188,7 +1188,7 @@
           "3"
         ],
         "priority": "high",
-        "details": "已于 2026-08-11 完成原型形变纠偏（codex/optical-editorial-v3）。以 80c8312 为接受基线，不恢复 v3 禁用的 RO loop/六节点圆环/Evolution-Hermes-Trust 卡片段。真实 DOM headline 保留一个 h1 与一个 aria-hidden 折射层；桌面标题单轴横排，固定狭缝落在两词交界附近；Canvas 核心点阵固定于狭缝并按纵向基线渐隐，指针只改变局部径向位移；SVG mask 在焦点区让位给位移层，避免整句重影；移动端保留两行可读布局。下一屏为 OPEN RO paper surface + N1-N6 SDF anatomy，真实 /explore 入口，不伪造公开研究数据。focused 20/20、Web 159/159、typecheck/build、三视口截图与 Open RO full-page 全通过；待 ECS 发布后补充 release ref。",
+        "details": "2026-08-11 第二轮原型形变纠偏（codex/optical-editorial-v3）。首轮 3336be4 虽通过工程门禁但视觉不合格：误改标题布局并产生白色大面积椭圆点阵，不作为接受基线。第二轮完整恢复原标题布局与 50% 光轴；真实 DOM headline 仍为一个 h1 + 一个 aria-hidden 折射层；Canvas 删除同心椭圆干涉环，核心点阵收窄为垂直狭缝，指针只产生局部径向扰动，以密集、低透明度右向波前线表达衍射；SVG mask 横向收窄，避免多字大面积撕裂。下一屏 OPEN RO + N1-N6 SDF anatomy 与真实 /explore 入口不变。focused 20/20、typecheck/build、3044 production 三视口 normal/reduced/Open RO shots 全通过；待 ECS 发布后补充最终 release ref。",
         "testStrategy": "TDD RED/GREEN 锁定字形安全区、时间插值、对称衍射波前、单一 h1 与 Open RO 六节点；浏览器逐帧断言 optical x 单调接近目标且不瞬移，SVG displacement scale>5；1440x900、1920x1080、390x844 normal/reduced-motion 与 Open RO full-page screenshots；overflow/console/reduced-motion gate。",
         "subtasks": [],
         "updatedAt": "2026-08-11T02:10:00.000Z"

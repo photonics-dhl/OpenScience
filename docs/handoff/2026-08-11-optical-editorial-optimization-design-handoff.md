@@ -11,8 +11,9 @@
 - Hero、OpticalField、Open RO 和 hydration/视觉测试修复已提交于 `99f1686` 之前的提交链；最终发布 ref 为 `99f16862389605d7552ac8d092ee5c8942c4e5c1`。
 - focused/browser/full Web 门禁：Landing/Optical 18/18、Web 157/157、typecheck、build、lint、docs lint、docs-sync 全通过；线上 1440/1920/390 normal/reduced/Open RO smoke 全通过。
 - ECS 部署前备份 `BACKUP_OK size=276K files=7/7`；远端 install/build、生产栈重启和 Nginx 配置测试成功；线上 `/auth/me` 与 `/admin` 仍按预期受保护返回 401。
-- 本轮纠偏：恢复单轴横排标题；固定桌面狭缝到词间交界附近；粒子点阵改为固定纵向场 + 指针局部位移；SVG mask 改为纵向椭圆局部折射，底层焦点区透明度降至接近零，消除整句重影。
-- 本轮本地证据：focused 20/20、Web 159/159、typecheck/build、3040 三视口 normal/reduced/Open RO shots 通过；交界点额外截图为 `apps/web/test/visual/out/boundary-1440.png`。
+- 首轮 `3336be4` 已部署但被用户判定视觉不合格：错误地改动了原有标题布局，并把点阵扩成大面积白色椭圆；不得作为接受基线。
+- 第二轮恢复原标题布局与 50% 光轴；删除同心椭圆干涉环；点阵收窄为垂直狭缝，改用密集、低透明度的右向波前线；文字局部折射遮罩横向收窄。
+- 第二轮本地证据：focused 20/20、typecheck/build、3044 production 三视口 normal/reduced/Open RO shots 通过；截图中已无白色同心圆或大面积粒子团。
 
 ## Constraints
 - 不读取或写入 `.env`；不删除现有文件。
