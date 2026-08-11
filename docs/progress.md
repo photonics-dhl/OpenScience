@@ -1,5 +1,13 @@
 # OpenScience (XGS) 进度日志
 
+## 2026-08-11（Optical Lab Task 8 Steps 3–5）— ✅ 隔离候选与测量门禁完成
+
+- **TDD 合同**：先建立 model/render/route/browser RED 门禁，再实现精确路由 `/_visual/optical-lab`。页面并排展示用户参考图、未改动生产首页的本地 production capture 和候选，候选保留单一可选择语义 `h1`，且首页模块无 Lab import。
+- **GPU 候选**：原生 WebGL 按 WebGL2→WebGL1（需 half-float）→DOM/static 降级；96×54 ping-pong dissipating field、固定 58% aperture signed displacement、轻量方向性 caustic/chroma 和稀疏 glyph-edge particles 均只在浏览器运行。移动低功耗与 reduced-motion 不启动 GPU loop；context loss/restore、卸载资源清理有浏览器门禁。
+- **测量证据**：production-start Chromium 的 desktop/WebGL1/shader failure/无 WebGL/mobile/reduced 与独立 pointer frames 全绿；desktop/WebGL1 为 60/58 FPS，CPU submit 为 0.08/0.05 ms。SwiftShader 的同步 GPU fallback 本轮均为 0.00 ms，记录为可观测诊断而非真机性能结论。Lab route-exclusive JS 为 19,559 B raw / 6,266 B gzip，CSS 为 4,134 B raw / 1,422 B gzip；首页 build 仍为 3.87 kB、First Load 112 kB。
+- **范围与状态**：未修改 `/`、生产 Landing renderer、API、数据模型、ECS/compose 或依赖/lockfile；Task Master Task 4 保持 `in-progress`。Task 8 Steps 3–5 已完成，Step 6 仍等待用户在真实设备选择候选，未授权生产替换或部署。
+- **下一步**：用户访问隔离 Lab 对 reference/current/candidate 做视觉裁决；只有明确选中候选后，另写生产替换计划并重新走 TDD、全量产品门禁和 ECS 授权。
+
 ## 2026-08-11（Optical Lab ECS GPU 能力探测）— ✅ 确认纯客户端 GPU 架构
 
 - **服务器事实**：ECS PCI 仅有虚拟 Cirrus Logic GD 5446；`/dev/dri` 无 render node，`nvidia-smi`/`rocminfo` 不可用，无 GPU kernel module；Docker runtimes 只有 `runc`，生产 compose 无 GPU 声明。因此服务器不具备 CUDA/ROCm/WebGL 硬件计算能力。

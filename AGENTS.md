@@ -13,6 +13,7 @@ OpenScience：AI 时代科研基础设施平台（Research Object / SDF / 预印
 - API：`npx pnpm@9.15.0 api`（Fastify 起 127.0.0.1:3001）；邀请码 CLI：`node scripts/invite.mjs create|list|revoke`（或 `npx pnpm@9.15.0 invite ...`）；配额 seed CLI：`node scripts/seed-quota.mjs --dry-run|--confirm`（P1A-7 占位值幂等 upsert，数值集中 `packages/domain/src/usage/seed-data.ts`）。
 - 卫生审计：`npx pnpm@9.15.0 audit:knip`（未用文件/导出/依赖）、`audit:dep`（dependency-cruiser：循环依赖/跨包深引用/orphan 告警）、`audit:dup`（jscpd 重复代码）、`audit:deps`（syncpack 版本一致性）、`docs:lint`（markdownlint 文档门禁）、`audit:docs-sync`（`scripts/docs/check-docs-sync.mjs`：索引路径存在性 + 文档反向登记 + AGENTS 迁移数一致性，已挂入 lint 与 CI）。
 - 开发栈：`npx pnpm@9.15.0 stack:up|stack:down|stack:ps|stack:logs`（postgres/redis/minio，仅 127.0.0.1）；测试：`npx pnpm@9.15.0 test`（单测）、`npx pnpm@9.15.0 test:integration`（起栈+集成测试）。
+- Optical Lab 隔离浏览器门禁：`npx pnpm@9.15.0 --filter @openscience/web shots:optical-lab`（精确路由 `/_visual/optical-lab`；截图与 metrics 输出到已忽略的 `apps/web/test/visual/out/optical-lab/`；不替换生产 Landing）。
 - 数据库迁移：`node packages/database/dist/migrate-cli.js deploy|status|reset-dev`（reset-dev 生产禁用；迁移归 `infra/migrations/`，每个迁移附 rollback.sql）。
 - 构建产物忽略：`dist/`、`.next/`、`*.tsbuildinfo`。
 

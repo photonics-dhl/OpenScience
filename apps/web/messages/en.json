@@ -714,5 +714,26 @@
     "schedule": "Schedule now",
     "publish": "Publish selection",
     "error": "The editorial queue could not be loaded."
+  },
+  "opticalLab": {
+    "eyebrow": "Optical Lab / non-production comparison",
+    "introduction": "Reference, production baseline, and browser-GPU candidate under one visual gate.",
+    "scope": "This route is an isolated experiment. It does not replace the production Landing until the user selects a candidate.",
+    "backToLanding": "Return to production Landing",
+    "comparisonLabel": "Optical field visual comparison",
+    "targetTitle": "User-owned target",
+    "targetNote": "Material and topology reference; not shipped as the production brand asset.",
+    "targetAlt": "User-provided reference showing Science compressed through a fixed optical aperture before evolves",
+    "currentTitle": "Current production",
+    "currentNote": "The deployed Canvas glyph-particle baseline at cd5be36.",
+    "currentAlt": "Current production Landing optical field capture",
+    "candidateTitle": "GPU candidate A",
+    "candidateNote": "Continuous glyph texture, fixed signed field, dissipating flow and sparse edge particles.",
+    "mode": "Render mode",
+    "context": "Context",
+    "fps": "FPS",
+    "frameTime": "CPU submit",
+    "gpuTime": "GPU frame",
+    "bounds": "Stable bounds"
   }
 }

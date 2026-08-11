@@ -1,7 +1,7 @@
 # ADR-009: Optical Runtime and Font Delivery
 
 - **Status:** Accepted
-- **Date:** 2026-08-10
+- **Date:** 2026-08-10 (amended 2026-08-11)
 - **Decision owners:** OpenScience product engineering
 - **Related:** `docs/specs/2026-08-10-optical-editorial-rebaseline-design.md`, `docs/plans/2026-08-10-optical-editorial-frontend-plan.md`
 
@@ -24,6 +24,22 @@ Use browser primitives:
 - No new runtime dependency in Phase 0. A WebGL helper may be reconsidered only after measured Canvas failure on the ECS acceptance devices.
 
 This keeps SSR safe because the server emits ordinary markup and a poster state; Canvas access occurs only in a client component after mount. Reduced-motion mode does not start the animation loop and preserves all copy, navigation and calls to action.
+
+#### 2026-08-11 isolated Optical Lab amendment
+
+The production Canvas implementation passed engineering gates but failed the user's visual review: its CPU `arc()` loop and separately invented focal/Fresnel passes produced a grey overlay, mechanical lines and decorative wave families instead of continuous glyph deformation. This is the measured Canvas failure anticipated above, but it does **not** authorize a production runtime replacement.
+
+An isolated, no-index route at `/_visual/optical-lab` may therefore use a dependency-free native WebGL experiment with these boundaries:
+
+- the production `/` route and its Canvas renderer remain unchanged and do not import the Lab chunk;
+- the server renders a selectable semantic `h1`; Canvas/WebGL access starts only after client mount;
+- capability order is WebGL2, then WebGL1 only when half-float support is viable, then DOM/static;
+- mobile low-power and `prefers-reduced-motion` use the DOM/static mode without an animation loop;
+- the field is a fixed-aperture signed flow texture with bounded glyph displacement, subtle directional caustic/chroma and sparse glyph-edge particles; pointer input changes energy/phase and a bounded vertical bias, never aperture position;
+- context loss exposes a fallback state, context restore rebuilds resources, and unmount deletes GL resources and cancels animation frames;
+- all per-frame work runs in the visitor's browser. ECS remains a Next.js build/static-delivery host and gains no GPU runtime, driver, compose setting or server-side rendering dependency.
+
+The experiment uses native WebGL rather than OGL, Three.js or a general visual engine, so no package or lockfile change is required. Its route-exclusive emitted client asset measured 19,559 bytes raw / 6,266 bytes gzip and its route CSS 4,134 bytes raw / 1,422 bytes gzip in the 2026-08-11 production build. These figures are evidence for the Lab only; user selection remains a separate gate before any production replacement plan.
 
 Primary references:
 
@@ -54,7 +70,7 @@ The fonts are visual roles, not a license issued by OpenScience. OpenScience pub
 
 ## Runtime and deployment budget
 
-- No JavaScript package or client network request is added by this decision.
+- No JavaScript package or client network request is added by this decision. The isolated Lab adds only its route-scoped native WebGL client/CSS assets described above; the production homepage bundle is unchanged.
 - Canvas resolution must be capped by viewport and device-pixel-ratio budgets in Task 4; the effect pauses offscreen and in hidden tabs.
 - Only transform/opacity are used for ordinary UI transitions. Displacement is isolated to the optical media layer and never applied to form controls or reading copy.
 - `next/font/google` downloads source assets at production image-build time. ECS builds therefore require the existing outbound proxy path; the resulting container serves fonts locally at runtime.
@@ -63,7 +79,7 @@ The fonts are visual roles, not a license issued by OpenScience. OpenScience pub
 ## Rejected alternatives
 
 - **Hosted animation/CDN script:** rejected for privacy, availability, CSP and version-pinning risk.
-- **Three.js or another general WebGL engine:** rejected at this stage because the required 2D field does not justify its bundle and GPU lifecycle cost.
+- **Three.js or another general WebGL engine:** rejected because the required 2D field does not justify its bundle and GPU lifecycle cost. The isolated Lab demonstrates the narrower native WebGL path without changing this decision.
 - **Shader-only hero:** rejected because it weakens SSR, no-JavaScript and accessibility fallback behavior.
 - **Generic all-IBM-Plex composition:** rejected because it reproduces the undifferentiated AI/SaaS appearance identified by the user. IBM Plex Mono remains the approved narrow data role from the canonical design spec.
 - **Decorative generated image as the brand:** rejected; the wordmark and interactive optical behavior remain the identity.

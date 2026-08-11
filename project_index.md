@@ -60,6 +60,9 @@
 | `apps/web/test/ui-components.test.ts` | 原语 storyless server-rendering 断言（Task 7.4；Task 8 追加双表面 `.surface-dark` 与 state-danger 断言） | 活文档 |
 | `apps/web/test/evolving-ro-symbol.test.tsx` | Task 7.7 Evolving RO Symbol server-rendering、变体、动效与 SVG 层级断言 | 活文档 |
 | `apps/web/components/brand/{OpticalHeadline,OpticalField}.tsx` / `apps/web/lib/optical-field/*.ts` | Optical Editorial Landing 品牌媒介：当前生产为固定 aperture 的 Canvas glyph-particle renderer；第四轮改进基线为纯客户端连续字形 GPU displacement + shared flowmap + sparse instanced particles，SSR h1 与 WebGL2→WebGL1→DOM fallback 保底 | `cd5be36` ECS 工程门禁通过但用户视觉否决；ECS 无 GPU 且无需 GPU，Task 4 已重开，生产替换前先做独立 Optical Lab |
+| `apps/web/app/{%5Fvisual,_visual}/optical-lab/page.tsx` / `apps/web/components/optical-lab/*.tsx` / `apps/web/lib/optical-lab/*.ts` | 精确 `/_visual/optical-lab` 隔离比较页：reference/current/candidate 三联屏、SSR selectable h1、原生 WebGL2→WebGL1 half-float→DOM/static、固定 aperture flow/glyph displacement/稀疏 edge particles、context recovery 与可测 diagnostics | Task 8 Steps 3–5 完成；route chunk 与生产 `/` 隔离，Step 6 待用户选择 |
+| `apps/web/public/optical-lab/{target-reference,current-production}.png` | 用户授权参考原图副本与未改动 Landing 的本地 production-build current capture，仅供 no-index Optical Lab 比较 | Task 8 Step 5 视觉证据；不进入生产首页 |
+| `apps/web/test/optical-lab-model.test.ts` / `apps/web/test/optical-lab-contract.test.tsx` / `apps/web/test/visual/optical-lab-gate.mjs` / `apps/web/test/visual/optical-lab-shots.mjs` | Optical Lab TDD/production-browser 门禁：语义/隔离/禁用图形、三档 fallback、稳定 bounds、independent frames、context loss/restore/cleanup、FPS/CPU/GPU diagnostics 与 desktop/mobile/reduced 截图 | 测试工具；输出位于已忽略 `test/visual/out/optical-lab/` |
 | `apps/web/app/explore/page.tsx` / `apps/web/components/explore/ResearchIndex.tsx` / `apps/web/test/{explore-index.test.tsx,e2e/explore-index.spec.ts}` | Optical Editorial 公开 Research Index：编号式 paper rows、query/SDF field/artifact 筛选、cursor load-more、真实 Public RO link 与 1440/390 无 Card browser gate | 活文档 |
 | `packages/domain/src/explore/explore.ts` / `apps/api/src/routes/explore.ts` / `apps/api/test/explore-routes.test.ts` | 匿名 `GET /explore` 合同；仅 public+published，稳定 publicId cursor，有界 query/limit 与关系筛选，返回 SDF/artifact/author provenance 摘要 | 活接口 |
 | `packages/domain/src/editorial/` / `apps/api/src/routes/{editorial,admin-editorial}.ts` | Ultrafast Science 策展域：版本绑定快照、媒体 provenance、draft→internal_review→scheduled→published 状态机、platform_admin scoped API 与公开过滤 | ECS 已部署并完成真实 published/audit 验收（2026-08-10） |
@@ -125,7 +128,7 @@
 | `docs/decisions/ADR-006-ingestion-parser-and-ocr-strategy.md` | PDF/DOCX 受控解析、图片本地 OCR 优先与 MiniMax fallback 边界；any2pdf 仅用于未来导出 | Accepted |
 | `docs/decisions/ADR-007-production-object-storage.md` | 生产对象存储选择 SeaweedFS 4.41 S3 模式；拒绝归档的 MinIO legacy binary，新 Secret/内网/卷/备份边界 | Accepted |
 | `docs/decisions/ADR-008-minimax-token-plan-provider.md` | MiniMax Token Plan 使用 Anthropic Messages 协议；Subscription Key 与普通 API Key 分流，key1→key2 回退与生产边界 | Accepted |
-| `docs/decisions/ADR-009-optical-runtime-and-fonts.md` | Optical Field 采用 Canvas 2D + SVG/CSS 原生能力；Bricolage/Bodoni/Noto Serif SC/IBM Plex Mono 字体角色、OFL 与 ECS 构建边界 | Accepted |
+| `docs/decisions/ADR-009-optical-runtime-and-fonts.md` | 生产 Optical Field 保持 Canvas 2D；2026-08-11 增补仅限 no-index Lab 的 dependency-free native WebGL 实验、三级降级、浏览器 GPU/ECS 隔离与实测 route budget；字体角色/OFL 边界不变 | Accepted（Task 8 Step 6 前不得替换生产） |
 | `docs/decisions/ADR-010-hermes-visual-runtime-and-live2d-license-gate.md` | Hermes 原创 SVG/CSS renderer、真实任务/六态/单实例契约；Wanko/Live2D 仅在运营主体记录资格与协议接受后启用 | Accepted |
 | `docs/handoff/2026-08-08-product-web-tooling-handoff.md` | 产品网页工具前置交接（Codex 10 MCP、双 Figma OAuth、迁移 ADR、重启后验证顺序） | 当前 handoff |
 | `docs/handoff/2026-08-10-optical-editorial-rebaseline-handoff.md` | Optical Editorial v3 前端重构交接：27 项 grill-me 决策、三联屏浏览器优先路线、服务器直接验收 | 当前 handoff |
@@ -134,6 +137,7 @@
 | `docs/handoff/2026-08-11-optical-editorial-production-acceptance-handoff.md` | `f5bb6e7` ECS 部署、回滚 ref/hash、真实账号 ingestion→Hermes→version 与公开路由验收 | 当前生产 handoff |
 | `docs/handoff/2026-08-11-optical-editorial-v3-complete-handoff.md` | Optical Editorial v3 15/15 完成、Hermes 原创 renderer、`0c79aa2` ECS 发布与全量浏览器门禁 | 当前完成 handoff |
 | `docs/handoff/2026-08-11-optical-editorial-optimization-design-handoff.md` | 首页增量优化设计交接：保留线上功能与风格，先优化 Landing，再传播到 Explore/Dashboard/创建页/公开 RO | 当前 handoff |
+| `docs/handoff/2026-08-11-optical-lab-task8-steps3-5-handoff.md` | Optical Lab Task 8 Steps 3–5 交接：隔离 native WebGL 候选、浏览器/包体证据、生产不变边界与 Step 6 用户选择门禁 | 当前 handoff |
 | `docs/specs/2026-08-04-p1b-3-blob-artifact-upload-design.md` | P1B-3 Blob 内容寻址存储与上传管线设计（design gate 已确认：五决策，代码已实现 2026-08-04） | 活文档 |
 | `docs/plans/2026-07-24-doc-architecture-plan.md` | 文档架构落地实施计划 | 活文档 |
 | `docs/plans/2026-07-24-mvp-task-breakdown-plan.md` | MVP 任务拆解与工具配置实施计划（已批准，执行中） | 活文档 |

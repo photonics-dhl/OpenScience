@@ -13,7 +13,8 @@
     "test:release": "playwright test product-release.spec.ts --config playwright.release.config.ts",
     "shots": "node test/visual/shots.mjs",
     "shots:workspace": "node test/visual/workspace-shots.mjs",
-    "shots:public": "node test/visual/public-reading-shots.mjs"
+    "shots:public": "node test/visual/public-reading-shots.mjs",
+    "shots:optical-lab": "node test/visual/optical-lab-gate.mjs"
   },
   "dependencies": {
     "@radix-ui/react-dialog": "^1.1.23",

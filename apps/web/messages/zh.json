@@ -714,5 +714,26 @@
     "schedule": "立即排期",
     "publish": "发布精选",
     "error": "暂时无法读取策展队列。"
+  },
+  "opticalLab": {
+    "eyebrow": "光学实验室 / 非生产对照",
+    "introduction": "在同一道视觉门禁中对照用户参考、生产基线与浏览器 GPU 候选。",
+    "scope": "本路由仅为隔离实验；用户选择候选前，不替换生产 Landing。",
+    "backToLanding": "返回生产 Landing",
+    "comparisonLabel": "光学场视觉对照",
+    "targetTitle": "用户参考目标",
+    "targetNote": "用于材料与拓扑对照，不作为生产品牌素材直接上线。",
+    "targetAlt": "用户提供的参考图，Science 经固定光学孔径压缩后连接到 evolves",
+    "currentTitle": "当前生产版本",
+    "currentNote": "已部署的 cd5be36 Canvas 字形粒子基线。",
+    "currentAlt": "当前生产 Landing 光学场截图",
+    "candidateTitle": "GPU 候选 A",
+    "candidateNote": "连续字形纹理、固定有符号场、衰减流场与稀疏边缘粒子。",
+    "mode": "渲染模式",
+    "context": "上下文",
+    "fps": "帧率",
+    "frameTime": "CPU 提交",
+    "gpuTime": "GPU 帧时",
+    "bounds": "稳定边界"
   }
 }

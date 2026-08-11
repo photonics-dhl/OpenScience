@@ -1183,7 +1183,7 @@
         "id": "4",
         "title": "在完整 Landing 原型上增强 DOM Typography + Optical Field",
         "description": "以用户确认的 80c8312 pre-distortion Optical Editorial 构图为基线；Science evolves./科学，持续演化。保持单一可访问 DOM 标题，Canvas/SVG 实现局部折射、固定狭缝衍射与半色调场，下一屏以 paper surface 展示 Open RO 六层 SDF 结构。",
-        "status": "done",
+        "status": "in-progress",
         "dependencies": [
           "3"
         ],
@@ -1191,7 +1191,7 @@
         "details": "2026-08-11 用户视觉否决 cd5be36；其 161/161、生产部署和路由证据只证明工程正确，不再构成审美接受。根因是 CPU Canvas 每帧逐点 arc() + 独立 focal/Fresnel 装饰，连续 DOM 字形没有共享 displacement 材质，形成灰色覆盖、机械竖线和波纹。外部调研已实际运行并读源码：ehaakana/codrops-text-demo（MIT，HTML-first WebGL text sync）、brunoimbrizi/interactive-particles（package MIT，glyph/image instancing + touch texture）、akella/DistortedPixels（MIT，DataTexture velocity + relaxation）、OGL Flowmap（Unlicense，ping-pong FBO）；无明确许可证项目不复制。ECS 探测确认仅虚拟 Cirrus VGA、无 render node/NVIDIA/ROCm/GPU module/Docker GPU runtime/compose GPU 声明；因此第四轮为纯客户端 continuous glyph material + shared GPU flow/displacement field + sparse instanced particles，禁止服务器 GPU 依赖，必须保留 SSR h1、WebGL2→WebGL1→DOM fallback 与 context-loss 恢复。先建非生产 Optical Lab 并排 reference/current/candidate，记录 chunk/FPS/frame time/mobile/reduced-motion，用户选中前不替换生产 Landing。",
         "testStrategy": "第四轮先在非生产 Optical Lab 做 reference/current/candidate 三列比较。RED/GREEN 必须覆盖：连续字形主体可读、WebGL 与 DOM bounds/字体同步、fixed aperture 拓扑、无 radial visible boundary、flow texture 衰减、sparse instanced edge particles、context-loss/reduced-motion/390px 降级；捕获独立 left/slit/right 60/150/300ms 帧并记录 gzip chunk、FPS、CPU/GPU frame time。用户选中前禁止替换生产 Landing。",
         "subtasks": [],
-        "updatedAt": "2026-08-11T06:55:00.000Z"
+        "updatedAt": "2026-08-11T08:52:43.747Z"
       },
       {
         "id": "5",
@@ -1253,7 +1253,7 @@
         "id": "9",
         "title": "重构 Dashboard 并将 Hermes/Live2D 绑定真实任务",
         "description": "以 Continue Research 和待确认队列替代统计 Hero/Card 网格，建立 Hermes 六态和 Visual/Task 同一 deep link。",
-        "status": "in-progress",
+        "status": "done",
         "dependencies": [
           "3",
           "8"
@@ -1262,7 +1262,7 @@
         "details": "计划 Task 9 已完成。Dashboard 无 Card/统计 Hero；caller-owned GET /ingestion?actionable=true；Visual/row 共用真实 IngestionTask deep link；原创 Optical Guide 单实例实现六态、指针凝视、审批/reduced 静止，空/加载/错误/活动/审批 1440/390 门禁通过。ADR-010 禁止把原创 renderer 冒充 Live2D；Wanko 仅在运营主体完成许可资格/接受记录后作为可替换 renderer 启用。",
         "testStrategy": "dashboard/hermes RED/GREEN；empty/loading/error/active/approval screenshots；one-instance assertion。",
         "subtasks": [],
-        "updatedAt": "2026-08-10T16:27:00.000Z"
+        "updatedAt": "2026-08-11T08:52:43.775Z"
       },
       {
         "id": "10",
@@ -1378,9 +1378,9 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-08-10T16:27:00.000Z",
+      "lastModified": "2026-08-11T08:52:43.775Z",
       "taskCount": 15,
-      "completedCount": 15,
+      "completedCount": 14,
       "tags": [
         "optical-editorial-v3"
       ]
