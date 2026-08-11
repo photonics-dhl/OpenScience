@@ -621,7 +621,7 @@ Run the public demos and read the source of Accessible WebGL Text, Interactive P
 
 - [ ] **Step 3: Write the Optical Lab contract and RED gates**
 
-Define a non-production visual route that shows target crop, current production capture and candidate side by side. Gate continuous glyph readability, fixed aperture topology, no radial boundary, stable DOM bounds, reduced-motion fallback and independent pointer frames.
+Define a non-production visual route that shows target crop, current production capture and candidate side by side. Gate continuous glyph readability, fixed aperture topology, no radial boundary, stable DOM bounds, reduced-motion fallback and independent pointer frames. Add client-only/SSR safety, WebGL2→WebGL1→DOM fallback, context-loss recovery and SwiftShader acceptance; no ECS GPU dependency is permitted.
 
 - [ ] **Step 4: Build the lightweight GPU candidate**
 

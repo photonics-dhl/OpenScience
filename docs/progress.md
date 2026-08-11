@@ -1,5 +1,12 @@
 # OpenScience (XGS) 进度日志
 
+## 2026-08-11（Optical Lab ECS GPU 能力探测）— ✅ 确认纯客户端 GPU 架构
+
+- **服务器事实**：ECS PCI 仅有虚拟 Cirrus Logic GD 5446；`/dev/dri` 无 render node，`nvidia-smi`/`rocminfo` 不可用，无 GPU kernel module；Docker runtimes 只有 `runc`，生产 compose 无 GPU 声明。因此服务器不具备 CUDA/ROCm/WebGL 硬件计算能力。
+- **浏览器事实**：Windows headless Chromium 访问生产首页时 WebGL/WebGL2 均可用，ANGLE Vulkan SwiftShader，max texture size 8192，语义 `h1` 存在；证明软件渲染门禁可运行，但不替代真实设备 FPS 验收。
+- **架构结论**：Optical Lab 继续实现，但所有逐帧 shader/flowmap/particle 计算只在用户浏览器；ECS 只负责 Next.js 构建和静态资源交付，不安装 GPU 驱动、不修改 compose。必须实现 WebGL2→WebGL1→DOM 静态标题三级降级与 context-loss 恢复。
+- **下一步**：把 client-only、SSR semantic headline、capability detection、SwiftShader acceptance 与真实设备性能预算写进 Optical Lab RED contract，再开始隔离候选实现。
+
 ## 2026-08-11（Landing 第四轮：停止 Canvas 调参，转外部实现调研）— ⏳ 参考架构已确认，待 Optical Lab
 
 - **用户验收**：用户明确判定线上 `cd5be36` 仍不好看，并要求先检索成熟实现；此前“生产发布完成”仅代表发布与工程门禁，不代表视觉验收，Task Master 4 已重新置为 in-progress。

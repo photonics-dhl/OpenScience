@@ -123,6 +123,18 @@ Object Header 使用单行规则线，不拆三张统计卡。左栏展示章节
 
 候选优先级为：先做 OGL/原生 WebGL2 的轻量混合 spike；只有当字体同步或性能证据证明不足时，才引入 Three.js + troika。依赖选择必须记录实际 gzip chunk、FPS、GPU/CPU frame time、390px 降级和许可证，不凭 star 数决定。
 
+#### 5.1.2 ECS GPU 边界与客户端降级（2026-08-11）
+
+生产 ECS 只读探测确认没有可用计算/渲染 GPU：PCI 仅暴露虚拟 `Cirrus Logic GD 5446`，`/dev/dri` 只有 `card0` 而没有 `renderD*`，无 NVIDIA/ROCm 工具或 GPU kernel module；Docker 仅有默认 `runc`，生产 compose 无 GPU runtime/device 声明。
+
+这不阻断 Optical Lab，因为 WebGL/OGL/Three shader 在访问者浏览器执行，Next.js 服务器只构建和传输 JS、字体、纹理及 shader，不承担逐帧渲染。实现边界固定如下：
+
+1. Optical renderer 必须是 client-only，并保持真实 DOM `h1` 在 SSR HTML 中；模块不得在 Node build/SSR 阶段读取 `window`、创建 WebGL context 或运行粒子模拟。
+2. 不向生产 compose 增加 GPU runtime、驱动、CUDA/ROCm 或 GPU 容器；本任务不依赖 ECS GPU，也不因视觉效果采购服务器 GPU。
+3. 客户端按能力选择 WebGL2 → WebGL1/half-float extension → DOM + 静态 CSS/Canvas 三层路径；context creation failure、context loss、低功耗和 reduced-motion 都必须能恢复完整标题。
+4. 自动化浏览器门禁允许使用 SwiftShader。当前 Windows headless Chromium 对生产页实测 WebGL/WebGL2 均可用，renderer 为 ANGLE Vulkan SwiftShader、max texture size 8192；因此测试不要求硬件 GPU，但必须另设性能预算，不能把软件渲染通过等同于真实设备流畅。
+5. 服务器不承担 WebGL 截图、视频合成或 GPGPU 计算；如未来需要服务端生成宣传媒体，使用独立离线任务或外部生成服务，并另立基础设施决策。
+
 ### 5.2 Hermes / Live2D
 
 Live2D 是功能驱动的研究伙伴，不是装饰。Landing 不抢主视觉；登录后在 Dashboard、创建页、Workspace 和公开 RO 页提供统一 Hermes 唤起入口，角色只在 Hermes 面板中出现。公开页默认只读，工作区可提出建议但写入仍需确认。面板首次打开显示当前上下文任务卡，而不是空白聊天框；点击 Live2D 与点击 Hermes 任务入口进入同一上下文。

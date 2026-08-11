@@ -28,6 +28,7 @@
 - 保留现有页面风格、素材和已完成功能，改动以增量优化为准。
 - 每次页面改动后必须运行 focused tests、三视口截图、线上路由验证，并同步 progress/project_index/handoff。
 - Live2D 生产使用仍需保留 ADR-010 的授权记录门禁。
+- ECS 无计算/渲染 GPU，不安装 GPU 驱动、不修改生产 compose；Optical renderer 必须 client-only，保留 SSR `h1`，并提供 WebGL2→WebGL1→DOM 静态标题三级降级与 context-loss 恢复。
 
 ## Open gate
 - 用户已明确否决 `cd5be36` 的视觉观感；其工程/生产证据仍有效，但不再是审美接受基线。Task Master 4 已重新打开。

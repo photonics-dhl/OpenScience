@@ -1188,10 +1188,10 @@
           "3"
         ],
         "priority": "high",
-        "details": "2026-08-11 用户视觉否决 cd5be36；其 161/161、生产部署和路由证据只证明工程正确，不再构成审美接受。根因是 CPU Canvas 每帧逐点 arc() + 独立 focal/Fresnel 装饰，连续 DOM 字形没有共享 displacement 材质，形成灰色覆盖、机械竖线和波纹。外部调研已实际运行并读源码：ehaakana/codrops-text-demo（MIT，HTML-first WebGL text sync）、brunoimbrizi/interactive-particles（package MIT，glyph/image instancing + touch texture）、akella/DistortedPixels（MIT，DataTexture velocity + relaxation）、OGL Flowmap（Unlicense，ping-pong FBO）；无明确许可证项目不复制。第四轮冻结为 continuous glyph material + shared GPU flow/displacement field + sparse instanced particles；先建非生产 Optical Lab 并排 reference/current/candidate，记录 chunk/FPS/frame time/mobile/reduced-motion，用户选中前不替换生产 Landing。",
+        "details": "2026-08-11 用户视觉否决 cd5be36；其 161/161、生产部署和路由证据只证明工程正确，不再构成审美接受。根因是 CPU Canvas 每帧逐点 arc() + 独立 focal/Fresnel 装饰，连续 DOM 字形没有共享 displacement 材质，形成灰色覆盖、机械竖线和波纹。外部调研已实际运行并读源码：ehaakana/codrops-text-demo（MIT，HTML-first WebGL text sync）、brunoimbrizi/interactive-particles（package MIT，glyph/image instancing + touch texture）、akella/DistortedPixels（MIT，DataTexture velocity + relaxation）、OGL Flowmap（Unlicense，ping-pong FBO）；无明确许可证项目不复制。ECS 探测确认仅虚拟 Cirrus VGA、无 render node/NVIDIA/ROCm/GPU module/Docker GPU runtime/compose GPU 声明；因此第四轮为纯客户端 continuous glyph material + shared GPU flow/displacement field + sparse instanced particles，禁止服务器 GPU 依赖，必须保留 SSR h1、WebGL2→WebGL1→DOM fallback 与 context-loss 恢复。先建非生产 Optical Lab 并排 reference/current/candidate，记录 chunk/FPS/frame time/mobile/reduced-motion，用户选中前不替换生产 Landing。",
         "testStrategy": "第四轮先在非生产 Optical Lab 做 reference/current/candidate 三列比较。RED/GREEN 必须覆盖：连续字形主体可读、WebGL 与 DOM bounds/字体同步、fixed aperture 拓扑、无 radial visible boundary、flow texture 衰减、sparse instanced edge particles、context-loss/reduced-motion/390px 降级；捕获独立 left/slit/right 60/150/300ms 帧并记录 gzip chunk、FPS、CPU/GPU frame time。用户选中前禁止替换生产 Landing。",
         "subtasks": [],
-        "updatedAt": "2026-08-11T06:35:00.000Z"
+        "updatedAt": "2026-08-11T06:55:00.000Z"
       },
       {
         "id": "5",
