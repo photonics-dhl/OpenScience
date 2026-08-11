@@ -39,6 +39,12 @@ function waitForExit(server) {
   return new Promise((resolve) => server.once('exit', resolve));
 }
 
+function timeout(label) {
+  return new Promise((_, reject) => {
+    setTimeout(() => reject(new Error(`${label} timed out after 3000ms`)), 3_000);
+  });
+}
+
 function assertTypographyContract(candidate, measured, selection) {
   assert.equal(measured.oneLine, true, `${candidate} must retain one title line`);
   assert(Math.abs(measured.apertureX - .58) <= .005, `${candidate} must keep the 58% aperture`);
@@ -78,6 +84,18 @@ async function stopServerAndVerifyPort() {
     throw new Error('Typography gate server did not record an exit during cleanup');
   }
   await assertPortIsAvailable();
+}
+
+async function closeBrowserBounded() {
+  if (!browser) return;
+  if (process.env.OPTICAL_LAB_TYPOGRAPHY_GATE_FORCE_BROWSER_CLOSE_FAILURE === 'reject') {
+    throw new Error('Forced browser close rejection');
+  }
+  if (process.env.OPTICAL_LAB_TYPOGRAPHY_GATE_FORCE_BROWSER_CLOSE_FAILURE === 'timeout') {
+    await timeout('Forced browser close');
+    return;
+  }
+  await Promise.race([browser.close(), timeout('Typography gate browser close')]);
 }
 
 async function waitForServer() {
@@ -208,7 +226,7 @@ try {
 } finally {
   let cleanupError;
   try {
-    await browser?.close();
+    await closeBrowserBounded();
   } catch (error) {
     cleanupError = error;
   }
