@@ -1,5 +1,17 @@
 export type OpticalRuntime = 'webgl2-full' | 'static-fallback' | 'dom-only';
 
+export const OPTICAL_LAB_RENDER_PHASE = 'task-3-runtime-shell-v1' as const;
+
+export const OPTICAL_WEBGL2_CONTEXT_ATTRIBUTES = Object.freeze({
+  alpha: true,
+  antialias: false,
+  depth: true,
+  powerPreference: 'default' as WebGLPowerPreference,
+  premultipliedAlpha: false,
+  preserveDrawingBuffer: false,
+  stencil: false,
+});
+
 export interface OpticalRuntimeCapabilities {
   canvas: boolean;
   initializationFailed: boolean;
@@ -17,4 +29,8 @@ export function chooseOpticalRuntime(capabilities: OpticalRuntimeCapabilities): 
     || !capabilities.webgl2
   ) return 'static-fallback';
   return 'webgl2-full';
+}
+
+export function acquireOpticalWebGL2Context(canvas: HTMLCanvasElement) {
+  return Boolean(canvas.getContext('webgl2', OPTICAL_WEBGL2_CONTEXT_ATTRIBUTES));
 }

@@ -28,6 +28,10 @@ const resourceModuleUrl = new URL('../lib/optical-lab/ogl/resources.ts', import.
 const resourceModule = existsSync(fileURLToPath(resourceModuleUrl))
   ? await import('../lib/optical-lab/ogl/resources')
   : null;
+const lifecycleModuleUrl = new URL('../lib/optical-lab/ogl/lifecycle.ts', import.meta.url);
+const lifecycleModule = existsSync(fileURLToPath(lifecycleModuleUrl))
+  ? await import('../lib/optical-lab/ogl/lifecycle')
+  : null;
 
 describe('isolated Optical Lab route contract', () => {
   beforeAll(() => {
@@ -68,6 +72,7 @@ describe('isolated Optical Lab route contract', () => {
     expect(markup).toContain('data-optical-ink="dom"');
     expect(markup).toContain('data-context-status="idle"');
     expect(markup).toContain('data-stable-bounds="pending"');
+    expect(markup).toContain('data-optical-render-phase="task-3-runtime-shell-v1"');
     expect(markup).not.toContain('optical-cursor-ring');
     expect(markup).not.toContain('radial-boundary');
     expect(markup).not.toContain('vertical-dotted-line');
@@ -186,6 +191,38 @@ describe('isolated Optical Lab route contract', () => {
     expect(gl.detachShader).toHaveBeenCalledWith(first.program, first.fragmentShader);
     expect(gl.detachShader).toHaveBeenCalledWith(second.program, second.vertexShader);
     expect(gl.detachShader).toHaveBeenCalledWith(second.program, second.fragmentShader);
+  });
+
+  it('fully releases asynchronous unavailable ownership before later policy cleanup', async () => {
+    const events: string[] = [];
+    const ownership = lifecycleModule?.createOpticalRendererOwnership();
+    expect(ownership).toBeDefined();
+    if (!ownership) return;
+    const canvas = { remove: vi.fn(() => events.push('canvas')) };
+    const renderer = {
+      dispose: vi.fn(() => {
+        events.push('renderer');
+        ownership.teardown();
+      }),
+      resize: vi.fn(),
+    };
+    const removeListeners = vi.fn(() => events.push('listeners'));
+    ownership.attach(canvas, renderer, removeListeners);
+
+    await Promise.resolve().then(() => {
+      ownership.teardownForUnavailable(() => events.push('published-static'));
+    });
+
+    expect(events).toEqual(['renderer', 'listeners', 'canvas', 'published-static']);
+    expect(renderer.dispose).toHaveBeenCalledTimes(1);
+    expect(removeListeners).toHaveBeenCalledTimes(1);
+    expect(canvas.remove).toHaveBeenCalledTimes(1);
+    expect(ownership.current()).toEqual({ canvas: null, renderer: null });
+
+    ownership.teardown();
+    expect(renderer.dispose).toHaveBeenCalledTimes(1);
+    expect(removeListeners).toHaveBeenCalledTimes(1);
+    expect(canvas.remove).toHaveBeenCalledTimes(1);
   });
 });
 

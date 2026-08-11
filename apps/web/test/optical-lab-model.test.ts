@@ -67,6 +67,24 @@ describe('Optical Lab capability and field model', () => {
     })).toBe('static-fallback');
   });
 
+  it('acquires the first WebGL2 context with the frozen OGL context contract', () => {
+    const getContext = vi.fn(() => ({}));
+    const canvas = { getContext } as unknown as HTMLCanvasElement;
+
+    expect(runtimePolicy?.acquireOpticalWebGL2Context(canvas)).toBe(true);
+    expect(getContext).toHaveBeenCalledTimes(1);
+    expect(getContext).toHaveBeenCalledWith('webgl2', {
+      alpha: true,
+      antialias: false,
+      depth: true,
+      powerPreference: 'default',
+      premultipliedAlpha: false,
+      preserveDrawingBuffer: false,
+      stencil: false,
+    });
+    expect(Object.isFrozen(runtimePolicy?.OPTICAL_WEBGL2_CONTEXT_ATTRIBUTES)).toBe(true);
+  });
+
   it('measures CSS-pixel DOM geometry after fonts settle and fixes the aperture at 58%', async () => {
     let fontsResolved = false;
     const fontsReady = Promise.resolve().then(() => {

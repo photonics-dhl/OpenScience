@@ -2,8 +2,13 @@
 
 import { useEffect, useRef } from 'react';
 
+import { createOpticalRendererOwnership } from '@/lib/optical-lab/ogl/lifecycle';
 import { createOpticalOglRenderer, type OpticalOglRendererSnapshot } from '@/lib/optical-lab/ogl/renderer';
-import { chooseOpticalRuntime, type OpticalRuntime } from '@/lib/optical-lab/runtime-policy';
+import {
+  acquireOpticalWebGL2Context,
+  chooseOpticalRuntime,
+  type OpticalRuntime,
+} from '@/lib/optical-lab/runtime-policy';
 
 export interface OpticalLabRendererProps {
   diagnosticsId: string;
@@ -40,10 +45,8 @@ export function OpticalLabRenderer({ diagnosticsId, stageId }: OpticalLabRendere
     const diagnostics = document.getElementById(diagnosticsId);
     if (!host || !stage || !diagnostics) return;
     const motionPolicy = window.matchMedia('(prefers-reduced-motion: reduce)');
-    let canvas: HTMLCanvasElement | null = null;
-    let renderer: ReturnType<typeof createOpticalOglRenderer> | null = null;
+    const ownership = createOpticalRendererOwnership();
     let runtime: OpticalRuntime = 'dom-only';
-    let removeCanvasListeners = () => {};
 
     const publishStatic = (nextRuntime: Exclude<OpticalRuntime, 'webgl2-full'>, status: string) => {
       runtime = nextRuntime;
@@ -76,8 +79,7 @@ export function OpticalLabRenderer({ diagnosticsId, stageId }: OpticalLabRendere
 
     const update = (snapshot: OpticalOglRendererSnapshot) => {
       if (snapshot.contextStatus === 'unavailable') {
-        canvas?.remove();
-        publishStatic('static-fallback', 'unavailable');
+        ownership.teardownForUnavailable(() => publishStatic('static-fallback', 'unavailable'));
         return;
       }
       stage.dataset.renderMode = snapshot.mode;
@@ -104,14 +106,7 @@ export function OpticalLabRenderer({ diagnosticsId, stageId }: OpticalLabRendere
       };
     };
 
-    const stop = () => {
-      renderer?.dispose();
-      renderer = null;
-      removeCanvasListeners();
-      removeCanvasListeners = () => {};
-      canvas?.remove();
-      canvas = null;
-    };
+    const stop = () => ownership.teardown();
 
     const start = () => {
       stop();
@@ -126,8 +121,8 @@ export function OpticalLabRenderer({ diagnosticsId, stageId }: OpticalLabRendere
         return;
       }
 
-      canvas = document.createElement('canvas');
-      const webgl2 = Boolean(canvas.getContext('webgl2'));
+      const canvas = document.createElement('canvas');
+      const webgl2 = acquireOpticalWebGL2Context(canvas);
       const chosenRuntime = chooseOpticalRuntime({
         canvas: true,
         initializationFailed: false,
@@ -137,7 +132,6 @@ export function OpticalLabRenderer({ diagnosticsId, stageId }: OpticalLabRendere
       });
       runtime = chosenRuntime;
       if (chosenRuntime !== 'webgl2-full') {
-        canvas = null;
         publishStatic(chosenRuntime, 'unavailable');
         return;
       }
@@ -148,23 +142,23 @@ export function OpticalLabRenderer({ diagnosticsId, stageId }: OpticalLabRendere
       const ownedCanvas = canvas;
       const onContextLost = (event: Event) => {
         event.preventDefault();
-        renderer?.dispose();
-        renderer = null;
-        ownedCanvas.remove();
+        ownership.suspendForContextRestore();
         publishStatic('static-fallback', 'lost');
       };
       const onContextRestored = () => start();
       ownedCanvas.addEventListener('webglcontextlost', onContextLost);
       ownedCanvas.addEventListener('webglcontextrestored', onContextRestored);
-      removeCanvasListeners = () => {
+      const removeCanvasListeners = () => {
         ownedCanvas.removeEventListener('webglcontextlost', onContextLost);
         ownedCanvas.removeEventListener('webglcontextrestored', onContextRestored);
       };
 
       try {
-        renderer = createOpticalOglRenderer(ownedCanvas, stage, update);
+        const renderer = createOpticalOglRenderer(ownedCanvas, stage, update);
+        ownership.attach(ownedCanvas, renderer, removeCanvasListeners);
       } catch {
-        stop();
+        removeCanvasListeners();
+        ownedCanvas.remove();
         const failedRuntime = chooseOpticalRuntime({
           canvas: true,
           initializationFailed: true,
@@ -179,7 +173,7 @@ export function OpticalLabRenderer({ diagnosticsId, stageId }: OpticalLabRendere
     const onResize = () => {
       const requiresStatic = motionPolicy.matches || window.innerWidth <= 480;
       if (requiresStatic !== (runtime !== 'webgl2-full')) start();
-      else renderer?.resize();
+      else ownership.current().renderer?.resize();
     };
     start();
     motionPolicy.addEventListener('change', start);

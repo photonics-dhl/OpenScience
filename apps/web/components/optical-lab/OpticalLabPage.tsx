@@ -7,6 +7,7 @@ import { getTranslations } from 'next-intl/server';
 import { OpticalLabClientMount } from './OpticalLabClientMount';
 
 import styles from '@/app/_visual/optical-lab/optical-lab.module.css';
+import { OPTICAL_LAB_RENDER_PHASE } from '@/lib/optical-lab/runtime-policy';
 
 export const opticalLabMetadata: Metadata = {
   robots: { follow: false, index: false },
@@ -83,6 +84,7 @@ export async function OpticalLabPage() {
             data-optical-ink="dom"
             data-optical-lab-candidate="true"
             data-optical-lab-candidate-stage="true"
+            data-optical-render-phase={OPTICAL_LAB_RENDER_PHASE}
             data-render-mode="static-fallback"
             data-stable-bounds="pending"
             id="optical-lab-candidate"

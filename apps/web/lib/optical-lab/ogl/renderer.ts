@@ -7,6 +7,7 @@ import {
   type OpticalLayout,
 } from '../layout';
 import { createOpticalOglResourceLedger, type OpticalOglResourceCounts } from './resources';
+import { OPTICAL_WEBGL2_CONTEXT_ATTRIBUTES } from '../runtime-policy';
 
 export interface OpticalOglRendererSnapshot {
   activeRaf: boolean;
@@ -51,8 +52,7 @@ export function createOpticalOglRenderer(
     renderer = new Renderer({
       canvas,
       webgl: 2,
-      alpha: true,
-      antialias: false,
+      ...OPTICAL_WEBGL2_CONTEXT_ATTRIBUTES,
       dpr: Math.min(devicePixelRatio, 2),
     });
   } finally {

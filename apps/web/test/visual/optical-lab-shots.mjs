@@ -10,6 +10,19 @@ import { analyzeOpticalTopology } from './optical-lab-visual-metrics.mjs';
 const scriptDir = path.dirname(fileURLToPath(import.meta.url));
 const outDir = path.resolve(scriptDir, 'out', 'optical-lab');
 const baseUrl = process.env.VISUAL_BASE_URL ?? 'http://127.0.0.1:3002';
+const OPTICAL_LAB_RENDER_PHASES = Object.freeze({
+  candidateBVisual: 'task-4-candidate-b-visual-v1',
+  runtimeShell: 'task-3-runtime-shell-v1',
+});
+const OPTICAL_WEBGL2_CONTEXT_ATTRIBUTES = Object.freeze({
+  alpha: true,
+  antialias: false,
+  depth: true,
+  powerPreference: 'default',
+  premultipliedAlpha: false,
+  preserveDrawingBuffer: false,
+  stencil: false,
+});
 await mkdir(outDir, { recursive: true });
 
 const browser = await chromium.launch({ headless: true });
@@ -183,6 +196,7 @@ for (const testCase of cases) {
   await page.addInitScript((forceContext) => {
       window.__OPTICAL_LAB_GL_TRACKER__ = {
         contexts: [],
+        firstContextAcquisition: null,
         instancedDraws: 0,
         instancedDrawErrors: [],
         instancedDrawInkStates: [],
@@ -368,6 +382,15 @@ for (const testCase of cases) {
         return context;
       };
       HTMLCanvasElement.prototype.getContext = function patchedGetContext(type, ...options) {
+        if (
+          window.__OPTICAL_LAB_GL_TRACKER__.firstContextAcquisition === null
+          && (type === 'webgl2' || type === 'webgl' || type === 'experimental-webgl')
+        ) {
+          window.__OPTICAL_LAB_GL_TRACKER__.firstContextAcquisition = {
+            options: options[0] ? { ...options[0] } : null,
+            type,
+          };
+        }
         if ((forceContext === 'webgl1' || forceContext === 'none') && type === 'webgl2') return null;
         if (forceContext === 'none' && (type === 'webgl' || type === 'experimental-webgl')) return null;
         const context = original.call(this, type, ...options);
@@ -408,14 +431,17 @@ for (const testCase of cases) {
   const mode = await diagnostics.getAttribute('data-render-mode');
   const contextStatus = await diagnostics.getAttribute('data-context-status');
   const expectedDynamic = testCase.name === 'desktop';
-  if (expectedDynamic) {
+  const renderPhase = await page.locator('[data-optical-lab-candidate-stage="true"]').getAttribute('data-optical-render-phase');
+
+  const runTask3RuntimeShellAssertions = async () => {
+    if (expectedDynamic) {
     await page.waitForFunction(() => {
       const node = document.querySelector('[data-optical-lab-diagnostics="true"]');
       return node?.getAttribute('data-context-status') === 'ready'
         && Number(node.getAttribute('data-frame-count') ?? 0) >= 2;
     }, undefined, { timeout: 5_000 });
-  }
-  const shell = await page.evaluate(() => {
+    }
+    const shell = await page.evaluate(() => {
     const diagnosticsNode = document.querySelector('[data-optical-lab-diagnostics="true"]');
     const stageNode = document.querySelector('[data-optical-lab-candidate-stage="true"]');
     const headline = document.querySelector('h1[data-optical-lab-semantic-title="true"]');
@@ -441,6 +467,7 @@ for (const testCase of cases) {
       contextStatus: diagnosticsNode?.getAttribute('data-context-status'),
       firstCompleteFrame: diagnosticsNode?.getAttribute('data-first-complete-frame'),
       frameCount: Number(diagnosticsNode?.getAttribute('data-frame-count') ?? 0),
+      firstContextAcquisition: window.__OPTICAL_LAB_GL_TRACKER__.firstContextAcquisition,
       ink: stageNode?.getAttribute('data-optical-ink'),
       mode: diagnosticsNode?.getAttribute('data-render-mode'),
       qualityTier: diagnosticsNode?.getAttribute('data-quality-tier'),
@@ -449,9 +476,22 @@ for (const testCase of cases) {
       evolvesX: evolvesRect.left - stageRect.left,
       stageWidth: stageRect.width,
     };
-  });
-  assert.equal(shell.selectedText, 'Science evolves.', `${testCase.name} must keep the exact selectable semantic heading`);
-  assert.equal(shell.firstCompleteFrame, 'false', `${testCase.name} shell must not claim a complete glyph/particle/composite frame`);
+    });
+    assert.equal(shell.selectedText, 'Science evolves.', `${testCase.name} must keep the exact selectable semantic heading`);
+    if (testCase.width > 480 && testCase.reducedMotion !== 'reduce') {
+      assert.deepEqual(
+        shell.firstContextAcquisition,
+        { options: OPTICAL_WEBGL2_CONTEXT_ATTRIBUTES, type: 'webgl2' },
+        `${testCase.name} first GL acquisition must use the shared WebGL2 context attributes`,
+      );
+    } else {
+      assert.equal(
+        shell.firstContextAcquisition,
+        null,
+        `${testCase.name} policy must not probe a GL context`,
+      );
+    }
+    assert.equal(shell.firstCompleteFrame, 'false', `${testCase.name} shell must not claim a complete glyph/particle/composite frame`);
   assert.equal(shell.ink, 'dom', `${testCase.name} shell must preserve DOM ink`);
   assert(Math.abs(shell.seamX - shell.stageWidth * .58) <= 1, `${testCase.name} Science must end at the 58% aperture`);
   assert(Math.abs(shell.evolvesX - shell.stageWidth * .58) <= 1, `${testCase.name} evolves must start at the 58% aperture`);
@@ -516,10 +556,12 @@ for (const testCase of cases) {
   }
   measurements.push({ case: testCase.name, ...shell });
   await page.screenshot({ fullPage: true, path: path.join(outDir, `${testCase.name}.png`) });
-  assert.deepEqual(errors, [], `${testCase.name} emitted browser errors: ${errors.join(' | ')}`);
-  await page.close();
-  if (shell) continue;
-  const marker = page.locator('[data-optical-lab-evolves="true"] > span');
+    assert.deepEqual(errors, [], `${testCase.name} emitted browser errors: ${errors.join(' | ')}`);
+    await page.close();
+  };
+
+  const runCandidateBVisualPhaseAssertions = async () => {
+    const marker = page.locator('[data-optical-lab-evolves="true"] > span');
   const semanticHeadline = page.locator('h1[data-optical-lab-semantic-title="true"]');
   if (testCase.name === 'desktop' || testCase.name === 'dom-fallback') {
     await semanticHeadline.scrollIntoViewIfNeeded();
@@ -967,7 +1009,19 @@ for (const testCase of cases) {
   measurements.push({ case: testCase.name, activePairwise, restingTopology, targetTopology, ...snapshot });
   await page.screenshot({ fullPage: true, path: path.join(outDir, `${testCase.name}.png`) });
   assert.deepEqual(errors, [], `${testCase.name} emitted browser errors: ${errors.join(' | ')}`);
-  await page.close();
+    await page.close();
+  };
+
+  if (renderPhase === OPTICAL_LAB_RENDER_PHASES.runtimeShell) {
+    await runTask3RuntimeShellAssertions();
+  } else if (renderPhase === OPTICAL_LAB_RENDER_PHASES.candidateBVisual) {
+    await runCandidateBVisualPhaseAssertions();
+  } else {
+    assert.fail(
+      `${testCase.name} declared unreviewed Optical Lab render phase ${JSON.stringify(renderPhase)}; `
+      + 'advance the production marker and this explicit gate together',
+    );
+  }
 }
 
 const cleanupPage = await browser.newPage({ viewport: { width: 1440, height: 900 } });

@@ -5,7 +5,8 @@
 - **运行策略**：隔离 Lab 新路径只保留 `webgl2-full` / `static-fallback` / `dom-only`；WebGL1、reduced motion、低功耗与初始化失败均不挂动态 Canvas、不启 RAF。OGL 构造在 canvas 实例上阻断其内置 WebGL1 fallback，未修改全局浏览器 API。
 - **布局与诚实发布**：Candidate 使用已批准 Archivo/Bodoni 单行 DOM 几何，桌面/移动均以 58% 结束 `Science` 并开始 `evolves.`；字体 ready 后读取真实 CSS-pixel word/baseline rectangles，超过 1px 拒绝 GPU 发布。Task 3 壳始终报告 `firstCompleteFrame=false` 并保留可选中 DOM ink，未伪造 glyph/particle/composite 或提前推广静态资产。
 - **事务生命周期**：按 context 建立 OGL raw-handle ledger，覆盖 shader/program/buffer/texture/framebuffer/renderbuffer/VAO，交叠 ownership 去重且每 program 只 detach 自己 shader；初始化失败、policy change、context loss、unmount 均 cancel RAF、精确 dispose、移除 canvas，restore 使用 fresh canvas + fresh WebGL2 context。
-- **TDD/验证**：初始 RED 为 2 files / 6 intended failures；审查补充 RED 捕获跨 program 8 次错误 detach 与旧 SSR mode。最终 focused 2 files / 24 tests、Web typecheck、production build、production-start 浏览器 lifecycle matrix 均 exit 0；生产 `/` bundle 仍 3.87 kB / First Load 112 kB，未改 Landing/ECS/backend。
+- **复审修复 round 1/5**：首个 WebGL2 capability acquisition 与 OGL constructor 共享 frozen context attributes；异步 unavailable 走单一可重入 ownership teardown，先 dispose renderer、移除 listeners/canvas、清空 refs 再发布 static；浏览器门禁以 `task-3-runtime-shell-v1` 显式分派，完整 Candidate B visual assertions 保留在命名 Task 4 分支，不再由恒真条件静默跳过。
+- **TDD/验证**：初始 RED 为 2 files / 6 intended failures；审查补充 RED 捕获跨 program 8 次错误 detach 与旧 SSR mode；fix-round RED 为 3 intended failures / 23 pass（缺 context acquisition contract、phase marker、ownership lifecycle）。最终 focused 2 files / 26 tests、scoped lint、Web typecheck、production build、production-start 浏览器 lifecycle matrix 均 exit 0；生产 `/` bundle 仍 3.87 kB / First Load 112 kB，未改 Landing/ECS/backend。
 - **下一步**：Task 4 才可注册非零 OGL glyph resources 并实现 MSDF 排版；完整 glyph/particle/composite frame 前不得隐藏 DOM ink。
 
 ## 2026-08-12（Optical Lab Task 2 review fix round 1/5）— ✅ 输出映射与配置不可变
