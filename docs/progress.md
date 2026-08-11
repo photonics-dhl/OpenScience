@@ -1,11 +1,11 @@
 # OpenScience (XGS) 进度日志
 
-## 2026-08-11（Optical Lab Candidate B 本地验收）— ✅ 工程收口，待 Step 6 用户选择
+## 2026-08-11（Optical Lab Candidate B 最终复审）— ✅ Important 修复，待 Step 6 用户选择
 
-- **TDD 与复审**：Candidate A production-start RED 为 resting waist `1.072084 < 1.18`；Candidate B 经模型、材质/视觉门禁与一轮复审修复后落在 `40b2668`、`217fcd3`、`db68475`，另以 `ded8011` 补齐 browser-gate ESLint globals。Critical/Important 均清零；保留性能 Minor：尚无显式 steady-state FPS/CPU 预算与直接 3,840 粒子上限断言。
-- **fresh GREEN**：`npx pnpm@9.15.0 --filter @openscience/web test -- optical-lab-contract.test.tsx optical-lab-model.test.ts optical-lab-visual-metrics.test.mjs` 14/14；Web 全量 29 files / 175 tests；Web typecheck、production build、138 秒 production-start browser matrix、root lint、docs lint 与 `git diff --check` 均 exit 0，3062 门禁前后及最终复核均无 listener。
-- **静止拓扑**：desktop/WebGL2 为 waist `1.239995`、downstream `0.093903`、continuity `0.970297`、directionality `1.565451`、curtain `0.583333 / 0.491071`；forced WebGL1 为 `1.469110 / 0.093586 / 0.969231 / 1.568519 / 0.978495 / 0.577904`。两路径均固定 aperture `x=.58`，DOM fallback 保持单一可读标题。
-- **人工审图**：静止与 left/right 150ms 原尺寸证据未见重复/截断标题、暗腰、白环、机械竖线、蜘蛛网扇形或 aperture 位移；整行响应轻微。相对参考，候选焦点和右向光束更克制，上下离散粒子幕更明显，因此只进入用户审美选择，不宣称等同参考。
+- **TDD 与最终复审**：`af08251` 修复两个 Important：真实鼠标拖选现精确得到 `Science evolves.`，且 stage pointer 事件继续通过；斜向 target/current refraction 按真实 RAF `dt` 指数跟随、无 bounce，velocity/phase 有界，refraction + wave + flow 的 CSS 像素合成向量总量不超过 `8px` 并在 `650ms` 归零。RED 分别为拖选空串、`Scienceevolves.`、斜向 `11.313708px > 8px`、缺少平滑 step 与 raw velocity `707.106781 > 1`。
+- **fresh GREEN**：focused Optical Lab 3 files / 16 tests、Web 全量 29 files / 177 tests；Web typecheck、production build、150.1 秒 production-start browser matrix、root lint 与 `git diff --check` 均 exit 0，3062 无 listener。现有 topology 与 active `.35/.008` 阈值未修改；直接 `particleCount <= 3,840` 断言已补，只有显式 steady-state FPS/CPU budget 仍为 deferred Minor。
+- **静止/交互证据**：desktop topology 为 `1.474743 / 0.092701 / 0.965347 / 1.563921 / 0.510417 / 0.481993`；forced WebGL1 为 `1.298521 / 0.093620 / 0.971795 / 1.579973 / 0.989247 / 0.587262`。desktop active left/slit 为 `1.571805 / 0.039936`、slit/right `1.056231 / 0.035001`（mean/changed）；aperture 仍固定 `x=.58`。
+- **人工审图**：desktop/resting/left/right、DOM fallback 与 WebGL1 resting 原尺寸证据未见重复/截断标题、暗腰、白环、机械竖线、蜘蛛网扇形或 aperture 位移；inline-flow 选择修复未造成可见几何偏移。相对参考，候选焦点和右向光束更克制，上下离散粒子幕更明显，因此只进入用户审美选择，不宣称等同参考。
 - **范围**：全部逐帧计算在访客浏览器；headless Chromium 使用 ANGLE/SwiftShader，不能代表真机 GPU 性能。ECS 未改、未部署，生产 `/` 与现有 Canvas Landing 未改；只有用户在 Step 6 明确选择后才能另立生产替换计划。
 
 ## 2026-08-11（Optical Lab Candidate B 计划）— ⏳ 书面设计确认，待执行方式

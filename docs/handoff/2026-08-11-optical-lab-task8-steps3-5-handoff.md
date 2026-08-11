@@ -4,7 +4,7 @@
 
 Task 8 Steps 3–5 and Candidate B local engineering acceptance are complete on `codex/optical-editorial-v3`. The isolated Lab is available only at `/_visual/optical-lab`; production `/` and its Canvas renderer remain unchanged. Task Master Task 4 remains `in-progress`. Step 6 is intentionally pending user visual selection.
 
-Candidate B commits: model `40b2668`, material/gate `217fcd3`, review fix `db68475`, browser-global lint fix `ded8011`. Earlier Candidate A commits `8485dac` and `a0509ef` remain history. The Lab has **not** been deployed.
+Candidate B commits: model `40b2668`, material/gate `217fcd3`, review fixes `db68475` and `af08251`, browser-global lint fix `ded8011`. Earlier Candidate A commits `8485dac` and `a0509ef` remain history. The Lab has **not** been deployed.
 
 ## Verification and review state
 
@@ -12,6 +12,8 @@ Candidate B commits: model `40b2668`, material/gate `217fcd3`, review fix `db684
 - Candidate B review fix round 1 addressed honest single-frame 150ms capture, descendant marker transparency/selection, first-draw GPU ink publication and differential fresh-context restore evidence. Scoped re-review found no open Critical/Important findings.
 - Fresh Task 3 verification passed: focused Optical Lab 14/14, full Web 29 files / 175 tests, Web typecheck, production build, 138-second production-start browser matrix, root lint (`WORKSPACE_STRUCTURE_OK`, `DOCS_SYNC_OK`), docs lint and `git diff --check`. Port 3062 had no listener before or after the gate and no listener on final recheck.
 - `ded8011` fixes the only Task 3 RED outside visual behavior: root lint found seven missing browser-global declarations in the Playwright gate; the one-line declaration fix passed targeted ESLint, root lint, focused tests, production build and the complete browser matrix without changing output or thresholds.
+- Final branch review found two further Important issues. `af08251` makes the visual overlay pointer-transparent and uses inline-flow semantic text, so real Chromium mouse drag selects exact `Science evolves.` in GPU and DOM fallback modes while stage pointer gates remain active. It also adds real-`dt` target/current refraction follow, radial velocity/phase limits, and a shader-side CSS-pixel clamp across refraction, wave and flow; the combined pointer displacement is at most `8px` and recovery is exactly zero by `650ms`.
+- Fresh final-fix evidence passed focused 16/16, Web 29 files / 177 tests, typecheck, root lint, production build and the 150.1-second full browser matrix. The unchanged `.35/.008` active and resting topology gates remained GREEN; port 3062 was clean afterward.
 
 ## Manual visual ruling
 
@@ -28,15 +30,15 @@ Candidate B is engineering-valid but not yet aesthetically selected. Original-re
 - Added contract/model tests before implementation and captured the expected missing-route/missing-model RED failures.
 - Added a no-index three-column Lab with the authorized target reference, a current production-build capture, and a candidate that retains one selectable semantic `h1`.
 - Added a dependency-free, client-only native WebGL renderer: transactional WebGL2 first; on acquisition or initialization failure, cleanup and retry WebGL1 on a fresh canvas; otherwise DOM/static.
-- Implemented a small dissipating flow texture, fixed 58% signed aperture, glyph texture displacement, bounded directional caustic/chroma, and sparse deterministic instanced glyph-edge particles through WebGL2 or `ANGLE_instanced_arrays`. Pointer input changes energy/phase and at most 18 px vertical bias, not aperture position.
+- Implemented a small dissipating flow texture, fixed 58% signed aperture, glyph texture displacement, bounded directional caustic/chroma, and sparse deterministic instanced glyph-edge particles through WebGL2 or `ANGLE_instanced_arrays`. Candidate A historically used an `18px` vertical-bias clamp; Candidate B instead caps the complete pointer-induced displacement vector at `8px` without moving the aperture.
 - Added dynamic mobile/reduced-motion static policies, context-loss fallback/recovery, transactional resource cleanup, and public diagnostics for mode/context/frame/FPS/CPU/GPU/bounds.
 - Added a production-start browser gate covering candidate-only distinct pointer frames, forbidden geometry/ghost pixel probes, WebGL2 and WebGL1 instanced draws, WebGL2-init failure to fresh WebGL1, forced dual-init/total-context fallback, mobile, reduced motion, context loss/restore, stable bounds and exact resource cleanup.
 - Amended ADR-009 for the measured Canvas visual failure and strictly isolated native WebGL exception. No visual dependency or lockfile change was introduced.
 
 ## Evidence
 
-- Fresh desktop/WebGL2 measured 57.4 FPS and 0.74 ms CPU submit; forced WebGL1 measured 52.4 FPS and 0.41 ms. Headless Chromium used ANGLE/SwiftShader; synchronized fallback GPU values are diagnostics only, not real-device performance claims.
-- Fresh desktop topology was waist `1.239995`, downstream `0.093903`, continuity `0.970297`, directionality `1.565451`, curtain coverage/spread `0.583333 / 0.491071`. Forced WebGL1 was `1.469110 / 0.093586 / 0.969231 / 1.568519 / 0.978495 / 0.577904`.
+- Fresh desktop/WebGL2 measured 56.7 FPS and 0.60 ms CPU submit; forced WebGL1 measured 49.4 FPS and 0.58 ms. Headless Chromium used ANGLE/SwiftShader; synchronized fallback GPU values are diagnostics only, not real-device performance claims.
+- Fresh desktop topology was `1.474743 / 0.092701 / 0.965347 / 1.563921 / 0.510417 / 0.481993` (waist/downstream/continuity/directionality/curtain coverage/spread). Forced WebGL1 was `1.298521 / 0.093620 / 0.971795 / 1.579973 / 0.989247 / 0.587262`.
 - Route-exclusive emitted Lab JavaScript: 19,559 bytes raw / 6,266 bytes gzip.
 - Route CSS: 4,134 bytes raw / 1,422 bytes gzip.
 - Production homepage build report remains 3.87 kB route size / 112 kB First Load JS and its module graph does not import the Lab renderer.
@@ -49,7 +51,7 @@ Next App Router treats `_visual` as a private folder. The actual route therefore
 ## Pending
 
 1. User reviews reference/current/Candidate B evidence and explicitly accepts, iterates or rejects Candidate B at Step 6; headless SwiftShader is not real-device performance proof.
-2. The deferred performance Minor remains visible: the browser gate records FPS/CPU and renderer particle count but lacks an explicit steady-state FPS/CPU budget and a direct 3,840-particle-cap assertion. Final review must triage it; Task 3 did not alter implementation or thresholds.
+2. The deferred performance Minor remains visible: the browser gate records FPS/CPU but has no explicit steady-state FPS/CPU budget. The final review added a direct `particleCount <= 3,840` assertion without changing the existing hard cap or inventing a headless performance threshold.
 3. Only if the user explicitly requests isolated deployment, run the separate authorized backup/deploy/online-verification workflow. No such authorization has been inferred here.
 4. Only if the user selects Candidate B for the homepage, write a separate production Landing replacement plan and rerun TDD, release-browser and authorized ECS deployment gates.
 
