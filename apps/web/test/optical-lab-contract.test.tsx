@@ -36,10 +36,12 @@ describe('isolated Optical Lab route contract', () => {
 
   it('keeps one selectable semantic headline in SSR while the GPU mount remains client-only', async () => {
     const markup = await renderLab();
+    const headlineText = markup
+      .match(/<h1\b[^>]*>(.*?)<\/h1>/)?.[1]
+      .replace(/<[^>]+>/g, '');
     expect(markup.match(/<h1\b/g) ?? []).toHaveLength(1);
     expect(markup).toContain('data-optical-lab-semantic-title="true"');
-    expect(markup).toContain('Science');
-    expect(markup).toContain('evolves');
+    expect(headlineText).toBe('Science evolves.');
     expect(markup).toContain('data-optical-lab-client-slot="true"');
     expect(markup).not.toContain('<canvas');
   });

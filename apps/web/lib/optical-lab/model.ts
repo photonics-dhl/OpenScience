@@ -26,6 +26,11 @@ export interface OpticalLabViewport {
   height: number;
 }
 
+export interface OpticalLabRefractionUv {
+  x: number;
+  y: number;
+}
+
 export interface OpticalLabBounds {
   x: number;
   y: number;
@@ -37,9 +42,46 @@ function clamp(value: number, minimum: number, maximum: number) {
   return Math.max(minimum, Math.min(maximum, value));
 }
 
+function clampVector(x: number, y: number, maximum: number) {
+  const magnitude = Math.hypot(x, y);
+  const scale = magnitude > maximum ? (maximum - 1e-9) / magnitude : 1;
+  return { x: x * scale, y: y * scale };
+}
+
 function exponentialRecovery(remaining: number) {
   if (remaining <= 0) return 0;
   return (Math.exp(4 * remaining) - 1) / (Math.exp(4) - 1);
+}
+
+export function clampOpticalLabRefraction(
+  refractionUv: OpticalLabRefractionUv,
+  viewport: OpticalLabViewport,
+) {
+  const pixels = clampVector(
+    refractionUv.x * viewport.width,
+    refractionUv.y * viewport.height,
+    OPTICAL_LAB_MAX_REFRACTION_PX,
+  );
+  return {
+    x: pixels.x / viewport.width,
+    y: pixels.y / viewport.height,
+  };
+}
+
+export function stepOpticalLabRefraction(
+  current: OpticalLabRefractionUv,
+  target: OpticalLabRefractionUv,
+  viewport: OpticalLabViewport,
+  deltaMs: number,
+) {
+  const boundedTarget = clampOpticalLabRefraction(target, viewport);
+  if (boundedTarget.x === 0 && boundedTarget.y === 0) return { x: 0, y: 0 };
+  const boundedCurrent = clampOpticalLabRefraction(current, viewport);
+  const follow = 1 - Math.exp(-Math.max(0, deltaMs) / 45);
+  return clampOpticalLabRefraction({
+    x: boundedCurrent.x + (boundedTarget.x - boundedCurrent.x) * follow,
+    y: boundedCurrent.y + (boundedTarget.y - boundedCurrent.y) * follow,
+  }, viewport);
 }
 
 export function selectOpticalLabMode(capabilities: OpticalLabCapabilities): OpticalLabRenderMode {
@@ -65,20 +107,24 @@ export function sampleOpticalLabField(
     + (1 - OPTICAL_LAB_REST_STRENGTH) * interactionStrength;
   const pointerX = pointer?.x ?? aperture.x;
   const pointerY = pointer?.y ?? aperture.y;
-  const maxX = OPTICAL_LAB_MAX_REFRACTION_PX / viewport.width;
-  const maxY = OPTICAL_LAB_MAX_REFRACTION_PX / viewport.height;
-  const refractionUv = pointer ? {
-    x: clamp(((pointerX - aperture.x) / viewport.width) * 0.018 * interactionStrength, -maxX, maxX),
-    y: clamp(((pointerY - aperture.y) / viewport.height) * 0.018 * interactionStrength, -maxY, maxY),
-  } : { x: 0, y: 0 };
+  const velocity = pointer ? clampVector(pointer.velocityX, pointer.velocityY, 1) : { x: 0, y: 0 };
+  const normalizedPointer = pointer ? {
+    ...pointer,
+    velocityX: velocity.x,
+    velocityY: velocity.y,
+  } : { x: aperture.x, y: aperture.y, velocityX: 0, velocityY: 0 };
+  const refractionUv = pointer ? clampOpticalLabRefraction({
+    x: ((pointerX - aperture.x) / viewport.width) * 0.018 * interactionStrength,
+    y: ((pointerY - aperture.y) / viewport.height) * 0.018 * interactionStrength,
+  }, viewport) : { x: 0, y: 0 };
 
   return {
     aperture,
     energy: interactionStrength,
     interactionStrength,
     opticalStrength,
-    phase: pointer ? pointer.velocityX * interactionStrength : 0,
-    pointer: pointer ?? { x: aperture.x, y: aperture.y, velocityX: 0, velocityY: 0 },
+    phase: clamp(normalizedPointer.velocityX * interactionStrength, -1, 1),
+    pointer: normalizedPointer,
     refractionUv,
   };
 }

@@ -398,8 +398,44 @@ for (const testCase of cases) {
   const mode = await diagnostics.getAttribute('data-render-mode');
   const contextStatus = await diagnostics.getAttribute('data-context-status');
   const marker = page.locator('[data-optical-lab-evolves="true"] > span');
+  const semanticHeadline = page.locator('h1[data-optical-lab-semantic-title="true"]');
+  if (testCase.name === 'desktop' || testCase.name === 'dom-fallback') {
+    await semanticHeadline.scrollIntoViewIfNeeded();
+    await page.waitForTimeout(50);
+    const dragEndpoints = await semanticHeadline.evaluate((headline) => {
+      const science = headline.querySelector('[data-optical-lab-science="true"]')?.firstChild;
+      const markerNode = headline.querySelector('[data-optical-lab-evolves="true"] > span')?.firstChild;
+      if (!science || !markerNode) return null;
+      const firstCharacter = document.createRange();
+      firstCharacter.setStart(science, 0);
+      firstCharacter.setEnd(science, 1);
+      const lastCharacter = document.createRange();
+      lastCharacter.setStart(markerNode, 0);
+      lastCharacter.setEnd(markerNode, markerNode.textContent?.length ?? 0);
+      const first = firstCharacter.getBoundingClientRect();
+      const last = lastCharacter.getBoundingClientRect();
+      return {
+        end: { x: last.right - last.width * .1, y: last.top + last.height * .5 },
+        start: { x: first.left + first.width * .1, y: first.top + first.height * .5 },
+      };
+    });
+    assert(dragEndpoints, `${testCase.name} semantic headline must have selectable character bounds`);
+    await page.evaluate(() => window.getSelection()?.removeAllRanges());
+    await page.mouse.move(dragEndpoints.start.x, dragEndpoints.start.y);
+    await page.mouse.down();
+    await page.mouse.move(dragEndpoints.end.x, dragEndpoints.end.y, { steps: 24 });
+    await page.mouse.up();
+    const selectedText = await semanticHeadline.evaluate(() => window.getSelection()?.toString() ?? '');
+    assert.equal(
+      selectedText,
+      'Science evolves.',
+      `${testCase.name} real mouse drag must select the exact semantic heading through the visual overlay`,
+    );
+    await page.evaluate(() => window.getSelection()?.removeAllRanges());
+  }
   let restingTopology = null;
   let targetTopology = null;
+  let activePairwise = null;
   if (
     testCase.reducedMotion === 'reduce'
     || testCase.width <= 480
@@ -468,6 +504,10 @@ for (const testCase of cases) {
     assert(
       Number(await diagnostics.getAttribute('data-particle-count')) > 0,
       'desktop must expose a non-empty sparse glyph-edge particle buffer',
+    );
+    assert(
+      Number(await diagnostics.getAttribute('data-particle-count')) <= 3_840,
+      'desktop particle budget must retain the existing 3,840 hard cap',
     );
     assert.match(
       await diagnostics.getAttribute('data-flow-texture') ?? '',
@@ -622,8 +662,10 @@ for (const testCase of cases) {
       );
       pointerFrames.set(position, decoded);
     }
+    activePairwise = {};
     for (const [first, second] of [['left', 'slit'], ['slit', 'right']]) {
       const difference = compareScreenshots(pointerFrames.get(first), pointerFrames.get(second));
+      activePairwise[`${first}/${second}`] = difference;
       assert(
         difference.meanChannelDifference >= .35 && difference.changedRatio >= .008,
         `${testCase.name} ${first}/${second} frames are visually indistinguishable: ${JSON.stringify(difference)}`,
@@ -800,7 +842,7 @@ for (const testCase of cases) {
   }));
   assert.equal(snapshot.apertureX, 0.58, 'all modes must declare the same fixed aperture');
   assert.notEqual(snapshot.bounds, 'pending', 'all modes must expose stable measured bounds');
-  measurements.push({ case: testCase.name, restingTopology, targetTopology, ...snapshot });
+  measurements.push({ case: testCase.name, activePairwise, restingTopology, targetTopology, ...snapshot });
   await page.screenshot({ fullPage: true, path: path.join(outDir, `${testCase.name}.png`) });
   assert.deepEqual(errors, [], `${testCase.name} emitted browser errors: ${errors.join(' | ')}`);
   await page.close();

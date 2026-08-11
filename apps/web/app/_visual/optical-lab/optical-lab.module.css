@@ -124,14 +124,14 @@
   top: 50%;
   left: 2.5%;
   width: 95%;
-  display: flex;
-  align-items: baseline;
+  display: block;
   margin: 0;
   color: var(--os-paper);
   line-height: .76;
   letter-spacing: -.07em;
   transform: translateY(-48%);
   user-select: text;
+  white-space: nowrap;
 }
 
 .science {
@@ -172,6 +172,7 @@
   position: absolute;
   z-index: 2;
   inset: 0;
+  pointer-events: none;
 }
 
 .diagnostics {
@@ -244,7 +245,6 @@
     top: 47%;
     left: 4%;
     width: 92%;
-    flex-wrap: wrap;
     line-height: .7;
   }
 

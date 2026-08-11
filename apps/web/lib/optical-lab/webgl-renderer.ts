@@ -1,7 +1,9 @@
 import {
   createFrameMetrics,
   OPTICAL_LAB_APERTURE_X,
+  OPTICAL_LAB_MAX_REFRACTION_PX,
   sampleOpticalLabField,
+  stepOpticalLabRefraction,
   type OpticalLabPointer,
   type OpticalLabRenderMode,
 } from './model';
@@ -86,6 +88,7 @@ function shaderSource(gl2: boolean) {
       uniform float uInteractionStrength;
       uniform float uPhase;
       uniform vec2 uRefraction;
+      uniform vec2 uViewportCssPx;
       VARYING vec2 vUv;
       OUTPUT_DECL
       void main() {
@@ -100,9 +103,13 @@ function shaderSource(gl2: boolean) {
         float velocityWave = sin(vUv.y * 41.0 + positiveDistance * 23.0) * 0.0012 * uPhase * downstream;
         float followEnvelope = 0.42 + seam * 0.58;
         vec2 flow = TEXTURE(uFlow, vUv).rg * 2. - 1.;
-        vec2 displaced = vUv + vec2(squeeze + restingWave + velocityWave, 0.0)
+        vec2 pointerDisplacement = vec2(velocityWave, 0.0)
           + uRefraction * followEnvelope
           + flow * seam * 0.009 * uInteractionStrength;
+        vec2 pointerPixels = pointerDisplacement * uViewportCssPx;
+        float pointerScale = min(1.0, ${OPTICAL_LAB_MAX_REFRACTION_PX.toFixed(1)} / max(length(pointerPixels), 0.0001));
+        vec2 displaced = vUv + vec2(squeeze + restingWave, 0.0)
+          + pointerDisplacement * pointerScale;
         float chroma = downstream * seam * 0.0011 * uInteractionStrength;
         float red = TEXTURE(uGlyph, displaced + vec2(chroma, 0.)).a;
         float glyphAlpha = TEXTURE(uGlyph, displaced).a;
@@ -141,6 +148,7 @@ function shaderSource(gl2: boolean) {
       uniform float uInteractionStrength;
       uniform float uPhase;
       uniform vec2 uRefraction;
+      uniform vec2 uViewportCssPx;
       out float vParticleAlpha;
       void main() {
         float signedDistance = aParticle.x - uApertureX;
@@ -151,8 +159,11 @@ function shaderSource(gl2: boolean) {
         float restingWave = sin(aParticle.y * 58.0 + positiveDistance * 31.0 + aParticle.z * 6.28) * 0.0028 * downstream;
         float velocityWave = sin(aParticle.y * 41.0 + positiveDistance * 23.0) * 0.0012 * uPhase * downstream;
         float followEnvelope = 0.42 + seam * 0.58;
-        vec2 position = aParticle.xy + vec2(squeeze + restingWave + velocityWave, 0.0)
-          + uRefraction * followEnvelope;
+        vec2 pointerDisplacement = vec2(velocityWave, 0.0) + uRefraction * followEnvelope;
+        vec2 pointerPixels = pointerDisplacement * uViewportCssPx;
+        float pointerScale = min(1.0, ${OPTICAL_LAB_MAX_REFRACTION_PX.toFixed(1)} / max(length(pointerPixels), 0.0001));
+        vec2 position = aParticle.xy + vec2(squeeze + restingWave, 0.0)
+          + pointerDisplacement * pointerScale;
         position.x += aVertexAnchor * 0.0000001;
         gl_Position = vec4(position * 2. - 1., 0., 1.);
         float curtainEnvelope = exp(-abs(signedDistance) * 6.0);
@@ -172,6 +183,7 @@ function shaderSource(gl2: boolean) {
       uniform float uInteractionStrength;
       uniform float uPhase;
       uniform vec2 uRefraction;
+      uniform vec2 uViewportCssPx;
       varying float vParticleAlpha;
       void main() {
         float signedDistance = aParticle.x - uApertureX;
@@ -182,8 +194,11 @@ function shaderSource(gl2: boolean) {
         float restingWave = sin(aParticle.y * 58.0 + positiveDistance * 31.0 + aParticle.z * 6.28) * 0.0028 * downstream;
         float velocityWave = sin(aParticle.y * 41.0 + positiveDistance * 23.0) * 0.0012 * uPhase * downstream;
         float followEnvelope = 0.42 + seam * 0.58;
-        vec2 position = aParticle.xy + vec2(squeeze + restingWave + velocityWave, 0.0)
-          + uRefraction * followEnvelope;
+        vec2 pointerDisplacement = vec2(velocityWave, 0.0) + uRefraction * followEnvelope;
+        vec2 pointerPixels = pointerDisplacement * uViewportCssPx;
+        float pointerScale = min(1.0, ${OPTICAL_LAB_MAX_REFRACTION_PX.toFixed(1)} / max(length(pointerPixels), 0.0001));
+        vec2 position = aParticle.xy + vec2(squeeze + restingWave, 0.0)
+          + pointerDisplacement * pointerScale;
         position.x += aVertexAnchor * 0.0000001;
         gl_Position = vec4(position * 2. - 1., 0., 1.);
         float curtainEnvelope = exp(-abs(signedDistance) * 6.0);
@@ -442,6 +457,8 @@ function initializeOpticalLabWebGLRenderer(
   let disposed = false;
   let previousPointer: { x: number; y: number; at: number } | null = null;
   let pointer: OpticalLabPointer | null = null;
+  let currentRefractionUv = { x: 0, y: 0 };
+  let previousFrameAt: number | null = null;
   let width = 1;
   let height = 1;
   let dpr = 1;
@@ -527,7 +544,17 @@ function initializeOpticalLabWebGLRenderer(
       timerQuery = glContext.createQuery();
       if (timerQuery) glContext.beginQuery(timerExtension!.TIME_ELAPSED_EXT, timerQuery);
     }
-    const field = sampleOpticalLabField(pointer, { height, width }, now);
+    const viewport = { height, width };
+    const targetField = sampleOpticalLabField(pointer, viewport, now);
+    const deltaMs = previousFrameAt === null ? 16 : Math.max(0, now - previousFrameAt);
+    previousFrameAt = now;
+    currentRefractionUv = stepOpticalLabRefraction(
+      currentRefractionUv,
+      targetField.refractionUv,
+      viewport,
+      deltaMs,
+    );
+    const field = { ...targetField, refractionUv: currentRefractionUv };
 
     gl.disable(gl.BLEND);
     gl.bindFramebuffer(gl.FRAMEBUFFER, flowFramebuffers[1 - flowIndex]!);
@@ -565,6 +592,7 @@ function initializeOpticalLabWebGLRenderer(
       field.refractionUv.x,
       field.refractionUv.y,
     );
+    gl.uniform2f(gl.getUniformLocation(displayProgram, 'uViewportCssPx'), width, height);
     drawFullscreen(displayProgram);
 
     gl.blendFunc(gl.SRC_ALPHA, gl.ONE);
@@ -600,6 +628,7 @@ function initializeOpticalLabWebGLRenderer(
       field.refractionUv.x,
       field.refractionUv.y,
     );
+    gl.uniform2f(gl.getUniformLocation(particleProgram, 'uViewportCssPx'), width, height);
     if (particleCount > 0) {
       if (gl2) (gl as WebGL2RenderingContext).drawArraysInstanced(gl.POINTS, 0, 1, particleCount);
       else angleInstancing?.drawArraysInstancedANGLE(gl.POINTS, 0, 1, particleCount);

@@ -82,6 +82,7 @@ export async function OpticalLabPage() {
           >
             <h1 className={styles.headline} data-optical-lab-semantic-title="true">
               <span className={styles.science} data-optical-lab-science="true">Science</span>
+              {' '}
               <span className={styles.evolves} data-optical-lab-evolves="true">evolves<span className={styles.marker}>.</span></span>
             </h1>
             <div className={styles.clientSlot} data-optical-lab-client-slot="true">
