@@ -1188,7 +1188,7 @@
           "3"
         ],
         "priority": "high",
-        "details": "2026-08-11 第二轮原型形变纠偏（codex/optical-editorial-v3）。首轮 3336be4 虽通过工程门禁但视觉不合格：误改标题布局并产生白色大面积椭圆点阵，不作为接受基线。第二轮完整恢复原标题布局与 50% 光轴；真实 DOM headline 仍为一个 h1 + 一个 aria-hidden 折射层；Canvas 删除同心椭圆干涉环，核心点阵收窄为垂直狭缝，指针只产生局部径向扰动，以密集、低透明度右向波前线表达衍射；SVG mask 横向收窄，避免多字大面积撕裂。下一屏 OPEN RO + N1-N6 SDF anatomy 与真实 /explore 入口不变。focused 20/20、typecheck/build、3044 production 三视口 normal/reduced/Open RO shots 全通过；待 ECS 发布后补充最终 release ref。",
+        "details": "2026-08-11 第二轮原型形变纠偏（codex/optical-editorial-v3）。首轮 3336be4 虽通过工程门禁但视觉不合格：误改标题布局并产生白色大面积椭圆点阵，不作为接受基线。第二轮完整恢复原标题布局与 50% 光轴；真实 DOM headline 仍为一个 h1 + 一个 aria-hidden 折射层；Canvas 删除同心椭圆干涉环，核心点阵收窄为垂直狭缝，指针只产生局部径向扰动，以密集、低透明度右向波前线表达衍射；SVG mask 横向收窄，避免多字大面积撕裂。下一屏 OPEN RO + N1-N6 SDF anatomy 与真实 /explore 入口不变。focused 20/20、Web 159/159、typecheck/build、本地与线上三视口 normal/reduced/Open RO shots 全通过。release b45e002 已在备份后部署，远端全量 build、生产栈/健康检查、Nginx -t 与线上路由 smoke 通过；等待用户人工审美复核。",
         "testStrategy": "TDD RED/GREEN 锁定字形安全区、时间插值、对称衍射波前、单一 h1 与 Open RO 六节点；浏览器逐帧断言 optical x 单调接近目标且不瞬移，SVG displacement scale>5；1440x900、1920x1080、390x844 normal/reduced-motion 与 Open RO full-page screenshots；overflow/console/reduced-motion gate。",
         "subtasks": [],
         "updatedAt": "2026-08-11T02:10:00.000Z"

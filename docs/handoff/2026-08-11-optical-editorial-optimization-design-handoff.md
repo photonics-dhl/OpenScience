@@ -14,6 +14,7 @@
 - 首轮 `3336be4` 已部署但被用户判定视觉不合格：错误地改动了原有标题布局，并把点阵扩成大面积白色椭圆；不得作为接受基线。
 - 第二轮恢复原标题布局与 50% 光轴；删除同心椭圆干涉环；点阵收窄为垂直狭缝，改用密集、低透明度的右向波前线；文字局部折射遮罩横向收窄。
 - 第二轮本地证据：focused 20/20、typecheck/build、3044 production 三视口 normal/reduced/Open RO shots 通过；截图中已无白色同心圆或大面积粒子团。
+- 第二轮已以 release `b45e002` 部署：部署前数据库备份 `BACKUP_OK size=276K files=7/7`；远端全量 build、生产容器重启/健康检查及 Nginx `-t` 通过；线上三视口 normal/reduced/Open RO shots 通过，`/`、`/explore` 返回 200，未登录 `/auth/me` 返回 401。
 
 ## Constraints
 - 不读取或写入 `.env`；不删除现有文件。
@@ -22,11 +23,11 @@
 - Live2D 生产使用仍需保留 ADR-010 的授权记录门禁。
 
 ## Open gate
-- 代码与本地视觉门禁已完成；生产发布仍需执行一次备份、部署和线上 Chromium 复验。
+- 本轮工程与生产发布门禁已完成；仍需用户对 `b45e002` 的实际视觉效果作人工审美复核，自动截图通过不等于审美接受。
 - 后续应按产品表面矩阵逐页优化 Dashboard/Workspace/Public RO/Hermes，新增范围先建立对应 spec/plan 和验收证据。
 
 ## Next action
-先完成本轮纠偏版本的 ECS 发布与线上截图，再以新 Landing 为视觉基线推进下一个明确产品表面；不要恢复已废弃的旧卡片/媒体叙事，也不要在未授权时扩张后端合同。
+先让用户复核线上 `b45e002` 的窄狭缝衍射；接受后再以此 Landing 为视觉基线推进下一个明确产品表面。不要恢复 `3336be4` 的白色大椭圆、已废弃的旧卡片/媒体叙事，也不要在未授权时扩张后端合同。
 
 ## Read first
 `AGENTS.md` → `docs/OpenScience_Kimi_Development_Spec.md` → `docs/progress.md` → `project_index.md` → `docs/specs/2026-08-10-optical-editorial-rebaseline-design.md` → `docs/decisions/ADR-010-hermes-visual-runtime-and-live2d-license-gate.md`
