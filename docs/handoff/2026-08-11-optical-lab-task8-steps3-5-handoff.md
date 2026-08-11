@@ -2,20 +2,20 @@
 
 ## Status
 
-Task 8 Steps 3–5 are implemented on `codex/optical-editorial-v3`. The isolated Lab is available only at `/_visual/optical-lab`; production `/` and its Canvas renderer remain unchanged. Task Master Task 4 remains `in-progress`. Step 6 is intentionally pending user visual selection.
+Task 8 Steps 3–5 and Candidate B local engineering acceptance are complete on `codex/optical-editorial-v3`. The isolated Lab is available only at `/_visual/optical-lab`; production `/` and its Canvas renderer remain unchanged. Task Master Task 4 remains `in-progress`. Step 6 is intentionally pending user visual selection.
 
-Implementation commit: `8485dac22edb15041e61884f47f3118ea2ef4708`. Review-fix commit: `a0509ef935704b1014b16029a6caafabf8855253`. The Lab has **not** been deployed.
+Candidate B commits: model `40b2668`, material/gate `217fcd3`, review fix `db68475`, browser-global lint fix `ded8011`. Earlier Candidate A commits `8485dac` and `a0509ef` remain history. The Lab has **not** been deployed.
 
 ## Verification and review state
 
-- Initial review found invalid pointer-frame evidence, incomplete WebGL2-init fallback cleanup, a tautological forbidden-visual check and non-instanced particle draws. Commit `a0509ef` fixes all four, plus dynamic motion/viewport policy and strict context-loss/resource-cleanup evidence.
-- Scoped re-review against `.superpowers/sdd/2026-08-11-landing-incremental-optimization-plan/review-9f8a182..a0509ef.diff` marked every finding addressed and found no new Critical/Important breakage.
-- Main-agent fresh verification after the fix passed: focused Optical Lab 9/9, full Web 28 files / 170 tests, Web typecheck, production build, 64.2-second production-start browser gate and `git diff --check`.
-- The gate produced nine distinct case-qualified candidate pointer frames and exercised WebGL2, WebGL1, WebGL2-init-failure to fresh-WebGL1, shader/total-context fallback, mobile, reduced motion, context loss/restore and exact GL create/delete cleanup.
+- Candidate B retained the reviewed transactional lifecycle and added reference-relative resting topology, fixed 58% aperture, nonzero resting optics, bounded whole-line refraction and a deterministic glyph-derived vertical particle curtain. Candidate A first failed honestly at resting waist `1.072084 < 1.18`.
+- Candidate B review fix round 1 addressed honest single-frame 150ms capture, descendant marker transparency/selection, first-draw GPU ink publication and differential fresh-context restore evidence. Scoped re-review found no open Critical/Important findings.
+- Fresh Task 3 verification passed: focused Optical Lab 14/14, full Web 29 files / 175 tests, Web typecheck, production build, 138-second production-start browser matrix, root lint (`WORKSPACE_STRUCTURE_OK`, `DOCS_SYNC_OK`), docs lint and `git diff --check`. Port 3062 had no listener before or after the gate and no listener on final recheck.
+- `ded8011` fixes the only Task 3 RED outside visual behavior: root lint found seven missing browser-global declarations in the Playwright gate; the one-line declaration fix passed targeted ESLint, root lint, focused tests, production build and the complete browser matrix without changing output or thresholds.
 
 ## Manual visual ruling
 
-The implementation is an engineering-valid experiment, not an aesthetically accepted candidate. The full-page evidence at `apps/web/test/visual/out/optical-lab/desktop.png` shows Candidate A with a low-contrast duplicate/overlap between the semantic DOM title and the displaced glyph texture; the fixed-aperture compression and downstream emission are much weaker than the user's target. It is acceptable to publish the Lab strictly as a comparison surface, but it must not replace production `/` or be described as visually approved.
+Candidate B is engineering-valid but not yet aesthetically selected. Original-resolution desktop, resting, left/right 150ms, forced WebGL1 and DOM fallback evidence shows one continuous title, a fixed aperture, a warm non-dark waist and subtle whole-line response. No duplicate/severed title, ring, fan, mechanical vertical line, DOM ghost or aperture movement was observed. Relative to the user reference, Candidate B has a more restrained focus and weaker rightward beam while its upper/lower discrete particle curtain is more prominent. Those differences require Step 6 user judgment; the candidate must not replace production `/` or be called visually accepted yet.
 
 ## Server preflight
 
@@ -35,8 +35,8 @@ The implementation is an engineering-valid experiment, not an aesthetically acce
 
 ## Evidence
 
-- Desktop and forced WebGL1 measured 60 FPS and 58 FPS in headless Chromium; CPU submit was 0.08 ms and 0.05 ms respectively.
-- Headless Chromium used ANGLE/SwiftShader. The synchronized GPU fallback reported 0.00 ms in the final run; treat it only as a diagnostics-path check, not as real-device GPU performance.
+- Fresh desktop/WebGL2 measured 57.4 FPS and 0.74 ms CPU submit; forced WebGL1 measured 52.4 FPS and 0.41 ms. Headless Chromium used ANGLE/SwiftShader; synchronized fallback GPU values are diagnostics only, not real-device performance claims.
+- Fresh desktop topology was waist `1.239995`, downstream `0.093903`, continuity `0.970297`, directionality `1.565451`, curtain coverage/spread `0.583333 / 0.491071`. Forced WebGL1 was `1.469110 / 0.093586 / 0.969231 / 1.568519 / 0.978495 / 0.577904`.
 - Route-exclusive emitted Lab JavaScript: 19,559 bytes raw / 6,266 bytes gzip.
 - Route CSS: 4,134 bytes raw / 1,422 bytes gzip.
 - Production homepage build report remains 3.87 kB route size / 112 kB First Load JS and its module graph does not import the Lab renderer.
@@ -48,9 +48,9 @@ Next App Router treats `_visual` as a private folder. The actual route therefore
 
 ## Pending
 
-1. User chooses whether to iterate Candidate A locally (recommended because its optical topology remains visually weaker than the target) or explicitly authorizes deployment of the isolated Lab for real-device review.
-2. If explicitly authorized, run remote database backup, deploy only the isolated Lab with `--skip-migrate`, and verify `/_visual/optical-lab`, `/`, `/explore`, and unauthenticated `/auth/me` online.
-3. User reviews the reference/current/candidate comparison on a real desktop GPU and mobile device and explicitly accepts, iterates, or rejects Candidate A in Task 8 Step 6.
-4. Only if accepted, create a separate production Landing replacement plan and run new TDD, release-browser and authorized ECS deployment gates.
+1. User reviews reference/current/Candidate B evidence and explicitly accepts, iterates or rejects Candidate B at Step 6; headless SwiftShader is not real-device performance proof.
+2. The deferred performance Minor remains visible: the browser gate records FPS/CPU and renderer particle count but lacks an explicit steady-state FPS/CPU budget and a direct 3,840-particle-cap assertion. Final review must triage it; Task 3 did not alter implementation or thresholds.
+3. Only if the user explicitly requests isolated deployment, run the separate authorized backup/deploy/online-verification workflow. No such authorization has been inferred here.
+4. Only if the user selects Candidate B for the homepage, write a separate production Landing replacement plan and rerun TDD, release-browser and authorized ECS deployment gates.
 
 No ECS, compose, API, schema, authentication, upload, Hermes or production Landing change is part of this handoff.

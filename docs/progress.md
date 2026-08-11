@@ -1,5 +1,13 @@
 # OpenScience (XGS) 进度日志
 
+## 2026-08-11（Optical Lab Candidate B 本地验收）— ✅ 工程收口，待 Step 6 用户选择
+
+- **TDD 与复审**：Candidate A production-start RED 为 resting waist `1.072084 < 1.18`；Candidate B 经模型、材质/视觉门禁与一轮复审修复后落在 `40b2668`、`217fcd3`、`db68475`，另以 `ded8011` 补齐 browser-gate ESLint globals。Critical/Important 均清零；保留性能 Minor：尚无显式 steady-state FPS/CPU 预算与直接 3,840 粒子上限断言。
+- **fresh GREEN**：`npx pnpm@9.15.0 --filter @openscience/web test -- optical-lab-contract.test.tsx optical-lab-model.test.ts optical-lab-visual-metrics.test.mjs` 14/14；Web 全量 29 files / 175 tests；Web typecheck、production build、138 秒 production-start browser matrix、root lint、docs lint 与 `git diff --check` 均 exit 0，3062 门禁前后及最终复核均无 listener。
+- **静止拓扑**：desktop/WebGL2 为 waist `1.239995`、downstream `0.093903`、continuity `0.970297`、directionality `1.565451`、curtain `0.583333 / 0.491071`；forced WebGL1 为 `1.469110 / 0.093586 / 0.969231 / 1.568519 / 0.978495 / 0.577904`。两路径均固定 aperture `x=.58`，DOM fallback 保持单一可读标题。
+- **人工审图**：静止与 left/right 150ms 原尺寸证据未见重复/截断标题、暗腰、白环、机械竖线、蜘蛛网扇形或 aperture 位移；整行响应轻微。相对参考，候选焦点和右向光束更克制，上下离散粒子幕更明显，因此只进入用户审美选择，不宣称等同参考。
+- **范围**：全部逐帧计算在访客浏览器；headless Chromium 使用 ANGLE/SwiftShader，不能代表真机 GPU 性能。ECS 未改、未部署，生产 `/` 与现有 Canvas Landing 未改；只有用户在 Step 6 明确选择后才能另立生产替换计划。
+
 ## 2026-08-11（Optical Lab Candidate B 计划）— ⏳ 书面设计确认，待执行方式
 
 - **设计确认**：用户复核 `docs/specs/2026-08-11-optical-lab-candidate-b-design.md` 后要求继续；ECS 无 GPU 的客户端执行边界再次确认。
