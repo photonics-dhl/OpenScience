@@ -1,4 +1,4 @@
-/* global createImageBitmap, document, fetch, HTMLCanvasElement, process, setTimeout, window */
+/* global createImageBitmap, document, fetch, getComputedStyle, HTMLCanvasElement, performance, process, queueMicrotask, setTimeout, window */
 
 import assert from 'node:assert/strict';
 import { mkdir, writeFile } from 'node:fs/promises';
