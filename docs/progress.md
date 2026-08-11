@@ -5,7 +5,7 @@
 - **浏览器验收加固**：pointer 截图改为 candidate-only clip 与 case-qualified 文件名，并以独立像素差、径向/白环/机械线 edge probe 和隐藏 Canvas ghost probe 做真实视觉门禁；synthetic regression fixture 证明门禁会拒绝退化，不再依赖自报 attribute。
 - **GPU fallback 与 lifecycle**：WebGL2/WebGL1 每次初始化使用 fresh canvas + transactional resource ledger；WebGL2 shader/init 失败会完整回收后继续 WebGL1，双失败才进入 DOM。cleanup gate 直接核对 Shader/Program/Buffer/Texture/Framebuffer/Query create/delete 计数。
 - **粒子与 policy**：WebGL2 使用 `drawArraysInstanced`，WebGL1 使用 `ANGLE_instanced_arrays`，能力缺失时不画非 instanced 粒子；reduced-motion 与 viewport policy 变化监听会卸载 GPU host。context-loss extension 缺失现在使门禁显式失败。
-- **证据**：RED `npx pnpm@9.15.0 --filter @openscience/web shots:optical-lab` 在旧实现以 `desktop must issue real instanced particle draws` 失败；GREEN focused 9/9、Web typecheck、production build 和 `OPTICAL_LAB_SERVER_MODE=start` browser gate 均 exit 0。未部署、未修改生产 Landing/API/schema/auth，忽略截图未提交。
+- **证据**：RED `npx pnpm@9.15.0 --filter @openscience/web shots:optical-lab` 在旧实现以 `desktop must issue real instanced particle draws` 失败；修复提交 `a0509ef` 后，主代理复跑 focused 9/9、Web 全量 28 files / 170 tests、Web typecheck、production build 和 64.2 秒 production-start browser gate，均 exit 0。独立 scoped re-review 判定全部 finding 已解决、无新增 Critical/Important。未部署、未修改生产 Landing/API/schema/auth，忽略截图未提交。
 - **下一步**：Step 6 仍等待用户真机视觉选择；SwiftShader 工程门禁不代表审美或真实硬件性能验收。
 
 ## 2026-08-11（Optical Lab session freeze）— ⏸️ 已同步，部署留待下一 session

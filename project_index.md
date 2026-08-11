@@ -137,7 +137,7 @@
 | `docs/handoff/2026-08-11-optical-editorial-production-acceptance-handoff.md` | `f5bb6e7` ECS 部署、回滚 ref/hash、真实账号 ingestion→Hermes→version 与公开路由验收 | 当前生产 handoff |
 | `docs/handoff/2026-08-11-optical-editorial-v3-complete-handoff.md` | Optical Editorial v3 15/15 完成、Hermes 原创 renderer、`0c79aa2` ECS 发布与全量浏览器门禁 | 当前完成 handoff |
 | `docs/handoff/2026-08-11-optical-editorial-optimization-design-handoff.md` | 首页增量优化设计交接：保留线上功能与风格，先优化 Landing，再传播到 Explore/Dashboard/创建页/公开 RO | 当前 handoff |
-| `docs/handoff/2026-08-11-optical-lab-task8-steps3-5-handoff.md` | Optical Lab Task 8 Steps 3–5 + session freeze 交接：commit、独立 review pending、人工视觉否决点、Git Bash 服务器预检、隔离部署/回滚顺序与 Step 6 用户选择门禁 | 当前 handoff；下个 session 先读 |
+| `docs/handoff/2026-08-11-optical-lab-task8-steps3-5-handoff.md` | Optical Lab Task 8 Steps 3–5 交接：实现与 review-fix commit、独立复审全绿、人工视觉否决点、Git Bash 服务器预检、隔离部署/回滚顺序与 Step 6 用户选择门禁 | 当前 handoff；工程门禁闭环，待用户视觉选择或隔离部署授权 |
 | `docs/specs/2026-08-04-p1b-3-blob-artifact-upload-design.md` | P1B-3 Blob 内容寻址存储与上传管线设计（design gate 已确认：五决策，代码已实现 2026-08-04） | 活文档 |
 | `docs/plans/2026-07-24-doc-architecture-plan.md` | 文档架构落地实施计划 | 活文档 |
 | `docs/plans/2026-07-24-mvp-task-breakdown-plan.md` | MVP 任务拆解与工具配置实施计划（已批准，执行中） | 活文档 |
