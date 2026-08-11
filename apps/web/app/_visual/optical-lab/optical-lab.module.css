@@ -256,3 +256,129 @@
     transform: none;
   }
 }
+
+.typographySpecimen {
+  position: relative;
+  width: 100vw;
+  min-width: 20rem;
+  height: 100vh;
+  min-height: 20rem;
+  overflow: hidden;
+  color: var(--os-paper);
+  background: #090909;
+  color-scheme: dark;
+}
+
+.typographyHeadline {
+  position: absolute;
+  z-index: 1;
+  top: 35.8vh;
+  left: 2.2vw;
+  display: block;
+  width: 93.5vw;
+  height: 24.2vh;
+  margin: 0;
+  font-size: 0;
+  line-height: 24.2vh;
+  white-space: nowrap;
+  user-select: text;
+}
+
+.typographyScience,
+.typographyEvolves {
+  display: inline-block;
+  min-width: 0;
+  align-self: center;
+  color: var(--os-paper);
+  user-select: text;
+  vertical-align: middle;
+}
+
+.typographyScience {
+  width: 55.8vw;
+}
+
+.typographyEvolves {
+  width: 37.7vw;
+}
+
+.typographyScienceInk,
+.typographyEvolvesInk {
+  display: inline-block;
+  line-height: .85;
+}
+
+.typographyScienceInk {
+  font-family: var(--font-bricolage), sans-serif;
+  font-size: clamp(4.25rem, 16.55vw, 16.75rem);
+  font-weight: 850;
+  letter-spacing: -.082em;
+}
+
+.typographyEvolvesInk {
+  padding-left: .01em;
+  font-family: var(--font-bodoni), serif;
+  font-size: clamp(4.25rem, 14.25vw, 14.95rem);
+  font-style: italic;
+  font-weight: 700;
+  letter-spacing: -.085em;
+  transform: scaleX(.82);
+  transform-origin: left center;
+}
+
+.typographyArchivo .typographyScienceInk {
+  font-family: inherit, sans-serif;
+  font-weight: 900;
+  letter-spacing: -.077em;
+}
+
+.typographyArialBlackReference .typographyScienceInk {
+  font-family: 'Arial Black', Arial, sans-serif;
+  font-size: clamp(4.1rem, 15.3vw, 16rem);
+  font-weight: 900;
+  letter-spacing: -.094em;
+}
+
+.typographyApertureGuide {
+  position: absolute;
+  top: 31%;
+  bottom: 31%;
+  left: 58vw;
+  width: 1px;
+  background: rgb(241 238 231 / .42);
+  box-shadow: 0 0 14px rgb(241 238 231 / .16);
+}
+
+.typographyBaselineGuide {
+  position: absolute;
+  top: 54.2vh;
+  left: 1.4vw;
+  width: 2.4vw;
+  height: 1px;
+  background: var(--os-vermilion);
+}
+
+@media (max-width: 48rem) {
+  .typographyHeadline {
+    top: 37%;
+    left: 3vw;
+    width: 94vw;
+    height: 22vh;
+  }
+
+  .typographyScience {
+    width: 55vw;
+  }
+
+  .typographyEvolves {
+    width: 39vw;
+  }
+
+  .typographyScienceInk {
+    font-size: clamp(3.7rem, 16.55vw, 16.75rem);
+  }
+
+  .typographyEvolvesInk {
+    font-size: clamp(3.7rem, 14.25vw, 14.95rem);
+  }
+}
