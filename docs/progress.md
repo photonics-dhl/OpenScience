@@ -1,5 +1,13 @@
 # OpenScience (XGS) 进度日志
 
+## 2026-08-11（Optical Lab session freeze）— ⏸️ 已同步，部署留待下一 session
+
+- **实现状态**：隔离 Lab 已提交为 `8485dac22edb15041e61884f47f3118ea2ef4708`；主代理重新运行 focused 9/9、Web 170/170、Web typecheck 与 production build，均通过，worktree clean。生产 `/` 仍为原 Canvas Landing，未部署 Lab、未修改 ECS/compose/API/schema/auth。
+- **审查状态**：独立 reviewer `/root/review_optical_lab` 已收到 `review-7c470ad..8485dac.diff`，本 session 结束时尚未回传结论；下个 session 必须先读取 reviewer 结果并处理 Important/Critical finding，不能把实现代理自测等同于审查完成。
+- **人工视觉门禁**：`apps/web/test/visual/out/optical-lab/desktop.png` 显示 Candidate A 仍存在低对比重叠字形，固定狭缝的压缩/出射拓扑弱于用户参考图；工程门禁通过不代表审美通过。可以把 Lab 部署为隔离对照，但不得据此替换首页或宣称视觉验收。
+- **服务器预检**：使用 Git for Windows Bash 执行 `infra/scripts/checkup.sh` 通过；磁盘使用 11%、可用内存约 26 GiB，nginx/Docker/生产 Web/API/Postgres/Redis/对象存储/ClamAV 正常。PowerShell 直接调用 `bash` 会误入 WSL 并因 `Z:\\Dirac\\scripts` PATH 转换失败，后续必须使用 `C:\\Program Files\\Git\\bin\\bash.exe`。
+- **下一步**：读取本交接与 reviewer 结论 → 必要时修复并复审 → 重新跑视觉/全量门禁 → 用户允许后先远端数据库备份，再以 `--skip-migrate` 部署隔离 `/_visual/optical-lab` → 在线核验 Lab 与 `/` 零回归；Step 6 仍由用户决定接受、迭代或拒绝 Candidate A。
+
 ## 2026-08-11（Optical Lab Task 8 Steps 3–5）— ✅ 隔离候选与测量门禁完成
 
 - **TDD 合同**：先建立 model/render/route/browser RED 门禁，再实现精确路由 `/_visual/optical-lab`。页面并排展示用户参考图、未改动生产首页的本地 production capture 和候选，候选保留单一可选择语义 `h1`，且首页模块无 Lab import。
