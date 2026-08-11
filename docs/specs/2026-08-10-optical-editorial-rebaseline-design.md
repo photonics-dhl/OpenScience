@@ -95,6 +95,34 @@ Object Header 使用单行规则线，不拆三张统计卡。左栏展示章节
 - SVG turbulence 不得承担主字形形变；主形变必须是方向明确的 glyph-to-particle 映射。`evolves` 只允许狭缝附近的前部字母出现局部折射/轻微色散，其余字母保持清晰。
 - 点击/按住短暂显现 SDF 证据层；不旋转全页、不使用星空或视频替代交互。
 
+#### 5.1.1 外部实现调研与第四轮技术基线（2026-08-11）
+
+用户在线复核否决 `cd5be36` 的观感：虽然工程门禁消除了 pointer disk，但 CPU Canvas 逐点绘制仍形成灰色覆盖、竖向点线和机械波纹，无法达到原型中连续字形被挤压、穿过焦点并重新展开的材质感。因此不得继续在现有 `arc()` 点阵 renderer 上调参。
+
+已实际打开演示、读取源码并核对许可证：
+
+| 参考实现 | 可复用机制 | 许可证/结论 |
+|---|---|---|
+| [Codrops Accessible WebGL Text](https://tympanus.net/codrops/2025/06/05/how-to-create-responsive-and-seo-friendly-webgl-text/) / [`ehaakana/codrops-text-demo`](https://github.com/ehaakana/codrops-text-demo) | HTML-first，读取 DOM bounds/computed style，以 `troika-three-text` 同步 WebGL 字形；原 DOM 保留 SEO/响应式/可访问性 | MIT；采用其 DOM/WebGL 同步思想，不复制其版式 |
+| [Bruno Imbrizi Interactive Particles](https://tympanus.net/codrops/2019/01/17/interactive-particles-with-three-js/) / [`interactive-particles`](https://github.com/brunoimbrizi/interactive-particles) | 从源图像像素阈值生成 `InstancedBufferGeometry`，用 off-screen touch texture 驱动 GPU 粒子 | `package.json` 声明 MIT；采用 glyph texture + instancing，拒绝其圆形 touch stamp |
+| [Akella Distorted Pixels](https://tympanus.net/codrops/2022/01/12/pixel-distortion-effect-with-three-js/) / [`DistortedPixels`](https://github.com/akella/DistortedPixels) | 低分辨率 float `DataTexture` 记录鼠标速度，逐帧 relaxation，fragment shader 采样位移纹理 | MIT；采用可衰减 displacement/velocity field，场中心仍固定在 aperture |
+| [OGL `Flowmap`](https://github.com/oframe/ogl/blob/master/src/extras/Flowmap.js) | ping-pong render target、velocity stamp、dissipation；以很小的 WebGL runtime 提供流场原语 | Unlicense；优先作为轻量 spike 候选，未基准前不锁定依赖 |
+| [DGFX Dreamy Particles](https://tympanus.net/codrops/2024/12/19/crafting-a-dreamy-particle-effect-with-three-js-and-gpgpu/) / [`codrops-dreamy-particles`](https://github.com/DGFX/codrops-dreamy-particles) | GPGPU position/velocity textures、mesh surface sampling、post-processing shine | 无明确仓库许可证；只学习架构，不复制代码/资产，不作为直接依赖 |
+| [Three.js WebGPU/TSL text destruction](https://tympanus.net/codrops/2025/07/22/interactive-text-destruction-with-three-js-webgpu-and-tsl/) | storage buffer + compute spring 变形真实 3D 字形 | 浏览器/包体/复杂度超出本首屏；不采用 WebGPU-only 路线 |
+| [Blotter.js text distortion](https://tympanus.net/codrops/2019/02/06/text-distortion-effects-using-blotter-js/) | 用 uniform 把 pointer/scroll speed 映射到连续文字材质 | 项目老旧且仓库无明确 LICENSE；只保留“速度→uniform→缓慢恢复”的交互原则 |
+
+第四轮必须采用“连续字形材质 + 共享 GPU 位移场 + 稀疏粒子辅层”的混合结构：
+
+1. 一个真实 DOM `h1` 继续承担语义、排版和无 WebGL 降级；WebGL 视觉层严格同步其 bounds 和字体，不再另造标题布局。
+2. 连续字形纹理是主体；固定 aperture 附近通过 signed displacement/flow field 做横向压缩、焦点收束、右侧拉伸和轻微 RGB 色散，不能把整字替换成灰点。
+3. 粒子层只采样受影响字形边缘/亮部，并与连续层共享同一 displacement field；使用 instancing/points 在 GPU 变换，不在 CPU 每帧循环绘制数千个 `arc()`。
+4. 指针速度只写入有衰减的 flow texture，改变局部能量和拖尾；固定 slit mask 决定空间拓扑，禁止 radial stamp 直接成为可见圆形边界。
+5. 焦散使用窄的 additive luminance ridge 与有限的方向性 streak；不绘制贯穿视口的竖点线，不生成对称蜘蛛网扇形。
+6. reduced-motion、WebGL 不可用和移动端低功耗模式显示完整 DOM 标题与一张稳定的静态焦散，不运行 GPGPU。
+7. 先建立独立 Optical Lab，同时并排展示原型裁切、当前生产基线和候选 GPU 输出；在用户选择前不得替换生产 Landing。
+
+候选优先级为：先做 OGL/原生 WebGL2 的轻量混合 spike；只有当字体同步或性能证据证明不足时，才引入 Three.js + troika。依赖选择必须记录实际 gzip chunk、FPS、GPU/CPU frame time、390px 降级和许可证，不凭 star 数决定。
+
 ### 5.2 Hermes / Live2D
 
 Live2D 是功能驱动的研究伙伴，不是装饰。Landing 不抢主视觉；登录后在 Dashboard、创建页、Workspace 和公开 RO 页提供统一 Hermes 唤起入口，角色只在 Hermes 面板中出现。公开页默认只读，工作区可提出建议但写入仍需确认。面板首次打开显示当前上下文任务卡，而不是空白聊天框；点击 Live2D 与点击 Hermes 任务入口进入同一上下文。

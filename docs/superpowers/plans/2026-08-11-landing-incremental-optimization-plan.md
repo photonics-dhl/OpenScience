@@ -604,3 +604,33 @@ Commit the tested implementation, take the required ECS database backup, deploy 
 - Scope: no backend, schema, upload, auth, or Hermes runtime changes are included.
 - Type consistency: Task 7 supersedes Task 3's rejected moving-origin/ambient-disk model; aperture coordinates remain fixed and pointer coordinates are consumed only as bounded modulation input.
 - No placeholder implementation steps remain; deployment resolves the tested commit directly from `git rev-parse HEAD`.
+
+---
+
+### Task 8: Replace Canvas Guesswork with a Reference-Grounded Optical Lab
+
+**Scope:** research and isolated visual comparison only; production Landing remains on `cd5be36` until the user selects a candidate.
+
+- [x] **Step 1: Reopen the visual gate and establish the root cause**
+
+Record that engineering acceptance did not equal visual acceptance. Trace the grey overlay and mechanical lines to the CPU Canvas `arc()` particle loop plus independently invented focal/Fresnel passes.
+
+- [x] **Step 2: Inspect mature implementations and licenses**
+
+Run the public demos and read the source of Accessible WebGL Text, Interactive Particles, Distorted Pixels, OGL Flowmap, Dreamy Particles, WebGPU/TSL Text Destruction and Blotter Text Distortion. Record adoption/rejection boundaries in the design spec.
+
+- [ ] **Step 3: Write the Optical Lab contract and RED gates**
+
+Define a non-production visual route that shows target crop, current production capture and candidate side by side. Gate continuous glyph readability, fixed aperture topology, no radial boundary, stable DOM bounds, reduced-motion fallback and independent pointer frames.
+
+- [ ] **Step 4: Build the lightweight GPU candidate**
+
+Prototype continuous glyph texture displacement, fixed-slit signed field, OGL/native WebGL2 flow texture with dissipation, and sparse instanced edge particles. Do not modify the production Landing component.
+
+- [ ] **Step 5: Measure instead of guessing**
+
+Capture desktop/mobile/reduced frames and record added gzip chunk, FPS, CPU/GPU frame time, context-loss fallback and renderer cleanup. Compare against current Canvas production and the reference crop.
+
+- [ ] **Step 6: User visual selection gate**
+
+Expose the isolated lab for user review. Only an explicitly selected candidate may receive a separate production replacement plan, TDD implementation and ECS deployment.

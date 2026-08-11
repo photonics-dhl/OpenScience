@@ -1,5 +1,13 @@
 # OpenScience (XGS) 进度日志
 
+## 2026-08-11（Landing 第四轮：停止 Canvas 调参，转外部实现调研）— ⏳ 参考架构已确认，待 Optical Lab
+
+- **用户验收**：用户明确判定线上 `cd5be36` 仍不好看，并要求先检索成熟实现；此前“生产发布完成”仅代表发布与工程门禁，不代表视觉验收，Task Master 4 已重新置为 in-progress。
+- **根因**：当前 `canvas-renderer.ts` 在 CPU 上逐粒子调用 `arc()`，用额外 focal vertical dots/Fresnel families 模拟光学现象；连续 DOM 字形本身没有共享位移材质，因此结果是灰色点阵盖住文字、机械竖线和装饰性波纹，而非原型的连续表面形变。
+- **外部证据**：实际运行 Codrops Interactive Particles、Accessible WebGL Text、Distorted Pixels、Dreamy Particles 与 Text Distortion 演示；读取对应 GitHub 源码、依赖和许可证。成熟模式是 HTML-first WebGL 字形同步、instanced glyph particles、DataTexture/Flowmap 位移与衰减，而不是 CPU Canvas 手绘点阵。
+- **技术纠偏**：spec 已冻结第四轮为“连续字形材质 + 共享 GPU 位移场 + 稀疏粒子辅层”；优先 OGL/原生 WebGL2 轻量 spike，Three.js + troika 仅作证据驱动备选；无明确许可证的仓库只学习，不复制。
+- **下一步**：不改生产 Landing。先在独立 Optical Lab 并排实现 reference/current/candidate，以真实字体、相同排版和固定 aperture 比较；提交用户视觉选择后再建立替换计划并部署。
+
 ## 2026-08-11（Landing 固定字形衍射第三轮纠偏）— ✅ 生产发布完成
 
 - **线上复核失败**：用户确认 release `b45e002` 仍有跟随鼠标的大圈粒子、扇形衍射线和缺失的原型字形穿越形变，因此上一条“已无大面积粒子团”的静态截图结论无效；`b45e002` 不作为视觉接受基线。

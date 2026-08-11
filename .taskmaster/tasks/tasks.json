@@ -5,7 +5,7 @@
         "id": 1,
         "title": "Phase 0: 现有系统只读审计与目标架构决策",
         "description": "对 Scholars Tea / AI Research Workshop 现有代码仓执行强制门禁式只读审计（Spec §22 Phase 0、§25、§20.1.2）：建立目录/依赖/服务/数据库/部署地图，形成可复用/重构/淘汰清单，评估安全与数据迁移风险，运行基准测试，产出 docs/CODEBASE_AUDIT.md 与 docs/adr/0001-target-architecture.md 草案。审计完成并经用户确认后才允许进入 Phase 1A（Spec §25 末段）。全程不修改业务代码（Spec §25.5）。",
-        "status": "done",
+        "status": "in-progress",
         "dependencies": [],
         "priority": "high",
         "details": "",
@@ -1188,10 +1188,10 @@
           "3"
         ],
         "priority": "high",
-        "details": "2026-08-11 第三轮固定字形衍射已以 cd5be36 发布。保持 80c8312 标题布局/页面结构；Canvas 在真实字体 ready 后采样 Science/evolves glyph alpha，固定 50% aperture，执行上游压缩、焦散、下游 Fresnel 重构；pointer 仅调制 energy/phase/不超过 18px 纵向偏折。已删除 moving ambient disk、radial repulsion、pointer ellipse mask、turbulence duplicate、quadratic fan 与无消费者旧合同；桌面/移动分别使用窄固定遮罩。独立复审补齐 reduced-motion 采样后静态重绘、首次重复栅格化、resize 新尺寸顺序和独立 active-frame 重置。focused 24/24、Web 161/161、typecheck/build 通过；部署前备份 276K 7/7，远端 build/重启/Nginx 通过；公网 Chromium 三视口/reduced/Open RO 与相互独立的 left/slit/right 60/150/300ms 全矩阵通过，路由 / 与 /explore 为 200、/auth/me 为 401；b45e002 仍是被否决基线。",
-        "testStrategy": "TDD RED/GREEN：任意 pointer 下 origin.x===aperture.x；无 ambient pointer disk、无 pointer-centered CSS mask、无 turbulence 主形变；glyph alpha sampler 与固定 aperture 映射；浏览器捕获 pointer-left/slit/right 的 60/150/300ms active frames，拒绝圆形边界/空洞、灰色多字撕裂、蜘蛛网扇形线和移动光轴；再跑 1440/1920/390 normal/reduced/Open RO、full Web、typecheck/build 与生产同矩阵。",
+        "details": "2026-08-11 用户视觉否决 cd5be36；其 161/161、生产部署和路由证据只证明工程正确，不再构成审美接受。根因是 CPU Canvas 每帧逐点 arc() + 独立 focal/Fresnel 装饰，连续 DOM 字形没有共享 displacement 材质，形成灰色覆盖、机械竖线和波纹。外部调研已实际运行并读源码：ehaakana/codrops-text-demo（MIT，HTML-first WebGL text sync）、brunoimbrizi/interactive-particles（package MIT，glyph/image instancing + touch texture）、akella/DistortedPixels（MIT，DataTexture velocity + relaxation）、OGL Flowmap（Unlicense，ping-pong FBO）；无明确许可证项目不复制。第四轮冻结为 continuous glyph material + shared GPU flow/displacement field + sparse instanced particles；先建非生产 Optical Lab 并排 reference/current/candidate，记录 chunk/FPS/frame time/mobile/reduced-motion，用户选中前不替换生产 Landing。",
+        "testStrategy": "第四轮先在非生产 Optical Lab 做 reference/current/candidate 三列比较。RED/GREEN 必须覆盖：连续字形主体可读、WebGL 与 DOM bounds/字体同步、fixed aperture 拓扑、无 radial visible boundary、flow texture 衰减、sparse instanced edge particles、context-loss/reduced-motion/390px 降级；捕获独立 left/slit/right 60/150/300ms 帧并记录 gzip chunk、FPS、CPU/GPU frame time。用户选中前禁止替换生产 Landing。",
         "subtasks": [],
-        "updatedAt": "2026-08-11T05:55:00.000Z"
+        "updatedAt": "2026-08-11T06:35:00.000Z"
       },
       {
         "id": "5",

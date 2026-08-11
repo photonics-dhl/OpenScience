@@ -30,11 +30,13 @@
 - Live2D 生产使用仍需保留 ADR-010 的授权记录门禁。
 
 ## Open gate
-- `b45e002` 已被人工审美复核否决；第三轮 `cd5be36` 已完成本地与生产门禁。当前开放门仅为用户在真实鼠标操作中的细腻度复核，不阻断本次发布事实。
+- 用户已明确否决 `cd5be36` 的视觉观感；其工程/生产证据仍有效，但不再是审美接受基线。Task Master 4 已重新打开。
+- 第四轮不得继续调现有 CPU Canvas `arc()` renderer；先按 spec §5.1.1 建立独立 Optical Lab，对比连续字形 GPU displacement + shared flowmap + sparse instanced particles。生产 Landing 在用户选中候选前保持不变。
+- `b45e002` 与 `cd5be36` 均已被人工审美复核否决；`cd5be36` 的本地/生产工程门禁事实保留，但不能再用于关闭视觉任务。
 - 后续应按产品表面矩阵逐页优化 Dashboard/Workspace/Public RO/Hermes，新增范围先建立对应 spec/plan 和验收证据。
 
 ## Next action
-请用户复核 `https://openscience.428312321.xyz/` 的真实指针手感；随后按产品表面矩阵继续增量优化 Dashboard/Workspace/Public RO/Hermes。不要恢复 `3336be4` 的白色大椭圆、`b45e002` 的 moving pointer disk、已废弃的旧卡片/媒体叙事，也不要扩张后端合同。
+建立不进入生产路由的 Optical Lab：同屏显示目标原型裁切、`cd5be36` 和 OGL/原生 WebGL2 混合候选，并记录 chunk/FPS/frame time/mobile/reduced-motion。用户选中候选后才替换 Landing；不要恢复 `3336be4` 的白色大椭圆、`b45e002` 的 moving pointer disk、已废弃的旧卡片/媒体叙事，也不要扩张后端合同。
 
 ## Read first
 `AGENTS.md` → `docs/OpenScience_Kimi_Development_Spec.md` → `docs/progress.md` → `project_index.md` → `docs/specs/2026-08-10-optical-editorial-rebaseline-design.md` → `docs/decisions/ADR-010-hermes-visual-runtime-and-live2d-license-gate.md`
