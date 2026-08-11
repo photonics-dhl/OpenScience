@@ -24,6 +24,10 @@ const typeSpecimenPageUrl = new URL('../app/_visual/optical-lab/type-specimen/pa
 const typeSpecimenPageModule = existsSync(fileURLToPath(typeSpecimenPageUrl))
   ? await import('../app/_visual/optical-lab/type-specimen/page')
   : null;
+const resourceModuleUrl = new URL('../lib/optical-lab/ogl/resources.ts', import.meta.url);
+const resourceModule = existsSync(fileURLToPath(resourceModuleUrl))
+  ? await import('../lib/optical-lab/ogl/resources')
+  : null;
 
 describe('isolated Optical Lab route contract', () => {
   beforeAll(() => {
@@ -60,7 +64,7 @@ describe('isolated Optical Lab route contract', () => {
   it('exposes stable renderer diagnostics without forbidden visual primitives', async () => {
     const markup = await renderLab();
     expect(markup).toContain('data-optical-lab-diagnostics="true"');
-    expect(markup).toContain('data-render-mode="dom-static"');
+    expect(markup).toContain('data-render-mode="static-fallback"');
     expect(markup).toContain('data-optical-ink="dom"');
     expect(markup).toContain('data-context-status="idle"');
     expect(markup).toContain('data-stable-bounds="pending"');
@@ -82,6 +86,106 @@ describe('isolated Optical Lab route contract', () => {
       expect(source).not.toContain('optical-lab');
       expect(source).not.toContain('OpticalLab');
     }
+  });
+
+  it('deletes every OGL-owned GL handle exactly once across overlapping registrations', () => {
+    const handles = Object.fromEntries([
+      'buffer', 'depth', 'fragmentShader', 'framebuffer', 'program', 'renderbuffer',
+      'texture', 'vertexArray', 'vertexShader',
+    ].map((name) => [name, { name }])) as Record<string, object>;
+    const gl = {
+      deleteBuffer: vi.fn(),
+      deleteFramebuffer: vi.fn(),
+      deleteProgram: vi.fn(),
+      deleteRenderbuffer: vi.fn(),
+      deleteShader: vi.fn(),
+      deleteTexture: vi.fn(),
+      deleteVertexArray: vi.fn(),
+      detachShader: vi.fn(),
+    } as unknown as WebGL2RenderingContext;
+    const ledger = resourceModule?.createOpticalOglResourceLedger(gl);
+    expect(ledger).toBeDefined();
+    if (!ledger) return;
+
+    ledger.trackProgram({
+      fragmentShader: handles.fragmentShader,
+      program: handles.program,
+      vertexShader: handles.vertexShader,
+    });
+    ledger.trackGeometry({
+      VAOs: { main: handles.vertexArray },
+      attributes: {
+        index: { buffer: handles.buffer },
+        position: { buffer: handles.buffer },
+      },
+    });
+    const sharedTexture = { texture: handles.texture };
+    ledger.trackTexture(sharedTexture);
+    ledger.trackRenderTarget({
+      buffer: handles.framebuffer,
+      depthBuffer: handles.depth,
+      depthStencilBuffer: null,
+      depthTexture: sharedTexture,
+      stencilBuffer: handles.renderbuffer,
+      textures: [sharedTexture],
+    });
+
+    expect(ledger.counts()).toEqual({
+      buffers: 1,
+      framebuffers: 1,
+      programs: 1,
+      renderbuffers: 2,
+      shaders: 2,
+      textures: 1,
+      vertexArrays: 1,
+    });
+    ledger.dispose();
+    ledger.dispose();
+
+    expect(gl.deleteBuffer).toHaveBeenCalledTimes(1);
+    expect(gl.deleteFramebuffer).toHaveBeenCalledTimes(1);
+    expect(gl.deleteProgram).toHaveBeenCalledTimes(1);
+    expect(gl.deleteRenderbuffer).toHaveBeenCalledTimes(2);
+    expect(gl.deleteShader).toHaveBeenCalledTimes(2);
+    expect(gl.deleteTexture).toHaveBeenCalledTimes(1);
+    expect(gl.deleteVertexArray).toHaveBeenCalledTimes(1);
+    expect(ledger.counts()).toEqual({
+      buffers: 0,
+      framebuffers: 0,
+      programs: 0,
+      renderbuffers: 0,
+      shaders: 0,
+      textures: 0,
+      vertexArrays: 0,
+    });
+  });
+
+  it('detaches only the shaders owned by each OGL program', () => {
+    const gl = {
+      deleteBuffer: vi.fn(),
+      deleteFramebuffer: vi.fn(),
+      deleteProgram: vi.fn(),
+      deleteRenderbuffer: vi.fn(),
+      deleteShader: vi.fn(),
+      deleteTexture: vi.fn(),
+      deleteVertexArray: vi.fn(),
+      detachShader: vi.fn(),
+    } as unknown as WebGL2RenderingContext;
+    const ledger = resourceModule?.createOpticalOglResourceLedger(gl);
+    expect(ledger).toBeDefined();
+    if (!ledger) return;
+    const first = { program: { name: 'first' }, vertexShader: { name: 'first-v' }, fragmentShader: { name: 'first-f' } };
+    const second = { program: { name: 'second' }, vertexShader: { name: 'second-v' }, fragmentShader: { name: 'second-f' } };
+    ledger.trackProgram(first);
+    ledger.trackProgram(second);
+
+    ledger.dispose();
+
+    expect(gl.detachShader).toHaveBeenCalledTimes(4);
+    expect(gl.detachShader).toHaveBeenCalledWith(first.program, first.vertexShader);
+    expect(gl.detachShader).toHaveBeenCalledWith(first.program, first.fragmentShader);
+    expect(gl.detachShader).toHaveBeenCalledWith(second.program, second.vertexShader);
+    expect(gl.detachShader).toHaveBeenCalledWith(second.program, second.fragmentShader);
   });
 });
 

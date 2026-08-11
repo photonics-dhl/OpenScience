@@ -121,31 +121,67 @@
 .headline {
   position: absolute;
   z-index: 1;
-  top: 50%;
-  left: 2.5%;
-  width: 95%;
+  top: 35.8%;
+  left: 2.2%;
+  width: 93.5%;
+  height: 24.2%;
   display: block;
   margin: 0;
   color: var(--os-paper);
-  line-height: .76;
-  letter-spacing: -.07em;
-  transform: translateY(-48%);
+  font-size: 0;
+  line-height: 1;
   user-select: text;
   white-space: nowrap;
 }
 
+.science,
+.evolves {
+  display: inline-block;
+  min-width: 0;
+  color: var(--os-paper);
+  user-select: text;
+  vertical-align: middle;
+}
+
 .science {
-  font-family: var(--font-display), sans-serif;
-  font-size: clamp(1.4rem, 11cqw, 8rem);
-  font-weight: 700;
+  width: 55.8cqw;
 }
 
 .evolves {
-  margin-left: -.025em;
-  font-family: var(--font-editorial-latin), serif;
-  font-size: clamp(1.5rem, 12cqw, 8.7rem);
+  width: 37.7cqw;
+}
+
+.scienceInk,
+.evolvesInk {
+  display: inline-block;
+  line-height: .85;
+}
+
+.scienceInk {
+  font-family: inherit;
+  font-size: clamp(1.4rem, 16.55cqw, 16.75rem);
+  font-weight: 900;
+  letter-spacing: -.077em;
+}
+
+.evolvesInk {
+  padding-left: .01em;
+  font-family: var(--font-bodoni), serif;
+  font-size: clamp(1.5rem, 14.25cqw, 14.95rem);
   font-style: italic;
-  font-weight: 400;
+  font-weight: 700;
+  letter-spacing: -.085em;
+  transform: scaleX(.82);
+  transform-origin: left center;
+}
+
+.baselineProbe {
+  position: absolute;
+  top: 76.033%;
+  left: 0;
+  width: 0;
+  height: 0;
+  pointer-events: none;
 }
 
 .marker {
@@ -239,13 +275,6 @@
 
   .scope {
     grid-column: auto;
-  }
-
-  .headline {
-    top: 47%;
-    left: 4%;
-    width: 92%;
-    line-height: .7;
   }
 
 }

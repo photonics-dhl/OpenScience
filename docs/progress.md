@@ -1,5 +1,13 @@
 # OpenScience (XGS) 进度日志
 
+## 2026-08-12（Optical Lab 高保真 Task 3）— ✅ WebGL2 OGL 运行壳
+
+- **运行策略**：隔离 Lab 新路径只保留 `webgl2-full` / `static-fallback` / `dom-only`；WebGL1、reduced motion、低功耗与初始化失败均不挂动态 Canvas、不启 RAF。OGL 构造在 canvas 实例上阻断其内置 WebGL1 fallback，未修改全局浏览器 API。
+- **布局与诚实发布**：Candidate 使用已批准 Archivo/Bodoni 单行 DOM 几何，桌面/移动均以 58% 结束 `Science` 并开始 `evolves.`；字体 ready 后读取真实 CSS-pixel word/baseline rectangles，超过 1px 拒绝 GPU 发布。Task 3 壳始终报告 `firstCompleteFrame=false` 并保留可选中 DOM ink，未伪造 glyph/particle/composite 或提前推广静态资产。
+- **事务生命周期**：按 context 建立 OGL raw-handle ledger，覆盖 shader/program/buffer/texture/framebuffer/renderbuffer/VAO，交叠 ownership 去重且每 program 只 detach 自己 shader；初始化失败、policy change、context loss、unmount 均 cancel RAF、精确 dispose、移除 canvas，restore 使用 fresh canvas + fresh WebGL2 context。
+- **TDD/验证**：初始 RED 为 2 files / 6 intended failures；审查补充 RED 捕获跨 program 8 次错误 detach 与旧 SSR mode。最终 focused 2 files / 24 tests、Web typecheck、production build、production-start 浏览器 lifecycle matrix 均 exit 0；生产 `/` bundle 仍 3.87 kB / First Load 112 kB，未改 Landing/ECS/backend。
+- **下一步**：Task 4 才可注册非零 OGL glyph resources 并实现 MSDF 排版；完整 glyph/particle/composite frame 前不得隐藏 DOM ink。
+
 ## 2026-08-12（Optical Lab Task 2 review fix round 1/5）— ✅ 输出映射与配置不可变
 
 - **审查修复**：生成器不再从 mutable `font.file` basename 推导写入路径；代码拥有且先验证唯一的 `science-display.ttf → science-display.{json,png}` 与 `evolves-editorial.ttf → evolves-editorial.{json,png}` 映射。篡改 source、输出重复/缺失/额外项会在任何 generation/write 前失败。
@@ -9,7 +17,7 @@
 ## 2026-08-12（Optical Lab 高保真 Task 2）— ✅ 固定 OGL/MSDF 资产
 
 - **字体/许可取证**：Google Fonts 仅提供变量上游，故固定 `google/fonts@038b637` 的官方 Archivo 与 Bodoni Moda Italic 输入，以 FontTools 4.55.3（禁止 timestamp 重算）分别实例化为 `Archivo Black`（`wdth=100,wght=900`）和 `Bodoni Moda 96pt Bold Italic`（`opsz=96,wght=700`）。上游、实例输入与生成输出 SHA-256、轴值、工具版本与原样 OFL 已登记在 `apps/web/assets/optical-lab/fonts/manifest.json`；不使用 `.next` 临时字体。
-- **受限生成器**：`@openscience/web` 固定 `ogl@1.0.11`（Unlicense）与 `msdf-bmfont-xml@2.8.0`（MIT）。`atlas:optical` 只允许 ` Sciencevolves.`、96px/8 distance range/4 padding、JSON、单页 smart power-of-two atlas，校验输入 hash/工具版本/输出目标，并仅覆写四个 atlas 输出后刷新 manifest hash。
+- **受限生成器**：`@openscience/web` 固定 `ogl@1.0.11`（Unlicense）与 `msdf-bmfont-xml@2.8.0`（MIT）。`atlas:optical` 只允许空格与 `Sciencevolves.`、96px/8 distance range/4 padding、JSON、单页 smart power-of-two atlas，校验输入 hash/工具版本/输出目标，并仅覆写四个 atlas 输出后刷新 manifest hash。
 - **TDD/验证**：atlas integrity RED 为缺少 manifest 的 `ENOENT`；审查发现 charset 可被 manifest 与文本同时篡改后，再以 `assertAcceptedCharset` RED→GREEN 固化不可变标题字符集。focused test `2/2`、两次生成后的 scoped `git diff --exit-code`、Web typecheck 均 exit 0；四个 atlas 共 `82,731 B`（≤512 KiB）。
 - **隔离与文档**：ADR-009 改为仅 no-index Lab 的 OGL WebGL2 exception，明确 Unlicense/MIT/OFL 与浏览器/ECS 边界。OGL 目前尚未被任何源代码 import（Task 3 才可在 Lab client graph 使用）；生产 `/` 无 Lab import，未改 API/schema/auth/Hermes/ECS 或部署。
 - **下一步**：Task 3 才可消费这些已提交的 Lab-only assets；仍不得更改生产首页或 ECS。

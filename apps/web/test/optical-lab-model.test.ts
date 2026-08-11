@@ -1,52 +1,132 @@
 import { existsSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
 const modelUrl = new URL('../lib/optical-lab/model.ts', import.meta.url);
 const model = existsSync(fileURLToPath(modelUrl))
   ? await import('../lib/optical-lab/model')
   : null;
+const runtimePolicyUrl = new URL('../lib/optical-lab/runtime-policy.ts', import.meta.url);
+const runtimePolicy = existsSync(fileURLToPath(runtimePolicyUrl))
+  ? await import('../lib/optical-lab/runtime-policy')
+  : null;
+const layoutUrl = new URL('../lib/optical-lab/layout.ts', import.meta.url);
+const layout = existsSync(fileURLToPath(layoutUrl))
+  ? await import('../lib/optical-lab/layout')
+  : null;
 
 describe('Optical Lab capability and field model', () => {
-  it('selects WebGL2 first and WebGL1 half-float only when viable', () => {
-    expect(model?.selectOpticalLabMode({
+  it('selects only the WebGL2 full runtime for an animated capable canvas', () => {
+    expect(runtimePolicy?.chooseOpticalRuntime({
+      canvas: true,
+      initializationFailed: false,
       reducedMotion: false,
       lowPower: false,
       webgl2: true,
-      webgl1: true,
-      halfFloat: true,
-    })).toBe('webgl2');
-    expect(model?.selectOpticalLabMode({
-      reducedMotion: false,
-      lowPower: false,
-      webgl2: false,
-      webgl1: true,
-      halfFloat: true,
-    })).toBe('webgl1');
-    expect(model?.selectOpticalLabMode({
-      reducedMotion: false,
-      lowPower: false,
-      webgl2: false,
-      webgl1: true,
-      halfFloat: false,
-    })).toBe('dom-static');
+    })).toBe('webgl2-full');
   });
 
-  it('uses the DOM/static path for reduced motion and low-power mobile', () => {
-    expect(model?.selectOpticalLabMode({
+  it('retires WebGL1 and chooses an honest static fallback for non-full policies', () => {
+    expect(runtimePolicy?.chooseOpticalRuntime({
+      canvas: true,
+      initializationFailed: false,
+      reducedMotion: false,
+      lowPower: false,
+      webgl2: false,
+    })).toBe('static-fallback');
+    expect(runtimePolicy?.chooseOpticalRuntime({
+      canvas: true,
+      initializationFailed: false,
       reducedMotion: true,
       lowPower: false,
       webgl2: true,
-      webgl1: true,
-      halfFloat: true,
-    })).toBe('dom-static');
-    expect(model?.selectOpticalLabMode({
+    })).toBe('static-fallback');
+    expect(runtimePolicy?.chooseOpticalRuntime({
+      canvas: true,
+      initializationFailed: true,
+      reducedMotion: false,
+      lowPower: false,
+      webgl2: true,
+    })).toBe('static-fallback');
+  });
+
+  it('uses DOM only when canvas is unavailable and static fallback on low-power mobile', () => {
+    expect(runtimePolicy?.chooseOpticalRuntime({
+      canvas: false,
+      initializationFailed: false,
+      lowPower: false,
+      reducedMotion: false,
+      webgl2: true,
+    })).toBe('dom-only');
+    expect(runtimePolicy?.chooseOpticalRuntime({
+      canvas: true,
+      initializationFailed: false,
       reducedMotion: false,
       lowPower: true,
       webgl2: true,
-      webgl1: true,
-      halfFloat: true,
-    })).toBe('dom-static');
+    })).toBe('static-fallback');
+  });
+
+  it('measures CSS-pixel DOM geometry after fonts settle and fixes the aperture at 58%', async () => {
+    let fontsResolved = false;
+    const fontsReady = Promise.resolve().then(() => {
+      fontsResolved = true;
+    });
+    vi.stubGlobal('document', { fonts: { ready: fontsReady } });
+    const rectangle = (left: number, top: number, width: number, height: number) => ({
+      bottom: top + height,
+      height,
+      left,
+      right: left + width,
+      top,
+      width,
+      x: left,
+      y: top,
+      toJSON: () => ({}),
+    });
+    const baseline = { getBoundingClientRect: () => rectangle(680, 375.2, 0, 0) };
+    const stage = {
+      getBoundingClientRect: () => rectangle(100, 50, 1_000, 600),
+      querySelector: () => baseline,
+    } as unknown as HTMLElement;
+    const science = {
+      getBoundingClientRect: () => rectangle(122, 264.8, 558, 145.2),
+    } as unknown as HTMLElement;
+    const evolves = {
+      getBoundingClientRect: () => rectangle(680, 264.8, 377, 145.2),
+    } as unknown as HTMLElement;
+
+    const measured = await layout?.measureOpticalLayout(stage, science, evolves);
+
+    expect(fontsResolved).toBe(true);
+    expect(measured).toEqual({
+      apertureX: 580,
+      baseline: 325.2,
+      evolves: { bottom: 360, height: 145.2, left: 580, right: 957, top: 214.8, width: 377 },
+      science: { bottom: 360, height: 145.2, left: 22, right: 580, top: 214.8, width: 558 },
+      title: { bottom: 360, height: 145.2, left: 22, right: 957, top: 214.8, width: 935 },
+      viewport: { height: 600, width: 1_000 },
+    });
+    vi.unstubAllGlobals();
+  });
+
+  it('rejects GPU publication when measured DOM bounds drift by more than one CSS pixel', () => {
+    const accepted = {
+      apertureX: 580,
+      baseline: 325.2,
+      evolves: { bottom: 360, height: 145.2, left: 580, right: 957, top: 214.8, width: 377 },
+      science: { bottom: 360, height: 145.2, left: 22, right: 580, top: 214.8, width: 558 },
+      title: { bottom: 360, height: 145.2, left: 22, right: 957, top: 214.8, width: 935 },
+      viewport: { height: 600, width: 1_000 },
+    };
+    expect(layout?.hasOpticalLayoutParity(accepted, {
+      ...accepted,
+      science: { ...accepted.science, right: 581 },
+    })).toBe(true);
+    expect(layout?.hasOpticalLayoutParity(accepted, {
+      ...accepted,
+      science: { ...accepted.science, right: 581.01 },
+    })).toBe(false);
   });
 
   it('keeps aperture topology fixed while pointer energy changes independently', () => {

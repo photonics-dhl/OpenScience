@@ -18,7 +18,6 @@ const cases = [
   { name: 'desktop', width: 1440, height: 900, reducedMotion: 'no-preference' },
   { name: 'webgl1-fallback', width: 900, height: 700, reducedMotion: 'no-preference', forceContext: 'webgl1' },
   { name: 'webgl2-init-fallback', width: 900, height: 700, reducedMotion: 'no-preference', forceContext: 'webgl2-init-failure' },
-  { name: 'shader-fallback', width: 900, height: 700, reducedMotion: 'no-preference', forceContext: 'shader-failure' },
   { name: 'dom-fallback', width: 900, height: 700, reducedMotion: 'no-preference', forceContext: 'none' },
   { name: 'mobile', width: 390, height: 844, reducedMotion: 'no-preference' },
   { name: 'reduced', width: 1440, height: 900, reducedMotion: 'reduce' },
@@ -284,7 +283,7 @@ for (const testCase of cases) {
         canvas.__opticalLabTestCanvasId = canvasId;
         const record = { canvasId, created: {}, deleted: {}, type };
         window.__OPTICAL_LAB_GL_TRACKER__.contexts.push(record);
-        for (const resource of ['Shader', 'Program', 'Buffer', 'Texture', 'Framebuffer', 'Query']) {
+        for (const resource of ['Shader', 'Program', 'Buffer', 'Texture', 'Framebuffer', 'Renderbuffer', 'VertexArray', 'Query']) {
           const createName = `create${resource}`;
           const deleteName = `delete${resource}`;
           if (typeof context[createName] === 'function') {
@@ -355,6 +354,17 @@ for (const testCase of cases) {
           }
           return extension;
         };
+        if (forceContext === 'webgl2-init-failure' && type === 'webgl2') {
+          const getParameter = context.getParameter.bind(context);
+          let failedInitialization = false;
+          context.getParameter = (parameter) => {
+            if (!failedInitialization && parameter === context.MAX_COMBINED_TEXTURE_IMAGE_UNITS) {
+              failedInitialization = true;
+              throw new Error('forced OGL initialization failure');
+            }
+            return getParameter(parameter);
+          };
+        }
         return context;
       };
       HTMLCanvasElement.prototype.getContext = function patchedGetContext(type, ...options) {
@@ -397,6 +407,118 @@ for (const testCase of cases) {
   await diagnostics.waitFor({ state: 'visible' });
   const mode = await diagnostics.getAttribute('data-render-mode');
   const contextStatus = await diagnostics.getAttribute('data-context-status');
+  const expectedDynamic = testCase.name === 'desktop';
+  if (expectedDynamic) {
+    await page.waitForFunction(() => {
+      const node = document.querySelector('[data-optical-lab-diagnostics="true"]');
+      return node?.getAttribute('data-context-status') === 'ready'
+        && Number(node.getAttribute('data-frame-count') ?? 0) >= 2;
+    }, undefined, { timeout: 5_000 });
+  }
+  const shell = await page.evaluate(() => {
+    const diagnosticsNode = document.querySelector('[data-optical-lab-diagnostics="true"]');
+    const stageNode = document.querySelector('[data-optical-lab-candidate-stage="true"]');
+    const headline = document.querySelector('h1[data-optical-lab-semantic-title="true"]');
+    const science = document.querySelector('[data-optical-lab-science="true"]');
+    const evolves = document.querySelector('[data-optical-lab-evolves="true"]');
+    const baseline = document.querySelector('[data-optical-lab-baseline-probe="true"]');
+    const selection = window.getSelection();
+    const range = document.createRange();
+    range.selectNodeContents(headline);
+    selection.removeAllRanges();
+    selection.addRange(range);
+    const selectedText = selection.toString();
+    selection.removeAllRanges();
+    const stageRect = stageNode.getBoundingClientRect();
+    const scienceRect = science.getBoundingClientRect();
+    const evolvesRect = evolves.getBoundingClientRect();
+    const baselineRect = baseline.getBoundingClientRect();
+    return {
+      activeRaf: window.__OPENSCIENCE_OPTICAL_LAB__?.activeRaf ?? false,
+      baseline: baselineRect.top - stageRect.top,
+      canvasCount: document.querySelectorAll('canvas[data-optical-lab-canvas="true"]').length,
+      contextCount: window.__OPTICAL_LAB_GL_TRACKER__.contexts.length,
+      contextStatus: diagnosticsNode?.getAttribute('data-context-status'),
+      firstCompleteFrame: diagnosticsNode?.getAttribute('data-first-complete-frame'),
+      frameCount: Number(diagnosticsNode?.getAttribute('data-frame-count') ?? 0),
+      ink: stageNode?.getAttribute('data-optical-ink'),
+      mode: diagnosticsNode?.getAttribute('data-render-mode'),
+      qualityTier: diagnosticsNode?.getAttribute('data-quality-tier'),
+      selectedText,
+      seamX: scienceRect.right - stageRect.left,
+      evolvesX: evolvesRect.left - stageRect.left,
+      stageWidth: stageRect.width,
+    };
+  });
+  assert.equal(shell.selectedText, 'Science evolves.', `${testCase.name} must keep the exact selectable semantic heading`);
+  assert.equal(shell.firstCompleteFrame, 'false', `${testCase.name} shell must not claim a complete glyph/particle/composite frame`);
+  assert.equal(shell.ink, 'dom', `${testCase.name} shell must preserve DOM ink`);
+  assert(Math.abs(shell.seamX - shell.stageWidth * .58) <= 1, `${testCase.name} Science must end at the 58% aperture`);
+  assert(Math.abs(shell.evolvesX - shell.stageWidth * .58) <= 1, `${testCase.name} evolves must start at the 58% aperture`);
+  assert(Math.abs(shell.baseline - (await page.locator('[data-optical-lab-candidate-stage="true"]').evaluate((node) => node.getBoundingClientRect().height * .542))) <= 1, `${testCase.name} baseline must remain at 54.2%`);
+
+  if (!expectedDynamic) {
+    assert.equal(shell.mode, 'static-fallback', `${testCase.name} must choose the static fallback`);
+    assert.equal(shell.canvasCount, 0, `${testCase.name} must mount no dynamic canvas`);
+    assert.equal(shell.activeRaf, false, `${testCase.name} must schedule no renderer RAF`);
+    if (testCase.forceContext === 'webgl1') {
+      assert.equal(shell.contextCount, 0, 'forced WebGL1 must never initialize a dynamic context');
+    }
+  } else {
+    assert.equal(shell.mode, 'webgl2-full', 'normal desktop must choose the WebGL2 full runtime');
+    assert.equal(shell.contextStatus, 'ready', 'normal desktop OGL shell must become ready');
+    assert.equal(shell.canvasCount, 1, 'normal desktop must mount exactly one canvas');
+    assert.equal(shell.activeRaf, true, 'normal desktop must run one bounded renderer RAF chain');
+    assert.equal(shell.qualityTier, 'shell', 'Task 3 must report the honest shell quality tier');
+    assert(shell.frameCount >= 2, 'normal desktop shell must report real frames');
+    assert(
+      (await page.evaluate(() => window.__OPTICAL_LAB_GL_TRACKER__.contexts)).every((entry) => entry.type === 'webgl2'),
+      'dynamic runtime must never initialize WebGL1',
+    );
+
+    const recoveryBefore = await page.evaluate(() => {
+      const canvasNode = document.querySelector('canvas[data-optical-lab-canvas="true"]');
+      const tracker = window.__OPTICAL_LAB_GL_TRACKER__;
+      const canvasId = canvasNode.__opticalLabTestCanvasId;
+      const context = tracker.contexts.findLast((entry) => entry.canvasId === canvasId);
+      const gl = canvasNode.getContext('webgl2');
+      const lose = gl?.getExtension('WEBGL_lose_context');
+      window.__OPTICAL_LAB_TEST_CONTEXT_LOSS_EXTENSION__ = lose;
+      lose?.loseContext();
+      return { canvasId, contextCount: tracker.contexts.length, created: { ...context.created } };
+    });
+    await page.waitForFunction(() => (
+      document.querySelector('[data-optical-lab-diagnostics="true"]')?.getAttribute('data-context-status') === 'lost'
+      && document.querySelectorAll('canvas[data-optical-lab-canvas="true"]').length === 0
+      && window.__OPENSCIENCE_OPTICAL_LAB__?.activeRaf === false
+    ), undefined, { timeout: 3_000 });
+    await page.evaluate(() => window.__OPTICAL_LAB_TEST_CONTEXT_LOSS_EXTENSION__.restoreContext());
+    await page.waitForFunction((before) => {
+      const canvasNode = document.querySelector('canvas[data-optical-lab-canvas="true"]');
+      return document.querySelector('[data-optical-lab-diagnostics="true"]')?.getAttribute('data-context-status') === 'ready'
+        && canvasNode?.__opticalLabTestCanvasId !== before.canvasId
+        && window.__OPTICAL_LAB_GL_TRACKER__.contexts.length > before.contextCount;
+    }, recoveryBefore, { timeout: 5_000 });
+    const recoveryAfter = await page.evaluate((before) => {
+      const canvasNode = document.querySelector('canvas[data-optical-lab-canvas="true"]');
+      const tracker = window.__OPTICAL_LAB_GL_TRACKER__;
+      return {
+        canvasId: canvasNode.__opticalLabTestCanvasId,
+        contexts: tracker.contexts,
+        oldContext: tracker.contexts.find((entry) => entry.canvasId === before.canvasId),
+      };
+    }, recoveryBefore);
+    assert.notEqual(recoveryAfter.canvasId, recoveryBefore.canvasId, 'restoration must use a fresh canvas and context');
+    assert(recoveryAfter.contexts.every((entry) => entry.type === 'webgl2'), 'restoration must not initialize WebGL1');
+    for (const [resource, created] of Object.entries(recoveryBefore.created)) {
+      assert.equal(recoveryAfter.oldContext.deleted[resource] ?? 0, created, `context loss leaked ${resource}`);
+    }
+  }
+  measurements.push({ case: testCase.name, ...shell });
+  await page.screenshot({ fullPage: true, path: path.join(outDir, `${testCase.name}.png`) });
+  assert.deepEqual(errors, [], `${testCase.name} emitted browser errors: ${errors.join(' | ')}`);
+  await page.close();
+  if (shell) continue;
   const marker = page.locator('[data-optical-lab-evolves="true"] > span');
   const semanticHeadline = page.locator('h1[data-optical-lab-semantic-title="true"]');
   if (testCase.name === 'desktop' || testCase.name === 'dom-fallback') {
@@ -860,7 +982,7 @@ await cleanupPage.addInitScript(() => {
       || context.__opticalLabCleanupInstrumented
     ) return context;
     context.__opticalLabCleanupInstrumented = true;
-    for (const resource of ['Shader', 'Program', 'Buffer', 'Texture', 'Framebuffer', 'Query']) {
+    for (const resource of ['Shader', 'Program', 'Buffer', 'Texture', 'Framebuffer', 'Renderbuffer', 'VertexArray', 'Query']) {
       const createName = `create${resource}`;
       const deleteName = `delete${resource}`;
       if (typeof context[createName] === 'function') {

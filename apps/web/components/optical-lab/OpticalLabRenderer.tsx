@@ -1,14 +1,9 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef } from 'react';
 
-import { OPTICAL_LAB_APERTURE_X } from '@/lib/optical-lab/model';
-import {
-  createOpticalLabWebGLRenderer,
-  type OpticalLabRendererSnapshot,
-} from '@/lib/optical-lab/webgl-renderer';
-
-const FLOW_TEXTURE_LABEL = '96x54 RGBA8 ping-pong · dissipation .955';
+import { createOpticalOglRenderer, type OpticalOglRendererSnapshot } from '@/lib/optical-lab/ogl/renderer';
+import { chooseOpticalRuntime, type OpticalRuntime } from '@/lib/optical-lab/runtime-policy';
 
 export interface OpticalLabRendererProps {
   diagnosticsId: string;
@@ -20,7 +15,9 @@ declare global {
     __OPENSCIENCE_OPTICAL_LAB__?: {
       activeRaf: boolean;
       contextStatus: string;
+      frameCount: number;
       mode: string;
+      resourceCounts: OpticalOglRendererSnapshot['resourceCounts'];
     };
   }
 }
@@ -30,135 +27,169 @@ function setText(diagnostics: HTMLElement, selector: string, value: string) {
   if (node) node.textContent = value;
 }
 
-function setOpticalInk(stage: HTMLElement, contextStatus: string) {
-  stage.dataset.opticalInk = contextStatus === 'ready' ? 'gpu' : 'dom';
+function setOpticalInk(stage: HTMLElement, snapshot?: OpticalOglRendererSnapshot) {
+  stage.dataset.opticalInk = snapshot?.firstCompleteFrame && snapshot.layoutStable ? 'gpu' : 'dom';
 }
 
 export function OpticalLabRenderer({ diagnosticsId, stageId }: OpticalLabRendererProps) {
   const hostRef = useRef<HTMLDivElement>(null);
-  const [mountCanvas, setMountCanvas] = useState(false);
-  const [generation, setGeneration] = useState(0);
-
-  useEffect(() => {
-    const stage = document.getElementById(stageId);
-    const diagnostics = document.getElementById(diagnosticsId);
-    if (!stage || !diagnostics) return;
-    const motionPolicy = window.matchMedia('(prefers-reduced-motion: reduce)');
-    const applyPolicy = () => {
-      const bounds = stage.getBoundingClientRect();
-      const stableBounds = `${bounds.x.toFixed(1)},${bounds.y.toFixed(1)},${bounds.width.toFixed(1)},${bounds.height.toFixed(1)}`;
-      stage.dataset.stableBounds = stableBounds;
-      diagnostics.dataset.stableBounds = stableBounds;
-      diagnostics.dataset.apertureX = String(OPTICAL_LAB_APERTURE_X);
-      setText(diagnostics, 'bounds', stableBounds);
-      const reducedMotion = motionPolicy.matches;
-      const lowPower = window.innerWidth <= 480;
-      if (!reducedMotion && !lowPower) {
-        setMountCanvas(true);
-        return;
-      }
-      setMountCanvas(false);
-      stage.dataset.renderMode = 'dom-static';
-      stage.dataset.contextStatus = 'idle';
-      setOpticalInk(stage, 'idle');
-      diagnostics.dataset.renderMode = 'dom-static';
-      diagnostics.dataset.contextStatus = 'idle';
-      diagnostics.dataset.renderer = reducedMotion ? 'DOM/static · reduced motion' : 'DOM/static · low power';
-      setText(diagnostics, 'mode', 'DOM/static');
-      setText(diagnostics, 'context', 'idle');
-      window.__OPENSCIENCE_OPTICAL_LAB__ = { activeRaf: false, contextStatus: 'idle', mode: 'dom-static' };
-    };
-    applyPolicy();
-    motionPolicy.addEventListener('change', applyPolicy);
-    window.addEventListener('resize', applyPolicy, { passive: true });
-    return () => {
-      motionPolicy.removeEventListener('change', applyPolicy);
-      window.removeEventListener('resize', applyPolicy);
-    };
-  }, [diagnosticsId, stageId]);
 
   useEffect(() => {
     const host = hostRef.current;
     const stage = document.getElementById(stageId);
     const diagnostics = document.getElementById(diagnosticsId);
-    if (!mountCanvas || !host || !stage || !diagnostics) return;
+    if (!host || !stage || !diagnostics) return;
+    const motionPolicy = window.matchMedia('(prefers-reduced-motion: reduce)');
+    let canvas: HTMLCanvasElement | null = null;
+    let renderer: ReturnType<typeof createOpticalOglRenderer> | null = null;
+    let runtime: OpticalRuntime = 'dom-only';
+    let removeCanvasListeners = () => {};
 
-    const update = (snapshot: OpticalLabRendererSnapshot) => {
-      stage.dataset.renderMode = snapshot.contextStatus === 'ready' ? snapshot.mode : 'dom-static';
+    const publishStatic = (nextRuntime: Exclude<OpticalRuntime, 'webgl2-full'>, status: string) => {
+      runtime = nextRuntime;
+      stage.dataset.renderMode = nextRuntime;
+      stage.dataset.contextStatus = status;
+      setOpticalInk(stage);
+      diagnostics.dataset.renderMode = nextRuntime;
+      diagnostics.dataset.contextStatus = status;
+      diagnostics.dataset.firstCompleteFrame = 'false';
+      diagnostics.dataset.qualityTier = 'static';
+      diagnostics.dataset.renderer = nextRuntime === 'dom-only' ? 'DOM only' : 'DOM/static interim';
+      setText(diagnostics, 'mode', nextRuntime);
+      setText(diagnostics, 'context', status);
+      window.__OPENSCIENCE_OPTICAL_LAB__ = {
+        activeRaf: false,
+        contextStatus: status,
+        frameCount: 0,
+        mode: nextRuntime,
+        resourceCounts: {
+          buffers: 0,
+          framebuffers: 0,
+          programs: 0,
+          renderbuffers: 0,
+          shaders: 0,
+          textures: 0,
+          vertexArrays: 0,
+        },
+      };
+    };
+
+    const update = (snapshot: OpticalOglRendererSnapshot) => {
+      if (snapshot.contextStatus === 'unavailable') {
+        canvas?.remove();
+        publishStatic('static-fallback', 'unavailable');
+        return;
+      }
+      stage.dataset.renderMode = snapshot.mode;
       stage.dataset.contextStatus = snapshot.contextStatus;
-      setOpticalInk(stage, snapshot.contextStatus);
-      stage.dataset.stableBounds = snapshot.bounds;
-      diagnostics.dataset.renderMode = snapshot.contextStatus === 'ready' ? snapshot.mode : 'dom-static';
+      setOpticalInk(stage, snapshot);
+      stage.dataset.stableBounds = snapshot.stableBounds;
+      diagnostics.dataset.renderMode = snapshot.mode;
       diagnostics.dataset.contextStatus = snapshot.contextStatus;
+      diagnostics.dataset.firstCompleteFrame = String(snapshot.firstCompleteFrame);
       diagnostics.dataset.frameCount = String(snapshot.frameCount);
-      diagnostics.dataset.flowTexture = `${FLOW_TEXTURE_LABEL}`;
-      diagnostics.dataset.fps = snapshot.fps.toFixed(1);
-      diagnostics.dataset.cpuFrameMs = snapshot.cpuFrameMs.toFixed(2);
-      diagnostics.dataset.gpuFrameMs = snapshot.gpuFrameMs?.toFixed(2) ?? 'unavailable';
-      diagnostics.dataset.gpuTiming = snapshot.gpuTiming;
-      diagnostics.dataset.particleCount = String(snapshot.particleCount);
-      diagnostics.dataset.particleRenderer = snapshot.particleRenderer;
-      diagnostics.dataset.renderer = snapshot.renderer;
-      diagnostics.dataset.stableBounds = snapshot.bounds;
-      setText(diagnostics, 'mode', snapshot.contextStatus === 'ready' ? snapshot.mode : 'DOM/static');
+      diagnostics.dataset.qualityTier = snapshot.qualityTier;
+      diagnostics.dataset.renderer = 'OGL WebGL2 shell';
+      diagnostics.dataset.resourceCounts = JSON.stringify(snapshot.resourceCounts);
+      diagnostics.dataset.stableBounds = snapshot.stableBounds;
+      setText(diagnostics, 'mode', snapshot.mode);
       setText(diagnostics, 'context', snapshot.contextStatus);
-      setText(diagnostics, 'fps', snapshot.fps.toFixed(1));
-      setText(diagnostics, 'frame-time', `${snapshot.cpuFrameMs.toFixed(2)} ms`);
-      setText(diagnostics, 'gpu-time', snapshot.gpuFrameMs === null ? 'n/a' : `${snapshot.gpuFrameMs.toFixed(2)} ms`);
-      setText(diagnostics, 'bounds', snapshot.bounds);
+      setText(diagnostics, 'bounds', snapshot.stableBounds);
       window.__OPENSCIENCE_OPTICAL_LAB__ = {
         activeRaf: snapshot.activeRaf,
         contextStatus: snapshot.contextStatus,
-        mode: snapshot.contextStatus === 'ready' ? snapshot.mode : 'dom-static',
+        frameCount: snapshot.frameCount,
+        mode: snapshot.mode,
+        resourceCounts: snapshot.resourceCounts,
       };
     };
 
-    let renderer: ReturnType<typeof createOpticalLabWebGLRenderer> = null;
-    try {
-      renderer = createOpticalLabWebGLRenderer(host, stage, update);
-    } catch {
-      // A viable context may still reject a shader or framebuffer. Preserve the semantic fallback.
-    }
-    if (!renderer) {
-      setMountCanvas(false);
-      stage.dataset.renderMode = 'dom-static';
-      stage.dataset.contextStatus = 'unavailable';
-      setOpticalInk(stage, 'unavailable');
-      diagnostics.dataset.renderMode = 'dom-static';
-      diagnostics.dataset.contextStatus = 'unavailable';
-      setText(diagnostics, 'mode', 'DOM/static');
-      setText(diagnostics, 'context', 'unavailable');
-      window.__OPENSCIENCE_OPTICAL_LAB__ = {
-        activeRaf: false,
-        contextStatus: 'unavailable',
-        mode: 'dom-static',
-      };
-      return;
-    }
-
-    const onContextLost = (event: Event) => {
-      event.preventDefault();
-      renderer.dispose();
-      stage.dataset.renderMode = 'dom-static';
-      stage.dataset.contextStatus = 'lost';
-      setOpticalInk(stage, 'lost');
-      diagnostics.dataset.renderMode = 'dom-static';
-      diagnostics.dataset.contextStatus = 'lost';
-      setText(diagnostics, 'mode', 'DOM/static');
-      setText(diagnostics, 'context', 'lost');
-      window.__OPENSCIENCE_OPTICAL_LAB__ = { activeRaf: false, contextStatus: 'lost', mode: 'dom-static' };
+    const stop = () => {
+      renderer?.dispose();
+      renderer = null;
+      removeCanvasListeners();
+      removeCanvasListeners = () => {};
+      canvas?.remove();
+      canvas = null;
     };
-    const onContextRestored = () => setGeneration((value) => value + 1);
-    renderer.canvas.addEventListener('webglcontextlost', onContextLost);
-    renderer.canvas.addEventListener('webglcontextrestored', onContextRestored);
 
+    const start = () => {
+      stop();
+      const reducedMotion = motionPolicy.matches;
+      const lowPower = window.innerWidth <= 480;
+      if (reducedMotion || lowPower) {
+        publishStatic('static-fallback', 'idle');
+        return;
+      }
+      if (typeof HTMLCanvasElement === 'undefined') {
+        publishStatic('dom-only', 'unavailable');
+        return;
+      }
+
+      canvas = document.createElement('canvas');
+      const webgl2 = Boolean(canvas.getContext('webgl2'));
+      const chosenRuntime = chooseOpticalRuntime({
+        canvas: true,
+        initializationFailed: false,
+        lowPower,
+        reducedMotion,
+        webgl2,
+      });
+      runtime = chosenRuntime;
+      if (chosenRuntime !== 'webgl2-full') {
+        canvas = null;
+        publishStatic(chosenRuntime, 'unavailable');
+        return;
+      }
+
+      canvas.dataset.opticalLabCanvas = 'true';
+      canvas.setAttribute('aria-hidden', 'true');
+      host.append(canvas);
+      const ownedCanvas = canvas;
+      const onContextLost = (event: Event) => {
+        event.preventDefault();
+        renderer?.dispose();
+        renderer = null;
+        ownedCanvas.remove();
+        publishStatic('static-fallback', 'lost');
+      };
+      const onContextRestored = () => start();
+      ownedCanvas.addEventListener('webglcontextlost', onContextLost);
+      ownedCanvas.addEventListener('webglcontextrestored', onContextRestored);
+      removeCanvasListeners = () => {
+        ownedCanvas.removeEventListener('webglcontextlost', onContextLost);
+        ownedCanvas.removeEventListener('webglcontextrestored', onContextRestored);
+      };
+
+      try {
+        renderer = createOpticalOglRenderer(ownedCanvas, stage, update);
+      } catch {
+        stop();
+        const failedRuntime = chooseOpticalRuntime({
+          canvas: true,
+          initializationFailed: true,
+          lowPower,
+          reducedMotion,
+          webgl2,
+        });
+        publishStatic(failedRuntime === 'webgl2-full' ? 'static-fallback' : failedRuntime, 'unavailable');
+      }
+    };
+
+    const onResize = () => {
+      const requiresStatic = motionPolicy.matches || window.innerWidth <= 480;
+      if (requiresStatic !== (runtime !== 'webgl2-full')) start();
+      else renderer?.resize();
+    };
+    start();
+    motionPolicy.addEventListener('change', start);
+    window.addEventListener('resize', onResize, { passive: true });
     return () => {
-      renderer.canvas.removeEventListener('webglcontextlost', onContextLost);
-      renderer.canvas.removeEventListener('webglcontextrestored', onContextRestored);
-      renderer.dispose();
+      motionPolicy.removeEventListener('change', start);
+      window.removeEventListener('resize', onResize);
+      stop();
     };
-  }, [diagnosticsId, generation, mountCanvas, stageId]);
+  }, [diagnosticsId, stageId]);
 
-  if (!mountCanvas) return null;
   return <div aria-hidden="true" data-optical-lab-canvas-host="true" ref={hostRef} />;
 }

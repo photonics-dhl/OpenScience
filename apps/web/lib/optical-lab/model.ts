@@ -5,14 +5,6 @@ export const OPTICAL_LAB_MAX_REFRACTION_PX = 8;
 
 export type OpticalLabRenderMode = 'webgl2' | 'webgl1' | 'dom-static';
 
-export interface OpticalLabCapabilities {
-  reducedMotion: boolean;
-  lowPower: boolean;
-  webgl2: boolean;
-  webgl1: boolean;
-  halfFloat: boolean;
-}
-
 export interface OpticalLabPointer {
   x: number;
   y: number;
@@ -82,13 +74,6 @@ export function stepOpticalLabRefraction(
     x: boundedCurrent.x + (boundedTarget.x - boundedCurrent.x) * follow,
     y: boundedCurrent.y + (boundedTarget.y - boundedCurrent.y) * follow,
   }, viewport);
-}
-
-export function selectOpticalLabMode(capabilities: OpticalLabCapabilities): OpticalLabRenderMode {
-  if (capabilities.reducedMotion || capabilities.lowPower) return 'dom-static';
-  if (capabilities.webgl2) return 'webgl2';
-  if (capabilities.webgl1 && capabilities.halfFloat) return 'webgl1';
-  return 'dom-static';
 }
 
 export function sampleOpticalLabField(
