@@ -47,5 +47,11 @@ try {
   process.env.VISUAL_BASE_URL = baseUrl;
   await import('./optical-lab-shots.mjs');
 } finally {
-  server.kill('SIGTERM');
+  if (server.exitCode === null) {
+    server.kill('SIGTERM');
+    await Promise.race([
+      new Promise((resolve) => server.once('exit', resolve)),
+      new Promise((resolve) => setTimeout(resolve, 3_000)),
+    ]);
+  }
 }

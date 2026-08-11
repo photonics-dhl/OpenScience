@@ -99,6 +99,7 @@ export async function OpticalLabPage() {
             data-gpu-timing="unavailable"
             data-optical-lab-diagnostics="true"
             data-particle-count="0"
+            data-particle-renderer="unavailable"
             data-render-mode="dom-static"
             data-renderer="DOM/static"
             data-stable-bounds="pending"

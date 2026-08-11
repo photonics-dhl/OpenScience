@@ -19,10 +19,12 @@ export interface OpticalLabRendererSnapshot {
   gpuTiming: 'timer-query' | 'synchronized-fallback' | 'unavailable';
   mode: Exclude<OpticalLabRenderMode, 'dom-static'>;
   particleCount: number;
+  particleRenderer: 'webgl2-instanced' | 'angle-instanced' | 'unavailable';
   renderer: string;
 }
 
 export interface OpticalLabWebGLRenderer {
+  canvas: HTMLCanvasElement;
   dispose(): void;
   mode: Exclude<OpticalLabRenderMode, 'dom-static'>;
 }
@@ -194,41 +196,52 @@ function compileShader(gl: GL, type: number, source: string) {
 function createProgram(gl: GL, vertex: string, fragment: string) {
   const program = gl.createProgram();
   if (!program) throw new Error('Unable to allocate Optical Lab program.');
-  const vertexShader = compileShader(gl, gl.VERTEX_SHADER, vertex);
-  const fragmentShader = compileShader(gl, gl.FRAGMENT_SHADER, fragment);
-  gl.attachShader(program, vertexShader);
-  gl.attachShader(program, fragmentShader);
-  gl.linkProgram(program);
-  gl.deleteShader(vertexShader);
-  gl.deleteShader(fragmentShader);
-  if (!gl.getProgramParameter(program, gl.LINK_STATUS)) {
-    const message = gl.getProgramInfoLog(program) ?? 'Unknown program link error.';
+  let vertexShader: WebGLShader | null = null;
+  let fragmentShader: WebGLShader | null = null;
+  try {
+    vertexShader = compileShader(gl, gl.VERTEX_SHADER, vertex);
+    fragmentShader = compileShader(gl, gl.FRAGMENT_SHADER, fragment);
+    gl.attachShader(program, vertexShader);
+    gl.attachShader(program, fragmentShader);
+    gl.linkProgram(program);
+    if (!gl.getProgramParameter(program, gl.LINK_STATUS)) {
+      throw new Error(gl.getProgramInfoLog(program) ?? 'Unknown program link error.');
+    }
+    return program;
+  } catch (error) {
     gl.deleteProgram(program);
-    throw new Error(message);
+    throw error;
+  } finally {
+    if (vertexShader) gl.deleteShader(vertexShader);
+    if (fragmentShader) gl.deleteShader(fragmentShader);
   }
-  return program;
 }
 
 function createTexture(gl: GL, width: number, height: number, source: TexImageSource | null = null) {
   const texture = gl.createTexture();
   if (!texture) throw new Error('Unable to allocate Optical Lab texture.');
-  gl.bindTexture(gl.TEXTURE_2D, texture);
-  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
-  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
-  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
-  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
-  if (source) gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, source);
-  else {
-    const neutral = new Uint8Array(width * height * 4);
-    for (let index = 0; index < neutral.length; index += 4) {
-      neutral[index] = 128;
-      neutral[index + 1] = 128;
-      neutral[index + 2] = 0;
-      neutral[index + 3] = 255;
+  try {
+    gl.bindTexture(gl.TEXTURE_2D, texture);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+    if (source) gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, source);
+    else {
+      const neutral = new Uint8Array(width * height * 4);
+      for (let index = 0; index < neutral.length; index += 4) {
+        neutral[index] = 128;
+        neutral[index + 1] = 128;
+        neutral[index + 2] = 0;
+        neutral[index + 3] = 255;
+      }
+      gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, width, height, 0, gl.RGBA, gl.UNSIGNED_BYTE, neutral);
     }
-    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, width, height, 0, gl.RGBA, gl.UNSIGNED_BYTE, neutral);
+    return texture;
+  } catch (error) {
+    gl.deleteTexture(texture);
+    throw error;
   }
-  return texture;
 }
 
 function createFramebuffer(gl: GL, texture: WebGLTexture) {
@@ -304,45 +317,69 @@ function bindFullscreen(gl: GL, program: WebGLProgram, buffer: WebGLBuffer) {
   gl.vertexAttribPointer(location, 2, gl.FLOAT, false, 0, 0);
 }
 
-export function createOpticalLabWebGLRenderer(
+function initializeOpticalLabWebGLRenderer(
   canvas: HTMLCanvasElement,
   stage: HTMLElement,
   onSnapshot: (snapshot: OpticalLabRendererSnapshot) => void,
-): OpticalLabWebGLRenderer | null {
-  const options: WebGLContextAttributes = {
-    alpha: true,
-    antialias: false,
-    depth: false,
-    failIfMajorPerformanceCaveat: false,
-    powerPreference: 'low-power',
-    premultipliedAlpha: true,
-    preserveDrawingBuffer: false,
-    stencil: false,
-  };
-  const webgl2 = canvas.getContext('webgl2', options);
-  const webgl1 = webgl2 ? null : canvas.getContext('webgl', options);
-  const gl = webgl2 ?? webgl1;
-  if (!gl) return null;
-  const mode = webgl2 ? 'webgl2' : 'webgl1';
-  if (mode === 'webgl1' && !gl.getExtension('OES_texture_half_float')) return null;
-
+  gl: GL,
+  mode: Exclude<OpticalLabRenderMode, 'dom-static'>,
+): OpticalLabWebGLRenderer {
   const gl2 = mode === 'webgl2';
-  const sources = shaderSource(gl2);
-  const displayProgram = createProgram(gl, sources.vertex, sources.display);
-  const flowProgram = createProgram(gl, sources.vertex, sources.flow);
-  const particleProgram = createProgram(gl, sources.particleVertex, sources.particleFragment);
-  const fullscreenBuffer = gl.createBuffer();
-  const particleBuffer = gl.createBuffer();
-  if (!fullscreenBuffer || !particleBuffer) throw new Error('Unable to allocate Optical Lab buffers.');
-  gl.bindBuffer(gl.ARRAY_BUFFER, fullscreenBuffer);
-  gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 1, -1, -1, 1, 1, 1]), gl.STATIC_DRAW);
+  const programs: WebGLProgram[] = [];
+  const buffers: WebGLBuffer[] = [];
+  const textures: WebGLTexture[] = [];
+  const framebuffers: WebGLFramebuffer[] = [];
+  let resourcesDisposed = false;
+  const disposeResources = () => {
+    if (resourcesDisposed) return;
+    resourcesDisposed = true;
+    buffers.forEach((buffer) => gl.deleteBuffer(buffer));
+    textures.forEach((texture) => gl.deleteTexture(texture));
+    framebuffers.forEach((framebuffer) => gl.deleteFramebuffer(framebuffer));
+    programs.forEach((program) => gl.deleteProgram(program));
+  };
 
-  const flowTextures = [
-    createTexture(gl, FLOW_WIDTH, FLOW_HEIGHT),
-    createTexture(gl, FLOW_WIDTH, FLOW_HEIGHT),
-  ];
-  const flowFramebuffers = flowTextures.map((texture) => createFramebuffer(gl, texture));
-  const glyphTexture = createTexture(gl, 1, 1);
+  try {
+    const sources = shaderSource(gl2);
+    const displayProgram = createProgram(gl, sources.vertex, sources.display);
+    programs.push(displayProgram);
+    const flowProgram = createProgram(gl, sources.vertex, sources.flow);
+    programs.push(flowProgram);
+    const particleProgram = createProgram(gl, sources.particleVertex, sources.particleFragment);
+    programs.push(particleProgram);
+    const fullscreenBuffer = gl.createBuffer();
+    if (!fullscreenBuffer) throw new Error('Unable to allocate Optical Lab fullscreen buffer.');
+    buffers.push(fullscreenBuffer);
+    const particleBuffer = gl.createBuffer();
+    if (!particleBuffer) throw new Error('Unable to allocate Optical Lab particle buffer.');
+    buffers.push(particleBuffer);
+    gl.bindBuffer(gl.ARRAY_BUFFER, fullscreenBuffer);
+    gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 1, -1, -1, 1, 1, 1]), gl.STATIC_DRAW);
+
+    const flowTextures: WebGLTexture[] = [];
+    for (let index = 0; index < 2; index += 1) {
+      const texture = createTexture(gl, FLOW_WIDTH, FLOW_HEIGHT);
+      textures.push(texture);
+      flowTextures.push(texture);
+    }
+    const flowFramebuffers: WebGLFramebuffer[] = [];
+    for (const texture of flowTextures) {
+      const framebuffer = createFramebuffer(gl, texture);
+      framebuffers.push(framebuffer);
+      flowFramebuffers.push(framebuffer);
+    }
+    const glyphTexture = createTexture(gl, 1, 1);
+    textures.push(glyphTexture);
+    const angleInstancing = gl2 ? null : gl.getExtension('ANGLE_instanced_arrays');
+    const particleRenderer: OpticalLabRendererSnapshot['particleRenderer'] = gl2
+      ? 'webgl2-instanced'
+      : angleInstancing
+        ? 'angle-instanced'
+        : 'unavailable';
+    const setAttributeDivisor = (location: number, divisor: number) => {
+      if (gl2) (gl as WebGL2RenderingContext).vertexAttribDivisor(location, divisor);
+      else angleInstancing?.vertexAttribDivisorANGLE(location, divisor);
+    };
   let particleCount = 0;
   let flowIndex = 0;
   let frameIndex = 0;
@@ -369,7 +406,7 @@ export function createOpticalLabWebGLRenderer(
     gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, raster.canvas);
     gl.bindBuffer(gl.ARRAY_BUFFER, particleBuffer);
     gl.bufferData(gl.ARRAY_BUFFER, raster.particles, gl.STATIC_DRAW);
-    particleCount = raster.particles.length / 3;
+    particleCount = particleRenderer === 'unavailable' ? 0 : raster.particles.length / 3;
   };
 
   const measure = () => {
@@ -406,6 +443,7 @@ export function createOpticalLabWebGLRenderer(
 
   const drawFullscreen = (program: WebGLProgram) => {
     bindFullscreen(gl, program, fullscreenBuffer);
+    setAttributeDivisor(gl.getAttribLocation(program, 'aPosition'), 0);
     gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
   };
 
@@ -479,12 +517,16 @@ export function createOpticalLabWebGLRenderer(
     gl.bindBuffer(gl.ARRAY_BUFFER, particleBuffer);
     gl.enableVertexAttribArray(particleLocation);
     gl.vertexAttribPointer(particleLocation, 3, gl.FLOAT, false, 0, 0);
+    setAttributeDivisor(particleLocation, 1);
     setUniform1f(gl, particleProgram, 'uApertureX', OPTICAL_LAB_APERTURE_X);
     setUniform1f(gl, particleProgram, 'uEnergy', field.energy);
     setUniform1f(gl, particleProgram, 'uPhase', field.phase);
     setUniform1f(gl, particleProgram, 'uTime', now);
     setUniform1f(gl, particleProgram, 'uVerticalBias', verticalBias);
-    gl.drawArrays(gl.POINTS, 0, particleCount);
+    if (particleCount > 0) {
+      if (gl2) (gl as WebGL2RenderingContext).drawArraysInstanced(gl.POINTS, 0, 1, particleCount);
+      else angleInstancing?.drawArraysInstancedANGLE(gl.POINTS, 0, 1, particleCount);
+    }
 
     if (shouldTimeGpu && timerQuery) (gl as WebGL2RenderingContext).endQuery(timerExtension!.TIME_ELAPSED_EXT);
     if (latestGpuMs === null && frameIndex >= 20) {
@@ -511,6 +553,7 @@ export function createOpticalLabWebGLRenderer(
         gpuTiming,
         mode,
         particleCount,
+        particleRenderer,
         renderer,
       });
     }
@@ -527,6 +570,7 @@ export function createOpticalLabWebGLRenderer(
   rafId = window.requestAnimationFrame(animate);
 
   return {
+    canvas,
     mode,
     dispose() {
       if (disposed) return;
@@ -535,14 +579,7 @@ export function createOpticalLabWebGLRenderer(
       resizeObserver.disconnect();
       stage.removeEventListener('pointermove', onPointerMove);
       if (timerQuery) (gl as WebGL2RenderingContext).deleteQuery(timerQuery);
-      gl.deleteBuffer(fullscreenBuffer);
-      gl.deleteBuffer(particleBuffer);
-      gl.deleteTexture(glyphTexture);
-      flowTextures.forEach((texture) => gl.deleteTexture(texture));
-      flowFramebuffers.forEach((framebuffer) => gl.deleteFramebuffer(framebuffer));
-      gl.deleteProgram(displayProgram);
-      gl.deleteProgram(flowProgram);
-      gl.deleteProgram(particleProgram);
+      disposeResources();
       onSnapshot({
         activeRaf: false,
         bounds: 'disposed',
@@ -554,8 +591,57 @@ export function createOpticalLabWebGLRenderer(
         gpuTiming: 'unavailable',
         mode,
         particleCount,
+        particleRenderer,
         renderer,
       });
     },
   };
+  } catch (error) {
+    disposeResources();
+    throw error;
+  }
+}
+
+const CONTEXT_OPTIONS: WebGLContextAttributes = {
+  alpha: true,
+  antialias: false,
+  depth: false,
+  failIfMajorPerformanceCaveat: false,
+  powerPreference: 'low-power',
+  premultipliedAlpha: true,
+  preserveDrawingBuffer: false,
+  stencil: false,
+};
+
+export function createOpticalLabWebGLRenderer(
+  host: HTMLElement,
+  stage: HTMLElement,
+  onSnapshot: (snapshot: OpticalLabRendererSnapshot) => void,
+): OpticalLabWebGLRenderer | null {
+  const attempts: Array<{
+    context: 'webgl2' | 'webgl';
+    mode: Exclude<OpticalLabRenderMode, 'dom-static'>;
+  }> = [
+    { context: 'webgl2', mode: 'webgl2' },
+    { context: 'webgl', mode: 'webgl1' },
+  ];
+
+  for (const attempt of attempts) {
+    const canvas = document.createElement('canvas');
+    canvas.setAttribute('aria-hidden', 'true');
+    canvas.dataset.opticalLabCanvas = 'true';
+    canvas.style.inset = '0';
+    canvas.style.position = 'absolute';
+    const gl = canvas.getContext(attempt.context, CONTEXT_OPTIONS) as GL | null;
+    if (!gl) continue;
+    if (attempt.mode === 'webgl1' && !gl.getExtension('OES_texture_half_float')) continue;
+    try {
+      const renderer = initializeOpticalLabWebGLRenderer(canvas, stage, onSnapshot, gl, attempt.mode);
+      host.replaceChildren(canvas);
+      return renderer;
+    } catch {
+      // Each attempt owns a fresh canvas and rolls back its complete resource ledger.
+    }
+  }
+  return null;
 }
