@@ -48,6 +48,7 @@ describe('isolated Optical Lab route contract', () => {
     const markup = await renderLab();
     expect(markup).toContain('data-optical-lab-diagnostics="true"');
     expect(markup).toContain('data-render-mode="dom-static"');
+    expect(markup).toContain('data-optical-ink="dom"');
     expect(markup).toContain('data-context-status="idle"');
     expect(markup).toContain('data-stable-bounds="pending"');
     expect(markup).not.toContain('optical-cursor-ring');

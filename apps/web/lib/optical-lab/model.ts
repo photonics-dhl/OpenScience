@@ -68,8 +68,8 @@ export function sampleOpticalLabField(
   const maxX = OPTICAL_LAB_MAX_REFRACTION_PX / viewport.width;
   const maxY = OPTICAL_LAB_MAX_REFRACTION_PX / viewport.height;
   const refractionUv = pointer ? {
-    x: clamp(((pointerX - aperture.x) / viewport.width) * 0.012 * interactionStrength, -maxX, maxX),
-    y: clamp(((pointerY - aperture.y) / viewport.height) * 0.012 * interactionStrength, -maxY, maxY),
+    x: clamp(((pointerX - aperture.x) / viewport.width) * 0.018 * interactionStrength, -maxX, maxX),
+    y: clamp(((pointerY - aperture.y) / viewport.height) * 0.018 * interactionStrength, -maxY, maxY),
   } : { x: 0, y: 0 };
 
   return {

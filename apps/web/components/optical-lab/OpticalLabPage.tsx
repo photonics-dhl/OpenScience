@@ -73,6 +73,7 @@ export async function OpticalLabPage() {
           <div
             className={styles.candidate}
             data-context-status="idle"
+            data-optical-ink="dom"
             data-optical-lab-candidate="true"
             data-optical-lab-candidate-stage="true"
             data-render-mode="dom-static"

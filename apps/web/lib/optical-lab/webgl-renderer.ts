@@ -53,13 +53,12 @@ function shaderSource(gl2: boolean) {
       uniform float uApertureX;
       uniform float uDissipation;
       uniform float uEnergy;
-      uniform vec2 uPointer;
       uniform vec2 uVelocity;
       in vec2 vUv;
       out vec4 outputColor;
       void main() {
         vec2 flow = mix(vec2(.5), texture(uPrevious, vUv).rg, uDissipation);
-        vec2 delta = vUv - vec2(uApertureX, uPointer.y);
+        vec2 delta = vUv - vec2(uApertureX, .5);
         float stamp = exp(-(delta.x * delta.x * 260. + delta.y * delta.y * 34.));
         flow += clamp(uVelocity, vec2(-1.), vec2(1.)) * stamp * uEnergy * .055;
         outputColor = vec4(clamp(flow, 0., 1.), uEnergy, 1.);
@@ -69,12 +68,11 @@ function shaderSource(gl2: boolean) {
       uniform float uApertureX;
       uniform float uDissipation;
       uniform float uEnergy;
-      uniform vec2 uPointer;
       uniform vec2 uVelocity;
       varying vec2 vUv;
       void main() {
         vec2 flow = mix(vec2(.5), texture2D(uPrevious, vUv).rg, uDissipation);
-        vec2 delta = vUv - vec2(uApertureX, uPointer.y);
+        vec2 delta = vUv - vec2(uApertureX, .5);
         float stamp = exp(-(delta.x * delta.x * 260. + delta.y * delta.y * 34.));
         flow += clamp(uVelocity, vec2(-1.), vec2(1.)) * stamp * uEnergy * .055;
         gl_FragColor = vec4(clamp(flow, 0., 1.), uEnergy, 1.);
@@ -84,30 +82,40 @@ function shaderSource(gl2: boolean) {
       uniform sampler2D uGlyph;
       uniform sampler2D uFlow;
       uniform float uApertureX;
-      uniform float uEnergy;
+      uniform float uOpticalStrength;
+      uniform float uInteractionStrength;
       uniform float uPhase;
-      uniform float uTime;
-      uniform float uVerticalBias;
+      uniform vec2 uRefraction;
       VARYING vec2 vUv;
       OUTPUT_DECL
       void main() {
         float signedDistance = vUv.x - uApertureX;
-        float seam = exp(-abs(signedDistance) * 16.);
-        float downstream = smoothstep(-.015, .16, signedDistance);
+        float seam = exp(-abs(signedDistance) * 24.0);
+        float downstream = smoothstep(-0.01, 0.15, signedDistance);
+        float positiveDistance = max(signedDistance, 0.0);
+        float beamWidth = 0.018 + positiveDistance * 0.22;
+        float axial = exp(-pow(abs(vUv.y - 0.5) / beamWidth, 1.55));
+        float squeeze = -signedDistance * exp(-abs(signedDistance) * 10.5) * 0.46;
+        float restingWave = sin(vUv.y * 58.0 + positiveDistance * 31.0) * 0.0028 * downstream;
+        float velocityWave = sin(vUv.y * 41.0 + positiveDistance * 23.0) * 0.0012 * uPhase * downstream;
+        float followEnvelope = 0.42 + seam * 0.58;
         vec2 flow = TEXTURE(uFlow, vUv).rg * 2. - 1.;
-        float squeeze = -signedDistance * exp(-abs(signedDistance) * 9.5) * .38;
-        float wave = sin(vUv.y * 51. + uTime * .00042 + uPhase * 2.4) * .0045 * downstream;
-        vec2 displaced = vUv + vec2(squeeze + wave + flow.x * seam * .018 * uEnergy,
-          uVerticalBias * seam + flow.y * seam * .014 * uEnergy);
-        float chroma = downstream * seam * (.0012 + uEnergy * .0018);
+        vec2 displaced = vUv + vec2(squeeze + restingWave + velocityWave, 0.0)
+          + uRefraction * followEnvelope
+          + flow * seam * 0.009 * uInteractionStrength;
+        float chroma = downstream * seam * 0.0011 * uInteractionStrength;
         float red = TEXTURE(uGlyph, displaced + vec2(chroma, 0.)).a;
-        float green = TEXTURE(uGlyph, displaced).a;
+        float glyphAlpha = TEXTURE(uGlyph, displaced).a;
         float blue = TEXTURE(uGlyph, displaced - vec2(chroma, 0.)).a;
-        vec3 glyph = vec3(red, green, blue);
-        float directional = signedDistance - ((vUv.y - .5) * .042 + .008);
-        float caustic = exp(-directional * directional * 5400.) * exp(-abs(vUv.y - .5) * 2.8) * .12;
-        vec3 color = glyph * vec3(.96, .945, .91) + vec3(.92, .31, .13) * caustic * uEnergy;
-        float alpha = max(max(red, green), blue) * .92 + caustic * uEnergy;
+        float waist = seam * exp(-abs(vUv.y - 0.5) * 17.0);
+        float rayTexture = 0.55 + 0.45 * cos((vUv.y - 0.5) * 150.0 - positiveDistance * 38.0);
+        float emission = downstream * axial * rayTexture * 0.18 * uOpticalStrength;
+        float caustic = waist * 0.34 * uOpticalStrength;
+        float accent = caustic * (0.34 + 0.18 * uInteractionStrength);
+        vec3 color = vec3(0.96, 0.945, 0.91) * (glyphAlpha + emission + caustic)
+          + vec3(0.92, 0.31, 0.13) * accent
+          + vec3(red - glyphAlpha, 0.0, blue - glyphAlpha) * 0.12;
+        float alpha = max(glyphAlpha * 0.96, emission + caustic);
         OUTPUT_COLOR(vec4(color, clamp(alpha, 0., .98)));
       }`;
   const display = gl2
@@ -126,41 +134,65 @@ function shaderSource(gl2: boolean) {
     ? `#version 300 es
       precision highp float;
       in vec3 aParticle;
+      in float aCurtain;
+      in float aVertexAnchor;
       uniform float uApertureX;
-      uniform float uEnergy;
+      uniform float uOpticalStrength;
+      uniform float uInteractionStrength;
       uniform float uPhase;
-      uniform float uTime;
-      uniform float uVerticalBias;
+      uniform vec2 uRefraction;
       out float vParticleAlpha;
       void main() {
         float signedDistance = aParticle.x - uApertureX;
-        float seam = exp(-abs(signedDistance) * 16.);
-        float downstream = smoothstep(-.015, .16, signedDistance);
-        float squeeze = -signedDistance * exp(-abs(signedDistance) * 9.5) * .38;
-        float wave = sin(aParticle.y * 51. + uTime * .00042 + uPhase * 2.4 + aParticle.z * 6.28) * .0045 * downstream;
-        vec2 position = vec2(aParticle.x + squeeze + wave, aParticle.y + uVerticalBias * seam);
+        float seam = exp(-abs(signedDistance) * 24.0);
+        float downstream = smoothstep(-0.01, 0.15, signedDistance);
+        float positiveDistance = max(signedDistance, 0.0);
+        float squeeze = -signedDistance * exp(-abs(signedDistance) * 10.5) * 0.46;
+        float restingWave = sin(aParticle.y * 58.0 + positiveDistance * 31.0 + aParticle.z * 6.28) * 0.0028 * downstream;
+        float velocityWave = sin(aParticle.y * 41.0 + positiveDistance * 23.0) * 0.0012 * uPhase * downstream;
+        float followEnvelope = 0.42 + seam * 0.58;
+        vec2 position = aParticle.xy + vec2(squeeze + restingWave + velocityWave, 0.0)
+          + uRefraction * followEnvelope;
+        position.x += aVertexAnchor * 0.0000001;
         gl_Position = vec4(position * 2. - 1., 0., 1.);
-        gl_PointSize = 1.6 + seam * (1.6 + uEnergy * 1.1);
-        vParticleAlpha = seam * (.24 + uEnergy * .42) * (aParticle.z * .3 + .7);
+        float curtainEnvelope = exp(-abs(signedDistance) * 6.0);
+        float glyphSize = 1.4 + seam * (1.1 + uOpticalStrength * 0.8);
+        float curtainSize = 1.5 + curtainEnvelope * (0.9 + uOpticalStrength * 0.65);
+        float glyphAlpha = seam * (0.08 + uOpticalStrength * 0.16 + uInteractionStrength * 0.12);
+        float curtainAlpha = curtainEnvelope * (0.18 + uOpticalStrength * 0.20);
+        gl_PointSize = mix(glyphSize, curtainSize, aCurtain);
+        vParticleAlpha = mix(glyphAlpha, curtainAlpha, aCurtain) * (aParticle.z * 0.3 + 0.7);
       }`
     : `precision highp float;
       attribute vec3 aParticle;
+      attribute float aCurtain;
+      attribute float aVertexAnchor;
       uniform float uApertureX;
-      uniform float uEnergy;
+      uniform float uOpticalStrength;
+      uniform float uInteractionStrength;
       uniform float uPhase;
-      uniform float uTime;
-      uniform float uVerticalBias;
+      uniform vec2 uRefraction;
       varying float vParticleAlpha;
       void main() {
         float signedDistance = aParticle.x - uApertureX;
-        float seam = exp(-abs(signedDistance) * 16.);
-        float downstream = smoothstep(-.015, .16, signedDistance);
-        float squeeze = -signedDistance * exp(-abs(signedDistance) * 9.5) * .38;
-        float wave = sin(aParticle.y * 51. + uTime * .00042 + uPhase * 2.4 + aParticle.z * 6.28) * .0045 * downstream;
-        vec2 position = vec2(aParticle.x + squeeze + wave, aParticle.y + uVerticalBias * seam);
+        float seam = exp(-abs(signedDistance) * 24.0);
+        float downstream = smoothstep(-0.01, 0.15, signedDistance);
+        float positiveDistance = max(signedDistance, 0.0);
+        float squeeze = -signedDistance * exp(-abs(signedDistance) * 10.5) * 0.46;
+        float restingWave = sin(aParticle.y * 58.0 + positiveDistance * 31.0 + aParticle.z * 6.28) * 0.0028 * downstream;
+        float velocityWave = sin(aParticle.y * 41.0 + positiveDistance * 23.0) * 0.0012 * uPhase * downstream;
+        float followEnvelope = 0.42 + seam * 0.58;
+        vec2 position = aParticle.xy + vec2(squeeze + restingWave + velocityWave, 0.0)
+          + uRefraction * followEnvelope;
+        position.x += aVertexAnchor * 0.0000001;
         gl_Position = vec4(position * 2. - 1., 0., 1.);
-        gl_PointSize = 1.6 + seam * (1.6 + uEnergy * 1.1);
-        vParticleAlpha = seam * (.24 + uEnergy * .42) * (aParticle.z * .3 + .7);
+        float curtainEnvelope = exp(-abs(signedDistance) * 6.0);
+        float glyphSize = 1.4 + seam * (1.1 + uOpticalStrength * 0.8);
+        float curtainSize = 1.5 + curtainEnvelope * (0.9 + uOpticalStrength * 0.65);
+        float glyphAlpha = seam * (0.08 + uOpticalStrength * 0.16 + uInteractionStrength * 0.12);
+        float curtainAlpha = curtainEnvelope * (0.18 + uOpticalStrength * 0.20);
+        gl_PointSize = mix(glyphSize, curtainSize, aCurtain);
+        vParticleAlpha = mix(glyphAlpha, curtainAlpha, aCurtain) * (aParticle.z * 0.3 + 0.7);
       }`;
   const particleFragment = gl2
     ? `#version 300 es
@@ -283,7 +315,15 @@ function rasterizeHeadline(stage: HTMLElement, width: number, height: number, dp
   }
 
   const image = context.getImageData(0, 0, canvas.width, canvas.height);
-  const positions: number[] = [];
+  const glyphParticles: number[] = [];
+  const curtainParticles: number[] = [];
+  const referenceArea = 419 * 236;
+  const areaScale = Math.max(1, (width * height) / referenceArea);
+  const maxGlyphParticles = 1_080;
+  const maxCurtainParticles = Math.min(3_840 - maxGlyphParticles, Math.ceil(960 * areaScale));
+  const curtainCopies = Math.max(3, Math.ceil(3 * Math.sqrt(areaScale)));
+  const maxGlyphValues = maxGlyphParticles * 4;
+  const maxCurtainValues = maxCurtainParticles * 4;
   const spacing = Math.max(3, Math.round(5 * dpr));
   const alphaAt = (x: number, y: number) => image.data[(y * canvas.width + x) * 4 + 3] ?? 0;
   for (let y = spacing; y < canvas.height - spacing; y += spacing) {
@@ -298,12 +338,22 @@ function rasterizeHeadline(stage: HTMLElement, width: number, height: number, dp
       if (!edge) continue;
       const seed = ((x * 17 + y * 31) % 997) / 997;
       if (seed < .28) continue;
-      positions.push(x / canvas.width, 1 - y / canvas.height, seed);
-      if (positions.length >= 4_800) break;
+      if (glyphParticles.length < maxGlyphValues) {
+        glyphParticles.push(x / canvas.width, 1 - y / canvas.height, seed, 0);
+      }
+      for (let copy = 0; copy < curtainCopies && curtainParticles.length < maxCurtainValues; copy += 1) {
+        const curtainXSeed = ((x * 47 + y * 13 + copy * 271) % 991) / 991;
+        const curtainYSeed = ((x * 29 + y * 43 + copy * 389) % 983) / 983;
+        const side = (x + y + copy) % 2 === 0 ? -1 : 1;
+        const curtainX = OPTICAL_LAB_APERTURE_X + (curtainXSeed - .5) * .22;
+        const curtainY = Math.max(.04, Math.min(.96, .5 + side * (.18 + curtainYSeed * .32)));
+        curtainParticles.push(curtainX, curtainY, seed, 1);
+      }
+      if (glyphParticles.length >= maxGlyphValues && curtainParticles.length >= maxCurtainValues) break;
     }
-    if (positions.length >= 4_800) break;
+    if (glyphParticles.length >= maxGlyphValues && curtainParticles.length >= maxCurtainValues) break;
   }
-  return { canvas, particles: new Float32Array(positions) };
+  return { canvas, particles: new Float32Array([...glyphParticles, ...curtainParticles]) };
 }
 
 function setUniform1f(gl: GL, program: WebGLProgram, name: string, value: number) {
@@ -353,8 +403,13 @@ function initializeOpticalLabWebGLRenderer(
     const particleBuffer = gl.createBuffer();
     if (!particleBuffer) throw new Error('Unable to allocate Optical Lab particle buffer.');
     buffers.push(particleBuffer);
+    const particleVertexBuffer = gl.createBuffer();
+    if (!particleVertexBuffer) throw new Error('Unable to allocate Optical Lab particle vertex buffer.');
+    buffers.push(particleVertexBuffer);
     gl.bindBuffer(gl.ARRAY_BUFFER, fullscreenBuffer);
     gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 1, -1, -1, 1, 1, 1]), gl.STATIC_DRAW);
+    gl.bindBuffer(gl.ARRAY_BUFFER, particleVertexBuffer);
+    gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([1]), gl.STATIC_DRAW);
 
     const flowTextures: WebGLTexture[] = [];
     for (let index = 0; index < 2; index += 1) {
@@ -406,7 +461,7 @@ function initializeOpticalLabWebGLRenderer(
     gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, raster.canvas);
     gl.bindBuffer(gl.ARRAY_BUFFER, particleBuffer);
     gl.bufferData(gl.ARRAY_BUFFER, raster.particles, gl.STATIC_DRAW);
-    particleCount = particleRenderer === 'unavailable' ? 0 : raster.particles.length / 3;
+    particleCount = particleRenderer === 'unavailable' ? 0 : raster.particles.length / 4;
   };
 
   const measure = () => {
@@ -473,8 +528,6 @@ function initializeOpticalLabWebGLRenderer(
       if (timerQuery) glContext.beginQuery(timerExtension!.TIME_ELAPSED_EXT, timerQuery);
     }
     const field = sampleOpticalLabField(pointer, { height, width }, now);
-    const pointerUv = { x: field.pointer.x / width, y: 1 - field.pointer.y / height };
-    const verticalBias = field.verticalBias / height;
 
     gl.disable(gl.BLEND);
     gl.bindFramebuffer(gl.FRAMEBUFFER, flowFramebuffers[1 - flowIndex]!);
@@ -486,7 +539,6 @@ function initializeOpticalLabWebGLRenderer(
     setUniform1f(gl, flowProgram, 'uApertureX', OPTICAL_LAB_APERTURE_X);
     setUniform1f(gl, flowProgram, 'uDissipation', .955);
     setUniform1f(gl, flowProgram, 'uEnergy', field.energy);
-    gl.uniform2f(gl.getUniformLocation(flowProgram, 'uPointer'), pointerUv.x, pointerUv.y);
     gl.uniform2f(gl.getUniformLocation(flowProgram, 'uVelocity'), field.pointer.velocityX, -field.pointer.velocityY);
     drawFullscreen(flowProgram);
     flowIndex = 1 - flowIndex;
@@ -505,28 +557,59 @@ function initializeOpticalLabWebGLRenderer(
     gl.bindTexture(gl.TEXTURE_2D, flowTextures[flowIndex]!);
     gl.uniform1i(gl.getUniformLocation(displayProgram, 'uFlow'), 1);
     setUniform1f(gl, displayProgram, 'uApertureX', OPTICAL_LAB_APERTURE_X);
-    setUniform1f(gl, displayProgram, 'uEnergy', field.energy);
+    setUniform1f(gl, displayProgram, 'uOpticalStrength', field.opticalStrength);
+    setUniform1f(gl, displayProgram, 'uInteractionStrength', field.interactionStrength);
     setUniform1f(gl, displayProgram, 'uPhase', field.phase);
-    setUniform1f(gl, displayProgram, 'uTime', now);
-    setUniform1f(gl, displayProgram, 'uVerticalBias', verticalBias);
+    gl.uniform2f(
+      gl.getUniformLocation(displayProgram, 'uRefraction'),
+      field.refractionUv.x,
+      field.refractionUv.y,
+    );
     drawFullscreen(displayProgram);
 
     gl.blendFunc(gl.SRC_ALPHA, gl.ONE);
     gl.useProgram(particleProgram);
     const particleLocation = gl.getAttribLocation(particleProgram, 'aParticle');
+    const curtainLocation = gl.getAttribLocation(particleProgram, 'aCurtain');
+    const particleVertexLocation = gl.getAttribLocation(particleProgram, 'aVertexAnchor');
+    const particleStride = 4 * Float32Array.BYTES_PER_ELEMENT;
+    gl.bindBuffer(gl.ARRAY_BUFFER, particleVertexBuffer);
+    gl.enableVertexAttribArray(particleVertexLocation);
+    gl.vertexAttribPointer(particleVertexLocation, 1, gl.FLOAT, false, 0, 0);
+    setAttributeDivisor(particleVertexLocation, 0);
     gl.bindBuffer(gl.ARRAY_BUFFER, particleBuffer);
     gl.enableVertexAttribArray(particleLocation);
-    gl.vertexAttribPointer(particleLocation, 3, gl.FLOAT, false, 0, 0);
+    gl.vertexAttribPointer(particleLocation, 3, gl.FLOAT, false, particleStride, 0);
+    gl.enableVertexAttribArray(curtainLocation);
+    gl.vertexAttribPointer(
+      curtainLocation,
+      1,
+      gl.FLOAT,
+      false,
+      particleStride,
+      3 * Float32Array.BYTES_PER_ELEMENT,
+    );
     setAttributeDivisor(particleLocation, 1);
+    setAttributeDivisor(curtainLocation, 1);
     setUniform1f(gl, particleProgram, 'uApertureX', OPTICAL_LAB_APERTURE_X);
-    setUniform1f(gl, particleProgram, 'uEnergy', field.energy);
+    setUniform1f(gl, particleProgram, 'uOpticalStrength', field.opticalStrength);
+    setUniform1f(gl, particleProgram, 'uInteractionStrength', field.interactionStrength);
     setUniform1f(gl, particleProgram, 'uPhase', field.phase);
-    setUniform1f(gl, particleProgram, 'uTime', now);
-    setUniform1f(gl, particleProgram, 'uVerticalBias', verticalBias);
+    gl.uniform2f(
+      gl.getUniformLocation(particleProgram, 'uRefraction'),
+      field.refractionUv.x,
+      field.refractionUv.y,
+    );
     if (particleCount > 0) {
       if (gl2) (gl as WebGL2RenderingContext).drawArraysInstanced(gl.POINTS, 0, 1, particleCount);
       else angleInstancing?.drawArraysInstancedANGLE(gl.POINTS, 0, 1, particleCount);
     }
+    setAttributeDivisor(particleLocation, 0);
+    setAttributeDivisor(curtainLocation, 0);
+    setAttributeDivisor(particleVertexLocation, 0);
+    gl.disableVertexAttribArray(particleLocation);
+    gl.disableVertexAttribArray(curtainLocation);
+    gl.disableVertexAttribArray(particleVertexLocation);
 
     if (shouldTimeGpu && timerQuery) (gl as WebGL2RenderingContext).endQuery(timerExtension!.TIME_ELAPSED_EXT);
     if (latestGpuMs === null && frameIndex >= 20) {

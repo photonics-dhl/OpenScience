@@ -5,6 +5,7 @@ import { mkdir, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { chromium } from 'playwright';
+import { analyzeOpticalTopology } from './optical-lab-visual-metrics.mjs';
 
 const scriptDir = path.dirname(fileURLToPath(import.meta.url));
 const outDir = path.resolve(scriptDir, 'out', 'optical-lab');
@@ -184,8 +185,22 @@ for (const testCase of cases) {
       window.__OPTICAL_LAB_GL_TRACKER__ = {
         contexts: [],
         instancedDraws: 0,
+        instancedDrawErrors: [],
+        preInstancedDrawErrors: [],
         pointDrawArrays: 0,
       };
+      window.__OPTICAL_LAB_TEST_FIXED_RAF_TIME__ = null;
+      window.__OPTICAL_LAB_TEST_RAF_CALLBACKS__ = 0;
+      window.__OPTICAL_LAB_TEST_LAST_POINTER_AT__ = null;
+      const requestAnimationFrame = window.requestAnimationFrame.bind(window);
+      window.requestAnimationFrame = (callback) => requestAnimationFrame((timestamp) => {
+        window.__OPTICAL_LAB_TEST_RAF_CALLBACKS__ += 1;
+        const fixedTimestamp = window.__OPTICAL_LAB_TEST_FIXED_RAF_TIME__;
+        callback(Number.isFinite(fixedTimestamp) ? fixedTimestamp : timestamp);
+      });
+      window.addEventListener('pointermove', () => {
+        window.__OPTICAL_LAB_TEST_LAST_POINTER_AT__ = performance.now();
+      }, { capture: true, passive: true });
       const original = HTMLCanvasElement.prototype.getContext;
       const canvasIds = new WeakMap();
       let nextCanvasId = 1;
@@ -219,11 +234,24 @@ for (const testCase of cases) {
           if (args[0] === context.POINTS) window.__OPTICAL_LAB_GL_TRACKER__.pointDrawArrays += 1;
           return drawArrays(...args);
         };
+        const recordInstancedPointDraw = (draw, args) => {
+          let staleError = context.getError();
+          while (staleError !== context.NO_ERROR && staleError !== context.CONTEXT_LOST_WEBGL) {
+            window.__OPTICAL_LAB_GL_TRACKER__.preInstancedDrawErrors.push(staleError);
+            staleError = context.getError();
+          }
+          const result = draw(...args);
+          const drawError = context.getError();
+          window.__OPTICAL_LAB_GL_TRACKER__.instancedDraws += 1;
+          window.__OPTICAL_LAB_GL_TRACKER__.instancedDrawErrors.push(drawError);
+          return result;
+        };
         if (typeof context.drawArraysInstanced === 'function') {
           const drawArraysInstanced = context.drawArraysInstanced.bind(context);
           context.drawArraysInstanced = (...args) => {
-            if (args[0] === context.POINTS) window.__OPTICAL_LAB_GL_TRACKER__.instancedDraws += 1;
-            return drawArraysInstanced(...args);
+            return args[0] === context.POINTS
+              ? recordInstancedPointDraw(drawArraysInstanced, args)
+              : drawArraysInstanced(...args);
           };
         }
         const getExtension = context.getExtension.bind(context);
@@ -234,8 +262,9 @@ for (const testCase of cases) {
             extension.__opticalLabInstrumented = true;
             const drawArraysInstanced = extension.drawArraysInstancedANGLE.bind(extension);
             extension.drawArraysInstancedANGLE = (...args) => {
-              if (args[0] === context.POINTS) window.__OPTICAL_LAB_GL_TRACKER__.instancedDraws += 1;
-              return drawArraysInstanced(...args);
+              return args[0] === context.POINTS
+                ? recordInstancedPointDraw(drawArraysInstanced, args)
+                : drawArraysInstanced(...args);
             };
           }
           return extension;
@@ -282,6 +311,8 @@ for (const testCase of cases) {
   await diagnostics.waitFor({ state: 'visible' });
   const mode = await diagnostics.getAttribute('data-render-mode');
   const contextStatus = await diagnostics.getAttribute('data-context-status');
+  let restingTopology = null;
+  let targetTopology = null;
   if (
     testCase.reducedMotion === 'reduce'
     || testCase.width <= 480
@@ -305,6 +336,17 @@ for (const testCase of cases) {
       const node = document.querySelector('[data-optical-lab-diagnostics="true"]');
       return Number(node?.getAttribute('data-frame-count') ?? 0) >= 12;
     }, undefined, { timeout: 5_000 });
+    const initialDrawEvidence = await page.evaluate(() => window.__OPTICAL_LAB_GL_TRACKER__);
+    assert(initialDrawEvidence.instancedDrawErrors.length > 0, `${testCase.name} must record an instanced particle draw`);
+    assert(
+      initialDrawEvidence.instancedDrawErrors.every((error) => error === 0),
+      `${testCase.name} instanced particle draw returned GL errors: ${JSON.stringify(initialDrawEvidence.instancedDrawErrors)}`,
+    );
+    assert.deepEqual(
+      initialDrawEvidence.preInstancedDrawErrors,
+      [],
+      `${testCase.name} fullscreen draws returned GL errors before the particle pass`,
+    );
 
     const stage = page.locator('[data-optical-lab-candidate-stage="true"]');
     await stage.scrollIntoViewIfNeeded();
@@ -327,20 +369,85 @@ for (const testCase of cases) {
     );
     const initialBounds = await stage.boundingBox();
     assert(initialBounds, 'candidate stage must have measurable bounds');
+    const targetImage = page.locator('[data-optical-lab-panel="target"] img');
+    const targetFrame = await decodeScreenshot(
+      page,
+      await targetImage.screenshot({ path: path.join(outDir, `${testCase.name}-target-resting.png`) }),
+    );
+    const restingFrame = await decodeScreenshot(
+      page,
+      await stage.screenshot({ path: path.join(outDir, `${testCase.name}-resting.png`) }),
+    );
+    targetTopology = analyzeOpticalTopology(targetFrame, .58);
+    restingTopology = analyzeOpticalTopology(restingFrame, .58);
+    assert(
+      restingTopology.waistConcentration >= Math.max(1.18, targetTopology.waistConcentration * .52),
+      `${testCase.name} resting waist is too weak: candidate=${JSON.stringify(restingTopology)} target=${JSON.stringify(targetTopology)}`,
+    );
+    assert(
+      restingTopology.downstreamSpread >= Math.max(.006, targetTopology.downstreamSpread * .38),
+      `${testCase.name} resting downstream spread is too weak: candidate=${JSON.stringify(restingTopology)} target=${JSON.stringify(targetTopology)}`,
+    );
+    assert(restingTopology.continuity >= .68, `${testCase.name} resting glyph is discontinuous: ${JSON.stringify(restingTopology)}`);
+    assert(
+      restingTopology.directionality >= Math.max(1.04, targetTopology.directionality * .42),
+      `${testCase.name} resting directionality is too weak: candidate=${JSON.stringify(restingTopology)} target=${JSON.stringify(targetTopology)}`,
+    );
+    assert(
+      restingTopology.verticalCurtainCoverage >= Math.max(.24, targetTopology.verticalCurtainCoverage * .32),
+      `${testCase.name} resting particle curtain is too short: candidate=${JSON.stringify(restingTopology)} target=${JSON.stringify(targetTopology)}`,
+    );
+    assert(
+      restingTopology.verticalCurtainSpread >= Math.max(.18, targetTopology.verticalCurtainSpread * .48),
+      `${testCase.name} resting particle curtain is too narrow: candidate=${JSON.stringify(restingTopology)} target=${JSON.stringify(targetTopology)}`,
+    );
     const y = initialBounds.y + initialBounds.height * 0.52;
     const pointerFrames = new Map();
     for (const [position, factor] of [['left', 0.22], ['slit', 0.58], ['right', 0.82]]) {
+      await page.evaluate(() => {
+        window.__OPTICAL_LAB_TEST_FIXED_RAF_TIME__ = null;
+      });
       await page.mouse.move(initialBounds.x + 8, initialBounds.y + 8);
       await page.waitForTimeout(700);
+      await page.evaluate(() => {
+        window.__OPTICAL_LAB_TEST_LAST_POINTER_AT__ = null;
+      });
       await page.mouse.move(initialBounds.x + initialBounds.width * factor, y);
-      await page.waitForTimeout(150);
-      const current = await diagnostics.evaluate((node) => ({
-        apertureX: Number(node.getAttribute('data-aperture-x')),
-        mode: node.getAttribute('data-render-mode'),
-      }));
-      assert(Math.abs(current.apertureX - 0.58) < 0.0001, `${position} frame must retain the fixed slit`);
-      assert.equal(current.mode, mode, `${position} frame must not change renderer mode`);
-      const screenshot = await stage.screenshot({ path: path.join(outDir, `${testCase.name}-${position}-150ms.png`) });
+      await page.waitForFunction(() => Number.isFinite(window.__OPTICAL_LAB_TEST_LAST_POINTER_AT__));
+      const controlledSample = await page.evaluate(() => {
+        const lastPointerAt = window.__OPTICAL_LAB_TEST_LAST_POINTER_AT__;
+        if (!Number.isFinite(lastPointerAt)) throw new Error('Optical Lab pointer timestamp was not recorded.');
+        const fixedTimestamp = lastPointerAt + 150;
+        window.__OPTICAL_LAB_TEST_FIXED_RAF_TIME__ = fixedTimestamp;
+        return {
+          callbackCount: window.__OPTICAL_LAB_TEST_RAF_CALLBACKS__,
+          fixedTimestamp,
+          lastPointerAt,
+        };
+      });
+      let screenshot;
+      try {
+        assert.equal(
+          controlledSample.fixedTimestamp - controlledSample.lastPointerAt,
+          150,
+          `${testCase.name}/${position} must sample exactly 150ms after the real pointer event`,
+        );
+        await page.waitForFunction(
+          (callbackCount) => window.__OPTICAL_LAB_TEST_RAF_CALLBACKS__ >= callbackCount + 2,
+          controlledSample.callbackCount,
+        );
+        const current = await diagnostics.evaluate((node) => ({
+          apertureX: Number(node.getAttribute('data-aperture-x')),
+          mode: node.getAttribute('data-render-mode'),
+        }));
+        assert(Math.abs(current.apertureX - 0.58) < 0.0001, `${position} frame must retain the fixed slit`);
+        assert.equal(current.mode, mode, `${position} frame must not change renderer mode`);
+        screenshot = await stage.screenshot({ path: path.join(outDir, `${testCase.name}-${position}-150ms.png`) });
+      } finally {
+        await page.evaluate(() => {
+          window.__OPTICAL_LAB_TEST_FIXED_RAF_TIME__ = null;
+        });
+      }
       const decoded = await decodeScreenshot(page, screenshot);
       assert(Math.abs(decoded.width - initialBounds.width) <= 2, `${testCase.name} screenshot must be candidate-only width`);
       assert(Math.abs(decoded.height - initialBounds.height) <= 2, `${testCase.name} screenshot must be candidate-only height`);
@@ -364,6 +471,27 @@ for (const testCase of cases) {
       assert(
         difference.meanChannelDifference >= .35 && difference.changedRatio >= .008,
         `${testCase.name} ${first}/${second} frames are visually indistinguishable: ${JSON.stringify(difference)}`,
+      );
+    }
+    const activeDifferences = [
+      compareScreenshots(pointerFrames.get('left'), pointerFrames.get('slit')),
+      compareScreenshots(pointerFrames.get('left'), pointerFrames.get('right')),
+      compareScreenshots(pointerFrames.get('slit'), pointerFrames.get('right')),
+    ];
+    const maximumActiveDifference = {
+      changedRatio: Math.max(...activeDifferences.map((difference) => difference.changedRatio)),
+      meanChannelDifference: Math.max(...activeDifferences.map((difference) => difference.meanChannelDifference)),
+    };
+    for (const [position, activeFrame] of pointerFrames) {
+      const difference = compareScreenshots(restingFrame, activeFrame);
+      assert(
+        difference.meanChannelDifference > 0 && difference.changedRatio > 0,
+        `${testCase.name} resting/${position} frames are visually indistinguishable: ${JSON.stringify(difference)}`,
+      );
+      assert(
+        difference.meanChannelDifference < maximumActiveDifference.meanChannelDifference
+          && difference.changedRatio < maximumActiveDifference.changedRatio,
+        `${testCase.name} resting/${position} change exceeds the active-frame maximum: resting=${JSON.stringify(difference)} activeMax=${JSON.stringify(maximumActiveDifference)}`,
       );
     }
 
@@ -414,6 +542,10 @@ for (const testCase of cases) {
 
     const drawEvidence = await page.evaluate(() => window.__OPTICAL_LAB_GL_TRACKER__);
     assert(drawEvidence.instancedDraws > 0, `${testCase.name} must issue real instanced particle draws`);
+    assert(
+      drawEvidence.instancedDrawErrors.every((error) => error === 0),
+      `${testCase.name} instanced particle draw returned GL errors: ${JSON.stringify(drawEvidence.instancedDrawErrors)}`,
+    );
     assert.equal(drawEvidence.pointDrawArrays, 0, `${testCase.name} must not use non-instanced POINTS draws`);
     if (testCase.forceContext === 'webgl2-init-failure') {
       const failedWebgl2 = drawEvidence.contexts.find((context) => context.type === 'webgl2');
@@ -444,7 +576,7 @@ for (const testCase of cases) {
   }));
   assert.equal(snapshot.apertureX, 0.58, 'all modes must declare the same fixed aperture');
   assert.notEqual(snapshot.bounds, 'pending', 'all modes must expose stable measured bounds');
-  measurements.push({ case: testCase.name, ...snapshot });
+  measurements.push({ case: testCase.name, restingTopology, targetTopology, ...snapshot });
   await page.screenshot({ fullPage: true, path: path.join(outDir, `${testCase.name}.png`) });
   assert.deepEqual(errors, [], `${testCase.name} emitted browser errors: ${errors.join(' | ')}`);
   await page.close();

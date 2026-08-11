@@ -63,10 +63,11 @@ describe('Optical Lab capability and field model', () => {
     );
     expect(left?.aperture).toEqual({ x: 696, y: 337.5 });
     expect(right?.aperture).toEqual(left?.aperture);
+    expect(right?.refractionUv).not.toEqual(left?.refractionUv);
     expect(left?.pointer.x).toBe(180);
     expect(right?.pointer.x).toBe(1_020);
-    expect((left?.refractionUv.y ?? 99) * viewport.height).toBeCloseTo(-1.17, 5);
-    expect((right?.refractionUv.y ?? 99) * viewport.height).toBeCloseTo(1.11, 5);
+    expect((left?.refractionUv.y ?? 99) * viewport.height).toBeCloseTo(-1.755, 5);
+    expect((right?.refractionUv.y ?? 99) * viewport.height).toBeCloseTo(1.665, 5);
   });
 
   it('dissipates interaction energy over 650ms without moving the slit', () => {
@@ -101,6 +102,22 @@ describe('Optical Lab capability and field model', () => {
     expect(Math.abs((active?.refractionUv.y ?? 1) * viewport.height)).toBeLessThanOrEqual(8);
     expect(active?.interactionStrength).toBe(1);
     expect(active?.opticalStrength).toBe(1);
+    expect(active?.aperture).toEqual({ x: 696, y: 337.5 });
+  });
+
+  it('keeps authored active positions perceptible without exceeding the eight pixel cap', () => {
+    const viewport = { width: 1_200, height: 675 };
+    const active = model?.sampleOpticalLabField({
+      x: viewport.width * .82,
+      y: viewport.height * .52,
+      lastActiveAt: 1_000,
+      velocityX: .8,
+      velocityY: 0,
+    }, viewport, 1_000);
+    const horizontalPixels = Math.abs((active?.refractionUv.x ?? 0) * viewport.width);
+
+    expect(horizontalPixels).toBeGreaterThanOrEqual(5);
+    expect(horizontalPixels).toBeLessThanOrEqual(8);
     expect(active?.aperture).toEqual({ x: 696, y: 337.5 });
   });
 

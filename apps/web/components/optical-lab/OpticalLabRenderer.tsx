@@ -30,6 +30,10 @@ function setText(diagnostics: HTMLElement, selector: string, value: string) {
   if (node) node.textContent = value;
 }
 
+function setOpticalInk(stage: HTMLElement, contextStatus: string) {
+  stage.dataset.opticalInk = contextStatus === 'ready' ? 'gpu' : 'dom';
+}
+
 export function OpticalLabRenderer({ diagnosticsId, stageId }: OpticalLabRendererProps) {
   const hostRef = useRef<HTMLDivElement>(null);
   const [mountCanvas, setMountCanvas] = useState(false);
@@ -56,6 +60,7 @@ export function OpticalLabRenderer({ diagnosticsId, stageId }: OpticalLabRendere
       setMountCanvas(false);
       stage.dataset.renderMode = 'dom-static';
       stage.dataset.contextStatus = 'idle';
+      setOpticalInk(stage, 'idle');
       diagnostics.dataset.renderMode = 'dom-static';
       diagnostics.dataset.contextStatus = 'idle';
       diagnostics.dataset.renderer = reducedMotion ? 'DOM/static · reduced motion' : 'DOM/static · low power';
@@ -81,6 +86,7 @@ export function OpticalLabRenderer({ diagnosticsId, stageId }: OpticalLabRendere
     const update = (snapshot: OpticalLabRendererSnapshot) => {
       stage.dataset.renderMode = snapshot.contextStatus === 'ready' ? snapshot.mode : 'dom-static';
       stage.dataset.contextStatus = snapshot.contextStatus;
+      setOpticalInk(stage, snapshot.contextStatus);
       stage.dataset.stableBounds = snapshot.bounds;
       diagnostics.dataset.renderMode = snapshot.contextStatus === 'ready' ? snapshot.mode : 'dom-static';
       diagnostics.dataset.contextStatus = snapshot.contextStatus;
@@ -117,6 +123,7 @@ export function OpticalLabRenderer({ diagnosticsId, stageId }: OpticalLabRendere
       setMountCanvas(false);
       stage.dataset.renderMode = 'dom-static';
       stage.dataset.contextStatus = 'unavailable';
+      setOpticalInk(stage, 'unavailable');
       diagnostics.dataset.renderMode = 'dom-static';
       diagnostics.dataset.contextStatus = 'unavailable';
       setText(diagnostics, 'mode', 'DOM/static');
@@ -134,6 +141,7 @@ export function OpticalLabRenderer({ diagnosticsId, stageId }: OpticalLabRendere
       renderer.dispose();
       stage.dataset.renderMode = 'dom-static';
       stage.dataset.contextStatus = 'lost';
+      setOpticalInk(stage, 'lost');
       diagnostics.dataset.renderMode = 'dom-static';
       diagnostics.dataset.contextStatus = 'lost';
       setText(diagnostics, 'mode', 'DOM/static');
