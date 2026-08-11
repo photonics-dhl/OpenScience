@@ -65,8 +65,8 @@ describe('Optical Lab capability and field model', () => {
     expect(right?.aperture).toEqual(left?.aperture);
     expect(left?.pointer.x).toBe(180);
     expect(right?.pointer.x).toBe(1_020);
-    expect(Math.abs(left?.verticalBias ?? 99)).toBeLessThanOrEqual(18);
-    expect(Math.abs(right?.verticalBias ?? 99)).toBeLessThanOrEqual(18);
+    expect((left?.refractionUv.y ?? 99) * viewport.height).toBeCloseTo(-1.17, 5);
+    expect((right?.refractionUv.y ?? 99) * viewport.height).toBeCloseTo(1.11, 5);
   });
 
   it('dissipates interaction energy over 650ms without moving the slit', () => {
@@ -79,6 +79,29 @@ describe('Optical Lab capability and field model', () => {
     expect(recovering?.energy).toBeGreaterThan(recovered?.energy ?? 1);
     expect(recovered?.energy).toBe(0);
     expect(active?.aperture).toEqual(recovered?.aperture);
+  });
+
+  it('keeps the resting optical composition energized without pointer input', () => {
+    const resting = model?.sampleOpticalLabField(null, { width: 1_200, height: 675 }, 5_000);
+    expect(resting?.interactionStrength).toBe(0);
+    expect(resting?.opticalStrength).toBeCloseTo(0.72, 5);
+    expect(resting?.refractionUv).toEqual({ x: 0, y: 0 });
+  });
+
+  it('normalizes whole-line pointer refraction to an eight pixel budget', () => {
+    const viewport = { width: 1_200, height: 675 };
+    const active = model?.sampleOpticalLabField({
+      x: 9_000,
+      y: -4_000,
+      lastActiveAt: 1_000,
+      velocityX: 1,
+      velocityY: -1,
+    }, viewport, 1_000);
+    expect(Math.abs((active?.refractionUv.x ?? 1) * viewport.width)).toBeLessThanOrEqual(8);
+    expect(Math.abs((active?.refractionUv.y ?? 1) * viewport.height)).toBeLessThanOrEqual(8);
+    expect(active?.interactionStrength).toBe(1);
+    expect(active?.opticalStrength).toBe(1);
+    expect(active?.aperture).toEqual({ x: 696, y: 337.5 });
   });
 
   it('reports frame, FPS and stable bounds as measurable diagnostics', () => {

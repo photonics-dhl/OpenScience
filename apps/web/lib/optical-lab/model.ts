@@ -1,5 +1,7 @@
 export const OPTICAL_LAB_APERTURE_X = 0.58;
 export const OPTICAL_LAB_RECOVERY_MS = 650;
+export const OPTICAL_LAB_REST_STRENGTH = 0.72;
+export const OPTICAL_LAB_MAX_REFRACTION_PX = 8;
 
 export type OpticalLabRenderMode = 'webgl2' | 'webgl1' | 'dom-static';
 
@@ -31,6 +33,15 @@ export interface OpticalLabBounds {
   height: number;
 }
 
+function clamp(value: number, minimum: number, maximum: number) {
+  return Math.max(minimum, Math.min(maximum, value));
+}
+
+function exponentialRecovery(remaining: number) {
+  if (remaining <= 0) return 0;
+  return (Math.exp(4 * remaining) - 1) / (Math.exp(4) - 1);
+}
+
 export function selectOpticalLabMode(capabilities: OpticalLabCapabilities): OpticalLabRenderMode {
   if (capabilities.reducedMotion || capabilities.lowPower) return 'dom-static';
   if (capabilities.webgl2) return 'webgl2';
@@ -48,17 +59,27 @@ export function sampleOpticalLabField(
     y: viewport.height * 0.5,
   };
   const elapsed = pointer ? Math.max(0, now - pointer.lastActiveAt) : OPTICAL_LAB_RECOVERY_MS;
-  const energy = pointer ? Math.max(0, 1 - elapsed / OPTICAL_LAB_RECOVERY_MS) : 0;
-  const verticalBias = pointer
-    ? Math.max(-18, Math.min(18, (pointer.y - aperture.y) * 0.06 * energy))
-    : 0;
+  const remaining = clamp(1 - elapsed / OPTICAL_LAB_RECOVERY_MS, 0, 1);
+  const interactionStrength = pointer ? exponentialRecovery(remaining) : 0;
+  const opticalStrength = OPTICAL_LAB_REST_STRENGTH
+    + (1 - OPTICAL_LAB_REST_STRENGTH) * interactionStrength;
+  const pointerX = pointer?.x ?? aperture.x;
+  const pointerY = pointer?.y ?? aperture.y;
+  const maxX = OPTICAL_LAB_MAX_REFRACTION_PX / viewport.width;
+  const maxY = OPTICAL_LAB_MAX_REFRACTION_PX / viewport.height;
+  const refractionUv = pointer ? {
+    x: clamp(((pointerX - aperture.x) / viewport.width) * 0.012 * interactionStrength, -maxX, maxX),
+    y: clamp(((pointerY - aperture.y) / viewport.height) * 0.012 * interactionStrength, -maxY, maxY),
+  } : { x: 0, y: 0 };
 
   return {
     aperture,
-    energy,
-    phase: pointer ? pointer.velocityX * energy : 0,
+    energy: interactionStrength,
+    interactionStrength,
+    opticalStrength,
+    phase: pointer ? pointer.velocityX * interactionStrength : 0,
     pointer: pointer ?? { x: aperture.x, y: aperture.y, velocityX: 0, velocityY: 0 },
-    verticalBias,
+    refractionUv,
   };
 }
 
