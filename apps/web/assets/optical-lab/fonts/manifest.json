@@ -1,0 +1,77 @@
+{
+  "charset": " Sciencevolves.",
+  "fontInstantiation": {
+    "instancer": "fontTools.varLib.instancer",
+    "options": [
+      "updateFontNames=true",
+      "recalcTimestamp=false"
+    ],
+    "version": "4.55.3"
+  },
+  "fonts": [
+    {
+      "axisSettings": {
+        "wdth": 100,
+        "wght": 900
+      },
+      "family": "Archivo Black",
+      "file": "science-display.ttf",
+      "license": "SIL OFL 1.1",
+      "licenseFile": "OFL-science.txt",
+      "sourceSha256": "b83eae2d3a2ec48a4fe5d3e34f9bb6653d2182cb998b7a99af231dd07ee54fcd",
+      "upstream": {
+        "gitCommit": "038b637da7b3fd956a4ed93ffc607c3d5e4ce172",
+        "path": "ofl/archivo/Archivo[wdth,wght].ttf",
+        "sha256": "0e094a7d3c7c4c25cf1310c4b30014f1dae9332220b1c2c88f4fa996f0b05053",
+        "url": "https://raw.githubusercontent.com/google/fonts/038b637da7b3fd956a4ed93ffc607c3d5e4ce172/ofl/archivo/Archivo%5Bwdth%2Cwght%5D.ttf"
+      }
+    },
+    {
+      "axisSettings": {
+        "opsz": 96,
+        "wght": 700
+      },
+      "family": "Bodoni Moda 96pt Bold Italic",
+      "file": "evolves-editorial.ttf",
+      "license": "SIL OFL 1.1",
+      "licenseFile": "OFL-evolves.txt",
+      "sourceSha256": "6c307e5f280743accf6d9f055e95b979f17436494bbefe751df4ee1c81c1b6ec",
+      "upstream": {
+        "gitCommit": "038b637da7b3fd956a4ed93ffc607c3d5e4ce172",
+        "path": "ofl/bodonimoda/BodoniModa-Italic[opsz,wght].ttf",
+        "sha256": "dfff1619f8f6871c6372f8855b67211f9a73b4e93d45aca868cd8f46a48622de",
+        "url": "https://raw.githubusercontent.com/google/fonts/038b637da7b3fd956a4ed93ffc607c3d5e4ce172/ofl/bodonimoda/BodoniModa-Italic%5Bopsz%2Cwght%5D.ttf"
+      }
+    }
+  ],
+  "generator": {
+    "name": "msdf-bmfont-xml",
+    "version": "2.8.0"
+  },
+  "outputs": [
+    {
+      "file": "public/optical-lab/atlas/science-display.json",
+      "sha256": "6583bdc7f22479013da4164fae944fcac800779a71825e78de1141cb27fae885"
+    },
+    {
+      "file": "public/optical-lab/atlas/science-display.png",
+      "sha256": "509967ce9f74076790ac2ac5dc4da7d076a80f9285e40d1a42e62117996bf08e"
+    },
+    {
+      "file": "public/optical-lab/atlas/evolves-editorial.json",
+      "sha256": "f5bfdb320e1fe9eaf63320a7fb44e3810c09127109732b6afa875bc840aec2ff"
+    },
+    {
+      "file": "public/optical-lab/atlas/evolves-editorial.png",
+      "sha256": "6c740251b33643698f0dfd1d4e70b7b563114e362e27fac07a957412cb6b6029"
+    }
+  ],
+  "settings": {
+    "distanceRange": 8,
+    "fontSize": 96,
+    "outputType": "json",
+    "powerOfTwo": true,
+    "smartSize": true,
+    "texturePadding": 4
+  }
+}

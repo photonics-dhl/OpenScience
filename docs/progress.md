@@ -1,5 +1,13 @@
 # OpenScience (XGS) 进度日志
 
+## 2026-08-12（Optical Lab 高保真 Task 2）— ✅ 固定 OGL/MSDF 资产
+
+- **字体/许可取证**：Google Fonts 仅提供变量上游，故固定 `google/fonts@038b637` 的官方 Archivo 与 Bodoni Moda Italic 输入，以 FontTools 4.55.3（禁止 timestamp 重算）分别实例化为 `Archivo Black`（`wdth=100,wght=900`）和 `Bodoni Moda 96pt Bold Italic`（`opsz=96,wght=700`）。上游、实例输入与生成输出 SHA-256、轴值、工具版本与原样 OFL 已登记在 `apps/web/assets/optical-lab/fonts/manifest.json`；不使用 `.next` 临时字体。
+- **受限生成器**：`@openscience/web` 固定 `ogl@1.0.11`（Unlicense）与 `msdf-bmfont-xml@2.8.0`（MIT）。`atlas:optical` 只允许 ` Sciencevolves.`、96px/8 distance range/4 padding、JSON、单页 smart power-of-two atlas，校验输入 hash/工具版本/输出目标，并仅覆写四个 atlas 输出后刷新 manifest hash。
+- **TDD/验证**：atlas integrity RED 为缺少 manifest 的 `ENOENT`；审查发现 charset 可被 manifest 与文本同时篡改后，再以 `assertAcceptedCharset` RED→GREEN 固化不可变标题字符集。focused test `2/2`、两次生成后的 scoped `git diff --exit-code`、Web typecheck 均 exit 0；四个 atlas 共 `82,731 B`（≤512 KiB）。
+- **隔离与文档**：ADR-009 改为仅 no-index Lab 的 OGL WebGL2 exception，明确 Unlicense/MIT/OFL 与浏览器/ECS 边界。OGL 目前尚未被任何源代码 import（Task 3 才可在 Lab client graph 使用）；生产 `/` 无 Lab import，未改 API/schema/auth/Hermes/ECS 或部署。
+- **下一步**：Task 3 才可消费这些已提交的 Lab-only assets；仍不得更改生产首页或 ECS。
+
 ## 2026-08-11（Optical Lab 高保真重构计划）— ✅ 设计确认，待选择执行方式
 
 - **书面确认**：用户确认 `docs/specs/2026-08-11-optical-lab-high-fidelity-design.md`，忠实原型、OGL WebGL2 多通道、静态高保真降级与轻量 flowmap 交互边界不再开放漂移。

@@ -14,7 +14,8 @@
     "shots": "node test/visual/shots.mjs",
     "shots:workspace": "node test/visual/workspace-shots.mjs",
     "shots:public": "node test/visual/public-reading-shots.mjs",
-    "shots:optical-lab": "node test/visual/optical-lab-gate.mjs"
+    "shots:optical-lab": "node test/visual/optical-lab-gate.mjs",
+    "atlas:optical": "node scripts/generate-optical-atlas.mjs"
   },
   "dependencies": {
     "@radix-ui/react-dialog": "^1.1.23",
@@ -24,6 +25,7 @@
     "lucide-react": "^1.29.0",
     "next": "14.2.35",
     "next-intl": "^4.13.4",
+    "ogl": "1.0.11",
     "react": "18.3.1",
     "react-dom": "18.3.1",
     "react-markdown": "^10.1.0",
@@ -35,6 +37,7 @@
     "@types/node": "20.14.10",
     "@types/react": "18.3.3",
     "@types/react-dom": "18.3.0",
+    "msdf-bmfont-xml": "2.8.0",
     "playwright": "^1.62.1",
     "tailwindcss": "^4",
     "vitest": "^2"
