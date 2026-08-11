@@ -141,3 +141,11 @@ Current infrastructure uses pinned base/worker images with bind-mounted applicat
 - API/Web/agent-worker restarted; API and all data dependencies healthy; worker critical-error count 0.
 - Server-side TLS probes for Landing, Login, Explore, Collection and Public RO returned 200.
 - Chromium against the public domain verified Dashboard 1440×900 and 390×844 with status 200, overflow 0 and browser errors 0. The browser requests used synthetic route fixtures and created no production records; the preceding Task 15 acceptance remains the real-account product-journey evidence.
+
+### 5.2 Fixed glyph diffraction correction (2026-08-11)
+
+- Release ref: `cd5be36`; rejected visual baseline: `b45e002`.
+- Pre-deploy checkup passed; database backup: 276K, 7/7 retention.
+- No schema or API change; deployment used `--skip-migrate`, completed the full workspace build, and restarted only API/Web/agent-worker.
+- Nginx configuration test passed; public `/` and `/explore` returned 200, while unauthenticated `/auth/me` returned the expected 401.
+- Chromium against the public domain passed 1440×900, 1920×1080 and 390×844 normal/reduced/Open RO cases plus independent pointer-left/slit/right frames at 60/150/300ms. Human inspection found no pointer-centered particle disk, moving optical axis, or quadratic fan.

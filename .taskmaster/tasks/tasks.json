@@ -1183,15 +1183,15 @@
         "id": "4",
         "title": "在完整 Landing 原型上增强 DOM Typography + Optical Field",
         "description": "以用户确认的 80c8312 pre-distortion Optical Editorial 构图为基线；Science evolves./科学，持续演化。保持单一可访问 DOM 标题，Canvas/SVG 实现局部折射、固定狭缝衍射与半色调场，下一屏以 paper surface 展示 Open RO 六层 SDF 结构。",
-        "status": "in-progress",
+        "status": "done",
         "dependencies": [
           "3"
         ],
         "priority": "high",
-        "details": "2026-08-11 第三轮固定字形衍射已通过本地门禁，待生产发布。保持 80c8312 标题布局/页面结构；Canvas 在真实字体 ready 后采样 Science/evolves glyph alpha，固定 50% aperture，执行上游压缩、焦散、下游 Fresnel 重构；pointer 仅调制 energy/phase/不超过 18px 纵向偏折。已删除 moving ambient disk、radial repulsion、pointer ellipse mask、turbulence duplicate、quadratic fan 与无消费者旧合同；桌面/移动分别使用窄固定遮罩。独立复审补齐 reduced-motion 采样后静态重绘、首次重复栅格化、resize 新尺寸顺序和独立 active-frame 重置。旧代码 RED 后 focused 24/24、Web 161/161、typecheck/build、3045 production 三视口/reduced/Open RO 与相互独立的 left/slit/right 60/150/300ms 人工帧门禁通过；b45e002 仍是被否决基线。",
+        "details": "2026-08-11 第三轮固定字形衍射已以 cd5be36 发布。保持 80c8312 标题布局/页面结构；Canvas 在真实字体 ready 后采样 Science/evolves glyph alpha，固定 50% aperture，执行上游压缩、焦散、下游 Fresnel 重构；pointer 仅调制 energy/phase/不超过 18px 纵向偏折。已删除 moving ambient disk、radial repulsion、pointer ellipse mask、turbulence duplicate、quadratic fan 与无消费者旧合同；桌面/移动分别使用窄固定遮罩。独立复审补齐 reduced-motion 采样后静态重绘、首次重复栅格化、resize 新尺寸顺序和独立 active-frame 重置。focused 24/24、Web 161/161、typecheck/build 通过；部署前备份 276K 7/7，远端 build/重启/Nginx 通过；公网 Chromium 三视口/reduced/Open RO 与相互独立的 left/slit/right 60/150/300ms 全矩阵通过，路由 / 与 /explore 为 200、/auth/me 为 401；b45e002 仍是被否决基线。",
         "testStrategy": "TDD RED/GREEN：任意 pointer 下 origin.x===aperture.x；无 ambient pointer disk、无 pointer-centered CSS mask、无 turbulence 主形变；glyph alpha sampler 与固定 aperture 映射；浏览器捕获 pointer-left/slit/right 的 60/150/300ms active frames，拒绝圆形边界/空洞、灰色多字撕裂、蜘蛛网扇形线和移动光轴；再跑 1440/1920/390 normal/reduced/Open RO、full Web、typecheck/build 与生产同矩阵。",
         "subtasks": [],
-        "updatedAt": "2026-08-11T05:50:00.000Z"
+        "updatedAt": "2026-08-11T05:55:00.000Z"
       },
       {
         "id": "5",

@@ -1,7 +1,7 @@
 # Handoff — 2026-08-11 Optical Editorial 原型形变纠偏
 
 ## Current goal
-在现有线上产品和业务流程之上，用固定 glyph-to-particle 狭缝拓扑替换已被用户拒绝的鼠标圆形场，并先完成本地动态帧审美验收。
+在现有线上产品和业务流程之上，用固定 glyph-to-particle 狭缝拓扑替换已被用户拒绝的鼠标圆形场，并完成生产动态帧审美验收。
 
 ## Done
 - 已核对线上主要路由均可访问，生产服务运行中。
@@ -20,6 +20,8 @@
 - 第三轮本地实现已完成：删除 pointer-centered ambient disk、径向排斥、移动 ellipse mask、SVG turbulence duplicate 与 quadratic fan；实际 Bricolage/Bodoni DOM 字形经 offscreen Canvas alpha 采样后在固定 aperture 两侧压缩/折射，鼠标只调制能量、相位和有界纵向偏折。
 - 第三轮独立复审发现并修复：reduced-motion 字形采样后漏重绘、首次重复栅格化、resize 使用旧尺寸、active-frame 延时累计以及旧 renderer 死合同。
 - 第三轮本地证据：focused 24/24、Web 161/161、typecheck、production build、3045 production visual shots 均通过；已人工检查 1440/390 normal/reduced 及相互独立的 left/slit/right 60/150/300ms 帧，无鼠标大圆或移动光轴。
+- 第三轮已以 release `cd5be36` 无迁移部署：前置巡检正常，数据库备份 `BACKUP_OK size=276K files=7/7`，远端全仓 build、生产应用重启和 Nginx `-t` 通过。
+- 公网 Chromium 重跑 1440/1920/390 normal/reduced/Open RO 及独立 left/slit/right 60/150/300ms 全矩阵；人工检查无鼠标大圆、移动光轴或蜘蛛网扇形；`/`、`/explore` 为 200，未登录 `/auth/me` 为 401。
 
 ## Constraints
 - 不读取或写入 `.env`；不删除现有文件。
@@ -28,11 +30,11 @@
 - Live2D 生产使用仍需保留 ADR-010 的授权记录门禁。
 
 ## Open gate
-- `b45e002` 已被人工审美复核否决；第三轮本地门禁已通过，但尚未提交与部署。生产备份、无迁移部署、线上 active-frame/三视口/reduced/Open RO 与路由 smoke 仍是发布门禁。
+- `b45e002` 已被人工审美复核否决；第三轮 `cd5be36` 已完成本地与生产门禁。当前开放门仅为用户在真实鼠标操作中的细腻度复核，不阻断本次发布事实。
 - 后续应按产品表面矩阵逐页优化 Dashboard/Workspace/Public RO/Hermes，新增范围先建立对应 spec/plan 和验收证据。
 
 ## Next action
-提交第三轮实现和同步文档，执行 ECS 备份与无迁移部署，然后对生产运行与本地相同的 active-frame/三视口门禁。不要恢复 `3336be4` 的白色大椭圆、`b45e002` 的 moving pointer disk、已废弃的旧卡片/媒体叙事，也不要扩张后端合同。
+请用户复核 `https://openscience.428312321.xyz/` 的真实指针手感；随后按产品表面矩阵继续增量优化 Dashboard/Workspace/Public RO/Hermes。不要恢复 `3336be4` 的白色大椭圆、`b45e002` 的 moving pointer disk、已废弃的旧卡片/媒体叙事，也不要扩张后端合同。
 
 ## Read first
 `AGENTS.md` → `docs/OpenScience_Kimi_Development_Spec.md` → `docs/progress.md` → `project_index.md` → `docs/specs/2026-08-10-optical-editorial-rebaseline-design.md` → `docs/decisions/ADR-010-hermes-visual-runtime-and-live2d-license-gate.md`

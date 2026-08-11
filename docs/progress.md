@@ -1,6 +1,6 @@
 # OpenScience (XGS) 进度日志
 
-## 2026-08-11（Landing 固定字形衍射第三轮纠偏）— ⏳ 本地门禁通过，待生产发布
+## 2026-08-11（Landing 固定字形衍射第三轮纠偏）— ✅ 生产发布完成
 
 - **线上复核失败**：用户确认 release `b45e002` 仍有跟随鼠标的大圈粒子、扇形衍射线和缺失的原型字形穿越形变，因此上一条“已无大面积粒子团”的静态截图结论无效；`b45e002` 不作为视觉接受基线。
 - **根因证据**：`canvas-renderer.ts` 的 ambient pass 仍以 moving `sample.origin` 形成圆形粒子盘，core strip 仍用鼠标径向排斥；CSS/SVG 仍以 moving origin 形成椭圆 mask 并用 turbulence 撕裂完整标题；浏览器旧门禁没有捕获 60/150/300ms active frames。
@@ -8,7 +8,9 @@
 - **TDD 与实现**：旧代码 RED 精确暴露 moving origin、radial disk/mask、turbulence duplicate、缺失 glyph sampler 和 active-frame 覆盖；GREEN 后标题继续保持单一可访问 DOM 与原布局，Canvas 改为加载真实字体后采样 glyph alpha，固定 50% aperture，上游压缩、焦散、下游 Fresnel grain，指针只调制 phase/energy/≤18px vertical bias。
 - **独立复审修复**：reduced-motion 在字体 alpha 采样完成后补静态重绘；删除首次挂载的重复全标题栅格化；resize 先提交新画布尺寸再重建粒子；active-frame 门禁每个 60/150/300ms 样本先独立回到 neutral，避免累计成 60/210/510ms；删除已无生产消费者的旧 density/displacement/wavefront 合同与 CSS 写入。
 - **本地证据**：focused 24/24、Web 26 files / 161 tests、typecheck、production build 通过；3045 production 截取 1440/1920/390 normal/reduced/Open RO，以及相互独立的 pointer-left/slit/right 60/150/300ms 帧。人工复核确认无鼠标圆形边界、无移动光轴、无贝塞尔扇形线；移动端使用独立窄遮罩，避免桌面宽遮罩造成整词灰化。
-- **下一步**：同步文档并提交；生产备份后从隔离 worktree 无迁移部署，再对线上运行相同 active-frame 矩阵与路由 smoke。生产证据完成前 Task Master 保持 in-progress。
+- **生产发布**：release `cd5be36` 在巡检正常、数据库备份 `BACKUP_OK size=276K files=7/7` 后以 `--skip-migrate` 从隔离 worktree 部署；远端全仓 build、compose 收敛、API/Web/agent-worker 重启和 Nginx `-t` 均通过。
+- **线上验收**：公网 Chromium 完成 1440/1920/390 normal/reduced/Open RO 和相互独立的 pointer-left/slit/right 60/150/300ms 全矩阵；人工检查未见鼠标大圆、移动光轴或蜘蛛网扇形，字形在固定狭缝附近保持 alpha-derived 压缩/聚焦/重构；`/`、`/explore` 返回 200，未登录 `/auth/me` 返回 401。Task Master 4 已置 done。
+- **下一步**：由用户在真实鼠标操作中复核细腻度；不再恢复被否决的 pointer disk。后续按既定产品表面计划继续增量优化 Dashboard/Workspace/Public RO/Hermes。
 
 ## 2026-08-11（Landing 原型形变纠偏）— ✅ 第二轮已部署
 

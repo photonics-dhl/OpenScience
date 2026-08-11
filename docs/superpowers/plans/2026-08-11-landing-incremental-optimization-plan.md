@@ -592,7 +592,7 @@ Remove the moving radial SVG masks and turbulence-led duplicate-text tear. Limit
 
 Run focused tests, Web typecheck, and production build. Capture 1440×900 active frames for pointer-left/slit/right at 60/150/300ms plus 1920×1080, 390×844, reduced-motion, and Open RO. Reject any circular boundary/hole, grey multi-letter tearing, spider-web fan, moving optical axis, or particles unrelated to glyph contours.
 
-- [ ] **Step 7: Commit, back up, deploy, and re-run the same production gate**
+- [x] **Step 7: Commit, back up, deploy, and re-run the same production gate**
 
 Commit the tested implementation, take the required ECS database backup, deploy from the isolated worktree without migration, then run the identical active-frame matrix against `https://openscience.428312321.xyz/`. Update progress, project index, handoff, and Task Master only after human-readable production evidence exists.
 
