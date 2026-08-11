@@ -9,6 +9,11 @@
 - **TDD/验证**：初始 RED 为 2 files / 6 intended failures；审查补充 RED 捕获跨 program 8 次错误 detach 与旧 SSR mode；fix-round RED 为 3 intended failures / 23 pass（缺 context acquisition contract、phase marker、ownership lifecycle）。最终 focused 2 files / 26 tests、scoped lint、Web typecheck、production build、production-start 浏览器 lifecycle matrix 均 exit 0；生产 `/` bundle 仍 3.87 kB / First Load 112 kB，未改 Landing/ECS/backend。
 - **下一步**：Task 4 才可注册非零 OGL glyph resources 并实现 MSDF 排版；完整 glyph/particle/composite frame 前不得隐藏 DOM ink。
 
+## 2026-08-12（Optical Lab Task 2 review fix round 2/5）— ✅ Node Buffer lint gate
+
+- **根因与修复**：atlas generator 在 Node 运行时直接使用全局 `Buffer`，根 ESLint `no-undef` 不推断 Node global。以显式 `import { Buffer } from 'node:buffer'` 绑定标准库，未改 atlas bytes/settings、依赖、字体、OGL runtime 或后续 Task。
+- **RED/GREEN**：targeted ESLint RED 为 `generate-optical-atlas.mjs:157:73 'Buffer' is not defined no-undef`；单行 import 后 targeted ESLint exit 0。focused atlas `6/6`、双生成 scoped clean diff、Web typecheck 与全根 `lint`（ESLint + `verify-workspace` + docs-sync）全部 exit 0。
+
 ## 2026-08-12（Optical Lab Task 2 review fix round 1/5）— ✅ 输出映射与配置不可变
 
 - **审查修复**：生成器不再从 mutable `font.file` basename 推导写入路径；代码拥有且先验证唯一的 `science-display.ttf → science-display.{json,png}` 与 `evolves-editorial.ttf → evolves-editorial.{json,png}` 映射。篡改 source、输出重复/缺失/额外项会在任何 generation/write 前失败。
