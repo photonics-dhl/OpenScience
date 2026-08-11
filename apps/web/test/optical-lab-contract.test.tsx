@@ -72,7 +72,7 @@ describe('isolated Optical Lab route contract', () => {
     expect(markup).toContain('data-optical-ink="dom"');
     expect(markup).toContain('data-context-status="idle"');
     expect(markup).toContain('data-stable-bounds="pending"');
-    expect(markup).toContain('data-optical-render-phase="task-3-runtime-shell-v1"');
+    expect(markup).toContain('data-optical-render-phase="task-4-msdf-glyph-v1"');
     expect(markup).not.toContain('optical-cursor-ring');
     expect(markup).not.toContain('radial-boundary');
     expect(markup).not.toContain('vertical-dotted-line');

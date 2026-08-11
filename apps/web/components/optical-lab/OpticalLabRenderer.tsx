@@ -91,7 +91,7 @@ export function OpticalLabRenderer({ diagnosticsId, stageId }: OpticalLabRendere
       diagnostics.dataset.firstCompleteFrame = String(snapshot.firstCompleteFrame);
       diagnostics.dataset.frameCount = String(snapshot.frameCount);
       diagnostics.dataset.qualityTier = snapshot.qualityTier;
-      diagnostics.dataset.renderer = 'OGL WebGL2 shell';
+      diagnostics.dataset.renderer = 'OGL WebGL2 MSDF glyph pass';
       diagnostics.dataset.resourceCounts = JSON.stringify(snapshot.resourceCounts);
       diagnostics.dataset.stableBounds = snapshot.stableBounds;
       setText(diagnostics, 'mode', snapshot.mode);

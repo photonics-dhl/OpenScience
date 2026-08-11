@@ -5,13 +5,15 @@ import { mkdir, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { chromium } from 'playwright';
+import { measureMsdfTypography } from './optical-lab-reference-metrics.mjs';
 import { analyzeOpticalTopology } from './optical-lab-visual-metrics.mjs';
 
 const scriptDir = path.dirname(fileURLToPath(import.meta.url));
 const outDir = path.resolve(scriptDir, 'out', 'optical-lab');
 const baseUrl = process.env.VISUAL_BASE_URL ?? 'http://127.0.0.1:3002';
 const OPTICAL_LAB_RENDER_PHASES = Object.freeze({
-  candidateBVisual: 'task-4-candidate-b-visual-v1',
+  legacyTask5Material: 'task-5-resting-material-v1',
+  msdfGlyph: 'task-4-msdf-glyph-v1',
   runtimeShell: 'task-3-runtime-shell-v1',
 });
 const OPTICAL_WEBGL2_CONTEXT_ATTRIBUTES = Object.freeze({
@@ -28,13 +30,40 @@ await mkdir(outDir, { recursive: true });
 const browser = await chromium.launch({ headless: true });
 const measurements = [];
 const cases = [
+  { name: 'reference-desktop', width: 1672, height: 941, reducedMotion: 'no-preference' },
   { name: 'desktop', width: 1440, height: 900, reducedMotion: 'no-preference' },
   { name: 'webgl1-fallback', width: 900, height: 700, reducedMotion: 'no-preference', forceContext: 'webgl1' },
   { name: 'webgl2-init-fallback', width: 900, height: 700, reducedMotion: 'no-preference', forceContext: 'webgl2-init-failure' },
+  { name: 'atlas-load-fallback', width: 900, height: 700, reducedMotion: 'no-preference', atlasFailure: true },
   { name: 'dom-fallback', width: 900, height: 700, reducedMotion: 'no-preference', forceContext: 'none' },
   { name: 'mobile', width: 390, height: 844, reducedMotion: 'no-preference' },
   { name: 'reduced', width: 1440, height: 900, reducedMotion: 'reduce' },
 ];
+
+function createInkMask(image, threshold = 36) {
+  const mask = new Uint8Array(image.width * image.height);
+  for (let index = 0; index < mask.length; index += 1) {
+    const pixel = index * 4;
+    const luminance = image.pixels[pixel] * .2126
+      + image.pixels[pixel + 1] * .7152
+      + image.pixels[pixel + 2] * .0722;
+    if (luminance >= threshold && image.pixels[pixel + 3] >= 32) mask[index] = 1;
+  }
+  return { height: image.height, mask, width: image.width };
+}
+
+function outsideTitleInkRatio(mask, title) {
+  let outside = 0;
+  let total = 0;
+  for (let y = 0; y < mask.height; y += 1) {
+    for (let x = 0; x < mask.width; x += 1) {
+      if (!mask.mask[y * mask.width + x]) continue;
+      total += 1;
+      if (x < title.left || x >= title.right || y < title.top || y >= title.bottom) outside += 1;
+    }
+  }
+  return outside / Math.max(1, total);
+}
 
 async function decodeScreenshot(page, buffer) {
   return page.evaluate(async (base64) => {
@@ -196,6 +225,10 @@ for (const testCase of cases) {
   await page.addInitScript((forceContext) => {
       window.__OPTICAL_LAB_GL_TRACKER__ = {
         contexts: [],
+        glyphDrawErrors: [],
+        glyphDrawInkStates: [],
+        glyphDraws: 0,
+        atlasColorSpaceConversions: [],
         firstContextAcquisition: null,
         instancedDraws: 0,
         instancedDrawErrors: [],
@@ -297,6 +330,13 @@ for (const testCase of cases) {
         canvas.__opticalLabTestCanvasId = canvasId;
         const record = { canvasId, created: {}, deleted: {}, type };
         window.__OPTICAL_LAB_GL_TRACKER__.contexts.push(record);
+        const pixelStorei = context.pixelStorei.bind(context);
+        context.pixelStorei = (parameter, value) => {
+          if (parameter === context.UNPACK_COLORSPACE_CONVERSION_WEBGL) {
+            window.__OPTICAL_LAB_GL_TRACKER__.atlasColorSpaceConversions.push(value);
+          }
+          return pixelStorei(parameter, value);
+        };
         for (const resource of ['Shader', 'Program', 'Buffer', 'Texture', 'Framebuffer', 'Renderbuffer', 'VertexArray', 'Query']) {
           const createName = `create${resource}`;
           const deleteName = `delete${resource}`;
@@ -316,11 +356,27 @@ for (const testCase of cases) {
             };
           }
         }
+        const recordGlyphDraw = (draw, args) => {
+          let staleError = context.getError();
+          while (staleError !== context.NO_ERROR && staleError !== context.CONTEXT_LOST_WEBGL) {
+            window.__OPTICAL_LAB_GL_TRACKER__.glyphDrawErrors.push(staleError);
+            staleError = context.getError();
+          }
+          const result = draw(...args);
+          window.__OPTICAL_LAB_GL_TRACKER__.glyphDraws += 1;
+          window.__OPTICAL_LAB_GL_TRACKER__.glyphDrawErrors.push(context.getError());
+          window.__OPTICAL_LAB_GL_TRACKER__.glyphDrawInkStates.push(
+            document.querySelector('[data-optical-lab-candidate-stage="true"]')?.getAttribute('data-optical-ink') ?? null,
+          );
+          return result;
+        };
         const drawArrays = context.drawArrays.bind(context);
         context.drawArrays = (...args) => {
           if (args[0] === context.POINTS) window.__OPTICAL_LAB_GL_TRACKER__.pointDrawArrays += 1;
-          return drawArrays(...args);
+          return args[0] === context.POINTS ? drawArrays(...args) : recordGlyphDraw(drawArrays, args);
         };
+        const drawElements = context.drawElements.bind(context);
+        context.drawElements = (...args) => recordGlyphDraw(drawElements, args);
         const recordInstancedPointDraw = (draw, args) => {
           let staleError = context.getError();
           while (staleError !== context.NO_ERROR && staleError !== context.CONTEXT_LOST_WEBGL) {
@@ -413,6 +469,9 @@ for (const testCase of cases) {
   page.on('console', (message) => {
     if (message.type() === 'error') errors.push(`${message.text()} @ ${message.location().url}`);
   });
+  if (testCase.atlasFailure) {
+    await page.route('**/optical-lab/atlas/*.png', (route) => route.abort('failed'));
+  }
 
   const response = await page.goto(`${baseUrl}/_visual/optical-lab`, { waitUntil: 'networkidle' });
   assert.equal(
@@ -430,7 +489,7 @@ for (const testCase of cases) {
   await diagnostics.waitFor({ state: 'visible' });
   const mode = await diagnostics.getAttribute('data-render-mode');
   const contextStatus = await diagnostics.getAttribute('data-context-status');
-  const expectedDynamic = testCase.name === 'desktop';
+  const expectedDynamic = testCase.name === 'desktop' || testCase.name === 'reference-desktop';
   const renderPhase = await page.locator('[data-optical-lab-candidate-stage="true"]').getAttribute('data-optical-render-phase');
 
   const runTask3RuntimeShellAssertions = async () => {
@@ -556,6 +615,251 @@ for (const testCase of cases) {
   }
   measurements.push({ case: testCase.name, ...shell });
   await page.screenshot({ fullPage: true, path: path.join(outDir, `${testCase.name}.png`) });
+    assert.deepEqual(errors, [], `${testCase.name} emitted browser errors: ${errors.join(' | ')}`);
+    await page.close();
+  };
+
+  const runTask4MsdfGlyphAssertions = async () => {
+    const stage = page.locator('[data-optical-lab-candidate-stage="true"]');
+    const marker = page.locator('[data-optical-lab-evolves="true"] span span').last();
+    const readGeometry = () => page.evaluate(() => {
+      const stageNode = document.querySelector('[data-optical-lab-candidate-stage="true"]');
+      const titleNode = document.querySelector('h1[data-optical-lab-semantic-title="true"]');
+      const scienceNode = document.querySelector('[data-optical-lab-science="true"]');
+      const evolvesNode = document.querySelector('[data-optical-lab-evolves="true"]');
+      const baselineNode = document.querySelector('[data-optical-lab-baseline-probe="true"]');
+      const stageRect = stageNode.getBoundingClientRect();
+      const local = (node) => {
+        const rect = node.getBoundingClientRect();
+        return {
+          bottom: rect.bottom - stageRect.top,
+          left: rect.left - stageRect.left,
+          right: rect.right - stageRect.left,
+          top: rect.top - stageRect.top,
+        };
+      };
+      const title = local(titleNode);
+      const science = local(scienceNode);
+      const evolves = local(evolvesNode);
+      const selection = window.getSelection();
+      const range = document.createRange();
+      range.selectNodeContents(titleNode);
+      selection.removeAllRanges();
+      selection.addRange(range);
+      const selectedText = selection.toString();
+      selection.removeAllRanges();
+      return {
+        baselineY: baselineNode.getBoundingClientRect().top - stageRect.top,
+        evolves,
+        oneLine: getComputedStyle(titleNode).whiteSpace === 'nowrap'
+          && Math.abs(science.right - evolves.left) <= 1
+          && science.top < evolves.bottom
+          && evolves.top < science.bottom,
+        science,
+        seamX: science.right,
+        selectedText,
+        title,
+        viewport: { height: stageRect.height, width: stageRect.width },
+      };
+    });
+    const assertGeometry = (geometry, label) => {
+      const within = (value, target, tolerance) => Math.abs(value - target) <= tolerance;
+      assert(within(geometry.title.left / geometry.viewport.width, .022, .01), `${label} title left drifted`);
+      assert(within(geometry.title.right / geometry.viewport.width, .957, .01), `${label} title right drifted`);
+      assert(within(geometry.baselineY / geometry.viewport.height, .542, .008), `${label} baseline drifted`);
+      assert(within(geometry.seamX / geometry.viewport.width, .58, .005), `${label} seam drifted`);
+      assert.equal(geometry.oneLine, true, `${label} must keep one visual line`);
+      assert.equal(geometry.selectedText, 'Science evolves.', `${label} must keep exact selectable text`);
+    };
+
+    const initialGeometry = await readGeometry();
+    assertGeometry(initialGeometry, testCase.name);
+    assert.equal(await page.locator('h1').count(), 1, `${testCase.name} must expose exactly one h1`);
+
+    if (!expectedDynamic) {
+      await page.waitForFunction(() => {
+        const node = document.querySelector('[data-optical-lab-diagnostics="true"]');
+        return node?.getAttribute('data-render-mode') !== 'webgl2-full';
+      });
+      assert.equal(await diagnostics.getAttribute('data-first-complete-frame'), 'false', `${testCase.name} static mode cannot publish GPU ink`);
+      assert.equal(await stage.getAttribute('data-optical-ink'), 'dom', `${testCase.name} static mode must retain DOM ink`);
+      assert.equal(await page.locator('canvas[data-optical-lab-canvas="true"]').count(), 0, `${testCase.name} static mode must remove its canvas`);
+      const staticTracker = await page.evaluate(() => window.__OPTICAL_LAB_GL_TRACKER__);
+      for (const context of staticTracker.contexts) {
+        for (const [resource, created] of Object.entries(context.created)) {
+          assert.equal(context.deleted[resource] ?? 0, created, `${testCase.name} initialization failure leaked ${resource}`);
+        }
+      }
+      assert.equal(
+        await marker.evaluate((node) => getComputedStyle(node).color),
+        'rgb(255, 78, 34)',
+        `${testCase.name} must retain the DOM vermilion period`,
+      );
+      measurements.push({ case: testCase.name, geometry: initialGeometry, mode: await diagnostics.getAttribute('data-render-mode') });
+      await page.screenshot({ fullPage: true, path: path.join(outDir, `${testCase.name}.png`) });
+      if (testCase.atlasFailure) {
+        assert(errors.length > 0, 'forced atlas failure must exercise the real texture error path');
+      } else {
+        assert.deepEqual(errors, [], `${testCase.name} emitted browser errors: ${errors.join(' | ')}`);
+      }
+      await page.close();
+      return;
+    }
+
+    try {
+      await page.waitForFunction(() => {
+        const node = document.querySelector('[data-optical-lab-diagnostics="true"]');
+        return node?.getAttribute('data-first-complete-frame') === 'true'
+          && document.querySelector('[data-optical-lab-candidate-stage="true"]')?.getAttribute('data-optical-ink') === 'gpu';
+      }, undefined, { timeout: 5_000 });
+    } catch (error) {
+      const evidence = await page.evaluate(() => ({
+        diagnostics: document.querySelector('[data-optical-lab-diagnostics="true"]')?.outerHTML,
+        stage: document.querySelector('[data-optical-lab-candidate-stage="true"]')?.outerHTML.slice(0, 600),
+        tracker: window.__OPTICAL_LAB_GL_TRACKER__,
+      }));
+      throw new Error(`${testCase.name} MSDF publication timed out: ${JSON.stringify({ errors, evidence })}`, { cause: error });
+    }
+
+    assert.equal(await diagnostics.getAttribute('data-quality-tier'), 'msdf-glyph');
+    assert.equal(await diagnostics.getAttribute('data-context-status'), 'ready');
+    assert.equal(await diagnostics.getAttribute('data-particle-count'), '0', 'Task 4 must not publish particles');
+    assert.equal(await diagnostics.getAttribute('data-flow-texture'), 'inactive', 'Task 4 must not publish a flowmap');
+    const firstDraws = await page.evaluate(() => window.__OPTICAL_LAB_GL_TRACKER__);
+    assert(firstDraws.glyphDraws >= 5, `${testCase.name} must complete mask, color, and composite draws`);
+    assert(firstDraws.glyphDrawInkStates.slice(0, 5).every((ink) => ink === 'dom'), `${testCase.name} must retain DOM ink through the complete first GPU frame`);
+    assert(firstDraws.glyphDrawErrors.every((error) => error === 0), `${testCase.name} glyph draw returned GL errors`);
+    assert(
+      firstDraws.atlasColorSpaceConversions.includes(0),
+      `${testCase.name} must upload MSDF RGB channels without browser color-space conversion`,
+    );
+    assert.equal(firstDraws.instancedDraws, 0, 'Task 4 must not execute the deferred material particle pass');
+    assert.equal(firstDraws.pointDrawArrays, 0, 'Task 4 must not execute POINTS draws');
+
+    await stage.scrollIntoViewIfNeeded();
+    const gpuFrame = await decodeScreenshot(
+      page,
+      await stage.screenshot({ path: path.join(outDir, `${testCase.name}-msdf-glyph.png`) }),
+    );
+    await stage.evaluate(() => {
+      const style = document.createElement('style');
+      style.dataset.opticalLabDomParityProbe = 'true';
+      style.textContent = `
+        [data-optical-lab-candidate-stage="true"]::before { display: none !important; }
+        [data-optical-lab-candidate-stage="true"] canvas { visibility: hidden !important; }
+        [data-optical-lab-candidate-stage="true"] h1,
+        [data-optical-lab-candidate-stage="true"] h1 * { color: #f1eee7 !important; }
+        [data-optical-lab-evolves="true"] span span { color: #ff4e22 !important; }
+      `;
+      document.head.append(style);
+    });
+    const domFrame = await decodeScreenshot(
+      page,
+      await stage.screenshot({ path: path.join(outDir, `${testCase.name}-dom-parity.png`) }),
+    );
+    await page.locator('style[data-optical-lab-dom-parity-probe="true"]').evaluate((node) => node.remove());
+    const gpuMask = createInkMask(gpuFrame);
+    const domMask = createInkMask(domFrame);
+    const typography = measureMsdfTypography({
+      ...initialGeometry,
+      domMask,
+      msdfMask: gpuMask,
+    });
+    assert(typography.occupiedColumnContinuity >= .6, `${testCase.name} MSDF occupied columns are discontinuous: ${JSON.stringify(typography)}`);
+    assert(typography.edgeBoundsOverlapWithDom >= .9, `${testCase.name} MSDF/DOM outer edges drifted: ${JSON.stringify(typography)}`);
+    assert(typography.edgeOverlapWithDom >= .9, `${testCase.name} MSDF/DOM edge overlap is too low: ${JSON.stringify(typography)}`);
+    assert(typography.scienceEdgeOverlapWithDom >= .9, `${testCase.name} Science silhouette overlap is too low: ${JSON.stringify(typography)}`);
+    assert(typography.evolvesEdgeOverlapWithDom >= .9, `${testCase.name} evolves silhouette overlap is too low: ${JSON.stringify(typography)}`);
+    assert(outsideTitleInkRatio(gpuMask, initialGeometry.title) <= .01, `${testCase.name} contains Task 5 energy outside the title`);
+    let vermilionPixels = 0;
+    for (let index = 0; index < gpuFrame.pixels.length; index += 4) {
+      const red = gpuFrame.pixels[index];
+      const green = gpuFrame.pixels[index + 1];
+      const blue = gpuFrame.pixels[index + 2];
+      if (red >= 120 && red > green * 1.35 && red > blue * 1.35) vermilionPixels += 1;
+    }
+    assert(vermilionPixels > 0, `${testCase.name} GPU period must remain vermilion`);
+    assert.equal(await page.locator('[data-optical-lab-canvas-host="true"]').evaluate((node) => getComputedStyle(node).pointerEvents), 'none');
+
+    let resizedGeometry = null;
+    if (testCase.name === 'reference-desktop') {
+      const boundsBeforeResize = await diagnostics.getAttribute('data-stable-bounds');
+      const frameBeforeResize = Number(await diagnostics.getAttribute('data-frame-count'));
+      await diagnostics.evaluate((node) => {
+        window.__OPTICAL_LAB_RESIZE_PUBLICATION__ = [];
+        window.__OPTICAL_LAB_RESIZE_OBSERVER__ = new window.MutationObserver(() => {
+          window.__OPTICAL_LAB_RESIZE_PUBLICATION__.push({
+            bounds: node.getAttribute('data-stable-bounds'),
+            complete: node.getAttribute('data-first-complete-frame'),
+          });
+        });
+        window.__OPTICAL_LAB_RESIZE_OBSERVER__.observe(node, {
+          attributeFilter: ['data-first-complete-frame', 'data-stable-bounds'],
+          attributes: true,
+        });
+      });
+      await page.setViewportSize({ width: 1440, height: 900 });
+      await page.waitForFunction(({ boundsBeforeResize, frameBeforeResize }) => {
+        const node = document.querySelector('[data-optical-lab-diagnostics="true"]');
+        return node?.getAttribute('data-first-complete-frame') === 'true'
+          && node.getAttribute('data-stable-bounds') !== boundsBeforeResize
+          && Number(node.getAttribute('data-frame-count')) > frameBeforeResize;
+      }, { boundsBeforeResize, frameBeforeResize });
+      const resizePublication = await page.evaluate(() => {
+        window.__OPTICAL_LAB_RESIZE_OBSERVER__.disconnect();
+        return window.__OPTICAL_LAB_RESIZE_PUBLICATION__;
+      });
+      const retractionIndex = resizePublication.findIndex(({ complete }) => complete === 'false');
+      assert(retractionIndex >= 0, 'resize must retract GPU ink before drawing the new layout');
+      assert(
+        resizePublication.slice(retractionIndex + 1).every(({ bounds, complete }) => (
+          complete !== 'true' || bounds !== boundsBeforeResize
+        )),
+        'resize must not republish a complete frame with stale DOM bounds',
+      );
+      resizedGeometry = await readGeometry();
+      assertGeometry(resizedGeometry, `${testCase.name}/resize`);
+      await stage.screenshot({ path: path.join(outDir, `${testCase.name}-resized-msdf-glyph.png`) });
+
+      const recoveryBefore = await page.evaluate(() => {
+        const canvas = document.querySelector('canvas[data-optical-lab-canvas="true"]');
+        const tracker = window.__OPTICAL_LAB_GL_TRACKER__;
+        const canvasId = canvas.__opticalLabTestCanvasId;
+        const context = tracker.contexts.findLast((entry) => entry.canvasId === canvasId);
+        const lose = canvas.getContext('webgl2')?.getExtension('WEBGL_lose_context');
+        window.__OPTICAL_LAB_TEST_CONTEXT_LOSS_EXTENSION__ = lose;
+        const value = { canvasId, contextCount: tracker.contexts.length, created: { ...context.created } };
+        lose.loseContext();
+        return value;
+      });
+      await page.waitForFunction(() => (
+        document.querySelector('[data-optical-lab-candidate-stage="true"]')?.getAttribute('data-optical-ink') === 'dom'
+        && document.querySelector('[data-optical-lab-diagnostics="true"]')?.getAttribute('data-context-status') === 'lost'
+      ));
+      await page.evaluate(() => window.__OPTICAL_LAB_TEST_CONTEXT_LOSS_EXTENSION__.restoreContext());
+      await page.waitForFunction((before) => {
+        const canvas = document.querySelector('canvas[data-optical-lab-canvas="true"]');
+        return canvas?.__opticalLabTestCanvasId !== before.canvasId
+          && document.querySelector('[data-optical-lab-diagnostics="true"]')?.getAttribute('data-first-complete-frame') === 'true';
+      }, recoveryBefore);
+      const recoveryAfter = await page.evaluate((before) => {
+        const canvas = document.querySelector('canvas[data-optical-lab-canvas="true"]');
+        const tracker = window.__OPTICAL_LAB_GL_TRACKER__;
+        return {
+          canvasId: canvas.__opticalLabTestCanvasId,
+          oldContext: tracker.contexts.find((entry) => entry.canvasId === before.canvasId),
+        };
+      }, recoveryBefore);
+      assert.notEqual(recoveryAfter.canvasId, recoveryBefore.canvasId, 'context restore must use a fresh canvas');
+      for (const [resource, created] of Object.entries(recoveryBefore.created)) {
+        assert.equal(recoveryAfter.oldContext.deleted[resource] ?? 0, created, `context restore leaked ${resource}`);
+      }
+      assertGeometry(await readGeometry(), `${testCase.name}/restore`);
+      await stage.screenshot({ path: path.join(outDir, `${testCase.name}-restored-msdf-glyph.png`) });
+    }
+
+    measurements.push({ case: testCase.name, geometry: initialGeometry, resizedGeometry, typography });
+    await page.screenshot({ fullPage: true, path: path.join(outDir, `${testCase.name}.png`) });
     assert.deepEqual(errors, [], `${testCase.name} emitted browser errors: ${errors.join(' | ')}`);
     await page.close();
   };
@@ -1014,7 +1318,9 @@ for (const testCase of cases) {
 
   if (renderPhase === OPTICAL_LAB_RENDER_PHASES.runtimeShell) {
     await runTask3RuntimeShellAssertions();
-  } else if (renderPhase === OPTICAL_LAB_RENDER_PHASES.candidateBVisual) {
+  } else if (renderPhase === OPTICAL_LAB_RENDER_PHASES.msdfGlyph) {
+    await runTask4MsdfGlyphAssertions();
+  } else if (renderPhase === OPTICAL_LAB_RENDER_PHASES.legacyTask5Material) {
     await runCandidateBVisualPhaseAssertions();
   } else {
     assert.fail(
@@ -1059,8 +1365,15 @@ await cleanupPage.addInitScript(() => {
   };
 });
 await cleanupPage.goto(`${baseUrl}/_visual/optical-lab`, { waitUntil: 'networkidle' });
+await cleanupPage.waitForFunction(() => (
+  document.querySelector('[data-optical-lab-diagnostics="true"]')?.getAttribute('data-first-complete-frame') === 'true'
+));
 await cleanupPage.locator('[data-optical-lab-exit="true"]').click();
 await cleanupPage.waitForURL(`${baseUrl}/`);
+await cleanupPage.waitForFunction(() => (
+  window.__OPENSCIENCE_OPTICAL_LAB__?.activeRaf === false
+  && window.__OPENSCIENCE_OPTICAL_LAB__?.contextStatus === 'disposed'
+));
 const cleanup = await cleanupPage.evaluate(() => window.__OPENSCIENCE_OPTICAL_LAB__ ?? null);
 assert.equal(cleanup?.activeRaf, false, 'renderer RAF must stop after route unmount');
 assert.equal(cleanup?.contextStatus, 'disposed', 'renderer resources must be disposed after route unmount');

@@ -1,6 +1,6 @@
 export type OpticalRuntime = 'webgl2-full' | 'static-fallback' | 'dom-only';
 
-export const OPTICAL_LAB_RENDER_PHASE = 'task-3-runtime-shell-v1' as const;
+export const OPTICAL_LAB_RENDER_PHASE = 'task-4-msdf-glyph-v1' as const;
 
 export const OPTICAL_WEBGL2_CONTEXT_ATTRIBUTES = Object.freeze({
   alpha: true,

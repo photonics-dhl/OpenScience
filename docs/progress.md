@@ -1,5 +1,14 @@
 # OpenScience (XGS) 进度日志
 
+## 2026-08-12（Optical Lab 高保真 Task 4）— ✅ MSDF 字形与 DOM 精确同构
+
+- **真实字形通道**：隔离 Lab 使用 OGL `Text`/BMFont geometry 与已批准的 Archivo 900、Bodoni Moda Italic 700（opsz 96）单页 atlas；derivative median MSDF shader 在线性 mask/color targets 中绘制 `Science evolves.`，句点保持 vermilion。没有加入粒子、溶解幕、焦散、bloom、GPGPU、flowmap 或 Task 5 材质。
+- **DOM 权威与首帧诚实性**：唯一可选择 `h1` 继续提供 CSS-pixel word/baseline/seam bounds；仅在两词 mask/color 与 composite 五次真实 draw 完整成功后发布 `firstCompleteFrame=true` / `data-optical-ink=gpu`。resize 与 context restore 先撤回 GPU ink，fresh context 完整重画后才再次发布；atlas/初始化失败、WebGL1、mobile、reduced motion 均保留静态 DOM。
+- **形状而非外框门禁**：AA 容差双向 mask coverage 在 1672×941 为 `0.946859`（Science `0.961199`、evolves `0.912870`），外框 IoU `0.904320`、occupied-column continuity `0.960440`；同外框错误轮廓 fixture 虽 bbox IoU=`1.0`，形状分仅 `0.197853`，证明门禁不会把外框近似误判为字形同构。
+- **显式阶段边界**：当前唯一 glyph phase 为 `task-4-msdf-glyph-v1`，由命名的 `runTask4MsdfGlyphAssertions` 验证；旧 Candidate B 完整材质断言保留但不激活，Task 5 后续必须显式使用 `task-5-resting-material-v1`，未知 marker fail closed。
+- **验证与范围**：focused `17/17`、Web 全量 `198/198`、Web typecheck、根 lint/workspace/docs-sync、production build、production-start browser gate 与原尺寸 desktop/resize/restore/mobile/fallback 审图均通过；生产 `/` 仍为 3.87 kB / 112 kB，未改 Landing、ECS、API/schema/auth/Hermes，未部署。
+- **下一步**：Task 5 才可实现并激活完整静止材质门禁；当前仍无获准 fallback asset，静态环境继续使用诚实 DOM。
+
 ## 2026-08-12（Optical Lab 高保真 Task 3）— ✅ WebGL2 OGL 运行壳
 
 - **运行策略**：隔离 Lab 新路径只保留 `webgl2-full` / `static-fallback` / `dom-only`；WebGL1、reduced motion、低功耗与初始化失败均不挂动态 Canvas、不启 RAF。OGL 构造在 canvas 实例上阻断其内置 WebGL1 fallback，未修改全局浏览器 API。

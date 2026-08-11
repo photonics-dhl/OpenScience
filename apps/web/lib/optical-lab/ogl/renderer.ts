@@ -6,8 +6,9 @@ import {
   serializeOpticalBounds,
   type OpticalLayout,
 } from '../layout';
-import { createOpticalOglResourceLedger, type OpticalOglResourceCounts } from './resources';
 import { OPTICAL_WEBGL2_CONTEXT_ATTRIBUTES } from '../runtime-policy';
+import { createGlyphPass, loadOpticalGlyphAtlases, type OpticalGlyphPass } from './glyph-pass';
+import type { OpticalOglResourceCounts } from './resources';
 
 export interface OpticalOglRendererSnapshot {
   activeRaf: boolean;
@@ -16,7 +17,7 @@ export interface OpticalOglRendererSnapshot {
   frameCount: number;
   layoutStable: boolean;
   mode: 'webgl2-full';
-  qualityTier: 'shell';
+  qualityTier: 'msdf-glyph';
   resourceCounts: OpticalOglResourceCounts;
   stableBounds: string;
 }
@@ -60,12 +61,12 @@ export function createOpticalOglRenderer(
   }
   if (!renderer.isWebgl2) throw new Error('The Optical Lab dynamic runtime requires WebGL2');
 
-  const gl = renderer.gl as WebGL2RenderingContext;
-  const ledger = createOpticalOglResourceLedger(gl);
   let acceptedLayout: OpticalLayout | null = null;
   let activeRaf = false;
   let disposed = false;
+  let firstCompleteFrame = false;
   let frameCount = 0;
+  let glyphPass: OpticalGlyphPass | null = null;
   let rafId: number | null = null;
   let stableBounds = 'pending';
 
@@ -75,12 +76,12 @@ export function createOpticalOglRenderer(
   ) => onSnapshot({
     activeRaf,
     contextStatus,
-    firstCompleteFrame: false,
+    firstCompleteFrame,
     frameCount,
     layoutStable,
     mode: 'webgl2-full',
-    qualityTier: 'shell',
-    resourceCounts: disposed ? emptyResourceCounts() : ledger.counts(),
+    qualityTier: 'msdf-glyph',
+    resourceCounts: disposed ? emptyResourceCounts() : glyphPass?.resourceCounts() ?? emptyResourceCounts(),
     stableBounds,
   });
 
@@ -94,26 +95,38 @@ export function createOpticalOglRenderer(
   const draw = () => {
     if (disposed) return;
     const layoutStable = acceptedLayout !== null;
-    gl.clearColor(0, 0, 0, 0);
-    gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
-    frameCount += 1;
-    report('ready', layoutStable);
-    rafId = requestAnimationFrame(draw);
+    try {
+      if (!glyphPass?.render(null)) throw new Error('Optical Lab MSDF color+mask frame is incomplete');
+      frameCount += 1;
+      firstCompleteFrame = layoutStable;
+      report('ready', layoutStable);
+      rafId = requestAnimationFrame(draw);
+    } catch {
+      activeRaf = false;
+      firstCompleteFrame = false;
+      glyphPass?.dispose();
+      glyphPass = null;
+      report('unavailable', false);
+    }
   };
 
   const resize = () => {
+    firstCompleteFrame = false;
+    report(frameCount > 0 ? 'ready' : 'initializing');
     void readLayout().then((layout) => {
       if (disposed) return;
       acceptedLayout = layout;
       stableBounds = serializeOpticalBounds(layout.title);
       renderer.setSize(layout.viewport.width, layout.viewport.height);
+      glyphPass?.resize(layout);
       report(frameCount > 0 ? 'ready' : 'initializing');
     }).catch(() => {
       if (disposed) return;
       activeRaf = false;
       if (rafId !== null) cancelAnimationFrame(rafId);
       rafId = null;
-      ledger.dispose();
+      glyphPass?.dispose();
+      glyphPass = null;
       report('unavailable', false);
     });
   };
@@ -125,21 +138,24 @@ export function createOpticalOglRenderer(
     stableBounds = serializeOpticalBounds(layout.title);
     renderer.setSize(layout.viewport.width, layout.viewport.height);
 
-    // The shell deliberately keeps DOM ink. This parity re-read is the publication
-    // guard Task 4 must satisfy before any GPU title can replace semantic ink.
+    const atlases = await loadOpticalGlyphAtlases();
+    if (disposed) return;
     const publicationLayout = await readLayout();
     if (disposed) return;
     const layoutStable = hasOpticalLayoutParity(layout, publicationLayout);
     if (!layoutStable) {
-      ledger.dispose();
       report('unavailable', false);
       return;
     }
+    acceptedLayout = publicationLayout;
+    stableBounds = serializeOpticalBounds(publicationLayout.title);
+    glyphPass = createGlyphPass(renderer.gl, publicationLayout, atlases);
     activeRaf = true;
     rafId = requestAnimationFrame(draw);
   }).catch(() => {
     if (disposed) return;
-    ledger.dispose();
+    glyphPass?.dispose();
+    glyphPass = null;
     report('unavailable', false);
   });
 
@@ -148,9 +164,11 @@ export function createOpticalOglRenderer(
       if (disposed) return;
       disposed = true;
       activeRaf = false;
+      firstCompleteFrame = false;
       if (rafId !== null) cancelAnimationFrame(rafId);
       rafId = null;
-      ledger.dispose();
+      glyphPass?.dispose();
+      glyphPass = null;
       report('disposed', false);
     },
     resize,

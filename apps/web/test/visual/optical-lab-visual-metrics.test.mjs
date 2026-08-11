@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'vitest';
+import * as referenceMetrics from './optical-lab-reference-metrics.mjs';
 import { analyzeOpticalTopology } from './optical-lab-visual-metrics.mjs';
 
 const APERTURE_X = .58;
@@ -73,5 +74,96 @@ describe('Optical Lab resting topology metrics', () => {
     assert(forbidden.directionality < 1.04);
     assert(forbidden.verticalCurtainCoverage < .18);
     assert(forbidden.verticalCurtainSpread < .14);
+  });
+});
+
+function createTypographyMask({ bottom, left, right, top }, width = 100, height = 50) {
+  const mask = new Uint8Array(width * height);
+  for (let y = top; y < bottom; y += 1) {
+    for (let x = left; x < right; x += 1) {
+      if ((x + y) % 7 !== 0) mask[y * width + x] = 1;
+    }
+  }
+  return { height, mask, width };
+}
+
+describe('Optical Lab MSDF typography metrics', () => {
+  it('measures reference-relative bounds, continuity, and DOM edge overlap', () => {
+    assert.equal(
+      typeof referenceMetrics.measureMsdfTypography,
+      'function',
+      'Task 4 requires a dedicated MSDF typography metric path',
+    );
+    const domMask = createTypographyMask({ bottom: 30, left: 2, right: 96, top: 18 });
+    const msdfMask = createTypographyMask({ bottom: 30, left: 2, right: 96, top: 18 });
+
+    const measured = referenceMetrics.measureMsdfTypography({
+      baselineY: 27.1,
+      domMask,
+      evolves: { bottom: 30, left: 58, right: 96, top: 18 },
+      msdfMask,
+      science: { bottom: 30, left: 2, right: 58, top: 18 },
+      seamX: 58,
+      title: { bottom: 30, left: 2, right: 96, top: 18 },
+      viewport: { height: 50, width: 100 },
+    });
+
+    assert.equal(measured.oneLine, true);
+    assert.equal(measured.title.left, .02);
+    assert.equal(measured.title.right, .96);
+    assert.equal(measured.baseline, .542);
+    assert.equal(measured.seamX, .58);
+    assert(measured.occupiedColumnContinuity >= .98);
+    assert(measured.edgeOverlapWithDom >= .9);
+  });
+
+  it('rejects a discontinuous mask that only shares the DOM bounding box', () => {
+    assert.equal(typeof referenceMetrics.measureMsdfTypography, 'function');
+    const domMask = createTypographyMask({ bottom: 30, left: 2, right: 96, top: 18 });
+    const msdfMask = createTypographyMask({ bottom: 30, left: 2, right: 96, top: 18 });
+    for (let y = 0; y < msdfMask.height; y += 1) {
+      for (let x = 42; x < 58; x += 1) msdfMask.mask[y * msdfMask.width + x] = 0;
+    }
+
+    const measured = referenceMetrics.measureMsdfTypography({
+      baselineY: 27.1,
+      domMask,
+      evolves: { bottom: 30, left: 58, right: 96, top: 18 },
+      msdfMask,
+      science: { bottom: 30, left: 2, right: 58, top: 18 },
+      seamX: 58,
+      title: { bottom: 30, left: 2, right: 96, top: 18 },
+      viewport: { height: 50, width: 100 },
+    });
+
+    assert(measured.occupiedColumnContinuity < .9);
+    assert(measured.edgeOverlapWithDom < 1, 'internal holes must reduce tolerant shape overlap');
+    assert.equal(measured.edgeBoundsOverlapWithDom, 1, 'matching outer edges are measured independently from internal holes');
+  });
+
+  it('rejects a wrong same-bounds silhouette even when its outer edges overlap', () => {
+    assert.equal(typeof referenceMetrics.measureMsdfTypography, 'function');
+    const domMask = createTypographyMask({ bottom: 105, left: 20, right: 220, top: 30 }, 240, 135);
+    const msdfMask = createTypographyMask({ bottom: 105, left: 20, right: 220, top: 30 }, 240, 135);
+    for (let y = 0; y < msdfMask.height; y += 1) {
+      for (let x = 0; x < msdfMask.width; x += 1) {
+        const border = (x === 20 || x === 219) && y >= 30 && y < 105;
+        const crossbar = y === 67 && x >= 20 && x < 220;
+        msdfMask.mask[y * msdfMask.width + x] = border || crossbar ? 1 : 0;
+      }
+    }
+    const measured = referenceMetrics.measureMsdfTypography({
+      baselineY: 90,
+      domMask,
+      evolves: { bottom: 105, left: 139, right: 220, top: 30 },
+      msdfMask,
+      science: { bottom: 105, left: 20, right: 139, top: 30 },
+      seamX: 139,
+      title: { bottom: 105, left: 20, right: 220, top: 30 },
+      viewport: { height: 135, width: 240 },
+    });
+
+    assert.equal(measured.edgeBoundsOverlapWithDom, 1);
+    assert(measured.edgeOverlapWithDom < .75);
   });
 });

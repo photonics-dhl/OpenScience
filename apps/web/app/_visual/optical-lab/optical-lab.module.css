@@ -167,9 +167,11 @@
 .evolvesInk {
   padding-left: .01em;
   font-family: var(--font-bodoni), serif;
+  font-optical-sizing: none;
   font-size: clamp(1.5rem, 14.25cqw, 14.95rem);
   font-style: italic;
   font-weight: 700;
+  font-variation-settings: 'opsz' 96, 'wght' 700;
   letter-spacing: -.085em;
   transform: scaleX(.82);
   transform-origin: left center;
@@ -201,6 +203,10 @@
 
 .candidate[data-optical-ink='gpu'] .headline .marker::selection {
   color: var(--os-vermilion);
+}
+
+.candidate[data-optical-ink='gpu']::before {
+  display: none;
 }
 
 .clientSlot,
