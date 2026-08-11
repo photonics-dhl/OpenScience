@@ -36,9 +36,11 @@ WebGL1 `ANGLE_instanced_arrays`, Vitest 2, Playwright Chromium.
 
 ## Required TDD Execution Order
 
-Execute Task 1, then Task 3 Steps 1–6 to establish the real Candidate A browser
-RED, then Task 2, then Task 3 Steps 7–8, then Task 4. The visual acceptance test
-must fail against Candidate A before any material shader production edit.
+Execute Task 1, then merged Task 2 in this internal order: Part B Steps 1–6
+establish the real Candidate A browser RED, Part A Steps 1–6 implement GREEN,
+then Part B Steps 7–8 tune and commit. Execute final acceptance Task 3 last.
+The visual acceptance test must fail against Candidate A before any material
+shader production edit.
 
 ---
 
@@ -161,7 +163,9 @@ git commit -m "feat(web): model candidate b optical response"
 
 ---
 
-### Task 2: Render One Continuous Reference-First Glyph Material
+### Task 2: Gate and Render the Candidate B Optical Material
+
+#### Part A: Render One Continuous Reference-First Glyph Material
 
 **Files:**
 - Modify: `apps/web/lib/optical-lab/webgl-renderer.ts:40-180,468-529`
@@ -172,7 +176,7 @@ git commit -m "feat(web): model candidate b optical response"
 
 **Interfaces:**
 - Consumes: Task 1's `opticalStrength`, `interactionStrength` and
-  `refractionUv`, plus the verified Candidate A browser RED from Task 3 Step 6.
+  `refractionUv`, plus the verified Candidate A browser RED from Part B Step 6.
 - Produces: display shader uniforms `uOpticalStrength`,
   `uInteractionStrength`, `uRefraction`; stage attribute
   `data-optical-ink="gpu|dom"`.
@@ -305,16 +309,14 @@ npx pnpm@9.15.0 --filter @openscience/web typecheck
 Expected: focused tests and typecheck pass with no pixel-valued displacement
 uniform remaining.
 
-- [ ] **Step 7: Commit Task 2**
+- [ ] **Step 7: Continue directly to Part B GREEN**
 
-```powershell
-git add -- apps/web/lib/optical-lab/webgl-renderer.ts apps/web/components/optical-lab/OpticalLabRenderer.tsx apps/web/components/optical-lab/OpticalLabPage.tsx apps/web/app/_visual/optical-lab/optical-lab.module.css apps/web/test/optical-lab-contract.test.tsx apps/web/test/optical-lab-model.test.ts
-git commit -m "feat(web): render candidate b optical material"
-```
+Do not commit yet. The merged task is complete only after the real browser
+visual RED has turned GREEN and Part B's full scoped commit is created.
 
 ---
 
-### Task 3: Gate Resting Reference Topology and Interaction
+#### Part B: Gate Resting Reference Topology and Interaction
 
 **Files:**
 - Create: `apps/web/test/visual/optical-lab-visual-metrics.mjs`
@@ -422,16 +424,16 @@ Do not loosen the literal acceptance thresholds, move the aperture, add a
 radial mask or expose the DOM ghost. After each change, rerun the production
 gate and inspect `desktop.png` at original resolution.
 
-- [ ] **Step 8: Commit Task 3**
+- [ ] **Step 8: Commit merged Task 2**
 
 ```powershell
-git add -- apps/web/test/visual/optical-lab-visual-metrics.mjs apps/web/test/visual/optical-lab-visual-metrics.test.mjs apps/web/test/visual/optical-lab-shots.mjs apps/web/lib/optical-lab/webgl-renderer.ts
-git commit -m "test(web): gate candidate b optical topology"
+git add -- apps/web/lib/optical-lab/model.ts apps/web/lib/optical-lab/webgl-renderer.ts apps/web/components/optical-lab/OpticalLabRenderer.tsx apps/web/components/optical-lab/OpticalLabPage.tsx apps/web/app/_visual/optical-lab/optical-lab.module.css apps/web/test/optical-lab-model.test.ts apps/web/test/optical-lab-contract.test.tsx apps/web/test/visual/optical-lab-visual-metrics.mjs apps/web/test/visual/optical-lab-visual-metrics.test.mjs apps/web/test/visual/optical-lab-shots.mjs
+git commit -m "feat(web): render and gate candidate b optics"
 ```
 
 ---
 
-### Task 4: Final Local Acceptance and Documentation
+### Task 3: Final Local Acceptance and Documentation
 
 **Files:**
 - Modify: `docs/progress.md`

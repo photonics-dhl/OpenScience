@@ -5,6 +5,7 @@
 - **设计确认**：用户复核 `docs/specs/2026-08-11-optical-lab-candidate-b-design.md` 后要求继续；ECS 无 GPU 的客户端执行边界再次确认。
 - **实施计划**：新增 `docs/superpowers/plans/2026-08-11-optical-lab-candidate-b-plan.md`，分为纯 field model、单一 GPU glyph material、reference-relative resting/pointer 像素门禁、本地验收与文档同步四个 TDD task。
 - **当前边界**：尚未修改 Candidate 实现、未部署、生产 `/` 不变；下一步选择 inline execution 或 subagent-driven execution。
+- **执行裁决**：用户选择 Subagent-Driven，并批准把原 shader Task 与 browser visual-gate Task 合并为一个复审单元，保证 Candidate A 真实 RED 先于任何 shader GREEN；计划现为三个复审单元。
 
 ## 2026-08-11（Optical Lab Candidate B 设计）— ⏳ 方向已批准，待书面复核
 
