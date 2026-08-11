@@ -1,5 +1,10 @@
 # Optical Lab Candidate B Design
 
+> **DEPRECATED → see
+> `docs/specs/2026-08-11-optical-lab-high-fidelity-design.md`.** Candidate B
+> passed engineering gates but was rejected by the user for typography,
+> reference fidelity and material quality. This file remains historical.
+
 ## Status
 
 Approved visual direction on 2026-08-11. This document defines an isolated

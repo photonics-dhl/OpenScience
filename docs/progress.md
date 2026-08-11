@@ -1,5 +1,13 @@
 # OpenScience (XGS) 进度日志
 
+## 2026-08-11（Optical Lab 高保真重构设计）— ⏳ 分段确认，待书面复核
+
+- **用户裁决**：Candidate B 虽工程门禁全绿，但标题比例、粒子层次、焦散与合成材质离 `Science evolves.` 原型过远，视觉上显得廉价，正式拒绝为审美基线；选择“忠实原型”方向 A。
+- **技术调研**：核对 OGL 的 MSDF、Mouse Flowmap、GPGPU particles、RenderTarget/Bloom/Fluid Distortion，及 Three.js + Troika + postprocessing、VFX-JS、Curtains.js、PixiJS 的适用边界；最新版 Three.js WebGLRenderer 已为 WebGL2-only。用户确认采用 OGL WebGL2 多通道重构，WebGL1/低性能环境使用高保真静态降级。
+- **已确认设计**：1672×941 下标题约占 `x=2.2%–95.7%`、`y=35.8%–60%`，基线约 54.2%，两套字体和固定 aperture 在 58% 相接；静止态由完整字形、字形溶解、全高粒子幕、4–6vw 窄焦散和仅向右射流五层组成；鼠标只以 flowmap 做 1–2px 整行跟随、局部不超过 4px、650ms 无 bounce 归零。
+- **文档**：新增 `docs/specs/2026-08-11-optical-lab-high-fidelity-design.md`，Candidate B spec 标记 DEPRECATED；生产 `/`、ECS、API、schema、auth 与 Hermes 均未修改或部署。
+- **下一步**：用户书面复核新 spec；批准后调用 writing-plans，第一实施门只做全尺寸字体 specimen，未通过人工排版验收前不得进入粒子或后处理实现。
+
 ## 2026-08-11（Optical Lab Candidate B 最终复审）— ✅ Important 修复，待 Step 6 用户选择
 
 - **TDD 与最终复审**：`af08251` 修复两个 Important：真实鼠标拖选现精确得到 `Science evolves.`，且 stage pointer 事件继续通过；斜向 target/current refraction 按真实 RAF `dt` 指数跟随、无 bounce，velocity/phase 有界，refraction + wave + flow 的 CSS 像素合成向量总量不超过 `8px` 并在 `650ms` 归零。RED 分别为拖选空串、`Scienceevolves.`、斜向 `11.313708px > 8px`、缺少平滑 step 与 raw velocity `707.106781 > 1`。

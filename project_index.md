@@ -60,7 +60,7 @@
 | `apps/web/test/ui-components.test.ts` | 原语 storyless server-rendering 断言（Task 7.4；Task 8 追加双表面 `.surface-dark` 与 state-danger 断言） | 活文档 |
 | `apps/web/test/evolving-ro-symbol.test.tsx` | Task 7.7 Evolving RO Symbol server-rendering、变体、动效与 SVG 层级断言 | 活文档 |
 | `apps/web/components/brand/{OpticalHeadline,OpticalField}.tsx` / `apps/web/lib/optical-field/*.ts` | Optical Editorial Landing 品牌媒介：当前生产为固定 aperture 的 Canvas glyph-particle renderer；第四轮改进基线为纯客户端连续字形 GPU displacement + shared flowmap + sparse instanced particles，SSR h1 与 WebGL2→WebGL1→DOM fallback 保底 | `cd5be36` ECS 工程门禁通过但用户视觉否决；ECS 无 GPU 且无需 GPU，Task 4 已重开，生产替换前先做独立 Optical Lab |
-| `apps/web/app/{%5Fvisual,_visual}/optical-lab/page.tsx` / `apps/web/components/optical-lab/*.tsx` / `apps/web/lib/optical-lab/*.ts` | 精确 `/_visual/optical-lab` 隔离比较页：reference/current/Candidate B 三联屏、单一 SSR selectable h1、fresh-canvas transactional WebGL2→WebGL1→DOM/static、固定 58% aperture、静止光学场、8px 内平滑整行折射、glyph-derived instanced particle curtain、policy/context recovery 与可测 diagnostics | Candidate B 最终复审修复完成（`af08251`）；Critical/Important 清零，生产 `/` 隔离，Step 6 待用户选择 |
+| `apps/web/app/{%5Fvisual,_visual}/optical-lab/page.tsx` / `apps/web/components/optical-lab/*.tsx` / `apps/web/lib/optical-lab/*.ts` | 精确 `/_visual/optical-lab` 隔离比较页：reference/current/Candidate B 三联屏、单一 SSR selectable h1、fresh-canvas transactional WebGL2→WebGL1→DOM/static、固定 58% aperture、静止光学场、8px 内平滑整行折射、glyph-derived instanced particle curtain、policy/context recovery 与可测 diagnostics | Candidate B 工程完成但用户视觉否决；生产 `/` 继续隔离，下一轮按高保真 OGL spec 重构 |
 | `apps/web/public/optical-lab/{target-reference,current-production}.png` | 用户授权参考原图副本与未改动 Landing 的本地 production-build current capture，仅供 no-index Optical Lab 比较 | Task 8 Step 5 视觉证据；不进入生产首页 |
 | `apps/web/test/optical-lab-{model,contract}.test.*` / `apps/web/test/visual/optical-lab-{gate,shots,visual-metrics}.*` | Optical Lab TDD/production-browser 门禁：纯拓扑 fixtures、reference-relative resting topology、真实拖选、honest 单帧 150ms 交互、8px 合成位移、forbidden geometry/ghost、transactional fallback、fresh context restore 与精确 GL cleanup | Candidate B fresh 16/16 + production matrix GREEN；直接 3,840 cap 已覆盖；输出位于已忽略 `test/visual/out/optical-lab/`，显式 steady-state FPS/CPU budget 仍为 deferred Minor |
 | `apps/web/app/explore/page.tsx` / `apps/web/components/explore/ResearchIndex.tsx` / `apps/web/test/{explore-index.test.tsx,e2e/explore-index.spec.ts}` | Optical Editorial 公开 Research Index：编号式 paper rows、query/SDF field/artifact 筛选、cursor load-more、真实 Public RO link 与 1440/390 无 Card browser gate | 活文档 |
@@ -137,7 +137,7 @@
 | `docs/handoff/2026-08-11-optical-editorial-production-acceptance-handoff.md` | `f5bb6e7` ECS 部署、回滚 ref/hash、真实账号 ingestion→Hermes→version 与公开路由验收 | 当前生产 handoff |
 | `docs/handoff/2026-08-11-optical-editorial-v3-complete-handoff.md` | Optical Editorial v3 15/15 完成、Hermes 原创 renderer、`0c79aa2` ECS 发布与全量浏览器门禁 | 当前完成 handoff |
 | `docs/handoff/2026-08-11-optical-editorial-optimization-design-handoff.md` | 首页增量优化设计交接：保留线上功能与风格，先优化 Landing，再传播到 Explore/Dashboard/创建页/公开 RO | 当前 handoff |
-| `docs/handoff/2026-08-11-optical-lab-task8-steps3-5-handoff.md` | Optical Lab Task 8 Steps 3–5 + Candidate B 最终复审交接：真实拖选、平滑 8px 合成位移、fresh 门禁、原尺寸视觉差异、SwiftShader 与 deferred performance Minor | 当前 handoff；Critical/Important 清零，未部署，待 Step 6 用户视觉选择 |
+| `docs/handoff/2026-08-11-optical-lab-task8-steps3-5-handoff.md` | Optical Lab Task 8 Steps 3–5、Candidate B 历史工程证据与高保真 OGL 重构设计交接 | 当前 handoff；Candidate B 视觉否决，未部署，新 spec 待书面复核 |
 | `docs/specs/2026-08-04-p1b-3-blob-artifact-upload-design.md` | P1B-3 Blob 内容寻址存储与上传管线设计（design gate 已确认：五决策，代码已实现 2026-08-04） | 活文档 |
 | `docs/plans/2026-07-24-doc-architecture-plan.md` | 文档架构落地实施计划 | 活文档 |
 | `docs/plans/2026-07-24-mvp-task-breakdown-plan.md` | MVP 任务拆解与工具配置实施计划（已批准，执行中） | 活文档 |
@@ -214,7 +214,8 @@
 | `docs/specs/2026-08-06-p1e-7-script-modification-design.md` | P1E-7 自然语言修改脚本与 diff 展示设计（design gate 已确认，代码已实现 2026-08-06） | 活文档 |
 | `docs/plans/2026-08-06-p1e-7-script-modification-plan.md` | P1E-7 脚本修改与 diff 实施计划（已执行完毕，task-master 6.7 done 2026-08-06） | 活文档 |
 | `docs/specs/2026-08-06-frontend-visual-system-design.md` | 前端视觉系统设计 spec（三方定稿正式版：定位/符号/token/三套视觉/字体/IA/Hermes/分期/验收，源出设计方向稿 v2 终稿决策层） | 已定稿 |
-| `docs/specs/2026-08-11-optical-lab-candidate-b-design.md` | Optical Lab Candidate B 设计：静止态参考优先、单一 GPU 字形层、固定 58% 狭缝、整行液态跟随、客户端 GPU 与三级降级/RED 验收边界 | 已批准并完成本地工程实现；待 Step 6 用户审美选择 |
+| `docs/specs/2026-08-11-optical-lab-candidate-b-design.md` | Optical Lab Candidate B 历史设计：单一 GPU 字形层、固定狭缝与 native WebGL 生命周期 | DEPRECATED → `docs/specs/2026-08-11-optical-lab-high-fidelity-design.md`；工程通过但视觉否决 |
+| `docs/specs/2026-08-11-optical-lab-high-fidelity-design.md` | `Science evolves.` 原型高保真重构：OGL WebGL2 多通道、全尺寸排版合同、MSDF/flowmap/GPGPU/HDR 五层静态光场、4px 轻交互与静态降级 | 分段设计已确认，待用户书面复核；未实现、未部署 |
 | `docs/plans/2026-08-06-frontend-p0-p1-plan.md` | 前端 P0 地基收尾 + P1 首页视觉原型实施计划（11 Task：Tailwind v4/token+WCAG 门禁/字体/shadcn/i18n/Header/EvolvingRoSymbol 两变体/Hero/#latest/Playwright 三尺寸截图/用户验收门） | 待执行 |
 | `docs/superpowers/plans/2026-08-07-homepage-rework.md` | Landing 首页视觉重做计划（主视觉 bitmap、真实 latest/trust 模块、入口修复、截图验收） | 已完成（2026-08-07，commit 481b5c4） |
 | `docs/superpowers/plans/2026-08-11-optical-lab-candidate-b-plan.md` | Optical Lab Candidate B 实施计划：纯模型静止能量/8px 液态折射 → Candidate A visual RED 与单一 GPU 字形 GREEN 合并复审 → 本地验收与用户选择 | Task 1–3 本地工程验收完成；Step 6 用户选择 pending，未部署 |

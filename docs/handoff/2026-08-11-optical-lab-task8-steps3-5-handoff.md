@@ -2,7 +2,7 @@
 
 ## Status
 
-Task 8 Steps 3–5 and Candidate B local engineering acceptance are complete on `codex/optical-editorial-v3`. The isolated Lab is available only at `/_visual/optical-lab`; production `/` and its Canvas renderer remain unchanged. Task Master Task 4 remains `in-progress`. Step 6 is intentionally pending user visual selection.
+Task 8 Steps 3–5 and Candidate B local engineering acceptance are complete on `codex/optical-editorial-v3`, but the user has now rejected Candidate B's visual result as too far from the `Science evolves.` reference. The isolated Lab remains available only at `/_visual/optical-lab`; production `/` and its Canvas renderer remain unchanged. Task Master Task 4 remains `in-progress`.
 
 Candidate B commits: model `40b2668`, material/gate `217fcd3`, review fixes `db68475` and `af08251`, browser-global lint fix `ded8011`. Earlier Candidate A commits `8485dac` and `a0509ef` remain history. The Lab has **not** been deployed.
 
@@ -17,7 +17,9 @@ Candidate B commits: model `40b2668`, material/gate `217fcd3`, review fixes `db6
 
 ## Manual visual ruling
 
-Candidate B is engineering-valid but not yet aesthetically selected. Original-resolution desktop, resting, left/right 150ms, forced WebGL1 and DOM fallback evidence shows one continuous title, a fixed aperture, a warm non-dark waist and subtle whole-line response. No duplicate/severed title, ring, fan, mechanical vertical line, DOM ghost or aperture movement was observed. Relative to the user reference, Candidate B has a more restrained focus and weaker rightward beam while its upper/lower discrete particle curtain is more prominent. Those differences require Step 6 user judgment; the candidate must not replace production `/` or be called visually accepted yet.
+Candidate B is engineering-valid but aesthetically rejected. Original-resolution evidence remains useful lifecycle and regression history, but its small title, isolated point curtain, weak focus and thin rightward emission do not reproduce the reference's composition or material quality. It must not replace production `/` or be called visually accepted.
+
+The user approved a replacement design section by section: OGL WebGL2 multi-pass rendering; a 1672×941 title contract spanning `x=2.2%–95.7%` and `y=35.8%–60%`; a fixed 58% type/aperture seam; intact glyph, dissolution, full-height curtain, 4–6vw caustic and right-only emission layers; flowmap-driven 1–2px whole-line follow with a 4px local cap and 650ms exact recovery; and a pre-rendered high-fidelity static fallback for WebGL1/reduced motion. The active design is `docs/specs/2026-08-11-optical-lab-high-fidelity-design.md`, pending written review.
 
 ## Server preflight
 
@@ -50,9 +52,9 @@ Next App Router treats `_visual` as a private folder. The actual route therefore
 
 ## Pending
 
-1. User reviews reference/current/Candidate B evidence and explicitly accepts, iterates or rejects Candidate B at Step 6; headless SwiftShader is not real-device performance proof.
-2. The deferred performance Minor remains visible: the browser gate records FPS/CPU but has no explicit steady-state FPS/CPU budget. The final review added a direct `particleCount <= 3,840` assertion without changing the existing hard cap or inventing a headless performance threshold.
-3. Only if the user explicitly requests isolated deployment, run the separate authorized backup/deploy/online-verification workflow. No such authorization has been inferred here.
-4. Only if the user selects Candidate B for the homepage, write a separate production Landing replacement plan and rerun TDD, release-browser and authorized ECS deployment gates.
+1. User reviews the written high-fidelity spec; after approval, invoke `writing-plans` and start with a typography-only full-size specimen gate.
+2. Amend ADR-009 in the implementation plan because the approved design replaces the dependency-free native experiment with OGL inside the isolated Lab.
+3. Preserve Candidate B lifecycle/cleanup evidence while replacing its visual formulas; headless SwiftShader is not real-device performance proof.
+4. Do not deploy or replace production `/` without a later explicit plan and authorization.
 
 No ECS, compose, API, schema, authentication, upload, Hermes or production Landing change is part of this handoff.
