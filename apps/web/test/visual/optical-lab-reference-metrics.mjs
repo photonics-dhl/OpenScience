@@ -112,6 +112,18 @@ function occupiedColumnContinuity({ height, mask, width }) {
   return occupied.length / span;
 }
 
+function maskInk(mask, { maxX = mask.width, minX = 0 } = {}) {
+  let ink = 0;
+  for (let y = 0; y < mask.height; y += 1) {
+    for (let x = minX; x < maxX; x += 1) ink += mask.mask[y * mask.width + x] ? 1 : 0;
+  }
+  return ink;
+}
+
+function inkDensityRatio(candidate, reference, range) {
+  return maskInk(candidate, range) / Math.max(1, maskInk(reference, range));
+}
+
 export function measureMsdfTypography({
   baselineY,
   domMask,
@@ -127,16 +139,25 @@ export function measureMsdfTypography({
     baseline: baselineY / viewport.height,
     edgeBoundsOverlapWithDom: boundsOverlap(msdfMask, domMask),
     edgeOverlapWithDom: tolerantMaskOverlap(msdfMask, domMask),
+    evolvesInkDensityRatio: inkDensityRatio(msdfMask, domMask, {
+      maxX: msdfMask.width,
+      minX: seamColumn,
+    }),
     evolves: normalizeBounds(evolves, viewport),
     evolvesEdgeOverlapWithDom: tolerantMaskOverlap(msdfMask, domMask, {
       maxX: msdfMask.width,
       minX: seamColumn,
     }),
+    inkDensityRatio: inkDensityRatio(msdfMask, domMask),
     occupiedColumnContinuity: occupiedColumnContinuity(msdfMask),
     oneLine: Math.abs(science.right - evolves.left) <= 1
       && science.top < evolves.bottom
       && evolves.top < science.bottom,
     science: normalizeBounds(science, viewport),
+    scienceInkDensityRatio: inkDensityRatio(msdfMask, domMask, {
+      maxX: seamColumn,
+      minX: 0,
+    }),
     scienceEdgeOverlapWithDom: tolerantMaskOverlap(msdfMask, domMask, {
       maxX: seamColumn,
       minX: 0,

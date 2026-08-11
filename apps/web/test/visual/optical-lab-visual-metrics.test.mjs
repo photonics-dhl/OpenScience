@@ -87,6 +87,52 @@ function createTypographyMask({ bottom, left, right, top }, width = 100, height 
   return { height, mask, width };
 }
 
+const FONT_LIKE_GLYPHS = Object.freeze({
+  '.': ['.....', '.....', '.....', '.....', '.....', '.....', '....#'],
+  S: ['#####', '#....', '#....', '#####', '....#', '....#', '#####'],
+  c: ['.####', '#....', '#....', '#....', '#....', '#....', '.####'],
+  e: ['#####', '#....', '#....', '####.', '#....', '#....', '#####'],
+  i: ['..#..', '.....', '.##..', '..#..', '..#..', '..#..', '.###.'],
+  l: ['.##..', '..#..', '..#..', '..#..', '..#..', '..#..', '.###.'],
+  n: ['#...#', '##..#', '##..#', '#.#.#', '#..##', '#..##', '#...#'],
+  o: ['.###.', '#...#', '#...#', '#...#', '#...#', '#...#', '.###.'],
+  s: ['.####', '#....', '#....', '.###.', '....#', '....#', '####.'],
+  v: ['#...#', '#...#', '#...#', '#...#', '.#.#.', '.#.#.', '..#..'],
+});
+
+function paintFontLikeWord(mask, text, bounds) {
+  const advances = [...text].map((glyph, index) => {
+    if (index === text.length - 1) return 5;
+    const pair = glyph.charCodeAt(0) + text.charCodeAt(index + 1);
+    return 6 + (pair % 2);
+  });
+  const totalAdvance = advances.reduce((sum, value) => sum + value, 0);
+  let cursor = 0;
+  for (let glyphIndex = 0; glyphIndex < text.length; glyphIndex += 1) {
+    const glyph = FONT_LIKE_GLYPHS[text[glyphIndex]];
+    for (let row = 0; row < glyph.length; row += 1) {
+      for (let column = 0; column < glyph[row].length; column += 1) {
+        if (glyph[row][column] !== '#') continue;
+        const left = Math.floor(bounds.left + ((cursor + column) / totalAdvance) * (bounds.right - bounds.left));
+        const right = Math.ceil(bounds.left + ((cursor + column + 1) / totalAdvance) * (bounds.right - bounds.left));
+        const top = Math.floor(bounds.top + (row / 7) * (bounds.bottom - bounds.top));
+        const bottom = Math.ceil(bounds.top + ((row + 1) / 7) * (bounds.bottom - bounds.top));
+        for (let y = top; y < bottom; y += 1) {
+          for (let x = left; x < right; x += 1) mask.mask[y * mask.width + x] = 1;
+        }
+      }
+    }
+    cursor += advances[glyphIndex];
+  }
+}
+
+function createFontLikeTitle(scienceText, evolvesText) {
+  const mask = { height: 180, mask: new Uint8Array(600 * 180), width: 600 };
+  paintFontLikeWord(mask, scienceText, { bottom: 150, left: 20, right: 365, top: 30 });
+  paintFontLikeWord(mask, evolvesText, { bottom: 150, left: 365, right: 580, top: 30 });
+  return mask;
+}
+
 describe('Optical Lab MSDF typography metrics', () => {
   it('measures reference-relative bounds, continuity, and DOM edge overlap', () => {
     assert.equal(
@@ -141,29 +187,28 @@ describe('Optical Lab MSDF typography metrics', () => {
     assert.equal(measured.edgeBoundsOverlapWithDom, 1, 'matching outer edges are measured independently from internal holes');
   });
 
-  it('rejects a wrong same-bounds silhouette even when its outer edges overlap', () => {
+  it('rejects realistic reordered glyphs with the same bounds and comparable stroke density', () => {
     assert.equal(typeof referenceMetrics.measureMsdfTypography, 'function');
-    const domMask = createTypographyMask({ bottom: 105, left: 20, right: 220, top: 30 }, 240, 135);
-    const msdfMask = createTypographyMask({ bottom: 105, left: 20, right: 220, top: 30 }, 240, 135);
-    for (let y = 0; y < msdfMask.height; y += 1) {
-      for (let x = 0; x < msdfMask.width; x += 1) {
-        const border = (x === 20 || x === 219) && y >= 30 && y < 105;
-        const crossbar = y === 67 && x >= 20 && x < 220;
-        msdfMask.mask[y * msdfMask.width + x] = border || crossbar ? 1 : 0;
-      }
-    }
+    const domMask = createFontLikeTitle('Science', 'evolves.');
+    const msdfMask = createFontLikeTitle('Secnice', 'nnclisc.');
     const measured = referenceMetrics.measureMsdfTypography({
-      baselineY: 90,
+      baselineY: 140,
       domMask,
-      evolves: { bottom: 105, left: 139, right: 220, top: 30 },
+      evolves: { bottom: 150, left: 365, right: 580, top: 30 },
       msdfMask,
-      science: { bottom: 105, left: 20, right: 139, top: 30 },
-      seamX: 139,
-      title: { bottom: 105, left: 20, right: 220, top: 30 },
-      viewport: { height: 135, width: 240 },
+      science: { bottom: 150, left: 20, right: 365, top: 30 },
+      seamX: 365,
+      title: { bottom: 150, left: 20, right: 580, top: 30 },
+      viewport: { height: 180, width: 600 },
     });
 
     assert.equal(measured.edgeBoundsOverlapWithDom, 1);
-    assert(measured.edgeOverlapWithDom < .75);
+    assert(measured.occupiedColumnContinuity >= .7);
+    assert(measured.inkDensityRatio >= .85 && measured.inkDensityRatio <= 1.15);
+    assert(measured.scienceInkDensityRatio >= .85 && measured.scienceInkDensityRatio <= 1.15);
+    assert(measured.evolvesInkDensityRatio >= .85 && measured.evolvesInkDensityRatio <= 1.15);
+    assert(measured.edgeOverlapWithDom < .9);
+    assert(measured.scienceEdgeOverlapWithDom < .9);
+    assert(measured.evolvesEdgeOverlapWithDom < .9);
   });
 });

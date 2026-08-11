@@ -32,8 +32,18 @@ const measurements = [];
 const cases = [
   { name: 'reference-desktop', width: 1672, height: 941, reducedMotion: 'no-preference' },
   { name: 'desktop', width: 1440, height: 900, reducedMotion: 'no-preference' },
+  {
+    name: 'resize-during-atlas-init',
+    width: 1672,
+    height: 941,
+    reducedMotion: 'no-preference',
+    dynamic: true,
+    resizeDuringAtlasLoad: { width: 1440, height: 900 },
+  },
   { name: 'webgl1-fallback', width: 900, height: 700, reducedMotion: 'no-preference', forceContext: 'webgl1' },
   { name: 'webgl2-init-fallback', width: 900, height: 700, reducedMotion: 'no-preference', forceContext: 'webgl2-init-failure' },
+  { name: 'shader-compile-link-fallback', width: 900, height: 700, reducedMotion: 'no-preference', forceContext: 'shader-failure' },
+  { name: 'incomplete-framebuffer-fallback', width: 900, height: 700, reducedMotion: 'no-preference', forceContext: 'framebuffer-incomplete' },
   { name: 'atlas-load-fallback', width: 900, height: 700, reducedMotion: 'no-preference', atlasFailure: true },
   { name: 'dom-fallback', width: 900, height: 700, reducedMotion: 'no-preference', forceContext: 'none' },
   { name: 'mobile', width: 390, height: 844, reducedMotion: 'no-preference' },
@@ -229,12 +239,18 @@ for (const testCase of cases) {
         glyphDrawInkStates: [],
         glyphDraws: 0,
         atlasColorSpaceConversions: [],
+        compileFailures: 0,
+        compileShaderCalls: 0,
         firstContextAcquisition: null,
+        framebufferChecks: 0,
         instancedDraws: 0,
         instancedDrawErrors: [],
         instancedDrawInkStates: [],
+        linkFailures: 0,
+        linkProgramCalls: 0,
         preInstancedDrawErrors: [],
         pointDrawArrays: 0,
+        straightAlphaFrames: [],
       };
       window.__OPTICAL_LAB_TEST_FIXED_RAF_TIME__ = null;
       window.__OPTICAL_LAB_TEST_RAF_CALLBACKS__ = 0;
@@ -337,6 +353,30 @@ for (const testCase of cases) {
           }
           return pixelStorei(parameter, value);
         };
+        const compileShader = context.compileShader.bind(context);
+        context.compileShader = (...args) => {
+          window.__OPTICAL_LAB_GL_TRACKER__.compileShaderCalls += 1;
+          const result = compileShader(...args);
+          if (!context.getShaderParameter(args[0], context.COMPILE_STATUS)) {
+            window.__OPTICAL_LAB_GL_TRACKER__.compileFailures += 1;
+          }
+          return result;
+        };
+        const linkProgram = context.linkProgram.bind(context);
+        context.linkProgram = (...args) => {
+          window.__OPTICAL_LAB_GL_TRACKER__.linkProgramCalls += 1;
+          const result = linkProgram(...args);
+          if (!context.getProgramParameter(args[0], context.LINK_STATUS)) {
+            window.__OPTICAL_LAB_GL_TRACKER__.linkFailures += 1;
+          }
+          return result;
+        };
+        const checkFramebufferStatus = context.checkFramebufferStatus.bind(context);
+        context.checkFramebufferStatus = (...args) => {
+          window.__OPTICAL_LAB_GL_TRACKER__.framebufferChecks += 1;
+          if (forceContext === 'framebuffer-incomplete') return context.FRAMEBUFFER_INCOMPLETE_ATTACHMENT;
+          return checkFramebufferStatus(...args);
+        };
         for (const resource of ['Shader', 'Program', 'Buffer', 'Texture', 'Framebuffer', 'Renderbuffer', 'VertexArray', 'Query']) {
           const createName = `create${resource}`;
           const deleteName = `delete${resource}`;
@@ -365,6 +405,35 @@ for (const testCase of cases) {
           const result = draw(...args);
           window.__OPTICAL_LAB_GL_TRACKER__.glyphDraws += 1;
           window.__OPTICAL_LAB_GL_TRACKER__.glyphDrawErrors.push(context.getError());
+          if (
+            window.__OPTICAL_LAB_GL_TRACKER__.straightAlphaFrames.length === 0
+            && context.getParameter(context.FRAMEBUFFER_BINDING) === null
+          ) {
+            const pixels = new Uint8Array(context.canvas.width * context.canvas.height * 4);
+            context.readPixels(0, 0, context.canvas.width, context.canvas.height, context.RGBA, context.UNSIGNED_BYTE, pixels);
+            let transparentRgb = 0;
+            const whiteEdges = [];
+            const vermilionEdges = [];
+            for (let index = 0; index < pixels.length; index += 4) {
+              const red = pixels[index];
+              const green = pixels[index + 1];
+              const blue = pixels[index + 2];
+              const alpha = pixels[index + 3];
+              if (alpha === 0 && (red !== 0 || green !== 0 || blue !== 0)) transparentRgb += 1;
+              if (alpha < 32 || alpha > 224) continue;
+              if (green >= red * .72 && blue >= red * .72) whiteEdges.push(Math.min(red, green, blue));
+              if (red >= green * 2 && red >= blue * 2) vermilionEdges.push({ green, red });
+            }
+            const mean = (values) => values.reduce((sum, value) => sum + value, 0) / Math.max(1, values.length);
+            window.__OPTICAL_LAB_GL_TRACKER__.straightAlphaFrames.push({
+              transparentRgb,
+              vermilionCount: vermilionEdges.length,
+              vermilionGreen: mean(vermilionEdges.map(({ green }) => green)),
+              vermilionRed: mean(vermilionEdges.map(({ red }) => red)),
+              whiteCount: whiteEdges.length,
+              whiteMinChannel: mean(whiteEdges),
+            });
+          }
           window.__OPTICAL_LAB_GL_TRACKER__.glyphDrawInkStates.push(
             document.querySelector('[data-optical-lab-candidate-stage="true"]')?.getAttribute('data-optical-ink') ?? null,
           );
@@ -450,10 +519,11 @@ for (const testCase of cases) {
         if ((forceContext === 'webgl1' || forceContext === 'none') && type === 'webgl2') return null;
         if (forceContext === 'none' && (type === 'webgl' || type === 'experimental-webgl')) return null;
         const context = original.call(this, type, ...options);
-        if (
-          context
-          && (forceContext === 'shader-failure' || (forceContext === 'webgl2-init-failure' && type === 'webgl2'))
-        ) {
+        if (context && forceContext === 'shader-failure') {
+          const shaderSource = context.shaderSource.bind(context);
+          context.shaderSource = (shader, source) => shaderSource(shader, `${source}\nforced_invalid_shader_token`);
+        }
+        if (context && forceContext === 'webgl2-init-failure' && type === 'webgl2') {
           const originalGetShaderParameter = context.getShaderParameter.bind(context);
           context.getShaderParameter = (shader, parameter) => (
             parameter === context.COMPILE_STATUS ? false : originalGetShaderParameter(shader, parameter)
@@ -472,8 +542,26 @@ for (const testCase of cases) {
   if (testCase.atlasFailure) {
     await page.route('**/optical-lab/atlas/*.png', (route) => route.abort('failed'));
   }
+  let atlasRequestStarted;
+  let releaseAtlasRequests;
+  if (testCase.resizeDuringAtlasLoad) {
+    let markAtlasRequestStarted;
+    atlasRequestStarted = new Promise((resolve) => { markAtlasRequestStarted = resolve; });
+    const atlasRequestsReleased = new Promise((resolve) => { releaseAtlasRequests = resolve; });
+    await page.route('**/optical-lab/atlas/*.png', async (route) => {
+      markAtlasRequestStarted();
+      await atlasRequestsReleased;
+      await route.continue();
+    });
+  }
 
-  const response = await page.goto(`${baseUrl}/_visual/optical-lab`, { waitUntil: 'networkidle' });
+  const navigation = page.goto(`${baseUrl}/_visual/optical-lab`, { waitUntil: 'networkidle' });
+  if (testCase.resizeDuringAtlasLoad) {
+    await atlasRequestStarted;
+    await page.setViewportSize(testCase.resizeDuringAtlasLoad);
+    releaseAtlasRequests();
+  }
+  const response = await navigation;
   assert.equal(
     response?.status(),
     200,
@@ -489,7 +577,7 @@ for (const testCase of cases) {
   await diagnostics.waitFor({ state: 'visible' });
   const mode = await diagnostics.getAttribute('data-render-mode');
   const contextStatus = await diagnostics.getAttribute('data-context-status');
-  const expectedDynamic = testCase.name === 'desktop' || testCase.name === 'reference-desktop';
+  const expectedDynamic = testCase.dynamic ?? (testCase.name === 'desktop' || testCase.name === 'reference-desktop');
   const renderPhase = await page.locator('[data-optical-lab-candidate-stage="true"]').getAttribute('data-optical-render-phase');
 
   const runTask3RuntimeShellAssertions = async () => {
@@ -684,6 +772,7 @@ for (const testCase of cases) {
       assert.equal(await diagnostics.getAttribute('data-first-complete-frame'), 'false', `${testCase.name} static mode cannot publish GPU ink`);
       assert.equal(await stage.getAttribute('data-optical-ink'), 'dom', `${testCase.name} static mode must retain DOM ink`);
       assert.equal(await page.locator('canvas[data-optical-lab-canvas="true"]').count(), 0, `${testCase.name} static mode must remove its canvas`);
+      assert.equal(await page.evaluate(() => window.__OPENSCIENCE_OPTICAL_LAB__?.activeRaf ?? false), false, `${testCase.name} static mode must stop its RAF chain`);
       const staticTracker = await page.evaluate(() => window.__OPTICAL_LAB_GL_TRACKER__);
       for (const context of staticTracker.contexts) {
         for (const [resource, created] of Object.entries(context.created)) {
@@ -695,12 +784,40 @@ for (const testCase of cases) {
         'rgb(255, 78, 34)',
         `${testCase.name} must retain the DOM vermilion period`,
       );
-      measurements.push({ case: testCase.name, geometry: initialGeometry, mode: await diagnostics.getAttribute('data-render-mode') });
+      measurements.push({
+        case: testCase.name,
+        failureEvidence: testCase.forceContext === 'shader-failure' || testCase.forceContext === 'framebuffer-incomplete'
+          ? {
+              compileFailures: staticTracker.compileFailures,
+              compileShaderCalls: staticTracker.compileShaderCalls,
+              contexts: staticTracker.contexts,
+              framebufferChecks: staticTracker.framebufferChecks,
+              glyphDraws: staticTracker.glyphDraws,
+              linkFailures: staticTracker.linkFailures,
+              linkProgramCalls: staticTracker.linkProgramCalls,
+            }
+          : null,
+        geometry: initialGeometry,
+        mode: await diagnostics.getAttribute('data-render-mode'),
+      });
       await page.screenshot({ fullPage: true, path: path.join(outDir, `${testCase.name}.png`) });
       if (testCase.atlasFailure) {
         assert(errors.length > 0, 'forced atlas failure must exercise the real texture error path');
       } else {
         assert.deepEqual(errors, [], `${testCase.name} emitted browser errors: ${errors.join(' | ')}`);
+      }
+      if (testCase.forceContext === 'shader-failure') {
+        const tracker = await page.evaluate(() => window.__OPTICAL_LAB_GL_TRACKER__);
+        assert(tracker.compileShaderCalls >= 2, 'forced shader failure must execute real shader compile calls');
+        assert(tracker.compileFailures >= 2, 'forced shader failure must produce real compile failures');
+        assert(tracker.linkProgramCalls >= 1, 'forced shader failure must execute a real program link');
+        assert(tracker.linkFailures >= 1, 'forced shader failure must produce a real link failure');
+        assert.equal(tracker.glyphDraws, 0, 'an unlinked glyph program must not reach a draw');
+      }
+      if (testCase.forceContext === 'framebuffer-incomplete') {
+        const tracker = await page.evaluate(() => window.__OPTICAL_LAB_GL_TRACKER__);
+        assert(tracker.framebufferChecks >= 1, 'forced incomplete framebuffer must execute a completeness check');
+        assert.equal(tracker.glyphDraws, 0, 'an incomplete glyph target must not reach a draw');
       }
       await page.close();
       return;
@@ -735,6 +852,15 @@ for (const testCase of cases) {
     );
     assert.equal(firstDraws.instancedDraws, 0, 'Task 4 must not execute the deferred material particle pass');
     assert.equal(firstDraws.pointDrawArrays, 0, 'Task 4 must not execute POINTS draws');
+
+    const straightAlpha = firstDraws.straightAlphaFrames[0];
+    assert(straightAlpha, `${testCase.name} must capture the drawing buffer inside the complete composite draw`);
+    assert.equal(straightAlpha.transparentRgb, 0, `${testCase.name} transparent drawing-buffer pixels must stay chroma-free`);
+    assert(straightAlpha.whiteCount > 20, `${testCase.name} must expose measurable white antialiasing pixels`);
+    assert(straightAlpha.whiteMinChannel >= 220, `${testCase.name} white edges are double attenuated: ${JSON.stringify(straightAlpha)}`);
+    assert(straightAlpha.vermilionCount > 0, `${testCase.name} must expose measurable vermilion antialiasing pixels`);
+    assert(straightAlpha.vermilionRed >= 245, `${testCase.name} vermilion red edges are double attenuated: ${JSON.stringify(straightAlpha)}`);
+    assert(straightAlpha.vermilionGreen >= 65, `${testCase.name} vermilion edge chroma collapsed: ${JSON.stringify(straightAlpha)}`);
 
     await stage.scrollIntoViewIfNeeded();
     const gpuFrame = await decodeScreenshot(
@@ -797,8 +923,18 @@ for (const testCase of cases) {
           attributeFilter: ['data-first-complete-frame', 'data-stable-bounds'],
           attributes: true,
         });
+        let releaseFontMeasurement;
+        const heldReady = new Promise((resolve) => { releaseFontMeasurement = resolve; });
+        Object.defineProperty(document.fonts, 'ready', { configurable: true, value: heldReady });
+        window.__OPTICAL_LAB_RELEASE_RESIZE_MEASUREMENT__ = () => {
+          Reflect.deleteProperty(document.fonts, 'ready');
+          releaseFontMeasurement();
+        };
       });
       await page.setViewportSize({ width: 1440, height: 900 });
+      await page.waitForFunction(() => window.__OPTICAL_LAB_RESIZE_PUBLICATION__.some(({ complete }) => complete === 'false'));
+      await page.waitForTimeout(80);
+      await page.evaluate(() => window.__OPTICAL_LAB_RELEASE_RESIZE_MEASUREMENT__());
       await page.waitForFunction(({ boundsBeforeResize, frameBeforeResize }) => {
         const node = document.querySelector('[data-optical-lab-diagnostics="true"]');
         return node?.getAttribute('data-first-complete-frame') === 'true'
@@ -858,7 +994,7 @@ for (const testCase of cases) {
       await stage.screenshot({ path: path.join(outDir, `${testCase.name}-restored-msdf-glyph.png`) });
     }
 
-    measurements.push({ case: testCase.name, geometry: initialGeometry, resizedGeometry, typography });
+    measurements.push({ case: testCase.name, geometry: initialGeometry, resizedGeometry, straightAlpha, typography });
     await page.screenshot({ fullPage: true, path: path.join(outDir, `${testCase.name}.png`) });
     assert.deepEqual(errors, [], `${testCase.name} emitted browser errors: ${errors.join(' | ')}`);
     await page.close();

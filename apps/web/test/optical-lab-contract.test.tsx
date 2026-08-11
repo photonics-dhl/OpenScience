@@ -32,6 +32,10 @@ const lifecycleModuleUrl = new URL('../lib/optical-lab/ogl/lifecycle.ts', import
 const lifecycleModule = existsSync(fileURLToPath(lifecycleModuleUrl))
   ? await import('../lib/optical-lab/ogl/lifecycle')
   : null;
+const glyphShaderModuleUrl = new URL('../lib/optical-lab/ogl/shaders/glyph.ts', import.meta.url);
+const glyphShaderModule = existsSync(fileURLToPath(glyphShaderModuleUrl))
+  ? await import('../lib/optical-lab/ogl/shaders/glyph')
+  : null;
 
 describe('isolated Optical Lab route contract', () => {
   beforeAll(() => {
@@ -91,6 +95,14 @@ describe('isolated Optical Lab route contract', () => {
       expect(source).not.toContain('optical-lab');
       expect(source).not.toContain('OpticalLab');
     }
+  });
+
+  it('writes straight-alpha RGB to the non-premultiplied drawing buffer', () => {
+    const shader = glyphShaderModule?.OPTICAL_GLYPH_COMPOSITE_FRAGMENT_SHADER ?? '';
+
+    expect(shader).toContain('color.rgb / max(color.a');
+    expect(shader).toContain('color.a <=');
+    expect(shader).not.toContain('fragColor = texture(tColor, vUv)');
   });
 
   it('deletes every OGL-owned GL handle exactly once across overlapping registrations', () => {

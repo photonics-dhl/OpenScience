@@ -66,7 +66,9 @@ export function createOpticalOglRenderer(
   let disposed = false;
   let firstCompleteFrame = false;
   let frameCount = 0;
+  let generation = 0;
   let glyphPass: OpticalGlyphPass | null = null;
+  let glyphAtlases: ReturnType<typeof loadOpticalGlyphAtlases> | null = null;
   let rafId: number | null = null;
   let stableBounds = 'pending';
 
@@ -92,17 +94,25 @@ export function createOpticalOglRenderer(
     return measureOpticalLayout(stage, science, evolves);
   };
 
-  const draw = () => {
-    if (disposed) return;
+  const cancelFrame = () => {
+    if (rafId !== null) cancelAnimationFrame(rafId);
+    rafId = null;
+    activeRaf = false;
+  };
+
+  const draw = (ownedGeneration: number) => {
+    if (disposed || ownedGeneration !== generation || !activeRaf || acceptedLayout === null) return;
     const layoutStable = acceptedLayout !== null;
     try {
       if (!glyphPass?.render(null)) throw new Error('Optical Lab MSDF color+mask frame is incomplete');
+      if (disposed || ownedGeneration !== generation || acceptedLayout === null) return;
       frameCount += 1;
       firstCompleteFrame = layoutStable;
       report('ready', layoutStable);
-      rafId = requestAnimationFrame(draw);
+      rafId = requestAnimationFrame(() => draw(ownedGeneration));
     } catch {
-      activeRaf = false;
+      if (ownedGeneration !== generation) return;
+      cancelFrame();
       firstCompleteFrame = false;
       glyphPass?.dispose();
       glyphPass = null;
@@ -110,21 +120,37 @@ export function createOpticalOglRenderer(
     }
   };
 
-  const resize = () => {
+  const beginLayoutGeneration = () => {
+    const ownedGeneration = ++generation;
+    cancelFrame();
     firstCompleteFrame = false;
+    acceptedLayout = null;
     report(frameCount > 0 ? 'ready' : 'initializing');
-    void readLayout().then((layout) => {
-      if (disposed) return;
-      acceptedLayout = layout;
-      stableBounds = serializeOpticalBounds(layout.title);
-      renderer.setSize(layout.viewport.width, layout.viewport.height);
-      glyphPass?.resize(layout);
-      report(frameCount > 0 ? 'ready' : 'initializing');
-    }).catch(() => {
-      if (disposed) return;
-      activeRaf = false;
-      if (rafId !== null) cancelAnimationFrame(rafId);
-      rafId = null;
+    void (async () => {
+      const layout = await readLayout();
+      if (disposed || ownedGeneration !== generation) return;
+      glyphAtlases ??= loadOpticalGlyphAtlases();
+      const atlases = await glyphAtlases;
+      if (disposed || ownedGeneration !== generation) return;
+      const publicationLayout = await readLayout();
+      if (disposed || ownedGeneration !== generation) return;
+      if (!hasOpticalLayoutParity(layout, publicationLayout)) {
+        report('unavailable', false);
+        return;
+      }
+      renderer.setSize(publicationLayout.viewport.width, publicationLayout.viewport.height);
+      if (glyphPass) glyphPass.resize(publicationLayout);
+      else glyphPass = createGlyphPass(renderer.gl, publicationLayout, atlases);
+      if (disposed || ownedGeneration !== generation) return;
+      acceptedLayout = publicationLayout;
+      stableBounds = serializeOpticalBounds(publicationLayout.title);
+      activeRaf = true;
+      report(frameCount > 0 ? 'ready' : 'initializing', true);
+      rafId = requestAnimationFrame(() => draw(ownedGeneration));
+    })().catch(() => {
+      if (disposed || ownedGeneration !== generation) return;
+      cancelFrame();
+      firstCompleteFrame = false;
       glyphPass?.dispose();
       glyphPass = null;
       report('unavailable', false);
@@ -132,45 +158,19 @@ export function createOpticalOglRenderer(
   };
 
   report('initializing', false);
-  void readLayout().then(async (layout) => {
-    if (disposed) return;
-    acceptedLayout = layout;
-    stableBounds = serializeOpticalBounds(layout.title);
-    renderer.setSize(layout.viewport.width, layout.viewport.height);
-
-    const atlases = await loadOpticalGlyphAtlases();
-    if (disposed) return;
-    const publicationLayout = await readLayout();
-    if (disposed) return;
-    const layoutStable = hasOpticalLayoutParity(layout, publicationLayout);
-    if (!layoutStable) {
-      report('unavailable', false);
-      return;
-    }
-    acceptedLayout = publicationLayout;
-    stableBounds = serializeOpticalBounds(publicationLayout.title);
-    glyphPass = createGlyphPass(renderer.gl, publicationLayout, atlases);
-    activeRaf = true;
-    rafId = requestAnimationFrame(draw);
-  }).catch(() => {
-    if (disposed) return;
-    glyphPass?.dispose();
-    glyphPass = null;
-    report('unavailable', false);
-  });
+  beginLayoutGeneration();
 
   return {
     dispose() {
       if (disposed) return;
       disposed = true;
-      activeRaf = false;
+      generation += 1;
       firstCompleteFrame = false;
-      if (rafId !== null) cancelAnimationFrame(rafId);
-      rafId = null;
+      cancelFrame();
       glyphPass?.dispose();
       glyphPass = null;
       report('disposed', false);
     },
-    resize,
+    resize: beginLayoutGeneration,
   };
 }

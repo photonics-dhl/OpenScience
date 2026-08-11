@@ -182,6 +182,15 @@ function createAtlasTexture(gl: OGLRenderingContext, atlas: LoadedAtlas) {
   });
 }
 
+function assertCompleteTarget(gl: OGLRenderingContext, target: RenderTarget, label: string) {
+  gl.bindFramebuffer(target.target, target.buffer);
+  const status = gl.checkFramebufferStatus(target.target);
+  gl.bindFramebuffer(target.target, null);
+  if (status !== gl.FRAMEBUFFER_COMPLETE) {
+    throw new Error(`Optical Lab ${label} framebuffer is incomplete: ${status}`);
+  }
+}
+
 export function createGlyphPass(
   gl: OGLRenderingContext,
   initialLayout: OpticalLayout,
@@ -235,9 +244,11 @@ export function createGlyphPass(
       width: gl.canvas.width,
     };
     const maskTarget = new RenderTarget(gl, targetOptions);
-    const colorTarget = new RenderTarget(gl, targetOptions);
     ledger.trackRenderTarget(maskTarget);
+    assertCompleteTarget(gl, maskTarget, 'mask');
+    const colorTarget = new RenderTarget(gl, targetOptions);
     ledger.trackRenderTarget(colorTarget);
+    assertCompleteTarget(gl, colorTarget, 'color');
 
     const compositeGeometry = new Triangle(gl);
     const compositeProgram = new Program(gl, {

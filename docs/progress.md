@@ -1,5 +1,13 @@
 # OpenScience (XGS) 进度日志
 
+## 2026-08-12（Optical Lab Task 4 review fix round 1/5）— ✅ 四项 Important 已修复
+
+- **异步几何 ownership**：renderer 以单调 generation 统一初始 DOM 测量、共享 atlas load、二次 parity、resize 与 RAF；resize 先同步撤回 GPU ink、取消旧 RAF 并使旧 async token 失效，最新 layout 完整重画后才重发。阻塞 `document.fonts.ready` 的 post-frame probe 在旧代码精确 RED 为 stale bounds 重新发布；延迟 atlas PNG 的 init-resize case 证明 pending atlas 不再导致永久 fallback。
+- **真实负样本**：移除稀疏 border/crossbar，改用两行相同外框、连续列与相近笔画密度的多字形 bitmap masks。错误字形 bbox IoU=`1.0`、continuity=`0.7375`、density ratio=`0.9850`，但整体/Science/evolves AA-tolerant overlap 仅 `0.829811 / 0.817836 / 0.852063`，均不能越过原 `0.90` 门；radius 与 literal threshold 未降低。
+- **straight alpha**：内部 color target 继续保存 premultiplied MSDF coverage，final composite 在 `premultipliedAlpha:false` drawing buffer 安全 unpremultiply。1672×941 composite-draw 内 `readPixels` 记录 2,141 个白色 AA edge pixels（平均最小通道 `231.06`）、28 个 vermilion edge pixels（R=`255`、G=`77.93`）且透明像素 RGB 污染为 `0`。
+- **真实失败矩阵**：invalid GLSL 确实执行 compile/link 后 0 glyph draw、停止 RAF、保留 DOM 并逐项资源回收；注入 `FRAMEBUFFER_INCOMPLETE_ATTACHMENT` 在旧代码精确 RED 为 30s 未离开 `webgl2-full`，修复后 target 采用 create→track→check 事务，部分构造 mask target 精确 cleanup 并静态 fail closed。
+- **验证与范围**：focused `18/18`、Web 全量 `199/199`、Web typecheck、production build、扩展 production-start 11-case gate 与原尺寸 GPU/DOM/resize/init-resize/shader/FBO 审图均通过；真实 reference shape overlap 现为 `0.959058`（Science `0.962785`、evolves `0.936090`）。没有 Task 5 effects，生产 `/` 仍 3.87 kB / 112 kB，未部署。
+
 ## 2026-08-12（Optical Lab 高保真 Task 4）— ✅ MSDF 字形与 DOM 精确同构
 
 - **真实字形通道**：隔离 Lab 使用 OGL `Text`/BMFont geometry 与已批准的 Archivo 900、Bodoni Moda Italic 700（opsz 96）单页 atlas；derivative median MSDF shader 在线性 mask/color targets 中绘制 `Science evolves.`，句点保持 vermilion。没有加入粒子、溶解幕、焦散、bloom、GPGPU、flowmap 或 Task 5 材质。

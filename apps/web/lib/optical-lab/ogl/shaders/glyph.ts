@@ -70,6 +70,8 @@ in vec2 vUv;
 out vec4 fragColor;
 
 void main() {
-  fragColor = texture(tColor, vUv);
+  vec4 color = texture(tColor, vUv);
+  if (color.a <= 0.0001) discard;
+  fragColor = vec4(color.rgb / max(color.a, 0.0001), color.a);
 }
 `;
