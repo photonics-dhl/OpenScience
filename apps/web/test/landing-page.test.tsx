@@ -123,8 +123,10 @@ describe('Optical Editorial landing page', () => {
     const markup = await renderLandingPage();
     expect(markup).toContain('data-optical-text-stage="true"');
     expect(markup).toContain('data-optical-text-base="true"');
-    expect(markup).toContain('data-optical-text-distorted="true"');
-    expect(markup).toContain('id="os-local-distortion"');
+    expect(markup).toContain('data-optical-science="true"');
+    expect(markup).toContain('data-optical-evolves="true"');
+    expect(markup).not.toContain('data-optical-text-distorted="true"');
+    expect(markup).not.toContain('id="os-local-distortion"');
     expect(markup.match(/<h1\b/g)).toHaveLength(1);
     expect(markup.match(/data-vermilion-marker=/g)).toHaveLength(1);
     expect(markup).toContain('data-optical-glyph-safe-zone="true"');

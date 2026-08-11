@@ -1,125 +1,140 @@
-import { sampleDiffractionWavefront, type OpticalSample, type OpticalViewport } from './field-model';
+import type { OpticalSample, OpticalViewport } from './field-model';
 
-function renderParticleLayer(
+export interface GlyphParticle {
+  alpha: number;
+  x: number;
+  y: number;
+}
+
+function clamp(value: number, minimum: number, maximum: number) {
+  return Math.min(maximum, Math.max(minimum, value));
+}
+
+function dot(
+  context: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  radius: number,
+  alpha: number,
+) {
+  if (alpha <= 0.01) return;
+  context.fillStyle = `rgba(241, 238, 231, ${clamp(alpha, 0, 0.92)})`;
+  context.beginPath();
+  context.arc(x, y, radius, 0, Math.PI * 2);
+  context.fill();
+}
+
+function chromaticFringe(
+  context: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  radius: number,
+  alpha: number,
+) {
+  context.fillStyle = `rgba(255, 78, 34, ${clamp(alpha * 0.2, 0, 0.12)})`;
+  context.beginPath();
+  context.arc(x - 1.15, y, radius, 0, Math.PI * 2);
+  context.fill();
+  context.fillStyle = `rgba(87, 184, 204, ${clamp(alpha * 0.16, 0, 0.1)})`;
+  context.beginPath();
+  context.arc(x + 1.15, y, radius, 0, Math.PI * 2);
+  context.fill();
+}
+
+function renderGlyphDiffraction(
   context: CanvasRenderingContext2D,
   sample: OpticalSample,
-  viewport: OpticalViewport,
-  spacing: number,
-  coreOnly: boolean,
+  glyphParticles: readonly GlyphParticle[],
 ) {
-  const center = coreOnly ? sample.aperture : sample.origin;
-  const radiusX = coreOnly ? sample.radius * 0.58 : sample.radius;
-  const minimumX = coreOnly ? Math.max(spacing / 2, center.x - radiusX) : spacing / 2;
-  const maximumX = coreOnly ? Math.min(viewport.width, center.x + radiusX) : viewport.width;
-  const minimumY = spacing / 2;
-  const maximumY = viewport.height;
-
-  context.fillStyle = 'rgba(241, 238, 231, 0.12)';
-  for (let y = minimumY; y < maximumY; y += spacing) {
-    for (let x = minimumX; x < maximumX; x += spacing) {
-      const baseDx = x - center.x;
-      const influenceDx = x - sample.origin.x;
-      const influenceDy = y - sample.origin.y;
-      const influenceDistance = Math.hypot(influenceDx, influenceDy);
-      const normalizedDistance = influenceDistance / sample.radius;
-      if (!coreOnly && normalizedDistance > 1) continue;
-      const influence = Math.max(0, 1 - normalizedDistance);
-      const radialX = influenceDistance ? influenceDx / influenceDistance : 0;
-      const radialY = influenceDistance ? influenceDy / influenceDistance : 0;
-      const ripple = Math.sin(sample.phase * 2.2 + influenceDistance * 0.055) * influence * (coreOnly ? 7 : 2);
-      const strength = coreOnly ? sample.displacement : sample.displacement * 0.16;
-      const offset = influence * influence * strength;
-      const baseline = coreOnly
-        ? Math.exp(-Math.abs(baseDx) / (radiusX * 0.58)) * (0.38 + 0.62 * Math.max(0, 1 - Math.abs(y - sample.aperture.y) / (viewport.height * 0.62)))
-        : 1;
-      const radius = coreOnly ? 0.45 + baseline * 0.72 + influence * 1.15 : 0.52 + influence * 0.42;
-      const alpha = coreOnly ? 0.028 + baseline * 0.22 + influence * 0.26 : 0.055 + influence * 0.46;
-      if (alpha < 0.04) continue;
-      context.fillStyle = `rgba(241, 238, 231, ${alpha})`;
-      context.beginPath();
-      context.arc(
-        x + radialX * offset - radialY * ripple,
-        y + radialY * offset + radialX * ripple,
-        radius,
-        0,
-        Math.PI * 2,
-      );
-      context.fill();
-    }
-  }
-}
-
-function renderApertureCurtain(context: CanvasRenderingContext2D, sample: OpticalSample, viewport: OpticalViewport) {
-  const columns = viewport.width < 640 ? 2 : 4;
-  const step = sample.coreSpacing * 1.35;
-  context.fillStyle = 'rgba(241, 238, 231, 0.48)';
-  for (let y = step / 2; y < viewport.height; y += step) {
-    const distanceFromAperture = Math.abs(y - sample.aperture.y);
-    const width = Math.min(sample.radius * 0.56, 16 + distanceFromAperture * 0.055);
-    const verticalFade = Math.max(0.12, 1 - distanceFromAperture / (viewport.height * 0.72));
-    context.globalAlpha = verticalFade * (0.42 + sample.evidence * 0.35);
-    for (let column = -columns; column <= columns; column += 1) {
-      const normalized = column / Math.max(columns, 1);
-      const wave = Math.sin(sample.phase * 1.4 + y * 0.018 + column) * 3.5;
-      context.beginPath();
-      context.arc(sample.aperture.x + normalized * width + wave, y, 0.65 + verticalFade * 0.45, 0, Math.PI * 2);
-      context.fill();
-    }
-  }
-  context.globalAlpha = 1;
-}
-
-function renderDiffractionField(context: CanvasRenderingContext2D, sample: OpticalSample, mobile: boolean) {
   const { aperture } = sample;
-  const intensity = 0.24 + sample.evidence * 0.56;
-  const reach = mobile ? 9 : 17;
-  const slitHalfHeight = mobile ? 15 : 23;
-  const baffleHeight = mobile ? 72 : 112;
+  const fieldWidth = sample.radius * 0.95;
 
-  context.save();
-  context.globalAlpha = intensity;
-  context.lineWidth = 1;
+  for (const particle of glyphParticles) {
+    const dx = particle.x - aperture.x;
+    if (Math.abs(dx) > fieldWidth) continue;
 
-  context.strokeStyle = 'rgba(241, 238, 231, 0.5)';
-  context.beginPath();
-  context.moveTo(aperture.x, aperture.y - baffleHeight);
-  context.lineTo(aperture.x, aperture.y - slitHalfHeight);
-  context.moveTo(aperture.x, aperture.y + slitHalfHeight);
-  context.lineTo(aperture.x, aperture.y + baffleHeight);
-  context.stroke();
+    const proximity = 1 - Math.abs(dx) / fieldWidth;
+    const energy = 0.72 + sample.evidence * 0.28;
+    let x = particle.x;
+    let y = particle.y;
 
-  for (let step = 0; step <= reach; step += 1) {
-    const upper = sampleDiffractionWavefront(aperture, step, -1, sample.phase);
-    const lower = sampleDiffractionWavefront(aperture, step, 1, sample.phase);
-    const alpha = Math.max(0.025, 0.18 - step * 0.009);
-    context.strokeStyle = `rgba(241, 238, 231, ${alpha})`;
-    context.beginPath();
-    context.moveTo(aperture.x + 2, aperture.y);
-    context.quadraticCurveTo(upper.x - 12, aperture.y, upper.x, upper.y);
-    context.moveTo(aperture.x + 2, aperture.y);
-    context.quadraticCurveTo(lower.x - 12, aperture.y, lower.x, lower.y);
-    context.stroke();
+    if (dx <= 0) {
+      const compression = Math.pow(proximity, 1.75) * 0.68;
+      x += (aperture.x - particle.x) * compression;
+      y += Math.sin(particle.y * 0.105 + sample.phase * 2.1) * proximity * (1.8 + sample.evidence * 3.8);
+      y += sample.verticalBias * proximity;
+    } else {
+      const refraction = Math.exp(-dx / (fieldWidth * 0.52));
+      x += Math.sin((particle.y - aperture.y) * 0.046 + sample.phase) * refraction * (4 + sample.evidence * 7);
+      y += Math.sin(dx * 0.052 + sample.phase * 2.4) * refraction * (2.5 + sample.evidence * 6.5);
+      y += sample.verticalBias * refraction;
+    }
+
+    const grain = 0.48 + proximity * 0.88;
+    const alpha = particle.alpha * (0.46 + proximity * 0.54) * energy;
+    dot(context, x, y, grain, alpha);
+    if (dx > 0 && dx < fieldWidth * 0.42 && sample.evidence > 0.04) {
+      chromaticFringe(context, x, y, grain * 0.78, alpha * sample.evidence);
+    }
+  }
+}
+
+function renderFocalCaustic(context: CanvasRenderingContext2D, sample: OpticalSample, viewport: OpticalViewport) {
+  const { aperture } = sample;
+  const spacing = viewport.width < 640 ? 6 : 4;
+  const halfHeight = viewport.height * 0.5;
+
+  for (let y = spacing / 2; y < viewport.height; y += spacing) {
+    const dy = y - aperture.y;
+    const normalizedY = Math.min(1, Math.abs(dy) / halfHeight);
+    const envelope = 1.2 + Math.pow(normalizedY, 1.65) * (viewport.width < 640 ? 24 : 62);
+    const fade = Math.pow(1 - normalizedY * 0.68, 1.6);
+
+    for (let lane = -4; lane <= 4; lane += 1) {
+      const lanePosition = lane / 4;
+      const x = aperture.x
+        + lanePosition * envelope
+        + Math.sin(y * 0.031 + sample.phase * 1.7 + lane) * (0.7 + normalizedY * 1.6);
+      const alpha = fade * (0.07 + (1 - Math.abs(lanePosition)) * 0.2) * (0.78 + sample.evidence * 0.22);
+      dot(context, x, y + sample.verticalBias * (1 - normalizedY), 0.45 + fade * 0.42, alpha);
+    }
   }
 
-  context.fillStyle = 'rgba(241, 238, 231, 0.9)';
-  context.beginPath();
-  context.arc(aperture.x, aperture.y, 2.2 + sample.evidence * 1.6, 0, Math.PI * 2);
-  context.fill();
-  context.restore();
+  dot(context, aperture.x, aperture.y + sample.verticalBias, 1.8 + sample.evidence * 0.7, 0.82);
+}
+
+function renderFresnelGrain(context: CanvasRenderingContext2D, sample: OpticalSample, mobile: boolean) {
+  const { aperture } = sample;
+  const families = mobile ? 6 : 11;
+  const steps = mobile ? 42 : 78;
+  const reach = sample.radius * (mobile ? 1.1 : 1.85);
+
+  for (let family = 0; family < families; family += 1) {
+    for (const side of [-1, 1] as const) {
+      for (let step = 1; step <= steps; step += 1) {
+        const progress = step / steps;
+        const x = aperture.x + 5 + progress * reach;
+        const spread = Math.pow(progress, 1.42) * (18 + family * (mobile ? 8 : 13));
+        const phaseRipple = Math.sin(progress * 11 + sample.phase * 1.8 + family * 0.63) * (1.2 + progress * 3.2);
+        const y = aperture.y + side * (spread + phaseRipple) + sample.verticalBias * (1 - progress);
+        const alpha = (1 - progress) * (1 - family / (families + 2)) * (0.065 + sample.evidence * 0.035);
+        dot(context, x, y, 0.42 + (1 - progress) * 0.34, alpha);
+      }
+    }
+  }
 }
 
 export function renderOpticalField(
   context: CanvasRenderingContext2D,
   sample: OpticalSample,
   viewport: OpticalViewport,
+  glyphParticles: readonly GlyphParticle[] = [],
 ) {
   const { width, height, dpr } = viewport;
   context.setTransform(dpr, 0, 0, dpr, 0, 0);
   context.clearRect(0, 0, width, height);
 
-  renderParticleLayer(context, sample, viewport, sample.ambientSpacing, false);
-  renderApertureCurtain(context, sample, viewport);
-  renderParticleLayer(context, sample, viewport, sample.coreSpacing, true);
-
-  renderDiffractionField(context, sample, width < 640);
+  renderGlyphDiffraction(context, sample, glyphParticles);
+  renderFocalCaustic(context, sample, viewport);
+  renderFresnelGrain(context, sample, width < 640);
 }

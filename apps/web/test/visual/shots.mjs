@@ -8,6 +8,7 @@ import { fileURLToPath } from 'node:url';
 
 const outDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), 'out');
 const baseUrl = process.env.VISUAL_BASE_URL ?? 'http://127.0.0.1:3002';
+const activeFrameDelays = [60, 150, 300];
 await mkdir(outDir, { recursive: true });
 
 const browser = await chromium.launch({ headless: true });
@@ -77,10 +78,21 @@ for (const testCase of cases) {
     assert(Math.abs(thirdX - targetX) < Math.abs(secondX - targetX), 'optical origin must keep converging monotonically');
     const interaction = await stage.evaluate((element) => ({
       opticalX: element.style.getPropertyValue('--os-optical-x'),
-      scale: Number(element.querySelector('[data-optical-displace="true"]')?.getAttribute('scale') ?? 0),
     }));
-    assert(interaction.opticalX.endsWith('px'), 'pointer must drive a pixel-local optical origin');
-    assert(interaction.scale > 5, 'pointer movement must visibly activate text displacement');
+    const apertureX = bounds.width * 0.5;
+    assert(Math.abs(Number.parseFloat(interaction.opticalX) - apertureX) < 1, 'optical axis must remain fixed at the aperture');
+
+    if (testCase.width === 1440 && testCase.symbol === 'a') {
+      for (const [position, factor] of [['left', 0.3], ['slit', 0.5], ['right', 0.7]]) {
+        for (const delay of activeFrameDelays) {
+          await page.mouse.move(bounds.x + 8, bounds.y + 8);
+          await page.waitForTimeout(700);
+          await page.mouse.move(bounds.x + bounds.width * factor, y);
+          await page.waitForTimeout(delay);
+          await page.screenshot({ path: path.join(outDir, `active-${position}-${delay}ms.png`) });
+        }
+      }
+    }
   }
   await page.screenshot({
     path: path.join(outDir, `${testCase.symbol}-${testCase.width}x${testCase.height}${testCase.reducedMotion === 'reduce' ? '-reduced' : ''}.png`),

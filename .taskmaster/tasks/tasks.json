@@ -1183,15 +1183,15 @@
         "id": "4",
         "title": "在完整 Landing 原型上增强 DOM Typography + Optical Field",
         "description": "以用户确认的 80c8312 pre-distortion Optical Editorial 构图为基线；Science evolves./科学，持续演化。保持单一可访问 DOM 标题，Canvas/SVG 实现局部折射、固定狭缝衍射与半色调场，下一屏以 paper surface 展示 Open RO 六层 SDF 结构。",
-        "status": "done",
+        "status": "in-progress",
         "dependencies": [
           "3"
         ],
         "priority": "high",
-        "details": "2026-08-11 第二轮原型形变纠偏（codex/optical-editorial-v3）。首轮 3336be4 虽通过工程门禁但视觉不合格：误改标题布局并产生白色大面积椭圆点阵，不作为接受基线。第二轮完整恢复原标题布局与 50% 光轴；真实 DOM headline 仍为一个 h1 + 一个 aria-hidden 折射层；Canvas 删除同心椭圆干涉环，核心点阵收窄为垂直狭缝，指针只产生局部径向扰动，以密集、低透明度右向波前线表达衍射；SVG mask 横向收窄，避免多字大面积撕裂。下一屏 OPEN RO + N1-N6 SDF anatomy 与真实 /explore 入口不变。focused 20/20、Web 159/159、typecheck/build、本地与线上三视口 normal/reduced/Open RO shots 全通过。release b45e002 已在备份后部署，远端全量 build、生产栈/健康检查、Nginx -t 与线上路由 smoke 通过；等待用户人工审美复核。",
-        "testStrategy": "TDD RED/GREEN 锁定字形安全区、时间插值、对称衍射波前、单一 h1 与 Open RO 六节点；浏览器逐帧断言 optical x 单调接近目标且不瞬移，SVG displacement scale>5；1440x900、1920x1080、390x844 normal/reduced-motion 与 Open RO full-page screenshots；overflow/console/reduced-motion gate。",
+        "details": "2026-08-11 第三轮固定字形衍射已通过本地门禁，待生产发布。保持 80c8312 标题布局/页面结构；Canvas 在真实字体 ready 后采样 Science/evolves glyph alpha，固定 50% aperture，执行上游压缩、焦散、下游 Fresnel 重构；pointer 仅调制 energy/phase/不超过 18px 纵向偏折。已删除 moving ambient disk、radial repulsion、pointer ellipse mask、turbulence duplicate、quadratic fan 与无消费者旧合同；桌面/移动分别使用窄固定遮罩。独立复审补齐 reduced-motion 采样后静态重绘、首次重复栅格化、resize 新尺寸顺序和独立 active-frame 重置。旧代码 RED 后 focused 24/24、Web 161/161、typecheck/build、3045 production 三视口/reduced/Open RO 与相互独立的 left/slit/right 60/150/300ms 人工帧门禁通过；b45e002 仍是被否决基线。",
+        "testStrategy": "TDD RED/GREEN：任意 pointer 下 origin.x===aperture.x；无 ambient pointer disk、无 pointer-centered CSS mask、无 turbulence 主形变；glyph alpha sampler 与固定 aperture 映射；浏览器捕获 pointer-left/slit/right 的 60/150/300ms active frames，拒绝圆形边界/空洞、灰色多字撕裂、蜘蛛网扇形线和移动光轴；再跑 1440/1920/390 normal/reduced/Open RO、full Web、typecheck/build 与生产同矩阵。",
         "subtasks": [],
-        "updatedAt": "2026-08-11T02:10:00.000Z"
+        "updatedAt": "2026-08-11T05:50:00.000Z"
       },
       {
         "id": "5",

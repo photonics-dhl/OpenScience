@@ -15,15 +15,12 @@ export interface OpticalViewport {
 }
 
 export interface OpticalSample {
-  ambientSpacing: number;
   aperture: OpticalPoint;
-  coreSpacing: number;
-  density: number;
-  displacement: number;
   evidence: number;
   origin: OpticalPoint;
   phase: number;
   radius: number;
+  verticalBias: number;
 }
 
 /** Time constant for the pointer's optical tracking spring. */
@@ -35,24 +32,6 @@ export function smoothOpticalPoint(current: OpticalPoint, target: OpticalPoint, 
     x: current.x + (target.x - current.x) * blend,
     y: current.y + (target.y - current.y) * blend,
   };
-}
-
-export function sampleDiffractionWavefront(
-  aperture: OpticalPoint,
-  step: number,
-  side: -1 | 1,
-  phase: number,
-): OpticalPoint {
-  const distance = 34 + step * 24;
-  const spread = distance * (0.24 + step * 0.035);
-  return {
-    x: aperture.x + distance + Math.sin(phase + step * 0.7) * 2,
-    y: aperture.y + side * spread,
-  };
-}
-
-export function textDisplacementScale(sample: OpticalSample) {
-  return sample.evidence * sample.displacement * 0.6;
 }
 
 function clamp(value: number, minimum: number, maximum: number) {
@@ -74,26 +53,20 @@ export function sampleOpticalField(
   now: number,
 ): OpticalSample {
   const mobile = viewport.width < 640;
-  const phase = (now % 6_283) / 1_000;
-  const restingOrigin = { x: viewport.width * 0.5, y: viewport.height * 0.46 };
+  const basePhase = (now % 6_283) / 1_000;
+  const restingOrigin = { x: viewport.width * 0.5, y: viewport.height * 0.5 };
   const recovery = pointer ? clamp((now - pointer.lastActiveAt) / 650, 0, 1) : 1;
-  const easedRecovery = recovery * recovery * (3 - 2 * recovery);
-  const origin = pointer
-    ? {
-        x: pointer.x + (restingOrigin.x - pointer.x) * easedRecovery,
-        y: pointer.y + (restingOrigin.y - pointer.y) * easedRecovery,
-      }
-    : restingOrigin;
+  const evidence = pointer?.pressed ? 1 : Math.max(0, 1 - recovery) * 0.9;
+  const pointerPhase = pointer ? clamp((pointer.x - restingOrigin.x) / viewport.width, -0.5, 0.5) * evidence * 0.7 : 0;
+  const verticalBias = pointer ? clamp(pointer.y - restingOrigin.y, -18, 18) * evidence : 0;
+  const phase = basePhase + pointerPhase;
 
   return {
-    ambientSpacing: mobile ? 32 : 26,
     aperture: restingOrigin,
-    coreSpacing: mobile ? 10 : 6,
-    density: mobile ? 0.3 : clamp(viewport.width / 1_440, 0.62, 1),
-    displacement: mobile ? 17 : 40 + Math.sin(phase) * 4,
-    evidence: pointer?.pressed ? 1 : Math.max(0, 1 - recovery) * 0.9,
-    origin,
+    evidence,
+    origin: restingOrigin,
     phase,
     radius: mobile ? clamp(viewport.width * 0.27, 90, 115) : clamp(viewport.width * 0.145, 180, 220),
+    verticalBias,
   };
 }

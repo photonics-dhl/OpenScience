@@ -1,7 +1,7 @@
 # Handoff — 2026-08-11 Optical Editorial 原型形变纠偏
 
 ## Current goal
-在现有线上产品和业务流程之上，修正 Landing 与 8.10 原型之间的光学几何差异，并完成生产复验。
+在现有线上产品和业务流程之上，用固定 glyph-to-particle 狭缝拓扑替换已被用户拒绝的鼠标圆形场，并先完成本地动态帧审美验收。
 
 ## Done
 - 已核对线上主要路由均可访问，生产服务运行中。
@@ -15,6 +15,11 @@
 - 第二轮恢复原标题布局与 50% 光轴；删除同心椭圆干涉环；点阵收窄为垂直狭缝，改用密集、低透明度的右向波前线；文字局部折射遮罩横向收窄。
 - 第二轮本地证据：focused 20/20、typecheck/build、3044 production 三视口 normal/reduced/Open RO shots 通过；截图中已无白色同心圆或大面积粒子团。
 - 第二轮已以 release `b45e002` 部署：部署前数据库备份 `BACKUP_OK size=276K files=7/7`；远端全量 build、生产容器重启/健康检查及 Nginx `-t` 通过；线上三视口 normal/reduced/Open RO shots 通过，`/`、`/explore` 返回 200，未登录 `/auth/me` 返回 401。
+- 用户随后在真实指针操作中否决 `b45e002`：ambient pointer disk、core radial repulsion、moving ellipse mask 与 turbulence 叠加，仍产生大圈和灰色字形撕裂；旧截图门禁未覆盖 active intermediate frames。
+- spec、现有实施计划 Task 7 与 Task Master 4 已重新打开：固定 aperture，粒子从实际 glyph alpha 采样，指针只调制能量/相位/有限纵向偏折；禁止圆形边界、移动光轴和随机完整字母撕裂。
+- 第三轮本地实现已完成：删除 pointer-centered ambient disk、径向排斥、移动 ellipse mask、SVG turbulence duplicate 与 quadratic fan；实际 Bricolage/Bodoni DOM 字形经 offscreen Canvas alpha 采样后在固定 aperture 两侧压缩/折射，鼠标只调制能量、相位和有界纵向偏折。
+- 第三轮独立复审发现并修复：reduced-motion 字形采样后漏重绘、首次重复栅格化、resize 使用旧尺寸、active-frame 延时累计以及旧 renderer 死合同。
+- 第三轮本地证据：focused 24/24、Web 161/161、typecheck、production build、3045 production visual shots 均通过；已人工检查 1440/390 normal/reduced 及相互独立的 left/slit/right 60/150/300ms 帧，无鼠标大圆或移动光轴。
 
 ## Constraints
 - 不读取或写入 `.env`；不删除现有文件。
@@ -23,11 +28,11 @@
 - Live2D 生产使用仍需保留 ADR-010 的授权记录门禁。
 
 ## Open gate
-- 本轮工程与生产发布门禁已完成；仍需用户对 `b45e002` 的实际视觉效果作人工审美复核，自动截图通过不等于审美接受。
+- `b45e002` 已被人工审美复核否决；第三轮本地门禁已通过，但尚未提交与部署。生产备份、无迁移部署、线上 active-frame/三视口/reduced/Open RO 与路由 smoke 仍是发布门禁。
 - 后续应按产品表面矩阵逐页优化 Dashboard/Workspace/Public RO/Hermes，新增范围先建立对应 spec/plan 和验收证据。
 
 ## Next action
-先让用户复核线上 `b45e002` 的窄狭缝衍射；接受后再以此 Landing 为视觉基线推进下一个明确产品表面。不要恢复 `3336be4` 的白色大椭圆、已废弃的旧卡片/媒体叙事，也不要在未授权时扩张后端合同。
+提交第三轮实现和同步文档，执行 ECS 备份与无迁移部署，然后对生产运行与本地相同的 active-frame/三视口门禁。不要恢复 `3336be4` 的白色大椭圆、`b45e002` 的 moving pointer disk、已废弃的旧卡片/媒体叙事，也不要扩张后端合同。
 
 ## Read first
 `AGENTS.md` → `docs/OpenScience_Kimi_Development_Spec.md` → `docs/progress.md` → `project_index.md` → `docs/specs/2026-08-10-optical-editorial-rebaseline-design.md` → `docs/decisions/ADR-010-hermes-visual-runtime-and-live2d-license-gate.md`

@@ -553,9 +553,54 @@ git commit -m "docs: record landing production optimization"
 
 ---
 
+### Task 7: Replace the Rejected Pointer-Disk Model with a Fixed Glyph Diffraction Field
+
+**Files:**
+- Modify: `apps/web/lib/optical-field/field-model.ts`
+- Modify: `apps/web/lib/optical-field/canvas-renderer.ts`
+- Modify: `apps/web/components/brand/OpticalField.tsx`
+- Modify: `apps/web/components/brand/OpticalHeadline.tsx`
+- Modify: `apps/web/app/globals.css`
+- Modify: `apps/web/test/optical-field.test.ts`
+- Modify: `apps/web/test/visual/shots.mjs`
+
+**Interfaces:**
+- Consumes: the real DOM headline, loaded Bricolage/Bodoni fonts, fixed aperture coordinates, pointer energy, and reduced-motion state.
+- Produces: a fixed-aperture field whose particles are sampled from headline glyph alpha; pointer input changes phase/intensity only; browser evidence includes active intermediate frames.
+
+- [x] **Step 1: Write failing regression contracts**
+
+Add tests proving that `origin.x === aperture.x` for every pointer position; the renderer has no full-field mouse-radius particle pass; the visual layer owns an offscreen glyph sampler; CSS contains no pointer-centered radial/ellipse mask; and the browser gate captures active left/slit/right frames at 60/150/300ms.
+
+- [x] **Step 2: Run focused tests and record RED**
+
+Run `npx pnpm@9.15.0 --filter @openscience/web test -- optical-field.test.ts landing-page.test.ts landing-motion-policy.test.ts`. Expected: failures identify the current moving origin, radial particle pass, SVG turbulence mask, and missing intermediate-frame captures.
+
+- [x] **Step 3: Implement the fixed glyph field**
+
+Render the exact headline fonts to an offscreen canvas after `document.fonts.ready`; sample non-transparent glyph pixels; map upstream samples toward the aperture with monotonic horizontal compression; render a narrow focal caustic and low-alpha downstream Fresnel envelope. Keep the semantic DOM headline readable and the canvas `aria-hidden`.
+
+- [x] **Step 4: Restrict pointer input to modulation**
+
+Keep the aperture and glyph map fixed. Convert pointer distance from the aperture into bounded energy/phase/vertical-bias values; never use pointer coordinates as a particle center or CSS mask origin. Coarse input remains a 650ms pulse and reduced motion renders a stable, noninteractive composition.
+
+- [x] **Step 5: Replace random glyph tearing**
+
+Remove the moving radial SVG masks and turbulence-led duplicate-text tear. Limit the visual reconstruction/color fringe to a narrow fixed band around the first part of `evolves`; preserve the original headline layout and the single accessible `h1`.
+
+- [x] **Step 6: Verify GREEN and inspect active frames**
+
+Run focused tests, Web typecheck, and production build. Capture 1440×900 active frames for pointer-left/slit/right at 60/150/300ms plus 1920×1080, 390×844, reduced-motion, and Open RO. Reject any circular boundary/hole, grey multi-letter tearing, spider-web fan, moving optical axis, or particles unrelated to glyph contours.
+
+- [ ] **Step 7: Commit, back up, deploy, and re-run the same production gate**
+
+Commit the tested implementation, take the required ECS database backup, deploy from the isolated worktree without migration, then run the identical active-frame matrix against `https://openscience.428312321.xyz/`. Update progress, project index, handoff, and Task Master only after human-readable production evidence exists.
+
+---
+
 ## Plan Self-Review
 
 - Spec coverage: Hero hierarchy, explicit typography, particle field, mobile/reduced motion, Open RO, route preservation, server deployment, and documentation are each assigned to a task.
 - Scope: no backend, schema, upload, auth, or Hermes runtime changes are included.
-- Type consistency: `ambientSpacing` and `coreSpacing` are introduced in Task 3 and consumed only by the renderer in the same task.
+- Type consistency: Task 7 supersedes Task 3's rejected moving-origin/ambient-disk model; aperture coordinates remain fixed and pointer coordinates are consumed only as bounded modulation input.
 - No placeholder implementation steps remain; deployment resolves the tested commit directly from `git rev-parse HEAD`.

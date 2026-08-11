@@ -125,7 +125,11 @@ for (const releaseCase of PRODUCT_RELEASE_CASES) {
 
     if (reducedMotion) {
       expect(await page.evaluate(() => matchMedia('(prefers-reduced-motion: reduce)').matches)).toBe(true);
-      expect(await page.locator('[data-optical-displace="true"]').getAttribute('scale')).toBe('0');
+      const reducedMask = await page.locator('[data-optical-text-base="true"]').evaluate((element) =>
+        getComputedStyle(element).maskImage,
+      );
+      expect(reducedMask).toBe('none');
+      await expect(page.locator('[data-optical-text-distorted="true"]')).toHaveCount(0);
     }
 
     const metrics = await page.evaluate(() => {

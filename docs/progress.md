@@ -1,5 +1,15 @@
 # OpenScience (XGS) 进度日志
 
+## 2026-08-11（Landing 固定字形衍射第三轮纠偏）— ⏳ 本地门禁通过，待生产发布
+
+- **线上复核失败**：用户确认 release `b45e002` 仍有跟随鼠标的大圈粒子、扇形衍射线和缺失的原型字形穿越形变，因此上一条“已无大面积粒子团”的静态截图结论无效；`b45e002` 不作为视觉接受基线。
+- **根因证据**：`canvas-renderer.ts` 的 ambient pass 仍以 moving `sample.origin` 形成圆形粒子盘，core strip 仍用鼠标径向排斥；CSS/SVG 仍以 moving origin 形成椭圆 mask 并用 turbulence 撕裂完整标题；浏览器旧门禁没有捕获 60/150/300ms active frames。
+- **事实源修正**：现有 Optical Field spec 与增量计划 Task 7 已改为固定 aperture、真实 glyph alpha 粒子采样、上游字形压缩/焦点/下游波前重构、pointer energy-only modulation；Task Master 4 重新置为 pending。
+- **TDD 与实现**：旧代码 RED 精确暴露 moving origin、radial disk/mask、turbulence duplicate、缺失 glyph sampler 和 active-frame 覆盖；GREEN 后标题继续保持单一可访问 DOM 与原布局，Canvas 改为加载真实字体后采样 glyph alpha，固定 50% aperture，上游压缩、焦散、下游 Fresnel grain，指针只调制 phase/energy/≤18px vertical bias。
+- **独立复审修复**：reduced-motion 在字体 alpha 采样完成后补静态重绘；删除首次挂载的重复全标题栅格化；resize 先提交新画布尺寸再重建粒子；active-frame 门禁每个 60/150/300ms 样本先独立回到 neutral，避免累计成 60/210/510ms；删除已无生产消费者的旧 density/displacement/wavefront 合同与 CSS 写入。
+- **本地证据**：focused 24/24、Web 26 files / 161 tests、typecheck、production build 通过；3045 production 截取 1440/1920/390 normal/reduced/Open RO，以及相互独立的 pointer-left/slit/right 60/150/300ms 帧。人工复核确认无鼠标圆形边界、无移动光轴、无贝塞尔扇形线；移动端使用独立窄遮罩，避免桌面宽遮罩造成整词灰化。
+- **下一步**：同步文档并提交；生产备份后从隔离 worktree 无迁移部署，再对线上运行相同 active-frame 矩阵与路由 smoke。生产证据完成前 Task Master 保持 in-progress。
+
 ## 2026-08-11（Landing 原型形变纠偏）— ✅ 第二轮已部署
 
 - **用户纠正**：首轮把问题误判为文字轴位置，并把核心点阵扩成大面积白色椭圆；release `3336be4` 虽通过工程门禁但视觉不合格，不能作为接受基线。
