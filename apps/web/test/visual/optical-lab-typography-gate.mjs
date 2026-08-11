@@ -132,13 +132,13 @@ async function inspectSpecimen({ candidate, route, screenshot }) {
       title.boundingBox(), science.boundingBox(), evolves.boundingBox(), baseline.boundingBox(),
     ]);
     assert(titleBox && scienceBox && evolvesBox && baselineBox, `${candidate} must expose measurable typography geometry`);
-    const measurement = await page.evaluate(({ baselineSelector, candidate, evolvesSelector, scienceSelector, titleSelector }) => {
+    const measurement = await page.evaluate(({ baselineSelector, evolvesSelector, scienceSelector, titleSelector }) => {
       const titleNode = document.querySelector(titleSelector);
       const scienceNode = document.querySelector(scienceSelector);
       const evolvesNode = document.querySelector(evolvesSelector);
       const baselineNode = document.querySelector(baselineSelector);
       const inkNode = scienceNode?.firstElementChild;
-      if (!(titleNode && scienceNode && evolvesNode && baselineNode && inkNode instanceof HTMLElement)) {
+      if (!(titleNode && scienceNode && evolvesNode && baselineNode && inkNode)) {
         throw new Error('Typography geometry or font nodes are missing');
       }
       const title = titleNode.getBoundingClientRect();
@@ -167,7 +167,7 @@ async function inspectSpecimen({ candidate, route, screenshot }) {
         userSelect: getComputedStyle(titleNode).userSelect,
       };
     }, {
-      baselineSelector: '[data-optical-baseline="true"]', candidate, evolvesSelector: '[data-optical-evolves="true"]',
+      baselineSelector: '[data-optical-baseline="true"]', evolvesSelector: '[data-optical-evolves="true"]',
       scienceSelector: '[data-optical-science="true"]', titleSelector: 'h1[data-optical-selectable="true"]',
     });
     assert.equal(measurement.userSelect, 'text', `${candidate} title must be selectable`);
@@ -222,23 +222,25 @@ try {
   await writeFile(path.join(outDir, 'typography-metrics.json'), `${JSON.stringify(metrics, null, 2)}\n`, 'utf8');
 } catch (error) {
   primaryError = error;
-  throw error;
-} finally {
-  let cleanupError;
-  try {
-    await closeBrowserBounded();
-  } catch (error) {
-    cleanupError = error;
-  }
-  try {
-    await stopServerAndVerifyPort();
-  } catch (error) {
-    cleanupError ??= error;
-  }
-  if (primaryError && cleanupError) {
-    primaryError.cleanupError = cleanupError;
-  }
-  if (!primaryError && cleanupError) {
-    throw cleanupError;
-  }
+}
+
+let cleanupError;
+try {
+  await closeBrowserBounded();
+} catch (error) {
+  cleanupError = error;
+}
+try {
+  await stopServerAndVerifyPort();
+} catch (error) {
+  cleanupError ??= error;
+}
+if (primaryError && cleanupError) {
+  primaryError.cleanupError = cleanupError;
+}
+if (primaryError) {
+  throw primaryError;
+}
+if (cleanupError) {
+  throw cleanupError;
 }
