@@ -1,5 +1,11 @@
 # OpenScience (XGS) 进度日志
 
+## 2026-08-12（Optical Lab Task 2 review fix round 1/5）— ✅ 输出映射与配置不可变
+
+- **审查修复**：生成器不再从 mutable `font.file` basename 推导写入路径；代码拥有且先验证唯一的 `science-display.ttf → science-display.{json,png}` 与 `evolves-editorial.ttf → evolves-editorial.{json,png}` 映射。篡改 source、输出重复/缺失/额外项会在任何 generation/write 前失败。
+- **不可变 gate**：代码与 manifest 同时固定 charset、`msdf-bmfont-xml@2.8.0`、96px、range 8、padding 4、JSON/MSDF、smart/POT、单页与 512 KiB 总预算；生成结果在写入前复核单页与总字节数。focused atlas suite 以实际 JSON 检查精确 unique glyph set、pages、POT 尺寸、distance field、size/padding 与 budget。
+- **TDD/验证**：RED 为 3 个缺失 `validateOpticalAtlasContract` 的映射/config probes + 缺失 manifest settings；GREEN `6/6`。随后双生成 scoped diff、Web typecheck 与 `audit:docs-sync` 均 exit 0；无 Task 3、生产首页或 ECS 改动。
+
 ## 2026-08-12（Optical Lab 高保真 Task 2）— ✅ 固定 OGL/MSDF 资产
 
 - **字体/许可取证**：Google Fonts 仅提供变量上游，故固定 `google/fonts@038b637` 的官方 Archivo 与 Bodoni Moda Italic 输入，以 FontTools 4.55.3（禁止 timestamp 重算）分别实例化为 `Archivo Black`（`wdth=100,wght=900`）和 `Bodoni Moda 96pt Bold Italic`（`opsz=96,wght=700`）。上游、实例输入与生成输出 SHA-256、轴值、工具版本与原样 OFL 已登记在 `apps/web/assets/optical-lab/fonts/manifest.json`；不使用 `.next` 临时字体。

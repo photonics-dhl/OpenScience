@@ -68,9 +68,12 @@
   ],
   "settings": {
     "distanceRange": 8,
+    "fieldType": "msdf",
     "fontSize": 96,
+    "maxTotalBytes": 524288,
     "outputType": "json",
     "powerOfTwo": true,
+    "singlePage": true,
     "smartSize": true,
     "texturePadding": 4
   }
