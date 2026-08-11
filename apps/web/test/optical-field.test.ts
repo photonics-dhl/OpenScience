@@ -23,6 +23,17 @@ describe('pointer-local optical field model', () => {
     expect(sample.evidence).toBe(1);
     expect(sample.ambientSpacing).toBe(26);
     expect(sample.coreSpacing).toBe(6);
+    expect(sample.aperture).toEqual({ x: 835.1999999999999, y: 414 });
+  });
+
+  it('keeps the diffraction aperture fixed while the pointer becomes a local field origin', () => {
+    const sample = sampleOpticalField(
+      { x: 180, y: 160, lastActiveAt: 500, pressed: true },
+      { width: 1440, height: 900, dpr: 1 },
+      500,
+    );
+    expect(sample.aperture).toEqual({ x: 835.1999999999999, y: 414 });
+    expect(sample.origin).toEqual({ x: 180, y: 160 });
   });
 
   it('stays within the optimized desktop optical envelope', () => {
@@ -55,16 +66,17 @@ describe('pointer-local optical field model', () => {
   it('masks the readable base layer inside the local distortion lens', () => {
     const css = readFileSync(new URL('../app/globals.css', import.meta.url), 'utf8');
     expect(css).toContain("[data-optical-text-base='true']");
-    expect(css).toContain('calc(1 - var(--os-optical-focus) * .55)');
-    expect(css).toContain('calc(var(--os-optical-focus) * .68)');
+    expect(css).toContain('radial-gradient(ellipse');
+    expect(css).toContain('calc(1 - var(--os-optical-focus))');
+    expect(css).toContain('calc(var(--os-optical-focus) * .96)');
   });
 
   it('returns to the aperture in the 650ms recovery window', () => {
     const pointer = { x: 120, y: 100, lastActiveAt: 1_000, pressed: false };
     const viewport = { width: 1_000, height: 600, dpr: 1 };
     expect(sampleOpticalField(pointer, viewport, 1_000).origin).toEqual({ x: 120, y: 100 });
-    expect(sampleOpticalField(pointer, viewport, 1_325).origin).toEqual({ x: 310, y: 188 });
-    expect(sampleOpticalField(pointer, viewport, 1_650).origin).toEqual({ x: 500, y: 276 });
+    expect(sampleOpticalField(pointer, viewport, 1_325).origin).toEqual({ x: 350, y: 188 });
+    expect(sampleOpticalField(pointer, viewport, 1_650).origin).toEqual({ x: 580, y: 276 });
   });
 
   it('suspends animation offscreen and caches layout through observers', () => {
@@ -112,5 +124,12 @@ describe('pointer-local optical field model', () => {
     expect(lower.x).toBe(upper.x);
     expect(upper.y).toBeLessThan(aperture.y);
     expect(lower.y - aperture.y).toBeCloseTo(aperture.y - upper.y, 5);
+  });
+
+  it('renders the core as a fixed aperture field with pointer-local displacement', () => {
+    const source = readFileSync(new URL('../lib/optical-field/canvas-renderer.ts', import.meta.url), 'utf8');
+    expect(source).toContain('coreOnly ? sample.aperture');
+    expect(source).toContain('sample.origin');
+    expect(source).toContain('viewport.height * 0.42');
   });
 });

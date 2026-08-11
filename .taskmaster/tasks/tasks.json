@@ -1188,7 +1188,7 @@
           "3"
         ],
         "priority": "high",
-        "details": "已于 2026-08-11 在 codex/optical-editorial-v3 完成。以 80c8312 为唯一接受基线，不恢复 v3 禁用的 RO loop/六节点圆环/Evolution-Hermes-Trust 卡片段。真实 DOM headline 保留一个 h1 与一个 aria-hidden 折射层；Bodoni 字形安全区防止 evolves 下缘裁切；指针使用 target/current 时间插值；固定孔径与衍射波前位于两词交界；粒子核心以狭缝为中心并由指针轻微牵引，文字滤镜保留底层可读性。下一屏为 OPEN RO paper surface + N1-N6 SDF anatomy，真实 /explore 入口，不伪造公开研究数据。focused 18/18、Web 157/157、截图/构建/lint/docs-sync 全通过。",
+        "details": "已于 2026-08-11 完成原型形变纠偏（codex/optical-editorial-v3）。以 80c8312 为接受基线，不恢复 v3 禁用的 RO loop/六节点圆环/Evolution-Hermes-Trust 卡片段。真实 DOM headline 保留一个 h1 与一个 aria-hidden 折射层；桌面标题单轴横排，固定狭缝落在两词交界附近；Canvas 核心点阵固定于狭缝并按纵向基线渐隐，指针只改变局部径向位移；SVG mask 在焦点区让位给位移层，避免整句重影；移动端保留两行可读布局。下一屏为 OPEN RO paper surface + N1-N6 SDF anatomy，真实 /explore 入口，不伪造公开研究数据。focused 20/20、Web 159/159、typecheck/build、三视口截图与 Open RO full-page 全通过；待 ECS 发布后补充 release ref。",
         "testStrategy": "TDD RED/GREEN 锁定字形安全区、时间插值、对称衍射波前、单一 h1 与 Open RO 六节点；浏览器逐帧断言 optical x 单调接近目标且不瞬移，SVG displacement scale>5；1440x900、1920x1080、390x844 normal/reduced-motion 与 Open RO full-page screenshots；overflow/console/reduced-motion gate。",
         "subtasks": [],
         "updatedAt": "2026-08-11T02:10:00.000Z"

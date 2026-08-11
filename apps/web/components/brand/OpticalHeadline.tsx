@@ -9,6 +9,7 @@ function OpticalHeadline({ locale, reducedMotion = false }: OpticalHeadlineProps
   const headlineLines = (includeMarker: boolean) => (
     <span className="os-optical-headline-axis">
       <span className="os-optical-science font-display">Science</span>
+      <span className="os-optical-gap"> </span>
       <span
         className="os-optical-evolves font-editorial-latin"
         data-optical-evolves="true"

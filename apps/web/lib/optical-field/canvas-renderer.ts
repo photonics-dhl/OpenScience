@@ -7,14 +7,9 @@ function renderParticleLayer(
   spacing: number,
   coreOnly: boolean,
 ) {
-  const center = coreOnly
-    ? {
-        x: sample.aperture.x + (sample.origin.x - sample.aperture.x) * 0.28,
-        y: sample.aperture.y + (sample.origin.y - sample.aperture.y) * 0.28,
-      }
-    : sample.origin;
-  const radiusX = coreOnly ? sample.radius * 0.62 : sample.radius;
-  const radiusY = coreOnly ? sample.radius * 1.25 : sample.radius;
+  const center = coreOnly ? sample.aperture : sample.origin;
+  const radiusX = coreOnly ? sample.radius * 1.08 : sample.radius;
+  const radiusY = coreOnly ? viewport.height * 0.42 : sample.radius;
   const minimumX = coreOnly ? Math.max(spacing / 2, center.x - radiusX) : spacing / 2;
   const maximumX = coreOnly ? Math.min(viewport.width, center.x + radiusX) : viewport.width;
   const minimumY = coreOnly ? Math.max(spacing / 2, center.y - radiusY) : spacing / 2;
@@ -23,21 +18,33 @@ function renderParticleLayer(
   context.fillStyle = coreOnly ? 'rgba(241, 238, 231, 0.58)' : 'rgba(241, 238, 231, 0.12)';
   for (let y = minimumY; y < maximumY; y += spacing) {
     for (let x = minimumX; x < maximumX; x += spacing) {
-      const dx = x - center.x;
-      const dy = y - center.y;
-      const distance = Math.hypot(dx, dy);
-      const normalizedDistance = coreOnly
-        ? Math.hypot(dx / radiusX, dy / radiusY)
+      const baseDx = x - center.x;
+      const baseDy = y - center.y;
+      const distance = Math.hypot(baseDx, baseDy);
+      const influenceDx = x - sample.origin.x;
+      const influenceDy = y - sample.origin.y;
+      const influenceDistance = Math.hypot(influenceDx, influenceDy);
+      const baselineDistance = coreOnly
+        ? Math.hypot(baseDx / radiusX, baseDy / radiusY)
         : distance / sample.radius;
-      if (normalizedDistance > 1) continue;
+      if (baselineDistance > 1) continue;
+      const baselineInfluence = Math.max(0, 1 - baselineDistance);
+      const normalizedDistance = coreOnly
+        ? Math.hypot(influenceDx / sample.radius, influenceDy / sample.radius)
+        : distance / sample.radius;
+      if (!coreOnly && normalizedDistance > 1) continue;
       const influence = Math.max(0, 1 - normalizedDistance);
-      const radialX = distance ? dx / distance : 0;
-      const radialY = distance ? dy / distance : 0;
-      const ripple = Math.sin(sample.phase * 2.2 + distance * 0.055) * influence * (coreOnly ? 7 : 2);
+      const radialX = influenceDistance ? influenceDx / influenceDistance : 0;
+      const radialY = influenceDistance ? influenceDy / influenceDistance : 0;
+      const ripple = Math.sin(sample.phase * 2.2 + influenceDistance * 0.055) * influence * (coreOnly ? 7 : 2);
       const strength = coreOnly ? sample.displacement : sample.displacement * 0.16;
       const offset = influence * influence * strength;
-      const radius = coreOnly ? 0.7 + influence * 1.45 : 0.52 + influence * 0.42;
+      const radius = coreOnly ? 0.62 + influence * 1.25 : 0.52 + influence * 0.42;
 
+      const alpha = coreOnly
+        ? 0.055 + baselineInfluence * 0.25 + influence * 0.32
+        : 0.055 + influence * 0.46;
+      context.fillStyle = `rgba(241, 238, 231, ${alpha})`;
       context.beginPath();
       context.arc(
         x + radialX * offset - radialY * ripple,
