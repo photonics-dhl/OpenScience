@@ -18,6 +18,10 @@ const serverMode = process.env.OPTICAL_LAB_SERVER_MODE === 'start' ? 'start' : '
 const baseUrl = `http://127.0.0.1:${port}`;
 const nextCli = path.join(webRoot, 'node_modules', 'next', 'dist', 'bin', 'next');
 const candidates = ['bricolage', 'archivo', 'arial-black-reference'];
+const expectedComputedFamilyPrefix = {
+  archivo: '__Archivo_',
+  bricolage: '__Bricolage_Grotesque_',
+};
 
 async function assertPortIsAvailable() {
   await new Promise((resolve, reject) => {
@@ -58,6 +62,22 @@ function assertServerOwnedAndAlive() {
   assert(server, 'Typography gate did not spawn its browser server');
   assert.equal(serverExit, undefined, `Typography gate server exited prematurely: ${JSON.stringify(serverExit)}`);
   assert.equal(server.exitCode, null, 'Typography gate server exited before the browser assertion completed');
+}
+
+async function stopServerAndVerifyPort() {
+  if (!server) return;
+  if (serverExit === undefined) {
+    const exited = waitForExit(server);
+    if (server.exitCode === null) server.kill('SIGTERM');
+    await Promise.race([
+      exited,
+      new Promise((resolve) => setTimeout(resolve, 3_000)),
+    ]);
+  }
+  if (serverExit === undefined) {
+    throw new Error('Typography gate server did not record an exit during cleanup');
+  }
+  await assertPortIsAvailable();
 }
 
 async function waitForServer() {
@@ -134,8 +154,14 @@ async function inspectSpecimen({ candidate, route, screenshot }) {
     });
     assert.equal(measurement.userSelect, 'text', `${candidate} title must be selectable`);
     if (candidate !== 'arial-black-reference') {
+      assert(
+        measurement.font.family.startsWith(expectedComputedFamilyPrefix[candidate]),
+        `${candidate} must resolve its expected computed family, received ${measurement.font.family}`,
+      );
       assert.equal(measurement.font.check, true, `${candidate} must pass document.fonts.check for its computed face`);
       assert.equal(measurement.font.loadedFace, true, `${candidate} must have a loaded computed font face, not fallback`);
+    } else {
+      assert.equal(measurement.font.family, 'Arial Black', 'Arial control must remain an honest local platform-family control');
     }
     const measured = measureTypography(measurement);
     assertTypographyContract(candidate, measured, measurement.selection);
@@ -162,6 +188,9 @@ try {
   server.stderr.on('data', (chunk) => { logs += chunk.toString(); });
   await waitForServer();
   browser = await chromium.launch({ headless: true });
+  if (process.env.OPTICAL_LAB_TYPOGRAPHY_GATE_FORCE_FAILURE === 'after-ready') {
+    throw new Error('Forced typography gate failure after server readiness');
+  }
   const metrics = [];
   for (const candidate of candidates) {
     metrics.push(await inspectSpecimen({
@@ -177,17 +206,21 @@ try {
   primaryError = error;
   throw error;
 } finally {
+  let cleanupError;
   try {
     await browser?.close();
-  } finally {
-    if (server && server.exitCode === null) {
-      const exited = waitForExit(server);
-      server.kill('SIGTERM');
-      await Promise.race([
-        exited,
-        new Promise((resolve) => setTimeout(resolve, 3_000)),
-      ]);
-      if (serverExit === undefined && !primaryError) throw new Error('Typography gate server did not exit during cleanup');
-    }
+  } catch (error) {
+    cleanupError = error;
+  }
+  try {
+    await stopServerAndVerifyPort();
+  } catch (error) {
+    cleanupError ??= error;
+  }
+  if (primaryError && cleanupError) {
+    primaryError.cleanupError = cleanupError;
+  }
+  if (!primaryError && cleanupError) {
+    throw cleanupError;
   }
 }
