@@ -214,6 +214,7 @@
 | `docs/specs/2026-08-06-p1e-7-script-modification-design.md` | P1E-7 自然语言修改脚本与 diff 展示设计（design gate 已确认，代码已实现 2026-08-06） | 活文档 |
 | `docs/plans/2026-08-06-p1e-7-script-modification-plan.md` | P1E-7 脚本修改与 diff 实施计划（已执行完毕，task-master 6.7 done 2026-08-06） | 活文档 |
 | `docs/specs/2026-08-06-frontend-visual-system-design.md` | 前端视觉系统设计 spec（三方定稿正式版：定位/符号/token/三套视觉/字体/IA/Hermes/分期/验收，源出设计方向稿 v2 终稿决策层） | 已定稿 |
+| `docs/specs/2026-08-11-optical-lab-candidate-b-design.md` | Optical Lab Candidate B 设计：静止态参考优先、单一 GPU 字形层、固定 58% 狭缝、整行液态跟随、客户端 GPU 与三级降级/RED 验收边界 | 已批准视觉方向；待用户复核书面 spec 后编写实施计划 |
 | `docs/plans/2026-08-06-frontend-p0-p1-plan.md` | 前端 P0 地基收尾 + P1 首页视觉原型实施计划（11 Task：Tailwind v4/token+WCAG 门禁/字体/shadcn/i18n/Header/EvolvingRoSymbol 两变体/Hero/#latest/Playwright 三尺寸截图/用户验收门） | 待执行 |
 | `docs/superpowers/plans/2026-08-07-homepage-rework.md` | Landing 首页视觉重做计划（主视觉 bitmap、真实 latest/trust 模块、入口修复、截图验收） | 已完成（2026-08-07，commit 481b5c4） |
 | `docs/plans/2026-08-07-web-quality-pipeline-plan.md` | Web 品质管线实施计划（Task 8 设计系统固化 → 9 动效层 → 10 Figma+MCP → 11 全站一致性 → 12 视觉回归门禁，2026-08-07 用户拍板） | 待执行 |

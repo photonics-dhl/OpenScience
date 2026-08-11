@@ -1,5 +1,12 @@
 # OpenScience (XGS) 进度日志
 
+## 2026-08-11（Optical Lab Candidate B 设计）— ⏳ 方向已批准，待书面复核
+
+- **用户决策**：静止态必须直接接近参考图；鼠标只做轻微增强，但整行文字需要平滑跟随形变。用户接受“液态折射”而非弹性回弹。
+- **选定方案**：WebGL ready 时仅显示一层连续 GPU 字形，语义/可选择 `h1` 保留但抑制重复视觉墨迹；固定 58% 狭缝、静止焦点和右向出射是主构图，pointer 只调相位/能量/全行低幅折射。
+- **运行边界**：ECS 无 GPU 不影响；服务端只交付 Next.js 资源，逐帧 shader/flow/particle 全在访客浏览器运行，WebGL2→WebGL1→DOM 降级不变，不改 Docker/ECS。
+- **文档**：新增 `docs/specs/2026-08-11-optical-lab-candidate-b-design.md`；当前未改实现、未部署，等待用户复核书面 spec 后进入实施计划与 TDD。
+
 ## 2026-08-11（Optical Lab review fix round 1）— ✅ Critical/Important 已修复
 
 - **浏览器验收加固**：pointer 截图改为 candidate-only clip 与 case-qualified 文件名，并以独立像素差、径向/白环/机械线 edge probe 和隐藏 Canvas ghost probe 做真实视觉门禁；synthetic regression fixture 证明门禁会拒绝退化，不再依赖自报 attribute。
