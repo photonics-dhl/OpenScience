@@ -1,5 +1,11 @@
 # OpenScience (XGS) 进度日志
 
+## 2026-08-11（Optical Lab Candidate B 计划）— ⏳ 书面设计确认，待执行方式
+
+- **设计确认**：用户复核 `docs/specs/2026-08-11-optical-lab-candidate-b-design.md` 后要求继续；ECS 无 GPU 的客户端执行边界再次确认。
+- **实施计划**：新增 `docs/superpowers/plans/2026-08-11-optical-lab-candidate-b-plan.md`，分为纯 field model、单一 GPU glyph material、reference-relative resting/pointer 像素门禁、本地验收与文档同步四个 TDD task。
+- **当前边界**：尚未修改 Candidate 实现、未部署、生产 `/` 不变；下一步选择 inline execution 或 subagent-driven execution。
+
 ## 2026-08-11（Optical Lab Candidate B 设计）— ⏳ 方向已批准，待书面复核
 
 - **用户决策**：静止态必须直接接近参考图；鼠标只做轻微增强，但整行文字需要平滑跟随形变。用户接受“液态折射”而非弹性回弹。
