@@ -7,6 +7,13 @@ export const CENTRAL_PARTICLE_WEBGL_ATTRIBUTES: WebGLContextAttributes = {
   premultipliedAlpha: false,
 };
 
+export function resolveCentralParticleDebugTime(search: string): number | null {
+  const value = new URLSearchParams(search).get('debugTime');
+  if (value === null || value.trim() === '') return null;
+  const time = Number(value);
+  return Number.isFinite(time) && time >= 0 && time <= 60_000 ? time : null;
+}
+
 export function probeCentralParticleWebGl2(canvas: Pick<HTMLCanvasElement, 'getContext'>): boolean {
   const context = canvas.getContext('webgl2', CENTRAL_PARTICLE_WEBGL_ATTRIBUTES);
   if (!context) return false;

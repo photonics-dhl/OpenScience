@@ -11,10 +11,14 @@ import {
 } from 'three';
 
 import {
+  createContinuousTitle,
+  type ContinuousTitleGeometry,
+} from './continuous-title';
+import { createCurtainGrid, createFieldParticleAttributes } from './curtain-grid';
+import {
   createParticleGrid,
   fitParticleViewport,
   mapParticlePointer,
-  type OpticalParticleGeometry,
   type ParticleViewportFit,
 } from './particle-grid';
 import { CENTRAL_PARTICLE_WEBGL_ATTRIBUTES } from './runtime-policy';
@@ -39,11 +43,13 @@ type CreateThreeRenderer = (
 ) => WebGLRenderer;
 
 type TouchTexture = ReturnType<typeof createTouchTexture>;
+type ContinuousTitle = ReturnType<typeof createContinuousTitle>;
 
 type RendererDependencies = {
   clearLoadTimeout?: (handle: ReturnType<typeof setTimeout>) => void;
   createTouchTexture?: () => TouchTexture;
-  loadGeometry?: (signal: AbortSignal) => Promise<OpticalParticleGeometry>;
+  fixedTimeMs?: number;
+  loadGeometry?: (signal: AbortSignal) => Promise<ContinuousTitleGeometry>;
   scheduleLoadTimeout?: (
     callback: () => void,
     delayMs: number,
@@ -56,7 +62,7 @@ const GEOMETRY_LOAD_TIMEOUT_MS = 8_000;
 async function loadOpticalGeometry(signal: AbortSignal) {
   const response = await fetch('/optical-prototype/title-geometry.json', { signal });
   if (!response.ok) throw new Error(`Unable to load optical title geometry (${response.status}).`);
-  return response.json() as Promise<OpticalParticleGeometry>;
+  return response.json() as Promise<ContinuousTitleGeometry>;
 }
 
 export function createCentralParticleRenderer(
@@ -74,6 +80,17 @@ export function createCentralParticleRenderer(
     context.getExtension('WEBGL_lose_context')?.loseContext();
     throw error;
   }
+  if (renderer.debug) {
+    renderer.debug.checkShaderErrors = true;
+    renderer.debug.onShaderError = (gl, program, vertexShader, fragmentShader) => {
+      const diagnostics = [
+        gl.getProgramInfoLog(program),
+        gl.getShaderInfoLog(vertexShader),
+        gl.getShaderInfoLog(fragmentShader),
+      ].filter(Boolean).join('\n');
+      throw new Error(`Central particle shader failed to compile or link.${diagnostics ? `\n${diagnostics}` : ''}`);
+    };
+  }
   let camera!: OrthographicCamera;
   let scene!: Scene;
   let touch: TouchTexture | null = null;
@@ -84,6 +101,7 @@ export function createCentralParticleRenderer(
   let loadTimer: ReturnType<typeof setTimeout> | null = null;
   let geometry: PlaneGeometry | null = null;
   let particles: InstancedMesh | null = null;
+  let title: ContinuousTitle | null = null;
   let disposed = false;
   let loadFailure: Error | null = null;
   let frame = 0;
@@ -98,7 +116,9 @@ export function createCentralParticleRenderer(
     uDesignOffset: { value: Vector2 };
     uDesignScale: { value: number };
     uDesignViewport: { value: Vector2 };
+    uFieldCenter: { value: Vector2 };
     uPointer: { value: Vector2 };
+    uTimeMs: { value: number };
     uTouch: { value: TouchTexture['texture'] };
   };
 
@@ -114,7 +134,9 @@ export function createCentralParticleRenderer(
       uDesignOffset: { value: new Vector2(0, 0) },
       uDesignScale: { value: 1 },
       uDesignViewport: { value: new Vector2(DESIGN_VIEWPORT.width, DESIGN_VIEWPORT.height) },
+      uFieldCenter: { value: new Vector2(DESIGN_VIEWPORT.width * 0.573, DESIGN_VIEWPORT.height * 0.5) },
       uPointer: { value: pointer },
+      uTimeMs: { value: dependencies.fixedTimeMs ?? 1500 },
       uTouch: { value: touch.texture },
     };
     material = new ShaderMaterial({
@@ -135,22 +157,45 @@ export function createCentralParticleRenderer(
     ready = Promise.resolve(pendingGeometry)
       .then((titleGeometry) => {
         if (disposed) return;
-        const grid = createParticleGrid(titleGeometry, 'high');
+        const glyphGrid = createParticleGrid(titleGeometry, 'high');
+        const curtainGrid = createCurtainGrid(titleGeometry.viewport, 'high');
+        const grid = createFieldParticleAttributes(glyphGrid, curtainGrid);
         const nextGeometry = new PlaneGeometry(1, 1);
+        let nextTitle: ContinuousTitle | null = null;
         try {
+          nextTitle = createContinuousTitle(
+            titleGeometry,
+            Math.min(window.devicePixelRatio || 1, 2),
+            { touchTexture: touch!.texture },
+          );
           nextGeometry.setAttribute('aHome', new InstancedBufferAttribute(grid.homes, 2));
+          nextGeometry.setAttribute('aId', new InstancedBufferAttribute(grid.ids, 1));
           nextGeometry.setAttribute(
             'aGroup',
             new InstancedBufferAttribute(Float32Array.from(grid.groups), 1),
+          );
+          nextGeometry.setAttribute(
+            'aOpacity',
+            new InstancedBufferAttribute(Float32Array.from(grid.opacities), 1),
+          );
+          nextGeometry.setAttribute('aPhase', new InstancedBufferAttribute(grid.phases, 1));
+          nextGeometry.setAttribute(
+            'aRole',
+            new InstancedBufferAttribute(Float32Array.from(grid.roles), 1),
           );
           const nextParticles = new InstancedMesh(nextGeometry, material!, grid.count);
           nextParticles.frustumCulled = false;
           designViewport = { ...grid.viewport };
           uniforms.uDesignViewport.value.set(grid.viewport.width, grid.viewport.height);
+          uniforms.uFieldCenter.value.set(titleGeometry.center.x, titleGeometry.center.y);
           geometry = nextGeometry;
           particles = nextParticles;
+          title = nextTitle;
+          title.setPointer(lastPointer);
+          scene.add(title.mesh);
           scene.add(nextParticles);
         } catch (error) {
+          nextTitle?.dispose();
           nextGeometry.dispose();
           throw error;
         }
@@ -183,6 +228,7 @@ export function createCentralParticleRenderer(
       y: Math.min(1, Math.max(0, next.y)),
     };
     pointer.set(normalized.x, normalized.y);
+    title?.setPointer(normalized);
     touch!.addPointer(normalized);
   }
 
@@ -206,12 +252,12 @@ export function createCentralParticleRenderer(
   window.addEventListener('pointercancel', onPointerCancel);
 
   function draw() {
-    if (disposed || !particles || !sized) return;
+    if (disposed || !particles || !title || !sized) return;
     renderer.render(scene, camera);
   }
 
   function schedule() {
-    if (!running || disposed || !particles || !sized || frame) return;
+    if (!running || disposed || !particles || !title || !sized || frame) return;
     lastFrameAt = performance.now();
     frame = window.requestAnimationFrame(tick);
   }
@@ -219,6 +265,7 @@ export function createCentralParticleRenderer(
   function tick(now: number) {
     if (!running || disposed) return;
     touch!.update(Math.min(50, Math.max(0, now - lastFrameAt)));
+    uniforms.uTimeMs.value = dependencies.fixedTimeMs ?? now;
     lastFrameAt = now;
     draw();
     frame = window.requestAnimationFrame(tick);
@@ -247,7 +294,9 @@ export function createCentralParticleRenderer(
       window.removeEventListener('pointermove', onPointerMove);
       window.removeEventListener('pointercancel', onPointerCancel);
       if (particles) scene.remove(particles);
+      if (title) scene.remove(title.mesh);
       geometry?.dispose();
+      title?.dispose();
       material!.dispose();
       touch!.dispose();
       renderer.dispose();
@@ -261,6 +310,7 @@ export function createCentralParticleRenderer(
     renderDebugFrame(state) {
       publishPointer({ velocity: 0.5, x: state.pointer[0], y: state.pointer[1] });
       touch!.update(0);
+      uniforms.uTimeMs.value = state.timeMs;
       draw();
     },
     async resize(bounds) {
@@ -269,12 +319,13 @@ export function createCentralParticleRenderer(
       await ready;
       if (disposed) throw new Error('Central particle renderer was disposed.');
       if (loadFailure) throw loadFailure;
-      if (!particles) throw new Error('Central particle geometry did not initialize.');
+      if (!particles || !title) throw new Error('Central particle geometry did not initialize.');
       renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
       renderer.setSize(width, height, false);
       viewportFit = fitParticleViewport(designViewport, { height, width });
       uniforms.uDesignOffset.value.set(viewportFit.offsetX, viewportFit.offsetY);
       uniforms.uDesignScale.value = viewportFit.scale;
+      title.setViewport(viewportFit);
       camera.left = 0;
       camera.right = width;
       camera.top = 0;

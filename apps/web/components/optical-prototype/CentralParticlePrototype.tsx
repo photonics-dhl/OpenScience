@@ -11,6 +11,7 @@ import {
 import {
   observeCentralParticlePolicy,
   probeCentralParticleWebGl2,
+  resolveCentralParticleDebugTime,
 } from '@/lib/optical-prototype/runtime-policy';
 
 import styles from './central-particle.module.css';
@@ -25,6 +26,7 @@ export function CentralParticlePrototype() {
     const motion = window.matchMedia('(prefers-reduced-motion: reduce)');
     const probe = document.createElement('canvas');
     const webgl2 = probeCentralParticleWebGl2(probe);
+    const debugTimeMs = resolveCentralParticleDebugTime(window.location.search);
 
     let lifecycle: ReturnType<typeof createCentralParticleLifecycle> | null = null;
     let rendererFactory: typeof import('@/lib/optical-prototype/renderer')['createCentralParticleRenderer'] | null = null;
@@ -46,7 +48,11 @@ export function CentralParticlePrototype() {
       if (cancelled || !dynamicAllowed || lifecycle || !rendererFactory) return;
       lifecycle = createCentralParticleLifecycle({
         createCanvas: () => document.createElement('canvas'),
-        createRenderer: (canvas) => rendererFactory!(canvas as HTMLCanvasElement),
+        createRenderer: (canvas) => rendererFactory!(
+          canvas as HTMLCanvasElement,
+          undefined,
+          debugTimeMs === null ? {} : { fixedTimeMs: debugTimeMs },
+        ),
         mountCanvas: (canvas) => {
           const element = canvas as HTMLCanvasElement;
           const owner = lifecycle;

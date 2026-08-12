@@ -1,5 +1,12 @@
 # OpenScience (XGS) 进度日志
 
+## 2026-08-12（Three.js 中央粒子原型 Task 5）— ⏳ 工程门禁 GREEN，等待视觉裁决
+
+- **连续字形与局部转移**：默认 GPU 帧不再用 5px 点阵替代标题，而是从同一 `outlinePath` 一次栅格化连续 alpha substrate；4,619 点全字网格仅留 debug，默认只选 508 个狭缝字形点，并与 1,305 个独立 curtain points 合并为单一 1,813-instance draw。狭缝外字形内部覆盖率 `0.999979`、孔洞率 `0.000021`、列连续性 `0.979887`，已消除像素字观感。
+- **固定光场与粒子幕**：57.3%/50% 固定中心叠加确定性径向收束、较弱 signed tangent 与右向 emission；纵向幕来自自己的规则 row/column/id 网格，未拉伸字形点、未使用 random/noise。原生 1672×935 帧：curtain coverage `0.956522`、spread `0.164474`、mechanical-line `0.030012`；中央额外能量 382 pixels、right/left ratio `2.237288`。
+- **轻交互与真实矩阵**：连续字形 TouchTexture warp 上限 4 CSS px；固定中心 pointer 仅改变 `0.000599` 的画面像素，平均通道差 `0.033884`。`debugTime=1500` 已在真实 shader uniform 中验证；1672×935、800×1000、1672×800、fresh-context restore、dynamic→mobile static、独立 mobile/reduced SVG fallback 均通过，所有新上下文 draw 为 `NO_ERROR`，端口 3062 完成后关闭。
+- **边界与待办**：生产 `/` 构建仍为 `3.87 kB / 112 kB`，Hero/OGL/ECS 未改，Bloom 与局部色散仍严格留给 Task 6。focused `56/56`、Web typecheck、root lint/workspace/docs-sync、production build 与 Task 5 browser gate GREEN；Web 全套 `250 pass / 2 fail` 仍是已登记的 Windows CRLF 基线（Landing 写死 LF；两份旧 MSDF JSON 工作树 hash 与 manifest blob hash 不同）。独立初审的 CPU/GLSL parity、lazy shader fail-closed 与 partial title rollback 三项 Important 已按 RED→GREEN 修复，等待窄复审和用户对固定原图的视觉裁决，未授权推广或部署。
+
 ## 2026-08-12（Three.js 中央粒子原型 Task 5 设计纠偏）— ✅ 连续字形取代全行点阵
 
 - **用户视觉裁决**：Task 4 的 5px 全字规则点阵虽然验证了字体几何、InstancedMesh、TouchTexture 与生命周期，但默认 GPU 帧隐藏平滑 SVG 后只留下 2.2–2.8px 圆点，因此必然呈现像素/网点字；这与参考的“连续字形主体、中央局部溶解、独立纵向粒子幕”不符，不能继续靠增密或 Bloom 掩盖。

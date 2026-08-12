@@ -13,6 +13,15 @@ const lifecycleModule = existsSync(fileURLToPath(lifecycleUrl)) ? await import('
 const rendererModule = existsSync(fileURLToPath(rendererUrl)) ? await import('../lib/optical-prototype/renderer') : null;
 
 describe('central particle isolated runtime shell', () => {
+  it('accepts an explicit bounded debug timestamp without freezing browser RAF', () => {
+    expect(policyModule?.resolveCentralParticleDebugTime).toBeTypeOf('function');
+    expect(policyModule?.resolveCentralParticleDebugTime('?debugTime=1500')).toBe(1500);
+    expect(policyModule?.resolveCentralParticleDebugTime('?debugTime=-1')).toBeNull();
+    expect(policyModule?.resolveCentralParticleDebugTime('?debugTime=not-a-number')).toBeNull();
+    expect(policyModule?.resolveCentralParticleDebugTime('?debugTime=60001')).toBeNull();
+    expect(policyModule?.resolveCentralParticleDebugTime('')).toBeNull();
+  });
+
   it('SSR renders one selectable title, generated SVG, no canvas, and no-index metadata', () => {
     expect(pageModule, 'isolated route must exist').not.toBeNull();
     if (!pageModule) return;
@@ -343,6 +352,12 @@ describe('central particle isolated runtime shell', () => {
     )).toThrow('2D unavailable');
     expect(renderer.dispose).toHaveBeenCalledTimes(1);
     expect(renderer.forceContextLoss).toHaveBeenCalledTimes(1);
+  });
+
+  it('turns a lazy Three shader failure into a thrown render failure', () => {
+    const source = readFileSync(rendererUrl, 'utf8');
+    expect(source).toContain('renderer.debug.onShaderError');
+    expect(source).toMatch(/onShaderError\s*=\s*\([^)]*\)\s*=>\s*\{[^}]*throw new Error/s);
   });
 
   it('turns geometry failure into a consumed resize rejection without starting an empty RAF', async () => {

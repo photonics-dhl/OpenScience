@@ -1,8 +1,10 @@
 export type ParticleTier = 'high' | 'medium' | 'low';
+export type ParticleGridMode = 'debug-grid' | 'seam';
 
 export type OpticalParticleGroup = 'science' | 'evolves' | 'period';
 
 export type OpticalParticleGeometry = {
+  center?: { x: number; y: number };
   points: ReadonlyArray<{
     column: number;
     glyphIndex: number;
@@ -13,6 +15,11 @@ export type OpticalParticleGeometry = {
     y: number;
   }>;
   viewport: { height: number; width: number };
+};
+
+type ParticleGridOptions = {
+  mode?: ParticleGridMode;
+  transferHalfWidth?: number;
 };
 
 export type ParticleViewportFit = {
@@ -64,9 +71,20 @@ const TIER_STRIDES: Record<ParticleTier, number> = {
   medium: 2,
 };
 
-export function createParticleGrid(geometry: OpticalParticleGeometry, tier: ParticleTier) {
+export function createParticleGrid(
+  geometry: OpticalParticleGeometry,
+  tier: ParticleTier,
+  options: ParticleGridOptions = {},
+) {
   const stride = TIER_STRIDES[tier];
-  const points = geometry.points.filter((point) => point.group === 'period' || point.id % stride === 0);
+  const mode = options.mode ?? 'seam';
+  const centerX = geometry.center?.x ?? geometry.viewport.width * 0.573;
+  const transferHalfWidth = options.transferHalfWidth ?? geometry.viewport.width * 0.055;
+  const points = geometry.points.filter((point) => {
+    const inMode = mode === 'debug-grid' || Math.abs(point.x - centerX) <= transferHalfWidth;
+    const inTier = point.group === 'period' || point.id % stride === 0;
+    return inMode && inTier;
+  });
   const homes = new Float32Array(points.length * 2);
   const ids = new Uint32Array(points.length);
   const groups = new Uint8Array(points.length);
