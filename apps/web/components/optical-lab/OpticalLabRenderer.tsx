@@ -56,6 +56,16 @@ export function OpticalLabRenderer({ diagnosticsId, stageId }: OpticalLabRendere
       diagnostics.dataset.renderMode = nextRuntime;
       diagnostics.dataset.contextStatus = status;
       diagnostics.dataset.firstCompleteFrame = 'false';
+      diagnostics.dataset.flowTexture = 'inactive';
+      diagnostics.dataset.particleCount = '0';
+      diagnostics.dataset.passEnergies = JSON.stringify({
+        caustic: 0,
+        curtain: 0,
+        dissolution: 0,
+        intactGlyph: 1,
+        rightwardEmission: 0,
+      });
+      diagnostics.dataset.precision = 'static';
       diagnostics.dataset.qualityTier = 'static';
       diagnostics.dataset.renderer = nextRuntime === 'dom-only' ? 'DOM only' : 'DOM/static interim';
       setText(diagnostics, 'mode', nextRuntime);
@@ -90,8 +100,12 @@ export function OpticalLabRenderer({ diagnosticsId, stageId }: OpticalLabRendere
       diagnostics.dataset.contextStatus = snapshot.contextStatus;
       diagnostics.dataset.firstCompleteFrame = String(snapshot.firstCompleteFrame);
       diagnostics.dataset.frameCount = String(snapshot.frameCount);
+      diagnostics.dataset.flowTexture = 'inactive';
+      diagnostics.dataset.particleCount = String(snapshot.particleCount);
+      diagnostics.dataset.passEnergies = JSON.stringify(snapshot.passEnergies);
+      diagnostics.dataset.precision = snapshot.precision;
       diagnostics.dataset.qualityTier = snapshot.qualityTier;
-      diagnostics.dataset.renderer = 'OGL WebGL2 MSDF glyph pass';
+      diagnostics.dataset.renderer = 'OGL WebGL2 MSDF + GPGPU resting material';
       diagnostics.dataset.resourceCounts = JSON.stringify(snapshot.resourceCounts);
       diagnostics.dataset.stableBounds = snapshot.stableBounds;
       setText(diagnostics, 'mode', snapshot.mode);

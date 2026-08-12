@@ -36,6 +36,18 @@ const glyphShaderModuleUrl = new URL('../lib/optical-lab/ogl/shaders/glyph.ts', 
 const glyphShaderModule = existsSync(fileURLToPath(glyphShaderModuleUrl))
   ? await import('../lib/optical-lab/ogl/shaders/glyph')
   : null;
+const particleShaderModuleUrl = new URL('../lib/optical-lab/ogl/shaders/particle-update.ts', import.meta.url);
+const particleShaderModule = existsSync(fileURLToPath(particleShaderModuleUrl))
+  ? await import('../lib/optical-lab/ogl/shaders/particle-update')
+  : null;
+const compositeShaderModuleUrl = new URL('../lib/optical-lab/ogl/shaders/composite.ts', import.meta.url);
+const compositeShaderModule = existsSync(fileURLToPath(compositeShaderModuleUrl))
+  ? await import('../lib/optical-lab/ogl/shaders/composite')
+  : null;
+const glyphPassModuleUrl = new URL('../lib/optical-lab/ogl/glyph-pass.ts', import.meta.url);
+const glyphPassModule = existsSync(fileURLToPath(glyphPassModuleUrl))
+  ? await import('../lib/optical-lab/ogl/glyph-pass')
+  : null;
 
 describe('isolated Optical Lab route contract', () => {
   beforeAll(() => {
@@ -76,7 +88,7 @@ describe('isolated Optical Lab route contract', () => {
     expect(markup).toContain('data-optical-ink="dom"');
     expect(markup).toContain('data-context-status="idle"');
     expect(markup).toContain('data-stable-bounds="pending"');
-    expect(markup).toContain('data-optical-render-phase="task-4-msdf-glyph-v1"');
+    expect(markup).toContain('data-optical-render-phase="task-5-resting-material-v1"');
     expect(markup).not.toContain('optical-cursor-ring');
     expect(markup).not.toContain('radial-boundary');
     expect(markup).not.toContain('vertical-dotted-line');
@@ -103,6 +115,66 @@ describe('isolated Optical Lab route contract', () => {
     expect(shader).toContain('color.rgb / max(color.a');
     expect(shader).toContain('color.a <=');
     expect(shader).not.toContain('fragColor = texture(tColor, vUv)');
+    expect(glyphShaderModule?.OPTICAL_GLYPH_FRAGMENT_SHADER).toContain('uWeightOffset');
+  });
+
+  it('uses an independent deterministic upstream dissolution lattice', () => {
+    const shader = particleShaderModule?.OPTICAL_PARTICLE_UPDATE_FRAGMENT_SHADER ?? '';
+
+    expect(particleShaderModule?.OPTICAL_DISSOLUTION_STRATA).toBe(48);
+    expect(shader).toContain('dissolutionRole');
+    expect(shader).toContain('floor(randomA * 48.0)');
+    expect(shader).toContain('upperBand');
+    expect(shader).not.toContain('pointer');
+  });
+
+  it('uses sparse curved caustic filaments without staircase modulation', () => {
+    const shader = compositeShaderModule?.OPTICAL_HIGH_ENERGY_FRAGMENT_SHADER ?? '';
+
+    expect(shader).toContain('curvedFilament');
+    expect(shader).toContain('filamentGate');
+    expect(shader).not.toContain('striationWave');
+    expect(shader).not.toContain('pointer');
+  });
+
+  it('reconstructs the approved evolves shear inside the measured ink bounds', () => {
+    const source = new Float32Array([0, 0, 0, 100, 0, 0, 0, 50, 0, 100, 50, 0]);
+    const transformed = glyphPassModule?.transformTextPositions(
+      source,
+      { bottom: 240, height: 100, left: 580, right: 900, top: 140, width: 320 },
+      -6,
+    );
+    expect(transformed).toBeDefined();
+    const xs = transformed ? [transformed[0], transformed[3], transformed[6], transformed[9]] : [];
+    expect(Math.min(...xs)).toBeCloseTo(580, 4);
+    expect(Math.max(...xs)).toBeCloseTo(900, 4);
+    expect((transformed?.[6] ?? 0) - (transformed?.[0] ?? 0)).toBeGreaterThan(10);
+  });
+
+  it('maps evolves landmarks from CSS em tracking and unpadded BMFont ink', () => {
+    const font = {
+      chars: [
+        { char: 'e', height: 54, id: 101, width: 46, x: 0, xadvance: 44, xoffset: -1, y: 0, yoffset: 59 },
+        { char: 'v', height: 54, id: 118, width: 50, x: 0, xadvance: 48, xoffset: -3, y: 0, yoffset: 59 },
+        { char: 'o', height: 54, id: 111, width: 48, x: 0, xadvance: 46, xoffset: -1, y: 0, yoffset: 59 },
+        { char: 'l', height: 81, id: 108, width: 33, x: 0, xadvance: 28, xoffset: -2, y: 0, yoffset: 32 },
+        { char: 's', height: 54, id: 115, width: 43, x: 0, xadvance: 39, xoffset: -3, y: 0, yoffset: 59 },
+        { char: '.', height: 20, id: 46, width: 20, x: 0, xadvance: 19, xoffset: -3, y: 0, yoffset: 93 },
+      ],
+      common: { base: 108, lineHeight: 146, scaleH: 512, scaleW: 512 },
+      distanceField: { distanceRange: 8, fieldType: 'msdf' },
+      info: { padding: [4, 4, 4, 4], size: 96 },
+      kernings: [],
+    };
+    const contract = glyphPassModule?.createBmFontInkMappingContract(font, 'evolves.', -.085);
+
+    expect(contract).toBeDefined();
+    expect(contract?.trackingUnits).toBeCloseTo(-8.16, 6);
+    expect(contract?.glyphs.at(-1)?.penX).toBeCloseTo(239.88, 6);
+    expect(contract?.inkBounds.left).toBeCloseTo(3, 6);
+    expect(contract?.inkBounds.right).toBeCloseTo(252.88, 6);
+    expect(contract?.quadBounds.left).toBeCloseTo(-1, 6);
+    expect(contract?.quadBounds.right).toBeCloseTo(256.88, 6);
   });
 
   it('deletes every OGL-owned GL handle exactly once across overlapping registrations', () => {

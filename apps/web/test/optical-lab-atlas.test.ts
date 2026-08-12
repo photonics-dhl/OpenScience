@@ -10,7 +10,12 @@ const atlasRoot = resolve(webRoot, 'public/optical-lab/atlas');
 type OpticalAtlasManifest = {
   charset: string;
   generator: { name: string; version: string };
-  fonts: Array<{ file: string; sourceSha256: string }>;
+  fonts: Array<{
+    axisSettings: Record<string, number>;
+    family: string;
+    file: string;
+    sourceSha256: string;
+  }>;
   outputs: Array<{ file: string; sha256: string }>;
   settings: Record<string, unknown>;
 };
@@ -66,6 +71,17 @@ describe('optical Lab MSDF atlas assets', () => {
     expect(() => validateOpticalAtlasContract(manifest)).toThrow('fixed settings');
   });
 
+  it('rejects an evolves instance other than the accepted 96pt regular italic', async () => {
+    const { validateOpticalAtlasContract } = await import('../scripts/generate-optical-atlas.mjs');
+    const manifest = manifestFixture();
+    const evolves = manifest.fonts.find(({ file }) => file === 'evolves-editorial.ttf');
+    expect(evolves).toBeDefined();
+    evolves!.axisSettings.wght = 700;
+    evolves!.family = 'Bodoni Moda 96pt Bold Italic';
+
+    expect(() => validateOpticalAtlasContract(manifest)).toThrow('fixed evolves static instance');
+  });
+
   it('ships deterministic licensed atlases for the accepted words', () => {
     const manifest = manifestFixture();
     const science = JSON.parse(
@@ -77,6 +93,10 @@ describe('optical Lab MSDF atlas assets', () => {
 
     expect(manifest.charset).toBe(' Sciencevolves.');
     expect(manifest.generator).toEqual({ name: 'msdf-bmfont-xml', version: '2.8.0' });
+    expect(manifest.fonts.find(({ file }) => file === 'evolves-editorial.ttf')).toMatchObject({
+      axisSettings: { opsz: 96, wght: 400 },
+      family: 'Bodoni Moda 96pt Italic',
+    });
     expect(Object.keys(science.chars).length).toBeGreaterThanOrEqual(8);
     expect(Object.keys(evolves.chars).length).toBeGreaterThanOrEqual(8);
     expect(verifyManifestHashes(manifest)).toBe(true);

@@ -103,9 +103,12 @@ describe('Optical Lab capability and field model', () => {
       toJSON: () => ({}),
     });
     const baseline = { getBoundingClientRect: () => rectangle(680, 375.2, 0, 0) };
+    const evolvesInk = { getBoundingClientRect: () => rectangle(690, 250, 350, 172) };
     const stage = {
       getBoundingClientRect: () => rectangle(100, 50, 1_000, 600),
-      querySelector: () => baseline,
+      querySelector: (selector: string) => (
+        selector === '[data-optical-lab-evolves-ink="true"]' ? evolvesInk : baseline
+      ),
     } as unknown as HTMLElement;
     const science = {
       getBoundingClientRect: () => rectangle(122, 264.8, 558, 145.2),
@@ -121,6 +124,7 @@ describe('Optical Lab capability and field model', () => {
       apertureX: 580,
       baseline: 325.2,
       evolves: { bottom: 360, height: 145.2, left: 580, right: 957, top: 214.8, width: 377 },
+      evolvesInk: { bottom: 372, height: 172, left: 590, right: 940, top: 200, width: 350 },
       science: { bottom: 360, height: 145.2, left: 22, right: 580, top: 214.8, width: 558 },
       title: { bottom: 360, height: 145.2, left: 22, right: 957, top: 214.8, width: 935 },
       viewport: { height: 600, width: 1_000 },
@@ -133,6 +137,7 @@ describe('Optical Lab capability and field model', () => {
       apertureX: 580,
       baseline: 325.2,
       evolves: { bottom: 360, height: 145.2, left: 580, right: 957, top: 214.8, width: 377 },
+      evolvesInk: { bottom: 372, height: 172, left: 590, right: 940, top: 200, width: 350 },
       science: { bottom: 360, height: 145.2, left: 22, right: 580, top: 214.8, width: 558 },
       title: { bottom: 360, height: 145.2, left: 22, right: 957, top: 214.8, width: 935 },
       viewport: { height: 600, width: 1_000 },

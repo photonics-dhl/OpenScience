@@ -30,6 +30,7 @@ uniform vec3 uBaseColor;
 uniform float uDistanceRange;
 uniform float uOutputMask;
 uniform float uPeriodId;
+uniform float uWeightOffset;
 uniform sampler2D tAtlas;
 
 in float vGlyphId;
@@ -47,7 +48,7 @@ void main() {
   vec2 unitRange = vec2(uDistanceRange) / vec2(textureSize(tAtlas, 0));
   vec2 screenTexSize = vec2(1.0) / max(fwidth(vUv), vec2(0.000001));
   float screenPxRange = max(0.5 * dot(unitRange, screenTexSize), 1.0);
-  float alpha = clamp(signedDistance * screenPxRange + 0.5, 0.0, 1.0);
+  float alpha = clamp(signedDistance * screenPxRange + 0.5 + uWeightOffset, 0.0, 1.0);
   if (alpha <= 0.001) discard;
 
   if (uOutputMask > 0.5) {

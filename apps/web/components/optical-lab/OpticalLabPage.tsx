@@ -91,7 +91,7 @@ export async function OpticalLabPage() {
           >
             <h1 className={styles.headline} data-optical-lab-semantic-title="true">
               <span className={styles.science} data-optical-lab-science="true"><span className={styles.scienceInk}>Science</span></span>{' '}
-              <span className={styles.evolves} data-optical-lab-evolves="true"><span className={styles.evolvesInk}>evolves<span className={styles.marker}>.</span></span></span>
+              <span className={styles.evolves} data-optical-lab-evolves="true"><span className={styles.evolvesInk} data-optical-lab-evolves-ink="true">evolves<span className={styles.marker}>.</span></span></span>
               <span aria-hidden="true" className={styles.baselineProbe} data-optical-lab-baseline-probe="true" />
             </h1>
             <div className={styles.clientSlot} data-optical-lab-client-slot="true">

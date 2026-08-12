@@ -1,19 +1,20 @@
-/* global createImageBitmap, document, fetch, getComputedStyle, HTMLCanvasElement, performance, process, queueMicrotask, setTimeout, window */
+/* global createImageBitmap, document, Event, fetch, getComputedStyle, HTMLCanvasElement, performance, process, queueMicrotask, setTimeout, window */
 
 import assert from 'node:assert/strict';
-import { mkdir, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { chromium } from 'playwright';
-import { measureMsdfTypography } from './optical-lab-reference-metrics.mjs';
+import { measureMsdfTypography, measureRestingMaterial } from './optical-lab-reference-metrics.mjs';
 import { analyzeOpticalTopology } from './optical-lab-visual-metrics.mjs';
 
 const scriptDir = path.dirname(fileURLToPath(import.meta.url));
 const outDir = path.resolve(scriptDir, 'out', 'optical-lab');
 const baseUrl = process.env.VISUAL_BASE_URL ?? 'http://127.0.0.1:3002';
 const OPTICAL_LAB_RENDER_PHASES = Object.freeze({
-  legacyTask5Material: 'task-5-resting-material-v1',
+  candidateBVisual: 'task-4-candidate-b-visual-v1',
   msdfGlyph: 'task-4-msdf-glyph-v1',
+  restingMaterial: 'task-5-resting-material-v1',
   runtimeShell: 'task-3-runtime-shell-v1',
 });
 const OPTICAL_WEBGL2_CONTEXT_ATTRIBUTES = Object.freeze({
@@ -250,6 +251,8 @@ for (const testCase of cases) {
         linkProgramCalls: 0,
         preInstancedDrawErrors: [],
         pointDrawArrays: 0,
+        pointDrawErrors: [],
+        pointDrawInkStates: [],
         straightAlphaFrames: [],
       };
       window.__OPTICAL_LAB_TEST_FIXED_RAF_TIME__ = null;
@@ -441,8 +444,19 @@ for (const testCase of cases) {
         };
         const drawArrays = context.drawArrays.bind(context);
         context.drawArrays = (...args) => {
-          if (args[0] === context.POINTS) window.__OPTICAL_LAB_GL_TRACKER__.pointDrawArrays += 1;
-          return args[0] === context.POINTS ? drawArrays(...args) : recordGlyphDraw(drawArrays, args);
+          if (args[0] !== context.POINTS) return recordGlyphDraw(drawArrays, args);
+          let staleError = context.getError();
+          while (staleError !== context.NO_ERROR && staleError !== context.CONTEXT_LOST_WEBGL) {
+            window.__OPTICAL_LAB_GL_TRACKER__.pointDrawErrors.push(staleError);
+            staleError = context.getError();
+          }
+          const result = drawArrays(...args);
+          window.__OPTICAL_LAB_GL_TRACKER__.pointDrawArrays += 1;
+          window.__OPTICAL_LAB_GL_TRACKER__.pointDrawErrors.push(context.getError());
+          window.__OPTICAL_LAB_GL_TRACKER__.pointDrawInkStates.push(
+            document.querySelector('[data-optical-lab-candidate-stage="true"]')?.getAttribute('data-optical-ink') ?? null,
+          );
+          return result;
         };
         const drawElements = context.drawElements.bind(context);
         context.drawElements = (...args) => recordGlyphDraw(drawElements, args);
@@ -519,7 +533,11 @@ for (const testCase of cases) {
         if ((forceContext === 'webgl1' || forceContext === 'none') && type === 'webgl2') return null;
         if (forceContext === 'none' && (type === 'webgl' || type === 'experimental-webgl')) return null;
         const context = original.call(this, type, ...options);
-        if (context && forceContext === 'shader-failure') {
+        if (
+          context
+          && forceContext === 'shader-failure'
+          && (type === 'webgl2' || type === 'webgl' || type === 'experimental-webgl')
+        ) {
           const shaderSource = context.shaderSource.bind(context);
           context.shaderSource = (shader, source) => shaderSource(shader, `${source}\nforced_invalid_shader_token`);
         }
@@ -707,7 +725,7 @@ for (const testCase of cases) {
     await page.close();
   };
 
-  const runTask4MsdfGlyphAssertions = async () => {
+  const runTask5RestingMaterialAssertions = async () => {
     const stage = page.locator('[data-optical-lab-candidate-stage="true"]');
     const marker = page.locator('[data-optical-lab-evolves="true"] span span').last();
     const readGeometry = () => page.evaluate(() => {
@@ -838,10 +856,16 @@ for (const testCase of cases) {
       throw new Error(`${testCase.name} MSDF publication timed out: ${JSON.stringify({ errors, evidence })}`, { cause: error });
     }
 
-    assert.equal(await diagnostics.getAttribute('data-quality-tier'), 'msdf-glyph');
+    assert.equal(await diagnostics.getAttribute('data-quality-tier'), 'resting-material');
     assert.equal(await diagnostics.getAttribute('data-context-status'), 'ready');
-    assert.equal(await diagnostics.getAttribute('data-particle-count'), '0', 'Task 4 must not publish particles');
-    assert.equal(await diagnostics.getAttribute('data-flow-texture'), 'inactive', 'Task 4 must not publish a flowmap');
+    assert(Number(await diagnostics.getAttribute('data-particle-count')) > 0, 'Task 5 must publish mask-derived particles');
+    assert.equal(await diagnostics.getAttribute('data-flow-texture'), 'inactive', 'Task 5 must not publish a Task 6 flowmap');
+    assert.match(await diagnostics.getAttribute('data-precision') ?? '', /^rgba(16f|8)$/);
+    assert.deepEqual(
+      Object.keys(JSON.parse(await diagnostics.getAttribute('data-pass-energies') ?? '{}')).sort(),
+      ['caustic', 'curtain', 'dissolution', 'intactGlyph', 'rightwardEmission'],
+      'Task 5 must expose exactly five named resting pass energies',
+    );
     const firstDraws = await page.evaluate(() => window.__OPTICAL_LAB_GL_TRACKER__);
     assert(firstDraws.glyphDraws >= 5, `${testCase.name} must complete mask, color, and composite draws`);
     assert(firstDraws.glyphDrawInkStates.slice(0, 5).every((ink) => ink === 'dom'), `${testCase.name} must retain DOM ink through the complete first GPU frame`);
@@ -850,8 +874,91 @@ for (const testCase of cases) {
       firstDraws.atlasColorSpaceConversions.includes(0),
       `${testCase.name} must upload MSDF RGB channels without browser color-space conversion`,
     );
-    assert.equal(firstDraws.instancedDraws, 0, 'Task 4 must not execute the deferred material particle pass');
-    assert.equal(firstDraws.pointDrawArrays, 0, 'Task 4 must not execute POINTS draws');
+
+    let restingMaterial = null;
+    if (testCase.name === 'reference-desktop') {
+      const frameBeforeNative = Number(await diagnostics.getAttribute('data-frame-count'));
+      await stage.evaluate(() => {
+        const style = document.createElement('style');
+        style.dataset.opticalLabNativeRestingProbe = 'true';
+        style.textContent = `
+          html, body { width: 1672px !important; height: 941px !important; margin: 0 !important; overflow: hidden !important; }
+          [data-optical-lab="true"] { padding: 0 !important; }
+          [data-optical-lab-candidate-stage="true"] {
+            position: fixed !important;
+            inset: 0 !important;
+            z-index: 2147483647 !important;
+            width: 1672px !important;
+            height: 941px !important;
+            aspect-ratio: auto !important;
+          }
+        `;
+        document.head.append(style);
+        window.dispatchEvent(new Event('resize'));
+      });
+      await page.waitForFunction((before) => {
+        const node = document.querySelector('[data-optical-lab-diagnostics="true"]');
+        const stageNode = document.querySelector('[data-optical-lab-candidate-stage="true"]');
+        const bounds = stageNode?.getBoundingClientRect();
+        return node?.getAttribute('data-first-complete-frame') === 'true'
+          && Number(node.getAttribute('data-frame-count')) > before
+          && Math.abs((bounds?.width ?? 0) - 1672) <= 1
+          && Math.abs((bounds?.height ?? 0) - 941) <= 1;
+      }, frameBeforeNative, { polling: 10, timeout: 5_000 });
+      const nativeGeometry = await readGeometry();
+      assertGeometry(nativeGeometry, `${testCase.name}/native-resting`);
+      const nativeCandidate = await decodeScreenshot(
+        page,
+        await stage.screenshot({ path: path.join(outDir, 'desktop-resting.png') }),
+      );
+      assert.equal(nativeCandidate.width, 1672, 'desktop-resting.png must preserve native reference width');
+      assert.equal(nativeCandidate.height, 941, 'desktop-resting.png must preserve native reference height');
+      const targetNative = await decodeScreenshot(
+        page,
+        await readFile(path.resolve(scriptDir, '../../public/optical-lab/target-reference.png')),
+      );
+      assert.equal(targetNative.width, 1672, 'target-reference.png must preserve native width');
+      assert.equal(targetNative.height, 941, 'target-reference.png must preserve native height');
+      restingMaterial = measureRestingMaterial({
+        apertureX: .58,
+        candidate: nativeCandidate,
+        target: targetNative,
+      });
+      assert(restingMaterial.intactGlyphContinuity >= .88, `native intact glyph continuity is too low: ${JSON.stringify(restingMaterial)}`);
+      assert(restingMaterial.dissolutionTransfer >= .55, `native dissolution transfer is too low: ${JSON.stringify(restingMaterial)}`);
+      assert(
+        restingMaterial.curtainCoverage >= restingMaterial.targetCurtainCoverage * .75,
+        `native curtain coverage is too low: ${JSON.stringify(restingMaterial)}`,
+      );
+      assert(
+        restingMaterial.causticWidth >= .04 && restingMaterial.causticWidth <= .06,
+        `native caustic width must stay within 4–6vw: ${JSON.stringify(restingMaterial)}`,
+      );
+      assert(restingMaterial.causticCenterError <= .005, `native caustic center drifted: ${JSON.stringify(restingMaterial)}`);
+      assert(restingMaterial.rightwardEnergyRatio >= 1.25, `native rightward energy is too weak: ${JSON.stringify(restingMaterial)}`);
+      assert(restingMaterial.leftwardEmissionRatio <= .12, `native leftward emission is too strong: ${JSON.stringify(restingMaterial)}`);
+      assert(restingMaterial.maskedStructuralSimilarity >= .62, `native masked similarity is too low: ${JSON.stringify(restingMaterial)}`);
+      assert(restingMaterial.forbiddenRingScore < .72, `native frame contains a ring: ${JSON.stringify(restingMaterial)}`);
+      assert(restingMaterial.forbiddenSymmetricFanScore < .42, `native frame contains a symmetric fan: ${JSON.stringify(restingMaterial)}`);
+      assert(restingMaterial.forbiddenMechanicalLineScore < .42, `native frame contains a mechanical divider: ${JSON.stringify(restingMaterial)}`);
+      assert(restingMaterial.forbiddenStaircaseCausticScore < .12, `native frame contains a staircase caustic: ${JSON.stringify(restingMaterial)}`);
+      assert(restingMaterial.forbiddenUniformDotScore < .42, `native frame contains a uniform-dot curtain: ${JSON.stringify(restingMaterial)}`);
+      assert(restingMaterial.forbiddenDuplicateTitleScore < .42, `native frame contains duplicate title ink: ${JSON.stringify(restingMaterial)}`);
+      const frameBeforeRestore = Number(await diagnostics.getAttribute('data-frame-count'));
+      await page.locator('style[data-optical-lab-native-resting-probe="true"]').evaluate((node) => node.remove());
+      await page.evaluate(() => window.dispatchEvent(new Event('resize')));
+      await page.waitForFunction((before) => {
+        const diagnosticsNode = document.querySelector('[data-optical-lab-diagnostics="true"]');
+        const bounds = document.querySelector('[data-optical-lab-candidate-stage="true"]')?.getBoundingClientRect();
+        return diagnosticsNode?.getAttribute('data-first-complete-frame') === 'true'
+          && Number(diagnosticsNode.getAttribute('data-frame-count')) > before
+          && (bounds?.width ?? 1672) < 1000;
+      }, frameBeforeRestore, { polling: 10, timeout: 5_000 });
+    }
+    assert.equal(firstDraws.instancedDraws, 0, 'Task 5 uses OGL GPGPU point state, not the rejected instanced Candidate B pass');
+    assert(firstDraws.pointDrawArrays > 0, 'Task 5 must execute a real GPGPU-backed POINTS draw');
+    assert(firstDraws.pointDrawErrors.every((error) => error === 0), 'Task 5 point draws must be GL-error free');
+    assert.equal(firstDraws.pointDrawInkStates[0], 'dom', 'DOM ink must remain visible through the first particle draw');
 
     const straightAlpha = firstDraws.straightAlphaFrames[0];
     assert(straightAlpha, `${testCase.name} must capture the drawing buffer inside the complete composite draw`);
@@ -863,9 +970,27 @@ for (const testCase of cases) {
     assert(straightAlpha.vermilionGreen >= 65, `${testCase.name} vermilion edge chroma collapsed: ${JSON.stringify(straightAlpha)}`);
 
     await stage.scrollIntoViewIfNeeded();
+    const materialFrame = await decodeScreenshot(
+      page,
+      await stage.screenshot({ path: path.join(outDir, `${testCase.name}-resting-material.png`) }),
+    );
+    const frameBeforeGlyphProbe = Number(await diagnostics.getAttribute('data-frame-count'));
+    await stage.evaluate((node) => { node.dataset.opticalLabGlyphParityProbe = 'all'; });
+    await page.waitForFunction((before) => Number(
+      document.querySelector('[data-optical-lab-diagnostics="true"]')?.getAttribute('data-frame-count'),
+    ) > before, frameBeforeGlyphProbe);
     const gpuFrame = await decodeScreenshot(
       page,
       await stage.screenshot({ path: path.join(outDir, `${testCase.name}-msdf-glyph.png`) }),
+    );
+    const frameBeforeEvolvesProbe = Number(await diagnostics.getAttribute('data-frame-count'));
+    await stage.evaluate((node) => { node.dataset.opticalLabGlyphParityProbe = 'evolves'; });
+    await page.waitForFunction((before) => Number(
+      document.querySelector('[data-optical-lab-diagnostics="true"]')?.getAttribute('data-frame-count'),
+    ) > before, frameBeforeEvolvesProbe);
+    const evolvesGpuFrame = await decodeScreenshot(
+      page,
+      await stage.screenshot({ path: path.join(outDir, `${testCase.name}-evolves-msdf-glyph.png`) }),
     );
     await stage.evaluate(() => {
       const style = document.createElement('style');
@@ -883,7 +1008,23 @@ for (const testCase of cases) {
       page,
       await stage.screenshot({ path: path.join(outDir, `${testCase.name}-dom-parity.png`) }),
     );
+    await stage.evaluate(() => {
+      const style = document.createElement('style');
+      style.dataset.opticalLabEvolvesParityProbe = 'true';
+      style.textContent = '[data-optical-lab-science="true"] { visibility: hidden !important; }';
+      document.head.append(style);
+    });
+    const evolvesDomFrame = await decodeScreenshot(
+      page,
+      await stage.screenshot({ path: path.join(outDir, `${testCase.name}-evolves-dom-parity.png`) }),
+    );
+    await page.locator('style[data-optical-lab-evolves-parity-probe="true"]').evaluate((node) => node.remove());
     await page.locator('style[data-optical-lab-dom-parity-probe="true"]').evaluate((node) => node.remove());
+    const frameBeforeMaterialRestore = Number(await diagnostics.getAttribute('data-frame-count'));
+    await stage.evaluate((node) => { delete node.dataset.opticalLabGlyphParityProbe; });
+    await page.waitForFunction((before) => Number(
+      document.querySelector('[data-optical-lab-diagnostics="true"]')?.getAttribute('data-frame-count'),
+    ) > before, frameBeforeMaterialRestore);
     const gpuMask = createInkMask(gpuFrame);
     const domMask = createInkMask(domFrame);
     const typography = measureMsdfTypography({
@@ -891,12 +1032,17 @@ for (const testCase of cases) {
       domMask,
       msdfMask: gpuMask,
     });
+    const evolvesTypography = measureMsdfTypography({
+      ...initialGeometry,
+      domMask: createInkMask(evolvesDomFrame),
+      msdfMask: createInkMask(evolvesGpuFrame),
+    });
     assert(typography.occupiedColumnContinuity >= .6, `${testCase.name} MSDF occupied columns are discontinuous: ${JSON.stringify(typography)}`);
     assert(typography.edgeBoundsOverlapWithDom >= .9, `${testCase.name} MSDF/DOM outer edges drifted: ${JSON.stringify(typography)}`);
     assert(typography.edgeOverlapWithDom >= .9, `${testCase.name} MSDF/DOM edge overlap is too low: ${JSON.stringify(typography)}`);
     assert(typography.scienceEdgeOverlapWithDom >= .9, `${testCase.name} Science silhouette overlap is too low: ${JSON.stringify(typography)}`);
-    assert(typography.evolvesEdgeOverlapWithDom >= .9, `${testCase.name} evolves silhouette overlap is too low: ${JSON.stringify(typography)}`);
-    assert(outsideTitleInkRatio(gpuMask, initialGeometry.title) <= .01, `${testCase.name} contains Task 5 energy outside the title`);
+    assert(evolvesTypography.evolvesEdgeOverlapWithDom >= .9, `${testCase.name} isolated evolves silhouette overlap is too low: ${JSON.stringify(evolvesTypography)}`);
+    assert(outsideTitleInkRatio(createInkMask(materialFrame), initialGeometry.title) > .01, `${testCase.name} must contain Task 5 energy outside the title`);
     let vermilionPixels = 0;
     for (let index = 0; index < gpuFrame.pixels.length; index += 4) {
       const red = gpuFrame.pixels[index];
@@ -994,7 +1140,7 @@ for (const testCase of cases) {
       await stage.screenshot({ path: path.join(outDir, `${testCase.name}-restored-msdf-glyph.png`) });
     }
 
-    measurements.push({ case: testCase.name, geometry: initialGeometry, resizedGeometry, straightAlpha, typography });
+    measurements.push({ case: testCase.name, geometry: initialGeometry, resizedGeometry, restingMaterial, straightAlpha, typography });
     await page.screenshot({ fullPage: true, path: path.join(outDir, `${testCase.name}.png`) });
     assert.deepEqual(errors, [], `${testCase.name} emitted browser errors: ${errors.join(' | ')}`);
     await page.close();
@@ -1455,8 +1601,10 @@ for (const testCase of cases) {
   if (renderPhase === OPTICAL_LAB_RENDER_PHASES.runtimeShell) {
     await runTask3RuntimeShellAssertions();
   } else if (renderPhase === OPTICAL_LAB_RENDER_PHASES.msdfGlyph) {
-    await runTask4MsdfGlyphAssertions();
-  } else if (renderPhase === OPTICAL_LAB_RENDER_PHASES.legacyTask5Material) {
+    await runTask5RestingMaterialAssertions();
+  } else if (renderPhase === OPTICAL_LAB_RENDER_PHASES.restingMaterial) {
+    await runTask5RestingMaterialAssertions();
+  } else if (renderPhase === OPTICAL_LAB_RENDER_PHASES.candidateBVisual) {
     await runCandidateBVisualPhaseAssertions();
   } else {
     assert.fail(

@@ -1,14 +1,14 @@
-/* global document, fetch, getComputedStyle, process, setTimeout, window */
+/* global createImageBitmap, document, fetch, getComputedStyle, process, Response, setTimeout, window */
 
 import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
 import net from 'node:net';
-import { mkdir, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { chromium } from 'playwright';
 
-import { measureTypography } from './optical-lab-reference-metrics.mjs';
+import { measureEditorialSuffix, measureTypography } from './optical-lab-reference-metrics.mjs';
 
 const scriptDir = path.dirname(fileURLToPath(import.meta.url));
 const webRoot = path.resolve(scriptDir, '../..');
@@ -22,6 +22,21 @@ const expectedComputedFamilyPrefix = {
   archivo: '__Archivo_',
   bricolage: '__Bricolage_Grotesque_',
 };
+
+async function decodeScreenshot(page, buffer) {
+  return page.evaluate(async (bytes) => {
+    const response = new Response(new Uint8Array(bytes));
+    const bitmap = await createImageBitmap(await response.blob());
+    const canvas = document.createElement('canvas');
+    canvas.width = bitmap.width;
+    canvas.height = bitmap.height;
+    const context = canvas.getContext('2d', { willReadFrequently: true });
+    context.drawImage(bitmap, 0, 0);
+    const image = context.getImageData(0, 0, bitmap.width, bitmap.height);
+    bitmap.close();
+    return { height: image.height, pixels: Array.from(image.data), width: image.width };
+  }, [...buffer]);
+}
 
 async function assertPortIsAvailable() {
   await new Promise((resolve, reject) => {
@@ -186,8 +201,29 @@ async function inspectSpecimen({ candidate, route, screenshot }) {
     assert.equal(await specimen.getAttribute('data-optical-aperture'), '0.58');
     assert.equal(await specimen.getAttribute('data-shipping-eligible'), candidate === 'arial-black-reference' ? 'false' : 'true');
     await page.evaluate(() => window.getSelection()?.removeAllRanges());
-    if (screenshot) await page.screenshot({ path: path.join(outDir, `typography-${candidate}.png`) });
-    return { candidate, measured, raw: measurement };
+    let editorialSuffix;
+    if (screenshot) {
+      const screenshotBuffer = await page.screenshot({ path: path.join(outDir, `typography-${candidate}.png`) });
+      if (candidate === 'archivo') {
+        const [candidateFrame, targetFrame] = await Promise.all([
+          decodeScreenshot(page, screenshotBuffer),
+          decodeScreenshot(page, await readFile(path.resolve(webRoot, 'public/optical-lab/target-reference.png'))),
+        ]);
+        editorialSuffix = {
+          candidate: measureEditorialSuffix(candidateFrame),
+          target: measureEditorialSuffix(targetFrame),
+        };
+        const widthRatio = editorialSuffix.candidate.bounds.width / editorialSuffix.target.bounds.width;
+        const heightRatio = editorialSuffix.candidate.bounds.height / editorialSuffix.target.bounds.height;
+        const densityRatio = editorialSuffix.candidate.inkDensity / editorialSuffix.target.inkDensity;
+        assert(widthRatio >= .97 && widthRatio <= 1.03, `Archivo evolves suffix width must match target: ${JSON.stringify(editorialSuffix)}`);
+        assert(heightRatio >= .96 && heightRatio <= 1.04, `Archivo evolves suffix height must match target: ${JSON.stringify(editorialSuffix)}`);
+        assert(Math.abs(editorialSuffix.candidate.bounds.bottom - editorialSuffix.target.bounds.bottom) <= .005, `Archivo evolves suffix baseline drifted: ${JSON.stringify(editorialSuffix)}`);
+        assert(densityRatio >= .8 && densityRatio <= 1.25, `Archivo evolves suffix ink density must match target: ${JSON.stringify(editorialSuffix)}`);
+        assert(Math.abs(editorialSuffix.candidate.slantDegrees - editorialSuffix.target.slantDegrees) <= 3, `Archivo evolves suffix slant must match target: ${JSON.stringify(editorialSuffix)}`);
+      }
+    }
+    return { candidate, editorialSuffix, measured, raw: measurement };
   } finally {
     await page.close();
   }

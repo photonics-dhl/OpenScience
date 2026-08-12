@@ -29,13 +29,13 @@
     {
       "axisSettings": {
         "opsz": 96,
-        "wght": 700
+        "wght": 400
       },
-      "family": "Bodoni Moda 96pt Bold Italic",
+      "family": "Bodoni Moda 96pt Italic",
       "file": "evolves-editorial.ttf",
       "license": "SIL OFL 1.1",
       "licenseFile": "OFL-evolves.txt",
-      "sourceSha256": "6c307e5f280743accf6d9f055e95b979f17436494bbefe751df4ee1c81c1b6ec",
+      "sourceSha256": "ea4193a09869d752f9128cc386fa3cd86fcb276235465dcf0e3213cb21d9861d",
       "upstream": {
         "gitCommit": "038b637da7b3fd956a4ed93ffc607c3d5e4ce172",
         "path": "ofl/bodonimoda/BodoniModa-Italic[opsz,wght].ttf",
@@ -59,11 +59,11 @@
     },
     {
       "file": "public/optical-lab/atlas/evolves-editorial.json",
-      "sha256": "f5bfdb320e1fe9eaf63320a7fb44e3810c09127109732b6afa875bc840aec2ff"
+      "sha256": "3c669188ff0964c772f765e53493903759a46bb22c3f4b63a503fae2601750f8"
     },
     {
       "file": "public/optical-lab/atlas/evolves-editorial.png",
-      "sha256": "6c740251b33643698f0dfd1d4e70b7b563114e362e27fac07a957412cb6b6029"
+      "sha256": "2cd7333d5b41ca05f562ef56024a1ab1e3f381bd1b066e5a82509e386c5289aa"
     }
   ],
   "settings": {

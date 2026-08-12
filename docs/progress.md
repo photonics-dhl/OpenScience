@@ -1,5 +1,27 @@
 # OpenScience (XGS) 进度日志
 
+## 2026-08-12（Optical Lab Task 5 字形坐标契约修复）— ⏳ 技术 GREEN，等待用户原尺寸视觉批准
+
+- **可证伪根因与 RED**：原 production-start gate 原样复现 isolated `evolves`：bounds `.901261`、density `1.076923` 通过而 shape `.766194 < .90`；GPU/DOM bbox 为 `287..466` / `291..475`，同掩膜只需约 `(+9,-1)` 刚性位移即可达 `.971335`。BMFont `base=108`、atlas size `96`、padding `4` 与 OGL/CSS tracking 语义给出 `7 × (.085 × 12) + 4 = 11.14` atlas px（约 `8.29` screen px）的末端 landmark 漂移预测。新增 contract test 先以缺失 ink-mapping authority 精确 RED（16 pass / 1 fail）。
+- **单一结构契约**：OGL tracking 现从 atlas `info.size` 换算；source 以 BMFont 声明 padding 后的真实 ink landmark 归一化；target 由浏览器按实际 computed font/letter-spacing 逐 glyph `TextMetrics` 并经真实 CSS matrix/origin 映射。没有 `+9px` 单词偏移，也没有修改 `.90`、radius `5`、target、mask 或 typography 阈值；唯一 h1 的 `Science evolves.`、58% seam、baseline、straight alpha、Task 4 lifecycle/resource cleanup 均保留。
+- **parity 与材质 GREEN**：isolated GPU/DOM bbox 更新为 `291..470` / `291..475`，bounds `.941251`、shape `.907246`、density `1.047571`；native material 保持 continuity `.957711`、dissolution `.809524`、curtain `.865450`（floor `.746579`）、caustic `.046651/.001053`、right `7.365091`、left `.119544`、similarity `.844167`，ring `.527778`、fan `.045455`，mechanical/staircase/uniform/duplicate `0`。
+- **完成态门禁**：focused `51/51`、全 Web `30 files / 212 tests`、Web/全仓 typecheck、fresh production build、完整 production-start resize/context/failure/restore matrix、root lint + workspace + docs-sync 与 atlas 双生成确定性均 GREEN。测试 shader-failure injector 只对 WebGL context 注入 invalid shader，避免把新的 2D measurement context 误当成 GL；真实 compile/link fail-closed 路径仍完整执行。
+- **硬停止**：已原尺寸检查 target、native resting、isolated GPU/DOM、resize 与 fallback；GPU/DOM 首缘对齐，GPU 末缘约短 5 px但通过原 literal contract。当前只等待用户视觉批准；未推广 fallback、未 commit、未部署，未开始 pointer/Task 6。
+
+## 2026-08-12（Optical Lab 高保真 Task 5 结构修复）— ⏳ 字形同构三轮后 NEEDS_CONTEXT
+
+- **授权结构修复**：沿用既有 pin 的 Google Fonts 上游，将 `evolves` 确定性静态实例改为 Bodoni Moda Italic `opsz=96,wght=400`，按真实 inner ink bounds 映射 GPU；材质拆出独立 upstream x-strata / y-mapping dissolution role，并把梯状 caustic 改为稀疏曲线高能细丝。未新增字体家族、依赖、pointer uniform、flowmap 或 Task 6 行为。
+- **字体目标门通过**：旧 700 在真实 native suffix 的 width/height/density/slant 分别为 `.93250/.90954/1.85623/6.0293deg` RED；新实例与几何最终为 `.97336/.99497/1.20693/1.1966deg` GREEN，bottom error `.004251`，58% seam `.579994`、baseline `.541993`，Archivo 未改。
+- **材质结构门通过**：continuity `.957711`、dissolution `.809524`、curtain `.865450`、caustic width `.046651` / center `.001053`、right `.7.365091`、left `.119544`、similarity `.844222`；ring `.569444`、fan `.045455`，mechanical/staircase/uniform/duplicate 均为 `0`。
+- **当前停止点**：同一 `evolves` DOM/GPU shape-parity 在三次限定映射中为 `.747038 → .708614 → isolated .766194 < .90`；最终 bounds `.901261`、density ratio `1.076923` 已通过，但 GPU 可见字约比 DOM 左移 7–8 px，根因指向 atlas quad/padding/advance origin 与 CSS inner-ink/negative letter-spacing 语义差异。按规则停止，不做第 4 次标量调参；完整 resize/context/failure matrix、root lint/full Web/双 atlas generation 未宣称，未请求视觉批准、未提交。
+
+## 2026-08-12（Optical Lab 高保真 Task 5）— ⏳ 三轮同断言后 NEEDS_CONTEXT
+
+- **静止材质实现**：隔离 Lab 已接入固定 seed、glyph-mask 派生的 OGL GPGPU 粒子，以及 intact glyph / dissolution / curtain / 4–6vw caustic / rightward emission 五层诊断；高能量独立四分之一分辨率模糊，color targets 优先 RGBA16F、WebGL2 内回落 RGBA8，最终维持 straight alpha。Task 5 没有 pointer uniform、flowmap 或 Task 6 行为。
+- **真实 RED/GREEN**：MSDF-only native frame 在 dissolution=`0` 精确 RED；synthetic valid/五个 forbidden fixtures 与 focused contract 最终 `25/25`，Web typecheck 和每轮 production build 通过。literal native thresholds 未降低，reference/accepted metrics 未改写规避失败。
+- **停止证据**：三次调参均在同一 `dissolutionTransfer ≥ .55` 断言失败，最终 `.511905`；其余最终指标已达：continuity `.956468`、curtain `.758267`、caustic width `.050239` / center error `.000144`、right `.7.365091`、left `.119544`、similarity `.819972`，ring/fan/mechanical/uniform/duplicate 均通过。按计划硬规则停止为 `NEEDS_CONTEXT`，未继续盲调。
+- **视觉结论与下一步**：原尺寸最新帧的点幕覆盖已合格，但 caustic 断续纹理仍呈梯状竖柱，且窄上游 dissolve 缺少确定性 x-column coverage；因此未请求用户材质批准、未运行完成态全门禁、未提交。若获准恢复，应先拆出确定性 mask-derived dissolution role 并将 caustic 改为稀疏曲线高能细丝，而非继续改标量。
+
 ## 2026-08-12（Optical Lab Task 4 review fix round 1/5）— ✅ 四项 Important 已修复
 
 - **异步几何 ownership**：renderer 以单调 generation 统一初始 DOM 测量、共享 atlas load、二次 parity、resize 与 RAF；resize 先同步撤回 GPU ink、取消旧 RAF 并使旧 async token 失效，最新 layout 完整重画后才重发。阻塞 `document.fonts.ready` 的 post-frame probe 在旧代码精确 RED 为 stale bounds 重新发布；延迟 atlas PNG 的 init-resize case 证明 pending atlas 不再导致永久 fallback。

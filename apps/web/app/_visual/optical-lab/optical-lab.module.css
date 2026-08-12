@@ -168,13 +168,14 @@
   padding-left: .01em;
   font-family: var(--font-bodoni), serif;
   font-optical-sizing: none;
-  font-size: clamp(1.5rem, 14.25cqw, 14.95rem);
+  font-size: clamp(1.5rem, 15.68cqw, 16.45rem);
   font-style: italic;
-  font-weight: 700;
-  font-variation-settings: 'opsz' 96, 'wght' 700;
+  font-weight: 400;
+  font-variation-settings: 'opsz' 96, 'wght' 400;
   letter-spacing: -.085em;
-  transform: scaleX(.82);
+  transform: scaleX(.83) skewX(-6deg);
   transform-origin: left center;
+  -webkit-text-stroke: 1.6px #090909;
 }
 
 .baselineProbe {
@@ -352,12 +353,15 @@
 .typographyEvolvesInk {
   padding-left: .01em;
   font-family: var(--font-bodoni), serif;
-  font-size: clamp(4.25rem, 14.25vw, 14.95rem);
+  font-size: clamp(4.25rem, 15.68vw, 16.45rem);
   font-style: italic;
-  font-weight: 700;
+  font-optical-sizing: none;
+  font-weight: 400;
+  font-variation-settings: 'opsz' 96, 'wght' 400;
   letter-spacing: -.085em;
-  transform: scaleX(.82);
+  transform: scaleX(.83) skewX(-6deg);
   transform-origin: left center;
+  -webkit-text-stroke: 1.6px #090909;
 }
 
 .typographyArchivo .typographyScienceInk {
@@ -413,6 +417,6 @@
   }
 
   .typographyEvolvesInk {
-    font-size: clamp(3.7rem, 14.25vw, 14.95rem);
+    font-size: clamp(3.7rem, 15.68vw, 16.45rem);
   }
 }

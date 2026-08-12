@@ -7,7 +7,13 @@ import {
   type OpticalLayout,
 } from '../layout';
 import { OPTICAL_WEBGL2_CONTEXT_ATTRIBUTES } from '../runtime-policy';
+import {
+  createCompositePass,
+  OPTICAL_RESTING_PASS_ENERGIES,
+  type OpticalCompositePass,
+} from './composite-pass';
 import { createGlyphPass, loadOpticalGlyphAtlases, type OpticalGlyphPass } from './glyph-pass';
+import { createParticlePass, type OpticalParticlePass } from './particle-pass';
 import type { OpticalOglResourceCounts } from './resources';
 
 export interface OpticalOglRendererSnapshot {
@@ -17,7 +23,11 @@ export interface OpticalOglRendererSnapshot {
   frameCount: number;
   layoutStable: boolean;
   mode: 'webgl2-full';
-  qualityTier: 'msdf-glyph';
+  apertureX: .58;
+  particleCount: number;
+  passEnergies: typeof OPTICAL_RESTING_PASS_ENERGIES;
+  precision: 'rgba16f' | 'rgba8' | 'pending';
+  qualityTier: 'resting-material';
   resourceCounts: OpticalOglResourceCounts;
   stableBounds: string;
 }
@@ -36,6 +46,18 @@ const emptyResourceCounts = (): OpticalOglResourceCounts => ({
   textures: 0,
   vertexArrays: 0,
 });
+
+const mergeResourceCounts = (...counts: OpticalOglResourceCounts[]): OpticalOglResourceCounts => (
+  counts.reduce<OpticalOglResourceCounts>((total, current) => ({
+    buffers: total.buffers + current.buffers,
+    framebuffers: total.framebuffers + current.framebuffers,
+    programs: total.programs + current.programs,
+    renderbuffers: total.renderbuffers + current.renderbuffers,
+    shaders: total.shaders + current.shaders,
+    textures: total.textures + current.textures,
+    vertexArrays: total.vertexArrays + current.vertexArrays,
+  }), emptyResourceCounts())
+);
 
 export function createOpticalOglRenderer(
   canvas: HTMLCanvasElement,
@@ -63,6 +85,7 @@ export function createOpticalOglRenderer(
 
   let acceptedLayout: OpticalLayout | null = null;
   let activeRaf = false;
+  let compositePass: OpticalCompositePass | null = null;
   let disposed = false;
   let firstCompleteFrame = false;
   let frameCount = 0;
@@ -70,6 +93,7 @@ export function createOpticalOglRenderer(
   let glyphPass: OpticalGlyphPass | null = null;
   let glyphAtlases: ReturnType<typeof loadOpticalGlyphAtlases> | null = null;
   let rafId: number | null = null;
+  let particlePass: OpticalParticlePass | null = null;
   let stableBounds = 'pending';
 
   const report = (
@@ -77,13 +101,23 @@ export function createOpticalOglRenderer(
     layoutStable = acceptedLayout !== null,
   ) => onSnapshot({
     activeRaf,
+    apertureX: .58,
     contextStatus,
     firstCompleteFrame,
     frameCount,
     layoutStable,
     mode: 'webgl2-full',
-    qualityTier: 'msdf-glyph',
-    resourceCounts: disposed ? emptyResourceCounts() : glyphPass?.resourceCounts() ?? emptyResourceCounts(),
+    particleCount: particlePass?.particleCount ?? 0,
+    passEnergies: OPTICAL_RESTING_PASS_ENERGIES,
+    precision: compositePass?.precision ?? 'pending',
+    qualityTier: 'resting-material',
+    resourceCounts: disposed
+      ? emptyResourceCounts()
+      : mergeResourceCounts(
+          glyphPass?.resourceCounts() ?? emptyResourceCounts(),
+          particlePass?.resourceCounts() ?? emptyResourceCounts(),
+          compositePass?.resourceCounts() ?? emptyResourceCounts(),
+        ),
     stableBounds,
   });
 
@@ -100,11 +134,36 @@ export function createOpticalOglRenderer(
     activeRaf = false;
   };
 
+  const disposeMaterialPasses = () => {
+    compositePass?.dispose();
+    compositePass = null;
+    particlePass?.dispose();
+    particlePass = null;
+  };
+
+  const disposeAllPasses = () => {
+    disposeMaterialPasses();
+    glyphPass?.dispose();
+    glyphPass = null;
+  };
+
   const draw = (ownedGeneration: number) => {
     if (disposed || ownedGeneration !== generation || !activeRaf || acceptedLayout === null) return;
     const layoutStable = acceptedLayout !== null;
     try {
-      if (!glyphPass?.render(null)) throw new Error('Optical Lab MSDF color+mask frame is incomplete');
+      const parityWord = stage.dataset.opticalLabGlyphParityProbe;
+      const glyphParityWord = parityWord === 'science' || parityWord === 'evolves' ? parityWord : null;
+      const glyphParityProbe = parityWord === 'all' || glyphParityWord !== null;
+      if (!glyphPass?.render(null, glyphParityWord)) throw new Error('Optical Lab MSDF color+mask frame is incomplete');
+      if (glyphParityProbe) {
+        frameCount += 1;
+        firstCompleteFrame = layoutStable;
+        report('ready', layoutStable);
+        rafId = requestAnimationFrame(() => draw(ownedGeneration));
+        return;
+      }
+      if (!particlePass?.render()) throw new Error('Optical Lab mask-derived particle frame is incomplete');
+      if (!compositePass?.render()) throw new Error('Optical Lab resting composite frame is incomplete');
       if (disposed || ownedGeneration !== generation || acceptedLayout === null) return;
       frameCount += 1;
       firstCompleteFrame = layoutStable;
@@ -114,8 +173,7 @@ export function createOpticalOglRenderer(
       if (ownedGeneration !== generation) return;
       cancelFrame();
       firstCompleteFrame = false;
-      glyphPass?.dispose();
-      glyphPass = null;
+      disposeAllPasses();
       report('unavailable', false);
     }
   };
@@ -125,6 +183,7 @@ export function createOpticalOglRenderer(
     cancelFrame();
     firstCompleteFrame = false;
     acceptedLayout = null;
+    disposeMaterialPasses();
     report(frameCount > 0 ? 'ready' : 'initializing');
     void (async () => {
       const layout = await readLayout();
@@ -141,6 +200,12 @@ export function createOpticalOglRenderer(
       renderer.setSize(publicationLayout.viewport.width, publicationLayout.viewport.height);
       if (glyphPass) glyphPass.resize(publicationLayout);
       else glyphPass = createGlyphPass(renderer.gl, publicationLayout, atlases);
+      particlePass = createParticlePass(renderer.gl, publicationLayout, glyphPass.maskTexture);
+      compositePass = createCompositePass(renderer.gl, publicationLayout, {
+        glyphColor: glyphPass.colorTexture,
+        glyphMask: glyphPass.maskTexture,
+        particles: particlePass.texture,
+      });
       if (disposed || ownedGeneration !== generation) return;
       acceptedLayout = publicationLayout;
       stableBounds = serializeOpticalBounds(publicationLayout.title);
@@ -151,8 +216,7 @@ export function createOpticalOglRenderer(
       if (disposed || ownedGeneration !== generation) return;
       cancelFrame();
       firstCompleteFrame = false;
-      glyphPass?.dispose();
-      glyphPass = null;
+      disposeAllPasses();
       report('unavailable', false);
     });
   };
@@ -167,8 +231,7 @@ export function createOpticalOglRenderer(
       generation += 1;
       firstCompleteFrame = false;
       cancelFrame();
-      glyphPass?.dispose();
-      glyphPass = null;
+      disposeAllPasses();
       report('disposed', false);
     },
     resize: beginLayoutGeneration,

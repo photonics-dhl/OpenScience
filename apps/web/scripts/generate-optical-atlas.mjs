@@ -88,6 +88,14 @@ export function validateOpticalAtlasContract(manifest) {
   if (!hasExactUniqueValues(manifest.outputs?.map(({ file }) => file), expectedOutputFiles)) {
     throw new Error('The Optical Lab manifest must list the exact unique output set.');
   }
+  const evolves = manifest.fonts?.find(({ file }) => file === 'evolves-editorial.ttf');
+  if (
+    evolves?.family !== 'Bodoni Moda 96pt Italic'
+    || evolves.axisSettings?.opsz !== 96
+    || evolves.axisSettings?.wght !== 400
+  ) {
+    throw new Error('The Optical Lab manifest must use the fixed evolves static instance.');
+  }
   if (JSON.stringify(normalizeJson(manifest.settings)) !== JSON.stringify(expectedSettings)) {
     throw new Error('The Optical Lab manifest must use the fixed settings.');
   }

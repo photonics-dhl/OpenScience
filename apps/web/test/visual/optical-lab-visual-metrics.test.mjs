@@ -77,6 +77,203 @@ describe('Optical Lab resting topology metrics', () => {
   });
 });
 
+function createFiveRegionFixture() {
+  return createImage((x, y) => {
+    const glyph = x >= .025 && x < .545 && Math.abs(y - .515) <= .115;
+    const glyphCounter = glyph
+      && ((x > .105 && x < .145) || (x > .275 && x < .315))
+      && Math.abs(y - .515) < .045;
+    const upstream = x >= .48 && x < APERTURE_X;
+    const particleHash = (Math.floor(x * 240) * 31 + Math.floor(y * 135) * 17) % 43;
+    const dissolution = upstream && Math.abs(y - .515) <= .22 && particleHash <= 7;
+    const curtainEnvelope = Math.abs(x - APERTURE_X) <= .095 && y >= .035 && y <= .965;
+    const curtainDensity = .16 + .24 * (1 - Math.min(1, Math.abs(y - .515) / .515));
+    const curtain = curtainEnvelope && particleHash / 43 < curtainDensity;
+    const caustic = Math.abs(x - APERTURE_X) <= .025 && Math.abs(y - .515) <= .34;
+    const downstream = x > APERTURE_X && x <= .94;
+    const raySlope = Math.abs(y - .515) / Math.max(.001, x - APERTURE_X);
+    const ray = downstream && (raySlope < .24 || (raySlope > .58 && raySlope < .68) || (raySlope > 1.05 && raySlope < 1.16));
+    if (caustic) return 1;
+    if (ray) return .62 * (1 - (x - APERTURE_X) / .5);
+    if (curtain) return .38 + .38 * (1 - Math.abs(y - .515) / .515);
+    if (dissolution) return .7;
+    if (glyph && !glyphCounter) return upstream ? .48 : .88;
+    return 0;
+  });
+}
+
+function createMsdfOnlyFixture() {
+  return createImage((x, y) => (
+    x >= .025 && x <= .957 && Math.abs(y - .515) <= .115 ? .88 : 0
+  ));
+}
+
+function createRingFixture() {
+  return createImage((x, y) => {
+    const radius = Math.hypot(x - APERTURE_X, y - .515);
+    return Math.abs(radius - .19) <= .015 ? .9 : 0;
+  });
+}
+
+function createSymmetricFanFixture() {
+  return createImage((x, y) => {
+    const dx = x - APERTURE_X;
+    const dy = y - .515;
+    const fan = Math.abs(dy - dx * 1.15) <= .014 || Math.abs(dy + dx * 1.15) <= .014;
+    return fan ? .82 : 0;
+  });
+}
+
+function createMechanicalLineFixture() {
+  return createImage((x) => (Math.abs(x - APERTURE_X) <= .004 ? .92 : 0));
+}
+
+function createStaircaseCausticFixture() {
+  return createImage((x, y) => {
+    const causticBand = Math.abs(x - APERTURE_X) <= .025;
+    const horizontalStep = Math.floor(y * 135) % 8 <= 2;
+    return causticBand && horizontalStep ? .96 : 0;
+  });
+}
+
+function createCurvedFilamentFixture() {
+  return createImage((x, y) => {
+    const vertical = y - .515;
+    const filamentCenter = APERTURE_X + Math.sign(vertical) * vertical * vertical * .055;
+    const sparse = Math.floor((y + .03) * 135) % 17 > 3;
+    return sparse && Math.abs(x - filamentCenter) <= .003 ? .96 : 0;
+  });
+}
+
+function createUniformDotCurtainFixture() {
+  return createImage((x, y) => {
+    const column = Math.round(x * 240);
+    const row = Math.round(y * 135);
+    const inCurtain = Math.abs(x - APERTURE_X) <= .09;
+    return inCurtain && column % 8 <= 1 && row % 8 <= 1 ? .7 : 0;
+  });
+}
+
+function createDuplicateTitleFixture() {
+  return createImage((x, y) => {
+    const title = x >= .025 && x <= .957;
+    return title && (Math.abs(y - .42) <= .055 || Math.abs(y - .64) <= .055) ? .82 : 0;
+  });
+}
+
+describe('Optical Lab five-region resting-material metrics', () => {
+  it('accepts a complete reference-like field at the literal Task 5 thresholds', () => {
+    assert.equal(
+      typeof referenceMetrics.measureRestingMaterial,
+      'function',
+      'Task 5 requires a dedicated five-region native-frame metric path',
+    );
+    const target = createFiveRegionFixture();
+    const candidate = referenceMetrics.measureRestingMaterial({
+      apertureX: APERTURE_X,
+      candidate: target,
+      target,
+    });
+
+    assert(candidate.intactGlyphContinuity >= .88);
+    assert(candidate.dissolutionTransfer >= .55);
+    assert(candidate.curtainCoverage >= candidate.targetCurtainCoverage * .75);
+    assert(
+      candidate.causticWidth >= .04 && candidate.causticWidth <= .06,
+      `reference-like caustic width drifted: ${JSON.stringify(candidate)}`,
+    );
+    assert(candidate.causticCenterError <= .005);
+    assert(candidate.rightwardEnergyRatio >= 1.25);
+    assert(candidate.leftwardEmissionRatio <= .12);
+    assert(candidate.maskedStructuralSimilarity >= .62);
+  });
+
+  it('keeps the current MSDF-only frame RED for missing resting material', () => {
+    assert.equal(typeof referenceMetrics.measureRestingMaterial, 'function');
+    const target = createFiveRegionFixture();
+    const candidate = referenceMetrics.measureRestingMaterial({
+      apertureX: APERTURE_X,
+      candidate: createMsdfOnlyFixture(),
+      target,
+    });
+
+    assert(
+      candidate.dissolutionTransfer < .55
+        || candidate.curtainCoverage < candidate.targetCurtainCoverage * .75
+        || candidate.causticWidth < .04
+        || candidate.rightwardEnergyRatio < 1.25
+        || candidate.maskedStructuralSimilarity < .62,
+      'MSDF-only ink must not satisfy the complete resting-material contract',
+    );
+  });
+
+  it('rejects a radial ring independently of directional energy', () => {
+    assert.equal(typeof referenceMetrics.measureRestingMaterial, 'function');
+    const measured = referenceMetrics.measureRestingMaterial({
+      apertureX: APERTURE_X,
+      candidate: createRingFixture(),
+      target: createFiveRegionFixture(),
+    });
+    assert(measured.forbiddenRingScore >= .72);
+  });
+
+  it('rejects a symmetric fan independently of a bright seam', () => {
+    assert.equal(typeof referenceMetrics.measureRestingMaterial, 'function');
+    const measured = referenceMetrics.measureRestingMaterial({
+      apertureX: APERTURE_X,
+      candidate: createSymmetricFanFixture(),
+      target: createFiveRegionFixture(),
+    });
+    assert(measured.forbiddenSymmetricFanScore >= .42);
+  });
+
+  it('rejects a mechanical full-height divider', () => {
+    assert.equal(typeof referenceMetrics.measureRestingMaterial, 'function');
+    const measured = referenceMetrics.measureRestingMaterial({
+      apertureX: APERTURE_X,
+      candidate: createMechanicalLineFixture(),
+      target: createFiveRegionFixture(),
+    });
+    assert(measured.forbiddenMechanicalLineScore >= .42);
+  });
+
+  it('rejects a staircase caustic while accepting sparse curved filaments', () => {
+    const staircase = referenceMetrics.measureRestingMaterial({
+      apertureX: APERTURE_X,
+      candidate: createStaircaseCausticFixture(),
+      target: createFiveRegionFixture(),
+    });
+    const filaments = referenceMetrics.measureRestingMaterial({
+      apertureX: APERTURE_X,
+      candidate: createCurvedFilamentFixture(),
+      target: createFiveRegionFixture(),
+    });
+
+    assert(staircase.forbiddenStaircaseCausticScore >= .12);
+    assert(filaments.forbiddenStaircaseCausticScore < .12);
+  });
+
+  it('rejects a uniform-dot curtain without luminance or spacing hierarchy', () => {
+    assert.equal(typeof referenceMetrics.measureRestingMaterial, 'function');
+    const measured = referenceMetrics.measureRestingMaterial({
+      apertureX: APERTURE_X,
+      candidate: createUniformDotCurtainFixture(),
+      target: createFiveRegionFixture(),
+    });
+    assert(measured.forbiddenUniformDotScore >= .42);
+  });
+
+  it('rejects duplicate title ink even when both silhouettes are continuous', () => {
+    assert.equal(typeof referenceMetrics.measureRestingMaterial, 'function');
+    const measured = referenceMetrics.measureRestingMaterial({
+      apertureX: APERTURE_X,
+      candidate: createDuplicateTitleFixture(),
+      target: createFiveRegionFixture(),
+    });
+    assert(measured.forbiddenDuplicateTitleScore >= .42);
+  });
+});
+
 function createTypographyMask({ bottom, left, right, top }, width = 100, height = 50) {
   const mask = new Uint8Array(width * height);
   for (let y = top; y < bottom; y += 1) {
