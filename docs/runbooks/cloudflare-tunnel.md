@@ -1,6 +1,6 @@
 # Runbook: Cloudflare Tunnel 公网入口
 
-> 状态：已部署并验证（2026-08-12）。部署属于 Spec §20.5“询问”级操作，必须先取得用户确认。
+> 状态：已部署并经中国移动实机验证（2026-08-12）。部署属于 Spec §20.5“询问”级操作，必须先取得用户确认。
 
 ## 1. 前置检查
 
@@ -37,3 +37,4 @@
 - Origin：`curl --resolve openscience.428312321.xyz:443:127.0.0.1 ...` 仍为 200，Nginx 日志包含 Cloudflare 回源请求。
 - 生命周期：`systemctl is-enabled/is-active cloudflared` 均成功；重启服务后 Tunnel 自动恢复 healthy。
 - 实机：中国移动手机通过 `https://openscience.428312321.xyz/` 成功打开。
+- 产品路由：Tunnel变更后的 Nginx 必须保留 `/api/` 前缀剥离与 `/auth/login`、`/auth/register` 页面精确分流；运行 `node --test infra/nginx/openscience.test.mjs`。

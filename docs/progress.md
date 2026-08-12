@@ -1,11 +1,18 @@
 # OpenScience (XGS) 进度日志
 
-## 2026-08-12（Cloudflare Tunnel 公网入口）— 已部署，待中国移动实机确认
+## 2026-08-12（生产页面/API 404 回归）— 已修复并完成公网浏览器验收
+
+- **责任与根因**：Cloudflare Tunnel 上线时，为增加真实 IP 透传，从主分支部署了较旧的 `infra/nginx/openscience.conf`，覆盖服务器已有的 `/api/` 前缀剥离、`/auth/login`/`register` 页面精确分流和 Curator Basic Auth。结果 `/explore` 文档仍为200，但手机实际 `/api/explore`、`/api/workspaces` 变为404，Sign in 页面也被错误转到 Fastify。这是本次基础设施修改引入的回归，不是 Cloudflare Tunnel 本身。
+- **TDD 修复**：新增 `infra/nginx/openscience.test.mjs`；修复前5项中4项精确RED，合并 API rewrite、身份页面分流、Curator保护与Tunnel真实IP后5/5 GREEN。`infra/scripts/deploy.sh` 由“仅配置不存在才复制”改为每次部署都备份、同步、`nginx -t`，失败恢复备份，避免仓库/服务器漂移。
+- **生产验证**：Nginx仅reload，Docker/Web/API未重启。`/explore`与`/api/explore?limit=1`均200；`/auth/login`、`/auth/register`均200；`/api/workspaces`、`/api/auth/me`为预期401；Curator无凭据为401。实际移动视口 Chromium遍历Explore/Auth/Dashboard/Create无404/5xx，站内链接404计数为0；Tunnel仍healthy/4 connections。
+- **下一步**：用户确认这些产品页面恢复后，再返回隔离 Three.js Task 3；不得用旧 worktree 的 Nginx 配置部署生产。
+
+## 2026-08-12（Cloudflare Tunnel 公网入口）— 已部署并经中国移动实机确认
 
 - **根因纠正**：Cloudflare 只托管权威 DNS；`openscience.428312321.xyz` 实际一直是 `A → 115.29.208.1`、`proxied=false`，服务器和本机均不存在 cloudflared。中国移动实机只到达 HTTP 301，HTTPS 未进入 Nginx，故障位于未备案域名直连阿里云大陆 ECS 的 TLS/SNI 入站路径，不是 Next.js、7890/7891 或视觉开发。
 - **部署结果**：通过不回显 Secret 的 `infra/scripts/deploy-cloudflare-tunnel.ps1` 创建远程管理 `openscience-prod`，ECS 安装 cloudflared 2026.7.3，systemd enabled/active，Cloudflare API healthy、4 connections；DNS 原位切换为 proxied Tunnel CNAME，公共解析为 Cloudflare anycast，不再暴露 ECS IP。
 - **安全边界**：Tunnel 回源现有 Nginx HTTPS；Nginx 仅信任 loopback cloudflared 的 `CF-Connecting-IP`，统一覆盖 XFF，真实客户端 IP 已在访问日志验证，Fastify `trustProxy:1` 限流语义保持。Tunnel token 只在服务器 root-only `0600` 文件，未进入仓库、unit 参数或输出。
-- **验证证据**：公网响应含 `server: cloudflare`/`CF-RAY`，初始20/20、服务重启后30/30请求为200；重启后自动恢复 healthy/4 connections，journal 无 warning；1.1.1.1 与 AliDNS 均返回 Cloudflare IP。下一步仅待用户用中国移动实机确认，再恢复隔离 Three.js Task 3。
+- **验证证据**：公网响应含 `server: cloudflare`/`CF-RAY`，初始20/20、服务重启后30/30请求为200；重启后自动恢复 healthy/4 connections，journal 无 warning；1.1.1.1 与 AliDNS 均返回 Cloudflare IP；用户已使用中国移动实机确认可访问。
 
 ## 2026-08-12（公网与 ECS 出网稳定化）— 已部署并完成故障切换演练
 

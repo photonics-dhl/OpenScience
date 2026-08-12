@@ -122,10 +122,10 @@ run_remote "cd $REMOTE_ROOT && docker compose -f $COMPOSE_FILE up -d" || exit 1
 
 # 5. nginx 反代 + /admin basic_auth（P1A-8）
 log "[6] nginx 反代部署..."
-run_remote "test -f $NGINX_CONF || cp $REMOTE_ROOT/infra/nginx/openscience.conf $NGINX_CONF"
+run_remote "set -e; backup=${NGINX_CONF}.pre-deploy-\$(date +%Y%m%d%H%M%S); cp -p $NGINX_CONF \$backup; install -m 0644 $REMOTE_ROOT/infra/nginx/openscience.conf $NGINX_CONF; if ! nginx -t; then cp -p \$backup $NGINX_CONF; nginx -t; exit 1; fi"
 # htpasswd 首次生成（无则提示用户手动；含敏感密码不入脚本）
 run_remote "test -f $HTPASSWD || echo 'WARN: $HTPASSWD 不存在——首次需手动生成（见 runbook）'"
-run_remote "nginx -t && systemctl reload nginx" || exit 1
+run_remote "systemctl reload nginx" || exit 1
 
 # 6. 验证
 log "[7] 验证..."

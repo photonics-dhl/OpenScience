@@ -70,7 +70,11 @@ ssh-run.sh "systemctl restart openscience-api"
 ## 4. 验证命令
 
 - API 健康：`curl -sI https://OpenScience.428312321.xyz/auth/me` → 401（未登录，服务在）
+- API 命名空间：`curl -sS https://OpenScience.428312321.xyz/api/explore?limit=1` → 200，且JSON包含 `items`/`nextCursor`；禁止把 `/api` 原样转给 Fastify。
+- 身份页面：`curl -sI https://OpenScience.428312321.xyz/auth/login` 与 `/auth/register` → 200；页面精确 location 必须优先于直连 Fastify 的 `/auth/*` API location。
+- 受保护读取：`curl -sI https://OpenScience.428312321.xyz/api/workspaces` → 401而不是404。
 - /admin 强认证：`curl -sI -u <admin-user> https://OpenScience.428312321.xyz/admin/` → basic_auth 放行后 401（API 层判未登录）或 200/403
 - 安全响应头：`curl -sI https://OpenScience.428312321.xyz/auth/me` → 含 `X-Content-Type-Options: nosniff`、CSP `default-src 'none'`
 - 限流：连续打 `/auth/login` 5+ 次 → 429 + `Retry-After`
 - 巡检复跑：`infra/scripts/checkup.sh` 无新增告警
+- Nginx合同：`node --test infra/nginx/openscience.test.mjs` → 5/5；每次部署必须同步仓库配置，不得“文件已存在则跳过”。
