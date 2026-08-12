@@ -3,8 +3,8 @@
 ## 2026-08-12（Three.js 中央粒子隔离原型 Task 2）— ✅ 字体权威几何合同
 
 - **单一几何源**：Node-only `opentype.js@2.0.0` 从仓库已提交的 Archivo Black 与 Bodoni Moda 96pt Bold Italic TTF 生成 `Science evolves.`；固定 1672×935、中心 `(57.3%, 50%)`、单基线、word/glyph advance、kerning-enabled pen metrics、SVG outline 与 2,259 个 5px 规则笛卡尔网格点（稳定 ID、无重复坐标）。生产 Hero、OGL Lab 与运行时路由均未修改。
-- **可复现与许可**：`geometry:optical-prototype` 输出 JSON/SVG 和 manifest；manifest 固定 Node 22.x / opentype.js 2.0.0、两份输入与两份输出 SHA-256，并指向已有原样 SIL OFL 1.1 文件。生成器对曲线固定 16 段展开并以非零 winding 归属点阵；浏览器只消费静态结果，不解析字体。
-- **TDD/验证**：首个 RED 为缺少三项生成资产（focused 4/4 expected failures）；补充 word advance 的第二 RED 精确为 `word advances must be generated`。GREEN focused 4/4；两次再生成均 scoped clean diff；Web production build 成功且 `.next/static/chunks/*.js` 扫描无 `opentype.js`。最终 root lint/docs-sync/diff gate 与 commit 证据记录于 Task 2 报告。
+- **可复现与许可**：`geometry:optical-prototype` 输出 JSON/SVG 和 manifest；manifest 记录实际精确 Node runtime（仓库 `engines.node >=20`，生成入口对非精确 semver/低版本 fail closed）与 opentype.js 2.0.0、两份输入和两份输出 SHA-256，并指向已有原样 SIL OFL 1.1 文件。生成器对曲线固定 16 段展开并以非零 winding 归属点阵；浏览器只消费静态结果，不解析字体。
+- **TDD/验证**：首个 RED 为缺少三项生成资产（focused 4/4 expected failures）；补充 word advance 的第二 RED 精确为 `word advances must be generated`。独立复审再捕获 opentype.js 2.0.0 `roundDecimal` 将近整数坐标序列化为 `NaN`；新增真实 `Path.fromSVG` 解析与边界门禁后 GREEN focused 5/5。解析边界相对 JSON 四边最大误差 0.004px；两次再生成均 scoped clean diff；Web production build 成功且 `.next/static/chunks/*.js` 扫描无 `opentype.js`。最终 root lint/docs-sync/diff gate 与 commit 证据记录于 Task 2 报告。
 
 ## 2026-08-12（Three.js 中央粒子隔离原型 Task 1）— ✅ 依赖、许可与 Landing 隔离合同
 

@@ -52,6 +52,30 @@ function rounded(value) {
   return Number(value.toFixed(3));
 }
 
+export function assertSupportedNodeRuntime(version) {
+  const match = /^(\d+)\.(\d+)\.(\d+)$/.exec(version);
+  if (!match) throw new Error(`Optical geometry generation requires an exact Node semver, received: ${version}`);
+  if (Number(match[1]) < 20) throw new Error(`Optical geometry generation requires Node >=20, received: ${version}`);
+  return version;
+}
+
+function finitePathData(path) {
+  const pack = (...values) => values.map((value) => {
+    if (!Number.isFinite(value)) throw new Error(`Cannot serialize non-finite SVG coordinate: ${value}`);
+    const normalized = rounded(value);
+    return Number.isInteger(normalized) ? String(normalized) : normalized.toFixed(3);
+  }).join(' ');
+  const serialized = path.commands.map((command) => {
+    if (command.type === 'M' || command.type === 'L') return `${command.type}${pack(command.x, command.y)}`;
+    if (command.type === 'Q') return `Q${pack(command.x1, command.y1, command.x, command.y)}`;
+    if (command.type === 'C') return `C${pack(command.x1, command.y1, command.x2, command.y2, command.x, command.y)}`;
+    if (command.type === 'Z') return 'Z';
+    throw new Error(`Unsupported SVG path command: ${command.type}`);
+  }).join('');
+  if (/(?:NaN|[+-]?Infinity)/.test(serialized)) throw new Error('Serialized SVG path contains a non-finite coordinate.');
+  return serialized;
+}
+
 function normalizeJson(value) {
   if (Array.isArray(value)) return value.map(normalizeJson);
   if (value && typeof value === 'object') {
@@ -180,6 +204,7 @@ function publicGlyph(record) {
 }
 
 async function main() {
+  const nodeVersion = assertSupportedNodeRuntime(process.versions.node);
   const [scienceSource, evolvesSource] = sources;
   const scienceFont = loadFont(resolve(webRoot, scienceSource.file));
   const evolvesFont = loadFont(resolve(webRoot, evolvesSource.file));
@@ -259,7 +284,9 @@ async function main() {
     center: contract.center,
     glyphs: records.map(publicGlyph),
     grid: { originX, originY, step: contract.gridStep },
-    outlinePath: `${scienceOutline.toPathData(3)} ${evolvesOutline.toPathData(3)}`,
+    // opentype.js 2.0.0 roundDecimal can emit NaN when a coordinate such as
+    // 1407.0000000000002 has a scientific-notation fractional remainder.
+    outlinePath: `${finitePathData(scienceOutline)} ${finitePathData(evolvesOutline)}`,
     points,
     schemaVersion: 1,
     text: contract.text,
@@ -309,7 +336,11 @@ async function main() {
       { file: 'public/optical-prototype/title-geometry.json', sha256: sha256(geometryContents) },
       { file: 'public/optical-prototype/title-outline.svg', sha256: sha256(svgContents) },
     ],
-    tools: { node: '22.x', opentypeJs: '2.0.0' },
+    tools: {
+      node: nodeVersion,
+      nodePolicy: 'repository engines.node >=20; exact generator runtime recorded',
+      opentypeJs: '2.0.0',
+    },
   };
 
   await Promise.all([mkdir(assetRoot, { recursive: true }), mkdir(publicRoot, { recursive: true })]);

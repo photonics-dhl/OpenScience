@@ -18,15 +18,16 @@
   "outputs": [
     {
       "file": "public/optical-prototype/title-geometry.json",
-      "sha256": "5ea0dd4be54eb787765ea005f1b530a0ba9a00e054cd26854aacc65cc2a87073"
+      "sha256": "c6cc258900cc5da4a6f411d29a588b2ea1306e29841d069d5d9a0ae091271dd3"
     },
     {
       "file": "public/optical-prototype/title-outline.svg",
-      "sha256": "96852f6cab4defabaac21525dd3e1d87f3af0e760027215166eeb5a09d3124be"
+      "sha256": "fc0e9f7a9fff6f45ac0e1254e61d0f920b3b950e9eeff39c2d3dbe3bd259ecd7"
     }
   ],
   "tools": {
-    "node": "22.x",
+    "node": "24.11.0",
+    "nodePolicy": "repository engines.node >=20; exact generator runtime recorded",
     "opentypeJs": "2.0.0"
   }
 }
