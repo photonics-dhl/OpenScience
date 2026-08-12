@@ -218,6 +218,34 @@ reference rather than merely forbid past regressions.
 - Record real-device desktop and mobile frame timings; SwiftShader evidence is
   lifecycle evidence only.
 
+## 2026-08-12 Energy Composition Iteration
+
+The first accepted reconstruction is technically stable but its energy field is
+still compositionally weaker than the reference. Multiple parallel vertical
+light bars and a broad grey downstream wash compete with the title. The next
+iteration keeps typography, interaction bounds, fallback policy and runtime
+architecture fixed while rebuilding the resting field around one optical event.
+
+The single source of visual truth is a narrow lens-shaped focal core centered at
+the fixed 58% aperture. It must be continuous through the title band, taper above
+and below it, and must not read as a straight mechanical divider. Glyph-derived
+particles approach this waist from the left, then bend into a full-height curved
+curtain. Downstream energy leaves the same core as sparse coherent filaments;
+large-area grey illumination behind `evolves.` is prohibited.
+
+The iteration is accepted only when all of these relationships hold at native
+size:
+
+- one dominant focal peak near 58%, with no second peak above 65% of it;
+- the outer curtain bends toward the focal core rather than forming parallel
+  vertical bars;
+- fine downstream filaments occupy more of the emitted energy than broad haze;
+- `Science evolves.` remains one line, fully readable and exactly selectable;
+- existing five-region, similarity, ring, fan, staircase, mechanical-line,
+  duplicate-title, interaction, fallback and resource-cleanup gates stay GREEN.
+
+No new renderer, dependency, route or production integration is authorized.
+
 ### Human gate
 
 Show full-size reference and candidate side by side at 1672 × 941. The user must
