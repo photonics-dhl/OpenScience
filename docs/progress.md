@@ -1,5 +1,12 @@
 # OpenScience (XGS) 进度日志
 
+## 2026-08-12（Optical Lab 高保真 Task 8）— ⏳ 本地工程验收完成，待真机与用户视觉终验
+
+- **独立审查收口**：独立 reviewer 无 Critical，3 项 Important 已以 RED/GREEN 修复并提交 `54236f3`：生产浏览器真实覆盖自适应两级降质/恢复、验收阶段 pointer 三位置帧与真实鼠标选择；运行诊断改为发布实测 FPS/CPU/bloom，GPU timer 不可用时明确 `unavailable`。静态 decorative fallback 现不截获指针，动态与 DOM/static 均可拖选唯一 `Science evolves.`。
+- **自适应证据**：`65536 / .25 → 36044 / .125 → 65536 / .25`（粒子/bloom），三阶段 bounds 均为 `10.8,99.1,460.0,69.2`；受控恢复观测 `60 FPS / 2ms CPU`。shader failure 与 incomplete FBO 的 Texture/Buffer/Shader/Program/Framebuffer create-delete 全量逐项相等。
+- **最终门禁**：全 Web `31 files / 221 tests`、typecheck、root lint（`WORKSPACE_STRUCTURE_OK` / `DOCS_SYNC_OK`）、fresh production build、133.2s production-start browser matrix、docs lint `180 files / 0 issues`、docs-sync、diff check 与 3062 端口前后清理全 GREEN；生产 `/` 仍 `3.87 kB / 112 kB`。
+- **诚实缺口**：本 session 无物理桌面/手机，未采集各 15s resting 与 pointer/touch 的 median/p95 frame time、tier、dropped frames；SwiftShader 证据不冒充真机 GPU。下一门禁为用户原尺寸最终视觉选择；即使批准也不构成替换生产 `/` 或部署 ECS 的授权。
+
 ## 2026-08-12（Optical Lab 高保真 Task 7）— ✅ 验收静态 fallback 与运行时预算
 
 - **静态验收资产**：受限 promotion CLI 只接受 `test/visual/out/optical-lab/desktop-resting.png`，校验 PNG、1672×941 与 2 MiB 上限后写入 `public/optical-lab/accepted-resting.png`，源 SHA-256 为 `711f74c957db07006d9b0a6bccb4b92c0074234018a3e30f2d13262993f3ed35`。图片为 decorative；唯一语义 h1 保持可选择，静态图 load 后隐藏重复 DOM ink，error 时恢复。

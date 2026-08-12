@@ -1,5 +1,27 @@
 # Optical Lab Task 8 Steps 3–5 Handoff
 
+## 2026-08-12 Task 8 Local Acceptance Update
+
+- High-fidelity Tasks 1–8 are locally engineering-GREEN on
+  `codex/optical-editorial-v3`. Commits are Task 5 `2404da2`, Task 6 `677cbb3`,
+  Task 7 `72b93a4` and final independent-review fixes `54236f3`.
+- Independent review found no Critical issues. All three Important findings were
+  resolved: browser-level adaptive quality transitions, accepted-phase pointer
+  evidence plus real mouse selection, and observed FPS/CPU/bloom diagnostics
+  with honest unavailable GPU timing.
+- Final adaptive evidence is `65536/.25 → 36044/.125 → 65536/.25`, with stable
+  bounds throughout and a controlled `60 FPS / 2 ms CPU` recovery observation.
+  Dynamic and DOM/static modes both support real drag selection of the unique
+  semantic `Science evolves.` title.
+- Fresh final gates passed: Web `31 files / 221 tests`, typecheck, root lint,
+  workspace/docs sync, production build, 133.2-second production-start browser
+  matrix, docs lint `180 files / 0 issues`, diff check and port 3062 cleanup.
+- Required physical desktop/mobile 15-second resting and interaction data was
+  not captured in this session. SwiftShader results are not real-device GPU
+  evidence. User full-size visual acceptance is also pending.
+- Production `/`, ECS, backend, schema, authentication and Hermes were not
+  changed or deployed. Visual acceptance alone does not authorize deployment.
+
 ## 2026-08-12 Task 6 Update
 
 - User approved the Task 5 original-resolution resting frame; accepted Task 5 is commit `2404da2`.
