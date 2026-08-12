@@ -1,5 +1,11 @@
 # OpenScience (XGS) 进度日志
 
+## 2026-08-12（Three.js 中央粒子隔离原型）— ✅ 路线批准，等待书面 spec 复核
+
+- **方向纠偏**：用户要求暂停在最终 OGL Hero 上继续盲调，先审查 `interactive-particles`、opentype.js、pmndrs postprocessing/R3F wrapper、tsParticles 与 particlesGL。结论是当前仓库实际为 `ogl@1.0.11` + React 18，并未使用 Three.js/R3F；此前缓慢的主因是 DOM、BMFont/MSDF 与粒子 mask 三套坐标及自研多 pass 同时收敛，工程指标无法替代审美验证。
+- **已批准路线**：在新分支 `codex/optical-native-prototype`、新 worktree `.worktrees/optical-native-prototype` 建立 no-index `/_visual/central-particle` 原型；固定 `three@0.185.1`、`postprocessing@6.39.4`，`opentype.js@2.0.0` 仅作为开发依赖。clean-room 迁移 TouchTexture/instanced circle 思想，不复制旧 Three r98、ControlKit、GSAP 或许可不清的实质代码。
+- **设计门禁**：新增 `docs/specs/2026-08-12-optical-native-particle-prototype-design.md`，冻结共享字体 path/metrics、规则网格、57.3%/50% 中心、独立纵向幕、低强度 selective Bloom、局部色散、固定 debug 与 1672×935 证据；生产 `/` 与现有 dirty OGL Task 5 worktree 均不修改。下一步为用户复核书面 spec，确认后才写实施计划和安装依赖。
+
 ## 2026-08-12（Optical Lab Task 4 review fix round 1/5）— ✅ 四项 Important 已修复
 
 - **异步几何 ownership**：renderer 以单调 generation 统一初始 DOM 测量、共享 atlas load、二次 parity、resize 与 RAF；resize 先同步撤回 GPU ink、取消旧 RAF 并使旧 async token 失效，最新 layout 完整重画后才重发。阻塞 `document.fonts.ready` 的 post-frame probe 在旧代码精确 RED 为 stale bounds 重新发布；延迟 atlas PNG 的 init-resize case 证明 pending atlas 不再导致永久 fallback。

@@ -217,6 +217,7 @@
 | `docs/specs/2026-08-06-frontend-visual-system-design.md` | 前端视觉系统设计 spec（三方定稿正式版：定位/符号/token/三套视觉/字体/IA/Hermes/分期/验收，源出设计方向稿 v2 终稿决策层） | 已定稿 |
 | `docs/specs/2026-08-11-optical-lab-candidate-b-design.md` | Optical Lab Candidate B 历史设计：单一 GPU 字形层、固定狭缝与 native WebGL 生命周期 | DEPRECATED → `docs/specs/2026-08-11-optical-lab-high-fidelity-design.md`；工程通过但视觉否决 |
 | `docs/specs/2026-08-11-optical-lab-high-fidelity-design.md` | `Science evolves.` 原型高保真重构：OGL WebGL2 多通道、全尺寸排版合同、MSDF/flowmap/GPGPU/HDR 五层静态光场、4px 轻交互与静态降级 | 用户已书面确认；Task 1–4 完成，未部署，Task 5+ 材质/交互/静态资产仍未实现 |
+| `docs/specs/2026-08-12-optical-native-particle-prototype-design.md` | 与生产 Hero/OGL Lab 隔离的 Three.js 技术样片：opentype 单一字体几何、规则网格、TouchTexture、57.3%/50% 弧形收束、独立纵向幕、selective Bloom/局部色散与固定 1672×935 证据 | 用户已批准路线；书面 spec 待复核，确认后才写实施计划和安装依赖 |
 | `docs/plans/2026-08-06-frontend-p0-p1-plan.md` | 前端 P0 地基收尾 + P1 首页视觉原型实施计划（11 Task：Tailwind v4/token+WCAG 门禁/字体/shadcn/i18n/Header/EvolvingRoSymbol 两变体/Hero/#latest/Playwright 三尺寸截图/用户验收门） | 待执行 |
 | `docs/superpowers/plans/2026-08-07-homepage-rework.md` | Landing 首页视觉重做计划（主视觉 bitmap、真实 latest/trust 模块、入口修复、截图验收） | 已完成（2026-08-07，commit 481b5c4） |
 | `docs/superpowers/plans/2026-08-11-optical-lab-candidate-b-plan.md` | Optical Lab Candidate B 实施计划：纯模型静止能量/8px 液态折射 → Candidate A visual RED 与单一 GPU 字形 GREEN 合并复审 → 本地验收与用户选择 | Task 1–3 本地工程验收完成；Step 6 用户选择 pending，未部署 |
