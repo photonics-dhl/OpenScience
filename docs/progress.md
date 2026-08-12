@@ -3,7 +3,7 @@
 ## 2026-08-12（Three.js 中央粒子隔离原型 Task 1）— ✅ 依赖、许可与 Landing 隔离合同
 
 - **依赖与许可**：`@openscience/web` 精确锁定 `three@0.185.1`、`postprocessing@6.39.4`，并将 `opentype.js@2.0.0` 限为开发期字体几何工具；`postprocessing` 已解析到兼容 peer `three >=0.168.0 <0.186.0`。ADR-009 补充 no-index native Three experiment、MIT/Zlib/Codrops clean-room attribution、浏览器执行/ECS 无 GPU 与生产 Landing 禁止 import 边界。
-- **TDD/隔离**：新增 `apps/web/test/central-particle-dependencies.test.ts`；RED 先证明缺少 `three` pin（focused Vitest exit 1），GREEN 固定三项精确版本、拒绝 R3F/wrapper/替代粒子引擎，并扫描生产 Landing 图以禁止 Three/postprocessing/prototype import。未创建 `/_visual/central-particle` 路由，未改生产 Hero。
+- **TDD/隔离**：新增 `apps/web/test/central-particle-dependencies.test.ts`；RED 先证明缺少 `three` pin（focused Vitest exit 1），GREEN 固定三项精确版本、拒绝 R3F/wrapper/替代粒子引擎，并扫描生产 Landing 图以禁止 Three/postprocessing/prototype import。复审补充 RED→GREEN：所有 dependency scope 均拒绝 GSAP、ControlKit、glslify、额外 React wrapper 与 hosted runtime，ADR-009 也作明确禁止。未创建 `/_visual/central-particle` 路由，未改生产 Hero。
 - **验证**：focused dependency guard、root lint 与 docs-sync 均在本 task 的报告中记录；后续 Task 2 才可消费 `opentype.js`，不得扩大运行时或生产导入边界。
 
 ## 2026-08-12（Three.js 中央粒子隔离原型）— ✅ 书面 spec 确认，实施计划完成

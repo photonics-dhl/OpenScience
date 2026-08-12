@@ -1,14 +1,41 @@
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 
-type WebPackage = {
-  dependencies: Record<string, string | undefined>;
-  devDependencies: Record<string, string | undefined>;
-};
+type DependencyScope = 'dependencies' | 'devDependencies' | 'optionalDependencies' | 'peerDependencies';
+
+type WebPackage = Partial<Record<DependencyScope, Record<string, string | undefined>>>;
 
 const packageJson = JSON.parse(
   readFileSync(new URL('../package.json', import.meta.url), 'utf8'),
 ) as WebPackage;
+
+const runtimeDependencies = packageJson.dependencies ?? {};
+const developmentDependencies = packageJson.devDependencies ?? {};
+const dependencyScopes: DependencyScope[] = [
+  'dependencies',
+  'devDependencies',
+  'optionalDependencies',
+  'peerDependencies',
+];
+
+const prohibitedPackages = [
+  '@react-three/drei',
+  '@react-three/fiber',
+  '@react-three/postprocessing',
+  '@unicornstudio/react',
+  'controlkit',
+  'glslify',
+  'gsap',
+  'particles-gl',
+  'react-three-fiber',
+  'tsparticles',
+  'unicorn-studio',
+];
+
+const prototypePolicy = readFileSync(
+  new URL('../../../docs/decisions/ADR-009-optical-runtime-and-fonts.md', import.meta.url),
+  'utf8',
+);
 
 const productionLandingModules = [
   '../app/page.tsx',
@@ -44,12 +71,27 @@ function isForbiddenPrototypeImport(specifier: string): boolean {
 
 describe('central particle prototype dependency boundary', () => {
   it('pins the approved native runtime packages and excludes wrapper engines', () => {
-    expect(packageJson.dependencies.three).toBe('0.185.1');
-    expect(packageJson.dependencies.postprocessing).toBe('6.39.4');
-    expect(packageJson.devDependencies['opentype.js']).toBe('2.0.0');
+    expect(runtimeDependencies.three).toBe('0.185.1');
+    expect(runtimeDependencies.postprocessing).toBe('6.39.4');
+    expect(developmentDependencies['opentype.js']).toBe('2.0.0');
 
-    for (const name of ['@react-three/fiber', '@react-three/postprocessing', 'tsparticles', 'particles-gl']) {
-      expect(packageJson.dependencies[name]).toBeUndefined();
+    for (const scope of dependencyScopes) {
+      const dependencies = packageJson[scope] ?? {};
+      for (const name of prohibitedPackages) {
+        expect(dependencies[name], `${scope}.${name}`).toBeUndefined();
+      }
+    }
+  });
+
+  it('documents every native-prototype prohibition in ADR-009', () => {
+    for (const policyTerm of [
+      'React Three Fiber',
+      'GSAP',
+      'ControlKit',
+      'glslify',
+      'hosted runtime',
+    ]) {
+      expect(prototypePolicy, policyTerm).toContain(policyTerm);
     }
   });
 
