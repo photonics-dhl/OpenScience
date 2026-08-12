@@ -25,6 +25,15 @@ describe('central particle isolated runtime shell', () => {
     expect(pageModule.metadata.robots).toEqual({ follow: false, index: false });
   });
 
+  it('uses true two-axis contain sizing for the SVG fallback', () => {
+    const css = readFileSync(
+      new URL('../components/optical-prototype/central-particle.module.css', import.meta.url),
+      'utf8',
+    );
+    expect(css).toMatch(/\.title\s*\{[^}]*height:\s*100(?:s|d|l)?vh;/s);
+    expect(css).toMatch(/\.outline\s*\{[^}]*height:\s*100%;[^}]*object-fit:\s*contain;/s);
+  });
+
   it.each([
     [{ width: 1672, reducedMotion: false, webgl2: true }, 'dynamic'],
     [{ width: 480, reducedMotion: false, webgl2: true }, 'static'],
@@ -309,6 +318,124 @@ describe('central particle isolated runtime shell', () => {
       () => { throw new Error('Three init failed'); },
     )).toThrow('Three init failed');
     expect(loseContext).toHaveBeenCalledTimes(1);
+  });
+
+  it('releases renderer ownership when post-WebGL initialization throws', () => {
+    expect(rendererModule).not.toBeNull();
+    if (!rendererModule) return;
+    const loseContext = vi.fn();
+    const renderer = {
+      dispose: vi.fn(),
+      forceContextLoss: vi.fn(),
+      setClearColor: vi.fn(),
+    };
+    const canvas = {
+      getContext: vi.fn().mockReturnValue({
+        getExtension: vi.fn().mockReturnValue({ loseContext }),
+      }),
+    } as unknown as HTMLCanvasElement;
+    expect(() => rendererModule.createCentralParticleRenderer(
+      canvas,
+      () => renderer as never,
+      {
+        createTouchTexture: () => { throw new Error('2D unavailable'); },
+      },
+    )).toThrow('2D unavailable');
+    expect(renderer.dispose).toHaveBeenCalledTimes(1);
+    expect(renderer.forceContextLoss).toHaveBeenCalledTimes(1);
+  });
+
+  it('turns geometry failure into a consumed resize rejection without starting an empty RAF', async () => {
+    expect(rendererModule).not.toBeNull();
+    if (!rendererModule) return;
+    const listeners = new Map<string, EventListener>();
+    const requestAnimationFrame = vi.fn();
+    vi.stubGlobal('window', {
+      addEventListener: vi.fn((type: string, listener: EventListener) => listeners.set(type, listener)),
+      cancelAnimationFrame: vi.fn(),
+      devicePixelRatio: 1,
+      innerHeight: 935,
+      innerWidth: 1672,
+      removeEventListener: vi.fn((type: string) => listeners.delete(type)),
+      requestAnimationFrame,
+    });
+    const renderer = {
+      dispose: vi.fn(), forceContextLoss: vi.fn(), render: vi.fn(),
+      setClearColor: vi.fn(), setPixelRatio: vi.fn(), setSize: vi.fn(),
+    };
+    const canvas = {
+      getBoundingClientRect: () => ({ left: 0, top: 0 }),
+      getContext: vi.fn().mockReturnValue({ getExtension: vi.fn() }),
+    } as unknown as HTMLCanvasElement;
+    const touch = {
+      addPointer: vi.fn(), clear: vi.fn(), dispose: vi.fn(),
+      texture: {}, update: vi.fn(),
+    };
+    const instance = rendererModule.createCentralParticleRenderer(
+      canvas,
+      () => renderer as never,
+      {
+        createTouchTexture: () => touch as never,
+        loadGeometry: () => Promise.reject(new Error('geometry 404')),
+      },
+    );
+    instance.render();
+    await expect(instance.resize({ height: 935, width: 1672 } as DOMRectReadOnly))
+      .rejects.toThrow('geometry 404');
+    await Promise.resolve();
+    expect(requestAnimationFrame).not.toHaveBeenCalled();
+    instance.dispose();
+    vi.unstubAllGlobals();
+  });
+
+  it('aborts a stalled geometry load on timeout and disposes once', async () => {
+    expect(rendererModule).not.toBeNull();
+    if (!rendererModule) return;
+    let timeout: (() => void) | undefined;
+    let signal: AbortSignal | undefined;
+    vi.stubGlobal('window', {
+      addEventListener: vi.fn(), cancelAnimationFrame: vi.fn(), devicePixelRatio: 1,
+      innerHeight: 935, innerWidth: 1672, removeEventListener: vi.fn(),
+      requestAnimationFrame: vi.fn(),
+    });
+    const renderer = {
+      dispose: vi.fn(), forceContextLoss: vi.fn(), render: vi.fn(),
+      setClearColor: vi.fn(), setPixelRatio: vi.fn(), setSize: vi.fn(),
+    };
+    const canvas = {
+      getBoundingClientRect: () => ({ left: 0, top: 0 }),
+      getContext: vi.fn().mockReturnValue({ getExtension: vi.fn() }),
+    } as unknown as HTMLCanvasElement;
+    const touch = {
+      addPointer: vi.fn(), clear: vi.fn(), dispose: vi.fn(), texture: {}, update: vi.fn(),
+    };
+    const instance = rendererModule.createCentralParticleRenderer(
+      canvas,
+      () => renderer as never,
+      {
+        clearLoadTimeout: vi.fn(),
+        createTouchTexture: () => touch as never,
+        loadGeometry: (nextSignal: AbortSignal) => {
+          signal = nextSignal;
+          return new Promise((_resolve, reject) => {
+            nextSignal.addEventListener('abort', () => reject(nextSignal.reason), { once: true });
+          });
+        },
+        scheduleLoadTimeout: (callback: () => void) => {
+          timeout = callback;
+          return 7 as never;
+        },
+      },
+    );
+    const resized = instance.resize({ height: 935, width: 1672 } as DOMRectReadOnly);
+    timeout?.();
+    await expect(resized).rejects.toThrow('timed out');
+    expect(signal?.aborted).toBe(true);
+    instance.dispose();
+    instance.dispose();
+    expect(renderer.dispose).toHaveBeenCalledTimes(1);
+    expect(renderer.forceContextLoss).toHaveBeenCalledTimes(1);
+    vi.unstubAllGlobals();
   });
 
   it('keeps the production landing graph free of central particle imports', () => {

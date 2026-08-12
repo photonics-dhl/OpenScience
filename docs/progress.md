@@ -1,5 +1,12 @@
 # OpenScience (XGS) 进度日志
 
+## 2026-08-12（Three.js 中央粒子隔离原型 Task 4）— ✅ 规则点阵与 TouchTexture
+
+- **真实 GPU 点阵**：隔离 `/_visual/central-particle` 现消费 Task 2 的 2,259 个规则笛卡尔点，以单个 Three.js `InstancedMesh` 绘制 soft-circle 标题，保留稳定 ID、Science/evolves/朱红句点分组与确定性 density tier；clean-room 128×128 detached CanvasTexture 提供有界鼠标 repulsion、路径插值和按真实 elapsed time 的 650ms 衰减。未加入 Task 5 收束场/纵向幕、Bloom/色散、OGL 或最终 Hero。
+- **诚实回退与生命周期**：SSR 唯一 h1/同源 SVG 在完整 GPU frame 前保持可见；geometry fetch 自创建起消费拒绝、支持 AbortController/8s timeout，stall 不启动空 RAF。WebGL 后任一同步初始化失败均反序释放 material/TouchTexture/renderer/context；正常 dispose 幂等，pointer listeners 全部归 renderer 所有。
+- **同构坐标**：GPU、SVG fallback 与 pointer inverse mapping 共享一套双轴 contain scale + centered offset；1672×935、800×1000 宽受限和 1672×800 高受限浏览器门禁均无拉伸/基线漂移。独立复审提出的三项 Important 均按 RED→GREEN 修正。
+- **验证与视觉裁决**：focused 4 files/38 tests、Web typecheck、root lint/workspace/docs-sync、production build（17/17 routes）与 production-start Chromium real-instancing gate GREEN；2,259 instances、framebuffer alpha 非零、GL error 全 0、pointer frame 有差异，3062 完成后关闭。原尺寸对照也证明当前技术路线可行但 Task 2 几何构图错误：现标题约 `x=309..1605,y=419..540`，参考批准排版约 `x=37..1600,y=337..565`，且 58% 应锚定词间光学缝而非整句中心。下一步先做独立 geometry repair，再进入 Task 5，禁止靠特效掩盖错误 home positions。
+
 ## 2026-08-12（Three.js 中央粒子隔离原型 Task 3）— ✅ WebGL2 运行壳
 
 - **隔离运行壳**：新增 no-index `/_visual/central-particle`，SSR 始终保留唯一 `Science evolves.` h1 与 Task 2 生成的同源 SVG；Three 只从该路由的客户端动态 chunk 加载，生产 `/` 继续保持 3.87 kB / 112 kB First Load。当前场景故意为空，不含粒子、TouchTexture、收束场、纵向幕、Bloom、色散或 Hero 接入。

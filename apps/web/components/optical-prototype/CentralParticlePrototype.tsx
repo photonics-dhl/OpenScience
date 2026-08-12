@@ -117,7 +117,11 @@ export function CentralParticlePrototype() {
   }, []);
 
   return (
-    <main className={styles.shell} data-central-particle-shell="true">
+    <main
+      className={styles.shell}
+      data-central-particle-shell="true"
+      data-gpu-ready={String(frameReady)}
+    >
       <h1 className={styles.title} data-central-particle-title="true">
         <span>Science evolves.</span>
         <img

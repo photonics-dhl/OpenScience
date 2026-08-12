@@ -9,6 +9,7 @@
 }
 
 .title {
+  height: 100svh;
   margin: 0;
   position: relative;
   user-select: all;
@@ -28,9 +29,16 @@
 .outline {
   color: currentColor;
   display: block;
-  height: auto;
+  height: 100%;
+  object-fit: contain;
   pointer-events: none;
+  opacity: 1;
+  transition: opacity 160ms cubic-bezier(0.16, 1, 0.3, 1);
   width: 100%;
+}
+
+.shell[data-gpu-ready='true'] .outline {
+  opacity: 0;
 }
 
 .mount,
