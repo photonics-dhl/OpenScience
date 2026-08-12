@@ -222,6 +222,7 @@
 | `docs/superpowers/plans/2026-08-07-homepage-rework.md` | Landing 首页视觉重做计划（主视觉 bitmap、真实 latest/trust 模块、入口修复、截图验收） | 已完成（2026-08-07，commit 481b5c4） |
 | `docs/superpowers/plans/2026-08-11-optical-lab-candidate-b-plan.md` | Optical Lab Candidate B 实施计划：纯模型静止能量/8px 液态折射 → Candidate A visual RED 与单一 GPU 字形 GREEN 合并复审 → 本地验收与用户选择 | Task 1–3 本地工程验收完成；Step 6 用户选择 pending，未部署 |
 | `docs/superpowers/plans/2026-08-11-optical-lab-high-fidelity-reconstruction-plan.md` | 用户已确认的高保真 OGL 重构计划：全尺寸字体样张 → 固定版本 MSDF 资产 → WebGL2 多 pass 静止光场 → 4px 内 flowmap → 静态降级/预算/真机验收 | Subagent-Driven Task 1–4 完成；Task 5+ 待执行，未部署 |
+| `docs/superpowers/plans/2026-08-12-optical-native-particle-prototype-plan.md` | 隔离 Three.js 原型：依赖/许可、opentype 单一几何、规则粒子/TouchTexture、中心弧形场/纵向幕、有限 postprocessing、固定证据与 ECS 发布 | 用户已确认 spec 和服务器部署；等待执行方式确认后安装依赖 |
 | `docs/plans/2026-08-07-web-quality-pipeline-plan.md` | Web 品质管线实施计划（Task 8 设计系统固化 → 9 动效层 → 10 Figma+MCP → 11 全站一致性 → 12 视觉回归门禁，2026-08-07 用户拍板） | 待执行 |
 | `docs/security/sandbox-threat-model.md` | 沙箱威胁模型（STRIDE + 8 类攻击向量 + 残留风险 + 缓解路线图，P1E-8） | 活文档 |
 | `docs/security/sandbox-security-statement.md` | 沙箱安全承诺与免责声明（P1E-8，待法律审核） | 活文档 |

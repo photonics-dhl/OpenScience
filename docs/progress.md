@@ -1,5 +1,11 @@
 # OpenScience (XGS) 进度日志
 
+## 2026-08-12（Three.js 中央粒子隔离原型）— ✅ 书面 spec 确认，实施计划完成
+
+- **用户确认**：用户确认 `docs/specs/2026-08-12-optical-native-particle-prototype-design.md`，并明确要求在服务器部署隔离原型。生产 Hero 仍不修改；ECS 无需 GPU，WebGL 由访客浏览器执行。
+- **实施计划**：新增 `docs/superpowers/plans/2026-08-12-optical-native-particle-prototype-plan.md`，8 个 TDD task 覆盖依赖/许可、opentype 单一几何、Three 生命周期、规则粒子与 TouchTexture、57.3% 收束/纵向幕、有限后处理、固定截图门禁及 ECS `--skip-migrate` 发布。
+- **部署边界**：本地全绿和独立复审后，先巡检与 DB 备份，再由 `deploy.sh` 同步、云上完整 workspace build、仅重启应用进程；公开 `/`、`/explore`、`/auth/me` 与 no-index 原型均纳入验收并记录 rollback ref。尚未安装依赖或修改运行时。
+
 ## 2026-08-12（Three.js 中央粒子隔离原型）— ✅ 路线批准，等待书面 spec 复核
 
 - **方向纠偏**：用户要求暂停在最终 OGL Hero 上继续盲调，先审查 `interactive-particles`、opentype.js、pmndrs postprocessing/R3F wrapper、tsParticles 与 particlesGL。结论是当前仓库实际为 `ogl@1.0.11` + React 18，并未使用 Three.js/R3F；此前缓慢的主因是 DOM、BMFont/MSDF 与粒子 mask 三套坐标及自研多 pass 同时收敛，工程指标无法替代审美验证。
