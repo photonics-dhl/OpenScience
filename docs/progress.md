@@ -6,6 +6,7 @@
 - **固定光场与粒子幕**：57.3%/50% 固定中心叠加确定性径向收束、较弱 signed tangent 与右向 emission；纵向幕来自自己的规则 row/column/id 网格，未拉伸字形点、未使用 random/noise。原生 1672×935 帧：curtain coverage `0.956522`、spread `0.164474`、mechanical-line `0.030012`；中央额外能量 382 pixels、right/left ratio `2.237288`。
 - **轻交互与真实矩阵**：连续字形 TouchTexture warp 上限 4 CSS px；固定中心 pointer 仅改变 `0.000599` 的画面像素，平均通道差 `0.033884`。`debugTime=1500` 已在真实 shader uniform 中验证；1672×935、800×1000、1672×800、fresh-context restore、dynamic→mobile static、独立 mobile/reduced SVG fallback 均通过，所有新上下文 draw 为 `NO_ERROR`，端口 3062 完成后关闭。
 - **边界与待办**：生产 `/` 构建仍为 `3.87 kB / 112 kB`，Hero/OGL/ECS 未改，Bloom 与局部色散仍严格留给 Task 6。focused `56/56`、Web typecheck、root lint/workspace/docs-sync、production build 与 Task 5 browser gate GREEN；Web 全套 `250 pass / 2 fail` 仍是已登记的 Windows CRLF 基线（Landing 写死 LF；两份旧 MSDF JSON 工作树 hash 与 manifest blob hash 不同）。独立初审的 CPU/GLSL parity、lazy shader fail-closed 与 partial title rollback 三项 Important 已按 RED→GREEN 修复，窄复审为 0 Critical / 0 Important、APPROVE；实现提交 `df5bba5`。当前只等待用户固定原图视觉裁决，未授权 Task 6、推广或部署。
+- **会话交接**：新增 `docs/handoff/2026-08-12-optical-native-prototype-task5-handoff.md`；下一会话从计划 Task 6 的 focused RED 开始，仅实现 selective Bloom + 中央局部色散，Task 7 总证据、Hero 接入和 ECS 部署继续后置。
 
 ## 2026-08-12（Three.js 中央粒子原型 Task 5 设计纠偏）— ✅ 连续字形取代全行点阵
 
