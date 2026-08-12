@@ -106,7 +106,12 @@ export function OpticalLabRenderer({ diagnosticsId, stageId }: OpticalLabRendere
       diagnostics.dataset.contextStatus = snapshot.contextStatus;
       diagnostics.dataset.firstCompleteFrame = String(snapshot.firstCompleteFrame);
       diagnostics.dataset.frameCount = String(snapshot.frameCount);
+      diagnostics.dataset.bloomScale = String(snapshot.bloomScale);
+      diagnostics.dataset.cpuFrameMs = String(snapshot.cpuFrameMs);
+      diagnostics.dataset.fps = String(snapshot.fps);
       diagnostics.dataset.flowTexture = snapshot.flowTexture;
+      diagnostics.dataset.gpuFrameMs = snapshot.gpuFrameMs;
+      diagnostics.dataset.gpuTiming = snapshot.gpuTiming;
       diagnostics.dataset.particleCount = String(snapshot.particleCount);
       diagnostics.dataset.passEnergies = JSON.stringify(snapshot.passEnergies);
       diagnostics.dataset.precision = snapshot.precision;
@@ -116,6 +121,9 @@ export function OpticalLabRenderer({ diagnosticsId, stageId }: OpticalLabRendere
       diagnostics.dataset.stableBounds = snapshot.stableBounds;
       setText(diagnostics, 'mode', snapshot.mode);
       setText(diagnostics, 'context', snapshot.contextStatus);
+      setText(diagnostics, 'fps', snapshot.fps.toFixed(1));
+      setText(diagnostics, 'frame-time', `${snapshot.cpuFrameMs.toFixed(2)} ms`);
+      setText(diagnostics, 'gpu-time', 'n/a');
       setText(diagnostics, 'bounds', snapshot.stableBounds);
       window.__OPENSCIENCE_OPTICAL_LAB__ = {
         activeRaf: snapshot.activeRaf,

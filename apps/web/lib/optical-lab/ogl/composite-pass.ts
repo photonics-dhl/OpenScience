@@ -26,6 +26,7 @@ export const OPTICAL_RESTING_PASS_ENERGIES = Object.freeze({
 });
 
 export interface OpticalCompositePass {
+  bloomScale: number;
   causticTexture: Texture;
   dispose(): void;
   passEnergies: typeof OPTICAL_RESTING_PASS_ENERGIES;
@@ -172,6 +173,7 @@ export function createCompositePass(
     const finalMesh = new Mesh(gl, { geometry, program: finalProgram });
 
     return {
+      bloomScale,
       causticTexture: energyTarget.texture,
       dispose() {
         if (disposed) return;

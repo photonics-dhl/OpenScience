@@ -108,6 +108,7 @@ export async function OpticalLabPage() {
           <dl
             className={styles.diagnostics}
             data-aperture-x="0.58"
+            data-bloom-scale="0.25"
             data-context-status="idle"
             data-cpu-frame-ms="0"
             data-fps="0"

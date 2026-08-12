@@ -109,6 +109,9 @@ describe('isolated Optical Lab route contract', () => {
     expect(rendererSource).toContain('sampleOpticalQuality');
     expect(rendererSource).toContain('qualityState.tier');
     expect(rendererSource).toContain('setQualityTier(qualityState.tier)');
+    expect(rendererSource).toContain('cpuFrameMs');
+    expect(rendererSource).toContain('fps: measuredFps');
+    expect(rendererSource).toContain('bloomScale: compositePass?.bloomScale');
     const particleSource = readFileSync(
       fileURLToPath(new URL('../lib/optical-lab/ogl/particle-pass.ts', import.meta.url)),
       'utf8',

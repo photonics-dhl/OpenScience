@@ -115,6 +115,8 @@
   height: 100%;
   display: none;
   object-fit: cover;
+  pointer-events: none;
+  user-select: none;
 }
 
 .candidate[data-render-mode='static-fallback'][data-static-artwork='loaded'] .staticFallback {

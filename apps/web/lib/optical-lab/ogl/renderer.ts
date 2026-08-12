@@ -26,9 +26,14 @@ import { createFlowPass, type OpticalFlowPass } from './flow-pass';
 
 export interface OpticalOglRendererSnapshot {
   activeRaf: boolean;
+  bloomScale: number;
   contextStatus: 'initializing' | 'ready' | 'unavailable' | 'disposed';
+  cpuFrameMs: number;
   firstCompleteFrame: boolean;
   frameCount: number;
+  fps: number;
+  gpuFrameMs: 'unavailable';
+  gpuTiming: 'unavailable';
   layoutStable: boolean;
   mode: 'webgl2-full';
   apertureX: .58;
@@ -96,6 +101,7 @@ export function createOpticalOglRenderer(
   let acceptedLayout: OpticalLayout | null = null;
   let activeRaf = false;
   let compositePass: OpticalCompositePass | null = null;
+  let cpuFrameMs = 0;
   let disposed = false;
   let firstCompleteFrame = false;
   let frameCount = 0;
@@ -107,6 +113,7 @@ export function createOpticalOglRenderer(
   let rafId: number | null = null;
   let particlePass: OpticalParticlePass | null = null;
   let qualityState = createOpticalQualityState();
+  let measuredFps = 0;
   let qualityWindowFrame = 0;
   let qualityWindowStartedAt = 0;
   let stableBounds = 'pending';
@@ -117,10 +124,15 @@ export function createOpticalOglRenderer(
   ) => onSnapshot({
     activeRaf,
     apertureX: .58,
+    bloomScale: compositePass?.bloomScale ?? .25,
     contextStatus,
+    cpuFrameMs,
     firstCompleteFrame,
     flowTexture: '96x54-ping-pong',
     frameCount,
+    fps: measuredFps,
+    gpuFrameMs: 'unavailable',
+    gpuTiming: 'unavailable',
     layoutStable,
     mode: 'webgl2-full',
     particleCount: particlePass?.particleCount ?? 0,
@@ -169,15 +181,17 @@ export function createOpticalOglRenderer(
   const draw = (ownedGeneration: number, timestamp = performance.now()) => {
     if (disposed || ownedGeneration !== generation || !activeRaf || acceptedLayout === null) return;
     const layoutStable = acceptedLayout !== null;
+    const cpuStartedAt = performance.now();
     try {
       if (qualityWindowStartedAt === 0) qualityWindowStartedAt = timestamp;
       qualityWindowFrame += 1;
       const qualityDurationMs = timestamp - qualityWindowStartedAt;
       if (qualityDurationMs >= 2_000) {
         const previousTier = qualityState.tier;
+        measuredFps = qualityWindowFrame * 1_000 / qualityDurationMs;
         qualityState = sampleOpticalQuality(qualityState, {
           durationMs: qualityDurationMs,
-          fps: qualityWindowFrame * 1_000 / qualityDurationMs,
+          fps: measuredFps,
         });
         qualityWindowFrame = 0;
         qualityWindowStartedAt = timestamp;
@@ -214,6 +228,7 @@ export function createOpticalOglRenderer(
       if (disposed || ownedGeneration !== generation || acceptedLayout === null) return;
       frameCount += 1;
       firstCompleteFrame = layoutStable;
+      cpuFrameMs = Math.max(0, performance.now() - cpuStartedAt);
       report('ready', layoutStable);
       rafId = requestAnimationFrame((nextTimestamp) => draw(ownedGeneration, nextTimestamp));
     } catch {

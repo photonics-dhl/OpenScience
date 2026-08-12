@@ -265,6 +265,7 @@ for (const testCase of cases) {
       window.__OPTICAL_LAB_TEST_HELD_RAF_CALLBACKS__ = 0;
       window.__OPTICAL_LAB_TEST_LAST_POINTER_AT__ = null;
       window.__OPTICAL_LAB_TEST_POINTER_NOW_READS__ = 0;
+      let controlledTimestamps = [];
       let controlledRendererFrameBudget = 0;
       let holdRaf = false;
       let forcedPointerNow = null;
@@ -288,6 +289,13 @@ for (const testCase of cases) {
         controlledRendererFrameBudget = frameCount;
         holdRaf = false;
       };
+      window.__OPTICAL_LAB_TEST_CONTROL_RAF_SEQUENCE__ = (timestamps) => {
+        controlledTimestamps = [...timestamps];
+      };
+      window.__OPTICAL_LAB_TEST_CONTROL_RAF_SEQUENCE_STATE__ = () => ({
+        next: controlledTimestamps[0] ?? null,
+        remaining: controlledTimestamps.length,
+      });
       window.__OPTICAL_LAB_TEST_RELEASE_RAF__ = () => {
         window.__OPTICAL_LAB_TEST_FIXED_RAF_TIME__ = null;
         controlledRendererFrameBudget = 0;
@@ -324,7 +332,7 @@ for (const testCase of cases) {
             callback(fixedTimestamp);
             return;
           }
-          callback(timestamp);
+          callback(controlledTimestamps.length > 0 ? controlledTimestamps.shift() : timestamp);
         });
         return nativeId;
       };
@@ -789,6 +797,37 @@ for (const testCase of cases) {
     assertGeometry(initialGeometry, testCase.name);
     assert.equal(await page.locator('h1').count(), 1, `${testCase.name} must expose exactly one h1`);
 
+    if (testCase.name === 'desktop' || testCase.name === 'dom-fallback') {
+      const semanticHeadline = page.locator('h1[data-optical-lab-semantic-title="true"]');
+      await semanticHeadline.scrollIntoViewIfNeeded();
+      const dragEndpoints = await semanticHeadline.evaluate((headline) => {
+        const science = headline.querySelector('[data-optical-lab-science="true"]')?.firstChild;
+        const evolvesInk = headline.querySelector('[data-optical-lab-evolves-ink="true"]');
+        if (!science || !evolvesInk) return null;
+        const firstCharacter = document.createRange();
+        firstCharacter.setStart(science, 0);
+        firstCharacter.setEnd(science, 1);
+        const first = firstCharacter.getBoundingClientRect();
+        const last = evolvesInk.getBoundingClientRect();
+        return {
+          end: { x: last.right - 1, y: last.top + last.height * .5 },
+          start: { x: first.left + 1, y: first.top + first.height * .5 },
+        };
+      });
+      assert(dragEndpoints, `${testCase.name} semantic headline must have selectable character bounds`);
+      await page.evaluate(() => window.getSelection()?.removeAllRanges());
+      await page.mouse.move(dragEndpoints.start.x, dragEndpoints.start.y);
+      await page.mouse.down();
+      await page.mouse.move(dragEndpoints.end.x, dragEndpoints.end.y, { steps: 24 });
+      await page.mouse.up();
+      assert.equal(
+        await semanticHeadline.evaluate(() => (window.getSelection()?.toString() ?? '').trimEnd()),
+        'Science evolves.',
+        `${testCase.name} real mouse drag must select the semantic title through the visual layer`,
+      );
+      await page.evaluate(() => window.getSelection()?.removeAllRanges());
+    }
+
     if (!expectedDynamic) {
       await page.waitForFunction(() => {
         const node = document.querySelector('[data-optical-lab-diagnostics="true"]');
@@ -892,6 +931,94 @@ for (const testCase of cases) {
       ['caustic', 'curtain', 'dissolution', 'intactGlyph', 'rightwardEmission'],
       'Task 5 must expose exactly five named resting pass energies',
     );
+
+    if (renderPhase === OPTICAL_LAB_RENDER_PHASES.acceptedFallback && testCase.name === 'reference-desktop') {
+      const initialQuality = await diagnostics.evaluate((node) => ({
+        bloomScale: Number(node.getAttribute('data-bloom-scale')),
+        bounds: node.getAttribute('data-stable-bounds'),
+        particleCount: Number(node.getAttribute('data-particle-count')),
+      }));
+      const baseTimestamp = await page.evaluate(() => performance.now());
+      await page.evaluate((base) => {
+        window.__OPTICAL_LAB_TEST_CONTROL_RAF_SEQUENCE__([
+          base + 100_000,
+          base + 102_100,
+          base + 104_200,
+          base + 106_300,
+          base + 108_400,
+          base + 110_500,
+        ]);
+      }, baseTimestamp);
+      try {
+        await page.waitForFunction(() => (
+          document.querySelector('[data-optical-lab-diagnostics="true"]')?.getAttribute('data-quality-tier') === 'reduced-bloom'
+        ), undefined, { timeout: 5_000 });
+      } catch (error) {
+        const evidence = await page.evaluate(() => ({
+          diagnostics: document.querySelector('[data-optical-lab-diagnostics="true"]')?.outerHTML,
+          raf: window.__OPTICAL_LAB_TEST_CONTROL_RAF_SEQUENCE_STATE__(),
+          tracker: {
+            contexts: window.__OPTICAL_LAB_GL_TRACKER__?.contexts,
+            pointDrawArrays: window.__OPTICAL_LAB_GL_TRACKER__?.pointDrawArrays,
+            pointDrawErrors: window.__OPTICAL_LAB_GL_TRACKER__?.pointDrawErrors,
+          },
+        }));
+        throw new Error(`adaptive quality reduction timed out: ${JSON.stringify(evidence)}`, { cause: error });
+      }
+      const reducedQuality = await diagnostics.evaluate((node) => ({
+        bloomScale: Number(node.getAttribute('data-bloom-scale')),
+        bounds: node.getAttribute('data-stable-bounds'),
+        particleCount: Number(node.getAttribute('data-particle-count')),
+      }));
+      assert.equal(reducedQuality.particleCount, Math.floor(65_536 * .55));
+      assert.equal(reducedQuality.bloomScale, .125);
+      assert.equal(reducedQuality.bounds, initialQuality.bounds, 'quality reduction must not change title layout');
+
+      // The page has two RAF consumers, so a 120 Hz global sequence yields a
+      // measured 60 FPS renderer stream for deterministic recovery coverage.
+      const fastTimestamps = Array.from({ length: 2_880 }, (_, index) => (
+        baseTimestamp + 110_500 + (index + 1) * (24_000 / 2_880)
+      ));
+      await page.evaluate((timestamps) => {
+        window.__OPTICAL_LAB_TEST_CONTROL_RAF_SEQUENCE__(timestamps);
+      }, fastTimestamps);
+      try {
+        await page.waitForFunction(() => (
+          document.querySelector('[data-optical-lab-diagnostics="true"]')?.getAttribute('data-quality-tier') === 'full'
+        ), undefined, { timeout: 30_000 });
+      } catch (error) {
+        const evidence = await page.evaluate(() => {
+          const node = document.querySelector('[data-optical-lab-diagnostics="true"]');
+          return {
+            bloomScale: node?.getAttribute('data-bloom-scale'),
+            cpuFrameMs: node?.getAttribute('data-cpu-frame-ms'),
+            fps: node?.getAttribute('data-fps'),
+            particleCount: node?.getAttribute('data-particle-count'),
+            raf: window.__OPTICAL_LAB_TEST_CONTROL_RAF_SEQUENCE_STATE__(),
+            tier: node?.getAttribute('data-quality-tier'),
+          };
+        });
+        throw new Error(`adaptive quality recovery timed out: ${JSON.stringify(evidence)}`, { cause: error });
+      }
+      const restoredQuality = await diagnostics.evaluate((node) => ({
+        bloomScale: Number(node.getAttribute('data-bloom-scale')),
+        bounds: node.getAttribute('data-stable-bounds'),
+        cpuFrameMs: Number(node.getAttribute('data-cpu-frame-ms')),
+        fps: Number(node.getAttribute('data-fps')),
+        gpuFrameMs: node.getAttribute('data-gpu-frame-ms'),
+        gpuTiming: node.getAttribute('data-gpu-timing'),
+        particleCount: Number(node.getAttribute('data-particle-count')),
+        tier: node.getAttribute('data-quality-tier'),
+      }));
+      assert.equal(restoredQuality.particleCount, initialQuality.particleCount);
+      assert.equal(restoredQuality.bloomScale, .25);
+      assert.equal(restoredQuality.bounds, initialQuality.bounds, 'quality recovery must not change title layout');
+      assert(restoredQuality.fps > 55, `recovery must publish the measured FPS: ${JSON.stringify(restoredQuality)}`);
+      assert(restoredQuality.cpuFrameMs >= 0, `runtime must publish CPU frame time: ${JSON.stringify(restoredQuality)}`);
+      assert.equal(restoredQuality.gpuFrameMs, 'unavailable');
+      assert.equal(restoredQuality.gpuTiming, 'unavailable');
+      measurements.push({ case: 'adaptive-quality', initialQuality, reducedQuality, restoredQuality });
+    }
     const firstDraws = await page.evaluate(() => window.__OPTICAL_LAB_GL_TRACKER__);
     assert(firstDraws.glyphDraws >= 5, `${testCase.name} must complete mask, color, and composite draws`);
     assert(firstDraws.glyphDrawInkStates.slice(0, 5).every((ink) => ink === 'dom'), `${testCase.name} must retain DOM ink through the complete first GPU frame`);
@@ -1000,7 +1127,11 @@ for (const testCase of cases) {
       page,
       await stage.screenshot({ path: path.join(outDir, `${testCase.name}-resting-material.png`) }),
     );
-    if (renderPhase === OPTICAL_LAB_RENDER_PHASES.boundedFlow && testCase.name === 'reference-desktop') {
+    if (
+      (renderPhase === OPTICAL_LAB_RENDER_PHASES.boundedFlow
+        || renderPhase === OPTICAL_LAB_RENDER_PHASES.acceptedFallback)
+      && testCase.name === 'reference-desktop'
+    ) {
       const bounds = await stage.boundingBox();
       assert(bounds, 'Task 6 pointer captures require candidate bounds');
       const activeFrames = [];
