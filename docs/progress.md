@@ -1,5 +1,13 @@
 # OpenScience (XGS) 进度日志
 
+## 2026-08-12（公网与 ECS 出网稳定化）— 已部署并完成故障切换演练
+
+- **根因边界**：Nginx/Web/容器持续健康，Chromium连续访问稳定；特定 Windows Schannel TLS 路径失败不是服务端宕机，RSA/ECDSA判别实验的 Nginx 配置已完整回滚。试验签发的未使用 RSA 证书按“不删除文件”红线原地保留，不被 Nginx加载；公网入站继续独立走 ECS，禁止依赖本机隧道。
+- **出网架构**：ECS 新增 loopback-only Squid 7.2（`127.0.0.1:7891`）；dockerd 与 `with-proxy` 统一指向7891，Squid优先 SSH reverse tunnel parent 7890，失效时 DIRECT。`live-restore=true` 已启用。
+- **故障切换证据**：在线路径 `FIRSTUP_PARENT/127.0.0.1`；隔离 dead-parent 演练 `HIER_DIRECT/180.163.150.34`，两者均 HTTP 204，演练后自动恢复 parent优先。
+- **公网证据**：最终 Chromium 60/60成功、1,200个静态资源200；Nginx 5xx计数 soak前后均为2，无新增；所有容器 PID不变、restart count=0。首次切换 dockerd时虽有 live-restore，host端口发布器仍短暂产生2次502，故后续视觉迭代期间禁止重启 Docker，正式部署需另做原子/双实例切换。
+- **文件与运行手册**：`docs/decisions/ADR-005-public-ingress-and-egress-failover.md`、`infra/squid/openscience-egress.conf`、`infra/scripts/{check-egress-path,test-egress-fallback}.sh`、`docs/runbooks/monitoring.md`。下一步：门禁通过后恢复隔离的 Three.js Task 3，不部署最终 Hero。
+
 ## 2026-08-11（Landing 增量优化实施计划）— 计划已写入，等待执行方式
 
 - **计划产出**：`docs/superpowers/plans/2026-08-11-landing-incremental-optimization-plan.md`，共 6 个可验收任务：契约测试、Hero 排版与入口层级、双层光学粒子场、Open RO 第二屏、全量本地产品门禁、ECS 部署验收。

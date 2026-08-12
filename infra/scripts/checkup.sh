@@ -26,7 +26,7 @@ else
 fi
 echo
 echo "=== systemd services ==="
-for svc in nginx docker postgresql redis; do
+for svc in nginx docker squid postgresql redis; do
   if systemctl list-unit-files "${svc}.service" 2>/dev/null | grep -q "^${svc}\.service"; then
     state=$(systemctl is-active "$svc" 2>/dev/null || true)
     echo "${svc}: ${state:-unknown}"
@@ -34,6 +34,19 @@ for svc in nginx docker postgresql redis; do
     echo "${svc}: N/A (未安装)"
   fi
 done
+echo
+echo "=== public ingress ==="
+curl --resolve openscience.428312321.xyz:443:127.0.0.1 \
+  --silent --show-error --output /dev/null --max-time 8 \
+  --write-out 'local_https: %{http_code} (%{time_total}s)\n' \
+  https://openscience.428312321.xyz/ || echo "local_https: failed"
+echo
+echo "=== egress failover ==="
+if [ -x /usr/local/bin/check-egress-path ]; then
+  /usr/local/bin/check-egress-path || echo "egress: failed"
+else
+  echo "N/A (/usr/local/bin/check-egress-path 未部署)"
+fi
 echo
 echo "=== TLS certs (/etc/letsencrypt) ==="
 if [ -d /etc/letsencrypt/live ]; then
