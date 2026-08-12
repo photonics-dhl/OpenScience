@@ -1,5 +1,11 @@
 # OpenScience (XGS) 进度日志
 
+## 2026-08-12（Three.js 中央粒子原型 Task 5 设计纠偏）— ✅ 连续字形取代全行点阵
+
+- **用户视觉裁决**：Task 4 的 5px 全字规则点阵虽然验证了字体几何、InstancedMesh、TouchTexture 与生命周期，但默认 GPU 帧隐藏平滑 SVG 后只留下 2.2–2.8px 圆点，因此必然呈现像素/网点字；这与参考的“连续字形主体、中央局部溶解、独立纵向粒子幕”不符，不能继续靠增密或 Bloom 掩盖。
+- **批准的 Task 5 修正**：用户确认默认渲染改为同源 `outlinePath` 的连续 GPU alpha substrate；规则字形点只在 57.3% aperture 附近承担转移，全字点阵仅保留显式 debug 模式。TouchTexture 对连续字形的局部采样形变上限 4 CSS px；纵向幕仍由独立规则网格产生，禁止拉伸文字点。
+- **实施门禁**：Task 5 必须先让当前 Task 4 截图在字形内部连续性/孔洞率指标上形成真实 RED，再实现连续 title pass，随后才加入中心径向+切向场与纵向幕；Task 6 的 Bloom/局部色散边界不前移。生产 Hero、公开 `/` 与服务器部署仍不修改。
+
 ## 2026-08-12（Three.js 中央粒子原型 Task 2 几何纠偏）— ✅ 光学缝锚定与 Bodoni 400
 
 - **停止错误方向**：Task 4 原尺寸截图证明 native WebGL/TouchTexture 路线可行，但旧几何把整句总 advance 居中到 57.3%，导致标题仅占 `x≈309..1605,y≈419..540`，与参考的大幅左起排版不符；因此未进入 Task 5 特效堆叠，先修正权威 home positions。

@@ -72,16 +72,27 @@ font-layout algorithm.
 
 ## 5. Particle and interaction model
 
-### 5.1 Regular text grid
+### 5.1 Continuous glyph substrate and seam-local grid
 
-Sample the generated word paths with a regular Cartesian grid, not random
-points. A candidate is retained when its grid-cell center falls within the
-path fill. Stable row, column and glyph IDs allow deterministic debug output.
-The period remains a separate vermilion group.
+The resting title is not a full-line particle font. A continuous GPU glyph
+substrate is the default visible title layer. It rasterizes the generated
+`outlinePath` into an alpha-only `CanvasTexture` at the design viewport and
+bounded device scale, then maps it through the same contain scale and offset as
+the SVG fallback and particle homes. The fragment shader assigns the approved
+Science, evolves and vermilion-period colours from generated design-space word
+and glyph bounds. Browser code must not lay out or remeasure the fonts.
 
-Render particles as instanced camera-facing quads. The fragment shader draws a
-soft circular coverage mask; it must not use square sprites or full-screen
-random noise. Particle home positions come directly from the generated grid.
+The substrate remains opaque and typographically continuous away from a narrow
+band around the aperture. A local shader warp may displace its texture lookup
+by at most four CSS pixels in response to TouchTexture. It must not expose the
+5px sampling lattice, square pixels or a halftone texture in the resting frame.
+
+The generated regular Cartesian grid remains the deterministic source for
+particles, but default rendering selects only seam-transfer points. Stable row,
+column and glyph IDs provide deterministic field motion and a separate debug
+mode may reveal the complete grid. Each selected point is rendered as an
+instanced camera-facing quad with a soft circular coverage mask. The full-line
+grid must never replace or hide the continuous substrate in the default mode.
 
 ### 5.2 Central field
 
@@ -94,8 +105,11 @@ combines:
 - a narrow seam-local transfer region, without vertical bars;
 - deterministic falloff based on grid IDs and source distance.
 
-The title remains legible away from the transfer region. The complete resting
-topology must exist without pointer input.
+The title remains continuous and legible away from the transfer region. Within
+the transfer band, substrate alpha decreases only where the corresponding
+particles gain energy, so the result reads as local dissolution rather than a
+second dotted title. The complete resting topology must exist without pointer
+input.
 
 ### 5.3 Independent vertical curtain
 

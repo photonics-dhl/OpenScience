@@ -2,9 +2,9 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Build and deploy a no-index Three.js prototype that renders `Science evolves.` from one deterministic font-geometry contract as a regular particle grid with a curved central field, independent vertical curtain, TouchTexture interaction and restrained local post-processing.
+**Goal:** Build and deploy a no-index Three.js prototype that renders `Science evolves.` from one deterministic font-geometry contract as a continuous glyph substrate with seam-local particles, a curved central field, independent vertical curtain, TouchTexture interaction and restrained local post-processing.
 
-**Architecture:** A Node-only `opentype.js` generator emits SVG paths, exact metrics and stable grid samples from committed fonts. A route-scoped imperative Three.js runtime consumes those assets, owns all renderer/composer resources, and preserves semantic DOM/SVG until a complete WebGL2 frame exists. Production Hero and the OGL Lab remain separate import graphs.
+**Architecture:** A Node-only `opentype.js` generator emits SVG paths, exact metrics and stable grid samples from committed fonts. A route-scoped imperative Three.js runtime rasterizes that exact path into a continuous alpha substrate, uses the grid only for seam-local particles and the independent curtain, owns all renderer/composer resources, and preserves semantic DOM/SVG until a complete WebGL2 frame exists. Production Hero and the OGL Lab remain separate import graphs.
 
 **Tech Stack:** Next.js 14.2.35, React 18.3.1, TypeScript, Three.js 0.185.1, postprocessing 6.39.4, opentype.js 2.0.0 (development only), Vitest and Playwright.
 
@@ -20,6 +20,7 @@
 - Reimplement TouchTexture/circle-particle ideas clean-room; copy no substantive `interactive-particles` source.
 - DOM/SVG, advances, kerning, baseline, bounds and particle homes consume one generated geometry contract.
 - Use a regular Cartesian grid with stable IDs, never random scatter.
+- Default resting ink is continuous; the full-title point grid is debug-only and must not replace the glyph substrate.
 - Debug center/pointer are `(0.573, 0.50)` at 1672×935, DPR 1, fixed seed and timestamp.
 - Bloom is selective and weak; aberration is locally masked. Add no unrelated post-processing.
 - WebGL2 is dynamic; mobile/reduced-motion/init failure use semantic DOM/SVG without continuous RAF.
@@ -132,20 +133,24 @@ type CentralParticleRenderer = {
 
 ---
 
-### Task 5: Shape the fixed central field and independent curtain
+### Task 5: Restore continuous glyph ink and shape the fixed central field
 
 **Files:**
-- Create: `apps/web/lib/optical-prototype/{field-model,curtain-grid}.ts`
-- Modify: particle vertex shader and renderer
+- Create: `apps/web/lib/optical-prototype/{continuous-title,field-model,curtain-grid}.ts`
+- Create: `apps/web/lib/optical-prototype/shaders/title.ts`
+- Modify: `apps/web/lib/optical-prototype/shaders/particle.ts`, `apps/web/lib/optical-prototype/renderer.ts`
 - Create: `apps/web/test/central-particle-visual-metrics.test.mjs`
 
-**Interfaces:** `sampleOpticalField(home,time,pointer,group)` provides CPU fixture/debug parity; curtain points have independent stable row/column IDs.
+**Interfaces:** `createContinuousTitle(geometry,qualityScale)` returns the alpha texture, stage mesh, resize hook and idempotent dispose; `sampleOpticalField(home,time,pointer,group)` provides CPU fixture/debug parity; `createCurtainGrid(viewport,tier)` returns independent stable row/column IDs.
 
-- [ ] Write RED requiring center error ≤0.5% stage width, curved tangential directionality, title continuity outside seam, full-height non-uniform curtain and right-biased emission. Negative fixtures reject bars, symmetric fans, rings, uniform rectangles and random scatter.
-- [ ] Run against the shell; confirm topology failures, not harness errors.
-- [ ] Implement radial attraction plus weaker signed tangential bend and seam transfer at `(0.573,0.50)`. Stable IDs modulate energy; pointer displacement stays below resting displacement.
-- [ ] Generate a separate regular curtain with tapered opacity/curvature; never stretch title particles into it.
-- [ ] Run metrics and fixed browser frame. After three identical tuning failures stop with exact evidence.
+- [ ] Write a source/CPU RED requiring the default composition to include one continuous-title mesh, select glyph particles only inside the seam-transfer band, clamp continuous-title pointer warp to 4 CSS pixels, and keep the complete 5px grid behind an explicit debug flag.
+- [ ] Add screenshot metrics at 1672×935 requiring outside-seam glyph-interior coverage ≥0.86, interior hole ratio ≤0.08 and occupied-column continuity ≥0.95. Run against the Task 4 frame and require a visual RED caused by the exposed 5px lattice.
+- [ ] Implement `createContinuousTitle` with `Path2D(geometry.outlinePath)` rendered into an alpha-only bounded-DPR CanvasTexture. Map the stage quad with the existing `fitParticleViewport` result; derive word/period colour regions only from generated bounds and release canvas texture, geometry and material exactly once.
+- [ ] Add the title shader: continuous alpha outside the aperture, energy-matched local dissolution within the transfer band and TouchTexture lookup warp capped at four CSS pixels. Publish GPU only after both title and particle passes draw successfully; SVG remains the failure/reduced/mobile fallback.
+- [ ] Write field/curtain RED requiring center error ≤0.5% stage width, curved tangential directionality, full-height non-uniform curtain and right-biased emission. Negative fixtures reject bars, symmetric fans, rings, uniform rectangles and random scatter.
+- [ ] Implement radial attraction plus weaker signed tangential bend and seam transfer at `(0.573,0.50)`. Stable IDs modulate energy; pointer displacement remains lower than resting field displacement.
+- [ ] Generate a separate regular curtain with tapered opacity/curvature and independent row/column IDs; never stretch title particles into it.
+- [ ] Run focused tests and a fixed production-browser frame at timestamp 1500ms and pointer `(0.573,0.50)`. Inspect the original-resolution PNG; after three identical metric failures stop with exact evidence.
 - [ ] Commit `feat(web): shape native optical convergence field`.
 
 ---
