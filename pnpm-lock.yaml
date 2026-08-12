@@ -211,6 +211,9 @@ importers:
       ogl:
         specifier: 1.0.11
         version: 1.0.11
+      postprocessing:
+        specifier: 6.39.4
+        version: 6.39.4(three@0.185.1)
       react:
         specifier: 18.3.1
         version: 18.3.1
@@ -226,6 +229,9 @@ importers:
       tailwind-merge:
         specifier: ^3.6.0
         version: 3.6.0
+      three:
+        specifier: 0.185.1
+        version: 0.185.1
     devDependencies:
       '@tailwindcss/postcss':
         specifier: ^4.3.3
@@ -242,6 +248,9 @@ importers:
       msdf-bmfont-xml:
         specifier: 2.8.0
         version: 2.8.0
+      opentype.js:
+        specifier: 2.0.0
+        version: 2.0.0
       playwright:
         specifier: ^1.62.1
         version: 1.62.1
@@ -6134,6 +6143,10 @@ packages:
     engines: {node: '>= 8.0.0'}
     hasBin: true
 
+  opentype.js@2.0.0:
+    resolution: {integrity: sha512-kCyjv6xdDY1W/jLWZ/L3QhhTlKUqDZMQ5+Jdlw12b3dXkKNpYBqqlMMj0YDQPShWFTMwgZI1hG14kN3XUDSg/A==}
+    hasBin: true
+
   option@0.2.4:
     resolution: {integrity: sha512-pkEqbDyl8ou5cpq+VsnQbe/WlEy5qS7xPzMS1U55OCG9KPvwFD46zDbxQIj3egJSFc3D+XhYOPUzz49zQAVy7A==}
 
@@ -6363,6 +6376,11 @@ packages:
   postcss@8.5.24:
     resolution: {integrity: sha512-8RyVklq0owXUTa4xlpzu4l9AaVKIdQvAcOHZWaMh98HgySsUtxRVf/chRe3dsSLqb6i40BzGRzEUddRaI+9TSw==}
     engines: {node: ^10 || ^12 || >=14}
+
+  postprocessing@6.39.4:
+    resolution: {integrity: sha512-oAS/PjAbc/xT3OzjUrGsorJ4J064XwhVD2t0OwKLP/E8QwDMUJ0oOv6ZI1SYMtLchv4g0ySEx+JcLy92+48vlA==}
+    peerDependencies:
+      three: '>= 0.168.0 < 0.186.0'
 
   prelude-ls@1.2.1:
     resolution: {integrity: sha512-vkcDPrRZo1QZLbn5RLGPpg/WmIQ65qoWWhcGKf/b5eplkkarX0m9z8ppCat4mlOqUsWpyNuYgO3VRyrYHSzX5g==}
@@ -7157,6 +7175,9 @@ packages:
 
   thread-stream@3.2.0:
     resolution: {integrity: sha512-zLBvqpwr4Esa0kRjcrzGU6zL25lePWaCLMx0RQFrmteozIfeNdaMLpG5U7PeHzvlFkAWaRKA9/KVW4F60iB+qw==}
+
+  three@0.185.1:
+    resolution: {integrity: sha512-5aojFCXKwnjBRZvUnt3WFfEcvUJgkN5LlijRFN95hMy8WVkG4I0QNcJE+OuWvuJ0bOdStrbfXn0pkd6/QyiAlg==}
 
   through2@4.0.2:
     resolution: {integrity: sha512-iOqSav00cVxEEICeD7TjLB1sueEL+81Wpzp2bY17uZjZN0pWZPuo4suZ/61VujxmqSGFfgOcNuTZ85QJwNZQpw==}
@@ -14429,6 +14450,8 @@ snapshots:
       string.prototype.codepointat: 0.2.1
       tiny-inflate: 1.0.3
 
+  opentype.js@2.0.0: {}
+
   option@0.2.4: {}
 
   optionator@0.9.4:
@@ -14704,6 +14727,10 @@ snapshots:
       nanoid: 3.3.16
       picocolors: 1.1.1
       source-map-js: 1.2.1
+
+  postprocessing@6.39.4(three@0.185.1):
+    dependencies:
+      three: 0.185.1
 
   prelude-ls@1.2.1: {}
 
@@ -15691,6 +15718,8 @@ snapshots:
   thread-stream@3.2.0:
     dependencies:
       real-require: 0.2.0
+
+  three@0.185.1: {}
 
   through2@4.0.2:
     dependencies:

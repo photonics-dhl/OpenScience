@@ -1,7 +1,7 @@
 # ADR-009: Optical Runtime and Font Delivery
 
 - **Status:** Accepted
-- **Date:** 2026-08-10 (amended 2026-08-11)
+- **Date:** 2026-08-10 (amended 2026-08-11, 2026-08-12)
 - **Decision owners:** OpenScience product engineering
 - **Related:** `docs/specs/2026-08-10-optical-editorial-rebaseline-design.md`, `docs/plans/2026-08-10-optical-editorial-frontend-plan.md`
 
@@ -42,6 +42,15 @@ An isolated, no-index route at `/_visual/optical-lab` may therefore use the pinn
 OGL is Unlicense-licensed. The Lab's pinned `msdf-bmfont-xml@2.8.0` atlas generator is MIT-licensed. Its exact Google Fonts inputs are committed as deterministic static instances: Archivo `wdth=100,wght=900` for `Science`, and Bodoni Moda Italic `opsz=96,wght=700` for `evolves.`. The generator, source URLs/commit hashes, source/output SHA-256 values and verbatim SIL OFL 1.1 notices are recorded in `apps/web/assets/optical-lab/fonts/manifest.json`; generated MSDF JSON/PNG files live in `apps/web/public/optical-lab/atlas/`. No `.next` font artifact is an input. Atlas generation and all runtime rendering remain client-side; ECS only serves the committed static files and gains no GPU, driver, compose, server-rendering or runtime dependency.
 
 The prior native-only bundle figures are retained as baseline evidence, not a projection for this OGL exception. Its route-exclusive budget must be remeasured before a later human-approved production replacement plan.
+
+#### 2026-08-12 no-index native Three.js experiment amendment
+
+The separate `/_visual/central-particle` experiment may use a native Three.js client graph only, with exact workspace-local pins `three@0.185.1` and `postprocessing@6.39.4`; `opentype.js@2.0.0` is a development-only geometry tool. It is a no-index technical prototype, not an extension of the OGL Lab and not authority to alter the production Hero.
+
+- The production `/` Landing graph must not import `three`, `postprocessing`, or any central-particle prototype module. React Three Fiber, React Three postprocessing, tsParticles, and particlesGL remain excluded so the experiment owns its rendering and lifecycle directly.
+- Three.js, postprocessing, and opentype.js are used under their MIT licenses. The clean-room reference boundary records the Zlib-licensed interactive-particle technique only as prior-art inspiration; no source, shaders, assets, ControlKit, GSAP integration, or other substantial code is copied. Codrops demos are credited as design/technique references only and are not a dependency or source of incorporated assets or code.
+- All rendering, pointer handling, animation frames, and postprocessing execute in the visitor's browser after client mount. ECS remains a Next.js build and static-delivery host: it receives no GPU runtime, driver, compose configuration, server-side WebGL rendering, or new production process.
+- Any future production use requires a separate, human-approved design and budget decision; route-local imports and no-index metadata do not waive this prohibition.
 
 Primary references:
 
