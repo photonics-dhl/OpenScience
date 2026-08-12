@@ -1,5 +1,13 @@
 # OpenScience (XGS) 进度日志
 
+## 2026-08-12（Three.js 中央粒子隔离原型 Task 3）— ✅ WebGL2 运行壳
+
+- **隔离运行壳**：新增 no-index `/_visual/central-particle`，SSR 始终保留唯一 `Science evolves.` h1 与 Task 2 生成的同源 SVG；Three 只从该路由的客户端动态 chunk 加载，生产 `/` 继续保持 3.87 kB / 112 kB First Load。当前场景故意为空，不含粒子、TouchTexture、收束场、纵向幕、Bloom、色散或 Hero 接入。
+- **策略与生命周期**：仅桌面 `>480px`、非 reduced motion 且真实 WebGL2 可用时挂载 pointer-transparent canvas；能力探针主动释放临时 context。运行壳限制 DPR≤2，使用正交相机，并显式拥有 RAF、visibility pause、generation-owned resize、失败撤回、context loss 后 fresh-canvas restore 与幂等清理；Three 构造失败会释放已获取的 WebGL2 context，cleanup 后的 loss 事件不得重新获得 observer ownership。
+- **TDD/复审验证**：focused 依赖/geometry/runtime `27/27`、Web typecheck、root lint/workspace/docs-sync、fresh production build 均 exit 0。独立复审的生命周期 Important 已用 RED→GREEN 关闭：主动 dispose 的 context-loss 不得重启、hidden 状态跨 restore 保留、width/reduced-motion 动态变更会 teardown/以 fresh canvas 恢复、旧 canvas 的延迟 loss/resize 回调不得操作新 lifecycle owner。真实 Chromium 覆盖 1672×935 首帧、鼠标拖选精确 `Science evolves.`、dynamic→480→dynamic→reduce→dynamic、真实 context restore、二次 WebGL2 获取失败和 console error=0，端口 3062 完成后关闭。Three 本身不带声明，补充精确 dev-only `@types/three@0.185.1`，不进入客户端 bundle。
+- **已知全量基线**：Web 全套为 217 pass / 2 fail；两项均由本机全局 `core.autocrlf=true` 把已提交 LF 转为 CRLF 所致：Landing 测试写死 LF 源码片段、两份 MSDF JSON 工作树字节 hash 与 Git blob manifest 不同。相关文件在 Task 3 diff 中为零，本提交不混入跨平台基线修复。
+- **下一步**：Task 4 才可消费 2,259 个规则网格点并加入 instanced circular particles 与 clean-room TouchTexture；仍不得修改或部署最终 Hero。
+
 ## 2026-08-12（Three.js 中央粒子隔离原型 Task 2）— ✅ 字体权威几何合同
 
 - **单一几何源**：Node-only `opentype.js@2.0.0` 从仓库已提交的 Archivo Black 与 Bodoni Moda 96pt Bold Italic TTF 生成 `Science evolves.`；固定 1672×935、中心 `(57.3%, 50%)`、单基线、word/glyph advance、kerning-enabled pen metrics、SVG outline 与 2,259 个 5px 规则笛卡尔网格点（稳定 ID、无重复坐标）。生产 Hero、OGL Lab 与运行时路由均未修改。

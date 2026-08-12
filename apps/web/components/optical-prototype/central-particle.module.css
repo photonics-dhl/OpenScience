@@ -1,0 +1,52 @@
+.shell {
+  align-items: center;
+  background: #050505;
+  color: #f4f1e9;
+  display: flex;
+  min-height: 100svh;
+  overflow: hidden;
+  position: relative;
+}
+
+.title {
+  margin: 0;
+  position: relative;
+  user-select: all;
+  width: 100%;
+  z-index: 1;
+}
+
+.title span {
+  clip-path: inset(50%);
+  height: 1px;
+  overflow: hidden;
+  position: absolute;
+  white-space: nowrap;
+  width: 1px;
+}
+
+.outline {
+  color: currentColor;
+  display: block;
+  height: auto;
+  pointer-events: none;
+  width: 100%;
+}
+
+.mount,
+.mount canvas {
+  inset: 0;
+  pointer-events: none;
+  position: absolute;
+}
+
+.mount canvas {
+  height: 100%;
+  opacity: 0;
+  transition: opacity 180ms ease;
+  width: 100%;
+}
+
+.mount[data-frame-ready='true'] canvas {
+  opacity: 1;
+}

@@ -73,6 +73,7 @@ describe('central particle prototype dependency boundary', () => {
   it('pins the approved native runtime packages and excludes wrapper engines', () => {
     expect(runtimeDependencies.three).toBe('0.185.1');
     expect(runtimeDependencies.postprocessing).toBe('6.39.4');
+    expect(developmentDependencies['@types/three']).toBe('0.185.1');
     expect(developmentDependencies['opentype.js']).toBe('2.0.0');
 
     for (const scope of dependencyScopes) {

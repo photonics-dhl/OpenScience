@@ -45,7 +45,7 @@ The prior native-only bundle figures are retained as baseline evidence, not a pr
 
 #### 2026-08-12 no-index native Three.js experiment amendment
 
-The separate `/_visual/central-particle` experiment may use a native Three.js client graph only, with exact workspace-local pins `three@0.185.1` and `postprocessing@6.39.4`; `opentype.js@2.0.0` is a development-only geometry tool. It is a no-index technical prototype, not an extension of the OGL Lab and not authority to alter the production Hero.
+The separate `/_visual/central-particle` experiment may use a native Three.js client graph only, with exact workspace-local pins `three@0.185.1` and `postprocessing@6.39.4`; `opentype.js@2.0.0` is a development-only geometry tool. Because Three 0.185.1 ships no TypeScript declarations, `@types/three@0.185.1` is pinned development-only and must not enter a browser chunk. It is a no-index technical prototype, not an extension of the OGL Lab and not authority to alter the production Hero.
 
 - The production `/` Landing graph must not import `three`, `postprocessing`, or any central-particle prototype module. The native prototype must not add React Three Fiber (`@react-three/fiber`), any additional React wrapper (`@react-three/drei`, `@react-three/postprocessing`, or `react-three-fiber`), `tsparticles`, or `particles-gl` in any runtime, development, optional, or peer dependency scope; it owns rendering and lifecycle directly.
 - GSAP, ControlKit, glslify, and a hosted runtime (including a Unicorn Studio SDK, hosted embed, or CDN script) are explicitly prohibited from this experiment. The dependency guard enforces the package boundary across runtime, development, optional, and peer dependency scopes.
