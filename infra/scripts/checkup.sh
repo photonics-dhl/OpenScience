@@ -26,7 +26,7 @@ else
 fi
 echo
 echo "=== systemd services ==="
-for svc in nginx docker squid postgresql redis; do
+for svc in nginx docker squid cloudflared postgresql redis; do
   if systemctl list-unit-files "${svc}.service" 2>/dev/null | grep -q "^${svc}\.service"; then
     state=$(systemctl is-active "$svc" 2>/dev/null || true)
     echo "${svc}: ${state:-unknown}"
@@ -36,6 +36,14 @@ for svc in nginx docker squid postgresql redis; do
 done
 echo
 echo "=== public ingress ==="
+edge_headers=$(curl --silent --show-error --head --max-time 12 \
+  https://openscience.428312321.xyz/ || true)
+edge_code=$(printf '%s\n' "$edge_headers" | awk 'toupper($1) ~ /^HTTP\// {code=$2} END {print code}')
+if [ "$edge_code" = "200" ] && printf '%s\n' "$edge_headers" | grep -qi '^cf-ray:'; then
+  echo "cloudflare_edge: 200 (cf-ray present)"
+else
+  echo "cloudflare_edge: ${edge_code:-failed} (cf-ray missing)"
+fi
 curl --resolve openscience.428312321.xyz:443:127.0.0.1 \
   --silent --show-error --output /dev/null --max-time 8 \
   --write-out 'local_https: %{http_code} (%{time_total}s)\n' \

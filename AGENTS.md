@@ -19,10 +19,10 @@ OpenScience：AI 时代科研基础设施平台（Research Object / SDF / 预印
 ## 云服务器（2026-07-31 上线）
 - 阿里云 ECS（Alibaba Cloud Linux 4），代码在 `/opt/openscience`；Node 22 + docker compose 插件 + nginx + acme.sh（cronie 续期）。
 - 远程操作只走 `infra/scripts/ssh-run.sh` / `checkup.sh`（项目专用密钥 `~/.ssh/id_ed25519_xgs`，服务器仅 publickey）。
-- DNS（Cloudflare，均 DNS-only）：`OpenScience.428312321.xyz`、`portainer.428312321.xyz` → 公网 IP；面板 `https://portainer.428312321.xyz`。
+- DNS/公网入口：`OpenScience.428312321.xyz` 已切到 ECS 常驻 Cloudflare Tunnel（proxied CNAME，回源 ECS Nginx）；`portainer.428312321.xyz` 仍为 DNS-only → ECS 公网 IP。面板 `https://portainer.428312321.xyz`。
 - 安全组放行 22/80/443；dev 栈端口仅 127.0.0.1；云上写操作前需用户确认。
 - 监控面板（2026-08-01）：统一入口导航 `https://portainer.428312321.xyz/nav/` → `/traffic/`（vnStat 流量账单）与 `/monitor/`（Netdata 实时）；basic_auth 账号 admin，凭据云上 `/etc/nginx/.htpasswd-monitor`（不入库）；runbook 见 `docs/runbooks/monitoring.md`。
-- **ECS 出网走稳定代理入口**：dockerd 与 `with-proxy <cmd>` 均指向服务器 Squid `127.0.0.1:7891`；Squid优先 parent `127.0.0.1:7890`（本机 v2ray 的 SSH 反向隧道），隧道不可用时自动回落阿里云直连。公网访客入站仍直接进入 ECS Nginx，禁止依赖个人电脑。隧道由本机 Windows 计划任务 `OpenScience-ProxyTunnel` 常驻（登录自启 + 断线 5s 重连，源文件 `infra/scripts/proxy-tunnel.{sh,vbs}`，日志 `%USERPROFILE%\proxy-tunnel.log`）；探测用云上 `/usr/local/bin/check-egress-path`。
+- **入站与出网分离**：公网访客经 Cloudflare Edge → ECS 常驻 `cloudflared` → loopback Nginx，cloudflared 不依赖个人电脑；dockerd 与 `with-proxy <cmd>` 则指向服务器 Squid `127.0.0.1:7891`，Squid优先 parent `127.0.0.1:7890`（本机 v2ray 的 SSH 反向隧道），失败时回落阿里云直连。SSH 隧道由 Windows 计划任务 `OpenScience-ProxyTunnel` 常驻；入站运行手册见 `docs/runbooks/cloudflare-tunnel.md`，出网探测用云上 `/usr/local/bin/check-egress-path`。
 - **服务器已卸载 Tailscale 且勿再装**（2026-08-01 实测）：tailscaled 劫持 `100.64.0.0/10` 路由，撞阿里云 VPC 内部 DNS（100.100.2.x）致全机 DNS 瘫痪。
 - 集成测试在云上执行：`cd /opt/openscience && npx pnpm@9.15.0 test:integration`（每次跑前必须**全量** `npx pnpm@9.15.0 build`——跨包 import 解析到目标包 dist，只 build database 会因 dist 过期致 500；2026-08-01 实证）。**集成测试限流桶隔离**：Redis server 端 key 空间全局共享，须 trustProxy:true + 用例唯一 X-Forwarded-For 独立桶（P1A-8 实证）。
 - API 反代 `infra/nginx/openscience.conf`（已部署云上 2026-08-03）：OpenScience.428312321.xyz → 127.0.0.1:3001，/admin 前缀 nginx basic_auth（凭据 `/etc/nginx/.htpasswd-admin` 云上生成不入库）；证书 DNS-01 签发（HTTP-01 被阿里云 403 拦，用 Cloudflare API）；部署见 docs/runbooks/deployment.md。

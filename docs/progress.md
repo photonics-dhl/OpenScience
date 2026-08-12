@@ -1,5 +1,12 @@
 # OpenScience (XGS) 进度日志
 
+## 2026-08-12（Cloudflare Tunnel 公网入口）— 已部署，待中国移动实机确认
+
+- **根因纠正**：Cloudflare 只托管权威 DNS；`openscience.428312321.xyz` 实际一直是 `A → 115.29.208.1`、`proxied=false`，服务器和本机均不存在 cloudflared。中国移动实机只到达 HTTP 301，HTTPS 未进入 Nginx，故障位于未备案域名直连阿里云大陆 ECS 的 TLS/SNI 入站路径，不是 Next.js、7890/7891 或视觉开发。
+- **部署结果**：通过不回显 Secret 的 `infra/scripts/deploy-cloudflare-tunnel.ps1` 创建远程管理 `openscience-prod`，ECS 安装 cloudflared 2026.7.3，systemd enabled/active，Cloudflare API healthy、4 connections；DNS 原位切换为 proxied Tunnel CNAME，公共解析为 Cloudflare anycast，不再暴露 ECS IP。
+- **安全边界**：Tunnel 回源现有 Nginx HTTPS；Nginx 仅信任 loopback cloudflared 的 `CF-Connecting-IP`，统一覆盖 XFF，真实客户端 IP 已在访问日志验证，Fastify `trustProxy:1` 限流语义保持。Tunnel token 只在服务器 root-only `0600` 文件，未进入仓库、unit 参数或输出。
+- **验证证据**：公网响应含 `server: cloudflare`/`CF-RAY`，初始20/20、服务重启后30/30请求为200；重启后自动恢复 healthy/4 connections，journal 无 warning；1.1.1.1 与 AliDNS 均返回 Cloudflare IP。下一步仅待用户用中国移动实机确认，再恢复隔离 Three.js Task 3。
+
 ## 2026-08-12（公网与 ECS 出网稳定化）— 已部署并完成故障切换演练
 
 - **根因边界**：Nginx/Web/容器持续健康，Chromium连续访问稳定；特定 Windows Schannel TLS 路径失败不是服务端宕机，RSA/ECDSA判别实验的 Nginx 配置已完整回滚。试验签发的未使用 RSA 证书按“不删除文件”红线原地保留，不被 Nginx加载；公网入站继续独立走 ECS，禁止依赖本机隧道。

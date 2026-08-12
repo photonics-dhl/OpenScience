@@ -79,6 +79,7 @@
 | `docs/superpowers/plans/2026-08-11-landing-incremental-optimization-plan.md` | 现有 Optical Editorial Landing 增量优化计划：排版/CTA、双层粒子场、Open RO 第二屏、全量 Web 门禁与 ECS 验收；不改 API/数据模型 | 已写入，待选择执行方式 |
 | `docs/decisions/ADR-004-figma-account-ownership-and-migration.md` | Figma 临时/长期账号所有权、双 OAuth 隔离、canonical 设计稿迁移与验收决策 | Accepted |
 | `docs/decisions/ADR-005-public-ingress-and-egress-failover.md` | 公网入站独立于个人工作站；ECS 出网经 Squid 优先 SSH 隧道、失败回落阿里云直连 | Accepted |
+| `docs/decisions/ADR-006-cloudflare-tunnel-public-ingress.md` | 未备案域名公网入口改由 ECS 常驻 Cloudflare Tunnel 承载；Nginx 继续作为统一回源与安全边界 | Accepted |
 | `docs/handoff/2026-08-08-product-web-tooling-handoff.md` | 产品网页工具前置交接（Codex 10 MCP、双 Figma OAuth、迁移 ADR、重启后验证顺序） | 当前 handoff |
 | `docs/handoff/2026-08-10-optical-editorial-rebaseline-handoff.md` | Optical Editorial v3 前端重构交接：27 项 grill-me 决策、三联屏浏览器优先路线、服务器直接验收 | 当前 handoff |
 | `docs/handoff/2026-08-11-optical-editorial-optimization-design-handoff.md` | 首页增量优化设计交接：保留线上功能与风格，先优化 Landing，再传播到 Explore/Dashboard/创建页/公开 RO | 当前 handoff |
@@ -222,6 +223,7 @@
 | `docs/runbooks/backup-restore.md` | 备份与恢复 runbook（四节骨架，Phase 1A 填充） | 骨架 |
 | `docs/runbooks/incident.md` | 故障响应 runbook（四节骨架，Phase 1A 填充） | 骨架 |
 | `docs/runbooks/monitoring.md` | 监控面板 runbook（Netdata + vnStat，同域 /monitor/ /traffic/ 路径，2026-08-01） | 已上线 |
+| `docs/runbooks/cloudflare-tunnel.md` | Cloudflare Tunnel 公网入口的前置检查、部署、回滚与移动端验收 | 已部署验证（待中国移动实机确认） |
 
 ## infra/
 | 路径 | 用途 | 状态 |
@@ -233,6 +235,7 @@
 | `infra/scripts/traffic-report.sh` | vnStat JSON → 流量账单静态页渲染（cron 每 5min，2026-08-01） | 已部署云上 |
 | `infra/scripts/with-proxy.sh` | 代理兜底包装：隧道可用走 v2ray、失效回落直连（云上 `/usr/local/bin/with-proxy`，2026-08-01） | 已部署云上 |
 | `infra/scripts/proxy-tunnel.sh` / `proxy-tunnel.vbs` | 本机侧 SSH 反向隧道常驻（Windows 计划任务 `OpenScience-ProxyTunnel` 登录自启 + 断线重连，2026-08-01） | 已启用 |
+| `infra/scripts/deploy-cloudflare-tunnel.ps1` | 使用项目 Secret 幂等部署/查询/回滚 ECS 常驻 Cloudflare Tunnel；token 仅经 stdin 写入服务器 | 已执行验证（2026-08-12） |
 | `infra/squid/openscience-egress.conf` / `infra/scripts/check-egress-path.sh` / `infra/scripts/test-egress-fallback.sh` | ECS loopback 出网入口：Squid 7891 优先 parent 7890、失败 DIRECT；配套端到端与隔离故障演练 | 已部署验证（2026-08-12） |
 | `infra/scripts/deploy.sh` | 部署脚本 | 骨架，Phase 1A 填充 |
 | `infra/compose/` | `docker-compose.dev.yml` 开发栈（postgres:16/redis:7/minio + minio-init，端口仅 127.0.0.1，P1A-2）；`docker-compose.monitor.yml` 监控栈（netdata + vnstat，2026-08-01）；`docker-compose.prod.yml` 生产栈（data_net/app_net 分段，数据服务不绑公网，api node:22、web node:22，web 通过 `npm run start` 使用 apps/web 本地 next binary 启动，P1A-9） | dev 本机未起栈；监控栈已部署云上；生产栈已部署云上（2026-08-03） |
