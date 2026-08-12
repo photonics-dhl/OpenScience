@@ -62,10 +62,18 @@ Next App Router treats `_visual` as a private folder. The actual route therefore
 
 ## Pending
 
-1. User chooses Subagent-Driven or Inline Execution for the approved implementation plan.
-2. Start Task 1 with the typography-only 1672×941 specimen RED; do not implement OGL particles or post-processing until the user selects and approves a shipping font specimen.
-3. Amend ADR-009 in Task 2 because the approved design replaces the dependency-free native experiment with OGL inside the isolated Lab.
-4. Preserve Candidate B lifecycle/cleanup evidence while replacing its visual formulas; headless SwiftShader is not real-device performance proof.
+1. Task 8: run the fresh final focused/full/build/browser/docs gates and record a local acceptance report.
+2. Record physical desktop and mobile 15-second resting/interaction performance; headless SwiftShader remains non-GPU evidence only.
+3. Request independent code review and resolve every Critical/Important finding with fresh RED/GREEN evidence.
+4. Present full-size reference, final dynamic candidate, static fallback and subtle active frame for final user acceptance.
 5. Do not deploy or replace production `/` without a later explicit plan and authorization.
+
+## Task 7 completion
+
+- Promoted the user-approved 1672×941 resting capture as decorative `accepted-resting.png`; the restricted CLI verifies dimensions, 2 MiB and records source SHA-256 `711f74c957db07006d9b0a6bccb4b92c0074234018a3e30f2d13262993f3ed35`.
+- Static fallback modes show the accepted artwork without canvas/RAF. The semantic h1 remains in DOM; its visible ink is suppressed only after image load and restored on image failure.
+- Runtime quality tiers are `full`, `reduced-particles`, `reduced-bloom`: two slow 2-second windows reduce one tier, ten fast seconds restore one; DPR ≤2, particle floor 55%, reduced bloom scale 1/8.
+- Fresh evidence: focused 24/24, full Web 31 files / 221 tests, typecheck, production build, production-start browser matrix, root lint/docs-sync and diff check passed. Production `/` remains 3.87 kB / 112 kB and its actual route chunks contain no OGL renderer.
+- Task 7 implementation and documentation are ready for the planned local feature commit. Production `/` and ECS were not changed.
 
 No ECS, compose, API, schema, authentication, upload, Hermes or production Landing change is part of this handoff.

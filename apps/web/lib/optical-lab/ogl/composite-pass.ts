@@ -8,6 +8,7 @@ import {
 } from 'ogl';
 
 import type { OpticalLayout } from '../layout';
+import { OPTICAL_QUALITY_BUDGETS, type OpticalQualityTier } from '../runtime-policy';
 import { createOpticalOglResourceLedger, type OpticalOglResourceCounts } from './resources';
 import {
   OPTICAL_ENERGY_BLUR_FRAGMENT_SHADER,
@@ -74,6 +75,7 @@ export function createCompositePass(
   gl: OGLRenderingContext,
   layout: OpticalLayout,
   textures: OpticalCompositeTextures,
+  qualityTier: OpticalQualityTier = 'full',
 ): OpticalCompositePass {
   const webgl2 = gl as WebGL2RenderingContext;
   const ledger = createOpticalOglResourceLedger(gl as WebGL2RenderingContext);
@@ -81,8 +83,9 @@ export function createCompositePass(
 
   try {
     const highPrecision = supportsHalfFloatTarget(gl);
-    const quarterWidth = Math.max(1, Math.round(gl.canvas.width * .25));
-    const quarterHeight = Math.max(1, Math.round(gl.canvas.height * .25));
+    const bloomScale = qualityTier === 'reduced-bloom' ? OPTICAL_QUALITY_BUDGETS.reducedBloomScale : .25;
+    const quarterWidth = Math.max(1, Math.round(gl.canvas.width * bloomScale));
+    const quarterHeight = Math.max(1, Math.round(gl.canvas.height * bloomScale));
     const targetOptions = {
       depth: false,
       format: gl.RGBA,

@@ -10,6 +10,7 @@ import {
 } from 'ogl';
 
 import type { OpticalLayout } from '../layout';
+import { OPTICAL_QUALITY_BUDGETS, type OpticalQualityTier } from '../runtime-policy';
 import { createOpticalOglResourceLedger, type OpticalOglResourceCounts } from './resources';
 import { OPTICAL_FULLSCREEN_VERTEX_SHADER } from './shaders/fullscreen';
 import {
@@ -24,6 +25,7 @@ export interface OpticalParticlePass {
   precision: 'rgba16f' | 'rgba8';
   render(flowTexture?: Texture | null, follow?: number): boolean;
   resourceCounts(): OpticalOglResourceCounts;
+  setQualityTier(tier: OpticalQualityTier): void;
   texture: Texture;
 }
 
@@ -87,6 +89,7 @@ export function createParticlePass(
   const ledger = createOpticalOglResourceLedger(gl as WebGL2RenderingContext);
   let disposed = false;
   let stateInitialized = false;
+  let activeParticleCount = PARTICLE_COUNT;
 
   try {
     const simulationGeometry = new Triangle(gl);
@@ -156,7 +159,7 @@ export function createParticlePass(
         disposed = true;
         ledger.dispose();
       },
-      particleCount: PARTICLE_COUNT,
+      get particleCount() { return activeParticleCount; },
       precision: highPrecision ? 'rgba16f' : 'rgba8',
       render(flowTexture = null, follow = 0) {
         if (disposed) return false;
@@ -178,6 +181,11 @@ export function createParticlePass(
         return gl.getError() === gl.NO_ERROR;
       },
       resourceCounts: () => ledger.counts(),
+      setQualityTier(tier) {
+        const ratio = tier === 'full' ? 1 : OPTICAL_QUALITY_BUDGETS.reducedParticleRatio;
+        activeParticleCount = Math.floor(PARTICLE_COUNT * ratio);
+        particleGeometry.setDrawRange(0, activeParticleCount);
+      },
       texture: particleTarget.texture,
     };
   } catch (error) {

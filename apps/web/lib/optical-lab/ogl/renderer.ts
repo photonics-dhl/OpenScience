@@ -6,7 +6,13 @@ import {
   serializeOpticalBounds,
   type OpticalLayout,
 } from '../layout';
-import { OPTICAL_WEBGL2_CONTEXT_ATTRIBUTES } from '../runtime-policy';
+import {
+  createOpticalQualityState,
+  OPTICAL_QUALITY_BUDGETS,
+  OPTICAL_WEBGL2_CONTEXT_ATTRIBUTES,
+  sampleOpticalQuality,
+  type OpticalQualityState,
+} from '../runtime-policy';
 import { stepOpticalResponse, type OpticalLabPointer } from '../model';
 import {
   createCompositePass,
@@ -29,7 +35,7 @@ export interface OpticalOglRendererSnapshot {
   particleCount: number;
   passEnergies: typeof OPTICAL_RESTING_PASS_ENERGIES;
   precision: 'rgba16f' | 'rgba8' | 'pending';
-  qualityTier: 'resting-material';
+  qualityTier: OpticalQualityState['tier'];
   flowTexture: '96x54-ping-pong';
   resourceCounts: OpticalOglResourceCounts;
   stableBounds: string;
@@ -80,7 +86,7 @@ export function createOpticalOglRenderer(
       canvas,
       webgl: 2,
       ...OPTICAL_WEBGL2_CONTEXT_ATTRIBUTES,
-      dpr: Math.min(devicePixelRatio, 2),
+      dpr: Math.min(devicePixelRatio, OPTICAL_QUALITY_BUDGETS.maxDpr),
     });
   } finally {
     Reflect.deleteProperty(canvas, 'getContext');
@@ -100,6 +106,9 @@ export function createOpticalOglRenderer(
   let glyphAtlases: ReturnType<typeof loadOpticalGlyphAtlases> | null = null;
   let rafId: number | null = null;
   let particlePass: OpticalParticlePass | null = null;
+  let qualityState = createOpticalQualityState();
+  let qualityWindowFrame = 0;
+  let qualityWindowStartedAt = 0;
   let stableBounds = 'pending';
 
   const report = (
@@ -117,7 +126,7 @@ export function createOpticalOglRenderer(
     particleCount: particlePass?.particleCount ?? 0,
     passEnergies: OPTICAL_RESTING_PASS_ENERGIES,
     precision: compositePass?.precision ?? 'pending',
-    qualityTier: 'resting-material',
+    qualityTier: qualityState.tier,
     resourceCounts: disposed
       ? emptyResourceCounts()
       : mergeResourceCounts(
@@ -161,6 +170,27 @@ export function createOpticalOglRenderer(
     if (disposed || ownedGeneration !== generation || !activeRaf || acceptedLayout === null) return;
     const layoutStable = acceptedLayout !== null;
     try {
+      if (qualityWindowStartedAt === 0) qualityWindowStartedAt = timestamp;
+      qualityWindowFrame += 1;
+      const qualityDurationMs = timestamp - qualityWindowStartedAt;
+      if (qualityDurationMs >= 2_000) {
+        const previousTier = qualityState.tier;
+        qualityState = sampleOpticalQuality(qualityState, {
+          durationMs: qualityDurationMs,
+          fps: qualityWindowFrame * 1_000 / qualityDurationMs,
+        });
+        qualityWindowFrame = 0;
+        qualityWindowStartedAt = timestamp;
+        if (qualityState.tier !== previousTier && acceptedLayout && glyphPass && particlePass) {
+          particlePass.setQualityTier(qualityState.tier);
+          compositePass?.dispose();
+          compositePass = createCompositePass(renderer.gl, acceptedLayout, {
+            glyphColor: glyphPass.colorTexture,
+            glyphMask: glyphPass.maskTexture,
+            particles: particlePass.texture,
+          }, qualityState.tier);
+        }
+      }
       const parityWord = stage.dataset.opticalLabGlyphParityProbe;
       const glyphParityWord = parityWord === 'science' || parityWord === 'evolves' ? parityWord : null;
       const glyphParityProbe = parityWord === 'all' || glyphParityWord !== null;
@@ -218,12 +248,13 @@ export function createOpticalOglRenderer(
       if (glyphPass) glyphPass.resize(publicationLayout);
       else glyphPass = createGlyphPass(renderer.gl, publicationLayout, atlases);
       particlePass = createParticlePass(renderer.gl, publicationLayout, glyphPass.maskTexture);
+      particlePass.setQualityTier(qualityState.tier);
       flowPass = createFlowPass(renderer.gl);
       compositePass = createCompositePass(renderer.gl, publicationLayout, {
         glyphColor: glyphPass.colorTexture,
         glyphMask: glyphPass.maskTexture,
         particles: particlePass.texture,
-      });
+      }, qualityState.tier);
       if (disposed || ownedGeneration !== generation) return;
       acceptedLayout = publicationLayout;
       stableBounds = serializeOpticalBounds(publicationLayout.title);

@@ -16,6 +16,7 @@ const OPTICAL_LAB_RENDER_PHASES = Object.freeze({
   msdfGlyph: 'task-4-msdf-glyph-v1',
   restingMaterial: 'task-5-resting-material-v1',
   boundedFlow: 'task-6-bounded-flow-v1',
+  acceptedFallback: 'task-7-accepted-fallback-v1',
   runtimeShell: 'task-3-runtime-shell-v1',
 });
 const OPTICAL_WEBGL2_CONTEXT_ATTRIBUTES = Object.freeze({
@@ -797,6 +798,9 @@ for (const testCase of cases) {
       assert.equal(await stage.getAttribute('data-optical-ink'), 'dom', `${testCase.name} static mode must retain DOM ink`);
       assert.equal(await page.locator('canvas[data-optical-lab-canvas="true"]').count(), 0, `${testCase.name} static mode must remove its canvas`);
       assert.equal(await page.evaluate(() => window.__OPENSCIENCE_OPTICAL_LAB__?.activeRaf ?? false), false, `${testCase.name} static mode must stop its RAF chain`);
+      await page.waitForFunction(() => (
+        document.querySelector('[data-optical-lab-candidate-stage="true"]')?.getAttribute('data-static-artwork') === 'loaded'
+      ));
       const staticTracker = await page.evaluate(() => window.__OPTICAL_LAB_GL_TRACKER__);
       for (const context of staticTracker.contexts) {
         for (const [resource, created] of Object.entries(context.created)) {
@@ -805,8 +809,13 @@ for (const testCase of cases) {
       }
       assert.equal(
         await marker.evaluate((node) => getComputedStyle(node).color),
-        'rgb(255, 78, 34)',
-        `${testCase.name} must retain the DOM vermilion period`,
+        'rgba(0, 0, 0, 0)',
+        `${testCase.name} accepted artwork must replace duplicate DOM ink`,
+      );
+      assert.equal(
+        await page.locator('[data-optical-lab-static-fallback="true"]').evaluate((node) => getComputedStyle(node).display),
+        'block',
+        `${testCase.name} must display the accepted resting artwork`,
       );
       measurements.push({
         case: testCase.name,
@@ -862,10 +871,13 @@ for (const testCase of cases) {
       throw new Error(`${testCase.name} MSDF publication timed out: ${JSON.stringify({ errors, evidence })}`, { cause: error });
     }
 
-    assert.equal(await diagnostics.getAttribute('data-quality-tier'), 'resting-material');
+    assert.match(await diagnostics.getAttribute('data-quality-tier') ?? '', /^(full|reduced-particles|reduced-bloom)$/);
     assert.equal(await diagnostics.getAttribute('data-context-status'), 'ready');
     assert(Number(await diagnostics.getAttribute('data-particle-count')) > 0, 'Task 5 must publish mask-derived particles');
-    if (renderPhase === OPTICAL_LAB_RENDER_PHASES.boundedFlow) {
+    if (
+      renderPhase === OPTICAL_LAB_RENDER_PHASES.boundedFlow
+      || renderPhase === OPTICAL_LAB_RENDER_PHASES.acceptedFallback
+    ) {
       assert.match(
         await diagnostics.getAttribute('data-flow-texture') ?? '',
         /96x54-ping-pong/,
@@ -1238,10 +1250,18 @@ for (const testCase of cases) {
   ) {
     assert.equal(mode, 'static-fallback', `${testCase.name} must use the stable DOM/static fallback`);
     assert.equal(await page.locator('canvas[data-optical-lab-canvas="true"]').count(), 0, `${testCase.name} must not start a GPU loop`);
+    await page.waitForFunction(() => (
+      document.querySelector('[data-optical-lab-candidate-stage="true"]')?.getAttribute('data-static-artwork') === 'loaded'
+    ));
     assert.equal(
       await marker.evaluate((node) => getComputedStyle(node).color),
-      'rgb(255, 78, 34)',
-      `${testCase.name} DOM fallback must keep the vermilion period visible`,
+      'rgba(0, 0, 0, 0)',
+      `${testCase.name} accepted artwork must suppress duplicate DOM ink after loading`,
+    );
+    assert.equal(
+      await page.locator('[data-optical-lab-static-fallback="true"]').evaluate((node) => getComputedStyle(node).display),
+      'block',
+      `${testCase.name} must display the accepted resting artwork`,
     );
   } else {
     if (testCase.forceContext === 'webgl1' || testCase.forceContext === 'webgl2-init-failure') {
@@ -1649,6 +1669,8 @@ for (const testCase of cases) {
   } else if (renderPhase === OPTICAL_LAB_RENDER_PHASES.restingMaterial) {
     await runTask5RestingMaterialAssertions();
   } else if (renderPhase === OPTICAL_LAB_RENDER_PHASES.boundedFlow) {
+    await runTask5RestingMaterialAssertions();
+  } else if (renderPhase === OPTICAL_LAB_RENDER_PHASES.acceptedFallback) {
     await runTask5RestingMaterialAssertions();
   } else if (renderPhase === OPTICAL_LAB_RENDER_PHASES.candidateBVisual) {
     await runCandidateBVisualPhaseAssertions();

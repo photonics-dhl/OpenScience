@@ -81,6 +81,42 @@ describe('isolated Optical Lab route contract', () => {
     expect(markup).not.toContain('<canvas');
   });
 
+  it('ships the accepted resting artwork as a decorative static fallback', async () => {
+    const markup = await renderLab();
+
+    expect(markup).toContain('src="/optical-lab/accepted-resting.png"');
+    expect(markup).toContain('alt=""');
+    expect(markup).toContain('data-optical-lab-static-fallback="true"');
+    expect(markup).toContain('data-optical-lab-semantic-title="true"');
+  });
+
+  it('keeps DOM ink until the fallback loads and restores it after image failure', () => {
+    const rendererSource = readFileSync(
+      fileURLToPath(new URL('../components/optical-lab/OpticalLabRenderer.tsx', import.meta.url)),
+      'utf8',
+    );
+    expect(rendererSource).toMatch(/fallback\?\.addEventListener\('load'/);
+    expect(rendererSource).toMatch(/fallback\?\.addEventListener\('error'/);
+    expect(rendererSource).toContain("stage.dataset.staticArtwork = 'loaded'");
+    expect(rendererSource).toContain("stage.dataset.staticArtwork = 'failed'");
+  });
+
+  it('feeds adaptive quality tiers into the OGL renderer', () => {
+    const rendererSource = readFileSync(
+      fileURLToPath(new URL('../lib/optical-lab/ogl/renderer.ts', import.meta.url)),
+      'utf8',
+    );
+    expect(rendererSource).toContain('sampleOpticalQuality');
+    expect(rendererSource).toContain('qualityState.tier');
+    expect(rendererSource).toContain('setQualityTier(qualityState.tier)');
+    const particleSource = readFileSync(
+      fileURLToPath(new URL('../lib/optical-lab/ogl/particle-pass.ts', import.meta.url)),
+      'utf8',
+    );
+    expect(particleSource).toContain('get particleCount()');
+    expect(particleSource).toContain('activeParticleCount = Math.floor');
+  });
+
   it('exposes stable renderer diagnostics without forbidden visual primitives', async () => {
     const markup = await renderLab();
     expect(markup).toContain('data-optical-lab-diagnostics="true"');
@@ -88,7 +124,7 @@ describe('isolated Optical Lab route contract', () => {
     expect(markup).toContain('data-optical-ink="dom"');
     expect(markup).toContain('data-context-status="idle"');
     expect(markup).toContain('data-stable-bounds="pending"');
-    expect(markup).toContain('data-optical-render-phase="task-6-bounded-flow-v1"');
+    expect(markup).toContain('data-optical-render-phase="task-7-accepted-fallback-v1"');
     expect(markup).not.toContain('optical-cursor-ring');
     expect(markup).not.toContain('radial-boundary');
     expect(markup).not.toContain('vertical-dotted-line');

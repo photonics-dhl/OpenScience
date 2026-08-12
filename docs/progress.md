@@ -1,5 +1,13 @@
 # OpenScience (XGS) 进度日志
 
+## 2026-08-12（Optical Lab 高保真 Task 7）— ✅ 验收静态 fallback 与运行时预算
+
+- **静态验收资产**：受限 promotion CLI 只接受 `test/visual/out/optical-lab/desktop-resting.png`，校验 PNG、1672×941 与 2 MiB 上限后写入 `public/optical-lab/accepted-resting.png`，源 SHA-256 为 `711f74c957db07006d9b0a6bccb4b92c0074234018a3e30f2d13262993f3ed35`。图片为 decorative；唯一语义 h1 保持可选择，静态图 load 后隐藏重复 DOM ink，error 时恢复。
+- **稳定自适应**：新增 `full → reduced-particles → reduced-bloom` 纯状态机；两个连续 2s `<45 FPS` 窗口逐档降级，`>55 FPS` 连续 10s 才恢复一档。DPR `≤2`，粒子 draw range 最低 55%，reduced bloom 使用 1/8 离屏目标；排版、58% seam、flow topology 与布局测量不变。
+- **预算与故障矩阵**：fallback `589,510 B ≤2 MiB`，atlas 总量 `82,731 B ≤512 KiB`；production `/` 仍 3.87 kB / First Load 112 kB，首页实际 route chunks 不含 OGL/Lab renderer。WebGL1、reduced motion、WebGL2/shader/FBO/atlas 初始化失败均显示验收图、无 canvas/RAF，context restore 与逐资源 cleanup 继续通过。
+- **验证**：focused `24/24`、全 Web `31 files / 221 tests`、typecheck、fresh production build、完整 production-start browser matrix、root lint (`WORKSPACE_STRUCTURE_OK` / `DOCS_SYNC_OK`)、`audit:docs-sync` 与 `git diff --check` 全 GREEN。
+- **范围**：只更新隔离 no-index Lab；生产 `/` 和 ECS 均未改变。下一步 Task 8 最终本地验收、独立 review、文档收口与用户最终选择。
+
 ## 2026-08-12（Optical Lab 高保真 Task 6）— ✅ 有界 flowmap 指针响应
 
 - **用户门禁与提交**：用户批准 Task 5 原尺寸静止材质；批准态以 `2404da2` 提交。Task 6 继续只在 `codex/optical-editorial-v3` 的 no-index Lab 中执行，未替换生产 `/`、未部署 ECS。

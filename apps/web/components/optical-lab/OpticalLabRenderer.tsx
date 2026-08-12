@@ -44,6 +44,12 @@ export function OpticalLabRenderer({ diagnosticsId, stageId }: OpticalLabRendere
     const stage = document.getElementById(stageId);
     const diagnostics = document.getElementById(diagnosticsId);
     if (!host || !stage || !diagnostics) return;
+    const fallback = stage.querySelector<HTMLImageElement>('[data-optical-lab-static-fallback="true"]');
+    const onFallbackLoad = () => { stage.dataset.staticArtwork = 'loaded'; };
+    const onFallbackError = () => { stage.dataset.staticArtwork = 'failed'; };
+    fallback?.addEventListener('load', onFallbackLoad);
+    fallback?.addEventListener('error', onFallbackError);
+    if (fallback?.complete) (fallback.naturalWidth > 0 ? onFallbackLoad : onFallbackError)();
     const motionPolicy = window.matchMedia('(prefers-reduced-motion: reduce)');
     const ownership = createOpticalRendererOwnership();
     let runtime: OpticalRuntime = 'dom-only';
@@ -210,6 +216,8 @@ export function OpticalLabRenderer({ diagnosticsId, stageId }: OpticalLabRendere
     motionPolicy.addEventListener('change', start);
     window.addEventListener('resize', onResize, { passive: true });
     return () => {
+      fallback?.removeEventListener('load', onFallbackLoad);
+      fallback?.removeEventListener('error', onFallbackError);
       motionPolicy.removeEventListener('change', start);
       window.removeEventListener('resize', onResize);
       stop();

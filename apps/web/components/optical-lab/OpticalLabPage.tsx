@@ -89,6 +89,13 @@ export async function OpticalLabPage() {
             data-stable-bounds="pending"
             id="optical-lab-candidate"
           >
+            <img
+              alt=""
+              aria-hidden="true"
+              className={styles.staticFallback}
+              data-optical-lab-static-fallback="true"
+              src="/optical-lab/accepted-resting.png"
+            />
             <h1 className={styles.headline} data-optical-lab-semantic-title="true">
               <span className={styles.science} data-optical-lab-science="true"><span className={styles.scienceInk}>Science</span></span>{' '}
               <span className={styles.evolves} data-optical-lab-evolves="true"><span className={styles.evolvesInk} data-optical-lab-evolves-ink="true">evolves<span className={styles.marker}>.</span></span></span>
