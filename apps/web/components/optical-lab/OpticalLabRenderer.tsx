@@ -100,7 +100,7 @@ export function OpticalLabRenderer({ diagnosticsId, stageId }: OpticalLabRendere
       diagnostics.dataset.contextStatus = snapshot.contextStatus;
       diagnostics.dataset.firstCompleteFrame = String(snapshot.firstCompleteFrame);
       diagnostics.dataset.frameCount = String(snapshot.frameCount);
-      diagnostics.dataset.flowTexture = 'inactive';
+      diagnostics.dataset.flowTexture = snapshot.flowTexture;
       diagnostics.dataset.particleCount = String(snapshot.particleCount);
       diagnostics.dataset.passEnergies = JSON.stringify(snapshot.passEnergies);
       diagnostics.dataset.precision = snapshot.precision;
@@ -169,7 +169,24 @@ export function OpticalLabRenderer({ diagnosticsId, stageId }: OpticalLabRendere
 
       try {
         const renderer = createOpticalOglRenderer(ownedCanvas, stage, update);
-        ownership.attach(ownedCanvas, renderer, removeCanvasListeners);
+        let previousPointer: { at: number; x: number; y: number } | null = null;
+        const onPointerMove = (event: PointerEvent) => {
+          const bounds = stage.getBoundingClientRect();
+          const at = performance.now();
+          const x = event.clientX - bounds.left;
+          const y = event.clientY - bounds.top;
+          const elapsed = Math.max(1, at - (previousPointer?.at ?? at - 16));
+          renderer.updatePointer({
+            lastActiveAt: at,
+            velocityX: Math.max(-1, Math.min(1, (x - (previousPointer?.x ?? x)) / elapsed * .08)),
+            velocityY: Math.max(-1, Math.min(1, (y - (previousPointer?.y ?? y)) / elapsed * .08)),
+            x, y,
+          });
+          previousPointer = { at, x, y };
+        };
+        stage.addEventListener('pointermove', onPointerMove, { passive: true });
+        const removePointer = () => stage.removeEventListener('pointermove', onPointerMove);
+        ownership.attach(ownedCanvas, renderer, () => { removeCanvasListeners(); removePointer(); });
       } catch {
         removeCanvasListeners();
         ownedCanvas.remove();

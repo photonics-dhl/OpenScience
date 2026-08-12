@@ -30,6 +30,20 @@ export interface OpticalLabBounds {
   height: number;
 }
 
+export interface OpticalResponse {
+  causticGain: number;
+  follow: number;
+  localPeakPx: number;
+  wholeLinePx: number;
+}
+
+export const RESTING_OPTICAL_RESPONSE: OpticalResponse = Object.freeze({
+  causticGain: 0,
+  follow: 0,
+  localPeakPx: 0,
+  wholeLinePx: 0,
+});
+
 function clamp(value: number, minimum: number, maximum: number) {
   return Math.max(minimum, Math.min(maximum, value));
 }
@@ -43,6 +57,33 @@ function clampVector(x: number, y: number, maximum: number) {
 function exponentialRecovery(remaining: number) {
   if (remaining <= 0) return 0;
   return (Math.exp(4 * remaining) - 1) / (Math.exp(4) - 1);
+}
+
+export function stepOpticalResponse(
+  pointer: OpticalLabPointer | null,
+  _viewport: OpticalLabViewport,
+  now: number,
+): OpticalResponse {
+  if (!pointer) return RESTING_OPTICAL_RESPONSE;
+  const elapsed = Math.max(0, now - pointer.lastActiveAt);
+  if (elapsed >= OPTICAL_LAB_RECOVERY_MS) return RESTING_OPTICAL_RESPONSE;
+
+  const attack = clamp(elapsed / 120, 0, 1);
+  const release = elapsed <= 120
+    ? 1
+    : clamp(1 - (elapsed - 120) / (OPTICAL_LAB_RECOVERY_MS - 120), 0, 1);
+  const follow = attack * release;
+  const authoredVelocity = clamp(Math.hypot(pointer.velocityX, pointer.velocityY), 0, 1);
+  const apertureX = _viewport.width * OPTICAL_LAB_APERTURE_X;
+  const direction = pointer.x < apertureX ? -1 : 1;
+  const wholeLinePx = direction * (1 + authoredVelocity) * follow;
+
+  return {
+    causticGain: .08 * follow,
+    follow,
+    localPeakPx: Math.min(4, wholeLinePx + 2 * follow),
+    wholeLinePx,
+  };
 }
 
 export function clampOpticalLabRefraction(

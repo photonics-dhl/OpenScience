@@ -1,6 +1,6 @@
 export type OpticalRuntime = 'webgl2-full' | 'static-fallback' | 'dom-only';
 
-export const OPTICAL_LAB_RENDER_PHASE = 'task-5-resting-material-v1' as const;
+export const OPTICAL_LAB_RENDER_PHASE = 'task-6-bounded-flow-v1' as const;
 
 export const OPTICAL_WEBGL2_CONTEXT_ATTRIBUTES = Object.freeze({
   alpha: true,

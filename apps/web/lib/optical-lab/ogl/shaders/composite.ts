@@ -76,6 +76,7 @@ uniform sampler2D tEnergy;
 uniform sampler2D tGlyphColor;
 uniform sampler2D tGlyphMask;
 uniform sampler2D tParticles;
+uniform float uCausticGain;
 
 in vec2 vUv;
 out vec4 fragColor;
@@ -104,8 +105,8 @@ void main() {
 
   vec3 premultiplied = glyph.rgb
     + particles.rgb * 0.84
-    + energy.rgb * 0.78
-    + blurred.rgb * 0.24
+    + energy.rgb * (0.78 + uCausticGain)
+    + blurred.rgb * (0.24 + uCausticGain * 0.5)
     + spectral;
   float alpha = clamp(glyph.a + particles.a * 0.84 + energy.a * 0.78 + blurred.a * 0.24, 0.0, 1.0);
   float monochromeGrain = (grain(gl_FragCoord.xy) - 0.5) * 0.012 * alpha;

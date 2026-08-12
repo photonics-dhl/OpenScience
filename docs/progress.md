@@ -1,5 +1,14 @@
 # OpenScience (XGS) 进度日志
 
+## 2026-08-12（Optical Lab 高保真 Task 6）— ✅ 有界 flowmap 指针响应
+
+- **用户门禁与提交**：用户批准 Task 5 原尺寸静止材质；批准态以 `2404da2` 提交。Task 6 继续只在 `codex/optical-editorial-v3` 的 no-index Lab 中执行，未替换生产 `/`、未部署 ECS。
+- **TDD 响应契约**：新增 `stepOpticalResponse`，真实 RED 为缺失 API；GREEN 固定 120ms 到达、整行绝对位移 `1–2px`、局部峰值 `≤4px`、caustic gain `≤.08`、左右 aperture 方向与 650ms exact rest，无 spring reversal。
+- **GPU 实现**：新增独占 96×54 双 RenderTarget 的 ping-pong flow pass；真实 pointer 时间戳、stage-local CSS 坐标与 capped velocity 经 renderer RAF 送入 flow。glyph composite 径向限制合成位移到 4px，particle 仅沿既有正 x 场偏转，caustic gain 由 composite uniform 消费。
+- **故障证据**：production-start gate 先捕获 final composite 缺失 `uCausticGain` 声明并 fail closed，所有 GPU 资源完整回收；采集真实 GLSL info log 后修正声明归属。三位置最初同帧的根因是模型丢失 aperture-relative 方向，源头修复后 left/slit/right 产生非零像素差。
+- **验收**：focused `29/29`、全 Web `30 files / 214 tests`、typecheck、fresh production build、完整 production-start browser lifecycle/fallback/resize/context-loss matrix、根 lint/workspace/docs-sync、`git diff --check` 全 GREEN；原尺寸 resting/left/slit/right/recovered 无环、机械线、标题断裂或布局跳动，650ms 恢复通过。
+- **下一步**：Task 7 推广已批准的静止 fallback，并实现粒子/blur 运行时预算降级；仍不得替换生产首页或部署 ECS。
+
 ## 2026-08-12（Optical Lab Task 5 字形坐标契约修复）— ⏳ 技术 GREEN，等待用户原尺寸视觉批准
 
 - **可证伪根因与 RED**：原 production-start gate 原样复现 isolated `evolves`：bounds `.901261`、density `1.076923` 通过而 shape `.766194 < .90`；GPU/DOM bbox 为 `287..466` / `291..475`，同掩膜只需约 `(+9,-1)` 刚性位移即可达 `.971335`。BMFont `base=108`、atlas size `96`、padding `4` 与 OGL/CSS tracking 语义给出 `7 × (.085 × 12) + 4 = 11.14` atlas px（约 `8.29` screen px）的末端 landmark 漂移预测。新增 contract test 先以缺失 ink-mapping authority 精确 RED（16 pass / 1 fail）。

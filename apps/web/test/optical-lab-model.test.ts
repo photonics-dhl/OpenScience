@@ -311,6 +311,49 @@ describe('Optical Lab capability and field model', () => {
     expect(active?.aperture).toEqual({ x: 696, y: 337.5 });
   });
 
+  it('bounds the Task 6 response envelope and reaches exact rest at 650ms', () => {
+    const viewport = { width: 1_200, height: 675 };
+    const pointer = {
+      x: 1_020,
+      y: 420,
+      lastActiveAt: 1_000,
+      velocityX: .8,
+      velocityY: .35,
+    };
+    const active = model?.stepOpticalResponse(pointer, viewport, 1_120);
+    const recovered = model?.stepOpticalResponse(pointer, viewport, 1_650);
+
+    expect(Math.abs(active?.wholeLinePx ?? 99)).toBeGreaterThanOrEqual(1);
+    expect(Math.abs(active?.wholeLinePx ?? 99)).toBeLessThanOrEqual(2);
+    expect(active?.localPeakPx).toBeLessThanOrEqual(4);
+    expect(active?.causticGain).toBeLessThanOrEqual(.08);
+    expect(recovered).toEqual({
+      causticGain: 0,
+      follow: 0,
+      localPeakPx: 0,
+      wholeLinePx: 0,
+    });
+  });
+
+  it('follows and recovers monotonically without spring reversal', () => {
+    const viewport = { width: 1_200, height: 675 };
+    const pointer = {
+      x: 120,
+      y: 180,
+      lastActiveAt: 2_000,
+      velocityX: -.9,
+      velocityY: .4,
+    };
+    const active = [2_000, 2_040, 2_080, 2_120]
+      .map((now) => model?.stepOpticalResponse(pointer, viewport, now).follow ?? -1);
+    const recovering = [2_120, 2_240, 2_360, 2_480, 2_650]
+      .map((now) => model?.stepOpticalResponse(pointer, viewport, now).follow ?? -1);
+
+    expect(active).toEqual([...active].sort((left, right) => left - right));
+    expect(recovering).toEqual([...recovering].sort((left, right) => right - left));
+    expect(recovering.at(-1)).toBe(0);
+  });
+
   it('reports frame, FPS and stable bounds as measurable diagnostics', () => {
     const metrics = model?.createFrameMetrics(4);
     metrics?.record(0, 0.8, null);

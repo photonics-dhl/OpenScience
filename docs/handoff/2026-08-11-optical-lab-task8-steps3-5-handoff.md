@@ -1,5 +1,13 @@
 # Optical Lab Task 8 Steps 3–5 Handoff
 
+## 2026-08-12 Task 6 Update
+
+- User approved the Task 5 original-resolution resting frame; accepted Task 5 is commit `2404da2`.
+- Task 6 bounded flow is complete in the isolated Lab: 96×54 ping-pong velocity targets, real pointer timestamps, aperture-relative direction, `1–2px` whole-line response, `≤4px` local cap, `≤.08` caustic gain and exact 650ms recovery.
+- Evidence: focused `29/29`, full Web `30 files / 214 tests`, Web typecheck, production build, production-start browser matrix, root lint/workspace/docs-sync and diff check all pass. Original-resolution resting/left/slit/right/recovered frames were inspected.
+- Production `/`, ECS, backend, schema, auth and Hermes were not changed or deployed.
+- Next action: execute Task 7 static fallback promotion and runtime budget adaptation. Do not replace production `/` without a later explicit approval.
+
 ## Status
 
 Task 8 Steps 3–5 and Candidate B local engineering acceptance are complete on `codex/optical-editorial-v3`, but the user rejected Candidate B's visual result as too far from the `Science evolves.` reference. The user has now approved the replacement design and its eight-task implementation plan. The isolated Lab remains available only at `/_visual/optical-lab`; production `/` and its Canvas renderer remain unchanged. Task Master Task 4 remains `in-progress`.

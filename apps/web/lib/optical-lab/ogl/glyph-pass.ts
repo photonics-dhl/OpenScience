@@ -77,7 +77,7 @@ export interface OpticalGlyphPass {
   colorTexture: Texture;
   dispose(): void;
   maskTexture: Texture;
-  render(flowTexture?: Texture | null, parityWord?: 'evolves' | 'science' | null): boolean;
+  render(flowTexture?: Texture | null, parityWord?: 'evolves' | 'science' | null, response?: { follow: number; wholeLinePx: number }): boolean;
   resize(layout: OpticalLayout): void;
   resourceCounts(): OpticalOglResourceCounts;
 }
@@ -343,7 +343,13 @@ export function createGlyphPass(
       depthWrite: false,
       fragment: OPTICAL_GLYPH_COMPOSITE_FRAGMENT_SHADER,
       transparent: false,
-      uniforms: { tColor: { value: colorTarget.texture } },
+      uniforms: {
+        tColor: { value: colorTarget.texture },
+        tFlow: { value: colorTarget.texture },
+        uFollow: { value: 0 },
+        uViewport: { value: [layout.viewport.width, layout.viewport.height] },
+        uWholeLinePx: { value: 0 },
+      },
       vertex: OPTICAL_FULLSCREEN_VERTEX_SHADER,
     });
     const compositeMesh = new Mesh(gl, { geometry: compositeGeometry, program: compositeProgram });
@@ -378,9 +384,11 @@ export function createGlyphPass(
         ledger.dispose();
       },
       maskTexture: maskTarget.texture,
-      render(flowTexture, parityWord = null) {
+      render(flowTexture, parityWord = null, response = { follow: 0, wholeLinePx: 0 }) {
         if (disposed) return false;
-        void flowTexture;
+        compositeProgram.uniforms.tFlow.value = flowTexture ?? colorTarget.texture;
+        compositeProgram.uniforms.uFollow.value = flowTexture ? response.follow : 0;
+        compositeProgram.uniforms.uWholeLinePx.value = response.wholeLinePx;
         gl.clearColor(0, 0, 0, 0);
         drawWords(maskTarget, true, parityWord);
         drawWords(colorTarget, false, parityWord);
@@ -403,6 +411,7 @@ export function createGlyphPass(
         position.needsUpdate = true;
         maskTarget.setSize(gl.canvas.width, gl.canvas.height);
         colorTarget.setSize(gl.canvas.width, gl.canvas.height);
+        compositeProgram.uniforms.uViewport.value = [layout.viewport.width, layout.viewport.height];
       },
       resourceCounts: () => ledger.counts(),
     };

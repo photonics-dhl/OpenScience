@@ -29,7 +29,7 @@ export interface OpticalCompositePass {
   dispose(): void;
   passEnergies: typeof OPTICAL_RESTING_PASS_ENERGIES;
   precision: 'rgba16f' | 'rgba8';
-  render(): boolean;
+  render(causticGain?: number): boolean;
   resourceCounts(): OpticalOglResourceCounts;
 }
 
@@ -156,6 +156,7 @@ export function createCompositePass(
         tGlyphMask: { value: textures.glyphMask },
         tParticles: { value: textures.particles },
         uViewport: { value: [layout.viewport.width, layout.viewport.height] },
+        uCausticGain: { value: 0 },
       },
       vertex: OPTICAL_FULLSCREEN_VERTEX_SHADER,
     });
@@ -176,8 +177,9 @@ export function createCompositePass(
       },
       passEnergies: OPTICAL_RESTING_PASS_ENERGIES,
       precision: highPrecision ? 'rgba16f' : 'rgba8',
-      render() {
+      render(causticGain = 0) {
         if (disposed) return false;
+        finalProgram.uniforms.uCausticGain.value = Math.min(.08, Math.max(0, causticGain));
         gl.clearColor(0, 0, 0, 0);
         gl.renderer.render({ clear: true, frustumCull: false, scene: energyMesh, sort: false, target: energyTarget });
         gl.renderer.render({ clear: true, frustumCull: false, scene: horizontalMesh, sort: false, target: blurHorizontalTarget });

@@ -22,7 +22,7 @@ export interface OpticalParticlePass {
   dispose(): void;
   particleCount: number;
   precision: 'rgba16f' | 'rgba8';
-  render(): boolean;
+  render(flowTexture?: Texture | null, follow?: number): boolean;
   resourceCounts(): OpticalOglResourceCounts;
   texture: Texture;
 }
@@ -119,6 +119,8 @@ export function createParticlePass(
       transparent: true,
       uniforms: {
         tState: simulation.uniform,
+        tFlow: { value: simulation.uniform.value },
+        uFollow: { value: 0 },
         uDpr: { value: Math.min(devicePixelRatio, 2) },
         uStateSize: { value: simulation.size },
       },
@@ -156,13 +158,15 @@ export function createParticlePass(
       },
       particleCount: PARTICLE_COUNT,
       precision: highPrecision ? 'rgba16f' : 'rgba8',
-      render() {
+      render(flowTexture = null, follow = 0) {
         if (disposed) return false;
         if (!stateInitialized) {
           simulation.render();
           stateInitialized = true;
         }
         gl.clearColor(0, 0, 0, 0);
+        particleProgram.uniforms.tFlow.value = flowTexture ?? simulation.uniform.value;
+        particleProgram.uniforms.uFollow.value = flowTexture ? follow : 0;
         gl.renderer.render({
           clear: true,
           frustumCull: false,

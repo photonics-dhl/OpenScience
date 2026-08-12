@@ -66,12 +66,22 @@ export const OPTICAL_GLYPH_COMPOSITE_FRAGMENT_SHADER = `#version 300 es
 precision highp float;
 
 uniform sampler2D tColor;
+uniform sampler2D tFlow;
+uniform vec2 uViewport;
+uniform float uFollow;
+uniform float uWholeLinePx;
 
 in vec2 vUv;
 out vec4 fragColor;
 
 void main() {
-  vec4 color = texture(tColor, vUv);
+  vec2 flow = texture(tFlow, vUv).xy * 2.0 - 1.0;
+  vec2 whole = vec2(uWholeLinePx / uViewport.x, 0.0);
+  vec2 local = flow * vec2(2.0 / uViewport.x, 2.0 / uViewport.y) * uFollow;
+  vec2 combinedPx = (whole + local) * uViewport;
+  float lengthPx = length(combinedPx);
+  combinedPx *= lengthPx > 4.0 ? 4.0 / lengthPx : 1.0;
+  vec4 color = texture(tColor, vUv - combinedPx / uViewport);
   if (color.a <= 0.0001) discard;
   fragColor = vec4(color.rgb / max(color.a, 0.0001), color.a);
 }

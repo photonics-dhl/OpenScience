@@ -15,6 +15,7 @@ const OPTICAL_LAB_RENDER_PHASES = Object.freeze({
   candidateBVisual: 'task-4-candidate-b-visual-v1',
   msdfGlyph: 'task-4-msdf-glyph-v1',
   restingMaterial: 'task-5-resting-material-v1',
+  boundedFlow: 'task-6-bounded-flow-v1',
   runtimeShell: 'task-3-runtime-shell-v1',
 });
 const OPTICAL_WEBGL2_CONTEXT_ATTRIBUTES = Object.freeze({
@@ -241,6 +242,7 @@ for (const testCase of cases) {
         glyphDraws: 0,
         atlasColorSpaceConversions: [],
         compileFailures: 0,
+        compileFailureLogs: [],
         compileShaderCalls: 0,
         firstContextAcquisition: null,
         framebufferChecks: 0,
@@ -362,6 +364,10 @@ for (const testCase of cases) {
           const result = compileShader(...args);
           if (!context.getShaderParameter(args[0], context.COMPILE_STATUS)) {
             window.__OPTICAL_LAB_GL_TRACKER__.compileFailures += 1;
+            window.__OPTICAL_LAB_GL_TRACKER__.compileFailureLogs.push({
+              log: context.getShaderInfoLog(args[0]),
+              source: context.getShaderSource(args[0]),
+            });
           }
           return result;
         };
@@ -859,7 +865,15 @@ for (const testCase of cases) {
     assert.equal(await diagnostics.getAttribute('data-quality-tier'), 'resting-material');
     assert.equal(await diagnostics.getAttribute('data-context-status'), 'ready');
     assert(Number(await diagnostics.getAttribute('data-particle-count')) > 0, 'Task 5 must publish mask-derived particles');
-    assert.equal(await diagnostics.getAttribute('data-flow-texture'), 'inactive', 'Task 5 must not publish a Task 6 flowmap');
+    if (renderPhase === OPTICAL_LAB_RENDER_PHASES.boundedFlow) {
+      assert.match(
+        await diagnostics.getAttribute('data-flow-texture') ?? '',
+        /96x54-ping-pong/,
+        'Task 6 must publish the bounded velocity flowmap',
+      );
+    } else {
+      assert.equal(await diagnostics.getAttribute('data-flow-texture'), 'inactive', 'Task 5 must not publish a Task 6 flowmap');
+    }
     assert.match(await diagnostics.getAttribute('data-precision') ?? '', /^rgba(16f|8)$/);
     assert.deepEqual(
       Object.keys(JSON.parse(await diagnostics.getAttribute('data-pass-energies') ?? '{}')).sort(),
@@ -974,6 +988,36 @@ for (const testCase of cases) {
       page,
       await stage.screenshot({ path: path.join(outDir, `${testCase.name}-resting-material.png`) }),
     );
+    if (renderPhase === OPTICAL_LAB_RENDER_PHASES.boundedFlow && testCase.name === 'reference-desktop') {
+      const bounds = await stage.boundingBox();
+      assert(bounds, 'Task 6 pointer captures require candidate bounds');
+      const activeFrames = [];
+      for (const [position, factor] of [['left', .22], ['slit', .58], ['right', .82]]) {
+        await page.mouse.move(bounds.x + bounds.width * factor, bounds.y + bounds.height * .52);
+        await page.waitForTimeout(150);
+        activeFrames.push(await decodeScreenshot(
+          page,
+          await stage.screenshot({ path: path.join(outDir, `desktop-${position}-150ms.png`) }),
+        ));
+      }
+      for (let index = 1; index < activeFrames.length; index += 1) {
+        const difference = compareScreenshots(activeFrames[index - 1], activeFrames[index]);
+        assert(
+          difference.meanChannelDifference > 0,
+          `Task 6 pointer positions must produce distinct frames: ${JSON.stringify(difference)}`,
+        );
+      }
+      await page.waitForTimeout(650);
+      const recoveredFrame = await decodeScreenshot(
+        page,
+        await stage.screenshot({ path: path.join(outDir, 'desktop-recovered-650ms.png') }),
+      );
+      const recoveredDifference = compareScreenshots(materialFrame, recoveredFrame);
+      assert(
+        recoveredDifference.meanChannelDifference < .25 && recoveredDifference.changedRatio < .01,
+        `Task 6 must recover to the resting composition: ${JSON.stringify(recoveredDifference)}`,
+      );
+    }
     const frameBeforeGlyphProbe = Number(await diagnostics.getAttribute('data-frame-count'));
     await stage.evaluate((node) => { node.dataset.opticalLabGlyphParityProbe = 'all'; });
     await page.waitForFunction((before) => Number(
@@ -1192,7 +1236,7 @@ for (const testCase of cases) {
     || testCase.forceContext === 'none'
     || testCase.forceContext === 'shader-failure'
   ) {
-    assert.equal(mode, 'dom-static', `${testCase.name} must use the stable DOM/static fallback`);
+    assert.equal(mode, 'static-fallback', `${testCase.name} must use the stable DOM/static fallback`);
     assert.equal(await page.locator('canvas[data-optical-lab-canvas="true"]').count(), 0, `${testCase.name} must not start a GPU loop`);
     assert.equal(
       await marker.evaluate((node) => getComputedStyle(node).color),
@@ -1201,9 +1245,9 @@ for (const testCase of cases) {
     );
   } else {
     if (testCase.forceContext === 'webgl1' || testCase.forceContext === 'webgl2-init-failure') {
-      assert.equal(mode, 'webgl1', `${testCase.name} must continue on WebGL1`);
+      assert.equal(mode, 'static-fallback', `${testCase.name} must fail closed to the static fallback`);
     }
-    else assert.match(mode ?? '', /^webgl[12]$/, 'desktop must choose a viable WebGL path');
+    else assert.equal(mode, 'webgl2-full', 'desktop must choose the reviewed WebGL2 full path');
     assert.equal(contextStatus, 'ready', 'desktop context must become ready');
     const gpuMarkerStyle = await marker.evaluate((node) => ({
       color: getComputedStyle(node).color,
@@ -1603,6 +1647,8 @@ for (const testCase of cases) {
   } else if (renderPhase === OPTICAL_LAB_RENDER_PHASES.msdfGlyph) {
     await runTask5RestingMaterialAssertions();
   } else if (renderPhase === OPTICAL_LAB_RENDER_PHASES.restingMaterial) {
+    await runTask5RestingMaterialAssertions();
+  } else if (renderPhase === OPTICAL_LAB_RENDER_PHASES.boundedFlow) {
     await runTask5RestingMaterialAssertions();
   } else if (renderPhase === OPTICAL_LAB_RENDER_PHASES.candidateBVisual) {
     await runCandidateBVisualPhaseAssertions();

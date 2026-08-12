@@ -7,6 +7,7 @@ import {
   type OpticalLayout,
 } from '../layout';
 import { OPTICAL_WEBGL2_CONTEXT_ATTRIBUTES } from '../runtime-policy';
+import { stepOpticalResponse, type OpticalLabPointer } from '../model';
 import {
   createCompositePass,
   OPTICAL_RESTING_PASS_ENERGIES,
@@ -15,6 +16,7 @@ import {
 import { createGlyphPass, loadOpticalGlyphAtlases, type OpticalGlyphPass } from './glyph-pass';
 import { createParticlePass, type OpticalParticlePass } from './particle-pass';
 import type { OpticalOglResourceCounts } from './resources';
+import { createFlowPass, type OpticalFlowPass } from './flow-pass';
 
 export interface OpticalOglRendererSnapshot {
   activeRaf: boolean;
@@ -28,6 +30,7 @@ export interface OpticalOglRendererSnapshot {
   passEnergies: typeof OPTICAL_RESTING_PASS_ENERGIES;
   precision: 'rgba16f' | 'rgba8' | 'pending';
   qualityTier: 'resting-material';
+  flowTexture: '96x54-ping-pong';
   resourceCounts: OpticalOglResourceCounts;
   stableBounds: string;
 }
@@ -35,6 +38,7 @@ export interface OpticalOglRendererSnapshot {
 export interface OpticalOglRenderer {
   dispose(): void;
   resize(): void;
+  updatePointer(pointer: OpticalLabPointer): void;
 }
 
 const emptyResourceCounts = (): OpticalOglResourceCounts => ({
@@ -91,6 +95,8 @@ export function createOpticalOglRenderer(
   let frameCount = 0;
   let generation = 0;
   let glyphPass: OpticalGlyphPass | null = null;
+  let flowPass: OpticalFlowPass | null = null;
+  let pointer: OpticalLabPointer | null = null;
   let glyphAtlases: ReturnType<typeof loadOpticalGlyphAtlases> | null = null;
   let rafId: number | null = null;
   let particlePass: OpticalParticlePass | null = null;
@@ -104,6 +110,7 @@ export function createOpticalOglRenderer(
     apertureX: .58,
     contextStatus,
     firstCompleteFrame,
+    flowTexture: '96x54-ping-pong',
     frameCount,
     layoutStable,
     mode: 'webgl2-full',
@@ -117,6 +124,7 @@ export function createOpticalOglRenderer(
           glyphPass?.resourceCounts() ?? emptyResourceCounts(),
           particlePass?.resourceCounts() ?? emptyResourceCounts(),
           compositePass?.resourceCounts() ?? emptyResourceCounts(),
+          flowPass?.resourceCounts() ?? emptyResourceCounts(),
         ),
     stableBounds,
   });
@@ -139,6 +147,8 @@ export function createOpticalOglRenderer(
     compositePass = null;
     particlePass?.dispose();
     particlePass = null;
+    flowPass?.dispose();
+    flowPass = null;
   };
 
   const disposeAllPasses = () => {
@@ -147,28 +157,35 @@ export function createOpticalOglRenderer(
     glyphPass = null;
   };
 
-  const draw = (ownedGeneration: number) => {
+  const draw = (ownedGeneration: number, timestamp = performance.now()) => {
     if (disposed || ownedGeneration !== generation || !activeRaf || acceptedLayout === null) return;
     const layoutStable = acceptedLayout !== null;
     try {
       const parityWord = stage.dataset.opticalLabGlyphParityProbe;
       const glyphParityWord = parityWord === 'science' || parityWord === 'evolves' ? parityWord : null;
       const glyphParityProbe = parityWord === 'all' || glyphParityWord !== null;
-      if (!glyphPass?.render(null, glyphParityWord)) throw new Error('Optical Lab MSDF color+mask frame is incomplete');
+      const response = stepOpticalResponse(pointer, acceptedLayout.viewport, timestamp);
+      const pointerSample = pointer ?? { x: acceptedLayout.apertureX, y: acceptedLayout.viewport.height * .5, velocityX: 0, velocityY: 0 };
+      if (!flowPass?.render({
+        follow: response.follow,
+        pointer: [pointerSample.x / acceptedLayout.viewport.width, 1 - pointerSample.y / acceptedLayout.viewport.height],
+        velocity: [pointerSample.velocityX, -pointerSample.velocityY],
+      })) throw new Error('Optical Lab flow frame is incomplete');
+      if (!glyphPass?.render(flowPass.texture(), glyphParityWord, response)) throw new Error('Optical Lab MSDF color+mask frame is incomplete');
       if (glyphParityProbe) {
         frameCount += 1;
         firstCompleteFrame = layoutStable;
         report('ready', layoutStable);
-        rafId = requestAnimationFrame(() => draw(ownedGeneration));
+        rafId = requestAnimationFrame((nextTimestamp) => draw(ownedGeneration, nextTimestamp));
         return;
       }
-      if (!particlePass?.render()) throw new Error('Optical Lab mask-derived particle frame is incomplete');
-      if (!compositePass?.render()) throw new Error('Optical Lab resting composite frame is incomplete');
+      if (!particlePass?.render(flowPass.texture(), response.follow)) throw new Error('Optical Lab mask-derived particle frame is incomplete');
+      if (!compositePass?.render(response.causticGain)) throw new Error('Optical Lab resting composite frame is incomplete');
       if (disposed || ownedGeneration !== generation || acceptedLayout === null) return;
       frameCount += 1;
       firstCompleteFrame = layoutStable;
       report('ready', layoutStable);
-      rafId = requestAnimationFrame(() => draw(ownedGeneration));
+      rafId = requestAnimationFrame((nextTimestamp) => draw(ownedGeneration, nextTimestamp));
     } catch {
       if (ownedGeneration !== generation) return;
       cancelFrame();
@@ -201,6 +218,7 @@ export function createOpticalOglRenderer(
       if (glyphPass) glyphPass.resize(publicationLayout);
       else glyphPass = createGlyphPass(renderer.gl, publicationLayout, atlases);
       particlePass = createParticlePass(renderer.gl, publicationLayout, glyphPass.maskTexture);
+      flowPass = createFlowPass(renderer.gl);
       compositePass = createCompositePass(renderer.gl, publicationLayout, {
         glyphColor: glyphPass.colorTexture,
         glyphMask: glyphPass.maskTexture,
@@ -211,7 +229,7 @@ export function createOpticalOglRenderer(
       stableBounds = serializeOpticalBounds(publicationLayout.title);
       activeRaf = true;
       report(frameCount > 0 ? 'ready' : 'initializing', true);
-      rafId = requestAnimationFrame(() => draw(ownedGeneration));
+      rafId = requestAnimationFrame((timestamp) => draw(ownedGeneration, timestamp));
     })().catch(() => {
       if (disposed || ownedGeneration !== generation) return;
       cancelFrame();
@@ -235,5 +253,6 @@ export function createOpticalOglRenderer(
       report('disposed', false);
     },
     resize: beginLayoutGeneration,
+    updatePointer(nextPointer) { pointer = nextPointer; },
   };
 }
