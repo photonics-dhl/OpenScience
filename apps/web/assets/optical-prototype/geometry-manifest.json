@@ -1,28 +1,46 @@
 {
   "inputs": [
     {
+      "axisSettings": {
+        "wdth": 100,
+        "wght": 900
+      },
       "family": "Archivo Black",
       "file": "assets/optical-lab/fonts/science-display.ttf",
       "license": "SIL OFL 1.1",
       "licenseFile": "assets/optical-lab/fonts/OFL-science.txt",
-      "sha256": "b83eae2d3a2ec48a4fe5d3e34f9bb6653d2182cb998b7a99af231dd07ee54fcd"
+      "sha256": "b83eae2d3a2ec48a4fe5d3e34f9bb6653d2182cb998b7a99af231dd07ee54fcd",
+      "upstream": {
+        "gitCommit": "038b637da7b3fd956a4ed93ffc607c3d5e4ce172",
+        "path": "ofl/archivo/Archivo[wdth,wght].ttf",
+        "sha256": "0e094a7d3c7c4c25cf1310c4b30014f1dae9332220b1c2c88f4fa996f0b05053"
+      }
     },
     {
-      "family": "Bodoni Moda 96pt Bold Italic",
-      "file": "assets/optical-lab/fonts/evolves-editorial.ttf",
+      "axisSettings": {
+        "opsz": 96,
+        "wght": 400
+      },
+      "family": "Bodoni Moda 96pt Italic",
+      "file": "assets/optical-prototype/fonts/evolves-editorial-400.ttf",
       "license": "SIL OFL 1.1",
       "licenseFile": "assets/optical-lab/fonts/OFL-evolves.txt",
-      "sha256": "6c307e5f280743accf6d9f055e95b979f17436494bbefe751df4ee1c81c1b6ec"
+      "sha256": "ea4193a09869d752f9128cc386fa3cd86fcb276235465dcf0e3213cb21d9861d",
+      "upstream": {
+        "gitCommit": "038b637da7b3fd956a4ed93ffc607c3d5e4ce172",
+        "path": "ofl/bodonimoda/BodoniModa-Italic[opsz,wght].ttf",
+        "sha256": "dfff1619f8f6871c6372f8855b67211f9a73b4e93d45aca868cd8f46a48622de"
+      }
     }
   ],
   "outputs": [
     {
       "file": "public/optical-prototype/title-geometry.json",
-      "sha256": "c6cc258900cc5da4a6f411d29a588b2ea1306e29841d069d5d9a0ae091271dd3"
+      "sha256": "988b6a48974885927a2505e311771e5bf5fb324b5ea70569bf61b2fa9cb6a95e"
     },
     {
       "file": "public/optical-prototype/title-outline.svg",
-      "sha256": "fc0e9f7a9fff6f45ac0e1254e61d0f920b3b950e9eeff39c2d3dbe3bd259ecd7"
+      "sha256": "c87ac38c57eb90024dc2af2afa01546437dc459d48a2ddbd2bff29302403ed09"
     }
   ],
   "tools": {

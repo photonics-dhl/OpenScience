@@ -18,20 +18,36 @@ const contract = Object.freeze({
   gridStep: 5,
   text: 'Science evolves.',
   viewport: { width: 1672, height: 935 },
+  words: {
+    evolves: { maxX: 1600, minX: 958.056, minY: 337 },
+    science: { maxX: 958.056, minX: 36.8, minY: 337 },
+  },
 });
 
 const sources = Object.freeze([
   {
+    axisSettings: { wdth: 100, wght: 900 },
     family: 'Archivo Black',
     file: 'assets/optical-lab/fonts/science-display.ttf',
     licenseFile: 'assets/optical-lab/fonts/OFL-science.txt',
     size: 156,
+    upstream: {
+      gitCommit: '038b637da7b3fd956a4ed93ffc607c3d5e4ce172',
+      path: 'ofl/archivo/Archivo[wdth,wght].ttf',
+      sha256: '0e094a7d3c7c4c25cf1310c4b30014f1dae9332220b1c2c88f4fa996f0b05053',
+    },
   },
   {
-    family: 'Bodoni Moda 96pt Bold Italic',
-    file: 'assets/optical-lab/fonts/evolves-editorial.ttf',
+    axisSettings: { opsz: 96, wght: 400 },
+    family: 'Bodoni Moda 96pt Italic',
+    file: 'assets/optical-prototype/fonts/evolves-editorial-400.ttf',
     licenseFile: 'assets/optical-lab/fonts/OFL-evolves.txt',
     size: 168,
+    upstream: {
+      gitCommit: '038b637da7b3fd956a4ed93ffc607c3d5e4ce172',
+      path: 'ofl/bodonimoda/BodoniModa-Italic[opsz,wght].ttf',
+      sha256: 'dfff1619f8f6871c6372f8855b67211f9a73b4e93d45aca868cd8f46a48622de',
+    },
   },
 ]);
 
@@ -102,6 +118,46 @@ function boundsOf(path) {
   };
 }
 
+function createWordTransform(path, target) {
+  const raw = path.getBoundingBox();
+  const source = { maxX: raw.x2, maxY: raw.y2, minX: raw.x1, minY: raw.y1 };
+  const scaleX = (target.maxX - target.minX) / (source.maxX - source.minX);
+  const scaleY = (contract.baseline - target.minY) / (contract.baseline - source.minY);
+  return {
+    x: (value) => target.minX + (value - source.minX) * scaleX,
+    y: (value) => contract.baseline + (value - contract.baseline) * scaleY,
+    scaleX,
+    scaleY,
+  };
+}
+
+function transformPath(path, transform) {
+  for (const command of path.commands) {
+    for (const key of ['x', 'x1', 'x2']) {
+      if (key in command) command[key] = transform.x(command[key]);
+    }
+    for (const key of ['y', 'y1', 'y2']) {
+      if (key in command) command[key] = transform.y(command[key]);
+    }
+  }
+  return path;
+}
+
+function skewPathX(path, degrees) {
+  if (degrees === 0) return path;
+  const tangent = Math.tan(degrees * Math.PI / 180);
+  for (const command of path.commands) {
+    for (const suffix of ['', '1', '2']) {
+      const xKey = `x${suffix}`;
+      const yKey = `y${suffix}`;
+      if (xKey in command && yKey in command) {
+        command[xKey] += tangent * (command[yKey] - contract.baseline);
+      }
+    }
+  }
+  return path;
+}
+
 function interpolateQuadratic(from, control, to, t) {
   const inverse = 1 - t;
   return {
@@ -166,7 +222,7 @@ function windingNumber(point, contours) {
   return winding;
 }
 
-function glyphRecords(font, text, startX, size, indexOffset, groupForCharacter) {
+function glyphRecords(font, text, startX, size, indexOffset, groupForCharacter, transform, skewX = 0) {
   const scale = size / font.unitsPerEm;
   const records = [];
   let previousPenX;
@@ -175,25 +231,28 @@ function glyphRecords(font, text, startX, size, indexOffset, groupForCharacter) 
     const index = records.length;
     const kerningBefore = index === 0 ? 0 : penX - previousPenX - previousAdvance;
     const advance = (glyph.advanceWidth ?? font.unitsPerEm) * scale;
-    const path = glyph.getPath(penX, contract.baseline, size);
+    const path = transformPath(
+      skewPathX(glyph.getPath(penX, contract.baseline, size), skewX),
+      transform,
+    );
     records.push({
-      advance: rounded(advance),
+      advance: rounded(advance * transform.scaleX),
       bounds: boundsOf(path),
       char: text[index],
       contours: flattenPath(path),
       family: font.names.fontFamily?.en ?? 'Unknown',
       group: groupForCharacter(text[index]),
       index: indexOffset + index,
-      kerningBefore: rounded(kerningBefore),
+      kerningBefore: rounded(kerningBefore * transform.scaleX),
       path,
-      penX: rounded(penX),
+      penX: rounded(transform.x(penX)),
       size,
     });
     previousPenX = penX;
     previousAdvance = advance;
   });
   const finalRecord = records.at(-1);
-  return { endX: finalRecord ? finalRecord.penX + finalRecord.advance : startX, records };
+  return { endX: finalRecord ? finalRecord.penX + finalRecord.advance : transform.x(startX), records };
 }
 
 function publicGlyph(record) {
@@ -211,42 +270,49 @@ async function main() {
   const scienceText = 'Science';
   const evolvesText = 'evolves.';
   const scienceWidth = scienceFont.getAdvanceWidth(scienceText, scienceSource.size, { kerning: true });
-  const spaceWidth = scienceFont.getAdvanceWidth(' ', scienceSource.size, { kerning: true });
   const evolvesWidth = evolvesFont.getAdvanceWidth(evolvesText, evolvesSource.size, { kerning: true });
-  const startX = contract.center.x - (scienceWidth + spaceWidth + evolvesWidth) / 2;
+  const scienceRawOutline = scienceFont.getPath(scienceText, 0, contract.baseline, scienceSource.size, { kerning: true });
+  const evolvesRawOutline = skewPathX(
+    evolvesFont.getPath(evolvesText, 0, contract.baseline, evolvesSource.size, { kerning: true }),
+    -6,
+  );
+  const scienceTransform = createWordTransform(scienceRawOutline, contract.words.science);
+  const evolvesTransform = createWordTransform(evolvesRawOutline, contract.words.evolves);
 
-  const science = glyphRecords(scienceFont, scienceText, startX, scienceSource.size, 0, () => 'science');
-  const spacePath = scienceFont.charToGlyph(' ').getPath(science.endX, contract.baseline, scienceSource.size);
+  const science = glyphRecords(scienceFont, scienceText, 0, scienceSource.size, 0, () => 'science', scienceTransform);
+  const spacePenX = (science.endX + evolvesTransform.x(0)) / 2;
   const space = {
-    advance: rounded(spaceWidth),
-    bounds: { minX: rounded(science.endX), minY: contract.baseline, maxX: rounded(science.endX), maxY: contract.baseline },
+    advance: rounded(Math.max(0.001, evolvesTransform.x(0) - spacePenX)),
+    bounds: { minX: rounded(spacePenX), minY: contract.baseline, maxX: rounded(spacePenX), maxY: contract.baseline },
     char: ' ',
     contours: [],
     family: scienceFont.names.fontFamily?.en ?? scienceSource.family,
     group: 'science',
     index: science.records.length,
     kerningBefore: 0,
-    path: spacePath,
-    penX: rounded(science.endX),
+    path: scienceFont.charToGlyph(' ').getPath(spacePenX, contract.baseline, scienceSource.size),
+    penX: rounded(spacePenX),
     size: scienceSource.size,
   };
   const evolves = glyphRecords(
     evolvesFont,
     evolvesText,
-    science.endX + spaceWidth,
+    0,
     evolvesSource.size,
     science.records.length + 1,
     (character) => (character === '.' ? 'period' : 'evolves'),
+    evolvesTransform,
+    -6,
   );
   const records = [...science.records, space, ...evolves.records];
 
-  const scienceOutline = scienceFont.getPath(scienceText, startX, contract.baseline, scienceSource.size, { kerning: true });
-  const evolvesOutline = evolvesFont.getPath(evolvesText, science.endX + spaceWidth, contract.baseline, evolvesSource.size, { kerning: true });
+  const scienceOutline = transformPath(scienceRawOutline, scienceTransform);
+  const evolvesOutline = transformPath(evolvesRawOutline, evolvesTransform);
   const visible = [boundsOf(scienceOutline), boundsOf(evolvesOutline)];
   const visibleBounds = {
-    minX: rounded(Math.min(...visible.map(({ minX }) => minX))),
-    minY: rounded(Math.min(...visible.map(({ minY }) => minY))),
-    maxX: rounded(Math.max(...visible.map(({ maxX }) => maxX))),
+    minX: contract.words.science.minX,
+    minY: contract.words.science.minY,
+    maxX: contract.words.evolves.maxX,
     maxY: rounded(Math.max(...visible.map(({ maxY }) => maxY))),
   };
   const originX = Math.floor(visibleBounds.minX / contract.gridStep) * contract.gridStep;
@@ -295,22 +361,26 @@ async function main() {
     visibleBounds,
     words: [
       {
-        advance: rounded(science.endX - startX),
+        advance: rounded(scienceWidth * scienceTransform.scaleX),
         baseline: contract.baseline,
         endX: rounded(science.endX),
         family: scienceFont.names.fontFamily?.en ?? scienceSource.family,
         size: scienceSource.size,
-        startX: rounded(startX),
+        skewX: 0,
+        startX: rounded(scienceTransform.x(0)),
         text: scienceText,
+        visibleBounds: { ...boundsOf(scienceOutline), ...contract.words.science },
       },
       {
-        advance: rounded(evolves.endX - (science.endX + spaceWidth)),
+        advance: rounded(evolvesWidth * evolvesTransform.scaleX),
         baseline: contract.baseline,
         endX: rounded(evolves.endX),
         family: evolvesFont.names.fontFamily?.en ?? evolvesSource.family,
         size: evolvesSource.size,
-        startX: rounded(science.endX + spaceWidth),
+        skewX: -6,
+        startX: rounded(evolvesTransform.x(0)),
         text: evolvesText,
+        visibleBounds: { ...boundsOf(evolvesOutline), ...contract.words.evolves },
       },
     ],
   };
@@ -326,11 +396,13 @@ async function main() {
 
   const manifest = {
     inputs: sources.map((source) => ({
+      axisSettings: source.axisSettings,
       family: source.family,
       file: source.file,
       license: 'SIL OFL 1.1',
       licenseFile: source.licenseFile,
       sha256: sha256(readFileSync(resolve(webRoot, source.file))),
+      upstream: source.upstream,
     })),
     outputs: [
       { file: 'public/optical-prototype/title-geometry.json', sha256: sha256(geometryContents) },

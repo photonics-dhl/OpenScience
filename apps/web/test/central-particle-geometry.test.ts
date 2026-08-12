@@ -15,6 +15,7 @@ type Glyph = {
   index: number;
   kerningBefore: number;
   penX: number;
+  group: 'science' | 'evolves' | 'period';
 };
 type Point = {
   column: number;
@@ -37,7 +38,7 @@ type Geometry = {
   typography: { kerning: true };
   viewport: { height: number; width: number };
   visibleBounds: Bounds;
-  words: Array<{ advance: number; baseline: number; endX: number; startX: number; text: string }>;
+  words: Array<{ advance: number; baseline: number; endX: number; skewX: number; startX: number; text: string; visibleBounds: Bounds }>;
 };
 
 function readGeneratedContract() {
@@ -87,6 +88,13 @@ describe('central particle authoritative title geometry', () => {
     });
     expect(Number.isFinite(geometry.baseline)).toBe(true);
     expect(geometry.words.every(({ baseline }) => baseline === geometry.baseline)).toBe(true);
+    expect(geometry.words[0].visibleBounds).toMatchObject({ minX: 36.8, maxX: 958.056 });
+    expect(geometry.words[1].visibleBounds).toMatchObject({ minX: 958.056, maxX: 1600 });
+    expect(geometry.words.map(({ skewX }) => skewX)).toEqual([0, -6]);
+    expect(geometry.visibleBounds.minX).toBeCloseTo(36.8, 1);
+    expect(geometry.visibleBounds.maxX).toBeCloseTo(1600, 1);
+    expect(geometry.visibleBounds.minY).toBeGreaterThanOrEqual(330);
+    expect(geometry.visibleBounds.maxY).toBeLessThanOrEqual(565);
   });
 
   it('records kerning-enabled monotonic glyph pen positions', () => {
@@ -99,9 +107,13 @@ describe('central particle authoritative title geometry', () => {
     if (!Array.isArray(geometry.words)) return;
     expect(geometry.words.map(({ text }) => text)).toEqual(['Science', 'evolves.']);
     expect(geometry.words.every(({ advance }) => advance > 0)).toBe(true);
-    expect(geometry.words[1].startX).toBeGreaterThan(geometry.words[0].endX);
-    for (let index = 1; index < geometry.glyphs.length; index += 1) {
-      expect(geometry.glyphs[index].penX).toBeGreaterThan(geometry.glyphs[index - 1].penX);
+    expect(geometry.words[0].visibleBounds.maxX).toBe(geometry.center.x);
+    expect(geometry.words[1].visibleBounds.minX).toBe(geometry.center.x);
+    for (const group of ['science', 'evolves', 'period'] as const) {
+      const pens = geometry.glyphs.filter((glyph) => glyph.group === group).map(({ penX }) => penX);
+      for (let index = 1; index < pens.length; index += 1) {
+        expect(pens[index]).toBeGreaterThan(pens[index - 1]);
+      }
     }
     expect(geometry.typography.kerning).toBe(true);
     expect(geometry.glyphs.every(({ kerningBefore }) => Number.isFinite(kerningBefore))).toBe(true);
@@ -176,6 +188,8 @@ describe('central particle authoritative title geometry', () => {
       expect(generator.assertSupportedNodeRuntime(process.versions.node)).toBe(process.versions.node);
     }
     expect(manifest.inputs).toHaveLength(2);
+    expect(manifest.inputs.find(({ file }) => file.includes('evolves'))?.sha256)
+      .toBe('ea4193a09869d752f9128cc386fa3cd86fcb276235465dcf0e3213cb21d9861d');
     for (const input of manifest.inputs) {
       const inputUrl = new URL(`../${input.file}`, import.meta.url);
       const licenseUrl = new URL(`../${input.licenseFile}`, import.meta.url);

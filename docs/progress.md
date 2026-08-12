@@ -1,5 +1,11 @@
 # OpenScience (XGS) 进度日志
 
+## 2026-08-12（Three.js 中央粒子原型 Task 2 几何纠偏）— ✅ 光学缝锚定与 Bodoni 400
+
+- **停止错误方向**：Task 4 原尺寸截图证明 native WebGL/TouchTexture 路线可行，但旧几何把整句总 advance 居中到 57.3%，导致标题仅占 `x≈309..1605,y≈419..540`，与参考的大幅左起排版不符；因此未进入 Task 5 特效堆叠，先修正权威 home positions。
+- **共享几何修复**：生成器现在以 57.3% (`x=958.056`) 作为 Science/evolves 可见轮廓的共同光学缝，固定批准边界 `36.8→958.056→1600`、共同 baseline 542，并以各词同一 affine 同步变换 SVG path、glyph bounds/pen/advance 与 5px 规则点阵。斜体左 overhang 允许 pen origin 越过词缝，单调性改为词内验证，不再用伪像素 offset 破坏真实轮廓。
+- **字体与结果**：新增隔离原型专用 Bodoni Moda 96pt Italic `opsz=96,wght=400`（SHA-256 `ea4193…9861d`，沿用原样 SIL OFL）并把批准的 `skewX(-6deg)` 写入共享路径合同，不修改旧 OGL atlas；生成点由 2,259 增至 4,619，真实 GPU 主体为 `x=39..1595,y=339..545`，而非旧居中小标题。两次连续生成 JSON/SVG/manifest 字节哈希完全一致；focused geometry 5/5、production build 与 4,619-instance Chromium gate GREEN。下一步进入 Task 5 的固定中心收束、独立纵向幕与低强度 Bloom。
+
 ## 2026-08-12（Three.js 中央粒子隔离原型 Task 4）— ✅ 规则点阵与 TouchTexture
 
 - **真实 GPU 点阵**：隔离 `/_visual/central-particle` 现消费 Task 2 的 2,259 个规则笛卡尔点，以单个 Three.js `InstancedMesh` 绘制 soft-circle 标题，保留稳定 ID、Science/evolves/朱红句点分组与确定性 density tier；clean-room 128×128 detached CanvasTexture 提供有界鼠标 repulsion、路径插值和按真实 elapsed time 的 650ms 衰减。未加入 Task 5 收束场/纵向幕、Bloom/色散、OGL 或最终 Hero。
