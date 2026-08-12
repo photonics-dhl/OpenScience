@@ -1,0 +1,32 @@
+{
+  "inputs": [
+    {
+      "family": "Archivo Black",
+      "file": "assets/optical-lab/fonts/science-display.ttf",
+      "license": "SIL OFL 1.1",
+      "licenseFile": "assets/optical-lab/fonts/OFL-science.txt",
+      "sha256": "b83eae2d3a2ec48a4fe5d3e34f9bb6653d2182cb998b7a99af231dd07ee54fcd"
+    },
+    {
+      "family": "Bodoni Moda 96pt Bold Italic",
+      "file": "assets/optical-lab/fonts/evolves-editorial.ttf",
+      "license": "SIL OFL 1.1",
+      "licenseFile": "assets/optical-lab/fonts/OFL-evolves.txt",
+      "sha256": "6c307e5f280743accf6d9f055e95b979f17436494bbefe751df4ee1c81c1b6ec"
+    }
+  ],
+  "outputs": [
+    {
+      "file": "public/optical-prototype/title-geometry.json",
+      "sha256": "5ea0dd4be54eb787765ea005f1b530a0ba9a00e054cd26854aacc65cc2a87073"
+    },
+    {
+      "file": "public/optical-prototype/title-outline.svg",
+      "sha256": "96852f6cab4defabaac21525dd3e1d87f3af0e760027215166eeb5a09d3124be"
+    }
+  ],
+  "tools": {
+    "node": "22.x",
+    "opentypeJs": "2.0.0"
+  }
+}

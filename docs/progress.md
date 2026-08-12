@@ -1,5 +1,11 @@
 # OpenScience (XGS) 进度日志
 
+## 2026-08-12（Three.js 中央粒子隔离原型 Task 2）— ✅ 字体权威几何合同
+
+- **单一几何源**：Node-only `opentype.js@2.0.0` 从仓库已提交的 Archivo Black 与 Bodoni Moda 96pt Bold Italic TTF 生成 `Science evolves.`；固定 1672×935、中心 `(57.3%, 50%)`、单基线、word/glyph advance、kerning-enabled pen metrics、SVG outline 与 2,259 个 5px 规则笛卡尔网格点（稳定 ID、无重复坐标）。生产 Hero、OGL Lab 与运行时路由均未修改。
+- **可复现与许可**：`geometry:optical-prototype` 输出 JSON/SVG 和 manifest；manifest 固定 Node 22.x / opentype.js 2.0.0、两份输入与两份输出 SHA-256，并指向已有原样 SIL OFL 1.1 文件。生成器对曲线固定 16 段展开并以非零 winding 归属点阵；浏览器只消费静态结果，不解析字体。
+- **TDD/验证**：首个 RED 为缺少三项生成资产（focused 4/4 expected failures）；补充 word advance 的第二 RED 精确为 `word advances must be generated`。GREEN focused 4/4；两次再生成均 scoped clean diff；Web production build 成功且 `.next/static/chunks/*.js` 扫描无 `opentype.js`。最终 root lint/docs-sync/diff gate 与 commit 证据记录于 Task 2 报告。
+
 ## 2026-08-12（Three.js 中央粒子隔离原型 Task 1）— ✅ 依赖、许可与 Landing 隔离合同
 
 - **依赖与许可**：`@openscience/web` 精确锁定 `three@0.185.1`、`postprocessing@6.39.4`，并将 `opentype.js@2.0.0` 限为开发期字体几何工具；`postprocessing` 已解析到兼容 peer `three >=0.168.0 <0.186.0`。ADR-009 补充 no-index native Three experiment、MIT/Zlib/Codrops clean-room attribution、浏览器执行/ECS 无 GPU 与生产 Landing 禁止 import 边界。

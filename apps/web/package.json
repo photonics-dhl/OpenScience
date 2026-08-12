@@ -15,7 +15,8 @@
     "shots:workspace": "node test/visual/workspace-shots.mjs",
     "shots:public": "node test/visual/public-reading-shots.mjs",
     "shots:optical-lab": "node test/visual/optical-lab-gate.mjs",
-    "atlas:optical": "node scripts/generate-optical-atlas.mjs"
+    "atlas:optical": "node scripts/generate-optical-atlas.mjs",
+    "geometry:optical-prototype": "node scripts/generate-optical-title-geometry.mjs"
   },
   "dependencies": {
     "@radix-ui/react-dialog": "^1.1.23",
