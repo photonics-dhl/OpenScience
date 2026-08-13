@@ -345,7 +345,7 @@ static composition.
 - The spatial gate consumes `.22 * stageWidth` as the wider locality boundary
   and retains centroid, halo, layer-order, recovery and lifecycle assertions.
 
-- [ ] **Step 1: Write literal amplified-envelope and wider-field RED tests**
+- [x] **Step 1: Write literal amplified-envelope and wider-field RED tests**
 
   Require exact limits `4/8/.14/.20`, active response approximately twice the
   accepted pre-amplification fixture, and a representative pixel at radius
@@ -353,20 +353,20 @@ static composition.
   the halo probe to remain `<=4/16` and typography to remain at least
   `empty * 1.25`.
 
-- [ ] **Step 2: Run focused model and native RED**
+- [x] **Step 2: Run focused model and native RED**
 
   Run focused Vitest and one external browser matrix against the current 3066
   preview. Expected failures must name the old `2/4/.08/.14` envelope or the
   old narrow field, not server startup.
 
-- [ ] **Step 3: Implement the minimum stronger/wider field**
+- [x] **Step 3: Implement the minimum stronger/wider field**
 
   Change only the four model limits and composite ambient/local budgets. Scale
   the empty liquid lift proportionally but keep it below the `.14` gain cap.
   Do not change recovery timing, wake anisotropy, typography, static plates,
   ambient phase or lifecycle ownership.
 
-- [ ] **Step 4: Verify the full native matrix and engineering gates**
+- [x] **Step 4: Verify the full native matrix and engineering gates**
 
   Require all five positions, wider locality, halo, layer ordering, same-RAF
   nontransparent recovery capture, touch and lifecycle to pass. Then run
@@ -396,7 +396,7 @@ static composition.
 - Production `/` retains `PublicShell`, navigation and `LatestResearch`; only
   the Hero visual body changes to the accepted shared surface.
 
-- [ ] **Step 1: Write production-promotion RED contracts**
+- [x] **Step 1: Write production-promotion RED contracts**
 
   Require `/` SSR to contain exactly one accepted surface, one semantic `h1`,
   the amplified interaction host and no legacy `OpticalHeadline` renderer.
@@ -404,19 +404,19 @@ static composition.
   retain one panel. Add desktop/mobile/reduced browser cases for overflow,
   navigation, static fallback and pointer response.
 
-- [ ] **Step 2: Run landing and Lab RED**
+- [x] **Step 2: Run landing and Lab RED**
 
   Run focused landing/Lab contracts and the production visual gate. Expected
   failures must show that landing still imports the legacy Hero visual.
 
-- [ ] **Step 3: Extract and promote the shared surface**
+- [x] **Step 3: Extract and promote the shared surface**
 
   Extract without changing accepted plate order or semantic text. Mount it in
   the landing Hero while preserving header, CTA/navigation accessibility and
   downstream Latest Research. Delete no files; leave the legacy component
   unreferenced until a separately approved cleanup.
 
-- [ ] **Step 4: Run local production acceptance sequentially**
+- [x] **Step 4: Run local production acceptance sequentially**
 
   Run focused tests, full Web tests, typecheck, lint, production build,
   desktop/mobile/reduced-motion production browser gates, Lab matrix,
