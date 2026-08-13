@@ -1,5 +1,12 @@
 # OpenScience (XGS) 进度日志
 
+## 2026-08-13（Optical Lab 能量构图迭代）— ✅ 本地实现与回归门禁收口
+
+- **单核构图**：粒子幕改为向固定 `.58` 孔径非线性汇聚；高能 pass 删除七列平行光柱，改为由粒子证据拥有的单一双侧透镜壳；最终 composite 只保留一组右向稀疏直线细束，降低 blur 占比并移除传播距离相关弯折。生产 `/`、ECS、后端、schema、认证与 Hermes 均未改变。
+- **可证伪视觉门禁**：新增外带丝状/宽雾比例、141 档径向连续性、目标相对绝对能量，以及普通/高密竖条纹、稀疏点、纯标题、悬空射线段和孤立桥点反例。独立复审发现的旁路与近场连接漏洞均以 RED/GREEN 关闭；每条有效轨迹现必须同时满足局部切向脊线、暗法向侧翼、稀疏角谱，以及孔径右侧 `.05–.11` 的 13 点连续桥接覆盖率 `≥75%`。
+- **最终本地指标**：caustic center error `.001352`、width `.059211`、curtain `.974914`、dissolution `.779762`、masked similarity `.861427`；filament `.805872`（target `.795277`）、haze `0`（target `.052510`）；连接径向轨迹 `6/141=.042553`、coherent energy `.012027`、absolute energy `.071579`（target `.028456`）。原尺寸截图确认单壳连续、无旧式七列光柱与宽雾回潮。
+- **验证**：focused `2 files / 35 tests`、全 Web `31 files / 223 tests`、全仓 test/typecheck/lint、workspace/docs sync、fresh production build、127.9s production-start browser matrix、docs lint `181 files / 0 issues`、diff check与 3062 端口清理均 GREEN。物理桌面/手机 15s 性能与用户最终视觉选择仍是诚实缺口；本结果不构成替换生产 `/` 或部署 ECS 的授权。
+
 ## 2026-08-12（Optical Lab 高保真 Task 8）— ⏳ 本地工程验收完成，待真机与用户视觉终验
 
 - **独立审查收口**：独立 reviewer 无 Critical，3 项 Important 已以 RED/GREEN 修复并提交 `54236f3`：生产浏览器真实覆盖自适应两级降质/恢复、验收阶段 pointer 三位置帧与真实鼠标选择；运行诊断改为发布实测 FPS/CPU/bloom，GPU timer 不可用时明确 `unavailable`。静态 decorative fallback 现不截获指针，动态与 DOM/static 均可拖选唯一 `Science evolves.`。

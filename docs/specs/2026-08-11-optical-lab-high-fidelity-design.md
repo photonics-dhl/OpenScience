@@ -234,12 +234,19 @@ curtain. Downstream energy leaves the same core as sparse coherent filaments;
 large-area grey illumination behind `evolves.` is prohibited.
 
 The iteration is accepted only when all of these relationships hold at native
-size:
+size. Early peak-count and row-convergence proposals were discarded after the
+target reference itself failed them; acceptance uses reference-valid morphology
+instead:
 
-- one dominant focal peak near 58%, with no second peak above 65% of it;
-- the outer curtain bends toward the focal core rather than forming parallel
+- one continuous particle-owned lens shell remains centered near 58%, within
+  the existing 4–6vw caustic geometry, rather than seven parallel focal bars;
+- the outer curtain bends toward the focal shell rather than forming parallel
   vertical bars;
-- fine downstream filaments occupy more of the emitted energy than broad haze;
+- fine downstream filaments occupy more of the emitted energy than broad haze,
+  preserve aperture-origin radial continuity, and retain target-relative
+  absolute energy;
+- vertical blinds, sparse dots, title ink and page chrome cannot satisfy the
+  downstream morphology metrics;
 - `Science evolves.` remains one line, fully readable and exactly selectable;
 - existing five-region, similarity, ring, fan, staircase, mechanical-line,
   duplicate-title, interaction, fallback and resource-cleanup gates stay GREEN.

@@ -1,5 +1,14 @@
 # Optical Lab Task 8 Steps 3–5 Handoff
 
+## 2026-08-13 Energy Composition Iteration
+
+- The isolated Lab now uses one particle-owned double-sided lens shell at the fixed `.58` aperture, a nonlinear converging particle curtain and one final-composite family of sparse straight rightward rays. The former seven parallel caustic columns, duplicate low-resolution ray field and broad blur wash are removed or reduced.
+- Morphology gates now measure outer-band filament/haze composition, 141-slope radial continuity and target-relative absolute energy. A coherent track must have a local tangent ridge, dark normal side lobes, sparse angular occupancy and at least 75% coverage across 13 near-aperture bridge samples from downstream `.05` through `.11`.
+- Independent review drove RED/GREEN fixtures for dense vertical blinds, title-only ink, floating radial segments and floating segments with isolated bridge dots. All are rejected; the current frame retains six aperture-connected tracks.
+- Latest native metrics: center error `.001352`, caustic width `.059211`, curtain `.974914`, dissolution `.779762`, similarity `.861427`, filament `.805872` versus target `.795277`, haze `0` versus target `.052510`, radial coherence `.042553`, coherent energy `.012027`, and absolute radial energy `.071579` versus target `.028456`.
+- Fresh verification passed focused `35/35`, Web `31 files / 223 tests`, full workspace tests/typecheck/lint, production build and 127.9-second production-start browser gate, docs lint `181 files / 0 issues`, docs sync, diff check and port 3062 cleanup.
+- Remaining external gates are physical desktop/mobile 15-second performance evidence and the user's final full-size visual ruling. Production `/` and ECS remain unchanged; this work does not authorize promotion or deployment.
+
 ## 2026-08-12 Task 8 Local Acceptance Update
 
 - High-fidelity Tasks 1–8 are locally engineering-GREEN on

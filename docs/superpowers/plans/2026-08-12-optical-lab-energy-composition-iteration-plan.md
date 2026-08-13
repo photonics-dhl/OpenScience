@@ -27,23 +27,27 @@
 - Modify: `apps/web/test/visual/optical-lab-shots.mjs`
 
 **Interfaces:**
-- Produces: `measureEnergyComposition(image, apertureX)` returning `secondaryPeakRatio`, `curtainConvergence`, `filamentEnergyRatio` and `broadHazeRatio`.
+- Produces: `measureEnergyComposition(image, apertureX)` returning
+  `filamentEnergyRatio` and `broadHazeRatio`, plus
+  `measureRadialCoherence(image, apertureX)` returning radial continuity and
+  absolute-energy evidence.
 - Consumes: existing decoded PNG image shape `{ width, height, pixels }` and aperture `.58`.
 
-- [ ] **Step 1: Add deterministic positive and negative fixtures**
+- [x] **Step 1: Add deterministic positive and negative fixtures**
 
 Create one lens-core fixture whose row peaks converge on `.58` and whose right
 energy is carried by thin filaments. Create one current-like fixture with five
 parallel columns plus a broad downstream wash.
 
-- [ ] **Step 2: Add literal morphology assertions**
+- [x] **Step 2: Add literal morphology assertions**
 
-Require the positive fixture to satisfy `secondaryPeakRatio < .65`,
-`curtainConvergence > .55`, `filamentEnergyRatio > .52` and
-`broadHazeRatio < .32`; require the current-like fixture to fail at least the
-peak, convergence and haze contracts.
+Require `filamentEnergyRatio > .52`, `broadHazeRatio < .32`, absolute radial
+continuity and target-relative absolute energy. Directionless vertical blinds,
+sparse dots, broad haze and title-only fixtures must fail. The originally
+proposed secondary-peak and row-convergence metrics were rejected because the
+target reference itself did not satisfy them.
 
-- [ ] **Step 3: Verify RED on the accepted production-start frame**
+- [x] **Step 3: Verify RED on the accepted production-start frame**
 
 Run:
 
@@ -70,26 +74,26 @@ literal morphology thresholds while existing metrics remain unchanged.
 - Produces: the same shader exports and render pass contracts; no TypeScript API
   or resource ownership changes.
 
-- [ ] **Step 1: Curve the particle-state mapping into the focal waist**
+- [x] **Step 1: Curve the particle-state mapping into the focal waist**
 
 Map curtain particles with a signed vertical coordinate and a smooth nonlinear
 convergence term so outer particles bend toward `.58` near the title band.
 Remove discrete parallel x strata from the high-energy curtain role while
 retaining deterministic glyph-derived dissolution upstream.
 
-- [ ] **Step 2: Replace bar energy with one analytic lens core**
+- [x] **Step 2: Replace bar energy with one analytic lens core**
 
 In the high-energy shader, use one tapered core distance field centered at
 `.58`, modulated by particle evidence. Keep a soft spectral fringe, but prevent
 additional full-height peaks and mechanical-line geometry.
 
-- [ ] **Step 3: Replace broad downstream wash with sparse filaments**
+- [x] **Step 3: Replace broad downstream wash with sparse filaments**
 
 Derive several subpixel-width rays from the focal core with deterministic phase,
 right-only decay and bounded luminance. Reduce blurred energy contribution so
 the title remains readable and the filament/haze metric passes.
 
-- [ ] **Step 4: Verify GREEN without weakening existing gates**
+- [x] **Step 4: Verify GREEN without weakening existing gates**
 
 Run the focused visual test and production-start browser matrix. Expected: all
 new morphology thresholds and all existing literal thresholds pass; inspect
@@ -107,7 +111,7 @@ resolution.
 - Produces: a reviewable local commit and updated handoff evidence.
 - Does not produce a production replacement or deployment authorization.
 
-- [ ] **Step 1: Run the complete gate**
+- [x] **Step 1: Run the complete gate**
 
 ```powershell
 npx pnpm@9.15.0 --filter @openscience/web test
@@ -122,13 +126,13 @@ git diff --check
 
 Confirm port 3062 is clear before and after the browser gate.
 
-- [ ] **Step 2: Request independent review**
+- [x] **Step 2: Request independent review**
 
 Review numerical stability, deterministic morphology, glyph readability,
 interaction invariants, fallback honesty and exact cleanup. Resolve every
 Critical and Important finding with a fresh RED/GREEN cycle.
 
-- [ ] **Step 3: Synchronize evidence and commit**
+- [x] **Step 3: Synchronize evidence and commit**
 
 Record exact before/after morphology and existing five-region metrics, test
 commands, commits, residual physical-device gap and the unchanged production
