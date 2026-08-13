@@ -15,6 +15,7 @@ const acceptedBaselinePath = path.resolve(
   'optical-lab-asset-accepted-1672x941.png',
 );
 const externalBaseUrl = process.env.OPTICAL_LAB_ASSET_INTERACTION_BASE_URL?.replace(/\/$/, '');
+const radialHaloMutation = process.env.OPTICAL_LAB_ASSET_RADIAL_HALO_MUTATION === '1';
 const port = Number(process.env.OPTICAL_LAB_ASSET_INTERACTION_PORT ?? 3065);
 const baseUrl = externalBaseUrl ?? `http://127.0.0.1:${port}`;
 const assetRoute = `${baseUrl}/_visual/optical-lab?candidate=asset`;
@@ -372,13 +373,17 @@ async function measureHaloShape(page, baseline, candidate, center, radiusRatio =
     const before = await decode(baselineBase64);
     const after = await decode(candidateBase64);
     const sectors = new Array(16).fill(0);
-    const radius = before.width * radiusValue;
+    const centerX = before.width * centerPoint.x;
+    const centerY = before.height * centerPoint.y;
+    const innerRadius = before.width * .16;
+    const outerRadius = before.width * radiusValue;
+    const centerOffset = (Math.round(centerY) * before.width + Math.round(centerX)) * 4;
     for (let y = 0; y < before.height; y += 1) {
       for (let x = 0; x < before.width; x += 1) {
-        const dx = x - before.width * centerPoint.x;
-        const dy = y - before.height * centerPoint.y;
+        const dx = x - centerX;
+        const dy = y - centerY;
         const distance = Math.hypot(dx, dy);
-        if (distance < radius * .35 || distance > radius * .78) continue;
+        if (distance < innerRadius || distance > outerRadius) continue;
         const offset = (y * before.width + x) * 4;
         const delta = Math.max(
           Math.abs(before.data[offset] - after.data[offset]),
@@ -391,7 +396,22 @@ async function measureHaloShape(page, baseline, candidate, center, radiusRatio =
       }
     }
     const occupied = sectors.filter((count) => count >= 12).length;
-    return { occupied, sectorCoverage: occupied / sectors.length, sectors };
+    return {
+      centerMaximum: Math.max(
+        before.data[centerOffset],
+        before.data[centerOffset + 1],
+        before.data[centerOffset + 2],
+      ),
+      edgeClearance: Math.min(
+        centerX - outerRadius,
+        (before.width - 1) - centerX - outerRadius,
+        centerY - outerRadius,
+        (before.height - 1) - centerY - outerRadius,
+      ),
+      occupied,
+      sectorCoverage: occupied / sectors.length,
+      sectors,
+    };
   }, {
     baselineBase64: baseline.toString('base64'),
     candidateBase64: candidate.toString('base64'),
@@ -477,6 +497,34 @@ try {
 
   browser = await chromium.launch({ headless: true });
   const page = await browser.newPage({ viewport: { width: 1672, height: 941 }, deviceScaleFactor: 1 });
+  if (radialHaloMutation) {
+    await page.addInitScript(() => {
+      window.__TASK14_RADIAL_HALO_MUTATIONS__ = 0;
+      const originalShaderSource = WebGL2RenderingContext.prototype.shaderSource;
+      WebGL2RenderingContext.prototype.shaderSource = function radialHaloShaderSource(shader, source) {
+        let mutated = source;
+        if (source.includes('float localMemory = min(uLocalStrength')) {
+          mutated = source.replace(
+            'float localMemory = min(uLocalStrength, max(previousLocal * 0.94, influence));',
+            `float screenDistance = length(vec2(
+              vUv.x - uPointer.x,
+              (vUv.y - uPointer.y) / max(0.001, uAspect)
+            ));
+            float rimDistance = screenDistance / max(0.001, uRadius);
+            float radialRim = smoothstep(0.80, 0.84, rimDistance)
+              * (1.0 - smoothstep(0.96, 1.0, rimDistance)) * uLocalStrength
+              * (1.0 - step(0.01, length(uPointer - vec2(0.30, 0.63))));
+            float localMemory = min(
+              uLocalStrength,
+              max(previousLocal * 0.94, max(influence, radialRim))
+            );`,
+          );
+          window.__TASK14_RADIAL_HALO_MUTATIONS__ += 1;
+        }
+        return originalShaderSource.call(this, shader, mutated);
+      };
+    });
+  }
   const pageErrors = [];
   page.on('pageerror', (error) => pageErrors.push(error.stack ?? error.message));
   page.on('console', (message) => {
@@ -506,6 +554,13 @@ try {
     const canvas = page.locator('canvas[data-optical-asset-interaction-canvas="true"]');
     await canvas.waitFor({ timeout: 5_000 });
     await page.waitForFunction(() => window.__OPENSCIENCE_OPTICAL_ASSET_INTERACTION__?.activeRaf === true);
+    if (radialHaloMutation) {
+      assert.equal(
+        await page.evaluate(() => window.__TASK14_RADIAL_HALO_MUTATIONS__),
+        1,
+        'The controlled radial-halo mutation must intercept exactly one flow shader',
+      );
+    }
     const computedMask = await canvas.evaluate((node) => getComputedStyle(node).maskImage);
     assert.equal(computedMask, 'none', 'The interaction canvas must cover the full stage without the former seam mask');
 
@@ -654,7 +709,6 @@ try {
       energy: { x: .58, y: .50 },
     };
     const layerEvidence = {};
-    let emptyHaloShape;
     const widerFieldEvidence = {};
     for (const [name, point] of Object.entries(layerPoints)) {
       await page.waitForTimeout(920);
@@ -664,10 +718,23 @@ try {
       const activeFrame = await captureCandidate(page, box, path.join(outDir, `pointer-layer-${name}.png`));
       layerEvidence[name] = await measureSpatialResponse(page, baseline, activeFrame, point, .04, 3);
       widerFieldEvidence[name] = await measureWiderFieldProbes(page, baseline, activeFrame, point, 3);
-      if (name === 'empty') {
-        emptyHaloShape = await measureHaloShape(page, baseline, activeFrame, point, .20, 3);
-      }
     }
+
+    await page.waitForTimeout(920);
+    const haloPoint = { x: .30, y: .37 };
+    const haloBaseline = await captureCandidate(page, box);
+    await dispatchGesture(candidate, haloPoint, 'mouse', 52);
+    await page.waitForTimeout(120);
+    const haloActive = await captureCandidate(
+      page,
+      box,
+      path.join(outDir, 'pointer-halo-outer-band.png'),
+    );
+    const emptyHaloShape = await measureHaloShape(page, haloBaseline, haloActive, haloPoint, .20, 3);
+    assert(
+      emptyHaloShape.centerMaximum <= 24 && emptyHaloShape.edgeClearance > 0,
+      `Outer-band halo probe must be dark and fully inset: ${JSON.stringify(emptyHaloShape)}`,
+    );
     assert(
       emptyHaloShape.sectorCoverage <= .25,
       `Uniform-black response must not form a cursor-centred circular rim: ${JSON.stringify(emptyHaloShape)}`,
