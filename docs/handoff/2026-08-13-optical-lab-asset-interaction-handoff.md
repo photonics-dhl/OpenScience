@@ -1,5 +1,53 @@
 # Handoff — 2026-08-13 Optical Lab Asset Interaction
 
+## Current canonical state — final fix complete with mobile blocker (2026-08-14)
+
+> **This section supersedes every next action and release-status statement
+> below.** The local release implementation is complete. Deployment is blocked
+> only because no physical mobile performance run is available.
+
+- `patchFollowPx4` now changes real local composite pixels through
+  `uPatchFollowPx`; it is signed-x, `localAmount * layerWeight` bounded, capped
+  at `4 CSS px`, and combined with local refraction under the existing `8 CSS
+  px` vector cap. It does not translate the global title, camera or surface.
+- Strict TDD was RED on the absent renderer/shader contract, then GREEN at
+  `10/10`. The final production-vs-follow-disabled shader mutation proof changes
+  `131,800` pixels and measures best energy registration at exactly `+4px`.
+  Production diagnostics report `patchFollowPx=3.9385276665` and
+  `refractionPx.x=7.8770553331`. A separate full-flow production-cap-8 versus
+  cap-12 mutation changes `78,488` pixels and exposes exactly the forbidden
+  extra `+4px`, proving the cap branch in rendered pixels. Full native matrix
+  remains GREEN, including
+  halo `1/16`, locality, layers, total cap, recovery, failure, context,
+  visibility/offscreen, delayed init, unmount and Lab→Landing ownership.
+- ADR-009 now Accepts the production OGL shared-surface exception and retires
+  Canvas-only/Lab-only/no-Lab-chunk. It records exact static/reduced/failure
+  behavior, continuous visible ambient RAF suspension, browser/ECS boundary,
+  measured budgets and mandatory exact release/rollback refs.
+- Fresh `/` build is `805 B / 132 kB First Load JS`; `/page` client JS/CSS is
+  `461,103 B raw / 135,268 B gzip`, route-exclusive
+  `119,866 / 35,935 B`; served optical plates total
+  `2,485,771 B raw / 2,465,418 B gzip`.
+- Installed headful Chrome `150.0.7871.187` selected unmasked WebGL2 D3D11
+  `NVIDIA GeForce RTX 4060`, not SwiftShader/software. In the actual active RDP
+  cadence (`31.2ms`, `~32.05Hz`), separate 15-second rest and continuous-pointer
+  intervals each produced `480` frames, median `31.2ms`, p95 `31.9ms`, dropped
+  `0`, fixed-full quality and DPR approximately `1`. This is not a 60Hz console
+  claim.
+- Final local gates are GREEN: focused `10/10`; Web `32 files / 237 tests`;
+  typecheck; production build; Landing desktop/mobile normal/reduced/pointer;
+  Lab full native; exact reduced static `952,176 B`; product release `27/27`.
+  The release matrix must run immediately after a production build because the
+  dev-based native gate replaces `.next`.
+- **Only remaining blocker:** ADB is unavailable and safe read-only Windows
+  portable/USB discovery found no connected physical mobile. Emulation is only
+  supplemental. Do not deploy until a real mobile completes both prescribed
+  15-second intervals. No speculative downshift was added without device-class
+  evidence.
+- See `.superpowers/sdd/2026-08-11-optical-lab-high-fidelity-reconstruction-plan/final-fix-report.md`.
+  No cloud, SSH, `.env`, backup or deployment operation occurred. All owned
+  ports were released; port 3000 was not touched.
+
 ## Current canonical state — shared surface local release candidate (2026-08-14)
 
 > **This section supersedes the pre-promotion instructions below.** Task 15 is

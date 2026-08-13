@@ -241,6 +241,7 @@ export async function createAssetInteractionRenderer(
         tFlow: { value: null },
         tTarget: { value: targetTexture },
         uCausticGain: { value: 0 },
+        uPatchFollowPx: { value: 0 },
         uRefractionPx: { value: [0, 0] },
         uViewport: { value: [1, 1] },
       },
@@ -294,6 +295,7 @@ export async function createAssetInteractionRenderer(
         }
         program.uniforms.tFlow.value = flowPass.texture();
         program.uniforms.uCausticGain.value = visuallyActive ? lastSample.causticGain : 0;
+        program.uniforms.uPatchFollowPx.value = visuallyActive ? lastSample.patchFollowPx : 0;
         program.uniforms.uRefractionPx.value = visuallyActive
           ? [lastSample.refractionPx.x, -lastSample.refractionPx.y]
           : [0, 0];

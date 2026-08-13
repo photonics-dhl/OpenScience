@@ -1,4 +1,4 @@
-import { existsSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import type { AssetInteractionInput } from '../lib/optical-lab/asset-interaction-model';
@@ -16,6 +16,11 @@ const model = existsSync(fileURLToPath(modelUrl))
   ? await import('../lib/optical-lab/asset-interaction-model')
   : null;
 const rendererUrl = new URL('../lib/optical-lab/ogl/asset-interaction-renderer.ts', import.meta.url);
+const rendererSource = existsSync(fileURLToPath(rendererUrl))
+  ? readFileSync(fileURLToPath(rendererUrl), 'utf8')
+  : '';
+const nativeGateUrl = new URL('./visual/optical-lab-asset-interaction-gate.mjs', import.meta.url);
+const nativeGateSource = readFileSync(fileURLToPath(nativeGateUrl), 'utf8');
 const interactionRenderer = existsSync(fileURLToPath(rendererUrl))
   ? await import('../lib/optical-lab/ogl/asset-interaction-renderer')
   : null;
@@ -223,5 +228,19 @@ describe('Optical Lab accepted asset OGL boundary', () => {
     expect(shader).toContain('emptyWeight * 0.21');
     expect(shader).toContain('smoothstep');
     expect(shader).not.toContain('abs(vUv.x - 0.58)');
+  });
+
+  it('routes the approved patch follow into local rendered displacement under the total cap', () => {
+    const shader = compositeShader?.OPTICAL_ASSET_COMPOSITE_FRAGMENT_SHADER ?? '';
+
+    expect(rendererSource).toContain('uPatchFollowPx: { value: 0 }');
+    expect(rendererSource).toContain('program.uniforms.uPatchFollowPx.value');
+    expect(shader).toContain('uniform float uPatchFollowPx');
+    expect(shader).toContain('clamp(uPatchFollowPx, -4.0, 4.0)');
+    expect(shader).toContain('localAmount * layerWeight');
+    expect(shader).toContain('combinedLength > 8.0');
+    expect(shader).toContain('combinedPx *= 8.0 / combinedLength');
+    expect(nativeGateSource).toContain('combinedPx *= 12.0 / combinedLength');
+    expect(nativeGateSource).toContain('capRegistration.best.shift');
   });
 });

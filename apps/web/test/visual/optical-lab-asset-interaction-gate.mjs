@@ -16,7 +16,9 @@ const acceptedBaselinePath = path.resolve(
   'fixtures',
   'optical-lab-asset-accepted-1672x941.png',
 );
+const energyPlatePath = path.resolve(webRoot, 'public', 'optical-lab', 'energy-plate-black-alpha-v1.png');
 const externalBaseUrl = process.env.OPTICAL_LAB_ASSET_INTERACTION_BASE_URL?.replace(/\/$/, '');
+const patchFollowProof = process.env.OPTICAL_LAB_ASSET_PATCH_FOLLOW_PROOF === '1';
 const radialHaloMutation = process.env.OPTICAL_LAB_ASSET_RADIAL_HALO_MUTATION === '1';
 const port = Number(process.env.OPTICAL_LAB_ASSET_INTERACTION_PORT ?? 3065);
 const baseUrl = externalBaseUrl ?? `http://127.0.0.1:${port}`;
@@ -423,12 +425,12 @@ async function measureHaloShape(page, baseline, candidate, center, radiusRatio =
   });
 }
 
-async function dispatchGesture(candidate, point, pointerType = 'mouse', pointerId = 41) {
+async function dispatchGesture(candidate, point, pointerType = 'mouse', pointerId = 41, distancePx = 18) {
   return candidate.evaluate(async (stage, input) => {
     const bounds = stage.getBoundingClientRect();
     const endX = bounds.left + bounds.width * input.point.x;
     const endY = bounds.top + bounds.height * input.point.y;
-    const startX = endX - 18;
+    const startX = endX - input.distancePx;
     const baseStamp = performance.now();
     const emit = (type, clientX, stamp) => {
       const event = new PointerEvent(type, {
@@ -451,7 +453,140 @@ async function dispatchGesture(candidate, point, pointerType = 'mouse', pointerI
     await new Promise((resolve) => setTimeout(resolve, 16));
     emit('pointermove', endX, baseStamp + 24);
     return performance.now();
-  }, { point, pointerId, pointerType });
+  }, { distancePx, point, pointerId, pointerType });
+}
+
+async function measureHorizontalRegistration(
+  page,
+  shifted,
+  reference,
+  energyPlate,
+  { maximumShift = 6, minimumEnergySignal = .48, minimumShift = -6 } = {},
+) {
+  return page.evaluate(async ({
+    energyBase64,
+    maximumShiftValue,
+    minimumEnergySignalValue,
+    minimumShiftValue,
+    referenceBase64,
+    shiftedBase64,
+  }) => {
+    const decode = async (encoded) => {
+      const blob = await (await fetch(`data:image/png;base64,${encoded}`)).blob();
+      const bitmap = await createImageBitmap(blob);
+      const canvas = document.createElement('canvas');
+      canvas.width = bitmap.width;
+      canvas.height = bitmap.height;
+      const context = canvas.getContext('2d', { willReadFrequently: true });
+      context.drawImage(bitmap, 0, 0);
+      return context.getImageData(0, 0, bitmap.width, bitmap.height);
+    };
+    const actual = await decode(shiftedBase64);
+    const expected = await decode(referenceBase64);
+    const energy = await decode(energyBase64);
+    const scores = [];
+    for (let shift = minimumShiftValue; shift <= maximumShiftValue; shift += 1) {
+      let error = 0;
+      let samples = 0;
+      for (let y = Math.round(expected.height * .12); y < Math.round(expected.height * .88); y += 1) {
+        for (let x = Math.round(expected.width * .50); x < Math.round(expected.width * .70); x += 1) {
+          const shiftedX = x + shift;
+          if (shiftedX < 0 || shiftedX >= actual.width) continue;
+          const expectedOffset = (y * expected.width + x) * 4;
+          const actualOffset = (y * actual.width + shiftedX) * 4;
+          const energyLuminance = (
+            energy.data[expectedOffset] * .2126
+            + energy.data[expectedOffset + 1] * .7152
+            + energy.data[expectedOffset + 2] * .0722
+          ) / 255;
+          const energySignal = energyLuminance * energy.data[expectedOffset + 3] / 255;
+          if (energySignal < minimumEnergySignalValue) continue;
+          error += Math.abs(expected.data[expectedOffset] - actual.data[actualOffset]);
+          error += Math.abs(expected.data[expectedOffset + 1] - actual.data[actualOffset + 1]);
+          error += Math.abs(expected.data[expectedOffset + 2] - actual.data[actualOffset + 2]);
+          samples += 3;
+        }
+      }
+      scores.push({ meanError: samples ? error / samples : Number.MAX_SAFE_INTEGER, shift });
+    }
+    const ranked = [...scores].sort((left, right) => left.meanError - right.meanError);
+    return { best: ranked[0], scores };
+  }, {
+    energyBase64: energyPlate.toString('base64'),
+    maximumShiftValue: maximumShift,
+    minimumEnergySignalValue: minimumEnergySignal,
+    minimumShiftValue: minimumShift,
+    referenceBase64: reference.toString('base64'),
+    shiftedBase64: shifted.toString('base64'),
+  });
+}
+
+async function capturePatchFollowProofFrame(
+  browserInstance,
+  { capScalePx = 8, disableFollow = false, fullFlow = false } = {},
+) {
+  const proofPage = await browserInstance.newPage({ viewport: { width: 1672, height: 941 }, deviceScaleFactor: 1 });
+  try {
+    await proofPage.addInitScript(({ capScale, disable, forceFullFlow }) => {
+      window.__TASK16_PATCH_FOLLOW_PROOF__ = { cap: 0, composite: 0, flow: 0 };
+      const originalShaderSource = WebGL2RenderingContext.prototype.shaderSource;
+      WebGL2RenderingContext.prototype.shaderSource = function patchFollowProofShaderSource(shader, source) {
+        let mutated = source;
+        if (source.includes('float localMemory = min(uLocalStrength')) {
+          mutated = source.replace(
+            'fragColor = vec4(velocity * 0.5 + 0.5, localMemory, 1.0);',
+            forceFullFlow
+              ? 'fragColor = vec4(1.0, 0.5, localMemory, 1.0);'
+              : 'fragColor = vec4(0.51, 0.5, localMemory, 1.0);',
+          );
+          window.__TASK16_PATCH_FOLLOW_PROOF__.flow += Number(mutated !== source);
+        }
+        if (source.includes('uniform float uPatchFollowPx')) {
+          if (disable) {
+            mutated = mutated.replace('clamp(uPatchFollowPx, -4.0, 4.0)', '0.0');
+          }
+          if (capScale === 12) {
+            const beforeCapMutation = mutated;
+            mutated = mutated.replace(
+              'combinedPx *= 8.0 / combinedLength;',
+              'combinedPx *= 12.0 / combinedLength;',
+            );
+            window.__TASK16_PATCH_FOLLOW_PROOF__.cap += Number(mutated !== beforeCapMutation);
+          }
+          window.__TASK16_PATCH_FOLLOW_PROOF__.composite += Number(mutated !== source || !disable);
+        }
+        return originalShaderSource.call(this, shader, mutated);
+      };
+    }, { capScale: capScalePx, disable: disableFollow, forceFullFlow: fullFlow });
+    await proofPage.goto(assetRoute, { waitUntil: 'networkidle' });
+    await proofPage.evaluate(() => document.fonts.ready.then(() => true));
+    await waitForImages(proofPage);
+    await prepareNativeCandidate(proofPage);
+    const candidate = proofPage.locator('[data-asset-candidate="true"]');
+    const canvas = proofPage.locator('canvas[data-optical-asset-interaction-canvas="true"]');
+    await canvas.waitFor({ timeout: 5_000 });
+    await proofPage.waitForFunction(() => window.__OPENSCIENCE_OPTICAL_ASSET_INTERACTION__?.activeRaf === true);
+    const mutations = await proofPage.evaluate(() => window.__TASK16_PATCH_FOLLOW_PROOF__);
+    assert.deepEqual(
+      mutations,
+      { cap: capScalePx === 12 ? 1 : 0, composite: 1, flow: 1 },
+      `Patch-follow proof must intercept exactly one flow and one composite shader: ${JSON.stringify(mutations)}`,
+    );
+    const proofPointerId = disableFollow ? 82 : 81;
+    await dispatchGesture(candidate, { x: .58, y: .5 }, 'mouse', proofPointerId, 48);
+    await proofPage.waitForTimeout(100);
+    await dispatchGesture(candidate, { x: .58, y: .5 }, 'mouse', proofPointerId, 48);
+    await proofPage.waitForFunction(() => {
+      const snapshot = window.__OPENSCIENCE_OPTICAL_ASSET_INTERACTION__;
+      return (snapshot?.patchFollowPx ?? 0) >= 3.9
+        && Math.hypot(snapshot?.refractionPx?.x ?? 0, snapshot?.refractionPx?.y ?? 0) <= 8.00001;
+    });
+    const peakSnapshot = await proofPage.evaluate(() => window.__OPENSCIENCE_OPTICAL_ASSET_INTERACTION__);
+    const capture = await captureInteractionCanvas(proofPage);
+    return { buffer: capture.buffer, snapshot: peakSnapshot };
+  } finally {
+    await proofPage.close();
+  }
 }
 
 async function prepareNativeCandidate(page) {
@@ -498,6 +633,83 @@ try {
   }
 
   browser = await chromium.launch({ headless: true });
+  if (patchFollowProof) {
+    const renderedFollow = await capturePatchFollowProofFrame(browser);
+    const disabledFollow = await capturePatchFollowProofFrame(browser, { disableFollow: true });
+    const cappedCombined = await capturePatchFollowProofFrame(browser, { fullFlow: true });
+    const twelvePxCapMutation = await capturePatchFollowProofFrame(
+      browser,
+      { capScalePx: 12, fullFlow: true },
+    );
+    const analysisPage = await browser.newPage();
+    try {
+      const changedPixels = await countAllPixelDifferences(
+        analysisPage,
+        disabledFollow.buffer,
+        renderedFollow.buffer,
+      );
+      const registration = await measureHorizontalRegistration(
+        analysisPage,
+        renderedFollow.buffer,
+        disabledFollow.buffer,
+        await readFile(energyPlatePath),
+      );
+      const capChangedPixels = await countAllPixelDifferences(
+        analysisPage,
+        cappedCombined.buffer,
+        twelvePxCapMutation.buffer,
+      );
+      const capRegistration = await measureHorizontalRegistration(
+        analysisPage,
+        twelvePxCapMutation.buffer,
+        cappedCombined.buffer,
+        await readFile(energyPlatePath),
+        { minimumEnergySignal: .98 },
+      );
+      assert(
+        changedPixels > 100,
+        `Disabling patch follow must change real native rendered pixels: ${changedPixels}`,
+      );
+      assert.equal(
+        registration.best.shift,
+        4,
+        `The native image-space patch-follow contribution must register at exactly +4 CSS px: ${JSON.stringify(registration)}`,
+      );
+      assert(
+        renderedFollow.snapshot.patchFollowPx >= 3.9
+          && renderedFollow.snapshot.patchFollowPx <= 4,
+        `The production follow sample must approach but never exceed the 4px cap: ${JSON.stringify(renderedFollow.snapshot)}`,
+      );
+      assert(
+        Math.hypot(
+          renderedFollow.snapshot.refractionPx.x,
+          renderedFollow.snapshot.refractionPx.y,
+        ) <= 8.00001,
+        `The patch-follow proof must retain the total 8px local envelope: ${JSON.stringify(renderedFollow.snapshot)}`,
+      );
+      assert(
+        capChangedPixels > 100,
+        `Changing only the combined cap from 8px to 12px must alter real native pixels: ${capChangedPixels}`,
+      );
+      assert.equal(
+        capRegistration.best.shift,
+        4,
+        `The native cap mutation must expose exactly the forbidden extra 4px: ${JSON.stringify(capRegistration)}`,
+      );
+      await writeFile(path.join(outDir, 'patch-follow-proof.json'), `${JSON.stringify({
+        capChangedPixels,
+        cappedSnapshot: cappedCombined.snapshot,
+        capRegistration,
+        changedPixels,
+        disabledSnapshot: disabledFollow.snapshot,
+        registration,
+        renderedSnapshot: renderedFollow.snapshot,
+        twelvePxCapMutationSnapshot: twelvePxCapMutation.snapshot,
+      }, null, 2)}\n`);
+    } finally {
+      await analysisPage.close();
+    }
+  }
   const page = await browser.newPage({ viewport: { width: 1672, height: 941 }, deviceScaleFactor: 1 });
   if (radialHaloMutation) {
     await page.addInitScript(() => {

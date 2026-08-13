@@ -7,6 +7,7 @@ uniform sampler2D tTarget;
 uniform vec2 uRefractionPx;
 uniform vec2 uViewport;
 uniform float uCausticGain;
+uniform float uPatchFollowPx;
 
 in vec2 vUv;
 out vec4 fragColor;
@@ -34,7 +35,13 @@ void main() {
   float ambientBudget = 1.4;
   float localBudget = min(8.0, length(uRefractionPx));
   float displacementBudget = mix(ambientBudget, localBudget, localAmount) * layerWeight;
-  vec2 displacedUv = clamp(vUv - flow * displacementBudget / uViewport, vec2(0.0), vec2(1.0));
+  vec2 refractedPx = flow * displacementBudget;
+  vec2 followPx = vec2(clamp(uPatchFollowPx, -4.0, 4.0), 0.0)
+    * localAmount * layerWeight;
+  vec2 combinedPx = refractedPx + followPx;
+  float combinedLength = length(combinedPx);
+  if (combinedLength > 8.0) combinedPx *= 8.0 / combinedLength;
+  vec2 displacedUv = clamp(vUv - combinedPx / uViewport, vec2(0.0), vec2(1.0));
 
   vec3 target = texture(tTarget, displacedUv).rgb;
   vec4 energy = texture(tEnergy, displacedUv);

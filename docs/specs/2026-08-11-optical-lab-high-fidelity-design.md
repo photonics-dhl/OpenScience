@@ -2,10 +2,13 @@
 
 ## Status
 
-Proposed for written review on 2026-08-11. The user approved the architecture,
-typography geometry, static optical field, pointer-response boundary and fallback
-strategy section by section. This document supersedes Candidate B as the active
-visual direction. It does not authorize production replacement or deployment.
+Approved visual and runtime design. The user approved the architecture,
+typography geometry, static optical field, pointer-response boundary, fallback
+strategy and 2026-08-13 production promotion section by section. This document
+supersedes Candidate B as the active visual direction and authorizes the local
+production replacement implemented through the shared accepted surface.
+Deployment remains a separate, explicitly confirmed operation governed by the
+deployment runbook.
 
 ## Problem
 
@@ -253,13 +256,16 @@ instead:
 
 This restriction is superseded only for the accepted asset interaction overlay
 defined below. It still prohibits replacing the approved resting composition,
-adding dependencies or changing production integration.
+adding dependencies or changing production integration until the later
+`Amplified Field and Production Promotion` amendment records that separate
+approval.
 
 ### Human gate
 
 Show full-size reference and candidate side by side at 1672 × 941. The user must
 approve typography first, then the resting optical material, then pointer motion.
-Passing automated gates does not authorize production replacement.
+Passing automated gates alone does not authorize production replacement. The
+later production-promotion amendment is the explicit approval boundary.
 
 ## 2026-08-13 Accepted Asset Interaction Amendment
 
@@ -340,7 +346,8 @@ resting composition with no functional information loss.
 - Reduced-motion, unavailable WebGL2, initialization failure, context loss and
   unmount all retain the accepted static frame and semantic selection.
 - Pointer-motion visual acceptance remains a separate user gate. Passing tests
-  does not authorize production `/` replacement or ECS deployment.
+  alone did not authorize production `/` replacement; the later production
+  amendment records the separate approval. ECS deployment is still separate.
 
 ## Scope
 
@@ -351,12 +358,14 @@ resting composition with no functional information loss.
 - Licensed font specimen and MSDF atlas workflow.
 - Multi-pass WebGL2 renderer and generated static fallback.
 - Accepted static asset plates and the isolated mixed-flow interaction overlay.
+- The accepted shared-surface production `/` Hero integration authorized by the
+  final production-promotion amendment.
 - Reference-relative browser gates and full-size user review.
 - ADR-009, progress, index and handoff synchronization.
 
 ### Out of scope
 
-- Production `/` replacement or ECS deployment.
+- ECS deployment or any cloud-side operation.
 - Backend, API, schema, authentication, upload or Hermes changes.
 - WebGPU-only effects.
 - Recreating the unrelated blue six-panel Chinese homepage concept.
@@ -370,6 +379,10 @@ plan beginning with pure response-envelope and lifecycle RED tests, then build
 the isolated overlay without reopening the accepted resting composition.
 Pointer-motion visual review remains mandatory before any separate production
 replacement or deployment decision.
+
+That review and the local production replacement were subsequently accepted in
+the `Amplified Field and Production Promotion` amendment. Deployment remains a
+separate release operation.
 
 ## 2026-08-13 Asset Presentation and Perceptibility Iteration
 
@@ -526,12 +539,20 @@ This amendment records the user's post-acceptance choice to combine the
 stronger-response and wider-field options, then deploy the accepted surface as
 the production landing Hero.
 
+It supersedes all earlier isolated-only/no-production-integration boundaries in
+this document. It authorizes the local shared production implementation, not an
+ECS or cloud deployment; the latter remains gated by the release runbooks.
+
 - Preserve the accepted `Science evolves.` typography, energy plate, static
   pixels, 16:9 composition, directional irregular wake, lifecycle and exact
   reduced-motion fallback.
 - Increase the authored ambient displacement budget from `.7px` to `1.4px`,
-  local displacement from `4px` to `8px`, whole-patch follow from `2px` to
-  `4px`, and caustic gain from `.08` to `.14`.
+  local displacement from `4px` to `8px`, pointer-local replacement-patch
+  follow from `2px` to `4px`, and caustic gain from `.08` to `.14`. The follow
+  term is a real signed horizontal shader contribution, bounded by the local
+  flow support and authored layer weight; it never translates the whole title
+  or camera. The combined follow plus local-flow displacement remains
+  vector-clamped to `8px`, so the `4px` term does not create a `12px` envelope.
 - Increase local radius from `.14` to `.20` of stage width. This widens the
   response without doubling area twice over; locality acceptance remains
   pointer-centred and must keep at least 75% of changed pixels within `.22` of
@@ -553,3 +574,19 @@ the production landing Hero.
   API contract or secret change. Use the repository deployment script with
   `--skip-migrate`, a pre-deploy backup/checkup, a verified release ref and a
   recorded rollback ref.
+
+### Final release performance acceptance
+
+- A hardware-rendered physical desktop interval is accepted when the unmasked
+  WebGL renderer is not SwiftShader/software, both the 15-second resting and
+  15-second pointer intervals stay within the active display cadence
+  (`median <= 1.25 × cadence`, `p95 <= 2 × cadence`) and dropped frames are no
+  more than 1% of cadence-expected frames. The display/session refresh rate
+  must be recorded rather than assumed to be 60Hz.
+- A connected physical mobile must run the same two 15-second intervals before
+  deployment acceptance. Device emulation is supplemental and cannot close
+  this gate. When no device is safely discoverable, physical mobile remains an
+  explicit release blocker; no result may be fabricated.
+- A conservative quality/DPR downshift is added only when physical measurements
+  identify a device class that misses the thresholds. The accepted desktop
+  evidence alone does not justify speculative rendering changes.

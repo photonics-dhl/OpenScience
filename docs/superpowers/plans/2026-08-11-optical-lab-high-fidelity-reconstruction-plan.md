@@ -82,6 +82,116 @@ loss reveal a promoted screenshot of the accepted resting WebGL2 frame.
 
 ---
 
+## 2026-08-14 Final Whole-Release Review Fix Wave
+
+> **For agentic workers:** REQUIRED SUB-SKILL: Use
+> superpowers:executing-plans and strict RED–GREEN TDD for every code change.
+
+**Goal:** Close every finding in `final-release-review.md` before deployment,
+without deploying or weakening the accepted static, accessibility, lifecycle or
+locality contracts.
+
+**Architecture:** Route the model's signed `patchFollowPx` through the shared
+asset renderer into the composite shader. The contribution is horizontal,
+pointer-local, multiplied by the existing `localAmount` and authored
+`layerWeight`, clamped to `±4` CSS px, and combined with flow refraction under
+the existing `8` CSS px vector cap. Amend ADR-009 to authorize the already
+approved client-only production OGL exception, measure the actual route/assets
+and a physical RTX 4060 browser, and leave physical mobile explicitly blocked
+when no device is discoverable.
+
+**Tech Stack:** React 18, TypeScript, OGL 1.0.11, WebGL2/GLSL ES 3.0,
+Vitest, Playwright, Chrome 150, Next.js 14.
+
+### Global Constraints
+
+- Preserve the accepted energy/typography plates, fixed authored `.58` seam,
+  selectable semantic title and zero global title/camera translation.
+- `patchFollowPx` contributes at most `4` CSS px only inside the local response;
+  total local displacement remains at most `8` CSS px and the exact `.16–.20`
+  outer-band halo allowance remains `4/16` sectors.
+- Production WebGL is WebGL2-only. Reduced motion, WebGL2/init/runtime/context
+  failure and no-canvas paths expose the accepted static surface with no RAF.
+- Ambient RAF is client-only, has one owner and suspends hidden, offscreen,
+  reduced and unmounted; ECS serves JS/assets and owns no GPU work.
+- Do not read `.env`, use SSH/cloud/backup/deploy, touch port 3000, delete
+  evidence, or claim physical-mobile evidence without a connected device.
+
+### Task 16: Patch Follow, Architecture Truth and Final Release Evidence
+
+**Files:**
+
+- Modify: `apps/web/lib/optical-lab/ogl/asset-interaction-renderer.ts`
+- Modify: `apps/web/lib/optical-lab/ogl/shaders/asset-composite.ts`
+- Modify: `apps/web/test/optical-lab-asset-interaction.test.ts`
+- Modify: `apps/web/test/visual/optical-lab-asset-interaction-gate.mjs`
+- Modify: `docs/specs/2026-08-11-optical-lab-high-fidelity-design.md`
+- Modify: `docs/decisions/ADR-009-optical-runtime-and-fonts.md`
+- Modify: `eslint.config.cjs`, `.gitignore`, `project_index.md`
+- Modify: `docs/runbooks/deployment.md`, `docs/runbooks/visual-release.md`
+- Modify: `docs/progress.md`
+- Modify: `.superpowers/sdd/2026-08-11-optical-lab-high-fidelity-reconstruction-plan/task-15-report.md`
+- Create: `.superpowers/sdd/2026-08-11-optical-lab-high-fidelity-reconstruction-plan/final-fix-report.md`
+- Modify: `docs/handoff/2026-08-13-optical-lab-asset-interaction-handoff.md`
+
+**Interfaces:**
+
+- Renderer uniform: `uPatchFollowPx: float`, assigned from the current bounded
+  model sample only while the local response is visually active.
+- Composite behavior: `followPx = vec2(clamp(uPatchFollowPx, -4.0, 4.0), 0)`
+  multiplied by `localAmount * layerWeight`; add it to refracted displacement
+  and normalize the combined vector only when its length exceeds `8.0`.
+- Native evidence: capture identical gestures with the production shader and a
+  controlled one-shader mutation that replaces only the follow contribution
+  with zero. Assert one mutation, non-zero image-space delta, a measured
+  directional contribution no greater than 4 px, retained total 8 px cap and
+  retained halo/locality/lifecycle results.
+
+- [x] **Step 1: Write and run RED contracts**
+
+  Add a focused shader/renderer contract for `uPatchFollowPx`, local/layer
+  bounding and combined `8.0` vector cap. Extend the native gate with the
+  controlled follow-disabled shader mutation and image-space A/B assertion.
+  Run focused Vitest and the native mutation gate; require failures caused by
+  the absent uniform/pixel contribution.
+
+- [x] **Step 2: Implement the minimal renderer/composite path and reach GREEN**
+
+  Add the uniform at program creation and assign it beside `uRefractionPx`.
+  In the shader, add only the bounded local/layer contribution and vector-cap
+  the final displacement before UV sampling. Rerun focused Vitest, the
+  follow-mutation native proof and the unmodified complete native matrix.
+
+- [x] **Step 3: Reconcile architecture, policy and measured budgets**
+
+  Amend ADR-009's Accepted decision and consequences for the production
+  exception, shared owner, fallbacks, ambient lifecycle, client/ECS boundary,
+  measured route/client/static budgets and rollback ref. Resolve “whole patch”
+  wording as pointer-local replacement-patch follow. Ignore the two scratch
+  evidence directories in `.gitignore` and retain their narrow ESLint ignores
+  with indexed rationale; formal visual tests remain linted.
+
+- [x] **Step 4: Record physical evidence honestly**
+
+  Use installed Chrome with the RTX 4060 and verify the unmasked WebGL renderer
+  is neither SwiftShader nor software. Record separate 15-second resting and
+  15-second pointer intervals with median/p95 frame time, dropped frames,
+  quality and DPR. Probe connected mobile devices read-only; if none exists,
+  mark physical mobile as the sole remaining blocker and keep emulation
+  supplemental only.
+
+- [x] **Step 5: Run the complete release gate and synchronize truth**
+
+  Run focused/full Web tests, typecheck, canonical lint, build, Landing native
+  normal/reduced/pointer matrix, Lab native/reduced/static/caps/recovery/
+  lifecycle matrix, 27-case release gate, docs lint/sync and `git diff --check`.
+  Update Task 15, final-fix report, progress, index, runbooks and the single
+  current handoff with exact outputs. Commit only if every available code,
+  review and release gate is green; report `DONE_WITH_CONCERNS` only when the
+  sole remaining item is unavailable physical mobile.
+
+---
+
 ## 2026-08-13 Full-Surface Layered Fluid Addendum
 
 This addendum implements the approved `Full-Surface Layered Fluid Interaction`

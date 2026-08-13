@@ -34,6 +34,14 @@ Every case requires:
 - transferred resources no greater than 3.5 MB;
 - no more than 1800 DOM nodes.
 
+The accepted Landing build additionally records its exact manifest and optical
+asset budget. The 2026-08-14 release candidate measures `/` as `805 B / 132 kB`
+in Next's route table, `461,103 B` raw / `135,268 B` gzip for all route
+client/CSS files, and `119,866 B` raw / `35,935 B` gzip route-exclusive to the
+root layout. The two served optical PNGs total `2,485,771 B`. Rebuild and
+remeasure these values for any later optical/runtime change; do not copy the
+numbers forward as estimates.
+
 ## Determinism
 
 The Landing release case requires exactly one `AcceptedOpticalSurface`, one
@@ -66,6 +74,25 @@ Reject the release if any canonical screenshot shows:
 Local release acceptance does not imply deployment. A later, explicitly
 authorized ECS turn must repeat the public Landing/reduced/pointer checks with
 real production services before the promoted surface is described as deployed.
+
+## Physical GPU Gate
+
+Before deployment, use an installed non-headless Chrome/Chromium and record the
+unmasked WebGL renderer. SwiftShader, llvmpipe or another software renderer does
+not satisfy the physical gate. Record separate 15-second resting and 15-second
+continuous-pointer intervals with median/p95 frame time, cadence-relative
+dropped frames, active quality and DPR.
+
+Acceptance is relative to the actual visible display/session cadence:
+`median <= 1.25 × cadence`, `p95 <= 2 × cadence`, and dropped frames no greater
+than 1% of cadence-expected frames. Record the display path explicitly when a
+remote display limits cadence; do not present it as a local-console refresh.
+
+Run the same intervals on a connected physical mobile. ADB/device emulation is
+supplemental only. If no physical mobile is safely discoverable, stop before
+deployment and record that blocker; do not replace it with an emulated result.
+Add an adaptive/DPR downshift only when physical measurements show that a real
+device class misses the thresholds.
 
 ## Failure Handling
 

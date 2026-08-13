@@ -1,7 +1,7 @@
 # ADR-009: Optical Runtime and Font Delivery
 
 - **Status:** Accepted
-- **Date:** 2026-08-10 (amended 2026-08-11)
+- **Date:** 2026-08-10 (amended 2026-08-11 and 2026-08-14)
 - **Decision owners:** OpenScience product engineering
 - **Related:** `docs/specs/2026-08-10-optical-editorial-rebaseline-design.md`, `docs/plans/2026-08-10-optical-editorial-frontend-plan.md`
 
@@ -15,33 +15,48 @@ The built-in web-search endpoint returned HTTP 404 during this audit. The same p
 
 ### Optical runtime
 
-Use browser primitives:
+The 2026-08-10 Canvas-only choice and the 2026-08-11 Lab-only/no-Lab-chunk
+restriction are retired for the Landing Hero. They remain historical evidence
+of the path that was tested and visually rejected, not active production rules.
 
-- Canvas 2D for deterministic halftone sampling and pointer/touch-local focus.
-- SVG/CSS `feDisplacementMap` only where text or a raster layer needs bounded displacement.
-- `requestAnimationFrame` for active frames, suspended when the document is hidden.
-- A static poster/CSS composition for SSR, no-JavaScript and reduced-motion modes.
-- No new runtime dependency in Phase 0. A WebGL helper may be reconsidered only after measured Canvas failure on the ECS acceptance devices.
+#### 2026-08-14 production OGL exception
 
-This keeps SSR safe because the server emits ordinary markup and a poster state; Canvas access occurs only in a client component after mount. Reduced-motion mode does not start the animation loop and preserves all copy, navigation and calls to action.
+The approved production exception uses pinned `ogl@1.0.11` through one shared
+`AcceptedOpticalSurface` consumed by `/` and the no-index asset Lab. It owns the
+ordered accepted energy/typography plates, one selectable semantic `h1` and one
+client `AssetInteractionMount`; the two routes do not carry forked renderers.
 
-#### 2026-08-11 isolated Optical Lab amendment
+The active boundaries are:
 
-The production Canvas implementation passed engineering gates but failed the user's visual review: its CPU `arc()` loop and separately invented focal/Fresnel passes produced a grey overlay, mechanical lines and decorative wave families instead of continuous glyph deformation. This is the measured Canvas failure anticipated above, but it does **not** authorize a production runtime replacement.
+- production is WebGL2-only for dynamic pixels; WebGL1, no-canvas, WebGL2
+  initialization/runtime failure and context loss expose the accepted static
+  plates without moving layout or title bounds;
+- `prefers-reduced-motion: reduce` uses the exact accepted static frame and
+  creates no interaction context or RAF;
+- normal motion owns one continuous, low-amplitude ambient RAF while visible;
+  it suspends and releases its canvas when the document is hidden, the surface
+  is offscreen, reduced motion activates, context fails or React unmounts;
+- pointer/touch response remains local to the `.20` flow support. The signed
+  replacement-patch follow is capped at `4` CSS px and multiplied by local
+  amount and authored layer weight. It does not translate the whole title or
+  camera, and the combined follow/refraction vector is capped at `8` CSS px;
+- the canvas is decorative and pointer-transparent. SSR always emits the
+  semantic title and accepted static assets before client initialization;
+- every per-frame operation runs in the visitor's browser. ECS is only a
+  Next.js/asset delivery boundary and gains no GPU, driver, Compose, Nginx or
+  server-rendered WebGL dependency.
 
-An isolated, no-index route at `/_visual/optical-lab` may therefore use the pinned `ogl@1.0.11` WebGL2 Lab exception with these boundaries:
+OGL is Unlicense-licensed. The pinned `msdf-bmfont-xml@2.8.0` atlas generator
+is MIT-licensed. Its deterministic Archivo and Bodoni Moda inputs, source and
+output hashes and verbatim SIL OFL 1.1 notices remain recorded in
+`apps/web/assets/optical-lab/fonts/manifest.json`; committed atlas files remain
+under `apps/web/public/optical-lab/atlas/`.
 
-- the production `/` route and its Canvas renderer remain unchanged and do not import the Lab chunk; OGL is importable only from the isolated Lab client graph;
-- the server renders a selectable semantic `h1`; Canvas/WebGL access starts only after client mount;
-- capability order is WebGL2, then WebGL1 only when half-float support is viable, then DOM/static;
-- mobile low-power and `prefers-reduced-motion` use the DOM/static mode without an animation loop;
-- the field is a fixed-aperture signed flow texture with bounded glyph displacement, subtle directional caustic/chroma and sparse glyph-edge particles; pointer input changes energy/phase and a bounded vertical bias, never aperture position;
-- context loss exposes a fallback state, context restore rebuilds resources, and unmount deletes GL resources and cancels animation frames;
-- all per-frame work runs in the visitor's browser. ECS remains a Next.js build/static-delivery host and gains no GPU runtime, driver, compose setting or server-side rendering dependency.
-
-OGL is Unlicense-licensed. The Lab's pinned `msdf-bmfont-xml@2.8.0` atlas generator is MIT-licensed. Its exact Google Fonts inputs are committed as deterministic static instances: Archivo `wdth=100,wght=900` for `Science`, and Bodoni Moda Italic `opsz=96,wght=700` for `evolves.`. The generator, source URLs/commit hashes, source/output SHA-256 values and verbatim SIL OFL 1.1 notices are recorded in `apps/web/assets/optical-lab/fonts/manifest.json`; generated MSDF JSON/PNG files live in `apps/web/public/optical-lab/atlas/`. No `.next` font artifact is an input. Atlas generation and all runtime rendering remain client-side; ECS only serves the committed static files and gains no GPU, driver, compose, server-rendering or runtime dependency.
-
-The prior native-only bundle figures are retained as baseline evidence, not a projection for this OGL exception. Its route-exclusive budget must be remeasured before a later human-approved production replacement plan.
+Rollback is an exact Git/source boundary, not a runtime feature flag. Before
+deployment, record the reviewed release ref and the currently live production
+rollback ref plus source hash. If public acceptance fails, redeploy that full
+rollback ref; the legacy Canvas source is retained only to make the previous
+release reproducible and is not imported by the promoted Landing graph.
 
 Primary references:
 
@@ -72,8 +87,18 @@ The fonts are visual roles, not a license issued by OpenScience. OpenScience pub
 
 ## Runtime and deployment budget
 
-- The isolated Lab adds pinned OGL, two generated MSDF PNG/JSON pairs and its route-scoped client assets; the production homepage bundle remains unchanged because it does not import the Lab graph.
-- Canvas resolution must be capped by viewport and device-pixel-ratio budgets in Task 4; the effect pauses offscreen and in hidden tabs.
+- The 2026-08-14 production build reports `/` at `805 B` route code and
+  `132 kB` First Load JS. Exact manifest accounting for the Landing route is
+  `461,103 B` raw / `135,268 B` gzip across client JS/CSS, of which
+  `119,866 B` raw / `35,935 B` gzip is route-exclusive relative to the root
+  layout.
+- The two runtime optical PNGs total `2,485,771 B` on disk/network
+  (`target-reference.png` `1,934,383 B`; energy plate `551,388 B`). PNG is
+  already compressed; gzip changes the pair only to `2,465,418 B`. The release
+  route remains below the visual gate's `3.5 MB` transferred-resource budget.
+- Dynamic resolution is capped at device pixel ratio `2`; the accepted compact
+  flow texture remains `96×54`. The ambient owner suspends offscreen and in
+  hidden tabs as defined above.
 - Only transform/opacity are used for ordinary UI transitions. Displacement is isolated to the optical media layer and never applied to form controls or reading copy.
 - `next/font/google` downloads source assets at production image-build time. ECS builds therefore require the existing outbound proxy path; the resulting container serves fonts locally at runtime.
 - Production build is a gate. If the font download path fails on ECS, the release does not replace the running image; vendored OFL WOFF2 files are the documented fallback.
@@ -81,11 +106,21 @@ The fonts are visual roles, not a license issued by OpenScience. OpenScience pub
 ## Rejected alternatives
 
 - **Hosted animation/CDN script:** rejected for privacy, availability, CSP and version-pinning risk.
-- **Three.js or another general WebGL engine:** rejected because the required 2D field does not justify its bundle and GPU lifecycle cost. OGL is the approved narrowly scoped Lab exception; the production decision remains separate.
+- **Three.js or another general WebGL engine:** rejected because the required
+  2D field does not justify its bundle and GPU lifecycle cost. OGL is the
+  approved shared Landing/Lab production exception.
 - **Shader-only hero:** rejected because it weakens SSR, no-JavaScript and accessibility fallback behavior.
 - **Generic all-IBM-Plex composition:** rejected because it reproduces the undifferentiated AI/SaaS appearance identified by the user. IBM Plex Mono remains the approved narrow data role from the canonical design spec.
 - **Decorative generated image as the brand:** rejected; the wordmark and interactive optical behavior remain the identity.
 
 ## Consequences
 
-The implementation remains small, inspectable and portable, while the visual system gains distinct type voices. Task 4 must prove the Canvas budget with browser measurements and deterministic screenshots. Task 14 must test reduced motion, font readiness and poster fallback before release.
+The production Landing now carries the shared OGL client graph and continuous
+visible ambient RAF, so release acceptance must include deterministic browser
+matrices, physical GPU evidence, visibility/reduced/failure cleanup and the
+measured route/static budgets above. The previous “production bundle unchanged”
+and “no Lab chunk on `/`” consequences no longer apply. Physical desktop
+evidence must identify the unmasked renderer and display cadence; physical
+mobile remains a hard gate until a connected device completes the prescribed
+intervals. Deployment still requires an exact release/rollback ref pair and
+the normal backup/checkup/public verification runbook.

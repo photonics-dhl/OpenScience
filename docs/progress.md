@@ -1,5 +1,42 @@
 # OpenScience (XGS) 进度日志
 
+## 2026-08-14（Optical 最终整体验收修复）— ⚠️ 仅物理移动端仍阻断部署
+
+- **真实像素链路**：`patchFollowPx4` 已从诊断值接入 renderer uniform 与
+  composite shader；贡献只在 `localAmount * layerWeight` 内沿 signed-x 生效，
+  与 local refraction 的合成向量仍严格 `<=8 CSS px`，不移动全局标题、camera
+  或 shared surface。严格 TDD 先由缺少 uniform/source contract 产生 RED，随后
+  focused `10/10` GREEN。
+- **原生抗突变证据**：同一手势分别运行 production shader 与只禁用 follow
+  项的单点 mutation，诊断值在两边都保留；新鲜 A/B 产生 `131,800` 个真实
+  像素差，image-space registration 唯一最佳位移为 `+4px`。生产快照为
+  `patchFollowPx=3.9385276665`、`refractionPx.x=7.8770553331`。另一个
+  full-flow A/B 只把 composite cap 从 `8px` mutation 为 `12px`，产生
+  `78,488` 个像素差且恰好多出 `+4px`，证明真实 cap branch 已被执行；完整原生
+  locality/layers/caps/recovery/failure/context/visibility/offscreen/
+  delayed-init/unmount/route-transfer 继续 GREEN，halo `1/16`。
+- **架构与预算**：ADR-009 已正式接受 production `ogl@1.0.11` 例外、唯一
+  `AcceptedOpticalSurface`、WebGL2→exact-static/reduced/failure 策略、可见
+  ambient RAF 与隐藏/离屏/失败/卸载 suspension、client-only/ECS 边界、精确
+  release/rollback ref；旧 Canvas-only/Lab-only/no-Lab-chunk 条款退役。新鲜
+  build 首页为 `805 B / 132 kB First Load JS`；`/page` client JS/CSS
+  `461,103 B raw / 135,268 B gzip`，route-exclusive `119,866 / 35,935 B`；
+  两个 runtime optical plates 合计 `2,485,771 B raw / 2,465,418 B gzip`。
+- **物理桌面**：安装版 Chrome `150.0.7871.187` 的 unmasked WebGL2 renderer
+  为 D3D11 `NVIDIA GeForce RTX 4060`，非 SwiftShader/software，DPR 约 `1`。
+  自动化位于实际 `~32.05Hz` RDP display cadence，不冒充 60Hz console：rest
+  与 continuous-pointer 各 15 秒均 `480` frames、median `31.2ms`、p95
+  `31.9ms`、dropped `0`、fixed-full quality/`96x54` flow。
+- **完整门禁**：focused `10/10`、Web `32 files / 237 tests`、typecheck、build、
+  Landing desktop/mobile normal/reduced/pointer、Lab full native 与 reduced exact
+  static `952,176 B`、product release `27/27` 均 GREEN。release 首次在用例前
+  因前序 dev gate 替换 production `.next` 而拒绝启动；按正确顺序重新 build
+  后原样矩阵全过，不是产品断言失败。
+- **唯一 blocker**：本机无 ADB，Windows 只读 portable/USB 探测未发现已连接
+  物理移动端；emulation 不能替代。物理移动端两段 15 秒尚未测量，因此仍是
+  唯一 deployment blocker。桌面在实际 cadence 下健康且无移动端证据，故未
+  添加无依据的 adaptive/DPR downshift。未执行 cloud/SSH/`.env`/backup/deploy。
+
 ## 2026-08-14（Accepted Optical Surface 本地晋升）— ✅ 本地 release candidate，未部署
 
 - **共享实现**：新增 `AcceptedOpticalSurface`，由 Landing Hero 与精确

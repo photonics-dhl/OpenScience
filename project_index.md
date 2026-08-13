@@ -12,10 +12,10 @@
 | [OpenScience Web Design System — canonical](https://www.figma.com/design/gjhowMG7cG4clKwvhvF08E) | 长期项目账号持有的 Optical Editorial V3 canonical；44 variables、12 styles、4 component sets、8 surfaces；旧 `rWS3…` 文件仅为历史迁移来源 | Task 13 验收完成 |
 | `.vscode/mcp.json` | VS Code MCP 配置（task-master-ai 直连 node_modules 本地入口） | 活文档，**本机持有，不入库**（含 key） |
 | `.env` / `.env.example` | 密钥 / 密钥模板 | 只读，禁打印 |
-| `.gitignore` | git 忽略规则（含 .env） | 活文档 |
+| `.gitignore` | git 忽略规则（含 `.env` 与 root `tmp/` / `apps/web/tmp/` 本地浏览器、GPU 探针及生成 evidence；正式 `apps/web/test/visual/` 不受影响） | 活文档 |
 | `minimax_proxy.py` | MiniMax API 本地代理（上个 session 产物） | 活文档 |
 | `package.json` / `pnpm-workspace.yaml` / `pnpm-lock.yaml` | pnpm workspace 根配置与锁文件（P1A-1）；`task-master-ai` 已入 root devDependencies（2026-07-31，VS Code MCP 直连用） | 活文档 |
-| `eslint.config.cjs` | 全仓 ESLint 9 flat config；排除构建物、隔离 worktree、agent skills 与 `.superpowers` 本地临时验收脚本 | 活配置 |
+| `eslint.config.cjs` | 全仓 ESLint 9 flat config；排除构建物、隔离 worktree、agent skills、`.superpowers` 与已 gitignore 的 root/web `tmp` 本地证据；豁免不覆盖产品源码或正式 `apps/web/test/visual/` 门禁 | 活配置 |
 | `apps/web/components.json` | shadcn/ui `new-york` 配置（Task 7.4，cssVariables + 本地 aliases） | 活文档 |
 | `apps/web/app/tokens.css` | 视觉 token 单一事实源（Task 2/8；2026-08-09 Task 1 补 ingestion workbench/evidence/status/focus/spacing/type/radius，与 Figma variables 同名） | 活文档 |
 | `apps/web/components/ui/{button,card,badge,skeleton,input,dialog,status-badge,progress-rail,dropzone,evidence-card}.tsx` | UI 基础组件；后四项为研究者导入 Task 1 稳定原语（双语、WCAG、reduced-motion、固定任务状态占位） | 活文档 |
@@ -61,10 +61,10 @@
 | `apps/web/test/evolving-ro-symbol.test.tsx` | Task 7.7 Evolving RO Symbol server-rendering、变体、动效与 SVG 层级断言 | 活文档 |
 | `apps/web/components/brand/{OpticalHeadline,OpticalField}.tsx` / `apps/web/lib/optical-field/*.ts` | 旧 Landing fixed-aperture Canvas/glyph-particle 媒介与模型，保留源文件供另行批准的清理/历史回归 | Task 15 后生产 Landing source 不再 import/mount；当前 ECS 仍是旧部署，勿误删或称已上线 |
 | `apps/web/app/{%5Fvisual,_visual}/optical-lab/page.tsx` / `apps/web/components/optical-lab/{OpticalLabClientMount,OpticalLabPage}.tsx` / `apps/web/lib/optical-lab/{layout,runtime-policy,model,ogl/*}.ts` | 精确 `/_visual/optical-lab` 比较页；`?candidate=asset` 以单面 shared AcceptedOpticalSurface 为真源，non-asset procedural 路径仅保留历史比较 | HISTORICAL non-asset Task 7 的 650ms rest 不适用于 asset；Task 15 本地共享晋升，未部署 |
-| `apps/web/components/optical-lab/AssetInteractionMount.tsx` / `apps/web/lib/optical-lab/asset-interaction-model.ts` / `apps/web/lib/optical-lab/ogl/{asset-interaction-renderer,asset-flow-pass}.ts` / `apps/web/lib/optical-lab/ogl/shaders/asset-{flow,composite}.ts` | accepted shared surface 的 lazy OGL 交互层：全 stage ambient、真实 pointer/touch x/y 的 `.20` 局部分层流体响应、4/8/.14 上限、120ms 响应、900ms exact local rest、同 RAF readback、reduced/context failure 静态回退与 generation-owned cleanup；Lab→Landing 转移验证旧 owner 精确销毁、新 owner 单实例 | Task 15 本地 Landing/Lab native matrix GREEN，生产部署 pending |
+| `apps/web/components/optical-lab/AssetInteractionMount.tsx` / `apps/web/lib/optical-lab/asset-interaction-model.ts` / `apps/web/lib/optical-lab/ogl/{asset-interaction-renderer,asset-flow-pass}.ts` / `apps/web/lib/optical-lab/ogl/shaders/asset-{flow,composite}.ts` | accepted shared surface 的 OGL 交互层：全 stage ambient、真实 pointer/touch x/y 的 `.20` 局部分层响应；pointer-local replacement follow 实际进入 composite（`<=4px`、`localAmount × layerWeight`），与 flow 合计 vector cap `<=8px`，gain `.14`；900ms local rest、同 RAF readback、reduced/context failure 静态回退与 cleanup | Final review fix native A/B 注册 `+4px` 且完整矩阵 GREEN；物理移动端 gate 阻塞部署 |
 | `apps/web/public/optical-lab/{target-reference,current-production,accepted-resting,energy-plate-black-alpha-v1}.png` / `apps/web/test/visual/promote-optical-lab-resting.mjs` | 用户授权参考/current、Task 5 decorative fallback 与用户确认的 1672×941 RGBA 黑底发光分解能量层；promotion 仅接受批准输出并记录 SHA-256 | Task 15 本地 Landing 与 asset Lab 共用 accepted plates；未部署 ECS |
 | `apps/web/assets/optical-lab/fonts/` / `apps/web/public/optical-lab/atlas/` / `apps/web/scripts/generate-optical-atlas.mjs` | 高保真 Lab 的 Archivo 900 与同一 pin 上游 Bodoni Moda Italic 400（opsz 96）确定性实例、原样 OFL、受限 charset、MSDF JSON/PNG 与受 pin generator | Task 2 资产合同由 Task 5 用户授权字体修复重开：manifest/精确 family-axis 校验/atlas 已更新；未新增 family、dependency 或 license，生产 `/` 不导入 |
-| `apps/web/test/optical-lab-{model,contract,atlas,runtime-budget,asset-interaction}.test.*` / `apps/web/test/visual/optical-lab-{gate,shots,visual-metrics,asset-interaction-gate}.*` / `apps/web/test/visual/{capture-optical-lab-asset.mjs,fixtures/optical-lab-asset-accepted-1672x941.png}` | Optical Lab TDD/production-browser 门禁：58% authored DOM、full-surface pointer/touch/reduced/init/runtime/context-loss/route-transfer/unmount、五位置 centroid/locality、四象限 ambient、<=900ms renderer-owned PNG、native 1672×941 exact identity、halo/预算/cleanup | Task 15 focused Landing/Lab `45/45`、native matrix 与 952,176 B reduced exact capture GREEN；输出在忽略目录，fixture 入库 |
+| `apps/web/test/optical-lab-{model,contract,atlas,runtime-budget,asset-interaction}.test.*` / `apps/web/test/visual/optical-lab-{gate,shots,visual-metrics,asset-interaction-gate}.*` / `apps/web/test/visual/{capture-optical-lab-asset.mjs,fixtures/optical-lab-asset-accepted-1672x941.png}` | Optical Lab TDD/production-browser 门禁：58% authored DOM、full-surface pointer/touch/reduced/init/runtime/context-loss/route-transfer/unmount、五位置 centroid/locality、四象限 ambient、<=900ms renderer PNG、native exact identity、follow-enabled/disabled shader mutation A/B 的 `+4px` image registration、combined `8px` cap、exact `.16–.20` halo/cleanup | Final fix source `10/10` 与 native proof/full matrix GREEN；输出在忽略目录，fixture 入库 |
 | `apps/web/app/explore/page.tsx` / `apps/web/components/explore/ResearchIndex.tsx` / `apps/web/test/{explore-index.test.tsx,e2e/explore-index.spec.ts}` | Optical Editorial 公开 Research Index：编号式 paper rows、query/SDF field/artifact 筛选、cursor load-more、真实 Public RO link 与 1440/390 无 Card browser gate | 活文档 |
 | `packages/domain/src/explore/explore.ts` / `apps/api/src/routes/explore.ts` / `apps/api/test/explore-routes.test.ts` | 匿名 `GET /explore` 合同；仅 public+published，稳定 publicId cursor，有界 query/limit 与关系筛选，返回 SDF/artifact/author provenance 摘要 | 活接口 |
 | `packages/domain/src/editorial/` / `apps/api/src/routes/{editorial,admin-editorial}.ts` | Ultrafast Science 策展域：版本绑定快照、媒体 provenance、draft→internal_review→scheduled→published 状态机、platform_admin scoped API 与公开过滤 | ECS 已部署并完成真实 published/audit 验收（2026-08-10） |
@@ -130,7 +130,7 @@
 | `docs/decisions/ADR-006-ingestion-parser-and-ocr-strategy.md` | PDF/DOCX 受控解析、图片本地 OCR 优先与 MiniMax fallback 边界；any2pdf 仅用于未来导出 | Accepted |
 | `docs/decisions/ADR-007-production-object-storage.md` | 生产对象存储选择 SeaweedFS 4.41 S3 模式；拒绝归档的 MinIO legacy binary，新 Secret/内网/卷/备份边界 | Accepted |
 | `docs/decisions/ADR-008-minimax-token-plan-provider.md` | MiniMax Token Plan 使用 Anthropic Messages 协议；Subscription Key 与普通 API Key 分流，key1→key2 回退与生产边界 | Accepted |
-| `docs/decisions/ADR-009-optical-runtime-and-fonts.md` | 生产 Optical Field 保持 Canvas 2D；2026-08-11 增补仅限 no-index Lab 的 `ogl@1.0.11` WebGL2 exception、MSDF/OFL/font provenance、浏览器 GPU/ECS 隔离与 route budget | Accepted（Task 8 Step 6 前不得替换生产） |
+| `docs/decisions/ADR-009-optical-runtime-and-fonts.md` | Accepted production `ogl@1.0.11` Landing/Lab shared exception；WebGL2→exact static/reduced/failure policy、continuous visible ambient suspension、client-only/ECS boundary、measured `/` client/static budget、exact rollback ref boundary；旧 Canvas-only/no-Lab-chunk rule retired | Accepted，2026-08-14 amended；物理移动端 gate 未关闭 |
 | `docs/decisions/ADR-010-hermes-visual-runtime-and-live2d-license-gate.md` | Hermes 原创 SVG/CSS renderer、真实任务/六态/单实例契约；Wanko/Live2D 仅在运营主体记录资格与协议接受后启用 | Accepted |
 | `docs/handoff/2026-08-08-product-web-tooling-handoff.md` | 产品网页工具前置交接（Codex 10 MCP、双 Figma OAuth、迁移 ADR、重启后验证顺序） | 当前 handoff |
 | `docs/handoff/2026-08-10-optical-editorial-rebaseline-handoff.md` | Optical Editorial v3 前端重构交接：27 项 grill-me 决策、三联屏浏览器优先路线、服务器直接验收 | 当前 handoff |
@@ -140,7 +140,7 @@
 | `docs/handoff/2026-08-11-optical-editorial-v3-complete-handoff.md` | Optical Editorial v3 15/15 完成、Hermes 原创 renderer、`0c79aa2` ECS 发布与全量浏览器门禁 | 当前完成 handoff |
 | `docs/handoff/2026-08-11-optical-editorial-optimization-design-handoff.md` | 首页增量优化设计交接：保留线上功能与风格，先优化 Landing，再传播到 Explore/Dashboard/创建页/公开 RO | 当前 handoff |
 | `docs/handoff/2026-08-11-optical-lab-task8-steps3-5-handoff.md` | Optical Lab Candidate B、高保真 OGL Task 1–8 与资产路线历史证据 | HISTORICAL → 当前入口为 `docs/handoff/2026-08-13-optical-lab-asset-interaction-handoff.md`；不得按其旧 next action 重启资产验证 |
-| `docs/handoff/2026-08-13-optical-lab-asset-interaction-handoff.md` | Optical asset 唯一 current 交接：AcceptedOpticalSurface 的 Landing/Lab 共享组合、本地 release gates、route-transfer ownership 与部署 preflight 边界；旧固定中心/隔离-only 指令降为历史 | CURRENT；Task 15 本地独立复审就绪，未执行 ECS/cloud/SSH/backup/deploy |
+| `docs/handoff/2026-08-13-optical-lab-asset-interaction-handoff.md` | Optical asset 唯一 current 交接：shared production exception、final follow pixel proof、bundle/physical RTX evidence、full release gates 与 remaining mobile blocker；旧 fixed-centre/isolated-only 指令降为历史 | CURRENT；未执行 ECS/cloud/SSH/backup/deploy |
 | `docs/specs/2026-08-04-p1b-3-blob-artifact-upload-design.md` | P1B-3 Blob 内容寻址存储与上传管线设计（design gate 已确认：五决策，代码已实现 2026-08-04） | 活文档 |
 | `docs/plans/2026-07-24-doc-architecture-plan.md` | 文档架构落地实施计划 | 活文档 |
 | `docs/plans/2026-07-24-mvp-task-breakdown-plan.md` | MVP 任务拆解与工具配置实施计划（已批准，执行中） | 活文档 |
@@ -218,11 +218,11 @@
 | `docs/plans/2026-08-06-p1e-7-script-modification-plan.md` | P1E-7 脚本修改与 diff 实施计划（已执行完毕，task-master 6.7 done 2026-08-06） | 活文档 |
 | `docs/specs/2026-08-06-frontend-visual-system-design.md` | 前端视觉系统设计 spec（三方定稿正式版：定位/符号/token/三套视觉/字体/IA/Hermes/分期/验收，源出设计方向稿 v2 终稿决策层） | 已定稿 |
 | `docs/specs/2026-08-11-optical-lab-candidate-b-design.md` | Optical Lab Candidate B 历史设计：单一 GPU 字形层、固定狭缝与 native WebGL 生命周期 | DEPRECATED → `docs/specs/2026-08-11-optical-lab-high-fidelity-design.md`；工程通过但视觉否决 |
-| `docs/specs/2026-08-11-optical-lab-high-fidelity-design.md` | `Science evolves.` 原型高保真重构：全画面分层流体已验收；放大修订将位移/亮度约提高两倍、radius 扩至 `.20`，并以共享表面推广至生产 Landing Hero | Tasks 11–14 完成；Task 15 本地共享晋升与 acceptance GREEN，独立复审/部署 preflight pending |
+| `docs/specs/2026-08-11-optical-lab-high-fidelity-design.md` | `Science evolves.` 高保真重构与生产共享规范：全画面分层流体、`.20` radius、pointer-local follow `<=4px`、follow+flow vector cap `<=8px`、无 global title/camera drift、物理设备性能门禁 | Production promotion 已批准；本地 final fix GREEN，物理移动端仍为 deployment blocker |
 | `docs/plans/2026-08-06-frontend-p0-p1-plan.md` | 前端 P0 地基收尾 + P1 首页视觉原型实施计划（11 Task：Tailwind v4/token+WCAG 门禁/字体/shadcn/i18n/Header/EvolvingRoSymbol 两变体/Hero/#latest/Playwright 三尺寸截图/用户验收门） | 待执行 |
 | `docs/superpowers/plans/2026-08-07-homepage-rework.md` | Landing 首页视觉重做计划（主视觉 bitmap、真实 latest/trust 模块、入口修复、截图验收） | 已完成（2026-08-07，commit 481b5c4） |
 | `docs/superpowers/plans/2026-08-11-optical-lab-candidate-b-plan.md` | Optical Lab Candidate B 实施计划：纯模型静止能量/8px 液态折射 → Candidate A visual RED 与单一 GPU 字形 GREEN 合并复审 → 本地验收与用户选择 | Task 1–3 本地工程验收完成；Step 6 用户选择 pending，未部署 |
-| `docs/superpowers/plans/2026-08-11-optical-lab-high-fidelity-reconstruction-plan.md` / `.superpowers/sdd/2026-08-11-optical-lab-high-fidelity-reconstruction/task-8-report.md` / `.superpowers/sdd/2026-08-11-optical-lab-high-fidelity-reconstruction-plan/task-{13,15}-report.md` | 高保真 OGL 重构计划及逐 Task 证据：Tasks 1–14 完成静态/放大流体/稳定空间门禁；Task 15 抽取共享 Landing/Lab surface 并记录本地 promotion acceptance | Task 15 本地 ready-to-deploy、独立复审/部署 preflight pending；未上线 |
+| `docs/superpowers/plans/2026-08-11-optical-lab-high-fidelity-reconstruction-plan.md` / `.superpowers/sdd/2026-08-11-optical-lab-high-fidelity-reconstruction/task-8-report.md` / `.superpowers/sdd/2026-08-11-optical-lab-high-fidelity-reconstruction-plan/task-{13,15}-report.md` / `.superpowers/sdd/2026-08-11-optical-lab-high-fidelity-reconstruction-plan/final-fix-report.md` | 高保真 OGL 重构计划及逐 Task/final-fix 证据：Tasks 1–15 完成静态、放大流体、shared Landing/Lab surface；Task 16 记录真实 `+4px` follow、combined `8px` cap、physical RTX/bundle/完整 release gates | `DONE_WITH_CONCERNS`：仅 physical mobile gate 未关闭；未上线 |
 | `docs/superpowers/plans/2026-08-12-optical-lab-energy-composition-iteration-plan.md` | Optical Lab 能量构图迭代：单一粒子拥有的透镜壳、弯曲全高粒子幕、径向连续性/绝对能量与稀疏右向细束门禁 | 已完成并经独立复审；本地全门禁 GREEN，待真机性能与用户视觉终验；生产 `/`/ECS 不变 |
 | `docs/plans/2026-08-07-web-quality-pipeline-plan.md` | Web 品质管线实施计划（Task 8 设计系统固化 → 9 动效层 → 10 Figma+MCP → 11 全站一致性 → 12 视觉回归门禁，2026-08-07 用户拍板） | 待执行 |
 | `docs/security/sandbox-threat-model.md` | 沙箱威胁模型（STRIDE + 8 类攻击向量 + 残留风险 + 缓解路线图，P1E-8） | 活文档 |
@@ -282,11 +282,11 @@
 | `docs/decisions/ADR-001-target-architecture.md` | 目标架构决策：选择性抽取 Scholars Tea，按 Baseline 重建平台底座 | 活文档（已接受） |
 | `docs/decisions/ADR-002-agent-tooling-portability.md` | Agent 工具能力与可迁移性决策（项目内安装/密钥不入库/分阶段工具候选） | 活文档 |
 | `docs/decisions/ADR-003-admin-strong-auth.md` | 管理后台强认证决策：nginx basic_auth 双层 + TOTP 列上线路障（P1A-8） | 活文档 |
-| `docs/runbooks/deployment.md` | 部署 runbook（cloud-sync/迁移/seed/nginx/验证、deploy.sh/DNS-01 实证）；§5.3 登记 accepted shared optical surface 的本地 release candidate 与上线前后硬门禁 | Task 15 未部署；release/rollback/checkup/backup/public evidence pending |
+| `docs/runbooks/deployment.md` | 部署 runbook（cloud-sync/迁移/seed/nginx/验证、deploy.sh/DNS-01 实证）；§5.3 登记 accepted shared optical surface、real `+4px` follow、RTX desktop evidence 与上线前后硬门禁 | 未部署；physical mobile、release/rollback/checkup/backup/public evidence pending |
 | `docs/runbooks/backup-restore.md` | 备份与恢复 runbook（四节骨架，Phase 1A 填充） | 骨架 |
 | `docs/runbooks/incident.md` | 故障响应 runbook（四节骨架，Phase 1A 填充） | 骨架 |
 | `docs/runbooks/monitoring.md` | 监控面板 runbook（Netdata + vnStat，同域 /monitor/ /traffic/ 路径，2026-08-01） | 已上线 |
-| `docs/runbooks/visual-release.md` | Optical Editorial production-build 视觉/无障碍/性能发布门禁：27-case 矩阵、accepted shared surface/reduced exact/pointer focused gate、预算、CI 证据与人工审美拒绝项 | 活 runbook；本地 GREEN，ECS repeat pending |
+| `docs/runbooks/visual-release.md` | Optical Editorial production-build 视觉/无障碍/性能发布门禁：27-case 矩阵、accepted shared surface/reduced exact/pointer focused gate、实测 route/static 预算、physical desktop/mobile cadence contract 与人工审美拒绝项 | 活 runbook；本地代码/RTX desktop GREEN，physical mobile BLOCKER，ECS repeat pending |
 
 ## infra/
 | 路径 | 用途 | 状态 |

@@ -164,6 +164,23 @@ Current infrastructure uses pinned base/worker images with bind-mounted applicat
   typecheck, production build, canonical root lint, product release `27/27`,
   focused Landing desktop/mobile/reduced/pointer checks, exact Lab native
   interaction/lifecycle matrix and byte-identical accepted reduced frame.
+- Final review fix locally wires the `4px` pointer-local replacement-patch
+  follow into real composite pixels while retaining the combined `8px` local
+  displacement cap and no global title/camera motion. Native A/B evidence
+  registers exactly `+4px` on authored energy pixels; the complete matrix keeps
+  the `.16–.20` halo at `1/16` sectors and all failure/lifecycle paths GREEN.
+- ADR-009 now authorizes the shared Landing/Lab OGL production exception and
+  records the WebGL2/static/reduced failure policy, continuous visible ambient
+  owner, browser-only/ECS boundary and measured bundle/static asset budget.
+- Hardware Chrome 150 selected the physical D3D11 RTX 4060 rather than
+  SwiftShader. Over the active Windows Remote Display cadence of about `32Hz`,
+  the 15-second resting and pointer intervals both measured `31.2ms` median,
+  `31.9ms` p95 and `0` cadence-relative dropped frames at DPR 1/fixed-full
+  quality. This is not a 60Hz local-console measurement.
+- **Deployment blocker:** no connected physical mobile was discoverable through
+  ADB or Windows portable-device enumeration. Do not run preflight/deploy or
+  describe the candidate as production-ready until a real mobile completes the
+  two prescribed 15-second intervals. Emulation cannot close this gate.
 - No schema, API, seed, Nginx, Compose, topology or secret change is included;
   the eventual deployment must use `--skip-migrate` unless the reviewed release
   diff later proves otherwise.
