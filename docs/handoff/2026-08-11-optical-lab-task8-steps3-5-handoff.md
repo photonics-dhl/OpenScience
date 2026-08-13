@@ -1,5 +1,14 @@
 # Optical Lab Task 8 Steps 3–5 Handoff
 
+## 2026-08-13 Asset-First Route Decision
+
+- User rejected the current right-side procedural ray fan as materially unlike `apps/web/public/optical-lab/target-reference.png`. Do not continue tuning the existing analytic ray field as the visual source of truth.
+- Next session must test an asset-first hybrid: a text-free transparent energy plate over the existing DOM/MSDF headline, with PNG as the first acceptance artifact and WebM/Unicorn only after the static composition is visually close.
+- Current OGL runtime, selection, flowmap, fallback and production isolation remain retained as infrastructure, but must not generate the full right-side material until a visual direction is re-approved.
+- Unicorn Studio research found official JS SDK, JSON export, WebM/MP4 export and commercial/no-logo export on the paid Legend plan; account access, self-hosting/CDN behavior and license terms are not yet verified for this project.
+- This session's Pillow-generated previews are untracked under `tmp/` and are not accepted assets. No page code, production route, ECS or deployment changed after the route decision.
+- First next-session action: read `AGENTS.md`, spec, progress and this handoff; inspect `target-reference.png`; produce and compare one transparent `energy-plate.png` at 1672×941 before any runtime integration.
+
 ## 2026-08-13 Energy Composition Iteration
 
 - The isolated Lab now uses one particle-owned double-sided lens shell at the fixed `.58` aperture, a nonlinear converging particle curtain and one final-composite family of sparse straight rightward rays. The former seven parallel caustic columns, duplicate low-resolution ray field and broad blur wash are removed or reduced.

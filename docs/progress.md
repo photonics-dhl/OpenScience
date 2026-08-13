@@ -1,5 +1,13 @@
 # OpenScience (XGS) 进度日志
 
+## 2026-08-13（资产优先路线决策）— ⏸️ 已确认下个 session 执行
+
+- **用户结论**：当前右侧解析射线扇面与真实原型差距过大，停止继续调 procedural shader；采用“资产优先混合层”路线，先验证高保真静态透明 PNG，再决定是否制作 WebM 动态层或引入 Unicorn Studio。
+- **本 session 诊断**：真正原型是 `apps/web/public/optical-lab/target-reference.png`；此前误展示 `test/visual/out/optical-lab/reference-desktop.png`（三栏实验对照页），已纠正。仓库已有 `target-reference.png`、OGL/MSDF atlas 和现有截图，但没有可直接复用的能量视频/3D 资产。
+- **路线分析**：当前 OGL 适合生命周期、交互和降级，不适合继续承担原型级右侧体积散射/非均匀细丝的完整生成。Unicorn Studio 官方提供 JS SDK、JSON export、WebM/MP4 export 与商业授权，但当前 session 无法操作其账户场景，不能凭空引入或假设 CDN/许可证边界已解决。
+- **失败实验**：本地 Pillow 程序生成的两版透明能量层仅作预览，均未接入页面、未提交；第一版过度规则，第二版能量过暗。临时实验目录为未跟踪 `tmp/`，下个 session 首先决定保留、迁移或清理。
+- **下个 session 单一入口**：使用已授权的图像生成/Unicorn 场景工具，制作一张无文字透明 `energy-plate.png`，叠加现有 DOM/MSDF 标题后在原尺寸与 `target-reference.png` 并排验证；未达到视觉接近前不得改生产 `/`、不得接入动态 runtime、不得部署 ECS。
+
 ## 2026-08-13（Optical Lab 能量构图迭代）— ✅ 本地实现与回归门禁收口
 
 - **单核构图**：粒子幕改为向固定 `.58` 孔径非线性汇聚；高能 pass 删除七列平行光柱，改为由粒子证据拥有的单一双侧透镜壳；最终 composite 只保留一组右向稀疏直线细束，降低 blur 占比并移除传播距离相关弯折。生产 `/`、ECS、后端、schema、认证与 Hermes 均未改变。
