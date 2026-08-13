@@ -313,7 +313,7 @@ async function measureSpatialResponse(page, baseline, candidate, center, radius 
   });
 }
 
-async function measureHaloShape(page, baseline, candidate, center, threshold = 3) {
+async function measureWiderFieldProbes(page, baseline, candidate, center, threshold = 3) {
   return page.evaluate(async ({ baselineBase64, candidateBase64, centerPoint, thresholdValue }) => {
     const decode = async (encoded) => {
       const blob = await (await fetch(`data:image/png;base64,${encoded}`)).blob();
@@ -327,8 +327,52 @@ async function measureHaloShape(page, baseline, candidate, center, threshold = 3
     };
     const before = await decode(baselineBase64);
     const after = await decode(candidateBase64);
+    const samplePatch = (radius) => {
+      const centerX = Math.round(before.width * (centerPoint.x + radius));
+      const centerY = Math.round(before.height * centerPoint.y);
+      let maximum = 0;
+      let responsive = 0;
+      for (let y = centerY - 3; y <= centerY + 3; y += 1) {
+        for (let x = centerX - 3; x <= centerX + 3; x += 1) {
+          const offset = (y * before.width + x) * 4;
+          const delta = Math.max(
+            Math.abs(before.data[offset] - after.data[offset]),
+            Math.abs(before.data[offset + 1] - after.data[offset + 1]),
+            Math.abs(before.data[offset + 2] - after.data[offset + 2]),
+          );
+          maximum = Math.max(maximum, delta);
+          if (delta >= thresholdValue) responsive += 1;
+        }
+      }
+      return { maximum, responsive };
+    };
+    const atRadius18 = samplePatch(.18);
+    const outsideRadius22 = samplePatch(.24);
+    return { atRadius18, outsideRadius22, threshold: thresholdValue };
+  }, {
+    baselineBase64: baseline.toString('base64'),
+    candidateBase64: candidate.toString('base64'),
+    centerPoint: center,
+    thresholdValue: threshold,
+  });
+}
+
+async function measureHaloShape(page, baseline, candidate, center, radiusRatio = .20, threshold = 3) {
+  return page.evaluate(async ({ baselineBase64, candidateBase64, centerPoint, radiusValue, thresholdValue }) => {
+    const decode = async (encoded) => {
+      const blob = await (await fetch(`data:image/png;base64,${encoded}`)).blob();
+      const bitmap = await createImageBitmap(blob);
+      const canvas = document.createElement('canvas');
+      canvas.width = bitmap.width;
+      canvas.height = bitmap.height;
+      const context = canvas.getContext('2d', { willReadFrequently: true });
+      context.drawImage(bitmap, 0, 0);
+      return context.getImageData(0, 0, bitmap.width, bitmap.height);
+    };
+    const before = await decode(baselineBase64);
+    const after = await decode(candidateBase64);
     const sectors = new Array(16).fill(0);
-    const radius = before.width * .16;
+    const radius = before.width * radiusValue;
     for (let y = 0; y < before.height; y += 1) {
       for (let x = 0; x < before.width; x += 1) {
         const dx = x - before.width * centerPoint.x;
@@ -352,6 +396,7 @@ async function measureHaloShape(page, baseline, candidate, center, threshold = 3
     baselineBase64: baseline.toString('base64'),
     candidateBase64: candidate.toString('base64'),
     centerPoint: center,
+    radiusValue: radiusRatio,
     thresholdValue: threshold,
   });
 }
@@ -500,7 +545,7 @@ try {
     const ambientTemporalStart = ambientTemporalStartCapture.buffer;
     const ambientTemporalEnd = ambientTemporalEndCapture.buffer;
     const ambientTemporalMotion = await measureLocalChange(
-      page, ambientTemporalStart, ambientTemporalEnd, { x: .5, y: .5 }, .16, 3,
+      page, ambientTemporalStart, ambientTemporalEnd, { x: .5, y: .5 }, .22, 3,
     );
     assert(ambientTemporalMotion.count > 0,
       `Ambient overlay capture path must observe temporal pixels: ${JSON.stringify(ambientTemporalMotion)}`);
@@ -556,7 +601,7 @@ try {
         await page.waitForTimeout(40);
         recoveredNext = (await captureInteractionCanvas(page)).buffer;
       }
-      const response = await measureSpatialResponse(page, pointerBaseline, activeFrame, point, .16, 3);
+      const response = await measureSpatialResponse(page, pointerBaseline, activeFrame, point, .22, 3);
       assert(response.changed >= 20, `${name} pointer produced no perceptible local pixels: ${JSON.stringify(response)}`);
       assert(
         response.centroid && Math.hypot(response.centroid.x - point.x, response.centroid.y - point.y) <= .04,
@@ -564,12 +609,12 @@ try {
       );
       assert(
         response.locality >= .75,
-        `${name} local response must retain at least 75% of changed pixels inside .16 stage width: ${JSON.stringify(response)}`,
+        `${name} local response must retain at least 75% of changed pixels inside .22 stage width: ${JSON.stringify(response)}`,
       );
       spatialEvidence[name] = response;
 
       if (name === 'left') {
-        const recoveredMotion = await measureLocalChange(page, recovered, recoveredNext, point, .16, 3);
+        const recoveredMotion = await measureLocalChange(page, recovered, recoveredNext, point, .22, 3);
         const recoveredSnapshot = await page.evaluate(() => window.__OPENSCIENCE_OPTICAL_ASSET_INTERACTION__);
         anchoredRecovery = { elapsedMs: recoveryObservedAt - injectedAt, recoveredMotion };
         captureEvidence = {
@@ -610,6 +655,7 @@ try {
     };
     const layerEvidence = {};
     let emptyHaloShape;
+    const widerFieldEvidence = {};
     for (const [name, point] of Object.entries(layerPoints)) {
       await page.waitForTimeout(920);
       const baseline = await captureCandidate(page, box);
@@ -617,11 +663,21 @@ try {
       await page.waitForTimeout(120);
       const activeFrame = await captureCandidate(page, box, path.join(outDir, `pointer-layer-${name}.png`));
       layerEvidence[name] = await measureSpatialResponse(page, baseline, activeFrame, point, .04, 3);
-      if (name === 'empty') emptyHaloShape = await measureHaloShape(page, baseline, activeFrame, point, 3);
+      widerFieldEvidence[name] = await measureWiderFieldProbes(page, baseline, activeFrame, point, 3);
+      if (name === 'empty') {
+        emptyHaloShape = await measureHaloShape(page, baseline, activeFrame, point, .20, 3);
+      }
     }
     assert(
-      emptyHaloShape.sectorCoverage <= .625,
+      emptyHaloShape.sectorCoverage <= .25,
       `Uniform-black response must not form a cursor-centred circular rim: ${JSON.stringify(emptyHaloShape)}`,
+    );
+    assert(
+      widerFieldEvidence.typography.atRadius18.maximum >= widerFieldEvidence.typography.threshold
+        && widerFieldEvidence.typography.atRadius18.responsive > 0
+        && widerFieldEvidence.typography.outsideRadius22.maximum
+          < widerFieldEvidence.typography.atRadius18.maximum,
+      `The widened field must respond at .18 stage width while remaining subordinate outside .22: ${JSON.stringify(widerFieldEvidence)}`,
     );
     assert(
       layerEvidence.energy.meanLocalMagnitude > layerEvidence.typography.meanLocalMagnitude
@@ -635,7 +691,7 @@ try {
     await dispatchGesture(candidate, touchPoint, 'touch', 61);
     await page.waitForTimeout(120);
     const touchActive = await captureCandidate(page, box, path.join(outDir, 'pointer-touch.png'));
-    const touchResponse = await measureSpatialResponse(page, touchBaseline, touchActive, touchPoint, .16, 3);
+    const touchResponse = await measureSpatialResponse(page, touchBaseline, touchActive, touchPoint, .22, 3);
     const touchSnapshot = await page.evaluate(() => window.__OPENSCIENCE_OPTICAL_ASSET_INTERACTION__);
     assert(Math.abs((touchSnapshot?.pointerX ?? -1) - touchPoint.x) < .02);
     assert(Math.abs((touchSnapshot?.pointerY ?? -1) - touchPoint.y) < .02);
@@ -647,12 +703,13 @@ try {
     assert(active, 'Asset interaction diagnostics are unavailable');
     assert.equal(active.apertureX, .58);
     assert.equal(active.ambientStrength, .035);
-    assert(Math.abs(active.patchFollowPx) <= 2, `Patch follow exceeded 2px: ${active.patchFollowPx}`);
-    assert(Math.hypot(active.refractionPx.x, active.refractionPx.y) <= 4.00001,
-      `Refraction exceeded 4px: ${JSON.stringify(active.refractionPx)}`);
-    assert(active.causticGain <= .080001, `Caustic gain exceeded 8%: ${active.causticGain}`);
+    assert(Math.abs(active.patchFollowPx) <= 4, `Patch follow exceeded 4px: ${active.patchFollowPx}`);
+    assert(Math.hypot(active.refractionPx.x, active.refractionPx.y) <= 8.00001,
+      `Refraction exceeded 8px: ${JSON.stringify(active.refractionPx)}`);
+    assert(active.causticGain <= .140001, `Caustic gain exceeded 14%: ${active.causticGain}`);
     await writeFile(path.join(outDir, 'spatial-metrics.json'), `${JSON.stringify({
       ambientMotion, anchoredRecovery, captureEvidence, emptyHaloShape, layerEvidence, spatialEvidence, touchResponse,
+      widerFieldEvidence,
     }, null, 2)}\n`);
 
     await candidate.dispatchEvent('pointerleave', { bubbles: false, pointerId: 1, pointerType: 'mouse' });

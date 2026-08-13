@@ -1,9 +1,9 @@
 export const ASSET_INTERACTION_LIMITS = Object.freeze({
   apertureX: .58 as const,
-  causticGain: .08,
-  localRefractionPx: 4,
-  localRadiusUv: .14,
-  patchFollowPx: 2,
+  causticGain: .14,
+  localRefractionPx: 8,
+  localRadiusUv: .20,
+  patchFollowPx: 4,
   recoveryMs: 900,
   responseMs: 120,
 });

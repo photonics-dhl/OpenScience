@@ -36,10 +36,12 @@ void main() {
   vec2 normal = vec2(-direction.y, direction.x);
   float along = dot(localDelta, direction);
   float across = dot(localDelta, normal);
-  float irregular = sin((along * 29.0 + across * 41.0) / max(0.001, uRadius) + phase) * uRadius * 0.055;
+  float transverseRadius = min(uRadius, 0.14);
+  float irregular = sin((along * 29.0 + across * 41.0) / max(0.001, uRadius) + phase)
+    * transverseRadius * 0.055;
   vec2 wakeDistance = vec2(
     (along + irregular) / max(0.001, uRadius * 1.12),
-    (across - irregular * 0.7) / max(0.001, uRadius * 0.54)
+    (across - irregular * 0.7) / max(0.001, transverseRadius * 0.54)
   );
   float localDistance = length(wakeDistance);
   float influence = (1.0 - smoothstep(0.28, 1.0, localDistance)) * uLocalStrength;

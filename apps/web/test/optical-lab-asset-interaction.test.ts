@@ -62,9 +62,9 @@ describe('Optical Lab accepted asset interaction envelope', () => {
 
     expect(sample.pointerX).toBe(.25);
     expect(sample.pointerY).toBe(.25);
-    expect(Math.hypot(sample.refractionPx.x, sample.refractionPx.y)).toBeCloseTo(4, 5);
-    expect(sample.refractionPx.x).toBeCloseTo(2.4, 5);
-    expect(sample.refractionPx.y).toBeCloseTo(3.2, 5);
+    expect(Math.hypot(sample.refractionPx.x, sample.refractionPx.y)).toBeCloseTo(8, 5);
+    expect(sample.refractionPx.x).toBeCloseTo(4.8, 5);
+    expect(sample.refractionPx.y).toBeCloseTo(6.4, 5);
   });
 
   it('approaches the latest velocity monotonically through the 120ms response window', () => {
@@ -109,11 +109,11 @@ describe('Optical Lab accepted asset interaction envelope', () => {
     const values = [0, 30, 60, 90, 120]
       .map((elapsed) => step(replaced, 3_060 + elapsed).refractionPx.x);
 
-    expect(values.every((value) => value >= -4 && value <= 4)).toBe(true);
-    expect(values.at(-1)).toBe(-4);
+    expect(values.every((value) => value >= -8 && value <= 8)).toBe(true);
+    expect(values.at(-1)).toBe(-8);
   });
 
-  it('never exceeds the authored follow, refraction and caustic caps', () => {
+  it('emits the approved doubled active envelope without exceeding its caps', () => {
     const createState = model?.createAssetInteractionState;
     const inject = model?.injectAssetInteraction;
     const step = model?.stepAssetInteraction;
@@ -124,13 +124,14 @@ describe('Optical Lab accepted asset interaction envelope', () => {
       pointerX: -1,
       pointerY: 2,
       velocityX: 500,
-      velocityY: -500,
+      velocityY: 0,
     }, 4_000);
     const sample = step(state, 4_120);
 
-    expect(Math.abs(sample.patchFollowPx)).toBeLessThanOrEqual(2);
-    expect(Math.hypot(sample.refractionPx.x, sample.refractionPx.y)).toBeLessThanOrEqual(4);
-    expect(sample.causticGain).toBeLessThanOrEqual(.08);
+    expect(sample.patchFollowPx).toBe(4);
+    expect(Math.hypot(sample.refractionPx.x, sample.refractionPx.y)).toBeCloseTo(8, 5);
+    expect(sample.causticGain).toBeCloseTo(.14, 5);
+    expect(sample.localRadiusUv).toBe(.20);
     expect(sample.pointerX).toBe(0);
     expect(sample.pointerY).toBe(1);
   });
@@ -162,8 +163,7 @@ describe('Optical Lab accepted asset interaction envelope', () => {
 
     expect(left.pointerX).toBe(.12);
     expect(right.pointerX).toBe(.88);
-    expect(left.localRadiusUv).toBeGreaterThanOrEqual(.12);
-    expect(left.localRadiusUv).toBeLessThanOrEqual(.16);
+    expect(left.localRadiusUv).toBe(.20);
     expect(step(leftState, 1_899).active).toBe(true);
     expect(step(leftState, 1_900).active).toBe(false);
     expect(follow.slice(0, -1).every((value) => value > 0)).toBe(true);
@@ -217,9 +217,10 @@ describe('Optical Lab accepted asset OGL boundary', () => {
     expect(shader).toContain('0.22');
     expect(shader).toContain('0.62');
     expect(shader).toContain('1.0');
-    expect(shader).toContain('min(4.0');
-    expect(shader).toContain('min(0.08');
-    expect(shader).toContain('0.7');
+    expect(shader).toContain('min(8.0');
+    expect(shader).toContain('min(0.14');
+    expect(shader).toContain('1.4');
+    expect(shader).toContain('emptyWeight * 0.21');
     expect(shader).toContain('smoothstep');
     expect(shader).not.toContain('abs(vUv.x - 0.58)');
   });
