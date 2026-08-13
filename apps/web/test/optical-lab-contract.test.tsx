@@ -20,6 +20,10 @@ const pageUrl = new URL('../app/_visual/optical-lab/page.tsx', import.meta.url);
 const pageModule = existsSync(fileURLToPath(pageUrl))
   ? await import('../app/_visual/optical-lab/page')
   : null;
+const assetCandidateRouteUrl = new URL('../app/%255Fvisual/optical-lab/page.tsx', import.meta.url);
+const assetCandidateRouteModule = existsSync(fileURLToPath(assetCandidateRouteUrl))
+  ? await import('../app/%5Fvisual/optical-lab/page')
+  : null;
 const typeSpecimenPageUrl = new URL('../app/_visual/optical-lab/type-specimen/page.tsx', import.meta.url);
 const typeSpecimenPageModule = existsSync(fileURLToPath(typeSpecimenPageUrl))
   ? await import('../app/_visual/optical-lab/type-specimen/page')
@@ -90,6 +94,78 @@ describe('isolated Optical Lab route contract', () => {
     expect(markup).toContain('data-optical-lab-semantic-title="true"');
   });
 
+  it('renders the asset query with a lazy interaction host and no server canvas', async () => {
+    const renderAssetCandidate = assetCandidateRouteModule?.default as unknown as (props: {
+      searchParams: { candidate: string };
+    }) => Promise<React.ReactElement>;
+    const markup = renderToStaticMarkup(await renderAssetCandidate({
+      searchParams: { candidate: 'asset' },
+    }));
+
+    const headlineText = markup
+      .match(/<h1\b[^>]*>(.*?)<\/h1>/)?.[1]
+      .replace(/<[^>]+>/g, '');
+    expect(markup).toContain('data-asset-candidate="true"');
+    expect(markup).toContain('data-optical-lab-target-typography-plate="true"');
+    expect(markup).toContain('data-typography-coupling="reference-plate"');
+    expect(markup).toContain('data-render-mode="asset-static"');
+    expect(markup).toContain('src="/optical-lab/energy-plate-black-alpha-v1.png"');
+    expect(markup).not.toContain('data-optical-lab-client-slot="true"');
+    expect(markup).toContain('data-optical-asset-interaction-host="true"');
+    expect(markup).not.toContain('<canvas');
+    expect(markup.match(/<h1\b/g) ?? []).toHaveLength(1);
+    expect(headlineText).toBe('Science evolves.');
+    expect(markup.match(/data-optical-lab-panel=/g) ?? []).toHaveLength(1);
+    expect(markup).not.toContain('data-optical-lab-panel="target"');
+    expect(markup).not.toContain('data-optical-lab-panel="current"');
+    expect(markup).not.toContain('/optical-lab/current-production.png');
+    expect(markup).toContain('data-optical-lab-asset-only="true"');
+    expect(markup.match(/data-optical-lab-exit=/g) ?? []).toHaveLength(1);
+  });
+
+  it('reports the asset stage as stable asset-static diagnostics', async () => {
+    const renderAssetCandidate = assetCandidateRouteModule?.default as unknown as (props: {
+      searchParams: { candidate: string };
+    }) => Promise<React.ReactElement>;
+    const markup = renderToStaticMarkup(await renderAssetCandidate({
+      searchParams: { candidate: 'asset' },
+    }));
+    const diagnostics = markup.match(/<dl\b[^>]*data-optical-lab-diagnostics="true"[^>]*>(.*?)<\/dl>/)?.[0] ?? '';
+
+    expect(markup).toMatch(/data-asset-candidate="true"[^>]*data-context-status="stable"[^>]*data-render-mode="asset-static"[^>]*data-stable-bounds="stable"/);
+    expect(diagnostics).toMatch(/data-context-status="stable"[^>]*data-render-mode="asset-static"[^>]*data-stable-bounds="stable"/);
+    expect(diagnostics).toContain('>Asset/static</dd>');
+    expect(diagnostics).toContain('>stable</dd>');
+  });
+
+  it.each([
+    ['other candidate', 'other'],
+    ['duplicate candidate', ['asset', 'asset']],
+  ] as const)('does not enable the asset stage for %s', async (_label, candidate) => {
+    const renderRoute = assetCandidateRouteModule?.default as unknown as (props: {
+      searchParams: { candidate: string | string[] };
+    }) => Promise<React.ReactElement>;
+    const markup = renderToStaticMarkup(await renderRoute({ searchParams: { candidate } }));
+
+    expect(markup).not.toContain('data-asset-candidate="true"');
+    expect(markup).toContain('data-render-mode="static-fallback"');
+    expect(markup).toContain('data-optical-lab-client-slot="true"');
+  });
+
+  it('ships the approved asset plate as a compact RGBA 1672 by 941 PNG', () => {
+    const assetPath = fileURLToPath(new URL('../public/optical-lab/energy-plate-black-alpha-v1.png', import.meta.url));
+
+    expect(existsSync(assetPath)).toBe(true);
+    if (!existsSync(assetPath)) return;
+
+    const png = readFileSync(assetPath);
+    expect(png.subarray(0, 8)).toEqual(Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]));
+    expect(png.readUInt32BE(16)).toBe(1672);
+    expect(png.readUInt32BE(20)).toBe(941);
+    expect(png[25]).toBe(6);
+    expect(png.byteLength).toBeLessThanOrEqual(2 * 1024 * 1024);
+  });
+
   it('keeps DOM ink until the fallback loads and restores it after image failure', () => {
     const rendererSource = readFileSync(
       fileURLToPath(new URL('../components/optical-lab/OpticalLabRenderer.tsx', import.meta.url)),
@@ -132,6 +208,14 @@ describe('isolated Optical Lab route contract', () => {
     expect(markup).not.toContain('radial-boundary');
     expect(markup).not.toContain('vertical-dotted-line');
     expect(markup).not.toContain('spiderweb-fan');
+  });
+
+  it('keeps the default visible diagnostics mode at DOM/static', async () => {
+    const markup = await renderLab();
+    const diagnostics = markup.match(/<dl\b[^>]*data-optical-lab-diagnostics="true"[^>]*>(.*?)<\/dl>/)?.[0] ?? '';
+
+    expect(diagnostics).toContain('data-render-mode="static-fallback"');
+    expect(diagnostics).toContain('>DOM/static</dd>');
   });
 
   it('does not leak the experimental renderer into the production homepage graph', () => {

@@ -251,13 +251,96 @@ instead:
 - existing five-region, similarity, ring, fan, staircase, mechanical-line,
   duplicate-title, interaction, fallback and resource-cleanup gates stay GREEN.
 
-No new renderer, dependency, route or production integration is authorized.
+This restriction is superseded only for the accepted asset interaction overlay
+defined below. It still prohibits replacing the approved resting composition,
+adding dependencies or changing production integration.
 
 ### Human gate
 
 Show full-size reference and candidate side by side at 1672 × 941. The user must
 approve typography first, then the resting optical material, then pointer motion.
 Passing automated gates does not authorize production replacement.
+
+## 2026-08-13 Accepted Asset Interaction Amendment
+
+The user accepted the fixed 1672 × 941 asset candidate as the resting visual
+baseline, then selected a bounded mixed-flow interaction. The resting frame is
+immutable: with no active pointer, reduced motion, initialization failure or
+completed recovery, the rendered pixels must equal the accepted baseline.
+
+### Architecture
+
+Add a dedicated `AssetInteractionRenderer` beside, not inside, the existing
+procedural Optical Lab renderer. It owns one transparent WebGL2 canvas above the
+accepted static energy and typography plates. The canvas remains visually empty
+at exact rest and renders only a feathered central replacement patch while
+input or recovery is active. It reuses the pinned OGL dependency and the
+existing 96 × 54 velocity flowmap concept; it does not regenerate glyphs,
+replace the static plates or import another rendering library.
+
+The interaction renderer samples the same approved energy and typography
+textures that define the resting candidate. A shader recomposes those textures,
+applies flow displacement inside the central patch and emits transparent pixels
+outside it. The patch includes opaque black replacement pixels beneath its
+distorted optical material so the unchanged static frame cannot show through as
+a duplicate. Feathered edges must not reveal a rectangular boundary.
+
+### Input and response
+
+- The whole Hero receives passive pointer velocity. Visible response remains
+  localized around the fixed 58% aperture; the cursor never becomes a radial
+  attraction point, ring, symmetric fan or movable light source.
+- Desktop pointer movement and mobile pointer/touch dragging use the same
+  normalized velocity model. Touch interaction must not block ordinary page
+  scrolling until a pointer is actively dragging within the Hero.
+- Apparent follow inside the patch is at most 2 CSS px. Local flowmap refraction
+  is radially clamped to 4 CSS px. Caustic energy gain is at most 8%.
+- Particle evidence bends slightly along the existing positive-x optical field;
+  it cannot reverse direction, move the aperture or create new broad haze.
+- Response approaches the latest velocity monotonically over approximately
+  120ms. Release or inactivity decays without bounce and reaches exact zero by
+  650ms, at which point the canvas becomes visually empty and the accepted
+  static pixels are authoritative again.
+- The earlier whole-line movement contract is narrowed for this asset mode:
+  input is global, but the approved title outside the central replacement patch
+  does not translate.
+
+### Capability and lifecycle policy
+
+| Condition | Result |
+| --- | --- |
+| WebGL2, normal motion | Lazy interaction canvas; RAF only during input/recovery |
+| `prefers-reduced-motion: reduce` | Accepted static frame; no interaction context or RAF |
+| WebGL2 unavailable or initialization failure | Accepted static frame; no visual or layout change |
+| Context loss | Remove the overlay, expose the accepted static frame, retry only through a fresh reviewed lifecycle |
+| Pointer/touch ends | Monotonic recovery, exact rest and inactive RAF by 650ms |
+
+The canvas is decorative, `aria-hidden`, pointer-transparent and generation
+owned. Every context, texture, target, program, buffer, listener and animation
+frame must be released exactly once on failure, context replacement and React
+unmount. No persistent RAF is allowed at rest.
+
+### Accessibility and selection
+
+The single semantic `h1` remains the only readable title and serializes exactly
+as `Science evolves.`. The overlay cannot intercept pointer selection, keyboard
+navigation or assistive technology. Selecting the title must still expose a
+visible selection highlight. Reduced-motion users receive the complete accepted
+resting composition with no functional information loss.
+
+### Acceptance gates
+
+- Native resting capture before any pointer event is pixel-identical to the
+  accepted asset baseline; the overlay reports no active RAF and no visible ink.
+- Honest elapsed-time captures cover pointer left, aperture, right, touch drag
+  and recovery. Displacement stays within 4 CSS px, gain within 8%, aperture at
+  58%, downstream direction positive-x and exact rest at 650ms.
+- Browser tests reject a radial cursor halo, rectangular patch edge, duplicated
+  static ink, whole-title drift, bounce, persistent RAF and leaked resources.
+- Reduced-motion, unavailable WebGL2, initialization failure, context loss and
+  unmount all retain the accepted static frame and semantic selection.
+- Pointer-motion visual acceptance remains a separate user gate. Passing tests
+  does not authorize production `/` replacement or ECS deployment.
 
 ## Scope
 
@@ -267,6 +350,7 @@ Passing automated gates does not authorize production replacement.
 - OGL evaluation and dependency/license recording.
 - Licensed font specimen and MSDF atlas workflow.
 - Multi-pass WebGL2 renderer and generated static fallback.
+- Accepted static asset plates and the isolated mixed-flow interaction overlay.
 - Reference-relative browser gates and full-size user review.
 - ADR-009, progress, index and handoff synchronization.
 
@@ -280,10 +364,149 @@ Passing automated gates does not authorize production replacement.
 
 ## Implementation Boundary
 
-After written approval, create a separate implementation plan. The first task is
-a typography-only specimen in the isolated Lab; no particles or postprocessing
-may be implemented until that specimen passes full-size user review. Production
-replacement and deployment remain later, separately authorized operations.
+The typography and resting asset candidate have passed full-size user review.
+After written approval of the interaction amendment, update the implementation
+plan beginning with pure response-envelope and lifecycle RED tests, then build
+the isolated overlay without reopening the accepted resting composition.
+Pointer-motion visual review remains mandatory before any separate production
+replacement or deployment decision.
+
+## 2026-08-13 Asset Presentation and Perceptibility Iteration
+
+The first motion review showed two presentation problems rather than a need to
+increase the approved safety envelope: target and current-production panels
+compete with the deployable candidate, while ordinary mouse motion does not
+drive the bounded response close enough to its existing authored limits.
+
+### Approved direction
+
+- Exact `candidate=asset` becomes a single-product acceptance surface. It shows
+  only the deployable candidate at the largest available 16:9 size; the target,
+  current-production panel, comparison captions and diagnostic grid do not
+  occupy the visible acceptance surface.
+- The accepted resting composition, typography plate, energy plate and fixed
+  `.58` seam remain unchanged. The page retains the one semantic selectable
+  `Science evolves.` heading and a minimal way back to the normal site.
+- Interaction limits stay unchanged: apparent follow `≤2px`, local refraction
+  `≤4px` and caustic gain `≤8%`. No stronger display mode is introduced.
+- Pointer/touch velocity sensitivity increases so a normal deliberate gesture
+  reaches a meaningful portion of the existing envelope. The normalized vector
+  remains capped at one, remains positive-x downstream and uses the existing
+  120ms monotonic response and 650ms exact recovery.
+- The full candidate surface remains the input region, while the visible change
+  stays inside the feathered central seam patch. No cursor halo, radial field,
+  title-wide translation or resting animation is added.
+
+### Acceptance
+
+- Exact asset query renders one candidate surface and no target/current panels.
+- A representative 18 CSS px deliberate mouse gesture sampled over 24ms reaches
+  at least 50% of the response envelope without exceeding any existing cap.
+- Slow movement remains smooth; pointer, touch, reduced motion, failures,
+  cleanup and native 1672 × 941 resting-pixel identity gates remain GREEN.
+- The running local acceptance URL remains isolated. This iteration does not
+  authorize production `/` replacement, commit or ECS deployment.
+
+## 2026-08-13 Full-Surface Layered Fluid Interaction
+
+The user rejected the fixed-seam interaction as spatially constrained and
+selected option C, a full-surface layered response informed by direct runtime
+observation of the Moonshot AI landing experience. The reference uses a
+continuously moving horizontal optical medium and a pointer-centred local
+disturbance that follows the cursor. This amendment adopts that interaction
+principle without copying the reference composition, typography, luminous orb
+or custom cursor.
+
+This section supersedes the interaction-specific spatial and resting-motion
+requirements in the preceding Asset Presentation and Perceptibility Iteration.
+That section remains authoritative for the single-candidate presentation,
+accepted static composition and production-isolation boundary only.
+
+### Visual thesis
+
+The accepted `Science evolves.` composition becomes a quiet optical medium:
+the resting typography, placement, energy plate and 16:9 framing remain the
+visual authority, while low-amplitude ambient flow prevents the surface from
+feeling inert. Pointer movement perturbs the medium wherever it occurs rather
+than remotely activating a fixed centre seam.
+
+### Layered field
+
+- The interaction canvas covers the complete candidate stage and is not clipped
+  by the former radial mask at 58% x.
+- A low-amplitude ambient field remains active across the complete stage. It is
+  spatially broad, slow and non-directional enough that the accepted resting
+  composition remains immediately recognizable.
+- Pointer and touch input inject a local two-dimensional disturbance centred on
+  the current pointer coordinates. Its visible radius is between 12% and 16%
+  of stage width and follows both x and y.
+- The field is deliberately layered. Empty black regions receive the weakest
+  refractive/brightness response; typography receives a medium response; the
+  existing energy/seam region receives the strongest response. Layer weights
+  derive from the accepted source plates rather than DOM-wide translation.
+- The fixed `.58` aperture is retained only as an authored energy landmark, not
+  as the interaction centre or a clipping boundary.
+
+### Motion character
+
+- Ambient motion is continuous but subordinate: no visible title drift, no
+  global camera movement, no cursor halo and no periodic scale pulse.
+- Pointer response is velocity-aware and position-aware. Slow movement creates
+  a smooth local refraction; faster movement adds a restrained trailing wake.
+  Input is accumulated through the flow texture rather than replacing the
+  whole field per event.
+- The local disturbance reaches perceptible strength within 120ms, then decays
+  monotonically after input stops and becomes visually inactive within
+  700–900ms. Recovery must not snap, reverse direction or leave a hard circular
+  boundary.
+- Pointer leave decays the existing field in place. Re-entry starts from the
+  remaining field rather than resetting the canvas.
+
+### Preservation and accessibility
+
+- At the accepted reference viewport, disabling animation at any frame exposes
+  the same approved static plates and selectable semantic `Science evolves.`
+  heading. The interaction renderer does not replace the semantic title.
+- `prefers-reduced-motion: reduce`, WebGL initialization failure, context loss
+  and runtime failure display the exact accepted static composition with no
+  ambient RAF or interaction canvas.
+- Touch uses the same full-surface field with passive scrolling preserved where
+  the gesture is predominantly vertical. Keyboard users receive the same
+  static semantic content and exit control.
+- The isolated `candidate=asset` route remains the only implementation surface.
+  Production `/`, commit and ECS deployment remain outside this amendment.
+
+### Performance and lifecycle budgets
+
+- Continue using one lazy WebGL2/OGL owner and the existing compact ping-pong
+  flow texture; increase texture resolution only if the full-surface visual
+  gate proves 96 × 54 visibly blocky.
+- Ambient animation may initialize after the candidate is visible, but it must
+  stop when the document is hidden, the candidate leaves the viewport, reduced
+  motion becomes active, context is lost or the component unmounts.
+- No more than one canvas, one RAF chain and one owned listener set may exist.
+  All GPU resources and diagnostic globals must be released on SPA unmount.
+
+### Acceptance
+
+- Native-size visual evidence preserves the accepted typography and energy
+  composition while showing non-zero low-amplitude motion in at least four
+  spatial quadrants during ambient operation.
+- Representative pointer samples at left, centre, right and upper/lower stage
+  positions each produce visible local change around that position; no sample
+  is redirected to the fixed 58% seam.
+- At least 75% of changed pixels for a stationary local response fall within a
+  16%-of-width radius around the pointer, while the ambient field remains
+  weaker outside that neighbourhood.
+- Typography/energy pixels respond more strongly than empty black regions, but
+  no glyph edge moves more than 4 CSS px and no local brightness gain exceeds
+  8% above the authored asset.
+- Pointer/touch, 700–900ms monotonic decay, pointer leave/re-entry, reduced
+  motion, visibility/intersection suspension, initialization/runtime/context
+  failure, exact resource cleanup and single-owner gates are executable and
+  GREEN before user motion review.
+- User motion review at desktop width is mandatory. Automated acceptance does
+  not authorize production promotion, commit or deployment.
 
 ## Technical References
 
@@ -296,3 +519,37 @@ replacement and deployment remain later, separately authorized operations.
 - Troika SDF text reference: <https://github.com/protectwise/troika/tree/main/packages/troika-three-text>
 - Three.js postprocessing reference: <https://github.com/pmndrs/postprocessing>
 - Google Fonts licensing repository: <https://github.com/google/fonts>
+
+## 2026-08-13 Amplified Field and Production Promotion
+
+This amendment records the user's post-acceptance choice to combine the
+stronger-response and wider-field options, then deploy the accepted surface as
+the production landing Hero.
+
+- Preserve the accepted `Science evolves.` typography, energy plate, static
+  pixels, 16:9 composition, directional irregular wake, lifecycle and exact
+  reduced-motion fallback.
+- Increase the authored ambient displacement budget from `.7px` to `1.4px`,
+  local displacement from `4px` to `8px`, whole-patch follow from `2px` to
+  `4px`, and caustic gain from `.08` to `.14`.
+- Increase local radius from `.14` to `.20` of stage width. This widens the
+  response without doubling area twice over; locality acceptance remains
+  pointer-centred and must keep at least 75% of changed pixels within `.22` of
+  stage width.
+- Keep the interaction velocity-aware and anisotropic. The stronger/wider
+  field must not create a closed cursor halo, hard circular boundary, global
+  title drift, camera movement or scale pulse. The sixteen-sector outer-rim
+  halo probe remains at no more than four occupied sectors.
+- Maintain `energy > typography > empty`, with typography at least `1.25 ×`
+  empty response. Empty black remains visible but subordinate.
+- Keep the 120ms approach and visually inactive local response by 900ms while
+  full-surface ambient motion continues. Hidden, offscreen, reduced-motion,
+  unavailable and disposed states retain the existing exact cleanup contract.
+- Promote the exact accepted surface into the production `/` Hero through one
+  shared component; the isolated Lab route remains a diagnostic/acceptance
+  surface rather than a forked implementation. Production keeps one semantic
+  `h1`, existing navigation and downstream Latest Research content.
+- Deployment is code-only: no database migration, seed, ECS topology, Nginx,
+  API contract or secret change. Use the repository deployment script with
+  `--skip-migrate`, a pre-deploy backup/checkup, a verified release ref and a
+  recorded rollback ref.

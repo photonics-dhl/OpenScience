@@ -1,0 +1,252 @@
+# Handoff — 2026-08-13 Optical Lab Asset Interaction
+
+## Current canonical state — full-surface interaction (read this only)
+
+> **Supersedes every fixed-centre instruction in the historical appendix
+> below.** The blue six-facet object, old procedural renderer, fixed `.58`
+> interaction centre, central-only patch, 650ms recovery and “implement Tasks
+> 11–13” are all stale. `.58` is now only an authored energy landmark.
+
+- **Current goal:** user motion review of the completed full-surface layered
+  fluid interaction at `/_visual/optical-lab?candidate=asset` on local preview
+  port 3066. Static `Science evolves.` typography/energy/16:9 composition is
+  already accepted and must not be regenerated or recomposed.
+- **Implemented:** complete-stage low-amplitude ambient flow; pointer/touch
+  local response at real x/y with `.14` stage-width radius; velocity-aligned
+  `1.12 × 0.54` irregular feathered wake with no cursor-centred circular halo;
+  layered response `energy > typography >= empty × 1.25`; signed velocity;
+  accumulated wake;
+  monotonic local recovery with visual inactivity by 900ms; reduced-motion,
+  visibility/intersection, context/runtime failure and SPA cleanup.
+- **Stable acceptance:** task-owned server `127.0.0.1:3113` used parent PID
+  `53936` / listener PID `80740`. Final five complete isolated-browser matrices
+  were exit 0 in `49.1/50.7/48.7/51.2/51.3s`; listener PID was unchanged each
+  run, then the owned server was released. Final locality minimum `.998889`,
+  all centroids within `.04`, layer means `15.770 > 7.787 > 6.712`, touch
+  locality `.999951`, four ambient quadrants non-zero, recovered local pixels
+  zero at `827.7ms` and follow exact zero at 900ms.
+- **Engineering gates:** reduced-motion native frame equals the accepted fixture
+  byte-for-byte with zero canvas/RAF; focused Vitest `35/35`, web typecheck and
+  production build exit 0. Final review fix evidence: old radial mutation
+  occupied `16/16` halo sectors; current wake occupies `3/16`; renderer-owned
+  same-RAF readback completes its real nontransparent PNG at `850.1ms`
+  (alpha/RGB `1571650/1568338`, recovered local `33/max9`); final layer means
+  `11.816 > 8.002 > 3.133`. Final upper centroid `(.53217,.31360)` is distance
+  `.0349` from input and halo remains `2/16` sectors. See
+  `.superpowers/sdd/2026-08-11-optical-lab-high-fidelity-reconstruction-plan/task-13-report.md`
+  for exact RED/GREEN and process evidence.
+- **Safety:** intentionally dirty/uncommitted worktree
+  `E:/Miscellaneous/XGS/.worktrees/optical-editorial-v3`, branch
+  `codex/optical-editorial-v3`. Do not reset/delete, read `.env`, commit, deploy,
+  change production `/`, touch ECS or stop unrelated port 3000.
+- **Next action:** show the 3066 desktop preview and ask only accept / iterate /
+  reject for motion. Automated acceptance does not authorize production
+  promotion. Current verified production-preview listener PID is `20136`; `/`
+  and the exact asset route are HTTP 200, asset-only marker is true and panel
+  count is one.
+
+> **Recovery evidence correction:** the earlier `762.3ms` compositor-copy PNG
+> was all transparent because it copied WebGL outside RAF with
+> `preserveDrawingBuffer:false`; do not reuse that evidence. Current capture is
+> renderer-owned `readPixels` immediately after draw, and asserts nonzero
+> ambient, active and recovered alpha/RGB before accepting recovery timing.
+
+## Historical superseded record — preserve as evidence, do not execute
+
+> **Fresh verification override (2026-08-13):** the deterministic mounted
+> 18px/24ms browser assertion is timing-flaky because it reads the last RAF
+> snapshot after a fixed 120ms timer. A controller rerun failed at `.3845`, and
+> four repetitions produced `.4135` fail / `.4583` fail / pass / pass. Treat the
+> earlier native-gate GREEN statement as superseded until an explicitly
+> authorized bounded-condition-wait fix is implemented and repeatedly verified.
+
+## Read This First: Single Current Task
+
+The only current task for the next session is the user's visual review of the
+implemented isolated Optical Lab asset candidate's central mixed-flow pointer
+interaction on its single deployable candidate surface. Engineering
+implementation is present, but the native motion gate has a known timing
+flake; visual motion acceptance is still
+pending.
+
+Do **not** restart, reinterpret or substitute any of these historical tasks:
+
+- do not work on the old blue six-facet object;
+- do not tune the rejected procedural ray fan or old Candidate B renderer;
+- do not regenerate, re-font or recompose the accepted resting
+  `Science evolves.` visual;
+- do not change production `/`, deploy ECS or begin production promotion.
+
+The visual source of truth is
+`apps/web/public/optical-lab/target-reference.png`. The accepted isolated result
+is `/_visual/optical-lab?candidate=asset` in worktree
+`E:/Miscellaneous/XGS/.worktrees/optical-editorial-v3` on branch
+`codex/optical-editorial-v3`.
+
+## Current Goal
+
+Show the implemented interaction at native size and obtain the user's explicit
+accept / iterate / reject decision. If the user requests iteration, change only
+the central motion response they identify; do not reopen the accepted resting
+composition.
+
+## User Decisions — Closed
+
+- Resting visual: explicitly accepted at native 1672 × 941.
+- Interaction family: mixed optical flow.
+- Input region: whole Hero.
+- Visible response: central seam only; no cursor halo or attraction field.
+- Desktop/mobile: equivalent pointer and touch velocity behavior.
+- Reduced motion: fully static accepted frame, no interaction context or RAF.
+- Architecture: separate `AssetInteractionRenderer`, not modification of the
+  rejected procedural Optical Lab renderer.
+
+## Contract — Do Not Reopen
+
+- Accepted resting pixels are immutable.
+- Transparent WebGL2 overlay is empty at rest and renders only a feathered
+  central replacement patch during input/recovery.
+- Apparent patch follow ≤2 CSS px; local refraction ≤4 CSS px; caustic gain
+  ≤8%; fixed aperture x=.58.
+- Approximately 120ms monotonic response; no bounce; exact zero and inactive
+  RAF by 650ms.
+- Particle evidence may bend only along the existing positive-x field. No
+  radial cursor mask, ring, symmetric fan, broad haze, rectangular patch edge,
+  duplicate ink or whole-title drift.
+- One selectable semantic `h1` remains exact `Science evolves.`; the decorative
+  canvas is `aria-hidden` and pointer-transparent.
+- WebGL2 failure, context loss and reduced motion expose the accepted static
+  frame without layout or visual change.
+
+Canonical details are in
+`docs/specs/2026-08-11-optical-lab-high-fidelity-design.md`, sections
+“2026-08-13 Accepted Asset Interaction Amendment” and “2026-08-13 Asset
+Presentation and Perceptibility Iteration”. Both sections are implemented; the
+user explicitly confirmed the architecture and every behavior choice. Dynamic
+visual acceptance remains pending.
+
+## Done
+
+- Corrected earlier task drift from the blue object/procedural field to the
+  real target reference.
+- Generated and promoted
+  `apps/web/public/optical-lab/energy-plate-black-alpha-v1.png` without an API
+  key.
+- Integrated exact `candidate=asset` routing and kept the default Lab and
+  production homepage isolated.
+- Corrected typography coupling: full target central typography/effect plate,
+  independent full-height energy plate and transparent selectable DOM title.
+- User visually accepted the resting candidate.
+- Browser/contract safeguards cover exact query isolation, RGBA dimensions,
+  no client/GPU mount in static asset mode, semantic selection and process
+  cleanup.
+- Added the focused implementation addendum to the existing high-fidelity plan.
+- Implemented a pure bounded response model, lazy `AssetInteractionMount`,
+  separate OGL `AssetInteractionRenderer`, fixed-seam 96 × 54 flow pass and
+  feathered composite shader without changing the old procedural renderer.
+- Added honest browser coverage for pointer left/aperture/right, touch drag,
+  reduced motion, context loss, exact 650ms recovery, outer-pixel identity and
+  process cleanup.
+- Fixed the browser-discovered GLSL ES reserved-word failure (`patch` →
+  `patchMask`) and retained a CSS compositor feather boundary.
+- Closed independent-review findings: leftward input can no longer reverse the
+  authored positive-x field; initialization/runtime/context/unmount paths now
+  prove canvas/listener/RAF/OGL cleanup; and the primary rest gate renders a
+  real 1672 × 941 stage against a committed accepted-baseline fixture.
+- Replaced the exact asset query's three-panel comparison shell with one
+  centered, uncropped 16:9 candidate figure (maximum width 1672px), one
+  semantic heading and one compact keyboard-visible exit link. Target/current
+  figures and captions remain on every non-asset Lab route; diagnostics remain
+  in the asset DOM but are visually hidden.
+- Added a deterministic mounted browser gesture with PointerEvent samples
+  exactly 18 CSS px and 24ms apart. Velocity deltas use `event.timeStamp` while
+  the renderer envelope retains its performance clock; published follow reaches
+  at least .5 at the 120ms response point without changing any cap or outer
+  accepted pixels.
+
+## Latest Evidence
+
+- Web Vitest: `32 files / 237 tests` passed.
+- Focused interaction + contract: `35/35` passed.
+- Web typecheck: passed.
+- Interaction browser gate and original static asset capture: passed; ports
+  3065 and 3063 were released. The temporary responsive check also released
+  port 3066.
+- Fresh production build: passed; `/` remains `3.87 kB / 112 kB`.
+- Asset-only desktop/mobile browser evidence: one panel, one heading, one exit,
+  zero comparison captions, hidden diagnostic DOM retained, no horizontal
+  overflow, contained plates and a visible 2px focus outline at 1672×941 and
+  390×844.
+- Rest and recovered candidate PNGs are byte-identical; atomic active-frame
+  pixels outside the central seam patch equal rest.
+- Native baseline fixture:
+  `apps/web/test/visual/fixtures/optical-lab-asset-accepted-1672x941.png`.
+- Native title band, headline core and first-`e` seam comparison against the
+  target: mean absolute RGB error `0`, max `0`.
+- Motion evidence is in the ignored
+  `apps/web/test/visual/out/optical-lab/asset-interaction/` directory.
+
+### Timing-flake override — current verification truth
+
+The mounted 18px/24ms assertion now RAF-polls the real published global until
+follow reaches .5, bounded at 500ms with latest-snapshot diagnostics. Exact
+event timestamps, 180ms wall-clock separation, caps, central-only pixels,
+recovery and all lifecycle cases remain unchanged; the gate does not import the
+mapping helper.
+
+The follow condition passed on multiple full native runs (ports 3067, 3068,
+3071, 3072 and 3073) and did not fail after this repair. Five consecutive clean
+runs could not be obtained because the owned Next dev/full gate repeatedly
+failed outside the follow assertion: reload/global loss, startup 500, one
+ArrayBuffer allocation failure, one existing unmount canvas-remove observation
+failure, and process-exit hangs after ports 3065/3074 stopped listening. The
+best streak was three consecutive exit-0 runs (3071–3073); 3074 then hit its
+120s ceiling and left an owned process, which was precisely validated and
+stopped. Stable five-run native GREEN is blocked by local gate infrastructure
+and is not claimed.
+
+## Deferred Promotion Minors
+
+These do not block the isolated Lab's user dynamic-visual review, but must be
+closed before commit or production promotion:
+
+- make the pre-normalization desktop/mobile actual-layout checks durable in a
+  browser gate; the existing native interaction gate intentionally normalizes
+  to 1672×941 for exact pixel evidence;
+- clear `window.__OPENSCIENCE_OPTICAL_ASSET_INTERACTION__` after SPA unmount.
+  Canvas, WebGL resources, RAF and owned listeners already clean up correctly;
+  only the diagnostic global currently survives with its disposed snapshot.
+
+## Working Tree and Safety
+
+The worktree is intentionally dirty and uncommitted. Preserve all existing
+changes and untracked files; do not delete or reset them. Relevant paths include:
+
+- modified route wrappers, Optical Lab page/component/CSS and contract test;
+- untracked interaction component, model, OGL renderer/flow/shaders, unit test
+  and browser gate;
+- modified active spec, plan, progress, index and historical handoff;
+- untracked approved PNG and asset capture script;
+- untracked `tmp/` image-generation and local inspection evidence.
+
+No production or ECS writes are authorized. Do not read `.env` or retry the
+failed API-key path. Do not commit unless the user separately asks.
+
+## Next Session: Exact Execution Order
+
+1. Work only in `E:/Miscellaneous/XGS/.worktrees/optical-editorial-v3`.
+2. Read `AGENTS.md` → `docs/OpenScience_Kimi_Development_Spec.md` → this
+   handoff → the active spec amendment → `docs/progress.md` →
+   `project_index.md`.
+3. Open exact `/_visual/optical-lab?candidate=asset` locally at native size;
+   this is now the single candidate surface. Let the user inspect mouse and
+   touch-equivalent central motion.
+4. Ask only for accept / iterate / reject. If iterating, reproduce the named
+   motion defect with the existing browser gate before changing code.
+5. Even after visual acceptance, stop. Production promotion, commit and ECS
+   deployment are separate actions requiring explicit user authorization.
+
+Suggested skills: `using-superpowers`, `writing-plans`, `executing-plans`,
+`test-driven-development`, `frontend-design`, `architecture-guard`,
+`test-gate`, `verification-before-completion`, `requesting-code-review` and
+`docs-sync`.

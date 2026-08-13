@@ -1,5 +1,61 @@
 # Optical Lab Task 8 Steps 3–5 Handoff
 
+> **SUPERSEDED CURRENT ENTRY:** This long document is historical evidence.
+> Resume only from
+> `docs/handoff/2026-08-13-optical-lab-asset-interaction-handoff.md`. The static
+> asset visual is already accepted; its only unfinished task is the central
+> mixed-flow interaction. Do not restart transparent-asset generation or old
+> procedural rendering work.
+
+## 2026-08-13 Accepted Interaction Architecture
+
+- The user selected mixed optical flow, global Hero input with central-only visible response, equivalent desktop/touch behavior, and a fully static reduced-motion result.
+- The active design now specifies a separate lightweight OGL `AssetInteractionRenderer`: the accepted static plates remain authoritative at rest; a feathered central replacement patch appears only during input/recovery and becomes transparent with inactive RAF by 650ms.
+- Bounds are patch follow ≤2 CSS px, local refraction ≤4 CSS px, caustic gain ≤8%, monotonic response near 120ms, fixed 58% aperture and no radial cursor field, whole-title drift or broad haze.
+- Written spec review is the current gate. No interaction code, production `/` change or ECS deployment is authorized yet.
+
+## 2026-08-13 Visual Acceptance and Interaction Request
+
+- The user explicitly accepted the current native visual candidate. Its resting typography, central coupling and energy composition are now the fixed baseline.
+- The user additionally requires central mouse interaction in the actual accepted product. No interaction implementation is authorized until its behavior is confirmed; motion must enhance, never replace or visibly drift, the accepted resting frame.
+- The existing active design offers a bounded baseline: velocity-follow rather than a radial cursor force, 1–2 CSS px whole-line follow, at most 4 CSS px local refraction, at most 8% caustic gain, monotonic response near 120ms and exact rest by 650ms with a fixed 58% aperture.
+- Production `/` and ECS remain unchanged and undeployed.
+
+## 2026-08-13 Typography–Energy Coupling Correction
+
+- The prior seam clip was visually invalid: it removed the final `e` of `Science` and left a flat, distorted DOM `evolves`; do not restore or describe that state as complete.
+- Exact asset mode now layers the full-height transparent energy plate, a feather-masked central typography/effect plate from the project-owned target reference, and one transparent selectable semantic heading. The legacy 1.6px DOM stroke is disabled in asset mode.
+- Native 1672×941 comparison reports zero mean/max RGB error across the full title band, headline core and first-`e` seam regions. Contract/browser RED→GREEN also proves intact overflow, loaded plate dimensions, transparent selectable text and no client/canvas/GPU mount.
+- This remains an isolated fixed-aspect visual acceptance prototype. Production `/`, ECS and responsive promotion are unchanged; user visual approval is still pending and must not be inferred from pixel/test evidence.
+
+## 2026-08-13 Asset Seam Ghost Fix
+
+- The apparent duplicate title was not baked into the generated RGBA plate. Archivo `Science` ink overflowed its 58% allocation while Bodoni `evolves` began at that same seam, so both were painted near the aperture.
+- Asset mode now clips only the overflowing Science ink at the seam. The default Lab runtime, semantic selectable title, asset composition, production `/` and ECS remain unchanged.
+- The browser regression guard first failed on computed `overflow-x: visible`, then passed with the seam clip and refreshed the ignored 1672×941 screenshot.
+
+## 2026-08-13 Approved Asset Candidate Integration
+
+- The user approved the black-to-alpha energy plate. It is promoted as `apps/web/public/optical-lab/energy-plate-black-alpha-v1.png` and is available only at `/_visual/optical-lab?candidate=asset`; production `/`, ECS and the default Lab candidate are unchanged.
+- Asset mode renders the decorative RGBA plate behind the single selectable semantic `Science evolves.` heading and omits the client mount, canvas and GPU runtime. Unknown or repeated candidate values cannot enable it.
+- Independent review findings on diagnostics consistency, capture-process ownership/cleanup and default diagnostic text were closed with RED/GREEN tests. Final scoped review found no Critical or Important issues.
+- Root verification passed contract `26/26`, Web typecheck, production build and the 1672×941 browser capture. The ignored evidence is `apps/web/test/visual/out/optical-lab/asset-candidate-1672x941.png`; nothing was deployed or committed in this integration round.
+
+## 2026-08-13 Black-to-Alpha Energy Plate Candidate
+
+- API-native transparency is no longer the only viable route. Built-in image generation produced a text-free pure-black energy plate from the real target reference; additive decomposition converts black to zero alpha and unpremultiplies the emissive RGB without chroma spill.
+- Candidate: `tmp/imagegen/energy-plate-black-alpha-v1.png` (RGBA 1672×941). Review composite: `tmp/imagegen/energy-plate-black-alpha-v1-preview.png`. Source: `tmp/imagegen/energy-plate-black-v1-source.png`.
+- Validation: transparent corners; nonzero alpha coverage `.144896`; 227,658 partially transparent pixels; recomposition over black has mean channel error `.210699`, p99 `2`, max `2` versus the source.
+- Superseded by the approved integration above. Production `/` and ECS remain unchanged.
+
+## 2026-08-13 Built-in Imagegen Transparency Gate
+
+- Built-in image generation used the real `target-reference.png` and produced a structurally relevant 1672×941 energy plate source with no text; this confirms the corrected task context and image-generation capability.
+- The required translucent filaments cannot be cleanly extracted from the generated magenta chroma background: v1 retains visible magenta spill, while the single allowed edge-contracted retry removes most of the subject. Neither output is accepted or integrated.
+- Untracked evidence remains under `tmp/imagegen/`; do not promote `energy-plate-v1.png` or `energy-plate-v2.png`.
+- User explicitly approved CLI `gpt-image-1.5` native transparency. The bundled CLI dry-run validated the edit request, but the real API call failed at authentication with HTTP 401 `invalid_api_key`; no native output file was created and the request was not retried.
+- Next action: the user updates `OPENAI_API_KEY` locally and refreshes the Codex process environment, then rerun the same non-overwriting native-transparent edit. Production `/`, runtime integration and ECS remain out of scope until a transparent static plate passes visual review.
+
 ## 2026-08-13 Asset-First Route Decision
 
 - User rejected the current right-side procedural ray fan as materially unlike `apps/web/public/optical-lab/target-reference.png`. Do not continue tuning the existing analytic ray field as the visual source of truth.

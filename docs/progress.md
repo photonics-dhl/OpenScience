@@ -1,5 +1,200 @@
 # OpenScience (XGS) 进度日志
 
+## 2026-08-13（全画面动效增强与生产发布）— ⏳ 用户确认组合方案，待执行 Tasks 14–15
+
+- **确认选择**：用户要求同时采用“强度约两倍”和“扩大作用范围”，并授权验证通过后部署。设计固定为 ambient `1.4px`、local `8px`、follow `4px`、gain `.14`、radius `.20`；保留方向性不规则尾流、900ms 恢复、无圆形 halo、静态构图和分层顺序。
+- **发布结构**：先完成候选面的 RED/GREEN 与原生空间门禁，再抽取唯一共享 `AcceptedOpticalSurface` 供 Lab 与生产 Landing Hero 共用；生产保留 PublicShell、导航与 Latest Research，不维护第二套视觉实现。
+- **部署边界**：用户已授权生产发布；部署为纯 Web/源码变更，必须走 `infra/scripts/deploy.sh --confirm --skip-migrate`，执行前巡检与数据库备份，记录 release/rollback ref；不改 schema、seed、Nginx、ECS 拓扑或 Secret。
+
+## 2026-08-13（恢复证据有效性复修）— ✅ 同 RAF 真实像素与诚实 900ms 门禁 GREEN
+
+- **旧证据 RED**：复审发现 `preserveDrawingBuffer:false` 时在 RAF 外
+  `drawImage(WebGL canvas)` 得到全透明 PNG；严格非零断言记录 ambient
+  start/end 的 alpha/RGB 均为 `0/0`，因此此前 `762.3ms` compositor-copy
+  结论明确作废。
+- **实现 GREEN**：renderer 在同一 RAF 的 `renderer.render` 后立即
+  `gl.readPixels`，翻转真实 WebGL frame、完成 PNG 编码后才记录时间；
+  `preserveDrawingBuffer` 仍为 false，capture bridge 受 generation/lifecycle
+  所有权约束。最终完整外部矩阵在 production preview 3066 listener PID
+  `20136` exit 0：ambient alpha/RGB 为 `1571552/1568210`，时变像素
+  `122`；active 为 `1571677/1569839`；recovered 为
+  `1571650/1568338`，完成于 `850.1ms`，局部差异 `33/max9`，900ms CPU
+  follow 精确为 0 且 ambient RAF 继续。
+- **空间稳定性复修**：最终复验先捕获 upper centroid 距离 `.0418` RED；
+  保持各向异性 wake，backtrace `.012 -> .009` 并向速度反向重心校正
+  `.04 * radius`。新鲜 GREEN upper `(.53217,.31360)`、距离 `.0349`、
+  locality `.992657`；halo `2/16`，层级仍为
+  `11.816 > 8.002 > 3.133`。
+- **回归与边界**：五位置 centroid/locality、halo 形状、
+  `energy > typography >= empty*1.25`、touch、caps、failure/lifecycle 均未
+  弱化；focused `35/35`、web typecheck、reduced-motion exact-static capture、
+  production build exit 0。build 后 3066 production preview listener PID
+  `20136`，`/`/asset 均 HTTP 200、asset-only marker true、panel count 1。
+  端口 3000 PID `33620` 未改变；未 commit/deploy/ECS/`.env`/生产 `/`。
+
+## 2026-08-13（全画面流体最终复审修复）— ✅ 3 Important + 1 Minor 已关闭
+
+- **可见圆盘 RED/GREEN**：独立复审确认旧 radial flow + 高频 grain 会在
+  cursor 周围形成 ribbed circular halo。新增 native 图像形状门禁，在空白
+  literal patch 的半径 35–78% 环带按 16 个角扇区统计连续 rim；旧实现
+  mutation 为 `16/16`、coverage `1.0`，明确 RED。新实现改为沿 signed
+  velocity 的 `1.12 × 0.54` 各向异性 irregular wake 与低频非线性 liquid
+  texture，最终为 `3/16`、coverage `.1875`，画面不再出现闭合圆盘/硬边界。
+- **恢复时间诚实化**：旧 `827.7ms` 是 screenshot 请求前时间，复审判定
+  无效；改为浏览器侧真实 WebGL compositor canvas PNG，并在编码完成后
+  记录 `performance.now()`。旧 native screenshot 完成于 `1209.8ms` RED；
+  最终 evidence 于 `762.3ms` 完成，local `count=0/max=0`，900ms CPU
+  follow 精确归零且 ambient 继续。
+- **层间裕量**：门禁从严格排序提高为
+  `energy > typography >= empty * 1.25`。旧运行曾出现
+  `15.423 > 6.193 < 6.646` RED；最终为
+  `14.258 > 7.928 > 3.501`，type/empty=`2.26`。empty lift 理论最大由
+  `5.5%` 降为 `2.64%`，仍有可感知像素但不压过字形。
+- **空间与工程 GREEN**：同一 owned 3114 server 完整外部矩阵 exit 0，
+  五点 locality 最低 `.998551`、centroid 全部 `<.04`、四象限 ambient 与
+  touch 继续通过。focused Vitest `35/35`、web typecheck、reduced-motion
+  exact static capture、production build 全部 exit 0；build 首页仍
+  `3.87 kB / 112 kB`。
+- **文档纠偏**：`project_index.md` 当前 AssetInteraction 行已改为
+  full-stage ambient / real x-y `.14` / layered / 900ms；current gate 行已改为
+  five-position stable-server + halo rejection；旧 650ms 仅保留在明确标为
+  HISTORICAL non-asset Task 7 的行。禁止后续 session 再按 fixed `.58`
+  central patch/650ms 执行。
+- **边界**：未 commit/deploy/ECS/`.env`/生产 `/`；端口 3000 PID `33620`
+  未改变。最终 docs lint 为 `182 files / 0 issues`，docs sync 为
+  `DOCS_SYNC_OK`；build 后 production preview 以 PID `95964` 留在 3066，
+  `/` 与 asset 均 HTTP 200、asset-only 为真、panel count 为 1。
+
+## 2026-08-13（全画面分层流体 Task 13）— ✅ 工程门禁 GREEN，待用户动态视觉验收
+
+- **稳定外部服务器五连**：门禁新增
+  `OPTICAL_LAB_ASSET_INTERACTION_BASE_URL`，外部模式先验证精确
+  asset-only 路由和单 panel，且从不 spawn/kill Next。任务自有
+  `127.0.0.1:3113` parent PID `53936` / listener PID `80740`；最终五轮
+  完整矩阵分别用时 `49.1/50.7/48.7/51.2/51.3s`、全部 exit 0，listener
+  PID 每轮前后均未改变，随后已按所有权验证释放 3113。
+- **空间/分层/恢复证据**：最终轮 left/centre/right/upper/lower centroid
+  均距输入小于 `.04`，locality 最低 `.998889`（要求 `.75`）；空白/字形/
+  能量 literal patch 平均幅度为 `6.712/7.787/15.770`，满足
+  `energy > typography > empty`；四个 ambient quadrant 均非零，touch
+  locality `.999951`。恢复帧于注入后 `827.7ms` 已为 `count=0/max=2`，
+  并在 `900ms` 单独证明 follow 精确归零、ambient RAF 继续。
+- **真实缺陷与最小调节**：upper 空白区最初被邻近 authored 粒子幕拉偏；
+  RED centroid 从 `(.52446,.36390)` 经第一轮仍为
+  `(.51400,.34294)`。最终只把空白层改成连续软 liquid lift，仍保持
+  `emptyWeight=.22`、理论最大亮度提升 `5.5% < 8%`，未改变静态 plates、
+  字形、能量构图、`.14` 半径或位移上限。
+- **顺序工程门禁**：reduced-motion 外部 capture 在零 canvas/RAF 下与
+  accepted 1672×941 fixture 逐字节相同；focused Vitest `35/35`、web
+  typecheck、production web build 均 exit 0，build 首页仍
+  `3.87 kB / 112 kB`；docs lint 为 `182 files / 0 issues`，docs sync 为
+  `DOCS_SYNC_OK`。旧 3066 preview 在 build 前按相关 worktree PID 精确
+  停止；build 后 production preview 以 PID `61128` 运行在 3066，`/` 与
+  asset 路由均 HTTP 200、asset-only marker 为真、panel count 为 1。
+  端口 3000 PID `33620` 始终未改变。
+- **边界**：生产 `/`、ECS、`.env`、commit/deploy 均未修改或执行；静态
+  构图仍为用户已验收资产。自动门禁不等于动态视觉批准，下一步只等待
+  用户在 3066 预览做 motion review。
+
+## 2026-08-13（全画面分层流体方向）— ✅ 书面规格确认，Tasks 11–13 计划完成
+
+- **用户纠正**：固定 58% seam 的小范围反馈不自然；目标改为参考 Moonshot 首屏的“介质本身持续流动，鼠标到哪里哪里反馈”，而不是放大中央 patch。
+- **运行态观察**：Moonshot 首屏存在横贯画面的持续 canvas 光学介质，光标在左/中/右移动时局部扰动中心随 x/y 移动；不照搬其 Moonshot 字样、发光球或自定义 cursor。参考文本已按 `read` 流程保存至本机 Downloads。
+- **选择与书面设计**：用户在视觉伴随页选择 C“全画面分层响应”。现有唯一高保真 spec 新增 “Full-Surface Layered Fluid Interaction”：保留已验收静态字形/能量/16:9 构图，全画面低幅环境流，指针处 12–16% 宽度局部扰动，空白区弱、字形中、能量区强，700–900ms 单调衰减；reduced-motion/失败态精确静止。
+- **实施计划**：现有唯一高保真计划追加 Tasks 11–13：先以 TDD 建立 pointer x/y、900ms 衰减、visibility/intersection suspension 与 diagnostic-global cleanup；再实现全画面 OGL ambient/local layered composite；最后用同一稳定外部 3066 server 做五位置空间门禁和五连验证，避免旧 Next 每轮重启污染。
+- **边界**：新节明确取代上一修订的固定中心空间约束与无 resting animation 约束；单候选呈现、静态构图和生产隔离仍有效。尚未执行 Tasks 11–13 或修改交互代码，未 commit、未替换生产 `/`、未部署。
+
+## 2026-08-13（Mounted follow timing-flake override）— ⛔ 五连 native 证据被 gate server cleanup 基础设施阻塞
+
+- **唯一代码范围**：只改 `optical-lab-asset-interaction-gate.mjs`。固定 `setTimeout(120)` 后读取最后 RAF snapshot 改为对真实 mounted global 进行 `polling:'raf'` 的有界 condition wait：follow `≥.5`，strict timeout `500ms`，失败带 latest snapshot。18px/24ms event timestamps、180ms wall-clock separation、caps、中央像素、recovery 与所有 lifecycle assertions 原样保留；gate 未调用纯 mapping helper，旧 `.1` sensitivity 理论目标上限 `.075` 仍必然失败。
+- **修复后 native 事实**：follow-threshold assertion 未再失败；独立 runs 在 3067、3068、3071、3072、3073 均 exit 0。但快速重启批次为 `0,1,0,1,0`（dev reload 后 global undefined、Next startup 500），另有 3069 `Array buffer allocation failed`、3070 既有 unmount `canvasRemove 0 !== 1`。
+- **停止条件已触发**：fresh-port streak 达 3071/3072/3073 三连 exit 0 后，3074 在 120s ceiling 后仍遗留已不监听的 owned `next dev -p 3074`，重复 3065 的 process-exit hang；按用户规则停止。所有本轮 owned orphan 均精确验证 PID/command 后停止，未触碰端口 3000 或旧 3066 server。不得声称五连 stable native GREEN。
+- **其余门禁**：focused `35/35` 与 web typecheck exit 0。两个 promotion minors（durable responsive assertions、SPA unmount diagnostic-global cleanup）仍延期且本轮未实现。
+
+## 2026-08-13（Tasks 9/10 fresh verification）— ⚠️ 浏览器门禁存在 RAF 时序抖动
+
+- **新鲜复验推翻稳定 GREEN 结论**：控制会话重跑 native interaction gate 时，确定性 18px/24ms mounted gesture 首次只发布 `follow=.3845`；随后四次复现为失败 `.4135`、失败 `.4583`、通过、通过，约一半运行未在固定 120ms 读取点达到 `.5`。focused Vitest 仍为 `35/35`，web typecheck 仍 exit 0，实际 3066 asset-only 页面 HTTP 200 / 单 panel 正常。
+- **根因已定位、尚未修复**：输入样本时间戳与 `.75` 映射正确；门禁用固定 `setTimeout(120)` 后立即读取“上一个 RAF 已发布 snapshot”，错误假设浏览器定时器到点前必有足够 RAF 帧。正确方向是 bounded condition wait 等待 mounted snapshot `follow >= .5`，同时保留超时失败；旧 `.1` 映射最高仅 `.075`，不会被该等待放过。
+- **当前状态**：不得把 native gate 或动态交互称为稳定 GREEN。SDD 最终修复波次已用完，需用户明确授权一个额外、仅限门禁时序稳定性的修复波次；此前记录的两个 production-promotion minors 仍延期。
+
+## 2026-08-13（Tasks 9/10 final review fix wave）— ✅ 本地工程 GREEN，动态视觉验收 pending
+
+- **浏览器证据缺口已关闭**：原 native gate 的 Playwright 18px move 只证明可见活动与上限，不能证明 24ms 映射；新增真实 mounted PointerEvent 路径，两个 sample 精确相隔 18 CSS px / 24ms，同时故意隔开 180ms wall clock。RED 如预期发布 follow `.071092 < .5`，证明组件忽略 event timestamp；最小修复改为 `event.timeStamp` 计算 sample delta，同时继续用 `performance.now()` 驱动 120/650ms renderer clock。
+- **GREEN 与不变边界**：修复后 native interaction gate exit 0；确定性路径在 120ms response point 发布 follow `≥.5`，仍守住 `.58` aperture、follow `≤2px`、refraction `≤4px`、caustic `≤.08`，且只有中央 seam pixels 可变。原 native baseline、pointer/touch、reduced motion、init/runtime failure、context loss、SPA unmount、650ms exact-rest assertions 未删除或弱化。focused `35/35` 与 web typecheck 均 exit 0。
+- **文档事实修正**：`project_index.md` 现标记 “Accepted Asset Interaction Amendment” 与 “Asset Presentation and Perceptibility Iteration” 均已实现；唯一 current handoff 同时引用两节。task-10 report 区分初始 unit proof 与本轮 mounted-browser proof。
+- **延期 minor（生产 promotion 前必须关闭，本轮不实现）**：一是把 normalization 之前的 desktop/mobile 实际布局检查固化为 durable browser assertions；二是 SPA unmount 后清除 diagnostic global。现有 GL resource / RAF / listener cleanup 已正确，这两项不阻断隔离 Lab 动态视觉验收，但阻断 commit/production promotion。
+
+## 2026-08-13（Asset 单一可部署候选面）— ✅ 本地工程 GREEN，待用户动态视觉验收
+
+- **唯一候选面**：精确 `/_visual/optical-lab?candidate=asset` 现在只输出一个 `data-optical-lab-panel="candidate"`、一个语义 `h1` 与一个右上退出链接；target/current figures、comparison captions 和 `current-production.png` 不再进入该路由 SSR。默认、未知及重复 candidate 继续保留原三栏比较面。
+- **布局与可访问性**：asset-only grid 居中单一 16:9 stage，最大宽度 `1672px`，plates 使用 `object-fit: contain`；桌面 1672×941 与移动 390×844 的浏览器检查均为零横向溢出、零裁切，退出链接 `:focus-visible` 为 2px 高对比 outline。diagnostics 只在 asset mode 视觉隐藏，DOM/data contract、交互 ownership 与既有 envelope limits 均保留。
+- **TDD 证据**：合同先在 `optical-lab-contract.test.tsx` 加入六个 literal asset-route assertions；RED 为 `1 failed / 25 passed`，明确收到 3 panels 而预期 1。最小实现后 focused GREEN 为 `26/26`；最终 focused contract + interaction model 为 `2 files / 35 tests`，其中 `18px / 24ms → .5625`、follow/refraction/caustic caps 与 650ms exact inactive recovery 均继续通过。
+- **浏览器门禁**：`node test/visual/optical-lab-asset-interaction-gate.mjs` 与 `node test/visual/capture-optical-lab-asset.mjs` 均 exit 0；原生 gate 的 1672×941 rest 与 accepted fixture 逐像素相同，活动帧仅改中央 seam patch，recovered 与 rest byte-identical，reduced-motion/runtime failure/context loss/SPA unmount cleanup 均保持通过。端口 3065、3063 与临时响应式检查端口 3066 均已释放。
+- **最终顺序门禁**：`npx pnpm@9.15.0 --filter @openscience/web test -- optical-lab-contract.test.tsx optical-lab-asset-interaction.test.ts`（35/35）、web typecheck、production web build（`/` 仍 `3.87 kB / 112 kB`）、`docs:lint`、`audit:docs-sync` 全部 exit 0。未提交、未替换生产 `/`、未部署 ECS；下一步仍只等待用户动态视觉验收。
+
+## 2026-08-13（Asset 中央混合光流实现）— ⏳ 工程 GREEN，等待用户动态视觉验收
+
+- **范围与实现**：只为精确 `/_visual/optical-lab?candidate=asset` 新增独立 `AssetInteractionMount`、纯响应包络、OGL `AssetInteractionRenderer`、固定 `.58` seam 的 96×54 ping-pong flow pass 与羽化 replacement composite；旧 procedural renderer、已验收静止 plates、生产 `/`、后端和 ECS 均未改变，也未新增依赖。
+- **TDD 与边界**：纯模型先记录 `5/5` 预期 RED，再达到 `5/5` GREEN；asset mount/shader/renderer 合同先记录 `4` 个预期失败，再与既有 contract 合并达到 `34/34`。响应保持 follow `≤2px`、局部折射 `≤4px`、caustic gain `≤.08`、约 120ms 单调接近、650ms 精确归零并停止 RAF；鼠标与 touch 使用同一速度归一化，reduced-motion 不创建 canvas/context。
+- **浏览器根因修复与独立 review**：首轮真实 gate 暴露 GLSL ES 3.0 保留字 `patch` 导致 composite shader 链接失败；改为 `patchMask`。独立 review 随后发现并关闭 4 项 Important：负 x 反向传播改为只沿 positive-x 场弯曲；runtime GL failure 现在停止 RAF、释放 ledger/flow 并移除 canvas；browser gate 增加 WebGL2 初始化失败、runtime `INVALID_OPERATION`、context loss、React SPA unmount 的 canvas/listener/create-delete exact cleanup；主门禁改为真正 1672×941 stage-only，并与 `fixtures/optical-lab-asset-accepted-1672x941.png` 逐像素比较。
+- **新鲜证据**：Web Vitest `32 files / 237 tests`、Web typecheck、`optical-lab-asset-interaction-gate.mjs`、原静态 `capture-optical-lab-asset.mjs`、production build、`git diff --check` 全部 exit 0；build 中 `/` 仍为 `3.87 kB / 112 kB`。浏览器证据位于已忽略的 `apps/web/test/visual/out/optical-lab/asset-interaction/`。
+- **当前唯一下一步**：用户原尺寸查看实际运动后选择接受或给出动态微调意见。自动门禁通过不等于视觉批准；未获单独授权不得替换生产 `/`、不得部署 ECS、不得提交。
+
+## 2026-08-13（Session 边界交接）— ⏳ 下一任务唯一锁定为中央混合光流
+
+- **唯一 current handoff**：`docs/handoff/2026-08-13-optical-lab-asset-interaction-handoff.md`。下个 session 必须从该文件继续；旧 `2026-08-11-optical-lab-task8-steps3-5-handoff.md` 已降级为历史证据。
+- **禁止任务漂移**：不得回到早期蓝色六面对象、被否决的 procedural 射线扇面/Candidate B、透明资产重新生成或静止字形重做。真实 source of truth 仍是 `apps/web/public/optical-lab/target-reference.png`；静止资产候选已经用户视觉验收。
+- **下个 session 唯一工作**：为 `/_visual/optical-lab?candidate=asset` 编写交互实施计划并以 TDD 实现独立 `AssetInteractionRenderer`；全 Hero 输入、中央 58% seam 响应、桌面/触屏同构、reduced-motion 静止、650ms 精确复位。先隔离 Lab 动态验收，不改生产 `/`、不部署 ECS。
+- **工作树纪律**：当前 branch/worktree 为 `codex/optical-editorial-v3` / `E:/Miscellaneous/XGS/.worktrees/optical-editorial-v3`，存在有意未提交修改及 `tmp/` 证据；下个 session 不得 reset、清理或删除，也不得读取 `.env`。
+
+## 2026-08-13（混合光流架构确认）— ✅ 用户决策闭合，待计划与实施
+
+- **用户选择**：混合光流、全 Hero 输入但仅中央响应、桌面/触屏同构；`prefers-reduced-motion` 保持验收静止帧。
+- **架构**：现有高保真设计新增 Asset Interaction Amendment：独立轻量 OGL 覆盖层，静止时完全透明，活动时只替换羽化中央 patch；复用已固定 OGL 与 96×54 flowmap，不修改旧 procedural renderer、不引入依赖。
+- **硬边界**：局部折射 `≤4px`、patch 内 apparent follow `≤2px`、焦散增益 `≤8%`、约 120ms 单调响应、650ms 精确归零并停止 RAF；58% 孔径、已验收静止字形/光效和中央外标题均不漂移。
+- **下一门禁**：用户已确认架构和全部行为选项，并要求下个 session 执行未完成任务。下一步直接基于 `docs/specs/2026-08-11-optical-lab-high-fidelity-design.md` amendment 编写实施计划并以 TDD 实现；交互动态仍需单独用户视觉验收。尚未写交互代码、未改生产 `/`、未部署 ECS。
+
+## 2026-08-13（资产候选视觉验收）— ✅ 用户确认；交互设计待锁定
+
+- **视觉结论**：用户明确确认当前原尺寸候选视觉正确并允许验收；`Science`、`evolves` 与中心光效的固定静止构图不再开放漂移。
+- **新增需求**：实际验收产品需要中央区域随鼠标产生动态交互。现有高保真 spec 已定义受限方向：指针写入低分辨率速度场，整行跟随 1–2 CSS px、局部折射不超过 4 CSS px、焦散增益不超过 8%、120ms 单调跟随、650ms 精确复位，且 58% 孔径不漂移。
+- **当前状态**：尚未选择资产候选采用轻量 2D 位移/遮罩还是恢复 WebGL flowmap；在用户确认交互强度与范围前不实现，不得以动态效果改写已验收静止帧。生产 `/` 与 ECS 仍未修改或部署。
+
+## 2026-08-13（字形—光效耦合纠偏）— ⏳ 工程 GREEN，待用户视觉验收
+
+- **否定旧结论**：上一轮以 `overflow:hidden` 消除重影的修复错误地截断了 `Science` 末尾 `e`，不能视为完成；用户指出的 `evolves` 字形/字效偏差同样成立。
+- **根因与结构修正**：旧实现把不透明 DOM 字和能量板分层叠放，无法产生目标中的粒子溶解、首字母折射与色散。资产候选现改为三层：全高透明能量板、带羽化边界的目标中央字效板、透明但保持可选择的唯一语义 `h1`；旧 `1.6px` DOM 黑描边也已归零，避免透明字残留轮廓。
+- **原尺寸证据**：1672×941 native capture 与 `target-reference.png` 在标题带 `(0,320)–(1672,565)`、headline core 及首个 `e`/光缝区域的 RGB mean absolute error 均为 `0`、max=`0`；`Science` 完整字形、`evolves` 字形及中心融合逐像素一致。
+- **诚实边界**：这是隔离固定宽高视觉验收原型，仍只在 `/_visual/optical-lab?candidate=asset`；生产 `/`、ECS 和响应式上线实现未改变。工程门禁通过不等于用户视觉批准，下一步只等待用户查看原尺寸结果。
+
+## 2026-08-13（资产候选孔径重影修复）— ✅ 原尺寸截图 GREEN
+
+- **根因**：透明能量资产经黑底复合确认不含文字；重影来自 Archivo `Science` 实际 ink 越过固定 58% 容器，而 Bodoni `evolves` 同时从 58% 起绘，孔径处两套字形叠印。
+- **最小修复**：仅在 `data-asset-candidate=true` 下裁切 `.science` 的横向越界 ink，保留能量资产、排版容器、唯一可选择语义标题及默认 GPU/production 路径不变。
+- **回归门禁**：browser gate 先以 computed `overflow-x: visible` 正确 RED，再在修复后 GREEN；门禁同时确认原始 ink 确实越过 seam，避免无效断言。原尺寸截图为已忽略的 `apps/web/test/visual/out/optical-lab/asset-candidate-1672x941.png`。
+
+## 2026-08-13（透明能量资产候选接入）— ✅ 隔离 Lab 验证通过
+
+- **用户确认与接入边界**：用户确认黑底发光分解候选后，将 `energy-plate-black-alpha-v1.png` 提升为 1672×941 RGBA 公共实验资产；仅 `/_visual/optical-lab?candidate=asset` 启用，生产 `/`、ECS、后端与既有默认 GPU 候选均未改变。
+- **渲染合同**：资产模式只渲染 decorative 透明图与唯一可选择语义 `Science evolves.` 标题，不挂载 `OpticalLabClientMount`、canvas 或 GPU runtime；默认/未知/重复 candidate 仍走原 `static-fallback`。机器诊断为 `asset-static`，可见诊断为 `Asset/static`，默认 `DOM/static` 文案保持不变。
+- **质量收口**：独立复审提出的 diagnostics 一致性、截图进程所有权/清理和否定 query 契约已以 RED/GREEN 修复；最终复审无 Critical/Important。截图脚本会拒绝既有 3063 listener、检测服务提前退出、关闭 browser/page，并在清理后验证端口释放。
+- **最终证据**：focused contract `26/26`、Web typecheck、production build、1672×941 本地 browser capture 与 `git diff --check` 均 GREEN；production build 首页仍为 `3.87 kB / 112 kB`。截图位于已忽略的 `apps/web/test/visual/out/optical-lab/asset-candidate-1672x941.png`，未提交、未部署。
+
+## 2026-08-13（黑底发光分解替代方案）— ✅ 无 API Key 获得透明候选
+
+- **方法纠偏**：半透明白光不再使用彩色色键。Codex 内置生图以 `target-reference.png` 为构图参考生成纯黑底、无文字能量层；随后按加色模型以像素峰值反推 alpha，并反预乘 RGB。黑色代表零光，因此不存在洋红污染，也无需 OpenAI API Key。
+- **候选结果**：`tmp/imagegen/energy-plate-black-alpha-v1.png` 为 RGBA 1672×941，四角 alpha=0，非零 alpha coverage `.144896`，其中 227,658 像素为连续半透明、314 像素完全不透明；孔径约在目标 57–58%，保留上下粒子幕、软焦散和右侧非均匀细丝。
+- **可逆验证**：透明候选重新叠回黑底后与生成源图的平均通道误差 `.210699`、p99=`2`、max=`2`，证明低亮辉光和细丝几乎无损保留。黑底审图为 `tmp/imagegen/energy-plate-black-alpha-v1-preview.png`。
+- **后续状态**：该候选已获用户确认并提升到隔离 Optical Lab；详见上方“透明能量资产候选接入”。生产 Landing 与 ECS 仍未改变。
+
+## 2026-08-13（Codex 内置生图透明能量层实验）— ⏸️ Chroma 路径不适用
+
+- **正确输入**：以 `apps/web/public/optical-lab/target-reference.png` 为唯一构图参考，生成 1672×941、无文字、固定 58% 孔径的粒子幕、焦散和右向非均匀细丝；未再使用早期蓝色六面对象。
+- **内置生图结果**：生成图在孔径位置、上下粒子幕和右侧不规则细丝上接近目标结构，但模型只能先输出纯洋红 chroma 背景。源图保存为未跟踪 `tmp/imagegen/energy-plate-v1-source.png`，未接入页面。
+- **透明化验证**：第一次去色键得到 RGBA 1672×941、透明角、主体 alpha coverage `.018473`，但软辉光带有明显洋红污染；按规则仅重试一次 `edge-contract=1`，coverage 降为 `.002593` 且主体大面积消失。`energy-plate-v1.png` 与 `energy-plate-v2.png` 均不合格，不作为候选资产。
+- **CLI 原生透明尝试**：用户明确批准后，bundled `image_gen.py` dry-run 确认 `gpt-image-1.5`、`/v1/images/edits`、1536×1024、高输入保真与透明 PNG 参数有效；真实调用在认证层返回 HTTP 401 `invalid_api_key`。变量存在但凭据无效，未生成 `output/imagegen/energy-plate-native-v1.png`，未重试、未读取或打印 `.env`。
+- **当前边界**：用户需在本机更新有效的 `OPENAI_API_KEY` 并重新启动/刷新当前进程环境，确认后才能复跑同一非覆盖调用。不继续调 chroma、不接入 runtime、不改生产 `/`、不部署 ECS。
+
 ## 2026-08-13（资产优先路线决策）— ⏸️ 已确认下个 session 执行
 
 - **用户结论**：当前右侧解析射线扇面与真实原型差距过大，停止继续调 procedural shader；采用“资产优先混合层”路线，先验证高保真静态透明 PNG，再决定是否制作 WebM 动态层或引入 Unicorn Studio。

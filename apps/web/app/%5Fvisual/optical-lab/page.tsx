@@ -2,6 +2,10 @@ import { OpticalLabPage, opticalLabMetadata } from '@/components/optical-lab/Opt
 
 export const metadata = opticalLabMetadata;
 
-export default function OpticalLabVisualRoute() {
-  return <OpticalLabPage />;
+export default async function OpticalLabVisualRoute({
+  searchParams,
+}: {
+  searchParams?: { candidate?: string | string[] };
+} = {}) {
+  return OpticalLabPage({ candidate: searchParams?.candidate === 'asset' ? 'asset' : undefined });
 }
