@@ -149,3 +149,31 @@ Current infrastructure uses pinned base/worker images with bind-mounted applicat
 - No schema or API change; deployment used `--skip-migrate`, completed the full workspace build, and restarted only API/Web/agent-worker.
 - Nginx configuration test passed; public `/` and `/explore` returned 200, while unauthenticated `/auth/me` returned the expected 401.
 - Chromium against the public domain passed 1440×900, 1920×1080 and 390×844 normal/reduced/Open RO cases plus independent pointer-left/slit/right frames at 60/150/300ms. Human inspection found no pointer-centered particle disk, moving optical axis, or quadratic fan.
+
+### 5.3 Accepted shared optical surface candidate (local only, 2026-08-14)
+
+> This is a release-candidate record, not deployment evidence. No SSH, cloud
+> sync, ECS checkup, backup, activation or public verification was performed.
+
+- Local source promotes the accepted amplified asset composition through one
+  shared `AcceptedOpticalSurface` consumed by Landing and the isolated asset
+  Lab. It retains the public shell/navigation/CTA/Latest Research contract and
+  removes the legacy `OpticalHeadline` runtime from `/` without deleting its
+  source files.
+- Local acceptance is GREEN: focused Landing/Lab `45/45`, Web `236/236`,
+  typecheck, production build, canonical root lint, product release `27/27`,
+  focused Landing desktop/mobile/reduced/pointer checks, exact Lab native
+  interaction/lifecycle matrix and byte-identical accepted reduced frame.
+- No schema, API, seed, Nginx, Compose, topology or secret change is included;
+  the eventual deployment must use `--skip-migrate` unless the reviewed release
+  diff later proves otherwise.
+- Before any production write, record the reviewed release and current
+  production rollback refs, run the approved local deploy dry-run, execute
+  `checkup.sh`, complete and verify the database backup/retention result, then
+  obtain authorization for the confirmed deploy command.
+- After activation, require public `/` and `/explore` 200 plus unauthenticated
+  `/auth/me` 401; desktop/mobile normal and reduced accepted frames; one
+  semantic `h1`; navigation/CTA/Latest Research; pointer response; zero overflow
+  or browser errors; healthy services; and no critical worker logs. Only then
+  update this section with release/rollback refs, backup evidence and public
+  results and describe the surface as deployed.

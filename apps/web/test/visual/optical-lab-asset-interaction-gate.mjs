@@ -1,3 +1,5 @@
+/* global Buffer, Event, EventTarget, HTMLCanvasElement, HTMLImageElement, PointerEvent, WebGL2RenderingContext, createImageBitmap, document, fetch, getComputedStyle, performance, process, setTimeout, window */
+
 import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
 import net from 'node:net';
@@ -901,7 +903,7 @@ try {
   const delayedInitialization = await browser.newPage({ viewport: { width: 900, height: 700 }, deviceScaleFactor: 1 });
   try {
     await delayedInitialization.addInitScript(() => {
-      window.__assetDelayedInitialization = { releaseDecode: null, webgl2Contexts: 0 };
+      window.__assetDelayedInitialization = { releaseDecodes: [], webgl2Contexts: 0 };
       const original = HTMLCanvasElement.prototype.getContext;
       HTMLCanvasElement.prototype.getContext = function trackedGetContext(contextId, ...options) {
         if (contextId === 'webgl2' && this.dataset.opticalAssetInteractionCanvas === 'true') {
@@ -913,7 +915,7 @@ try {
       HTMLImageElement.prototype.decode = function delayedTargetDecode() {
         if (this.src.includes('/optical-lab/target-reference.png')) {
           return new Promise((resolve) => {
-            window.__assetDelayedInitialization.releaseDecode = resolve;
+            window.__assetDelayedInitialization.releaseDecodes.push(resolve);
           });
         }
         return originalDecode.call(this);
@@ -923,7 +925,7 @@ try {
     await delayedInitialization.waitForSelector('canvas[data-optical-asset-interaction-canvas="true"]', { state: 'attached' });
     await delayedInitialization.waitForFunction(() => window.__assetDelayedInitialization.webgl2Contexts === 1);
     await delayedInitialization.waitForFunction(() => (
-      typeof window.__assetDelayedInitialization.releaseDecode === 'function'
+      window.__assetDelayedInitialization.releaseDecodes.length === 1
     ));
     await delayedInitialization.evaluate(() => {
       Object.defineProperty(document, 'hidden', { configurable: true, value: true });
@@ -940,20 +942,23 @@ try {
     const navigatedHome = delayedInitialization.waitForURL(`${baseUrl}/`, { waitUntil: 'commit' });
     await delayedInitialization.locator('[data-optical-lab-exit="true"]').evaluate((link) => link.click());
     await navigatedHome;
-    await delayedInitialization.evaluate(() => window.__assetDelayedInitialization.releaseDecode());
+    await delayedInitialization.waitForSelector('[data-accepted-optical-surface="landing"]');
+    await delayedInitialization.evaluate(() => window.__assetDelayedInitialization.releaseDecodes[0]());
     await delayedInitialization.waitForTimeout(300);
     assert.equal(
       await delayedInitialization.evaluate(() => '__OPENSCIENCE_OPTICAL_ASSET_INTERACTION__' in window),
-      false,
-      'A late initialization completion must not resurrect the diagnostic global after unmount',
+      true,
+      'A late Lab initialization completion must preserve the Landing diagnostic owner',
     );
     assert.equal(
-      await delayedInitialization.evaluate(() => window.__assetDelayedInitialization.webgl2Contexts),
+      await delayedInitialization.locator('#landing-optical-surface canvas[data-optical-asset-interaction-canvas="true"]').count(),
       1,
-      'Late completion must dispose the retained pending owner without creating another context',
+      'The Landing must retain exactly one fresh canvas owner after the Lab unmounts',
     );
   } finally {
-    await delayedInitialization.evaluate(() => window.__assetDelayedInitialization?.releaseDecode?.()).catch(() => {});
+    await delayedInitialization.evaluate(() => {
+      for (const release of window.__assetDelayedInitialization?.releaseDecodes ?? []) release();
+    }).catch(() => {});
     await delayedInitialization.close();
   }
 
@@ -995,7 +1000,10 @@ try {
       const originalAdd = EventTarget.prototype.addEventListener;
       const originalRemove = EventTarget.prototype.removeEventListener;
       const isOwnedTarget = (target) => target?.id === 'optical-lab-candidate'
-        || target?.dataset?.opticalAssetInteractionCanvas === 'true';
+        || (
+          target?.dataset?.opticalAssetInteractionCanvas === 'true'
+          && target.closest('#optical-lab-candidate') !== null
+        );
       EventTarget.prototype.addEventListener = function trackedAdd(type, ...args) {
         if (isOwnedTarget(this)) {
           const counts = window.__assetInteractionCleanup.listenersAdded;
@@ -1031,8 +1039,13 @@ try {
     }
     assert.equal(
       await unmount.evaluate(() => '__OPENSCIENCE_OPTICAL_ASSET_INTERACTION__' in window),
-      false,
-      'SPA unmount must remove the diagnostic global after publishing disposed state to its DOM owner',
+      true,
+      'SPA promotion must transfer the diagnostic global to the Landing owner',
+    );
+    assert.equal(
+      await unmount.locator('#landing-optical-surface canvas[data-optical-asset-interaction-canvas="true"]').count(),
+      1,
+      'SPA promotion must leave exactly one Landing canvas owner',
     );
   } finally {
     await unmount.close();

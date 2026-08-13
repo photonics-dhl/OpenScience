@@ -148,9 +148,4 @@ describe('fixed-aperture glyph diffraction model', () => {
     expect(measure.indexOf('size = { width, height, dpr };')).toBeLessThan(measure.indexOf('rebuildGlyphParticles();'));
   });
 
-  it('captures each active frame from an independently recovered pointer state', () => {
-    const source = readFileSync(new URL('./visual/shots.mjs', import.meta.url), 'utf8');
-    expect(source).toContain('await page.waitForTimeout(700);');
-    expect(source).toContain('await page.waitForTimeout(delay);');
-  });
 });

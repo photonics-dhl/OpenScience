@@ -1,6 +1,43 @@
 # Handoff — 2026-08-13 Optical Lab Asset Interaction
 
-## Current canonical state — full-surface interaction (read this only)
+## Current canonical state — shared surface local release candidate (2026-08-14)
+
+> **This section supersedes the pre-promotion instructions below.** Task 15 is
+> complete only through local, independent-review-ready promotion. Nothing in
+> this handoff records or authorizes an ECS deployment.
+
+- `apps/web/components/optical-lab/AcceptedOpticalSurface.tsx` is the single
+  accepted composition owner for the ordered energy/typography plates, semantic
+  `Science evolves.` heading, hidden diagnostics and amplified
+  `AssetInteractionMount`.
+- Both the Landing Hero and exact asset Lab route consume that component with
+  unique stage/diagnostics IDs. Landing deliberately owns the sole page `h1`;
+  its kicker/context, SiteHeader navigation, Explore/Create CTAs, Open RO link
+  and downstream Latest Research remain outside the shared visual and are not
+  duplicated.
+- Legacy `OpticalHeadline`/`OpticalField` files remain in the repository for a
+  separately approved cleanup, but production `/` no longer imports or mounts
+  that runtime.
+- Fresh local gates are GREEN: focused Landing/Lab `45/45`; Web `236/236`;
+  typecheck; production build; canonical root lint; Landing desktop/mobile and
+  normal/reduced production matrix; product release `27/27`; exact Lab native
+  pointer/touch/failure/lifecycle matrix; and byte-identical reduced-motion
+  1672×941 capture (`952,176 B`). Visual inspection found no clipping,
+  diagnostic leakage, focus residue, overflow or navigation/CTA regression.
+- The SPA lifecycle contract now measures ownership across the promoted route:
+  the old Lab canvas/resources/listeners dispose exactly once, then `/` owns one
+  fresh Landing canvas and diagnostic snapshot. A delayed Lab initialization
+  cannot overwrite or delete that new Landing owner.
+- No task server is running. Owned 3010/3102/3131 and earlier worktree preview
+  ports were released; unrelated port 3000 PID `33620` was not touched.
+- **Next action:** independent review of the scoped source/docs/tests commit.
+  Deployment preflight remains pending: choose release/rollback refs, run the
+  approved local dry-run, ECS checkup and database backup, then deploy only in a
+  separately authorized deployment turn. No `.env` read, cloud sync, SSH, ECS,
+  backup or deployment occurred here. There is no schema, API, Nginx, Compose or
+  topology change.
+
+## Historical pre-promotion state — full-surface interaction
 
 > **Supersedes every fixed-centre instruction in the historical appendix
 > below.** The blue six-facet object, old procedural renderer, fixed `.58`

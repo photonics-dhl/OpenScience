@@ -1,6 +1,6 @@
 import { useTranslations } from 'next-intl';
 
-import { OpticalHeadline } from '@/components/brand/OpticalHeadline';
+import { AcceptedOpticalSurface } from '@/components/optical-lab/AcceptedOpticalSurface';
 
 interface HeroProps {
   locale: string;
@@ -8,6 +8,7 @@ interface HeroProps {
 
 export default function Hero({ locale }: HeroProps) {
   const t = useTranslations('landing');
+  const optical = useTranslations('opticalLab');
 
   return (
     <section
@@ -21,8 +22,23 @@ export default function Hero({ locale }: HeroProps) {
           <span>{t('hero.context')}</span>
         </div>
 
-        <div className="flex flex-1 items-center py-10 sm:py-12">
-          <div className="w-full"><OpticalHeadline locale={locale} /></div>
+        <div className="-mx-4 flex flex-1 items-center py-6 sm:-mx-6 sm:py-8 lg:-mx-8">
+          <div className="w-full">
+            <AcceptedOpticalSurface
+              diagnosticsId="landing-optical-diagnostics"
+              labels={{
+                bounds: optical('bounds'),
+                context: optical('context'),
+                fps: optical('fps'),
+                frameTime: optical('frameTime'),
+                gpuTime: optical('gpuTime'),
+                mode: optical('mode'),
+              }}
+              locale={locale}
+              stageId="landing-optical-surface"
+              surface="landing"
+            />
+          </div>
         </div>
 
         <div className="relative z-10 grid gap-7 border-t border-os-rule-dark pt-5 lg:grid-cols-[minmax(18rem,0.72fr)_minmax(26rem,1.28fr)] lg:items-end">

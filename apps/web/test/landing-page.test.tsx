@@ -54,6 +54,10 @@ vi.mock('next-intl/server', () => ({
   })[key] ?? key,
 }));
 
+vi.mock('next/font/google', () => ({
+  Archivo: () => ({ className: 'archivo-font' }),
+}));
+
 describe('Optical Editorial landing page', () => {
   beforeAll(() => {
     vi.stubGlobal('React', React);
@@ -70,14 +74,26 @@ describe('Optical Editorial landing page', () => {
     expect(layoutSource).toContain("document.documentElement.classList.add('js')");
   });
 
-  it('uses the pre-distortion Optical Editorial composition without legacy media', async () => {
+  it('promotes the accepted optical surface without changing the public landing composition', async () => {
     const markup = await renderLandingPage();
-    const text = markup.replace(/<[^>]+>/g, '');
-    expect(text).toContain('Science');
-    expect(text).toContain('evolves.');
-    expect(text).toContain('科学，持续演化。');
-    expect(markup.match(/data-vermilion-marker=/g)).toHaveLength(1);
+    const headlineText = markup
+      .match(/<h1\b[^>]*>(.*?)<\/h1>/)?.[1]
+      .replace(/<[^>]+>/g, '');
+    const energyPlateAt = markup.indexOf('src="/optical-lab/energy-plate-black-alpha-v1.png"');
+    const typographyPlateAt = markup.indexOf('src="/optical-lab/target-reference.png"');
+
+    expect(markup.match(/data-accepted-optical-surface=/g) ?? []).toHaveLength(1);
+    expect(markup).toContain('data-accepted-optical-surface="landing"');
+    expect(markup).toContain('id="landing-optical-surface"');
+    expect(markup).toContain('id="landing-optical-diagnostics"');
+    expect(markup).toContain('data-optical-asset-interaction-host="true"');
+    expect(markup.match(/<h1\b/g) ?? []).toHaveLength(1);
+    expect(headlineText).toBe('Science evolves.');
+    expect(energyPlateAt).toBeGreaterThan(-1);
+    expect(typographyPlateAt).toBeGreaterThan(energyPlateAt);
     expect(markup).toContain('data-landing-art-direction="optical-editorial-v3"');
+    expect(markup).not.toContain('data-optical-field="true"');
+    expect(markup).not.toContain('data-optical-text-stage="true"');
     expect(markup).not.toContain('<video');
     expect(markup).not.toContain('ro-loop');
     expect(markup).not.toContain('data-hero-loop-policy');
@@ -102,14 +118,15 @@ describe('Optical Editorial landing page', () => {
     expect(markup.indexOf('href="/explore"')).toBeLessThan(markup.indexOf('href="/research-objects/new"'));
     expect(markup).not.toContain('data-hero-metadata-legend');
     expect(markup).not.toContain('optical-cursor-ring');
-    expect(markup).toContain('font-editorial-latin');
-    expect(markup).toContain('font-editorial-cjk');
+    expect(markup).toContain('data-typography-coupling="reference-plate"');
+    expect(markup).toContain('data-optical-lab-evolves-ink="true"');
   });
 
-  it('uses the shared public shell and a decorative-only optical field', async () => {
+  it('uses the shared public shell and keeps the accepted optical plates decorative', async () => {
     const markup = await renderLandingPage();
     expect(markup).toContain('data-os-surface="public"');
-    expect(markup).toContain('data-optical-field="true"');
+    expect(markup).toContain('data-optical-lab-asset-plate="true"');
+    expect(markup).toContain('data-optical-lab-target-typography-plate="true"');
     expect(markup).toContain('aria-hidden="true"');
     expect(markup.match(/<main\b/g)).toHaveLength(1);
     expect(markup).not.toContain('data-symbol-variant');
@@ -119,18 +136,14 @@ describe('Optical Editorial landing page', () => {
     expect(markup).not.toContain('OS / 00—∞');
   });
 
-  it('keeps one semantic headline while the optical field carries interaction', async () => {
+  it('keeps one semantic headline while the amplified shared surface carries interaction', async () => {
     const markup = await renderLandingPage();
-    expect(markup).toContain('data-optical-text-stage="true"');
-    expect(markup).toContain('data-optical-text-base="true"');
-    expect(markup).toContain('data-optical-science="true"');
-    expect(markup).toContain('data-optical-evolves="true"');
-    expect(markup).not.toContain('data-optical-text-distorted="true"');
-    expect(markup).not.toContain('id="os-local-distortion"');
+    expect(markup).toContain('data-asset-candidate="true"');
+    expect(markup).toContain('data-render-mode="asset-static"');
+    expect(markup).toContain('data-optical-lab-semantic-title="true"');
     expect(markup.match(/<h1\b/g)).toHaveLength(1);
-    expect(markup.match(/data-vermilion-marker=/g)).toHaveLength(1);
-    expect(markup).toContain('data-optical-glyph-safe-zone="true"');
-    expect(markup).toContain('data-diffraction-aperture="true"');
+    expect(markup).not.toContain('data-optical-text-base="true"');
+    expect(markup).not.toContain('data-optical-field="true"');
   });
 
   it('uses the next viewport for a complete Open RO anatomy instead of principle placeholders', async () => {

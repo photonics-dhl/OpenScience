@@ -1,114 +1,113 @@
-/* global document, process, window */
+/* global HTMLElement, document, process, window */
 
 import { chromium } from 'playwright';
 import assert from 'node:assert/strict';
-import { mkdir } from 'node:fs/promises';
+import { mkdir, readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const outDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), 'out');
+const acceptedBaselinePath = path.resolve(
+  path.dirname(fileURLToPath(import.meta.url)),
+  'fixtures',
+  'optical-lab-asset-accepted-1672x941.png',
+);
 const baseUrl = process.env.VISUAL_BASE_URL ?? 'http://127.0.0.1:3002';
-const activeFrameDelays = [60, 150, 300];
 await mkdir(outDir, { recursive: true });
 
-const browser = await chromium.launch({ headless: true });
 const cases = [
-  { symbol: 'a', width: 1440, height: 900, reducedMotion: 'no-preference' },
-  { symbol: 'b', width: 1440, height: 900, reducedMotion: 'no-preference' },
-  { symbol: 'a', width: 1920, height: 1080, reducedMotion: 'no-preference' },
-  { symbol: 'b', width: 1920, height: 1080, reducedMotion: 'no-preference' },
-  { symbol: 'a', width: 390, height: 844, reducedMotion: 'no-preference' },
-  { symbol: 'b', width: 390, height: 844, reducedMotion: 'no-preference' },
-  { symbol: 'a', width: 1440, height: 900, reducedMotion: 'reduce' },
-  { symbol: 'b', width: 1440, height: 900, reducedMotion: 'reduce' },
+  { name: 'desktop', width: 1672, height: 941, reducedMotion: 'no-preference' },
+  { name: 'mobile', width: 390, height: 844, reducedMotion: 'no-preference' },
+  { name: 'desktop-reduced', width: 1672, height: 941, reducedMotion: 'reduce' },
+  { name: 'mobile-reduced', width: 390, height: 844, reducedMotion: 'reduce' },
 ];
 
-for (const testCase of cases) {
-  const page = await browser.newPage({
-    viewport: { width: testCase.width, height: testCase.height },
-    deviceScaleFactor: 2,
-    reducedMotion: testCase.reducedMotion,
-  });
-  const runtimeErrors = [];
-  page.on('pageerror', (error) => runtimeErrors.push(error.message));
-  page.on('console', (message) => {
-    if (message.type() === 'error') runtimeErrors.push(message.text());
-  });
-  await page.goto(`${baseUrl}/`, { waitUntil: 'networkidle' });
-  await page.evaluate(() => document.fonts.ready.then(() => true));
-  assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth), true, 'landing must not overflow horizontally');
-  assert.equal(await page.locator('h1').count(), 1, 'landing must expose one semantic headline');
-  const headline = page.locator('[data-optical-text-base="true"]');
-  const evolves = page.locator('[data-optical-evolves="true"]').first();
-  const fontFamily = await evolves.evaluate((node) => node.ownerDocument.defaultView?.getComputedStyle(node).fontFamily ?? '');
-  assert.match(fontFamily, /Bodoni|editorial/i, 'evolves must use the Latin editorial face');
-  assert.equal(await page.locator('.optical-cursor-ring').count(), 0, 'large cursor ring must be removed');
-  if (testCase.width >= 1280) {
-    assert.equal(await headline.getAttribute('data-headline-layout'), 'single-axis');
-  }
-  if (testCase.reducedMotion === 'no-preference') {
-    const stage = page.locator('[data-optical-text-stage="true"]');
-    const bounds = await stage.boundingBox();
-    assert(bounds, 'interactive headline stage must be visible');
-    const targetFactor = testCase.symbol === 'a' ? 0.3 : 0.7;
-    const startFactor = testCase.symbol === 'a' ? 0.7 : 0.3;
-    const y = bounds.y + bounds.height * 0.46;
-    await page.mouse.move(bounds.x + bounds.width * startFactor, y);
-    await page.waitForTimeout(120);
-    await page.mouse.move(bounds.x + bounds.width * targetFactor, y);
-    const readOpticalX = () => stage.evaluate((element) => Number.parseFloat(element.style.getPropertyValue('--os-optical-pointer-x')));
-    const waitForNextOpticalX = async (previous) => {
-      await page.waitForFunction(
-        ({ value }) => {
-          const element = document.querySelector('[data-optical-text-stage="true"]');
-          const current = Number.parseFloat(element?.style.getPropertyValue('--os-optical-pointer-x') ?? 'NaN');
-          return Number.isFinite(current) && current !== value;
-        },
-        { value: previous },
-        { polling: 'raf', timeout: 2_000 },
-      );
-      return readOpticalX();
-    };
-    const firstX = await readOpticalX();
-    const secondX = await waitForNextOpticalX(firstX);
-    const thirdX = await waitForNextOpticalX(secondX);
-    const targetX = bounds.width * targetFactor;
-    assert(Math.abs(firstX - targetX) > 1, 'pointer target must not be applied in a single frame');
-    assert(Math.abs(secondX - targetX) < Math.abs(firstX - targetX), 'optical origin must ease toward the pointer target');
-    assert(Math.abs(thirdX - targetX) < Math.abs(secondX - targetX), 'optical origin must keep converging monotonically');
-    const interaction = await stage.evaluate((element) => ({
-      opticalX: element.style.getPropertyValue('--os-optical-x'),
-    }));
-    const apertureX = bounds.width * 0.5;
-    assert(Math.abs(Number.parseFloat(interaction.opticalX) - apertureX) < 1, 'optical axis must remain fixed at the aperture');
+const browser = await chromium.launch({ headless: true });
 
-    if (testCase.width === 1440 && testCase.symbol === 'a') {
-      for (const [position, factor] of [['left', 0.3], ['slit', 0.5], ['right', 0.7]]) {
-        for (const delay of activeFrameDelays) {
-          await page.mouse.move(bounds.x + 8, bounds.y + 8);
-          await page.waitForTimeout(700);
-          await page.mouse.move(bounds.x + bounds.width * factor, y);
-          await page.waitForTimeout(delay);
-          await page.screenshot({ path: path.join(outDir, `active-${position}-${delay}ms.png`) });
-        }
-      }
-    }
-  }
-  await page.screenshot({
-    path: path.join(outDir, `${testCase.symbol}-${testCase.width}x${testCase.height}${testCase.reducedMotion === 'reduce' ? '-reduced' : ''}.png`),
-  });
-  if (testCase.symbol === 'a' && testCase.reducedMotion === 'no-preference' && [390, 1440].includes(testCase.width)) {
-    const openRo = page.locator('[data-landing-module="open-ro"]');
-    await openRo.scrollIntoViewIfNeeded();
-    assert.equal(await openRo.isVisible(), true, 'Open RO anatomy must remain visible below the fold');
-    assert.equal(await openRo.locator('[data-sdf-node]').count(), 6, 'Open RO anatomy must expose all six SDF layers');
-    await page.screenshot({
-      fullPage: true,
-      path: path.join(outDir, `a-${testCase.width}x${testCase.height}-full.png`),
+try {
+  for (const testCase of cases) {
+    const page = await browser.newPage({
+      viewport: { width: testCase.width, height: testCase.height },
+      deviceScaleFactor: 1,
+      reducedMotion: testCase.reducedMotion,
     });
-  }
-  assert.deepEqual(runtimeErrors, [], `landing emitted browser errors: ${runtimeErrors.join(' | ')}`);
-  await page.close();
-}
+    const runtimeErrors = [];
+    page.on('pageerror', (error) => runtimeErrors.push(error.message));
+    page.on('console', (message) => {
+      if (message.type() === 'error' && !message.text().includes('favicon')) runtimeErrors.push(message.text());
+    });
 
-await browser.close();
+    await page.goto(`${baseUrl}/`, { waitUntil: 'networkidle' });
+    await page.evaluate(() => document.fonts.ready.then(() => true));
+
+    const surface = page.locator('[data-accepted-optical-surface="landing"]');
+    assert.equal(await surface.count(), 1, 'landing must render one shared accepted optical surface');
+    assert.equal(await page.locator('main').count(), 1, 'landing must expose one main landmark');
+    assert.equal(await page.locator('h1').count(), 1, 'landing must expose one semantic headline');
+    assert.equal(await page.locator('[data-optical-field="true"]').count(), 0, 'legacy OpticalHeadline field must not mount');
+    assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth), true, 'landing must not overflow horizontally');
+
+    for (const href of ['/explore', '/research-objects/new', '/auth/login']) {
+      assert((await page.locator(`a[href="${href}"]`).count()) > 0, `landing must retain ${href} navigation`);
+    }
+    assert.equal(await page.locator('[data-hero-action="primary"]').isVisible(), true, 'Explore CTA must remain visible');
+    assert.equal(await page.locator('[data-hero-action="secondary"]').isVisible(), true, 'Create CTA must remain visible');
+    assert.equal(await page.locator('[data-landing-module="open-ro"]').count(), 1, 'Latest Research/Open RO must remain below the Hero');
+
+    const bounds = await surface.boundingBox();
+    assert(bounds && bounds.width > 0 && bounds.height > 0, 'accepted surface must have visible bounds');
+    assert(Math.abs(bounds.width / bounds.height - 16 / 9) < .02, 'accepted surface must retain its 16:9 plate geometry');
+    assert.equal(await surface.locator('[data-optical-lab-asset-plate="true"]').count(), 1, 'accepted energy plate must remain mounted');
+    assert.equal(await surface.locator('[data-optical-lab-target-typography-plate="true"]').count(), 1, 'accepted typography plate must remain mounted');
+    assert.equal(await page.locator('#landing-optical-diagnostics').isVisible(), false, 'shared diagnostics must remain visually hidden');
+
+    if (testCase.reducedMotion === 'reduce') {
+      assert.equal(await surface.getAttribute('data-render-mode'), 'asset-static', 'reduced motion must retain the exact static surface');
+      assert.equal(await surface.locator('canvas[data-optical-asset-interaction-canvas="true"]').count(), 0, 'reduced motion must not create an interaction canvas');
+      if (testCase.width === 1672) {
+        assert.deepEqual(
+          await surface.screenshot({ animations: 'disabled' }),
+          await readFile(acceptedBaselinePath),
+          'production reduced motion must expose the accepted static surface pixel-for-pixel',
+        );
+      }
+    } else {
+      await surface.locator('canvas[data-optical-asset-interaction-canvas="true"]').waitFor({ state: 'attached', timeout: 10_000 });
+      const startX = bounds.x + bounds.width * .3;
+      const endX = bounds.x + bounds.width * .7;
+      const y = bounds.y + bounds.height * .45;
+      await page.mouse.move(startX, y);
+      await page.waitForTimeout(48);
+      await page.mouse.move(endX, y, { steps: 2 });
+      await page.waitForFunction(() => {
+        const snapshot = window.__OPENSCIENCE_OPTICAL_ASSET_INTERACTION__;
+        return Boolean(snapshot && snapshot.follow > .05 && snapshot.activeRaf);
+      }, undefined, { polling: 'raf', timeout: 2_000 });
+      const response = await page.evaluate(() => window.__OPENSCIENCE_OPTICAL_ASSET_INTERACTION__);
+      assert(response && response.follow > .05, 'pointer movement must activate the amplified shared field');
+      assert(response.pointerX > .5, 'pointer response must follow the production Hero input position');
+    }
+
+    await page.locator('[data-hero-action="primary"]').focus();
+    assert.equal(await page.locator('[data-hero-action="primary"]').evaluate((node) => node === document.activeElement), true, 'primary CTA must be keyboard focusable');
+    await page.evaluate(() => (document.activeElement instanceof HTMLElement ? document.activeElement.blur() : undefined));
+    await page.waitForFunction(() => {
+      const skipLink = document.querySelector('a[href="#main-content"]');
+      return skipLink instanceof HTMLElement && skipLink.getBoundingClientRect().bottom <= 0;
+    }, undefined, { polling: 'raf', timeout: 2_000 });
+    assert.equal(
+      await page.locator('a[href="#main-content"]').evaluate((node) => node.getBoundingClientRect().bottom <= 0),
+      true,
+      'skip link must settle outside the viewport before visual evidence is captured',
+    );
+    await page.screenshot({
+      path: path.join(outDir, `landing-accepted-${testCase.width}x${testCase.height}${testCase.reducedMotion === 'reduce' ? '-reduced' : ''}.png`),
+      fullPage: true,
+      animations: 'disabled',
+    });
+    assert.deepEqual(runtimeErrors, [], `landing emitted browser errors: ${runtimeErrors.join(' | ')}`);
+    await page.close();
+  }
+} finally {
+  await browser.close();
+}

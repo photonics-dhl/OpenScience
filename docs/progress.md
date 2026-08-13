@@ -1,5 +1,29 @@
 # OpenScience (XGS) 进度日志
 
+## 2026-08-14（Accepted Optical Surface 本地晋升）— ✅ 本地 release candidate，未部署
+
+- **共享实现**：新增 `AcceptedOpticalSurface`，由 Landing Hero 与精确
+  `/_visual/optical-lab?candidate=asset` 共用同一 accepted plate、唯一语义
+  `h1`、`AssetInteractionMount` 与隐藏诊断。生产 `/` 仍保留
+  `PublicShell`、SiteHeader 导航、Explore/Create CTA、Open RO 过渡和
+  Latest Research；旧 `OpticalHeadline` 留档但已退出 Landing runtime。
+- **TDD 与浏览器证据**：SSR/浏览器 RED 先证实 Landing 没有 shared surface；
+  GREEN 后 focused Landing/Lab `45/45`、Web 全量 `32 files / 236 tests`、
+  typecheck、production build、canonical root lint、27/27 production release
+  matrix 全部 exit 0。Landing 原生 desktop/mobile normal/reduced、pointer、
+  focus、overflow、one-main/one-h1 通过；desktop reduced frame 与接受 fixture
+  byte-for-byte 相同。
+- **Lab 回归**：完整 native pointer/touch/five-position/lifecycle/failure matrix
+  exit 0；Lab → Landing SPA 迁移会销毁旧 Lab canvas/resources/listeners，并只
+  保留一个新的 Landing canvas owner。reduced-motion 1672×941 capture 为
+  `952,176 B`，与接受 fixture byte-for-byte 相同；桌面与移动截图人工检查无
+  裁切、诊断泄漏、焦点残留或导航/CTA 回归。
+- **发布边界**：本轮只形成独立复审就绪的本地 release candidate；尚未执行
+  dry-run、ECS checkup、数据库备份、rollback ref 记录、云端同步或部署。
+  无 schema/API/seed/Nginx/Compose/topology/Secret 变更。所有任务自有端口已
+  释放，既有 3000 listener 未触碰；下一步必须先完成独立审查，再在明确的
+  deployment turn 中按 runbook 执行生产 preflight。
+
 ## 2026-08-13（全画面动效增强与生产发布）— ⏳ 用户确认组合方案，待执行 Tasks 14–15
 
 - **确认选择**：用户要求同时采用“强度约两倍”和“扩大作用范围”，并授权验证通过后部署。设计固定为 ambient `1.4px`、local `8px`、follow `4px`、gain `.14`、radius `.20`；保留方向性不规则尾流、900ms 恢复、无圆形 halo、静态构图和分层顺序。

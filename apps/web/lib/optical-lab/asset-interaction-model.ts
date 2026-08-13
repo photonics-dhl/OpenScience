@@ -85,7 +85,11 @@ function sampleVelocity(state: AssetInteractionState, now: number) {
   };
 }
 
-export function createAssetInteractionState(_now = 0): AssetInteractionState {
+export function createAssetInteractionState(
+  // The public clock-compatible signature is retained for renderer/test callers.
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  _now = 0,
+): AssetInteractionState {
   return {
     injectedAt: null,
     pointerX: .5,

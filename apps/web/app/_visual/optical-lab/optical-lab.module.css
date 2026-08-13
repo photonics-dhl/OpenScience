@@ -125,12 +125,23 @@
   aspect-ratio: 16 / 9;
 }
 
+.acceptedSurface {
+  width: min(100%, 1672px);
+  max-width: 1672px;
+  margin-inline: auto;
+  aspect-ratio: 16 / 9;
+}
+
 .assetPanel .assetPlate,
 .assetPanel .targetTypographyPlate {
   object-fit: contain;
 }
 
 .assetPanel .diagnostics {
+  display: none;
+}
+
+.diagnostics.acceptedDiagnostics {
   display: none;
 }
 

@@ -3,8 +3,19 @@ const tseslint = require('typescript-eslint');
 
 module.exports = [
   {
-    // .worktrees 是本地隔离工作区；.agents/.superpowers 是 agent skill 与临时验收脚本，均非产品源码
-    ignores: ['**/dist/**', '**/node_modules/**', '**/.next/**', 'infra/**', '**/.worktrees/**', '.agents/**', '.superpowers/**'],
+    // .worktrees 是本地隔离工作区；.agents/.superpowers 是 agent skill 与临时验收脚本，均非产品源码。
+    // tmp/ 与 apps/web/tmp/ 只保存本地浏览器探针/日志证据；正式门禁脚本仍位于 apps/web/test/visual/ 并继续受 lint。
+    ignores: [
+      '**/dist/**',
+      '**/node_modules/**',
+      '**/.next/**',
+      'infra/**',
+      '**/.worktrees/**',
+      '.agents/**',
+      '.superpowers/**',
+      'tmp/**',
+      'apps/web/tmp/**',
+    ],
   },
   js.configs.recommended,
   ...tseslint.configs.recommended,

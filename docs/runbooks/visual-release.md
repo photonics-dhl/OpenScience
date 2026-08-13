@@ -22,7 +22,7 @@ The source of truth is `apps/web/test/visual/product-release-manifest.mjs`.
 - Surfaces: Landing, Workspace, Public RO, Auth, Dashboard, Evidence Intake, Explore and Ultrafast Science Collection.
 - Viewports: 1440×900, 1920×1080 and 390×844.
 - Reduced motion: Landing at all three viewports.
-- Named states: optical resting/reduced, proposal ready, published reading, request code, approval ready, mixed evidence, launch corpus and selected media.
+- Named states: accepted optical resting/reduced, proposal ready, published reading, request code, approval ready, mixed evidence, launch corpus and selected media.
 
 Every case requires:
 
@@ -36,7 +36,13 @@ Every case requires:
 
 ## Determinism
 
-The test injects a fixed `window.__OPENSCIENCE_VISUAL_CLOCK__` before application code runs. Optical Field samples therefore use a stable phase without changing normal production behavior. The runner also waits for network idle and local fonts, uses stable demo identifiers, and pauses CSS/Web Animations before capture.
+The Landing release case requires exactly one `AcceptedOpticalSurface`, one
+semantic `h1`, the accepted plate order and no legacy Optical Field runtime. It
+waits for network idle and local fonts, uses stable demo identifiers, and pauses
+CSS/Web Animations before capture. The focused `test/visual/shots.mjs` gate also
+checks desktop/mobile normal and reduced states, exact accepted reduced pixels,
+navigation/CTA/focus behavior and a bounded pointer response from the amplified
+asset interaction.
 
 Do not add query-string backdoors, production demo accounts or stored credentials for visual testing. Do not read `.env` in the fixture server.
 
@@ -57,7 +63,9 @@ Reject the release if any canonical screenshot shows:
 - placeholder copy, fake metrics, empty media without an honest state, or inconsistent surface color;
 - visible test focus, debug overlays, horizontal scrolling or materially smaller mobile functionality.
 
-The final ECS review repeats this gate with real data and real APIs before Task 15 can be marked done.
+Local release acceptance does not imply deployment. A later, explicitly
+authorized ECS turn must repeat the public Landing/reduced/pointer checks with
+real production services before the promoted surface is described as deployed.
 
 ## Failure Handling
 

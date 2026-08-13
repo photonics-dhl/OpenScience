@@ -125,11 +125,12 @@ for (const releaseCase of PRODUCT_RELEASE_CASES) {
 
     if (reducedMotion) {
       expect(await page.evaluate(() => matchMedia('(prefers-reduced-motion: reduce)').matches)).toBe(true);
-      const reducedMask = await page.locator('[data-optical-text-base="true"]').evaluate((element) =>
-        getComputedStyle(element).maskImage,
-      );
-      expect(reducedMask).toBe('none');
-      await expect(page.locator('[data-optical-text-distorted="true"]')).toHaveCount(0);
+      const acceptedSurface = page.locator('[data-accepted-optical-surface="landing"]');
+      await expect(acceptedSurface).toHaveCount(1);
+      await expect(acceptedSurface.locator('[data-optical-lab-asset-plate="true"]')).toHaveCount(1);
+      await expect(acceptedSurface.locator('[data-optical-lab-target-typography-plate="true"]')).toHaveCount(1);
+      await expect(acceptedSurface.locator('canvas[data-optical-asset-interaction-canvas="true"]')).toHaveCount(0);
+      await expect(acceptedSurface).toHaveAttribute('data-render-mode', 'asset-static');
     }
 
     const metrics = await page.evaluate(() => {

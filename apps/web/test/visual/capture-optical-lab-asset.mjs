@@ -1,3 +1,5 @@
+/* global HTMLImageElement, document, fetch, getComputedStyle, process, setTimeout, window */
+
 import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
 import net from 'node:net';

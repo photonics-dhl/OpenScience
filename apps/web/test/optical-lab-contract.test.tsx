@@ -120,6 +120,9 @@ describe('isolated Optical Lab route contract', () => {
     expect(markup).not.toContain('data-optical-lab-panel="current"');
     expect(markup).not.toContain('/optical-lab/current-production.png');
     expect(markup).toContain('data-optical-lab-asset-only="true"');
+    expect(markup).toContain('data-accepted-optical-surface="lab"');
+    expect(markup).toContain('id="optical-lab-candidate"');
+    expect(markup).toContain('id="optical-lab-diagnostics"');
     expect(markup.match(/data-optical-lab-exit=/g) ?? []).toHaveLength(1);
   });
 
@@ -216,20 +219,6 @@ describe('isolated Optical Lab route contract', () => {
 
     expect(diagnostics).toContain('data-render-mode="static-fallback"');
     expect(diagnostics).toContain('>DOM/static</dd>');
-  });
-
-  it('does not leak the experimental renderer into the production homepage graph', () => {
-    const productionFiles = [
-      '../app/page.tsx',
-      '../components/landing/Hero.tsx',
-      '../components/brand/OpticalHeadline.tsx',
-      '../components/brand/OpticalField.tsx',
-    ];
-    for (const relativePath of productionFiles) {
-      const source = readFileSync(new URL(relativePath, import.meta.url), 'utf8');
-      expect(source).not.toContain('optical-lab');
-      expect(source).not.toContain('OpticalLab');
-    }
   });
 
   it('writes straight-alpha RGB to the non-premultiplied drawing buffer', () => {
