@@ -161,6 +161,205 @@ function createDuplicateTitleFixture() {
   });
 }
 
+function createLensEnergyFixture() {
+  return createImage((x, y) => {
+    const vertical = y - .515;
+    const coreHalfWidth = .006 + Math.abs(vertical) * .018;
+    const core = Math.abs(x - APERTURE_X) <= coreHalfWidth
+      && Math.abs(vertical) <= .42;
+    const curtainProgress = Math.max(0, Math.min(1, (Math.abs(vertical) - .16) / .3));
+    const curtainDistance = .024 + Math.pow(curtainProgress, 1.35) * .085;
+    const curtainCenter = APERTURE_X + Math.sign(vertical) * curtainDistance;
+    const curtain = Math.abs(x - curtainCenter) <= .004
+      && Math.abs(vertical) >= .16
+      && Math.abs(vertical) <= .46;
+    const downstream = x - APERTURE_X;
+    const filament = downstream > .015 && downstream < .36
+      && [-1.2, -1.1, -.9, .9, 1.1, 1.2].some((slope) => (
+        Math.abs(vertical - downstream * slope) <= .003
+      ));
+    if (core) return 1;
+    if (curtain) return .72;
+    return filament ? .58 : 0;
+  });
+}
+
+function createBarsAndHazeFixture() {
+  return createImage((x, y) => {
+    const vertical = y - .515;
+    const bars = [-.026, -.013, 0, .013, .026].some((offset) => (
+      Math.abs(x - (APERTURE_X + offset)) <= .004
+    )) && Math.abs(vertical) <= .38;
+    const downstream = x - APERTURE_X;
+    const haze = downstream > .02 && downstream < .38 && Math.abs(vertical) < .42;
+    if (bars) return .94;
+    return haze ? .18 * (1 - downstream / .42) : 0;
+  });
+}
+
+function createBrightTitleOnlyFixture() {
+  return createImage((x, y) => (
+    x >= .62 && x <= .92 && y >= .39 && y <= .61 ? .95 : 0
+  ));
+}
+
+function createVerticalBlindsFixture() {
+  return createImage((x, y) => (
+    x > APERTURE_X + .12
+      && x < APERTURE_X + .37
+      && y > .08
+      && y < .92
+      && Math.abs((x * 80) % 1 - .5) < .12
+      ? .82
+      : 0
+  ));
+}
+
+function createDenseVerticalBlindsFixture() {
+  return createImage((x, y) => (
+    x > APERTURE_X + .12
+      && x < APERTURE_X + .37
+      && y > .08
+      && y < .92
+      && Math.floor(x * 240) % 3 !== 0
+      ? .82
+      : 0
+  ));
+}
+
+function createFloatingRadialSegmentsFixture() {
+  return createImage((x, y) => {
+    const downstream = x - APERTURE_X;
+    const vertical = y - .515;
+    return downstream >= .12
+      && downstream < .37
+      && [-1.2, -.96, -.72, .72, .96, 1.2].some((slope) => (
+        Math.abs(vertical - downstream * slope) <= .003
+      ))
+      ? .82
+      : 0;
+  });
+}
+
+function createDottedBridgeRadialSegmentsFixture() {
+  return createImage((x, y) => {
+    const downstream = x - APERTURE_X;
+    const vertical = y - .515;
+    const onRay = [-1.2, -.96, -.72, .72, .96, 1.2].some((slope) => (
+      Math.abs(vertical - downstream * slope) <= .003
+    ));
+    const farSegment = downstream >= .12 && downstream < .37;
+    const isolatedBridge = Math.abs(downstream - .05) <= .003
+      || Math.abs(downstream - .1) <= .003;
+    return onRay && (farSegment || isolatedBridge) ? .82 : 0;
+  });
+}
+
+function createSinglePixelBridgeSegmentsFixture() {
+  const width = 1672;
+  const height = 941;
+  const pixels = new Uint8Array(width * height * 4);
+  const slopes = [-1.2, -.96, -.72, .72, .96, 1.2];
+  const setPixel = (x, y) => {
+    const pixelX = Math.round(x * (width - 1));
+    const pixelY = Math.round(y * (height - 1));
+    if (pixelX < 0 || pixelX >= width || pixelY < 0 || pixelY >= height) return;
+    const index = (pixelY * width + pixelX) * 4;
+    pixels[index] = 209;
+    pixels[index + 1] = 209;
+    pixels[index + 2] = 209;
+    pixels[index + 3] = 255;
+  };
+
+  for (const slope of slopes) {
+    for (let pixelX = Math.round((APERTURE_X + .12) * width); pixelX < (APERTURE_X + .37) * width; pixelX += 1) {
+      const x = pixelX / (width - 1);
+      setPixel(x, .515 + (x - APERTURE_X) * slope);
+    }
+    for (let sample = 0; sample < 10; sample += 1) {
+      const downstream = .05 + sample * .005;
+      setPixel(APERTURE_X + downstream, .515 + downstream * slope);
+    }
+  }
+  return { height, pixels, width };
+}
+
+function createSparseDotFieldFixture() {
+  return createImage((x, y) => {
+    if (x <= APERTURE_X + .12 || x >= APERTURE_X + .37 || y <= .08 || y >= .92) return 0;
+    const column = Math.floor(x * 92);
+    const row = Math.floor(y * 92);
+    return (column * 7 + row * 11) % 13 === 0 ? .82 : 0;
+  });
+}
+
+describe('Optical Lab energy-composition morphology', () => {
+  it('distinguishes coherent outer-band filaments from broad haze without counting title ink', () => {
+    assert.equal(
+      typeof referenceMetrics.measureEnergyComposition,
+      'function',
+      'the iteration requires a dedicated energy-composition metric path',
+    );
+    const lens = referenceMetrics.measureEnergyComposition(createLensEnergyFixture(), APERTURE_X);
+    const bars = referenceMetrics.measureEnergyComposition(createBarsAndHazeFixture(), APERTURE_X);
+    const titleOnly = referenceMetrics.measureEnergyComposition(createBrightTitleOnlyFixture(), APERTURE_X);
+    const titleOnlyMaterial = referenceMetrics.measureRestingMaterial({
+      apertureX: APERTURE_X,
+      candidate: createBrightTitleOnlyFixture(),
+      target: createBrightTitleOnlyFixture(),
+    });
+
+    assert(lens.filamentEnergyRatio > .52, JSON.stringify(lens));
+    assert(lens.broadHazeRatio < .32, JSON.stringify(lens));
+    assert(
+      bars.filamentEnergyRatio <= .52
+        && bars.broadHazeRatio >= .32,
+      JSON.stringify(bars),
+    );
+    assert.deepEqual(titleOnly, { broadHazeRatio: 0, filamentEnergyRatio: 0 });
+    assert.equal(titleOnlyMaterial.leftwardEmissionRatio, 0);
+    assert.equal(titleOnlyMaterial.rightwardEnergyRatio, 0);
+  });
+
+  it('accepts aperture-origin rays and rejects directionless blinds and sparse points', () => {
+    assert.equal(typeof referenceMetrics.measureRadialCoherence, 'function');
+    const radial = referenceMetrics.measureRadialCoherence(createLensEnergyFixture(), APERTURE_X);
+    const blinds = referenceMetrics.measureRadialCoherence(createVerticalBlindsFixture(), APERTURE_X);
+    const denseBlinds = referenceMetrics.measureRadialCoherence(
+      createDenseVerticalBlindsFixture(),
+      APERTURE_X,
+    );
+    const dots = referenceMetrics.measureRadialCoherence(createSparseDotFieldFixture(), APERTURE_X);
+    const floatingSegments = referenceMetrics.measureRadialCoherence(
+      createFloatingRadialSegmentsFixture(),
+      APERTURE_X,
+    );
+    const dottedBridgeSegments = referenceMetrics.measureRadialCoherence(
+      createDottedBridgeRadialSegmentsFixture(),
+      APERTURE_X,
+    );
+    const singlePixelBridgeSegments = referenceMetrics.measureRadialCoherence(
+      createSinglePixelBridgeSegmentsFixture(),
+      APERTURE_X,
+    );
+    const titleOnly = referenceMetrics.measureRadialCoherence(createBrightTitleOnlyFixture(), APERTURE_X);
+
+    assert(radial.radialCoherence >= .035, JSON.stringify(radial));
+    assert(radial.coherentRadialEnergy >= .009, JSON.stringify(radial));
+    assert(blinds.radialCoherence < .05, JSON.stringify(blinds));
+    assert(denseBlinds.radialCoherence < .05, JSON.stringify(denseBlinds));
+    assert(dots.radialCoherence < .05, JSON.stringify(dots));
+    assert(floatingSegments.radialCoherence < .035, JSON.stringify(floatingSegments));
+    assert(dottedBridgeSegments.radialCoherence < .035, JSON.stringify(dottedBridgeSegments));
+    assert(singlePixelBridgeSegments.radialCoherence < .035, JSON.stringify(singlePixelBridgeSegments));
+    assert.deepEqual(titleOnly, {
+      absoluteRadialEnergy: 0,
+      coherentRadialEnergy: 0,
+      radialCoherence: 0,
+    });
+  });
+});
+
 describe('Optical Lab five-region resting-material metrics', () => {
   it('accepts a complete reference-like field at the literal Task 5 thresholds', () => {
     assert.equal(

@@ -167,13 +167,20 @@ describe('isolated Optical Lab route contract', () => {
     expect(shader).not.toContain('pointer');
   });
 
-  it('uses sparse curved caustic filaments without staircase modulation', () => {
+  it('uses one particle-owned lens shell and no duplicate low-resolution ray field', () => {
     const shader = compositeShaderModule?.OPTICAL_HIGH_ENERGY_FRAGMENT_SHADER ?? '';
 
-    expect(shader).toContain('curvedFilament');
-    expect(shader).toContain('filamentGate');
+    expect(shader).toContain('lensShell');
+    expect(shader).toContain('abs(abs(deltaX - lensBend) - lensHalfWidth)');
+    expect(shader).toContain('particleEvidence');
+    expect(shader).toContain('mix(0.08, 1.0, particleEvidence)');
+    expect(shader).not.toContain('curvedFilament');
+    expect(shader).not.toContain('heroRays');
+    expect(shader).not.toContain('outerPlume');
     expect(shader).not.toContain('striationWave');
     expect(shader).not.toContain('pointer');
+    expect(compositeShaderModule?.OPTICAL_RESTING_COMPOSITE_FRAGMENT_SHADER).toContain('sourceEvidence');
+    expect(compositeShaderModule?.OPTICAL_RESTING_COMPOSITE_FRAGMENT_SHADER).toContain('mix(0.08, 1.0, sourceEvidence)');
   });
 
   it('reconstructs the approved evolves shear inside the measured ink bounds', () => {

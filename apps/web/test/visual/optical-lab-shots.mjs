@@ -5,7 +5,12 @@ import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { chromium } from 'playwright';
-import { measureMsdfTypography, measureRestingMaterial } from './optical-lab-reference-metrics.mjs';
+import {
+  measureEnergyComposition,
+  measureMsdfTypography,
+  measureRadialCoherence,
+  measureRestingMaterial,
+} from './optical-lab-reference-metrics.mjs';
 import { analyzeOpticalTopology } from './optical-lab-visual-metrics.mjs';
 
 const scriptDir = path.dirname(fileURLToPath(import.meta.url));
@@ -1077,6 +1082,15 @@ for (const testCase of cases) {
         candidate: nativeCandidate,
         target: targetNative,
       });
+      const targetRestingMaterial = measureRestingMaterial({
+        apertureX: .58,
+        candidate: targetNative,
+        target: targetNative,
+      });
+      restingMaterial.energyComposition = measureEnergyComposition(nativeCandidate, .58);
+      restingMaterial.targetEnergyComposition = measureEnergyComposition(targetNative, .58);
+      restingMaterial.radialCoherence = measureRadialCoherence(nativeCandidate, .58);
+      restingMaterial.targetRadialCoherence = measureRadialCoherence(targetNative, .58);
       assert(restingMaterial.intactGlyphContinuity >= .88, `native intact glyph continuity is too low: ${JSON.stringify(restingMaterial)}`);
       assert(restingMaterial.dissolutionTransfer >= .55, `native dissolution transfer is too low: ${JSON.stringify(restingMaterial)}`);
       assert(
@@ -1088,8 +1102,14 @@ for (const testCase of cases) {
         `native caustic width must stay within 4–6vw: ${JSON.stringify(restingMaterial)}`,
       );
       assert(restingMaterial.causticCenterError <= .005, `native caustic center drifted: ${JSON.stringify(restingMaterial)}`);
-      assert(restingMaterial.rightwardEnergyRatio >= 1.25, `native rightward energy is too weak: ${JSON.stringify(restingMaterial)}`);
-      assert(restingMaterial.leftwardEmissionRatio <= .12, `native leftward emission is too strong: ${JSON.stringify(restingMaterial)}`);
+      assert(
+        restingMaterial.rightwardEnergyRatio >= targetRestingMaterial.rightwardEnergyRatio * 1.25,
+        `native rightward energy must exceed the target reference: ${JSON.stringify({ restingMaterial, targetRestingMaterial })}`,
+      );
+      assert(
+        restingMaterial.leftwardEmissionRatio <= targetRestingMaterial.leftwardEmissionRatio * .75,
+        `native leftward emission must stay below the target reference: ${JSON.stringify({ restingMaterial, targetRestingMaterial })}`,
+      );
       assert(restingMaterial.maskedStructuralSimilarity >= .62, `native masked similarity is too low: ${JSON.stringify(restingMaterial)}`);
       assert(restingMaterial.forbiddenRingScore < .72, `native frame contains a ring: ${JSON.stringify(restingMaterial)}`);
       assert(restingMaterial.forbiddenSymmetricFanScore < .42, `native frame contains a symmetric fan: ${JSON.stringify(restingMaterial)}`);
@@ -1097,6 +1117,25 @@ for (const testCase of cases) {
       assert(restingMaterial.forbiddenStaircaseCausticScore < .12, `native frame contains a staircase caustic: ${JSON.stringify(restingMaterial)}`);
       assert(restingMaterial.forbiddenUniformDotScore < .42, `native frame contains a uniform-dot curtain: ${JSON.stringify(restingMaterial)}`);
       assert(restingMaterial.forbiddenDuplicateTitleScore < .42, `native frame contains duplicate title ink: ${JSON.stringify(restingMaterial)}`);
+      assert(restingMaterial.energyComposition.filamentEnergyRatio > .52, `native downstream field lacks coherent filaments: ${JSON.stringify(restingMaterial)}`);
+      assert(restingMaterial.energyComposition.broadHazeRatio < .32, `native downstream field contains broad haze: ${JSON.stringify(restingMaterial)}`);
+      assert(
+        restingMaterial.energyComposition.filamentEnergyRatio >= restingMaterial.targetEnergyComposition.filamentEnergyRatio * .8,
+        `native downstream filament energy regressed from the target reference: ${JSON.stringify(restingMaterial)}`,
+      );
+      assert(
+        restingMaterial.energyComposition.broadHazeRatio <= restingMaterial.targetEnergyComposition.broadHazeRatio + .1,
+        `native downstream haze regressed from the target reference: ${JSON.stringify(restingMaterial)}`,
+      );
+      assert(
+        restingMaterial.radialCoherence.radialCoherence >= .035
+          && restingMaterial.radialCoherence.coherentRadialEnergy >= .009,
+        `native downstream field lacks absolute radial continuity: ${JSON.stringify(restingMaterial)}`,
+      );
+      assert(
+        restingMaterial.radialCoherence.absoluteRadialEnergy >= restingMaterial.targetRadialCoherence.absoluteRadialEnergy * .55,
+        `native downstream field lacks target-relative absolute energy: ${JSON.stringify(restingMaterial)}`,
+      );
       const frameBeforeRestore = Number(await diagnostics.getAttribute('data-frame-count'));
       await page.locator('style[data-optical-lab-native-resting-probe="true"]').evaluate((node) => node.remove());
       await page.evaluate(() => window.dispatchEvent(new Event('resize')));

@@ -29,9 +29,18 @@ void main() {
   vec2 position = seed.xy;
 
   if (seed.w < 0.68) {
-    float centerWeight = 1.0 - abs(randomB - 0.5) * 1.35;
-    position.x = mix(seed.x, 0.58 + (randomA - 0.5) * mix(0.15, 0.09, centerWeight), transfer);
-    position.y = mix(seed.y, 0.03 + randomB * 0.94, transfer * 0.98);
+    float curtainTransfer = smoothstep(0.43, 0.465, seed.x);
+    float curtainY = 0.03 + randomB * 0.94;
+    float curtainVertical = curtainY - 0.515;
+    float curtainSpread = mix(0.004, 0.047, pow(abs(curtainVertical) / 0.485, 1.35));
+    float curvedCenter = 0.58
+      + sign(curtainVertical) * curtainVertical * curtainVertical * (randomC - 0.5) * 0.055;
+    position.x = mix(
+      seed.x,
+      curvedCenter + (randomA - 0.5) * curtainSpread + sin(curtainVertical * 37.0 + randomC * 6.283) * 0.0018,
+      curtainTransfer
+    );
+    position.y = mix(seed.y, curtainY, curtainTransfer * 0.98);
   } else if (seed.w > 0.86) {
     float downstream = pow(randomB, 1.35);
     position.x = 0.583 + downstream * 0.365;

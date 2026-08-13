@@ -201,8 +201,8 @@ function regionEnergy(image, left, right, top, bottom) {
 
 function outerBandEnergy(image, left, right) {
   return (
-    regionEnergy(image, left, right, .04, .34)
-    + regionEnergy(image, left, right, .69, .96)
+    regionEnergy(image, left, right, .08, .30)
+    + regionEnergy(image, left, right, .72, .92)
   ) * .5;
 }
 
@@ -255,6 +255,148 @@ function causticGeometry(image, apertureX) {
   const left = selected[0].x / image.width;
   const right = (selected.at(-1).x + 1) / image.width;
   return { centerError: Math.abs((left + right) * .5 - apertureX), width: right - left };
+}
+
+export function measureEnergyComposition(image, apertureX) {
+  const horizontal = pixelBounds(image, apertureX + .12, Math.min(.97, apertureX + .38), 0, 1);
+  const bands = [
+    pixelBounds(image, 0, 1, .08, .30),
+    pixelBounds(image, 0, 1, .72, .92),
+  ];
+  const maximumFilamentWidth = Math.max(2, Math.ceil(image.width * .012));
+  const minimumHazeWidth = Math.max(maximumFilamentWidth + 1, Math.ceil(image.width * .035));
+  let broadEnergy = 0;
+  let filamentEnergy = 0;
+  let totalEnergy = 0;
+
+  for (const band of bands) {
+    for (let y = band.top; y < band.bottom; y += 1) {
+      let runStart = horizontal.left;
+      while (runStart < horizontal.right) {
+        while (runStart < horizontal.right && luminance(image, runStart, y) < .04) runStart += 1;
+        if (runStart >= horizontal.right) break;
+
+        let runEnd = runStart;
+        let runEnergy = 0;
+        let runPeak = 0;
+        while (runEnd < horizontal.right) {
+          const value = luminance(image, runEnd, y);
+          if (value < .04) break;
+          runEnergy += value;
+          runPeak = Math.max(runPeak, value);
+          runEnd += 1;
+        }
+
+        const runWidth = runEnd - runStart;
+        totalEnergy += runEnergy;
+        if (runWidth <= maximumFilamentWidth && runPeak >= .22) filamentEnergy += runEnergy;
+        if (runWidth >= minimumHazeWidth) broadEnergy += runEnergy;
+        runStart = runEnd + 1;
+      }
+    }
+  }
+
+  return {
+    broadHazeRatio: broadEnergy / Math.max(.0001, totalEnergy),
+    filamentEnergyRatio: filamentEnergy / Math.max(.0001, totalEnergy),
+  };
+}
+
+export function measureRadialCoherence(image, apertureX) {
+  const slopes = 141;
+  const samples = 48;
+  let coherentEnergy = 0;
+  let coherentTracks = 0;
+  let totalEnergy = 0;
+
+  for (let slopeIndex = 0; slopeIndex < slopes; slopeIndex += 1) {
+    const slope = -1.4 + slopeIndex / (slopes - 1) * 2.8;
+    const tangentY = slope * image.height / image.width;
+    const tangentLength = Math.hypot(1, tangentY);
+    const tangentX = 1 / tangentLength;
+    const normalizedTangentY = tangentY / tangentLength;
+    const normalX = -normalizedTangentY;
+    const normalY = tangentX;
+    const ridgeAt = (x, y, normalRadius = 2) => {
+      const pixelX = Math.round(x * (image.width - 1));
+      const pixelY = Math.round(y * (image.height - 1));
+      let value = 0;
+      for (let normalOffset = -normalRadius; normalOffset <= normalRadius; normalOffset += 1) {
+        value = Math.max(value, luminance(
+          image,
+          Math.round(pixelX + normalX * normalOffset),
+          Math.round(pixelY + normalY * normalOffset),
+        ));
+      }
+      return value;
+    };
+    const ridgeEvidenceAt = (x, y, normalRadius = 2) => {
+      const pixelX = Math.round(x * (image.width - 1));
+      const pixelY = Math.round(y * (image.height - 1));
+      const ridgeValue = (tangentOffset) => {
+        const sampleX = (pixelX + tangentX * tangentOffset) / (image.width - 1);
+        const sampleY = (pixelY + normalizedTangentY * tangentOffset) / (image.height - 1);
+        return ridgeAt(sampleX, sampleY, normalRadius);
+      };
+      const value = ridgeValue(0);
+      const normalEnergy = [-6, -4, 4, 6].reduce((sum, offset) => sum + luminance(
+        image,
+        Math.round(pixelX + normalX * offset),
+        Math.round(pixelY + normalY * offset),
+      ), 0) / 4;
+      const tangentEnergy = (ridgeValue(-4) + ridgeValue(4)) / 2;
+      return {
+        matches: value >= .055
+          && tangentEnergy >= .045
+          && value >= normalEnergy + .025
+          && normalEnergy <= value * .55,
+        normalEnergy,
+        tangentEnergy,
+        value,
+      };
+    };
+    const bridgeSamples = 13;
+    const bridgeHits = Array.from({ length: bridgeSamples }, (_, index) => (
+      .05 + index * .005
+    )).reduce((hits, downstream) => {
+      const x = apertureX + downstream;
+      const y = .515 + downstream * slope;
+      return hits + Number(ridgeEvidenceAt(x, y, 4).matches);
+    }, 0);
+    let bright = 0;
+    let trackEnergy = 0;
+    let valid = 0;
+    for (let sample = 0; sample < samples; sample += 1) {
+      const x = apertureX + .12 + sample / (samples - 1) * .25;
+      const y = .515 + (x - apertureX) * slope;
+      if (!((y >= .08 && y <= .3) || (y >= .72 && y <= .92))) continue;
+      const evidence = ridgeEvidenceAt(x, y);
+      const { normalEnergy, tangentEnergy, value } = evidence;
+      trackEnergy += value;
+      if (
+        value >= .08
+        && tangentEnergy >= .055
+        && value >= normalEnergy + .035
+        && normalEnergy <= value * .45
+      ) bright += 1;
+      valid += 1;
+    }
+    if (valid === 0) continue;
+    const averageEnergy = trackEnergy / valid;
+    totalEnergy += averageEnergy;
+    if (bright / valid >= .62 && bridgeHits / bridgeSamples >= .75) {
+      coherentTracks += 1;
+      coherentEnergy += averageEnergy;
+    }
+  }
+
+  const angularOccupancy = coherentTracks / slopes;
+  const sparseRadialField = angularOccupancy <= .35;
+  return {
+    absoluteRadialEnergy: totalEnergy / slopes,
+    coherentRadialEnergy: sparseRadialField ? coherentEnergy / slopes : 0,
+    radialCoherence: sparseRadialField ? angularOccupancy : 0,
+  };
 }
 
 function cosineSimilarity(candidate, target) {
