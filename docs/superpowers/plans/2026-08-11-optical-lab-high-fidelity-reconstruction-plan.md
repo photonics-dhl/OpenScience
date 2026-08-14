@@ -82,6 +82,55 @@ loss reveal a promoted screenshot of the accepted resting WebGL2 frame.
 
 ---
 
+### Task 20: Perceptible Idle Ambient Motion
+
+**Goal:** Make the no-input optical field plainly visible while preserving the
+accepted pointer envelope, 700ms local recovery, static plates and reduced-motion
+fallback.
+
+**Files:**
+
+- Modify: `apps/web/lib/optical-lab/ogl/asset-interaction-renderer.ts`
+- Modify: `apps/web/lib/optical-lab/ogl/shaders/asset-composite.ts`
+- Modify: `apps/web/test/optical-lab-asset-interaction.test.ts`
+- Modify: `apps/web/test/visual/shots.mjs`
+- Modify: canonical progress/index/handoff and Task 19 report
+
+**Constraints:**
+
+- Keep pointer response `70ms`, follow `5px`, local/combined cap `10px`, gain
+  `.18`, radius `.20/.14` and exact local zero at `700ms` unchanged.
+- Keep the flow texture, draw count, lifecycle and reduced-motion static path
+  unchanged; do not add a pass, texture, canvas or dependency. Preserve `.985`
+  local persistence inside the previous-local support while preventing that
+  persistence from duplicating ambient velocity outside the local support.
+- Increase only the idle authored-composite displacement and ambient cycle speed;
+  retain the `.05` flow-vector cap to avoid changing pointer geometry.
+
+- [x] **Step 1: Record the current idle field as RED**
+
+  Add focused source contracts for a `4.5px` idle displacement budget and a
+  `5000ms` ambient cycle. Strengthen the Landing browser gate to sample three
+  consecutive `360ms` no-input windows and require at least `1.0%` real changed
+  pixels in every window and all four quadrants. Run against the current `2px / 8s`
+  implementation and retain the expected failures.
+
+- [x] **Step 2: Apply the minimum idle-only tuning**
+
+  Change the authored composite ambient budget from `2.0` to `4.5` CSS pixels and
+  renderer ambient phase from `8000ms` to `5000ms`. Do not change flow amplitude,
+  local model constants, overlay activity or recovery logic.
+
+- [ ] **Step 3: Verify and release**
+
+  Require focused tests, three-window desktop/mobile idle evidence, full native
+  pointer/recovery/lifecycle matrix, reduced exact-static capture, Web tests,
+  typecheck, lint, build and product release to pass. Inspect resting desktop and
+  mobile frames for legibility and absence of global flashing, then synchronize
+  docs and deploy through the existing backup/dry-run/`--skip-migrate` runbook.
+
+---
+
 ## 2026-08-14 Final Whole-Release Review Fix Wave
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use

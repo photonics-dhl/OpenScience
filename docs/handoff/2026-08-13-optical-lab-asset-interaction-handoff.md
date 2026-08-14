@@ -1,5 +1,34 @@
 # Handoff — 2026-08-13 Optical Lab Asset Interaction
 
+## Current canonical state — Task 20 stronger idle RC, deployment pending (2026-08-14)
+
+> **This section supersedes Task 19's next action and every historical Task
+> 17/18 statement below.** The current task remains the production `Science
+> evolves.` shared Landing/Lab surface; do not reopen the blue six-face object.
+
+- User accepted pointer interaction but found no-input flow too weak. Task 20
+  keeps every local contract unchanged and changes only idle displacement
+  `2px → 4.5px` plus cycle `8s → 5s`; ambient vector remains `.05`.
+- Renderer pauses the ambient clock during local input and resumes from the same
+  phase after the existing exact `700ms` local zero. Flow persistence retains
+  the accepted `.985` inside previous-local support and is zero outside it,
+  preventing whole-frame ambient duplication without attenuating local history.
+- Final local evidence includes two consecutive full native GREEN runs after
+  phase-matching layer probes: latest idle `33,890` pixels with all four
+  quadrants; worst centroid `.02263`, worst locality `.98994`; layers
+  `20.37 > 15.40 > 5.14`; recovery `788.5ms`; halo `2/16`; touch `.99954`.
+  One timing-only PNG run was RED at `992.7ms`, followed by two consecutive
+  full GREEN runs at `184.6s/178.6s`. Focused `14/14`, Web `241/241`,
+  typecheck/lint/build, Landing desktop/mobile normal/reduced/pointer/idle,
+  reduced exact Lab, full native and release `27/27` are GREEN.
+- No pass, FBO, texture, canvas owner, dependency, API, data, schema, Nginx,
+  Compose, secret or topology change. Physical-mobile waiver remains the same
+  one-release risk decision; simulated mobile is not described as hardware.
+- **Next action:** finish independent diff review and docs gates, commit Task 20,
+  then use the already authorized backup/dry-run/`deploy.sh --confirm
+  --skip-migrate` production path and repeat public desktop/mobile idle/pointer/
+  reduced plus service/log verification.
+
 ## Current canonical state — Task 19 deployed and publicly verified (2026-08-14)
 
 > **This section supersedes every Task 17/18 blocker and next-action statement

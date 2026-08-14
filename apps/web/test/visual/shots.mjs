@@ -53,7 +53,7 @@ async function measureTemporalQuadrants(page, before, after, threshold = 1) {
         quadrants[(y >= first.height / 2 ? 2 : 0) + (x >= first.width / 2 ? 1 : 0)] += 1;
       }
     }
-    return { count, quadrants };
+    return { count, quadrants, total: first.width * first.height };
   }, {
     afterBase64: after.toString('base64'),
     beforeBase64: before.toString('base64'),
@@ -115,12 +115,17 @@ try {
       const idleSnapshot = await page.evaluate(() => window.__OPENSCIENCE_OPTICAL_ASSET_INTERACTION__);
       assert.equal(idleSnapshot?.ambientStrength, .05, 'Landing idle proof must exercise the exact ambient flow budget');
       assert.equal(idleSnapshot?.follow, 0, 'Landing idle proof must run before pointer input');
-      const idleBefore = await canvas.screenshot();
-      await page.waitForTimeout(360);
-      const idleAfter = await canvas.screenshot();
-      const idleMotion = await measureTemporalQuadrants(page, idleBefore, idleAfter, 1);
-      assert(idleMotion.count > 0 && idleMotion.quadrants.every((count) => count > 0),
-        `Landing idle motion must change real pixels in all four quadrants: ${JSON.stringify(idleMotion)}`);
+      const idleWindows = [];
+      for (let index = 0; index < 3; index += 1) {
+        const idleBefore = await canvas.screenshot();
+        await page.waitForTimeout(360);
+        const idleAfter = await canvas.screenshot();
+        idleWindows.push(await measureTemporalQuadrants(page, idleBefore, idleAfter, 1));
+      }
+      assert(idleWindows.every((motion) => (
+        motion.count / motion.total >= .01
+        && motion.quadrants.every((count) => count > 0)
+      )), `Landing idle motion must remain perceptible in every window and all four quadrants: ${JSON.stringify(idleWindows)}`);
       const startX = bounds.x + bounds.width * .3;
       const endX = bounds.x + bounds.width * .7;
       const y = bounds.y + bounds.height * .45;

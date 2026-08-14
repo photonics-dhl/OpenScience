@@ -64,7 +64,7 @@ void main() {
     -1.0,
     1.0
   ) * step(0.0001, uLocalStrength);
-  float localPersistence = step(0.0001, uLocalStrength);
+  float localPersistence = step(0.0001, previousLocal);
   vec2 velocity = previous * 0.985 * localPersistence + ambient + uVelocity * influence * 0.24;
   float magnitude = length(velocity);
   if (magnitude > 1.0) velocity /= magnitude;

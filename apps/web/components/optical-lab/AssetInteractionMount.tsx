@@ -30,6 +30,7 @@ const emptySnapshot = (
   suspended = false,
 ): AssetInteractionSnapshot => ({
   activeRaf: false,
+  ambientPhase: 0,
   ambientStrength: 0,
   apertureX: .58,
   causticGain: 0,
@@ -80,6 +81,7 @@ export function AssetInteractionMount({ diagnosticsId, stageId }: AssetInteracti
       stage.dataset.renderMode = snapshot.activeRaf ? 'asset-interactive' : 'asset-static';
       diagnostics.dataset.apertureX = String(snapshot.apertureX);
       diagnostics.dataset.assetActiveRaf = String(snapshot.activeRaf);
+      diagnostics.dataset.assetAmbientPhase = String(snapshot.ambientPhase);
       diagnostics.dataset.assetAmbientStrength = String(snapshot.ambientStrength);
       diagnostics.dataset.assetCausticGain = String(snapshot.causticGain);
       diagnostics.dataset.assetFollow = String(snapshot.follow);

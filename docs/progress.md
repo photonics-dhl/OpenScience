@@ -1,5 +1,13 @@
 # OpenScience (XGS) 进度日志
 
+## 2026-08-14（Task 20 默认流动增强）— ✅ 本地 release candidate，待部署
+
+- **目标与边界**：针对用户反馈“无鼠标时默认流动太弱”，只增强 idle authored-composite；鼠标 `70ms`、follow `5px`、local/combined `10px`、gain `.18`、radius `.20/.14`、overlay alpha 与 `700ms` local zero 均保持不变。reduced-motion 继续 pixel-exact static。
+- **实现**：idle displacement `2px → 4.5px`，cycle `8s → 5s`，flow vector cap 仍为 `.05`。交互期间只暂停 ambient phase，`700ms` 后扣除暂停时长从同一 phase 连续恢复；flow persistence 在 previous-local support 内仍为原 `.985`，support 外归零，消除输入时上一帧 ambient 被整屏重复叠加的旧缺陷。无新增 pass/FBO/texture/canvas/dependency。
+- **TDD/调试证据**：旧版 focused 对 `4.5px/5s` 合同 RED，Landing 三个 `360ms` 窗口在旧版降到约 `0.42%`；单纯放大后 native RED 至 centroid `.14`，冻结 phase 后仍 RED 至 `.18`，最终由 binary previous-local 根因修复闭合。独立复审曾复现未锁 phase 的 layer RED（energy `13.28 < 15.42`）；固定 `.25` phase 后两轮完整 native 连续 GREEN。最新 idle `33,890` pixels、四象限 `[4,910,14,352,2,851,11,777]`；最差 centroid `.02263`、最差 locality `.98994`；layers `20.37 > 15.40 > 5.14`，touch `.99954`，halo `2/16`，恢复 PNG `788.5ms`。其间一次恢复 PNG 编码为 `992.7ms` RED（恢复像素 max delta 已为 9），如实保留为环境时序抖动，随后两轮分别 `184.6s/178.6s` exit 0。
+- **本地门禁**：focused `14/14`、Web `32 files / 241 tests`、typecheck、canonical lint/workspace/docs sync、production build（`/` `804 B / 132 kB`）、Landing desktop/mobile normal/reduced/pointer/三窗口 idle、Lab full native 连续两轮、reduced exact-static、product release `27/27` 均 GREEN；桌面/移动截图人工检查无截字、硬圆环、全局闪烁或布局回归。
+- **发布边界**：独立复审、最终 docs/diff/安全检查及 ECS backup/dry-run/`--skip-migrate` 部署尚待完成；不改 schema、seed、API、Nginx、Compose、Secret 或 ECS 拓扑。
+
 ## 2026-08-14（Task 19 独立覆盖层）— ✅ 已部署并通过公网验收
 
 - **实现**：复用现有 RGBA8 flow texture 的 A 通道承载 phase-independent pointer carrier；原 authored composite 先以 `clear:true` 绘制，新的 ledger-owned transparent overlay 再以 `clear:false` 绘制。无新增 FBO、texture、canvas owner、依赖或服务器 GPU。最终参数为 response `70ms`、follow `5px`、local/combined cap `10px`、gain `.18`、ambient `.05`/`2px`/`8s`、纵向 `.20`/横向 `.14`、empty `.27`，local geometry/carrier 在 `700ms` 精确归零。

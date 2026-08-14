@@ -112,9 +112,11 @@ async function waitForImages(page) {
 
 async function waitForAmbientSamplePhase(page, samplePhase) {
   await page.waitForFunction((targetPhase) => {
-    const phase = (performance.now() % 8_000) / 8_000;
-    return phase >= targetPhase && phase < targetPhase + .004;
-  }, samplePhase, { polling: 'raf', timeout: 9_000 });
+    const snapshot = window.__OPENSCIENCE_OPTICAL_ASSET_INTERACTION__;
+    const phase = snapshot?.ambientPhase ?? -1;
+    const phaseDistance = Math.abs(phase - targetPhase);
+    return Math.min(phaseDistance, 1 - phaseDistance) < .012;
+  }, samplePhase, { polling: 'raf', timeout: 6_000 });
 }
 
 async function moveMouse(page, box, xRatio, yRatio = .5) {
@@ -1086,7 +1088,9 @@ try {
             : `pointer-${name}-phase-${phaseLabel}-baseline.png`),
         );
         const injectedAt = await dispatchGesture(candidate, point, 'mouse', 41);
-        const phaseAtInjection = (injectedAt % 8_000) / 8_000;
+        const phaseAtInjection = await page.evaluate(
+          () => window.__OPENSCIENCE_OPTICAL_ASSET_INTERACTION__?.ambientPhase ?? -1,
+        );
         await page.waitForFunction(({ x, y }) => {
           const snapshot = window.__OPENSCIENCE_OPTICAL_ASSET_INTERACTION__;
           return Math.abs((snapshot?.pointerX ?? -1) - x) < .02
@@ -1100,7 +1104,9 @@ try {
             ? `pointer-${name}.png`
             : `pointer-${name}-phase-${phaseLabel}.png`),
         );
-        const phaseAtCapture = await page.evaluate(() => (performance.now() % 8_000) / 8_000);
+        const phaseAtCapture = await page.evaluate(
+          () => window.__OPENSCIENCE_OPTICAL_ASSET_INTERACTION__?.ambientPhase ?? -1,
+        );
         const activeOverlayCapture = name === 'left' && primaryPhase
           ? await captureInteractionCanvas(page)
           : null;
@@ -1229,6 +1235,7 @@ try {
     const widerFieldEvidence = {};
     for (const [name, point] of Object.entries(layerPoints)) {
       await page.waitForTimeout(920);
+      await waitForAmbientSamplePhase(page, .25);
       const baseline = await captureCandidate(page, box);
       await dispatchGesture(candidate, point, 'mouse', 51);
       await page.waitForTimeout(120);

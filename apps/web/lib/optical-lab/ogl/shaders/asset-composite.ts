@@ -32,7 +32,7 @@ void main() {
   float layerWeight = mix(emptyWeight, typeWeight, smoothstep(0.04, 0.42, targetLuminance));
   layerWeight = mix(layerWeight, energyWeight, smoothstep(0.06, 0.48, energySignal));
 
-  float ambientBudget = 2.0;
+  float ambientBudget = 4.5;
   float localBudget = min(10.0, length(uRefractionPx));
   float displacementBudget = mix(ambientBudget, localBudget, localAmount) * layerWeight;
   vec2 refractedPx = flow * displacementBudget;

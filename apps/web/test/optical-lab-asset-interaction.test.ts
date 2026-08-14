@@ -209,6 +209,8 @@ describe('Optical Lab accepted asset OGL boundary', () => {
     expect(shader).toContain('normalize(uVelocity');
     expect(shader).toContain('length(wakeDistance)');
     expect(shader).toContain('previous * 0.985');
+    expect(shader).toContain('localPersistence = step(0.0001, previousLocal)');
+    expect(shader).toContain('previous * 0.985 * localPersistence');
     expect(shader).toContain('backtraceUv');
     expect(shader).toContain('texture(tPrevious, backtraceUv)');
     expect(shader).toContain('min(uLocalStrength');
@@ -233,7 +235,7 @@ describe('Optical Lab accepted asset OGL boundary', () => {
     expect(shader).toContain('1.0');
     expect(shader).toContain('min(10.0');
     expect(shader).toContain('min(0.18');
-    expect(shader).toContain('float ambientBudget = 2.0');
+    expect(shader).toContain('float ambientBudget = 4.5');
     expect(shader).toContain('emptyWeight * 0.27');
     expect(shader).toContain('smoothstep');
     expect(shader).not.toContain('abs(vUv.x - 0.58)');
@@ -245,13 +247,31 @@ describe('Optical Lab accepted asset OGL boundary', () => {
     expect(rendererSource).toContain('uPatchFollowPx: { value: 0 }');
     expect(rendererSource).toContain('program.uniforms.uPatchFollowPx.value');
     expect(shader).toContain('uniform float uPatchFollowPx');
-    expect(rendererSource).toContain('(now % 8_000) / 8_000');
+    expect(rendererSource).toContain('% 5_000) / 5_000');
     expect(shader).toContain('clamp(uPatchFollowPx, -5.0, 5.0)');
     expect(shader).toContain('localAmount * layerWeight');
     expect(shader).toContain('combinedLength > 10.0');
     expect(shader).toContain('combinedPx *= 10.0 / combinedLength');
     expect(nativeGateSource).toContain('combinedPx *= 14.0 / combinedLength');
     expect(nativeGateSource).toContain('capRegistration.best.shift');
+  });
+
+  it('keeps the stronger idle field separate from the accepted local envelope', () => {
+    const shader = compositeShader?.OPTICAL_ASSET_COMPOSITE_FRAGMENT_SHADER ?? '';
+
+    expect(rendererSource).toContain('ambientPhase: lastAmbientPhase');
+    expect(shader).toContain('float ambientBudget = 4.5');
+    expect(flowShader?.OPTICAL_ASSET_FLOW_FRAGMENT_SHADER ?? '').toContain('min(0.05, ambientMagnitude)');
+    expect(rendererSource).toContain('const visuallyActive = lastSample.active');
+    expect(rendererSource).toContain('if (visuallyActive)');
+  });
+
+  it('pauses only the ambient clock during local interaction and resumes it without a jump', () => {
+    expect(rendererSource).toContain('let ambientPausedAt: number | null = null');
+    expect(rendererSource).toContain('let ambientPausedMs = 0');
+    expect(rendererSource).toContain('ambientPausedMs += now - ambientPausedAt');
+    expect(rendererSource).toContain('const phaseClock = ambientPausedAt ?? now');
+    expect(nativeGateSource).toContain('snapshot?.ambientPhase');
   });
 
   it('keeps the approved visible-centroid and locality contract mutation-resistant', () => {

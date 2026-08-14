@@ -17,6 +17,7 @@ import { OPTICAL_FULLSCREEN_VERTEX_SHADER } from './shaders/fullscreen';
 
 export interface AssetInteractionSnapshot {
   activeRaf: boolean;
+  ambientPhase: number;
   ambientStrength: number;
   apertureX: .58;
   causticGain: number;
@@ -115,6 +116,9 @@ export async function createAssetInteractionRenderer(
   let rafId: number | null = null;
   let state: AssetInteractionState = createAssetInteractionState(performance.now());
   let lastSample = stepAssetInteraction(state, performance.now());
+  let ambientPausedAt: number | null = null;
+  let ambientPausedMs = 0;
+  let lastAmbientPhase = 0;
   let localFlowActive = false;
   let pendingCapture: {
     reject: (reason: Error) => void;
@@ -177,6 +181,7 @@ export async function createAssetInteractionRenderer(
 
   const report = (contextStatus: AssetInteractionSnapshot['contextStatus']) => onSnapshot({
     activeRaf,
+    ambientPhase: lastAmbientPhase,
     ambientStrength: activeRaf && !suspended ? ASSET_AMBIENT_STRENGTH : 0,
     apertureX: ASSET_INTERACTION_LIMITS.apertureX,
     causticGain: lastSample.causticGain,
@@ -289,6 +294,12 @@ export async function createAssetInteractionRenderer(
       try {
         lastSample = stepAssetInteraction(state, now);
         const visuallyActive = lastSample.active;
+        if (!visuallyActive && ambientPausedAt !== null) {
+          ambientPausedMs += now - ambientPausedAt;
+          ambientPausedAt = null;
+        }
+        const phaseClock = ambientPausedAt ?? now;
+        lastAmbientPhase = ((phaseClock - ambientPausedMs) % 5_000) / 5_000;
         if (localFlowActive && !visuallyActive) flowPass?.reset();
         localFlowActive = visuallyActive;
         const velocity: [number, number] = [
@@ -296,7 +307,7 @@ export async function createAssetInteractionRenderer(
           -lastSample.refractionPx.y / ASSET_INTERACTION_LIMITS.localRefractionPx,
         ];
         if (!flowPass?.render({
-          ambientPhase: (now % 8_000) / 8_000,
+          ambientPhase: lastAmbientPhase,
           aspect: Math.max(1, stage.clientWidth) / Math.max(1, stage.clientHeight),
           localStrength: visuallyActive ? lastSample.follow : 0,
           pointer: [lastSample.pointerX, 1 - lastSample.pointerY],
@@ -365,6 +376,9 @@ export async function createAssetInteractionRenderer(
           cancelFrame();
           clear();
           flowPass?.reset();
+          ambientPausedAt = null;
+          ambientPausedMs = 0;
+          lastAmbientPhase = 0;
           localFlowActive = false;
           state = createAssetInteractionState(performance.now());
           lastSample = stepAssetInteraction(state, performance.now());
@@ -379,6 +393,7 @@ export async function createAssetInteractionRenderer(
       },
       updatePointer(input, now) {
         if (disposed) return;
+        if (ambientPausedAt === null) ambientPausedAt = now;
         state = injectAssetInteraction(state, input, now);
         if (!activeRaf && !suspended) {
           activeRaf = true;
