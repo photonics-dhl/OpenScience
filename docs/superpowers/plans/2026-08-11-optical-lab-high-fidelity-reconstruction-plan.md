@@ -121,7 +121,7 @@ fallback.
   renderer ambient phase from `8000ms` to `5000ms`. Do not change flow amplitude,
   local model constants, overlay activity or recovery logic.
 
-- [ ] **Step 3: Verify and release**
+- [x] **Step 3: Verify and release**
 
   Require focused tests, three-window desktop/mobile idle evidence, full native
   pointer/recovery/lifecycle matrix, reduced exact-static capture, Web tests,

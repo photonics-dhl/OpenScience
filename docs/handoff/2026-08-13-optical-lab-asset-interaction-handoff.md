@@ -1,6 +1,6 @@
 # Handoff — 2026-08-13 Optical Lab Asset Interaction
 
-## Current canonical state — Task 20 stronger idle RC, deployment pending (2026-08-14)
+## Current canonical state — Task 20 deployed and publicly verified (2026-08-14)
 
 > **This section supersedes Task 19's next action and every historical Task
 > 17/18 statement below.** The current task remains the production `Science
@@ -24,10 +24,14 @@
 - No pass, FBO, texture, canvas owner, dependency, API, data, schema, Nginx,
   Compose, secret or topology change. Physical-mobile waiver remains the same
   one-release risk decision; simulated mobile is not described as hardware.
-- **Next action:** finish independent diff review and docs gates, commit Task 20,
-  then use the already authorized backup/dry-run/`deploy.sh --confirm
-  --skip-migrate` production path and repeat public desktop/mobile idle/pointer/
-  reduced plus service/log verification.
+- Release `28c7789` is live; rollback is `b6a41da`. Pre/post checkup, `280K`
+  database backup (`7/7`), dry-run, remote full build and
+  `deploy.sh --confirm --skip-migrate` all passed. No migration or seed ran.
+  Public `/`, asset Lab and `/explore` return `200`; unauthenticated `/auth/me`
+  returns `401`. Remote hashes match the release, and public desktop/mobile
+  normal/reduced, three-window idle and pointer checks are GREEN.
+- **Next action:** user visual validation only. Do not reopen the blue six-face
+  object, Task 17/18 geometry experiments or the superseded Task 19 idle budget.
 
 ## Current canonical state — Task 19 deployed and publicly verified (2026-08-14)
 

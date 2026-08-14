@@ -204,3 +204,30 @@ Current infrastructure uses pinned base/worker images with bind-mounted applicat
   reduced modes: one semantic `h1`, retained navigation/CTA/Latest Research,
   zero overflow/errors, normal idle pixel changes in all four quadrants and
   pointer response; reduced mode creates no interaction canvas.
+
+### 5.4 Stronger idle optical flow deployment (2026-08-14)
+
+> Release `28c7789`; rollback `b6a41da`. The same one-release physical-mobile
+> performance waiver remains in force; simulated mobile is not hardware proof.
+
+- The no-input authored displacement is `4.5px` on a `5s` cycle with the
+  existing `.05` vector cap. Pointer response/caps, overlay ownership and exact
+  `700ms` local zero are unchanged. Previous-local persistence remains `.985`
+  inside its support and is suppressed outside it, avoiding whole-frame ambient
+  duplication.
+- Local acceptance passed focused `14/14`, Web `241/241`, typecheck, canonical
+  lint/docs sync, production build, two consecutive full native matrices,
+  reduced exact-static, Landing desktop/mobile normal/reduced/pointer/three idle
+  windows and product release `27/27`. Independent review returned APPROVE.
+- Pre/post checkup passed. Database backup returned
+  `BACKUP_OK size=280K files=7/7`; dry-run preceded
+  `deploy.sh --confirm --skip-migrate`. The remote full-workspace build passed
+  and Web/API/agent-worker restarted; no migration or seed ran.
+- Public `/`, asset Lab and `/explore` return `200`; unauthenticated `/auth/me`
+  returns `401`. The four changed renderer/source SHA-256 values match locally
+  and remotely. Public Chromium passed 1672×941 and 390×844 normal/reduced,
+  three consecutive `360ms` idle windows with at least `1%` changed pixels in
+  every window/all four quadrants, pointer response and exact reduced fixture.
+- Restart logs contain the expected prior-process `SIGTERM`; stale Server Action
+  requests occurred before the final Ready marker. No new runtime error appears
+  after the deployed server became ready.
