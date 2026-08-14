@@ -258,8 +258,7 @@ Current infrastructure uses pinned base/worker images with bind-mounted applicat
 
 ### 5.6 Unified water material and clean target deployment (2026-08-14)
 
-> Local release candidate only until the independent re-review and production
-> operation finish. Current production remains `8edf6fa`; rollback `28c7789`.
+> Deployed release `744c631`; rollback `8edf6fa`.
 
 - Task 22 removes the superseded `3.4s` CSS sweep. The existing WebGL flow uses
   a continuous, non-wrapping shader clock on a ten-second scale; derivative
@@ -279,3 +278,13 @@ Current infrastructure uses pinned base/worker images with bind-mounted applicat
   After deployment, verify `/`, asset Lab and `/explore` return `200`, anonymous
   `/auth/me` returns `401`, and rerun the public Landing browser gate before
   recording release/rollback/backup identifiers here.
+- Actual operation: pre/post checkup passed; the same release window's database
+  backup was `BACKUP_OK size=280K files=7/7`. Dry-run preceded two
+  `deploy.sh --confirm --skip-migrate` hotfix deployments; neither ran migration
+  nor seed. Intermediate `8fe2094`, `3edfd03`, and `68920c3` were rejected by
+  public phase coverage (`.20096`, `.22907`, `.21292` row ratios against `.20`).
+  Final `744c631` keeps the curvature-light intensity but uses near-neutral
+  cool/warm white; local and public Landing gates each passed five consecutive
+  runs. `/`, asset Lab and `/explore` return `200`; anonymous `/auth/me` returns
+  `401`. Remote composite SHA-256 matches local
+  `3d7e8439dcae1612f76cb546cdcb246d14e9b47665d6ca2203e15878800213c0`.

@@ -1,6 +1,6 @@
 # Handoff — 2026-08-13 Optical Lab Asset Interaction
 
-## Current canonical state — Task 22 local release candidate (2026-08-14)
+## Current canonical state — Task 22 deployed and publicly verified (2026-08-14)
 
 > **This section supersedes Task 21's CSS-current architecture.** The task is
 > still the production `Science evolves.` Landing/Lab surface. Do not reopen
@@ -16,28 +16,33 @@
   `0.40–0.74`, eliminating the same pixels from WebGL output.
 - Idle uses the existing flow texture and a non-wrapping shader clock on a
   ten-second presentation scale to combine three spatial scales. Grazing light
-  is multiplicatively curvature-gated, so the phase carrier cannot create a
-  broad cyan/orange band on its own.
+  is multiplicatively curvature-gated and uses near-neutral cool/warm white,
+  so the phase carrier cannot create a broad cyan/orange band.
   No new dependency/pass/FBO/texture/asset/route exists. Pointer
   `5px/10px/.18/.20/700ms`, overlay, lifecycle and reduced-motion are retained.
 - RED evidence: old static plate changed `11,124` contamination-zone pixels;
   raw live GPU captures visibly contained the arrow/status copy. Final static
   contamination and live lower-left bright-pixel counts are both `0`.
-- Fresh local evidence is GREEN: focused `16/16`, Web `243/243`, typecheck,
+- Fresh release evidence is GREEN: focused `16/16`, Web `243/243`, typecheck,
   production build (`/` `804 B / 133 kB`), production Landing desktop/mobile
   normal/reduced/idle/pointer and the full native matrix. The final native run
-  records ambient `39,396`, worst centroid `.04333`, worst locality `.99437`,
-  layers `21.29 > 15.58 > 5.15`, halo `2/16`, touch `.99537`, and renderer PNG
-  completion `813.7ms`. Independent re-review APPROVE and final canonical lint,
+  records ambient `29,086`, spatial locality `>=.9954`, layers
+  `21.05 > 15.64 > 5.33`, halo `2/16`, touch `.99497`, and renderer PNG
+  completion `851.6ms`. Independent re-review APPROVE and final canonical lint,
   docs `186/0`, docs sync, release `27/27` and diff check are GREEN. Clean
   reduced fixture SHA-256 is
   `e3a2e71efc14b57cac6485739f3ef904b6ce8b070d98e2b7cf403087f07b9c97`.
 - The user renewed the physical-mobile performance waiver for Task 22. This is
   an accepted risk, not physical-device evidence; emulated mobile remains only
   layout/behavior proof.
-- **Next action:** independent re-review → commit → authorized checkup/backup/dry-run/
-  `--skip-migrate` deploy → public browser verification. Until deployment,
-  production release remains `8edf6fa`, rollback `28c7789`.
+- Public verification rejected three intermediate phase-sensitive candidates
+  (`8fe2094`, `3edfd03`, `68920c3`) before final acceptance. Release `744c631`
+  is live with rollback `8edf6fa`; pre/post checkup, `280K`/`7/7` backup,
+  dry-run, remote full build and `--skip-migrate` deployment passed. Public
+  routes are `200/200/200/401`, five consecutive public Landing matrices pass,
+  and the remote composite shader hash matches local.
+- **Next action:** user visual validation only. Do not reopen the blue six-face
+  object or restore Task 21's CSS sweep.
 
 ## Current canonical state — Task 21 deployed and publicly verified (2026-08-14)
 

@@ -53,6 +53,6 @@ Remove `accepted-optical-idle-current`. Apply a headline-only clip to the visibl
 
 Run the focused Vitest, Landing desktop/mobile normal/reduced browser gate, full native interaction matrix, full Web tests, typecheck, lint, production build, and release Playwright gate. Inspect fresh desktop/mobile idle and active screenshots at original size.
 
-- [ ] **Step 5: Synchronize and deploy**
+- [x] **Step 5: Synchronize and deploy**
 
 Update `docs/progress.md`, `project_index.md`, the current optical handoff, and deployment evidence. Run docs lint/docs sync/diff check, obtain independent review, commit, then follow the existing `checkup → backup → deploy --skip-migrate → public browser verification` runbook. Preserve the current release hash as rollback.
