@@ -69,7 +69,7 @@ void main() {
   float causticCrest = smoothstep(0.66, 0.94, causticCarrier);
   float curvatureCrest = smoothstep(0.085, 0.24, curvature);
   float grazingLight = curvatureCrest
-    * (0.35 + 0.65 * causticCrest)
+    * (0.08 + 0.92 * causticCrest)
     * (0.28 + 0.72 * liquidGrain)
     * 0.11
     * (1.0 - localAmount)
