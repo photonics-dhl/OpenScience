@@ -160,15 +160,20 @@ Current infrastructure uses pinned base/worker images with bind-mounted applicat
   Lab. It retains the public shell/navigation/CTA/Latest Research contract and
   removes the legacy `OpticalHeadline` runtime from `/` without deleting its
   source files.
-- Local acceptance is GREEN: focused Landing/Lab `45/45`, Web `236/236`,
-  typecheck, production build, canonical root lint, product release `27/27`,
-  focused Landing desktop/mobile/reduced/pointer checks, exact Lab native
-  interaction/lifecycle matrix and byte-identical accepted reduced frame.
-- Final review fix locally wires the `4px` pointer-local replacement-patch
-  follow into real composite pixels while retaining the combined `8px` local
-  displacement cap and no global title/camera motion. Native A/B evidence
-  registers exactly `+4px` on authored energy pixels; the complete matrix keeps
-  the `.16–.20` halo at `1/16` sectors and all failure/lifecycle paths GREEN.
+- Task 19 local acceptance is GREEN: focused `12/12`, Web `239/239`, typecheck,
+  production build, canonical lint/docs sync, product release `27/27`, Landing
+  desktop/mobile/reduced/pointer/idle, exact Lab native interaction/lifecycle
+  matrix and byte-identical accepted reduced frame.
+- The final renderer uses `5px` pointer-local follow and a `10px` combined local
+  displacement cap without global title/camera motion. Native A/B evidence
+  registers exactly `+5px`; the `10→14px` mutation exposes the forbidden extra
+  `+4px`. The complete matrix keeps the `.16–.20` halo at `2/16` sectors.
+- The independent overlay alpha mask is pointer-centred (`<=.04`); final
+  authored+overlay centroid is `<=.08` with locality `>=.80`. Overlay-disable
+  is enforced by a real WebGL skip-draw mutation that suppresses `487` draws
+  and fails upper/lower pixels. Same-RAF local recovery completes at `767.8ms`
+  after exact local zero at `700ms` while ambient motion continues. Idle frames
+  omit the zero-alpha overlay draw and retain authored ambient motion.
 - ADR-009 now authorizes the shared Landing/Lab OGL production exception and
   records the WebGL2/static/reduced failure policy, continuous visible ambient
   owner, browser-only/ECS boundary and measured bundle/static asset budget.
@@ -177,10 +182,11 @@ Current infrastructure uses pinned base/worker images with bind-mounted applicat
   the 15-second resting and pointer intervals both measured `31.2ms` median,
   `31.9ms` p95 and `0` cadence-relative dropped frames at DPR 1/fixed-full
   quality. This is not a 60Hz local-console measurement.
-- **Deployment blocker:** no connected physical mobile was discoverable through
-  ADB or Windows portable-device enumeration. Do not run preflight/deploy or
-  describe the candidate as production-ready until a real mobile completes the
-  two prescribed 15-second intervals. Emulation cannot close this gate.
+- **Accepted risk:** no connected physical mobile was discoverable through ADB
+  or Windows portable-device enumeration. The user explicitly waived this
+  release gate on 2026-08-14 and authorized deployment after all remaining
+  local gates. Simulated mobile/reduced evidence must not be described as a
+  physical-mobile performance result.
 - No schema, API, seed, Nginx, Compose, topology or secret change is included;
   the eventual deployment must use `--skip-migrate` unless the reviewed release
   diff later proves otherwise.

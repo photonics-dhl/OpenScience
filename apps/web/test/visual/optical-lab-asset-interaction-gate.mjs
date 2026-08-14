@@ -20,6 +20,13 @@ const energyPlatePath = path.resolve(webRoot, 'public', 'optical-lab', 'energy-p
 const externalBaseUrl = process.env.OPTICAL_LAB_ASSET_INTERACTION_BASE_URL?.replace(/\/$/, '');
 const patchFollowProof = process.env.OPTICAL_LAB_ASSET_PATCH_FOLLOW_PROOF === '1';
 const radialHaloMutation = process.env.OPTICAL_LAB_ASSET_RADIAL_HALO_MUTATION === '1';
+const fixedCenterMutation = process.env.OPTICAL_LAB_ASSET_FIXED_CENTER_MUTATION === '1';
+const overlaySkipDrawMutation = process.env.OPTICAL_LAB_ASSET_OVERLAY_SKIP_DRAW_MUTATION === '1';
+const overlayMaskProof = process.env.OPTICAL_LAB_ASSET_OVERLAY_MASK_PROOF === '1';
+const overlayCentroidLimit = .04;
+const visibleCentroidLimit = .08;
+const localityFloor = .80;
+const spatialSamplePhases = [0, .25, .5, .75];
 const port = Number(process.env.OPTICAL_LAB_ASSET_INTERACTION_PORT ?? 3065);
 const baseUrl = externalBaseUrl ?? `http://127.0.0.1:${port}`;
 const assetRoute = `${baseUrl}/_visual/optical-lab?candidate=asset`;
@@ -52,6 +59,9 @@ let server;
 let serverExit;
 let logs = '';
 let primaryError;
+const fixedCenterMutationComplete = new Error('fixed-centre mutation proof complete');
+const overlaySkipDrawMutationComplete = new Error('overlay-skip-draw mutation proof complete');
+const overlayMaskProofComplete = new Error('overlay-mask proof complete');
 
 function assertServerOwnedAndAlive() {
   assert(server, 'Asset interaction gate did not spawn its browser server');
@@ -98,6 +108,13 @@ async function assertExternalAssetRoute() {
 async function waitForImages(page) {
   await page.locator('[data-optical-lab-asset-plate="true"]').evaluate((image) => image.decode());
   await page.locator('[data-optical-lab-target-typography-plate="true"]').evaluate((image) => image.decode());
+}
+
+async function waitForAmbientSamplePhase(page, samplePhase) {
+  await page.waitForFunction((targetPhase) => {
+    const phase = (performance.now() % 8_000) / 8_000;
+    return phase >= targetPhase && phase < targetPhase + .004;
+  }, samplePhase, { polling: 'raf', timeout: 9_000 });
 }
 
 async function moveMouse(page, box, xRatio, yRatio = .5) {
@@ -176,6 +193,7 @@ async function measureChangedPixels(page, baseline, candidate, threshold = 8) {
     const before = await decode(baselineBase64);
     const after = await decode(candidateBase64);
     let count = 0;
+    let magnitude = 0;
     let weightedX = 0;
     let weightedY = 0;
     const quadrants = [0, 0, 0, 0];
@@ -189,6 +207,7 @@ async function measureChangedPixels(page, baseline, candidate, threshold = 8) {
         );
         if (delta < thresholdValue) continue;
         count += 1;
+        magnitude += delta;
         weightedX += x;
         weightedY += y;
         quadrants[(y >= before.height / 2 ? 2 : 0) + (x >= before.width / 2 ? 1 : 0)] += 1;
@@ -197,6 +216,7 @@ async function measureChangedPixels(page, baseline, candidate, threshold = 8) {
     return {
       centroid: count ? { x: weightedX / count / before.width, y: weightedY / count / before.height } : null,
       count,
+      magnitude,
       quadrants,
     };
   }, {
@@ -308,6 +328,56 @@ async function measureSpatialResponse(page, baseline, candidate, center, radius 
       locality: changed ? inside / changed : 0,
       maximum,
       meanLocalMagnitude: localPixels ? localMagnitude / localPixels : 0,
+    };
+  }, {
+    baselineBase64: baseline.toString('base64'),
+    candidateBase64: candidate.toString('base64'),
+    centerPoint: center,
+    radiusRatio: radius,
+    thresholdValue: threshold,
+  });
+}
+
+async function measureAlphaSpatialResponse(page, baseline, candidate, center, radius = .22, threshold = 1) {
+  return page.evaluate(async ({ baselineBase64, candidateBase64, centerPoint, radiusRatio, thresholdValue }) => {
+    const decode = async (encoded) => {
+      const blob = await (await fetch(`data:image/png;base64,${encoded}`)).blob();
+      const bitmap = await createImageBitmap(blob);
+      const canvas = document.createElement('canvas');
+      canvas.width = bitmap.width;
+      canvas.height = bitmap.height;
+      const context = canvas.getContext('2d', { willReadFrequently: true });
+      context.drawImage(bitmap, 0, 0);
+      return context.getImageData(0, 0, bitmap.width, bitmap.height);
+    };
+    const before = await decode(baselineBase64);
+    const after = await decode(candidateBase64);
+    const radiusPx = before.width * radiusRatio;
+    let changed = 0;
+    let inside = 0;
+    let maximum = 0;
+    let weightedX = 0;
+    let weightedY = 0;
+    for (let y = 0; y < before.height; y += 1) {
+      for (let x = 0; x < before.width; x += 1) {
+        const offset = (y * before.width + x) * 4;
+        const delta = Math.abs(before.data[offset + 3] - after.data[offset + 3]);
+        maximum = Math.max(maximum, delta);
+        if (delta < thresholdValue) continue;
+        changed += 1;
+        weightedX += x;
+        weightedY += y;
+        if (Math.hypot(x - before.width * centerPoint.x, y - before.height * centerPoint.y) <= radiusPx) {
+          inside += 1;
+        }
+      }
+    }
+    return {
+      centroid: changed ? { x: weightedX / changed / before.width, y: weightedY / changed / before.height } : null,
+      changed,
+      inside,
+      locality: changed ? inside / changed : 0,
+      maximum,
     };
   }, {
     baselineBase64: baseline.toString('base64'),
@@ -523,37 +593,45 @@ async function measureHorizontalRegistration(
 
 async function capturePatchFollowProofFrame(
   browserInstance,
-  { capScalePx = 8, disableFollow = false, fullFlow = false } = {},
+  { capScalePx = 10, disableFollow = false, fullFlow = false } = {},
 ) {
   const proofPage = await browserInstance.newPage({ viewport: { width: 1672, height: 941 }, deviceScaleFactor: 1 });
   try {
     await proofPage.addInitScript(({ capScale, disable, forceFullFlow }) => {
-      window.__TASK16_PATCH_FOLLOW_PROOF__ = { cap: 0, composite: 0, flow: 0 };
+      window.__TASK16_PATCH_FOLLOW_PROOF__ = { cap: 0, composite: 0, flow: 0, overlay: 0 };
       const originalShaderSource = WebGL2RenderingContext.prototype.shaderSource;
       WebGL2RenderingContext.prototype.shaderSource = function patchFollowProofShaderSource(shader, source) {
         let mutated = source;
         if (source.includes('float localMemory = min(uLocalStrength')) {
           mutated = source.replace(
-            'fragColor = vec4(velocity * 0.5 + 0.5, localMemory, 1.0);',
+            'fragColor = vec4(velocity * 0.5 + 0.5, localMemory, carrier * 0.5 + 0.5);',
             forceFullFlow
-              ? 'fragColor = vec4(1.0, 0.5, localMemory, 1.0);'
-              : 'fragColor = vec4(0.51, 0.5, localMemory, 1.0);',
+              ? 'fragColor = vec4(1.0, 0.5, localMemory, carrier * 0.5 + 0.5);'
+              : 'fragColor = vec4(0.51, 0.5, localMemory, carrier * 0.5 + 0.5);',
           );
           window.__TASK16_PATCH_FOLLOW_PROOF__.flow += Number(mutated !== source);
         }
         if (source.includes('uniform float uPatchFollowPx')) {
           if (disable) {
-            mutated = mutated.replace('clamp(uPatchFollowPx, -4.0, 4.0)', '0.0');
+            mutated = mutated.replace('clamp(uPatchFollowPx, -5.0, 5.0)', '0.0');
           }
-          if (capScale === 12) {
+          if (capScale === 14) {
             const beforeCapMutation = mutated;
             mutated = mutated.replace(
-              'combinedPx *= 8.0 / combinedLength;',
-              'combinedPx *= 12.0 / combinedLength;',
+              'combinedPx *= 10.0 / combinedLength;',
+              'combinedPx *= 14.0 / combinedLength;',
             );
             window.__TASK16_PATCH_FOLLOW_PROOF__.cap += Number(mutated !== beforeCapMutation);
           }
           window.__TASK16_PATCH_FOLLOW_PROOF__.composite += Number(mutated !== source || !disable);
+        }
+        if (source.includes('float overlayAlpha = min(0.16')) {
+          const beforeOverlayMutation = mutated;
+          mutated = mutated.replace(
+            'float overlayAlpha = min(0.16, abs(carrier) * 0.16);',
+            'float overlayAlpha = 0.0;',
+          );
+          window.__TASK16_PATCH_FOLLOW_PROOF__.overlay += Number(mutated !== beforeOverlayMutation);
         }
         return originalShaderSource.call(this, shader, mutated);
       };
@@ -569,8 +647,8 @@ async function capturePatchFollowProofFrame(
     const mutations = await proofPage.evaluate(() => window.__TASK16_PATCH_FOLLOW_PROOF__);
     assert.deepEqual(
       mutations,
-      { cap: capScalePx === 12 ? 1 : 0, composite: 1, flow: 1 },
-      `Patch-follow proof must intercept exactly one flow and one composite shader: ${JSON.stringify(mutations)}`,
+      { cap: capScalePx === 14 ? 1 : 0, composite: 1, flow: 1, overlay: 1 },
+      `Patch-follow proof must intercept one flow, composite and overlay shader: ${JSON.stringify(mutations)}`,
     );
     const proofPointerId = disableFollow ? 82 : 81;
     await dispatchGesture(candidate, { x: .58, y: .5 }, 'mouse', proofPointerId, 48);
@@ -578,10 +656,14 @@ async function capturePatchFollowProofFrame(
     await dispatchGesture(candidate, { x: .58, y: .5 }, 'mouse', proofPointerId, 48);
     await proofPage.waitForFunction(() => {
       const snapshot = window.__OPENSCIENCE_OPTICAL_ASSET_INTERACTION__;
-      return (snapshot?.patchFollowPx ?? 0) >= 3.9
-        && Math.hypot(snapshot?.refractionPx?.x ?? 0, snapshot?.refractionPx?.y ?? 0) <= 8.00001;
-    });
+      return (snapshot?.patchFollowPx ?? 0) >= 4.85
+        && Math.hypot(snapshot?.refractionPx?.x ?? 0, snapshot?.refractionPx?.y ?? 0) <= 10.00001;
+    }, undefined, { polling: 'raf', timeout: 2_000 });
     const peakSnapshot = await proofPage.evaluate(() => window.__OPENSCIENCE_OPTICAL_ASSET_INTERACTION__);
+    assert(
+      peakSnapshot.patchFollowPx >= 4.85,
+      `Patch-follow proof did not reach the 5px envelope: ${JSON.stringify(peakSnapshot)}`,
+    );
     const capture = await captureInteractionCanvas(proofPage);
     return { buffer: capture.buffer, snapshot: peakSnapshot };
   } finally {
@@ -589,8 +671,8 @@ async function capturePatchFollowProofFrame(
   }
 }
 
-async function prepareNativeCandidate(page) {
-  await page.evaluate(() => {
+async function prepareNativeCandidate(page, { hideAuthoredPlates = false } = {}) {
+  await page.evaluate(({ hidePlates }) => {
     document.documentElement.style.width = '1672px';
     document.documentElement.style.height = '941px';
     document.body.style.width = '1672px';
@@ -602,6 +684,10 @@ async function prepareNativeCandidate(page) {
     const candidatePanel = main?.querySelector('[data-optical-lab-panel="candidate"]');
     const candidate = main?.querySelector('[data-asset-candidate="true"]');
     const diagnostics = candidatePanel?.querySelector('[data-optical-lab-diagnostics="true"]');
+    if (hidePlates) {
+      for (const plate of candidate?.querySelectorAll('img') ?? []) plate.style.visibility = 'hidden';
+      candidate.style.background = '#000';
+    }
     Object.assign(main.style, { height: '941px', minHeight: '941px', padding: '0', width: '1672px' });
     if (header) header.style.display = 'none';
     Object.assign(comparison.style, {
@@ -612,7 +698,7 @@ async function prepareNativeCandidate(page) {
     Object.assign(candidate.style, {
       aspectRatio: 'auto', height: '941px', width: '1672px',
     });
-  });
+  }, { hidePlates: hideAuthoredPlates });
 }
 
 try {
@@ -637,9 +723,9 @@ try {
     const renderedFollow = await capturePatchFollowProofFrame(browser);
     const disabledFollow = await capturePatchFollowProofFrame(browser, { disableFollow: true });
     const cappedCombined = await capturePatchFollowProofFrame(browser, { fullFlow: true });
-    const twelvePxCapMutation = await capturePatchFollowProofFrame(
+    const fourteenPxCapMutation = await capturePatchFollowProofFrame(
       browser,
-      { capScalePx: 12, fullFlow: true },
+      { capScalePx: 14, fullFlow: true },
     );
     const analysisPage = await browser.newPage();
     try {
@@ -657,11 +743,11 @@ try {
       const capChangedPixels = await countAllPixelDifferences(
         analysisPage,
         cappedCombined.buffer,
-        twelvePxCapMutation.buffer,
+        fourteenPxCapMutation.buffer,
       );
       const capRegistration = await measureHorizontalRegistration(
         analysisPage,
-        twelvePxCapMutation.buffer,
+        fourteenPxCapMutation.buffer,
         cappedCombined.buffer,
         await readFile(energyPlatePath),
         { minimumEnergySignal: .98 },
@@ -672,24 +758,24 @@ try {
       );
       assert.equal(
         registration.best.shift,
-        4,
-        `The native image-space patch-follow contribution must register at exactly +4 CSS px: ${JSON.stringify(registration)}`,
+        5,
+        `The native image-space patch-follow contribution must register at exactly +5 CSS px: ${JSON.stringify(registration)}`,
       );
       assert(
-        renderedFollow.snapshot.patchFollowPx >= 3.9
-          && renderedFollow.snapshot.patchFollowPx <= 4,
-        `The production follow sample must approach but never exceed the 4px cap: ${JSON.stringify(renderedFollow.snapshot)}`,
+        renderedFollow.snapshot.patchFollowPx >= 4.85
+          && renderedFollow.snapshot.patchFollowPx <= 5,
+        `The production follow sample must approach but never exceed the 5px cap: ${JSON.stringify(renderedFollow.snapshot)}`,
       );
       assert(
         Math.hypot(
           renderedFollow.snapshot.refractionPx.x,
           renderedFollow.snapshot.refractionPx.y,
-        ) <= 8.00001,
-        `The patch-follow proof must retain the total 8px local envelope: ${JSON.stringify(renderedFollow.snapshot)}`,
+        ) <= 10.00001,
+        `The patch-follow proof must retain the total 10px local envelope: ${JSON.stringify(renderedFollow.snapshot)}`,
       );
       assert(
         capChangedPixels > 100,
-        `Changing only the combined cap from 8px to 12px must alter real native pixels: ${capChangedPixels}`,
+        `Changing only the combined cap from 10px to 14px must alter real native pixels: ${capChangedPixels}`,
       );
       assert.equal(
         capRegistration.best.shift,
@@ -704,13 +790,89 @@ try {
         disabledSnapshot: disabledFollow.snapshot,
         registration,
         renderedSnapshot: renderedFollow.snapshot,
-        twelvePxCapMutationSnapshot: twelvePxCapMutation.snapshot,
+        fourteenPxCapMutationSnapshot: fourteenPxCapMutation.snapshot,
       }, null, 2)}\n`);
     } finally {
       await analysisPage.close();
     }
   }
   const page = await browser.newPage({ viewport: { width: 1672, height: 941 }, deviceScaleFactor: 1 });
+  if (overlayMaskProof) {
+    await page.addInitScript(() => {
+      window.__TASK19_OVERLAY_MASK_MUTATIONS__ = 0;
+      const originalShaderSource = WebGL2RenderingContext.prototype.shaderSource;
+      WebGL2RenderingContext.prototype.shaderSource = function overlayMaskShaderSource(shader, source) {
+        let mutated = source;
+        mutated = mutated.replace(
+          'fragColor = vec4(color, replacement);',
+          'fragColor = vec4(0.0);',
+        );
+        window.__TASK19_OVERLAY_MASK_MUTATIONS__ += Number(mutated !== source);
+        return originalShaderSource.call(this, shader, mutated);
+      };
+    });
+  }
+  if (overlaySkipDrawMutation) {
+    await page.addInitScript(() => {
+      window.__TASK19_OVERLAY_SKIP_DRAW_MUTATION__ = { overlayShaders: 0, skippedDraws: 0 };
+      const attachedPrograms = new WeakMap();
+      const overlayPrograms = new WeakSet();
+      let currentProgram = null;
+      const originalShaderSource = WebGL2RenderingContext.prototype.shaderSource;
+      WebGL2RenderingContext.prototype.shaderSource = function trackedOverlayShaderSource(shader, source) {
+        if (source.includes('float overlayAlpha = min(0.16')) {
+          for (const program of attachedPrograms.get(shader) ?? []) overlayPrograms.add(program);
+          window.__TASK19_OVERLAY_SKIP_DRAW_MUTATION__.overlayShaders += 1;
+        }
+        return originalShaderSource.call(this, shader, source);
+      };
+      const originalAttachShader = WebGL2RenderingContext.prototype.attachShader;
+      WebGL2RenderingContext.prototype.attachShader = function trackedAttachShader(program, shader) {
+        const programs = attachedPrograms.get(shader) ?? [];
+        programs.push(program);
+        attachedPrograms.set(shader, programs);
+        return originalAttachShader.call(this, program, shader);
+      };
+      const originalUseProgram = WebGL2RenderingContext.prototype.useProgram;
+      WebGL2RenderingContext.prototype.useProgram = function trackedUseProgram(program) {
+        currentProgram = program;
+        return originalUseProgram.call(this, program);
+      };
+      const originalDrawArrays = WebGL2RenderingContext.prototype.drawArrays;
+      WebGL2RenderingContext.prototype.drawArrays = function skipOverlayDrawArrays(...args) {
+        if (currentProgram && overlayPrograms.has(currentProgram)) {
+          window.__TASK19_OVERLAY_SKIP_DRAW_MUTATION__.skippedDraws += 1;
+          return undefined;
+        }
+        return originalDrawArrays.apply(this, args);
+      };
+      const originalDrawElements = WebGL2RenderingContext.prototype.drawElements;
+      WebGL2RenderingContext.prototype.drawElements = function skipOverlayDrawElements(...args) {
+        if (currentProgram && overlayPrograms.has(currentProgram)) {
+          window.__TASK19_OVERLAY_SKIP_DRAW_MUTATION__.skippedDraws += 1;
+          return undefined;
+        }
+        return originalDrawElements.apply(this, args);
+      };
+    });
+  }
+  if (fixedCenterMutation) {
+    await page.addInitScript(() => {
+      window.__TASK17_FIXED_CENTER_MUTATIONS__ = 0;
+      const originalShaderSource = WebGL2RenderingContext.prototype.shaderSource;
+      WebGL2RenderingContext.prototype.shaderSource = function fixedCenterShaderSource(shader, source) {
+        let mutated = source;
+        if (source.includes('vec2 localDelta = vec2(vUv.x - uPointer.x')) {
+          mutated = source.replace(
+            'vec2 localDelta = vec2(vUv.x - uPointer.x, (vUv.y - uPointer.y)',
+            'vec2 localDelta = vec2(vUv.x - 0.5, (vUv.y - 0.5)',
+          );
+          window.__TASK17_FIXED_CENTER_MUTATIONS__ += Number(mutated !== source);
+        }
+        return originalShaderSource.call(this, shader, mutated);
+      };
+    });
+  }
   if (radialHaloMutation) {
     await page.addInitScript(() => {
       window.__TASK14_RADIAL_HALO_MUTATIONS__ = 0;
@@ -756,7 +918,7 @@ try {
     await page.goto(assetRoute, { waitUntil: 'networkidle' });
     await page.evaluate(() => document.fonts.ready.then(() => true));
     await waitForImages(page);
-    await prepareNativeCandidate(page);
+    await prepareNativeCandidate(page, { hideAuthoredPlates: overlayMaskProof });
     const candidate = page.locator('[data-asset-candidate="true"]');
     const box = await candidate.boundingBox();
     assert(box, 'Asset candidate bounds are unavailable');
@@ -768,12 +930,67 @@ try {
     const canvas = page.locator('canvas[data-optical-asset-interaction-canvas="true"]');
     await canvas.waitFor({ timeout: 5_000 });
     await page.waitForFunction(() => window.__OPENSCIENCE_OPTICAL_ASSET_INTERACTION__?.activeRaf === true);
+    if (overlayMaskProof) {
+      assert.equal(
+        await page.evaluate(() => window.__TASK19_OVERLAY_MASK_MUTATIONS__),
+        1,
+        'The overlay-mask proof must isolate one composite output while preserving production overlay alpha',
+      );
+    }
+    if (overlaySkipDrawMutation) {
+      const skipDrawState = await page.evaluate(() => window.__TASK19_OVERLAY_SKIP_DRAW_MUTATION__);
+      assert.equal(skipDrawState.overlayShaders, 1, 'The skip-draw mutation must identify one overlay shader');
+      assert.equal(skipDrawState.skippedDraws, 0, 'The idle renderer must not issue overlay draw calls');
+    }
+    if (fixedCenterMutation) {
+      assert.equal(
+        await page.evaluate(() => window.__TASK17_FIXED_CENTER_MUTATIONS__),
+        1,
+        'The controlled fixed-centre mutation must intercept exactly one flow shader',
+      );
+    }
     if (radialHaloMutation) {
       assert.equal(
         await page.evaluate(() => window.__TASK14_RADIAL_HALO_MUTATIONS__),
         1,
         'The controlled radial-halo mutation must intercept exactly one flow shader',
       );
+    }
+    if (overlayMaskProof) {
+      const overlayPoints = [
+        ['left', { x: .16, y: .48 }],
+        ['centre', { x: .50, y: .48 }],
+        ['right', { x: .84, y: .48 }],
+        ['upper', { x: .50, y: .30 }],
+        ['lower', { x: .50, y: .70 }],
+      ];
+      const overlayEvidence = {};
+      for (const [name, point] of overlayPoints) {
+        await page.waitForTimeout(720);
+        const baseline = (await captureInteractionCanvas(page)).buffer;
+        await dispatchGesture(candidate, point, 'mouse', 91);
+        await page.waitForTimeout(120);
+        const active = (await captureInteractionCanvas(
+          page,
+          path.join(outDir, `overlay-mask-${name}.png`),
+        )).buffer;
+        const response = await measureAlphaSpatialResponse(page, baseline, active, point, .22, 1);
+        const centroidDistance = response.centroid
+          ? Math.hypot(response.centroid.x - point.x, response.centroid.y - point.y)
+          : Number.POSITIVE_INFINITY;
+        assert(response.changed >= 20, `${name} overlay mask produced no visible pixels: ${JSON.stringify(response)}`);
+        assert(
+          centroidDistance <= overlayCentroidLimit && response.locality >= localityFloor,
+          `${name} overlay mask must retain centroid <= ${overlayCentroidLimit} and locality >= ${localityFloor}: ${JSON.stringify({ centroidDistance, response })}`,
+        );
+        overlayEvidence[name] = { centroidDistance, response };
+      }
+      await writeFile(path.join(outDir, 'overlay-mask-proof.json'), `${JSON.stringify({
+        localityFloor,
+        overlayCentroidLimit,
+        overlayEvidence,
+      }, null, 2)}\n`);
+      throw overlayMaskProofComplete;
     }
     const computedMask = await canvas.evaluate((node) => getComputedStyle(node).maskImage);
     assert.equal(computedMask, 'none', 'The interaction canvas must cover the full stage without the former seam mask');
@@ -792,14 +1009,18 @@ try {
     );
     await canvas.evaluate((node) => { node.style.display = ''; });
 
+    const idleSnapshot = await page.evaluate(() => window.__OPENSCIENCE_OPTICAL_ASSET_INTERACTION__);
+    assert.equal(idleSnapshot?.follow, 0, 'Idle temporal proof must run before any pointer input');
+    assert.equal(idleSnapshot?.patchFollowPx, 0, 'Idle temporal proof must contain no local follow');
+    assert.deepEqual(idleSnapshot?.refractionPx, { x: 0, y: 0 }, 'Idle temporal proof must contain no local refraction');
     const ambientBefore = await captureCandidate(page, box, path.join(outDir, 'ambient-before.png'));
     await page.waitForTimeout(360);
     const ambientAfter = await captureCandidate(page, box, path.join(outDir, 'ambient-after.png'));
     const ambientMotion = await measureChangedPixels(page, ambientBefore, ambientAfter, 1);
-    assert(
-      ambientMotion.quadrants.every((count) => count > 0),
-      `Ambient motion must remain visible in four quadrants: ${JSON.stringify(ambientMotion)}`,
-    );
+    assert(ambientMotion.count > 0 && ambientMotion.quadrants.every((count) => count > 0),
+      `No-input idle motion must change real pixels in all four quadrants: ${JSON.stringify(ambientMotion)}`);
+    assert.equal(idleSnapshot?.ambientStrength, .05,
+      `Idle temporal proof must exercise the exact ambient flow budget: ${JSON.stringify({ ambientMotion, idleSnapshot })}`);
 
     const ambientTemporalStartCapture = await captureInteractionCanvas(page);
     await page.waitForTimeout(40);
@@ -818,6 +1039,13 @@ try {
     );
     assert(ambientTemporalMotion.count > 0,
       `Ambient overlay capture path must observe temporal pixels: ${JSON.stringify(ambientTemporalMotion)}`);
+    await waitForAmbientSamplePhase(page, .25);
+    const ambientSpatialBaseline = await captureCandidate(page, box);
+    await page.waitForTimeout(136);
+    const ambientSpatialAfter = await captureCandidate(page, box);
+    const ambientSpatialInterval = await measureChangedPixels(
+      page, ambientSpatialBaseline, ambientSpatialAfter, 3,
+    );
     const spatialSamples = [
       ['left', { x: .16, y: .48 }],
       ['centre', { x: .50, y: .48 }],
@@ -826,22 +1054,56 @@ try {
       ['lower', { x: .50, y: .70 }],
     ];
     const spatialEvidence = {};
+    const spatialFailures = [];
+    const phasesToSample = fixedCenterMutation ? [.25] : spatialSamplePhases;
     let anchoredRecovery;
     let captureEvidence;
+    let recoveryAmbientMotion;
     for (const [name, point] of spatialSamples) {
-      await page.waitForTimeout(920);
-      const pointerBaseline = await captureCandidate(page, box);
-      const injectedAt = await dispatchGesture(candidate, point, 'mouse', 41);
-      await page.waitForFunction(({ x, y }) => {
-        const snapshot = window.__OPENSCIENCE_OPTICAL_ASSET_INTERACTION__;
-        return Math.abs((snapshot?.pointerX ?? -1) - x) < .02
-          && Math.abs((snapshot?.pointerY ?? -1) - y) < .02;
-      }, point);
-      await page.waitForTimeout(120);
-      const activeFrame = await captureCandidate(
-        page, box, path.join(outDir, `pointer-${name}.png`),
-      );
-      const activeOverlayCapture = name === 'left' ? await captureInteractionCanvas(page) : null;
+      spatialEvidence[name] = {};
+      for (const samplePhase of phasesToSample) {
+        const primaryPhase = samplePhase === .25;
+        const phaseLabel = String(samplePhase).replace('.', '-');
+        await page.waitForTimeout(920);
+        await waitForAmbientSamplePhase(page, samplePhase);
+        if (name === 'left' && primaryPhase) {
+          const localAmbientStart = (await captureInteractionCanvas(page)).buffer;
+          await page.waitForTimeout(40);
+          const localAmbientEnd = (await captureInteractionCanvas(page)).buffer;
+          recoveryAmbientMotion = await measureLocalChange(
+            page, localAmbientStart, localAmbientEnd, point, .22, 3,
+          );
+          assert(
+            recoveryAmbientMotion.count > 0 && recoveryAmbientMotion.maximum > 0,
+            `The recovery comparison requires a live point-matched ambient window: ${JSON.stringify(recoveryAmbientMotion)}`,
+          );
+        }
+        const pointerBaseline = await captureCandidate(
+          page,
+          box,
+          path.join(outDir, primaryPhase
+            ? `pointer-${name}-baseline.png`
+            : `pointer-${name}-phase-${phaseLabel}-baseline.png`),
+        );
+        const injectedAt = await dispatchGesture(candidate, point, 'mouse', 41);
+        const phaseAtInjection = (injectedAt % 8_000) / 8_000;
+        await page.waitForFunction(({ x, y }) => {
+          const snapshot = window.__OPENSCIENCE_OPTICAL_ASSET_INTERACTION__;
+          return Math.abs((snapshot?.pointerX ?? -1) - x) < .02
+            && Math.abs((snapshot?.pointerY ?? -1) - y) < .02;
+        }, point);
+        await page.waitForTimeout(120);
+        const activeFrame = await captureCandidate(
+          page,
+          box,
+          path.join(outDir, primaryPhase
+            ? `pointer-${name}.png`
+            : `pointer-${name}-phase-${phaseLabel}.png`),
+        );
+        const phaseAtCapture = await page.evaluate(() => (performance.now() % 8_000) / 8_000);
+        const activeOverlayCapture = name === 'left' && primaryPhase
+          ? await captureInteractionCanvas(page)
+          : null;
       if (activeOverlayCapture) {
         assert(activeOverlayCapture.nonZeroAlpha > 0 && activeOverlayCapture.nonZeroRgb > 0,
           `Active local overlay capture must contain rendered pixels: ${JSON.stringify({
@@ -853,8 +1115,8 @@ try {
       let recoveredCapture;
       let recoveredNext;
       let recoveryObservedAt;
-      if (name === 'left') {
-        const visualDeadline = injectedAt + 780;
+      if (name === 'left' && primaryPhase) {
+        const visualDeadline = injectedAt + 700;
         await page.waitForFunction((target) => performance.now() >= target, visualDeadline);
         recoveredCapture = await captureInteractionCanvas(
           page, path.join(outDir, 'pointer-left-recovered.png'),
@@ -872,17 +1134,17 @@ try {
       }
       const response = await measureSpatialResponse(page, pointerBaseline, activeFrame, point, .22, 3);
       assert(response.changed >= 20, `${name} pointer produced no perceptible local pixels: ${JSON.stringify(response)}`);
-      assert(
-        response.centroid && Math.hypot(response.centroid.x - point.x, response.centroid.y - point.y) <= .04,
-        `${name} changed-pixel centroid escaped the pointer: ${JSON.stringify({ point, response })}`,
-      );
-      assert(
-        response.locality >= .75,
-        `${name} local response must retain at least 75% of changed pixels inside .22 stage width: ${JSON.stringify(response)}`,
-      );
-      spatialEvidence[name] = response;
+      spatialEvidence[name][samplePhase] = { ...response, phaseAtCapture, phaseAtInjection };
+      const centroidDistance = response.centroid
+        ? Math.hypot(response.centroid.x - point.x, response.centroid.y - point.y)
+        : Number.POSITIVE_INFINITY;
+      if (centroidDistance > visibleCentroidLimit || response.locality < localityFloor) {
+        spatialFailures.push({
+          centroidDistance, name, phaseAtCapture, phaseAtInjection, point, response, samplePhase,
+        });
+      }
 
-      if (name === 'left') {
+      if (name === 'left' && primaryPhase) {
         const recoveredMotion = await measureLocalChange(page, recovered, recoveredNext, point, .22, 3);
         const recoveredSnapshot = await page.evaluate(() => window.__OPENSCIENCE_OPTICAL_ASSET_INTERACTION__);
         anchoredRecovery = { elapsedMs: recoveryObservedAt - injectedAt, recoveredMotion };
@@ -897,6 +1159,7 @@ try {
             startNonZeroAlpha: ambientTemporalStartCapture.nonZeroAlpha,
             startNonZeroRgb: ambientTemporalStartCapture.nonZeroRgb,
             temporalChangedPixels: ambientTemporalMotion.count,
+            pointMatchedRecoveryMotion: recoveryAmbientMotion,
           },
           recovered: {
             completedElapsedMs: anchoredRecovery.elapsedMs,
@@ -905,17 +1168,57 @@ try {
           },
         };
         assert(
-          anchoredRecovery.elapsedMs >= 780 && anchoredRecovery.elapsedMs <= 900,
-          `Visually inactive capture must occur no later than the 900ms injection deadline: ${JSON.stringify(anchoredRecovery)}`,
+          anchoredRecovery.elapsedMs >= 700 && anchoredRecovery.elapsedMs <= 900,
+          `The 700ms local-zero capture and PNG encoding must complete by 900ms: ${JSON.stringify(anchoredRecovery)}`,
         );
-        assert.equal(recoveredSnapshot?.follow, 0, 'Local strength must be exact zero at the 900ms visual deadline');
+        assert.equal(recoveredSnapshot?.follow, 0, 'Local strength must remain exact zero after the 700ms visual boundary');
         assert(
-          recoveredMotion.count <= Math.max(300, ambientTemporalMotion.count * 3 + 60),
-          `Local pixels must be visually inactive at the anchored 900ms deadline: ${JSON.stringify({ ambientTemporalMotion, anchoredRecovery })}`,
+          recoveredMotion.count <= Math.max(300, recoveryAmbientMotion.count * 3 + 60),
+          `Local pixels must be visually inactive after the anchored 700ms boundary: ${JSON.stringify({ recoveryAmbientMotion, anchoredRecovery })}`,
         );
         assert.equal(recoveredSnapshot?.activeRaf, true, 'Ambient RAF must continue at local recovery');
       }
+      }
     }
+    if (fixedCenterMutation) {
+      const redirectedNames = ['left', 'right', 'upper', 'lower'];
+      const redirectedFailures = redirectedNames.map(
+        (name) => spatialFailures.find((failure) => failure.name === name),
+      );
+      assert(
+        redirectedFailures.every((failure) => failure?.centroidDistance > visibleCentroidLimit),
+        `The fixed-centre mutation must fail the visible response contract at every redirected sample: ${JSON.stringify(spatialFailures)}`,
+      );
+      await writeFile(path.join(outDir, 'fixed-center-mutation-proof.json'), `${JSON.stringify({
+        localityFloor,
+        redirectedFailures,
+        visibleCentroidLimit,
+      }, null, 2)}\n`);
+      throw fixedCenterMutationComplete;
+    }
+    if (overlaySkipDrawMutation) {
+      const skipDrawState = await page.evaluate(() => window.__TASK19_OVERLAY_SKIP_DRAW_MUTATION__);
+      assert(
+        skipDrawState.skippedDraws > 0,
+        `The mutation must skip real local overlay draws after pointer input: ${JSON.stringify(skipDrawState)}`,
+      );
+      assert(
+        spatialFailures.length > 0,
+        `Skipping the final overlay draw must fail at least one phase/position sample: ${JSON.stringify(spatialEvidence)}`,
+      );
+      await writeFile(path.join(outDir, 'overlay-skip-draw-mutation-proof.json'), `${JSON.stringify({
+        localityFloor,
+        skipDrawState,
+        spatialFailures,
+        visibleCentroidLimit,
+      }, null, 2)}\n`);
+      throw overlaySkipDrawMutationComplete;
+    }
+    assert.deepEqual(
+      spatialFailures,
+      [],
+      `Every pointer sample must retain centroid <= ${visibleCentroidLimit} and locality >= ${localityFloor}: ${JSON.stringify(spatialFailures)}`,
+    );
 
     const layerPoints = {
       empty: { x: .10, y: .12 },
@@ -976,21 +1279,21 @@ try {
     const touchSnapshot = await page.evaluate(() => window.__OPENSCIENCE_OPTICAL_ASSET_INTERACTION__);
     assert(Math.abs((touchSnapshot?.pointerX ?? -1) - touchPoint.x) < .02);
     assert(Math.abs((touchSnapshot?.pointerY ?? -1) - touchPoint.y) < .02);
-    assert(touchResponse.changed >= 20 && touchResponse.locality >= .75,
+    assert(touchResponse.changed >= 20 && touchResponse.locality >= localityFloor,
       `Touch must inject the same bounded full-surface field: ${JSON.stringify(touchResponse)}`);
     assert.equal(await candidate.evaluate((stage) => getComputedStyle(stage).touchAction), 'pan-y');
 
     const active = await page.evaluate(() => window.__OPENSCIENCE_OPTICAL_ASSET_INTERACTION__);
     assert(active, 'Asset interaction diagnostics are unavailable');
     assert.equal(active.apertureX, .58);
-    assert.equal(active.ambientStrength, .035);
-    assert(Math.abs(active.patchFollowPx) <= 4, `Patch follow exceeded 4px: ${active.patchFollowPx}`);
-    assert(Math.hypot(active.refractionPx.x, active.refractionPx.y) <= 8.00001,
-      `Refraction exceeded 8px: ${JSON.stringify(active.refractionPx)}`);
-    assert(active.causticGain <= .140001, `Caustic gain exceeded 14%: ${active.causticGain}`);
+    assert.equal(active.ambientStrength, .05);
+    assert(Math.abs(active.patchFollowPx) <= 5, `Patch follow exceeded 5px: ${active.patchFollowPx}`);
+    assert(Math.hypot(active.refractionPx.x, active.refractionPx.y) <= 10.00001,
+      `Refraction exceeded 10px: ${JSON.stringify(active.refractionPx)}`);
+    assert(active.causticGain <= .180001, `Caustic gain exceeded 18%: ${active.causticGain}`);
     await writeFile(path.join(outDir, 'spatial-metrics.json'), `${JSON.stringify({
-      ambientMotion, anchoredRecovery, captureEvidence, emptyHaloShape, layerEvidence, spatialEvidence, touchResponse,
-      widerFieldEvidence,
+      ambientMotion, ambientSpatialInterval, anchoredRecovery, captureEvidence, emptyHaloShape, layerEvidence,
+      spatialEvidence, touchResponse, widerFieldEvidence,
     }, null, 2)}\n`);
 
     await candidate.dispatchEvent('pointerleave', { bubbles: false, pointerId: 1, pointerType: 'mouse' });
@@ -1279,7 +1582,11 @@ try {
   }
   assert.deepEqual(pageErrors, [], `Asset interaction emitted browser errors: ${pageErrors.join('\n')}`);
 } catch (error) {
-  primaryError = error;
+  if (
+    error !== fixedCenterMutationComplete
+    && error !== overlaySkipDrawMutationComplete
+    && error !== overlayMaskProofComplete
+  ) primaryError = error;
 }
 
 let cleanupError;

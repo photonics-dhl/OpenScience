@@ -1,5 +1,40 @@
 # Handoff — 2026-08-13 Optical Lab Asset Interaction
 
+## Current canonical state — Task 19 local release candidate GREEN (2026-08-14)
+
+> **This section supersedes every Task 17/18 blocker and next-action statement
+> below.** Do not restart the blue six-face object or the earlier fixed-centre
+> plan. The current task is the production `Science evolves.` shared Landing/Lab
+> optical surface.
+
+- Task 19 adds one independent transparent overlay draw after the authored
+  composite. It reuses the same RGBA8 flow texture/canvas/RAF and existing
+  lifecycle ledger; no new FBO, texture, owner, package or server GPU exists.
+- Current accepted tuning: `70ms` response, `.05` ambient flow, `2px` ambient
+  displacement, `8s` idle cycle, `5px` follow, `10px` local/combined cap,
+  `.18` gain, longitudinal `.20` / transverse `.14`, empty `.27`, exact local
+  geometry/carrier zero at `700ms`.
+- Responsibility-specific acceptance is binding: production framebuffer-alpha
+  overlay mask centroid `<=.04`; final authored+overlay centroid `<=.08` and
+  locality `>=.80` across five positions × four phases. Latest overlay worst is
+  `.01083`; final worst is `.0609174` / locality `.852831`. A real WebGL
+  skip-draw mutation suppresses `487` overlay draws and fails up to about `.12`,
+  proving the ordered overlay draw is load-bearing.
+- Retained native evidence is GREEN: follow `+5px`, forbidden cap mutation
+  `+4px`, halo `2/16`, energy > typography > empty, touch locality `.9673`,
+  recovered same-RAF PNG complete at `767.8ms` with exact local zero after
+  `700ms` and ambient RAF continuing. Focused `12/12`, Web `239/239`, typecheck,
+  lint/docs sync, build, Landing matrix, exact reduced Lab and release `27/27`
+  are GREEN.
+- User waived only the physical-mobile performance gate and authorized deploy
+  after all other gates. Never describe simulated mobile as physical hardware.
+- **Next action:** independent final diff review with no Critical/Important,
+  commit, then checkup → backup → dry-run →
+  `infra/scripts/deploy.sh --confirm --skip-migrate` → public/browser/service
+  verification and rollback record. No schema/seed/Nginx/Compose/Secret change.
+- Canonical pending report:
+  `.superpowers/sdd/2026-08-11-optical-lab-high-fidelity-reconstruction-plan/task-19-report.md`.
+
 ## Current canonical state — Task 17 blocked, no deployment (2026-08-14)
 
 > **This section supersedes every next action and release-status statement

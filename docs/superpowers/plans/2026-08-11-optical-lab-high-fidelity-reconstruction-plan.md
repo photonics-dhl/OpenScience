@@ -190,6 +190,216 @@ Vitest, Playwright, Chrome 150, Next.js 14.
   review and release gate is green; report `DONE_WITH_CONCERNS` only when the
   sole remaining item is unavailable physical mobile.
 
+### Task 17: Responsive Ambient Release Tuning and Deployment
+
+**Files:**
+
+- Modify: `apps/web/lib/optical-lab/asset-interaction-model.ts`
+- Modify: `apps/web/lib/optical-lab/ogl/asset-flow-pass.ts`
+- Modify: `apps/web/lib/optical-lab/ogl/asset-interaction-renderer.ts`
+- Modify: `apps/web/lib/optical-lab/ogl/shaders/asset-flow.ts`
+- Modify: `apps/web/lib/optical-lab/ogl/shaders/asset-composite.ts`
+- Modify: `apps/web/test/optical-lab-asset-interaction.test.ts`
+- Modify: `apps/web/test/visual/optical-lab-asset-interaction-gate.mjs`
+- Modify: `apps/web/test/visual/shots.mjs`
+- Modify: canonical spec/progress/handoff/index/runbooks and SDD reports
+
+**Interfaces:**
+
+- Exact response limits become `responseMs: 70`, `patchFollowPx: 5`,
+  `localRefractionPx: 10`, `causticGain: .18`, `localRadiusUv: .20`.
+- Flow ambient magnitude becomes `.05`; composite ambient displacement becomes
+  `2px`; renderer phase becomes `(now % 8_000) / 8_000`.
+- Empty carrier coefficient becomes `.27`; combined displacement remains
+  vector-clamped at `10px` after local follow and refraction are combined.
+
+- [ ] **Step 1: Write literal response, idle-motion and cap RED tests**
+
+  Require the exact limits, 70ms full response, 8s bounded phase, `.05` ambient,
+  2px ambient displacement, `.27` carrier and mutation-resistant 10→14 combined
+  cap proof. Add no-input temporal evidence in all four quadrants and retain the
+  exact outer-band halo, layer ordering, recovery and lifecycle assertions.
+
+- [ ] **Step 2: Verify RED against the current release candidate**
+
+  Run focused Vitest and an owned-server Landing/Lab browser gate. Failures must
+  expose the old 120ms/4/8/.14/.035/1.4/12s values or insufficient idle motion,
+  not server startup or stale assets.
+
+- [ ] **Step 3: Implement the minimum balanced tuning**
+
+  Change only the named response/ambient budgets and dependent uniforms/tests.
+  Preserve `.20` longitudinal / `.14` transverse geometry, directional wake,
+  static plates, semantic markup, reduced-motion behavior and ownership.
+
+- [ ] **Step 4: Run full local release acceptance and independent review**
+
+  Run focused/full Web, typecheck, canonical lint, build, Landing desktop/mobile
+  normal/reduced/pointer/idle, Lab full native/reduced static, release 27-case,
+  docs lint/sync/diff and RTX desktop performance. Require independent review
+  with no Critical/Important before deployment.
+
+- [ ] **Step 5: Record the physical-mobile waiver and deploy**
+
+  Record the user's explicit waiver without claiming physical mobile evidence.
+  Then complete Task 15 Steps 5–6: rollback ref, checkup, backup, dry-run,
+  `infra/scripts/deploy.sh --confirm --skip-migrate`, public route/browser,
+  service/log and rollback evidence.
+
+Task 17 stopped after the stronger constants exposed authored-texture centroid
+bias and the final bounded recovery run completed at `961.8ms`. Its rejected
+support-offset and phase-decoupling experiments were reverted. Task 18 replaces
+the local-response architecture; it does not weaken Task 17's visual gates.
+
+### Task 18: Dual-Channel Local Response and Release
+
+**Status:** BLOCKED and reverted. The carrier-only path was centred, but the
+single composite RGB output still cancelled carrier pixels against authored
+displacement. Uniform amplitude and chromatic-axis probes also failed the
+unchanged four-phase matrix. Any next attempt requires a new overlay/pass
+design and explicit approval; do not continue with scalar shader changes.
+
+**Goal:** Keep the approved stronger motion while separating pointer-centred
+visibility from authored-texture displacement and reaching exact local visual
+zero at `700ms`.
+
+**Architecture:** Reuse the current RGBA8 flow texture. RG stores velocity, B
+stores local geometry memory, and A stores a signed pointer-centred carrier
+encoded from `[-1,1]` to `[0,1]`. The composite decodes A for zero-mean local
+contrast and uses B for displacement. No new texture or pass is introduced.
+
+**Files:**
+
+- Modify: `apps/web/lib/optical-lab/asset-interaction-model.ts`
+- Modify: `apps/web/lib/optical-lab/ogl/asset-interaction-renderer.ts`
+- Modify: `apps/web/lib/optical-lab/ogl/shaders/asset-flow.ts`
+- Modify: `apps/web/lib/optical-lab/ogl/shaders/asset-composite.ts`
+- Modify: `apps/web/test/optical-lab-asset-interaction.test.ts`
+- Modify: `apps/web/test/visual/optical-lab-asset-interaction-gate.mjs`
+- Modify: canonical progress/index/handoff, ADR/spec evidence and Task 18 report
+
+**Interfaces:**
+
+- `ASSET_INTERACTION_LIMITS.recoveryMs` becomes the literal `700`.
+- Flow output is `vec4(velocity * .5 + .5, localMemory,
+  carrier * .5 + .5)`; fresh/no-local carrier decodes to exact zero.
+- Composite uses decoded A only for signed local contrast. It cannot add a
+  positive radial lift or move the static plate/title/camera.
+- Renderer resets geometry and carrier together when `sample.active` becomes
+  false at `700ms`; ambient RG flow and RAF continue.
+
+- [ ] **Step 1: Write and verify focused RED**
+
+  Add literal behavioral assertions that a full-strength injection is active at
+  `699ms` and exact zero at `700ms`. Add shader contracts for decoded carrier,
+  zero-neutral alpha and separate geometry/visibility consumers. Run:
+
+  ```powershell
+  npx pnpm@9.15.0 --filter @openscience/web test -- optical-lab-asset-interaction.test.ts
+  ```
+
+  Expected RED: old `recoveryMs: 900`, flow alpha `1.0`, and composite without
+  an A-channel carrier fail. The production changes that make these tests pass
+  are the 700ms model boundary and real carrier encode/decode path.
+
+- [ ] **Step 2: Add and verify native mutation RED**
+
+  Extend the existing owned-server native gate with a one-line carrier-disable
+  shader mutation. It must change real active pixels and fail at least one of
+  the twenty phase/position samples while the unmodified renderer retains
+  centroid `<=.065`, locality `>=.80`, and outer halo `<=4/16`. Recovery capture
+  must contain nontransparent ambient pixels, observe local zero at `700ms`,
+  finish PNG encoding by `900ms`, and retain exact model follow zero.
+
+- [ ] **Step 3: Implement the minimum dual-channel GREEN**
+
+  In the flow shader, derive a phase-independent anisotropic carrier from the
+  existing `.20/.14` wake coordinates. Encode its signed value in A and decay
+  it only while local input remains active. In the composite shader, decode A
+  and apply bounded zero-mean contrast through the existing layer weights;
+  keep `5px` follow, `10px` vector cap, `.18` gain, `.05` ambient and `2px`
+  ambient displacement unchanged. In the renderer, use the model's exact
+  `active` boundary instead of a diagnostic tail floor.
+
+- [ ] **Step 4: Run full release gates and review**
+
+  Run focused/full Web, typecheck, canonical lint, build, Landing desktop/mobile
+  normal/reduced/pointer/idle, Lab native four-phase/five-position/mutations/
+  recovery/lifecycle, exact reduced static, release `27/27`, docs lint/sync and
+  diff check. Inspect final desktop/mobile active and resting captures. Request
+  independent review; stop on any Critical/Important or repeated native RED.
+
+- [ ] **Step 5: Commit, preflight and deploy**
+
+  After every local gate is GREEN, commit the reviewed implementation, record
+  exact release/rollback refs and the physical-mobile waiver, then run checkup,
+  backup, deployment dry-run and
+  `infra/scripts/deploy.sh --confirm --skip-migrate`. Verify public `/`, asset
+  Lab, API/service health, browser console, active/resting motion and rollback
+  evidence. Do not change schema, seed, Nginx, Compose, secrets or ECS topology.
+
+### Task 19: Independent Optical Overlay Pass
+
+**Goal:** Preserve the centred carrier as a final transparent draw so authored
+displacement cannot cancel its pixels.
+
+**Files:**
+
+- Create: `apps/web/lib/optical-lab/ogl/shaders/asset-overlay.ts`
+- Modify: `apps/web/lib/optical-lab/asset-interaction-model.ts`
+- Modify: `apps/web/lib/optical-lab/ogl/asset-interaction-renderer.ts`
+- Modify: `apps/web/lib/optical-lab/ogl/shaders/asset-flow.ts`
+- Modify: `apps/web/test/optical-lab-asset-interaction.test.ts`
+- Modify: `apps/web/test/visual/optical-lab-asset-interaction-gate.mjs`
+- Modify: canonical docs and Task 19 report
+
+**Interfaces:**
+
+- Flow A stores signed carrier encoded as `carrier * .5 + .5`.
+- `OPTICAL_ASSET_OVERLAY_FRAGMENT_SHADER` samples `tFlow` and emits a bounded
+  warm/cool tint with alpha `<=.16`.
+- Renderer owns a tracked overlay program/mesh, renders authored composite with
+  `clear:true`, then overlay with `clear:false`.
+- Model and renderer use exact `700ms` local zero; ambient RG and RAF continue.
+
+- [x] **Step 1: Focused and native RED**
+
+  Require the 700ms model boundary, encoded A carrier, overlay shader export,
+  tracked overlay program and ordered `clear:false` draw. Add a real browser
+  mutation that zeros overlay alpha and must fail spatial evidence. Against the
+  current tree, focused tests must fail on missing overlay/700ms and the native
+  mutation must fail because it intercepts zero overlay shaders.
+
+- [x] **Step 2: Minimum overlay GREEN**
+
+  Reintroduce the centred phase-independent A carrier. Add one transparent OGL
+  program that decodes A, selects equal-strength warm/cool tints by sign and
+  caps alpha at `.16`. Track it in the existing ledger and draw it after the
+  authored mesh without clearing. Reset A/B at the exact 700ms boundary.
+
+- [x] **Step 3: Mutation and full native acceptance**
+
+  Require a real WebGL second-draw skip mutation RED and unmodified GREEN across all four
+  phases and five positions. Isolated overlay-mask centroid must be `<=.04`;
+  final composite centroid must be `<=.08` with locality `>=.80`. Retain halo
+  `<=4/16`, layer order, follow/cap mutations, 700/900ms recovery, touch,
+  failures, suspension and exact resource cleanup. A real WebGL mutation that
+  skips the overlay draw must fail at least one final-composite sample.
+
+- [x] **Step 4: Release verification and visual inspection**
+
+  Run focused/full Web, typecheck, canonical lint, build, Landing normal/
+  reduced/mobile/pointer/idle, exact reduced Lab, release `27/27`, docs gates
+  and diff check. Inspect resting and active desktop/mobile captures and obtain
+  independent review with no Critical/Important.
+
+- [ ] **Step 5: Commit and deploy**
+
+  Record exact release/rollback refs and mobile waiver, run checkup, backup and
+  dry-run, then deploy with `--confirm --skip-migrate`. Verify public routes,
+  browser motion/console, services/logs and rollback evidence. Do not alter
+  schema, seed, Nginx, Compose, secrets or ECS topology.
+
 ---
 
 ## 2026-08-13 Full-Surface Layered Fluid Addendum

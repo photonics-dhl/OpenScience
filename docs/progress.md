@@ -1,5 +1,13 @@
 # OpenScience (XGS) 进度日志
 
+## 2026-08-14（Task 19 独立覆盖层）— ✅ 本地发布候选 GREEN，待审查与部署
+
+- **实现**：复用现有 RGBA8 flow texture 的 A 通道承载 phase-independent pointer carrier；原 authored composite 先以 `clear:true` 绘制，新的 ledger-owned transparent overlay 再以 `clear:false` 绘制。无新增 FBO、texture、canvas owner、依赖或服务器 GPU。最终参数为 response `70ms`、follow `5px`、local/combined cap `10px`、gain `.18`、ambient `.05`/`2px`/`8s`、纵向 `.20`/横向 `.14`、empty `.27`，local geometry/carrier 在 `700ms` 精确归零。
+- **双层视觉合同**：renderer-owned readPixels 直接测量生产 framebuffer alpha，隔离 overlay mask 五位置 centroid 距离 `.00784–.01083`、locality `1.0`，满足 overlay `<=.04`；最终 authored+overlay 四相位二十样本最差为 right phase `.25` 的 `.0609174`、locality `.852831`，满足 composite `<=.08` / locality `>=.80`。真实 WebGL skip-draw mutation 跳过 `487` 次 overlay draw 后重新产生 upper/lower `.11–.12` 失败，证明 layer-order/draw 是 load-bearing。
+- **保留门禁**：真实 follow A/B 为 `+5px`（`148,512` pixels），10→14 cap mutation 暴露禁止的 `+4px`（`144,857` pixels）；outer halo `2/16`；energy `21.7211` > typography `14.6018` > empty `5.60004`；touch locality `.9673`。同 RAF recovered PNG 在 `767.8ms` 完成，point-matched ambient/recovered 均 max delta `9`，follow 已在 `700ms` 归零且 ambient RAF 持续。idle 不再执行透明 overlay 全屏 draw。
+- **全量证据**：focused `12/12`、Web `32 files / 239 tests`、typecheck、canonical lint/workspace/docs sync、production build（`/` `804 B / 132 kB`）、Landing desktop/mobile normal+reduced+pointer+idle、Lab reduced exact-static、product release `27/27` 全部 GREEN；最新桌面/active 截图人工检查无截字、硬圆环或布局回归。
+- **发布边界**：用户已明确豁免物理手机性能门禁，并授权本地全绿后部署；模拟移动端/reduced 证据保留，但不冒充物理手机结果。独立 diff review、提交、checkup/backup/dry-run、`deploy.sh --confirm --skip-migrate` 与公网回归仍待执行；不改 schema、seed、Nginx、Compose、Secret 或 ECS 拓扑。
+
 ## 2026-08-14（最终动效调优与手机门禁豁免）— ⛔ Task 18 单纹理架构阻塞，未部署
 
 - **架构决策**：用户选择继续增强版并批准单纹理双通道方案。flow RG/B 保留速度与几何记忆，A 新增独立的 pointer-centred 可见载体；composite 将折射与零均值方向性水纹分开，避免中央字形/能量把边缘响应 centroid 拉向内侧。局部通道改为 `700ms` 精确视觉归零，同 RAF PNG 仍须在 `900ms` 前完成；不增加 texture、pass、package 或服务器 GPU 依赖。

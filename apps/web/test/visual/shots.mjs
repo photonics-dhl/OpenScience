@@ -1,4 +1,4 @@
-/* global HTMLElement, document, process, window */
+/* global HTMLElement, createImageBitmap, document, fetch, process, window */
 
 import { chromium } from 'playwright';
 import assert from 'node:assert/strict';
@@ -23,6 +23,43 @@ const cases = [
 ];
 
 const browser = await chromium.launch({ headless: true });
+
+async function measureTemporalQuadrants(page, before, after, threshold = 1) {
+  return page.evaluate(async ({ afterBase64, beforeBase64, thresholdValue }) => {
+    const decode = async (encoded) => {
+      const blob = await (await fetch(`data:image/png;base64,${encoded}`)).blob();
+      const bitmap = await createImageBitmap(blob);
+      const canvas = document.createElement('canvas');
+      canvas.width = bitmap.width;
+      canvas.height = bitmap.height;
+      const context = canvas.getContext('2d', { willReadFrequently: true });
+      context.drawImage(bitmap, 0, 0);
+      return context.getImageData(0, 0, bitmap.width, bitmap.height);
+    };
+    const first = await decode(beforeBase64);
+    const second = await decode(afterBase64);
+    const quadrants = [0, 0, 0, 0];
+    let count = 0;
+    for (let y = 0; y < first.height; y += 1) {
+      for (let x = 0; x < first.width; x += 1) {
+        const offset = (y * first.width + x) * 4;
+        const delta = Math.max(
+          Math.abs(first.data[offset] - second.data[offset]),
+          Math.abs(first.data[offset + 1] - second.data[offset + 1]),
+          Math.abs(first.data[offset + 2] - second.data[offset + 2]),
+        );
+        if (delta < thresholdValue) continue;
+        count += 1;
+        quadrants[(y >= first.height / 2 ? 2 : 0) + (x >= first.width / 2 ? 1 : 0)] += 1;
+      }
+    }
+    return { count, quadrants };
+  }, {
+    afterBase64: after.toString('base64'),
+    beforeBase64: before.toString('base64'),
+    thresholdValue: threshold,
+  });
+}
 
 try {
   for (const testCase of cases) {
@@ -72,7 +109,18 @@ try {
         );
       }
     } else {
-      await surface.locator('canvas[data-optical-asset-interaction-canvas="true"]').waitFor({ state: 'attached', timeout: 10_000 });
+      const canvas = surface.locator('canvas[data-optical-asset-interaction-canvas="true"]');
+      await canvas.waitFor({ state: 'attached', timeout: 10_000 });
+      await page.waitForFunction(() => window.__OPENSCIENCE_OPTICAL_ASSET_INTERACTION__?.activeRaf === true);
+      const idleSnapshot = await page.evaluate(() => window.__OPENSCIENCE_OPTICAL_ASSET_INTERACTION__);
+      assert.equal(idleSnapshot?.ambientStrength, .05, 'Landing idle proof must exercise the exact ambient flow budget');
+      assert.equal(idleSnapshot?.follow, 0, 'Landing idle proof must run before pointer input');
+      const idleBefore = await canvas.screenshot();
+      await page.waitForTimeout(360);
+      const idleAfter = await canvas.screenshot();
+      const idleMotion = await measureTemporalQuadrants(page, idleBefore, idleAfter, 1);
+      assert(idleMotion.count > 0 && idleMotion.quadrants.every((count) => count > 0),
+        `Landing idle motion must change real pixels in all four quadrants: ${JSON.stringify(idleMotion)}`);
       const startX = bounds.x + bounds.width * .3;
       const endX = bounds.x + bounds.width * .7;
       const y = bounds.y + bounds.height * .45;

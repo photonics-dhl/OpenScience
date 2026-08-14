@@ -12,6 +12,7 @@ import { OPTICAL_QUALITY_BUDGETS, OPTICAL_WEBGL2_CONTEXT_ATTRIBUTES } from '../r
 import { createAssetFlowPass, type AssetFlowPass } from './asset-flow-pass';
 import { createOpticalOglResourceLedger, type OpticalOglResourceCounts } from './resources';
 import { OPTICAL_ASSET_COMPOSITE_FRAGMENT_SHADER } from './shaders/asset-composite';
+import { OPTICAL_ASSET_OVERLAY_FRAGMENT_SHADER } from './shaders/asset-overlay';
 import { OPTICAL_FULLSCREEN_VERTEX_SHADER } from './shaders/fullscreen';
 
 export interface AssetInteractionSnapshot {
@@ -46,8 +47,7 @@ export interface AssetInteractionFrameCapture {
   width: number;
 }
 
-const ASSET_AMBIENT_STRENGTH = .035;
-const ASSET_VISUAL_RECOVERY_FLOOR = .07;
+const ASSET_AMBIENT_STRENGTH = .05;
 
 const emptyResourceCounts = (): OpticalOglResourceCounts => ({
   buffers: 0,
@@ -249,6 +249,19 @@ export async function createAssetInteractionRenderer(
     });
     ledger.trackProgram(program);
     const mesh = new Mesh(renderer.gl, { geometry, program });
+    const overlayProgram = new Program(renderer.gl, {
+      cullFace: false,
+      depthTest: false,
+      depthWrite: false,
+      fragment: OPTICAL_ASSET_OVERLAY_FRAGMENT_SHADER,
+      transparent: true,
+      uniforms: {
+        tFlow: { value: null },
+      },
+      vertex: OPTICAL_FULLSCREEN_VERTEX_SHADER,
+    });
+    ledger.trackProgram(overlayProgram);
+    const overlayMesh = new Mesh(renderer.gl, { geometry, program: overlayProgram });
     flowPass = createAssetFlowPass(renderer.gl);
 
     const resize = () => {
@@ -275,7 +288,7 @@ export async function createAssetInteractionRenderer(
       if (disposed || suspended || !activeRaf) return;
       try {
         lastSample = stepAssetInteraction(state, now);
-        const visuallyActive = lastSample.follow >= ASSET_VISUAL_RECOVERY_FLOOR;
+        const visuallyActive = lastSample.active;
         if (localFlowActive && !visuallyActive) flowPass?.reset();
         localFlowActive = visuallyActive;
         const velocity: [number, number] = [
@@ -283,7 +296,7 @@ export async function createAssetInteractionRenderer(
           -lastSample.refractionPx.y / ASSET_INTERACTION_LIMITS.localRefractionPx,
         ];
         if (!flowPass?.render({
-          ambientPhase: (now % 12_000) / 12_000,
+          ambientPhase: (now % 8_000) / 8_000,
           aspect: Math.max(1, stage.clientWidth) / Math.max(1, stage.clientHeight),
           localStrength: visuallyActive ? lastSample.follow : 0,
           pointer: [lastSample.pointerX, 1 - lastSample.pointerY],
@@ -294,6 +307,7 @@ export async function createAssetInteractionRenderer(
           return;
         }
         program.uniforms.tFlow.value = flowPass.texture();
+        overlayProgram.uniforms.tFlow.value = flowPass.texture();
         program.uniforms.uCausticGain.value = visuallyActive ? lastSample.causticGain : 0;
         program.uniforms.uPatchFollowPx.value = visuallyActive ? lastSample.patchFollowPx : 0;
         program.uniforms.uRefractionPx.value = visuallyActive
@@ -301,6 +315,9 @@ export async function createAssetInteractionRenderer(
           : [0, 0];
         renderer.gl.clearColor(0, 0, 0, 0);
         renderer.render({ clear: true, frustumCull: false, scene: mesh, sort: false });
+        if (visuallyActive) {
+          renderer.render({ clear: false, frustumCull: false, scene: overlayMesh, sort: false });
+        }
         captureRenderedFrame();
         report('ready');
         rafId = requestAnimationFrame(draw);

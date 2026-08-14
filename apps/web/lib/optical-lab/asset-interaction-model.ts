@@ -1,11 +1,11 @@
 export const ASSET_INTERACTION_LIMITS = Object.freeze({
   apertureX: .58 as const,
-  causticGain: .14,
-  localRefractionPx: 8,
+  causticGain: .18,
+  localRefractionPx: 10,
   localRadiusUv: .20,
-  patchFollowPx: 4,
-  recoveryMs: 900,
-  responseMs: 120,
+  patchFollowPx: 5,
+  recoveryMs: 700,
+  responseMs: 70,
 });
 
 const ASSET_POINTER_VELOCITY_SENSITIVITY = .75;

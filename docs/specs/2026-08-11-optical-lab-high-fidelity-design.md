@@ -685,8 +685,13 @@ remove that coupling.
   continues through the authored pass; reduced motion and failure states create
   neither WebGL pass.
 
-The native carrier-disable mutation must now intercept the overlay shader and
-make at least one phase/position sample fail. The unmodified renderer must pass
-all twenty samples, the real `.16–.20` halo band, layer ordering, touch,
+The native mutation must identify the overlay shader/program and skip the real
+second WebGL draw, making at least one phase/position sample fail. The isolated
+mask proof must preserve production overlay output/blending and measure its
+framebuffer alpha directly. The unmodified renderer must pass
+all twenty samples under the responsibility-specific contract: the isolated
+overlay alpha mask has centroid distance `<=.04`, while the final authored plus
+overlay composite has centroid distance `<=.08` and locality `>=.80`. The real
+`.16–.20` halo band, layer ordering, touch,
 700/900ms recovery and exact lifecycle counts. A mutation that skips the second
 draw must also fail real pixels; source presence alone is insufficient.

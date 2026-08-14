@@ -32,15 +32,15 @@ void main() {
   float layerWeight = mix(emptyWeight, typeWeight, smoothstep(0.04, 0.42, targetLuminance));
   layerWeight = mix(layerWeight, energyWeight, smoothstep(0.06, 0.48, energySignal));
 
-  float ambientBudget = 1.4;
-  float localBudget = min(8.0, length(uRefractionPx));
+  float ambientBudget = 2.0;
+  float localBudget = min(10.0, length(uRefractionPx));
   float displacementBudget = mix(ambientBudget, localBudget, localAmount) * layerWeight;
   vec2 refractedPx = flow * displacementBudget;
-  vec2 followPx = vec2(clamp(uPatchFollowPx, -4.0, 4.0), 0.0)
+  vec2 followPx = vec2(clamp(uPatchFollowPx, -5.0, 5.0), 0.0)
     * localAmount * layerWeight;
   vec2 combinedPx = refractedPx + followPx;
   float combinedLength = length(combinedPx);
-  if (combinedLength > 8.0) combinedPx *= 8.0 / combinedLength;
+  if (combinedLength > 10.0) combinedPx *= 10.0 / combinedLength;
   vec2 displacedUv = clamp(vUv - combinedPx / uViewport, vec2(0.0), vec2(1.0));
 
   vec3 target = texture(tTarget, displacedUv).rgb;
@@ -49,14 +49,14 @@ void main() {
     * (1.0 - smoothstep(0.60, 0.64, displacedUv.y));
   vec3 energyPlate = mix(vec3(0.0196), energy.rgb, energy.a);
   vec3 authored = mix(energyPlate, target, displacedTargetMask);
-  float gain = min(0.14, max(0.0, uCausticGain)) * localAmount * layerWeight;
+  float gain = min(0.18, max(0.0, uCausticGain)) * localAmount * layerWeight;
   float authoredSignal = max(targetLuminance, energySignal);
   float emptySignal = 1.0 - smoothstep(0.015, 0.08, authoredSignal);
   float liquidWave = 0.5 + 0.5 * sin(
     vUv.x * 29.0 + sin(vUv.y * 23.0 + flow.y * 5.0) * 2.4 + flow.x * 6.0
   );
   float liquidGrain = smoothstep(0.16, 0.88, liquidWave);
-  float emptyLift = emptySignal * localAmount * emptyWeight * 0.21 * (0.35 + 0.65 * liquidGrain);
+  float emptyLift = emptySignal * localAmount * emptyWeight * 0.27 * (0.35 + 0.65 * liquidGrain);
   vec3 color = min(vec3(1.0), authored + energy.rgb * gain + vec3(emptyLift));
   float replacement = smoothstep(0.0005, 0.012, flowLength) * mix(0.34, 1.0, localAmount);
   fragColor = vec4(color, replacement);

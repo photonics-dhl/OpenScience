@@ -32,6 +32,10 @@ const compositeShaderUrl = new URL('../lib/optical-lab/ogl/shaders/asset-composi
 const compositeShader = existsSync(fileURLToPath(compositeShaderUrl))
   ? await import('../lib/optical-lab/ogl/shaders/asset-composite')
   : null;
+const overlayShaderUrl = new URL('../lib/optical-lab/ogl/shaders/asset-overlay.ts', import.meta.url);
+const overlayShader = existsSync(fileURLToPath(overlayShaderUrl))
+  ? await import('../lib/optical-lab/ogl/shaders/asset-overlay')
+  : null;
 
 describe('Optical Lab accepted asset interaction envelope', () => {
   it('maps a perceptible bounded pointer velocity from a 24ms pointer delta', () => {
@@ -63,16 +67,16 @@ describe('Optical Lab accepted asset interaction envelope', () => {
       velocityX: 3,
       velocityY: 4,
     }, 1_000);
-    const sample = step(state, 1_120);
+    const sample = step(state, 1_070);
 
     expect(sample.pointerX).toBe(.25);
     expect(sample.pointerY).toBe(.25);
-    expect(Math.hypot(sample.refractionPx.x, sample.refractionPx.y)).toBeCloseTo(8, 5);
-    expect(sample.refractionPx.x).toBeCloseTo(4.8, 5);
-    expect(sample.refractionPx.y).toBeCloseTo(6.4, 5);
+    expect(Math.hypot(sample.refractionPx.x, sample.refractionPx.y)).toBeCloseTo(10, 5);
+    expect(sample.refractionPx.x).toBeCloseTo(6, 5);
+    expect(sample.refractionPx.y).toBeCloseTo(8, 5);
   });
 
-  it('approaches the latest velocity monotonically through the 120ms response window', () => {
+  it('reaches the latest velocity monotonically at the exact 70ms response boundary', () => {
     const createState = model?.createAssetInteractionState;
     const inject = model?.injectAssetInteraction;
     const step = model?.stepAssetInteraction;
@@ -85,11 +89,12 @@ describe('Optical Lab accepted asset interaction envelope', () => {
       velocityX: 1,
       velocityY: 0,
     }, 2_000);
-    const follow = [0, 40, 80, 120].map((elapsed) => step(state, 2_000 + elapsed).follow);
+    const follow = [0, 23, 46, 69, 70].map((elapsed) => step(state, 2_000 + elapsed).follow);
 
     expect(follow[0]).toBe(0);
     expect(follow).toEqual([...follow].sort((left, right) => left - right));
-    expect(follow[3]).toBe(1);
+    expect(follow[3]).toBeLessThan(1);
+    expect(follow[4]).toBe(1);
   });
 
   it('preserves leftward pointer velocity in the optical field', () => {
@@ -111,14 +116,14 @@ describe('Optical Lab accepted asset interaction envelope', () => {
       velocityX: -1,
       velocityY: 0,
     }, 3_060);
-    const values = [0, 30, 60, 90, 120]
+    const values = [0, 18, 35, 52, 70]
       .map((elapsed) => step(replaced, 3_060 + elapsed).refractionPx.x);
 
-    expect(values.every((value) => value >= -8 && value <= 8)).toBe(true);
-    expect(values.at(-1)).toBe(-8);
+    expect(values.every((value) => value >= -10 && value <= 10)).toBe(true);
+    expect(values.at(-1)).toBeCloseTo(-10, 5);
   });
 
-  it('emits the approved doubled active envelope without exceeding its caps', () => {
+  it('emits the approved balanced active envelope without exceeding its caps', () => {
     const createState = model?.createAssetInteractionState;
     const inject = model?.injectAssetInteraction;
     const step = model?.stepAssetInteraction;
@@ -131,17 +136,17 @@ describe('Optical Lab accepted asset interaction envelope', () => {
       velocityX: 500,
       velocityY: 0,
     }, 4_000);
-    const sample = step(state, 4_120);
+    const sample = step(state, 4_070);
 
-    expect(sample.patchFollowPx).toBe(4);
-    expect(Math.hypot(sample.refractionPx.x, sample.refractionPx.y)).toBeCloseTo(8, 5);
-    expect(sample.causticGain).toBeCloseTo(.14, 5);
+    expect(sample.patchFollowPx).toBe(5);
+    expect(Math.hypot(sample.refractionPx.x, sample.refractionPx.y)).toBeCloseTo(10, 5);
+    expect(sample.causticGain).toBeCloseTo(.18, 5);
     expect(sample.localRadiusUv).toBe(.20);
     expect(sample.pointerX).toBe(0);
     expect(sample.pointerY).toBe(1);
   });
 
-  it('responds at literal full-surface pointer locations and decays to zero at 900ms', () => {
+  it('responds at literal full-surface pointer locations and reaches exact visual zero at 700ms', () => {
     const createState = model?.createAssetInteractionState;
     const inject = model?.injectAssetInteraction;
     const step = model?.stepAssetInteraction;
@@ -160,17 +165,17 @@ describe('Optical Lab accepted asset interaction envelope', () => {
       velocityX: .4,
       velocityY: .1,
     }, 2_000);
-    const left = step(leftState, 1_120);
-    const right = step(rightState, 2_120);
-    const recovering = [120, 300, 500, 700, 900]
+    const left = step(leftState, 1_070);
+    const right = step(rightState, 2_070);
+    const recovering = [70, 200, 400, 600, 700]
       .map((elapsed) => step(leftState, 1_000 + elapsed));
     const follow = recovering.map((sample) => sample.follow);
 
     expect(left.pointerX).toBe(.12);
     expect(right.pointerX).toBe(.88);
     expect(left.localRadiusUv).toBe(.20);
-    expect(step(leftState, 1_899).active).toBe(true);
-    expect(step(leftState, 1_900).active).toBe(false);
+    expect(step(leftState, 1_699).active).toBe(true);
+    expect(step(leftState, 1_700).active).toBe(false);
     expect(follow.slice(0, -1).every((value) => value > 0)).toBe(true);
     expect(follow[0]).toBeGreaterThan(follow[1]);
     expect(follow[1]).toBeGreaterThan(follow[2]);
@@ -207,10 +212,14 @@ describe('Optical Lab accepted asset OGL boundary', () => {
     expect(shader).toContain('backtraceUv');
     expect(shader).toContain('texture(tPrevious, backtraceUv)');
     expect(shader).toContain('min(uLocalStrength');
-    expect(shader).toContain('0.035');
+    expect(shader).toContain('min(0.05, ambientMagnitude)');
+    expect(shader).toContain('min(uRadius, 0.14)');
     expect(shader).not.toContain('APERTURE_X');
     expect(shader).not.toContain('uPointerY');
     expect(shader).toContain('tPrevious');
+    expect(shader).toContain('previousSample.w * 2.0 - 1.0');
+    expect(shader).toContain('carrier * 0.5 + 0.5');
+    expect(shader).not.toContain('localMemory, 1.0');
   });
 
   it('composites a smooth full-surface response with authored layer weights and caps', () => {
@@ -222,10 +231,10 @@ describe('Optical Lab accepted asset OGL boundary', () => {
     expect(shader).toContain('0.22');
     expect(shader).toContain('0.62');
     expect(shader).toContain('1.0');
-    expect(shader).toContain('min(8.0');
-    expect(shader).toContain('min(0.14');
-    expect(shader).toContain('1.4');
-    expect(shader).toContain('emptyWeight * 0.21');
+    expect(shader).toContain('min(10.0');
+    expect(shader).toContain('min(0.18');
+    expect(shader).toContain('float ambientBudget = 2.0');
+    expect(shader).toContain('emptyWeight * 0.27');
     expect(shader).toContain('smoothstep');
     expect(shader).not.toContain('abs(vUv.x - 0.58)');
   });
@@ -236,11 +245,49 @@ describe('Optical Lab accepted asset OGL boundary', () => {
     expect(rendererSource).toContain('uPatchFollowPx: { value: 0 }');
     expect(rendererSource).toContain('program.uniforms.uPatchFollowPx.value');
     expect(shader).toContain('uniform float uPatchFollowPx');
-    expect(shader).toContain('clamp(uPatchFollowPx, -4.0, 4.0)');
+    expect(rendererSource).toContain('(now % 8_000) / 8_000');
+    expect(shader).toContain('clamp(uPatchFollowPx, -5.0, 5.0)');
     expect(shader).toContain('localAmount * layerWeight');
-    expect(shader).toContain('combinedLength > 8.0');
-    expect(shader).toContain('combinedPx *= 8.0 / combinedLength');
-    expect(nativeGateSource).toContain('combinedPx *= 12.0 / combinedLength');
+    expect(shader).toContain('combinedLength > 10.0');
+    expect(shader).toContain('combinedPx *= 10.0 / combinedLength');
+    expect(nativeGateSource).toContain('combinedPx *= 14.0 / combinedLength');
     expect(nativeGateSource).toContain('capRegistration.best.shift');
   });
+
+  it('keeps the approved visible-centroid and locality contract mutation-resistant', () => {
+    expect(nativeGateSource).toContain('const overlayCentroidLimit = .04');
+    expect(nativeGateSource).toContain('const visibleCentroidLimit = .08');
+    expect(nativeGateSource).toContain('const localityFloor = .80');
+    expect(nativeGateSource).toContain('const spatialSamplePhases = [0, .25, .5, .75]');
+    expect(nativeGateSource).toContain('OPTICAL_LAB_ASSET_FIXED_CENTER_MUTATION');
+    expect(nativeGateSource).toContain('vec2 localDelta = vec2(vUv.x - 0.5, (vUv.y - 0.5)');
+    expect(nativeGateSource).toContain('fixed-centre mutation must fail the visible response contract');
+    expect(nativeGateSource).toContain('OPTICAL_LAB_ASSET_OVERLAY_MASK_PROOF');
+    expect(nativeGateSource).toContain('OPTICAL_LAB_ASSET_OVERLAY_SKIP_DRAW_MUTATION');
+    expect(nativeGateSource).toContain('measureAlphaSpatialResponse');
+    expect(nativeGateSource).not.toContain('overlayAlpha / 0.16');
+  });
+
+  it('draws a bounded transparent overlay after the authored composite', () => {
+    const shader = overlayShader?.OPTICAL_ASSET_OVERLAY_FRAGMENT_SHADER ?? '';
+
+    expect(shader).toContain('uniform sampler2D tFlow');
+    expect(shader).toContain('flowSample.a * 2.0 - 1.0');
+    expect(flowShader?.OPTICAL_ASSET_FLOW_FRAGMENT_SHADER ?? '').toContain('float shapedCarrierWave');
+    expect(shader).toContain('abs(carrier) * 0.16');
+    expect(shader).not.toContain('abs(carrier) * localAmount');
+    expect(shader).toContain('min(0.16');
+    expect(shader).toContain('coolTint');
+    expect(shader).toContain('warmTint');
+    expect(shader).toContain('vec3(0.08, 0.24, 0.32)');
+    expect(shader).toContain('vec3(0.36, 0.16, 0.08)');
+    expect(rendererSource).toContain('OPTICAL_ASSET_OVERLAY_FRAGMENT_SHADER');
+    expect(rendererSource).toContain('overlayProgram');
+    expect(rendererSource).toContain('scene: overlayMesh');
+    expect(rendererSource).toContain('clear: false');
+    expect(rendererSource).toContain('if (visuallyActive)');
+    expect(rendererSource).toContain('const visuallyActive = lastSample.active');
+    expect(rendererSource).not.toContain('ASSET_VISUAL_RECOVERY_FLOOR');
+  });
+
 });

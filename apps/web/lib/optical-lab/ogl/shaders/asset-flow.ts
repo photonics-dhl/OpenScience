@@ -21,6 +21,7 @@ void main() {
   vec2 stored = previousSample.xy * 2.0 - 1.0;
   vec2 previous = mix(stored, vec2(0.0), uFresh);
   float previousLocal = mix(previousSample.z, 0.0, uFresh);
+  float previousCarrier = mix(previousSample.w * 2.0 - 1.0, 0.0, uFresh);
 
   float phase = uAmbientPhase * 2.0 * PI;
   vec2 ambient = vec2(
@@ -28,7 +29,7 @@ void main() {
     cos(vUv.x * 7.0 - phase * 0.61) - sin((vUv.x - vUv.y) * 6.0 + phase)
   );
   float ambientMagnitude = length(ambient);
-  if (ambientMagnitude > 0.0) ambient *= min(0.035, ambientMagnitude) / ambientMagnitude;
+  if (ambientMagnitude > 0.0) ambient *= min(0.05, ambientMagnitude) / ambientMagnitude;
 
   vec2 direction = normalize(uVelocity + vec2(0.0001, 0.0));
   vec2 localDelta = vec2(vUv.x - uPointer.x, (vUv.y - uPointer.y) / max(0.001, uAspect))
@@ -45,11 +46,29 @@ void main() {
   );
   float localDistance = length(wakeDistance);
   float influence = (1.0 - smoothstep(0.28, 1.0, localDistance)) * uLocalStrength;
+  float carrierIrregular = sin(
+    (along * 29.0 + across * 41.0) / max(0.001, uRadius)
+  ) * transverseRadius * 0.055;
+  vec2 carrierDistance = vec2(
+    (along + carrierIrregular) / max(0.001, uRadius * 1.12),
+    (across - carrierIrregular * 0.7) / max(0.001, transverseRadius * 0.54)
+  );
+  float carrierSupport = 1.0 - smoothstep(0.28, 1.0, length(carrierDistance));
+  float carrierWave = sin(
+    along * 31.0 / max(0.001, uRadius)
+      + across * 17.0 / max(0.001, transverseRadius)
+  );
+  float shapedCarrierWave = sign(carrierWave) * (0.5 + 0.5 * abs(carrierWave));
+  float carrier = clamp(
+    mix(previousCarrier * 0.72, carrierSupport * shapedCarrierWave, uLocalStrength),
+    -1.0,
+    1.0
+  ) * step(0.0001, uLocalStrength);
   float localPersistence = step(0.0001, uLocalStrength);
   vec2 velocity = previous * 0.985 * localPersistence + ambient + uVelocity * influence * 0.24;
   float magnitude = length(velocity);
   if (magnitude > 1.0) velocity /= magnitude;
   float localMemory = min(uLocalStrength, max(previousLocal * 0.94, influence));
-  fragColor = vec4(velocity * 0.5 + 0.5, localMemory, 1.0);
+  fragColor = vec4(velocity * 0.5 + 0.5, localMemory, carrier * 0.5 + 0.5);
 }
 `;
