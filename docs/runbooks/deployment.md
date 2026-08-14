@@ -150,10 +150,11 @@ Current infrastructure uses pinned base/worker images with bind-mounted applicat
 - Nginx configuration test passed; public `/` and `/explore` returned 200, while unauthenticated `/auth/me` returned the expected 401.
 - Chromium against the public domain passed 1440×900, 1920×1080 and 390×844 normal/reduced/Open RO cases plus independent pointer-left/slit/right frames at 60/150/300ms. Human inspection found no pointer-centered particle disk, moving optical axis, or quadratic fan.
 
-### 5.3 Accepted shared optical surface candidate (local only, 2026-08-14)
+### 5.3 Accepted shared optical surface deployment (2026-08-14)
 
-> This is a release-candidate record, not deployment evidence. No SSH, cloud
-> sync, ECS checkup, backup, activation or public verification was performed.
+> Release `b6a41da`; rollback `cd5be36`. The physical-mobile performance gate
+> was explicitly waived for this release only; simulated mobile evidence is not
+> described as physical hardware.
 
 - Local source promotes the accepted amplified asset composition through one
   shared `AcceptedOpticalSurface` consumed by Landing and the isolated asset
@@ -187,16 +188,19 @@ Current infrastructure uses pinned base/worker images with bind-mounted applicat
   release gate on 2026-08-14 and authorized deployment after all remaining
   local gates. Simulated mobile/reduced evidence must not be described as a
   physical-mobile performance result.
-- No schema, API, seed, Nginx, Compose, topology or secret change is included;
-  the eventual deployment must use `--skip-migrate` unless the reviewed release
-  diff later proves otherwise.
-- Before any production write, record the reviewed release and current
-  production rollback refs, run the approved local deploy dry-run, execute
-  `checkup.sh`, complete and verify the database backup/retention result, then
-  obtain authorization for the confirmed deploy command.
-- After activation, require public `/` and `/explore` 200 plus unauthenticated
-  `/auth/me` 401; desktop/mobile normal and reduced accepted frames; one
-  semantic `h1`; navigation/CTA/Latest Research; pointer response; zero overflow
-  or browser errors; healthy services; and no critical worker logs. Only then
-  update this section with release/rollback refs, backup evidence and public
-  results and describe the surface as deployed.
+- Pre-deploy checkup passed; database backup returned
+  `BACKUP_OK size=280K files=7/7`. The approved dry-run preceded
+  `deploy.sh --confirm --skip-migrate`; no migration or seed ran and no schema,
+  Nginx, Compose, topology or secret changed.
+- Remote full-workspace build passed and API/Web/agent-worker restarted. Post
+  checkup shows API/PostgreSQL/Redis/object storage/malware scanner healthy;
+  Nginx and Cloudflare ingress are active. Critical API/Web/worker log matches
+  in the deployment window: `0`.
+- Public `/`, `/_visual/optical-lab?candidate=asset` and `/explore` return 200;
+  unauthenticated `/auth/me` returns 401. Remote `asset-overlay.ts` SHA-256
+  `4f2674b3c041416074b97df27245ee82062a45981fa439f0e9d8979f5554d633`
+  matches the local release.
+- Chromium against the public domain passed 1672×941 and 390×844 normal and
+  reduced modes: one semantic `h1`, retained navigation/CTA/Latest Research,
+  zero overflow/errors, normal idle pixel changes in all four quadrants and
+  pointer response; reduced mode creates no interaction canvas.

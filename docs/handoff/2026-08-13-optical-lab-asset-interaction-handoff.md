@@ -1,6 +1,6 @@
 # Handoff — 2026-08-13 Optical Lab Asset Interaction
 
-## Current canonical state — Task 19 local release candidate GREEN (2026-08-14)
+## Current canonical state — Task 19 deployed and publicly verified (2026-08-14)
 
 > **This section supersedes every Task 17/18 blocker and next-action statement
 > below.** Do not restart the blue six-face object or the earlier fixed-centre
@@ -28,11 +28,15 @@
   are GREEN.
 - User waived only the physical-mobile performance gate and authorized deploy
   after all other gates. Never describe simulated mobile as physical hardware.
-- **Next action:** independent final diff review with no Critical/Important,
-  commit, then checkup → backup → dry-run →
-  `infra/scripts/deploy.sh --confirm --skip-migrate` → public/browser/service
-  verification and rollback record. No schema/seed/Nginx/Compose/Secret change.
-- Canonical pending report:
+- Release `b6a41da` is active on ECS; rollback anchor is `cd5be36`. Pre/post
+  checkup passed, backup was `280K` with `7/7` retention, and deployment used
+  `--skip-migrate`. Public `/`, Lab and `/explore` return 200; unauthenticated
+  `/auth/me` returns 401. Desktop/mobile normal/reduced browser checks passed,
+  including four-quadrant idle pixels, pointer response, zero errors/overflow
+  and no reduced-motion interaction canvas. Critical-log match count is zero.
+- **Next action:** user performs final visual judgment on the deployed surface.
+  Do not reopen the blue six-face object or historical Task 17/18 plans.
+- Canonical report:
   `.superpowers/sdd/2026-08-11-optical-lab-high-fidelity-reconstruction-plan/task-19-report.md`.
 
 ## Current canonical state — Task 17 blocked, no deployment (2026-08-14)

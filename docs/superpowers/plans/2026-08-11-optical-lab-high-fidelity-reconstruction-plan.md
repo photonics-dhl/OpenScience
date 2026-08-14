@@ -366,9 +366,9 @@ displacement cannot cancel its pixels.
 
   Require the 700ms model boundary, encoded A carrier, overlay shader export,
   tracked overlay program and ordered `clear:false` draw. Add a real browser
-  mutation that zeros overlay alpha and must fail spatial evidence. Against the
-  current tree, focused tests must fail on missing overlay/700ms and the native
-  mutation must fail because it intercepts zero overlay shaders.
+  mutation that skips the overlay draw and must fail spatial evidence. Against
+  the current tree, focused tests must fail on missing overlay/700ms and the
+  native mutation must fail because it intercepts zero overlay shaders.
 
 - [x] **Step 2: Minimum overlay GREEN**
 
@@ -393,7 +393,7 @@ displacement cannot cancel its pixels.
   and diff check. Inspect resting and active desktop/mobile captures and obtain
   independent review with no Critical/Important.
 
-- [ ] **Step 5: Commit and deploy**
+- [x] **Step 5: Commit and deploy**
 
   Record exact release/rollback refs and mobile waiver, run checkup, backup and
   dry-run, then deploy with `--confirm --skip-migrate`. Verify public routes,
