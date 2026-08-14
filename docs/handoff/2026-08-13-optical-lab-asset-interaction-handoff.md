@@ -1,10 +1,10 @@
 # Handoff — 2026-08-13 Optical Lab Asset Interaction
 
-## Current canonical state — Task 21 local candidate, not deployed (2026-08-14)
+## Current canonical state — Task 21 deployed and publicly verified (2026-08-14)
 
 > **This section supersedes Task 20's “visual validation only” next action.**
-> Production remains release `28c7789` until the Task 21 deploy finishes; do
-> not reopen the blue six-face object.
+> Production release is `8edf6fa`; rollback is `28c7789`. Do not reopen the
+> blue six-face object.
 
 - User reports the Task 20 idle result is still visually static. The old public
   gate only proved threshold-1 noise. A new real Landing gate requires three
@@ -21,8 +21,13 @@
 - Strict Landing desktop/mobile/production-start evidence is GREEN; full Lab
   native centroid/locality/recovery/halo/touch/lifecycle evidence is GREEN;
   focused `14/14`, full Web `241/241`, typecheck, lint, build and 27-case release
-  gate are GREEN. Next action is independent diff review, final docs gates,
-  commit, deploy and public screenshot validation. No deploy has occurred yet.
+  gate are GREEN. Independent review returned APPROVE with 0 Critical/Important.
+- Release `8edf6fa` deployed with `--skip-migrate` after a `280K`, `7/7`
+  database backup. Post-checkup is healthy. Public `/`, asset Lab and `/explore`
+  return `200`; unauthenticated `/auth/me` returns `401`. Public desktop/mobile
+  normal/reduced browser gates and the strict three-window idle gate pass;
+  inspected screenshots show readable complete glyphs, a visible resting light
+  current and no black operating-system arrow.
 
 ## Current canonical state — Task 20 deployed and publicly verified (2026-08-14)
 

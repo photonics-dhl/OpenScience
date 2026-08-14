@@ -231,3 +231,27 @@ Current infrastructure uses pinned base/worker images with bind-mounted applicat
 - Restart logs contain the expected prior-process `SIGTERM`; stale Server Action
   requests occurred before the final Ready marker. No new runtime error appears
   after the deployed server became ready.
+
+### 5.5 Perceptible Landing idle current deployment (2026-08-14)
+
+> Release `8edf6fa`; rollback `28c7789`. This release changes only the Landing
+> optical presentation and its browser evidence; no schema, API, Compose,
+> Nginx or secret contract changed.
+
+- A Landing-only `3.4s` cool-white-warm light current now moves across the
+  central title at rest and pauses during renderer-owned local interaction.
+  Reduced motion remains exact static. The operating-system arrow is hidden
+  only over the Landing optical stage.
+- Local acceptance passed focused `14/14`, Web `241/241`, typecheck, canonical
+  lint/docs sync, 16-page build, full native Lab matrix, reduced exact-static,
+  Landing desktop/mobile normal/reduced/pointer/idle evidence and product
+  release `27/27`. Independent review returned APPROVE with 0
+  Critical/Important findings.
+- Pre/post checkup passed. Database backup returned
+  `BACKUP_OK size=280K files=7/7`; dry-run preceded
+  `deploy.sh --confirm --skip-migrate`. No migration or seed ran.
+- Public `/`, asset Lab and `/explore` return `200`; unauthenticated `/auth/me`
+  returns `401`. Public Chromium passed desktop/mobile normal/reduced and three
+  consecutive `360ms` central-title-band windows at RGB delta `>=3`. Retained
+  screenshots were inspected for complete glyphs, visible resting motion and
+  absence of the black arrow cursor.

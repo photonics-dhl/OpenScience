@@ -58,7 +58,7 @@
   reduced exact-static capture, full Web tests, typecheck, lint and build.
   Inspect desktop/mobile resting and active screenshots visually.
 
-- [ ] **Step 4: Review, docs and release**
+- [x] **Step 4: Review, docs and release**
 
   Review the scoped diff, synchronize `docs/progress.md`, `project_index.md`
   and the current handoff, commit the tracked set, then use the deployment
