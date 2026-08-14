@@ -49,6 +49,15 @@ export interface AssetInteractionFrameCapture {
 }
 
 const ASSET_AMBIENT_STRENGTH = .05;
+const ASSET_AMBIENT_CYCLE_MS = 10_000;
+
+export function sampleAssetAmbientClock(elapsedMs: number) {
+  const shaderTime = Math.max(0, elapsedMs) / ASSET_AMBIENT_CYCLE_MS;
+  return {
+    cycle: shaderTime - Math.floor(shaderTime),
+    shaderTime,
+  };
+}
 
 const emptyResourceCounts = (): OpticalOglResourceCounts => ({
   buffers: 0,
@@ -118,6 +127,7 @@ export async function createAssetInteractionRenderer(
   let lastSample = stepAssetInteraction(state, performance.now());
   let ambientPausedAt: number | null = null;
   let ambientPausedMs = 0;
+  let ambientStartedAt = performance.now();
   let lastAmbientPhase = 0;
   let localFlowActive = false;
   let pendingCapture: {
@@ -245,6 +255,7 @@ export async function createAssetInteractionRenderer(
         tEnergy: { value: energyTexture },
         tFlow: { value: null },
         tTarget: { value: targetTexture },
+        uAmbientPhase: { value: 0 },
         uCausticGain: { value: 0 },
         uPatchFollowPx: { value: 0 },
         uRefractionPx: { value: [0, 0] },
@@ -299,7 +310,8 @@ export async function createAssetInteractionRenderer(
           ambientPausedAt = null;
         }
         const phaseClock = ambientPausedAt ?? now;
-        lastAmbientPhase = ((phaseClock - ambientPausedMs) % 5_000) / 5_000;
+        const ambientClock = sampleAssetAmbientClock(phaseClock - ambientPausedMs - ambientStartedAt);
+        lastAmbientPhase = ambientClock.cycle;
         if (localFlowActive && !visuallyActive) flowPass?.reset();
         localFlowActive = visuallyActive;
         const velocity: [number, number] = [
@@ -307,7 +319,7 @@ export async function createAssetInteractionRenderer(
           -lastSample.refractionPx.y / ASSET_INTERACTION_LIMITS.localRefractionPx,
         ];
         if (!flowPass?.render({
-          ambientPhase: lastAmbientPhase,
+          ambientPhase: ambientClock.shaderTime,
           aspect: Math.max(1, stage.clientWidth) / Math.max(1, stage.clientHeight),
           localStrength: visuallyActive ? lastSample.follow : 0,
           pointer: [lastSample.pointerX, 1 - lastSample.pointerY],
@@ -319,6 +331,7 @@ export async function createAssetInteractionRenderer(
         }
         program.uniforms.tFlow.value = flowPass.texture();
         overlayProgram.uniforms.tFlow.value = flowPass.texture();
+        program.uniforms.uAmbientPhase.value = ambientClock.shaderTime;
         program.uniforms.uCausticGain.value = visuallyActive ? lastSample.causticGain : 0;
         program.uniforms.uPatchFollowPx.value = visuallyActive ? lastSample.patchFollowPx : 0;
         program.uniforms.uRefractionPx.value = visuallyActive
@@ -378,6 +391,7 @@ export async function createAssetInteractionRenderer(
           flowPass?.reset();
           ambientPausedAt = null;
           ambientPausedMs = 0;
+          ambientStartedAt = performance.now();
           lastAmbientPhase = 0;
           localFlowActive = false;
           state = createAssetInteractionState(performance.now());
@@ -386,6 +400,7 @@ export async function createAssetInteractionRenderer(
           return;
         }
         flowPass?.reset();
+        ambientStartedAt = performance.now();
         localFlowActive = false;
         activeRaf = true;
         report('ready');

@@ -116,7 +116,7 @@ async function waitForAmbientSamplePhase(page, samplePhase) {
     const phase = snapshot?.ambientPhase ?? -1;
     const phaseDistance = Math.abs(phase - targetPhase);
     return Math.min(phaseDistance, 1 - phaseDistance) < .012;
-  }, samplePhase, { polling: 'raf', timeout: 6_000 });
+  }, samplePhase, { polling: 'raf', timeout: 12_000 });
 }
 
 async function moveMouse(page, box, xRatio, yRatio = .5) {
@@ -277,8 +277,23 @@ async function measureLocalChange(page, baseline, candidate, center, radius, thr
   });
 }
 
-async function measureSpatialResponse(page, baseline, candidate, center, radius = .16, threshold = 3) {
-  return page.evaluate(async ({ baselineBase64, candidateBase64, centerPoint, radiusRatio, thresholdValue }) => {
+async function measureSpatialResponse(
+  page,
+  baseline,
+  candidate,
+  center,
+  radius = .16,
+  threshold = 3,
+  ambientBaseline = null,
+) {
+  return page.evaluate(async ({
+    ambientBaselineBase64,
+    baselineBase64,
+    candidateBase64,
+    centerPoint,
+    radiusRatio,
+    thresholdValue,
+  }) => {
     const decode = async (encoded) => {
       const blob = await (await fetch(`data:image/png;base64,${encoded}`)).blob();
       const bitmap = await createImageBitmap(blob);
@@ -291,6 +306,7 @@ async function measureSpatialResponse(page, baseline, candidate, center, radius 
     };
     const before = await decode(baselineBase64);
     const after = await decode(candidateBase64);
+    const ambientBefore = ambientBaselineBase64 ? await decode(ambientBaselineBase64) : before;
     const radiusPx = before.width * radiusRatio;
     let changed = 0;
     let inside = 0;
@@ -302,11 +318,17 @@ async function measureSpatialResponse(page, baseline, candidate, center, radius 
     for (let y = 0; y < before.height; y += 1) {
       for (let x = 0; x < before.width; x += 1) {
         const offset = (y * before.width + x) * 4;
-        const delta = Math.max(
+        const activeDelta = Math.max(
           Math.abs(before.data[offset] - after.data[offset]),
           Math.abs(before.data[offset + 1] - after.data[offset + 1]),
           Math.abs(before.data[offset + 2] - after.data[offset + 2]),
         );
+        const ambientDelta = ambientBaselineBase64 ? Math.max(
+          Math.abs(ambientBefore.data[offset] - before.data[offset]),
+          Math.abs(ambientBefore.data[offset + 1] - before.data[offset + 1]),
+          Math.abs(ambientBefore.data[offset + 2] - before.data[offset + 2]),
+        ) : 0;
+        const delta = Math.max(0, activeDelta - ambientDelta);
         const distance = Math.hypot(
           x - before.width * centerPoint.x,
           y - before.height * centerPoint.y,
@@ -332,6 +354,7 @@ async function measureSpatialResponse(page, baseline, candidate, center, radius 
       meanLocalMagnitude: localPixels ? localMagnitude / localPixels : 0,
     };
   }, {
+    ambientBaselineBase64: ambientBaseline?.toString('base64') ?? null,
     baselineBase64: baseline.toString('base64'),
     candidateBase64: candidate.toString('base64'),
     centerPoint: center,
@@ -1080,6 +1103,8 @@ try {
             `The recovery comparison requires a live point-matched ambient window: ${JSON.stringify(recoveryAmbientMotion)}`,
           );
         }
+        const pointerAmbientControl = await captureCandidate(page, box);
+        await page.waitForTimeout(136);
         const pointerBaseline = await captureCandidate(
           page,
           box,
@@ -1138,7 +1163,15 @@ try {
         await page.waitForTimeout(40);
         recoveredNext = (await captureInteractionCanvas(page)).buffer;
       }
-      const response = await measureSpatialResponse(page, pointerBaseline, activeFrame, point, .22, 3);
+      const response = await measureSpatialResponse(
+        page,
+        pointerBaseline,
+        activeFrame,
+        point,
+        .22,
+        3,
+        pointerAmbientControl,
+      );
       assert(response.changed >= 20, `${name} pointer produced no perceptible local pixels: ${JSON.stringify(response)}`);
       spatialEvidence[name][samplePhase] = { ...response, phaseAtCapture, phaseAtInjection };
       const centroidDistance = response.centroid

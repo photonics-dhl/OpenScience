@@ -24,10 +24,19 @@ void main() {
   float previousCarrier = mix(previousSample.w * 2.0 - 1.0, 0.0, uFresh);
 
   float phase = uAmbientPhase * 2.0 * PI;
-  vec2 ambient = vec2(
+  vec2 ambientLarge = vec2(
     sin(vUv.y * 8.0 + phase) + cos((vUv.x + vUv.y) * 5.0 - phase * 0.73),
     cos(vUv.x * 7.0 - phase * 0.61) - sin((vUv.x - vUv.y) * 6.0 + phase)
   );
+  vec2 ambientMedium = vec2(
+    sin(vUv.y * 4.3 + phase * 0.37),
+    cos(vUv.x * 3.7 - phase * 0.31)
+  );
+  vec2 ambientFine = vec2(
+    cos((vUv.x + vUv.y) * 13.1 - phase * 0.83),
+    -sin((vUv.x - vUv.y) * 11.7 + phase * 1.17)
+  );
+  vec2 ambient = ambientLarge * 0.68 + ambientMedium * 0.22 + ambientFine * 0.10;
   float ambientMagnitude = length(ambient);
   if (ambientMagnitude > 0.0) ambient *= min(0.05, ambientMagnitude) / ambientMagnitude;
 

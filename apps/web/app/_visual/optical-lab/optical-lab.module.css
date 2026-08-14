@@ -218,7 +218,8 @@
   object-fit: cover;
   pointer-events: none;
   user-select: none;
-  mask-image: linear-gradient(to bottom, transparent 26%, #000 33%, #000 60%, transparent 64%);
+  clip-path: inset(26% 0 40% 0);
+  mask-image: linear-gradient(to bottom, transparent 26%, #000 33%, #000 58%, transparent 60%);
 }
 
 .candidate[data-render-mode='static-fallback'][data-static-artwork='loaded'] .staticFallback {
@@ -378,50 +379,9 @@
   touch-action: pan-y;
 }
 
-.candidate[data-accepted-optical-surface='landing'] {
-  cursor: none;
-}
-
-.candidate[data-accepted-optical-surface='landing']
-  [data-optical-asset-interaction-host='true']::after {
-  position: absolute;
-  z-index: 2;
-  inset: -6% -20%;
-  content: '';
-  background: linear-gradient(
-    102deg,
-    transparent 24%,
-    rgb(89 174 214 / .04) 34%,
-    rgb(151 221 245 / .15) 43%,
-    rgb(241 238 231 / .18) 49%,
-    rgb(255 112 64 / .13) 55%,
-    rgb(176 93 58 / .04) 64%,
-    transparent 76%
-  );
-  mix-blend-mode: screen;
-  pointer-events: none;
-  transform: translate3d(-24%, 0, 0) skewX(-8deg);
-  will-change: transform;
-  animation: accepted-optical-idle-current 3.4s linear infinite;
-}
-
-.candidate[data-accepted-optical-surface='landing'][data-optical-local-active='true']
-  [data-optical-asset-interaction-host='true']::after {
-  animation-play-state: paused;
-}
-
-@keyframes accepted-optical-idle-current {
-  to {
-    transform: translate3d(24%, 0, 0) skewX(-8deg);
-  }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .candidate[data-accepted-optical-surface='landing']
-    [data-optical-asset-interaction-host='true']::after {
-    display: none;
-    animation: none;
-  }
+.candidate[data-accepted-optical-surface='landing'],
+.candidate[data-accepted-optical-surface='landing'] * {
+  cursor: none !important;
 }
 
 .diagnostics {

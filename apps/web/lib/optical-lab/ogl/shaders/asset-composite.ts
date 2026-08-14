@@ -6,6 +6,7 @@ uniform sampler2D tFlow;
 uniform sampler2D tTarget;
 uniform vec2 uRefractionPx;
 uniform vec2 uViewport;
+uniform float uAmbientPhase;
 uniform float uCausticGain;
 uniform float uPatchFollowPx;
 
@@ -21,8 +22,8 @@ void main() {
 
   vec3 targetAuthored = texture(tTarget, vUv).rgb;
   vec4 energyAuthored = texture(tEnergy, vUv);
-  float targetMask = smoothstep(0.26, 0.33, vUv.y)
-    * (1.0 - smoothstep(0.60, 0.64, vUv.y));
+  float targetMask = smoothstep(0.40, 0.42, vUv.y)
+    * (1.0 - smoothstep(0.72, 0.74, vUv.y));
   float targetLuminance = dot(targetAuthored, vec3(0.2126, 0.7152, 0.0722)) * targetMask;
   float energyLuminance = dot(energyAuthored.rgb, vec3(0.2126, 0.7152, 0.0722));
   float energySignal = energyAuthored.a * energyLuminance;
@@ -32,7 +33,7 @@ void main() {
   float layerWeight = mix(emptyWeight, typeWeight, smoothstep(0.04, 0.42, targetLuminance));
   layerWeight = mix(layerWeight, energyWeight, smoothstep(0.06, 0.48, energySignal));
 
-  float ambientBudget = 4.5;
+  float ambientBudget = 6.0;
   float localBudget = min(10.0, length(uRefractionPx));
   float displacementBudget = mix(ambientBudget, localBudget, localAmount) * layerWeight;
   vec2 refractedPx = flow * displacementBudget;
@@ -45,8 +46,8 @@ void main() {
 
   vec3 target = texture(tTarget, displacedUv).rgb;
   vec4 energy = texture(tEnergy, displacedUv);
-  float displacedTargetMask = smoothstep(0.26, 0.33, displacedUv.y)
-    * (1.0 - smoothstep(0.60, 0.64, displacedUv.y));
+  float displacedTargetMask = smoothstep(0.40, 0.42, displacedUv.y)
+    * (1.0 - smoothstep(0.72, 0.74, displacedUv.y));
   vec3 energyPlate = mix(vec3(0.0196), energy.rgb, energy.a);
   vec3 authored = mix(energyPlate, target, displacedTargetMask);
   float gain = min(0.18, max(0.0, uCausticGain)) * localAmount * layerWeight;
@@ -57,7 +58,31 @@ void main() {
   );
   float liquidGrain = smoothstep(0.16, 0.88, liquidWave);
   float emptyLift = emptySignal * localAmount * emptyWeight * 0.27 * (0.35 + 0.65 * liquidGrain);
-  vec3 color = min(vec3(1.0), authored + energy.rgb * gain + vec3(emptyLift));
+  vec2 flowDx = dFdx(flow) * uViewport.x;
+  vec2 flowDy = dFdy(flow) * uViewport.y;
+  float curvature = abs(flowDx.y - flowDy.x) + 0.45 * abs(flowDx.x - flowDy.y);
+  float ambientTime = uAmbientPhase * 6.28318530718;
+  float causticCarrier = 0.5 + 0.25 * (
+    sin(vUv.x * 29.0 + vUv.y * 17.0 + flow.x * 48.0 - flow.y * 31.0 + ambientTime * 0.83)
+      + cos(vUv.x * 13.0 - vUv.y * 37.0 + flow.y * 43.0 - ambientTime * 0.61)
+  );
+  float causticCrest = smoothstep(0.66, 0.94, causticCarrier);
+  float curvatureCrest = smoothstep(0.075, 0.24, curvature);
+  float grazingLight = curvatureCrest
+    * (0.35 + 0.65 * causticCrest)
+    * (0.28 + 0.72 * liquidGrain)
+    * 0.11
+    * (1.0 - localAmount)
+    * layerWeight;
+  vec3 grazingTint = mix(
+    vec3(0.38, 0.72, 0.86),
+    vec3(0.95, 0.58, 0.34),
+    smoothstep(-0.035, 0.035, flow.x)
+  );
+  vec3 color = min(
+    vec3(1.0),
+    authored + energy.rgb * gain + vec3(emptyLift) + grazingTint * grazingLight
+  );
   float replacement = smoothstep(0.0005, 0.012, flowLength) * mix(0.34, 1.0, localAmount);
   fragColor = vec4(color, replacement);
 }

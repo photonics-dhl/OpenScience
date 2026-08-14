@@ -1,5 +1,44 @@
 # Handoff — 2026-08-13 Optical Lab Asset Interaction
 
+## Current canonical state — Task 22 local release candidate (2026-08-14)
+
+> **This section supersedes Task 21's CSS-current architecture.** The task is
+> still the production `Science evolves.` Landing/Lab surface. Do not reopen
+> the blue six-face object or restore the `3.4s` pseudo-element sweep.
+
+- The user approved a mature unified-water direction: idle is slow autonomous
+  advection plus restrained grazing light; pointer is the faster local injection
+  into the same field. The Task 21 CSS sweep has been removed.
+- Root cause of the persistent black arrow and lower-left copy is the full-page
+  `target-reference.png`, not the live OS cursor alone. It contains the captured
+  arrow, navigation, CTA, and SDF status copy. Static plate contribution is now
+  hard-clipped to the title band; the live shader uses flipped texture-Y mask
+  `0.40–0.74`, eliminating the same pixels from WebGL output.
+- Idle uses the existing flow texture and a non-wrapping shader clock on a
+  ten-second presentation scale to combine three spatial scales. Grazing light
+  is multiplicatively curvature-gated, so the phase carrier cannot create a
+  broad cyan/orange band on its own.
+  No new dependency/pass/FBO/texture/asset/route exists. Pointer
+  `5px/10px/.18/.20/700ms`, overlay, lifecycle and reduced-motion are retained.
+- RED evidence: old static plate changed `11,124` contamination-zone pixels;
+  raw live GPU captures visibly contained the arrow/status copy. Final static
+  contamination and live lower-left bright-pixel counts are both `0`.
+- Fresh local evidence is GREEN: focused `16/16`, Web `243/243`, typecheck,
+  production build (`/` `804 B / 133 kB`), production Landing desktop/mobile
+  normal/reduced/idle/pointer and the full native matrix. The final native run
+  records ambient `39,396`, worst centroid `.04333`, worst locality `.99437`,
+  layers `21.29 > 15.58 > 5.15`, halo `2/16`, touch `.99537`, and renderer PNG
+  completion `813.7ms`. Independent re-review APPROVE and final canonical lint,
+  docs `186/0`, docs sync, release `27/27` and diff check are GREEN. Clean
+  reduced fixture SHA-256 is
+  `e3a2e71efc14b57cac6485739f3ef904b6ce8b070d98e2b7cf403087f07b9c97`.
+- The user renewed the physical-mobile performance waiver for Task 22. This is
+  an accepted risk, not physical-device evidence; emulated mobile remains only
+  layout/behavior proof.
+- **Next action:** independent re-review → commit → authorized checkup/backup/dry-run/
+  `--skip-migrate` deploy → public browser verification. Until deployment,
+  production release remains `8edf6fa`, rollback `28c7789`.
+
 ## Current canonical state — Task 21 deployed and publicly verified (2026-08-14)
 
 > **This section supersedes Task 20's “visual validation only” next action.**

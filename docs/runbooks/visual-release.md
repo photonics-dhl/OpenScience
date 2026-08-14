@@ -94,11 +94,12 @@ deployment and record that blocker; do not replace it with an emulated result.
 Add an adaptive/DPR downshift only when physical measurements show that a real
 device class misses the thresholds.
 
-Release-specific exception: for the 2026-08-14 Task 19 optical overlay release,
-the product owner explicitly accepted the unavailable physical-mobile evidence
-as a documented performance risk and authorized deployment after every other
-gate passes. The waiver does not convert emulation into physical evidence and
-does not apply to future releases unless renewed.
+Release-specific exception: the product owner explicitly accepted unavailable
+physical-mobile evidence for the 2026-08-14 Task 19 optical overlay release and
+renewed that risk acceptance for the directly continued Task 20, Task 21 and
+Task 22 optical-motion releases. Deployment is authorized only after every
+other release gate passes. The waiver does not convert emulation into physical
+evidence and does not apply beyond Task 22 unless renewed again.
 
 ## Failure Handling
 

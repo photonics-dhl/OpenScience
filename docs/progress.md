@@ -1,5 +1,14 @@
 # OpenScience (XGS) 进度日志
 
+## 2026-08-14（Task 22 水流材质与底图清理）— ⏳ 本地 release candidate，等待复审与部署
+
+- **用户目标**：废弃 Task 21 的线性扫光，让 `Science evolves.` 在无输入时像水一样持续流动并带细微曲率光；pointer 仍是同一材质的快速局部注入。同时清除交互时仍出现的黑色箭头和左下角状态文字。
+- **根因**：Task 21 的 idle owner 是 `3.4s` CSS linear-gradient，并未与 WebGL 流场融合。更关键的是 `target-reference.png` 是整页截图，真实包含 arrow cursor、导航、CTA 与 `6 SDF fields / 12 linked artifacts`；静态 `<img>` 与 WebGL target sampling 都曾让这些像素进入成品。WebGL `vUv.y` 与屏幕 Y 反向，旧 `0.26–0.60` shader mask 实际保留屏幕约 `40%–74%`，正好覆盖污染区。
+- **实现**：删除 Landing CSS pseudo-element/animation；visible target plate 使用屏幕标题带 hard clip，shader 改用对应纹理坐标 `0.40–0.74`。现有 96×54 flow 继续提供三尺度空间方向；renderer 把可观测周期保持为 `0–1`，但向 shader 传递不回绕的连续 10 秒基准时间，消除旧 5 秒边界跳变。composite 的冷白暖光严格乘以 derivative-curvature crest，不再由独立正弦 carrier 形成宽色带。pointer `5px/10px/.18/.20/700ms`、overlay、FBO/texture 数量、lifecycle 与 reduced-motion 均不变；无新依赖、pass、asset 或服务器 GPU。
+- **TDD 证据**：旧 focused 精确缺少多尺度/连续时钟 bridge；旧公网 CSS sweep RED；静态 plate 在污染探针区贡献 `11,124` pixels；renderer 原始同-RAF PNG 直接显示烘焙箭头与左下文字；旧 caustic 最大横向色带覆盖 `28.7%`，新真实 GPU 门禁要求 `<=20%`。修复后静态污染贡献 `0`、live lower-left bright pixel `0`，真实 pointer hit target 为 `cursor:none`，连续 idle 窗口的标题与四象限均变化且色带门禁 GREEN。
+- **发布级本地门禁**：focused `16/16`；完整 Web `32 files / 243 tests`；typecheck；16-page production build（`/` `804 B / 133 kB`）；production Landing desktop/mobile normal/reduced/idle/pointer；完整 native 20-sample pointer/recovery/touch/lifecycle matrix GREEN。最终 ambient `39,396` pixels/四象限；ambient-subtracted pointer 最差 centroid `.04333`、最差 locality `.99437`；layers `21.29 > 15.58 > 5.15`；halo `2/16`；touch `.99537`；同-RAF recovery PNG `813.7ms`。一次 dev run 因截图目录触发 HMR 后 `app/page.js` 404，另一次 PNG encoding `1159.6ms` timing-only RED；干净 production `next start` 全矩阵 exit 0。完整 Web/build 前的 canonical lint/docs sync 与 product release `27/27` 已 GREEN，最终同步门禁待复审后刷新。干净 reduced fixture SHA-256 为 `e3a2e71efc14b57cac6485739f3ef904b6ce8b070d98e2b7cf403087f07b9c97`。
+- **风险与下一步**：用户已为本次连续 Task 22 发布续签物理手机性能豁免；模拟 mobile 只证明布局/功能，不冒充硬件性能。独立复审 `APPROVE`（0 Critical/Important）；canonical lint、docs `186/0`、`DOCS_SYNC_OK`、release `27/27` 与 diff check 均 GREEN。下一步提交并按既有授权执行 checkup、backup、dry-run、`deploy.sh --confirm --skip-migrate` 与公网 desktop/mobile normal/reduced/idle/pointer 回归。Task 21 的 `3.4s` CSS current 自本条起视为 superseded。
+
 ## 2026-08-14（Task 21 首屏自主光流与黑色光标）— ✅ 已部署并通过公网验收
 
 - **用户反馈**：生产 Landing 的 no-input 动效依然肉眼不可见；用户截图中的黑色“鼠标”破坏底层粒子背景，希望首屏先由 `Science evolves.` 的自主运动抓住注意，再以 pointer 形成不同的局部反馈。

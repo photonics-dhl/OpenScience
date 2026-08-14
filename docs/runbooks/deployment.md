@@ -255,3 +255,27 @@ Current infrastructure uses pinned base/worker images with bind-mounted applicat
   consecutive `360ms` central-title-band windows at RGB delta `>=3`. Retained
   screenshots were inspected for complete glyphs, visible resting motion and
   absence of the black arrow cursor.
+
+### 5.6 Unified water material and clean target deployment (2026-08-14)
+
+> Local release candidate only until the independent re-review and production
+> operation finish. Current production remains `8edf6fa`; rollback `28c7789`.
+
+- Task 22 removes the superseded `3.4s` CSS sweep. The existing WebGL flow uses
+  a continuous, non-wrapping shader clock on a ten-second scale; derivative
+  curvature gates the narrow caustic crest so no independent broad wash can
+  appear. Pointer caps and exact `700ms` local recovery are unchanged.
+- The full-page target reference is constrained to title-only contribution in
+  both CSS and flipped-Y shader coordinates. The new browser gate proves zero
+  static contamination-zone pixels and zero bright lower-left pixels in the
+  renderer-owned same-RAF PNG.
+- Required pre-deploy evidence: focused/Web/typecheck/lint/build; Landing
+  desktop/mobile normal/reduced/idle/pointer; full native interaction/lifecycle;
+  product release `27/27`; independent review with no Critical/Important.
+- The product owner renewed the unavailable physical-mobile performance waiver
+  through Task 22. Emulated mobile remains layout/behavior evidence only.
+- Execute the existing pre-checkup, database backup, dry-run and
+  `deploy.sh --confirm --skip-migrate` sequence. Do not run migration or seed.
+  After deployment, verify `/`, asset Lab and `/explore` return `200`, anonymous
+  `/auth/me` returns `401`, and rerun the public Landing browser gate before
+  recording release/rollback/backup identifiers here.
