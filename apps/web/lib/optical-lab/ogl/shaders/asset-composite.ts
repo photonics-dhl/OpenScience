@@ -67,7 +67,7 @@ void main() {
       + cos(vUv.x * 13.0 - vUv.y * 37.0 + flow.y * 43.0 - ambientTime * 0.61)
   );
   float causticCrest = smoothstep(0.66, 0.94, causticCarrier);
-  float curvatureCrest = smoothstep(0.075, 0.24, curvature);
+  float curvatureCrest = smoothstep(0.085, 0.24, curvature);
   float grazingLight = curvatureCrest
     * (0.35 + 0.65 * causticCrest)
     * (0.28 + 0.72 * liquidGrain)
