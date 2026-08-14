@@ -263,16 +263,17 @@ try {
       const idleWindows = [];
       for (let index = 0; index < 3; index += 1) {
         const phaseBefore = await page.evaluate(() => window.__OPENSCIENCE_OPTICAL_ASSET_INTERACTION__?.ambientPhase);
-        const idleBefore = await captureRendererFrame(page);
-        await page.waitForTimeout(360);
-        const idleAfter = await captureRendererFrame(page);
+        const idleRendererBefore = await captureRendererFrame(page);
+        const idleBefore = await surface.screenshot();
+        await page.waitForTimeout(1200);
+        const idleAfter = await surface.screenshot();
         const phaseAfter = await page.evaluate(() => window.__OPENSCIENCE_OPTICAL_ASSET_INTERACTION__?.ambientPhase);
         if (testCase.name === 'desktop' && index === 0) {
-          await writeFile(path.join(outDir, 'landing-idle-canvas-before.png'), idleBefore);
-          await writeFile(path.join(outDir, 'landing-idle-canvas-after.png'), idleAfter);
+          await writeFile(path.join(outDir, 'landing-idle-surface-before.png'), idleBefore);
+          await writeFile(path.join(outDir, 'landing-idle-surface-after.png'), idleAfter);
         }
         assert.equal(
-          await measureLowerLeftBrightPixels(page, idleBefore, 12),
+          await measureLowerLeftBrightPixels(page, idleRendererBefore, 12),
           0,
           'the live WebGL target contribution must not contain the baked lower-left status copy',
         );
@@ -289,8 +290,8 @@ try {
         && motion.phaseAfter !== motion.phaseBefore
       )), `Landing idle phase must advance in every observation window: ${JSON.stringify(idleWindows)}`);
       assert(idleWindows.every((motion) => (
-        motion.titleCount / motion.titleTotal >= .015
-        && motion.titleDelta / motion.titleTotal >= .06
+        motion.titleCount / motion.titleTotal >= .18
+        && motion.titleDelta / motion.titleTotal >= 1.10
         && motion.quadrants.every((count) => count > 0)
       )), `Landing idle motion must visibly animate the title band in every window and all four quadrants: ${JSON.stringify(idleWindows)}`);
       assert(idleWindows.every((motion) => (

@@ -98,6 +98,7 @@ export async function createAssetInteractionRenderer(
   stage: HTMLElement,
   onSnapshot: (snapshot: AssetInteractionSnapshot) => void,
 ): Promise<AssetInteractionRenderer> {
+  const isLandingPresentation = stage.dataset.acceptedOpticalSurface === 'landing';
   const inheritedGetContext = canvas.getContext.bind(canvas);
   const webgl2OnlyGetContext = ((contextId: string, ...options: unknown[]) => {
     if (contextId === 'webgl' || contextId === 'experimental-webgl') return null;
@@ -258,6 +259,7 @@ export async function createAssetInteractionRenderer(
         uAmbientPhase: { value: 0 },
         uCausticGain: { value: 0 },
         uPatchFollowPx: { value: 0 },
+        uPresentationAlpha: { value: isLandingPresentation ? 1 : 0 },
         uRefractionPx: { value: [0, 0] },
         uViewport: { value: [1, 1] },
       },

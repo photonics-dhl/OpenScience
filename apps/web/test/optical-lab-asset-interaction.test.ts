@@ -237,6 +237,11 @@ describe('Optical Lab accepted asset OGL boundary', () => {
     expect(shader).toContain('min(0.18');
     expect(shader).toContain('float ambientBudget = 6.0');
     expect(shader).toContain('emptyWeight * 0.27');
+    expect(shader).toContain('uniform float uPresentationAlpha');
+    expect(shader).toContain('mix(0.34, 1.0, localAmount)');
+    expect(shader).toContain('mix(interactionReplacement, 1.0, uPresentationAlpha)');
+    expect(rendererSource).toContain('uPresentationAlpha: { value: isLandingPresentation ? 1 : 0 }');
+    expect(rendererSource).toContain("stage.dataset.acceptedOpticalSurface === 'landing'");
     expect(shader).toContain('smoothstep');
     expect(shader).not.toContain('abs(vUv.x - 0.58)');
   });
@@ -283,6 +288,18 @@ describe('Optical Lab accepted asset OGL boundary', () => {
     expect(composite).toContain('uniform float uAmbientPhase');
     expect(rendererSource).toContain('uAmbientPhase: { value: 0 }');
     expect(rendererSource).toContain('program.uniforms.uAmbientPhase.value = ambientClock.shaderTime');
+  });
+
+  it('adds Landing-only caustic breathing and sparse glyph-edge shimmer that yield to local input', () => {
+    const composite = compositeShader?.OPTICAL_ASSET_COMPOSITE_FRAGMENT_SHADER ?? '';
+
+    expect(composite).toContain('float presentationIdle = uPresentationAlpha * (1.0 - localAmount)');
+    expect(composite).toContain('float centreBreath');
+    expect(composite).toContain('float glyphEdge');
+    expect(composite).toContain('float glyphShimmer');
+    expect(composite).toContain('curvatureCrest * centreField');
+    expect(composite).toContain('glyphEdge * edgeCrest');
+    expect(composite).toContain('* presentationIdle');
   });
 
   it('keeps the rendered ambient clock continuous across its ten-second presentation cycle', () => {

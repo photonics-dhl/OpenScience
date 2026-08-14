@@ -97,9 +97,11 @@ device class misses the thresholds.
 Release-specific exception: the product owner explicitly accepted unavailable
 physical-mobile evidence for the 2026-08-14 Task 19 optical overlay release and
 renewed that risk acceptance for the directly continued Task 20, Task 21 and
-Task 22 optical-motion releases. Deployment is authorized only after every
+Task 22 optical-motion releases. On 2026-08-15 the product owner explicitly
+renewed the same unavailable-physical-mobile risk acceptance for Task 23 after
+reviewing the final local production preview. Deployment is authorized only after every
 other release gate passes. The waiver does not convert emulation into physical
-evidence and does not apply beyond Task 22 unless renewed again.
+evidence and does not apply beyond Task 23 unless renewed again.
 
 ## Failure Handling
 

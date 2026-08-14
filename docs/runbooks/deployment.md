@@ -288,3 +288,29 @@ Current infrastructure uses pinned base/worker images with bind-mounted applicat
   runs. `/`, asset Lab and `/explore` return `200`; anonymous `/auth/me` returns
   `401`. Remote composite SHA-256 matches local
   `3d7e8439dcae1612f76cb546cdcb246d14e9b47665d6ca2203e15878800213c0`.
+
+### 5.7 Perceptually visible idle presentation deployment (2026-08-15)
+
+> Pending release commit; production before this operation remains `744c631`
+> and is the rollback anchor.
+
+- Task 23 corrects the acceptance boundary from raw transparent-canvas motion
+  to the final composed `AcceptedOpticalSurface`. Landing alone receives full
+  presentation alpha, `2.2px` non-linear idle drift, centre curvature breathing,
+  and sparse glyph-edge shimmer; all presentation accents yield under local
+  input and evaluate to zero in Lab. No schema, API, dependency, asset, route,
+  texture, framebuffer, owner, Nginx, Compose, or Secret changes are included.
+- The product owner approved the visual candidate and deployment after the
+  Lab PNG completion timing RED was disclosed (`956.7ms > 900ms`, recovered
+  max delta `9`); this remains accepted timing risk, not a GREEN native matrix.
+  The owner separately renewed the unavailable physical-mobile performance
+  waiver for Task 23. Simulated mobile remains layout/behavior evidence only.
+- Required evidence before the server write: focused/Web/typecheck/canonical
+  lint/build, final-surface Landing desktop/mobile normal/reduced/idle/pointer,
+  product release `27/27`, docs gates, and independent review with no
+  Critical/Important findings. Use checkup, DB backup, dry-run, then
+  `deploy.sh --confirm --skip-migrate`; do not run migration or seed.
+- After deployment verify `/`, asset Lab and `/explore` return `200`, anonymous
+  `/auth/me` returns `401`, rerun the public final-surface Landing gate, compare
+  the remote composite shader hash with the release, and record the actual
+  release/rollback/backup/checkup evidence here.

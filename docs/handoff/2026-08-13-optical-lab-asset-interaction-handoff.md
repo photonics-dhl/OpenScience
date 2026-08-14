@@ -1,5 +1,50 @@
 # Handoff — 2026-08-13 Optical Lab Asset Interaction
 
+## Current canonical state — Task 23 local perceptual candidate (2026-08-14)
+
+> **This section supersedes Task 22's “user visual validation only” wording.**
+> The deployed release is still `744c631`. The user has approved Task 23's
+> final idle appearance and deployment, and explicitly renewed the Task 23
+> physical-mobile waiver. Production authorization is complete.
+
+- The user correctly rejected Task 22's idle as visually stationary. The old
+  browser evidence sampled the transparent WebGL canvas in isolation, not the
+  final canvas-over-static-plate result. The corrected `720ms` final-surface
+  gate makes deployed behavior RED: title-band changed-pixel counts were
+  `344 / 0 / 32` of `628,672`, including one completely static window.
+- The local candidate adds only a Landing presentation uniform. Landing uses
+  full existing-composite alpha during idle; Lab receives `0` and retains the
+  accepted `mix(0.34, 1.0, localAmount)` expression. Ambient `.05/6px/10s`,
+  pointer `5px/10px/.18/.20/700ms`, overlay, resources, reduced motion, and
+  lifecycle are unchanged. Do not reopen stronger displacement/light trials.
+- Current GREEN evidence: corrected final-surface Landing browser gate,
+  focused `16/16`, full Web `243/243`, typecheck, and 16-page production build.
+  Original-size before/after/full-page screenshots show motion without broad
+  chromatic bands, cursor/status contamination, clipping, or layout drift.
+- Strict Lab native attempts remain timing RED at `1066.7ms` and `953.2ms`
+  for a `<=900ms` PNG completion assertion. Because the Landing-only uniform
+  is zero in Lab, this is not evidence of changed Lab geometry; nevertheless,
+  do not call the full native matrix GREEN or deploy around this fact.
+- Preview `http://127.0.0.1:3184/` is the first Task 23 candidate retained only
+  as an A/B reference. The user approved it, then requested the attention
+  refinement described below and subsequently approved deployment.
+- The user approved that first local candidate on 2026-08-15 and requested one
+  further restrained attention pass. The new production preview is
+  `http://127.0.0.1:3185/`; `3184` remains the pre-enhancement A/B reference.
+  The new Landing-only composite adds `2.2px` non-linear presentation drift,
+  centre-weighted curvature breathing, and sparse glyph-edge shimmer. All are
+  gated by `uPresentationAlpha * (1.0 - localAmount)`, so they disappear under
+  pointer input and evaluate to zero in Lab. The exact final-surface gate was
+  raised above the old measured ceiling to three `1200ms` windows with title
+  coverage `>=18%` and average delta `>=1.10`; fresh production-start desktop
+  and mobile runs pass, as do focused `17/17`, Web `244/244`, typecheck, and
+  build. The retained Lab gate again has only a recovery PNG timing RED
+  (`956.7ms`, recovered max delta `9`); the user approved deployment after this
+  disclosure, so record it as accepted timing risk without calling it GREEN.
+  The user explicitly renewed the unavailable physical-mobile waiver for Task
+  23. Emulated mobile remains layout/behavior evidence only; the waiver does
+  not extend beyond this release.
+
 ## Current canonical state — Task 22 deployed and publicly verified (2026-08-14)
 
 > **This section supersedes Task 21's CSS-current architecture.** The task is

@@ -56,3 +56,75 @@ Run the focused Vitest, Landing desktop/mobile normal/reduced browser gate, full
 - [x] **Step 5: Synchronize and deploy**
 
 Update `docs/progress.md`, `project_index.md`, the current optical handoff, and deployment evidence. Run docs lint/docs sync/diff check, obtain independent review, commit, then follow the existing `checkup → backup → deploy --skip-migrate → public browser verification` runbook. Preserve the current release hash as rollback.
+
+---
+
+### Task 2: Make idle motion perceptually visible
+
+**Files:**
+- Modify: `apps/web/test/visual/shots.mjs`
+- Modify: `apps/web/test/optical-lab-asset-interaction.test.ts`
+- Modify: `apps/web/lib/optical-lab/ogl/asset-interaction-renderer.ts`
+- Modify: `apps/web/lib/optical-lab/ogl/shaders/asset-composite.ts`
+
+**Interfaces:**
+- Consumes: the existing continuous ambient clock and shared Landing/Lab WebGL field.
+- Produces: a visibly breathing idle field without changing the accepted local pointer envelope.
+
+- [x] **Step 1: Write and run the perceptual RED**
+
+Raise the real Landing browser contract from 360 ms technical motion to a 720 ms perceptual window requiring title coverage `>= .04` and title delta average `>= .20`. Add source contracts for the chosen ambient-only constants. Run the focused unit and browser gate; the current release must fail on salience.
+
+- [x] **Step 2: Implement one Landing-only presentation adjustment**
+
+Expose the already-rendered water composite at full presentation alpha only when `data-accepted-optical-surface=landing`; retain the accepted Lab alpha expression and all flow/light/pointer constants. This is the smallest change that fixes final-composite visibility without changing shared interaction geometry.
+
+- [ ] **Step 3: Verify visual and engineering acceptance (partially complete)**
+
+Run focused tests, Landing desktop/mobile normal/reduced browser gates, the full native pointer matrix, full Web tests, typecheck, build, release gate, docs lint/sync, and diff check. Inspect fresh before/after and full-page screenshots at original size.
+
+Current boundary: Landing final-surface salience, focused `16/16`, Web `243/243`, typecheck, build, and screenshot inspection are GREEN. Two otherwise unchanged Lab native attempts failed only the `<=900ms` renderer-PNG completion deadline at `1066.7ms` and `953.2ms`; do not mark this step complete or retry product changes solely to hide that timing evidence.
+
+- [ ] **Step 4: Review, commit, and deploy after the existing production confirmation boundary**
+
+Update progress/index/handoff with current evidence, obtain independent review, commit, and deploy only after the production write confirmation required by the runbook.
+
+---
+
+### Task 3: Add restrained idle attention accents
+
+**Files:**
+- Modify: `apps/web/test/visual/shots.mjs`
+- Modify: `apps/web/test/optical-lab-asset-interaction.test.ts`
+- Modify: `apps/web/lib/optical-lab/ogl/shaders/asset-composite.ts`
+
+**Interfaces:**
+- Consumes: continuous `uAmbientPhase`, `uPresentationAlpha`, `localAmount`, curvature, target luminance, and the existing final-surface screenshot helper.
+- Produces: Landing-only centre caustic breathing and glyph-edge shimmer that yield to pointer interaction.
+
+- [x] **Step 1: Write and run RED**
+
+Require three final-surface `1200ms` windows with increased title-band salience,
+all-quadrant motion, and the retained `<=20%` chromatic row/column limit. Add
+focused source contracts for centre weighting, glyph-edge weighting,
+Landing-only presentation gating, and `(1.0 - localAmount)` suppression.
+
+- [x] **Step 2: Implement the minimal shader refinement**
+
+Reuse the existing composite pass and continuous shader clock. Add two bounded,
+near-neutral terms: a centre-weighted curvature caustic and a sparse target-edge
+shimmer. Do not alter flow, pointer caps, radius, recovery, overlay, resources,
+static plates, or reduced-motion behavior.
+
+- [ ] **Step 3: Verify and visually inspect (partially complete)**
+
+Run focused tests, the production Landing browser gate, full Web tests,
+typecheck, build, and the retained Lab native matrix. Inspect before/after,
+desktop, and mobile screenshots at original size; reject broad bands, flashes,
+hard rings, clipping, cursor/status contamination, or illegible glyphs.
+
+Current boundary: focused `17/17`, Web `244/244`, typecheck, build, fresh
+production-start Landing desktop/mobile normal/reduced/idle/pointer, and
+original-size inspection are GREEN; the final surface itself supplies both
+salience and chromatic-band evidence. The retained Lab matrix remains timing RED
+at `956.7ms > 900ms` with recovered max delta `9`; do not mark complete.

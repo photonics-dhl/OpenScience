@@ -34,3 +34,30 @@ No new dependency, framebuffer, texture, image asset, or route is allowed.
 - The Landing stage and all descendants compute `cursor: none` during interaction.
 - Pixels below the headline band contain neither the captured arrow nor the lower-left status copy from `target-reference.png`.
 - Mobile retains autonomous flow; `prefers-reduced-motion: reduce` retains the clean static composition and mounts no interaction canvas.
+
+## Task 23 perceptual correction
+
+The first release satisfied temporal pixel coverage but failed the product goal: adjacent idle captures are technically different while the title still reads as stationary to a person. The acceptance contract therefore distinguishes motion existence from motion salience.
+
+- Within a 720 ms observation window, at least 4% of title-band pixels must change by at least 4 RGB levels and their accumulated change must average at least 0.20 RGB levels across the full title band.
+- Idle displacement and grazing light may increase only on the ambient branch. The accepted pointer limits, local radius, recovery, overlay ownership, contamination masks, and reduced-motion fixture remain unchanged.
+- The visual character is a slow liquid breathing of the letterforms and centre field, not a sweep, pulse, flash, chromatic wash, or cursor-centred halo.
+
+### Approved attention refinement
+
+The user approved one further restrained enhancement after reviewing the local
+Task 23 candidate. The idle state has three related layers rather than unrelated
+decorations:
+
+1. the existing low-frequency global liquid advection remains the base;
+2. a centre-weighted, curvature-gated caustic breath makes the optical seam open
+   and close slowly without a circular boundary;
+3. a sparse, non-linear highlight follows glyph edge energy rather than sweeping
+   across the whole viewport.
+
+The two presentation accents are Landing-only, near-neutral, phase-offset, and
+multiplied by `(1.0 - localAmount)` so the accepted pointer wake becomes the
+single dominant response during interaction. They add no DOM layer, texture,
+framebuffer, package, image, timer, or animation owner. Reduced motion remains
+the exact static fixture. Final-surface browser evidence must use 1.2-second
+windows and prove stable visible motion without broad row/column bands.
