@@ -41,10 +41,10 @@ The active boundaries are:
   `5` CSS px; the combined follow/refraction vector is capped at `10` CSS px.
   Neither term translates the whole title or camera;
 - the existing flow texture carries separate local geometry and pointer-centred
-  visibility channels. The composite uses the visibility channel for a signed,
-  zero-mean directional ripple, so authored typography and energy can scale
-  response strength without relocating its centre. This adds no render pass or
-  texture;
+  visibility channels. The authored composite consumes geometry first; one
+  final transparent overlay program consumes visibility from the same texture
+  and draws with `clear: false`. This adds one tracked draw/program but no
+  texture, framebuffer, owner or package;
 - local channels reach exact visual zero at `700ms`; same-RAF capture and PNG
   encoding must complete by `900ms` while ambient flow and RAF continue;
 - the canvas is decorative and pointer-transparent. SSR always emits the

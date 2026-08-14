@@ -28,6 +28,21 @@
   refraction from visible contrast, and local channels reach exact visual zero
   at `700ms` while ambient motion continues. This is design-only until its new
   plan, RED/GREEN cycle and full release gates pass.
+- **Task 18 result:** the single-texture dual-channel implementation is
+  BLOCKED and fully reverted. Carrier-only native evidence was centred at all
+  five positions (distance about `.002–.034`, locality `.999–1.0`), but the
+  authored displacement and carrier still cancelled in the same RGB output;
+  full matrices failed up to centroid `.12785`. Uniform carrier amplitude and
+  a near-zero-luminance chromatic axis also failed. Focused cleanup is `11/11`
+  and ports 3174–3179 are free. Do not retry another shader scalar.
+- Continuing requires a separately approved overlay/pass architecture. It adds
+  a GPU pass and therefore exceeds the approved single-texture/no-new-pass
+  design. No Task 18 implementation commit or deployment exists.
+- **Approval received:** the user approved one independent transparent overlay
+  pass. It reuses the existing flow texture and canvas, adds no FBO/texture or
+  owner, draws after the authored composite with `clear:false`, and is tracked
+  by the renderer ledger. Task 19 may proceed directly through TDD and full
+  release gates; deployment still requires GREEN evidence.
 - Canonical evidence: `.superpowers/sdd/2026-08-11-optical-lab-high-fidelity-reconstruction-plan/task-17-report.md`.
   No cloud sync, SSH, `.env` read, backup, ECS change or deployment occurred;
   port 3000 was untouched.

@@ -657,3 +657,36 @@ closed-halo, disabled-carrier, `5px` follow and `10→14px` cap mutations must a
 be detected. Recovery evidence must contain nontransparent ambient pixels,
 show local visual zero at `700ms`, complete PNG encoding by `900ms`, and confirm
 that the ambient RAF continues.
+
+### Independent overlay-pass amendment
+
+Native Task 18 evidence showed that the A-channel carrier was centred by itself
+but still cancelled against authored displacement when both shared one
+composite RGB result. The user approved one final transparent overlay pass to
+remove that coupling.
+
+- The flow texture keeps the Task 18 channel contract: RG velocity, B local
+  geometry memory and A signed pointer-centred carrier. No new flow texture or
+  framebuffer is added.
+- The authored composite pass renders first and continues to own displacement,
+  follow, gain and plate reconstruction. It clears the canvas exactly once.
+- A second transparent program samples the same flow texture and draws after
+  the authored composite with `clear: false`. It maps the carrier sign to a
+  restrained warm/cool optical tint and uses carrier magnitude as bounded
+  alpha. Maximum overlay alpha is `.16`.
+- Overlay alpha has a pointer-centred baseline independent of authored layer
+  pixels. Existing displacement and gain still enforce
+  `energy > typography >= empty × 1.25`; the overlay cannot relocate the
+  response centre or create a closed radial rim.
+- The overlay program, shader and draw call belong to the existing renderer
+  resource ledger and lifecycle. Suspension, context loss, failure and unmount
+  must delete the additional program/shaders without adding another owner.
+- Local geometry and overlay carrier reach exact zero at `700ms`. Ambient flow
+  continues through the authored pass; reduced motion and failure states create
+  neither WebGL pass.
+
+The native carrier-disable mutation must now intercept the overlay shader and
+make at least one phase/position sample fail. The unmodified renderer must pass
+all twenty samples, the real `.16–.20` halo band, layer ordering, touch,
+700/900ms recovery and exact lifecycle counts. A mutation that skips the second
+draw must also fail real pixels; source presence alone is insufficient.
