@@ -1,6 +1,6 @@
 # OpenScience (XGS) 进度日志
 
-## 2026-08-14（Task 23 最终合成可见性纠偏）— ⏳ 用户已批准视觉、部署与手机风险豁免
+## 2026-08-14（Task 23 最终合成可见性纠偏）— ✅ 已部署并通过公网最终合成验收
 
 - **用户反馈与真实根因**：Task 22 公网待机仍像静止。旧门禁读取透明 WebGL canvas 自身，证明的是 renderer 内部有像素变化，不是它叠到静态 plate 后仍能被人眼看见；把门禁改为对最终 `AcceptedOpticalSurface` 合成截图做连续 `720ms` 比较后，当前生产候选按预期 RED，三个窗口标题带变化仅 `344 / 0 / 32` pixels（总计 `628,672`），其中一窗完全静止。
 - **最小候选**：不再增大 flow 位移、曲率光或 pointer 半径；新增 Landing-only `uPresentationAlpha`，让首页无输入时完整呈现既有水流合成，而 asset Lab 继续使用原 `mix(0.34, 1.0, localAmount)` 透明度路径。这样不改变 `.05/6px/10s` ambient、`5px/10px/.18/.20/700ms` pointer、overlay、FBO/texture/owner、reduced-motion 或生命周期，也不把 Landing 的视觉增强带进 Lab 几何合同。
@@ -8,6 +8,7 @@
 - **用户批准**：用户已查看本地 production preview、批准最终视觉并明确要求部署；该指令同时在已披露 `956.7ms > 900ms` PNG 编码计时 RED 后作出，因此将此 timing-only RED 记录为本次接受风险，不写成 GREEN。用户随后明确续签 Task 23 的物理手机性能豁免；模拟 mobile 仍只证明布局/行为，不冒充真机性能。本次生产写入授权已齐备。
 - **2026-08-15 用户确认后的注意力增强**：用户认可 Task 23 第一版并要求待机水流更明显、增加成熟但克制的吸睛动效。新候选在 Landing-only presentation path 增加约 `2.2px` 非线性液态漂移、中央曲率焦散呼吸与稀疏字缘高光；三者均乘以 `(1.0 - localAmount)`，pointer 激活后让位，不改变 Lab、flow texture、overlay、资源 owner 或 reduced-motion。旧候选在 `1200ms` 最终合成窗口的标题覆盖仅约 `13.1%–15.1%`、平均变化约 `.80–.93`，新门禁提高为每窗 `>=18% / >=1.10` 并 GREEN；production preview 为 `http://127.0.0.1:3185/`，旧 `3184` 保留用于 A/B。
 - **增强版当前证据**：focused `17/17`、完整 Web `32 files / 244 tests`、typecheck、16-page production build、canonical lint、release `27/27`，以及 fresh production-start Landing desktop/mobile normal/reduced/idle/pointer 门禁 GREEN；最终 surface 本身同时承担显著性和宽色带门禁，原尺寸 before/after/mobile 截图人工检查无宽色带、圆形灯斑、截字、黑色箭头或状态文字。Lab native 仍只在既有 PNG 完成时限 RED：恢复像素 max delta `9`，但 `956.7ms > 900ms`；新增三项在 Lab 均乘 `uPresentationAlpha=0`，不得把该矩阵写为 GREEN，也不为刷绿修改产品。
+- **生产发布**：release `48809d6`，rollback `744c631`。独立复审 APPROVE（0 Critical/Important）；部署前后 ECS checkup 健康，数据库备份 `BACKUP_OK size=280K files=7/7`，dry-run 后执行 `deploy.sh --confirm --skip-migrate`，远端全仓 build 与 16-page Web build 通过并仅重启 Web/API/agent-worker，未运行 migration/seed。公网 `/`、asset Lab、`/explore` 为 `200`，匿名 `/auth/me` 为 `401`；remote/local composite SHA-256 均为 `277f77ffe1e9269e3ce58d3ebf0aaba88bd6c9c959fb5bcc382425dd8f66b272`。公网门禁首次只在 `networkidle` 30s 超时、未进入断言；随后原命令完成 desktop/mobile normal/reduced/idle/pointer 全部断言，原尺寸截图人工检查正常。
 
 ## 2026-08-14（Task 22 水流材质与底图清理）— ✅ 已部署并通过公网跨相位验收
 

@@ -1,11 +1,11 @@
 # Handoff — 2026-08-13 Optical Lab Asset Interaction
 
-## Current canonical state — Task 23 local perceptual candidate (2026-08-14)
+## Current canonical state — Task 23 deployed and publicly verified (2026-08-15)
 
 > **This section supersedes Task 22's “user visual validation only” wording.**
-> The deployed release is still `744c631`. The user has approved Task 23's
-> final idle appearance and deployment, and explicitly renewed the Task 23
-> physical-mobile waiver. Production authorization is complete.
+> Release `48809d6` is deployed; rollback is `744c631`. The user approved the
+> final idle appearance/deployment and explicitly renewed the Task 23
+> physical-mobile waiver.
 
 - The user correctly rejected Task 22's idle as visually stationary. The old
   browser evidence sampled the transparent WebGL canvas in isolation, not the
@@ -44,6 +44,15 @@
   The user explicitly renewed the unavailable physical-mobile waiver for Task
   23. Emulated mobile remains layout/behavior evidence only; the waiver does
   not extend beyond this release.
+- Deployment evidence: independent re-review APPROVE with no Critical/Important;
+  pre/post checkup healthy; DB backup `280K`, `7/7`; dry-run followed by
+  `--confirm --skip-migrate`; no migration or seed. Remote full workspace and
+  16-page Web builds passed. Public `/`, asset Lab and `/explore` are `200`,
+  anonymous `/auth/me` is `401`; local/remote composite SHA-256 both equal
+  `277f77ffe1e9269e3ce58d3ebf0aaba88bd6c9c959fb5bcc382425dd8f66b272`.
+  The first public browser attempt timed out at `networkidle` before assertions;
+  the subsequent unchanged command completed all desktop/mobile normal,
+  reduced, idle, pointer, salience, band, contamination, and cursor assertions.
 
 ## Current canonical state — Task 22 deployed and publicly verified (2026-08-14)
 

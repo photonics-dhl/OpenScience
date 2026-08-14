@@ -79,13 +79,13 @@ Raise the real Landing browser contract from 360 ms technical motion to a 720 ms
 
 Expose the already-rendered water composite at full presentation alpha only when `data-accepted-optical-surface=landing`; retain the accepted Lab alpha expression and all flow/light/pointer constants. This is the smallest change that fixes final-composite visibility without changing shared interaction geometry.
 
-- [ ] **Step 3: Verify visual and engineering acceptance (partially complete)**
+- [x] **Step 3: Verify visual and engineering acceptance with accepted timing risk**
 
 Run focused tests, Landing desktop/mobile normal/reduced browser gates, the full native pointer matrix, full Web tests, typecheck, build, release gate, docs lint/sync, and diff check. Inspect fresh before/after and full-page screenshots at original size.
 
-Current boundary: Landing final-surface salience, focused `16/16`, Web `243/243`, typecheck, build, and screenshot inspection are GREEN. Two otherwise unchanged Lab native attempts failed only the `<=900ms` renderer-PNG completion deadline at `1066.7ms` and `953.2ms`; do not mark this step complete or retry product changes solely to hide that timing evidence.
+Current boundary: Landing final-surface salience, focused `17/17`, Web `244/244`, typecheck, build, release `27/27`, and screenshot inspection are GREEN. Otherwise unchanged Lab native attempts failed only the `<=900ms` renderer-PNG completion deadline at `1066.7ms`, `953.2ms`, and `956.7ms`; the user explicitly accepted this timing risk and the native matrix remains documented RED rather than being relabelled GREEN.
 
-- [ ] **Step 4: Review, commit, and deploy after the existing production confirmation boundary**
+- [x] **Step 4: Review, commit, and deploy after the existing production confirmation boundary**
 
 Update progress/index/handoff with current evidence, obtain independent review, commit, and deploy only after the production write confirmation required by the runbook.
 
@@ -116,7 +116,7 @@ near-neutral terms: a centre-weighted curvature caustic and a sparse target-edge
 shimmer. Do not alter flow, pointer caps, radius, recovery, overlay, resources,
 static plates, or reduced-motion behavior.
 
-- [ ] **Step 3: Verify and visually inspect (partially complete)**
+- [x] **Step 3: Verify and visually inspect with accepted timing risk**
 
 Run focused tests, the production Landing browser gate, full Web tests,
 typecheck, build, and the retained Lab native matrix. Inspect before/after,
@@ -127,4 +127,6 @@ Current boundary: focused `17/17`, Web `244/244`, typecheck, build, fresh
 production-start Landing desktop/mobile normal/reduced/idle/pointer, and
 original-size inspection are GREEN; the final surface itself supplies both
 salience and chromatic-band evidence. The retained Lab matrix remains timing RED
-at `956.7ms > 900ms` with recovered max delta `9`; do not mark complete.
+at `956.7ms > 900ms` with recovered max delta `9`; the user accepted that risk
+without converting the native matrix to GREEN. Release `48809d6` is deployed,
+public final-surface browser evidence is GREEN, and rollback is `744c631`.

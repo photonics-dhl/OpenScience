@@ -291,8 +291,7 @@ Current infrastructure uses pinned base/worker images with bind-mounted applicat
 
 ### 5.7 Perceptually visible idle presentation deployment (2026-08-15)
 
-> Pending release commit; production before this operation remains `744c631`
-> and is the rollback anchor.
+> Deployed release `48809d6`; rollback `744c631`.
 
 - Task 23 corrects the acceptance boundary from raw transparent-canvas motion
   to the final composed `AcceptedOpticalSurface`. Landing alone receives full
@@ -314,3 +313,15 @@ Current infrastructure uses pinned base/worker images with bind-mounted applicat
   `/auth/me` returns `401`, rerun the public final-surface Landing gate, compare
   the remote composite shader hash with the release, and record the actual
   release/rollback/backup/checkup evidence here.
+- Actual operation: pre/post checkup passed; DB backup returned
+  `BACKUP_OK size=280K files=7/7`; dry-run preceded
+  `deploy.sh --confirm --skip-migrate`. Remote full-workspace and 16-page Web
+  builds passed; no migration or seed ran. Public `/`, asset Lab and `/explore`
+  return `200`, anonymous `/auth/me` returns `401`. Remote/local composite
+  SHA-256 both equal
+  `277f77ffe1e9269e3ce58d3ebf0aaba88bd6c9c959fb5bcc382425dd8f66b272`.
+  The first public browser run timed out at `networkidle` before assertions;
+  the unchanged rerun passed desktop/mobile normal/reduced/idle/pointer and the
+  final-surface `1200ms` salience/band contract. Public screenshots were
+  inspected without clipping, cursor/status contamination, hard halo, or broad
+  chromatic bands.
