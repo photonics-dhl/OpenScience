@@ -590,3 +590,70 @@ ECS or cloud deployment; the latter remains gated by the release runbooks.
 - A conservative quality/DPR downshift is added only when physical measurements
   identify a device class that misses the thresholds. The accepted desktop
   evidence alone does not justify speculative rendering changes.
+## 2026-08-14 Responsive Ambient Release Tuning
+
+The user approved a final balanced enhancement and explicitly waived the
+otherwise-required physical-mobile performance gate for this release. The
+waiver does not convert emulated mobile evidence into physical-device evidence;
+it is a documented release risk.
+
+- Reduce the response window from `120ms` to `70ms`. After input stops, the
+  local field reaches exact visual zero by `700ms` with no bounce or spring.
+  Ambient motion continues. The same-RAF capture and PNG encoding must finish
+  before the existing `900ms` acceptance deadline.
+- Increase ambient displacement from `1.4px` to `2px` and ambient flow magnitude
+  from `.035` to `.05`. Shorten the bounded ambient cycle from `12s` to `8s` so
+  the medium is visibly alive before input.
+- Increase pointer-local patch follow from `4px` to `5px`, combined local
+  displacement from `8px` to `10px`, and local caustic gain from `.14` to `.18`.
+  Keep longitudinal radius `.20` and the accepted transverse cap `.14`.
+- Scale the empty liquid carrier proportionally to `.27`; its weighted maximum
+  is `.22 × .27 = .0594`, below the `.18` gain cap. Preserve
+  `energy > typography >= empty × 1.25`.
+- Retain the exact `.16–.20` outer-band halo cap of at most `4/16` sectors.
+  Across ambient phases `0/.25/.5/.75`, all five pointer samples must keep the
+  threshold-3 changed-pixel centroid within `.065` stage width and at least
+  `.80` locality inside the accepted neighbourhood. Keep the valid same-RAF
+  recovery capture, reduced-motion exact static frame and lifecycle cleanup.
+- Idle animation must show nonzero temporal changes in all four quadrants over
+  a representative interval without cursor input. It must not introduce a
+  global brightness pulse, camera/title drift, scale animation, hard ring or
+  closed halo.
+- Production deployment remains code-only and uses the confirmed
+  `--skip-migrate` path. Record the mobile waiver, rollback ref, backup,
+  hardware-desktop evidence and public post-deploy browser/service checks.
+
+### Dual-channel local response architecture
+
+The stronger Task 17 constants exposed a coupling in the original flow. The
+composite derived visible change from displaced authored pixels, so the central
+typography and energy plate pulled edge-response centroids inward. Scalar
+radius, offset and phase changes either failed repeat runs or damaged recovery
+and halo evidence. Task 17 therefore separates local geometry from local
+visibility inside the existing flow texture.
+
+- The flow pass keeps RG for velocity and B for local geometry memory. A stores
+  a pointer-centred visible carrier derived from the same anisotropic `.20/.14`
+  support. Ambient phase may move the background field, but it must not move
+  the carrier centre.
+- The carrier is a signed, zero-mean directional ripple with an open,
+  irregular outline. It cannot emit a positive radial disc, closed rim or
+  whole-stage brightness pulse.
+- The composite uses geometry memory for refraction and the visible carrier for
+  a low-amplitude local contrast change. Authored layer weights still produce
+  `energy > typography >= empty × 1.25`, but they cannot relocate the carrier.
+  Follow remains at most `5px`, the combined local vector remains at most
+  `10px`, gain remains at most `.18`, and the static plates do not move.
+- The renderer clears both local channels at the `700ms` visual boundary. It
+  keeps the ambient RG field and RAF alive. Hidden, offscreen, reduced-motion,
+  context-failure and unmount paths retain the existing single-owner cleanup.
+- This change stays in the current flow/composite renderer. It adds no texture,
+  render pass, package, API, ECS dependency or server-side GPU work.
+
+Acceptance must distinguish the architecture from a diagnostic-only change.
+The native gate intercepts the carrier channel and requires real pixel failure,
+then restores it and runs the four-phase, five-position matrix. Fixed-centre,
+closed-halo, disabled-carrier, `5px` follow and `10→14px` cap mutations must all
+be detected. Recovery evidence must contain nontransparent ambient pixels,
+show local visual zero at `700ms`, complete PNG encoding by `900ms`, and confirm
+that the ambient RAF continues.

@@ -36,10 +36,17 @@ The active boundaries are:
 - normal motion owns one continuous, low-amplitude ambient RAF while visible;
   it suspends and releases its canvas when the document is hidden, the surface
   is offscreen, reduced motion activates, context fails or React unmounts;
-- pointer/touch response remains local to the `.20` flow support. The signed
-  replacement-patch follow is capped at `4` CSS px and multiplied by local
-  amount and authored layer weight. It does not translate the whole title or
-  camera, and the combined follow/refraction vector is capped at `8` CSS px;
+- pointer/touch response remains local to the `.20` longitudinal and `.14`
+  transverse flow support. The signed replacement-patch follow is capped at
+  `5` CSS px; the combined follow/refraction vector is capped at `10` CSS px.
+  Neither term translates the whole title or camera;
+- the existing flow texture carries separate local geometry and pointer-centred
+  visibility channels. The composite uses the visibility channel for a signed,
+  zero-mean directional ripple, so authored typography and energy can scale
+  response strength without relocating its centre. This adds no render pass or
+  texture;
+- local channels reach exact visual zero at `700ms`; same-RAF capture and PNG
+  encoding must complete by `900ms` while ambient flow and RAF continue;
 - the canvas is decorative and pointer-transparent. SSR always emits the
   semantic title and accepted static assets before client initialization;
 - every per-frame operation runs in the visitor's browser. ECS is only a
@@ -121,6 +128,8 @@ matrices, physical GPU evidence, visibility/reduced/failure cleanup and the
 measured route/static budgets above. The previous “production bundle unchanged”
 and “no Lab chunk on `/`” consequences no longer apply. Physical desktop
 evidence must identify the unmasked renderer and display cadence; physical
-mobile remains a hard gate until a connected device completes the prescribed
-intervals. Deployment still requires an exact release/rollback ref pair and
-the normal backup/checkup/public verification runbook.
+mobile remains required by default. For this release, the user explicitly
+accepted the missing physical-mobile measurement as a deployment risk;
+emulation remains supplemental and is not recorded as device evidence.
+Deployment still requires an exact release/rollback ref pair and the normal
+backup/checkup/public verification runbook.

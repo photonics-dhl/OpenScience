@@ -1,5 +1,15 @@
 # OpenScience (XGS) 进度日志
 
+## 2026-08-14（最终动效调优与手机门禁豁免）— ⛔ Task 17 本地门禁阻塞，未部署
+
+- **架构决策**：用户选择继续增强版并批准单纹理双通道方案。flow RG/B 保留速度与几何记忆，A 新增独立的 pointer-centred 可见载体；composite 将折射与零均值方向性水纹分开，避免中央字形/能量把边缘响应 centroid 拉向内侧。局部通道改为 `700ms` 精确视觉归零，同 RAF PNG 仍须在 `900ms` 前完成；不增加 texture、pass、package 或服务器 GPU 依赖。
+- **最终参数**：用户选择平衡增强：response `70ms`、ambient displacement `2px`、ambient flow `.05`、local displacement `10px`、patch follow `5px`、gain `.18`、ambient cycle `8s`；radius 保持纵向 `.20` / 横向 `.14`，empty carrier `.27`。
+- **静止态目标**：无输入时四象限持续可见但低幅的流体运动；不得出现全局亮度脉冲、标题/镜头漂移、缩放或圆形 halo。交互后局部通道在 `700ms` 精确视觉归零，同 RAF PNG 在 `900ms` 前完成，环境流继续。
+- **发布授权与风险接受**：用户明确选择“豁免物理手机门禁并部署”。本次会保留模拟移动端/真实 RTX 桌面证据，但不会把它们写成物理手机结果；该豁免作为已知移动 GPU 性能风险进入 release/rollback 记录。
+- **部署条件**：Task 17 全门禁和独立复审无 Critical/Important 后，执行已确认的 checkup、备份、`--skip-migrate` 部署和公网回归；不改 schema、seed、Nginx、Compose、Secret 或 ECS 拓扑。
+- **当前阻塞证据**：批准参数的原始 Task 16 wake 在真实四相位矩阵中仍出现右侧 centroid `.07028 > .065`；最终单变量 `1.15` support 假设又在同 RAF 恢复证据处得到 `961.8ms > 900ms`（`1,382` pixels、max delta `79`）。按系统化调试停止规则，不再叠加第 4 个补丁；该假设和失败的相位解耦均已撤回，Task 17 未提交、未部署。
+- **下一步**：书面 spec 复核后编写实施计划；按新架构重新建立 RED、实现最小 GREEN，并重跑全部 native/release 门禁。手机门禁豁免仍有效，但不豁免本地失败门禁。
+
 ## 2026-08-14（Optical 最终整体验收修复）— ⚠️ 仅物理移动端仍阻断部署
 
 - **真实像素链路**：`patchFollowPx4` 已从诊断值接入 renderer uniform 与

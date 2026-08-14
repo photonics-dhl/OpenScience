@@ -1,5 +1,37 @@
 # Handoff — 2026-08-13 Optical Lab Asset Interaction
 
+## Current canonical state — Task 17 blocked, no deployment (2026-08-14)
+
+> **This section supersedes every next action and release-status statement
+> below.** The physical-mobile gate is explicitly waived by the user, but the
+> Task 17 local native gate is RED, so deployment has not started.
+
+- Rollback/last fully accepted anchor is commit `6cd460c`. Task 16 has complete
+  local release evidence and independent APPROVE.
+- The uncommitted Task 17 working tree retains only the user-approved target
+  constants (`70ms`, `5px`, `10px`, `.18`, ambient `.05`/`2px`/`8s`, empty
+  `.27`) plus its test/docs evidence. The rejected `1.15` outward support and
+  local/ambient phase-decoupling experiments were reverted; original Task 16
+  wake geometry is restored.
+- The untouched wake with stronger constants failed the real four-phase matrix
+  at the right sample (`.07028 > .065`). The final bounded `1.15` hypothesis
+  then failed the same-RAF recovery deadline: PNG completion `961.8ms > 900ms`,
+  with `1,382` changed pixels and max delta `79`.
+- Per the three-hypothesis/systematic-debugging stop rule, do not add another
+  scalar shader tweak. Task 17 is **BLOCKED**, uncommitted and not deployable.
+- User decision required: deploy the already reviewed Task 16 anchor, or approve
+  an architectural redesign of Task 17 followed by a fresh full native/release
+  matrix. The mobile waiver remains valid but does not waive local failures.
+- **Decision received:** the user selected the Task 17 redesign and approved a
+  single-texture dual-channel flow. RG/B retain velocity and geometry memory; A
+  carries a pointer-centred signed visibility ripple. The composite separates
+  refraction from visible contrast, and local channels reach exact visual zero
+  at `700ms` while ambient motion continues. This is design-only until its new
+  plan, RED/GREEN cycle and full release gates pass.
+- Canonical evidence: `.superpowers/sdd/2026-08-11-optical-lab-high-fidelity-reconstruction-plan/task-17-report.md`.
+  No cloud sync, SSH, `.env` read, backup, ECS change or deployment occurred;
+  port 3000 was untouched.
+
 ## Current canonical state — final fix complete with mobile blocker (2026-08-14)
 
 > **This section supersedes every next action and release-status statement
