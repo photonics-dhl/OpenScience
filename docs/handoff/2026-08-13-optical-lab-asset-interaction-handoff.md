@@ -1,5 +1,29 @@
 # Handoff — 2026-08-13 Optical Lab Asset Interaction
 
+## Current canonical state — Task 21 local candidate, not deployed (2026-08-14)
+
+> **This section supersedes Task 20's “visual validation only” next action.**
+> Production remains release `28c7789` until the Task 21 deploy finishes; do
+> not reopen the blue six-face object.
+
+- User reports the Task 20 idle result is still visually static. The old public
+  gate only proved threshold-1 noise. A new real Landing gate requires three
+  consecutive `360ms` title-band windows at RGB delta `>=3`; the deployed
+  implementation is RED at only `101 / 0 / 9` changed title pixels out of
+  `628,672`.
+- The screenshot's black mouse shape is the operating-system arrow. The scoped
+  `cursor:none` fix is retained and protected by computed-style browser RED;
+  links and buttons keep their own cursor behavior.
+- Final architecture leaves product WebGL identical to `28c7789` and adds a
+  Landing-only CSS presentation owner: a `3.4s` cool-white-warm light current
+  runs at rest, pauses while local follow is active, and is absent under
+  reduced motion. The cursor fix is also Landing-only.
+- Strict Landing desktop/mobile/production-start evidence is GREEN; full Lab
+  native centroid/locality/recovery/halo/touch/lifecycle evidence is GREEN;
+  focused `14/14`, full Web `241/241`, typecheck, lint, build and 27-case release
+  gate are GREEN. Next action is independent diff review, final docs gates,
+  commit, deploy and public screenshot validation. No deploy has occurred yet.
+
 ## Current canonical state — Task 20 deployed and publicly verified (2026-08-14)
 
 > **This section supersedes Task 19's next action and every historical Task

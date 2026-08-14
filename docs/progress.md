@@ -1,5 +1,13 @@
 # OpenScience (XGS) 进度日志
 
+## 2026-08-14（Task 21 首屏自主光流与黑色光标）— ✅ 本地候选通过，待部署
+
+- **用户反馈**：生产 Landing 的 no-input 动效依然肉眼不可见；用户截图中的黑色“鼠标”破坏底层粒子背景，希望首屏先由 `Science evolves.` 的自主运动抓住注意，再以 pointer 形成不同的局部反馈。
+- **已确认并保留**：黑色形状是系统默认 arrow cursor，不是底图或 WebGL 黑洞。生产 computed style 为 `cursor:auto`，真实浏览器门禁按预期 RED；光学舞台改为 `cursor:none`，按钮/链接仍保留自身 cursor。Landing 门禁从 threshold-1 全场计数收紧为连续三个 `360ms` 标题带 threshold-3 感知门槛；当前线上/回退代码真实 RED 为标题带 `101 / 0 / 9` changed pixels（`628,672` total），证实 Task 20 的旧“1% threshold-1”证据不足以支持肉眼可见。
+- **最终实现**：WebGL renderer/shader 保持 `28c7789` 的已验收行为；只在 Landing accepted surface 的 interaction host 上增加独立、低成本的冷白暖 `screen` 光流层，`3.4s` 横向循环。它在 no-input 时持续扫过 `Science evolves.`，local follow 出现时暂停，让 pointer-owned 局部折射成为唯一主反馈；reduced-motion 下完全隐藏。系统 arrow cursor 也只在 Landing 光学舞台内隐藏，Lab 不受影响。
+- **真实门禁**：旧线上候选在连续三个 `360ms`、RGB delta `>=3` 的标题带窗口仅有 `101 / 0 / 9` changed pixels（`628,672` total），按预期 RED；最终 Landing 浏览器门禁 GREEN，并生成 desktop/mobile idle 截图供肉眼检查。完整 Lab native matrix GREEN，证明 centroid/locality/halo/recovery/touch/lifecycle 未被改写；focused `14/14`、全 Web `241/241`、typecheck、canonical lint、16-page build、27-case release matrix 与 production `next start` Landing gate 均 GREEN。
+- **当前状态**：本地 release candidate 已闭合，尚未部署。下一步只剩独立差异审查、文档最终门禁、提交及按 deployment runbook 上线/公网截图验收。
+
 ## 2026-08-14（Task 20 默认流动增强）— ✅ 已部署并通过公网验收
 
 - **目标与边界**：针对用户反馈“无鼠标时默认流动太弱”，只增强 idle authored-composite；鼠标 `70ms`、follow `5px`、local/combined `10px`、gain `.18`、radius `.20/.14`、overlay alpha 与 `700ms` local zero 均保持不变。reduced-motion 继续 pixel-exact static。

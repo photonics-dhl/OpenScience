@@ -287,6 +287,8 @@
 | `docs/runbooks/incident.md` | 故障响应 runbook（四节骨架，Phase 1A 填充） | 骨架 |
 | `docs/runbooks/monitoring.md` | 监控面板 runbook（Netdata + vnStat，同域 /monitor/ /traffic/ 路径，2026-08-01） | 已上线 |
 | `docs/runbooks/visual-release.md` | Optical Editorial production-build 视觉/无障碍/性能发布门禁：27-case 矩阵、accepted shared surface/reduced exact/pointer focused gate、实测 route/static 预算、physical desktop/mobile cadence contract 与人工审美拒绝项；Task 19 含一次性用户风险豁免 | 活 runbook；Task 19 已部署并完成 ECS 公网回归，physical mobile 豁免仅适用于本次 release |
+| `docs/superpowers/specs/2026-08-14-optical-idle-attention-design.md` | Task 21 首屏自主光流与黑色系统光标修复设计：Landing-only idle/pointer 双态、标题带人眼感知门槛、reduced-motion 边界 | 活设计；本地候选通过，待部署 |
+| `docs/superpowers/plans/2026-08-14-optical-idle-attention-plan.md` | Task 21 单任务 TDD 实施计划；弱 idle 与系统 cursor RED 已闭合，Landing-only presentation owner 通过完整浏览器/native/release 门禁 | 本地执行完成，待部署/公网验收 |
 
 ## infra/
 | 路径 | 用途 | 状态 |

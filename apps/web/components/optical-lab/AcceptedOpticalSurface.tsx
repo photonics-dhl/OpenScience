@@ -46,6 +46,7 @@ export function AcceptedOpticalSurface({
         data-optical-ink="dom"
         data-optical-lab-candidate="true"
         data-optical-lab-candidate-stage="true"
+        data-optical-local-active="false"
         data-optical-render-phase={OPTICAL_LAB_RENDER_PHASE}
         data-render-mode="asset-static"
         data-stable-bounds="stable"

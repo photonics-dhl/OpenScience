@@ -78,6 +78,7 @@ export function AssetInteractionMount({ diagnosticsId, stageId }: AssetInteracti
     const publish = (snapshot: AssetInteractionSnapshot) => {
       window.__OPENSCIENCE_OPTICAL_ASSET_INTERACTION__ = snapshot;
       stage.dataset.contextStatus = snapshot.contextStatus;
+      stage.dataset.opticalLocalActive = String(snapshot.follow > 0);
       stage.dataset.renderMode = snapshot.activeRaf ? 'asset-interactive' : 'asset-static';
       diagnostics.dataset.apertureX = String(snapshot.apertureX);
       diagnostics.dataset.assetActiveRaf = String(snapshot.activeRaf);

@@ -1,4 +1,4 @@
-/* global HTMLElement, createImageBitmap, document, fetch, process, window */
+/* global HTMLElement, createImageBitmap, document, fetch, getComputedStyle, process, window */
 
 import { chromium } from 'playwright';
 import assert from 'node:assert/strict';
@@ -40,6 +40,9 @@ async function measureTemporalQuadrants(page, before, after, threshold = 1) {
     const second = await decode(afterBase64);
     const quadrants = [0, 0, 0, 0];
     let count = 0;
+    let titleCount = 0;
+    let titleDelta = 0;
+    let titleTotal = 0;
     for (let y = 0; y < first.height; y += 1) {
       for (let x = 0; x < first.width; x += 1) {
         const offset = (y * first.width + x) * 4;
@@ -48,12 +51,18 @@ async function measureTemporalQuadrants(page, before, after, threshold = 1) {
           Math.abs(first.data[offset + 1] - second.data[offset + 1]),
           Math.abs(first.data[offset + 2] - second.data[offset + 2]),
         );
+        const inTitleBand = y >= first.height * .30 && y <= first.height * .70;
+        if (inTitleBand) titleTotal += 1;
         if (delta < thresholdValue) continue;
         count += 1;
+        if (inTitleBand) {
+          titleCount += 1;
+          titleDelta += delta;
+        }
         quadrants[(y >= first.height / 2 ? 2 : 0) + (x >= first.width / 2 ? 1 : 0)] += 1;
       }
     }
-    return { count, quadrants, total: first.width * first.height };
+    return { count, quadrants, titleCount, titleDelta, titleTotal, total: first.width * first.height };
   }, {
     afterBase64: after.toString('base64'),
     beforeBase64: before.toString('base64'),
@@ -97,6 +106,11 @@ try {
     assert.equal(await surface.locator('[data-optical-lab-asset-plate="true"]').count(), 1, 'accepted energy plate must remain mounted');
     assert.equal(await surface.locator('[data-optical-lab-target-typography-plate="true"]').count(), 1, 'accepted typography plate must remain mounted');
     assert.equal(await page.locator('#landing-optical-diagnostics').isVisible(), false, 'shared diagnostics must remain visually hidden');
+    assert.equal(
+      await surface.evaluate((node) => getComputedStyle(node).cursor),
+      'none',
+      'the optical surface must not expose the black operating-system arrow over its dark field',
+    );
 
     if (testCase.reducedMotion === 'reduce') {
       assert.equal(await surface.getAttribute('data-render-mode'), 'asset-static', 'reduced motion must retain the exact static surface');
@@ -120,12 +134,16 @@ try {
         const idleBefore = await canvas.screenshot();
         await page.waitForTimeout(360);
         const idleAfter = await canvas.screenshot();
-        idleWindows.push(await measureTemporalQuadrants(page, idleBefore, idleAfter, 1));
+        idleWindows.push(await measureTemporalQuadrants(page, idleBefore, idleAfter, 3));
       }
       assert(idleWindows.every((motion) => (
-        motion.count / motion.total >= .01
+        motion.titleCount / motion.titleTotal >= .015
+        && motion.titleDelta / motion.titleTotal >= .06
         && motion.quadrants.every((count) => count > 0)
-      )), `Landing idle motion must remain perceptible in every window and all four quadrants: ${JSON.stringify(idleWindows)}`);
+      )), `Landing idle motion must visibly animate the title band in every window and all four quadrants: ${JSON.stringify(idleWindows)}`);
+      await surface.screenshot({
+        path: path.join(outDir, `landing-idle-${testCase.width}x${testCase.height}.png`),
+      });
       const startX = bounds.x + bounds.width * .3;
       const endX = bounds.x + bounds.width * .7;
       const y = bounds.y + bounds.height * .45;
