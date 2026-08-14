@@ -278,6 +278,8 @@ describe('Optical Lab accepted asset OGL boundary', () => {
     expect(composite).toContain('dFdy(flow)');
     expect(composite).toContain('grazingLight');
     expect(composite).toContain('(0.08 + 0.92 * causticCrest)');
+    expect(composite).toContain('vec3(0.76, 0.86, 0.90)');
+    expect(composite).toContain('vec3(0.92, 0.84, 0.76)');
     expect(composite).toContain('uniform float uAmbientPhase');
     expect(rendererSource).toContain('uAmbientPhase: { value: 0 }');
     expect(rendererSource).toContain('program.uniforms.uAmbientPhase.value = ambientClock.shaderTime');

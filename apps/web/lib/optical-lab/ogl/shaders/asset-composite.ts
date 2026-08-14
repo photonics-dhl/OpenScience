@@ -75,8 +75,8 @@ void main() {
     * (1.0 - localAmount)
     * layerWeight;
   vec3 grazingTint = mix(
-    vec3(0.38, 0.72, 0.86),
-    vec3(0.95, 0.58, 0.34),
+    vec3(0.76, 0.86, 0.90),
+    vec3(0.92, 0.84, 0.76),
     smoothstep(-0.035, 0.035, flow.x)
   );
   vec3 color = min(
