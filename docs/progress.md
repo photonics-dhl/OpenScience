@@ -1,11 +1,22 @@
 # OpenScience (XGS) 进度日志
 
+## 2026-08-15（Hermes 原创 3D 学者 Agent）— ✅ 本地实现与生产构建验收完成
+
+- **最终形象**：以真实机器人识别为第一优先，完成头、宽幅烟黑 visor、肩部 folio 披片、装订式石墨脊柱、紧凑悬浮躯干与双机械臂；冷青索引光与暖珊瑚批注光只作信息语义。八方位 turntable、正侧背面与 48 px silhouette 已人工检查，无摄像头、面具、书精灵、婴幼或廉价拼接读法。
+- **原创资产**：事实源为 `apps/web/assets/hermes/Hermes.blend` 与可复现 builder；当前运行 GLB 为 `1,143,636 B`、gzip `298,555 B`、`19,024` triangles、`6` materials、`6` primitives/draws，六段动作名称与状态一一对应。最终构建 GLB SHA-256 `e8d121f629441af04478ce31dd26d1300e87ff2a41751a7bc671d535634c0003`；不含 Wanko/Live2D/VRM/Mixamo 二进制。
+- **真实运行时**：Dashboard 在 load/idle 后懒加载 OGL；原 SVG 保持 SSR、首帧、失败、context loss 与 reduced-motion fallback。桌面 DPR `1.5`、移动 `1.0`；无指针约 30 Hz，指针时升至接近 60 Hz；离屏/hidden 暂停，route transfer 释放 owner。`awaiting_approval` 真实像素哈希不变，其他五态均有真实像素变化。
+- **生产浏览器证据**：六态 first frame `32.9–47.2ms`（本机 production start）；主体高度 `83.1%–87.6%`、宽度 `38.7%–53.6%`，没有裁切；非静态动作在 `260ms` 内持续产帧，pointer `180ms` 内 8 帧。桌面/390px 移动、initial reduced、ready→reduced→normal、GLB failure、branded shader link failure、delayed-load→reduced、hidden/offscreen、context-loss 与 route-unmount 全部通过 `HERMES_3D_GATE_OK`；failed 在一次回弹后真实像素保持稳定。WebGL2 账本同时证明普通/context-loss/失败路径均释放唯一 owner，reduced 往返为 acquired `2` / released `1`（恢复后的 owner 仍在页面上）。
+- **复审修复**：fallback readiness 现在随 renderer teardown 复位，异步 import/renderer 以 effect generation 独占；failed 禁止循环。Bone Ceramic roughness 为 `.68`，眼光改为低功耗暖象牙；guiding/scanning/suggesting/approval/failed 由同一 6-draw shader 提供各自的脉冲、扫描、批注边光或降亮语义。
+- **工程门禁**：focused `10/10`、完整 Web `33 files / 250 tests`、typecheck、16-page production build GREEN；Dashboard first-load JS `130 kB`。Blender 4.5.12 LTS Portable 的下载、解压和可执行文件均位于 E 盘项目 `.tools/`，未安装到 C 盘；本轮构建进程的 TEMP/TMP/用户配置也显式指向 E 盘。
+- **独立复审**：最终只读复审 `APPROVE`，Critical / Important / Minor 均为 `0`；复核 branded shader failure 不是恒真门禁、WebGL context 账本区分 canvas 删除与真实 release，并确认 Blender 获取、构建、临时目录和用户配置全部被 E 盘边界约束。
+- **边界**：本次只完成本地分支，不部署 ECS。原 SVG rollback 保留；ADR-010 已由 SVG-only 更新为原创 glTF/OGL 渐进增强，Wanko 继续只作行为参考与受许可门禁的可选替换方案。
+
 ## 2026-08-15（Hermes 原创 3D 学者 Agent）— ⏳ 设计与实施启动
 
 - **用户决策**：废弃摄像头、面具、浮空书体与二维概念图直接交付路线；Hermes 改为具有头、肩、紧凑躯干、机械臂与悬浮核心的学者型机器人。书卷气只进入 folio 肩部披片、装订式脊柱、页层与批注边光，机器人识别优先于学术隐喻。
 - **资产真值**：最终交付必须包含可编辑 `.blend`、网页 `.glb`、PBR 材质、六态动作、poster、turntable 和真实资产门禁；imagegen 图片仅为被否决/探索性的 moodboard，不作为可复现资产。
 - **运行边界**：复用现有 `HermesVisualState` 与 OGL 1.0.11 的 glTF/Skin/Animation 能力；原 SVG/CSS Optical Guide 保留为 SSR、加载、reduced-motion 与失败 fallback；不引入 Three.js/Pixi/Cubism，不复制 Wanko 或 Live2D 二进制。
-- **工具约束**：Blender 仅使用 E 盘项目专用 Portable 路径，下载、解压、缓存和输出均不得落到 C 盘。设计 spec 与 TDD 实施计划已登记；当前未修改生产代码、未部署服务器。
+- **工具约束**：Blender 仅使用 E 盘项目专用 Portable 路径，下载、解压、可执行文件与输出不落到 C 盘；正式构建时再显式覆盖 TEMP/TMP/用户配置。设计 spec 与 TDD 实施计划已登记；当前未修改生产代码、未部署服务器。
 - **下一步**：按 `docs/plans/2026-08-15-hermes-3d-scholar-agent-plan.md` 从 GLB RED 合同和 checksum-pinned Blender Portable 开始，随后生成原创 geometry/rig/material/actions 并进入隔离浏览器验收。
 
 ## 2026-08-15（主页视觉验收与版本收口）— ✅ 已验收并合并至 `main`

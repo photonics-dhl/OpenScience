@@ -4,6 +4,7 @@ import Link from 'next/link';
 import * as React from 'react';
 import { useEffect, useRef, useState } from 'react';
 
+import { Hermes3DMount } from './Hermes3DMount';
 import type { HermesVisualState } from './hermes-state';
 
 function HermesStaticPortrait({ state }: { state: HermesVisualState }) {
@@ -56,6 +57,7 @@ export interface HermesVisualAdapterProps {
 export function HermesVisualAdapter({ state, href }: HermesVisualAdapterProps) {
   const linkRef = useRef<HTMLAnchorElement>(null);
   const [interactiveReady, setInteractiveReady] = useState(false);
+  const [threeReady, setThreeReady] = useState(false);
   const still = state === 'awaiting_approval';
 
   useEffect(() => {
@@ -105,7 +107,7 @@ export function HermesVisualAdapter({ state, href }: HermesVisualAdapterProps) {
       href={href}
       ref={linkRef}
       data-hermes-fallback="static"
-      data-hermes-renderer="original-vector"
+      data-hermes-renderer={threeReady ? 'ogl-gltf' : 'original-vector'}
       data-hermes-state={state}
       data-motion={still ? 'still' : 'responsive'}
       data-runtime-ready={interactiveReady ? 'true' : 'false'}
@@ -117,7 +119,18 @@ export function HermesVisualAdapter({ state, href }: HermesVisualAdapterProps) {
         <span>Research guidance</span><span className="text-os-vermilion transition-transform group-hover:translate-x-1 motion-reduce:transform-none">Open task →</span>
       </span>
       <span className="absolute inset-x-6 bottom-10 top-7 block text-os-paper" data-hermes-instance="single">
-        <HermesStaticPortrait state={state} />
+        <span
+          className="hermes-vector-fallback absolute inset-0 block"
+          data-hermes-fallback-visible={threeReady ? 'false' : 'true'}
+        >
+          <HermesStaticPortrait state={state} />
+        </span>
+        <Hermes3DMount
+          onFailure={() => setThreeReady(false)}
+          onFirstFrame={() => setThreeReady(true)}
+          onUnavailable={() => setThreeReady(false)}
+          state={state}
+        />
       </span>
     </Link>
   );

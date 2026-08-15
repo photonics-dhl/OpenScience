@@ -1832,6 +1832,35 @@ body {
     linear-gradient(90deg, transparent 49.8%, rgb(241 238 231 / .045) 50%, transparent 50.2%);
 }
 
+.hermes-vector-fallback {
+  opacity: 1;
+  transition: opacity 480ms var(--ease-optical);
+}
+
+.hermes-visual[data-hermes-renderer='ogl-gltf'] .hermes-vector-fallback {
+  opacity: 0;
+}
+
+.hermes-3d-host,
+.hermes-3d-host canvas {
+  height: 100%;
+  width: 100%;
+}
+
+.hermes-3d-host {
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 520ms var(--ease-optical);
+}
+
+.hermes-visual[data-hermes-renderer='ogl-gltf'] .hermes-3d-host {
+  opacity: 1;
+}
+
+.hermes-3d-host canvas {
+  display: block;
+}
+
 .hermes-gaze {
   transform: translate3d(var(--hermes-gaze-x), var(--hermes-gaze-y), 0);
   transform-origin: 180px 177px;
@@ -1904,6 +1933,8 @@ body {
 @media (prefers-reduced-motion: reduce) {
   .hermes-gaze { transition: none; }
   .hermes-portrait * { animation: none !important; }
+  .hermes-3d-host { display: none; }
+  .hermes-vector-fallback { opacity: 1 !important; transition: none; }
 }
 
 .font-display {

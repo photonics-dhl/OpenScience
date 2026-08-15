@@ -34,7 +34,8 @@
 | `apps/web/test/ingestion-foundations.test.ts` / `apps/web/test/visual/ingestion-shots.mjs` / `apps/web/app/{%5Fvisual,_visual}/ingestion-foundations/page.tsx` | 研究者导入视觉地基 TDD 合同与 1440/768/375 三视口浏览器截图门禁；脚本访问仅开发态可用的真实编译原语预览 | 活文档 |
 | `apps/web/app/tokens.css` / `apps/web/app/layout.tsx` / `apps/web/test/{tokens-contrast,optical-foundations}.test.ts` | Optical Editorial v3 视觉地基：黑/纸白/朱红 token、0/4/8px 半径、四字体角色、语义 motion、AA/禁蓝紫/降级门禁 | 活文档 |
 | `apps/web/components/brand/OpenScienceWordmark.tsx` / `apps/web/components/shell/*.tsx` / `apps/web/test/surface-shells.test.tsx` | Optical Editorial 品牌与 Public/Identity/Dashboard/Workspace 四类无 Card shell；单一 main、skip link、19/56/25 工作区平面与动作反馈门禁 | 活文档 |
-| `apps/web/components/hermes/{HermesRail,HermesVisualAdapter,hermes-state}.ts(x)` / `apps/web/test/{hermes-state.test.tsx,e2e/hermes-dashboard.spec.ts}` | Dashboard Hermes 六态、真实 IngestionTask 同链入口、原创 Optical Guide 单实例/指针响应/审批静止/reduced fallback；Wanko runtime 受 ADR-010 许可门禁未部署 | 活实现（Task 9 done） |
+| `apps/web/components/hermes/{HermesRail,HermesVisualAdapter,Hermes3DMount,hermes-state}.ts(x)` / `apps/web/lib/hermes/` / `apps/web/assets/hermes/Hermes.blend` / `apps/web/public/hermes/hermes-scholar.{glb,webp}` / `apps/web/scripts/hermes/` / `apps/web/test/{hermes-state,hermes-3d-asset-contract}.test.ts(x)` / `apps/web/test/visual/hermes-3d-gate.mjs` | Dashboard Hermes 原创 3D 学者 Agent：六态真实 GLB 动作、同一 IngestionTask deep link、懒加载 OGL、指针 gaze、SVG 首帧/失败/reduced fallback；`.blend` 与 builder 可复现，6 draws / 19,024 triangles | 本地实现与 production browser 验收完成，待用户视觉验收/合并，未部署（2026-08-15） |
+| `infra/scripts/{fetch-blender-portable,build-hermes-asset}.ps1` | SHA-256 固定的 Blender 4.5.12 LTS Portable 获取器与可复现构建入口；下载、解压、可执行文件、TEMP/TMP 和 Blender 用户配置均强制位于 E 盘项目 `.tools/`，不在 C 盘安装 Blender | Hermes 3D 本地工具链；`.tools/` 不入库 |
 | `apps/web/components/research/*.tsx` / `apps/web/components/editor/*.tsx` / `apps/web/app/research-objects/[id]/edit/page.tsx` | Optical Editorial RO Workspace：56/64/44px 产品层级、19/56/25 单实例工作面、六节点 SDF、Evidence/Before-After proposal、Artifact rule row、Radix 高影响审查与移动功能等价 | 活文档 |
 | `packages/domain/src/commit/commits.ts` / `apps/api/src/routes/commits.ts` | Commit、版本详情/重建/比较及成员受控的 `GET /research-objects/:id/versions` 降序摘要；供 Editor、Overview、Versions、Publish 共用 | 活接口；Task 12 补齐版本列表合同 |
 | `apps/web/lib/product-surfaces.ts` / `apps/web/test/product-surface-matrix.test.ts` | Task 12 产品表面真源：Overview/SDF/Files/Versions/Collaboration/Publish/Sandbox/Settings 的真实路由、权限、五态、移动等价与风险声明 | ECS 390/1440 验收通过（2026-08-10） |
@@ -76,7 +77,7 @@
 | `apps/web/test/visual/shots.mjs` | Landing production browser gate：1672×941/390×844 normal/reduced、唯一 main/h1/shared surface、导航/CTA/Latest Research、overflow/errors/focus、bounded pointer；Task 23 normal 最终 surface 连续三段 `1200ms` 验证标题 coverage `>=18%` / average delta `>=1.10`、四象限与色带 `<=20%`，desktop reduced exact fixture | Task 23 本地与公网 production GREEN |
 | `apps/web/.gitignore` | web 局部生成物忽略（Task 7.10 截图输出 `test/visual/out/` 不入库） | 活文档 |
 | `apps/web/vitest.config.ts` | Vitest Node 环境、`@/` alias 解析与 `.ts/.tsx` 测试发现（Task 7.4/7.7） | 活文档 |
-| `tsconfig.base.json` / `eslint.config.cjs` / `.npmrc` | 共享 TypeScript/ESLint/pnpm 基线；ESLint 9 flat config 只忽略构建、agent 与本地 evidence 临时目录，正式 `apps/web/test/visual/` 门禁持续受 lint | 活文档；Task 15 canonical root lint GREEN |
+| `tsconfig.base.json` / `eslint.config.cjs` / `.npmrc` | 共享 TypeScript/ESLint/pnpm 基线；ESLint 9 flat config 只忽略构建、agent、本地 evidence 与项目级 `.tools/` 第三方便携工具目录，正式 `apps/web/test/visual/` 门禁持续受 lint | 活文档；Hermes 3D 的 E 盘 Blender 仍由项目脚本/资产合同验收 |
 | `knip.json` / `.dependency-cruiser.cjs` / `.markdownlint-cli2.jsonc` | 卫生工具配置：knip（未用代码）、dependency-cruiser（依赖边界）、markdownlint（文档门禁）（2026-07-28 落地） | 活文档 |
 | `scripts/verify-workspace.mjs` | Monorepo 结构校验脚本（lint 的第二段，`verify:workspace` 入口） | 活文档 |
 | `scripts/docs/check-docs-sync.mjs` | 文档同步门禁（索引路径存在性 + docs 反向登记 + AGENTS 迁移数一致性；lint 第三段，`audit:docs-sync` 入口，2026-08-06） | 活文档 |
@@ -117,11 +118,11 @@
 | `docs/specs/2026-08-03-p1b-2-ro-sdf-model-design.md` | P1B-2 RO/SDF 数据模型设计（design gate 已确认：三实体 + 迁移 7 + API 骨架，代码已实现 2026-08-03） | 活文档 |
 | `docs/specs/2026-08-08-openscience-product-web-design.md` | 产品级网页设计 spec（方向 A：Monumental Scholarly Intelligence；统一 RO 工作流、Hermes/Live2D、Public RO、Ultrafast Science 策展、许可与版本模型；用户已批准，待书面审阅） | 活文档 |
 | `docs/specs/2026-08-10-optical-editorial-rebaseline-design.md` | 前端视觉与交互 spec：Art Direction v3 Optical Editorial Instrument 为视觉真源；2026-08-11 增量优化边界明确为保留现有线上功能、优先优化 Landing，再传播到 Explore/Dashboard/创建页/公开 RO | 用户已确认范围，待书面审阅 |
-| `docs/specs/2026-08-15-hermes-3d-scholar-agent-design.md` | Hermes 原创 3D 学者型机器人设计：明确非摄像头/非浮空书体的头肩躯干与手势语言、folio 披片/装订脊柱、六态动作、GLB/OGL 运行边界、性能与 fallback 合同 | 用户批准结构方向，实施中 |
+| `docs/specs/2026-08-15-hermes-3d-scholar-agent-design.md` | Hermes 原创 3D 学者型机器人设计：明确非摄像头/非浮空书体的头肩躯干与手势语言、folio 披片/装订脊柱、六态动作、GLB/OGL 运行边界、性能与 fallback 合同 | 用户批准；本地实现与浏览器门禁完成 |
 | `docs/data/launch-research-corpus.md` | 18 条公开启动语料的范围、免责声明、真实来源、上游许可证证据与 ECS seed 操作边界 | 活文档；本地完成，待生产 seed |
 | `docs/plans/2026-08-08-openscience-product-web-plan.md` | 旧产品级网页实现计划；2026-08-10 被 Optical Editorial v3 计划取代，仅保留历史 | DEPRECATED |
 | `docs/plans/2026-08-10-optical-editorial-frontend-plan.md` | Optical Editorial v3 完整实施计划：15 Task 覆盖生产基线、foundations、三联屏、Auth/Intake/Dashboard/Hermes、Explore/启动语料、Editorial、其余产品面、Figma、质量门禁与 ECS E2E | 当前执行计划 |
-| `docs/plans/2026-08-15-hermes-3d-scholar-agent-plan.md` | Hermes `.blend/.glb`、原创 geometry/rig/material、六态动作、E 盘 Blender Portable、lazy OGL renderer、真实浏览器与文档验收的 TDD 实施计划 | 当前执行计划 |
+| `docs/plans/2026-08-15-hermes-3d-scholar-agent-plan.md` | Hermes `.blend/.glb`、原创 geometry/rig/material、六态动作、E 盘 Blender Portable、lazy OGL renderer、真实浏览器与文档验收的 TDD 实施计划 | 实施与独立 review 完成；待原子提交和用户视觉验收 |
 | `docs/design/optical-editorial-figma-map.md` | 长期账号 Figma canonical 的 V3 variables/styles/components/八表面节点映射、代码对应关系与 Code Connect 边界 | Task 13 canonical 映射 |
 | `docs/superpowers/specs/2026-08-09-researcher-ingestion-product-slice-design.md` | 研究者第一条产品级前端闭环设计：注册、Dashboard、资料导入、Hermes 证据确认、RO Workspace；待用户审阅 | 设计 spec |
 | `docs/superpowers/plans/2026-08-09-researcher-ingestion-product-slice-plan.md` | 研究者导入闭环实施计划：基础视觉、Auth/Dashboard、多格式上传、Hermes 证据、RO Workspace、浏览器验收与生产部署；Task 1–2 完成，Task 3 启动 | 执行中 |
@@ -133,7 +134,7 @@
 | `docs/decisions/ADR-007-production-object-storage.md` | 生产对象存储选择 SeaweedFS 4.41 S3 模式；拒绝归档的 MinIO legacy binary，新 Secret/内网/卷/备份边界 | Accepted |
 | `docs/decisions/ADR-008-minimax-token-plan-provider.md` | MiniMax Token Plan 使用 Anthropic Messages 协议；Subscription Key 与普通 API Key 分流，key1→key2 回退与生产边界 | Accepted |
 | `docs/decisions/ADR-009-optical-runtime-and-fonts.md` | Accepted production `ogl@1.0.11` Landing/Lab shared exception；WebGL2→exact static/reduced/failure policy、continuous visible ambient suspension、client-only/ECS boundary、measured `/` client/static budget、exact rollback ref boundary；旧 Canvas-only/no-Lab-chunk rule retired | Accepted，2026-08-14 amended；物理移动端 gate 未关闭 |
-| `docs/decisions/ADR-010-hermes-visual-runtime-and-live2d-license-gate.md` | Hermes 原创 SVG/CSS renderer、真实任务/六态/单实例契约；Wanko/Live2D 仅在运营主体记录资格与协议接受后启用 | Accepted |
+| `docs/decisions/ADR-010-hermes-visual-runtime-and-live2d-license-gate.md` | Hermes 原创 glTF/OGL 渐进增强 + SVG fallback、真实任务/六态/单实例契约；Wanko/Live2D 仅在运营主体记录资格与协议接受后启用 | Accepted；2026-08-15 以真实 3D 证据更新 |
 | `docs/handoff/2026-08-08-product-web-tooling-handoff.md` | 产品网页工具前置交接（Codex 10 MCP、双 Figma OAuth、迁移 ADR、重启后验证顺序） | 当前 handoff |
 | `docs/handoff/2026-08-10-optical-editorial-rebaseline-handoff.md` | Optical Editorial v3 前端重构交接：27 项 grill-me 决策、三联屏浏览器优先路线、服务器直接验收 | 当前 handoff |
 | `docs/handoff/2026-08-10-figma-canonical-task13-handoff.md` | Task 13 长期账号 canonical、节点审计、文档门禁与 Task 14 接续说明 | 活交接 |
@@ -143,6 +144,7 @@
 | `docs/handoff/2026-08-11-optical-editorial-optimization-design-handoff.md` | 首页增量优化设计交接：保留线上功能与风格，先优化 Landing，再传播到 Explore/Dashboard/创建页/公开 RO | 当前 handoff |
 | `docs/handoff/2026-08-11-optical-lab-task8-steps3-5-handoff.md` | Optical Lab Candidate B、高保真 OGL Task 1–8 与资产路线历史证据 | HISTORICAL → 当前入口为 `docs/handoff/2026-08-13-optical-lab-asset-interaction-handoff.md`；不得按其旧 next action 重启资产验证 |
 | `docs/handoff/2026-08-13-optical-lab-asset-interaction-handoff.md` | Optical asset 唯一 current 交接：Task 23 最终 Landing 合成已部署并获用户验收；记录双层 centroid 合同、700ms recovery、手机门禁豁免、release/rollback 与公网证据；旧 Task 17/18 阻塞降为历史 | CURRENT；主页视觉阶段已收口并合并至 `main` |
+| `docs/handoff/2026-08-15-hermes-3d-scholar-agent-handoff.md` | Hermes 原创 3D 学者 Agent 本地实现交接：可编辑 `.blend`、六态 GLB、OGL 渐进增强、真实浏览器证据、E 盘 Blender 边界与未部署状态 | CURRENT；待用户最终视觉验收与分支集成 |
 | `docs/specs/2026-08-04-p1b-3-blob-artifact-upload-design.md` | P1B-3 Blob 内容寻址存储与上传管线设计（design gate 已确认：五决策，代码已实现 2026-08-04） | 活文档 |
 | `docs/plans/2026-07-24-doc-architecture-plan.md` | 文档架构落地实施计划 | 活文档 |
 | `docs/plans/2026-07-24-mvp-task-breakdown-plan.md` | MVP 任务拆解与工具配置实施计划（已批准，执行中） | 活文档 |

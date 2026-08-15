@@ -20,7 +20,7 @@ async function mockDashboard(page: Page, taskState?: string) {
   }] : [] }));
 }
 
-test('Hermes renders empty, active and approval states with one original visual', async ({ page }) => {
+test('Hermes renders six GLB actions with one original-vector fallback', async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 900 });
 
   for (const [taskState, visualState] of [
@@ -34,11 +34,13 @@ test('Hermes renders empty, active and approval states with one original visual'
     await page.unrouteAll({ behavior: 'wait' });
     await mockDashboard(page, taskState);
     await page.goto(`${baseUrl}/dashboard`, { waitUntil: 'networkidle' });
-    const visual = page.locator('[data-hermes-renderer="original-vector"]');
+    const visual = page.locator(`[data-hermes-state="${visualState}"]`);
     await expect(visual).toHaveAttribute('data-hermes-state', visualState);
     await expect(page.locator('[data-hermes-instance]')).toHaveCount(1);
     await expect(page.locator('[data-live2d-instance]')).toHaveCount(0);
     await expect(visual).toHaveAttribute('data-runtime-ready', visualState === 'awaiting_approval' ? 'false' : 'true');
+    await expect(visual).toHaveAttribute('data-hermes-renderer', 'ogl-gltf', { timeout: 15_000 });
+    await expect(page.locator('[data-hermes-3d-canvas]')).toHaveCount(1);
     const box = await visual.boundingBox();
     if (box) await page.mouse.move(box.x + box.width * 0.75, box.y + box.height * 0.3);
     const gazeX = await visual.evaluate((element) => element.style.getPropertyValue('--hermes-gaze-x'));

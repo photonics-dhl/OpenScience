@@ -14,6 +14,7 @@ module.exports = [
       '**/.worktrees/**',
       '.agents/**',
       '.superpowers/**',
+      '.tools/**',
       'tmp/**',
       'apps/web/tmp/**',
     ],
