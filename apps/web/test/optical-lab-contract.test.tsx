@@ -69,7 +69,7 @@ describe('isolated Optical Lab route contract', () => {
     expect(markup).toContain('data-optical-lab-panel="target"');
     expect(markup).toContain('data-optical-lab-panel="current"');
     expect(markup).toContain('data-optical-lab-panel="candidate"');
-    expect(markup).toContain('/optical-lab/target-reference.png');
+    expect(markup).toContain('/optical-lab/target-reference.1622d38cd152f414.png');
     expect(markup).toContain('/optical-lab/current-production.png');
   });
 
@@ -109,7 +109,7 @@ describe('isolated Optical Lab route contract', () => {
     expect(markup).toContain('data-optical-lab-target-typography-plate="true"');
     expect(markup).toContain('data-typography-coupling="reference-plate"');
     expect(markup).toContain('data-render-mode="asset-static"');
-    expect(markup).toContain('src="/optical-lab/energy-plate-black-alpha-v1.png"');
+    expect(markup).toContain('src="/optical-lab/energy-plate-black-alpha-v1.52cbf993a05e8d00.png"');
     expect(markup).not.toContain('data-optical-lab-client-slot="true"');
     expect(markup).toContain('data-optical-asset-interaction-host="true"');
     expect(markup).not.toContain('<canvas');

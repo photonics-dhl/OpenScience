@@ -329,3 +329,40 @@ Current infrastructure uses pinned base/worker images with bind-mounted applicat
   final-surface `1200ms` salience/band contract. Public screenshots were
   inspected without clipping, cursor/status contamination, hard halo, or broad
   chromatic bands.
+
+### 5.8 Content-addressed optical asset cache (2026-08-16)
+
+> Local candidate only; production deployment requires a separate confirmation.
+
+#### Pre-deployment checks
+
+- Verify `apps/web/lib/optical-lab/asset-manifest.mjs` contains the complete
+  SHA-256 of each canonical PNG and that the versioned URL embeds its first 16
+  hexadecimal digits.
+- Run the focused cache contract, complete Web tests, typecheck, production
+  build, canonical lint, and docs gates.
+- Confirm `/`, `/api/*`, and canonical `/optical-lab/*.png` paths are absent
+  from the one-year immutable header rules.
+
+#### Execution
+
+1. Run the standard checkup and database backup even though this change has no
+   schema or data mutation.
+2. Run the deployment dry-run, then `deploy.sh --confirm --skip-migrate`.
+3. Do not purge old hashed URLs. New content receives a different URL and old
+   cached bytes are harmless.
+
+#### Rollback
+
+- Redeploy the preceding release. Its HTML and WebGL bundle reference the prior
+  hashed URLs, which remain valid in Cloudflare and at the canonical source.
+- Do not rename or delete canonical PNG files during rollback.
+
+#### Verification
+
+- `curl -sSI` for each versioned PNG must return
+  `Cache-Control: public, max-age=31536000, immutable` and `200`.
+- The canonical PNG paths must not return `immutable`; `/` must remain
+  `private, no-cache, no-store`, and anonymous `/auth/me` must remain `401`.
+- A second public request should progress from `MISS`/`REVALIDATED` to `HIT`
+  with a non-zero `Age`; cache propagation is verified without purging.

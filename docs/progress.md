@@ -1,5 +1,13 @@
 # OpenScience (XGS) 进度日志
 
+## 2026-08-16（内容寻址缓存优化）— ⏳ 本地完成，待部署
+
+- **目标与边界**：不让个人电脑承担生产流量；只优化 Landing 两张大型光学 PNG。HTML、API、登录态、Workspace 和 canonical 源路径不进入一年缓存规则。
+- **更新语义**：新增共享 asset manifest，URL 包含真实文件 SHA-256 前 16 位；Next 只对两个精确 versioned URL rewrite 到 canonical 文件并返回 `public, max-age=31536000, immutable`。文件内容变化而 manifest 未更新时测试直接失败，更新 digest 后 URL 改变，不依赖人工 purge 即可立即取得新内容。
+- **TDD**：旧实现按预期出现 5 项 RED（缺 manifest/rewrite/header、SSR/WebGL 仍为 canonical URL）；最小实现后 focused `38/38`、完整 Web `248/248`、typecheck 与 16-page production build GREEN。
+- **真实响应**：本地 `next start` 下两个 versioned PNG 均为 `200 + immutable/31536000`；canonical PNG 为 `public, max-age=0`，`/` 保持 `private, no-cache, no-store`，Landing HTML 含两个 versioned URL。production Landing desktop/mobile normal/reduced/idle/pointer 浏览器门禁 exit 0；3190–3192 测试端口均已释放。
+- **下一步**：完成 canonical lint/docs/diff 与独立审查后提交 `codex/cache-versioned-assets`；用户确认生产写入后按 deployment §5.8 执行 checkup、备份、dry-run、`--skip-migrate` 部署，并验证 Cloudflare `HIT + Age`。
+
 ## 2026-08-15（Hermes 原创 3D 学者 Agent）— ⏳ 设计与实施启动
 
 - **用户决策**：废弃摄像头、面具、浮空书体与二维概念图直接交付路线；Hermes 改为具有头、肩、紧凑躯干、机械臂与悬浮核心的学者型机器人。书卷气只进入 folio 肩部披片、装订式脊柱、页层与批注边光，机器人识别优先于学术隐喻。

@@ -8,6 +8,7 @@ import { OpticalLabClientMount } from './OpticalLabClientMount';
 import { AcceptedOpticalSurface } from './AcceptedOpticalSurface';
 
 import styles from '@/app/_visual/optical-lab/optical-lab.module.css';
+import { OPTICAL_ASSET_URLS } from '@/lib/optical-lab/asset-manifest.mjs';
 import { OPTICAL_LAB_RENDER_PHASE } from '@/lib/optical-lab/runtime-policy';
 
 export const opticalLabMetadata: Metadata = {
@@ -71,7 +72,7 @@ export async function OpticalLabPage({ candidate }: { candidate?: 'asset' } = {}
                   fill
                   priority
                   sizes="(min-width: 1280px) 33vw, 100vw"
-                  src="/optical-lab/target-reference.png"
+                  src={OPTICAL_ASSET_URLS.targetReference}
                   unoptimized
                 />
               </div>

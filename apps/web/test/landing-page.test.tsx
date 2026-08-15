@@ -79,8 +79,8 @@ describe('Optical Editorial landing page', () => {
     const headlineText = markup
       .match(/<h1\b[^>]*>(.*?)<\/h1>/)?.[1]
       .replace(/<[^>]+>/g, '');
-    const energyPlateAt = markup.indexOf('src="/optical-lab/energy-plate-black-alpha-v1.png"');
-    const typographyPlateAt = markup.indexOf('src="/optical-lab/target-reference.png"');
+    const energyPlateAt = markup.indexOf('src="/optical-lab/energy-plate-black-alpha-v1.52cbf993a05e8d00.png"');
+    const typographyPlateAt = markup.indexOf('src="/optical-lab/target-reference.1622d38cd152f414.png"');
 
     expect(markup.match(/data-accepted-optical-surface=/g) ?? []).toHaveLength(1);
     expect(markup).toContain('data-accepted-optical-surface="landing"');
