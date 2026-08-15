@@ -120,11 +120,13 @@
 | `docs/specs/2026-08-10-optical-editorial-rebaseline-design.md` | 前端视觉与交互 spec：Art Direction v3 Optical Editorial Instrument 为视觉真源；2026-08-11 增量优化边界明确为保留现有线上功能、优先优化 Landing，再传播到 Explore/Dashboard/创建页/公开 RO | 用户已确认范围，待书面审阅 |
 | `docs/specs/2026-08-15-hermes-3d-scholar-agent-design.md` | Hermes 3D 学者机器人历史方案；已被少年星图龙原型取代，仅保留否决记录 | **DEPRECATED** |
 | `docs/specs/2026-08-15-hermes-constellation-dragon-prototype-design.md` | Hermes 少年星图龙轻量建模原型：紧凑 S 身、六节点背脊、朱红引用尾、E 盘 Blender、四视图与静态 stop/go 门槛 | 当前原型事实源 |
+| `docs/specs/2026-08-15-hermes-2d-pet-design.md` | Hermes 2.5D 星图宠物：原创透明 idle/blink/working 三帧、轻量分层、六状态映射、reduced-motion 与用户审美门槛 | 当前视觉实验事实源；待实现 |
 | `docs/data/launch-research-corpus.md` | 18 条公开启动语料的范围、免责声明、真实来源、上游许可证证据与 ECS seed 操作边界 | 活文档；本地完成，待生产 seed |
 | `docs/plans/2026-08-08-openscience-product-web-plan.md` | 旧产品级网页实现计划；2026-08-10 被 Optical Editorial v3 计划取代，仅保留历史 | DEPRECATED |
 | `docs/plans/2026-08-10-optical-editorial-frontend-plan.md` | Optical Editorial v3 完整实施计划：15 Task 覆盖生产基线、foundations、三联屏、Auth/Intake/Dashboard/Hermes、Explore/启动语料、Editorial、其余产品面、Figma、质量门禁与 ECS E2E | 当前执行计划 |
 | `docs/plans/2026-08-15-hermes-3d-scholar-agent-plan.md` | 被否决的 3D 学者机器人 `.blend/.glb` 与运行时计划 | **DEPRECATED** |
 | `docs/plans/2026-08-15-hermes-constellation-dragon-prototype-plan.md` | 少年星图龙的 RED 资产合同、确定性 Blender builder、四视图/待机渲染与视觉 stop/go；不接产品运行时 | 当前执行计划 |
+| `docs/plans/2026-08-15-hermes-2d-pet-plan.md` | Hermes 2.5D 原创资产生成、PNG 合同、分层 portrait、六状态与真实浏览器视觉验收 | 当前执行计划 |
 | `docs/handoff/2026-08-15-hermes-constellation-dragon-prototype-handoff.md` | 少年星图龙静态 Blender 原型、结构门禁、真实渲染与用户 go/no-go 边界 | 当前原型交接；待用户视觉验收 |
 | `docs/design/optical-editorial-figma-map.md` | 长期账号 Figma canonical 的 V3 variables/styles/components/八表面节点映射、代码对应关系与 Code Connect 边界 | Task 13 canonical 映射 |
 | `docs/superpowers/specs/2026-08-09-researcher-ingestion-product-slice-design.md` | 研究者第一条产品级前端闭环设计：注册、Dashboard、资料导入、Hermes 证据确认、RO Workspace；待用户审阅 | 设计 spec |
