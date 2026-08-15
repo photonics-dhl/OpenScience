@@ -90,7 +90,7 @@
 | `infra/scripts/backup.sh` / `docs/runbooks/backup-restore.md` | PostgreSQL + SeaweedFS volume 非破坏备份入口（`--db`/`--objects`） | 已实现，待服务器恢复演练（2026-08-10） |
 | `infra/scripts/deploy.sh` / `infra/scripts/deploy.test.mjs` | ECS dry-run/confirmed release 部署；所有 production Compose 路径强制同一 `.env.prod`；栈收敛后只重启 bind-mounted `api/web/agent-worker` 以切换 release，数据服务保持运行 | 活脚本；2026-08-10 生产现场修复 |
 | `apps/agent-worker/Dockerfile` / `apps/agent-worker/src/clamav.ts` / `apps/agent-worker/src/ingestion-parser.ts` | Tesseract `eng+chi_sim` 本地图片 OCR；ClamAV INSTREAM fail-closed 扫描；MiniMax 不作为默认 OCR | 本地实现，待服务器镜像/恶意样本/图片验收（2026-08-10） |
-| `apps/web/scripts/hermes/build-constellation-dragon.py` / `inspect-constellation-dragon.mjs` / `apps/web/test/hermes-constellation-dragon-asset-contract.test.ts` / `apps/web/assets/hermes/HermesConstellationDragon.blend` / `apps/web/public/hermes/prototype/` | Hermes 少年星图龙确定性 Blender 静态原型、资产检查器、TDD 合同、四视图/contact sheet 与 manifest；六节点背脊、朱砂尾笔、紧凑卷体 | **用户视觉 NO-GO**；未提交、未接运行时，仅保留失败证据，禁止误读为候选资产 |
+| Rejected local Hermes Blender prototype (not repository content) | 少年星图龙的 builder、`.blend`、四视图/contact sheet 与资产合同仅保留在 `hermes-constellation-dragon` 本地 worktree | **用户视觉 NO-GO**；从未提交或接入运行时，禁止误读为候选资产 |
 | `.cursor/` | Cursor 编辑器配置 | 工具自管 |
 | `.taskmaster/` | task-master 任务状态 | 工具自管 |
 | `.memory/memory.jsonl` | Memory MCP 知识图谱存储（MEMORY_FILE_PATH 指定） | 工具自管，随 git 备份 |
