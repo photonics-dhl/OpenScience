@@ -11,6 +11,10 @@
     "version": "Version",
     "language": "Language"
   },
+  "shell": {
+    "skipToContent": "Skip to research content",
+    "primaryNavigation": "Primary navigation"
+  },
   "editor": {
     "title": "SDF Editor",
     "outline": "Outline",
@@ -35,6 +39,7 @@
     "suggestionDismissed": "Suggestion dismissed",
     "saveToSdf": "Save to SDF",
     "uploadArtifact": "Upload artifact",
+    "uploadFailed": "Upload failed",
     "restoreDraft": "Restore draft",
     "discardDraft": "Discard draft",
     "draftFound": "Unsaved draft found",
@@ -44,11 +49,84 @@
     "extracting": "Extracting…",
     "commitMessage": "Commit message",
     "commit": "Create commit",
+    "commitShort": "Commit",
+    "untitledObject": "Untitled Research Object",
+      "workspaceNavigation": "Research Object workspace",
+      "workspaceModes": "Research Object modes",
+      "modeOverview": "Overview",
+      "modeWrite": "Write & SDF",
+      "modeData": "Data & Code",
+      "modeVersions": "Versions",
+      "modeCollaboration": "Collaboration",
+      "modePublish": "Publish",
+      "modeUnavailable": "This mode is not available yet",
+      "skipToWorkspace": "Skip to Research Object content",
+    "mobileWorkspaceNavigation": "Workspace views",
+    "evidencePending": "Awaiting linked evidence",
+    "evidencePendingDescription": "Evidence excerpts appear here with their artifact and source location.",
+    "reviewPending": "No active review",
+    "reviewPendingDescription": "Human and Hermes review records remain attached to the affected SDF scope.",
+      "hermesExtractor": "Hermes extractor",
+      "hermesEvidenceLabel": "Hermes / Evidence",
+      "sdfCoreLabel": "SDF / Core 0.1",
+      "researcherPrompt": "Researcher prompt",
+      "sourceLocatorUnavailable": "Source locator unavailable",
+      "currentSdfAggregate": "Current SDF aggregate",
+      "artifactStored": "Stored artifact",
+      "artifactStatus": {
+        "uploading": "Uploading",
+        "done": "Uploaded",
+        "error": "Upload failed",
+        "ready": "Ready"
+      },
+      "visibility": {
+        "private": "Private",
+        "invite_only": "Invite only",
+        "public": "Public"
+      },
+      "saveState": {
+        "dirty": "Unsaved",
+        "saving": "Saving",
+        "saved": "Saved",
+        "error": "Save failed"
+      },
+      "versionStatus": {
+        "draft": "Draft",
+        "under_review": "Under review",
+        "approved": "Approved",
+        "published": "Published",
+        "revised": "Revised",
+        "withdrawn": "Withdrawn",
+        "rejected": "Rejected",
+        "restricted": "Restricted"
+      },
+    "proposalSource": "Source",
+    "proposalScope": "Scope",
+    "proposalBefore": "Before",
+    "proposalAfter": "After",
+    "proposalEmpty": "Empty",
+    "reviewChanges": "Review changes",
+    "reviewHighImpact": "Review high-impact proposal",
+    "highImpactChange": "High-impact change",
+    "reviewCompleteChange": "Review the complete change.",
+    "returnToProposal": "Return",
+    "applyReviewedChange": "Apply reviewed change",
+    "hints": {
+      "problem": "Define the scientific question and its boundary.",
+      "insight": "State the central insight without promotional language.",
+      "method": "Describe the method, materials, and experimental design.",
+      "results": "Report findings with their supporting evidence.",
+      "limitations": "Record limitations, uncertainty, and boundary conditions.",
+      "reproducibility": "Connect code, data, environment, and rerun instructions."
+    },
     "yes": "Yes",
     "no": "No"
   },
   "collab": {
     "title": "Collaboration",
+    "description": "Discuss evidence, branch changes, authorship and release intent without losing the Research Object identity.",
+    "loading": "Loading collaboration state…",
+    "error": "The collaboration surface could not load.",
     "navLabel": "Collaboration tabs",
     "contentLabel": "Collaboration content",
     "tab": {
@@ -61,14 +139,9 @@
     },
     "issue": {
       "newTitle": "New issue title",
-      "kind": "Type",
-      "kind.question": "Question",
-      "kind.method_repro": "Reproduction",
-      "kind.failure": "Failure",
-      "kind.bug_report": "Bug report",
-      "kind.suggestion": "Suggestion",
-      "status.open": "Open",
-      "status.closed": "Closed",
+      "kindLabel": "Type",
+      "kind": { "question": "Question", "method_repro": "Reproduction", "failure": "Failure", "bug_report": "Bug report", "suggestion": "Suggestion" },
+      "status": { "open": "Open", "closed": "Closed" },
       "create": "Create issue",
       "empty": "No issues",
       "noBody": "(no body)",
@@ -91,9 +164,7 @@
       "create": "Create PR",
       "empty": "No pull requests",
       "noBody": "(no body)",
-      "status.open": "Open",
-      "status.merged": "Merged",
-      "status.rejected": "Rejected",
+      "status": { "open": "Open", "merged": "Merged", "rejected": "Rejected" },
       "declaration": "Change declaration",
       "diff": "Change diff",
       "noDiff": "No diff",
@@ -102,10 +173,8 @@
     },
     "review": {
       "title": "Review",
-      "verdict": "Verdict",
-      "verdict.approve": "Approve",
-      "verdict.requestChanges": "Request changes",
-      "verdict.comment": "Comment",
+      "verdictLabel": "Verdict",
+      "verdict": { "approve": "Approve", "requestChanges": "Request changes", "comment": "Comment" },
       "body": "Review comment",
       "submit": "Submit review"
     },
@@ -161,9 +230,7 @@
       "empty": "No notifications",
       "markRead": "Mark as read",
       "view": "View",
-      "type.pull_request.opened": "Pull request opened",
-      "type.pull_request.merged": "Pull request merged",
-      "type.issue.updated": "Issue updated"
+      "type": { "pull_request": { "opened": "Pull request opened", "merged": "Pull request merged" }, "issue": { "updated": "Issue updated" } }
     }
   },
   "public": {
@@ -189,6 +256,7 @@
     "contributions": "Contributions",
     "abstract": "Abstract",
     "coreFields": "Core fields",
+    "problem": "Research question",
     "insight": "Core insight",
     "method": "Method",
     "results": "Results",
@@ -206,7 +274,18 @@
     "versionHash": "Version hash",
     "copyFullHash": "Copy full hash",
     "citation": "Citation",
+    "researchObject": "Research Object",
+    "identity": "Persistent identity",
+    "citationRail": "Research object citation and provenance",
+    "continuingObject": "Continuing object — resolves to the evolving record",
+    "objectCitation": "Continuing object",
+    "versionCitation": "Immutable version",
     "copyCitation": "Copy citation",
+    "copyObjectCitation": "Copy continuing-object citation",
+    "copyFailed": "Copy failed",
+    "legalDisclaimerDefault": "This timestamp only proves that the platform received and recorded this version and its content hash; it does not guarantee priority, ownership, scientific correctness, or legal evidence.",
+    "artifactProvenance": "Attached evidence",
+    "invalidVersion": "Invalid version",
     "aiReview": "AI review summary",
     "status": "Status",
     "passed": "Passed",
@@ -237,11 +316,16 @@
       "login": "Log in"
     },
     "hero": {
+      "kicker": "Research, as a living object",
+      "context": "OpenScience / Research Objects",
       "title": "Let research\nkeep evolving.",
       "subtitle": "Bring papers, data, code, and discussion together as open, verifiable, evolving research objects.",
       "ctaExplore": "Explore research",
       "ctaCreate": "Create research object",
       "hermesStatus": "Hermes is parsing",
+      "metaObject": "Research Object",
+      "metaStructure": "SDF metadata",
+      "metaVersion": "Version provenance",
       "pillar1Title": "Structured",
       "pillar1Desc": "Papers, data, and code parsed into queryable SDF structures",
       "pillar2Title": "Verifiable",
@@ -250,8 +334,33 @@
       "pillar3Desc": "Hermes curates and reviews, so research keeps evolving"
     },
     "latest": {
-      "title": "Latest research",
-      "empty": "No public research yet. Stay tuned."
+      "title": "A public record, not a feed",
+      "empty": "OpenScience keeps the object legible before it asks for attention: source, structure, and change remain connected.",
+      "item1": "Original evidence stays attached",
+      "item2": "Structure remains inspectable",
+      "item3": "Every version stays citable",
+      "label1": "Evidence",
+      "label2": "Structure",
+      "label3": "Citation"
+    },
+    "openRo": {
+      "eyebrow": "Open Research Object",
+      "title": "One object. Six inspectable evidence layers.",
+      "description": "Papers, data, code, and discussion remain bound to one stable identity, with source and version intact through every change.",
+      "action": "Open the public research index",
+      "stableId": "Stable identity",
+      "node1": "Problem",
+      "node1Summary": "The question and scope the object claims to address.",
+      "node2": "Insight",
+      "node2Summary": "The central contribution separated from supporting evidence.",
+      "node3": "Method",
+      "node3Summary": "The procedure, materials, and assumptions used to produce the result.",
+      "node4": "Results",
+      "node4Summary": "The observations and outputs that support the stated conclusion.",
+      "node5": "Limitations",
+      "node5Summary": "Known constraints, uncertainty, and claims the evidence does not support.",
+      "node6": "Reproducibility",
+      "node6Summary": "The data, code, environment, and steps needed to reproduce the work."
     },
     "evolution": {
       "title": "How research evolves",
@@ -306,5 +415,325 @@
         "three": "AI review and human review run in parallel with evidence preserved."
       }
     }
+  },
+  "auth": {
+    "identity": {
+      "skipToForm": "Skip to identity form",
+      "loginEyebrow": "Identity / sign in",
+      "verificationEyebrow": "Identity / verification",
+      "tagline": "Identity · provenance · continuity",
+      "createEyebrow": "Research identity / 01",
+      "createTitle": "Evidence begins with a verifiable author.",
+      "createDescription": "Your identity follows each research object, version, contribution, and review without claiming ownership of the science for you.",
+      "returnEyebrow": "Research identity / return",
+      "returnTitle": "Return to the work, not a feed.",
+      "returnDescription": "Continue the latest research object and resolve only the tasks that need your judgment."
+    },
+    "register": {
+      "title": "Create your research account",
+      "description": "Use your personal or institutional email. No invitation field is required here.",
+      "displayName": "Display name",
+      "email": "Email",
+      "password": "Password",
+      "passwordHint": "Use at least 8 characters with a letter and a number.",
+      "passwordError": {
+        "length": "Password must be at least 8 characters.",
+        "letter": "Password must include a letter.",
+        "number": "Password must include a number."
+      },
+      "requestCode": "Send verification code",
+      "sending": "Sending…",
+      "code": "Verification code",
+      "codeSent": "We sent a code to {email}",
+      "confirm": "Create account",
+      "confirming": "Creating account…",
+      "resend": "Resend code",
+      "resendIn": "Resend in {seconds}s",
+      "haveAccount": "Already have an account?",
+      "login": "Log in"
+    },
+    "login": {
+      "title": "Welcome back",
+      "description": "Return to your research workspace and continue your latest work.",
+      "email": "Email",
+      "password": "Password",
+      "submit": "Log in",
+      "signingIn": "Signing in…",
+      "noAccount": "New to OpenScience?",
+      "register": "Create account"
+    },
+    "errors": {
+      "generic": "We could not complete that action. Please try again."
+    }
+  },
+  "dashboard": {
+    "eyebrow": "Personal workspace",
+    "title": "Research dashboard",
+    "welcome": "{name}, continue from your latest research context or begin a new research object.",
+    "loading": "Restoring your research context…",
+    "context": {
+      "navigation": "Dashboard utilities",
+      "help": "Help",
+      "settings": "Settings"
+    },
+    "continue": {
+      "title": "Continue research",
+      "emptyTitle": "Import your first research material",
+      "emptyBody": "Hermes preserves source evidence before proposing SDF fields for your confirmation.",
+      "open": "Continue research",
+      "version": "Version {version}",
+      "pending": "{count} items need attention"
+    },
+    "import": {
+      "eyebrow": "New research context",
+      "title": "Start a research object",
+      "description": "Bring existing material or begin with a blank structured object.",
+      "upload": "Upload materials",
+      "blank": "Create blank RO"
+    },
+    "hermes": {
+      "title": "Hermes tasks",
+      "empty": "No tasks need your attention.",
+      "review": "Review evidence",
+      "retry": "Retry task",
+      "view": "View progress",
+      "progress": "{current} of {total} fields"
+    },
+    "research": {
+      "title": "Your research",
+      "empty": "No research objects yet.",
+      "noResults": "No research objects match your search.",
+      "search": "Search research objects",
+      "version": "v{version}",
+      "status": {
+        "draft": "Draft",
+        "under_review": "Under review",
+        "approved": "Approved",
+        "published": "Published",
+        "revised": "Revised",
+        "archived": "Archived"
+      }
+    },
+    "errors": {
+      "title": "Dashboard unavailable",
+      "load": "We could not restore your research context.",
+      "retry": "Reload"
+    }
+  },
+  "createResearch": {
+    "back": "Dashboard",
+    "title": "Create a research object",
+    "description": "Start with a blank structured object or attach source material. Files remain evidence; Hermes proposes structure only after storage.",
+    "workspace": "Workspace",
+    "workspaceLoading": "Loading workspaces…",
+    "researchTitle": "Research title",
+    "materials": "Source materials (optional)",
+    "materialsHint": "PDF, DOCX, TeX/ZIP, Markdown and common research images. Upload processing continues in the next step.",
+    "materialsRequired": "Choose at least one source file to start an import.",
+    "create": "Create research object",
+    "creating": "Creating…",
+    "error": "The research object could not be created.",
+    "evidenceTitle": "Evidence before automation",
+    "evidenceBody": "The original artifact, extraction proposal and your decisions remain separate and traceable.",
+    "stepStore": "Store source artifacts with content hashes",
+    "stepParse": "Locate claims, methods and source anchors",
+    "stepConfirm": "You confirm every SDF write"
+  },
+  "ingestion": {
+    "status": {
+      "queued": "Queued",
+      "uploading": "Uploading",
+      "stored": "Stored",
+      "parsing": "Parsing evidence",
+      "needs_review": "Needs review",
+      "confirmed": "Confirmed",
+      "written": "Written to draft",
+      "failed_retryable": "Retry available",
+      "failed_blocked": "Blocked",
+      "missing": "Missing",
+      "inferred": "Inferred",
+      "rejected": "Rejected"
+    },
+    "statusDescription": {
+      "queued": "Waiting for an available processing slot.",
+      "uploading": "Keeping the upload recoverable while bytes are transferred.",
+      "stored": "The artifact is stored and ready for analysis.",
+      "parsing": "Hermes is locating claims, methods, and source anchors.",
+      "needs_review": "Evidence is ready for your decisions.",
+      "confirmed": "All proposed fields in this batch are confirmed.",
+      "written": "Confirmed evidence has been written to the RO draft.",
+      "failed_retryable": "Processing stopped safely and can be retried.",
+      "failed_blocked": "Processing needs a change before it can continue."
+    },
+    "confidence": {
+      "high": "High confidence",
+      "medium": "Medium confidence",
+      "low": "Low confidence"
+    },
+    "progress": {
+      "label": "Research material processing",
+      "count": "{current} of {total} fields"
+    },
+    "actions": {
+      "retry": "Retry",
+      "confirm": "Confirm",
+      "edit": "Edit",
+      "reject": "Reject",
+      "skip": "Skip"
+    },
+    "dropzone": {
+      "label": "Add research materials",
+      "hint": "PDF, DOCX, TeX, Markdown, PNG, JPEG, WebP or SVG",
+      "browse": "Choose files"
+    },
+    "evidence": {
+      "field": "SDF field",
+      "confidence": "Confidence",
+      "source": "Evidence source"
+    },
+    "intake": {
+      "title": "Arrange the evidence set",
+      "localOnly": "Files remain on this device until you explicitly create the Research Object.",
+      "dropTitle": "Drop source material into the working set",
+      "formats": "PDF · Word · TeX/ZIP · Markdown · images · CSV/TSV · JSON/YAML · Notebook · Python/R",
+      "browse": "Choose files",
+      "remove": "Remove",
+      "retry": "Retry",
+      "retryUpload": "Retry upload",
+      "primary": "Primary manuscript",
+      "supporting": "Supporting evidence",
+      "clearPrimary": "Clear primary manuscript",
+      "progressLabel": "Material processing progress",
+      "provenance": "Every original remains an immutable Artifact with its source name and content hash.",
+      "consent": "Submitting authorizes security scanning, parsing/OCR, and SDF proposal generation for this batch.",
+      "submitNote": "No SDF field is written from these materials until you review and confirm the proposal.",
+      "blankNote": "A blank RO starts without source evidence; material can be attached later.",
+      "titlePlaceholder": "A precise working title",
+      "blankTitle": "Begin with structure, not files.",
+      "blankBody": "Open the six-field SDF draft immediately and attach evidence whenever the research object is ready for it.",
+      "openDraft": "Open draft",
+      "reviewReady": "Evidence is ready for review",
+      "roles": {
+        "manuscript": "Manuscript",
+        "figure": "Figure",
+        "data": "Data",
+        "code": "Code",
+        "supplement": "Supplement"
+      },
+      "stage": {
+        "scan": "Scan",
+        "upload": "Upload",
+        "parse": "Parse / OCR",
+        "map": "SDF map",
+        "review": "Review"
+      },
+      "status": {
+        "local": "Local only",
+        "uploading": "Uploading",
+        "queued": "Queued",
+        "stored": "Stored",
+        "parsing": "Parsing / OCR",
+        "needs_review": "Needs review",
+        "confirmed": "Confirmed",
+        "written": "Written",
+        "failed_retryable": "Retry available",
+        "failed_blocked": "Blocked"
+      }
+    }
+  },
+  "explore": {
+    "eyebrow": "Public research index",
+    "title": "Research worth inspecting.",
+    "description": "Verified public Research Objects will appear here with their evidence, SDF structure, versions, licenses, and review history intact.",
+    "empty": "No public Research Objects match this index view.",
+    "create": "Create a Research Object",
+    "indexLabel": "Published Research Object index",
+    "search": "Search title or SDF evidence",
+    "field": "SDF field",
+    "artifactType": "Artifact type",
+    "allFields": "All SDF fields",
+    "allArtifacts": "All artifacts",
+    "apply": "Apply filters",
+    "loading": "Reading the public index…",
+    "error": "The public index could not be loaded.",
+    "loadMore": "Continue index",
+    "unknownAuthor": "Author record pending",
+    "noArtifacts": "No artifacts",
+    "fields": { "problem": "Problem", "insight": "Insight", "method": "Method", "results": "Results", "limitations": "Limitations", "reproducibility": "Reproducibility" },
+    "artifacts": { "document": "Documents", "image": "Images", "data": "Data", "code": "Code", "video": "Video", "other": "Other" }
+  },
+  "productSurfaces": {
+    "navigation": "Research Object navigation", "skip": "Skip to product surface", "objectMap": "SDF map", "integrity": "Integrity", "integrityBody": "Every action remains attached to a Research Object version and its evidence trail.",
+    "fields": { "problem": "Problem", "insight": "Insight", "method": "Method", "results": "Results", "limitations": "Limitations", "reproducibility": "Reproducibility" },
+    "state": { "loadingBody": "Loading the Research Object and its version history…", "errorTitle": "The surface could not load", "forbiddenTitle": "This workspace is private" },
+    "nav": { "overview": "Overview", "sdf": "SDF", "files": "Files", "versions": "Versions", "collaboration": "Collaboration", "publish": "Publish", "sandbox": "Sandbox" },
+    "overview": { "kicker": "Object overview", "title": "Overview", "body": "A quiet index of what this Research Object claims, how it is evidenced, and where its current version stands.", "status": "Object state", "visibility": "Visibility", "history": "Recorded versions", "emptyTitle": "The structure is still open", "emptyBody": "Start with the six SDF fields, then attach the evidence that makes each claim inspectable.", "continue": "Open SDF editor", "inspect": "Inspect versions" },
+    "versions": { "kicker": "Version history", "title": "Versions", "body": "Snapshots are immutable records. Select two to compare their exact SDF and evidence manifest.", "compare": "Compare", "emptyTitle": "No committed versions", "emptyBody": "Create the first commit from the SDF editor or Files surface.", "diff": "Deterministic comparison" },
+    "files": { "kicker": "Evidence store", "title": "Files", "body": "Upload manuscripts, data, code, images or video. Files become part of a version only when you create a commit.", "provenance": "Evidence provenance", "provenanceBody": "The upload records a content hash and logical path. A commit binds it to an immutable Research Object version.", "defaultCommit": "Attach evidence", "commitMessage": "Commit message", "attaching": "Creating commit…", "attach": "Attach to new version", "empty": "Choose one or more files above to prepare a version.", "committed": "Evidence committed. The new version is now available in Versions." },
+    "sandbox": { "kicker": "Reproducible execution", "title": "Sandbox", "body": "Run a bounded scientific script on the server, inspect its output, and keep the environment alongside the Research Object.", "context": "Research Object visualization", "environment": "Execution environment", "script": "Python script", "starting": "Starting…", "run": "Run in sandbox", "notFound": "The sandbox job was not found.", "result": "Visualization result", "close": "Close", "runtime": "Runtime", "download": "Download locally", "viewScript": "View Python script", "logs": "Execution logs", "modify": "Modify script", "previewError": "Could not generate a preview.", "executeError": "Could not create the modified job.", "modifyPrompt": "Describe the change", "modifyPlaceholder": "For example: change the curve colour, add a title, or adjust the x-axis label.", "previewing": "Generating preview…", "preview": "Generate preview", "policyPassed": "Policy check passed", "policyBlocked": "Policy check blocked", "diff": "Script diff", "confirmExecute": "Confirm execution" },
+    "publish": { "kicker": "Release control", "title": "Publish", "body": "Publication is a high-impact operation: choose a version, record all three licences, pass the release review, then confirm the immutable public record.", "permanence": "Public record", "permanenceBody": "A published version receives a stable public ID, UTC timestamp and content hash. It cannot be edited in place.", "version": "Version to release", "licenses": "Licences", "license": { "text": "Text", "code": "Code", "data": "Data" }, "checking": "Running review…", "review": "Save licences and review", "action": "Review changes", "readiness": "Release readiness", "notReviewed": "Not reviewed", "reviewStatus": { "passed": "Review passed", "blocked": "Release blocked" }, "emptyTitle": "Nothing is ready to publish", "emptyBody": "Create a committed version before opening release control.", "published": "Published public version", "confirmTitle": "Confirm immutable publication", "confirmBody": "This is an R3 action. The selected version, licences, timestamp and content hash will become a public record.", "cancel": "Cancel", "confirm": "Publish version", "close": "Close review" },
+    "settings": { "navigation": "Account settings", "skip": "Skip to settings", "kicker": "Account / preferences", "title": "Settings", "body": "Your identity, language and session controls for OpenScience.", "identity": "Research identity", "name": "Display name", "email": "Email", "level": "Access level", "preferences": "Preferences", "language": "Language", "signOut": "Sign out" }
+  },
+  "editorial": {
+    "edition": "Journal selection · v1",
+    "eyebrow": "Ultrafast Science / Selected Research",
+    "description": "A journal-curated reading layer over versioned OpenScience Research Objects. Every entry retains its SDF, evidence, licence and review history.",
+    "empty": "The first issue is being composed.",
+    "defaultNote": "A selected Research Object, preserved as a citable version with explicit evidence and provenance.",
+    "mediaCount": "{count} media / evidence",
+    "noMedia": "Version evidence linked",
+    "selected": "Selected editorially",
+    "read": "Read the object",
+    "source": "source",
+    "editorialNote": "Editorial note",
+    "disclosure": "Editorial selections are a journal reading layer, not peer-review acceptance.",
+    "browse": "Browse the full Research Index"
+  },
+  "editorialAdmin": {
+    "eyebrow": "Editorial curator / internal",
+    "description": "Bind a published Research Object version to the Ultrafast Science reading layer. Selection is editorial context, not peer-review acceptance.",
+    "addEyebrow": "Add to the issue",
+    "candidate": "Published version",
+    "choose": "Choose a Research Object",
+    "note": "Editorial note",
+    "notePlaceholder": "Why this object belongs in the issue",
+    "media": "Optional issue media",
+    "mediaHint": "If a media URL is supplied, alt text, credit, licence and source provenance are all required.",
+    "image": "Image",
+    "video": "Video",
+    "mediaUrl": "HTTPS media URL",
+    "mediaAlt": "Accessible description",
+    "mediaCredit": "Creator / credit",
+    "mediaLicense": "Licence identifier",
+    "mediaSource": "HTTPS provenance source",
+    "add": "Add draft selection",
+    "working": "Working…",
+    "queueLabel": "Editorial queue",
+    "queueEyebrow": "Issue sequence",
+    "sendReview": "Send to internal review",
+    "schedule": "Schedule now",
+    "publish": "Publish selection",
+    "error": "The editorial queue could not be loaded."
+  },
+  "opticalLab": {
+    "eyebrow": "Optical Lab / non-production comparison",
+    "introduction": "Reference, production baseline, and browser-GPU candidate under one visual gate.",
+    "scope": "This route is an isolated experiment. It does not replace the production Landing until the user selects a candidate.",
+    "backToLanding": "Return to production Landing",
+    "comparisonLabel": "Optical field visual comparison",
+    "targetTitle": "User-owned target",
+    "targetNote": "Material and topology reference; not shipped as the production brand asset.",
+    "targetAlt": "User-provided reference showing Science compressed through a fixed optical aperture before evolves",
+    "currentTitle": "Current production",
+    "currentNote": "The deployed Canvas glyph-particle baseline at cd5be36.",
+    "currentAlt": "Current production Landing optical field capture",
+    "candidateTitle": "GPU candidate A",
+    "candidateNote": "Continuous glyph texture, fixed signed field, dissipating flow and sparse edge particles.",
+    "mode": "Render mode",
+    "context": "Context",
+    "fps": "FPS",
+    "frameTime": "CPU submit",
+    "gpuTime": "GPU frame",
+    "bounds": "Stable bounds"
   }
 }

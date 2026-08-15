@@ -2,7 +2,8 @@
 
 import { useEffect, useReducer, useState } from 'react';
 import { useTranslations } from 'next-intl';
-import { getResearchObject } from '../../../../lib/api';
+import { getResearchObject, type ResearchObjectSummary } from '../../../../lib/api';
+import { ResearchSurfaceShell, SurfaceState } from '../../../../components/research/ResearchSurfaceShell';
 import { collabReducer, initialCollabState } from '../../../../lib/collab-state';
 import CollabTabs from '../../../../components/collab/CollabTabs';
 import IssueList, { IssueDetail } from '../../../../components/collab/IssueList';
@@ -18,6 +19,7 @@ export default function CollabPage({ params }: { params: { id: string } }) {
   const roId = params.id;
   const [state, dispatch] = useReducer(collabReducer, initialCollabState);
   const [workspaceId, setWorkspaceId] = useState('');
+  const [object, setObject] = useState<ResearchObjectSummary | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isAuthor, setIsAuthor] = useState(false);
 
@@ -28,6 +30,7 @@ export default function CollabPage({ params }: { params: { id: string } }) {
       try {
         const ro = await getResearchObject(roId);
         if (cancelled) return;
+        setObject(ro.researchObject);
         setWorkspaceId(ro.researchObject.workspaceId);
       } catch (e) {
         if (!cancelled) setError(e instanceof Error ? e.message : String(e));
@@ -50,15 +53,16 @@ export default function CollabPage({ params }: { params: { id: string } }) {
     return () => { cancelled = true; };
   }, [roId]);
 
+  if (!object && !error) return <SurfaceState detail={t('loading')} kind="loading" title={t('title')} />;
+  if (!object) return <SurfaceState detail={error ?? t('error')} kind="error" title={t('title')} />;
   return (
-    <div className="collab-page">
-      <div className="toolbar">
-        <span className="toolbar-title">{t('title')}</span>
-      </div>
+    <ResearchSurfaceShell active="collaboration" object={object}>
+      <div className="collab-page">
+      <header className="mb-8 border-b border-os-rule-dark pb-6"><p className="font-data text-[10px] uppercase tracking-[0.16em] text-os-vermilion">RO / {t('title')}</p><h1 className="mt-3 font-editorial text-5xl font-normal text-os-paper">{t('title')}</h1><p className="mt-4 max-w-2xl text-sm leading-6 text-os-muted-dark">{t('description')}</p></header>
       {error && <div className="error-panel" role="alert">{error}</div>}
       <CollabTabs tab={state.tab} onChange={(tab) => dispatch({ type: 'set_tab', tab })} />
 
-      <main className="collab-content" aria-label={t('contentLabel')}>
+      <div className="collab-content" aria-label={t('contentLabel')}>
         {state.tab === 'issues' && (
           state.selectedId
             ? <IssueDetail roId={roId} issueId={state.selectedId} onBack={() => dispatch({ type: 'select', id: null })} />
@@ -78,7 +82,7 @@ export default function CollabPage({ params }: { params: { id: string } }) {
         {state.tab === 'fork' && <ForkPanel roId={roId} workspaceId={workspaceId} />}
         {state.tab === 'authors' && <AuthorsPanel roId={roId} canEdit={isAuthor} />}
         {state.tab === 'notifications' && <NotificationsPanel />}
-      </main>
+      </div>
 
       <HighRiskDialog
         open={state.highRisk.open}
@@ -94,7 +98,8 @@ export default function CollabPage({ params }: { params: { id: string } }) {
           }
         }}
       />
-    </div>
+      </div>
+    </ResearchSurfaceShell>
   );
 }
 

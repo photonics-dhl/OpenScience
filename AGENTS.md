@@ -8,11 +8,12 @@ OpenScience：AI 时代科研基础设施平台（Research Object / SDF / 预印
 - 根目录已是 pnpm workspace；pnpm 不全局安装，统一用 `npx pnpm@9.15.0 <cmd>`。
 - `apps/`：`api` 已含 50+ Fastify 端点——平台底座（`/auth` P1A-3、`/workspaces` P1A-4、RBAC 守卫 P1A-5、`/admin/audit-logs` P1A-6、配额/账务 P1A-7、安全基线 `src/security/` P1A-8）+ RO/SDF/版本（`/research-objects`、`/sdf`、`/artifacts`、`/commits`、`/versions`、comparison、导出 zip，P1B）+ 协作（branches/issues/licenses/forks/pull-requests/authors/reviews/notifications，P1C）+ Hermes 与发布（agent-approvals、审核、申诉、publications、公开页，P1D）+ `/sandbox-jobs`（P1E-5）；`web` 已实现三栏 SDF 编辑器（P1B-8）+ 移动端抽屉/WCAG AA（P1B-9）+ 协作单页（P1C-10）+ 公开 RO 页（P1D-9）+ 沙箱可视化组件（P1E-6/7）+ **next-intl 已接通**（无 locale 路由：`i18n/request.ts` cookie NEXT_LOCALE→Accept-Language→zh，`NextIntlClientProvider` 在 layout，语言切换 `components/LocaleSwitcher.tsx`；公开页文案走 `messages/* public` 命名空间；`public/` 含 favicon/logo/og-image SVG 占位 + `hermes/` Live2D 待迁移说明）；`agent-worker` 队列消费者 + sdf.extract + review.analyze（P1D）；`science-worker` 沙箱执行完整实现（dockerode 编排 + AST 策略检查 + 16 项安全基线测试 + **pending 轮询执行链** `src/index.ts` pollOnce/main + `/output` 产物收集落库 `artifact-collector.ts`，P1E）；`sandbox-controller` 仍为空壳（功能落在 science-worker）。
 - `packages/`：13 个包。已实现：`database`/`storage`（P1A-2，含 rate-limit P1A-8、迁移 CLI）、`auth`（P1A-3 + P1A-9 QQ SMTP）、`domain`（workspace P1A-4、权限矩阵 P1A-5、usage P1A-7、research-object P1B-2、协作/审批/发布域 P1C/P1D、sandbox P1E）、`config`/`observability`（P1A-6/8）、`sdf-schema`（P1B-1，additionalProperties 宽容债务 0.2.0 收紧）、`diff`（P1B-5 九类确定性 diff）、`versioning`（P1B-4 manifest/patch）、`identity`（P1B-6 public-id/uuid7）、`ai-gateway`（P1D-1 统一路由 + 调用日志）；仍占位：`search`、`ui`。
-- `infra/`：`compose` 已含 `docker-compose.dev.yml` 开发栈、`docker-compose.monitor.yml` 监控栈、`docker-compose.prod.yml` 生产栈（P1A-9，data_net/app_net 分段，已部署云上）；`migrations` 已含迁移 1–21（prisma 格式，含 rollback.sql；21 = sandbox_jobs.context + users.level，20 = sandbox_jobs 幂等规整版，19 = author_affiliation，18 = publish_state，17 = appeals，16 = ai_reviews，15 = agent_tasks，7 = research_object + sdf_documents + sdf_nodes）；沙箱表原始 SQL 留存于 `packages/database/migrations/`（13/14，已标 DEPRECATED，勿再手工执行）；`nginx` 已含 `portainer.conf` + `openscience.conf`（均部署云上，/admin basic_auth）；`scripts/deploy.sh` + `backup.sh`（P1A-9）；`sandbox/` 已含沙箱基础镜像 Dockerfile + 构建/测试脚本 + README（P1E-3，Python 3.11-slim + 科学计算库 + 非 root）。
+- `infra/`：`compose` 已含 dev/monitor/prod 三套栈；生产栈按 data_net/app_net 分段，2026-08-09 增加仅 data_net 可达的 SeaweedFS 4.41 S3 对象存储（ADR-007）；`migrations` 已含迁移 1–26（Prisma 格式，均含 rollback.sql；26 = Editorial Collection/Selection）；沙箱表原始 SQL 留存于 `packages/database/migrations/`（13/14，已标 DEPRECATED，勿再手工执行）；`nginx` 已含 `portainer.conf` + `openscience.conf`（均部署云上，/admin basic_auth）；`scripts/deploy.sh` + `backup.sh`（P1A-9）；`sandbox/` 已含沙箱基础镜像 Dockerfile + 构建/测试脚本 + README（P1E-3，Python 3.11-slim + 科学计算库 + 非 root）。
 - 常用命令：`npx pnpm@9.15.0 install`、`npx pnpm@9.15.0 build`、`npx pnpm@9.15.0 typecheck`、`npx pnpm@9.15.0 lint`（ESLint 9 全仓检查 + `scripts/verify-workspace.mjs` 结构校验）。
 - API：`npx pnpm@9.15.0 api`（Fastify 起 127.0.0.1:3001）；邀请码 CLI：`node scripts/invite.mjs create|list|revoke`（或 `npx pnpm@9.15.0 invite ...`）；配额 seed CLI：`node scripts/seed-quota.mjs --dry-run|--confirm`（P1A-7 占位值幂等 upsert，数值集中 `packages/domain/src/usage/seed-data.ts`）。
 - 卫生审计：`npx pnpm@9.15.0 audit:knip`（未用文件/导出/依赖）、`audit:dep`（dependency-cruiser：循环依赖/跨包深引用/orphan 告警）、`audit:dup`（jscpd 重复代码）、`audit:deps`（syncpack 版本一致性）、`docs:lint`（markdownlint 文档门禁）、`audit:docs-sync`（`scripts/docs/check-docs-sync.mjs`：索引路径存在性 + 文档反向登记 + AGENTS 迁移数一致性，已挂入 lint 与 CI）。
 - 开发栈：`npx pnpm@9.15.0 stack:up|stack:down|stack:ps|stack:logs`（postgres/redis/minio，仅 127.0.0.1）；测试：`npx pnpm@9.15.0 test`（单测）、`npx pnpm@9.15.0 test:integration`（起栈+集成测试）。
+- Optical Lab 隔离浏览器门禁：`npx pnpm@9.15.0 --filter @openscience/web shots:optical-lab`（精确路由 `/_visual/optical-lab`；截图与 metrics 输出到已忽略的 `apps/web/test/visual/out/optical-lab/`；不替换生产 Landing）。
 - 数据库迁移：`node packages/database/dist/migrate-cli.js deploy|status|reset-dev`（reset-dev 生产禁用；迁移归 `infra/migrations/`，每个迁移附 rollback.sql）。
 - 构建产物忽略：`dist/`、`.next/`、`*.tsbuildinfo`。
 
@@ -26,7 +27,7 @@ OpenScience：AI 时代科研基础设施平台（Research Object / SDF / 预印
 - **服务器已卸载 Tailscale 且勿再装**（2026-08-01 实测）：tailscaled 劫持 `100.64.0.0/10` 路由，撞阿里云 VPC 内部 DNS（100.100.2.x）致全机 DNS 瘫痪。
 - 集成测试在云上执行：`cd /opt/openscience && npx pnpm@9.15.0 test:integration`（每次跑前必须**全量** `npx pnpm@9.15.0 build`——跨包 import 解析到目标包 dist，只 build database 会因 dist 过期致 500；2026-08-01 实证）。**集成测试限流桶隔离**：Redis server 端 key 空间全局共享，须 trustProxy:true + 用例唯一 X-Forwarded-For 独立桶（P1A-8 实证）。
 - API 反代 `infra/nginx/openscience.conf`（已部署云上 2026-08-03）：OpenScience.428312321.xyz → 127.0.0.1:3001，/admin 前缀 nginx basic_auth（凭据 `/etc/nginx/.htpasswd-admin` 云上生成不入库）；证书 DNS-01 签发（HTTP-01 被阿里云 403 拦，用 Cloudflare API）；部署见 docs/runbooks/deployment.md。
-- 生产栈 `docker-compose.prod.yml`（P1A-9）：postgres/redis 无端口映射（仅 data_net），api 暴露 127.0.0.1:3001；env 走 `/opt/openscience/.env.prod`（云上生成不入库）。**invite/migrate/seed 需容器内跑**（生产 postgres 无端口映射，宿主机解析不到 `postgres:5432`）：`docker compose --env-file /opt/openscience/.env.prod -f /opt/openscience/infra/compose/docker-compose.prod.yml exec -T -e DATABASE_URL=$(grep '^DATABASE_URL=' /opt/openscience/.env.prod | cut -d= -f2-) -w /opt/openscience api node /opt/openscience/scripts/<script>`。
+- 生产栈 `docker-compose.prod.yml`（P1A-9 + ADR-007）：postgres/redis/object-storage 无端口映射（仅 data_net），SeaweedFS S3 数据落 `seaweed-data` 命名卷，api 暴露 127.0.0.1:3001；env 走 `/opt/openscience/.env.prod`（云上生成不入库）。**invite/migrate/seed 需容器内跑**（生产 postgres 无端口映射，宿主机解析不到 `postgres:5432`）：`docker compose --env-file /opt/openscience/.env.prod -f /opt/openscience/infra/compose/docker-compose.prod.yml exec -T -e DATABASE_URL=$(grep '^DATABASE_URL=' /opt/openscience/.env.prod | cut -d= -f2-) -w /opt/openscience api node /opt/openscience/scripts/<script>`。
 - CI：`.github/workflows/ci.yml`（GitHub Actions，build/typecheck/lint/test，push+PR main）。每日备份 cron `0 3 * * * /usr/local/bin/backup.sh --confirm --db`（pg_dump 保留 7 轮）。
 
 ## 第一优先级：需求基线
@@ -65,6 +66,11 @@ OpenScience：AI 时代科研基础设施平台（Research Object / SDF / 预印
 - Node 工具放 root `devDependencies` 并提交 lockfile；Python 工具优先 `uvx` 或项目 `.venv`
 - 密钥只来自本机 `.env` 或服务器 Secret；仓库只提交 `.env.example`/模板，不提交真实 key
 - 新增/移除工具能力必须登记 `project_index.md`；影响流程时更新 AGENTS 或 ADR（见 `docs/decisions/ADR-002-agent-tooling-portability.md`）
+
+## Deployment Acceptance Rule
+
+- 有部署目标的功能优先在服务器完成最终部署与验收；本地用于代码编写、单元/构建门禁和安全预检，不能以本地通过替代服务器运行证据。
+- 服务器是生产功能的最终应用场景；交付证据至少包含服务器 build、迁移状态、目标容器状态、运行时依赖加载和公网/内网健康检查。
 
 ## Index Maintenance Rules
 - 创建/修改/移动文件后更新 `project_index.md`

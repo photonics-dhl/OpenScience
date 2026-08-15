@@ -5,6 +5,8 @@ import {
   login,
   logout,
   register,
+  requestSignupCode,
+  confirmSignup,
   resendCode,
   verifyEmail,
   type AuthDeps,
@@ -39,6 +41,12 @@ const registerBody = z.object({
 const verifyBody = z.object({ email: z.string().email(), code: z.string().regex(/^\d{6}$/) });
 const emailBody = z.object({ email: z.string().email() });
 const loginBody = z.object({ email: z.string().email(), password: z.string().min(1) });
+const signupRequestBody = z.object({ email: z.string().email() });
+const signupConfirmBody = signupRequestBody.extend({
+  code: z.string().regex(/^\d{6}$/),
+  password: passwordSchema,
+  displayName: z.string().min(1).max(64),
+});
 
 function setSessionCookie(reply: FastifyReply, token: string, secure: boolean): void {
   void reply.setCookie(SESSION_COOKIE, token, {
@@ -51,6 +59,19 @@ function setSessionCookie(reply: FastifyReply, token: string, secure: boolean): 
 }
 
 export function registerAuthRoutes(app: FastifyInstance, deps: AuthRouteDeps): void {
+  app.post('/request-signup-code', async (req, reply) => {
+    const body = signupRequestBody.parse(req.body);
+    await requestSignupCode(deps, body, auditCtx(req));
+    return reply.status(202).send({ ok: true });
+  });
+
+  app.post('/confirm-signup', async (req, reply) => {
+    const body = signupConfirmBody.parse(req.body);
+    const result = await confirmSignup(deps, body, auditCtx(req));
+    setSessionCookie(reply, result.sessionToken, deps.secureCookies);
+    return reply.status(201).send({ userId: result.userId, status: result.status });
+  });
+
   app.post('/register', async (req, reply) => {
     const body = registerBody.parse(req.body);
     const result = await register(deps, body, auditCtx(req));

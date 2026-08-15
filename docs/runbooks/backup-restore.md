@@ -20,9 +20,10 @@
 #   （脚本在云上 /opt/openscience/infra/scripts/backup.sh；建议软链到 /usr/local/bin）
 ```
 
-- 备份内容：`pg_dump` 经生产 postgres 容器导出全库 → `/var/backups/openscience/db-YYYY-MM-DD.sql`
+- 备份内容：`pg_dump` 经生产 postgres 容器导出全库 → `/var/backups/openscience/db-YYYY-MM-DD.sql`；对象存储可追加 `--objects`，脚本会对 SeaweedFS Docker volume 创建本机压缩快照 `/var/backups/openscience/objects-YYYY-MM-DD.tar.gz`，不读取或输出对象内容。
 - 保留策略：`KEEP_BACKUPS=7` 轮（参数化），超出的轮转删除（--confirm 放行 rm）
 - 输出仅 `BACKUP_OK size=... files=N/7`，不输出备份内容（Spec §20.1-9）
+- 对象快照输出仅 `OBJECT_BACKUP_OK size=...`；恢复时先停止写入，再将 tar 解压回同一 volume，完成 SeaweedFS healthcheck 后恢复 API/worker。
 
 ## 3. 回滚步骤
 

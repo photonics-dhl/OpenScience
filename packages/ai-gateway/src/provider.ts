@@ -32,6 +32,7 @@ export interface ProviderConfig {
 
 export interface Provider {
   readonly name: string;
+  readonly model: string;
   complete(opts: CompleteOptions): Promise<ProviderResult>;
 }
 
@@ -45,6 +46,10 @@ export class OpenAiCompatProvider implements Provider {
     private readonly cfg: ProviderConfig,
     private readonly fetcher: typeof fetch = globalThis.fetch,
   ) {}
+
+  get model(): string {
+    return this.cfg.model;
+  }
 
   async complete(opts: CompleteOptions): Promise<ProviderResult> {
     const controller = new AbortController();
@@ -80,6 +85,70 @@ export class OpenAiCompatProvider implements Provider {
         usage: {
           inputTokens: data.usage?.prompt_tokens ?? 0,
           outputTokens: data.usage?.completion_tokens ?? 0,
+        },
+        model: data.model ?? opts.model,
+      };
+    } finally {
+      clearTimeout(timer);
+    }
+  }
+}
+
+/** Anthropic Messages 兼容 Provider；MiniMax Token Plan Subscription Key 使用该协议。 */
+export class AnthropicCompatProvider implements Provider {
+  constructor(
+    readonly name: string,
+    private readonly cfg: ProviderConfig,
+    private readonly fetcher: typeof fetch = globalThis.fetch,
+  ) {}
+
+  get model(): string {
+    return this.cfg.model;
+  }
+
+  async complete(opts: CompleteOptions): Promise<ProviderResult> {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 60_000);
+    try {
+      const system = opts.messages
+        .filter((message) => message.role === 'system')
+        .map((message) => message.content)
+        .join('\n\n');
+      const messages = opts.messages
+        .filter((message) => message.role !== 'system')
+        .map((message) => ({ role: message.role, content: message.content }));
+      const res = await this.fetcher(`${this.cfg.baseUrl.replace(/\/$/, '')}/v1/messages`, {
+        method: 'POST',
+        headers: {
+          'content-type': 'application/json',
+          'x-api-key': this.cfg.apiKey,
+          'anthropic-version': '2023-06-01',
+        },
+        body: JSON.stringify({
+          model: opts.model,
+          system: system || undefined,
+          messages,
+          temperature: opts.temperature,
+          max_tokens: opts.maxTokens ?? 4096,
+        }),
+        signal: controller.signal,
+      });
+      if (!res.ok) throw new Error(`Provider ${this.name} HTTP ${res.status}`);
+      const data = (await res.json()) as {
+        content?: Array<{ type?: string; text?: string }>;
+        usage?: { input_tokens?: number; output_tokens?: number };
+        model?: string;
+      };
+      const text = data.content
+        ?.filter((block) => block.type === 'text' && typeof block.text === 'string')
+        .map((block) => block.text)
+        .join('\n') ?? '';
+      if (!text) throw new Error(`Provider ${this.name} 空响应`);
+      return {
+        text,
+        usage: {
+          inputTokens: data.usage?.input_tokens ?? 0,
+          outputTokens: data.usage?.output_tokens ?? 0,
         },
         model: data.model ?? opts.model,
       };

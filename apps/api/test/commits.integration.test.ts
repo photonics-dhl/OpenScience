@@ -142,6 +142,10 @@ describe('P1B-4 /commits + /versions（云上，真 MinIO）', () => {
     expect(result.versionNo).toBe(1);
     expect(result.snapshot.core.problem).toBe('新版问题');
 
+    const versions = await app.inject({ method: 'GET', url: `/research-objects/${ro.id}/versions`, cookies: { openscience_session: cookie } });
+    expect(versions.statusCode).toBe(200);
+    expect(versions.json().versions).toEqual([expect.objectContaining({ versionId: result.versionId, versionNo: 1, status: 'draft' })]);
+
     const detail = await app.inject({ method: 'GET', url: `/versions/${result.versionId}`, cookies: { openscience_session: cookie } });
     expect(detail.statusCode).toBe(200);
     expect(detail.json().version.snapshot.core.problem).toBe('新版问题');

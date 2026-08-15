@@ -51,8 +51,10 @@ export {
 export {
   generateMonthlyGrants,
   applyMonthlyGrants,
+  ensureMonthlyGrantForUser,
   MONTHLY_GRANT_RESOURCE,
   MONTHLY_PERIOD_REGEX,
+  type MonthlyGrantResult,
 } from './usage/grants';
 export { checkLimit, type CheckLimitInput, type CheckLimitResult } from './usage/limits';
 export { GLOBAL_DEFAULT_POLICIES, type SeedQuotaPolicy } from './usage/seed-data';
@@ -63,7 +65,7 @@ export {
 } from './research-object/types';
 export { ResearchObjectError, type ResearchObjectErrorCode } from './research-object/errors';
 export {
-  createResearchObject, getResearchObject, updateResearchObject,
+  createResearchObject, getResearchObject, listResearchObjects, updateResearchObject,
   type CreateResearchObjectInput, type ResearchObjectSummary, type ResearchObjectDetail, type UpdateResearchObjectInput,
 } from './research-object/research-objects';
 export {
@@ -80,8 +82,8 @@ export {
 } from './artifact/artifacts';
 export { CommitError, type CommitErrorCode } from './commit/errors';
 export {
-  createCommit, getVersion, rebuildVersion,
-  type CreateCommitInput, type CreateCommitResult, type VersionDetail,
+  createCommit, getVersion, listVersions, rebuildVersion,
+  type CreateCommitInput, type CreateCommitResult, type VersionDetail, type VersionSummary,
   type ArtifactReference,
 } from './commit/commits';
 export type { VersionSnapshot } from '@openscience/versioning';
@@ -152,7 +154,7 @@ export {
 export { InAppChannel, EmailChannel } from './notification/channels';
 export { AgentError, type AgentErrorCode } from './agent/errors';
 export {
-  createAgentSession, submitAgentTask, getAgentTask, listAgentSessions, markTaskProgress,
+  claimAgentTask, createAgentSession, dispatchAgentTask, submitAgentTask, getAgentTask, listAgentSessions, listAgentTasks, markTaskProgress,
   AGENT_TASK_QUEUE, AI_CREDIT_RESOURCE,
   type AgentDeps, type AgentTaskView, type AgentSessionView, type AgentTaskStatus,
 } from './agent/agent';
@@ -186,3 +188,15 @@ export {
 } from './sandbox/quota';
 export { onSandboxJobCompleted } from './sandbox/events';
 export { checkPythonScript, modifyScriptStub, type PolicyCheckResult } from './sandbox';
+export { IngestionError, type IngestionErrorCode } from './ingestion/errors';
+export { EXPLORE_ARTIFACT_TYPES, classifyExploreArtifact, listPublicResearchIndex, type ExploreArtifactType, type ResearchIndexItem, type ResearchIndexPage } from './explore/explore';
+export { INGESTION_EXTENSIONS, assertSupportedIngestionFile } from './ingestion/format-policy';
+export { EditorialError, type EditorialErrorCode } from './editorial/errors';
+export {
+  EDITORIAL_DISCLOSURE, EDITORIAL_STATES, assertEditorialRole, assertEditorialTransition,
+  validateEditorialMedia, buildEditorialSnapshot, createEditorialSelection, updateEditorialSelection,
+  transitionEditorialSelection, listEditorialSelections, getPublicEditorialCollection,
+  type EditorialState, type EditorialMedia, type EditorialSelectionView, type EditorialCollectionView,
+} from './editorial/editorial';
+export { INGESTION_TASK_STATES, type ActionableIngestionTaskView, type IngestionTaskState, type IngestionFileInput, type IngestionTaskView, type IngestionBatchView } from './ingestion/ingestion-types';
+export { authorizeIngestionWrite, confirmIngestionTask, createIngestionBatch, getIngestionBatch, getIngestionTask, listActionableIngestionTasks, retryIngestionTask, type IngestionDeps } from './ingestion/ingestion-service';

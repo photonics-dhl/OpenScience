@@ -1,0 +1,27 @@
+export const PRODUCT_RELEASE_VIEWPORTS = Object.freeze([
+  { name: 'desktop', width: 1440, height: 900 },
+  { name: 'wide', width: 1920, height: 1080 },
+  { name: 'mobile', width: 390, height: 844 },
+]);
+
+const surfaces = Object.freeze([
+  { surface: 'landing', route: '/', state: 'optical-resting' },
+  { surface: 'workspace', route: '/research-objects/ro-release/edit', state: 'proposal-ready' },
+  { surface: 'public', route: '/research/OSR-DEMO-000001/v/1', state: 'published-reading' },
+  { surface: 'auth', route: '/auth/register', state: 'request-code' },
+  { surface: 'dashboard', route: '/dashboard', state: 'approval-ready' },
+  { surface: 'intake', route: '/research-objects/new?mode=import', state: 'mixed-evidence' },
+  { surface: 'explore', route: '/explore', state: 'launch-corpus' },
+  { surface: 'collection', route: '/collections/ultrafast-science', state: 'selected-media' },
+]);
+
+export const PRODUCT_RELEASE_CASES = Object.freeze([
+  ...surfaces.flatMap((surface) => PRODUCT_RELEASE_VIEWPORTS.map((viewport) => ({ ...surface, viewport, reducedMotion: false }))),
+  ...PRODUCT_RELEASE_VIEWPORTS.map((viewport) => ({ ...surfaces[0], state: 'optical-reduced', viewport, reducedMotion: true })),
+]);
+
+export const PRODUCT_RELEASE_BUDGETS = Object.freeze({
+  lcpMs: 4_000,
+  transferBytes: 3_500_000,
+  domNodes: 1_800,
+});

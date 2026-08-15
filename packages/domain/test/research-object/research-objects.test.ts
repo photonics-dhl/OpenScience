@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { AuditSink } from '@openscience/observability';
 import { createFakePrisma, createFakeMailer, seedUser } from '../helpers/fakes';
-import { createResearchObject, getResearchObject, updateResearchObject } from '../../src/research-object/research-objects';
+import { createResearchObject, getResearchObject, listResearchObjects, updateResearchObject } from '../../src/research-object/research-objects';
 import { SDF_NODE_TYPES } from '../../src/research-object/types';
 
 function makeDeps(audit?: AuditSink) {
@@ -63,6 +63,29 @@ describe('createResearchObject（验收步骤 2：个人空间建私有 RO）', 
 });
 
 describe('getResearchObject', () => {
+  it('lists only research objects in the current user workspaces, newest first', async () => {
+    const { deps, db, user } = makeDeps();
+    const first = await createResearchObject(deps, { workspaceId: 'ws-1', userId: user.id, title: 'First' });
+    const second = await createResearchObject(deps, { workspaceId: 'ws-1', userId: user.id, title: 'Second' });
+    db.researchObjects.find((row) => row.id === first.id).updatedAt = new Date('2026-01-01');
+    db.researchObjects.find((row) => row.id === second.id).updatedAt = new Date('2026-02-01');
+    db.researchObjects.push({ id: 'other-ro', workspaceId: 'other-workspace', title: 'Private other', status: 'draft', visibility: 'private', version: 1, publicId: null, createdAt: new Date(), updatedAt: new Date() });
+
+    const rows = await listResearchObjects(deps, { userId: user.id, limit: 10 });
+
+    expect(rows.map((row) => row.title)).toEqual(['Second', 'First']);
+  });
+
+  it('相同幂等键重放 → 返回同一 RO 且不重复创建', async () => {
+    const { deps, db, user } = makeDeps();
+    const input = { workspaceId: 'ws-1', userId: user.id, title: 'Replay safe', idempotencyKey: 'import-1:create' };
+    const first = await createResearchObject(deps, input);
+    const replay = await createResearchObject(deps, input);
+    expect(replay.id).toBe(first.id);
+    expect(db.researchObjects).toHaveLength(1);
+    expect(db.sdfDocuments).toHaveLength(1);
+  });
+
   it('成员查详情（RO + core + nodes）', async () => {
     const { deps, user } = makeDeps();
     const ro = await createResearchObject(deps, { workspaceId: 'ws-1', userId: user.id, title: 'Detail' });

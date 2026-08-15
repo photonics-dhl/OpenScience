@@ -97,7 +97,7 @@ body {
   position: fixed;
   inset: 0;
   background: rgba(15, 23, 42, 0.4);
-  z-index: 100;
+  z-index: var(--z-overlay);
 }
 .drawer {
   position: absolute;
@@ -123,8 +123,42 @@ body {
 
 /* 焦点状态（§18.3） */
 :focus-visible {
-  outline: 2px solid var(--color-accent);
+  outline: 2px solid var(--focus-ring);
   outline-offset: 2px;
+}
+
+/* Researcher ingestion surfaces share stable semantic layers with the Figma
+   foundations. Workbench backgrounds are solid hierarchy steps, not generic
+   decorative gradients; evidence remains an ink-on-paper reading surface. */
+.surface-workbench {
+  color: var(--workbench-text);
+  background: var(--workbench-bg);
+  color-scheme: dark;
+}
+
+.surface-evidence {
+  color: var(--evidence-ink);
+  background: var(--evidence-paper);
+  color-scheme: light;
+}
+
+@keyframes ro-node-confirm {
+  0%, 100% { transform: scale(1); opacity: 1; }
+  45% { transform: scale(1.035); opacity: 0.82; }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .ro-node-motion {
+    animation: ro-node-confirm var(--motion-fast) var(--ease-entrance) 1;
+    transform-origin: center;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ro-node-motion {
+    animation: none;
+    transition: none;
+  }
 }
 
 /* 大纲 */
@@ -694,7 +728,7 @@ body {
   font-size: 0.95em;
   font-weight: 500;
   color: var(--color-muted);
-  transition: all 0.2s;
+  transition: color var(--motion-focus) var(--ease-standard), border-color var(--motion-focus) var(--ease-standard);
   white-space: nowrap;
 }
 
@@ -1044,6 +1078,230 @@ body {
 }
 .pub-placeholder {
   color: #94a3b8;
+}
+
+/* Optical Editorial public reading surface — warm paper, long-form first. */
+.pub-page-tabbed {
+  max-width: none;
+  padding: 0;
+  background: var(--os-paper);
+  color: var(--os-ink);
+}
+
+.pub-reading-surface {
+  min-height: 100dvh;
+  padding: clamp(2rem, 5vw, 5.5rem) clamp(1rem, 4vw, 4rem);
+  background-color: var(--os-paper);
+  background-image: repeating-linear-gradient(0deg, rgb(25 26 24 / .018) 0, rgb(25 26 24 / .018) 1px, transparent 1px, transparent 4px);
+}
+
+.pub-reading-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 760px) minmax(240px, 280px);
+  gap: clamp(3rem, 6vw, 7rem);
+  justify-content: center;
+  align-items: start;
+}
+
+.pub-reading-column {
+  min-width: 0;
+  font-family: var(--font-editorial-serif);
+  font-size: clamp(1.05rem, 1.3vw, 1.2rem);
+  line-height: 1.75;
+}
+
+.pub-reading-identity {
+  padding-bottom: 2.5rem;
+  border-bottom: 1px solid var(--os-rule-paper);
+}
+
+.pub-reading-identity h1 {
+  max-width: 19ch;
+  margin: .45rem 0 1.5rem;
+  font-family: var(--font-editorial-serif);
+  font-size: clamp(3.2rem, 6.3vw, 6.6rem);
+  font-weight: 400;
+  line-height: .95;
+  letter-spacing: -.06em;
+}
+
+.pub-kicker,
+.pub-rail-label {
+  margin: 0;
+  font-family: var(--font-data);
+  font-size: .68rem;
+  line-height: 1.4;
+  letter-spacing: .16em;
+  text-transform: uppercase;
+  color: var(--os-muted-paper);
+}
+
+.pub-author-line {
+  display: flex;
+  flex-wrap: wrap;
+  gap: .35rem 1rem;
+  margin: 1rem 0;
+  font-family: var(--font-ui);
+  font-size: .93rem;
+}
+
+.pub-license-line {
+  display: grid;
+  grid-template-columns: 7rem 1fr;
+  gap: 1rem;
+  padding-top: 1rem;
+  border-top: 1px solid var(--os-rule-paper);
+  font-family: var(--font-data);
+  font-size: .72rem;
+  line-height: 1.6;
+  color: var(--os-muted-paper);
+}
+
+.pub-reading-insight {
+  margin: 2.5rem 0 4.5rem;
+  padding: 1.5rem 0 1.8rem 1.5rem;
+  border-left: 3px solid var(--os-vermilion);
+  border-bottom: 1px solid var(--os-rule-paper);
+}
+
+.pub-reading-insight > p:last-child {
+  max-width: 31ch;
+  margin: .75rem 0 0;
+  font-size: clamp(1.9rem, 3.4vw, 3.1rem);
+  line-height: 1.08;
+  letter-spacing: -.035em;
+}
+
+.pub-reading-abstract,
+.pub-reading-sdf,
+.pub-reading-citation {
+  margin: 4.5rem 0;
+}
+
+.pub-reading-column h2 {
+  margin: 0 0 1.5rem;
+  font-family: var(--font-ui);
+  font-size: .78rem;
+  letter-spacing: .14em;
+  text-transform: uppercase;
+}
+
+.pub-reading-sdf > section {
+  display: grid;
+  grid-template-columns: minmax(7rem, .28fr) minmax(0, .72fr);
+  gap: 1.5rem;
+  padding: 1.5rem 0;
+  border-top: 1px solid var(--os-rule-paper);
+}
+
+.pub-reading-sdf h3 {
+  margin: 0;
+  font-family: var(--font-data);
+  font-size: .7rem;
+  font-weight: 500;
+  letter-spacing: .1em;
+  text-transform: uppercase;
+}
+
+.pub-reading-sdf p { margin: 0; }
+.pub-reading-sdf [data-sdf-state='empty'] p { color: var(--os-muted-paper); font-style: italic; }
+
+.pub-reading-citation {
+  padding: 2rem 0;
+  border-block: 1px solid var(--os-rule-paper);
+}
+
+.pub-reading-rail {
+  position: sticky;
+  top: 2rem;
+  border-top: 1px solid var(--os-ink);
+  font-family: var(--font-data);
+  font-size: .7rem;
+  line-height: 1.55;
+}
+
+.pub-reading-rail section {
+  padding: 1.1rem 0;
+  border-bottom: 1px solid var(--os-rule-paper);
+}
+
+.pub-reading-rail code,
+.pub-provenance-caption code {
+  display: block;
+  margin-top: .45rem;
+  overflow-wrap: anywhere;
+  color: var(--os-ink);
+}
+
+.pub-rail-muted { color: var(--os-muted-paper); }
+.pub-rail-actions { margin-top: .8rem; }
+.pub-reading-surface .copy-btn {
+  min-height: 2.25rem;
+  padding: .45rem .75rem;
+  border: 1px solid var(--os-rule-paper);
+  border-radius: var(--radius-control);
+  background: transparent;
+  color: var(--os-ink);
+}
+.pub-reading-surface .copy-btn:hover { border-color: var(--os-ink); background: transparent; }
+
+.pub-provenance-caption {
+  display: grid;
+  grid-template-columns: 7rem 1fr;
+  gap: 1rem;
+  margin-top: 1.5rem;
+  font-family: var(--font-data);
+  font-size: .68rem;
+  color: var(--os-muted-paper);
+}
+
+.pub-reading-surface .pub-disclaimer {
+  margin: 5rem 0 0;
+  padding: 1.5rem 0 0;
+  border: 0;
+  border-top: 1px solid var(--os-rule-paper);
+  border-radius: 0;
+  background: transparent;
+  color: var(--os-muted-paper);
+}
+.pub-reading-surface .pub-disclaimer h3,
+.pub-reading-surface .pub-disclaimer p { color: inherit; }
+
+.pub-reading-tabs {
+  max-width: 1100px;
+  margin: 5rem auto 0;
+  border-top: 1px solid var(--os-rule-paper);
+}
+.pub-reading-tabs .pub-tabs { border-color: var(--os-rule-paper); }
+.pub-reading-tabs .pub-tab { border: 0; border-radius: 0; color: var(--os-muted-paper); }
+.pub-reading-tabs .pub-tab.active { border-bottom: 2px solid var(--os-vermilion); color: var(--os-ink); }
+
+@media (max-width: 900px) {
+  .pub-reading-layout { grid-template-columns: minmax(0, 760px); }
+  .pub-reading-rail { position: static; display: grid; grid-template-columns: repeat(3, 1fr); gap: 1rem; }
+}
+
+@media (max-width: 640px) {
+  .pub-reading-surface { padding: 2rem 1rem 4rem; }
+  .pub-reading-identity h1 { font-size: clamp(2.8rem, 15vw, 4.4rem); }
+  .pub-reading-rail { grid-template-columns: 1fr; }
+  .pub-reading-sdf > section,
+  .pub-license-line,
+  .pub-provenance-caption { grid-template-columns: 1fr; gap: .6rem; }
+}
+
+@media print {
+  .pub-page-tabbed,
+  .pub-reading-surface { background: #fff !important; color: #111 !important; }
+  .pub-reading-surface { padding: 0; }
+  .pub-reading-layout { display: block; }
+  .pub-reading-column { max-width: 100%; font-size: 10.5pt; }
+  .pub-reading-rail { position: static; margin-top: 2rem; break-inside: avoid; }
+  .pub-reading-tabs,
+  .copy-btn,
+  [data-public-deep-navigation='true'] { display: none !important; }
+  [data-print-landmark='citation'],
+  [data-print-landmark='provenance'] { display: block !important; break-inside: avoid; }
 }
 
 /* P1E-6: Visualization Result Component */
@@ -1406,11 +1664,272 @@ body {
 
 /* ===== Task 3: 正文系统字体栈 + 标题衬线工具类（追加，不覆盖上方已有 body 其他属性） ===== */
 body {
-  font-family: system-ui, -apple-system, 'PingFang SC', 'Microsoft YaHei', 'Noto Sans SC', sans-serif;
+  font-family: var(--font-ui);
+}
+
+/* Local optical typography: the DOM headline remains the readable source;
+   these layers only reveal a pointer-local instrument effect. */
+[data-optical-text-stage='true'] {
+  --os-optical-x: 50%;
+  --os-optical-y: 50%;
+  --os-optical-focus: 0;
+}
+
+.os-optical-headline-axis {
+  display: block;
+  line-height: .84;
+}
+
+.os-optical-science,
+.os-optical-evolves {
+  display: block;
+  letter-spacing: 0;
+}
+
+.os-optical-science {
+  font-size: 4.7rem;
+  font-weight: 650;
+}
+
+.os-optical-evolves {
+  margin-left: 14vw;
+  padding-bottom: .13em;
+  font-size: 5.2rem;
+  font-style: italic;
+  font-weight: 440;
+}
+
+@media (min-width: 640px) {
+  .os-optical-science { font-size: 7rem; }
+  .os-optical-evolves { margin-left: 18vw; font-size: 7.6rem; }
+}
+
+@media (min-width: 1024px) {
+  .os-optical-science { font-size: 9rem; }
+  .os-optical-evolves { font-size: 9.8rem; }
+}
+
+@media (min-width: 1280px) {
+  .os-optical-headline-axis {
+    display: flex;
+    align-items: baseline;
+    white-space: nowrap;
+  }
+  .os-optical-science { font-size: 10.5rem; }
+  .os-optical-evolves { margin-left: -.045em; font-size: 10.5rem; }
+}
+
+@media (min-width: 1600px) {
+  .os-optical-science,
+  .os-optical-evolves { font-size: 12.5rem; }
+}
+
+[data-optical-text-base='true'] {
+  -webkit-mask-image: linear-gradient(
+    to right,
+    #000 0,
+    #000 calc(50% - 210px),
+    rgb(0 0 0 / .94) calc(50% - 175px),
+    rgb(0 0 0 / .42) calc(50% - 125px),
+    rgb(0 0 0 / .08) calc(50% - 70px),
+    transparent calc(50% - 16px),
+    transparent calc(50% + 12px),
+    rgb(0 0 0 / .08) calc(50% + 42px),
+    rgb(0 0 0 / .55) calc(50% + 95px),
+    #000 calc(50% + 145px),
+    #000 100%
+  );
+  mask-image: linear-gradient(
+    to right,
+    #000 0,
+    #000 calc(50% - 210px),
+    rgb(0 0 0 / .94) calc(50% - 175px),
+    rgb(0 0 0 / .42) calc(50% - 125px),
+    rgb(0 0 0 / .08) calc(50% - 70px),
+    transparent calc(50% - 16px),
+    transparent calc(50% + 12px),
+    rgb(0 0 0 / .08) calc(50% + 42px),
+    rgb(0 0 0 / .55) calc(50% + 95px),
+    #000 calc(50% + 145px),
+    #000 100%
+  );
+}
+
+.optical-field-viewport {
+  inset: -34vh 0;
+}
+
+.optical-diffraction-aperture {
+  position: absolute;
+  left: calc(50% - 1px);
+  top: calc(50% - 22px);
+  width: 2px;
+  height: 44px;
+  border-radius: 999px;
+  background: linear-gradient(to bottom, transparent, rgb(241 238 231 / .92) 35%, rgb(241 238 231 / .92) 65%, transparent);
+  box-shadow: 0 0 22px rgb(241 238 231 / .38);
+  opacity: calc(.36 + var(--os-optical-focus) * .58);
+  transform: scaleY(calc(.85 + var(--os-optical-focus) * .3));
+  transition: opacity 220ms ease-out;
+}
+
+@media (max-width: 760px) {
+  [data-optical-text-base='true'] {
+    -webkit-mask-image: linear-gradient(
+      to right,
+      #000 0,
+      #000 calc(50% - 82px),
+      rgb(0 0 0 / .58) calc(50% - 54px),
+      rgb(0 0 0 / .08) calc(50% - 24px),
+      transparent calc(50% - 5px),
+      transparent calc(50% + 5px),
+      rgb(0 0 0 / .2) calc(50% + 24px),
+      rgb(0 0 0 / .75) calc(50% + 50px),
+      #000 calc(50% + 76px),
+      #000 100%
+    );
+    mask-image: linear-gradient(
+      to right,
+      #000 0,
+      #000 calc(50% - 82px),
+      rgb(0 0 0 / .58) calc(50% - 54px),
+      rgb(0 0 0 / .08) calc(50% - 24px),
+      transparent calc(50% - 5px),
+      transparent calc(50% + 5px),
+      rgb(0 0 0 / .2) calc(50% + 24px),
+      rgb(0 0 0 / .75) calc(50% + 50px),
+      #000 calc(50% + 76px),
+      #000 100%
+    );
+  }
+  .optical-field-viewport { inset: -18vh 0; }
+}
+
+[data-optical-text-stage='true'][data-reduced-motion='true'] [data-optical-text-base='true'] {
+  -webkit-mask-image: none;
+  mask-image: none;
+}
+
+[data-optical-text-stage='true'][data-reduced-motion='true'] .optical-diffraction-aperture {
+  display: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  [data-optical-text-base='true'] {
+    -webkit-mask-image: none;
+    mask-image: none;
+  }
+  .optical-diffraction-aperture { display: none; }
+}
+
+/* Hermes is an original optical guide, not a bundled third-party character.
+   Pointer gaze stays compositor-only; approval and reduced-motion are still. */
+.hermes-visual {
+  --hermes-gaze-x: 0px;
+  --hermes-gaze-y: 0px;
+  background:
+    radial-gradient(circle at 50% 48%, rgb(255 78 34 / .055), transparent 31%),
+    linear-gradient(90deg, transparent 49.8%, rgb(241 238 231 / .045) 50%, transparent 50.2%);
+}
+
+.hermes-gaze {
+  transform: translate3d(var(--hermes-gaze-x), var(--hermes-gaze-y), 0);
+  transform-origin: 180px 177px;
+  transition: transform 420ms var(--ease-optical);
+}
+
+.hermes-orbit,
+.hermes-nodes,
+.hermes-pupil,
+.hermes-wave,
+.hermes-scan {
+  transform-box: fill-box;
+  transform-origin: center;
+}
+
+@keyframes hermes-orbit-drift {
+  to { transform: rotate(360deg); }
+}
+
+@keyframes hermes-breathe {
+  0%, 100% { opacity: .72; transform: scale(.98); }
+  50% { opacity: 1; transform: scale(1.035); }
+}
+
+@keyframes hermes-node-signal {
+  0%, 65%, 100% { opacity: .34; transform: scale(.72); }
+  18% { opacity: 1; transform: scale(1.8); }
+}
+
+@keyframes hermes-scan-pass {
+  from { transform: translateY(0); opacity: 0; }
+  18%, 82% { opacity: 1; }
+  to { transform: translateY(142px); opacity: 0; }
+}
+
+@keyframes hermes-fault {
+  0%, 92%, 100% { transform: translateX(0); opacity: 1; }
+  94% { transform: translateX(-3px); opacity: .58; }
+  97% { transform: translateX(2px); }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .hermes-visual[data-motion='responsive'] .hermes-orbit {
+    animation: hermes-orbit-drift 28s linear infinite;
+  }
+
+  .hermes-visual[data-hermes-state='idle'] .hermes-pupil,
+  .hermes-visual[data-hermes-state='guiding'] .hermes-pupil {
+    animation: hermes-breathe 4.8s ease-in-out infinite;
+  }
+
+  .hermes-visual[data-hermes-state='suggesting'] .hermes-nodes circle,
+  .hermes-visual[data-hermes-state='guiding'] .hermes-nodes circle {
+    animation: hermes-node-signal 2.7s ease-in-out infinite;
+  }
+
+  .hermes-visual[data-hermes-state='scanning'] .hermes-scan {
+    animation: hermes-scan-pass 2.3s var(--ease-optical) infinite;
+  }
+
+  .hermes-visual[data-hermes-state='failed'] .hermes-gaze {
+    animation: hermes-fault 3.6s steps(1, end) infinite;
+  }
+}
+
+.hermes-visual[data-hermes-state='awaiting_approval'] .hermes-pupil {
+  fill: #ff4e22;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .hermes-gaze { transition: none; }
+  .hermes-portrait * { animation: none !important; }
 }
 
 .font-display {
-  font-family: var(--font-display), 'Songti SC', serif;
+  font-family: var(--font-display-grotesk);
+}
+
+.font-editorial {
+  font-family: var(--font-editorial-serif);
+}
+
+:lang(zh) .font-editorial,
+:lang(zh-CN) .font-editorial {
+  font-family: var(--font-cjk-serif);
+}
+
+.font-editorial-latin {
+  font-family: var(--font-editorial-serif), "Times New Roman", serif;
+}
+
+.font-editorial-cjk {
+  font-family: var(--font-cjk-serif), "Songti SC", serif;
+}
+
+.font-data {
+  font-family: var(--font-data);
+  font-variant-numeric: tabular-nums;
 }
 
 /* ===== Landing hero 符号呼吸动效（仅 opacity/transform 级；reduced-motion 不加载） ===== */

@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { useTranslations } from 'next-intl';
 import type { ModifyScriptResponse } from '@/lib/api';
 import { modifyScript, createSandboxJob } from '@/lib/api';
 
@@ -17,6 +18,7 @@ export default function ScriptModifier({
   onClose,
   onModifyComplete,
 }: Props) {
+  const t = useTranslations('productSurfaces');
   const [prompt, setPrompt] = useState('');
   const [preview, setPreview] = useState<ModifyScriptResponse | null>(null);
   const [loading, setLoading] = useState(false);
@@ -32,7 +34,7 @@ export default function ScriptModifier({
       const result = await modifyScript(jobId, { prompt });
       setPreview(result);
     } catch (err) {
-      setError(err instanceof Error ? err.message : '生成预览失败');
+      setError(err instanceof Error ? err.message : t('sandbox.previewError'));
     } finally {
       setLoading(false);
     }
@@ -49,7 +51,7 @@ export default function ScriptModifier({
       onModifyComplete(result.job.id);
       onClose();
     } catch (err) {
-      setError(err instanceof Error ? err.message : '执行失败');
+      setError(err instanceof Error ? err.message : t('sandbox.executeError'));
     } finally {
       setExecuting(false);
     }
@@ -59,8 +61,8 @@ export default function ScriptModifier({
     <div className="script-modifier-overlay" onClick={onClose}>
       <div className="script-modifier" onClick={(e) => e.stopPropagation()}>
         <div className="modifier-header">
-          <h2>修改脚本</h2>
-          <button onClick={onClose} className="close-btn" aria-label="关闭">
+          <h2 className="font-editorial text-3xl font-normal text-os-paper">{t('sandbox.modify')}</h2>
+          <button onClick={onClose} className="rounded-panel p-2 text-os-paper" aria-label={t('sandbox.close')}>
             ✕
           </button>
         </div>
@@ -68,12 +70,12 @@ export default function ScriptModifier({
         <div className="modifier-body">
           {/* 修改意图输入 */}
           <div className="prompt-section">
-            <label htmlFor="modify-prompt">描述你想要的修改：</label>
+            <label className="text-sm text-os-paper" htmlFor="modify-prompt">{t('sandbox.modifyPrompt')}</label>
             <textarea
               id="modify-prompt"
               value={prompt}
               onChange={(e) => setPrompt(e.target.value)}
-              placeholder="例如: 将曲线颜色改为红色, 增加标题, 调整 x 轴标签"
+              placeholder={t('sandbox.modifyPlaceholder')}
               rows={3}
               disabled={loading || executing}
             />
@@ -82,7 +84,7 @@ export default function ScriptModifier({
               disabled={!prompt.trim() || loading || executing}
               className="preview-btn"
             >
-              {loading ? '生成中...' : '生成预览'}
+              {loading ? t('sandbox.previewing') : t('sandbox.preview')}
             </button>
           </div>
 
@@ -95,10 +97,10 @@ export default function ScriptModifier({
               {/* 策略检查结果 */}
               <div className={`policy-check ${preview.policyResult.allowed ? 'allowed' : 'blocked'}`}>
                 {preview.policyResult.allowed ? (
-                  <span>✅ 策略检查通过</span>
+                  <span>{t('sandbox.policyPassed')}</span>
                 ) : (
                   <>
-                    <span>❌ 策略检查阻断</span>
+                    <span>{t('sandbox.policyBlocked')}</span>
                     <ul>
                       {preview.policyResult.violations.map((v, i) => (
                         <li key={i}>{v}</li>
@@ -110,7 +112,7 @@ export default function ScriptModifier({
 
               {/* Diff 展示 */}
               <div className="diff-viewer">
-                <h3>脚本差异</h3>
+                <h3>{t('sandbox.diff')}</h3>
                 <pre>{preview.diff}</pre>
               </div>
 
@@ -121,7 +123,7 @@ export default function ScriptModifier({
                   disabled={executing}
                   className="execute-btn"
                 >
-                  {executing ? '创建新任务中...' : '确认执行'}
+                  {executing ? t('sandbox.starting') : t('sandbox.confirmExecute')}
                 </button>
               )}
             </div>

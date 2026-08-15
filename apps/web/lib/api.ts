@@ -26,6 +26,26 @@ export class ApiClientError extends Error {
   }
 }
 
+export interface CurrentUser {
+  userId: string;
+  email: string;
+  displayName: string;
+  status: string;
+  level: string;
+}
+
+export interface AuthResult {
+  userId: string;
+  status: string;
+}
+
+export interface ConfirmSignupInput {
+  email: string;
+  code: string;
+  password: string;
+  displayName: string;
+}
+
 export interface ResearchObjectSummary {
   id: string;
   workspaceId: string;
@@ -49,19 +69,432 @@ export interface ArtifactReference {
   artifactId: string;
 }
 
-async function request<T>(path: string, init?: RequestInit): Promise<T> {
+let csrfToken: string | null = null;
+
+const PUBLIC_AUTH_WRITES = new Set([
+  '/api/auth/request-signup-code',
+  '/api/auth/confirm-signup',
+  '/api/auth/register',
+  '/api/auth/verify-email',
+  '/api/auth/resend-code',
+  '/api/auth/login',
+]);
+
+function isProtectedWrite(path: string, init?: RequestInit): boolean {
+  const method = (init?.method ?? 'GET').toUpperCase();
+  return !['GET', 'HEAD', 'OPTIONS'].includes(method) && !PUBLIC_AUTH_WRITES.has(path.split('?')[0] ?? path);
+}
+
+export async function getCsrfToken(): Promise<string> {
+  if (csrfToken) return csrfToken;
+  const res = await fetch('/api/csrf-token', { credentials: 'include' });
+  if (!res.ok) throw new ApiClientError('CSRF_TOKEN_FAILED', `无法建立安全会话 ${res.status}`, res.status);
+  const body = await res.json() as { csrfToken: string };
+  csrfToken = body.csrfToken;
+  return csrfToken;
+}
+
+interface ProtectedXhr {
+  open(method: string, url: string): void;
+  setRequestHeader(name: string, value: string): void;
+  withCredentials: boolean;
+}
+
+/** Prepare progress-capable multipart XHR without overriding its browser-generated boundary. */
+export async function prepareProtectedXhr(xhr: ProtectedXhr, method: string, path: string): Promise<void> {
+  const token = await getCsrfToken();
+  xhr.open(method, path);
+  xhr.withCredentials = true;
+  xhr.setRequestHeader('x-csrf-token', token);
+}
+
+function isCsrfFailure(status: number, body?: ApiErrorBody): boolean {
+  return status === 403 && (
+    body?.error.code.startsWith('FST_CSRF_') === true
+    || body?.error.code.startsWith('CSRF_') === true
+  );
+}
+
+/** Same-origin browser transport. Protected writes carry the API CSRF token. */
+export async function apiRequest<T>(path: string, init?: RequestInit, csrfRetry = true): Promise<T> {
+  const headers = Object.fromEntries(new Headers(init?.headers).entries());
+  if (!headers['content-type']) headers['content-type'] = 'application/json';
+  if (isProtectedWrite(path, init)) headers['x-csrf-token'] = await getCsrfToken();
+
   const res = await fetch(path, {
-    credentials: 'include',
-    headers: { 'content-type': 'application/json', ...(init?.headers ?? {}) },
     ...init,
+    credentials: 'include',
+    headers,
   });
   if (!res.ok) {
     let body: ApiErrorBody | undefined;
     try { body = await res.json() as ApiErrorBody; } catch { /* 非 JSON */ }
+    if (csrfRetry && isProtectedWrite(path, init) && isCsrfFailure(res.status, body)) {
+      csrfToken = null;
+      return apiRequest<T>(path, init, false);
+    }
     throw new ApiClientError(body?.error?.code ?? 'UNKNOWN', body?.error?.message ?? `请求失败 ${res.status}`, res.status);
   }
   if (res.status === 204) return undefined as T;
   return res.json() as Promise<T>;
+}
+
+const request = apiRequest;
+
+/** Keep post-auth navigation on this origin and out of auth-loop routes. */
+export function safeReturnTo(value: string | null | undefined): string {
+  if (!value || Array.from(value).some((character) => {
+    const code = character.charCodeAt(0);
+    return character === '\\' || code < 32 || code === 127;
+  })) return '/dashboard';
+  const trustedOrigin = 'https://openscience.invalid';
+  try {
+    const target = new URL(value, trustedOrigin);
+    if (target.origin !== trustedOrigin) return '/dashboard';
+    if (target.pathname === '/auth/login' || target.pathname === '/auth/register') return '/dashboard';
+    return `${target.pathname}${target.search}${target.hash}`;
+  } catch {
+    return '/dashboard';
+  }
+}
+
+/** Request a verification code without collecting an invitation code in the product UI. */
+export async function requestSignupCode(input: { email: string }): Promise<{ ok: true }> {
+  return request('/api/auth/request-signup-code', {
+    method: 'POST',
+    body: JSON.stringify(input),
+  });
+}
+
+/** Confirm the code and finish account creation in one explicit step. */
+export async function confirmSignup(input: ConfirmSignupInput): Promise<AuthResult> {
+  return request('/api/auth/confirm-signup', {
+    method: 'POST',
+    body: JSON.stringify(input),
+  });
+}
+
+export async function loginWithPassword(input: {
+  email: string;
+  password: string;
+}): Promise<AuthResult> {
+  return request('/api/auth/login', {
+    method: 'POST',
+    body: JSON.stringify(input),
+  });
+}
+
+export async function getCurrentUser(): Promise<CurrentUser> {
+  return request('/api/auth/me');
+}
+
+export interface DashboardResearchApi {
+  id: string;
+  publicId: string | null;
+  title: string;
+  version: number;
+  status: string;
+}
+
+export interface DashboardTaskApi {
+  id: string;
+  researchObjectId: string;
+  researchTitle: string;
+  logicalPath: string;
+  state: IngestionTaskState;
+  retryCount: number;
+  error: string | null;
+}
+
+export async function getDashboardOverview(): Promise<{
+  researchObjects: DashboardResearchApi[];
+  tasks: DashboardTaskApi[];
+}> {
+  const [research, ingestion] = await Promise.all([
+    request<{ researchObjects: DashboardResearchApi[] }>('/api/research-objects?limit=20'),
+    request<{ tasks: DashboardTaskApi[] }>('/api/ingestion?actionable=true'),
+  ]);
+  return { researchObjects: research.researchObjects, tasks: ingestion.tasks };
+}
+
+export async function logout(): Promise<void> {
+  await request('/api/auth/logout', { method: 'POST' });
+}
+
+export interface ResearchIndexItemApi {
+  publicId: string;
+  title: string;
+  url: string;
+  latestVersion: number;
+  publishedAt: string | null;
+  updatedAt: string;
+  insight: string | null;
+  fields: string[];
+  artifactTypes: string[];
+  authors: string[];
+}
+
+export interface ResearchIndexPageApi {
+  items: ResearchIndexItemApi[];
+  nextCursor: string | null;
+}
+
+export async function getExploreIndex(input: {
+  query?: string;
+  cursor?: string;
+  limit?: number;
+  field?: string;
+  artifactType?: string;
+} = {}): Promise<ResearchIndexPageApi> {
+  const params = new URLSearchParams();
+  if (input.query) params.set('query', input.query);
+  params.set('limit', String(input.limit ?? 20));
+  if (input.field) params.set('field', input.field);
+  if (input.artifactType) params.set('artifactType', input.artifactType);
+  if (input.cursor) params.set('cursor', input.cursor);
+  return request(`/api/explore?${params.toString()}`);
+}
+
+export interface EditorialMediaApi {
+  type: 'image' | 'video';
+  url: string;
+  alt: string;
+  credit: string;
+  licenseId: string;
+  sourceUrl: string;
+}
+
+export interface EditorialSelectionApi {
+  id: string;
+  collectionId: string;
+  researchObjectId: string;
+  versionId: string;
+  selectedBy: string;
+  title: string;
+  publicId: string;
+  versionNo: number;
+  sdf: Record<string, unknown>;
+  note: string;
+  media: EditorialMediaApi[];
+  sortOrder: number;
+  state: 'draft' | 'internal_review' | 'scheduled' | 'published';
+  scheduledAt: string | null;
+  publishedAt: string | null;
+  disclosure: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface EditorialCollectionApi {
+  id: string;
+  slug: string;
+  title: string;
+  description: string;
+  selections: EditorialSelectionApi[];
+}
+
+export async function getEditorialCollection(slug: string): Promise<EditorialCollectionApi> {
+  const result = await request<{ collection: EditorialCollectionApi }>(`/api/editorial/collections/${encodeURIComponent(slug)}`);
+  return result.collection;
+}
+
+export interface EditorialCandidateApi {
+  publicId: string;
+  title: string;
+  versionId: string;
+  versionNo: number;
+}
+
+export async function getEditorialCandidates(): Promise<EditorialCandidateApi[]> {
+  const result = await request<{ candidates: EditorialCandidateApi[] }>('/admin/editorial/candidates');
+  return result.candidates;
+}
+
+export async function getAdminEditorialCollection(slug: string): Promise<EditorialCollectionApi> {
+  const result = await request<{ collection: EditorialCollectionApi }>(`/admin/editorial/collections/${encodeURIComponent(slug)}/selections`);
+  return result.collection;
+}
+
+export async function createEditorialSelectionApi(slug: string, input: { versionId: string; note?: string; media?: EditorialMediaApi[] }): Promise<EditorialSelectionApi> {
+  const result = await request<{ selection: EditorialSelectionApi }>(`/admin/editorial/collections/${encodeURIComponent(slug)}/selections`, {
+    method: 'POST', body: JSON.stringify(input),
+  });
+  return result.selection;
+}
+
+export async function transitionEditorialSelectionApi(id: string, state: EditorialSelectionApi['state'], scheduledAt?: string): Promise<EditorialSelectionApi> {
+  const result = await request<{ selection: EditorialSelectionApi }>(`/admin/editorial/selections/${id}/transition`, {
+    method: 'POST', body: JSON.stringify({ state, scheduledAt }),
+  });
+  return result.selection;
+}
+
+export interface WorkspaceApi {
+  id: string;
+  name: string;
+  type: string;
+  role: string;
+  status?: string;
+}
+
+export async function listMyWorkspaces(): Promise<WorkspaceApi[]> {
+  const result = await request<{ workspaces: WorkspaceApi[] }>('/api/workspaces');
+  return result.workspaces;
+}
+
+/** Compatibility alias for a legacy create-flow route retained during rolling server sync. */
+export async function listWorkspaces(): Promise<{ workspaces: WorkspaceApi[] }> {
+  return { workspaces: await listMyWorkspaces() };
+}
+
+export async function createResearchObject(input: { workspaceId: string; title: string; sdf?: unknown }, idempotencyKey = crypto.randomUUID()): Promise<{
+  researchObject: { id: string; workspaceId: string; version: number };
+}> {
+  const { workspaceId, title } = input;
+  return request('/api/research-objects', {
+    method: 'POST',
+    headers: { 'idempotency-key': idempotencyKey },
+    body: JSON.stringify({ workspaceId, title }),
+  });
+}
+
+/** Upload one source artifact while preserving browser multipart boundaries. */
+export async function uploadArtifactFile(
+  workspaceId: string,
+  file: File,
+  logicalPath = file.name,
+  idempotencyKey?: string,
+  onProgress?: (percent: number) => void,
+): Promise<ArtifactReference> {
+  const xhr = new XMLHttpRequest();
+  await prepareProtectedXhr(xhr, 'POST', '/api/artifacts/upload');
+  if (idempotencyKey) xhr.setRequestHeader('idempotency-key', idempotencyKey);
+  const body = new FormData();
+  body.append('workspaceId', workspaceId);
+  body.append('logicalPath', logicalPath);
+  body.append('file', file, file.name);
+
+  return new Promise((resolve, reject) => {
+    xhr.upload.onprogress = (event) => {
+      if (event.lengthComputable) onProgress?.(Math.round((event.loaded / event.total) * 100));
+    };
+    xhr.onerror = () => reject(new ApiClientError('UPLOAD_FAILED', `上传失败：${file.name}`, 0));
+    xhr.onload = () => {
+      let parsed: { artifact?: { artifactId: string; logicalPath: string }; error?: { code?: string; message?: string } } = {};
+      try { parsed = JSON.parse(xhr.responseText) as typeof parsed; } catch { /* handled below */ }
+      if (xhr.status >= 200 && xhr.status < 300 && parsed.artifact) {
+        resolve({ artifactId: parsed.artifact.artifactId, logicalPath: parsed.artifact.logicalPath });
+        return;
+      }
+      reject(new ApiClientError(parsed.error?.code ?? 'UPLOAD_FAILED', parsed.error?.message ?? `上传失败：${file.name}`, xhr.status));
+    };
+    xhr.send(body);
+  });
+}
+
+const EMPTY_SDF_CORE: SdfCore = {
+  schemaVersion: '0.1.0',
+  problem: '',
+  insight: '',
+  method: '',
+  results: '',
+  limitations: '',
+  reproducibility: '',
+};
+
+interface MaterialImportDeps {
+  create: typeof createResearchObject;
+  upload: (workspaceId: string, file: File, logicalPath: string, idempotencyKey: string) => Promise<ArtifactReference>;
+  commit: typeof createCommit;
+}
+
+export interface MaterialImportCheckpoint {
+  importId: string;
+  mode: 'blank' | 'import';
+  materialSetId: string;
+  workspaceId: string;
+  title: string;
+  researchObject?: { id: string; workspaceId: string; version: number };
+  uploaded: Array<ArtifactReference & { fingerprint: string }>;
+}
+
+function splitExtension(filename: string): { stem: string; extension: string } {
+  const dot = filename.lastIndexOf('.');
+  return dot > 0 ? { stem: filename.slice(0, dot), extension: filename.slice(dot) } : { stem: filename, extension: '' };
+}
+
+/** Produce manifest-safe, stable paths even when selected files share a basename. */
+export function planMaterialLogicalPaths(materials: readonly File[]): string[] {
+  const used = new Set<string>();
+  return materials.map((file) => {
+    const original = file.name;
+    if (!used.has(original)) { used.add(original); return original; }
+    const { stem, extension } = splitExtension(original);
+    let suffix = 2;
+    let candidate = `${stem} (${suffix})${extension}`;
+    while (used.has(candidate)) candidate = `${stem} (${++suffix})${extension}`;
+    used.add(candidate);
+    return candidate;
+  });
+}
+
+async function sha256Hex(data: BufferSource): Promise<string> {
+  const digest = await crypto.subtle.digest('SHA-256', data);
+  return Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, '0')).join('');
+}
+
+async function materialFingerprint(file: File): Promise<string> {
+  return sha256Hex(await file.arrayBuffer());
+}
+
+/** Create an RO and persist every selected source file in its first immutable commit. */
+export async function createResearchObjectWithMaterials(
+  input: { workspaceId: string; title: string; mode?: 'blank' | 'import' },
+  materials: readonly File[],
+  deps: MaterialImportDeps = { create: createResearchObject, upload: uploadArtifactFile, commit: createCommit },
+  prior?: MaterialImportCheckpoint,
+  onCheckpoint?: (checkpoint: MaterialImportCheckpoint) => void,
+): Promise<{ researchObject: { id: string; workspaceId: string; version: number } }> {
+  const mode = input.mode ?? (materials.length > 0 ? 'import' : 'blank');
+  const logicalPaths = planMaterialLogicalPaths(materials);
+  const fingerprints = await Promise.all(materials.map(materialFingerprint));
+  const materialSetId = await sha256Hex(new TextEncoder().encode(JSON.stringify(
+    logicalPaths.map((logicalPath, index) => ({ logicalPath, sha256: fingerprints[index] })),
+  )));
+  const matchesPrior = prior?.workspaceId === input.workspaceId && prior.title === input.title
+    && prior.mode === mode && prior.materialSetId === materialSetId;
+  let checkpoint: MaterialImportCheckpoint = matchesPrior
+    ? { ...prior, uploaded: [...prior.uploaded] }
+    : { importId: crypto.randomUUID(), mode, materialSetId, workspaceId: input.workspaceId, title: input.title, uploaded: [] };
+  if (!checkpoint.researchObject) {
+    const created = await deps.create(input, `${checkpoint.importId}:create`);
+    checkpoint = { ...checkpoint, researchObject: created.researchObject };
+    onCheckpoint?.(checkpoint);
+  }
+  const researchObject = checkpoint.researchObject;
+  if (!researchObject) throw new Error('Material import checkpoint is missing its research object');
+  const created = { researchObject };
+  if (materials.length === 0) return created;
+  const artifacts: ArtifactReference[] = [];
+  for (const [index, file] of materials.entries()) {
+    const logicalPath = logicalPaths[index];
+    const fingerprint = fingerprints[index];
+    const completed = checkpoint.uploaded.find((item) => item.logicalPath === logicalPath && item.fingerprint === fingerprint);
+    if (completed) {
+      artifacts.push({ logicalPath: completed.logicalPath, artifactId: completed.artifactId });
+      continue;
+    }
+    const uploaded = await deps.upload(input.workspaceId, file, logicalPath, `${checkpoint.importId}:upload:${index}:${fingerprint}`);
+    artifacts.push(uploaded);
+    checkpoint = { ...checkpoint, uploaded: [...checkpoint.uploaded, { ...uploaded, logicalPath, fingerprint }] };
+    onCheckpoint?.(checkpoint);
+  }
+  await deps.commit(
+    created.researchObject.id,
+    { message: `Import ${materials.length} source material${materials.length === 1 ? '' : 's'}`, version: created.researchObject.version, sdfCore: EMPTY_SDF_CORE, artifacts },
+    `${checkpoint.importId}:commit`,
+  );
+  return created;
 }
 
 /** 查 RO 详情（含 SDF core）。 */
@@ -95,6 +528,46 @@ export async function createCommit(
 /** 版本 diff（P1B-5）。 */
 export async function getVersionDiff(fromVersionId: string, toVersionId: string): Promise<{ diff: unknown }> {
   return request(`/api/versions/${fromVersionId}/comparison?to=${toVersionId}`);
+}
+
+export interface LicenseSet {
+  text: string;
+  code: string;
+  data: string;
+}
+
+export interface PublicationReview {
+  id: string;
+  versionId: string;
+  status: 'passed' | 'blocked';
+  hardBlocks: Array<{ code: string; reason: string }>;
+  warnings: unknown[];
+  verdict: string;
+  createdAt: string;
+}
+
+export async function getLicenses(roId: string, versionId?: string): Promise<{ licenses: LicenseSet | null; source: 'version' | 'ro' | 'none' }> {
+  return request(`/api/research-objects/${roId}/licenses${versionId ? `/${versionId}` : ''}`);
+}
+
+export async function setVersionLicenses(roId: string, versionId: string, licenses: LicenseSet): Promise<void> {
+  await request(`/api/research-objects/${roId}/licenses/${versionId}`, { method: 'PUT', body: JSON.stringify(licenses) });
+}
+
+export async function runPublicationReview(versionId: string): Promise<{ review: PublicationReview }> {
+  return request(`/api/versions/${versionId}/review`, { method: 'POST' });
+}
+
+export async function getPublicationReview(versionId: string): Promise<{ review: PublicationReview | null }> {
+  return request(`/api/versions/${versionId}/review`);
+}
+
+export async function transitionVersionStatus(versionId: string, status: string): Promise<{ version: { id: string; status: string } }> {
+  return request(`/api/versions/${versionId}/status`, { method: 'POST', body: JSON.stringify({ status }) });
+}
+
+export async function publishVersion(versionId: string): Promise<{ published: { versionId: string; publicId: string; publicVersionId: string; publishedAt: string; status: string } }> {
+  return request(`/api/versions/${versionId}/publish`, { method: 'POST', body: JSON.stringify({ r3Confirmed: true }) });
 }
 
 // ===== P1C-10：协作 API client（P1C-2~9 端点封装）=====
@@ -393,21 +866,12 @@ export interface ModifyScriptResponse {
 /** 生成修改后的脚本预览（带 diff 和策略检查） */
 export async function modifyScript(
   jobId: string,
-  request: ModifyScriptRequest
+  input: ModifyScriptRequest
 ): Promise<ModifyScriptResponse> {
-  const res = await fetch(`/api/sandbox-jobs/${jobId}/modify`, {
+  return apiRequest(`/api/sandbox-jobs/${jobId}/modify`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(request),
-    credentials: 'include',
+    body: JSON.stringify(input),
   });
-
-  if (!res.ok) {
-    const error = await res.json().catch(() => ({ error: { message: 'Network error' } }));
-    throw new Error(error.error?.message || 'Modify script failed');
-  }
-
-  return res.json();
 }
 
 export interface SandboxJobContext {
@@ -431,25 +895,90 @@ export interface CreateSandboxJobResponse {
 
 /** 创建新的沙箱作业（P1E-5 POST /sandbox-jobs） */
 export async function createSandboxJob(
-  request: CreateSandboxJobRequest
+  input: CreateSandboxJobRequest
 ): Promise<CreateSandboxJobResponse> {
-  const res = await fetch('/api/sandbox-jobs', {
+  return apiRequest('/api/sandbox-jobs', {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(request),
-    credentials: 'include',
+    body: JSON.stringify(input),
   });
+}
 
-  if (!res.ok) {
-    const error = await res.json().catch(() => ({ error: { message: 'Network error' } }));
-    throw new ApiClientError(
-      error.error?.code || 'CREATE_FAILED',
-      error.error?.message || 'Create sandbox job failed',
-      res.status
-    );
-  }
+export interface IngestionTaskDetail {
+  task: { id: string; artifactId: string; logicalPath: string; state: string; retryCount: number; error: string | null; agentTaskId: string | null; result: Record<string, unknown> | null };
+  batchId: string;
+  researchObjectId: string;
+  version: number;
+}
 
-  return res.json();
+export type IngestionTaskState = 'queued' | 'uploading' | 'stored' | 'parsing' | 'needs_review' | 'confirmed' | 'written' | 'failed_retryable' | 'failed_blocked';
+
+export interface IngestionTaskSummary {
+  id: string;
+  artifactId: string;
+  logicalPath: string;
+  state: IngestionTaskState;
+  retryCount: number;
+  error: string | null;
+  agentTaskId: string | null;
+}
+
+export interface IngestionBatch {
+  batchId: string;
+  researchObjectId: string;
+  tasks: IngestionTaskSummary[];
+}
+
+export interface StartIngestionResult extends IngestionBatch {
+  artifacts: ArtifactReference[];
+}
+
+export async function startIngestionBatch(
+  researchObjectId: string,
+  files: File[],
+  idempotencyKey: string,
+  onProgress?: (percent: number) => void,
+): Promise<StartIngestionResult> {
+  const xhr = new XMLHttpRequest();
+  await prepareProtectedXhr(xhr, 'POST', `/api/research-objects/${researchObjectId}/ingest`);
+  xhr.setRequestHeader('idempotency-key', idempotencyKey);
+  const body = new FormData();
+  body.append('processingConsent', 'true');
+  for (const file of files) body.append('file', file, file.name);
+
+  return new Promise((resolve, reject) => {
+    xhr.upload.onprogress = (event) => {
+      if (event.lengthComputable) onProgress?.(Math.round((event.loaded / event.total) * 100));
+    };
+    xhr.onerror = () => reject(new ApiClientError('INGESTION_UPLOAD_FAILED', 'Research materials could not be uploaded', 0));
+    xhr.onload = () => {
+      let parsed: StartIngestionResult | ApiErrorBody | undefined;
+      try { parsed = JSON.parse(xhr.responseText) as StartIngestionResult | ApiErrorBody; } catch { /* handled below */ }
+      if (xhr.status >= 200 && xhr.status < 300 && parsed && 'batchId' in parsed) {
+        resolve(parsed);
+        return;
+      }
+      const error = parsed && 'error' in parsed ? parsed.error : undefined;
+      reject(new ApiClientError(error?.code ?? 'INGESTION_UPLOAD_FAILED', error?.message ?? 'Research materials could not be uploaded', xhr.status));
+    };
+    xhr.send(body);
+  });
+}
+
+export async function getIngestionBatch(batchId: string): Promise<IngestionBatch> {
+  return apiRequest(`/api/ingestion/${batchId}`);
+}
+
+export async function retryIngestionTask(taskId: string): Promise<IngestionTaskSummary> {
+  const result = await apiRequest<{ task: IngestionTaskSummary }>(`/api/ingestion/${taskId}/retry`, { method: 'POST' });
+  return result.task;
+}
+
+export async function getIngestionTask(taskId: string): Promise<IngestionTaskDetail> {
+  return apiRequest(`/api/ingestion/tasks/${taskId}`);
+}
+
+export async function confirmIngestionTask(taskId: string, input: { version: number; core: SdfCore }): Promise<{ task: IngestionTaskDetail['task']; sdf: { core: SdfCore } }> {
+  return apiRequest(`/api/ingestion/${taskId}/confirm`, { method: 'POST', body: JSON.stringify(input) });
 }
 
 

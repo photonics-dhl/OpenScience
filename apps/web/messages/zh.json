@@ -11,6 +11,10 @@
     "version": "版本",
     "language": "语言"
   },
+  "shell": {
+    "skipToContent": "跳到科研内容",
+    "primaryNavigation": "主导航"
+  },
   "editor": {
     "title": "SDF 编辑器",
     "outline": "大纲",
@@ -35,6 +39,7 @@
     "suggestionDismissed": "建议已忽略",
     "saveToSdf": "保存到 SDF",
     "uploadArtifact": "上传附件",
+    "uploadFailed": "上传失败",
     "restoreDraft": "恢复草稿",
     "discardDraft": "放弃草稿",
     "draftFound": "检测到未保存的草稿",
@@ -44,11 +49,84 @@
     "extracting": "提取中…",
     "commitMessage": "提交说明",
     "commit": "创建提交",
+    "commitShort": "提交",
+    "untitledObject": "未命名科研对象",
+      "workspaceNavigation": "科研对象工作区",
+      "workspaceModes": "科研对象模式",
+      "modeOverview": "概览",
+      "modeWrite": "写作与 SDF",
+      "modeData": "数据与代码",
+      "modeVersions": "版本",
+      "modeCollaboration": "协作",
+      "modePublish": "发布",
+      "modeUnavailable": "该模式尚未开放",
+      "skipToWorkspace": "跳到科研对象内容",
+    "mobileWorkspaceNavigation": "工作区视图",
+    "evidencePending": "等待关联证据",
+    "evidencePendingDescription": "证据片段将在这里显示，并保留素材与来源位置。",
+    "reviewPending": "暂无进行中的评审",
+    "reviewPendingDescription": "人工与 Hermes 的评审记录始终绑定到受影响的 SDF 范围。",
+      "hermesExtractor": "Hermes 提取器",
+      "hermesEvidenceLabel": "Hermes / 证据",
+      "sdfCoreLabel": "SDF / 核心结构 0.1",
+      "researcherPrompt": "研究者提示",
+      "sourceLocatorUnavailable": "来源位置暂不可用",
+      "currentSdfAggregate": "当前 SDF 聚合内容",
+      "artifactStored": "已存储素材",
+      "artifactStatus": {
+        "uploading": "上传中",
+        "done": "已上传",
+        "error": "上传失败",
+        "ready": "可用"
+      },
+      "visibility": {
+        "private": "私有",
+        "invite_only": "仅受邀可见",
+        "public": "公开"
+      },
+      "saveState": {
+        "dirty": "未保存",
+        "saving": "保存中",
+        "saved": "已保存",
+        "error": "保存失败"
+      },
+      "versionStatus": {
+        "draft": "草稿",
+        "under_review": "评审中",
+        "approved": "已批准",
+        "published": "已发布",
+        "revised": "已修订",
+        "withdrawn": "已撤回",
+        "rejected": "已拒绝",
+        "restricted": "受限"
+      },
+    "proposalSource": "来源",
+    "proposalScope": "范围",
+    "proposalBefore": "修改前",
+    "proposalAfter": "修改后",
+    "proposalEmpty": "空",
+    "reviewChanges": "审阅变更",
+    "reviewHighImpact": "审阅高影响变更",
+    "highImpactChange": "高影响变更",
+    "reviewCompleteChange": "完整审阅这项变更。",
+    "returnToProposal": "返回",
+    "applyReviewedChange": "应用已审阅变更",
+    "hints": {
+      "problem": "界定科学问题及其边界。",
+      "insight": "陈述核心洞见，避免宣传性语言。",
+      "method": "描述方法、材料与实验设计。",
+      "results": "结合支持证据报告研究结果。",
+      "limitations": "记录局限、不确定性与边界条件。",
+      "reproducibility": "关联代码、数据、环境与复现实验说明。"
+    },
     "yes": "是",
     "no": "否"
   },
   "collab": {
     "title": "协作",
+    "description": "在不丢失 Research Object 身份的前提下讨论证据、分支变更、作者关系与发布意图。",
+    "loading": "正在加载协作状态…",
+    "error": "协作页面暂时无法加载。",
     "navLabel": "协作标签",
     "contentLabel": "协作内容",
     "tab": {
@@ -61,14 +139,9 @@
     },
     "issue": {
       "newTitle": "新问题标题",
-      "kind": "类型",
-      "kind.question": "提问",
-      "kind.method_repro": "复现问题",
-      "kind.failure": "失败",
-      "kind.bug_report": "错误报告",
-      "kind.suggestion": "建议",
-      "status.open": "开启",
-      "status.closed": "关闭",
+      "kindLabel": "类型",
+      "kind": { "question": "提问", "method_repro": "复现问题", "failure": "失败", "bug_report": "错误报告", "suggestion": "建议" },
+      "status": { "open": "开启", "closed": "关闭" },
       "create": "创建问题",
       "empty": "暂无问题",
       "noBody": "（无正文）",
@@ -91,9 +164,7 @@
       "create": "创建 PR",
       "empty": "暂无拉取请求",
       "noBody": "（无正文）",
-      "status.open": "开启",
-      "status.merged": "已合并",
-      "status.rejected": "已拒绝",
+      "status": { "open": "开启", "merged": "已合并", "rejected": "已拒绝" },
       "declaration": "变更声明",
       "diff": "变更差异",
       "noDiff": "暂无差异",
@@ -102,10 +173,8 @@
     },
     "review": {
       "title": "评审",
-      "verdict": "结论",
-      "verdict.approve": "通过",
-      "verdict.requestChanges": "请求修改",
-      "verdict.comment": "评论",
+      "verdictLabel": "结论",
+      "verdict": { "approve": "通过", "requestChanges": "请求修改", "comment": "评论" },
       "body": "评审意见",
       "submit": "提交评审"
     },
@@ -161,9 +230,7 @@
       "empty": "暂无通知",
       "markRead": "标为已读",
       "view": "查看",
-      "type.pull_request.opened": "拉取请求已打开",
-      "type.pull_request.merged": "拉取请求已合并",
-      "type.issue.updated": "问题动态"
+      "type": { "pull_request": { "opened": "拉取请求已打开", "merged": "拉取请求已合并" }, "issue": { "updated": "问题动态" } }
     }
   },
   "public": {
@@ -189,6 +256,7 @@
     "contributions": "贡献",
     "abstract": "摘要",
     "coreFields": "核心字段",
+    "problem": "研究问题",
     "insight": "核心洞察",
     "method": "方法",
     "results": "结果",
@@ -206,7 +274,18 @@
     "versionHash": "版本哈希",
     "copyFullHash": "复制完整哈希",
     "citation": "引用格式",
+    "researchObject": "科研对象",
+    "identity": "长期身份",
+    "citationRail": "科研对象引用与来源",
+    "continuingObject": "持续演化对象——始终解析到当前记录",
+    "objectCitation": "持续对象",
+    "versionCitation": "不可变版本",
     "copyCitation": "复制引用",
+    "copyObjectCitation": "复制持续对象引用",
+    "copyFailed": "复制失败",
+    "legalDisclaimerDefault": "此时间戳仅证明平台在相应时间接收并记录了该版本及其内容哈希，不构成专利优先权、著作权归属、科研正确性或司法存证保证。",
+    "artifactProvenance": "附加证据",
+    "invalidVersion": "无效版本号",
     "aiReview": "AI 审核摘要",
     "status": "状态",
     "passed": "通过",
@@ -237,11 +316,16 @@
       "login": "登录"
     },
     "hero": {
+      "kicker": "研究，作为持续演化的对象",
+      "context": "OpenScience / 科研对象",
       "title": "让研究，\n持续演化。",
       "subtitle": "将论文、数据、代码与讨论，组织为开放、可验证、可演化的研究对象。",
       "ctaExplore": "探索研究",
       "ctaCreate": "创建研究对象",
       "hermesStatus": "Hermes 正在解析",
+      "metaObject": "科研对象",
+      "metaStructure": "SDF 元数据",
+      "metaVersion": "版本溯源",
       "pillar1Title": "结构化",
       "pillar1Desc": "论文、数据、代码，解析为可查询的 SDF 结构",
       "pillar2Title": "可验证",
@@ -250,8 +334,33 @@
       "pillar3Desc": "Hermes 持续组织与评审，让研究不断演化"
     },
     "latest": {
-      "title": "最新研究",
-      "empty": "暂无公开研究，敬请期待。"
+      "title": "公共记录，而非信息流",
+      "empty": "OpenScience 先让研究对象清晰可读，再争取注意力：来源、结构与变化始终相连。",
+      "item1": "原始证据始终随对象保留",
+      "item2": "结构化内容始终可检查",
+      "item3": "每个版本始终可引用",
+      "label1": "证据",
+      "label2": "结构",
+      "label3": "引用"
+    },
+    "openRo": {
+      "eyebrow": "开放科研对象",
+      "title": "一个对象，六层可检验证据。",
+      "description": "论文、数据、代码与讨论始终绑定同一个稳定身份，并在每次演化中保留来源与版本。",
+      "action": "打开公开科研索引",
+      "stableId": "稳定身份",
+      "node1": "问题",
+      "node1Summary": "研究对象试图回答的问题、范围与边界。",
+      "node2": "洞见",
+      "node2Summary": "与支撑证据明确区分的核心贡献。",
+      "node3": "方法",
+      "node3Summary": "产生结果所使用的步骤、材料与假设。",
+      "node4": "结果",
+      "node4Summary": "支撑结论的观察、数据与输出。",
+      "node5": "局限",
+      "node5Summary": "已知约束、不确定性和证据不能支持的主张。",
+      "node6": "可复现性",
+      "node6Summary": "复现研究所需的数据、代码、环境与步骤。"
     },
     "evolution": {
       "title": "研究如何演化",
@@ -306,5 +415,325 @@
         "three": "AI 审核与人工审核并行，保留证据。"
       }
     }
+  },
+  "auth": {
+    "identity": {
+      "skipToForm": "跳转到身份表单",
+      "loginEyebrow": "科研身份 / 登录",
+      "verificationEyebrow": "科研身份 / 验证",
+      "tagline": "身份 · 来源 · 连续性",
+      "createEyebrow": "科研身份 / 01",
+      "createTitle": "证据，从可验证的作者开始。",
+      "createDescription": "同一身份贯穿研究对象、版本、贡献与审阅；平台记录事实，但不替你裁定成果归属。",
+      "returnEyebrow": "科研身份 / 返回",
+      "returnTitle": "回到研究，而不是信息流。",
+      "returnDescription": "继续最近的研究对象，只处理真正需要你判断的任务。"
+    },
+    "register": {
+      "title": "创建科研账户",
+      "description": "使用个人或机构邮箱获取验证码，无需在此填写邀请码。",
+      "displayName": "显示名称",
+      "email": "邮箱",
+      "password": "密码",
+      "passwordHint": "至少 8 位，并同时包含字母和数字。",
+      "passwordError": {
+        "length": "密码至少需要 8 位。",
+        "letter": "密码需要包含字母。",
+        "number": "密码需要包含数字。"
+      },
+      "requestCode": "发送验证码",
+      "sending": "正在发送…",
+      "code": "验证码",
+      "codeSent": "验证码已发送至 {email}",
+      "confirm": "创建账户",
+      "confirming": "正在创建…",
+      "resend": "重新发送验证码",
+      "resendIn": "{seconds} 秒后可重新发送",
+      "haveAccount": "已有账户？",
+      "login": "登录"
+    },
+    "login": {
+      "title": "欢迎回来",
+      "description": "回到你的研究工作区，继续最近的研究。",
+      "email": "邮箱",
+      "password": "密码",
+      "submit": "登录",
+      "signingIn": "正在登录…",
+      "noAccount": "第一次使用 OpenScience？",
+      "register": "创建账户"
+    },
+    "errors": {
+      "generic": "暂时无法完成操作，请重试。"
+    }
+  },
+  "dashboard": {
+    "eyebrow": "个人工作区",
+    "title": "科研工作台",
+    "welcome": "{name}，从最近的研究上下文继续，或开始一个新的研究对象。",
+    "loading": "正在恢复研究上下文…",
+    "context": {
+      "navigation": "工作台工具",
+      "help": "帮助",
+      "settings": "设置"
+    },
+    "continue": {
+      "title": "继续研究",
+      "emptyTitle": "导入第一份科研资料",
+      "emptyBody": "Hermes 会先保留来源证据，再提出可供你确认的 SDF 字段。",
+      "open": "继续研究",
+      "version": "版本 {version}",
+      "pending": "{count} 项等待处理"
+    },
+    "import": {
+      "eyebrow": "新的研究上下文",
+      "title": "开始一个研究对象",
+      "description": "导入现有科研资料，或从空白的结构化对象开始。",
+      "upload": "上传资料",
+      "blank": "创建空白 RO"
+    },
+    "hermes": {
+      "title": "Hermes 任务",
+      "empty": "当前没有需要你处理的任务。",
+      "review": "核对证据",
+      "retry": "重试任务",
+      "view": "查看进度",
+      "progress": "{current}/{total} 个字段"
+    },
+    "research": {
+      "title": "你的研究",
+      "empty": "还没有研究对象。",
+      "noResults": "没有匹配的研究对象。",
+      "search": "搜索研究对象",
+      "version": "v{version}",
+      "status": {
+        "draft": "草稿",
+        "under_review": "审核中",
+        "approved": "已通过",
+        "published": "已发布",
+        "revised": "已修订",
+        "archived": "已归档"
+      }
+    },
+    "errors": {
+      "title": "无法加载工作台",
+      "load": "暂时无法恢复研究上下文。",
+      "retry": "重新加载"
+    }
+  },
+  "createResearch": {
+    "back": "返回研究驾驶舱",
+    "title": "创建 Research Object",
+    "description": "从空白结构开始，或附加原始研究资料。文件始终作为证据保留；Hermes 只在安全存储后提出结构建议。",
+    "workspace": "工作空间",
+    "workspaceLoading": "正在加载工作空间…",
+    "researchTitle": "研究标题",
+    "materials": "原始资料（可选）",
+    "materialsHint": "支持 PDF、DOCX、TeX/ZIP、Markdown 与常见科研图片；创建后进入上传处理。",
+    "materialsRequired": "请至少选择一份源文件后再开始导入。",
+    "create": "创建 Research Object",
+    "creating": "正在创建…",
+    "error": "无法创建 Research Object。",
+    "evidenceTitle": "先保留证据，再进行自动化",
+    "evidenceBody": "原始 Artifact、提取建议与您的决定保持分离并可追溯。",
+    "stepStore": "以内容哈希保存原始资料",
+    "stepParse": "定位主张、方法与来源锚点",
+    "stepConfirm": "每一项 SDF 写入都由您确认"
+  },
+  "ingestion": {
+    "status": {
+      "queued": "排队中",
+      "uploading": "上传中",
+      "stored": "已保存",
+      "parsing": "正在解析证据",
+      "needs_review": "待确认",
+      "confirmed": "已确认",
+      "written": "已写入草稿",
+      "failed_retryable": "可重试",
+      "failed_blocked": "已阻断",
+      "missing": "缺失",
+      "inferred": "推断",
+      "rejected": "已拒绝"
+    },
+    "statusDescription": {
+      "queued": "正在等待可用的处理位置。",
+      "uploading": "文件传输期间会保留可恢复进度。",
+      "stored": "Artifact 已保存，可以开始分析。",
+      "parsing": "Hermes 正在定位论点、方法与来源锚点。",
+      "needs_review": "证据已就绪，请逐项确认。",
+      "confirmed": "本批次的建议字段已全部确认。",
+      "written": "确认后的证据已写入 RO 草稿。",
+      "failed_retryable": "处理已安全停止，可以重试。",
+      "failed_blocked": "继续处理前需要先修正问题。"
+    },
+    "confidence": {
+      "high": "高置信度",
+      "medium": "中置信度",
+      "low": "低置信度"
+    },
+    "progress": {
+      "label": "科研资料处理进度",
+      "count": "已处理 {current}/{total} 个字段"
+    },
+    "actions": {
+      "retry": "重试",
+      "confirm": "确认",
+      "edit": "编辑",
+      "reject": "拒绝",
+      "skip": "跳过"
+    },
+    "dropzone": {
+      "label": "添加科研资料",
+      "hint": "支持 PDF、DOCX、TeX、Markdown、PNG、JPEG、WebP 或 SVG",
+      "browse": "选择文件"
+    },
+    "evidence": {
+      "field": "SDF 字段",
+      "confidence": "置信度",
+      "source": "证据来源"
+    },
+    "intake": {
+      "title": "编排证据集合",
+      "localOnly": "在您明确创建 Research Object 前，文件只保留在当前设备。",
+      "dropTitle": "将原始材料放入工作集合",
+      "formats": "PDF · Word · TeX/ZIP · Markdown · 图片 · CSV/TSV · JSON/YAML · Notebook · Python/R",
+      "browse": "选择文件",
+      "remove": "移除",
+      "retry": "重试",
+      "retryUpload": "重试上传",
+      "primary": "主文稿",
+      "supporting": "支持证据",
+      "clearPrimary": "取消主文稿",
+      "progressLabel": "材料处理进度",
+      "provenance": "每份原件都作为不可变 Artifact 保留，并记录源文件名与内容哈希。",
+      "consent": "提交即授权本批材料进行安全扫描、解析/OCR 与 SDF 建议生成。",
+      "submitNote": "在您审阅并确认建议前，系统不会把任何 SDF 字段写入草稿。",
+      "blankNote": "空白 RO 不附带源证据；您可以在之后随时补充材料。",
+      "titlePlaceholder": "准确的研究工作标题",
+      "blankTitle": "先建立结构，而不是先上传文件。",
+      "blankBody": "直接进入六字段 SDF 草稿，在科研对象准备好时再附加证据。",
+      "openDraft": "打开草稿",
+      "reviewReady": "证据已可审阅",
+      "roles": {
+        "manuscript": "文稿",
+        "figure": "图像",
+        "data": "数据",
+        "code": "代码",
+        "supplement": "补充材料"
+      },
+      "stage": {
+        "scan": "扫描",
+        "upload": "上传",
+        "parse": "解析 / OCR",
+        "map": "SDF 映射",
+        "review": "审阅"
+      },
+      "status": {
+        "local": "仅本地",
+        "uploading": "上传中",
+        "queued": "排队中",
+        "stored": "已保存",
+        "parsing": "解析 / OCR 中",
+        "needs_review": "待审阅",
+        "confirmed": "已确认",
+        "written": "已写入",
+        "failed_retryable": "可重试",
+        "failed_blocked": "已阻断"
+      }
+    }
+  },
+  "explore": {
+    "eyebrow": "公开研究索引",
+    "title": "值得检验的研究。",
+    "description": "通过验证的公开科研对象将在这里呈现，并保留其证据、SDF 结构、版本、许可与评审历史。",
+    "empty": "当前索引条件下没有公开 Research Object。",
+    "create": "创建科研对象",
+    "indexLabel": "已发布 Research Object 索引",
+    "search": "搜索标题或 SDF 证据",
+    "field": "SDF 字段",
+    "artifactType": "Artifact 类型",
+    "allFields": "全部 SDF 字段",
+    "allArtifacts": "全部 Artifact",
+    "apply": "应用筛选",
+    "loading": "正在读取公开索引…",
+    "error": "暂时无法加载公开索引。",
+    "loadMore": "继续浏览索引",
+    "unknownAuthor": "作者记录待补充",
+    "noArtifacts": "暂无 Artifact",
+    "fields": { "problem": "问题", "insight": "洞见", "method": "方法", "results": "结果", "limitations": "局限", "reproducibility": "可复现性" },
+    "artifacts": { "document": "文档", "image": "图片", "data": "数据", "code": "代码", "video": "视频", "other": "其他" }
+  },
+  "productSurfaces": {
+    "navigation": "科研对象导航", "skip": "跳到产品内容", "objectMap": "SDF 结构图", "integrity": "完整性", "integrityBody": "每个动作都绑定到 Research Object 的具体版本与证据链。",
+    "fields": { "problem": "问题", "insight": "洞见", "method": "方法", "results": "结果", "limitations": "局限", "reproducibility": "可复现性" },
+    "state": { "loadingBody": "正在读取科研对象与版本历史…", "errorTitle": "页面暂时无法加载", "forbiddenTitle": "该工作区为私有" },
+    "nav": { "overview": "概览", "sdf": "SDF", "files": "文件", "versions": "版本", "collaboration": "协作", "publish": "发布", "sandbox": "沙箱" },
+    "overview": { "kicker": "对象概览", "title": "概览", "body": "安静地呈现这个 Research Object 的主张、证据和当前版本状态。", "status": "对象状态", "visibility": "可见性", "history": "已记录版本", "emptyTitle": "结构仍然开放", "emptyBody": "从六个 SDF 字段开始，再为每项主张绑定可检查的证据。", "continue": "打开 SDF 编辑器", "inspect": "查看版本" },
+    "versions": { "kicker": "版本历史", "title": "版本", "body": "快照是不可变记录。选择两个版本，比较确切的 SDF 与证据清单。", "compare": "比较", "emptyTitle": "还没有已提交版本", "emptyBody": "在 SDF 编辑器或文件页面创建第一次提交。", "diff": "确定性比较" },
+    "files": { "kicker": "证据存储", "title": "文件", "body": "上传论文、数据、代码、图片或视频。只有创建提交后，文件才会成为版本的一部分。", "provenance": "证据来源", "provenanceBody": "上传会记录内容哈希与逻辑路径；提交会把它绑定到不可变的 Research Object 版本。", "defaultCommit": "绑定证据", "commitMessage": "提交说明", "attaching": "正在创建提交…", "attach": "绑定到新版本", "empty": "请先在上方选择文件。", "committed": "证据已提交，新版本已经出现在版本页面。" },
+    "sandbox": { "kicker": "可复现实验", "title": "沙箱", "body": "在服务器上运行受边界约束的科研脚本，检查输出，并把执行环境保留在 Research Object 旁。", "context": "Research Object 可视化", "environment": "执行环境", "script": "Python 脚本", "starting": "启动中…", "run": "在沙箱运行", "notFound": "没有找到这个沙箱任务。", "result": "可视化结果", "close": "关闭", "runtime": "运行时间", "download": "下载到本设备", "viewScript": "查看 Python 脚本", "logs": "执行日志", "modify": "修改脚本", "previewError": "无法生成修改预览。", "executeError": "无法创建修改后的任务。", "modifyPrompt": "描述你想要的修改", "modifyPlaceholder": "例如：改变曲线颜色、添加标题或调整 x 轴标签。", "previewing": "正在生成预览…", "preview": "生成预览", "policyPassed": "策略检查通过", "policyBlocked": "策略检查阻断", "diff": "脚本差异", "confirmExecute": "确认执行" },
+    "publish": { "kicker": "发布控制", "title": "发布", "body": "发布是高影响操作：选择版本、记录三类许可、通过发布审核，再确认不可变的公开记录。", "permanence": "公开记录", "permanenceBody": "已发布版本会获得稳定公开 ID、UTC 时间戳和内容哈希，不能原地修改。", "version": "要发布的版本", "licenses": "许可", "license": { "text": "正文", "code": "代码", "data": "数据" }, "checking": "正在审核…", "review": "保存许可并审核", "action": "审阅变更", "readiness": "发布就绪度", "notReviewed": "尚未审核", "reviewStatus": { "passed": "审核通过", "blocked": "发布被阻断" }, "emptyTitle": "还没有可发布版本", "emptyBody": "先创建一个提交版本，再进入发布控制。", "published": "已发布公开版本", "confirmTitle": "确认不可变发布", "confirmBody": "这是 R3 操作。所选版本、许可、时间戳和内容哈希将成为公开记录。", "cancel": "取消", "confirm": "发布版本", "close": "关闭审阅" },
+    "settings": { "navigation": "账户设置", "skip": "跳到设置内容", "kicker": "账户 / 偏好", "title": "设置", "body": "管理 OpenScience 的身份、语言和会话。", "identity": "科研身份", "name": "显示名称", "email": "邮箱", "level": "访问级别", "preferences": "偏好", "language": "语言", "signOut": "退出登录" }
+  },
+  "editorial": {
+    "edition": "期刊精选 · 第一期",
+    "eyebrow": "Ultrafast Science / 精选研究",
+    "description": "以期刊策展方式组织版本化的 OpenScience Research Object；每条内容仍保留其 SDF、证据、许可和评审历史。",
+    "empty": "第一期内容正在编排中。",
+    "defaultNote": "一个按确切版本保存、具备明确证据与来源链的精选 Research Object。",
+    "mediaCount": "{count} 项媒体 / 证据",
+    "noMedia": "已绑定版本证据",
+    "selected": "编辑精选",
+    "read": "阅读科研对象",
+    "source": "来源",
+    "editorialNote": "编辑说明",
+    "disclosure": "期刊精选是一层编辑阅读语境，不等同于同行评审通过。",
+    "browse": "浏览完整研究索引"
+  },
+  "editorialAdmin": {
+    "eyebrow": "期刊策展 / 内部工作台",
+    "description": "将已发布的 Research Object 版本绑定到 Ultrafast Science 阅读层。精选是编辑语境，不等同于同行评审通过。",
+    "addEyebrow": "加入本期",
+    "candidate": "已发布版本",
+    "choose": "选择一个 Research Object",
+    "note": "编辑说明",
+    "notePlaceholder": "为什么它属于这一期",
+    "media": "可选的期刊配套媒体",
+    "mediaHint": "填写媒体 URL 时，必须同时提供替代文本、署名、许可和来源证明。",
+    "image": "图片",
+    "video": "视频",
+    "mediaUrl": "HTTPS 媒体 URL",
+    "mediaAlt": "无障碍描述",
+    "mediaCredit": "创作者 / 署名",
+    "mediaLicense": "许可标识",
+    "mediaSource": "HTTPS 来源证明",
+    "add": "加入草稿精选",
+    "working": "处理中…",
+    "queueLabel": "策展队列",
+    "queueEyebrow": "本期顺序",
+    "sendReview": "送内部审阅",
+    "schedule": "立即排期",
+    "publish": "发布精选",
+    "error": "暂时无法读取策展队列。"
+  },
+  "opticalLab": {
+    "eyebrow": "光学实验室 / 非生产对照",
+    "introduction": "在同一道视觉门禁中对照用户参考、生产基线与浏览器 GPU 候选。",
+    "scope": "本路由仅为隔离实验；用户选择候选前，不替换生产 Landing。",
+    "backToLanding": "返回生产 Landing",
+    "comparisonLabel": "光学场视觉对照",
+    "targetTitle": "用户参考目标",
+    "targetNote": "用于材料与拓扑对照，不作为生产品牌素材直接上线。",
+    "targetAlt": "用户提供的参考图，Science 经固定光学孔径压缩后连接到 evolves",
+    "currentTitle": "当前生产版本",
+    "currentNote": "已部署的 cd5be36 Canvas 字形粒子基线。",
+    "currentAlt": "当前生产 Landing 光学场截图",
+    "candidateTitle": "GPU 候选 A",
+    "candidateNote": "连续字形纹理、固定有符号场、衰减流场与稀疏边缘粒子。",
+    "mode": "渲染模式",
+    "context": "上下文",
+    "fps": "帧率",
+    "frameTime": "CPU 提交",
+    "gpuTime": "GPU 帧时",
+    "bounds": "稳定边界"
   }
 }

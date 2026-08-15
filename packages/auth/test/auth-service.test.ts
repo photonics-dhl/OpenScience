@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { AuthError } from '../src/errors';
-import { getCurrentUser, login, register, resendCode, verifyEmail, type AuthDeps } from '../src/auth-service';
+import { confirmSignup, getCurrentUser, login, register, requestSignupCode, resendCode, verifyEmail, type AuthDeps } from '../src/auth-service';
 import { hashPassword } from '../src/password';
 import { createFakeMailer, createFakePrisma, createFakeRedis } from './helpers/fakes';
 
@@ -99,6 +99,84 @@ describe('register', () => {
     // 串行场景：usedBy 已写入，assertInvitationRedeemable 在 user.create 之前拒绝，故第二个用户未创建；
     // 并发竞态（两个事务都通过 assert 后才写 usedBy）由 guarded updateMany 的 count=0 兜底并回滚。
     expect(db.users.filter((u) => u.email === 'second@example.com')).toHaveLength(0);
+  });
+});
+
+describe('email-code signup', () => {
+  it('requests a code without creating a user, then confirms into a verified user', async () => {
+    const { deps, db, mailer } = makeDeps();
+    await requestSignupCode(deps, { email: 'apply@example.com' });
+    expect(db.users).toHaveLength(0);
+    expect(mailer.sent[0].text).toMatch(/\d{6}/);
+    const code = mailer.sent[0].text.match(/(\d{6})/)![1];
+    const result = await confirmSignup(deps, { email: 'apply@example.com', displayName: 'Applicant', password: 'passw0rd-x', code });
+    expect(result.status).toBe('email_verified');
+    expect(db.users[0].status).toBe('email_verified');
+    expect(db.signupChallenges[0].consumedAt).not.toBeNull();
+  });
+
+  it('rejects an invalid signup code without creating a user', async () => {
+    const { deps, db } = makeDeps();
+    await requestSignupCode(deps, { email: 'invalid-code@example.com' });
+    await expect(confirmSignup(deps, { email: 'invalid-code@example.com', displayName: 'Applicant', password: 'passw0rd-x', code: '000000' })).rejects.toMatchObject({ code: 'CODE_INVALID' });
+    expect(db.users).toHaveLength(0);
+  });
+
+  it('counts concurrent wrong confirmations atomically and locks after five attempts', async () => {
+    const { deps, db } = makeDeps();
+    await requestSignupCode(deps, { email: 'parallel-wrong@example.com' });
+    const attempts = Array.from({ length: 5 }, () =>
+      confirmSignup(deps, {
+        email: 'parallel-wrong@example.com',
+        displayName: 'Applicant',
+        password: 'passw0rd-x',
+        code: '000000',
+      }).catch((error: AuthError) => error.code),
+    );
+    await expect(Promise.all(attempts)).resolves.toEqual(Array(5).fill('CODE_INVALID'));
+    expect(db.signupChallenges[0].attempts).toBe(5);
+    expect(db.signupChallenges[0].lockedUntil).not.toBeNull();
+  });
+
+  it('keeps the public response generic and invalidates an unsent challenge so an immediate retry can deliver', async () => {
+    const { deps, db, mailer } = makeDeps();
+    const auditEvents: Array<{ action: string }> = [];
+    deps.audit = { record: async (event) => void auditEvents.push({ action: event.action }) };
+    deps.mailer = { send: async () => { throw new Error('smtp unavailable'); } };
+    await expect(requestSignupCode(deps, { email: 'retry-delivery@example.com' })).resolves.toBeUndefined();
+    expect(db.signupChallenges[0].consumedAt).not.toBeNull();
+    expect(auditEvents).toContainEqual({ action: 'auth.signup_code.delivery_failed' });
+
+    deps.mailer = mailer;
+    await expect(requestSignupCode(deps, { email: 'retry-delivery@example.com' })).resolves.toBeUndefined();
+    expect(mailer.sent).toHaveLength(1);
+  });
+
+  it('uses the same challenge and mail path for an already-active email', async () => {
+    const { deps, db, mailer } = makeDeps();
+    db.users.push({
+      id: 'active-user', email: 'active@example.com', passwordHash: 'unused', displayName: 'Active',
+      status: 'email_verified', createdAt: NOW, updatedAt: NOW,
+    });
+
+    await expect(requestSignupCode(deps, { email: 'active@example.com' })).resolves.toBeUndefined();
+
+    expect(db.signupChallenges).toHaveLength(1);
+    expect(mailer.sent).toHaveLength(1);
+    expect(mailer.sent[0].to).toBe('active@example.com');
+  });
+
+  it('migrates an existing invited account through the public code flow', async () => {
+    const { deps, db, mailer } = makeDeps();
+    db.users.push({ id: 'legacy-user', email: 'legacy@example.com', passwordHash: await hashPassword('old-passw0rd'), displayName: 'Legacy', status: 'invited', createdAt: NOW, updatedAt: NOW });
+    await requestSignupCode(deps, { email: 'legacy@example.com' });
+    expect(mailer.sent).toHaveLength(1);
+    const code = mailer.sent[0].text.match(/(\d{6})/)![1];
+    const result = await confirmSignup(deps, { email: 'legacy@example.com', displayName: 'Migrated', password: 'new-passw0rd1', code });
+    expect(result.status).toBe('email_verified');
+    expect(db.users).toHaveLength(1);
+    expect(db.users[0]).toMatchObject({ id: 'legacy-user', displayName: 'Migrated', status: 'email_verified' });
+    await expect(login(deps, { email: 'legacy@example.com', password: 'new-passw0rd1' })).resolves.toMatchObject({ status: 'email_verified' });
   });
 });
 

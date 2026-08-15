@@ -40,11 +40,13 @@ interface FakeDb {
   toolApprovals: any[];
   aiReviews: any[];
   appeals: any[];
+  ingestionBatches: any[];
+  ingestionTasks: any[];
 }
 
 /** 内存版 Prisma 子集：覆盖 workspace 领域用到的调用面。 */
 export function createFakePrisma(): { prisma: PrismaClient; db: FakeDb } {
-  const db: FakeDb = { users: [], workspaces: [], memberships: [], workspaceInvitations: [], mailOutbox: [], quotaPolicies: [], usageLedger: [], researchObjects: [], sdfDocuments: [], sdfNodes: [], blobs: [], artifacts: [], branches: [], commits: [], changesets: [], versions: [], versionManifests: [], manifestEntries: [], identifiers: [], publications: [], visibilityGrants: [], visibilityRequests: [], pullRequests: [], issues: [], comments: [], reviews: [], licenseAssignments: [], forkRelations: [], notifications: [], authors: [], contributions: [], agentSessions: [], agentTasks: [], toolApprovals: [], aiReviews: [], appeals: [] };
+  const db: FakeDb = { users: [], workspaces: [], memberships: [], workspaceInvitations: [], mailOutbox: [], quotaPolicies: [], usageLedger: [], researchObjects: [], sdfDocuments: [], sdfNodes: [], blobs: [], artifacts: [], branches: [], commits: [], changesets: [], versions: [], versionManifests: [], manifestEntries: [], identifiers: [], publications: [], visibilityGrants: [], visibilityRequests: [], pullRequests: [], issues: [], comments: [], reviews: [], licenseAssignments: [], forkRelations: [], notifications: [], authors: [], contributions: [], agentSessions: [], agentTasks: [], toolApprovals: [], aiReviews: [], appeals: [], ingestionBatches: [], ingestionTasks: [] };
   let seq = 0;
   const nextId = () => `00000000-0000-4000-8000-${String(++seq).padStart(12, '0')}`;
   const p2002 = () => {
@@ -211,6 +213,7 @@ export function createFakePrisma(): { prisma: PrismaClient; db: FakeDb } {
     },
     usageLedger: {
       create: async ({ data }: any) => {
+        if (data.idempotencyKey && db.usageLedger.some((row) => row.idempotencyKey === data.idempotencyKey)) throw p2002();
         const row = { id: nextId(), createdAt: new Date(), ...data };
         db.usageLedger.push(row);
         return row;
@@ -244,8 +247,79 @@ export function createFakePrisma(): { prisma: PrismaClient; db: FakeDb } {
       },
     },
     researchObject: {
+      findMany: async ({ where, include, orderBy, take }: any) => {
+        const userId = where?.workspace?.members?.some?.userId;
+        let rows = db.researchObjects.filter((row) =>
+          !userId || db.memberships.some((membership) => membership.workspaceId === row.workspaceId && membership.userId === userId),
+        );
+        const matchesText = (value: string, filter: any) => {
+          if (!filter) return true;
+          if (filter.contains !== undefined) return value.toLocaleLowerCase().includes(String(filter.contains).toLocaleLowerCase());
+          if (filter.endsWith !== undefined) return value.toLocaleLowerCase().endsWith(String(filter.endsWith).toLocaleLowerCase());
+          if (filter.not?.endsWith !== undefined) return !value.toLocaleLowerCase().endsWith(String(filter.not.endsWith).toLocaleLowerCase());
+          return true;
+        };
+        const matchesEntry = (entry: any, condition: any): boolean =>
+          (condition.OR === undefined || condition.OR.some((part: any) => matchesEntry(entry, part))) &&
+          (condition.AND === undefined || condition.AND.every((part: any) => matchesEntry(entry, part))) &&
+          matchesText(entry.logicalPath, condition.logicalPath);
+        const versionsFor = (row: any) => db.versions.filter((version) => version.researchObjectId === row.id);
+        const matchesVersionSome = (row: any, condition: any) => versionsFor(row).some((version) => {
+          if (condition.status !== undefined && version.status !== condition.status) return false;
+          const manifest = db.versionManifests.find((candidate) => candidate.versionId === version.id);
+          const entrySome = condition.manifest?.is?.entries?.some;
+          return !entrySome || (!!manifest && db.manifestEntries.some((entry) => entry.manifestId === manifest.id && matchesEntry(entry, entrySome)));
+        });
+        const matchesClause = (row: any, clause: any): boolean => {
+          if (clause.OR) return clause.OR.some((part: any) => matchesClause(row, part));
+          if (clause.title && !matchesText(row.title, clause.title)) return false;
+          if (clause.versions?.some && !matchesVersionSome(row, clause.versions.some)) return false;
+          const nodeSome = clause.sdfDocument?.nodes?.some;
+          if (nodeSome) {
+            const document = db.sdfDocuments.find((candidate) => candidate.researchObjectId === row.id);
+            const nodes = document ? db.sdfNodes.filter((node) => node.sdfDocumentId === document.id) : [];
+            if (!nodes.some((node) =>
+              (nodeSome.nodeType === undefined || node.nodeType === nodeSome.nodeType) &&
+              matchesText(node.content, nodeSome.content),
+            )) return false;
+          }
+          return true;
+        };
+        rows = rows.filter((row) =>
+          (where?.visibility === undefined || row.visibility === where.visibility) &&
+          (where?.publicId?.not === undefined || row.publicId !== where.publicId.not) &&
+          (where?.publicId?.gt === undefined || row.publicId > where.publicId.gt) &&
+          (!where?.versions?.some || matchesVersionSome(row, where.versions.some)) &&
+          (!where?.AND || where.AND.every((clause: any) => matchesClause(row, clause))),
+        );
+        if (orderBy?.updatedAt === 'desc') rows = rows.sort((a, b) => b.updatedAt.getTime() - a.updatedAt.getTime());
+        if (orderBy?.publicId === 'asc') rows = rows.sort((a, b) => a.publicId.localeCompare(b.publicId));
+        rows = rows.slice(0, take ?? rows.length);
+        if (!include) return rows;
+        return rows.map((row) => {
+          const sdfDocument = db.sdfDocuments.find((document) => document.researchObjectId === row.id);
+          const nodes = sdfDocument
+            ? db.sdfNodes.filter((node) => node.sdfDocumentId === sdfDocument.id).toSorted((a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0))
+            : [];
+          let versions = versionsFor(row).filter((version) => !include.versions?.where?.status || version.status === include.versions.where.status);
+          if (include.versions?.orderBy?.versionNo === 'desc') versions = versions.toSorted((a, b) => b.versionNo - a.versionNo);
+          versions = versions.slice(0, include.versions?.take ?? versions.length).map((version) => {
+            const manifest = db.versionManifests.find((candidate) => candidate.versionId === version.id);
+            return {
+              ...version,
+              manifest: manifest ? { ...manifest, entries: db.manifestEntries.filter((entry) => entry.manifestId === manifest.id) } : null,
+              publications: db.publications.filter((publication) => publication.versionId === version.id),
+            };
+          });
+          const authors = db.authors
+            .filter((author) => author.researchObjectId === row.id)
+            .toSorted((a, b) => a.sortOrder - b.sortOrder)
+            .map((author) => ({ ...author, user: db.users.find((user) => user.id === author.userId) }));
+          return { ...row, sdfDocument: sdfDocument ? { ...sdfDocument, nodes } : null, versions, authors };
+        });
+      },
       findUnique: async ({ where, include }: any) => {
-        const ro = db.researchObjects.find((r) => r.id === where.id) ?? null;
+        const ro = db.researchObjects.find((r) => where.id ? r.id === where.id : r.idempotencyKey === where.idempotencyKey) ?? null;
         if (!ro || !include?.sdfDocument) return ro;
         const doc = db.sdfDocuments.find((d) => d.researchObjectId === ro.id);
         return { ...ro, sdfDocument: doc ? { ...doc, nodes: db.sdfNodes.filter((n) => n.sdfDocumentId === doc.id) } : null };
@@ -254,7 +328,7 @@ export function createFakePrisma(): { prisma: PrismaClient; db: FakeDb } {
         const row = {
           id: nextId(), status: 'draft', visibility: 'private', version: 1,
           createdAt: new Date(), updatedAt: new Date(),
-          workspaceId: data.workspaceId, title: data.title, createdBy: data.createdBy,
+          workspaceId: data.workspaceId, title: data.title, createdBy: data.createdBy, idempotencyKey: data.idempotencyKey,
         };
         db.researchObjects.push(row);
         if (data.sdfDocument?.create) {
@@ -324,7 +398,7 @@ export function createFakePrisma(): { prisma: PrismaClient; db: FakeDb } {
     },
     artifact: {
       findUnique: async ({ where, include }: any) => {
-        const row = db.artifacts.find((a) => a.id === where.id) ?? null;
+        const row = db.artifacts.find((a) => where.id ? a.id === where.id : a.idempotencyKey === where.idempotencyKey) ?? null;
         if (!row || !include?.blob) return row;
         return { ...row, blob: db.blobs.find((b) => b.sha256 === row.blobSha256) ?? null };
       },
@@ -573,12 +647,13 @@ export function createFakePrisma(): { prisma: PrismaClient; db: FakeDb } {
     },
     agentSession: {
       create: async ({ data }: any) => {
+        if (data.idempotencyKey && db.agentSessions.some((session) => session.idempotencyKey === data.idempotencyKey)) throw p2002();
         const row = { id: nextId(), status: 'active', createdAt: new Date(), updatedAt: new Date(), ...data };
         db.agentSessions.push(row);
         return row;
       },
       findUnique: async ({ where }: any) => {
-        const row = db.agentSessions.find((s) => s.id === where.id) ?? null;
+        const row = db.agentSessions.find((s) => where.id ? s.id === where.id : s.idempotencyKey === where.idempotencyKey) ?? null;
         if (!row) return null;
         return { ...row };
       },
@@ -591,7 +666,7 @@ export function createFakePrisma(): { prisma: PrismaClient; db: FakeDb } {
     agentTask: {
       create: async ({ data }: any) => {
         if (data.idempotencyKey && db.agentTasks.some((t) => t.idempotencyKey === data.idempotencyKey)) throw p2002();
-        const row = { id: nextId(), status: 'pending', progress: 0, createdAt: new Date(), updatedAt: new Date(), ...data };
+        const row = { id: nextId(), status: 'pending', progress: 0, dispatchedAt: null, createdAt: new Date(), updatedAt: new Date(), ...data };
         db.agentTasks.push(row);
         return row;
       },
@@ -611,10 +686,23 @@ export function createFakePrisma(): { prisma: PrismaClient; db: FakeDb } {
         Object.assign(row, data, { updatedAt: new Date() });
         return { ...row };
       },
+      updateMany: async ({ where, data }: any) => {
+        const rows = db.agentTasks.filter((task) =>
+          (where.id === undefined || task.id === where.id) &&
+          (where.dispatchedAt === undefined || task.dispatchedAt === where.dispatchedAt) &&
+          (where.status?.in === undefined || where.status.in.includes(task.status)),
+        );
+        rows.forEach((row) => Object.assign(row, data, { updatedAt: new Date() }));
+        return { count: rows.length };
+      },
       findMany: async ({ where, include }: any) => {
         let rows = db.agentTasks.filter((t) =>
           (where.session === undefined || (where.session.userId === undefined || db.agentSessions.find((s) => s.id === t.sessionId)?.userId === where.session.userId)),
         );
+        if (where.status?.in) rows = rows.filter((task) => where.status.in.includes(task.status));
+        if (include?.session) {
+          rows = rows.map((task) => ({ ...task, session: db.agentSessions.find((session) => session.id === task.sessionId) }));
+        }
         if (include?.approvals) {
           rows = rows.filter((t) => db.toolApprovals.some((a) => a.taskId === t.id && a.status === (include.approvals.where?.status ?? a.status)));
           rows = rows.map((t) => ({
@@ -623,6 +711,87 @@ export function createFakePrisma(): { prisma: PrismaClient; db: FakeDb } {
           }));
         }
         return rows;
+      },
+    },
+    ingestionBatch: {
+      create: async ({ data }: any) => {
+        if (data.idempotencyKey && db.ingestionBatches.some((batch) => batch.idempotencyKey === data.idempotencyKey)) throw p2002();
+        const row = { id: nextId(), createdAt: new Date(), updatedAt: new Date(), ...data };
+        db.ingestionBatches.push(row);
+        return row;
+      },
+      findUnique: async ({ where, include }: any) => {
+        const row = db.ingestionBatches.find((batch) => where.id ? batch.id === where.id : batch.idempotencyKey === where.idempotencyKey) ?? null;
+        if (!row || !include) return row;
+        const researchObject = db.researchObjects.find((ro) => ro.id === row.researchObjectId) ?? null;
+        let tasks = db.ingestionTasks.filter((task) => task.batchId === row.id);
+        if (include.tasks?.orderBy?.createdAt === 'asc') tasks = tasks.sort((a, b) => a.createdAt - b.createdAt);
+        if (include.tasks?.include?.artifact) tasks = tasks.map((task) => ({ ...task, artifact: db.artifacts.find((artifact) => artifact.id === task.artifactId) }));
+        return { ...row, researchObject, tasks };
+      },
+      update: async ({ where, data }: any) => {
+        const row = db.ingestionBatches.find((batch) => batch.id === where.id);
+        Object.assign(row, data, { updatedAt: new Date() });
+        return { ...row };
+      },
+    },
+    ingestionTask: {
+      create: async ({ data }: any) => {
+        const row = { id: nextId(), state: 'queued', retryCount: 0, error: null, createdAt: new Date(), updatedAt: new Date(), ...data };
+        db.ingestionTasks.push(row);
+        return row;
+      },
+      findUnique: async ({ where, include }: any) => {
+        const row = db.ingestionTasks.find((task) => where.id
+          ? task.id === where.id
+          : task.batchId === where.batchId_artifactId?.batchId && task.artifactId === where.batchId_artifactId?.artifactId) ?? null;
+        if (!row || !include) return row;
+        const batch = db.ingestionBatches.find((candidate) => candidate.id === row.batchId) ?? null;
+        const researchObject = batch ? db.researchObjects.find((ro) => ro.id === batch.researchObjectId) : null;
+        return {
+          ...row,
+          artifact: db.artifacts.find((artifact) => artifact.id === row.artifactId),
+          batch: batch ? { ...batch, researchObject } : null,
+        };
+      },
+      findMany: async ({ where, include, orderBy, take }: any) => {
+        let rows = db.ingestionTasks.filter((task) => {
+          const batch = db.ingestionBatches.find((candidate) => candidate.id === task.batchId);
+          return (where?.batch?.userId === undefined || batch?.userId === where.batch.userId) &&
+            (where?.state?.in === undefined || where.state.in.includes(task.state));
+        });
+        if (orderBy?.updatedAt === 'desc') {
+          rows = rows.toSorted((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime());
+        }
+        if (take !== undefined) rows = rows.slice(0, take);
+        if (!include) return rows;
+        return rows.map((row) => {
+          const batch = db.ingestionBatches.find((candidate) => candidate.id === row.batchId) ?? null;
+          const researchObject = batch ? db.researchObjects.find((ro) => ro.id === batch.researchObjectId) ?? null : null;
+          return {
+            ...row,
+            artifact: db.artifacts.find((artifact) => artifact.id === row.artifactId),
+            batch: batch ? { ...batch, researchObject } : null,
+          };
+        });
+      },
+      update: async ({ where, data, include }: any) => {
+        const row = db.ingestionTasks.find((task) => task.id === where.id);
+        const retryCount = data.retryCount?.increment ? row.retryCount + data.retryCount.increment : (data.retryCount ?? row.retryCount);
+        Object.assign(row, { ...data, retryCount, updatedAt: new Date() });
+        return include?.artifact ? { ...row, artifact: db.artifacts.find((artifact) => artifact.id === row.artifactId) } : { ...row };
+      },
+      updateMany: async ({ where, data }: any) => {
+        const rows = db.ingestionTasks.filter((task) =>
+          (where.agentTaskId === undefined || task.agentTaskId === where.agentTaskId) &&
+          (where.id === undefined || task.id === where.id) &&
+          (where.state === undefined || task.state === where.state),
+        );
+        rows.forEach((row) => {
+          const retryCount = data.retryCount?.increment ? row.retryCount + data.retryCount.increment : (data.retryCount ?? row.retryCount);
+          Object.assign(row, { ...data, retryCount, updatedAt: new Date() });
+        });
+        return { count: rows.length };
       },
     },
     toolApproval: {

@@ -56,6 +56,7 @@ export function registerArtifactRoutes(app: FastifyInstance, deps: ArtifactRoute
       return reply.status(400).send({ error: { code: 'INVALID_REQUEST', message: '缺少 logicalPath' } });
     }
     try {
+      const idempotencyKey = z.string().min(1).max(200).optional().parse(req.headers['idempotency-key']);
       const result = await createArtifact(
         deps,
         {
@@ -63,6 +64,7 @@ export function registerArtifactRoutes(app: FastifyInstance, deps: ArtifactRoute
           content: data.file, // Readable
           uploadedBy: user.userId,
           workspaceId,
+          idempotencyKey,
         },
         auditCtx(req),
       );

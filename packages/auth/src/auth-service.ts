@@ -56,6 +56,17 @@ export interface RegisterInput {
   displayName: string;
 }
 
+export interface SignupCodeRequest {
+  email: string;
+}
+
+export interface SignupConfirmation {
+  email: string;
+  displayName: string;
+  password: string;
+  code: string;
+}
+
 function now(deps: AuthDeps): Date {
   return deps.now ? deps.now() : new Date();
 }
@@ -111,6 +122,92 @@ export async function register(deps: AuthDeps, input: RegisterInput, ctx: AuditC
       throw new AuthError('EMAIL_ALREADY_REGISTERED', '该邮箱已注册');
     }
     throw err;
+  }
+}
+
+/** Request-only signup challenge: no User row is created until the code is confirmed. */
+export async function requestSignupCode(deps: AuthDeps, input: SignupCodeRequest, ctx: AuditContext = {}): Promise<void> {
+  const email = input.email.trim().toLowerCase();
+  const at = now(deps);
+  const previous = await deps.prisma.signupChallenge.findFirst({ where: { email, consumedAt: null }, orderBy: { createdAt: 'desc' } });
+  if (previous && inCooldown(previous.lastSentAt, at)) return;
+  const code = generateVerificationCode();
+  if (previous) {
+    await deps.prisma.signupChallenge.updateMany({
+      where: { id: previous.id, consumedAt: null },
+      data: { expiresAt: at, consumedAt: at },
+    });
+  }
+  let challenge: { id: string };
+  try {
+    challenge = await deps.prisma.signupChallenge.create({
+      data: { email, codeHash: hashVerificationCode(code), expiresAt: new Date(at.getTime() + CODE_TTL_MS), lastSentAt: at },
+    });
+  } catch (error) {
+    // Partial unique index permits one active challenge/sender per normalized email.
+    if ((error as { code?: string })?.code === 'P2002') return;
+    throw error;
+  }
+  try {
+    await deps.mailer.send({ to: email, subject: 'OpenScience 注册验证码', text: `你的 OpenScience 注册验证码是 ${code}，10 分钟内有效。` });
+  } catch {
+    await deps.prisma.signupChallenge.updateMany({
+      where: { id: challenge.id, consumedAt: null },
+      data: { expiresAt: at, consumedAt: at },
+    });
+    await recordAuth(deps, { actorId: null, action: 'auth.signup_code.delivery_failed', metadata: { channel: 'email' } }, ctx);
+    // Public response remains 202 for every address and mail-provider state. The
+    // failed challenge is already consumed and the operational failure is audited.
+    return;
+  }
+  await recordAuth(deps, { actorId: null, action: 'auth.signup_code.request', metadata: { channel: 'email' } }, ctx);
+}
+
+/** Confirm a signup challenge and atomically create the verified user + personal workspace. */
+export async function confirmSignup(deps: AuthDeps, input: SignupConfirmation, ctx: AuditContext = {}): Promise<Required<AuthResult>> {
+  const email = input.email.trim().toLowerCase();
+  const at = now(deps);
+  const existingUser = await deps.prisma.user.findUnique({ where: { email } });
+  if (existingUser && existingUser.status !== 'invited') throw new AuthError('CODE_INVALID', '验证码错误或已失效');
+  const challenge = await deps.prisma.signupChallenge.findFirst({ where: { email, consumedAt: null }, orderBy: { createdAt: 'desc' } });
+  if (!challenge) throw new AuthError('CODE_INVALID', '验证码错误或已失效');
+  if (isLocked(challenge.lockedUntil, at)) throw new AuthError('CODE_LOCKED', '尝试次数过多，请稍后再试');
+  if (isCodeExpired(challenge.expiresAt, at)) throw new AuthError('CODE_EXPIRED', '验证码已过期，请重新获取');
+  if (challenge.codeHash !== hashVerificationCode(input.code)) {
+    let current = challenge;
+    for (let retry = 0; retry < 5; retry++) {
+      const updated = await deps.prisma.signupChallenge.updateMany({
+        where: { id: current.id, consumedAt: null, attempts: current.attempts },
+        data: registerFailedAttempt(current.attempts, at),
+      });
+      if (updated.count === 1) break;
+      const refreshed = await deps.prisma.signupChallenge.findFirst({
+        where: { email, consumedAt: null },
+        orderBy: { createdAt: 'desc' },
+      });
+      if (!refreshed || refreshed.id !== challenge.id) throw new AuthError('CODE_INVALID', '验证码错误或已失效');
+      if (isLocked(refreshed.lockedUntil, at)) throw new AuthError('CODE_LOCKED', '尝试次数过多，请稍后再试');
+      current = refreshed;
+    }
+    throw new AuthError('CODE_INVALID', '验证码错误或已失效');
+  }
+  const passwordHash = await hashPassword(input.password);
+  try {
+    const user = await deps.prisma.$transaction(async (tx) => {
+      const redeemed = await tx.signupChallenge.updateMany({ where: { id: challenge.id, consumedAt: null }, data: { consumedAt: at } });
+      if (redeemed.count !== 1) throw new AuthError('CODE_INVALID', '验证码错误或已失效');
+      const created = existingUser
+        ? await tx.user.update({ where: { id: existingUser.id }, data: { passwordHash, displayName: input.displayName.trim(), status: 'email_verified' } })
+        : await tx.user.create({ data: { email, passwordHash, displayName: input.displayName.trim(), status: 'email_verified' } });
+      await deps.onEmailVerified?.(tx, { id: created.id, email: created.email, displayName: created.displayName });
+      await recordAuth(deps, { actorId: created.id, action: 'auth.signup_code.confirm', targetType: 'user', targetId: created.id }, ctx, tx);
+      return created;
+    });
+    const sessionToken = await createSession(deps.redis, { userId: user.id, status: user.status });
+    return { userId: user.id, status: user.status, sessionToken };
+  } catch (error) {
+    if ((error as { code?: string })?.code === 'P2002') throw new AuthError('EMAIL_ALREADY_REGISTERED', '该邮箱已注册');
+    throw error;
   }
 }
 

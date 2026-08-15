@@ -93,6 +93,7 @@ CREATE INDEX usage_ledger_resource_period_idx ON usage_ledger(resource, period);
 - 月度重置 = 每月向每个活跃用户插入一条 `monthly_grant` 流水，`delta=+N`，`period='YYYY-MM'`
 - `monthly_amount` 来自 policy：`resolvePolicy(user_level 或 global, 'ai_credit')` 的 `limit_value` 语义 = **每月授予量**（非余额上限）
 - 幂等：重置脚本按 `(user_id, resource, period)` 查重，已发过的 period 跳过
+- 新用户在邮箱确认事务中按同一 policy 补齐当前 UTC 月 grant；确定性幂等键保证同月重复确认/重试不重复发放，且既有 Personal Workspace 不会导致授信被跳过
 - 调度：`grants.ts` 纯函数生成流水行 + 脚本骨架调用；Cron 常驻归 2.9
 
 ## 4. 默认占位数值（保守，§24 待确认）

@@ -48,24 +48,24 @@
 
 **Interfaces:** Consumes `cbcb60c` on `codex/researcher-ingestion` and `b0b3969` on `main`; produces isolated `codex/optical-editorial-v3` with production ingestion plus approved design/plan documents.
 
-- [ ] Verify `git status --short`, `git worktree list` and both hashes; record unrelated dirty files without staging them.
-- [ ] Use `using-git-worktrees` to create `codex/optical-editorial-v3` from `codex/researcher-ingestion`.
-- [ ] Cherry-pick `b0b3969`; retain newer production evidence when resolving documentation-only conflicts.
-- [ ] Run `npx pnpm@9.15.0 test`, `build`, `docs:lint` and `audit:docs-sync`.
-- [ ] Commit only reconciliation changes: `docs: establish optical editorial execution baseline`.
+- [x] Verify `git status --short`, `git worktree list` and both hashes; record unrelated dirty files without staging them.
+- [x] Use `using-git-worktrees` to create `codex/optical-editorial-v3` from `codex/researcher-ingestion`.
+- [x] Cherry-pick `b0b3969`; retain newer production evidence when resolving documentation-only conflicts.
+- [x] Run `npx pnpm@9.15.0 --filter @openscience/database generate`, then `build`, `test`, `docs:lint` and `audit:docs-sync`; fresh worktrees have neither Prisma Client nor cross-package `dist` outputs before this order.
+- [x] Commit only reconciliation changes: `docs: establish optical editorial execution baseline`.
 
 ### Task 2: Audit Community Dependencies and Implement V3 Foundations
 
-**Files:** Modify `apps/web/app/tokens.css`, `globals.css`, `layout.tsx`, `apps/web/package.json`, `pnpm-lock.yaml`, `apps/web/test/tokens-contrast.test.ts`; create `docs/decisions/ADR-005-optical-runtime-and-fonts.md`, `apps/web/test/optical-foundations.test.ts`.
+**Files:** Modify `apps/web/app/tokens.css`, `globals.css`, `layout.tsx`, `apps/web/package.json`, `pnpm-lock.yaml`, `apps/web/test/tokens-contrast.test.ts`; create `docs/decisions/ADR-009-optical-runtime-and-fonts.md`, `apps/web/test/optical-foundations.test.ts`.
 
 **Interfaces:** Produces `--os-black-0`, `--os-black-1`, `--os-paper`, `--os-ink`, `--os-vermilion`, `--os-confirmed`, `--os-rule-dark`, `--os-rule-paper`, motion and font-role variables.
 
-- [ ] Research current official repositories/registries for one lightweight displacement/halftone option and approved fonts; record license, runtime cost, SSR support, reduced-motion fallback and ECS requirements in ADR-005.
-- [ ] Prefer Canvas 2D + CSS/SVG filters if they satisfy the contract; reject unpinned or hosted runtimes.
-- [ ] Add failing tests requiring v3 variables, forbidding decorative blue/violet tokens and asserting AA pairs.
-- [ ] Run `npx pnpm@9.15.0 --filter @openscience/web test -- tokens-contrast optical-foundations`; verify RED.
-- [ ] Implement monochrome/vermilion variables, 0/4/8px radius scale, typography roles and motion tokens; retain legacy aliases only while consumed.
-- [ ] Re-run focused tests and typecheck; commit `feat(web): establish optical editorial foundations`.
+- [x] Research current official repositories/registries for one lightweight displacement/halftone option and approved fonts; record license, runtime cost, SSR support, reduced-motion fallback and ECS requirements in ADR-009 (`ADR-005` was already assigned to public email registration).
+- [x] Prefer Canvas 2D + CSS/SVG filters if they satisfy the contract; reject unpinned or hosted runtimes.
+- [x] Add failing tests requiring v3 variables, forbidding decorative blue/violet tokens and asserting AA pairs.
+- [x] Run `npx pnpm@9.15.0 --filter @openscience/web test -- tokens-contrast optical-foundations`; verify RED.
+- [x] Implement monochrome/vermilion variables, 0/4/8px radius scale, typography roles and motion tokens; retain legacy aliases only while consumed.
+- [x] Re-run focused tests and typecheck; commit `feat(web): establish optical editorial foundations`.
 
 ### Task 3: Build Shared Brand and Surface Shells
 
@@ -73,23 +73,25 @@
 
 **Interfaces:** Produces `OpenScienceWordmark({compact?, tone:'dark'|'paper'})` and shell components with one main landmark and skip-link target.
 
-- [ ] Write failing assertions for `OpenScience.` with separate vermilion stop, one `main`, focusable skip link and no `Card` dependency.
-- [ ] Verify RED with the focused test.
-- [ ] Implement wordmark, `O.` favicon and four rule/background-step shells; buttons use 8px radius and active press feedback.
-- [ ] Add symmetric i18n keys; run i18n, focused tests, typecheck and build.
-- [ ] Commit `feat(web): add optical editorial product shells`.
+- [x] Write failing assertions for `OpenScience.` with separate vermilion stop, one `main`, focusable skip link and no `Card` dependency.
+- [x] Verify RED with the focused test.
+- [x] Implement wordmark, `O.` favicon and four rule/background-step shells; buttons use 8px radius and active press feedback.
+- [x] Add symmetric i18n keys; run i18n, focused tests, typecheck and build.
+- [x] Commit `feat(web): add optical editorial product shells`.
 
-### Task 4: Replace Landing with the Optical Editorial Brand Medium
+### Task 4: Enhance the Existing Landing Prototype with the Optical Editorial Medium
 
-**Files:** Replace `components/landing/{Hero,SiteHeader,LatestResearch}.tsx`, `app/page.tsx`, `test/landing-page.test.tsx`; create `components/brand/{OpticalHeadline,OpticalField}.tsx`, `lib/optical-field/{field-model,canvas-renderer}.ts`; modify catalogs and `test/visual/shots.mjs`.
+**Files:** Preserve and enhance `components/landing/{Hero,SiteHeader,LatestResearch,EvolutionPanel,HermesBand,TrustBand}.tsx`, `app/page.tsx`, `test/landing-page.test.tsx`; create `components/brand/{OpticalHeadline,OpticalField}.tsx`, `lib/optical-field/{field-model,canvas-renderer}.ts`; modify catalogs and `test/visual/shots.mjs`.
 
 **Interfaces:** Produces `OpticalHeadline({locale,reducedMotion})`, pure `sampleOpticalField(pointer,viewport,now): OpticalSample`; Canvas stays `aria-hidden` and never owns text.
 
-- [ ] Write failing tests for real DOM English/Chinese headlines, Create/Explore routes, one vermilion marker, deterministic bounds and static reduced-motion mode.
-- [ ] Verify RED because the old symmetrical ring renders.
-- [ ] Implement asymmetric DOM typography first; pass static 1440×900 and 390×844 AI-slop review before Canvas.
-- [ ] Implement 160–200px pointer radius, 8–14px maximum visual displacement, 400–600ms recovery and ≤35% mobile density.
-- [ ] Capture 1440×900, 1920×1080 and 390×844 normal/reduced motion; commit `feat(web): replace landing with optical editorial medium`.
+- [x] Write failing tests for real DOM English/Chinese headlines, Create/Explore routes, one vermilion marker, deterministic bounds and static reduced-motion mode.
+- [x] Verify RED because the old symmetrical ring renders.
+- [x] Implement asymmetric DOM typography first; pass static 1440×900 and 390×844 AI-slop review before Canvas.
+- [x] Implement 160–200px pointer radius, 8–14px maximum visual displacement, 400–600ms recovery and ≤35% mobile density.
+- [x] Follow-up optical text pass: keep the headline as selectable DOM text while adding pointer-local SVG displacement, chromatic focus, mask falloff and a vermilion focus ring from `OpenScience_Text_Distortion_Demo.html`.
+- [x] Capture 1440×900, 1920×1080 and 390×844 normal/reduced motion; commit `feat(web): replace landing with optical editorial medium`.
+- [x] Regression correction: restore the approved `80c8312` Optical Editorial composition, keep one semantic headline plus one decorative distortion layer, add glyph safety, frame-time interpolation, fixed slit diffraction and a complete paper `OPEN RO.` second screen; do not restore the v3-prohibited RO loop, orbit, video or card narrative modules.
 
 ### Task 5: Rebuild RO Workspace as Three Stable Work Planes
 
@@ -97,11 +99,11 @@
 
 **Interfaces:** Produces `19% / minmax(0,56%) / 25%` grid; ObjectHeader receives ID/title/version/visibility/save state/action; proposals require source, scope and review callback.
 
-- [ ] Write failing tests for one ObjectHeader, three desktop planes, six numbered SDF nodes, source-bearing proposals, collapsible evidence and mobile functional parity.
-- [ ] Verify RED; implement presentation without changing persistence calls.
-- [ ] Replace card/pill statuses with rules, weight and mono metadata; only the active node has vermilion.
-- [ ] Test keyboard order, 320px overflow, focus return and full-screen high-risk review.
-- [ ] Capture a real test RO; commit `feat(web): rebuild research object workspace`.
+- [x] Write failing tests for one ObjectHeader, three desktop planes, six numbered SDF nodes, source-bearing proposals, collapsible evidence and mobile functional parity.
+- [x] Verify RED; implement presentation without changing persistence calls.
+- [x] Replace card/pill statuses with rules, weight and mono metadata; only the active node has vermilion.
+- [x] Test keyboard order, 320px overflow, focus return and full-screen high-risk review.
+- [x] Capture a real-shaped test RO through compiled API contracts; commit `feat(web): rebuild research object workspace`.
 
 ### Task 6: Rebuild Public RO as a Citable Paper Surface
 
@@ -109,11 +111,11 @@
 
 **Interfaces:** Preserves existing API fields; produces 760px reading column + 280px metadata rail and distinct continuing-RO/version citations.
 
-- [ ] Write failing tests placing identity/license/citation/Insight before deep tabs, requiring text SDF states and print landmarks.
-- [ ] Verify RED; implement paper surface and academic captions with no dark workspace frame.
-- [ ] Add print CSS retaining citation/provenance and removing interactive chrome.
-- [ ] Run contract/render/typecheck/build and capture desktop/mobile/print evidence.
-- [ ] Commit `feat(web): rebuild public research object reading`.
+- [x] Write failing tests placing identity/license/citation/Insight before deep tabs, requiring text SDF states and print landmarks.
+- [x] Verify RED; implement paper surface and academic captions with no dark workspace frame.
+- [x] Add print CSS retaining citation/provenance and removing interactive chrome.
+- [x] Run contract/render/typecheck/build and capture desktop/mobile/print evidence.
+- [x] Commit `feat(web): rebuild public research object reading`.
 
 ### Task 7: Integrate Auth into the Research Identity Experience
 
@@ -121,10 +123,10 @@
 
 **Interfaces:** Preserves `request-signup-code`, `confirm-signup`, `login`, `safeReturnTo` and cookies; supports standalone sign-in and Create-intent return.
 
-- [ ] Add failing tests for two-step code registration, compact fields, safe returnTo, standalone sign-in, retryable errors and focus transfer.
-- [ ] Verify RED; implement IdentityShell brand/form planes.
-- [ ] Run stubbed E2E and compiled Next + real Fastify signup E2E; require successful session assertion.
-- [ ] Capture desktop/mobile error and success; commit `feat(web): integrate research identity auth experience`.
+- [x] Add failing tests for two-step code registration, compact fields, safe returnTo, standalone sign-in, retryable errors and focus transfer.
+- [x] Verify RED; implement IdentityShell brand/form planes.
+- [x] Run stubbed E2E and compiled Next + real Fastify signup E2E; require successful session assertion.
+- [x] Capture desktop/mobile error and success; commit `feat(web): integrate research identity auth experience`.
 
 ### Task 8: Complete the Mixed-Material Evidence Intake
 
@@ -132,10 +134,10 @@
 
 **Interfaces:** Produces `IntakeMaterial {localId,file,role:'manuscript'|'figure'|'data'|'code'|'supplement',primary,status,progress,artifactId?,taskId?,errorCode?}`; consumes existing upload/ingestion/OCR/ClamAV/confirmation routes.
 
-- [ ] Write failing tests for PDF/Word/TeX-ZIP/Markdown/image/data/code, one optional primary manuscript, pre-auth local-only state, per-file progress, retry and `needs_review`.
-- [ ] Verify RED; implement queue/roles without uploading before auth and explicit submit.
-- [ ] Bind real `scan → upload → parse/OCR → SDF map → review` states; never fake progress.
-- [ ] Add E2E for mixed batch, blocked file and OCR-to-review; commit `feat(web): complete evidence intake workflow`.
+- [x] Write failing tests for PDF/Word/TeX-ZIP/Markdown/image/data/code, one optional primary manuscript, pre-auth local-only state, per-file progress, retry and `needs_review`.
+- [x] Verify RED; implement queue/roles without uploading before auth and explicit submit.
+- [x] Bind real `scan → upload → parse/OCR → SDF map → review` states; never fake progress.
+- [x] Add E2E for mixed batch, blocked file and OCR-to-review; commit `feat(web): complete evidence intake workflow`.
 
 ### Task 9: Rebuild Dashboard and Connect Hermes/Live2D to Tasks
 
@@ -143,10 +145,12 @@
 
 **Interfaces:** Produces `HermesVisualState = 'idle'|'guiding'|'scanning'|'suggesting'|'awaiting_approval'|'failed'`; visual and task entry share the same task/RO URL.
 
-- [ ] Write failing tests for one Continue Research action, row-based RO list, actionable confirmations, deep-link equality, approval stillness and static fallback.
-- [ ] Verify RED; implement without statistics hero or card grid.
-- [ ] Load one Live2D instance after LCP; provide static failure/reduced-motion fallback.
-- [ ] Capture empty/loading/error/active/approval states; commit `feat(web): rebuild dashboard and hermes task guidance`.
+- [x] Write failing tests for one Continue Research action, row-based RO list, actionable confirmations, deep-link equality, approval stillness and static fallback.
+- [x] Verify RED; implement without statistics hero or card grid.
+- [x] Load one original Hermes visual instance after page load; keep the renderer boundary Live2D-compatible and require ADR-010 operator/license acceptance before any third-party binary is deployed.
+- [x] Capture empty/loading/error/active/approval states; commit `feat(web): rebuild dashboard and hermes task guidance`.
+
+Accepted 2026-08-11: Dashboard consumes caller-owned `IngestionTask` IDs through `GET /ingestion?actionable=true`; visual/queue deep links, six states, pointer gaze, approval/reduced stillness, empty/loading/error/active/approval browser evidence and the single original renderer pass. ADR-010 supersedes the unsafe assumption that the agent can accept Wanko terms for the operator; Wanko remains a replaceable licensed renderer and its binaries remain undeployed.
 
 ### Task 10: Deliver Explore and the Provenance-Safe Launch Corpus
 
@@ -154,11 +158,13 @@
 
 **Interfaces:** `GET /explore?query=&cursor=&limit=&field=&artifactType=` returns `{items:ResearchIndexItem[],nextCursor:string|null}`; seeder is idempotent by source identifier and never deletes.
 
-- [ ] Use `api-contract`, and `database-migration` only if schema change is necessary; run `security-review` before public exposure.
-- [ ] Curate six full Demonstration ROs and 12–18 index entries from license-compatible primary sources; record source, license, retrieval date and provenance.
-- [ ] Write failing API pagination/visibility and UI index/search/filter tests.
-- [ ] Implement the least backend surface and numbered editorial index, not cards/infinite social feed.
-- [ ] Run seed dry-run, then explicit non-destructive confirmation; commit `feat(explore): add research index and launch corpus`.
+- [x] Use `api-contract`, and `database-migration` only if schema change is necessary; run `security-review` before public exposure.
+- [x] Curate six full Demonstration ROs and 12–18 index entries from license-compatible primary sources; record source, license, retrieval date and provenance.
+- [x] Write failing API pagination/visibility and UI index/search/filter tests.
+- [x] Implement the least backend surface and numbered editorial index, not cards/infinite social feed.
+- [x] Run seed dry-run, then explicit non-destructive confirmation; commit `feat(explore): add research index and launch corpus`.
+
+Checkpoint 2026-08-10: anonymous cursor API, numbered paper index, search/field/artifact filters, 6 complete + 12 lightweight verified-source records, default-dry-run idempotent seeder and desktop/mobile browser evidence pass locally. ECS backup/sync/confirmed seed/replay/live route verification completed: API 18 items, DB 18 demo ROs + 6 provenance artifacts, production HTTPS Explore and public RO 200 at desktop/mobile with no overflow or console errors. No schema change was required. Task 10 accepted; proceed to Task 11.
 
 ### Task 11: Deliver Ultrafast Science Collections and Editorial Curator
 
@@ -166,10 +172,14 @@
 
 **Interfaces:** Selections bind `researchObjectId` + version and include selectedBy/selectedAt/note/media/schedule; scoped Editorial Curator never implies peer-review acceptance.
 
-- [ ] Use `api-contract`, `database-migration` and `security-review` if existing models cannot represent selection safely.
-- [ ] Write failing scoped authorization, immutable snapshot and public-label tests.
-- [ ] Write failing UI tests for media provenance, ordering, preview and draft → internal review → scheduled → published.
-- [ ] Implement API/domain and both pages; commit `feat(editorial): add ultrafast science curation`.
+- [x] Use `api-contract`, `database-migration` and `security-review`; migration 26 is additive and has rollback.
+- [x] Write failing scoped authorization, immutable snapshot and public-label tests.
+- [x] Write failing UI tests for media provenance, ordering, preview and draft → internal review → scheduled → published.
+- [x] Implement API/domain and both pages; local implementation checkpoint complete.
+
+Checkpoint 2026-08-10: migration 26, immutable version-bound editorial selections, scoped curator APIs, public `/collections/[slug]` and curator `/editorial/curator` are implemented. Admin requests use the Nginx Basic Auth `/admin/editorial/*` prefix plus application role and CSRF. Domain 4/4, API 3/3, Web 1/1, typechecks and Next build pass. ECS migration and real admin→published flow remain before acceptance.
+
+Accepted 2026-08-10: migration 26 and production build deployed after a 208K backup. A real public demo version completed all four states and produced four audit rows. Production collection/API/browser gates pass at 1440/390 with exact-version link, localized disclosure, zero overflow/errors; unauthenticated curator/admin requests return 401. Task 11 is complete.
 
 ### Task 12: Close Visual Consistency Across Remaining Product Surfaces
 
@@ -177,10 +187,12 @@
 
 **Interfaces:** Produces a route/state matrix for Overview, SDF, Files, Versions, Collaboration, Publish, sandbox and settings where present.
 
-- [ ] Generate matrix from actual routes; fail if a route lacks surface, mobile, loading, empty, error and permission declarations.
-- [ ] Apply WorkspaceShell/research primitives without rewriting working business calls.
-- [ ] Replace placeholder/hard-coded copy with symmetric i18n.
-- [ ] Verify mobile parity and high-risk Review Changes; commit `feat(web): close optical editorial product surfaces`.
+- [x] Generate matrix from actual routes; fail if a route lacks surface, mobile, loading, empty, error and permission declarations.
+- [x] Apply WorkspaceShell/research primitives without rewriting working business calls.
+- [x] Replace placeholder/hard-coded copy with symmetric i18n.
+- [x] Verify mobile parity and high-risk Review Changes; commit `feat(web): close optical editorial product surfaces`.
+
+Accepted 2026-08-10: eight-surface route/state matrix, real Overview/Files/Versions/Publish/Sandbox/Settings routes and unified Collaboration/Editor navigation are deployed. Production browser acceptance with the test account passes at 390/1440 with navigation present, zero overflow and zero console errors. Deployment discovery also closed the Nginx `/auth/login` routing conflict, missing version-list API and next-intl dotted-key defect. Task 12 is complete.
 
 ### Task 13: Rebuild Figma Canonical Foundations and Component Mapping
 
@@ -188,11 +200,13 @@
 
 **Interfaces:** Figma variables map 1:1 to tokens; runtime Optical Field remains browser-owned.
 
-- [ ] Verify long-term owner/canonical file before writes; never expose OAuth/session material.
-- [ ] Create `01 Foundations / V3 Optical Editorial`, typography specimen, grids, motion and reduced-motion notes.
-- [ ] Build structural frames/states for Landing, Workspace, Public, Auth, Dashboard, Intake, Explore and Collection.
-- [ ] Map only real components and document Code Connect limits without blocking delivery.
-- [ ] Compare Figma tokens, code tokens and browser screenshots; commit `docs(figma): register optical editorial canonical map`.
+- [x] Verify long-term owner/canonical file before writes; never expose OAuth/session material.
+- [x] Create `01 Foundations / V3 Optical Editorial`, typography specimen, grids, motion and reduced-motion notes.
+- [x] Build structural frames/states for Landing, Workspace, Public, Auth, Dashboard, Intake, Explore and Collection.
+- [x] Map only real components and document Code Connect limits without blocking delivery.
+- [x] Compare Figma tokens, code tokens and browser screenshots; commit `docs(figma): register optical editorial canonical map`.
+
+Accepted 2026-08-10: the long-term account owns the canonical file. The isolated V3 namespace contains 44 Web-scoped variables, 9 text styles, 3 effects, four real component sets and an eight-surface route/state matrix. Browser Canvas remains the Optical Field runtime truth; no static Figma layer is presented as the production interaction.
 
 ### Task 14: Install Visual, Accessibility and Performance Release Gates
 
@@ -200,11 +214,13 @@
 
 **Interfaces:** Captures 1440×900, 1920×1080 and 390×844 with deterministic Canvas clock/seed.
 
-- [ ] Write failing manifest tests requiring every canonical route/state/viewport and reduced-motion capture.
-- [ ] Implement deterministic screenshots with font readiness, network idle and stable demo IDs; never auto-update baselines on ordinary PRs.
-- [ ] Add keyboard landmark/focus, reduced-motion and LCP/bundle/runtime measurements.
-- [ ] Run test, E2E, typecheck, build, lint, docs gates, knip, dependency, duplication and dependency-version audits.
-- [ ] Perform full-width and 390px AI-slop/manual aesthetic gate; commit `test(web): install product visual release gate`.
+- [x] Write failing manifest tests requiring every canonical route/state/viewport and reduced-motion capture.
+- [x] Implement deterministic screenshots with font readiness, network idle and stable demo IDs; never auto-update baselines on ordinary PRs.
+- [x] Add keyboard landmark/focus, reduced-motion and LCP/bundle/runtime measurements.
+- [x] Run test, E2E, typecheck, build, lint, docs gates, knip, dependency, duplication and dependency-version audits.
+- [x] Perform full-width and 390px AI-slop/manual aesthetic gate; commit `test(web): install product visual release gate`.
+
+Accepted 2026-08-10: 27 production-build browser cases cover eight canonical surfaces at 1440×900, 1920×1080 and 390×844, plus Landing reduced motion at all three sizes. Each case gates one `main`/`h1`, horizontal overflow, form names, keyboard focus, browser errors, DOM/transfer/LCP budgets and deterministic Canvas time. Full tests, typecheck, build, lint and the release E2E pass. Knip and dependency-cruiser still report explicitly documented pre-existing repository debt; this change adds no new finding and does not silently auto-update visual evidence.
 
 ### Task 15: Deploy Directly to ECS and Prove the Complete Journey
 
@@ -212,13 +228,15 @@
 
 **Interfaces:** Consumes immutable images; produces server evidence and rollback tag.
 
-- [ ] Cloud-sync from the isolated worktree without `.env`, credentials, screenshots or unrelated files.
-- [ ] Build immutable web/API images on ECS, check migrations and record prior image/tag.
-- [ ] Recreate only required services; verify health, TLS, API, worker, ClamAV and storage.
-- [ ] Execute landing → sign-in/code registration → Dashboard → mixed Intake → OCR/parse → Hermes confirm → Workspace → version → publish → Public RO → Explore → Ultrafast Science.
-- [ ] Capture canonical server viewports and LCP/reduced-motion/keyboard/mobile evidence.
-- [ ] On blocker, rollback and keep status in-progress; never label partial production complete.
-- [ ] Synchronize Task Master/docs and commit `docs: record optical editorial production acceptance`.
+- [x] Cloud-sync from the isolated worktree without `.env`, credentials, screenshots or unrelated files.
+- [x] Build the release on ECS, verify no migration change and record the prior rollback ref/source hash.
+- [x] Recreate only required services; verify health, TLS, API, worker, ClamAV and storage.
+- [x] Execute landing → sign-in → Dashboard → mixed Intake → parse/review → Hermes confirm → Workspace → version → publish-ready → Public RO → Explore → Ultrafast Science.
+- [x] Capture canonical server desktop/mobile evidence and reuse the Task 14 reduced-motion/keyboard/performance budgets against the identical release hash.
+- [x] On blocker, rollback and keep status in-progress; never label partial production complete.
+- [x] Synchronize Task Master/docs and commit `docs: record optical editorial production acceptance`.
+
+Accepted 2026-08-11: `f5bb6e7` was synced from the isolated worktree, built on ECS and activated through the project deployment script after a 232K database backup. The prior deployed Optical Field hash matched rollback ref `53d5cbf`; the new remote hash matches the local release. The current production topology still uses pinned base/worker images with bind-mounted built application code rather than per-release immutable Web/API images, so the verified Git ref + source hash is the rollback anchor. Real-account browser acceptance passed seven authenticated RO surfaces, three-format ingestion to three `needs_review` tasks, Hermes confirmation and version creation; the synthetic object was intentionally left publish-ready rather than polluting the public index. Existing published demo RO, Explore and Ultrafast Science routes all return 200 at desktop/mobile with zero overflow or browser errors.
 
 ## Completion Definition
 

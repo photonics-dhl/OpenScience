@@ -3,6 +3,8 @@
 import { useEffect, useState } from 'react';
 import { useTranslations } from 'next-intl';
 
+import { allowAutomaticEvolution } from '@/lib/landing-motion';
+
 import EvolvingRoSymbol from './evolving-ro-symbol';
 
 const stages = ['create', 'parse', 'diff', 'publish'] as const;
@@ -15,20 +17,43 @@ export default function EvolutionPanel() {
 
   // One slow auto pass through the four stages, then stop (v2: no loops, no scroll-jacking).
   useEffect(() => {
+    const motion = window.matchMedia('(prefers-reduced-motion: reduce)');
     if (autoDone) return undefined;
 
     let index = 0;
-    const timer = window.setInterval(() => {
-      index += 1;
-      if (index >= stages.length) {
-        window.clearInterval(timer);
-        setAutoDone(true);
-        return;
-      }
-      setActive(stages[index]);
-    }, 2600);
+    let timer: number | undefined;
 
-    return () => window.clearInterval(timer);
+    const stop = () => {
+      if (timer === undefined) return;
+      window.clearInterval(timer);
+      timer = undefined;
+    };
+
+    const start = () => {
+      if (!allowAutomaticEvolution(motion.matches) || timer !== undefined) return;
+      timer = window.setInterval(() => {
+        index += 1;
+        if (index >= stages.length) {
+          stop();
+          setAutoDone(true);
+          return;
+        }
+        setActive(stages[index]);
+      }, 2600);
+    };
+
+    const handleMotionChange = () => {
+      if (motion.matches) stop();
+      else start();
+    };
+
+    start();
+    motion.addEventListener('change', handleMotionChange);
+
+    return () => {
+      stop();
+      motion.removeEventListener('change', handleMotionChange);
+    };
   }, [autoDone]);
 
   const select = (stage: Stage) => {

@@ -7,6 +7,7 @@ import {
   getResearchObject,
   getSdfDocument,
   grantVisibility,
+  listResearchObjects,
   requestVisibilityChange,
   updateResearchObject,
   updateSdfDocument,
@@ -43,14 +44,21 @@ const sdfBody = z.object({
 
 /** P1B-2：/research-objects + /sdf API 骨架（幂等键 + 乐观锁 + 审计，§16/§17）。 */
 export function registerResearchObjectRoutes(app: FastifyInstance, deps: ResearchObjectRouteDeps): void {
+  app.get('/research-objects', async (req, reply) => {
+    const user = await requireCurrentUser(deps, req, reply);
+    if (!user) return;
+    const { limit } = z.object({ limit: z.coerce.number().int().min(1).max(100).default(20) }).parse(req.query);
+    return reply.send({ researchObjects: await listResearchObjects(deps, { userId: user.userId, limit }) });
+  });
+
   app.post('/research-objects', async (req, reply) => {
     const user = await requireCurrentUser(deps, req, reply);
     if (!user) return;
     const body = createBody.parse(req.body);
-    // 幂等键：同 Idempotency-Key + workspaceId + title 防重（简化：唯一约束由 domain 层未来加，先靠业务重查）
+    const idempotencyKey = z.string().min(1).max(200).optional().parse(req.headers['idempotency-key']);
     const ro = await createResearchObject(
       deps,
-      { workspaceId: body.workspaceId, userId: user.userId, title: body.title, sdf: body.sdf },
+      { workspaceId: body.workspaceId, userId: user.userId, title: body.title, sdf: body.sdf, idempotencyKey },
       auditCtx(req),
     );
     return reply.status(201).send({ researchObject: ro });

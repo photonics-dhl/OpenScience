@@ -9,11 +9,12 @@ interface FakeDb {
   invitations: any[];
   emailVerifications: any[];
   mailOutbox: any[];
+  signupChallenges: any[];
 }
 
 /** 内存版 Prisma 子集：仅覆盖 auth-service 用到的调用面。 */
 export function createFakePrisma(): { prisma: PrismaClient; db: FakeDb } {
-  const db: FakeDb = { users: [], invitations: [], emailVerifications: [], mailOutbox: [] };
+  const db: FakeDb = { users: [], invitations: [], emailVerifications: [], mailOutbox: [], signupChallenges: [] };
   let seq = 0;
   const nextId = () => `00000000-0000-4000-8000-${String(++seq).padStart(12, '0')}`;
 
@@ -81,6 +82,31 @@ export function createFakePrisma(): { prisma: PrismaClient; db: FakeDb } {
         for (const v of db.emailVerifications) {
           if (v.userId === where.userId && v.verifiedAt === null) {
             Object.assign(v, data);
+            count++;
+          }
+        }
+        return { count };
+      },
+    },
+    signupChallenge: {
+      findFirst: async ({ where }: any) => db.signupChallenges.filter((c) => c.email.toLowerCase() === where.email.toLowerCase() && c.consumedAt === null).sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())[0] ?? null,
+      create: async ({ data }: any) => {
+        if (db.signupChallenges.some((c) => c.email.toLowerCase() === data.email.toLowerCase() && c.consumedAt === null)) {
+          const err = new Error('Unique constraint failed') as Error & { code: string };
+          err.code = 'P2002';
+          throw err;
+        }
+        const row = { id: nextId(), attempts: 0, lockedUntil: null, consumedAt: null, createdAt: new Date(), ...data };
+        db.signupChallenges.push(row);
+        return row;
+      },
+      updateMany: async ({ where, data }: any) => {
+        let count = 0;
+        for (const c of db.signupChallenges) {
+          if (c.id === where.id
+            && (where.consumedAt === undefined || c.consumedAt === where.consumedAt)
+            && (where.attempts === undefined || c.attempts === where.attempts)) {
+            Object.assign(c, data);
             count++;
           }
         }

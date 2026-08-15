@@ -2,7 +2,8 @@
 
 import { useRef, useState } from 'react';
 import { useTranslations } from 'next-intl';
-import type { ArtifactReference } from '../../lib/api';
+import { ArtifactRow } from '@/components/research/ArtifactRow';
+import { prepareProtectedXhr, type ArtifactReference } from '../../lib/api';
 
 interface UploadJob {
   logicalPath: string;
@@ -25,13 +26,17 @@ export default function ArtifactUploader({
   const fileRef = useRef<HTMLInputElement>(null);
   const [jobs, setJobs] = useState<UploadJob[]>([]);
 
-  function upload(file: File) {
+  async function upload(file: File) {
     const logicalPath = file.name;
     const xhr = new XMLHttpRequest();
     setJobs((prev) => [...prev, { logicalPath, progress: 0, state: 'uploading' }]);
 
-    xhr.open('POST', '/api/artifacts/upload');
-    xhr.withCredentials = true;
+    try {
+      await prepareProtectedXhr(xhr, 'POST', '/api/artifacts/upload');
+    } catch {
+      setJobs((prev) => prev.map((job) => (job.logicalPath === logicalPath ? { ...job, state: 'error' } : job)));
+      return;
+    }
     xhr.upload.onprogress = (e) => {
       if (e.lengthComputable) {
         const pct = Math.round((e.loaded / e.total) * 100);
@@ -64,37 +69,42 @@ export default function ArtifactUploader({
   }
 
   return (
-    <div>
-      <h3 className="pane-title" style={{ marginTop: 24 }}>{t('artifacts')}</h3>
-      <input
-        ref={fileRef}
-        type="file"
-        data-testid="artifact-input"
-        onChange={(e) => { const f = e.target.files?.[0]; if (f) upload(f); }}
-        aria-label={t('uploadArtifact')}
-      />
-      <div className="artifact-list">
+    <section className="mt-10 border-t border-os-rule-dark pt-5" id="artifacts">
+      <div className="flex items-center justify-between gap-4">
+        <h2 className="m-0 font-editorial text-2xl font-normal text-os-paper">{t('artifacts')}</h2>
+        <label className="inline-flex min-h-10 cursor-pointer items-center rounded-panel border border-os-rule-dark px-3 text-sm text-os-paper">
+          {t('uploadArtifact')}
+          <input
+            ref={fileRef}
+            className="sr-only"
+            type="file"
+            data-testid="artifact-input"
+            onChange={(e) => { const f = e.target.files?.[0]; if (f) void upload(f); }}
+            aria-label={t('uploadArtifact')}
+          />
+        </label>
+      </div>
+      <div className="mt-4">
         {jobs.map((job) => (
-          <div key={job.logicalPath} className="artifact-item">
-            {job.logicalPath}
+          <div key={job.logicalPath}>
+            <ArtifactRow name={job.logicalPath} status={t(`artifactStatus.${job.state}`)} meta={job.artifactId ? t('artifactStored') : undefined} />
             {job.state === 'uploading' && (
-              <div className="progress-bar" role="progressbar" aria-valuenow={job.progress} aria-valuemin={0} aria-valuemax={100}>
-                <div className="progress-fill" style={{ width: `${job.progress}%` }} />
-                <span>{job.progress}%</span>
+              <div className="h-1 bg-os-rule-dark" role="progressbar" aria-valuenow={job.progress} aria-valuemin={0} aria-valuemax={100}>
+                <div className="h-full bg-os-paper" style={{ width: `${job.progress}%` }} />
               </div>
             )}
             {job.state === 'error' && (
-              <span>
-                <span className="diff-before">上传失败</span>{' '}
-                <button className="btn" onClick={() => retry(job)}>{t('common.retry')}</button>
-              </span>
+              <div className="flex items-center justify-between border-b border-os-rule-dark py-2 text-sm text-os-paper">
+                <span>{t('uploadFailed')}</span>
+                <button className="min-h-9 rounded-panel border border-os-rule-dark bg-transparent px-3 text-os-paper" onClick={() => retry(job)}>{t('common.retry')}</button>
+              </div>
             )}
           </div>
         ))}
         {artifacts.filter((a) => !jobs.some((j) => j.artifactId === a.artifactId)).map((a) => (
-          <div key={a.artifactId} className="artifact-item">{a.logicalPath}</div>
+          <ArtifactRow key={a.artifactId} name={a.logicalPath} status={t('artifactStatus.ready')} meta={t('artifactStored')} />
         ))}
       </div>
-    </div>
+    </section>
   );
 }

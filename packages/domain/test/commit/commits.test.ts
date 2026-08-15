@@ -6,7 +6,7 @@ import type { AuditSink } from '@openscience/observability';
 import { createFakePrisma, seedUser } from '../helpers/fakes';
 import { createResearchObject } from '../../src/research-object/research-objects';
 import { createArtifact } from '../../src/artifact/artifacts';
-import { createCommit, getVersion, rebuildVersion } from '../../src/commit/commits';
+import { createCommit, getVersion, listVersions, rebuildVersion } from '../../src/commit/commits';
 import { CommitError } from '../../src/commit/errors';
 
 function memoryStorage(): StorageAdapter & { store: Map<string, { body: Buffer }> } {
@@ -114,6 +114,15 @@ describe('createCommit（§7.2.3 Manifest + §7.2.5 JSON Patch + §16 乐观锁/
 });
 
 describe('getVersion / rebuildVersion（§7.1 可重建可校验）', () => {
+  it('listVersions 返回降序最小版本摘要', async () => {
+    const { deps, user, ro } = await makeRo();
+    await createCommit(deps, { researchObjectId: ro.id, userId: user.id, message: 'v1', version: 1 });
+    await createCommit(deps, { researchObjectId: ro.id, userId: user.id, message: 'v2', version: 2 });
+    const versions = await listVersions(deps, { researchObjectId: ro.id, userId: user.id });
+    expect(versions.map((version) => version.versionNo)).toEqual([2, 1]);
+    expect(versions[0]).toEqual(expect.objectContaining({ versionId: expect.any(String), commitId: expect.any(String), status: 'draft' }));
+  });
+
   it('getVersion 返回 Manifest 快照', async () => {
     const { deps, user, ro } = await makeRo();
     const created = await createCommit(deps, {

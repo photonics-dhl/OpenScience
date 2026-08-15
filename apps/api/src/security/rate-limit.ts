@@ -16,6 +16,8 @@ export interface RouteRule {
  */
 export const RATE_LIMIT_ROUTES: Record<string, RouteRule> = {
   '/auth/login': { limit: 5, windowSec: 60 },
+  '/auth/request-signup-code': { limit: 3, windowSec: 300 },
+  '/auth/confirm-signup': { limit: 10, windowSec: 300 },
   '/auth/register': { limit: 5, windowSec: 600 },
   '/auth/resend-code': { limit: 3, windowSec: 300 },
   '/auth/verify-email': { limit: 10, windowSec: 300 },
@@ -29,6 +31,9 @@ export const RATE_LIMIT_ROUTES: Record<string, RouteRule> = {
   '/research/:publicId/v/:versionNo': { limit: 120, windowSec: 60 },
   // P1E-5：沙箱作业创建限流（§21.2-17）
   '/sandbox-jobs': { limit: 10, windowSec: 60 },
+  // Research ingestion: authenticated but memory/storage/AI intensive.
+  '/research-objects/:id/ingest': { limit: 5, windowSec: 60 },
+  '/ingestion/:taskId/retry': { limit: 10, windowSec: 60 },
 };
 
 export interface RegisterRateLimitOptions {
@@ -53,6 +58,7 @@ export function registerRateLimit(app: FastifyInstance, opts: RegisterRateLimitO
 
   // 键支持 `:param` 段（如 /research-objects/:id/issues）→ 转正则（P1C-3 路径参数路由限流）
   const compiled = Object.entries(rules).map(([path, rule]) => ({
+    path,
     rule,
     regex: new RegExp('^' + path.replace(/:[A-Za-z0-9_]+/g, '[^/]+') + '$'),
   }));
@@ -62,7 +68,7 @@ export function registerRateLimit(app: FastifyInstance, opts: RegisterRateLimitO
     const matched = compiled.find(({ regex }) => regex.test(path));
     const rule = matched?.rule;
     if (!rule) return;
-    const r = await rateLimitHit(opts.redis, { ip: req.ip, route: path, windowSec: rule.windowSec, limit: rule.limit });
+    const r = await rateLimitHit(opts.redis, { ip: req.ip, route: matched.path, windowSec: rule.windowSec, limit: rule.limit });
     if (!r.allowed) {
       await opts.audit?.record({
         actorId: null,

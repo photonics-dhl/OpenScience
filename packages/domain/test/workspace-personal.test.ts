@@ -3,6 +3,40 @@ import { createPersonalWorkspace } from '../src/workspace/personal';
 import { createFakePrisma } from './helpers/fakes';
 
 describe('createPersonalWorkspace', () => {
+  it('首次建个人空间时按当期 policy 幂等发放一笔月度 AI Credit', async () => {
+    const { prisma, db } = createFakePrisma();
+    db.quotaPolicies.push({
+      id: 'policy-ai-credit',
+      scope: 'global',
+      scopeKey: null,
+      resource: 'ai_credit',
+      limitValue: 500,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    });
+
+    await createPersonalWorkspace(
+      prisma,
+      { id: 'u1', email: 'a@example.com', displayName: 'Alice' },
+      new Date('2026-08-09T00:00:00.000Z'),
+    );
+    await createPersonalWorkspace(
+      prisma,
+      { id: 'u1', email: 'a@example.com', displayName: 'Alice' },
+      new Date('2026-08-09T12:00:00.000Z'),
+    );
+
+    expect(db.usageLedger).toHaveLength(1);
+    expect(db.usageLedger[0]).toMatchObject({
+      userId: 'u1',
+      resource: 'ai_credit',
+      delta: 500n,
+      kind: 'monthly_grant',
+      period: '2026-08',
+      idempotencyKey: 'monthly-ai-credit:u1:2026-08',
+    });
+  });
+
   it('创建 personal workspace + owner membership', async () => {
     const { prisma, db } = createFakePrisma();
     await createPersonalWorkspace(prisma, { id: 'u1', email: 'a@example.com', displayName: 'Alice' });

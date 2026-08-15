@@ -4,56 +4,64 @@ import { useState } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { useTranslations } from 'next-intl';
+
+import { SDFNode } from '@/components/research/SDFNode';
 import type { SdfCore } from '../../lib/api';
 
-const FIELDS: Array<{ key: keyof Omit<SdfCore, 'schemaVersion'>; hint: string }> = [
-  { key: 'problem', hint: '描述研究的核心科学或技术问题' },
-  { key: 'insight', hint: '核心洞见与创新点' },
-  { key: 'method', hint: '研究方法与实验设计' },
-  { key: 'results', hint: '研究结果与发现' },
-  { key: 'limitations', hint: '局限性与边界条件' },
-  { key: 'reproducibility', hint: '可复现性与代码/数据' },
+const FIELDS: Array<keyof Omit<SdfCore, 'schemaVersion'>> = [
+  'problem', 'insight', 'method', 'results', 'limitations', 'reproducibility',
 ];
 
-/** 中栏：Markdown 六字段编辑（§5.4，textarea + 预览切换）。 */
 export default function CoreEditor({
   core,
   onEdit,
   activeField,
+  onSelectField,
 }: {
   core: SdfCore;
   onEdit: (field: keyof Omit<SdfCore, 'schemaVersion'>, value: string) => void;
   activeField: keyof Omit<SdfCore, 'schemaVersion'> | null;
+  onSelectField: (field: keyof Omit<SdfCore, 'schemaVersion'>) => void;
 }) {
   const t = useTranslations('editor');
   const [preview, setPreview] = useState(false);
-
   const current = activeField ?? 'problem';
-  const field = FIELDS.find((f) => f.key === current)!;
 
   return (
     <div>
-      <div className="toolbar-inline">
-        <span className="field-label">{t(field.key)}</span>
-        <span className="pane-meta">{field.hint}</span>
-        <span style={{ flex: 1 }} />
-        <button className="btn" onClick={() => setPreview(!preview)}>
+      <div className="flex items-end justify-between border-b border-os-rule-dark pb-4">
+        <div>
+          <p className="m-0 font-data text-[10px] uppercase tracking-[0.15em] text-os-muted-dark">{t('sdfCoreLabel')}</p>
+          <h1 className="mb-0 mt-2 font-editorial text-4xl font-normal tracking-[-0.04em] text-os-paper">{t('coreEdit')}</h1>
+        </div>
+        <button className="min-h-10 rounded-panel border border-os-rule-dark bg-transparent px-3 text-sm text-os-paper" onClick={() => setPreview(!preview)}>
           {preview ? t('edit') : t('preview')}
         </button>
       </div>
-      {preview ? (
-        <div className="md-preview">
-          <ReactMarkdown remarkPlugins={[remarkGfm]}>{core[current]}</ReactMarkdown>
-        </div>
-      ) : (
-        <textarea
-          className="field-textarea"
-          value={core[current]}
-          onChange={(e) => onEdit(current, e.target.value)}
-          placeholder={field.hint}
-          aria-label={t(field.key)}
-        />
-      )}
+      {FIELDS.map((field, index) => (
+        <SDFNode
+          active={current === field}
+          hint={t(`hints.${field}`)}
+          key={field}
+          label={t(field)}
+          number={index + 1}
+          onActivate={() => onSelectField(field)}
+        >
+          {preview ? (
+            <div className="surface-evidence min-h-36 p-5 text-sm leading-7">
+              <ReactMarkdown remarkPlugins={[remarkGfm]}>{core[field]}</ReactMarkdown>
+            </div>
+          ) : (
+            <textarea
+              className="min-h-48 w-full resize-y border border-os-rule-dark bg-os-black-1 p-4 font-editorial text-lg leading-8 text-os-paper focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring"
+              value={core[field]}
+              onChange={(event) => onEdit(field, event.target.value)}
+              placeholder={t(`hints.${field}`)}
+              aria-label={t(field)}
+            />
+          )}
+        </SDFNode>
+      ))}
     </div>
   );
 }

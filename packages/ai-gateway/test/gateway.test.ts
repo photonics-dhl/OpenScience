@@ -1,10 +1,10 @@
 import { describe, expect, it, vi } from 'vitest';
 import { AiGateway } from '../src/gateway';
-import { OpenAiCompatProvider, type Provider, type ProviderResult } from '../src/provider';
+import { AnthropicCompatProvider, OpenAiCompatProvider, type Provider, type ProviderResult } from '../src/provider';
 import { AiGatewayError } from '../src/errors';
 
 function fakeProvider(name: string, impl: () => Promise<ProviderResult>): Provider {
-  return { name, complete: impl };
+  return { name, model: name, complete: impl };
 }
 
 const OK = (text: string, model = 'm1'): ProviderResult => ({
@@ -107,5 +107,56 @@ describe('OpenAiCompatProvider（fetch 直连，Q1）', () => {
     const fetchMock = vi.fn(async () => new Response('err', { status: 500 }));
     const p = new OpenAiCompatProvider('minimax', { baseUrl: 'https://api.x', apiKey: 'k', model: 'm' }, fetchMock as never);
     await expect(p.complete({ model: 'm', messages: [] })).rejects.toThrow(/HTTP 500/);
+  });
+});
+
+describe('AnthropicCompatProvider（MiniMax Token Plan）', () => {
+  it('调用 /v1/messages + x-api-key，并提取 text block 与 usage', async () => {
+    const fetchMock = vi.fn(async () => new Response(JSON.stringify({
+      content: [
+        { type: 'thinking', thinking: 'private reasoning' },
+        { type: 'text', text: '{"problem":"p"}' },
+      ],
+      usage: { input_tokens: 21, output_tokens: 8 },
+      model: 'MiniMax-M3',
+    }), { status: 200 }));
+    const provider = new AnthropicCompatProvider(
+      'minimax-token-plan-1',
+      { baseUrl: 'https://api.minimax.io/anthropic', apiKey: 'subscription-key', model: 'MiniMax-M3' },
+      fetchMock as never,
+    );
+
+    const result = await provider.complete({
+      model: 'MiniMax-M3',
+      messages: [
+        { role: 'system', content: 'Return JSON.' },
+        { role: 'user', content: 'Extract SDF.' },
+      ],
+      maxTokens: 2048,
+    });
+
+    expect(result).toMatchObject({
+      text: '{"problem":"p"}',
+      usage: { inputTokens: 21, outputTokens: 8 },
+      model: 'MiniMax-M3',
+    });
+    const call = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(call[0]).toBe('https://api.minimax.io/anthropic/v1/messages');
+    expect((call[1].headers as Record<string, string>)['x-api-key']).toBe('subscription-key');
+    expect((call[1].headers as Record<string, string>)['anthropic-version']).toBe('2023-06-01');
+    expect((call[1].headers as Record<string, string>)).not.toHaveProperty('authorization');
+    expect(JSON.parse(String(call[1].body))).toMatchObject({
+      model: 'MiniMax-M3',
+      system: 'Return JSON.',
+      messages: [{ role: 'user', content: 'Extract SDF.' }],
+      max_tokens: 2048,
+    });
+  });
+
+  it('剥离 MiniMax thinking 与 markdown fence 后通过', async () => {
+    const text = '<think>internal</think>```json\n{"method":"m"}\n```';
+    const gw = new AiGateway({ providers: [fakeProvider('p', async () => OK(text))] });
+    const out = await gw.completeStructured((v): v is { method: string } => typeof v === 'object' && v !== null && typeof (v as { method?: unknown }).method === 'string', [{ role: 'user', content: 'x' }]);
+    expect(out.method).toBe('m');
   });
 });

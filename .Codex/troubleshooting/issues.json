@@ -39,5 +39,5 @@
       "prevention": "Before authorizing a second server for the same OAuth endpoint, switch the browser to the intended account. Verify both identities with whoami in fresh clients before creating canonical assets."
     }
   ],
-  "last_updated": "2026-08-08"
+  "last_updated": "2026-08-09"
 }

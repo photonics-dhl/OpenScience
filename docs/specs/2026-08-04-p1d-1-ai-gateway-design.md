@@ -25,7 +25,7 @@
 
 - `Provider` 接口：`complete(opts: {model, messages, temperature?, maxTokens?}): Promise<ProviderResult>`
 - `ProviderResult`：`{text, usage: {inputTokens, outputTokens}, model}`
-- `MiniMaxProvider`：调用 MiniMax OpenAI 兼容 API（§24 占位：baseUrl/modelId 从 env）；SDK 仅在 ai-gateway 内
+- `MiniMaxProvider`：普通 API Key 调用 MiniMax OpenAI 兼容 API；Token Plan Subscription Key 按 ADR-008 调用 Anthropic Messages 兼容 API。baseUrl/modelId 从 env 注入，协议实现仅在 ai-gateway 内
 - 无第三方 SDK 依赖（用 fetch 直连 OpenAI 兼容端点，避免 SDK 版本锁定）——**选 fetch 而非 SDK**（零依赖 + 可 mock）
 
 ### 路由与回退（Q2）

@@ -1,17 +1,44 @@
 # Handoff — 2026-08-10 Optical Editorial 前端重构
 
-- Current goal: 按用户确认的 Art Direction v3，重构 OpenScience 产品级网页视觉与交互，并在服务器直接验收部署。
+- Current goal: Task 11 已完成 ECS 全流程验收；下一步执行 Task 12 剩余产品面一致性。Task 9 仍仅因 Live2D 许可门禁保持 in-progress。
 - Done:
   - 审计 `docs/user_ideas/8.10/` 资源；确认 `OpenScience_Art_Direction_v3.md` 覆盖旧视觉，Masterplan v2 保留产品结构。
   - 完成 27 项 grill-me 设计决策：三种表面、双入口身份流、Hermes/Live2D、Evidence Intake、三联屏、启动语料、Figma/浏览器职责、动效、部署方式均已确认。
   - 新 spec：`docs/specs/2026-08-10-optical-editorial-rebaseline-design.md`。
   - 新计划：`docs/plans/2026-08-10-optical-editorial-frontend-plan.md`，15 Task 完整覆盖；Task Master `optical-editorial-v3` tag 已验证 15 tasks / 42 valid dependencies，旧 master 视觉任务已 cancelled。
+  - Task 1 完成：新工作树 `E:/Miscellaneous/XGS/.worktrees/optical-editorial-v3` / branch `codex/optical-editorial-v3`；Prisma generate → full build → full test 全绿（Web 92、Domain 313、API 58、Agent Worker 24、Science Worker 29）。
+  - Task 2 完成：ADR-009 决定 Canvas 2D + SVG/CSS 原生 Optical Field（无新增运行时依赖）；Bricolage Grotesque、Bodoni Moda、Noto Serif SC、IBM Plex Mono 以 next/font 构建期自托管；v3 黑/纸白/朱红 tokens、0/4/8px 半径、motion/字体角色与 AA/禁蓝紫门禁已落地。聚焦 24/24、全 Web 99/99、typecheck/build 通过；review 后修正朱红控件黑字与双表面 focus 对比度。
+  - Task 3 完成：`OpenScience.`/`O.` 品牌原语与 Public/Identity/Dashboard/Workspace 四类无 Card shell 已落地；单一 main、skip link、19/56/25 Workspace 平面、8px action/press/reduced-motion、中英文 shell 文案均有测试。focused 9/9、全 Web 108/108、typecheck/build 通过。
+  - Task 4 完成：Landing 已替换为真实 DOM `Science evolves.` / `科学，持续演化。` 与原生 Canvas Optical Field；Create/Explore/Login 真实路由、160–200px 局部作用半径、8–14px 位移、500ms 回弹、按住证据层、离屏暂停、移动 32% 密度及 reduced-motion 静态交互均已落地。全 Web 116/116、typecheck/build 通过；1440/1920/390 normal/reduced 截图完成，英文 320px 无溢出；Explore 纸面导航对比度 5.34:1/15.07:1。
+  - Task 4 follow-up 完成：依据 `docs/user_ideas/8.10/OpenScience_Text_Distortion_Demo.html` 补齐真实文字的 pointer-local SVG displacement、mask falloff、chromatic focus、vermilion cursor ring；base DOM 仍可选择/可访问，focused landing + optical-field 11/11、typecheck、production build 通过。
+  - Task 4 第一次回归结论已被用户再次纠正：`01966eb` 恢复 RO loop/六节点媒体是错误方向；`OpenScience_Art_Direction_v3.md` 明确禁止该视觉，不能用“找回功能”替代新版审美基线。
+  - Task 4 二次重开：Git 已确认文字动效前最后可接受点为 `80c8312`。当前 Landing 恢复其大尺度非对称排版 + Canvas Optical Field，移除旧媒体和 Evolution/Hermes/Trust 卡片段；三个 `<h1>` 已收敛为一个语义标题 + 一个 `aria-hidden` 局部折射层。3019 生产预览 HTTP 200，等待用户视觉确认；Task Master Task 4 为 in-progress。
+  - 视觉真源登记修复：此前 `OpenScience_Art_Direction_v3.md` 只在 `OpenScience_Design_Handoff_v2.zip` 内，活文档引用路径实际不存在；原文现已落到 `docs/user_ideas/8.10/`。
+  - Task 4 三项视觉纠偏：明确狭缝原型为 `ChatGPT Image 2026年8月10日 01_30_19 (1).png`；`evolves.` 增加 Bodoni glyph safe zone，pointer 改为 frame-time target/current 插值，Canvas 在两词交界新增固定孔径/衍射扇面/干涉波前。原 `LatestResearch` 三原则占位改为 paper `OPEN RO.` + N1–N6 SDF anatomy + `/explore` 真实入口。focused 15/15、typecheck/build/shots 通过；Chromium 逐帧坐标单调缓动，3019 HTTP 200。Task 4 仍 in-progress，待用户视觉验收。
+  - Task 4 独立复审：实现无 Critical；reviewer 发现固定 `16ms` 逐帧断言可能在繁忙 runner 假失败。视觉门禁已改为等待实际 rAF 诊断坐标变化，并区分平滑指针坐标与含静止回归的显示坐标；连续 3 轮完整 shots 通过。SiteHeader 过时索引同时修正。
+  - Task 4 最终封版：用户确认交互基本可用，pointer tracking time constant 收紧为 58ms；复审无剩余 finding，Task Master/plan 置 done。
+  - Task 7 完成：Research Identity 注册/登录两平面上线；真实验证码/登录/session/returnTo 契约保持不变，OTP 自动聚焦、503 可重试错误与 en/zh 文案落地。复审发现并修复反斜杠开放重定向、硬编码英文和伪行为测试；最终 APPROVE。全 Web 135/135、stubbed E2E 5/5、real Fastify signup 1/1、typecheck/build 通过。
+  - Task 8 完成：Evidence Intake 支持 PDF/Word/TeX-ZIP/Markdown/图片/CSV/TSV/JSON/YAML/Notebook/Python/R，本地预选、材料角色与可选单一主稿；显式提交后走真实 CSRF multipart ingest、batch poll、task retry 和 needs_review→Hermes deep link。网络失败复用 RO，安全阻断无 retry。全 Web 141/141、全 Domain 321/321、Playwright 6/6、typecheck/build、1440/390 浏览器审美门禁通过；3019 为最新 production preview。
+  - Task 9 检查点：Dashboard 改为无 Card 的规则线工作台；新增 caller-owned `GET /ingestion?actionable=true`，修复 AgentTask/IngestionTask ID 串用，Hermes Visual/queue 使用同一真实确认 deep link。六态、审批静止、静态 fallback、1440/390 与 Playwright 7/7 通过；真实 Wanko 资产因 Live2D 许可主体资格尚未形成项目确认而未部署，Task 9 保持 in-progress。
+  - Task 10 本地检查点：新增匿名 `GET /explore` cursor API 与编号式 paper Research Index；query/field/artifact 筛选只覆盖 public+published。核验 18 个 GitHub primary-source 项目的许可证证据，形成 6 个完整 demonstration + 12 个轻量索引；默认 dry-run seeder 只为完整项写平台 provenance Markdown，不复制上游数据、无删除、稳定幂等。Web 146/146、Domain 324/324、API 59/59、seed 6/6、typecheck/build、1440/390 browser gate 通过；待 ECS confirm/replay/live gate。
+  - Task 10 首次 ECS deploy：生产备份、同步、全量 build、迁移 status、quota seed 已通过；Compose `up` 因 deploy script 唯一路径漏传 `.env.prod` 在解析前退出，原容器持续运行。已用 `infra/scripts/deploy.test.mjs` RED/GREEN 修复，下一次只重放同步与服务切换，不重复已通过 build/migrate。
+  - Task 10 ECS seed 入口复核：Linux 容器 dry-run 首次静默退出，根因是脚本手写 `file:///` 主入口判断在 POSIX 产生四斜杠。已改为 `pathToFileURL(process.argv[1]).href`，增加跨平台测试；数据库确认仍未写入，待同步重试。
+  - Task 10 ECS confirm 复核：dry-run 修复后，确认阶段暴露根脚本无法解析 `@openscience/storage` workspace alias；失败发生在 catalog/对象存储/数据库写入前。已切换至 `../packages/storage/dist/index.js`，待同步重试。
+  - Task 10 ECS seed 已完成：`--confirm` 创建 18 条，replay 返回 18 条 `EXISTS`，证明稳定幂等。随后内部探针仍得到 API/Web `/explore` 404，定位为 bind-mounted 源码更新后 `docker compose up -d` 不会重启配置未变化的长期 Node 进程。部署脚本现显式仅重启 `api web agent-worker`，数据服务保持运行；合同测试 2/2 与 shell 语法门禁通过，待同步切换与 live 验收。
+  - Task 10 最终 ECS/live 验收：应用服务切换后 API `/explore?limit=50` 返回 18 items，`field=method` 返回 18；Web `/explore` 与 `/research/OSR-DEMO-000001` 均 200；DB 为 18 demo ROs + 6 provenance artifacts。生产 Chromium 1440/390：18 真实链接、overflow=0、console errors=0。Task 10 已关闭。
+  - Task 11 本地实现：migration 26 `editorial_collections/editorial_selections`（含 rollback 与 Ultrafast Science 系统 collection）；版本绑定快照、媒体 provenance、安全 HTTPS 校验、四态状态机、published immutable、平台管理员 scoped 守卫已落地。匿名 collection API、admin candidates/queue/create/update/transition API 与 `/collections/[slug]`、`/editorial/curator` 页面已完成；管理 API 保持 Nginx Basic Auth `/admin/*` + platform_admin + CSRF 三层门禁；domain 4/4、API 3/3、Web 1/1、typecheck/build 全绿。
+  - Task 11 首次 ECS 复核：backup 208K、migration 26、server full build、Nginx/app restart、真实 selection 四态推进至 published 均成功；内部 API 200。外部 page 仍显示 unavailable，定位为 Web 容器缺 `API_ORIGIN` 而回落到容器自身 127.0.0.1:3001。Compose 已补 `http://api:3001` + API healthy dependency 与 RED/GREEN 合同测试，待重部署和浏览器验收。
+  - Task 11 最终验收：Web SSR transport 重部署后容器内 API 200；生产 DB 1 published selection / 4 editorial audits，测试账号为 platform_admin。HTTPS collection 桌面/390px 均 200、exact-version link=1、localized disclosure=1、overflow=0、console errors=0；curator/admin unauthenticated=401。Task 11 已关闭。
+  - Task 5 完成：RO Workspace 已建立独立 56px Global Nav / 64px Object Header / 44px Mode Tabs 与 19/56/25 单实例三工作面；六个 SDF 节点、Artifact rule rows、source/scope-bearing Before/After proposals、可折叠 evidence 与 Radix 全屏高影响审查均已落地。移动三面切换不卸载状态，Data/Versions 模式按钮会先切换到对应工作面再滚动锚点，320px 提交/上下文可用且无溢出。Extractor provenance 诚实标记为当前 SDF 聚合，未实现的 Overview/Publish 明确禁用。Web 121/121、typecheck/build、focused ESLint、1440/390/320 production browser 门禁通过，reviewer APPROVE。
+  - Task 6 完成：Public RO 改为 warm-paper 760/280 阅读 surface；identity/license/continuing-object citation/immutable-version citation/Insight 先于 deep tabs，六个 SDF 文本状态、作者身份/通讯作者、发布时间/哈希、AI review、artifact provenance、学术 captions 与 print retention 已落地。公开对象稳定 URL 通过 server absolute API transport 解析 latest version，版本 URL 使用 exact version；Web 127/127、typecheck/build、1440/390/print browser gate 通过。独立复审的 1 Critical + 6 Important + 2 Minor 均已修正。
 - Constraints:
   - 不读取/打印 `.env`；不把效果图伪数据投入生产。
   - 视觉核心必须由可访问 DOM + 自有轻量 Canvas/WebGL 媒介层实现；第三方库只作受控局部依赖。
   - 开发阶段无用户，验收通过后直接替换服务器页面；保留上一镜像以便回滚。
 - Open risks:
-  - 新视觉尚未编码；Figma canonical 需要按 v3 新建 foundations，旧文件不再作为视觉裁决源。
-  - 启动 6 个完整 Demonstration RO 与 12–18 个索引条目尚未采集/登记。
-- Next action: 执行 Task Master `optical-editorial-v3` Task 1，从 `codex/researcher-ingestion` 建立 `codex/optical-editorial-v3` 工作树并带入 `b0b3969` 设计文档。
+  - Landing、Workspace、Public RO、Auth 与 Intake 已完成浏览器替换；Dashboard 与其余产品页仍需按同一语言逐项替换。Figma canonical 需要按 v3 新建 foundations，旧文件不再作为视觉裁决源。
+  - next-intl 开发/E2E 日志仍报告旧 `collab` dotted keys；登记至 Task 12，不阻断当前认证流程。
+  - Wanko sample 不是无条件开源资产；其随附许可说明区分一般/小规模与中大型主体。确认项目适用类别并接受当前协议前，只能发布静态 Hermes fallback。
+  - 启动语料已写入 ECS 并通过 replay；公开路由必须在应用进程切换后再声称上线。
+- Next action: Task 12 audit actual routes → generate route/state matrix → rebuild remaining Collaboration/Versions/Publish/Sandbox/Settings surfaces → mobile/error/permission browser gates → ECS deploy. Task 9 的 Live2D 许可风险独立保留。
 - Read first: `AGENTS.md` → `docs/OpenScience_Kimi_Development_Spec.md` → `docs/progress.md` → `project_index.md` → `docs/specs/2026-08-10-optical-editorial-rebaseline-design.md` → `docs/user_ideas/8.10/OpenScience_Art_Direction_v3.md`。

@@ -66,7 +66,7 @@ export default function IssueList({
           value={newTitle}
           onChange={(e) => setNewTitle(e.target.value)}
         />
-        <select aria-label={t('issue.kind')} value={newKind} onChange={(e) => setNewKind(e.target.value)}>
+        <select aria-label={t('issue.kindLabel')} value={newKind} onChange={(e) => setNewKind(e.target.value)}>
           {ISSUE_KINDS.map((k) => (
             <option key={k} value={k}>{t(`issue.kind.${k}`)}</option>
           ))}

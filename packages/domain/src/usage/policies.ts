@@ -1,5 +1,7 @@
 import type { PrismaClient, QuotaPolicy } from '@prisma/client';
 
+export type PolicyReader = Pick<PrismaClient, 'quotaPolicy'>;
+
 /** P1A-7 配额 scope（三层回退维度）。scope_key 语义：global=null，user_level=等级标识，workspace=workspaceId。 */
 export const QUOTA_SCOPES = ['global', 'user_level', 'workspace'] as const;
 export type QuotaScope = (typeof QUOTA_SCOPES)[number];
@@ -36,7 +38,7 @@ export interface ResolvedPolicy {
  * 未命中返回 null（无限制，不做 0 误判）。无 userLevel 时跳过 user_level 层，仅 workspace → global。
  */
 export async function resolvePolicy(
-  deps: { prisma: PrismaClient },
+  deps: { prisma: PolicyReader },
   input: ResolvePolicyInput,
 ): Promise<ResolvedPolicy | null> {
   const candidates = await deps.prisma.quotaPolicy.findMany({ where: { resource: input.resource } });

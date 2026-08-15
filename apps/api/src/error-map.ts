@@ -1,5 +1,5 @@
 import { AuthError, type AuthErrorCode } from '@openscience/auth';
-import { AgentError, AppealError, ApprovalError, ArtifactError, AuthorError, BranchError, CommitError, ForkError, IssueError, LicenseError, NotificationError, PrError, PublishError, ResearchObjectError, ReviewError, UsageError, VisibilityError, WorkspaceError, type WorkspaceErrorCode } from '@openscience/domain';
+import { AgentError, AppealError, ApprovalError, ArtifactError, AuthorError, BranchError, CommitError, EditorialError, ForkError, IngestionError, IssueError, LicenseError, NotificationError, PrError, PublishError, ResearchObjectError, ReviewError, UsageError, VisibilityError, WorkspaceError, type WorkspaceErrorCode } from '@openscience/domain';
 import { buildErrorBody, type ErrorBody } from '@openscience/observability';
 
 const AUTH_ERROR_HTTP: Record<AuthErrorCode, number> = {
@@ -11,6 +11,7 @@ const AUTH_ERROR_HTTP: Record<AuthErrorCode, number> = {
   RESEND_COOLDOWN: 429,
   CREDENTIALS_INVALID: 401,
   ACCOUNT_NOT_ACTIVE: 403,
+  VERIFICATION_DELIVERY_FAILED: 503,
   SESSION_INVALID: 401,
 };
 
@@ -136,6 +137,16 @@ const AGENT_ERROR_HTTP: Record<AgentError['code'], number> = {
   ILLEGAL_TRANSITION: 409, // 任务状态机非法迁移
 };
 
+const INGESTION_ERROR_HTTP: Record<IngestionError['code'], number> = {
+  INGESTION_NOT_FOUND: 404,
+  PROCESSING_CONSENT_REQUIRED: 400,
+  UNSUPPORTED_INGESTION_FORMAT: 415,
+  INGESTION_NOT_RETRYABLE: 409,
+  FILE_TOO_LARGE: 413,
+  INGESTION_BUSY: 429,
+  VALIDATION_ERROR: 400,
+};
+
 const APPROVAL_ERROR_HTTP: Record<ApprovalError['code'], number> = {
   NOT_FOUND: 404,
   FORBIDDEN: 403,
@@ -161,10 +172,23 @@ const PUBLISH_ERROR_HTTP: Record<PublishError['code'], number> = {
   ILLEGAL_TRANSITION: 409,
 };
 
+const EDITORIAL_ERROR_HTTP: Record<EditorialError['code'], number> = {
+  NOT_FOUND: 404,
+  FORBIDDEN: 403,
+  VERSION_NOT_PUBLIC: 409,
+  DUPLICATE_SELECTION: 409,
+  INVALID_MEDIA: 400,
+  ILLEGAL_TRANSITION: 409,
+  IMMUTABLE_SELECTION: 409,
+};
+
 export type { ErrorBody };
 
 /** 统一错误映射（2.6 扩展为全局标准前的最小版：/auth + /workspaces + /usage）；requestId 三方串联（Spec §17）。 */
 export function httpStatusForError(err: unknown, requestId?: string): { status: number; body: ErrorBody } {
+  if (err instanceof EditorialError) {
+    return { status: EDITORIAL_ERROR_HTTP[err.code], body: buildErrorBody(err.code, err.message, requestId) };
+  }
   if (err instanceof AuthError) {
     return { status: AUTH_ERROR_HTTP[err.code], body: buildErrorBody(err.code, err.message, requestId) };
   }
@@ -213,6 +237,9 @@ export function httpStatusForError(err: unknown, requestId?: string): { status: 
   if (err instanceof AgentError) {
     return { status: AGENT_ERROR_HTTP[err.code], body: buildErrorBody(err.code, err.message, requestId) };
   }
+  if (err instanceof IngestionError) {
+    return { status: INGESTION_ERROR_HTTP[err.code], body: buildErrorBody(err.code, err.message, requestId) };
+  }
   if (err instanceof ApprovalError) {
     return { status: APPROVAL_ERROR_HTTP[err.code], body: buildErrorBody(err.code, err.message, requestId) };
   }
@@ -225,6 +252,9 @@ export function httpStatusForError(err: unknown, requestId?: string): { status: 
   // @fastify/csrf-protection 校验失败：403 而非 500（FastifyError.code = FST_CSRF_INVALID_TOKEN / FST_CSRF_MISSING_SECRET）
   if (typeof (err as { code?: unknown }).code === 'string' && (err as { code: string }).code.startsWith('FST_CSRF')) {
     return { status: 403, body: buildErrorBody('CSRF_INVALID', 'CSRF token 校验失败', requestId) };
+  }
+  if (['FST_REQ_FILE_TOO_LARGE', 'FST_REQ_PARTS_LIMIT', 'FST_REQ_FIELDS_LIMIT'].includes(String((err as { code?: unknown }).code))) {
+    return { status: 413, body: buildErrorBody('FILE_TOO_LARGE', '上传内容超过限制', requestId) };
   }
   if ((err as { name?: string })?.name === 'ZodError') {
     return { status: 400, body: buildErrorBody('VALIDATION_ERROR', '请求参数不合法', requestId) };

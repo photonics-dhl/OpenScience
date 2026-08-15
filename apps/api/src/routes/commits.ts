@@ -3,7 +3,7 @@ import { z } from 'zod';
 import { createRequire } from 'node:module';
 import type { AuthDeps } from '@openscience/auth';
 import type { StorageAdapter } from '@openscience/storage';
-import { buildExportPackage, compareVersions, createCommit, getVersion, rebuildVersion } from '@openscience/domain';
+import { buildExportPackage, compareVersions, createCommit, getVersion, listVersions, rebuildVersion } from '@openscience/domain';
 import type { AuditContext } from '@openscience/observability';
 import { requireCurrentUser } from './session-guard';
 
@@ -34,6 +34,13 @@ const commitBody = z.object({
  * GET /versions/:id/rebuild：完整重建 + blob sha256 校验（§7.1）。
  */
 export function registerCommitRoutes(app: FastifyInstance, deps: CommitRouteDeps): void {
+  app.get('/research-objects/:id/versions', async (req, reply) => {
+    const user = await requireCurrentUser(deps, req, reply);
+    if (!user) return;
+    const { id } = roIdParams.parse(req.params);
+    return reply.send({ versions: await listVersions(deps, { researchObjectId: id, userId: user.userId }) });
+  });
+
   app.post('/research-objects/:id/commits', async (req, reply) => {
     const user = await requireCurrentUser(deps, req, reply);
     if (!user) return;

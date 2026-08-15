@@ -1,0 +1,218 @@
+{
+  "chars": [
+    {
+      "char": "i",
+      "chnl": 15,
+      "height": 78,
+      "id": 105,
+      "index": 297,
+      "page": 0,
+      "width": 27,
+      "x": 0,
+      "xadvance": 31,
+      "xoffset": 2,
+      "y": 0,
+      "yoffset": 10
+    },
+    {
+      "char": "l",
+      "chnl": 15,
+      "height": 78,
+      "id": 108,
+      "index": 320,
+      "page": 0,
+      "width": 27,
+      "x": 0,
+      "xadvance": 31,
+      "xoffset": 2,
+      "y": 82,
+      "yoffset": 10
+    },
+    {
+      "char": "S",
+      "chnl": 15,
+      "height": 76,
+      "id": 83,
+      "index": 152,
+      "page": 0,
+      "width": 70,
+      "x": 0,
+      "xadvance": 69,
+      "xoffset": 0,
+      "y": 164,
+      "yoffset": 13
+    },
+    {
+      "char": "v",
+      "chnl": 15,
+      "height": 59,
+      "id": 118,
+      "index": 419,
+      "page": 0,
+      "width": 67,
+      "x": 31,
+      "xadvance": 59,
+      "xoffset": -4,
+      "y": 0,
+      "yoffset": 29
+    },
+    {
+      "char": "e",
+      "chnl": 15,
+      "height": 61,
+      "id": 101,
+      "index": 265,
+      "page": 0,
+      "width": 65,
+      "x": 31,
+      "xadvance": 64,
+      "xoffset": -1,
+      "y": 63,
+      "yoffset": 28
+    },
+    {
+      "char": "o",
+      "chnl": 15,
+      "height": 61,
+      "id": 111,
+      "index": 337,
+      "page": 0,
+      "width": 65,
+      "x": 0,
+      "xadvance": 64,
+      "xoffset": -1,
+      "y": 244,
+      "yoffset": 28
+    },
+    {
+      "char": "c",
+      "chnl": 15,
+      "height": 61,
+      "id": 99,
+      "index": 254,
+      "page": 0,
+      "width": 64,
+      "x": 0,
+      "xadvance": 64,
+      "xoffset": -1,
+      "y": 309,
+      "yoffset": 28
+    },
+    {
+      "char": "n",
+      "chnl": 15,
+      "height": 60,
+      "id": 110,
+      "index": 328,
+      "page": 0,
+      "width": 61,
+      "x": 0,
+      "xadvance": 64,
+      "xoffset": 2,
+      "y": 374,
+      "yoffset": 28
+    },
+    {
+      "char": "s",
+      "chnl": 15,
+      "height": 61,
+      "id": 115,
+      "index": 378,
+      "page": 0,
+      "width": 60,
+      "x": 0,
+      "xadvance": 59,
+      "xoffset": -1,
+      "y": 438,
+      "yoffset": 28
+    },
+    {
+      "char": ".",
+      "chnl": 15,
+      "height": 27,
+      "id": 46,
+      "index": 565,
+      "page": 0,
+      "width": 28,
+      "x": 31,
+      "xadvance": 32,
+      "xoffset": 2,
+      "y": 128,
+      "yoffset": 61
+    },
+    {
+      "char": " ",
+      "chnl": 15,
+      "height": 0,
+      "id": 32,
+      "index": 619,
+      "page": 0,
+      "width": 0,
+      "x": 31,
+      "xadvance": 17,
+      "xoffset": -4,
+      "y": 159,
+      "yoffset": 80
+    }
+  ],
+  "common": {
+    "alphaChnl": 0,
+    "base": 84,
+    "blueChnl": 0,
+    "greenChnl": 0,
+    "lineHeight": 104,
+    "packed": 0,
+    "pages": 1,
+    "redChnl": 0,
+    "scaleH": 512,
+    "scaleW": 512
+  },
+  "distanceField": {
+    "distanceRange": 8,
+    "fieldType": "msdf"
+  },
+  "info": {
+    "aa": 1,
+    "bold": 0,
+    "charset": [
+      " ",
+      "S",
+      "c",
+      "i",
+      "e",
+      "n",
+      "v",
+      "o",
+      "l",
+      "s",
+      "."
+    ],
+    "face": "science-display",
+    "italic": 0,
+    "outline": 0,
+    "padding": [
+      4,
+      4,
+      4,
+      4
+    ],
+    "size": 96,
+    "smooth": 1,
+    "spacing": [
+      0,
+      0
+    ],
+    "stretchH": 100,
+    "unicode": 1
+  },
+  "kernings": [
+    {
+      "amount": -8,
+      "first": 118,
+      "second": 46
+    }
+  ],
+  "pages": [
+    "science-display.png"
+  ]
+}

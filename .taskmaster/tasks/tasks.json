@@ -5,7 +5,7 @@
         "id": 1,
         "title": "Phase 0: 现有系统只读审计与目标架构决策",
         "description": "对 Scholars Tea / AI Research Workshop 现有代码仓执行强制门禁式只读审计（Spec §22 Phase 0、§25、§20.1.2）：建立目录/依赖/服务/数据库/部署地图，形成可复用/重构/淘汰清单，评估安全与数据迁移风险，运行基准测试，产出 docs/CODEBASE_AUDIT.md 与 docs/adr/0001-target-architecture.md 草案。审计完成并经用户确认后才允许进入 Phase 1A（Spec §25 末段）。全程不修改业务代码（Spec §25.5）。",
-        "status": "done",
+        "status": "in-progress",
         "dependencies": [],
         "priority": "high",
         "details": "",
@@ -889,7 +889,7 @@
         "id": 7,
         "title": "Phase 2A: 前端视觉系统（P0 地基收尾 + P1 首页视觉原型）",
         "description": "按已定稿 spec docs/specs/2026-08-06-frontend-visual-system-design.md 与计划 docs/plans/2026-08-06-frontend-p0-p1-plan.md 执行：Tailwind v4/shadcn/token/字体底座，首页 Header+Hero+#latest 原型，EvolvingRoSymbol 两版变体三尺寸截图供用户拍板冻结 token。三方定稿见 docs/proposals/2026-08-06-frontend-design-direction-v1.md 文末 v2 终稿决策层 D1-D9。",
-        "status": "in-progress",
+        "status": "done",
         "dependencies": [
           "6"
         ],
@@ -1140,154 +1140,165 @@
   "optical-editorial-v3": {
     "tasks": [
       {
-        "id": 1,
+        "id": "1",
         "title": "建立最新生产能力上的 Optical Editorial 独立执行基线",
         "description": "从 codex/researcher-ingestion 的 cbcb60c 创建 codex/optical-editorial-v3 工作树，带入 main 的 b0b3969 设计文档，保留已验证注册、Hermes ingestion、OCR、ClamAV、备份恢复与服务器证据。",
-        "status": "pending",
+        "status": "done",
         "dependencies": [],
         "priority": "high",
         "details": "计划 Task 1。使用 using-git-worktrees；核对 dirty files；只解决文档冲突；跑 test/build/docs:lint/audit:docs-sync；不得把 .memory 或 docs/user_ideas 未跟踪原件误提交。",
         "testStrategy": "git worktree/branch/hash 证据；npx pnpm@9.15.0 test、build、docs:lint、audit:docs-sync 全绿。",
-        "subtasks": []
+        "subtasks": [],
+        "updatedAt": "2026-08-09T22:16:23.553Z"
       },
       {
-        "id": 2,
+        "id": "2",
         "title": "审计社区依赖并建立 V3 Optical Editorial Foundations",
         "description": "审核字体、halftone/displacement 技术的许可证、包体、SSR、降级和 ECS 安装要求，建立 monochrome + vermilion tokens、字体角色、半径和 motion 真源。",
-        "status": "pending",
+        "status": "done",
         "dependencies": [
           "1"
         ],
         "priority": "high",
-        "details": "计划 Task 2。修改 tokens.css/globals/layout/package/lock；新增 ADR-005 和 optical-foundations tests；优先 Canvas2D+CSS/SVG，拒绝 hosted/不可锁定 runtime。",
+        "details": "计划 Task 2。修改 tokens.css/globals/layout；新增 ADR-009 和 optical-foundations tests；采用 Canvas2D+CSS/SVG，拒绝 hosted/不可锁定 runtime。ADR-005 已被邮箱验证码注册占用。",
         "testStrategy": "先观察 tokens tests RED，再 GREEN；AA 配色、禁蓝紫装饰 token、typecheck/build/docs gates。",
-        "subtasks": []
+        "subtasks": [],
+        "updatedAt": "2026-08-09T22:30:30.589Z"
       },
       {
-        "id": 3,
+        "id": "3",
         "title": "实现共享品牌、Wordmark 与四种产品 Surface Shell",
         "description": "建立 OpenScience. 文字标识、O. favicon、Public/Identity/Dashboard/Workspace shells，使用规则线和背景色阶代替 Card 容器。",
-        "status": "pending",
+        "status": "done",
         "dependencies": [
           "2"
         ],
         "priority": "high",
         "details": "计划 Task 3。新增 components/brand 与 components/shell；主 landmark、skip link、8px action radius、双语文案。",
         "testStrategy": "surface-shells render RED/GREEN；i18n symmetry；typecheck/build；无 Card dependency。",
-        "subtasks": []
+        "subtasks": [],
+        "updatedAt": "2026-08-09T22:49:18.413Z"
       },
       {
-        "id": 4,
-        "title": "以 DOM Typography + Optical Field 重做 Landing",
-        "description": "用 Science evolves./科学，持续演化。非对称混排替换 Evolving RO 环，Canvas/WebGL 只承担局部折射、半色调和证据粒子。",
-        "status": "pending",
+        "id": "4",
+        "title": "在完整 Landing 原型上增强 DOM Typography + Optical Field",
+        "description": "以用户确认的 80c8312 pre-distortion Optical Editorial 构图为基线；Science evolves./科学，持续演化。保持单一可访问 DOM 标题，Canvas/SVG 实现局部折射、固定狭缝衍射与半色调场，下一屏以 paper surface 展示 Open RO 六层 SDF 结构。",
+        "status": "in-progress",
         "dependencies": [
           "3"
         ],
         "priority": "high",
-        "details": "计划 Task 4。真实 DOM headline；160-200px 作用半径；8-14px 位移；400-600ms 回弹；移动 ≤35% 密度；Create/Explore 真实路由。",
-        "testStrategy": "landing RED/GREEN；1440x900、1920x1080、390x844 normal/reduced-motion screenshots；AI-slop gate。",
-        "subtasks": []
+        "details": "2026-08-11 用户视觉否决 cd5be36；其 161/161、生产部署和路由证据只证明工程正确，不再构成审美接受。根因是 CPU Canvas 每帧逐点 arc() + 独立 focal/Fresnel 装饰，连续 DOM 字形没有共享 displacement 材质，形成灰色覆盖、机械竖线和波纹。外部调研已实际运行并读源码：ehaakana/codrops-text-demo（MIT，HTML-first WebGL text sync）、brunoimbrizi/interactive-particles（package MIT，glyph/image instancing + touch texture）、akella/DistortedPixels（MIT，DataTexture velocity + relaxation）、OGL Flowmap（Unlicense，ping-pong FBO）；无明确许可证项目不复制。ECS 探测确认仅虚拟 Cirrus VGA、无 render node/NVIDIA/ROCm/GPU module/Docker GPU runtime/compose GPU 声明；因此第四轮为纯客户端 continuous glyph material + shared GPU flow/displacement field + sparse instanced particles，禁止服务器 GPU 依赖，必须保留 SSR h1、WebGL2→WebGL1→DOM fallback 与 context-loss 恢复。Optical Lab Steps 3–5 已在 8485dac22edb15041e61884f47f3118ea2ef4708 实现并由主代理复验 9/9 focused、170/170 Web、typecheck/build；尚未部署，独立 review 未回传。人工证据仍见低对比叠字与弱 aperture topology，因此只可部署为隔离对照，用户选中前不替换生产 Landing。",
+        "testStrategy": "第四轮先在非生产 Optical Lab 做 reference/current/candidate 三列比较。RED/GREEN 必须覆盖：连续字形主体可读、WebGL 与 DOM bounds/字体同步、fixed aperture 拓扑、无 radial visible boundary、flow texture 衰减、sparse instanced edge particles、context-loss/reduced-motion/390px 降级；捕获独立 left/slit/right 60/150/300ms 帧并记录 gzip chunk、FPS、CPU/GPU frame time。用户选中前禁止替换生产 Landing。",
+        "subtasks": [],
+        "updatedAt": "2026-08-11T10:08:00.000Z"
       },
       {
-        "id": 5,
+        "id": "5",
         "title": "将 RO Workspace 重构为稳定三工作平面",
         "description": "建立 19/56/25 Outline/Editor/Evidence-Hermes 布局、单行 ObjectHeader、编号 SDF Node、EvidenceSnippet 与 Before/After proposal。",
-        "status": "pending",
+        "status": "done",
         "dependencies": [
           "3"
         ],
         "priority": "high",
         "details": "计划 Task 5。不改持久化契约；只给 active node 朱红点；移动端 bottom navigation/sheets 功能等价；高风险全屏 review。",
         "testStrategy": "workspace shell RED/GREEN；keyboard/focus/320px overflow；真实测试 RO 三视口截图。",
-        "subtasks": []
+        "subtasks": [],
+        "updatedAt": "2026-08-10T00:44:48.287Z"
       },
       {
-        "id": 6,
+        "id": "6",
         "title": "将 Public RO 重构为可引用纸面阅读表面",
         "description": "建立 760px 阅读列 + 280px metadata rail，优先标题、作者、身份、版本、许可、引用和 Insight，保留 print/PDF 与 provenance。",
-        "status": "pending",
+        "status": "done",
         "dependencies": [
           "3"
         ],
         "priority": "high",
         "details": "计划 Task 6。复用现有 public API；不发明质量分；SDF 状态含文本；Figure 用 academic caption 而非媒体 Card。",
         "testStrategy": "public render/contract RED/GREEN；typecheck/build；desktop/mobile/print evidence。",
-        "subtasks": []
+        "subtasks": [],
+        "updatedAt": "2026-08-10T01:54:41.834Z"
       },
       {
-        "id": 7,
+        "id": "7",
         "title": "将验证码注册与登录融入 Research Identity 体验",
         "description": "保留独立 Sign in 与 Create-intent returnTo 两条路径，重构为 Optical Editorial 身份页，不改真实 signup-code/session 契约。",
-        "status": "pending",
+        "status": "done",
         "dependencies": [
           "3"
         ],
         "priority": "high",
         "details": "计划 Task 7。两步验证码、紧凑字段、安全 returnTo、可重试错误和焦点转移；保留 signup-live real Fastify E2E。",
         "testStrategy": "auth component RED/GREEN；stubbed E2E + compiled Next/real Fastify signup E2E；desktop/mobile states。",
-        "subtasks": []
+        "subtasks": [],
+        "updatedAt": "2026-08-10T08:08:00.000Z"
       },
       {
-        "id": 8,
+        "id": "8",
         "title": "完成 PDF/Word/TeX/Markdown/图片/数据/代码混合 Evidence Intake",
         "description": "实现本地预选、材料角色、主文稿、逐文件进度和 scan→upload→parse/OCR→SDF map→review 的真实闭环。",
-        "status": "pending",
+        "status": "done",
         "dependencies": [
           "7"
         ],
         "priority": "high",
         "details": "计划 Task 8。未认证/未提交不得上传；保留 ClamAV/OCR/ingestion/confirm 契约；blocked、retry 与 needs_review 明确。",
         "testStrategy": "Evidence Intake RED/GREEN；mixed batch、blocked file、OCR-to-review Playwright。",
-        "subtasks": []
+        "subtasks": [],
+        "updatedAt": "2026-08-10T09:25:00.000Z"
       },
       {
-        "id": 9,
+        "id": "9",
         "title": "重构 Dashboard 并将 Hermes/Live2D 绑定真实任务",
         "description": "以 Continue Research 和待确认队列替代统计 Hero/Card 网格，建立 Hermes 六态和 Visual/Task 同一 deep link。",
-        "status": "pending",
+        "status": "done",
         "dependencies": [
           "3",
           "8"
         ],
         "priority": "high",
-        "details": "计划 Task 9。全站单 Live2D、LCP 后加载、审批静止、失败/reduced-motion 静态 fallback。",
+        "details": "计划 Task 9 已完成。Dashboard 无 Card/统计 Hero；caller-owned GET /ingestion?actionable=true；Visual/row 共用真实 IngestionTask deep link；原创 Optical Guide 单实例实现六态、指针凝视、审批/reduced 静止，空/加载/错误/活动/审批 1440/390 门禁通过。ADR-010 禁止把原创 renderer 冒充 Live2D；Wanko 仅在运营主体完成许可资格/接受记录后作为可替换 renderer 启用。",
         "testStrategy": "dashboard/hermes RED/GREEN；empty/loading/error/active/approval screenshots；one-instance assertion。",
-        "subtasks": []
+        "subtasks": [],
+        "updatedAt": "2026-08-11T08:52:43.775Z"
       },
       {
-        "id": 10,
+        "id": "10",
         "title": "交付 Explore Research Index 与可追溯启动语料",
         "description": "实现编号式 Research Index、搜索/筛选和公开 API，导入 6 个完整 Demonstration RO 与 12-18 个轻量真实来源索引。",
-        "status": "pending",
+        "status": "done",
         "dependencies": [
           "4",
           "6"
         ],
         "priority": "high",
-        "details": "计划 Task 10。使用 api-contract/security-review；仅在必要时 migration；seed 幂等且不删除；每项记录来源、许可、日期、provenance。",
+        "details": "计划 Task 10。匿名 cursor API、编号式 Research Index、query/field/artifact 筛选、6 个完整 + 12 个轻量 license-verified source records、默认 dry-run/显式确认/幂等 seeder 已完成。ECS backup、同步、18 条 confirmed seed、replay（18 EXISTS）、bind-mounted 应用进程切换与 live gate 完成：API 18 items，DB 18 demo RO + 6 provenance artifacts，生产 HTTPS Explore/public RO 桌面与移动均 200、无溢出/console error。",
         "testStrategy": "API pagination/visibility contracts；UI search/filter/active row；seed dry-run + explicit non-destructive confirmation。",
-        "subtasks": []
+        "subtasks": [],
+        "updatedAt": "2026-08-10T12:10:00.000Z"
       },
       {
-        "id": 11,
+        "id": "11",
         "title": "交付 Ultrafast Science Collection 与 scoped Editorial Curator",
         "description": "在 Public RO 事实身份上增加期刊策展层，支持候选、媒体、编辑说明、排序、排期和 draft→internal review→scheduled→published。",
-        "status": "pending",
+        "status": "done",
         "dependencies": [
           "6",
           "10"
         ],
         "priority": "high",
-        "details": "计划 Task 11。绑定 researchObjectId+selected version；Selected by 不等于同行评审；角色权限 scoped；需要时走 API/migration/security skills。",
+        "details": "计划 Task 11 已完成。backup 208K、migration 26、server full build、Web SSR API_ORIGIN 修复与重部署；测试账号 platform_admin，真实 demo exact version 完成 draft→internal_review→scheduled→published，4 audit rows。生产 collection API 200；desktop/390 exact-version link/disclosure/localized/overflow/console gate 全过；curator/admin 未认证均 401。",
         "testStrategy": "authorization/immutable snapshot/public label integration；editorial state/UI render tests。",
-        "subtasks": []
+        "subtasks": [],
+        "updatedAt": "2026-08-10T13:00:00.000Z"
       },
       {
-        "id": 12,
+        "id": "12",
         "title": "补齐协作、版本、发布、Sandbox 与其余产品表面一致性",
         "description": "建立实际路由/状态矩阵，用 WorkspaceShell 与研究领域组件覆盖 Overview/SDF/Files/Versions/Collaboration/Publish/Sandbox/Settings。",
-        "status": "pending",
+        "status": "done",
         "dependencies": [
           "5",
           "6",
@@ -1298,15 +1309,16 @@
           "11"
         ],
         "priority": "high",
-        "details": "计划 Task 12。不得改写已工作业务调用；补齐 loading/empty/error/permission/mobile；所有 copy i18n；高风险 Review Changes。",
+        "details": "Task 12 已完成并部署 ECS。八表面 route/state matrix 与五态/权限/移动声明生效；新增 Overview、Files、Versions、Publish、Sandbox、Settings 真实路由，Collaboration/Editor 统一 WorkspaceShell；Files commit、版本列表/diff、许可+审核+R3 发布、server sandbox、auth logout 均使用真实 API。生产验收同时修复 Nginx auth Web/API 路由冲突、缺失版本列表 API 与 next-intl dotted keys。390/1440 浏览器导航、overflow、console gate 通过。",
         "testStrategy": "product-surface-matrix must cover every actual route/state；mobile parity；existing collab/sandbox tests。",
-        "subtasks": []
+        "subtasks": [],
+        "updatedAt": "2026-08-10T14:00:00.000Z"
       },
       {
-        "id": 13,
+        "id": "13",
         "title": "重建长期账号 Figma Canonical 与真实组件映射",
         "description": "建立 V3 foundations、排版 specimen、grid、motion/reduced-motion 注释和所有核心页面结构/状态，变量与 tokens.css 一一对应。",
-        "status": "pending",
+        "status": "done",
         "dependencies": [
           "2",
           "3",
@@ -1323,13 +1335,14 @@
         "priority": "medium",
         "details": "计划 Task 13。先验证长期 owner/canonical；只映射真实组件；Optical Field 仍由浏览器拥有；Code Connect 限制不阻塞交付。",
         "testStrategy": "Figma/code token diff；组件映射清单；browser screenshots 对照；OAuth/token 不入文档。",
-        "subtasks": []
+        "subtasks": [],
+        "updatedAt": "2026-08-10T15:10:11.184Z"
       },
       {
-        "id": 14,
+        "id": "14",
         "title": "建立视觉回归、无障碍与性能发布门禁",
         "description": "为所有 canonical route/state 建立确定性三视口截图、keyboard/reduced-motion/accessibility E2E 与 LCP/bundle/runtime 检查。",
-        "status": "pending",
+        "status": "done",
         "dependencies": [
           "4",
           "5",
@@ -1345,33 +1358,32 @@
         "priority": "high",
         "details": "计划 Task 14。Canvas 固定 clock/seed；普通 PR 不自动更新 baseline；运行全仓 test/build/typecheck/lint/docs/audit 门禁和人工 AI-slop gate。",
         "testStrategy": "manifest RED/GREEN；1440x900/1920x1080/390x844；WCAG AA；LCP≤2.5s；全量 gates。",
-        "subtasks": []
+        "subtasks": [],
+        "updatedAt": "2026-08-10T15:46:34.562Z"
       },
       {
-        "id": 15,
+        "id": "15",
         "title": "直接部署 ECS 并证明完整产品旅程",
         "description": "构建不可变镜像并直接替换开发期服务器页面，保留上一 tag；在真实服务完成从 Landing 到 Editorial Collection 的完整旅程。",
-        "status": "pending",
+        "status": "done",
         "dependencies": [
           "14"
         ],
         "priority": "high",
-        "details": "计划 Task 15。cloud-sync 不带 secrets/screenshots；健康/TLS/API/worker/ClamAV/storage 门禁；失败立即 rollback 且任务保持 in-progress。",
+        "details": "已于 2026-08-11 以 release 99f16862389605d7552ac8d092ee5c8942c4e5c1 部署。cloud-sync 不带 secrets/screenshots；部署前备份 BACKUP_OK size=276K files=7/7；ECS 全量 install/build、生产栈重启、Nginx -t、线上 Chromium 三视口 normal/reduced/Open RO smoke 均通过。",
         "testStrategy": "landing→auth→dashboard→mixed intake→OCR/parse→Hermes confirm→workspace→version→publish→public→explore→selection；server screenshots/LCP/mobile/keyboard evidence。",
-        "subtasks": []
+        "subtasks": [],
+        "updatedAt": "2026-08-11T02:10:00.000Z"
       }
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-08-10T08:30:00.000Z",
+      "lastModified": "2026-08-11T08:52:43.775Z",
       "taskCount": 15,
-      "completedCount": 0,
+      "completedCount": 14,
       "tags": [
         "optical-editorial-v3"
-      ],
-      "description": "Approved Optical Editorial Instrument frontend rebaseline and server delivery program",
-      "created": "2026-08-09T21:58:31.395Z",
-      "updated": "2026-08-09T21:58:31.395Z"
+      ]
     }
   }
 }

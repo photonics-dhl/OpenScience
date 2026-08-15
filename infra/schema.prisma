@@ -43,6 +43,7 @@ model User {
   memberships              Membership[]
   sentWorkspaceInvitations WorkspaceInvitation[] @relation("WorkspaceInvitationInviter")
   createdResearchObjects   ResearchObject[]      @relation("ResearchObjectCreator")
+  ingestionBatches         IngestionBatch[]
   uploadedArtifacts        Artifact[]            @relation("ArtifactUploader")
   authoredCommits          Commit[]
   grantedVisibilityGrants  VisibilityGrant[]     @relation("VisibilityGranter")
@@ -60,6 +61,7 @@ model User {
   agentApprovals           ToolApproval[]        @relation("ToolApprover")
   appealsFiled             Appeal[]              @relation("Appellant")
   appealsModerated         Appeal[]              @relation("Moderator")
+  selectedEditorialEntries EditorialSelection[] @relation("EditorialSelector")
 
   @@map("users")
 }
@@ -93,6 +95,22 @@ model EmailVerification {
 
   @@index([userId])
   @@map("email_verifications")
+}
+
+model SignupChallenge {
+  id          String    @id @default(uuid()) @db.Uuid
+  email       String    @db.Citext
+  codeHash    String    @map("code_hash")
+  attempts    Int       @default(0)
+  lockedUntil DateTime? @map("locked_until")
+  expiresAt   DateTime  @map("expires_at")
+  lastSentAt  DateTime  @map("last_sent_at")
+  consumedAt  DateTime? @map("consumed_at")
+  createdAt   DateTime  @default(now()) @map("created_at")
+
+  @@index([email, createdAt])
+  // Partial unique index for one active challenge/email is defined in migration SQL.
+  @@map("signup_challenges")
 }
 
 model MailOutbox {
@@ -257,16 +275,16 @@ enum SandboxJobStatus {
 }
 
 model SandboxJob {
-  id             String              @id @default(uuid()) @db.Uuid
-  workspaceId    String              @map("workspace_id") @db.Uuid
-  userId         String              @map("user_id") @db.Uuid
+  id             String           @id @default(uuid()) @db.Uuid
+  workspaceId    String           @map("workspace_id") @db.Uuid
+  userId         String           @map("user_id") @db.Uuid
   script         String
-  status         SandboxJobStatus    @default(pending)
+  status         SandboxJobStatus @default(pending)
   result         Json?
   context        Json?
-  runtimeSeconds Int?                @map("runtime_seconds")
-  createdAt      DateTime            @default(now()) @map("created_at")
-  completedAt    DateTime?           @map("completed_at")
+  runtimeSeconds Int?             @map("runtime_seconds")
+  createdAt      DateTime         @default(now()) @map("created_at")
+  completedAt    DateTime?        @map("completed_at")
 
   workspace Workspace         @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   user      User              @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -324,16 +342,17 @@ enum SdfNodeType {
 }
 
 model ResearchObject {
-  id          String       @id @default(uuid()) @db.Uuid
-  workspaceId String       @map("workspace_id") @db.Uuid
-  title       String
-  status      RoStatus     @default(draft)
-  visibility  RoVisibility @default(private)
-  version     Int          @default(1) // 乐观锁（§16）；P1B-4 版本引擎推进
-  publicId    String?      @unique @map("public_id") // 公开 RO ID（§6.1），发布时分配（P1B-7），draft 无
-  createdBy   String       @map("created_by") @db.Uuid
-  createdAt   DateTime     @default(now()) @map("created_at")
-  updatedAt   DateTime     @updatedAt @map("updated_at")
+  id             String       @id @default(uuid()) @db.Uuid
+  workspaceId    String       @map("workspace_id") @db.Uuid
+  title          String
+  status         RoStatus     @default(draft)
+  visibility     RoVisibility @default(private)
+  version        Int          @default(1) // 乐观锁（§16）；P1B-4 版本引擎推进
+  publicId       String?      @unique @map("public_id") // 公开 RO ID（§6.1），发布时分配（P1B-7），draft 无
+  createdBy      String       @map("created_by") @db.Uuid
+  createdAt      DateTime     @default(now()) @map("created_at")
+  updatedAt      DateTime     @updatedAt @map("updated_at")
+  idempotencyKey String?      @unique @map("idempotency_key")
 
   workspace          Workspace           @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   creator            User                @relation("ResearchObjectCreator", fields: [createdBy], references: [id], onDelete: Restrict)
@@ -351,9 +370,11 @@ model ResearchObject {
   authors            Author[]
   contributions      Contribution[]
   licenseAssignments LicenseAssignment[]
-  agentSessions       AgentSession[]
-  aiReviews           AiReview[]
-  appeals             Appeal[]
+  agentSessions      AgentSession[]
+  aiReviews          AiReview[]
+  appeals            Appeal[]
+  ingestionBatches   IngestionBatch[]
+  editorialSelections EditorialSelection[]
 
   @@index([workspaceId])
   @@map("research_objects")
@@ -403,18 +424,20 @@ model Blob {
 }
 
 model Artifact {
-  id          String   @id @default(uuid()) @db.Uuid
-  logicalPath String   @map("logical_path") // 用户视角路径（非唯一，P1B-4 Version Manifest 再去重）
-  mimeType    String?  @map("mime_type") // MIME 检测结果（失败 = null，允许上传）
-  size        BigInt // 字节数（冗余，免 join Blob）
-  blobSha256  String   @map("blob_sha256") @db.Char(64) // 指向 Blob（内容寻址）
-  uploadedBy  String   @map("uploaded_by") @db.Uuid // 上传者（审计，§17）
-  workspaceId String   @map("workspace_id") @db.Uuid // 所属 Workspace（越权防护，§17）
-  createdAt   DateTime @default(now()) @map("created_at")
+  id             String   @id @default(uuid()) @db.Uuid
+  logicalPath    String   @map("logical_path") // 用户视角路径（非唯一，P1B-4 Version Manifest 再去重）
+  mimeType       String?  @map("mime_type") // MIME 检测结果（失败 = null，允许上传）
+  size           BigInt // 字节数（冗余，免 join Blob）
+  blobSha256     String   @map("blob_sha256") @db.Char(64) // 指向 Blob（内容寻址）
+  uploadedBy     String   @map("uploaded_by") @db.Uuid // 上传者（审计，§17）
+  workspaceId    String   @map("workspace_id") @db.Uuid // 所属 Workspace（越权防护，§17）
+  createdAt      DateTime @default(now()) @map("created_at")
+  idempotencyKey String?  @unique @map("idempotency_key")
 
   blob      Blob      @relation(fields: [blobSha256], references: [sha256], onDelete: Restrict)
   uploader  User      @relation("ArtifactUploader", fields: [uploadedBy], references: [id], onDelete: Restrict)
   workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  ingestionTasks IngestionTask[]
 
   @@index([workspaceId])
   @@index([blobSha256])
@@ -511,6 +534,7 @@ model Version {
   appeals            Appeal[]
   parentVersion      Version?            @relation("VersionParent", fields: [parentVersionId], references: [id], onDelete: SetNull)
   childVersions      Version[]           @relation("VersionParent")
+  editorialSelections EditorialSelection[]
 
   @@unique([researchObjectId, versionNo])
   @@index([researchObjectId])
@@ -569,6 +593,60 @@ model Publication {
 
   @@index([versionId])
   @@map("publications")
+}
+
+// --- Optical Editorial v3 Task 11：期刊策展层（不改变 RO/Version 事实身份）---
+
+enum EditorialSelectionState {
+  draft
+  internal_review
+  scheduled
+  published
+}
+
+model EditorialCollection {
+  id          String   @id @default(uuid()) @db.Uuid
+  slug        String   @unique
+  title       String
+  description String
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  selections EditorialSelection[]
+
+  @@map("editorial_collections")
+}
+
+model EditorialSelection {
+  id                   String                  @id @default(uuid()) @db.Uuid
+  collectionId         String                  @map("collection_id") @db.Uuid
+  researchObjectId     String                  @map("research_object_id") @db.Uuid
+  versionId            String                  @map("version_id") @db.Uuid
+  selectedBy           String                  @map("selected_by") @db.Uuid
+  titleSnapshot        String                  @map("title_snapshot")
+  publicIdSnapshot     String                  @map("public_id_snapshot")
+  versionNoSnapshot    Int                     @map("version_no_snapshot")
+  sdfSnapshot          Json                    @map("sdf_snapshot")
+  note                 String                  @default("")
+  media                Json                    @default("[]")
+  disclosure           String
+  sortOrder            Int                     @default(0) @map("sort_order")
+  state                EditorialSelectionState @default(draft)
+  scheduledAt          DateTime?               @map("scheduled_at")
+  publishedAt          DateTime?               @map("published_at")
+  createdAt            DateTime                @default(now()) @map("created_at")
+  updatedAt            DateTime                @updatedAt @map("updated_at")
+
+  collection     EditorialCollection @relation(fields: [collectionId], references: [id], onDelete: Cascade)
+  researchObject ResearchObject      @relation(fields: [researchObjectId], references: [id], onDelete: Restrict)
+  version        Version             @relation(fields: [versionId], references: [id], onDelete: Restrict)
+  selector       User                @relation("EditorialSelector", fields: [selectedBy], references: [id], onDelete: Restrict)
+
+  @@unique([collectionId, researchObjectId, versionId])
+  @@index([collectionId, state, sortOrder])
+  @@index([researchObjectId])
+  @@index([versionId])
+  @@map("editorial_selections")
 }
 
 // --- P1B-7：RO 可见性模型（§4.2 三态 + §4.2 扩大显式审批记录 + §17 越权防护）---
@@ -752,7 +830,7 @@ model Author {
   userId           String   @map("user_id") @db.Uuid
   sortOrder        Int      @map("sort_order") // 作者顺序（作者组确认，§3.4）
   isCorresponding  Boolean  @default(false) @map("is_corresponding")
-  affiliation      String?  // P1D-9：机构声明（§4.3 公开页必显）
+  affiliation      String? // P1D-9：机构声明（§4.3 公开页必显）
   createdAt        DateTime @default(now()) @map("created_at")
 
   researchObject ResearchObject @relation(fields: [researchObjectId], references: [id], onDelete: Cascade)
@@ -810,39 +888,43 @@ model Notification {
 // --- P1D-2：Hermes 会话与异步任务（§15 AgentSession/AgentTask/ToolApproval + §9.3 长任务异步）---
 
 model AgentSession {
-  id               String    @id @default(uuid()) @db.Uuid
-  userId           String    @map("user_id") @db.Uuid
-  researchObjectId String?   @map("research_object_id") @db.Uuid
+  id               String   @id @default(uuid()) @db.Uuid
+  userId           String   @map("user_id") @db.Uuid
+  researchObjectId String?  @map("research_object_id") @db.Uuid
   kind             String
-  title            String    @default("")
-  status           String    @default("active")
-  createdAt        DateTime  @default(now()) @map("created_at")
-  updatedAt        DateTime  @updatedAt @map("updated_at")
+  title            String   @default("")
+  status           String   @default("active")
+  idempotencyKey   String?  @unique @map("idempotency_key")
+  createdAt        DateTime @default(now()) @map("created_at")
+  updatedAt        DateTime @updatedAt @map("updated_at")
 
   user           User            @relation(fields: [userId], references: [id], onDelete: Cascade)
   researchObject ResearchObject? @relation(fields: [researchObjectId], references: [id], onDelete: Cascade)
   tasks          AgentTask[]
+  ingestionBatch IngestionBatch?
 
   @@index([userId])
   @@map("agent_sessions")
 }
 
 model AgentTask {
-  id              String          @id @default(uuid()) @db.Uuid
-  sessionId       String          @map("session_id") @db.Uuid
-  kind            String
-  status          AgentTaskStatus @default(pending)
-  progress        Int             @default(0)
-  payload         Json            @default("{}")
-  result          Json?
-  error           String?
+  id             String          @id @default(uuid()) @db.Uuid
+  sessionId      String          @map("session_id") @db.Uuid
+  kind           String
+  status         AgentTaskStatus @default(pending)
+  progress       Int             @default(0)
+  payload        Json            @default("{}")
+  result         Json?
+  error          String?
+  dispatchedAt   DateTime?       @map("dispatched_at")
   // §16 幂等键：同 key 重发 → 返回既有任务（不重复执行）
-  idempotencyKey  String?         @unique @map("idempotency_key")
-  createdAt       DateTime        @default(now()) @map("created_at")
-  updatedAt       DateTime        @updatedAt @map("updated_at")
+  idempotencyKey String?         @unique @map("idempotency_key")
+  createdAt      DateTime        @default(now()) @map("created_at")
+  updatedAt      DateTime        @updatedAt @map("updated_at")
 
-  session AgentSession  @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  session   AgentSession   @relation(fields: [sessionId], references: [id], onDelete: Cascade)
   approvals ToolApproval[]
+  ingestionTask IngestionTask?
 
   @@index([sessionId])
   @@map("agent_tasks")
@@ -873,6 +955,57 @@ enum AgentTaskStatus {
   failed
 }
 
+enum IngestionTaskState {
+  queued
+  uploading
+  stored
+  parsing
+  needs_review
+  confirmed
+  written
+  failed_retryable
+  failed_blocked
+}
+
+model IngestionBatch {
+  id               String   @id @default(uuid()) @db.Uuid
+  researchObjectId String   @map("research_object_id") @db.Uuid
+  userId           String   @map("user_id") @db.Uuid
+  agentSessionId   String?  @unique @map("agent_session_id") @db.Uuid
+  idempotencyKey   String?  @unique @map("idempotency_key")
+  requestDigest    String   @map("request_digest") @db.Char(64)
+  createdAt        DateTime @default(now()) @map("created_at")
+  updatedAt        DateTime @updatedAt @map("updated_at")
+
+  researchObject ResearchObject  @relation(fields: [researchObjectId], references: [id], onDelete: Cascade)
+  user           User            @relation(fields: [userId], references: [id], onDelete: Restrict)
+  agentSession   AgentSession?   @relation(fields: [agentSessionId], references: [id], onDelete: SetNull)
+  tasks          IngestionTask[]
+
+  @@index([researchObjectId])
+  @@map("ingestion_batches")
+}
+
+model IngestionTask {
+  id          String             @id @default(uuid()) @db.Uuid
+  batchId     String             @map("batch_id") @db.Uuid
+  artifactId  String             @map("artifact_id") @db.Uuid
+  agentTaskId String?            @unique @map("agent_task_id") @db.Uuid
+  state       IngestionTaskState @default(queued)
+  retryCount  Int                @default(0) @map("retry_count")
+  error       String?
+  createdAt   DateTime           @default(now()) @map("created_at")
+  updatedAt   DateTime           @updatedAt @map("updated_at")
+
+  batch    IngestionBatch @relation(fields: [batchId], references: [id], onDelete: Cascade)
+  artifact Artifact       @relation(fields: [artifactId], references: [id], onDelete: Restrict)
+  agentTask AgentTask?     @relation(fields: [agentTaskId], references: [id], onDelete: SetNull)
+
+  @@unique([batchId, artifactId])
+  @@index([batchId])
+  @@map("ingestion_tasks")
+}
+
 // --- P1D-5：AI 发布审核记录（§15 AIReview + §11.1 硬阻断 + §11.3 稳定可引用）---
 
 model AiReview {
@@ -896,16 +1029,16 @@ model AiReview {
 // --- P1D-7：审核申诉与 Moderator 队列（§11.3 + §15 Appeal + §16 appeal.created）---
 
 model Appeal {
-  id               String   @id @default(uuid()) @db.Uuid
-  versionId        String   @map("version_id") @db.Uuid
-  researchObjectId String   @map("research_object_id") @db.Uuid
-  aiReviewId       String   @map("ai_review_id") @db.Uuid
-  appellantId      String   @map("appellant_id") @db.Uuid
+  id               String    @id @default(uuid()) @db.Uuid
+  versionId        String    @map("version_id") @db.Uuid
+  researchObjectId String    @map("research_object_id") @db.Uuid
+  aiReviewId       String    @map("ai_review_id") @db.Uuid
+  appellantId      String    @map("appellant_id") @db.Uuid
   reason           String
-  status           String   @default("pending") // pending / resolved / rejected
-  moderatorId      String?  @map("moderator_id") @db.Uuid
+  status           String    @default("pending") // pending / resolved / rejected
+  moderatorId      String?   @map("moderator_id") @db.Uuid
   resolution       Json?
-  createdAt        DateTime @default(now()) @map("created_at")
+  createdAt        DateTime  @default(now()) @map("created_at")
   resolvedAt       DateTime? @map("resolved_at")
 
   version        Version        @relation(fields: [versionId], references: [id], onDelete: Cascade)

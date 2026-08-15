@@ -55,21 +55,22 @@ function token(name: string): string {
 /** 断言配对（前景 token / 背景 token）≥ 4.5（大文本可 ≥3，此处按 4.5 从严）。
  *  --border-subtle 为 rgba 边框色，不参与对比度断言。 */
 const pairs: Array<[string, string]> = [
-  ['hero-text', 'hero-bg'],
-  ['hero-muted', 'hero-bg'],
-  ['hero-text', 'hero-surface'],
-  ['ink', 'canvas-bg'],
-  ['ink', 'paper-bg'],
-  ['accent-primary-strong', 'hero-bg'],
-  ['hero-text', 'state-danger'],
+  ['os-paper', 'os-black-0'],
+  ['os-muted-dark', 'os-black-0'],
+  ['os-paper', 'os-black-1'],
+  ['os-ink', 'os-paper'],
+  ['os-muted-paper', 'os-paper'],
+  ['os-vermilion', 'os-black-0'],
+  ['os-black-0', 'os-vermilion'],
+  ['os-black-0', 'os-confirmed'],
 ];
 
-describe('视觉 token WCAG AA 对比度门禁（spec §3）', () => {
-  it('spec §3 全部变量已落到 tokens.css :root', () => {
+describe('Optical Editorial v3 token WCAG AA gate', () => {
+  it('v3 canonical color variables exist in tokens.css :root', () => {
     for (const name of [
-      'hero-bg', 'hero-surface', 'hero-text', 'hero-muted',
-      'accent-primary', 'accent-primary-strong', 'accent-diff',
-      'canvas-bg', 'paper-bg', 'ink', 'border-subtle',
+      'os-black-0', 'os-black-1', 'os-black-2', 'os-paper', 'os-ink',
+      'os-muted-dark', 'os-muted-paper', 'os-vermilion', 'os-confirmed',
+      'os-rule-dark', 'os-rule-paper',
     ]) {
       expect(tokens.has(name), `--${name} 缺失`).toBe(true);
     }

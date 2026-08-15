@@ -8,6 +8,9 @@ export interface AiSuggestion {
   before: string;
   status: 'pending' | 'applied' | 'dismissed';
   source: 'extractor' | 'manual'; // Phase 1D extractor 接同通路
+  sourceContext?: 'sdf_aggregate';
+  sourceLocator?: string;
+  risk?: 'normal' | 'high';
 }
 
 /** 建议状态机：pending → applied（写入草稿，不直接写 SDF）/ dismissed。 */
@@ -63,14 +66,24 @@ export function demoSuggestions(currentCore: SdfCore): AiSuggestion[] {
  * P1D-3：Extractor 结果 core → AiSuggestion[]（§5.4 逐字段 diff 展示）。
  * 仅非空且与当前不同的字段产出建议；source='extractor'。
  */
-export function coreToSuggestions(core: SdfCore, currentCore: SdfCore): AiSuggestion[] {
+export function coreToSuggestions(core: SdfCore, currentCore: SdfCore, sourceLocator?: string): AiSuggestion[] {
   const fields = ['problem', 'insight', 'method', 'results', 'limitations', 'reproducibility'] as const;
   const list: AiSuggestion[] = [];
   for (const field of fields) {
     const suggestion = (core[field] ?? '').trim();
     const before = (currentCore[field] ?? '').trim();
     if (!suggestion || suggestion === before) continue;
-    list.push({ id: `extract-${field}`, field, suggestion, before, status: 'pending', source: 'extractor' });
+    list.push({
+      id: `extract-${field}`,
+      field,
+      suggestion,
+      before,
+      status: 'pending',
+      source: 'extractor',
+      sourceContext: 'sdf_aggregate',
+      sourceLocator,
+      risk: field === 'results' || field === 'reproducibility' ? 'high' : 'normal',
+    });
   }
   return list;
 }

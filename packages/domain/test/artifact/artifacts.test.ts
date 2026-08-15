@@ -82,6 +82,23 @@ describe('createArtifact（§7.2.2 元数据 + §7.1 去重）', () => {
     expect(db.artifacts).toHaveLength(2); // 两个 Artifact
   });
 
+  it('相同幂等键重放 → 返回同一 Artifact 且不重复写元数据', async () => {
+    const { deps, db, user } = makeDeps();
+    const input = { logicalPath: 'paper.pdf', content: PNG, uploadedBy: user.id, workspaceId: 'ws-1', idempotencyKey: 'import-1:upload:0' };
+    const first = await createArtifact(deps, input);
+    const replay = await createArtifact(deps, input);
+    expect(replay.artifactId).toBe(first.artifactId);
+    expect(replay.alreadyExists).toBe(true);
+    expect(db.artifacts).toHaveLength(1);
+  });
+
+  it('相同幂等键但内容不同 → 拒绝而非静默复用旧 Artifact', async () => {
+    const { deps, user } = makeDeps();
+    const base = { logicalPath: 'paper.md', uploadedBy: user.id, workspaceId: 'ws-1', idempotencyKey: 'import-1:upload:0' };
+    await createArtifact(deps, { ...base, content: Buffer.from('old evidence') });
+    await expect(createArtifact(deps, { ...base, content: Buffer.from('new evidence') })).rejects.toThrow(/其他文件内容/);
+  });
+
   it('未知魔数内容 → mimeType=null（Design Gate：允许上传）', async () => {
     const { deps, user } = makeDeps();
     const result = await createArtifact(deps, {

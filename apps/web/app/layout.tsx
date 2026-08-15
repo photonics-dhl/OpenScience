@@ -1,18 +1,44 @@
 import type { Metadata } from "next";
 import type { ReactNode } from "react";
-import { Noto_Serif_SC } from "next/font/google";
+import {
+  Bodoni_Moda,
+  Bricolage_Grotesque,
+  IBM_Plex_Mono,
+  Noto_Serif_SC,
+} from "next/font/google";
 import { NextIntlClientProvider } from "next-intl";
 import { getLocale, getMessages } from "next-intl/server";
 import type { Locale } from "../i18n/locale";
 import "./globals.css";
 
-// Task 3：标题衬线字体，构建期自托管（next/font/google 按 unicode-range 分片，浏览器按需加载）。
-// preload: false —— Noto Serif SC 在 next/font 中仅登记 latin 子集，开启 preload 必须指定子集，
-// 而指定 latin 会丢掉 CJK 分片；关 preload 后保留全部 unicode-range 分片，浏览器按需加载（简报 Step 4 允许）。
-const displaySerif = Noto_Serif_SC({
-  weight: ["600", "900"],
+// next/font downloads at image-build time and serves the files from our own origin.
+// The four roles deliberately separate display, editorial, CJK and data voices.
+const displayGrotesk = Bricolage_Grotesque({
+  subsets: ["latin"],
   display: "swap",
-  variable: "--font-display",
+  variable: "--font-bricolage",
+});
+
+const editorialSerif = Bodoni_Moda({
+  subsets: ["latin"],
+  display: "swap",
+  variable: "--font-bodoni",
+  adjustFontFallback: false,
+});
+
+const dataMono = IBM_Plex_Mono({
+  weight: "400",
+  subsets: ["latin"],
+  display: "swap",
+  variable: "--font-ibm-plex-mono",
+});
+
+// Noto Serif SC has no CJK subset flag in next/font's manifest. Disabling preload
+// preserves its unicode-range shards so browsers request only the glyphs in use.
+const cjkSerif = Noto_Serif_SC({
+  weight: ["400", "600", "900"],
+  display: "swap",
+  variable: "--font-noto-serif-sc",
   preload: false,
 });
 
@@ -35,7 +61,11 @@ export default async function RootLayout({ children }: { children: ReactNode }) 
   const messages = await getMessages();
 
   return (
-    <html lang={locale === "zh" ? "zh-CN" : "en"} className={displaySerif.variable}>
+    <html
+      suppressHydrationWarning
+      lang={locale === "zh" ? "zh-CN" : "en"}
+      className={`${displayGrotesk.variable} ${editorialSerif.variable} ${dataMono.variable} ${cjkSerif.variable}`}
+    >
       <body>
         {/* Task 9：JS 可用性标记，CSS 滚动进入动效以 html.js 门控（无 JS 时内容始终可见） */}
         <script

@@ -89,10 +89,51 @@ Object Header 使用单行规则线，不拆三张统计卡。左栏展示章节
 
 - 主标题是真实 DOM 文本，可选择、可访问、可索引。
 - Canvas/WebGL 生成半色调、局部 displacement、折射和证据粒子。
-- 中央保持低速、稳定的竖向粒子幕；指针进入标题区域后，光学中心向指针平滑靠近，但强作用只限于标题交界。
-- 桌面指针作用半径 180–220px，字符位移 36–44px，停止后约 650ms 恢复；移动端不持续追踪手指，点击触发一次短暂脉冲。
-- 不显示巨大的圆形鼠标环；粒子分为低密度环境层和高密度字形/交界核心层，二者共享同一力场。
+- 中央保持低速、稳定的固定狭缝与竖向粒子幕；空间拓扑永久绑定标题交界，指针不得移动光轴、遮罩或粒子场中心。
+- 桌面指针只调制狭缝附近的能量、相位和不超过 18px 的纵向偏折，停止后约 650ms 恢复；移动端不持续追踪手指，点击触发一次短暂脉冲。
+- 不显示巨大的圆形鼠标环、圆形空洞或跟随鼠标的粒子球；字形粒子必须从实际标题 glyph alpha 采样，呈现 `Science` 字形逐渐粒子化、向狭缝压缩并在右侧以波前/局部字形折射展开的连续关系。
+- SVG turbulence 不得承担主字形形变；主形变必须是方向明确的 glyph-to-particle 映射。`evolves` 只允许狭缝附近的前部字母出现局部折射/轻微色散，其余字母保持清晰。
 - 点击/按住短暂显现 SDF 证据层；不旋转全页、不使用星空或视频替代交互。
+
+#### 5.1.1 外部实现调研与第四轮技术基线（2026-08-11）
+
+用户在线复核否决 `cd5be36` 的观感：虽然工程门禁消除了 pointer disk，但 CPU Canvas 逐点绘制仍形成灰色覆盖、竖向点线和机械波纹，无法达到原型中连续字形被挤压、穿过焦点并重新展开的材质感。因此不得继续在现有 `arc()` 点阵 renderer 上调参。
+
+已实际打开演示、读取源码并核对许可证：
+
+| 参考实现 | 可复用机制 | 许可证/结论 |
+|---|---|---|
+| [Codrops Accessible WebGL Text](https://tympanus.net/codrops/2025/06/05/how-to-create-responsive-and-seo-friendly-webgl-text/) / [`ehaakana/codrops-text-demo`](https://github.com/ehaakana/codrops-text-demo) | HTML-first，读取 DOM bounds/computed style，以 `troika-three-text` 同步 WebGL 字形；原 DOM 保留 SEO/响应式/可访问性 | MIT；采用其 DOM/WebGL 同步思想，不复制其版式 |
+| [Bruno Imbrizi Interactive Particles](https://tympanus.net/codrops/2019/01/17/interactive-particles-with-three-js/) / [`interactive-particles`](https://github.com/brunoimbrizi/interactive-particles) | 从源图像像素阈值生成 `InstancedBufferGeometry`，用 off-screen touch texture 驱动 GPU 粒子 | `package.json` 声明 MIT；采用 glyph texture + instancing，拒绝其圆形 touch stamp |
+| [Akella Distorted Pixels](https://tympanus.net/codrops/2022/01/12/pixel-distortion-effect-with-three-js/) / [`DistortedPixels`](https://github.com/akella/DistortedPixels) | 低分辨率 float `DataTexture` 记录鼠标速度，逐帧 relaxation，fragment shader 采样位移纹理 | MIT；采用可衰减 displacement/velocity field，场中心仍固定在 aperture |
+| [OGL `Flowmap`](https://github.com/oframe/ogl/blob/master/src/extras/Flowmap.js) | ping-pong render target、velocity stamp、dissipation；以很小的 WebGL runtime 提供流场原语 | Unlicense；优先作为轻量 spike 候选，未基准前不锁定依赖 |
+| [DGFX Dreamy Particles](https://tympanus.net/codrops/2024/12/19/crafting-a-dreamy-particle-effect-with-three-js-and-gpgpu/) / [`codrops-dreamy-particles`](https://github.com/DGFX/codrops-dreamy-particles) | GPGPU position/velocity textures、mesh surface sampling、post-processing shine | 无明确仓库许可证；只学习架构，不复制代码/资产，不作为直接依赖 |
+| [Three.js WebGPU/TSL text destruction](https://tympanus.net/codrops/2025/07/22/interactive-text-destruction-with-three-js-webgpu-and-tsl/) | storage buffer + compute spring 变形真实 3D 字形 | 浏览器/包体/复杂度超出本首屏；不采用 WebGPU-only 路线 |
+| [Blotter.js text distortion](https://tympanus.net/codrops/2019/02/06/text-distortion-effects-using-blotter-js/) | 用 uniform 把 pointer/scroll speed 映射到连续文字材质 | 项目老旧且仓库无明确 LICENSE；只保留“速度→uniform→缓慢恢复”的交互原则 |
+
+第四轮必须采用“连续字形材质 + 共享 GPU 位移场 + 稀疏粒子辅层”的混合结构：
+
+1. 一个真实 DOM `h1` 继续承担语义、排版和无 WebGL 降级；WebGL 视觉层严格同步其 bounds 和字体，不再另造标题布局。
+2. 连续字形纹理是主体；固定 aperture 附近通过 signed displacement/flow field 做横向压缩、焦点收束、右侧拉伸和轻微 RGB 色散，不能把整字替换成灰点。
+3. 粒子层只采样受影响字形边缘/亮部，并与连续层共享同一 displacement field；使用 instancing/points 在 GPU 变换，不在 CPU 每帧循环绘制数千个 `arc()`。
+4. 指针速度只写入有衰减的 flow texture，改变局部能量和拖尾；固定 slit mask 决定空间拓扑，禁止 radial stamp 直接成为可见圆形边界。
+5. 焦散使用窄的 additive luminance ridge 与有限的方向性 streak；不绘制贯穿视口的竖点线，不生成对称蜘蛛网扇形。
+6. reduced-motion、WebGL 不可用和移动端低功耗模式显示完整 DOM 标题与一张稳定的静态焦散，不运行 GPGPU。
+7. 先建立独立 Optical Lab，同时并排展示原型裁切、当前生产基线和候选 GPU 输出；在用户选择前不得替换生产 Landing。
+
+候选优先级为：先做 OGL/原生 WebGL2 的轻量混合 spike；只有当字体同步或性能证据证明不足时，才引入 Three.js + troika。依赖选择必须记录实际 gzip chunk、FPS、GPU/CPU frame time、390px 降级和许可证，不凭 star 数决定。
+
+#### 5.1.2 ECS GPU 边界与客户端降级（2026-08-11）
+
+生产 ECS 只读探测确认没有可用计算/渲染 GPU：PCI 仅暴露虚拟 `Cirrus Logic GD 5446`，`/dev/dri` 只有 `card0` 而没有 `renderD*`，无 NVIDIA/ROCm 工具或 GPU kernel module；Docker 仅有默认 `runc`，生产 compose 无 GPU runtime/device 声明。
+
+这不阻断 Optical Lab，因为 WebGL/OGL/Three shader 在访问者浏览器执行，Next.js 服务器只构建和传输 JS、字体、纹理及 shader，不承担逐帧渲染。实现边界固定如下：
+
+1. Optical renderer 必须是 client-only，并保持真实 DOM `h1` 在 SSR HTML 中；模块不得在 Node build/SSR 阶段读取 `window`、创建 WebGL context 或运行粒子模拟。
+2. 不向生产 compose 增加 GPU runtime、驱动、CUDA/ROCm 或 GPU 容器；本任务不依赖 ECS GPU，也不因视觉效果采购服务器 GPU。
+3. 客户端按能力选择 WebGL2 → WebGL1/half-float extension → DOM + 静态 CSS/Canvas 三层路径；context creation failure、context loss、低功耗和 reduced-motion 都必须能恢复完整标题。
+4. 自动化浏览器门禁允许使用 SwiftShader。当前 Windows headless Chromium 对生产页实测 WebGL/WebGL2 均可用，renderer 为 ANGLE Vulkan SwiftShader、max texture size 8192；因此测试不要求硬件 GPU，但必须另设性能预算，不能把软件渲染通过等同于真实设备流畅。
+5. 服务器不承担 WebGL 截图、视频合成或 GPGPU 计算；如未来需要服务端生成宣传媒体，使用独立离线任务或外部生成服务，并另立基础设施决策。
 
 ### 5.2 Hermes / Live2D
 
@@ -136,4 +177,5 @@ Figma 管理 tokens、字体、栅格、组件、响应式结构、状态矩阵�
 - Public RO 可长时间阅读、打印和引用；
 - 真实 API、空/加载/错误/成功/权限/任务失败状态均可操作；
 - WCAG AA、键盘焦点、`prefers-reduced-motion` 和 LCP ≤ 2.5s 通过；
+- 指针位于标题左侧、狭缝与右侧的 60/150/300ms 动态帧均不得出现圆形粒子边界，且固定光轴不得随鼠标横移；
 - 三视口截图和服务器实际操作由用户审美验收后，才进入下一片。

@@ -11,6 +11,7 @@ export interface CreateResearchObjectInput {
   workspaceId: string;
   userId: string;
   title: string;
+  idempotencyKey?: string;
   /** 可选初始 SDF core（缺省用空六字段文档）。 */
   sdf?: {
     core: Record<string, string>;
@@ -29,6 +30,34 @@ export interface ResearchObjectSummary {
 
 export interface ResearchObjectDetail extends ResearchObjectSummary {
   sdf: { core: Record<string, string>; nodes: Array<{ nodeType: string; content: string }> };
+}
+
+export interface ResearchObjectListItem extends ResearchObjectSummary {
+  publicId: string | null;
+  updatedAt: Date;
+}
+
+/** Dashboard list: only ROs from workspaces where the caller is a member. */
+export async function listResearchObjects(
+  deps: WorkspaceDeps,
+  input: { userId: string; limit?: number },
+): Promise<ResearchObjectListItem[]> {
+  const rows = await deps.prisma.researchObject.findMany({
+    where: { workspace: { members: { some: { userId: input.userId } } } },
+    orderBy: { updatedAt: 'desc' },
+    take: Math.min(Math.max(input.limit ?? 20, 1), 100),
+  });
+  return rows.map((row) => ({
+    id: row.id,
+    workspaceId: row.workspaceId,
+    title: row.title,
+    status: row.status,
+    visibility: row.visibility,
+    version: row.version,
+    publicId: row.publicId,
+    createdAt: row.createdAt,
+    updatedAt: row.updatedAt,
+  }));
 }
 
 /** 空六字段文档（§5.1）。 */
@@ -54,12 +83,29 @@ export async function createResearchObject(
   if (!title || title.length > 200) throw new ResearchObjectError('VALIDATION_ERROR', '标题长度需为 1-200 字符');
   const core = input.sdf?.core ?? emptyCore();
 
-  const ro = await deps.prisma.$transaction(async (tx) => {
+  const replayExisting = async () => {
+    if (!input.idempotencyKey) return null;
+    const existing = await deps.prisma.researchObject.findUnique({ where: { idempotencyKey: input.idempotencyKey } });
+    if (existing) {
+      if (existing.workspaceId !== input.workspaceId || existing.createdBy !== input.userId || existing.title !== title) {
+        throw new ResearchObjectError('VALIDATION_ERROR', '幂等键已用于其他请求');
+      }
+      return { id: existing.id, workspaceId: existing.workspaceId, title: existing.title, status: existing.status, visibility: existing.visibility, version: existing.version, createdAt: existing.createdAt };
+    }
+    return null;
+  };
+  const replay = await replayExisting();
+  if (replay) return replay;
+
+  let ro;
+  try {
+    ro = await deps.prisma.$transaction(async (tx) => {
     const created = await tx.researchObject.create({
       data: {
         workspaceId: input.workspaceId,
         title,
         createdBy: input.userId,
+        idempotencyKey: input.idempotencyKey,
         sdfDocument: {
           create: {
             coreJson: core as object,
@@ -83,7 +129,14 @@ export async function createResearchObject(
       ctx,
     );
     return created;
-  });
+    });
+  } catch (error) {
+    if ((error as { code?: string }).code === 'P2002' && input.idempotencyKey) {
+      const concurrentReplay = await replayExisting();
+      if (concurrentReplay) return concurrentReplay;
+    }
+    throw error;
+  }
 
   return { id: ro.id, workspaceId: ro.workspaceId, title: ro.title, status: ro.status, visibility: ro.visibility, version: ro.version, createdAt: ro.createdAt };
 }

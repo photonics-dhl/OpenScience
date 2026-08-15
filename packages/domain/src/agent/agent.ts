@@ -1,8 +1,9 @@
 import type { Redis } from 'ioredis';
+import { isDeepStrictEqual } from 'node:util';
 import type { AuditContext } from '@openscience/observability';
 import { requireMembership } from '../workspace/helpers';
 import { recordAudit } from '../workspace/audit';
-import { getBalance } from '../usage/ledger';
+import { getBalance, recordEntry } from '../usage/ledger';
 import type { WorkspaceDeps } from '../workspace/types';
 import { AgentError } from './errors';
 
@@ -45,13 +46,53 @@ export interface AgentSessionView {
   createdAt: Date;
 }
 
+export interface AgentTaskListItem extends AgentTaskView {
+  researchObjectId: string | null;
+}
+
+function assertSessionReplay(
+  existing: { userId: string; researchObjectId: string | null; kind: string; title: string },
+  input: { userId: string; researchObjectId?: string; kind: string; title?: string },
+): void {
+  if (existing.userId !== input.userId || existing.researchObjectId !== (input.researchObjectId ?? null)
+    || existing.kind !== input.kind || existing.title !== (input.title ?? '')) {
+    throw new AgentError('VALIDATION_ERROR', '幂等键已用于其他 Hermes 会话');
+  }
+}
+
+function assertTaskReplay(
+  existing: { sessionId: string; kind: string; payload: unknown },
+  input: { sessionId: string; kind: string; payload: Record<string, unknown> },
+): void {
+  if (existing.sessionId !== input.sessionId || existing.kind !== input.kind || !isDeepStrictEqual(existing.payload, input.payload)) {
+    throw new AgentError('VALIDATION_ERROR', '幂等键已用于其他 Hermes 任务');
+  }
+}
+
+/** Dashboard task rail: caller-owned tasks with their RO context. */
+export async function listAgentTasks(
+  deps: AgentDeps,
+  input: { userId: string; actionableOnly?: boolean },
+): Promise<AgentTaskListItem[]> {
+  const rows = await deps.prisma.agentTask.findMany({
+    where: {
+      session: { userId: input.userId },
+      ...(input.actionableOnly ? { status: { in: ['pending', 'running', 'failed'] } } : {}),
+    },
+    include: { session: true },
+    orderBy: { updatedAt: 'desc' },
+    take: 20,
+  });
+  return rows.map((task) => ({ ...taskToView(task), researchObjectId: task.session.researchObjectId }));
+}
+
 /**
  * 建 Hermes 会话（§15 AgentSession）：
  * - researchObject 归属 workspace 成员校验（§17 越权）
  */
 export async function createAgentSession(
   deps: AgentDeps,
-  input: { userId: string; researchObjectId?: string; kind: string; title?: string },
+  input: { userId: string; researchObjectId?: string; kind: string; title?: string; idempotencyKey?: string },
   ctx: AuditContext = {},
 ): Promise<AgentSessionView> {
   if (input.researchObjectId) {
@@ -59,8 +100,24 @@ export async function createAgentSession(
     if (!ro) throw new AgentError('RESEARCH_OBJECT_NOT_FOUND', '研究对象不存在');
     await requireMembership(deps, ro.workspaceId, input.userId);
   }
+  if (input.idempotencyKey) {
+    const existing = await deps.prisma.agentSession.findUnique({ where: { idempotencyKey: input.idempotencyKey } });
+    if (existing) {
+      assertSessionReplay(existing, input);
+      return { id: existing.id, researchObjectId: existing.researchObjectId, kind: existing.kind, title: existing.title, status: existing.status, createdAt: existing.createdAt };
+    }
+  }
   const session = await deps.prisma.agentSession.create({
-    data: { userId: input.userId, researchObjectId: input.researchObjectId ?? null, kind: input.kind, title: input.title ?? '' },
+    data: { userId: input.userId, researchObjectId: input.researchObjectId ?? null, kind: input.kind, title: input.title ?? '', idempotencyKey: input.idempotencyKey },
+  }).catch(async (error: unknown) => {
+    if ((error as { code?: string }).code === 'P2002' && input.idempotencyKey) {
+      const existing = await deps.prisma.agentSession.findUnique({ where: { idempotencyKey: input.idempotencyKey } });
+      if (existing) {
+        assertSessionReplay(existing, input);
+        return existing;
+      }
+    }
+    throw error;
   });
   await recordAudit(deps, deps.prisma, {
     actorId: input.userId, action: 'agent.session.create', targetType: 'agent_session', targetId: session.id,
@@ -81,7 +138,7 @@ export async function createAgentSession(
  */
 export async function submitAgentTask(
   deps: AgentDeps,
-  input: { sessionId: string; userId: string; kind: string; payload: Record<string, unknown>; idempotencyKey?: string },
+  input: { sessionId: string; userId: string; kind: string; payload: Record<string, unknown>; idempotencyKey?: string; dispatch?: boolean },
   ctx: AuditContext = {},
 ): Promise<AgentTaskView> {
   const session = await deps.prisma.agentSession.findUnique({ where: { id: input.sessionId } });
@@ -106,7 +163,11 @@ export async function submitAgentTask(
   // §16 幂等键：同 key 已存在 → 返回既有任务
   if (input.idempotencyKey) {
     const existing = await deps.prisma.agentTask.findUnique({ where: { idempotencyKey: input.idempotencyKey } });
-    if (existing) return taskToView(existing);
+    if (existing) {
+      assertTaskReplay(existing, input);
+      if (input.dispatch !== false && existing.dispatchedAt == null) await dispatchAgentTask(deps, existing.id);
+      return taskToView(existing);
+    }
   }
 
   const task = await deps.prisma.agentTask.create({
@@ -116,22 +177,48 @@ export async function submitAgentTask(
       payload: input.payload as never,
       idempotencyKey: input.idempotencyKey,
     },
-  }).catch((e: unknown) => {
+  }).catch(async (e: unknown) => {
     if (typeof (e as { code?: unknown })?.code === 'string' && (e as { code: string }).code === 'P2002') {
-      const dup = deps.prisma.agentTask.findUnique({ where: { idempotencyKey: input.idempotencyKey ?? '' } });
-      void dup;
+      const dup = await deps.prisma.agentTask.findUnique({ where: { idempotencyKey: input.idempotencyKey ?? '' } });
+      if (dup) {
+        assertTaskReplay(dup, input);
+        if (input.dispatch !== false && dup.dispatchedAt == null) await dispatchAgentTask(deps, dup.id);
+        return dup;
+      }
       throw new AgentError('DUPLICATE_IDEMPOTENCY_KEY', '幂等键重复（§16）', e);
     }
     throw e;
   });
 
-  // 入队（§9.3 长任务异步）
-  await deps.redis.lpush(AGENT_TASK_QUEUE, task.id);
+  if (input.dispatch !== false) await dispatchAgentTask(deps, task.id);
 
   await recordAudit(deps, deps.prisma, {
     actorId: input.userId, action: 'agent.task.submit', workspaceId, targetType: 'agent_task', targetId: task.id,
     metadata: { kind: input.kind, sessionId: session.id },
   }, ctx);
+  return taskToView(task);
+}
+
+export async function dispatchAgentTask(deps: AgentDeps, taskId: string): Promise<boolean> {
+  const task = await deps.prisma.agentTask.findUnique({ where: { id: taskId } });
+  if (!task || task.dispatchedAt != null) return false;
+  await deps.redis.lpush(AGENT_TASK_QUEUE, task.id);
+  await deps.prisma.agentTask.updateMany({
+    where: { id: task.id, dispatchedAt: null },
+    data: { dispatchedAt: new Date() },
+  });
+  return true;
+}
+
+export async function claimAgentTask(deps: AgentDeps, taskId: string): Promise<AgentTaskView | null> {
+  const claimed = await deps.prisma.agentTask.updateMany({
+    where: { id: taskId, status: { in: ['pending', 'failed'] } },
+    data: { status: 'running', progress: 10, error: null },
+  });
+  if (claimed.count !== 1) return null;
+  const task = await deps.prisma.agentTask.findUnique({ where: { id: taskId } });
+  if (!task) return null;
+  await syncIngestionState(deps, task.id, 'running');
   return taskToView(task);
 }
 
@@ -171,7 +258,7 @@ export async function markTaskProgress(
   deps: AgentDeps,
   input: { taskId: string; status: AgentTaskStatus; progress?: number; result?: Record<string, unknown>; error?: string | null },
 ): Promise<AgentTaskView> {
-  const task = await deps.prisma.agentTask.findUnique({ where: { id: input.taskId } });
+  const task = await deps.prisma.agentTask.findUnique({ where: { id: input.taskId }, include: { session: true } });
   if (!task) throw new AgentError('RESEARCH_OBJECT_NOT_FOUND', '任务不存在');
   const from = task.status as AgentTaskStatus;
 
@@ -183,6 +270,7 @@ export async function markTaskProgress(
     if (input.progress !== undefined && input.progress >= (task.progress ?? 0)) {
       await deps.prisma.agentTask.update({ where: { id: task.id }, data: { progress: input.progress } });
     }
+    await syncIngestionState(deps, task.id, input.status, input.error);
     return taskToView(task);
   }
 
@@ -190,16 +278,50 @@ export async function markTaskProgress(
     throw new AgentError('ILLEGAL_TRANSITION', `任务状态 ${from} → ${input.status} 非法`);
   }
 
-  const updated = await deps.prisma.agentTask.update({
-    where: { id: task.id },
-    data: {
-      status: input.status,
-      ...(input.progress !== undefined ? { progress: input.progress } : {}),
-      ...(input.result !== undefined ? { result: input.result as never } : {}),
-      ...(input.error !== undefined ? { error: input.error } : {}),
-    },
+  const updated = await deps.prisma.$transaction(async (tx) => {
+    const row = await tx.agentTask.update({
+      where: { id: task.id },
+      data: {
+        status: input.status,
+        ...(input.progress !== undefined ? { progress: input.progress } : {}),
+        ...(input.result !== undefined ? { result: input.result as never } : {}),
+        ...(input.error !== undefined ? { error: input.error } : {}),
+      },
+    });
+    if (input.status === 'succeeded') {
+      await recordEntry(tx, {
+        userId: task.session.userId,
+        resource: AI_CREDIT_RESOURCE,
+        delta: -1,
+        kind: 'consume',
+        reason: `Agent task ${task.kind}`,
+        idempotencyKey: `agent-task-consume:${task.id}`,
+        metadata: { taskId: task.id, kind: task.kind },
+      });
+    }
+    return row;
   });
+  await syncIngestionState(deps, task.id, input.status, input.error);
   return taskToView(updated);
+}
+
+async function syncIngestionState(
+  deps: AgentDeps,
+  agentTaskId: string,
+  status: AgentTaskStatus,
+  error?: string | null,
+): Promise<void> {
+  const state = status === 'running'
+    ? 'parsing'
+    : status === 'succeeded'
+      ? 'needs_review'
+      : status === 'failed'
+        ? (error?.startsWith('[blocked]') ? 'failed_blocked' : 'failed_retryable')
+        : 'queued';
+  await deps.prisma.ingestionTask.updateMany({
+    where: { agentTaskId },
+    data: { state, ...(status === 'failed' ? { error: error ?? 'Extraction failed' } : { error: null }) },
+  });
 }
 
 function taskToView(task: {

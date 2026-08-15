@@ -7,6 +7,7 @@ import OutlinePanel from '../../../../components/editor/OutlinePanel';
 import CoreEditor from '../../../../components/editor/CoreEditor';
 import SuggestionsPanel from '../../../../components/editor/SuggestionsPanel';
 import ArtifactUploader from '../../../../components/editor/ArtifactUploader';
+import { ObjectHeader } from '../../../../components/research/ObjectHeader';
 import {
   createCommit,
   getAgentTask,
@@ -29,7 +30,6 @@ import {
 import {
   applySuggestionsToCore,
   coreToSuggestions,
-  demoSuggestions,
   suggestionReducer,
 } from '../../../../lib/suggestions';
 
@@ -48,11 +48,16 @@ export default function EditorPage({ params }: { params: { id: string } }) {
   const [suggestions, dispatchSuggestions] = useReducer(suggestionReducer, []);
   const [artifacts, setArtifacts] = useState<ArtifactReference[]>([]);
   const [versions, setVersions] = useState<VersionRow[]>([]);
-  const [activeField, setActiveField] = useState<FieldKey | null>(null);
+  const [activeField, setActiveField] = useState<FieldKey | null>('problem');
   const [workspaceId, setWorkspaceId] = useState<string>('');
+  const [objectMeta, setObjectMeta] = useState<{ title: string; visibility: string }>({
+    title: t('untitledObject'),
+    visibility: 'private',
+  });
   const [draftPrompt, setDraftPrompt] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
   const [committing, setCommitting] = useState(false);
   const [commitMsg, setCommitMsg] = useState('');
   // P1D-3：AI 提取状态（§5.4 + §18.3 进度可恢复）
@@ -69,6 +74,7 @@ export default function EditorPage({ params }: { params: { id: string } }) {
         const ro = await getResearchObject(roId);
         if (cancelled) return;
         setWorkspaceId(ro.researchObject.workspaceId);
+        setObjectMeta({ title: ro.researchObject.title, visibility: ro.researchObject.visibility });
         const core = ro.researchObject.sdf?.core ?? emptyCore();
         // 草稿恢复（§18.3）
         const draft = loadDraft(roId);
@@ -101,12 +107,6 @@ export default function EditorPage({ params }: { params: { id: string } }) {
     return () => {
       if (pollTimer.current) clearInterval(pollTimer.current);
     };
-  }, []);
-
-  // 预置建议（Phase 1D extractor 接同通路）
-  useEffect(() => {
-    dispatchSuggestions({ type: 'reset' });
-    for (const s of demoSuggestions(state.core)) dispatchSuggestions({ type: 'add', suggestion: s });
   }, []);
 
   function editField(field: FieldKey, value: string) {
@@ -165,13 +165,16 @@ export default function EditorPage({ params }: { params: { id: string } }) {
   /** 保存到 SDF（乐观锁，§16）。 */
   async function handleSave() {
     setSaving(true);
+    setSaveError(null);
     setErrorMsg(null);
     try {
       await updateSdf(roId, state.version, state.core);
       dispatch({ type: 'saved' });
       clearDraft(roId);
     } catch (e) {
-      setErrorMsg(e instanceof Error ? e.message : String(e));
+      const message = e instanceof Error ? e.message : String(e);
+      setSaveError(message);
+      setErrorMsg(message);
     } finally {
       setSaving(false);
     }
@@ -221,39 +224,35 @@ export default function EditorPage({ params }: { params: { id: string } }) {
     }
   }
 
+  const saveState = saveError ? 'error' : saving ? 'saving' : state.dirty ? 'dirty' : 'saved';
+
   return (
-    <div>
-      <div className="toolbar">
-        <span className="toolbar-title">{t('title')}</span>
-        <button className="btn" onClick={handleSave} disabled={saving || !state.dirty}>
-          {saving ? t('common.saving') ?? '…' : t('saveToSdf')}
-        </button>
-        <input
-          placeholder={t('commitMessage')}
-          value={commitMsg}
-          onChange={(e) => setCommitMsg(e.target.value)}
-          style={{ width: 160, padding: '6px 8px', borderRadius: 6, border: '1px solid var(--color-border)' }}
-        />
-        <button className="btn btn-primary" onClick={handleCommit} disabled={committing}>{t('commit')}</button>
-      </div>
-
-      {draftPrompt && (
-        <div className="draft-banner">
-          {t('draftFound')}
-          <button className="btn" onClick={restoreDraft}>{t('restoreDraft')}</button>
-          <button className="btn" onClick={discardDraft}>{t('discardDraft')}</button>
-        </div>
-      )}
-      {errorMsg && (
-        <div className="error-panel" role="alert">
-          {errorMsg}
-          <div className="error-actions">
-            <button className="btn" onClick={() => setErrorMsg(null)}>{t('common.cancel')}</button>
-          </div>
-        </div>
-      )}
-
-      <EditorLayout
+    <EditorLayout
+        objectId={roId}
+        header={
+          <ObjectHeader
+            actions={
+              <>
+                <button aria-label={t('saveToSdf')} className="min-h-9 rounded-panel border border-os-rule-dark bg-transparent px-3 text-os-paper disabled:opacity-40" onClick={handleSave} disabled={saving || !state.dirty}>
+                  <span className="hidden sm:inline">{saving ? t('common.saving') ?? '…' : t('saveToSdf')}</span><span className="sm:hidden">SDF</span>
+                </button>
+                <input
+                  aria-label={t('commitMessage')}
+                  className="h-9 w-20 min-w-0 border border-os-rule-dark bg-os-black-1 px-2 text-xs text-os-paper placeholder:text-os-muted-dark sm:w-40 sm:px-3"
+                  placeholder={t('commitMessage')}
+                  value={commitMsg}
+                  onChange={(event) => setCommitMsg(event.target.value)}
+                />
+                <button className="min-h-9 rounded-panel border-0 bg-os-vermilion px-3 font-semibold text-os-black-0 disabled:opacity-40" onClick={handleCommit} disabled={committing}><span className="hidden sm:inline">{t('commit')}</span><span className="sm:hidden">{t('commitShort')}</span></button>
+              </>
+            }
+            objectId={roId}
+            saveState={saveState}
+            title={objectMeta.title}
+            version={state.version}
+            visibility={objectMeta.visibility}
+          />
+        }
         outline={
           <OutlinePanel
             core={state.core}
@@ -265,7 +264,20 @@ export default function EditorPage({ params }: { params: { id: string } }) {
         }
         main={
           <>
-            <CoreEditor core={state.core} onEdit={editField} activeField={activeField} />
+            {draftPrompt && (
+              <div className="mb-5 flex flex-wrap items-center gap-3 border-y border-os-rule-dark py-3 text-sm text-os-paper">
+                <span>{t('draftFound')}</span>
+                <button className="min-h-9 rounded-panel border border-os-rule-dark bg-transparent px-3 text-os-paper" onClick={restoreDraft}>{t('restoreDraft')}</button>
+                <button className="min-h-9 rounded-panel border border-os-rule-dark bg-transparent px-3 text-os-paper" onClick={discardDraft}>{t('discardDraft')}</button>
+              </div>
+            )}
+            {errorMsg && (
+              <div className="mb-5 flex items-center justify-between gap-4 border-l-2 border-os-vermilion py-2 pl-4 text-sm text-os-paper" role="alert">
+                <span>{errorMsg}</span>
+                <button className="min-h-9 rounded-panel border border-os-rule-dark bg-transparent px-3 text-os-paper" onClick={() => setErrorMsg(null)}>{t('common.cancel')}</button>
+              </div>
+            )}
+            <CoreEditor core={state.core} onEdit={editField} activeField={activeField} onSelectField={setActiveField} />
             <ArtifactUploader workspaceId={workspaceId} artifacts={artifacts} onArtifactsChange={setArtifacts} />
           </>
         }
@@ -280,6 +292,5 @@ export default function EditorPage({ params }: { params: { id: string } }) {
           />
         }
       />
-    </div>
   );
 }

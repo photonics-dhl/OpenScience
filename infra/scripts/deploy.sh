@@ -20,7 +20,8 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
-ENV_FILE="$PROJECT_ROOT/.env"
+CONFIG_ROOT="${XGS_CONFIG_ROOT:-$PROJECT_ROOT}"
+ENV_FILE="$CONFIG_ROOT/.env"
 
 # --- 参数解析 ---
 CONFIRM=0
@@ -89,7 +90,8 @@ if [ "$CONFIRM" -ne 1 ]; then
   [ "$SKIP_BUILD" -eq 1 ] || plan "2. install + 全量 build（跨包 import 需全量）"
   [ "$SKIP_MIGRATE" -eq 1 ] || plan "3. migrate deploy + status 验证"
   [ "$SKIP_MIGRATE" -eq 1 ] || plan "4. seed-quota --confirm（幂等）"
-  plan "5. 生产栈：docker compose -f $COMPOSE_FILE up -d"
+  plan "5. 生产栈：docker compose --env-file $PROD_ENV -f $COMPOSE_FILE up -d"
+  plan "5b. 重启 bind-mounted 应用进程：api web agent-worker（不重启数据服务）"
   plan "6. nginx：$NGINX_CONF 部署（nginx -t + reload）+ htpasswd-admin（首次）"
   plan "7. 验证：curl /auth/me 401、/admin basic_auth、安全头"
   exit 0
@@ -99,7 +101,7 @@ log "=== 执行部署（--confirm）==="
 
 # 1. 同步（复用 cloud-sync 逻辑：tar 流式经 ssh）
 log "[1] 同步代码..."
-node "$PROJECT_ROOT/scripts/cloud-sync.mjs" || { echo "同步失败" >&2; exit 1; }
+XGS_SOURCE_ROOT="$PROJECT_ROOT" XGS_CONFIG_ROOT="$CONFIG_ROOT" node "$PROJECT_ROOT/scripts/cloud-sync.mjs" || { echo "同步失败" >&2; exit 1; }
 
 # 2. build
 if [ "$SKIP_BUILD" -ne 1 ]; then
@@ -110,15 +112,20 @@ fi
 # 3. 迁移
 if [ "$SKIP_MIGRATE" -ne 1 ]; then
   log "[3] 迁移 deploy..."
-  run_remote "cd $REMOTE_ROOT && node packages/database/dist/migrate-cli.js deploy" || exit 1
+  run_remote "cd $REMOTE_ROOT && docker compose --env-file $PROD_ENV -f $COMPOSE_FILE exec -T -e DATABASE_URL=\$(grep '^DATABASE_URL=' $PROD_ENV | cut -d= -f2-) -w $REMOTE_ROOT api node packages/database/dist/migrate-cli.js deploy" || exit 1
   # seed 占位值（幂等）
   log "[4] seed-quota..."
-  run_remote "cd $REMOTE_ROOT && node scripts/seed-quota.mjs --confirm" || exit 1
+  run_remote "cd $REMOTE_ROOT && docker compose --env-file $PROD_ENV -f $COMPOSE_FILE exec -T -e DATABASE_URL=\$(grep '^DATABASE_URL=' $PROD_ENV | cut -d= -f2-) -w $REMOTE_ROOT api node scripts/seed-quota.mjs --confirm" || exit 1
 fi
 
 # 4. 生产栈
 log "[5] 生产栈 up..."
-run_remote "cd $REMOTE_ROOT && docker compose -f $COMPOSE_FILE up -d" || exit 1
+run_remote "cd $REMOTE_ROOT && docker compose --env-file $PROD_ENV -f $COMPOSE_FILE up -d" || exit 1
+
+# 源码与构建产物通过 bind mount 同步到长期运行的容器。Compose 配置未变化时，
+# `up -d` 不会重启这些进程，因此显式重启应用服务以切换到本次 release；数据服务保持运行。
+log "[5b] 重启 bind-mounted 应用进程..."
+run_remote "cd $REMOTE_ROOT && docker compose --env-file $PROD_ENV -f $COMPOSE_FILE restart api web agent-worker" || exit 1
 
 # 5. nginx 反代 + /admin basic_auth（P1A-8）
 log "[6] nginx 反代部署..."
