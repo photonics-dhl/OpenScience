@@ -1,5 +1,9 @@
 # Hermes 3D Scholar Agent Design
 
+> **DEPRECATED (2026-08-15):** 用户否决该学者机器人视觉方向。新的可行性事实源为
+> `docs/specs/2026-08-15-hermes-constellation-dragon-prototype-design.md`。
+> 本文仅保留为已否决方案记录，不得作为当前 Hermes 实施基线。
+
 - Status: Approved for implementation
 - Date: 2026-08-15
 - Product surface: authenticated workspaces and Hermes task surfaces

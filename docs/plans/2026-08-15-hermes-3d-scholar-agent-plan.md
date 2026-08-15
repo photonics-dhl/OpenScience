@@ -1,5 +1,9 @@
 # Hermes 3D Scholar Agent Implementation Plan
 
+> **DEPRECATED (2026-08-15):** 用户否决该机器人方案，未进入 `main` 的生产实现。
+> 当前只执行 `docs/plans/2026-08-15-hermes-constellation-dragon-prototype-plan.md`
+> 的轻量建模可行性验证。
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Deliver an original, reproducible Blender/GLB Hermes scholar robot with six honest actions and a lazy OGL renderer that preserves the existing semantic and fallback contract.
