@@ -90,6 +90,7 @@
 | `infra/scripts/backup.sh` / `docs/runbooks/backup-restore.md` | PostgreSQL + SeaweedFS volume 非破坏备份入口（`--db`/`--objects`） | 已实现，待服务器恢复演练（2026-08-10） |
 | `infra/scripts/deploy.sh` / `infra/scripts/deploy.test.mjs` | ECS dry-run/confirmed release 部署；所有 production Compose 路径强制同一 `.env.prod`；栈收敛后只重启 bind-mounted `api/web/agent-worker` 以切换 release，数据服务保持运行 | 活脚本；2026-08-10 生产现场修复 |
 | `apps/agent-worker/Dockerfile` / `apps/agent-worker/src/clamav.ts` / `apps/agent-worker/src/ingestion-parser.ts` | Tesseract `eng+chi_sim` 本地图片 OCR；ClamAV INSTREAM fail-closed 扫描；MiniMax 不作为默认 OCR | 本地实现，待服务器镜像/恶意样本/图片验收（2026-08-10） |
+| `apps/web/scripts/hermes/build-constellation-dragon.py` / `inspect-constellation-dragon.mjs` / `apps/web/test/hermes-constellation-dragon-asset-contract.test.ts` / `apps/web/assets/hermes/HermesConstellationDragon.blend` / `apps/web/public/hermes/prototype/` | Hermes 少年星图龙确定性 Blender 静态原型、资产检查器、TDD 合同、四视图/contact sheet 与 manifest；六节点背脊、朱砂尾笔、紧凑卷体 | **用户视觉 NO-GO**；未提交、未接运行时，仅保留失败证据，禁止误读为候选资产 |
 | `.cursor/` | Cursor 编辑器配置 | 工具自管 |
 | `.taskmaster/` | task-master 任务状态 | 工具自管 |
 | `.memory/memory.jsonl` | Memory MCP 知识图谱存储（MEMORY_FILE_PATH 指定） | 工具自管，随 git 备份 |
@@ -124,6 +125,7 @@
 | `docs/plans/2026-08-10-optical-editorial-frontend-plan.md` | Optical Editorial v3 完整实施计划：15 Task 覆盖生产基线、foundations、三联屏、Auth/Intake/Dashboard/Hermes、Explore/启动语料、Editorial、其余产品面、Figma、质量门禁与 ECS E2E | 当前执行计划 |
 | `docs/plans/2026-08-15-hermes-3d-scholar-agent-plan.md` | 被否决的 3D 学者机器人 `.blend/.glb` 与运行时计划 | **DEPRECATED** |
 | `docs/plans/2026-08-15-hermes-constellation-dragon-prototype-plan.md` | 少年星图龙的 RED 资产合同、确定性 Blender builder、四视图/待机渲染与视觉 stop/go；不接产品运行时 | 当前执行计划 |
+| `docs/handoff/2026-08-15-hermes-constellation-dragon-prototype-handoff.md` | 少年星图龙静态 Blender 原型、结构门禁、真实渲染与用户 go/no-go 边界 | 当前原型交接；待用户视觉验收 |
 | `docs/design/optical-editorial-figma-map.md` | 长期账号 Figma canonical 的 V3 variables/styles/components/八表面节点映射、代码对应关系与 Code Connect 边界 | Task 13 canonical 映射 |
 | `docs/superpowers/specs/2026-08-09-researcher-ingestion-product-slice-design.md` | 研究者第一条产品级前端闭环设计：注册、Dashboard、资料导入、Hermes 证据确认、RO Workspace；待用户审阅 | 设计 spec |
 | `docs/superpowers/plans/2026-08-09-researcher-ingestion-product-slice-plan.md` | 研究者导入闭环实施计划：基础视觉、Auth/Dashboard、多格式上传、Hermes 证据、RO Workspace、浏览器验收与生产部署；Task 1–2 完成，Task 3 启动 | 执行中 |

@@ -31,12 +31,12 @@
 - `inspectConstellationDragon(rootDir): Promise<DragonAssetReport>` reads the generated manifest and PNG IHDR headers.
 - Blender builder accepts `--output-root <apps/web absolute path>` and emits the canonical `.blend`, manifest and review renders.
 
-- [ ] Write a Vitest contract that requires the exact named anatomy, six nodes, material/triangle budgets and four absent review PNGs.
-- [ ] Run the focused test and record the expected missing-manifest RED.
-- [ ] Implement the manifest/PNG inspector without a new dependency.
-- [ ] Implement the minimum deterministic Blender geometry and four PBR materials.
-- [ ] Add the head, compact S body, short brow crests, cheek fins, dorsal ribbon, four tucked paws, six evidence nodes and vermilion tail nib with exact names.
-- [ ] Save `.blend`, emit manifest, and rerun the focused test until structural assertions are GREEN.
+- [x] Write a Vitest contract that requires the exact named anatomy, six nodes, material/triangle budgets and four absent review PNGs.
+- [x] Run the focused test and record the expected missing-manifest RED.
+- [x] Implement the manifest/PNG inspector without a new dependency.
+- [x] Implement the minimum deterministic Blender geometry and four PBR materials.
+- [x] Add the head, compact S body, short brow crests, cheek fins, dorsal ribbon, four tucked paws, six evidence nodes and vermilion tail nib with exact names.
+- [x] Save `.blend`, emit manifest, and rerun the focused test until structural assertions are GREEN.
 - [ ] Commit the structural prototype.
 
 ### Task 2: Review lighting, four poses and visual stop/go evidence
@@ -56,10 +56,10 @@
 - Builder renders all views at `768 × 768`, then composes a `1536 × 1536` contact sheet inside Blender.
 - Manifest records render names, dimensions, nontransparent coverage, material count and evaluated triangle count.
 
-- [ ] Extend the focused contract to require valid PNG signatures, exact dimensions, nontransparent coverage and contact sheet.
-- [ ] Run the contract and record the expected missing-render RED.
-- [ ] Add neutral editorial lighting, orthographic cameras and four deterministic pose transforms.
-- [ ] Render all review PNGs and compose the contact sheet without external image libraries.
-- [ ] Run the focused contract, `git diff --check`, docs lint and docs sync.
+- [x] Extend the focused contract to require valid PNG signatures, exact dimensions, nontransparent coverage and contact sheet.
+- [x] Run the contract and record the expected missing-render RED.
+- [x] Add neutral editorial lighting, orthographic cameras and four deterministic pose transforms.
+- [x] Render all review PNGs and compose the contact sheet without external image libraries.
+- [x] Run the focused contract, `git diff --check`, docs lint and docs sync.
 - [ ] Inspect the contact sheet and 48 px downsample visually; record an honest stop/go conclusion in `docs/progress.md` and handoff.
 - [ ] Commit the review-ready prototype only if the render is genuinely usable.
