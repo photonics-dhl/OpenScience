@@ -7,6 +7,11 @@
 > Flexible-HTTP origin experiment and the incorrect 2026-08-13 task handoff
 > were removed. Future sessions must treat this document, `docs/progress.md`
 > and `project_index.md` on `main` as the canonical starting state.
+> Local merge commit: `a09d0f0`. GitHub review branch:
+> `codex/accepted-optical-release`; PR:
+> <https://github.com/photonics-dhl/OpenScience/pull/1>. The unregistered local
+> directory `.worktrees/optical-editorial-v3` survived Git worktree removal on
+> Windows and must not be read as a fact source; its branch no longer exists.
 > **This section supersedes Task 22's “user visual validation only” wording.**
 > Release `48809d6` is deployed; rollback is `744c631`. The user approved the
 > final idle appearance/deployment and explicitly renewed the Task 23

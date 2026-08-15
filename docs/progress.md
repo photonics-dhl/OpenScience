@@ -7,6 +7,8 @@
 - **精确清理**：移除未提交且已证实无效的 Cloudflare Flexible HTTP 应急回源实验，以及错误的 `2026-08-13-current-task-status-handoff.md` 与其过时 Task Master/索引状态；没有删除用户原始素材、设计决策、验收报告或回滚证据。
 - **合并门禁**：先生成 Prisma Client，再执行全仓 build、test、typecheck、lint；生产 Web 16 页构建、Web 244 项、Domain 329 项、API 62 项及其他 workspace 测试全部通过。Nginx/Compose/deploy/Cloudflare 13 项合同、docs lint 191 文件与 `DOCS_SYNC_OK` 通过。
 - **可移植性修复**：`.gitattributes` 固定布局源码、OFL 文本及 atlas JSON 为 LF，防止 Windows `core.autocrlf` 破坏源码断言与确定性资源哈希。
+- **GitHub 版本记录**：本地合并提交为 `a09d0f0`；远程审阅分支 `codex/accepted-optical-release` 与 [PR #1](https://github.com/photonics-dhl/OpenScience/pull/1) 已创建，等待 GitHub CI/审阅后合入远程 `main`。PR 是审阅入口，远程分支与提交历史才是可恢复副本。
+- **本机残留边界**：Git 已注销并删除 `codex/optical-editorial-v3` 分支，但 Windows 未能移除已注销的物理目录 `.worktrees/optical-editorial-v3`（directory not empty）。该目录不得再作为代码或文档事实源；由于首次删除未完整成功，本 session 未使用更强删除命令重试。
 
 ## 2026-08-15（Cloudflare Tunnel 502/530 事故）— 已恢复并完成出口根因定位
 
