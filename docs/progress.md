@@ -1,5 +1,13 @@
 # OpenScience (XGS) 进度日志
 
+## 2026-08-15（Hermes 原创 3D 学者 Agent）— ⏳ 设计与实施启动
+
+- **用户决策**：废弃摄像头、面具、浮空书体与二维概念图直接交付路线；Hermes 改为具有头、肩、紧凑躯干、机械臂与悬浮核心的学者型机器人。书卷气只进入 folio 肩部披片、装订式脊柱、页层与批注边光，机器人识别优先于学术隐喻。
+- **资产真值**：最终交付必须包含可编辑 `.blend`、网页 `.glb`、PBR 材质、六态动作、poster、turntable 和真实资产门禁；imagegen 图片仅为被否决/探索性的 moodboard，不作为可复现资产。
+- **运行边界**：复用现有 `HermesVisualState` 与 OGL 1.0.11 的 glTF/Skin/Animation 能力；原 SVG/CSS Optical Guide 保留为 SSR、加载、reduced-motion 与失败 fallback；不引入 Three.js/Pixi/Cubism，不复制 Wanko 或 Live2D 二进制。
+- **工具约束**：Blender 仅使用 E 盘项目专用 Portable 路径，下载、解压、缓存和输出均不得落到 C 盘。设计 spec 与 TDD 实施计划已登记；当前未修改生产代码、未部署服务器。
+- **下一步**：按 `docs/plans/2026-08-15-hermes-3d-scholar-agent-plan.md` 从 GLB RED 合同和 checksum-pinned Blender Portable 开始，随后生成原创 geometry/rig/material/actions 并进入隔离浏览器验收。
+
 ## 2026-08-15（主页视觉验收与版本收口）— ✅ 已验收并合并至 `main`
 
 - **产品结论**：用户确认当前 Landing `Science evolves.` 待机水流、光效与 pointer 交互可以验收；线上正式视觉版本仍为 `48809d6`，回滚锚点为 `744c631`。
