@@ -62,7 +62,7 @@
 
 ## 常用查询
 
-- Tunnel：`systemctl status cloudflared`；Cloudflare API/控制台应显示 `openscience-prod` healthy 且 4 条连接。
+- Tunnel：`systemctl status cloudflared cloudflared-watchdog.timer`；`curl -fsS http://127.0.0.1:49312/metrics | grep cloudflared_tunnel_ha_connections` 应为 3 或 4，Cloudflare API/控制台应显示 `openscience-prod` healthy。
 - 公网入口：`curl -sSI https://openscience.428312321.xyz/` 应返回 200，并包含 `server: cloudflare` 与 `cf-ray`。
 
 - 本月流量（账单口径，上行 tx 为计费方向）：
@@ -85,6 +85,7 @@ printf 'monitor:%s\n' "$(openssl passwd -apr1 '<新密码>')" > /etc/nginx/.htpa
 - vnStat 数据归零：数据在 docker 卷 `vnstatdb`，删卷才会丢；重建容器不丢。
 - **拉镜像代理**：完成 ADR-005 切换后，dockerd 指向 Squid 7891；Squid优先 7890 隧道并在不可用时 DIRECT。切换前的旧状态仍是 dockerd直接指向 7890，断线时 pull 会失败。
 - **OpenScience 手机端打不开**：先查公共 DNS 是否返回 Cloudflare anycast，而非 `115.29.208.1`；再查 `cloudflared` 是否 healthy。仅“域名 NS 在 Cloudflare”不能证明已使用 Tunnel。
+- **Tunnel 502/530/1033 但源站健康**：查 HA metrics 与 `journalctl -u cloudflared`。若出现 QUIC `no recent network activity`，分别测试 TCP/UDP 7844；2026-08-15 实证为阿里云到部分 LAX Edge 不可达，生产已固定到三轮验证通过的 SJC IPv4/HTTP2 池。不要改 CNAME，也不要把 connector 迁到个人电脑。
 - **Tailscale 与阿里云内网冲突（2026-08-01 实测）**：tailscaled up 会劫持 `100.64.0.0/10` 路由，
   而阿里云 VPC 内部 DNS（100.100.2.136/138）恰在该段 → 全机 DNS 瘫痪、yum/apk 不可用。
   当日已完全卸载（包/服务/repo/状态目录），不要再在这台服务器上安装 Tailscale。

@@ -83,6 +83,7 @@
 | `docs/handoff/2026-08-08-product-web-tooling-handoff.md` | 产品网页工具前置交接（Codex 10 MCP、双 Figma OAuth、迁移 ADR、重启后验证顺序） | 当前 handoff |
 | `docs/handoff/2026-08-10-optical-editorial-rebaseline-handoff.md` | Optical Editorial v3 前端重构交接：27 项 grill-me 决策、三联屏浏览器优先路线、服务器直接验收 | 当前 handoff |
 | `docs/handoff/2026-08-11-optical-editorial-optimization-design-handoff.md` | 首页增量优化设计交接：保留线上功能与风格，先优化 Landing，再传播到 Explore/Dashboard/创建页/公开 RO | 当前 handoff |
+| `docs/handoff/2026-08-15-cloudflare-tunnel-egress-incident-handoff.md` | Cloudflare Tunnel 502/530 事故根因、生产修复、回滚证据与后续观察项 | 当前基础设施交接 |
 | `docs/specs/2026-08-04-p1b-3-blob-artifact-upload-design.md` | P1B-3 Blob 内容寻址存储与上传管线设计（design gate 已确认：五决策，代码已实现 2026-08-04） | 活文档 |
 | `docs/plans/2026-07-24-doc-architecture-plan.md` | 文档架构落地实施计划 | 活文档 |
 | `docs/plans/2026-07-24-mvp-task-breakdown-plan.md` | MVP 任务拆解与工具配置实施计划（已批准，执行中） | 活文档 |
@@ -223,7 +224,7 @@
 | `docs/runbooks/backup-restore.md` | 备份与恢复 runbook（四节骨架，Phase 1A 填充） | 骨架 |
 | `docs/runbooks/incident.md` | 故障响应 runbook（四节骨架，Phase 1A 填充） | 骨架 |
 | `docs/runbooks/monitoring.md` | 监控面板 runbook（Netdata + vnStat，同域 /monitor/ /traffic/ 路径，2026-08-01） | 已上线 |
-| `docs/runbooks/cloudflare-tunnel.md` | Cloudflare Tunnel 公网入口的前置检查、部署、回滚与移动端验收 | 已部署并经中国移动实机确认 |
+| `docs/runbooks/cloudflare-tunnel.md` | Cloudflare Tunnel 公网入口、固定 Edge/HTTP2、HA watchdog、回滚与移动端验收 | 已部署并完成 2026-08-15 出口事故修复 |
 
 ## infra/
 | 路径 | 用途 | 状态 |
@@ -235,7 +236,9 @@
 | `infra/scripts/traffic-report.sh` | vnStat JSON → 流量账单静态页渲染（cron 每 5min，2026-08-01） | 已部署云上 |
 | `infra/scripts/with-proxy.sh` | 代理兜底包装：隧道可用走 v2ray、失效回落直连（云上 `/usr/local/bin/with-proxy`，2026-08-01） | 已部署云上 |
 | `infra/scripts/proxy-tunnel.sh` / `proxy-tunnel.vbs` | 本机侧 SSH 反向隧道常驻（Windows 计划任务 `OpenScience-ProxyTunnel` 登录自启 + 断线重连，2026-08-01） | 已启用 |
-| `infra/scripts/deploy-cloudflare-tunnel.ps1` | 使用项目 Secret 幂等部署/查询/回滚 ECS 常驻 Cloudflare Tunnel；token 仅经 stdin 写入服务器 | 已执行验证（2026-08-12） |
+| `infra/scripts/deploy-cloudflare-tunnel.ps1` | 使用项目 Secret 幂等部署/查询/回滚 ECS 常驻 Cloudflare Tunnel；同步版本化 unit/watchdog，token 仅经 stdin 写入服务器 | 已执行验证（2026-08-15） |
+| `infra/scripts/cloudflared-watchdog.sh` / `infra/scripts/cloudflared-resilience.test.mjs` | HA metrics + 公网状态 watchdog（180 秒冷却）及配置/metrics 失败回归门禁 | 4/4 GREEN，已部署（2026-08-15） |
+| `infra/systemd/cloudflared.service` / `infra/systemd/cloudflared-watchdog.service` / `infra/systemd/cloudflared-watchdog.timer` | 固定 SJC IPv4/HTTP2 Edge 池、loopback metrics 与每分钟恢复 timer | 已部署（2026-08-15） |
 | `infra/nginx/openscience.test.mjs` | 生产 Nginx 合同：`/api` rewrite、Auth页面/API分流、Curator保护、Tunnel真实IP与部署同步 | 5/5 GREEN（2026-08-12） |
 | `infra/squid/openscience-egress.conf` / `infra/scripts/check-egress-path.sh` / `infra/scripts/test-egress-fallback.sh` | ECS loopback 出网入口：Squid 7891 优先 parent 7890、失败 DIRECT；配套端到端与隔离故障演练 | 已部署验证（2026-08-12） |
 | `infra/scripts/deploy.sh` | 部署脚本 | 骨架，Phase 1A 填充 |

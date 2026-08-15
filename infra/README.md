@@ -11,6 +11,9 @@
 | `scripts/checkup.sh` | 只读巡检：磁盘/内存/负载/Docker/服务状态/TLS 证书 | 可用 |
 | `scripts/backup.sh` | 数据库/对象存储每日备份 | 骨架，Phase 1A 填充（P1A-*） |
 | `scripts/deploy.sh` | 部署脚本 | 骨架，Phase 1A 填充（P1A-*） |
+| `scripts/deploy-cloudflare-tunnel.ps1` | 幂等部署 ECS 常驻 Tunnel、固定健康 Edge 池并安装 watchdog | 已部署验证（2026-08-15） |
+| `scripts/cloudflared-watchdog.sh` | 每分钟依据 HA metrics + 公网状态恢复 Tunnel，180 秒冷却 | 已部署验证（2026-08-15） |
+| `systemd/cloudflared*.{service,timer}` | Tunnel 与 watchdog 的版本化 systemd 单元 | 已部署验证（2026-08-15） |
 
 ## 用法
 

@@ -1,5 +1,13 @@
 # OpenScience (XGS) 进度日志
 
+## 2026-08-15（Cloudflare Tunnel 502/530 事故）— 已恢复并完成出口根因定位
+
+- **故障边界**：ECS 的 Nginx、Web、API 与 loopback 回源始终健康；Cloudflare CNAME、Tunnel ID、token 和远程 ingress 均未漂移。公网 502/530/1033 来自 `cloudflared` 无可用 connector，不是 CNAME 托管失效。
+- **根因证据**：XGS 的 `auto/QUIC` 连接反复选择阿里云杭州到 Cloudflare LAX 的异常 7844 路径，注册后约数秒断开；同地域 Ultron 通过固定 IPv4/HTTP2 与 watchdog 仍能保留 HA。XGS 对 SJC `198.41.219.1-10:7844` 连续三轮 TLS 探测全部 3/3，通过临时 connector 验证后公网连续恢复 200，证明是边缘池部分路由不可达与自动选址失效的组合，不涉及本机 7890/7891 出口。
+- **生产修复**：`cloudflared.service` 固定 `region=us`、IPv4、HTTP/2 和已验证 SJC Edge 池，暴露 `127.0.0.1:49312` HA 指标；新增每分钟 systemd watchdog，要求至少 3 条 HA 且公网 200/304，180 秒冷却后才允许重启。当前 HA=4，service/timer 均 enabled/active。
+- **验证与回归**：本机公网 HEAD 12/12 为 200，跨越 watchdog 周期后 connector PID 不变、HA=4、公网=200；watchdog 首次启动暴露 metrics 未就绪时重复输出 `0` 的解析缺陷，已通过可执行 RED→GREEN 回归修复，健康运行不再误重启。`node --test infra/scripts/cloudflared-resilience.test.mjs` 为 4/4 GREEN。
+- **回滚证据**：原 unit 保存在 ECS `/var/lib/openscience/incident-20260815/cloudflared.service.before-edge-fix`；候选与修复前 watchdog 亦保留在同一事故目录，未删除任何文件。直接 proxied A 回源会被阿里云 ICP 页面间歇拦截，不再作为首选回滚。
+
 ## 2026-08-12（生产页面/API 404 回归）— 已修复并完成公网浏览器验收
 
 - **责任与根因**：Cloudflare Tunnel 上线时，为增加真实 IP 透传，从主分支部署了较旧的 `infra/nginx/openscience.conf`，覆盖服务器已有的 `/api/` 前缀剥离、`/auth/login`/`register` 页面精确分流和 Curator Basic Auth。结果 `/explore` 文档仍为200，但手机实际 `/api/explore`、`/api/workspaces` 变为404，Sign in 页面也被错误转到 Fastify。这是本次基础设施修改引入的回归，不是 Cloudflare Tunnel 本身。

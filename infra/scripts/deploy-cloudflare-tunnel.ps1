@@ -214,26 +214,16 @@ try {
 
   Invoke-SshWithInput -RemoteCommand 'set -e; umask 077; mkdir -p /etc/cloudflared; cat > /etc/cloudflared/tunnel-token; chmod 600 /etc/cloudflared/tunnel-token; chown root:root /etc/cloudflared/tunnel-token; test -s /etc/cloudflared/tunnel-token; echo TOKEN_FILE_READY' -InputText $tunnelToken
 
-  $unit = @'
-[Unit]
-Description=OpenScience Cloudflare Tunnel
-After=network-online.target nginx.service
-Wants=network-online.target
-
-[Service]
-Type=notify
-TimeoutStartSec=0
-ExecStart=/usr/bin/cloudflared tunnel --no-autoupdate --protocol auto run --token-file /etc/cloudflared/tunnel-token
-Restart=always
-RestartSec=5s
-NoNewPrivileges=true
-PrivateTmp=true
-ProtectHome=true
-
-[Install]
-WantedBy=multi-user.target
-'@
-  Invoke-SshWithInput -RemoteCommand 'set -e; cat > /etc/systemd/system/cloudflared.service; chmod 644 /etc/systemd/system/cloudflared.service; systemctl daemon-reload; systemctl enable --now cloudflared; sleep 10; systemctl is-enabled cloudflared; systemctl is-active cloudflared' -InputText $unit
+  $unit = Get-Content -Raw (Join-Path $projectRoot 'infra/systemd/cloudflared.service')
+  $watchdog = Get-Content -Raw (Join-Path $projectRoot 'infra/scripts/cloudflared-watchdog.sh')
+  $watchdogService = Get-Content -Raw (Join-Path $projectRoot 'infra/systemd/cloudflared-watchdog.service')
+  $watchdogTimer = Get-Content -Raw (Join-Path $projectRoot 'infra/systemd/cloudflared-watchdog.timer')
+  Invoke-Ssh -ConfirmDangerous 'set -e; mkdir -p /var/lib/openscience; if test -f /etc/systemd/system/cloudflared.service; then cp --preserve=mode,ownership,timestamps /etc/systemd/system/cloudflared.service /var/lib/openscience/cloudflared.service.pre-deploy; fi; systemctl disable --now cloudflared-watchdog.timer 2>/dev/null || true'
+  Invoke-SshWithInput -RemoteCommand 'set -e; cat > /etc/systemd/system/cloudflared.service; chmod 644 /etc/systemd/system/cloudflared.service' -InputText $unit
+  Invoke-SshWithInput -RemoteCommand 'set -e; cat > /usr/local/sbin/openscience-cloudflared-watchdog; chmod 755 /usr/local/sbin/openscience-cloudflared-watchdog' -InputText $watchdog
+  Invoke-SshWithInput -RemoteCommand 'set -e; cat > /etc/systemd/system/cloudflared-watchdog.service; chmod 644 /etc/systemd/system/cloudflared-watchdog.service' -InputText $watchdogService
+  Invoke-SshWithInput -RemoteCommand 'set -e; cat > /etc/systemd/system/cloudflared-watchdog.timer; chmod 644 /etc/systemd/system/cloudflared-watchdog.timer' -InputText $watchdogTimer
+  Invoke-Ssh -ConfirmDangerous 'set -e; bash -n /usr/local/sbin/openscience-cloudflared-watchdog; systemd-analyze verify /etc/systemd/system/cloudflared.service /etc/systemd/system/cloudflared-watchdog.service /etc/systemd/system/cloudflared-watchdog.timer; systemctl daemon-reload; systemctl enable cloudflared; systemctl restart cloudflared; sleep 10; systemctl is-enabled cloudflared; systemctl is-active cloudflared'
 
   $healthy = $null
   foreach ($attempt in 1..12) {
@@ -245,8 +235,10 @@ WantedBy=multi-user.target
     }
   }
   if (!$healthy) {
+    Invoke-Ssh -ConfirmDangerous 'set -e; test -f /var/lib/openscience/cloudflared.service.pre-deploy; cp --preserve=mode,ownership,timestamps /var/lib/openscience/cloudflared.service.pre-deploy /etc/systemd/system/cloudflared.service; systemctl daemon-reload; systemctl restart cloudflared'
     throw 'Tunnel did not become healthy with at least two edge connections'
   }
+  Invoke-Ssh -ConfirmDangerous 'set -e; systemctl enable --now cloudflared-watchdog.timer; systemctl is-enabled cloudflared-watchdog.timer; systemctl is-active cloudflared-watchdog.timer'
 
   $backup = @{
     capturedAt = (Get-Date).ToUniversalTime().ToString('o')

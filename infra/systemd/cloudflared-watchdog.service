@@ -1,0 +1,11 @@
+[Unit]
+Description=Check and recover the OpenScience Cloudflare Tunnel
+After=network-online.target cloudflared.service
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/openscience-cloudflared-watchdog
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectHome=true

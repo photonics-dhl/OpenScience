@@ -1,0 +1,17 @@
+[Unit]
+Description=OpenScience Cloudflare Tunnel
+After=network-online.target nginx.service
+Wants=network-online.target
+
+[Service]
+Type=notify
+TimeoutStartSec=0
+ExecStart=/usr/bin/cloudflared tunnel --region us --edge-ip-version 4 --protocol http2 --no-prechecks --metrics 127.0.0.1:49312 --edge 198.41.219.1:7844 --edge 198.41.219.2:7844 --edge 198.41.219.3:7844 --edge 198.41.219.4:7844 --edge 198.41.219.5:7844 --edge 198.41.219.6:7844 --edge 198.41.219.7:7844 --edge 198.41.219.8:7844 --edge 198.41.219.9:7844 --edge 198.41.219.10:7844 --no-autoupdate run --token-file /etc/cloudflared/tunnel-token
+Restart=always
+RestartSec=5s
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectHome=true
+
+[Install]
+WantedBy=multi-user.target
