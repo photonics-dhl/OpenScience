@@ -4,6 +4,7 @@ import Link from 'next/link';
 import * as React from 'react';
 import { useEffect, useRef, useState } from 'react';
 
+import { HermesPetPortrait } from './HermesPetPortrait';
 import type { HermesVisualState } from './hermes-state';
 
 function HermesStaticPortrait({ state }: { state: HermesVisualState }) {
@@ -66,8 +67,9 @@ export function HermesVisualAdapter({ state, href }: HermesVisualAdapterProps) {
       window.clearTimeout(timer);
       if (still || media.matches) {
         setInteractiveReady(false);
-        linkRef.current?.style.setProperty('--hermes-gaze-x', '0px');
-        linkRef.current?.style.setProperty('--hermes-gaze-y', '0px');
+        linkRef.current?.style.setProperty('--hermes-pet-x', '0px');
+        linkRef.current?.style.setProperty('--hermes-pet-y', '0px');
+        linkRef.current?.style.setProperty('--hermes-pet-tilt', '0deg');
         return;
       }
       timer = window.setTimeout(() => {
@@ -90,13 +92,18 @@ export function HermesVisualAdapter({ state, href }: HermesVisualAdapterProps) {
     const bounds = event.currentTarget.getBoundingClientRect();
     const x = Math.max(-1, Math.min(1, ((event.clientX - bounds.left) / bounds.width - 0.5) * 2));
     const y = Math.max(-1, Math.min(1, ((event.clientY - bounds.top) / bounds.height - 0.5) * 2));
-    event.currentTarget.style.setProperty('--hermes-gaze-x', `${(x * 9).toFixed(2)}px`);
-    event.currentTarget.style.setProperty('--hermes-gaze-y', `${(y * 6).toFixed(2)}px`);
+    const rawX = x * 6;
+    const rawY = y * 4;
+    const scale = Math.min(1, 6 / Math.max(0.001, Math.hypot(rawX, rawY)));
+    event.currentTarget.style.setProperty('--hermes-pet-x', `${(rawX * scale).toFixed(2)}px`);
+    event.currentTarget.style.setProperty('--hermes-pet-y', `${(rawY * scale).toFixed(2)}px`);
+    event.currentTarget.style.setProperty('--hermes-pet-tilt', `${(x * 2).toFixed(2)}deg`);
   };
 
   const resetGaze = () => {
-    linkRef.current?.style.setProperty('--hermes-gaze-x', '0px');
-    linkRef.current?.style.setProperty('--hermes-gaze-y', '0px');
+    linkRef.current?.style.setProperty('--hermes-pet-x', '0px');
+    linkRef.current?.style.setProperty('--hermes-pet-y', '0px');
+    linkRef.current?.style.setProperty('--hermes-pet-tilt', '0deg');
   };
 
   return (
@@ -105,7 +112,7 @@ export function HermesVisualAdapter({ state, href }: HermesVisualAdapterProps) {
       href={href}
       ref={linkRef}
       data-hermes-fallback="static"
-      data-hermes-renderer="original-vector"
+      data-hermes-renderer="layered-pet"
       data-hermes-state={state}
       data-motion={still ? 'still' : 'responsive'}
       data-runtime-ready={interactiveReady ? 'true' : 'false'}
@@ -116,8 +123,8 @@ export function HermesVisualAdapter({ state, href }: HermesVisualAdapterProps) {
       <span className="absolute inset-x-0 bottom-3 z-10 flex items-center justify-between border-t border-os-rule-dark pt-3 text-xs text-os-muted-dark">
         <span>Research guidance</span><span className="text-os-vermilion transition-transform group-hover:translate-x-1 motion-reduce:transform-none">Open task →</span>
       </span>
-      <span className="absolute inset-x-6 bottom-10 top-7 block text-os-paper" data-hermes-instance="single">
-        <HermesStaticPortrait state={state} />
+      <span className="absolute inset-x-2 bottom-10 top-6 flex justify-center text-os-paper" data-hermes-instance="single">
+        <HermesPetPortrait fallback={<HermesStaticPortrait state={state} />} state={state} />
       </span>
     </Link>
   );

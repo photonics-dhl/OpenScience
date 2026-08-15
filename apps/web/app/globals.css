@@ -1827,9 +1827,148 @@ body {
 .hermes-visual {
   --hermes-gaze-x: 0px;
   --hermes-gaze-y: 0px;
+  --hermes-pet-x: 0px;
+  --hermes-pet-y: 0px;
+  --hermes-pet-tilt: 0deg;
   background:
     radial-gradient(circle at 50% 48%, rgb(255 78 34 / .055), transparent 31%),
     linear-gradient(90deg, transparent 49.8%, rgb(241 238 231 / .045) 50%, transparent 50.2%);
+}
+
+.hermes-pet-stage {
+  --hermes-state-x: 0px;
+  --hermes-state-tilt: 0deg;
+  position: relative;
+  display: block;
+  height: 100%;
+  width: auto;
+  max-width: 100%;
+  aspect-ratio: 1;
+  flex: 0 1 auto;
+  transform: translate3d(var(--hermes-pet-x), var(--hermes-pet-y), 0) rotate(var(--hermes-pet-tilt));
+  transform-origin: 52% 58%;
+  transition: transform 240ms var(--ease-optical);
+  will-change: transform;
+}
+
+.hermes-visual[data-hermes-state='guiding'] .hermes-pet-stage,
+.hermes-visual[data-hermes-state='suggesting'] .hermes-pet-stage {
+  --hermes-state-x: 3px;
+  --hermes-state-tilt: -1deg;
+}
+
+.hermes-vector-fallback,
+.hermes-pet-frame,
+.hermes-pet-aura,
+.hermes-pet-node-field,
+.hermes-pet-focus-line {
+  position: absolute;
+  inset: 0;
+}
+
+.hermes-vector-fallback {
+  opacity: .42;
+  transition: opacity 220ms ease;
+}
+
+.hermes-pet-stage[data-pet-ready='true'] .hermes-vector-fallback {
+  opacity: 0;
+  pointer-events: none;
+}
+
+.hermes-pet-frame {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  opacity: 0;
+  filter: drop-shadow(0 16px 24px rgb(0 0 0 / .22));
+  transition: opacity 180ms ease, filter 320ms ease;
+  user-select: none;
+}
+
+.hermes-pet-stage[data-pet-ready='true'] .hermes-pet-idle {
+  opacity: 1;
+}
+
+.hermes-pet-aura {
+  inset: 12% 18% 10%;
+  border-radius: 50%;
+  background:
+    radial-gradient(circle at 57% 45%, rgb(255 199 102 / .16), transparent 38%),
+    radial-gradient(circle at 45% 62%, rgb(241 238 231 / .07), transparent 55%);
+  filter: blur(18px);
+  opacity: .7;
+}
+
+.hermes-pet-node-field {
+  pointer-events: none;
+}
+
+.hermes-pet-node {
+  position: absolute;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: #fff4cf;
+  box-shadow: 0 0 8px 2px rgb(255 157 62 / .7), 0 0 18px rgb(255 78 34 / .28);
+  opacity: .18;
+}
+
+.hermes-pet-node-neck { left: 49.8%; top: 40.7%; }
+.hermes-pet-node-shoulder { left: 46.1%; top: 52.2%; }
+.hermes-pet-node-back { left: 61.5%; top: 49.2%; }
+.hermes-pet-node-flank { left: 73.8%; top: 54.2%; }
+.hermes-pet-node-tail { left: 75.5%; top: 67.7%; }
+.hermes-pet-node-citation { left: 65.4%; top: 76.3%; }
+
+.hermes-pet-focus-line {
+  inset: 13% 5% auto 5%;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgb(255 190 92 / .8), transparent);
+  box-shadow: 0 0 12px rgb(255 78 34 / .3);
+  opacity: 0;
+}
+
+.hermes-visual[data-hermes-state='scanning'] .hermes-pet-idle,
+.hermes-visual[data-hermes-state='scanning'] .hermes-pet-blink {
+  opacity: 0;
+}
+
+.hermes-visual[data-hermes-state='scanning'] .hermes-pet-stage[data-pet-ready='true'] .hermes-pet-working {
+  opacity: 1;
+}
+
+.hermes-visual[data-hermes-state='failed'] .hermes-pet-frame {
+  filter: grayscale(.35) drop-shadow(0 16px 24px rgb(0 0 0 / .22));
+}
+
+.hermes-visual[data-hermes-state='awaiting_approval'] .hermes-pet-node-citation,
+.hermes-visual[data-hermes-state='failed'] .hermes-pet-node-citation {
+  background: #ff4e22;
+  box-shadow: 0 0 8px 2px rgb(255 78 34 / .62), 0 0 18px rgb(255 78 34 / .24);
+  opacity: 1;
+  animation: none;
+}
+
+@keyframes hermes-pet-float {
+  0%, 100% { transform: translate3d(var(--hermes-state-x), 1px, 0) rotate(var(--hermes-state-tilt)) scale(.985); }
+  48% { transform: translate3d(var(--hermes-state-x), -4px, 0) rotate(var(--hermes-state-tilt)) scale(1.012); }
+}
+
+@keyframes hermes-pet-blink {
+  0%, 43%, 46%, 100% { opacity: 0; }
+  44%, 45% { opacity: 1; }
+}
+
+@keyframes hermes-pet-node-pulse {
+  0%, 58%, 100% { opacity: .16; transform: scale(.7); }
+  18% { opacity: .92; transform: scale(1.35); }
+}
+
+@keyframes hermes-pet-scan-line {
+  0% { opacity: 0; transform: translateY(38px); }
+  18%, 72% { opacity: .8; }
+  100% { opacity: 0; transform: translateY(154px); }
 }
 
 .hermes-gaze {
@@ -1867,13 +2006,26 @@ body {
   to { transform: translateY(142px); opacity: 0; }
 }
 
-@keyframes hermes-fault {
-  0%, 92%, 100% { transform: translateX(0); opacity: 1; }
-  94% { transform: translateX(-3px); opacity: .58; }
-  97% { transform: translateX(2px); }
-}
-
 @media (prefers-reduced-motion: no-preference) {
+  .hermes-visual[data-motion='responsive'] .hermes-pet-frame {
+    animation: hermes-pet-float 5.8s ease-in-out infinite;
+  }
+
+  .hermes-visual[data-motion='responsive'][data-hermes-state='idle'] .hermes-pet-blink,
+  .hermes-visual[data-motion='responsive'][data-hermes-state='guiding'] .hermes-pet-blink {
+    animation: hermes-pet-blink 7.2s steps(1, end) infinite;
+  }
+
+  .hermes-visual[data-hermes-state='guiding'] .hermes-pet-node,
+  .hermes-visual[data-hermes-state='suggesting'] .hermes-pet-node,
+  .hermes-visual[data-hermes-state='scanning'] .hermes-pet-node {
+    animation: hermes-pet-node-pulse 2.4s ease-in-out infinite;
+  }
+
+  .hermes-visual[data-hermes-state='scanning'] .hermes-pet-focus-line[data-working='true'] {
+    animation: hermes-pet-scan-line 2.1s var(--ease-optical) infinite;
+  }
+
   .hermes-visual[data-motion='responsive'] .hermes-orbit {
     animation: hermes-orbit-drift 28s linear infinite;
   }
@@ -1892,9 +2044,7 @@ body {
     animation: hermes-scan-pass 2.3s var(--ease-optical) infinite;
   }
 
-  .hermes-visual[data-hermes-state='failed'] .hermes-gaze {
-    animation: hermes-fault 3.6s steps(1, end) infinite;
-  }
+  .hermes-visual[data-hermes-state='failed'] .hermes-gaze { animation: none; }
 }
 
 .hermes-visual[data-hermes-state='awaiting_approval'] .hermes-pupil {
@@ -1904,6 +2054,11 @@ body {
 @media (prefers-reduced-motion: reduce) {
   .hermes-gaze { transition: none; }
   .hermes-portrait * { animation: none !important; }
+  .hermes-pet-stage { transform: none; transition: none; }
+  .hermes-pet-stage * { animation: none !important; transition: none !important; }
+  .hermes-pet-blink,
+  .hermes-pet-focus-line { display: none; }
+  .hermes-pet-node { animation: none !important; transform: none; }
 }
 
 .font-display {

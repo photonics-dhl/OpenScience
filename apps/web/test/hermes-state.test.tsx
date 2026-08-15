@@ -34,16 +34,21 @@ describe('Hermes dashboard guidance', () => {
     expect(markup).not.toContain('data-live2d-instance');
     expect(markup).toContain('data-motion="still"');
     expect(markup).toContain('data-hermes-fallback="static"');
-    expect(markup).toContain('data-hermes-renderer="original-vector"');
+    expect(markup).toContain('data-hermes-renderer="layered-pet"');
     expect(markup).toContain('data-hermes-state="awaiting_approval"');
-    expect(markup).toContain('data-hermes-gaze="true"');
+    expect(markup).toContain('data-hermes-pet="true"');
+    expect(markup.match(/data-hermes-frame=/g) ?? []).toHaveLength(3);
+    expect(markup.match(/data-hermes-node=/g) ?? []).toHaveLength(6);
   });
 
   it('exposes all six visual states without depending on a licensed binary', () => {
     for (const state of ['idle', 'guiding', 'scanning', 'suggesting', 'awaiting_approval', 'failed'] as const) {
       const markup = renderToStaticMarkup(createElement(HermesVisualAdapter, { state, href: '/dashboard' }));
       expect(markup).toContain(`data-hermes-state="${state}"`);
-      expect(markup).toContain('data-hermes-renderer="original-vector"');
+      expect(markup).toContain('data-hermes-renderer="layered-pet"');
+      expect(markup).toContain('hermes-pet-idle.png');
+      expect(markup).toContain('hermes-pet-blink.png');
+      expect(markup).toContain('hermes-pet-working.png');
       expect(markup).not.toContain('.moc3');
     }
   });

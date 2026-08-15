@@ -23,11 +23,11 @@
 - Create: `apps/web/scripts/hermes/inspect-pet-assets.mjs`
 - Create: `apps/web/test/hermes-pet-asset-contract.test.ts`
 
-- [ ] Write the missing-asset RED contract.
-- [ ] Generate one canonical transparent idle master from the approved constellation-dragon reference.
-- [ ] Edit that master into consistent blink and working frames.
-- [ ] Implement the dependency-free inspector and satisfy dimension, alpha and byte budgets.
-- [ ] Inspect all three frames at native size and 160px presentation size.
+- [x] Write the missing-asset RED contract.
+- [x] Generate one canonical transparent idle master from the approved constellation-dragon reference.
+- [x] Edit that master into consistent blink and working frames.
+- [x] Implement the dependency-free inspector and satisfy dimension, alpha and byte budgets.
+- [x] Inspect all three frames at native size and 160px presentation size.
 
 ### Task 2: Layered portrait and state contract
 
@@ -36,10 +36,10 @@
 - Modify: `apps/web/components/hermes/HermesVisualAdapter.tsx`
 - Modify: `apps/web/test/hermes-state.test.tsx`
 
-- [ ] Write SSR RED assertions for the pet renderer, three frames, six nodes and static fallback.
-- [ ] Implement the minimum presentation component and state mapping.
-- [ ] Preserve the single task link, one Hermes instance and all six visual states.
-- [ ] Keep pointer ownership in the adapter and expose bounded lean variables.
+- [x] Write SSR RED assertions for the pet renderer, three frames, six nodes and static fallback.
+- [x] Implement the minimum presentation component and state mapping.
+- [x] Preserve the single task link, one Hermes instance and all six visual states.
+- [x] Keep pointer ownership in the adapter and expose bounded lean variables.
 
 ### Task 3: Motion, browser evidence and docs
 
@@ -48,10 +48,10 @@
 - Modify: `apps/web/test/e2e/hermes-dashboard.spec.ts`
 - Modify: `docs/progress.md`
 - Modify: `project_index.md`
-- Create: `docs/handoff/2026-08-15-hermes-2d-pet-handoff.md`
+- Create: `docs/handoff/2026-08-16-hermes-2d-pet-handoff.md`
 
-- [ ] Add idle breathing, float, blink and state-specific node motion with compositor-only properties.
-- [ ] Add reduced-motion and approval stillness gates.
-- [ ] Run focused tests, typecheck, production browser desktop/mobile/reduced/pointer checks and visual screenshots.
-- [ ] Run docs lint, docs sync and diff check.
-- [ ] Record an honest user-visual pending conclusion; do not deploy or merge before approval.
+- [x] Add idle breathing, float, blink and state-specific node motion with compositor-only properties.
+- [x] Add reduced-motion and approval stillness gates.
+- [x] Run focused tests, typecheck, production browser desktop/mobile/reduced/pointer checks and visual screenshots.
+- [x] Run docs lint, docs sync and diff check.
+- [x] Record an honest user-visual pending conclusion; do not deploy or merge before approval.

@@ -21,7 +21,7 @@ Accepted for prototype implementation on 2026-08-15. Supersedes the rejected pro
 
 1. `hermes-pet-idle.png`：睁眼、放松、三分之四视角的 canonical 母版。
 2. `hermes-pet-blink.png`：与母版轮廓、光照和画幅严格一致，仅闭眼。
-3. `hermes-pet-working.png`：同一角色轻微前倾，证据节点进入工作状态；不得改物种、配色或比例。
+3. `hermes-pet-working.png`：与母版共享完全相同的轮廓，证据节点进入工作状态；不得改物种、配色或比例。
 
 每张图必须无文字、无边框、无背景、无投影底板；来源说明写入同目录 README。生成图只作为项目原创资产，不复用第三方角色、Live2D 二进制或仓库素材。
 
@@ -51,7 +51,8 @@ Accepted for prototype implementation on 2026-08-15. Supersedes the rejected pro
 
 - 角色图片 `alt=""`，状态含义继续由可读文本提供。
 - `prefers-reduced-motion: reduce` 时禁用呼吸、漂浮、眨眼、节点脉冲和指针倾身。
-- 三张 PNG 总传输预算不超过 1.5MB；单张画幅固定 1024×1024，非透明覆盖率 12%–72%。
+- 三张 PNG 总传输预算不超过 1.5MB；单张画幅固定 824×824（对应当前 256px 展示仍超过 3× 像素密度），非透明覆盖率 12%–72%。实现时 832px 三帧的首次 RED 为 1,511,539B，因而保持预算不变并从生成母版一次归一到 824px；这不是降低视觉门槛。
+- blink/working 与 idle 的 Alpha 摘要必须完全一致，状态切换不得移动角色外轮廓。
 - 同一页面只允许一个 `data-hermes-instance="single"`。
 - 图片缺失时保留现有文本、链接与静态 SVG fallback，不产生空白操作区。
 

@@ -1,5 +1,13 @@
 # OpenScience (XGS) 进度日志
 
+## 2026-08-16（Hermes 2.5D 星图宠物）— ✅ 本地实现完成，⏳ 用户视觉验收
+
+- **最终形象**：以唯一 idle 母版交付暖纸书页质感的少年星图龙；深墨证据脊承载六个节点，头顶核心不计入 SDF 六节点，朱砂引用尾保持品牌记忆点。blink 只替换眼区，working 只增加证据节点光，三帧 Alpha 摘要完全相同，切换不再跳形。
+- **运行实现**：`HermesPetPortrait` 使用三张原生透明 PNG，`HermesVisualAdapter` 保留真实任务 deep link 与六状态语义；idle 呼吸/漂浮/眨眼，guiding/suggesting 节点脉冲，scanning 切 working 与扫描线，approval/failed 使用单一朱砂信号且角色不抖动。指针合成位移限制在 `6px`、倾角 `2deg`，420ms 内回中；reduced-motion 静止。
+- **失败与预算**：任一当前活动帧失败都会恢复原 SVG，不产生空白操作区；三张 824×824 RGBA PNG 合计 `1,472,269B`，低于 1.5MB，当前 256px 槽位仍超过 3× 像素密度。832px 的 `1,511,539B` RED 已记录，未放宽预算。
+- **真实门禁**：资产/SSR focused `5/5`、Web `245/245`、typecheck、production build（Dashboard `7.46kB / 129kB`）与外部单服务 Playwright `2/2` GREEN；桌面六态、390px、reduced、指针边界/回中、工作帧失败 fallback、主内容/溢出/console error 均已覆盖，截图人工检查完整。全仓 lint/结构/docs-sync、markdownlint `199 files / 0 issues` 与 diff check 均 GREEN；独立复审 APPROVE，无 Critical/Important。
+- **事实边界**：旧 Blender 少年星图龙原型维持用户 NO-GO，仅留历史 worktree，不属于仓库候选或运行时；当前唯一视觉候选是本 2.5D 实现。未部署、未合并，等待用户只验最终 Workspace 效果。
+
 ## 2026-08-15（Hermes 2.5D 星图宠物）— ⏳ 原创透明资产与 Workspace 样机启动
 
 - **用户决策**：确认停止修补被否决的程序化 3D，转向高质量 2.5D 分层角色；目标是更接近 Codex Pet 的轻巧陪伴感，同时保留少年星图龙、六节点证据脊与朱砂引用尾的品牌故事。

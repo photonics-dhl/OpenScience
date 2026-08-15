@@ -1,6 +1,6 @@
 # Hermes Live2D 资产
 
-Hermes 任务视觉的公开资产目录。当前产品使用 `HermesVisualAdapter` 的原创 Optical Guide（SVG/CSS 单实例）；它是正式轻量 renderer，不是 Live2D，也不依赖第三方角色二进制。Wanko Live2D 模型尚未复制或部署。
+Hermes 任务视觉的公开资产目录。当前候选 renderer 是 `HermesVisualAdapter` + `pet/` 下原创透明 2.5D 星图宠物三帧；原 Optical Guide SVG 仅作为 SSR、图片失败与 reduced-motion 的静态 fallback。该实现不是 Live2D，也不依赖第三方角色二进制。Wanko Live2D 模型尚未复制或部署。
 
 ## 迁移要求
 

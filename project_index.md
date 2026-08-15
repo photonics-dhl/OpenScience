@@ -34,7 +34,7 @@
 | `apps/web/test/ingestion-foundations.test.ts` / `apps/web/test/visual/ingestion-shots.mjs` / `apps/web/app/{%5Fvisual,_visual}/ingestion-foundations/page.tsx` | 研究者导入视觉地基 TDD 合同与 1440/768/375 三视口浏览器截图门禁；脚本访问仅开发态可用的真实编译原语预览 | 活文档 |
 | `apps/web/app/tokens.css` / `apps/web/app/layout.tsx` / `apps/web/test/{tokens-contrast,optical-foundations}.test.ts` | Optical Editorial v3 视觉地基：黑/纸白/朱红 token、0/4/8px 半径、四字体角色、语义 motion、AA/禁蓝紫/降级门禁 | 活文档 |
 | `apps/web/components/brand/OpenScienceWordmark.tsx` / `apps/web/components/shell/*.tsx` / `apps/web/test/surface-shells.test.tsx` | Optical Editorial 品牌与 Public/Identity/Dashboard/Workspace 四类无 Card shell；单一 main、skip link、19/56/25 工作区平面与动作反馈门禁 | 活文档 |
-| `apps/web/components/hermes/{HermesRail,HermesVisualAdapter,hermes-state}.ts(x)` / `apps/web/test/{hermes-state.test.tsx,e2e/hermes-dashboard.spec.ts}` | Dashboard Hermes 六态、真实 IngestionTask 同链入口、原创 Optical Guide 单实例/指针响应/审批静止/reduced fallback；Wanko runtime 受 ADR-010 许可门禁未部署 | 活实现（Task 9 done） |
+| `apps/web/components/hermes/{HermesRail,HermesVisualAdapter,HermesPetPortrait,hermes-state}.ts(x)` / `apps/web/public/hermes/pet/` / `apps/web/scripts/hermes/inspect-pet-assets.mjs` / `apps/web/test/{hermes-state,hermes-pet-asset-contract}.test.ts(x)` / `apps/web/test/e2e/hermes-dashboard.spec.ts` | Dashboard Hermes 2.5D 星图宠物候选：原生透明 idle/blink/working 同轮廓三帧、真实 IngestionTask 同链六态、6px/2deg 指针响应、审批/失败单一朱砂信号、active-frame SVG fallback 与 reduced-motion；Wanko runtime 受 ADR-010 许可门禁未部署 | 本地实现完成；待用户视觉验收，未部署 |
 | `apps/web/components/research/*.tsx` / `apps/web/components/editor/*.tsx` / `apps/web/app/research-objects/[id]/edit/page.tsx` | Optical Editorial RO Workspace：56/64/44px 产品层级、19/56/25 单实例工作面、六节点 SDF、Evidence/Before-After proposal、Artifact rule row、Radix 高影响审查与移动功能等价 | 活文档 |
 | `packages/domain/src/commit/commits.ts` / `apps/api/src/routes/commits.ts` | Commit、版本详情/重建/比较及成员受控的 `GET /research-objects/:id/versions` 降序摘要；供 Editor、Overview、Versions、Publish 共用 | 活接口；Task 12 补齐版本列表合同 |
 | `apps/web/lib/product-surfaces.ts` / `apps/web/test/product-surface-matrix.test.ts` | Task 12 产品表面真源：Overview/SDF/Files/Versions/Collaboration/Publish/Sandbox/Settings 的真实路由、权限、五态、移动等价与风险声明 | ECS 390/1440 验收通过（2026-08-10） |
@@ -119,15 +119,16 @@
 | `docs/specs/2026-08-08-openscience-product-web-design.md` | 产品级网页设计 spec（方向 A：Monumental Scholarly Intelligence；统一 RO 工作流、Hermes/Live2D、Public RO、Ultrafast Science 策展、许可与版本模型；用户已批准，待书面审阅） | 活文档 |
 | `docs/specs/2026-08-10-optical-editorial-rebaseline-design.md` | 前端视觉与交互 spec：Art Direction v3 Optical Editorial Instrument 为视觉真源；2026-08-11 增量优化边界明确为保留现有线上功能、优先优化 Landing，再传播到 Explore/Dashboard/创建页/公开 RO | 用户已确认范围，待书面审阅 |
 | `docs/specs/2026-08-15-hermes-3d-scholar-agent-design.md` | Hermes 3D 学者机器人历史方案；已被少年星图龙原型取代，仅保留否决记录 | **DEPRECATED** |
-| `docs/specs/2026-08-15-hermes-constellation-dragon-prototype-design.md` | Hermes 少年星图龙轻量建模原型：紧凑 S 身、六节点背脊、朱红引用尾、E 盘 Blender、四视图与静态 stop/go 门槛 | 当前原型事实源 |
-| `docs/specs/2026-08-15-hermes-2d-pet-design.md` | Hermes 2.5D 星图宠物：原创透明 idle/blink/working 三帧、轻量分层、六状态映射、reduced-motion 与用户审美门槛 | 当前视觉实验事实源；待实现 |
+| `docs/specs/2026-08-15-hermes-constellation-dragon-prototype-design.md` | Hermes 少年星图龙轻量 Blender 原型历史设计 | **用户视觉 NO-GO**；不得作为当前候选 |
+| `docs/specs/2026-08-15-hermes-2d-pet-design.md` | Hermes 2.5D 星图宠物：原创透明 idle/blink/working 同轮廓三帧、轻量分层、六状态映射、reduced-motion 与用户审美门槛 | **当前唯一视觉候选事实源**；本地实现完成，待用户验收 |
 | `docs/data/launch-research-corpus.md` | 18 条公开启动语料的范围、免责声明、真实来源、上游许可证证据与 ECS seed 操作边界 | 活文档；本地完成，待生产 seed |
 | `docs/plans/2026-08-08-openscience-product-web-plan.md` | 旧产品级网页实现计划；2026-08-10 被 Optical Editorial v3 计划取代，仅保留历史 | DEPRECATED |
 | `docs/plans/2026-08-10-optical-editorial-frontend-plan.md` | Optical Editorial v3 完整实施计划：15 Task 覆盖生产基线、foundations、三联屏、Auth/Intake/Dashboard/Hermes、Explore/启动语料、Editorial、其余产品面、Figma、质量门禁与 ECS E2E | 当前执行计划 |
 | `docs/plans/2026-08-15-hermes-3d-scholar-agent-plan.md` | 被否决的 3D 学者机器人 `.blend/.glb` 与运行时计划 | **DEPRECATED** |
-| `docs/plans/2026-08-15-hermes-constellation-dragon-prototype-plan.md` | 少年星图龙的 RED 资产合同、确定性 Blender builder、四视图/待机渲染与视觉 stop/go；不接产品运行时 | 当前执行计划 |
-| `docs/plans/2026-08-15-hermes-2d-pet-plan.md` | Hermes 2.5D 原创资产生成、PNG 合同、分层 portrait、六状态与真实浏览器视觉验收 | 当前执行计划 |
-| `docs/handoff/2026-08-15-hermes-constellation-dragon-prototype-handoff.md` | 少年星图龙静态 Blender 原型、结构门禁、真实渲染与用户 go/no-go 边界 | 当前原型交接；待用户视觉验收 |
+| `docs/plans/2026-08-15-hermes-constellation-dragon-prototype-plan.md` | 少年星图龙的 RED 资产合同、确定性 Blender builder、四视图/待机渲染与视觉 stop/go；不接产品运行时 | **历史 NO-GO 计划**；停止执行 |
+| `docs/plans/2026-08-15-hermes-2d-pet-plan.md` | Hermes 2.5D 原创资产生成、PNG 合同、分层 portrait、六状态与真实浏览器视觉验收 | 实施完成；仅余用户视觉验收与后续部署决策 |
+| `docs/handoff/2026-08-15-hermes-constellation-dragon-prototype-handoff.md` | 少年星图龙静态 Blender 原型、结构门禁与用户 NO-GO 结论 | 历史交接；不得按其 next action 恢复 3D |
+| `docs/handoff/2026-08-16-hermes-2d-pet-handoff.md` | Hermes 2.5D 星图宠物当前唯一交接：实现、资产合同、浏览器证据、旧 3D 隔离与用户视觉待验收边界 | **CURRENT** |
 | `docs/design/optical-editorial-figma-map.md` | 长期账号 Figma canonical 的 V3 variables/styles/components/八表面节点映射、代码对应关系与 Code Connect 边界 | Task 13 canonical 映射 |
 | `docs/superpowers/specs/2026-08-09-researcher-ingestion-product-slice-design.md` | 研究者第一条产品级前端闭环设计：注册、Dashboard、资料导入、Hermes 证据确认、RO Workspace；待用户审阅 | 设计 spec |
 | `docs/superpowers/plans/2026-08-09-researcher-ingestion-product-slice-plan.md` | 研究者导入闭环实施计划：基础视觉、Auth/Dashboard、多格式上传、Hermes 证据、RO Workspace、浏览器验收与生产部署；Task 1–2 完成，Task 3 启动 | 执行中 |

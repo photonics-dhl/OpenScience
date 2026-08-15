@@ -48,6 +48,7 @@ npx_stderr.txt
 # Playwright MCP 工具产物
 .playwright-mcp/
 test-results/
+test-results-*/
 
 # Local browser/GPU probes and generated release evidence. Formal executable
 # gates remain under apps/web/test/visual/ and are tracked/linted.
