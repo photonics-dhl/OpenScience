@@ -1,12 +1,13 @@
 # OpenScience (XGS) 进度日志
 
-## 2026-08-16（内容寻址缓存优化）— ⏳ 本地完成，待部署
+## 2026-08-16（内容寻址缓存优化）— ✅ 已部署并验证 Cloudflare 命中
 
 - **目标与边界**：不让个人电脑承担生产流量；只优化 Landing 两张大型光学 PNG。HTML、API、登录态、Workspace 和 canonical 源路径不进入一年缓存规则。
 - **更新语义**：新增共享 asset manifest，URL 包含真实文件 SHA-256 前 16 位；Next 只对两个精确 versioned URL rewrite 到 canonical 文件并返回 `public, max-age=31536000, immutable`。文件内容变化而 manifest 未更新时测试直接失败，更新 digest 后 URL 改变，不依赖人工 purge 即可立即取得新内容。
-- **TDD**：旧实现按预期出现 5 项 RED（缺 manifest/rewrite/header、SSR/WebGL 仍为 canonical URL）；最小实现后 focused `38/38`、完整 Web `248/248`、typecheck 与 16-page production build GREEN。
+- **TDD**：旧实现按预期出现 5 项 RED（缺 manifest/rewrite/header、SSR/WebGL 仍为 canonical URL）；最小实现后 focused `38/38`、完整 Web `249/249`、typecheck 与 16-page production build GREEN。
 - **真实响应**：本地 `next start` 下两个 versioned PNG 均为 `200 + immutable/31536000`；canonical PNG 为 `public, max-age=0`，`/` 保持 `private, no-cache, no-store`，Landing HTML 含两个 versioned URL。production Landing desktop/mobile normal/reduced/idle/pointer 浏览器门禁 exit 0；3190–3192 测试端口均已释放。
-- **下一步**：完成 canonical lint/docs/diff 与独立审查后提交 `codex/cache-versioned-assets`；用户确认生产写入后按 deployment §5.8 执行 checkup、备份、dry-run、`--skip-migrate` 部署，并验证 Cloudflare `HIT + Age`。
+- **生产发布**：release `b93fa9d`，rollback `48809d6`。部署前后 ECS checkup 均健康，备份 `BACKUP_OK size=280K files=7/7`；dry-run 后执行 `deploy.sh --confirm --skip-migrate`，远端全仓与 16-page Web build 通过，只重启 Web/API/agent-worker，未运行 migration/seed。公网 `/`、`/explore`、asset Lab 为 `200`，匿名 `/auth/me` 为 `401`，Landing HTML 同时引用两条 versioned URL；远端与本地 manifest SHA-256 均为 `b30577ef504010fb214b669a545e88fa02e7148c170fe3e64d45c905b8db2ffa`。
+- **边缘实证**：两张 versioned PNG 首次请求均为 Cloudflare `MISS`，第二次均为 `HIT`，`Age` 分别为 `13`/`12`，响应保持 `public, max-age=31536000, immutable`。canonical 兼容路径不含 `immutable`，但现有 Cloudflare 规则会给它们 `max-age=14400`；生产 HTML/WebGL 不再引用这些路径，更新仍以新 digest URL 立即生效，无需 purge。Tunnel HA=`4`、loopback origin=`200`，公网 Landing desktop/mobile normal/reduced/idle/pointer 浏览器门禁 exit 0。
 
 ## 2026-08-15（Hermes 原创 3D 学者 Agent）— ⏳ 设计与实施启动
 

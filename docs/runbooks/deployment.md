@@ -332,7 +332,7 @@ Current infrastructure uses pinned base/worker images with bind-mounted applicat
 
 ### 5.8 Content-addressed optical asset cache (2026-08-16)
 
-> Local candidate only; production deployment requires a separate confirmation.
+> Deployed as release `b93fa9d`; rollback release is `48809d6`.
 
 #### Pre-deployment checks
 
@@ -366,3 +366,18 @@ Current infrastructure uses pinned base/worker images with bind-mounted applicat
   `private, no-cache, no-store`, and anonymous `/auth/me` must remain `401`.
 - A second public request should progress from `MISS`/`REVALIDATED` to `HIT`
   with a non-zero `Age`; cache propagation is verified without purging.
+
+#### Deployment evidence
+
+- Pre/post checkup: Cloudflare Edge and loopback origin `200`, Tunnel HA `4`;
+  database backup `BACKUP_OK size=280K files=7/7`.
+- `deploy.sh --confirm --skip-migrate b93fa9d` completed the remote full build
+  and restarted Web/API/agent-worker; no migration or seed ran.
+- Both versioned PNGs progressed from `MISS` to `HIT`; observed `Age` values
+  were `13` and `12`, with the one-year immutable header intact.
+- Canonical compatibility paths remain non-immutable. Cloudflare currently
+  applies `max-age=14400` to them, but production HTML/WebGL references only
+  digest-versioned URLs, so updated bytes publish under a new URL immediately.
+- Public `/`, `/explore`, and the asset Lab return `200`; anonymous `/auth/me`
+  returns `401`; the public Landing desktop/mobile normal/reduced/idle/pointer
+  browser matrix exits `0`.

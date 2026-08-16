@@ -38,4 +38,4 @@ files while exact header rules enable safe Edge caching.
 - [x] Run focused tests, Web typecheck, build, lint, and docs gates.
 - [x] Start a production server and verify versioned assets return immutable
   cache headers while `/`, `/api/*`, and canonical asset paths do not.
-- [ ] Deploy only after the user separately confirms the production operation.
+- [x] Deploy only after the user separately confirms the production operation.
