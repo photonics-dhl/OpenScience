@@ -37,6 +37,19 @@ Accepted for prototype implementation on 2026-08-15. Supersedes the rejected pro
 
 不引入 Canvas、WebGL、Three.js、Cubism 或新的运行时依赖。图片用原生 `img`，避免 Next Image 在透明状态叠层中的布局和解码差异。
 
+### 生命感增量
+
+单张母版不得只做整体漂浮。呈现层复用同一 active frame，通过羽化 CSS mask
+形成 head、body、tail 三个重叠但无硬接缝的运动区域；base frame 保持轮廓稳定。
+
+- 待机：body 呼吸，head 以不同周期轻微观察/回正，页冠偶发轻颤，tail 做克制的引用叶回弹；周期不得同步。
+- 指针：整个 Hermes 面板都是感应区。head 在 120ms 内朝指针移动，body 以约 240ms 跟随，tail 以约 420ms 反向回弹；三层不得拥有相同 transform。
+- 状态：scanning 保留 working frame 和证据扫描；guiding/suggesting 增强节点级联；approval、failed 与 reduced-motion 不使用游戏式抖动。
+- 边界：head 局部附加位移不超过 9px/3deg，body 不超过 5px/1.5deg，tail 不超过 4px/3deg；整角色既有 6px/2deg 上界保持。
+
+生命感的浏览器验收必须读取同一页面中至少两个时间点与一次真实 pointer
+事件，证明 head/body/tail 的 computed transform 分离；仅断言 CSS 动画名称不算通过。
+
 ## 状态映射
 
 - `idle`：母版缓慢呼吸、漂浮和周期眨眼。

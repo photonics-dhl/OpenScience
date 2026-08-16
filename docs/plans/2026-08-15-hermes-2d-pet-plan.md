@@ -55,3 +55,19 @@
 - [x] Run focused tests, typecheck, production browser desktop/mobile/reduced/pointer checks and visual screenshots.
 - [x] Run docs lint, docs sync and diff check.
 - [x] Record an honest user-visual pending conclusion; do not deploy or merge before approval.
+
+### Task 4: Articulated life pass
+
+**Files:**
+
+- Modify: `apps/web/components/hermes/HermesPetPortrait.tsx`
+- Modify: `apps/web/components/hermes/HermesVisualAdapter.tsx`
+- Modify: `apps/web/app/globals.css`
+- Modify: `apps/web/test/hermes-state.test.tsx`
+- Modify: `apps/web/test/e2e/hermes-dashboard.spec.ts`
+
+- [ ] Add a focused RED contract requiring real head/body/tail presentation layers while preserving one semantic Hermes instance and three canonical frames.
+- [ ] Add a browser RED assertion that idle head/body transforms diverge over time and pointer input produces distinct head/body/tail transforms before reset.
+- [ ] Implement feathered head/body/tail overlays from the active canonical frame; do not add image assets or runtime dependencies.
+- [ ] Drive bounded pointer variables from the existing adapter and keep approval/reduced-motion completely still.
+- [ ] Run focused, browser desktop/mobile/reduced, full Web, typecheck/build, docs and diff gates; inspect actual motion in the open Workspace preview.
