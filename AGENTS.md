@@ -59,6 +59,8 @@ OpenScience：AI 时代科研基础设施平台（Research Object / SDF / 预印
 
 ## Memory Rules
 - 任务开始前必读 `docs/OpenScience_Kimi_Development_Spec.md`、`docs/progress.md` 和 `project_index.md`
+- 判断“当前任务”前必须先运行 `git worktree list --porcelain` 与 `git branch --sort=-committerdate`；若存在更新的任务分支，必须读取该分支置顶 `docs/progress.md` 与标记为 CURRENT 的 handoff，禁止仅凭 `main` 中较旧的 spec/plan 推断任务阶段。
+- 历史方案即使仍保留完整内容，只要标有 `DEPRECATED`、`NO-GO` 或被 CURRENT handoff 取代，就不得作为实施入口。
 - 重大决策写 Memory MCP（实体前缀 `XGS-`）
 
 ## Tooling Portability Rules

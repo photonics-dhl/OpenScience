@@ -1,5 +1,12 @@
 # OpenScience (XGS) 进度日志
 
+## 2026-08-16（Hermes 任务记忆纠偏）— ✅ 当前事实源已对齐
+
+- **当前真实阶段**：唯一 Hermes 视觉候选位于 `codex/hermes-2d-pet`（`a5a8446`），是已完成工程门禁、等待用户 Workspace 视觉验收的 2.5D 少年星图龙；不是尚待实施的 3D 学者机器人。
+- **历史边界**：3D 学者机器人已被用户否决；后续 Blender 少年星图龙也因视觉未达标被判 NO-GO。二者只保留历史证据，禁止恢复为当前任务。
+- **误读根因**：后续候选仍在独立 worktree，未进入 `main`；`main` 的旧 3D spec 未标废弃，而启动规则未要求枚举 worktree，导致 agent 把主分支中最新文档误当成全仓最新任务。
+- **预防措施**：`AGENTS.md` 现在强制先枚举 worktree/分支，再读取 CURRENT handoff；新增 `docs/handoff/2026-08-16-hermes-2d-pet-handoff.md`，旧 3D spec/plan 加 DEPRECATED/STOPPED 标记。下一步仅打开并验收 2.5D Workspace 实际效果。
+
 ## 2026-08-16（内容寻址缓存优化）— ✅ 已部署并验证 Cloudflare 命中
 
 - **目标与边界**：不让个人电脑承担生产流量；只优化 Landing 两张大型光学 PNG。HTML、API、登录态、Workspace 和 canonical 源路径不进入一年缓存规则。

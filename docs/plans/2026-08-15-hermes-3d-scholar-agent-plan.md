@@ -1,5 +1,9 @@
 # Hermes 3D Scholar Agent Implementation Plan
 
+> **DEPRECATED / STOPPED (2026-08-15):** 用户已否决该 3D 学者机器人方向。
+> 本计划仅保留历史证据，不得继续执行；当前入口见
+> `docs/handoff/2026-08-16-hermes-2d-pet-handoff.md`。
+>
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Deliver an original, reproducible Blender/GLB Hermes scholar robot with six honest actions and a lazy OGL renderer that preserves the existing semantic and fallback contract.

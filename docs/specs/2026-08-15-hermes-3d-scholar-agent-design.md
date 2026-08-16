@@ -1,5 +1,9 @@
 # Hermes 3D Scholar Agent Design
 
+> **DEPRECATED / USER NO-GO (2026-08-15):** 本学者机器人已经被用户否决，
+> 不得作为当前 Hermes 实施入口。当前唯一候选与下一步见
+> `docs/handoff/2026-08-16-hermes-2d-pet-handoff.md`。
+
 - Status: Approved for implementation
 - Date: 2026-08-15
 - Product surface: authenticated workspaces and Hermes task surfaces
