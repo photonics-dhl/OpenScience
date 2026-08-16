@@ -1,5 +1,23 @@
 # OpenScience (XGS) 进度日志
 
+## 2026-08-16（Hermes 情境引导员）— ✅ 设计确认，⏳ 待实施计划
+
+- **用户判断**：现有 2.5D 候选仍像一张会轻微移动的图片，缺少引导员、小助手和 Hermes 真实入口的角色能力；旧点击在无任务时跳往新建 RO，并未唤起 Hermes。
+- **确认方向**：可视化比较 A 安静陪伴、B 情境引导员、C 任务领航台后选择 B。待机采用呼吸、眨眼、观察、六节点苏醒与朱砂引用尾的异步行为语法；主动提示只能来自真实 Dashboard 上下文。
+- **入口决策**：点击角色、提示或显式动作，从右侧展开 Hermes 助手抽屉；移动端为等价全高底部面板，保留当前 Workspace，不强制跳页。
+- **真实任务边界**：新增正式 `workspace.guide` AgentTask，复用 AgentSession、AI Gateway、AI Credit、队列、轮询与 R0–R4 审批；禁止把未知 kind 的 demo fallback 冒充 Hermes。
+- **事实源**：`docs/specs/2026-08-16-hermes-contextual-guide-design.md`。当前仅完成设计，不宣称代码、门禁、合并或部署完成。
+
+## 2026-08-16（Hermes 2.5D 生命感增量）— ✅ 工程完成，⏳ 用户动态视觉验收
+
+- **用户反馈与根因**：旧候选虽有三帧和 CSS float，但真实测量显示 1.2 秒内整图仅移动约 `3.3px`，pointer 也只是整张图最多 `6px/2deg`；头、身体、尾部没有独立因果，因此被感知为静态贴图。
+- **复审纠偏**：首版局部运动保留完整底图又叠加三张同源位图，会重复曝光并产生潜在重影；正式 E2E 还读取外层 idle transform，不能证明 pointer 真正作用于可见内容。该实现未提交，已按 TDD 替换。
+- **当前实现**：不改三张原创 PNG，不引入新依赖；运行时只显示一份 active frame，head/body/tail 改为不含角色像素的 CSS 观察光、呼吸晕和引用尾信号。待机使用 `8.3s / 4.7s / 6.9s` 非同步周期；pointer 让三个 signal 以 `120/240/420ms` 领先、跟随和反向滞后。
+- **边界保持**：整角色既有 `6px/2deg` 不变；局部 head/body/tail 分别限制在 `8px/3deg`、`4px/1.3deg`、`3px/3deg`。approval 与 reduced-motion 完全静止，真实 task deep link、六状态、三 canonical frame、fallback 和单实例不变。
+- **TDD 与浏览器证据**：focused 新合同在旧叠图上精确 RED（4 pass / 1 fail），当前 GREEN 5/5；锁定 Playwright `1.62.1` 的单服务 E2E 2/2 GREEN。真实 idle 520ms 三层 transform 均变化且不相同；pointer top-right 得到 signal X 位移约 `7.89 / 3.94 / -2.96px`，离开后回零；live still 切换立即为 `0s/none`。
+- **最终门禁**：完整 Web `33 files / 246 tests`、typecheck、canonical root lint（含 `WORKSPACE_STRUCTURE_OK` / `DOCS_SYNC_OK`）、16-page production build 与重启后单服务 E2E `2/2` 均 GREEN；Dashboard first-load `129kB`。预览为 `http://127.0.0.1:3189/dashboard`，未合并、未部署，自动化不替代用户动态审美验收。
+- **独立复审**：重复位图、错误 DOM 取证、pointer readiness、leave reset 与 still 级联均逐项复核；最终 `0 Critical / 0 Important / 0 Minor`，结论 `APPROVE`。
+
 ## 2026-08-16（Hermes 2.5D 星图宠物）— ✅ 本地实现完成，⏳ 用户视觉验收
 
 - **最终形象**：以唯一 idle 母版交付暖纸书页质感的少年星图龙；深墨证据脊承载六个节点，头顶核心不计入 SDF 六节点，朱砂引用尾保持品牌记忆点。blink 只替换眼区，working 只增加证据节点光，三帧 Alpha 摘要完全相同，切换不再跳形。

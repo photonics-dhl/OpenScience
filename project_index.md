@@ -34,7 +34,7 @@
 | `apps/web/test/ingestion-foundations.test.ts` / `apps/web/test/visual/ingestion-shots.mjs` / `apps/web/app/{%5Fvisual,_visual}/ingestion-foundations/page.tsx` | 研究者导入视觉地基 TDD 合同与 1440/768/375 三视口浏览器截图门禁；脚本访问仅开发态可用的真实编译原语预览 | 活文档 |
 | `apps/web/app/tokens.css` / `apps/web/app/layout.tsx` / `apps/web/test/{tokens-contrast,optical-foundations}.test.ts` | Optical Editorial v3 视觉地基：黑/纸白/朱红 token、0/4/8px 半径、四字体角色、语义 motion、AA/禁蓝紫/降级门禁 | 活文档 |
 | `apps/web/components/brand/OpenScienceWordmark.tsx` / `apps/web/components/shell/*.tsx` / `apps/web/test/surface-shells.test.tsx` | Optical Editorial 品牌与 Public/Identity/Dashboard/Workspace 四类无 Card shell；单一 main、skip link、19/56/25 工作区平面与动作反馈门禁 | 活文档 |
-| `apps/web/components/hermes/{HermesRail,HermesVisualAdapter,HermesPetPortrait,hermes-state}.ts(x)` / `apps/web/public/hermes/pet/` / `apps/web/scripts/hermes/inspect-pet-assets.mjs` / `apps/web/test/{hermes-state,hermes-pet-asset-contract}.test.ts(x)` / `apps/web/test/e2e/hermes-dashboard.spec.ts` | Dashboard Hermes 2.5D 星图宠物候选：原生透明 idle/blink/working 同轮廓三帧、真实 IngestionTask 同链六态、6px/2deg 指针响应、审批/失败单一朱砂信号、active-frame SVG fallback 与 reduced-motion；Wanko runtime 受 ADR-010 许可门禁未部署 | 本地实现完成；待用户视觉验收，未部署 |
+| `apps/web/components/hermes/{HermesRail,HermesVisualAdapter,HermesPetPortrait,hermes-state}.ts(x)` / `apps/web/public/hermes/pet/` / `apps/web/scripts/hermes/inspect-pet-assets.mjs` / `apps/web/test/{hermes-state,hermes-pet-asset-contract}.test.ts(x)` / `apps/web/test/e2e/hermes-dashboard.spec.ts` | Dashboard Hermes 2.5D 星图宠物候选：原生透明 idle/blink/working 同轮廓三帧、单份 active frame、CSS-only head/body/tail 生命信号、非同步待机、pointer 领先/跟随/尾部滞后、真实 IngestionTask 同链六态、审批同帧静止、active-frame SVG fallback 与 reduced-motion；Wanko runtime 受 ADR-010 许可门禁未部署 | 生命感工程与复审修复完成；待用户动态视觉验收，未部署 |
 | `apps/web/components/research/*.tsx` / `apps/web/components/editor/*.tsx` / `apps/web/app/research-objects/[id]/edit/page.tsx` | Optical Editorial RO Workspace：56/64/44px 产品层级、19/56/25 单实例工作面、六节点 SDF、Evidence/Before-After proposal、Artifact rule row、Radix 高影响审查与移动功能等价 | 活文档 |
 | `packages/domain/src/commit/commits.ts` / `apps/api/src/routes/commits.ts` | Commit、版本详情/重建/比较及成员受控的 `GET /research-objects/:id/versions` 降序摘要；供 Editor、Overview、Versions、Publish 共用 | 活接口；Task 12 补齐版本列表合同 |
 | `apps/web/lib/product-surfaces.ts` / `apps/web/test/product-surface-matrix.test.ts` | Task 12 产品表面真源：Overview/SDF/Files/Versions/Collaboration/Publish/Sandbox/Settings 的真实路由、权限、五态、移动等价与风险声明 | ECS 390/1440 验收通过（2026-08-10） |
@@ -76,7 +76,7 @@
 | `apps/web/test/visual/shots.mjs` | Landing production browser gate：1672×941/390×844 normal/reduced、唯一 main/h1/shared surface、导航/CTA/Latest Research、overflow/errors/focus、bounded pointer；Task 23 normal 最终 surface 连续三段 `1200ms` 验证标题 coverage `>=18%` / average delta `>=1.10`、四象限与色带 `<=20%`，desktop reduced exact fixture | Task 23 本地与公网 production GREEN |
 | `apps/web/.gitignore` | web 局部生成物忽略（Task 7.10 截图输出 `test/visual/out/` 不入库） | 活文档 |
 | `apps/web/vitest.config.ts` | Vitest Node 环境、`@/` alias 解析与 `.ts/.tsx` 测试发现（Task 7.4/7.7） | 活文档 |
-| `tsconfig.base.json` / `eslint.config.cjs` / `.npmrc` | 共享 TypeScript/ESLint/pnpm 基线；ESLint 9 flat config 只忽略构建、agent 与本地 evidence 临时目录，正式 `apps/web/test/visual/` 门禁持续受 lint | 活文档；Task 15 canonical root lint GREEN |
+| `tsconfig.base.json` / `eslint.config.cjs` / `.npmrc` | 共享 TypeScript/ESLint/pnpm 基线；ESLint 9 flat config 只忽略构建、agent 与 gitignored 的 `tmp/`、`apps/web/tmp/`、`apps/web/test/visual/out/` 本地证据目录，正式 `apps/web/test/visual/*` 门禁持续受 lint | 活文档；Hermes 本地预览证据不污染 canonical lint |
 | `knip.json` / `.dependency-cruiser.cjs` / `.markdownlint-cli2.jsonc` | 卫生工具配置：knip（未用代码）、dependency-cruiser（依赖边界）、markdownlint（文档门禁）（2026-07-28 落地） | 活文档 |
 | `scripts/verify-workspace.mjs` | Monorepo 结构校验脚本（lint 的第二段，`verify:workspace` 入口） | 活文档 |
 | `scripts/docs/check-docs-sync.mjs` | 文档同步门禁（索引路径存在性 + docs 反向登记 + AGENTS 迁移数一致性；lint 第三段，`audit:docs-sync` 入口，2026-08-06） | 活文档 |
@@ -121,6 +121,7 @@
 | `docs/specs/2026-08-15-hermes-3d-scholar-agent-design.md` | Hermes 3D 学者机器人历史方案；已被少年星图龙原型取代，仅保留否决记录 | **DEPRECATED** |
 | `docs/specs/2026-08-15-hermes-constellation-dragon-prototype-design.md` | Hermes 少年星图龙轻量 Blender 原型历史设计 | **用户视觉 NO-GO**；不得作为当前候选 |
 | `docs/specs/2026-08-15-hermes-2d-pet-design.md` | Hermes 2.5D 星图宠物：原创透明 idle/blink/working 同轮廓三帧、轻量分层、六状态映射、reduced-motion 与用户审美门槛 | **当前唯一视觉候选事实源**；本地实现完成，待用户验收 |
+| `docs/specs/2026-08-16-hermes-contextual-guide-design.md` | Hermes 情境引导员：异步待机行为语法、真实上下文提示、右侧助手抽屉与正式 `workspace.guide` AgentTask 闭环 | **用户已确认设计**；待实施计划与 TDD |
 | `docs/data/launch-research-corpus.md` | 18 条公开启动语料的范围、免责声明、真实来源、上游许可证证据与 ECS seed 操作边界 | 活文档；本地完成，待生产 seed |
 | `docs/plans/2026-08-08-openscience-product-web-plan.md` | 旧产品级网页实现计划；2026-08-10 被 Optical Editorial v3 计划取代，仅保留历史 | DEPRECATED |
 | `docs/plans/2026-08-10-optical-editorial-frontend-plan.md` | Optical Editorial v3 完整实施计划：15 Task 覆盖生产基线、foundations、三联屏、Auth/Intake/Dashboard/Hermes、Explore/启动语料、Editorial、其余产品面、Figma、质量门禁与 ECS E2E | 当前执行计划 |
