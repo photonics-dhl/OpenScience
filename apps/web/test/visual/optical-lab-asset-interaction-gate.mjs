@@ -8,6 +8,8 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { chromium } from 'playwright';
 
+import { OPTICAL_ASSET_URLS } from '../../lib/optical-lab/asset-manifest.mjs';
+
 const scriptDir = path.dirname(fileURLToPath(import.meta.url));
 const webRoot = path.resolve(scriptDir, '../..');
 const outDir = path.resolve(scriptDir, 'out', 'optical-lab', 'asset-interaction');
@@ -1468,7 +1470,7 @@ try {
       };
       const originalDecode = HTMLImageElement.prototype.decode;
       HTMLImageElement.prototype.decode = function delayedTargetDecode() {
-        if (this.src.includes('/optical-lab/target-reference.png')) {
+        if (this.src.includes(OPTICAL_ASSET_URLS.targetReference)) {
           return new Promise((resolve) => {
             window.__assetDelayedInitialization.releaseDecodes.push(resolve);
           });

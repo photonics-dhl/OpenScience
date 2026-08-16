@@ -329,3 +329,55 @@ Current infrastructure uses pinned base/worker images with bind-mounted applicat
   final-surface `1200ms` salience/band contract. Public screenshots were
   inspected without clipping, cursor/status contamination, hard halo, or broad
   chromatic bands.
+
+### 5.8 Content-addressed optical asset cache (2026-08-16)
+
+> Deployed as release `b93fa9d`; rollback release is `48809d6`.
+
+#### Pre-deployment checks
+
+- Verify `apps/web/lib/optical-lab/asset-manifest.mjs` contains the complete
+  SHA-256 of each canonical PNG and that the versioned URL embeds its first 16
+  hexadecimal digits.
+- Run the focused cache contract, complete Web tests, typecheck, production
+  build, canonical lint, and docs gates.
+- Confirm `/`, `/api/*`, and canonical `/optical-lab/*.png` paths are absent
+  from the one-year immutable header rules.
+
+#### Execution
+
+1. Run the standard checkup and database backup even though this change has no
+   schema or data mutation.
+2. Run the deployment dry-run, then `deploy.sh --confirm --skip-migrate`.
+3. Do not purge old hashed URLs. New content receives a different URL and old
+   cached bytes are harmless.
+
+#### Rollback
+
+- Redeploy the preceding release. Its HTML and WebGL bundle reference the prior
+  hashed URLs, which remain valid in Cloudflare and at the canonical source.
+- Do not rename or delete canonical PNG files during rollback.
+
+#### Verification
+
+- `curl -sSI` for each versioned PNG must return
+  `Cache-Control: public, max-age=31536000, immutable` and `200`.
+- The canonical PNG paths must not return `immutable`; `/` must remain
+  `private, no-cache, no-store`, and anonymous `/auth/me` must remain `401`.
+- A second public request should progress from `MISS`/`REVALIDATED` to `HIT`
+  with a non-zero `Age`; cache propagation is verified without purging.
+
+#### Deployment evidence
+
+- Pre/post checkup: Cloudflare Edge and loopback origin `200`, Tunnel HA `4`;
+  database backup `BACKUP_OK size=280K files=7/7`.
+- `deploy.sh --confirm --skip-migrate b93fa9d` completed the remote full build
+  and restarted Web/API/agent-worker; no migration or seed ran.
+- Both versioned PNGs progressed from `MISS` to `HIT`; observed `Age` values
+  were `13` and `12`, with the one-year immutable header intact.
+- Canonical compatibility paths remain non-immutable. Cloudflare currently
+  applies `max-age=14400` to them, but production HTML/WebGL references only
+  digest-versioned URLs, so updated bytes publish under a new URL immediately.
+- Public `/`, `/explore`, and the asset Lab return `200`; anonymous `/auth/me`
+  returns `401`; the public Landing desktop/mobile normal/reduced/idle/pointer
+  browser matrix exits `0`.

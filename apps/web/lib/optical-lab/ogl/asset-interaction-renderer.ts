@@ -8,6 +8,7 @@ import {
   type AssetInteractionInput,
   type AssetInteractionState,
 } from '../asset-interaction-model';
+import { OPTICAL_ASSET_URLS } from '../asset-manifest.mjs';
 import { OPTICAL_QUALITY_BUDGETS, OPTICAL_WEBGL2_CONTEXT_ATTRIBUTES } from '../runtime-policy';
 import { createAssetFlowPass, type AssetFlowPass } from './asset-flow-pass';
 import { createOpticalOglResourceLedger, type OpticalOglResourceCounts } from './resources';
@@ -222,8 +223,8 @@ export async function createAssetInteractionRenderer(
 
   try {
     const [targetImage, energyImage] = await Promise.all([
-      loadImage('/optical-lab/target-reference.png'),
-      loadImage('/optical-lab/energy-plate-black-alpha-v1.png'),
+      loadImage(OPTICAL_ASSET_URLS.targetReference),
+      loadImage(OPTICAL_ASSET_URLS.energyPlate),
     ]);
     if (disposed) throw new Error('Asset interaction renderer was disposed while loading');
     const targetTexture = new Texture(renderer.gl, {

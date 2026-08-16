@@ -3,6 +3,7 @@ import { Archivo } from 'next/font/google';
 import { AssetInteractionMount } from './AssetInteractionMount';
 
 import styles from '@/app/_visual/optical-lab/optical-lab.module.css';
+import { OPTICAL_ASSET_URLS } from '@/lib/optical-lab/asset-manifest.mjs';
 import { OPTICAL_LAB_RENDER_PHASE } from '@/lib/optical-lab/runtime-policy';
 
 const archivo = Archivo({
@@ -58,14 +59,14 @@ export function AcceptedOpticalSurface({
           aria-hidden="true"
           className={styles.assetPlate}
           data-optical-lab-asset-plate="true"
-          src="/optical-lab/energy-plate-black-alpha-v1.png"
+          src={OPTICAL_ASSET_URLS.energyPlate}
         />
         <img
           alt=""
           aria-hidden="true"
           className={styles.targetTypographyPlate}
           data-optical-lab-target-typography-plate="true"
-          src="/optical-lab/target-reference.png"
+          src={OPTICAL_ASSET_URLS.targetReference}
         />
         <h1 className={styles.headline} data-optical-lab-semantic-title="true">
           <span className={styles.science} data-optical-lab-science="true">
