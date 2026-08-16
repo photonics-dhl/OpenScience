@@ -2,9 +2,9 @@
 
 ## 状态
 
-Accepted for prototype implementation on 2026-08-15. Supersedes the rejected
-procedural Blender character as the active visual experiment; it does not erase
-the historical NO-GO record.
+Implemented on branch `codex/hermes-2d-pet`; engineering review is complete and
+user Workspace visual approval is pending. This is the only active Hermes
+visual candidate.
 
 ## 目标
 

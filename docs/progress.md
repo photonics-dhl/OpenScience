@@ -5,7 +5,7 @@
 - **当前真实阶段**：唯一 Hermes 视觉候选位于 `codex/hermes-2d-pet`（`a5a8446`），是已完成工程门禁、等待用户 Workspace 视觉验收的 2.5D 少年星图龙；不是尚待实施的 3D 学者机器人。
 - **历史边界**：3D 学者机器人已被用户否决；后续 Blender 少年星图龙也因视觉未达标被判 NO-GO。二者只保留历史证据，禁止恢复为当前任务。
 - **误读根因**：后续候选仍在独立 worktree，未进入 `main`；`main` 的旧 3D spec 未标废弃，而启动规则未要求枚举 worktree，导致 agent 把主分支中最新文档误当成全仓最新任务。
-- **预防措施**：`AGENTS.md` 现在强制先枚举 worktree/分支，再读取 CURRENT handoff；新增 `docs/handoff/2026-08-16-hermes-2d-pet-handoff.md`，旧 3D spec/plan 加 DEPRECATED/STOPPED 标记。下一步仅打开并验收 2.5D Workspace 实际效果。
+- **预防措施**：`AGENTS.md` 现在强制先枚举 worktree/分支，再读取 CURRENT handoff；新增 `docs/handoff/2026-08-16-hermes-2d-pet-handoff.md`。用户随后授权清理已否决方案，旧 3D spec/plan 已从活仓库删除，历史结论只保留在本进度记录与 CURRENT handoff。下一步仅打开并验收 2.5D Workspace 实际效果。
 
 ## 2026-08-16（内容寻址缓存优化）— ✅ 已部署并验证 Cloudflare 命中
 
@@ -16,13 +16,13 @@
 - **生产发布**：release `b93fa9d`，rollback `48809d6`。部署前后 ECS checkup 均健康，备份 `BACKUP_OK size=280K files=7/7`；dry-run 后执行 `deploy.sh --confirm --skip-migrate`，远端全仓与 16-page Web build 通过，只重启 Web/API/agent-worker，未运行 migration/seed。公网 `/`、`/explore`、asset Lab 为 `200`，匿名 `/auth/me` 为 `401`，Landing HTML 同时引用两条 versioned URL；远端与本地 manifest SHA-256 均为 `b30577ef504010fb214b669a545e88fa02e7148c170fe3e64d45c905b8db2ffa`。
 - **边缘实证**：两张 versioned PNG 首次请求均为 Cloudflare `MISS`，第二次均为 `HIT`，`Age` 分别为 `13`/`12`，响应保持 `public, max-age=31536000, immutable`。canonical 兼容路径不含 `immutable`，但现有 Cloudflare 规则会给它们 `max-age=14400`；生产 HTML/WebGL 不再引用这些路径，更新仍以新 digest URL 立即生效，无需 purge。Tunnel HA=`4`、loopback origin=`200`，公网 Landing desktop/mobile normal/reduced/idle/pointer 浏览器门禁 exit 0。
 
-## 2026-08-15（Hermes 原创 3D 学者 Agent）— ⏳ 设计与实施启动
+## 2026-08-15（Hermes 原创 3D 学者 Agent）— ❌ HISTORICAL / USER NO-GO
 
 - **用户决策**：废弃摄像头、面具、浮空书体与二维概念图直接交付路线；Hermes 改为具有头、肩、紧凑躯干、机械臂与悬浮核心的学者型机器人。书卷气只进入 folio 肩部披片、装订式脊柱、页层与批注边光，机器人识别优先于学术隐喻。
 - **资产真值**：最终交付必须包含可编辑 `.blend`、网页 `.glb`、PBR 材质、六态动作、poster、turntable 和真实资产门禁；imagegen 图片仅为被否决/探索性的 moodboard，不作为可复现资产。
 - **运行边界**：复用现有 `HermesVisualState` 与 OGL 1.0.11 的 glTF/Skin/Animation 能力；原 SVG/CSS Optical Guide 保留为 SSR、加载、reduced-motion 与失败 fallback；不引入 Three.js/Pixi/Cubism，不复制 Wanko 或 Live2D 二进制。
 - **工具约束**：Blender 仅使用 E 盘项目专用 Portable 路径，下载、解压、缓存和输出均不得落到 C 盘。设计 spec 与 TDD 实施计划已登记；当前未修改生产代码、未部署服务器。
-- **下一步**：按 `docs/plans/2026-08-15-hermes-3d-scholar-agent-plan.md` 从 GLB RED 合同和 checksum-pinned Blender Portable 开始，随后生成原创 geometry/rig/material/actions 并进入隔离浏览器验收。
+- **终止结论**：该路线已被用户否决，旧 spec/plan 于 2026-08-16 清理；不得从本历史记录恢复实施。
 
 ## 2026-08-15（主页视觉验收与版本收口）— ✅ 已验收并合并至 `main`
 
