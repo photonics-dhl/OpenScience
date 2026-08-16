@@ -26,6 +26,6 @@
 
 ## Next action
 
-1. 用户复核 `docs/specs/2026-08-16-hermes-contextual-guide-design.md`。
-2. 复核后用 writing-plans 生成实施计划，再按 TDD 实现 `workspace.guide`、助手抽屉与待机行为语法。
+1. 按 `docs/plans/2026-08-16-hermes-contextual-guide-plan.md` 直接执行 TDD，不再等待逐步批准。
+2. 完成 `workspace.guide`、助手抽屉与待机行为语法后，运行纵向门禁与独立复审。
 3. 自动化 GREEN 后仍需用户检查真实动态预览；不得恢复旧程序化 3D 或把未知 task kind 的 demo fallback 当成 Hermes。

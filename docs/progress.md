@@ -1,12 +1,13 @@
 # OpenScience (XGS) 进度日志
 
-## 2026-08-16（Hermes 情境引导员）— ✅ 设计确认，⏳ 待实施计划
+## 2026-08-16（Hermes 情境引导员）— ✅ 设计与计划确认，⏳ TDD 实施
 
 - **用户判断**：现有 2.5D 候选仍像一张会轻微移动的图片，缺少引导员、小助手和 Hermes 真实入口的角色能力；旧点击在无任务时跳往新建 RO，并未唤起 Hermes。
 - **确认方向**：可视化比较 A 安静陪伴、B 情境引导员、C 任务领航台后选择 B。待机采用呼吸、眨眼、观察、六节点苏醒与朱砂引用尾的异步行为语法；主动提示只能来自真实 Dashboard 上下文。
 - **入口决策**：点击角色、提示或显式动作，从右侧展开 Hermes 助手抽屉；移动端为等价全高底部面板，保留当前 Workspace，不强制跳页。
 - **真实任务边界**：新增正式 `workspace.guide` AgentTask，复用 AgentSession、AI Gateway、AI Credit、队列、轮询与 R0–R4 审批；禁止把未知 kind 的 demo fallback 冒充 Hermes。
 - **事实源**：`docs/specs/2026-08-16-hermes-contextual-guide-design.md`。当前仅完成设计，不宣称代码、门禁、合并或部署完成。
+- **执行计划**：`docs/plans/2026-08-16-hermes-contextual-guide-plan.md` 将工作收敛为提示模型、正式 Worker、助手抽屉、待机行为和纵向验收五项；用户已授权计划完成后直接实施。
 
 ## 2026-08-16（Hermes 2.5D 生命感增量）— ✅ 工程完成，⏳ 用户动态视觉验收
 

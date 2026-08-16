@@ -128,6 +128,7 @@
 | `docs/plans/2026-08-15-hermes-3d-scholar-agent-plan.md` | 被否决的 3D 学者机器人 `.blend/.glb` 与运行时计划 | **DEPRECATED** |
 | `docs/plans/2026-08-15-hermes-constellation-dragon-prototype-plan.md` | 少年星图龙的 RED 资产合同、确定性 Blender builder、四视图/待机渲染与视觉 stop/go；不接产品运行时 | **历史 NO-GO 计划**；停止执行 |
 | `docs/plans/2026-08-15-hermes-2d-pet-plan.md` | Hermes 2.5D 原创资产生成、PNG 合同、分层 portrait、六状态与真实浏览器视觉验收 | 实施完成；仅余用户视觉验收与后续部署决策 |
+| `docs/plans/2026-08-16-hermes-contextual-guide-plan.md` | Hermes 情境引导员实施：真实提示模型、`workspace.guide` Worker、助手抽屉、待机行为语法与纵向验收 | 当前执行计划 |
 | `docs/handoff/2026-08-15-hermes-constellation-dragon-prototype-handoff.md` | 少年星图龙静态 Blender 原型、结构门禁与用户 NO-GO 结论 | 历史交接；不得按其 next action 恢复 3D |
 | `docs/handoff/2026-08-16-hermes-2d-pet-handoff.md` | Hermes 2.5D 星图宠物当前唯一交接：实现、资产合同、浏览器证据、旧 3D 隔离与用户视觉待验收边界 | **CURRENT** |
 | `docs/design/optical-editorial-figma-map.md` | 长期账号 Figma canonical 的 V3 variables/styles/components/八表面节点映射、代码对应关系与 Code Connect 边界 | Task 13 canonical 映射 |
