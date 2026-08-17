@@ -7,7 +7,7 @@
 - 形象为暖纸书页质感的少年星图龙：紧凑 S 形轮廓、深墨证据脊、六个 SDF 证据节点、额外头顶 Hermes 核心与朱砂引用尾。它不是通用机器人、摄像头、Live2D/Wanko 或 3D 模型。
 - 新范围覆盖 Personal Workspace 的 Dashboard → RO 创建 → 导入/六字段 SDF → Hermes diff → Commit 主链；2026-08-17 已在 ECS 以真实 arXiv PDF 与 MiniMax-M3 贯通，并部署 release `aa1c8af` 的真实页面 motion/guide 修复，未改数据库 schema。正式任务继续复用 credit/queue/audit/approval、提交限流和服务端上下文授权。
 - 2026-08-17 核心候选与真实论文/引导链已部署 ECS。用户已再次明确“方案早已确定，现在是实现阶段”；任何后续 session 都不得重开形象、Live2D/3D 或技术路线选择。不要再从下文旧 43.8 秒 grammar 或历史 2.5D 证据推断当前行为；当前调度事实源是 `action-catalog.ts` + `behavior-director.ts` + `motion-mixer.ts` + `pet-motion.ts` 的 action-specific trajectories。
-- 用户浏览器所在 Windows 当前关闭系统动画，Codex Chromium 因此命中 reduced-motion；旧录屏强制 `no-preference`，不能代表用户页面。当前候选已在真实页面提供“开启 Hermes 动效”，选择会持久化并跨 Dashboard/创建/编辑路由恢复 mesh、整体动作与 pointer input；URL `?hermes-motion=full|reduced` 仍可作显式覆盖并同步保存。禁止再把自动化 media override 视频当作用户环境证据。
+- 用户浏览器所在 Windows 当前关闭系统动画；旧 CSS 会无条件隐藏 WebGL canvas，因此出现“renderer 正在绘制但真实页面只有静态 fallback”，不是用户观察偏差。2026-08-18 候选已将显式 full 与系统 media query 解耦，首次默认 full，并在 Hermes 舞台始终显示 full/reduced 切换；用户选择持久化并跨 Dashboard/创建/编辑路由恢复。未解析偏好时先静态，已保存 reduced 不会 hydration 闪动。URL `?hermes-motion=full|reduced` 仍可覆盖并同步保存。禁止再把 canvas 存在、data 属性或自动化 media override 视频当作可见动效证据，必须断言 canvas 可见并检查真实像素。
 
 ## Workspace Companion candidate
 
@@ -16,7 +16,7 @@
 - 角色另有唯一 whole-character presentation layer：巡游整体游出至少 `30px` 并回到 `6px` 内，至少 6 种自主动作整体轮廓位移达到 `8px`，pointer 迎接位移达到 `8px`；只移动角色，不移动提示/按钮/编辑器/用户 dock，reduced/approval 完全关闭。最新完整 release 用时 `151.8s`、exit `0`；用户视觉仍是唯一未通过门禁。
 - RO 创建和编辑页注册语义锚点并拥有真实 Assistant Drawer：标题填写后推进到 source-import，SDF 选择推进到当前字段；点击角色可直接唤起 Hermes。bubble 只显示当前锚点声明的功能，创建页为 Explain，编辑字段为 Explain/Draft/Check；Explain 提供逐字段内容提示，Draft 复用 `sdf.extract`，建议在显式 Apply 前不改 SDF。
 - 聚合命令为 `npx pnpm@9.15.0 --filter @openscience/web test:hermes-companion-release`，覆盖 articulation/affine mutation、真实 renderer draw/performance、用户触发后的逐 RAF 航行几何、Diff 写入边界和 90 秒 WebM。最新运行用时 `146s`、exit `0`；first-ready `916ms`，idle/pointer `451/505` 次 draw，p95 `18.1/18ms`。产品 Dashboard canvas 已由 `181px` 提升为 `213px`；基础呼吸 `5,531`、pointer `58,558` 个变化像素。
-- 最新修复门禁：本地与公网 production-browser Dashboard/创建/编辑/真实 reduced preference 均 `6/6`；Web `295/295`、typecheck、lint、17-page build；Hermes 聚合 release `145.6s` exit 0（idle `5,215`、pointer `58,228` changed pixels）。ECS release `aa1c8af` / rollback `c9df24d`，备份 `376K / 7/7`，远端 source hash 匹配，服务与公网硬检查 GREEN。尚未完成 Drawer 内 Quiet/Balanced/Active 与 sound/particle/proactive 设置 UI；两信号主动提示与逐字段 cooldown 的完整浏览器矩阵。
+- 最新修复门禁：2026-08-18 默认 full/常驻切换候选 motion `16/16`、自包含单 worker Dashboard/创建/编辑命令 `18/18`、全 Web `295/295`、typecheck 与 17-page build GREEN；mock 已覆盖启动期 workspace-guide 查询，不依赖本机 3101 API。聚合 release `144.7s` exit 0：breathing `5,531`、pointer `58,667` changed pixels，first-ready `923ms`，idle/pointer draw `452/510`、p95 `18/18ms`；尚未发布。当前 ECS 仍为 release `aa1c8af` / rollback `c9df24d`。尚未完成 Drawer 内 Quiet/Balanced/Active 与 sound/particle/proactive 设置 UI；两信号主动提示与逐字段 cooldown 的完整浏览器矩阵。
 - 用户明确禁止本机 Docker。本机不再是服务验收入口；当前运行事实只认 ECS 公网 `https://OpenScience.428312321.xyz`。本机仅编辑和作为浏览器客户端，3000 与任何本机容器均禁止触碰。
 
 ## 2026-08-17 ECS real-workflow checkpoint
@@ -52,5 +52,5 @@
 
 ## Next action
 
-1. 产品负责人使用真实账号复验无 query 的持久 full-motion、创建 title→source-import、编辑字段航行与角色点击唤起 Drawer；若视觉接受，再继续 Task 9/10/11 未完成证据与高级偏好/主动提示矩阵。
+1. 在用户确认后发布 2026-08-18 默认 full/常驻切换候选，再由产品负责人使用真实账号复验无 query 的 full-motion、常驻切换、创建 title→source-import、编辑字段航行与角色点击唤起 Drawer。
 2. 高级偏好设置 UI 与两信号主动提示/cooldown 仍是显式未完成项；历史 progress 不得覆盖本 handoff，旧程序化 3D、整图 PNG/CSS-signal renderer 与 43.8 秒稀疏旧语法不得恢复为任务入口。本机 Docker 继续禁止，生产事实只认 ECS。

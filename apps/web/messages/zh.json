@@ -745,6 +745,7 @@
     "draft": "草拟",
     "check": "检查",
     "enableMotion": "开启 Hermes 动效",
+    "disableMotion": "关闭 Hermes 动效",
     "takeMeThere": "带我过去",
     "targets": {
       "ro-title": "先给研究对象一个准确标题。",

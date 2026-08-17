@@ -1,6 +1,6 @@
 'use client';
 
-import { usePathname } from 'next/navigation';
+import { usePathname, useSearchParams } from 'next/navigation';
 import { useLocale, useTranslations } from 'next-intl';
 import * as React from 'react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -146,6 +146,8 @@ function HermesWorkspaceStage({ fallbackAssistantOpen, fallbackOnInvoke, guideTa
   registryVersion: number;
   writing: boolean;
 }) {
+  const searchParams = useSearchParams();
+  const motionSearch = searchParams.toString();
   const state = presentation?.state ?? 'idle';
   const t = useTranslations('hermesCompanion');
   const workspaceId = presentation?.workspaceId ?? 'workspace-current';
@@ -160,7 +162,8 @@ function HermesWorkspaceStage({ fallbackAssistantOpen, fallbackOnInvoke, guideTa
   const [dockReady, setDockReady] = useState(false);
   const [dragging, setDragging] = useState(false);
   const [position, setPosition] = useState({ x: 0, y: 0 });
-  const [reducedMotion, setReducedMotion] = useState(true);
+  const [reducedMotion, setReducedMotion] = useState<boolean | null>(null);
+  const effectiveReducedMotion = reducedMotion ?? true;
   const [behavior, setBehavior] = useState<HermesBehaviorFrame>(() => createInitialHermesBehavior(behaviorInput('idle', pointerRef.current, false, true, 0)));
   const [guideActions, setGuideActions] = useState<HermesAnchorAction[]>([]);
   const [guideReady, setGuideReady] = useState(false);
@@ -168,18 +171,14 @@ function HermesWorkspaceStage({ fallbackAssistantOpen, fallbackOnInvoke, guideTa
   const [travelRequested, setTravelRequested] = useState(false);
 
   useEffect(() => {
-    const media = window.matchMedia('(prefers-reduced-motion: reduce)');
-    const queryPreference = new URLSearchParams(window.location.search).get('hermes-motion');
+    const search = motionSearch ? `?${motionSearch}` : '';
+    const queryPreference = new URLSearchParams(search).get('hermes-motion');
     if (queryPreference === 'full' || queryPreference === 'reduced') saveHermesMotionPreference(window.localStorage, queryPreference);
-    const sync = () => setReducedMotion(resolveHermesReducedMotion(
-      media.matches,
-      window.location.search,
+    setReducedMotion(resolveHermesReducedMotion(
+      search,
       loadHermesMotionPreference(window.localStorage),
     ));
-    sync();
-    media.addEventListener('change', sync);
-    return () => media.removeEventListener('change', sync);
-  }, []);
+  }, [motionSearch]);
 
   useEffect(() => {
     if (!presentation?.anchor) { setAnchorRect(null); return; }
@@ -213,13 +212,13 @@ function HermesWorkspaceStage({ fallbackAssistantOpen, fallbackOnInvoke, guideTa
 
   useEffect(() => {
     const timer = window.setInterval(() => {
-      const input = behaviorInput(state, pointerRef.current, dragging, reducedMotion);
+      const input = behaviorInput(state, pointerRef.current, dragging, effectiveReducedMotion);
       input.guide = guideTarget ? (guideReady ? 'arrived' : 'travel') : 'idle';
       input.writing = writing;
       setBehavior((previous) => stepHermesBehavior(previous, input));
     }, 250);
     return () => window.clearInterval(timer);
-  }, [dragging, guideReady, guideTarget, reducedMotion, state, writing]);
+  }, [dragging, effectiveReducedMotion, guideReady, guideTarget, state, writing]);
 
   useEffect(() => () => window.clearTimeout(leaveTimerRef.current), []);
 
@@ -234,7 +233,7 @@ function HermesWorkspaceStage({ fallbackAssistantOpen, fallbackOnInvoke, guideTa
     const stageBounds = stage.getBoundingClientRect();
     const from = new DOMRect(stageBounds.x, stageBounds.y, Math.max(1, stageBounds.width), Math.max(1, stageBounds.height));
     const target = new DOMRect(snapshot.rect.x, snapshot.rect.y, snapshot.rect.width, snapshot.rect.height);
-    if (reducedMotion) {
+    if (effectiveReducedMotion) {
       setGuideMode('static');
       setGuideReady(true);
       return;
@@ -258,7 +257,7 @@ function HermesWorkspaceStage({ fallbackAssistantOpen, fallbackOnInvoke, guideTa
     const arrivalMs = timeline.length === 0 ? 0 : timeline.at(-1)!.atMs + TRAVEL_SEGMENT_MS;
     timers.push(window.setTimeout(() => setGuideReady(true), arrivalMs));
     return () => timers.forEach((timer) => window.clearTimeout(timer));
-  }, [customDock, dockReady, guideTarget, reducedMotion, registry, registryVersion, travelRequested]);
+  }, [customDock, dockReady, effectiveReducedMotion, guideTarget, registry, registryVersion, travelRequested]);
 
   useEffect(() => {
     if (!guideTarget) return;
@@ -269,7 +268,7 @@ function HermesWorkspaceStage({ fallbackAssistantOpen, fallbackOnInvoke, guideTa
 
   const advanceBehavior = (nextPointer = pointerRef.current, nextDragging = dragging) => {
     pointerRef.current = nextPointer;
-    setBehavior((previous) => stepHermesBehavior(previous, behaviorInput(state, nextPointer, nextDragging, reducedMotion)));
+    setBehavior((previous) => stepHermesBehavior(previous, behaviorInput(state, nextPointer, nextDragging, effectiveReducedMotion)));
   };
 
   const onPointerDown = (event: React.PointerEvent<HTMLDivElement>) => {
@@ -353,7 +352,8 @@ function HermesWorkspaceStage({ fallbackAssistantOpen, fallbackOnInvoke, guideTa
       data-hermes-dragging={dragging ? 'true' : 'false'}
       data-hermes-guide-motion={guideMode ?? 'idle'}
       data-hermes-guide-target={guideTarget ?? undefined}
-      data-hermes-motion-preference={reducedMotion ? 'reduced' : 'full'}
+      data-hermes-motion-preference={reducedMotion === null ? 'resolving' : reducedMotion ? 'reduced' : 'full'}
+      data-hermes-presentation-state={state}
       data-hermes-workspace-stage="true"
       onPointerDown={onPointerDown}
       onPointerLeave={onPointerLeave}
@@ -370,29 +370,30 @@ function HermesWorkspaceStage({ fallbackAssistantOpen, fallbackOnInvoke, guideTa
           if (suppressClickRef.current) { suppressClickRef.current = false; return; }
           (presentation?.onInvoke ?? fallbackOnInvoke)();
         }}
-        reducedMotion={reducedMotion}
+        reducedMotion={effectiveReducedMotion}
         state={state}
         suggestion={presentation?.suggestion ?? neutralSuggestion}
       />
-      {reducedMotion ? (
-        <button
-          className="hermes-motion-enable"
-          onClick={(event) => {
-            event.stopPropagation();
-            saveHermesMotionPreference(window.localStorage, 'full');
-            setReducedMotion(false);
-          }}
-          onPointerDown={(event) => event.stopPropagation()}
-          type="button"
-        >{t('enableMotion')}</button>
-      ) : null}
+      {reducedMotion !== null ? <button
+        className="hermes-motion-enable"
+        data-hermes-motion-toggle
+        data-motion-active={reducedMotion ? 'false' : 'true'}
+        onClick={(event) => {
+          event.stopPropagation();
+          const preference = reducedMotion ? 'full' : 'reduced';
+          saveHermesMotionPreference(window.localStorage, preference);
+          setReducedMotion(preference === 'reduced');
+        }}
+        onPointerDown={(event) => event.stopPropagation()}
+        type="button"
+      >{reducedMotion ? t('enableMotion') : t('disableMotion')}</button> : null}
       {guideReady && guideTarget ? (
         <HermesGuideBubble
           actions={guideActions}
           edgeStop={guideMode === 'edge-stop'}
           onDismiss={onDismissGuide}
           onTakeMeThere={() => {
-            document.querySelector(`[data-hermes-anchor="${guideTarget}"]`)?.scrollIntoView({ behavior: reducedMotion ? 'auto' : 'smooth', block: 'center' });
+            document.querySelector(`[data-hermes-anchor="${guideTarget}"]`)?.scrollIntoView({ behavior: effectiveReducedMotion ? 'auto' : 'smooth', block: 'center' });
             setTravelRequested(true);
           }}
           target={guideTarget}

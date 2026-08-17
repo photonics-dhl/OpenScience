@@ -18,6 +18,7 @@
 - Priority is `approval still > user drag > guide travel > task work > pointer/focus > patrol > base life`.
 - Generation never writes fields directly; accepted full or partial diff hunks are the only write path.
 - Mobile and reduced-motion retain every action and piece of content through alternate presentation.
+- 2026-08-18 product amendment: first use defaults to full motion, while one always-visible stage control persists an explicit reduced/full choice across routes and reloads. Explicit reduced mode retains the static accessible alternative.
 - Do not read `.env` or commit before the user accepts the final live visual. ECS deployment and real-provider testing were explicitly authorized on 2026-08-17; local Docker remains prohibited.
 
 ---

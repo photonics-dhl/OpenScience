@@ -17,7 +17,6 @@ export function saveHermesMotionPreference(storage: Pick<HermesMotionStorage, 's
 }
 
 export function resolveHermesReducedMotion(
-  systemReduced: boolean,
   search: string,
   storedPreference: HermesMotionPreference | null = null,
 ): boolean {
@@ -26,5 +25,5 @@ export function resolveHermesReducedMotion(
   if (preference === 'reduced') return true;
   if (storedPreference === 'full') return false;
   if (storedPreference === 'reduced') return true;
-  return systemReduced;
+  return false;
 }

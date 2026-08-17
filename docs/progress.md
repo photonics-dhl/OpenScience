@@ -1,5 +1,12 @@
 # OpenScience (XGS) 进度日志
 
+## 2026-08-18（Hermes 默认动效与常驻控制）— ✅ 本地实现/真实页面 GREEN，⏳ 待生产发布确认
+
+- **用户实际缺陷与根因**：Windows `prefers-reduced-motion` 不仅让首次状态默认 reduced，旧 CSS 还无条件 `display:none` 隐藏 WebGL canvas；因此即使 JS 已显式 full、renderer 也在绘制，真实页面仍只显示静态 fallback。旧“开启 Hermes 动效”又仅在 reduced 分支渲染，full 时按钮消失，用户无法判断或修正状态。
+- **产品修复**：Hermes 首次默认 full motion；只有用户主动关闭、已保存 reduced 偏好或显式 `?hermes-motion=reduced` 才静止。未解析持久偏好时先保持静态，避免 reduced 用户 hydration 闪动；显式 full 不再被系统 media query 隐藏。控制改为舞台内常驻高对比 pill：full 显示“关闭 Hermes 动效”，reduced 显示“开启 Hermes 动效”，两种选择均跨路由/刷新保留。审批态仍保持克制静止。
+- **TDD / 真实证据**：RED 依次捕获默认 reduced、已保存 reduced 的 hydration full 闪动、`full` canvas 被 CSS 隐藏，以及系统 no-preference 下显式 reduced 仍保留提示 transition；GREEN 为 motion `16/16`、自包含单 worker Dashboard/创建/编辑浏览器命令 `18/18`、全 Web `295/295`、typecheck 与 17-page production build。Dashboard mock 现覆盖启动期 workspace-guide 查询，不再偶然依赖 3101 API。完整 Hermes release `144.7s` exit `0`：呼吸 `5,531`、pointer `58,667` changed pixels，first-ready `923ms`，idle/pointer 真实 draw `452/510`，p95 均 `18ms`。1440×900 人工截图确认常驻控制可辨识。
+- **边界**：未改角色动作语法、Agent 权限、API、数据库或生产配置；尚未执行 ECS 写操作，生产仍为 release `aa1c8af`。
+
 ## 2026-08-17（Hermes 真实页面引导与动效偏好修复）— ✅ ECS 部署与公网行为 GREEN
 
 - **用户实际缺陷**：Windows 浏览器命中 reduced-motion 后 Hermes 长期呈静态，而产品没有显式恢复入口；创建/编辑页没有真实 Assistant Drawer owner，点击角色无法唤起 Hermes；引导目标只固定在 `ro-title` / `sdf-problem`，填写标题或切换 SDF 字段不会推进；创建页还显示没有消费者的 Draft/Check。

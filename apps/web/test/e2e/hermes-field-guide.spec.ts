@@ -42,7 +42,7 @@ test('reduced motion retains the guide actions without positional travel or part
   await page.emulateMedia({ reducedMotion: 'reduce' });
   await page.setViewportSize({ width: 390, height: 844 });
   await mockWorkspace(page);
-  await page.goto(`${baseUrl}/research-objects/new?mode=blank`, { waitUntil: 'networkidle' });
+  await page.goto(`${baseUrl}/research-objects/new?mode=blank&hermes-motion=reduced`, { waitUntil: 'networkidle' });
 
   const stage = page.locator('[data-hermes-workspace-stage]');
   await expect(page.locator('[data-hermes-guide-bubble]')).toBeVisible();

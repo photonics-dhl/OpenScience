@@ -173,7 +173,7 @@ Sound is off by default. Optional sound uses restrained water, paper, and eviden
 
 - Desktop safe corridors use screen edges and target-side clearance.
 - Mobile uses left/right edges and the area above the software keyboard. Hermes shrinks at a field target; guidance copy stays above the keyboard and outside the input.
-- `prefers-reduced-motion` retains the character, guidance, diff, and assistant actions while replacing travel, bounce, elastic return, and particles with static pose changes and fades.
+- Hermes defaults to full motion on first use so the companion is visibly alive. A persistent stage control lets the user explicitly choose reduced motion; that saved choice and `?hermes-motion=reduced` retain the character, guidance, diff, and assistant actions while replacing travel, bounce, elastic return, and particles with static pose changes and fades. The control remains visible in both modes so the current state is never implicit.
 - Keyboard users can invoke, dismiss, move between bubble actions, request travel, and return focus without pointer input.
 - Escape cancels travel or closes the current bubble before closing the assistant drawer.
 - A role menu exposed by right click, long press, or drawer settings offers Quiet / Balanced / Active, proactive hints, sound, particles, and reset dock. Default is Balanced/Scholarly Active.

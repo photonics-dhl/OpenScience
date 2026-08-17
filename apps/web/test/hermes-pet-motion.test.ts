@@ -21,15 +21,15 @@ const actionAt = (action: Parameters<typeof sampleHermesMotion>[0]['action'], pr
 });
 
 describe('Hermes articulated pet motion', () => {
-  it('allows an explicit full-motion preference to override a reduced-motion system setting', async () => {
+  it('starts Hermes in full motion until the user explicitly reduces it', async () => {
     const preference = await import('@/lib/hermes/motion-preference').catch(() => null);
 
     expect(preference).not.toBeNull();
     if (!preference) return;
 
-    expect(preference.resolveHermesReducedMotion(true, '?hermes-motion=full')).toBe(false);
-    expect(preference.resolveHermesReducedMotion(false, '?hermes-motion=reduced')).toBe(true);
-    expect(preference.resolveHermesReducedMotion(true, '')).toBe(true);
+    expect(preference.resolveHermesReducedMotion('?hermes-motion=full')).toBe(false);
+    expect(preference.resolveHermesReducedMotion('?hermes-motion=reduced')).toBe(true);
+    expect(preference.resolveHermesReducedMotion('')).toBe(false);
 
     const values = new Map<string, string>();
     const storage = {
@@ -40,7 +40,9 @@ describe('Hermes articulated pet motion', () => {
     expect(preference.loadHermesMotionPreference).toBeTypeOf('function');
     preference.saveHermesMotionPreference(storage, 'full');
     expect(preference.loadHermesMotionPreference(storage)).toBe('full');
-    expect(preference.resolveHermesReducedMotion(true, '', preference.loadHermesMotionPreference(storage))).toBe(false);
+    expect(preference.resolveHermesReducedMotion('', preference.loadHermesMotionPreference(storage))).toBe(false);
+    preference.saveHermesMotionPreference(storage, 'reduced');
+    expect(preference.resolveHermesReducedMotion('', preference.loadHermesMotionPreference(storage))).toBe(true);
   });
 
   it('renders a director-selected action instead of falling back to the legacy clock grammar', () => {
