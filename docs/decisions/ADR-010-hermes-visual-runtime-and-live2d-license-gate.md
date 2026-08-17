@@ -28,3 +28,7 @@ Sources:
 - Task 9 can close without shipping an unlicensed asset or misrepresenting a fallback as Live2D.
 - Dashboard remains lightweight: the verified production build adds no third-party visual dependency and keeps the Dashboard first-load JavaScript at 128 kB.
 - The product loses Wanko-specific character motion for now, but preserves the same task/state contract and a reversible adapter boundary.
+
+## 2026-08-16 clarification
+
+This ADR gates the Wanko sample, Cubism Core and other third-party character binaries. It does **not** prohibit an original articulated renderer built from OpenScience-owned textures with a dependency already accepted elsewhere in the product. The static SVG/CSS renderer remains the failure and reduced-motion fallback; the current visual implementation is governed by `docs/specs/2026-08-16-hermes-articulated-mesh-pet-design.md`. No implementation may describe peripheral glow movement as character articulation.

@@ -6,11 +6,21 @@ import remarkGfm from 'remark-gfm';
 import { useTranslations } from 'next-intl';
 
 import { SDFNode } from '@/components/research/SDFNode';
+import { HermesAnchor } from '@/components/hermes/HermesAnchor';
+import type { HermesAnchorId } from '@/lib/hermes/anchor-registry';
 import type { SdfCore } from '../../lib/api';
 
 const FIELDS: Array<keyof Omit<SdfCore, 'schemaVersion'>> = [
   'problem', 'insight', 'method', 'results', 'limitations', 'reproducibility',
 ];
+const HERMES_FIELD_ANCHORS: Record<keyof Omit<SdfCore, 'schemaVersion'>, HermesAnchorId> = {
+  problem: 'sdf-problem',
+  insight: 'sdf-insight',
+  method: 'sdf-method',
+  results: 'sdf-results',
+  limitations: 'sdf-limitations',
+  reproducibility: 'sdf-evidence',
+};
 
 export default function CoreEditor({
   core,
@@ -52,13 +62,15 @@ export default function CoreEditor({
               <ReactMarkdown remarkPlugins={[remarkGfm]}>{core[field]}</ReactMarkdown>
             </div>
           ) : (
-            <textarea
-              className="min-h-48 w-full resize-y border border-os-rule-dark bg-os-black-1 p-4 font-editorial text-lg leading-8 text-os-paper focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring"
-              value={core[field]}
-              onChange={(event) => onEdit(field, event.target.value)}
-              placeholder={t(`hints.${field}`)}
-              aria-label={t(field)}
-            />
+            <HermesAnchor id={HERMES_FIELD_ANCHORS[field]}>
+              <textarea
+                className="min-h-48 w-full resize-y border border-os-rule-dark bg-os-black-1 p-4 font-editorial text-lg leading-8 text-os-paper focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring"
+                value={core[field]}
+                onChange={(event) => onEdit(field, event.target.value)}
+                placeholder={t(`hints.${field}`)}
+                aria-label={t(field)}
+              />
+            </HermesAnchor>
           )}
         </SDFNode>
       ))}

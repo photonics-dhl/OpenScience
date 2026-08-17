@@ -37,7 +37,92 @@
         "docs/decisions/ADR-004-figma-account-ownership-and-migration.md"
       ],
       "prevention": "Before authorizing a second server for the same OAuth endpoint, switch the browser to the intended account. Verify both identities with whoami in fresh clients before creating canonical assets."
+    },
+    {
+      "id": "issue-003",
+      "title": "Hermes acceptance video and production preview used different API conditions",
+      "date": "2026-08-17",
+      "status": "resolved",
+      "tags": [
+        "troubleshooting/env",
+        "troubleshooting/browser"
+      ],
+      "description": "The release-gate WebM showed a healthy Dashboard and Hermes whole-character motion, while the user's 3194 page did not match it. The initially linked WebM also failed to load in the app.",
+      "root_cause": "The release gate intercepted auth, research-object, and ingestion requests with successful fixtures, but 3194 had been started without `API_ORIGIN=http://127.0.0.1:3188`; its real server-side requests fell back to port 3001 and rendered `无法加载工作台 / 请求失败 500`. An already-open `next start` tab could additionally retain old JS/CSS after rebuild. The Markdown handoff referenced a local WebM filesystem path rather than an HTTP media URL.",
+      "solution": "Start 3194 with the verified local preview API on 3188, then run and record an acceptance browser with zero API interceptions. After each production rebuild, open a fresh cache-busted Dashboard URL. Serve ignored visual evidence through a bounded localhost HTTP server instead of a local media path.",
+      "verification": "The unmocked 3194 browser loads Ada Researcher and the real preview RO without the 500 error; Hermes reports idle/ready with reduced motion false, exercises six actions in 18 seconds, and moves across a 33x23px range. The final 35.8-second 1440x900 WebM uses zero API interceptions and has no console errors. Dashboard and video URLs both return HTTP 200, with the video served as `video/webm`.",
+      "files": [
+        "apps/web/app/globals.css",
+        "apps/web/test/visual/out/hermes-companion/hermes-rich-motion-latest.webm"
+      ],
+      "prevention": "A release video must use the same API origin and data path as the handed-off preview. Before visual delivery, run one zero-interception browser probe that rejects Dashboard error copy, records the real body/state/renderer/action trajectory, and only then records video. Never ask for acceptance from a tab that survived a production rebuild; publish evidence over HTTP and verify status/content type."
+    },
+    {
+      "id": "issue-004",
+      "title": "Hermes motion video forced animation while the real Codex browser honored Windows reduced motion",
+      "date": "2026-08-17",
+      "status": "resolved",
+      "tags": [
+        "troubleshooting/env",
+        "troubleshooting/browser",
+        "troubleshooting/accessibility"
+      ],
+      "description": "The corrected Dashboard and video used the same API data, but the user still saw a static Hermes while the Playwright recording moved.",
+      "root_cause": "Windows SystemParametersInfo reported ClientAreaAnimationsEnabled=false, so the Codex Chromium browser exposed prefers-reduced-motion: reduce. Hermes deliberately returned a still motion sample, skipped the WebGL renderer, and disabled CSS whole-character motion. The acceptance recorder explicitly forced reducedMotion: no-preference, so it did not represent the user's browser environment.",
+      "solution": "Add one explicit Hermes motion preference resolver. The default continues to honor the system, while ?hermes-motion=full opts into full mesh, CSS whole-character actions, and pointer input. Scope reduced-motion CSS suppression to stages that have not explicitly selected full motion.",
+      "verification": "With Playwright still emulating prefers-reduced-motion: reduce, the system URL remains fallback with zero travel, while ?hermes-motion=full reports rig ready/input true, performs eight actions in 20 seconds, moves the actor 25.39px with a 34.08px size delta, and enters engaged state on pointer input.",
+      "files": [
+        "apps/web/lib/hermes/motion-preference.ts",
+        "apps/web/components/hermes/HermesWorkspaceStage.tsx",
+        "apps/web/components/hermes/HermesVisualAdapter.tsx",
+        "apps/web/components/hermes/HermesRiggedPortrait.tsx",
+        "apps/web/app/globals.css",
+        "apps/web/test/hermes-pet-motion.test.ts"
+      ],
+      "prevention": "Visual acceptance must run once with the user's real reduced-motion condition. Any recorder override must be disclosed and paired with an equivalent product preference; data attributes or test-only media emulation cannot substitute for the user's rendered result."
+    },
+    {
+      "id": "issue-005",
+      "title": "Real arXiv PDF failed before MiniMax extraction",
+      "date": "2026-08-17",
+      "status": "resolved",
+      "tags": [
+        "troubleshooting/ingestion",
+        "troubleshooting/security",
+        "troubleshooting/parser"
+      ],
+      "description": "The real 24,671,920-byte arXiv 2009.06045 PDF first failed malware policy and then entered parser review, despite being a legitimate paper that parsed correctly outside the production pipeline.",
+      "root_cause": "The artifact scan applied the byte sequence ../ to every format instead of only ZIP archives, and the controlled parser limit was 20MB. After those fixes, direct string matching still rejected valid MiniMax evidence quotes because PDF extraction changed whitespace, punctuation and line-break hyphenation.",
+      "solution": "Apply traversal detection only when ZIP magic is present while retaining global EICAR/PE checks; raise the bounded parser input to 50MB; match evidence by exact text, whitespace equivalence, then a unique NFKC alphanumeric canonical sequence, always persisting the original manuscript substring and locator.",
+      "verification": "The real paper completed ECS upload, parsing, MiniMax extraction, review, confirm and version commit. Five supported fields have original-source character locators, while unsupported reproducibility remains explicitly missing. Focused artifact/worker tests preserve ZIP traversal rejection and the 50MB+1 boundary.",
+      "files": [
+        "packages/domain/src/artifact/scan.ts",
+        "packages/domain/test/artifact/scan.test.ts",
+        "apps/agent-worker/src/ingestion-parser.ts",
+        "apps/agent-worker/src/extractor.ts"
+      ],
+      "prevention": "Production ingestion acceptance must include a real large PDF, exact source-locator verification and explicit missing fields. Generic byte heuristics must be gated by the file format they describe."
+    },
+    {
+      "id": "issue-006",
+      "title": "MiniMax workspace guide output repeatedly failed the strict result contract",
+      "date": "2026-08-17",
+      "status": "resolved",
+      "tags": [
+        "troubleshooting/ai",
+        "troubleshooting/schema",
+        "troubleshooting/production"
+      ],
+      "description": "A real Dashboard workspace.guide task called MiniMax-M3 successfully three times but ended failed with the structured-output retry limit.",
+      "root_cause": "The prompt named fields without defining their exact types or allowed object keys and did not enumerate current authorized target IDs. MiniMax returned useful prose using title/description, a question array for needsMoreInformation, and open-task actions when no such target was available. Identical retries had no new constraint and repeated the mismatch.",
+      "solution": "Keep the strict guard and server authorization unchanged. Supply membership-scoped SDF core fields to the model, state the exact JSON shape and forbidden keys, require a boolean needsMoreInformation, and enumerate the only allowed task/RO IDs for navigation.",
+      "verification": "After a full ECS deployment, a real browser Dashboard submission succeeded in about 40 seconds, accurately identified the complete RO, the missing reproducibility evidence and duplicate diagnostic drafts, and returned only authorized RO/task navigation links.",
+      "files": [
+        "apps/agent-worker/src/workspace-guide.ts",
+        "apps/agent-worker/test/workspace-guide.test.ts"
+      ],
+      "prevention": "Structured AI prompts must specify exact types, exact allowed keys and runtime allowlists; retries must not be treated as evidence that an underspecified contract will self-correct."
     }
   ],
-  "last_updated": "2026-08-09"
+  "last_updated": "2026-08-17"
 }

@@ -66,6 +66,17 @@ run_remote() {
   ssh "${SSH_OPTS[@]}" "${SSH_USER}@${SSH_HOST}" "$1"
 }
 
+wait_for_healthy() {
+  local services=("$@")
+  run_remote "cd $REMOTE_ROOT && docker compose --env-file $PROD_ENV -f $COMPOSE_FILE up -d --wait --wait-timeout 300 ${services[*]}"
+}
+
+expect_http_status() {
+  local url="$1"
+  local expected="$2"
+  run_remote "actual=\$(curl -sS -o /dev/null -w '%{http_code}' '$url'); test \"\$actual\" = '$expected'"
+}
+
 # --- 参数化（§24 待确认项，改一处即可）---
 REMOTE_ROOT="/opt/openscience"
 PROD_ENV="$REMOTE_ROOT/.env.prod"
@@ -90,8 +101,8 @@ if [ "$CONFIRM" -ne 1 ]; then
   [ "$SKIP_BUILD" -eq 1 ] || plan "2. install + 全量 build（跨包 import 需全量）"
   [ "$SKIP_MIGRATE" -eq 1 ] || plan "3. migrate deploy + status 验证"
   [ "$SKIP_MIGRATE" -eq 1 ] || plan "4. seed-quota --confirm（幂等）"
-  plan "5. 生产栈：docker compose --env-file $PROD_ENV -f $COMPOSE_FILE up -d"
-  plan "5b. 重启 bind-mounted 应用进程：api web agent-worker（不重启数据服务）"
+  plan "5. 重建 agent-worker/document-parser 镜像并收敛生产栈"
+  plan "5b. parser 先行并硬等待 healthy；再收敛全栈，重启 bind-mounted api/web/agent-worker"
   plan "6. nginx：$NGINX_CONF 部署（nginx -t + reload）+ htpasswd-admin（首次）"
   plan "7. 验证：curl /auth/me 401、/admin basic_auth、安全头"
   exit 0
@@ -120,12 +131,15 @@ fi
 
 # 4. 生产栈
 log "[5] 生产栈 up..."
-run_remote "cd $REMOTE_ROOT && docker compose --env-file $PROD_ENV -f $COMPOSE_FILE up -d" || exit 1
+run_remote "cd $REMOTE_ROOT && docker compose --env-file $PROD_ENV -f $COMPOSE_FILE build agent-worker document-parser" || exit 1
+run_remote "cd $REMOTE_ROOT && docker compose --env-file $PROD_ENV -f $COMPOSE_FILE up -d --wait --wait-timeout 300 document-parser" || exit 1
+wait_for_healthy || exit 1
 
 # 源码与构建产物通过 bind mount 同步到长期运行的容器。Compose 配置未变化时，
 # `up -d` 不会重启这些进程，因此显式重启应用服务以切换到本次 release；数据服务保持运行。
-log "[5b] 重启 bind-mounted 应用进程..."
+log "[5b] 重启 bind-mounted api/web/agent-worker 并重新等待应用健康..."
 run_remote "cd $REMOTE_ROOT && docker compose --env-file $PROD_ENV -f $COMPOSE_FILE restart api web agent-worker" || exit 1
+wait_for_healthy api web agent-worker || exit 1
 
 # 5. nginx 反代 + /admin basic_auth（P1A-8）
 log "[6] nginx 反代部署..."
@@ -136,7 +150,8 @@ run_remote "systemctl reload nginx" || exit 1
 
 # 6. 验证
 log "[7] 验证..."
-run_remote "curl -sI https://OpenScience.428312321.xyz/auth/me | head -1 || true"
-run_remote "curl -sI -u dummy:x https://OpenScience.428312321.xyz/admin/ | head -1 || true"
+expect_http_status https://OpenScience.428312321.xyz/ 200
+expect_http_status https://OpenScience.428312321.xyz/auth/me 401
+expect_http_status https://OpenScience.428312321.xyz/admin/ 401
 
 log "=== 部署完成（release=$RELEASE_REF）==="

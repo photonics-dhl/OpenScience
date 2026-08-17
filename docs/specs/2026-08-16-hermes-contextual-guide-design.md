@@ -1,9 +1,9 @@
 # Hermes Contextual Guide Design
 
-Status: **Approved for planning**
+Status: **DEPRECATED → superseded by `docs/specs/2026-08-17-hermes-workspace-companion-motion-design.md`**
 Date: 2026-08-16
 Supersedes: none
-Related visual asset spec: `docs/specs/2026-08-15-hermes-2d-pet-design.md`
+Related visual renderer spec: `docs/specs/2026-08-16-hermes-articulated-mesh-pet-design.md`
 
 ## 1. Goal
 
@@ -149,8 +149,12 @@ Closing and reopening the drawer restores the current session/task. A page reloa
 - Drawer focus is trapped, Escape closes it, and focus returns to the opener.
 - Desktop and mobile expose equivalent functionality.
 - Reduced motion disables idle, pointer, transition, and prompt entrance animation while retaining content and actions.
-- The implementation adds no Canvas, WebGL, Live2D runtime, 3D asset, or third-party mascot dependency.
+- The guide/task implementation is renderer-independent. The CURRENT renderer may use the existing project OGL runtime with original assets, but adds no third-party mascot binary, Cubism runtime, or unreviewed licence obligation.
 - Timers pause while the document is hidden and are disposed on unmount.
+- One AI Credit is reserved and charged atomically when a new task is accepted (including provider failure/retry); an idempotent replay never charges again. This prevents concurrent overspend and makes the failure policy explicit.
+- The API and Worker use one shared bounded `workspace.guide` payload parser; task, credit reservation and submission audit commit before Redis dispatch, and model-call metadata is persisted without goal/prompt/key content.
+- Serializable credit reservation retries Prisma `P2034` at most three times. A committed but undispatched guide task remains a DB outbox row and is reconciled by the single Worker; processing residues are recovered on Worker startup. This reconciliation intentionally excludes ingestion tasks created with `dispatch:false` before their association row exists.
+- Audit persistence failure is surfaced through the Worker logger but cannot turn a successful, already-billed provider response into fallback or structured-output replay.
 
 ## 7. Verification
 
@@ -180,9 +184,9 @@ Automation is necessary but not sufficient. Final acceptance requires a user-vis
 
 ## 8. Non-goals
 
-- replacing the approved 2.5D constellation-dragon asset;
+- replacing the approved constellation-dragon identity or its original texture source;
 - returning to rejected Blender/3D/robot concepts;
-- introducing Live2D before the ADR-010 licence gate is satisfied;
+- introducing Wanko/Cubism or another third-party character binary before its licence gate is satisfied;
 - creating unrestricted autonomous actions;
 - building a general multi-thread chat product in this increment;
 - changing database schema, quotas, or approval policy.

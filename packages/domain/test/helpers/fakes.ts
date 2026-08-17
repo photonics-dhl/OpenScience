@@ -695,11 +695,16 @@ export function createFakePrisma(): { prisma: PrismaClient; db: FakeDb } {
         rows.forEach((row) => Object.assign(row, data, { updatedAt: new Date() }));
         return { count: rows.length };
       },
-      findMany: async ({ where, include }: any) => {
+      findMany: async ({ where, include, orderBy, take }: any) => {
         let rows = db.agentTasks.filter((t) =>
-          (where.session === undefined || (where.session.userId === undefined || db.agentSessions.find((s) => s.id === t.sessionId)?.userId === where.session.userId)),
+          (where.session === undefined || (where.session.userId === undefined || db.agentSessions.find((s) => s.id === t.sessionId)?.userId === where.session.userId)) &&
+          (where.kind === undefined || t.kind === where.kind) &&
+          (where.dispatchedAt === undefined || t.dispatchedAt === where.dispatchedAt) &&
+          (typeof where.status !== 'string' || t.status === where.status),
         );
         if (where.status?.in) rows = rows.filter((task) => where.status.in.includes(task.status));
+        if (orderBy?.createdAt === 'asc') rows.sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime());
+        if (typeof take === 'number') rows = rows.slice(0, take);
         if (include?.session) {
           rows = rows.map((task) => ({ ...task, session: db.agentSessions.find((session) => session.id === task.sessionId) }));
         }

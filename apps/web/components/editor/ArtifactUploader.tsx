@@ -3,6 +3,7 @@
 import { useRef, useState } from 'react';
 import { useTranslations } from 'next-intl';
 import { ArtifactRow } from '@/components/research/ArtifactRow';
+import { HermesAnchor } from '@/components/hermes/HermesAnchor';
 import { prepareProtectedXhr, type ArtifactReference } from '../../lib/api';
 
 interface UploadJob {
@@ -69,6 +70,7 @@ export default function ArtifactUploader({
   }
 
   return (
+    <HermesAnchor id="source-import">
     <section className="mt-10 border-t border-os-rule-dark pt-5" id="artifacts">
       <div className="flex items-center justify-between gap-4">
         <h2 className="m-0 font-editorial text-2xl font-normal text-os-paper">{t('artifacts')}</h2>
@@ -106,5 +108,6 @@ export default function ArtifactUploader({
         ))}
       </div>
     </section>
+    </HermesAnchor>
   );
 }

@@ -18,10 +18,11 @@ describe('parseIngestion', () => {
     });
   });
 
-  it('使用受控 PDF adapter 返回正文，并拒绝过大输入', async () => {
+  it('使用受控 PDF adapter 接受真实论文大小，并拒绝超过 50 MB 的输入', async () => {
     const adapters = { pdf: async (content: Buffer) => `PDF:${content.length}` };
     await expect(parseIngestionWithAdapters('paper.pdf', Buffer.from('%PDF-1.7'), adapters)).resolves.toMatchObject({ status: 'ready', format: 'pdf', text: 'PDF:8' });
-    await expect(parseIngestionWithAdapters('paper.pdf', Buffer.alloc(20 * 1024 * 1024 + 1), adapters)).resolves.toMatchObject({ status: 'needs_review', reason: 'parser-input-too-large' });
+    await expect(parseIngestionWithAdapters('paper.pdf', Buffer.alloc(24_671_920), adapters)).resolves.toMatchObject({ status: 'ready', format: 'pdf', text: 'PDF:24671920' });
+    await expect(parseIngestionWithAdapters('paper.pdf', Buffer.alloc(50 * 1024 * 1024 + 1), adapters)).resolves.toMatchObject({ status: 'needs_review', reason: 'parser-input-too-large' });
   });
 
   it('图片优先使用本地 OCR adapter', async () => {

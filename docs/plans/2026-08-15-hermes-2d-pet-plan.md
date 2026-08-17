@@ -1,5 +1,7 @@
 # Hermes 2.5D Pet Implementation Plan
 
+Status: **DEPRECATED / VISUAL NO-GO on 2026-08-16 → superseded by `docs/plans/2026-08-16-hermes-articulated-mesh-pet-plan.md`.** The PNG asset work remains reusable; the deleted `HermesPetPortrait` and CSS-signal runtime are historical only and must not be resumed.
+
 **Goal:** Replace the rejected procedural 3D experiment with an original, high-quality transparent 2.5D Hermes pet prototype inside the existing visual adapter.
 
 **Architecture:** Three consistent transparent PNG frames feed a small `HermesPetPortrait` presentation component. `HermesVisualAdapter` retains state, link and pointer ownership; CSS owns compositor-only motion. A dependency-free Node inspector and Vitest contracts guard the assets and SSR structure.
@@ -66,8 +68,8 @@
 - Modify: `apps/web/test/hermes-state.test.tsx`
 - Modify: `apps/web/test/e2e/hermes-dashboard.spec.ts`
 
-- [ ] Add a focused RED contract requiring real head/body/tail presentation layers while preserving one semantic Hermes instance and three canonical frames.
-- [ ] Add a browser RED assertion that idle head/body transforms diverge over time and pointer input produces distinct head/body/tail transforms before reset.
-- [ ] Implement feathered head/body/tail overlays from the active canonical frame; do not add image assets or runtime dependencies.
-- [ ] Drive bounded pointer variables from the existing adapter and keep approval/reduced-motion completely still.
-- [ ] Run focused, browser desktop/mobile/reduced, full Web, typecheck/build, docs and diff gates; inspect actual motion in the open Workspace preview.
+- [x] Add a focused RED contract requiring head/body/tail life signals while preserving one semantic Hermes instance and three canonical frames.
+- [x] Add browser RED assertions for divergent idle motion, actual visible signal response, immediate responsive-to-still reset and pointer leave reset.
+- [x] Keep one visible active frame and implement CSS-only observation-light, breathing-aura and citation-tail signals; do not duplicate character pixels, add image assets or add runtime dependencies.
+- [x] Drive bounded pointer variables from the existing adapter and keep approval/reduced-motion completely still.
+- [x] Run focused, browser desktop/mobile/reduced, full Web, typecheck/build, docs and diff gates; inspect actual motion in the open Workspace preview.

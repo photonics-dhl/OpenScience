@@ -84,6 +84,35 @@ describe('调用日志脱敏（§17）', () => {
     expect(log.provider).toBe('primary');
     expect(log.latencyMs).toBeTypeOf('number');
   });
+
+  it('审计落库失败不重放已成功的 provider 调用', async () => {
+    let primaryCalls = 0;
+    let fallbackCalls = 0;
+    const primary = fakeProvider('primary', async () => {
+      primaryCalls += 1;
+      return OK('{"method":"m"}');
+    });
+    const fallback = fakeProvider('fallback', async () => {
+      fallbackCalls += 1;
+      return OK('{"method":"fallback"}');
+    });
+    const errors: string[] = [];
+    const gateway = new AiGateway({
+      providers: [primary, fallback],
+      audit: { record: async () => { throw new Error('audit unavailable'); } } as never,
+      logger: { info: () => undefined, warn: () => undefined, error: (message) => errors.push(String(message)) },
+    });
+
+    const result = await gateway.completeStructured(
+      (value): value is { method: string } => typeof value === 'object' && value !== null && typeof (value as { method?: unknown }).method === 'string',
+      [{ role: 'user', content: 'x' }],
+    );
+
+    expect(result).toEqual({ method: 'm' });
+    expect(primaryCalls).toBe(1);
+    expect(fallbackCalls).toBe(0);
+    expect(errors).toEqual([expect.stringContaining('audit unavailable')]);
+  });
 });
 
 describe('OpenAiCompatProvider（fetch 直连，Q1）', () => {

@@ -1,7 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import { createFakePrisma, seedUser } from '../helpers/fakes';
 import { createResearchObject } from '../../src/research-object/research-objects';
-import { claimAgentTask, createAgentSession, submitAgentTask, getAgentTask, listAgentTasks, markTaskProgress } from '../../src/agent/agent';
+import {
+  claimAgentTask, createAgentSession, submitAgentTask, getAgentTask, listAgentTasks, markTaskProgress,
+  recoverUndispatchedAgentTasks,
+} from '../../src/agent/agent';
 
 /** 内存 Redis fake（队列：agent:queue）。 */
 function fakeRedis() {
@@ -100,6 +103,28 @@ describe('AgentSession/AgentTask（§15 + §16 幂等 + §9.1 配额）', () => 
     expect(redis.lists.get('agent:queue')).toEqual([replay.id]);
   });
 
+  it('worker reconciliation 重派已提交但未写入 Redis 的任务', async () => {
+    const { deps, user, ro, redis, db } = await makeDeps();
+    const session = await createAgentSession(deps, { userId: user.id, researchObjectId: ro.id, kind: 'workspace.guide' });
+    const originalLpush = redis.lpush;
+    redis.lpush = async () => { throw new Error('redis unavailable'); };
+    const input = {
+      sessionId: session.id,
+      userId: user.id,
+      kind: 'workspace.guide',
+      payload: {},
+      idempotencyKey: 'recover-without-client-replay',
+    };
+    await expect(submitAgentTask(deps, input)).rejects.toThrow(/redis unavailable/);
+    const [pending] = db.agentTasks;
+    expect(pending.dispatchedAt).toBeNull();
+
+    redis.lpush = originalLpush;
+    expect(await recoverUndispatchedAgentTasks(deps)).toBe(1);
+    expect(redis.lists.get('agent:queue')).toEqual([pending.id]);
+    expect(db.agentTasks[0].dispatchedAt).toBeInstanceOf(Date);
+  });
+
   it('worker CAS claim 只允许一个消费者执行任务', async () => {
     const { deps, user, ro } = await makeDeps();
     const session = await createAgentSession(deps, { userId: user.id, researchObjectId: ro.id, kind: 'extract' });
@@ -149,6 +174,65 @@ describe('AgentSession/AgentTask（§15 + §16 幂等 + §9.1 配额）', () => 
     ).rejects.toThrow(/AI Credit 不足/);
   });
 
+  it('提交时原子预留 AI Credit，不能在首个任务完成前继续透支', async () => {
+    const { deps, user, ro, db } = await makeDeps(1);
+    const session = await createAgentSession(deps, { userId: user.id, researchObjectId: ro.id, kind: 'workspace.guide' });
+    const first = await submitAgentTask(deps, {
+      sessionId: session.id, userId: user.id, kind: 'workspace.guide', payload: {}, idempotencyKey: 'reserve-one', dispatch: false,
+    });
+    expect(db.usageLedger.filter((entry) => entry.idempotencyKey === `agent-task-reserve:${first.id}`)).toHaveLength(1);
+    await expect(submitAgentTask(deps, {
+      sessionId: session.id, userId: user.id, kind: 'workspace.guide', payload: {}, idempotencyKey: 'reserve-two', dispatch: false,
+    })).rejects.toThrow(/AI Credit 不足/);
+  });
+
+  it('Serializable 冲突后重试额度预留且只创建一个任务', async () => {
+    const { deps, user, ro, db } = await makeDeps(1);
+    const session = await createAgentSession(deps, { userId: user.id, researchObjectId: ro.id, kind: 'workspace.guide' });
+    const prisma = (deps as { prisma: { $transaction: (fn: (tx: unknown) => Promise<unknown>, options?: unknown) => Promise<unknown> } }).prisma;
+    const originalTransaction = prisma.$transaction;
+    let attempts = 0;
+    prisma.$transaction = async (fn, options) => {
+      attempts += 1;
+      if (attempts === 1) throw Object.assign(new Error('serialization conflict'), { code: 'P2034' });
+      return originalTransaction(fn, options);
+    };
+
+    const task = await submitAgentTask(deps, {
+      sessionId: session.id,
+      userId: user.id,
+      kind: 'workspace.guide',
+      payload: {},
+      idempotencyKey: 'serializable-retry',
+      dispatch: false,
+    });
+
+    expect(attempts).toBe(2);
+    expect(db.agentTasks.filter((entry) => entry.id === task.id)).toHaveLength(1);
+    expect(db.usageLedger.filter((entry) => entry.idempotencyKey === `agent-task-reserve:${task.id}`)).toHaveLength(1);
+  });
+
+  it('creates the task audit and credit reservation before Redis dispatch', async () => {
+    const { deps, user, ro, redis, db } = await makeDeps(1);
+    const events: Array<{ action: string }> = [];
+    (deps as { audit?: unknown }).audit = { record: async (event: { action: string }) => { events.push(event); } };
+    const session = await createAgentSession(deps, { userId: user.id, researchObjectId: ro.id, kind: 'workspace.guide' });
+    redis.lpush = async () => {
+      expect(events.map((event) => event.action)).toContain('agent.task.submit');
+      expect(db.usageLedger.some((entry) => String(entry.idempotencyKey).startsWith('agent-task-reserve:'))).toBe(true);
+      return 1;
+    };
+    await submitAgentTask(deps, { sessionId: session.id, userId: user.id, kind: 'workspace.guide', payload: {} });
+  });
+
+  it('workspace.guide 任务不能借用其他 kind 的会话', async () => {
+    const { deps, user, ro } = await makeDeps();
+    const session = await createAgentSession(deps, { userId: user.id, researchObjectId: ro.id, kind: 'extract' });
+    await expect(submitAgentTask(deps, {
+      sessionId: session.id, userId: user.id, kind: 'workspace.guide', payload: {}, dispatch: false,
+    })).rejects.toThrow(/会话类型/);
+  });
+
   it('他人会话提交 → 404（§17 越权）', async () => {
     const { deps, db, user, ro } = await makeDeps();
     const session = await createAgentSession(deps, { userId: user.id, researchObjectId: ro.id, kind: 'extract' });
@@ -156,6 +240,24 @@ describe('AgentSession/AgentTask（§15 + §16 幂等 + §9.1 配额）', () => 
     await expect(
       submitAgentTask(deps, { sessionId: session.id, userId: outsider.id, kind: 'x', payload: {} }),
     ).rejects.toThrow(/会话不存在/);
+  });
+
+  it('拒绝把其它 Workspace 的 Artifact 绑定到 sdf.extract 会话', async () => {
+    const { deps, db, user, ro } = await makeDeps();
+    db.artifacts.push({
+      id: 'artifact-other-workspace', logicalPath: 'private-paper.pdf', mimeType: 'application/pdf', size: 12n,
+      blobSha256: 'a'.repeat(64), uploadedBy: 'other-user', workspaceId: 'ws-other', createdAt: new Date(), idempotencyKey: null,
+    });
+    const session = await createAgentSession(deps, { userId: user.id, researchObjectId: ro.id, kind: 'ingestion' });
+
+    await expect(submitAgentTask(deps, {
+      sessionId: session.id,
+      userId: user.id,
+      kind: 'sdf.extract',
+      payload: { artifactId: 'artifact-other-workspace', researchObjectId: ro.id },
+      dispatch: false,
+    })).rejects.toThrow(/Artifact/);
+    expect(db.agentTasks).toHaveLength(0);
   });
 
   it('任务状态机：非法迁移拒绝 + 终态幂等', async () => {
@@ -170,7 +272,7 @@ describe('AgentSession/AgentTask（§15 + §16 幂等 + §9.1 配额）', () => 
     await markTaskProgress(deps, { taskId: task.id, status: 'running', progress: 50 });
     const done = await markTaskProgress(deps, { taskId: task.id, status: 'succeeded', progress: 100, result: { ok: true } });
     expect(done.status).toBe('succeeded');
-    expect(db.usageLedger.filter((entry) => entry.idempotencyKey === `agent-task-consume:${task.id}`)).toHaveLength(1);
+    expect(db.usageLedger.filter((entry) => entry.idempotencyKey === `agent-task-reserve:${task.id}`)).toHaveLength(1);
     // 终态重放 → skip（§16 幂等，不抛错不覆盖）
     const replay = await markTaskProgress(deps, { taskId: task.id, status: 'running', progress: 10 });
     expect(replay.status).toBe('succeeded');

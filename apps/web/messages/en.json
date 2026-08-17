@@ -497,7 +497,31 @@
       "review": "Review evidence",
       "retry": "Retry task",
       "view": "View progress",
-      "progress": "{current} of {total} fields"
+      "progress": "{current} of {total} fields",
+      "guide": {
+        "actionable": { "title": "A research task can move forward", "body": "I can start with the highest-priority task and help determine the next step." },
+        "review": { "title": "Evidence needs your review", "body": "The current task is explicitly marked for review. We can begin by checking the evidence." },
+        "failed": { "title": "A task needs investigation", "body": "The current task did not complete. I can explain the failure and suggest a safe recovery path." },
+        "processing": { "title": "Hermes is organising the material", "body": "The current task is still processing. I can explain its progress and prepare the checks that follow." },
+        "queued": { "title": "A research task is queued", "body": "The task has not started yet. I can help organise the research steps that come next." },
+        "continue": { "title": "Continue your latest research", "body": "I can organise the next step around this research object without changing anything you have not approved." },
+        "neutral": { "title": "What would you like to advance today?", "body": "I will understand the goal first, then propose a verifiable and actionable research path." },
+      "invoke": "Invoke Hermes",
+      "eyebrow": "Hermes / contextual guide",
+      "dialogLabel": "Hermes research guide",
+        "title": "Start with the goal. I will guide the route.",
+        "close": "Close Hermes",
+        "openContext": "Open current task",
+        "goalLabel": "What would you like to advance today?",
+        "goalPlaceholder": "For example: organise the imported paper into a reusable RO structure",
+        "submit": "Ask Hermes to plan",
+      "working": "Hermes is organising the evidence…",
+      "progress": "Task progress {progress}%",
+      "resume": "Resume this task",
+      "result": "Suggested research path",
+      "needsMoreInformation": "I need a little more context before I can offer reliable guidance.",
+      "error": "Hermes could not complete this plan. Your goal is preserved so you can retry."
+      }
     },
     "research": {
       "title": "Your research",
@@ -714,6 +738,26 @@
     "schedule": "Schedule now",
     "publish": "Publish selection",
     "error": "The editorial queue could not be loaded."
+  },
+  "hermesCompanion": {
+    "dismiss": "Dismiss Hermes guidance",
+    "explain": "Explain",
+    "draft": "Draft",
+    "check": "Check",
+    "takeMeThere": "Take me there",
+    "targets": {
+      "ro-title": "Give this research object a precise title.",
+      "source-import": "Bring the source evidence in here.",
+      "research-question": "State the question the work resolves.",
+      "sdf-problem": "Start with the research problem.",
+      "sdf-insight": "Name the central insight.",
+      "sdf-method": "Describe the method and boundary.",
+      "sdf-evidence": "Record evidence and reproducibility.",
+      "sdf-results": "Distil the result.",
+      "sdf-limitations": "Make the limitations explicit.",
+      "hermes-diff": "Review every proposed change.",
+      "commit": "Commit only what you accept."
+    }
   },
   "opticalLab": {
     "eyebrow": "Optical Lab / non-production comparison",

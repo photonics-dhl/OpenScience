@@ -11,10 +11,13 @@
     "test:e2e": "playwright test --config playwright.config.ts",
     "test:e2e:signup": "playwright test --config playwright.signup.config.ts",
     "test:release": "playwright test product-release.spec.ts --config playwright.release.config.ts",
+    "test:hermes-release": "node test/visual/hermes-release-gate.mjs",
+    "test:hermes-companion-release": "node test/visual/hermes-release-gate.mjs",
     "shots": "node test/visual/shots.mjs",
     "shots:workspace": "node test/visual/workspace-shots.mjs",
     "shots:public": "node test/visual/public-reading-shots.mjs",
     "shots:optical-lab": "node test/visual/optical-lab-gate.mjs",
+    "shots:hermes": "node test/visual/hermes-articulation-gate.mjs",
     "atlas:optical": "node scripts/generate-optical-atlas.mjs"
   },
   "dependencies": {

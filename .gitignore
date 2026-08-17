@@ -54,6 +54,8 @@ test-results-*/
 # gates remain under apps/web/test/visual/ and are tracked/linted.
 tmp/
 apps/web/tmp/
+test/visual/out/
+apps/web/test/visual/out/
 
 # cloud-sync 服务器凭据（本机生成不入库，同 .mcp.json 模式）
 .cloud-sync-env

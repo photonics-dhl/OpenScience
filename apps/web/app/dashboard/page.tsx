@@ -11,10 +11,12 @@ import { ContinueResearch } from '@/components/dashboard/ContinueResearch';
 import { ImportStage } from '@/components/dashboard/ImportStage';
 import { ResearchList } from '@/components/dashboard/ResearchList';
 import { HermesRail, type HermesRailTask } from '@/components/hermes/HermesRail';
-import { HermesVisualAdapter } from '@/components/hermes/HermesVisualAdapter';
-import { deriveHermesVisualState, hermesTaskHref } from '@/components/hermes/hermes-state';
+import { HermesAssistantDrawer } from '@/components/hermes/HermesAssistantDrawer';
+import { HermesDockAnchor } from '@/components/hermes/HermesDockAnchor';
+import { deriveHermesGuide } from '@/components/hermes/hermes-guide';
+import { deriveHermesCompositeVisualState } from '@/components/hermes/hermes-state';
 import { DashboardShell } from '@/components/shell/DashboardShell';
-import { ApiClientError, getCurrentUser, getDashboardOverview, type CurrentUser } from '@/lib/api';
+import { ApiClientError, getCurrentUser, getDashboardOverview, type AgentTaskView, type CurrentUser } from '@/lib/api';
 import type { DashboardResearch } from '@/components/dashboard/ResearchList';
 import type { Locale } from '@/i18n/locale';
 
@@ -26,6 +28,8 @@ export default function DashboardPage() {
   const [researchObjects, setResearchObjects] = useState<DashboardResearch[]>([]);
   const [tasks, setTasks] = useState<HermesRailTask[]>([]);
   const [error, setError] = useState('');
+  const [hermesOpen, setHermesOpen] = useState(false);
+  const [guideTask, setGuideTask] = useState<AgentTaskView | null>(null);
 
   useEffect(() => {
     let active = true;
@@ -80,9 +84,13 @@ export default function DashboardPage() {
     );
   }
 
-  const primaryTask = tasks[0] ?? null;
-  const visualState = deriveHermesVisualState(tasks);
-  const visualHref = primaryTask ? hermesTaskHref(primaryTask) : '/research-objects/new?mode=import';
+  const guideWorking = guideTask?.status === 'pending' || guideTask?.status === 'running';
+  const visualState = deriveHermesCompositeVisualState(tasks, guideWorking);
+  const suggestion = deriveHermesGuide({ tasks, researchObjects });
+  const dashboardContext = {
+    tasks: tasks.slice(0, 20).map((task) => ({ id: task.id, researchObjectId: task.researchObjectId, state: task.state })),
+    researchObjects: researchObjects.slice(0, 20).map((research) => ({ id: research.id, title: research.title, status: research.status })),
+  };
 
   return (
     <DashboardShell
@@ -115,7 +123,7 @@ export default function DashboardPage() {
           <ContinueResearch research={researchObjects[0] ?? null} />
         </div>
         <div className="lg:col-span-4 lg:row-span-2">
-          <HermesVisualAdapter href={visualHref} state={visualState} />
+          <HermesDockAnchor assistantOpen={hermesOpen} onInvoke={() => setHermesOpen(true)} state={visualState} suggestion={suggestion} />
           <HermesRail tasks={tasks} />
         </div>
         <div className="lg:col-span-8">
@@ -125,6 +133,14 @@ export default function DashboardPage() {
           <ResearchList researchObjects={researchObjects} />
         </div>
       </div>
+      <HermesAssistantDrawer
+        dashboardContext={dashboardContext}
+        locale={locale}
+        onOpenChange={setHermesOpen}
+        onTaskStateChange={setGuideTask}
+        open={hermesOpen}
+        suggestion={suggestion}
+      />
     </DashboardShell>
   );
 }

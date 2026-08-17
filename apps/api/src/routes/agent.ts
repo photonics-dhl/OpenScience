@@ -1,7 +1,7 @@
 import type { FastifyInstance, FastifyRequest } from 'fastify';
 import { z } from 'zod';
 import type { AuthDeps } from '@openscience/auth';
-import { createAgentSession, getAgentTask, listAgentSessions, listAgentTasks, submitAgentTask, approveApproval, listPendingApprovals, rejectApproval, revokeApproval } from '@openscience/domain';
+import { createAgentSession, getAgentTask, listAgentSessions, listAgentTasks, parseWorkspaceGuidePayload, submitAgentTask, approveApproval, listPendingApprovals, rejectApproval, revokeApproval } from '@openscience/domain';
 import type { AuditContext } from '@openscience/observability';
 import { requireCurrentUser } from './session-guard';
 
@@ -17,11 +17,25 @@ const sessionBody = z.object({
   kind: z.string().min(1).max(64),
   title: z.string().max(200).optional(),
 });
-const taskBody = z.object({
+const workspaceGuideTaskBody = z.object({
   sessionId: z.string().uuid(),
-  kind: z.string().min(1).max(64),
+  kind: z.literal('workspace.guide'),
+  payload: z.unknown().transform((payload, ctx) => {
+    try { return parseWorkspaceGuidePayload(payload); }
+    catch (error) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, message: error instanceof Error ? error.message : 'workspace.guide payload 无效' });
+      return z.NEVER;
+    }
+  }),
+}).strict();
+const genericTaskBody = z.object({
+  sessionId: z.string().uuid(),
+  kind: z.string().min(1).max(64).refine((kind) => kind !== 'workspace.guide'),
   payload: z.record(z.string(), z.unknown()).default({}),
+}).strict().superRefine((value, ctx) => {
+  if (JSON.stringify(value.payload).length > 65_536) ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'payload exceeds 64KB' });
 });
+export const agentTaskBodySchema = z.union([workspaceGuideTaskBody, genericTaskBody]);
 
 /**
  * P1D-2：/agent Hermes 会话与异步任务 API（§9.3 长任务 + §16 幂等 + §18.3 进度可恢复 + §9.1 配额）。
@@ -35,9 +49,16 @@ export function registerAgentRoutes(app: FastifyInstance, deps: AgentRouteDeps):
     const user = await requireCurrentUser(deps, req, reply);
     if (!user) return;
     const body = sessionBody.parse(req.body);
+    const idempotencyKey = req.headers['idempotency-key'];
     const session = await createAgentSession(
       deps,
-      { userId: user.userId, researchObjectId: body.researchObjectId, kind: body.kind, title: body.title },
+      {
+        userId: user.userId,
+        researchObjectId: body.researchObjectId,
+        kind: body.kind,
+        title: body.title,
+        idempotencyKey: typeof idempotencyKey === 'string' ? idempotencyKey : undefined,
+      },
       auditCtx(req),
     );
     return reply.status(201).send({ session });
@@ -52,14 +73,14 @@ export function registerAgentRoutes(app: FastifyInstance, deps: AgentRouteDeps):
   app.get('/agent/tasks', async (req, reply) => {
     const user = await requireCurrentUser(deps, req, reply);
     if (!user) return;
-    const { actionable } = z.object({ actionable: z.enum(['true', 'false']).default('true') }).parse(req.query);
-    return reply.send({ tasks: await listAgentTasks(deps, { userId: user.userId, actionableOnly: actionable === 'true' }) });
+    const { actionable, kind } = z.object({ actionable: z.enum(['true', 'false']).default('true'), kind: z.string().min(1).max(64).optional() }).parse(req.query);
+    return reply.send({ tasks: await listAgentTasks(deps, { userId: user.userId, actionableOnly: actionable === 'true', kind }) });
   });
 
   app.post('/agent/tasks', async (req, reply) => {
     const user = await requireCurrentUser(deps, req, reply);
     if (!user) return;
-    const body = taskBody.parse(req.body);
+    const body = agentTaskBodySchema.parse(req.body);
     const idempotencyKey = req.headers['idempotency-key'];
     const task = await submitAgentTask(
       deps,

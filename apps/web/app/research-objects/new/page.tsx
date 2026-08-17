@@ -7,6 +7,7 @@ import * as React from 'react';
 import { useCallback, useEffect, useMemo, useState, type FormEvent } from 'react';
 
 import { EvidenceIntake } from '@/components/intake/EvidenceIntake';
+import { HermesAnchor } from '@/components/hermes/HermesAnchor';
 import { createIntakeMaterials, updateMaterialFromTask, type IntakeMaterial } from '@/components/intake/intake-model';
 import {
   createResearchObject,
@@ -190,11 +191,13 @@ export default function NewResearchObjectPage() {
               </label>
               <label className="grid gap-2 text-[11px] uppercase tracking-[0.14em] text-white/45">
                 {t('researchTitle')}
-                <input className="min-h-12 border-0 border-b border-white/25 bg-transparent px-1 text-base normal-case tracking-normal text-white outline-none placeholder:text-white/25 focus:border-[#ef4c2f]" name="title" required maxLength={200} value={title} onChange={(event) => setTitle(event.target.value)} placeholder={intakeT('titlePlaceholder')} />
+                <HermesAnchor id="ro-title">
+                  <input className="min-h-12 w-full border-0 border-b border-white/25 bg-transparent px-1 text-base normal-case tracking-normal text-white outline-none placeholder:text-white/25 focus:border-[#ef4c2f]" name="title" required maxLength={200} value={title} onChange={(event) => setTitle(event.target.value)} placeholder={intakeT('titlePlaceholder')} />
+                </HermesAnchor>
               </label>
             </section>
 
-            {mode === 'import' ? <div className="pt-10"><EvidenceIntake materials={materials} onChange={setMaterials} onRetry={retry} /></div> : (
+            {mode === 'import' ? <div className="pt-10"><HermesAnchor id="source-import"><EvidenceIntake materials={materials} onChange={setMaterials} onRetry={retry} /></HermesAnchor></div> : (
               <section className="border-b border-white/20 py-12">
                 <p className="font-display text-3xl">{intakeT('blankTitle')}</p>
                 <p className="mt-3 max-w-xl text-sm leading-6 text-white/50">{intakeT('blankBody')}</p>
