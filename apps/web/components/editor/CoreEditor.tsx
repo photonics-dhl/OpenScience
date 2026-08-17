@@ -1,12 +1,13 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { useTranslations } from 'next-intl';
 
 import { SDFNode } from '@/components/research/SDFNode';
 import { HermesAnchor } from '@/components/hermes/HermesAnchor';
+import { useOptionalHermesWorkspaceStage } from '@/components/hermes/HermesWorkspaceStage';
 import type { HermesAnchorId } from '@/lib/hermes/anchor-registry';
 import type { SdfCore } from '../../lib/api';
 
@@ -36,6 +37,11 @@ export default function CoreEditor({
   const t = useTranslations('editor');
   const [preview, setPreview] = useState(false);
   const current = activeField ?? 'problem';
+  const hermesStage = useOptionalHermesWorkspaceStage();
+
+  useEffect(() => {
+    hermesStage?.requestGuide(HERMES_FIELD_ANCHORS[current]);
+  }, [current, hermesStage]);
 
   return (
     <div>

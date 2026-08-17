@@ -8,6 +8,12 @@ async function mockWorkspace(page: Page) {
   await page.route('**/api/workspaces**', (route) => json(route, { workspaces: [{ id: 'workspace-guide', name: 'Ada lab' }] }));
   await page.route('**/api/research-objects?limit=20', (route) => json(route, { researchObjects: [] }));
   await page.route('**/api/ingestion?actionable=true', (route) => json(route, { tasks: [] }));
+  await page.route('**/api/agent/tasks**', (route) => json(route, { tasks: [] }));
+  await page.route('**/api/research-objects/ro-guide/versions', (route) => json(route, { versions: [] }));
+  await page.route('**/api/research-objects/ro-guide', (route) => json(route, { researchObject: {
+    id: 'ro-guide', workspaceId: 'workspace-guide', title: 'Attosecond optical sampling', visibility: 'private', version: 1,
+    sdf: { core: { schemaVersion: '0.1.0', problem: '', insight: '', method: '', results: '', limitations: '', reproducibility: '' } },
+  } }));
 }
 
 test('Hermes arrives beside the first RO field without covering it', async ({ page }) => {
@@ -41,8 +47,40 @@ test('reduced motion retains the guide actions without positional travel or part
   const stage = page.locator('[data-hermes-workspace-stage]');
   await expect(page.locator('[data-hermes-guide-bubble]')).toBeVisible();
   await expect(page.getByRole('button', { name: /Explain|解释/i })).toBeVisible();
-  await expect(page.getByRole('button', { name: /Draft|草拟/i })).toBeVisible();
-  await expect(page.getByRole('button', { name: /Check|检查/i })).toBeVisible();
+  await expect(page.getByRole('button', { name: /Draft|草拟/i })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: /Check|检查/i })).toHaveCount(0);
+  await page.getByRole('button', { name: /Explain|解释/i }).click();
+  await expect(page.locator('[data-hermes-guide-explanation]')).toBeVisible();
   await expect(stage).toHaveAttribute('data-hermes-guide-motion', 'static');
   await expect(stage.locator('[data-hermes-particles]')).toHaveCount(0);
+});
+
+test('creation guidance advances to source import and the route keeps a working Hermes entry', async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await mockWorkspace(page);
+  await page.goto(`${baseUrl}/research-objects/new?mode=import&hermes-motion=full`, { waitUntil: 'networkidle' });
+
+  const stage = page.locator('[data-hermes-workspace-stage]');
+  await expect(stage).toHaveAttribute('data-hermes-guide-target', 'ro-title');
+  await page.locator('input[name="title"]').fill('Attosecond optical sampling');
+  await expect(stage).toHaveAttribute('data-hermes-guide-target', 'source-import');
+  await expect(page.locator('[data-hermes-guide-bubble]')).toContainText(/source|证据/i);
+
+  await stage.locator('[data-hermes-input-owner]').click();
+  await expect(page.getByRole('dialog')).toBeVisible();
+});
+
+test('editing guidance follows the selected SDF field and keeps functional draft actions', async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await mockWorkspace(page);
+  await page.goto(`${baseUrl}/research-objects/ro-guide/edit?hermes-motion=full`, { waitUntil: 'networkidle' });
+
+  const stage = page.locator('[data-hermes-workspace-stage]');
+  await expect(stage).toHaveAttribute('data-hermes-guide-target', 'sdf-problem');
+  await page.locator('[data-sdf-node="2"] > button').click();
+  await expect(stage).toHaveAttribute('data-hermes-guide-target', 'sdf-insight');
+  await expect(page.getByRole('button', { name: /Draft|草拟/i })).toBeVisible();
+  await expect(page.getByRole('button', { name: /Check|检查/i })).toBeVisible();
+  await page.getByRole('button', { name: /Explain|解释/i }).click();
+  await expect(page.locator('[data-hermes-guide-explanation]')).toContainText(/claim|evidence|论断|证据/i);
 });

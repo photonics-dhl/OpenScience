@@ -10,7 +10,6 @@ import type { HermesActionId } from '@/lib/hermes/action-catalog';
 import { HermesRiggedPortrait } from './HermesRiggedPortrait';
 import type { HermesGuideSuggestion } from './hermes-guide';
 import type { HermesVisualState } from './hermes-state';
-import { resolveHermesReducedMotion } from '@/lib/hermes/motion-preference';
 
 function HermesStaticPortrait({ state }: { state: HermesVisualState }) {
   const nodes = [
@@ -61,9 +60,10 @@ export interface HermesVisualAdapterProps {
   state: HermesVisualState;
   suggestion: HermesGuideSuggestion;
   onInvoke: () => void;
+  reducedMotion: boolean;
 }
 
-export function HermesVisualAdapter({ action, actionStartedAtMs, assistantOpen = false, state, suggestion, onInvoke }: HermesVisualAdapterProps) {
+export function HermesVisualAdapter({ action, actionStartedAtMs, assistantOpen = false, state, suggestion, onInvoke, reducedMotion }: HermesVisualAdapterProps) {
   const t = useTranslations('dashboard.hermes');
   const linkRef = useRef<HTMLButtonElement>(null);
   const engagedRef = useRef(false);
@@ -102,12 +102,11 @@ export function HermesVisualAdapter({ action, actionStartedAtMs, assistantOpen =
   }, [assistantOpen, interactiveReady, still, state]);
 
   useEffect(() => {
-    const media = window.matchMedia('(prefers-reduced-motion: reduce)');
     let cancelled = false;
     let timer = 0;
     const schedule = () => {
       window.clearTimeout(timer);
-      if (still || resolveHermesReducedMotion(media.matches, window.location.search)) {
+      if (still || reducedMotion) {
         setInteractiveReady(false);
         updateEngaged(false);
         resetArticulation();
@@ -119,22 +118,19 @@ export function HermesVisualAdapter({ action, actionStartedAtMs, assistantOpen =
     };
     if (document.readyState === 'complete') schedule();
     else window.addEventListener('load', schedule, { once: true });
-    media.addEventListener('change', schedule);
     return () => {
       cancelled = true;
       window.clearTimeout(timer);
       window.removeEventListener('load', schedule);
-      media.removeEventListener('change', schedule);
     };
-  }, [still]);
+  }, [reducedMotion, still]);
 
   useEffect(() => {
-    const media = window.matchMedia('(prefers-reduced-motion: reduce)');
     if (still || assistantOpen) {
       setPromptVisible(false);
       return;
     }
-    if (resolveHermesReducedMotion(media.matches, window.location.search)) {
+    if (reducedMotion) {
       setPromptVisible(true);
       return;
     }
@@ -167,7 +163,7 @@ export function HermesVisualAdapter({ action, actionStartedAtMs, assistantOpen =
       window.clearTimeout(hideTimer);
       document.removeEventListener('visibilitychange', onVisibility);
     };
-  }, [assistantOpen, still]);
+  }, [assistantOpen, reducedMotion, still]);
 
   const setGaze = (event: React.PointerEvent<HTMLButtonElement>) => {
     if (still || !interactiveReady) return;
@@ -219,7 +215,7 @@ export function HermesVisualAdapter({ action, actionStartedAtMs, assistantOpen =
         data-hermes-companion-actor="true"
         data-hermes-instance="single"
       >
-        <HermesRiggedPortrait fallback={<HermesStaticPortrait state={state} />} inputRef={meshInputRef} state={state} />
+        <HermesRiggedPortrait fallback={<HermesStaticPortrait state={state} />} inputRef={meshInputRef} reducedMotion={reducedMotion} state={state} />
       </span>
       <span aria-hidden={!promptVisible} className="hermes-guide-nudge" data-visible={promptVisible ? 'true' : 'false'}>{t(suggestion.bodyKey)}</span>
     </button>

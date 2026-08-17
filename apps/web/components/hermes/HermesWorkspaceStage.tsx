@@ -1,11 +1,13 @@
 'use client';
 
 import { usePathname } from 'next/navigation';
+import { useLocale, useTranslations } from 'next-intl';
 import * as React from 'react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import { createInitialHermesBehavior, stepHermesBehavior, type HermesBehaviorFrame, type HermesBehaviorInput } from '@/lib/hermes/behavior-director';
-import { createHermesAnchorRegistry, type HermesAnchorId, type HermesAnchorRegistration, type HermesAnchorRegistry } from '@/lib/hermes/anchor-registry';
+import { createHermesAnchorRegistry, type HermesAnchorAction, type HermesAnchorId, type HermesAnchorRegistration, type HermesAnchorRegistry } from '@/lib/hermes/anchor-registry';
+import type { WorkspaceGuidePayload } from '@/lib/api';
 import {
   hasStoredHermesDockPreferences,
   loadHermesDockPreferences,
@@ -14,7 +16,9 @@ import {
   type HermesViewportClass,
 } from '@/lib/hermes/dock-preferences';
 import { createHermesTravelTimeline, planHermesTravel } from '@/lib/hermes/travel-path';
+import { loadHermesMotionPreference, resolveHermesReducedMotion, saveHermesMotionPreference } from '@/lib/hermes/motion-preference';
 
+import { HermesAssistantDrawer } from './HermesAssistantDrawer';
 import type { HermesGuideSuggestion } from './hermes-guide';
 import type { HermesVisualState } from './hermes-state';
 import { HermesVisualAdapter } from './HermesVisualAdapter';
@@ -47,8 +51,9 @@ const behaviorInput = (
   pointer: HermesBehaviorInput['pointer'],
   dragging: boolean,
   reducedMotion: boolean,
+  nowMs = Date.now(),
 ): HermesBehaviorInput => ({
-  activity: 'balanced', dragging, guide: 'idle', nowMs: Date.now(), pointer, reducedMotion,
+  activity: 'balanced', dragging, guide: 'idle', nowMs, pointer, reducedMotion,
   seed: 0x4845524d, state,
   task: state === 'failed' ? 'failed' : state === 'scanning' ? 'working' : 'idle',
   writing: false,
@@ -56,7 +61,9 @@ const behaviorInput = (
 
 export function HermesWorkspaceStageProvider({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
+  const locale = useLocale() as 'zh' | 'en';
   const [presentation, setPresentation] = useState<HermesStagePresentation | null>(null);
+  const [routeAssistantOpen, setRouteAssistantOpen] = useState(false);
   const [guideTarget, setGuideTarget] = useState<HermesAnchorId | null>(null);
   const [registryVersion, setRegistryVersion] = useState(0);
   const [writing, setWriting] = useState(false);
@@ -82,18 +89,37 @@ export function HermesWorkspaceStageProvider({ children }: { children: React.Rea
     else if (/^\/research-objects\/[^/]+\/edit$/.test(pathname)) setGuideTarget('sdf-problem');
     else setGuideTarget(null);
   }, [pathname]);
+  useEffect(() => setRouteAssistantOpen(false), [pathname]);
   const context = useMemo(() => ({ register, registerAnchor, requestGuide: setGuideTarget, setWriting }), [register, registerAnchor]);
+  const route = pathname === '/research-objects/new' ? 'research-object-new' : 'research-object-edit';
+  const researchObjectId = /^\/research-objects\/([^/]+)\/edit$/.exec(pathname)?.[1];
+  const routeContext: WorkspaceGuidePayload['context'] = researchObjectId
+    ? { tasks: [], researchObjects: [{ id: researchObjectId, title: 'Current research object', status: 'draft' }] }
+    : { tasks: [], researchObjects: [] };
   return (
     <HermesWorkspaceStageContext.Provider value={context}>
       {children}
       {supportedPath(pathname) ? (
         <HermesWorkspaceStage
           guideTarget={guideTarget}
+          fallbackAssistantOpen={routeAssistantOpen}
+          fallbackOnInvoke={() => setRouteAssistantOpen(true)}
           onDismissGuide={() => setGuideTarget(null)}
           presentation={presentation}
           registry={registryRef.current}
           registryVersion={registryVersion}
           writing={writing}
+        />
+      ) : null}
+      {pathname !== '/dashboard' && supportedPath(pathname) && !presentation ? (
+        <HermesAssistantDrawer
+          dashboardContext={routeContext}
+          locale={locale}
+          onOpenChange={setRouteAssistantOpen}
+          open={routeAssistantOpen}
+          route={route}
+          suggestion={neutralSuggestion}
+          target={guideTarget}
         />
       ) : null}
     </HermesWorkspaceStageContext.Provider>
@@ -110,7 +136,9 @@ export function useOptionalHermesWorkspaceStage() {
   return React.useContext(HermesWorkspaceStageContext);
 }
 
-function HermesWorkspaceStage({ guideTarget, onDismissGuide, presentation, registry, registryVersion, writing }: {
+function HermesWorkspaceStage({ fallbackAssistantOpen, fallbackOnInvoke, guideTarget, onDismissGuide, presentation, registry, registryVersion, writing }: {
+  fallbackAssistantOpen: boolean;
+  fallbackOnInvoke: () => void;
   guideTarget: HermesAnchorId | null;
   onDismissGuide: () => void;
   presentation: HermesStagePresentation | null;
@@ -119,6 +147,7 @@ function HermesWorkspaceStage({ guideTarget, onDismissGuide, presentation, regis
   writing: boolean;
 }) {
   const state = presentation?.state ?? 'idle';
+  const t = useTranslations('hermesCompanion');
   const workspaceId = presentation?.workspaceId ?? 'workspace-current';
   const dragRef = useRef<{ pointerId: number; startX: number; startY: number; originX: number; originY: number; moved: boolean } | null>(null);
   const pointerRef = useRef({ present: false, speed: 0, x: 0, y: 0 });
@@ -131,15 +160,22 @@ function HermesWorkspaceStage({ guideTarget, onDismissGuide, presentation, regis
   const [dockReady, setDockReady] = useState(false);
   const [dragging, setDragging] = useState(false);
   const [position, setPosition] = useState({ x: 0, y: 0 });
-  const [reducedMotion, setReducedMotion] = useState(false);
-  const [behavior, setBehavior] = useState<HermesBehaviorFrame>(() => createInitialHermesBehavior(behaviorInput('idle', pointerRef.current, false, false)));
+  const [reducedMotion, setReducedMotion] = useState(true);
+  const [behavior, setBehavior] = useState<HermesBehaviorFrame>(() => createInitialHermesBehavior(behaviorInput('idle', pointerRef.current, false, true, 0)));
+  const [guideActions, setGuideActions] = useState<HermesAnchorAction[]>([]);
   const [guideReady, setGuideReady] = useState(false);
   const [guideMode, setGuideMode] = useState<'travel' | 'edge-stop' | 'static' | null>(null);
   const [travelRequested, setTravelRequested] = useState(false);
 
   useEffect(() => {
     const media = window.matchMedia('(prefers-reduced-motion: reduce)');
-    const sync = () => setReducedMotion(resolveHermesReducedMotion(media.matches, window.location.search));
+    const queryPreference = new URLSearchParams(window.location.search).get('hermes-motion');
+    if (queryPreference === 'full' || queryPreference === 'reduced') saveHermesMotionPreference(window.localStorage, queryPreference);
+    const sync = () => setReducedMotion(resolveHermesReducedMotion(
+      media.matches,
+      window.location.search,
+      loadHermesMotionPreference(window.localStorage),
+    ));
     sync();
     media.addEventListener('change', sync);
     return () => media.removeEventListener('change', sync);
@@ -189,11 +225,12 @@ function HermesWorkspaceStage({ guideTarget, onDismissGuide, presentation, regis
 
   useEffect(() => {
     setGuideReady(false);
-    if (!guideTarget) { setGuideMode(null); return; }
+    if (!guideTarget) { setGuideActions([]); setGuideMode(null); return; }
     if (!dockReady) return;
     const snapshot = registry.snapshot(guideTarget);
     const stage = stageRef.current;
-    if (!snapshot || !stage) return;
+    if (!snapshot || !stage) { setGuideActions([]); return; }
+    setGuideActions(snapshot.actions);
     const stageBounds = stage.getBoundingClientRect();
     const from = new DOMRect(stageBounds.x, stageBounds.y, Math.max(1, stageBounds.width), Math.max(1, stageBounds.height));
     const target = new DOMRect(snapshot.rect.x, snapshot.rect.y, snapshot.rect.width, snapshot.rect.height);
@@ -277,7 +314,7 @@ function HermesWorkspaceStage({ guideTarget, onDismissGuide, presentation, regis
     advanceBehavior(pointerRef.current, false);
     if (!drag.moved) {
       suppressClickRef.current = true;
-      presentation?.onInvoke();
+      (presentation?.onInvoke ?? fallbackOnInvoke)();
       window.setTimeout(() => { suppressClickRef.current = false; }, 0);
       return;
     }
@@ -305,7 +342,7 @@ function HermesWorkspaceStage({ guideTarget, onDismissGuide, presentation, regis
     height: 288, left: position.x - 144, top: position.y - 144, width: 288,
   };
   const ageMs = Math.max(0, Date.now() - behavior.startedAtMs);
-  const actionStartedAtMs = typeof performance === 'undefined' ? undefined : performance.now() - ageMs;
+  const actionStartedAtMs = behavior.startedAtMs === 0 || typeof performance === 'undefined' ? undefined : performance.now() - ageMs;
 
   return (
     <div
@@ -328,16 +365,30 @@ function HermesWorkspaceStage({ guideTarget, onDismissGuide, presentation, regis
       <HermesVisualAdapter
         action={behavior.primary}
         actionStartedAtMs={actionStartedAtMs}
-        assistantOpen={presentation?.assistantOpen ?? false}
+        assistantOpen={presentation?.assistantOpen ?? fallbackAssistantOpen}
         onInvoke={() => {
           if (suppressClickRef.current) { suppressClickRef.current = false; return; }
-          presentation?.onInvoke();
+          (presentation?.onInvoke ?? fallbackOnInvoke)();
         }}
+        reducedMotion={reducedMotion}
         state={state}
         suggestion={presentation?.suggestion ?? neutralSuggestion}
       />
+      {reducedMotion ? (
+        <button
+          className="hermes-motion-enable"
+          onClick={(event) => {
+            event.stopPropagation();
+            saveHermesMotionPreference(window.localStorage, 'full');
+            setReducedMotion(false);
+          }}
+          onPointerDown={(event) => event.stopPropagation()}
+          type="button"
+        >{t('enableMotion')}</button>
+      ) : null}
       {guideReady && guideTarget ? (
         <HermesGuideBubble
+          actions={guideActions}
           edgeStop={guideMode === 'edge-stop'}
           onDismiss={onDismissGuide}
           onTakeMeThere={() => {
@@ -350,4 +401,3 @@ function HermesWorkspaceStage({ guideTarget, onDismissGuide, presentation, regis
     </div>
   );
 }
-import { resolveHermesReducedMotion } from '@/lib/hermes/motion-preference';

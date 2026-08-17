@@ -7,40 +7,27 @@ import { useEffect, useRef, useState } from 'react';
 import type { HermesPetMeshInput, HermesPetMeshRenderer } from '@/lib/hermes/pet-mesh-renderer';
 
 import type { HermesVisualState } from './hermes-state';
-import { resolveHermesReducedMotion } from '@/lib/hermes/motion-preference';
-
 export interface HermesRiggedPortraitProps {
   fallback: ReactNode;
   inputRef: MutableRefObject<HermesPetMeshInput>;
+  reducedMotion: boolean;
   state: HermesVisualState;
 }
 
-export function HermesRiggedPortrait({ fallback, inputRef, state }: HermesRiggedPortraitProps) {
+export function HermesRiggedPortrait({ fallback, inputRef, reducedMotion, state }: HermesRiggedPortraitProps) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const rendererRef = useRef<HermesPetMeshRenderer | null>(null);
   const stageRef = useRef<HTMLSpanElement | null>(null);
   const stateRef = useRef(state);
   const [ready, setReady] = useState(false);
   const [contextGeneration, setContextGeneration] = useState(0);
-  const [reducedMotion, setReducedMotion] = useState<boolean | null>(null);
-  const runtimeActive = reducedMotion === false && state !== 'awaiting_approval';
+  const runtimeActive = !reducedMotion && state !== 'awaiting_approval';
   stateRef.current = state;
   inputRef.current.state = state;
 
   useEffect(() => {
     rendererRef.current?.wake();
   }, [state]);
-
-  useEffect(() => {
-    const media = window.matchMedia('(prefers-reduced-motion: reduce)');
-    const sync = () => {
-      setReady(false);
-      setReducedMotion(resolveHermesReducedMotion(media.matches, window.location.search));
-    };
-    sync();
-    media.addEventListener('change', sync);
-    return () => media.removeEventListener('change', sync);
-  }, []);
 
   useEffect(() => {
     const canvas = canvasRef.current;

@@ -68,3 +68,24 @@ test('one Hermes stage persists across workspace routes and keeps direct manipul
   await page.mouse.move(inputBox!.x + inputBox!.width + 140, inputBox!.y + inputBox!.height / 2);
   await expect(stage).toHaveAttribute('data-hermes-action', 'pointer-avoid');
 });
+
+test('a user can enable full Hermes motion once and keep it across workspace routes', async ({ page }) => {
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await mockWorkspace(page);
+  await page.goto(`${baseUrl}/dashboard`, { waitUntil: 'networkidle' });
+
+  const stage = page.locator('[data-hermes-workspace-stage]');
+  await expect(stage).toHaveAttribute('data-hermes-motion-preference', 'reduced');
+  const enable = page.getByRole('button', { name: /Enable Hermes motion|开启 Hermes 动效/i });
+  await expect(enable).toBeVisible();
+  await enable.click();
+  await expect(stage).toHaveAttribute('data-hermes-motion-preference', 'full');
+  await expect(stage.locator('[data-hermes-articulated-canvas="true"]')).toHaveCount(1);
+
+  await page.getByRole('link', { name: 'Continue research', exact: true }).click();
+  await expect(page).toHaveURL(/\/research-objects\/ro-hermes\/edit$/);
+  await page.reload({ waitUntil: 'networkidle' });
+  await expect(stage).toHaveAttribute('data-hermes-motion-preference', 'full');
+  expect(await page.evaluate(() => window.location.search)).not.toContain('hermes-motion');
+});

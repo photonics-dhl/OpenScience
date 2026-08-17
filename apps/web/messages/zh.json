@@ -744,6 +744,7 @@
     "explain": "解释",
     "draft": "草拟",
     "check": "检查",
+    "enableMotion": "开启 Hermes 动效",
     "takeMeThere": "带我过去",
     "targets": {
       "ro-title": "先给研究对象一个准确标题。",
@@ -757,6 +758,19 @@
       "sdf-limitations": "坦诚写明局限。",
       "hermes-diff": "逐项审阅建议改动。",
       "commit": "只提交你确认的内容。"
+    },
+    "details": {
+      "ro-title": "用研究对象、方法或范围命名，避免“关于……的研究”这类空泛标题。",
+      "source-import": "上传承载论断的论文、数据或代码；Hermes 只依据你有权使用的材料提出建议。",
+      "research-question": "把对象、未知量和判断边界写进一个可回答的问题。",
+      "sdf-problem": "说明研究对象、现有缺口，以及为什么这个缺口值得解决。",
+      "sdf-insight": "用一句可检验的核心论断，并指出它由哪类证据支持。",
+      "sdf-method": "写清步骤、关键参数、适用条件和失效边界。",
+      "sdf-evidence": "列出复现实验所需的数据、代码、环境和操作条件。",
+      "sdf-results": "优先写量化结果、比较基线与不确定性，不把推测写成结论。",
+      "sdf-limitations": "明确样本、方法、外推范围与尚未验证的部分。",
+      "hermes-diff": "逐项核对证据与措辞；只有你接受的差异才会写入。",
+      "commit": "确认版本说明和变更范围后再提交，已发布版本不会被原地改写。"
     }
   },
   "opticalLab": {

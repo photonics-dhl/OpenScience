@@ -2007,6 +2007,32 @@ body {
   color: var(--os-paper, #f1eee7);
 }
 
+.hermes-companion-explanation {
+  margin-top: .7rem;
+  border-top: 1px solid rgb(241 238 231 / .16);
+  padding-top: .65rem;
+  color: var(--os-muted-dark, #b6bcb6);
+}
+
+.hermes-motion-enable {
+  position: absolute;
+  z-index: 70;
+  right: .75rem;
+  bottom: .65rem;
+  min-height: 2rem;
+  border-bottom: 1px solid var(--color-vermilion, #ff4e22);
+  padding: 0 .15rem;
+  background: rgb(11 15 12 / .88);
+  color: var(--os-paper, #f1eee7);
+  font-size: .72rem;
+  line-height: 1;
+}
+
+.hermes-motion-enable:focus-visible {
+  outline: 2px solid var(--color-vermilion, #ff4e22);
+  outline-offset: 3px;
+}
+
 .hermes-companion-take-me {
   margin-top: .55rem;
   color: var(--color-vermilion, #ff4e22);

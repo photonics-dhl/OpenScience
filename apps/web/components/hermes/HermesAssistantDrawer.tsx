@@ -25,6 +25,8 @@ export interface HermesAssistantDrawerProps {
   suggestion: HermesGuideSuggestion;
   dashboardContext: WorkspaceGuidePayload['context'];
   onTaskStateChange?(task: AgentTaskView | null): void;
+  route?: WorkspaceGuidePayload['route'];
+  target?: WorkspaceGuidePayload['target'];
 }
 
 function resultFromTask(task: AgentTaskView): WorkspaceGuideResult | null {
@@ -42,7 +44,7 @@ function resultFromTask(task: AgentTaskView): WorkspaceGuideResult | null {
 }
 
 export function HermesAssistantDrawer({
-  open, onOpenChange, locale, suggestion, dashboardContext, onTaskStateChange,
+  open, onOpenChange, locale, suggestion, dashboardContext, onTaskStateChange, route = 'dashboard', target = null,
 }: HermesAssistantDrawerProps) {
   const t = useTranslations('dashboard.hermes');
   const sessionId = useRef<string | null>(null);
@@ -106,7 +108,7 @@ export function HermesAssistantDrawer({
       const response = await submitWorkspaceGuideTask({
         sessionId: sessionId.current,
         idempotencyKey: taskKey.current,
-        payload: { goal: normalized, locale, route: 'dashboard', target: null, context: dashboardContext },
+        payload: { goal: normalized, locale, route, target, context: dashboardContext },
       });
       setTask(response.task);
       taskKey.current = null;

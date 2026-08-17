@@ -54,6 +54,7 @@ export default function HermesArticulationVisualRoute() {
         <HermesRiggedPortrait
           fallback={<span aria-hidden="true" />}
           inputRef={inputRef}
+          reducedMotion={false}
           state={state}
         />
       </div>

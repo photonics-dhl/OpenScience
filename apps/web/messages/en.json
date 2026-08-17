@@ -744,6 +744,7 @@
     "explain": "Explain",
     "draft": "Draft",
     "check": "Check",
+    "enableMotion": "Enable Hermes motion",
     "takeMeThere": "Take me there",
     "targets": {
       "ro-title": "Give this research object a precise title.",
@@ -757,6 +758,19 @@
       "sdf-limitations": "Make the limitations explicit.",
       "hermes-diff": "Review every proposed change.",
       "commit": "Commit only what you accept."
+    },
+    "details": {
+      "ro-title": "Name the research object, method, or scope precisely; avoid a generic “study of” title.",
+      "source-import": "Bring the paper, data, or code that carries the claims. Hermes drafts only from material you are authorised to use.",
+      "research-question": "State the object, unknown, and decision boundary as one answerable question.",
+      "sdf-problem": "Identify the research object, the existing gap, and why closing that gap matters.",
+      "sdf-insight": "Write one testable central claim and name the kind of evidence that supports it.",
+      "sdf-method": "Record the steps, decisive parameters, operating conditions, and failure boundary.",
+      "sdf-evidence": "List the data, code, environment, and procedure another researcher needs to reproduce the work.",
+      "sdf-results": "Lead with quantitative outcomes, comparison baselines, and uncertainty; keep conjecture out of the result.",
+      "sdf-limitations": "Make sample, method, generalisation, and unverified boundaries explicit.",
+      "hermes-diff": "Check evidence and wording one change at a time. Only accepted changes are written.",
+      "commit": "Confirm the version note and scope before committing; published versions are never overwritten."
     }
   },
   "opticalLab": {

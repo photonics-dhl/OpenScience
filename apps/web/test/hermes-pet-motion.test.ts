@@ -30,6 +30,17 @@ describe('Hermes articulated pet motion', () => {
     expect(preference.resolveHermesReducedMotion(true, '?hermes-motion=full')).toBe(false);
     expect(preference.resolveHermesReducedMotion(false, '?hermes-motion=reduced')).toBe(true);
     expect(preference.resolveHermesReducedMotion(true, '')).toBe(true);
+
+    const values = new Map<string, string>();
+    const storage = {
+      getItem: (key: string) => values.get(key) ?? null,
+      setItem: (key: string, value: string) => { values.set(key, value); },
+    };
+    expect(preference.saveHermesMotionPreference).toBeTypeOf('function');
+    expect(preference.loadHermesMotionPreference).toBeTypeOf('function');
+    preference.saveHermesMotionPreference(storage, 'full');
+    expect(preference.loadHermesMotionPreference(storage)).toBe('full');
+    expect(preference.resolveHermesReducedMotion(true, '', preference.loadHermesMotionPreference(storage))).toBe(false);
   });
 
   it('renders a director-selected action instead of falling back to the legacy clock grammar', () => {
