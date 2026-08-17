@@ -330,3 +330,27 @@ Current infrastructure uses pinned base/worker images with bind-mounted applicat
   final-surface `1200ms` salience/band contract. Public screenshots were
   inspected without clipping, cursor/status contamination, hard halo, or broad
   chromatic bands.
+
+### 5.8 Hermes real-page motion and field guidance deployment (2026-08-17)
+
+> Deployed release `aa1c8af`; rollback `c9df24d`.
+
+- The release persists an explicit Hermes full/reduced motion choice, exposes
+  an accessible enable-motion control, keeps a real Assistant Drawer on RO
+  creation/edit routes, and advances semantic guidance from title to import
+  and the selected SDF field. No schema, migration, seed, provider prompt,
+  permission, Nginx or Secret contract changed.
+- Pre-deploy checkup passed and the database backup returned
+  `BACKUP_OK size=376K files=7/7`. Dry-run preceded
+  `deploy.sh --confirm --skip-migrate`; no migration or seed ran.
+- The local deployment invocation reached its 604-second client ceiling near
+  the final restart, so completion was established independently rather than
+  inferred: the remote Stage SHA-256 `febedc9d144596f9624fa8cf3646d95938195ca980385f37dd4afb59b6b07219`
+  matches the release, Web/API/Worker were freshly restarted, Parser and data
+  services are healthy, and recent critical-error counts are zero.
+- Parser isolation remains `network=none`, `user=node`, read-only rootfs,
+  `512MiB`, `64` PIDs, with only `parser-jobs` mounted. Public `/` and
+  `/api/explore` return `200`; anonymous `/api/workspaces` and `/auth/me`
+  return `401`. A public-domain production-browser matrix passed `6/6` for
+  motion persistence, route continuity, creation/import guidance, selected
+  SDF field guidance, callable Drawer and reduced-motion actions.

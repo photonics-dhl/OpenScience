@@ -122,7 +122,7 @@
 | `docs/specs/2026-08-15-hermes-3d-scholar-agent-design.md` | Hermes 3D 学者机器人历史方案；已被少年星图龙原型取代，仅保留否决记录 | **DEPRECATED** |
 | `docs/specs/2026-08-15-hermes-constellation-dragon-prototype-design.md` | Hermes 少年星图龙轻量 Blender 原型历史设计 | **用户视觉 NO-GO**；不得作为当前候选 |
 | `docs/specs/2026-08-15-hermes-2d-pet-design.md` | Hermes 2.5D 整图 PNG/CSS-signal 历史原型 | **DEPRECATED / VISUAL NO-GO**；资产可复用，renderer 不得继续 |
-| `docs/specs/2026-08-17-hermes-workspace-companion-motion-design.md` | Hermes Workspace Companion CURRENT 设计：四层 mesh 动作混合、25+ 行为、C 安全航道、语义字段引导、用户停靠、reviewable diff、移动端/reduced 与真实像素验收 | **CURRENT Hermes visual/guide design**；真实页面 motion owner、持久偏好、创建/编辑 Drawer 与逐字段目标已本地 GREEN，待 ECS 复验 |
+| `docs/specs/2026-08-17-hermes-workspace-companion-motion-design.md` | Hermes Workspace Companion CURRENT 设计：四层 mesh 动作混合、25+ 行为、C 安全航道、语义字段引导、用户停靠、reviewable diff、移动端/reduced 与真实像素验收 | **CURRENT Hermes visual/guide design**；真实页面 motion owner、持久偏好、创建/编辑 Drawer 与逐字段目标已部署 `aa1c8af`，待用户体验复验 |
 | `docs/specs/2026-08-16-hermes-articulated-mesh-pet-design.md` | Hermes 原创 OGL 2D mesh-rig 历史设计：真实角色像素关节、旧待机语法与严格 lifecycle | **DEPRECATED**；由 2026-08-17 Workspace Companion spec 取代 |
 | `docs/specs/2026-08-16-hermes-contextual-guide-design.md` | Hermes 情境引导员历史设计：Dashboard 提示、助手抽屉与正式 `workspace.guide` 闭环 | **DEPRECATED**；由 2026-08-17 Workspace Companion spec 取代 |
 | `docs/data/launch-research-corpus.md` | 18 条公开启动语料的范围、免责声明、真实来源、上游许可证证据与 ECS seed 操作边界 | 活文档；本地完成，待生产 seed |
@@ -142,7 +142,7 @@
 | `apps/web/test/visual/hermes-companion-motion-gate.mjs` / `apps/web/test/visual/hermes-guidance-geometry-gate.mjs` / `apps/web/test/visual/hermes-release-gate.mjs` | 90 秒真实动作/关节视频、逐 RAF 航行几何、Diff 写入安全及 Hermes 聚合生产门禁；含 288px 六动作真实像素阈值、Dashboard canvas `>=210px`、至少 6 种 whole-silhouette `>=8px`、patrol `>=30px` 并回位、pointer 整体位移合同，防止动作名/像素 delta GREEN 但实际仍不可感知 | CURRENT release gate GREEN；最新聚合 `151.8s` exit 0、213px canvas，用户动态视觉验收 pending |
 | `apps/web/test/visual/hermes-real-ro-production-gate.mjs` / `packages/domain/test/artifact/scan.test.ts` | ECS-only 真实论文纵向门禁：固定 arXiv 2009.06045v1 SHA-256、浏览器创建/上传、MiniMax 六字段决策与原文证据、确认前 SDF 不变、显式缺失披露、bulk confirm/version commit、Hermes runtime；上传响应与状态轮询均允许 300 秒生产边缘延迟，同时锁定合法 PDF `../` 不误判而真实 ZIP traversal 继续拒绝 | CURRENT production smoke；不使用本机 Docker、不拦截 API；不等同于 per-field diff/source UI、完整 gold rubric 或独立 audit 查询，输出仅写 ignored visual evidence |
 | `docs/handoff/2026-08-15-hermes-constellation-dragon-prototype-handoff.md` | 少年星图龙静态 Blender 原型、结构门禁与用户 NO-GO 结论 | 历史交接；不得按其 next action 恢复 3D |
-| `docs/handoff/2026-08-16-hermes-2d-pet-handoff.md` | Hermes Workspace Companion CURRENT 交接：单一 stage、27-action、持久 motion 控制、创建/编辑 Drawer、逐字段航行/Diff、真实 release 证据与未完成边界 | **CURRENT**；本地候选 GREEN，ECS 更新待确认 |
+| `docs/handoff/2026-08-16-hermes-2d-pet-handoff.md` | Hermes Workspace Companion CURRENT 交接：单一 stage、27-action、持久 motion 控制、创建/编辑 Drawer、逐字段航行/Diff、真实 release 与 ECS 证据及未完成边界 | **CURRENT**；release `aa1c8af` 已部署，公网门禁 GREEN，待用户体验复验 |
 | `docs/design/optical-editorial-figma-map.md` | 长期账号 Figma canonical 的 V3 variables/styles/components/八表面节点映射、代码对应关系与 Code Connect 边界 | Task 13 canonical 映射 |
 | `docs/superpowers/specs/2026-08-09-researcher-ingestion-product-slice-design.md` | 研究者第一条产品级前端闭环设计：注册、Dashboard、资料导入、Hermes 证据确认、RO Workspace；待用户审阅 | 设计 spec |
 | `docs/superpowers/plans/2026-08-09-researcher-ingestion-product-slice-plan.md` | 研究者导入闭环实施计划：基础视觉、Auth/Dashboard、多格式上传、Hermes 证据、RO Workspace、浏览器验收与生产部署；Task 1–2 完成，Task 3 启动 | 执行中 |

@@ -1,12 +1,13 @@
 # OpenScience (XGS) 进度日志
 
-## 2026-08-17（Hermes 真实页面引导与动效偏好修复）— ✅ 本地 production 门禁 GREEN，⏳ ECS 更新待确认
+## 2026-08-17（Hermes 真实页面引导与动效偏好修复）— ✅ ECS 部署与公网行为 GREEN
 
 - **用户实际缺陷**：Windows 浏览器命中 reduced-motion 后 Hermes 长期呈静态，而产品没有显式恢复入口；创建/编辑页没有真实 Assistant Drawer owner，点击角色无法唤起 Hermes；引导目标只固定在 `ro-title` / `sdf-problem`，填写标题或切换 SDF 字段不会推进；创建页还显示没有消费者的 Draft/Check。
 - **根因修复**：`HermesWorkspaceStage` 现为唯一 motion owner，显式 full/reduced 偏好写入 localStorage，并把同一值传给 Adapter/Rig；reduced 页面保留可访问的“开启 Hermes 动效”。创建/编辑页接入真实 Drawer，title→source-import 与当前 SDF 字段驱动语义航点；bubble 只显示锚点声明的可执行动作，Explain 展示逐字段填写说明。
 - **一致性修复**：初始 behavior timestamp 改为 SSR/client 确定值，消除真实路由 hydration 差异；Dashboard 原有 Drawer 与 route Drawer 互斥，仍保持单 stage/canvas owner。
 - **TDD / production 证据**：RED 为 motion preference `1 failed / 15 passed`，浏览器字段引导 `3 failed / 1 passed`；GREEN 为 production Next 浏览器 `6/6`、Web `295/295`、typecheck、canonical lint（`WORKSPACE_STRUCTURE_OK` / `DOCS_SYNC_OK`）、17-page build。完整 Hermes release 用时 `145.6s`、exit `0`：idle breathing `5,215`、pointer `58,228` changed pixels，head/torso/tail 位移互不相同。
-- **边界**：本轮未改 API schema、Agent 权限、MiniMax prompt 或数据库；尚未部署本次前端修复。生产写入仍需单独确认，不能把本地 production gate 写成 ECS 已更新。
+- **ECS 发布**：用户确认后以 release `aa1c8af`、rollback `c9df24d` 部署，跳过迁移与 seed；部署前数据库备份 `376K / 7/7`。本地 SSH 等待在 604 秒超时，但只读诊断确认远端 source hash `febedc9d…219c8` 与本地一致，Web/API/Worker 已切换进程，Parser 与全部数据服务健康。公网直接加载部署版本的同一 Hermes production-browser matrix `6/6` GREEN；`/`、`/api/explore` 为 `200`，匿名 workspace/auth 为 `401`，近 15 分钟 API/Web/Worker/Parser 关键错误均为 `0`。
+- **边界**：本轮未改 API schema、Agent 权限、MiniMax prompt 或数据库；生产代码已经更新，但仍需产品负责人使用真实账号亲自判断动效强度与逐字段引导是否达到体验预期。
 
 ## 2026-08-17（真实论文 + MiniMax + Hermes ECS 纵向验收）— ✅ 安全隔离、主流程与真实引导 GREEN，⏳ 逐字段/动作归因仍待补齐
 
