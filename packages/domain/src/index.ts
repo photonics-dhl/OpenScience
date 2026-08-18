@@ -154,7 +154,7 @@ export {
 export { InAppChannel, EmailChannel } from './notification/channels';
 export { AgentError, type AgentErrorCode } from './agent/errors';
 export {
-  claimAgentTask, createAgentSession, dispatchAgentTask, submitAgentTask, getAgentTask, listAgentSessions, listAgentTasks, markTaskProgress,
+  claimAgentTask, createAgentSession, dispatchAgentTask, submitAgentTask, getAgentTask, retryAgentTask, listAgentSessions, listAgentTasks, markTaskProgress,
   prepareAgentTaskForCrashRecovery, recoverUndispatchedAgentTasks,
   AGENT_TASK_QUEUE, AI_CREDIT_RESOURCE,
   type AgentDeps, type AgentTaskView, type AgentSessionView, type AgentTaskStatus,

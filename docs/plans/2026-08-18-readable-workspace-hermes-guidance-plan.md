@@ -383,11 +383,11 @@ Completed in `80cd6e9`. The mocked production-build flow is preflight only; the 
 - Produces a version tuple for local branch/HEAD, GitHub branch/main, ECS release, and rollback.
 - Does not deploy until the required cloud-write confirmation is present.
 
-- [ ] **Step 1: Run sequential local release gates**
+- [x] **Step 1: Run sequential local release gates**
 
 Run focused tests, full Web Vitest, Web typecheck, root lint, production build, representative desktop/mobile/reduced E2E, all Hermes pixel/performance gates, docs lint, docs sync, and diff check. Do not parallelize build with a running Next server.
 
-- [ ] **Step 2: Request independent review**
+- [x] **Step 2: Request independent review**
 
 Review the complete diff for correctness, UX, accessibility, security/privacy, lifecycle, performance, test honesty, and stale CURRENT claims. Resolve every Critical/Important finding before release.
 
@@ -401,7 +401,7 @@ Run read-only checkup and deployment dry-run. Obtain explicit confirmation befor
 
 - [ ] **Step 5: Deploy and run the public acceptance**
 
-On confirmation: run ECS backup, confirmed deploy without migration/seed unless the diff proves otherwise, post-checkup, public HTTP checks, the uninterrupted blank-RO production gate, and direct user visual review.
+On confirmation: run ECS backup, confirmed deploy with migration 27 and quota seed because this candidate contains additive retry metadata, post-checkup, public HTTP checks, the uninterrupted blank-RO production gate, and direct user visual review.
 
 - [ ] **Step 6: Final docs sync and release record**
 

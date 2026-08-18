@@ -17,7 +17,7 @@ describe('same-origin API routing contract', () => {
 
   it('reconciles the active nginx config on every production deployment', () => {
     const deploy = readFileSync(resolve(repoRoot, 'infra/scripts/deploy.sh'), 'utf8');
-    expect(deploy).toContain('install -m 0644 $REMOTE_ROOT/infra/nginx/openscience.conf $NGINX_CONF');
+    expect(deploy).toContain('install -m 0644 $RELEASE_ROOT/infra/nginx/openscience.conf $NGINX_CONF');
     expect(deploy).not.toContain('test -f $NGINX_CONF || cp');
   });
 
@@ -29,6 +29,48 @@ describe('same-origin API routing contract', () => {
 });
 
 describe('apiRequest CSRF contract', () => {
+  it('replays extractor session and task creation with stable idempotency keys', async () => {
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(new Response(JSON.stringify({ csrfToken: 'csrf-1' }), { status: 200 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ session: { id: 'session-1' } }), { status: 201 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ task: { id: 'task-1' } }), { status: 201 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ session: { id: 'session-1' } }), { status: 200 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ task: { id: 'task-1' } }), { status: 200 }));
+    vi.stubGlobal('fetch', fetchMock);
+    const { submitExtractTask } = await import('../lib/api');
+
+    await submitExtractTask('ro-1', 'source', 'extract-run-1');
+    await submitExtractTask('ro-1', 'source', 'extract-run-1');
+
+    const sessionWrites = fetchMock.mock.calls.filter(([url]) => url === '/api/agent/sessions');
+    const taskWrites = fetchMock.mock.calls.filter(([url]) => url === '/api/agent/tasks');
+    expect(sessionWrites).toHaveLength(2);
+    expect(taskWrites).toHaveLength(2);
+    for (const [, options] of sessionWrites) {
+      expect(options).toEqual(expect.objectContaining({
+        headers: expect.objectContaining({ 'idempotency-key': 'extract-run-1:session' }),
+      }));
+    }
+    for (const [, options] of taskWrites) {
+      expect(options).toEqual(expect.objectContaining({
+        headers: expect.objectContaining({ 'idempotency-key': 'extract-run-1:task' }),
+      }));
+    }
+  });
+
+  it('retries the same failed agent task without submitting a new task', async () => {
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(new Response(JSON.stringify({ csrfToken: 'csrf-1' }), { status: 200 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ task: { id: 'task-1', status: 'pending' } }), { status: 200 }));
+    vi.stubGlobal('fetch', fetchMock);
+    const { retryAgentTask } = await import('../lib/api');
+
+    await retryAgentTask('task-1');
+
+    expect(fetchMock).toHaveBeenLastCalledWith('/api/agent/tasks/task-1/retry', expect.objectContaining({ method: 'POST' }));
+    expect(fetchMock.mock.calls.some(([url]) => url === '/api/agent/tasks')).toBe(false);
+  });
+
   it('does not request a CSRF token for reads', async () => {
     const fetchMock = vi.fn().mockResolvedValue(
       new Response(JSON.stringify({ ok: true }), {

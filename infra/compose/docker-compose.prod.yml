@@ -7,12 +7,12 @@
 #
 # 生产纪律：
 #   - 零默认值：DB/redis/cookie/SMTP/S3 凭据全从 env_file（/opt/openscience/.env.prod，云上生成不入库）
-#   - 代码经 deploy.sh 同步到 /opt/openscience，api 容器 volume 挂载源码目录跑 dist
+#   - 代码来自完整 Git commit 的不可变 XGS_RELEASE_ROOT，容器内统一挂载到 /opt/openscience
 #   - 对象存储使用 SeaweedFS 单节点 S3 模式；仅 data_net 可达，数据落命名卷
 #
 # 用法：
 #   docker compose -f docker-compose.prod.yml up -d
-#   前置：/opt/openscience/.env.prod 存在，代码已同步并全量 build
+#   前置：/opt/openscience/.env.prod 存在，XGS_RELEASE_ROOT 已同步并全量 build
 
 name: openscience-prod
 
@@ -73,12 +73,13 @@ services:
     # node:22（debian bookworm full，含 openssl3）—— Prisma engine 与 cloud host build 的
     # debian-openssl-3.0.x 匹配；slim/alpine 缺 openssl 运行时致 engine 加载失败（P1A-9 实证）
     image: node:22
+    user: node
     # 暴露 127.0.0.1:3001 到 host（nginx 反代）；不绑 0.0.0.0
     ports:
       - "127.0.0.1:3001:3001"
     working_dir: /opt/openscience/apps/api
     volumes:
-      - /opt/openscience:/opt/openscience
+      - ${XGS_RELEASE_ROOT:?XGS_RELEASE_ROOT required}:/opt/openscience:ro
     command: ["node", "dist/index.js"]
     env_file:
       - /opt/openscience/.env.prod
@@ -122,17 +123,18 @@ services:
   agent-worker:
     # Hermes ingestion consumer; no host port, only app/data network access.
     build:
-      context: ../..
+      context: ${XGS_RELEASE_ROOT:?XGS_RELEASE_ROOT required}
       dockerfile: apps/agent-worker/Dockerfile
       network: host
       args:
         HTTP_PROXY: http://127.0.0.1:7891
         HTTPS_PROXY: http://127.0.0.1:7891
         NO_PROXY: localhost,127.0.0.1
-    image: openscience-agent-worker:2026-08-10
+    image: openscience-agent-worker:${XGS_RELEASE_IMAGE_TAG:?XGS_RELEASE_IMAGE_TAG required}
+    user: node
     working_dir: /opt/openscience/apps/agent-worker
     volumes:
-      - /opt/openscience:/opt/openscience
+      - ${XGS_RELEASE_ROOT:?XGS_RELEASE_ROOT required}:/opt/openscience:ro
       - parser-jobs:/parser-jobs
     command: ["node", "dist/index.js"]
     env_file:
@@ -171,14 +173,14 @@ services:
   document-parser:
     # Hostile binary parsing is isolated from production secrets and all networks.
     build:
-      context: ../..
+      context: ${XGS_RELEASE_ROOT:?XGS_RELEASE_ROOT required}
       dockerfile: apps/agent-worker/Dockerfile.parser
       network: host
       args:
         HTTP_PROXY: http://127.0.0.1:7891
         HTTPS_PROXY: http://127.0.0.1:7891
         NO_PROXY: localhost,127.0.0.1
-    image: openscience-document-parser:2026-08-17
+    image: openscience-document-parser:${XGS_RELEASE_IMAGE_TAG:?XGS_RELEASE_IMAGE_TAG required}
     working_dir: /app
     volumes:
       - parser-jobs:/parser-jobs
@@ -208,11 +210,14 @@ services:
 
   web:
     image: node:22
+    user: node
     ports:
       - "127.0.0.1:3000:3000"
     working_dir: /opt/openscience/apps/web
     volumes:
-      - /opt/openscience:/opt/openscience
+      - ${XGS_RELEASE_ROOT:?XGS_RELEASE_ROOT required}:/opt/openscience:ro
+    tmpfs:
+      - /opt/openscience/apps/web/.next/cache:size=256m,uid=1000,gid=1000,mode=0750
     command: ["npm", "run", "start"]
     env_file:
       - /opt/openscience/.env.prod

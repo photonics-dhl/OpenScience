@@ -3,7 +3,7 @@ import { createFakePrisma, seedUser } from '../helpers/fakes';
 import { createResearchObject } from '../../src/research-object/research-objects';
 import {
   claimAgentTask, createAgentSession, submitAgentTask, getAgentTask, listAgentTasks, markTaskProgress,
-  recoverUndispatchedAgentTasks,
+  recoverUndispatchedAgentTasks, retryAgentTask,
 } from '../../src/agent/agent';
 
 /** 内存 Redis fake（队列：agent:queue）。 */
@@ -51,6 +51,61 @@ async function makeDeps(credit = 100) {
 }
 
 describe('AgentSession/AgentTask（§15 + §16 幂等 + §9.1 配额）', () => {
+  it('retries one failed task without reserving a second AI credit', async () => {
+    const { deps, user, ro, redis, db } = await makeDeps(1);
+    const session = await createAgentSession(deps, { userId: user.id, researchObjectId: ro.id, kind: 'extract' });
+    const task = await submitAgentTask(deps, { sessionId: session.id, userId: user.id, kind: 'sdf.extract', payload: { manuscriptText: 'bounded' } });
+    await markTaskProgress(deps, { taskId: task.id, status: 'running' });
+    await markTaskProgress(deps, { taskId: task.id, status: 'failed', error: 'provider timeout' });
+    const retried = await retryAgentTask(deps, { userId: user.id, taskId: task.id });
+    expect(retried.status).toBe('pending');
+    expect(retried.retryCount).toBe(1);
+    expect(db.agentTasks[0].payload).toEqual({ manuscriptText: 'bounded' });
+    expect(db.agentTasks[0].retryCount).toBe(1);
+    expect(db.usageLedger.filter((entry) => entry.resource === 'ai_credit' && entry.delta < 0)).toHaveLength(1);
+    expect(redis.lists.get('agent:queue')?.filter((id) => id === task.id)).toHaveLength(2);
+    await markTaskProgress(deps, { taskId: task.id, status: 'running' });
+    await markTaskProgress(deps, { taskId: task.id, status: 'failed', error: 'provider timeout again' });
+    await expect(retryAgentTask(deps, { userId: user.id, taskId: task.id })).rejects.toThrow(/already retried/i);
+  });
+
+  it('rejects retry for blocked, artifact-backed, and non-extractor tasks', async () => {
+    const { deps, user, ro, db } = await makeDeps(4);
+    const session = await createAgentSession(deps, { userId: user.id, researchObjectId: ro.id, kind: 'extract' });
+    for (const candidate of [
+      { kind: 'sdf.extract', payload: { manuscriptText: 'safe' }, error: '[blocked] malware detected' },
+      { kind: 'demo.echo', payload: {}, error: 'provider timeout' },
+    ]) {
+      const task = await submitAgentTask(deps, { sessionId: session.id, userId: user.id, ...candidate });
+      await markTaskProgress(deps, { taskId: task.id, status: 'running' });
+      await markTaskProgress(deps, { taskId: task.id, status: 'failed', error: candidate.error });
+      await expect(retryAgentTask(deps, { userId: user.id, taskId: task.id })).rejects.toThrow(/not retryable/i);
+    }
+    const artifactTask = await submitAgentTask(deps, {
+      sessionId: session.id, userId: user.id, kind: 'sdf.extract', payload: { manuscriptText: 'safe' },
+    });
+    db.agentTasks.find((task) => task.id === artifactTask.id).payload = {
+      manuscriptText: 'safe', artifactId: '00000000-0000-0000-0000-000000000001',
+    };
+    await markTaskProgress(deps, { taskId: artifactTask.id, status: 'running' });
+    await markTaskProgress(deps, { taskId: artifactTask.id, status: 'failed', error: 'provider timeout' });
+    await expect(retryAgentTask(deps, { userId: user.id, taskId: artifactTask.id })).rejects.toThrow(/not retryable/i);
+  });
+
+  it('durably reconciles an extractor retry when Redis dispatch fails', async () => {
+    const { deps, user, ro, redis, db } = await makeDeps(1);
+    const session = await createAgentSession(deps, { userId: user.id, researchObjectId: ro.id, kind: 'extract' });
+    const task = await submitAgentTask(deps, { sessionId: session.id, userId: user.id, kind: 'sdf.extract', payload: { manuscriptText: 'bounded' } });
+    await markTaskProgress(deps, { taskId: task.id, status: 'running' });
+    await markTaskProgress(deps, { taskId: task.id, status: 'failed', error: 'provider timeout' });
+    const originalLpush = redis.lpush;
+    redis.lpush = async () => { throw new Error('redis unavailable'); };
+    await expect(retryAgentTask(deps, { userId: user.id, taskId: task.id })).rejects.toThrow(/redis unavailable/);
+    expect(db.agentTasks[0]).toMatchObject({ status: 'pending', dispatchedAt: null, retryCount: 1 });
+    redis.lpush = originalLpush;
+    expect(await recoverUndispatchedAgentTasks(deps)).toBe(1);
+    expect(redis.lists.get('agent:queue')?.filter((id) => id === task.id)).toHaveLength(2);
+  });
   it('建会话 + 提交任务入队 + 进度查询', async () => {
     const { deps, user, ro, redis } = await makeDeps();
     const session = await createAgentSession(deps, { userId: user.id, researchObjectId: ro.id, kind: 'extract' });

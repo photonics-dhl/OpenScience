@@ -62,6 +62,8 @@ export default function SuggestionsPanel({
         <BeforeAfterProposal
           after={suggestion.suggestion}
           before={suggestion.before}
+          evidenceLocator={suggestion.evidence?.locator}
+          evidenceQuote={suggestion.evidence?.quote}
           key={suggestion.id}
           onDismiss={() => onDismiss(suggestion.id)}
           onReview={(value) => onApply(suggestion.id, value)}

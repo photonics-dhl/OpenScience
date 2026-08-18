@@ -33,6 +33,17 @@ describe('coreToSuggestions（P1D-3：Extractor core → AiSuggestion，§5.4 �
     ]));
   });
 
+  it('把逐字段原文与 locator 带进可审阅建议', () => {
+    const core = { schemaVersion: '0.1.0', problem: 'P', insight: '', method: '', results: '', limitations: '', reproducibility: '' };
+    const suggestions = coreToSuggestions(core, emptyCore(), {
+      problem: { quote: 'Exact source sentence.', locator: 'chars:11-33' },
+    });
+    expect(suggestions[0]).toMatchObject({
+      field: 'problem',
+      evidence: { quote: 'Exact source sentence.', locator: 'chars:11-33' },
+    });
+  });
+
   it('only exposes recognized missing-evidence fields from an extractor result', () => {
     expect(extractMissingSdfFields({ needsMoreInformation: ['results', 'unknown', 3, 'limitations'] })).toEqual([
       'results',

@@ -6,7 +6,7 @@
 
 ## 1. 前置检查
 
-- [ ] 生产栈运行中：`docker compose -f /opt/openscience/infra/compose/docker-compose.prod.yml ps`
+- [ ] 生产栈运行中：先读取 `/opt/openscience/.release-id`，并用对应 compose、`XGS_RELEASE_ROOT` 与同值 `XGS_RELEASE_IMAGE_TAG` 执行 `docker compose ps`
 - [ ] 备份目录可写：`mkdir -p /var/backups/openscience && touch /var/backups/openscience/.write-test && rm /var/backups/openscience/.write-test`
 - [ ] 磁盘余量：`df -h /var/backups`（单次 dump 数 MB 级，7 轮远低于 1G，安全）
 - [ ] 上一次备份时间：`ls -lt /var/backups/openscience/`
@@ -17,7 +17,7 @@
 ```bash
 # 每日备份（cron 0 3 * * *）：
 #   /usr/local/bin/backup.sh --confirm --db
-#   （脚本在云上 /opt/openscience/infra/scripts/backup.sh；建议软链到 /usr/local/bin）
+#   deploy.sh 会把当前 release 的脚本安装为 /usr/local/bin/backup.sh；脚本自行校验 active SHA。
 ```
 
 - 备份内容：`pg_dump` 经生产 postgres 容器导出全库 → `/var/backups/openscience/db-YYYY-MM-DD.sql`；对象存储可追加 `--objects`，脚本会对 SeaweedFS Docker volume 创建本机压缩快照 `/var/backups/openscience/objects-YYYY-MM-DD.tar.gz`，不读取或输出对象内容。
@@ -50,7 +50,10 @@ docker exec -i openscience-restore-test psql -U postgres -d restore \
 # 3) 行数对比（临时库 vs 生产）
 docker exec openscience-restore-test psql -U postgres -d restore \
   -tAc "SELECT count(*) FROM users"
-docker compose -f /opt/openscience/infra/compose/docker-compose.prod.yml \
+release_sha="$(cat /opt/openscience/.release-id)"
+release_root="/opt/openscience-releases/$release_sha"
+XGS_RELEASE_ROOT="$release_root" XGS_RELEASE_IMAGE_TAG="$release_sha" docker compose \
+  -f "$release_root/infra/compose/docker-compose.prod.yml" \
   exec -T postgres psql -U $POSTGRES_USER -d $POSTGRES_DB \
   -tAc "SELECT count(*) FROM users"
 # 4) 清理

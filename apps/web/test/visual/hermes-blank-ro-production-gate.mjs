@@ -1,14 +1,30 @@
-/* global Headers, MutationObserver, URL, console, document, fetch, performance, process, window */
+/* global Headers, MutationObserver, URL, console, document, fetch, getComputedStyle, performance, process, window */
 
 import assert from 'node:assert/strict';
+import { createHash } from 'node:crypto';
 import { mkdir, writeFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
-import { chromium } from 'playwright';
+import { chromium, request } from 'playwright';
 
+const canonicalOrigin = 'https://openscience.428312321.xyz';
 const baseUrl = process.env.OPENSCIENCE_PRODUCTION_URL;
 const sessionToken = process.env.OPENSCIENCE_E2E_SESSION_TOKEN;
+const acceptanceWorkspaceId = process.env.OPENSCIENCE_ACCEPTANCE_WORKSPACE_ID;
+const adminAuth = process.env.OPENSCIENCE_E2E_ADMIN_AUTH;
+const expectedRelease = process.env.OPENSCIENCE_EXPECTED_RELEASE;
 if (!baseUrl) throw new Error('OPENSCIENCE_PRODUCTION_URL is required');
 if (!sessionToken) throw new Error('OPENSCIENCE_E2E_SESSION_TOKEN is required');
+if (!acceptanceWorkspaceId || !/^[0-9a-f]{8}-[0-9a-f-]{27}$/i.test(acceptanceWorkspaceId)) throw new Error('OPENSCIENCE_ACCEPTANCE_WORKSPACE_ID must be a UUID');
+if (!adminAuth || !/^Basic [A-Za-z0-9+/]+=*$/.test(adminAuth)) throw new Error('OPENSCIENCE_E2E_ADMIN_AUTH must be a Basic authorization header');
+if (!expectedRelease || !/^[0-9a-f]{40}$/.test(expectedRelease)) throw new Error('OPENSCIENCE_EXPECTED_RELEASE must be a full Git SHA');
+const requestedOrigin = new URL(baseUrl);
+if (requestedOrigin.origin.toLowerCase() !== canonicalOrigin || requestedOrigin.pathname !== '/' || requestedOrigin.search || requestedOrigin.hash) {
+  throw new Error(`OPENSCIENCE_PRODUCTION_URL must be exactly ${canonicalOrigin}/`);
+}
+const releaseResponse = await fetch(`${canonicalOrigin}/__release`, { cache: 'no-store' });
+if (!releaseResponse.ok) throw new Error(`release identity ${releaseResponse.status}`);
+const deployedRelease = (await releaseResponse.text()).trim();
+assert.equal(deployedRelease, expectedRelease, 'public origin does not serve the expected release');
 
 const outputDir = resolve('test/visual/out/hermes-blank-ro');
 await mkdir(outputDir, { recursive: true });
@@ -29,10 +45,13 @@ const label = `E2E — Hermes blank guidance — ${new Date().toISOString()}`;
 const taskIds = [];
 const motionSamples = [];
 let agentTaskRequests = 0;
-const networkInterceptions = 0;
+let networkInterceptions = 0;
 
 const browser = await chromium.launch({ headless: true });
-const context = await browser.newContext({ viewport: { width: 1440, height: 1000 } });
+const context = await browser.newContext({
+  viewport: { width: 1440, height: 1000 },
+  recordVideo: { dir: outputDir, size: { width: 1440, height: 1000 } },
+});
 await context.addCookies([{
   name: 'openscience_session',
   value: sessionToken,
@@ -43,6 +62,18 @@ await context.addCookies([{
   sameSite: 'Lax',
 }]);
 const page = await context.newPage();
+const adminRequest = await request.newContext({
+  baseURL: canonicalOrigin,
+  extraHTTPHeaders: {
+    authorization: adminAuth,
+    cookie: `openscience_session=${sessionToken}`,
+  },
+});
+const originalRoute = page.route.bind(page);
+page.route = async (...args) => {
+  networkInterceptions += 1;
+  return originalRoute(...args);
+};
 page.on('request', (request) => {
   if (request.method() === 'POST' && new URL(request.url()).pathname === '/api/agent/tasks') agentTaskRequests += 1;
 });
@@ -81,6 +112,13 @@ async function browserJson(path, init = {}) {
   }, { path, init });
 }
 
+async function adminJson(path) {
+  const response = await adminRequest.get(path);
+  const body = await response.json().catch(() => null);
+  if (!response.ok()) throw new Error(`${path} ${response.status()} ${body?.error?.code ?? 'UNKNOWN'}`);
+  return body;
+}
+
 const readCore = (response) => response?.researchObject?.sdf?.core ?? {};
 const assertFieldsEmpty = (core, message) => {
   for (const field of fields) assert.equal(String(core[field] ?? '').trim(), '', `${message}: ${field}`);
@@ -88,15 +126,40 @@ const assertFieldsEmpty = (core, message) => {
 const proposalFor = (value) => page.locator('[data-before-after-proposal]').filter({
   has: page.getByText(value, { exact: true }),
 }).first();
+const hashText = (value) => createHash('sha256').update(String(value ?? '')).digest('hex');
+const aiCredit = (usage) => usage.user?.find((item) => item.resource === 'ai_credit')?.used;
+const rectsOverlap = (a, b) => a && b && a.x < b.x + b.width && a.x + a.width > b.x && a.y < b.y + b.height && a.y + a.height > b.y;
+const assertHermesClear = async (protectedLocator, message) => {
+  const footprintParts = page.locator('[data-hermes-companion-actor="true"], [data-hermes-companion-bubble]');
+  const boxes = await footprintParts.evaluateAll((nodes) => nodes.map((node) => {
+    const style = getComputedStyle(node);
+    if (style.display === 'none' || style.visibility === 'hidden' || Number.parseFloat(style.opacity) === 0) return null;
+    const rect = node.getBoundingClientRect();
+    return { x: rect.x, y: rect.y, width: rect.width, height: rect.height };
+  }).filter(Boolean));
+  const footprint = boxes.length === 0 ? null : {
+    x: Math.min(...boxes.map((box) => box.x)),
+    y: Math.min(...boxes.map((box) => box.y)),
+    width: Math.max(...boxes.map((box) => box.x + box.width)) - Math.min(...boxes.map((box) => box.x)),
+    height: Math.max(...boxes.map((box) => box.y + box.height)) - Math.min(...boxes.map((box) => box.y)),
+  };
+  assert.ok(footprint, 'Hermes footprint disappeared during guidance acceptance');
+  const protectedBoxes = await protectedLocator.evaluateAll((nodes) => nodes.map((node) => {
+    const rect = node.getBoundingClientRect();
+    return { x: rect.x, y: rect.y, width: rect.width, height: rect.height };
+  }));
+  assert.equal(protectedBoxes.some((box) => rectsOverlap(footprint, box)), false, message);
+};
 
 try {
   await page.goto(`${baseUrl}/research-objects/new?mode=blank&hermes-motion=full`, { waitUntil: 'networkidle' });
   const me = await browserJson('/api/auth/me');
   assert.ok(me?.userId, 'authenticated production session was not accepted');
+  const usageBefore = await browserJson('/api/usage');
 
-  const workspace = await page.locator('select option:not([value=""])').first().getAttribute('value');
-  assert.ok(workspace, 'personal workspace was not rendered');
-  await page.locator('select').selectOption(workspace);
+  const workspaceOption = page.locator(`select option[value="${acceptanceWorkspaceId}"]`);
+  assert.equal(await workspaceOption.count(), 1, 'configured acceptance workspace was not rendered');
+  await page.locator('select').selectOption(acceptanceWorkspaceId);
   await page.locator('input[name="title"]').fill(label);
   await page.getByRole('button', { name: /Create research object|创建研究对象/ }).click();
   await page.waitForURL(/\/research-objects\/[^/]+\/edit/);
@@ -104,11 +167,18 @@ try {
   assert.ok(researchObjectId, 'blank create flow did not expose a Research Object id');
 
   const created = await browserJson(`/api/research-objects/${researchObjectId}`);
+  assert.equal(created.researchObject.workspaceId, acceptanceWorkspaceId, 'blank RO was created outside the dedicated acceptance workspace');
   assert.equal(created.researchObject.visibility, 'private');
   assertFieldsEmpty(readCore(created), 'new blank RO was not empty');
+  const createAudit = await adminJson(`/api/admin/audit-logs?workspaceId=${acceptanceWorkspaceId}&action=research_object.create&limit=20`);
+  assert.ok(createAudit.items?.some((item) => item.targetId === researchObjectId), 'research_object.create audit fact was not observable');
 
   const stage = page.locator('[data-hermes-workspace-stage]');
   await stage.waitFor({ state: 'visible' });
+  const idleFrameA = await stage.screenshot();
+  await page.waitForTimeout(900);
+  const idleFrameB = await stage.screenshot();
+  assert.notEqual(hashText(idleFrameA), hashText(idleFrameB), 'Hermes idle pixels did not change before interaction');
   await page.getByRole('textbox', { name: /Problem|问题/ }).fill(controlledBrief);
 
   const taskResponsePromise = page.waitForResponse((response) => (
@@ -120,6 +190,8 @@ try {
   const submitted = await taskResponse.json();
   assert.ok(submitted?.task?.id, 'sdf.extract response omitted task id');
   taskIds.push(submitted.task.id);
+  const sessionAudit = await adminJson(`/api/admin/audit-logs?action=agent.session.create&actorId=${me.userId}&limit=20`);
+  assert.ok(sessionAudit.items?.some((item) => item.targetId === submitted.task.sessionId), 'agent.session.create audit fact was not observable');
 
   const deadline = Date.now() + 300_000;
   let taskDetail;
@@ -130,6 +202,10 @@ try {
     await page.waitForTimeout(1_500);
   }
   assert.equal(taskDetail?.task?.status, 'succeeded', 'sdf.extract did not complete within 300 seconds');
+  const usageAfter = await browserJson('/api/usage');
+  assert.equal(aiCredit(usageAfter), aiCredit(usageBefore) - 1, 'sdf.extract did not reserve exactly one AI credit');
+  const taskAudit = await adminJson(`/api/admin/audit-logs?workspaceId=${acceptanceWorkspaceId}&action=agent.task.submit&limit=20`);
+  assert.ok(taskAudit.items?.some((item) => item.targetId === submitted.task.id), 'agent.task.submit audit fact was not observable');
 
   const result = taskDetail.task.result ?? {};
   const proposedCore = result.core ?? {};
@@ -145,12 +221,32 @@ try {
   });
   assert.equal(unsupportedClaims.length, 0, `unsupported proposal fields: ${unsupportedClaims.join(', ')}`);
 
+  for (const field of fields.filter((candidate) => candidate !== 'results')) {
+    const value = String(proposedCore[field] ?? '').trim();
+    if (!value) continue;
+    const evidenceBlock = proposalFor(value).locator('[data-proposal-evidence]');
+    await evidenceBlock.waitFor({ state: 'visible' });
+    assert.equal(await evidenceBlock.getByText(evidence[field].quote, { exact: true }).count(), 1, `${field} evidence quote is not visible in its proposal`);
+    assert.equal(await evidenceBlock.getByText(evidence[field].locator, { exact: true }).count(), 1, `${field} evidence locator is not visible in its proposal`);
+  }
+
   await page.locator('[data-before-after-proposal]').first().waitFor({ state: 'visible', timeout: 30_000 });
   await stage.evaluate((node) => {
-    if (node.getAttribute('data-hermes-presentation-state') !== 'suggesting') {
+    if (node.getAttribute('data-hermes-presentation-state') !== 'awaiting_approval') {
       throw new Error('Hermes did not enter review presentation');
     }
+    const actor = node.querySelector('[data-hermes-companion-actor="true"]');
+    if (actor && getComputedStyle(actor).animationName !== 'none') throw new Error('Hermes review posture is not still');
   });
+  const activeProposal = page.locator('[data-before-after-proposal]').first();
+  await assertHermesClear(page.locator('[data-before-after-proposal], main textarea, header button, header input'), 'Hermes footprint overlaps protected review controls');
+  const firstReviewButton = activeProposal.getByRole('button').first();
+  await firstReviewButton.focus();
+  const focusVisible = await firstReviewButton.evaluate((node) => {
+    const style = getComputedStyle(node);
+    return Number.parseFloat(style.outlineWidth) > 0 || style.boxShadow !== 'none';
+  });
+  assert.equal(focusVisible, true, 'keyboard review action has no visible focus indicator');
   const beforeReview = await browserJson(`/api/research-objects/${researchObjectId}`);
   assertFieldsEmpty(readCore(beforeReview), 'Hermes wrote before explicit field review');
 
@@ -164,12 +260,15 @@ try {
   await problemProposal.getByRole('button', { name: /Edit suggestion|编辑建议/ }).click();
   await problemProposal.getByRole('textbox').fill(gold.problem);
   await problemProposal.getByRole('button', { name: /Apply edited change|应用已编辑内容/ }).click();
+  await assertHermesClear(page.locator('[data-before-after-proposal], main textarea, header button, header input'), 'Hermes overlaps after edit-accept');
 
   const directProposal = proposalFor(proposedCore[directField]);
   await directProposal.getByRole('button', { name: /Review changes|审阅变更/ }).click();
+  await assertHermesClear(page.locator('[data-before-after-proposal], main textarea, header button, header input'), 'Hermes overlaps after direct accept');
 
   const rejectedProposal = proposalFor(proposedCore[rejectedField]);
   await rejectedProposal.getByRole('button', { name: /Dismiss|忽略建议/ }).click();
+  await assertHermesClear(page.locator('[data-before-after-proposal], main textarea, header button, header input'), 'Hermes overlaps after rejection');
 
   const missingResults = page.locator('[data-missing-evidence="results"]');
   await missingResults.waitFor({ state: 'visible' });
@@ -185,6 +284,8 @@ try {
   await page.getByRole('button', { name: /Save to SDF|保存到 SDF/ }).click();
   const saveResponse = await saveResponsePromise;
   assert.ok(saveResponse.ok(), `SDF save failed: ${saveResponse.status()}`);
+  const sdfAudit = await adminJson(`/api/admin/audit-logs?workspaceId=${acceptanceWorkspaceId}&action=sdf.update&limit=20`);
+  assert.ok(sdfAudit.items?.some((item) => item.targetId === researchObjectId), 'sdf.update audit fact was not observable');
 
   const accepted = { problem: gold.problem, [directField]: proposedCore[directField], results: '' };
   const afterSave = await browserJson(`/api/research-objects/${researchObjectId}`);
@@ -209,6 +310,27 @@ try {
   assert.ok(commitResponse.ok(), `commit failed: ${commitResponse.status()}`);
   const committed = await commitResponse.json();
   assert.ok(committed?.commit?.versionId, 'commit response omitted version id');
+  const committedDetail = await browserJson(`/api/versions/${committed.commit.versionId}`);
+  assert.equal(committedDetail.version.snapshot.core.problem, gold.problem);
+  assert.equal(committedDetail.version.snapshot.core[directField], proposedCore[directField]);
+  assert.equal(committedDetail.version.snapshot.core[rejectedField], '');
+  assert.equal(committedDetail.version.snapshot.core.results, '');
+  const commitAudit = await adminJson(`/api/admin/audit-logs?workspaceId=${acceptanceWorkspaceId}&action=commit.create&limit=20`);
+  assert.ok(commitAudit.items?.some((item) => item.targetId === committed.commit.commitId), 'commit.create audit fact was not observable');
+
+  await context.addCookies([{ name: 'NEXT_LOCALE', value: 'zh', domain: new URL(baseUrl).hostname, path: '/' }]);
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto(`${baseUrl}/research-objects/${researchObjectId}/edit?hermes-motion=reduced`, { waitUntil: 'networkidle' });
+  const mobileStage = page.locator('[data-hermes-workspace-stage]');
+  await mobileStage.waitFor({ state: 'visible' });
+  assert.equal(await mobileStage.getAttribute('data-hermes-motion-preference'), 'reduced');
+  assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1), true, 'mobile editor overflows horizontally');
+  assert.equal(await mobileStage.locator('[data-hermes-companion-actor="true"]').evaluate((node) => getComputedStyle(node).animationName), 'none');
+  await assertHermesClear(page.locator('main textarea, header button, header input'), 'reduced mobile Hermes overlaps protected controls');
+  assert.equal(await page.getByRole('button', { name: /保存到 SDF/ }).count(), 1, 'Chinese editor controls were not rendered');
+  await context.addCookies([{ name: 'NEXT_LOCALE', value: 'en', domain: new URL(baseUrl).hostname, path: '/' }]);
+  await page.reload({ waitUntil: 'networkidle' });
+  assert.equal(await page.getByRole('button', { name: /Save to SDF/ }).count(), 1, 'English editor controls were not rendered');
 
   await page.goto(`${baseUrl}/dashboard?hermes-motion=full`, { waitUntil: 'networkidle' });
   const motionStates = new Set();
@@ -216,7 +338,7 @@ try {
     if (sample.guide === 'travel') motionStates.add('travel');
     if (sample.presentation === 'idle') motionStates.add('idle');
     if (sample.presentation === 'scanning') motionStates.add('working');
-    if (sample.presentation === 'suggesting') motionStates.add('review');
+    if (sample.presentation === 'awaiting_approval') motionStates.add('review');
   }
   assert.ok(['idle', 'travel', 'working', 'review'].every((state) => motionStates.has(state)), `incomplete Hermes motion states: ${[...motionStates].join(', ')}`);
   assert.equal(networkInterceptions, 0);
@@ -226,17 +348,19 @@ try {
   assert.equal(accepted.results, '');
   assert.equal(persistedAfterReload.results, '');
 
+  const fieldHashes = Object.fromEntries(fields.map((field) => [field, hashText(persistedAfterReload[field])]));
   const report = {
     ok: true,
-    baseUrl,
-    label,
+    origin: canonicalOrigin,
+    deployedRelease,
     researchObjectId,
     taskIds,
     missingEvidence,
     unsupportedClaims,
-    accepted,
-    rejected: { [rejectedField]: proposedCore[rejectedField] },
-    persistedAfterReload,
+    fieldHashes,
+    evidenceLocators: Object.fromEntries(fields.filter((field) => evidence[field]?.locator).map((field) => [field, evidence[field].locator])),
+    acceptedFields: Object.keys(accepted),
+    rejectedField,
     committedVersionId: committed.commit.versionId,
     committedVersionNo: committed.commit.versionNo,
     motionStates: [...motionStates].sort(),
@@ -255,5 +379,7 @@ try {
     motionStates: report.motionStates,
   }));
 } finally {
+  await adminRequest.dispose();
+  await context.close();
   await browser.close();
 }

@@ -5,6 +5,7 @@ import { describe, expect, it } from 'vitest';
 
 const tokens = readFileSync(path.join(__dirname, '../app/tokens.css'), 'utf8');
 const globals = readFileSync(path.join(__dirname, '../app/globals.css'), 'utf8');
+const browserGate = readFileSync(path.join(__dirname, 'visual/workspace-readability-gate.mjs'), 'utf8');
 
 describe('workspace readability foundation', () => {
   it('defines semantic text roles for controls and sustained reading', () => {
@@ -29,5 +30,16 @@ describe('workspace readability foundation', () => {
     expect(globals).toMatch(/\.hermes-companion-actions button:hover[\s\S]*?background:/);
     expect(globals).toMatch(/\.hermes-companion-actions button:focus-visible[\s\S]*?outline:/);
     expect(globals).toMatch(/\.hermes-companion-actions button:disabled[\s\S]*?cursor:\s*not-allowed/);
+  });
+
+  it('measures contrast, vertical clipping, and keyboard focus instead of inferring accessibility', () => {
+    expect(browserGate).toContain('contrastRatio');
+    expect(browserGate).toContain('contrastFailures');
+    expect(browserGate).toContain("tag === 'INPUT' || tag === 'TEXTAREA'");
+    expect(browserGate).toContain('verticallyClipped');
+    expect(browserGate).toContain('auditKeyboardFocus');
+    expect(browserGate).toContain("page.keyboard.press('Tab')");
+    expect(browserGate).toContain('firstFocused');
+    expect(browserGate).not.toContain('visited.has(key)');
   });
 });

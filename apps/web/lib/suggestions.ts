@@ -11,6 +11,7 @@ export interface AiSuggestion {
   sourceContext?: 'sdf_aggregate';
   sourceLocator?: string;
   risk?: 'normal' | 'high';
+  evidence?: { quote: string; locator: string };
 }
 
 export const SDF_FIELDS = ['problem', 'insight', 'method', 'results', 'limitations', 'reproducibility'] as const;
@@ -82,12 +83,17 @@ export function demoSuggestions(currentCore: SdfCore): AiSuggestion[] {
  * P1D-3：Extractor 结果 core → AiSuggestion[]（§5.4 逐字段 diff 展示）。
  * 仅非空且与当前不同的字段产出建议；source='extractor'。
  */
-export function coreToSuggestions(core: SdfCore, currentCore: SdfCore, sourceLocator?: string): AiSuggestion[] {
+export function coreToSuggestions(
+  core: SdfCore,
+  currentCore: SdfCore,
+  evidenceOrLocator?: Partial<Record<SdfField, { quote: string; locator: string }>> | string,
+): AiSuggestion[] {
   const list: AiSuggestion[] = [];
   for (const field of SDF_FIELDS) {
     const suggestion = (core[field] ?? '').trim();
     const before = (currentCore[field] ?? '').trim();
     if (!suggestion || suggestion === before) continue;
+    const evidence = typeof evidenceOrLocator === 'object' ? evidenceOrLocator[field] : undefined;
     list.push({
       id: `extract-${field}`,
       field,
@@ -96,7 +102,8 @@ export function coreToSuggestions(core: SdfCore, currentCore: SdfCore, sourceLoc
       status: 'pending',
       source: 'extractor',
       sourceContext: 'sdf_aggregate',
-      sourceLocator,
+      sourceLocator: evidence?.locator ?? (typeof evidenceOrLocator === 'string' ? evidenceOrLocator : undefined),
+      evidence,
       risk: field === 'results' || field === 'reproducibility' ? 'high' : 'normal',
     });
   }

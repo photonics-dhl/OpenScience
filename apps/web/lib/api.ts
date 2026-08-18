@@ -737,6 +737,7 @@ export interface AgentTaskView {
   kind: string;
   status: 'pending' | 'running' | 'succeeded' | 'failed';
   progress: number;
+  retryCount: number;
   result: Record<string, unknown> | null;
   error: string | null;
   createdAt: string;
@@ -789,13 +790,15 @@ export async function submitWorkspaceGuideTask(input: {
 }
 
 /** 建 Hermes 会话 + 提交 sdf.extract 任务（§9.3 异步 + §16 幂等）。 */
-export async function submitExtractTask(roId: string, manuscriptText: string): Promise<{ task: AgentTaskView }> {
+export async function submitExtractTask(roId: string, manuscriptText: string, idempotencyKey = crypto.randomUUID()): Promise<{ task: AgentTaskView }> {
   const session = await request<{ session: { id: string } }>('/api/agent/sessions', {
     method: 'POST',
+    headers: { 'Idempotency-Key': `${idempotencyKey}:session` },
     body: JSON.stringify({ researchObjectId: roId, kind: 'extract', title: 'SDF 提取' }),
   });
   const task = await request<{ task: AgentTaskView }>('/api/agent/tasks', {
     method: 'POST',
+    headers: { 'Idempotency-Key': `${idempotencyKey}:task` },
     body: JSON.stringify({ sessionId: session.session.id, kind: 'sdf.extract', payload: { manuscriptText } }),
   });
   return task;
@@ -805,6 +808,10 @@ export async function submitExtractTask(roId: string, manuscriptText: string): P
 export async function getAgentTask(roId: string, taskId: string): Promise<{ task: AgentTaskView }> {
   void roId;
   return request(`/api/agent/tasks/${taskId}`);
+}
+
+export async function retryAgentTask(taskId: string): Promise<{ task: AgentTaskView }> {
+  return request(`/api/agent/tasks/${taskId}/retry`, { method: 'POST' });
 }
 
 // ===== P1D-9：公开页数据（§4.3 必显）=====

@@ -916,6 +916,7 @@ model AgentTask {
   payload        Json            @default("{}")
   result         Json?
   error          String?
+  retryCount     Int             @default(0) @map("retry_count")
   dispatchedAt   DateTime?       @map("dispatched_at")
   // §16 幂等键：同 key 重发 → 返回既有任务（不重复执行）
   idempotencyKey String?         @unique @map("idempotency_key")

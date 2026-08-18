@@ -30,7 +30,11 @@ done
 [ "$BACKUP_DB" -eq 1 ] || [ "$BACKUP_OBJECTS" -eq 1 ] || { echo "用法: backup.sh [--confirm] --db [--objects]" >&2; exit 64; }
 
 REMOTE_ROOT="/opt/openscience"
-COMPOSE_FILE="$REMOTE_ROOT/infra/compose/docker-compose.prod.yml"
+RELEASE_SHA="$(cat "$REMOTE_ROOT/.release-id")"
+[[ "$RELEASE_SHA" =~ ^[0-9a-f]{40}$ ]] || { echo "BACKUP_FAIL: invalid active release identity" >&2; exit 1; }
+RELEASE_ROOT="/opt/openscience-releases/$RELEASE_SHA"
+test "$(cat "$RELEASE_ROOT/.release-source")" = "$RELEASE_SHA" || { echo "BACKUP_FAIL: active release directory mismatch" >&2; exit 1; }
+COMPOSE_FILE="$RELEASE_ROOT/infra/compose/docker-compose.prod.yml"
 DUMP_DIR="/var/backups/openscience"
 KEEP="${KEEP_BACKUPS:-7}"
 DB_USER="${POSTGRES_USER:-openscience}"
@@ -43,7 +47,7 @@ if [ "$BACKUP_DB" -eq 1 ]; then
 DUMP_FILE="$DUMP_DIR/db-$DATE.sql"
 
 # pg_dump：经生产 postgres 容器导出；内容不向 stdout 输出（Spec §20.1-9）
-docker compose --env-file "$REMOTE_ROOT/.env.prod" -f "$COMPOSE_FILE" exec -T postgres \
+XGS_RELEASE_ROOT="$RELEASE_ROOT" XGS_RELEASE_IMAGE_TAG="$RELEASE_SHA" docker compose --env-file "$REMOTE_ROOT/.env.prod" -f "$COMPOSE_FILE" exec -T postgres \
   pg_dump -U "$DB_USER" -d "$DB_NAME" > "$DUMP_FILE"
 
 # 校验 dump 非空

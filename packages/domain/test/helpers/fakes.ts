@@ -666,7 +666,7 @@ export function createFakePrisma(): { prisma: PrismaClient; db: FakeDb } {
     agentTask: {
       create: async ({ data }: any) => {
         if (data.idempotencyKey && db.agentTasks.some((t) => t.idempotencyKey === data.idempotencyKey)) throw p2002();
-        const row = { id: nextId(), status: 'pending', progress: 0, dispatchedAt: null, createdAt: new Date(), updatedAt: new Date(), ...data };
+        const row = { id: nextId(), status: 'pending', progress: 0, retryCount: 0, dispatchedAt: null, createdAt: new Date(), updatedAt: new Date(), ...data };
         db.agentTasks.push(row);
         return row;
       },
@@ -690,6 +690,10 @@ export function createFakePrisma(): { prisma: PrismaClient; db: FakeDb } {
         const rows = db.agentTasks.filter((task) =>
           (where.id === undefined || task.id === where.id) &&
           (where.dispatchedAt === undefined || task.dispatchedAt === where.dispatchedAt) &&
+          (where.kind === undefined || task.kind === where.kind) &&
+          (where.retryCount === undefined || task.retryCount === where.retryCount) &&
+          (where.error === undefined || task.error === where.error) &&
+          (typeof where.status !== 'string' || task.status === where.status) &&
           (where.status?.in === undefined || where.status.in.includes(task.status)),
         );
         rows.forEach((row) => Object.assign(row, data, { updatedAt: new Date() }));
@@ -698,7 +702,7 @@ export function createFakePrisma(): { prisma: PrismaClient; db: FakeDb } {
       findMany: async ({ where, include, orderBy, take }: any) => {
         let rows = db.agentTasks.filter((t) =>
           (where.session === undefined || (where.session.userId === undefined || db.agentSessions.find((s) => s.id === t.sessionId)?.userId === where.session.userId)) &&
-          (where.kind === undefined || t.kind === where.kind) &&
+          (where.kind === undefined || (typeof where.kind === 'string' ? t.kind === where.kind : where.kind.in.includes(t.kind))) &&
           (where.dispatchedAt === undefined || t.dispatchedAt === where.dispatchedAt) &&
           (typeof where.status !== 'string' || t.status === where.status),
         );

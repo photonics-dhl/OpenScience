@@ -1,0 +1,2 @@
+ALTER TABLE "agent_tasks"
+  ADD COLUMN "retry_count" INTEGER NOT NULL DEFAULT 0;

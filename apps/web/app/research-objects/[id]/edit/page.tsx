@@ -17,6 +17,7 @@ import {
   getResearchObject,
   getVersionDiff,
   listVersions,
+  retryAgentTask,
   submitExtractTask,
   updateSdf,
   type ArtifactReference,
@@ -31,6 +32,12 @@ import {
   type EditorState,
 } from '../../../../lib/editor-state';
 import {
+  clearExtractReviewState,
+  loadExtractReviewState,
+  saveExtractReviewState,
+  type ExtractReviewCheckpoint,
+} from '../../../../lib/extract-review-state';
+import {
   applySuggestionsToCore,
   coreToSuggestions,
   extractMissingSdfFields,
@@ -39,6 +46,10 @@ import {
 } from '../../../../lib/suggestions';
 
 type FieldKey = keyof Omit<SdfCore, 'schemaVersion'>;
+type ActiveExtraction = Pick<ExtractReviewCheckpoint, 'idempotencyKey' | 'taskId' | 'retryAvailable' | 'dismissedFields' | 'acknowledgedMissingFields'> & {
+  manuscriptText: string;
+  sourceCore: SdfCore;
+};
 
 const HERMES_DIFF_SIDES: Array<'left' | 'top'> = ['left', 'top'];
 
@@ -71,9 +82,12 @@ export default function EditorPage({ params }: { params: { id: string } }) {
   const [extracting, setExtracting] = useState(false);
   const [extractProgress, setExtractProgress] = useState(0);
   const [missingFields, setMissingFields] = useState<SdfField[]>([]);
+  const [editorLoaded, setEditorLoaded] = useState(false);
+  const [activeExtraction, setActiveExtraction] = useState<ActiveExtraction | null>(null);
+  const [recoverableExtraction, setRecoverableExtraction] = useState<ActiveExtraction | null>(null);
   const hermesStage = useOptionalHermesWorkspaceStage();
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const pollTimer = useRef<ReturnType<typeof setInterval> | null>(null);
+  const restoredExtraction = useRef(false);
 
   // 加载 RO + SDF + 版本
   useEffect(() => {
@@ -94,7 +108,10 @@ export default function EditorPage({ params }: { params: { id: string } }) {
           dispatch({ type: 'init', core, version: ro.researchObject.version });
         }
         const vs = await listVersions(roId);
-        if (!cancelled) setVersions(vs.versions ?? []);
+        if (!cancelled) {
+          setVersions(vs.versions ?? []);
+          setEditorLoaded(true);
+        }
       } catch (e) {
         if (!cancelled) setErrorMsg(e instanceof Error ? e.message : String(e));
       }
@@ -111,17 +128,104 @@ export default function EditorPage({ params }: { params: { id: string } }) {
     return () => { if (saveTimer.current) clearTimeout(saveTimer.current); };
   }, [state.core, state.dirty, roId]);
 
-  // 卸载时清提取轮询（§18.3）
+  // 刷新后恢复同一个已计费任务或尚未完成的逐字段 review。
   useEffect(() => {
-    return () => {
-      if (pollTimer.current) clearInterval(pollTimer.current);
+    if (!editorLoaded || restoredExtraction.current) return;
+    restoredExtraction.current = true;
+    const checkpoint = loadExtractReviewState(window.localStorage, roId);
+    if (!checkpoint) return;
+    setExtracting(true);
+    setActiveExtraction({
+      idempotencyKey: checkpoint.idempotencyKey,
+      taskId: checkpoint.taskId,
+      retryAvailable: checkpoint.retryAvailable,
+      dismissedFields: checkpoint.dismissedFields,
+      acknowledgedMissingFields: checkpoint.acknowledgedMissingFields,
+      manuscriptText: Object.values(state.core).join('\n\n'),
+      sourceCore: state.core,
+    });
+  }, [editorLoaded, roId, state.core]);
+
+  // 单一串行轮询 owner：每次 await 完成后才安排下一次，避免重叠 GET 与重复完成回调。
+  useEffect(() => {
+    if (!activeExtraction) return;
+    let cancelled = false;
+    let timer: ReturnType<typeof setTimeout> | null = null;
+    const persist = (run: typeof activeExtraction) => {
+      saveExtractReviewState(window.localStorage, roId, {
+        version: 1,
+        idempotencyKey: run.idempotencyKey,
+        taskId: run.taskId,
+        retryAvailable: run.retryAvailable,
+        dismissedFields: run.dismissedFields,
+        acknowledgedMissingFields: run.acknowledgedMissingFields,
+        updatedAt: Date.now(),
+      });
     };
-  }, []);
+    const poll = async () => {
+      try {
+        if (!activeExtraction.taskId) {
+          const { task } = await submitExtractTask(
+            roId,
+            activeExtraction.manuscriptText,
+            activeExtraction.idempotencyKey,
+          );
+          if (cancelled) return;
+          const next = { ...activeExtraction, taskId: task.id };
+          persist(next);
+          setActiveExtraction(next);
+          return;
+        }
+        const cur = await getAgentTask(roId, activeExtraction.taskId);
+        if (cancelled) return;
+        setExtractProgress(cur.task.progress ?? 0);
+        if (cur.task.status === 'succeeded') {
+          const core = cur.task.result?.core as SdfCore | undefined;
+          const nextMissing = extractMissingSdfFields(cur.task.result).filter((field) => !activeExtraction.acknowledgedMissingFields.includes(field));
+          const evidence = cur.task.result?.evidence as Partial<Record<SdfField, { quote: string; locator: string }>> | undefined;
+          const nextSuggestions = core
+            ? coreToSuggestions(core, activeExtraction.sourceCore, evidence).filter((item) => !activeExtraction.dismissedFields.includes(item.field))
+            : [];
+          dispatchSuggestions({ type: 'reset' });
+          for (const suggestion of nextSuggestions) dispatchSuggestions({ type: 'add', suggestion });
+          setMissingFields(nextMissing);
+          setActiveField(nextSuggestions[0]?.field ?? nextMissing[0] ?? 'problem');
+          if (nextSuggestions.length === 0 && nextMissing.length === 0) clearExtractReviewState(window.localStorage, roId);
+          else persist(activeExtraction);
+          setRecoverableExtraction(null);
+          setActiveExtraction(null);
+          setExtracting(false);
+          return;
+        }
+        if (cur.task.status === 'failed') {
+          const paused = { ...activeExtraction, retryAvailable: cur.task.retryCount < 1 };
+          persist(paused);
+          setRecoverableExtraction(paused);
+          setActiveExtraction(null);
+          setErrorMsg(cur.task.error ?? 'AI 提取失败');
+          setExtracting(false);
+          return;
+        }
+        timer = setTimeout(() => { void poll(); }, 1500);
+      } catch (error) {
+        if (cancelled) return;
+        setErrorMsg(error instanceof Error ? error.message : String(error));
+        setRecoverableExtraction(activeExtraction);
+        setActiveExtraction(null);
+        setExtracting(false);
+      }
+    };
+    void poll();
+    return () => {
+      cancelled = true;
+      if (timer) clearTimeout(timer);
+    };
+  }, [activeExtraction, roId]);
 
   const hermesRouteState = extracting
     ? 'scanning'
     : suggestions.some((suggestion) => suggestion.status === 'pending') || missingFields.length > 0
-      ? 'suggesting'
+      ? 'awaiting_approval'
       : 'idle';
   useEffect(() => {
     hermesStage?.setRouteState(hermesRouteState);
@@ -139,6 +243,12 @@ export default function EditorPage({ params }: { params: { id: string } }) {
     if (nextField) setActiveField(nextField);
   }
 
+  function persistReview(update: (checkpoint: ExtractReviewCheckpoint) => ExtractReviewCheckpoint) {
+    const checkpoint = loadExtractReviewState(window.localStorage, roId);
+    if (!checkpoint) return;
+    saveExtractReviewState(window.localStorage, roId, update({ ...checkpoint, updatedAt: Date.now() }));
+  }
+
   function applySuggestion(id: string, value: string) {
     const revised = suggestionReducer(suggestions, { type: 'revise', id, suggestion: value });
     const applied = suggestionReducer(revised, { type: 'apply', id });
@@ -148,17 +258,28 @@ export default function EditorPage({ params }: { params: { id: string } }) {
     for (const [k, v] of Object.entries(next) as [FieldKey, string][]) {
       if (v !== state.core[k]) dispatch({ type: 'edit_field', field: k, value: v });
     }
+    saveDraft(roId, next);
     advanceReview(id);
   }
 
   function dismissSuggestion(id: string) {
+    const dismissed = suggestionReducer(suggestions, { type: 'dismiss', id });
     dispatchSuggestions({ type: 'dismiss', id });
+    const field = dismissed.find((item) => item.id === id)?.field;
+    if (field) persistReview((checkpoint) => ({
+      ...checkpoint,
+      dismissedFields: [...new Set([...checkpoint.dismissedFields, field])],
+    }));
     advanceReview(id);
   }
 
   function acknowledgeMissing(field: SdfField) {
     const remaining = missingFields.filter((candidate) => candidate !== field);
     setMissingFields(remaining);
+    persistReview((checkpoint) => ({
+      ...checkpoint,
+      acknowledgedMissingFields: [...new Set([...checkpoint.acknowledgedMissingFields, field])],
+    }));
     const nextSuggestion = suggestions.find((item) => item.status === 'pending');
     setActiveField(nextSuggestion?.field ?? remaining[0] ?? field);
   }
@@ -169,36 +290,54 @@ export default function EditorPage({ params }: { params: { id: string } }) {
     setExtractProgress(0);
     setMissingFields([]);
     setErrorMsg(null);
-    try {
-      const { task } = await submitExtractTask(roId, Object.values(state.core).join('\n\n'));
-      pollTimer.current = setInterval(async () => {
-        try {
-          const cur = await getAgentTask(roId, task.id);
-          setExtractProgress(cur.task.progress ?? 0);
-          if (cur.task.status === 'succeeded') {
-            if (pollTimer.current) clearInterval(pollTimer.current);
-            const core = cur.task.result?.core as SdfCore | undefined;
-            setMissingFields(extractMissingSdfFields(cur.task.result));
-            if (core) {
-              dispatchSuggestions({ type: 'reset' });
-              for (const s of coreToSuggestions(core, state.core)) dispatchSuggestions({ type: 'add', suggestion: s });
-            }
-            setExtracting(false);
-          } else if (cur.task.status === 'failed') {
-            if (pollTimer.current) clearInterval(pollTimer.current);
-            setErrorMsg(cur.task.error ?? 'AI 提取失败');
-            setExtracting(false);
-          }
-        } catch (e) {
-          if (pollTimer.current) clearInterval(pollTimer.current);
-          setErrorMsg(e instanceof Error ? e.message : String(e));
-          setExtracting(false);
-        }
-      }, 1500);
-    } catch (e) {
-      setErrorMsg(e instanceof Error ? e.message : String(e));
-      setExtracting(false);
+    const checkpoint = loadExtractReviewState(window.localStorage, roId);
+    const recovery = recoverableExtraction;
+    let taskId = recovery?.taskId ?? checkpoint?.taskId;
+    const retryAvailable = recovery?.retryAvailable ?? checkpoint?.retryAvailable ?? false;
+    if (retryAvailable && taskId) {
+      try {
+        const retried = await retryAgentTask(taskId);
+        taskId = retried.task.id;
+      } catch (error) {
+        setErrorMsg(error instanceof Error ? error.message : String(error));
+        const resumed: ActiveExtraction = recovery ?? {
+          idempotencyKey: checkpoint?.idempotencyKey ?? crypto.randomUUID(),
+          taskId,
+          retryAvailable: false,
+          dismissedFields: checkpoint?.dismissedFields ?? [],
+          acknowledgedMissingFields: checkpoint?.acknowledgedMissingFields ?? [],
+          manuscriptText: Object.values(state.core).join('\n\n'),
+          sourceCore: state.core,
+        };
+        setRecoverableExtraction(null);
+        setActiveExtraction({ ...resumed, retryAvailable: false });
+        return;
+      }
     }
+    const run: ActiveExtraction = recovery ? {
+      ...recovery,
+      taskId,
+      retryAvailable: false,
+    } : {
+      idempotencyKey: checkpoint?.idempotencyKey ?? crypto.randomUUID(),
+      taskId,
+      retryAvailable: false,
+      dismissedFields: checkpoint?.dismissedFields ?? [],
+      acknowledgedMissingFields: checkpoint?.acknowledgedMissingFields ?? [],
+      manuscriptText: Object.values(state.core).join('\n\n'),
+      sourceCore: state.core,
+    };
+    saveExtractReviewState(window.localStorage, roId, {
+      version: 1,
+      idempotencyKey: run.idempotencyKey,
+      taskId: run.taskId,
+      retryAvailable: run.retryAvailable,
+      dismissedFields: run.dismissedFields,
+      acknowledgedMissingFields: run.acknowledgedMissingFields,
+      updatedAt: Date.now(),
+    });
+    setRecoverableExtraction(null);
+    setActiveExtraction(run);
   }
 
   /** 保存到 SDF（乐观锁，§16）。 */
@@ -210,6 +349,9 @@ export default function EditorPage({ params }: { params: { id: string } }) {
       await updateSdf(roId, state.version, state.core);
       dispatch({ type: 'saved', version: state.version + 1 });
       clearDraft(roId);
+      if (!suggestions.some((item) => item.status === 'pending') && missingFields.length === 0) {
+        clearExtractReviewState(window.localStorage, roId);
+      }
     } catch (e) {
       const message = e instanceof Error ? e.message : String(e);
       setSaveError(message);
@@ -231,6 +373,9 @@ export default function EditorPage({ params }: { params: { id: string } }) {
         artifacts,
       });
       dispatch({ type: 'saved', version: state.version + 1 });
+      if (!suggestions.some((item) => item.status === 'pending') && missingFields.length === 0) {
+        clearExtractReviewState(window.localStorage, roId);
+      }
       setCommitMsg('');
       const vs = await listVersions(roId);
       setVersions(vs.versions ?? []);

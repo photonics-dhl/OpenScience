@@ -13,6 +13,8 @@ export interface BeforeAfterProposalProps {
   scope: string;
   source: string;
   status?: 'pending' | 'applied' | 'dismissed';
+  evidenceQuote?: string;
+  evidenceLocator?: string;
 }
 
 function BeforeAfterProposal({
@@ -24,6 +26,8 @@ function BeforeAfterProposal({
   scope,
   source,
   status = 'pending',
+  evidenceQuote,
+  evidenceLocator,
 }: BeforeAfterProposalProps) {
   const [reviewing, setReviewing] = useState(false);
   const [editing, setEditing] = useState(false);
@@ -75,6 +79,12 @@ function BeforeAfterProposal({
           )}
         </div>
       </div>
+      {evidenceQuote && evidenceLocator ? (
+        <blockquote className="mt-4 border-l-2 border-os-rule-dark pl-4" data-proposal-evidence={evidenceLocator}>
+          <p className="m-0 font-data text-xs uppercase tracking-[0.08em] text-os-muted-dark">{evidenceLocator}</p>
+          <p className="mb-0 mt-2 text-base leading-[var(--leading-body)] text-os-paper">{evidenceQuote}</p>
+        </blockquote>
+      ) : null}
       {status === 'pending' ? (
         <div className="mt-4 flex justify-end gap-2">
           {onDismiss && <button data-reading-role="control" className="min-h-10 rounded-panel border border-os-rule-dark bg-transparent px-3 text-sm text-os-muted-dark" onClick={onDismiss}>{t('dismissSuggestion')}</button>}

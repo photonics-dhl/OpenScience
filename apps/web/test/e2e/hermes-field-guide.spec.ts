@@ -60,12 +60,31 @@ test('reduced motion retains the guide actions without positional travel or part
   const stage = page.locator('[data-hermes-workspace-stage]');
   await expect(page.locator('[data-hermes-guide-bubble]')).toBeVisible();
   await expect(page.getByRole('button', { name: /Explain|解释/i })).toBeVisible();
+  await expectGuideClearOf(page, page.locator('input[name="title"]'));
   await expect(page.getByRole('button', { name: /Draft|草拟/i })).toHaveCount(0);
   await expect(page.getByRole('button', { name: /Check|检查/i })).toHaveCount(0);
   await page.getByRole('button', { name: /Explain|解释/i }).click();
   await expect(page.locator('[data-hermes-guide-explanation]')).toBeVisible();
   await expect(stage).toHaveAttribute('data-hermes-guide-motion', 'static');
   await expect(stage.locator('[data-hermes-particles]')).toHaveCount(0);
+});
+
+test('a fully obstructed guide keeps Hermes and its motion control visible while suppressing only the bubble', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await mockWorkspace(page);
+  await page.goto(`${baseUrl}/research-objects/new?mode=blank&hermes-motion=full`, { waitUntil: 'networkidle' });
+
+  await page.evaluate(() => {
+    const blocker = document.createElement('div');
+    blocker.dataset.hermesProtected = 'true';
+    Object.assign(blocker.style, { position: 'fixed', inset: '0', zIndex: '1' });
+    document.body.append(blocker);
+  });
+  const stage = page.locator('[data-hermes-workspace-stage]');
+  await expect(stage).toHaveAttribute('data-hermes-guide-suppressed', 'true');
+  await expect(stage).toBeVisible();
+  await expect(stage.locator('[data-hermes-motion-toggle]')).toBeVisible();
+  await expect(page.locator('[data-hermes-guide-bubble][data-hermes-guide-visible="true"]')).toHaveCount(0);
 });
 
 test('creation guidance advances to source import and the route keeps a working Hermes entry', async ({ page }) => {

@@ -1,7 +1,7 @@
 import type { FastifyInstance, FastifyRequest } from 'fastify';
 import { z } from 'zod';
 import type { AuthDeps } from '@openscience/auth';
-import { createAgentSession, getAgentTask, listAgentSessions, listAgentTasks, parseWorkspaceGuidePayload, submitAgentTask, approveApproval, listPendingApprovals, rejectApproval, revokeApproval } from '@openscience/domain';
+import { createAgentSession, getAgentTask, retryAgentTask, listAgentSessions, listAgentTasks, parseWorkspaceGuidePayload, submitAgentTask, approveApproval, listPendingApprovals, rejectApproval, revokeApproval } from '@openscience/domain';
 import type { AuditContext } from '@openscience/observability';
 import { requireCurrentUser } from './session-guard';
 
@@ -101,6 +101,13 @@ export function registerAgentRoutes(app: FastifyInstance, deps: AgentRouteDeps):
     if (!user) return;
     const { id } = z.object({ id: z.string().uuid() }).parse(req.params);
     return reply.send({ task: await getAgentTask(deps, { userId: user.userId, taskId: id }) });
+  });
+
+  app.post('/agent/tasks/:id/retry', async (req, reply) => {
+    const user = await requireCurrentUser(deps, req, reply);
+    if (!user) return;
+    const { id } = z.object({ id: z.string().uuid() }).parse(req.params);
+    return reply.send({ task: await retryAgentTask(deps, { userId: user.userId, taskId: id }, auditCtx(req)) });
   });
 
   // P1D-4：R0-R4 审批（§9.4 + §15 ToolApproval）

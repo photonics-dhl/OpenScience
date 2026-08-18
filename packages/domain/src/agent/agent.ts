@@ -1,5 +1,6 @@
 import type { Redis } from 'ioredis';
 import { isDeepStrictEqual } from 'node:util';
+import { Prisma } from '@prisma/client';
 import type { AuditContext } from '@openscience/observability';
 import { requireMembership } from '../workspace/helpers';
 import { recordAudit } from '../workspace/audit';
@@ -31,6 +32,7 @@ export interface AgentTaskView {
   kind: string;
   status: AgentTaskStatus;
   progress: number;
+  retryCount: number;
   result: Record<string, unknown> | null;
   error: string | null;
   createdAt: Date;
@@ -251,7 +253,7 @@ export async function dispatchAgentTask(deps: AgentDeps, taskId: string): Promis
 /** DB task rows with dispatchedAt=null are the durable queue outbox. */
 export async function recoverUndispatchedAgentTasks(deps: AgentDeps, limit = 50): Promise<number> {
   const tasks = await deps.prisma.agentTask.findMany({
-    where: { kind: 'workspace.guide', status: 'pending', dispatchedAt: null },
+    where: { kind: { in: ['workspace.guide', 'sdf.extract'] }, status: 'pending', dispatchedAt: null },
     orderBy: { createdAt: 'asc' },
     take: limit,
   });
@@ -298,6 +300,53 @@ export async function getAgentTask(
     throw new AgentError('RESEARCH_OBJECT_NOT_FOUND', '任务不存在');
   }
   return taskToView(task);
+}
+
+/** One explicit, idempotent-cost retry of a failed task. The original credit reservation is reused. */
+export async function retryAgentTask(
+  deps: AgentDeps,
+  input: { userId: string; taskId: string },
+  ctx: AuditContext = {},
+): Promise<AgentTaskView> {
+  const task = await deps.prisma.agentTask.findUnique({ where: { id: input.taskId }, include: { session: true } });
+  if (!task || task.session.userId !== input.userId) throw new AgentError('RESEARCH_OBJECT_NOT_FOUND', '任务不存在');
+  if (task.status !== 'failed') throw new AgentError('ILLEGAL_TRANSITION', 'Only failed tasks can be retried');
+  const payload = task.payload && typeof task.payload === 'object' && !Array.isArray(task.payload)
+    ? task.payload as Record<string, unknown>
+    : {};
+  const retryableExtractor = task.kind === 'sdf.extract'
+    && typeof payload.manuscriptText === 'string'
+    && !('artifactId' in payload)
+    && !task.error?.startsWith('[blocked]');
+  if (!retryableExtractor) throw new AgentError('ILLEGAL_TRANSITION', 'Task is not retryable');
+  if (task.retryCount >= 1) throw new AgentError('ILLEGAL_TRANSITION', 'Task was already retried');
+
+  let workspaceId: string | null = null;
+  if (task.session.researchObjectId) {
+    const ro = await deps.prisma.researchObject.findUnique({ where: { id: task.session.researchObjectId } });
+    if (!ro) throw new AgentError('RESEARCH_OBJECT_NOT_FOUND', '研究对象不存在');
+    await requireMembership(deps, ro.workspaceId, input.userId);
+    workspaceId = ro.workspaceId;
+  }
+
+  const updated = await deps.prisma.$transaction(async (tx) => {
+    const changed = await tx.agentTask.updateMany({
+      where: { id: task.id, status: 'failed', kind: 'sdf.extract', retryCount: 0, error: task.error },
+      data: {
+        status: 'pending', progress: 0, result: Prisma.JsonNull, error: null, dispatchedAt: null,
+        retryCount: 1,
+      },
+    });
+    if (changed.count !== 1) throw new AgentError('ILLEGAL_TRANSITION', 'Task retry is no longer available');
+    await recordAudit(deps, tx, {
+      actorId: input.userId, action: 'agent.task.retry', workspaceId,
+      targetType: 'agent_task', targetId: task.id, metadata: { retryAttempt: 1, creditPolicy: 'reuse-original-reservation' },
+    }, ctx);
+    return tx.agentTask.findUnique({ where: { id: task.id } });
+  });
+  if (!updated) throw new AgentError('RESEARCH_OBJECT_NOT_FOUND', '任务不存在');
+  await dispatchAgentTask(deps, task.id);
+  return taskToView(updated);
 }
 
 /** 会话列表（当前用户）。 */
@@ -381,11 +430,11 @@ async function syncIngestionState(
 
 function taskToView(task: {
   id: string; sessionId: string; kind: string; status: AgentTaskStatus;
-  progress: number; result: unknown; error: string | null; createdAt: Date; updatedAt: Date;
+  progress: number; retryCount: number; result: unknown; error: string | null; createdAt: Date; updatedAt: Date;
 }): AgentTaskView {
   return {
     id: task.id, sessionId: task.sessionId, kind: task.kind, status: task.status,
-    progress: task.progress, result: (task.result ?? null) as Record<string, unknown> | null,
+    progress: task.progress, retryCount: task.retryCount, result: (task.result ?? null) as Record<string, unknown> | null,
     error: task.error, createdAt: task.createdAt, updatedAt: task.updatedAt,
   };
 }

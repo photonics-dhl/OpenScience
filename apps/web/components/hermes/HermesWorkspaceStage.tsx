@@ -296,12 +296,6 @@ function HermesWorkspaceStage({ fallbackAssistantOpen, fallbackOnInvoke, guideTa
     const stageBounds = stage.getBoundingClientRect();
     const from = new DOMRect(stageBounds.x, stageBounds.y, Math.max(1, stageBounds.width), Math.max(1, stageBounds.height));
     const target = new DOMRect(snapshot.rect.x, snapshot.rect.y, snapshot.rect.width, snapshot.rect.height);
-    if (effectiveReducedMotion) {
-      setGuideMode('static');
-      setGuideSuppressed(false);
-      setGuideReady(true);
-      return;
-    }
     if (customDock && !travelRequested) {
       setGuideMode('edge-stop');
       setGuideSuppressed(false);
@@ -335,6 +329,13 @@ function HermesWorkspaceStage({ fallbackAssistantOpen, fallbackOnInvoke, guideTa
       target,
       viewport: new DOMRect(0, 0, window.innerWidth, window.innerHeight),
     });
+    if (effectiveReducedMotion) {
+      if (plan.safe) setPosition(plan.dock);
+      setGuideSuppressed(!plan.safe);
+      setGuideMode('static');
+      setGuideReady(true);
+      return;
+    }
     setGuideSuppressed(!plan.safe);
     setGuideMode(plan.mode === 'edge-stop' ? 'edge-stop' : 'travel');
     const timeline = createHermesTravelTimeline(plan.points, TRAVEL_SEGMENT_MS);

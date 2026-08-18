@@ -200,7 +200,7 @@ export default function NewResearchObjectPage() {
               <label data-reading-role="control" className="grid gap-2 text-sm font-medium tracking-[0.02em] text-white/70">
                 {t('researchTitle')}
                 <HermesAnchor actions={EXPLAIN_ONLY} id="ro-title">
-                  <input data-reading-role="reading" className="min-h-12 w-full border-0 border-b border-white/25 bg-transparent px-1 text-[1.0625rem] normal-case tracking-normal text-white outline-none placeholder:text-white/40 focus:border-[#ef4c2f]" name="title" required maxLength={200} value={title} onChange={(event) => setTitle(event.target.value)} placeholder={intakeT('titlePlaceholder')} />
+                  <input data-reading-role="reading" className="min-h-12 w-full border-0 border-b border-white/25 bg-transparent px-1 text-[1.0625rem] normal-case tracking-normal text-white outline-none placeholder:text-white/60 focus:border-[#ef4c2f]" name="title" required maxLength={200} value={title} onChange={(event) => setTitle(event.target.value)} placeholder={intakeT('titlePlaceholder')} />
                 </HermesAnchor>
               </label>
             </section>
@@ -222,10 +222,10 @@ export default function NewResearchObjectPage() {
               </div>
             ) : null}
             <footer className="mt-10 flex flex-wrap items-center justify-between gap-5 border-t border-white/25 pt-6">
-              <p className="max-w-xl text-xs leading-5 text-white/42">{mode === 'import' ? intakeT('submitNote') : intakeT('blankNote')}</p>
+              <p className="max-w-xl text-xs leading-5 text-white/60">{mode === 'import' ? intakeT('submitNote') : intakeT('blankNote')}</p>
               <div className="flex gap-4">
                 {researchObjectId ? <Link className="min-h-12 px-5 py-3 text-xs uppercase tracking-[0.14em] text-white/60 hover:text-white" href={`/research-objects/${researchObjectId}/edit`}>{intakeT('openDraft')}</Link> : null}
-                {!batchId ? <button data-reading-role="control" className="min-h-12 border-0 bg-[#ef4c2f] px-7 text-sm font-semibold tracking-[0.04em] text-white transition-colors hover:bg-[#ff6244] disabled:cursor-not-allowed disabled:opacity-45 motion-reduce:transition-none" disabled={pending || !workspaceId} type="submit">{pending ? t('creating') : researchObjectId ? intakeT('retryUpload') : t('create')}</button> : null}
+                {!batchId ? <button data-reading-role="control" className="min-h-12 border-0 bg-[#bd321d] px-7 text-sm font-semibold tracking-[0.04em] text-white transition-colors hover:bg-[#d13b22] disabled:cursor-not-allowed disabled:opacity-60 motion-reduce:transition-none" disabled={pending || !workspaceId} type="submit">{pending ? t('creating') : researchObjectId ? intakeT('retryUpload') : t('create')}</button> : null}
               </div>
             </footer>
           </form>

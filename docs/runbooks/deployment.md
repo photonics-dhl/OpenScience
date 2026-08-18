@@ -21,29 +21,31 @@
 ### 2.1 同步代码（`scripts/cloud-sync.mjs`）
 
 ```bash
-node scripts/cloud-sync.mjs
-# tar-over-ssh 同步到 /opt/openscience；排除 .env/.git/node_modules/dist
-# 隔离 worktree 部署时设置 XGS_CONFIG_ROOT=/e/Miscellaneous/XGS，服务器配置与 release 源码分离。
-# 干净 release 预部署时设置 XGS_REMOTE_ROOT=/opt/openscience-next，先在 staging 目录 build 再切换。
+infra/scripts/deploy.sh --rollback-ref <known-good-ref> <release-ref> # dry-run
+infra/scripts/deploy.sh --confirm --rollback-ref <known-good-ref> <release-ref>
+# deploy 只接受 clean HEAD；完整 git archive 落到 /opt/openscience-releases/<40-char-sha>。
+# 不使用文件白名单；.dockerignore 等所有 tracked build input 必须进入归档。
+# /opt/openscience/.env.prod 与 .release-id 是稳定运行状态，不进入 release 目录。
 ```
 
 ### 2.2 安装依赖 + 全量构建（云上）
 
 ```bash
-ssh-run.sh "cd /opt/openscience && npx pnpm@9.15.0 install && npx pnpm@9.15.0 build"
+ssh-run.sh "cd /opt/openscience-releases/<sha> && npx pnpm@9.15.0 install && npx pnpm@9.15.0 build"
 # 跨包 import 解析到目标包 dist，必须全量 build（AGENTS.md 坑）
 ```
 
 ### 2.3 迁移部署 + seed（如需）
 
 ```bash
-ssh-run.sh "cd /opt/openscience && node packages/database/dist/migrate-cli.js deploy"
-ssh-run.sh "cd /opt/openscience && node scripts/seed-quota.mjs --confirm"   # P1A-7 配额占位值
+# 只通过 deploy.sh 的 versioned Compose `run --rm --no-deps` 路径执行；不要在宿主直连 DB。
 ```
 
 生产栈数据库没有宿主端口映射，实际执行必须通过 API 容器，并从服务器 `.env.prod` 注入容器内 `DATABASE_URL`；`infra/scripts/deploy.sh` 已封装该路径。
 
-生产 Web/API/Agent Worker 源码与构建产物以 bind mount 进入长期运行容器；`document-parser` 则是自包含镜像。`deploy.sh` 会先重建 Worker/Parser 镜像并单独等待 Parser healthy，再用 Compose `--wait` 收敛全栈；随后显式重启 bind-mounted `api web agent-worker`，并再次硬等待应用健康。PostgreSQL、Redis、对象存储和 Parser 不在该重启集合中。禁止以仅同步文件、仅执行 `up -d` 或忽略 HTTP 状态作为发布完成证据。
+生产 Web/API/Agent Worker 以非 root 从 `XGS_RELEASE_ROOT` 只读挂载到容器内 `/opt/openscience`；Web 只有独立 bounded cache 可写。Worker/Parser image tag 等于 `XGS_RELEASE_IMAGE_TAG` SHA，`document-parser` 仍是自包含镜像。`deploy.sh` 先完成 install、全量 build 与 image build，再执行迁移并切换服务；Parser 先 healthy，随后 `api web agent-worker` 强制重建并硬等待。后续回滚使用上一 release 自己的 Compose；首次版本化切换因 legacy Compose 不支持 release 变量，显式使用新 Compose 适配器，并从正在运行的容器 image ID 保存 rollback images。公网健康与 `/__release` 精确 SHA 通过前，ERR handler 保留可验证上一 release；同 SHA 只验证并 no-op。禁止以仅同步文件、仅执行 `up -d` 或忽略 HTTP 状态作为发布完成证据。
+
+Release SHA 目录是 write-once：已存在目录只核验 marker 与输入 archive，不会自动删除或替换。若存在 `/opt/openscience/.release-failed`，或 `.release-id` 缺失但仍有容器挂载 `/opt/openscience-releases/*`，部署必须硬停止；运维人员需先核对容器、Compose、Nginx 和实际 SHA，完成显式恢复后再清理故障标记。不得用再次部署代替恢复。
 
 ### 2.4 初始化生产对象存储（首次）
 
@@ -64,8 +66,10 @@ chmod 600 /opt/openscience/.env.prod
 
 # 3) 经既有代理隧道拉镜像，再验证 compose；命令不得回显 resolved env
 with-proxy docker pull chrislusf/seaweedfs:4.41
-docker compose --env-file /opt/openscience/.env.prod \
-  -f /opt/openscience/infra/compose/docker-compose.prod.yml config --quiet
+release_sha="$(cat /opt/openscience/.release-id)"
+release_root="/opt/openscience-releases/$release_sha"
+XGS_RELEASE_ROOT="$release_root" XGS_RELEASE_IMAGE_TAG="$release_sha" docker compose --env-file /opt/openscience/.env.prod \
+  -f "$release_root/infra/compose/docker-compose.prod.yml" config --quiet
 ```
 
 回滚：恢复刚创建的 `.env.prod.pre-s3-*`，切回上一 release compose；`seaweed-data` 卷保留，未经用户明确批准不得删除。
@@ -98,17 +102,18 @@ ssh-run.sh "systemctl restart openscience-api"
 ### 2.7 验证对象存储与 Hermes worker
 
 ```bash
-ssh-run.sh "cd /opt/openscience && docker compose --env-file /opt/openscience/.env.prod -f infra/compose/docker-compose.prod.yml ps api web agent-worker document-parser object-storage postgres redis"
-ssh-run.sh "cd /opt/openscience && docker compose --env-file /opt/openscience/.env.prod -f infra/compose/docker-compose.prod.yml logs --tail=100 agent-worker"
+ssh-run.sh 'sha=$(cat /opt/openscience/.release-id); root=/opt/openscience-releases/$sha; cd "$root" && XGS_RELEASE_ROOT="$root" XGS_RELEASE_IMAGE_TAG="$sha" docker compose --env-file /opt/openscience/.env.prod -f infra/compose/docker-compose.prod.yml ps api web agent-worker document-parser object-storage postgres redis'
+ssh-run.sh 'sha=$(cat /opt/openscience/.release-id); root=/opt/openscience-releases/$sha; cd "$root" && XGS_RELEASE_ROOT="$root" XGS_RELEASE_IMAGE_TAG="$sha" docker compose --env-file /opt/openscience/.env.prod -f infra/compose/docker-compose.prod.yml logs --tail=100 agent-worker'
 ```
 
 预期：`object-storage`、API、Web、`agent-worker` 与 `document-parser` 均为 `healthy`；worker 日志出现启动行，不出现模块、Prisma、Redis、Storage 或 parser sidecar 连接错误。另以 `docker inspect` 确认 `document-parser` 的网络模式为 `none`、用户为 `node`、rootfs 只读、memory 为 512MB、PID 上限为 64，Mounts 中只有 `parser-jobs` 且 Config.Env 不含生产数据库、对象存储或 MiniMax Secret。
 
 ## 3. 回滚步骤
 
-- 代码回滚：`node scripts/cloud-sync.mjs` 同步旧 release ref，重新 install + build，重启服务；对象卷保留。
+- 应用回滚：部署脚本在公网验收前自动恢复上一 SHA 自己的 Compose、只读 bind root、SHA-tagged images 与 Nginx；只有恢复成功才原子更新 `.release-id`。恢复失败必须删除不可信 `.release-id` 并写入 `.release-failed` 供人工诊断。首次版本化切换是唯一使用新 Compose 兼容适配器的例外。手工回滚仍需为目标和回退点同时提供明确 Git ref；不得原地改 release 目录。
+- 故障态恢复：`.release-failed` 是阻断标记，不得直接删除后盲目重跑。先确认实际容器 image/mount、目标 release 自身 Compose 与 Nginx，再恢复一个可信 `.release-id`；任何 release SHA 目录都不得自动覆盖。
 - nginx 回滚：恢复上一版 `openscience.conf`（`cp` 备份），`nginx -t && systemctl reload nginx`。
-- 迁移回滚：`node packages/database/dist/migrate-cli.js status` 确认；破坏性迁移先备份（`docs/runbooks/backup-restore.md`）。
+- 迁移回滚：应用自动回滚不撤销数据库变更。先按 migration `rollback.sql` 与备份评估兼容性；破坏性迁移未经单独确认不得上线。
 - 判定：`checkup.sh` 复跑 + API 健康检查（见 §4）。
 
 ## 4. 验证命令
@@ -136,7 +141,7 @@ ssh-run.sh "cd /opt/openscience && docker compose --env-file /opt/openscience/.e
 - Public probes: Landing, Explore, Ultrafast Science Collection and the canonical demo Public RO return 200; unauthenticated `/auth/me` returns 401.
 - Real-browser flow: sign-in, Dashboard, seven RO product surfaces, three-format Intake, async `needs_review`, Hermes confirmation, version creation and Publish-ready surface passed. The synthetic acceptance object must not be publicly published.
 
-Current infrastructure uses pinned base/worker images with bind-mounted application code. Until a dedicated immutable-image migration is implemented, the verified Git ref plus remote source hash is the rollback anchor; do not describe the Web/API deployment as a per-release immutable image.
+Historical note for the 2026-08-11 release: it used fixed worker tags and a writable application bind. ADR-011 supersedes that deployment topology for future releases; do not reuse this historical paragraph as a current instruction.
 
 ### 5.1 Final Hermes refinement (2026-08-11)
 
