@@ -101,6 +101,8 @@ try {
   const actor = page.locator('[data-hermes-companion-actor]');
   const inputOwner = page.locator('[data-hermes-input-owner="true"]');
   const interactiveRig = page.locator('[data-hermes-rig="mesh-2d"]');
+  await page.addStyleTag({ content: '.hermes-companion-actor{animation:none!important}' });
+  await page.waitForTimeout(220);
   const beforeHover = await actor.boundingBox();
   const rigBounds = await interactiveRig.boundingBox();
   assert.ok(beforeHover, 'Hermes actor must expose a real product bounding box');
