@@ -13,7 +13,7 @@ jobs:
   gate:
     name: Build / Typecheck / Lint / Test
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 40
     steps:
       - uses: actions/checkout@v4
 
@@ -48,7 +48,9 @@ jobs:
         run: npx pnpm@9.15.0 test
 
       - name: Install release browser
-        run: npx pnpm@9.15.0 --filter @openscience/web exec playwright install --with-deps chromium
+        # GitHub's Ubuntu runner already includes browser system libraries.
+        # Re-running apt through --with-deps consumed most of the former 20m job budget.
+        run: npx pnpm@9.15.0 --filter @openscience/web exec playwright install chromium
 
       - name: Product visual release gate
         run: npx pnpm@9.15.0 --filter @openscience/web test:release
