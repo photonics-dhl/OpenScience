@@ -95,6 +95,19 @@ describe('Hermes behavior director', () => {
     expect(new Set(actions).size).toBe(10);
   });
 
+  it('keeps a ninety-second idle session varied without immediate repeats', () => {
+    let current = createInitialHermesBehavior(input({ nowMs: 0, seed: 37 }));
+    const observed = [current.primary];
+    for (let nowMs = 250; nowMs <= 90_000; nowMs += 250) {
+      const next = stepHermesBehavior(current, input({ nowMs, seed: 37 }));
+      if (next.primary !== current.primary) observed.push(next.primary);
+      current = next;
+    }
+
+    expect(new Set(observed).size).toBeGreaterThanOrEqual(8);
+    expect(observed.every((action, index) => index === 0 || action !== observed[index - 1])).toBe(true);
+  });
+
   it('keeps the balanced companion visibly alive instead of leaving multi-second static gaps', () => {
     const start = 12_345;
     const first = createInitialHermesBehavior(input({ nowMs: start, seed: 13 }));

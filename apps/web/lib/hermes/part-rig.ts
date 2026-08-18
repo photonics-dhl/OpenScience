@@ -121,7 +121,33 @@ export function createHermesPartPoses(
     y: sample.torso.y * .5,
   };
 
-  if (action === 'stretch') {
+  if (action === 'evidence-check') {
+    poses.forepaws.x -= pulse * 3;
+    poses.forepaws.angle -= pulse * 5;
+    poses.evidenceNodes.y -= pulse * 5.5;
+    poses.evidenceNodes.angle += pulse * 9;
+  } else if (action === 'read') {
+    poses.forepaws.y -= pulse * 2.5;
+    poses.forepaws.angle -= pulse * 4;
+    poses.evidenceNodes.x += pulse * 3.5;
+    poses.evidenceNodes.angle -= pulse * 7;
+  } else if (action === 'compare') {
+    poses.forepaws.x -= pulse * 4;
+    poses.forepaws.angle += pulse * 7;
+    poses.evidenceNodes.x += pulse * 6;
+    poses.evidenceNodes.angle -= pulse * 11;
+  } else if (action === 'quiet-write') {
+    poses.forepaws.x += oscillation * 2.5;
+    poses.forepaws.y -= pulse * 2;
+    poses.forepaws.angle -= pulse * 5.5;
+    poses.crown.angle *= .55;
+  } else if (action === 'possible-issue') {
+    poses.forepaws.x -= pulse * 3.5;
+    poses.forepaws.angle += pulse * 6;
+    poses.crown.angle -= pulse * 7;
+    poses.evidenceNodes.y += pulse * 3;
+    poses.evidenceNodes.angle += pulse * 8;
+  } else if (action === 'stretch') {
     poses.forepaws.y -= pulse * 9;
     poses.forepaws.angle -= pulse * 9;
     poses.crown.angle -= pulse * 5;
@@ -129,9 +155,16 @@ export function createHermesPartPoses(
     poses.forepaws.x += oscillation * 5;
     poses.forepaws.y -= pulse * 7;
     poses.forepaws.angle += oscillation * 14;
-  } else if (action === 'guide-arrive' || action === 'success') {
+  } else if (action === 'guide-arrive') {
     poses.forepaws.y -= pulse * 4;
     poses.forepaws.angle -= pulse * 6;
+    poses.crown.angle += pulse * 7;
+  } else if (action === 'success') {
+    poses.forepaws.y -= pulse * 5;
+    poses.forepaws.angle -= pulse * 10;
+    poses.crown.angle += pulse * 7;
+    poses.evidenceNodes.y -= pulse * 6;
+    poses.evidenceNodes.angle += oscillation * 12;
   } else if (action === 'page-tidy' || action === 'draft') {
     poses.forepaws.x += oscillation * 3;
     poses.forepaws.angle += oscillation * 8;

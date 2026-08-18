@@ -95,8 +95,8 @@ try {
     const origin = points[0];
     return Math.max(...points.map((point) => Math.hypot(point.left - origin.left, point.top - origin.top))) >= 8;
   }).map(({ action }) => action));
-  assert.ok(visiblyMovingActions.size >= 6,
-    `at least six autonomous actions must move the whole silhouette >=8px, got ${JSON.stringify([...visiblyMovingActions])}`);
+  assert.deepEqual([...visiblyMovingActions], ['patrol'],
+    `only the travelling patrol signature may move the enclosing silhouette >=8px: ${JSON.stringify([...visiblyMovingActions])}`);
 
   const actor = page.locator('[data-hermes-companion-actor]');
   const inputOwner = page.locator('[data-hermes-input-owner="true"]');
@@ -104,14 +104,21 @@ try {
   await page.addStyleTag({ content: '.hermes-companion-actor{animation:none!important}' });
   await page.waitForTimeout(220);
   const beforeHover = await actor.boundingBox();
+  const beforeHoverJoints = await page.locator('[data-hermes-articulated-canvas]').evaluate((canvas) => [
+    canvas.getAttribute('data-hermes-head'), canvas.getAttribute('data-hermes-tail'),
+  ].join('|'));
   const rigBounds = await interactiveRig.boundingBox();
   assert.ok(beforeHover, 'Hermes actor must expose a real product bounding box');
   assert.ok(rigBounds, 'Hermes rig must expose its real pointer hit area');
   await interactiveRig.hover({ position: { x: rigBounds.width - 2, y: 2 } });
   await page.waitForTimeout(220);
   const duringHover = await actor.boundingBox();
-  assert.ok(duringHover && Math.hypot(duringHover.x - beforeHover.x, duringHover.y - beforeHover.y) >= 8,
-    `pointer interaction must visibly move the whole actor: before=${JSON.stringify(beforeHover)} during=${JSON.stringify(duringHover)}`);
+  const duringHoverJoints = await page.locator('[data-hermes-articulated-canvas]').evaluate((canvas) => [
+    canvas.getAttribute('data-hermes-head'), canvas.getAttribute('data-hermes-tail'),
+  ].join('|'));
+  assert.ok(duringHover && Math.hypot(duringHover.x - beforeHover.x, duringHover.y - beforeHover.y) <= 2,
+    `pointer interaction must articulate internal joints without dragging the whole actor: before=${JSON.stringify(beforeHover)} during=${JSON.stringify(duringHover)}`);
+  assert.notEqual(duringHoverJoints, beforeHoverJoints, 'pointer interaction must change real renderer-backed head/tail joints');
   await page.mouse.move(20, 20);
   await page.waitForTimeout(260);
   const pointerReset = await inputOwner.evaluate((node) => ({

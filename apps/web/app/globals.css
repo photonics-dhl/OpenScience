@@ -1900,46 +1900,6 @@ body {
   animation: hermes-companion-patrol 4.2s cubic-bezier(.42, 0, .2, 1) both;
 }
 
-.hermes-workspace-stage[data-hermes-action='observe-left'] .hermes-companion-actor {
-  animation: hermes-companion-observe-left 1.5s cubic-bezier(.2, .8, .2, 1) both;
-}
-
-.hermes-workspace-stage[data-hermes-action='observe-right'] .hermes-companion-actor {
-  animation: hermes-companion-observe-right 1.5s cubic-bezier(.2, .8, .2, 1) both;
-}
-
-.hermes-workspace-stage[data-hermes-action='evidence-check'] .hermes-companion-actor {
-  animation: hermes-companion-evidence-check 1.65s cubic-bezier(.2, .8, .2, 1) both;
-}
-
-.hermes-workspace-stage[data-hermes-action='page-tidy'] .hermes-companion-actor {
-  animation: hermes-companion-page-tidy 1.25s ease-in-out both;
-}
-
-.hermes-workspace-stage[data-hermes-action='stretch'] .hermes-companion-actor {
-  animation: hermes-companion-stretch 1.45s cubic-bezier(.2, .8, .2, 1) both;
-}
-
-.hermes-workspace-stage[data-hermes-action='doze'] .hermes-companion-actor {
-  animation: hermes-companion-doze 1.8s ease-in-out both;
-}
-
-.hermes-workspace-stage[data-hermes-action='wake'] .hermes-companion-actor {
-  animation: hermes-companion-wake .9s cubic-bezier(.18, .9, .3, 1) both;
-}
-
-.hermes-workspace-stage[data-hermes-action='surprise-settle'] .hermes-companion-actor {
-  animation: hermes-companion-surprise .85s cubic-bezier(.16, 1, .3, 1) both;
-}
-
-.hermes-workspace-stage[data-hermes-action='citation-trace'] .hermes-companion-actor {
-  animation: hermes-companion-citation-trace 2.1s ease-in-out both;
-}
-
-.hermes-visual[data-hermes-engaged='true'] .hermes-companion-actor {
-  transform: translate3d(var(--hermes-pointer-x, 0), var(--hermes-pointer-y, 0), 0);
-}
-
 @keyframes hermes-companion-patrol {
   0%, 100% { transform: translate3d(0, 0, 0) rotate(0deg); }
   18% { transform: translate3d(-18px, -9px, 0) rotate(-2deg); }
@@ -1947,56 +1907,6 @@ body {
   58% { transform: translate3d(13px, -25px, 0) rotate(1.5deg); }
   78% { transform: translate3d(34px, -10px, 0) rotate(2.5deg); }
   90% { transform: translate3d(13px, -3px, 0) rotate(1deg); }
-}
-
-@keyframes hermes-companion-observe-left {
-  0%, 100% { transform: translate3d(0, 0, 0) rotate(0); }
-  32%, 66% { transform: translate3d(-16px, -6px, 0) rotate(-2deg); }
-}
-
-@keyframes hermes-companion-observe-right {
-  0%, 100% { transform: translate3d(0, 0, 0) rotate(0); }
-  32%, 66% { transform: translate3d(16px, -6px, 0) rotate(2deg); }
-}
-
-@keyframes hermes-companion-evidence-check {
-  0%, 100% { transform: translate3d(0, 0, 0) scale(1); }
-  28%, 68% { transform: translate3d(-5px, -14px, 0) scale(1.035); }
-}
-
-@keyframes hermes-companion-page-tidy {
-  0%, 100% { transform: translate3d(0, 0, 0) rotate(0); }
-  26% { transform: translate3d(-10px, -5px, 0) rotate(-2.5deg); }
-  58% { transform: translate3d(10px, -7px, 0) rotate(2.5deg); }
-}
-
-@keyframes hermes-companion-stretch {
-  0%, 100% { transform: translate3d(0, 0, 0) scale(1); }
-  30%, 68% { transform: translate3d(0, -16px, 0) scale(1.055); }
-}
-
-@keyframes hermes-companion-doze {
-  0%, 100% { transform: translate3d(0, 0, 0) scale(1); }
-  35%, 70% { transform: translate3d(-5px, 11px, 0) rotate(-2deg) scale(.975); }
-}
-
-@keyframes hermes-companion-wake {
-  0%, 100% { transform: translate3d(0, 0, 0) scale(1); }
-  35% { transform: translate3d(0, -18px, 0) scale(1.06); }
-  68% { transform: translate3d(0, -7px, 0) scale(1.025); }
-}
-
-@keyframes hermes-companion-surprise {
-  0%, 100% { transform: translate3d(0, 0, 0) rotate(0) scale(1); }
-  32% { transform: translate3d(-12px, -13px, 0) rotate(-3deg) scale(.96); }
-  68% { transform: translate3d(4px, -5px, 0) rotate(1deg) scale(1.035); }
-}
-
-@keyframes hermes-companion-citation-trace {
-  0%, 100% { transform: translate3d(0, 0, 0) rotate(0); }
-  25% { transform: translate3d(-15px, -8px, 0) rotate(-2deg); }
-  55% { transform: translate3d(13px, -12px, 0) rotate(2deg); }
-  78% { transform: translate3d(5px, -4px, 0) rotate(.8deg); }
 }
 
 .hermes-companion-bubble {
@@ -2156,7 +2066,7 @@ body [data-reading-role='reading'] {
 }
 
 .hermes-motion-enable {
-  position: absolute;
+  position: fixed;
   z-index: 70;
   right: .55rem;
   bottom: .5rem;
@@ -2309,7 +2219,7 @@ body [data-reading-role='reading'] {
 .hermes-guide-nudge {
   position: absolute;
   z-index: 12;
-  top: .75rem;
+  top: .5rem;
   left: .25rem;
   right: .25rem;
   width: auto;

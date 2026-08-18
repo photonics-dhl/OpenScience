@@ -37,6 +37,7 @@ export default function HermesArticulationVisualRoute() {
       action,
       actionStartedAtMs: performance.now(),
       engaged: false,
+      motionTimeMs: 9_000,
       pointer: { x: 0, y: 0 },
       state,
     };
@@ -58,6 +59,13 @@ export default function HermesArticulationVisualRoute() {
         <button type="button" onClick={() => setAction('surprise-settle')}>Surprise action</button>
         <button type="button" onClick={() => setAction('patrol')}>Patrol action</button>
         <button type="button" onClick={() => setAction('return-dock')}>Return action</button>
+        <button type="button" onClick={() => setAction('evidence-check')}>Evidence action</button>
+        <button type="button" onClick={() => setAction('read')}>Read action</button>
+        <button type="button" onClick={() => setAction('compare')}>Compare action</button>
+        <button type="button" onClick={() => setAction('quiet-write')}>Writing action</button>
+        <button type="button" onClick={() => setAction('possible-issue')}>Issue action</button>
+        <button type="button" onClick={() => setAction('guide-arrive')}>Arrival action</button>
+        <button type="button" onClick={() => setAction('success')}>Success action</button>
         <button type="button" onClick={() => setProbe(true)}>Fixed pointer</button>
       </div>
       <div className="h-[520px] w-[520px]" data-hermes-articulation-harness="true">

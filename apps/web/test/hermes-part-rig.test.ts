@@ -70,4 +70,35 @@ describe('Hermes semantic part rig', () => {
       }
     }
   });
+
+  it('gives evidence work, comparison, drafting, and uncertainty distinct joint signatures', () => {
+    const actions = ['evidence-check', 'read', 'compare', 'quiet-write', 'possible-issue'] as const;
+    const poses = actions.map((action) => createHermesPartPoses(sampleAction(action, 800), action, .5));
+    const signatures = poses.map((pose) => [
+      vectorKey(pose.head),
+      vectorKey(pose.forepaws),
+      vectorKey(pose.tail),
+      vectorKey(pose.crown),
+      vectorKey(pose.evidenceNodes),
+    ].join('|'));
+
+    expect(new Set(signatures).size).toBe(actions.length);
+    expect(Math.abs(poses[0].evidenceNodes.y)).toBeGreaterThanOrEqual(4);
+    expect(Math.abs(poses[1].evidenceNodes.x)).toBeGreaterThanOrEqual(3);
+    expect(Math.abs(poses[2].evidenceNodes.x)).toBeGreaterThanOrEqual(5);
+    expect(Math.abs(poses[3].forepaws.angle)).toBeGreaterThanOrEqual(4);
+    expect(Math.abs(poses[4].crown.angle - poses[4].head.angle)).toBeGreaterThanOrEqual(4);
+  });
+
+  it('uses anticipation and release poses for arrival and completion while keeping the base neutral', () => {
+    const arrival = createHermesPartPoses(sampleAction('guide-arrive', 540), 'guide-arrive', .35);
+    const success = createHermesPartPoses(sampleAction('success', 900), 'success', .5);
+    const writing = createHermesPartPoses(sampleAction('quiet-write', 1_000), 'quiet-write', .5);
+
+    expect(arrival.forepaws.y).toBeLessThanOrEqual(-4);
+    expect(Math.abs(arrival.crown.angle - arrival.head.angle)).toBeGreaterThanOrEqual(4);
+    expect(success.evidenceNodes.y).toBeLessThanOrEqual(-5);
+    expect(Math.abs(success.forepaws.angle)).toBeGreaterThanOrEqual(8);
+    expect(writing.base).toEqual({ angle: 0, x: 0, y: 0 });
+  });
 });
