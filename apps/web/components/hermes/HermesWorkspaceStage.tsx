@@ -17,6 +17,12 @@ import {
 } from '@/lib/hermes/dock-preferences';
 import { createHermesTravelTimeline, planHermesTravel } from '@/lib/hermes/travel-path';
 import { loadHermesMotionPreference, resolveHermesReducedMotion, saveHermesMotionPreference } from '@/lib/hermes/motion-preference';
+import {
+  createHermesRuntimeStatus,
+  reduceHermesRuntimeStatus,
+  resolveHermesMotionControl,
+  type HermesRuntimeStatus,
+} from '@/lib/hermes/hermes-runtime-status';
 
 import { HermesAssistantDrawer } from './HermesAssistantDrawer';
 import type { HermesGuideSuggestion } from './hermes-guide';
@@ -155,6 +161,7 @@ function HermesWorkspaceStage({ fallbackAssistantOpen, fallbackOnInvoke, guideTa
   const pointerRef = useRef({ present: false, speed: 0, x: 0, y: 0 });
   const pointerSampleRef = useRef({ at: 0, x: 0, y: 0 });
   const leaveTimerRef = useRef(0);
+  const contextLossRecoveriesRef = useRef(0);
   const suppressClickRef = useRef(false);
   const stageRef = useRef<HTMLDivElement | null>(null);
   const [anchorRect, setAnchorRect] = useState<DOMRectReadOnly | null>(null);
@@ -163,6 +170,7 @@ function HermesWorkspaceStage({ fallbackAssistantOpen, fallbackOnInvoke, guideTa
   const [dragging, setDragging] = useState(false);
   const [position, setPosition] = useState({ x: 0, y: 0 });
   const [reducedMotion, setReducedMotion] = useState<boolean | null>(null);
+  const [runtimeStatus, setRuntimeStatus] = useState<HermesRuntimeStatus>(() => createHermesRuntimeStatus());
   const effectiveReducedMotion = reducedMotion ?? true;
   const [behavior, setBehavior] = useState<HermesBehaviorFrame>(() => createInitialHermesBehavior(behaviorInput('idle', pointerRef.current, false, true, 0)));
   const [guideActions, setGuideActions] = useState<HermesAnchorAction[]>([]);
@@ -348,6 +356,7 @@ function HermesWorkspaceStage({ fallbackAssistantOpen, fallbackOnInvoke, guideTa
   };
   const ageMs = Math.max(0, Date.now() - behavior.startedAtMs);
   const actionStartedAtMs = behavior.startedAtMs === 0 || typeof performance === 'undefined' ? undefined : performance.now() - ageMs;
+  const motionControl = resolveHermesMotionControl(effectiveReducedMotion, runtimeStatus);
 
   return (
     <div
@@ -377,7 +386,16 @@ function HermesWorkspaceStage({ fallbackAssistantOpen, fallbackOnInvoke, guideTa
           if (suppressClickRef.current) { suppressClickRef.current = false; return; }
           (presentation?.onInvoke ?? fallbackOnInvoke)();
         }}
+        onRuntimeStatus={(status) => {
+          if (status.phase === 'fallback' && status.reason === 'context-lost' && contextLossRecoveriesRef.current < 1) {
+            contextLossRecoveriesRef.current += 1;
+            setRuntimeStatus(reduceHermesRuntimeStatus(status, { type: 'retry' }));
+            return;
+          }
+          setRuntimeStatus(status);
+        }}
         reducedMotion={effectiveReducedMotion}
+        rendererGeneration={runtimeStatus.generation}
         state={state}
         suggestion={presentation?.suggestion ?? neutralSuggestion}
       />
@@ -385,15 +403,25 @@ function HermesWorkspaceStage({ fallbackAssistantOpen, fallbackOnInvoke, guideTa
         className="hermes-motion-enable"
         data-hermes-motion-toggle
         data-motion-active={reducedMotion ? 'false' : 'true'}
+        data-motion-runtime={runtimeStatus.phase}
+        disabled={motionControl.action === 'none'}
         onClick={(event) => {
           event.stopPropagation();
+          if (motionControl.action === 'retry') {
+            contextLossRecoveriesRef.current = 0;
+            setRuntimeStatus((current) => reduceHermesRuntimeStatus(current, { type: 'retry' }));
+            return;
+          }
           const preference = reducedMotion ? 'full' : 'reduced';
           saveHermesMotionPreference(window.localStorage, preference);
           setReducedMotion(preference === 'reduced');
         }}
         onPointerDown={(event) => event.stopPropagation()}
         type="button"
-      >{reducedMotion ? t('enableMotion') : t('disableMotion')}</button> : null}
+      >{t(motionControl.label === 'enable' ? 'enableMotion'
+        : motionControl.label === 'disable' ? 'disableMotion'
+          : motionControl.label === 'retry' ? 'retryMotion'
+            : 'startingMotion')}</button> : null}
       {guideReady && guideTarget ? (
         <HermesGuideBubble
           actions={guideActions}

@@ -38,7 +38,7 @@ test('Hermes renders articulated, working and approval states with one visual ow
     ['queued', 'guiding'],
     ['parsing', 'scanning'],
     ['stored', 'suggesting'],
-    ['needs_review', 'awaiting_approval'],
+    ['needs_review', 'suggesting'],
     ['failed_retryable', 'failed'],
   ] as const) {
     await page.unrouteAll({ behavior: 'wait' });
@@ -54,69 +54,62 @@ test('Hermes renders articulated, working and approval states with one visual ow
     await expect(page.locator('[data-hermes-frame]')).toHaveCount(1);
     await expect(page.locator('[data-hermes-part], [data-hermes-idle-signal]')).toHaveCount(0);
     await expect(page.locator('[data-live2d-instance]')).toHaveCount(0);
-    await expect(visual).toHaveAttribute('data-hermes-input-ready', visualState === 'awaiting_approval' ? 'false' : 'true');
+    await expect(visual).toHaveAttribute('data-hermes-input-ready', 'true');
     const rig = page.locator('[data-hermes-rig="mesh-2d"]');
     const canvas = page.locator('[data-hermes-articulated-canvas="true"]');
-    if (visualState === 'awaiting_approval') {
-      await expect(rig).toHaveAttribute('data-hermes-rig-status', 'fallback');
-      await expect(page.locator('.hermes-rig-image-fallback')).toHaveCSS('opacity', '1');
-      await expect(page.locator('.hermes-companion-actor')).toHaveCSS('animation-name', 'none');
-      await expect(page.locator('.hermes-guide-nudge')).toHaveCSS('transition-duration', '0s');
-    } else {
-      await expect(rig).toHaveAttribute('data-hermes-rig-status', 'ready', { timeout: 20_000 });
-      await expect(canvas).toBeVisible();
-      if (visualState === 'failed') {
-        await expect(canvas).toHaveAttribute('data-hermes-gesture', 'failed-settle');
-        await expect.poll(async () => {
-          const actual = (await canvas.getAttribute('data-hermes-head'))?.split(',').map(Number) ?? [];
-          const expected = [0, 1.8, -1.8];
-          return Math.max(...expected.map((value, index) => Math.abs(value - (actual[index] ?? Number.POSITIVE_INFINITY))));
-        }).toBeLessThanOrEqual(.01);
-        const failedPose = await Promise.all([
-          canvas.getAttribute('data-hermes-head'),
-          canvas.getAttribute('data-hermes-torso'),
-          canvas.getAttribute('data-hermes-tail'),
-        ]);
-        const box = await rig.boundingBox();
-        expect(box).not.toBeNull();
-        await page.mouse.move(box!.x + box!.width * .86, box!.y + box!.height * .18);
-        await expect(canvas).toHaveAttribute('data-hermes-gesture', 'failed-settle');
-        await page.waitForTimeout(180);
-        const settledPose = await Promise.all([
-          canvas.getAttribute('data-hermes-head'),
-          canvas.getAttribute('data-hermes-torso'),
-          canvas.getAttribute('data-hermes-tail'),
-        ]);
-        const maxPoseDelta = Math.max(...settledPose.flatMap((value, poseIndex) => {
-          const baseline = failedPose[poseIndex]?.split(',').map(Number) ?? [];
-          return (value?.split(',').map(Number) ?? []).map((part, partIndex) => Math.abs(part - (baseline[partIndex] ?? Number.POSITIVE_INFINITY)));
-        }));
-        // The renderer eases toward the fixed failed pose, so a pointer sample may
-        // expose a small interpolation remainder without changing its restrained state.
-        expect(maxPoseDelta).toBeLessThanOrEqual(.1);
-        await page.mouse.move(0, 0);
-        await page.screenshot({ path: `${outDir}/${visualState}-1440x900.png`, fullPage: true, animations: 'disabled' });
-        continue;
-      }
-      const before = await canvas.getAttribute('data-hermes-head');
-      await expect.poll(() => canvas.getAttribute('data-hermes-head')).not.toBe(before);
+    await expect(rig).toHaveAttribute('data-hermes-rig-status', 'ready', { timeout: 20_000 });
+    await expect(canvas).toBeVisible();
+    if (visualState === 'failed') {
+      await expect(canvas).toHaveAttribute('data-hermes-gesture', 'failed-settle');
+      await expect.poll(async () => {
+        const actual = (await canvas.getAttribute('data-hermes-head'))?.split(',').map(Number) ?? [];
+        const expected = [0, 1.8, -1.8];
+        return Math.max(...expected.map((value, index) => Math.abs(value - (actual[index] ?? Number.POSITIVE_INFINITY))));
+      }).toBeLessThanOrEqual(.01);
+      const failedPose = await Promise.all([
+        canvas.getAttribute('data-hermes-head'),
+        canvas.getAttribute('data-hermes-torso'),
+        canvas.getAttribute('data-hermes-tail'),
+      ]);
       const box = await rig.boundingBox();
       expect(box).not.toBeNull();
       await page.mouse.move(box!.x + box!.width * .86, box!.y + box!.height * .18);
-      await expect(visual).toHaveAttribute('data-hermes-engaged', 'true');
-      await expect(canvas).toHaveAttribute('data-hermes-gesture', 'focus');
-      await expect.poll(async () => {
-        const focusedHead = (await canvas.getAttribute('data-hermes-head'))?.split(',').map(Number) ?? [];
-        const focusedTorso = (await canvas.getAttribute('data-hermes-torso'))?.split(',').map(Number) ?? [];
-        const focusedTail = (await canvas.getAttribute('data-hermes-tail'))?.split(',').map(Number) ?? [];
-        return {
-          headLeads: Math.abs(focusedHead[0] ?? 0) > Math.abs(focusedTorso[0] ?? 0),
-          tailCounters: Math.sign(focusedHead[0] ?? 0) === -Math.sign(focusedTail[0] ?? 0),
-        };
-      }).toEqual({ headLeads: true, tailCounters: true });
+      await expect(canvas).toHaveAttribute('data-hermes-gesture', 'failed-settle');
+      await page.waitForTimeout(180);
+      const settledPose = await Promise.all([
+        canvas.getAttribute('data-hermes-head'),
+        canvas.getAttribute('data-hermes-torso'),
+        canvas.getAttribute('data-hermes-tail'),
+      ]);
+      const maxPoseDelta = Math.max(...settledPose.flatMap((value, poseIndex) => {
+        const baseline = failedPose[poseIndex]?.split(',').map(Number) ?? [];
+        return (value?.split(',').map(Number) ?? []).map((part, partIndex) => Math.abs(part - (baseline[partIndex] ?? Number.POSITIVE_INFINITY)));
+      }));
+      // The renderer eases toward the fixed failed pose, so a pointer sample may
+      // expose a small interpolation remainder without changing its restrained state.
+      expect(maxPoseDelta).toBeLessThanOrEqual(.1);
       await page.mouse.move(0, 0);
-      await expect(visual).toHaveAttribute('data-hermes-engaged', 'false');
+      await page.screenshot({ path: `${outDir}/${visualState}-1440x900.png`, fullPage: true, animations: 'disabled' });
+      continue;
     }
+    const before = await canvas.getAttribute('data-hermes-head');
+    await expect.poll(() => canvas.getAttribute('data-hermes-head')).not.toBe(before);
+    const box = await rig.boundingBox();
+    expect(box).not.toBeNull();
+    await page.mouse.move(box!.x + box!.width * .86, box!.y + box!.height * .18);
+    await expect(visual).toHaveAttribute('data-hermes-engaged', 'true');
+    await expect(canvas).toHaveAttribute('data-hermes-gesture', 'focus');
+    await expect.poll(async () => {
+      const focusedHead = (await canvas.getAttribute('data-hermes-head'))?.split(',').map(Number) ?? [];
+      const focusedTorso = (await canvas.getAttribute('data-hermes-torso'))?.split(',').map(Number) ?? [];
+      const focusedTail = (await canvas.getAttribute('data-hermes-tail'))?.split(',').map(Number) ?? [];
+      return {
+        headLeads: Math.abs(focusedHead[0] ?? 0) > Math.abs(focusedTorso[0] ?? 0),
+        tailCounters: Math.sign(focusedHead[0] ?? 0) === -Math.sign(focusedTail[0] ?? 0),
+      };
+    }).toEqual({ headLeads: true, tailCounters: true });
+    await page.mouse.move(0, 0);
+    await expect(visual).toHaveAttribute('data-hermes-engaged', 'false');
     await page.screenshot({ path: `${outDir}/${visualState}-1440x900.png`, fullPage: true, animations: 'disabled' });
   }
 
@@ -125,7 +118,7 @@ test('Hermes renders articulated, working and approval states with one visual ow
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto(`${baseUrl}/dashboard`, { waitUntil: 'networkidle' });
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(390);
-  await page.screenshot({ path: `${outDir}/awaiting_approval-390x844.png`, fullPage: true, animations: 'disabled' });
+  await page.screenshot({ path: `${outDir}/suggesting-needs-review-390x844.png`, fullPage: true, animations: 'disabled' });
 
   await page.unrouteAll({ behavior: 'wait' });
   await mockDashboard(page);
@@ -186,6 +179,13 @@ test('Hermes keeps the guide usable when WebGL2 is unavailable', async ({ page }
   const visual = page.locator('[data-hermes-renderer="articulated-mesh"]');
   const rig = page.locator('[data-hermes-rig="mesh-2d"]');
   await expect(rig).toHaveAttribute('data-hermes-rig-status', 'fallback');
+  await expect(rig).toHaveAttribute('data-hermes-runtime-reason', 'webgl2-unavailable');
+  const retry = page.getByRole('button', { name: /Retry Hermes motion|重试 Hermes 动效/i });
+  await expect(retry).toBeVisible();
+  const generation = Number(await rig.getAttribute('data-hermes-runtime-generation'));
+  await retry.click();
+  await expect(rig).toHaveAttribute('data-hermes-runtime-generation', String(generation + 1));
+  await expect(rig).toHaveAttribute('data-hermes-runtime-reason', 'webgl2-unavailable');
   await expect(page.locator('.hermes-rig-canvas')).toHaveCSS('opacity', '0');
   await expect(page.locator('.hermes-rig-image-fallback')).toHaveCSS('opacity', '1');
   await visual.click();
@@ -295,7 +295,7 @@ test('Hermes applies offscreen suspension after delayed initialization', async (
   await page.waitForTimeout(120);
   await page.evaluate(() => (window as Window & { __releaseHermesImages?: () => void }).__releaseHermesImages?.());
   await page.waitForTimeout(600);
-  await expect(rig).toHaveAttribute('data-hermes-rig-status', 'fallback');
+  await expect(rig).toHaveAttribute('data-hermes-rig-status', 'starting');
   await expect(page.locator('[data-hermes-articulated-canvas="true"]')).not.toHaveAttribute('data-hermes-head', /.+/);
 
   await offscreenStyle.evaluate((style) => style.remove());
@@ -384,6 +384,72 @@ test('Hermes remounts a fresh canvas after a live WebGL context loss', async ({ 
   await expect(stage).toHaveAttribute('data-hermes-rig-status', 'ready');
   const newCanvas = await page.locator('[data-hermes-articulated-canvas]').elementHandle();
   expect(await oldCanvas?.evaluate((old, next) => old !== next, newCanvas)).toBe(true);
+
+  await page.locator('[data-hermes-articulated-canvas]').evaluate((canvas: HTMLCanvasElement) => {
+    canvas.getContext('webgl2')?.getExtension('WEBGL_lose_context')?.loseContext();
+  });
+  await expect(stage).toHaveAttribute('data-hermes-rig-status', 'fallback');
+  const boundedGeneration = await stage.getAttribute('data-hermes-runtime-generation');
+  await page.waitForTimeout(500);
+  await expect(stage).toHaveAttribute('data-hermes-runtime-generation', boundedGeneration!);
+  await expect(page.getByRole('button', { name: /Retry Hermes motion|重试 Hermes 动效/i })).toBeEnabled();
+});
+
+test('Hermes keeps the real six-field approval surface still until confirmation succeeds', async ({ page }) => {
+  const detail = {
+    batchId: 'batch-review',
+    researchObjectId: 'ro-hermes',
+    version: 2,
+    task: {
+      agentTaskId: 'agent-review', artifactId: 'artifact-review', error: null, id: 'task-review',
+      logicalPath: 'manuscript.pdf', retryCount: 0, state: 'needs_review',
+      result: { core: {
+        schemaVersion: '0.1.0', problem: 'Problem', insight: 'Insight', method: 'Method',
+        results: 'Results', limitations: 'Limitations', reproducibility: 'Reproducibility',
+      } },
+    },
+  };
+  await page.route('**/api/ingestion/tasks/task-review', (route) => json(route, detail));
+  await page.route('**/api/csrf-token', (route) => json(route, { csrfToken: 'review-csrf' }));
+  await page.route('**/api/ingestion/task-review/confirm', (route) => {
+    detail.task.state = 'confirmed';
+    return json(route, { sdf: { core: detail.task.result.core }, task: detail.task });
+  });
+  await page.goto(`${baseUrl}/research-objects/ro-hermes/hermes?task=task-review&hermes-motion=full`, { waitUntil: 'networkidle' });
+  await expect(page.getByRole('heading', { name: '确认你的研究结构' })).toBeVisible();
+  await expect(page.locator('[data-hermes-workspace-stage="true"]')).toHaveAttribute('data-hermes-presentation-state', 'awaiting_approval');
+  await expect(page.locator('[data-hermes-rig="mesh-2d"]')).toHaveAttribute('data-hermes-rig-status', 'fallback');
+  await expect(page.locator('.hermes-companion-actor')).toHaveCSS('animation-name', 'none');
+  await page.getByRole('button', { name: '确认并创建版本' }).click();
+  await expect(page.getByText('已确认并写入新版本。')).toBeVisible();
+  await expect(page.locator('[data-hermes-workspace-stage="true"]')).toHaveAttribute('data-hermes-presentation-state', 'idle');
+  await page.evaluate(() => window.scrollTo(0, 0));
+  await expect(page.locator('[data-hermes-rig="mesh-2d"]')).toHaveAttribute('data-hermes-rig-status', 'ready', { timeout: 20_000 });
+  await page.reload({ waitUntil: 'networkidle' });
+  await expect(page.locator('[data-hermes-workspace-stage="true"]')).toHaveAttribute('data-hermes-presentation-state', 'idle');
+  await expect(page.getByRole('button', { name: '已确认' })).toBeDisabled();
+});
+
+test('Hermes keeps visible renderer-owned draw heartbeat gaps within 750ms', async ({ page }) => {
+  await mockDashboard(page);
+  await page.goto(`${baseUrl}/dashboard?hermes-motion=full`, { waitUntil: 'networkidle' });
+  const rig = page.locator('[data-hermes-rig="mesh-2d"]');
+  await expect(rig).toHaveAttribute('data-hermes-rig-status', 'ready', { timeout: 20_000 });
+  const heartbeats = await rig.evaluate((node) => new Promise<number[]>((resolve, reject) => {
+    const values = [Number(node.getAttribute('data-hermes-last-draw-at'))];
+    const timeout = window.setTimeout(() => { observer.disconnect(); reject(new Error(`heartbeat timeout: ${values.join(',')}`)); }, 4_000);
+    const observer = new MutationObserver(() => {
+      const value = Number(node.getAttribute('data-hermes-last-draw-at'));
+      if (value > values.at(-1)!) values.push(value);
+      if (values.length < 5) return;
+      window.clearTimeout(timeout);
+      observer.disconnect();
+      resolve(values);
+    });
+    observer.observe(node, { attributeFilter: ['data-hermes-last-draw-at'] });
+  }));
+  expect(heartbeats[0]).toBeGreaterThan(0);
+  expect(Math.max(...heartbeats.slice(1).map((value, index) => value - heartbeats[index]))).toBeLessThanOrEqual(750);
 });
 
 test('Hermes idle story opens a real contextual guide without leaving the workspace', async ({ page }) => {

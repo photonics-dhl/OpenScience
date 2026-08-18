@@ -746,6 +746,8 @@
     "check": "Check",
     "enableMotion": "Enable Hermes motion",
     "disableMotion": "Reduce Hermes motion",
+    "startingMotion": "Starting Hermes motion",
+    "retryMotion": "Retry Hermes motion",
     "takeMeThere": "Take me there",
     "targets": {
       "ro-title": "Give this research object a precise title.",
