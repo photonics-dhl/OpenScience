@@ -80,7 +80,7 @@
 | `tsconfig.base.json` / `eslint.config.cjs` / `.npmrc` | 共享 TypeScript/ESLint/pnpm 基线；ESLint 9 flat config 只忽略构建、agent 与 gitignored 的 `tmp/`、`apps/web/tmp/`、`apps/web/test/visual/out/` 本地证据目录，正式 `apps/web/test/visual/*` 门禁持续受 lint | 活文档；Hermes 本地预览证据不污染 canonical lint |
 | `knip.json` / `.dependency-cruiser.cjs` / `.markdownlint-cli2.jsonc` | 卫生工具配置：knip（未用代码）、dependency-cruiser（依赖边界）、markdownlint（文档门禁）（2026-07-28 落地） | 活文档 |
 | `scripts/verify-workspace.mjs` | Monorepo 结构校验脚本（lint 的第二段，`verify:workspace` 入口） | 活文档 |
-| `scripts/docs/check-docs-sync.mjs` | 文档同步门禁（索引路径存在性 + docs 反向登记 + AGENTS 迁移数一致性；lint 第三段，`audit:docs-sync` 入口，2026-08-06） | 活文档 |
+| `scripts/docs/check-docs-sync.mjs` / `scripts/docs/docs-sync-skill.test.mjs` | 文档同步门禁：索引存在/反向登记/迁移一致性，并锁定 worktree-first、唯一 CURRENT、版本元组、bounded read、active-memory 压缩与 canonical lint wiring | CURRENT；`audit:docs-sync` 先跑 skill `6/6` 再跑结构审计 |
 | `scripts/invite.mjs` | 邀请码管理 CLI（create/list/revoke，P1A-3） | 活文档 |
 | `scripts/seed-quota.mjs` | 配额占位值幂等 upsert CLI（--dry-run/--confirm，P1A-7，数值集中 `packages/domain/src/usage/seed-data.ts`） | 活文档 |
 | `scripts/cloud-sync.mjs` | 云上同步（tar-over-ssh，排除 secrets/构建产物，支持 source/config/remote root 分离与干净 release staging） | 活文档 |
@@ -142,7 +142,7 @@
 | `apps/web/test/visual/hermes-companion-motion-gate.mjs` / `apps/web/test/visual/hermes-guidance-geometry-gate.mjs` / `apps/web/test/visual/hermes-release-gate.mjs` | 90 秒真实动作/关节视频、逐 RAF 航行几何、Diff 写入安全及 Hermes 聚合生产门禁；含 288px 六动作真实像素阈值、Dashboard canvas `>=210px`、至少 6 种 whole-silhouette `>=8px`、patrol `>=30px` 并回位、pointer 整体位移合同，防止动作名/像素 delta GREEN 但实际仍不可感知 | CURRENT release gate GREEN；最新聚合 `151.8s` exit 0、213px canvas，用户动态视觉验收 pending |
 | `apps/web/test/visual/hermes-real-ro-production-gate.mjs` / `packages/domain/test/artifact/scan.test.ts` | ECS-only 真实论文纵向门禁：固定 arXiv 2009.06045v1 SHA-256、浏览器创建/上传、MiniMax 六字段决策与原文证据、确认前 SDF 不变、显式缺失披露、bulk confirm/version commit、Hermes runtime；上传响应与状态轮询均允许 300 秒生产边缘延迟，同时锁定合法 PDF `../` 不误判而真实 ZIP traversal 继续拒绝 | CURRENT production smoke；不使用本机 Docker、不拦截 API；不等同于 per-field diff/source UI、完整 gold rubric 或独立 audit 查询，输出仅写 ignored visual evidence |
 | `docs/handoff/2026-08-15-hermes-constellation-dragon-prototype-handoff.md` | 少年星图龙静态 Blender 原型、结构门禁与用户 NO-GO 结论 | 历史交接；不得按其 next action 恢复 3D |
-| `docs/handoff/2026-08-16-hermes-2d-pet-handoff.md` | Hermes Workspace Companion CURRENT 交接：单一 stage、27-action、持久 motion 控制、创建/编辑 Drawer、逐字段航行/Diff、真实 release 与 ECS 证据及未完成边界 | **CURRENT**；release `aa1c8af` 已部署，公网门禁 GREEN，待用户体验复验 |
+| `docs/handoff/2026-08-16-hermes-2d-pet-handoff.md` | Hermes Workspace Companion 唯一 CURRENT 交接：当前入口、候选能力、branch/HEAD/release/rollback、约束与单一 next action | **CURRENT / compact active-memory**；38 行，待 PR/本地 main/ECS 收口 |
 | `docs/design/optical-editorial-figma-map.md` | 长期账号 Figma canonical 的 V3 variables/styles/components/八表面节点映射、代码对应关系与 Code Connect 边界 | Task 13 canonical 映射 |
 | `docs/superpowers/specs/2026-08-09-researcher-ingestion-product-slice-design.md` | 研究者第一条产品级前端闭环设计：注册、Dashboard、资料导入、Hermes 证据确认、RO Workspace；待用户审阅 | 设计 spec |
 | `docs/superpowers/plans/2026-08-09-researcher-ingestion-product-slice-plan.md` | 研究者导入闭环实施计划：基础视觉、Auth/Dashboard、多格式上传、Hermes 证据、RO Workspace、浏览器验收与生产部署；Task 1–2 完成，Task 3 启动 | 执行中 |
@@ -352,7 +352,7 @@
 | `.agents/skills/infra-runbook/SKILL.md` | 基础设施与运维 runbook 规范（单 ECS 拓扑、备份、部署） | 活文档 |
 | `.agents/skills/security-review/SKILL.md` | 安全审查清单（密钥、越权、上传、沙箱、日志脱敏） | 活文档 |
 | `.agents/skills/test-gate/SKILL.md` | 测试门禁（最小相关测试→阶段验收、禁隐藏失败） | 活文档 |
-| `.agents/skills/docs-sync/SKILL.md` | 文档同步纪律（progress/project_index/AGENTS/handoff 事实源对齐） | 活文档 |
+| `.agents/skills/docs-sync/SKILL.md` | 文档同步与记忆卫生纪律：Git 定锚、每主题唯一 CURRENT、bounded reads、版本元组、80 行 handoff、历史降级而不删除 | CURRENT；TDD `6/6`，防旧记忆回流与重复证据膨胀 |
 
 ## 已废弃
 | 路径 | 说明 |

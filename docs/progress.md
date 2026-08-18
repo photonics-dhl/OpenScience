@@ -1,5 +1,12 @@
 # OpenScience (XGS) 进度日志
 
+## 2026-08-18（版本收口与 active-memory 压缩）— ⏳ 本地 GREEN，待推送/合并/部署
+
+- **版本边界**：用户授权更新 PR #3、合并本地 `main` 并部署 ECS；当前功能分支候选为 `ee514aa` 加本轮 docs-sync commit，远端分支仍为 `0398838`，ECS 仍为 release/rollback `aa1c8af` / `c9df24d`。
+- **旧记忆根因**：无 skill 基线虽最终判断正确，但读取了大量历史，并遇到旧 progress CURRENT、handoff 旧动作语法、文件名日期与正文状态、已部署/待部署未绑版本四类干扰。CURRENT Hermes handoff 已从 56 个长行压缩为 38 行，只保留当前事实、版本元组、边界和下一步；历史文件未删除。
+- **docs-sync TDD**：新增 `scripts/docs/docs-sync-skill.test.mjs`，旧 skill `0/4` RED，canonical lint 绕过 skill 合同再以 `5/6` RED；新版 skill + AGENTS bounded-read + CI wiring `6/6` GREEN。独立 forward test 只读 baseline 相关段、progress 前 80 行、CURRENT 索引区与 38 行 handoff，正确给出 task/version tuple，历史命中未进入 active reasoning。
+- **下一步**：完成 canonical lint/docs gate 与提交，推送功能分支更新 PR；保护本地 `main` 的用户未跟踪设计资产后合并验证，再按 runbook 备份、dry-run、`--skip-migrate` 部署并记录新 release/rollback。
+
 ## 2026-08-18（Hermes 默认动效与常驻控制）— ✅ 本地实现/真实页面 GREEN，⏳ 待生产发布确认
 
 - **用户实际缺陷与根因**：Windows `prefers-reduced-motion` 不仅让首次状态默认 reduced，旧 CSS 还无条件 `display:none` 隐藏 WebGL canvas；因此即使 JS 已显式 full、renderer 也在绘制，真实页面仍只显示静态 fallback。旧“开启 Hermes 动效”又仅在 reduced 分支渲染，full 时按钮消失，用户无法判断或修正状态。

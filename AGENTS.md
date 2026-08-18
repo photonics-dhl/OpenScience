@@ -2,7 +2,7 @@
 
 ## Overview
 OpenScience：AI 时代科研基础设施平台（Research Object / SDF / 预印本 + 社区评价）。工作目录 `E:/Miscellaneous/XGS`。
-当前状态：**MVP（Phase 0/1A/1B/1C/1D/1E）已完成（2026-08-06）**，进入生产前准备；主交接 `docs/handoff/2026-08-06-mvp-complete-handoff.md`，下一步为 `docs/security/production-security-checklist.md` 的 P0 项。
+平台基线：**MVP（Phase 0/1A/1B/1C/1D/1E）已完成（2026-08-06）**。当前产品任务、候选版本与生产 release 不写死在本段；必须从 Git 版本元数据和 `project_index.md` 标记的 CURRENT handoff 取得，禁止恢复旧 MVP next action。
 
 ## Monorepo Layout & Commands（P1A-1 起）
 - 根目录已是 pnpm workspace；pnpm 不全局安装，统一用 `npx pnpm@9.15.0 <cmd>`。
@@ -58,7 +58,8 @@ OpenScience：AI 时代科研基础设施平台（Research Object / SDF / 预印
 - **文档同步纪律**：见 `.agents/skills/docs-sync/SKILL.md`；创建/修改文件、任务状态变化、换 agent/session 前必须按它同步索引/进度/AGENTS/handoff
 
 ## Memory Rules
-- 任务开始前必读 `docs/OpenScience_Kimi_Development_Spec.md`、`docs/progress.md` 和 `project_index.md`
+- 任务开始先运行 worktree/branch/status 检查；读取需求基线相关章节、`docs/progress.md` first 80 lines，并用 `rg -n "CURRENT|<topic>" project_index.md docs/handoff docs/specs docs/plans` 定位相关索引行与唯一 CURRENT handoff，禁止默认加载全部历史。
+- 判断状态时记录 `branch / HEAD / release / rollback`；本地候选、远端分支、本地 `main` 与 ECS 版本不得混写。
 - 重大决策写 Memory MCP（实体前缀 `XGS-`）
 
 ## Tooling Portability Rules
