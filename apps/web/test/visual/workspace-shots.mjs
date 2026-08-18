@@ -1,4 +1,4 @@
-/* global document, process */
+/* global document, process, window */
 
 import { chromium } from 'playwright';
 import { mkdir } from 'node:fs/promises';

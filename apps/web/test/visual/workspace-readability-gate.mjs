@@ -1,4 +1,4 @@
-/* global document, getComputedStyle, process */
+/* global console, document, getComputedStyle, process */
 
 import { chromium } from 'playwright';
 
