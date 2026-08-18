@@ -427,7 +427,8 @@ Current infrastructure uses pinned base/worker images with bind-mounted applicat
   guide bubble; keyboard invocation, character drag, pointer response, and
   guide actions remain available. No API, schema, permission, provider, or
   production topology changed.
-- Evidence: PR head `a3d8a3f` passed GitHub CI run `32094257833`; local Web
+- Evidence: PR runtime/test head `fdba093` passed final GitHub CI run
+  `32096174871`; local Web
   `295/295`, product release `27/27`, Hermes aggregate `144.9s`, typecheck,
   lint/docs-sync, and the 17-page production build passed. Parser cancellation
   and breathing gates now wait on deterministic publication/joint state rather

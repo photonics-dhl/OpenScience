@@ -3,7 +3,7 @@
 ## 2026-08-18（Hermes 透明命中区与 ECS 热修）— ✅ PR CI / main / ECS GREEN
 
 - **真实回归与修复**：PR 产品门禁在 `workspace / proposal-ready / mobile` 捕获 Hermes 288px 透明根按钮遮住 `AI Extract`。Stage 与根按钮现默认 pointer-through，仅真实 rig、常驻动效开关和 guide bubble 接收鼠标；角色本体点击、拖动、pointer-avoid 与键盘焦点保留。
-- **门禁诚实性**：旧 pointer 脚本已改为真实 rig 命中；Parser 取消竞态测试等待 request 实际发布而非固定 10ms；Hermes breathing 以 9000/9520ms 确定关节帧采样，移除首帧竞速 false GREEN/RED。远端 PR HEAD `a3d8a3f`，GitHub CI `32094257833` 用时 7m03s GREEN。
+- **门禁诚实性**：旧 pointer 脚本已改为真实 rig 命中并在自主动作验收后隔离 pointer；Parser 取消竞态测试等待 request 实际发布；Hermes breathing 以 9000/9520ms 确定关节帧采样。远端 PR runtime/test HEAD `fdba093`，最终 GitHub CI `32096174871` 用时 7m11s GREEN。
 - **本地与生产**：本地 `main` 应用 HEAD / ECS release 为 `1b76b46`，rollback `017bf1e`；Web `295/295`、产品 `27/27`、Hermes 聚合 `144.9s`、17-page build、typecheck、lint/docs-sync 均 GREEN。ECS 前后 checkup 健康，DB backup `384K / 7/7`，未迁移、未 seed。
 - **公网证据**：Stage/CSS 远端 SHA-256 与本地一致；直接加载公网构建的移动端 proposal-ready 用例 `1/1` GREEN，证明 Hermes 透明区不再遮挡表单。下一步仅为真实账号体验复验；高级 motion/sound/particle/proactive 设置仍属后续范围。
 

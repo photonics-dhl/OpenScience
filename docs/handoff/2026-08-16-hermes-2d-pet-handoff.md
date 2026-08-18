@@ -17,8 +17,8 @@
 ## Version tuple
 
 - Branch: `codex/hermes-2d-pet`
-- Remote branch HEAD: `a3d8a3f` (Hermes hit-area fix + deterministic Parser/breathing gates)
-- Local `main` application HEAD: `1b76b46`; succeeding docs commit is not the deployed application ref
+- Remote branch runtime/test HEAD: `fdba093` (Hermes hit-area fix + deterministic Parser/breathing/pointer gates); branch docs commit `c175d50` precedes this final test head
+- Local `main` integrated test HEAD: `272b613`; application release ref remains `1b76b46`, and succeeding docs-only commits are not deployed application refs
 - ECS release / rollback: `1b76b46` / `017bf1e`
 - PR: `https://github.com/photonics-dhl/OpenScience/pull/3`
 
