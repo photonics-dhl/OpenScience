@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { createHermesTravelTimeline, planHermesTravel } from '@/lib/hermes/travel-path';
+import { createHermesTravelTimeline, planHermesTravel, rectForFootprint } from '@/lib/hermes/travel-path';
 
 const rect = (x: number, y: number, width: number, height: number): DOMRectReadOnly => ({
   bottom: y + height,
@@ -17,6 +17,12 @@ const rect = (x: number, y: number, width: number, height: number): DOMRectReadO
 const overlaps = (a: DOMRectReadOnly, b: DOMRectReadOnly) => (
   a.left < b.right && a.right > b.left && a.top < b.bottom && a.bottom > b.top
 );
+const actorFootprint = (actor: DOMRectReadOnly) => ({
+  bottom: actor.height / 2,
+  left: actor.width / 2,
+  right: actor.width / 2,
+  top: actor.height / 2,
+});
 
 function sweptOverlaps(
   points: Array<{ x: number; y: number }>,
@@ -37,6 +43,69 @@ function sweptOverlaps(
 }
 
 describe('Hermes safe travel path', () => {
+  it('keeps the complete actor and guide-bubble footprint outside the editable field', () => {
+    const editable = rect(520, 180, 500, 420);
+    const footprint = { bottom: 150, left: 150, right: 150, top: 230 };
+    const route = planHermesTravel({
+      editable,
+      footprint,
+      from: rect(920, 610, 260, 230),
+      preferredSides: ['right'],
+      target: rect(520, 180, 500, 92),
+      viewport: rect(0, 0, 1200, 800),
+    });
+    const occupied = rectForFootprint(route.dock, footprint);
+
+    expect(overlaps(rect(occupied.left, occupied.top, occupied.right - occupied.left, occupied.bottom - occupied.top), editable)).toBe(false);
+  });
+
+  it('routes the measured asymmetric footprint around a wide editor field', () => {
+    const editable = rect(305.59375, 350.1875, 742.40625, 199.59375);
+    const footprint = { bottom: 107, left: 152, right: 152, top: 231.5 };
+    const route = planHermesTravel({
+      editable,
+      footprint,
+      from: rect(1_152, 594, 288, 288),
+      preferredSides: ['top', 'right'],
+      target: editable,
+      viewport: rect(0, 0, 1_440, 900),
+    });
+    const collision = route.points.slice(1).find((point, index) => {
+      const previous = route.points[index];
+      return Array.from({ length: 101 }, (_, sample) => {
+        const ratio = sample / 100;
+        return {
+          x: previous.x + (point.x - previous.x) * ratio,
+          y: previous.y + (point.y - previous.y) * ratio,
+        };
+      }).some((center) => {
+        const occupied = rectForFootprint(center, footprint);
+        return overlaps(rect(occupied.left, occupied.top, occupied.right - occupied.left, occupied.bottom - occupied.top), editable);
+      });
+    });
+
+    expect(route.points.length).toBeGreaterThan(2);
+    expect(collision).toBeUndefined();
+  });
+
+  it('rejects a preferred dock that would cover an evidence diff', () => {
+    const target = rect(500, 220, 200, 90);
+    const diff = rect(730, 120, 320, 520);
+    const footprint = { bottom: 130, left: 150, right: 150, top: 220 };
+    const route = planHermesTravel({
+      editable: target,
+      footprint,
+      from: rect(850, 500, 260, 230),
+      obstacles: [diff],
+      preferredSides: ['right'],
+      target,
+      viewport: rect(0, 0, 1200, 800),
+    });
+    const occupied = rectForFootprint(route.dock, footprint);
+
+    expect(overlaps(rect(occupied.left, occupied.top, occupied.right - occupied.left, occupied.bottom - occupied.top), diff)).toBe(false);
+  });
+
   it('preserves every safe waypoint as a separate travel segment', () => {
     expect(createHermesTravelTimeline([
       { x: 100, y: 100 },
@@ -55,7 +124,7 @@ describe('Hermes safe travel path', () => {
 
     for (const from of starts) {
       for (const target of targets) {
-        const route = planHermesTravel({ editable: target, from, preferredSides: ['right', 'left', 'top', 'bottom'], target, viewport });
+        const route = planHermesTravel({ editable: target, footprint: actorFootprint(from), from, preferredSides: ['right', 'left', 'top', 'bottom'], target, viewport });
         expect(route.mode).toBe('travel');
         expect(sweptOverlaps(route.points, from, target)).toBe(false);
         expect(route.points.at(-1)).toEqual(route.dock);
@@ -66,11 +135,49 @@ describe('Hermes safe travel path', () => {
   it('stops at the viewport edge for an off-screen target without including the target position', () => {
     const viewport = rect(0, 0, 1000, 700);
     const target = rect(300, 1_300, 400, 80);
-    const route = planHermesTravel({ editable: target, from: rect(850, 40, 90, 90), preferredSides: ['right'], target, viewport });
+    const from = rect(850, 40, 90, 90);
+    const route = planHermesTravel({ editable: target, footprint: actorFootprint(from), from, preferredSides: ['right'], target, viewport });
 
     expect(route.mode).toBe('edge-stop');
     expect(route.dock.y).toBeLessThanOrEqual(655);
     expect(route.points.every((point) => point.y <= 655)).toBe(true);
+  });
+
+  it('keeps an off-screen target edge-stop clear of a visible evidence diff', () => {
+    const viewport = rect(0, 0, 320, 720);
+    const target = rect(0, 0, 0, 0);
+    const diff = rect(16, -66, 288, 466);
+    const footprint = { bottom: 82, left: 144, right: 144, top: 144 };
+    const route = planHermesTravel({
+      editable: target,
+      footprint,
+      from: rect(0, 0, 160, 160),
+      obstacles: [diff],
+      preferredSides: ['right'],
+      target,
+      viewport,
+    });
+    const occupied = rectForFootprint(route.dock, footprint);
+
+    expect(route.mode).toBe('edge-stop');
+    expect(overlaps(rect(occupied.left, occupied.top, occupied.right - occupied.left, occupied.bottom - occupied.top), diff)).toBe(false);
+  });
+
+  it('reports when dense mobile evidence leaves no safe fixed guide position', () => {
+    const viewport = rect(0, 0, 320, 720);
+    const target = rect(0, 0, 0, 0);
+    const route = planHermesTravel({
+      editable: target,
+      footprint: { bottom: 82, left: 144, right: 144, top: 144 },
+      from: rect(0, 0, 160, 160),
+      obstacles: [rect(16, -66, 288, 466), rect(16, 400, 288, 467)],
+      preferredSides: ['right'],
+      target,
+      viewport,
+    });
+
+    expect(route.mode).toBe('edge-stop');
+    expect(route.safe).toBe(false);
   });
 
   it('keeps the arrival dock above a mobile keyboard inset', () => {
@@ -79,6 +186,7 @@ describe('Hermes safe travel path', () => {
     const route = planHermesTravel({
       bottomInsetPx: 300,
       editable: target,
+      footprint: actorFootprint(rect(278, 60, 80, 80)),
       from: rect(278, 60, 80, 80),
       preferredSides: ['top', 'right'],
       target,
@@ -92,6 +200,7 @@ describe('Hermes safe travel path', () => {
   it('returns a stable missing-target result and clamps routes after a viewport resize', () => {
     const missing = planHermesTravel({
       editable: null,
+      footprint: actorFootprint(rect(900, 600, 90, 90)),
       from: rect(900, 600, 90, 90),
       preferredSides: ['right'],
       target: null,
@@ -102,6 +211,7 @@ describe('Hermes safe travel path', () => {
 
     const resized = planHermesTravel({
       editable: rect(140, 240, 260, 60),
+      footprint: actorFootprint(rect(900, 600, 90, 90)),
       from: rect(900, 600, 90, 90),
       preferredSides: ['top', 'left'],
       target: rect(140, 240, 260, 60),

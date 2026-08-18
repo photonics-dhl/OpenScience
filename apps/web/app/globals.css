@@ -1872,6 +1872,11 @@ body {
   transition-duration: 300ms, 300ms, 320ms, 320ms;
 }
 
+.hermes-workspace-stage[data-hermes-guide-suppressed='true'] {
+  visibility: hidden;
+  pointer-events: none;
+}
+
 .hermes-workspace-stage .hermes-visual {
   height: 100%;
   min-height: 0;
@@ -2038,6 +2043,73 @@ body {
   cursor: pointer;
 }
 
+.hermes-companion-bubble[data-hermes-guide-visible='false'] {
+  visibility: hidden;
+  pointer-events: none;
+}
+
+@media (max-width: 640px) {
+  .hermes-workspace-stage[data-hermes-guide-target] .hermes-visual {
+    border-bottom: 0;
+    background: transparent;
+  }
+
+  .hermes-workspace-stage[data-hermes-guide-target] .hermes-visual-state-label,
+  .hermes-workspace-stage[data-hermes-guide-target] .hermes-visual-invoke-label,
+  .hermes-workspace-stage[data-hermes-guide-target] .hermes-guide-nudge {
+    display: none;
+  }
+
+  .hermes-workspace-stage[data-hermes-guide-target] .hermes-companion-actor {
+    inset: .5rem 0;
+  }
+
+  .hermes-workspace-stage[data-hermes-guide-target] .hermes-companion-bubble {
+    top: calc(100% - .75rem);
+    bottom: auto;
+    padding: .55rem .7rem;
+    font-size: var(--text-caption);
+    line-height: 1.3;
+  }
+
+  .hermes-workspace-stage[data-hermes-guide-target] .hermes-companion-bubble > p {
+    margin: 0 1.35rem .4rem 0;
+  }
+
+  .hermes-workspace-stage[data-hermes-guide-target] .hermes-companion-actions {
+    gap: .35rem;
+    margin-top: 0;
+  }
+
+  .hermes-workspace-stage[data-hermes-guide-target] .hermes-companion-actions button,
+  .hermes-workspace-stage[data-hermes-guide-target] .hermes-companion-take-me {
+    min-height: 2.25rem;
+    padding: .35rem .58rem;
+  }
+
+  .hermes-workspace-stage[data-hermes-guide-target] .hermes-companion-bubble[data-hermes-guide-edge-stop='true'] {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center;
+    gap: .6rem;
+  }
+
+  .hermes-workspace-stage[data-hermes-guide-target] .hermes-companion-bubble[data-hermes-guide-edge-stop='true'] > p {
+    overflow: hidden;
+    margin: 0 1rem 0 0;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .hermes-workspace-stage[data-hermes-guide-target] .hermes-companion-bubble[data-hermes-guide-edge-stop='true'] .hermes-companion-actions {
+    display: none;
+  }
+
+  .hermes-workspace-stage[data-hermes-guide-target] .hermes-companion-bubble[data-hermes-guide-edge-stop='true'] .hermes-companion-take-me {
+    margin: 0 1rem 0 0;
+  }
+}
+
 /* Browser-verified semantic reading roles. These are intentionally explicit:
    route-specific editorial selectors may change typeface, never legibility. */
 body [data-reading-role='caption'] {
@@ -2130,6 +2202,18 @@ body [data-reading-role='reading'] {
   margin-top: .55rem;
   background: rgb(255 78 34 / .09);
   color: var(--color-vermilion, #ff4e22);
+}
+
+/* During a field visit, the guide bubble owns the interaction. Keeping the
+   global motion toggle out of the travelling footprint prevents it from
+   intercepting the field or evidence controls beneath the character. */
+.hermes-workspace-stage[data-hermes-guide-target] .hermes-motion-enable {
+  visibility: hidden;
+  pointer-events: none;
+}
+
+.hermes-workspace-stage[data-hermes-guide-target] .hermes-guide-nudge {
+  display: none;
 }
 
 .hermes-workspace-stage:not([data-hermes-motion-preference='full']),

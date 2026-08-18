@@ -8,6 +8,40 @@ const baseUrl = process.env.VISUAL_BASE_URL ?? 'http://127.0.0.1:3016';
 const outDir = path.resolve('test/visual/out');
 await mkdir(outDir, { recursive: true });
 
+async function assertGuidanceClearOfVisibleProposals(page, viewport, phase) {
+  const result = await page.evaluate(() => {
+    const stage = document.querySelector('[data-hermes-workspace-stage]');
+    const guideTarget = stage?.getAttribute('data-hermes-guide-target');
+    if (stage?.getAttribute('data-hermes-guide-suppressed') === 'true') return { overlaps: false, proposal: null, suppressed: true };
+    const actor = document.querySelector('[data-hermes-companion-actor="true"]')?.getBoundingClientRect();
+    const bubble = guideTarget ? document.querySelector('[data-hermes-guide-bubble][data-hermes-guide-visible="true"]')?.getBoundingClientRect() : null;
+    const proposals = Array.from(document.querySelectorAll('[data-before-after-proposal]'))
+      .map((element) => element.getBoundingClientRect())
+      .filter((proposal) => proposal.width > 0 && proposal.height > 0 && proposal.right > 0 && proposal.bottom > 0 && proposal.left < window.innerWidth && proposal.top < window.innerHeight);
+    if (!actor || (guideTarget && !bubble)) return { error: 'missing actor or visible bubble geometry' };
+    if (proposals.length === 0) return { overlaps: false, proposal: null };
+    const occupied = {
+      bottom: bubble ? Math.max(actor.bottom, bubble.bottom) : actor.bottom,
+      left: bubble ? Math.min(actor.left, bubble.left) : actor.left,
+      right: bubble ? Math.max(actor.right, bubble.right) : actor.right,
+      top: bubble ? Math.min(actor.top, bubble.top) : actor.top,
+    };
+    const overlaps = proposals.find((proposal) => occupied.left < proposal.right && occupied.right > proposal.left && occupied.top < proposal.bottom && occupied.bottom > proposal.top);
+    return {
+      overlaps: Boolean(overlaps),
+      guideMode: document.querySelector('[data-hermes-workspace-stage]')?.getAttribute('data-hermes-guide-motion'),
+      actor: { bottom: actor.bottom, left: actor.left, right: actor.right, top: actor.top },
+      bubble: bubble ? { bottom: bubble.bottom, left: bubble.left, right: bubble.right, top: bubble.top } : null,
+      occupied,
+      proposal: overlaps ? { bottom: overlaps.bottom, left: overlaps.left, right: overlaps.right, top: overlaps.top } : null,
+      proposals: proposals.map((proposal) => ({ bottom: proposal.bottom, left: proposal.left, right: proposal.right, top: proposal.top })),
+    };
+  });
+  if (result.error || result.overlaps) {
+    throw new Error(`Hermes guidance covers a visible evidence diff at ${viewport.width} during ${phase}: ${JSON.stringify(result)}`);
+  }
+}
+
 const researchObject = {
   id: 'ro-optical-editorial-test',
   workspaceId: 'workspace-test',
@@ -85,6 +119,11 @@ for (const viewport of [{ width: 1440, height: 900 }, { width: 390, height: 844 
   }
   await page.locator('[data-extract-sdf="true"]').click();
   await page.locator('[data-before-after-proposal]').first().waitFor({ timeout: 5_000 });
+  await page.waitForFunction(() => document.querySelector('[data-hermes-guide-bubble][data-hermes-guide-visible="true"]') || document.querySelector('[data-hermes-workspace-stage][data-hermes-guide-suppressed="true"]'));
+  if (await page.locator('[data-hermes-workspace-stage][data-hermes-guide-target] .hermes-guide-nudge').isVisible()) {
+    throw new Error(`Hermes rendered both the autonomous nudge and field guide at ${viewport.width}`);
+  }
+  await assertGuidanceClearOfVisibleProposals(page, viewport, 'initial proposal');
   if (viewport.width < 1024) {
     const mobileTabs = page.locator('[data-mobile-workspace-navigation="true"] button');
     if (await mobileTabs.count() !== 3) throw new Error(`Expected three mobile workspace views at ${viewport.width}`);
@@ -119,6 +158,34 @@ for (const viewport of [{ width: 1440, height: 900 }, { width: 390, height: 844 
   if (overflow !== 0 || errors.length > 0) {
     throw new Error(`Workspace browser gate failed at ${viewport.width}: overflow=${overflow}; errors=${errors.join(' | ')}`);
   }
+  await page.waitForFunction(() => {
+    const stage = document.querySelector('[data-hermes-workspace-stage]');
+    return !stage?.getAttribute('data-hermes-guide-target') || stage.getAttribute('data-hermes-guide-suppressed') === 'true' || document.querySelector('[data-hermes-guide-bubble][data-hermes-guide-visible="true"]');
+  });
+  try {
+    await page.waitForFunction(() => {
+    const stage = document.querySelector('[data-hermes-workspace-stage]');
+    if (stage?.getAttribute('data-hermes-guide-suppressed') === 'true') return true;
+    const guideTarget = stage?.getAttribute('data-hermes-guide-target');
+    const actor = document.querySelector('[data-hermes-companion-actor="true"]')?.getBoundingClientRect();
+    const bubble = guideTarget ? document.querySelector('[data-hermes-guide-bubble][data-hermes-guide-visible="true"]')?.getBoundingClientRect() : null;
+    if (!actor || (guideTarget && !bubble)) return false;
+    const occupied = {
+      bottom: bubble ? Math.max(actor.bottom, bubble.bottom) : actor.bottom,
+      left: bubble ? Math.min(actor.left, bubble.left) : actor.left,
+      right: bubble ? Math.max(actor.right, bubble.right) : actor.right,
+      top: bubble ? Math.min(actor.top, bubble.top) : actor.top,
+    };
+    return Array.from(document.querySelectorAll('[data-before-after-proposal]'))
+      .map((element) => element.getBoundingClientRect())
+      .filter((proposal) => proposal.width > 0 && proposal.height > 0 && proposal.right > 0 && proposal.bottom > 0 && proposal.left < window.innerWidth && proposal.top < window.innerHeight)
+      .every((proposal) => occupied.right <= proposal.left || occupied.left >= proposal.right || occupied.bottom <= proposal.top || occupied.top >= proposal.bottom);
+    }, undefined, { timeout: 5_000 });
+  } catch {
+    await assertGuidanceClearOfVisibleProposals(page, viewport, 'final timeout diagnostics');
+    throw new Error(`Hermes guidance did not settle clear of visible proposals at ${viewport.width}`);
+  }
+  await assertGuidanceClearOfVisibleProposals(page, viewport, 'final settled frame');
   await page.screenshot({ path: path.join(outDir, `workspace-${viewport.width}x${viewport.height}.png`) });
   await page.close();
 }

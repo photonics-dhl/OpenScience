@@ -51,14 +51,20 @@ try {
     let sawTravel = false;
     const sample = () => {
       const stage = document.querySelector('[data-hermes-workspace-stage]');
-      const actor = stage?.getBoundingClientRect();
+      const actor = stage?.querySelector('[data-hermes-companion-actor="true"]')?.getBoundingClientRect();
+      const bubble = stage?.querySelector('[data-hermes-guide-bubble]')?.getBoundingClientRect();
       const field = document.querySelector('[data-hermes-anchor="sdf-problem"]')?.getBoundingClientRect();
       sawTravel ||= stage?.getAttribute('data-hermes-guide-motion') === 'travel';
-      if (sawTravel && actor && field) window.__hermesGuideGeometrySamples.push({
-        actor: { bottom: actor.bottom, left: actor.left, right: actor.right, top: actor.top },
+      if (sawTravel && actor && bubble && field) window.__hermesGuideGeometrySamples.push({
+        actor: {
+          bottom: Math.max(actor.bottom, bubble.bottom),
+          left: Math.min(actor.left, bubble.left),
+          right: Math.max(actor.right, bubble.right),
+          top: Math.min(actor.top, bubble.top),
+        },
         field: { bottom: field.bottom, left: field.left, right: field.right, top: field.top },
       });
-      if (sawTravel && document.querySelector('[data-hermes-guide-bubble]')) {
+      if (sawTravel && document.querySelector('[data-hermes-guide-bubble][data-hermes-guide-visible="true"]')) {
         window.__hermesGuideGeometrySamplingDone = true;
         return;
       }
@@ -71,7 +77,7 @@ try {
   const samples = await page.evaluate(() => window.__hermesGuideGeometrySamples);
   assert.ok(samples.length >= 10, `guide travel must yield real geometry samples, got ${samples.length}`);
   const collision = samples.find(({ actor, field }) => actor.left < field.right && actor.right > field.left && actor.top < field.bottom && actor.bottom > field.top);
-  assert.equal(collision, undefined, `Hermes swept across the editable target: ${JSON.stringify(collision)}`);
+  assert.equal(collision, undefined, `Hermes swept across the editable target: ${JSON.stringify({ collision, first: samples.slice(0, 4), last: samples.slice(-4) })}`);
   const before = await page.locator('textarea').evaluateAll((nodes) => nodes.map((node) => node.value));
   await page.getByRole('button', { name: /Draft|草拟/ }).click();
   await page.locator('[data-before-after-proposal]').first().waitFor({ timeout: 5_000 });

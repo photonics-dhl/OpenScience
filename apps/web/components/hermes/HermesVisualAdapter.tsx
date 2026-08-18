@@ -209,8 +209,8 @@ export function HermesVisualAdapter({ action, actionStartedAtMs, assistantOpen =
       onFocus={() => engageArticulation()}
       onBlur={resetGaze}
     >
-      <span data-reading-role="caption" className="absolute left-0 top-0 z-10 font-mono uppercase tracking-[0.1em] text-os-muted-dark">Hermes / {state.replaceAll('_', ' ')}</span>
-      <span className="absolute inset-x-0 bottom-3 z-10 flex items-center justify-between gap-4 border-t border-os-rule-dark pt-3 text-xs text-os-muted-dark">
+      <span data-reading-role="caption" className="hermes-visual-state-label absolute left-0 top-0 z-10 font-mono uppercase tracking-[0.1em] text-os-muted-dark">Hermes / {state.replaceAll('_', ' ')}</span>
+      <span className="hermes-visual-invoke-label absolute inset-x-0 bottom-3 z-10 flex items-center justify-between gap-4 border-t border-os-rule-dark pt-3 text-xs text-os-muted-dark">
         <span className="truncate">{t(suggestion.titleKey)}</span><span className="shrink-0 text-os-vermilion transition-transform group-hover:translate-x-1 motion-reduce:transform-none">{t('guide.invoke')} →</span>
       </span>
       <span

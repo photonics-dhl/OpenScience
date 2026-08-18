@@ -164,8 +164,10 @@ function HermesWorkspaceStage({ fallbackAssistantOpen, fallbackOnInvoke, guideTa
   const contextLossRecoveriesRef = useRef(0);
   const suppressClickRef = useRef(false);
   const stageRef = useRef<HTMLDivElement | null>(null);
+  const bubbleRef = useRef<HTMLElement | null>(null);
   const [anchorRect, setAnchorRect] = useState<DOMRectReadOnly | null>(null);
   const [customDock, setCustomDock] = useState(false);
+  const [compactGuide, setCompactGuide] = useState(false);
   const [dockReady, setDockReady] = useState(false);
   const [dragging, setDragging] = useState(false);
   const [position, setPosition] = useState({ x: 0, y: 0 });
@@ -176,7 +178,17 @@ function HermesWorkspaceStage({ fallbackAssistantOpen, fallbackOnInvoke, guideTa
   const [guideActions, setGuideActions] = useState<HermesAnchorAction[]>([]);
   const [guideReady, setGuideReady] = useState(false);
   const [guideMode, setGuideMode] = useState<'travel' | 'edge-stop' | 'static' | null>(null);
+  const [guideSuppressed, setGuideSuppressed] = useState(false);
+  const [protectedGeometryVersion, setProtectedGeometryVersion] = useState(0);
   const [travelRequested, setTravelRequested] = useState(false);
+
+  useEffect(() => {
+    const query = window.matchMedia('(max-width: 640px)');
+    const sync = () => setCompactGuide(query.matches);
+    sync();
+    query.addEventListener('change', sync);
+    return () => query.removeEventListener('change', sync);
+  }, []);
 
   useEffect(() => {
     const search = motionSearch ? `?${motionSearch}` : '';
@@ -231,47 +243,110 @@ function HermesWorkspaceStage({ fallbackAssistantOpen, fallbackOnInvoke, guideTa
   useEffect(() => () => window.clearTimeout(leaveTimerRef.current), []);
 
   useEffect(() => {
+    if (!guideTarget) return;
+    const selector = '[data-before-after-proposal], [data-extract-sdf="true"], [data-hermes-protected="true"]';
+    let frame = 0;
+    let previous = '';
+    const refresh = () => {
+      window.cancelAnimationFrame(frame);
+      frame = window.requestAnimationFrame(() => {
+        const next = Array.from(document.querySelectorAll<HTMLElement>(selector))
+          .map((element) => element.getBoundingClientRect())
+          .filter((bounds) => bounds.width > 0 && bounds.height > 0)
+          .map((bounds) => [bounds.left, bounds.top, bounds.right, bounds.bottom].map((value) => Math.round(value)).join(':'))
+          .join('|');
+        if (next === previous) return;
+        previous = next;
+        setProtectedGeometryVersion((value) => value + 1);
+      });
+    };
+    refresh();
+    const observer = new MutationObserver(refresh);
+    observer.observe(document.body, { attributeFilter: ['class', 'hidden', 'style'], attributes: true, childList: true, subtree: true });
+    window.addEventListener('resize', refresh);
+    window.addEventListener('scroll', refresh, true);
+    return () => {
+      window.cancelAnimationFrame(frame);
+      observer.disconnect();
+      window.removeEventListener('resize', refresh);
+      window.removeEventListener('scroll', refresh, true);
+    };
+  }, [guideTarget]);
+
+  useEffect(() => {
     setGuideReady(false);
-    if (!guideTarget) { setGuideActions([]); setGuideMode(null); return; }
+    if (!guideTarget) {
+      if (guideActions.length > 0) setGuideActions([]);
+      setGuideMode(null);
+      setGuideSuppressed(false);
+      return;
+    }
     if (!dockReady) return;
     const snapshot = registry.snapshot(guideTarget);
     const stage = stageRef.current;
     if (!snapshot || !stage) { setGuideActions([]); return; }
-    setGuideActions(snapshot.actions);
+    if (guideActions.join('|') !== snapshot.actions.join('|')) {
+      setGuideActions(snapshot.actions);
+      return;
+    }
     const stageBounds = stage.getBoundingClientRect();
     const from = new DOMRect(stageBounds.x, stageBounds.y, Math.max(1, stageBounds.width), Math.max(1, stageBounds.height));
     const target = new DOMRect(snapshot.rect.x, snapshot.rect.y, snapshot.rect.width, snapshot.rect.height);
     if (effectiveReducedMotion) {
       setGuideMode('static');
+      setGuideSuppressed(false);
       setGuideReady(true);
       return;
     }
     if (customDock && !travelRequested) {
       setGuideMode('edge-stop');
+      setGuideSuppressed(false);
       setGuideReady(true);
       return;
     }
+    const actorBounds = stage.querySelector<HTMLElement>('[data-hermes-companion-actor="true"]')?.getBoundingClientRect() ?? stageBounds;
+    const bubbleBounds = bubbleRef.current?.getBoundingClientRect() ?? stageBounds;
+    const stageCenter = { x: stageBounds.left + stageBounds.width / 2, y: stageBounds.top + stageBounds.height / 2 };
+    const union = {
+      bottom: Math.max(actorBounds.bottom, bubbleBounds.bottom),
+      left: Math.min(actorBounds.left, bubbleBounds.left),
+      right: Math.max(actorBounds.right, bubbleBounds.right),
+      top: Math.min(actorBounds.top, bubbleBounds.top),
+    };
     const plan = planHermesTravel({
       bottomInsetPx: window.visualViewport ? Math.max(0, window.innerHeight - window.visualViewport.height) : 0,
+      clearancePx: snapshot.clearancePx,
       editable: target,
+      footprint: {
+        bottom: Math.max(1, union.bottom - stageCenter.y),
+        left: Math.max(1, stageCenter.x - union.left),
+        right: Math.max(1, union.right - stageCenter.x),
+        top: Math.max(1, stageCenter.y - union.top),
+      },
       from,
+      obstacles: Array.from(document.querySelectorAll<HTMLElement>('[data-before-after-proposal], [data-extract-sdf="true"], [data-hermes-protected="true"]'))
+        .map((element) => element.getBoundingClientRect())
+        .filter((bounds) => bounds.width > 0 && bounds.height > 0 && bounds.right > 0 && bounds.bottom > 0 && bounds.left < window.innerWidth && bounds.top < window.innerHeight),
       preferredSides: snapshot.sides,
       target,
       viewport: new DOMRect(0, 0, window.innerWidth, window.innerHeight),
     });
+    setGuideSuppressed(!plan.safe);
     setGuideMode(plan.mode === 'edge-stop' ? 'edge-stop' : 'travel');
     const timeline = createHermesTravelTimeline(plan.points, TRAVEL_SEGMENT_MS);
     const timers = timeline.map((step) => window.setTimeout(() => setPosition(step.point), step.atMs));
     const arrivalMs = timeline.length === 0 ? 0 : timeline.at(-1)!.atMs + TRAVEL_SEGMENT_MS;
     timers.push(window.setTimeout(() => setGuideReady(true), arrivalMs));
     return () => timers.forEach((timer) => window.clearTimeout(timer));
-  }, [customDock, dockReady, effectiveReducedMotion, guideTarget, registry, registryVersion, travelRequested]);
+  }, [compactGuide, customDock, dockReady, effectiveReducedMotion, guideActions, guideTarget, protectedGeometryVersion, registry, registryVersion, travelRequested]);
 
   useEffect(() => {
     if (!guideTarget) return;
-    const cancel = (event: KeyboardEvent) => { if (event.key === 'Escape') onDismissGuide(); };
-    window.addEventListener('keydown', cancel);
-    return () => window.removeEventListener('keydown', cancel);
+    const cancel = (event: KeyboardEvent) => {
+      if (event.key === 'Escape' && !document.querySelector('[role="dialog"], [aria-modal="true"]')) onDismissGuide();
+    };
+    window.addEventListener('keydown', cancel, true);
+    return () => window.removeEventListener('keydown', cancel, true);
   }, [guideTarget, onDismissGuide]);
 
   const advanceBehavior = (nextPointer = pointerRef.current, nextDragging = dragging) => {
@@ -350,9 +425,10 @@ function HermesWorkspaceStage({ fallbackAssistantOpen, fallbackOnInvoke, guideTa
     onPointerLeave();
   };
 
-  const anchored = anchorRect && !customDock;
+  const anchored = anchorRect && !customDock && !guideTarget;
+  const stageSize = compactGuide && guideTarget ? 160 : 288;
   const style: React.CSSProperties = anchored ? { height: anchorRect.height, left: anchorRect.left, top: anchorRect.top, width: anchorRect.width } : {
-    height: 288, left: position.x - 144, top: position.y - 144, width: 288,
+    height: stageSize, left: position.x - stageSize / 2, top: position.y - stageSize / 2, width: stageSize,
   };
   const ageMs = Math.max(0, Date.now() - behavior.startedAtMs);
   const actionStartedAtMs = behavior.startedAtMs === 0 || typeof performance === 'undefined' ? undefined : performance.now() - ageMs;
@@ -366,6 +442,7 @@ function HermesWorkspaceStage({ fallbackAssistantOpen, fallbackOnInvoke, guideTa
       data-hermes-action-started-at={behavior.startedAtMs}
       data-hermes-dragging={dragging ? 'true' : 'false'}
       data-hermes-guide-motion={guideMode ?? 'idle'}
+      data-hermes-guide-suppressed={guideSuppressed ? 'true' : 'false'}
       data-hermes-guide-target={guideTarget ?? undefined}
       data-hermes-motion-preference={reducedMotion === null ? 'resolving' : reducedMotion ? 'reduced' : 'full'}
       data-hermes-presentation-state={state}
@@ -422,7 +499,7 @@ function HermesWorkspaceStage({ fallbackAssistantOpen, fallbackOnInvoke, guideTa
         : motionControl.label === 'disable' ? 'disableMotion'
           : motionControl.label === 'retry' ? 'retryMotion'
             : 'startingMotion')}</button> : null}
-      {guideReady && guideTarget ? (
+      {guideTarget ? (
         <HermesGuideBubble
           actions={guideActions}
           edgeStop={guideMode === 'edge-stop'}
@@ -431,7 +508,9 @@ function HermesWorkspaceStage({ fallbackAssistantOpen, fallbackOnInvoke, guideTa
             document.querySelector(`[data-hermes-anchor="${guideTarget}"]`)?.scrollIntoView({ behavior: effectiveReducedMotion ? 'auto' : 'smooth', block: 'center' });
             setTravelRequested(true);
           }}
+          ref={bubbleRef}
           target={guideTarget}
+          visible={guideReady && !guideSuppressed}
         />
       ) : null}
     </div>

@@ -1,7 +1,24 @@
-import { expect, test, type Page, type Route } from 'playwright/test';
+import { expect, test, type Locator, type Page, type Route } from 'playwright/test';
 
 const baseUrl = process.env.WEB_BASE_URL ?? 'http://127.0.0.1:3010';
 const json = (route: Route, body: unknown, status = 200) => route.fulfill({ status, contentType: 'application/json', body: JSON.stringify(body) });
+
+async function expectGuideClearOf(page: Page, obstacle: Locator) {
+  const boxes = await Promise.all([
+    page.locator('[data-hermes-companion-actor="true"]').boundingBox(),
+    page.locator('[data-hermes-guide-bubble][data-hermes-guide-visible="true"]').boundingBox(),
+    obstacle.boundingBox(),
+  ]);
+  expect(boxes.every(Boolean)).toBe(true);
+  const [actor, bubble, target] = boxes as NonNullable<(typeof boxes)[number]>[];
+  const occupied = {
+    bottom: Math.max(actor.y + actor.height, bubble.y + bubble.height),
+    left: Math.min(actor.x, bubble.x),
+    right: Math.max(actor.x + actor.width, bubble.x + bubble.width),
+    top: Math.min(actor.y, bubble.y),
+  };
+  expect(occupied.right <= target.x || occupied.left >= target.x + target.width || occupied.bottom <= target.y || occupied.top >= target.y + target.height).toBe(true);
+}
 
 async function mockWorkspace(page: Page) {
   await page.route('**/api/auth/me', (route) => json(route, { userId: 'guide-user', email: 'guide@example.invalid', displayName: 'Ada', status: 'email_verified', level: 'free' }));
@@ -27,11 +44,7 @@ test('Hermes arrives beside the first RO field without covering it', async ({ pa
   await expect(guide).toBeVisible();
   await expect(stage).toHaveAttribute('data-hermes-guide-target', 'ro-title');
   await expect(guide).toContainText(/title|标题/i);
-  const stageBox = await stage.boundingBox();
-  const titleBox = await title.boundingBox();
-  expect(stageBox).not.toBeNull();
-  expect(titleBox).not.toBeNull();
-  expect(stageBox!.x + stageBox!.width <= titleBox!.x || stageBox!.x >= titleBox!.x + titleBox!.width || stageBox!.y + stageBox!.height <= titleBox!.y || stageBox!.y >= titleBox!.y + titleBox!.height).toBe(true);
+  await expectGuideClearOf(page, title);
   await page.keyboard.press('Escape');
   await expect(guide).toHaveCount(0);
   await title.focus();
@@ -81,6 +94,7 @@ test('editing guidance follows the selected SDF field and keeps functional draft
   await expect(stage).toHaveAttribute('data-hermes-guide-target', 'sdf-insight');
   await expect(page.getByRole('button', { name: /Draft|草拟/i })).toBeVisible();
   await expect(page.getByRole('button', { name: /Check|检查/i })).toBeVisible();
+  await expectGuideClearOf(page, page.getByRole('textbox', { name: /Insight|洞见/i }));
   await page.getByRole('button', { name: /Explain|解释/i }).click();
   await expect(page.locator('[data-hermes-guide-explanation]')).toContainText(/claim|evidence|论断|证据/i);
 });
