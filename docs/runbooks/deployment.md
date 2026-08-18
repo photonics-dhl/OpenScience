@@ -441,3 +441,29 @@ Current infrastructure uses pinned base/worker images with bind-mounted applicat
   (`a8aa0f86...5ab17`). A production-browser mobile proposal-ready test loaded
   the public build and passed `1/1`, including the formerly blocked AI Extract
   click. ECS services, Cloudflare ingress, and local HTTPS remain healthy.
+
+### 5.12 Hermes real-account living-motion repair (2026-08-18)
+
+> Deployed release `39c752b`; rollback `1b76b46`.
+
+- Scope: Dashboard `needs_review` is an active `suggesting` state rather than
+  approval-still; the real six-field approval route owns stillness only while
+  server task state is `needs_review`. The renderer replaces repeated
+  whole-image ellipse deformation with one normalized bind-UV semantic-part
+  displacement, and publishes draw heartbeat/fallback diagnostics with bounded
+  context-loss recovery. No API, schema, provider, permission, Secret, or
+  topology changed.
+- Evidence: merged Web `308/308`, typecheck, 17-page build, production E2E
+  `14/14`, Hermes real-pixel/affine-mutation/performance gate, root lint/docs,
+  and independent review passed. Pre/post checkup was healthy; DB backup was
+  `BACKUP_OK size=384K files=7/7`; dry-run preceded
+  `deploy.sh --confirm --skip-migrate 39c752b`.
+- Public real-account verification: nine real `needs_review` tasks produced
+  `presentation=suggesting`, `preference=full`, `renderer=ready`,
+  `inputReady=true`, no fallback reason, and zero browser errors. Renderer
+  heartbeat advanced by 516.6ms; idle pose/PNG and pointer PNG changed, with
+  pointer gesture `focus`. The short-lived verification session was deleted.
+- Source integrity: remote/local SHA-256 matched for `part-rig-shaders.ts`,
+  `pet-mesh-renderer.ts`, `hermes-state.ts`, and the real Hermes approval page.
+  `/`, `/dashboard`, and `/explore` returned `200`; anonymous `/auth/me`
+  returned expected `401`.
