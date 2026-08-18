@@ -30,6 +30,20 @@
   box-sizing: border-box;
 }
 
+/* Tailwind preflight is intentionally absent, so controls must not inherit
+   browser-specific fonts, colors, or opaque button paint. */
+button,
+input,
+select,
+textarea {
+  color: inherit;
+  font: inherit;
+}
+
+button {
+  background: transparent;
+}
+
 body {
   margin: 0;
   font-family: var(--font-sans);
@@ -2010,9 +2024,34 @@ body {
 
 .hermes-companion-actions button,
 .hermes-companion-take-me {
-  min-height: 2rem;
-  border-bottom: 1px solid rgb(241 238 231 / .3);
+  min-height: 2.25rem;
+  border: 1px solid rgb(241 238 231 / .3);
+  border-radius: var(--radius-control);
+  padding: .42rem .72rem;
+  background: rgb(241 238 231 / .08);
   color: var(--os-paper, #f1eee7);
+  font-size: var(--text-control);
+  font-weight: 600;
+  line-height: 1.2;
+  cursor: pointer;
+}
+
+.hermes-companion-actions button:hover,
+.hermes-companion-take-me:hover {
+  border-color: rgb(241 238 231 / .5);
+  background: rgb(241 238 231 / .15);
+}
+
+.hermes-companion-actions button:focus-visible,
+.hermes-companion-take-me:focus-visible {
+  outline: 2px solid var(--os-vermilion, #ff4e22);
+  outline-offset: 2px;
+}
+
+.hermes-companion-actions button:disabled,
+.hermes-companion-take-me:disabled {
+  opacity: .5;
+  cursor: not-allowed;
 }
 
 .hermes-companion-explanation {
@@ -2067,6 +2106,7 @@ body {
 
 .hermes-companion-take-me {
   margin-top: .55rem;
+  background: rgb(255 78 34 / .09);
   color: var(--color-vermilion, #ff4e22);
 }
 

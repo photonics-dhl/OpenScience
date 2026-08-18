@@ -43,6 +43,14 @@
   --font-size-base: 1rem;
   --font-size-lg: 1.125rem;
 
+  /* Semantic reading roles. Necessary controls never use the caption role. */
+  --text-caption: 0.75rem;
+  --text-control: 0.875rem;
+  --text-body: 1rem;
+  --text-reading: 1.0625rem;
+  --leading-body: 1.6;
+  --leading-reading: 1.7;
+
   /* Semantic motion: focus, reveal, scan and long optical drift. */
   --motion-fast: 160ms;
   --motion-focus: 180ms;
