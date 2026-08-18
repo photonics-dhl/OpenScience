@@ -391,7 +391,7 @@ Run focused tests, full Web Vitest, Web typecheck, root lint, production build, 
 
 Review the complete diff for correctness, UX, accessibility, security/privacy, lifecycle, performance, test honesty, and stale CURRENT claims. Resolve every Critical/Important finding before release.
 
-- [ ] **Step 3: Commit and push the reviewed candidate**
+- [x] **Step 3: Commit and push the reviewed candidate**
 
 Stage only tracked task files; preserve `docs/user_ideas/8.10/*`. Record exact commit hashes in progress/handoff/index.
 
