@@ -5,9 +5,10 @@
 ## 2026-08-19 — 可读工作台与 Hermes 引导实施中
 
 - **当前目标**：落实已确认的 B「平衡学者工作台」，并让 Hermes 在真实 blank RO 流程中安全游动、解释字段、生成可审阅 diff、披露缺失证据，最终以 ECS 公网真实账号验收。
-- **Tasks 1–3 已完成**：`ec553f8` 建立 14–17 px 语义阅读角色与浏览器无关控件；`3cb00c1` 将阅读层级应用到代表页面；`7878cc5` 将 actor+bubble 完整 footprint、动态字段/diff 障碍和安全 edge-stop 纳入路径，移动端无安全位置时暂退并在安全后恢复。
-- **Task 3 当前证据**：travel-path Vitest `10/10`、field-guide Playwright `4/4`、真实 guidance geometry gate、1440/390/320 workspace shots、Web typecheck 与 diff-check 均 GREEN。一次老化 dev server 导航超时已由全新 3201 复跑排除，未冒充产品断言失败。
-- **下一步**：Task 4——编辑后接受建议、只写入显式接受文本，并直接消费 `needsMoreInformation` 显示无证据字段；禁止合成结果句或静默写入。
+- **Tasks 1–4 已完成**：`ec553f8` 建立阅读/控件基线；`3cb00c1` 应用代表页面层级；`7878cc5` 落实完整 footprint/动态障碍/移动 retreat；`44b61b0` 支持 edit-before-accept、dismiss 与 missing acknowledgement 的确定推进，并直接消费 `needsMoreInformation`，不合成结果。
+- **路径复核**：`63a6eb9` 让门禁先观察 travel-hidden→arrival，修复旧气泡首帧竞态，并为动态 footprint 留 1px 物理余量；真实 geometry gate 无字段相交。
+- **当前证据**：focused Vitest `30/30`、Hermes draft/field-guide Playwright `5/5`、可读性 `18` 路由/视图、真实 geometry gate、1440/390/320 shots、Web typecheck 与 diff-check GREEN。dismiss 与 missing-ack 均用 real-browser mutation 证明门禁可失败。
+- **下一步**：Task 5——在不增加新 renderer owner 的前提下，把字段语义映射到可辨认的阅读/证据/不确定性/成功动作，并验证真实角色像素差异；审批与 reduced 仍静止。
 - **最终验收边界**：完成 Tasks 4–6 后，以公网真实管理员从 blank RO 输入受控研究构想，验证 evidence / missing disclosure、accept / edit-accept / reject、保存、刷新和 commit。本地仅预检，部署仍需最终云写确认。
 
 ## Stable production boundary
@@ -19,7 +20,7 @@
 
 ## Version tuple
 
-- Branch / application HEAD: `codex/readable-hermes-guidance` / `7878cc5`
+- Branch / application HEAD: `codex/readable-hermes-guidance` / `44b61b0`
 - Local main: `c60ffdd`
 - ECS release / rollback: `39c752b` / `1b76b46`
 - Current branch PR: none（PR 3 仅为旧 Hermes 集成历史）

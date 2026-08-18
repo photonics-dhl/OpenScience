@@ -226,7 +226,7 @@ type SdfField = (typeof SDF_FIELDS)[number];
 const isSdfField = (value: unknown): value is SdfField => typeof value === 'string' && SDF_FIELDS.includes(value as SdfField);
 ```
 
-- [ ] **Step 1: Write RED reducer and browser contracts**
+- [x] **Step 1: Write RED reducer and browser contracts**
 
 ```ts
 const revised = suggestionReducer([pending], { type: 'revise', id: pending.id, suggestion: 'Researcher-edited text' });
@@ -245,11 +245,11 @@ await expect(resultsNotice).toContainText(/no result evidence|没有结果证据
 await expect(results).toHaveValue('');
 ```
 
-- [ ] **Step 2: Verify RED**
+- [x] **Step 2: Verify RED**
 
 Run focused editor/extractor Vitest and `hermes-draft-diff.spec.ts`.
 
-- [ ] **Step 3: Implement the suggestion transition and disclosure UI**
+- [x] **Step 3: Implement the suggestion transition and disclosure UI**
 
 Keep missing fields separate from suggestions:
 
@@ -261,7 +261,7 @@ const missing = Array.isArray(cur.task.result?.needsMoreInformation)
 
 Never synthesize a result sentence. Display a warning tied to `sdf-results`; accepting or dismissing one suggestion advances to the next pending/missing field and requests the corresponding Hermes anchor.
 
-- [ ] **Step 4: Verify no silent writes and commit**
+- [x] **Step 4: Verify no silent writes and commit**
 
 Run focused tests, Web typecheck, and diff check.
 
