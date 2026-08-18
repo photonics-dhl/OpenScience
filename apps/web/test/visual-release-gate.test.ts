@@ -32,7 +32,9 @@ describe('product visual release manifest', () => {
     const packageJson = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8')) as { scripts: Record<string, string> };
     expect(opticalSource).toContain('__OPENSCIENCE_VISUAL_CLOCK__');
     expect(packageJson.scripts['test:release']).toContain('product-release.spec.ts');
-    expect(workflow).toContain('playwright install --with-deps chromium');
+    expect(workflow).toContain('timeout-minutes: 40');
+    expect(workflow).toContain('playwright install chromium');
+    expect(workflow).not.toContain('playwright install --with-deps chromium');
     expect(workflow).toContain('actions/upload-artifact');
   });
 
