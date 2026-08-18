@@ -5,11 +5,11 @@
 ## 2026-08-19 — 可读工作台与 Hermes 引导实施中
 
 - **当前目标**：落实已确认的 B「平衡学者工作台」，并让 Hermes 在真实 blank RO 流程中安全游动、解释字段、生成可审阅 diff、披露缺失证据，最终以 ECS 公网真实账号验收。
-- **Tasks 1–5 已完成**：`ec553f8` 建立阅读/控件基线；`3cb00c1` 应用代表页面层级；`7878cc5` 落实完整 footprint/动态障碍/移动 retreat；`44b61b0` 支持 edit-before-accept、dismiss 与 missing acknowledgement 的确定推进；`757de5b` 移除内部动作的整图 CSS 拉伸，并为 evidence/read/compare/write/issue/arrival/success 增加独立关节签名。
+- **Tasks 1–6 已完成本地候选**：`ec553f8` 阅读/控件；`3cb00c1` 页面层级；`7878cc5` footprint/移动 retreat；`44b61b0` edit-before-accept/missing disclosure；`757de5b` 语义关节动作；`80cd6e9` blank RO 真实网络门禁、编辑页 working/review 状态与保存后乐观锁版本推进。
 - **路径复核**：`63a6eb9` 让门禁先观察 travel-hidden→arrival，修复旧气泡首帧竞态，并为动态 footprint 留 1px 物理余量；真实 geometry gate 无字段相交。
-- **当前证据**：Task 5 focused `16/16`、Dashboard E2E `14/14`、90 秒 companion 与 articulation real-pixel gates、production build/typecheck/diff-check GREEN；performance gate 首帧 `958ms`、脚本 `200,620B`、纹理 `1,472,269B`、idle/pointer p95 `18ms` 且 0 drop（SwiftShader 边界）。approval/reduced 保持静止，只有 patrol 可移动 enclosing silhouette。
-- **下一步**：Task 6——增加真实 blank-RO 生产 gate，验证 accept、edit-accept、reject、missing results、保存/刷新/commit 与动作状态；本地 mocked flow 只作预检。
-- **最终验收边界**：完成 Tasks 4–6 后，以公网真实管理员从 blank RO 输入受控研究构想，验证 evidence / missing disclosure、accept / edit-accept / reject、保存、刷新和 commit。本地仅预检，部署仍需最终云写确认。
+- **当前证据**：Task 6 production build、mocked blank flow `1/1`、既有 draft-diff `1/1`、Hermes aggregate `158s`、focused/typecheck/scoped lint/syntax/diff-check GREEN；aggregate 首帧 `814ms`、idle/pointer p95 约 `18ms` 且 0 drop（SwiftShader 边界）。真实 ECS blank-RO leg 尚未运行。
+- **下一步**：Task 7——全量串行门禁、独立审查、push、只读 ECS checkup/dry-run；缺少最终云写确认时必须停在部署检查点。
+- **最终验收边界**：部署后以公网真实管理员运行 `test:hermes-blank-ro-production`，验证 evidence / missing disclosure、accept / edit-accept / reject、保存、刷新、commit 与 idle/travel/working/review；本地 mock 不替代该证据。
 
 ## Stable production boundary
 
@@ -20,7 +20,7 @@
 
 ## Version tuple
 
-- Branch / application HEAD: `codex/readable-hermes-guidance` / `757de5b`
+- Branch / application HEAD: `codex/readable-hermes-guidance` / `80cd6e9`
 - Local main: `c60ffdd`
 - ECS release / rollback: `39c752b` / `1b76b46`
 - Current branch PR: none（PR 3 仅为旧 Hermes 集成历史）

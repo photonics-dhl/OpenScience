@@ -334,7 +334,7 @@ Commit: `feat(web): enrich Hermes scholarly motion`
 - Adds `pnpm --filter @openscience/web test:hermes-blank-ro-production`.
 - Writes only ignored screenshots/video/metrics under `apps/web/test/visual/out/hermes-blank-ro/`.
 
-- [ ] **Step 1: Write the public-gate contract before product changes are declared complete**
+- [x] **Step 1: Write the public-gate contract before product changes are declared complete**
 
 The script uses a real short-lived administrator session without printing it and asserts:
 
@@ -351,19 +351,21 @@ assert.ok(motionStates.has('idle') && motionStates.has('travel') && motionStates
 
 The run performs one accept, one edit-accept, one reject, save, refresh, and commit. It retains the labelled private acceptance RO.
 
-- [ ] **Step 2: Run the local mocked flow only as RED/preflight**
+- [x] **Step 2: Run the local mocked flow only as RED/preflight**
 
 Run the focused E2E against a production Next build. Expected initial failures identify missing edit-accept, missing-evidence, or geometry behaviour; mocked GREEN is not release evidence.
 
-- [ ] **Step 3: Wire the gate into the Hermes aggregate**
+- [x] **Step 3: Wire the gate into the Hermes aggregate**
 
 Do not expose credentials or enable the gate in ordinary CI. Require explicit production base URL and the existing secure session bootstrap path.
 
-- [ ] **Step 4: Commit the acceptance gate**
+- [x] **Step 4: Commit the acceptance gate**
 
 Run MJS syntax check, focused E2E, release gate excluding the ECS-only leg, Web typecheck, and diff check.
 
 Commit: `test(web): verify blank RO Hermes guidance`
+
+Completed in `80cd6e9`. The mocked production-build flow is preflight only; the credentialed ECS leg remains Task 7 release evidence.
 
 ---
 
