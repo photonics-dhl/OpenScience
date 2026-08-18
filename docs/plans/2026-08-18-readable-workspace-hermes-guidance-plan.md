@@ -35,7 +35,7 @@
 - Produces CSS variables `--text-caption`, `--text-control`, `--text-body`, `--text-reading`, `--leading-body`, and `--leading-reading`.
 - Produces explicit button/input/select/textarea inheritance and transparent button fallback without Tailwind preflight.
 
-- [ ] **Step 1: Write the failing foundation contract**
+- [x] **Step 1: Write the failing foundation contract**
 
 ```ts
 it('defines readable semantic roles and browser-independent controls', () => {
@@ -47,13 +47,13 @@ it('defines readable semantic roles and browser-independent controls', () => {
 });
 ```
 
-- [ ] **Step 2: Verify RED**
+- [x] **Step 2: Verify RED**
 
 Run: `npx pnpm@9.15.0 --filter @openscience/web exec vitest run test/workspace-readability.test.ts`
 
 Expected: FAIL because semantic roles and the explicit Hermes action control contract do not exist.
 
-- [ ] **Step 3: Add the minimal foundation**
+- [x] **Step 3: Add the minimal foundation**
 
 ```css
 :root {
@@ -71,7 +71,7 @@ button { background: transparent; }
 
 Give `.hermes-companion-actions button`, `.hermes-companion-take-me`, and dismiss controls explicit border, background, foreground, size, hover, focus, and disabled states.
 
-- [ ] **Step 4: Verify GREEN and commit**
+- [x] **Step 4: Verify GREEN and commit**
 
 Run: focused Vitest, Web typecheck, and `git diff --check`.
 
@@ -98,7 +98,7 @@ Commit: `fix(web): establish readable control foundations`
 - Consumes the Task 1 semantic type roles.
 - Produces `data-reading-role="body|control|caption|reading"` hooks used only for honest browser acceptance.
 
-- [ ] **Step 1: Add a failing representative-route browser test**
+- [x] **Step 1: Add a failing representative-route browser test**
 
 ```ts
 async function assertReadable(locator: Locator, minimumPx: number) {
@@ -114,13 +114,13 @@ await expect(page.locator('[data-reading-role="control"]')).toHaveCSS('backgroun
 
 Cover Landing, Dashboard, settings, explore, blank/import create, SDF editor, collaboration, and public RO at 1440×900 and 390×844. The visual gate scans every visible button, link, input, select, textarea, and label for a 14 px minimum; rejects any visible text below 12 px unless it is an explicitly non-essential caption; checks necessary muted text at 4.5:1; rejects clipped action text; and requires non-empty accessible names.
 
-- [ ] **Step 2: Verify RED on the current public-shaped UI**
+- [x] **Step 2: Verify RED on the current public-shaped UI**
 
 Run: `npx pnpm@9.15.0 --filter @openscience/web exec playwright test test/e2e/workspace-readability.spec.ts`
 
 Expected: FAIL on 10–12 px essential labels and the Hermes guide action background.
 
-- [ ] **Step 3: Replace microtype only where it carries meaning**
+- [x] **Step 3: Replace microtype only where it carries meaning**
 
 Use semantic type roles rather than blanket scaling:
 
@@ -133,7 +133,7 @@ Use semantic type roles rather than blanket scaling:
 
 Retain editorial display headings and data identifiers. Do not increase non-essential version/hash metadata beyond the caption role.
 
-- [ ] **Step 4: Verify desktop/mobile and commit**
+- [x] **Step 4: Verify desktop/mobile and commit**
 
 Run the focused browser test, complete readability route gate, existing public-reading shots, workspace shots, Web typecheck, and `git diff --check`.
 
@@ -156,7 +156,7 @@ Commit: `fix(web): improve scholarly reading hierarchy`
 - Adds `footprint: HermesFootprintInsets` to `HermesTravelInput`.
 - Adds `visible: boolean` and a forwarded `HTMLElement` ref to `HermesGuideBubble` so the bubble can be measured while visually hidden.
 
-- [ ] **Step 1: Write RED tests for actor-plus-bubble collision**
+- [x] **Step 1: Write RED tests for actor-plus-bubble collision**
 
 ```ts
 const plan = planHermesTravel({
@@ -170,13 +170,13 @@ expect(footprint.right <= editable.left || footprint.left >= editable.right
 
 In Playwright, calculate the union of `[data-hermes-companion-actor]` and `[data-hermes-guide-bubble]` and assert it does not intersect each of the six active textareas or the before/after diff on desktop and mobile.
 
-- [ ] **Step 2: Verify RED**
+- [x] **Step 2: Verify RED**
 
 Run: focused travel-path Vitest and `hermes-field-guide.spec.ts`.
 
 Expected: the actor rectangle may pass while the overflowing bubble intersects the target.
 
-- [ ] **Step 3: Plan travel from the measured union footprint**
+- [x] **Step 3: Plan travel from the measured union footprint**
 
 ```ts
 export interface HermesFootprintInsets { left: number; right: number; top: number; bottom: number }
@@ -193,7 +193,7 @@ export function rectForFootprint(center: Point, footprint: HermesFootprintInsets
 
 Render the bubble in an inert, `visibility:hidden` measurement state before arrival. Measure actor and bubble relative to the Stage centre, pass the union insets into `planHermesTravel`, use the registered `clearancePx`, and fall back to `edge-stop` when no collision-free side exists. On mobile, keep the guide inside the bottom guidance region rather than above the character.
 
-- [ ] **Step 4: Verify all six targets and commit**
+- [x] **Step 4: Verify all six targets and commit**
 
 Run focused Vitest, field-guide E2E, guidance geometry gate, Web typecheck, and diff check.
 
