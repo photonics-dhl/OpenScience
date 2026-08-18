@@ -417,3 +417,26 @@ Current infrastructure uses pinned base/worker images with bind-mounted applicat
   Dashboard's 90-second renderer gate passed with 28 actions, 13 distinct
   actions, 22 micro, 6 signature, a 4358ms maximum gap, patrol return,
   six-action whole-character motion, and pointer response.
+
+### 5.11 Hermes form-clear hit area hotfix (2026-08-18)
+
+> Deployed release `1b76b46`; rollback `017bf1e`.
+
+- Scope: Hermes' transparent 288px stage no longer intercepts Workspace form
+  controls. Pointer input is restricted to the visible rig, motion control, and
+  guide bubble; keyboard invocation, character drag, pointer response, and
+  guide actions remain available. No API, schema, permission, provider, or
+  production topology changed.
+- Evidence: PR head `a3d8a3f` passed GitHub CI run `32094257833`; local Web
+  `295/295`, product release `27/27`, Hermes aggregate `144.9s`, typecheck,
+  lint/docs-sync, and the 17-page production build passed. Parser cancellation
+  and breathing gates now wait on deterministic publication/joint state rather
+  than scheduler timing.
+- Operation: pre/post checkup passed; DB backup returned
+  `BACKUP_OK size=384K files=7/7`; dry-run preceded
+  `deploy.sh --confirm --skip-migrate 1b76b46`. No migration or seed ran.
+- Verification: remote/local SHA-256 values match for
+  `HermesWorkspaceStage.tsx` (`c2d44c43...835c6`) and `globals.css`
+  (`a8aa0f86...5ab17`). A production-browser mobile proposal-ready test loaded
+  the public build and passed `1/1`, including the formerly blocked AI Extract
+  click. ECS services, Cloudflare ingress, and local HTTPS remain healthy.
