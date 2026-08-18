@@ -285,7 +285,7 @@ Commit: `feat(web): add reviewable Hermes field drafts`
 - Keeps the existing action IDs and renderer input shape.
 - Produces independent head, torso, forepaw, tail, page-crown, gaze, and evidence-node joint changes for idle, discovery, travel, arrival, work, review, and completion.
 
-- [ ] **Step 1: Add RED diversity and perceptibility contracts**
+- [x] **Step 1: Add RED diversity and perceptibility contracts**
 
 ```ts
 let current = createInitialHermesBehavior(input({ nowMs: 0, seed: 37 }));
@@ -306,15 +306,15 @@ expect(writing.base).toEqual({ angle: 0, x: 0, y: 0 });
 
 The real-pixel gate freezes autonomous time for pointer attribution, then separately samples a 90-second idle window. It requires non-affine region vectors, visible eye/head/tail/node activity, and no open seams.
 
-- [ ] **Step 2: Verify RED against the coarse repertoire**
+- [x] **Step 2: Verify RED against the coarse repertoire**
 
 Run focused Vitest and the current companion motion gate. Record exact missing signatures or overused whole-character motion.
 
-- [ ] **Step 3: Tune semantic joints, not the enclosing bitmap**
+- [x] **Step 3: Tune semantic joints, not the enclosing bitmap**
 
 Remove whole-character scale/ellipse gestures for internal actions. Preserve whole-character translation only for travel, landing compression, user drag, and milestone dance. Tune anticipation, hold, and release in `part-rig.ts`; keep quiet-write restrained and approval still.
 
-- [ ] **Step 4: Verify pixels and commit**
+- [x] **Step 4: Verify pixels and commit**
 
 Run behavior/rig Vitest, articulation gate, companion gate, performance gate, reduced-motion E2E, Web typecheck, and diff check.
 
