@@ -2,7 +2,7 @@
 
 ## 2026-08-18（版本收口、docs-sync 与 Hermes 默认动效发布）— ✅ ECS GREEN
 
-- **版本边界**：功能修复 `ee514aa`、docs-sync `961b584` 已推送并更新 PR #3；本地 `main` 合并 release `017bf1e` 已部署 ECS，rollback 为 `aa1c8af`。用户自有未跟踪设计资产未移动、删除或提交。
+- **版本边界**：功能修复 `ee514aa`、docs-sync `961b584` 与 rejected-3D cleanup `5a680b9` 已推送并更新 PR #3；本地 `main` 合并 release `017bf1e` 已部署 ECS，rollback 为 `aa1c8af`。用户自有未跟踪设计资产未移动、删除或提交。
 - **旧记忆根因**：无 skill 基线虽最终判断正确，但读取了大量历史，并遇到旧 progress CURRENT、handoff 旧动作语法、文件名日期与正文状态、已部署/待部署未绑版本四类干扰。CURRENT Hermes handoff 已从 56 个长行压缩为 38 行，只保留当前事实、版本元组、边界和下一步；历史文件未删除。
 - **docs-sync TDD**：新增 `scripts/docs/docs-sync-skill.test.mjs`，旧 skill `0/4` RED，canonical lint 绕过合同再以 `5/6` RED；新版 skill + AGENTS bounded-read + CI wiring `6/6` GREEN。独立 forward test 只读 baseline 相关段、progress 前 80 行、CURRENT 索引区与 compact handoff，正确给出 task/version tuple，历史命中未进入 active reasoning。
 - **合并与部署证据**：合并后 lint/docs-sync、Web `300/300`、typecheck、17-page build GREEN；ECS 前后 checkup 健康，DB backup `384K / 7/7`，dry-run 后 `--confirm --skip-migrate` 成功。远端 Stage/motion-preference SHA-256 与本地一致；Parser 保持 `network=none`、非 root、只读、512MiB/64 PID、仅 bounded IPC mount。公网 `/`、`/explore`、`/auth/login`、`/api/explore` 为 `200`，匿名 `/auth/me` 与 `/admin/` 为 `401`。

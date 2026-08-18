@@ -17,7 +17,7 @@
 ## Version tuple
 
 - Branch: `codex/hermes-2d-pet`
-- Remote branch HEAD: `961b584` (`ee514aa` feature + docs-sync)
+- Remote branch HEAD: `5a680b9` (`ee514aa` feature + docs-sync + rejected 3D cleanup)
 - Local `main`: `017bf1e`
 - ECS release / rollback: `017bf1e` / `aa1c8af`
 - PR: `https://github.com/photonics-dhl/OpenScience/pull/3`
