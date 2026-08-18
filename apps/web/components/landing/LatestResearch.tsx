@@ -9,7 +9,7 @@ export default function LatestResearch() {
       <div className="mx-auto grid max-w-[112rem] border-y border-os-rule-paper lg:grid-cols-[0.9fr_1.1fr]" data-open-ro-density="calm" data-open-ro-index="true">
         <div className="relative flex flex-col justify-between border-b border-os-rule-paper py-8 lg:border-b-0 lg:border-r lg:pr-12">
           <div>
-            <p className="m-0 font-data text-[10px] uppercase tracking-[0.2em] text-os-vermilion sm:text-xs">{t('openRo.eyebrow')}</p>
+            <p data-reading-role="caption" className="m-0 font-data uppercase tracking-[0.1em] text-os-vermilion">{t('openRo.eyebrow')}</p>
             <h2 className="m-0 mt-6 font-display text-7xl font-semibold leading-[0.76] text-os-ink sm:text-8xl lg:text-[9rem]">
               OPEN
               <span className="font-editorial-latin ml-[14%] block font-normal italic">RO<span className="text-os-vermilion">.</span></span>
@@ -22,7 +22,7 @@ export default function LatestResearch() {
         </div>
 
         <div className="flex flex-col py-8 lg:pl-12">
-          <div className="flex items-center justify-between border-b border-os-rule-paper pb-4 font-data text-[10px] uppercase tracking-[0.16em] text-os-muted-paper sm:text-xs">
+          <div data-reading-role="caption" className="flex items-center justify-between border-b border-os-rule-paper pb-4 font-data uppercase tracking-[0.1em] text-os-muted-paper">
             <span>SDF / 06</span>
             <span>{t('openRo.stableId')} · RO-ID</span>
           </div>

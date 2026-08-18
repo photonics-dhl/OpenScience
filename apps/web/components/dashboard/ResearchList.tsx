@@ -36,7 +36,7 @@ export function ResearchList({ researchObjects }: ResearchListProps) {
     <section className="border-t border-os-rule-dark pt-5" aria-labelledby="research-list-title">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <p className="font-mono text-[0.68rem] uppercase tracking-[0.22em] text-os-muted-dark">
+          <p data-reading-role="caption" className="font-mono uppercase tracking-[0.1em] text-os-muted-dark">
             Index / Research objects
           </p>
           <h2 id="research-list-title" className="mt-2 text-xl font-medium text-os-paper">
@@ -74,11 +74,11 @@ export function ResearchList({ researchObjects }: ResearchListProps) {
                   <span className="block truncate font-medium text-os-paper group-hover:text-os-vermilion">
                     {research.title}
                   </span>
-                  <span className="mt-1 block font-mono text-[0.68rem] text-os-muted-dark">
+                  <span data-reading-role="caption" className="mt-1 block font-mono text-os-muted-dark">
                     {research.publicId} · {t('research.version', { version: research.versionNo })}
                   </span>
                 </span>
-                <span className="font-mono text-[0.68rem] uppercase tracking-[0.1em] text-os-muted-dark">
+                <span data-reading-role="caption" className="font-mono uppercase tracking-[0.06em] text-os-muted-dark">
                   {t(`research.status.${research.status}`)}
                 </span>
               </Link>

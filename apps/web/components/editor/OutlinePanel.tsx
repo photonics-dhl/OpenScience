@@ -36,7 +36,7 @@ export default function OutlinePanel({
     <nav aria-label={t('outline')}>
       <div className="flex items-baseline justify-between border-b border-os-rule-dark pb-3">
         <h2 className="m-0 font-data text-xs uppercase tracking-[0.14em] text-os-paper">{t('outline')}</h2>
-        <span className="font-data text-[10px] text-os-muted-dark">{filled}/{FIELD_ORDER.length}</span>
+        <span className="font-data text-xs text-os-muted-dark">{filled}/{FIELD_ORDER.length}</span>
       </div>
       <ol className="m-0 list-none p-0">
         {FIELD_ORDER.map((field, index) => (
@@ -46,7 +46,7 @@ export default function OutlinePanel({
               onClick={() => onSelectField(field)}
               type="button"
             >
-              <span className="font-data text-[10px]">{String(index + 1).padStart(2, '0')}</span>
+              <span className="font-data text-xs">{String(index + 1).padStart(2, '0')}</span>
               <span className={activeField === field ? 'text-os-paper' : undefined}>{t(field)}</span>
               <span className={activeField === field ? 'ml-auto h-1.5 w-1.5 bg-os-vermilion' : 'ml-auto h-1.5 w-1.5 border border-os-rule-dark'} aria-hidden="true" />
             </button>

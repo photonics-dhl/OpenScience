@@ -17,7 +17,7 @@ function ObjectHeader({ objectId, title, version, visibility, saveState, actions
 
   return (
     <div
-      className="flex w-full min-w-0 items-center justify-between gap-3 overflow-hidden font-data text-[11px] uppercase tracking-[0.1em] text-os-muted-dark"
+      className="flex w-full min-w-0 items-center justify-between gap-3 overflow-hidden font-data text-sm tracking-[0.04em] text-os-muted-dark"
       data-object-header="true"
     >
       <div className="min-w-0 flex-1">
@@ -25,7 +25,7 @@ function ObjectHeader({ objectId, title, version, visibility, saveState, actions
           <strong className="min-w-0 truncate font-sans text-xs font-semibold normal-case tracking-normal text-os-paper sm:text-sm">{title}</strong>
           <span className="shrink-0">v{version}</span>
         </div>
-        <div className="mt-1 flex min-w-0 items-center gap-2 text-[9px] sm:text-[10px]">
+        <div data-reading-role="caption" className="mt-1 flex min-w-0 items-center gap-2 tracking-[0.06em]">
           <span className="hidden truncate sm:inline">{objectId}</span>
           <span className="hidden sm:inline" aria-hidden="true">/</span>
           <span className="hidden md:inline">{visibilityLabel}</span>

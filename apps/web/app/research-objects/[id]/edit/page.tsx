@@ -254,7 +254,8 @@ export default function EditorPage({ params }: { params: { id: string } }) {
                 </button>
                 <input
                   aria-label={t('commitMessage')}
-                  className="h-9 w-20 min-w-0 border border-os-rule-dark bg-os-black-1 px-2 text-xs text-os-paper placeholder:text-os-muted-dark sm:w-40 sm:px-3"
+                  className="h-9 w-20 min-w-0 border border-os-rule-dark bg-os-black-1 px-2 text-sm text-os-paper placeholder:text-os-muted-dark sm:w-40 sm:px-3"
+                  data-reading-role="control"
                   placeholder={t('commitMessage')}
                   value={commitMsg}
                   onChange={(event) => setCommitMsg(event.target.value)}

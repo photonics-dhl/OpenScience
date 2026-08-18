@@ -32,7 +32,7 @@ export function EvidenceIntake({ materials, onChange, onRetry }: {
     <section aria-labelledby="evidence-intake-title">
       <div className="flex items-end justify-between gap-5 border-b border-white/25 pb-4">
         <div>
-          <p className="text-[11px] uppercase tracking-[0.22em] text-[#ff7457]">02 / Evidence intake</p>
+          <p data-reading-role="caption" className="uppercase tracking-[0.1em] text-[#ff7457]">02 / Evidence intake</p>
           <h2 className="mt-2 font-display text-2xl" id="evidence-intake-title">{t('title')}</h2>
         </div>
         <p className="hidden max-w-sm text-right text-xs leading-5 text-white/45 sm:block">{t('localOnly')}</p>
@@ -47,7 +47,7 @@ export function EvidenceIntake({ materials, onChange, onRetry }: {
         <div>
           <p className="font-medium">{t('dropTitle')}</p>
           <p className="mt-2 text-xs leading-5 text-white/45">{t('formats')}</p>
-          <button className="mt-4 border-x-0 border-t-0 border-b border-[#ef4c2f] bg-transparent p-0 pb-1 text-xs font-semibold uppercase tracking-[0.14em] text-[#ff8065]" type="button" onClick={() => input.current?.click()}>{t('browse')}</button>
+          <button data-reading-role="control" className="mt-4 border-x-0 border-t-0 border-b border-[#ef4c2f] bg-transparent p-0 pb-1 text-sm font-semibold tracking-[0.04em] text-[#ff8065]" type="button" onClick={() => input.current?.click()}>{t('browse')}</button>
           <input ref={input} aria-label={t('browse')} className="sr-only" type="file" multiple accept={EVIDENCE_ACCEPT} onChange={(event) => add(Array.from(event.target.files ?? []))} />
         </div>
       </div>
@@ -60,7 +60,7 @@ export function EvidenceIntake({ materials, onChange, onRetry }: {
             onRetry={onRetry}
             onRoleChange={setRole}
           />
-          {materials.some(({ primary }) => primary) ? <button className="mt-4 border-0 bg-transparent p-0 text-xs text-white/45 hover:text-white" type="button" onClick={() => onChange(setPrimaryMaterial(materials, null))}>{t('clearPrimary')}</button> : null}
+          {materials.some(({ primary }) => primary) ? <button data-reading-role="control" className="mt-4 border-0 bg-transparent p-0 text-sm text-white/60 hover:text-white" type="button" onClick={() => onChange(setPrimaryMaterial(materials, null))}>{t('clearPrimary')}</button> : null}
         </div>
       ) : null}
     </section>

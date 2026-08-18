@@ -23,7 +23,7 @@ export function HermesRail({ tasks }: { tasks: HermesRailTask[] }) {
     <aside className="border-t border-os-rule-dark pt-5" aria-labelledby="hermes-task-title">
       <div className="flex items-end justify-between gap-4 border-b border-os-rule-dark pb-3">
         <div>
-          <p className="font-mono text-[0.68rem] uppercase tracking-[0.22em] text-os-vermilion">Hermes / live queue</p>
+          <p data-reading-role="caption" className="font-mono uppercase tracking-[0.1em] text-os-vermilion">Hermes / live queue</p>
           <h2 id="hermes-task-title" className="mt-2 text-xl font-medium text-os-paper">{t('hermes.title')}</h2>
         </div>
         <span className="font-mono text-xs tabular-nums text-os-muted-dark" aria-label={`${tasks.length}`}>{String(tasks.length).padStart(2, '0')}</span>
@@ -39,13 +39,13 @@ export function HermesRail({ tasks }: { tasks: HermesRailTask[] }) {
                 className="group grid grid-cols-[2.2rem_minmax(0,1fr)_auto] items-start gap-3 py-4 outline-none focus-visible:ring-2 focus-visible:ring-os-vermilion"
                 href={hermesTaskHref(task)}
               >
-                <span className="font-mono text-[0.68rem] text-os-muted-dark">{String(index + 1).padStart(2, '0')}</span>
+                <span data-reading-role="caption" className="font-mono text-os-muted-dark">{String(index + 1).padStart(2, '0')}</span>
                 <span className="min-w-0">
                   <span className="block truncate text-sm font-medium text-os-paper group-hover:text-os-vermilion">{task.researchTitle}</span>
-                  <span className="mt-1 block truncate font-mono text-[0.68rem] text-os-muted-dark">{task.logicalPath}</span>
+                  <span data-reading-role="caption" className="mt-1 block truncate font-mono text-os-muted-dark">{task.logicalPath}</span>
                   {task.error ? <span className="mt-1 block text-xs text-os-vermilion">{task.error}</span> : null}
                 </span>
-                <span className="font-mono text-[0.64rem] uppercase tracking-[0.12em] text-os-muted-dark">{task.state.replaceAll('_', ' ')}</span>
+                <span data-reading-role="caption" className="font-mono uppercase tracking-[0.06em] text-os-muted-dark">{task.state.replaceAll('_', ' ')}</span>
               </Link>
             </li>
           ))}

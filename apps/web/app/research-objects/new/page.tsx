@@ -173,15 +173,15 @@ export default function NewResearchObjectPage() {
     <main className="surface-dark min-h-screen bg-[#0b0b0a] text-[#f4f0e8]">
       <div className="mx-auto max-w-[92rem] px-5 pb-16 pt-6 sm:px-8 lg:px-12">
         <header className="flex items-center justify-between border-b border-white/20 pb-5">
-          <Link className="text-xs uppercase tracking-[0.16em] text-white/55 hover:text-white" href="/dashboard">← {t('back')}</Link>
-          <p className="text-[10px] uppercase tracking-[0.2em] text-white/35">OpenScience / Research Object</p>
+          <Link data-reading-role="control" className="text-sm tracking-[0.04em] text-white/70 hover:text-white" href="/dashboard">← {t('back')}</Link>
+          <p data-reading-role="caption" className="uppercase tracking-[0.12em] text-white/55">OpenScience / Research Object</p>
         </header>
 
         <div className="grid gap-12 pt-10 lg:grid-cols-[minmax(18rem,.55fr)_minmax(0,1.45fr)] lg:gap-20">
           <aside className="lg:sticky lg:top-10 lg:self-start">
-            <p className="text-[11px] uppercase tracking-[0.22em] text-[#ff7457]">01 / Research identity</p>
+            <p data-reading-role="caption" className="uppercase tracking-[0.12em] text-[#ff7457]">01 / Research identity</p>
             <h1 className="mt-5 max-w-xl font-display text-4xl leading-[.98] sm:text-6xl lg:text-[4.7rem]">{t('title')}</h1>
-            <p className="mt-6 max-w-md text-sm leading-7 text-white/52">{t('description')}</p>
+            <p data-reading-role="body" className="mt-6 max-w-md text-base leading-[var(--leading-body)] text-white/65">{t('description')}</p>
             <div className="mt-10 border-t border-white/20 pt-5 text-xs leading-6 text-white/45">
               <p>{intakeT('provenance')}</p>
               <p className="mt-3">{intakeT('consent')}</p>
@@ -190,17 +190,17 @@ export default function NewResearchObjectPage() {
 
           <form className="min-w-0" onSubmit={submit}>
             <section className="grid gap-6 border-b border-white/25 pb-10 sm:grid-cols-2">
-              <label className="grid gap-2 text-[11px] uppercase tracking-[0.14em] text-white/45">
+              <label data-reading-role="control" className="grid gap-2 text-sm font-medium tracking-[0.02em] text-white/70">
                 {t('workspace')}
-                <select className="min-h-12 border-0 border-b border-white/25 bg-transparent text-base normal-case tracking-normal text-white outline-none focus:border-[#ef4c2f]" value={workspaceId} onChange={(event) => setWorkspaceId(event.target.value)} required>
+                <select data-reading-role="reading" className="min-h-12 border-0 border-b border-white/25 bg-transparent text-[1.0625rem] normal-case tracking-normal text-white outline-none focus:border-[#ef4c2f]" value={workspaceId} onChange={(event) => setWorkspaceId(event.target.value)} required>
                   <option className="bg-[#11100f]" value="">{t('workspaceLoading')}</option>
                   {workspaces.map((workspace) => <option className="bg-[#11100f]" key={workspace.id} value={workspace.id}>{workspace.name}</option>)}
                 </select>
               </label>
-              <label className="grid gap-2 text-[11px] uppercase tracking-[0.14em] text-white/45">
+              <label data-reading-role="control" className="grid gap-2 text-sm font-medium tracking-[0.02em] text-white/70">
                 {t('researchTitle')}
                 <HermesAnchor actions={EXPLAIN_ONLY} id="ro-title">
-                  <input className="min-h-12 w-full border-0 border-b border-white/25 bg-transparent px-1 text-base normal-case tracking-normal text-white outline-none placeholder:text-white/25 focus:border-[#ef4c2f]" name="title" required maxLength={200} value={title} onChange={(event) => setTitle(event.target.value)} placeholder={intakeT('titlePlaceholder')} />
+                  <input data-reading-role="reading" className="min-h-12 w-full border-0 border-b border-white/25 bg-transparent px-1 text-[1.0625rem] normal-case tracking-normal text-white outline-none placeholder:text-white/40 focus:border-[#ef4c2f]" name="title" required maxLength={200} value={title} onChange={(event) => setTitle(event.target.value)} placeholder={intakeT('titlePlaceholder')} />
                 </HermesAnchor>
               </label>
             </section>
@@ -208,7 +208,7 @@ export default function NewResearchObjectPage() {
             {mode === 'import' ? <div className="pt-10"><HermesAnchor actions={EXPLAIN_ONLY} id="source-import"><EvidenceIntake materials={materials} onChange={setMaterials} onRetry={retry} /></HermesAnchor></div> : (
               <section className="border-b border-white/20 py-12">
                 <p className="font-display text-3xl">{intakeT('blankTitle')}</p>
-                <p className="mt-3 max-w-xl text-sm leading-6 text-white/50">{intakeT('blankBody')}</p>
+                <p data-reading-role="body" className="mt-3 max-w-xl text-base leading-[var(--leading-body)] text-white/65">{intakeT('blankBody')}</p>
               </section>
             )}
 
@@ -225,7 +225,7 @@ export default function NewResearchObjectPage() {
               <p className="max-w-xl text-xs leading-5 text-white/42">{mode === 'import' ? intakeT('submitNote') : intakeT('blankNote')}</p>
               <div className="flex gap-4">
                 {researchObjectId ? <Link className="min-h-12 px-5 py-3 text-xs uppercase tracking-[0.14em] text-white/60 hover:text-white" href={`/research-objects/${researchObjectId}/edit`}>{intakeT('openDraft')}</Link> : null}
-                {!batchId ? <button className="min-h-12 border-0 bg-[#ef4c2f] px-7 text-xs font-semibold uppercase tracking-[0.15em] text-white transition-colors hover:bg-[#ff6244] disabled:cursor-not-allowed disabled:opacity-45 motion-reduce:transition-none" disabled={pending || !workspaceId} type="submit">{pending ? t('creating') : researchObjectId ? intakeT('retryUpload') : t('create')}</button> : null}
+                {!batchId ? <button data-reading-role="control" className="min-h-12 border-0 bg-[#ef4c2f] px-7 text-sm font-semibold tracking-[0.04em] text-white transition-colors hover:bg-[#ff6244] disabled:cursor-not-allowed disabled:opacity-45 motion-reduce:transition-none" disabled={pending || !workspaceId} type="submit">{pending ? t('creating') : researchObjectId ? intakeT('retryUpload') : t('create')}</button> : null}
               </div>
             </footer>
           </form>

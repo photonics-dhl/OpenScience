@@ -17,9 +17,10 @@ export default function SiteHeader({ tone = 'dark' }: SiteHeaderProps) {
 
   return (
     <div className="flex items-center gap-1 sm:gap-3" data-navigation-tone={tone}>
-      <a href="/explore" className={linkClassName}>{t('nav.explore')}</a>
-      <a href="/research-objects/new" className={linkClassName}>{t('nav.create')}</a>
+      <a data-reading-role="control" href="/explore" className={linkClassName}>{t('nav.explore')}</a>
+      <a data-reading-role="control" href="/research-objects/new" className={linkClassName}>{t('nav.create')}</a>
       <a
+        data-reading-role="control"
         href="/auth/login"
         className={cn(
           'inline-flex min-h-10 items-center rounded-panel border px-3 text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring sm:px-4',

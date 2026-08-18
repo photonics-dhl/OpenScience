@@ -38,6 +38,7 @@ select,
 textarea {
   color: inherit;
   font: inherit;
+  font-size: var(--text-control);
 }
 
 button {
@@ -177,14 +178,14 @@ body {
 
 /* 大纲 */
 .pane-title {
-  font-size: 12px;
+  font-size: 14px;
   font-weight: 600;
   color: var(--color-muted);
   text-transform: uppercase;
   margin: 0 0 8px;
 }
 .pane-meta {
-  font-size: 12px;
+  font-size: 14px;
   color: var(--color-muted);
   margin: 0 0 10px;
 }
@@ -192,7 +193,7 @@ body {
   padding: 6px 8px;
   border-radius: 4px;
   cursor: pointer;
-  font-size: 13px;
+  font-size: 14px;
   color: var(--color-text);
 }
 .outline-item:hover {
@@ -208,7 +209,7 @@ body {
   margin-bottom: 16px;
 }
 .field-label {
-  font-size: 12px;
+  font-size: 14px;
   font-weight: 600;
   color: var(--color-muted);
   text-transform: uppercase;
@@ -220,7 +221,7 @@ body {
   border: 1px solid var(--color-border);
   border-radius: 6px;
   padding: 10px;
-  font-size: 14px;
+  font-size: 17px;
   line-height: 1.6;
   font-family: var(--font-sans);
   resize: vertical;
@@ -235,7 +236,7 @@ body {
   padding: 10px 14px;
   min-height: 120px;
   line-height: 1.7;
-  font-size: 14px;
+  font-size: 17px;
 }
 
 /* 按钮 */
@@ -244,7 +245,7 @@ body {
   border-radius: 6px;
   border: 1px solid var(--color-border);
   background: var(--color-panel);
-  font-size: 13px;
+  font-size: 14px;
   cursor: pointer;
 }
 .btn:hover {
@@ -271,7 +272,7 @@ body {
   background: var(--color-bg);
   border-radius: 4px;
   padding: 8px;
-  font-size: 12px;
+  font-size: 15px;
   margin: 8px 0;
 }
 .diff-before {
@@ -291,7 +292,7 @@ body {
 .version-item {
   padding: 6px 8px;
   border-radius: 4px;
-  font-size: 13px;
+  font-size: 14px;
   cursor: pointer;
 }
 .version-item:hover {
@@ -307,7 +308,7 @@ body {
   margin-top: 8px;
 }
 .artifact-item {
-  font-size: 13px;
+  font-size: 14px;
   padding: 4px 0;
   color: var(--color-muted);
 }
@@ -343,7 +344,7 @@ body {
   border-radius: 6px;
   padding: 12px;
   margin-bottom: 12px;
-  font-size: 13px;
+  font-size: 15px;
 }
 .error-actions {
   display: flex;
@@ -358,7 +359,7 @@ body {
   border-radius: 6px;
   padding: 10px 12px;
   margin-bottom: 12px;
-  font-size: 13px;
+  font-size: 15px;
   display: flex;
   align-items: center;
   gap: 12px;
@@ -1143,7 +1144,7 @@ body {
 .pub-rail-label {
   margin: 0;
   font-family: var(--font-data);
-  font-size: .68rem;
+  font-size: .75rem;
   line-height: 1.4;
   letter-spacing: .16em;
   text-transform: uppercase;
@@ -1156,7 +1157,7 @@ body {
   gap: .35rem 1rem;
   margin: 1rem 0;
   font-family: var(--font-ui);
-  font-size: .93rem;
+  font-size: 1rem;
 }
 
 .pub-license-line {
@@ -1166,7 +1167,7 @@ body {
   padding-top: 1rem;
   border-top: 1px solid var(--os-rule-paper);
   font-family: var(--font-data);
-  font-size: .72rem;
+  font-size: .875rem;
   line-height: 1.6;
   color: var(--os-muted-paper);
 }
@@ -1195,7 +1196,7 @@ body {
 .pub-reading-column h2 {
   margin: 0 0 1.5rem;
   font-family: var(--font-ui);
-  font-size: .78rem;
+  font-size: .875rem;
   letter-spacing: .14em;
   text-transform: uppercase;
 }
@@ -1211,7 +1212,7 @@ body {
 .pub-reading-sdf h3 {
   margin: 0;
   font-family: var(--font-data);
-  font-size: .7rem;
+  font-size: .875rem;
   font-weight: 500;
   letter-spacing: .1em;
   text-transform: uppercase;
@@ -1230,7 +1231,7 @@ body {
   top: 2rem;
   border-top: 1px solid var(--os-ink);
   font-family: var(--font-data);
-  font-size: .7rem;
+  font-size: .75rem;
   line-height: 1.55;
 }
 
@@ -1256,6 +1257,7 @@ body {
   border-radius: var(--radius-control);
   background: transparent;
   color: var(--os-ink);
+  font-size: var(--text-control);
 }
 .pub-reading-surface .copy-btn:hover { border-color: var(--os-ink); background: transparent; }
 
@@ -1265,7 +1267,7 @@ body {
   gap: 1rem;
   margin-top: 1.5rem;
   font-family: var(--font-data);
-  font-size: .68rem;
+  font-size: .75rem;
   color: var(--os-muted-paper);
 }
 
@@ -2036,6 +2038,26 @@ body {
   cursor: pointer;
 }
 
+/* Browser-verified semantic reading roles. These are intentionally explicit:
+   route-specific editorial selectors may change typeface, never legibility. */
+body [data-reading-role='caption'] {
+  font-size: var(--text-caption);
+}
+
+body [data-reading-role='control'] {
+  font-size: var(--text-control);
+}
+
+body [data-reading-role='body'] {
+  font-size: var(--text-body);
+  line-height: var(--leading-body);
+}
+
+body [data-reading-role='reading'] {
+  font-size: var(--text-reading);
+  line-height: var(--leading-reading);
+}
+
 .hermes-companion-actions button:hover,
 .hermes-companion-take-me:hover {
   border-color: rgb(241 238 231 / .5);
@@ -2075,7 +2097,7 @@ body {
   padding: .35rem .62rem;
   background: rgb(11 15 12 / .94);
   color: var(--os-paper, #f1eee7);
-  font-size: .72rem;
+  font-size: var(--text-control);
   line-height: 1;
   box-shadow: 0 6px 20px rgb(0 0 0 / .32);
   cursor: pointer;
@@ -2212,7 +2234,7 @@ body {
   padding: .25rem .65rem;
   color: #111713;
   font-family: var(--font-editorial-serif), Georgia, serif;
-  font-size: .68rem;
+  font-size: var(--text-control);
   line-height: 1.35;
   overflow: hidden;
   text-overflow: ellipsis;

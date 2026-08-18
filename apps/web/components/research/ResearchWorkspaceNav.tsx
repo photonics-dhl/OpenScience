@@ -24,8 +24,9 @@ export function ResearchWorkspaceNav({ active, objectId }: { active: Exclude<Pro
         <Link
           aria-current={active === id ? 'page' : undefined}
           className={active === id
-            ? 'flex min-h-11 items-center gap-2 border-b-2 border-os-vermilion px-3 font-data text-[10px] uppercase tracking-[0.1em] text-os-paper'
-            : 'flex min-h-11 items-center gap-2 border-b-2 border-transparent px-3 font-data text-[10px] uppercase tracking-[0.1em] text-os-muted-dark transition-colors hover:text-os-paper'}
+            ? 'flex min-h-11 items-center gap-2 border-b-2 border-os-vermilion px-3 font-data text-sm uppercase tracking-[0.06em] text-os-paper'
+            : 'flex min-h-11 items-center gap-2 border-b-2 border-transparent px-3 font-data text-sm uppercase tracking-[0.06em] text-os-muted-dark transition-colors hover:text-os-paper'}
+          data-reading-role="control"
           href={researchSurfaceHref(id, objectId)}
           key={id}
         >

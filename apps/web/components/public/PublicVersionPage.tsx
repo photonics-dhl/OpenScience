@@ -229,14 +229,14 @@ export function PublicReadingSurface({ research, activeTab = 'overview', onTabCh
             </div>
           </header>
 
-          <section className="pub-reading-insight" data-sdf-node="insight" data-sdf-state={version.core.insight ? 'confirmed' : 'empty'}>
+          <section className="pub-reading-insight" data-reading-role="body" data-sdf-node="insight" data-sdf-state={version.core.insight ? 'confirmed' : 'empty'}>
             <p className="pub-kicker">{t('insight')}</p>
             <p>{version.core.insight || t('none')}</p>
           </section>
 
           <section className="pub-reading-abstract" aria-labelledby="public-abstract-heading">
             <h2 id="public-abstract-heading">{t('abstract')}</h2>
-            <p>{version.core.problem || t('none')}</p>
+            <p data-reading-role="body">{version.core.problem || t('none')}</p>
           </section>
 
           <section className="pub-reading-sdf" aria-labelledby="public-sdf-heading">
@@ -244,7 +244,7 @@ export function PublicReadingSurface({ research, activeTab = 'overview', onTabCh
             {PUBLIC_SDF_NODES.filter(([key]) => key !== 'insight').map(([key, label]) => {
               const value = version.core[key];
               return <section key={key} data-sdf-node={key} data-sdf-state={value ? 'confirmed' : 'empty'}>
-                <h3>{t(label)}</h3><p>{value || t('none')}</p>
+                <h3>{t(label)}</h3><p data-reading-role="reading">{value || t('none')}</p>
               </section>;
             })}
           </section>

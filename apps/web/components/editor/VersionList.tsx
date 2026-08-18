@@ -42,7 +42,7 @@ export default function VersionList({
 
   return (
     <div>
-      <h3 className="m-0 border-b border-os-rule-dark pb-3 font-data text-[10px] uppercase tracking-[0.14em] text-os-muted-dark">{t('versions')}</h3>
+      <h3 data-reading-role="caption" className="m-0 border-b border-os-rule-dark pb-3 font-data uppercase tracking-[0.1em] text-os-muted-dark">{t('versions')}</h3>
       {shown.map((v) => (
         <button
           key={v.versionId}

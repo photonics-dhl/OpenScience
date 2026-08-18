@@ -17,7 +17,7 @@ export function ContinueResearch({ research }: ContinueResearchProps) {
   if (!research) {
     return (
       <section className="border-y border-os-rule-dark py-6 sm:py-8" aria-labelledby="continue-title">
-        <p className="font-mono text-[0.68rem] uppercase tracking-[0.22em] text-os-vermilion">00 / {t('continue.title')}</p>
+        <p data-reading-role="caption" className="font-mono uppercase tracking-[0.1em] text-os-vermilion">00 / {t('continue.title')}</p>
         <h2 id="continue-title" className="mt-5 max-w-2xl font-editorial text-3xl leading-tight text-os-paper sm:text-5xl">
           {t('continue.emptyTitle')}
         </h2>
@@ -38,13 +38,13 @@ export function ContinueResearch({ research }: ContinueResearchProps) {
       aria-labelledby="continue-title"
       data-continuation-priority="primary"
     >
-      <p className="font-mono text-[0.68rem] uppercase tracking-[0.22em] text-os-vermilion">
+      <p data-reading-role="caption" className="font-mono uppercase tracking-[0.1em] text-os-vermilion">
         00 / {t('continue.title')}
       </p>
       <h2 id="continue-title" className="mt-5 max-w-3xl font-editorial text-3xl leading-[1.04] text-os-paper transition-colors group-hover:text-white sm:text-5xl">
         {research.title}
       </h2>
-      <div className="mt-4 flex flex-wrap gap-x-5 gap-y-1 font-mono text-[0.7rem] uppercase tracking-[0.1em] text-os-muted-dark">
+      <div data-reading-role="caption" className="mt-4 flex flex-wrap gap-x-5 gap-y-1 font-mono uppercase tracking-[0.06em] text-os-muted-dark">
         <span>{research.publicId}</span>
         <span>{t('continue.version', { version: research.versionNo })}</span>
         {research.pendingCount > 0 ? (

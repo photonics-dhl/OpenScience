@@ -36,23 +36,23 @@ function BeforeAfterProposal({
 
   return (
     <article className="border-t border-os-rule-dark py-5" data-before-after-proposal="true" data-risk={risk}>
-      <div className="grid gap-2 font-data text-[10px] uppercase tracking-[0.12em] text-os-muted-dark sm:grid-cols-2">
+      <div data-reading-role="caption" className="grid gap-2 font-data uppercase tracking-[0.08em] text-os-muted-dark sm:grid-cols-2">
         <span data-proposal-source={source}>{t('proposalSource')} / {source}</span>
         <span className="sm:text-right" data-proposal-scope={scope}>{t('proposalScope')} / {scope}</span>
       </div>
       <div className="mt-4 grid gap-px bg-os-rule-dark sm:grid-cols-2">
         <div className="bg-os-black-1 p-4">
-          <span className="font-data text-[10px] uppercase tracking-[0.12em] text-os-muted-dark">{t('proposalBefore')}</span>
-          <p className="mb-0 mt-3 text-sm leading-6 text-os-muted-dark">{before || t('proposalEmpty')}</p>
+          <span data-reading-role="caption" className="font-data uppercase tracking-[0.08em] text-os-muted-dark">{t('proposalBefore')}</span>
+          <p data-reading-role="reading" className="mb-0 mt-3 text-[1.0625rem] leading-[var(--leading-reading)] text-os-muted-dark">{before || t('proposalEmpty')}</p>
         </div>
         <div className="bg-os-black-1 p-4">
-          <span className="font-data text-[10px] uppercase tracking-[0.12em] text-os-muted-dark">{t('proposalAfter')}</span>
-          <p className="mb-0 mt-3 text-sm leading-6 text-os-paper">{after}</p>
+          <span data-reading-role="caption" className="font-data uppercase tracking-[0.08em] text-os-muted-dark">{t('proposalAfter')}</span>
+          <p data-reading-role="reading" className="mb-0 mt-3 text-[1.0625rem] leading-[var(--leading-reading)] text-os-paper">{after}</p>
         </div>
       </div>
       {status === 'pending' ? (
         <div className="mt-4 flex justify-end gap-2">
-          {onDismiss && <button className="min-h-10 rounded-panel border border-os-rule-dark bg-transparent px-3 text-sm text-os-muted-dark" onClick={onDismiss}>{t('dismissSuggestion')}</button>}
+          {onDismiss && <button data-reading-role="control" className="min-h-10 rounded-panel border border-os-rule-dark bg-transparent px-3 text-sm text-os-muted-dark" onClick={onDismiss}>{t('dismissSuggestion')}</button>}
           {risk === 'high' ? (
             <Dialog.Root onOpenChange={setReviewing} open={reviewing}>
               <Dialog.Trigger asChild>

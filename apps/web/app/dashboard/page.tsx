@@ -73,7 +73,7 @@ export default function DashboardPage() {
     return (
       <main className="surface-workbench grid min-h-screen place-items-center px-4 text-os-paper">
         <section className="w-full max-w-xl border-y border-os-rule-dark py-10 text-center">
-          <p className="font-mono text-[0.68rem] uppercase tracking-[0.22em] text-os-vermilion">System / interrupted</p>
+          <p data-reading-role="caption" className="font-mono uppercase tracking-[0.12em] text-os-vermilion">System / interrupted</p>
           <h1 className="mt-4 font-editorial text-4xl">{t('errors.title')}</h1>
           <p role="alert" className="mt-3 text-sm text-os-muted-dark">{error}</p>
           <button className="mt-6 border-b border-os-vermilion pb-1 text-sm font-semibold text-os-paper hover:text-os-vermilion" type="button" onClick={() => window.location.reload()}>
@@ -97,10 +97,10 @@ export default function DashboardPage() {
       className="text-os-paper"
       headerActions={(
         <div className="ml-auto flex items-center justify-end gap-3">
-          <span className="hidden font-mono text-[0.68rem] uppercase tracking-[0.12em] text-os-muted-dark sm:inline">{user?.displayName}</span>
+          <span data-reading-role="caption" className="hidden font-mono uppercase tracking-[0.08em] text-os-muted-dark sm:inline">{user?.displayName}</span>
           <LocaleSwitcher locale={locale} />
-          <Link className="text-xs text-os-muted-dark hover:text-os-paper focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-os-vermilion" href="/settings">{t('context.settings')}</Link>
-          <Link className="text-xs text-os-muted-dark hover:text-os-paper focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-os-vermilion" href="/#about">{t('context.help')}</Link>
+          <Link data-reading-role="control" className="text-sm text-os-muted-dark hover:text-os-paper focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-os-vermilion" href="/settings">{t('context.settings')}</Link>
+          <Link data-reading-role="control" className="text-sm text-os-muted-dark hover:text-os-paper focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-os-vermilion" href="/#about">{t('context.help')}</Link>
         </div>
       )}
       navigationLabel={t('context.navigation')}
@@ -108,13 +108,13 @@ export default function DashboardPage() {
     >
       <div className="mx-auto grid max-w-screen-2xl gap-x-8 gap-y-10 lg:grid-cols-12">
         <header className="lg:col-span-12">
-          <p className="font-mono text-[0.68rem] uppercase tracking-[0.22em] text-os-muted-dark">
+          <p data-reading-role="caption" className="font-mono uppercase tracking-[0.12em] text-os-muted-dark">
             {t('eyebrow')}
           </p>
           <h1 className="mt-3 font-editorial text-4xl font-normal leading-none sm:text-6xl">
             {t('title')}
           </h1>
-          <p className="mt-4 max-w-2xl text-sm leading-6 text-os-muted-dark">
+          <p data-reading-role="body" className="mt-4 max-w-2xl text-base leading-[var(--leading-body)] text-os-muted-dark">
             {t('welcome', { name: user?.displayName ?? '' })}
           </p>
         </header>

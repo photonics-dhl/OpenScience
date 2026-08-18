@@ -50,7 +50,7 @@ export function ResearchIndex({ initialPage }: { initialPage?: ResearchIndexPage
             <select className="w-full appearance-none border-0 bg-transparent p-0 pr-7 text-sm text-os-ink shadow-none outline-none" value={field} onChange={(event) => setField(event.target.value)}>
               {FIELDS.map((value) => <option key={value} value={value}>{value ? t(`fields.${value}`) : t('allFields')}</option>)}
             </select>
-            <span aria-hidden="true" className="pointer-events-none absolute right-0 top-1/2 -translate-y-1/2 font-data text-[0.65rem] text-os-vermilion">↓</span>
+            <span aria-hidden="true" className="pointer-events-none absolute right-0 top-1/2 -translate-y-1/2 font-data text-xs text-os-vermilion">↓</span>
           </span>
         </label>
         <label className="border-b border-os-rule-paper pb-2">
@@ -59,7 +59,7 @@ export function ResearchIndex({ initialPage }: { initialPage?: ResearchIndexPage
             <select className="w-full appearance-none border-0 bg-transparent p-0 pr-7 text-sm text-os-ink shadow-none outline-none" value={artifactType} onChange={(event) => setArtifactType(event.target.value)}>
               {ARTIFACT_TYPES.map((value) => <option key={value} value={value}>{value ? t(`artifacts.${value}`) : t('allArtifacts')}</option>)}
             </select>
-            <span aria-hidden="true" className="pointer-events-none absolute right-0 top-1/2 -translate-y-1/2 font-data text-[0.65rem] text-os-vermilion">↓</span>
+            <span aria-hidden="true" className="pointer-events-none absolute right-0 top-1/2 -translate-y-1/2 font-data text-xs text-os-vermilion">↓</span>
           </span>
         </label>
         <button className="min-h-11 rounded-panel bg-os-ink px-5 text-sm font-semibold text-os-paper active:translate-y-px motion-reduce:transform-none" type="submit">{t('apply')}</button>

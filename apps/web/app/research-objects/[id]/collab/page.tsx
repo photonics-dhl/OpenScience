@@ -58,7 +58,7 @@ export default function CollabPage({ params }: { params: { id: string } }) {
   return (
     <ResearchSurfaceShell active="collaboration" object={object}>
       <div className="collab-page">
-      <header className="mb-8 border-b border-os-rule-dark pb-6"><p className="font-data text-[10px] uppercase tracking-[0.16em] text-os-vermilion">RO / {t('title')}</p><h1 className="mt-3 font-editorial text-5xl font-normal text-os-paper">{t('title')}</h1><p className="mt-4 max-w-2xl text-sm leading-6 text-os-muted-dark">{t('description')}</p></header>
+      <header className="mb-8 border-b border-os-rule-dark pb-6"><p data-reading-role="caption" className="font-data uppercase tracking-[0.1em] text-os-vermilion">RO / {t('title')}</p><h1 className="mt-3 font-editorial text-5xl font-normal text-os-paper">{t('title')}</h1><p data-reading-role="body" className="mt-4 max-w-2xl text-base leading-[var(--leading-body)] text-os-muted-dark">{t('description')}</p></header>
       {error && <div className="error-panel" role="alert">{error}</div>}
       <CollabTabs tab={state.tab} onChange={(tab) => dispatch({ type: 'set_tab', tab })} />
 
