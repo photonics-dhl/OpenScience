@@ -24,6 +24,14 @@ export default function HermesArticulationVisualRoute() {
       state,
     };
   };
+  const setRestFrame = (motionTimeMs: number) => {
+    inputRef.current = {
+      engaged: false,
+      motionTimeMs,
+      pointer: { x: 0, y: 0 },
+      state,
+    };
+  };
   const setAction = (action: HermesActionId) => {
     inputRef.current = {
       action,
@@ -39,7 +47,9 @@ export default function HermesArticulationVisualRoute() {
       <div className="mb-6 flex gap-3">
         <button type="button" onClick={() => setState('idle')}>Idle</button>
         <button type="button" onClick={() => setState('awaiting_approval')}>Approval</button>
-        <button type="button" onClick={() => setProbe(false)}>Freeze rest</button>
+        <button type="button" onClick={() => setRestFrame(9_000)}>Freeze rest</button>
+        <button type="button" onClick={() => setRestFrame(9_000)}>Breathing frame A</button>
+        <button type="button" onClick={() => setRestFrame(9_520)}>Breathing frame B</button>
         <button type="button" onClick={() => setAction('observe-left')}>Observe action</button>
         <button type="button" onClick={() => setAction('citation-trace')}>Citation action</button>
         <button type="button" onClick={() => setAction('stretch')}>Stretch action</button>
