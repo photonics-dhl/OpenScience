@@ -99,7 +99,9 @@ describe('document parser sidecar IPC', () => {
     try {
       const adapters = createParserJobAdapters(jobDir, 40);
       const pending = adapters.pdf!(Buffer.from('%PDF racing'));
-      await new Promise((resolve) => setTimeout(resolve, 10));
+      await expect.poll(async () => (
+        (await readdir(jobDir)).some((name) => name.endsWith('.request.json'))
+      ), { interval: 5, timeout: 1_000 }).toBe(true);
       const processing = processParserJobsOnce(jobDir, {
         pdf: async () => {
           await new Promise((resolve) => setTimeout(resolve, 60));
