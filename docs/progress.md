@@ -1,5 +1,12 @@
 # OpenScience (XGS) 进度日志
 
+## 2026-08-18（Hermes 透明命中区与 ECS 热修）— ✅ PR CI / main / ECS GREEN
+
+- **真实回归与修复**：PR 产品门禁在 `workspace / proposal-ready / mobile` 捕获 Hermes 288px 透明根按钮遮住 `AI Extract`。Stage 与根按钮现默认 pointer-through，仅真实 rig、常驻动效开关和 guide bubble 接收鼠标；角色本体点击、拖动、pointer-avoid 与键盘焦点保留。
+- **门禁诚实性**：旧 pointer 脚本已改为真实 rig 命中；Parser 取消竞态测试等待 request 实际发布而非固定 10ms；Hermes breathing 以 9000/9520ms 确定关节帧采样。远端 PR HEAD `a3d8a3f`，GitHub CI `32094257833` 用时 7m03s GREEN。
+- **本地与生产**：本地 `main` 应用 HEAD / ECS release 为 `1b76b46`，rollback `017bf1e`；Web `295/295`、产品 `27/27`、Hermes 聚合 `144.9s`、17-page build、typecheck、lint/docs-sync 均 GREEN。ECS 前后 checkup 健康，DB backup `384K / 7/7`，未迁移、未 seed。
+- **公网证据**：Stage/CSS 远端 SHA-256 与本地一致；直接加载公网构建的移动端 proposal-ready 用例 `1/1` GREEN。下一步仅为真实账号体验复验；高级 motion/sound/particle/proactive 设置仍属后续范围。
+
 ## 2026-08-18（版本收口与 active-memory 压缩）— ⏳ 本地 GREEN，待推送/合并/部署
 
 - **版本边界**：用户授权更新 PR #3、合并本地 `main` 并部署 ECS；当前功能分支候选为 `ee514aa` 加本轮 docs-sync commit，远端分支仍为 `0398838`，ECS 仍为 release/rollback `aa1c8af` / `c9df24d`。

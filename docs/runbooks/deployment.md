@@ -354,3 +354,19 @@ Current infrastructure uses pinned base/worker images with bind-mounted applicat
   return `401`. A public-domain production-browser matrix passed `6/6` for
   motion persistence, route continuity, creation/import guidance, selected
   SDF field guidance, callable Drawer and reduced-motion actions.
+
+### 5.9 Hermes form-clear hit area hotfix (2026-08-18)
+
+> Deployed release `1b76b46`; rollback `017bf1e`.
+
+- Hermes' transparent stage no longer intercepts Workspace form controls.
+  Pointer input is restricted to the visible rig, motion control, and guide
+  bubble; keyboard invocation, drag, pointer response, and guide actions remain.
+- PR head `a3d8a3f` passed GitHub CI run `32094257833`; local Web `295/295`,
+  product `27/27`, Hermes aggregate `144.9s`, typecheck, lint/docs-sync, and the
+  17-page build passed. No API, schema, permission, provider, or topology changed.
+- Pre/post checkup passed; DB backup returned `384K files=7/7`; dry-run preceded
+  `deploy.sh --confirm --skip-migrate 1b76b46`. No migration or seed ran.
+- Remote/local SHA-256 values match for Stage (`c2d44c43...835c6`) and CSS
+  (`a8aa0f86...5ab17`). The public-build mobile proposal-ready test passed
+  `1/1`, including the formerly blocked AI Extract click.
