@@ -8,7 +8,8 @@
 
 - [ ] 目标 release ref 已 CI 绿灯（lint/typecheck/unit/build）
 - [ ] 云上集成测试已全绿（`test:integration`，跑前全量 `build`）
-- [ ] `agent-worker` 解析服务已包含在生产 compose，且 parser 依赖可在服务器 release 目录解析
+- [ ] `document-parser` 隔离解析 sidecar 已包含在生产 compose，`agent-worker` 仅通过 128 MiB `parser-jobs` tmpfs 卷交换请求；sidecar 必须使用自包含镜像，且保持无宿主源码/Secret 挂载、无网络、只读 rootfs、非 root 与 512MB/64 PID 上限
+- [ ] Parser 镜像构建使用 host network + `127.0.0.1:7891` Squid 访问 apt/npm；这只作用于构建，运行时仍必须是 `network_mode:none`
 - [ ] `object-storage` 使用固定版本/摘要，仅在 `data_net`，`seaweed-data` 命名卷存在
 - [ ] `.env.prod` 已有 `S3_ACCESS_KEY`、`S3_SECRET_KEY`、`S3_BUCKET`；只检查变量名存在，不输出值
 - [ ] 巡检基线 `infra/scripts/checkup.sh` 无告警
@@ -42,7 +43,7 @@ ssh-run.sh "cd /opt/openscience && node scripts/seed-quota.mjs --confirm"   # P1
 
 生产栈数据库没有宿主端口映射，实际执行必须通过 API 容器，并从服务器 `.env.prod` 注入容器内 `DATABASE_URL`；`infra/scripts/deploy.sh` 已封装该路径。
 
-生产应用源码与构建产物以 bind mount 进入长期运行容器。`docker compose up -d` 在 Compose 配置未变化时不会切换 Node 进程，因此 `deploy.sh` 会在栈收敛后显式重启 `api web agent-worker`；PostgreSQL、Redis 与对象存储不在该重启集合中。禁止以仅同步文件或仅执行 `up -d` 作为发布完成证据，必须继续完成内部 live route 探针。
+生产 Web/API/Agent Worker 源码与构建产物以 bind mount 进入长期运行容器；`document-parser` 则是自包含镜像。`deploy.sh` 会先重建 Worker/Parser 镜像并单独等待 Parser healthy，再用 Compose `--wait` 收敛全栈；随后显式重启 bind-mounted `api web agent-worker`，并再次硬等待应用健康。PostgreSQL、Redis、对象存储和 Parser 不在该重启集合中。禁止以仅同步文件、仅执行 `up -d` 或忽略 HTTP 状态作为发布完成证据。
 
 ### 2.4 初始化生产对象存储（首次）
 
@@ -97,11 +98,11 @@ ssh-run.sh "systemctl restart openscience-api"
 ### 2.7 验证对象存储与 Hermes worker
 
 ```bash
-ssh-run.sh "cd /opt/openscience && docker compose --env-file /opt/openscience/.env.prod -f infra/compose/docker-compose.prod.yml ps api web agent-worker object-storage postgres redis"
+ssh-run.sh "cd /opt/openscience && docker compose --env-file /opt/openscience/.env.prod -f infra/compose/docker-compose.prod.yml ps api web agent-worker document-parser object-storage postgres redis"
 ssh-run.sh "cd /opt/openscience && docker compose --env-file /opt/openscience/.env.prod -f infra/compose/docker-compose.prod.yml logs --tail=100 agent-worker"
 ```
 
-预期：`object-storage` 与 API 为 `healthy`，`agent-worker` 为 `Up`；worker 日志出现启动行，不出现模块、Prisma、Redis 或 Storage 连接错误。
+预期：`object-storage`、API、Web、`agent-worker` 与 `document-parser` 均为 `healthy`；worker 日志出现启动行，不出现模块、Prisma、Redis、Storage 或 parser sidecar 连接错误。另以 `docker inspect` 确认 `document-parser` 的网络模式为 `none`、用户为 `node`、rootfs 只读、memory 为 512MB、PID 上限为 64，Mounts 中只有 `parser-jobs` 且 Config.Env 不含生产数据库、对象存储或 MiniMax Secret。
 
 ## 3. 回滚步骤
 
@@ -336,48 +337,55 @@ Current infrastructure uses pinned base/worker images with bind-mounted applicat
 
 #### Pre-deployment checks
 
-- Verify `apps/web/lib/optical-lab/asset-manifest.mjs` contains the complete
-  SHA-256 of each canonical PNG and that the versioned URL embeds its first 16
-  hexadecimal digits.
-- Run the focused cache contract, complete Web tests, typecheck, production
-  build, canonical lint, and docs gates.
-- Confirm `/`, `/api/*`, and canonical `/optical-lab/*.png` paths are absent
-  from the one-year immutable header rules.
+- Verify `apps/web/lib/optical-lab/asset-manifest.mjs` contains each canonical
+  PNG's complete SHA-256 and embeds its first 16 hexadecimal digits in the URL.
+- Run the cache contract, complete Web tests, typecheck, production build,
+  canonical lint, and docs gates.
+- Confirm dynamic HTML/API and canonical PNG paths are absent from immutable
+  header rules.
 
-#### Execution
+#### Execution and rollback
 
-1. Run the standard checkup and database backup even though this change has no
-   schema or data mutation.
+1. Run the standard checkup and database backup.
 2. Run the deployment dry-run, then `deploy.sh --confirm --skip-migrate`.
-3. Do not purge old hashed URLs. New content receives a different URL and old
-   cached bytes are harmless.
-
-#### Rollback
-
-- Redeploy the preceding release. Its HTML and WebGL bundle reference the prior
-  hashed URLs, which remain valid in Cloudflare and at the canonical source.
-- Do not rename or delete canonical PNG files during rollback.
+3. Do not purge old hashed URLs. A new digest publishes updated content at a
+   new URL; rollback HTML continues to reference the preceding valid URL.
 
 #### Verification
 
-- `curl -sSI` for each versioned PNG must return
-  `Cache-Control: public, max-age=31536000, immutable` and `200`.
-- The canonical PNG paths must not return `immutable`; `/` must remain
-  `private, no-cache, no-store`, and anonymous `/auth/me` must remain `401`.
-- A second public request should progress from `MISS`/`REVALIDATED` to `HIT`
-  with a non-zero `Age`; cache propagation is verified without purging.
+- Versioned PNGs return `200` and
+  `Cache-Control: public, max-age=31536000, immutable`.
+- Canonical paths are not immutable; `/` remains non-cacheable and anonymous
+  `/auth/me` remains `401`.
+- A second public request reaches Cloudflare `HIT` with non-zero `Age`.
 
 #### Deployment evidence
 
-- Pre/post checkup: Cloudflare Edge and loopback origin `200`, Tunnel HA `4`;
-  database backup `BACKUP_OK size=280K files=7/7`.
-- `deploy.sh --confirm --skip-migrate b93fa9d` completed the remote full build
-  and restarted Web/API/agent-worker; no migration or seed ran.
-- Both versioned PNGs progressed from `MISS` to `HIT`; observed `Age` values
-  were `13` and `12`, with the one-year immutable header intact.
-- Canonical compatibility paths remain non-immutable. Cloudflare currently
-  applies `max-age=14400` to them, but production HTML/WebGL references only
-  digest-versioned URLs, so updated bytes publish under a new URL immediately.
-- Public `/`, `/explore`, and the asset Lab return `200`; anonymous `/auth/me`
-  returns `401`; the public Landing desktop/mobile normal/reduced/idle/pointer
-  browser matrix exits `0`.
+- Release `b93fa9d` used `--skip-migrate`; backup and pre/post checkup passed.
+- Both versioned PNGs progressed from `MISS` to `HIT`, with observed `Age`
+  values `13` and `12`.
+- Public `/`, `/explore`, the asset Lab, and the Landing browser matrix passed.
+
+### 5.9 Hermes real-page motion and field guidance deployment (2026-08-17)
+
+> Deployed release `aa1c8af`; rollback `c9df24d`.
+
+- The release persists an explicit Hermes full/reduced motion choice, exposes
+  an accessible enable-motion control, keeps a real Assistant Drawer on RO
+  creation/edit routes, and advances semantic guidance from title to import
+  and the selected SDF field. No schema, migration, seed, provider prompt,
+  permission, Nginx or Secret contract changed.
+- Pre-deploy checkup passed and the database backup returned
+  `BACKUP_OK size=376K files=7/7`. Dry-run preceded
+  `deploy.sh --confirm --skip-migrate`; no migration or seed ran.
+- The local deployment invocation reached its 604-second client ceiling near
+  the final restart, so completion was established independently rather than
+  inferred: the remote Stage SHA-256 `febedc9d144596f9624fa8cf3646d95938195ca980385f37dd4afb59b6b07219`
+  matches the release, Web/API/Worker were freshly restarted, Parser and data
+  services are healthy, and recent critical-error counts are zero.
+- Parser isolation remains `network=none`, `user=node`, read-only rootfs,
+  `512MiB`, `64` PIDs, with only `parser-jobs` mounted. Public `/` and
+  `/api/explore` return `200`; anonymous `/api/workspaces` and `/auth/me`
+  return `401`. A public-domain production-browser matrix passed `6/6` for
+  motion persistence, route continuity, creation/import guidance, selected
+  SDF field guidance, callable Drawer and reduced-motion actions.

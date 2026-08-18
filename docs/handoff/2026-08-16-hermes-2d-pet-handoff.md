@@ -1,31 +1,38 @@
-# Handoff — 2026-08-16 Hermes 2.5D 星图宠物
+# Handoff — 2026-08-17 Hermes Workspace Companion
 
 ## Current truth
 
-- 当前唯一 Hermes 视觉候选是分支 `codex/hermes-2d-pet`、提交 `a5a8446` 的 2.5D 星图宠物；旧 3D 学者机器人和 Blender 星图龙均已被用户判定 NO-GO，不得按旧计划继续。
-- 形象为暖纸书页质感的少年星图龙：紧凑 S 形轮廓、深墨证据脊、六个 SDF 证据节点、额外头顶 Hermes 核心与朱砂引用尾。它不是通用机器人、摄像头、Live2D/Wanko 或 3D 模型。
-- 本轮只完成 Personal Workspace / Dashboard 的轻量候选；未部署 ECS，未修改 Hermes 权限、配额、工具或任务状态模型。
+- 当前唯一设计/执行入口是 `docs/specs/2026-08-17-hermes-workspace-companion-motion-design.md` 与 `docs/plans/2026-08-17-hermes-workspace-companion-motion-plan.md`。旧 3D、Live2D、整图 PNG/CSS-signal 与 2026-08-16 mesh/contextual 路线均为 DEPRECATED/NO-GO。
+- 产品形象与技术路线已经确定，当前处于实现/生产验收阶段，不得重新讨论路线。运行事实源是 `action-catalog.ts`、`behavior-director.ts`、`motion-mixer.ts`、`pet-motion.ts` 与 `HermesWorkspaceStage.tsx`。
+- 2026-08-18 候选已修复 Windows 系统设置隐藏 WebGL canvas 的根因：首次默认 full，常驻 full/reduced 控制，偏好跨路由/刷新保存；审批与主动 reduced 同帧静止。
+- 用户已授权：更新 PR、合并本地 `main`、优化 docs-sync，并部署 ECS。禁止本机 Docker；生产事实只认 ECS 与公网验收。
 
-## Implementation
+## Workspace Companion candidate
 
-- `HermesPetPortrait.tsx` 使用三张 824×824 原生 RGBA PNG；idle、blink、working 共享完全相同的 Alpha 摘要，blink 只替换眼区，working 只增加节点光。
-- `HermesVisualAdapter` 继续拥有真实 task deep link、六状态和 pointer；位移向量不超过 6px，倾角不超过 2deg，离开回中。
-- CSS 提供 idle 呼吸/漂浮/眨眼、guiding/suggesting 节点脉冲、scanning working/扫描线、approval/failed 单一朱砂信号；reduced-motion 与 approval 静止，failed 不抖动。
-- 当前活动帧未加载或失败时 SVG fallback 保持可见；E2E 通过人工触发 working error 证明 scanning 不会空白。
+- 单一 Workspace stage/canvas owner；27-action 确定优先级、独立关节与 whole-character presentation layer；用户停靠优先于自动航行。
+- 创建/编辑页有真实 Drawer 与语义锚点：title→source import、选中 SDF 字段→Explain/Draft/Check；建议只在显式 Apply 后改 SDF。
+- 本地候选证据：motion `16/16`、自包含单 worker 浏览器 `18/18`、Web `295/295`、17-page build、聚合 release `144.7s` exit 0；完整指标见 `docs/progress.md` 最新条目。
+- 未完成边界：高级 Quiet/Balanced/Active、sound/particle/proactive 设置 UI，以及两信号主动提示/cooldown 的完整矩阵。
 
-## Evidence
+## Version tuple
 
-- 三张 RGBA PNG 合计 1,472,269B，尺寸 824×824，Alpha 摘要一致。
-- focused Vitest 5/5、完整 Web 245/245、Web typecheck、production build 和外部单服务 Playwright 2/2 GREEN。
-- 桌面六态、390px、reduced、指针边界/回中、工作帧失败 fallback、主内容/溢出/console error 均已覆盖；独立复审 APPROVE，无 Critical/Important。
+- Branch: `codex/hermes-2d-pet`
+- Feature commit: `ee514aa`; current branch HEAD is the succeeding docs-sync commit (`git rev-parse HEAD` is authoritative)
+- Remote branch before push: `0398838`
+- ECS release / rollback: `aa1c8af` / `c9df24d`
+- PR: `https://github.com/photonics-dhl/OpenScience/pull/3`
+
+## Constraints and open risks
+
+- 不读取/记录 `.env`、Secret 或真实用户内容；部署不迁移、不 seed。
+- 真实论文链的 per-field accept/edit/reject、完整 six-field gold rubric 与独立 persisted-audit 查询仍未完成，不得写成 Hermes 全面完成。
+- ECS Parser 必须保持 `network=none`、非 root、只读 rootfs、512MiB/64 PID 与 bounded IPC；本轮前端/docs 更新不得改变该边界。
+- 本地 `main` 有用户自有未跟踪设计资产；合并不得删除、移动或提交它们。
 
 ## Next action
 
-1. 用户只判断最终 Workspace 视觉是否达到品牌要求。
-2. 若用户批准，再单独决定是否合并与部署；不要把自动化 GREEN 当作审美批准。
-3. 若用户否决，只迭代 2.5D 母版/呈现，不恢复旧程序化 3D，除非用户明确改变路线。
+1. 完成 docs-sync 门禁与文档压缩，提交并推送 `codex/hermes-2d-pet`，更新 PR #3。
+2. 合并到本地 `main`，保护用户未跟踪资产；验证合并结果。
+3. 按 `docs/runbooks/deployment.md` 执行 checkup、DB backup、dry-run、`--confirm --skip-migrate`，再验证容器、版本哈希与公网行为。
 
-## Mandatory startup route
-
-`AGENTS.md` → `git worktree list --porcelain` → 本 handoff → 分支
-`codex/hermes-2d-pet` 的置顶 `docs/progress.md`。禁止从旧 3D spec 猜测任务。
+Read first：`AGENTS.md` → 本 handoff → CURRENT spec/plan → `docs/progress.md` first 80 lines → `project_index.md` 相关 CURRENT 行。

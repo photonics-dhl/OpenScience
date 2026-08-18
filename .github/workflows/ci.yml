@@ -53,6 +53,9 @@ jobs:
       - name: Product visual release gate
         run: npx pnpm@9.15.0 --filter @openscience/web test:release
 
+      - name: Hermes Workspace Companion release gate
+        run: npx pnpm@9.15.0 --filter @openscience/web test:hermes-companion-release
+
       - name: Upload visual release evidence
         if: always()
         uses: actions/upload-artifact@v4

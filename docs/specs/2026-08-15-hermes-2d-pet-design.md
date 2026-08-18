@@ -1,10 +1,10 @@
-# Hermes 2.5D 星图宠物设计
+# Hermes 2.5D 星图宠物设计（视觉 NO-GO）
 
 ## 状态
 
-Implemented on branch `codex/hermes-2d-pet`; engineering review is complete and
-user Workspace visual approval is pending. This is the only active Hermes
-visual candidate.
+**DEPRECATED / VISUAL NO-GO on 2026-08-16 → 见 `docs/specs/2026-08-16-hermes-articulated-mesh-pet-design.md`.**
+
+本方案的三张原创 PNG 仍可作为新 renderer 的纹理与失败 fallback；但“整张 PNG + 不含角色像素的 CSS signal”已经被用户判定为死气的图片，不得再作为 CURRENT renderer、生命感完成证据或实施入口。
 
 ## 目标
 
@@ -19,7 +19,7 @@ visual candidate.
 
 ## 原创资产
 
-候选分支 `codex/hermes-2d-pet` 在 `apps/web/public/hermes/pet/` 保存三张透明 RGBA PNG：
+在 `apps/web/public/hermes/pet/` 保存三张透明 RGBA PNG：
 
 1. `hermes-pet-idle.png`：睁眼、放松、三分之四视角的 canonical 母版。
 2. `hermes-pet-blink.png`：与母版轮廓、光照和画幅严格一致，仅闭眼。
@@ -39,6 +39,21 @@ visual candidate.
 
 不引入 Canvas、WebGL、Three.js、Cubism 或新的运行时依赖。图片用原生 `img`，避免 Next Image 在透明状态叠层中的布局和解码差异。
 
+### 生命感增量
+
+单张母版不得只做整体漂浮，也不得为了局部运动重复曝光同一角色像素。运行时只显示
+一张 active frame；head、body、tail 由三个不含角色位图的 CSS 生命信号补充观察光、
+呼吸晕和引用尾回弹，避免重影、切片露缝和额外解码。
+
+- 待机：body 呼吸，head 以不同周期轻微观察/回正，页冠偶发轻颤，tail 做克制的引用叶回弹；周期不得同步。
+- 指针：整个 Hermes 面板都是感应区。head signal 在 120ms 内朝指针移动，body signal 以约 240ms 跟随，tail signal 以约 420ms 反向回弹；三个实际可见 signal 不得拥有相同 transform。
+- 状态：scanning 保留 working frame 和证据扫描；guiding/suggesting 增强节点级联；approval、failed 与 reduced-motion 不使用游戏式抖动。
+- 边界：head 局部附加位移不超过 9px/3deg，body 不超过 5px/1.5deg，tail 不超过 4px/3deg；整角色既有 6px/2deg 上界保持。
+
+生命感的浏览器验收必须读取同一页面中至少两个时间点与一次真实 pointer
+事件，证明 head/body/tail signal 的 computed transform 分离；还必须证明 responsive
+切换到 still 时 signal 的 transition 与 transform 同帧清零。仅断言 CSS 动画名称不算通过。
+
 ## 状态映射
 
 - `idle`：母版缓慢呼吸、漂浮和周期眨眼。
@@ -53,7 +68,7 @@ visual candidate.
 
 - 角色图片 `alt=""`，状态含义继续由可读文本提供。
 - `prefers-reduced-motion: reduce` 时禁用呼吸、漂浮、眨眼、节点脉冲和指针倾身。
-- 三张 PNG 总传输预算不超过 1.5MB；单张画幅固定 824×824，非透明覆盖率 12%–72%。
+- 三张 PNG 总传输预算不超过 1.5MB；单张画幅固定 824×824（对应当前 256px 展示仍超过 3× 像素密度），非透明覆盖率 12%–72%。实现时 832px 三帧的首次 RED 为 1,511,539B，因而保持预算不变并从生成母版一次归一到 824px；这不是降低视觉门槛。
 - blink/working 与 idle 的 Alpha 摘要必须完全一致，状态切换不得移动角色外轮廓。
 - 同一页面只允许一个 `data-hermes-instance="single"`。
 - 图片缺失时保留现有文本、链接与静态 SVG fallback，不产生空白操作区。

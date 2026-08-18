@@ -1,0 +1,11 @@
+.git
+.env
+.env.*
+**/.env
+**/.env.*
+node_modules
+**/node_modules
+test
+**/test/visual/out
+.next
+**/.next

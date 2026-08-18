@@ -124,10 +124,16 @@ services:
     build:
       context: ../..
       dockerfile: apps/agent-worker/Dockerfile
+      network: host
+      args:
+        HTTP_PROXY: http://127.0.0.1:7891
+        HTTPS_PROXY: http://127.0.0.1:7891
+        NO_PROXY: localhost,127.0.0.1
     image: openscience-agent-worker:2026-08-10
     working_dir: /opt/openscience/apps/agent-worker
     volumes:
       - /opt/openscience:/opt/openscience
+      - parser-jobs:/parser-jobs
     command: ["node", "dist/index.js"]
     env_file:
       - /opt/openscience/.env.prod
@@ -139,6 +145,7 @@ services:
       TESSERACT_LANGS: eng+chi_sim
       CLAMAV_HOST: malware-scanner
       CLAMAV_PORT: "3310"
+      PARSER_JOB_DIR: /parser-jobs
     depends_on:
       postgres:
         condition: service_healthy
@@ -148,9 +155,55 @@ services:
         condition: service_healthy
       malware-scanner:
         condition: service_healthy
+      document-parser:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "kill -0 1"]
+      interval: 10s
+      timeout: 3s
+      retries: 6
+      start_period: 10s
     networks:
       - app_net
       - data_net
+    restart: unless-stopped
+
+  document-parser:
+    # Hostile binary parsing is isolated from production secrets and all networks.
+    build:
+      context: ../..
+      dockerfile: apps/agent-worker/Dockerfile.parser
+      network: host
+      args:
+        HTTP_PROXY: http://127.0.0.1:7891
+        HTTPS_PROXY: http://127.0.0.1:7891
+        NO_PROXY: localhost,127.0.0.1
+    image: openscience-document-parser:2026-08-17
+    working_dir: /app
+    volumes:
+      - parser-jobs:/parser-jobs
+    command: ["node", "dist/parser-service.js"]
+    environment:
+      NODE_ENV: production
+      PARSER_JOB_DIR: /parser-jobs
+      TESSERACT_LANGS: eng+chi_sim
+    network_mode: none
+    user: node
+    read_only: true
+    tmpfs:
+      - /tmp:size=64m,noexec,nosuid,nodev
+    mem_limit: 512m
+    pids_limit: 64
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    healthcheck:
+      test: ["CMD-SHELL", "find /parser-jobs/.ready -mmin -1 -print -quit 2>/dev/null | grep -q ."]
+      interval: 10s
+      timeout: 3s
+      retries: 12
+      start_period: 20s
     restart: unless-stopped
 
   web:
@@ -183,4 +236,10 @@ volumes:
   postgres-data:
   redis-data:
   seaweed-data:
+  parser-jobs:
+    driver: local
+    driver_opts:
+      type: tmpfs
+      device: tmpfs
+      o: size=128m,uid=1000,gid=1000,mode=0770
   clamav-data:

@@ -16,6 +16,12 @@ export async function scanFile(content: Buffer | Readable): Promise<ScanResult> 
   if (buf.includes(Buffer.from('X5O!P%@AP[4\\PZX54(P^)7CC)7}$EICAR-STANDARD-ANTIVIRUS-TEST-FILE!$H+H*'))) {
     return { safe: false, threat: 'eicar-test-signature' };
   }
-  if (buf.includes(Buffer.from('../')) || buf.includes(Buffer.from('..\\'))) return { safe: false, threat: 'archive-path-traversal' };
+  const zipSignature = buf.subarray(0, 4);
+  const isZipContainer = zipSignature.equals(Buffer.from([0x50, 0x4b, 0x03, 0x04]))
+    || zipSignature.equals(Buffer.from([0x50, 0x4b, 0x05, 0x06]))
+    || zipSignature.equals(Buffer.from([0x50, 0x4b, 0x07, 0x08]));
+  if (isZipContainer && (buf.includes(Buffer.from('../')) || buf.includes(Buffer.from('..\\')))) {
+    return { safe: false, threat: 'archive-path-traversal' };
+  }
   return { safe: true };
 }

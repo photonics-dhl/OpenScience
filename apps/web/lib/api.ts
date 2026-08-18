@@ -743,6 +743,51 @@ export interface AgentTaskView {
   updatedAt: string;
 }
 
+export interface WorkspaceGuidePayload {
+  goal: string;
+  locale: 'zh' | 'en';
+  route: 'dashboard' | 'research-object-new' | 'research-object-edit';
+  target: 'ro-title' | 'source-import' | 'research-question' | 'sdf-problem' | 'sdf-insight' | 'sdf-method' | 'sdf-evidence' | 'sdf-results' | 'sdf-limitations' | 'hermes-diff' | 'commit' | null;
+  context: {
+    tasks: Array<{ id: string; researchObjectId: string; state: string }>;
+    researchObjects: Array<{ id: string; title: string; status: string }>;
+  };
+}
+
+export interface WorkspaceGuideResult {
+  summary: string;
+  nextSteps: Array<{
+    label: string;
+    intent: 'open-task' | 'open-ro' | 'start-import';
+    targetId?: string;
+  }>;
+  needsMoreInformation: boolean;
+}
+
+export async function createWorkspaceGuideSession(title: string, idempotencyKey: string): Promise<{ session: { id: string } }> {
+  return request('/api/agent/sessions', {
+    method: 'POST',
+    headers: { 'Idempotency-Key': idempotencyKey },
+    body: JSON.stringify({ kind: 'workspace.guide', title: title.slice(0, 200) }),
+  });
+}
+
+export async function listAgentTasks(): Promise<{ tasks: AgentTaskView[] }> {
+  return request('/api/agent/tasks?actionable=false&kind=workspace.guide');
+}
+
+export async function submitWorkspaceGuideTask(input: {
+  sessionId: string;
+  payload: WorkspaceGuidePayload;
+  idempotencyKey: string;
+}): Promise<{ task: AgentTaskView }> {
+  return request('/api/agent/tasks', {
+    method: 'POST',
+    headers: { 'Idempotency-Key': input.idempotencyKey },
+    body: JSON.stringify({ sessionId: input.sessionId, kind: 'workspace.guide', payload: input.payload }),
+  });
+}
+
 /** 建 Hermes 会话 + 提交 sdf.extract 任务（§9.3 异步 + §16 幂等）。 */
 export async function submitExtractTask(roId: string, manuscriptText: string): Promise<{ task: AgentTaskView }> {
   const session = await request<{ session: { id: string } }>('/api/agent/sessions', {

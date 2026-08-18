@@ -35,4 +35,10 @@ describe('product visual release manifest', () => {
     expect(workflow).toContain('playwright install --with-deps chromium');
     expect(workflow).toContain('actions/upload-artifact');
   });
+
+  it('allows the pinned real-paper upload to finish over the production edge', () => {
+    const productionGate = readFileSync(new URL('./visual/hermes-real-ro-production-gate.mjs', import.meta.url), 'utf8');
+    expect(productionGate).toContain('{ timeout: 300_000 }');
+    expect(productionGate).toContain('const deadline = Date.now() + 300_000');
+  });
 });

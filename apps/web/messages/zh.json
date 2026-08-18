@@ -497,7 +497,31 @@
       "review": "核对证据",
       "retry": "重试任务",
       "view": "查看进度",
-      "progress": "{current}/{total} 个字段"
+      "progress": "{current}/{total} 个字段",
+      "guide": {
+        "actionable": { "title": "有一项研究任务可以继续", "body": "我会从当前优先级最高的任务开始，帮你判断下一步。" },
+        "review": { "title": "有证据等待你确认", "body": "当前任务已明确标记为待审核。我们可以从证据确认开始。" },
+        "failed": { "title": "有一项任务需要排查", "body": "当前任务未能完成。我可以先解释失败信息，再给出安全的恢复路径。" },
+        "processing": { "title": "Hermes 正在整理材料", "body": "当前任务仍在处理中。我可以说明进度，并帮你准备完成后的检查步骤。" },
+        "queued": { "title": "研究任务已进入队列", "body": "任务尚未开始处理。我可以先帮你安排接下来的研究步骤。" },
+        "continue": { "title": "继续最近的研究", "body": "我可以围绕现有研究对象梳理下一步，不会改动未经你确认的内容。" },
+        "neutral": { "title": "告诉我今天想推进什么", "body": "我会先理解目标，再给出可核查、可执行的研究路径。" },
+      "invoke": "唤起 Hermes",
+      "eyebrow": "Hermes / 情境引导员",
+      "dialogLabel": "Hermes 科研引导员",
+        "title": "从目标开始，我来带路。",
+        "close": "关闭 Hermes",
+        "openContext": "打开当前任务",
+        "goalLabel": "你今天想推进什么？",
+        "goalPlaceholder": "例如：整理刚导入的论文，建立一份可复用的 RO 结构",
+        "submit": "请 Hermes 规划",
+      "working": "Hermes 正在组织证据…",
+      "progress": "任务进度 {progress}%",
+      "resume": "继续查询这个任务",
+      "result": "建议的研究路径",
+      "needsMoreInformation": "我还需要你补充一点信息，再继续给出可靠建议。",
+      "error": "Hermes 暂时无法完成这次规划。你的目标仍保留，可以重试。"
+      }
     },
     "research": {
       "title": "你的研究",
@@ -714,6 +738,41 @@
     "schedule": "立即排期",
     "publish": "发布精选",
     "error": "暂时无法读取策展队列。"
+  },
+  "hermesCompanion": {
+    "dismiss": "关闭 Hermes 引导",
+    "explain": "解释",
+    "draft": "草拟",
+    "check": "检查",
+    "enableMotion": "开启 Hermes 动效",
+    "disableMotion": "关闭 Hermes 动效",
+    "takeMeThere": "带我过去",
+    "targets": {
+      "ro-title": "先给研究对象一个准确标题。",
+      "source-import": "把原始证据带到这里。",
+      "research-question": "写清这项研究要回答的问题。",
+      "sdf-problem": "先界定研究问题。",
+      "sdf-insight": "提炼最核心的洞见。",
+      "sdf-method": "说明方法与适用边界。",
+      "sdf-evidence": "记录证据与可复现性。",
+      "sdf-results": "凝练研究结果。",
+      "sdf-limitations": "坦诚写明局限。",
+      "hermes-diff": "逐项审阅建议改动。",
+      "commit": "只提交你确认的内容。"
+    },
+    "details": {
+      "ro-title": "用研究对象、方法或范围命名，避免“关于……的研究”这类空泛标题。",
+      "source-import": "上传承载论断的论文、数据或代码；Hermes 只依据你有权使用的材料提出建议。",
+      "research-question": "把对象、未知量和判断边界写进一个可回答的问题。",
+      "sdf-problem": "说明研究对象、现有缺口，以及为什么这个缺口值得解决。",
+      "sdf-insight": "用一句可检验的核心论断，并指出它由哪类证据支持。",
+      "sdf-method": "写清步骤、关键参数、适用条件和失效边界。",
+      "sdf-evidence": "列出复现实验所需的数据、代码、环境和操作条件。",
+      "sdf-results": "优先写量化结果、比较基线与不确定性，不把推测写成结论。",
+      "sdf-limitations": "明确样本、方法、外推范围与尚未验证的部分。",
+      "hermes-diff": "逐项核对证据与措辞；只有你接受的差异才会写入。",
+      "commit": "确认版本说明和变更范围后再提交，已发布版本不会被原地改写。"
+    }
   },
   "opticalLab": {
     "eyebrow": "光学实验室 / 非生产对照",

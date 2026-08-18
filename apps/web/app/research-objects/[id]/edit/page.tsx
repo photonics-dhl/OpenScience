@@ -8,6 +8,8 @@ import CoreEditor from '../../../../components/editor/CoreEditor';
 import SuggestionsPanel from '../../../../components/editor/SuggestionsPanel';
 import ArtifactUploader from '../../../../components/editor/ArtifactUploader';
 import { ObjectHeader } from '../../../../components/research/ObjectHeader';
+import { HermesAnchor } from '../../../../components/hermes/HermesAnchor';
+import { HermesDraftDiff, type HermesDraftTarget } from '../../../../components/hermes/HermesDraftDiff';
 import {
   createCommit,
   getAgentTask,
@@ -34,6 +36,8 @@ import {
 } from '../../../../lib/suggestions';
 
 type FieldKey = keyof Omit<SdfCore, 'schemaVersion'>;
+
+const HERMES_DIFF_SIDES: Array<'left' | 'top'> = ['left', 'top'];
 
 interface VersionRow {
   versionId: string;
@@ -225,6 +229,18 @@ export default function EditorPage({ params }: { params: { id: string } }) {
   }
 
   const saveState = saveError ? 'error' : saving ? 'saving' : state.dirty ? 'dirty' : 'saved';
+  const fieldForTarget: Record<HermesDraftTarget, FieldKey> = {
+    'sdf-problem': 'problem',
+    'sdf-insight': 'insight',
+    'sdf-method': 'method',
+    'sdf-evidence': 'reproducibility',
+    'sdf-results': 'results',
+    'sdf-limitations': 'limitations',
+  };
+  const revealDiff = (target: HermesDraftTarget) => {
+    setActiveField(fieldForTarget[target]);
+    document.querySelector('[data-hermes-anchor="hermes-diff"]')?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  };
 
   return (
     <EditorLayout
@@ -264,6 +280,11 @@ export default function EditorPage({ params }: { params: { id: string } }) {
         }
         main={
           <>
+            <HermesDraftDiff
+              disabled={extracting}
+              onCheck={revealDiff}
+              onDraft={(target) => { revealDiff(target); void handleExtract(); }}
+            />
             {draftPrompt && (
               <div className="mb-5 flex flex-wrap items-center gap-3 border-y border-os-rule-dark py-3 text-sm text-os-paper">
                 <span>{t('draftFound')}</span>
@@ -282,14 +303,16 @@ export default function EditorPage({ params }: { params: { id: string } }) {
           </>
         }
         aside={
-          <SuggestionsPanel
-            suggestions={suggestions}
-            onApply={applySuggestion}
-            onDismiss={dismissSuggestion}
-            onExtract={handleExtract}
-            extracting={extracting}
-            extractProgress={extractProgress}
-          />
+          <HermesAnchor id="hermes-diff" sides={HERMES_DIFF_SIDES}>
+            <SuggestionsPanel
+              suggestions={suggestions}
+              onApply={applySuggestion}
+              onDismiss={dismissSuggestion}
+              onExtract={handleExtract}
+              extracting={extracting}
+              extractProgress={extractProgress}
+            />
+          </HermesAnchor>
         }
       />
   );

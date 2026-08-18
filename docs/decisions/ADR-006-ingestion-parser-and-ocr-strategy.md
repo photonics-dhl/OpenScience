@@ -12,16 +12,17 @@
 ## Decision
 
 1. 文本格式（Markdown/TeX）使用确定性 UTF-8 解码。
-2. PDF 使用 `pdf-parse` 受控 adapter；DOCX 使用 Mammoth raw-text adapter。解析输入限制为 20 MiB，异常或空正文进入 `needs_review`。
+2. PDF 使用 `pdf-parse` 受控 adapter；DOCX 使用 Mammoth raw-text adapter。解析输入限制为 50 MiB；超限永久阻断，限内异常或空正文进入 `needs_review`。
 3. 图片 OCR 采用分层策略：
    - 第一层：服务器本地 OCR 引擎（优先 PaddleOCR/兼容 HTTP worker，模型和语言包固定在镜像中）；
    - 第二层：可插拔 Tesseract 适配器，用于本地轻量部署；
    - 第三层：MiniMax 视觉模型 fallback，仅在前两层不可用且用户已同意外部 AI 处理时调用。
 4. OCR 必须通过接口注入，记录引擎、模型版本、语言、置信度摘要和是否使用外部服务；不记录图片原文或密钥。
 5. `any2pdf` 不进入 ingestion worker；后续导出链路可单独以 MIT 组件评估接入。
+6. 所有 PDF/DOCX/OCR 二进制解析只在自包含 `document-parser` sidecar 内运行。主 Worker 通过容量为 128 MiB 的 `parser-jobs` tmpfs 卷交换一次性任务；sidecar 不挂载宿主 release（因此不可见 `.env.prod`），不加载生产 env，`network_mode: none`、非 root、只读 rootfs、全部 capability 丢弃，并设 512 MiB memory、64 PID 与 60 秒任务超时。响应使用 `O_NOFOLLOW`、普通文件和 24 MiB 上限验证。主 Worker 不允许回退到进程内二进制解析。
 
 ## Consequences
 
 - 解析器可在没有 MiniMax 服务时继续处理文本和可用本地引擎的图片。
-- 图片 OCR 与二进制解析仍需真实 fixture、隔离容器和生产镜像验收后才能解除发布门禁。
+- 图片 OCR 与二进制解析仍需真实 fixture、隔离 sidecar 和生产镜像验收后才能解除发布门禁。
 - 外部 AI fallback 必须受隐私同意、限流、审计和失败降级约束。

@@ -1,5 +1,6 @@
 'use client';
 
+import * as React from 'react';
 import { useEffect, useRef, type ReactNode } from 'react';
 
 /** 自写抽屉（§5.4/§18.3）：aria-modal + focus trap + Esc 关闭 + 焦点还原。 */
@@ -9,12 +10,18 @@ export default function Drawer({
   label,
   children,
   side = 'left',
+  closeLabel = 'Close',
+  className = '',
+  overlayClassName = '',
 }: {
   open: boolean;
   onClose: () => void;
   label: string;
   children: ReactNode;
   side?: 'left' | 'right';
+  closeLabel?: string;
+  className?: string;
+  overlayClassName?: string;
 }) {
   const ref = useRef<HTMLDivElement>(null);
   const triggerRef = useRef<Element | null>(null);
@@ -23,7 +30,10 @@ export default function Drawer({
   useEffect(() => {
     if (open) {
       triggerRef.current = document.activeElement;
-      ref.current?.focus();
+      const first = ref.current?.querySelector<HTMLElement>(
+        'a[href], button, input, textarea, select, [tabindex]:not([tabindex="-1"])',
+      );
+      (first ?? ref.current)?.focus();
     } else if (triggerRef.current instanceof HTMLElement) {
       triggerRef.current.focus();
     }
@@ -44,7 +54,7 @@ export default function Drawer({
         if (focusables.length === 0) return;
         const first = focusables[0];
         const last = focusables[focusables.length - 1];
-        if (e.shiftKey && document.activeElement === first) {
+        if (e.shiftKey && (document.activeElement === first || document.activeElement === ref.current)) {
           e.preventDefault();
           last.focus();
         } else if (!e.shiftKey && document.activeElement === last) {
@@ -59,10 +69,10 @@ export default function Drawer({
 
   if (!open) return null;
   return (
-    <div className="drawer-overlay" onClick={onClose}>
+    <div className={`drawer-overlay ${overlayClassName}`.trim()} onClick={onClose}>
       <div
         ref={ref}
-        className={`drawer drawer-${side}`}
+        className={`drawer drawer-${side} ${className}`.trim()}
         role="dialog"
         aria-modal="true"
         aria-label={label}
@@ -70,7 +80,7 @@ export default function Drawer({
         onClick={(e) => e.stopPropagation()}
       >
         {children}
-        <button className="btn drawer-close" onClick={onClose} aria-label="关闭">
+        <button className="btn drawer-close" onClick={onClose} aria-label={closeLabel}>
           ×
         </button>
       </div>

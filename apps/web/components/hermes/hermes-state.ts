@@ -35,6 +35,12 @@ export function deriveHermesVisualState(tasks: HermesStateInput[]): HermesVisual
   return 'guiding';
 }
 
+export function deriveHermesCompositeVisualState(tasks: HermesStateInput[], guideActive: boolean): HermesVisualState {
+  const ingestionState = deriveHermesVisualState(tasks);
+  if (ingestionState === 'awaiting_approval') return ingestionState;
+  return guideActive ? 'scanning' : ingestionState;
+}
+
 export function hermesTaskHref(task: HermesTaskLink): string {
   return `/research-objects/${encodeURIComponent(task.researchObjectId)}/hermes?task=${encodeURIComponent(task.id)}`;
 }

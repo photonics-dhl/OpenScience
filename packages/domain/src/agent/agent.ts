@@ -3,7 +3,7 @@ import { isDeepStrictEqual } from 'node:util';
 import type { AuditContext } from '@openscience/observability';
 import { requireMembership } from '../workspace/helpers';
 import { recordAudit } from '../workspace/audit';
-import { getBalance, recordEntry } from '../usage/ledger';
+import { recordEntry } from '../usage/ledger';
 import type { WorkspaceDeps } from '../workspace/types';
 import { AgentError } from './errors';
 
@@ -72,11 +72,12 @@ function assertTaskReplay(
 /** Dashboard task rail: caller-owned tasks with their RO context. */
 export async function listAgentTasks(
   deps: AgentDeps,
-  input: { userId: string; actionableOnly?: boolean },
+  input: { userId: string; actionableOnly?: boolean; kind?: string },
 ): Promise<AgentTaskListItem[]> {
   const rows = await deps.prisma.agentTask.findMany({
     where: {
       session: { userId: input.userId },
+      ...(input.kind ? { kind: input.kind } : {}),
       ...(input.actionableOnly ? { status: { in: ['pending', 'running', 'failed'] } } : {}),
     },
     include: { session: true },
@@ -107,8 +108,15 @@ export async function createAgentSession(
       return { id: existing.id, researchObjectId: existing.researchObjectId, kind: existing.kind, title: existing.title, status: existing.status, createdAt: existing.createdAt };
     }
   }
-  const session = await deps.prisma.agentSession.create({
-    data: { userId: input.userId, researchObjectId: input.researchObjectId ?? null, kind: input.kind, title: input.title ?? '', idempotencyKey: input.idempotencyKey },
+  const session = await deps.prisma.$transaction(async (tx) => {
+    const created = await tx.agentSession.create({
+      data: { userId: input.userId, researchObjectId: input.researchObjectId ?? null, kind: input.kind, title: input.title ?? '', idempotencyKey: input.idempotencyKey },
+    });
+    await recordAudit(deps, tx, {
+      actorId: input.userId, action: 'agent.session.create', targetType: 'agent_session', targetId: created.id,
+      metadata: { kind: input.kind },
+    }, ctx);
+    return created;
   }).catch(async (error: unknown) => {
     if ((error as { code?: string }).code === 'P2002' && input.idempotencyKey) {
       const existing = await deps.prisma.agentSession.findUnique({ where: { idempotencyKey: input.idempotencyKey } });
@@ -119,10 +127,6 @@ export async function createAgentSession(
     }
     throw error;
   });
-  await recordAudit(deps, deps.prisma, {
-    actorId: input.userId, action: 'agent.session.create', targetType: 'agent_session', targetId: session.id,
-    metadata: { kind: input.kind },
-  }, ctx);
   return {
     id: session.id, researchObjectId: session.researchObjectId, kind: session.kind,
     title: session.title, status: session.status, createdAt: session.createdAt,
@@ -145,19 +149,27 @@ export async function submitAgentTask(
   if (!session || session.userId !== input.userId) {
     throw new AgentError('RESEARCH_OBJECT_NOT_FOUND', '会话不存在');
   }
+  if ((session.kind === 'workspace.guide') !== (input.kind === 'workspace.guide')) {
+    throw new AgentError('VALIDATION_ERROR', 'Hermes 任务与会话类型不匹配');
+  }
   let workspaceId: string | null = null;
   if (session.researchObjectId) {
     const ro = await deps.prisma.researchObject.findUnique({ where: { id: session.researchObjectId } });
-    if (ro) {
-      await requireMembership(deps, ro.workspaceId, input.userId);
-      workspaceId = ro.workspaceId;
-    }
+    if (!ro) throw new AgentError('RESEARCH_OBJECT_NOT_FOUND', '研究对象不存在');
+    await requireMembership(deps, ro.workspaceId, input.userId);
+    workspaceId = ro.workspaceId;
   }
-
-  // §9.1 + §2.4-7：AI Credit 配额校验
-  const balance = await getBalance(deps, { userId: input.userId, resource: AI_CREDIT_RESOURCE });
-  if (balance <= 0) {
-    throw new AgentError('INSUFFICIENT_CREDIT', 'AI Credit 不足（§2.4-7），请补充后再试');
+  const artifactId = input.kind === 'sdf.extract' && typeof input.payload.artifactId === 'string'
+    ? input.payload.artifactId
+    : null;
+  if (artifactId) {
+    if (!session.researchObjectId || !workspaceId || input.payload.researchObjectId !== session.researchObjectId) {
+      throw new AgentError('VALIDATION_ERROR', 'Artifact 提取任务未绑定当前研究对象');
+    }
+    const artifact = await deps.prisma.artifact.findUnique({ where: { id: artifactId } });
+    if (!artifact || artifact.workspaceId !== workspaceId) {
+      throw new AgentError('RESEARCH_OBJECT_NOT_FOUND', 'Artifact 不存在或不可访问');
+    }
   }
 
   // §16 幂等键：同 key 已存在 → 返回既有任务
@@ -170,32 +182,58 @@ export async function submitAgentTask(
     }
   }
 
-  const task = await deps.prisma.agentTask.create({
-    data: {
-      sessionId: session.id,
-      kind: input.kind,
-      payload: input.payload as never,
-      idempotencyKey: input.idempotencyKey,
-    },
-  }).catch(async (e: unknown) => {
-    if (typeof (e as { code?: unknown })?.code === 'string' && (e as { code: string }).code === 'P2002') {
-      const dup = await deps.prisma.agentTask.findUnique({ where: { idempotencyKey: input.idempotencyKey ?? '' } });
-      if (dup) {
-        assertTaskReplay(dup, input);
-        if (input.dispatch !== false && dup.dispatchedAt == null) await dispatchAgentTask(deps, dup.id);
-        return dup;
+  let task;
+  for (let attempt = 0; ; attempt += 1) {
+    try {
+      task = await deps.prisma.$transaction(async (tx) => {
+        const balance = await tx.usageLedger.aggregate({
+          where: { userId: input.userId, resource: AI_CREDIT_RESOURCE },
+          _sum: { delta: true },
+        });
+        if (Number(balance._sum.delta ?? 0) <= 0) {
+          throw new AgentError('INSUFFICIENT_CREDIT', 'AI Credit 不足（§2.4-7），请补充后再试');
+        }
+        const created = await tx.agentTask.create({
+          data: {
+            sessionId: session.id,
+            kind: input.kind,
+            payload: input.payload as never,
+            idempotencyKey: input.idempotencyKey,
+          },
+        });
+        await recordEntry(tx, {
+          userId: input.userId,
+          resource: AI_CREDIT_RESOURCE,
+          delta: -1,
+          kind: 'consume',
+          reason: `Agent task reservation ${input.kind}`,
+          idempotencyKey: `agent-task-reserve:${created.id}`,
+          metadata: { taskId: created.id, kind: input.kind, policy: 'charged-on-submit' },
+        });
+        await recordAudit(deps, tx, {
+          actorId: input.userId, action: 'agent.task.submit', workspaceId, targetType: 'agent_task', targetId: created.id,
+          metadata: { kind: input.kind, sessionId: session.id, creditPolicy: 'charged-on-submit' },
+        }, ctx);
+        return created;
+      }, { isolationLevel: 'Serializable' });
+      break;
+    } catch (error: unknown) {
+      const code = (error as { code?: unknown })?.code;
+      if (code === 'P2034' && attempt < 2) continue;
+      if (code === 'P2002') {
+        const duplicate = await deps.prisma.agentTask.findUnique({ where: { idempotencyKey: input.idempotencyKey ?? '' } });
+        if (duplicate) {
+          assertTaskReplay(duplicate, input);
+          task = duplicate;
+          break;
+        }
+        throw new AgentError('DUPLICATE_IDEMPOTENCY_KEY', '幂等键重复（§16）', error);
       }
-      throw new AgentError('DUPLICATE_IDEMPOTENCY_KEY', '幂等键重复（§16）', e);
+      throw error;
     }
-    throw e;
-  });
+  }
 
   if (input.dispatch !== false) await dispatchAgentTask(deps, task.id);
-
-  await recordAudit(deps, deps.prisma, {
-    actorId: input.userId, action: 'agent.task.submit', workspaceId, targetType: 'agent_task', targetId: task.id,
-    metadata: { kind: input.kind, sessionId: session.id },
-  }, ctx);
   return taskToView(task);
 }
 
@@ -208,6 +246,34 @@ export async function dispatchAgentTask(deps: AgentDeps, taskId: string): Promis
     data: { dispatchedAt: new Date() },
   });
   return true;
+}
+
+/** DB task rows with dispatchedAt=null are the durable queue outbox. */
+export async function recoverUndispatchedAgentTasks(deps: AgentDeps, limit = 50): Promise<number> {
+  const tasks = await deps.prisma.agentTask.findMany({
+    where: { kind: 'workspace.guide', status: 'pending', dispatchedAt: null },
+    orderBy: { createdAt: 'asc' },
+    take: limit,
+  });
+  let dispatched = 0;
+  for (const task of tasks) {
+    if (await dispatchAgentTask(deps, task.id)) dispatched += 1;
+  }
+  return dispatched;
+}
+
+/** Convert an interrupted running claim into the existing retryable failed state. */
+export async function prepareAgentTaskForCrashRecovery(deps: AgentDeps, taskId: string): Promise<boolean> {
+  const task = await deps.prisma.agentTask.findUnique({ where: { id: taskId } });
+  if (!task) return false;
+  if (task.status === 'pending') return true;
+  if (task.status === 'failed' && task.error === '[retryable] worker interrupted') return true;
+  if (task.status !== 'running') return false;
+  const reset = await deps.prisma.agentTask.updateMany({
+    where: { id: taskId, status: 'running' },
+    data: { status: 'failed', error: '[retryable] worker interrupted' },
+  });
+  return reset.count === 1;
 }
 
 export async function claimAgentTask(deps: AgentDeps, taskId: string): Promise<AgentTaskView | null> {
@@ -288,17 +354,6 @@ export async function markTaskProgress(
         ...(input.error !== undefined ? { error: input.error } : {}),
       },
     });
-    if (input.status === 'succeeded') {
-      await recordEntry(tx, {
-        userId: task.session.userId,
-        resource: AI_CREDIT_RESOURCE,
-        delta: -1,
-        kind: 'consume',
-        reason: `Agent task ${task.kind}`,
-        idempotencyKey: `agent-task-consume:${task.id}`,
-        metadata: { taskId: task.id, kind: task.kind },
-      });
-    }
     return row;
   });
   await syncIngestionState(deps, task.id, input.status, input.error);

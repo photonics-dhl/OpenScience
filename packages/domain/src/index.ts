@@ -155,6 +155,7 @@ export { InAppChannel, EmailChannel } from './notification/channels';
 export { AgentError, type AgentErrorCode } from './agent/errors';
 export {
   claimAgentTask, createAgentSession, dispatchAgentTask, submitAgentTask, getAgentTask, listAgentSessions, listAgentTasks, markTaskProgress,
+  prepareAgentTaskForCrashRecovery, recoverUndispatchedAgentTasks,
   AGENT_TASK_QUEUE, AI_CREDIT_RESOURCE,
   type AgentDeps, type AgentTaskView, type AgentSessionView, type AgentTaskStatus,
 } from './agent/agent';
@@ -200,3 +201,4 @@ export {
 } from './editorial/editorial';
 export { INGESTION_TASK_STATES, type ActionableIngestionTaskView, type IngestionTaskState, type IngestionFileInput, type IngestionTaskView, type IngestionBatchView } from './ingestion/ingestion-types';
 export { authorizeIngestionWrite, confirmIngestionTask, createIngestionBatch, getIngestionBatch, getIngestionTask, listActionableIngestionTasks, retryIngestionTask, type IngestionDeps } from './ingestion/ingestion-service';
+export { parseWorkspaceGuidePayload, type WorkspaceGuidePayload } from './agent/workspace-guide-contract';

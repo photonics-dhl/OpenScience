@@ -27,4 +27,19 @@ describe('MiniMax worker gateway config', () => {
       expect(JSON.parse(String(init.body)).model).toBe('MiniMax-M3');
     }
   });
+
+  it('persists redacted AI call metadata through the injected audit sink', async () => {
+    const events: Array<Record<string, unknown>> = [];
+    const gateway = buildGateway({ MINIMAX_API_KEY: 'test-key', MINIMAX_MODEL: 'MiniMax-M3' }, vi.fn(async () => new Response(JSON.stringify({
+      choices: [{ message: { content: 'ok' } }],
+      usage: { prompt_tokens: 3, completion_tokens: 1 },
+      model: 'MiniMax-M3',
+    }), { status: 200 })) as never, { record: async (event) => { events.push(event as unknown as Record<string, unknown>); } });
+
+    await gateway.complete([{ role: 'user', content: 'sensitive research goal' }]);
+    expect(events).toHaveLength(1);
+    expect(events[0]).toMatchObject({ action: 'ai.gateway.call', targetType: 'ai_gateway' });
+    expect(JSON.stringify(events[0])).not.toContain('sensitive research goal');
+    expect(JSON.stringify(events[0])).not.toContain('test-key');
+  });
 });

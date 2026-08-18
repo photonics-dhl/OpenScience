@@ -7,11 +7,14 @@
 import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
+import { validateHermesRendererIndex } from './hermes-renderer-index.mjs';
+
 const issues = [];
 
 // ---------- 检查 A：索引内路径存在性 ----------
 const indexPath = 'project_index.md';
 const indexText = readFileSync(indexPath, 'utf8');
+issues.push(...validateHermesRendererIndex(indexText));
 const indexedPaths = new Set();
 for (const m of indexText.matchAll(/`((?:docs|infra|apps|packages|scripts)\/[^`]+?)`/g)) {
   const p = m[1];

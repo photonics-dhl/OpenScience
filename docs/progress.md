@@ -1,28 +1,170 @@
 # OpenScience (XGS) 进度日志
 
-## 2026-08-16（Hermes 任务记忆纠偏）— ✅ 当前事实源已对齐
+## 2026-08-18（版本收口与 active-memory 压缩）— ⏳ 本地 GREEN，待推送/合并/部署
 
-- **当前真实阶段**：唯一 Hermes 视觉候选位于 `codex/hermes-2d-pet`（`a5a8446`），是已完成工程门禁、等待用户 Workspace 视觉验收的 2.5D 少年星图龙；不是尚待实施的 3D 学者机器人。
-- **历史边界**：3D 学者机器人已被用户否决；后续 Blender 少年星图龙也因视觉未达标被判 NO-GO。二者只保留历史证据，禁止恢复为当前任务。
-- **误读根因**：后续候选仍在独立 worktree，未进入 `main`；`main` 的旧 3D spec 未标废弃，而启动规则未要求枚举 worktree，导致 agent 把主分支中最新文档误当成全仓最新任务。
-- **预防措施**：`AGENTS.md` 现在强制先枚举 worktree/分支，再读取 CURRENT handoff；新增 `docs/handoff/2026-08-16-hermes-2d-pet-handoff.md`。用户随后授权清理已否决方案，旧 3D spec/plan 已从活仓库删除，历史结论只保留在本进度记录与 CURRENT handoff。下一步仅打开并验收 2.5D Workspace 实际效果。
+- **版本边界**：用户授权更新 PR #3、合并本地 `main` 并部署 ECS；当前功能分支候选为 `ee514aa` 加本轮 docs-sync commit，远端分支仍为 `0398838`，ECS 仍为 release/rollback `aa1c8af` / `c9df24d`。
+- **旧记忆根因**：无 skill 基线虽最终判断正确，但读取了大量历史，并遇到旧 progress CURRENT、handoff 旧动作语法、文件名日期与正文状态、已部署/待部署未绑版本四类干扰。CURRENT Hermes handoff 已从 56 个长行压缩为 38 行，只保留当前事实、版本元组、边界和下一步；历史文件未删除。
+- **docs-sync TDD**：新增 `scripts/docs/docs-sync-skill.test.mjs`，旧 skill `0/4` RED，canonical lint 绕过 skill 合同再以 `5/6` RED；新版 skill + AGENTS bounded-read + CI wiring `6/6` GREEN。独立 forward test 只读 baseline 相关段、progress 前 80 行、CURRENT 索引区与 38 行 handoff，正确给出 task/version tuple，历史命中未进入 active reasoning。
+- **下一步**：完成 canonical lint/docs gate 与提交，推送功能分支更新 PR；保护本地 `main` 的用户未跟踪设计资产后合并验证，再按 runbook 备份、dry-run、`--skip-migrate` 部署并记录新 release/rollback。
+
+## 2026-08-18（Hermes 默认动效与常驻控制）— ✅ 本地实现/真实页面 GREEN，⏳ 待生产发布确认
+
+- **用户实际缺陷与根因**：Windows `prefers-reduced-motion` 不仅让首次状态默认 reduced，旧 CSS 还无条件 `display:none` 隐藏 WebGL canvas；因此即使 JS 已显式 full、renderer 也在绘制，真实页面仍只显示静态 fallback。旧“开启 Hermes 动效”又仅在 reduced 分支渲染，full 时按钮消失，用户无法判断或修正状态。
+- **产品修复**：Hermes 首次默认 full motion；只有用户主动关闭、已保存 reduced 偏好或显式 `?hermes-motion=reduced` 才静止。未解析持久偏好时先保持静态，避免 reduced 用户 hydration 闪动；显式 full 不再被系统 media query 隐藏。控制改为舞台内常驻高对比 pill：full 显示“关闭 Hermes 动效”，reduced 显示“开启 Hermes 动效”，两种选择均跨路由/刷新保留。审批态仍保持克制静止。
+- **TDD / 真实证据**：RED 依次捕获默认 reduced、已保存 reduced 的 hydration full 闪动、`full` canvas 被 CSS 隐藏，以及系统 no-preference 下显式 reduced 仍保留提示 transition；GREEN 为 motion `16/16`、自包含单 worker Dashboard/创建/编辑浏览器命令 `18/18`、全 Web `295/295`、typecheck 与 17-page production build。Dashboard mock 现覆盖启动期 workspace-guide 查询，不再偶然依赖 3101 API。完整 Hermes release `144.7s` exit `0`：呼吸 `5,531`、pointer `58,667` changed pixels，first-ready `923ms`，idle/pointer 真实 draw `452/510`，p95 均 `18ms`。1440×900 人工截图确认常驻控制可辨识。
+- **边界**：未改角色动作语法、Agent 权限、API、数据库或生产配置；尚未执行 ECS 写操作，生产仍为 release `aa1c8af`。
+
+## 2026-08-17（Hermes 真实页面引导与动效偏好修复）— ✅ ECS 部署与公网行为 GREEN
+
+- **用户实际缺陷**：Windows 浏览器命中 reduced-motion 后 Hermes 长期呈静态，而产品没有显式恢复入口；创建/编辑页没有真实 Assistant Drawer owner，点击角色无法唤起 Hermes；引导目标只固定在 `ro-title` / `sdf-problem`，填写标题或切换 SDF 字段不会推进；创建页还显示没有消费者的 Draft/Check。
+- **根因修复**：`HermesWorkspaceStage` 现为唯一 motion owner，显式 full/reduced 偏好写入 localStorage，并把同一值传给 Adapter/Rig；reduced 页面保留可访问的“开启 Hermes 动效”。创建/编辑页接入真实 Drawer，title→source-import 与当前 SDF 字段驱动语义航点；bubble 只显示锚点声明的可执行动作，Explain 展示逐字段填写说明。
+- **一致性修复**：初始 behavior timestamp 改为 SSR/client 确定值，消除真实路由 hydration 差异；Dashboard 原有 Drawer 与 route Drawer 互斥，仍保持单 stage/canvas owner。
+- **TDD / production 证据**：RED 为 motion preference `1 failed / 15 passed`，浏览器字段引导 `3 failed / 1 passed`；GREEN 为 production Next 浏览器 `6/6`、Web `295/295`、typecheck、canonical lint（`WORKSPACE_STRUCTURE_OK` / `DOCS_SYNC_OK`）、17-page build。完整 Hermes release 用时 `145.6s`、exit `0`：idle breathing `5,215`、pointer `58,228` changed pixels，head/torso/tail 位移互不相同。
+- **ECS 发布**：用户确认后以 release `aa1c8af`、rollback `c9df24d` 部署，跳过迁移与 seed；部署前数据库备份 `376K / 7/7`。本地 SSH 等待在 604 秒超时，但只读诊断确认远端 source hash `febedc9d…219c8` 与本地一致，Web/API/Worker 已切换进程，Parser 与全部数据服务健康。公网直接加载部署版本的同一 Hermes production-browser matrix `6/6` GREEN；`/`、`/api/explore` 为 `200`，匿名 workspace/auth 为 `401`，近 15 分钟 API/Web/Worker/Parser 关键错误均为 `0`。
+- **边界**：本轮未改 API schema、Agent 权限、MiniMax prompt 或数据库；生产代码已经更新，但仍需产品负责人使用真实账号亲自判断动效强度与逐字段引导是否达到体验预期。
+
+## 2026-08-17（真实论文 + MiniMax + Hermes ECS 纵向验收）— ✅ 安全隔离、主流程与真实引导 GREEN，⏳ 逐字段/动作归因仍待补齐
+
+- **运行边界**：用户明确禁止本机 Docker；本轮所有 Postgres/Redis/SeaweedFS/API/Web/Worker/MiniMax 运行与最终验证均在 ECS，Windows 仅编辑代码并以 Playwright 访问公网生产站。
+- **最新真实样本**：公网网页导入固定 arXiv `2009.06045v1`，SHA-256 `d57dc94c05ca99ccb33f8186e9317353c663a638cde1c0c8a90c7c2d029f484a`、24,671,920 bytes；最新生产 RO `7e3665f3-ac08-438f-9ccc-f35e99c6b677` / task `e72d221e-d56e-4963-99b2-609dabc0252e`。MiniMax-M3 对 method/results/limitations 给出原文 quote + `chars:*` locator，保留 `5 fJ`、`50 pJ`、`1 PHz` 等量值；problem/insight/reproducibility 证据不足时保持显式缺失。确认前六字段为空，确认后只写入模型建议或统一缺失披露，RO version 2、commit versionNo 2。
+- **真实生产缺陷闭合**：合法 PDF 中的 `../` 曾被误判为 ZIP traversal；24.7MB 论文超过旧 20MB parser 上限；PDF 排版空白/断词使模型原文 quote 的直接 `indexOf` 失败。现仅对真实 ZIP magic 执行 traversal 检查、受控 parser 上限为 50MB，并以保留词边界的唯一 NFKC/字母数字 token 序列匹配回填原稿 substring，避免把 `not able` 错配成 `notable`；EICAR/PE 与真实 ZIP traversal 仍 fail-closed。
+- **Hermes 真实引导**：最新 Dashboard 真实提交 13.7 秒 succeeded；Hermes 指出 reproducibility 缺失、量值需复核、同主题重复草稿与空壳对象，并只返回三个 membership-scoped 站内 RO/task 链接，其中首项精确指向最新 RO。严格 Schema、服务端上下文重建、workspace membership 与 target allowlist 未放宽。
+- **安全隔离**：跨 workspace artifact 读取在 submit 与 Worker 执行时双重拒绝；ClamAV 缺失/超 50MB 均 fail-closed。敌对 PDF/DOCX/image 解析移入自包含 `document-parser` sidecar：运行时 `network=none`、无宿主源码/Secret、非 root、只读 rootfs、512MiB/64 PID、128MiB tmpfs IPC；响应 24MiB 封顶，取消写入使用 `O_EXCL|O_NOFOLLOW`，90 秒回收孤儿。安全与架构独立复审均 APPROVE（0 Critical/Important/Minor）。
+- **ECS 证据**：部署首次发现阿里 Docker mirror 对 `node:22-bookworm-slim` 返回 Bad Request，以及 BuildKit 内 apt/npm 无代理；最终统一复用 `node:22-bookworm`，Worker/Parser 构建期以 host network 走 ECS Squid `127.0.0.1:7891`，运行时 Parser 仍无网络。标准脚本完成远端全仓 build、两镜像构建、Parser-first healthy、全栈 `--wait`、bind-mounted API/Web/Worker 重启、Nginx 与公网 `200/401/401` 硬检查；26 migrations current，所有生产容器 healthy。最新 gate 85 秒 exit 0。
+- **最终版本门禁**：真实论文 gate 的上传响应与 ingestion 状态轮询现均使用 300 秒生产边缘容忍度；合同先以 `1 failed / 3 passed` 精确捕获旧 240 秒，再以 `4/4` GREEN。最终整仓 test、typecheck、canonical lint（含 `WORKSPACE_STRUCTURE_OK` / `DOCS_SYNC_OK`）与 17-page build 均 fresh GREEN；Web `295/295`、Domain `339/339`、Worker `51/51`、API `65/65`。根目录生成的真实浏览器证据保留于 `test/visual/out/` 并被精确忽略，不删除、不提交。
+- **仍未完成**：Task 9 尚缺持久模型审计记录的独立查询断言；Task 10 当前只是 bulk review/confirm/version/commit smoke，尚无逐字段 accept/edit/reject + source UI 与完整六字段 gold rubric；Task 11 尚未在同一不间断真实流程中证明 upload/parsing/field locate/diff/commit 等每个持久状态都触发独立 Hermes 角色像素动作，以及 reduced-motion 和资源回收矩阵。不得把任一项写成完成。
+
+## 2026-08-17（Hermes 整体轮廓生命感修复）— ✅ 工程与 release GREEN，⏳ 用户视觉复验
+
+- **第三次用户否决**：213px、独立关节和更密 cadence 仍被真实使用判断为“效果太弱”；最新整页接触表确认角色重心长期锁在同一位置，工程 pixel delta 不能代表 Codex Pet 式生命感。
+- **真实根因**：`patrol` 只在 mesh 内移动头尾，角色画布从未离开原位；其声明时长 `4.6s` 还会被 `2.4–4.2s` 的下一自主动作提前截断。其余 observe/evidence/stretch/doze/wake/surprise/citation 同样缺少整体轮廓轨迹。
+- **本轮实现**：新增唯一的 whole-character presentation layer，只移动角色画布，不移动提示、按钮、编辑器或用户停靠点。巡游在停靠区内沿不对称路径游出并返回；左右观察、查证、整理、伸展、打盹、醒来、惊讶和引用追踪均有不同的整体位移/转角/缩放。pointer 以 `14px × 10px` 朝指针迎接并在离开后清零；reduced-motion/approval 强制关闭该层。
+- **TDD 与真实门禁**：旧 build 的 90 秒 RED 为 patrol 轨迹空；首个实现又真实暴露“游出后被提前切换、余偏约 13px”。调度 RED→GREEN 后 `patrol=4.2s` 且自主动作完整播放。第二个产品 RED 证明旧版本只有 patrol 1 种整体动作达到 `8px`；最终门禁要求至少 6 种、巡游 excursion `>=30px` 且回位 `<=6px`、pointer 整体位移 `>=8px`，完整 `test:hermes-companion-release` 用时 `151.8s`、exit `0`。
+- **当前边界**：新 production 预览保持 `http://127.0.0.1:3194/dashboard`；尚未提交、推送或部署。所有 GREEN 仍只代表可交给用户复验，不代表用户已接受。
+- **验收环境事故与闭合**：旧 release gate mock 了 auth/RO/ingestion 成功响应，而 3194 启动时遗漏 `API_ORIGIN=3188`，真实页面实际为“无法加载工作台 / 500”；旧 production 标签与本地文件 WebM 又扩大了差异。现已用同一 3188 API 重启 3194，并以零 API 拦截浏览器验证真实 RO 页面：Hermes idle/ready、reduced=false，18 秒 6 种动作、整体范围约 `33×23px`。最终 `hermes-unmocked-real-preview.webm` 为 35.8 秒 1440×900、零拦截/零 console error，与真实页面共享 build/API；经 3195 HTTP 提供。事故登记于 `.Codex/troubleshooting/issues.json` issue-003。
+- **第二个验收环境根因与修复**：用户继续看到完全静止并非观察偏差。Windows 实测 `ClientAreaAnimationsEnabled=false`，Codex 浏览器因此命中 `prefers-reduced-motion: reduce`；而旧录屏强制 `no-preference`，两者仍非同一条件。新增显式 `?hermes-motion=full` 产品偏好，统一覆盖 Stage/Adapter/Rig 与 CSS 抑制；默认仍跟随系统。真实 RED 为 reduced 环境 fallback 且 12 秒位移 `0`；GREEN 在同一 reduced 环境下 rig ready/input true，20 秒 8 种动作、整体位移 `25.39px`、尺寸变化 `34.08px`，pointer 后 engaged=true。当前验收入口只能使用 `http://127.0.0.1:3194/dashboard?hermes-motion=full`；事故登记 issue-004。
+
+## 2026-08-17（Hermes 产品尺寸感知修复）— ✅ 第二轮实现与 release GREEN，⏳ 用户视觉复验
+
+- **用户复验结论**：带版本参数的新页面排除了旧标签缓存；用户仍判定动作太弱、待机稀疏、互动不可感知，因此上一条“可感知性修复”只代表工程门禁 GREEN，不代表视觉完成。
+- **第二根因**：真实 Dashboard canvas 仅 `181×181px`；动作使用单峰正弦，约 0.4–1.8 秒后回中，再等待 4–8 秒；基础头、页冠、躯干与尾部共用同相呼吸。旧门禁统计像素数量，却没有约束真实产品尺寸、动作保持时间或独立节律。
+- **本轮实现**：Dashboard canvas 提升到 `213×213px`；balanced 微动作改为 `2.4–4.2s`、signature `14–22s`；动作采用快速进入、可读保持、平滑退出；头/页冠/躯干/尾巴使用独立周期与相位；stationary hover 改为清晰的头部前探、躯干跟随和尾部反向。
+- **TDD 与真实证据**：focused RED 精确记录旧 `6.947s` gap、stretch `1.0385`、hover head `5.09px` 和同相 idle；修复后 Hermes director/motion/mixer `29/29`。真实产品尺寸门禁先以 `181px < 210px` RED，再以 `213px` GREEN。完整 release 用时 `146s`、exit `0`；breathing `5,531` changed pixels、pointer `58,558`，90 秒记录 29 次动作、13 种表演。
+- **当前边界**：预览仍为 `http://127.0.0.1:3194/dashboard`，需要使用新的 cache-busting URL 复验；尚未提交、推送或部署。用户视觉通过前，不得把本条写成最终接受。
+
+## 2026-08-17（Hermes 动作可感知性修复）— ✅ 实现与完整生产门禁完成，⏳ 用户动态视觉验收
+
+- **本轮不是重做方案**：用户明确 Workspace Companion 方案已冻结，本轮只修复“27 个动作在实际画面中仍像同一张静态图片”的实现缺陷；不得在后续 session 重新发起形象或技术路线选择。
+- **真实根因**：`action-catalog.ts` 虽登记 27 个动作，旧 `pet-motion.ts` 却把多数动作折叠到约五个共享姿势；基础呼吸仅有亚像素位移，旧 90 秒门禁又只统计动作名与内部关节字符串，因此产生了不能代表肉眼效果的 GREEN。
+- **实现修复**：27 个动作现在进入 action-specific mesh 轨迹。左右观察使用相反头眼方向；伸展、打盹、苏醒、惊讶、巡游、归位、引用尾、pointer approach/avoid 均有独立的头、躯干、页冠、眼区与尾部编排。基础生命感同步提升为可见但克制的呼吸、轻摆与页冠响应；审批、reduced、失败静止和单 canvas/context 边界保持不变。
+- **真实像素证据**：最新完整 `test:hermes-companion-release` 用时 `146.6s`、exit `0`。288px 实际角色尺寸下，doze/patrol/return/stretch/surprise/wake 各产生 `15,311–20,169` 个变化像素；基础呼吸 `4,203`、pointer `54,181`。非仿射 head/torso/tail 位移分别为 `(2,6)` / `(1,1)` / `(-1,-8)`，whole-affine mutation 三域均为 `(7,3)` 并被拒绝。
+- **90 秒产品证据**：production Dashboard 记录 16 次动作、12 种不同表演，含 Return Dock、Citation Trace、Stretch、Doze、Wake、Surprise；动作间隔均在门禁范围内。WebM 与 metrics 位于忽略目录 `apps/web/test/visual/out/hermes-companion/`，最新视频为 `page@fe92931cb3b467cd1f507316d583da63.webm`。
+- **工程门禁**：Web `41 files / 289 tests`、Web typecheck、17-page production build 与 Hermes 聚合 release gate 均 GREEN。当前预览继续使用 `http://127.0.0.1:3194/dashboard`；仍未提交、推送或部署，下一步只接受用户对真实动态的视觉判断。
+
+## 2026-08-17（Hermes Workspace Companion）— ✅ 核心候选与生产门禁完成，⏳ 用户视觉验收
+
+- **全局角色与动作**：Hermes 已从 Dashboard 局部槽位提升为 `app/layout.tsx` 下的单一 Workspace stage；Dashboard → RO 创建/编辑的 SPA 切换保留同一 canvas owner。27 个动作由四层 motion mixer 合成，审批/reduced 精确静止，失败收敛后休眠；微动作改为 seeded shuffle-cycle，避免 hash 长期偏向少数动作。
+- **真实 90 秒生命感证据**：production gate 记录 15 次动作、12 种不同动作、2 个 signature（Return Dock / Citation Trace）、15 组不同 head/torso/tail 真实关节帧；相邻不重复，最大间隔 `8.115s`。WebM、截图和 JSON 写入忽略目录 `apps/web/test/visual/out/hermes-companion/`。
+- **填写领航**：RO title/import、六个 SDF 字段与 diff 面板使用语义锚点；Hermes 按规划航点逐段移动（位置 transition `300ms`、航段 `360ms`），真实 RAF 几何采样未穿过目标输入区。移动/reduced 保留 Explain/Draft/Check，Escape 可取消，离屏目标保留 edge-stop/Take me there 边界。用户保存的自定义停靠高于自动字段引导：重载后先原位提示，只有点击“带我过去”才执行安全航行；production E2E `4/4` 与更新后的几何门禁均 GREEN。
+- **Diff 写入边界**：guide 事件只允许动作与已知语义 target；`workspace.guide` 共享严格 route/target parser，Worker 继续从 membership-scoped DB 重建可信上下文。Draft 复用 `sdf.extract`，同步重复事件由 single-flight 闩锁压成一个 session/task；真实浏览器证明建议出现前六字段逐字节不变，Apply 只改变选中字段。
+- **生产 release 数据**：articulation/whole-affine mutation、真实 draw cadence、guidance geometry、Diff 安全与 90 秒 motion 聚合门禁全部 GREEN。最新聚合运行的 SwiftShader 边界 first-ready `781ms`，冷 Dashboard `2,174,824B`；idle/pointer `451/507` 次真实 draw，p95 `18ms`。最新 Web `41 files / 285 tests`、Domain `40/336`、Worker `7/32`、API `12/65`、AI Gateway `12/12`、根 typecheck 与 17-page build GREEN。
+- **诚实边界**：本轮尚未把 Quiet/Balanced/Active、sound/particle/proactive 开关做成 Drawer 设置，也未完成“两信号主动提示/逐字段 cooldown”的全部浏览器矩阵；计划中保持未勾选，不能误读为完成。当前候选可进行用户动态视觉验收；未提交、未推送、未部署。
+
+## 2026-08-17（Hermes Workspace Companion）— ✅ 设计与计划确认，⏳ 直接实施
+
+- **用户结论**：当前 articulated mesh 已有可见动态，但动作丰富度、待机生命感与填写过程中的领航能力仍不足；不接受继续堆整图/CSS 关键帧。
+- **确认体验**：采用 C 安全航道和 C 水墨 S 曲线游动＋轻落地；首次关键步骤自动引导，后续由组合求助信号/用户召唤触发；目标离屏时先停边缘，用户点击“带我去”后才滚动。
+- **填写辅助**：抵达后使用两层提示，提供解释、根据授权材料起草、检查当前内容；任何生成只进入高亮 diff，用户全选、分段接受、修改或拒绝后才写入。
+- **生命感语法**：学者 70%＋灵宠 30%，默认 4–8 秒微动作、20–35 秒标志动作；至少 25 个动作原型及变体，包含有限巡视、安静陪写、疑点、工作、分级庆祝、里程碑舞蹈和轻粒子。
+- **交互边界**：用户可拖动并决定最终停靠位置，按设备/Workspace 本地记忆；桌面、移动端键盘上沿、reduced-motion、默认静音、活跃档位和审批完全静止均已确认。
+- **成熟案例研究**：采用 Rive/Live2D 的状态优先级与多层混合、Duolingo 的角色语言/成功动作、Driver.js 的真实元素锚定，以及 Apple/WCAG 的短促、可取消和 reduced 替代；不引入这些第三方角色运行时。
+- **唯一事实源**：`docs/specs/2026-08-17-hermes-workspace-companion-motion-design.md`；旧 2026-08-16 mesh/contextual spec 已标 DEPRECATED。实施入口为 `docs/plans/2026-08-17-hermes-workspace-companion-motion-plan.md`。
+- **当前边界**：用户授权计划后直接实施，只验证最终视觉；提交、推送与部署仍必须等待最终视觉接受。
+
+## 2026-08-16（Hermes 任务记忆纠偏）— ✅ HISTORICAL
+
+- **当时事实**：2.5D 候选曾位于独立 worktree，3D 学者机器人与 Blender 星图龙均已被用户否决；该阶段已由 2026-08-17 Workspace Companion CURRENT spec/plan 取代。
+- **误读根因与后续修复**：旧 session 只读 `main`、旧 3D 文档未降级，导致把历史方案当成当前任务。现由 worktree-first、唯一 CURRENT handoff、版本元组与 bounded-read docs-sync 合同防止回流；本条不得作为 next action。
 
 ## 2026-08-16（内容寻址缓存优化）— ✅ 已部署并验证 Cloudflare 命中
 
-- **目标与边界**：不让个人电脑承担生产流量；只优化 Landing 两张大型光学 PNG。HTML、API、登录态、Workspace 和 canonical 源路径不进入一年缓存规则。
-- **更新语义**：新增共享 asset manifest，URL 包含真实文件 SHA-256 前 16 位；Next 只对两个精确 versioned URL rewrite 到 canonical 文件并返回 `public, max-age=31536000, immutable`。文件内容变化而 manifest 未更新时测试直接失败，更新 digest 后 URL 改变，不依赖人工 purge 即可立即取得新内容。
-- **TDD**：旧实现按预期出现 5 项 RED（缺 manifest/rewrite/header、SSR/WebGL 仍为 canonical URL）；最小实现后 focused `38/38`、完整 Web `249/249`、typecheck 与 16-page production build GREEN。
-- **真实响应**：本地 `next start` 下两个 versioned PNG 均为 `200 + immutable/31536000`；canonical PNG 为 `public, max-age=0`，`/` 保持 `private, no-cache, no-store`，Landing HTML 含两个 versioned URL。production Landing desktop/mobile normal/reduced/idle/pointer 浏览器门禁 exit 0；3190–3192 测试端口均已释放。
-- **生产发布**：release `b93fa9d`，rollback `48809d6`。部署前后 ECS checkup 均健康，备份 `BACKUP_OK size=280K files=7/7`；dry-run 后执行 `deploy.sh --confirm --skip-migrate`，远端全仓与 16-page Web build 通过，只重启 Web/API/agent-worker，未运行 migration/seed。公网 `/`、`/explore`、asset Lab 为 `200`，匿名 `/auth/me` 为 `401`，Landing HTML 同时引用两条 versioned URL；远端与本地 manifest SHA-256 均为 `b30577ef504010fb214b669a545e88fa02e7148c170fe3e64d45c905b8db2ffa`。
-- **边缘实证**：两张 versioned PNG 首次请求均为 Cloudflare `MISS`，第二次均为 `HIT`，`Age` 分别为 `13`/`12`，响应保持 `public, max-age=31536000, immutable`。canonical 兼容路径不含 `immutable`，但现有 Cloudflare 规则会给它们 `max-age=14400`；生产 HTML/WebGL 不再引用这些路径，更新仍以新 digest URL 立即生效，无需 purge。Tunnel HA=`4`、loopback origin=`200`，公网 Landing desktop/mobile normal/reduced/idle/pointer 浏览器门禁 exit 0。
+- **目标与边界**：只对 Landing 两张大型光学 PNG 使用内容寻址 URL 与一年 immutable 缓存；HTML、API、登录态、Workspace 和 canonical 源路径不进入规则。
+- **发布证据**：release `b93fa9d` / rollback `48809d6`；focused `38/38`、Web `249/249`、typecheck/build GREEN，ECS 备份与 `--skip-migrate` 部署完成。公网 versioned PNG 从 `MISS` 转 `HIT`，`Age=13/12`，更新通过新 digest URL 生效且无需 purge。
+- **当前意义**：该缓存实现已进入后续 Hermes release 的祖先代码；完整执行与回滚步骤见 deployment runbook §5.8，不改变当前 Hermes task routing。
 
-## 2026-08-15（Hermes 原创 3D 学者 Agent）— ❌ HISTORICAL / USER NO-GO
+## 2026-08-16（Hermes 生命感认知事故纠偏）— ✅ mesh-rig 工程与独立复审完成，⏳ 用户视觉验收
+
+- **用户终验否决**：此前工程门禁虽 GREEN，但角色仍被感知为死气图片，既没有 Codex Pet 的独立身体运动，也没有 Live2D 的参数化生命感；不得再写成“生命感完成”。
+- **根因链**：2026-08-06 已确认的 Live2D/Wanko 行为基线包含随机小动作、mood/motion 映射与眼耳嘴参数驱动；后续因 Wanko 许可门禁产生的原型约束被错误扩大为禁止所有真实分层，并被标成 CURRENT。测试又只读取无角色像素的 CSS signal transform，形成错误 GREEN。
+- **事实源修复**：旧 `2026-08-15-hermes-2d-pet-design.md` 已降为 `DEPRECATED / VISUAL NO-GO`；ADR-010 澄清只约束 Wanko/Cubism/第三方二进制，不禁止原创 renderer；CURRENT 改为 `2026-08-16-hermes-articulated-mesh-pet-design.md`。
+- **实施决策**：保留原创星图龙纹理与已完成的 guide/task/drawer/权限链，使用已有 OGL 以单画布 28×28 mesh 对真实角色像素进行头、页冠、躯干、尾部与眼区关节变形；约 43.8 秒确定性长语法改变动作顺序与休止长度，包含两秒内可见的观察/页冠轻颤/引用尾摆/证据巡视/眨眼，以及 pointer/focus/drawer-open lead/follow/settle。
+- **当前实现与真实证据**：旧 `HermesPetPortrait.tsx` 和 `.hermes-pet-*` / `.hermes-idle-signal` runtime 已删除；提示条不再遮挡角色。固定自主时钟下 pointer control 为 `0` changed px；真实 mesh 的 head / torso / tail 光学位移分别为 `(2,6)` / `(2,0)` / `(-1,-8)`，而受控整图 affine 突变三域均为 `(7,3)` 并被拒绝。三域内部裂缝率最高 `3.37%`，角色前后均为一个连通分量。
+- **生命周期 RED→GREEN**：同页 `idle → approval → idle`、运行中 `webglcontextlost`、WebGL2 缺失、延迟解码离屏与 pending-init SPA 离页均先获得真实 RED。当前以 canvas generation key、WebGL2 preflight + AbortSignal 事务清理、缓存并回放 desired suspension 闭合；focus/open 也会写入真实 mesh input，而非只改 DOM 标签。production E2E `12/12`。
+- **防复发门禁**：新增 `scripts/docs/hermes-renderer-index.mjs` 及 `3/3` 测试并接入 `audit:docs-sync`；唯一 CURRENT 必须是 articulated mesh，旧 2.5D renderer 必须保持 `DEPRECATED / VISUAL NO-GO`。CURRENT handoff 内部的旧 CSS-signal 实施/证据段已移除。
+- **性能与全量门禁**：WebGL2 capability preflight 已移到 OGL import/三纹理解码之前；失败浏览器只请求静态 idle fallback，且 fallback SVG 不再运行旧 CSS 无限动画。冷生产 Dashboard 最新实测 14 个客户端脚本 `186,659B`、三张纹理 `1,472,269B`、全资源传输 `2,164,595B`，first-ready `809ms`。门禁直接包裹 Hermes canvas 的 WebGL draw：SwiftShader 下待机/pointer 7.5 秒分别为 `451/504` 次真实绘制、`451/504` 个关节状态，median `16.9/16.8ms`、p95 `18ms`、drop `0`、renderer RAF CPU p95 `0.2ms`；明确不冒充物理 GPU。独立 CI 聚合脚本、package command 与 workflow step 已接通；production 未开启 `ENABLE_VISUAL_HARNESS=1` 时测试路由为 `404`。最新 Web `35 files / 258 tests`、Worker `7/32`、API `12/65`、Domain `39/334`、AI Gateway `12/12`、五个受影响包 typecheck、17-page build、production E2E `12/12`、articulation/affine-mutation 与 standalone Hermes release gate 均 GREEN；独立架构、视觉证据与安全复审均为 `APPROVE`，尚待用户动态验收，未提交、未部署。
+- **guide 安全与可靠性收口**：`workspace.guide` API 与 Worker 复用同一严格 payload parser；任务、AI Credit 预留与提交审计在 Serializable 事务内完成后才 dispatch，`P2034` 最多重试三次，策略明确为 submit 时计费。Worker 每轮只协调 `workspace.guide` 的 DB outbox，启动时恢复单消费者 processing 残留；不会提前派发 ingestion 的 `dispatch:false` 两阶段任务。AI Gateway 审计失败会显式记录错误但不会重放已计费 provider 调用；kind 过滤保证刷新恢复不会被其他任务挤出。
+- **最终同步门禁**：canonical root lint（含 `WORKSPACE_STRUCTURE_OK` / `DOCS_SYNC_OK`）、markdownlint `203 files / 0 issues`、独立 `audit:docs-sync` 与 `git diff --check` 均 GREEN。production preview 保持在 `http://127.0.0.1:3194/dashboard`；只待用户视觉判断。
+
+## 2026-08-16（Hermes 情境引导员）— ✅ 工程实现与复审完成，⏳ 用户视觉验收
+
+- **角色闭环**：Dashboard Hermes 不再是跳页图片链接；待机使用 observation / evidence / citation 三段异步品牌动作，并基于真实 ingestion/RO 状态给出一次性情境提示。pointer/focus 进入 attentive，点击原地打开桌面右侧、390px 全屏的深色助手抽屉。
+- **真实任务链**：新增 `workspace.guide` Worker kind，复用 AgentSession、AgentTask、AI Gateway、AI Credit、Redis 队列、轮询、审计与 CSRF；`/agent/tasks` 新增 `20/60s` Redis 限流。Worker 以 guide task 的 session user 为锚，从数据库重建 ingestion/RO 上下文，并要求当前 workspace membership；客户端自报标题、状态和跨 workspace ID 不进入模型可信上下文。
+- **恢复与权限**：会话和任务分别使用稳定幂等键，提交有同步锁；polling 失败只恢复同一 task，不重复扣 credit；刷新后从现有 task 列表恢复 pending/result。AI 输出限为三项只读导航意图并再次校验目标；approval 静止优先于 guide working，reduced-motion 保留静态提示和全部操作。
+- **浏览器证据**：production build 的外部单服务 Playwright `4/4` GREEN，覆盖六态、idle 三动作、真实提示、focus containment/close restore、guide working/progress、needs-more-information、刷新恢复、同 task 网络恢复、390px 全屏抽屉与 reduced-motion 静态内容。修复了旧 Playwright 配置在外部验收时仍启动第二 Next、污染同一 `.next` 的基础设施问题。
+- **自动门禁**：Agent Worker `6 files / 30 tests`、Web `34 files / 251 tests`、API rate-limit `10/10`、三包 typecheck、16-page production build 与最新构建上的外部 Playwright `4/4` 均 GREEN；独立复审发现的上下文授权、重复任务、焦点、reduced、状态文案、approval 优先级问题均已闭合，最终结论为 `APPROVE`（0 Critical / 0 Important / 0 Minor）。未部署、未合并；下一步仅由用户检查 `http://127.0.0.1:3194/dashboard` 的真实动态与交互后决定提交/部署。
+
+## 2026-08-16（Hermes 情境引导员）— ✅ 设计与计划确认，⏳ TDD 实施
+
+- **用户判断**：现有 2.5D 候选仍像一张会轻微移动的图片，缺少引导员、小助手和 Hermes 真实入口的角色能力；旧点击在无任务时跳往新建 RO，并未唤起 Hermes。
+- **确认方向**：可视化比较 A 安静陪伴、B 情境引导员、C 任务领航台后选择 B。待机采用呼吸、眨眼、观察、六节点苏醒与朱砂引用尾的异步行为语法；主动提示只能来自真实 Dashboard 上下文。
+- **入口决策**：点击角色、提示或显式动作，从右侧展开 Hermes 助手抽屉；移动端为等价全高底部面板，保留当前 Workspace，不强制跳页。
+- **真实任务边界**：新增正式 `workspace.guide` AgentTask，复用 AgentSession、AI Gateway、AI Credit、队列、轮询与 R0–R4 审批；禁止把未知 kind 的 demo fallback 冒充 Hermes。
+- **事实源**：`docs/specs/2026-08-16-hermes-contextual-guide-design.md`。当前仅完成设计，不宣称代码、门禁、合并或部署完成。
+- **执行计划**：`docs/plans/2026-08-16-hermes-contextual-guide-plan.md` 将工作收敛为提示模型、正式 Worker、助手抽屉、待机行为和纵向验收五项；用户已授权计划完成后直接实施。
+
+## 2026-08-16（Hermes 2.5D 生命感增量）— ✅ 工程完成，⏳ 用户动态视觉验收
+
+- **用户反馈与根因**：旧候选虽有三帧和 CSS float，但真实测量显示 1.2 秒内整图仅移动约 `3.3px`，pointer 也只是整张图最多 `6px/2deg`；头、身体、尾部没有独立因果，因此被感知为静态贴图。
+- **复审纠偏**：首版局部运动保留完整底图又叠加三张同源位图，会重复曝光并产生潜在重影；正式 E2E 还读取外层 idle transform，不能证明 pointer 真正作用于可见内容。该实现未提交，已按 TDD 替换。
+- **当前实现**：不改三张原创 PNG，不引入新依赖；运行时只显示一份 active frame，head/body/tail 改为不含角色像素的 CSS 观察光、呼吸晕和引用尾信号。待机使用 `8.3s / 4.7s / 6.9s` 非同步周期；pointer 让三个 signal 以 `120/240/420ms` 领先、跟随和反向滞后。
+- **边界保持**：整角色既有 `6px/2deg` 不变；局部 head/body/tail 分别限制在 `8px/3deg`、`4px/1.3deg`、`3px/3deg`。approval 与 reduced-motion 完全静止，真实 task deep link、六状态、三 canonical frame、fallback 和单实例不变。
+- **TDD 与浏览器证据**：focused 新合同在旧叠图上精确 RED（4 pass / 1 fail），当前 GREEN 5/5；锁定 Playwright `1.62.1` 的单服务 E2E 2/2 GREEN。真实 idle 520ms 三层 transform 均变化且不相同；pointer top-right 得到 signal X 位移约 `7.89 / 3.94 / -2.96px`，离开后回零；live still 切换立即为 `0s/none`。
+- **最终门禁**：完整 Web `33 files / 246 tests`、typecheck、canonical root lint（含 `WORKSPACE_STRUCTURE_OK` / `DOCS_SYNC_OK`）、16-page production build 与重启后单服务 E2E `2/2` 均 GREEN；Dashboard first-load `129kB`。预览为 `http://127.0.0.1:3189/dashboard`，未合并、未部署，自动化不替代用户动态审美验收。
+- **独立复审**：重复位图、错误 DOM 取证、pointer readiness、leave reset 与 still 级联均逐项复核；最终 `0 Critical / 0 Important / 0 Minor`，结论 `APPROVE`。
+
+## 2026-08-16（Hermes 2.5D 星图宠物）— ✅ 本地实现完成，⏳ 用户视觉验收
+
+- **最终形象**：以唯一 idle 母版交付暖纸书页质感的少年星图龙；深墨证据脊承载六个节点，头顶核心不计入 SDF 六节点，朱砂引用尾保持品牌记忆点。blink 只替换眼区，working 只增加证据节点光，三帧 Alpha 摘要完全相同，切换不再跳形。
+- **运行实现**：`HermesPetPortrait` 使用三张原生透明 PNG，`HermesVisualAdapter` 保留真实任务 deep link 与六状态语义；idle 呼吸/漂浮/眨眼，guiding/suggesting 节点脉冲，scanning 切 working 与扫描线，approval/failed 使用单一朱砂信号且角色不抖动。指针合成位移限制在 `6px`、倾角 `2deg`，420ms 内回中；reduced-motion 静止。
+- **失败与预算**：任一当前活动帧失败都会恢复原 SVG，不产生空白操作区；三张 824×824 RGBA PNG 合计 `1,472,269B`，低于 1.5MB，当前 256px 槽位仍超过 3× 像素密度。832px 的 `1,511,539B` RED 已记录，未放宽预算。
+- **真实门禁**：资产/SSR focused `5/5`、Web `245/245`、typecheck、production build（Dashboard `7.46kB / 129kB`）与外部单服务 Playwright `2/2` GREEN；桌面六态、390px、reduced、指针边界/回中、工作帧失败 fallback、主内容/溢出/console error 均已覆盖，截图人工检查完整。全仓 lint/结构/docs-sync、markdownlint `199 files / 0 issues` 与 diff check 均 GREEN；独立复审 APPROVE，无 Critical/Important。
+- **事实边界**：旧 Blender 少年星图龙原型维持用户 NO-GO，仅留历史 worktree，不属于仓库候选或运行时；当前唯一视觉候选是本 2.5D 实现。未部署、未合并，等待用户只验最终 Workspace 效果。
+
+## 2026-08-15（Hermes 2.5D 星图宠物）— ⏳ 原创透明资产与 Workspace 样机启动
+
+- **用户决策**：确认停止修补被否决的程序化 3D，转向高质量 2.5D 分层角色；目标是更接近 Codex Pet 的轻巧陪伴感，同时保留少年星图龙、六节点证据脊与朱砂引用尾的品牌故事。
+- **实现边界**：使用原创透明插画母版与 blink/working 两个一致状态帧；React/CSS 只负责分层、呼吸、漂浮、眨眼、节点脉冲和最多 `6px / 2deg` 指针倾身。不引入 Canvas/WebGL/Cubism/第三方角色资产。
+- **发布边界**：先在隔离分支完成真实 Workspace 样机与用户视觉验收；自动化通过不等于审美通过，未验收前不部署。
+- **下一步**：资产合同先 RED，再生成 canonical idle、blink、working 三帧，最后替换现有 Dashboard Hermes 视觉呈现并跑真实浏览器门禁。
+
+## 2026-08-15（Hermes 少年星图龙建模原型）— ❌ 用户视觉 NO-GO
+
+- **用户决策**：否决精致机器人、纸墨团与星页鳐方向；在熊猫、猫和龙的同画风比较后，选择继续精修“少年星图龙”。当前固定记忆点为紧凑 S 形龙身、六节点墨色背脊与朱红引用尾，目标同时满足艺术、可爱、轻科幻和教授级工作台兼容性。
+- **范围收紧**：本轮只制作真实 Blender 静态母版、三分之四/正面/侧面/盘卧待机四视图和 48 px 视觉证据；未通过静态视觉门槛即停止，不提前制作完整六态、GLB 或 Workspace 运行时。
+- **事实纠偏**：旧 `2026-08-15-hermes-3d-scholar-agent-*` spec/plan 已标 `DEPRECATED`，不删除历史文件；当前事实源改为少年星图龙 prototype design/plan，避免后续 session 再读错旧机器人任务。
+- **隔离与工具**：新分支 `codex/hermes-constellation-dragon-prototype` 位于 E 盘 worktree；复用 E 盘便携 Blender 4.5.12 可执行文件，不复制旧机器人造型。隔离基线 Hermes 4/4 与 `DOCS_SYNC_OK` 通过。
+- **真实建模进度**：已生成可编辑 `.blend`、四张 768 px 视图与 1536 px contact sheet；TDD 先捕获旧高瘦轮廓和页片世界原点错误，再按确认概念重构为头胸相交的修长卷体、外脊六节点证据带、三片书页背鳍、竖向杏仁眼、墨绿验证耳鳍、短圆肢与双叶朱砂引用尾。当前结构指标为轮廓高宽比 `1.376`、头胸中心距 `0.326`、背脊/身体半径比 `0.192`、眼高宽比 `1.278`、19,676 triangles，focused asset contract 2/2 GREEN。
+- **视觉结论**：用户检查最终 contact sheet 后明确判定“没达到”。当前基础体程序化 3D 路线在头脸原创度、身体截面、肢体连接、侧视厚度和整体品牌气质上均未达到要求；结构门禁 GREEN 不等于审美通过。
+- **停止边界**：不提交当前静态模型，不制作 GLB、骨骼、六态动作或 Workspace 集成；现有文件仅作为失败证据保留，未经用户授权不删除。
+- **下一步**：重新选择资产方法。首选为与 Workspace 兼容的高质量 2.5D 分层角色母版与轻量骨骼；完整雕刻 3D 或授权基础模型改造作为成本更高的备选。
+
+## 2026-08-15（Hermes 原创 3D 学者 Agent）— ⏳ 设计与实施启动
 
 - **用户决策**：废弃摄像头、面具、浮空书体与二维概念图直接交付路线；Hermes 改为具有头、肩、紧凑躯干、机械臂与悬浮核心的学者型机器人。书卷气只进入 folio 肩部披片、装订式脊柱、页层与批注边光，机器人识别优先于学术隐喻。
 - **资产真值**：最终交付必须包含可编辑 `.blend`、网页 `.glb`、PBR 材质、六态动作、poster、turntable 和真实资产门禁；imagegen 图片仅为被否决/探索性的 moodboard，不作为可复现资产。
 - **运行边界**：复用现有 `HermesVisualState` 与 OGL 1.0.11 的 glTF/Skin/Animation 能力；原 SVG/CSS Optical Guide 保留为 SSR、加载、reduced-motion 与失败 fallback；不引入 Three.js/Pixi/Cubism，不复制 Wanko 或 Live2D 二进制。
 - **工具约束**：Blender 仅使用 E 盘项目专用 Portable 路径，下载、解压、缓存和输出均不得落到 C 盘。设计 spec 与 TDD 实施计划已登记；当前未修改生产代码、未部署服务器。
-- **终止结论**：该路线已被用户否决，旧 spec/plan 于 2026-08-16 清理；不得从本历史记录恢复实施。
+- **下一步**：按 `docs/plans/2026-08-15-hermes-3d-scholar-agent-plan.md` 从 GLB RED 合同和 checksum-pinned Blender Portable 开始，随后生成原创 geometry/rig/material/actions 并进入隔离浏览器验收。
 
 ## 2026-08-15（主页视觉验收与版本收口）— ✅ 已验收并合并至 `main`
 

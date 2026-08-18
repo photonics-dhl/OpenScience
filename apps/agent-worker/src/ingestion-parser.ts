@@ -1,7 +1,5 @@
 import { extname } from 'node:path';
 import { spawn } from 'node:child_process';
-import { PDFParse } from 'pdf-parse';
-import mammoth from 'mammoth';
 
 export type ParsedIngestion =
   | { status: 'ready'; text: string; format: string }
@@ -11,6 +9,71 @@ export interface IngestionAdapters {
   pdf?: (content: Buffer) => Promise<string>;
   docx?: (content: Buffer) => Promise<string>;
   image?: (content: Buffer) => Promise<string>;
+}
+
+const PARSER_TIMEOUT_MS = 60_000;
+const MAX_PARSED_TEXT_CHARS = 5 * 1024 * 1024;
+const ISOLATED_PARSER_SOURCE = `
+(async () => {
+  const chunks = [];
+  for await (const chunk of process.stdin) chunks.push(chunk);
+  const content = Buffer.concat(chunks);
+  const kind = process.argv[1];
+  let text = '';
+  if (kind === 'pdf') {
+    const { PDFParse } = require('pdf-parse');
+    const parser = new PDFParse({ data: content });
+    try { text = (await parser.getText()).text; } finally { await parser.destroy(); }
+  } else if (kind === 'docx') {
+    text = (await require('mammoth').extractRawText({ buffer: content })).value;
+  } else {
+    throw new Error('unsupported isolated parser');
+  }
+  if (text.length > ${MAX_PARSED_TEXT_CHARS}) throw new Error('parsed text too large');
+  process.stdout.write(text);
+})().catch((error) => {
+  process.stderr.write(error instanceof Error ? error.message : String(error));
+  process.exitCode = 1;
+});
+`;
+
+function parseBinaryIsolated(kind: 'pdf' | 'docx', content: Buffer): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const child = spawn(process.execPath, ['--max-old-space-size=256', '-e', ISOLATED_PARSER_SOURCE, kind], {
+      stdio: ['pipe', 'pipe', 'pipe'],
+    });
+    const chunks: Buffer[] = [];
+    let outputSize = 0;
+    let errorText = '';
+    let settled = false;
+    const finish = (error?: Error, text?: string) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      if (child.exitCode === null) child.kill('SIGKILL');
+      if (error) reject(error);
+      else resolve(text ?? '');
+    };
+    const timer = setTimeout(() => finish(new Error(`${kind} parser timeout`)), PARSER_TIMEOUT_MS);
+    child.stdout.on('data', (chunk: Buffer) => {
+      outputSize += chunk.length;
+      if (outputSize > MAX_PARSED_TEXT_CHARS * 4) {
+        finish(new Error(`${kind} parser output too large`));
+        return;
+      }
+      chunks.push(chunk);
+    });
+    child.stderr.on('data', (chunk: Buffer) => {
+      if (errorText.length < 4096) errorText += chunk.toString('utf8', 0, 4096 - errorText.length);
+    });
+    child.once('error', (error) => finish(error));
+    child.once('close', (code) => {
+      if (code === 0) finish(undefined, Buffer.concat(chunks).toString('utf8'));
+      else finish(new Error(errorText || `${kind} parser exited ${code ?? 'unknown'}`));
+    });
+    child.stdin.once('error', (error) => finish(error));
+    child.stdin.end(content);
+  });
 }
 
 async function tesseractOcr(content: Buffer): Promise<string> {
@@ -32,20 +95,13 @@ async function tesseractOcr(content: Buffer): Promise<string> {
 
 export function createDefaultIngestionAdapters(): IngestionAdapters {
   return {
-    pdf: async (content) => {
-      const parser = new PDFParse({ data: content });
-      try {
-        return (await parser.getText()).text;
-      } finally {
-        await parser.destroy();
-      }
-    },
-    docx: async (content) => (await mammoth.extractRawText({ buffer: content })).value,
+    pdf: (content) => parseBinaryIsolated('pdf', content),
+    docx: (content) => parseBinaryIsolated('docx', content),
     image: tesseractOcr,
   };
 }
 
-const MAX_PARSER_INPUT = 20 * 1024 * 1024;
+export const MAX_PARSER_INPUT = 50 * 1024 * 1024;
 
 /**
  * 将已通过上传内容门禁的 Blob 转成 Hermes 可消费的正文。
