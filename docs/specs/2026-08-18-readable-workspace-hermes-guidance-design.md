@@ -1,6 +1,6 @@
 # Readable Workspace and Hermes Guidance Design
 
-Status: **CURRENT — product direction approved; written-spec review pending**
+Status: **CURRENT — approved for implementation**
 
 Date: 2026-08-18
 Extends: `docs/specs/2026-08-17-hermes-workspace-companion-motion-design.md`

@@ -2,12 +2,12 @@
 
 > 本文件只保留 CURRENT window；完整历史由 Git history 保存，不作为新 session 默认输入。
 
-## 2026-08-18 — 可读工作台与 Hermes 空白创建引导（设计待书面确认）
+## 2026-08-18 — 可读工作台与 Hermes 空白创建引导（设计确认，进入实施）
 
 - **用户复验结论**：公网 Hermes 已有视觉运动，但优雅度、生命感和真实引导仍不足；截图同时证明 guide action 按钮出现浏览器白底/浅色文字，且 Hermes/气泡遮挡字段与 diff。全站大量 10–12 px、宽字距、低对比信息导致阅读吃力。
 - **已确认方向**：采用 B「平衡学者工作台」；分别优化 authenticated workspace、public RO 与 Landing，不把三套视觉系统同质化。Hermes 保留现有角色/renderer，改为待机→发现缺项→安全游动→抵达→Explain/Draft/Check→字段 diff→反馈的真实编舞，并把不遮挡 active input 设为硬约束。
 - **真实验收**：公网真实管理员从 blank RO 开始，输入一段无实验结果的受控研究构想；MiniMax 必须准确生成五类有依据字段并对 results 明示未知，完成 accept / edit-accept / reject、保存、刷新和 commit。不得用 mock、API interception 或 visual harness 代替。
-- **CURRENT 入口**：`docs/specs/2026-08-18-readable-workspace-hermes-guidance-design.md`；产品方向已确认，等待用户书面 spec 复核后再写实施计划，业务代码尚未修改。
+- **CURRENT 入口**：设计 `docs/specs/2026-08-18-readable-workspace-hermes-guidance-design.md` 与计划 `docs/plans/2026-08-18-readable-workspace-hermes-guidance-plan.md`；书面 spec 已确认，按 TDD 直接实施，业务代码尚未修改。
 
 ## 2026-08-18 — Hermes 真实动效修复（已部署并通过公网真实账号验收）
 

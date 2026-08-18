@@ -123,7 +123,8 @@
 | `docs/specs/2026-08-15-hermes-constellation-dragon-prototype-design.md` | Hermes 少年星图龙轻量 Blender 原型历史设计 | **用户视觉 NO-GO**；不得作为当前候选 |
 | `docs/specs/2026-08-15-hermes-2d-pet-design.md` | Hermes 2.5D 整图 PNG/CSS-signal 历史原型 | **DEPRECATED / VISUAL NO-GO**；资产可复用，renderer 不得继续 |
 | `docs/specs/2026-08-17-hermes-workspace-companion-motion-design.md` | Hermes Workspace Companion CURRENT 设计：四层 mesh 动作混合、25+ 行为、C 安全航道、语义字段引导、用户停靠、reviewable diff、移动端/reduced 与真实像素验收 | **CURRENT Hermes visual/guide design**；默认 full、逐字段目标与透明区表单穿透已部署 `1b76b46`，待用户体验复验 |
-| `docs/specs/2026-08-18-readable-workspace-hermes-guidance-design.md` | B 平衡学者工作台、三视觉系统阅读基线、浏览器无关控件样式、Hermes 不遮挡引导编舞与公网 blank RO→六字段→diff→commit 真实验收 | **CURRENT next implementation design**；产品方向已确认，书面 spec review pending，业务代码未改 |
+| `docs/specs/2026-08-18-readable-workspace-hermes-guidance-design.md` | B 平衡学者工作台、三视觉系统阅读基线、浏览器无关控件样式、Hermes 不遮挡引导编舞与公网 blank RO→六字段→diff→commit 真实验收 | **CURRENT next implementation design**；书面 spec 已确认，进入实施 |
+| `docs/plans/2026-08-18-readable-workspace-hermes-guidance-plan.md` | 可读性基础→代表页面→完整 Hermes footprint 避让→edit-before-accept/缺失证据→语义动作→公网 blank RO gate→ECS checkpoint 的 TDD 实施链 | **CURRENT execution plan**；已确认，Task 1 pending |
 | `docs/specs/2026-08-16-hermes-articulated-mesh-pet-design.md` | Hermes 原创 OGL 2D mesh-rig 历史设计：真实角色像素关节、旧待机语法与严格 lifecycle | **DEPRECATED**；由 2026-08-17 Workspace Companion spec 取代 |
 | `docs/specs/2026-08-16-hermes-contextual-guide-design.md` | Hermes 情境引导员历史设计：Dashboard 提示、助手抽屉与正式 `workspace.guide` 闭环 | **DEPRECATED**；由 2026-08-17 Workspace Companion spec 取代 |
 | `docs/data/launch-research-corpus.md` | 18 条公开启动语料的范围、免责声明、真实来源、上游许可证证据与 ECS seed 操作边界 | 活文档；本地完成，待生产 seed |

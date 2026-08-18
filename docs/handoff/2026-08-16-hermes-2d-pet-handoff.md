@@ -2,8 +2,8 @@
 
 ## Current truth
 
-- 2026-08-18 用户公网复验确认：动画存在，但角色仍不够优雅/有生命感；全站阅读层级、字号、对比和控件默认样式有系统问题，guide bubble 会遮挡字段/diff。CURRENT next-design 是 `docs/specs/2026-08-18-readable-workspace-hermes-guidance-design.md`，方向已确认，业务实现尚未开始。
-- 当前唯一设计/执行入口是 `docs/specs/2026-08-17-hermes-workspace-companion-motion-design.md` 与 `docs/plans/2026-08-17-hermes-workspace-companion-motion-plan.md`。旧 3D、Live2D、整图 PNG/CSS-signal 与 2026-08-16 mesh/contextual 路线均为 DEPRECATED/NO-GO。
+- 2026-08-18 用户公网复验确认：动画存在，但角色仍不够优雅/有生命感；全站阅读层级、字号、对比和控件默认样式有系统问题，guide bubble 会遮挡字段/diff。CURRENT design/plan 是 `docs/specs/2026-08-18-readable-workspace-hermes-guidance-design.md` 与 `docs/plans/2026-08-18-readable-workspace-hermes-guidance-plan.md`，均已确认，业务实现尚未开始。
+- 当前唯一新增需求入口是 2026-08-18 readable-workspace design/plan；2026-08-17 motion spec/plan 仅保留为已实现 renderer/行为合同的历史依据，不再作为本轮执行入口。旧 3D、Live2D、整图 PNG/CSS-signal 与 2026-08-16 mesh/contextual 路线均为 DEPRECATED/NO-GO。
 - 产品形象与技术路线已经确定，当前处于实现/生产验收阶段，不得重新讨论路线。运行事实源是 `action-catalog.ts`、`behavior-director.ts`、`motion-mixer.ts`、`pet-motion.ts` 与 `HermesWorkspaceStage.tsx`。
 - 2026-08-18 release `1b76b46` 已修复 Windows 系统设置隐藏 WebGL canvas 与移动端透明舞台遮挡表单：首次默认 full，常驻 full/reduced 控制；只有真实 rig/控制/bubble 命中鼠标，审批与主动 reduced 同帧静止。
 - 真实静止根因已经闭合：Dashboard 曾把队列 `needs_review` 误当作审批 UI 已打开；旧空任务 mock 录屏未覆盖该分支。release `39c752b` 已部署并通过公网真实账号验收。禁止本机 Docker；后续视觉判断仍以 ECS 公网页面为准。
@@ -32,8 +32,8 @@
 
 ## Next action
 
-1. 用户复核 `docs/specs/2026-08-18-readable-workspace-hermes-guidance-design.md`；确认后写单一实施计划。
-2. 实施必须同时修复阅读 token/控件基线、Hermes 避让与真实 blank RO per-field diff 引导；不得只增加动作数量。
+1. 按 `docs/plans/2026-08-18-readable-workspace-hermes-guidance-plan.md` 从 Task 1 开始 TDD 实施。
+2. 同时修复阅读 token/控件基线、Hermes 避让与真实 blank RO per-field diff 引导；不得只增加动作数量。
 3. 最终只接受 ECS 公网真实账号的 blank→六字段→accept/edit/reject→save/refresh/commit 连续证据，不以 mock 录屏替代。
 
 Read first：`AGENTS.md` → 本 handoff → `docs/specs/2026-08-18-readable-workspace-hermes-guidance-design.md` → 需求基线 UI/Hermes 段 → 短版 `docs/progress.md`；`project_index.md` 只用 `rg` 定向查 CURRENT 行。
