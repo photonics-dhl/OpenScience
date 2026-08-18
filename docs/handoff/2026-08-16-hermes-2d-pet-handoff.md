@@ -4,22 +4,22 @@
 
 - 当前唯一设计/执行入口是 `docs/specs/2026-08-17-hermes-workspace-companion-motion-design.md` 与 `docs/plans/2026-08-17-hermes-workspace-companion-motion-plan.md`。旧 3D、Live2D、整图 PNG/CSS-signal 与 2026-08-16 mesh/contextual 路线均为 DEPRECATED/NO-GO。
 - 产品形象与技术路线已经确定，当前处于实现/生产验收阶段，不得重新讨论路线。运行事实源是 `action-catalog.ts`、`behavior-director.ts`、`motion-mixer.ts`、`pet-motion.ts` 与 `HermesWorkspaceStage.tsx`。
-- 2026-08-18 候选已修复 Windows 系统设置隐藏 WebGL canvas 的根因：首次默认 full，常驻 full/reduced 控制，偏好跨路由/刷新保存；审批与主动 reduced 同帧静止。
-- 用户已授权：更新 PR、合并本地 `main`、优化 docs-sync，并部署 ECS。禁止本机 Docker；生产事实只认 ECS 与公网验收。
+- 2026-08-18 release `017bf1e` 已修复 Windows 系统设置隐藏 WebGL canvas 的根因：首次默认 full，常驻 full/reduced 控制，偏好跨路由/刷新保存；审批与主动 reduced 同帧静止。
+- PR、local-main merge、docs-sync 优化和 ECS 发布均已完成。禁止本机 Docker；生产事实只认 ECS 与公网验收。
 
 ## Workspace Companion candidate
 
 - 单一 Workspace stage/canvas owner；27-action 确定优先级、独立关节与 whole-character presentation layer；用户停靠优先于自动航行。
 - 创建/编辑页有真实 Drawer 与语义锚点：title→source import、选中 SDF 字段→Explain/Draft/Check；建议只在显式 Apply 后改 SDF。
-- 本地候选证据：motion `16/16`、自包含单 worker 浏览器 `18/18`、Web `295/295`、17-page build、聚合 release `144.7s` exit 0；完整指标见 `docs/progress.md` 最新条目。
+- 合并/生产证据：Web `300/300`、17-page build、线上 90 秒动作门禁 exit 0（13 distinct / 28 actions），源码哈希与 Parser 隔离检查通过；完整指标见 `docs/progress.md` 最新条目。
 - 未完成边界：高级 Quiet/Balanced/Active、sound/particle/proactive 设置 UI，以及两信号主动提示/cooldown 的完整矩阵。
 
 ## Version tuple
 
 - Branch: `codex/hermes-2d-pet`
-- Feature commit: `ee514aa`; current branch HEAD is the succeeding docs-sync commit (`git rev-parse HEAD` is authoritative)
-- Remote branch before push: `0398838`
-- ECS release / rollback: `aa1c8af` / `c9df24d`
+- Remote branch HEAD: `961b584` (`ee514aa` feature + docs-sync)
+- Local `main`: `017bf1e`
+- ECS release / rollback: `017bf1e` / `aa1c8af`
 - PR: `https://github.com/photonics-dhl/OpenScience/pull/3`
 
 ## Constraints and open risks
@@ -31,8 +31,8 @@
 
 ## Next action
 
-1. 完成 docs-sync 门禁与文档压缩，提交并推送 `codex/hermes-2d-pet`，更新 PR #3。
-2. 合并到本地 `main`，保护用户未跟踪资产；验证合并结果。
-3. 按 `docs/runbooks/deployment.md` 执行 checkup、DB backup、dry-run、`--confirm --skip-migrate`，再验证容器、版本哈希与公网行为。
+1. 产品负责人用真实账号复验无 query 默认 full、常驻 full/reduced 切换、跨路由持久化、创建 title→source-import 与编辑字段引导。
+2. 高级 Quiet/Balanced/Active、sound/particle/proactive 设置 UI 与两信号主动提示/cooldown 仍是后续范围，不得写成已完成。
+3. 若远端 PR 合并或 `main` 推送，先核对 GitHub CI 与 version tuple；不得把 post-deploy docs commit 冒充已部署应用 release。
 
 Read first：`AGENTS.md` → 本 handoff → CURRENT spec/plan → `docs/progress.md` first 80 lines → `project_index.md` 相关 CURRENT 行。

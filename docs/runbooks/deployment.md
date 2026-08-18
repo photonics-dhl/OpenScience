@@ -389,3 +389,31 @@ Current infrastructure uses pinned base/worker images with bind-mounted applicat
   return `401`. A public-domain production-browser matrix passed `6/6` for
   motion persistence, route continuity, creation/import guidance, selected
   SDF field guidance, callable Drawer and reduced-motion actions.
+
+### 5.10 Hermes default-visible motion and docs routing release (2026-08-18)
+
+> Deployed release `017bf1e`; rollback `aa1c8af`.
+
+- Scope: first-use Hermes motion defaults to `full`; a persistent full/reduced
+  control remains visible; hydration starts static until the saved preference
+  resolves; approval and explicit reduced remain fully still. The same release
+  hardens docs-sync with worktree-first routing, one CURRENT handoff, bounded
+  reads, and a branch/HEAD/release/rollback tuple.
+- Pre-deploy evidence on the merged tree: canonical lint/docs-sync, Web
+  `300/300`, Web typecheck, and the 17-page production build passed. No schema,
+  migration, seed, provider, permission, or Secret change was included.
+- Operation: pre/post checkup passed; DB backup returned
+  `BACKUP_OK size=384K files=7/7`; dry-run preceded
+  `deploy.sh --confirm --skip-migrate 017bf1e`. The ECS full-workspace build,
+  Parser-first health wait, application restart, Nginx validation, and hard
+  HTTP checks completed successfully.
+- Source integrity: remote/local SHA-256 values match for
+  `HermesWorkspaceStage.tsx` (`8414f18f...a9507`) and
+  `motion-preference.ts` (`72fd4924...adc6`). Parser remains `network=none`,
+  `user=node`, read-only, 512MiB/64 PID, `cap_drop=ALL`, with only
+  `/parser-jobs` mounted.
+- Public verification: `/`, `/explore`, `/auth/login`, and `/api/explore`
+  return `200`; anonymous `/auth/me` and `/admin/` return `401`. The deployed
+  Dashboard's 90-second renderer gate passed with 28 actions, 13 distinct
+  actions, 22 micro, 6 signature, a 4358ms maximum gap, patrol return,
+  six-action whole-character motion, and pointer response.

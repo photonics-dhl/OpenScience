@@ -1,18 +1,19 @@
 # OpenScience (XGS) 进度日志
 
-## 2026-08-18（版本收口与 active-memory 压缩）— ⏳ 本地 GREEN，待推送/合并/部署
+## 2026-08-18（版本收口、docs-sync 与 Hermes 默认动效发布）— ✅ ECS GREEN
 
-- **版本边界**：用户授权更新 PR #3、合并本地 `main` 并部署 ECS；当前功能分支候选为 `ee514aa` 加本轮 docs-sync commit，远端分支仍为 `0398838`，ECS 仍为 release/rollback `aa1c8af` / `c9df24d`。
+- **版本边界**：功能修复 `ee514aa`、docs-sync `961b584` 已推送并更新 PR #3；本地 `main` 合并 release `017bf1e` 已部署 ECS，rollback 为 `aa1c8af`。用户自有未跟踪设计资产未移动、删除或提交。
 - **旧记忆根因**：无 skill 基线虽最终判断正确，但读取了大量历史，并遇到旧 progress CURRENT、handoff 旧动作语法、文件名日期与正文状态、已部署/待部署未绑版本四类干扰。CURRENT Hermes handoff 已从 56 个长行压缩为 38 行，只保留当前事实、版本元组、边界和下一步；历史文件未删除。
-- **docs-sync TDD**：新增 `scripts/docs/docs-sync-skill.test.mjs`，旧 skill `0/4` RED，canonical lint 绕过 skill 合同再以 `5/6` RED；新版 skill + AGENTS bounded-read + CI wiring `6/6` GREEN。独立 forward test 只读 baseline 相关段、progress 前 80 行、CURRENT 索引区与 38 行 handoff，正确给出 task/version tuple，历史命中未进入 active reasoning。
-- **下一步**：完成 canonical lint/docs gate 与提交，推送功能分支更新 PR；保护本地 `main` 的用户未跟踪设计资产后合并验证，再按 runbook 备份、dry-run、`--skip-migrate` 部署并记录新 release/rollback。
+- **docs-sync TDD**：新增 `scripts/docs/docs-sync-skill.test.mjs`，旧 skill `0/4` RED，canonical lint 绕过合同再以 `5/6` RED；新版 skill + AGENTS bounded-read + CI wiring `6/6` GREEN。独立 forward test 只读 baseline 相关段、progress 前 80 行、CURRENT 索引区与 compact handoff，正确给出 task/version tuple，历史命中未进入 active reasoning。
+- **合并与部署证据**：合并后 lint/docs-sync、Web `300/300`、typecheck、17-page build GREEN；ECS 前后 checkup 健康，DB backup `384K / 7/7`，dry-run 后 `--confirm --skip-migrate` 成功。远端 Stage/motion-preference SHA-256 与本地一致；Parser 保持 `network=none`、非 root、只读、512MiB/64 PID、仅 bounded IPC mount。公网 `/`、`/explore`、`/auth/login`、`/api/explore` 为 `200`，匿名 `/auth/me` 与 `/admin/` 为 `401`。
+- **真实线上动效**：公网 Dashboard 直接加载已部署 JS/WebGL 的 90 秒门禁 exit `0`：28 次动作、13 种 distinct、22 micro、6 signature、最大动作间隔 `4358ms`，并通过巡游回位、至少六种整体位移与 pointer 响应。下一步仅需产品负责人用真实账号复验无 query 默认 full、切换持久化与逐字段引导体验。
 
-## 2026-08-18（Hermes 默认动效与常驻控制）— ✅ 本地实现/真实页面 GREEN，⏳ 待生产发布确认
+## 2026-08-18（Hermes 默认动效与常驻控制）— ✅ 已并入 release `017bf1e`
 
 - **用户实际缺陷与根因**：Windows `prefers-reduced-motion` 不仅让首次状态默认 reduced，旧 CSS 还无条件 `display:none` 隐藏 WebGL canvas；因此即使 JS 已显式 full、renderer 也在绘制，真实页面仍只显示静态 fallback。旧“开启 Hermes 动效”又仅在 reduced 分支渲染，full 时按钮消失，用户无法判断或修正状态。
 - **产品修复**：Hermes 首次默认 full motion；只有用户主动关闭、已保存 reduced 偏好或显式 `?hermes-motion=reduced` 才静止。未解析持久偏好时先保持静态，避免 reduced 用户 hydration 闪动；显式 full 不再被系统 media query 隐藏。控制改为舞台内常驻高对比 pill：full 显示“关闭 Hermes 动效”，reduced 显示“开启 Hermes 动效”，两种选择均跨路由/刷新保留。审批态仍保持克制静止。
 - **TDD / 真实证据**：RED 依次捕获默认 reduced、已保存 reduced 的 hydration full 闪动、`full` canvas 被 CSS 隐藏，以及系统 no-preference 下显式 reduced 仍保留提示 transition；GREEN 为 motion `16/16`、自包含单 worker Dashboard/创建/编辑浏览器命令 `18/18`、全 Web `295/295`、typecheck 与 17-page production build。Dashboard mock 现覆盖启动期 workspace-guide 查询，不再偶然依赖 3101 API。完整 Hermes release `144.7s` exit `0`：呼吸 `5,531`、pointer `58,667` changed pixels，first-ready `923ms`，idle/pointer 真实 draw `452/510`，p95 均 `18ms`。1440×900 人工截图确认常驻控制可辨识。
-- **边界**：未改角色动作语法、Agent 权限、API、数据库或生产配置；尚未执行 ECS 写操作，生产仍为 release `aa1c8af`。
+- **边界**：未改角色动作语法、Agent 权限、API、数据库或生产配置；部署未运行 migration/seed，生产 release/rollback 已更新为 `017bf1e` / `aa1c8af`。
 
 ## 2026-08-17（Hermes 真实页面引导与动效偏好修复）— ✅ ECS 部署与公网行为 GREEN
 
