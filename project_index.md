@@ -251,7 +251,7 @@
 | `docs/security/sandbox-security-statement.md` | 沙箱安全承诺与免责声明（P1E-8，待法律审核） | 活文档 |
 | `docs/security/production-security-checklist.md` | 生产安全检查清单（P0/P1/P2 三级，P0 为上线阻断项，P1E-8） | 活文档 |
 | `docs/project-index-p1e-supplement.md` | P1E 索引补充草稿（内容已合并入本索引 2026-08-06；注意其 P1E-1/2 设计文档条目为登记错误，实际不存在） | 已合并，留存快照 |
-| `docs/progress.md` | 进度日志，新条目置顶 | 活文档 |
+| `docs/progress.md` | 不超过 120 行 / 16 KiB 的 CURRENT progress window；完整历史只查 Git history，不进入默认 session 输入 | **CURRENT active-memory** |
 | `docs/handoff/` | 交接文档目录（阶段边界/换 agent/换电脑，必须入库） | 活文档 |
 | `docs/handoff/2026-07-28-before-p1a-2-handoff.md` | P1A-2 前交接：Phase 0 Accepted、P1A-1 done、下一任务 P1A-2 | 活文档 |
 | `docs/handoff/2026-07-28-p1a-2-local-done-cloud-pending-handoff.md` | P1A-2 本地完成交接：代码+本地门禁 done，集成测试待阿里云，下一任务 P1A-3 design gate | 活文档 |
@@ -308,7 +308,7 @@
 | `docs/decisions/ADR-006-cloudflare-tunnel-public-ingress.md` | 未备案域名公网入口改由 ECS 常驻 Cloudflare Tunnel 承载；Nginx 继续作为统一回源与安全边界 | Accepted |
 | `docs/handoff/2026-08-15-cloudflare-tunnel-egress-incident-handoff.md` | Cloudflare Tunnel 502/530 事故根因、生产修复、回滚证据与后续观察项 | 当前基础设施交接 |
 | `docs/specs/2026-08-16-edge-cache-asset-versioning-design.md` / `docs/plans/2026-08-16-edge-cache-asset-versioning-plan.md` / `docs/handoff/2026-08-16-edge-cache-asset-versioning-handoff.md` | Landing 大型光学资产内容寻址缓存的设计、实施与部署证据 | 已完成历史主题；release `b93fa9d`，不作为当前 Hermes 入口 |
-| `docs/runbooks/deployment.md` | 部署 runbook（cloud-sync/迁移/seed/nginx/验证、Parser 隔离与版本化资产）；§5.3–5.10 登记 Optical 与 Hermes 生产发布 | CURRENT；最新 release/rollback `017bf1e` / `aa1c8af` |
+| `docs/runbooks/deployment.md` | 部署 runbook（cloud-sync/迁移/seed/nginx/验证、Parser 隔离与版本化资产）；§5.3–5.10 登记 Optical 与 Hermes 生产发布 | CURRENT；最新 application release/rollback `1b76b46` / `017bf1e` |
 | `docs/runbooks/backup-restore.md` | 备份与恢复 runbook（四节骨架，Phase 1A 填充） | 骨架 |
 | `docs/runbooks/incident.md` | 故障响应 runbook（四节骨架，Phase 1A 填充） | 骨架 |
 | `docs/runbooks/monitoring.md` | 监控面板 runbook（Netdata + vnStat，同域 /monitor/ /traffic/ 路径，2026-08-01） | 已上线 |
@@ -352,7 +352,7 @@
 | `.agents/skills/infra-runbook/SKILL.md` | 基础设施与运维 runbook 规范（单 ECS 拓扑、备份、部署） | 活文档 |
 | `.agents/skills/security-review/SKILL.md` | 安全审查清单（密钥、越权、上传、沙箱、日志脱敏） | 活文档 |
 | `.agents/skills/test-gate/SKILL.md` | 测试门禁（最小相关测试→阶段验收、禁隐藏失败） | 活文档 |
-| `.agents/skills/docs-sync/SKILL.md` | 文档同步与记忆卫生纪律：Git 定锚、每主题唯一 CURRENT、bounded reads、版本元组、80 行 handoff、历史降级而不删除 | CURRENT；TDD `6/6`，防旧记忆回流与重复证据膨胀 |
+| `.agents/skills/docs-sync/SKILL.md` / `scripts/docs/docs-sync-skill.test.mjs` | 文档同步与记忆卫生纪律：Git 定锚、每主题唯一 CURRENT、search-only index、120 行 progress、80 行 handoff、16 KiB active-doc 上限、历史转 Git/archive 且不进入默认读取 | CURRENT；TDD `8/8`，防旧记忆回流与重复证据膨胀 |
 
 ## 已废弃
 | 路径 | 说明 |

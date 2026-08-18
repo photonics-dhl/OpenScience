@@ -58,7 +58,7 @@ OpenScience：AI 时代科研基础设施平台（Research Object / SDF / 预印
 - **文档同步纪律**：见 `.agents/skills/docs-sync/SKILL.md`；创建/修改文件、任务状态变化、换 agent/session 前必须按它同步索引/进度/AGENTS/handoff
 
 ## Memory Rules
-- 任务开始先运行 worktree/branch/status 检查；读取需求基线相关章节、`docs/progress.md` first 80 lines，并用 `rg -n "CURRENT|<topic>" project_index.md docs/handoff docs/specs docs/plans` 定位相关索引行与唯一 CURRENT handoff，禁止默认加载全部历史。
+- 任务开始先运行 worktree/branch/status 检查；用 `rg -n "CURRENT|<topic>" project_index.md docs/handoff docs/specs docs/plans` 定位唯一 CURRENT handoff，先读 handoff，再读需求基线相关章节和短版 `docs/progress.md`。`project_index.md` 只定向检索，禁止默认加载全文或 archive。
 - 判断状态时记录 `branch / HEAD / release / rollback`；本地候选、远端分支、本地 `main` 与 ECS 版本不得混写。
 - 重大决策写 Memory MCP（实体前缀 `XGS-`）
 
