@@ -77,7 +77,7 @@
 | `apps/web/test/visual/shots.mjs` | Landing production browser gate：1672×941/390×844 normal/reduced、唯一 main/h1/shared surface、导航/CTA/Latest Research、overflow/errors/focus、bounded pointer；Task 23 normal 最终 surface 连续三段 `1200ms` 验证标题 coverage `>=18%` / average delta `>=1.10`、四象限与色带 `<=20%`，desktop reduced exact fixture | Task 23 本地与公网 production GREEN |
 | `apps/web/.gitignore` | web 局部生成物忽略（Task 7.10 截图输出 `test/visual/out/` 不入库） | 活文档 |
 | `apps/web/vitest.config.ts` | Vitest Node 环境、`@/` alias 解析与 `.ts/.tsx` 测试发现（Task 7.4/7.7） | 活文档 |
-| `tsconfig.base.json` / `eslint.config.cjs` / `.npmrc` | 共享 TypeScript/ESLint/pnpm 基线；ESLint 9 flat config 只忽略构建、agent 与 gitignored 的 `tmp/`、`apps/web/tmp/`、`apps/web/test/visual/out/` 本地证据目录，正式 `apps/web/test/visual/*` 门禁持续受 lint | 活文档；Hermes 本地预览证据不污染 canonical lint |
+| `tsconfig.base.json` / `eslint.config.cjs` / `.npmrc` | 共享 TypeScript/ESLint/pnpm 基线；ESLint 9 flat config 只忽略构建、agent 与 gitignored 的本地临时/视觉证据目录，正式 visual gate 源文件持续受 lint | 活文档；Hermes 本地预览证据不污染 canonical lint |
 | `knip.json` / `.dependency-cruiser.cjs` / `.markdownlint-cli2.jsonc` | 卫生工具配置：knip（未用代码）、dependency-cruiser（依赖边界）、markdownlint（文档门禁）（2026-07-28 落地） | 活文档 |
 | `scripts/verify-workspace.mjs` | Monorepo 结构校验脚本（lint 的第二段，`verify:workspace` 入口） | 活文档 |
 | `scripts/docs/check-docs-sync.mjs` / `scripts/docs/docs-sync-skill.test.mjs` | 文档同步门禁：索引存在/反向登记/迁移一致性，并锁定 worktree-first、唯一 CURRENT、版本元组、bounded read、active-memory 压缩与 canonical lint wiring | CURRENT；`audit:docs-sync` 先跑 skill `6/6` 再跑结构审计 |
@@ -119,7 +119,6 @@
 | `docs/specs/2026-08-03-p1b-2-ro-sdf-model-design.md` | P1B-2 RO/SDF 数据模型设计（design gate 已确认：三实体 + 迁移 7 + API 骨架，代码已实现 2026-08-03） | 活文档 |
 | `docs/specs/2026-08-08-openscience-product-web-design.md` | 产品级网页设计 spec（方向 A：Monumental Scholarly Intelligence；统一 RO 工作流、Hermes/Live2D、Public RO、Ultrafast Science 策展、许可与版本模型；用户已批准，待书面审阅） | 活文档 |
 | `docs/specs/2026-08-10-optical-editorial-rebaseline-design.md` | 前端视觉与交互 spec：Art Direction v3 Optical Editorial Instrument 为视觉真源；2026-08-11 增量优化边界明确为保留现有线上功能、优先优化 Landing，再传播到 Explore/Dashboard/创建页/公开 RO | 用户已确认范围，待书面审阅 |
-| `docs/specs/2026-08-15-hermes-3d-scholar-agent-design.md` | Hermes 3D 学者机器人历史方案；已被少年星图龙原型取代，仅保留否决记录 | **DEPRECATED** |
 | `docs/specs/2026-08-15-hermes-constellation-dragon-prototype-design.md` | Hermes 少年星图龙轻量 Blender 原型历史设计 | **用户视觉 NO-GO**；不得作为当前候选 |
 | `docs/specs/2026-08-15-hermes-2d-pet-design.md` | Hermes 2.5D 整图 PNG/CSS-signal 历史原型 | **DEPRECATED / VISUAL NO-GO**；资产可复用，renderer 不得继续 |
 | `docs/specs/2026-08-17-hermes-workspace-companion-motion-design.md` | Hermes Workspace Companion CURRENT 设计：四层 mesh 动作混合、25+ 行为、C 安全航道、语义字段引导、用户停靠、reviewable diff、移动端/reduced 与真实像素验收 | **CURRENT Hermes visual/guide design**；真实页面 motion owner、持久偏好、创建/编辑 Drawer 与逐字段目标已部署 `aa1c8af`，待用户体验复验 |
@@ -128,7 +127,6 @@
 | `docs/data/launch-research-corpus.md` | 18 条公开启动语料的范围、免责声明、真实来源、上游许可证证据与 ECS seed 操作边界 | 活文档；本地完成，待生产 seed |
 | `docs/plans/2026-08-08-openscience-product-web-plan.md` | 旧产品级网页实现计划；2026-08-10 被 Optical Editorial v3 计划取代，仅保留历史 | DEPRECATED |
 | `docs/plans/2026-08-10-optical-editorial-frontend-plan.md` | Optical Editorial v3 完整实施计划：15 Task 覆盖生产基线、foundations、三联屏、Auth/Intake/Dashboard/Hermes、Explore/启动语料、Editorial、其余产品面、Figma、质量门禁与 ECS E2E | 当前执行计划 |
-| `docs/plans/2026-08-15-hermes-3d-scholar-agent-plan.md` | 被否决的 3D 学者机器人 `.blend/.glb` 与运行时计划 | **DEPRECATED** |
 | `docs/plans/2026-08-15-hermes-constellation-dragon-prototype-plan.md` | 少年星图龙的 RED 资产合同、确定性 Blender builder、四视图/待机渲染与视觉 stop/go；不接产品运行时 | **历史 NO-GO 计划**；停止执行 |
 | `docs/plans/2026-08-15-hermes-2d-pet-plan.md` | Hermes 2.5D 原创资产生成与已删除整图/CSS-signal presentation 历史计划 | **DEPRECATED / VISUAL NO-GO**；只保留资产生成历史 |
 | `docs/plans/2026-08-17-hermes-workspace-companion-motion-plan.md` | Hermes Workspace Companion 八任务实施计划：事实源、行为导演、四层 mixer、锚点/路径/停靠、全局 stage、字段引导、diff、默认 full/常驻控制与真实 release gate | **CURRENT execution plan**；2026-08-18 默认动效候选本地 GREEN，高级偏好 UI 与两信号提示仍待后续，ECS 更新待确认 |
