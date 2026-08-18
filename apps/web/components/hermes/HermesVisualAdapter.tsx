@@ -6,6 +6,7 @@ import { useEffect, useRef, useState } from 'react';
 
 import type { HermesPetMeshInput } from '@/lib/hermes/pet-mesh-renderer';
 import type { HermesActionId } from '@/lib/hermes/action-catalog';
+import type { HermesRuntimeStatus } from '@/lib/hermes/hermes-runtime-status';
 
 import { HermesRiggedPortrait } from './HermesRiggedPortrait';
 import type { HermesGuideSuggestion } from './hermes-guide';
@@ -60,10 +61,12 @@ export interface HermesVisualAdapterProps {
   state: HermesVisualState;
   suggestion: HermesGuideSuggestion;
   onInvoke: () => void;
+  onRuntimeStatus?: (status: HermesRuntimeStatus) => void;
   reducedMotion: boolean;
+  rendererGeneration?: number;
 }
 
-export function HermesVisualAdapter({ action, actionStartedAtMs, assistantOpen = false, state, suggestion, onInvoke, reducedMotion }: HermesVisualAdapterProps) {
+export function HermesVisualAdapter({ action, actionStartedAtMs, assistantOpen = false, state, suggestion, onInvoke, onRuntimeStatus, reducedMotion, rendererGeneration }: HermesVisualAdapterProps) {
   const t = useTranslations('dashboard.hermes');
   const linkRef = useRef<HTMLButtonElement>(null);
   const engagedRef = useRef(false);
@@ -215,7 +218,14 @@ export function HermesVisualAdapter({ action, actionStartedAtMs, assistantOpen =
         data-hermes-companion-actor="true"
         data-hermes-instance="single"
       >
-        <HermesRiggedPortrait fallback={<HermesStaticPortrait state={state} />} inputRef={meshInputRef} reducedMotion={reducedMotion} state={state} />
+        <HermesRiggedPortrait
+          fallback={<HermesStaticPortrait state={state} />}
+          inputRef={meshInputRef}
+          onRuntimeStatus={onRuntimeStatus}
+          reducedMotion={reducedMotion}
+          rendererGeneration={rendererGeneration}
+          state={state}
+        />
       </span>
       <span aria-hidden={!promptVisible} className="hermes-guide-nudge" data-visible={promptVisible ? 'true' : 'false'}>{t(suggestion.bodyKey)}</span>
     </button>

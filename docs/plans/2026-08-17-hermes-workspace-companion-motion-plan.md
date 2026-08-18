@@ -4,14 +4,14 @@
 
 **Goal:** Upgrade the current single-location Hermes mesh into a Workspace-wide scholarly companion with layered life, safe target travel, semantic field guidance, user-selected docking, and reviewable draft diffs.
 
-**Architecture:** Keep one existing OGL mesh renderer and add a pure behavior director, four-layer motion mixer, semantic anchor registry, and persistent Workspace stage. The stage uses a single Portal owner across Dashboard and the RO create/edit workflow; all AI drafting continues through the existing AgentTask, credit, queue, audit, and suggestion-diff infrastructure.
+**Architecture:** Keep one OGL/WebGL2 context and persistent Workspace stage, but replace the visually rejected four-region warp with a continuous-texture semantic bone rig whose head/crown, face, torso, forepaws, citation tail, and evidence nodes are independently controllable. The behavior director, semantic navigation, and existing AgentTask/credit/queue/audit/diff chain remain unchanged.
 
 **Tech Stack:** Next.js 14 App Router, React 18, TypeScript, OGL 1.0.11, Vitest, Playwright 1.62.1, existing Fastify/AgentTask/Redis/AI Gateway stack.
 
 ## Global Constraints
 
 - `docs/specs/2026-08-17-hermes-workspace-companion-motion-design.md` is the only CURRENT Hermes visual/guide spec.
-- Preserve the original three 824×824 RGBA textures, one mesh canvas, one WebGL2 context, one OGL program/plane owner, and the existing static fallback.
+- Preserve the original approved Hermes artwork, one mesh canvas, one WebGL2 context, one lifecycle ledger, and the existing static fallback. Semantic bones share one continuous texture and one draw owner; the rejected four-region deformation is no longer an acceptance constraint.
 - Do not add Cubism, Rive, Three.js, Pixi, a second full-screen WebGL context, or third-party character assets.
 - Motion evidence must measure character pixels or mesh joints; DOM labels, effects, and data attributes are diagnostic only.
 - Default cadence is one micro-action every 2.4–4.2 seconds and one signature action every 14–22 seconds with no immediate repeat; this supersedes the original 4–8 / 20–35 cadence after the real 181px product view was rejected as visually static.
@@ -20,6 +20,108 @@
 - Mobile and reduced-motion retain every action and piece of content through alternate presentation.
 - 2026-08-18 product amendment: first use defaults to full motion, while one always-visible stage control persists an explicit reduced/full choice across routes and reloads. Explicit reduced mode retains the static accessible alternative.
 - Do not read `.env` or commit before the user accepts the final live visual. ECS deployment and real-provider testing were explicitly authorized on 2026-08-17; local Docker remains prohibited.
+
+---
+
+### Task 9: Make the Real Runtime Observable
+
+**Files:**
+
+- Modify: `apps/web/lib/hermes/pet-mesh-renderer.ts`
+- Modify: `apps/web/components/hermes/HermesRiggedPortrait.tsx`
+- Modify: `apps/web/components/hermes/HermesWorkspaceStage.tsx`
+- Test: `apps/web/test/hermes-runtime-status.test.tsx`
+- Test: `apps/web/test/e2e/hermes-workspace-stage.spec.ts`
+
+**Interfaces:**
+
+- Produces `HermesRuntimeStatus = { phase: 'starting' | 'ready' | 'fallback'; reason?: 'webgl2-unavailable' | 'asset-load-failed' | 'renderer-init-failed' | 'context-lost'; generation: number; lastDrawAt: number | null }`.
+- The persistent motion control consumes status and offers retry only for fallback; it never reports motion enabled merely because the preference is `full`.
+
+- [ ] **Step 1: Write failing component and browser contracts**
+
+Assert that delayed initialization reports `starting`, a renderer-owned draw changes it to `ready`, forced WebGL2 failure reports `fallback/webgl2-unavailable`, context loss reports `fallback/context-lost`, and retry creates a new generation/canvas.
+
+- [ ] **Step 2: Run RED**
+
+Run: `npx pnpm@9.15.0 --filter @openscience/web test -- hermes-runtime-status.test.tsx`
+
+Expected: FAIL because the component currently collapses every failure to `ready=false` and exposes no reason or retry generation.
+
+- [ ] **Step 3: Implement the minimal status bridge**
+
+Publish status only from renderer lifecycle events. Keep error text safe and enumerable; do not expose stack traces, GPU strings, paths, or provider data. Preserve reduced-motion and approval static behavior.
+
+- [ ] **Step 4: Run GREEN**
+
+Run the focused unit file, the Workspace stage Playwright file, and Web typecheck.
+
+### Task 10: Replace the Rejected Four-Region Warp With a Semantic Bone Rig
+
+**Files:**
+
+- Create: `apps/web/lib/hermes/part-rig.ts`
+- Create: `apps/web/lib/hermes/part-rig-shaders.ts`
+- Modify: `apps/web/lib/hermes/pet-mesh-renderer.ts`
+- Modify: `apps/web/lib/hermes/motion-mixer.ts`
+- Modify: `apps/web/lib/hermes/pet-motion.ts`
+- Test: `apps/web/test/hermes-part-rig.test.ts`
+- Test: `apps/web/test/hermes-motion-mixer.test.ts`
+
+**Interfaces:**
+
+- Produces `HERMES_PARTS` for `base | torso | tail | forepaws | head | crown | face | evidenceNodes`, with normalized pivots, smooth joint regions, and accepted transform channels.
+- Produces one `HermesPartPose` per semantic bone from the existing behavior frame; all bones deform one continuous texture through the existing context and lifecycle ledger.
+
+- [ ] **Step 1: Write failing rig contracts**
+
+Require unique pivots, stable bone definitions, smooth connected deformation, no bone-owned RAF/context, exact approval/reduced static poses, and at least three independently different bone vectors for blink, observe, stretch, citation trace, pointer, and milestone actions.
+
+- [ ] **Step 2: Run RED**
+
+Run the focused part-rig and motion-mixer tests. Expected: FAIL because only the rejected head/torso/tail/crown warp exists.
+
+- [ ] **Step 3: Implement the smallest shared-context rig**
+
+Reuse the approved textures. Add independently transformed semantic bones with smooth weights over the continuous character texture; keep one mesh draw and one connected silhouette. Never approximate raster cutouts with visible geometric mask edges.
+
+- [ ] **Step 4: Implement readable action arcs**
+
+Map anticipation/action/feedback/settle progress to real part poses. Blink closes visible eye pixels; observation leads face/head; stretch separates head/crown/forepaws; citation trace bends the tail; success sequences evidence nodes; pointer response combines gaze, head lead, torso delay, and tail counter-motion.
+
+- [ ] **Step 5: Run GREEN and mutation proofs**
+
+Mutation A replaces every part transform with the torso transform and must fail non-affine/locality checks. Mutation B disables face state blending and must fail blink pixel closure. Mutation C disables the tail part draw and must fail citation-trace silhouette evidence.
+
+### Task 11: Replace Attribute Gates With Product-Size Perceptual Acceptance
+
+**Files:**
+
+- Modify: `apps/web/test/visual/hermes-companion-motion-gate.mjs`
+- Modify: `apps/web/test/visual/hermes-articulation-gate.mjs`
+- Modify: `apps/web/test/visual/hermes-release-gate.mjs`
+- Modify: `docs/progress.md`
+- Modify: `docs/handoff/2026-08-16-hermes-2d-pet-handoff.md`
+
+**Interfaces:**
+
+- Produces a 90-second real Workspace video, product-size contact sheet, per-action silhouette/expression deltas, runtime-status trace, and same-session preference/fallback evidence.
+
+- [ ] **Step 1: Write the failing perceptual gate before renderer changes**
+
+At actual rendered size, require eight labelled capture windows whose images remain classifiable after labels/data attributes are removed; require visible eye closure, head-first observation, tail-only citation motion, full-body patrol, pointer response, and exact approval/reduced stillness. The current full-image plane must fail this gate.
+
+- [ ] **Step 2: Run RED on the existing production candidate**
+
+Persist the contact sheet and metrics as rejected baseline evidence. Do not treat the existing `>=8px` silhouette threshold or action-name count as visual acceptance.
+
+- [ ] **Step 3: Run GREEN on the layered rig**
+
+Use the real Dashboard layout, product size, no action labels, and renderer-owned pixels. Run both fresh-profile and persisted full/reduced profiles; report fallback honestly.
+
+- [ ] **Step 4: Human live-preview gate**
+
+Open the exact preview the user can access and show the same video/contact sheet generated by the gate. Stop before commit/deploy until the user confirms the live result.
 
 ---
 

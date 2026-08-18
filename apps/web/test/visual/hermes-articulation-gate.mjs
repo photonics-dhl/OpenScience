@@ -284,12 +284,19 @@ try {
     const original = WebGL2RenderingContext.prototype.shaderSource;
     WebGL2RenderingContext.prototype.shaderSource = function (shader, source) {
       let next = source;
-      if (source.includes('uniform vec3 uHead;') && source.includes('float torsoWeight')) {
-        next = source.replace(/void main\(\) \{[\s\S]*?\n {2}\}/, `void main() {
+      if (source.includes('uniform vec3 uHead;') && source.includes('uniform vec3 uForepaws;')) {
+        next = `#version 300 es
+precision highp float;
+in vec3 position;
+in vec2 uv;
+uniform vec2 uViewport;
+uniform vec3 uHead;
+out vec2 vUv;
+void main() {
     vec2 point = uv + uHead.xy / max(uViewport, vec2(1.0));
     vUv = uv;
     gl_Position = vec4(point * 2.0 - 1.0, 0.0, 1.0);
-  }`);
+}`;
       }
       return original.call(this, shader, next);
     };

@@ -1,8 +1,22 @@
 import type { HermesPetVisualState, HermesMotionSample } from './pet-motion';
 import { sampleHermesMotion } from './pet-motion';
 import type { HermesActionId, HermesEffect } from './action-catalog';
+import { HERMES_ACTION_CATALOG } from './action-catalog';
+import { createHermesPartPoses, HERMES_PARTS } from './part-rig';
+import { HERMES_PART_FRAGMENT_SHADER, HERMES_PART_VERTEX_SHADER } from './part-rig-shaders';
 import { shouldContinueHermesAnimation } from './motion-mixer';
 import type { OpticalOglResourceLedger } from '../optical-lab/ogl/resources';
+import type { HermesRuntimeFailureReason } from './hermes-runtime-status';
+
+export class HermesPetRendererError extends Error {
+  readonly code: HermesRuntimeFailureReason;
+
+  constructor(code: HermesRuntimeFailureReason) {
+    super(code);
+    this.name = 'HermesPetRendererError';
+    this.code = code;
+  }
+}
 
 export interface HermesPetMeshInput {
   action?: HermesActionId;
@@ -14,6 +28,7 @@ export interface HermesPetMeshInput {
 }
 
 export interface HermesPetMeshSnapshot {
+  drawnAt: number;
   firstFrame: boolean;
   gesture: HermesMotionSample['gesture'];
   headAngle: number;
@@ -28,83 +43,6 @@ export interface HermesPetMeshRenderer {
   setSuspended(suspended: boolean): void;
   wake(): void;
 }
-
-const VERTEX_SHADER = /* glsl */ `#version 300 es
-  precision highp float;
-  in vec3 position;
-  in vec2 uv;
-  uniform vec2 uViewport;
-  uniform vec3 uHead;
-  uniform vec4 uTorso;
-  uniform vec3 uTail;
-  uniform float uCrown;
-  out vec2 vUv;
-
-  vec2 rotateAt(vec2 point, vec2 pivot, float degreesValue, vec2 translation, float weight) {
-    float angle = radians(degreesValue * weight);
-    float cosine = cos(angle);
-    float sine = sin(angle);
-    vec2 local = point - pivot;
-    vec2 rotated = vec2(local.x * cosine - local.y * sine, local.x * sine + local.y * cosine);
-    vec2 transformed = pivot + rotated + translation / max(uViewport, vec2(1.0)) * weight;
-    return mix(point, transformed, weight);
-  }
-
-  void main() {
-    vec2 point = uv;
-    float torsoWeight = smoothstep(.18, .36, uv.y) * (1.0 - smoothstep(.70, .84, uv.y));
-    torsoWeight *= smoothstep(.10, .28, uv.x) * (1.0 - smoothstep(.86, .98, uv.x));
-    float tailWeight = smoothstep(.48, .75, uv.x) * (1.0 - smoothstep(.58, .78, uv.y));
-    tailWeight = max(tailWeight, smoothstep(.52, .72, uv.x) * (1.0 - smoothstep(.15, .42, uv.y)));
-    float headWeight = smoothstep(.48, .68, uv.y) * (1.0 - smoothstep(.52, .68, uv.x));
-    float crownWeight = smoothstep(.73, .88, uv.y) * (1.0 - smoothstep(.58, .72, uv.x));
-
-    vec2 torsoPivot = vec2(.43, .43);
-    vec2 torsoLocal = point - torsoPivot;
-    vec2 torsoScaled = torsoPivot + vec2(torsoLocal.x, torsoLocal.y * uTorso.w);
-    point = mix(point, torsoScaled, torsoWeight * .82);
-    point = rotateAt(point, torsoPivot, uTorso.z, uTorso.xy, torsoWeight);
-
-    point.y += sin(clamp((uv.x - .48) * 2.25, 0.0, 1.0) * 3.14159265) * uTail.z * tailWeight;
-    point = rotateAt(point, vec2(.60, .39), uTail.x, vec2(0.0), tailWeight);
-    point = rotateAt(point, vec2(.36, .54), uHead.z, uHead.xy, headWeight);
-    point = rotateAt(point, vec2(.35, .67), uCrown, vec2(0.0), crownWeight);
-
-    vUv = uv;
-    gl_Position = vec4(point * 2.0 - 1.0, position.z, 1.0);
-  }
-`;
-
-const FRAGMENT_SHADER = /* glsl */ `#version 300 es
-  precision highp float;
-  uniform sampler2D tIdle;
-  uniform sampler2D tBlink;
-  uniform sampler2D tWorking;
-  uniform vec2 uGaze;
-  uniform float uBlink;
-  uniform float uWorking;
-  uniform vec4 uEffect;
-  in vec2 vUv;
-  out vec4 outColor;
-
-  void main() {
-    float leftEye = 1.0 - smoothstep(.045, .095, distance(vUv, vec2(.205, .705)));
-    float rightEye = 1.0 - smoothstep(.045, .105, distance(vUv, vec2(.365, .705)));
-    float gazeMask = max(leftEye, rightEye);
-    vec2 sampledUv = vUv - uGaze * .009 * gazeMask;
-    vec4 idle = texture(tIdle, sampledUv);
-    vec4 blink = texture(tBlink, sampledUv);
-    vec4 working = texture(tWorking, sampledUv);
-    vec4 resting = mix(idle, blink, clamp(uBlink, 0.0, 1.0));
-    outColor = mix(resting, working, clamp(uWorking, 0.0, 1.0));
-    vec3 effectTint = uEffect.x * vec3(.16, .52, .70)
-      + uEffect.y * vec3(.48, .64, .42)
-      + uEffect.z * vec3(.64, .42, .18)
-      + uEffect.w * vec3(.58, .36, .70);
-    float inkEdge = smoothstep(.025, .22, outColor.a) * (1.0 - smoothstep(.70, .98, outColor.a));
-    outColor.rgb += effectTint * inkEdge * .18;
-  }
-`;
 
 async function loadImage(source: string) {
   const image = new Image();
@@ -149,7 +87,7 @@ export async function createHermesPetMeshRenderer(
     stencil: false,
   };
   const ownedContext = canvas.getContext('webgl2', contextAttributes);
-  if (!ownedContext) throw new Error('Hermes articulated mesh requires WebGL2');
+  if (!ownedContext) throw new HermesPetRendererError('webgl2-unavailable');
   let ledger: OpticalOglResourceLedger | null = null;
   let resourcesDisposed = false;
   const disposeResources = () => {
@@ -171,9 +109,9 @@ export async function createHermesPetMeshRenderer(
     const pendingResources = Promise.all([
       import('ogl'),
       Promise.all([
-        loadImage('/hermes/pet/hermes-pet-idle.png'),
-        loadImage('/hermes/pet/hermes-pet-blink.png'),
-        loadImage('/hermes/pet/hermes-pet-working.png'),
+        loadImage('/hermes/pet/hermes-pet-idle.png').catch(() => { throw new HermesPetRendererError('asset-load-failed'); }),
+        loadImage('/hermes/pet/hermes-pet-blink.png').catch(() => { throw new HermesPetRendererError('asset-load-failed'); }),
+        loadImage('/hermes/pet/hermes-pet-working.png').catch(() => { throw new HermesPetRendererError('asset-load-failed'); }),
       ]),
       import('../optical-lab/ogl/resources'),
     ]);
@@ -188,7 +126,7 @@ export async function createHermesPetMeshRenderer(
       dpr: Math.min(window.devicePixelRatio || 1, 1.5),
       webgl: 2,
     });
-    if (!renderer.isWebgl2) throw new Error('Hermes articulated mesh requires WebGL2');
+    if (!renderer.isWebgl2) throw new HermesPetRendererError('webgl2-unavailable');
     const gl = renderer.gl as WebGL2RenderingContext & typeof renderer.gl;
     gl.clearColor(0, 0, 0, 0);
     ledger = createOpticalOglResourceLedger(gl);
@@ -211,23 +149,25 @@ export async function createHermesPetMeshRenderer(
     cullFace: false,
     depthTest: false,
     depthWrite: false,
-    fragment: FRAGMENT_SHADER,
+    fragment: HERMES_PART_FRAGMENT_SHADER,
     transparent: true,
     uniforms: {
       tBlink: { value: textures[1] },
       tIdle: { value: textures[0] },
       tWorking: { value: textures[2] },
-      uBlink: { value: 0 },
-      uCrown: { value: 0 },
       uEffect: { value: [0, 0, 0, 0] },
+      uEvidenceNodes: { value: [0, 0, 0] },
+      uForepaws: { value: [0, 0, 0] },
       uGaze: { value: [0, 0] },
       uHead: { value: [0, 0, 0] },
+      uCrown: { value: [0, 0, 0] },
       uTail: { value: [0, 0, 0] },
-      uTorso: { value: [0, 0, 0, 1] },
+      uTextureMix: { value: 0 },
+      uTorso: { value: [0, 0, 0] },
       uViewport: { value: [1, 1] },
       uWorking: { value: 0 },
     },
-    vertex: VERTEX_SHADER,
+    vertex: HERMES_PART_VERTEX_SHADER,
   });
   program.setBlendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
   ledger.trackProgram(program);
@@ -239,6 +179,7 @@ export async function createHermesPetMeshRenderer(
   let startedAt = performance.now();
   let previousAt = startedAt;
   let previousGesture: HermesMotionSample['gesture'] = 'rest';
+  let previousSnapshotAt = Number.NEGATIVE_INFINITY;
   let current = sampleHermesMotion({ elapsedMs: 0, engaged: false, pointer: { x: 0, y: 0 }, reducedMotion: false, state: 'idle' });
 
   const resize = () => {
@@ -292,23 +233,32 @@ export async function createHermesPetMeshRenderer(
         y: damp(current.torso.y, target.torso.y, deltaMs, 175),
       },
     };
-    program.uniforms.uBlink.value = current.blink;
-    program.uniforms.uCrown.value = current.crownAngle;
     program.uniforms.uEffect.value = effectUniform(current.effect);
     program.uniforms.uGaze.value = [current.gaze.x, current.gaze.y];
-    program.uniforms.uHead.value = [current.head.x, current.head.y, current.head.angle];
-    program.uniforms.uTail.value = [current.tail.angle, 0, current.tail.curl];
-    program.uniforms.uTorso.value = [current.torso.x, current.torso.y, current.torso.angle, current.torso.scale];
     program.uniforms.uWorking.value = current.working ? 1 : 0;
+    const actionElapsedMs = input.actionStartedAtMs === undefined ? 0 : Math.max(0, now - input.actionStartedAtMs);
+    const actionDurationMs = input.action ? HERMES_ACTION_CATALOG[input.action].durationMs : 1;
+    const actionProgress = Math.min(1, actionElapsedMs / Math.max(1, actionDurationMs));
+    const partPoses = createHermesPartPoses(current, input.action, actionProgress);
+    program.uniforms.uTorso.value = [partPoses.torso.x, partPoses.torso.y, partPoses.torso.angle];
+    program.uniforms.uTail.value = [partPoses.tail.x, partPoses.tail.y, partPoses.tail.angle];
+    program.uniforms.uForepaws.value = [partPoses.forepaws.x, partPoses.forepaws.y, partPoses.forepaws.angle];
+    program.uniforms.uHead.value = [partPoses.head.x, partPoses.head.y, partPoses.head.angle];
+    program.uniforms.uCrown.value = [partPoses.crown.x, partPoses.crown.y, partPoses.crown.angle];
+    program.uniforms.uEvidenceNodes.value = [partPoses.evidenceNodes.x, partPoses.evidenceNodes.y, partPoses.evidenceNodes.angle];
+    program.uniforms.uTextureMix.value = partPoses.face.textureMix ?? 0;
     renderer.render({ clear: true, frustumCull: false, scene: mesh, sort: false });
+    canvas.dataset.hermesRigParts = String(HERMES_PARTS.length);
     canvas.dataset.hermesGesture = current.gesture;
     canvas.dataset.hermesHead = `${current.head.x.toFixed(3)},${current.head.y.toFixed(3)},${current.head.angle.toFixed(3)}`;
     canvas.dataset.hermesTorso = `${current.torso.x.toFixed(3)},${current.torso.y.toFixed(3)},${current.torso.angle.toFixed(3)},${current.torso.scale.toFixed(4)}`;
     canvas.dataset.hermesTail = `${current.tail.angle.toFixed(3)},${current.tail.curl.toFixed(4)}`;
-    if (!firstFrame || current.gesture !== previousGesture) {
+    if (!firstFrame || current.gesture !== previousGesture || now - previousSnapshotAt >= 500) {
       firstFrame = true;
       previousGesture = current.gesture;
+      previousSnapshotAt = now;
       onSnapshot({
+        drawnAt: now,
         firstFrame,
         gesture: current.gesture,
         headAngle: current.head.angle,
@@ -333,7 +283,7 @@ export async function createHermesPetMeshRenderer(
       if (rafId !== null) cancelAnimationFrame(rafId);
       rafId = null;
       disposeResources();
-      onSnapshot({ firstFrame, gesture: previousGesture, headAngle: current.head.angle, status: 'disposed', tailAngle: current.tail.angle, torsoScale: current.torso.scale });
+      onSnapshot({ drawnAt: previousAt, firstFrame, gesture: previousGesture, headAngle: current.head.angle, status: 'disposed', tailAngle: current.tail.angle, torsoScale: current.torso.scale });
     },
     resize,
     setSuspended(next) {

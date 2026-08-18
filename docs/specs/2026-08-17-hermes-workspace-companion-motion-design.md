@@ -36,7 +36,11 @@ Default activity is **scholarly active**: after the 2026-08-17 product-size perc
 
 ## 3. Motion architecture
 
-Keep the existing original OGL mesh, texture budget, lifecycle ledger, WebGL2 preflight, and static fallback. Do not add Cubism, Rive, Three.js, Pixi, or a third-party character binary. Adopt the proven state-machine and animation-mixing concepts without changing renderer ownership.
+Keep the original Hermes artwork, one Workspace owner, lifecycle ledger, WebGL2 preflight, and static fallback. Do not add Cubism, Rive, Three.js, Pixi, or a third-party character binary. The 2026-08-18 product-size browser review invalidates the former single full-image `Plane` constraint: a catalogue of named actions rendered through one warped illustration is not sufficient character articulation.
+
+The live renderer therefore uses one WebGL context with a **semantic multi-bone rig**. Head and page-crown, eyes/face, torso, forepaws, citation tail, and six evidence nodes have independent pivots and pose channels while sharing one continuous character texture. Smooth authored joint weights preserve a single connected silhouette, so stronger articulation does not introduce raster cutout seams. Face state blends the approved idle/blink/working textures; effects remain separate and never count as character motion.
+
+This is not a new mascot or a new assistant backend. It is a renderer correction that makes the already-approved character and action language perceptible.
 
 Motion is composed from four independent layers:
 
@@ -58,6 +62,15 @@ approval still
 ```
 
 Higher-priority input interrupts a lower-priority action immediately and begins from the current pose through a bounded blend. Users never have to wait for an animation to finish before typing, navigating, closing, or approving.
+
+Each primary action is a short readable arc rather than a label applied to continuous idle noise:
+
+1. anticipation (80–180 ms);
+2. decisive action with a distinct silhouette or expression (180–700 ms);
+3. feedback/hold (120–600 ms);
+4. settled return from the current pose (180–500 ms).
+
+At the rendered Workspace size, blink must close the visible eyes, observation must lead with pupils/head before the torso, stretch must separate crown/head/forepaws from the torso, citation trace must visibly articulate the tail, and patrol must translate the whole character. These are visual contracts, not diagnostic state names.
 
 ## 4. Action catalogue
 
@@ -184,6 +197,8 @@ Sound is off by default. Optional sound uses restrained water, paper, and eviden
 - `HermesAnchorRegistry`: semantic target registration and live geometry.
 - `HermesBehaviorDirector`: priority, cooldown, anti-repeat, interruption, and deterministic test clock.
 - `HermesMotionMixer`: four-layer parameter composition for the existing mesh renderer.
+- `HermesPartRig`: semantic bones, pivots, joint weights, and per-bone transforms over the continuous approved texture.
+- `HermesRuntimeStatus`: `starting | ready | fallback` plus safe reason, context generation, last real draw time, and retry intent.
 - `HermesGuideBubble`: short guidance, off-screen edge action, and expanded help actions.
 - `HermesDraftDiff`: formal Hermes task integration and non-mutating diff review.
 - local preference adapter: device-and-Workspace position and motion settings.
@@ -204,6 +219,7 @@ Visual navigation is R0. Drafting and checking use the existing AgentSession, Ag
 ## 9. Lifecycle and performance
 
 - One Workspace owner, one mesh canvas, one WebGL context, and one active character.
+- Multiple semantic bones share that one mesh, context, RAF, and lifecycle ledger; no bone may create its own draw owner or context.
 - The stage transfers across route changes without duplicating character pixels.
 - Hidden, offscreen, reduced, approval-still, failure-settled, and long quiet states stop unnecessary drawing while keeping event wake-up paths.
 - Pending initialization remains abortable and context ownership remains transactional.
@@ -225,6 +241,9 @@ Automated and human acceptance must include:
 8. mouse, keyboard, drag, touch, mobile keyboard, reduced-motion, asset failure, context loss, resize, and route-transfer coverage;
 9. real renderer draw cadence, first-ready, resource transfer, suspension, and cleanup evidence;
 10. final user review of the actual Workspace video and live preview. Numeric gates do not replace visual acceptance.
+11. a product-size contact sheet in which at least eight autonomous actions are distinguishable without action labels or diagnostic attributes;
+12. live runtime status that distinguishes `starting`, `ready`, and `fallback`, exposes a safe fallback reason and retry, and proves recent renderer-owned draws instead of equating a saved preference with a working canvas;
+13. same-session acceptance using the user's motion preference and actual WebGL path; a fresh mocked Playwright context is supporting evidence only.
 
 ## 11. Research basis
 

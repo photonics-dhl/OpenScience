@@ -28,7 +28,9 @@ const PRIORITY: Record<string, number> = {
 export function deriveHermesVisualState(tasks: HermesStateInput[]): HermesVisualState {
   const task = [...tasks].sort((a, b) => (PRIORITY[b.state] ?? 0) - (PRIORITY[a.state] ?? 0))[0];
   if (!task) return 'idle';
-  if (task.state === 'needs_review') return 'awaiting_approval';
+  // A review waiting in the Dashboard queue is a suggestion to visit the
+  // review surface, not an approval interaction that is already open.
+  if (task.state === 'needs_review') return 'suggesting';
   if (task.state.startsWith('failed_')) return 'failed';
   if (task.state === 'parsing' || task.state === 'uploading') return 'scanning';
   if (task.state === 'stored') return 'suggesting';

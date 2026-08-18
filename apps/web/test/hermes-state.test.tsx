@@ -64,7 +64,7 @@ describe('Hermes dashboard guidance', () => {
     expect(deriveHermesVisualState([{ state: 'queued' }])).toBe('guiding');
     expect(deriveHermesVisualState([{ state: 'parsing' }])).toBe('scanning');
     expect(deriveHermesVisualState([{ state: 'stored' }])).toBe('suggesting');
-    expect(deriveHermesVisualState([{ state: 'needs_review' }])).toBe('awaiting_approval');
+    expect(deriveHermesVisualState([{ state: 'needs_review' }])).toBe('suggesting');
     expect(deriveHermesVisualState([{ state: 'failed_retryable' }])).toBe('failed');
   });
 
@@ -76,8 +76,9 @@ describe('Hermes dashboard guidance', () => {
     expect(rail).toContain(`href="${href}"`);
   });
 
-  it('keeps approval fully still even while a guide task is active', () => {
-    expect(deriveHermesCompositeVisualState([{ state: 'needs_review' }], true)).toBe('awaiting_approval');
+  it('keeps a queued review alive on the dashboard instead of treating it as an open approval surface', () => {
+    expect(deriveHermesCompositeVisualState([{ state: 'needs_review' }], false)).toBe('suggesting');
+    expect(deriveHermesCompositeVisualState([{ state: 'needs_review' }], true)).toBe('scanning');
     expect(deriveHermesCompositeVisualState([], true)).toBe('scanning');
   });
 
