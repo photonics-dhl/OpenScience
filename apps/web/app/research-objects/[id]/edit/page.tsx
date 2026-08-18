@@ -32,7 +32,9 @@ import {
 import {
   applySuggestionsToCore,
   coreToSuggestions,
+  extractMissingSdfFields,
   suggestionReducer,
+  type SdfField,
 } from '../../../../lib/suggestions';
 
 type FieldKey = keyof Omit<SdfCore, 'schemaVersion'>;
@@ -67,6 +69,7 @@ export default function EditorPage({ params }: { params: { id: string } }) {
   // P1D-3：AI 提取状态（§5.4 + §18.3 进度可恢复）
   const [extracting, setExtracting] = useState(false);
   const [extractProgress, setExtractProgress] = useState(0);
+  const [missingFields, setMissingFields] = useState<SdfField[]>([]);
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const pollTimer = useRef<ReturnType<typeof setInterval> | null>(null);
 
@@ -118,22 +121,41 @@ export default function EditorPage({ params }: { params: { id: string } }) {
   }
 
   /** §5.4 MUST：建议确认 → 写入草稿（不直接写 SDF）。 */
-  function applySuggestion(id: string) {
+  function advanceReview(id: string, missing = missingFields) {
+    const nextSuggestion = suggestions.find((item) => item.id !== id && item.status === 'pending');
+    const nextField = nextSuggestion?.field ?? missing[0];
+    if (nextField) setActiveField(nextField);
+  }
+
+  function applySuggestion(id: string, value: string) {
+    const revised = suggestionReducer(suggestions, { type: 'revise', id, suggestion: value });
+    const applied = suggestionReducer(revised, { type: 'apply', id });
+    dispatchSuggestions({ type: 'revise', id, suggestion: value });
     dispatchSuggestions({ type: 'apply', id });
-    const next = applySuggestionsToCore(state.core, suggestions.map((s) => (s.id === id ? { ...s, status: 'applied' as const } : s)));
+    const next = applySuggestionsToCore(state.core, applied);
     for (const [k, v] of Object.entries(next) as [FieldKey, string][]) {
       if (v !== state.core[k]) dispatch({ type: 'edit_field', field: k, value: v });
     }
+    advanceReview(id);
   }
 
   function dismissSuggestion(id: string) {
     dispatchSuggestions({ type: 'dismiss', id });
+    advanceReview(id);
+  }
+
+  function acknowledgeMissing(field: SdfField) {
+    const remaining = missingFields.filter((candidate) => candidate !== field);
+    setMissingFields(remaining);
+    const nextSuggestion = suggestions.find((item) => item.status === 'pending');
+    setActiveField(nextSuggestion?.field ?? remaining[0] ?? field);
   }
 
   /** P1D-3：AI 提取（§9.3 异步长任务 + §18.3 轮询进度）。提取只产出建议，不写 SDF（§9.2）。 */
   async function handleExtract() {
     setExtracting(true);
     setExtractProgress(0);
+    setMissingFields([]);
     setErrorMsg(null);
     try {
       const { task } = await submitExtractTask(roId, Object.values(state.core).join('\n\n'));
@@ -144,6 +166,7 @@ export default function EditorPage({ params }: { params: { id: string } }) {
           if (cur.task.status === 'succeeded') {
             if (pollTimer.current) clearInterval(pollTimer.current);
             const core = cur.task.result?.core as SdfCore | undefined;
+            setMissingFields(extractMissingSdfFields(cur.task.result));
             if (core) {
               dispatchSuggestions({ type: 'reset' });
               for (const s of coreToSuggestions(core, state.core)) dispatchSuggestions({ type: 'add', suggestion: s });
@@ -307,6 +330,8 @@ export default function EditorPage({ params }: { params: { id: string } }) {
           <HermesAnchor id="hermes-diff" sides={HERMES_DIFF_SIDES}>
             <SuggestionsPanel
               suggestions={suggestions}
+              missingFields={missingFields}
+              onAcknowledgeMissing={acknowledgeMissing}
               onApply={applySuggestion}
               onDismiss={dismissSuggestion}
               onExtract={handleExtract}

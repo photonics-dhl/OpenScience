@@ -4,7 +4,7 @@ import { useTranslations } from 'next-intl';
 
 import { BeforeAfterProposal } from '@/components/research/BeforeAfterProposal';
 import { EvidenceSnippet } from '@/components/research/EvidenceSnippet';
-import type { AiSuggestion } from '../../lib/suggestions';
+import type { AiSuggestion, SdfField } from '../../lib/suggestions';
 
 export default function SuggestionsPanel({
   suggestions,
@@ -14,10 +14,14 @@ export default function SuggestionsPanel({
   extracting,
   extractProgress,
   extractError,
+  missingFields,
+  onAcknowledgeMissing,
 }: {
   suggestions: AiSuggestion[];
-  onApply: (id: string) => void;
+  onApply: (id: string, value: string) => void;
   onDismiss: (id: string) => void;
+  missingFields: SdfField[];
+  onAcknowledgeMissing: (field: SdfField) => void;
   onExtract?: () => void;
   extracting?: boolean;
   extractProgress?: number;
@@ -44,6 +48,15 @@ export default function SuggestionsPanel({
         </div>
       )}
       {extractError && <div className="mt-4 border-l-2 border-os-vermilion pl-3 text-sm text-os-paper" role="alert">{extractError}</div>}
+      {missingFields.map((field) => (
+        <article className="mt-4 border-l-2 border-os-vermilion bg-os-black-1 p-4" data-missing-evidence={field} key={field}>
+          <p className="m-0 font-data text-xs uppercase tracking-[0.1em] text-os-vermilion">{t('missingEvidenceTitle', { field: t(field) })}</p>
+          <p data-reading-role="body" className="mb-0 mt-2 text-base leading-[var(--leading-body)] text-os-paper">
+            {field === 'results' ? t('missingResultsEvidence') : t('missingEvidenceDescription', { field: t(field) })}
+          </p>
+          <button className="mt-3 min-h-10 rounded-panel border border-os-rule-dark bg-transparent px-3 text-sm text-os-paper" onClick={() => onAcknowledgeMissing(field)}>{t('acknowledgeMissingEvidence')}</button>
+        </article>
+      ))}
       {suggestions.length === 0 && <p data-reading-role="body" className="border-b border-os-rule-dark py-6 text-base leading-[var(--leading-body)] text-os-muted-dark">{t('noSuggestions')}</p>}
       {suggestions.map((suggestion) => (
         <BeforeAfterProposal
@@ -51,7 +64,7 @@ export default function SuggestionsPanel({
           before={suggestion.before}
           key={suggestion.id}
           onDismiss={() => onDismiss(suggestion.id)}
-          onReview={() => onApply(suggestion.id)}
+          onReview={(value) => onApply(suggestion.id, value)}
           risk={suggestion.risk}
           scope={`SDF / ${t(suggestion.field)}`}
           source={`${suggestion.sourceLocator ?? (suggestion.sourceContext === 'sdf_aggregate' ? t('currentSdfAggregate') : t('sourceLocatorUnavailable'))} · ${suggestion.source === 'extractor' ? t('hermesExtractor') : t('researcherPrompt')}`}

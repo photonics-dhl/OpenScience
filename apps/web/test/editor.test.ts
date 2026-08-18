@@ -110,6 +110,21 @@ describe('suggestionReducer（§5.4 MUST 确认后才写 SDF）', () => {
     expect(next.problem).toBe('新问题'); // applied 合入
     expect(next.method).toBe(''); // dismissed 不合入
   });
+
+  it('revise keeps a proposal pending and apply writes only the researcher-edited text', () => {
+    const revised = suggestionReducer(demo, {
+      type: 'revise',
+      id: 'demo-1',
+      suggestion: 'Researcher-edited text',
+    });
+    expect(revised.find((item) => item.id === 'demo-1')).toMatchObject({
+      status: 'pending',
+      suggestion: 'Researcher-edited text',
+    });
+
+    const applied = suggestionReducer(revised, { type: 'apply', id: 'demo-1' });
+    expect(applySuggestionsToCore(emptyCore(), applied).problem).toBe('Researcher-edited text');
+  });
 });
 
 describe('合同测试：编辑器 core vs SDF_CORE_FIELDS（§21.1）', () => {

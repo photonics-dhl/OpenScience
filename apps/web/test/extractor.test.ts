@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { coreToSuggestions } from '../lib/suggestions';
+import { coreToSuggestions, extractMissingSdfFields } from '../lib/suggestions';
 
 const emptyCore = () => ({
   schemaVersion: '0.1.0', problem: '', insight: '', method: '', results: '', limitations: '', reproducibility: '',
@@ -31,5 +31,14 @@ describe('coreToSuggestions（P1D-3：Extractor core → AiSuggestion，§5.4 �
       expect.objectContaining({ field: 'results', sourceLocator: 'manuscript.pdf · p. 12', risk: 'high' }),
       expect.objectContaining({ field: 'reproducibility', sourceLocator: 'manuscript.pdf · p. 12', risk: 'high' }),
     ]));
+  });
+
+  it('only exposes recognized missing-evidence fields from an extractor result', () => {
+    expect(extractMissingSdfFields({ needsMoreInformation: ['results', 'unknown', 3, 'limitations'] })).toEqual([
+      'results',
+      'limitations',
+    ]);
+    expect(extractMissingSdfFields({ needsMoreInformation: true })).toEqual([]);
+    expect(extractMissingSdfFields(null)).toEqual([]);
   });
 });

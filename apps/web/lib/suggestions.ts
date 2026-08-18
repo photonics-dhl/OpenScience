@@ -13,10 +13,24 @@ export interface AiSuggestion {
   risk?: 'normal' | 'high';
 }
 
+export const SDF_FIELDS = ['problem', 'insight', 'method', 'results', 'limitations', 'reproducibility'] as const;
+export type SdfField = (typeof SDF_FIELDS)[number];
+
+const isSdfField = (value: unknown): value is SdfField =>
+  typeof value === 'string' && SDF_FIELDS.includes(value as SdfField);
+
+export function extractMissingSdfFields(result: unknown): SdfField[] {
+  if (!result || typeof result !== 'object' || Array.isArray(result)) return [];
+  const values = (result as Record<string, unknown>).needsMoreInformation;
+  if (!Array.isArray(values)) return [];
+  return [...new Set(values.filter(isSdfField))];
+}
+
 /** 建议状态机：pending → applied（写入草稿，不直接写 SDF）/ dismissed。 */
 export type SuggestionAction =
   | { type: 'apply'; id: string }
   | { type: 'dismiss'; id: string }
+  | { type: 'revise'; id: string; suggestion: string }
   | { type: 'add'; suggestion: AiSuggestion }
   | { type: 'reset' };
 
@@ -28,6 +42,8 @@ export function suggestionReducer(suggestions: AiSuggestion[], action: Suggestio
       return [];
     case 'apply':
       return suggestions.map((s) => (s.id === action.id && s.status === 'pending' ? { ...s, status: 'applied' as const } : s));
+    case 'revise':
+      return suggestions.map((s) => (s.id === action.id && s.status === 'pending' ? { ...s, suggestion: action.suggestion } : s));
     case 'dismiss':
       return suggestions.map((s) => (s.id === action.id && s.status === 'pending' ? { ...s, status: 'dismissed' as const } : s));
     default:
@@ -67,9 +83,8 @@ export function demoSuggestions(currentCore: SdfCore): AiSuggestion[] {
  * 仅非空且与当前不同的字段产出建议；source='extractor'。
  */
 export function coreToSuggestions(core: SdfCore, currentCore: SdfCore, sourceLocator?: string): AiSuggestion[] {
-  const fields = ['problem', 'insight', 'method', 'results', 'limitations', 'reproducibility'] as const;
   const list: AiSuggestion[] = [];
-  for (const field of fields) {
+  for (const field of SDF_FIELDS) {
     const suggestion = (core[field] ?? '').trim();
     const before = (currentCore[field] ?? '').trim();
     if (!suggestion || suggestion === before) continue;
