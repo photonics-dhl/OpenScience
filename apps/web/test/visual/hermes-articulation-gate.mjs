@@ -204,10 +204,16 @@ try {
     tail: [.48, .52, .98, .98],
   };
 
-  await page.getByRole('button', { name: 'Freeze rest' }).click();
+  await page.getByRole('button', { name: 'Breathing frame A' }).click();
   await page.waitForFunction(() => document.querySelector('[data-hermes-articulated-canvas]')?.getAttribute('data-hermes-gesture') === 'rest');
+  await page.waitForTimeout(100);
   const restA = await capture(stage, 'rest-a');
-  await page.waitForTimeout(520);
+  const restAJoints = await canvas.evaluate((node) => `${node.getAttribute('data-hermes-head')}|${node.getAttribute('data-hermes-torso')}|${node.getAttribute('data-hermes-tail')}`);
+  await page.getByRole('button', { name: 'Breathing frame B' }).click();
+  await page.waitForFunction((before) => {
+    const node = document.querySelector('[data-hermes-articulated-canvas]');
+    return `${node?.getAttribute('data-hermes-head')}|${node?.getAttribute('data-hermes-torso')}|${node?.getAttribute('data-hermes-tail')}` !== before;
+  }, restAJoints);
   const restB = await capture(stage, 'rest-b');
   const breathing = await comparePng(page, restA, restB, regions);
 
