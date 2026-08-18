@@ -164,11 +164,12 @@ export function planHermesTravel(input: HermesTravelInput): HermesTravelPlan {
     const edgeDock = safeDock ?? start;
     return { dock: edgeDock, mode: 'edge-stop', points: start.x === edgeDock.x && start.y === edgeDock.y ? [start] : [start, edgeDock], safe: Boolean(safeDock) };
   }
+  const pathSafetyPx = 1;
   const expanded: Bounds = {
-    left: editable.left - footprint.right,
-    right: editable.right + footprint.left,
-    top: editable.top - footprint.bottom,
-    bottom: editable.bottom + footprint.top,
+    left: editable.left - footprint.right - pathSafetyPx,
+    right: editable.right + footprint.left + pathSafetyPx,
+    top: editable.top - footprint.bottom - pathSafetyPx,
+    bottom: editable.bottom + footprint.top + pathSafetyPx,
   };
   const points = shortestVisiblePath(start, dock, safe, expanded);
   return { dock, mode: 'travel', points, safe: true };

@@ -49,12 +49,15 @@ try {
     window.__hermesGuideGeometrySamples = [];
     window.__hermesGuideGeometrySamplingDone = false;
     let sawTravel = false;
+    let sawTravelHidden = false;
     const sample = () => {
       const stage = document.querySelector('[data-hermes-workspace-stage]');
       const actor = stage?.querySelector('[data-hermes-companion-actor="true"]')?.getBoundingClientRect();
       const bubble = stage?.querySelector('[data-hermes-guide-bubble]')?.getBoundingClientRect();
       const field = document.querySelector('[data-hermes-anchor="sdf-problem"]')?.getBoundingClientRect();
       sawTravel ||= stage?.getAttribute('data-hermes-guide-motion') === 'travel';
+      const guideVisible = Boolean(document.querySelector('[data-hermes-guide-bubble][data-hermes-guide-visible="true"]'));
+      sawTravelHidden ||= sawTravel && !guideVisible;
       if (sawTravel && actor && bubble && field) window.__hermesGuideGeometrySamples.push({
         actor: {
           bottom: Math.max(actor.bottom, bubble.bottom),
@@ -64,7 +67,7 @@ try {
         },
         field: { bottom: field.bottom, left: field.left, right: field.right, top: field.top },
       });
-      if (sawTravel && document.querySelector('[data-hermes-guide-bubble][data-hermes-guide-visible="true"]')) {
+      if (sawTravelHidden && guideVisible) {
         window.__hermesGuideGeometrySamplingDone = true;
         return;
       }
@@ -83,6 +86,7 @@ try {
   await page.locator('[data-before-after-proposal]').first().waitFor({ timeout: 5_000 });
   assert.deepEqual(await page.locator('textarea').evaluateAll((nodes) => nodes.map((node) => node.value)), before, 'drafting must not change SDF before acceptance');
   await page.locator('[data-before-after-proposal]').filter({ hasText: 'Proposed problem' }).getByRole('button', { name: /Review changes|审阅变更/ }).click();
+  await page.getByRole('navigation', { name: /Outline|大纲/ }).getByRole('button', { name: /01 Problem|01 问题/, exact: true }).click();
   assert.equal(await page.getByRole('textbox', { name: /Problem|问题/ }).inputValue(), 'Proposed problem');
   await stage.screenshot({ path: resolve(output, 'guide-arrival.png'), animations: 'allow' });
   await writeFile(resolve(output, 'guidance-metrics.json'), `${JSON.stringify({ geometrySamples: samples.length, sdfFieldsBefore: before.length }, null, 2)}\n`);

@@ -88,6 +88,33 @@ describe('Hermes safe travel path', () => {
     expect(collision).toBeUndefined();
   });
 
+  it('leaves one physical pixel for animated footprint measurement variance', () => {
+    const editable = rect(305.59375, 350.1875, 742.40625, 199.59375);
+    const measured = { bottom: 107, left: 152, right: 152, top: 231.5 };
+    const rendered = { bottom: 108, left: 153, right: 153, top: 232.5 };
+    const route = planHermesTravel({
+      editable,
+      footprint: measured,
+      from: rect(1_152, 594, 288, 288),
+      preferredSides: ['top', 'right'],
+      target: editable,
+      viewport: rect(0, 0, 1_440, 900),
+    });
+
+    const collision = route.points.slice(1).some((point, index) => {
+      const previous = route.points[index];
+      return Array.from({ length: 101 }, (_, sample) => {
+        const ratio = sample / 100;
+        return rectForFootprint({
+          x: previous.x + (point.x - previous.x) * ratio,
+          y: previous.y + (point.y - previous.y) * ratio,
+        }, rendered);
+      }).some((occupied) => overlaps(rect(occupied.left, occupied.top, occupied.right - occupied.left, occupied.bottom - occupied.top), editable));
+    });
+
+    expect(collision).toBe(false);
+  });
+
   it('rejects a preferred dock that would cover an evidence diff', () => {
     const target = rect(500, 220, 200, 90);
     const diff = rect(730, 120, 320, 520);
