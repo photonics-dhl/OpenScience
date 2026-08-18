@@ -13,6 +13,7 @@
     "test:release": "playwright test product-release.spec.ts --config playwright.release.config.ts",
     "test:hermes-release": "node test/visual/hermes-release-gate.mjs",
     "test:hermes-companion-release": "node test/visual/hermes-release-gate.mjs",
+    "test:hermes-blank-ro-production": "node test/visual/hermes-blank-ro-production-gate.mjs",
     "shots": "node test/visual/shots.mjs",
     "shots:workspace": "node test/visual/workspace-shots.mjs",
     "shots:readability": "node test/visual/workspace-readability-gate.mjs",

@@ -41,9 +41,10 @@ describe('editorReducer', () => {
     expect(s.dirty).toBe(true);
   });
 
-  it('saved → dirty=false + lastSavedAt 更新', () => {
-    const s = editorReducer({ core: core(), version: 1, dirty: true, lastSavedAt: null }, { type: 'saved' });
+  it('saved → 乐观锁版本前进 + dirty=false + lastSavedAt 更新', () => {
+    const s = editorReducer({ core: core(), version: 1, dirty: true, lastSavedAt: null }, { type: 'saved', version: 2 });
     expect(s.dirty).toBe(false);
+    expect(s.version).toBe(2);
     expect(s.lastSavedAt).not.toBeNull();
   });
 

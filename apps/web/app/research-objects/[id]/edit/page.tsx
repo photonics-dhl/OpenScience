@@ -10,6 +10,7 @@ import ArtifactUploader from '../../../../components/editor/ArtifactUploader';
 import { ObjectHeader } from '../../../../components/research/ObjectHeader';
 import { HermesAnchor } from '../../../../components/hermes/HermesAnchor';
 import { HermesDraftDiff, type HermesDraftTarget } from '../../../../components/hermes/HermesDraftDiff';
+import { useOptionalHermesWorkspaceStage } from '../../../../components/hermes/HermesWorkspaceStage';
 import {
   createCommit,
   getAgentTask,
@@ -70,6 +71,7 @@ export default function EditorPage({ params }: { params: { id: string } }) {
   const [extracting, setExtracting] = useState(false);
   const [extractProgress, setExtractProgress] = useState(0);
   const [missingFields, setMissingFields] = useState<SdfField[]>([]);
+  const hermesStage = useOptionalHermesWorkspaceStage();
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const pollTimer = useRef<ReturnType<typeof setInterval> | null>(null);
 
@@ -115,6 +117,16 @@ export default function EditorPage({ params }: { params: { id: string } }) {
       if (pollTimer.current) clearInterval(pollTimer.current);
     };
   }, []);
+
+  const hermesRouteState = extracting
+    ? 'scanning'
+    : suggestions.some((suggestion) => suggestion.status === 'pending') || missingFields.length > 0
+      ? 'suggesting'
+      : 'idle';
+  useEffect(() => {
+    hermesStage?.setRouteState(hermesRouteState);
+  }, [hermesRouteState, hermesStage]);
+  useEffect(() => () => hermesStage?.setRouteState('idle'), [hermesStage]);
 
   function editField(field: FieldKey, value: string) {
     dispatch({ type: 'edit_field', field, value });
@@ -196,7 +208,7 @@ export default function EditorPage({ params }: { params: { id: string } }) {
     setErrorMsg(null);
     try {
       await updateSdf(roId, state.version, state.core);
-      dispatch({ type: 'saved' });
+      dispatch({ type: 'saved', version: state.version + 1 });
       clearDraft(roId);
     } catch (e) {
       const message = e instanceof Error ? e.message : String(e);
@@ -218,7 +230,7 @@ export default function EditorPage({ params }: { params: { id: string } }) {
         sdfCore: state.core,
         artifacts,
       });
-      dispatch({ type: 'saved' });
+      dispatch({ type: 'saved', version: state.version + 1 });
       setCommitMsg('');
       const vs = await listVersions(roId);
       setVersions(vs.versions ?? []);

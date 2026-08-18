@@ -33,6 +33,9 @@ try {
   await import('./hermes-performance-gate.mjs');
   await import('./hermes-guidance-geometry-gate.mjs');
   await import('./hermes-companion-motion-gate.mjs');
+  if (process.env.OPENSCIENCE_RUN_BLANK_RO_PRODUCTION === '1') {
+    await import('./hermes-blank-ro-production-gate.mjs');
+  }
 } finally {
   server?.kill();
 }

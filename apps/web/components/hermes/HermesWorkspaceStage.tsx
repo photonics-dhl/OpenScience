@@ -43,6 +43,7 @@ interface HermesWorkspaceStageContextValue {
   register(presentation: HermesStagePresentation): () => void;
   registerAnchor(registration: HermesAnchorRegistration): () => void;
   requestGuide(target: HermesAnchorId | null): void;
+  setRouteState(state: HermesVisualState): void;
   setWriting(writing: boolean): void;
 }
 
@@ -70,6 +71,7 @@ export function HermesWorkspaceStageProvider({ children }: { children: React.Rea
   const locale = useLocale() as 'zh' | 'en';
   const [presentation, setPresentation] = useState<HermesStagePresentation | null>(null);
   const [routeAssistantOpen, setRouteAssistantOpen] = useState(false);
+  const [routeState, setRouteState] = useState<HermesVisualState>('idle');
   const [guideTarget, setGuideTarget] = useState<HermesAnchorId | null>(null);
   const [registryVersion, setRegistryVersion] = useState(0);
   const [writing, setWriting] = useState(false);
@@ -96,7 +98,7 @@ export function HermesWorkspaceStageProvider({ children }: { children: React.Rea
     else setGuideTarget(null);
   }, [pathname]);
   useEffect(() => setRouteAssistantOpen(false), [pathname]);
-  const context = useMemo(() => ({ register, registerAnchor, requestGuide: setGuideTarget, setWriting }), [register, registerAnchor]);
+  const context = useMemo(() => ({ register, registerAnchor, requestGuide: setGuideTarget, setRouteState, setWriting }), [register, registerAnchor]);
   const route = pathname === '/research-objects/new' ? 'research-object-new' : 'research-object-edit';
   const researchObjectId = /^\/research-objects\/([^/]+)\/edit$/.exec(pathname)?.[1];
   const routeContext: WorkspaceGuidePayload['context'] = researchObjectId
@@ -114,6 +116,7 @@ export function HermesWorkspaceStageProvider({ children }: { children: React.Rea
           presentation={presentation}
           registry={registryRef.current}
           registryVersion={registryVersion}
+          routeState={routeState}
           writing={writing}
         />
       ) : null}
@@ -142,7 +145,7 @@ export function useOptionalHermesWorkspaceStage() {
   return React.useContext(HermesWorkspaceStageContext);
 }
 
-function HermesWorkspaceStage({ fallbackAssistantOpen, fallbackOnInvoke, guideTarget, onDismissGuide, presentation, registry, registryVersion, writing }: {
+function HermesWorkspaceStage({ fallbackAssistantOpen, fallbackOnInvoke, guideTarget, onDismissGuide, presentation, registry, registryVersion, routeState, writing }: {
   fallbackAssistantOpen: boolean;
   fallbackOnInvoke: () => void;
   guideTarget: HermesAnchorId | null;
@@ -150,11 +153,12 @@ function HermesWorkspaceStage({ fallbackAssistantOpen, fallbackOnInvoke, guideTa
   presentation: HermesStagePresentation | null;
   registry: HermesAnchorRegistry;
   registryVersion: number;
+  routeState: HermesVisualState;
   writing: boolean;
 }) {
   const searchParams = useSearchParams();
   const motionSearch = searchParams.toString();
-  const state = presentation?.state ?? 'idle';
+  const state = presentation?.state ?? routeState;
   const t = useTranslations('hermesCompanion');
   const workspaceId = presentation?.workspaceId ?? 'workspace-current';
   const dragRef = useRef<{ pointerId: number; startX: number; startY: number; originX: number; originY: number; moved: boolean } | null>(null);
