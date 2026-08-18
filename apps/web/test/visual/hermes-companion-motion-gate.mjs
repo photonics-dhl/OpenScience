@@ -100,9 +100,12 @@ try {
 
   const actor = page.locator('[data-hermes-companion-actor]');
   const inputOwner = page.locator('[data-hermes-input-owner="true"]');
+  const interactiveRig = page.locator('[data-hermes-rig="mesh-2d"]');
   const beforeHover = await actor.boundingBox();
+  const rigBounds = await interactiveRig.boundingBox();
   assert.ok(beforeHover, 'Hermes actor must expose a real product bounding box');
-  await inputOwner.hover({ position: { x: 24, y: 48 } });
+  assert.ok(rigBounds, 'Hermes rig must expose its real pointer hit area');
+  await interactiveRig.hover({ position: { x: rigBounds.width - 2, y: 2 } });
   await page.waitForTimeout(220);
   const duringHover = await actor.boundingBox();
   assert.ok(duringHover && Math.hypot(duringHover.x - beforeHover.x, duringHover.y - beforeHover.y) >= 8,

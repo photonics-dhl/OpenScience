@@ -61,11 +61,11 @@ test('one Hermes stage persists across workspace routes and keeps direct manipul
     return restored ? Math.max(Math.abs(restored.x - moved!.x), Math.abs(restored.y - moved!.y)) : Number.POSITIVE_INFINITY;
   }).toBeLessThan(8);
 
-  const inputBox = await input.boundingBox();
-  expect(inputBox).not.toBeNull();
-  await page.mouse.move(inputBox!.x + inputBox!.width * .12, inputBox!.y + inputBox!.height / 2);
-  await page.mouse.move(inputBox!.x + inputBox!.width * .88, inputBox!.y + inputBox!.height / 2);
-  await page.mouse.move(inputBox!.x + inputBox!.width + 140, inputBox!.y + inputBox!.height / 2);
+  const rigBox = await stage.locator('[data-hermes-rig="mesh-2d"]').boundingBox();
+  expect(rigBox).not.toBeNull();
+  await page.mouse.move(rigBox!.x + rigBox!.width * .2, rigBox!.y + rigBox!.height / 2);
+  await page.mouse.move(rigBox!.x + rigBox!.width * .8, rigBox!.y + rigBox!.height / 2);
+  await page.mouse.move(rigBox!.x + rigBox!.width + 140, rigBox!.y + rigBox!.height / 2);
   await expect(stage).toHaveAttribute('data-hermes-action', 'pointer-avoid');
 });
 
