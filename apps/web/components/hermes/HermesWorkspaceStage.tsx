@@ -336,6 +336,12 @@ function HermesWorkspaceStage({ fallbackAssistantOpen, fallbackOnInvoke, guideTa
     leaveTimerRef.current = window.setTimeout(() => advanceBehavior({ present: false, speed: 0, x: 0, y: 0 }, false), settleMs);
   };
 
+  const onPointerOut = (event: React.PointerEvent<HTMLDivElement>) => {
+    const nextTarget = event.relatedTarget;
+    if (nextTarget instanceof Node && event.currentTarget.contains(nextTarget)) return;
+    onPointerLeave();
+  };
+
   const anchored = anchorRect && !customDock;
   const style: React.CSSProperties = anchored ? { height: anchorRect.height, left: anchorRect.left, top: anchorRect.top, width: anchorRect.width } : {
     height: 288, left: position.x - 144, top: position.y - 144, width: 288,
@@ -358,6 +364,7 @@ function HermesWorkspaceStage({ fallbackAssistantOpen, fallbackOnInvoke, guideTa
       onPointerDown={onPointerDown}
       onPointerLeave={onPointerLeave}
       onPointerMove={onPointerMove}
+      onPointerOut={onPointerOut}
       onPointerUp={onPointerUp}
       ref={stageRef}
       style={style}
