@@ -12,7 +12,7 @@ const releaseSha = process.env.XGS_RELEASE_SHA;
 if (!releaseSha || !/^[0-9a-f]{40}$/.test(releaseSha)) {
   throw new Error('XGS_RELEASE_SHA must be a full Git commit SHA');
 }
-const releaseRoot = process.env.XGS_RELEASE_ROOT ?? `/opt/openscience-releases/${releaseSha}`;
+const releaseRoot = `/opt/openscience-releases/${releaseSha}`;
 const cfg = JSON.parse(readFileSync(path.join(configRoot, '.cloud-sync-env'), 'utf8'));
 const key = cfg.key.replace(/^~/, os.homedir());
 

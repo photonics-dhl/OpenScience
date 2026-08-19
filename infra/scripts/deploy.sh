@@ -140,13 +140,13 @@ else
   # 作为显式兼容适配器，并把切换前正在运行的不可变镜像 ID 保存为 rollback tag。
   ROLLBACK_COMPOSE_FILE="$COMPOSE_FILE"
   ROLLBACK_COMPOSE_MODE="first-transition-adapter"
-  XGS_SOURCE_ROOT="$PROJECT_ROOT" XGS_CONFIG_ROOT="$CONFIG_ROOT" XGS_RELEASE_SHA="$PREVIOUS_RELEASE_SHA" XGS_RELEASE_ROOT="$PREVIOUS_RELEASE_ROOT" node "$PROJECT_ROOT/scripts/cloud-sync.mjs"
+  XGS_SOURCE_ROOT="$PROJECT_ROOT" XGS_CONFIG_ROOT="$CONFIG_ROOT" XGS_RELEASE_SHA="$PREVIOUS_RELEASE_SHA" node "$PROJECT_ROOT/scripts/cloud-sync.mjs"
   run_remote "cd $PREVIOUS_RELEASE_ROOT && npx pnpm@9.15.0 install && npx pnpm@9.15.0 build"
   run_remote "set -e; worker_container=\$(docker compose --env-file $PROD_ENV -f $LEGACY_COMPOSE_FILE ps -q agent-worker); parser_container=\$(docker compose --env-file $PROD_ENV -f $LEGACY_COMPOSE_FILE ps -q document-parser); test -n \"\$worker_container\"; test -n \"\$parser_container\"; worker_image=\$(docker inspect --format='{{.Image}}' \"\$worker_container\"); parser_image=\$(docker inspect --format='{{.Image}}' \"\$parser_container\"); test -n \"\$worker_image\"; test -n \"\$parser_image\"; docker image inspect \"\$worker_image\" \"\$parser_image\" >/dev/null; docker tag \"\$worker_image\" openscience-agent-worker:$PREVIOUS_RELEASE_SHA; docker tag \"\$parser_image\" openscience-document-parser:$PREVIOUS_RELEASE_SHA"
 fi
 
 log "[1] 物化完整 Git release..."
-XGS_SOURCE_ROOT="$PROJECT_ROOT" XGS_CONFIG_ROOT="$CONFIG_ROOT" XGS_RELEASE_SHA="$RELEASE_SHA" XGS_RELEASE_ROOT="$RELEASE_ROOT" node "$PROJECT_ROOT/scripts/cloud-sync.mjs"
+XGS_SOURCE_ROOT="$PROJECT_ROOT" XGS_CONFIG_ROOT="$CONFIG_ROOT" XGS_RELEASE_SHA="$RELEASE_SHA" node "$PROJECT_ROOT/scripts/cloud-sync.mjs"
 
 log "[2] install + 全量 build..."
 run_remote "cd $RELEASE_ROOT && npx pnpm@9.15.0 install && npx pnpm@9.15.0 build"

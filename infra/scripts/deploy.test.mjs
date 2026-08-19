@@ -73,9 +73,13 @@ test('release source guard rejects dirty trees and refs other than HEAD', async 
 
 test('cloud sync materializes the complete commit in an immutable release directory', () => {
   assert.match(cloudSync, /spawn\('git', \['archive', '--format=tar\.gz', releaseSha\]/);
+  assert.match(cloudSync, /const releaseRoot = `\/opt\/openscience-releases\/\$\{releaseSha\}`/);
+  assert.doesNotMatch(cloudSync, /process\.env\.XGS_RELEASE_ROOT/);
   assert.doesNotMatch(cloudSync, /ENTRIES|MANAGED_DIRS|MANAGED_FILES|--', \.\.\./);
   assert.match(source, /RELEASE_ROOT="\/opt\/openscience-releases\/\$RELEASE_SHA"/);
   assert.match(source, /XGS_RELEASE_ROOT=\$RELEASE_ROOT/);
+  assert.doesNotMatch(source, /XGS_RELEASE_SHA="\$PREVIOUS_RELEASE_SHA" XGS_RELEASE_ROOT=/);
+  assert.doesNotMatch(source, /XGS_RELEASE_SHA="\$RELEASE_SHA" XGS_RELEASE_ROOT=/);
   assert.match(productionCompose, /context: \$\{XGS_RELEASE_ROOT:\?XGS_RELEASE_ROOT required\}/);
   assert.match(productionCompose, /\$\{XGS_RELEASE_ROOT:\?XGS_RELEASE_ROOT required\}:\/opt\/openscience/);
   assert.match(productionCompose, /\$\{XGS_RELEASE_ROOT:\?XGS_RELEASE_ROOT required\}:\/opt\/openscience:ro/);
@@ -125,7 +129,7 @@ test('worker and parser images are immutable per release and legacy images are p
   assert.match(source, /docker inspect --format='\{\{\.Image\}\}'/);
   assert.ok(source.includes(String.raw`docker tag \"\$worker_image\" openscience-agent-worker:$PREVIOUS_RELEASE_SHA`));
   assert.ok(source.includes(String.raw`docker tag \"\$parser_image\" openscience-document-parser:$PREVIOUS_RELEASE_SHA`));
-  assert.match(source, /XGS_RELEASE_SHA="\$PREVIOUS_RELEASE_SHA" XGS_RELEASE_ROOT="\$PREVIOUS_RELEASE_ROOT"/);
+  assert.match(source, /XGS_RELEASE_SHA="\$PREVIOUS_RELEASE_SHA" node/);
   assert.match(source, /cd \$PREVIOUS_RELEASE_ROOT && npx pnpm@9\.15\.0 install && npx pnpm@9\.15\.0 build/);
   assert.match(source, /XGS_RELEASE_IMAGE_TAG=\$RELEASE_SHA/);
   assert.match(source, /XGS_RELEASE_IMAGE_TAG=\$PREVIOUS_RELEASE_SHA/);
