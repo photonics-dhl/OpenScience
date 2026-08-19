@@ -395,14 +395,22 @@ Review the complete diff for correctness, UX, accessibility, security/privacy, l
 
 Stage only tracked task files; preserve `docs/user_ideas/8.10/*`. Record exact commit hashes in progress/handoff/index.
 
-- [ ] **Step 4: Stop at the ECS write checkpoint if confirmation is absent**
+- [x] **Step 4: Stop at the ECS write checkpoint if confirmation is absent**
 
 Run read-only checkup and deployment dry-run. Obtain explicit confirmation before backup/deploy.
 
-- [ ] **Step 5: Deploy and run the public acceptance**
+- [x] **Step 5: Deploy and run the public acceptance**
 
 On confirmation: run ECS backup, confirmed deploy with migration 27 and quota seed because this candidate contains additive retry metadata, post-checkup, public HTTP checks, the uninterrupted blank-RO production gate, and direct user visual review.
 
-- [ ] **Step 6: Final docs sync and release record**
+- [x] **Step 6: Final docs sync and release record**
 
 Record release/rollback, real public metrics, the retained private acceptance RO label, and any honestly unresolved aesthetic issue. Run docs lint, docs sync, and diff check again; commit/push the release record.
+
+Completed on ECS at release `06072c1fd3eb30148daec8d4c4a8572fa3bdacc8`
+with rollback `8ecf96c193e0010329cdf3330819063d1ad7958d`. The final
+public gate retained private RO `ad35cac3-cbd9-4a2a-9a00-9762fcc15e91`, used
+one real MiniMax task with zero interception, observed all four Hermes motion
+states, disclosed missing Results, and committed reviewed version 2. A real
+400 at draft save was fixed by separating draft-shape validation from the
+non-draft full-core contract before the successful rerun.

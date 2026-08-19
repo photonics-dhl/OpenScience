@@ -472,3 +472,29 @@ Historical note for the 2026-08-11 release: it used fixed worker tags and a writ
   `pet-mesh-renderer.ts`, `hermes-state.ts`, and the real Hermes approval page.
   `/`, `/dashboard`, and `/explore` returned `200`; anonymous `/auth/me`
   returned expected `401`.
+
+### 5.13 Readable Workspace and blank-RO guidance release (2026-08-19)
+
+> Deployed release `06072c1`; rollback `8ecf96c`.
+
+- Scope: readable three-surface controls, non-obstructive Hermes field guidance,
+  evidence-backed field diffs, durable one-task recovery, and draft SDF support
+  for explicitly unresolved fields. Non-draft full-core validation, permissions,
+  credit, idempotency, optimistic locking, audit, and version boundaries remain.
+- Operation: read-only checkup passed; the final DB backup was 433,513 bytes
+  with 7 retained rotations. Both release candidates used clean full-SHA
+  materialization, full install/build, SHA Worker/Parser images, Parser-first
+  health, application restart, Nginx validation, hard public checks, and an
+  explicit rollback ref. Migration status is 27/27 current.
+- Public acceptance: `https://openscience.428312321.xyz/__release` returned the
+  exact full SHA. A real administrator and real MiniMax created retained private
+  RO `ad35cac3-cbd9-4a2a-9a00-9762fcc15e91` with one task and no network
+  interception. Five suggestions carried source locators, Results stayed
+  explicitly missing, unsupported claims were zero, and edit-accept, accept,
+  reject, save, reload, audit, credit, and immutable version 2 all passed.
+  Hermes published `idle`, `travel`, `working`, and still `review` states.
+- Recovery evidence: the first run exposed a real `PUT /sdf` 400 because draft
+  save reused the non-empty publication validator. TDD split draft shape
+  validation from non-draft completeness in `06072c1`, then the same public gate
+  passed. Temporary verification sessions were removed; ignored video, PNG, and
+  metrics remain local evidence only.

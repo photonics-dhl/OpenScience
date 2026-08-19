@@ -1,6 +1,6 @@
 # Readable Workspace and Hermes Guidance Design
 
-Status: **CURRENT — approved for implementation**
+Status: **CURRENT — implemented and deployed (`06072c1`)**
 
 Date: 2026-08-18
 Extends: `docs/specs/2026-08-17-hermes-workspace-companion-motion-design.md`
