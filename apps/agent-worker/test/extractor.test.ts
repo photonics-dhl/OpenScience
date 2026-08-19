@@ -237,4 +237,36 @@ describe('extractHandler（§9.2 提取 + §9.3 结构化校验 + 不写 SDF）'
     expect(result.evidence.problem).toEqual({ quote: '', locator: '' });
     expect(result.needsMoreInformation).toContain('problem');
   });
+
+  it('模型保守地标记全部缺失时仍采用正文中的显式字段标签，但不推断未提供的 Results', async () => {
+    const manuscriptText = [
+      'Problem: Current optical measurements require an unverified assumption.',
+      'Insight: Field-resolved sampling can connect waveforms to transport.',
+      'Method: Use a calibrated pump-probe protocol.',
+      'Limitations: Generalisation beyond this device remains unverified.',
+      'Reproducibility: Publish calibration, geometry, code, and environment details.',
+    ].join('\n');
+    const missingProposal = {
+      schemaVersion: '0.1.0',
+      fields: Object.fromEntries(Object.keys(VALID_PROPOSAL.fields).map((field) => [field, {
+        summary: '', sourceQuote: '', needsMoreInformation: true,
+      }])),
+    };
+    const provider: Provider = {
+      name: 'conservative', model: 'conservative',
+      complete: async () => ({ text: JSON.stringify(missingProposal), usage: { inputTokens: 1, outputTokens: 1 }, model: 'conservative' }),
+    };
+    const gateway = new (await import('@openscience/ai-gateway')).AiGateway({ providers: [provider] }) as AiGateway;
+
+    const result = await extractHandler(gateway, { payload: { manuscriptText } });
+
+    expect(result.core.problem).toBe('Current optical measurements require an unverified assumption.');
+    expect(result.evidence.problem).toEqual({
+      quote: 'Current optical measurements require an unverified assumption.',
+      locator: 'chars:9-71',
+    });
+    expect(result.core.reproducibility).toContain('Publish calibration');
+    expect(result.core.results).toBe('');
+    expect(result.needsMoreInformation).toEqual(['results']);
+  });
 });

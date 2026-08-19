@@ -1,21 +1,25 @@
 /* global Headers, MutationObserver, URL, console, document, fetch, getComputedStyle, performance, process, window */
 
 import assert from 'node:assert/strict';
-import { createHash } from 'node:crypto';
+import { Buffer } from 'node:buffer';
+import { spawn } from 'node:child_process';
+import { createHash, randomUUID } from 'node:crypto';
 import { mkdir, writeFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
-import { chromium, request } from 'playwright';
+import { chromium } from 'playwright';
 
 const canonicalOrigin = 'https://openscience.428312321.xyz';
 const baseUrl = process.env.OPENSCIENCE_PRODUCTION_URL;
 const sessionToken = process.env.OPENSCIENCE_E2E_SESSION_TOKEN;
 const acceptanceWorkspaceId = process.env.OPENSCIENCE_ACCEPTANCE_WORKSPACE_ID;
 const adminAuth = process.env.OPENSCIENCE_E2E_ADMIN_AUTH;
+const sshRunner = process.env.OPENSCIENCE_E2E_SSH_RUNNER;
+const bashExecutable = process.env.OPENSCIENCE_E2E_BASH ?? 'bash';
 const expectedRelease = process.env.OPENSCIENCE_EXPECTED_RELEASE;
 if (!baseUrl) throw new Error('OPENSCIENCE_PRODUCTION_URL is required');
 if (!sessionToken) throw new Error('OPENSCIENCE_E2E_SESSION_TOKEN is required');
 if (!acceptanceWorkspaceId || !/^[0-9a-f]{8}-[0-9a-f-]{27}$/i.test(acceptanceWorkspaceId)) throw new Error('OPENSCIENCE_ACCEPTANCE_WORKSPACE_ID must be a UUID');
-if (!adminAuth || !/^Basic [A-Za-z0-9+/]+=*$/.test(adminAuth)) throw new Error('OPENSCIENCE_E2E_ADMIN_AUTH must be a Basic authorization header');
+if (!sshRunner && (!adminAuth || !/^Basic [A-Za-z0-9+/]+=*$/.test(adminAuth))) throw new Error('OPENSCIENCE_E2E_ADMIN_AUTH must be a Basic authorization header when no SSH audit runner is configured');
 if (!expectedRelease || !/^[0-9a-f]{40}$/.test(expectedRelease)) throw new Error('OPENSCIENCE_EXPECTED_RELEASE must be a full Git SHA');
 const requestedOrigin = new URL(baseUrl);
 if (requestedOrigin.origin.toLowerCase() !== canonicalOrigin || requestedOrigin.pathname !== '/' || requestedOrigin.search || requestedOrigin.hash) {
@@ -62,13 +66,15 @@ await context.addCookies([{
   sameSite: 'Lax',
 }]);
 const page = await context.newPage();
-const adminRequest = await request.newContext({
-  baseURL: canonicalOrigin,
-  extraHTTPHeaders: {
-    authorization: adminAuth,
-    cookie: `openscience_session=${sessionToken}`,
-  },
-});
+const basicPair = adminAuth ? Buffer.from(adminAuth.slice('Basic '.length), 'base64').toString('utf8') : '';
+const basicSeparator = basicPair.indexOf(':');
+if (!sshRunner && basicSeparator < 1) throw new Error('OPENSCIENCE_E2E_ADMIN_AUTH decoded to an invalid Basic credential');
+const curlUser = basicPair.slice(0, basicSeparator);
+const curlPassword = basicPair.slice(basicSeparator + 1);
+const curlConfigValue = (value) => {
+  if (/\r|\n/.test(value)) throw new Error('curl config credential contains a newline');
+  return value.replaceAll('\\', '\\\\').replaceAll('"', '\\"');
+};
 const originalRoute = page.route.bind(page);
 page.route = async (...args) => {
   networkInterceptions += 1;
@@ -113,10 +119,66 @@ async function browserJson(path, init = {}) {
 }
 
 async function adminJson(path) {
-  const response = await adminRequest.get(path);
-  const body = await response.json().catch(() => null);
-  if (!response.ok()) throw new Error(`${path} ${response.status()} ${body?.error?.code ?? 'UNKNOWN'}`);
-  return body;
+  const url = new URL(path, canonicalOrigin);
+  assert.equal(url.origin, canonicalOrigin, 'admin request escaped the canonical production origin');
+  url.searchParams.set('_acceptance', randomUUID());
+  if (sshRunner) {
+    const internalPath = `${url.pathname.replace(/^\/api\/admin/, '/admin')}${url.search}`;
+    assert.match(internalPath, /^\/admin\/[A-Za-z0-9_/?=&.:%-]+$/, 'admin request contains unsafe shell path characters');
+    assert.match(sessionToken, /^[A-Za-z0-9_-]+$/, 'session token contains unsafe shell characters');
+    const remoteScript = [
+      'set -euo pipefail',
+      `curl --silent --show-error --fail-with-body --max-time 20 -H 'Cookie: openscience_session=${sessionToken}' 'http://127.0.0.1:3001${internalPath}'`,
+      '',
+    ].join('\n');
+    const body = await new Promise((resolveBody, rejectBody) => {
+      const child = spawn(bashExecutable, [sshRunner, 'base64 -d | bash'], { shell: false, stdio: ['pipe', 'pipe', 'pipe'] });
+      const stdout = [];
+      const stderr = [];
+      let bytes = 0;
+      child.stdout.on('data', (chunk) => {
+        bytes += chunk.length;
+        if (bytes > 2 * 1024 * 1024) child.kill();
+        else stdout.push(chunk);
+      });
+      child.stderr.on('data', (chunk) => stderr.push(chunk));
+      child.on('error', rejectBody);
+      child.on('close', (code) => {
+        if (bytes > 2 * 1024 * 1024) return rejectBody(new Error(`${path} SSH response exceeded 2 MiB`));
+        if (code !== 0) return rejectBody(new Error(`${path} SSH audit exit ${code}: ${Buffer.concat(stderr).toString('utf8').trim()}`));
+        resolveBody(Buffer.concat(stdout).toString('utf8'));
+      });
+      child.stdin.end(Buffer.from(remoteScript).toString('base64'));
+    });
+    return JSON.parse(body);
+  }
+  const body = await new Promise((resolveBody, rejectBody) => {
+    const child = spawn(process.platform === 'win32' ? 'curl.exe' : 'curl', [
+      '--silent', '--show-error', '--fail-with-body', '--config', '-', url.href,
+    ], { shell: false, stdio: ['pipe', 'pipe', 'pipe'] });
+    const stdout = [];
+    const stderr = [];
+    let bytes = 0;
+    child.stdout.on('data', (chunk) => {
+      bytes += chunk.length;
+      if (bytes > 2 * 1024 * 1024) child.kill();
+      else stdout.push(chunk);
+    });
+    child.stderr.on('data', (chunk) => stderr.push(chunk));
+    child.on('error', rejectBody);
+    child.on('close', (code) => {
+      if (bytes > 2 * 1024 * 1024) return rejectBody(new Error(`${path} response exceeded 2 MiB`));
+      if (code !== 0) return rejectBody(new Error(`${path} curl exit ${code}: ${Buffer.concat(stderr).toString('utf8').trim()}`));
+      resolveBody(Buffer.concat(stdout).toString('utf8'));
+    });
+    child.stdin.end([
+      `user = "${curlConfigValue(`${curlUser}:${curlPassword}`)}"`,
+      `header = "Cookie: openscience_session=${curlConfigValue(sessionToken)}"`,
+      'header = "Cache-Control: no-cache"',
+      '',
+    ].join('\n'));
+  });
+  return JSON.parse(body);
 }
 
 const readCore = (response) => response?.researchObject?.sdf?.core ?? {};
@@ -161,7 +223,7 @@ try {
   assert.equal(await workspaceOption.count(), 1, 'configured acceptance workspace was not rendered');
   await page.locator('select').selectOption(acceptanceWorkspaceId);
   await page.locator('input[name="title"]').fill(label);
-  await page.getByRole('button', { name: /Create research object|创建研究对象/ }).click();
+  await page.getByRole('button', { name: /Create research object|创建(?:研究对象| Research Object)/i }).click();
   await page.waitForURL(/\/research-objects\/[^/]+\/edit/);
   const researchObjectId = new URL(page.url()).pathname.match(/\/research-objects\/([^/]+)\/edit/)?.[1];
   assert.ok(researchObjectId, 'blank create flow did not expose a Research Object id');
@@ -256,7 +318,12 @@ try {
   const rejectedField = ['method', 'limitations', 'insight', 'reproducibility'].find((field) => supported.includes(field) && field !== directField);
   assert.ok(directField && rejectedField, 'controlled brief did not produce three independently reviewable proposals');
 
-  const problemProposal = proposalFor(proposedCore.problem);
+  const problemProposalMatch = proposalFor(proposedCore.problem);
+  const problemProposalIndex = await problemProposalMatch.evaluate((node) => (
+    [...document.querySelectorAll('[data-before-after-proposal]')].indexOf(node)
+  ));
+  assert.ok(problemProposalIndex >= 0, 'problem proposal was not present before editing');
+  const problemProposal = page.locator('[data-before-after-proposal]').nth(problemProposalIndex);
   await problemProposal.getByRole('button', { name: /Edit suggestion|编辑建议/ }).click();
   await problemProposal.getByRole('textbox').fill(gold.problem);
   await problemProposal.getByRole('button', { name: /Apply edited change|应用已编辑内容/ }).click();
@@ -272,7 +339,8 @@ try {
 
   const missingResults = page.locator('[data-missing-evidence="results"]');
   await missingResults.waitFor({ state: 'visible' });
-  await page.getByRole('textbox', { name: /Results|结果/ }).evaluate((node) => {
+  await page.locator('main [data-sdf-node="4"] > button').click();
+  await page.locator('main').getByRole('textbox', { name: /^(?:Results|结果)$/ }).evaluate((node) => {
     if (node.value !== '') throw new Error('missing Results was not kept empty');
   });
   await missingResults.getByRole('button', { name: /Acknowledge and continue|知悉并继续/ }).click();
@@ -379,7 +447,6 @@ try {
     motionStates: report.motionStates,
   }));
 } finally {
-  await adminRequest.dispose();
   await context.close();
   await browser.close();
 }

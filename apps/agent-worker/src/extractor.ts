@@ -170,6 +170,27 @@ function findEvidenceRange(source: string, proposedQuote: string): { start: numb
   return { start: startToken.start, end: endToken.end };
 }
 
+const EXPLICIT_FIELD_LABELS: Record<(typeof SDF_CORE_FIELDS)[number], string> = {
+  problem: 'Problem|问题',
+  insight: 'Insight|洞见',
+  method: 'Method|方法',
+  results: 'Results?|结果',
+  limitations: 'Limitations?|局限|限制',
+  reproducibility: 'Reproducibility|可复现性|复现',
+};
+
+function findExplicitFieldEvidence(
+  source: string,
+  field: (typeof SDF_CORE_FIELDS)[number],
+): { quote: string; start: number; end: number } | null {
+  const match = new RegExp(`^(?:${EXPLICIT_FIELD_LABELS[field]})\\s*[:：]\\s*([^\\r\\n]+)$`, 'im').exec(source);
+  if (!match?.[1]?.trim()) return null;
+  const raw = match[1];
+  const quote = raw.trim();
+  const start = (match.index ?? 0) + match[0].indexOf(raw) + raw.indexOf(quote);
+  return { quote, start, end: start + quote.length };
+}
+
 function materializeProposal(proposal: ExtractedProposal, manuscriptText: string): ExtractionResult {
   const core = { schemaVersion: SDF_CORE_VERSION } as ExtractedCore;
   const evidence = {} as ExtractionResult['evidence'];
@@ -177,12 +198,18 @@ function materializeProposal(proposal: ExtractedProposal, manuscriptText: string
   for (const field of SDF_CORE_FIELDS) {
     const candidate = proposal.fields[field];
     const range = findEvidenceRange(manuscriptText, candidate.sourceQuote);
-    const unsupported = candidate.needsMoreInformation || !range;
-    core[field] = unsupported ? '' : candidate.summary.trim();
-    evidence[field] = unsupported
-      ? { quote: '', locator: '' }
-      : { quote: manuscriptText.slice(range.start, range.end), locator: `chars:${range.start}-${range.end}` };
-    if (unsupported) needsMoreInformation.push(field);
+    const explicit = findExplicitFieldEvidence(manuscriptText, field);
+    if (!candidate.needsMoreInformation && range) {
+      core[field] = candidate.summary.trim();
+      evidence[field] = { quote: manuscriptText.slice(range.start, range.end), locator: `chars:${range.start}-${range.end}` };
+    } else if (explicit) {
+      core[field] = explicit.quote;
+      evidence[field] = { quote: explicit.quote, locator: `chars:${explicit.start}-${explicit.end}` };
+    } else {
+      core[field] = '';
+      evidence[field] = { quote: '', locator: '' };
+      needsMoreInformation.push(field);
+    }
   }
   return { core, evidence, needsMoreInformation };
 }

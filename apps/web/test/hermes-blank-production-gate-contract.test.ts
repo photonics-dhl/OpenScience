@@ -11,7 +11,12 @@ describe('public blank RO acceptance safety and evidence contract', () => {
     expect(source).toContain('OPENSCIENCE_E2E_ADMIN_AUTH');
     expect(source).toContain('OPENSCIENCE_EXPECTED_RELEASE');
     expect(source).toContain('fetch(`${canonicalOrigin}/__release`');
-    expect(source).toContain('request.newContext');
+    expect(source).toContain("spawn(process.platform === 'win32' ? 'curl.exe' : 'curl'");
+    expect(source).toContain("'--config', '-'");
+    expect(source).toContain('child.stdin.end');
+    expect(source).toContain("shell: false");
+    expect(source).toContain("url.searchParams.set('_acceptance', randomUUID())");
+    expect(source).toContain('header = "Cache-Control: no-cache"');
     expect(source).not.toContain('headers: { authorization: adminAuth }');
   });
 
