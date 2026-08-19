@@ -31,8 +31,8 @@ infra/scripts/deploy.sh --confirm --rollback-ref <known-good-ref> <release-ref>
 ### 2.2 安装依赖 + 全量构建（云上）
 
 ```bash
-ssh-run.sh "cd /opt/openscience-releases/<sha> && npx pnpm@9.15.0 install && npx pnpm@9.15.0 build"
-# 跨包 import 解析到目标包 dist，必须全量 build（AGENTS.md 坑）
+ssh-run.sh "cd /opt/openscience-releases/<sha> && npx pnpm@9.15.0 install && npx pnpm@9.15.0 --filter @openscience/database generate && npx pnpm@9.15.0 build"
+# clean Git archive 不含生成的 Prisma Client；先 generate，再做解析到各包 dist 的全量 build。
 ```
 
 ### 2.3 迁移部署 + seed（如需）

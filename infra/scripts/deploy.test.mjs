@@ -41,6 +41,13 @@ test('deployment fails unless application health and public status checks pass',
   assert.doesNotMatch(source, /curl[^\n]+\|\| true/);
 });
 
+test('clean release builds generate Prisma before compiling any workspace package', () => {
+  const rollbackBuild = 'cd $PREVIOUS_RELEASE_ROOT && npx pnpm@9.15.0 install && npx pnpm@9.15.0 --filter @openscience/database generate && npx pnpm@9.15.0 build';
+  const candidateBuild = 'cd $RELEASE_ROOT && npx pnpm@9.15.0 install && npx pnpm@9.15.0 --filter @openscience/database generate && npx pnpm@9.15.0 build';
+  assert.ok(source.includes(rollbackBuild));
+  assert.ok(source.includes(candidateBuild));
+});
+
 test('deployment publishes and verifies the exact immutable release identity', () => {
   assert.match(source, /verify-release-source\.mjs" --root "\$PROJECT_ROOT" --ref "\$RELEASE_REF"/);
   assert.match(source, /printf '%s\\n' '\$RELEASE_SHA'[^\n]+\.release-id\.next; mv[^\n]+\.release-id/);
@@ -130,7 +137,7 @@ test('worker and parser images are immutable per release and legacy images are p
   assert.ok(source.includes(String.raw`docker tag \"\$worker_image\" openscience-agent-worker:$PREVIOUS_RELEASE_SHA`));
   assert.ok(source.includes(String.raw`docker tag \"\$parser_image\" openscience-document-parser:$PREVIOUS_RELEASE_SHA`));
   assert.match(source, /XGS_RELEASE_SHA="\$PREVIOUS_RELEASE_SHA" node/);
-  assert.match(source, /cd \$PREVIOUS_RELEASE_ROOT && npx pnpm@9\.15\.0 install && npx pnpm@9\.15\.0 build/);
+  assert.match(source, /cd \$PREVIOUS_RELEASE_ROOT && npx pnpm@9\.15\.0 install && npx pnpm@9\.15\.0 --filter @openscience\/database generate && npx pnpm@9\.15\.0 build/);
   assert.match(source, /XGS_RELEASE_IMAGE_TAG=\$RELEASE_SHA/);
   assert.match(source, /XGS_RELEASE_IMAGE_TAG=\$PREVIOUS_RELEASE_SHA/);
 });
