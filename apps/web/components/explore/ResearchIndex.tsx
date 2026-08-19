@@ -78,9 +78,9 @@ export function ResearchIndex({ initialPage }: { initialPage?: ResearchIndexPage
                 <span className="min-w-0">
                   <span className="block font-editorial text-3xl leading-tight text-os-ink group-hover:text-os-vermilion sm:text-4xl">{item.title}</span>
                   {item.insight ? <span className="mt-3 block max-w-3xl text-sm leading-6 text-os-muted-paper">{item.insight}</span> : null}
-                  <span className="mt-4 block font-data text-[0.68rem] uppercase tracking-[0.1em] text-os-muted-paper">{item.authors.join(' · ') || t('unknownAuthor')}</span>
+                  <span className="mt-4 block font-data text-xs uppercase tracking-[0.1em] text-os-muted-paper">{item.authors.join(' · ') || t('unknownAuthor')}</span>
                 </span>
-                <span className="grid gap-2 font-data text-[0.68rem] uppercase tracking-[0.1em] text-os-muted-paper md:text-right">
+                <span className="grid gap-2 font-data text-xs uppercase tracking-[0.1em] text-os-muted-paper md:text-right">
                   <span>{item.publicId} / v{item.latestVersion}</span>
                   <span>{item.fields.join(' · ')}</span>
                   <span>{item.artifactTypes.join(' · ') || t('noArtifacts')}</span>
