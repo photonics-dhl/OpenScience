@@ -1,6 +1,6 @@
 import Ajv, { type ErrorObject } from 'ajv';
 import addFormats from 'ajv-formats';
-import { coreSchema } from './core';
+import { coreSchema, draftCoreSchema } from './core';
 import { manifestSchema } from './manifest';
 
 const ajv = new Ajv({ allErrors: true });
@@ -17,6 +17,13 @@ const coreValidate = ajv.compile(coreSchema);
 export function validateSdfCore(doc: unknown): ValidationResult {
   const ok = coreValidate(doc);
   return { ok, errors: coreValidate.errors ?? [] };
+}
+
+const draftCoreValidate = ajv.compile(draftCoreSchema);
+
+export function validateSdfDraftCore(doc: unknown): ValidationResult {
+  const ok = draftCoreValidate(doc);
+  return { ok, errors: draftCoreValidate.errors ?? [] };
 }
 
 const manifestValidate = ajv.compile(manifestSchema);

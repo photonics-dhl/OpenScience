@@ -43,6 +43,22 @@ describe('sdf 读写（P1B-1 合同 + 乐观锁）', () => {
     expect(records.some((r) => (r as { action: string }).action === 'sdf.update')).toBe(true);
   });
 
+  it('draft 更新允许保留已明确披露但尚未解决的空字段', async () => {
+    const { deps, user } = makeDeps();
+    const ro = await createResearchObject(deps, { workspaceId: 'ws-1', userId: user.id, title: 'Planned study' });
+
+    const updated = await updateSdfDocument(deps, {
+      userId: user.id,
+      roId: ro.id,
+      version: 1,
+      core: fullCore({ results: '' }),
+    });
+
+    expect(updated.core.problem).toBe('P');
+    expect(updated.core.results).toBe('');
+    expect(updated.nodes.find((node) => node.nodeType === 'results')?.content).toBe('');
+  });
+
   it('非法 core → VALIDATION_ERROR（P1B-1 合同）', async () => {
     const { deps, user } = makeDeps();
     const ro = await createResearchObject(deps, { workspaceId: 'ws-1', userId: user.id, title: 'S' });

@@ -1,5 +1,5 @@
 import type { AuditContext } from '@openscience/observability';
-import { validateSdfCore } from '@openscience/sdf-schema';
+import { validateSdfCore, validateSdfDraftCore } from '@openscience/sdf-schema';
 import { recordAudit } from '../workspace/audit';
 import { requireMembership } from '../workspace/helpers';
 import { requireRoAccess } from '../visibility/access';
@@ -48,10 +48,6 @@ export async function updateSdfDocument(
   input: UpdateSdfInput,
   ctx: AuditContext = {},
 ): Promise<SdfDocumentView> {
-  // 合同校验（P1B-1）：非法 SDF 拒绝
-  const check = validateSdfCore(input.core);
-  if (!check.ok) throw new ResearchObjectError('VALIDATION_ERROR', 'SDF 文档不符合 core Schema');
-
   const ro = await deps.prisma.researchObject.findUnique({
     where: { id: input.roId },
     include: { sdfDocument: { include: { nodes: true } } },
@@ -59,6 +55,13 @@ export async function updateSdfDocument(
   if (!ro) throw new ResearchObjectError('RESEARCH_OBJECT_NOT_FOUND', '研究对象不存在');
   await requireMembership(deps, ro.workspaceId, input.userId);
   if (!ro.sdfDocument) throw new ResearchObjectError('VALIDATION_ERROR', 'SDF 文档不存在');
+
+  // 草稿必须保留完整六字段结构，但可显式留下尚无证据的空字段；
+  // 非草稿状态仍执行发布级非空 core 合同。
+  const check = ro.status === 'draft'
+    ? validateSdfDraftCore(input.core)
+    : validateSdfCore(input.core);
+  if (!check.ok) throw new ResearchObjectError('VALIDATION_ERROR', 'SDF 文档不符合 core Schema');
 
   // 乐观锁：RO.version 匹配才更新
   const result = await deps.prisma.$transaction(async (tx) => {

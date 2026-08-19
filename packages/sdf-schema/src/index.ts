@@ -2,6 +2,7 @@ export {
   SDF_CORE_VERSION,
   SDF_CORE_FIELDS,
   coreSchema,
+  draftCoreSchema,
   type SdfCore,
 } from './core';
 export {
@@ -11,4 +12,4 @@ export {
   manifestSchema,
   type SdfManifest,
 } from './manifest';
-export { validateSdfCore, validateManifest, type ValidationResult } from './validate';
+export { validateSdfCore, validateSdfDraftCore, validateManifest, type ValidationResult } from './validate';

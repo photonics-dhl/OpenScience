@@ -34,6 +34,27 @@ export const coreSchema = {
   // 债务：宽容未知键（可选字段定型时收紧）
 } as const;
 
+/**
+ * Editable draft shape. All six semantic slots must exist, but an unresolved
+ * slot remains the empty string until evidence or the author supplies it.
+ * Publication/full-core validation continues to use `coreSchema`.
+ */
+export const draftCoreSchema = {
+  $schema: 'http://json-schema.org/draft-07/schema#',
+  title: 'OpenScience SDF Draft Core',
+  type: 'object',
+  required: ['schemaVersion', ...SDF_CORE_FIELDS],
+  properties: {
+    schemaVersion: { const: SDF_CORE_VERSION },
+    problem: { type: 'string' },
+    insight: { type: 'string' },
+    method: { type: 'string' },
+    results: { type: 'string' },
+    limitations: { type: 'string' },
+    reproducibility: { type: 'string' },
+  },
+} as const;
+
 /** TS 类型：六必填字段均为非空字符串。 */
 export type SdfCore = {
   schemaVersion: typeof SDF_CORE_VERSION;
