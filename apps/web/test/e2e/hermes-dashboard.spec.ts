@@ -31,18 +31,28 @@ async function mockDashboard(page: Page, taskState?: string) {
   });
 }
 
-test('Dashboard exposes the three semantic regions Hermes must protect', async ({ page }) => {
+async function expectDashboardProtectedRegions(page: Page) {
+  const regions = [
+    page.locator('header nav[data-hermes-primary-navigation="true"]'),
+    page.locator('section[aria-labelledby="continue-title"]'),
+    page.locator('section[aria-labelledby="import-stage-title"]'),
+    page.locator('aside[aria-labelledby="hermes-task-title"]'),
+  ];
+  for (const region of regions) {
+    await expect(region).toHaveCount(1);
+    await expect(region).toHaveAttribute('data-hermes-protected', 'true');
+  }
+  await expect.poll(() => page.locator('[data-hermes-protected="true"]').count()).toBeGreaterThanOrEqual(regions.length);
+}
+
+test('Dashboard protects semantic navigation, continuation, import and Hermes task regions', async ({ page }) => {
   await mockDashboard(page);
   await page.goto(`${baseUrl}/dashboard?hermes-motion=reduced`, { waitUntil: 'networkidle' });
-  const protectedRegions = page.locator('[data-hermes-protected="true"]');
-  await expect(protectedRegions).toHaveCount(3);
-  await expect(page.locator('section[aria-labelledby="continue-title"]')).toHaveAttribute('data-hermes-protected', 'true');
-  await expect(page.locator('section[aria-labelledby="import-stage-title"]')).toHaveAttribute('data-hermes-protected', 'true');
-  await expect(page.locator('aside[aria-labelledby="hermes-task-title"]')).toHaveAttribute('data-hermes-protected', 'true');
+  await expectDashboardProtectedRegions(page);
 
   await page.route('**/api/research-objects?limit=20', (route) => json(route, { researchObjects: [] }));
   await page.reload({ waitUntil: 'networkidle' });
-  await expect(page.locator('section[aria-labelledby="continue-title"]')).toHaveAttribute('data-hermes-protected', 'true');
+  await expectDashboardProtectedRegions(page);
 });
 
 test('Hermes measures a real performance bubble into a protected-safe viewport placement', async ({ page }) => {

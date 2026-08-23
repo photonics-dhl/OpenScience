@@ -225,7 +225,7 @@ export default function NewResearchObjectPage() {
               <p className="max-w-xl text-xs leading-5 text-white/60">{mode === 'import' ? intakeT('submitNote') : intakeT('blankNote')}</p>
               <div className="flex gap-4">
                 {researchObjectId ? <Link className="min-h-12 px-5 py-3 text-xs uppercase tracking-[0.14em] text-white/60 hover:text-white" href={`/research-objects/${researchObjectId}/edit`}>{intakeT('openDraft')}</Link> : null}
-                {!batchId ? <button data-reading-role="control" className="min-h-12 border-0 bg-[#bd321d] px-7 text-sm font-semibold tracking-[0.04em] text-white transition-colors hover:bg-[#d13b22] disabled:cursor-not-allowed disabled:opacity-60 motion-reduce:transition-none" disabled={pending || !workspaceId} type="submit">{pending ? t('creating') : researchObjectId ? intakeT('retryUpload') : t('create')}</button> : null}
+                {!batchId ? <button data-hermes-protected="true" data-reading-role="control" className="min-h-12 border-0 bg-[#bd321d] px-7 text-sm font-semibold tracking-[0.04em] text-white transition-colors hover:bg-[#d13b22] disabled:cursor-not-allowed disabled:opacity-60 motion-reduce:transition-none" disabled={pending || !workspaceId} type="submit">{pending ? t('creating') : researchObjectId ? intakeT('retryUpload') : t('create')}</button> : null}
               </div>
             </footer>
           </form>
