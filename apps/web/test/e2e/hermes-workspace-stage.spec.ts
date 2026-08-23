@@ -50,6 +50,7 @@ test('anchored Hermes detaches only after drag intent and settles away from prot
   await page.mouse.move(start.x + 3, start.y + 2);
   await page.mouse.up();
   await expect(stage).toHaveAttribute('data-hermes-anchored', 'true');
+  await expect(stage).toHaveAttribute('data-hermes-invoke-count', '1');
   await expect(page.getByRole('dialog', { name: 'Hermes research guide' })).toBeVisible();
   await expect(stage).toHaveAttribute('data-hermes-assistant-open', 'true');
   await expect(stage).toHaveAttribute('aria-hidden', 'true');
@@ -85,10 +86,17 @@ test('anchored Hermes detaches only after drag intent and settles away from prot
 
   const cancelInput = await input.boundingBox();
   expect(cancelInput).not.toBeNull();
+  await stage.evaluate((element) => {
+    element.addEventListener('lostpointercapture', () => {
+      element.setAttribute('data-hermes-test-lost-capture-count', String(Number(element.getAttribute('data-hermes-test-lost-capture-count') ?? '0') + 1));
+    });
+  });
   await page.mouse.move(cancelInput!.x + cancelInput!.width / 2, cancelInput!.y + cancelInput!.height / 2);
   await page.mouse.down();
   await page.mouse.move(cancelInput!.x - 40, cancelInput!.y + 30, { steps: 4 });
-  await stage.dispatchEvent('pointercancel', { pointerId: 1, pointerType: 'mouse' });
+  expect(await stage.evaluate((element) => element.hasPointerCapture(1))).toBe(true);
+  await stage.evaluate((element) => element.releasePointerCapture(1));
+  await expect(stage).toHaveAttribute('data-hermes-test-lost-capture-count', '1');
   await expect(stage).toHaveAttribute('data-hermes-dragging', 'false');
   await expect(stage).toHaveAttribute('data-hermes-anchored', 'true');
   await page.mouse.up();
@@ -115,6 +123,41 @@ test('anchored Hermes detaches only after drag intent and settles away from prot
 
   expect(await page.evaluate((key) => localStorage.getItem(key), desktopKey)).not.toBeNull();
   expect(await page.evaluate((key) => localStorage.getItem(key), mobileKey)).toBeNull();
+
+  const actorBeforeReflow = await stage.locator('[data-hermes-companion-actor="true"]').boundingBox();
+  expect(actorBeforeReflow).not.toBeNull();
+  await page.evaluate((bounds) => {
+    document.querySelectorAll<HTMLElement>('[data-hermes-protected="true"]').forEach((element) => {
+      element.dataset.hermesResizeHidden = 'true';
+      element.style.display = 'none';
+    });
+    const blocker = document.createElement('div');
+    blocker.dataset.hermesProtected = 'true';
+    blocker.dataset.hermesResizeBlocker = 'true';
+    blocker.style.cssText = `position:fixed;pointer-events:none;left:${bounds.x - 24}px;top:${bounds.y - 24}px;width:${bounds.width + 48}px;height:${bounds.height + 48}px`;
+    document.body.append(blocker);
+  }, actorBeforeReflow!);
+  await page.setViewportSize({ width: 1280, height: 820 });
+  await expect.poll(async () => {
+    const actorAfterReflow = await stage.locator('[data-hermes-companion-actor="true"]').boundingBox();
+    const blocker = await page.locator('[data-hermes-resize-blocker="true"]').boundingBox();
+    return actorAfterReflow && blocker ? overlaps(actorAfterReflow, blocker) : true;
+  }).toBe(false);
+  const actorAfterReflow = await stage.locator('[data-hermes-companion-actor="true"]').boundingBox();
+  const visibleProtectedAfterReflow = await protectedRegions.evaluateAll((elements) => elements.map((element) => {
+    const bounds = element.getBoundingClientRect();
+    return { x: bounds.x, y: bounds.y, width: bounds.width, height: bounds.height };
+  }).filter((bounds) => bounds.width > 0 && bounds.height > 0));
+  expect(actorAfterReflow).not.toBeNull();
+  expect(visibleProtectedAfterReflow.some((region) => overlaps(actorAfterReflow!, region))).toBe(false);
+  expect(await page.evaluate((key) => localStorage.getItem(key), desktopKey)).not.toBeNull();
+  await page.locator('[data-hermes-resize-blocker="true"]').evaluate((element) => {
+    element.remove();
+    document.querySelectorAll<HTMLElement>('[data-hermes-resize-hidden="true"]').forEach((region) => {
+      region.style.removeProperty('display');
+      delete region.dataset.hermesResizeHidden;
+    });
+  });
 
   await page.setViewportSize({ width: 390, height: 844 });
   await expect(stage).toHaveAttribute('data-hermes-stage-size', '200');

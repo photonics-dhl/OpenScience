@@ -77,6 +77,37 @@ test('Hermes measures a real performance bubble into a protected-safe viewport p
   expect(bubbleBox!.x + bubbleBox!.width).toBeLessThanOrEqual(1440);
   expect(bubbleBox!.y + bubbleBox!.height).toBeLessThanOrEqual(900);
 
+  const transitionTarget = protectedBoxes.find((region) => region.width >= bubbleBox!.width && region.height >= bubbleBox!.height);
+  expect(transitionTarget).toBeDefined();
+  const transitionDelta = {
+    x: transitionTarget!.x + (transitionTarget!.width - bubbleBox!.width) / 2 - bubbleBox!.x,
+    y: transitionTarget!.y + (transitionTarget!.height - bubbleBox!.height) / 2 - bubbleBox!.y,
+  };
+  await stage.evaluate((element) => {
+    element.addEventListener('transitionend', (event) => {
+      if (event.propertyName === 'left') element.setAttribute('data-hermes-test-left-transition-ended', 'true');
+    });
+  });
+  await page.evaluate((delta) => {
+    const anchor = document.querySelector<HTMLElement>('[data-hermes-dock-anchor="true"]');
+    if (!anchor) throw new Error('Hermes anchor missing');
+    anchor.style.transform = `translate(${delta.x}px, ${delta.y}px)`;
+    window.dispatchEvent(new Event('resize'));
+  }, transitionDelta);
+  await expect(stage).toHaveAttribute('data-hermes-test-left-transition-ended', 'true');
+  await expect(stage).toHaveAttribute('data-hermes-bubble-safe', 'true');
+  const bubbleAfterTransition = await bubble.boundingBox();
+  expect(bubbleAfterTransition).not.toBeNull();
+  const protectedAfterTransition = await page.locator('[data-hermes-protected="true"]').evaluateAll((elements) => elements.map((element) => {
+    const bounds = element.getBoundingClientRect();
+    return { x: bounds.x, y: bounds.y, width: bounds.width, height: bounds.height };
+  }).filter((bounds) => bounds.width > 0 && bounds.height > 0));
+  expect(protectedAfterTransition.some((region) => overlaps(bubbleAfterTransition!, region))).toBe(false);
+  expect(bubbleAfterTransition!.x).toBeGreaterThanOrEqual(0);
+  expect(bubbleAfterTransition!.y).toBeGreaterThanOrEqual(0);
+  expect(bubbleAfterTransition!.x + bubbleAfterTransition!.width).toBeLessThanOrEqual(1440);
+  expect(bubbleAfterTransition!.y + bubbleAfterTransition!.height).toBeLessThanOrEqual(900);
+
   await page.evaluate(() => {
     document.querySelectorAll('[data-hermes-protected="true"]').forEach((element) => element.removeAttribute('data-hermes-protected'));
     const spacer = document.createElement('div');
