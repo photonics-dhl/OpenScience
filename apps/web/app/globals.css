@@ -1996,6 +1996,11 @@ body {
   animation: hermes-bubble-enter 220ms cubic-bezier(.16, 1, .3, 1) both;
 }
 
+.hermes-workspace-stage[data-hermes-guide-target] .hermes-functional-bubble {
+  --hermes-guide-bubble-inline-offset: .5rem;
+  right: var(--hermes-guide-bubble-inline-offset);
+}
+
 .hermes-companion-bubble::after {
   position: absolute;
   right: auto;
@@ -2148,6 +2153,10 @@ body {
 .hermes-workspace-stage[data-hermes-bubble-horizontal='left'] .hermes-companion-bubble {
   right: auto;
   left: .5rem;
+}
+
+.hermes-workspace-stage[data-hermes-guide-target][data-hermes-bubble-horizontal='left'] .hermes-functional-bubble {
+  left: var(--hermes-guide-bubble-inline-offset);
 }
 
 .hermes-workspace-stage[data-hermes-bubble-horizontal='left'] .hermes-companion-bubble::after {

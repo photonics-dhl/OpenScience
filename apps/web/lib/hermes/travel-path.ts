@@ -177,17 +177,34 @@ function shortestVisiblePath(start: Point, end: Point, safe: Bounds, obstacle: B
 }
 
 export function planHermesTravel(input: HermesTravelInput): HermesTravelPlan {
-  const variants: NormalizedFootprintVariant[] = input.footprintVariants?.slice(0, 4)
-    ?? [{ footprint: input.footprint, parts: [input.footprint], placement: undefined }];
+  const legacyVariant: NormalizedFootprintVariant = {
+    footprint: input.footprint,
+    parts: [input.footprint],
+    placement: undefined,
+  };
+  const providedVariants = input.footprintVariants?.slice(0, 4) ?? [];
+  const usesCompositeVariants = providedVariants.length > 0;
+  const variants: NormalizedFootprintVariant[] = usesCompositeVariants
+    ? providedVariants
+    : [legacyVariant];
   const boundsFor = (footprint: HermesFootprintInsets): Bounds => ({
     left: input.viewport.left + footprint.left,
     right: input.viewport.right - footprint.right,
     top: input.viewport.top + footprint.top,
     bottom: input.viewport.bottom - (input.bottomInsetPx ?? 0) - footprint.bottom,
   });
-  const fallbackVariant = variants[0] ?? { footprint: input.footprint, parts: [input.footprint], placement: undefined };
+  const start = center(input.from);
+  const contains = (bounds: Bounds, point: Point) => point.x >= bounds.left && point.x <= bounds.right
+    && point.y >= bounds.top && point.y <= bounds.bottom;
+  const eligibleVariants = usesCompositeVariants
+    ? variants.filter((variant) => contains(boundsFor(variant.footprint), start))
+    : variants;
+  const routeStartFor = (variant: NormalizedFootprintVariant) => usesCompositeVariants
+    ? start
+    : clampPoint(start, boundsFor(variant.footprint));
+  const fallbackVariant = variants[0];
   const fallbackSafe = boundsFor(fallbackVariant.footprint);
-  const fallbackStart = clampPoint(center(input.from), fallbackSafe);
+  const fallbackStart = routeStartFor(fallbackVariant);
   if (!input.target || !input.editable) return { dock: fallbackStart, mode: 'missing', points: [fallbackStart], safe: true };
   const editable = input.editable;
   const target = input.target;
@@ -197,7 +214,7 @@ export function planHermesTravel(input: HermesTravelInput): HermesTravelPlan {
     && obstacles.every((obstacle) => variant.parts.every((part) => !rectsOverlap(rectForFootprint(candidate, part), obstacle)))
   );
   const safeEdge = () => {
-    for (const variant of variants) {
+    for (const variant of eligibleVariants) {
       const safe = boundsFor(variant.footprint);
       if (safe.left > safe.right || safe.top > safe.bottom) continue;
       const dock = findSafeEdgeDock(safe, (candidate) => candidateIsSafe(candidate, variant));
@@ -209,13 +226,13 @@ export function planHermesTravel(input: HermesTravelInput): HermesTravelPlan {
   const targetVisible = rectsOverlap(target, input.viewport);
   if (!targetVisible) {
     const edge = safeEdge();
-    const dock = edge?.dock ?? clampPoint(center(target), fallbackSafe);
-    const start = edge ? clampPoint(center(input.from), boundsFor(edge.variant.footprint)) : fallbackStart;
+    const dock = edge?.dock ?? (usesCompositeVariants ? start : clampPoint(center(target), fallbackSafe));
+    const routeStart = edge ? routeStartFor(edge.variant) : start;
     return {
       dock,
       mode: 'edge-stop',
       placement: edge?.placement,
-      points: start.x === dock.x && start.y === dock.y ? [start] : [start, dock],
+      points: routeStart.x === dock.x && routeStart.y === dock.y ? [routeStart] : [routeStart, dock],
       safe: Boolean(edge),
     };
   }
@@ -226,7 +243,20 @@ export function planHermesTravel(input: HermesTravelInput): HermesTravelPlan {
   const uniqueSides = sides.filter((side, index) => sides.indexOf(side) === index);
   let selected: { dock: Point; placement?: HermesTravelPlacement; safe: Bounds; variant: NormalizedFootprintVariant } | null = null;
   for (const side of uniqueSides) {
-    for (const variant of variants) {
+    const desiredPlacement: HermesTravelPlacement = {
+      horizontal: side === 'left' ? 'left' : side === 'right' ? 'right'
+        : targetCenter.x < (input.viewport.left + input.viewport.right) / 2 ? 'right' : 'left',
+      vertical: side === 'top' ? 'above' : side === 'bottom' ? 'below'
+        : targetCenter.y < (input.viewport.top + input.viewport.bottom) / 2 ? 'below' : 'above',
+    };
+    const rankedVariants = [...eligibleVariants].sort((a, b) => {
+      const score = (variant: NormalizedFootprintVariant) => variant.placement
+        ? Number(variant.placement.horizontal !== desiredPlacement.horizontal) * 2
+          + Number(variant.placement.vertical !== desiredPlacement.vertical)
+        : 0;
+      return score(a) - score(b);
+    });
+    for (const variant of rankedVariants) {
       const footprint = variant.footprint;
       const safe = boundsFor(footprint);
       if (safe.left > safe.right || safe.top > safe.bottom) continue;
@@ -246,19 +276,19 @@ export function planHermesTravel(input: HermesTravelInput): HermesTravelPlan {
   }
   if (!selected) {
     const edge = safeEdge();
-    const edgeDock = edge?.dock ?? fallbackStart;
-    const start = edge ? clampPoint(center(input.from), boundsFor(edge.variant.footprint)) : fallbackStart;
+    const edgeDock = edge?.dock ?? (usesCompositeVariants ? start : fallbackStart);
+    const routeStart = edge ? routeStartFor(edge.variant) : start;
     return {
       dock: edgeDock,
       mode: 'edge-stop',
       placement: edge?.placement,
-      points: start.x === edgeDock.x && start.y === edgeDock.y ? [start] : [start, edgeDock],
+      points: routeStart.x === edgeDock.x && routeStart.y === edgeDock.y ? [routeStart] : [routeStart, edgeDock],
       safe: Boolean(edge),
     };
   }
   const { dock, placement, safe, variant } = selected;
   const footprint = variant.footprint;
-  const start = clampPoint(center(input.from), safe);
+  const routeStart = routeStartFor(variant);
   const pathSafetyPx = 1;
   const expanded: Bounds = {
     left: editable.left - footprint.right - pathSafetyPx,
@@ -266,6 +296,6 @@ export function planHermesTravel(input: HermesTravelInput): HermesTravelPlan {
     top: editable.top - footprint.bottom - pathSafetyPx,
     bottom: editable.bottom + footprint.top + pathSafetyPx,
   };
-  const points = shortestVisiblePath(start, dock, safe, expanded);
+  const points = shortestVisiblePath(routeStart, dock, safe, expanded);
   return { dock, mode: 'travel', placement, points, safe: true };
 }

@@ -36,6 +36,7 @@ async function expectGuideClearOf(page: Page, obstacle: Locator) {
 
 async function mockWorkspace(page: Page) {
   await page.route('**/api/auth/me', (route) => json(route, { userId: 'guide-user', email: 'guide@example.invalid', displayName: 'Ada', status: 'email_verified', level: 'free' }));
+  await page.route('**/api/csrf-token', (route) => json(route, { csrfToken: 'guide-token' }));
   await page.route('**/api/workspaces**', (route) => json(route, { workspaces: [{ id: 'workspace-guide', name: 'Ada lab' }] }));
   await page.route('**/api/research-objects?limit=20', (route) => json(route, { researchObjects: [] }));
   await page.route('**/api/ingestion?actionable=true', (route) => json(route, { tasks: [] }));
@@ -170,7 +171,12 @@ test('mobile Live2D carrier stays single-layer and docks above the virtual keybo
   await page.setViewportSize({ width: 390, height: 844 });
   await page.addInitScript(() => {
     if (window.visualViewport) {
-      Object.defineProperty(window.visualViewport, 'height', { configurable: true, get: () => 544 });
+      let visualHeight = 844;
+      Object.defineProperty(window.visualViewport, 'height', { configurable: true, get: () => visualHeight });
+      Object.defineProperty(window, '__setHermesVisualViewportHeight', { configurable: true, value: (height: number) => {
+        visualHeight = height;
+        window.visualViewport?.dispatchEvent(new Event('resize'));
+      } });
     }
   });
   await mockWorkspace(page);
@@ -182,7 +188,12 @@ test('mobile Live2D carrier stays single-layer and docks above the virtual keybo
   await expect(stage).toHaveAttribute('data-hermes-footprint-source', 'carrier-travel-hull');
   await expect(stage.locator('[data-hermes-live2d-canvas="true"]')).toHaveCount(1);
   await expect(stage.locator('[data-hermes-carrier-rear], [data-hermes-carrier-front]')).toHaveCount(0);
-  await expect.poll(async () => (await travelHull.boundingBox())?.y ?? Number.POSITIVE_INFINITY).toBeLessThan(544);
+  await expect(page.locator('[data-hermes-guide-bubble]')).toBeVisible();
+  await page.evaluate(() => (window as Window & { __setHermesVisualViewportHeight(height: number): void }).__setHermesVisualViewportHeight(544));
+  await expect.poll(async () => {
+    const bounds = await travelHull.boundingBox();
+    return bounds ? bounds.y + bounds.height : Number.POSITIVE_INFINITY;
+  }).toBeLessThanOrEqual(545);
   const [travelBox, interactionBox] = await Promise.all([travelHull.boundingBox(), interactionHull.boundingBox()]);
   expect(travelBox).not.toBeNull();
   expect(interactionBox).not.toBeNull();
@@ -270,6 +281,19 @@ test('field guidance leaves the primary blank-RO create action directly operable
   await expect(page.locator('[data-hermes-guide-bubble][data-hermes-guide-visible="true"]')).toBeVisible();
   const create = page.getByRole('button', { name: /Create research object|创建 Research Object/i });
   await expect(create).toHaveAttribute('data-hermes-protected', 'true');
+  await expect(create).toBeEnabled();
+  await expect.poll(async () => {
+    const createBounds = await create.boundingBox();
+    if (!createBounds) return null;
+    return page.evaluate(({ x, y }) => {
+      const stageNode = document.querySelector('[data-hermes-workspace-stage]');
+      const hit = document.elementFromPoint(x, y);
+      return {
+        action: stageNode?.getAttribute('data-hermes-action'),
+        hit: hit?.closest('button[type="submit"]')?.tagName ?? null,
+      };
+    }, { x: createBounds.x + createBounds.width / 2, y: createBounds.y + createBounds.height / 2 });
+  }, { timeout: 15_000 }).toEqual({ action: 'guide-arrive', hit: 'BUTTON' });
   const createBox = await create.boundingBox();
   expect(createBox).not.toBeNull();
   const geometry = await page.evaluate(({ x, y }) => {
@@ -287,7 +311,6 @@ test('field guidance leaves the primary blank-RO create action directly operable
       travel: rect('[data-hermes-carrier-travel-hull="true"]'),
     };
   }, { x: createBox!.x + createBox!.width / 2, y: createBox!.y + createBox!.height / 2 });
-  await expect(stage).toHaveAttribute('data-hermes-action', 'guide-arrive', { timeout: 15_000 });
   const settledGeometry = await page.evaluate(() => {
     const rect = (selector: string) => {
       const bounds = document.querySelector(selector)?.getBoundingClientRect();
@@ -309,8 +332,11 @@ test('field guidance leaves the primary blank-RO create action directly operable
   });
   expect(settledGeometry.hit?.tagName, `settled protected replan must expose Create: ${JSON.stringify({ geometry, settledGeometry })}`).toBe('BUTTON');
 
+  const submitted = page.waitForRequest((request) => new URL(request.url()).pathname === '/api/research-objects'
+    && request.method() === 'POST');
   await create.click();
-  await page.waitForTimeout(500);
+  await submitted;
+  await expect.poll(() => createRequests).toBe(1);
   const afterClick = {
     assistantOpen: await stage.getAttribute('data-hermes-assistant-open'),
     createRequests,

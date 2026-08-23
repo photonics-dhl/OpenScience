@@ -219,6 +219,7 @@ function HermesWorkspaceStage({ fallbackAssistantOpen, fallbackOnInvoke, guideTa
   const [bubblePlacement, setBubblePlacement] = useState<MeasuredBubblePlacement | null>(null);
   const [invokeCount, setInvokeCount] = useState(0);
   const [stageMotionVersion, setStageMotionVersion] = useState(0);
+  const guideReplanVersion = guideSuppressed ? stageMotionVersion : 0;
 
   useEffect(() => {
     const query = window.matchMedia('(max-width: 640px)');
@@ -229,9 +230,11 @@ function HermesWorkspaceStage({ fallbackAssistantOpen, fallbackOnInvoke, guideTa
     sync();
     query.addEventListener('change', sync);
     window.addEventListener('resize', sync);
+    window.visualViewport?.addEventListener('resize', sync);
     return () => {
       query.removeEventListener('change', sync);
       window.removeEventListener('resize', sync);
+      window.visualViewport?.removeEventListener('resize', sync);
     };
   }, []);
 
@@ -454,17 +457,23 @@ function HermesWorkspaceStage({ fallbackAssistantOpen, fallbackOnInvoke, guideTa
     const arrivalMs = timeline.length === 0 ? 0 : timeline.at(-1)!.atMs + TRAVEL_SEGMENT_MS;
     timers.push(window.setTimeout(() => setGuideReady(true), arrivalMs));
     return () => timers.forEach((timer) => window.clearTimeout(timer));
-  }, [compactGuide, customDock, dockReady, effectiveReducedMotion, guideActions, guideTarget, protectedGeometryVersion, registry, registryVersion, travelRequested]);
+  }, [compactGuide, customDock, dockReady, effectiveReducedMotion, guideActions, guideReplanVersion, guideTarget, protectedGeometryVersion, registry,
+    registryVersion, travelRequested, viewportSize]);
 
   useEffect(() => {
     if (!dockReady || viewportSize.width <= 0 || viewportSize.height <= 0) return;
     const size = resolveHermesStageSize(false, compactGuide);
     const half = size / 2;
+    const visualViewport = guideTarget ? window.visualViewport : null;
+    const viewportLeft = visualViewport?.offsetLeft ?? 0;
+    const viewportTop = visualViewport?.offsetTop ?? 0;
+    const viewportRight = viewportLeft + (visualViewport?.width ?? viewportSize.width);
+    const viewportBottom = viewportTop + (visualViewport?.height ?? viewportSize.height);
     setPosition((current) => ({
-      x: Math.min(viewportSize.width - half, Math.max(half, current.x)),
-      y: Math.min(viewportSize.height - half, Math.max(half, current.y)),
+      x: Math.min(viewportRight - half, Math.max(viewportLeft + half, current.x)),
+      y: Math.min(viewportBottom - half, Math.max(viewportTop + half, current.y)),
     }));
-  }, [compactGuide, dockReady, viewportSize]);
+  }, [compactGuide, dockReady, guideTarget, viewportSize]);
 
   React.useLayoutEffect(() => {
     if (customDock || dockStored !== false || !dockReady || dockKind !== 'desktop' || dockKind !== viewportClass() || dragging || guideTarget || speech.cue

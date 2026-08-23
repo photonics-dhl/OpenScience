@@ -146,6 +146,29 @@ try {
     const obstacle = arrival.obstacles.find((candidate) => overlaps(part, candidate));
     assert.equal(obstacle, undefined, `${name} must not cover extract/protected work at arrival: ${JSON.stringify(obstacle)}`);
   }
+  const horizontalFlip = await page.evaluate(async () => {
+    const stage = document.querySelector('[data-hermes-workspace-stage]');
+    const bubble = document.querySelector('[data-hermes-guide-bubble]');
+    if (!(stage instanceof globalThis.HTMLElement) || !(bubble instanceof globalThis.HTMLElement)) return null;
+    const original = stage.getAttribute('data-hermes-bubble-horizontal');
+    const measure = async (horizontal) => {
+      stage.setAttribute('data-hermes-bubble-horizontal', horizontal);
+      await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+      const stageBounds = stage.getBoundingClientRect();
+      const bubbleBounds = bubble.getBoundingClientRect();
+      const center = stageBounds.left + stageBounds.width / 2;
+      return { left: center - bubbleBounds.left, right: bubbleBounds.right - center };
+    };
+    const left = await measure('left');
+    const right = await measure('right');
+    if (original) stage.setAttribute('data-hermes-bubble-horizontal', original);
+    return { left, right };
+  });
+  assert.ok(horizontalFlip, 'horizontal guide-bubble flip geometry must be measurable');
+  assert.ok(Math.abs(horizontalFlip.left.left - horizontalFlip.right.right) <= .5,
+    `left/right guide-bubble outer offsets must be symmetric: ${JSON.stringify(horizontalFlip)}`);
+  assert.ok(Math.abs(horizontalFlip.left.right - horizontalFlip.right.left) <= .5,
+    `left/right guide-bubble inner offsets must be symmetric: ${JSON.stringify(horizontalFlip)}`);
   const before = await page.locator('textarea').evaluateAll((nodes) => nodes.map((node) => node.value));
   await page.getByRole('button', { name: /Draft|草拟/ }).click();
   await page.locator('[data-before-after-proposal]').first().waitFor({ timeout: 5_000 });

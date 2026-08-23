@@ -91,7 +91,7 @@ describe('Hermes safe travel path', () => {
       preferredSides: ['right', 'top'],
       target: editable,
       viewport: rect(0, 0, 1440, 900),
-    } as Parameters<typeof planHermesTravel>[0] & { footprintVariants: unknown[] });
+    });
     const rightDock = { x: 1236, y: 449.984375 };
     const occupiedUnion = rectForFootprint(rightDock, footprint);
 
@@ -124,15 +124,15 @@ describe('Hermes safe travel path', () => {
           placement: { horizontal: 'right', vertical: 'below' },
         },
       ],
-      from: rect(900, 600, 100, 100),
+      from: rect(900, 570, 100, 100),
       obstacles: [rect(650, 220, 100, 50)],
       preferredSides: ['right'],
       target,
       viewport: rect(0, 0, 1200, 800),
-    } as Parameters<typeof planHermesTravel>[0] & { footprintVariants: unknown[] });
+    });
 
     expect(route.mode).toBe('travel');
-    expect((route as { placement?: unknown }).placement).toEqual({ horizontal: 'right', vertical: 'below' });
+    expect(route.placement).toEqual({ horizontal: 'right', vertical: 'below' });
     expect(sweptOverlaps(route.points, rect(0, 0, 300, 210), target)).toBe(false);
   });
 
@@ -151,11 +151,73 @@ describe('Hermes safe travel path', () => {
       preferredSides: ['right'],
       target,
       viewport: rect(0, 0, 1200, 800),
-    } as Parameters<typeof planHermesTravel>[0] & { footprintVariants: unknown[] });
+    });
 
     expect(route.mode).toBe('edge-stop');
     expect(route.safe).toBe(false);
-    expect((route as { placement?: unknown }).placement).toBeUndefined();
+    expect(route.placement).toBeUndefined();
+  });
+
+  it('rejects a variant that would silently clamp away the real route start', () => {
+    const target = rect(300, 220, 200, 80);
+    const footprint = { bottom: 80, left: 80, right: 150, top: 80 };
+    const route = planHermesTravel({
+      editable: target,
+      footprint,
+      footprintVariants: [{
+        footprint,
+        parts: [footprint],
+        placement: { horizontal: 'right', vertical: 'below' },
+      }],
+      from: rect(850, 500, 100, 100),
+      preferredSides: ['right'],
+      target,
+      viewport: rect(0, 0, 1000, 700),
+    });
+
+    expect(route.mode).toBe('edge-stop');
+    expect(route.safe).toBe(false);
+    expect(route.points[0]).toEqual({ x: 900, y: 550 });
+    expect(route.placement).toBeUndefined();
+  });
+
+  it('prefers the open arrival quadrant instead of preserving the source orientation', () => {
+    const target = rect(300, 180, 240, 100);
+    const actor = { bottom: 50, left: 50, right: 50, top: 50 };
+    const footprint = { bottom: 110, left: 110, right: 110, top: 110 };
+    const route = planHermesTravel({
+      editable: target,
+      footprint,
+      footprintVariants: [
+        { footprint, parts: [actor], placement: { horizontal: 'left', vertical: 'above' } },
+        { footprint, parts: [actor], placement: { horizontal: 'right', vertical: 'below' } },
+      ],
+      from: rect(700, 500, 100, 100),
+      preferredSides: ['right'],
+      target,
+      viewport: rect(0, 0, 1200, 800),
+    });
+
+    expect(route.mode).toBe('travel');
+    expect(route.placement).toEqual({ horizontal: 'right', vertical: 'below' });
+  });
+
+  it('treats an empty variant list as the legacy single-footprint plan', () => {
+    const target = rect(400, 260, 200, 80);
+    const footprint = { bottom: 50, left: 50, right: 50, top: 50 };
+    const route = planHermesTravel({
+      editable: target,
+      footprint,
+      footprintVariants: [],
+      from: rect(850, 500, 100, 100),
+      preferredSides: ['right'],
+      target,
+      viewport: rect(0, 0, 1200, 800),
+    });
+
+    expect(route.mode).toBe('travel');
+    expect(route.safe).toBe(true);
+    expect(route.points[0]).toEqual({ x: 900, y: 550 });
   });
 
   it('keeps the complete actor and guide-bubble footprint outside the editable field', () => {
