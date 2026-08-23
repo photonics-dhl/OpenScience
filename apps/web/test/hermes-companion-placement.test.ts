@@ -17,8 +17,8 @@ const rect = (left: number, top: number, width: number, height: number): RectLik
 const rectForFootprint = (point: Point, footprint: { bottom: number; left: number; right: number; top: number }) => rect(
   point.x - footprint.left,
   point.y - footprint.top,
-  point.x + footprint.right,
-  point.y + footprint.bottom,
+  footprint.left + footprint.right,
+  footprint.top + footprint.bottom,
 );
 
 const overlaps = (a: RectLike, b: RectLike) => (
@@ -47,7 +47,7 @@ describe('Hermes companion placement', () => {
 
     expect(result.safe).toBe(true);
     expect(overlaps(rectForFootprint(result.point, footprint), protectedWork)).toBe(false);
-    expect(result.point).toEqual({ x: 100, y: 450 });
+    expect(result.point).toEqual({ x: 128, y: 310 });
   });
 
   it.each([
@@ -100,6 +100,19 @@ describe('Hermes companion placement', () => {
       bounds: rect(118, 558, 120, 80),
       horizontal: 'left',
       vertical: 'above',
+    });
+  });
+
+  it('falls back to a centered mobile bubble when diagonal quadrants are blocked', () => {
+    expect(resolveHermesBubblePlacement({
+      actor: rect(147, 637, 96, 94),
+      bubble: { height: 55, width: 192 },
+      obstacles: [rect(20, 294, 350, 283), rect(20, 818, 350, 204)],
+      viewport: rect(0, 0, 390, 844),
+    })).toEqual({
+      bounds: rect(99, 743, 192, 55),
+      horizontal: 'center',
+      vertical: 'below',
     });
   });
 

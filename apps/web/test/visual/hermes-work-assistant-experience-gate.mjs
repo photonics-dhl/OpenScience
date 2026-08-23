@@ -1,4 +1,4 @@
-/* global document, getComputedStyle, innerWidth, localStorage, process */
+/* global document, DOMMatrixReadOnly, DOMPoint, getComputedStyle, innerWidth, localStorage, process, scrollTo, scrollY, URL */
 
 import assert from 'node:assert/strict';
 import { mkdir, writeFile } from 'node:fs/promises';
@@ -103,6 +103,68 @@ async function assertFootprintsSafe(page, viewport, label) {
   return { actor, protectedRegions };
 }
 
+async function assertBubblePointerFacesActor(page, actor, bubbleBox, label) {
+  const stage = page.locator('[data-hermes-workspace-stage="true"]');
+  const bubble = page.locator('[data-hermes-performance-bubble="true"]');
+  const placement = {
+    horizontal: await stage.getAttribute('data-hermes-bubble-horizontal'),
+    vertical: await stage.getAttribute('data-hermes-bubble-vertical'),
+  };
+  const tail = await bubble.evaluate((node) => {
+    const style = getComputedStyle(node, '::after');
+    const bubbleBounds = node.getBoundingClientRect();
+    const left = Number.parseFloat(style.left);
+    const top = Number.parseFloat(style.top);
+    const width = Number.parseFloat(style.width);
+    const height = Number.parseFloat(style.height);
+    const [originX, originY] = style.transformOrigin.split(' ').map(Number.parseFloat);
+    const matrix = new DOMMatrixReadOnly(style.transform === 'none' ? undefined : style.transform);
+    const endpoint = (x, y) => {
+      const point = new DOMPoint(x - originX, y - originY).matrixTransform(matrix);
+      return {
+        x: bubbleBounds.x + left + originX + point.x,
+        y: bubbleBounds.y + top + originY + point.y,
+      };
+    };
+    return {
+      bottom: style.bottom,
+      end: endpoint(width, height / 2),
+      left: style.left,
+      right: style.right,
+      start: endpoint(0, height / 2),
+      top: style.top,
+      transform: style.transform,
+      transformOrigin: style.transformOrigin,
+    };
+  });
+  const distanceToActor = (point) => Math.hypot(
+    point.x < actor.x ? actor.x - point.x : point.x > actor.x + actor.width ? point.x - actor.x - actor.width : 0,
+    point.y < actor.y ? actor.y - point.y : point.y > actor.y + actor.height ? point.y - actor.y - actor.height : 0,
+  );
+  const startDistance = distanceToActor(tail.start);
+  const endDistance = distanceToActor(tail.end);
+  const actorCenterX = actor.x + actor.width / 2;
+  const bubbleCenterX = bubbleBox.x + bubbleBox.width / 2;
+  if (placement.horizontal === 'left') {
+    assert.ok(bubbleCenterX < actorCenterX && tail.end.x > tail.start.x && endDistance < startDistance,
+      `${label} left bubble pointer must run toward the actor on its right: ${JSON.stringify({ endDistance, placement, startDistance, tail })}`);
+  } else if (placement.horizontal === 'right') {
+    assert.ok(bubbleCenterX > actorCenterX && tail.start.x < tail.end.x && startDistance < endDistance,
+      `${label} right bubble pointer must run toward the actor on its left: ${JSON.stringify({ endDistance, placement, startDistance, tail })}`);
+  } else {
+    assert.ok(Math.abs(bubbleCenterX - actorCenterX) <= 2 && Math.abs(tail.start.x - actorCenterX) <= 2,
+      `${label} centered bubble tail must align with the actor center: ${JSON.stringify({ actor, bubbleBox, placement, tail })}`);
+  }
+  if (placement.vertical === 'below') {
+    assert.ok(bubbleBox.y >= actor.y + actor.height && Math.min(tail.start.y, tail.end.y) < bubbleBox.y,
+      `${label} below bubble pointer must leave its top edge toward the actor`);
+  } else {
+    assert.ok(bubbleBox.y + bubbleBox.height <= actor.y && Math.max(tail.start.y, tail.end.y) > bubbleBox.y + bubbleBox.height,
+      `${label} above bubble pointer must leave its bottom edge toward the actor`);
+  }
+  return { placement, tail };
+}
+
 async function waitForSpeech(page) {
   const observed = new Set();
   for (let elapsed = 0; elapsed < 300_000; elapsed += 250) {
@@ -135,11 +197,19 @@ async function exerciseCreateImport(page, label, state) {
   const title = `First-person ${label} optical draft`;
   await page.waitForFunction(() => document.querySelector('select')?.value === 'workspace-user');
   await page.locator('input[name="title"]').fill(title);
+  const createButton = page.getByRole('button', { name: /Create Research Object|创建 Research Object/u });
+  const createBox = await createButton.boundingBox();
+  assert.ok(createBox, `${label} create action must have geometry`);
+  const createHit = await page.evaluate(({ x, y }) => document.elementFromPoint(x, y)?.closest('button[type="submit"]') !== null, {
+    x: createBox.x + createBox.width / 2,
+    y: createBox.y + createBox.height / 2,
+  });
+  assert.equal(createHit, true, `${label} transparent Hermes pixels must not intercept the real RO create action`);
   const created = page.waitForResponse((response) => new URL(response.url()).pathname === '/api/research-objects'
     && response.request().method() === 'POST', { timeout: 10_000 });
   const createResults = await Promise.allSettled([
     created,
-    page.getByRole('button', { name: /Create Research Object|创建 Research Object/u }).click({ timeout: 10_000 }),
+    createButton.click({ timeout: 10_000 }),
   ]);
   if (createResults.some((result) => result.status === 'rejected')) {
     const diagnostics = await page.evaluate(() => ({
@@ -188,6 +258,22 @@ try {
     assert.equal(await page.locator('[data-hermes-protected="true"]').count(), 3, label + ' must expose all protected Dashboard regions');
     const initial = await assertFootprintsSafe(page, viewport, label + ' initial');
 
+    if (viewport.width <= 640) {
+      const stageBox = await stage.boundingBox();
+      assert.ok(stageBox, `${label} stage must have geometry for transparent-hit testing`);
+      const transparentPoint = { x: stageBox.x + 4, y: stageBox.y + 4 };
+      const transparentHit = await page.evaluate(({ x, y }) => {
+        const stageNode = document.querySelector('[data-hermes-workspace-stage="true"]');
+        const hit = document.elementFromPoint(x, y);
+        return Boolean(stageNode && hit && stageNode.contains(hit));
+      }, transparentPoint);
+      assert.equal(transparentHit, false, `${label} transparent stage corner must pass through to the page`);
+      await page.mouse.move(transparentPoint.x, transparentPoint.y);
+      await page.mouse.wheel(0, 240);
+      await page.waitForFunction(() => scrollY > 0);
+      await page.evaluate(() => scrollTo(0, 0));
+    }
+
     await exerciseCreateImport(page, label, state);
 
     const invoke = page.locator('[data-hermes-input-owner="true"]');
@@ -206,11 +292,53 @@ try {
       { name: 'right', x: viewport.width - 1, y: viewport.height / 2 },
       { name: 'bottom', x: viewport.width / 2, y: viewport.height - 1 },
     ];
+    const edgeSettles = [];
     for (const edge of edgeTargets) {
       await dragStage(page, stage, edge);
       assert.equal(await stage.getAttribute('data-hermes-anchored'), 'false', label + ' drag to ' + edge.name + ' must detach from the dock');
-      await assertFootprintsSafe(page, viewport, label + ' ' + edge.name + ' edge');
+      const settled = await assertFootprintsSafe(page, viewport, label + ' ' + edge.name + ' edge');
+      edgeSettles.push({ actor: settled.actor, name: edge.name, protectedRegions: settled.protectedRegions });
     }
+    const edgeAllowance = Number(expectedSize) * .2 + 2;
+    for (const settled of edgeSettles) {
+      const distances = {
+        bottom: viewport.height - settled.actor.y - settled.actor.height,
+        left: settled.actor.x,
+        right: viewport.width - settled.actor.x - settled.actor.width,
+        top: settled.actor.y,
+      };
+      if (distances[settled.name] > edgeAllowance) {
+        const projected = { ...settled.actor };
+        if (settled.name === 'left') projected.x = 0;
+        if (settled.name === 'right') projected.x = viewport.width - projected.width;
+        if (settled.name === 'top') projected.y = 0;
+        if (settled.name === 'bottom') projected.y = viewport.height - projected.height;
+        assert.ok(settled.protectedRegions.some((region) => overlaps(projected, region)),
+          `${label} ${settled.name} release may miss its edge only when that projected footprint is protected: ${JSON.stringify({ distances, edgeAllowance, projected, settled })}`);
+      }
+    }
+    for (let first = 0; first < edgeSettles.length; first += 1) for (let second = first + 1; second < edgeSettles.length; second += 1) {
+      const a = edgeSettles[first].actor;
+      const b = edgeSettles[second].actor;
+      assert.ok(Math.hypot(a.x - b.x, a.y - b.y) > 8,
+        `${label} edge releases must produce distinct settled points: ${JSON.stringify(edgeSettles)}`);
+    }
+    const protectedRoControl = page.locator('[data-continuation-priority="primary"] a[href="/research-objects/ro-hermes/edit"]');
+    const protectedRoControlBox = await protectedRoControl.boundingBox();
+    assert.ok(protectedRoControlBox, `${label} protected RO control must have geometry after edge releases`);
+    const protectedRoControlHit = await page.evaluate(({ x, y }) => {
+      const hit = document.elementFromPoint(x, y);
+      return hit?.closest('a[href="/research-objects/ro-hermes/edit"]') !== null;
+    }, {
+      x: protectedRoControlBox.x + protectedRoControlBox.width / 2,
+      y: protectedRoControlBox.y + protectedRoControlBox.height / 2,
+    });
+    assert.equal(protectedRoControlHit, true, `${label} transparent Hermes pixels must not intercept the protected RO control after drag settling`);
+    await protectedRoControl.click();
+    await page.waitForURL('**/research-objects/ro-hermes/edit');
+    await page.goto(`${baseUrl}/dashboard?hermes-motion=full`, { waitUntil: 'domcontentloaded' });
+    await waitForRig(page);
+
     await dragStage(page, stage, edgeTargets[1]);
     const persistedSafety = await assertFootprintsSafe(page, viewport, label + ' persisted detached point');
     const persisted = await stage.boundingBox();
@@ -288,9 +416,12 @@ try {
     assert.equal(bubbleStyle.backdropFilter, 'none', label + ' bubble must not use blur');
     assert.equal(bubbleStyle.shadow, 'rgba(0, 0, 0, 0.18) 0px 8px 20px 0px', label + ' bubble must use one restrained shadow');
     if (viewport.width <= 640) {
+      assert.equal(bubbleVisible, true, label + ' must use the safe centered mobile bubble fallback');
       assert.ok(bubbleStyle.lineCount <= 2, label + ' mobile cue must remain one short sentence: ' + JSON.stringify(bubbleStyle));
       assert.equal(bubbleStyle.visibleToolbar, 0, label + ' mobile cue must not expose a toolbar');
     }
+    const bubbleBox = bubbleVisible ? await bubble.boundingBox() : null;
+    const bubblePointer = bubbleBox ? await assertBubblePointerFacesActor(page, final.actor, bubbleBox, label) : null;
     assert.ok(final.actor.width * final.actor.height / (viewport.width * viewport.height) < .15,
       label + ' Hermes must remain subordinate to the research task');
     assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true, label + ' must not overflow horizontally');
@@ -299,10 +430,12 @@ try {
     metrics[label] = {
       actor: final.actor,
       actorViewportRatio: Number((final.actor.width * final.actor.height / (viewport.width * viewport.height)).toFixed(4)),
-      bubble: bubbleVisible ? await bubble.boundingBox() : null,
+      bubble: bubbleBox,
+      bubblePointer,
       bubbleStyle,
       createdTitle: state.createdTitles[0],
       initialActor: initial.actor,
+      edgeSettles,
       protectedRegions: final.protectedRegions,
       runtimeOwners: { canvas: 1, model: 1, raf: 1 },
       stageSize: Number(expectedSize),

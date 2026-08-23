@@ -570,7 +570,8 @@ function HermesWorkspaceStage({ fallbackAssistantOpen, fallbackOnInvoke, guideTa
   };
 
   const onPointerDown = (event: React.PointerEvent<HTMLDivElement>) => {
-    if (!(event.target instanceof Element) || !event.target.closest('[data-hermes-input-owner]')) return;
+    if (!(event.target instanceof Element)
+      || !event.target.closest('[data-hermes-input-owner], [data-hermes-carrier-interaction-hull="true"]')) return;
     const bounds = event.currentTarget.getBoundingClientRect();
     dragRef.current = { pointerId: event.pointerId, startX: event.clientX, startY: event.clientY, originX: bounds.left + bounds.width / 2, originY: bounds.top + bounds.height / 2, customDock, moved: false };
     event.currentTarget.setPointerCapture(event.pointerId);
@@ -631,7 +632,9 @@ function HermesWorkspaceStage({ fallbackAssistantOpen, fallbackOnInvoke, guideTa
     }
     suppressClickRef.current = true;
     const stageBounds = event.currentTarget.getBoundingClientRect();
-    const actorBounds = event.currentTarget.querySelector<HTMLElement>('[data-hermes-companion-actor="true"]')?.getBoundingClientRect() ?? stageBounds;
+    const actorBounds = event.currentTarget.querySelector<HTMLElement>('[data-hermes-carrier-travel-hull="true"]')?.getBoundingClientRect()
+      ?? event.currentTarget.querySelector<HTMLElement>('[data-hermes-companion-actor="true"]')?.getBoundingClientRect()
+      ?? stageBounds;
     const center = { x: stageBounds.left + stageBounds.width / 2, y: stageBounds.top + stageBounds.height / 2 };
     const settled = resolveHermesSettledDock({
       desired: center,

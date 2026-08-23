@@ -2,7 +2,7 @@ export type Point = { x: number; y: number };
 export type RectLike = { bottom: number; left: number; right: number; top: number };
 export type Footprint = { bottom: number; left: number; right: number; top: number };
 export type HermesBubblePlacement = {
-  horizontal: 'left' | 'right';
+  horizontal: 'center' | 'left' | 'right';
   vertical: 'above' | 'below';
   bounds: RectLike;
 };
@@ -44,17 +44,18 @@ export function resolveHermesSettledDock(input: {
     x: clamp(input.desired.x, safe.left, safe.right),
     y: clamp(input.desired.y, safe.top, safe.bottom),
   };
-  const candidates = [
-    desired,
-    { x: safe.left, y: safe.top },
-    { x: safe.right, y: safe.top },
-    { x: safe.right, y: safe.bottom },
-    { x: safe.left, y: safe.bottom },
-    { x: (safe.left + safe.right) / 2, y: safe.top },
-    { x: safe.right, y: (safe.top + safe.bottom) / 2 },
-    { x: (safe.left + safe.right) / 2, y: safe.bottom },
-    { x: safe.left, y: (safe.top + safe.bottom) / 2 },
-  ].sort((a, b) => Math.hypot(a.x - desired.x, a.y - desired.y)
+  const xCandidates = [desired.x, safe.left, safe.right, (safe.left + safe.right) / 2,
+    ...input.obstacles.flatMap((obstacle) => [
+      clamp(obstacle.left - input.footprint.right - gap, safe.left, safe.right),
+      clamp(obstacle.right + input.footprint.left + gap, safe.left, safe.right),
+    ])];
+  const yCandidates = [desired.y, safe.top, safe.bottom, (safe.top + safe.bottom) / 2,
+    ...input.obstacles.flatMap((obstacle) => [
+      clamp(obstacle.top - input.footprint.bottom - gap, safe.top, safe.bottom),
+      clamp(obstacle.bottom + input.footprint.top + gap, safe.top, safe.bottom),
+    ])];
+  const candidates = xCandidates.flatMap((x) => yCandidates.map((y) => ({ x, y })))
+    .sort((a, b) => Math.hypot(a.x - desired.x, a.y - desired.y)
     - Math.hypot(b.x - desired.x, b.y - desired.y));
   const point = candidates.find((candidate) => input.obstacles.every(
     (obstacle) => !overlaps(occupied(candidate, input.footprint), obstacle),
@@ -91,6 +92,23 @@ export function resolveHermesBubblePlacement(input: {
       && bounds.top >= input.viewport.top && bounds.bottom <= input.viewport.bottom;
     if (inside && input.obstacles.every((obstacle) => !overlaps(bounds, obstacle))) {
       return { bounds, horizontal: sideX, vertical: sideY };
+    }
+  }
+
+  for (const sideY of vertical) {
+    const left = actorX - input.bubble.width / 2;
+    const top = sideY === 'below'
+      ? input.actor.bottom + gap : input.actor.top - gap - input.bubble.height;
+    const bounds = {
+      bottom: top + input.bubble.height,
+      left,
+      right: left + input.bubble.width,
+      top,
+    };
+    const inside = bounds.left >= input.viewport.left && bounds.right <= input.viewport.right
+      && bounds.top >= input.viewport.top && bounds.bottom <= input.viewport.bottom;
+    if (inside && input.obstacles.every((obstacle) => !overlaps(bounds, obstacle))) {
+      return { bounds, horizontal: 'center', vertical: sideY };
     }
   }
 

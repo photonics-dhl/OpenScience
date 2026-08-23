@@ -1942,7 +1942,8 @@ body {
   pointer-events: auto;
 }
 
-.hermes-workspace-stage[data-hermes-guide-target] .hermes-carrier-interaction-hull {
+.hermes-workspace-stage[data-hermes-guide-target] .hermes-carrier-interaction-hull,
+.hermes-workspace-stage[data-hermes-guide-target] .hermes-carrier-interaction-hull::after {
   pointer-events: none;
 }
 
@@ -1990,12 +1991,13 @@ body {
 
 .hermes-companion-bubble::after {
   position: absolute;
-  right: 1.25rem;
+  right: auto;
+  left: 1.25rem;
   bottom: -.74rem;
   width: 2rem;
   height: 1.5px;
-  transform: rotate(24deg);
-  transform-origin: right center;
+  transform: rotate(-24deg);
+  transform-origin: left center;
   background: var(--color-vermilion, #cf482c);
   content: '';
   pointer-events: none;
@@ -2137,10 +2139,19 @@ body {
 }
 
 .hermes-workspace-stage[data-hermes-bubble-horizontal='left'] .hermes-companion-bubble::after {
+  right: 1.25rem;
+  left: auto;
+  transform: rotate(24deg);
+  transform-origin: right center;
+}
+
+.hermes-workspace-stage[data-hermes-bubble-horizontal='center'] .hermes-companion-bubble::after {
   right: auto;
-  left: 1.25rem;
-  transform: rotate(-24deg);
-  transform-origin: left center;
+  left: 50%;
+  width: 1.5px;
+  height: .75rem;
+  transform: translateX(-50%);
+  transform-origin: center;
 }
 
 .hermes-workspace-stage[data-hermes-bubble-vertical='below'] .hermes-companion-bubble {
@@ -2440,7 +2451,25 @@ body [data-reading-role='reading'] {
   height: 100%;
   min-width: 44px;
   min-height: 44px;
+  pointer-events: none;
+}
+
+.hermes-carrier-interaction-hull::after {
+  position: absolute;
+  inset: 12% 12% 14%;
+  min-width: 44px;
+  min-height: 44px;
+  content: '';
+  cursor: grab;
   pointer-events: auto;
+}
+
+.hermes-workspace-stage[data-hermes-dragging='true'] .hermes-carrier-interaction-hull::after {
+  cursor: grabbing;
+}
+
+.hermes-carrier-interaction-hull .hermes-visual {
+  pointer-events: none;
 }
 
 .hermes-carrier-interaction-hull .hermes-rig-canvas {

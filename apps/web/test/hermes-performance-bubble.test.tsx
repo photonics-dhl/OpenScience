@@ -53,6 +53,8 @@ describe('Hermes performance bubble', () => {
   it('keeps the ink-edge annotation compact, restrained and touch accessible', () => {
     const bubble = cssRule('.hermes-companion-bubble');
     const dismiss = cssRule('.hermes-companion-dismiss');
+    const tail = cssRule('.hermes-companion-bubble::after');
+    const leftTail = cssRule(".hermes-workspace-stage[data-hermes-bubble-horizontal='left'] .hermes-companion-bubble::after");
 
     expect(bubble).toContain('max-width: 15.5rem;');
     expect(bubble).toContain('border: 1px solid rgb(241 238 231 / .14);');
@@ -62,6 +64,8 @@ describe('Hermes performance bubble', () => {
     expect(bubble).not.toMatch(/gradient|blur/iu);
     expect(dismiss).toContain('width: 40px;');
     expect(dismiss).toContain('height: 40px;');
+    expect(tail).toContain('left: 1.25rem;');
+    expect(leftTail).toContain('right: 1.25rem;');
     expect(globals).toContain("[data-hermes-stage-size='200'] .hermes-companion-bubble");
     expect(globals).not.toContain("[data-hermes-stage-size='176']");
   });
