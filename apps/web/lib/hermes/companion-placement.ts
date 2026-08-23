@@ -7,6 +7,47 @@ export type HermesBubblePlacement = {
   bounds: RectLike;
 };
 
+export type HermesMotionEnvelope = { bottom: number; left: number; right: number; top: number };
+
+/** Must stay in lockstep with `@keyframes hermes-companion-patrol` in globals.css. */
+export const HERMES_PATROL_TRANSLATION_ENVELOPE: Readonly<HermesMotionEnvelope> = Object.freeze({
+  bottom: 0,
+  left: 34,
+  right: 34,
+  top: 25,
+});
+
+/** Browser-sampled travel-hull extrema, rounded outward from the translation + rotation/hover cycle. */
+export const HERMES_PATROL_MOTION_ENVELOPE: Readonly<HermesMotionEnvelope> = Object.freeze({
+  bottom: 27,
+  left: 51,
+  right: 34,
+  top: 28,
+});
+
+export function expandHermesFootprintForMotion(
+  footprint: Footprint,
+  action: string,
+): Footprint {
+  const envelope = action === 'patrol' ? HERMES_PATROL_MOTION_ENVELOPE : { bottom: 0, left: 0, right: 0, top: 0 };
+  return {
+    bottom: footprint.bottom + envelope.bottom,
+    left: footprint.left + envelope.left,
+    right: footprint.right + envelope.right,
+    top: footprint.top + envelope.top,
+  };
+}
+
+export function expandHermesRectForMotion(bounds: RectLike, action: string): RectLike {
+  const envelope = action === 'patrol' ? HERMES_PATROL_MOTION_ENVELOPE : { bottom: 0, left: 0, right: 0, top: 0 };
+  return {
+    bottom: bounds.bottom + envelope.bottom,
+    left: bounds.left - envelope.left,
+    right: bounds.right + envelope.right,
+    top: bounds.top - envelope.top,
+  };
+}
+
 const gap = 12;
 
 const clamp = (value: number, minimum: number, maximum: number) => (

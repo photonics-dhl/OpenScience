@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  expandHermesFootprintForMotion,
+  HERMES_PATROL_MOTION_ENVELOPE,
+  HERMES_PATROL_TRANSLATION_ENVELOPE,
   resolveHermesBubblePlacement,
   resolveHermesSettledDock,
   type Point,
@@ -26,6 +29,22 @@ const overlaps = (a: RectLike, b: RectLike) => (
 );
 
 describe('Hermes companion placement', () => {
+  it('expands a dock footprint by the full patrol translation envelope', () => {
+    expect(HERMES_PATROL_TRANSLATION_ENVELOPE).toEqual({ bottom: 0, left: 34, right: 34, top: 25 });
+    expect(HERMES_PATROL_MOTION_ENVELOPE).toEqual({ bottom: 27, left: 51, right: 34, top: 28 });
+    expect(expandHermesFootprintForMotion(
+      { bottom: 42, left: 50, right: 48, top: 46 },
+      'patrol',
+    )).toEqual({ bottom: 69, left: 101, right: 82, top: 74 });
+  });
+
+  it('does not inflate a non-translating guide action on a narrow viewport', () => {
+    expect(expandHermesFootprintForMotion(
+      { bottom: 80, left: 120, right: 120, top: 80 },
+      'guide-arrive',
+    )).toEqual({ bottom: 80, left: 120, right: 120, top: 80 });
+  });
+
   it('keeps an unobstructed desired dock point', () => {
     expect(resolveHermesSettledDock({
       desired: { x: 420, y: 310 },

@@ -6,6 +6,7 @@ import {
   planHermesTravel,
   rectForFootprint,
   resolveHermesGuideSourceCandidate,
+  resolveHermesStationaryGuidePlacement,
 } from '@/lib/hermes/travel-path';
 
 const rect = (x: number, y: number, width: number, height: number): DOMRectReadOnly => ({
@@ -49,6 +50,47 @@ function sweptOverlaps(
 }
 
 describe('Hermes safe travel path', () => {
+  it('selects a stationary composite guide placement whose bubble clears protected work', () => {
+    const actor = { bottom: 40, left: 40, right: 40, top: 40 };
+    const variants = [
+      {
+        footprint: { bottom: 120, left: 40, right: 150, top: 40 },
+        parts: [actor, { bottom: 120, left: -50, right: 150, top: -50 }],
+        placement: { horizontal: 'right' as const, vertical: 'below' as const },
+      },
+      {
+        footprint: { bottom: 40, left: 150, right: 40, top: 120 },
+        parts: [actor, { bottom: -50, left: 150, right: -50, top: 120 }],
+        placement: { horizontal: 'left' as const, vertical: 'above' as const },
+      },
+    ];
+
+    const selected = resolveHermesStationaryGuidePlacement({
+      at: { x: 200, y: 200 },
+      obstacles: [rect(240, 240, 130, 100)],
+      variants,
+      viewport: rect(0, 0, 400, 400),
+    });
+
+    expect(selected?.placement).toEqual({ horizontal: 'left', vertical: 'above' });
+  });
+
+  it('suppresses a stationary guide bubble when every composite placement is unsafe', () => {
+    const actor = { bottom: 40, left: 40, right: 40, top: 40 };
+    const variants = createHermesTravelFootprintVariants(
+      actor,
+      { bottom: 120, left: -50, right: 150, top: -50 },
+      { horizontal: 'right', vertical: 'below' },
+    );
+
+    expect(resolveHermesStationaryGuidePlacement({
+      at: { x: 200, y: 200 },
+      obstacles: [rect(0, 0, 400, 400)],
+      variants,
+      viewport: rect(0, 0, 400, 400),
+    })).toBeNull();
+  });
+
   it('keeps the mobile insight top candidate between navigation controls and the target', () => {
     const actor = { bottom: 66.234375, left: 69.921875, right: 69.90625, top: 69.921875 };
     const bubble = { bottom: 182.125, left: 92, right: 100, top: -80 };

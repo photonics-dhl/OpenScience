@@ -1965,6 +1965,10 @@ body {
   animation: hermes-companion-patrol 4.2s cubic-bezier(.42, 0, .2, 1) both;
 }
 
+.hermes-workspace-stage[data-hermes-action='patrol'][data-hermes-motion-envelope-safe='false'] .hermes-companion-actor {
+  animation: none;
+}
+
 @keyframes hermes-companion-patrol {
   0%, 100% { transform: translate3d(0, 0, 0) rotate(0deg); }
   18% { transform: translate3d(-18px, -9px, 0) rotate(-2deg); }
@@ -2116,7 +2120,7 @@ body {
     margin: 0 1.35rem .4rem 0;
   }
 
-  .hermes-workspace-stage[data-hermes-guide-target][data-hermes-motion-preference='reduced'] .hermes-functional-bubble[data-hermes-guide-visible='true'],
+  .hermes-workspace-stage[data-hermes-guide-target][data-hermes-motion-preference='reduced'] .hermes-functional-bubble:is([data-hermes-guide-visible='true'], [data-hermes-guide-measuring='true']),
   .hermes-workspace-stage[data-hermes-guide-target] .hermes-motion-enable[data-motion-runtime='fallback'] + .hermes-functional-bubble[data-hermes-guide-visible='true'] {
     padding-bottom: 4rem;
   }

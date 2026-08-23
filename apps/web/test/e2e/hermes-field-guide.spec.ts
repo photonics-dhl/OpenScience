@@ -31,7 +31,8 @@ async function expectGuideClearOf(page: Page, obstacle: Locator) {
     right: Math.max(actor.x + actor.width, bubble.x + bubble.width),
     top: Math.min(actor.y, bubble.y),
   };
-  expect(occupied.right <= target.x || occupied.left >= target.x + target.width || occupied.bottom <= target.y || occupied.top >= target.y + target.height).toBe(true);
+  expect(occupied.right <= target.x || occupied.left >= target.x + target.width || occupied.bottom <= target.y || occupied.top >= target.y + target.height,
+    `guide composite must clear target: ${JSON.stringify({ actor, bubble, occupied, target })}`).toBe(true);
 }
 
 async function mockWorkspace(page: Page) {
@@ -170,6 +171,107 @@ test('a saved bottom-right dock travels with a fixed safe guide-bubble orientati
     expect(boxesOverlap(part, targetBox!)).toBe(false);
     expect(obstacleBoxes.some((obstacle) => boxesOverlap(part, obstacle))).toBe(false);
   }
+});
+
+test('a custom dock flips an unsafe stationary bubble and suppresses it when every bubble variant is blocked', async ({ page }) => {
+  const storageKey = 'openscience:hermes-dock:v1:workspace-current:desktop';
+  const storedDock = JSON.stringify({
+    activity: 'balanced', particles: true, proactiveHints: true, sound: false, xRatio: .65, yRatio: .7,
+  });
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.clock.install({ time: new Date('2026-08-23T00:00:00Z') });
+  await page.addInitScript(({ key, value }) => localStorage.setItem(key, value), { key: storageKey, value: storedDock });
+  await mockWorkspace(page);
+  await page.goto(`${baseUrl}/research-objects/new?mode=blank&hermes-motion=full`, { waitUntil: 'networkidle' });
+
+  const stage = page.locator('[data-hermes-workspace-stage]');
+  const bubble = page.locator('[data-hermes-guide-bubble]');
+  await expect(stage).toHaveAttribute('data-hermes-guide-motion', 'edge-stop');
+  const initialDiagnostic = await page.evaluate(() => {
+    const bounds = (selector: string) => {
+      const value = document.querySelector(selector)?.getBoundingClientRect();
+      return value ? { bottom: value.bottom, height: value.height, left: value.left, right: value.right, top: value.top, width: value.width } : null;
+    };
+    const stageNode = document.querySelector<HTMLElement>('[data-hermes-workspace-stage]')!;
+    const bubbleNode = document.querySelector<HTMLElement>('[data-hermes-guide-bubble]')!;
+    return {
+      actor: bounds('[data-hermes-carrier-travel-hull="true"]'),
+      bubble: bounds('[data-hermes-guide-bubble]'),
+      protected: Array.from(document.querySelectorAll('[data-hermes-protected="true"]')).map((element) => {
+        const value = element.getBoundingClientRect();
+        return { bottom: value.bottom, left: value.left, right: value.right, top: value.top };
+      }),
+      stage: bounds('[data-hermes-workspace-stage]'),
+      layoutBubble: {
+        height: bubbleNode.offsetHeight, left: stageNode.getBoundingClientRect().left + bubbleNode.offsetLeft,
+        top: stageNode.getBoundingClientRect().top + bubbleNode.offsetTop, width: bubbleNode.offsetWidth,
+      },
+      stageState: Object.fromEntries(['data-hermes-guide-ready', 'data-hermes-guide-size-version', 'data-hermes-guide-suppressed']
+        .map((name) => [name, document.querySelector('[data-hermes-workspace-stage]')?.getAttribute(name)])),
+      target: bounds('[data-hermes-anchor="ro-title"]'),
+    };
+  });
+  await expect(bubble, `stationary guide should start safe: ${JSON.stringify(initialDiagnostic)}`).toBeVisible();
+  const initialPlacement = await stage.evaluate((element) => `${element.getAttribute('data-hermes-bubble-horizontal')}:${element.getAttribute('data-hermes-bubble-vertical')}`);
+  const initialCenter = await stage.evaluate((element) => {
+    const bounds = element.getBoundingClientRect();
+    return { x: bounds.left + bounds.width / 2, y: bounds.top + bounds.height / 2 };
+  });
+  await page.evaluate(() => {
+    const bounds = document.querySelector<HTMLElement>('[data-hermes-guide-bubble]')!.getBoundingClientRect();
+    const blocker = document.createElement('div');
+    blocker.dataset.hermesProtected = 'true';
+    blocker.dataset.stationaryBubbleBlocker = 'one';
+    Object.assign(blocker.style, {
+      height: `${bounds.height}px`, left: `${bounds.left}px`, pointerEvents: 'none', position: 'fixed',
+      top: `${bounds.top}px`, width: '32px', zIndex: '1',
+    });
+    document.body.append(blocker);
+  });
+  await expect.poll(async () => stage.evaluate((element) => `${element.getAttribute('data-hermes-bubble-horizontal')}:${element.getAttribute('data-hermes-bubble-vertical')}`)).not.toBe(initialPlacement);
+  await expect(bubble).toBeVisible();
+  const [flippedBubble, firstBlocker] = await Promise.all([
+    bubble.boundingBox(), page.locator('[data-stationary-bubble-blocker="one"]').boundingBox(),
+  ]);
+  expect(flippedBubble && firstBlocker).toBeTruthy();
+  expect(boxesOverlap(flippedBubble!, firstBlocker!)).toBe(false);
+
+  await page.evaluate(() => {
+    document.querySelectorAll('[data-stationary-bubble-blocker]').forEach((element) => element.remove());
+    const actor = document.querySelector<HTMLElement>('[data-hermes-carrier-travel-hull="true"]')!.getBoundingClientRect();
+    const regions = [
+      { left: 0, top: 0, width: innerWidth, height: actor.top },
+      { left: 0, top: actor.bottom, width: innerWidth, height: innerHeight - actor.bottom },
+      { left: 0, top: actor.top, width: actor.left, height: actor.height },
+      { left: actor.right, top: actor.top, width: innerWidth - actor.right, height: actor.height },
+    ];
+    for (const [index, region] of regions.entries()) {
+      const blocker = document.createElement('div');
+      blocker.dataset.hermesProtected = 'true';
+      blocker.dataset.stationaryBubbleBlocker = String(index);
+      Object.assign(blocker.style, {
+        height: `${Math.max(0, region.height)}px`, left: `${region.left}px`, pointerEvents: 'none',
+        position: 'fixed', top: `${region.top}px`, width: `${Math.max(0, region.width)}px`, zIndex: '1',
+      });
+      document.body.append(blocker);
+    }
+  });
+  await expect(stage).toHaveAttribute('data-hermes-guide-suppressed', 'true');
+  await expect(bubble).toBeHidden();
+  const finalCenter = await stage.evaluate((element) => {
+    const bounds = element.getBoundingClientRect();
+    return { x: bounds.left + bounds.width / 2, y: bounds.top + bounds.height / 2 };
+  });
+  expect(finalCenter.x).toBeCloseTo(initialCenter.x, 1);
+  expect(finalCenter.y).toBeCloseTo(initialCenter.y, 1);
+  expect(await page.evaluate((key) => localStorage.getItem(key), storageKey)).toBe(storedDock);
+  await expect(stage.locator('[data-hermes-carrier-interaction-hull="true"]')).toBeVisible();
+  let exposedPatrol = false;
+  for (let elapsed = 0; elapsed < 180_000 && !exposedPatrol; elapsed += 500) {
+    await page.clock.fastForward(500);
+    exposedPatrol = await stage.getAttribute('data-hermes-action') === 'patrol';
+  }
+  expect(exposedPatrol, 'an envelope-unsafe custom dock must gate patrol at the visual action boundary').toBe(false);
 });
 
 test('a no-op full-motion guide restore clears its transaction and preserves later protected settling', async ({ page }) => {
@@ -425,7 +527,7 @@ test('mobile Live2D carrier stays single-layer and docks above the virtual keybo
 test('temporary visual-viewport guidance preserves and restores the exact stored mobile dock', async ({ page }) => {
   const storageKey = 'openscience:hermes-dock:v1:workspace-current:mobile';
   const storedDock = JSON.stringify({
-    activity: 'balanced', particles: true, proactiveHints: true, sound: false, xRatio: .75, yRatio: .7,
+    activity: 'balanced', particles: true, proactiveHints: true, sound: false, xRatio: .75, yRatio: .75,
   });
   await page.setViewportSize({ width: 390, height: 844 });
   await page.addInitScript(({ key, value }) => {
@@ -467,7 +569,7 @@ test('temporary visual-viewport guidance preserves and restores the exact stored
   await expect.poll(async () => {
     const bounds = await stage.boundingBox();
     return bounds ? { x: Math.round(bounds.x + bounds.width / 2), y: Math.round(bounds.y + bounds.height / 2) } : null;
-  }).toEqual({ x: 290, y: 591 });
+  }).toEqual({ x: 290, y: 633 });
   expect(await page.evaluate((key) => localStorage.getItem(key), storageKey)).toBe(storedDock);
 });
 
@@ -967,9 +1069,67 @@ test('mobile editing guidance keeps three accessible actions and explanation ins
   await expect(insight).toBeFocused();
   await expect.poll(guideState).toEqual({ actions: 3, phase: 'route', ready: 'true', suppressed: 'false', target: 'sdf-insight' });
 
+  const collapsed = await bubble.boundingBox();
+  expect(collapsed).not.toBeNull();
+  const collapsedVertical = await stage.getAttribute('data-hermes-bubble-vertical');
+  const beforeBlockerGeometryVersion = Number(await stage.getAttribute('data-hermes-protected-geometry-version'));
+  await page.evaluate(({ bounds, vertical }) => {
+    const blocker = document.createElement('div');
+    blocker.dataset.hermesProtected = 'true';
+    blocker.dataset.expandedGuideBlocker = 'true';
+    const top = vertical === 'above' ? bounds.y - 42 : bounds.y + bounds.height + 8;
+    Object.assign(blocker.style, {
+      height: '34px', left: `${bounds.x}px`, pointerEvents: 'none', position: 'fixed',
+      top: `${top}px`, width: `${bounds.width}px`, zIndex: '1',
+    });
+    document.body.append(blocker);
+  }, { bounds: collapsed!, vertical: collapsedVertical });
+  await expect.poll(async () => Number(await stage.getAttribute('data-hermes-protected-geometry-version'))).toBeGreaterThan(beforeBlockerGeometryVersion);
+  await expect(bubble).toBeVisible();
+  const beforeExplainPlanCount = Number(await stage.getAttribute('data-hermes-guide-plan-count'));
+  const beforeExplainSizeVersion = Number(await stage.getAttribute('data-hermes-guide-size-version'));
+  await page.evaluate(() => {
+    const bubbleNode = document.querySelector<HTMLElement>('[data-hermes-guide-bubble]')!;
+    (window as Window & { __hermesExplainHidden?: boolean }).__hermesExplainHidden = false;
+    new MutationObserver(() => {
+      if (bubbleNode.dataset.hermesGuideVisible === 'false') {
+        (window as Window & { __hermesExplainHidden?: boolean }).__hermesExplainHidden = true;
+      }
+    }).observe(bubbleNode, { attributeFilter: ['data-hermes-guide-visible'] });
+  });
   await actions.filter({ hasText: /Explain|解释/i }).click();
   const explanation = page.locator('[data-hermes-guide-explanation]');
   await expect(explanation).toContainText(/claim|evidence|论断|证据/i);
+  await expect.poll(async () => Number(await stage.getAttribute('data-hermes-guide-size-version'))).toBeGreaterThan(beforeExplainSizeVersion);
+  await expect.poll(async () => Number(await stage.getAttribute('data-hermes-guide-plan-count'))).toBeGreaterThan(beforeExplainPlanCount);
+  expect(await page.evaluate(() => (window as Window & { __hermesExplainHidden?: boolean }).__hermesExplainHidden)).toBe(true);
+  await expect(bubble).toBeVisible();
+  const [expandedBubble, expandedBlocker, expandedTarget] = await Promise.all([
+    bubble.boundingBox(), page.locator('[data-expanded-guide-blocker="true"]').boundingBox(), insight.boundingBox(),
+  ]);
+  expect(expandedBubble && expandedBlocker && expandedTarget).toBeTruthy();
+  const expandedPlacement = await stage.evaluate((element) => ({
+    bubbleLayout: (() => {
+      const bubbleNode = element.querySelector<HTMLElement>('[data-hermes-guide-bubble]')!;
+      const style = getComputedStyle(bubbleNode);
+      return { clientHeight: bubbleNode.clientHeight, offsetHeight: bubbleNode.offsetHeight, scale: style.scale, transform: style.transform, zoom: style.zoom };
+    })(),
+    horizontal: element.getAttribute('data-hermes-bubble-horizontal'),
+    planCount: element.getAttribute('data-hermes-guide-plan-count'),
+    phase: element.getAttribute('data-hermes-guide-phase'),
+    protectedVersion: element.getAttribute('data-hermes-protected-geometry-version'),
+    sizeVersion: element.getAttribute('data-hermes-guide-size-version'),
+    suppressed: element.getAttribute('data-hermes-guide-suppressed'),
+    vertical: element.getAttribute('data-hermes-bubble-vertical'),
+  }));
+  expect(boxesOverlap(expandedBubble!, expandedBlocker!), `expanded placement: ${JSON.stringify({
+    collapsed, collapsedVertical, expandedBlocker, expandedBubble, expandedPlacement,
+  })}`).toBe(false);
+  expect(boxesOverlap(expandedBubble!, expandedTarget!)).toBe(false);
+  expect(expandedBubble!.x).toBeGreaterThanOrEqual(0);
+  expect(expandedBubble!.y).toBeGreaterThanOrEqual(0);
+  expect(expandedBubble!.x + expandedBubble!.width).toBeLessThanOrEqual(390);
+  expect(expandedBubble!.y + expandedBubble!.height).toBeLessThanOrEqual(844);
   const contrast = await explanation.evaluate((element) => {
     const parse = (value: string) => {
       const channels = value.match(/[\d.]+/g)?.map(Number) ?? [];
@@ -1048,4 +1208,35 @@ test('mobile editing guidance keeps three accessible actions and explanation ins
 
   await mkdir(visualOut, { recursive: true });
   await page.screenshot({ animations: 'disabled', path: resolve(visualOut, 'mobile-editor-actions-390x844.png') });
+});
+
+test('English expanded guidance remeasures before showing a protected-safe narrow bubble', async ({ page }) => {
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.context().addCookies([{ name: 'NEXT_LOCALE', url: baseUrl, value: 'en' }]);
+  await mockWorkspace(page);
+  await page.goto(`${baseUrl}/research-objects/ro-guide/edit?hermes-motion=reduced`, { waitUntil: 'networkidle' });
+  const stage = page.locator('[data-hermes-workspace-stage]');
+  await expect(stage).toHaveAttribute('data-hermes-guide-target', 'sdf-problem');
+  await page.locator('[data-sdf-node="2"] > button').click();
+  await expect.poll(async () => stage.evaluate((element) => ({
+    actions: element.getAttribute('data-hermes-guide-action-count'),
+    ready: element.getAttribute('data-hermes-guide-ready'),
+    suppressed: element.getAttribute('data-hermes-guide-suppressed'),
+    target: element.getAttribute('data-hermes-guide-target'),
+  }))).toEqual({ actions: '3', ready: 'true', suppressed: 'false', target: 'sdf-insight' });
+  const bubble = page.locator('[data-hermes-guide-bubble][data-hermes-guide-visible="true"]');
+  const insight = page.getByRole('textbox', { name: /Insight/i });
+  const beforeVersion = Number(await stage.getAttribute('data-hermes-guide-size-version'));
+  await bubble.getByRole('button', { name: 'Explain' }).click();
+  await expect(page.locator('[data-hermes-guide-explanation]')).toContainText(/claim|evidence/i);
+  await expect.poll(async () => Number(await stage.getAttribute('data-hermes-guide-size-version'))).toBeGreaterThan(beforeVersion);
+  await expect(bubble).toBeVisible();
+  const [bubbleBounds, targetBounds] = await Promise.all([bubble.boundingBox(), insight.boundingBox()]);
+  expect(bubbleBounds && targetBounds).toBeTruthy();
+  expect(boxesOverlap(bubbleBounds!, targetBounds!)).toBe(false);
+  expect(bubbleBounds!.x).toBeGreaterThanOrEqual(0);
+  expect(bubbleBounds!.y).toBeGreaterThanOrEqual(0);
+  expect(bubbleBounds!.x + bubbleBounds!.width).toBeLessThanOrEqual(390);
+  expect(bubbleBounds!.y + bubbleBounds!.height).toBeLessThanOrEqual(844);
 });

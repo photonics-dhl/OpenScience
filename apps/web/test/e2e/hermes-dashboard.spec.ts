@@ -1,5 +1,7 @@
 import { expect, test, type Page, type Route } from 'playwright/test';
 
+import { HERMES_PATROL_MOTION_ENVELOPE, HERMES_PATROL_TRANSLATION_ENVELOPE } from '../../lib/hermes/companion-placement';
+
 const baseUrl = process.env.WEB_BASE_URL ?? 'http://127.0.0.1:3010';
 const outDir = 'test/visual/out/hermes-dashboard';
 
@@ -150,6 +152,138 @@ test('Dashboard protects semantic navigation, continuation, import and Hermes ta
   await page.route('**/api/research-objects?limit=20', (route) => json(route, { researchObjects: [] }));
   await page.reload({ waitUntil: 'networkidle' });
   await expectDashboardProtectedRegions(page);
+});
+
+test('a patrol cycle stays inside its shared motion envelope and clears adjacent protected work', async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await mockDashboard(page);
+  await page.goto(`${baseUrl}/dashboard?hermes-motion=full`, { waitUntil: 'networkidle' });
+  const stage = page.locator('[data-hermes-workspace-stage="true"]');
+  const travelHull = stage.locator('[data-hermes-carrier-travel-hull="true"]');
+  await expect(travelHull).toBeVisible();
+  await expect(stage.locator('[data-hermes-rig="live2d-wanko"]')).toHaveAttribute('data-hermes-rig-status', 'ready', { timeout: 20_000 });
+  const geometryVersion = Number(await stage.getAttribute('data-hermes-protected-geometry-version'));
+  await page.evaluate((motionEnvelope) => {
+    const hull = document.querySelector<HTMLElement>('[data-hermes-carrier-travel-hull="true"]')!.getBoundingClientRect();
+    const blocker = document.createElement('div');
+    blocker.dataset.hermesProtected = 'true';
+    blocker.dataset.patrolEnvelopeBlocker = 'true';
+    const useRight = hull.right + motionEnvelope.right + 41 <= innerWidth;
+    Object.assign(blocker.style, {
+      height: `${hull.height}px`,
+      left: `${useRight ? hull.right + motionEnvelope.right + 1 : hull.left - motionEnvelope.left - 41}px`,
+      pointerEvents: 'none',
+      position: 'fixed', top: `${hull.top}px`, width: '40px', zIndex: '1',
+    });
+    document.body.append(blocker);
+  }, HERMES_PATROL_MOTION_ENVELOPE);
+  await expect.poll(async () => Number(await stage.getAttribute('data-hermes-protected-geometry-version'))).toBeGreaterThan(geometryVersion);
+  await expect.poll(async () => {
+    const [hull, blocker] = await Promise.all([
+      travelHull.boundingBox(), page.locator('[data-patrol-envelope-blocker="true"]').boundingBox(),
+    ]);
+    return hull && blocker ? !overlaps(hull, blocker) : false;
+  }).toBe(true);
+  await expect(stage).toHaveAttribute('data-hermes-motion-envelope-safe', 'true');
+
+  await page.evaluate(() => {
+    const stageNode = document.querySelector<HTMLElement>('[data-hermes-workspace-stage="true"]')!;
+    const forcePatrol = () => {
+      if (stageNode.dataset.hermesAction !== 'patrol') stageNode.dataset.hermesAction = 'patrol';
+    };
+    forcePatrol();
+    new MutationObserver(forcePatrol).observe(stageNode, { attributeFilter: ['data-hermes-action'], attributes: true });
+  });
+  await expect(stage).toHaveAttribute('data-hermes-action', 'patrol');
+  await expect(stage).toHaveAttribute('data-hermes-motion-envelope-safe', 'true');
+  const settledEnvelope = await page.evaluate((motionEnvelope) => {
+    const hull = document.querySelector<HTMLElement>('[data-hermes-carrier-travel-hull="true"]')!.getBoundingClientRect();
+    const blocker = document.querySelector<HTMLElement>('[data-patrol-envelope-blocker="true"]')!.getBoundingClientRect();
+    const envelope = {
+      bottom: hull.bottom + motionEnvelope.bottom, left: hull.left - motionEnvelope.left,
+      right: hull.right + motionEnvelope.right, top: hull.top - motionEnvelope.top,
+    };
+    const overlapsEnvelope = envelope.left < blocker.right && envelope.right > blocker.left
+      && envelope.top < blocker.bottom && envelope.bottom > blocker.top;
+    return { blocker: { bottom: blocker.bottom, left: blocker.left, right: blocker.right, top: blocker.top }, envelope, overlapsEnvelope };
+  }, HERMES_PATROL_MOTION_ENVELOPE);
+  expect(settledEnvelope.overlapsEnvelope, `settled patrol envelope: ${JSON.stringify(settledEnvelope)}`).toBe(false);
+  const patrolOrigin = await travelHull.boundingBox();
+  expect(patrolOrigin).not.toBeNull();
+  const evidence = await page.evaluate(() => new Promise<{
+    collisions: number; frames: number; maxBottomDelta: number; maxRightDelta: number; maxX: number; maxY: number;
+    minLeftDelta: number; minTopDelta: number; minX: number; minY: number; viewportViolations: number;
+  }>((resolveEvidence) => {
+    const stageNode = document.querySelector<HTMLElement>('[data-hermes-workspace-stage="true"]')!;
+    const actor = stageNode.querySelector<HTMLElement>('[data-hermes-companion-actor="true"]')!;
+    const hull = stageNode.querySelector<HTMLElement>('[data-hermes-carrier-travel-hull="true"]')!;
+    const blocker = document.querySelector<HTMLElement>('[data-patrol-envelope-blocker="true"]')!;
+    const origin = hull.getBoundingClientRect();
+    const result = {
+      collisions: 0, frames: 0, maxX: Number.NEGATIVE_INFINITY, maxY: Number.NEGATIVE_INFINITY,
+      maxBottomDelta: Number.NEGATIVE_INFINITY, maxRightDelta: Number.NEGATIVE_INFINITY,
+      minLeftDelta: Number.POSITIVE_INFINITY, minTopDelta: Number.POSITIVE_INFINITY,
+      minX: Number.POSITIVE_INFINITY, minY: Number.POSITIVE_INFINITY, viewportViolations: 0,
+    };
+    const started = performance.now();
+    const overlapsRect = (a: DOMRect, b: DOMRect) => a.left < b.right && a.right > b.left && a.top < b.bottom && a.bottom > b.top;
+    const sample = () => {
+      const bounds = hull.getBoundingClientRect();
+      const obstacle = blocker.getBoundingClientRect();
+      const matrix = new DOMMatrixReadOnly(getComputedStyle(actor).transform);
+      result.frames += 1;
+      result.minX = Math.min(result.minX, matrix.m41);
+      result.maxX = Math.max(result.maxX, matrix.m41);
+      result.minY = Math.min(result.minY, matrix.m42);
+      result.maxY = Math.max(result.maxY, matrix.m42);
+      result.minLeftDelta = Math.min(result.minLeftDelta, bounds.left - origin.left);
+      result.maxRightDelta = Math.max(result.maxRightDelta, bounds.right - origin.right);
+      result.minTopDelta = Math.min(result.minTopDelta, bounds.top - origin.top);
+      result.maxBottomDelta = Math.max(result.maxBottomDelta, bounds.bottom - origin.bottom);
+      result.collisions += Number(overlapsRect(bounds, obstacle));
+      result.viewportViolations += Number(bounds.left < 0 || bounds.top < 0 || bounds.right > innerWidth || bounds.bottom > innerHeight);
+      if (performance.now() - started >= 4_190) resolveEvidence(result);
+      else requestAnimationFrame(sample);
+    };
+    requestAnimationFrame(sample);
+  }));
+  expect(evidence.frames).toBeGreaterThan(120);
+  expect(evidence.collisions, `patrol evidence: ${JSON.stringify({ evidence, patrolOrigin, settledEnvelope })}`).toBe(0);
+  expect(evidence.viewportViolations, `patrol evidence: ${JSON.stringify(evidence)}`).toBe(0);
+  expect(evidence.minLeftDelta).toBeGreaterThanOrEqual(-HERMES_PATROL_MOTION_ENVELOPE.left);
+  expect(evidence.maxRightDelta).toBeLessThanOrEqual(HERMES_PATROL_MOTION_ENVELOPE.right);
+  expect(evidence.minTopDelta).toBeGreaterThanOrEqual(-HERMES_PATROL_MOTION_ENVELOPE.top);
+  expect(evidence.maxBottomDelta).toBeLessThanOrEqual(HERMES_PATROL_MOTION_ENVELOPE.bottom);
+  const cssExtrema = await page.evaluate(async () => {
+    const probeStage = document.createElement('div');
+    probeStage.className = 'hermes-workspace-stage';
+    probeStage.dataset.hermesAction = 'patrol';
+    probeStage.dataset.hermesMotionEnvelopeSafe = 'true';
+    probeStage.dataset.hermesMotionPreference = 'full';
+    probeStage.style.visibility = 'hidden';
+    const actor = document.createElement('div');
+    actor.className = 'hermes-companion-actor';
+    probeStage.append(actor);
+    document.body.append(probeStage);
+    await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
+    const animation = actor.getAnimations().find((candidate) => (candidate as CSSAnimation).animationName === 'hermes-companion-patrol')!;
+    animation.pause();
+    const result = { maxX: Number.NEGATIVE_INFINITY, maxY: Number.NEGATIVE_INFINITY, minX: Number.POSITIVE_INFINITY, minY: Number.POSITIVE_INFINITY };
+    for (const progress of [0, .18, .38, .58, .78, .9, 1]) {
+      animation.currentTime = 4_200 * progress;
+      const matrix = new DOMMatrixReadOnly(getComputedStyle(actor).transform);
+      result.minX = Math.min(result.minX, matrix.m41);
+      result.maxX = Math.max(result.maxX, matrix.m41);
+      result.minY = Math.min(result.minY, matrix.m42);
+      result.maxY = Math.max(result.maxY, matrix.m42);
+    }
+    probeStage.remove();
+    return result;
+  });
+  expect(Math.abs(cssExtrema.minX + HERMES_PATROL_TRANSLATION_ENVELOPE.left)).toBeLessThanOrEqual(1);
+  expect(Math.abs(cssExtrema.maxX - HERMES_PATROL_TRANSLATION_ENVELOPE.right)).toBeLessThanOrEqual(1);
+  expect(Math.abs(cssExtrema.minY + HERMES_PATROL_TRANSLATION_ENVELOPE.top)).toBeLessThanOrEqual(1);
+  expect(Math.abs(cssExtrema.maxY - HERMES_PATROL_TRANSLATION_ENVELOPE.bottom)).toBeLessThanOrEqual(1);
 });
 
 test('Hermes measures a real performance bubble into a protected-safe viewport placement', async ({ page }) => {

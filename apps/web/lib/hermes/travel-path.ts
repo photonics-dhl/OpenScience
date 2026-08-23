@@ -137,6 +137,26 @@ export function rectForFootprint(point: Point, footprint: HermesFootprintInsets)
   };
 }
 
+export function resolveHermesStationaryGuidePlacement(input: {
+  at: Point;
+  obstacles: DOMRectReadOnly[];
+  variants: HermesTravelFootprintVariant[];
+  viewport: DOMRectReadOnly;
+}): HermesTravelFootprintVariant | null {
+  for (const variant of input.variants.slice(0, 4)) {
+    const composite = rectForFootprint(input.at, variant.footprint);
+    const inside = composite.left >= input.viewport.left && composite.right <= input.viewport.right
+      && composite.top >= input.viewport.top && composite.bottom <= input.viewport.bottom;
+    if (!inside) continue;
+    const partsAreSafe = variant.parts.every((part) => {
+      const bounds = rectForFootprint(input.at, part);
+      return input.obstacles.every((obstacle) => !rectsOverlap(bounds, obstacle));
+    });
+    if (partsAreSafe) return variant;
+  }
+  return null;
+}
+
 export function createHermesTravelTimeline(points: Point[], segmentMs: number): HermesTravelStep[] {
   return points.slice(1).map((point, index) => ({ atMs: index * segmentMs, point }));
 }
