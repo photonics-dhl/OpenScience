@@ -33,6 +33,72 @@ async function mockWorkspace(page: Page) {
   } }));
 }
 
+const boxesOverlap = (a: { x: number; y: number; width: number; height: number }, b: { x: number; y: number; width: number; height: number }) => (
+  a.x < b.x + b.width && a.x + a.width > b.x && a.y < b.y + b.height && a.y + a.height > b.y
+);
+
+test('a saved bottom-right dock travels with a fixed safe guide-bubble orientation', async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.addInitScript(() => localStorage.setItem('openscience:hermes-dock:v1:workspace-current:desktop', JSON.stringify({
+    activity: 'balanced', particles: true, proactiveHints: true, sound: false, xRatio: .9, yRatio: .82,
+  })));
+  await mockWorkspace(page);
+  await page.goto(`${baseUrl}/research-objects/ro-guide/edit?hermes-motion=full`, { waitUntil: 'networkidle' });
+
+  const stage = page.locator('[data-hermes-workspace-stage]');
+  const bubble = page.locator('[data-hermes-guide-bubble]');
+  await expect(stage).toHaveAttribute('data-hermes-guide-motion', 'edge-stop');
+  await expect(bubble).toBeVisible();
+  await page.evaluate(() => {
+    window.__hermesFieldGuideJourney = { arrival: null, done: false, hiddenDuringTravel: false, samples: 0, travel: null };
+    const sample = () => {
+      const stage = document.querySelector('[data-hermes-workspace-stage]');
+      const travelling = stage?.getAttribute('data-hermes-guide-motion') === 'travel';
+      const visible = Boolean(document.querySelector('[data-hermes-guide-bubble][data-hermes-guide-visible="true"]'));
+      if (travelling) {
+        window.__hermesFieldGuideJourney.samples += 1;
+        window.__hermesFieldGuideJourney.hiddenDuringTravel ||= !visible;
+        window.__hermesFieldGuideJourney.travel ??= {
+          horizontal: stage?.getAttribute('data-hermes-bubble-horizontal'),
+          vertical: stage?.getAttribute('data-hermes-bubble-vertical'),
+        };
+      }
+      if (window.__hermesFieldGuideJourney.hiddenDuringTravel && visible) {
+        window.__hermesFieldGuideJourney.arrival = {
+          horizontal: stage?.getAttribute('data-hermes-bubble-horizontal'),
+          vertical: stage?.getAttribute('data-hermes-bubble-vertical'),
+        };
+        window.__hermesFieldGuideJourney.done = true;
+        return;
+      }
+      requestAnimationFrame(sample);
+    };
+    requestAnimationFrame(sample);
+  });
+  await page.getByRole('button', { name: /Take me there|带我过去/ }).click();
+  await expect(stage).toHaveAttribute('data-hermes-guide-motion', 'travel');
+  await expect(bubble).toBeHidden();
+  await expect.poll(() => page.evaluate(() => window.__hermesFieldGuideJourney.done)).toBe(true);
+  const journey = await page.evaluate(() => window.__hermesFieldGuideJourney);
+  expect(journey.samples).toBeGreaterThanOrEqual(10);
+  expect(journey.hiddenDuringTravel).toBe(true);
+  expect(journey.arrival).toEqual(journey.travel);
+  await expect(bubble).toBeVisible();
+
+  const actorBox = await stage.locator('[data-hermes-carrier-travel-hull="true"]').boundingBox();
+  const bubbleBox = await bubble.boundingBox();
+  const targetBox = await page.locator('[data-hermes-anchor="sdf-problem"]').boundingBox();
+  const obstacleBoxes = await page.locator('[data-before-after-proposal], [data-extract-sdf="true"], [data-hermes-protected="true"]').evaluateAll((elements) => elements
+    .map((element) => element.getBoundingClientRect())
+    .filter((bounds) => bounds.width > 0 && bounds.height > 0)
+    .map(({ height, width, x, y }) => ({ height, width, x, y })));
+  expect(actorBox && bubbleBox && targetBox).toBeTruthy();
+  for (const part of [actorBox!, bubbleBox!]) {
+    expect(boxesOverlap(part, targetBox!)).toBe(false);
+    expect(obstacleBoxes.some((obstacle) => boxesOverlap(part, obstacle))).toBe(false);
+  }
+});
+
 test('Hermes arrives beside the first RO field without covering it', async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 900 });
   await mockWorkspace(page);

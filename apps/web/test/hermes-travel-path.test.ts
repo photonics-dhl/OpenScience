@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { createHermesTravelTimeline, planHermesTravel, rectForFootprint } from '@/lib/hermes/travel-path';
+import { createHermesTravelFootprintVariants, createHermesTravelTimeline, planHermesTravel, rectForFootprint } from '@/lib/hermes/travel-path';
 
 const rect = (x: number, y: number, width: number, height: number): DOMRectReadOnly => ({
   bottom: y + height,
@@ -43,6 +43,121 @@ function sweptOverlaps(
 }
 
 describe('Hermes safe travel path', () => {
+  it('builds four fixed bubble orientations from the measured source placement', () => {
+    expect(createHermesTravelFootprintVariants(
+      { bottom: 129, left: 137, right: 137, top: 138 },
+      { bottom: -160, left: 172, right: 76, top: 315 },
+      { horizontal: 'left', vertical: 'above' },
+    )).toEqual([
+      {
+        footprint: { bottom: 129, left: 172, right: 137, top: 315 },
+        parts: [{ bottom: 129, left: 137, right: 137, top: 138 }, { bottom: -160, left: 172, right: 76, top: 315 }],
+        placement: { horizontal: 'left', vertical: 'above' },
+      },
+      {
+        footprint: { bottom: 315, left: 172, right: 137, top: 138 },
+        parts: [{ bottom: 129, left: 137, right: 137, top: 138 }, { bottom: 315, left: 172, right: 76, top: -160 }],
+        placement: { horizontal: 'left', vertical: 'below' },
+      },
+      {
+        footprint: { bottom: 129, left: 137, right: 172, top: 315 },
+        parts: [{ bottom: 129, left: 137, right: 137, top: 138 }, { bottom: -160, left: 76, right: 172, top: 315 }],
+        placement: { horizontal: 'right', vertical: 'above' },
+      },
+      {
+        footprint: { bottom: 315, left: 137, right: 172, top: 138 },
+        parts: [{ bottom: 129, left: 137, right: 137, top: 138 }, { bottom: 315, left: 76, right: 172, top: -160 }],
+        placement: { horizontal: 'right', vertical: 'below' },
+      },
+    ]);
+  });
+
+  it('treats the measured actor and guide bubble as separate parts around the extract control', () => {
+    const editable = rect(305.59375, 350.1875, 742.40625, 199.59375);
+    const extract = rect(1349.515625, 189, 70.484375, 40);
+    const actor = { bottom: 128.6810302734375, left: 137.0008544921875, right: 137.2574462890625, top: 138.39215087890625 };
+    const bubble = { bottom: -160, left: 172, right: 76, top: 314.5 };
+    const footprint = { bottom: actor.bottom, left: bubble.left, right: actor.right, top: bubble.top };
+    const route = planHermesTravel({
+      editable,
+      footprint,
+      footprintVariants: [{
+        footprint,
+        parts: [actor, bubble],
+        placement: { horizontal: 'right', vertical: 'above' },
+      }],
+      from: rect(1122.5625, 589.40625, 360, 360),
+      obstacles: [extract],
+      preferredSides: ['right', 'top'],
+      target: editable,
+      viewport: rect(0, 0, 1440, 900),
+    } as Parameters<typeof planHermesTravel>[0] & { footprintVariants: unknown[] });
+    const rightDock = { x: 1236, y: 449.984375 };
+    const occupiedUnion = rectForFootprint(rightDock, footprint);
+
+    expect(overlaps(rect(occupiedUnion.left, occupiedUnion.top, occupiedUnion.right - occupiedUnion.left, occupiedUnion.bottom - occupiedUnion.top), extract)).toBe(true);
+    expect([actor, bubble].every((part) => {
+      const occupiedPart = rectForFootprint(rightDock, part);
+      return !overlaps(rect(occupiedPart.left, occupiedPart.top, occupiedPart.right - occupiedPart.left, occupiedPart.bottom - occupiedPart.top), extract);
+    })).toBe(true);
+    expect(route.mode).toBe('travel');
+    expect((route as { placement?: unknown }).placement).toEqual({ horizontal: 'right', vertical: 'above' });
+  });
+
+  it('selects the below-bubble variant when only the above bubble conflicts', () => {
+    const target = rect(400, 300, 200, 100);
+    const actor = { bottom: 50, left: 50, right: 50, top: 50 };
+    const aboveBubble = { bottom: -60, left: 150, right: 50, top: 160 };
+    const belowBubble = { bottom: 160, left: 150, right: 50, top: -60 };
+    const route = planHermesTravel({
+      editable: target,
+      footprint: { bottom: 50, left: 150, right: 50, top: 160 },
+      footprintVariants: [
+        {
+          footprint: { bottom: 50, left: 150, right: 50, top: 160 },
+          parts: [actor, aboveBubble],
+          placement: { horizontal: 'right', vertical: 'above' },
+        },
+        {
+          footprint: { bottom: 160, left: 150, right: 50, top: 50 },
+          parts: [actor, belowBubble],
+          placement: { horizontal: 'right', vertical: 'below' },
+        },
+      ],
+      from: rect(900, 600, 100, 100),
+      obstacles: [rect(650, 220, 100, 50)],
+      preferredSides: ['right'],
+      target,
+      viewport: rect(0, 0, 1200, 800),
+    } as Parameters<typeof planHermesTravel>[0] & { footprintVariants: unknown[] });
+
+    expect(route.mode).toBe('travel');
+    expect((route as { placement?: unknown }).placement).toEqual({ horizontal: 'right', vertical: 'below' });
+    expect(sweptOverlaps(route.points, rect(0, 0, 300, 210), target)).toBe(false);
+  });
+
+  it('keeps an edge-stop unsafe when every composite placement conflicts', () => {
+    const target = rect(400, 300, 200, 100);
+    const actor = { bottom: 50, left: 50, right: 50, top: 50 };
+    const route = planHermesTravel({
+      editable: target,
+      footprint: actor,
+      footprintVariants: [
+        { footprint: actor, parts: [actor], placement: { horizontal: 'right', vertical: 'above' } },
+        { footprint: actor, parts: [actor], placement: { horizontal: 'right', vertical: 'below' } },
+      ],
+      from: rect(900, 600, 100, 100),
+      obstacles: [rect(0, 0, 1200, 800)],
+      preferredSides: ['right'],
+      target,
+      viewport: rect(0, 0, 1200, 800),
+    } as Parameters<typeof planHermesTravel>[0] & { footprintVariants: unknown[] });
+
+    expect(route.mode).toBe('edge-stop');
+    expect(route.safe).toBe(false);
+    expect((route as { placement?: unknown }).placement).toBeUndefined();
+  });
+
   it('keeps the complete actor and guide-bubble footprint outside the editable field', () => {
     const editable = rect(520, 180, 500, 420);
     const footprint = { bottom: 150, left: 150, right: 150, top: 230 };

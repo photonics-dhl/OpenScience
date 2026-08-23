@@ -15,7 +15,13 @@ import {
   saveHermesDockPreferences,
   type HermesViewportClass,
 } from '@/lib/hermes/dock-preferences';
-import { createHermesTravelTimeline, planHermesTravel } from '@/lib/hermes/travel-path';
+import {
+  createHermesTravelFootprintVariants,
+  createHermesTravelTimeline,
+  planHermesTravel,
+  type HermesFootprintInsets,
+  type HermesTravelPlacement,
+} from '@/lib/hermes/travel-path';
 import { loadHermesMotionPreference, resolveHermesReducedMotion, saveHermesMotionPreference } from '@/lib/hermes/motion-preference';
 import {
   createHermesRuntimeStatus,
@@ -58,6 +64,17 @@ const viewportClass = (): HermesViewportClass => window.innerWidth <= 640 ? 'mob
 const TRAVEL_SEGMENT_MS = 360;
 const SETTLED_MOTION_CLEARANCE_PX = 2;
 type MeasuredBubblePlacement = HermesBubblePlacement & { stageLeft: number; stageTop: number };
+type GuidePlanState = {
+  mode: 'travel' | 'edge-stop' | 'static' | null;
+  placement: HermesTravelPlacement | null;
+};
+
+const footprintFromBounds = (bounds: DOMRectReadOnly, centerPoint: { x: number; y: number }): HermesFootprintInsets => ({
+  bottom: bounds.bottom - centerPoint.y,
+  left: centerPoint.x - bounds.left,
+  right: bounds.right - centerPoint.x,
+  top: centerPoint.y - bounds.top,
+});
 
 const behaviorInput = (
   state: HermesVisualState,
@@ -195,7 +212,7 @@ function HermesWorkspaceStage({ fallbackAssistantOpen, fallbackOnInvoke, guideTa
   const [speech, setSpeech] = useState<HermesSpeechState>(() => createHermesSpeechState(Date.now(), 0x4845524d));
   const [guideActions, setGuideActions] = useState<HermesAnchorAction[]>([]);
   const [guideReady, setGuideReady] = useState(false);
-  const [guideMode, setGuideMode] = useState<'travel' | 'edge-stop' | 'static' | null>(null);
+  const [guidePlanState, setGuidePlanState] = useState<GuidePlanState>({ mode: null, placement: null });
   const [guideSuppressed, setGuideSuppressed] = useState(false);
   const [protectedGeometryVersion, setProtectedGeometryVersion] = useState(0);
   const [travelRequested, setTravelRequested] = useState(false);
@@ -375,7 +392,7 @@ function HermesWorkspaceStage({ fallbackAssistantOpen, fallbackOnInvoke, guideTa
     setGuideReady(false);
     if (!guideTarget) {
       if (guideActions.length > 0) setGuideActions([]);
-      setGuideMode(null);
+      setGuidePlanState({ mode: null, placement: null });
       setGuideSuppressed(false);
       return;
     }
@@ -391,7 +408,7 @@ function HermesWorkspaceStage({ fallbackAssistantOpen, fallbackOnInvoke, guideTa
     const from = new DOMRect(stageBounds.x, stageBounds.y, Math.max(1, stageBounds.width), Math.max(1, stageBounds.height));
     const target = new DOMRect(snapshot.rect.x, snapshot.rect.y, snapshot.rect.width, snapshot.rect.height);
     if (customDock && !travelRequested) {
-      setGuideMode('edge-stop');
+      setGuidePlanState({ mode: 'edge-stop', placement: null });
       setGuideSuppressed(false);
       setGuideReady(true);
       return;
@@ -400,22 +417,21 @@ function HermesWorkspaceStage({ fallbackAssistantOpen, fallbackOnInvoke, guideTa
     const travelHullBounds = stage.querySelector<HTMLElement>('[data-hermes-carrier-travel-hull="true"]')?.getBoundingClientRect() ?? actorBounds;
     const bubbleBounds = bubbleRef.current?.getBoundingClientRect() ?? stageBounds;
     const stageCenter = { x: stageBounds.left + stageBounds.width / 2, y: stageBounds.top + stageBounds.height / 2 };
-    const union = {
-      bottom: Math.max(travelHullBounds.bottom, bubbleBounds.bottom),
-      left: Math.min(travelHullBounds.left, bubbleBounds.left),
-      right: Math.max(travelHullBounds.right, bubbleBounds.right),
-      top: Math.min(travelHullBounds.top, bubbleBounds.top),
+    const measuredPlacement: HermesTravelPlacement = {
+      horizontal: stage.dataset.hermesBubbleHorizontal === 'right' ? 'right' : 'left',
+      vertical: stage.dataset.hermesBubbleVertical === 'below' ? 'below' : 'above',
     };
+    const footprintVariants = createHermesTravelFootprintVariants(
+      footprintFromBounds(travelHullBounds, stageCenter),
+      footprintFromBounds(bubbleBounds, stageCenter),
+      measuredPlacement,
+    );
     const plan = planHermesTravel({
       bottomInsetPx: window.visualViewport ? Math.max(0, window.innerHeight - window.visualViewport.height) : 0,
       clearancePx: snapshot.clearancePx,
       editable: target,
-      footprint: {
-        bottom: Math.max(1, union.bottom - stageCenter.y),
-        left: Math.max(1, stageCenter.x - union.left),
-        right: Math.max(1, union.right - stageCenter.x),
-        top: Math.max(1, stageCenter.y - union.top),
-      },
+      footprint: footprintVariants[0].footprint,
+      footprintVariants,
       from,
       obstacles: Array.from(document.querySelectorAll<HTMLElement>('[data-before-after-proposal], [data-extract-sdf="true"], [data-hermes-protected="true"]'))
         .map((element) => element.getBoundingClientRect())
@@ -427,12 +443,12 @@ function HermesWorkspaceStage({ fallbackAssistantOpen, fallbackOnInvoke, guideTa
     if (effectiveReducedMotion) {
       if (plan.safe) setPosition(plan.dock);
       setGuideSuppressed(!plan.safe);
-      setGuideMode('static');
+      setGuidePlanState({ mode: 'static', placement: plan.placement ?? null });
       setGuideReady(true);
       return;
     }
     setGuideSuppressed(!plan.safe);
-    setGuideMode(plan.mode === 'edge-stop' ? 'edge-stop' : 'travel');
+    setGuidePlanState({ mode: plan.mode === 'edge-stop' ? 'edge-stop' : 'travel', placement: plan.placement ?? null });
     const timeline = createHermesTravelTimeline(plan.points, TRAVEL_SEGMENT_MS);
     const timers = timeline.map((step) => window.setTimeout(() => setPosition(step.point), step.atMs));
     const arrivalMs = timeline.length === 0 ? 0 : timeline.at(-1)!.atMs + TRAVEL_SEGMENT_MS;
@@ -704,8 +720,14 @@ function HermesWorkspaceStage({ fallbackAssistantOpen, fallbackOnInvoke, guideTa
   const stageSize = resolveHermesStageSize(false, compactGuide);
   const stageCenterX = anchored ? anchorRect.left + anchorRect.width / 2 : position.x;
   const stageCenterY = anchored ? anchorRect.top + anchorRect.height / 2 : position.y;
-  const bubbleHorizontal = bubblePlacement?.horizontal ?? (viewportSize.width > 0 && stageCenterX < viewportSize.width / 2 ? 'right' : 'left');
-  const bubbleVertical = bubblePlacement?.vertical ?? (viewportSize.height > 0 && stageCenterY < viewportSize.height / 2 ? 'below' : 'above');
+  const fallbackBubbleHorizontal = viewportSize.width > 0 && stageCenterX < viewportSize.width / 2 ? 'right' : 'left';
+  const fallbackBubbleVertical = viewportSize.height > 0 && stageCenterY < viewportSize.height / 2 ? 'below' : 'above';
+  const bubbleHorizontal = guideTarget
+    ? guidePlanState.placement?.horizontal ?? fallbackBubbleHorizontal
+    : bubblePlacement?.horizontal ?? fallbackBubbleHorizontal;
+  const bubbleVertical = guideTarget
+    ? guidePlanState.placement?.vertical ?? fallbackBubbleVertical
+    : bubblePlacement?.vertical ?? fallbackBubbleVertical;
   const style: React.CSSProperties = {
     height: stageSize, left: stageCenterX - stageSize / 2, top: stageCenterY - stageSize / 2,
     transition: settlingNewDock ? 'none' : undefined, width: stageSize,
@@ -725,7 +747,7 @@ function HermesWorkspaceStage({ fallbackAssistantOpen, fallbackOnInvoke, guideTa
       data-hermes-bubble-safe={speech.cue ? (bubblePlacement ? 'true' : 'false') : 'true'}
       data-hermes-bubble-vertical={bubbleVertical}
       data-hermes-dragging={dragging ? 'true' : 'false'}
-      data-hermes-guide-motion={guideMode ?? 'idle'}
+      data-hermes-guide-motion={guidePlanState.mode ?? 'idle'}
       data-hermes-guide-suppressed={guideSuppressed ? 'true' : 'false'}
       data-hermes-guide-target={guideTarget ?? undefined}
       data-hermes-invoke-count={invokeCount}
@@ -810,10 +832,11 @@ function HermesWorkspaceStage({ fallbackAssistantOpen, fallbackOnInvoke, guideTa
       {guideTarget ? (
         <HermesGuideBubble
           actions={guideActions}
-          edgeStop={guideMode === 'edge-stop'}
+          edgeStop={guidePlanState.mode === 'edge-stop'}
           onDismiss={onDismissGuide}
           onTakeMeThere={() => {
             document.querySelector(`[data-hermes-anchor="${guideTarget}"]`)?.scrollIntoView({ behavior: effectiveReducedMotion ? 'auto' : 'smooth', block: 'center' });
+            setGuideReady(false);
             setTravelRequested(true);
           }}
           ref={bubbleRef}
