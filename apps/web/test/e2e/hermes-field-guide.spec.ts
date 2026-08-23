@@ -172,6 +172,165 @@ test('a saved bottom-right dock travels with a fixed safe guide-bubble orientati
   }
 });
 
+test('a no-op full-motion guide restore clears its transaction and preserves later protected settling', async ({ page }) => {
+  const storageKey = 'openscience:hermes-dock:v1:workspace-current:desktop';
+  const storedDock = JSON.stringify({
+    activity: 'balanced', particles: true, proactiveHints: true, sound: false, xRatio: .9, yRatio: .82,
+  });
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.addInitScript(({ key, value }) => localStorage.setItem(key, value), { key: storageKey, value: storedDock });
+  await mockWorkspace(page);
+  await page.goto(`${baseUrl}/research-objects/ro-guide/edit?hermes-motion=full`, { waitUntil: 'networkidle' });
+
+  const stage = page.locator('[data-hermes-workspace-stage]');
+  await expect(stage).toHaveAttribute('data-hermes-guide-motion', 'edge-stop');
+  await page.keyboard.press('Escape');
+  await expect(stage).toHaveAttribute('data-hermes-guide-phase', 'idle');
+  await expect(stage).toHaveAttribute('data-hermes-guide-restore-active', 'false');
+  await expect(stage).toHaveAttribute('data-hermes-guide-settled-replan-count', '0');
+
+  await page.evaluate(() => {
+    const actor = document.querySelector<HTMLElement>('[data-hermes-carrier-travel-hull="true"]')?.getBoundingClientRect();
+    if (!actor) throw new Error('travel hull must exist');
+    const blocker = document.createElement('div');
+    blocker.dataset.hermesProtected = 'true';
+    Object.assign(blocker.style, {
+      height: `${actor.height}px`, left: `${actor.left}px`, position: 'fixed', top: `${actor.top}px`, width: `${actor.width}px`, zIndex: '1',
+    });
+    document.body.append(blocker);
+  });
+  await expect.poll(async () => {
+    const [actor, blocker] = await Promise.all([
+      stage.locator('[data-hermes-carrier-travel-hull="true"]').boundingBox(),
+      page.locator('[data-hermes-protected="true"]').last().boundingBox(),
+    ]);
+    return actor && blocker ? !boxesOverlap(actor, blocker) : false;
+  }).toBe(true);
+  await expect.poll(() => page.evaluate((key) => localStorage.getItem(key), storageKey)).not.toBe(storedDock);
+});
+
+test('a transitionless full-motion source clamp probes real geometry and consumes one settled epoch', async ({ page }) => {
+  const storageKey = 'openscience:hermes-dock:v1:workspace-current:desktop';
+  const storedDock = JSON.stringify({
+    activity: 'balanced', particles: true, proactiveHints: true, sound: false, xRatio: .9, yRatio: .82,
+  });
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.addInitScript(({ key, value }) => localStorage.setItem(key, value), { key: storageKey, value: storedDock });
+  await mockWorkspace(page);
+  await page.goto(`${baseUrl}/research-objects/ro-guide/edit?hermes-motion=full`, { waitUntil: 'networkidle' });
+
+  const stage = page.locator('[data-hermes-workspace-stage]');
+  const bubble = page.locator('[data-hermes-guide-bubble]');
+  await expect(stage).toHaveAttribute('data-hermes-guide-motion', 'edge-stop');
+  await page.evaluate(() => {
+    const stageNode = document.querySelector<HTMLElement>('[data-hermes-workspace-stage]');
+    if (!stageNode) throw new Error('Hermes stage must exist');
+    stageNode.style.transition = 'none';
+    stageNode.style.top = '-180px';
+    (window as Window & { __transitionlessSource?: {
+      firstRoute: { route: { x: number; y: number }; settled: { x: number; y: number } } | null;
+      sourceFrames: number;
+      timelineDuringSource: number[];
+    } }).__transitionlessSource = {
+      firstRoute: null, sourceFrames: 0, timelineDuringSource: [],
+    };
+    new MutationObserver(() => {
+      const journey = (window as Window & { __transitionlessSource: {
+        firstRoute: { route: { x: number; y: number }; settled: { x: number; y: number } } | null;
+      } }).__transitionlessSource;
+      if (stageNode.dataset.hermesGuidePhase !== 'route' || journey.firstRoute) return;
+      journey.firstRoute = {
+        route: { x: Number(stageNode.dataset.hermesGuideRouteStartX), y: Number(stageNode.dataset.hermesGuideRouteStartY) },
+        settled: { x: Number(stageNode.dataset.hermesGuideSettledSourceX), y: Number(stageNode.dataset.hermesGuideSettledSourceY) },
+      };
+    }).observe(stageNode, { attributeFilter: ['data-hermes-guide-phase'], attributes: true });
+    const sample = () => {
+      const journey = (window as Window & { __transitionlessSource: { sourceFrames: number; timelineDuringSource: number[] } }).__transitionlessSource;
+      if (stageNode.dataset.hermesGuidePhase === 'source-settle') {
+        journey.sourceFrames += 1;
+        journey.timelineDuringSource.push(Number(stageNode.dataset.hermesGuideTimelineCount));
+      }
+      if (stageNode.dataset.hermesGuidePhase !== 'route') requestAnimationFrame(sample);
+    };
+    requestAnimationFrame(sample);
+  });
+  await page.evaluate(() => new Promise<void>((resolveFrame) => requestAnimationFrame(() => requestAnimationFrame(resolveFrame))));
+  await page.evaluate(() => document.querySelector<HTMLElement>('.hermes-companion-take-me')?.click());
+
+  await expect(stage).toHaveAttribute('data-hermes-guide-phase', 'route', { timeout: 10_000 });
+  const sourceProbe = await page.evaluate(() => (window as Window & {
+    __transitionlessSource?: {
+      firstRoute: { route: { x: number; y: number }; settled: { x: number; y: number } } | null;
+      sourceFrames: number;
+      timelineDuringSource: number[];
+    };
+  }).__transitionlessSource);
+  expect(sourceProbe?.sourceFrames).toBeGreaterThanOrEqual(1);
+  expect(sourceProbe?.timelineDuringSource).not.toContain(1);
+  expect(Number(await stage.getAttribute('data-hermes-guide-timeline-count'))).toBeGreaterThanOrEqual(1);
+  await expect(stage).toHaveAttribute('data-hermes-guide-settled-replan-count', '1');
+  expect(sourceProbe?.firstRoute?.route).toEqual(sourceProbe?.firstRoute?.settled);
+
+  await expect(bubble).toBeVisible({ timeout: 15_000 });
+  await page.keyboard.press('Escape');
+  await page.evaluate(() => {
+    const actor = document.querySelector<HTMLElement>('[data-hermes-carrier-travel-hull="true"]')?.getBoundingClientRect();
+    if (!actor) throw new Error('travel hull must exist');
+    const blocker = document.createElement('div');
+    blocker.dataset.hermesProtected = 'true';
+    Object.assign(blocker.style, {
+      height: `${actor.height}px`, left: `${actor.left}px`, position: 'fixed', top: `${actor.top}px`, width: `${actor.width}px`, zIndex: '1',
+    });
+    document.body.append(blocker);
+  });
+  await expect.poll(async () => {
+    const [actor, blocker] = await Promise.all([
+      stage.locator('[data-hermes-carrier-travel-hull="true"]').boundingBox(),
+      page.locator('[data-hermes-protected="true"]').last().boundingBox(),
+    ]);
+    return actor && blocker ? !boxesOverlap(actor, blocker) : false;
+  }).toBe(true);
+});
+
+test('a route change cancels an in-flight restore transaction before its transition can settle', async ({ page }) => {
+  const storageKey = 'openscience:hermes-dock:v1:workspace-current:desktop';
+  const storedDock = JSON.stringify({
+    activity: 'balanced', particles: true, proactiveHints: true, sound: false, xRatio: .9, yRatio: .82,
+  });
+  await page.setViewportSize({ width: 1000, height: 800 });
+  await page.addInitScript(({ key, value }) => {
+    localStorage.setItem(key, value);
+    if (!window.visualViewport) return;
+    let visualRect = { height: 800, left: 0, top: 0, width: 1000 };
+    Object.defineProperties(window.visualViewport, {
+      height: { configurable: true, get: () => visualRect.height },
+      offsetLeft: { configurable: true, get: () => visualRect.left },
+      offsetTop: { configurable: true, get: () => visualRect.top },
+      width: { configurable: true, get: () => visualRect.width },
+    });
+    Object.defineProperty(window, '__setHermesVisualViewportRect', { configurable: true, value: (next: typeof visualRect) => {
+      visualRect = next;
+      window.visualViewport?.dispatchEvent(new Event('scroll'));
+    } });
+  }, { key: storageKey, value: storedDock });
+  await mockWorkspace(page);
+  await page.goto(`${baseUrl}/research-objects/ro-guide/edit?hermes-motion=full`, { waitUntil: 'networkidle' });
+
+  const stage = page.locator('[data-hermes-workspace-stage]');
+  await expect(stage).toHaveAttribute('data-hermes-guide-motion', 'edge-stop');
+  await page.evaluate(() => (window as Window & {
+    __setHermesVisualViewportRect(rectangle: { height: number; left: number; top: number; width: number }): void;
+  }).__setHermesVisualViewportRect({ height: 600, left: 100, top: 100, width: 700 }));
+  await expect(stage).toHaveAttribute('data-hermes-guide-phase', 'source-settle');
+  await expect(stage).toHaveAttribute('data-hermes-guide-phase', 'edge-stop');
+  await page.keyboard.press('Escape');
+  await expect(stage).toHaveAttribute('data-hermes-guide-restore-active', 'true');
+  await page.evaluate(() => window.history.pushState({}, '', '/dashboard'));
+  await expect(page).toHaveURL(/\/dashboard/);
+  await expect(stage).toHaveAttribute('data-hermes-guide-restore-active', 'false');
+  expect(await page.evaluate((key) => localStorage.getItem(key), storageKey)).toBe(storedDock);
+});
+
 test('Hermes arrives beside the first RO field without covering it', async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 900 });
   await mockWorkspace(page);
@@ -376,6 +535,9 @@ test('route and breakpoint changes adopt the matching stored dock instead of a s
   const desktopDock = JSON.stringify({
     activity: 'balanced', particles: true, proactiveHints: true, sound: false, xRatio: .76, yRatio: .72,
   });
+  const routeDock = JSON.stringify({
+    activity: 'balanced', particles: true, proactiveHints: true, sound: false, xRatio: .3, yRatio: .35,
+  });
   const mobileDock = JSON.stringify({
     activity: 'balanced', particles: true, proactiveHints: true, sound: false, xRatio: .3, yRatio: .4,
   });
@@ -413,13 +575,18 @@ test('route and breakpoint changes adopt the matching stored dock instead of a s
   await page.evaluate(() => window.history.pushState({}, '', '/research-objects/ro-guide/edit?hermes-motion=full'));
   await expect(page).toHaveURL(/\/research-objects\/ro-guide\/edit/);
   await expect(stage).toHaveAttribute('data-hermes-guide-target', 'sdf-problem', { timeout: 10_000 });
+  await page.evaluate(({ key, value }) => localStorage.setItem(key, value), { key: desktopKey, value: routeDock });
   await page.keyboard.press('Escape');
   await expect(stage).not.toHaveAttribute('data-hermes-guide-target', /.+/);
   await expect.poll(async () => {
     const bounds = await stage.boundingBox();
-    return bounds ? { x: Math.round(bounds.x + bounds.width / 2), y: Math.round(bounds.y + bounds.height / 2) } : null;
-  }).toEqual({ x: 760, y: 576 });
-  expect(await page.evaluate((key) => localStorage.getItem(key), desktopKey)).toBe(desktopDock);
+    return bounds ? {
+      restore: await stage.getAttribute('data-hermes-guide-restore-active'),
+      x: Math.round(bounds.x + bounds.width / 2),
+      y: Math.round(bounds.y + bounds.height / 2),
+    } : null;
+  }).toEqual({ restore: 'false', x: 300, y: 280 });
+  expect(await page.evaluate((key) => localStorage.getItem(key), desktopKey)).toBe(routeDock);
 
   await page.setViewportSize({ width: 390, height: 844 });
   await expect.poll(async () => {
@@ -511,19 +678,9 @@ test('a dynamic protected control invalidates guide geometry while target descen
   await expect(bubble).toBeVisible();
   const plansBefore = Number(await stage.getAttribute('data-hermes-guide-plan-count'));
   await page.evaluate(() => {
-    const target = document.querySelector<HTMLElement>('[data-hermes-anchor="ro-title"]');
-    if (!target) throw new Error('title target must exist');
-    const nested = document.createElement('span');
-    nested.dataset.hermesProtected = 'true';
-    nested.dataset.readingRole = 'control';
-    nested.dataset.dynamicTargetControl = 'true';
-    Object.assign(nested.style, { display: 'block', height: '1px', width: '1px' });
-    target.append(nested);
-
     const actor = document.querySelector<HTMLElement>('[data-hermes-carrier-travel-hull="true"]')?.getBoundingClientRect();
     if (!actor) throw new Error('travel hull must exist');
     const control = document.createElement('button');
-    control.dataset.hermesProtected = 'true';
     control.dataset.readingRole = 'control';
     control.dataset.dynamicGuideControl = 'true';
     Object.assign(control.style, {
@@ -531,7 +688,37 @@ test('a dynamic protected control invalidates guide geometry while target descen
     });
     document.body.append(control);
   });
+  await page.evaluate(() => new Promise<void>((resolveFrame) => requestAnimationFrame(() => requestAnimationFrame(resolveFrame))));
+  expect(Number(await stage.getAttribute('data-hermes-guide-plan-count'))).toBe(plansBefore);
+  await page.locator('[data-dynamic-guide-control="true"]').evaluate((element) => {
+    (element as HTMLElement).dataset.hermesProtected = 'true';
+  });
   await expect.poll(async () => Number(await stage.getAttribute('data-hermes-guide-plan-count'))).toBeGreaterThan(plansBefore);
+  const plansAfterPromotion = Number(await stage.getAttribute('data-hermes-guide-plan-count'));
+  await page.locator('[data-dynamic-guide-control="true"]').evaluate((element) => {
+    (element as HTMLElement).dataset.hermesProtected = 'false';
+  });
+  await expect.poll(async () => Number(await stage.getAttribute('data-hermes-guide-plan-count'))).toBeGreaterThan(plansAfterPromotion);
+  const plansAfterRemoval = Number(await stage.getAttribute('data-hermes-guide-plan-count'));
+  await page.locator('[data-dynamic-guide-control="true"]').evaluate((element) => {
+    (element as HTMLElement).dataset.hermesProtected = 'true';
+  });
+  await expect.poll(async () => Number(await stage.getAttribute('data-hermes-guide-plan-count'))).toBeGreaterThan(plansAfterRemoval);
+  const plansBeforeTargetDescendant = Number(await stage.getAttribute('data-hermes-guide-plan-count'));
+  await page.evaluate(() => {
+    const target = document.querySelector<HTMLElement>('[data-hermes-anchor="ro-title"]');
+    if (!target) throw new Error('title target must exist');
+    const bounds = target.getBoundingClientRect();
+    const nested = document.createElement('span');
+    nested.dataset.hermesProtected = 'true';
+    nested.dataset.readingRole = 'control';
+    nested.dataset.dynamicTargetControl = 'true';
+    Object.assign(nested.style, {
+      display: 'block', height: `${bounds.height}px`, left: `${bounds.left}px`, position: 'fixed', top: `${bounds.top}px`, width: `${bounds.width}px`,
+    });
+    target.append(nested);
+  });
+  await expect.poll(async () => Number(await stage.getAttribute('data-hermes-guide-plan-count'))).toBeGreaterThan(plansBeforeTargetDescendant);
   await expect(stage).toHaveAttribute('data-hermes-guide-suppressed', 'false');
   await expect.poll(async () => {
     const [actor, guideBubble, control] = await Promise.all([

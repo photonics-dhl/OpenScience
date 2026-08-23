@@ -7,6 +7,103 @@ const overlaps = (a: { x: number; y: number; width: number; height: number }, b:
   a.x < b.x + b.width && a.x + a.width > b.x && a.y < b.y + b.height && a.y + a.height > b.y
 );
 
+interface PerformanceBubbleEvidence {
+  action: string;
+  actor: { x: number; y: number; width: number; height: number };
+  bubble: { x: number; y: number; width: number; height: number };
+  bubbleTransformY: number;
+  cue: string;
+  horizontal: string;
+  protectedRegions: Array<{ x: number; y: number; width: number; height: number }>;
+  scrollY: number;
+  vertical: string;
+  viewport: { height: number; width: number };
+}
+
+async function readPerformanceBubbleEvidence(page: Page): Promise<PerformanceBubbleEvidence | null> {
+  return page.evaluate(() => {
+    const stage = document.querySelector<HTMLElement>('[data-hermes-workspace-stage="true"]');
+    const bubble = stage?.querySelector<HTMLElement>('[data-hermes-performance-bubble="true"]');
+    const actor = stage?.querySelector<HTMLElement>('[data-hermes-companion-actor="true"]');
+    const cue = bubble?.dataset.hermesSpeechCue;
+    const horizontal = stage?.dataset.hermesBubbleHorizontal;
+    const vertical = stage?.dataset.hermesBubbleVertical;
+    if (!stage || !bubble || !actor || !cue || !horizontal || !vertical
+      || stage.dataset.hermesSpeechVisible !== 'true'
+      || bubble.dataset.hermesSpeechVisible !== 'true'
+      || stage.dataset.hermesBubbleSafe !== 'true') return null;
+    const rect = (element: Element) => {
+      const bounds = element.getBoundingClientRect();
+      return { x: bounds.x, y: bounds.y, width: bounds.width, height: bounds.height };
+    };
+    const bubbleBounds = rect(bubble);
+    const actorBounds = rect(actor);
+    if (bubbleBounds.width <= 0 || bubbleBounds.height <= 0 || actorBounds.width <= 0 || actorBounds.height <= 0) return null;
+    return {
+      action: stage.dataset.hermesAction ?? 'missing',
+      actor: actorBounds,
+      bubble: bubbleBounds,
+      bubbleTransformY: new DOMMatrixReadOnly(getComputedStyle(bubble).transform).m42,
+      cue,
+      horizontal,
+      protectedRegions: Array.from(document.querySelectorAll('[data-hermes-protected="true"]')).map(rect)
+        .filter((bounds) => bounds.width > 0 && bounds.height > 0),
+      scrollY: window.scrollY,
+      vertical,
+      viewport: { height: window.innerHeight, width: window.innerWidth },
+    };
+  });
+}
+
+async function waitForPerformanceBubbleEvidence(
+  page: Page,
+  accept: (evidence: PerformanceBubbleEvidence) => boolean = isSafePerformanceBubble,
+): Promise<PerformanceBubbleEvidence> {
+  const actions = new Set<string>();
+  for (let elapsed = 0; elapsed < 300_000; elapsed += 500) {
+    const evidence = await readPerformanceBubbleEvidence(page);
+    if (evidence) {
+      actions.add(evidence.action);
+      if (accept(evidence)) return evidence;
+    }
+    await page.clock.fastForward(500);
+    await page.waitForTimeout(5);
+  }
+  throw new Error(`No measurable performance bubble; observed actions: ${Array.from(actions).join(', ')}`);
+}
+
+function isSafePerformanceBubble(evidence: PerformanceBubbleEvidence) {
+  return !evidence.protectedRegions.some((region) => overlaps(evidence.bubble, region))
+    && isPerformanceCompositeInsideViewport(evidence)
+    && /^(left|right)$/u.test(evidence.horizontal)
+    && /^(above|below)$/u.test(evidence.vertical);
+}
+
+function isPerformanceCompositeInsideViewport(evidence: PerformanceBubbleEvidence) {
+  return evidence.actor.x >= 0
+    && evidence.actor.y >= 0
+    && evidence.actor.x + evidence.actor.width <= evidence.viewport.width
+    && evidence.actor.y + evidence.actor.height <= evidence.viewport.height
+    && evidence.bubble.x >= 0
+    && evidence.bubble.y >= 0
+    && evidence.bubble.x + evidence.bubble.width <= evidence.viewport.width
+    && evidence.bubble.y + evidence.bubble.height <= evidence.viewport.height;
+}
+
+function expectSafePerformanceBubble(evidence: PerformanceBubbleEvidence) {
+  expect(evidence.protectedRegions.some((region) => overlaps(evidence.bubble, region))).toBe(false);
+  expect(evidence.actor.x).toBeGreaterThanOrEqual(0);
+  expect(evidence.actor.y).toBeGreaterThanOrEqual(0);
+  expect(evidence.actor.x + evidence.actor.width).toBeLessThanOrEqual(evidence.viewport.width);
+  expect(evidence.actor.y + evidence.actor.height).toBeLessThanOrEqual(evidence.viewport.height);
+  expect(evidence.bubble.x).toBeGreaterThanOrEqual(0);
+  expect(evidence.bubble.y).toBeGreaterThanOrEqual(0);
+  expect(evidence.bubble.x + evidence.bubble.width).toBeLessThanOrEqual(evidence.viewport.width);
+  expect(evidence.bubble.y + evidence.bubble.height).toBeLessThanOrEqual(evidence.viewport.height);
+  expect(evidence.horizontal).toMatch(/left|right/u);
+  expect(evidence.vertical).toMatch(/above|below/u);
+}
+
 async function json(route: Route, body: unknown, status = 200) {
   await route.fulfill({ status, contentType: 'application/json', body: JSON.stringify(body) });
 }
@@ -60,42 +157,32 @@ test('Hermes measures a real performance bubble into a protected-safe viewport p
   await mockDashboard(page);
   await page.clock.install({ time: new Date('2026-08-23T00:00:00Z') });
   await page.goto(`${baseUrl}/dashboard?hermes-motion=full`, { waitUntil: 'networkidle' });
-  const stage = page.locator('[data-hermes-workspace-stage="true"]');
-  let visible = false;
-  const actions = new Set<string>();
-  for (let elapsed = 0; elapsed < 300_000 && !visible; elapsed += 250) {
-    await page.clock.fastForward(250);
-    await page.waitForTimeout(5);
-    actions.add(await stage.getAttribute('data-hermes-action') ?? 'missing');
-    visible = await stage.getAttribute('data-hermes-speech-visible') === 'true';
-  }
-  expect(visible, `observed actions: ${Array.from(actions).join(', ')}`).toBe(true);
-  const bubble = stage.locator('[data-hermes-performance-bubble="true"]');
-  await expect(bubble).toHaveAttribute('data-hermes-speech-visible', 'true');
-  await expect(stage).toHaveAttribute('data-hermes-bubble-safe', 'true');
-  await expect(stage).toHaveAttribute('data-hermes-bubble-horizontal', /left|right/u);
-  await expect(stage).toHaveAttribute('data-hermes-bubble-vertical', /above|below/u);
-  const bubbleBox = await bubble.boundingBox();
-  expect(bubbleBox).not.toBeNull();
-  const protectedBoxes = await page.locator('[data-hermes-protected="true"]').evaluateAll((elements) => elements.map((element) => {
-    const bounds = element.getBoundingClientRect();
-    return { x: bounds.x, y: bounds.y, width: bounds.width, height: bounds.height };
-  }).filter((bounds) => bounds.width > 0 && bounds.height > 0));
-  expect(protectedBoxes.some((region) => overlaps(bubbleBox!, region))).toBe(false);
-  expect(bubbleBox!.x).toBeGreaterThanOrEqual(0);
-  expect(bubbleBox!.y).toBeGreaterThanOrEqual(0);
-  expect(bubbleBox!.x + bubbleBox!.width).toBeLessThanOrEqual(1440);
-  expect(bubbleBox!.y + bubbleBox!.height).toBeLessThanOrEqual(900);
+  const initialEvidence = await waitForPerformanceBubbleEvidence(page);
+  expectSafePerformanceBubble(initialEvidence);
 
-  const transitionTarget = protectedBoxes.find((region) => region.width >= bubbleBox!.width && region.height >= bubbleBox!.height);
+  const transitionTarget = initialEvidence.protectedRegions.find((region) => (
+    region.width >= initialEvidence.bubble.width && region.height >= initialEvidence.bubble.height
+  ));
   expect(transitionTarget).toBeDefined();
   const transitionDelta = {
-    x: transitionTarget!.x + (transitionTarget!.width - bubbleBox!.width) / 2 - bubbleBox!.x,
-    y: transitionTarget!.y + (transitionTarget!.height - bubbleBox!.height) / 2 - bubbleBox!.y,
+    x: transitionTarget!.x + (transitionTarget!.width - initialEvidence.bubble.width) / 2 - initialEvidence.bubble.x,
+    y: transitionTarget!.y + (transitionTarget!.height - initialEvidence.bubble.height) / 2 - initialEvidence.bubble.y,
   };
-  await stage.evaluate((element) => {
-    element.addEventListener('transitionend', (event) => {
-      if (event.propertyName === 'left') element.setAttribute('data-hermes-test-left-transition-ended', 'true');
+  const forcedBubble = {
+    ...initialEvidence.bubble,
+    x: initialEvidence.bubble.x + transitionDelta.x,
+    y: initialEvidence.bubble.y + transitionDelta.y,
+  };
+  expect(overlaps(forcedBubble, transitionTarget!)).toBe(true);
+  await page.evaluate(() => {
+    const stage = document.querySelector<HTMLElement>('[data-hermes-workspace-stage="true"]');
+    if (!stage) throw new Error('Hermes stage missing');
+    stage.dataset.hermesTestGeometryMutationCount = '0';
+    new MutationObserver(() => {
+      stage.dataset.hermesTestGeometryMutationCount = String(Number(stage.dataset.hermesTestGeometryMutationCount ?? '0') + 1);
+    }).observe(stage, {
+      attributeFilter: ['data-hermes-bubble-horizontal', 'data-hermes-bubble-safe', 'data-hermes-bubble-vertical', 'style'],
+      attributes: true,
     });
   });
   await page.evaluate((delta) => {
@@ -104,19 +191,22 @@ test('Hermes measures a real performance bubble into a protected-safe viewport p
     anchor.style.transform = `translate(${delta.x}px, ${delta.y}px)`;
     window.dispatchEvent(new Event('resize'));
   }, transitionDelta);
-  await expect(stage).toHaveAttribute('data-hermes-test-left-transition-ended', 'true');
-  await expect(stage).toHaveAttribute('data-hermes-bubble-safe', 'true');
-  const bubbleAfterTransition = await bubble.boundingBox();
-  expect(bubbleAfterTransition).not.toBeNull();
-  const protectedAfterTransition = await page.locator('[data-hermes-protected="true"]').evaluateAll((elements) => elements.map((element) => {
-    const bounds = element.getBoundingClientRect();
-    return { x: bounds.x, y: bounds.y, width: bounds.width, height: bounds.height };
-  }).filter((bounds) => bounds.width > 0 && bounds.height > 0));
-  expect(protectedAfterTransition.some((region) => overlaps(bubbleAfterTransition!, region))).toBe(false);
-  expect(bubbleAfterTransition!.x).toBeGreaterThanOrEqual(0);
-  expect(bubbleAfterTransition!.y).toBeGreaterThanOrEqual(0);
-  expect(bubbleAfterTransition!.x + bubbleAfterTransition!.width).toBeLessThanOrEqual(1440);
-  expect(bubbleAfterTransition!.y + bubbleAfterTransition!.height).toBeLessThanOrEqual(900);
+  await expect.poll(async () => Number(await page.locator('[data-hermes-workspace-stage="true"]')
+    .getAttribute('data-hermes-test-geometry-mutation-count') ?? '0')).toBeGreaterThan(0);
+  const transitionedEvidence = await waitForPerformanceBubbleEvidence(page, (evidence) => {
+    const targetStillPresent = evidence.protectedRegions.some((region) => (
+      Math.abs(region.x - transitionTarget!.x) < 1
+      && Math.abs(region.y - transitionTarget!.y) < 1
+      && Math.abs(region.width - transitionTarget!.width) < 1
+      && Math.abs(region.height - transitionTarget!.height) < 1
+    ));
+    return targetStillPresent
+      && !overlaps(evidence.bubble, transitionTarget!)
+      && !overlaps(evidence.actor, transitionTarget!)
+      && isSafePerformanceBubble(evidence);
+  });
+  expectSafePerformanceBubble(transitionedEvidence);
+  expect(overlaps(transitionedEvidence.bubble, transitionTarget!) || overlaps(transitionedEvidence.actor, transitionTarget!)).toBe(false);
 
   await page.evaluate(() => {
     document.querySelectorAll('[data-hermes-protected="true"]').forEach((element) => element.removeAttribute('data-hermes-protected'));
@@ -125,22 +215,30 @@ test('Hermes measures a real performance bubble into a protected-safe viewport p
     document.body.append(spacer);
     document.body.classList.add('hermes-bubble-scroll-fixture');
   });
-  await page.waitForTimeout(50);
-  const actorBeforeScroll = await stage.locator('[data-hermes-companion-actor="true"]').boundingBox();
-  const bubbleBeforeScroll = await bubble.boundingBox();
-  expect(actorBeforeScroll).not.toBeNull();
-  expect(bubbleBeforeScroll).not.toBeNull();
-  await page.evaluate(() => window.scrollBy(0, 40));
-  await expect.poll(async () => (await stage.locator('[data-hermes-companion-actor="true"]').boundingBox())?.y ?? Number.POSITIVE_INFINITY)
-    .toBeLessThan(actorBeforeScroll!.y - 30);
-  await expect.poll(async () => {
-    const actorAfterScroll = await stage.locator('[data-hermes-companion-actor="true"]').boundingBox();
-    const bubbleAfterScroll = await bubble.boundingBox();
-    if (!actorAfterScroll || !bubbleAfterScroll) return Number.POSITIVE_INFINITY;
-    return Math.abs(
-      (bubbleAfterScroll.y - bubbleBeforeScroll!.y) - (actorAfterScroll.y - actorBeforeScroll!.y),
-    );
-  }).toBeLessThan(3);
+  let scrollEvidence: { before: PerformanceBubbleEvidence; after: PerformanceBubbleEvidence } | null = null;
+  for (let attempt = 0; attempt < 4 && !scrollEvidence; attempt += 1) {
+    const before = await waitForPerformanceBubbleEvidence(page, isPerformanceCompositeInsideViewport);
+    await page.evaluate(() => window.scrollBy(0, 40));
+    let after: PerformanceBubbleEvidence | null = null;
+    await expect.poll(async () => {
+      const candidate = await readPerformanceBubbleEvidence(page);
+      if (!candidate
+        || candidate.cue !== before.cue
+        || candidate.horizontal !== before.horizontal
+        || candidate.vertical !== before.vertical
+        || candidate.scrollY < before.scrollY + 30) return false;
+      after = candidate;
+      return true;
+    }, { timeout: 1_000 }).toBe(true).catch(() => undefined);
+    if (after) scrollEvidence = { after, before };
+  }
+  expect(scrollEvidence).not.toBeNull();
+  const beforeScroll = scrollEvidence!.before;
+  const afterScroll = scrollEvidence!.after;
+  expect(Math.abs(
+    ((afterScroll.bubble.y - afterScroll.bubbleTransformY) - (beforeScroll.bubble.y - beforeScroll.bubbleTransformY))
+      - (afterScroll.actor.y - beforeScroll.actor.y),
+  )).toBeLessThan(3);
 });
 
 test('Hermes renders articulated, working and approval states with one visual owner', async ({ page }) => {

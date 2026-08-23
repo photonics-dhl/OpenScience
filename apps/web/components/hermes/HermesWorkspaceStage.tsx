@@ -364,9 +364,10 @@ function HermesWorkspaceStage({ fallbackAssistantOpen, fallbackOnInvoke, guideTa
   }, [compactGuide, presentation?.anchor, workspaceId]);
 
   React.useLayoutEffect(() => {
+    const currentPathname = window.location.pathname;
     if (guideTarget && dockReady && dockKind) {
       if (!guideOriginRef.current) guideOriginRef.current = {
-        customDock, dockKind, pathname, point: { ...positionRef.current }, workspaceId,
+        customDock, dockKind, pathname: currentPathname, point: { ...positionRef.current }, workspaceId,
       };
       return;
     }
@@ -377,7 +378,7 @@ function HermesWorkspaceStage({ fallbackAssistantOpen, fallbackOnInvoke, guideTa
     if (dragging || dragRef.current?.moved) return;
     const currentKind = dockKind ?? viewportClass();
     const currentContextMatches = origin.workspaceId === workspaceId && origin.dockKind === currentKind
-      && origin.customDock === customDock && origin.pathname === pathname;
+      && origin.customDock === customDock && origin.pathname === currentPathname;
     const half = resolveHermesStageSize(false, currentKind === 'mobile') / 2;
     const preferences = loadHermesDockPreferences(window.localStorage, workspaceId, currentKind);
     const stored = hasStoredHermesDockPreferences(window.localStorage, workspaceId, currentKind);
@@ -389,13 +390,24 @@ function HermesWorkspaceStage({ fallbackAssistantOpen, fallbackOnInvoke, guideTa
       x: Math.min(window.innerWidth - half, Math.max(half, desired.x)),
       y: Math.min(window.innerHeight - half, Math.max(half, desired.y)),
     };
+    const stageBounds = stageRef.current?.getBoundingClientRect();
+    const actualCenter = stageBounds ? {
+      x: stageBounds.left + stageBounds.width / 2,
+      y: stageBounds.top + stageBounds.height / 2,
+    } : null;
+    if (actualCenter && Math.hypot(actualCenter.x - restored.x, actualCenter.y - restored.y) < .5) {
+      restoringGuideDockRef.current = null;
+      skipGuideRestorePersistenceRef.current = null;
+      setGuideRestoreActive(false);
+      return;
+    }
     const epoch = nextGuideRestoreEpochRef.current + 1;
     nextGuideRestoreEpochRef.current = epoch;
     restoringGuideDockRef.current = {
       customDock: currentContextMatches ? origin.customDock : stored,
       dockKind: currentKind,
       epoch,
-      pathname,
+      pathname: currentPathname,
       point: restored,
       workspaceId,
     };
@@ -417,14 +429,66 @@ function HermesWorkspaceStage({ fallbackAssistantOpen, fallbackOnInvoke, guideTa
       setSettledReplan({ ...pending, point: centerPoint });
     }
     const restoring = restoringGuideDockRef.current;
-    if (restoring && Math.hypot(centerPoint.x - restoring.point.x, centerPoint.y - restoring.point.y) < .5) {
+    const restoreContextMatches = restoring && restoring.epoch === skipGuideRestorePersistenceRef.current
+      && restoring.workspaceId === workspaceId && restoring.dockKind === dockKind && restoring.customDock === customDock
+      && restoring.pathname === window.location.pathname;
+    if (restoring && !restoreContextMatches) {
+      restoringGuideDockRef.current = null;
+      if (skipGuideRestorePersistenceRef.current === restoring.epoch) skipGuideRestorePersistenceRef.current = null;
+      setGuideRestoreActive(false);
+    } else if (restoring && Math.hypot(centerPoint.x - restoring.point.x, centerPoint.y - restoring.point.y) < .5) {
       restoringGuideDockRef.current = null;
       setGuideRestoreActive(false);
     }
-  }, []);
+  }, [customDock, dockKind, pathname, workspaceId]);
 
   React.useLayoutEffect(() => {
-    if (effectiveReducedMotion) consumeSettledMove();
+    const pending = pendingSettledReplanRef.current;
+    const restoring = restoringGuideDockRef.current;
+    if (!pending && !restoring) return;
+    if (effectiveReducedMotion) {
+      consumeSettledMove();
+      return;
+    }
+    const pendingSignature = pending ? { contextKey: pending.contextKey, epoch: pending.epoch } : null;
+    const restoreSignature = restoring ? {
+      customDock: restoring.customDock, dockKind: restoring.dockKind, epoch: restoring.epoch,
+      pathname: restoring.pathname, workspaceId: restoring.workspaceId,
+    } : null;
+    let frame = 0;
+    let probes = 0;
+    const signaturesMatch = () => {
+      const currentPending = pendingSettledReplanRef.current;
+      const currentRestore = restoringGuideDockRef.current;
+      const pendingMatches = !pendingSignature || (currentPending?.contextKey === pendingSignature.contextKey
+        && currentPending.epoch === pendingSignature.epoch);
+      const restoreMatches = !restoreSignature || (currentRestore?.customDock === restoreSignature.customDock
+        && currentRestore.dockKind === restoreSignature.dockKind
+        && currentRestore.epoch === restoreSignature.epoch && currentRestore.pathname === restoreSignature.pathname
+        && currentRestore.workspaceId === restoreSignature.workspaceId);
+      return pendingMatches && restoreMatches;
+    };
+    const probe = () => {
+      if (!signaturesMatch()) return;
+      probes += 1;
+      const stage = stageRef.current;
+      if (stage) {
+        const transition = window.getComputedStyle(stage);
+        const properties = transition.transitionProperty.split(',').map((value) => value.trim());
+        const durations = transition.transitionDuration.split(',').map((value) => value.trim());
+        const delays = transition.transitionDelay.split(',').map((value) => value.trim());
+        const milliseconds = (value: string) => Number.parseFloat(value) * (value.endsWith('ms') ? 1 : 1000);
+        const hasStageTransition = properties.some((property, index) => (
+          ['all', 'left', 'top'].includes(property)
+          && milliseconds(durations[index % durations.length] ?? '0s') + milliseconds(delays[index % delays.length] ?? '0s') > 0
+        ));
+        if (hasStageTransition) return;
+      }
+      consumeSettledMove();
+      if (probes < 2 && signaturesMatch()) frame = window.requestAnimationFrame(probe);
+    };
+    frame = window.requestAnimationFrame(probe);
+    return () => window.cancelAnimationFrame(frame);
   }, [consumeSettledMove, effectiveReducedMotion, position]);
 
   useEffect(() => setTravelRequested(false), [guideTarget]);
@@ -477,7 +541,9 @@ function HermesWorkspaceStage({ fallbackAssistantOpen, fallbackOnInvoke, guideTa
     const geometryObserver = new ResizeObserver(refresh);
     refresh();
     const observer = new MutationObserver(refresh);
-    observer.observe(document.body, { attributeFilter: ['class', 'hidden', 'style'], attributes: true, childList: true, subtree: true });
+    observer.observe(document.body, {
+      attributeFilter: ['class', 'data-hermes-protected', 'hidden', 'style'], attributes: true, childList: true, subtree: true,
+    });
     window.addEventListener('resize', refresh);
     window.addEventListener('scroll', refresh, true);
     return () => {
