@@ -2,13 +2,11 @@
 
 ## Current truth
 
-- **2026-08-23 最新状态覆盖下方历史阻塞叙述**：用户确认形象设计完成。唯一母版 `wanko_genie_v09.cmo3` SHA-256 `BA111D4E...1121ADD` 保持未改；非覆盖 `wanko_genie_v09_exportprep.cmo3` 只承担旧 atlas 兼容与 runtime 导出。
-- SDK 4.0 bundle 已输出到外部 `runtime-v09-export-20260823/` 并进入仓库 `apps/web/public/hermes/live2d/wanko/`；model3 的 moc/physics/display-info/两张 RGBA texture 与 12 个 motion 引用闭合。两张 texture 均已把 `alpha=0` 的 RGB 确定性归零，逐像素门禁和 bundle verifier GREEN。
-- 用户已明确授权永久删除；C 盘同目录 42 个旧顶层迭代已逐项删除并复核 `Remaining 0`，不可恢复。最终 v09 母版/exportprep/runtime/motions、v09 hat/smoke、批准灯源与最终证据仍保留。
-- 仓库 v09 浏览器集成已删除造成蓝金碎片的旧 Pixi procedural navigator，stage 只保留单一 Cubism model/canvas；同时修复 Core error→retry、系统 reduced-motion、首屏双初始化、主动 context release 误报与产品 E2E 漂移。fresh 真实截图、26 动作、性能和 aggregate release gate GREEN。生产仍是 `06072c1`，下一硬门是排除未跟踪 historical carrier、完成 release review/commit 与 operator 按 ADR-010 明确记录适用许可；确认前禁止公网写。
-- 用户最新要求烟雾像参考图一样以高密度实体托起 Wanko，而非透明薄雾：隐藏原碗像素但保留 `B_BOWL_01`/`PARAM_BOWL_SWING` 为不可见共享根；最小结构仍为 6 个 smoke ArtMesh + 4 个 Warp Deformer，固定 rear/core → body → front veil/rim → paws。前层目标改为包覆下腹约 `28–35%`、内部近实色且仅边缘羽化，canonical Wanko 不得变成烟尾。
-- Task 17.1 已 GREEN：只读 browser runtime isolation 证明 `D_BODY_01/02` 为独立 native paw meshes（orders `25/26`），位于 `D_BOWL_01`（order `24`）之上；v05 既有证据保留 bowl root/`PARAM_BOWL_SWING` 共享运动关系。当前 v09 未保存 Add-PSD 状态未被触碰。
-- v07 真 RGBA 母版及完整合成已获用户通过。Task17.3 v01 因模糊 U 形气囊/right-extrema 遮脸失败；v02 保留纹理但有水平腹部切线；限定 mask-only v03 已消除硬切，六层共享坐标/alpha/coverage/24 格接触表与独立 Sol High 均通过，材料性问题 0。便捷副本已放到 `wanko_genie_v09.cmo3` 同级的 `wanko_genie_v09_smoke_v03*`，哈希与审计原件一致。当前唯一动作仍是用户签核接触表；尚无用户批准的六层 checkpoint、v10、参数或 runtime，签核前不得 Cubism。
+- **2026-08-23 最新状态覆盖下方历史阻塞叙述**：唯一 v09 母版 `wanko_genie_v09.cmo3`（SHA-256 `BA111D4E...1121ADD`）未改；SDK 4.0 bundle、两张 zero-alpha RGB-clean texture 与 12 motions 已在 ECS development release `c97926a` 运行，rollback `06072c1`。
+- 本地 Phase 1 候选把语义动作扩为 32，新增正帽、竖耳、听灯、开心晃、思考停顿；仅组合既有 motion/parameter，不修改 Cubism、美术轮廓、帽子、流苏、烟雾或神灯。
+- Workspace 舞台为桌面 `336px` / 紧凑引导 `176px`，整体角色保持单命中区。自主语言与动作共用 performance beat，`25–45s` cadence、`3–5s` 可见，并在 writing/approval/dialog/assistant/reduced/hidden 状态静默。
+- 气泡采用纸白批注笺、深靛墨色、朱红 citation-thread 尾线、4px radius；mobile 右对齐。fresh Web `360/360`、typecheck、18 页 production build、31-action browser gate GREEN，左右边界不裁切。
+- 当前本地候选 `codex/hermes-wanko-live2d@0929174`（docs commit 位于其后）尚未部署；ignored 预览为 `apps/web/test/visual/out/hermes-live2d/bubble-{cap-check-desktop,happy-wiggle-mobile}.png`。下一步只做用户视觉判断，不自动进入 Phase 2 Cubism motion。
 
 - 用户已确认停止修改当前丑陋茶壶，先由 Codex 独立重画 lamp-only Photoshop vector/shape 源美术。新硬门：低矮横向阿拉丁神灯、深靛蓝釉面/克制金边、细长上扬嘴、开放 S/C 把手；壶身 `0.82–0.92x` Wanko、总跨距 `<=1.20x`、总高 `28–32%`。先交付 light/dark × `512/288/160` 灯体单独预览；不许用 Wanko/烟/辉光/品牌掩盖轮廓，用户未通过前不得导入 Cubism。
 - 用户已通过 lamp-only 候选 `C:/Users/Mac/.codex/generated_images/01a01f25-fdbf-7f20-a4d4-5a3523c32909/exec-24f1bfe9-14e1-4a70-86e2-66bf6dcadcad.png` 及唯一品牌候选 `brand-study-v03/sdf-brand-reference-topology-v03.svg`：较粗壶嘴输入流→竖向深色开放中心→三条不回汇扇形路线→每支两个蓝白圆点→仅中支连接单一橙色结果。机械合同、主线程 light/dark `512/288/160` 实图与 Sol High 对照参考图复审均 GREEN/APPROVE；签核不等于 PSD/Cubism/生产验收。
@@ -42,8 +40,8 @@
 
 ## Version tuple
 
-- Branch / technical release candidate: `codex/hermes-wanko-live2d` / `f327136befbc6c12109afe10672a3a5f2ad7bc36`（本次 docs release record commit 位于其后）
-- Remote candidate: `origin/codex/readable-hermes-guidance`（release record commit 在其后）
+- Branch / technical release candidate: `codex/hermes-wanko-live2d` / `0929174b69fc2c519ce9bdc8de7f40b765f30235`（本次 docs sync commit 位于其后）
+- Remote candidate: `origin/codex/readable-hermes-guidance@c88c78003957204e6218b8bd2c9c3842a6fbb315`（未包含本次候选）
 - Local main: `c60ffdd16b85ea8f0d8b047493fa03a4c0230c05`
 - ECS release / rollback: `c97926ab4188d5d5fc7a6e58e0333d20a600c692` / `06072c1fd3eb30148daec8d4c4a8572fa3bdacc8`
 - Current branch PR: none
@@ -57,8 +55,8 @@
 
 ## Next action
 
-1. 42 个已授权的 C 盘旧顶层迭代已永久删除并复核 `Remaining 0`；v09 keep list 与仓库候选均保留，勿再次清理。
-2. 用户已接受许可条款、批准清理旧仓库资产，并明确把当前服务器使用归为开发阶段、指示不等待 publication-plan 分类；ADR-010 已记录 development exception，不得把它改写成正式 publication licence 已验证。
-3. ECS deployment/acceptance 已完成；后续只需用户在真实登录工作区做最终视觉确认。当前 release `c97926a`，rollback `06072c1`。
+1. 让用户检查本地 `336px` 桌面与 `176px` mobile 气泡截图；不要部署或修改 v09 美术。
+2. 若 Phase 1 视觉通过，再单独决定是否需要 Phase 2 原生 Cubism motion；不得把“动作更多”自动解释为重开模型美术。
+3. ECS 保持 `c97926a` / rollback `06072c1`，本地预览结果不能冒充生产验收。
 
 Read first：`AGENTS.md` → 本 handoff → 2026-08-19 Wanko CURRENT design/plan → `docs/progress.md`；`project_index.md` 只用 `rg` 定向查 CURRENT 行。

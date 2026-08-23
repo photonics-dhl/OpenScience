@@ -2075,14 +2075,14 @@ global token CSS and Pixi Live2D runtime.
   `happy-wiggle` and `thinking-pause`; every new action resolves to one existing
   v09 motion or a bounded parameter-only pose.
 
-- [ ] **Step 1: RED — write performance policy tests.**
+- [x] **Step 1: RED — write performance policy tests.**
 
   Add literal expectations proving the lively intervals, a fifteen-action
   seeded ambient cycle without immediate repeats, `25–45s` speech scheduling,
   `3–5s` visibility, phrase non-repeat and hard suppression. Assert a mismatched
   action cannot retain an old cue beat ID.
 
-- [ ] **Step 2: Run RED.**
+- [x] **Step 2: Run RED.**
 
   Run:
   `npx pnpm@9.15.0 --filter @openscience/web exec vitest run test/hermes-performance-beat.test.ts test/hermes-behavior-director.test.ts test/hermes-wanko-action-director.test.ts`
@@ -2090,13 +2090,13 @@ global token CSS and Pixi Live2D runtime.
   Expected: fail because the performance module and five actions do not exist
   and balanced cadence still starts at `2.4–4.2s / 14–22s`.
 
-- [ ] **Step 3: GREEN — implement the pure policy and five profiles.**
+- [x] **Step 3: GREEN — implement the pure policy and five profiles.**
 
   Use seeded integer hashing already established in `behavior-director.ts`.
   Store translation keys, never localized strings, in speech cues. Preserve
   priority ordering and do not make approval/failure interruptible.
 
-- [ ] **Step 4: Run focused GREEN.**
+- [x] **Step 4: Run focused GREEN.**
 
   Re-run the Step 2 command and require zero failures.
 
@@ -2123,20 +2123,20 @@ global token CSS and Pixi Live2D runtime.
 - `HermesWorkspaceStage` computes speech guards from real writing, approval,
   assistant/modal and document visibility state before advancing the policy.
 
-- [ ] **Step 1: RED — write sizing and real component tests.**
+- [x] **Step 1: RED — write sizing and real component tests.**
 
   Assert desktop/mobile sizing, semantic `aside`/polite live region, dismiss
   button, beat/cue identity and hidden tab order. Render the real component with
   only next-intl translation lookup replaced; do not assert against a mock UI.
 
-- [ ] **Step 2: Run RED.**
+- [x] **Step 2: Run RED.**
 
   Run:
   `npx pnpm@9.15.0 --filter @openscience/web exec vitest run test/hermes-stage-sizing.test.ts test/hermes-performance-bubble.test.tsx`
 
   Expected: fail because both modules are absent.
 
-- [ ] **Step 3: GREEN — implement the stage and bubble.**
+- [x] **Step 3: GREEN — implement the stage and bubble.**
 
   Use the existing global CSS strategy. Style a warm-paper annotation slip with
   dark-indigo type, `4px` radius, layered shadow and one vermilion
@@ -2144,7 +2144,7 @@ global token CSS and Pixi Live2D runtime.
   `40px` target, visible focus and `scale(.95)` active state. Reuse the same
   surface language for functional guide bubbles without changing their actions.
 
-- [ ] **Step 4: Add bilingual cue keys and run focused GREEN.**
+- [x] **Step 4: Add bilingual cue keys and run focused GREEN.**
 
   Add short matched `zh/en` strings under `hermesCompanion.performance` and
   re-run Step 2 plus `npx pnpm@9.15.0 --filter @openscience/web typecheck`.
@@ -2165,25 +2165,25 @@ global token CSS and Pixi Live2D runtime.
   `apps/web/test/visual/out/hermes-live2d/`; it does not produce deployable
   source art or a server release.
 
-- [ ] **Step 1: RED — extend the browser gate.**
+- [x] **Step 1: RED — extend the browser gate.**
 
   Require actual `336/176` stage bounds, at least twelve idle actions in a
   90-second deterministic sample, matching action/beat/cue diagnostics, paper
   bubble visibility, safe mobile placement and exact approval/reduced frames.
 
-- [ ] **Step 2: Run the focused production browser gate.**
+- [x] **Step 2: Run the focused production browser gate.**
 
   Build and serve the web app, then run
   `npx pnpm@9.15.0 --filter @openscience/web test:hermes-live2d` and require RED
   on the old fixture/sizing before adapting the visual harness.
 
-- [ ] **Step 3: Implement the minimum harness support and run GREEN.**
+- [x] **Step 3: Implement the minimum harness support and run GREEN.**
 
   Add explicit deterministic controls only to the ignored visual route. Do not
   put test-only mutation methods in production classes. Capture desktop idle,
   interaction, guide, task, approval and `390×844` mobile frames.
 
-- [ ] **Step 4: Run the local quality gate and sync truth.**
+- [x] **Step 4: Run the local quality gate and sync truth.**
 
   Run focused Vitest, full Web tests, Web typecheck, production build, Live2D
   gate, `audit:docs-sync`, `docs:lint` and `git diff --check`. Record candidate

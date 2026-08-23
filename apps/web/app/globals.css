@@ -2027,7 +2027,7 @@ body {
   border: 1px solid rgb(21 37 54 / .16);
   border-radius: 4px;
   padding: .5rem .75rem;
-  background: #e4ded2;
+  background: rgb(228 222 210);
   color: #152536;
   font-size: var(--text-control);
   font-weight: 600;

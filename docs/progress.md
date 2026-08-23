@@ -2,11 +2,11 @@
 
 > 本文件只保留 CURRENT window；完整历史由 Git history 保存，不作为新 session 默认输入。
 
-## 2026-08-23 — Wanko lively performance preview approved for implementation
+## 2026-08-23 — Wanko lively performance preview ready for visual review
 
-- 用户选择桌面常态 `336px`、活泼 cadence、整体角色单一命中区，以及 `60%` 可爱精灵 / `40%` 学者助手的混合气质；采用两阶段 C，但先只以现有 v09 的 12 段 motion 做本地 Phase 1 预览，不改模型美术、不进 Cubism、不部署。
-- 动作与语言统一为一个 semantic performance beat；四组覆盖待机、直接交互、字段引导、任务反馈。自主气泡为 `25–45s` 偶尔出现、`3–5s` 收起，并在输入/审批/弹窗/reduced-motion 下静默；功能引导气泡继续可用。
-- 气泡方向是纸白学术批注笺、深靛蓝墨色、单根朱红 citation-thread 尾线、4px radius、无玻璃/渐变/弹跳。用户明确要求无需继续逐项询问，先完成真实本地页面与截图供视觉判断。
+- 本地 Phase 1 候选已把动作目录从 27 扩为 32：新增正帽、竖耳、听灯、开心晃与思考停顿；复用 v09 的 12 段 motion，不改模型美术、不进 Cubism。桌面常态 `336px`，紧凑引导态真实 `176px`，整体角色仍是单一命中区。
+- 动作与语言共用 semantic performance beat；自主气泡 `25–45s` 偶尔出现、`3–5s` 收起，并在输入、审批、弹窗、助手打开、页面隐藏或 reduced-motion 下静默。纸白批注笺、深靛墨色、朱红 citation-thread 尾线、4px radius；移动端右对齐且浏览器门禁证明不裁切。
+- fresh Web `360/360`（355 Vitest + 5 Node）、typecheck、18 页 production build、31-action Live2D motion/browser gate GREEN；截图为 ignored `apps/web/test/visual/out/hermes-live2d/bubble-{cap-check-desktop,happy-wiggle-mobile}.png`。候选 `0929174` 尚未部署，ECS 仍为 `c97926a`，下一步只需用户视觉判断。
 
 ## 2026-08-23 — Wanko v09 Cubism runtime export
 
@@ -63,8 +63,8 @@
 
 ## Version tuple
 
-- Branch / technical release candidate: `codex/hermes-wanko-live2d` / `f327136befbc6c12109afe10672a3a5f2ad7bc36`（本次 docs release record commit 位于其后）
-- Remote candidate: `origin/codex/readable-hermes-guidance`（release record commit 位于该 implementation 之后）
+- Branch / technical release candidate: `codex/hermes-wanko-live2d` / `0929174b69fc2c519ce9bdc8de7f40b765f30235`（本次 docs sync commit 位于其后）
+- Remote candidate: `origin/codex/readable-hermes-guidance@c88c78003957204e6218b8bd2c9c3842a6fbb315`（未包含本次本地候选）
 - Local main: `c60ffdd16b85ea8f0d8b047493fa03a4c0230c05`
 - ECS release / rollback: `c97926ab4188d5d5fc7a6e58e0333d20a600c692` / `06072c1fd3eb30148daec8d4c4a8572fa3bdacc8`
 - Current branch PR: none
@@ -74,7 +74,7 @@
 1. `AGENTS.md`
 2. `docs/handoff/2026-08-16-hermes-2d-pet-handoff.md`
 3. `docs/specs/2026-08-19-hermes-wanko-live2d-design.md`（approved CURRENT design）
-4. `docs/plans/2026-08-19-hermes-wanko-live2d-plan.md`（Tasks 8–13 CURRENT execution）
+4. `docs/plans/2026-08-19-hermes-wanko-live2d-plan.md`（Task 19 Phase 1 CURRENT execution）
 5. `docs/specs/2026-08-18-readable-workspace-hermes-guidance-design.md`（已实施功能 foundation）
 6. `docs/OpenScience_Kimi_Development_Spec.md`（只读 UI / Hermes / 权限相关段落）
 7. 本文件
