@@ -107,7 +107,7 @@ This round is limited to guide-target pointer geometry, its browser contract, an
 ### RED to GREEN evidence
 
 1. Guide perimeter: the prior test measured the travel hull and bubble in separate asynchronous browser calls, then classified perimeter points after the active `guide-travel` animation had moved the stage. It reproduced six apparent Hermes-owned exterior samples, including approximately `(325.5, 388.8)`, `(325.5, 432.8)`, `(325.5, 476.8)`, `(237.5, 388.8)` and `(281.5, 388.8)`. Diagnostic frames showed the measured travel rect had moved from about `(1.23, 418.61)..(290.28, 700.90)` to `(141.36, 272.93)..(428.00, 552.74)` before hit-testing. The contract now measures the stage, visible travel hull, visible bubble, perimeter points and `elementFromPoint` ownership synchronously in one browser frame. The guide-only core was conservatively reduced from `inset: 30% 30% 22%` to `32% 32% 24%`. GREEN: every exterior sample is page-owned.
-2. Visible guide entry: the same atomic audit reads the actual pseudo-element target size. It measured approximately `129.6 x 158.4` on desktop and `72 x 88` at the mobile stage size, both above 44x44. A real center click opens the Hermes drawer and increments the invocation count exactly once. The title, select, files, Create action and other page-owned controls remain directly clickable; no force click or broad transparent hit surface is used.
+2. Visible guide entry: the desktop atomic audit reads the actual pseudo-element target size and measured approximately `129.6 x 158.4`, above 44x44. A real center click opens the Hermes drawer and increments the invocation count exactly once. The title, select, files, Create action and other page-owned controls remain directly clickable; no force click or broad transparent hit surface is used.
 3. Rendered contrast: the mobile browser contract now composites the computed `rgba(12, 15, 14, .97)` bubble background over the first non-transparent page background before calculating WCAG contrast. This corrects the Fix Round 2 wording: the resolved existing token is `#9b9d98`, not the documented fallback `#b6bcb6`, and the measured rendered contrast is about `7.03:1`, not `9.96:1`. It remains above the required 4.5:1.
 4. Cross-worker RED verification: on a fresh production build/server, `test:hermes-work-assistant` passed, so the reported missing zh `editor.common.cancel` key did not reproduce. `test:hermes-live2d` also passed, so the reported RO-create motion surface count of zero did not reproduce. Neither area was changed in this scoped round.
 
@@ -131,3 +131,14 @@ No screenshot was regenerated because the only CSS change affects an invisible g
 - The browser gate now judges geometry and ownership from one atomic rendering frame, so moving guide art cannot produce stale-coordinate false positives.
 - The guide core stays visibly aligned and accessible while transparent exterior points remain page-owned. Ordinary autonomous alpha coverage is unchanged and independently green in the motion gate.
 - The two separate architecture-review findings concerning transition-end replanning and temporary visual-viewport recovery remain with the planner/Stage owner and were intentionally not touched.
+
+## Fix Round 4 — mobile pointer evidence clarification
+
+Date: 2026-08-24
+
+Base: `2304305 fix(web): make Hermes guidance lifecycle deterministic`
+
+- The real 390x844 editor-guide scenario now reads the guide interaction `::after` computed inset and pseudo-element dimensions. It asserts the mobile target is at least 44x44 and that `elementFromPoint` at its derived center is owned by the interaction hull. This is the separate mobile evidence for the approximately `72 x 88` target; the desktop perimeter audit did not measure it.
+- The atomic perimeter test classifies visible art using the travel hull's bounding rectangle plus the visible guide-bubble rectangle. It is an ownership/perimeter contract, not an invented native-alpha mask. Native-alpha envelope coverage remains separately enforced by the Live2D artifact/motion gate.
+- No production CSS or visible layout changed in this round, so no screenshot was regenerated. The existing original-resolution 390x844 inspection remains applicable.
+- Static validation passed: Playwright discovered the focused 390x844 test, owned ESLint passed, and `git diff --check` passed. The focused browser attempt did not reach the new assertion because the local Next dev server spent the full 60-second Playwright startup window compiling the editor route; the subsequent direct route probe also timed out before returning HTTP. This is recorded as an environment/startup limitation, not claimed as a browser GREEN run.

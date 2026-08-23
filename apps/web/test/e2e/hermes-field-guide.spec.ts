@@ -752,6 +752,28 @@ test('mobile editing guidance keeps three accessible actions and explanation ins
     JSON.stringify({ actions: '3', phase: 'route', ready: 'true', suppressed: 'false' }),
   ]));
 
+  const mobilePointer = await stage.evaluate((stageNode) => {
+    const interaction = stageNode.querySelector<HTMLElement>('[data-hermes-carrier-interaction-hull="true"]')!;
+    const bounds = interaction.getBoundingClientRect();
+    const pseudo = getComputedStyle(interaction, '::after');
+    const height = Number.parseFloat(pseudo.height);
+    const left = Number.parseFloat(pseudo.left);
+    const top = Number.parseFloat(pseudo.top);
+    const width = Number.parseFloat(pseudo.width);
+    const center = { x: bounds.left + left + width / 2, y: bounds.top + top + height / 2 };
+    const hit = document.elementFromPoint(center.x, center.y);
+    return {
+      center,
+      centerOwned: hit?.closest('[data-hermes-carrier-interaction-hull="true"]') === interaction,
+      height,
+      inset: { bottom: pseudo.bottom, left: pseudo.left, right: pseudo.right, top: pseudo.top },
+      width,
+    };
+  });
+  expect(mobilePointer.width, `mobile guide pointer width: ${JSON.stringify(mobilePointer)}`).toBeGreaterThanOrEqual(44);
+  expect(mobilePointer.height, `mobile guide pointer height: ${JSON.stringify(mobilePointer)}`).toBeGreaterThanOrEqual(44);
+  expect(mobilePointer.centerOwned, `mobile guide pointer center ownership: ${JSON.stringify(mobilePointer)}`).toBe(true);
+
   const insight = page.getByRole('textbox', { name: /Insight|洞见/i });
   await expectGuideClearOf(page, insight);
   await insight.click();
