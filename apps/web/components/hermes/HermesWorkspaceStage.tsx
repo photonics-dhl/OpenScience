@@ -451,6 +451,10 @@ function HermesWorkspaceStage({ fallbackAssistantOpen, fallbackOnInvoke, guideTa
     const stage = stageRef.current;
     if (!stage) return;
     const stageBounds = stage.getBoundingClientRect();
+    const settledStageSize = resolveHermesStageSize(false, dockKind === 'mobile');
+    if (Math.abs(stageBounds.width - settledStageSize) >= 1 || Math.abs(stageBounds.height - settledStageSize) >= 1) return;
+    if (Math.abs(stageBounds.left - (position.x - settledStageSize / 2)) >= 1
+      || Math.abs(stageBounds.top - (position.y - settledStageSize / 2)) >= 1) return;
     const actorBounds = stage.querySelector<HTMLElement>('[data-hermes-companion-actor="true"]')?.getBoundingClientRect() ?? stageBounds;
     const center = { x: stageBounds.left + stageBounds.width / 2, y: stageBounds.top + stageBounds.height / 2 };
     const settled = resolveHermesSettledDock({
@@ -468,6 +472,7 @@ function HermesWorkspaceStage({ fallbackAssistantOpen, fallbackOnInvoke, guideTa
       viewport: { bottom: window.innerHeight, left: 0, right: window.innerWidth, top: 0 },
     });
     if (!settled.safe) return;
+    if (Math.hypot(settled.point.x - position.x, settled.point.y - position.y) < .5) return;
     setPosition(settled.point);
     const kind = viewportClass();
     const preferences = loadHermesDockPreferences(window.localStorage, workspaceId, kind);
@@ -476,7 +481,7 @@ function HermesWorkspaceStage({ fallbackAssistantOpen, fallbackOnInvoke, guideTa
       xRatio: settled.point.x / window.innerWidth,
       yRatio: settled.point.y / window.innerHeight,
     });
-  }, [customDock, dockKind, dockReady, dragging, guideTarget, protectedGeometryVersion, viewportSize, workspaceId]);
+  }, [customDock, dockKind, dockReady, dragging, guideTarget, position, protectedGeometryVersion, stageMotionVersion, viewportSize, workspaceId]);
 
   useEffect(() => {
     if (!guideTarget) return;
@@ -602,7 +607,7 @@ function HermesWorkspaceStage({ fallbackAssistantOpen, fallbackOnInvoke, guideTa
   };
 
   const onStageTransitionEnd = (event: React.TransitionEvent<HTMLDivElement>) => {
-    if (event.currentTarget !== event.target || (event.propertyName !== 'left' && event.propertyName !== 'top')) return;
+    if (event.currentTarget !== event.target || !['height', 'left', 'top', 'width'].includes(event.propertyName)) return;
     setStageMotionVersion((version) => version + 1);
   };
 

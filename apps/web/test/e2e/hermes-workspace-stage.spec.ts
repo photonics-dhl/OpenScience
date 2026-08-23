@@ -171,8 +171,53 @@ test('anchored Hermes detaches only after drag intent and settles away from prot
   await page.mouse.down();
   await page.mouse.move(90, 120, { steps: 8 });
   await page.mouse.up();
-  expect(await page.evaluate((key) => localStorage.getItem(key), mobileKey)).not.toBeNull();
+  const mobilePreferenceAfterRelease = await page.evaluate((key) => localStorage.getItem(key), mobileKey);
+  expect(mobilePreferenceAfterRelease).not.toBeNull();
   expect(await page.evaluate(([desktop, mobile]) => localStorage.getItem(desktop) !== localStorage.getItem(mobile), [desktopKey, mobileKey])).toBe(true);
+  const mobileStageAfterRelease = await stage.boundingBox();
+  const mobileHullAfterRelease = await stage.locator('[data-hermes-carrier-travel-hull="true"]').boundingBox();
+  expect(mobileStageAfterRelease).not.toBeNull();
+  expect(mobileHullAfterRelease).not.toBeNull();
+  expect(mobileHullAfterRelease!.x).toBeGreaterThanOrEqual(0);
+  expect(mobileHullAfterRelease!.y).toBeGreaterThanOrEqual(0);
+  expect(mobileHullAfterRelease!.x + mobileHullAfterRelease!.width).toBeLessThanOrEqual(390);
+  expect(mobileHullAfterRelease!.y + mobileHullAfterRelease!.height).toBeLessThanOrEqual(844);
+
+  const persistedSafeMobilePreference = await page.evaluate(({ key, value }) => {
+    const preference = JSON.parse(value) as Record<string, unknown>;
+    preference.xRatio = .500801;
+    preference.yRatio = .118483;
+    const serialized = JSON.stringify(preference);
+    localStorage.setItem(key, serialized);
+    return serialized;
+  }, { key: mobileKey, value: mobilePreferenceAfterRelease! });
+  await page.evaluate(() => window.history.replaceState(null, '', '/dashboard?hermes-motion=full'));
+  await page.reload({ waitUntil: 'networkidle' });
+  await expect(stage).toHaveAttribute('data-hermes-anchored', 'false');
+  await page.waitForTimeout(1_200);
+  const [mobileStageAfterReload, mobileHullAfterReload] = await Promise.all([
+    stage.boundingBox(),
+    stage.locator('[data-hermes-carrier-travel-hull="true"]').boundingBox(),
+  ]);
+  expect(mobileStageAfterReload).not.toBeNull();
+  expect(mobileHullAfterReload).not.toBeNull();
+  expect(await page.evaluate((key) => localStorage.getItem(key), mobileKey)).toBe(persistedSafeMobilePreference);
+  const mobileLayoutViewport = await page.evaluate(() => ({ height: window.innerHeight, width: window.innerWidth }));
+  expect(Math.abs(
+    mobileStageAfterReload!.x + mobileStageAfterReload!.width / 2 - .500801 * mobileLayoutViewport.width,
+  )).toBeLessThan(1);
+  expect(Math.abs(
+    mobileStageAfterReload!.y + mobileStageAfterReload!.height / 2 - .118483 * mobileLayoutViewport.height,
+  )).toBeLessThan(1);
+  const protectedAfterMobileReload = await protectedRegions.evaluateAll((elements) => elements.map((element) => {
+    const bounds = element.getBoundingClientRect();
+    return { x: bounds.x, y: bounds.y, width: bounds.width, height: bounds.height };
+  }).filter((bounds) => bounds.width > 0 && bounds.height > 0));
+  expect(protectedAfterMobileReload.some((region) => overlaps(mobileHullAfterReload!, region))).toBe(false);
+  expect(mobileHullAfterReload!.x).toBeGreaterThanOrEqual(0);
+  expect(mobileHullAfterReload!.y).toBeGreaterThanOrEqual(0);
+  expect(mobileHullAfterReload!.x + mobileHullAfterReload!.width).toBeLessThanOrEqual(390);
+  expect(mobileHullAfterReload!.y + mobileHullAfterReload!.height).toBeLessThanOrEqual(844);
 });
 
 test('Hermes mounts the real Wanko Live2D portrait inside the persistent stage', async ({ page }) => {
