@@ -55,6 +55,8 @@ describe('Hermes performance bubble', () => {
     const dismiss = cssRule('.hermes-companion-dismiss');
     const tail = cssRule('.hermes-companion-bubble::after');
     const leftTail = cssRule(".hermes-workspace-stage[data-hermes-bubble-horizontal='left'] .hermes-companion-bubble::after");
+    const speakingFooter = cssRule(".hermes-workspace-stage[data-hermes-bubble-safe='true'][data-hermes-speech-visible='true'] .hermes-visual-invoke-label");
+    const visibleCta = cssRule(".hermes-workspace-stage[data-hermes-anchored='true'][data-hermes-speech-visible='false'] .hermes-visible-invoke-cta");
 
     expect(bubble).toContain('max-width: 15.5rem;');
     expect(bubble).toContain('border: 1px solid rgb(241 238 231 / .14);');
@@ -66,6 +68,8 @@ describe('Hermes performance bubble', () => {
     expect(dismiss).toContain('height: 40px;');
     expect(tail).toContain('left: 1.25rem;');
     expect(leftTail).toContain('right: 1.25rem;');
+    expect(speakingFooter).toContain('display: none;');
+    expect(visibleCta).toContain('pointer-events: auto;');
     expect(globals).toContain("[data-hermes-stage-size='200'] .hermes-companion-bubble");
     expect(globals).not.toContain("[data-hermes-stage-size='176']");
   });

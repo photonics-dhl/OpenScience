@@ -46,7 +46,9 @@ function ShellHeader({ actions, actionsKind = 'navigation', compactBrandOnMobile
       ) : <OpenScienceWordmark tone={tone} />}
       {actions ? actionsKind === 'navigation' ? (
         <nav aria-label={navigationLabel}
-          className="min-w-0 flex-1 [&_a]:rounded-panel [&_button]:rounded-panel [&_a]:active:translate-y-px [&_button]:active:translate-y-px motion-reduce:[&_a]:transform-none motion-reduce:[&_button]:transform-none"
+          className="ml-auto min-w-0 [&_a]:rounded-panel [&_button]:rounded-panel [&_a]:active:translate-y-px [&_button]:active:translate-y-px motion-reduce:[&_a]:transform-none motion-reduce:[&_button]:transform-none"
+          data-hermes-primary-navigation="true"
+          data-hermes-protected="true"
         >
           {actions}
         </nav>

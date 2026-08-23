@@ -127,11 +127,13 @@ async function assertBubblePointerFacesActor(page, actor, bubbleBox, label) {
       };
     };
     return {
+      bottomPoint: endpoint(width / 2, height),
       bottom: style.bottom,
       end: endpoint(width, height / 2),
       left: style.left,
       right: style.right,
       start: endpoint(0, height / 2),
+      topPoint: endpoint(width / 2, 0),
       top: style.top,
       transform: style.transform,
       transformOrigin: style.transformOrigin,
@@ -143,6 +145,8 @@ async function assertBubblePointerFacesActor(page, actor, bubbleBox, label) {
   );
   const startDistance = distanceToActor(tail.start);
   const endDistance = distanceToActor(tail.end);
+  const topDistance = distanceToActor(tail.topPoint);
+  const bottomDistance = distanceToActor(tail.bottomPoint);
   const actorCenterX = actor.x + actor.width / 2;
   const bubbleCenterX = bubbleBox.x + bubbleBox.width / 2;
   if (placement.horizontal === 'left') {
@@ -152,10 +156,17 @@ async function assertBubblePointerFacesActor(page, actor, bubbleBox, label) {
     assert.ok(bubbleCenterX > actorCenterX && tail.start.x < tail.end.x && startDistance < endDistance,
       `${label} right bubble pointer must run toward the actor on its left: ${JSON.stringify({ endDistance, placement, startDistance, tail })}`);
   } else {
-    assert.ok(Math.abs(bubbleCenterX - actorCenterX) <= 2 && Math.abs(tail.start.x - actorCenterX) <= 2,
+    assert.ok(Math.abs(bubbleCenterX - actorCenterX) <= 2
+      && Math.abs((tail.topPoint.x + tail.bottomPoint.x) / 2 - actorCenterX) <= 2,
       `${label} centered bubble tail must align with the actor center: ${JSON.stringify({ actor, bubbleBox, placement, tail })}`);
   }
-  if (placement.vertical === 'below') {
+  if (placement.horizontal === 'center' && placement.vertical === 'below') {
+    assert.ok(bubbleBox.y >= actor.y + actor.height && tail.topPoint.y < tail.bottomPoint.y && topDistance < bottomDistance,
+      `${label} centered-below pointer must run from its top toward the actor: ${JSON.stringify({ bottomDistance, placement, tail, topDistance })}`);
+  } else if (placement.horizontal === 'center') {
+    assert.ok(bubbleBox.y + bubbleBox.height <= actor.y && tail.bottomPoint.y > tail.topPoint.y && bottomDistance < topDistance,
+      `${label} centered-above pointer must run from its bottom toward the actor: ${JSON.stringify({ bottomDistance, placement, tail, topDistance })}`);
+  } else if (placement.vertical === 'below') {
     assert.ok(bubbleBox.y >= actor.y + actor.height && Math.min(tail.start.y, tail.end.y) < bubbleBox.y,
       `${label} below bubble pointer must leave its top edge toward the actor`);
   } else {
@@ -163,6 +174,25 @@ async function assertBubblePointerFacesActor(page, actor, bubbleBox, label) {
       `${label} above bubble pointer must leave its bottom edge toward the actor`);
   }
   return { placement, tail };
+}
+
+async function clickVisibleHermesCta(page, stage, label) {
+  const cta = page.locator('[data-hermes-visible-invoke-cta="true"]');
+  const ctaBox = await cta.boundingBox();
+  assert.ok(ctaBox, `${label} visible Hermes CTA must have geometry`);
+  const ctaHit = await page.evaluate(({ x, y }) => document.elementFromPoint(x, y)
+    ?.closest('[data-hermes-visible-invoke-cta="true"]') !== null, {
+    x: ctaBox.x + ctaBox.width / 2,
+    y: ctaBox.y + ctaBox.height / 2,
+  });
+  assert.equal(ctaHit, true, `${label} visible Hermes CTA must own its exact painted coordinates`);
+  const before = Number(await stage.getAttribute('data-hermes-invoke-count'));
+  await page.mouse.click(ctaBox.x + ctaBox.width / 2, ctaBox.y + ctaBox.height / 2);
+  const dialog = page.locator('[role="dialog"][aria-modal="true"]');
+  await dialog.waitFor({ state: 'visible' });
+  assert.equal(Number(await stage.getAttribute('data-hermes-invoke-count')), before + 1,
+    `${label} visible Hermes CTA must invoke the drawer exactly once`);
+  return dialog;
 }
 
 async function waitForSpeech(page) {
@@ -255,7 +285,9 @@ try {
     assert.equal(await page.locator('[data-hermes-live2d-canvas="true"]').count(), 1, label + ' must have one canvas owner');
     assert.equal(await page.locator('[data-live2d-instance="wanko"]').count(), 1, label + ' must have one model owner');
     assert.equal(await page.locator('[data-hermes-runtime-owner="running"]').count(), 1, label + ' must have one running RAF owner');
-    assert.equal(await page.locator('[data-hermes-protected="true"]').count(), 3, label + ' must expose all protected Dashboard regions');
+    assert.ok(await page.locator('[data-hermes-protected="true"]').count() >= 4, label + ' must protect primary navigation plus Dashboard work regions');
+    assert.equal(await page.locator('header nav[data-hermes-primary-navigation="true"][data-hermes-protected="true"]').count(), 1,
+      label + ' must mark the real primary shell navigation as protected');
     const initial = await assertFootprintsSafe(page, viewport, label + ' initial');
 
     if (viewport.width <= 640) {
@@ -276,10 +308,7 @@ try {
 
     await exerciseCreateImport(page, label, state);
 
-    const invoke = page.locator('[data-hermes-input-owner="true"]');
-    await invoke.click();
-    const dialog = page.locator('[role="dialog"][aria-modal="true"]');
-    await dialog.waitFor({ state: 'visible' });
+    const dialog = await clickVisibleHermesCta(page, stage, label + ' initial');
     assert.equal(await stage.getAttribute('data-hermes-assistant-open'), 'true', label + ' click must open the assistant');
     assert.equal(await stage.evaluate((node) => getComputedStyle(node).opacity), '0.18', label + ' open drawer must quiet the stage');
     await dialog.locator('.drawer-close').click();
@@ -296,7 +325,23 @@ try {
     for (const edge of edgeTargets) {
       await dragStage(page, stage, edge);
       assert.equal(await stage.getAttribute('data-hermes-anchored'), 'false', label + ' drag to ' + edge.name + ' must detach from the dock');
-      const settled = await assertFootprintsSafe(page, viewport, label + ' ' + edge.name + ' edge');
+      let settled = await assertFootprintsSafe(page, viewport, label + ' ' + edge.name + ' edge');
+      if (edge.name === 'top') {
+        const language = page.locator('header nav[data-hermes-primary-navigation="true"] select');
+        const languageBox = await language.boundingBox();
+        assert.ok(languageBox, `${label} language selector must have geometry after top settlement`);
+        const languageHit = await page.evaluate(({ x, y }) => document.elementFromPoint(x, y)?.closest('select') !== null, {
+          x: languageBox.x + languageBox.width / 2,
+          y: languageBox.y + languageBox.height / 2,
+        });
+        assert.equal(languageHit, true, `${label} top-settled Hermes must not intercept the language selector`);
+        await language.selectOption('en');
+        await page.waitForFunction(() => document.cookie.includes('NEXT_LOCALE=en'));
+        await language.selectOption('zh');
+        await page.waitForFunction(() => document.cookie.includes('NEXT_LOCALE=zh'));
+        await waitForRig(page);
+        settled = await assertFootprintsSafe(page, viewport, label + ' top edge after real language interaction');
+      }
       edgeSettles.push({ actor: settled.actor, name: edge.name, protectedRegions: settled.protectedRegions });
     }
     const edgeAllowance = Number(expectedSize) * .2 + 2;
@@ -425,8 +470,21 @@ try {
     assert.ok(final.actor.width * final.actor.height / (viewport.width * viewport.height) < .15,
       label + ' Hermes must remain subordinate to the research task');
     assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true, label + ' must not overflow horizontally');
-    assert.deepEqual(browserErrors, [], label + ' must have no console or page errors');
     await page.screenshot({ animations: 'disabled', path: resolve(output, 'dashboard-' + label + '.png') });
+    if (bubbleVisible) {
+      const footer = page.locator('[data-hermes-visual-footer="true"]');
+      assert.equal(await footer.evaluate((node) => getComputedStyle(node).display), 'none',
+        `${label} visible speech must remove the overlapping Hermes footer from layout and hit testing`);
+      assert.equal(await footer.boundingBox(), null, `${label} visible speech and footer geometry must be mutually exclusive`);
+      await bubble.locator('.hermes-companion-dismiss').click();
+      await page.waitForFunction(() => document.querySelector('[data-hermes-workspace-stage="true"]')?.getAttribute('data-hermes-speech-visible') === 'false');
+      assert.notEqual(await footer.evaluate((node) => getComputedStyle(node).display), 'none',
+        `${label} dismissing speech must restore the visible Hermes footer`);
+      const restoredDialog = await clickVisibleHermesCta(page, stage, label + ' restored footer');
+      await restoredDialog.locator('.drawer-close').click();
+      await restoredDialog.waitFor({ state: 'detached' });
+    }
+    assert.deepEqual(browserErrors, [], label + ' must have no console or page errors');
     metrics[label] = {
       actor: final.actor,
       actorViewportRatio: Number((final.actor.width * final.actor.height / (viewport.width * viewport.height)).toFixed(4)),

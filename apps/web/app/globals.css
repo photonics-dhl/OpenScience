@@ -1936,6 +1936,19 @@ body {
   color: #ff8a70;
 }
 
+.hermes-visible-invoke-cta {
+  pointer-events: none;
+}
+
+.hermes-workspace-stage[data-hermes-anchored='true'][data-hermes-speech-visible='false'] .hermes-visible-invoke-cta {
+  cursor: pointer;
+  pointer-events: auto;
+}
+
+.hermes-workspace-stage[data-hermes-bubble-safe='true'][data-hermes-speech-visible='true'] .hermes-visual-invoke-label {
+  display: none;
+}
+
 .hermes-workspace-stage .hermes-carrier-interaction-hull,
 .hermes-workspace-stage .hermes-motion-enable,
 .hermes-workspace-stage .hermes-companion-bubble {

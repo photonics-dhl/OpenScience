@@ -72,6 +72,20 @@ describe('Optical Editorial brand and surface shells', () => {
     expect(primitives).toContain('motion-reduce:[&_a]:transform-none');
   });
 
+  it('marks primary shell navigation as protected from the Hermes travel footprint', () => {
+    const dashboard = renderToStaticMarkup(createElement(
+      DashboardShell,
+      {
+        headerActions: createElement('button', { type: 'button' }, 'Language'),
+        navigationLabel: 'Primary navigation',
+        skipLabel: 'Skip',
+      },
+      createElement('h1', null, 'Research content'),
+    ));
+
+    expect(dashboard).toMatch(/<nav\b[^>]*data-hermes-primary-navigation="true"[^>]*data-hermes-protected="true"/u);
+  });
+
   it('keeps shell accessibility copy symmetric across locales', () => {
     const en = JSON.parse(readFileSync(path.join(__dirname, '../messages/en.json'), 'utf8'));
     const zh = JSON.parse(readFileSync(path.join(__dirname, '../messages/zh.json'), 'utf8'));
