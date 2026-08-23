@@ -181,6 +181,8 @@ function HermesWorkspaceStage({ fallbackAssistantOpen, fallbackOnInvoke, guideTa
   const [viewportSize, setViewportSize] = useState({ height: 0, width: 0 });
   const [dockReady, setDockReady] = useState(false);
   const [dockKind, setDockKind] = useState<HermesViewportClass | null>(null);
+  const [dockStored, setDockStored] = useState<boolean | null>(null);
+  const [settlingNewDock, setSettlingNewDock] = useState(false);
   const [dragging, setDragging] = useState(false);
   const [position, setPosition] = useState({ x: 0, y: 0 });
   const [reducedMotion, setReducedMotion] = useState<boolean | null>(null);
@@ -250,6 +252,7 @@ function HermesWorkspaceStage({ fallbackAssistantOpen, fallbackOnInvoke, guideTa
     const kind = viewportClass();
     const preferences = loadHermesDockPreferences(window.localStorage, workspaceId, kind);
     const stored = hasStoredHermesDockPreferences(window.localStorage, workspaceId, kind);
+    setDockStored(stored);
     setCustomDock(stored);
     if (stored || !presentation?.anchor) {
       const size = resolveHermesStageSize(false, kind === 'mobile');
@@ -287,7 +290,7 @@ function HermesWorkspaceStage({ fallbackAssistantOpen, fallbackOnInvoke, guideTa
   useEffect(() => () => window.clearTimeout(leaveTimerRef.current), []);
 
   useEffect(() => {
-    if (!customDock && !guideTarget && !speech.cue) return;
+    if (!customDock && dockStored !== false && !guideTarget && !speech.cue) return;
     const selector = '[data-before-after-proposal], [data-extract-sdf="true"], [data-hermes-protected="true"]';
     let frame = 0;
     let previous = '';
@@ -319,7 +322,7 @@ function HermesWorkspaceStage({ fallbackAssistantOpen, fallbackOnInvoke, guideTa
       window.removeEventListener('resize', refresh);
       window.removeEventListener('scroll', refresh, true);
     };
-  }, [customDock, guideTarget, speech.cue]);
+  }, [customDock, dockStored, guideTarget, speech.cue]);
 
   React.useLayoutEffect(() => {
     if (!speech.cue || guideTarget) {
@@ -446,6 +449,47 @@ function HermesWorkspaceStage({ fallbackAssistantOpen, fallbackOnInvoke, guideTa
   }, [compactGuide, dockReady, viewportSize]);
 
   React.useLayoutEffect(() => {
+    if (customDock || dockStored !== false || !dockReady || dockKind !== 'desktop' || dockKind !== viewportClass() || dragging || guideTarget || speech.cue
+      || !anchorRect || reducedMotion === null || viewportSize.width <= 0 || viewportSize.height <= 0) return;
+    const stage = stageRef.current;
+    const travelHull = stage?.querySelector<HTMLElement>('[data-hermes-carrier-travel-hull="true"]');
+    if (!stage || !travelHull) return;
+    const stageBounds = stage.getBoundingClientRect();
+    const stageSize = resolveHermesStageSize(false, false);
+    const anchorCenter = { x: anchorRect.left + anchorRect.width / 2, y: anchorRect.top + anchorRect.height / 2 };
+    if (Math.abs(stageBounds.width - stageSize) >= 1 || Math.abs(stageBounds.height - stageSize) >= 1
+      || Math.abs(stageBounds.left - (anchorCenter.x - stageSize / 2)) >= 1
+      || Math.abs(stageBounds.top - (anchorCenter.y - stageSize / 2)) >= 1) return;
+    const hullBounds = travelHull.getBoundingClientRect();
+    const settled = resolveHermesSettledDock({
+      desired: anchorCenter,
+      footprint: {
+        bottom: Math.max(1, hullBounds.bottom - anchorCenter.y),
+        left: Math.max(1, anchorCenter.x - hullBounds.left),
+        right: Math.max(1, hullBounds.right - anchorCenter.x),
+        top: Math.max(1, anchorCenter.y - hullBounds.top),
+      },
+      obstacles: Array.from(document.querySelectorAll<HTMLElement>('[data-hermes-protected="true"]'))
+        .map((element) => element.getBoundingClientRect())
+        .filter((bounds) => bounds.width > 0 && bounds.height > 0 && bounds.right > 0 && bounds.bottom > 0
+          && bounds.left < window.innerWidth && bounds.top < window.innerHeight),
+      viewport: { bottom: window.innerHeight, left: 0, right: window.innerWidth, top: 0 },
+    });
+    if (!settled.safe || Math.hypot(settled.point.x - anchorCenter.x, settled.point.y - anchorCenter.y) < .5) return;
+    const preferences = loadHermesDockPreferences(window.localStorage, workspaceId, dockKind);
+    saveHermesDockPreferences(window.localStorage, workspaceId, dockKind, {
+      ...preferences,
+      xRatio: settled.point.x / window.innerWidth,
+      yRatio: settled.point.y / window.innerHeight,
+    });
+    setPosition(settled.point);
+    setSettlingNewDock(true);
+    setDockStored(true);
+    setCustomDock(true);
+  }, [anchorRect, customDock, dockKind, dockReady, dockStored, dragging, guideTarget, protectedGeometryVersion,
+    reducedMotion, speech.cue, stageMotionVersion, viewportSize, workspaceId]);
+
+  React.useLayoutEffect(() => {
     if (!customDock || !dockReady || dockKind !== viewportClass() || dragging || guideTarget
       || viewportSize.width <= 0 || viewportSize.height <= 0) return;
     const stage = stageRef.current;
@@ -455,7 +499,9 @@ function HermesWorkspaceStage({ fallbackAssistantOpen, fallbackOnInvoke, guideTa
     if (Math.abs(stageBounds.width - settledStageSize) >= 1 || Math.abs(stageBounds.height - settledStageSize) >= 1) return;
     if (Math.abs(stageBounds.left - (position.x - settledStageSize / 2)) >= 1
       || Math.abs(stageBounds.top - (position.y - settledStageSize / 2)) >= 1) return;
-    const actorBounds = stage.querySelector<HTMLElement>('[data-hermes-companion-actor="true"]')?.getBoundingClientRect() ?? stageBounds;
+    const actorBounds = stage.querySelector<HTMLElement>('[data-hermes-carrier-travel-hull="true"]')?.getBoundingClientRect()
+      ?? stage.querySelector<HTMLElement>('[data-hermes-companion-actor="true"]')?.getBoundingClientRect()
+      ?? stageBounds;
     const center = { x: stageBounds.left + stageBounds.width / 2, y: stageBounds.top + stageBounds.height / 2 };
     const settled = resolveHermesSettledDock({
       desired: center,
@@ -471,8 +517,15 @@ function HermesWorkspaceStage({ fallbackAssistantOpen, fallbackOnInvoke, guideTa
           && bounds.left < window.innerWidth && bounds.top < window.innerHeight),
       viewport: { bottom: window.innerHeight, left: 0, right: window.innerWidth, top: 0 },
     });
-    if (!settled.safe) return;
-    if (Math.hypot(settled.point.x - position.x, settled.point.y - position.y) < .5) return;
+    if (!settled.safe) {
+      if (settlingNewDock) setSettlingNewDock(false);
+      return;
+    }
+    const settledDistance = Math.hypot(settled.point.x - position.x, settled.point.y - position.y);
+    if (settledDistance < (settlingNewDock ? .05 : .5)) {
+      if (settlingNewDock) setSettlingNewDock(false);
+      return;
+    }
     setPosition(settled.point);
     const kind = viewportClass();
     const preferences = loadHermesDockPreferences(window.localStorage, workspaceId, kind);
@@ -481,7 +534,8 @@ function HermesWorkspaceStage({ fallbackAssistantOpen, fallbackOnInvoke, guideTa
       xRatio: settled.point.x / window.innerWidth,
       yRatio: settled.point.y / window.innerHeight,
     });
-  }, [customDock, dockKind, dockReady, dragging, guideTarget, position, protectedGeometryVersion, stageMotionVersion, viewportSize, workspaceId]);
+  }, [customDock, dockKind, dockReady, dragging, guideTarget, position, protectedGeometryVersion, settlingNewDock,
+    stageMotionVersion, viewportSize, workspaceId]);
 
   useEffect(() => {
     if (!guideTarget) return;
@@ -632,7 +686,8 @@ function HermesWorkspaceStage({ fallbackAssistantOpen, fallbackOnInvoke, guideTa
   const bubbleHorizontal = bubblePlacement?.horizontal ?? (viewportSize.width > 0 && stageCenterX < viewportSize.width / 2 ? 'right' : 'left');
   const bubbleVertical = bubblePlacement?.vertical ?? (viewportSize.height > 0 && stageCenterY < viewportSize.height / 2 ? 'below' : 'above');
   const style: React.CSSProperties = {
-    height: stageSize, left: stageCenterX - stageSize / 2, top: stageCenterY - stageSize / 2, width: stageSize,
+    height: stageSize, left: stageCenterX - stageSize / 2, top: stageCenterY - stageSize / 2,
+    transition: settlingNewDock ? 'none' : undefined, width: stageSize,
   };
   const ageMs = Math.max(0, Date.now() - behavior.startedAtMs);
   const actionStartedAtMs = behavior.startedAtMs === 0 || typeof performance === 'undefined' ? undefined : performance.now() - ageMs;

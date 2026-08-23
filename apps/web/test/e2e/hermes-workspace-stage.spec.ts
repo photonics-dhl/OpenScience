@@ -220,6 +220,50 @@ test('anchored Hermes detaches only after drag intent and settles away from prot
   expect(mobileHullAfterReload!.y + mobileHullAfterReload!.height).toBeLessThanOrEqual(844);
 });
 
+test('Hermes settles a first desktop dock when the responsive rail anchor moves offscreen', async ({ page }) => {
+  const desktopKey = 'openscience:hermes-dock:v1:workspace-current:desktop';
+  const mobileKey = 'openscience:hermes-dock:v1:workspace-current:mobile';
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.addInitScript(({ key }) => {
+    localStorage.setItem(key, JSON.stringify({
+      activity: 'balanced', particles: true, proactiveHints: true, sound: false, xRatio: .5, yRatio: .12,
+    }));
+  }, { key: mobileKey });
+  await mockWorkspace(page);
+  await page.goto(`${baseUrl}/dashboard?hermes-motion=full`, { waitUntil: 'networkidle' });
+
+  const stage = page.locator('[data-hermes-workspace-stage="true"]');
+  await expect(stage).toHaveAttribute('data-hermes-anchored', 'false');
+  expect(await page.evaluate((key) => localStorage.getItem(key), desktopKey)).toBeNull();
+
+  await page.setViewportSize({ width: 800, height: 900 });
+  await expect(stage).toHaveAttribute('data-hermes-stage-size', '360');
+  await page.waitForTimeout(1_200);
+  await expect(stage).toHaveAttribute('data-hermes-anchored', 'false');
+  const readSettledSafety = () => stage.evaluate((element) => {
+    const hull = element.querySelector<HTMLElement>('[data-hermes-carrier-travel-hull="true"]')?.getBoundingClientRect();
+    if (!hull) return false;
+    const protectedRegions = Array.from(document.querySelectorAll<HTMLElement>('[data-hermes-protected="true"]'))
+      .map((node) => node.getBoundingClientRect())
+      .filter((bounds) => bounds.width > 0 && bounds.height > 0);
+    return hull.left >= 0 && hull.top >= 0 && hull.right <= window.innerWidth && hull.bottom <= window.innerHeight
+      && protectedRegions.every((region) => !(
+        hull.left < region.right && hull.right > region.left && hull.top < region.bottom && hull.bottom > region.top
+      ));
+  });
+  await expect.poll(readSettledSafety).toBe(true);
+  const settledDesktopPreference = await page.evaluate((key) => localStorage.getItem(key), desktopKey);
+  expect(settledDesktopPreference).not.toBeNull();
+  await expect(page.getByRole('dialog', { name: 'Hermes research guide' })).toHaveCount(0);
+
+  await page.reload({ waitUntil: 'networkidle' });
+  await expect(stage).toHaveAttribute('data-hermes-anchored', 'false');
+  await page.waitForTimeout(1_200);
+  await expect.poll(readSettledSafety).toBe(true);
+  expect(await page.evaluate((key) => localStorage.getItem(key), desktopKey)).not.toBeNull();
+  expect(await page.evaluate(([desktop, mobile]) => localStorage.getItem(desktop) !== localStorage.getItem(mobile), [desktopKey, mobileKey])).toBe(true);
+});
+
 test('Hermes mounts the real Wanko Live2D portrait inside the persistent stage', async ({ page }) => {
   const browserErrors: string[] = [];
   page.on('pageerror', (error) => browserErrors.push(error.message));
