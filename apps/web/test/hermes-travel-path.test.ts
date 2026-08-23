@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import {
   createHermesTravelFootprintVariants,
+  resolveHermesGuideTravelMotionEnvelope,
   createHermesTravelTimeline,
   planHermesTravel,
   rectForFootprint,
@@ -50,6 +51,10 @@ function sweptOverlaps(
 }
 
 describe('Hermes safe travel path', () => {
+  it('binds guide travel planning to the full carrier rotation and hover envelope', () => {
+    expect(resolveHermesGuideTravelMotionEnvelope(360)).toEqual({ bottom: 9, left: 12, right: 5, top: 11 });
+    expect(resolveHermesGuideTravelMotionEnvelope(200)).toEqual({ bottom: 5, left: 7, right: 3, top: 7 });
+  });
   it('selects a stationary composite guide placement whose bubble clears protected work', () => {
     const actor = { bottom: 40, left: 40, right: 40, top: 40 };
     const variants = [
@@ -117,6 +122,30 @@ describe('Hermes safe travel path', () => {
     expect(plan.dock).toEqual({ x: 195, y: 236.0625 });
   });
 
+  it('retains a safe real source when target clearance would push the expanded bubble into a blocker', () => {
+    const actor = { bottom: 72, left: 70, right: 70, top: 72 };
+    const variants = createHermesTravelFootprintVariants(
+      actor,
+      { bottom: 239.8, left: 92, right: 100, top: -80 },
+      { horizontal: 'left', vertical: 'below' },
+    );
+    const target = rect(16, 434, 358, 200);
+    const route = planHermesTravel({
+      editable: target,
+      footprint: variants[0].footprint,
+      footprintVariants: variants,
+      from: rect(95, 252, 200, 200),
+      obstacles: [rect(103, 73, 192, 34)],
+      preferredSides: ['right', 'top'],
+      target,
+      viewport: rect(0, 0, 390, 844),
+    });
+
+    expect(route.safe).toBe(true);
+    expect(route.dock).toEqual({ x: 195, y: 352 });
+    expect(route.placement).toEqual({ horizontal: 'left', vertical: 'above' });
+  });
+
   it('keeps source pre-clamp placement separate from the final arrival placement', () => {
     const footprint = { bottom: 100, left: 100, right: 100, top: 100 };
     const parts = [{ bottom: 50, left: 50, right: 50, top: 50 }];
@@ -151,6 +180,32 @@ describe('Hermes safe travel path', () => {
     expect(route.placement).toEqual({ horizontal: 'left', vertical: 'above' });
     expect(route.placement).not.toEqual(source.placement);
   });
+
+  it('pre-clamps an expanded bubble with a placement that is safe at the real source', () => {
+    const actor = { bottom: 66.25, left: 70, right: 70, top: 70 };
+    const variants = createHermesTravelFootprintVariants(
+      actor,
+      { bottom: 294.5, left: 92, right: 100, top: -80 },
+      { horizontal: 'left', vertical: 'below' },
+    );
+    const target = rect(16, 434, 358, 192);
+
+    const source = resolveHermesGuideSourceCandidate({
+      current: { x: 195, y: 236 },
+      editable: target,
+      guardPx: 6,
+      obstacles: [],
+      variants,
+      viewport: rect(0, 0, 390, 844),
+    });
+
+    expect(source).toEqual({
+      placement: { horizontal: 'left', vertical: 'above' },
+      point: { x: 195, y: 300.5 },
+      requiresMove: true,
+    });
+  });
+
   it('builds four fixed bubble orientations from the measured source placement', () => {
     expect(createHermesTravelFootprintVariants(
       { bottom: 129, left: 137, right: 137, top: 138 },

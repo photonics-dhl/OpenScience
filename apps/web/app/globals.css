@@ -2121,7 +2121,7 @@ body {
   }
 
   .hermes-workspace-stage[data-hermes-guide-target][data-hermes-motion-preference='reduced'] .hermes-functional-bubble:is([data-hermes-guide-visible='true'], [data-hermes-guide-measuring='true']),
-  .hermes-workspace-stage[data-hermes-guide-target] .hermes-motion-enable[data-motion-runtime='fallback'] + .hermes-functional-bubble[data-hermes-guide-visible='true'] {
+  .hermes-workspace-stage[data-hermes-guide-target] .hermes-motion-enable[data-motion-runtime='fallback'] + .hermes-functional-bubble:is([data-hermes-guide-visible='true'], [data-hermes-guide-measuring='true']) {
     padding-bottom: 4rem;
   }
 

@@ -65,6 +65,26 @@ test('a saved bottom-right dock travels with a fixed safe guide-bubble orientati
   const bubble = page.locator('[data-hermes-guide-bubble]');
   await expect(stage).toHaveAttribute('data-hermes-guide-motion', 'edge-stop');
   await expect(bubble).toBeVisible();
+  const initialBubbleSizeVersion = Number(await stage.getAttribute('data-hermes-guide-size-version'));
+  await page.evaluate(() => {
+    const target = window as unknown as { __hermesEdgeStopLayout?: {
+      measuring: Array<{ height: number; width: number }>;
+      visible: Array<{ height: number; width: number }>;
+    } };
+    target.__hermesEdgeStopLayout = { measuring: [], visible: [] };
+    const bubbleNode = document.querySelector<HTMLElement>('[data-hermes-guide-bubble]')!;
+    let measured = false;
+    const sample = () => {
+      const size = { height: bubbleNode.offsetHeight, width: bubbleNode.offsetWidth };
+      if (bubbleNode.dataset.hermesGuideMeasuring === 'true') {
+        measured = true;
+        target.__hermesEdgeStopLayout!.measuring.push(size);
+      } else if (measured && bubbleNode.dataset.hermesGuideVisible === 'true') {
+        target.__hermesEdgeStopLayout!.visible.push(size);
+      }
+    };
+    new MutationObserver(sample).observe(bubbleNode, { attributeFilter: ['data-hermes-guide-measuring', 'data-hermes-guide-visible'], attributes: true });
+  });
   await expect(stage).toHaveAttribute('data-hermes-guide-timeline-count', '0');
   await page.evaluate(() => {
     window.__hermesFieldGuideJourney = { arrival: null, done: false, hiddenDuringTravel: false, samples: 0, travel: null };
@@ -122,7 +142,25 @@ test('a saved bottom-right dock travels with a fixed safe guide-bubble orientati
     vertical: await stage.getAttribute('data-hermes-bubble-vertical'),
   };
   await expect(stage).toHaveAttribute('data-hermes-guide-timeline-count', '0');
-  await expect(stage).toHaveAttribute('data-hermes-guide-phase', 'route');
+  await expect.poll(() => stage.getAttribute('data-hermes-guide-phase')).not.toBe('source-settle');
+  const postSettleDiagnostic = await stage.evaluate((element) => ({
+    actor: (() => { const bounds = element.querySelector('[data-hermes-carrier-travel-hull="true"]')?.getBoundingClientRect(); return bounds ? { bottom: bounds.bottom, left: bounds.left, right: bounds.right, top: bounds.top } : null; })(),
+    bubble: (() => { const bounds = element.querySelector('[data-hermes-guide-bubble]')?.getBoundingClientRect(); return bounds ? { bottom: bounds.bottom, left: bounds.left, right: bounds.right, top: bounds.top } : null; })(),
+    phase: element.getAttribute('data-hermes-guide-phase'),
+    planCount: element.getAttribute('data-hermes-guide-plan-count'),
+    placement: `${element.getAttribute('data-hermes-bubble-horizontal')}:${element.getAttribute('data-hermes-bubble-vertical')}`,
+    source: [element.getAttribute('data-hermes-guide-settled-source-x'), element.getAttribute('data-hermes-guide-settled-source-y')],
+    stage: (() => { const bounds = element.getBoundingClientRect(); return { bottom: bounds.bottom, left: bounds.left, right: bounds.right, top: bounds.top }; })(),
+    target: (() => { const bounds = document.querySelector('[data-hermes-anchor="sdf-problem"]')?.getBoundingClientRect(); return bounds ? { bottom: bounds.bottom, left: bounds.left, right: bounds.right, top: bounds.top } : null; })(),
+    obstacles: Array.from(document.querySelectorAll<HTMLElement>('[data-before-after-proposal], [data-extract-sdf="true"], [data-hermes-protected="true"]')).map((node) => {
+      const bounds = node.getBoundingClientRect();
+      return { bottom: bounds.bottom, extract: node.dataset.extractSdf, left: bounds.left, proposal: node.hasAttribute('data-before-after-proposal'), protected: node.dataset.hermesProtected, right: bounds.right, top: bounds.top };
+    }).filter((entry) => entry.right > entry.left && entry.bottom > entry.top),
+    settledParts: (window as Window & { __hermesSettledSourceParts?: unknown }).__hermesSettledSourceParts,
+  }));
+  expect(postSettleDiagnostic.phase, JSON.stringify({ postSettleDiagnostic, sourcePlacement })).toBe('route');
+  await expect(stage).toHaveAttribute('data-hermes-guide-motion', 'travel');
+  await expect(bubble).toBeHidden();
   const settledSource = await stage.evaluate((element) => ({
     x: Number(element.getAttribute('data-hermes-guide-settled-source-x')),
     y: Number(element.getAttribute('data-hermes-guide-settled-source-y')),
@@ -149,8 +187,6 @@ test('a saved bottom-right dock travels with a fixed safe guide-bubble orientati
     expect(part!.right).toBeLessThanOrEqual(1434);
     expect(part!.bottom).toBeLessThanOrEqual(894);
   }
-  await expect(stage).toHaveAttribute('data-hermes-guide-motion', 'travel');
-  await expect(bubble).toBeHidden();
   await expect.poll(() => page.evaluate(() => window.__hermesFieldGuideJourney.done)).toBe(true);
   const journey = await page.evaluate(() => window.__hermesFieldGuideJourney);
   expect(journey.samples).toBeGreaterThanOrEqual(10);
@@ -158,6 +194,16 @@ test('a saved bottom-right dock travels with a fixed safe guide-bubble orientati
   expect(journey.arrival).toEqual(journey.travel);
   expect(journey.arrival).not.toEqual(sourcePlacement);
   await expect(bubble).toBeVisible();
+  await expect.poll(async () => Number(await stage.getAttribute('data-hermes-guide-size-version'))).toBe(initialBubbleSizeVersion + 1);
+  const edgeStopLayout = await page.evaluate(() => (window as unknown as {
+    __hermesEdgeStopLayout: {
+      measuring: Array<{ height: number; width: number }>;
+      visible: Array<{ height: number; width: number }>;
+    };
+  }).__hermesEdgeStopLayout);
+  expect(edgeStopLayout.measuring.length).toBeGreaterThan(0);
+  expect(edgeStopLayout.visible.length).toBeGreaterThan(0);
+  expect(edgeStopLayout.visible.at(-1)).toEqual(edgeStopLayout.measuring.at(-1));
 
   const actorBox = await stage.locator('[data-hermes-carrier-travel-hull="true"]').boundingBox();
   const bubbleBox = await bubble.boundingBox();
@@ -179,7 +225,6 @@ test('a custom dock flips an unsafe stationary bubble and suppresses it when eve
     activity: 'balanced', particles: true, proactiveHints: true, sound: false, xRatio: .65, yRatio: .7,
   });
   await page.setViewportSize({ width: 1440, height: 900 });
-  await page.clock.install({ time: new Date('2026-08-23T00:00:00Z') });
   await page.addInitScript(({ key, value }) => localStorage.setItem(key, value), { key: storageKey, value: storedDock });
   await mockWorkspace(page);
   await page.goto(`${baseUrl}/research-objects/new?mode=blank&hermes-motion=full`, { waitUntil: 'networkidle' });
@@ -187,6 +232,7 @@ test('a custom dock flips an unsafe stationary bubble and suppresses it when eve
   const stage = page.locator('[data-hermes-workspace-stage]');
   const bubble = page.locator('[data-hermes-guide-bubble]');
   await expect(stage).toHaveAttribute('data-hermes-guide-motion', 'edge-stop');
+  await page.clock.install({ time: new Date('2026-08-23T00:00:00Z') });
   const initialDiagnostic = await page.evaluate(() => {
     const bounds = (selector: string) => {
       const value = document.querySelector(selector)?.getBoundingClientRect();
@@ -274,6 +320,70 @@ test('a custom dock flips an unsafe stationary bubble and suppresses it when eve
   expect(exposedPatrol, 'an envelope-unsafe custom dock must gate patrol at the visual action boundary').toBe(false);
 });
 
+test('stationary custom guidance observes Extract and proposal obstacles through the shared page-owned contract', async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.addInitScript(() => localStorage.setItem('openscience:hermes-dock:v1:workspace-current:desktop', JSON.stringify({
+    activity: 'balanced', particles: true, proactiveHints: true, sound: false, xRatio: .65, yRatio: .7,
+  })));
+  await mockWorkspace(page);
+  await page.goto(`${baseUrl}/research-objects/new?mode=blank&hermes-motion=full`, { waitUntil: 'networkidle' });
+
+  const stage = page.locator('[data-hermes-workspace-stage]');
+  const bubble = page.locator('[data-hermes-guide-bubble]');
+  await expect(stage).toHaveAttribute('data-hermes-guide-motion', 'edge-stop');
+  await expect(bubble).toBeVisible();
+  const initialPlacement = await stage.evaluate((element) => `${element.getAttribute('data-hermes-bubble-horizontal')}:${element.getAttribute('data-hermes-bubble-vertical')}`);
+  const initialVersion = Number(await stage.getAttribute('data-hermes-protected-geometry-version'));
+  await page.evaluate(() => {
+    const bounds = document.querySelector<HTMLElement>('[data-hermes-guide-bubble]')!.getBoundingClientRect();
+    const blocker = document.createElement('div');
+    blocker.dataset.stationaryPageObstacle = 'extract';
+    Object.assign(blocker.style, {
+      height: `${bounds.height}px`, left: `${bounds.left}px`, pointerEvents: 'none', position: 'fixed',
+      top: `${bounds.top}px`, width: '32px', zIndex: '1',
+    });
+    document.body.append(blocker);
+  });
+  await page.evaluate(() => new Promise<void>((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve()))));
+  const mountedVersion = Number(await stage.getAttribute('data-hermes-protected-geometry-version'));
+  await page.evaluate(() => {
+    document.querySelector<HTMLElement>('[data-stationary-page-obstacle="extract"]')!.dataset.extractSdf = 'true';
+  });
+  expect(mountedVersion).toBeGreaterThanOrEqual(initialVersion);
+  await expect.poll(async () => Number(await stage.getAttribute('data-hermes-protected-geometry-version'))).toBeGreaterThan(mountedVersion);
+  await expect.poll(async () => stage.evaluate((element) => `${element.getAttribute('data-hermes-bubble-horizontal')}:${element.getAttribute('data-hermes-bubble-vertical')}`)).not.toBe(initialPlacement);
+  const [flippedBubble, extract] = await Promise.all([
+    bubble.boundingBox(), page.locator('[data-stationary-page-obstacle="extract"]').boundingBox(),
+  ]);
+  expect(flippedBubble && extract).toBeTruthy();
+  expect(boxesOverlap(flippedBubble!, extract!)).toBe(false);
+
+  const flippedVersion = Number(await stage.getAttribute('data-hermes-protected-geometry-version'));
+  await page.evaluate(() => {
+    document.querySelector<HTMLElement>('[data-stationary-page-obstacle="extract"]')!.removeAttribute('data-extract-sdf');
+    const actor = document.querySelector<HTMLElement>('[data-hermes-carrier-travel-hull="true"]')!.getBoundingClientRect();
+    const regions = [
+      { left: 0, top: 0, width: innerWidth, height: actor.top },
+      { left: 0, top: actor.bottom, width: innerWidth, height: innerHeight - actor.bottom },
+      { left: 0, top: actor.top, width: actor.left, height: actor.height },
+      { left: actor.right, top: actor.top, width: innerWidth - actor.right, height: actor.height },
+    ];
+    for (const [index, region] of regions.entries()) {
+      const blocker = document.createElement('div');
+      blocker.dataset.stationaryPageObstacle = `proposal-${index}`;
+      Object.assign(blocker.style, {
+        height: `${Math.max(0, region.height)}px`, left: `${region.left}px`, pointerEvents: 'none', position: 'fixed',
+        top: `${region.top}px`, width: `${Math.max(0, region.width)}px`, zIndex: '1',
+      });
+      document.body.append(blocker);
+      blocker.setAttribute('data-before-after-proposal', '');
+    }
+  });
+  await expect.poll(async () => Number(await stage.getAttribute('data-hermes-protected-geometry-version'))).toBeGreaterThan(flippedVersion);
+  await expect(stage).toHaveAttribute('data-hermes-guide-suppressed', 'true');
+  await expect(bubble).toBeHidden();
+});
+
 test('a no-op full-motion guide restore clears its transaction and preserves later protected settling', async ({ page }) => {
   const storageKey = 'openscience:hermes-dock:v1:workspace-current:desktop';
   const storedDock = JSON.stringify({
@@ -286,6 +396,7 @@ test('a no-op full-motion guide restore clears its transaction and preserves lat
 
   const stage = page.locator('[data-hermes-workspace-stage]');
   await expect(stage).toHaveAttribute('data-hermes-guide-motion', 'edge-stop');
+  await stage.evaluate((element) => { element.style.transitionDuration = '1s, 1s, 320ms, 320ms'; });
   await page.keyboard.press('Escape');
   await expect(stage).toHaveAttribute('data-hermes-guide-phase', 'idle');
   await expect(stage).toHaveAttribute('data-hermes-guide-restore-active', 'false');
@@ -399,11 +510,11 @@ test('a route change cancels an in-flight restore transaction before its transit
   const storedDock = JSON.stringify({
     activity: 'balanced', particles: true, proactiveHints: true, sound: false, xRatio: .9, yRatio: .82,
   });
-  await page.setViewportSize({ width: 1000, height: 800 });
+  await page.setViewportSize({ width: 1440, height: 900 });
   await page.addInitScript(({ key, value }) => {
     localStorage.setItem(key, value);
     if (!window.visualViewport) return;
-    let visualRect = { height: 800, left: 0, top: 0, width: 1000 };
+    let visualRect = { height: 900, left: 0, top: 0, width: 1440 };
     Object.defineProperties(window.visualViewport, {
       height: { configurable: true, get: () => visualRect.height },
       offsetLeft: { configurable: true, get: () => visualRect.left },
@@ -422,9 +533,10 @@ test('a route change cancels an in-flight restore transaction before its transit
   await expect(stage).toHaveAttribute('data-hermes-guide-motion', 'edge-stop');
   await page.evaluate(() => (window as Window & {
     __setHermesVisualViewportRect(rectangle: { height: number; left: number; top: number; width: number }): void;
-  }).__setHermesVisualViewportRect({ height: 600, left: 100, top: 100, width: 700 }));
+  }).__setHermesVisualViewportRect({ height: 700, left: 0, top: 100, width: 1440 }));
   await expect(stage).toHaveAttribute('data-hermes-guide-phase', 'source-settle');
-  await expect(stage).toHaveAttribute('data-hermes-guide-phase', 'edge-stop');
+  await expect(stage).toHaveAttribute('data-hermes-guide-phase', 'route');
+  await stage.evaluate((element) => { element.style.transitionDuration = ''; });
   await page.keyboard.press('Escape');
   await expect(stage).toHaveAttribute('data-hermes-guide-restore-active', 'true');
   await page.evaluate(() => window.history.pushState({}, '', '/dashboard'));
@@ -1079,8 +1191,8 @@ test('mobile editing guidance keeps three accessible actions and explanation ins
     blocker.dataset.expandedGuideBlocker = 'true';
     const top = vertical === 'above' ? bounds.y - 42 : bounds.y + bounds.height + 8;
     Object.assign(blocker.style, {
-      height: '34px', left: `${bounds.x}px`, pointerEvents: 'none', position: 'fixed',
-      top: `${top}px`, width: `${bounds.width}px`, zIndex: '1',
+      height: '34px', left: `${bounds.x + bounds.width - 6}px`, pointerEvents: 'none', position: 'fixed',
+      top: `${top}px`, width: '6px', zIndex: '1',
     });
     document.body.append(blocker);
   }, { bounds: collapsed!, vertical: collapsedVertical });
@@ -1103,6 +1215,35 @@ test('mobile editing guidance keeps three accessible actions and explanation ins
   await expect.poll(async () => Number(await stage.getAttribute('data-hermes-guide-size-version'))).toBeGreaterThan(beforeExplainSizeVersion);
   await expect.poll(async () => Number(await stage.getAttribute('data-hermes-guide-plan-count'))).toBeGreaterThan(beforeExplainPlanCount);
   expect(await page.evaluate(() => (window as Window & { __hermesExplainHidden?: boolean }).__hermesExplainHidden)).toBe(true);
+  const expandedDiagnostic = await stage.evaluate((element) => {
+    const guideBubble = element.querySelector<HTMLElement>('[data-hermes-guide-bubble]')!;
+    const originalHorizontal = element.dataset.hermesBubbleHorizontal;
+    const originalVertical = element.dataset.hermesBubbleVertical;
+    const placements = (['left', 'right'] as const).flatMap((horizontal) => (['above', 'below'] as const).map((vertical) => {
+      element.dataset.hermesBubbleHorizontal = horizontal;
+      element.dataset.hermesBubbleVertical = vertical;
+      const bounds = guideBubble.getBoundingClientRect();
+      return { bottom: bounds.bottom, horizontal, left: bounds.left, right: bounds.right, top: bounds.top, vertical };
+    }));
+    if (originalHorizontal) element.dataset.hermesBubbleHorizontal = originalHorizontal;
+    if (originalVertical) element.dataset.hermesBubbleVertical = originalVertical;
+    const bounds = (selector: string) => {
+      const value = document.querySelector(selector)?.getBoundingClientRect();
+      return value ? { bottom: value.bottom, left: value.left, right: value.right, top: value.top } : null;
+    };
+    return {
+      actor: bounds('[data-hermes-carrier-travel-hull="true"]'), blocker: bounds('[data-expanded-guide-blocker="true"]'),
+      obstacles: Array.from(document.querySelectorAll<HTMLElement>('[data-before-after-proposal], [data-extract-sdf="true"], [data-hermes-protected="true"]')).map((node) => {
+        const value = node.getBoundingClientRect();
+        return { bottom: value.bottom, left: value.left, right: value.right, top: value.top };
+      }).filter((value) => value.right > value.left && value.bottom > value.top),
+      phase: element.dataset.hermesGuidePhase, placement: `${originalHorizontal}:${originalVertical}`, placements,
+      planCount: element.dataset.hermesGuidePlanCount,
+      source: [element.dataset.hermesGuideRouteStartX, element.dataset.hermesGuideRouteStartY], suppressed: element.dataset.hermesGuideSuppressed,
+      target: bounds('[data-hermes-anchor="sdf-insight"]'), viewport: { height: innerHeight, width: innerWidth },
+    };
+  });
+  expect(expandedDiagnostic.suppressed, JSON.stringify(expandedDiagnostic)).toBe('false');
   await expect(bubble).toBeVisible();
   const [expandedBubble, expandedBlocker, expandedTarget] = await Promise.all([
     bubble.boundingBox(), page.locator('[data-expanded-guide-blocker="true"]').boundingBox(), insight.boundingBox(),
@@ -1235,6 +1376,93 @@ test('English expanded guidance remeasures before showing a protected-safe narro
   const [bubbleBounds, targetBounds] = await Promise.all([bubble.boundingBox(), insight.boundingBox()]);
   expect(bubbleBounds && targetBounds).toBeTruthy();
   expect(boxesOverlap(bubbleBounds!, targetBounds!)).toBe(false);
+  expect(bubbleBounds!.x).toBeGreaterThanOrEqual(0);
+  expect(bubbleBounds!.y).toBeGreaterThanOrEqual(0);
+  expect(bubbleBounds!.x + bubbleBounds!.width).toBeLessThanOrEqual(390);
+  expect(bubbleBounds!.y + bubbleBounds!.height).toBeLessThanOrEqual(844);
+});
+
+test('full-motion runtime fallback measures the same narrow guide box that becomes visible', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.addInitScript(`{
+    const original = HTMLCanvasElement.prototype.getContext;
+    HTMLCanvasElement.prototype.getContext = function (kind, ...args) {
+      if (kind === 'webgl2') return null;
+      return original.call(this, kind, ...args);
+    };
+  }`);
+  await mockWorkspace(page);
+  await page.goto(`${baseUrl}/research-objects/ro-guide/edit?hermes-motion=full`, { waitUntil: 'networkidle' });
+  const stage = page.locator('[data-hermes-workspace-stage]');
+  const bubble = page.locator('[data-hermes-guide-bubble]');
+  await expect(stage.locator('[data-hermes-rig="live2d-wanko"]')).toHaveAttribute('data-hermes-rig-status', 'fallback');
+  await page.locator('[data-sdf-node="2"] > button').click();
+  await expect.poll(async () => stage.evaluate((element) => ({
+    actions: element.getAttribute('data-hermes-guide-action-count'),
+    ready: element.getAttribute('data-hermes-guide-ready'),
+    suppressed: element.getAttribute('data-hermes-guide-suppressed'),
+    target: element.getAttribute('data-hermes-guide-target'),
+  }))).toEqual({ actions: '3', ready: 'true', suppressed: 'false', target: 'sdf-insight' });
+  const waitForStageSettled = () => expect.poll(() => stage.evaluate((element) => {
+    const bounds = element.getBoundingClientRect();
+    return Math.hypot(bounds.left - Number.parseFloat(element.style.left), bounds.top - Number.parseFloat(element.style.top)) < .5;
+  })).toBe(true);
+  await waitForStageSettled();
+  await page.evaluate(() => {
+    const target = window as unknown as { __hermesFallbackLayout?: {
+      measuring: Array<{ height: number; width: number }>;
+      visible: Array<{ height: number; width: number }>;
+    } };
+    target.__hermesFallbackLayout = { measuring: [], visible: [] };
+    const bubbleNode = document.querySelector<HTMLElement>('[data-hermes-guide-bubble]')!;
+    let measured = false;
+    const sample = () => {
+      const size = { height: bubbleNode.offsetHeight, width: bubbleNode.offsetWidth };
+      if (bubbleNode.dataset.hermesGuideMeasuring === 'true') {
+        measured = true;
+        target.__hermesFallbackLayout!.measuring.push(size);
+      } else if (measured && bubbleNode.dataset.hermesGuideVisible === 'true') {
+        target.__hermesFallbackLayout!.visible.push(size);
+      }
+    };
+    new MutationObserver(sample).observe(bubbleNode, { attributeFilter: ['data-hermes-guide-measuring', 'data-hermes-guide-visible'], attributes: true });
+  });
+  const beforeVersion = Number(await stage.getAttribute('data-hermes-guide-size-version'));
+  await bubble.getByRole('button', { name: /解释|Explain/i }).click();
+  await expect(page.locator('[data-hermes-guide-explanation]')).toBeVisible();
+  await expect.poll(async () => Number(await stage.getAttribute('data-hermes-guide-size-version'))).toBe(beforeVersion + 1);
+  await expect.poll(() => page.evaluate(() => (window as unknown as {
+    __hermesFallbackLayout: { visible: unknown[] };
+  }).__hermesFallbackLayout.visible.length)).toBeGreaterThan(0);
+  await waitForStageSettled();
+  const layout = await page.evaluate(() => (window as unknown as {
+    __hermesFallbackLayout: {
+      measuring: Array<{ height: number; width: number }>;
+      visible: Array<{ height: number; width: number }>;
+    };
+  }).__hermesFallbackLayout);
+  expect(layout.measuring.length).toBeGreaterThan(0);
+  expect(layout.visible.at(-1)).toEqual(layout.measuring.at(-1));
+  const [bubbleBounds, targetBounds] = await Promise.all([
+    bubble.boundingBox(), page.getByRole('textbox', { name: /Insight|洞见/i }).boundingBox(),
+  ]);
+  expect(bubbleBounds && targetBounds).toBeTruthy();
+  const fallbackDiagnostic = await stage.evaluate((element) => ({
+    actor: (() => { const bounds = element.querySelector('[data-hermes-carrier-travel-hull="true"]')?.getBoundingClientRect(); return bounds ? { bottom: bounds.bottom, left: bounds.left, right: bounds.right, top: bounds.top } : null; })(),
+    anchor: (() => { const bounds = document.querySelector('[data-hermes-anchor="sdf-insight"]')?.getBoundingClientRect(); return bounds ? { bottom: bounds.bottom, left: bounds.left, right: bounds.right, top: bounds.top } : null; })(),
+    horizontal: element.getAttribute('data-hermes-bubble-horizontal'),
+    mode: element.getAttribute('data-hermes-guide-motion'),
+    phase: element.getAttribute('data-hermes-guide-phase'),
+    planCount: element.getAttribute('data-hermes-guide-plan-count'),
+    ready: element.getAttribute('data-hermes-guide-ready'),
+    sizeVersion: element.getAttribute('data-hermes-guide-size-version'),
+    stage: (() => { const bounds = element.getBoundingClientRect(); return { bottom: bounds.bottom, left: bounds.left, right: bounds.right, styleLeft: element.style.left, styleTop: element.style.top, top: bounds.top }; })(),
+    suppressed: element.getAttribute('data-hermes-guide-suppressed'),
+    vertical: element.getAttribute('data-hermes-bubble-vertical'),
+    routeStartX: element.getAttribute('data-hermes-guide-route-start-x'),
+    routeStartY: element.getAttribute('data-hermes-guide-route-start-y'),
+  }));
+  expect(boxesOverlap(bubbleBounds!, targetBounds!), JSON.stringify({ bubbleBounds, fallbackDiagnostic, layout, targetBounds })).toBe(false);
   expect(bubbleBounds!.x).toBeGreaterThanOrEqual(0);
   expect(bubbleBounds!.y).toBeGreaterThanOrEqual(0);
   expect(bubbleBounds!.x + bubbleBounds!.width).toBeLessThanOrEqual(390);

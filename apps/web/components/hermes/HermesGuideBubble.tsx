@@ -19,8 +19,14 @@ export const HermesGuideBubble = forwardRef<HTMLElement, {
   const t = useTranslations('hermesCompanion');
   const locale = useLocale();
   const [explaining, setExplaining] = useState(false);
+  const previousLayoutSignatureRef = useRef<string | null>(null);
   const previousLocaleRef = useRef(locale);
   useEffect(() => setExplaining(false), [target]);
+  useLayoutEffect(() => {
+    const signature = `${edgeStop}:${actions.join('|')}`;
+    if (previousLayoutSignatureRef.current !== null && previousLayoutSignatureRef.current !== signature) onLayoutWillChange();
+    previousLayoutSignatureRef.current = signature;
+  }, [actions, edgeStop, onLayoutWillChange]);
   useLayoutEffect(() => {
     if (previousLocaleRef.current !== locale) onLayoutWillChange();
     previousLocaleRef.current = locale;

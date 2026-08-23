@@ -7,6 +7,39 @@ export interface HermesFootprintInsets {
   top: number;
 }
 
+// The carrier is square, its travel hull is inset 12%/12%/14%, and guide travel
+// combines -3deg with the hover keyframes (-.6deg..+.6deg, y 0..-2px).
+// Deriving the outward-rounded envelope from the rendered stage size avoids
+// applying the desktop allowance to the narrower mobile carrier.
+export function resolveHermesGuideTravelMotionEnvelope(stageSize: number): HermesFootprintInsets {
+  const hull = { bottom: stageSize * .86, left: stageSize * .12, right: stageSize * .88, top: stageSize * .12 };
+  const origin = { x: stageSize * .5, y: stageSize * .65 };
+  const extrema = { bottom: Number.NEGATIVE_INFINITY, left: Number.POSITIVE_INFINITY, right: Number.NEGATIVE_INFINITY, top: Number.POSITIVE_INFINITY };
+  for (const degrees of [-3.6, -2.4]) {
+    const angle = degrees * Math.PI / 180;
+    for (const translateY of [0, -2]) {
+      for (const x of [hull.left, hull.right]) {
+        for (const y of [hull.top, hull.bottom]) {
+          const dx = x - origin.x;
+          const dy = y - origin.y;
+          const transformedX = origin.x + dx * Math.cos(angle) - dy * Math.sin(angle);
+          const transformedY = origin.y + dx * Math.sin(angle) + dy * Math.cos(angle) + translateY;
+          extrema.left = Math.min(extrema.left, transformedX);
+          extrema.right = Math.max(extrema.right, transformedX);
+          extrema.top = Math.min(extrema.top, transformedY);
+          extrema.bottom = Math.max(extrema.bottom, transformedY);
+        }
+      }
+    }
+  }
+  return {
+    bottom: Math.ceil(extrema.bottom - hull.bottom),
+    left: Math.ceil(hull.left - extrema.left),
+    right: Math.ceil(extrema.right - hull.right),
+    top: Math.ceil(hull.top - extrema.top),
+  };
+}
+
 export interface HermesTravelInput {
   bottomInsetPx?: number;
   clearancePx?: number;
@@ -93,11 +126,13 @@ export interface HermesGuideSourceCandidate {
 
 export function resolveHermesGuideSourceCandidate(input: {
   current: Point;
+  editable?: DOMRectReadOnly | null;
   guardPx: number;
+  obstacles?: DOMRectReadOnly[];
   variants: HermesTravelFootprintVariant[];
   viewport: DOMRectReadOnly;
 }): HermesGuideSourceCandidate | null {
-  const candidates = input.variants.slice(0, 4).flatMap(({ footprint, placement }) => {
+  const candidates = input.variants.slice(0, 4).flatMap(({ footprint, parts, placement }) => {
     const bounds = {
       bottom: input.viewport.bottom - footprint.bottom - input.guardPx,
       left: input.viewport.left + footprint.left + input.guardPx,
@@ -105,12 +140,32 @@ export function resolveHermesGuideSourceCandidate(input: {
       top: input.viewport.top + footprint.top + input.guardPx,
     };
     if (bounds.left > bounds.right || bounds.top > bounds.bottom) return [];
-    const point = clampPoint(input.current, bounds);
-    return [{
-      distance: Math.hypot(point.x - input.current.x, point.y - input.current.y),
-      placement,
-      point,
-    }];
+    const seed = clampPoint(input.current, bounds);
+    const candidateXs = [seed.x];
+    const candidateYs = [seed.y];
+    const addEscapePoints = (obstacle: DOMRectReadOnly, part: HermesFootprintInsets) => {
+      candidateYs.push(
+        clamp(obstacle.top - part.bottom - input.guardPx, bounds.top, bounds.bottom),
+        clamp(obstacle.bottom + part.top + input.guardPx, bounds.top, bounds.bottom),
+      );
+      candidateXs.push(
+        clamp(obstacle.left - part.right - input.guardPx, bounds.left, bounds.right),
+        clamp(obstacle.right + part.left + input.guardPx, bounds.left, bounds.right),
+      );
+    };
+    if (input.editable) addEscapePoints(input.editable, footprint);
+    for (const obstacle of input.obstacles ?? []) {
+      for (const part of parts) addEscapePoints(obstacle, part);
+    }
+    const points = candidateXs.flatMap((x) => candidateYs.map((y) => ({ x, y })));
+    return points.filter((point, index) => points.findIndex((candidate) => candidate.x === point.x && candidate.y === point.y) === index)
+      .filter((point) => (!input.editable || !rectsOverlap(rectForFootprint(point, footprint), input.editable))
+        && (input.obstacles ?? []).every((obstacle) => parts.every((part) => !rectsOverlap(rectForFootprint(point, part), obstacle))))
+      .map((point) => ({
+        distance: Math.hypot(point.x - input.current.x, point.y - input.current.y),
+        placement,
+        point,
+      }));
   });
   candidates.sort((a, b) => a.distance - b.distance);
   const selected = candidates[0];
@@ -252,7 +307,7 @@ export function planHermesTravel(input: HermesTravelInput): HermesTravelPlan {
   const start = center(input.from);
   const contains = (bounds: Bounds, point: Point) => point.x >= bounds.left && point.x <= bounds.right
     && point.y >= bounds.top && point.y <= bounds.bottom;
-  const eligibleVariants = usesCompositeVariants
+  const viewportEligibleVariants = usesCompositeVariants
     ? variants.filter((variant) => contains(boundsFor(variant.footprint), start))
     : variants;
   const routeStartFor = (variant: NormalizedFootprintVariant) => usesCompositeVariants
@@ -269,6 +324,9 @@ export function planHermesTravel(input: HermesTravelInput): HermesTravelPlan {
     !rectsOverlap(rectForFootprint(candidate, variant.footprint), editable)
     && obstacles.every((obstacle) => variant.parts.every((part) => !rectsOverlap(rectForFootprint(candidate, part), obstacle)))
   );
+  const eligibleVariants = usesCompositeVariants
+    ? viewportEligibleVariants.filter((variant) => !rectsOverlap(rectForFootprint(start, variant.footprint), editable))
+    : viewportEligibleVariants;
   const safeEdge = () => {
     for (const variant of eligibleVariants) {
       const safe = boundsFor(variant.footprint);
@@ -325,6 +383,12 @@ export function planHermesTravel(input: HermesTravelInput): HermesTravelPlan {
     const candidate = safeCandidates[0];
     if (candidate) selected = { ...candidate, placement: candidate.variant.placement };
     if (selected) break;
+  }
+  if (!selected) {
+    const stationary = eligibleVariants.find((variant) => candidateIsSafe(start, variant));
+    if (stationary) {
+      selected = { dock: start, placement: stationary.placement, safe: boundsFor(stationary.footprint), variant: stationary };
+    }
   }
   if (!selected) {
     const edge = safeEdge();
