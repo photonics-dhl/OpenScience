@@ -58,11 +58,12 @@ export interface HermesVisualAdapterProps {
   suggestion: HermesGuideSuggestion;
   onInvoke: () => void;
   onRuntimeStatus?: (status: HermesRuntimeStatus) => void;
+  promptSuppressed?: boolean;
   reducedMotion: boolean;
   rendererGeneration?: number;
 }
 
-export function HermesVisualAdapter({ action, actionStartedAtMs, assistantOpen = false, state, suggestion, onInvoke, onRuntimeStatus, reducedMotion, rendererGeneration }: HermesVisualAdapterProps) {
+export function HermesVisualAdapter({ action, actionStartedAtMs, assistantOpen = false, state, suggestion, onInvoke, onRuntimeStatus, promptSuppressed = false, reducedMotion, rendererGeneration }: HermesVisualAdapterProps) {
   const t = useTranslations('dashboard.hermes');
   const linkRef = useRef<HTMLButtonElement>(null);
   const engagedRef = useRef(false);
@@ -125,7 +126,7 @@ export function HermesVisualAdapter({ action, actionStartedAtMs, assistantOpen =
   }, [reducedMotion, still]);
 
   useEffect(() => {
-    if (still || assistantOpen) {
+    if (still || assistantOpen || promptSuppressed) {
       setPromptVisible(false);
       return;
     }
@@ -162,7 +163,7 @@ export function HermesVisualAdapter({ action, actionStartedAtMs, assistantOpen =
       window.clearTimeout(hideTimer);
       document.removeEventListener('visibilitychange', onVisibility);
     };
-  }, [assistantOpen, reducedMotion, still]);
+  }, [assistantOpen, promptSuppressed, reducedMotion, still]);
 
   const setGaze = (event: React.PointerEvent<HTMLButtonElement>) => {
     if (still || !interactiveReady) return;

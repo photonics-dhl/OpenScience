@@ -18,7 +18,8 @@ export const HermesGuideBubble = forwardRef<HTMLElement, {
   const [explaining, setExplaining] = useState(false);
   useEffect(() => setExplaining(false), [target]);
   return (
-    <aside aria-hidden={!visible} className="hermes-companion-bubble" data-hermes-guide-bubble="true" data-hermes-guide-edge-stop={edgeStop ? 'true' : 'false'} data-hermes-guide-visible={visible ? 'true' : 'false'} onPointerDown={(event) => event.stopPropagation()} ref={ref}>
+    <aside aria-hidden={!visible} aria-live="polite" className="hermes-companion-bubble hermes-functional-bubble" data-hermes-guide-bubble="true" data-hermes-guide-edge-stop={edgeStop ? 'true' : 'false'} data-hermes-guide-visible={visible ? 'true' : 'false'} onPointerDown={(event) => event.stopPropagation()} ref={ref}>
+      <span className="hermes-companion-kicker">{t('guideLabel')}</span>
       <button aria-label={t('dismiss')} className="hermes-companion-dismiss" onClick={onDismiss} tabIndex={visible ? 0 : -1} type="button">×</button>
       <p>{t(`targets.${target}`)}</p>
       <div className="hermes-companion-actions">

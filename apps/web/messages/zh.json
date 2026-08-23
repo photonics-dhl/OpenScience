@@ -748,6 +748,8 @@
   },
   "hermesCompanion": {
     "dismiss": "关闭 Hermes 引导",
+    "dismissSpeech": "收起 Hermes 的话",
+    "guideLabel": "字段批注",
     "explain": "解释",
     "draft": "草拟",
     "check": "检查",
@@ -756,6 +758,19 @@
     "startingMotion": "Hermes 动效启动中",
     "retryMotion": "重试 Hermes 动效",
     "takeMeThere": "带我过去",
+    "performance": {
+      "tones": { "curious": "发现", "focused": "校读", "friendly": "同行", "reflective": "片刻思考" },
+      "capCheck": { "one": "帽子正，思路也正。", "two": "先把思路扶稳。" },
+      "earPerk": { "one": "我听见新问题了。", "two": "这条线索有动静。" },
+      "lampListen": { "one": "灯里有一点回声。", "two": "证据正在聚拢。" },
+      "happyWiggle": { "one": "这一步很扎实。", "two": "进展不错，继续。" },
+      "thinkingPause": { "one": "让我想一小会儿。", "two": "先别急着下结论。" },
+      "evidenceCheck": { "one": "证据先对齐。", "two": "我在核对出处。" },
+      "observe": { "one": "那边好像有线索。", "two": "我再看一眼上下文。" },
+      "possibleIssue": { "one": "这里还缺一环。", "two": "这句话需要证据。" },
+      "read": { "one": "我在读证据链。", "two": "先看原文怎么说。" },
+      "success": { "one": "这一步已经闭合。", "two": "证据和表述对上了。" }
+    },
     "targets": {
       "ro-title": "先给研究对象一个准确标题。",
       "source-import": "把原始证据带到这里。",

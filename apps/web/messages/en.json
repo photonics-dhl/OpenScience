@@ -748,6 +748,8 @@
   },
   "hermesCompanion": {
     "dismiss": "Dismiss Hermes guidance",
+    "dismissSpeech": "Dismiss Hermes note",
+    "guideLabel": "Field note",
     "explain": "Explain",
     "draft": "Draft",
     "check": "Check",
@@ -756,6 +758,19 @@
     "startingMotion": "Starting Hermes motion",
     "retryMotion": "Retry Hermes motion",
     "takeMeThere": "Take me there",
+    "performance": {
+      "tones": { "curious": "Noticing", "focused": "Checking", "friendly": "Alongside", "reflective": "Thinking" },
+      "capCheck": { "one": "Hat straight. Thought steady.", "two": "Let me steady the thread." },
+      "earPerk": { "one": "I heard a new question.", "two": "That clue just moved." },
+      "lampListen": { "one": "There is an echo in the lamp.", "two": "The evidence is gathering." },
+      "happyWiggle": { "one": "That step is solid.", "two": "Good progress. Keep going." },
+      "thinkingPause": { "one": "Give me a moment to think.", "two": "Let us not conclude too soon." },
+      "evidenceCheck": { "one": "Evidence first, aligned.", "two": "I am checking the source." },
+      "observe": { "one": "There may be a clue over there.", "two": "One more look at the context." },
+      "possibleIssue": { "one": "One link is still missing.", "two": "This sentence needs evidence." },
+      "read": { "one": "I am reading the evidence chain.", "two": "Let us see what the source says." },
+      "success": { "one": "This step now closes cleanly.", "two": "Evidence and wording align." }
+    },
     "targets": {
       "ro-title": "Give this research object a precise title.",
       "source-import": "Bring the source evidence in here.",
