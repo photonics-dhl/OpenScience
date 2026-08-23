@@ -181,7 +181,7 @@ describe('Hermes safe travel path', () => {
     expect(route.placement).toBeUndefined();
   });
 
-  it('prefers the open arrival quadrant instead of preserving the source orientation', () => {
+  it('chooses bubble orientation from the actual safe candidate quadrant', () => {
     const target = rect(300, 180, 240, 100);
     const actor = { bottom: 50, left: 50, right: 50, top: 50 };
     const footprint = { bottom: 110, left: 110, right: 110, top: 110 };
@@ -190,6 +190,8 @@ describe('Hermes safe travel path', () => {
       footprint,
       footprintVariants: [
         { footprint, parts: [actor], placement: { horizontal: 'left', vertical: 'above' } },
+        { footprint, parts: [actor], placement: { horizontal: 'left', vertical: 'below' } },
+        { footprint, parts: [actor], placement: { horizontal: 'right', vertical: 'above' } },
         { footprint, parts: [actor], placement: { horizontal: 'right', vertical: 'below' } },
       ],
       from: rect(700, 500, 100, 100),
@@ -199,7 +201,8 @@ describe('Hermes safe travel path', () => {
     });
 
     expect(route.mode).toBe('travel');
-    expect(route.placement).toEqual({ horizontal: 'right', vertical: 'below' });
+    expect(route.dock.x).toBeGreaterThan(600);
+    expect(route.placement).toEqual({ horizontal: 'left', vertical: 'below' });
   });
 
   it('treats an empty variant list as the legacy single-footprint plan', () => {

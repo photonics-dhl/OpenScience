@@ -243,23 +243,10 @@ export function planHermesTravel(input: HermesTravelInput): HermesTravelPlan {
   const uniqueSides = sides.filter((side, index) => sides.indexOf(side) === index);
   let selected: { dock: Point; placement?: HermesTravelPlacement; safe: Bounds; variant: NormalizedFootprintVariant } | null = null;
   for (const side of uniqueSides) {
-    const desiredPlacement: HermesTravelPlacement = {
-      horizontal: side === 'left' ? 'left' : side === 'right' ? 'right'
-        : targetCenter.x < (input.viewport.left + input.viewport.right) / 2 ? 'right' : 'left',
-      vertical: side === 'top' ? 'above' : side === 'bottom' ? 'below'
-        : targetCenter.y < (input.viewport.top + input.viewport.bottom) / 2 ? 'below' : 'above',
-    };
-    const rankedVariants = [...eligibleVariants].sort((a, b) => {
-      const score = (variant: NormalizedFootprintVariant) => variant.placement
-        ? Number(variant.placement.horizontal !== desiredPlacement.horizontal) * 2
-          + Number(variant.placement.vertical !== desiredPlacement.vertical)
-        : 0;
-      return score(a) - score(b);
-    });
-    for (const variant of rankedVariants) {
+    const safeCandidates = eligibleVariants.flatMap((variant) => {
       const footprint = variant.footprint;
       const safe = boundsFor(footprint);
-      if (safe.left > safe.right || safe.top > safe.bottom) continue;
+      if (safe.left > safe.right || safe.top > safe.bottom) return [];
       const bySide: Record<HermesDockSide, Point> = {
         top: { x: targetCenter.x, y: target.top - clearance - footprint.bottom },
         right: { x: target.right + clearance + footprint.left, y: targetCenter.y },
@@ -267,11 +254,20 @@ export function planHermesTravel(input: HermesTravelInput): HermesTravelPlan {
         left: { x: target.left - clearance - footprint.right, y: targetCenter.y },
       };
       const dock = clampPoint(bySide[side], safe);
-      if (candidateIsSafe(dock, variant)) {
-        selected = { dock, placement: variant.placement, safe, variant };
-        break;
-      }
-    }
+      return candidateIsSafe(dock, variant) ? [{ dock, safe, variant }] : [];
+    });
+    const score = ({ dock, variant }: (typeof safeCandidates)[number]) => {
+      if (!variant.placement) return 0;
+      const desiredPlacement: HermesTravelPlacement = {
+        horizontal: dock.x < (input.viewport.left + input.viewport.right) / 2 ? 'right' : 'left',
+        vertical: dock.y < (input.viewport.top + input.viewport.bottom) / 2 ? 'below' : 'above',
+      };
+      return Number(variant.placement.horizontal !== desiredPlacement.horizontal) * 2
+        + Number(variant.placement.vertical !== desiredPlacement.vertical);
+    };
+    safeCandidates.sort((a, b) => score(a) - score(b));
+    const candidate = safeCandidates[0];
+    if (candidate) selected = { ...candidate, placement: candidate.variant.placement };
     if (selected) break;
   }
   if (!selected) {

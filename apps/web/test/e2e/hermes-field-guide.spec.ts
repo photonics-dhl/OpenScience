@@ -122,8 +122,10 @@ test('Hermes arrives beside the first RO field without covering it', async ({ pa
   const guide = page.locator('[data-hermes-guide-bubble]');
   const title = page.locator('input[name="title"]');
   const stage = page.locator('[data-hermes-workspace-stage]');
-  await expect(guide).toBeVisible();
   await expect(stage).toHaveAttribute('data-hermes-guide-target', 'ro-title');
+  await expect(stage).toHaveAttribute('data-hermes-action', 'guide-arrive', { timeout: 15_000 });
+  await expect(stage).toHaveAttribute('data-hermes-guide-suppressed', 'false');
+  await expect(guide).toBeVisible();
   await expect(guide).toContainText(/title|标题/i);
   await expectGuideClearOf(page, title);
   await page.keyboard.press('Escape');
@@ -203,12 +205,64 @@ test('mobile Live2D carrier stays single-layer and docks above the virtual keybo
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(390);
 });
 
+test('temporary visual-viewport guidance preserves and restores the exact stored mobile dock', async ({ page }) => {
+  const storageKey = 'openscience:hermes-dock:v1:workspace-current:mobile';
+  const storedDock = JSON.stringify({
+    activity: 'balanced', particles: true, proactiveHints: true, sound: false, xRatio: .75, yRatio: .7,
+  });
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.addInitScript(({ key, value }) => {
+    localStorage.setItem(key, value);
+    if (!window.visualViewport) return;
+    let visualRect = { height: 844, left: 0, top: 0, width: 390 };
+    Object.defineProperties(window.visualViewport, {
+      height: { configurable: true, get: () => visualRect.height },
+      offsetLeft: { configurable: true, get: () => visualRect.left },
+      offsetTop: { configurable: true, get: () => visualRect.top },
+      width: { configurable: true, get: () => visualRect.width },
+    });
+    Object.defineProperty(window, '__setHermesVisualViewportRect', { configurable: true, value: (next: typeof visualRect) => {
+      visualRect = next;
+      window.visualViewport?.dispatchEvent(new Event('scroll'));
+    } });
+  }, { key: storageKey, value: storedDock });
+  await mockWorkspace(page);
+  await page.goto(`${baseUrl}/research-objects/ro-guide/edit?hermes-motion=full`, { waitUntil: 'networkidle' });
+
+  const stage = page.locator('[data-hermes-workspace-stage]');
+  const bubble = page.locator('[data-hermes-guide-bubble]');
+  await expect(stage).toHaveAttribute('data-hermes-guide-motion', 'edge-stop');
+  await expect(bubble).toBeVisible();
+  await page.evaluate(() => (window as Window & {
+    __setHermesVisualViewportRect(rectangle: { height: number; left: number; top: number; width: number }): void;
+  }).__setHermesVisualViewportRect({ height: 500, left: 30, top: 80, width: 300 }));
+  await expect.poll(async () => {
+    const parts = await Promise.all([
+      stage.locator('[data-hermes-carrier-travel-hull="true"]').boundingBox(),
+      bubble.boundingBox(),
+    ]);
+    return parts.every((bounds) => bounds && bounds.x >= 30 && bounds.x + bounds.width <= 330
+      && bounds.y >= 80 && bounds.y + bounds.height <= 580);
+  }).toBe(true);
+
+  await page.keyboard.press('Escape');
+  await expect(bubble).toHaveCount(0);
+  await expect.poll(async () => {
+    const bounds = await stage.boundingBox();
+    return bounds ? { x: Math.round(bounds.x + bounds.width / 2), y: Math.round(bounds.y + bounds.height / 2) } : null;
+  }).toEqual({ x: 290, y: 591 });
+  expect(await page.evaluate((key) => localStorage.getItem(key), storageKey)).toBe(storedDock);
+});
+
 test('a fully obstructed guide keeps Hermes and its motion control visible while suppressing only the bubble', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await mockWorkspace(page);
   await page.goto(`${baseUrl}/research-objects/new?mode=blank&hermes-motion=full`, { waitUntil: 'networkidle' });
 
   const stage = page.locator('[data-hermes-workspace-stage]');
+  await expect(stage).toHaveAttribute('data-hermes-guide-suppressed', 'false');
+  await expect(stage).toHaveAttribute('data-hermes-action', 'guide-arrive', { timeout: 15_000 });
+  await expect(page.locator('[data-hermes-guide-bubble][data-hermes-guide-visible="true"]')).toBeVisible();
   await expect(stage.locator('[data-hermes-motion-toggle]')).toBeHidden();
   await page.evaluate(() => {
     const blocker = document.createElement('div');
@@ -220,6 +274,55 @@ test('a fully obstructed guide keeps Hermes and its motion control visible while
   await expect(stage).toBeVisible();
   await expect(stage.locator('[data-hermes-motion-toggle]')).toBeVisible();
   await expect(page.locator('[data-hermes-guide-bubble][data-hermes-guide-visible="true"]')).toHaveCount(0);
+  const countsBeforeUnrelatedMotion = await stage.evaluate((element) => ({
+    plans: Number(element.getAttribute('data-hermes-guide-plan-count')),
+    replans: Number(element.getAttribute('data-hermes-guide-settled-replan-count')),
+  }));
+  await page.evaluate(async () => {
+    const carrier = document.querySelector<HTMLElement>('.hermes-wanko-carrier');
+    if (!carrier) throw new Error('Hermes carrier must exist');
+    for (const angle of ['1deg', '-1deg', '0deg']) {
+      const ended = new Promise<void>((resolveTransition) => {
+        const onEnd = (event: TransitionEvent) => {
+          if (event.propertyName !== 'transform') return;
+          carrier.removeEventListener('transitionend', onEnd);
+          resolveTransition();
+        };
+        carrier.addEventListener('transitionend', onEnd);
+      });
+      carrier.style.transform = `rotate(${angle})`;
+      await ended;
+    }
+  });
+  const countsAfterUnrelatedMotion = await stage.evaluate((element) => ({
+    plans: Number(element.getAttribute('data-hermes-guide-plan-count')),
+    replans: Number(element.getAttribute('data-hermes-guide-settled-replan-count')),
+  }));
+  expect(countsAfterUnrelatedMotion).toEqual(countsBeforeUnrelatedMotion);
+  const stability = await page.evaluate(() => new Promise<{
+    actions: string[]; motions: string[]; plans: number[]; replans: number[];
+  }>((resolveJourney) => {
+    const actions: string[] = [];
+    const motions: string[] = [];
+    const plans: number[] = [];
+    const replans: number[] = [];
+    const sample = () => {
+      const stageNode = document.querySelector('[data-hermes-workspace-stage]');
+      actions.push(stageNode?.getAttribute('data-hermes-action') ?? 'missing');
+      motions.push(stageNode?.getAttribute('data-hermes-guide-motion') ?? 'missing');
+      plans.push(Number(stageNode?.getAttribute('data-hermes-guide-plan-count') ?? Number.NaN));
+      replans.push(Number(stageNode?.getAttribute('data-hermes-guide-settled-replan-count') ?? Number.NaN));
+      if (actions.length >= 180) resolveJourney({ actions, motions, plans, replans });
+      else requestAnimationFrame(sample);
+    };
+    requestAnimationFrame(sample);
+  }));
+  expect(stability.plans.every(Number.isFinite), `guide plan count must be instrumented: ${JSON.stringify(stability)}`).toBe(true);
+  expect(stability.replans.every(Number.isFinite), `settled replan count must be instrumented: ${JSON.stringify(stability)}`).toBe(true);
+  expect(Math.max(...stability.plans) - Math.min(...stability.plans)).toBeLessThanOrEqual(1);
+  expect(Math.max(...stability.replans) - Math.min(...stability.replans)).toBe(0);
+  expect(new Set(stability.actions.slice(-60))).toEqual(new Set(['guide-arrive']));
+  expect(new Set(stability.motions.slice(-60))).toEqual(new Set(['edge-stop']));
 });
 
 test('creation guidance advances to source import and the route keeps a working Hermes entry', async ({ page }) => {
@@ -249,9 +352,26 @@ test('creation guidance advances to source import and the route keeps a working 
 
   const stageBox = await stage.boundingBox();
   expect(stageBox).not.toBeNull();
-  const transparentPoint = { x: stageBox!.x + 4, y: stageBox!.y + 4 };
-  expect(await page.evaluate(({ x, y }) => document.elementFromPoint(x, y)?.closest('[data-hermes-workspace-stage]') === null, transparentPoint),
-    'the guide stage transparent perimeter must remain page-owned').toBe(true);
+  const visibleGuideParts = await Promise.all([
+    stage.locator('[data-hermes-carrier-travel-hull="true"]').boundingBox(),
+    page.locator('[data-hermes-guide-bubble][data-hermes-guide-visible="true"]').boundingBox(),
+  ]);
+  const pointInside = (point: { x: number; y: number }, bounds: NonNullable<(typeof visibleGuideParts)[number]>) => (
+    point.x >= bounds.x && point.x <= bounds.x + bounds.width && point.y >= bounds.y && point.y <= bounds.y + bounds.height
+  );
+  const perimeterPoints = Array.from({ length: 9 }, (_, index) => index / 8).flatMap((ratio) => [
+    { x: stageBox!.x + 4 + ratio * (stageBox!.width - 8), y: stageBox!.y + 4 },
+    { x: stageBox!.x + 4 + ratio * (stageBox!.width - 8), y: stageBox!.y + stageBox!.height - 4 },
+    { x: stageBox!.x + 4, y: stageBox!.y + 4 + ratio * (stageBox!.height - 8) },
+    { x: stageBox!.x + stageBox!.width - 4, y: stageBox!.y + 4 + ratio * (stageBox!.height - 8) },
+  ]);
+  const transparentPoints = perimeterPoints.filter((point) => visibleGuideParts.every((bounds) => !bounds || !pointInside(point, bounds)));
+  expect(transparentPoints.length, 'the guide stage perimeter must retain transparent samples').toBeGreaterThan(0);
+  const blockedTransparentPoints = await page.evaluate((points) => points.flatMap(({ x, y }) => {
+    const hit = document.elementFromPoint(x, y);
+    return hit?.closest('[data-hermes-workspace-stage]') ? [{ className: hit.className, tagName: hit.tagName, x, y }] : [];
+  }), transparentPoints);
+  expect(blockedTransparentPoints, 'every transparent guide perimeter sample must remain page-owned').toEqual([]);
 
   const visibleHermes = stage.locator('[data-hermes-carrier-travel-hull="true"]');
   const visiblePoint = await expectExactCenterHit(page, visibleHermes, '[data-hermes-carrier-interaction-hull="true"]', 'visible Hermes art');
@@ -331,6 +451,12 @@ test('field guidance leaves the primary blank-RO create action directly operable
     };
   });
   expect(settledGeometry.hit?.tagName, `settled protected replan must expose Create: ${JSON.stringify({ geometry, settledGeometry })}`).toBe('BUTTON');
+  const noOverlap = (part: NonNullable<typeof settledGeometry.actor>, obstacle: NonNullable<typeof settledGeometry.button>) => (
+    part.left < obstacle.right && part.right > obstacle.left && part.top < obstacle.bottom && part.bottom > obstacle.top
+  );
+  expect(settledGeometry.actor && settledGeometry.bubble && settledGeometry.button).toBeTruthy();
+  expect(noOverlap(settledGeometry.actor!, settledGeometry.button!)).toBe(false);
+  expect(noOverlap(settledGeometry.bubble!, settledGeometry.button!)).toBe(false);
 
   const submitted = page.waitForRequest((request) => new URL(request.url()).pathname === '/api/research-objects'
     && request.method() === 'POST');
