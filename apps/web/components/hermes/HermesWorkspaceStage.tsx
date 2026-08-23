@@ -198,10 +198,15 @@ function HermesWorkspaceStage({ fallbackAssistantOpen, fallbackOnInvoke, guideTa
     const search = motionSearch ? `?${motionSearch}` : '';
     const queryPreference = new URLSearchParams(search).get('hermes-motion');
     if (queryPreference === 'full' || queryPreference === 'reduced') saveHermesMotionPreference(window.localStorage, queryPreference);
-    setReducedMotion(resolveHermesReducedMotion(
+    const systemPreference = window.matchMedia('(prefers-reduced-motion: reduce)');
+    const sync = () => setReducedMotion(resolveHermesReducedMotion(
       search,
       loadHermesMotionPreference(window.localStorage),
+      systemPreference.matches,
     ));
+    sync();
+    systemPreference.addEventListener('change', sync);
+    return () => systemPreference.removeEventListener('change', sync);
   }, [motionSearch]);
 
   useEffect(() => {
@@ -303,13 +308,14 @@ function HermesWorkspaceStage({ fallbackAssistantOpen, fallbackOnInvoke, guideTa
       return;
     }
     const actorBounds = stage.querySelector<HTMLElement>('[data-hermes-companion-actor="true"]')?.getBoundingClientRect() ?? stageBounds;
+    const travelHullBounds = stage.querySelector<HTMLElement>('[data-hermes-carrier-travel-hull="true"]')?.getBoundingClientRect() ?? actorBounds;
     const bubbleBounds = bubbleRef.current?.getBoundingClientRect() ?? stageBounds;
     const stageCenter = { x: stageBounds.left + stageBounds.width / 2, y: stageBounds.top + stageBounds.height / 2 };
     const union = {
-      bottom: Math.max(actorBounds.bottom, bubbleBounds.bottom),
-      left: Math.min(actorBounds.left, bubbleBounds.left),
-      right: Math.max(actorBounds.right, bubbleBounds.right),
-      top: Math.min(actorBounds.top, bubbleBounds.top),
+      bottom: Math.max(travelHullBounds.bottom, bubbleBounds.bottom),
+      left: Math.min(travelHullBounds.left, bubbleBounds.left),
+      right: Math.max(travelHullBounds.right, bubbleBounds.right),
+      top: Math.min(travelHullBounds.top, bubbleBounds.top),
     };
     const plan = planHermesTravel({
       bottomInsetPx: window.visualViewport ? Math.max(0, window.innerHeight - window.visualViewport.height) : 0,
@@ -449,6 +455,7 @@ function HermesWorkspaceStage({ fallbackAssistantOpen, fallbackOnInvoke, guideTa
       data-hermes-guide-motion={guideMode ?? 'idle'}
       data-hermes-guide-suppressed={guideSuppressed ? 'true' : 'false'}
       data-hermes-guide-target={guideTarget ?? undefined}
+      data-hermes-footprint-source="carrier-travel-hull"
       data-hermes-motion-preference={reducedMotion === null ? 'resolving' : reducedMotion ? 'reduced' : 'full'}
       data-hermes-presentation-state={state}
       data-hermes-workspace-stage="true"
@@ -460,7 +467,7 @@ function HermesWorkspaceStage({ fallbackAssistantOpen, fallbackOnInvoke, guideTa
       ref={stageRef}
       style={style}
     >
-      <HermesVisualAdapter
+      {reducedMotion !== null ? <HermesVisualAdapter
         action={behavior.primary}
         actionStartedAtMs={actionStartedAtMs}
         assistantOpen={presentation?.assistantOpen ?? fallbackAssistantOpen}
@@ -480,7 +487,7 @@ function HermesWorkspaceStage({ fallbackAssistantOpen, fallbackOnInvoke, guideTa
         rendererGeneration={runtimeStatus.generation}
         state={state}
         suggestion={presentation?.suggestion ?? neutralSuggestion}
-      />
+      /> : null}
       {reducedMotion !== null ? <button
         className="hermes-motion-enable"
         data-hermes-motion-toggle

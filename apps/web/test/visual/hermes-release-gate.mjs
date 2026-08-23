@@ -2,11 +2,14 @@
 
 import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
+import { fileURLToPath } from 'node:url';
 
 const port = Number(process.env.HERMES_GATE_PORT ?? 3198);
 const externalBaseUrl = process.env.WEB_BASE_URL;
 const baseUrl = externalBaseUrl ?? `http://127.0.0.1:${port}`;
 const nextBin = new URL('../../node_modules/next/dist/bin/next', import.meta.url).pathname.replace(/^\/(.:\/)/, '$1');
+const webRoot = fileURLToPath(new URL('../..', import.meta.url));
+const playwrightBin = fileURLToPath(new URL('../../node_modules/playwright/cli.js', import.meta.url));
 const server = externalBaseUrl ? null : spawn(process.execPath, [nextBin, 'start', '--hostname', '127.0.0.1', '--port', String(port)], {
   env: { ...process.env, API_ORIGIN: 'http://127.0.0.1:1', ENABLE_VISUAL_HARNESS: '1' },
   stdio: ['ignore', 'pipe', 'pipe'],
@@ -26,13 +29,33 @@ const waitForServer = async () => {
   assert.fail(`Hermes release server did not start:\n${serverOutput}`);
 };
 
+const runProductE2E = () => new Promise((resolve, reject) => {
+  const child = spawn(process.execPath, [
+    playwrightBin,
+    'test',
+    'test/e2e/hermes-dashboard.spec.ts',
+    '--config',
+    'playwright.config.ts',
+  ], {
+    cwd: webRoot,
+    env: { ...process.env, WEB_BASE_URL: baseUrl },
+    stdio: 'inherit',
+  });
+  child.once('error', reject);
+  child.once('exit', (code) => {
+    if (code === 0) resolve();
+    else reject(new Error(`Hermes product E2E failed with exit code ${code ?? 'unknown'}`));
+  });
+});
+
 try {
   await waitForServer();
   process.env.WEB_BASE_URL = baseUrl;
-  await import('./hermes-articulation-gate.mjs');
+  await import('./hermes-live2d-motion-gate.mjs');
   await import('./hermes-performance-gate.mjs');
   await import('./hermes-guidance-geometry-gate.mjs');
   await import('./hermes-companion-motion-gate.mjs');
+  await runProductE2E();
   if (process.env.OPENSCIENCE_RUN_BLANK_RO_PRODUCTION === '1') {
     await import('./hermes-blank-ro-production-gate.mjs');
   }

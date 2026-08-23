@@ -88,6 +88,28 @@ describe('Hermes safe travel path', () => {
     expect(collision).toBeUndefined();
   });
 
+  it.each([
+    ['desktop', { bottom: 102, left: 148, right: 132, top: 176 }, rect(1_152, 594, 288, 288), rect(0, 0, 1_440, 900)],
+    ['mobile', { bottom: 72, left: 94, right: 88, top: 116 }, rect(246, 548, 144, 144), rect(0, 0, 390, 844)],
+  ] as const)('keeps the %s carrier travel hull clear of the target field', (_variant, footprint, from, viewport) => {
+    const editable = viewport.width > 640
+      ? rect(305, 350, 742, 200)
+      : rect(24, 478, 342, 128);
+    const route = planHermesTravel({
+      editable,
+      footprint,
+      from,
+      preferredSides: ['top', 'right', 'left', 'bottom'],
+      target: editable,
+      viewport,
+    });
+
+    for (const point of route.points.slice(1)) {
+      const occupied = rectForFootprint(point, footprint);
+      expect(overlaps(rect(occupied.left, occupied.top, occupied.right - occupied.left, occupied.bottom - occupied.top), editable)).toBe(false);
+    }
+  });
+
   it('leaves one physical pixel for animated footprint measurement variance', () => {
     const editable = rect(305.59375, 350.1875, 742.40625, 199.59375);
     const measured = { bottom: 107, left: 152, right: 152, top: 231.5 };

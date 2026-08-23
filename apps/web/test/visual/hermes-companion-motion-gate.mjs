@@ -1,6 +1,7 @@
 /* global document, process */
 
 import assert from 'node:assert/strict';
+import { createHash } from 'node:crypto';
 import { mkdir, writeFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
 
@@ -22,7 +23,7 @@ await page.route('**/api/ingestion?actionable=true', (route) => route.fulfill({ 
 
 try {
   await page.goto(`${baseUrl}/dashboard`, { waitUntil: 'networkidle' });
-  await page.waitForFunction(() => document.querySelector('[data-hermes-rig="mesh-2d"]')?.getAttribute('data-hermes-rig-status') === 'ready');
+  await page.waitForFunction(() => document.querySelector('[data-hermes-rig="live2d-wanko"]')?.getAttribute('data-hermes-rig-status') === 'ready');
   const stage = page.locator('[data-hermes-workspace-stage]');
   const canvasBounds = await page.locator('[data-hermes-articulated-canvas]').boundingBox();
   assert.ok(canvasBounds && canvasBounds.width >= 210 && canvasBounds.height >= 210,
@@ -38,7 +39,6 @@ try {
   while (Date.now() - started < 90_000 && !duplicate) {
     const sample = await page.evaluate(() => {
       const stageNode = document.querySelector('[data-hermes-workspace-stage]');
-      const canvas = document.querySelector('[data-hermes-articulated-canvas]');
       const actor = document.querySelector('[data-hermes-companion-actor]');
       const actorBounds = actor?.getBoundingClientRect();
       return {
@@ -46,7 +46,7 @@ try {
         actor: actorBounds ? { left: actorBounds.left, top: actorBounds.top } : null,
         kind: stageNode?.getAttribute('data-hermes-action-kind') ?? '',
         startedAt: stageNode?.getAttribute('data-hermes-action-started-at') ?? '',
-        joints: [canvas?.getAttribute('data-hermes-head'), canvas?.getAttribute('data-hermes-torso'), canvas?.getAttribute('data-hermes-tail')].join('|'),
+        frame: '',
       };
     });
     if (sample.action === 'patrol' && sample.startedAt && sample.actor) {
@@ -61,9 +61,8 @@ try {
     }
     if (sample.startedAt && sample.startedAt !== lastStartedAt) {
       await page.waitForTimeout(260);
-      sample.joints = await page.locator('[data-hermes-articulated-canvas]').evaluate((canvas) => [
-        canvas.getAttribute('data-hermes-head'), canvas.getAttribute('data-hermes-torso'), canvas.getAttribute('data-hermes-tail'),
-      ].join('|'));
+      const frame = await page.locator('[data-hermes-articulated-canvas]').screenshot({ animations: 'allow' });
+      sample.frame = createHash('sha256').update(frame).digest('hex');
       actions.push({ ...sample, elapsedMs: Date.now() - started });
       if (actions.length > 1 && actions.at(-2).action === sample.action) duplicate = [actions.at(-2), actions.at(-1)];
       lastStartedAt = sample.startedAt;
@@ -81,7 +80,7 @@ try {
   assert.ok(signature.length >= 2, `90s idle must include at least 2 signature actions, got ${signature.length}`);
   assert.ok(gaps.every((gap) => gap <= 8_500), `idle action gap exceeded 8.5s: ${gaps.join(', ')}`);
   assert.equal(duplicate, null, `consecutive actions must not repeat: ${JSON.stringify(duplicate)}`);
-  assert.ok(new Set(actions.map((entry) => entry.joints)).size >= 8, 'classified actions must produce at least 8 distinct real mesh joint frames');
+  assert.ok(new Set(actions.map((entry) => entry.frame)).size >= 8, 'classified actions must produce at least 8 distinct real Live2D canvas frames');
   const completedPatrol = [...patrolTracks.values()].find((track) => {
     if (track.length < 8) return false;
     const origin = track[0];
@@ -100,25 +99,42 @@ try {
 
   const actor = page.locator('[data-hermes-companion-actor]');
   const inputOwner = page.locator('[data-hermes-input-owner="true"]');
-  const interactiveRig = page.locator('[data-hermes-rig="mesh-2d"]');
+  const interactiveRig = page.locator('[data-hermes-carrier-interaction-hull="true"]');
   await page.addStyleTag({ content: '.hermes-companion-actor{animation:none!important}' });
   await page.waitForTimeout(220);
   const beforeHover = await actor.boundingBox();
-  const beforeHoverJoints = await page.locator('[data-hermes-articulated-canvas]').evaluate((canvas) => [
-    canvas.getAttribute('data-hermes-head'), canvas.getAttribute('data-hermes-tail'),
-  ].join('|'));
+  const beforeHoverFrame = await page.locator('[data-hermes-articulated-canvas]').screenshot({ animations: 'allow' });
   const rigBounds = await interactiveRig.boundingBox();
   assert.ok(beforeHover, 'Hermes actor must expose a real product bounding box');
-  assert.ok(rigBounds, 'Hermes rig must expose its real pointer hit area');
-  await interactiveRig.hover({ position: { x: rigBounds.width - 2, y: 2 } });
+  assert.ok(rigBounds && rigBounds.width >= 44 && rigBounds.height >= 44, 'Hermes carrier must expose a 44px minimum cockpit hit area');
+  const cockpitSample = {
+    x: rigBounds.x + rigBounds.width * .8,
+    y: rigBounds.y + rigBounds.height * .2,
+  };
+  const cockpitHit = await page.evaluate(({ x, y }) => {
+    const hull = document.querySelector('[data-hermes-carrier-interaction-hull="true"]');
+    const target = document.elementFromPoint(x, y);
+    return {
+      inside: Boolean(hull && target && (target === hull || hull.contains(target))),
+      target: target?.getAttribute('data-hermes-carrier-interaction-hull')
+        ?? target?.getAttribute('data-hermes-live2d-canvas')
+        ?? target?.tagName
+        ?? null,
+    };
+  }, cockpitSample);
+  assert.ok(cockpitHit.inside,
+    `cockpit pointer sample must hit the interaction hull or its descendant: ${JSON.stringify({ cockpitHit, cockpitSample, rigBounds })}`);
+  await page.mouse.move(cockpitSample.x, cockpitSample.y);
   await page.waitForTimeout(220);
   const duringHover = await actor.boundingBox();
-  const duringHoverJoints = await page.locator('[data-hermes-articulated-canvas]').evaluate((canvas) => [
-    canvas.getAttribute('data-hermes-head'), canvas.getAttribute('data-hermes-tail'),
-  ].join('|'));
+  const duringHoverFrame = await page.locator('[data-hermes-articulated-canvas]').screenshot({ animations: 'allow' });
   assert.ok(duringHover && Math.hypot(duringHover.x - beforeHover.x, duringHover.y - beforeHover.y) <= 2,
     `pointer interaction must articulate internal joints without dragging the whole actor: before=${JSON.stringify(beforeHover)} during=${JSON.stringify(duringHover)}`);
-  assert.notEqual(duringHoverJoints, beforeHoverJoints, 'pointer interaction must change real renderer-backed head/tail joints');
+  assert.notEqual(
+    createHash('sha256').update(duringHoverFrame).digest('hex'),
+    createHash('sha256').update(beforeHoverFrame).digest('hex'),
+    'pointer interaction must change real Live2D canvas pixels',
+  );
   await page.mouse.move(20, 20);
   await page.waitForTimeout(260);
   const pointerReset = await inputOwner.evaluate((node) => ({

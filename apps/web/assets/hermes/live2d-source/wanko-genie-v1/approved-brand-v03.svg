@@ -1,0 +1,75 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="2079" height="756" viewBox="0 0 2079 756" fill="none">
+  <defs>
+    <linearGradient id="inputBlue" x1="150" y1="140" x2="820" y2="410" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#4C9EFF" stop-opacity=".28"/>
+      <stop offset=".42" stop-color="#35BFFF" stop-opacity=".76"/>
+      <stop offset="1" stop-color="#DDFBFF" stop-opacity=".96"/>
+    </linearGradient>
+    <linearGradient id="routeBlue" x1="820" y1="410" x2="1545" y2="405" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#E6FBFF" stop-opacity=".92"/>
+      <stop offset=".35" stop-color="#76D5FF" stop-opacity=".88"/>
+      <stop offset=".78" stop-color="#42A8F2" stop-opacity=".74"/>
+      <stop offset="1" stop-color="#7EC7FF" stop-opacity=".48"/>
+    </linearGradient>
+    <radialGradient id="nodeBlue">
+      <stop offset="0" stop-color="#FFFFFF"/>
+      <stop offset=".38" stop-color="#D9F8FF"/>
+      <stop offset=".72" stop-color="#59C9FF"/>
+      <stop offset="1" stop-color="#2388E9"/>
+    </radialGradient>
+    <radialGradient id="resultOrange">
+      <stop offset="0" stop-color="#FFF9E4"/>
+      <stop offset=".34" stop-color="#FFD56D"/>
+      <stop offset=".72" stop-color="#FF842B"/>
+      <stop offset="1" stop-color="#ED4A1A"/>
+    </radialGradient>
+    <filter id="lineGlow" x="-20%" y="-80%" width="140%" height="260%">
+      <feGaussianBlur stdDeviation="3.2" result="soft"/>
+      <feMerge><feMergeNode in="soft"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+    <filter id="nodeGlow" x="-140%" y="-140%" width="380%" height="380%">
+      <feGaussianBlur stdDeviation="3.8" result="soft"/>
+      <feMerge><feMergeNode in="soft"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+    <style>
+      .metadata-node { r: 14px; }
+      @media (max-width: 220px) {
+        .input-flow { stroke-width: 9px; }
+        .metadata-route { stroke-width: 7px; }
+        .metadata-node { r: 18px; stroke-width: 5px; filter: none; }
+        #SDF_OPEN_CENTRE, #SDF_DIFF_RESULT { filter: none; }
+      }
+    </style>
+  </defs>
+
+  <!-- The reference's thicker blue stream travels from the spout into the source centre. -->
+  <path class="input-flow" d="M142 137 C282 148 378 220 493 276 C601 329 692 331 791 396" stroke="url(#inputBlue)" stroke-width="7" stroke-linecap="round" filter="url(#lineGlow)"/>
+
+  <!-- A vertical dark, open-centred source capsule; it is not one of the six dimensions. -->
+  <g id="SDF_OPEN_CENTRE" filter="url(#nodeGlow)">
+    <rect class="centre-capsule" x="778" y="367" width="43" height="91" rx="21.5" fill="#07143A" stroke="#DDF9FF" stroke-width="6"/>
+    <path d="M794 380 V445" stroke="#48BFFF" stroke-width="4" stroke-linecap="round"/>
+  </g>
+
+  <!-- Three independent fan routes. They never rejoin; only the middle route reaches the orange result. -->
+  <g id="SDF_THREE_REFERENCE_ROUTES" stroke="url(#routeBlue)" stroke-width="4.3" stroke-linecap="round" stroke-linejoin="round" fill="none" filter="url(#lineGlow)">
+    <path class="metadata-route" data-route="top" data-connects-result="false" data-rejoins="false" d="M820 397 C895 384 948 350 1028 341 C1119 330 1208 348 1316 371 C1350 378 1376 379 1402 377"/>
+    <path class="metadata-route" data-route="middle" data-connects-result="true" data-rejoins="false" d="M820 409 C905 407 964 425 1038 431 C1128 439 1190 428 1277 414 C1368 399 1443 403 1539 406"/>
+    <path class="metadata-route" data-route="bottom" data-connects-result="false" data-rejoins="false" d="M820 421 C895 440 952 477 1026 493 C1113 512 1186 500 1260 480 C1321 463 1363 458 1405 462"/>
+  </g>
+
+  <!-- Exactly two circular metadata points per route, matching the reference rhythm. -->
+  <g id="SDF_EXACT_SIX_CIRCULAR_NODES" fill="url(#nodeBlue)" stroke="#EAFBFF" stroke-width="3.5" filter="url(#nodeGlow)">
+    <circle class="metadata-node" data-node="1" data-route="top" cx="1028" cy="341"/>
+    <circle class="metadata-node" data-node="2" data-route="top" cx="1208" cy="348"/>
+    <circle class="metadata-node" data-node="3" data-route="middle" cx="1038" cy="431"/>
+    <circle class="metadata-node" data-node="4" data-route="middle" cx="1277" cy="414"/>
+    <circle class="metadata-node" data-node="5" data-route="bottom" cx="1026" cy="493"/>
+    <circle class="metadata-node" data-node="6" data-route="bottom" cx="1260" cy="480"/>
+  </g>
+
+  <!-- The middle trajectory alone resolves into the differentiated orange result. -->
+  <g id="SDF_DIFF_RESULT" filter="url(#nodeGlow)">
+    <circle data-result="diff" cx="1556" cy="407" r="19" fill="url(#resultOrange)" stroke="#FFF1C2" stroke-width="4"/>
+  </g>
+</svg>

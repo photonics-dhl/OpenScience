@@ -189,6 +189,7 @@ const proposalFor = (value) => page.locator('[data-before-after-proposal]').filt
   has: page.getByText(value, { exact: true }),
 }).first();
 const hashText = (value) => createHash('sha256').update(String(value ?? '')).digest('hex');
+const hashBytes = (value) => createHash('sha256').update(value).digest('hex');
 const aiCredit = (usage) => usage.user?.find((item) => item.resource === 'ai_credit')?.used;
 const rectsOverlap = (a, b) => a && b && a.x < b.x + b.width && a.x + a.width > b.x && a.y < b.y + b.height && a.y + a.height > b.y;
 const assertHermesClear = async (protectedLocator, message) => {
@@ -211,6 +212,17 @@ const assertHermesClear = async (protectedLocator, message) => {
     return { x: rect.x, y: rect.y, width: rect.width, height: rect.height };
   }));
   assert.equal(protectedBoxes.some((box) => rectsOverlap(footprint, box)), false, message);
+};
+const wankoCanvas = () => page.locator('[data-hermes-rig="live2d-wanko"] [data-hermes-live2d-canvas="true"][data-live2d-instance="wanko"]');
+const waitForWankoReady = async () => {
+  await page.locator('[data-hermes-rig="live2d-wanko"][data-hermes-rig-status="ready"]').waitFor({ state: 'visible', timeout: 30_000 });
+  assert.equal(await wankoCanvas().count(), 1, 'Workspace did not retain exactly one Wanko Live2D canvas');
+};
+const captureWanko = async () => {
+  await waitForWankoReady();
+  const frame = await wankoCanvas().screenshot();
+  assert.ok(frame.length > 1_000, 'Wanko Live2D frame was unexpectedly empty');
+  return { frame, hash: hashBytes(frame) };
 };
 
 try {
@@ -237,10 +249,10 @@ try {
 
   const stage = page.locator('[data-hermes-workspace-stage]');
   await stage.waitFor({ state: 'visible' });
-  const idleFrameA = await stage.screenshot();
+  const idleFrameA = await captureWanko();
   await page.waitForTimeout(900);
-  const idleFrameB = await stage.screenshot();
-  assert.notEqual(hashText(idleFrameA), hashText(idleFrameB), 'Hermes idle pixels did not change before interaction');
+  const idleFrameB = await captureWanko();
+  assert.notEqual(idleFrameA.hash, idleFrameB.hash, 'Wanko idle pixels did not change before interaction');
   await page.getByRole('textbox', { name: /Problem|问题/ }).fill(controlledBrief);
 
   const taskResponsePromise = page.waitForResponse((response) => (
@@ -252,6 +264,14 @@ try {
   const submitted = await taskResponse.json();
   assert.ok(submitted?.task?.id, 'sdf.extract response omitted task id');
   taskIds.push(submitted.task.id);
+  await stage.waitFor({ state: 'visible' });
+  await stage.evaluate((node) => {
+    if (node.getAttribute('data-hermes-presentation-state') !== 'scanning') throw new Error('Hermes did not enter the extraction work state');
+  });
+  const workingFrameA = await captureWanko();
+  await page.waitForTimeout(420);
+  const workingFrameB = await captureWanko();
+  assert.notEqual(workingFrameA.hash, workingFrameB.hash, 'Wanko work pixels did not animate during extraction');
   const sessionAudit = await adminJson(`/api/admin/audit-logs?action=agent.session.create&actorId=${me.userId}&limit=20`);
   assert.ok(sessionAudit.items?.some((item) => item.targetId === submitted.task.sessionId), 'agent.session.create audit fact was not observable');
 
@@ -299,6 +319,8 @@ try {
     }
     const actor = node.querySelector('[data-hermes-companion-actor="true"]');
     if (actor && getComputedStyle(actor).animationName !== 'none') throw new Error('Hermes review posture is not still');
+    const canvas = node.querySelector('[data-hermes-live2d-canvas="true"]');
+    if (canvas && getComputedStyle(canvas).display !== 'none') throw new Error('Wanko Live2D canvas remained active during approval');
   });
   const activeProposal = page.locator('[data-before-after-proposal]').first();
   await assertHermesClear(page.locator('[data-before-after-proposal], main textarea, header button, header input'), 'Hermes footprint overlaps protected review controls');
@@ -386,6 +408,14 @@ try {
   const commitAudit = await adminJson(`/api/admin/audit-logs?workspaceId=${acceptanceWorkspaceId}&action=commit.create&limit=20`);
   assert.ok(commitAudit.items?.some((item) => item.targetId === committed.commit.commitId), 'commit.create audit fact was not observable');
 
+  await waitForWankoReady();
+  await page.locator('[data-hermes-rig="live2d-wanko"][data-hermes-wanko-presentation="celebrate"]').waitFor({ state: 'visible', timeout: 45_000 });
+  const celebrationFrameA = await captureWanko();
+  await page.waitForTimeout(360);
+  const celebrationFrameB = await captureWanko();
+  assert.notEqual(celebrationFrameA.hash, celebrationFrameB.hash, 'Wanko milestone celebration did not produce real pixel motion after commit');
+  assert.equal(await page.locator('.hermes-wanko-celebration').count(), 1, 'Wanko celebration brand layer was not present after commit');
+
   await context.addCookies([{ name: 'NEXT_LOCALE', value: 'zh', domain: new URL(baseUrl).hostname, path: '/' }]);
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto(`${baseUrl}/research-objects/${researchObjectId}/edit?hermes-motion=reduced`, { waitUntil: 'networkidle' });
@@ -427,6 +457,11 @@ try {
     unsupportedClaims,
     fieldHashes,
     evidenceLocators: Object.fromEntries(fields.filter((field) => evidence[field]?.locator).map((field) => [field, evidence[field].locator])),
+    wankoPixelHashes: {
+      idle: [idleFrameA.hash, idleFrameB.hash],
+      working: [workingFrameA.hash, workingFrameB.hash],
+      celebration: [celebrationFrameA.hash, celebrationFrameB.hash],
+    },
     acceptedFields: Object.keys(accepted),
     rejectedField,
     committedVersionId: committed.commit.versionId,

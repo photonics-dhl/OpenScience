@@ -1868,6 +1868,7 @@ body {
 .hermes-dock-anchor {
   min-height: 18rem;
   width: 100%;
+  pointer-events: none;
 }
 
 .hermes-workspace-stage {
@@ -1914,7 +1915,7 @@ body {
   color: #ff8a70;
 }
 
-.hermes-workspace-stage .hermes-rig-stage,
+.hermes-workspace-stage .hermes-carrier-interaction-hull,
 .hermes-workspace-stage .hermes-motion-enable,
 .hermes-workspace-stage .hermes-companion-bubble {
   pointer-events: auto;
@@ -2139,6 +2140,18 @@ body [data-reading-role='reading'] {
   outline-offset: 3px;
 }
 
+@media (max-width: 640px) {
+  .hermes-motion-enable {
+    position: absolute;
+    top: -2.35rem;
+    right: 0;
+    bottom: auto;
+    min-height: 1.85rem;
+    padding: .3rem .55rem;
+    font-size: .68rem;
+  }
+}
+
 .hermes-companion-take-me {
   margin-top: .55rem;
   background: rgb(255 78 34 / .09);
@@ -2232,10 +2245,16 @@ body [data-reading-role='reading'] {
 }
 
 .hermes-rig-image-fallback {
-  z-index: 2;
-  object-fit: contain;
+  z-index: 7;
   opacity: 1;
   transition: opacity 180ms ease;
+}
+
+.hermes-rig-image-fallback img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
 }
 
 .hermes-rig-vector-fallback {
@@ -2244,13 +2263,260 @@ body [data-reading-role='reading'] {
   opacity: .2;
 }
 
+.hermes-rig-stage[data-hermes-poster-status='failed'] .hermes-rig-image-fallback {
+  opacity: 0 !important;
+}
+
+.hermes-rig-stage[data-hermes-poster-status='failed']:not([data-hermes-rig-status='ready']) .hermes-rig-vector-fallback {
+  z-index: 8;
+  opacity: 1 !important;
+}
+
+.hermes-wanko-carrier,
+.hermes-carrier-shadow,
+.hermes-carrier-rear,
+.hermes-carrier-brand,
+.hermes-carrier-vapor-rear,
+.hermes-carrier-interaction-hull,
+.hermes-carrier-front,
+.hermes-carrier-vapor-front,
+.hermes-carrier-glow,
+.hermes-carrier-navigation,
+.hermes-carrier-effects,
+.hermes-carrier-travel-hull {
+  position: absolute;
+  inset: 0;
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.hermes-wanko-carrier {
+  --hermes-carrier-front-effect-scale: .54;
+  position: relative;
+  overflow: visible;
+  pointer-events: none;
+  transform-origin: 50% 65%;
+  transition: transform 240ms cubic-bezier(.2, .8, .2, 1);
+  animation: hermes-carrier-hover 6.2s ease-in-out infinite;
+}
+
+.hermes-rig-stage[data-hermes-static-frame='true'] .hermes-wanko-carrier {
+  animation: none !important;
+  transition: none !important;
+}
+
+.hermes-carrier-shadow {
+  z-index: 1;
+}
+
+.hermes-carrier-rear {
+  z-index: 2;
+}
+
+.hermes-carrier-shadow,
+.hermes-carrier-rear,
+.hermes-carrier-brand,
+.hermes-carrier-front {
+  transform: scale(.54);
+  transform-origin: 50% 55%;
+}
+
+.hermes-carrier-brand {
+  z-index: 3;
+  opacity: .9;
+  mix-blend-mode: screen;
+}
+
+.hermes-carrier-vapor-rear {
+  z-index: 4;
+  mix-blend-mode: screen;
+}
+
+.hermes-carrier-interaction-hull {
+  z-index: 5;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  min-width: 44px;
+  min-height: 44px;
+  pointer-events: auto;
+}
+
+.hermes-carrier-interaction-hull .hermes-rig-canvas {
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+
+.hermes-carrier-rear img,
+.hermes-carrier-brand img,
+.hermes-carrier-vapor-rear img,
+.hermes-carrier-front img,
+.hermes-carrier-vapor-front img,
+.hermes-carrier-shadow img,
+.hermes-carrier-glow img,
+.hermes-carrier-navigation img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  pointer-events: none;
+  user-select: none;
+}
+
+.hermes-carrier-front {
+  z-index: 6;
+}
+
+.hermes-carrier-vapor-front {
+  z-index: 7;
+  mix-blend-mode: screen;
+}
+
+.hermes-carrier-vapor-front,
+.hermes-carrier-glow {
+  transform: scale(var(--hermes-carrier-front-effect-scale));
+  transform-origin: 50% 55%;
+}
+
+.hermes-carrier-glow {
+  z-index: 8;
+  opacity: .42;
+  mix-blend-mode: screen;
+  transition: opacity 260ms ease;
+}
+
+.hermes-carrier-effects {
+  z-index: 10;
+  opacity: 0;
+  transition: opacity 240ms ease;
+}
+
+.hermes-carrier-navigation {
+  z-index: 9;
+  opacity: 0;
+  mix-blend-mode: screen;
+  transition: opacity 220ms ease;
+}
+
+.hermes-carrier-effects::before,
+.hermes-carrier-effects::after {
+  position: absolute;
+  content: '';
+  pointer-events: none;
+}
+
+.hermes-carrier-effects::before {
+  left: 18%;
+  top: 58%;
+  width: 20%;
+  height: 2px;
+  background: linear-gradient(90deg, transparent, rgb(103 163 255 / .48));
+  filter: blur(1px);
+}
+
+.hermes-carrier-effects::after {
+  left: 47%;
+  top: 35%;
+  width: 8%;
+  height: 24%;
+  border-radius: 50%;
+  background: radial-gradient(ellipse, rgb(255 216 129 / .22), transparent 68%);
+}
+
+.hermes-carrier-travel-hull {
+  z-index: 0;
+  inset: 4% 8%;
+  width: 84%;
+  height: 92%;
+}
+
+.hermes-rig-stage[data-hermes-wanko-presentation='evidence'] .hermes-carrier-glow {
+  opacity: .72;
+}
+
+.hermes-rig-stage[data-hermes-wanko-presentation='trail'] .hermes-carrier-effects,
+.hermes-rig-stage[data-hermes-wanko-presentation='celebrate'] .hermes-carrier-effects {
+  opacity: 1;
+}
+
+.hermes-rig-stage[data-hermes-wanko-presentation='trail'] .hermes-carrier-navigation {
+  opacity: 1;
+}
+
+.hermes-workspace-stage[data-hermes-action='guide-travel'] .hermes-wanko-carrier,
+.hermes-workspace-stage[data-hermes-action='patrol'] .hermes-wanko-carrier {
+  transform: rotate(-3deg);
+}
+
+@media (max-width: 640px) {
+  .hermes-wanko-carrier {
+    --hermes-carrier-front-effect-scale: .48;
+  }
+
+  .hermes-carrier-shadow,
+  .hermes-carrier-rear,
+  .hermes-carrier-brand,
+  .hermes-carrier-front {
+    transform: scale(.48);
+  }
+
+  .hermes-carrier-vapor-rear,
+  .hermes-carrier-effects {
+    transform: scale(.68);
+    transform-origin: 50% 55%;
+  }
+
+  .hermes-carrier-interaction-hull { inset: 0; width: 100%; height: 100%; }
+
+  .hermes-carrier-interaction-hull .hermes-rig-canvas { inset: 0; width: 100%; height: 100%; }
+}
+
+@keyframes hermes-carrier-hover {
+  0%, 100% { translate: 0 0; rotate: -.6deg; }
+  50% { translate: 0 -2px; rotate: .6deg; }
+}
+
+[data-hermes-layer-isolation='wanko'] :is(.hermes-carrier-shadow,.hermes-carrier-rear,.hermes-carrier-brand,.hermes-carrier-vapor-rear,.hermes-carrier-front,.hermes-carrier-vapor-front,.hermes-carrier-glow,.hermes-carrier-navigation,.hermes-carrier-effects),
+[data-hermes-layer-isolation='rear'] :is(.hermes-carrier-shadow,.hermes-carrier-brand,.hermes-carrier-vapor-rear,.hermes-carrier-interaction-hull,.hermes-carrier-front,.hermes-carrier-vapor-front,.hermes-carrier-glow,.hermes-carrier-navigation,.hermes-carrier-effects,.hermes-rig-image-fallback,.hermes-rig-vector-fallback),
+[data-hermes-layer-isolation='front'] :is(.hermes-carrier-shadow,.hermes-carrier-rear,.hermes-carrier-brand,.hermes-carrier-vapor-rear,.hermes-carrier-interaction-hull,.hermes-carrier-vapor-front,.hermes-carrier-glow,.hermes-carrier-navigation,.hermes-carrier-effects,.hermes-rig-image-fallback,.hermes-rig-vector-fallback),
+[data-hermes-layer-isolation='effects'] :is(.hermes-carrier-shadow,.hermes-carrier-rear,.hermes-carrier-brand,.hermes-carrier-vapor-rear,.hermes-carrier-interaction-hull,.hermes-carrier-front,.hermes-carrier-vapor-front,.hermes-rig-image-fallback,.hermes-rig-vector-fallback) {
+  opacity: 0 !important;
+}
+
 .hermes-rig-stage[data-hermes-rig-status='ready'] .hermes-rig-canvas { opacity: 1; }
 .hermes-rig-stage[data-hermes-rig-status='ready'] .hermes-rig-image-fallback,
 .hermes-rig-stage[data-hermes-rig-status='ready'] .hermes-rig-vector-fallback { opacity: 0; }
 
-.hermes-workspace-stage:not([data-hermes-motion-preference='full']) .hermes-rig-canvas { display: none; }
+.hermes-rig-stage:not([data-hermes-rig-status='ready']) .hermes-carrier-shadow,
+.hermes-rig-stage:not([data-hermes-rig-status='ready']) .hermes-carrier-rear,
+.hermes-rig-stage:not([data-hermes-rig-status='ready']) .hermes-carrier-brand,
+.hermes-rig-stage:not([data-hermes-rig-status='ready']) .hermes-carrier-vapor-rear,
+.hermes-rig-stage:not([data-hermes-rig-status='ready']) .hermes-carrier-front,
+.hermes-rig-stage:not([data-hermes-rig-status='ready']) .hermes-carrier-vapor-front,
+.hermes-rig-stage:not([data-hermes-rig-status='ready']) .hermes-carrier-glow,
+.hermes-rig-stage:not([data-hermes-rig-status='ready']) .hermes-carrier-navigation,
+.hermes-rig-stage:not([data-hermes-rig-status='ready']) .hermes-carrier-effects {
+  opacity: 0;
+}
+
+.hermes-workspace-stage:not([data-hermes-motion-preference='full']) .hermes-rig-canvas { display: block; }
 .hermes-workspace-stage:not([data-hermes-motion-preference='full']) .hermes-rig-image-fallback { opacity: 1 !important; transition: none; }
 .hermes-workspace-stage:not([data-hermes-motion-preference='full']) .hermes-rig-vector-fallback { opacity: 0; transition: none; }
+.hermes-workspace-stage:not([data-hermes-motion-preference='full']) .hermes-wanko-carrier,
+.hermes-workspace-stage[data-hermes-presentation-state='awaiting_approval'] .hermes-wanko-carrier,
+.hermes-rig-stage:not([data-hermes-rig-status='ready']) .hermes-wanko-carrier {
+  animation: none !important;
+  transition: none !important;
+}
+
+.hermes-workspace-stage:not([data-hermes-motion-preference='full']) .hermes-wanko-carrier *,
+.hermes-workspace-stage[data-hermes-presentation-state='awaiting_approval'] .hermes-wanko-carrier *,
+.hermes-rig-stage:not([data-hermes-rig-status='ready']) .hermes-wanko-carrier * {
+  animation: none !important;
+  transition: none !important;
+}
 
 .hermes-guide-nudge {
   position: absolute;
@@ -2259,26 +2525,34 @@ body [data-reading-role='reading'] {
   left: .25rem;
   right: .25rem;
   width: auto;
-  border-left: 2px solid var(--color-vermilion, #ff4e22);
-  background: rgb(241 238 231 / .94);
-  padding: .25rem .65rem;
-  color: #111713;
+  border: 1px solid rgb(241 238 231 / .22);
+  border-left-color: rgb(207 72 44 / .78);
+  border-radius: .55rem;
+  background: rgb(11 15 12 / .92);
+  padding: .38rem .65rem .42rem;
+  color: var(--os-paper, #f1eee7);
   font-family: var(--font-editorial-serif), Georgia, serif;
   font-size: var(--text-control);
-  line-height: 1.35;
+  line-height: 1.42;
   overflow: hidden;
   text-overflow: ellipsis;
-  white-space: nowrap;
+  white-space: normal;
   opacity: 0;
   transform: translate3d(8px, -3px, 0);
   transition: opacity 480ms ease, transform 620ms cubic-bezier(.16, 1, .3, 1);
   pointer-events: none;
-  box-shadow: 0 12px 34px rgb(0 0 0 / .28);
+  box-shadow: 0 12px 34px rgb(0 0 0 / .3), inset 0 1px 0 rgb(241 238 231 / .035);
 }
 
 .hermes-guide-nudge[data-visible='true'] {
   opacity: 1;
   transform: translate3d(0, 0, 0);
+}
+
+@media (min-width: 641px) {
+  .hermes-guide-nudge {
+    top: -1.25rem;
+  }
 }
 
 .hermes-gaze {

@@ -5,7 +5,7 @@ const json = (route: Route, body: unknown, status = 200) => route.fulfill({ stat
 
 async function expectGuideClearOf(page: Page, obstacle: Locator) {
   const boxes = await Promise.all([
-    page.locator('[data-hermes-companion-actor="true"]').boundingBox(),
+    page.locator('[data-hermes-carrier-travel-hull="true"]').boundingBox(),
     page.locator('[data-hermes-guide-bubble][data-hermes-guide-visible="true"]').boundingBox(),
     obstacle.boundingBox(),
   ]);
@@ -67,6 +67,31 @@ test('reduced motion retains the guide actions without positional travel or part
   await expect(page.locator('[data-hermes-guide-explanation]')).toBeVisible();
   await expect(stage).toHaveAttribute('data-hermes-guide-motion', 'static');
   await expect(stage.locator('[data-hermes-particles]')).toHaveCount(0);
+});
+
+test('mobile carrier uses compact layers and docks above the virtual keyboard inset', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.addInitScript(() => {
+    if (window.visualViewport) {
+      Object.defineProperty(window.visualViewport, 'height', { configurable: true, get: () => 544 });
+    }
+  });
+  await mockWorkspace(page);
+  await page.goto(`${baseUrl}/research-objects/new?mode=blank&hermes-motion=full`, { waitUntil: 'networkidle' });
+
+  const stage = page.locator('[data-hermes-workspace-stage]');
+  const travelHull = stage.locator('[data-hermes-carrier-travel-hull="true"]');
+  const interactionHull = stage.locator('[data-hermes-carrier-interaction-hull="true"]');
+  await expect(stage).toHaveAttribute('data-hermes-footprint-source', 'carrier-travel-hull');
+  await expect(stage.locator('[data-hermes-carrier-rear="true"] source')).toHaveAttribute('media', '(max-width: 640px)');
+  await expect.poll(async () => (await travelHull.boundingBox())?.y ?? Number.POSITIVE_INFINITY).toBeLessThan(544);
+  const [travelBox, interactionBox] = await Promise.all([travelHull.boundingBox(), interactionHull.boundingBox()]);
+  expect(travelBox).not.toBeNull();
+  expect(interactionBox).not.toBeNull();
+  expect(travelBox!.y + travelBox!.height).toBeLessThanOrEqual(545);
+  expect(interactionBox!.width).toBeGreaterThanOrEqual(44);
+  expect(interactionBox!.height).toBeGreaterThanOrEqual(44);
+  expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(390);
 });
 
 test('a fully obstructed guide keeps Hermes and its motion control visible while suppressing only the bubble', async ({ page }) => {

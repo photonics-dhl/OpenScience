@@ -12,48 +12,6 @@ import { HermesRiggedPortrait } from './HermesRiggedPortrait';
 import type { HermesGuideSuggestion } from './hermes-guide';
 import type { HermesVisualState } from './hermes-state';
 
-function HermesStaticPortrait({ state }: { state: HermesVisualState }) {
-  const nodes = [
-    [180, 76], [264, 128], [264, 226], [180, 278], [96, 226], [96, 128],
-  ];
-
-  return (
-    <svg aria-hidden="true" className="hermes-portrait h-full w-full" viewBox="0 0 360 360">
-      <defs>
-        <linearGradient id="hermes-scan" x1="0" x2="1">
-          <stop offset="0" stopColor="currentColor" stopOpacity="0" />
-          <stop offset=".5" stopColor="currentColor" stopOpacity=".85" />
-          <stop offset="1" stopColor="currentColor" stopOpacity="0" />
-        </linearGradient>
-        <radialGradient id="hermes-iris">
-          <stop offset="0" stopColor="#ff4e22" stopOpacity=".95" />
-          <stop offset=".28" stopColor="#ff4e22" stopOpacity=".18" />
-          <stop offset="1" stopColor="#f1eee7" stopOpacity="0" />
-        </radialGradient>
-      </defs>
-      <g className="hermes-orbit">
-        <circle cx="180" cy="177" r="116" fill="none" stroke="currentColor" strokeDasharray="1 12" strokeOpacity=".2" />
-        <path d="M70 177c42-29 72-43 110-43s68 14 110 43c-42 29-72 43-110 43s-68-14-110-43Z" fill="none" stroke="currentColor" strokeOpacity=".22" />
-      </g>
-      <g className="hermes-nodes">
-        {nodes.map(([cx, cy], index) => <circle cx={cx} cy={cy} fill={index === 0 ? '#ff4e22' : 'currentColor'} key={`${cx}-${cy}`} opacity={index === 0 ? 1 : 0.5} r={index === 0 ? 3 : 2} style={{ animationDelay: `${index * 90}ms` }} />)}
-      </g>
-      <g className="hermes-gaze" data-hermes-gaze="true">
-        <path d="M119 177c18-31 37-47 61-47s43 16 61 47c-18 31-37 47-61 47s-43-16-61-47Z" fill="#070a0d" stroke="currentColor" strokeWidth="1.2" />
-        <circle cx="180" cy="177" fill="url(#hermes-iris)" r="43" />
-        <circle className="hermes-pupil" cx="180" cy="177" fill="currentColor" r="9" />
-        <path d="M151 177h58M180 148v58" stroke="currentColor" strokeOpacity=".24" strokeWidth=".8" />
-      </g>
-      <path className="hermes-wave" d="M48 177h53m158 0h53" fill="none" stroke="currentColor" strokeDasharray="2 7" strokeOpacity=".36" />
-      <path className="hermes-scan" d="M50 106h260" stroke="url(#hermes-scan)" strokeWidth="2" data-hermes-scan={state === 'scanning' ? 'active' : 'still'} />
-      <g className="hermes-caption" fill="none" stroke="currentColor" strokeOpacity=".22">
-        <path d="M113 307h134" />
-        <path d="M139 320h82" />
-      </g>
-    </svg>
-  );
-}
-
 export interface HermesVisualAdapterProps {
   action?: HermesActionId;
   actionStartedAtMs?: number;
@@ -219,7 +177,7 @@ export function HermesVisualAdapter({ action, actionStartedAtMs, assistantOpen =
         data-hermes-instance="single"
       >
         <HermesRiggedPortrait
-          fallback={<HermesStaticPortrait state={state} />}
+          fallback={<span aria-hidden="true" data-hermes-static-status={state} />}
           inputRef={meshInputRef}
           onRuntimeStatus={onRuntimeStatus}
           reducedMotion={reducedMotion}

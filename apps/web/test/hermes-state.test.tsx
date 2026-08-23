@@ -85,16 +85,28 @@ describe('Hermes dashboard guidance', () => {
   it('renders one honest Hermes mount and keeps approval/reduced fallback still', () => {
     const markup = renderToStaticMarkup(createElement(HermesVisualAdapter, { state: 'awaiting_approval', suggestion: neutralSuggestion, onInvoke: () => undefined }));
     expect(markup.match(/data-hermes-instance/g) ?? []).toHaveLength(1);
-    expect(markup).not.toContain('data-live2d-instance');
+    expect(markup).toContain('data-live2d-instance="wanko"');
     expect(markup).toContain('data-motion="still"');
     expect(markup).toContain('data-hermes-fallback="static"');
     expect(markup).toContain('data-hermes-renderer="articulated-mesh"');
     expect(markup).toContain('data-hermes-state="awaiting_approval"');
-    expect(markup).toContain('data-hermes-rig="mesh-2d"');
-    expect(markup).toContain('data-hermes-rig-status="fallback"');
+    expect(markup).toContain('data-hermes-rig="live2d-wanko"');
+    expect(markup).toContain('data-hermes-rig-status="starting"');
     expect(markup).toContain('data-hermes-input-ready="false"');
     expect(markup).not.toContain('data-runtime-ready');
-    expect(markup.match(/data-hermes-frame=/g) ?? []).toHaveLength(1);
+    expect(markup).not.toContain('<img');
+    expect(markup).not.toContain('<picture');
+    expect(markup).not.toContain('<svg');
+    expect(markup).not.toContain('poster-');
+
+    const reduced = renderToStaticMarkup(createElement(HermesVisualAdapter, {
+      reducedMotion: true, state: 'idle', suggestion: neutralSuggestion, onInvoke: () => undefined,
+    }));
+    expect(reduced).not.toContain('<img');
+    expect(reduced).not.toContain('<picture');
+    expect(reduced).not.toContain('<svg');
+    expect(reduced).not.toContain('poster-');
+    expect(reduced).not.toContain('/hermes/pet/');
   });
 
   it('exposes all six visual states without depending on a licensed binary', () => {
@@ -102,8 +114,12 @@ describe('Hermes dashboard guidance', () => {
       const markup = renderToStaticMarkup(createElement(HermesVisualAdapter, { state, suggestion: neutralSuggestion, onInvoke: () => undefined }));
       expect(markup).toContain(`data-hermes-state="${state}"`);
       expect(markup).toContain('data-hermes-renderer="articulated-mesh"');
-      expect(markup).toContain(state === 'scanning' ? 'hermes-pet-working.png' : 'hermes-pet-idle.png');
-      expect(markup).toContain('data-hermes-rig="mesh-2d"');
+      expect(markup).not.toContain('<img');
+      expect(markup).not.toContain('<picture');
+      expect(markup).not.toContain('<svg');
+      expect(markup).not.toContain('poster-');
+      expect(markup).not.toContain('/hermes/pet/');
+      expect(markup).toContain('data-hermes-rig="live2d-wanko"');
       expect(markup).not.toContain('.moc3');
     }
   });

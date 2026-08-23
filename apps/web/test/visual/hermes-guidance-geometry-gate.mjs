@@ -42,6 +42,7 @@ try {
   const stage = page.locator('[data-hermes-workspace-stage]');
   const target = page.locator('[data-hermes-anchor="sdf-problem"]');
   await stage.waitFor();
+  assert.equal(await stage.getAttribute('data-hermes-footprint-source'), 'carrier-travel-hull');
   await target.waitFor();
   await page.locator('[data-hermes-guide-bubble]').waitFor();
   assert.equal(await stage.getAttribute('data-hermes-guide-motion'), 'edge-stop', 'a saved user dock must not be overridden by automatic guide travel');
@@ -52,7 +53,7 @@ try {
     let sawTravelHidden = false;
     const sample = () => {
       const stage = document.querySelector('[data-hermes-workspace-stage]');
-      const actor = stage?.querySelector('[data-hermes-companion-actor="true"]')?.getBoundingClientRect();
+      const actor = stage?.querySelector('[data-hermes-carrier-travel-hull="true"]')?.getBoundingClientRect();
       const bubble = stage?.querySelector('[data-hermes-guide-bubble]')?.getBoundingClientRect();
       const field = document.querySelector('[data-hermes-anchor="sdf-problem"]')?.getBoundingClientRect();
       sawTravel ||= stage?.getAttribute('data-hermes-guide-motion') === 'travel';

@@ -21,6 +21,50 @@ async function mockWorkspace(page: Page) {
   } }));
 }
 
+test('Hermes mounts the real Wanko Live2D portrait inside the persistent stage', async ({ page }) => {
+  const browserErrors: string[] = [];
+  page.on('pageerror', (error) => browserErrors.push(error.message));
+  page.on('console', (message) => { if (message.type() === 'error') browserErrors.push(message.text()); });
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await mockWorkspace(page);
+  await page.goto(`${baseUrl}/dashboard?hermes-motion=full`, { waitUntil: 'networkidle' });
+
+  const rig = page.locator('[data-hermes-rig="live2d-wanko"]');
+  const stage = page.locator('[data-hermes-workspace-stage="true"]');
+  await expect(rig).toHaveCount(1);
+  await expect(stage).toHaveAttribute('data-hermes-footprint-source', 'carrier-travel-hull');
+  await expect.poll(async () => ({
+    errors: browserErrors,
+    status: await rig.getAttribute('data-hermes-rig-status'),
+  }), { timeout: 20_000 }).toEqual({ errors: [], status: 'ready' });
+  await expect(rig.locator('[data-hermes-live2d-canvas="true"]')).toBeVisible();
+  await expect(rig.locator('canvas')).toHaveCount(1);
+  const carrier = rig.locator('[data-hermes-carrier="true"]');
+  const interactionHull = carrier.locator('[data-hermes-carrier-interaction-hull="true"]');
+  await expect(carrier.locator('[data-hermes-carrier-travel-hull="true"]')).toHaveCount(1);
+  const carrierBox = await carrier.boundingBox();
+  const interactionBox = await interactionHull.boundingBox();
+  expect(carrierBox).not.toBeNull();
+  expect(interactionBox).not.toBeNull();
+  expect(interactionBox!.width).toBeGreaterThanOrEqual(44);
+  expect(interactionBox!.height).toBeGreaterThanOrEqual(44);
+
+  await page.mouse.click(carrierBox!.x + carrierBox!.width * .1, carrierBox!.y + carrierBox!.height * .55);
+  await expect(page.getByRole('dialog', { name: 'Hermes research guide' })).toHaveCount(0);
+  await page.mouse.click(interactionBox!.x + interactionBox!.width / 2, interactionBox!.y + interactionBox!.height / 2);
+  await expect(page.getByRole('dialog', { name: 'Hermes research guide' })).toBeVisible();
+  await expect(rig).toHaveAttribute('data-hermes-wanko-presentation', /quiet|evidence|trail|celebrate|missing/u);
+  await page.screenshot({ path: 'test/visual/out/hermes-live2d/wanko-dashboard.png', fullPage: true });
+});
+
+test('Hermes Live2D visual harness exposes every production action on one real canvas', async ({ page }) => {
+  await page.goto(`${baseUrl}/_visual/hermes-live2d`, { waitUntil: 'networkidle' });
+  await expect(page.locator('[data-hermes-live2d-harness="true"]')).toHaveCount(1);
+  await expect(page.locator('[data-hermes-rig="live2d-wanko"]')).toHaveAttribute('data-hermes-rig-status', 'ready', { timeout: 20_000 });
+  await expect(page.locator('[data-hermes-action-control]')).toHaveCount(27);
+  await expect(page.locator('[data-hermes-live2d-canvas="true"]')).toHaveCount(1);
+});
+
 test('one Hermes stage persists across workspace routes and keeps direct manipulation', async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 900 });
   const browserErrors: string[] = [];
@@ -61,11 +105,11 @@ test('one Hermes stage persists across workspace routes and keeps direct manipul
     return restored ? Math.max(Math.abs(restored.x - moved!.x), Math.abs(restored.y - moved!.y)) : Number.POSITIVE_INFINITY;
   }).toBeLessThan(8);
 
-  const rigBox = await stage.locator('[data-hermes-rig="mesh-2d"]').boundingBox();
-  expect(rigBox).not.toBeNull();
-  await page.mouse.move(rigBox!.x + rigBox!.width * .2, rigBox!.y + rigBox!.height / 2);
-  await page.mouse.move(rigBox!.x + rigBox!.width * .8, rigBox!.y + rigBox!.height / 2);
-  await page.mouse.move(rigBox!.x + rigBox!.width + 140, rigBox!.y + rigBox!.height / 2);
+  const interactionBox = await stage.locator('[data-hermes-carrier-interaction-hull="true"]').boundingBox();
+  expect(interactionBox).not.toBeNull();
+  await page.mouse.move(interactionBox!.x + interactionBox!.width * .2, interactionBox!.y + interactionBox!.height / 2);
+  await page.mouse.move(interactionBox!.x + interactionBox!.width * .8, interactionBox!.y + interactionBox!.height / 2);
+  await page.mouse.move(interactionBox!.x + interactionBox!.width + 140, interactionBox!.y + interactionBox!.height / 2);
   await expect(stage).toHaveAttribute('data-hermes-action', 'pointer-avoid');
 });
 

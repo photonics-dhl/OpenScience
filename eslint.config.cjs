@@ -17,6 +17,9 @@ module.exports = [
       'tmp/**',
       'apps/web/tmp/**',
       'apps/web/test/visual/out/**',
+      // Pinned vendor runtime is preserved byte-for-byte and verified by the
+      // Hermes Live2D asset contract; it is not authored project source.
+      'apps/web/public/hermes/live2d/live2dcubismcore.min.js',
     ],
   },
   js.configs.recommended,

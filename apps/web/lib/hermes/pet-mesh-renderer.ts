@@ -6,17 +6,16 @@ import { createHermesPartPoses, HERMES_PARTS } from './part-rig';
 import { HERMES_PART_FRAGMENT_SHADER, HERMES_PART_VERTEX_SHADER } from './part-rig-shaders';
 import { shouldContinueHermesAnimation } from './motion-mixer';
 import type { OpticalOglResourceLedger } from '../optical-lab/ogl/resources';
-import type { HermesRuntimeFailureReason } from './hermes-runtime-status';
+import { HermesPetRendererError } from './hermes-renderer-error';
 
-export class HermesPetRendererError extends Error {
-  readonly code: HermesRuntimeFailureReason;
-
-  constructor(code: HermesRuntimeFailureReason) {
-    super(code);
-    this.name = 'HermesPetRendererError';
-    this.code = code;
-  }
-}
+export { createWankoRendererController } from './wanko-renderer-controller';
+export { createWankoLive2DRenderer } from './wanko-live2d-renderer';
+export { HermesPetRendererError } from './hermes-renderer-error';
+export {
+  getWankoModelPlacement,
+  resolveWankoPresentationVariant,
+  setWankoNativePresentation,
+} from './wanko-model-presentation';
 
 export interface HermesPetMeshInput {
   action?: HermesActionId;
