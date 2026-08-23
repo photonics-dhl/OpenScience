@@ -3,6 +3,7 @@
 ## Current truth
 
 - **2026-08-23 最新状态覆盖下方历史阻塞叙述**：唯一 v09 母版 `wanko_genie_v09.cmo3`（SHA-256 `BA111D4E...1121ADD`）未改；SDK 4.0 bundle、两张 zero-alpha RGB-clean texture 与 12 motions 已在 ECS development release `c97926a` 运行，rollback `06072c1`。
+- 用户已确认以该 ECS release 的 `288/160px` 为唯一比例基线，实施精确 `1.25x` 的 `360/200px` movable work-assistant。默认保留 Dashboard 右栏 anchor；拖动后脱离为 floating companion，click 仍打开现有 drawer；气泡与角色分别测量和避让。设计已写入 CURRENT spec §11，尚未实施。
 - 用户已否决动作画廊和大卡片气泡，并进一步明确“伴随助手”不等于缩小 Hermes。本地候选 `c123a5a` 恢复桌面 `336px` / 移动 `176px`，同时保留全角色拖动、viewport clamp、resize recovery 与位置持久化。
 - RO 创建流程重新成为首屏唯一主任务，32 动作控制折叠进 developer tray。气泡是紧凑 ink-edge note，按角色象限翻转；用户拖动即关闭过时引导，移动端不显示浮动动作工具栏，正常 renderer 不常驻动效设置胶囊。
 - fresh Web `360/360`、typecheck、18 页 production build、31-action motion gate 与 RO-create first-person gate GREEN；ignored 预览为 `apps/web/test/visual/out/hermes-work-assistant/ro-create-{desktop,mobile}-large.png`。尚未部署，ECS 保持 `c97926a` / rollback `06072c1`。
@@ -54,8 +55,8 @@
 
 ## Next action
 
-1. 让用户检查本地真实 RO-create 桌面/移动截图与 `http://127.0.0.1:3198/_visual/hermes-live2d`；不要部署或修改 v09 美术。
-2. 若 work-assistant 层级通过，再单独决定是否需要 Phase 2 原生 Cubism motion；不得把“动作更多”自动解释为重开模型美术。
-3. ECS 保持 `c97926a` / rollback `06072c1`，本地预览结果不能冒充生产验收。
+1. 用户复核 CURRENT spec §11 后，按 writing-plans 建立精确 `360/200px`、dock-detach、bubble collision 与真实 Dashboard 验收计划；不要修改 v09 美术。
+2. 以 TDD 实施并在 `1440×900`、`1920×1080`、`390×844` 实际使用，动作丰富度不得压过 RO 主流程。
+3. 本地与独立 release review 通过后，走现有脚本部署；ECS 在此之前保持 `c97926a` / rollback `06072c1`，本地结果不能冒充生产验收。
 
 Read first：`AGENTS.md` → 本 handoff → 2026-08-19 Wanko CURRENT design/plan → `docs/progress.md`；`project_index.md` 只用 `rg` 定向查 CURRENT 行。

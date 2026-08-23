@@ -2,6 +2,12 @@
 
 > 本文件只保留 CURRENT window；完整历史由 Git history 保存，不作为新 session 默认输入。
 
+## 2026-08-23 — Hermes production-ratio enhancement design approved
+
+- 用户以 ECS `/dashboard` 当前 release `c97926a` 为唯一比例基线，批准 ordinary `288→360px`、compact/mobile `160→200px` 的精确 `1.25x` 调整；不修改 v09 模型、美术、帽子、流苏、灯或烟雾。
+- 线上右栏 anchor 仍是默认 home；整角色拖动后脱离为 viewport-clamped floating companion，desktop/mobile 分别持久化。click 打开现有 drawer，drag 不得误触 click；气泡按象限翻转并与角色分别测量，不得遮挡 Dashboard 主操作、Hermes task rail、导航或 drawer。
+- 气泡维持克制 optical-editorial annotation，移动端仅一句短提示；动作与语言共用 semantic beat，输入/审批/modal/drawer/hidden/reduced-motion 时降噪。最终验收必须覆盖本地与公网 authenticated Dashboard 的 `1440×900`、`1920×1080`、`390×844`，不能以动作数量或代码存在代替审美与使用效果。
+
 ## 2026-08-23 — Hermes movable work-assistant correction
 
 - 用户否决“动作画廊占据主页面”的产品层级，同时明确伴随化不等于缩小角色。本地候选 `c123a5a` 保留 Scholar's Tea 的可移动行为边界并恢复完整视觉比例：桌面 `336px`、移动 `176px`；全角色可拖、实时 viewport clamp、位置持久化，窗口缩放后仍可恢复。

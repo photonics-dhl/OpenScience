@@ -1,6 +1,6 @@
 # Hermes Wanko Live2D Companion Design
 
-Status: **CURRENT — smoke-bowl replacement written design approved**
+Status: **CURRENT — v09 movable work-assistant enhancement approved**
 
 Supersedes only the visual renderer and motion-authoring portions of:
 
@@ -465,15 +465,29 @@ checks pass, generated smoke is source-art study only, not a production asset.
 > assistant that recedes while the user works; OpenScience keeps its own
 > optical-editorial visual language.
 
-The 2026-08-23 follow-up keeps the approved v09 model, texture, hat, tassel,
-lamp, smoke silhouette and dock position intact. `336 CSS px` remains the
-ordinary desktop rendering envelope; making Hermes peripheral must come from
-movable positioning and quiet interaction, not from shrinking the character.
-Mobile uses `176 CSS px`; anchored product placements retain their owner-provided
-bounds. The whole actor remains draggable,
-viewport-clamped and position-persistent.
-Collision and travel planning must consume the actual rendered stage and bubble
-union rather than assuming either previous constant.
+The approved production-ratio enhancement starts from the exact ECS release
+`c97926a`, not from the local diagnostic canvas. That release renders ordinary
+desktop Hermes at `288 CSS px` and the compact/mobile endpoint at `160 CSS px`.
+Both endpoints increase by exactly `1.25x`, to `360 CSS px` and `200 CSS px`.
+The approved v09 model, texture, hat, tassel, lamp and smoke silhouette do not
+change.
+
+The current Dashboard right-rail `HermesDockAnchor` remains the default home and
+the Dashboard information architecture does not move. A deliberate whole-actor
+drag detaches Hermes into a floating companion; release commits a viewport-
+clamped position, stored separately for desktop and mobile. Resize and
+orientation changes reclamp the saved point so the actor always remains
+recoverable. A click without drag opens the existing assistant drawer. Dragging
+must not open the drawer and must dismiss a speech cue whose placement or
+context is no longer current.
+
+The actor and bubble have separate measured collision footprints, with their
+union used for viewport clamping and obstruction checks. The bubble flips by
+viewport quadrant and prefers the side facing open space. Neither footprint may
+cover the Dashboard create/import actions, Continue Research action, current
+Hermes task rail, primary navigation, approval controls or assistant drawer
+controls. Making Hermes peripheral comes from quiet timing and movable
+positioning, never from reducing the agreed `360/200` scale.
 
 ### 11.1 One semantic performance owner
 
@@ -526,17 +540,29 @@ reduced-motion continue to render one non-empty model frame and then remain
 pixel-exact static; functional guide text remains available without animated
 entrance when reduced motion is active.
 
+On mobile, an autonomous or task cue is one short sentence and never expands
+into a floating action toolbar. Functional actions remain in their existing
+drawer or product surface. At every viewport, the bubble is subordinate to the
+character and the character is subordinate to the research task: no bubble may
+become a feature card, tutorial panel or persistent page section.
+
 ### 11.3 Phase boundary and acceptance
 
-Phase 1 ships only as a local visual candidate until the user inspects real
-desktop and `390×844` RO-creation captures. The visual harness must present the
-real task surface first; its exhaustive action controls belong in a collapsed
-developer tray and never consume the main canvas. Focused tests must fail on an
-oversized ordinary footprint, a light-card bubble, or action controls presented
+Phase 1 is first evaluated against the production Dashboard structure using
+authenticated, production-shaped data at `1440×900`, `1920×1080` and
+`390×844`. The visual harness must present the real task surface first; its
+exhaustive action controls belong in a collapsed developer tray and never
+consume the main canvas. Focused tests must fail on a scale other than the exact
+production-derived endpoints, a light-card bubble, or action controls presented
 as primary content. Acceptance requires:
 
-- `336` desktop / `176` mobile product footprint, and no regression in
-  actual-bounds travel, viewport resize recovery or saved user position;
+- exact `360` desktop / `200` compact-mobile product footprints, and no
+  regression in the current right-rail anchored position;
+- click-to-open, drag-without-click, dock detachment, viewport edge recovery,
+  desktop/mobile persistence and resize/orientation reclamping;
+- independent actor/bubble measurement, quadrant flipping and no overlap with
+  Continue Research, create/import, the Hermes task rail, navigation or drawer;
+- no regression in actual-bounds travel or existing safe-path guidance;
 - deterministic lively decks, no immediate repeats and truthful priority order;
 - action/speech beat identity, bilingual keys and autonomous silence guards;
 - accessible bubble semantics, focus states, non-overlapping `40 px` actions,
@@ -544,6 +570,12 @@ as primary content. Acceptance requires:
 - real WebGL screenshots for idle speech, direct interaction, guidance, task
   feedback, mobile edge placement, approval and reduced-motion stillness;
 - no new image layer, renderer owner, dependency, API or server contract.
+
+After local browser, WebGL, accessibility and performance gates pass, deploy
+through the existing project release script. Final acceptance is the
+authenticated public Dashboard at the same three viewports, including a real
+drag/click/resize session, target container health, exact release identity and
+rollback readiness. Local screenshots cannot substitute for that ECS evidence.
 
 Only after the user judges Phase 1 in-browser may Phase 2 author a small set of
 new `.motion3.json` clips for poses that parameter composition cannot express.
