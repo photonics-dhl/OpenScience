@@ -16,6 +16,7 @@ export function HermesPerformanceBubble({ cue, onDismiss, visible }: {
       aria-hidden={!visible}
       aria-live="polite"
       className="hermes-companion-bubble hermes-performance-bubble"
+      data-hermes-bubble-material="ink-edge"
       data-hermes-performance-bubble="true"
       data-hermes-performance-beat={cue.beatId}
       data-hermes-speech-cue={cue.messageKey}

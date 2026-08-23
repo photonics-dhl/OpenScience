@@ -15,6 +15,7 @@
     "test:hermes-companion-release": "node test/visual/hermes-release-gate.mjs",
     "test:hermes-blank-ro-production": "node test/visual/hermes-blank-ro-production-gate.mjs",
     "test:hermes-live2d": "node test/visual/hermes-live2d-motion-gate.mjs",
+    "test:hermes-work-assistant": "node test/visual/hermes-work-assistant-experience-gate.mjs",
     "shots": "node test/visual/shots.mjs",
     "shots:workspace": "node test/visual/workspace-shots.mjs",
     "shots:readability": "node test/visual/workspace-readability-gate.mjs",

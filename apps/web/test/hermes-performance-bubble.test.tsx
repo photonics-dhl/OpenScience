@@ -23,6 +23,7 @@ describe('Hermes performance bubble', () => {
     expect(html).toContain('aria-live="polite"');
     expect(html).toContain('aria-hidden="false"');
     expect(html).toContain('data-hermes-performance-bubble="true"');
+    expect(html).toContain('data-hermes-bubble-material="ink-edge"');
     expect(html).toContain('data-hermes-performance-beat="cap-check:42000"');
     expect(html).toContain('data-hermes-speech-cue="performance.capCheck.one"');
     expect(html).toContain('translated:performance.tones.focused');

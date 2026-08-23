@@ -1874,8 +1874,8 @@ body {
 .hermes-workspace-stage {
   position: fixed;
   z-index: 44;
-  min-width: 11rem;
-  min-height: 11rem;
+  min-width: 7.5rem;
+  min-height: 7.5rem;
   pointer-events: none;
   touch-action: none;
   transition: left 520ms cubic-bezier(.16, 1, .3, 1), top 520ms cubic-bezier(.16, 1, .3, 1), width 320ms ease, height 320ms ease;
@@ -1894,6 +1894,21 @@ body {
   height: 100%;
   min-height: 0;
   pointer-events: none;
+}
+
+.hermes-workspace-stage[data-hermes-anchored='false'] .hermes-visual {
+  border: 0;
+  background: transparent;
+}
+
+.hermes-workspace-stage[data-hermes-anchored='false'] .hermes-visual-state-label,
+.hermes-workspace-stage[data-hermes-anchored='false'] .hermes-visual-invoke-label,
+.hermes-workspace-stage[data-hermes-anchored='false'] .hermes-guide-nudge {
+  display: none;
+}
+
+.hermes-workspace-stage[data-hermes-anchored='false'] .hermes-companion-actor {
+  inset: 0;
 }
 
 .hermes-visual-state-label,
@@ -1942,37 +1957,36 @@ body {
 }
 
 .hermes-companion-bubble {
-  --hermes-bubble-x: -50%;
+  --hermes-bubble-x: 0%;
   position: absolute;
   z-index: 60;
-  left: 50%;
-  bottom: calc(100% - 2rem);
-  width: min(18rem, calc(100vw - 1.5rem));
+  right: 0;
+  bottom: calc(100% - 1.25rem);
+  width: min(15.5rem, calc(100vw - 1.5rem));
   transform: translateX(var(--hermes-bubble-x));
   border-radius: 4px;
-  outline: 1px solid rgb(21 37 54 / .11);
+  outline: 1px solid rgb(241 238 231 / .13);
   outline-offset: -1px;
-  background: #f1eee7;
-  padding: .78rem 2.8rem .85rem .9rem;
-  color: #152536;
-  box-shadow: 0 16px 42px rgb(24 19 12 / .2), 0 2px 7px rgb(24 19 12 / .14), inset 0 1px rgb(255 255 255 / .72);
-  font-family: var(--font-editorial-serif), Georgia, serif;
-  font-size: .82rem;
-  line-height: 1.48;
+  background: rgb(14 17 15 / .96);
+  padding: .64rem 2.65rem .7rem .78rem;
+  color: rgb(241 238 231 / .92);
+  box-shadow: 0 10px 28px rgb(0 0 0 / .24), inset 0 1px rgb(255 255 255 / .035);
+  font-family: var(--font-ui), system-ui, sans-serif;
+  font-size: .76rem;
+  line-height: 1.42;
   text-wrap: pretty;
   animation: hermes-bubble-enter 220ms cubic-bezier(.16, 1, .3, 1) both;
 }
 
 .hermes-companion-bubble::after {
   position: absolute;
-  right: 2.1rem;
-  bottom: -1.08rem;
-  width: 3rem;
+  right: 1.25rem;
+  bottom: -.74rem;
+  width: 2rem;
   height: 1.5px;
   transform: rotate(24deg);
   transform-origin: right center;
   background: var(--color-vermilion, #cf482c);
-  box-shadow: 0 0 0 1px rgb(207 72 44 / .05);
   content: '';
   pointer-events: none;
 }
@@ -1984,10 +1998,10 @@ body {
 
 .hermes-companion-kicker {
   display: block;
-  margin: 0 0 .3rem;
-  color: #9b321f;
+  margin: 0 0 .22rem;
+  color: #ff8065;
   font-family: var(--font-data), ui-monospace, monospace;
-  font-size: .62rem;
+  font-size: .58rem;
   font-weight: 700;
   letter-spacing: .12em;
   line-height: 1.2;
@@ -2006,10 +2020,13 @@ body {
   width: 40px;
   height: 40px;
   place-items: center;
+  border: 0;
   border-radius: 4px;
-  color: #66717b;
+  padding: 0;
+  background: transparent;
+  color: rgb(241 238 231 / .55);
   font-family: var(--font-data), ui-monospace, monospace;
-  font-size: 1rem;
+  font-size: .9rem;
   line-height: 1;
   transition: transform 120ms ease, background-color 120ms ease, color 120ms ease;
   touch-action: manipulation;
@@ -2048,7 +2065,6 @@ body {
   .hermes-performance-bubble {
     --hermes-bubble-x: 0%;
     right: 0;
-    left: auto;
   }
 
   .hermes-workspace-stage[data-hermes-guide-target] .hermes-visual {
@@ -2067,8 +2083,6 @@ body {
   }
 
   .hermes-workspace-stage[data-hermes-guide-target] .hermes-companion-bubble {
-    top: calc(100% - .75rem);
-    bottom: auto;
     padding: .62rem 2.7rem .7rem .75rem;
     font-size: var(--text-caption);
     line-height: 1.3;
@@ -2090,17 +2104,11 @@ body {
   }
 
   .hermes-workspace-stage[data-hermes-guide-target] .hermes-companion-bubble[data-hermes-guide-edge-stop='true'] {
-    display: grid;
-    grid-template-columns: minmax(0, 1fr) auto;
-    align-items: center;
-    gap: .6rem;
+    display: block;
   }
 
   .hermes-workspace-stage[data-hermes-guide-target] .hermes-companion-bubble[data-hermes-guide-edge-stop='true'] > p {
-    overflow: hidden;
-    margin: 0 1rem 0 0;
-    text-overflow: ellipsis;
-    white-space: nowrap;
+    margin: 0 1rem .45rem 0;
   }
 
   .hermes-workspace-stage[data-hermes-guide-target] .hermes-companion-bubble[data-hermes-guide-edge-stop='true'] .hermes-companion-actions {
@@ -2108,7 +2116,58 @@ body {
   }
 
   .hermes-workspace-stage[data-hermes-guide-target] .hermes-companion-bubble[data-hermes-guide-edge-stop='true'] .hermes-companion-take-me {
-    margin: 0 1rem 0 0;
+    margin: 0;
+    white-space: nowrap;
+  }
+}
+
+.hermes-workspace-stage[data-hermes-bubble-horizontal='left'] .hermes-companion-bubble {
+  right: auto;
+  left: .5rem;
+}
+
+.hermes-workspace-stage[data-hermes-bubble-horizontal='left'] .hermes-companion-bubble::after {
+  right: auto;
+  left: 1.25rem;
+  transform: rotate(-24deg);
+  transform-origin: left center;
+}
+
+.hermes-workspace-stage[data-hermes-bubble-vertical='below'] .hermes-companion-bubble {
+  top: calc(100% - 1.25rem);
+  bottom: auto;
+}
+
+.hermes-workspace-stage[data-hermes-bubble-vertical='below'] .hermes-companion-bubble::after {
+  top: -.74rem;
+  bottom: auto;
+}
+
+/* A 120 px mobile companion may speak, but it must not become a second
+   toolbar over the active form. Detailed guide actions remain available in
+   the assistant drawer after the user invokes Hermes. */
+@media (max-width: 640px) {
+  .hermes-workspace-stage[data-hermes-stage-size='120'] .hermes-companion-bubble {
+    right: .5rem;
+    width: min(12rem, calc(100vw - 1rem));
+    padding: .55rem 2.35rem .58rem .68rem;
+    font-size: .72rem;
+    line-height: 1.34;
+  }
+
+  .hermes-workspace-stage[data-hermes-stage-size='120'][data-hermes-bubble-horizontal='left'] .hermes-companion-bubble {
+    right: auto;
+    left: .5rem;
+  }
+
+  .hermes-workspace-stage[data-hermes-stage-size='120'] .hermes-companion-actions,
+  .hermes-workspace-stage[data-hermes-stage-size='120'] .hermes-companion-take-me {
+    display: none;
+  }
+
+  .hermes-workspace-stage[data-hermes-stage-size='120'] .hermes-companion-bubble > p,
+  .hermes-workspace-stage[data-hermes-stage-size='120'] .hermes-companion-bubble[data-hermes-guide-edge-stop='true'] > p {
+    margin: 0;
   }
 }
 
@@ -2140,8 +2199,8 @@ body [data-reading-role='reading'] {
   }
 
   .hermes-companion-dismiss:hover {
-    background: rgb(21 37 54 / .07);
-    color: #152536;
+    background: rgb(241 238 231 / .07);
+    color: var(--os-paper);
   }
 }
 
@@ -2243,6 +2302,12 @@ body [data-reading-role='reading'] {
 .hermes-workspace-stage[data-hermes-guide-suppressed='true'] .hermes-motion-enable {
   visibility: visible;
   pointer-events: auto;
+}
+
+/* A healthy animated companion does not need a permanently detached settings
+   pill. The control returns when motion is reduced or the renderer needs help. */
+.hermes-workspace-stage[data-hermes-anchored='false'] .hermes-motion-enable[data-motion-active='true'][data-motion-runtime='ready'] {
+  display: none;
 }
 
 .hermes-workspace-stage[data-hermes-guide-target] .hermes-guide-nudge {

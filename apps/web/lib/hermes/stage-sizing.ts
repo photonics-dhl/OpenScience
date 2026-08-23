@@ -1,5 +1,6 @@
-export type HermesStageSize = 176 | 336;
+export type HermesStageSize = 120 | 176 | 336;
 
-export function resolveHermesStageSize(compactGuide: boolean, hasGuide: boolean): HermesStageSize {
-  return compactGuide && hasGuide ? 176 : 336;
+export function resolveHermesStageSize(expanded: boolean, compact = false): HermesStageSize {
+  if (expanded) return 336;
+  return compact ? 120 : 176;
 }

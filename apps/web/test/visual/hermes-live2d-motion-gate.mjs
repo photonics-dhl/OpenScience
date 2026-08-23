@@ -108,13 +108,27 @@ page.on('console', (message) => {
 
 try {
   await page.goto(`${baseUrl}/_visual/hermes-live2d`, { waitUntil: 'networkidle' });
+  const taskSurface = page.locator('[data-hermes-ro-create-fixture="true"]');
+  const developerTray = page.locator('[data-hermes-dev-tray="true"]');
+  assert.equal(await taskSurface.count(), 1, 'the preview must be a real RO-create task surface, not an action gallery');
+  assert.equal(await developerTray.count(), 1, 'exhaustive controls must live in a developer tray');
+  assert.equal(await developerTray.getAttribute('open'), null, 'the developer tray must be collapsed by default');
+  await developerTray.evaluate((element) => { element.open = true; });
   const rig = page.locator('[data-hermes-rig="live2d-wanko"]');
   const fixture = page.locator('[data-hermes-live2d-fixture]');
   await rig.waitFor({ state: 'visible' });
   await page.waitForFunction(() => document.querySelector('[data-hermes-rig="live2d-wanko"]')?.getAttribute('data-hermes-rig-status') === 'ready');
   assert.equal(await page.locator('[data-hermes-live2d-canvas="true"]').count(), 1);
-  assert.equal(await fixture.getAttribute('data-hermes-stage-size'), '336');
+  assert.equal(await fixture.getAttribute('data-hermes-stage-size'), '120');
   assert.equal(await page.locator('[data-hermes-performance-bubble]').count(), 1);
+  const primaryCreateBox = await page.locator('[data-hermes-primary-create]').boundingBox();
+  const ordinaryFixtureBox = await fixture.boundingBox();
+  assert.ok(primaryCreateBox && ordinaryFixtureBox, 'task action and ordinary assistant must both have geometry');
+  const ordinaryOverlapsPrimary = ordinaryFixtureBox.left < primaryCreateBox.x + primaryCreateBox.width
+    && ordinaryFixtureBox.right > primaryCreateBox.x
+    && ordinaryFixtureBox.top < primaryCreateBox.y + primaryCreateBox.height
+    && ordinaryFixtureBox.bottom > primaryCreateBox.y;
+  assert.equal(ordinaryOverlapsPrimary, false, 'ordinary Hermes must not cover the primary RO-create action');
 
   const carrier = rig.locator('[data-hermes-carrier="true"]');
   const travelHull = rig.locator('[data-hermes-carrier-travel-hull="true"]');
@@ -146,9 +160,11 @@ try {
   const performanceBubble = page.locator('[data-hermes-performance-bubble]');
   assert.equal(await performanceBubble.getAttribute('data-hermes-speech-visible'), 'true');
   assert.match(await performanceBubble.getAttribute('data-hermes-performance-beat'), /^cap-check:/u);
+  await developerTray.evaluate((element) => { element.open = false; });
   await page.screenshot({ path: resolve(output, 'bubble-cap-check-desktop.png'), fullPage: true, animations: 'disabled' });
   await performanceBubble.getByRole('button').click({ force: true });
   assert.equal(await performanceBubble.getAttribute('data-hermes-speech-visible'), 'false');
+  await developerTray.evaluate((element) => { element.open = true; });
 
   await page.locator('[data-hermes-action-control="read"]').click({ force: true });
   await page.waitForTimeout(420);
@@ -159,26 +175,26 @@ try {
   const pointerResponse = await comparePng(page, pointerBefore, pointerAfter);
   assert.ok(pointerResponse.changed >= 650, `pointer must visibly articulate Wanko: ${JSON.stringify(pointerResponse)}`);
 
-  const layerIsolationStyle = await page.addStyleTag({ content: 'html,body,main,[data-hermes-live2d-fixture],.hermes-workspace-stage .hermes-visual{background:transparent!important;border-color:transparent!important}' });
+  const layerIsolationStyle = await page.addStyleTag({ content: 'html,body,main,[data-hermes-live2d-fixture],.hermes-workspace-stage .hermes-visual{background:transparent!important;border-color:transparent!important}[data-hermes-ro-create-fixture]>:not([data-hermes-live2d-fixture]){visibility:hidden!important}' });
   const layerMetrics = {};
   for (const variant of ['desktop', 'mobile']) {
     await page.setViewportSize(variant === 'desktop' ? { height: 900, width: 1440 } : { height: 844, width: 390 });
-    await page.locator(`[data-hermes-poster-size="${variant}"]`).click();
-    await page.locator('[data-hermes-poster-control="normal"]').click();
+    await page.locator(`[data-hermes-poster-size="${variant}"]`).evaluate((button) => button.click());
+    await page.locator('[data-hermes-poster-control="normal"]').evaluate((button) => button.click());
     await page.waitForFunction(() => document.querySelector('[data-hermes-rig="live2d-wanko"]')?.getAttribute('data-hermes-rig-status') === 'ready');
     const bounds = {};
     for (const layer of ['all', 'wanko']) {
-      await page.locator(`[data-hermes-layer-control="${layer}"]`).click();
+      await page.locator(`[data-hermes-layer-control="${layer}"]`).evaluate((button) => button.click());
       await page.waitForTimeout(80);
       const frame = await carrier.screenshot({ animations: 'disabled', omitBackground: true });
       bounds[layer] = await alphaBounds(page, frame);
       await writeFile(resolve(output, `${variant}-${layer}.png`), frame);
     }
     assert.ok(bounds.wanko.width > 0 && bounds.wanko.height > 0, `${variant} Wanko layer must be non-empty`);
-    assert.equal(await fixture.getAttribute('data-hermes-stage-size'), variant === 'desktop' ? '336' : '176');
+    assert.equal(await fixture.getAttribute('data-hermes-stage-size'), variant === 'desktop' ? '336' : '120');
     const fixtureBox = await fixture.boundingBox();
-    assert.equal(fixtureBox?.width, variant === 'desktop' ? 336 : 176, `${variant} stage must render at the declared width`);
-    assert.equal(fixtureBox?.height, variant === 'desktop' ? 336 : 176, `${variant} stage must render at the declared height`);
+    assert.equal(fixtureBox?.width, variant === 'desktop' ? 336 : 120, `${variant} stage must render at the declared width`);
+    assert.equal(fixtureBox?.height, variant === 'desktop' ? 336 : 120, `${variant} stage must render at the declared height`);
     assert.ok(bounds.all.width / bounds.wanko.width <= 1.02, `${variant} native scene must not expand through external art: ${JSON.stringify(bounds)}`);
     const travelBounds = await travelHull.evaluate((node) => ({
       bottom: node.offsetTop + node.offsetHeight,
@@ -200,10 +216,13 @@ try {
   const mobileBubbleBox = await page.locator('[data-hermes-performance-bubble]').boundingBox();
   assert.ok(mobileBubbleBox && mobileBubbleBox.x >= 0, `mobile performance bubble must not clip left: ${JSON.stringify(mobileBubbleBox)}`);
   assert.ok(mobileBubbleBox.x + mobileBubbleBox.width <= 390, `mobile performance bubble must not clip right: ${JSON.stringify(mobileBubbleBox)}`);
+  await developerTray.evaluate((element) => { element.open = false; });
   await page.screenshot({ path: resolve(output, 'bubble-happy-wiggle-mobile.png'), fullPage: true, animations: 'disabled' });
+  await developerTray.evaluate((element) => { element.open = true; });
 
   await page.setViewportSize({ height: 900, width: 1440 });
   await page.locator('[data-hermes-poster-size="desktop"]').click();
+  await page.waitForTimeout(360);
   await page.locator('[data-hermes-layer-control="all"]').click();
   await page.locator('[data-hermes-action-control="observe-left"]').click({ force: true });
   await page.waitForTimeout(200);

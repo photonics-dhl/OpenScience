@@ -8,6 +8,7 @@ import type { HermesVisualState } from '@/components/hermes/hermes-state';
 import { HERMES_ACTION_CATALOG, type HermesActionId } from '@/lib/hermes/action-catalog';
 import type { HermesSpeechCue, HermesSpeechTone } from '@/lib/hermes/performance-beat';
 import type { HermesPetMeshInput } from '@/lib/hermes/pet-mesh-renderer';
+import { resolveHermesStageSize } from '@/lib/hermes/stage-sizing';
 
 const actions = Object.keys(HERMES_ACTION_CATALOG) as HermesActionId[];
 const speechFixtures: Partial<Record<HermesActionId, { messageKey: string; tone: HermesSpeechTone }>> = {
@@ -24,7 +25,7 @@ export default function HermesLive2DVisualRoute() {
   const [action, setAction] = useState<HermesActionId>('observe-left');
   const [reducedMotion, setReducedMotion] = useState(false);
   const [state, setState] = useState<HermesVisualState>('idle');
-  const [fixtureSize, setFixtureSize] = useState<'desktop' | 'mobile'>('desktop');
+  const [fixtureSize, setFixtureSize] = useState<'desktop' | 'mobile'>('mobile');
   const [layerIsolation, setLayerIsolation] = useState<'all' | 'effects' | 'front' | 'rear' | 'wanko'>('all');
   const [speechDismissed, setSpeechDismissed] = useState(false);
   const inputRef = useRef<HermesPetMeshInput>({
@@ -59,6 +60,7 @@ export default function HermesLive2DVisualRoute() {
     tone: speechFixture.tone,
     visibleUntilMs: Number.POSITIVE_INFINITY,
   } : null;
+  const stageSize = resolveHermesStageSize(fixtureSize === 'desktop', fixtureSize === 'mobile');
 
   const setPointer = (engaged: boolean) => {
     inputRef.current = {
@@ -102,13 +104,35 @@ export default function HermesLive2DVisualRoute() {
   };
 
   return (
-    <main className="min-h-screen bg-[#050706] p-6 text-os-paper" data-hermes-live2d-harness="true">
-      <header className="mx-auto mb-5 max-w-[1180px] border-b border-os-rule-dark pb-4">
-        <p className="font-mono text-xs uppercase tracking-[.12em] text-os-vermilion">Hermes / Wanko Live2D motion laboratory</p>
-        <h1 className="mt-2 font-serif text-3xl">One companion, thirty-two production actions</h1>
+    <main className="min-h-screen bg-[#0b0b0a] px-5 pb-16 pt-6 text-os-paper sm:px-8 lg:px-12" data-hermes-live2d-harness="true" data-hermes-ro-create-fixture="true">
+      <header className="mx-auto flex max-w-[92rem] items-center justify-between border-b border-white/20 pb-5">
+        <span className="text-sm text-white/70">← Research dashboard</span>
+        <p className="font-mono text-xs uppercase tracking-[.12em] text-white/55">OpenScience / Research Object</p>
       </header>
-      <section className="mx-auto grid max-w-[1180px] gap-5 lg:grid-cols-[minmax(0,1fr)_560px]">
-        <div className="grid content-start grid-cols-2 gap-2 sm:grid-cols-3">
+      <section className="mx-auto grid max-w-[92rem] gap-12 pt-10 lg:grid-cols-[minmax(18rem,.55fr)_minmax(0,1.45fr)] lg:gap-20">
+        <aside>
+          <p className="font-mono text-xs uppercase tracking-[.12em] text-os-vermilion">01 / Research identity</p>
+          <h1 className="mt-5 max-w-xl font-display text-4xl leading-[.98] sm:text-6xl lg:text-[4.7rem]">Create<br />Research Object</h1>
+          <p className="mt-6 max-w-md text-base leading-7 text-white/65">Start from a blank six-field SDF, or bring existing research material into an evidence-preserving draft.</p>
+        </aside>
+        <form className="min-w-0" onSubmit={(event) => event.preventDefault()}>
+          <div className="grid gap-6 border-b border-white/25 pb-10 sm:grid-cols-2">
+            <label className="grid gap-2 text-sm text-white/70">Workspace<select className="min-h-12 border-0 border-b border-white/25 bg-transparent text-base text-white"><option className="bg-[#11100f]">Research workspace</option></select></label>
+            <label className="grid gap-2 text-sm text-white/70">Research title<input className="min-h-12 border-0 border-b border-white/25 bg-transparent px-1 text-base text-white outline-none focus:border-os-vermilion" placeholder="A precise working title" /></label>
+          </div>
+          <section className="border-b border-white/20 py-12">
+            <p className="font-display text-3xl">Build the structure first.</p>
+            <p className="mt-3 max-w-xl text-base leading-7 text-white/65">Problem, Insight, Method, Results, Limitations and Reproducibility remain editable evidence fields.</p>
+          </section>
+          <footer className="mt-10 flex flex-wrap items-center justify-between gap-5 border-t border-white/25 pt-6">
+            <p className="max-w-xl text-xs leading-5 text-white/60">No source material is required for a blank draft.</p>
+            <button className="min-h-12 bg-[#bd321d] px-7 text-sm font-semibold text-white" data-hermes-primary-create type="submit">Create Research Object</button>
+          </footer>
+        </form>
+      </section>
+      <details className="fixed bottom-4 left-4 z-[80] max-w-[calc(100vw-2rem)] bg-[#111411] text-os-paper shadow-xl" data-hermes-dev-tray="true">
+        <summary className="cursor-pointer px-4 py-3 font-mono text-xs uppercase tracking-[.1em] text-white/65">Hermes diagnostics</summary>
+        <div className="grid max-h-[60vh] w-[38rem] max-w-full grid-cols-2 gap-2 overflow-auto border-t border-white/10 p-3 sm:grid-cols-3">
           {actions.map((candidate) => (
             <button
               className="border border-os-rule-dark px-3 py-2 text-left font-mono text-xs hover:border-os-vermilion"
@@ -140,14 +164,15 @@ export default function HermesLive2DVisualRoute() {
             </button>
           ))}
         </div>
+      </details>
         <div
-          className="hermes-workspace-stage relative mt-16 max-w-full justify-self-end border border-os-rule-dark bg-[#090d0a]"
+          className="hermes-workspace-stage"
           data-hermes-live2d-fixture={action}
           data-hermes-layer-isolation={layerIsolation}
           data-hermes-motion-preference={reducedMotion ? 'reduced' : 'full'}
           data-hermes-poster-size-active={fixtureSize}
-          data-hermes-stage-size={fixtureSize === 'desktop' ? '336' : '176'}
-          style={{ height: fixtureSize === 'desktop' ? 336 : 176, position: 'relative', width: fixtureSize === 'desktop' ? 336 : 176 }}
+          data-hermes-stage-size={stageSize}
+          style={{ bottom: 24, height: stageSize, left: 'auto', position: 'fixed', right: 24, top: 'auto', width: stageSize }}
         >
           <div className="hermes-companion-actor absolute inset-0">
             <HermesRiggedPortrait
@@ -165,7 +190,6 @@ export default function HermesLive2DVisualRoute() {
             />
           ) : null}
         </div>
-      </section>
     </main>
   );
 }
