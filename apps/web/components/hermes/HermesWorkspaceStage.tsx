@@ -56,6 +56,7 @@ const neutralSuggestion: HermesGuideSuggestion = { bodyKey: 'guide.neutral.body'
 const supportedPath = (pathname: string) => pathname === '/dashboard' || pathname.startsWith('/research-objects/');
 const viewportClass = (): HermesViewportClass => window.innerWidth <= 640 ? 'mobile' : 'desktop';
 const TRAVEL_SEGMENT_MS = 360;
+const SETTLED_MOTION_CLEARANCE_PX = 2;
 type MeasuredBubblePlacement = HermesBubblePlacement & { stageLeft: number; stageTop: number };
 
 const behaviorInput = (
@@ -182,6 +183,7 @@ function HermesWorkspaceStage({ fallbackAssistantOpen, fallbackOnInvoke, guideTa
   const [dockReady, setDockReady] = useState(false);
   const [dockKind, setDockKind] = useState<HermesViewportClass | null>(null);
   const [dockStored, setDockStored] = useState<boolean | null>(null);
+  const [settlingDockReady, setSettlingDockReady] = useState(false);
   const [settlingNewDock, setSettlingNewDock] = useState(false);
   const [dragging, setDragging] = useState(false);
   const [position, setPosition] = useState({ x: 0, y: 0 });
@@ -476,22 +478,25 @@ function HermesWorkspaceStage({ fallbackAssistantOpen, fallbackOnInvoke, guideTa
       viewport: { bottom: window.innerHeight, left: 0, right: window.innerWidth, top: 0 },
     });
     if (!settled.safe || Math.hypot(settled.point.x - anchorCenter.x, settled.point.y - anchorCenter.y) < .5) return;
-    const preferences = loadHermesDockPreferences(window.localStorage, workspaceId, dockKind);
-    saveHermesDockPreferences(window.localStorage, workspaceId, dockKind, {
-      ...preferences,
-      xRatio: settled.point.x / window.innerWidth,
-      yRatio: settled.point.y / window.innerHeight,
-    });
-    setPosition(settled.point);
+    setSettlingDockReady(false);
     setSettlingNewDock(true);
-    setDockStored(true);
     setCustomDock(true);
   }, [anchorRect, customDock, dockKind, dockReady, dockStored, dragging, guideTarget, protectedGeometryVersion,
     reducedMotion, speech.cue, stageMotionVersion, viewportSize, workspaceId]);
 
   React.useLayoutEffect(() => {
+    if (settlingNewDock) setSettlingDockReady(false);
+  }, [behavior.primary, settlingNewDock]);
+
+  useEffect(() => {
+    if (!settlingNewDock) return;
+    setSettlingDockReady(true);
+    setStageMotionVersion((version) => version + 1);
+  }, [behavior.primary, settlingNewDock]);
+
+  React.useLayoutEffect(() => {
     if (!customDock || !dockReady || dockKind !== viewportClass() || dragging || guideTarget
-      || viewportSize.width <= 0 || viewportSize.height <= 0) return;
+      || (settlingNewDock && !settlingDockReady) || viewportSize.width <= 0 || viewportSize.height <= 0) return;
     const stage = stageRef.current;
     if (!stage) return;
     const stageBounds = stage.getBoundingClientRect();
@@ -503,13 +508,14 @@ function HermesWorkspaceStage({ fallbackAssistantOpen, fallbackOnInvoke, guideTa
       ?? stage.querySelector<HTMLElement>('[data-hermes-companion-actor="true"]')?.getBoundingClientRect()
       ?? stageBounds;
     const center = { x: stageBounds.left + stageBounds.width / 2, y: stageBounds.top + stageBounds.height / 2 };
+    const motionClearance = settlingNewDock ? SETTLED_MOTION_CLEARANCE_PX : 0;
     const settled = resolveHermesSettledDock({
       desired: center,
       footprint: {
-        bottom: Math.max(1, actorBounds.bottom - center.y),
-        left: Math.max(1, center.x - actorBounds.left),
-        right: Math.max(1, actorBounds.right - center.x),
-        top: Math.max(1, center.y - actorBounds.top),
+        bottom: Math.max(1, actorBounds.bottom - center.y) + motionClearance,
+        left: Math.max(1, center.x - actorBounds.left) + motionClearance,
+        right: Math.max(1, actorBounds.right - center.x) + motionClearance,
+        top: Math.max(1, center.y - actorBounds.top) + motionClearance,
       },
       obstacles: Array.from(document.querySelectorAll<HTMLElement>('[data-hermes-protected="true"]'))
         .map((element) => element.getBoundingClientRect())
@@ -517,16 +523,23 @@ function HermesWorkspaceStage({ fallbackAssistantOpen, fallbackOnInvoke, guideTa
           && bounds.left < window.innerWidth && bounds.top < window.innerHeight),
       viewport: { bottom: window.innerHeight, left: 0, right: window.innerWidth, top: 0 },
     });
-    if (!settled.safe) {
-      if (settlingNewDock) setSettlingNewDock(false);
-      return;
-    }
+    if (!settled.safe) return;
     const settledDistance = Math.hypot(settled.point.x - position.x, settled.point.y - position.y);
     if (settledDistance < (settlingNewDock ? .05 : .5)) {
-      if (settlingNewDock) setSettlingNewDock(false);
+      if (settlingNewDock) {
+        const preferences = loadHermesDockPreferences(window.localStorage, workspaceId, dockKind);
+        saveHermesDockPreferences(window.localStorage, workspaceId, dockKind, {
+          ...preferences,
+          xRatio: settled.point.x / window.innerWidth,
+          yRatio: settled.point.y / window.innerHeight,
+        });
+        setDockStored(true);
+        setSettlingNewDock(false);
+      }
       return;
     }
     setPosition(settled.point);
+    if (settlingNewDock) return;
     const kind = viewportClass();
     const preferences = loadHermesDockPreferences(window.localStorage, workspaceId, kind);
     saveHermesDockPreferences(window.localStorage, workspaceId, kind, {
@@ -534,8 +547,8 @@ function HermesWorkspaceStage({ fallbackAssistantOpen, fallbackOnInvoke, guideTa
       xRatio: settled.point.x / window.innerWidth,
       yRatio: settled.point.y / window.innerHeight,
     });
-  }, [customDock, dockKind, dockReady, dragging, guideTarget, position, protectedGeometryVersion, settlingNewDock,
-    stageMotionVersion, viewportSize, workspaceId]);
+  }, [behavior.primary, customDock, dockKind, dockReady, dragging, guideTarget, position, protectedGeometryVersion,
+    settlingDockReady, settlingNewDock, stageMotionVersion, viewportSize, workspaceId]);
 
   useEffect(() => {
     if (!guideTarget) return;
@@ -661,7 +674,12 @@ function HermesWorkspaceStage({ fallbackAssistantOpen, fallbackOnInvoke, guideTa
   };
 
   const onStageTransitionEnd = (event: React.TransitionEvent<HTMLDivElement>) => {
-    if (event.currentTarget !== event.target || !['height', 'left', 'top', 'width'].includes(event.propertyName)) return;
+    const stageTransition = event.currentTarget === event.target && ['height', 'left', 'top', 'width'].includes(event.propertyName);
+    const target = event.target;
+    const footprintTransition = target instanceof HTMLElement
+      && (target.matches('.hermes-companion-actor') || target.matches('.hermes-wanko-carrier'))
+      && ['rotate', 'transform', 'translate'].includes(event.propertyName);
+    if (!stageTransition && !footprintTransition) return;
     setStageMotionVersion((version) => version + 1);
   };
 
