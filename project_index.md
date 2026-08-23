@@ -126,7 +126,7 @@
 | `docs/specs/2026-08-15-hermes-constellation-dragon-prototype-design.md` | Hermes 少年星图龙轻量 Blender 原型历史设计 | **用户视觉 NO-GO**；不得作为当前候选 |
 | `docs/specs/2026-08-15-hermes-2d-pet-design.md` | Hermes 2.5D 整图 PNG/CSS-signal 历史原型 | **DEPRECATED / VISUAL NO-GO**；资产可复用，renderer 不得继续 |
 | `docs/specs/2026-08-17-hermes-workspace-companion-motion-design.md` | Hermes Workspace Companion 已实施 guide/anchor/travel/dock/diff foundation 与历史 OGL visual contract | **IMPLEMENTED FOUNDATION / VISUAL SUPERSEDED**；CURRENT renderer 见 2026-08-19 Wanko spec |
-| `docs/specs/2026-08-19-hermes-wanko-live2d-design.md` | Wanko 第一阶段验证角色、24+ 行为；§10 原生碗结构蜕变与 §10.7 烟雾托座：隐藏碗像素、保留碗骨架，6 个 smoke ArtMesh/4 个 Warp Deformer、独占 motion-after 参数、mobile/static 门与零 runtime 拼贴 | **CURRENT Hermes visual/guide design**；烟雾替代碗可见作用的设计已获用户确认 |
+| `docs/specs/2026-08-19-hermes-wanko-live2d-design.md` | Wanko 第一阶段验证角色；§10 原生灯/烟雾托座；§11 统一 semantic performance beat、`336/176px`、活泼动作与双语 optical-editorial 气泡系统 | **CURRENT Hermes visual/guide design**；Phase 1 本地预览获准实施，Phase 2 Cubism 新动作待真实画面判断 |
 | `docs/specs/2026-08-22-wanko-scholar-hat-design.md` | canonical Wanko 常驻学者帽视觉、佩戴遮挡、流苏运动和 visual-before-Cubism 门 | **CURRENT accessory design COMPLETE**；用户确认 v09 整体形象完成，已进入 Cubism 母版并随 2026-08-23 runtime bundle 导出，尚未部署 |
 | `docs/specs/2026-08-18-readable-workspace-hermes-guidance-design.md` | B 平衡学者工作台、三视觉系统阅读基线、浏览器无关控件样式、Hermes 不遮挡引导编舞与公网 blank RO→六字段→diff→commit 真实验收 | **CURRENT implemented design**；ECS release `06072c1` 公网验收完成 |
 | `docs/plans/2026-08-18-readable-workspace-hermes-guidance-plan.md` | 可读性基础→代表页面→完整 Hermes footprint 避让→edit-before-accept/缺失证据→语义动作→公网 blank RO gate→ECS checkpoint 的 TDD 实施链 | **COMPLETED**；release `06072c1` / rollback `8ecf96c` |

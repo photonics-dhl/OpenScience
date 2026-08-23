@@ -2,6 +2,12 @@
 
 > 本文件只保留 CURRENT window；完整历史由 Git history 保存，不作为新 session 默认输入。
 
+## 2026-08-23 — Wanko lively performance preview approved for implementation
+
+- 用户选择桌面常态 `336px`、活泼 cadence、整体角色单一命中区，以及 `60%` 可爱精灵 / `40%` 学者助手的混合气质；采用两阶段 C，但先只以现有 v09 的 12 段 motion 做本地 Phase 1 预览，不改模型美术、不进 Cubism、不部署。
+- 动作与语言统一为一个 semantic performance beat；四组覆盖待机、直接交互、字段引导、任务反馈。自主气泡为 `25–45s` 偶尔出现、`3–5s` 收起，并在输入/审批/弹窗/reduced-motion 下静默；功能引导气泡继续可用。
+- 气泡方向是纸白学术批注笺、深靛蓝墨色、单根朱红 citation-thread 尾线、4px radius、无玻璃/渐变/弹跳。用户明确要求无需继续逐项询问，先完成真实本地页面与截图供视觉判断。
+
 ## 2026-08-23 — Wanko v09 Cubism runtime export
 
 - 用户确认形象设计完成；v09 是唯一母版：`C:/Users/Mac/AppData/Local/OpenScience/Live2D/wanko-genie-v1/wanko_genie_v09.cmo3`，SHA-256 `BA111D4E...1121ADD`，原件未改。

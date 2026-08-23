@@ -455,3 +455,80 @@ motions cannot overwrite the four smoke parameters; no mesh inversion, holes or
 draw-order swaps at extrema; and real desktop/mobile frame-time, alpha-overdraw,
 crop, collision, suspension/resume and context-recovery gates. Until those
 checks pass, generated smoke is source-art study only, not a production asset.
+
+## 11. Lively performance beats and annotation bubbles
+
+The 2026-08-23 follow-up keeps the approved v09 model, texture, hat, tassel,
+lamp, smoke silhouette and dock position intact while increasing the normal
+desktop stage from `288 CSS px` to `336 CSS px`. A mobile field visit uses
+`176 CSS px`; anchored product placements retain their owner-provided bounds.
+Collision and travel planning must consume the actual rendered stage and bubble
+union rather than assuming either previous constant.
+
+### 11.1 One semantic performance owner
+
+Motion and language are selected as one `HermesPerformanceBeat`, never by two
+independent random selectors. A beat contains one existing semantic action,
+one deterministic visual variant, an optional localized speech cue, duration,
+priority, cooldown and interruption policy. The current single Cubism
+model/canvas/RAF owner remains unchanged. Phase 1 reuses the twelve exported
+v09 motions plus bounded parameter and actor-transform layers; it does not open
+Cubism Editor, change source art or export another model.
+
+Four decks share the same director:
+
+- ambient: lively `3–6 s` micro cadence and `12–20 s` signature cadence;
+- direct interaction: whole-character hover, press, drag and release feedback;
+- field guidance: travel, arrive, point, explain and wait-for-input beats;
+- task truth: scan, read, compare, draft, missing evidence, success, failure and
+  approval beats derived only from real product state.
+
+The personality mix is approximately `60%` familiar-spirit and `40%` scholar.
+Seeded deck traversal must avoid immediate repetition and expose at least twelve
+perceptually distinct actions in a 90-second lively idle session. A signature
+beat finishes before another autonomous action can replace it.
+
+### 11.2 Bubble language and visual system
+
+The bubble is an optical-editorial annotation slip, not a cartoon cloud: warm
+paper surface, dark-indigo ink, one restrained vermilion citation-thread tail,
+fixed `4 px` surface radius and background-step plus layered shadow depth. The
+headline/intent label uses the existing data face; speech uses the existing
+editorial CJK/Latin stack. Entry is only opacity plus a `4 px` upward settle
+with `cubic-bezier(.16, 1, .3, 1)`; there is no bounce, glass blur or decorative
+gradient. Buttons keep a `40×40 CSS px` minimum hit area, visible focus and an
+interruptible `scale(.95)` active state.
+
+Every cue is a `next-intl` key with matched Chinese and English variants. Chinese
+ambient lines target at most 16 Han characters; English targets one line or two
+short lines. Guide bubbles retain their real field actions. Ambient bubbles have
+no invented product action and may offer only the existing Hermes invocation.
+The same beat ID appears in DOM diagnostics so browser gates can prove that the
+rendered action and localized cue belong together.
+
+Autonomous speech is occasional despite lively silent motion: a deterministic
+`25–45 s` cadence, `3–5 s` display duration, no immediate phrase repeat and at
+most one bubble. Input/writing, approval, modal/drawer-open, hidden document,
+unsafe placement and reduced-motion suppress autonomous speech. Approval and
+reduced-motion continue to render one non-empty model frame and then remain
+pixel-exact static; functional guide text remains available without animated
+entrance when reduced motion is active.
+
+### 11.3 Phase boundary and acceptance
+
+Phase 1 ships only as a local visual candidate until the user inspects real
+desktop and `390×844` captures. Focused tests must first fail on the old cadence,
+old size, absent speech policy and unsynchronised bubble. Acceptance requires:
+
+- `336/176` unanchored stage sizing and no regression in actual-bounds travel;
+- deterministic lively decks, no immediate repeats and truthful priority order;
+- action/speech beat identity, bilingual keys and autonomous silence guards;
+- accessible bubble semantics, focus states and non-overlapping `40 px` actions;
+- real WebGL screenshots for idle speech, direct interaction, guidance, task
+  feedback, mobile edge placement, approval and reduced-motion stillness;
+- no new image layer, renderer owner, dependency, API or server contract.
+
+Only after the user judges Phase 1 in-browser may Phase 2 author a small set of
+new `.motion3.json` clips for poses that parameter composition cannot express.
+Phase 2 remains non-overwriting, changes no art, and requires its own Cubism
+source/export and visual acceptance gate before replacing the v09 runtime.
