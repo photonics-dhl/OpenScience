@@ -2489,6 +2489,8 @@ body [data-reading-role='reading'] {
 .hermes-rig-stage[data-hermes-rig-status='ready'] .hermes-rig-image-fallback,
 .hermes-rig-stage[data-hermes-rig-status='ready'] .hermes-rig-vector-fallback { opacity: 0; }
 
+.hermes-rig-stage[data-hermes-rig-status='fallback'] .hermes-rig-vector-fallback { opacity: 1; }
+
 .hermes-rig-stage:not([data-hermes-rig-status='ready']) .hermes-carrier-shadow,
 .hermes-rig-stage:not([data-hermes-rig-status='ready']) .hermes-carrier-rear,
 .hermes-rig-stage:not([data-hermes-rig-status='ready']) .hermes-carrier-brand,

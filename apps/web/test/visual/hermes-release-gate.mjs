@@ -34,6 +34,7 @@ const runProductE2E = () => new Promise((resolve, reject) => {
     playwrightBin,
     'test',
     'test/e2e/hermes-dashboard.spec.ts',
+    'test/e2e/hermes-field-guide.spec.ts',
     '--config',
     'playwright.config.ts',
   ], {

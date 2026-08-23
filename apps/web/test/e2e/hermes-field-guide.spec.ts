@@ -69,7 +69,7 @@ test('reduced motion retains the guide actions without positional travel or part
   await expect(stage.locator('[data-hermes-particles]')).toHaveCount(0);
 });
 
-test('mobile carrier uses compact layers and docks above the virtual keyboard inset', async ({ page }) => {
+test('mobile Live2D carrier stays single-layer and docks above the virtual keyboard inset', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await page.addInitScript(() => {
     if (window.visualViewport) {
@@ -83,7 +83,8 @@ test('mobile carrier uses compact layers and docks above the virtual keyboard in
   const travelHull = stage.locator('[data-hermes-carrier-travel-hull="true"]');
   const interactionHull = stage.locator('[data-hermes-carrier-interaction-hull="true"]');
   await expect(stage).toHaveAttribute('data-hermes-footprint-source', 'carrier-travel-hull');
-  await expect(stage.locator('[data-hermes-carrier-rear="true"] source')).toHaveAttribute('media', '(max-width: 640px)');
+  await expect(stage.locator('[data-hermes-live2d-canvas="true"]')).toHaveCount(1);
+  await expect(stage.locator('[data-hermes-carrier-rear], [data-hermes-carrier-front]')).toHaveCount(0);
   await expect.poll(async () => (await travelHull.boundingBox())?.y ?? Number.POSITIVE_INFINITY).toBeLessThan(544);
   const [travelBox, interactionBox] = await Promise.all([travelHull.boundingBox(), interactionHull.boundingBox()]);
   expect(travelBox).not.toBeNull();

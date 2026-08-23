@@ -197,6 +197,7 @@ test('Hermes keeps the guide usable when WebGL2 is unavailable', async ({ page }
   await page.goto(`${baseUrl}/dashboard`, { waitUntil: 'networkidle' });
   await expect(page.getByRole('heading', { name: 'Research dashboard' })).toBeVisible();
   const visual = page.locator('[data-hermes-renderer="articulated-mesh"]');
+  await expect(visual.locator('.hermes-rig-vector-fallback .hermes-portrait')).toBeVisible();
   const rig = page.locator('[data-hermes-rig="live2d-wanko"]');
   await expect(rig).toHaveAttribute('data-hermes-rig-status', 'fallback');
   await expect(rig).toHaveAttribute('data-hermes-runtime-reason', 'webgl2-unavailable');

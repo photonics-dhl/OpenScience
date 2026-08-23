@@ -96,7 +96,8 @@ describe('Hermes dashboard guidance', () => {
     expect(markup).not.toContain('data-runtime-ready');
     expect(markup).not.toContain('<img');
     expect(markup).not.toContain('<picture');
-    expect(markup).not.toContain('<svg');
+    expect(markup.match(/<svg/g) ?? []).toHaveLength(1);
+    expect(markup).toContain('class="hermes-portrait');
     expect(markup).not.toContain('poster-');
 
     const reduced = renderToStaticMarkup(createElement(HermesVisualAdapter, {
@@ -104,7 +105,8 @@ describe('Hermes dashboard guidance', () => {
     }));
     expect(reduced).not.toContain('<img');
     expect(reduced).not.toContain('<picture');
-    expect(reduced).not.toContain('<svg');
+    expect(reduced.match(/<svg/g) ?? []).toHaveLength(1);
+    expect(reduced).toContain('class="hermes-portrait');
     expect(reduced).not.toContain('poster-');
     expect(reduced).not.toContain('/hermes/pet/');
   });
@@ -116,7 +118,8 @@ describe('Hermes dashboard guidance', () => {
       expect(markup).toContain('data-hermes-renderer="articulated-mesh"');
       expect(markup).not.toContain('<img');
       expect(markup).not.toContain('<picture');
-      expect(markup).not.toContain('<svg');
+      expect(markup.match(/<svg/g) ?? []).toHaveLength(1);
+      expect(markup).toContain('class="hermes-portrait');
       expect(markup).not.toContain('poster-');
       expect(markup).not.toContain('/hermes/pet/');
       expect(markup).toContain('data-hermes-rig="live2d-wanko"');
