@@ -1,7 +1,7 @@
 'use client';
 
 import { useLocale, useTranslations } from 'next-intl';
-import { forwardRef, useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { forwardRef, useLayoutEffect, useRef, useState } from 'react';
 
 import type { HermesAnchorAction, HermesAnchorId } from '@/lib/hermes/anchor-registry';
 import { dispatchHermesGuideAction } from './HermesDraftDiff';
@@ -21,7 +21,14 @@ export const HermesGuideBubble = forwardRef<HTMLElement, {
   const [explaining, setExplaining] = useState(false);
   const previousLayoutSignatureRef = useRef<string | null>(null);
   const previousLocaleRef = useRef(locale);
-  useEffect(() => setExplaining(false), [target]);
+  const previousTargetRef = useRef(target);
+  useLayoutEffect(() => {
+    if (previousTargetRef.current === target) return;
+    previousTargetRef.current = target;
+    if (!explaining) return;
+    onLayoutWillChange();
+    setExplaining(false);
+  }, [explaining, onLayoutWillChange, target]);
   useLayoutEffect(() => {
     const signature = `${edgeStop}:${actions.join('|')}`;
     if (previousLayoutSignatureRef.current !== null && previousLayoutSignatureRef.current !== signature) onLayoutWillChange();

@@ -1482,6 +1482,70 @@ test('mobile editing guidance keeps three accessible actions and explanation ins
   await page.screenshot({ animations: 'disabled', path: resolve(visualOut, 'mobile-editor-actions-390x844.png') });
 });
 
+test('switching editor fields collapses Explain through one convergent layout epoch', async ({ page }) => {
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await mockWorkspace(page);
+  await page.goto(`${baseUrl}/research-objects/ro-guide/edit?hermes-motion=reduced`, { waitUntil: 'networkidle' });
+
+  const stage = page.locator('[data-hermes-workspace-stage]');
+  const bubble = page.locator('[data-hermes-guide-bubble]');
+  await expect(stage).toHaveAttribute('data-hermes-guide-target', 'sdf-problem');
+  await expect(bubble).toBeVisible();
+  const initialSizeVersion = Number(await stage.getAttribute('data-hermes-guide-size-version'));
+
+  await page.locator('[data-sdf-node="2"] > button').click();
+  await expect(stage).toHaveAttribute('data-hermes-guide-target', 'sdf-insight');
+  await expect(stage).toHaveAttribute('data-hermes-guide-ready', 'true');
+  expect(Number(await stage.getAttribute('data-hermes-guide-size-version')),
+    'a collapsed target switch must not create a layout epoch').toBe(initialSizeVersion);
+
+  await bubble.getByRole('button', { name: /Explain|解释/i }).click();
+  await expect(page.locator('[data-hermes-guide-explanation]')).toBeVisible();
+  await expect.poll(async () => Number(await stage.getAttribute('data-hermes-guide-size-version'))).toBe(initialSizeVersion + 1);
+  const expanded = await bubble.boundingBox();
+  expect(expanded).not.toBeNull();
+  const beforeSwitchPlanCount = Number(await stage.getAttribute('data-hermes-guide-plan-count'));
+
+  await page.locator('[data-sdf-node="3"] > button').click();
+  await expect(stage).toHaveAttribute('data-hermes-guide-target', 'sdf-method');
+  await expect(page.locator('[data-hermes-guide-explanation]')).toHaveCount(0);
+  await expect.poll(async () => Number(await stage.getAttribute('data-hermes-guide-size-version'))).toBe(initialSizeVersion + 2);
+  await expect(stage).toHaveAttribute('data-hermes-guide-ready', 'true');
+  await expect(stage).toHaveAttribute('data-hermes-guide-suppressed', 'false');
+  await expect(bubble).toBeVisible();
+  const collapsed = await bubble.boundingBox();
+  const method = page.getByRole('textbox', { name: /Method|方法/i });
+  const methodBounds = await method.boundingBox();
+  expect(collapsed && methodBounds).toBeTruthy();
+  expect(collapsed!.height).toBeLessThan(expanded!.height);
+  expect(boxesOverlap(collapsed!, methodBounds!)).toBe(false);
+  expect(collapsed!.x).toBeGreaterThanOrEqual(0);
+  expect(collapsed!.y).toBeGreaterThanOrEqual(0);
+  expect(collapsed!.x + collapsed!.width).toBeLessThanOrEqual(1440);
+  expect(collapsed!.y + collapsed!.height).toBeLessThanOrEqual(900);
+
+  const settled = await page.evaluate(() => new Promise<Array<{ plans: string | undefined; size: string | undefined }>>((resolveSamples) => {
+    const samples: Array<{ plans: string | undefined; size: string | undefined }> = [];
+    const sample = () => {
+      const node = document.querySelector<HTMLElement>('[data-hermes-workspace-stage]');
+      samples.push({ plans: node?.dataset.hermesGuidePlanCount, size: node?.dataset.hermesGuideSizeVersion });
+      if (samples.length === 60) resolveSamples(samples);
+      else requestAnimationFrame(sample);
+    };
+    requestAnimationFrame(sample);
+  }));
+  expect(new Set(settled.map((sample) => `${sample.plans}:${sample.size}`)).size, JSON.stringify(settled)).toBe(1);
+  expect(Number(settled[0]?.plans)).toBeGreaterThan(beforeSwitchPlanCount);
+
+  const collapsedSwitchVersion = Number(await stage.getAttribute('data-hermes-guide-size-version'));
+  await page.locator('[data-sdf-node="4"] > button').click();
+  await expect(stage).toHaveAttribute('data-hermes-guide-target', 'sdf-results');
+  await expect(stage).toHaveAttribute('data-hermes-guide-ready', 'true');
+  expect(Number(await stage.getAttribute('data-hermes-guide-size-version')),
+    'a second collapsed target switch must not create a layout epoch').toBe(collapsedSwitchVersion);
+});
+
 test('English expanded guidance remeasures before showing a protected-safe narrow bubble', async ({ page }) => {
   await page.emulateMedia({ reducedMotion: 'reduce' });
   await page.setViewportSize({ width: 390, height: 844 });
