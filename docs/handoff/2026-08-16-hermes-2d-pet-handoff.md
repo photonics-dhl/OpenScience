@@ -2,11 +2,11 @@
 
 ## Current truth
 
-- **2026-08-24 最新状态覆盖下方历史阻塞叙述**：唯一 v09 母版 `wanko_genie_v09.cmo3`（SHA-256 `BA111D4E...1121ADD`）及 SDK 4.0 bundle、两张 zero-alpha RGB-clean texture、帽子/流苏/灯/烟雾与 12 motions 均未改；ECS 仍运行 development release `c97926a`，本轮显式 rollback 为该 release。
+- **2026-08-24 最新状态覆盖下方历史阻塞叙述**：唯一 v09 母版 `wanko_genie_v09.cmo3`（SHA-256 `BA111D4E...1121ADD`）及 SDK 4.0 bundle、两张 zero-alpha RGB-clean texture、帽子/流苏/灯/烟雾与 12 motions 均未改；ECS development release 已更新为 `5f4e73c`，rollback `c97926a`。
 - 本地技术候选 `2b9cef1` 已从 ECS `288/160px` 基线实现精确 `1.25x` 的 `360/200px` movable work-assistant：默认 Dashboard 右栏 anchor，整角色拖动后脱离并安全持久化，click 打开现有 drawer；角色、气泡、guide travel hull 与 protected workflow 均以真实几何独立测量。
 - RO 创建保持首屏主任务，32 动作只在 developer tray 展开。气泡是紧凑 ink-edge note；移动端三项 guide action 为 44px 可访问目标，普通自主短句与动作绑定为固定 4 秒原子 beat，hover/drag/guide/task/approval/writing/reduced 等优先状态即时打断。
 - fresh Web `390/390` + 5 Node contracts、typecheck、18 页 production build、Live2D gate、work-assistant gate 与 canonical product E2E `40/40` GREEN；独立 Sol High 对 Task 21 最终增量无 Critical/Important/Minor。ignored 证据为 `apps/web/test/visual/out/hermes-work-assistant/dashboard-{1440x900,1920x1080,390x844}.png` 与 `dashboard-metrics.json`。
-- 尚未部署；本地候选不能冒充生产验收。下一步仅走已授权的 `--skip-migrate` dry-run/deploy，并在公网 Dashboard 重复三视口 click/drag/resize/bubble/Create 验收。
+- 已以 `--skip-migrate` 部署：服务器全量 build、Nginx、精确 `/__release`、全部容器、Parser 隔离、27/27 migrations、五个 Live2D runtime SHA 与公网三视口 click/drag/resize/bubble/Create UI gate GREEN；`.release-failed` 不存在。公网 UI gate 对 API 使用无写入拦截，未把它冒充真实账号/数据库纵向验收。
 
 - 用户已确认停止修改当前丑陋茶壶，先由 Codex 独立重画 lamp-only Photoshop vector/shape 源美术。新硬门：低矮横向阿拉丁神灯、深靛蓝釉面/克制金边、细长上扬嘴、开放 S/C 把手；壶身 `0.82–0.92x` Wanko、总跨距 `<=1.20x`、总高 `28–32%`。先交付 light/dark × `512/288/160` 灯体单独预览；不许用 Wanko/烟/辉光/品牌掩盖轮廓，用户未通过前不得导入 Cubism。
 - 用户已通过 lamp-only 候选 `C:/Users/Mac/.codex/generated_images/01a01f25-fdbf-7f20-a4d4-5a3523c32909/exec-24f1bfe9-14e1-4a70-86e2-66bf6dcadcad.png` 及唯一品牌候选 `brand-study-v03/sdf-brand-reference-topology-v03.svg`：较粗壶嘴输入流→竖向深色开放中心→三条不回汇扇形路线→每支两个蓝白圆点→仅中支连接单一橙色结果。机械合同、主线程 light/dark `512/288/160` 实图与 Sol High 对照参考图复审均 GREEN/APPROVE；签核不等于 PSD/Cubism/生产验收。
@@ -40,10 +40,10 @@
 
 ## Version tuple
 
-- Branch / technical release candidate: `codex/hermes-wanko-live2d` / `2b9cef1a010c6118bf28ba19be5cf281764c3832`（本次 docs sync/release commit 位于其后）
+- Branch / deployed technical release: `codex/hermes-wanko-live2d` / `5f4e73c10dace9f2d18f8788ead238863cd33312`（本次 post-deploy docs commit 位于其后）
 - Remote candidate: `origin/codex/readable-hermes-guidance@c88c78003957204e6218b8bd2c9c3842a6fbb315`（未包含本次候选）
 - Local main: `c60ffdd16b85ea8f0d8b047493fa03a4c0230c05`
-- ECS release / rollback: `c97926ab4188d5d5fc7a6e58e0333d20a600c692` / `06072c1fd3eb30148daec8d4c4a8572fa3bdacc8`
+- ECS release / rollback: `5f4e73c10dace9f2d18f8788ead238863cd33312` / `c97926ab4188d5d5fc7a6e58e0333d20a600c692`
 - Current branch PR: none
 
 ## Constraints
@@ -55,8 +55,8 @@
 
 ## Next action
 
-1. 创建包含本次 docs sync 的干净 immutable release commit；确认本地分支、HEAD、ECS release 与 rollback 四元组。
-2. 运行 `checkup.sh` 与 deploy dry-run，再以 `--confirm --skip-migrate --rollback-ref c97926a...` 执行已授权的 development deployment；不迁移、不 seed。
-3. 在公网 authenticated Dashboard 的 `1440×900`、`1920×1080`、`390×844` 重复 click/drag/resize/bubble/Create 验收，核对容器、runtime asset、精确 release SHA、迁移只读状态与 `.release-failed` 不存在。
+1. 保持 release `5f4e73c` / rollback `c97926a`，观察 Dashboard 客户端错误、容器健康与用户移动/气泡反馈；不要因 docs commit 重新部署。
+2. 若后续提供现有测试会话，则补一次不创建新数据的真实认证 Dashboard smoke；当前无 session token，已完成的公网 UI gate 明确为无写入拦截。
+3. 任何新 Hermes 视觉/动作迭代另开任务；不要修改已部署 v09 母版或恢复旧 `336/176`、动作画廊、大卡片气泡。
 
 Read first：`AGENTS.md` → 本 handoff → 2026-08-19 Wanko CURRENT design/plan → `docs/progress.md`；`project_index.md` 只用 `rg` 定向查 CURRENT 行。

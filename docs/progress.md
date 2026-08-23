@@ -7,7 +7,8 @@
 - Task 21 本地候选 `2b9cef1` 已实现精确 `360/200px`、右栏默认 anchor、整角色 drag-detach/viewport clamp/desktop-mobile 持久化、真实 protected-region 避让、guide travel/restore 与紧凑 optical-editorial 气泡；v09 模型、美术、帽子/流苏/灯/烟雾及 runtime assets 字节未改。
 - 伴随动作与气泡不会抢占 RO：32 动作留在 developer tray，移动端保留三个 44px guide actions；自主短句使用固定 4 秒 atomic beat，普通自主动作在该窗口保持同 owner，hover/drag/guide/task/approval/writing/reduced 等优先状态立即打断。该修复关闭了 390px 下气泡在样式读取/真实 dismiss 前撤下的可重复竞态。
 - fresh controller gates：Web `390/390` + 5 Node contracts、typecheck、18 页 production build、Live2D、work-assistant 与 canonical product E2E `40/40` GREEN；Live2D first-ready `906ms`，idle/pointer `0` drops。独立 Sol High 最终审查无 Critical/Important/Minor。
-- 本地截图/metrics 位于 ignored `apps/web/test/visual/out/hermes-work-assistant/`；本地 3198 已停止、worktree tracked clean。尚未部署，ECS 保持 `c97926a`；下一步是以它为 rollback 的 `--skip-migrate` dry-run/deploy 与 authenticated 公网三视口验收。
+- release `5f4e73c` 已以 `--skip-migrate` 部署，rollback `c97926a`。服务器全量 build、Nginx、精确 `/__release`、全部容器、Parser `node/read-only/network=none/512MiB/64PID`、27/27 migrations 与 Core/model/moc3/两张 texture SHA GREEN；最新 DB backup 441,411 bytes，部署未迁移、未 seed。
+- 公网 deployed Dashboard 在 `1440×900`、`1920×1080`、`390×844` 的真实 click/drag/reload/resize/bubble/Create UI gate GREEN，截图/metrics 位于 ignored `apps/web/test/visual/out/hermes-work-assistant/`；API 使用无写入拦截，未声称完成真实账号/数据库纵向 gate。前后 checkup 均健康，`.release-failed` 不存在。
 
 ## 2026-08-23 — Hermes production-ratio enhancement design approved
 
@@ -67,10 +68,10 @@
 
 ## Version tuple
 
-- Branch / technical release candidate: `codex/hermes-wanko-live2d` / `2b9cef1a010c6118bf28ba19be5cf281764c3832`（本次 docs sync/release commit 位于其后）
+- Branch / deployed technical release: `codex/hermes-wanko-live2d` / `5f4e73c10dace9f2d18f8788ead238863cd33312`（本次 post-deploy docs commit 位于其后）
 - Remote candidate: `origin/codex/readable-hermes-guidance@c88c78003957204e6218b8bd2c9c3842a6fbb315`（未包含本次本地候选）
 - Local main: `c60ffdd16b85ea8f0d8b047493fa03a4c0230c05`
-- ECS release / rollback: `c97926ab4188d5d5fc7a6e58e0333d20a600c692` / `06072c1fd3eb30148daec8d4c4a8572fa3bdacc8`
+- ECS release / rollback: `5f4e73c10dace9f2d18f8788ead238863cd33312` / `c97926ab4188d5d5fc7a6e58e0333d20a600c692`
 - Current branch PR: none
 
 ## Read first

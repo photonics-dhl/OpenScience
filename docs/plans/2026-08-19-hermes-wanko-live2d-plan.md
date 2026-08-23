@@ -1,6 +1,6 @@
 # Hermes Wanko Live2D Companion Implementation Plan
 
-> **Status (2026-08-24): CURRENT IN PROGRESS — Task 21 implementation/local review are complete; deployment and public acceptance remain.**
+> **Status (2026-08-24): CURRENT DEPLOYED — Task 21 implementation, review, deployment and no-write public UI acceptance are complete; optional real-account smoke remains explicit.**
 > The ECS baseline is `c97926a`, the approved product endpoints are `360/200px`,
 > and this task changes presentation and interaction only, never v09 source art.
 > **For agentic workers:** REQUIRED SUB-SKILL: Use `executing-plans` to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
@@ -2738,7 +2738,7 @@ Dashboard acceptance.
   `360/200` only after code and browser gates are green. Commit all reviewed
   source, tests and docs; require `git status --short` empty.
 
-- [ ] **Step 4: Perform read-only preflight and deployment dry-run.**
+- [x] **Step 4: Perform read-only preflight and deployment dry-run.**
 
   ```bash
   XGS_RELEASE_SHA="$(git rev-parse HEAD)"
@@ -2749,7 +2749,7 @@ Dashboard acceptance.
   Verify current release identity, no `.release-failed`, backup readiness and
   healthy containers. The dry-run must name the exact candidate and rollback.
 
-- [ ] **Step 5: Deploy the already authorized development release.**
+- [x] **Step 5: Deploy the already authorized development release.**
 
   ```bash
   XGS_RELEASE_SHA="$(git rev-parse HEAD)"
@@ -2769,3 +2769,9 @@ Dashboard acceptance.
   absence of `.release-failed`. Update the deployment runbook with backup size,
   container/migration status, public gate count and rollback SHA; run docs gates
   again before claiming completion.
+
+  Current evidence: deployed three-viewport UI interaction gate is GREEN with
+  API writes intercepted; exact release/assets, containers, migrations and
+  `.release-failed` are independently verified. No real session token was
+  available, so this checkbox remains open rather than relabeling the no-write
+  browser gate as a real-account/database acceptance.

@@ -498,3 +498,36 @@ Historical note for the 2026-08-11 release: it used fixed worker tags and a writ
   validation from non-draft completeness in `06072c1`, then the same public gate
   passed. Temporary verification sessions were removed; ignored video, PNG, and
   metrics remain local evidence only.
+
+### 5.14 Hermes production-ratio movable companion release (2026-08-24)
+
+> Deployed release `5f4e73c`; rollback `c97926a`.
+
+- Scope: exact `360px` desktop / `200px` compact-mobile Hermes, anchored by
+  default and movable by whole-character drag; real actor/bubble/guide geometry
+  avoids semantic Dashboard work. Compact ink-edge speech uses one four-second
+  atomic autonomous beat while priority interaction, task, approval, writing,
+  guide and reduced states interrupt immediately. The v09 model, textures,
+  motions, hat, tassel, lamp and smoke bytes are unchanged.
+- Local evidence: Web `390/390` plus five Node contracts, typecheck, the 18-page
+  production build, Live2D/work-assistant gates and canonical product E2E
+  `40/40` passed. Live2D first-ready was 906ms; idle/pointer recorded zero
+  dropped frames. Independent Sol High review reported no Critical, Important
+  or Minor findings.
+- Operation: pre/post read-only checkup and the exact dry-run passed before
+  `deploy.sh --confirm --skip-migrate --rollback-ref c97926a... 5f4e73c...`.
+  Server full-workspace build, SHA-tagged Worker/Parser images, Parser-first
+  switching, Nginx validation and hard release checks passed. No migration or
+  seed ran; read-only status reports 27/27 migrations current. Latest retained
+  DB backup is 441,411 bytes; the backup directory contains nine files.
+- Runtime evidence: all production services are running and health-checked;
+  Parser remains `user=node`, read-only, `network=none`, 512MiB and 64 PID.
+  `.release-failed` is absent and `/__release` returns the exact full SHA.
+  Public SHA-256 values for Cubism Core, `.moc3`, model JSON and both textures
+  match the immutable release tree byte for byte.
+- Public UI acceptance: the deployed Dashboard passed click, drag, persisted
+  dock, reload, 640px breakpoint resize, autonomous bubble/dismiss, Create and
+  protected-geometry checks at `1440×900`, `1920×1080` and `390×844`. API
+  responses/writes were intercepted to avoid production data mutation; this is
+  deliberately not recorded as a real-account/database vertical gate. The
+  latter requires an existing test session token and remains optional evidence.
