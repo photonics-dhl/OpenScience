@@ -15,7 +15,7 @@ describe('Hermes performance speech policy', () => {
     expect(state.cue).toBeNull();
   });
 
-  it('binds a visible cue to the current action beat for three to five seconds', () => {
+  it('binds a one-line cue to the current action beat for exactly four seconds', () => {
     const initial = createHermesSpeechState(0, 17);
     const shown = stepHermesSpeech(initial, {
       action: 'cap-check',
@@ -27,10 +27,20 @@ describe('Hermes performance speech policy', () => {
 
     expect(shown.cue?.beatId).toBe(`cap-check:${initial.nextAtMs}`);
     expect(shown.cue?.messageKey).toMatch(/^performance\.capCheck\./u);
-    expect((shown.cue?.visibleUntilMs ?? 0) - initial.nextAtMs).toBeGreaterThanOrEqual(3_000);
-    expect((shown.cue?.visibleUntilMs ?? 0) - initial.nextAtMs).toBeLessThanOrEqual(5_000);
+    expect((shown.cue?.visibleUntilMs ?? 0) - initial.nextAtMs).toBe(4_000);
     expect(shown.nextAtMs - initial.nextAtMs).toBeGreaterThanOrEqual(25_000);
     expect(shown.nextAtMs - initial.nextAtMs).toBeLessThanOrEqual(45_000);
+
+    const lastReadableFrame = stepHermesSpeech(shown, {
+      action: 'cap-check', actionStartedAtMs: initial.nextAtMs, allowed: true,
+      nowMs: initial.nextAtMs + 3_999, seed: 17,
+    });
+    const expired = stepHermesSpeech(lastReadableFrame, {
+      action: 'cap-check', actionStartedAtMs: initial.nextAtMs, allowed: true,
+      nowMs: initial.nextAtMs + 4_000, seed: 17,
+    });
+    expect(lastReadableFrame.cue).toBe(shown.cue);
+    expect(expired.cue).toBeNull();
   });
 
   it('clears a cue when the rendered action changes instead of leaving mismatched language', () => {

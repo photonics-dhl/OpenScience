@@ -58,10 +58,48 @@ describe('Hermes atomic performance director', () => {
   it.each([
     ['hover', input({ nowMs: 1_250, pointer: { present: true, speed: .2, x: .2, y: -.1 } }), 'pointer-approach'],
     ['press', input({ dragging: true, nowMs: 1_250 }), 'drag'],
+    ['guide', input({ guide: 'travel', nowMs: 1_250 }), 'guide-travel'],
+    ['task', input({ nowMs: 1_250, state: 'scanning', task: 'working' }), 'read'],
   ] as const)('clears an obsolete cue in the same %s transition commit', (_label, behaviorInput, expectedAction) => {
     const next = stepHermesPerformance(speaking('cap-check', 1_000), { behaviorInput, speechAllowed: true });
 
     expect(next.behavior.primary).toBe(expectedAction);
     expect(next.speech.cue).toBeNull();
+  });
+
+  it('holds an ordinary autonomous beat through the cue window, then releases it atomically', () => {
+    const startedAtMs = 1_000;
+    const cueAtMs = 1_399;
+    const initialSpeech = { ...createHermesSpeechState(0, 37), nextAtMs: cueAtMs };
+    const previous: HermesPerformanceState = {
+      behavior: {
+        ...createInitialHermesBehavior(input({ nowMs: 0 })),
+        durationMs: 400,
+        kind: 'micro',
+        nextMicroAtMs: 1_400,
+        nextSignatureAtMs: 20_000,
+        primary: 'cap-check',
+        startedAtMs,
+      },
+      speech: stepHermesSpeech(initialSpeech, {
+        action: 'cap-check', actionStartedAtMs: startedAtMs, allowed: true, nowMs: cueAtMs, seed: 37,
+      }),
+    };
+    const lastReadableMs = previous.speech.cue!.visibleUntilMs - 1;
+    const held = stepHermesPerformance(previous, {
+      behaviorInput: input({ nowMs: lastReadableMs }),
+      speechAllowed: true,
+    });
+
+    expect(held.behavior).toBe(previous.behavior);
+    expect(held.speech.cue).toBe(previous.speech.cue);
+    expect(held.speech.cue?.beatId).toBe(`${held.behavior.primary}:${held.behavior.startedAtMs}`);
+
+    const released = stepHermesPerformance(held, {
+      behaviorInput: input({ nowMs: previous.speech.cue!.visibleUntilMs }),
+      speechAllowed: true,
+    });
+    expect(released.behavior.startedAtMs).toBe(previous.speech.cue!.visibleUntilMs);
+    expect(released.speech.cue).toBeNull();
   });
 });

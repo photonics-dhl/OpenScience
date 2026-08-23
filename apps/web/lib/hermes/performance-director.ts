@@ -34,7 +34,18 @@ export function stepHermesPerformance(
   previous: HermesPerformanceState,
   input: HermesPerformanceInput,
 ): HermesPerformanceState {
-  const behavior = stepHermesBehavior(previous.behavior, input.behaviorInput);
+  const candidate = stepHermesBehavior(previous.behavior, input.behaviorInput);
+  const cue = previous.speech.cue;
+  const cueOwnsPreviousBeat = cue?.beatId === `${previous.behavior.primary}:${previous.behavior.startedAtMs}`;
+  const holdAutonomousBeat = Boolean(
+    input.speechAllowed
+    && cueOwnsPreviousBeat
+    && cue
+    && input.behaviorInput.nowMs < cue.visibleUntilMs
+    && previous.behavior.kind !== 'priority'
+    && candidate.kind !== 'priority',
+  );
+  const behavior = holdAutonomousBeat ? previous.behavior : candidate;
   const speech = stepHermesSpeech(previous.speech, {
     action: behavior.primary,
     actionStartedAtMs: behavior.startedAtMs,

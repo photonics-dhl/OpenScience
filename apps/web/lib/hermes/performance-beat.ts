@@ -29,6 +29,10 @@ interface SpeechDefinition {
   tone: HermesSpeechTone;
 }
 
+// One short sentence needs enough time to read and reach its dismiss target,
+// while remaining visibly subordinate to the research workspace.
+export const HERMES_AUTONOMOUS_CUE_VISIBLE_MS = 4_000;
+
 const speechByAction: Partial<Record<HermesActionId, SpeechDefinition>> = {
   'cap-check': { keys: ['performance.capCheck.one', 'performance.capCheck.two'], tone: 'focused' },
   'ear-perk': { keys: ['performance.earPerk.one', 'performance.earPerk.two'], tone: 'curious' },
@@ -92,7 +96,7 @@ export function stepHermesSpeech(previous: HermesSpeechState, input: HermesSpeec
       beatId: `${input.action}:${input.actionStartedAtMs}`,
       messageKey,
       tone: definition.tone,
-      visibleUntilMs: input.nowMs + interval(input.seed, input.nowMs, sequence, 3_000, 5_000, 0x75),
+      visibleUntilMs: input.nowMs + HERMES_AUTONOMOUS_CUE_VISIBLE_MS,
     },
     nextAtMs,
     previousMessageKey: messageKey,
