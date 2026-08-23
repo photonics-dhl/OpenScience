@@ -32,3 +32,14 @@ Sources:
 ## 2026-08-16 clarification
 
 This ADR gates the Wanko sample, Cubism Core and other third-party character binaries. It does **not** prohibit an original articulated renderer built from OpenScience-owned textures with a dependency already accepted elsewhere in the product. The static SVG/CSS renderer remains the failure and reduced-motion fallback; the current visual implementation is governed by `docs/specs/2026-08-16-hermes-articulated-mesh-pet-design.md`. No implementation may describe peripheral glow movement as character articulation.
+
+## 2026-08-23 operator development exception
+
+The operator explicitly accepted the Live2D/Wankoromochi terms, classified the
+current server use as development-stage deployment, instructed the agent not to
+delay that deployment for publication-plan classification, and authorized the
+existing copyright notice and removal of the renderer if eligibility ends.
+This exception authorizes the v09 development deployment; it is not a
+representation that a publication licence category or legal entity has been
+verified. Reclassification as a formal public release must restore the full
+identity/category/plan review in Decision 5.

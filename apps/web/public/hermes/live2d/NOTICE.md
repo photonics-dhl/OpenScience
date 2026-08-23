@@ -1,6 +1,6 @@
 # Hermes Wankoromochi Runtime Notice
 
-PUBLICATION REVIEW: REQUIRED BEFORE PUBLIC DEPLOYMENT
+DEVELOPMENT DEPLOYMENT AUTHORIZED BY OPERATOR — PUBLICATION PLAN UNVERIFIED
 
 The browser runtime also includes `live2dcubismcore.min.js`, SHA-256
 `25ae938cb4fe282ce189b357bcc97e603d1e1f7ec78bf04150d401c23cdc792f`.
@@ -22,10 +22,11 @@ Prescribed short copyright notice:
 
 > This content uses sample data owned and copyrighted by Live2D Inc.
 
-Wankoromochi must retain its mochi theme. Local technical validation does not
-record acceptance of the sample-material agreements and does not determine the
-applicable AI/chatbot SDK publication plan. The operator must record both before
-this candidate is deployed publicly.
+Wankoromochi must retain its mochi theme. On 2026-08-23 the operator explicitly
+accepted the sample-material terms and authorized development-stage server
+deployment without waiting for an AI/chatbot publication-plan classification.
+This notice does not claim that a publication category or legal entity has been
+verified. A formal public-release classification must complete that review.
 
 ## Pinned runtime SHA-256
 
