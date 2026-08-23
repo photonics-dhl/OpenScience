@@ -2,11 +2,11 @@
 
 ## Current truth
 
-- **2026-08-23 最新状态覆盖下方历史阻塞叙述**：唯一 v09 母版 `wanko_genie_v09.cmo3`（SHA-256 `BA111D4E...1121ADD`）未改；SDK 4.0 bundle、两张 zero-alpha RGB-clean texture 与 12 motions 已在 ECS development release `c97926a` 运行，rollback `06072c1`。
-- 用户已确认以该 ECS release 的 `288/160px` 为唯一比例基线，实施精确 `1.25x` 的 `360/200px` movable work-assistant。默认保留 Dashboard 右栏 anchor；拖动后脱离为 floating companion，click 仍打开现有 drawer；气泡与角色分别测量和避让。设计已写入 CURRENT spec §11，尚未实施。
-- 用户已否决动作画廊和大卡片气泡，并进一步明确“伴随助手”不等于缩小 Hermes。本地候选 `c123a5a` 恢复桌面 `336px` / 移动 `176px`，同时保留全角色拖动、viewport clamp、resize recovery 与位置持久化。
-- RO 创建流程重新成为首屏唯一主任务，32 动作控制折叠进 developer tray。气泡是紧凑 ink-edge note，按角色象限翻转；用户拖动即关闭过时引导，移动端不显示浮动动作工具栏，正常 renderer 不常驻动效设置胶囊。
-- fresh Web `360/360`、typecheck、18 页 production build、31-action motion gate 与 RO-create first-person gate GREEN；ignored 预览为 `apps/web/test/visual/out/hermes-work-assistant/ro-create-{desktop,mobile}-large.png`。尚未部署，ECS 保持 `c97926a` / rollback `06072c1`。
+- **2026-08-24 最新状态覆盖下方历史阻塞叙述**：唯一 v09 母版 `wanko_genie_v09.cmo3`（SHA-256 `BA111D4E...1121ADD`）及 SDK 4.0 bundle、两张 zero-alpha RGB-clean texture、帽子/流苏/灯/烟雾与 12 motions 均未改；ECS 仍运行 development release `c97926a`，本轮显式 rollback 为该 release。
+- 本地技术候选 `2b9cef1` 已从 ECS `288/160px` 基线实现精确 `1.25x` 的 `360/200px` movable work-assistant：默认 Dashboard 右栏 anchor，整角色拖动后脱离并安全持久化，click 打开现有 drawer；角色、气泡、guide travel hull 与 protected workflow 均以真实几何独立测量。
+- RO 创建保持首屏主任务，32 动作只在 developer tray 展开。气泡是紧凑 ink-edge note；移动端三项 guide action 为 44px 可访问目标，普通自主短句与动作绑定为固定 4 秒原子 beat，hover/drag/guide/task/approval/writing/reduced 等优先状态即时打断。
+- fresh Web `390/390` + 5 Node contracts、typecheck、18 页 production build、Live2D gate、work-assistant gate 与 canonical product E2E `40/40` GREEN；独立 Sol High 对 Task 21 最终增量无 Critical/Important/Minor。ignored 证据为 `apps/web/test/visual/out/hermes-work-assistant/dashboard-{1440x900,1920x1080,390x844}.png` 与 `dashboard-metrics.json`。
+- 尚未部署；本地候选不能冒充生产验收。下一步仅走已授权的 `--skip-migrate` dry-run/deploy，并在公网 Dashboard 重复三视口 click/drag/resize/bubble/Create 验收。
 
 - 用户已确认停止修改当前丑陋茶壶，先由 Codex 独立重画 lamp-only Photoshop vector/shape 源美术。新硬门：低矮横向阿拉丁神灯、深靛蓝釉面/克制金边、细长上扬嘴、开放 S/C 把手；壶身 `0.82–0.92x` Wanko、总跨距 `<=1.20x`、总高 `28–32%`。先交付 light/dark × `512/288/160` 灯体单独预览；不许用 Wanko/烟/辉光/品牌掩盖轮廓，用户未通过前不得导入 Cubism。
 - 用户已通过 lamp-only 候选 `C:/Users/Mac/.codex/generated_images/01a01f25-fdbf-7f20-a4d4-5a3523c32909/exec-24f1bfe9-14e1-4a70-86e2-66bf6dcadcad.png` 及唯一品牌候选 `brand-study-v03/sdf-brand-reference-topology-v03.svg`：较粗壶嘴输入流→竖向深色开放中心→三条不回汇扇形路线→每支两个蓝白圆点→仅中支连接单一橙色结果。机械合同、主线程 light/dark `512/288/160` 实图与 Sol High 对照参考图复审均 GREEN/APPROVE；签核不等于 PSD/Cubism/生产验收。
@@ -40,7 +40,7 @@
 
 ## Version tuple
 
-- Branch / technical release candidate: `codex/hermes-wanko-live2d` / `c123a5adbc00418c096a7656a2c65bb5f5965e6f`（本次 docs sync commit 位于其后）
+- Branch / technical release candidate: `codex/hermes-wanko-live2d` / `2b9cef1a010c6118bf28ba19be5cf281764c3832`（本次 docs sync/release commit 位于其后）
 - Remote candidate: `origin/codex/readable-hermes-guidance@c88c78003957204e6218b8bd2c9c3842a6fbb315`（未包含本次候选）
 - Local main: `c60ffdd16b85ea8f0d8b047493fa03a4c0230c05`
 - ECS release / rollback: `c97926ab4188d5d5fc7a6e58e0333d20a600c692` / `06072c1fd3eb30148daec8d4c4a8572fa3bdacc8`
@@ -55,8 +55,8 @@
 
 ## Next action
 
-1. 从 CURRENT plan Task 21.1 开始，以 TDD 实施精确 `360/200px`、dock-detach、bubble collision 与 protected Dashboard surfaces；不要修改 v09 美术。
-2. 在 `1440×900`、`1920×1080`、`390×844` 第一人称实际使用，动作丰富度不得压过 RO 主流程。
-3. 本地与独立 Sol High release review 通过后走现有脚本部署；ECS 在此之前保持 `c97926a` / rollback `06072c1`，本地结果不能冒充生产验收。
+1. 创建包含本次 docs sync 的干净 immutable release commit；确认本地分支、HEAD、ECS release 与 rollback 四元组。
+2. 运行 `checkup.sh` 与 deploy dry-run，再以 `--confirm --skip-migrate --rollback-ref c97926a...` 执行已授权的 development deployment；不迁移、不 seed。
+3. 在公网 authenticated Dashboard 的 `1440×900`、`1920×1080`、`390×844` 重复 click/drag/resize/bubble/Create 验收，核对容器、runtime asset、精确 release SHA、迁移只读状态与 `.release-failed` 不存在。
 
 Read first：`AGENTS.md` → 本 handoff → 2026-08-19 Wanko CURRENT design/plan → `docs/progress.md`；`project_index.md` 只用 `rg` 定向查 CURRENT 行。

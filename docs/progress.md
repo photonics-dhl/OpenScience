@@ -2,6 +2,13 @@
 
 > 本文件只保留 CURRENT window；完整历史由 Git history 保存，不作为新 session 默认输入。
 
+## 2026-08-24 — Hermes production-ratio local release candidate
+
+- Task 21 本地候选 `2b9cef1` 已实现精确 `360/200px`、右栏默认 anchor、整角色 drag-detach/viewport clamp/desktop-mobile 持久化、真实 protected-region 避让、guide travel/restore 与紧凑 optical-editorial 气泡；v09 模型、美术、帽子/流苏/灯/烟雾及 runtime assets 字节未改。
+- 伴随动作与气泡不会抢占 RO：32 动作留在 developer tray，移动端保留三个 44px guide actions；自主短句使用固定 4 秒 atomic beat，普通自主动作在该窗口保持同 owner，hover/drag/guide/task/approval/writing/reduced 等优先状态立即打断。该修复关闭了 390px 下气泡在样式读取/真实 dismiss 前撤下的可重复竞态。
+- fresh controller gates：Web `390/390` + 5 Node contracts、typecheck、18 页 production build、Live2D、work-assistant 与 canonical product E2E `40/40` GREEN；Live2D first-ready `906ms`，idle/pointer `0` drops。独立 Sol High 最终审查无 Critical/Important/Minor。
+- 本地截图/metrics 位于 ignored `apps/web/test/visual/out/hermes-work-assistant/`；本地 3198 已停止、worktree tracked clean。尚未部署，ECS 保持 `c97926a`；下一步是以它为 rollback 的 `--skip-migrate` dry-run/deploy 与 authenticated 公网三视口验收。
+
 ## 2026-08-23 — Hermes production-ratio enhancement design approved
 
 - 用户以 ECS `/dashboard` 当前 release `c97926a` 为唯一比例基线，批准 ordinary `288→360px`、compact/mobile `160→200px` 的精确 `1.25x` 调整；不修改 v09 模型、美术、帽子、流苏、灯或烟雾。
@@ -29,19 +36,9 @@
 
 ## 2026-08-22 — Wanko smoke-bowl replacement design approved
 
-- Task 17.1 structural preflight is GREEN without touching the dirty Cubism v09: runtime isolation proves `D_BODY_01/02` are separate native paw meshes at render orders `25/26`, above `D_BOWL_01` order `24`; evidence and a limitation-aware manifest live outside the repo under `evidence-smoke-bowl-preflight-v01/`.
-- 用户否决透明薄雾/横向腰环，并明确要求烟雾像参考图一样以高密度实体托起 Wanko。最新一次定向生成得到真 RGBA `smoke-bowl-study-v07/dense-support-smoke-master-v07.png`；完整 light/dark 合成证明灯口→金色主柱→下腹前后夹层连续，并已获用户视觉通过，旧 v01–v05/SVG 均降为 rejected evidence。v07 是**获批的源美术方向**，不是 PSD/ArtMesh/v10 完成。
-- 用户批准隐藏原碗像素、保留 `B_BOWL_01`/`PARAM_BOWL_SWING` 为不可见共享骨架；六个 model-owned smoke ArtMeshes 与四个 Warp Deformers 取代碗的可见承托和下腹遮挡，不使用 DOM/runtime 图片。
-- 固定层级仍为 rear smoke/core → canonical body → front veil/rim → paws；用户已通过前层形成可感知承托面并遮住下腹约 `28–35%`、内部近实色且仅轮廓羽化的幅度，烟雾四个独占参数必须在 stock motion/Physics 后写入。
-- Task 17.3 首次简化矢量重绘 v01 因模糊 U 形气囊/right-extrema 遮脸失败；v02 保留 v07 纹理但有水平腹部切线。限定 mask-only v03 移除硬切且不改四个 rear/core 哈希：六层共享坐标 RGBA、30.9% coverage、24 格接触表、PSD 复开与独立 Sol High 复审均通过，材料性问题 0。为便于用户查找，PSD/contact/manifest 与六层逐字节复制到 `wanko_genie_v09.cmo3` 同级的 `wanko_genie_v09_smoke_v03*` 路径，审计原件保留不动；当前仍待用户签核接触表，未通过前不得创建/导入 v10。
-- Task 17 实施计划已写入 CURRENT plan：视觉阶段最多一次定向再生成，接触表未经用户通过不得创建 v10；有状态 Cubism 保存继续由 Sol High 执行。
-
-- **原生挂接已落盘但视觉未通过**：在受保护 `wanko_genie_v03.cmo3` 上另存 `wanko_genie_v05.cmo3`；九个 `GENIE_*` ArtMesh 的 Inspector 均逐项显示父变形器 `お椀の回転 [お椀]`。v05 为 4,258,067 bytes / SHA-256 `82042FBB6C965F57EBEF1DFBF2E24670E7B39DD696CA8039A1F254EF4A568CCE`；v03 仍为原 SHA `702B56F5...C2D1E`。
-- **参数继承证据**：`PARAM_BOWL_SWING` 从 `0` 调至正端时，灯、Wanko 与新增 ArtMesh 同步绕原生碗结构运动；隔点帧差 `24,301 / 218,025`（11.15%，mean 6.00/255，max 255），随后恢复 `-0.0` 并保存。该证据只通过 Task 16.3 的 parent/inheritance 子步骤，不代表造型好看或遮挡完成。
-- **明确未完成/操作事故**：现有 front shell 仍不足以覆盖白色下身，壶体造型/比例也未获用户验收；diff/trail 仍未拆层，四个参数、12 motion audit、small-size captures、export/runtime/High visual gate 均未完成。一次 DPI/标签焦点自动化产生未采用 v04，并误把 v02 保存成 4,376,949 bytes / SHA `997D00B9...0721D`；v01 仍完整保留原始 3,954,855 bytes / SHA `07EE5F...1649`，v03 未覆盖。未获用户批准前不覆盖/删除 v02；后续只以 v05/v06 为工作检查点。
-- **成本/路由实测**：本线程最新本地 `turn_context` 为 `gpt-5.6-sol` / `medium`，模型路由生效；token event 报 `model_context_window=258400`，对应配置 `272000` 的 95% 可用窗口，说明配置已被当前旧线程读取，无需重启才能使用。累计 usage 已混合配置修改前后，仍不能据此判定节约策略通过；严谨 A/B 应从新线程取首个快照。
-- **恢复与强制保护**：用户于 2026-08-22 明确批准恢复方案。Cubism 已正常关闭且未保存 v01/v04 的自动化脏状态；事故 v02 原样保留并设只读，另从 v01 无覆盖创建 `wanko_genie_v02_restored_07EE5F56.cmo3`，长度/完整 SHA 与项目原件、v01 三者一致。项目原件、v01–v05 与 restored 均已设 NTFS ReadOnly；只有待验证活动 derivative v06 可写。后续有状态 Cubism 保存/恢复任务类回退 Sol High，统一只开一个 derivative 且递增 Save As。
-- **Sol High v06 停机门**：High 仅打开 v06 单一标签并正常退出；打开/关闭前后均为 4,258,067 bytes / SHA `423242F3...EE94`，未创建 v07。截图证明灯体明显大于 32% 目标且压住 canonical 上身，视觉仍失败。External API 未监听且 GUI 前台/菜单捕获不可靠，因此本轮没有重新证明九层父级/六参数默认；只保留 v05 已验证语义，禁止把 v06 冒充新检查点。
+- 历史 v01–v06 的构图、遮挡、GUI 自动化与恢复流水已由后续 v09 母版/runtime 取代，完整证据保留在 Git history 与外部审计目录；不得恢复旧茶壶、水平腰环或把失败检查点冒充当前资产。
+- 用户通过的稳定结构是 model-owned rear smoke/core → canonical body → front veil/rim → paws，隐藏原碗像素但保留共享骨架；不使用 DOM/runtime 拼贴。最终 v09 六层烟雾、PSD/contact/manifest 与受保护母版位置见上一节 CURRENT runtime 记录。
+- 历史事故 v02 及其字节一致恢复副本继续只读保留；任何新的有状态 Cubism 保存/恢复仍须使用单一递增 derivative 与 Sol High 守卫。当前 Task 21 不修改这些文件。
 
 ## 2026-08-19 — Hermes Wanko Live2D local release candidate (visual superseded)
 
@@ -70,7 +67,7 @@
 
 ## Version tuple
 
-- Branch / technical release candidate: `codex/hermes-wanko-live2d` / `c123a5adbc00418c096a7656a2c65bb5f5965e6f`（本次 docs sync commit 位于其后）
+- Branch / technical release candidate: `codex/hermes-wanko-live2d` / `2b9cef1a010c6118bf28ba19be5cf281764c3832`（本次 docs sync/release commit 位于其后）
 - Remote candidate: `origin/codex/readable-hermes-guidance@c88c78003957204e6218b8bd2c9c3842a6fbb315`（未包含本次本地候选）
 - Local main: `c60ffdd16b85ea8f0d8b047493fa03a4c0230c05`
 - ECS release / rollback: `c97926ab4188d5d5fc7a6e58e0333d20a600c692` / `06072c1fd3eb30148daec8d4c4a8572fa3bdacc8`
@@ -81,7 +78,7 @@
 1. `AGENTS.md`
 2. `docs/handoff/2026-08-16-hermes-2d-pet-handoff.md`
 3. `docs/specs/2026-08-19-hermes-wanko-live2d-design.md`（approved CURRENT design）
-4. `docs/plans/2026-08-19-hermes-wanko-live2d-plan.md`（Task 19 Phase 1 CURRENT execution）
+4. `docs/plans/2026-08-19-hermes-wanko-live2d-plan.md`（Task 21 deployment/acceptance CURRENT execution）
 5. `docs/specs/2026-08-18-readable-workspace-hermes-guidance-design.md`（已实施功能 foundation）
 6. `docs/OpenScience_Kimi_Development_Spec.md`（只读 UI / Hermes / 权限相关段落）
 7. 本文件

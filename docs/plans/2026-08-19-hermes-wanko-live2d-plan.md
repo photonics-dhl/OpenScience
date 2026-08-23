@@ -1,6 +1,6 @@
 # Hermes Wanko Live2D Companion Implementation Plan
 
-> **Status (2026-08-23): CURRENT IN PROGRESS — Tasks 1–20 are completed or historical evidence; Task 21 is the only execution entry.**
+> **Status (2026-08-24): CURRENT IN PROGRESS — Task 21 implementation/local review are complete; deployment and public acceptance remain.**
 > The ECS baseline is `c97926a`, the approved product endpoints are `360/200px`,
 > and this task changes presentation and interaction only, never v09 source art.
 > **For agentic workers:** REQUIRED SUB-SKILL: Use `executing-plans` to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
@@ -2278,7 +2278,7 @@ Dashboard acceptance.
 - Preserves `resolveHermesStageSize(expanded, compact)` so existing consumers do
   not need a second sizing owner.
 
-- [ ] **Step 1: Write the failing size test.**
+- [x] **Step 1: Write the failing size test.**
 
   Replace the old expectations with the production-derived endpoints:
 
@@ -2290,7 +2290,7 @@ Dashboard acceptance.
   });
   ```
 
-- [ ] **Step 2: Run RED and verify the reason.**
+- [x] **Step 2: Run RED and verify the reason.**
 
   Run:
 
@@ -2301,7 +2301,7 @@ Dashboard acceptance.
   Expected: FAIL with received `336` and `176`, proving the test detects the
   unimplemented ratio rather than a test setup error.
 
-- [ ] **Step 3: Implement the minimal size change.**
+- [x] **Step 3: Implement the minimal size change.**
 
   ```ts
   export type HermesStageSize = 200 | 360;
@@ -2312,7 +2312,7 @@ Dashboard acceptance.
   }
   ```
 
-- [ ] **Step 4: Run GREEN and commit the size contract.**
+- [x] **Step 4: Run GREEN and commit the size contract.**
 
   Re-run the focused command, require one passing file with no warning, then
   commit `test(web): lock Hermes production ratio`.
@@ -2333,7 +2333,7 @@ Dashboard acceptance.
 - Consumes measured actor/bubble rectangles and protected DOM rectangles; it
   does not query the DOM or own React state.
 
-- [ ] **Step 1: Write failing pure placement tests.**
+- [x] **Step 1: Write failing pure placement tests.**
 
   Cover the desired point, each viewport edge, a Continue Research rectangle,
   a right-rail task rectangle, a `390×844` viewport and a dense layout with no
@@ -2363,7 +2363,7 @@ Dashboard acceptance.
   });
   ```
 
-- [ ] **Step 2: Run RED and verify missing exports.**
+- [x] **Step 2: Run RED and verify missing exports.**
 
   ```powershell
   npx pnpm@9.15.0 --filter @openscience/web exec vitest run test/hermes-companion-placement.test.ts test/hermes-dock-preferences.test.ts
@@ -2372,7 +2372,7 @@ Dashboard acceptance.
   Expected: FAIL because the placement module and settled-dock contract do not
   exist.
 
-- [ ] **Step 3: Implement deterministic candidate selection.**
+- [x] **Step 3: Implement deterministic candidate selection.**
 
   Use one `12px` clearance. Clamp the desired centre first, then consider four
   corners and four edge midpoints, sort candidates by distance to the desired
@@ -2478,7 +2478,7 @@ Dashboard acceptance.
   `safe:false`; React must revert a drag or suppress autonomous speech rather
   than cover protected work.
 
-- [ ] **Step 4: Run GREEN and commit geometry policy.**
+- [x] **Step 4: Run GREEN and commit geometry policy.**
 
   Re-run both focused files and commit
   `feat(web): add collision-safe Hermes placement`.
@@ -2504,7 +2504,7 @@ Dashboard acceptance.
   `data-hermes-bubble-horizontal`, `data-hermes-bubble-vertical` and
   `data-hermes-bubble-safe` remain browser-test diagnostics.
 
-- [ ] **Step 1: Write failing interaction and Dashboard hierarchy tests.**
+- [x] **Step 1: Write failing interaction and Dashboard hierarchy tests.**
 
   Add assertions that the anchored stage is exactly `360×360`, mobile is
   `200×200`, the three Dashboard regions expose `data-hermes-protected`, a
@@ -2513,7 +2513,7 @@ Dashboard acceptance.
   independent. Assert drawer-open makes the stage inert and no actor/bubble
   rectangle overlaps protected regions after pointer release.
 
-- [ ] **Step 2: Run the browser tests and verify RED.**
+- [x] **Step 2: Run the browser tests and verify RED.**
 
   Against a clean production build server, run:
 
@@ -2524,7 +2524,7 @@ Dashboard acceptance.
   Expected: FAIL on `336/176`, absent protected markers and anchored geometry
   still using the raw anchor rectangle.
 
-- [ ] **Step 3: Mark protected product regions and preserve layout ownership.**
+- [x] **Step 3: Mark protected product regions and preserve layout ownership.**
 
   Add the marker only to the existing semantic containers:
 
@@ -2554,7 +2554,7 @@ Dashboard acceptance.
   same collision contract. `HermesDockAnchor` remains unchanged as an inert
   registration node and never becomes a second position owner.
 
-- [ ] **Step 4: Center the exact stage on the anchor and detach only after intent.**
+- [x] **Step 4: Center the exact stage on the anchor and detach only after intent.**
 
   Replace anchored raw bounds with the resolved stage square:
 
@@ -2577,7 +2577,7 @@ Dashboard acceptance.
   when `safe=false`, and persist ratios only after a safe settle. A no-drag
   release calls the existing `onInvoke` exactly once.
 
-- [ ] **Step 5: Measure and place bubbles independently.**
+- [x] **Step 5: Measure and place bubbles independently.**
 
   Convert `HermesPerformanceBubble` to `React.forwardRef<HTMLElement, Props>`.
   When a cue becomes available, measure the actor and bubble, call
@@ -2587,7 +2587,7 @@ Dashboard acceptance.
   set `data-hermes-assistant-open="true"`, `aria-hidden="true"` and make the
   stage inert so it cannot cover or capture drawer controls.
 
-- [ ] **Step 6: Run GREEN and commit the interaction slice.**
+- [x] **Step 6: Run GREEN and commit the interaction slice.**
 
   Re-run the focused unit and E2E files. Commit
   `feat(web): integrate Hermes with Dashboard work flow` only after click,
@@ -2610,7 +2610,7 @@ Dashboard acceptance.
 - Produces screenshots and geometry metrics under ignored
   `apps/web/test/visual/out/hermes-work-assistant/`.
 
-- [ ] **Step 1: Write failing visual-contract assertions.**
+- [x] **Step 1: Write failing visual-contract assertions.**
 
   Change all production size expectations from `336/176` to `360/200`. Require
   the bubble to remain at most `15.5rem`, use one `4px` radius, no gradient or
@@ -2618,7 +2618,7 @@ Dashboard acceptance.
   sentence and no visible mobile action toolbar. Add the `1920×1080` viewport
   to the experience gate.
 
-- [ ] **Step 2: Run RED on the old selectors.**
+- [x] **Step 2: Run RED on the old selectors.**
 
   ```powershell
   npx pnpm@9.15.0 --filter @openscience/web exec vitest run test/hermes-performance-bubble.test.tsx test/hermes-stage-sizing.test.ts
@@ -2627,7 +2627,7 @@ Dashboard acceptance.
   Then run the existing visual gate against the clean local server and require
   failure on the old `176/336` attributes or selectors.
 
-- [ ] **Step 3: Apply the committed optical-editorial treatment.**
+- [x] **Step 3: Apply the committed optical-editorial treatment.**
 
   Replace every mobile size selector with `200` and reserve `360px` desktop /
   `200px` mobile anchor height. Use these exact material values:
@@ -2662,7 +2662,7 @@ Dashboard acceptance.
   focus and `:active { transform: scale(.95); }`; approval and reduced-motion
   overrides remove the transition.
 
-- [ ] **Step 4: Use the page as a real user at all three viewports.**
+- [x] **Step 4: Use the page as a real user at all three viewports.**
 
   The gate must type in the RO title, use create/import, click Hermes to open
   and close the drawer, drag to every edge, reload, resize across the `640px`
@@ -2681,7 +2681,7 @@ Dashboard acceptance.
   the main work column, the bubble reads as a card, the mobile form is blocked,
   or the assistant appears visually detached from the right rail.
 
-- [ ] **Step 5: Run GREEN and commit the visual slice.**
+- [x] **Step 5: Run GREEN and commit the visual slice.**
 
   Run the focused Vitest and both Hermes visual gates. Commit
   `style(web): refine Hermes companion presence` only after the three screenshots
@@ -2703,7 +2703,7 @@ Dashboard acceptance.
 - Changes no migration, database data, Secret, provider, permission or network
   topology.
 
-- [ ] **Step 1: Run the complete local gate serially.**
+- [x] **Step 1: Run the complete local gate serially.**
 
   Stop the local Next server before build, then run:
 
@@ -2724,14 +2724,14 @@ Dashboard acceptance.
   Dashboard E2E subset. Any skipped visual, WebGL or browser test is a release
   blocker, not a warning.
 
-- [ ] **Step 2: Obtain independent Sol High review.**
+- [x] **Step 2: Obtain independent Sol High review.**
 
   Review the complete Task 21 diff against §11 for correctness, React lifecycle,
   pointer capture, touch/keyboard accessibility, protected-region honesty,
   one-owner runtime safety, performance, test strength and release rollback.
   Resolve every Critical or Important finding and re-run affected gates.
 
-- [ ] **Step 3: Sync CURRENT truth and create the immutable release commit.**
+- [x] **Step 3: Sync CURRENT truth and create the immutable release commit.**
 
   Record branch / HEAD / ECS release / rollback, exact test counts, screenshot
   paths and remaining risks. Update implementation rows from `336/176` to
