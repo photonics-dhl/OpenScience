@@ -3,9 +3,9 @@
 ## Current truth
 
 - **2026-08-23 最新状态覆盖下方历史阻塞叙述**：唯一 v09 母版 `wanko_genie_v09.cmo3`（SHA-256 `BA111D4E...1121ADD`）未改；SDK 4.0 bundle、两张 zero-alpha RGB-clean texture 与 12 motions 已在 ECS development release `c97926a` 运行，rollback `06072c1`。
-- 用户已否决动作画廊和大卡片气泡；本地候选 `be45f91` 把 Hermes 校正为可移动工作助手。桌面常态 `176px`、移动 `120px`，`336px` 只供显式展开/诊断；全角色拖动、viewport clamp、resize recovery 与位置持久化均有真实浏览器门禁。
+- 用户已否决动作画廊和大卡片气泡，并进一步明确“伴随助手”不等于缩小 Hermes。本地候选 `c123a5a` 恢复桌面 `336px` / 移动 `176px`，同时保留全角色拖动、viewport clamp、resize recovery 与位置持久化。
 - RO 创建流程重新成为首屏唯一主任务，32 动作控制折叠进 developer tray。气泡是紧凑 ink-edge note，按角色象限翻转；用户拖动即关闭过时引导，移动端不显示浮动动作工具栏，正常 renderer 不常驻动效设置胶囊。
-- fresh Web `360/360`、typecheck、18 页 production build、31-action motion gate 与 RO-create first-person gate GREEN；ignored 预览为 `apps/web/test/visual/out/hermes-work-assistant/ro-create-{desktop,mobile}-final.png`。尚未部署，ECS 保持 `c97926a` / rollback `06072c1`。
+- fresh Web `360/360`、typecheck、18 页 production build、31-action motion gate 与 RO-create first-person gate GREEN；ignored 预览为 `apps/web/test/visual/out/hermes-work-assistant/ro-create-{desktop,mobile}-large.png`。尚未部署，ECS 保持 `c97926a` / rollback `06072c1`。
 
 - 用户已确认停止修改当前丑陋茶壶，先由 Codex 独立重画 lamp-only Photoshop vector/shape 源美术。新硬门：低矮横向阿拉丁神灯、深靛蓝釉面/克制金边、细长上扬嘴、开放 S/C 把手；壶身 `0.82–0.92x` Wanko、总跨距 `<=1.20x`、总高 `28–32%`。先交付 light/dark × `512/288/160` 灯体单独预览；不许用 Wanko/烟/辉光/品牌掩盖轮廓，用户未通过前不得导入 Cubism。
 - 用户已通过 lamp-only 候选 `C:/Users/Mac/.codex/generated_images/01a01f25-fdbf-7f20-a4d4-5a3523c32909/exec-24f1bfe9-14e1-4a70-86e2-66bf6dcadcad.png` 及唯一品牌候选 `brand-study-v03/sdf-brand-reference-topology-v03.svg`：较粗壶嘴输入流→竖向深色开放中心→三条不回汇扇形路线→每支两个蓝白圆点→仅中支连接单一橙色结果。机械合同、主线程 light/dark `512/288/160` 实图与 Sol High 对照参考图复审均 GREEN/APPROVE；签核不等于 PSD/Cubism/生产验收。
@@ -39,7 +39,7 @@
 
 ## Version tuple
 
-- Branch / technical release candidate: `codex/hermes-wanko-live2d` / `be45f91c209bedddafb3930f5b1d28c8cf125324`（本次 docs sync commit 位于其后）
+- Branch / technical release candidate: `codex/hermes-wanko-live2d` / `c123a5adbc00418c096a7656a2c65bb5f5965e6f`（本次 docs sync commit 位于其后）
 - Remote candidate: `origin/codex/readable-hermes-guidance@c88c78003957204e6218b8bd2c9c3842a6fbb315`（未包含本次候选）
 - Local main: `c60ffdd16b85ea8f0d8b047493fa03a4c0230c05`
 - ECS release / rollback: `c97926ab4188d5d5fc7a6e58e0333d20a600c692` / `06072c1fd3eb30148daec8d4c4a8572fa3bdacc8`

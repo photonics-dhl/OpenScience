@@ -466,11 +466,11 @@ checks pass, generated smoke is source-art study only, not a production asset.
 > optical-editorial visual language.
 
 The 2026-08-23 follow-up keeps the approved v09 model, texture, hat, tassel,
-lamp, smoke silhouette and dock position intact. `336 px` is the high-quality
-rendering envelope and the opt-in laboratory/expanded size, not the ordinary
-workspace footprint. Unanchored product use and field guidance render inside a
-`176 CSS px` footprint on desktop and `120 CSS px` on mobile; anchored product
-placements retain their owner-provided bounds. The whole actor remains draggable,
+lamp, smoke silhouette and dock position intact. `336 CSS px` remains the
+ordinary desktop rendering envelope; making Hermes peripheral must come from
+movable positioning and quiet interaction, not from shrinking the character.
+Mobile uses `176 CSS px`; anchored product placements retain their owner-provided
+bounds. The whole actor remains draggable,
 viewport-clamped and position-persistent.
 Collision and travel planning must consume the actual rendered stage and bubble
 union rather than assuming either previous constant.
@@ -535,9 +535,8 @@ developer tray and never consume the main canvas. Focused tests must fail on an
 oversized ordinary footprint, a light-card bubble, or action controls presented
 as primary content. Acceptance requires:
 
-- `176` desktop / `120` mobile ordinary product footprint, `336` explicit
-  expanded fixture, and no regression in actual-bounds travel, viewport resize
-  recovery or saved user position;
+- `336` desktop / `176` mobile product footprint, and no regression in
+  actual-bounds travel, viewport resize recovery or saved user position;
 - deterministic lively decks, no immediate repeats and truthful priority order;
 - action/speech beat identity, bilingual keys and autonomous silence guards;
 - accessible bubble semantics, focus states, non-overlapping `40 px` actions,

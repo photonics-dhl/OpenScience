@@ -2215,14 +2215,14 @@ radial menu, gradients, chat-card styling or copy.
 
 - [x] **Step 1: RED — encode product hierarchy.**
 
-  Require `176px` desktop / `120px` mobile ordinary footprints, preserve the
-  explicit `336px` expanded fixture, and require the visual route to expose a
+  Require `336px` desktop / `176px` mobile companion footprints and require the
+  visual route to expose a
   real RO-create task surface with action controls inside a developer tray.
 
 - [x] **Step 2: GREEN — correct footprint and bubble material.**
 
-  Keep the high-resolution renderer and current drag/persistence owner. Reduce
-  ordinary CSS footprint, replace the light card with a compact dark edge note,
+  Keep the high-resolution renderer, full readable scale and current
+  drag/persistence owner. Replace the light card with a compact dark edge note,
   and retain polite live-region, focus and `40px` dismiss semantics.
 
 - [x] **Step 3: GREEN — rebuild the preview around the task.**

@@ -4,9 +4,9 @@
 
 ## 2026-08-23 — Hermes movable work-assistant correction
 
-- 用户否决“动作画廊占据主页面”的产品层级；本地候选 `be45f91` 已按 Scholar's Tea 的行为边界改为可移动工作助手：桌面 `176px`、移动 `120px`，`336px` 只用于显式展开/诊断；全角色可拖、实时 viewport clamp、位置持久化，窗口缩放后仍可恢复。
+- 用户否决“动作画廊占据主页面”的产品层级，同时明确伴随化不等于缩小角色。本地候选 `c123a5a` 保留 Scholar's Tea 的可移动行为边界并恢复完整视觉比例：桌面 `336px`、移动 `176px`；全角色可拖、实时 viewport clamp、位置持久化，窗口缩放后仍可恢复。
 - RO 创建是唯一主任务。`/_visual/hermes-live2d` 首屏改成真实创建表单，32 动作/图层/海报控制全部折叠进诊断 tray；产品气泡改为紧凑 ink-edge note，按象限翻转。用户开始拖动即关闭过时引导；移动端不把气泡扩成浮动工具栏，正常 renderer 也不常驻动效设置胶囊。
-- fresh Web `360/360`（355 Vitest + 5 Node）、typecheck、18 页 production build、Live2D motion gate 与真实 RO-create Playwright gate GREEN；后者覆盖创建提交、1440/390 拖动、边缘夹紧、刷新恢复、resize recovery、气泡让路与主操作不遮挡。ignored 视觉证据：`apps/web/test/visual/out/hermes-work-assistant/ro-create-{desktop,mobile}-final.png`。未部署，ECS 保持 `c97926a` / rollback `06072c1`。
+- fresh Web `360/360`（355 Vitest + 5 Node）、typecheck、18 页 production build、Live2D motion gate 与真实 RO-create Playwright gate GREEN；后者覆盖创建提交、1440/390 大尺寸拖动、边缘夹紧、刷新恢复、resize recovery、气泡让路与主操作不遮挡。ignored 视觉证据：`apps/web/test/visual/out/hermes-work-assistant/ro-create-{desktop,mobile}-large.png`。未部署，ECS 保持 `c97926a` / rollback `06072c1`。
 
 ## 2026-08-23 — Wanko v09 Cubism runtime export
 
@@ -63,7 +63,7 @@
 
 ## Version tuple
 
-- Branch / technical release candidate: `codex/hermes-wanko-live2d` / `be45f91c209bedddafb3930f5b1d28c8cf125324`（本次 docs sync commit 位于其后）
+- Branch / technical release candidate: `codex/hermes-wanko-live2d` / `c123a5adbc00418c096a7656a2c65bb5f5965e6f`（本次 docs sync commit 位于其后）
 - Remote candidate: `origin/codex/readable-hermes-guidance@c88c78003957204e6218b8bd2c9c3842a6fbb315`（未包含本次本地候选）
 - Local main: `c60ffdd16b85ea8f0d8b047493fa03a4c0230c05`
 - ECS release / rollback: `c97926ab4188d5d5fc7a6e58e0333d20a600c692` / `06072c1fd3eb30148daec8d4c4a8572fa3bdacc8`
