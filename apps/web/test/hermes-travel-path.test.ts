@@ -1,6 +1,12 @@
 import { describe, expect, it } from 'vitest';
 
-import { createHermesTravelFootprintVariants, createHermesTravelTimeline, planHermesTravel, rectForFootprint } from '@/lib/hermes/travel-path';
+import {
+  createHermesTravelFootprintVariants,
+  createHermesTravelTimeline,
+  planHermesTravel,
+  rectForFootprint,
+  resolveHermesGuideSourceCandidate,
+} from '@/lib/hermes/travel-path';
 
 const rect = (x: number, y: number, width: number, height: number): DOMRectReadOnly => ({
   bottom: y + height,
@@ -43,6 +49,66 @@ function sweptOverlaps(
 }
 
 describe('Hermes safe travel path', () => {
+  it('keeps the mobile insight top candidate between navigation controls and the target', () => {
+    const actor = { bottom: 66.234375, left: 69.921875, right: 69.90625, top: 69.921875 };
+    const bubble = { bottom: 182.125, left: 92, right: 100, top: -80 };
+    const variants = createHermesTravelFootprintVariants(actor, bubble, { horizontal: 'left', vertical: 'below' });
+    const controls = [
+      rect(211.59375, 69.484375, 80, 36),
+      rect(8, 120, 119.921875, 44), rect(127.921875, 120, 73.734375, 44),
+      rect(201.65625, 120, 92.203125, 44), rect(293.859375, 120, 119.921875, 44),
+      rect(295.875, 212.1875, 78.125, 40),
+      rect(8, 788, 124, 48), rect(133, 788, 124, 48), rect(258, 788, 124, 48),
+    ];
+    const plan = planHermesTravel({
+      editable: rect(16, 434.1875, 358, 199.59375),
+      footprint: variants[0].footprint,
+      footprintVariants: variants,
+      from: rect(95, 136.0625, 200, 200),
+      obstacles: controls,
+      preferredSides: ['right', 'top'],
+      target: rect(16, 434.1875, 358, 199.59375),
+      viewport: rect(0, 0, 390, 844),
+    });
+    expect(plan.safe).toBe(true);
+    expect(plan.mode).toBe('travel');
+    expect(plan.dock).toEqual({ x: 195, y: 236.0625 });
+  });
+
+  it('keeps source pre-clamp placement separate from the final arrival placement', () => {
+    const footprint = { bottom: 100, left: 100, right: 100, top: 100 };
+    const parts = [{ bottom: 50, left: 50, right: 50, top: 50 }];
+    const variants = [
+      { footprint, parts, placement: { horizontal: 'right' as const, vertical: 'above' as const } },
+      { footprint, parts, placement: { horizontal: 'right' as const, vertical: 'below' as const } },
+      { footprint, parts, placement: { horizontal: 'left' as const, vertical: 'above' as const } },
+      { footprint, parts, placement: { horizontal: 'left' as const, vertical: 'below' as const } },
+    ];
+    const source = resolveHermesGuideSourceCandidate({
+      current: { x: 1190, y: 10 },
+      guardPx: 6,
+      variants,
+      viewport: rect(0, 0, 1200, 800),
+    });
+    expect(source).toEqual({
+      placement: { horizontal: 'right', vertical: 'above' },
+      point: { x: 1094, y: 106 },
+      requiresMove: true,
+    });
+
+    const route = planHermesTravel({
+      editable: rect(900, 600, 100, 50),
+      footprint,
+      footprintVariants: variants,
+      from: rect(source.point.x - 50, source.point.y - 50, 100, 100),
+      preferredSides: ['right'],
+      target: rect(900, 600, 100, 50),
+      viewport: rect(0, 0, 1200, 800),
+    });
+    expect(route.points[0]).toEqual(source.point);
+    expect(route.placement).toEqual({ horizontal: 'left', vertical: 'above' });
+    expect(route.placement).not.toEqual(source.placement);
+  });
   it('builds four fixed bubble orientations from the measured source placement', () => {
     expect(createHermesTravelFootprintVariants(
       { bottom: 129, left: 137, right: 137, top: 138 },

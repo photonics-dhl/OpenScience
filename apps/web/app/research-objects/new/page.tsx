@@ -190,7 +190,7 @@ export default function NewResearchObjectPage() {
 
           <form className="min-w-0" onSubmit={submit}>
             <section className="grid gap-6 border-b border-white/25 pb-10 sm:grid-cols-2">
-              <label data-reading-role="control" className="grid gap-2 text-sm font-medium tracking-[0.02em] text-white/70">
+              <label data-hermes-protected="true" data-reading-role="control" className="grid gap-2 text-sm font-medium tracking-[0.02em] text-white/70">
                 {t('workspace')}
                 <select data-reading-role="reading" className="min-h-12 border-0 border-b border-white/25 bg-transparent text-[1.0625rem] normal-case tracking-normal text-white outline-none focus:border-[#ef4c2f]" value={workspaceId} onChange={(event) => setWorkspaceId(event.target.value)} required>
                   <option className="bg-[#11100f]" value="">{t('workspaceLoading')}</option>

@@ -19,6 +19,7 @@ import {
   createHermesTravelFootprintVariants,
   createHermesTravelTimeline,
   planHermesTravel,
+  resolveHermesGuideSourceCandidate,
   type HermesFootprintInsets,
   type HermesTravelPlacement,
 } from '@/lib/hermes/travel-path';
@@ -76,6 +77,25 @@ type HermesViewportRect = {
   right: number;
   top: number;
   width: number;
+};
+type GuideDockContext = {
+  customDock: boolean;
+  dockKind: HermesViewportClass;
+  pathname: string;
+  workspaceId: string;
+};
+type GuideDockOrigin = GuideDockContext & { point: { x: number; y: number } };
+type GuideRestoreTransaction = GuideDockContext & { epoch: number; point: { x: number; y: number } };
+type GuideSettledReplan = {
+  contextKey: string;
+  epoch: number;
+  point: { x: number; y: number };
+};
+type GuideDiagnostics = {
+  phase: 'idle' | 'source-settle' | 'route' | 'edge-stop';
+  routeStart: { x: number; y: number } | null;
+  settledSource: { x: number; y: number } | null;
+  timelineCount: number;
 };
 
 const footprintFromBounds = (bounds: DOMRectReadOnly, centerPoint: { x: number; y: number }): HermesFootprintInsets => ({
@@ -188,6 +208,7 @@ function HermesWorkspaceStage({ fallbackAssistantOpen, fallbackOnInvoke, guideTa
   routeState: HermesVisualState;
   writing: boolean;
 }) {
+  const pathname = usePathname();
   const searchParams = useSearchParams();
   const motionSearch = searchParams.toString();
   const state = presentation?.state ?? routeState;
@@ -214,11 +235,12 @@ function HermesWorkspaceStage({ fallbackAssistantOpen, fallbackOnInvoke, guideTa
   const [dragging, setDragging] = useState(false);
   const [position, setPosition] = useState({ x: 0, y: 0 });
   const positionRef = useRef(position);
-  const pendingSettledReplanRef = useRef<{ epoch: number; point: { x: number; y: number } } | null>(null);
+  const pendingSettledReplanRef = useRef<GuideSettledReplan | null>(null);
   const nextSettledReplanEpochRef = useRef(0);
-  const guideOriginRef = useRef<{ x: number; y: number } | null>(null);
-  const restoringGuideDockRef = useRef<{ x: number; y: number } | null>(null);
-  const skipNextDockPersistenceRef = useRef(false);
+  const guideOriginRef = useRef<GuideDockOrigin | null>(null);
+  const restoringGuideDockRef = useRef<GuideRestoreTransaction | null>(null);
+  const nextGuideRestoreEpochRef = useRef(0);
+  const skipGuideRestorePersistenceRef = useRef<number | null>(null);
   const [reducedMotion, setReducedMotion] = useState<boolean | null>(null);
   const [runtimeStatus, setRuntimeStatus] = useState<HermesRuntimeStatus>(() => createHermesRuntimeStatus());
   const effectiveReducedMotion = reducedMotion ?? true;
@@ -234,18 +256,26 @@ function HermesWorkspaceStage({ fallbackAssistantOpen, fallbackOnInvoke, guideTa
   const [bubblePlacement, setBubblePlacement] = useState<MeasuredBubblePlacement | null>(null);
   const [invokeCount, setInvokeCount] = useState(0);
   const [stageMotionVersion, setStageMotionVersion] = useState(0);
-  const [settledReplanEpoch, setSettledReplanEpoch] = useState(0);
+  const [settledReplan, setSettledReplan] = useState<GuideSettledReplan | null>(null);
+  const [guideRestoreActive, setGuideRestoreActive] = useState(false);
+  const [guideDiagnostics, setGuideDiagnostics] = useState<GuideDiagnostics>({
+    phase: 'idle', routeStart: null, settledSource: null, timelineCount: 0,
+  });
   const guidePlanCountRef = useRef(0);
   const guideSettledReplanCountRef = useRef(0);
   const lastPlannedSettledEpochRef = useRef(0);
 
   React.useLayoutEffect(() => { positionRef.current = position; }, [position]);
 
-  const movePositionAwaitingSettledReplan = useCallback((point: { x: number; y: number }) => {
+  const guideContextKey = guideTarget && dockKind ? `${workspaceId}:${dockKind}:${pathname}:${guideTarget}` : null;
+  const guideContextKeyRef = useRef(guideContextKey);
+  guideContextKeyRef.current = guideContextKey;
+
+  const movePositionAwaitingSettledReplan = useCallback((point: { x: number; y: number }, contextKey: string) => {
     if (Math.hypot(point.x - positionRef.current.x, point.y - positionRef.current.y) < .05) return false;
     const epoch = nextSettledReplanEpochRef.current + 1;
     nextSettledReplanEpochRef.current = epoch;
-    pendingSettledReplanRef.current = { epoch, point };
+    pendingSettledReplanRef.current = { contextKey, epoch, point };
     positionRef.current = point;
     setPosition(point);
     return true;
@@ -309,21 +339,35 @@ function HermesWorkspaceStage({ fallbackAssistantOpen, fallbackOnInvoke, guideTa
   useEffect(() => {
     setDockReady(false);
     const kind = viewportClass();
+    const contextPrefix = `${workspaceId}:${kind}:`;
+    if (pendingSettledReplanRef.current && !pendingSettledReplanRef.current.contextKey.startsWith(contextPrefix)) {
+      pendingSettledReplanRef.current = null;
+    }
+    if (restoringGuideDockRef.current
+      && (restoringGuideDockRef.current.workspaceId !== workspaceId || restoringGuideDockRef.current.dockKind !== kind)) {
+      restoringGuideDockRef.current = null;
+      skipGuideRestorePersistenceRef.current = null;
+      setGuideRestoreActive(false);
+    }
     const preferences = loadHermesDockPreferences(window.localStorage, workspaceId, kind);
     const stored = hasStoredHermesDockPreferences(window.localStorage, workspaceId, kind);
     setDockStored(stored);
     setCustomDock(stored);
     if (stored || !presentation?.anchor) {
       const size = resolveHermesStageSize(false, kind === 'mobile');
-      setPosition(resolveHermesDock(preferences, { height: window.innerHeight, width: window.innerWidth }, { height: size, width: size }, true));
+      const resolved = resolveHermesDock(preferences, { height: window.innerHeight, width: window.innerWidth }, { height: size, width: size }, true);
+      positionRef.current = resolved;
+      setPosition(resolved);
     }
     setDockKind(kind);
     setDockReady(true);
   }, [compactGuide, presentation?.anchor, workspaceId]);
 
   React.useLayoutEffect(() => {
-    if (guideTarget && dockReady) {
-      if (!guideOriginRef.current) guideOriginRef.current = { ...positionRef.current };
+    if (guideTarget && dockReady && dockKind) {
+      if (!guideOriginRef.current) guideOriginRef.current = {
+        customDock, dockKind, pathname, point: { ...positionRef.current }, workspaceId,
+      };
       return;
     }
     const origin = guideOriginRef.current;
@@ -331,16 +375,35 @@ function HermesWorkspaceStage({ fallbackAssistantOpen, fallbackOnInvoke, guideTa
     guideOriginRef.current = null;
     pendingSettledReplanRef.current = null;
     if (dragging || dragRef.current?.moved) return;
-    const half = resolveHermesStageSize(false, compactGuide) / 2;
+    const currentKind = dockKind ?? viewportClass();
+    const currentContextMatches = origin.workspaceId === workspaceId && origin.dockKind === currentKind
+      && origin.customDock === customDock && origin.pathname === pathname;
+    const half = resolveHermesStageSize(false, currentKind === 'mobile') / 2;
+    const preferences = loadHermesDockPreferences(window.localStorage, workspaceId, currentKind);
+    const stored = hasStoredHermesDockPreferences(window.localStorage, workspaceId, currentKind);
+    const desired = currentContextMatches
+      ? origin.point
+      : resolveHermesDock(preferences, { height: window.innerHeight, width: window.innerWidth }, { height: half * 2, width: half * 2 }, true);
+    if (!currentContextMatches) setCustomDock(stored);
     const restored = {
-      x: Math.min(window.innerWidth - half, Math.max(half, origin.x)),
-      y: Math.min(window.innerHeight - half, Math.max(half, origin.y)),
+      x: Math.min(window.innerWidth - half, Math.max(half, desired.x)),
+      y: Math.min(window.innerHeight - half, Math.max(half, desired.y)),
     };
-    restoringGuideDockRef.current = restored;
-    skipNextDockPersistenceRef.current = true;
+    const epoch = nextGuideRestoreEpochRef.current + 1;
+    nextGuideRestoreEpochRef.current = epoch;
+    restoringGuideDockRef.current = {
+      customDock: currentContextMatches ? origin.customDock : stored,
+      dockKind: currentKind,
+      epoch,
+      pathname,
+      point: restored,
+      workspaceId,
+    };
+    skipGuideRestorePersistenceRef.current = epoch;
+    setGuideRestoreActive(true);
     positionRef.current = restored;
     setPosition(restored);
-  }, [compactGuide, dockReady, dragging, guideTarget]);
+  }, [customDock, dockKind, dockReady, dragging, guideTarget, pathname, workspaceId]);
 
   const consumeSettledMove = useCallback(() => {
     const stage = stageRef.current;
@@ -348,17 +411,21 @@ function HermesWorkspaceStage({ fallbackAssistantOpen, fallbackOnInvoke, guideTa
     const bounds = stage.getBoundingClientRect();
     const centerPoint = { x: bounds.left + bounds.width / 2, y: bounds.top + bounds.height / 2 };
     const pending = pendingSettledReplanRef.current;
-    if (pending && Math.hypot(centerPoint.x - pending.point.x, centerPoint.y - pending.point.y) < .5) {
+    if (pending && pending.contextKey === guideContextKeyRef.current
+      && Math.hypot(centerPoint.x - pending.point.x, centerPoint.y - pending.point.y) < .5) {
       pendingSettledReplanRef.current = null;
-      setSettledReplanEpoch(pending.epoch);
+      setSettledReplan({ ...pending, point: centerPoint });
     }
     const restoring = restoringGuideDockRef.current;
-    if (restoring && Math.hypot(centerPoint.x - restoring.x, centerPoint.y - restoring.y) < .5) {
+    if (restoring && Math.hypot(centerPoint.x - restoring.point.x, centerPoint.y - restoring.point.y) < .5) {
       restoringGuideDockRef.current = null;
+      setGuideRestoreActive(false);
     }
   }, []);
 
-  React.useLayoutEffect(() => { consumeSettledMove(); }, [consumeSettledMove, position]);
+  React.useLayoutEffect(() => {
+    if (effectiveReducedMotion) consumeSettledMove();
+  }, [consumeSettledMove, effectiveReducedMotion, position]);
 
   useEffect(() => setTravelRequested(false), [guideTarget]);
 
@@ -473,10 +540,11 @@ function HermesWorkspaceStage({ fallbackAssistantOpen, fallbackOnInvoke, guideTa
       if (guideActions.length > 0) setGuideActions([]);
       setGuidePlanState({ mode: null, placement: null });
       setGuideSuppressed(false);
-      lastPlannedSettledEpochRef.current = settledReplanEpoch;
+      pendingSettledReplanRef.current = null;
+      setGuideDiagnostics((current) => current.phase === 'idle' ? current : { ...current, phase: 'idle' });
       return;
     }
-    if (!dockReady) return;
+    if (!dockReady || !dockKind || !guideContextKey || viewportSize.width <= 0 || viewportSize.height <= 0) return;
     const snapshot = registry.snapshot(guideTarget);
     const stage = stageRef.current;
     if (!snapshot || !stage) { setGuideActions([]); return; }
@@ -487,12 +555,6 @@ function HermesWorkspaceStage({ fallbackAssistantOpen, fallbackOnInvoke, guideTa
     const stageBounds = stage.getBoundingClientRect();
     const from = new DOMRect(stageBounds.x, stageBounds.y, Math.max(1, stageBounds.width), Math.max(1, stageBounds.height));
     const target = new DOMRect(snapshot.rect.x, snapshot.rect.y, snapshot.rect.width, snapshot.rect.height);
-    if (customDock && !travelRequested) {
-      setGuidePlanState({ mode: 'edge-stop', placement: null });
-      setGuideSuppressed(false);
-      setGuideReady(true);
-      return;
-    }
     const actorBounds = stage.querySelector<HTMLElement>('[data-hermes-companion-actor="true"]')?.getBoundingClientRect() ?? stageBounds;
     const travelHullBounds = stage.querySelector<HTMLElement>('[data-hermes-carrier-travel-hull="true"]')?.getBoundingClientRect() ?? actorBounds;
     const bubbleBounds = bubbleRef.current?.getBoundingClientRect() ?? stageBounds;
@@ -506,19 +568,48 @@ function HermesWorkspaceStage({ fallbackAssistantOpen, fallbackOnInvoke, guideTa
       footprintFromBounds(bubbleBounds, stageCenter),
       measuredPlacement,
     );
+    const sourceCenter = { x: stageBounds.left + stageBounds.width / 2, y: stageBounds.top + stageBounds.height / 2 };
+    const guidanceViewportChanged = viewportSize.left !== 0 || viewportSize.top !== 0
+      || viewportSize.width !== window.innerWidth || viewportSize.height !== window.innerHeight;
+    const sourceCandidate = (!customDock || travelRequested || guidanceViewportChanged)
+      ? resolveHermesGuideSourceCandidate({
+        current: sourceCenter,
+        guardPx: GUIDE_PRECLAMP_MOTION_CLEARANCE_PX,
+        variants: footprintVariants,
+        viewport: new DOMRect(viewportSize.left, viewportSize.top, viewportSize.width, viewportSize.height),
+      })
+      : null;
+    const pending = pendingSettledReplanRef.current;
+    if (pending?.contextKey === guideContextKey) return;
+    if (pending) pendingSettledReplanRef.current = null;
+    if (sourceCandidate?.requiresMove) {
+      setGuideSuppressed(false);
+      setGuidePlanState((currentPlan) => ({ ...currentPlan, placement: sourceCandidate.placement }));
+      setGuideDiagnostics((current) => ({ ...current, phase: 'source-settle', routeStart: null, settledSource: null }));
+      movePositionAwaitingSettledReplan(sourceCandidate.point, guideContextKey);
+      return;
+    }
+    if (customDock && !travelRequested) {
+      setGuidePlanState({ mode: 'edge-stop', placement: sourceCandidate?.placement ?? null });
+      setGuideSuppressed(false);
+      setGuideDiagnostics((current) => ({ ...current, phase: 'edge-stop', routeStart: null }));
+      setGuideReady(true);
+      return;
+    }
     const targetElement = document.querySelector<HTMLElement>(`[data-hermes-anchor="${guideTarget}"]`);
     const obstacles = Array.from(document.querySelectorAll<HTMLElement>(
-      '[data-before-after-proposal], [data-extract-sdf="true"], [data-hermes-protected="true"], [data-reading-role="control"]',
+      '[data-before-after-proposal], [data-extract-sdf="true"], [data-hermes-protected="true"]',
     ))
       .filter((element) => !targetElement || (!targetElement.contains(element) && !element.contains(targetElement)))
       .map((element) => element.getBoundingClientRect())
       .filter((bounds) => bounds.width > 0 && bounds.height > 0 && bounds.right > viewportSize.left && bounds.bottom > viewportSize.top
         && bounds.left < viewportSize.right && bounds.top < viewportSize.bottom);
     guidePlanCountRef.current += 1;
-    if (settledReplanEpoch > 0 && settledReplanEpoch !== lastPlannedSettledEpochRef.current) {
+    if (settledReplan && settledReplan.contextKey === guideContextKey
+      && settledReplan.epoch !== lastPlannedSettledEpochRef.current) {
       guideSettledReplanCountRef.current += 1;
+      lastPlannedSettledEpochRef.current = settledReplan.epoch;
     }
-    lastPlannedSettledEpochRef.current = settledReplanEpoch;
     const plan = planHermesTravel({
       clearancePx: snapshot.clearancePx,
       editable: target,
@@ -534,78 +625,45 @@ function HermesWorkspaceStage({ fallbackAssistantOpen, fallbackOnInvoke, guideTa
       if (plan.safe) setPosition(plan.dock);
       setGuideSuppressed(!plan.safe);
       setGuidePlanState({ mode: 'static', placement: plan.placement ?? null });
+      setGuideDiagnostics((current) => ({
+        ...current, phase: 'route', routeStart: plan.points[0] ?? sourceCenter,
+        settledSource: settledReplan?.contextKey === guideContextKey ? settledReplan.point : sourceCenter,
+      }));
       setGuideReady(true);
       return;
     }
     setGuideSuppressed(!plan.safe);
     setGuidePlanState({ mode: plan.mode === 'edge-stop' ? 'edge-stop' : 'travel', placement: plan.placement ?? null });
     const timeline = createHermesTravelTimeline(plan.points, TRAVEL_SEGMENT_MS);
+    setGuideDiagnostics((current) => ({
+      phase: plan.mode === 'edge-stop' ? 'edge-stop' : 'route',
+      routeStart: plan.points[0] ?? sourceCenter,
+      settledSource: settledReplan?.contextKey === guideContextKey ? settledReplan.point : sourceCenter,
+      timelineCount: current.timelineCount + Number(plan.mode === 'travel'),
+    }));
     const timers = timeline.map((step) => window.setTimeout(() => setPosition(step.point), step.atMs));
     const arrivalMs = timeline.length === 0 ? 0 : timeline.at(-1)!.atMs + TRAVEL_SEGMENT_MS;
     timers.push(window.setTimeout(() => setGuideReady(true), arrivalMs));
     return () => timers.forEach((timer) => window.clearTimeout(timer));
-  }, [compactGuide, customDock, dockReady, effectiveReducedMotion, guideActions, guideTarget, protectedGeometryVersion, registry,
-    registryVersion, settledReplanEpoch, travelRequested, viewportSize]);
+  }, [customDock, dockKind, dockReady, effectiveReducedMotion, guideActions, guideContextKey, guideTarget,
+    movePositionAwaitingSettledReplan, protectedGeometryVersion, registry, registryVersion, settledReplan, travelRequested, viewportSize]);
 
   useEffect(() => {
     if (!dockReady || viewportSize.width <= 0 || viewportSize.height <= 0) return;
+    if (guideTarget) return;
     const size = resolveHermesStageSize(false, compactGuide);
     const half = size / 2;
-    const viewportLeft = guideTarget ? viewportSize.left : 0;
-    const viewportTop = guideTarget ? viewportSize.top : 0;
-    const viewportRight = guideTarget ? viewportSize.right : window.innerWidth;
-    const viewportBottom = guideTarget ? viewportSize.bottom : window.innerHeight;
+    const viewportLeft = 0;
+    const viewportTop = 0;
+    const viewportRight = window.innerWidth;
+    const viewportBottom = window.innerHeight;
     const current = positionRef.current;
-    let next = {
+    const next = {
       x: Math.min(viewportRight - half, Math.max(viewportLeft + half, current.x)),
       y: Math.min(viewportBottom - half, Math.max(viewportTop + half, current.y)),
     };
-    const guidanceViewportChanged = viewportSize.left !== 0 || viewportSize.top !== 0
-      || viewportSize.width !== window.innerWidth || viewportSize.height !== window.innerHeight;
-    if (guideTarget && (!customDock || travelRequested || guidanceViewportChanged)) {
-      const stage = stageRef.current;
-      const bubble = bubbleRef.current;
-      const actor = stage?.querySelector<HTMLElement>('[data-hermes-carrier-travel-hull="true"]');
-      if (stage && bubble && actor) {
-        const stageBounds = stage.getBoundingClientRect();
-        const actualCenter = { x: stageBounds.left + stageBounds.width / 2, y: stageBounds.top + stageBounds.height / 2 };
-        const measuredPlacement: HermesTravelPlacement = {
-          horizontal: stage.dataset.hermesBubbleHorizontal === 'right' ? 'right' : 'left',
-          vertical: stage.dataset.hermesBubbleVertical === 'below' ? 'below' : 'above',
-        };
-        const variants = createHermesTravelFootprintVariants(
-          footprintFromBounds(actor.getBoundingClientRect(), actualCenter),
-          footprintFromBounds(bubble.getBoundingClientRect(), actualCenter),
-          measuredPlacement,
-        );
-        const candidates = variants.flatMap(({ footprint, placement }) => {
-          const bounds = {
-            bottom: viewportBottom - footprint.bottom - GUIDE_PRECLAMP_MOTION_CLEARANCE_PX,
-            left: viewportLeft + footprint.left + GUIDE_PRECLAMP_MOTION_CLEARANCE_PX,
-            right: viewportRight - footprint.right - GUIDE_PRECLAMP_MOTION_CLEARANCE_PX,
-            top: viewportTop + footprint.top + GUIDE_PRECLAMP_MOTION_CLEARANCE_PX,
-          };
-          if (bounds.left > bounds.right || bounds.top > bounds.bottom) return [];
-          return [{ placement, point: {
-            x: Math.min(bounds.right, Math.max(bounds.left, actualCenter.x)),
-            y: Math.min(bounds.bottom, Math.max(bounds.top, actualCenter.y)),
-          } }];
-        });
-        candidates.sort((a, b) => Math.hypot(a.point.x - actualCenter.x, a.point.y - actualCenter.y)
-          - Math.hypot(b.point.x - actualCenter.x, b.point.y - actualCenter.y));
-        const selectedCandidate = candidates[0];
-        if (selectedCandidate) {
-          next = selectedCandidate.point;
-          setGuidePlanState((currentPlan) => currentPlan.placement?.horizontal === selectedCandidate.placement.horizontal
-            && currentPlan.placement.vertical === selectedCandidate.placement.vertical
-            ? currentPlan
-            : { ...currentPlan, placement: selectedCandidate.placement });
-        }
-      }
-    }
-    if (guideTarget) movePositionAwaitingSettledReplan(next);
-    else if (Math.hypot(next.x - current.x, next.y - current.y) >= .05) setPosition(next);
-  }, [compactGuide, customDock, dockReady, guideTarget, movePositionAwaitingSettledReplan, travelRequested, viewportSize]);
+    if (Math.hypot(next.x - current.x, next.y - current.y) >= .05) setPosition(next);
+  }, [compactGuide, dockReady, guideTarget, viewportSize]);
 
   React.useLayoutEffect(() => {
     if (customDock || dockStored !== false || !dockReady || dockKind !== 'desktop' || dockKind !== viewportClass() || dragging || guideTarget || speech.cue
@@ -683,8 +741,8 @@ function HermesWorkspaceStage({ fallbackAssistantOpen, fallbackOnInvoke, guideTa
     if (!settled.safe) return;
     const settledDistance = Math.hypot(settled.point.x - position.x, settled.point.y - position.y);
     if (settledDistance < (settlingNewDock ? .05 : .5)) {
-      if (skipNextDockPersistenceRef.current) {
-        skipNextDockPersistenceRef.current = false;
+      if (skipGuideRestorePersistenceRef.current !== null) {
+        skipGuideRestorePersistenceRef.current = null;
         return;
       }
       if (settlingNewDock) {
@@ -700,7 +758,7 @@ function HermesWorkspaceStage({ fallbackAssistantOpen, fallbackOnInvoke, guideTa
       return;
     }
     setPosition(settled.point);
-    if (settlingNewDock || skipNextDockPersistenceRef.current) return;
+    if (settlingNewDock || skipGuideRestorePersistenceRef.current !== null) return;
     const kind = viewportClass();
     const preferences = loadHermesDockPreferences(window.localStorage, workspaceId, kind);
     saveHermesDockPreferences(window.localStorage, workspaceId, kind, {
@@ -730,11 +788,24 @@ function HermesWorkspaceStage({ fallbackAssistantOpen, fallbackOnInvoke, guideTa
     (presentation?.onInvoke ?? fallbackOnInvoke)();
   };
 
+  const cancelGuideRestore = (actualPoint?: { x: number; y: number }) => {
+    guideOriginRef.current = null;
+    restoringGuideDockRef.current = null;
+    skipGuideRestorePersistenceRef.current = null;
+    setGuideRestoreActive(false);
+    if (actualPoint) {
+      positionRef.current = actualPoint;
+      setPosition(actualPoint);
+    }
+  };
+
   const onPointerDown = (event: React.PointerEvent<HTMLDivElement>) => {
     if (!(event.target instanceof Element)
       || !event.target.closest('[data-hermes-input-owner], [data-hermes-carrier-interaction-hull="true"]')) return;
     const bounds = event.currentTarget.getBoundingClientRect();
-    dragRef.current = { pointerId: event.pointerId, startX: event.clientX, startY: event.clientY, originX: bounds.left + bounds.width / 2, originY: bounds.top + bounds.height / 2, customDock, moved: false };
+    const actualPoint = { x: bounds.left + bounds.width / 2, y: bounds.top + bounds.height / 2 };
+    if (restoringGuideDockRef.current) cancelGuideRestore(actualPoint);
+    dragRef.current = { pointerId: event.pointerId, startX: event.clientX, startY: event.clientY, originX: actualPoint.x, originY: actualPoint.y, customDock, moved: false };
     event.currentTarget.setPointerCapture(event.pointerId);
     setDragging(true);
     advanceBehavior(pointerRef.current, true);
@@ -760,7 +831,11 @@ function HermesWorkspaceStage({ fallbackAssistantOpen, fallbackOnInvoke, guideTa
       const dy = event.clientY - drag.startY;
       if (!drag.moved && Math.hypot(dx, dy) > 5) {
         drag.moved = true;
-        if (guideTarget) onDismissGuide();
+        if (guideTarget) {
+          cancelGuideRestore();
+          pendingSettledReplanRef.current = null;
+          onDismissGuide();
+        }
         setSpeech((current) => ({ ...current, cue: null }));
         setCustomDock(true);
       }
@@ -894,10 +969,20 @@ function HermesWorkspaceStage({ fallbackAssistantOpen, fallbackOnInvoke, guideTa
       data-hermes-bubble-vertical={bubbleVertical}
       data-hermes-dragging={dragging ? 'true' : 'false'}
       data-hermes-guide-motion={guidePlanState.mode ?? 'idle'}
+      data-hermes-guide-action-count={guideActions.length}
+      data-hermes-guide-phase={guideDiagnostics.phase}
       data-hermes-guide-plan-count={guidePlanCountRef.current}
+      data-hermes-guide-restore-active={guideRestoreActive ? 'true' : 'false'}
+      data-hermes-guide-route-start-x={guideDiagnostics.routeStart?.x}
+      data-hermes-guide-route-start-y={guideDiagnostics.routeStart?.y}
+      data-hermes-guide-ready={guideReady ? 'true' : 'false'}
+      data-hermes-guide-registry-version={registryVersion}
+      data-hermes-guide-settled-source-x={guideDiagnostics.settledSource?.x}
+      data-hermes-guide-settled-source-y={guideDiagnostics.settledSource?.y}
       data-hermes-guide-settled-replan-count={guideSettledReplanCountRef.current}
       data-hermes-guide-suppressed={guideSuppressed ? 'true' : 'false'}
       data-hermes-guide-target={guideTarget ?? undefined}
+      data-hermes-guide-timeline-count={guideDiagnostics.timelineCount}
       data-hermes-invoke-count={invokeCount}
       data-hermes-footprint-source="carrier-travel-hull"
       data-hermes-motion-preference={reducedMotion === null ? 'resolving' : reducedMotion ? 'reduced' : 'full'}

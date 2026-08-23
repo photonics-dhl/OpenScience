@@ -16,6 +16,9 @@
     "primaryNavigation": "主导航"
   },
   "editor": {
+    "common": {
+      "cancel": "取消"
+    },
     "title": "SDF 编辑器",
     "outline": "大纲",
     "versions": "版本导航",

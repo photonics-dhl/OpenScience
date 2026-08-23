@@ -85,6 +85,42 @@ export interface HermesTravelStep {
 export type Point = { x: number; y: number };
 export type Bounds = { left: number; right: number; top: number; bottom: number };
 
+export interface HermesGuideSourceCandidate {
+  placement: HermesTravelPlacement;
+  point: Point;
+  requiresMove: boolean;
+}
+
+export function resolveHermesGuideSourceCandidate(input: {
+  current: Point;
+  guardPx: number;
+  variants: HermesTravelFootprintVariant[];
+  viewport: DOMRectReadOnly;
+}): HermesGuideSourceCandidate | null {
+  const candidates = input.variants.slice(0, 4).flatMap(({ footprint, placement }) => {
+    const bounds = {
+      bottom: input.viewport.bottom - footprint.bottom - input.guardPx,
+      left: input.viewport.left + footprint.left + input.guardPx,
+      right: input.viewport.right - footprint.right - input.guardPx,
+      top: input.viewport.top + footprint.top + input.guardPx,
+    };
+    if (bounds.left > bounds.right || bounds.top > bounds.bottom) return [];
+    const point = clampPoint(input.current, bounds);
+    return [{
+      distance: Math.hypot(point.x - input.current.x, point.y - input.current.y),
+      placement,
+      point,
+    }];
+  });
+  candidates.sort((a, b) => a.distance - b.distance);
+  const selected = candidates[0];
+  return selected ? {
+    placement: selected.placement,
+    point: selected.point,
+    requiresMove: selected.distance >= .05,
+  } : null;
+}
+
 const clamp = (value: number, minimum: number, maximum: number) => Math.min(maximum, Math.max(minimum, value));
 const center = (rectangle: DOMRectReadOnly): Point => ({ x: rectangle.left + rectangle.width / 2, y: rectangle.top + rectangle.height / 2 });
 const clampPoint = (point: Point, bounds: Bounds): Point => ({

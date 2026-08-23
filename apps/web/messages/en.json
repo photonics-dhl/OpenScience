@@ -16,6 +16,9 @@
     "primaryNavigation": "Primary navigation"
   },
   "editor": {
+    "common": {
+      "cancel": "Cancel"
+    },
     "title": "SDF Editor",
     "outline": "Outline",
     "versions": "Versions",
