@@ -2,11 +2,11 @@
 
 > 本文件只保留 CURRENT window；完整历史由 Git history 保存，不作为新 session 默认输入。
 
-## 2026-08-23 — Wanko lively performance preview ready for visual review
+## 2026-08-23 — Hermes movable work-assistant correction
 
-- 本地 Phase 1 候选已把动作目录从 27 扩为 32：新增正帽、竖耳、听灯、开心晃与思考停顿；复用 v09 的 12 段 motion，不改模型美术、不进 Cubism。桌面常态 `336px`，紧凑引导态真实 `176px`，整体角色仍是单一命中区。
-- 动作与语言共用 semantic performance beat；自主气泡 `25–45s` 偶尔出现、`3–5s` 收起，并在输入、审批、弹窗、助手打开、页面隐藏或 reduced-motion 下静默。纸白批注笺、深靛墨色、朱红 citation-thread 尾线、4px radius；移动端右对齐且浏览器门禁证明不裁切。
-- fresh Web `360/360`（355 Vitest + 5 Node）、typecheck、18 页 production build、31-action Live2D motion/browser gate GREEN；截图为 ignored `apps/web/test/visual/out/hermes-live2d/bubble-{cap-check-desktop,happy-wiggle-mobile}.png`。候选 `0929174` 尚未部署，ECS 仍为 `c97926a`，下一步只需用户视觉判断。
+- 用户否决“动作画廊占据主页面”的产品层级；本地候选 `be45f91` 已按 Scholar's Tea 的行为边界改为可移动工作助手：桌面 `176px`、移动 `120px`，`336px` 只用于显式展开/诊断；全角色可拖、实时 viewport clamp、位置持久化，窗口缩放后仍可恢复。
+- RO 创建是唯一主任务。`/_visual/hermes-live2d` 首屏改成真实创建表单，32 动作/图层/海报控制全部折叠进诊断 tray；产品气泡改为紧凑 ink-edge note，按象限翻转。用户开始拖动即关闭过时引导；移动端不把气泡扩成浮动工具栏，正常 renderer 也不常驻动效设置胶囊。
+- fresh Web `360/360`（355 Vitest + 5 Node）、typecheck、18 页 production build、Live2D motion gate 与真实 RO-create Playwright gate GREEN；后者覆盖创建提交、1440/390 拖动、边缘夹紧、刷新恢复、resize recovery、气泡让路与主操作不遮挡。ignored 视觉证据：`apps/web/test/visual/out/hermes-work-assistant/ro-create-{desktop,mobile}-final.png`。未部署，ECS 保持 `c97926a` / rollback `06072c1`。
 
 ## 2026-08-23 — Wanko v09 Cubism runtime export
 
@@ -63,7 +63,7 @@
 
 ## Version tuple
 
-- Branch / technical release candidate: `codex/hermes-wanko-live2d` / `0929174b69fc2c519ce9bdc8de7f40b765f30235`（本次 docs sync commit 位于其后）
+- Branch / technical release candidate: `codex/hermes-wanko-live2d` / `be45f91c209bedddafb3930f5b1d28c8cf125324`（本次 docs sync commit 位于其后）
 - Remote candidate: `origin/codex/readable-hermes-guidance@c88c78003957204e6218b8bd2c9c3842a6fbb315`（未包含本次本地候选）
 - Local main: `c60ffdd16b85ea8f0d8b047493fa03a4c0230c05`
 - ECS release / rollback: `c97926ab4188d5d5fc7a6e58e0333d20a600c692` / `06072c1fd3eb30148daec8d4c4a8572fa3bdacc8`

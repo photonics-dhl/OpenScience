@@ -831,6 +831,7 @@ poster, zero visible canvas, zero animated glow/steam/trail.
 - Modify: `apps/web/test/visual/hermes-live2d-motion-gate.mjs`
 - Modify: `apps/web/test/visual/hermes-guidance-geometry-gate.mjs`
 - Modify: `apps/web/app/_visual/hermes-live2d/page.tsx`
+- Modify: `apps/web/package.json`
 - Modify: `apps/web/app/%5Fvisual/hermes-live2d/page.tsx`
 
 **Interfaces:**
@@ -2189,3 +2190,55 @@ global token CSS and Pixi Live2D runtime.
   gate, `audit:docs-sync`, `docs:lint` and `git diff --check`. Record candidate
   HEAD, production `c97926a`, rollback `06072c1`, screenshot paths and any Phase
   2 motion gaps. Stop for user visual judgment; do not deploy.
+
+## Task 20 — Movable work-assistant product-context correction
+
+**Goal:** Make Hermes behave as peripheral, user-positioned workbench chrome
+while the real RO creation task remains visually and interactively dominant.
+
+**Reference boundary:** Scholar's Tea contributes behaviour only: compact
+default presence, whole-actor drag, viewport clamping, saved position,
+contextual expansion and quiet idle. OpenScience does not copy its avatar,
+radial menu, gradients, chat-card styling or copy.
+
+**Files:**
+
+- Modify: `apps/web/lib/hermes/stage-sizing.ts`
+- Modify: `apps/web/components/hermes/HermesWorkspaceStage.tsx`
+- Modify: `apps/web/components/hermes/HermesPerformanceBubble.tsx`
+- Modify: `apps/web/app/globals.css`
+- Modify: `apps/web/app/_visual/hermes-live2d/page.tsx`
+- Modify: `apps/web/test/hermes-stage-sizing.test.ts`
+- Modify: `apps/web/test/hermes-performance-bubble.test.tsx`
+- Modify: `apps/web/test/visual/hermes-live2d-motion-gate.mjs`
+- Create: `apps/web/test/visual/hermes-work-assistant-experience-gate.mjs`
+
+- [x] **Step 1: RED — encode product hierarchy.**
+
+  Require `176px` desktop / `120px` mobile ordinary footprints, preserve the
+  explicit `336px` expanded fixture, and require the visual route to expose a
+  real RO-create task surface with action controls inside a developer tray.
+
+- [x] **Step 2: GREEN — correct footprint and bubble material.**
+
+  Keep the high-resolution renderer and current drag/persistence owner. Reduce
+  ordinary CSS footprint, replace the light card with a compact dark edge note,
+  and retain polite live-region, focus and `40px` dismiss semantics.
+
+- [x] **Step 3: GREEN — rebuild the preview around the task.**
+
+  Present title, Workspace, blank/import decision and primary create action as
+  the first viewport. Keep exhaustive action/layer/poster controls collapsed and
+  out of the task grid.
+
+- [x] **Step 4: Playwright first-person acceptance.**
+
+  At `1440×900` and `390×844`, type in the title, use the form controls, drag
+  Hermes to a new edge, reload to verify persistence, open/dismiss a cue and
+  confirm the assistant never overlaps the active control or primary action;
+  drag dismisses stale guidance and viewport resize keeps it recoverable.
+
+- [x] **Step 5: Run full gates, sync docs and stop locally.**
+
+  Run focused RED/GREEN evidence, Web tests, typecheck, production build,
+  browser gates, docs sync/lint and `git diff --check`. Do not deploy.

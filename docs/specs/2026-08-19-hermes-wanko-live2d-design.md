@@ -458,10 +458,20 @@ checks pass, generated smoke is source-art study only, not a production asset.
 
 ## 11. Lively performance beats and annotation bubbles
 
+> **2026-08-23 product-context correction:** The assistant is peripheral
+> workspace chrome, never page content. The earlier action-laboratory preview
+> over-weighted motion coverage and is visually rejected. Scholar's Tea is the
+> behavioural reference for a movable, viewport-clamped, position-persistent
+> assistant that recedes while the user works; OpenScience keeps its own
+> optical-editorial visual language.
+
 The 2026-08-23 follow-up keeps the approved v09 model, texture, hat, tassel,
-lamp, smoke silhouette and dock position intact while increasing the normal
-desktop stage from `288 CSS px` to `336 CSS px`. A mobile field visit uses
-`176 CSS px`; anchored product placements retain their owner-provided bounds.
+lamp, smoke silhouette and dock position intact. `336 px` is the high-quality
+rendering envelope and the opt-in laboratory/expanded size, not the ordinary
+workspace footprint. Unanchored product use and field guidance render inside a
+`176 CSS px` footprint on desktop and `120 CSS px` on mobile; anchored product
+placements retain their owner-provided bounds. The whole actor remains draggable,
+viewport-clamped and position-persistent.
 Collision and travel planning must consume the actual rendered stage and bubble
 union rather than assuming either previous constant.
 
@@ -490,11 +500,13 @@ beat finishes before another autonomous action can replace it.
 
 ### 11.2 Bubble language and visual system
 
-The bubble is an optical-editorial annotation slip, not a cartoon cloud: warm
-paper surface, dark-indigo ink, one restrained vermilion citation-thread tail,
-fixed `4 px` surface radius and background-step plus layered shadow depth. The
-headline/intent label uses the existing data face; speech uses the existing
-editorial CJK/Latin stack. Entry is only opacity plus a `4 px` upward settle
+The bubble is an optical-editorial edge annotation, not a cartoon cloud, card or
+modal: a low-contrast ink surface, paper-white text, one restrained vermilion
+status mark and a short citation-thread pointer. It is at most `15.5rem` wide,
+uses the fixed `4 px` surface radius, and contains no large light rectangle or
+decorative shadow stack. The intent label and speech use the existing compact
+UI/data typography so the note reads as workspace chrome rather than an article
+excerpt. Entry is only opacity plus a `4 px` upward settle
 with `cubic-bezier(.16, 1, .3, 1)`; there is no bounce, glass blur or decorative
 gradient. Buttons keep a `40×40 CSS px` minimum hit area, visible focus and an
 interruptible `scale(.95)` active state.
@@ -517,13 +529,19 @@ entrance when reduced motion is active.
 ### 11.3 Phase boundary and acceptance
 
 Phase 1 ships only as a local visual candidate until the user inspects real
-desktop and `390×844` captures. Focused tests must first fail on the old cadence,
-old size, absent speech policy and unsynchronised bubble. Acceptance requires:
+desktop and `390×844` RO-creation captures. The visual harness must present the
+real task surface first; its exhaustive action controls belong in a collapsed
+developer tray and never consume the main canvas. Focused tests must fail on an
+oversized ordinary footprint, a light-card bubble, or action controls presented
+as primary content. Acceptance requires:
 
-- `336/176` unanchored stage sizing and no regression in actual-bounds travel;
+- `176` desktop / `120` mobile ordinary product footprint, `336` explicit
+  expanded fixture, and no regression in actual-bounds travel, viewport resize
+  recovery or saved user position;
 - deterministic lively decks, no immediate repeats and truthful priority order;
 - action/speech beat identity, bilingual keys and autonomous silence guards;
-- accessible bubble semantics, focus states and non-overlapping `40 px` actions;
+- accessible bubble semantics, focus states, non-overlapping `40 px` actions,
+  and no overlap with the RO title, material intake or primary create action;
 - real WebGL screenshots for idle speech, direct interaction, guidance, task
   feedback, mobile edge placement, approval and reduced-motion stillness;
 - no new image layer, renderer owner, dependency, API or server contract.

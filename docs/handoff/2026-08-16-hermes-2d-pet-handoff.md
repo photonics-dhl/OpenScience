@@ -3,10 +3,9 @@
 ## Current truth
 
 - **2026-08-23 最新状态覆盖下方历史阻塞叙述**：唯一 v09 母版 `wanko_genie_v09.cmo3`（SHA-256 `BA111D4E...1121ADD`）未改；SDK 4.0 bundle、两张 zero-alpha RGB-clean texture 与 12 motions 已在 ECS development release `c97926a` 运行，rollback `06072c1`。
-- 本地 Phase 1 候选把语义动作扩为 32，新增正帽、竖耳、听灯、开心晃、思考停顿；仅组合既有 motion/parameter，不修改 Cubism、美术轮廓、帽子、流苏、烟雾或神灯。
-- Workspace 舞台为桌面 `336px` / 紧凑引导 `176px`，整体角色保持单命中区。自主语言与动作共用 performance beat，`25–45s` cadence、`3–5s` 可见，并在 writing/approval/dialog/assistant/reduced/hidden 状态静默。
-- 气泡采用纸白批注笺、深靛墨色、朱红 citation-thread 尾线、4px radius；mobile 右对齐。fresh Web `360/360`、typecheck、18 页 production build、31-action browser gate GREEN，左右边界不裁切。
-- 当前本地候选 `codex/hermes-wanko-live2d@0929174`（docs commit 位于其后）尚未部署；ignored 预览为 `apps/web/test/visual/out/hermes-live2d/bubble-{cap-check-desktop,happy-wiggle-mobile}.png`。下一步只做用户视觉判断，不自动进入 Phase 2 Cubism motion。
+- 用户已否决动作画廊和大卡片气泡；本地候选 `be45f91` 把 Hermes 校正为可移动工作助手。桌面常态 `176px`、移动 `120px`，`336px` 只供显式展开/诊断；全角色拖动、viewport clamp、resize recovery 与位置持久化均有真实浏览器门禁。
+- RO 创建流程重新成为首屏唯一主任务，32 动作控制折叠进 developer tray。气泡是紧凑 ink-edge note，按角色象限翻转；用户拖动即关闭过时引导，移动端不显示浮动动作工具栏，正常 renderer 不常驻动效设置胶囊。
+- fresh Web `360/360`、typecheck、18 页 production build、31-action motion gate 与 RO-create first-person gate GREEN；ignored 预览为 `apps/web/test/visual/out/hermes-work-assistant/ro-create-{desktop,mobile}-final.png`。尚未部署，ECS 保持 `c97926a` / rollback `06072c1`。
 
 - 用户已确认停止修改当前丑陋茶壶，先由 Codex 独立重画 lamp-only Photoshop vector/shape 源美术。新硬门：低矮横向阿拉丁神灯、深靛蓝釉面/克制金边、细长上扬嘴、开放 S/C 把手；壶身 `0.82–0.92x` Wanko、总跨距 `<=1.20x`、总高 `28–32%`。先交付 light/dark × `512/288/160` 灯体单独预览；不许用 Wanko/烟/辉光/品牌掩盖轮廓，用户未通过前不得导入 Cubism。
 - 用户已通过 lamp-only 候选 `C:/Users/Mac/.codex/generated_images/01a01f25-fdbf-7f20-a4d4-5a3523c32909/exec-24f1bfe9-14e1-4a70-86e2-66bf6dcadcad.png` 及唯一品牌候选 `brand-study-v03/sdf-brand-reference-topology-v03.svg`：较粗壶嘴输入流→竖向深色开放中心→三条不回汇扇形路线→每支两个蓝白圆点→仅中支连接单一橙色结果。机械合同、主线程 light/dark `512/288/160` 实图与 Sol High 对照参考图复审均 GREEN/APPROVE；签核不等于 PSD/Cubism/生产验收。
@@ -40,7 +39,7 @@
 
 ## Version tuple
 
-- Branch / technical release candidate: `codex/hermes-wanko-live2d` / `0929174b69fc2c519ce9bdc8de7f40b765f30235`（本次 docs sync commit 位于其后）
+- Branch / technical release candidate: `codex/hermes-wanko-live2d` / `be45f91c209bedddafb3930f5b1d28c8cf125324`（本次 docs sync commit 位于其后）
 - Remote candidate: `origin/codex/readable-hermes-guidance@c88c78003957204e6218b8bd2c9c3842a6fbb315`（未包含本次候选）
 - Local main: `c60ffdd16b85ea8f0d8b047493fa03a4c0230c05`
 - ECS release / rollback: `c97926ab4188d5d5fc7a6e58e0333d20a600c692` / `06072c1fd3eb30148daec8d4c4a8572fa3bdacc8`
@@ -55,8 +54,8 @@
 
 ## Next action
 
-1. 让用户检查本地 `336px` 桌面与 `176px` mobile 气泡截图；不要部署或修改 v09 美术。
-2. 若 Phase 1 视觉通过，再单独决定是否需要 Phase 2 原生 Cubism motion；不得把“动作更多”自动解释为重开模型美术。
+1. 让用户检查本地真实 RO-create 桌面/移动截图与 `http://127.0.0.1:3198/_visual/hermes-live2d`；不要部署或修改 v09 美术。
+2. 若 work-assistant 层级通过，再单独决定是否需要 Phase 2 原生 Cubism motion；不得把“动作更多”自动解释为重开模型美术。
 3. ECS 保持 `c97926a` / rollback `06072c1`，本地预览结果不能冒充生产验收。
 
 Read first：`AGENTS.md` → 本 handoff → 2026-08-19 Wanko CURRENT design/plan → `docs/progress.md`；`project_index.md` 只用 `rg` 定向查 CURRENT 行。
