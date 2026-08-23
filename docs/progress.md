@@ -9,8 +9,9 @@
 - SDK 4.0 runtime 已导出到 `runtime-v09-export-20260823/`：`.moc3`、`.model3.json`、`.physics3.json`、`.cdi3.json` 与 `1024/2048` 两张 RGBA texture 引用闭合。导出后按 alpha 确定性清理两张 texture，`alpha=0 && RGB!=0` 均为 `0`；可见像素与 alpha 不变，bundle verifier GREEN。
 - v09 runtime 已以稳定文件名进入 `apps/web/public/hermes/live2d/wanko/`：新 `.moc3`、display-info、两张 texture 与原 12 个 motion 引用闭合，motion 参数全部兼容。Deep review 定位蓝金碎片来自被否决的 Pixi procedural navigator，而非 v09 纹理；active renderer 已删除全部 `Graphics` 叠画，只保留单一 Cubism model/canvas，fresh 真实截图干净。
 - 用户明确授权永久删除；C 盘同目录 42 个旧顶层迭代已逐项删除并复核 `Remaining 0`，不可恢复。保留 v09 母版/exportprep/runtime/motions、最终 hat/smoke、批准灯源和最终证据；仓库 v09 是当前唯一部署候选。
+- 用户进一步批准删除仓库旧资产：已移除未跟踪 carrier/poster/exporter 实验，以及已跟踪三张旧 pet PNG、旧 OGL renderer、carrier decoder、对应合同与 dead CSS；当前 `public/hermes` 只保留 v09 Live2D bundle、notice 与目录说明。
 - 发布审查另修复 Cubism Core 首次失败后 retry 永久等待、系统 reduced-motion 未生效、首屏双初始化、主动释放 context 被误报为 context loss 和旧产品 E2E 漂移；runtime error 已移出旧 renderer 循环依赖。实现候选 `d194a5d7149d25b481f52370c540665c8a51ce4d` 已提交；后续复核把 Field Guide 纳入 aggregate gate，恢复 ADR-010 要求的 original inline SVG/CSS failure fallback，并将 Live2D runtime 标为 Git `-text` 以保证 Windows/Linux checkout 字节哈希一致。fresh Web 360/360、typecheck/build 与 Dashboard + Field Guide 22/22 production E2E GREEN。
-- 公网写仍停在 Live2D 发布许可硬门：已要求 operator 明确确认 Sample 条款与 AI/chatbot SDK publication 判定适用；确认前只生成本地 release candidate，不把技术通过冒充许可完成或生产部署。
+- 用户已明确接受 Live2D/Wankoromochi 许可条款；公网写仍停在 ADR-010 记录硬门，尚缺 operator 法律名称、主体类别及适用 Cubism AI/chatbot plan。补齐前只生成本地 release candidate，不代填法律事实或生产部署。
 
 ## 2026-08-22 — Wanko smoke-bowl replacement design approved
 

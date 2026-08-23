@@ -3,7 +3,6 @@ import { describe, expect, it, vi } from 'vitest';
 import {
   claimAbortableWankoResource,
   createWankoMotionSwitch,
-  decodeRequiredWankoCarrierAssets,
 } from '@/lib/hermes/wanko-runtime-ownership';
 
 describe('Wanko runtime ownership', () => {
@@ -99,13 +98,4 @@ describe('Wanko runtime ownership', () => {
     expect(dispose).toHaveBeenCalledWith(lateModel);
   });
 
-  it('rejects incomplete required carrier layers before the renderer can become ready', async () => {
-    const good = { complete: true, decode: vi.fn(), naturalWidth: 2048 };
-    const broken = { complete: true, decode: vi.fn(), naturalWidth: 0 };
-
-    await expect(decodeRequiredWankoCarrierAssets([good, good, good, broken, good, good, good, good]))
-      .rejects.toThrow('required-carrier-asset-failed');
-    await expect(decodeRequiredWankoCarrierAssets([good, good, good, good, good, good, good]))
-      .rejects.toThrow('required-carrier-asset-count');
-  });
 });

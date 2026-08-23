@@ -111,24 +111,3 @@ export async function claimAbortableWankoResource<T>(
     signal.removeEventListener('abort', onAbort);
   }
 }
-
-export interface DecodableWankoCarrierAsset {
-  readonly complete: boolean;
-  readonly naturalWidth: number;
-  decode(): Promise<void>;
-}
-
-export async function decodeRequiredWankoCarrierAssets(
-  images: readonly DecodableWankoCarrierAsset[],
-): Promise<void> {
-  const failure = (message: string) => Object.assign(new Error(message), { code: 'asset-load-failed' as const });
-  if (images.length !== 8) throw failure('required-carrier-asset-count');
-  await Promise.all(images.map(async (image) => {
-    try {
-      if (!image.complete || image.naturalWidth <= 0) await image.decode();
-    } catch {
-      throw failure('required-carrier-asset-failed');
-    }
-    if (image.naturalWidth <= 0) throw failure('required-carrier-asset-failed');
-  }));
-}

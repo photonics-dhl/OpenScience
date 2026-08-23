@@ -3,7 +3,7 @@
 Hermes 任务视觉的公开资产目录。当前本地候选 renderer 是
 `HermesVisualAdapter` 驱动的单实例 Wanko Live2D v09；运行时只从
 `live2d/` 加载闭合 Cubism bundle。原创 Optical Guide 仅作为运行时失败时
-的可访问文本/结构 fallback，不冒充 Wanko 像素。
+的内联 SVG/CSS 视觉与可访问控制 fallback，不冒充 Wanko 像素。
 
 ## 迁移要求
 

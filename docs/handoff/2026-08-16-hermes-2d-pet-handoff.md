@@ -58,7 +58,7 @@
 ## Next action
 
 1. 42 个已授权的 C 盘旧顶层迭代已永久删除并复核 `Remaining 0`；v09 keep list 与仓库候选均保留，勿再次清理。
-2. 取得并登记 ADR-010 要求的 operator 法律身份/规模类别、Wankoromochi Sample 条款接受、适用 Cubism SDK AI/chatbot plan、公开用途/署名与失去资格时停用回退承诺；未完成不得公网部署。
+2. 用户已接受许可条款并批准清理旧仓库资产；继续取得并登记 ADR-010 尚缺的 operator 法律名称、规模类别与适用 Cubism SDK AI/chatbot plan，连同公开用途/署名与失去资格时停用回退承诺；未完成不得公网部署。
 3. 许可门通过后，以干净 release commit 执行备份、`--skip-migrate` 部署及 ECS build/container/runtime/public acceptance；部署前生产保持 `06072c1`，rollback `8ecf96c`。
 
 Read first：`AGENTS.md` → 本 handoff → 2026-08-19 Wanko CURRENT design/plan → `docs/progress.md`；`project_index.md` 只用 `rg` 定向查 CURRENT 行。
