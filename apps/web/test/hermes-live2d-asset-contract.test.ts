@@ -80,14 +80,16 @@ describe('Hermes Wanko Live2D runtime assets', () => {
     }
   });
 
-  it('records the upstream terms and blocks public release until operator review', () => {
+  it('records the upstream terms and the operator development exception', () => {
     expect(existsSync(noticePath)).toBe(true);
     const notice = readFileSync(noticePath, 'utf8');
     expect(notice).toContain('https://www.live2d.com/en/learn/sample/wankoromochi/');
     expect(notice).toContain('https://www.live2d.com/en/learn/sample/model-terms/');
     expect(notice).toContain('https://www.live2d.com/en/sdk/license/');
     expect(notice).toContain('This content uses sample data owned and copyrighted by Live2D Inc.');
-    expect(notice).toContain('PUBLICATION REVIEW: REQUIRED BEFORE PUBLIC DEPLOYMENT');
+    expect(notice).toContain('DEVELOPMENT DEPLOYMENT AUTHORIZED BY OPERATOR — PUBLICATION PLAN UNVERIFIED');
+    expect(notice).toContain('does not claim that a publication category or legal entity has been');
+    expect(notice).toContain('verified. A formal public-release classification must complete that review.');
   });
 
   it('pins the proprietary Cubism Core byte used by the browser runtime', () => {
