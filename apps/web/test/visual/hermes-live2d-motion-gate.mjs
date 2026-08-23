@@ -107,7 +107,7 @@ page.on('console', (message) => {
 });
 
 try {
-  await page.goto(`${baseUrl}/_visual/hermes-live2d`, { waitUntil: 'networkidle' });
+  await page.goto(`${baseUrl}/_visual/hermes-live2d`, { waitUntil: 'domcontentloaded' });
   const taskSurface = page.locator('[data-hermes-ro-create-fixture="true"]');
   const developerTray = page.locator('[data-hermes-dev-tray="true"]');
   assert.equal(await taskSurface.count(), 1, 'the preview must be a real RO-create task surface, not an action gallery');
@@ -119,7 +119,7 @@ try {
   await rig.waitFor({ state: 'visible' });
   await page.waitForFunction(() => document.querySelector('[data-hermes-rig="live2d-wanko"]')?.getAttribute('data-hermes-rig-status') === 'ready');
   assert.equal(await page.locator('[data-hermes-live2d-canvas="true"]').count(), 1);
-  assert.equal(await fixture.getAttribute('data-hermes-stage-size'), '176');
+  assert.equal(await fixture.getAttribute('data-hermes-stage-size'), '200');
   assert.equal(await page.locator('[data-hermes-performance-bubble]').count(), 1);
   const primaryCreateBox = await page.locator('[data-hermes-primary-create]').boundingBox();
   const ordinaryFixtureBox = await fixture.boundingBox();
@@ -160,6 +160,29 @@ try {
   const performanceBubble = page.locator('[data-hermes-performance-bubble]');
   assert.equal(await performanceBubble.getAttribute('data-hermes-speech-visible'), 'true');
   assert.match(await performanceBubble.getAttribute('data-hermes-performance-beat'), /^cap-check:/u);
+  const bubbleMaterial = await performanceBubble.evaluate((node) => {
+    const style = getComputedStyle(node);
+    const dismiss = node.querySelector('.hermes-companion-dismiss');
+    const dismissBox = dismiss?.getBoundingClientRect();
+    return {
+      backdropFilter: style.backdropFilter,
+      backgroundImage: style.backgroundImage,
+      borderRadius: style.borderRadius,
+      dismissHeight: dismissBox?.height ?? 0,
+      dismissWidth: dismissBox?.width ?? 0,
+      maxWidth: style.maxWidth,
+      shadow: style.boxShadow,
+    };
+  });
+  assert.deepEqual(bubbleMaterial, {
+    backdropFilter: 'none',
+    backgroundImage: 'none',
+    borderRadius: '4px',
+    dismissHeight: 40,
+    dismissWidth: 40,
+    maxWidth: '248px',
+    shadow: 'rgba(0, 0, 0, 0.18) 0px 8px 20px 0px',
+  });
   await developerTray.evaluate((element) => { element.open = false; });
   await page.screenshot({ path: resolve(output, 'bubble-cap-check-desktop.png'), fullPage: true, animations: 'disabled' });
   await performanceBubble.getByRole('button').click({ force: true });
@@ -191,10 +214,10 @@ try {
       await writeFile(resolve(output, `${variant}-${layer}.png`), frame);
     }
     assert.ok(bounds.wanko.width > 0 && bounds.wanko.height > 0, `${variant} Wanko layer must be non-empty`);
-    assert.equal(await fixture.getAttribute('data-hermes-stage-size'), variant === 'desktop' ? '336' : '176');
+    assert.equal(await fixture.getAttribute('data-hermes-stage-size'), variant === 'desktop' ? '360' : '200');
     const fixtureBox = await fixture.boundingBox();
-    assert.equal(fixtureBox?.width, variant === 'desktop' ? 336 : 176, `${variant} stage must render at the declared width`);
-    assert.equal(fixtureBox?.height, variant === 'desktop' ? 336 : 176, `${variant} stage must render at the declared height`);
+    assert.equal(fixtureBox?.width, variant === 'desktop' ? 360 : 200, `${variant} stage must render at the declared width`);
+    assert.equal(fixtureBox?.height, variant === 'desktop' ? 360 : 200, `${variant} stage must render at the declared height`);
     assert.ok(bounds.all.width / bounds.wanko.width <= 1.02, `${variant} native scene must not expand through external art: ${JSON.stringify(bounds)}`);
     const travelBounds = await travelHull.evaluate((node) => ({
       bottom: node.offsetTop + node.offsetHeight,
@@ -216,6 +239,21 @@ try {
   const mobileBubbleBox = await page.locator('[data-hermes-performance-bubble]').boundingBox();
   assert.ok(mobileBubbleBox && mobileBubbleBox.x >= 0, `mobile performance bubble must not clip left: ${JSON.stringify(mobileBubbleBox)}`);
   assert.ok(mobileBubbleBox.x + mobileBubbleBox.width <= 390, `mobile performance bubble must not clip right: ${JSON.stringify(mobileBubbleBox)}`);
+  const mobileBubbleContract = await page.locator('[data-hermes-performance-bubble]').evaluate((node) => {
+    const paragraph = node.querySelector('p');
+    const paragraphStyle = paragraph ? getComputedStyle(paragraph) : null;
+    const paragraphBox = paragraph?.getBoundingClientRect();
+    const visibleToolbar = Array.from(node.querySelectorAll('.hermes-companion-actions, .hermes-companion-take-me'))
+      .filter((element) => getComputedStyle(element).display !== 'none').length;
+    return {
+      lineCount: paragraphBox && paragraphStyle ? Math.ceil(paragraphBox.height / Number.parseFloat(paragraphStyle.lineHeight)) : 0,
+      paragraphCount: node.querySelectorAll('p').length,
+      visibleToolbar,
+    };
+  });
+  assert.equal(mobileBubbleContract.paragraphCount, 1, 'mobile speech must remain one sentence');
+  assert.ok(mobileBubbleContract.lineCount <= 2, `mobile speech must remain at most two short lines: ${JSON.stringify(mobileBubbleContract)}`);
+  assert.equal(mobileBubbleContract.visibleToolbar, 0, 'mobile speech must not expose an action toolbar');
   await developerTray.evaluate((element) => { element.open = false; });
   await page.screenshot({ path: resolve(output, 'bubble-happy-wiggle-mobile.png'), fullPage: true, animations: 'disabled' });
   await developerTray.evaluate((element) => { element.open = true; });

@@ -1866,9 +1866,10 @@ body {
 }
 
 .hermes-dock-anchor {
-  min-height: 18rem;
+  min-height: 22.5rem;
   width: 100%;
   pointer-events: none;
+  translate: 0 -2.25rem;
 }
 
 .hermes-workspace-stage {
@@ -1888,6 +1889,11 @@ body {
 
 .hermes-workspace-stage[data-hermes-guide-motion='travel'] {
   transition-duration: 300ms, 300ms, 320ms, 320ms;
+}
+
+.hermes-workspace-stage[data-hermes-assistant-open='true'] {
+  opacity: .18;
+  pointer-events: none;
 }
 
 .hermes-workspace-stage .hermes-visual {
@@ -1936,6 +1942,10 @@ body {
   pointer-events: auto;
 }
 
+.hermes-workspace-stage[data-hermes-guide-target] .hermes-carrier-interaction-hull {
+  pointer-events: none;
+}
+
 .hermes-companion-actor {
   transform: translate3d(0, 0, 0);
   transform-origin: 50% 58%;
@@ -1963,14 +1973,14 @@ body {
   right: 0;
   bottom: calc(100% - 1.25rem);
   width: min(15.5rem, calc(100vw - 1.5rem));
+  max-width: 15.5rem;
   transform: translateX(var(--hermes-bubble-x));
+  border: 1px solid rgb(241 238 231 / .14);
   border-radius: 4px;
-  outline: 1px solid rgb(241 238 231 / .13);
-  outline-offset: -1px;
-  background: rgb(14 17 15 / .96);
+  background: rgb(12 15 14 / .97);
   padding: .64rem 2.65rem .7rem .78rem;
   color: rgb(241 238 231 / .92);
-  box-shadow: 0 10px 28px rgb(0 0 0 / .24), inset 0 1px rgb(255 255 255 / .035);
+  box-shadow: 0 8px 20px rgb(0 0 0 / .18);
   font-family: var(--font-ui), system-ui, sans-serif;
   font-size: .76rem;
   line-height: 1.42;
@@ -2143,11 +2153,16 @@ body {
   bottom: auto;
 }
 
-/* A 176 px mobile companion may speak, but it must not become a second
+/* A 200 px mobile companion may speak, but it must not become a second
    toolbar over the active form. Detailed guide actions remain available in
    the assistant drawer after the user invokes Hermes. */
 @media (max-width: 640px) {
-  .hermes-workspace-stage[data-hermes-stage-size='176'] .hermes-companion-bubble {
+  .hermes-dock-anchor {
+    min-height: 12.5rem;
+    translate: none;
+  }
+
+  .hermes-workspace-stage[data-hermes-stage-size='200'] .hermes-companion-bubble {
     right: .5rem;
     width: min(12rem, calc(100vw - 1rem));
     padding: .55rem 2.35rem .58rem .68rem;
@@ -2155,18 +2170,18 @@ body {
     line-height: 1.34;
   }
 
-  .hermes-workspace-stage[data-hermes-stage-size='176'][data-hermes-bubble-horizontal='left'] .hermes-companion-bubble {
+  .hermes-workspace-stage[data-hermes-stage-size='200'][data-hermes-bubble-horizontal='left'] .hermes-companion-bubble {
     right: auto;
     left: .5rem;
   }
 
-  .hermes-workspace-stage[data-hermes-stage-size='176'] .hermes-companion-actions,
-  .hermes-workspace-stage[data-hermes-stage-size='176'] .hermes-companion-take-me {
+  .hermes-workspace-stage[data-hermes-stage-size='200'] .hermes-companion-actions,
+  .hermes-workspace-stage[data-hermes-stage-size='200'] .hermes-companion-take-me {
     display: none;
   }
 
-  .hermes-workspace-stage[data-hermes-stage-size='176'] .hermes-companion-bubble > p,
-  .hermes-workspace-stage[data-hermes-stage-size='176'] .hermes-companion-bubble[data-hermes-guide-edge-stop='true'] > p {
+  .hermes-workspace-stage[data-hermes-stage-size='200'] .hermes-companion-bubble > p,
+  .hermes-workspace-stage[data-hermes-stage-size='200'] .hermes-companion-bubble[data-hermes-guide-edge-stop='true'] > p {
     margin: 0;
   }
 }
@@ -2436,9 +2451,9 @@ body [data-reading-role='reading'] {
 
 .hermes-carrier-travel-hull {
   z-index: 0;
-  inset: 4% 8%;
-  width: 84%;
-  height: 92%;
+  inset: 12% 12% 14%;
+  width: 76%;
+  height: 74%;
 }
 
 .hermes-workspace-stage[data-hermes-action='guide-travel'] .hermes-wanko-carrier,
