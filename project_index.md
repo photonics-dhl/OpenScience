@@ -130,7 +130,7 @@
 | `docs/specs/2026-08-22-wanko-scholar-hat-design.md` | canonical Wanko 常驻学者帽视觉、佩戴遮挡、流苏运动和 visual-before-Cubism 门 | **CURRENT accessory design COMPLETE**；用户确认 v09 整体形象完成，已进入 Cubism 母版并随 2026-08-23 runtime bundle 导出，尚未部署 |
 | `docs/specs/2026-08-18-readable-workspace-hermes-guidance-design.md` | B 平衡学者工作台、三视觉系统阅读基线、浏览器无关控件样式、Hermes 不遮挡引导编舞与公网 blank RO→六字段→diff→commit 真实验收 | **CURRENT implemented design**；ECS release `06072c1` 公网验收完成 |
 | `docs/plans/2026-08-18-readable-workspace-hermes-guidance-plan.md` | 可读性基础→代表页面→完整 Hermes footprint 避让→edit-before-accept/缺失证据→语义动作→公网 blank RO gate→ECS checkpoint 的 TDD 实施链 | **COMPLETED**；release `06072c1` / rollback `8ecf96c` |
-| `docs/plans/2026-08-19-hermes-wanko-live2d-plan.md` | Tasks 1–15 历史 runtime/carrier/zero-image 迭代；Task 16 保留灯图集证据；Task 17 按 17.1 preflight → 17.2/17.3 透明六层视觉门 → 17.4 High Cubism v10 → 17.5 TDD/runtime 执行烟雾托座 | **CURRENT IN PROGRESS**；17.1 GREEN、17.2 v07 用户通过、17.3 mask-only v03 机械门与 High 通过，当前待用户接触表签核；签核前不得 Cubism/import/runtime |
+| `docs/plans/2026-08-19-hermes-wanko-live2d-plan.md` | Tasks 1–18 历史模型/灯/烟雾/学士帽迭代与 v09 部署；Task 19 按 performance policy → `336/176px` annotation bubble → 真实浏览器候选实施 | **CURRENT IN PROGRESS**；Task 19 Phase 1 获用户授权先做本地效果，Phase 2 Cubism 新动作与 ECS 部署均未授权 |
 | `docs/specs/2026-08-16-hermes-articulated-mesh-pet-design.md` | Hermes 原创 OGL 2D mesh-rig 历史设计：真实角色像素关节、旧待机语法与严格 lifecycle | **DEPRECATED**；由 2026-08-17 Workspace Companion spec 取代 |
 | `docs/specs/2026-08-16-hermes-contextual-guide-design.md` | Hermes 情境引导员历史设计：Dashboard 提示、助手抽屉与正式 `workspace.guide` 闭环 | **DEPRECATED**；由 2026-08-17 Workspace Companion spec 取代 |
 | `docs/data/launch-research-corpus.md` | 18 条公开启动语料的范围、免责声明、真实来源、上游许可证证据与 ECS seed 操作边界 | 活文档；本地完成，待生产 seed |

@@ -2017,6 +2017,175 @@ Playwright. Install no dependency.
 - [x] Permanently remove the 42 explicitly inventoried obsolete C-drive
   iterations after user authorization; retain the v09 masters, runtime,
   motions, final hat/smoke and approved source evidence.
-- [ ] Create the clean release commit and deploy to ECS only after the operator
-  explicitly confirms the applicable Live2D Sample terms and AI/chatbot SDK
-  publication licensing decision.
+- [x] Create the clean release commit and deploy the operator-authorized
+  development candidate `c97926a` to ECS with rollback `06072c1`; retain the
+  explicit publication-plan-unverified notice and do not treat it as a formal
+  public-release classification.
+
+## Task 19 — Lively performance beats and optical-editorial bubbles
+
+> **For agentic workers:** REQUIRED SUB-SKILL: Use
+> `superpowers:subagent-driven-development` or `superpowers:executing-plans` to
+> implement this task in order. The current session uses inline execution by
+> explicit user request; no ECS deployment is authorized.
+
+**Goal:** Produce a local Phase 1 candidate with a `336px` Wanko, lively and
+deterministic motion variety, and bilingual annotation bubbles selected from the
+same semantic performance beat.
+
+**Architecture:** Keep `behavior-director.ts` as the only semantic action
+selector and the existing Live2D renderer as the single pixel owner. Add one
+pure performance-beat/speech policy consumed by the stage and a focused bubble
+component; do not add an API, dependency, image layer or second timer owner.
+
+**Tech stack:** React 18, TypeScript, next-intl, Vitest, Playwright, existing
+global token CSS and Pixi Live2D runtime.
+
+### Global constraints
+
+- Preserve the approved v09 model, texture, hat, tassel, lamp and smoke pixels.
+- Phase 1 reuses the twelve existing `.motion3.json` files and does not open
+  Cubism Editor or export another model.
+- Desktop unanchored stage is `336px`; mobile field-guide stage is `176px`.
+- Autonomous motion cadence is `3–6s` micro / `12–20s` signature; autonomous
+  speech is `25–45s`, visible `3–5s`.
+- Approval, reduced motion, writing, modal/drawer-open and hidden-document
+  states suppress autonomous speech; approval/reduced remain exact-static.
+- All new visible copy has matched `zh` and `en` next-intl keys.
+- This task ends at local user visual review. Do not deploy.
+
+### Task 19.1: Deterministic performance and speech policy
+
+**Files:**
+
+- Create: `apps/web/lib/hermes/performance-beat.ts`
+- Modify: `apps/web/lib/hermes/action-catalog.ts`
+- Modify: `apps/web/lib/hermes/behavior-director.ts`
+- Modify: `apps/web/lib/hermes/wanko-action-director.ts`
+- Create: `apps/web/test/hermes-performance-beat.test.ts`
+- Modify: `apps/web/test/hermes-behavior-director.test.ts`
+- Modify: `apps/web/test/hermes-wanko-action-director.test.ts`
+
+**Interfaces:**
+
+- Produces `HermesPerformanceBeat`, `HermesSpeechState`,
+  `createHermesSpeechState(nowMs, seed)` and
+  `stepHermesSpeech(previous, input)`.
+- Extends the ambient deck with `cap-check`, `ear-perk`, `lamp-listen`,
+  `happy-wiggle` and `thinking-pause`; every new action resolves to one existing
+  v09 motion or a bounded parameter-only pose.
+
+- [ ] **Step 1: RED — write performance policy tests.**
+
+  Add literal expectations proving the lively intervals, a fifteen-action
+  seeded ambient cycle without immediate repeats, `25–45s` speech scheduling,
+  `3–5s` visibility, phrase non-repeat and hard suppression. Assert a mismatched
+  action cannot retain an old cue beat ID.
+
+- [ ] **Step 2: Run RED.**
+
+  Run:
+  `npx pnpm@9.15.0 --filter @openscience/web exec vitest run test/hermes-performance-beat.test.ts test/hermes-behavior-director.test.ts test/hermes-wanko-action-director.test.ts`
+
+  Expected: fail because the performance module and five actions do not exist
+  and balanced cadence still starts at `2.4–4.2s / 14–22s`.
+
+- [ ] **Step 3: GREEN — implement the pure policy and five profiles.**
+
+  Use seeded integer hashing already established in `behavior-director.ts`.
+  Store translation keys, never localized strings, in speech cues. Preserve
+  priority ordering and do not make approval/failure interruptible.
+
+- [ ] **Step 4: Run focused GREEN.**
+
+  Re-run the Step 2 command and require zero failures.
+
+### Task 19.2: Stage sizing and annotation-slip bubble
+
+**Files:**
+
+- Create: `apps/web/lib/hermes/stage-sizing.ts`
+- Create: `apps/web/components/hermes/HermesPerformanceBubble.tsx`
+- Modify: `apps/web/components/hermes/HermesWorkspaceStage.tsx`
+- Modify: `apps/web/components/hermes/HermesGuideBubble.tsx`
+- Modify: `apps/web/app/globals.css`
+- Modify: `apps/web/messages/zh.json`
+- Modify: `apps/web/messages/en.json`
+- Create: `apps/web/test/hermes-performance-bubble.test.tsx`
+- Create: `apps/web/test/hermes-stage-sizing.test.ts`
+
+**Interfaces:**
+
+- Produces `resolveHermesStageSize(compactGuide, hasGuide): 336 | 176`.
+- `HermesPerformanceBubble` consumes one `HermesSpeechCue`, visibility and a
+  dismiss callback; it exposes matching `data-hermes-performance-beat` and
+  `data-hermes-speech-cue` diagnostics.
+- `HermesWorkspaceStage` computes speech guards from real writing, approval,
+  assistant/modal and document visibility state before advancing the policy.
+
+- [ ] **Step 1: RED — write sizing and real component tests.**
+
+  Assert desktop/mobile sizing, semantic `aside`/polite live region, dismiss
+  button, beat/cue identity and hidden tab order. Render the real component with
+  only next-intl translation lookup replaced; do not assert against a mock UI.
+
+- [ ] **Step 2: Run RED.**
+
+  Run:
+  `npx pnpm@9.15.0 --filter @openscience/web exec vitest run test/hermes-stage-sizing.test.ts test/hermes-performance-bubble.test.tsx`
+
+  Expected: fail because both modules are absent.
+
+- [ ] **Step 3: GREEN — implement the stage and bubble.**
+
+  Use the existing global CSS strategy. Style a warm-paper annotation slip with
+  dark-indigo type, `4px` radius, layered shadow and one vermilion
+  citation-thread pseudo-element. Animate only opacity/transform; buttons use a
+  `40px` target, visible focus and `scale(.95)` active state. Reuse the same
+  surface language for functional guide bubbles without changing their actions.
+
+- [ ] **Step 4: Add bilingual cue keys and run focused GREEN.**
+
+  Add short matched `zh/en` strings under `hermesCompanion.performance` and
+  re-run Step 2 plus `npx pnpm@9.15.0 --filter @openscience/web typecheck`.
+
+### Task 19.3: Real-browser visual candidate and acceptance evidence
+
+**Files:**
+
+- Modify: `apps/web/app/_visual/hermes-live2d/page.tsx`
+- Modify: `apps/web/test/visual/hermes-live2d-motion-gate.mjs`
+- Modify: `docs/progress.md`
+- Modify: `docs/handoff/2026-08-16-hermes-2d-pet-handoff.md`
+- Modify: `project_index.md`
+
+**Interfaces:**
+
+- Produces ignored desktop/mobile screenshots and metrics under
+  `apps/web/test/visual/out/hermes-live2d/`; it does not produce deployable
+  source art or a server release.
+
+- [ ] **Step 1: RED — extend the browser gate.**
+
+  Require actual `336/176` stage bounds, at least twelve idle actions in a
+  90-second deterministic sample, matching action/beat/cue diagnostics, paper
+  bubble visibility, safe mobile placement and exact approval/reduced frames.
+
+- [ ] **Step 2: Run the focused production browser gate.**
+
+  Build and serve the web app, then run
+  `npx pnpm@9.15.0 --filter @openscience/web test:hermes-live2d` and require RED
+  on the old fixture/sizing before adapting the visual harness.
+
+- [ ] **Step 3: Implement the minimum harness support and run GREEN.**
+
+  Add explicit deterministic controls only to the ignored visual route. Do not
+  put test-only mutation methods in production classes. Capture desktop idle,
+  interaction, guide, task, approval and `390×844` mobile frames.
+
+- [ ] **Step 4: Run the local quality gate and sync truth.**
+
+  Run focused Vitest, full Web tests, Web typecheck, production build, Live2D
+  gate, `audit:docs-sync`, `docs:lint` and `git diff --check`. Record candidate
+  HEAD, production `c97926a`, rollback `06072c1`, screenshot paths and any Phase
+  2 motion gaps. Stop for user visual judgment; do not deploy.
