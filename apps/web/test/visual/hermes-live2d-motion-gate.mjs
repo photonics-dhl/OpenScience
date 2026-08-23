@@ -119,7 +119,7 @@ try {
   await rig.waitFor({ state: 'visible' });
   await page.waitForFunction(() => document.querySelector('[data-hermes-rig="live2d-wanko"]')?.getAttribute('data-hermes-rig-status') === 'ready');
   assert.equal(await page.locator('[data-hermes-live2d-canvas="true"]').count(), 1);
-  assert.equal(await fixture.getAttribute('data-hermes-stage-size'), '120');
+  assert.equal(await fixture.getAttribute('data-hermes-stage-size'), '176');
   assert.equal(await page.locator('[data-hermes-performance-bubble]').count(), 1);
   const primaryCreateBox = await page.locator('[data-hermes-primary-create]').boundingBox();
   const ordinaryFixtureBox = await fixture.boundingBox();
@@ -191,10 +191,10 @@ try {
       await writeFile(resolve(output, `${variant}-${layer}.png`), frame);
     }
     assert.ok(bounds.wanko.width > 0 && bounds.wanko.height > 0, `${variant} Wanko layer must be non-empty`);
-    assert.equal(await fixture.getAttribute('data-hermes-stage-size'), variant === 'desktop' ? '336' : '120');
+    assert.equal(await fixture.getAttribute('data-hermes-stage-size'), variant === 'desktop' ? '336' : '176');
     const fixtureBox = await fixture.boundingBox();
-    assert.equal(fixtureBox?.width, variant === 'desktop' ? 336 : 120, `${variant} stage must render at the declared width`);
-    assert.equal(fixtureBox?.height, variant === 'desktop' ? 336 : 120, `${variant} stage must render at the declared height`);
+    assert.equal(fixtureBox?.width, variant === 'desktop' ? 336 : 176, `${variant} stage must render at the declared width`);
+    assert.equal(fixtureBox?.height, variant === 'desktop' ? 336 : 176, `${variant} stage must render at the declared height`);
     assert.ok(bounds.all.width / bounds.wanko.width <= 1.02, `${variant} native scene must not expand through external art: ${JSON.stringify(bounds)}`);
     const travelBounds = await travelHull.evaluate((node) => ({
       bottom: node.offsetTop + node.offsetHeight,

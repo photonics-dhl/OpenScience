@@ -2143,11 +2143,11 @@ body {
   bottom: auto;
 }
 
-/* A 120 px mobile companion may speak, but it must not become a second
+/* A 176 px mobile companion may speak, but it must not become a second
    toolbar over the active form. Detailed guide actions remain available in
    the assistant drawer after the user invokes Hermes. */
 @media (max-width: 640px) {
-  .hermes-workspace-stage[data-hermes-stage-size='120'] .hermes-companion-bubble {
+  .hermes-workspace-stage[data-hermes-stage-size='176'] .hermes-companion-bubble {
     right: .5rem;
     width: min(12rem, calc(100vw - 1rem));
     padding: .55rem 2.35rem .58rem .68rem;
@@ -2155,18 +2155,18 @@ body {
     line-height: 1.34;
   }
 
-  .hermes-workspace-stage[data-hermes-stage-size='120'][data-hermes-bubble-horizontal='left'] .hermes-companion-bubble {
+  .hermes-workspace-stage[data-hermes-stage-size='176'][data-hermes-bubble-horizontal='left'] .hermes-companion-bubble {
     right: auto;
     left: .5rem;
   }
 
-  .hermes-workspace-stage[data-hermes-stage-size='120'] .hermes-companion-actions,
-  .hermes-workspace-stage[data-hermes-stage-size='120'] .hermes-companion-take-me {
+  .hermes-workspace-stage[data-hermes-stage-size='176'] .hermes-companion-actions,
+  .hermes-workspace-stage[data-hermes-stage-size='176'] .hermes-companion-take-me {
     display: none;
   }
 
-  .hermes-workspace-stage[data-hermes-stage-size='120'] .hermes-companion-bubble > p,
-  .hermes-workspace-stage[data-hermes-stage-size='120'] .hermes-companion-bubble[data-hermes-guide-edge-stop='true'] > p {
+  .hermes-workspace-stage[data-hermes-stage-size='176'] .hermes-companion-bubble > p,
+  .hermes-workspace-stage[data-hermes-stage-size='176'] .hermes-companion-bubble[data-hermes-guide-edge-stop='true'] > p {
     margin: 0;
   }
 }

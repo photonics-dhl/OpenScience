@@ -58,7 +58,7 @@ try {
   const create = desktop.getByRole('button', { name: /Create Research Object|创建 Research Object/u });
   await stage.waitFor({ state: 'visible' });
   await desktop.waitForFunction(() => document.querySelector('[data-hermes-rig="live2d-wanko"]')?.getAttribute('data-hermes-rig-status') === 'ready');
-  assert.equal(await stage.getAttribute('data-hermes-stage-size'), '176');
+  assert.equal(await stage.getAttribute('data-hermes-stage-size'), '336');
   await title.fill('Coherent transport in a driven optical lattice');
   assert.equal(await title.inputValue(), 'Coherent transport in a driven optical lattice');
 
@@ -101,7 +101,7 @@ try {
   await title.fill('Coherent transport in a driven optical lattice');
   await dragStage(desktop, stage, { x: 120, y: 720 });
   assert.equal(await desktop.locator('.hermes-companion-bubble:visible').count(), 0, 'moving Hermes must dismiss stale contextual speech');
-  await desktop.screenshot({ path: resolve(output, 'ro-create-desktop-final.png'), fullPage: true, animations: 'disabled' });
+  await desktop.screenshot({ path: resolve(output, 'ro-create-desktop-large.png'), fullPage: true, animations: 'disabled' });
   await create.click();
   await desktop.waitForURL('**/research-objects/ro-experience/edit');
   await desktopContext.close();
@@ -114,7 +114,7 @@ try {
   const mobileTitle = mobile.locator('input[name="title"]');
   const mobileCreate = mobile.getByRole('button', { name: /Create Research Object|创建 Research Object/u });
   await mobileStage.waitFor({ state: 'visible' });
-  assert.equal(await mobileStage.getAttribute('data-hermes-stage-size'), '120');
+  assert.equal(await mobileStage.getAttribute('data-hermes-stage-size'), '176');
   await mobileTitle.fill('Mobile optical evidence draft');
   const mobileStageBox = await mobileStage.boundingBox();
   const mobileTitleBox = await mobileTitle.boundingBox();
@@ -128,7 +128,7 @@ try {
     && mobileClamped.x + mobileClamped.width <= 390 && mobileClamped.y + mobileClamped.height <= 844,
   `mobile drag must keep Hermes on-screen: ${JSON.stringify(mobileClamped)}`);
   assert.equal(await mobile.locator('.hermes-companion-bubble:visible').count(), 0, 'moving mobile Hermes must dismiss stale contextual speech');
-  assert.equal(await mobileStage.getAttribute('data-hermes-stage-size'), '120', 'mobile guidance must keep the compact assistant footprint');
+  assert.equal(await mobileStage.getAttribute('data-hermes-stage-size'), '176', 'mobile guidance must preserve a readable companion');
   const mobileBubble = mobile.locator('.hermes-companion-bubble:visible');
   if (await mobileBubble.count()) {
     const mobileBubbleBox = await mobileBubble.boundingBox();
@@ -138,7 +138,7 @@ try {
     const visibleGuideControls = await mobileBubble.locator('.hermes-companion-actions, .hermes-companion-take-me').evaluateAll((nodes) => nodes.filter((node) => getComputedStyle(node).display !== 'none').length);
     assert.equal(visibleGuideControls, 0, 'mobile contextual speech must not expand into a floating toolbar');
   }
-  await mobile.screenshot({ path: resolve(output, 'ro-create-mobile-final.png'), fullPage: true, animations: 'disabled' });
+  await mobile.screenshot({ path: resolve(output, 'ro-create-mobile-large.png'), fullPage: true, animations: 'disabled' });
   await mobileContext.close();
 } finally {
   await browser.close();
