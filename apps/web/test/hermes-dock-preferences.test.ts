@@ -35,7 +35,7 @@ describe('Hermes dock preferences', () => {
     expect(loadHermesDockPreferences(storage, 'workspace-a', 'mobile')).not.toEqual(saved);
   });
 
-  it('keeps a user-selected overlapping position and only clamps it when the viewport changes', () => {
+  it('keeps a user-selected overlapping position and uses settled-dock recovery when the viewport changes', () => {
     const preference = {
       activity: 'balanced' as const,
       particles: true,
