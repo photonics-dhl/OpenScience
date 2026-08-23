@@ -1,4 +1,4 @@
-/* global document, DOMMatrixReadOnly, DOMPoint, getComputedStyle, innerWidth, localStorage, process, scrollTo, scrollY, URL */
+/* global document, DOMMatrixReadOnly, DOMPoint, getComputedStyle, innerWidth, localStorage, process, scrollTo, scrollY, URL, window */
 
 import assert from 'node:assert/strict';
 import { mkdir, writeFile } from 'node:fs/promises';
@@ -216,6 +216,27 @@ async function waitForSpeech(page) {
   assert.fail(`Hermes must emit one bounded autonomous cue: ${Array.from(observed).join(', ')}`);
 }
 
+async function assertAtomicPerformanceOwner(page, label, frames = 24) {
+  const evidence = await page.evaluate((frameCount) => new Promise((resolve) => {
+    const samples = [];
+    const sample = () => {
+      const stage = document.querySelector('[data-hermes-workspace-stage="true"]');
+      const action = stage?.getAttribute('data-hermes-action') ?? '';
+      const beats = Array.from(document.querySelectorAll('[data-hermes-performance-bubble="true"][data-hermes-speech-visible="true"]'))
+        .map((node) => node.getAttribute('data-hermes-performance-beat') ?? '');
+      samples.push({ action, beats });
+      if (samples.length >= frameCount) resolve(samples);
+      else window.requestAnimationFrame(sample);
+    };
+    window.requestAnimationFrame(sample);
+  }), frames);
+  assert.equal(evidence.some(({ action, beats }) => beats.some((beat) => !beat.startsWith(`${action}:`))), false,
+    `${label} action and visible performance beat must share one semantic snapshot: ${JSON.stringify(evidence)}`);
+  assert.equal(evidence.some(({ beats }) => beats.length > 1), false,
+    `${label} must keep one performance-speech owner: ${JSON.stringify(evidence)}`);
+  return evidence;
+}
+
 async function exerciseCreateImport(page, label, state) {
   await page.locator('a[href="/research-objects/new?mode=import"]').last().click();
   await page.waitForURL('**/research-objects/new?mode=import');
@@ -228,13 +249,38 @@ async function exerciseCreateImport(page, label, state) {
   await page.waitForFunction(() => document.querySelector('select')?.value === 'workspace-user');
   await page.locator('input[name="title"]').fill(title);
   const createButton = page.getByRole('button', { name: /Create Research Object|创建 Research Object/u });
-  const createBox = await createButton.boundingBox();
-  assert.ok(createBox, `${label} create action must have geometry`);
-  const createHit = await page.evaluate(({ x, y }) => document.elementFromPoint(x, y)?.closest('button[type="submit"]') !== null, {
-    x: createBox.x + createBox.width / 2,
-    y: createBox.y + createBox.height / 2,
-  });
-  assert.equal(createHit, true, `${label} transparent Hermes pixels must not intercept the real RO create action`);
+  await createButton.scrollIntoViewIfNeeded();
+  const createSnapshotHandle = await page.waitForFunction(() => {
+    const stage = document.querySelector('[data-hermes-workspace-stage="true"]');
+    const button = document.querySelector('button[type="submit"]');
+    const rect = (node) => {
+      const bounds = node?.getBoundingClientRect();
+      return bounds ? { bottom: bounds.bottom, height: bounds.height, left: bounds.left, right: bounds.right, top: bounds.top, width: bounds.width } : null;
+    };
+    const create = rect(button);
+    const snapshot = {
+      action: stage?.getAttribute('data-hermes-action'),
+      actor: rect(stage?.querySelector('[data-hermes-companion-actor="true"]')),
+      bubble: rect(stage?.querySelector('[data-hermes-guide-bubble][data-hermes-guide-visible="true"]')),
+      create,
+      guidePhase: stage?.getAttribute('data-hermes-guide-phase'),
+      guideReady: stage?.getAttribute('data-hermes-guide-ready'),
+      protected: button?.getAttribute('data-hermes-protected'),
+      travel: rect(stage?.querySelector('[data-hermes-carrier-travel-hull="true"]')),
+    };
+    const settled = snapshot.action === 'guide-arrive' && ['route', 'edge-stop'].includes(snapshot.guidePhase)
+      && snapshot.guideReady === 'true' && snapshot.protected === 'true' && create;
+    if (!settled) return false;
+    const hit = document.elementFromPoint(create.left + create.width / 2, create.top + create.height / 2);
+    return {
+      ...snapshot,
+      hit: hit ? { className: hit.className, submitOwner: hit.closest('button[type="submit"]') !== null, tagName: hit.tagName } : null,
+    };
+  }, undefined, { timeout: 10_000 });
+  const createSnapshot = await createSnapshotHandle.jsonValue();
+  await createSnapshotHandle.dispose();
+  assert.equal(createSnapshot.hit?.submitOwner, true,
+    `${label} settled transparent Hermes pixels must not intercept the real RO create action: ${JSON.stringify(createSnapshot)}`);
   const created = page.waitForResponse((response) => new URL(response.url()).pathname === '/api/research-objects'
     && response.request().method() === 'POST', { timeout: 10_000 });
   const createResults = await Promise.allSettled([
@@ -432,6 +478,7 @@ try {
     const speech = await waitForSpeech(page);
     const bubble = page.locator('[data-hermes-performance-bubble="true"]');
     await bubble.waitFor({ state: 'attached' });
+    await assertAtomicPerformanceOwner(page, `${label} autonomous speech`);
     const bubbleVisible = speech.bubbleVisible === 'true';
     assert.equal(speech.bubbleSafe === 'true', bubbleVisible, label + ' autonomous speech must render only with a measured safe placement');
     if (bubbleVisible) visibleCueCount += 1;
@@ -483,6 +530,28 @@ try {
       const restoredDialog = await clickVisibleHermesCta(page, stage, label + ' restored footer');
       await restoredDialog.locator('.drawer-close').click();
       await restoredDialog.waitFor({ state: 'detached' });
+    }
+    if (label === '1440x900') {
+      const interaction = stage.locator('[data-hermes-carrier-interaction-hull="true"]');
+      const interactionBox = await interaction.boundingBox();
+      assert.ok(interactionBox, `${label} semantic-owner pointer exercise needs interaction geometry`);
+      const pointer = { x: interactionBox.x + interactionBox.width / 2, y: interactionBox.y + interactionBox.height / 2 };
+      await page.mouse.move(pointer.x, pointer.y);
+      const hoverEvidence = await assertAtomicPerformanceOwner(page, `${label} hover transition`);
+      assert.equal(hoverEvidence.some(({ action }) => action === 'pointer-approach' || action === 'pointer-avoid'), true,
+        `${label} hover must reach one pointer behavior: ${JSON.stringify(hoverEvidence)}`);
+      await page.mouse.down();
+      const pressEvidence = await assertAtomicPerformanceOwner(page, `${label} press transition`);
+      assert.equal(pressEvidence.some(({ action }) => action === 'drag'), true,
+        `${label} primary press must reach drag without a stale beat: ${JSON.stringify(pressEvidence)}`);
+      await page.mouse.move(pointer.x + 8, pointer.y + 8, { steps: 2 });
+      await page.mouse.up();
+      await page.mouse.move(20, viewport.height - 20);
+      await page.clock.fastForward(800);
+      await page.waitForTimeout(5);
+      const leaveEvidence = await assertAtomicPerformanceOwner(page, `${label} hover leave transition`);
+      assert.equal(leaveEvidence.some(({ action }) => action !== 'pointer-approach' && action !== 'pointer-avoid'), true,
+        `${label} hover leave must release pointer behavior without a stale beat: ${JSON.stringify(leaveEvidence)}`);
     }
     assert.deepEqual(browserErrors, [], label + ' must have no console or page errors');
     metrics[label] = {

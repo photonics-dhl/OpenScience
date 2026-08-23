@@ -122,6 +122,7 @@ This round is limited to guide-target pointer geometry, its browser contract, an
 - Web unit/contract suite: **55 files, 375 tests passed**, plus Node asset/export contracts **5/5 passed**.
 - Web production build: **passed**, 18 static pages generated.
 - Web typecheck: **passed**.
+- Owned ESLint, root lint/docs-sync, and `git diff --check`: **passed**.
 - ESLint on the changed TypeScript browser contract: **passed**; CSS has no configured ESLint parser and was reported as ignored rather than failed.
 
 ### Visual and self-review
@@ -142,3 +143,31 @@ Base: `2304305 fix(web): make Hermes guidance lifecycle deterministic`
 - The atomic perimeter test classifies visible art using the travel hull's bounding rectangle plus the visible guide-bubble rectangle. It is an ownership/perimeter contract, not an invented native-alpha mask. Native-alpha envelope coverage remains separately enforced by the Live2D artifact/motion gate.
 - No production CSS or visible layout changed in this round, so no screenshot was regenerated. The existing original-resolution 390x844 inspection remains applicable.
 - Static validation passed: Playwright discovered the focused 390x844 test, owned ESLint passed, and `git diff --check` passed. The focused browser attempt did not reach the new assertion because the local Next dev server spent the full 60-second Playwright startup window compiling the editor route; the subsequent direct route probe also timed out before returning HTTP. This is recorded as an environment/startup limitation, not claimed as a browser GREEN run.
+
+## Fix Round 5 — atomic behavior/speech ownership and pointer intent
+
+Date: 2026-08-24
+
+Base: `b1fadc7`
+
+### RED to GREEN evidence
+
+1. Atomic semantic owner: the 250ms loop enqueued `setBehavior(next)` and then stepped speech from an effect-lagged `behaviorRef`, allowing a newly rendered action to coexist briefly with the previous action's beat. Pointer transitions updated only behavior and left cue reconciliation to a later timer. A new pure performance director now selects the next behavior and steps speech from that exact snapshot, while `HermesWorkspaceStage` commits `{ behavior, speech }` as one React state value. RED was the absent atomic transaction contract; GREEN is three focused unit cases covering a task-state tick plus hover and press cue invalidation. The browser gate samples consecutive animation frames during autonomous speech, hover enter, primary press and hover leave; every visible beat is either absent or begins with the same frame's action identity, and no frame has multiple visible performance owners.
+2. Pointer intent: the old `onPointerDown` accepted every button and secondary pointer, overwrote `dragRef`, captured it and could invoke the drawer. RED browser evidence showed a right click incrementing `data-hermes-invoke-count` from 0 to 1 and opening the drawer. The handler now rejects `!event.isPrimary` and `event.button !== 0` before changing restore, drag or capture state. GREEN proves right click and secondary touch do not invoke/capture, a secondary touch cannot replace an active primary drag, and primary left drag/click still work; the focused browser test passed five consecutive runs.
+3. Atomic Create ownership: the work-assistant gate no longer caches a pre-settlement bounding box or point. It scrolls the real mobile Create control into view, then one browser `waitForFunction` task requires `guide-arrive`, `guideReady=true`, phase `route` or `edge-stop`, and the real protected attribute before returning fresh Create/actor/bubble/travel rectangles plus `elementFromPoint` at the current Create center. The first post-change 390 run correctly diagnosed the control at y=1213..1262, outside the 844px viewport, rather than misclassifying it as Hermes interception. After real `scrollIntoViewIfNeeded`, the complete three-viewport gate passed without force click or a longer timeout.
+
+### Fresh gates
+
+- Atomic director/beat/behavior focused unit tests: **18/18 passed**.
+- Pointer browser RED reproduced, then focused GREEN **1/1** and repeat **5/5**.
+- Full `test:hermes-work-assistant`: **passed** at 1440x900, 1920x1080 and 390x844.
+- Canonical self-starting `test:hermes-companion-release`: Live2D/performance/geometry/motion plus product browser suite **36/36 passed**.
+- Web unit/contract suite: **56 files, 384 tests passed**, plus Node asset/export contracts **5/5 passed**.
+- Web production build: **passed**, 18 static pages generated.
+- Web typecheck: **passed**.
+
+### Self-review and concerns
+
+- No geometry, guide lifecycle, stage sizing, ordinary hit plane, visual styling or translation changed. There is no screenshot delta.
+- The atomic helper is a web-internal Hermes module and does not alter app/package dependency direction.
+- Separate review findings for stationary obstacle collection and edge-stop/fallback measurement remain with the geometry owner and were intentionally not touched here.

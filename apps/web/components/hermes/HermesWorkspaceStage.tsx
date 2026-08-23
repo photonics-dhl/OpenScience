@@ -5,7 +5,7 @@ import { useLocale, useTranslations } from 'next-intl';
 import * as React from 'react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
-import { createInitialHermesBehavior, stepHermesBehavior, type HermesBehaviorFrame, type HermesBehaviorInput } from '@/lib/hermes/behavior-director';
+import type { HermesBehaviorInput } from '@/lib/hermes/behavior-director';
 import { createHermesAnchorRegistry, type HermesAnchorAction, type HermesAnchorId, type HermesAnchorRegistration, type HermesAnchorRegistry } from '@/lib/hermes/anchor-registry';
 import type { WorkspaceGuidePayload } from '@/lib/api';
 import {
@@ -31,7 +31,7 @@ import {
   resolveHermesMotionControl,
   type HermesRuntimeStatus,
 } from '@/lib/hermes/hermes-runtime-status';
-import { createHermesSpeechState, stepHermesSpeech, type HermesSpeechState } from '@/lib/hermes/performance-beat';
+import { createHermesPerformanceState, stepHermesPerformance } from '@/lib/hermes/performance-director';
 import { resolveHermesStageSize } from '@/lib/hermes/stage-sizing';
 import {
   expandHermesFootprintForMotion,
@@ -254,9 +254,11 @@ function HermesWorkspaceStage({ fallbackAssistantOpen, fallbackOnInvoke, guideTa
   const [reducedMotion, setReducedMotion] = useState<boolean | null>(null);
   const [runtimeStatus, setRuntimeStatus] = useState<HermesRuntimeStatus>(() => createHermesRuntimeStatus());
   const effectiveReducedMotion = reducedMotion ?? true;
-  const [behavior, setBehavior] = useState<HermesBehaviorFrame>(() => createInitialHermesBehavior(behaviorInput('idle', pointerRef.current, false, true, 0)));
-  const behaviorRef = useRef(behavior);
-  const [speech, setSpeech] = useState<HermesSpeechState>(() => createHermesSpeechState(Date.now(), 0x4845524d));
+  const [performanceState, setPerformanceState] = useState(() => createHermesPerformanceState(
+    behaviorInput('idle', pointerRef.current, false, true, 0),
+    Date.now(),
+  ));
+  const { behavior, speech } = performanceState;
   const [guideActions, setGuideActions] = useState<HermesAnchorAction[]>([]);
   const [guideReady, setGuideReady] = useState(false);
   const [guidePlanState, setGuidePlanState] = useState<GuidePlanState>({ mode: null, placement: null });
@@ -279,6 +281,18 @@ function HermesWorkspaceStage({ fallbackAssistantOpen, fallbackOnInvoke, guideTa
   const guidePlanCountRef = useRef(0);
   const guideSettledReplanCountRef = useRef(0);
   const lastPlannedSettledEpochRef = useRef(0);
+
+  const advancePerformance = useCallback((nextPointer = pointerRef.current, nextDragging = dragging) => {
+    pointerRef.current = nextPointer;
+    const input = behaviorInput(state, nextPointer, nextDragging, effectiveReducedMotion);
+    input.guide = guideTarget ? (guideReady ? 'arrived' : 'travel') : 'idle';
+    input.writing = writing;
+    const assistantOpen = presentation?.assistantOpen ?? fallbackAssistantOpen;
+    const modalOpen = Boolean(document.querySelector('[role="dialog"][aria-modal="true"]'));
+    const speechAllowed = !effectiveReducedMotion && !writing && !guideTarget && state !== 'awaiting_approval'
+      && !assistantOpen && !modalOpen && document.visibilityState === 'visible';
+    setPerformanceState((previous) => stepHermesPerformance(previous, { behaviorInput: input, speechAllowed }));
+  }, [dragging, effectiveReducedMotion, fallbackAssistantOpen, guideReady, guideTarget, presentation?.assistantOpen, state, writing]);
 
   React.useLayoutEffect(() => { positionRef.current = position; }, [position]);
 
@@ -550,28 +564,11 @@ function HermesWorkspaceStage({ fallbackAssistantOpen, fallbackOnInvoke, guideTa
 
   useEffect(() => setTravelRequested(false), [guideTarget]);
 
-  useEffect(() => { behaviorRef.current = behavior; }, [behavior]);
-
   useEffect(() => {
-    const timer = window.setInterval(() => {
-      const input = behaviorInput(state, pointerRef.current, dragging, effectiveReducedMotion);
-      input.guide = guideTarget ? (guideReady ? 'arrived' : 'travel') : 'idle';
-      input.writing = writing;
-      setBehavior((previous) => stepHermesBehavior(previous, input));
-      const activeBehavior = behaviorRef.current;
-      const assistantOpen = presentation?.assistantOpen ?? fallbackAssistantOpen;
-      const modalOpen = Boolean(document.querySelector('[role="dialog"][aria-modal="true"]'));
-      setSpeech((previous) => stepHermesSpeech(previous, {
-        action: activeBehavior.primary,
-        actionStartedAtMs: activeBehavior.startedAtMs,
-        allowed: !effectiveReducedMotion && !writing && !guideTarget && state !== 'awaiting_approval'
-          && !assistantOpen && !modalOpen && document.visibilityState === 'visible',
-        nowMs: input.nowMs,
-        seed: input.seed,
-      }));
-    }, 250);
+    advancePerformance();
+    const timer = window.setInterval(advancePerformance, 250);
     return () => window.clearInterval(timer);
-  }, [dragging, effectiveReducedMotion, fallbackAssistantOpen, guideReady, guideTarget, presentation?.assistantOpen, state, writing]);
+  }, [advancePerformance]);
 
   useEffect(() => () => window.clearTimeout(leaveTimerRef.current), []);
 
@@ -945,11 +942,6 @@ function HermesWorkspaceStage({ fallbackAssistantOpen, fallbackOnInvoke, guideTa
     return () => window.removeEventListener('keydown', cancel, true);
   }, [guideTarget, onDismissGuide]);
 
-  const advanceBehavior = (nextPointer = pointerRef.current, nextDragging = dragging) => {
-    pointerRef.current = nextPointer;
-    setBehavior((previous) => stepHermesBehavior(previous, behaviorInput(state, nextPointer, nextDragging, effectiveReducedMotion)));
-  };
-
   const invokeHermes = () => {
     setInvokeCount((count) => count + 1);
     (presentation?.onInvoke ?? fallbackOnInvoke)();
@@ -967,7 +959,7 @@ function HermesWorkspaceStage({ fallbackAssistantOpen, fallbackOnInvoke, guideTa
   };
 
   const onPointerDown = (event: React.PointerEvent<HTMLDivElement>) => {
-    if (!(event.target instanceof Element)
+    if (!event.isPrimary || event.button !== 0 || !(event.target instanceof Element)
       || !event.target.closest('[data-hermes-input-owner], [data-hermes-carrier-interaction-hull="true"]')) return;
     const bounds = event.currentTarget.getBoundingClientRect();
     const actualPoint = { x: bounds.left + bounds.width / 2, y: bounds.top + bounds.height / 2 };
@@ -975,7 +967,7 @@ function HermesWorkspaceStage({ fallbackAssistantOpen, fallbackOnInvoke, guideTa
     dragRef.current = { pointerId: event.pointerId, startX: event.clientX, startY: event.clientY, originX: actualPoint.x, originY: actualPoint.y, customDock, moved: false };
     event.currentTarget.setPointerCapture(event.pointerId);
     setDragging(true);
-    advanceBehavior(pointerRef.current, true);
+    advancePerformance(pointerRef.current, true);
   };
 
   const onPointerMove = (event: React.PointerEvent<HTMLDivElement>) => {
@@ -1003,11 +995,10 @@ function HermesWorkspaceStage({ fallbackAssistantOpen, fallbackOnInvoke, guideTa
           pendingSettledReplanRef.current = null;
           onDismissGuide();
         }
-        setSpeech((current) => ({ ...current, cue: null }));
         setCustomDock(true);
       }
       if (!drag.moved) {
-        advanceBehavior(nextPointer, true);
+        advancePerformance(nextPointer, true);
         return;
       }
       const halfWidth = bounds.width / 2;
@@ -1017,7 +1008,7 @@ function HermesWorkspaceStage({ fallbackAssistantOpen, fallbackOnInvoke, guideTa
         y: Math.min(window.innerHeight - halfHeight, Math.max(halfHeight, drag.originY + dy)),
       });
     }
-    advanceBehavior(nextPointer, Boolean(drag));
+    advancePerformance(nextPointer, Boolean(drag));
   };
 
   const onPointerUp = (event: React.PointerEvent<HTMLDivElement>) => {
@@ -1026,7 +1017,7 @@ function HermesWorkspaceStage({ fallbackAssistantOpen, fallbackOnInvoke, guideTa
     dragRef.current = null;
     event.currentTarget.releasePointerCapture(event.pointerId);
     setDragging(false);
-    advanceBehavior(pointerRef.current, false);
+    advancePerformance(pointerRef.current, false);
     if (!drag.moved) {
       suppressClickRef.current = true;
       invokeHermes();
@@ -1122,7 +1113,7 @@ function HermesWorkspaceStage({ fallbackAssistantOpen, fallbackOnInvoke, guideTa
     setDragging(false);
     setCustomDock(drag.customDock);
     setPosition({ x: drag.originX, y: drag.originY });
-    advanceBehavior(pointerRef.current, false);
+    advancePerformance(pointerRef.current, false);
   };
 
   const onStageTransitionEnd = (event: React.TransitionEvent<HTMLDivElement>) => {
@@ -1144,7 +1135,7 @@ function HermesWorkspaceStage({ fallbackAssistantOpen, fallbackOnInvoke, guideTa
     if (dragRef.current) return;
     const settleMs = pointerRef.current.speed > .75 ? 700 : 0;
     window.clearTimeout(leaveTimerRef.current);
-    leaveTimerRef.current = window.setTimeout(() => advanceBehavior({ present: false, speed: 0, x: 0, y: 0 }, false), settleMs);
+    leaveTimerRef.current = window.setTimeout(() => advancePerformance({ present: false, speed: 0, x: 0, y: 0 }, false), settleMs);
   };
 
   const onPointerOut = (event: React.PointerEvent<HTMLDivElement>) => {
@@ -1247,7 +1238,10 @@ function HermesWorkspaceStage({ fallbackAssistantOpen, fallbackOnInvoke, guideTa
       {!guideTarget && speech.cue ? (
         <HermesPerformanceBubble
           cue={speech.cue}
-          onDismiss={() => setSpeech((current) => ({ ...current, cue: null }))}
+          onDismiss={() => setPerformanceState((current) => ({
+            ...current,
+            speech: { ...current.speech, cue: null },
+          }))}
           ref={bubbleRef}
           style={bubblePlacement ? {
             bottom: 'auto',

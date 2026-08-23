@@ -25,6 +25,58 @@ const overlaps = (a: { x: number; y: number; width: number; height: number }, b:
   a.x < b.x + b.width && a.x + a.width > b.x && a.y < b.y + b.height && a.y + a.height > b.y
 );
 
+test('only the primary left pointer can own Hermes click and drag state', async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await mockWorkspace(page);
+  await page.goto(`${baseUrl}/dashboard?hermes-motion=reduced`, { waitUntil: 'networkidle' });
+
+  const stage = page.locator('[data-hermes-workspace-stage="true"]');
+  const interaction = stage.locator('[data-hermes-carrier-interaction-hull="true"]');
+  const startBounds = await interaction.boundingBox();
+  expect(startBounds).not.toBeNull();
+  const start = { x: startBounds!.x + startBounds!.width / 2, y: startBounds!.y + startBounds!.height / 2 };
+  const invokeCount = await stage.getAttribute('data-hermes-invoke-count');
+
+  await page.mouse.click(start.x, start.y, { button: 'right' });
+  await expect(stage).toHaveAttribute('data-hermes-dragging', 'false');
+  await expect(stage).toHaveAttribute('data-hermes-invoke-count', invokeCount!);
+  await expect(page.getByRole('dialog', { name: 'Hermes research guide' })).toHaveCount(0);
+
+  const secondaryIdle = await stage.evaluate((stageNode, point) => {
+    const target = stageNode.querySelector<HTMLElement>('[data-hermes-carrier-interaction-hull="true"]')!;
+    target.dispatchEvent(new PointerEvent('pointerdown', {
+      bubbles: true, button: 0, clientX: point.x, clientY: point.y, isPrimary: false, pointerId: 41, pointerType: 'touch',
+    }));
+    target.dispatchEvent(new PointerEvent('pointerup', {
+      bubbles: true, button: 0, clientX: point.x, clientY: point.y, isPrimary: false, pointerId: 41, pointerType: 'touch',
+    }));
+    return stageNode.hasPointerCapture(41);
+  }, start);
+  expect(secondaryIdle).toBe(false);
+  await expect(stage).toHaveAttribute('data-hermes-dragging', 'false');
+  await expect(stage).toHaveAttribute('data-hermes-invoke-count', invokeCount!);
+
+  await page.mouse.move(start.x, start.y);
+  await page.mouse.down();
+  await expect(stage).toHaveAttribute('data-hermes-dragging', 'true');
+  const primaryCapture = await stage.evaluate((stageNode, point) => {
+    const target = stageNode.querySelector<HTMLElement>('[data-hermes-carrier-interaction-hull="true"]')!;
+    target.dispatchEvent(new PointerEvent('pointerdown', {
+      bubbles: true, button: 0, clientX: point.x, clientY: point.y, isPrimary: false, pointerId: 42, pointerType: 'touch',
+    }));
+    return { primary: stageNode.hasPointerCapture(1), secondary: stageNode.hasPointerCapture(42) };
+  }, start);
+  expect(primaryCapture).toEqual({ primary: true, secondary: false });
+  await page.mouse.move(start.x + 12, start.y + 8, { steps: 2 });
+  await page.mouse.up();
+  await expect(stage).toHaveAttribute('data-hermes-dragging', 'false');
+
+  const settledBounds = await interaction.boundingBox();
+  expect(settledBounds).not.toBeNull();
+  await page.mouse.click(settledBounds!.x + settledBounds!.width / 2, settledBounds!.y + settledBounds!.height / 2);
+  await expect(page.getByRole('dialog', { name: 'Hermes research guide' })).toBeVisible();
+});
+
 test('anchored Hermes detaches only after drag intent and settles away from protected work', async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 900 });
   await mockWorkspace(page);
