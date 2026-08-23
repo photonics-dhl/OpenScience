@@ -58,7 +58,7 @@ describe('Wanko action director', () => {
     const actions = Object.keys(HERMES_ACTION_CATALOG) as HermesActionId[];
     const performances = actions.map((action) => resolve(action, 17));
     expect(performances).toHaveLength(actions.length);
-    expect(new Set(performances.map(signature)).size).toBeGreaterThanOrEqual(24);
+    expect(new Set(performances.map(signature)).size).toBeGreaterThanOrEqual(29);
   });
 
   it('keeps every profile inside the Wanko motion and parameter envelope', () => {
@@ -138,6 +138,18 @@ describe('Wanko action director', () => {
       PARAM_EYE_L_OPEN: .08,
       PARAM_EYE_R_OPEN: .08,
     });
+  });
+
+  it('gives the five new lively ambient actions distinct bounded performances', () => {
+    const resolve = getResolver();
+    expect(resolve).toBeTypeOf('function');
+    if (!resolve) return;
+
+    const performances = ['cap-check', 'ear-perk', 'lamp-listen', 'happy-wiggle', 'thinking-pause']
+      .map((action) => resolve(action as HermesActionId, 11));
+
+    expect(new Set(performances.map(signature)).size).toBe(5);
+    expect(performances.every((performance) => Object.keys(performance.parameters).length >= 2)).toBe(true);
   });
 
   it('locks decision states and product signatures to honest motion profiles', () => {

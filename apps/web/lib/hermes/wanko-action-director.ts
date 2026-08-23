@@ -171,6 +171,31 @@ const profiles: Record<Exclude<HermesActionId, 'blink-single'>, WankoPerformance
     parameters: { PARAM_ANGLE_Z: 7, PARAM_EYE_L_OPEN: 1.18, PARAM_EYE_R_OPEN: 1.18, PARAM_MOUTH_OPEN_Y: .82 },
     presentation: 'quiet',
   },
+  'cap-check': {
+    motion: motion('Tap', 1),
+    parameters: { PARAM_ANGLE_X: 4, PARAM_EYE_L_OPEN: .86, PARAM_HAND_R: .68 },
+    presentation: 'quiet',
+  },
+  'ear-perk': {
+    motion: motion('FlickUp', 0),
+    parameters: { PARAM_ANGLE_Z: 4, PARAM_EAR_L: .92, PARAM_EAR_R: .7 },
+    presentation: 'quiet',
+  },
+  'lamp-listen': {
+    motion: motion('Idle', 1),
+    parameters: { PARAM_ANGLE_Y: 10, PARAM_BODY_ANGLE_X: 5, PARAM_EAR_R: .62 },
+    presentation: 'evidence',
+  },
+  'happy-wiggle': {
+    motion: motion('Shake', 0),
+    parameters: { PARAM_EAR_L: .7, PARAM_EAR_R: .7, PARAM_MOUTH_FORM: .65, PARAM_SWING: .72 },
+    presentation: 'celebrate',
+  },
+  'thinking-pause': {
+    motion: null,
+    parameters: { PARAM_ANGLE_Z: -6, PARAM_FACE_01: .55, PARAM_HAND_L: .42 },
+    presentation: 'evidence',
+  },
   wake: {
     motion: motion('FlickUp', 0, 2),
     parameters: { PARAM_BODY_ANGLE_Y: -5, PARAM_EAR_L: .72, PARAM_EAR_R: .72, PARAM_EYE_L_OPEN: 1.1, PARAM_EYE_R_OPEN: 1.1 },
