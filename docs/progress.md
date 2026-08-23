@@ -12,6 +12,7 @@
 - 用户进一步批准删除仓库旧资产：已移除未跟踪 carrier/poster/exporter 实验，以及已跟踪三张旧 pet PNG、旧 OGL renderer、carrier decoder、对应合同与 dead CSS；当前 `public/hermes` 只保留 v09 Live2D bundle、notice 与目录说明。
 - 发布审查另修复 Cubism Core 首次失败后 retry 永久等待、系统 reduced-motion 未生效、首屏双初始化、主动释放 context 被误报为 context loss 和旧产品 E2E 漂移；runtime error 已移出旧 renderer 循环依赖。实现候选 `d194a5d7149d25b481f52370c540665c8a51ce4d` 已提交；后续复核把 Field Guide 纳入 aggregate gate，恢复 ADR-010 要求的 original inline SVG/CSS failure fallback，并将 Live2D runtime 标为 Git `-text` 以保证 Windows/Linux checkout 字节哈希一致。fresh Web 360/360、typecheck/build 与 Dashboard + Field Guide 22/22 production E2E GREEN。
 - 用户已明确接受 Live2D/Wankoromochi 条款并指示当前服务器使用按开发阶段部署，不等待 publication-plan 分类；ADR-010/NOTICE 已记录该 operator exception，同时明确不冒充已验证法律主体或正式 publication licence。当前获准执行 ECS 开发部署。
+- ECS 开发部署完成：DB backup `432K`、7/7；release `c97926ab4188d5d5fc7a6e58e0333d20a600c692`，rollback `06072c1fd3eb30148daec8d4c4a8572fa3bdacc8`。服务器全量 build GREEN，27 migrations current，服务运行/healthy，Parser 保持 `network=none`、只读、`node`、512 MiB/64 PID；公网 `/__release` 与 Core/model/两张 texture 哈希精确匹配，旧 pet/carrier URL 404。公网 21 个适用 product E2E GREEN；唯一未运行通过的用例依赖生产按设计关闭的 `/_visual` harness（404），不属于产品页面回归。
 
 ## 2026-08-22 — Wanko smoke-bowl replacement design approved
 
@@ -28,17 +29,6 @@
 - **成本/路由实测**：本线程最新本地 `turn_context` 为 `gpt-5.6-sol` / `medium`，模型路由生效；token event 报 `model_context_window=258400`，对应配置 `272000` 的 95% 可用窗口，说明配置已被当前旧线程读取，无需重启才能使用。累计 usage 已混合配置修改前后，仍不能据此判定节约策略通过；严谨 A/B 应从新线程取首个快照。
 - **恢复与强制保护**：用户于 2026-08-22 明确批准恢复方案。Cubism 已正常关闭且未保存 v01/v04 的自动化脏状态；事故 v02 原样保留并设只读，另从 v01 无覆盖创建 `wanko_genie_v02_restored_07EE5F56.cmo3`，长度/完整 SHA 与项目原件、v01 三者一致。项目原件、v01–v05 与 restored 均已设 NTFS ReadOnly；只有待验证活动 derivative v06 可写。后续有状态 Cubism 保存/恢复任务类回退 Sol High，统一只开一个 derivative 且递增 Save As。
 - **Sol High v06 停机门**：High 仅打开 v06 单一标签并正常退出；打开/关闭前后均为 4,258,067 bytes / SHA `423242F3...EE94`，未创建 v07。截图证明灯体明显大于 32% 目标且压住 canonical 上身，视觉仍失败。External API 未监听且 GUI 前台/菜单捕获不可靠，因此本轮没有重新证明九层父级/六参数默认；只保留 v05 已验证语义，禁止把 v06 冒充新检查点。
-
-## 2026-08-21 — Wanko native bowl metamorphosis design gate
-
-- **历史设计门（已由 2026-08-22 smoke-bowl 决策扩展）**：方案 1 原先仅允许低位 vapor 过渡；最新 CURRENT 仍保留 canonical 头脸/耳/手/上身与 miniature 神灯比例，但由分层烟雾托座完整取代原碗可见承托。
-- **结构/品牌**：复用原 bowl Part/deformer 与 rear → body → front rim → hands 顺序，新增 model-owned `texture_01` ArtMeshes；六蓝节点/open centre/branch-merge/orange diff 必须成为曲面珐琅/星嵌，不是线路贴图。运行时 PNG/SVG/Pixi/poster 继续禁止。
-- **Cubism 检查点**：命名 derivative `wanko_genie_v03.cmo3` 已保存为 4,257,511 bytes / SHA-256 `702B56F5BBAB9CD3BF7B58DABD9C239AE12BF59A6DD6B01288416289E7BC2D1E`；当时 `v01`/`v02` 均为原 3,954,855 bytes / SHA `07EE5F...1649`，但 v02 后于 2026-08-22 被误保存，当前不可再作为原字节证据；v01 仍是完整原字节锚。九个 lamp/vapor/brand 层均为 PSD→Cubism ArtMesh，不是 browser/runtime 图片层。该模型只是结构检查点，尚未获用户视觉验收或导出 runtime bundle。
-- **参数/遮挡证据与下一步**：External API permission 已显式授权，API 1.0.1 实测 31 parameters。六个 `PARAM_LAMP_*` 范围/default 已创建；`VAPOR` 与 `STORY` 已各绑定 `0,1` keyform，0→1 Editor crop 有 4,363 个 `delta>=3` 像素（1.13%，max 241），默认恢复为 `.32/.18`。fresh model-object CSV 证明 canonical `D_BODY_00` draw order 400、新 `GENIE_FRONT_SHELL` 500，因此露出的白色下身不是 order regression，而是 front-shell coverage/未复用 bowl parent deformer 的几何问题。`COMPACT`、`TRAIL_X/Y`、`DIFF` 尚未绑定；diff 仍与 story 共用 ArtMesh，必须先修几何父子关系并拆独立层。
-- **源文件证据**：受保护原件未改动；`wanko_touch_t01.cmo3` 为 3,954,855 bytes / SHA-256 `07EE5F56ED4E63A131BE0C2585BDDAA20C54C7BD004AA2DB3EA7F1403FDA1649`，`wanko_motions_t01.can3` 为 139,103 bytes / SHA-256 `367FA2DC5B665B900B6BE49187F2C7246602A5F6A22ACDAAC491C6C20CB0566D`。
-- **本机清理**：用户授权后已将 Hermes 3D worktree 的 Blender 4.5.12 portable、下载 ZIP、Roaming 4.5 配置和 Local shader cache 送入回收站，共约 1.338 GB；保留项目 `.blend` 源与可复现 fetch script。
-- **质量/成本**：当前长线程仍属失败样本，策略 **not passed**。配置为 Sol Medium、`220k` total auto-compact（约 81%，保留 52k raw headroom）与 `6k` tool-output cap；后续运行时证据已证明本线程读到新窗口配置，但旧线程累计 usage 不能用于前后 A/B，也不能把 compaction 或高 cache 命中冒充节约成功。
-- **边界**：不提交、不部署、不做 ECS 写；公网保持 `06072c1` / rollback `8ecf96c`。ADR-010、用户视觉 gate 与独立 ECS 授权继续阻止发布。
 
 ## 2026-08-19 — Hermes Wanko Live2D local release candidate (visual superseded)
 
@@ -70,7 +60,7 @@
 - Branch / technical release candidate: `codex/hermes-wanko-live2d` / `f327136befbc6c12109afe10672a3a5f2ad7bc36`（本次 docs release record commit 位于其后）
 - Remote candidate: `origin/codex/readable-hermes-guidance`（release record commit 位于该 implementation 之后）
 - Local main: `c60ffdd16b85ea8f0d8b047493fa03a4c0230c05`
-- ECS release / rollback: `06072c1fd3eb30148daec8d4c4a8572fa3bdacc8` / `8ecf96c193e0010329cdf3330819063d1ad7958d`
+- ECS release / rollback: `c97926ab4188d5d5fc7a6e58e0333d20a600c692` / `06072c1fd3eb30148daec8d4c4a8572fa3bdacc8`
 - Current branch PR: none
 
 ## Read first

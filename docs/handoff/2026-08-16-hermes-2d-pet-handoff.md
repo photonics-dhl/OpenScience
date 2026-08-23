@@ -45,7 +45,7 @@
 - Branch / technical release candidate: `codex/hermes-wanko-live2d` / `f327136befbc6c12109afe10672a3a5f2ad7bc36`（本次 docs release record commit 位于其后）
 - Remote candidate: `origin/codex/readable-hermes-guidance`（release record commit 在其后）
 - Local main: `c60ffdd16b85ea8f0d8b047493fa03a4c0230c05`
-- ECS release / rollback: `06072c1fd3eb30148daec8d4c4a8572fa3bdacc8` / `8ecf96c193e0010329cdf3330819063d1ad7958d`
+- ECS release / rollback: `c97926ab4188d5d5fc7a6e58e0333d20a600c692` / `06072c1fd3eb30148daec8d4c4a8572fa3bdacc8`
 - Current branch PR: none
 
 ## Constraints
@@ -59,6 +59,6 @@
 
 1. 42 个已授权的 C 盘旧顶层迭代已永久删除并复核 `Remaining 0`；v09 keep list 与仓库候选均保留，勿再次清理。
 2. 用户已接受许可条款、批准清理旧仓库资产，并明确把当前服务器使用归为开发阶段、指示不等待 publication-plan 分类；ADR-010 已记录 development exception，不得把它改写成正式 publication licence 已验证。
-3. 以干净 release commit 执行备份、`--skip-migrate` 部署及 ECS build/container/runtime/public acceptance；切换前生产保持 `06072c1`，rollback `8ecf96c`。
+3. ECS deployment/acceptance 已完成；后续只需用户在真实登录工作区做最终视觉确认。当前 release `c97926a`，rollback `06072c1`。
 
 Read first：`AGENTS.md` → 本 handoff → 2026-08-19 Wanko CURRENT design/plan → `docs/progress.md`；`project_index.md` 只用 `rg` 定向查 CURRENT 行。
