@@ -345,18 +345,86 @@ test('field guidance leaves the primary blank-RO create action directly operable
   expect(createRequests, `real create click must submit exactly once: ${JSON.stringify({ afterClick, geometry })}`).toBe(1);
 });
 
-test('editing guidance follows the selected SDF field and keeps functional draft actions', async ({ page }) => {
-  await page.setViewportSize({ width: 1440, height: 900 });
+test('mobile editing guidance keeps three accessible actions and explanation inside its bubble', async ({ page }) => {
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  await page.setViewportSize({ width: 390, height: 844 });
   await mockWorkspace(page);
-  await page.goto(`${baseUrl}/research-objects/ro-guide/edit?hermes-motion=full`, { waitUntil: 'networkidle' });
+  await page.goto(`${baseUrl}/research-objects/ro-guide/edit?hermes-motion=reduced`, { waitUntil: 'networkidle' });
 
   const stage = page.locator('[data-hermes-workspace-stage]');
+  const bubble = page.locator('[data-hermes-guide-bubble][data-hermes-guide-visible="true"]');
   await expect(stage).toHaveAttribute('data-hermes-guide-target', 'sdf-problem');
   await page.locator('[data-sdf-node="2"] > button').click();
   await expect(stage).toHaveAttribute('data-hermes-guide-target', 'sdf-insight');
-  await expect(page.getByRole('button', { name: /Draft|草拟/i })).toBeVisible();
-  await expect(page.getByRole('button', { name: /Check|检查/i })).toBeVisible();
-  await expectGuideClearOf(page, page.getByRole('textbox', { name: /Insight|洞见/i }));
-  await page.getByRole('button', { name: /Explain|解释/i }).click();
-  await expect(page.locator('[data-hermes-guide-explanation]')).toContainText(/claim|evidence|论断|证据/i);
+  const actions = bubble.locator('.hermes-companion-actions button');
+  await expect(actions).toHaveCount(3);
+
+  const insight = page.getByRole('textbox', { name: /Insight|洞见/i });
+  await expectGuideClearOf(page, insight);
+  await insight.click();
+  await expect(insight).toBeFocused();
+
+  await actions.filter({ hasText: /Explain|解释/i }).click();
+  const explanation = page.locator('[data-hermes-guide-explanation]');
+  await expect(explanation).toContainText(/claim|evidence|论断|证据/i);
+  const contrast = await explanation.evaluate((element) => {
+    const parse = (value: string) => {
+      const channels = value.match(/[\d.]+/g)?.map(Number) ?? [];
+      return { blue: channels[2] ?? 0, green: channels[1] ?? 0, red: channels[0] ?? 0 };
+    };
+    const luminance = (value: ReturnType<typeof parse>) => {
+      const linear = (channel: number) => {
+        const normalized = channel / 255;
+        return normalized <= .04045 ? normalized / 12.92 : ((normalized + .055) / 1.055) ** 2.4;
+      };
+      return .2126 * linear(value.red) + .7152 * linear(value.green) + .0722 * linear(value.blue);
+    };
+    const foreground = getComputedStyle(element).color;
+    const background = getComputedStyle(element.closest('[data-hermes-guide-bubble]')!).backgroundColor;
+    const [lighter, darker] = [luminance(parse(foreground)), luminance(parse(background))].sort((a, b) => b - a);
+    return { background, foreground, ratio: (lighter + .05) / (darker + .05) };
+  });
+  expect(contrast.ratio, `computed guide explanation contrast ${JSON.stringify(contrast)}`).toBeGreaterThanOrEqual(4.5);
+
+  const bubbleBox = await bubble.boundingBox();
+  const actionBoxes = await actions.evaluateAll((elements) => elements.map((element) => {
+    const bounds = element.getBoundingClientRect();
+    return { height: bounds.height, width: bounds.width, x: bounds.x, y: bounds.y };
+  }));
+  expect(bubbleBox).not.toBeNull();
+  for (const action of actionBoxes) {
+    expect(action.width).toBeGreaterThanOrEqual(44);
+    expect(action.height).toBeGreaterThanOrEqual(44);
+    expect(action.x).toBeGreaterThanOrEqual(bubbleBox!.x);
+    expect(action.y).toBeGreaterThanOrEqual(bubbleBox!.y);
+    expect(action.x + action.width).toBeLessThanOrEqual(bubbleBox!.x + bubbleBox!.width);
+    expect(action.y + action.height).toBeLessThanOrEqual(bubbleBox!.y + bubbleBox!.height);
+  }
+  for (let index = 0; index < actionBoxes.length; index += 1) {
+    for (let peer = index + 1; peer < actionBoxes.length; peer += 1) {
+      expect(boxesOverlap(actionBoxes[index], actionBoxes[peer])).toBe(false);
+    }
+  }
+
+  const dismiss = bubble.locator('.hermes-companion-dismiss');
+  const guideCopy = bubble.locator(':scope > p:not(.hermes-companion-explanation)');
+  const motionToggle = stage.locator('[data-hermes-motion-toggle]');
+  await expect(motionToggle).toBeVisible();
+  const [copyBox, dismissBox, explanationBox, motionBox] = await Promise.all([
+    guideCopy.boundingBox(), dismiss.boundingBox(), explanation.boundingBox(), motionToggle.boundingBox(),
+  ]);
+  expect(copyBox && dismissBox && explanationBox && motionBox).toBeTruthy();
+  expect(explanationBox!.x).toBeGreaterThanOrEqual(bubbleBox!.x);
+  expect(explanationBox!.x + explanationBox!.width).toBeLessThanOrEqual(bubbleBox!.x + bubbleBox!.width);
+  expect(explanationBox!.y + explanationBox!.height).toBeLessThanOrEqual(bubbleBox!.y + bubbleBox!.height);
+  expect(boxesOverlap(dismissBox!, copyBox!)).toBe(false);
+  expect(boxesOverlap(dismissBox!, explanationBox!)).toBe(false);
+  expect(boxesOverlap(motionBox!, copyBox!)).toBe(false);
+  expect(boxesOverlap(motionBox!, dismissBox!)).toBe(false);
+  expect(boxesOverlap(motionBox!, explanationBox!)).toBe(false);
+  expect(actionBoxes.some((action) => boxesOverlap(dismissBox!, action))).toBe(false);
+  expect(actionBoxes.some((action) => boxesOverlap(motionBox!, action))).toBe(false);
+
+  await mkdir(visualOut, { recursive: true });
+  await page.screenshot({ animations: 'disabled', path: resolve(visualOut, 'mobile-editor-actions-390x844.png') });
 });

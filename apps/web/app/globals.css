@@ -2121,15 +2121,18 @@ body {
     padding-bottom: 4rem;
   }
 
-  .hermes-workspace-stage[data-hermes-guide-target] .hermes-companion-actions {
-    gap: .35rem;
-    margin-top: 0;
+  .hermes-workspace-stage[data-hermes-guide-target] .hermes-functional-bubble .hermes-companion-actions {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: .25rem;
+    margin-top: .5rem;
   }
 
-  .hermes-workspace-stage[data-hermes-guide-target] .hermes-companion-actions button,
+  .hermes-workspace-stage[data-hermes-guide-target] .hermes-functional-bubble .hermes-companion-actions button,
   .hermes-workspace-stage[data-hermes-guide-target] .hermes-companion-take-me {
-    min-height: 2.5rem;
-    padding: .35rem .58rem;
+    min-width: 0;
+    min-height: 2.75rem;
+    padding: .35rem .25rem;
   }
 
   .hermes-workspace-stage[data-hermes-guide-target] .hermes-companion-bubble[data-hermes-guide-edge-stop='true'] {
@@ -2185,9 +2188,8 @@ body {
   bottom: auto;
 }
 
-/* A 200 px mobile companion may speak, but it must not become a second
-   toolbar over the active form. Detailed guide actions remain available in
-   the assistant drawer after the user invokes Hermes. */
+/* A 200 px mobile companion may guide active work, but its autonomous
+   performance cue must not become a second toolbar over the form. */
 @media (max-width: 640px) {
   .hermes-dock-anchor {
     min-height: 12.5rem;
@@ -2211,9 +2213,17 @@ body {
     display: none;
   }
 
+  .hermes-workspace-stage[data-hermes-stage-size='200'][data-hermes-guide-target] .hermes-functional-bubble {
+    padding-right: .68rem;
+  }
+
   .hermes-workspace-stage[data-hermes-stage-size='200'] .hermes-companion-bubble > p,
   .hermes-workspace-stage[data-hermes-stage-size='200'] .hermes-companion-bubble[data-hermes-guide-edge-stop='true'] > p {
     margin: 0;
+  }
+
+  .hermes-workspace-stage[data-hermes-stage-size='200'][data-hermes-guide-target] .hermes-functional-bubble > p:not(.hermes-companion-explanation) {
+    margin-right: 2rem;
   }
 }
 
@@ -2273,7 +2283,7 @@ body [data-reading-role='reading'] {
   margin-top: .7rem;
   border-top: 1px solid rgb(21 37 54 / .14);
   padding-top: .65rem;
-  color: #52616e;
+  color: var(--os-muted-dark, #b6bcb6);
 }
 
 .hermes-motion-enable {

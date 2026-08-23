@@ -61,3 +61,37 @@ Thus the protected CTA is observed and the actor replans, but the selected compo
 - No force click, broad click-through, reduced collision clearance, full-stage transparent hit plane, travel-path change, or dock-state change was introduced.
 - The guide-specific core remains at least 44px and aligns with visible Wanko art; the ordinary hit plane still covers the measured native alpha envelope.
 - The exact Create protection is correct and independently observable, but it exposes rather than repairs the composite planned-vs-DOM mismatch. Release remains blocked until the new settled regression, work-assistant gate, and full companion release are green.
+
+## Fix Round 2 — mobile editor action geometry and explanation contrast
+
+Date: 2026-08-24
+
+Base: `47b57da fix(web): align Hermes guide planning with live geometry`
+
+This round supersedes the earlier composite-mismatch concern above: the guide geometry fix at `47b57da` made the settled Create regression, work-assistant gate, and companion release green. This scoped follow-up changed only `globals.css`, the field-guide browser contract, and this report; it did not touch the planner, Stage, ordinary interaction hull, 360/200 stage sizes, or Create protection.
+
+### Review findings and TDD evidence
+
+1. Mobile editor actions: the new 390x844 editor journey selected `sdf-insight`, expanded the functional guide, and failed against the old CSS because all three action targets were only 40px high (`Expected >= 44; Received 40`). The mobile functional action row now uses three equal grid columns with compact gaps; every Explain/Draft/Check target is at least 44x44, remains inside the bubble, and is disjoint from its peers. The real Insight textarea remains unobstructed and was clicked and focused without force.
+2. Explanation contrast: the same test read browser computed styles and failed against the old `#52616e` foreground on `rgba(12, 15, 14, .97)` at `3.020997:1`. The explanation now uses the existing `--os-muted-dark` token (`#b6bcb6` fallback), producing approximately `9.96:1`, above the 4.5:1 normal-text threshold.
+3. Expanded layout: the contract proves the main guide copy, dismiss control, three actions, explanation, and reduced-motion pill do not overlap. The explanation remains within the measured bubble bounds. The functional bubble receives only the compact mobile padding needed for the three controls; autonomous performance actions remain hidden at 200px as before.
+
+### Original-resolution visual inspection
+
+`apps/web/test/visual/out/hermes-field-guide/mobile-editor-actions-390x844.png` was generated and inspected at original 390x844 resolution. The bubble is a compact 192px editorial panel: three equal actions form one clear row, the explanation reads as a muted high-contrast secondary paragraph, and the motion pill occupies its own bottom reserve. The dismiss mark, title/copy, action row, explanation, tail and motion pill remain visually separated. Wanko stays the anchor beneath the panel while the Insight editor and bottom workspace navigation remain legible and operable; the guide does not expand into a second page-sized surface.
+
+### Fresh gates
+
+- Focused mobile editor browser test: **1/1 passed**.
+- Full `hermes-field-guide.spec.ts`: **8/8 passed**.
+- `test:hermes-work-assistant`: **passed**.
+- `test:hermes-companion-release`: Live2D/performance/geometry/motion gates plus product E2E **26/26 passed**.
+- Web unit/contract suite: **55 files, 375 tests passed**, plus Node asset/export contracts **5/5 passed**.
+- Web build: **passed**, 18 static pages generated.
+- Web typecheck: **passed**.
+- ESLint on the changed browser contract: **passed**.
+
+### Fix Round 2 concerns
+
+- No known issue remains in this mobile CSS/E2E slice.
+- The separate architecture review findings about transition-end replanning and temporary visual-viewport recovery belong to the planner/Stage owner and were intentionally not changed here.
