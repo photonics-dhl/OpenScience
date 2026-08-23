@@ -130,7 +130,6 @@ const stableGuideTravelHullFootprint = (
   hull: HTMLElement | null,
   stageBounds: DOMRectReadOnly,
   centerPoint: { x: number; y: number },
-  includeMotionEnvelope: boolean,
 ): HermesFootprintInsets => {
   if (!hull) return footprintFromBounds(stageBounds, centerPoint);
   let left = 0;
@@ -149,9 +148,7 @@ const stableGuideTravelHullFootprint = (
     hull.offsetHeight,
   );
   const layout = footprintFromBounds(layoutBounds, centerPoint);
-  const envelope = includeMotionEnvelope
-    ? resolveHermesGuideTravelMotionEnvelope(stageBounds.width)
-    : { bottom: 0, left: 0, right: 0, top: 0 };
+  const envelope = resolveHermesGuideTravelMotionEnvelope(stageBounds.width);
   return {
     bottom: layout.bottom + envelope.bottom,
     left: layout.left + envelope.left,
@@ -748,7 +745,7 @@ function HermesWorkspaceStage({ fallbackAssistantOpen, fallbackOnInvoke, guideTa
       vertical: stage.dataset.hermesBubbleVertical === 'below' ? 'below' : 'above',
     };
     const footprintVariants = createHermesTravelFootprintVariants(
-      stableGuideTravelHullFootprint(stage, travelHull, stageBounds, stageCenter, !effectiveReducedMotion),
+      stableGuideTravelHullFootprint(stage, travelHull, stageBounds, stageCenter),
       footprintFromBounds(bubbleBounds, stageCenter),
       measuredPlacement,
     );
