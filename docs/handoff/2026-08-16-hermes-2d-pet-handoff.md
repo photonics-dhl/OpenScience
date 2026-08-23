@@ -42,7 +42,7 @@
 
 ## Version tuple
 
-- Branch / technical release candidate: `codex/hermes-wanko-live2d` / `8929ccf18e995402625c3c5d327b26ed11406220`（本次 docs release record commit 位于其后）
+- Branch / technical release candidate: `codex/hermes-wanko-live2d` / `f327136befbc6c12109afe10672a3a5f2ad7bc36`（本次 docs release record commit 位于其后）
 - Remote candidate: `origin/codex/readable-hermes-guidance`（release record commit 在其后）
 - Local main: `c60ffdd16b85ea8f0d8b047493fa03a4c0230c05`
 - ECS release / rollback: `06072c1fd3eb30148daec8d4c4a8572fa3bdacc8` / `8ecf96c193e0010329cdf3330819063d1ad7958d`
