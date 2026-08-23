@@ -350,30 +350,51 @@ test('creation guidance advances to source import and the route keeps a working 
   const chooser = await chooserPromise;
   await chooser.setFiles([]);
 
-  const stageBox = await stage.boundingBox();
-  expect(stageBox).not.toBeNull();
-  const visibleGuideParts = await Promise.all([
-    stage.locator('[data-hermes-carrier-travel-hull="true"]').boundingBox(),
-    page.locator('[data-hermes-guide-bubble][data-hermes-guide-visible="true"]').boundingBox(),
-  ]);
-  const pointInside = (point: { x: number; y: number }, bounds: NonNullable<(typeof visibleGuideParts)[number]>) => (
-    point.x >= bounds.x && point.x <= bounds.x + bounds.width && point.y >= bounds.y && point.y <= bounds.y + bounds.height
-  );
-  const perimeterPoints = Array.from({ length: 9 }, (_, index) => index / 8).flatMap((ratio) => [
-    { x: stageBox!.x + 4 + ratio * (stageBox!.width - 8), y: stageBox!.y + 4 },
-    { x: stageBox!.x + 4 + ratio * (stageBox!.width - 8), y: stageBox!.y + stageBox!.height - 4 },
-    { x: stageBox!.x + 4, y: stageBox!.y + 4 + ratio * (stageBox!.height - 8) },
-    { x: stageBox!.x + stageBox!.width - 4, y: stageBox!.y + 4 + ratio * (stageBox!.height - 8) },
-  ]);
-  const transparentPoints = perimeterPoints.filter((point) => visibleGuideParts.every((bounds) => !bounds || !pointInside(point, bounds)));
-  expect(transparentPoints.length, 'the guide stage perimeter must retain transparent samples').toBeGreaterThan(0);
-  const blockedTransparentPoints = await page.evaluate((points) => points.flatMap(({ x, y }) => {
-    const hit = document.elementFromPoint(x, y);
-    return hit?.closest('[data-hermes-workspace-stage]') ? [{ className: hit.className, tagName: hit.tagName, x, y }] : [];
-  }), transparentPoints);
-  expect(blockedTransparentPoints, 'every transparent guide perimeter sample must remain page-owned').toEqual([]);
+  const perimeterAudit = await stage.evaluate((stageNode) => {
+    const stageBounds = stageNode.getBoundingClientRect();
+    const interaction = stageNode.querySelector<HTMLElement>('[data-hermes-carrier-interaction-hull="true"]')!;
+    const interactionBounds = interaction.getBoundingClientRect();
+    const style = getComputedStyle(interaction, '::after');
+    const rect = (selector: string) => {
+      const rectangle = stageNode.querySelector(selector)?.getBoundingClientRect();
+      return rectangle ? { bottom: rectangle.bottom, left: rectangle.left, right: rectangle.right, top: rectangle.top } : null;
+    };
+    const visibleGuideParts = [
+      rect('[data-hermes-carrier-travel-hull="true"]'),
+      rect('[data-hermes-guide-bubble][data-hermes-guide-visible="true"]'),
+    ];
+    const pointInside = (point: { x: number; y: number }, bounds: NonNullable<(typeof visibleGuideParts)[number]>) => (
+      point.x >= bounds.left && point.x <= bounds.right && point.y >= bounds.top && point.y <= bounds.bottom
+    );
+    const perimeterPoints = Array.from({ length: 9 }, (_, index) => index / 8).flatMap((ratio) => [
+      { x: stageBounds.left + 4 + ratio * (stageBounds.width - 8), y: stageBounds.top + 4 },
+      { x: stageBounds.left + 4 + ratio * (stageBounds.width - 8), y: stageBounds.bottom - 4 },
+      { x: stageBounds.left + 4, y: stageBounds.top + 4 + ratio * (stageBounds.height - 8) },
+      { x: stageBounds.right - 4, y: stageBounds.top + 4 + ratio * (stageBounds.height - 8) },
+    ]);
+    const transparentPoints = perimeterPoints.filter((point) => visibleGuideParts.every((bounds) => !bounds || !pointInside(point, bounds)));
+    const blocked = transparentPoints.flatMap(({ x, y }) => {
+      const hit = document.elementFromPoint(x, y);
+      return hit?.closest('[data-hermes-workspace-stage]') ? [{ className: hit.className, tagName: hit.tagName, x, y }] : [];
+    });
+    return {
+      action: stageNode?.dataset.hermesAction,
+      blocked,
+      bounds: { bottom: interactionBounds.bottom, left: interactionBounds.left, right: interactionBounds.right, top: interactionBounds.top },
+      bubble: rect('[data-hermes-guide-bubble][data-hermes-guide-visible="true"]'),
+      pseudo: { bottom: style.bottom, height: style.height, left: style.left, right: style.right, top: style.top, width: style.width },
+      stage: { bottom: stageBounds.bottom, left: stageBounds.left, right: stageBounds.right, top: stageBounds.top },
+      transparentCount: transparentPoints.length,
+      travel: rect('[data-hermes-carrier-travel-hull="true"]'),
+    };
+  });
+  expect(perimeterAudit.transparentCount, 'the guide stage perimeter must retain transparent samples').toBeGreaterThan(0);
+  expect(perimeterAudit.blocked, `every transparent guide perimeter sample must remain page-owned: ${JSON.stringify(perimeterAudit)}`).toEqual([]);
 
   const visibleHermes = stage.locator('[data-hermes-carrier-travel-hull="true"]');
+  const visibleCore = { height: Number.parseFloat(perimeterAudit.pseudo.height), width: Number.parseFloat(perimeterAudit.pseudo.width) };
+  expect(visibleCore.width).toBeGreaterThanOrEqual(44);
+  expect(visibleCore.height).toBeGreaterThanOrEqual(44);
   const visiblePoint = await expectExactCenterHit(page, visibleHermes, '[data-hermes-carrier-interaction-hull="true"]', 'visible Hermes art');
   const invokeCount = Number(await stage.getAttribute('data-hermes-invoke-count'));
   await page.mouse.click(visiblePoint.x, visiblePoint.y);
@@ -496,8 +517,14 @@ test('mobile editing guidance keeps three accessible actions and explanation ins
   const contrast = await explanation.evaluate((element) => {
     const parse = (value: string) => {
       const channels = value.match(/[\d.]+/g)?.map(Number) ?? [];
-      return { blue: channels[2] ?? 0, green: channels[1] ?? 0, red: channels[0] ?? 0 };
+      return { alpha: channels[3] ?? 1, blue: channels[2] ?? 0, green: channels[1] ?? 0, red: channels[0] ?? 0 };
     };
+    const composite = (foreground: ReturnType<typeof parse>, background: ReturnType<typeof parse>) => ({
+      alpha: 1,
+      blue: foreground.blue * foreground.alpha + background.blue * (1 - foreground.alpha),
+      green: foreground.green * foreground.alpha + background.green * (1 - foreground.alpha),
+      red: foreground.red * foreground.alpha + background.red * (1 - foreground.alpha),
+    });
     const luminance = (value: ReturnType<typeof parse>) => {
       const linear = (channel: number) => {
         const normalized = channel / 255;
@@ -506,9 +533,21 @@ test('mobile editing guidance keeps three accessible actions and explanation ins
       return .2126 * linear(value.red) + .7152 * linear(value.green) + .0722 * linear(value.blue);
     };
     const foreground = getComputedStyle(element).color;
-    const background = getComputedStyle(element.closest('[data-hermes-guide-bubble]')!).backgroundColor;
-    const [lighter, darker] = [luminance(parse(foreground)), luminance(parse(background))].sort((a, b) => b - a);
-    return { background, foreground, ratio: (lighter + .05) / (darker + .05) };
+    const bubble = element.closest<HTMLElement>('[data-hermes-guide-bubble]')!;
+    const bubbleBackground = getComputedStyle(bubble).backgroundColor;
+    const bounds = bubble.getBoundingClientRect();
+    const pageElement = document.elementsFromPoint(bounds.left + bounds.width / 2, bounds.top + bounds.height / 2)
+      .find((candidate) => !candidate.closest('[data-hermes-workspace-stage]'));
+    let backdrop: Element | null = pageElement ?? null;
+    let pageBackground = 'rgb(255, 255, 255)';
+    while (backdrop) {
+      const candidate = getComputedStyle(backdrop).backgroundColor;
+      if (parse(candidate).alpha > 0) { pageBackground = candidate; break; }
+      backdrop = backdrop.parentElement;
+    }
+    const renderedBackground = composite(parse(bubbleBackground), parse(pageBackground));
+    const [lighter, darker] = [luminance(parse(foreground)), luminance(renderedBackground)].sort((a, b) => b - a);
+    return { bubbleBackground, foreground, pageBackground, ratio: (lighter + .05) / (darker + .05), renderedBackground };
   });
   expect(contrast.ratio, `computed guide explanation contrast ${JSON.stringify(contrast)}`).toBeGreaterThanOrEqual(4.5);
 

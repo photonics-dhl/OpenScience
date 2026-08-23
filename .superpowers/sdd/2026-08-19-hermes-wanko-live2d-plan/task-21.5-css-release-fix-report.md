@@ -95,3 +95,39 @@ This round supersedes the earlier composite-mismatch concern above: the guide ge
 
 - No known issue remains in this mobile CSS/E2E slice.
 - The separate architecture review findings about transition-end replanning and temporary visual-viewport recovery belong to the planner/Stage owner and were intentionally not changed here.
+
+## Fix Round 3 — atomic guide perimeter and rendered contrast
+
+Date: 2026-08-24
+
+Base: `ca3f3fd fix(web): bound Hermes guide replanning`
+
+This round is limited to guide-target pointer geometry, its browser contract, and this report. It does not change the planner, Stage, 360/200 stage sizes, or the ordinary autonomous interaction plane (`inset: 12% 12% 14%`).
+
+### RED to GREEN evidence
+
+1. Guide perimeter: the prior test measured the travel hull and bubble in separate asynchronous browser calls, then classified perimeter points after the active `guide-travel` animation had moved the stage. It reproduced six apparent Hermes-owned exterior samples, including approximately `(325.5, 388.8)`, `(325.5, 432.8)`, `(325.5, 476.8)`, `(237.5, 388.8)` and `(281.5, 388.8)`. Diagnostic frames showed the measured travel rect had moved from about `(1.23, 418.61)..(290.28, 700.90)` to `(141.36, 272.93)..(428.00, 552.74)` before hit-testing. The contract now measures the stage, visible travel hull, visible bubble, perimeter points and `elementFromPoint` ownership synchronously in one browser frame. The guide-only core was conservatively reduced from `inset: 30% 30% 22%` to `32% 32% 24%`. GREEN: every exterior sample is page-owned.
+2. Visible guide entry: the same atomic audit reads the actual pseudo-element target size. It measured approximately `129.6 x 158.4` on desktop and `72 x 88` at the mobile stage size, both above 44x44. A real center click opens the Hermes drawer and increments the invocation count exactly once. The title, select, files, Create action and other page-owned controls remain directly clickable; no force click or broad transparent hit surface is used.
+3. Rendered contrast: the mobile browser contract now composites the computed `rgba(12, 15, 14, .97)` bubble background over the first non-transparent page background before calculating WCAG contrast. This corrects the Fix Round 2 wording: the resolved existing token is `#9b9d98`, not the documented fallback `#b6bcb6`, and the measured rendered contrast is about `7.03:1`, not `9.96:1`. It remains above the required 4.5:1.
+4. Cross-worker RED verification: on a fresh production build/server, `test:hermes-work-assistant` passed, so the reported missing zh `editor.common.cancel` key did not reproduce. `test:hermes-live2d` also passed, so the reported RO-create motion surface count of zero did not reproduce. Neither area was changed in this scoped round.
+
+### Fresh gates
+
+- Focused source-import perimeter/entry browser test: **1/1 passed**.
+- Focused mobile rendered-contrast browser test: **1/1 passed**.
+- Full `hermes-field-guide.spec.ts`: **9/9 passed**.
+- `test:hermes-work-assistant`: **passed**.
+- `test:hermes-live2d`: **passed**, including native-alpha interaction coverage and whole-character drag behavior.
+- `test:hermes-companion-release`: Live2D/performance/geometry/motion gates plus product E2E **27/27 passed**.
+- Web unit/contract suite: **55 files, 375 tests passed**, plus Node asset/export contracts **5/5 passed**.
+- Web production build: **passed**, 18 static pages generated.
+- Web typecheck: **passed**.
+- ESLint on the changed TypeScript browser contract: **passed**; CSS has no configured ESLint parser and was reported as ignored rather than failed.
+
+### Visual and self-review
+
+No screenshot was regenerated because the only CSS change affects an invisible guide-only pointer pseudo-element; visible layout, paint, typography and the previously inspected 390x844 composition are pixel-unchanged. The prior original-resolution screenshot remains `apps/web/test/visual/out/hermes-field-guide/mobile-editor-actions-390x844.png`.
+
+- The browser gate now judges geometry and ownership from one atomic rendering frame, so moving guide art cannot produce stale-coordinate false positives.
+- The guide core stays visibly aligned and accessible while transparent exterior points remain page-owned. Ordinary autonomous alpha coverage is unchanged and independently green in the motion gate.
+- The two separate architecture-review findings concerning transition-end replanning and temporary visual-viewport recovery remain with the planner/Stage owner and were intentionally not touched.

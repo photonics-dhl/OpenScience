@@ -2499,7 +2499,7 @@ body [data-reading-role='reading'] {
 /* Field guidance keeps one deliberate click target on Wanko's visible
    torso/lamp core without turning the full 360/200 stage into a hit plane. */
 .hermes-workspace-stage[data-hermes-guide-target] .hermes-carrier-interaction-hull::after {
-  inset: 30% 30% 22%;
+  inset: 32% 32% 24%;
 }
 
 .hermes-workspace-stage[data-hermes-dragging='true'] .hermes-carrier-interaction-hull::after {
