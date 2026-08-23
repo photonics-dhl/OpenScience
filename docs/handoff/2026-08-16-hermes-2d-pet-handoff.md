@@ -42,7 +42,7 @@
 
 ## Version tuple
 
-- Branch / local HEAD: `codex/hermes-wanko-live2d` / `c88c78003957204e6218b8bd2c9c3842a6fbb315`
+- Branch / implementation candidate: `codex/hermes-wanko-live2d` / `d194a5d7149d25b481f52370c540665c8a51ce4d`（本次 docs release record commit 位于其后）
 - Remote candidate: `origin/codex/readable-hermes-guidance`（release record commit 在其后）
 - Local main: `c60ffdd16b85ea8f0d8b047493fa03a4c0230c05`
 - ECS release / rollback: `06072c1fd3eb30148daec8d4c4a8572fa3bdacc8` / `8ecf96c193e0010329cdf3330819063d1ad7958d`
@@ -57,8 +57,8 @@
 
 ## Next action
 
-1. 用户选择把 42 个旧顶层项迁移到 `E:` archive（推荐、可恢复）还是永久删除；执行前再次校验绝对路径，严禁触碰 v09 keep list。
-2. 部署细节确认时，把新 bundle 与既有 motions/model3 绑定方案、仓库落点、许可状态、浏览器视觉门禁和 ECS release/rollback 逐项锁定；云上写操作仍需用户单独确认。
-3. 未部署前生产保持 `06072c1`；不得把本地导出冒充 ECS 证据。
+1. 42 个已授权的 C 盘旧顶层迭代已永久删除并复核 `Remaining 0`；v09 keep list 与仓库候选均保留，勿再次清理。
+2. 取得并登记 ADR-010 要求的 operator 法律身份/规模类别、Wankoromochi Sample 条款接受、适用 Cubism SDK AI/chatbot plan、公开用途/署名与失去资格时停用回退承诺；未完成不得公网部署。
+3. 许可门通过后，以干净 release commit 执行备份、`--skip-migrate` 部署及 ECS build/container/runtime/public acceptance；部署前生产保持 `06072c1`，rollback `8ecf96c`。
 
 Read first：`AGENTS.md` → 本 handoff → 2026-08-19 Wanko CURRENT design/plan → `docs/progress.md`；`project_index.md` 只用 `rg` 定向查 CURRENT 行。

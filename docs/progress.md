@@ -9,7 +9,7 @@
 - SDK 4.0 runtime 已导出到 `runtime-v09-export-20260823/`：`.moc3`、`.model3.json`、`.physics3.json`、`.cdi3.json` 与 `1024/2048` 两张 RGBA texture 引用闭合。导出后按 alpha 确定性清理两张 texture，`alpha=0 && RGB!=0` 均为 `0`；可见像素与 alpha 不变，bundle verifier GREEN。
 - v09 runtime 已以稳定文件名进入 `apps/web/public/hermes/live2d/wanko/`：新 `.moc3`、display-info、两张 texture 与原 12 个 motion 引用闭合，motion 参数全部兼容。Deep review 定位蓝金碎片来自被否决的 Pixi procedural navigator，而非 v09 纹理；active renderer 已删除全部 `Graphics` 叠画，只保留单一 Cubism model/canvas，fresh 真实截图干净。
 - 用户明确授权永久删除；C 盘同目录 42 个旧顶层迭代已逐项删除并复核 `Remaining 0`，不可恢复。保留 v09 母版/exportprep/runtime/motions、最终 hat/smoke、批准灯源和最终证据；仓库 v09 是当前唯一部署候选。
-- 发布审查另修复 Cubism Core 首次失败后 retry 永久等待、系统 reduced-motion 未生效、首屏双初始化、主动释放 context 被误报为 context loss 和旧产品 E2E 漂移；runtime error 已移出旧 renderer 循环依赖。fresh Hermes aggregate gate GREEN，Dashboard 15/16 连续 + 独立 harness 1/1 GREEN；最终全仓门禁须在 release commit 前重跑。
+- 发布审查另修复 Cubism Core 首次失败后 retry 永久等待、系统 reduced-motion 未生效、首屏双初始化、主动释放 context 被误报为 context loss 和旧产品 E2E 漂移；runtime error 已移出旧 renderer 循环依赖。实现候选 `d194a5d7149d25b481f52370c540665c8a51ce4d` 已提交；fresh Hermes aggregate gate、Dashboard 16/16 production E2E、全仓 test/lint、Web typecheck/build 与 docs 门禁均 GREEN。
 - 公网写仍停在 Live2D 发布许可硬门：已要求 operator 明确确认 Sample 条款与 AI/chatbot SDK publication 判定适用；确认前只生成本地 release candidate，不把技术通过冒充许可完成或生产部署。
 
 ## 2026-08-22 — Wanko smoke-bowl replacement design approved
@@ -66,7 +66,7 @@
 
 ## Version tuple
 
-- Branch / local HEAD: `codex/hermes-wanko-live2d` / `c88c78003957204e6218b8bd2c9c3842a6fbb315`
+- Branch / implementation candidate: `codex/hermes-wanko-live2d` / `d194a5d7149d25b481f52370c540665c8a51ce4d`（本次 docs release record commit 位于其后）
 - Remote candidate: `origin/codex/readable-hermes-guidance`（release record commit 位于该 implementation 之后）
 - Local main: `c60ffdd16b85ea8f0d8b047493fa03a4c0230c05`
 - ECS release / rollback: `06072c1fd3eb30148daec8d4c4a8572fa3bdacc8` / `8ecf96c193e0010329cdf3330819063d1ad7958d`
