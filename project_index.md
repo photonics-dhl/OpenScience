@@ -130,7 +130,7 @@
 | `docs/specs/2026-08-22-wanko-scholar-hat-design.md` | canonical Wanko 常驻学者帽视觉、佩戴遮挡、流苏运动和 visual-before-Cubism 门 | **CURRENT accessory design COMPLETE**；用户确认 v09 整体形象完成，已进入 Cubism 母版并随 2026-08-23 runtime bundle 导出，尚未部署 |
 | `docs/specs/2026-08-18-readable-workspace-hermes-guidance-design.md` | B 平衡学者工作台、三视觉系统阅读基线、浏览器无关控件样式、Hermes 不遮挡引导编舞与公网 blank RO→六字段→diff→commit 真实验收 | **CURRENT implemented design**；ECS release `06072c1` 公网验收完成 |
 | `docs/plans/2026-08-18-readable-workspace-hermes-guidance-plan.md` | 可读性基础→代表页面→完整 Hermes footprint 避让→edit-before-accept/缺失证据→语义动作→公网 blank RO gate→ECS checkpoint 的 TDD 实施链 | **COMPLETED**；release `06072c1` / rollback `8ecf96c` |
-| `docs/plans/2026-08-19-hermes-wanko-live2d-plan.md` | Tasks 1–18 历史模型/灯/烟雾/学士帽迭代与 v09 部署；Task 19 动作/语言 foundation；Task 20 保留 `336/176px` 完整视觉比例并校正为 movable work assistant，以真实 RO-create Playwright 门禁验收 | **CURRENT LOCAL TASK 20** `c123a5a`；Phase 2 Cubism 新动作与 ECS 部署均未授权 |
+| `docs/plans/2026-08-19-hermes-wanko-live2d-plan.md` | Tasks 1–20 为历史/已实施证据；Task 21 按 TDD 实施 production-derived `360/200px`、右栏停靠→拖动脱离、protected-region/bubble collision、三视口真实 Dashboard 与 ECS rollback 验收 | **CURRENT EXECUTION ENTRY — Task 21 written**；代码仍停在 `c123a5a`，尚未实施新比例或部署 |
 | `docs/specs/2026-08-16-hermes-articulated-mesh-pet-design.md` | Hermes 原创 OGL 2D mesh-rig 历史设计：真实角色像素关节、旧待机语法与严格 lifecycle | **DEPRECATED**；由 2026-08-17 Workspace Companion spec 取代 |
 | `docs/specs/2026-08-16-hermes-contextual-guide-design.md` | Hermes 情境引导员历史设计：Dashboard 提示、助手抽屉与正式 `workspace.guide` 闭环 | **DEPRECATED**；由 2026-08-17 Workspace Companion spec 取代 |
 | `docs/data/launch-research-corpus.md` | 18 条公开启动语料的范围、免责声明、真实来源、上游许可证证据与 ECS seed 操作边界 | 活文档；本地完成，待生产 seed |

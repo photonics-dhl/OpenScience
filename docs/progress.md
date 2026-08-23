@@ -7,6 +7,7 @@
 - 用户以 ECS `/dashboard` 当前 release `c97926a` 为唯一比例基线，批准 ordinary `288→360px`、compact/mobile `160→200px` 的精确 `1.25x` 调整；不修改 v09 模型、美术、帽子、流苏、灯或烟雾。
 - 线上右栏 anchor 仍是默认 home；整角色拖动后脱离为 viewport-clamped floating companion，desktop/mobile 分别持久化。click 打开现有 drawer，drag 不得误触 click；气泡按象限翻转并与角色分别测量，不得遮挡 Dashboard 主操作、Hermes task rail、导航或 drawer。
 - 气泡维持克制 optical-editorial annotation，移动端仅一句短提示；动作与语言共用 semantic beat，输入/审批/modal/drawer/hidden/reduced-motion 时降噪。最终验收必须覆盖本地与公网 authenticated Dashboard 的 `1440×900`、`1920×1080`、`390×844`，不能以动作数量或代码存在代替审美与使用效果。
+- CURRENT 实施计划已追加 Task 21：按 size contract → pure placement → Dashboard integration → first-person visual gate → Sol High release review/ECS acceptance 的 TDD 顺序执行；现有代码仍为 `c123a5a`，计划完成不代表实现完成。
 
 ## 2026-08-23 — Hermes movable work-assistant correction
 

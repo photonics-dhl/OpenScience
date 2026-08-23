@@ -1,13 +1,13 @@
 # Hermes Wanko Live2D Companion Implementation Plan
 
-> **Status (2026-08-22): CURRENT IN PROGRESS — Task 17.1 is GREEN; imagegen masters were rejected for geometry or baked backgrounds; a true-alpha six-group smoke geometry checkpoint awaits user visual acceptance before Photoshop/Cubism v10.**
-> Tasks 1–6 remain runtime-foundation evidence. Historical Task 7 is not an
-> execution entry. Tasks 8–15 are rejected/history-only; continue only from Task 16.2.
+> **Status (2026-08-23): CURRENT IN PROGRESS — Tasks 1–20 are completed or historical evidence; Task 21 is the only execution entry.**
+> The ECS baseline is `c97926a`, the approved product endpoints are `360/200px`,
+> and this task changes presentation and interaction only, never v09 source art.
 > **For agentic workers:** REQUIRED SUB-SKILL: Use `executing-plans` to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Finish the existing Wanko Live2D runtime as a compact genie-lamp research navigator while preserving the implemented Workspace guide, safe travel, diff and agent workflow.
+**Goal:** Deliver the approved v09 Hermes as a `360/200px` movable work assistant with quiet, collision-safe bubbles and truthful semantic actions on the real Dashboard.
 
-**Architecture:** `HermesWorkspaceStage` remains the single route-persistent product owner. The active candidate must be one Cubism model whose derivative reuses the native bowl Part/deformer/draw-order structure and adds model-owned lamp, vapor and enamel-brand ArtMeshes on `texture_01`; no runtime carrier image, poster or procedural plume is allowed. Historical Tasks 8–15 remain evidence only.
+**Architecture:** `HermesWorkspaceStage` remains the single route-persistent product owner and the v09 Cubism bundle remains byte-identical. Pure placement functions resolve stage size, settled drag positions and bubble quadrants from measured footprints and protected Dashboard rectangles; React owns orchestration, CSS owns only the approved optical-editorial material and motion treatment.
 
 **Tech Stack:** Next.js 14, React 18, TypeScript, Pixi 7, `pixi-live2d-display` Cubism 4 adapter, Live2D Cubism Core for Web, Vitest, Playwright.
 
@@ -24,7 +24,7 @@
 - Reduced and approval use deterministic non-empty frames from the same Cubism model; runtime failure exposes the accessible textual Hermes control, never a poster or decorative character image.
 - Runtime publication contains only the closed Cubism bundle; editable Wanko/Photoshop/Cubism source stays outside the public bundle.
 - Do not install a new image or browser dependency. Use the installed Photoshop 2024, Cubism Editor 5.3.03 PRO Trial and existing Playwright stack. AI-redrawn Wanko pixels and flattened concept art cannot become source ArtMeshes.
-- Public deployment is blocked until sample-material terms and the applicable AI/chatbot SDK publication licence are recorded as accepted.
+- ADR-010 and the deployed NOTICE record the operator's development-stage terms acceptance; this task may update the already authorized ECS development deployment but must not claim a verified publication licence or legal identity.
 - Do not use local Docker, read `.env`, or treat a local browser gate as ECS evidence.
 
 ---
@@ -2242,3 +2242,530 @@ radial menu, gradients, chat-card styling or copy.
 
   Run focused RED/GREEN evidence, Web tests, typecheck, production build,
   browser gates, docs sync/lint and `git diff --check`. Do not deploy.
+
+## Task 21 — Production-ratio Dashboard companion release
+
+**Goal:** Starting from ECS release `c97926a`, deliver exact `360px` desktop and
+`200px` compact/mobile Hermes endpoints with anchored-by-default placement,
+drag-to-detach, collision-safe optical-editorial bubbles and production
+Dashboard acceptance.
+
+**Global constraints:**
+
+- Keep the v09 `.moc3`, model JSON, motions, textures, hat, tassel, lamp and
+  smoke bytes unchanged.
+- Keep one route-persistent `HermesWorkspaceStage`, one Cubism model, one canvas
+  and one RAF owner; add no dependency, image layer, API or schema.
+- The Dashboard and RO workflow remain primary. Exhaustive motion controls stay
+  inside the developer-only collapsed tray.
+- A settled actor or visible bubble may not cover Continue Research,
+  create/import, the Hermes task rail, navigation, approval or drawer controls.
+- Approval, explicit reduced motion, typing, modal/drawer-open and hidden-page
+  guards remain authoritative.
+- Test at `1440×900`, `1920×1080` and `390×844`; local evidence cannot replace
+  authenticated ECS evidence.
+
+### Task 21.1: Encode the production-derived size contract
+
+**Files:**
+
+- Modify: `apps/web/test/hermes-stage-sizing.test.ts`
+- Modify: `apps/web/lib/hermes/stage-sizing.ts`
+
+**Interfaces:**
+
+- Produces `HermesStageSize = 200 | 360`.
+- Preserves `resolveHermesStageSize(expanded, compact)` so existing consumers do
+  not need a second sizing owner.
+
+- [ ] **Step 1: Write the failing size test.**
+
+  Replace the old expectations with the production-derived endpoints:
+
+  ```ts
+  it('scales the ECS companion endpoints by exactly 1.25', () => {
+    expect(resolveHermesStageSize(false)).toBe(360);
+    expect(resolveHermesStageSize(false, true)).toBe(200);
+    expect(resolveHermesStageSize(true)).toBe(360);
+  });
+  ```
+
+- [ ] **Step 2: Run RED and verify the reason.**
+
+  Run:
+
+  ```powershell
+  npx pnpm@9.15.0 --filter @openscience/web exec vitest run test/hermes-stage-sizing.test.ts
+  ```
+
+  Expected: FAIL with received `336` and `176`, proving the test detects the
+  unimplemented ratio rather than a test setup error.
+
+- [ ] **Step 3: Implement the minimal size change.**
+
+  ```ts
+  export type HermesStageSize = 200 | 360;
+
+  export function resolveHermesStageSize(expanded: boolean, compact = false): HermesStageSize {
+    if (expanded) return 360;
+    return compact ? 200 : 360;
+  }
+  ```
+
+- [ ] **Step 4: Run GREEN and commit the size contract.**
+
+  Re-run the focused command, require one passing file with no warning, then
+  commit `test(web): lock Hermes production ratio`.
+
+### Task 21.2: Resolve settled docks and bubble quadrants from real geometry
+
+**Files:**
+
+- Create: `apps/web/lib/hermes/companion-placement.ts`
+- Create: `apps/web/test/hermes-companion-placement.test.ts`
+- Modify: `apps/web/lib/hermes/dock-preferences.ts`
+- Modify: `apps/web/test/hermes-dock-preferences.test.ts`
+
+**Interfaces:**
+
+- Produces `resolveHermesSettledDock(input): { point: Point; safe: boolean }`.
+- Produces `resolveHermesBubblePlacement(input): HermesBubblePlacement | null`.
+- Consumes measured actor/bubble rectangles and protected DOM rectangles; it
+  does not query the DOM or own React state.
+
+- [ ] **Step 1: Write failing pure placement tests.**
+
+  Cover the desired point, each viewport edge, a Continue Research rectangle,
+  a right-rail task rectangle, a `390×844` viewport and a dense layout with no
+  legal bubble quadrant:
+
+  ```ts
+  it('settles at the nearest point that keeps the actor clear of protected work', () => {
+    const result = resolveHermesSettledDock({
+      desired: { x: 420, y: 310 },
+      footprint: { bottom: 100, left: 100, right: 100, top: 100 },
+      obstacles: [rect(240, 120, 500, 380)],
+      viewport: rect(0, 0, 1440, 900),
+    });
+    expect(result.safe).toBe(true);
+    expect(overlaps(rectForFootprint(result.point, {
+      bottom: 100, left: 100, right: 100, top: 100,
+    }), rect(240, 120, 500, 380))).toBe(false);
+  });
+
+  it('suppresses a bubble when no in-viewport quadrant avoids protected work', () => {
+    expect(resolveHermesBubblePlacement({
+      actor: rect(95, 322, 200, 200),
+      bubble: { height: 92, width: 192 },
+      obstacles: [rect(0, 0, 390, 844)],
+      viewport: rect(0, 0, 390, 844),
+    })).toBeNull();
+  });
+  ```
+
+- [ ] **Step 2: Run RED and verify missing exports.**
+
+  ```powershell
+  npx pnpm@9.15.0 --filter @openscience/web exec vitest run test/hermes-companion-placement.test.ts test/hermes-dock-preferences.test.ts
+  ```
+
+  Expected: FAIL because the placement module and settled-dock contract do not
+  exist.
+
+- [ ] **Step 3: Implement deterministic candidate selection.**
+
+  Use one `12px` clearance. Clamp the desired centre first, then consider four
+  corners and four edge midpoints, sort candidates by distance to the desired
+  point, and select the first footprint that intersects no obstacle. Bubble
+  candidates prefer open space based on actor quadrant, then try the remaining
+  three combinations:
+
+  ```ts
+  export type Point = { x: number; y: number };
+  export type RectLike = { bottom: number; left: number; right: number; top: number };
+  export type Footprint = { bottom: number; left: number; right: number; top: number };
+  export type HermesBubblePlacement = {
+    horizontal: 'left' | 'right';
+    vertical: 'above' | 'below';
+    bounds: RectLike;
+  };
+
+  const gap = 12;
+  const clamp = (value: number, minimum: number, maximum: number) =>
+    Math.min(maximum, Math.max(minimum, value));
+  const overlaps = (a: RectLike, b: RectLike) =>
+    a.left < b.right && a.right > b.left && a.top < b.bottom && a.bottom > b.top;
+  const occupied = (point: Point, footprint: Footprint): RectLike => ({
+    bottom: point.y + footprint.bottom,
+    left: point.x - footprint.left,
+    right: point.x + footprint.right,
+    top: point.y - footprint.top,
+  });
+
+  export function resolveHermesSettledDock(input: {
+    desired: Point;
+    footprint: Footprint;
+    obstacles: RectLike[];
+    viewport: RectLike;
+  }): { point: Point; safe: boolean } {
+    const safe = {
+      bottom: input.viewport.bottom - input.footprint.bottom,
+      left: input.viewport.left + input.footprint.left,
+      right: input.viewport.right - input.footprint.right,
+      top: input.viewport.top + input.footprint.top,
+    };
+    if (safe.left > safe.right || safe.top > safe.bottom) {
+      return { point: input.desired, safe: false };
+    }
+    const desired = {
+      x: clamp(input.desired.x, safe.left, safe.right),
+      y: clamp(input.desired.y, safe.top, safe.bottom),
+    };
+    const candidates = [
+      desired,
+      { x: safe.left, y: safe.top },
+      { x: safe.right, y: safe.top },
+      { x: safe.right, y: safe.bottom },
+      { x: safe.left, y: safe.bottom },
+      { x: (safe.left + safe.right) / 2, y: safe.top },
+      { x: safe.right, y: (safe.top + safe.bottom) / 2 },
+      { x: (safe.left + safe.right) / 2, y: safe.bottom },
+      { x: safe.left, y: (safe.top + safe.bottom) / 2 },
+    ].sort((a, b) => Math.hypot(a.x - desired.x, a.y - desired.y)
+      - Math.hypot(b.x - desired.x, b.y - desired.y));
+    const point = candidates.find((candidate) => input.obstacles.every(
+      (obstacle) => !overlaps(occupied(candidate, input.footprint), obstacle),
+    ));
+    return point ? { point, safe: true } : { point: desired, safe: false };
+  }
+
+  export function resolveHermesBubblePlacement(input: {
+    actor: RectLike;
+    bubble: { height: number; width: number };
+    obstacles: RectLike[];
+    viewport: RectLike;
+  }): HermesBubblePlacement | null {
+    const actorX = (input.actor.left + input.actor.right) / 2;
+    const actorY = (input.actor.top + input.actor.bottom) / 2;
+    const horizontal = actorX < (input.viewport.left + input.viewport.right) / 2
+      ? ['right', 'left'] as const : ['left', 'right'] as const;
+    const vertical = actorY < (input.viewport.top + input.viewport.bottom) / 2
+      ? ['below', 'above'] as const : ['above', 'below'] as const;
+    for (const sideY of vertical) for (const sideX of horizontal) {
+      const left = sideX === 'right'
+        ? input.actor.right + gap : input.actor.left - gap - input.bubble.width;
+      const top = sideY === 'below'
+        ? input.actor.bottom + gap : input.actor.top - gap - input.bubble.height;
+      const bounds = {
+        bottom: top + input.bubble.height,
+        left,
+        right: left + input.bubble.width,
+        top,
+      };
+      const inside = bounds.left >= input.viewport.left && bounds.right <= input.viewport.right
+        && bounds.top >= input.viewport.top && bounds.bottom <= input.viewport.bottom;
+      if (inside && input.obstacles.every((obstacle) => !overlaps(bounds, obstacle))) {
+        return { bounds, horizontal: sideX, vertical: sideY };
+      }
+    }
+    return null;
+  }
+  ```
+
+  `resolveHermesDock` continues to load stored ratios, but delegates resize
+  recovery to the settled-dock resolver with an empty obstacle list. Invalid or
+  impossible settled positions return the clamped desired point with
+  `safe:false`; React must revert a drag or suppress autonomous speech rather
+  than cover protected work.
+
+- [ ] **Step 4: Run GREEN and commit geometry policy.**
+
+  Re-run both focused files and commit
+  `feat(web): add collision-safe Hermes placement`.
+
+### Task 21.3: Wire anchored scale, drag detachment and protected surfaces
+
+**Files:**
+
+- Modify: `apps/web/components/hermes/HermesWorkspaceStage.tsx`
+- Modify: `apps/web/components/hermes/HermesPerformanceBubble.tsx`
+- Modify: `apps/web/components/dashboard/ContinueResearch.tsx`
+- Modify: `apps/web/components/dashboard/ImportStage.tsx`
+- Modify: `apps/web/components/hermes/HermesRail.tsx`
+- Modify: `apps/web/test/e2e/hermes-workspace-stage.spec.ts`
+- Modify: `apps/web/test/e2e/hermes-dashboard.spec.ts`
+
+**Interfaces:**
+
+- `data-hermes-protected="true"` marks Dashboard regions that placement must
+  avoid without coupling the stage to component names.
+- `HermesPerformanceBubble` forwards an `HTMLElement` ref for real measurement.
+- `data-hermes-anchored`, `data-hermes-stage-size`,
+  `data-hermes-bubble-horizontal`, `data-hermes-bubble-vertical` and
+  `data-hermes-bubble-safe` remain browser-test diagnostics.
+
+- [ ] **Step 1: Write failing interaction and Dashboard hierarchy tests.**
+
+  Add assertions that the anchored stage is exactly `360×360`, mobile is
+  `200×200`, the three Dashboard regions expose `data-hermes-protected`, a
+  pointer click opens the drawer without detaching, a drag beyond `5px`
+  detaches without opening the drawer, and desktop/mobile storage keys remain
+  independent. Assert drawer-open makes the stage inert and no actor/bubble
+  rectangle overlaps protected regions after pointer release.
+
+- [ ] **Step 2: Run the browser tests and verify RED.**
+
+  Against a clean production build server, run:
+
+  ```powershell
+  npx pnpm@9.15.0 --filter @openscience/web exec playwright test test/e2e/hermes-workspace-stage.spec.ts test/e2e/hermes-dashboard.spec.ts --config playwright.config.ts
+  ```
+
+  Expected: FAIL on `336/176`, absent protected markers and anchored geometry
+  still using the raw anchor rectangle.
+
+- [ ] **Step 3: Mark protected product regions and preserve layout ownership.**
+
+  Add the marker only to the existing semantic containers:
+
+  ```tsx
+  <section
+    aria-labelledby="continue-title"
+    className="group border-y border-os-rule-dark py-6 sm:py-8"
+    data-continuation-priority="primary"
+    data-hermes-protected="true"
+  >
+
+  <section
+    aria-labelledby="import-stage-title"
+    className="border-t border-os-rule-dark pt-5"
+    data-hermes-protected="true"
+  >
+
+  <aside
+    aria-labelledby="hermes-task-title"
+    className="border-t border-os-rule-dark pt-5"
+    data-hermes-protected="true"
+  >
+  ```
+
+  Apply `data-hermes-protected="true"` to both `ContinueResearch` branches, so
+  the empty-state import link and populated Continue Research action share the
+  same collision contract. `HermesDockAnchor` remains unchanged as an inert
+  registration node and never becomes a second position owner.
+
+- [ ] **Step 4: Center the exact stage on the anchor and detach only after intent.**
+
+  Replace anchored raw bounds with the resolved stage square:
+
+  ```ts
+  const stageSize = resolveHermesStageSize(false, compactGuide);
+  const stageCenterX = anchored ? anchorRect.left + anchorRect.width / 2 : position.x;
+  const stageCenterY = anchored ? anchorRect.top + anchorRect.height / 2 : position.y;
+  const style: React.CSSProperties = {
+    height: stageSize,
+    left: stageCenterX - stageSize / 2,
+    top: stageCenterY - stageSize / 2,
+    width: stageSize,
+  };
+  ```
+
+  Keep `customDock=false` during sub-threshold pointer motion. At the first move
+  above `5px`, dismiss the stale cue and set detachment. On pointer release,
+  measure the actor footprint, resolve the nearest safe settled dock against
+  visible `[data-hermes-protected="true"]` rectangles, revert to the drag origin
+  when `safe=false`, and persist ratios only after a safe settle. A no-drag
+  release calls the existing `onInvoke` exactly once.
+
+- [ ] **Step 5: Measure and place bubbles independently.**
+
+  Convert `HermesPerformanceBubble` to `React.forwardRef<HTMLElement, Props>`.
+  When a cue becomes available, measure the actor and bubble, call
+  `resolveHermesBubblePlacement`, write the chosen data attributes, and keep the
+  cue hidden when placement is `null`. Functional guide bubbles continue to use
+  the existing travel planner and drawer fallback. When the drawer is open,
+  set `data-hermes-assistant-open="true"`, `aria-hidden="true"` and make the
+  stage inert so it cannot cover or capture drawer controls.
+
+- [ ] **Step 6: Run GREEN and commit the interaction slice.**
+
+  Re-run the focused unit and E2E files. Commit
+  `feat(web): integrate Hermes with Dashboard work flow` only after click,
+  drag, persistence, protected-region and drawer-inert assertions are green.
+
+### Task 21.4: Refine bubble material and first-person visual acceptance
+
+**Files:**
+
+- Modify: `apps/web/app/globals.css`
+- Modify: `apps/web/test/hermes-performance-bubble.test.tsx`
+- Modify: `apps/web/test/visual/hermes-live2d-motion-gate.mjs`
+- Modify: `apps/web/test/visual/hermes-work-assistant-experience-gate.mjs`
+- Modify: `apps/web/app/_visual/hermes-live2d/page.tsx` only if the real task
+  fixture lacks a required protected marker; do not promote diagnostics.
+
+**Interfaces:**
+
+- Preserves the `ink-edge` material token and bilingual `next-intl` cue keys.
+- Produces screenshots and geometry metrics under ignored
+  `apps/web/test/visual/out/hermes-work-assistant/`.
+
+- [ ] **Step 1: Write failing visual-contract assertions.**
+
+  Change all production size expectations from `336/176` to `360/200`. Require
+  the bubble to remain at most `15.5rem`, use one `4px` radius, no gradient or
+  blur, a single restrained shadow, `40×40px` dismiss target, one short mobile
+  sentence and no visible mobile action toolbar. Add the `1920×1080` viewport
+  to the experience gate.
+
+- [ ] **Step 2: Run RED on the old selectors.**
+
+  ```powershell
+  npx pnpm@9.15.0 --filter @openscience/web exec vitest run test/hermes-performance-bubble.test.tsx test/hermes-stage-sizing.test.ts
+  ```
+
+  Then run the existing visual gate against the clean local server and require
+  failure on the old `176/336` attributes or selectors.
+
+- [ ] **Step 3: Apply the committed optical-editorial treatment.**
+
+  Replace every mobile size selector with `200` and reserve `360px` desktop /
+  `200px` mobile anchor height. Use these exact material values:
+
+  ```css
+  .hermes-dock-anchor {
+    min-height: 22.5rem;
+  }
+
+  .hermes-companion-bubble {
+    max-width: 15.5rem;
+    border: 1px solid rgb(241 238 231 / .14);
+    border-radius: 4px;
+    background: rgb(12 15 14 / .97);
+    box-shadow: 0 8px 20px rgb(0 0 0 / .18);
+  }
+
+  .hermes-workspace-stage[data-hermes-assistant-open='true'] {
+    opacity: .18;
+    pointer-events: none;
+  }
+
+  @media (max-width: 640px) {
+    .hermes-dock-anchor { min-height: 12.5rem; }
+    .hermes-workspace-stage[data-hermes-stage-size='200'] .hermes-companion-bubble {
+      width: min(12rem, calc(100vw - 1rem));
+    }
+  }
+  ```
+
+  Keep entry motion to opacity plus `4px` settle. Preserve visible keyboard
+  focus and `:active { transform: scale(.95); }`; approval and reduced-motion
+  overrides remove the transition.
+
+- [ ] **Step 4: Use the page as a real user at all three viewports.**
+
+  The gate must type in the RO title, use create/import, click Hermes to open
+  and close the drawer, drag to every edge, reload, resize across the `640px`
+  breakpoint, wait for an autonomous cue, trigger task feedback and verify:
+
+  ```text
+  actor ∩ protected = ∅
+  bubble ∩ protected = ∅
+  actor/bubble inside visual viewport
+  one canvas + one model + one RAF owner
+  no uncaught page or console errors
+  ```
+
+  Save `dashboard-{1440x900,1920x1080,390x844}.png` and a compact JSON metrics
+  file. Review the screenshots at full size; fail the task if Hermes dominates
+  the main work column, the bubble reads as a card, the mobile form is blocked,
+  or the assistant appears visually detached from the right rail.
+
+- [ ] **Step 5: Run GREEN and commit the visual slice.**
+
+  Run the focused Vitest and both Hermes visual gates. Commit
+  `style(web): refine Hermes companion presence` only after the three screenshots
+  and metrics satisfy the written design.
+
+### Task 21.5: Quality gate, independent release review and ECS acceptance
+
+**Files:**
+
+- Modify after validation: `docs/progress.md`
+- Modify after validation: `docs/handoff/2026-08-16-hermes-2d-pet-handoff.md`
+- Modify after validation: `project_index.md`
+- Modify after deployment: `docs/runbooks/deployment.md`
+
+**Interfaces:**
+
+- Produces one clean immutable release commit and retains ECS release
+  `c97926a` as the explicit rollback ref.
+- Changes no migration, database data, Secret, provider, permission or network
+  topology.
+
+- [ ] **Step 1: Run the complete local gate serially.**
+
+  Stop the local Next server before build, then run:
+
+  ```powershell
+  npx pnpm@9.15.0 --filter @openscience/web test
+  npx pnpm@9.15.0 --filter @openscience/web typecheck
+  npx pnpm@9.15.0 --filter @openscience/web build
+  npx pnpm@9.15.0 --filter @openscience/web test:hermes-live2d
+  npx pnpm@9.15.0 --filter @openscience/web test:hermes-work-assistant
+  npx pnpm@9.15.0 --filter @openscience/web test:hermes-companion-release
+  npx pnpm@9.15.0 lint
+  npx pnpm@9.15.0 audit:docs-sync
+  npx pnpm@9.15.0 docs:lint
+  git diff --check
+  ```
+
+  Start the production server only after the build and run the authenticated
+  Dashboard E2E subset. Any skipped visual, WebGL or browser test is a release
+  blocker, not a warning.
+
+- [ ] **Step 2: Obtain independent Sol High review.**
+
+  Review the complete Task 21 diff against §11 for correctness, React lifecycle,
+  pointer capture, touch/keyboard accessibility, protected-region honesty,
+  one-owner runtime safety, performance, test strength and release rollback.
+  Resolve every Critical or Important finding and re-run affected gates.
+
+- [ ] **Step 3: Sync CURRENT truth and create the immutable release commit.**
+
+  Record branch / HEAD / ECS release / rollback, exact test counts, screenshot
+  paths and remaining risks. Update implementation rows from `336/176` to
+  `360/200` only after code and browser gates are green. Commit all reviewed
+  source, tests and docs; require `git status --short` empty.
+
+- [ ] **Step 4: Perform read-only preflight and deployment dry-run.**
+
+  ```bash
+  XGS_RELEASE_SHA="$(git rev-parse HEAD)"
+  bash infra/scripts/checkup.sh
+  bash infra/scripts/deploy.sh --skip-migrate --rollback-ref c97926ab4188d5d5fc7a6e58e0333d20a600c692 "$XGS_RELEASE_SHA"
+  ```
+
+  Verify current release identity, no `.release-failed`, backup readiness and
+  healthy containers. The dry-run must name the exact candidate and rollback.
+
+- [ ] **Step 5: Deploy the already authorized development release.**
+
+  ```bash
+  XGS_RELEASE_SHA="$(git rev-parse HEAD)"
+  bash infra/scripts/deploy.sh --confirm --skip-migrate --rollback-ref c97926ab4188d5d5fc7a6e58e0333d20a600c692 "$XGS_RELEASE_SHA"
+  ```
+
+  The script must complete full workspace build, SHA-tagged images, Parser-first
+  health, application restart, Nginx validation, exact `/__release` and public
+  health checks. Do not run migrations or seed data.
+
+- [ ] **Step 6: Run authenticated public acceptance and close the release.**
+
+  Against `https://openscience.428312321.xyz/dashboard`, repeat the three
+  viewport click/drag/resize/bubble checks with the existing authenticated
+  production gate. Confirm target container health, runtime dependency loading,
+  one canvas/model/RAF, protected-region separation, exact release SHA and the
+  absence of `.release-failed`. Update the deployment runbook with backup size,
+  container/migration status, public gate count and rollback SHA; run docs gates
+  again before claiming completion.

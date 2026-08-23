@@ -55,8 +55,8 @@
 
 ## Next action
 
-1. 用户复核 CURRENT spec §11 后，按 writing-plans 建立精确 `360/200px`、dock-detach、bubble collision 与真实 Dashboard 验收计划；不要修改 v09 美术。
-2. 以 TDD 实施并在 `1440×900`、`1920×1080`、`390×844` 实际使用，动作丰富度不得压过 RO 主流程。
-3. 本地与独立 release review 通过后，走现有脚本部署；ECS 在此之前保持 `c97926a` / rollback `06072c1`，本地结果不能冒充生产验收。
+1. 从 CURRENT plan Task 21.1 开始，以 TDD 实施精确 `360/200px`、dock-detach、bubble collision 与 protected Dashboard surfaces；不要修改 v09 美术。
+2. 在 `1440×900`、`1920×1080`、`390×844` 第一人称实际使用，动作丰富度不得压过 RO 主流程。
+3. 本地与独立 Sol High release review 通过后走现有脚本部署；ECS 在此之前保持 `c97926a` / rollback `06072c1`，本地结果不能冒充生产验收。
 
 Read first：`AGENTS.md` → 本 handoff → 2026-08-19 Wanko CURRENT design/plan → `docs/progress.md`；`project_index.md` 只用 `rg` 定向查 CURRENT 行。
