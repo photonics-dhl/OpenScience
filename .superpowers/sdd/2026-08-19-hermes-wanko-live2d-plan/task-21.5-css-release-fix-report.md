@@ -171,3 +171,29 @@ Base: `b1fadc7`
 - No geometry, guide lifecycle, stage sizing, ordinary hit plane, visual styling or translation changed. There is no screenshot delta.
 - The atomic helper is a web-internal Hermes module and does not alter app/package dependency direction.
 - Separate review findings for stationary obstacle collection and edge-stop/fallback measurement remain with the geometry owner and were intentionally not touched here.
+
+## Fix Round 6 — isolate deterministic behavior time from guide geometry
+
+Date: 2026-08-24
+
+Base: `5a521f0`
+
+### RED to GREEN evidence
+
+The standalone work-assistant gate previously installed Playwright's fake clock before the first navigation. That froze the real guide lifecycle before its initial route/ready transaction, so `exerciseCreateImport` exhausted its existing 10-second semantic-settlement timeout with the stage still idle. The gate now performs initial navigation, guide arrival, protected Create hit-testing, the real click/POST, dock persistence, and breakpoint geometry recovery on the browser's real clock. It explicitly asserts the atomic Create snapshot is `action=guide-arrive` and `guideReady=true` before fake time may be installed. Geometry stabilization uses consecutive real `requestAnimationFrame` samples instead of advancing test time.
+
+Only after those guide and geometry checks complete does the gate install fake time. The remaining clock advances are limited to deterministic task/autonomous/hover/press/leave behavior-beat transitions. No ready/phase condition was weakened, no force click was introduced, and the existing semantic timeout was not extended.
+
+### Fresh gates
+
+- Standalone `test:hermes-work-assistant`: **passed 3 consecutive runs**, covering 1440x900, 1920x1080 and 390x844 each time.
+- Canonical self-starting `test:hermes-companion-release`: performance gate passed (`firstReadyMs=862`, zero idle/pointer drops) and product E2E finished **36 passed / 2 failed**. Both failures are independent guide-geometry regressions already assigned to the geometry owner: the saved bottom-right travel bubble remained visible, and drag-cancel restore did not persist a changed dock. The work-clock gate is not one of the failures.
+- Web production build: **passed**, 18 static pages generated.
+- Web typecheck: **passed**.
+- ESLint on the changed work-assistant gate: **passed**.
+- `git diff --check`: **passed**.
+
+### Self-review and concerns
+
+- This round changes only the standalone browser gate and this report; no Stage, planner, geometry, CSS, production behavior, stage size, or hit plane changed.
+- The two canonical guide-geometry failures remain release blockers outside this scoped clock fix. The separately reported reduced-motion hull issue also remains with the geometry owner.

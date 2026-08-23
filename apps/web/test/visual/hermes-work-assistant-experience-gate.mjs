@@ -72,6 +72,25 @@ async function dragStage(page, stage, target) {
   await page.waitForTimeout(1200);
 }
 
+async function waitForStableStageGeometry(page) {
+  await page.waitForFunction(() => new Promise((resolve) => {
+    let previous = '';
+    let stableFrames = 0;
+    const sample = () => {
+      const stage = document.querySelector('[data-hermes-workspace-stage="true"]');
+      const bounds = stage?.getBoundingClientRect();
+      const signature = bounds
+        ? [bounds.left, bounds.top, bounds.width, bounds.height].map((value) => value.toFixed(2)).join(':')
+        : '';
+      stableFrames = signature && signature === previous ? stableFrames + 1 : 0;
+      previous = signature;
+      if (stableFrames >= 3) resolve(true);
+      else window.requestAnimationFrame(sample);
+    };
+    window.requestAnimationFrame(sample);
+  }));
+}
+
 async function protectedBoxes(page) {
   return page.locator('[data-hermes-protected="true"]').evaluateAll((elements) => elements.map((element) => {
     const bounds = element.getBoundingClientRect();
@@ -300,6 +319,7 @@ async function exerciseCreateImport(page, label, state) {
   assert.ok(state.createdTitles.includes(title), `${label} must submit the typed RO title`);
   await page.goto(`${baseUrl}/dashboard?hermes-motion=full`, { waitUntil: 'domcontentloaded' });
   await waitForRig(page);
+  return createSnapshot;
 }
 
 const browser = await chromium.launch({ headless: true });
@@ -320,7 +340,6 @@ try {
         browserErrors.push(message.text() + ' @ ' + location.url + ':' + location.lineNumber + ':' + location.columnNumber);
       }
     });
-    await page.clock.install({ time: new Date('2026-08-23T00:00:00Z') });
     await mockProduct(page, state);
     await page.goto(baseUrl + '/dashboard?hermes-motion=full', { waitUntil: 'domcontentloaded' });
     await waitForRig(page);
@@ -352,7 +371,9 @@ try {
       await page.evaluate(() => scrollTo(0, 0));
     }
 
-    await exerciseCreateImport(page, label, state);
+    const preClockGuide = await exerciseCreateImport(page, label, state);
+    assert.equal(preClockGuide.action, 'guide-arrive', `${label} guide must settle on the real clock before fake-clock installation`);
+    assert.equal(preClockGuide.guideReady, 'true', `${label} guide readiness must not depend on fake time`);
 
     const dialog = await clickVisibleHermesCta(page, stage, label + ' initial');
     assert.equal(await stage.getAttribute('data-hermes-assistant-open'), 'true', label + ' click must open the assistant');
@@ -440,7 +461,7 @@ try {
     ));
     await page.reload({ waitUntil: 'domcontentloaded' });
     await waitForRig(page);
-    await page.waitForTimeout(1200);
+    await waitForStableStageGeometry(page);
     const restored = await stage.boundingBox();
     const restoredDock = await page.evaluate(() => Object.fromEntries(
       Object.keys(localStorage)
@@ -454,17 +475,14 @@ try {
     await page.setViewportSize(acrossBreakpoint);
     await page.waitForFunction((size) => document.querySelector('[data-hermes-workspace-stage]')?.getAttribute('data-hermes-stage-size') === size,
       acrossBreakpoint.width <= 640 ? '200' : '360');
-    await page.clock.runFor(2_000);
-    await page.waitForTimeout(10);
-    await page.waitForTimeout(1200);
+    await waitForStableStageGeometry(page);
     await assertFootprintsSafe(page, acrossBreakpoint, label + ' across 640px breakpoint');
     await page.setViewportSize(viewport);
     await page.waitForFunction((size) => document.querySelector('[data-hermes-workspace-stage]')?.getAttribute('data-hermes-stage-size') === size, expectedSize);
-    await page.clock.runFor(2_000);
-    await page.waitForTimeout(10);
-    await page.waitForTimeout(1200);
+    await waitForStableStageGeometry(page);
 
     await page.evaluate(() => Object.keys(localStorage).filter((key) => key.startsWith('openscience:hermes-dock:')).forEach((key) => localStorage.removeItem(key)));
+    await page.clock.install({ time: new Date('2026-08-23T00:00:00Z') });
     state.taskState = 'parsing';
     await page.reload({ waitUntil: 'domcontentloaded' });
     await waitForRig(page);
