@@ -14,6 +14,7 @@ const actions = [
   'citation-trace', 'stretch', 'doze', 'wake', 'surprise-settle', 'patrol', 'return-dock',
   'pointer-approach', 'pointer-avoid', 'drag', 'guide-travel', 'guide-arrive', 'quiet-write',
   'read', 'compare', 'draft', 'possible-issue', 'success', 'milestone-dance', 'failed-settle',
+  'cap-check', 'ear-perk', 'lamp-listen', 'happy-wiggle', 'thinking-pause',
 ];
 
 await mkdir(output, { recursive: true });
@@ -112,6 +113,8 @@ try {
   await rig.waitFor({ state: 'visible' });
   await page.waitForFunction(() => document.querySelector('[data-hermes-rig="live2d-wanko"]')?.getAttribute('data-hermes-rig-status') === 'ready');
   assert.equal(await page.locator('[data-hermes-live2d-canvas="true"]').count(), 1);
+  assert.equal(await fixture.getAttribute('data-hermes-stage-size'), '336');
+  assert.equal(await page.locator('[data-hermes-performance-bubble]').count(), 1);
 
   const carrier = rig.locator('[data-hermes-carrier="true"]');
   const travelHull = rig.locator('[data-hermes-carrier-travel-hull="true"]');
@@ -124,7 +127,7 @@ try {
   const metrics = [];
   let previous = await fixture.screenshot({ animations: 'allow' });
   for (const action of actions) {
-    await page.locator(`[data-hermes-action-control="${action}"]`).click();
+    await page.locator(`[data-hermes-action-control="${action}"]`).click({ force: true });
     await page.waitForTimeout(520);
     const frame = await fixture.screenshot({ animations: 'allow' });
     await writeFile(resolve(output, `action-${action}.png`), frame);
@@ -135,10 +138,19 @@ try {
     previous = frame;
   }
 
-  assert.ok(new Set(metrics.map(({ hash }) => hash)).size >= 22, 'production actions must expose at least 22 distinguishable real frames');
+  assert.ok(new Set(metrics.map(({ hash }) => hash)).size >= 26, 'production actions must expose at least 26 distinguishable real frames');
   assert.deepEqual(new Set(metrics.map(({ presentation }) => presentation)), new Set(['quiet', 'evidence', 'trail', 'celebrate', 'missing']));
 
-  await page.locator('[data-hermes-action-control="read"]').click();
+  await page.locator('[data-hermes-action-control="cap-check"]').click({ force: true });
+  await page.waitForTimeout(260);
+  const performanceBubble = page.locator('[data-hermes-performance-bubble]');
+  assert.equal(await performanceBubble.getAttribute('data-hermes-speech-visible'), 'true');
+  assert.match(await performanceBubble.getAttribute('data-hermes-performance-beat'), /^cap-check:/u);
+  await page.screenshot({ path: resolve(output, 'bubble-cap-check-desktop.png'), fullPage: true, animations: 'disabled' });
+  await performanceBubble.getByRole('button').click({ force: true });
+  assert.equal(await performanceBubble.getAttribute('data-hermes-speech-visible'), 'false');
+
+  await page.locator('[data-hermes-action-control="read"]').click({ force: true });
   await page.waitForTimeout(420);
   const pointerBefore = await fixture.screenshot({ animations: 'allow' });
   await page.locator('[data-hermes-pointer-control="engage"]').click();
@@ -147,7 +159,7 @@ try {
   const pointerResponse = await comparePng(page, pointerBefore, pointerAfter);
   assert.ok(pointerResponse.changed >= 650, `pointer must visibly articulate Wanko: ${JSON.stringify(pointerResponse)}`);
 
-  await page.addStyleTag({ content: 'html,body,main,[data-hermes-live2d-fixture]{background:transparent!important;border-color:transparent!important}' });
+  const layerIsolationStyle = await page.addStyleTag({ content: 'html,body,main,[data-hermes-live2d-fixture],.hermes-workspace-stage .hermes-visual{background:transparent!important;border-color:transparent!important}' });
   const layerMetrics = {};
   for (const variant of ['desktop', 'mobile']) {
     await page.setViewportSize(variant === 'desktop' ? { height: 900, width: 1440 } : { height: 844, width: 390 });
@@ -163,6 +175,10 @@ try {
       await writeFile(resolve(output, `${variant}-${layer}.png`), frame);
     }
     assert.ok(bounds.wanko.width > 0 && bounds.wanko.height > 0, `${variant} Wanko layer must be non-empty`);
+    assert.equal(await fixture.getAttribute('data-hermes-stage-size'), variant === 'desktop' ? '336' : '176');
+    const fixtureBox = await fixture.boundingBox();
+    assert.equal(fixtureBox?.width, variant === 'desktop' ? 336 : 176, `${variant} stage must render at the declared width`);
+    assert.equal(fixtureBox?.height, variant === 'desktop' ? 336 : 176, `${variant} stage must render at the declared height`);
     assert.ok(bounds.all.width / bounds.wanko.width <= 1.02, `${variant} native scene must not expand through external art: ${JSON.stringify(bounds)}`);
     const travelBounds = await travelHull.evaluate((node) => ({
       bottom: node.offsetTop + node.offsetHeight,
@@ -176,22 +192,31 @@ try {
     assert.ok(bounds.all.bottom <= travelBounds.bottom + 1, `${variant} travel hull misses native scene bottom edge: ${JSON.stringify({ bounds, travelBounds })}`);
     layerMetrics[variant] = bounds;
   }
+  await layerIsolationStyle.evaluate((node) => node.remove());
+  await page.setViewportSize({ height: 844, width: 390 });
+  await page.locator('[data-hermes-poster-size="mobile"]').click();
+  await page.locator('[data-hermes-action-control="happy-wiggle"]').click({ force: true });
+  await page.waitForTimeout(260);
+  const mobileBubbleBox = await page.locator('[data-hermes-performance-bubble]').boundingBox();
+  assert.ok(mobileBubbleBox && mobileBubbleBox.x >= 0, `mobile performance bubble must not clip left: ${JSON.stringify(mobileBubbleBox)}`);
+  assert.ok(mobileBubbleBox.x + mobileBubbleBox.width <= 390, `mobile performance bubble must not clip right: ${JSON.stringify(mobileBubbleBox)}`);
+  await page.screenshot({ path: resolve(output, 'bubble-happy-wiggle-mobile.png'), fullPage: true, animations: 'disabled' });
 
   await page.setViewportSize({ height: 900, width: 1440 });
   await page.locator('[data-hermes-poster-size="desktop"]').click();
   await page.locator('[data-hermes-layer-control="all"]').click();
-  await page.locator('[data-hermes-action-control="observe-left"]').click();
+  await page.locator('[data-hermes-action-control="observe-left"]').click({ force: true });
   await page.waitForTimeout(200);
   const idleStart = await carrier.boundingBox();
   await page.waitForTimeout(3100);
   const idleEnd = await carrier.boundingBox();
   assert.ok(idleStart && idleEnd && Math.abs(idleEnd.y - idleStart.y) <= 2.1, `idle carrier hover must stay within 2px: ${JSON.stringify({ idleStart, idleEnd })}`);
   const travelHullBefore = await travelHull.evaluate((node) => ({ height: node.offsetHeight, left: node.offsetLeft, top: node.offsetTop, width: node.offsetWidth }));
-  await page.locator('[data-hermes-action-control="success"]').click();
+  await page.locator('[data-hermes-action-control="success"]').click({ force: true });
   await page.waitForTimeout(300);
   const travelHullAfter = await travelHull.evaluate((node) => ({ height: node.offsetHeight, left: node.offsetLeft, top: node.offsetTop, width: node.offsetWidth }));
   assert.deepEqual(travelHullAfter, travelHullBefore, 'effects must not resize the collision hull');
-  await page.locator('[data-hermes-action-control="guide-travel"]').click();
+  await page.locator('[data-hermes-action-control="guide-travel"]').click({ force: true });
   await page.waitForTimeout(300);
   const travelTransform = await carrier.evaluate((node) => getComputedStyle(node).transform);
   assert.ok(Math.abs(transformAngle(travelTransform)) <= 3.05, `travel bank must stay within 3 degrees, got ${travelTransform}`);
