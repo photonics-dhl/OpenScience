@@ -5,11 +5,17 @@ import * as React from 'react';
 
 import type { HermesSpeechCue } from '@/lib/hermes/performance-beat';
 
-export function HermesPerformanceBubble({ cue, onDismiss, visible }: {
+interface HermesPerformanceBubbleProps {
   cue: HermesSpeechCue;
   onDismiss: () => void;
+  style?: React.CSSProperties;
   visible: boolean;
-}) {
+}
+
+export const HermesPerformanceBubble = React.forwardRef<HTMLElement, HermesPerformanceBubbleProps>(function HermesPerformanceBubble(
+  { cue, onDismiss, style, visible },
+  ref,
+) {
   const t = useTranslations('hermesCompanion');
   return (
     <aside
@@ -23,6 +29,8 @@ export function HermesPerformanceBubble({ cue, onDismiss, visible }: {
       data-hermes-speech-tone={cue.tone}
       data-hermes-speech-visible={visible ? 'true' : 'false'}
       onPointerDown={(event) => event.stopPropagation()}
+      ref={ref}
+      style={style}
     >
       <span className="hermes-companion-kicker">{t(`performance.tones.${cue.tone}`)}</span>
       <p>{t(cue.messageKey)}</p>
@@ -35,4 +43,4 @@ export function HermesPerformanceBubble({ cue, onDismiss, visible }: {
       >×</button>
     </aside>
   );
-}
+});

@@ -20,7 +20,11 @@ export function HermesRail({ tasks }: { tasks: HermesRailTask[] }) {
   const t = useTranslations('dashboard');
 
   return (
-    <aside className="border-t border-os-rule-dark pt-5" aria-labelledby="hermes-task-title">
+    <aside
+      aria-labelledby="hermes-task-title"
+      className="border-t border-os-rule-dark pt-5"
+      data-hermes-protected="true"
+    >
       <div className="flex items-end justify-between gap-4 border-b border-os-rule-dark pb-3">
         <div>
           <p data-reading-role="caption" className="font-mono uppercase tracking-[0.1em] text-os-vermilion">Hermes / live queue</p>

@@ -21,6 +21,117 @@ async function mockWorkspace(page: Page) {
   } }));
 }
 
+const overlaps = (a: { x: number; y: number; width: number; height: number }, b: { x: number; y: number; width: number; height: number }) => (
+  a.x < b.x + b.width && a.x + a.width > b.x && a.y < b.y + b.height && a.y + a.height > b.y
+);
+
+test('anchored Hermes detaches only after drag intent and settles away from protected work', async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await mockWorkspace(page);
+  await page.goto(`${baseUrl}/dashboard?hermes-motion=reduced`, { waitUntil: 'networkidle' });
+
+  const stage = page.locator('[data-hermes-workspace-stage="true"]');
+  const anchor = page.locator('[data-hermes-dock-anchor="true"]');
+  await expect(stage).toHaveAttribute('data-hermes-anchored', 'true');
+  await expect(stage).toHaveAttribute('data-hermes-stage-size', '360');
+  const [stageBox, anchorBox] = await Promise.all([stage.boundingBox(), anchor.boundingBox()]);
+  expect(stageBox).not.toBeNull();
+  expect(anchorBox).not.toBeNull();
+  expect({ width: Math.round(stageBox!.width), height: Math.round(stageBox!.height) }).toEqual({ width: 360, height: 360 });
+  expect(Math.round(stageBox!.x + stageBox!.width / 2)).toBe(Math.round(anchorBox!.x + anchorBox!.width / 2));
+  expect(Math.round(stageBox!.y + stageBox!.height / 2)).toBe(Math.round(anchorBox!.y + anchorBox!.height / 2));
+
+  const input = stage.locator('[data-hermes-input-owner]');
+  const inputBox = await input.boundingBox();
+  expect(inputBox).not.toBeNull();
+  const start = { x: inputBox!.x + inputBox!.width / 2, y: inputBox!.y + inputBox!.height / 2 };
+  await page.mouse.move(start.x, start.y);
+  await page.mouse.down();
+  await page.mouse.move(start.x + 3, start.y + 2);
+  await page.mouse.up();
+  await expect(stage).toHaveAttribute('data-hermes-anchored', 'true');
+  await expect(page.getByRole('dialog', { name: 'Hermes research guide' })).toBeVisible();
+  await expect(stage).toHaveAttribute('data-hermes-assistant-open', 'true');
+  await expect(stage).toHaveAttribute('aria-hidden', 'true');
+  await expect(stage).toHaveAttribute('inert', '');
+  await stage.locator('[data-hermes-input-owner]').evaluate((element: HTMLElement) => element.focus());
+  expect(await stage.locator('[data-hermes-input-owner]').evaluate((element) => element === document.activeElement)).toBe(false);
+  await page.getByRole('button', { name: 'Close Hermes' }).click();
+
+  const protectedRegions = page.locator('[data-hermes-protected="true"]');
+  const protectedBoxes = await protectedRegions.evaluateAll((elements) => elements.map((element) => {
+    const bounds = element.getBoundingClientRect();
+    return { x: bounds.x, y: bounds.y, width: bounds.width, height: bounds.height };
+  }).filter((bounds) => bounds.width > 0 && bounds.height > 0));
+  const desktopKey = 'openscience:hermes-dock:v1:workspace-current:desktop';
+  const mobileKey = 'openscience:hermes-dock:v1:workspace-current:mobile';
+
+  await page.evaluate(() => {
+    const blocker = document.createElement('div');
+    blocker.dataset.hermesProtected = 'true';
+    blocker.dataset.hermesTestBlocker = 'true';
+    blocker.style.cssText = 'position:fixed;inset:0;pointer-events:none';
+    document.body.append(blocker);
+  });
+  const blockedInput = await input.boundingBox();
+  expect(blockedInput).not.toBeNull();
+  await page.mouse.move(blockedInput!.x + blockedInput!.width / 2, blockedInput!.y + blockedInput!.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(120, 140, { steps: 8 });
+  await page.mouse.up();
+  await expect(stage).toHaveAttribute('data-hermes-anchored', 'true');
+  expect(await page.evaluate((key) => localStorage.getItem(key), desktopKey)).toBeNull();
+  await page.locator('[data-hermes-test-blocker="true"]').evaluate((element) => element.remove());
+
+  const cancelInput = await input.boundingBox();
+  expect(cancelInput).not.toBeNull();
+  await page.mouse.move(cancelInput!.x + cancelInput!.width / 2, cancelInput!.y + cancelInput!.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(cancelInput!.x - 40, cancelInput!.y + 30, { steps: 4 });
+  await stage.dispatchEvent('pointercancel', { pointerId: 1, pointerType: 'mouse' });
+  await expect(stage).toHaveAttribute('data-hermes-dragging', 'false');
+  await expect(stage).toHaveAttribute('data-hermes-anchored', 'true');
+  await page.mouse.up();
+
+  const desired = protectedBoxes[0];
+  const safeInput = await input.boundingBox();
+  expect(safeInput).not.toBeNull();
+  await page.mouse.move(safeInput!.x + safeInput!.width / 2, safeInput!.y + safeInput!.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(desired.x + desired.width / 2, desired.y + desired.height / 2, { steps: 8 });
+  await page.mouse.up();
+  await expect(stage).toHaveAttribute('data-hermes-anchored', 'false');
+  await expect(page.getByRole('dialog', { name: 'Hermes research guide' })).toHaveCount(0);
+  const actorBox = await stage.locator('[data-hermes-companion-actor="true"]').boundingBox();
+  expect(actorBox).not.toBeNull();
+  expect(protectedBoxes.some((region) => overlaps(actorBox!, region))).toBe(false);
+  const bubble = stage.locator('[data-hermes-performance-bubble="true"]');
+  if (await bubble.count()) {
+    const bubbleBox = await bubble.boundingBox();
+    expect(bubbleBox).not.toBeNull();
+    expect(protectedBoxes.some((region) => overlaps(bubbleBox!, region))).toBe(false);
+    await expect(stage).toHaveAttribute('data-hermes-bubble-safe', 'true');
+  }
+
+  expect(await page.evaluate((key) => localStorage.getItem(key), desktopKey)).not.toBeNull();
+  expect(await page.evaluate((key) => localStorage.getItem(key), mobileKey)).toBeNull();
+
+  await page.setViewportSize({ width: 390, height: 844 });
+  await expect(stage).toHaveAttribute('data-hermes-stage-size', '200');
+  await expect(stage).toHaveAttribute('data-hermes-anchored', 'true');
+  const mobileBox = await stage.boundingBox();
+  expect(mobileBox).not.toBeNull();
+  expect({ width: Math.round(mobileBox!.width), height: Math.round(mobileBox!.height) }).toEqual({ width: 200, height: 200 });
+  const mobileInput = await input.boundingBox();
+  expect(mobileInput).not.toBeNull();
+  await page.mouse.move(mobileInput!.x + mobileInput!.width / 2, mobileInput!.y + mobileInput!.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(90, 120, { steps: 8 });
+  await page.mouse.up();
+  expect(await page.evaluate((key) => localStorage.getItem(key), mobileKey)).not.toBeNull();
+  expect(await page.evaluate(([desktop, mobile]) => localStorage.getItem(desktop) !== localStorage.getItem(mobile), [desktopKey, mobileKey])).toBe(true);
+});
+
 test('Hermes mounts the real Wanko Live2D portrait inside the persistent stage', async ({ page }) => {
   const browserErrors: string[] = [];
   page.on('pageerror', (error) => browserErrors.push(error.message));
@@ -49,8 +160,6 @@ test('Hermes mounts the real Wanko Live2D portrait inside the persistent stage',
   expect(interactionBox!.width).toBeGreaterThanOrEqual(44);
   expect(interactionBox!.height).toBeGreaterThanOrEqual(44);
 
-  await page.mouse.click(carrierBox!.x + carrierBox!.width * .1, carrierBox!.y + carrierBox!.height * .55);
-  await expect(page.getByRole('dialog', { name: 'Hermes research guide' })).toHaveCount(0);
   await page.mouse.click(interactionBox!.x + interactionBox!.width / 2, interactionBox!.y + interactionBox!.height / 2);
   await expect(page.getByRole('dialog', { name: 'Hermes research guide' })).toBeVisible();
   await expect(rig).toHaveAttribute('data-hermes-wanko-presentation', /quiet|evidence|trail|celebrate|missing/u);
@@ -61,7 +170,7 @@ test('Hermes Live2D visual harness exposes every production action on one real c
   await page.goto(`${baseUrl}/_visual/hermes-live2d`, { waitUntil: 'networkidle' });
   await expect(page.locator('[data-hermes-live2d-harness="true"]')).toHaveCount(1);
   await expect(page.locator('[data-hermes-rig="live2d-wanko"]')).toHaveAttribute('data-hermes-rig-status', 'ready', { timeout: 20_000 });
-  await expect(page.locator('[data-hermes-action-control]')).toHaveCount(27);
+  await expect(page.locator('[data-hermes-action-control]')).toHaveCount(32);
   await expect(page.locator('[data-hermes-live2d-canvas="true"]')).toHaveCount(1);
 });
 
@@ -113,19 +222,22 @@ test('one Hermes stage persists across workspace routes and keeps direct manipul
   await expect(stage).toHaveAttribute('data-hermes-action', 'pointer-avoid');
 });
 
-test('Hermes defaults to full motion and lets the user persist an explicit reduced preference', async ({ page }) => {
+test('Hermes respects system motion and persists explicit user preferences', async ({ page }) => {
   await page.emulateMedia({ reducedMotion: 'reduce' });
   await page.setViewportSize({ width: 1440, height: 900 });
   await mockWorkspace(page);
   await page.goto(`${baseUrl}/dashboard`, { waitUntil: 'networkidle' });
 
   const stage = page.locator('[data-hermes-workspace-stage]');
-  await expect(stage).toHaveAttribute('data-hermes-motion-preference', 'full');
+  await expect(stage).toHaveAttribute('data-hermes-motion-preference', 'reduced');
   const canvas = stage.locator('[data-hermes-articulated-canvas="true"]');
   await expect(canvas).toHaveCount(1);
   await expect(canvas).toBeVisible();
+  const enable = page.getByRole('button', { name: /Enable Hermes motion|开启 Hermes 动效/i });
+  await expect(enable).toBeVisible();
+  await enable.click();
+  await expect(stage).toHaveAttribute('data-hermes-motion-preference', 'full');
   const disable = page.getByRole('button', { name: /Reduce Hermes motion|关闭 Hermes 动效/i });
-  await expect(disable).toBeVisible();
   await disable.click();
   await expect(stage).toHaveAttribute('data-hermes-motion-preference', 'reduced');
   await page.emulateMedia({ reducedMotion: 'no-preference' });
@@ -135,8 +247,7 @@ test('Hermes defaults to full motion and lets the user persist an explicit reduc
   await expect(stage).toHaveAttribute('data-hermes-motion-preference', 'full');
   await page.evaluate(() => window.history.pushState(null, '', '?hermes-motion=reduced'));
   await expect(stage).toHaveAttribute('data-hermes-motion-preference', 'reduced');
-  const enable = page.getByRole('button', { name: /Enable Hermes motion|开启 Hermes 动效/i });
-  await expect(enable).toBeVisible();
+  await expect(page.getByRole('button', { name: /Enable Hermes motion|开启 Hermes 动效/i })).toBeVisible();
 
   await page.addInitScript(() => {
     const states: string[] = [];

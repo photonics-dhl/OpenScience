@@ -16,7 +16,11 @@ export function ContinueResearch({ research }: ContinueResearchProps) {
 
   if (!research) {
     return (
-      <section className="border-y border-os-rule-dark py-6 sm:py-8" aria-labelledby="continue-title">
+      <section
+        aria-labelledby="continue-title"
+        className="border-y border-os-rule-dark py-6 sm:py-8"
+        data-hermes-protected="true"
+      >
         <p data-reading-role="caption" className="font-mono uppercase tracking-[0.1em] text-os-vermilion">00 / {t('continue.title')}</p>
         <h2 id="continue-title" className="mt-5 max-w-2xl font-editorial text-3xl leading-tight text-os-paper sm:text-5xl">
           {t('continue.emptyTitle')}
@@ -37,6 +41,7 @@ export function ContinueResearch({ research }: ContinueResearchProps) {
       className="group border-y border-os-rule-dark py-6 sm:py-8"
       aria-labelledby="continue-title"
       data-continuation-priority="primary"
+      data-hermes-protected="true"
     >
       <p data-reading-role="caption" className="font-mono uppercase tracking-[0.1em] text-os-vermilion">
         00 / {t('continue.title')}

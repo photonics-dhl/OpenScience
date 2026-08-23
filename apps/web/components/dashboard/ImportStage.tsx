@@ -14,7 +14,11 @@ export function ImportStage({ compact = false }: ImportStageProps) {
   const t = useTranslations('dashboard');
 
   return (
-    <section className="border-t border-os-rule-dark pt-5" aria-labelledby="import-stage-title">
+    <section
+      aria-labelledby="import-stage-title"
+      className="border-t border-os-rule-dark pt-5"
+      data-hermes-protected="true"
+    >
       <p data-reading-role="caption" className="font-mono uppercase tracking-[0.12em] text-os-muted-dark">
         {t('import.eyebrow')}
       </p>

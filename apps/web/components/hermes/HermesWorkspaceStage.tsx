@@ -25,6 +25,7 @@ import {
 } from '@/lib/hermes/hermes-runtime-status';
 import { createHermesSpeechState, stepHermesSpeech, type HermesSpeechState } from '@/lib/hermes/performance-beat';
 import { resolveHermesStageSize } from '@/lib/hermes/stage-sizing';
+import { resolveHermesBubblePlacement, resolveHermesSettledDock, type HermesBubblePlacement } from '@/lib/hermes/companion-placement';
 
 import { HermesAssistantDrawer } from './HermesAssistantDrawer';
 import type { HermesGuideSuggestion } from './hermes-guide';
@@ -55,6 +56,7 @@ const neutralSuggestion: HermesGuideSuggestion = { bodyKey: 'guide.neutral.body'
 const supportedPath = (pathname: string) => pathname === '/dashboard' || pathname.startsWith('/research-objects/');
 const viewportClass = (): HermesViewportClass => window.innerWidth <= 640 ? 'mobile' : 'desktop';
 const TRAVEL_SEGMENT_MS = 360;
+type MeasuredBubblePlacement = HermesBubblePlacement & { stageLeft: number; stageTop: number };
 
 const behaviorInput = (
   state: HermesVisualState,
@@ -164,10 +166,11 @@ function HermesWorkspaceStage({ fallbackAssistantOpen, fallbackOnInvoke, guideTa
   const state = presentation?.state ?? routeState;
   const t = useTranslations('hermesCompanion');
   const workspaceId = presentation?.workspaceId ?? 'workspace-current';
-  const dragRef = useRef<{ pointerId: number; startX: number; startY: number; originX: number; originY: number; moved: boolean } | null>(null);
+  const dragRef = useRef<{ pointerId: number; startX: number; startY: number; originX: number; originY: number; customDock: boolean; moved: boolean } | null>(null);
   const pointerRef = useRef({ present: false, speed: 0, x: 0, y: 0 });
   const pointerSampleRef = useRef({ at: 0, x: 0, y: 0 });
   const leaveTimerRef = useRef(0);
+  const assistantWasOpenRef = useRef(false);
   const contextLossRecoveriesRef = useRef(0);
   const suppressClickRef = useRef(false);
   const stageRef = useRef<HTMLDivElement | null>(null);
@@ -191,6 +194,7 @@ function HermesWorkspaceStage({ fallbackAssistantOpen, fallbackOnInvoke, guideTa
   const [guideSuppressed, setGuideSuppressed] = useState(false);
   const [protectedGeometryVersion, setProtectedGeometryVersion] = useState(0);
   const [travelRequested, setTravelRequested] = useState(false);
+  const [bubblePlacement, setBubblePlacement] = useState<MeasuredBubblePlacement | null>(null);
 
   useEffect(() => {
     const query = window.matchMedia('(max-width: 640px)');
@@ -249,7 +253,7 @@ function HermesWorkspaceStage({ fallbackAssistantOpen, fallbackOnInvoke, guideTa
       setPosition(resolveHermesDock(preferences, { height: window.innerHeight, width: window.innerWidth }, { height: size, width: size }, true));
     }
     setDockReady(true);
-  }, [presentation?.anchor, workspaceId]);
+  }, [compactGuide, presentation?.anchor, workspaceId]);
 
   useEffect(() => setTravelRequested(false), [guideTarget]);
 
@@ -279,7 +283,7 @@ function HermesWorkspaceStage({ fallbackAssistantOpen, fallbackOnInvoke, guideTa
   useEffect(() => () => window.clearTimeout(leaveTimerRef.current), []);
 
   useEffect(() => {
-    if (!guideTarget) return;
+    if (!guideTarget && !speech.cue) return;
     const selector = '[data-before-after-proposal], [data-extract-sdf="true"], [data-hermes-protected="true"]';
     let frame = 0;
     let previous = '';
@@ -307,7 +311,52 @@ function HermesWorkspaceStage({ fallbackAssistantOpen, fallbackOnInvoke, guideTa
       window.removeEventListener('resize', refresh);
       window.removeEventListener('scroll', refresh, true);
     };
-  }, [guideTarget]);
+  }, [guideTarget, speech.cue]);
+
+  React.useLayoutEffect(() => {
+    if (!speech.cue || guideTarget) {
+      setBubblePlacement(null);
+      return;
+    }
+    const stage = stageRef.current;
+    const bubble = bubbleRef.current;
+    const actor = stage?.querySelector<HTMLElement>('[data-hermes-companion-actor="true"]');
+    if (!stage || !bubble || !actor) return;
+    const viewport = window.visualViewport;
+    const placement = resolveHermesBubblePlacement({
+      actor: actor.getBoundingClientRect(),
+      bubble: { height: bubble.offsetHeight, width: bubble.offsetWidth },
+      obstacles: Array.from(document.querySelectorAll<HTMLElement>('[data-hermes-protected="true"]'))
+        .map((element) => element.getBoundingClientRect())
+        .filter((bounds) => bounds.width > 0 && bounds.height > 0 && bounds.right > 0 && bounds.bottom > 0
+          && bounds.left < window.innerWidth && bounds.top < window.innerHeight),
+      viewport: {
+        bottom: (viewport?.offsetTop ?? 0) + (viewport?.height ?? window.innerHeight),
+        left: viewport?.offsetLeft ?? 0,
+        right: (viewport?.offsetLeft ?? 0) + (viewport?.width ?? window.innerWidth),
+        top: viewport?.offsetTop ?? 0,
+      },
+    });
+    const stageBounds = stage.getBoundingClientRect();
+    setBubblePlacement(placement ? {
+      ...placement,
+      stageLeft: placement.bounds.left - stageBounds.left,
+      stageTop: placement.bounds.top - stageBounds.top,
+    } : null);
+  }, [anchorRect, guideTarget, position, protectedGeometryVersion, speech.cue, viewportSize]);
+
+  const assistantOpen = presentation?.assistantOpen ?? fallbackAssistantOpen;
+  const setStageNode = useCallback((node: HTMLDivElement | null) => {
+    stageRef.current = node;
+    if (node) node.inert = assistantOpen;
+  }, [assistantOpen]);
+
+  React.useLayoutEffect(() => {
+    if (assistantWasOpenRef.current && !assistantOpen) {
+      stageRef.current?.querySelector<HTMLElement>('[data-hermes-input-owner]')?.focus();
+    }
+    assistantWasOpenRef.current = assistantOpen;
+  }, [assistantOpen]);
 
   useEffect(() => {
     setGuideReady(false);
@@ -403,8 +452,9 @@ function HermesWorkspaceStage({ fallbackAssistantOpen, fallbackOnInvoke, guideTa
   };
 
   const onPointerDown = (event: React.PointerEvent<HTMLDivElement>) => {
+    if (!(event.target instanceof Element) || !event.target.closest('[data-hermes-input-owner]')) return;
     const bounds = event.currentTarget.getBoundingClientRect();
-    dragRef.current = { pointerId: event.pointerId, startX: event.clientX, startY: event.clientY, originX: bounds.left + bounds.width / 2, originY: bounds.top + bounds.height / 2, moved: false };
+    dragRef.current = { pointerId: event.pointerId, startX: event.clientX, startY: event.clientY, originX: bounds.left + bounds.width / 2, originY: bounds.top + bounds.height / 2, customDock, moved: false };
     event.currentTarget.setPointerCapture(event.pointerId);
     setDragging(true);
     advanceBehavior(pointerRef.current, true);
@@ -431,8 +481,13 @@ function HermesWorkspaceStage({ fallbackAssistantOpen, fallbackOnInvoke, guideTa
       if (!drag.moved && Math.hypot(dx, dy) > 5) {
         drag.moved = true;
         if (guideTarget) onDismissGuide();
+        setSpeech((current) => ({ ...current, cue: null }));
+        setCustomDock(true);
       }
-      setCustomDock(true);
+      if (!drag.moved) {
+        advanceBehavior(nextPointer, true);
+        return;
+      }
       const halfWidth = bounds.width / 2;
       const halfHeight = bounds.height / 2;
       setPosition({
@@ -446,8 +501,8 @@ function HermesWorkspaceStage({ fallbackAssistantOpen, fallbackOnInvoke, guideTa
   const onPointerUp = (event: React.PointerEvent<HTMLDivElement>) => {
     const drag = dragRef.current;
     if (!drag || drag.pointerId !== event.pointerId) return;
-    event.currentTarget.releasePointerCapture(event.pointerId);
     dragRef.current = null;
+    event.currentTarget.releasePointerCapture(event.pointerId);
     setDragging(false);
     advanceBehavior(pointerRef.current, false);
     if (!drag.moved) {
@@ -457,14 +512,47 @@ function HermesWorkspaceStage({ fallbackAssistantOpen, fallbackOnInvoke, guideTa
       return;
     }
     suppressClickRef.current = true;
+    const stageBounds = event.currentTarget.getBoundingClientRect();
+    const actorBounds = event.currentTarget.querySelector<HTMLElement>('[data-hermes-companion-actor="true"]')?.getBoundingClientRect() ?? stageBounds;
+    const center = { x: stageBounds.left + stageBounds.width / 2, y: stageBounds.top + stageBounds.height / 2 };
+    const settled = resolveHermesSettledDock({
+      desired: center,
+      footprint: {
+        bottom: Math.max(1, actorBounds.bottom - center.y),
+        left: Math.max(1, center.x - actorBounds.left),
+        right: Math.max(1, actorBounds.right - center.x),
+        top: Math.max(1, center.y - actorBounds.top),
+      },
+      obstacles: Array.from(document.querySelectorAll<HTMLElement>('[data-hermes-protected="true"]'))
+        .map((element) => element.getBoundingClientRect())
+        .filter((bounds) => bounds.width > 0 && bounds.height > 0 && bounds.right > 0 && bounds.bottom > 0
+          && bounds.left < window.innerWidth && bounds.top < window.innerHeight),
+      viewport: { bottom: window.innerHeight, left: 0, right: window.innerWidth, top: 0 },
+    });
+    if (!settled.safe) {
+      setPosition({ x: drag.originX, y: drag.originY });
+      setCustomDock(drag.customDock);
+      return;
+    }
+    setPosition(settled.point);
     const kind = viewportClass();
     const preferences = loadHermesDockPreferences(window.localStorage, workspaceId, kind);
-    const bounds = event.currentTarget.getBoundingClientRect();
     saveHermesDockPreferences(window.localStorage, workspaceId, kind, {
       ...preferences,
-      xRatio: (bounds.left + bounds.width / 2) / window.innerWidth,
-      yRatio: (bounds.top + bounds.height / 2) / window.innerHeight,
+      xRatio: settled.point.x / window.innerWidth,
+      yRatio: settled.point.y / window.innerHeight,
     });
+  };
+
+  const onPointerCancel = (event: React.PointerEvent<HTMLDivElement>) => {
+    const drag = dragRef.current;
+    if (!drag || drag.pointerId !== event.pointerId) return;
+    dragRef.current = null;
+    if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId);
+    setDragging(false);
+    setCustomDock(drag.customDock);
+    setPosition({ x: drag.originX, y: drag.originY });
+    advanceBehavior(pointerRef.current, false);
   };
 
   const onPointerLeave = () => {
@@ -485,10 +573,10 @@ function HermesWorkspaceStage({ fallbackAssistantOpen, fallbackOnInvoke, guideTa
   const stageSize = resolveHermesStageSize(false, compactGuide);
   const stageCenterX = anchored ? anchorRect.left + anchorRect.width / 2 : position.x;
   const stageCenterY = anchored ? anchorRect.top + anchorRect.height / 2 : position.y;
-  const bubbleHorizontal = viewportSize.width > 0 && stageCenterX < viewportSize.width / 2 ? 'left' : 'right';
-  const bubbleVertical = viewportSize.height > 0 && stageCenterY < viewportSize.height / 2 ? 'below' : 'above';
-  const style: React.CSSProperties = anchored ? { height: anchorRect.height, left: anchorRect.left, top: anchorRect.top, width: anchorRect.width } : {
-    height: stageSize, left: position.x - stageSize / 2, top: position.y - stageSize / 2, width: stageSize,
+  const bubbleHorizontal = bubblePlacement?.horizontal ?? (viewportSize.width > 0 && stageCenterX < viewportSize.width / 2 ? 'right' : 'left');
+  const bubbleVertical = bubblePlacement?.vertical ?? (viewportSize.height > 0 && stageCenterY < viewportSize.height / 2 ? 'below' : 'above');
+  const style: React.CSSProperties = {
+    height: stageSize, left: stageCenterX - stageSize / 2, top: stageCenterY - stageSize / 2, width: stageSize,
   };
   const ageMs = Math.max(0, Date.now() - behavior.startedAtMs);
   const actionStartedAtMs = behavior.startedAtMs === 0 || typeof performance === 'undefined' ? undefined : performance.now() - ageMs;
@@ -502,6 +590,7 @@ function HermesWorkspaceStage({ fallbackAssistantOpen, fallbackOnInvoke, guideTa
       data-hermes-action-started-at={behavior.startedAtMs}
       data-hermes-anchored={anchored ? 'true' : 'false'}
       data-hermes-bubble-horizontal={bubbleHorizontal}
+      data-hermes-bubble-safe={speech.cue ? (bubblePlacement ? 'true' : 'false') : 'true'}
       data-hermes-bubble-vertical={bubbleVertical}
       data-hermes-dragging={dragging ? 'true' : 'false'}
       data-hermes-guide-motion={guideMode ?? 'idle'}
@@ -513,12 +602,16 @@ function HermesWorkspaceStage({ fallbackAssistantOpen, fallbackOnInvoke, guideTa
       data-hermes-speech-visible={speech.cue ? 'true' : 'false'}
       data-hermes-stage-size={stageSize}
       data-hermes-workspace-stage="true"
+      data-hermes-assistant-open={assistantOpen ? 'true' : 'false'}
+      aria-hidden={assistantOpen ? 'true' : undefined}
+      onLostPointerCapture={onPointerCancel}
+      onPointerCancel={onPointerCancel}
       onPointerDown={onPointerDown}
       onPointerLeave={onPointerLeave}
       onPointerMove={onPointerMove}
       onPointerOut={onPointerOut}
       onPointerUp={onPointerUp}
-      ref={stageRef}
+      ref={setStageNode}
       style={style}
     >
       {reducedMotion !== null ? <HermesVisualAdapter
@@ -547,7 +640,14 @@ function HermesWorkspaceStage({ fallbackAssistantOpen, fallbackOnInvoke, guideTa
         <HermesPerformanceBubble
           cue={speech.cue}
           onDismiss={() => setSpeech((current) => ({ ...current, cue: null }))}
-          visible
+          ref={bubbleRef}
+          style={bubblePlacement ? {
+            bottom: 'auto',
+            left: bubblePlacement.stageLeft,
+            right: 'auto',
+            top: bubblePlacement.stageTop,
+          } : undefined}
+          visible={Boolean(bubblePlacement)}
         />
       ) : null}
       {reducedMotion !== null ? <button

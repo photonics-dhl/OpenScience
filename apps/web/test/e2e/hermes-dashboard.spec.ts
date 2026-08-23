@@ -3,6 +3,10 @@ import { expect, test, type Page, type Route } from 'playwright/test';
 const baseUrl = process.env.WEB_BASE_URL ?? 'http://127.0.0.1:3010';
 const outDir = 'test/visual/out/hermes-dashboard';
 
+const overlaps = (a: { x: number; y: number; width: number; height: number }, b: { x: number; y: number; width: number; height: number }) => (
+  a.x < b.x + b.width && a.x + a.width > b.x && a.y < b.y + b.height && a.y + a.height > b.y
+);
+
 async function json(route: Route, body: unknown, status = 200) {
   await route.fulfill({ status, contentType: 'application/json', body: JSON.stringify(body) });
 }
@@ -26,6 +30,77 @@ async function mockDashboard(page: Page, taskState?: string) {
     return route.fallback();
   });
 }
+
+test('Dashboard exposes the three semantic regions Hermes must protect', async ({ page }) => {
+  await mockDashboard(page);
+  await page.goto(`${baseUrl}/dashboard?hermes-motion=reduced`, { waitUntil: 'networkidle' });
+  const protectedRegions = page.locator('[data-hermes-protected="true"]');
+  await expect(protectedRegions).toHaveCount(3);
+  await expect(page.locator('section[aria-labelledby="continue-title"]')).toHaveAttribute('data-hermes-protected', 'true');
+  await expect(page.locator('section[aria-labelledby="import-stage-title"]')).toHaveAttribute('data-hermes-protected', 'true');
+  await expect(page.locator('aside[aria-labelledby="hermes-task-title"]')).toHaveAttribute('data-hermes-protected', 'true');
+
+  await page.route('**/api/research-objects?limit=20', (route) => json(route, { researchObjects: [] }));
+  await page.reload({ waitUntil: 'networkidle' });
+  await expect(page.locator('section[aria-labelledby="continue-title"]')).toHaveAttribute('data-hermes-protected', 'true');
+});
+
+test('Hermes measures a real performance bubble into a protected-safe viewport placement', async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await mockDashboard(page);
+  await page.clock.install({ time: new Date('2026-08-23T00:00:00Z') });
+  await page.goto(`${baseUrl}/dashboard?hermes-motion=full`, { waitUntil: 'networkidle' });
+  const stage = page.locator('[data-hermes-workspace-stage="true"]');
+  let visible = false;
+  const actions = new Set<string>();
+  for (let elapsed = 0; elapsed < 300_000 && !visible; elapsed += 250) {
+    await page.clock.fastForward(250);
+    await page.waitForTimeout(5);
+    actions.add(await stage.getAttribute('data-hermes-action') ?? 'missing');
+    visible = await stage.getAttribute('data-hermes-speech-visible') === 'true';
+  }
+  expect(visible, `observed actions: ${Array.from(actions).join(', ')}`).toBe(true);
+  const bubble = stage.locator('[data-hermes-performance-bubble="true"]');
+  await expect(bubble).toHaveAttribute('data-hermes-speech-visible', 'true');
+  await expect(stage).toHaveAttribute('data-hermes-bubble-safe', 'true');
+  await expect(stage).toHaveAttribute('data-hermes-bubble-horizontal', /left|right/u);
+  await expect(stage).toHaveAttribute('data-hermes-bubble-vertical', /above|below/u);
+  const bubbleBox = await bubble.boundingBox();
+  expect(bubbleBox).not.toBeNull();
+  const protectedBoxes = await page.locator('[data-hermes-protected="true"]').evaluateAll((elements) => elements.map((element) => {
+    const bounds = element.getBoundingClientRect();
+    return { x: bounds.x, y: bounds.y, width: bounds.width, height: bounds.height };
+  }).filter((bounds) => bounds.width > 0 && bounds.height > 0));
+  expect(protectedBoxes.some((region) => overlaps(bubbleBox!, region))).toBe(false);
+  expect(bubbleBox!.x).toBeGreaterThanOrEqual(0);
+  expect(bubbleBox!.y).toBeGreaterThanOrEqual(0);
+  expect(bubbleBox!.x + bubbleBox!.width).toBeLessThanOrEqual(1440);
+  expect(bubbleBox!.y + bubbleBox!.height).toBeLessThanOrEqual(900);
+
+  await page.evaluate(() => {
+    document.querySelectorAll('[data-hermes-protected="true"]').forEach((element) => element.removeAttribute('data-hermes-protected'));
+    const spacer = document.createElement('div');
+    spacer.style.height = '1000px';
+    document.body.append(spacer);
+    document.body.classList.add('hermes-bubble-scroll-fixture');
+  });
+  await page.waitForTimeout(50);
+  const actorBeforeScroll = await stage.locator('[data-hermes-companion-actor="true"]').boundingBox();
+  const bubbleBeforeScroll = await bubble.boundingBox();
+  expect(actorBeforeScroll).not.toBeNull();
+  expect(bubbleBeforeScroll).not.toBeNull();
+  await page.evaluate(() => window.scrollBy(0, 40));
+  await expect.poll(async () => (await stage.locator('[data-hermes-companion-actor="true"]').boundingBox())?.y ?? Number.POSITIVE_INFINITY)
+    .toBeLessThan(actorBeforeScroll!.y - 30);
+  await expect.poll(async () => {
+    const actorAfterScroll = await stage.locator('[data-hermes-companion-actor="true"]').boundingBox();
+    const bubbleAfterScroll = await bubble.boundingBox();
+    if (!actorAfterScroll || !bubbleAfterScroll) return Number.POSITIVE_INFINITY;
+    return Math.abs(
+      (bubbleAfterScroll.y - bubbleBeforeScroll!.y) - (actorAfterScroll.y - actorBeforeScroll!.y),
+    );
+  }).toBeLessThan(3);
+});
 
 test('Hermes renders articulated, working and approval states with one visual owner', async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 900 });
@@ -520,10 +595,16 @@ test('Hermes idle story opens a real contextual guide without leaving the worksp
   await expect(page.locator('[data-hermes-part], [data-hermes-idle-signal]')).toHaveCount(0);
   await expect(page.locator('.hermes-guide-nudge')).toHaveAttribute('data-visible', 'true', { timeout: 5_000 });
   const promptBox = await page.locator('.hermes-guide-nudge').boundingBox();
-  const rigBox = await page.locator('[data-hermes-rig="live2d-wanko"]').boundingBox();
   expect(promptBox).not.toBeNull();
-  expect(rigBox).not.toBeNull();
-  expect(promptBox!.y + promptBox!.height).toBeLessThanOrEqual(rigBox!.y);
+  expect(promptBox!.x).toBeGreaterThanOrEqual(0);
+  expect(promptBox!.y).toBeGreaterThanOrEqual(0);
+  expect(promptBox!.x + promptBox!.width).toBeLessThanOrEqual(1440);
+  expect(promptBox!.y + promptBox!.height).toBeLessThanOrEqual(900);
+  const protectedBoxes = await page.locator('[data-hermes-protected="true"]').evaluateAll((elements) => elements.map((element) => {
+    const bounds = element.getBoundingClientRect();
+    return { x: bounds.x, y: bounds.y, width: bounds.width, height: bounds.height };
+  }).filter((bounds) => bounds.width > 0 && bounds.height > 0));
+  expect(protectedBoxes.some((region) => overlaps(promptBox!, region))).toBe(false);
 
   await visual.click();
   const dialog = page.getByRole('dialog', { name: 'Hermes research guide' });
