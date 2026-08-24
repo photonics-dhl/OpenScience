@@ -18,7 +18,7 @@ import {
 } from 'lucide-react';
 import dynamic from 'next/dynamic';
 import { useLocale, useTranslations } from 'next-intl';
-import { useRouter, useSearchParams } from 'next/navigation';
+import { useSearchParams } from 'next/navigation';
 import {
   type PointerEvent as ReactPointerEvent,
   useEffect,
@@ -84,7 +84,6 @@ function useReducedMotion() {
 export function ResearchWorkbenchReview() {
   const t = useTranslations('researchWorkbenchReview');
   const locale = useLocale();
-  const router = useRouter();
   const searchParams = useSearchParams();
   const [state, dispatch] = useReducer(
     reduceResearchWorkbenchState,
@@ -145,7 +144,13 @@ export function ResearchWorkbenchReview() {
   function selectView(view: ResearchWorkbenchView) {
     setMenuOpen(false);
     dispatch({ type: 'view', view });
-    router.replace(`/_visual/research-workbench?view=${view}`, { scroll: false });
+    const nextUrl = new URL(window.location.href);
+    nextUrl.searchParams.set('view', view);
+    window.history.replaceState(
+      window.history.state,
+      '',
+      `${nextUrl.pathname}${nextUrl.search}${nextUrl.hash}`,
+    );
   }
 
   function handleSceneTabKeyDown(

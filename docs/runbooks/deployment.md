@@ -547,8 +547,8 @@ Historical note for the 2026-08-11 release: it used fixed worker tags and a writ
 
 ### 5.15 Hermes warm-paper workbench visual-review candidate (2026-08-24)
 
-> User-authorized deployment candidate; the active ECS release remains
-> `5f4e73c` with rollback tree `c97926a` until the confirmed switch succeeds.
+> Initial authorized release `02d3dd9` is active with rollback `5f4e73c`;
+> production-browser keyboard-navigation hotfix is pending a second switch.
 
 - Scope: anonymous, `noindex`, no-write `/_visual/research-workbench` route with
   six deep-linked review scenes, real v09 Hermes at exact `360/200px`, desktop
@@ -560,8 +560,8 @@ Historical note for the 2026-08-11 release: it used fixed worker tags and a writ
   menu/dialog accessibility behavior only. The route contains no gradient,
   glass blur, glow, purple, emoji, pill cluster or per-menu-item card styling.
 - Fresh local evidence before candidate commit: reducer `5/5` with a killed
-  mutation, Web `395/395` plus five Node contracts, focused Playwright `4/4`,
-  typecheck and the 19-page production build passed. Five ignored real-WebGL
+  mutation, Web `395/395` plus five Node contracts, focused Playwright `5/5`,
+  typecheck and the 19-page production build passed. Six ignored real-WebGL
   screenshots were inspected at original detail and corrected for actor
   obstruction, mobile clipping, premature canvas capture and focus appearance.
 - Operation: run the canonical Git Bash checkup and database backup, then exact
@@ -569,3 +569,10 @@ Historical note for the 2026-08-11 release: it used fixed worker tags and a writ
   `5f4e73c...` as explicit rollback. Record candidate SHA, backup size/retention,
   container health, public HTTP 200, exact `/__release`, absent failure marker
   and retained rollback tree only after those checks actually pass.
+- Initial operation evidence: backup `432K files=7/7`; exact server build and
+  healthy container switch passed; public route returned 200; `/__release`
+  returned `02d3dd9c495fda18025d9f1698cf41a247094052`; `.release-failed` was absent
+  and the `5f4e73c...` rollback tree remained. The first public E2E was `4/5`
+  because rapid scene switching exposed an async same-route query race. The
+  hotfix synchronizes reducer state and query via History API and must repeat
+  dry-run, confirmed `--skip-migrate` deployment and public `5/5` acceptance.

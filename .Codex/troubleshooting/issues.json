@@ -145,7 +145,28 @@
         "apps/web/test/e2e/hermes-field-guide.spec.ts"
       ],
       "prevention": "A random-motion video is not a workflow acceptance test. Every Hermes release must be exercised in the actual user media preference and through the uninterrupted creation/editing milestones, with visible controls and route-owned action consumers."
+    },
+    {
+      "id": "issue-008",
+      "title": "Hermes visual-review keyboard menu raced asynchronous scene URL navigation",
+      "date": "2026-08-24",
+      "status": "in_progress",
+      "tags": [
+        "troubleshooting/browser",
+        "troubleshooting/accessibility",
+        "troubleshooting/navigation",
+        "troubleshooting/production"
+      ],
+      "description": "The first production acceptance run passed right-click, long press, fallback and reduced-motion cases but intermittently failed Shift+F10 after a rapid Editor to Review to Editor tab sequence.",
+      "root_cause": "The visual fixture kept scene state locally while calling asynchronous Next router.replace for the query string. During a rapid Review to Editor return, the browser URL was still editor, so Next treated the second replace as a no-op while the first review RSC request remained in flight. Its eventual commit could race the newly opened context menu.",
+      "solution": "Keep the fixture's local reducer as the interaction owner and update the same-route view query synchronously with window.history.replaceState. Add a browser contract requiring each Arrow-key scene change to update the query before the next input event.",
+      "verification": "A deterministic RED assertion observed local state=review while the URL still said editor. After the single navigation-boundary change, the focused regression and full five-case local route suite passed; public hotfix deployment and repeat acceptance remain pending.",
+      "files": [
+        "apps/web/components/visual/ResearchWorkbenchReview.tsx",
+        "apps/web/test/e2e/research-workbench-review.spec.ts"
+      ],
+      "prevention": "For local-only same-route visual controls, do not mix immediate reducer state with an asynchronous server navigation solely to mirror a query parameter. Assert state and URL move atomically before testing subsequent keyboard input."
     }
   ],
-  "last_updated": "2026-08-17"
+  "last_updated": "2026-08-24"
 }

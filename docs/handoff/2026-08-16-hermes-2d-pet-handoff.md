@@ -1,6 +1,6 @@
 # Handoff — Hermes Wanko Live2D Companion
 
-> **CURRENT active-memory，2026-08-24 12:48 +08。** 旧灯体、帽子、流苏、Cubism GUI 试验和被否决候选只从 Git history 查阅，不再作为实施入口。
+> **CURRENT active-memory，2026-08-24 13:02 +08。** 旧灯体、帽子、流苏、Cubism GUI 试验和被否决候选只从 Git history 查阅，不再作为实施入口。
 
 ## Goal
 
@@ -10,11 +10,11 @@
 
 ## Version tuple
 
-- Working branch / audited pre-release HEAD: `codex/hermes-wanko-live2d` / `b3d1f8fba5306fa75ef79833dd986ac7de31f13c`；已批准候选仍位于其后的未提交工作树。
-- Deployable application source: `5f4e73c10dace9f2d18f8788ead238863cd33312`。
+- Working branch / deployed HEAD: `codex/hermes-wanko-live2d` / `02d3dd9c495fda18025d9f1698cf41a247094052`；keyboard-navigation hotfix 仍位于其后的未提交工作树。
+- Deployable application source: `02d3dd9c495fda18025d9f1698cf41a247094052`。
 - Local main / origin main: `c60ffdd16b85ea8f0d8b047493fa03a4c0230c05` / `7eb2f5bc4718ee445b79bd089acb64acb3691e62`；`origin/main` 是 local main 的祖先，二者都早于当前工作分支。
 - Remote feature: `origin/codex/hermes-wanko-live2d` 不存在；旧 `origin/codex/readable-hermes-guidance@c88c780` 不是本次候选。
-- ECS release / rollback: `5f4e73c10dace9f2d18f8788ead238863cd33312` / `c97926ab4188d5d5fc7a6e58e0333d20a600c692`。
+- ECS release / rollback: `02d3dd9c495fda18025d9f1698cf41a247094052` / `5f4e73c10dace9f2d18f8788ead238863cd33312`。
 
 ## Done
 
@@ -26,6 +26,7 @@
 - 用户已确认 Hermes 互动采用桌面右键/键盘菜单键、移动端长按、文本气泡、场景自适应与“陪伴动作 + 真实工作入口”的混合菜单；首轮造型被否决后，已批准暖纸/矿物纸工作台方向并授权实现部署。
 - UI taste 工具链已审计并启用：全局 Skills `ui-ux-pro-max@bc826e2`、`baseline-ui@bdbcc56`，以及固定 `shadcn@4.19.0`、cwd 指向本 worktree `apps/web` 的 shadcn MCP；初始化握手通过。21st.dev 因需要外部 API Key 未安装。
 - `/_visual/research-workbench` 候选已经本地实现：六个可深链场景、真实 `360/200px` v09 Hermes、右键/键盘/长按菜单、普通点击无写入 assistant dialog、暖纸 `19px/1.72` 阅读与 evidence-only graphite rail。WebGL2 失败会退回同尺寸真实 Wanko 静态帧；菜单有可访问名且不会吞掉输入区的 Shift+F10。状态测试 `5/5`、Web `395/395` + 5 Node、route E2E `5/5`、typecheck、root lint/docs-sync 与 19-page build GREEN。
+- 首次部署 `02d3dd9` 的服务器门禁与 HTTP/release/rollback 验证通过，但公网 route E2E 仅 `4/5`：快速场景切换时异步 `router.replace` 与本地 reducer 竞态。同步 History query hotfix 已在本地由先红后绿测试证明，尚未二次部署；不得把首次 `4/5` 冒充最终验收。
 - 最新数据库备份 `/var/backups/openscience/db-2026-08-24.sql` 为 441,411 bytes；当前保留 7 个 DB dump。未读取备份内容。
 
 ## Constraints

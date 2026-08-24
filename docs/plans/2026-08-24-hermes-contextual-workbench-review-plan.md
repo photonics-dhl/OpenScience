@@ -135,12 +135,12 @@ project release script with the current production release as rollback.
   claiming deployment early.
 - [x] Register all newly created product and documentation files.
 - [x] Preserve the application release / ECS release / rollback distinction.
-- [ ] Commit the complete candidate so `git status` is clean and release source
+- [x] Commit the complete candidate so `git status` is clean and release source
   verification can succeed.
 
 ## Task 8: Deploy and verify the public visual URL
 
-- [ ] Run the read-only ECS checkup and database backup from Windows Git Bash.
+- [x] Run the read-only ECS checkup and database backup from Windows Git Bash.
 - [ ] Run deployment dry-run, then confirmed deployment with `--skip-migrate`
   and explicit rollback ref after revalidating the exact candidate SHA.
 - [ ] Verify target containers, public route HTTP 200, exact `/__release` SHA,

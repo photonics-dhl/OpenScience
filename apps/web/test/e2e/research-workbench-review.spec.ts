@@ -66,8 +66,10 @@ test('keyboard menu access, quiet editor metrics and review acknowledgement work
   const editorTab = page.getByRole('tab', { name: /编辑|Editor/u });
   await editorTab.focus();
   await page.keyboard.press('ArrowRight');
+  expect(new URL(page.url()).searchParams.get('view')).toBe('review');
   await expect(page.getByRole('tab', { name: /审阅|Review/u })).toHaveAttribute('aria-selected', 'true');
   await page.keyboard.press('ArrowLeft');
+  expect(new URL(page.url()).searchParams.get('view')).toBe('editor');
   await expect(editorTab).toHaveAttribute('aria-selected', 'true');
 
   await trigger.focus();
