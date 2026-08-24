@@ -581,3 +581,72 @@ Only after the user judges Phase 1 in-browser may Phase 2 author a small set of
 new `.motion3.json` clips for poses that parameter composition cannot express.
 Phase 2 remains non-overwriting, changes no art, and requires its own Cubism
 source/export and visual acceptance gate before replacing the v09 runtime.
+
+## 12. Contextual research workbench visual acceptance (approved 2026-08-24)
+
+The user approved implementation and ECS deployment after rejecting the prior
+menu screenshots as too restrained, unattractive and visibly assembled from
+generic AI UI parts. The first deployable slice is therefore an anonymous,
+`noindex` visual acceptance route at `/_visual/research-workbench`. It renders
+the actual v09 Hermes runtime and production-derived `360/200px` proportions,
+but uses fixture research content and performs no API or database writes. The
+route is an acceptance surface, not a replacement for authenticated product
+pages; its approved language is migrated page by page only after in-browser
+review.
+
+### 12.1 Visual thesis and information hierarchy
+
+The committed direction is a daylight warm-paper research workbench: generous
+reading typography, mineral paper layers, dark graphite reserved for evidence
+inspection, and restrained vermilion used as a research mark rather than a
+decoration. Warm paper spans Dashboard, editor, explore and reading contexts;
+the former full-page “instrument black” treatment is removed. The utility
+sequence is always orient, act, then inspect evidence. Landing-page theatrical
+typography is not carried into these working surfaces.
+
+Long-form research text targets `19px / 1.72` with a Source Serif 4 and Noto
+Serif SC reading stack. Bricolage Grotesque remains the interface face; IBM Plex
+Mono is limited to identifiers, measurements and evidence metadata. Important
+text must never rely on tiny size, tracking or low contrast. Surfaces use the
+existing flat and `4px` radii, rules instead of stacked shadows, and project
+spacing tokens. There are no gradients, glass blur, glow, purple, emoji icons,
+generic command palettes, pill clusters, individual menu-item cards or floating
+card grids.
+
+### 12.2 Hermes menu semantics and scene variants
+
+The menu unfolds beside Hermes like a small set of carried research tools. A
+desktop context click, `Shift+F10` or the Menu key opens it; a mobile long press
+opens the compact variant. Ordinary click continues to open an assistant drawer
+fixture. The menu mixes companion actions with truthful work entries, uses one
+continuous paper plane with grouped rules, and positions beside rather than over
+the character. One visible focus treatment and one contextual live-status
+region describe selection results.
+
+Dashboard may be lively through Hermes' reaction, cadence and one short text
+bubble. Editor, input and approval contexts are quieter: fewer items, no
+autonomous distraction and lower-contrast character feedback. Cute expression
+comes from the real character scale, reaction timing, paper/ink tactility and
+small purposeful motion—not stickers, emoji or infantile copy. Motion is limited
+to menu origin, character response and selection result using interruptible
+opacity/transform transitions no longer than `180ms`; reduced motion removes
+those transitions while preserving state feedback.
+
+### 12.3 Acceptance states and release boundary
+
+The route must directly expose six inspectable states: Dashboard default menu,
+menu hover/keyboard focus, companion-action speech feedback, mobile long-press
+compact menu, quiet editor, and focused review evidence. It also includes
+explore and long-reading contexts so typography and density can be judged in the
+actual warm-paper system. Browser gates assert exact Hermes sizes, keyboard and
+long-press access, drawer click semantics, focus visibility, `320/390px`
+overflow safety, reading metrics, reduced motion, and the absence of API writes.
+
+The route uses CSS Modules for visual styling and Radix/shadcn evidence only for
+accessible interaction primitives; shadcn defaults do not determine its visual
+language. Deployment uses the existing immutable Git release process with
+`--skip-migrate`, an explicit rollback ref, public route and `/__release`
+verification, healthy target containers and retained rollback tree. Product
+source pages remain unchanged until the user reviews the public URL and gives
+specific feedback on silhouette, paper/ink feel, cuteness, density and action
+feedback.

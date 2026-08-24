@@ -801,6 +801,85 @@
       "commit": "Confirm the version note and scope before committing; published versions are never overwritten."
     }
   },
+  "researchWorkbenchReview": {
+    "backHome": "Return to OpenScience",
+    "visualReview": "Public visual review",
+    "exit": "Enter current product",
+    "kicker": "Hermes / contextual research tools",
+    "title": "A research workbench, not an instrument panel",
+    "introduction": "Warm paper carries reading and thought. Deep graphite appears only for evidence inspection. Right-click Hermes to see its tools unfold from the character.",
+    "sceneLabel": "Visual review scenes",
+    "close": "Close",
+    "hermesTrigger": "Hermes: click for assistant, right-click for action menu",
+    "measure": { "surface": "Work surface", "surfaceValue": "Warm paper", "reading": "Reading" },
+    "views": {
+      "dashboard": { "label": "Workbench", "eyebrow": "01 / Return to research", "note": "Lively information, while the active study and primary action remain first." },
+      "editor": { "label": "Editor", "eyebrow": "02 / Quiet writing", "note": "Less interface noise; sustained reading comes from type size, rhythm and margin notes." },
+      "review": { "label": "Review", "eyebrow": "03 / Evidence comparison", "note": "Dark material serves source evidence only; suggestions and decisions stay on warm paper." },
+      "explore": { "label": "Explore", "eyebrow": "04 / Scholarly discovery", "note": "A continuous index replaces the card wall so titles, questions and evidence scan naturally." },
+      "reading": { "label": "Reading", "eyebrow": "05 / Long reading", "note": "19px text at 1.72 leading supports sustained scholarly reading." },
+      "mobile": { "label": "Mobile", "eyebrow": "06 / Long-press interaction", "note": "The compact layout keeps 200px Hermes and 44px targets without turning actions into icon riddles." }
+    },
+    "menu": {
+      "eyebrow": "Tools carried by Hermes", "title": "How should we continue?",
+      "quiet": "Read quietly with me", "quietNote": "Set reminders aside; keep the company",
+      "tidy": "Help me order this page", "tidyNote": "Mark the structure and next step",
+      "editor": "Continue editing method", "editorNote": "Return to the last paragraph",
+      "review": "Check one suggestion", "reviewNote": "Compare source and change",
+      "keyboardHint": "Shift+F10 or Menu key to open · Esc to close",
+      "mobileHint": "Long-press Hermes to open · tap still enters assistant"
+    },
+    "bubble": { "intent": "Reading together" },
+    "status": { "ready": "Hermes is beside the research workbench.", "quiet": "I’ll stay with this page without interrupting.", "recorded": "Recorded. The suggestion remains linked to its evidence." },
+    "assistant": {
+      "title": "Research assistant",
+      "description": "Ordinary click preserves the existing assistant entry. This review fixture sends no request and writes no research data.",
+      "prompt": "I can help order this page, but I will not accept evidence or rewrite a published version for you.",
+      "inputLabel": "Prepared question",
+      "draft": "Compare this method description with its evidence source."
+    },
+    "dashboard": {
+      "active": "In progress", "title": "Ultrafast charge transfer in layered matter",
+      "summary": "The method and primary result are structured. Next, compare the Figure 3C time constant with the original experiment record.",
+      "evidence": "Evidence linked", "version": "Working version", "next": "Next decision", "nextValue": "Check result", "continue": "Continue this research",
+      "activity": "Research trail", "eventOne": "Method section saved", "eventOneNote": "Parameter bounds and calibration records linked.",
+      "eventTwo": "Hermes found one difference", "eventTwoNote": "The caption and result use different time constants.",
+      "eventThree": "Experiment notes imported", "eventThreeNote": "Four files entered the evidence library.", "yesterday": "Yesterday"
+    },
+    "editor": {
+      "outline": "SDF structure", "problem": "Research problem", "method": "Method and boundary", "results": "Primary result", "limitations": "Limitations",
+      "paragraphOne": "We measured interlayer charge transfer with few-cycle pump-probe microscopy, constraining time zero through three independent calibrations. Every run retains raw frames, calibration parameters and the analysis environment.",
+      "paragraphTwo": "Fitting is limited to regions above the preregistered signal-to-noise threshold. The method resolves a fast channel before structural relaxation, but cannot determine its microscopic mechanism alone.",
+      "note": "Keeping reproducibility conditions beside the prose makes them easier to find than hiding them in a low-contrast settings panel.",
+      "notes": "Margin notes", "noteOne": "Time zero comes from calibration/run-03.", "noteTwo": "Mechanism remains an unverified interpretation."
+    },
+    "review": {
+      "source": "Source evidence", "quote": "All three independent calibration runs resolve an early transfer component below 80 fs.",
+      "confidence": "Extraction confidence", "provenance": "Provenance", "suggestion": "Hermes suggestion 01 / 01",
+      "title": "Keep the conclusion inside the evidence boundary",
+      "body": "The current sentence presents the fast component as a confirmed mechanism, while the evidence supports only its time scale and repeatability. Keep the observation and leave mechanism for later validation.",
+      "before": "We confirm a phonon-driven ultrafast interlayer transfer mechanism.",
+      "after": "We observe an interlayer transfer component below 80 fs across three independent calibrations.",
+      "accept": "Accept suggestion", "accepted": "Accepted"
+    },
+    "explore": {
+      "query": "ultrafast charge transfer · reproducible experiment", "results": "3 related research objects",
+      "oneTitle": "Nonequilibrium carrier dynamics in layered semiconductors", "oneNote": "Pump-probe · raw data · analysis code · 2026",
+      "twoTitle": "How time-zero calibration changes sub-100-fs claims", "twoNote": "Method · calibration records · replication report · 2025",
+      "threeTitle": "Early charge-separation channels in 2D heterojunctions", "threeNote": "Preprint · four public reviews · CC0 data · 2026"
+    },
+    "reading": {
+      "citation": "Public research object / version 4", "title": "Ultrafast charge transfer in layered matter",
+      "deck": "An evidence-first versioned record connecting claims, methods, raw data and reproducible environments.", "byline": "DHL · Zhejiang University",
+      "paragraphOne": "How interlayer charge moves before the lattice reaches equilibrium is central to nonequilibrium processes in two-dimensional heterostructures. Each primary claim stays in the same version as the raw frames, calibration record and analysis code that produced it.",
+      "paragraphTwo": "Three independent runs show a transfer component below 80 femtoseconds. The result supports an early channel but does not determine the microscopic mechanism alone; that limitation remains visible beside the reproduction conditions."
+    },
+    "mobile": {
+      "active": "Continue research", "title": "Check the Figure 3C time constant",
+      "summary": "One difference remains between the evidence and result. Hermes stays below the work without covering the decision.",
+      "hint": "Long-press Hermes below for the compact action menu. Ordinary tap still opens the assistant."
+    }
+  },
   "opticalLab": {
     "eyebrow": "Optical Lab / non-production comparison",
     "introduction": "Reference, production baseline, and browser-GPU candidate under one visual gate.",

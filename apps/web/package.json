@@ -25,6 +25,7 @@
     "atlas:optical": "node scripts/generate-optical-atlas.mjs"
   },
   "dependencies": {
+    "@radix-ui/react-context-menu": "2.3.7",
     "@radix-ui/react-dialog": "^1.1.23",
     "@radix-ui/react-slot": "^1.3.3",
     "class-variance-authority": "^0.7.1",

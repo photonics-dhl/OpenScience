@@ -1,7 +1,7 @@
 # OpenScience (XGS) 项目文件索引
 
 > 维护规则：创建/修改/移动文件后必须更新本索引。创建新文件前先查本表防重复。
-> **CURRENT source/deployment anchor（2026-08-24 09:02 +08）：** working branch / audited pre-sync HEAD `codex/hermes-wanko-live2d@e4e6e66`（本轮 docs-sync commit 位于其后）；local main / origin main `c60ffdd` / `7eb2f5b`；ECS release / rollback `5f4e73c` / `c97926a`。只有本锚点与主题唯一 CURRENT handoff 可决定当前状态；下方带旧 release 的组件/验收行只表示历史首次证据，不得覆盖全局锚点。
+> **CURRENT source/deployment anchor（2026-08-24 12:48 +08）：** working branch / audited pre-release HEAD `codex/hermes-wanko-live2d@b3d1f8f`，已批准 review-route candidate 位于未提交工作树；local main / origin main `c60ffdd` / `7eb2f5b`；ECS release / rollback 仍为 `5f4e73c` / `c97926a`。只有本锚点与主题唯一 CURRENT handoff 可决定当前状态；不得把 candidate 或 docs-only HEAD 冒充 application release。
 
 ## 根目录
 | 路径 | 用途 | 状态 |
@@ -9,6 +9,7 @@
 | `AGENTS.md` | 项目规则总入口（基线指引/分类规范/Memory/工具可迁移性/索引/安全红线） | 活文档 |
 | `project_index.md` | 本索引 | 活文档 |
 | `.mcp.json` | 项目级 MCP 配置（kimi-code/Cursor）；2026-08-08 保持 10 个：`semantic-scholar`、`github`、`mermaid`、`memory`、`context7`、`tavily-search`、`figma-temp`、`figma-primary`、`shadcn`、`task-master-ai`；双 Figma 直接使用官方 remote URL，过渡期移除低价值 `fetch` | 活文档，**本机持有，已移出 git 跟踪**（2026-07-31） |
+| Codex global `ui-ux-pro-max` / `baseline-ui` Skills + `shadcn` MCP | 2026-08-24 为 Hermes 互动视觉纠偏启用：Skills 固定审计提交 `bc826e2` / `bdbcc56`；shadcn 固定 `4.19.0`、cwd 为当前 worktree `apps/web`，MCP 初始化握手通过；不把资料库命中替代用户审美验收 | **本机工具能力，不入库**；重启 Codex 后自动发现 Skills/MCP |
 | `.Codex/troubleshooting/issues.json` | 项目工具/MCP/API 故障的结构化问题库；不记录账号、密钥、OAuth URL 或 token | 活文档 |
 | [OpenScience Web Design System — canonical](https://www.figma.com/design/gjhowMG7cG4clKwvhvF08E) | 长期项目账号持有的 Optical Editorial V3 canonical；44 variables、12 styles、4 component sets、8 surfaces；旧 `rWS3…` 文件仅为历史迁移来源 | Task 13 验收完成 |
 | `.vscode/mcp.json` | VS Code MCP 配置（task-master-ai 直连 node_modules 本地入口） | 活文档，**本机持有，不入库**（含 key） |
@@ -20,6 +21,7 @@
 | `apps/web/components.json` | shadcn/ui `new-york` 配置（Task 7.4，cssVariables + 本地 aliases） | 活文档 |
 | `apps/web/app/tokens.css` | 视觉 token 单一事实源（Task 2/8；2026-08-09 Task 1 补 ingestion workbench/evidence/status/focus/spacing/type/radius，与 Figma variables 同名） | 活文档 |
 | `apps/web/components/ui/{button,card,badge,skeleton,input,dialog,status-badge,progress-rail,dropzone,evidence-card}.tsx` | UI 基础组件；后四项为研究者导入 Task 1 稳定原语（双语、WCAG、reduced-motion、固定任务状态占位） | 活文档 |
+| `apps/web/components/ui/context-menu.tsx` | 无主题 Radix context-menu 行为原语；只封装可访问结构，不携带 shadcn 默认视觉 | CURRENT candidate；供 Hermes 评审 route 使用 |
 | `apps/web/app/auth/{register,login}/page.tsx` / `apps/web/components/auth/{ResearchIdentityPanel,SignupCodeForm,LoginForm}.tsx` | Optical Editorial Research Identity 双平面；邮箱验证码注册与独立登录共用真实 session 契约，无邀请码字段；受信 origin `returnTo`、OTP 自动聚焦、可重试错误与中英 i18n | 活文档 |
 | `apps/web/app/dashboard/page.tsx` / `apps/web/components/dashboard/` / `apps/web/components/hermes/HermesAssistantDrawer.tsx` | 研究驾驶舱：最近 RO、导入/创建、可行动 Hermes 任务、研究列表与原地 Hermes guide drawer | 活实现 |
 | `apps/web/app/research-objects/new/page.tsx` / `apps/web/components/intake/*.tsx` | Optical Editorial Evidence Intake：blank 直接进入 SDF；import 在明确提交前仅本地编排 manuscript/figure/data/code/supplement 与可选主稿，提交后连接真实 ingest batch、逐任务轮询、blocked/retry 与 needs_review→Hermes deep link | 活文档 |
@@ -39,6 +41,7 @@
 | `apps/web/public/hermes/live2d/{NOTICE.md,live2dcubismcore.min.js,wanko/**}` / `apps/web/test/hermes-live2d-asset-contract.test.ts` / external `C:/Users/Mac/AppData/Local/OpenScience/Live2D/wanko-genie-v1/runtime-v09-export-20260823/` | v09 SDK 4.0 runtime：两张 texture zero-alpha RGB clean、12 motion 参数兼容、manifest 闭合；active renderer 只有单一 Cubism model/canvas，旧 pet/carrier 公开 URL 为 404 | **CURRENT ECS development deployment** `5f4e73c`；母版 SHA `BA111D4E...1121ADD` 未改，operator exception 与版权 notice 已部署，rollback `c97926a` |
 | `apps/web/lib/hermes/{live2d-core-loader,wanko-action-director,wanko-renderer-controller,wanko-live2d-renderer,wanko-model-presentation,wanko-runtime-ownership}.ts` / `apps/web/test/{hermes-wanko-action-director,hermes-wanko-renderer-contract,hermes-wanko-runtime-ownership}.test.ts` | 浏览器单 Wanko canvas/model/RAF owner；32-action profile 复用 byte-identical v09 12 motions，旧 OGL pet renderer、三张 pet PNG、carrier decoder/asset/exporter/CSS 已按授权永久移出当前 tree | **CURRENT v09 ECS runtime** `5f4e73c`；五个关键 runtime 文件公网 SHA 与 release tree 一致 |
 | `apps/web/app/_visual/hermes-live2d/page.tsx` / `apps/web/app/%5Fvisual/hermes-live2d/page.tsx` / `apps/web/test/visual/hermes-live2d-motion-gate.mjs` / `apps/web/test/visual/hermes-work-assistant-experience-gate.mjs` / `apps/web/test/visual/hermes-companion-motion-gate.mjs` / `apps/web/test/visual/hermes-performance-gate.mjs` / `apps/web/test/visual/hermes-release-gate.mjs` / `apps/web/test/e2e/hermes-dashboard.spec.ts` / `apps/web/test/e2e/hermes-field-guide.spec.ts` | 明示 flag 才开放的真实 RO-create fixture + 折叠诊断 tray；覆盖 Wanko 32-action、`360/200`、气泡/图层/像素/比例/exact-static、真实创建提交、drag/reload/resize、guide geometry、atomic speech 与主操作不遮挡；default production harness 仍 404 | **CURRENT LOCAL + PUBLIC UI GATES GREEN** `5f4e73c`：Web `390+5`、canonical product E2E `40/40`、公网三视口无写入 UI gate；真实账号纵向 gate 未重跑 |
+| `apps/web/app/%5Fvisual/research-workbench/` / `apps/web/app/_visual/research-workbench/` / `apps/web/components/visual/{ResearchWorkbenchReview,ResearchWorkbenchHermes,research-workbench-review.module.css}` / `apps/web/public/hermes/wanko-static.png` / `apps/web/lib/research-workbench-state.ts` / `apps/web/test/{research-workbench-state.test.ts,e2e/research-workbench-review.spec.ts}` | 匿名 noindex 暖纸产品视觉评审入口；六场景 deep-link、真实 v09 `360/200px`、WebGL 失败时同尺寸真实 Wanko 静态帧、Hermes 右键/键盘/长按菜单、普通点击无写入 assistant fixture、19px/1.72 阅读与 evidence-only graphite rail | **APPROVED DEPLOY CANDIDATE / LOCAL GREEN**：state `5/5` + mutation、E2E `5/5`、Web `395/395` + 5 Node、19-page build；待 clean SHA 与 ECS 公网验收 |
 | `apps/web/components/research/*.tsx` / `apps/web/components/editor/*.tsx` / `apps/web/app/research-objects/[id]/edit/page.tsx` | Optical Editorial RO Workspace：56/64/44px 产品层级、19/56/25 单实例工作面、六节点 SDF、Evidence/Before-After proposal、Artifact rule row、Radix 高影响审查与移动功能等价 | 活文档 |
 | `packages/domain/src/commit/commits.ts` / `apps/api/src/routes/commits.ts` | Commit、版本详情/重建/比较及成员受控的 `GET /research-objects/:id/versions` 降序摘要；供 Editor、Overview、Versions、Publish 共用 | 活接口；Task 12 补齐版本列表合同 |
 | `apps/web/lib/product-surfaces.ts` / `apps/web/test/product-surface-matrix.test.ts` | Task 12 产品表面真源：Overview/SDF/Files/Versions/Collaboration/Publish/Sandbox/Settings 的真实路由、权限、五态、移动等价与风险声明 | ECS 390/1440 验收通过（2026-08-10） |
@@ -127,11 +130,12 @@
 | `docs/specs/2026-08-15-hermes-constellation-dragon-prototype-design.md` | Hermes 少年星图龙轻量 Blender 原型历史设计 | **用户视觉 NO-GO**；不得作为当前候选 |
 | `docs/specs/2026-08-15-hermes-2d-pet-design.md` | Hermes 2.5D 整图 PNG/CSS-signal 历史原型 | **DEPRECATED / VISUAL NO-GO**；资产可复用，renderer 不得继续 |
 | `docs/specs/2026-08-17-hermes-workspace-companion-motion-design.md` | Hermes Workspace Companion 已实施 guide/anchor/travel/dock/diff foundation 与历史 OGL visual contract | **IMPLEMENTED FOUNDATION / VISUAL SUPERSEDED**；CURRENT renderer 见 2026-08-19 Wanko spec |
-| `docs/specs/2026-08-19-hermes-wanko-live2d-design.md` | Wanko 第一阶段验证角色；§10 原生灯/烟雾托座；§11 以 ECS `288/160px` 为输入基线精确放大至 `360/200px`，保留右栏停靠、拖动脱离、统一 semantic performance beat 与双语 optical-editorial 气泡系统 | **CURRENT Hermes visual/guide design — IMPLEMENTED**；ECS release `5f4e73c`，rollback `c97926a` |
+| `docs/specs/2026-08-19-hermes-wanko-live2d-design.md` | Wanko 第一阶段角色与 runtime；§11 movable `360/200px`；§12 已批准 daylight warm-paper 研究工作台、情境菜单交互、阅读字体与匿名公网视觉验收边界 | **CURRENT Hermes visual/guide design**；§11 deployed `5f4e73c`，§12 approved candidate 待部署 |
 | `docs/specs/2026-08-22-wanko-scholar-hat-design.md` | canonical Wanko 常驻学者帽视觉、佩戴遮挡、流苏运动和 visual-before-Cubism 门 | **CURRENT accessory design COMPLETE / DEPLOYED**；v09 母版与 2026-08-23 runtime bundle 已随 release `5f4e73c` 部署 |
 | `docs/specs/2026-08-18-readable-workspace-hermes-guidance-design.md` | B 平衡学者工作台、三视觉系统阅读基线、浏览器无关控件样式、Hermes 不遮挡引导编舞与公网 blank RO→六字段→diff→commit 真实验收 | **IMPLEMENTED FOUNDATION / CARRIED FORWARD**；首次公网真实验收 `06072c1`，现行 release `5f4e73c` |
 | `docs/plans/2026-08-18-readable-workspace-hermes-guidance-plan.md` | 可读性基础→代表页面→完整 Hermes footprint 避让→edit-before-accept/缺失证据→语义动作→公网 blank RO gate→ECS checkpoint 的 TDD 实施链 | **COMPLETED**；release `06072c1` / rollback `8ecf96c` |
 | `docs/plans/2026-08-19-hermes-wanko-live2d-plan.md` | Tasks 1–20 与 Task 21 的 Wanko、`360/200px` movable companion、protected-region/bubble collision、三视口 Dashboard 与 ECS rollback 实施证据 | **COMPLETED / HISTORICAL EXECUTION EVIDENCE**；release `5f4e73c`，不得作为下个任务的 CURRENT plan |
+| `docs/plans/2026-08-24-hermes-contextual-workbench-review-plan.md` | 暖纸视觉评审 route 的 TDD、真实 Hermes、键盘/长按/assistant、浏览器截图、docs-sync 与 immutable ECS 部署任务链 | **CURRENT EXECUTION PLAN**；Tasks 1–6 local complete，Tasks 7–8 release/deploy pending |
 | `docs/specs/2026-08-16-hermes-articulated-mesh-pet-design.md` | Hermes 原创 OGL 2D mesh-rig 历史设计：真实角色像素关节、旧待机语法与严格 lifecycle | **DEPRECATED**；由 2026-08-17 Workspace Companion spec 取代 |
 | `docs/specs/2026-08-16-hermes-contextual-guide-design.md` | Hermes 情境引导员历史设计：Dashboard 提示、助手抽屉与正式 `workspace.guide` 闭环 | **DEPRECATED**；由 2026-08-17 Workspace Companion spec 取代 |
 | `docs/data/launch-research-corpus.md` | 18 条公开启动语料的范围、免责声明、真实来源、上游许可证证据与 ECS seed 操作边界 | 活文档；本地完成，待生产 seed |
@@ -319,7 +323,7 @@
 | `docs/decisions/ADR-006-cloudflare-tunnel-public-ingress.md` | 未备案域名公网入口改由 ECS 常驻 Cloudflare Tunnel 承载；Nginx 继续作为统一回源与安全边界 | Accepted |
 | `docs/handoff/2026-08-15-cloudflare-tunnel-egress-incident-handoff.md` | Cloudflare Tunnel 502/530 事故根因、生产修复、回滚证据与后续观察项 | 当前基础设施交接 |
 | `docs/specs/2026-08-16-edge-cache-asset-versioning-design.md` / `docs/plans/2026-08-16-edge-cache-asset-versioning-plan.md` / `docs/handoff/2026-08-16-edge-cache-asset-versioning-handoff.md` | Landing 大型光学资产内容寻址缓存的设计、实施与部署证据 | 已完成历史主题；release `b93fa9d`，不作为当前 Hermes 入口 |
-| `docs/runbooks/deployment.md` | 部署 runbook（cloud-sync/迁移/seed/nginx/验证、Parser 隔离与版本化资产）；§5.3–5.14 登记 Optical 与 Hermes 生产发布 | CURRENT；最新 ECS application release/rollback `5f4e73c` / `c97926a` |
+| `docs/runbooks/deployment.md` | 部署 runbook（cloud-sync/迁移/seed/nginx/验证、Parser 隔离、Windows Git Bash 专用密钥调用与版本化资产）；§5.3–5.14 登记 Optical 与 Hermes 生产发布 | CURRENT；09:22 +08 只读复验通过，最新 ECS application release/rollback `5f4e73c` / `c97926a` |
 | `docs/runbooks/backup-restore.md` | 备份与恢复 runbook（四节骨架，Phase 1A 填充） | 骨架 |
 | `docs/runbooks/incident.md` | 故障响应 runbook（四节骨架，Phase 1A 填充） | 骨架 |
 | `docs/runbooks/monitoring.md` | 监控面板 runbook（Netdata + vnStat，同域 /monitor/ /traffic/ 路径，2026-08-01） | 已上线 |

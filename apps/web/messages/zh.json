@@ -801,6 +801,125 @@
       "commit": "确认版本说明和变更范围后再提交，已发布版本不会被原地改写。"
     }
   },
+  "researchWorkbenchReview": {
+    "backHome": "返回 OpenScience",
+    "visualReview": "公开视觉评审",
+    "exit": "进入当前产品",
+    "kicker": "Hermes / 情境研究工具",
+    "title": "研究工作台，而不是仪器面板",
+    "introduction": "暖纸承担阅读与思考，深石墨只在证据核验时出现。右键 Hermes 查看它如何从角色身边自然展开。",
+    "sceneLabel": "视觉评审场景",
+    "close": "关闭",
+    "hermesTrigger": "Hermes：点击打开助手，右键打开动作菜单",
+    "measure": {
+      "surface": "工作表面",
+      "surfaceValue": "暖纸",
+      "reading": "正文"
+    },
+    "views": {
+      "dashboard": { "label": "工作台", "eyebrow": "01 / 回到研究", "note": "信息活泼，但主动作和正在进行的研究始终先被看见。" },
+      "editor": { "label": "编辑", "eyebrow": "02 / 安静书写", "note": "降低界面噪声，用正文尺寸、行距和页边批注承载连续阅读。" },
+      "review": { "label": "审阅", "eyebrow": "03 / 对照证据", "note": "深色只服务于证据来源；建议和决定仍留在暖纸工作面。" },
+      "explore": { "label": "发现", "eyebrow": "04 / 学术发现", "note": "以连续索引取代卡片墙，让标题、问题和证据类型便于扫读。" },
+      "reading": { "label": "阅读", "eyebrow": "05 / 长文阅读", "note": "19px 正文与 1.72 行距，适合长时间阅读和中文学术内容。" },
+      "mobile": { "label": "移动端", "eyebrow": "06 / 长按交互", "note": "紧凑布局保留 200px Hermes 和 44px 触点，不把菜单压成图标谜题。" }
+    },
+    "menu": {
+      "eyebrow": "Hermes 随身工具",
+      "title": "这一步想怎么继续？",
+      "quiet": "安静陪我读",
+      "quietNote": "收起提醒，只保留陪伴",
+      "tidy": "帮我理清这一页",
+      "tidyNote": "标出当前结构和下一步",
+      "editor": "继续编辑方法",
+      "editorNote": "回到上次停留的段落",
+      "review": "核对一条建议",
+      "reviewNote": "并排查看原文与改动",
+      "keyboardHint": "Shift+F10 或菜单键打开 · Esc 关闭",
+      "mobileHint": "长按 Hermes 打开 · 点按仍进入助手"
+    },
+    "bubble": { "intent": "一起读" },
+    "status": {
+      "ready": "Hermes 已在研究工作台旁待命。",
+      "quiet": "我在这页陪你，不打扰。",
+      "recorded": "已记录这条建议，证据与表述保持关联。"
+    },
+    "assistant": {
+      "title": "研究助手",
+      "description": "普通点击保持原有助手入口；这个评审夹具不发送请求，也不会写入研究数据。",
+      "prompt": "我可以帮你梳理本页结构，但不会替你接受证据或改写已发布版本。",
+      "inputLabel": "准备询问",
+      "draft": "请比较这段方法描述与证据来源。"
+    },
+    "dashboard": {
+      "active": "正在进行",
+      "title": "层状材料中的超快电荷转移",
+      "summary": "当前研究对象已完成方法和主要结果的结构化整理，下一步需要核对图 3C 的时间常数与原始实验记录。",
+      "evidence": "证据已关联",
+      "version": "工作版本",
+      "next": "下一决定",
+      "nextValue": "核对结果",
+      "continue": "继续这项研究",
+      "activity": "研究轨迹",
+      "eventOne": "方法段已保存",
+      "eventOneNote": "参数范围与校准记录已关联。",
+      "eventTwo": "Hermes 找到一处差异",
+      "eventTwoNote": "图注与结果段的时间常数不一致。",
+      "eventThree": "导入实验笔记",
+      "eventThreeNote": "4 个文件进入证据库。",
+      "yesterday": "昨日"
+    },
+    "editor": {
+      "outline": "SDF 结构",
+      "problem": "研究问题",
+      "method": "方法与边界",
+      "results": "主要结果",
+      "limitations": "限制",
+      "paragraphOne": "我们使用少周期泵浦—探测显微术测量层间电荷转移，并以三次独立校准约束时间零点。每次测量都保留原始帧、校准参数与分析环境。",
+      "paragraphTwo": "拟合只在信噪比高于预先登记阈值的区域进行。该方法能够分辨结构弛豫之前出现的快速通道，但不能单独确定其微观机制。",
+      "note": "把可复现条件留在正文附近，比藏进一个低对比度设置面板更容易被研究者发现。",
+      "notes": "页边批注",
+      "noteOne": "时间零点来自 calibration/run-03。",
+      "noteTwo": "机制解释仍应标记为待验证。"
+    },
+    "review": {
+      "source": "原始证据",
+      "quote": "三个独立校准运行均解析出 80 fs 以内的早期转移分量。",
+      "confidence": "提取置信度",
+      "provenance": "来源",
+      "suggestion": "Hermes 建议 01 / 01",
+      "title": "让结论与证据边界一致",
+      "body": "原表述把快速分量写成已确定的机制，但现有证据只支持时间尺度与重复性。建议保留观察结果，把机制判断留作后续验证。",
+      "before": "我们确认了由声子驱动的超快层间转移机制。",
+      "after": "我们在三次独立校准中观察到 80 fs 以内的层间转移分量。",
+      "accept": "接受这条建议",
+      "accepted": "已接受"
+    },
+    "explore": {
+      "query": "超快电荷转移 · 可复现实验",
+      "results": "3 个相关研究对象",
+      "oneTitle": "层状半导体中的非平衡载流子动力学",
+      "oneNote": "泵浦—探测 · 原始数据 · 分析代码 · 2026",
+      "twoTitle": "时间零点校准对亚百飞秒结论的影响",
+      "twoNote": "方法学 · 校准记录 · 复现报告 · 2025",
+      "threeTitle": "二维异质结的早期电荷分离通道",
+      "threeNote": "预印本 · 公开评审 4 条 · 数据 CC0 · 2026"
+    },
+    "reading": {
+      "citation": "公开研究对象 / 版本 4",
+      "title": "层状物质中的超快电荷转移",
+      "deck": "证据优先的版本化记录，连接论断、方法、原始数据与可复现环境。",
+      "byline": "DHL · 浙江大学",
+      "paragraphOne": "层间电荷如何在晶格达到平衡之前移动，是理解二维异质结构中非平衡过程的关键问题。我们把每条主要论断与产生它的原始帧、校准记录和分析代码保持在同一版本中。",
+      "paragraphTwo": "三个独立运行均显示一个亚 80 飞秒的转移分量。结果支持早期转移通道的存在，但尚不足以单独判定微观机制；这一限制与复现条件一起保留在公开记录中。"
+    },
+    "mobile": {
+      "active": "继续研究",
+      "title": "核对图 3C 的时间常数",
+      "summary": "证据与结果段有一处需要确认。Hermes 会留在页面下方，不遮住主要决定。",
+      "hint": "长按下方 Hermes，查看紧凑动作菜单。普通点按仍打开助手。"
+    }
+  },
   "opticalLab": {
     "eyebrow": "光学实验室 / 非生产对照",
     "introduction": "在同一道视觉门禁中对照用户参考、生产基线与浏览器 GPU 候选。",

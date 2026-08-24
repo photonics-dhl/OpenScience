@@ -14,6 +14,10 @@
   --os-muted-paper: #5f625e;
   --os-vermilion: #ff4e22;
   --os-confirmed: #85b77d;
+  --os-canvas-warm: #e7e1d6;
+  --os-paper-strong: #fffaf2;
+  --os-graphite: #202522;
+  --os-vermilion-ink: #b83b22;
   /* Derived rules use the canonical foregrounds at low alpha. */
   --os-rule-dark: rgb(241 238 231 / 0.18);
   --os-rule-paper: rgb(25 26 24 / 0.2);
@@ -21,6 +25,7 @@
   /* Typography roles. next/font supplies the first four variables at <html>. */
   --font-display-grotesk: var(--font-bricolage), 'Arial Narrow', sans-serif;
   --font-editorial-serif: var(--font-bodoni), 'Times New Roman', serif;
+  --font-reading-serif: var(--font-source-serif), var(--font-noto-serif-sc), 'Songti SC', Georgia, serif;
   --font-cjk-serif: var(--font-noto-serif-sc), 'Songti SC', serif;
   --font-ui: var(--font-bricolage), system-ui, 'PingFang SC', sans-serif;
   --font-data: var(--font-ibm-plex-mono), 'Cascadia Mono', monospace;
@@ -48,8 +53,10 @@
   --text-control: 0.875rem;
   --text-body: 1rem;
   --text-reading: 1.0625rem;
+  --text-reading-long: 1.1875rem;
   --leading-body: 1.6;
   --leading-reading: 1.7;
+  --leading-reading-long: 1.72;
 
   /* Semantic motion: focus, reveal, scan and long optical drift. */
   --motion-fast: 160ms;
@@ -114,6 +121,10 @@
   --color-os-muted-paper: var(--os-muted-paper);
   --color-os-vermilion: var(--os-vermilion);
   --color-os-confirmed: var(--os-confirmed);
+  --color-os-canvas-warm: var(--os-canvas-warm);
+  --color-os-paper-strong: var(--os-paper-strong);
+  --color-os-graphite: var(--os-graphite);
+  --color-os-vermilion-ink: var(--os-vermilion-ink);
   --color-os-rule-dark: var(--os-rule-dark);
   --color-os-rule-paper: var(--os-rule-paper);
   --color-state-danger: var(--state-danger);

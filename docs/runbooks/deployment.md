@@ -1,6 +1,6 @@
 # Runbook: 部署（Deployment）
 
-> 状态：**CURRENT**。2026-08-24 09:02 +08 只读核验的 active application release 为 `5f4e73c10dace9f2d18f8788ead238863cd33312`，rollback tree 为 `c97926ab4188d5d5fc7a6e58e0333d20a600c692`；docs-only HEAD 不得替代或触发应用部署。
+> 状态：**CURRENT**。2026-08-24 09:22 +08 只读核验的 active application release 为 `5f4e73c10dace9f2d18f8788ead238863cd33312`，rollback tree 为 `c97926ab4188d5d5fc7a6e58e0333d20a600c692`；docs-only HEAD 不得替代或触发应用部署。
 > 格式遵循 `.agents/skills/infra-runbook/SKILL.md` 四节强制要求。
 > 部署属 Spec §20.5"询问"级操作：执行前需用户确认，必须走 `infra/scripts/deploy.sh` + CI/CD，禁止手工改服务器代码。
 
@@ -15,6 +15,19 @@
 - [ ] 巡检基线 `infra/scripts/checkup.sh` 无告警
 - [ ] 备份确认（`docs/runbooks/backup-restore.md`）
 - [ ] P1A-8 追加：API 反代 `infra/nginx/openscience.conf` 的 SSL 证书已签发（`~/.acme.sh`）
+
+### 1.1 Windows 必须用 Git Bash 执行 SSH 脚本
+
+Windows 上不要用系统 `bash.exe`、WSL 或 `wsl bash` 调用 `infra/scripts/ssh-run.sh`、`checkup.sh` 和部署脚本。WSL 的 HOME 是 `/root`，看不到 Windows SSH 配置；Windows 挂载的 `C:/Users/Mac/.ssh/id_ed25519_xgs` 在 WSL 中又显示为 `0777`，OpenSSH 会以私钥权限过宽为由拒绝加载。
+
+在 PowerShell 中显式调用 Git for Windows Bash：
+
+```powershell
+& 'C:\Program Files\Git\bin\bash.exe' ./infra/scripts/checkup.sh
+& 'C:\Program Files\Git\bin\bash.exe' ./infra/scripts/ssh-run.sh '<read-only command>'
+```
+
+Git Bash 会沿用 Windows 用户目录中的 SSH 配置和项目专用密钥。出现“SSH 认证失败”时，先检查实际调用的是不是 `C:\Program Files\Git\bin\bash.exe`；不要改用密码，不要复制、打印或放宽私钥权限。2026-08-24 09:22 +08 已用上述 `checkup.sh` 命令完成只读复验。
 
 ## 2. 执行步骤
 
@@ -531,3 +544,28 @@ Historical note for the 2026-08-11 release: it used fixed worker tags and a writ
   responses/writes were intercepted to avoid production data mutation; this is
   deliberately not recorded as a real-account/database vertical gate. The
   latter requires an existing test session token and remains optional evidence.
+
+### 5.15 Hermes warm-paper workbench visual-review candidate (2026-08-24)
+
+> User-authorized deployment candidate; the active ECS release remains
+> `5f4e73c` with rollback tree `c97926a` until the confirmed switch succeeds.
+
+- Scope: anonymous, `noindex`, no-write `/_visual/research-workbench` route with
+  six deep-linked review scenes, real v09 Hermes at exact `360/200px`, desktop
+  context click plus `Shift+F10`/Menu key, mobile long press, and an isolated
+  ordinary-click assistant dialog fixture. It changes no authenticated product
+  route, API, migration, seed or stored research data.
+- Visual boundary: daylight warm paper across work and reading; `19px / 1.72`
+  long-form type; deep graphite limited to evidence inspection. Radix provides
+  menu/dialog accessibility behavior only. The route contains no gradient,
+  glass blur, glow, purple, emoji, pill cluster or per-menu-item card styling.
+- Fresh local evidence before candidate commit: reducer `5/5` with a killed
+  mutation, Web `395/395` plus five Node contracts, focused Playwright `4/4`,
+  typecheck and the 19-page production build passed. Five ignored real-WebGL
+  screenshots were inspected at original detail and corrected for actor
+  obstruction, mobile clipping, premature canvas capture and focus appearance.
+- Operation: run the canonical Git Bash checkup and database backup, then exact
+  dry-run and confirmed `deploy.sh --skip-migrate` using active release
+  `5f4e73c...` as explicit rollback. Record candidate SHA, backup size/retention,
+  container health, public HTTP 200, exact `/__release`, absent failure marker
+  and retained rollback tree only after those checks actually pass.
