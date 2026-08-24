@@ -1,7 +1,7 @@
 # Research Folio Product System Implementation Plan
 
 > **Execution target:** `codex/hermes-wanko-live2d` in `E:/Miscellaneous/XGS/.worktrees/readable-hermes-guidance` only. Landing is explicitly out of scope. Deploy with `--skip-migrate` after local and server gates.
-> **Status:** Tasks 1–9 COMPLETE; Task 10 local gates/review/docs COMPLETE for application source `eb55820ee67d00b0924797ccbbd1db395412f07a`. Production remains `33418fdf9e4c13cd3e34eba0a15f6f0208fc5183`, rollback `2abfe42e56881ae7b7a3e7f0a0b3a97b31762326`; immutable deployment is next.
+> **Status:** Tasks 1–10 COMPLETE. Application source `eb55820ee67d00b0924797ccbbd1db395412f07a` is deployed in immutable release `3010903e3058ba49c6d6dceb7fa938ea2fd0eb3e`; rollback is `33418fdf9e4c13cd3e34eba0a15f6f0208fc5183`.
 
 **Goal:** Replace the fragmented instrument-black treatment on every real non-Landing route with the approved Research Folio system, make the primary research workflow readable and self-explanatory, and guarantee that anchored Hermes never covers product content.
 
@@ -205,7 +205,7 @@
 - [x] Run the complete Web test suite, typecheck, production build, product release matrix, Hermes focused gates, root lint/docs gates and `git diff --check`.
 - [x] Request independent Sol High architecture/product review; fix all Critical and Important findings and repeat affected gates.
 - [x] Synchronize the exact branch / candidate / ECS release / rollback tuple and commit the release candidate with a clean tree.
-- [ ] Run ECS preflight and backup, then deploy the immutable candidate with `infra/scripts/deploy.sh <candidate> --skip-migrate <rollback>`; do not migrate, seed or write research data.
-- [ ] Verify server build, 27-current migration status, target container health, runtime asset loading, loopback/public health, exact `/__release`, absent failure marker and retained rollback tree.
-- [ ] Run public no-write browser checks for Dashboard right click, `Shift+F10`, ContextMenu key, companion feedback and mobile long press; inspect the deployed bubble at native size.
-- [ ] Record deployed SHA, rollback SHA, evidence and remaining authentication limitation in CURRENT docs.
+- [x] Run ECS preflight and backup, then deploy the immutable candidate with `infra/scripts/deploy.sh <candidate> --skip-migrate <rollback>`; do not migrate, seed or write research data.
+- [x] Verify server build, 27-current migration status, target container health, runtime asset loading, loopback/public health, exact `/__release`, absent failure marker and retained rollback tree.
+- [x] Run public no-write browser checks for Dashboard right click, `Shift+F10`, ContextMenu key, companion feedback and mobile long press; inspect the deployed bubble at native size.
+- [x] Record deployed SHA, rollback SHA, evidence and remaining authentication limitation in CURRENT docs.

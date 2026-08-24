@@ -1,6 +1,6 @@
 # Runbook: 部署（Deployment）
 
-> 状态：**CURRENT**。2026-08-24 验收的 active application release 为 `33418fdf9e4c13cd3e34eba0a15f6f0208fc5183`，rollback tree 为 `2abfe42e56881ae7b7a3e7f0a0b3a97b31762326`；2026-08-25 mouth-anchored speech application source `eb55820ee67d00b0924797ccbbd1db395412f07a` 已完成本地门禁，尚未部署。docs-only HEAD 不得冒充 application source。
+> 状态：**CURRENT**。2026-08-25 验收的 active immutable release 为 `3010903e3058ba49c6d6dceb7fa938ea2fd0eb3e`，rollback tree 为 `33418fdf9e4c13cd3e34eba0a15f6f0208fc5183`；mouth-anchored speech application source 为 `eb55820ee67d00b0924797ccbbd1db395412f07a`。post-deploy docs-only HEAD 不得冒充 application source。
 > 格式遵循 `.agents/skills/infra-runbook/SKILL.md` 四节强制要求。
 > 部署属 Spec §20.5"询问"级操作：执行前需用户确认，必须走 `infra/scripts/deploy.sh` + CI/CD，禁止手工改服务器代码。
 
@@ -635,3 +635,36 @@ Historical note for the 2026-08-11 release: it used fixed worker tags and a writ
   current; release/failure/rollback markers, real routes and Live2D assets pass.
   Public Dashboard plus three Hermes interaction gates pass `4/4`. No migration,
   seed or research-data write ran.
+
+### 5.18 Hermes mouth-anchored speech release (2026-08-25)
+
+> Active immutable release `3010903e3058ba49c6d6dceb7fa938ea2fd0eb3e`;
+> rollback `33418fdf9e4c13cd3e34eba0a15f6f0208fc5183`; application source
+> `eb55820ee67d00b0924797ccbbd1db395412f07a`.
+
+- Scope: real non-Landing Hermes explicit feedback now uses one mouth-anchored
+  warm-paper sentence with calibrated desktop/mobile tails. Its carried-tool
+  menu is one continuous ruled ledger, including a 224px mobile form; right
+  click, `Shift+F10`, ContextMenu key, long press and ordinary-click drawer
+  semantics remain. Landing is unchanged.
+- Local release evidence: targeted `14/14`, Web `403/403` plus five Node
+  contracts, current Hermes aggregate `19+3`, work-assistant three viewports,
+  product release `60/60`, full root typecheck/lint/docs-sync/test/build and
+  independent architecture/Hermes reviews passed. The ECS build generated 19
+  Web routes.
+- Operation: canonical preflight and backup `432K files=7/7` passed. The exact
+  release was deployed through `deploy.sh --confirm --skip-migrate` with the
+  exact rollback above. API, Agent Worker and Document Parser are healthy; Web
+  is running; 27 migrations remain current. Runtime dependencies load from the
+  immutable release, and Parser remains non-root/read-only/network-none with a
+  512MiB/64-PID bound.
+- Acceptance: Cloudflare and loopback HTTPS return 200; real identity,
+  Dashboard, create, Explore and Live2D model/moc routes return 200;
+  `/__release` matches the full SHA; `.release-failed` is absent and the rollback
+  tree remains. Public no-write browser checks for desktop pointer/keyboard,
+  mobile long press and editor feedback pass `3/3`; native-size screenshot review
+  confirms the feedback remains inside the Hermes research margin and does not
+  cover editor text.
+- No migration, seed or research-data write ran. The public check uses no-write
+  API interception and is not a claim of a fresh real-account/database vertical
+  journey; that remains optional when a safe existing test session is available.
