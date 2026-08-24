@@ -176,6 +176,7 @@ for (const releaseCase of PRODUCT_RELEASE_CASES) {
     });
     expect(postStateGeometry.excess, JSON.stringify(postStateGeometry.offenders, null, 2)).toBe(0);
     expect(postStateGeometry.companionOverlaps).toEqual([]);
+    expect(await page.locator('[data-hermes-placement="anchored"] [data-hermes-performance-bubble][data-hermes-speech-visible="true"]').count()).toBe(0);
 
     if (reducedMotion) {
       expect(await page.evaluate(() => matchMedia('(prefers-reduced-motion: reduce)').matches)).toBe(true);
@@ -216,6 +217,9 @@ test('Hermes action menu / desktop pointer and keyboard preserve the assistant e
   await installClientFixtures(page);
   await page.goto(`${baseUrl}/dashboard`, { waitUntil: 'networkidle' });
   const trigger = page.locator('[data-hermes-input-owner="true"]');
+  await page.waitForTimeout(4500);
+  expect(await page.locator('[data-hermes-placement="anchored"] [data-hermes-performance-bubble][data-hermes-speech-visible="true"]').count()).toBe(0);
+  expect(await page.locator('[data-hermes-placement="anchored"] .hermes-guide-nudge[data-visible="true"]').count()).toBe(0);
   const scrollBeforeMenu = await page.evaluate(() => window.scrollY);
   await trigger.click({ button: 'right' });
   const menu = page.getByRole('menu', { name: /Hermes/u });

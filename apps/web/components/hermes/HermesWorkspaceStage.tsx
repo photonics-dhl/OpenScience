@@ -336,10 +336,10 @@ function HermesWorkspaceStage({ fallbackAssistantOpen, fallbackOnInvoke, guideTa
     input.writing = writing;
     const assistantOpen = presentation?.assistantOpen ?? fallbackAssistantOpen;
     const modalOpen = Boolean(document.querySelector('[role="dialog"][aria-modal="true"]'));
-    const speechAllowed = !effectiveReducedMotion && !writing && !guideTarget && state !== 'awaiting_approval'
+    const speechAllowed = !effectiveReducedMotion && !writing && !guideTarget && !presentation?.anchor && state !== 'awaiting_approval'
       && !assistantOpen && !modalOpen && document.visibilityState === 'visible';
     setPerformanceState((previous) => stepHermesPerformance(previous, { behaviorInput: input, speechAllowed }));
-  }, [dragging, effectiveReducedMotion, fallbackAssistantOpen, guideReady, guideTarget, presentation?.assistantOpen, state, writing]);
+  }, [dragging, effectiveReducedMotion, fallbackAssistantOpen, guideReady, guideTarget, presentation?.anchor, presentation?.assistantOpen, state, writing]);
 
   React.useLayoutEffect(() => { positionRef.current = position; }, [position]);
 
@@ -1331,7 +1331,7 @@ function HermesWorkspaceStage({ fallbackAssistantOpen, fallbackOnInvoke, guideTa
           }
           setRuntimeStatus(status);
         }}
-        promptSuppressed={Boolean(speech.cue) || Boolean(guideTarget)}
+        promptSuppressed={anchored || Boolean(speech.cue) || Boolean(guideTarget)}
         reducedMotion={effectiveReducedMotion}
         rendererGeneration={runtimeStatus.generation}
         state={state}
