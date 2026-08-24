@@ -1,7 +1,7 @@
 # Research Folio Product System Implementation Plan
 
 > **Execution target:** `codex/hermes-wanko-live2d` in `E:/Miscellaneous/XGS/.worktrees/readable-hermes-guidance` only. Landing is explicitly out of scope. Deploy with `--skip-migrate` after local and server gates.
-> **Status:** Tasks 1–8 COMPLETE at production release `33418fdf9e4c13cd3e34eba0a15f6f0208fc5183`, rollback `2abfe42e56881ae7b7a3e7f0a0b3a97b31762326`; Tasks 9–10 approved for the 2026-08-25 Hermes speech/menu refinement.
+> **Status:** Tasks 1–9 COMPLETE; Task 10 local gates/review/docs COMPLETE for application source `eb55820ee67d00b0924797ccbbd1db395412f07a`. Production remains `33418fdf9e4c13cd3e34eba0a15f6f0208fc5183`, rollback `2abfe42e56881ae7b7a3e7f0a0b3a97b31762326`; immutable deployment is next.
 
 **Goal:** Replace the fragmented instrument-black treatment on every real non-Landing route with the approved Research Folio system, make the primary research workflow readable and self-explanatory, and guarantee that anchored Hermes never covers product content.
 
@@ -184,14 +184,14 @@
 - Modify: `apps/web/test/hermes-state.test.tsx`
 - Modify: `apps/web/test/e2e/product-release.spec.ts`
 
-- [ ] Add a failing component contract proving performance speech and companion-action feedback expose one sentence without a tone/speaker label, shortcut, toolbar or rectangular status treatment.
-- [ ] Add a failing CSS/geometry contract proving the speech silhouette is oval/asymmetric, its short triangular tail uses the mouth anchor, the anchored warm-paper variant has no gradient/glass/glow, and desktop/mobile sizes retain the `360/200px` actor relationship.
-- [ ] Add a failing browser assertion that selecting the companion action closes the Radix menu, shows the polite reply in the reserved margin, and keeps its rectangle disjoint from protected research content.
-- [ ] Run the focused tests and retain the expected RED failures caused by the old kicker, dismiss control and rectangular feedback CSS.
-- [ ] Implement the minimal shared speech markup and scoped CSS overrides. Keep guide bubbles functional and keep ordinary click, keyboard menu, ContextMenu key and long-press behavior unchanged.
-- [ ] Refine the existing context menu into one continuous ruled research-ledger sheet with grouped rows and a single pull tab; do not replace Radix focus or navigation behavior.
-- [ ] Run focused unit/browser tests, then inspect desktop `1440/1024/736px` and mobile `390/360/320px` screenshots at native size.
-- [ ] Commit the tested product change.
+- [x] Add a failing component contract proving performance speech and companion-action feedback expose one sentence without a tone/speaker label, shortcut, toolbar or rectangular status treatment.
+- [x] Add a failing CSS/geometry contract proving the speech silhouette is oval/asymmetric, its short triangular tail uses the mouth anchor, the anchored warm-paper variant has no gradient/glass/glow, and desktop/mobile sizes retain the `360/200px` actor relationship.
+- [x] Add a failing browser assertion that selecting the companion action closes the Radix menu, shows the polite reply in the reserved margin, and keeps its rectangle disjoint from protected research content.
+- [x] Run the focused tests and retain the expected RED failures caused by the old kicker, dismiss control and rectangular feedback CSS.
+- [x] Implement the minimal shared speech markup and scoped CSS overrides. Keep guide bubbles functional and keep ordinary click, keyboard menu, ContextMenu key and long-press behavior unchanged.
+- [x] Refine the existing context menu into one continuous ruled research-ledger sheet with grouped rows and a single pull tab; do not replace Radix focus or navigation behavior.
+- [x] Run focused unit/browser tests, then inspect desktop `1440/1024/736px` and mobile `390/360/320px` screenshots at native size.
+- [x] Commit the tested product change.
 
 ## Task 10: Review, synchronize and deploy the Hermes refinement
 
@@ -202,9 +202,9 @@
 - Modify: `project_index.md`
 - Modify: this plan status/evidence
 
-- [ ] Run the complete Web test suite, typecheck, production build, product release matrix, Hermes focused gates, root lint/docs gates and `git diff --check`.
-- [ ] Request independent Sol High architecture/product review; fix all Critical and Important findings and repeat affected gates.
-- [ ] Synchronize the exact branch / candidate / ECS release / rollback tuple and commit the release candidate with a clean tree.
+- [x] Run the complete Web test suite, typecheck, production build, product release matrix, Hermes focused gates, root lint/docs gates and `git diff --check`.
+- [x] Request independent Sol High architecture/product review; fix all Critical and Important findings and repeat affected gates.
+- [x] Synchronize the exact branch / candidate / ECS release / rollback tuple and commit the release candidate with a clean tree.
 - [ ] Run ECS preflight and backup, then deploy the immutable candidate with `infra/scripts/deploy.sh <candidate> --skip-migrate <rollback>`; do not migrate, seed or write research data.
 - [ ] Verify server build, 27-current migration status, target container health, runtime asset loading, loopback/public health, exact `/__release`, absent failure marker and retained rollback tree.
 - [ ] Run public no-write browser checks for Dashboard right click, `Shift+F10`, ContextMenu key, companion feedback and mobile long press; inspect the deployed bubble at native size.

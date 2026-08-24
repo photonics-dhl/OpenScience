@@ -1,6 +1,6 @@
 # Handoff — Hermes Wanko Live2D Companion
 
-> **CURRENT active-memory，2026-08-24 19:06 +08。** 旧灯体、帽子、流苏、Cubism GUI 试验和被否决候选只从 Git history 查阅，不再作为实施入口。
+> **CURRENT active-memory，2026-08-25 01:52 +08。** 旧灯体、帽子、流苏、Cubism GUI 试验和被否决候选只从 Git history 查阅，不再作为实施入口。
 
 ## Goal
 
@@ -10,8 +10,8 @@
 
 ## Version tuple
 
-- Working branch / application source: `codex/hermes-wanko-live2d` / `56f6cf4c36b418f7aa2a2742a7fbcefc086b3519` + release metadata at deployed commit `33418fdf9e4c13cd3e34eba0a15f6f0208fc5183`.
-- Deployable application source: `56f6cf4c36b418f7aa2a2742a7fbcefc086b3519`。
+- Working branch / application source: `codex/hermes-wanko-live2d` / `eb55820ee67d00b0924797ccbbd1db395412f07a`；release metadata candidate 尚未提交。
+- Deployable application source: `eb55820ee67d00b0924797ccbbd1db395412f07a`。
 - Local main / origin main: `c60ffdd16b85ea8f0d8b047493fa03a4c0230c05` / `7eb2f5bc4718ee445b79bd089acb64acb3691e62`；`origin/main` 是 local main 的祖先，二者都早于当前工作分支。
 - Remote feature: `origin/codex/hermes-wanko-live2d` 不存在；旧 `origin/codex/readable-hermes-guidance@c88c780` 不是本次候选。
 - ECS release / rollback: `33418fdf9e4c13cd3e34eba0a15f6f0208fc5183` / `2abfe42e56881ae7b7a3e7f0a0b3a97b31762326`。
@@ -37,6 +37,7 @@
 - 首次 whole-product release `2abfe42` 已部署：checkup、`432K files=7/7` backup、server full build、27 migrations current、healthy target containers、route/runtime asset 200、精确 release、absent failure marker、rollback `bba5f14` 与公网 no-write `57/57` 通过；未 migration/seed/data write。
 - 发布后原尺寸截图而非自动断言发现旧首次 nudge 仍在 Dashboard 压住 Hermes 标签/动效控制。hotfix `56f6cf4` 同时禁止锚定态未请求的 performance speech 与 adapter nudge，保留显式 guide、菜单、drawer 与菜单动作反馈；修复截图无覆盖，focused Hermes `3/3`、完整 release matrix `60/60`、Web `402/402` + 5 Node、typecheck/build GREEN。
 - exact release `33418fd` 已以 `2abfe42` 为 rollback、`--skip-migrate` 发布。pre/post checkup、fresh `432K files=7/7` backup、server full build、27 migrations current、healthy target runtime、精确 release/absent failure/rollback markers、真实 route/Live2D assets 与公网 Dashboard + Hermes `4/4` 均通过；未 migration/seed/data write。
+- 2026-08-25 mouth-anchored speech candidate `eb55820` 已完成：显式 feedback 为一条暖纸椭圆短句，纸尾按 desktop/mobile 口部锚点校准；连续 ledger 菜单、224px 移动菜单、方向翻转、应用内 reduced-motion 与 pointer-up 竞态均有回归覆盖。Fresh evidence 为 Web `403+5`、targeted `14/14`、work-assistant 三视口、Hermes aggregate `19+3`、product release `60/60`、全仓 typecheck/lint/test/build GREEN；两轮独立复审无部署阻断。旧 40 条 E2E 中 21 条 travel/dark prompt/旧 dock 断言已被批准锚定契约取代，19 条仍适用的 runtime/guide 场景继续进 CURRENT gate。
 
 ## Constraints
 
@@ -53,9 +54,9 @@
 
 ## Next action
 
-1. 用户直接浏览登录、Dashboard、创建 RO、编辑与公开阅读入口，反馈信息层级、阅读、Hermes 协调、菜单密度及动作反馈。
-2. 若视觉继续迭代，保持 Landing 不变、真实 route 验收与每次服务器发布的 immutable release/rollback 证据。
-3. 工作分支尚未进入 main；另开集成任务时明确 merge / PR / 保留分支，不从旧 main 猜测状态。
+1. 将 docs-only candidate metadata 提交后，以当前 production `33418fd` 为 rollback，执行 `--skip-migrate` immutable deployment，并完成服务器与公网 no-write 验收。
+2. 用户直接浏览登录、Dashboard、创建 RO、编辑与公开阅读入口，反馈信息层级、阅读、Hermes 协调、菜单密度及动作反馈。
+3. 若继续迭代，保持 Landing 不变；工作分支尚未进入 main，另开集成任务时明确 merge / PR / 保留分支。
 
 ## Read first
 

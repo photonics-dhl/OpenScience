@@ -1,6 +1,6 @@
 # Runbook: 部署（Deployment）
 
-> 状态：**CURRENT**。2026-08-24 15:21 +08 验收的 active application release 为 `bba5f144fd082bc05fdbfb4d5d98dd7d094fe8cf`，rollback tree 为 `68d8be7248aef2f52b32f76624e9928f4242c45c`；docs-only HEAD 不得替代或触发应用部署。
+> 状态：**CURRENT**。2026-08-24 验收的 active application release 为 `33418fdf9e4c13cd3e34eba0a15f6f0208fc5183`，rollback tree 为 `2abfe42e56881ae7b7a3e7f0a0b3a97b31762326`；2026-08-25 mouth-anchored speech application source `eb55820ee67d00b0924797ccbbd1db395412f07a` 已完成本地门禁，尚未部署。docs-only HEAD 不得冒充 application source。
 > 格式遵循 `.agents/skills/infra-runbook/SKILL.md` 四节强制要求。
 > 部署属 Spec §20.5"询问"级操作：执行前需用户确认，必须走 `infra/scripts/deploy.sh` + CI/CD，禁止手工改服务器代码。
 
