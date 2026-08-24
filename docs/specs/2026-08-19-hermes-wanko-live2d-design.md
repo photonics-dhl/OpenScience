@@ -711,3 +711,34 @@ continues to open the existing assistant drawer. Contextual work entries use the
 active Research Object and route. A companion result renders as a short inline
 margin note; when no safe margin exists, the drawer is the overflow surface.
 Landing, source artwork, APIs, data contracts, voice and TTS remain unchanged.
+
+### 13.1 Mouth-anchored speech and carried-tool ledger (approved 2026-08-25)
+
+The user rejected the deployed rectangular margin note because its detached
+box, label and connector did not read as speech from Hermes. Explicit companion
+feedback now uses a familiar, lightly asymmetric speech silhouette placed in
+the same page-owned research margin as the actor. It contains exactly one short
+sentence: no speaker label, tone label, shortcut, completion state, secondary
+copy or action toolbar. Its short triangular tail terminates at the visible
+mouth in renderer-local coordinates and flips with the bubble side; it must not
+terminate at the hat, rail edge or an arbitrary point near the character.
+
+The actor and speech bubble form one local visual unit. A companion action first
+closes the menu, then produces one small character response and the four-second
+text reply; menu and speech never coexist. The bubble may overlap the actor's
+empty background but never research text, form controls or the menu. If the
+reserved margin cannot fit the combined footprint, the response moves into the
+assistant drawer rather than floating over product content. Reduced motion
+removes the entrance and character reaction while preserving the same message
+and accessible polite announcement.
+
+The action menu is not a speech bubble. It remains Radix-owned and uses a single
+low-radius research-ledger sheet with a ruled spine, grouped row separators and
+one vermilion pull tab. Items are continuous rows rather than cards. Dashboard
+may show two truthful current-research actions and one companion action; editor,
+input and approval contexts use the quieter subset. Desktop keeps the exact
+`360px` actor and opens through right click, `Shift+F10` or Menu; compact/mobile
+keeps `200px`, opens by long press from the Hermes/lamp hit region and preserves
+ordinary tap for the assistant drawer. The menu uses the existing project fonts,
+warm paper, ink, icons and focus primitive; it adds no gradient, glass, glow,
+pill cluster or default command-palette styling.
