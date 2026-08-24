@@ -4,7 +4,7 @@
 
 ## Current version tuple
 
-- Branch / local candidate base: `codex/hermes-wanko-live2d` / `d36e2e0bb515155737f0325539f11b215b642e80` + uncommitted Research Folio candidate；deployed application remains `bba5f144fd082bc05fdbfb4d5d98dd7d094fe8cf` until immutable deployment passes.
+- Branch / application source: `codex/hermes-wanko-live2d` / `fe0d2b64309b3b5d11f1f08690ba53149ed44602` + candidate metadata；deployed application remains `bba5f144fd082bc05fdbfb4d5d98dd7d094fe8cf` until immutable deployment passes.
 - Deployable application source: `bba5f144fd082bc05fdbfb4d5d98dd7d094fe8cf`。
 - Local main / origin main: `c60ffdd16b85ea8f0d8b047493fa03a4c0230c05` / `7eb2f5bc4718ee445b79bd089acb64acb3691e62`；两者都早于当前工作分支，远端 Hermes feature 不存在。
 - ECS release / rollback: `bba5f144fd082bc05fdbfb4d5d98dd7d094fe8cf` / `68d8be7248aef2f52b32f76624e9928f4242c45c`。

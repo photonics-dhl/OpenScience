@@ -1,7 +1,7 @@
 # OpenScience (XGS) 项目文件索引
 
 > 维护规则：创建/修改/移动文件后必须更新本索引。创建新文件前先查本表防重复。
-> **CURRENT source/deployment anchor（2026-08-24 20:10 +08）：** working branch candidate `codex/hermes-wanko-live2d@d36e2e0 + uncommitted Research Folio tree`；deployed application remains `bba5f14`；local main / origin main `c60ffdd` / `7eb2f5b`；ECS release / rollback 为 `bba5f14` / `68d8be7`。只有本锚点与主题唯一 CURRENT handoff 可决定当前状态。
+> **CURRENT source/deployment anchor（2026-08-24 20:10 +08）：** working branch application source `codex/hermes-wanko-live2d@fe0d2b6` + candidate metadata；deployed application remains `bba5f14`；local main / origin main `c60ffdd` / `7eb2f5b`；ECS release / rollback 为 `bba5f14` / `68d8be7`。只有本锚点与主题唯一 CURRENT handoff 可决定当前状态。
 
 ## 根目录
 | 路径 | 用途 | 状态 |
