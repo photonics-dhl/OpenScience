@@ -1,6 +1,6 @@
 # Hermes Wanko Live2D Companion Design
 
-Status: **CURRENT — v09 movable work-assistant enhancement approved**
+Status: **CURRENT — implemented and deployed as ECS release `5f4e73c` (rollback `c97926a`)**
 
 Supersedes only the visual renderer and motion-authoring portions of:
 

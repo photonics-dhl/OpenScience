@@ -1,8 +1,8 @@
 # Hermes Wanko Live2D Companion Implementation Plan
 
-> **Status (2026-08-24): CURRENT DEPLOYED — Task 21 implementation, review, deployment and no-write public UI acceptance are complete; optional real-account smoke remains explicit.**
-> The ECS baseline is `c97926a`, the approved product endpoints are `360/200px`,
-> and this task changes presentation and interaction only, never v09 source art.
+> **Status (2026-08-24): COMPLETED / HISTORICAL EXECUTION EVIDENCE — Task 21 implementation, review, deployment and no-write public UI acceptance are complete. Do not use this as the next task's CURRENT plan.**
+> The Task 21 input baseline was `c97926a`; its deployed output is `5f4e73c`
+> with rollback `c97926a` and approved product endpoints `360/200px`.
 > **For agentic workers:** REQUIRED SUB-SKILL: Use `executing-plans` to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Deliver the approved v09 Hermes as a `360/200px` movable work assistant with quiet, collision-safe bubbles and truthful semantic actions on the real Dashboard.

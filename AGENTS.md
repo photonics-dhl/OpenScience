@@ -60,6 +60,7 @@ OpenScience：AI 时代科研基础设施平台（Research Object / SDF / 预印
 ## Memory Rules
 - 任务开始先运行 worktree/branch/status 检查；用 `rg -n "CURRENT|<topic>" project_index.md docs/handoff docs/specs docs/plans` 定位唯一 CURRENT handoff，先读 handoff，再读需求基线相关章节和短版 `docs/progress.md`。`project_index.md` 只定向检索，禁止默认加载全文或 archive。
 - 判断状态时记录 `branch / HEAD / release / rollback`；本地候选、远端分支、本地 `main` 与 ECS 版本不得混写。
+- 涉及已部署表面或以生产为基线的新任务，启动时先 `git fetch origin`，再走 `infra/scripts/checkup.sh` 与只读 `.release-id`/`/__release`/容器健康核验；以实测结果刷新 CURRENT handoff，文档日期或旧 release 段落不得覆盖服务器事实。
 - 重大决策写 Memory MCP（实体前缀 `XGS-`）
 
 ## Tooling Portability Rules

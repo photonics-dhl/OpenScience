@@ -1,6 +1,6 @@
 # Runbook: 部署（Deployment）
 
-> 状态：部分填充（P1A-8 补 API 反代 + /admin basic_auth 部署步骤；CI/CD 自动化归 2.9 填充 deploy.sh）。
+> 状态：**CURRENT**。2026-08-24 09:02 +08 只读核验的 active application release 为 `5f4e73c10dace9f2d18f8788ead238863cd33312`，rollback tree 为 `c97926ab4188d5d5fc7a6e58e0333d20a600c692`；docs-only HEAD 不得替代或触发应用部署。
 > 格式遵循 `.agents/skills/infra-runbook/SKILL.md` 四节强制要求。
 > 部署属 Spec §20.5"询问"级操作：执行前需用户确认，必须走 `infra/scripts/deploy.sh` + CI/CD，禁止手工改服务器代码。
 
@@ -519,7 +519,7 @@ Historical note for the 2026-08-11 release: it used fixed worker tags and a writ
   Server full-workspace build, SHA-tagged Worker/Parser images, Parser-first
   switching, Nginx validation and hard release checks passed. No migration or
   seed ran; read-only status reports 27/27 migrations current. Latest retained
-  DB backup is 441,411 bytes; the backup directory contains nine files.
+  DB backup is 441,411 bytes; 2026-08-24 09:02 +08 fresh read-only audit confirms the configured seven retained DB dumps.
 - Runtime evidence: all production services are running and health-checked;
   Parser remains `user=node`, read-only, `network=none`, 512MiB and 64 PID.
   `.release-failed` is absent and `/__release` returns the exact full SHA.
