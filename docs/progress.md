@@ -1,22 +1,22 @@
 # OpenScience 进度（CURRENT window）
 
-> 最新同步：2026-08-24 13:10 +08。完整历史由 Git history 保存；DEPRECATED、NO-GO、旧计划和 archive 不作为新 session 默认输入。
+> 最新同步：2026-08-24 15:05 +08。完整历史由 Git history 保存；DEPRECATED、NO-GO、旧计划和 archive 不作为新 session 默认输入。
 
 ## Current version tuple
 
-- Branch / deployed application HEAD: `codex/hermes-wanko-live2d` / `b73a9dd5d6dc95b57349682a09e72525b8c033b2`；其后的变更仅为部署证据文档，不是另一份应用 release。
-- Deployable application source: `b73a9dd5d6dc95b57349682a09e72525b8c033b2`。
+- Branch / local deployable candidate: `codex/hermes-wanko-live2d` / `68d8be7248aef2f52b32f76624e9928f4242c45c`。
+- ECS deployed application HEAD remains `b73a9dd5d6dc95b57349682a09e72525b8c033b2` until the immutable switch is verified.
 - Local main / origin main: `c60ffdd16b85ea8f0d8b047493fa03a4c0230c05` / `7eb2f5bc4718ee445b79bd089acb64acb3691e62`；两者都早于当前工作分支，远端 Hermes feature 不存在。
 - ECS release / rollback: `b73a9dd5d6dc95b57349682a09e72525b8c033b2` / `02d3dd9c495fda18025d9f1698cf41a247094052`。
 
-## 2026-08-24 — Hermes warm-paper workbench candidate ready
+## 2026-08-24 — Research Session Folio candidate ready
 
-- 用户已解除 design gate 并明确授权实现与生产部署。为让视觉可以直接验收，首个 slice 是匿名、`noindex`、零 API/数据库写入的 `/_visual/research-workbench`，不先覆盖认证产品页。
-- 唯一 CURRENT Hermes spec 新增 §12，固定 daylight warm-paper/mineral-paper 工作台；深石墨只用于证据 rail，长文 `19px / 1.72`，UI/正文/数据字体角色分离。baseline-ui 禁止项与 ui-ux-pro-max 无障碍、触控、性能检查表已落实；shadcn/Radix 只提供 context-menu 行为原语，不套默认视觉。
-- 评审 route 展示 Dashboard 默认菜单与 focus、陪伴短句反馈、quiet editor、evidence review、explore、long reading、mobile long press；使用真实 v09 Hermes 与精确 `360/200px`。桌面右键、`Shift+F10`、Menu 键、移动长按和普通点击助手 dialog 均有浏览器合同。
-- Fresh local evidence：状态 RED→GREEN `5/5`，mutation 可杀死；Web `395/395` + 5 Node contracts、route E2E `5/5`、typecheck、19-page production build 与 root lint/docs-sync GREEN。六张 ignored WebGL 截图已按 original detail 复核并修正角色遮挡、移动裁切、过早画布与焦点轮廓。
-- 独立架构审查的四项发现均已收敛：菜单键监听只挂在 Hermes trigger，不吞掉输入区原生行为；菜单有双语可访问名；WebGL2 失败显示同尺寸真实 Wanko 静态帧；实施计划准确记录 route-local 字体边界。失败路径与焦点边界已加入浏览器合同。
-- 首次 ECS 发布 `02d3dd9` 后，公网 `4/5` 暴露快速 Editor→Review→Editor 的异步 query 竞态；RED 测试证明本地 state 已变而 URL 仍旧。hotfix `b73a9dd` 使用 History API 原子更新 scene/query，二次 `--skip-migrate` 发布完成。最终服务器 build/containers、route HTTP 200、精确 `/__release=b73a9dd...`、absent `.release-failed`、rollback `02d3dd9...` 均通过；公网完整 route E2E `5/5`，键盘竞态额外并发复跑 `3/3`。
+- 用户确认继续优化并授权部署；范围仍是匿名、`noindex`、零 API/数据库写入的 `/_visual/research-workbench`，没有修改认证产品页或 Landing。
+- candidate `68d8be7` 将首屏改为 active study → open decision → evidence → version 的真实研究会话；Hermes 进入研究页边并与决策共享锚点，菜单只在右键、`Shift+F10`、Menu 键或移动长按后出现，普通点击保持 assistant dialog。
+- 阅读字体修复为实际加载的 Source Serif 4 / Noto Serif SC；Latin `18px / 1.68`，CJK `18px / 1.82`，UI 恢复项目 Bricolage。菜单是一张低圆角纸面，不使用默认 shadcn 视觉、渐变、玻璃或独立项目卡片。
+- 主 CTA 现进入 evidence review；中文 Portal 菜单无拉丁字距；移动长按后的 synthetic click 被抑制。独立只读审查确认无 API、存储、数据写和范围漂移，全部 P2/P3 已回归覆盖。
+- Fresh local evidence：route E2E `7/7`、Web `395/395` + 5 Node contracts、typecheck、19-page production build、root lint、docs-sync、docs lint 与 `git diff --check` GREEN；ignored 原尺寸桌面/中文/反馈/editor/mobile 截图已复核。
+- ECS 尚未切换：当前 release / rollback 仍为 `b73a9dd...` / `02d3dd9...`；下一步只部署精确 candidate `68d8be7`，使用 `--skip-migrate`。
 
 ## 2026-08-24 — UI taste toolchain correction
 
