@@ -1,6 +1,6 @@
 # Handoff — Hermes Wanko Live2D Companion
 
-> **CURRENT active-memory，2026-08-24 15:05 +08。** 旧灯体、帽子、流苏、Cubism GUI 试验和被否决候选只从 Git history 查阅，不再作为实施入口。
+> **CURRENT active-memory，2026-08-24 15:21 +08。** 旧灯体、帽子、流苏、Cubism GUI 试验和被否决候选只从 Git history 查阅，不再作为实施入口。
 
 ## Goal
 
@@ -10,11 +10,11 @@
 
 ## Version tuple
 
-- Working branch / local deployable candidate: `codex/hermes-wanko-live2d` / `68d8be7248aef2f52b32f76624e9928f4242c45c`。
-- ECS deployed application HEAD remains `b73a9dd5d6dc95b57349682a09e72525b8c033b2` until the immutable switch is verified.
+- Working branch / deployed application HEAD: `codex/hermes-wanko-live2d` / `bba5f144fd082bc05fdbfb4d5d98dd7d094fe8cf`；其后的变更只记录部署证据。
+- Deployable application source: `bba5f144fd082bc05fdbfb4d5d98dd7d094fe8cf`。
 - Local main / origin main: `c60ffdd16b85ea8f0d8b047493fa03a4c0230c05` / `7eb2f5bc4718ee445b79bd089acb64acb3691e62`；`origin/main` 是 local main 的祖先，二者都早于当前工作分支。
 - Remote feature: `origin/codex/hermes-wanko-live2d` 不存在；旧 `origin/codex/readable-hermes-guidance@c88c780` 不是本次候选。
-- ECS release / rollback: `b73a9dd5d6dc95b57349682a09e72525b8c033b2` / `02d3dd9c495fda18025d9f1698cf41a247094052`。
+- ECS release / rollback: `bba5f144fd082bc05fdbfb4d5d98dd7d094fe8cf` / `68d8be7248aef2f52b32f76624e9928f4242c45c`。
 
 ## Done
 
@@ -25,11 +25,13 @@
 - Windows 远程操作须显式调用 `C:\Program Files\Git\bin\bash.exe`；系统 `bash.exe` 会进入 WSL，无法安全加载 Windows 侧项目密钥。完整诊断与命令见 deployment runbook §1.1。
 - 用户已确认 Hermes 互动采用桌面右键/键盘菜单键、移动端长按、文本气泡、场景自适应与“陪伴动作 + 真实工作入口”的混合菜单；首轮造型被否决后，已批准暖纸/矿物纸工作台方向并授权实现部署。
 - UI taste 工具链已审计并启用：全局 Skills `ui-ux-pro-max@bc826e2`、`baseline-ui@bdbcc56`，以及固定 `shadcn@4.19.0`、cwd 指向本 worktree `apps/web` 的 shadcn MCP；初始化握手通过。21st.dev 因需要外部 API Key 未安装。
-- `/_visual/research-workbench` 候选已经本地实现：六个可深链场景、真实 `360/200px` v09 Hermes、右键/键盘/长按菜单、普通点击无写入 assistant dialog、暖纸 `19px/1.72` 阅读与 evidence-only graphite rail。WebGL2 失败会退回同尺寸真实 Wanko 静态帧；菜单有可访问名且不会吞掉输入区的 Shift+F10。状态测试 `5/5`、Web `395/395` + 5 Node、route E2E `5/5`、typecheck、root lint/docs-sync 与 19-page build GREEN。
+- `/_visual/research-workbench` 已实现六个可深链场景、真实 `360/200px` v09 Hermes、右键/键盘/长按菜单、普通点击无写入 assistant dialog、locale-aware `18px` 暖纸阅读与 evidence-only graphite rail。WebGL2 失败会退回同尺寸真实 Wanko 静态帧；菜单有可访问名且不会吞掉输入区的 Shift+F10。
 - 首次部署 `02d3dd9` 的公网 route E2E `4/5` 暴露异步 `router.replace` 与本地 reducer 竞态；同步 History query hotfix `b73a9dd` 已二次无迁移部署。最终公网完整 E2E `5/5`，键盘场景额外并发 `3/3`；route 200、精确 release、absent failure marker、healthy containers 与 rollback tree 均已验证。
-- 用户已确认 Research Session Folio 迭代；candidate `68d8be7` 将 active study、open decision、evidence 与 next version 提到首屏，并把 Hermes 收入共享研究页边。菜单由真实右键/键盘/长按触发，不再加载即打断。
+- 用户已确认 Research Session Folio 迭代；release `bba5f14` 将 active study、open decision、evidence 与 next version 提到首屏，并把 Hermes 收入共享研究页边。菜单由真实右键/键盘/长按触发，不再加载即打断。
 - Fresh candidate evidence：route E2E `7/7`、Web `395/395` + 5 Node、typecheck、19-page build、root lint/docs gates GREEN。独立审查发现的主 CTA 空行为、中文 Portal 字距和 UI 字体偏移均已修复；无 API、存储、数据写或认证页改动。
-- 最新数据库备份 `/var/backups/openscience/db-2026-08-24.sql` 为 441,411 bytes；当前保留 7 个 DB dump。未读取备份内容。
+- ECS checkup 与 DB backup `432K files=7/7` 通过。即时公网验收发现 hydration 前核心 CTA 可吞点击，hotfix `bba5f14` 将它改为真实 `href` 渐进增强链接；右键合同在 Hermes ready 后执行。
+- 最终 `bba5f14` 以 `--skip-migrate` 发布：服务器 19-page build、27 migrations current、目标容器 healthy、route 200、精确 release、absent failure marker、rollback `68d8be7` 和公网 no-write E2E `7/7` 全部通过。
+- 最新数据库备份返回 `432K files=7/7`。未读取备份内容。
 
 ## Constraints
 
@@ -46,9 +48,8 @@
 
 ## Next action
 
-1. 对精确 candidate `68d8be7` 用 Git Bash 运行 checkup、DB backup、dry-run 与 `--confirm --skip-migrate`；切换前保持 ECS `b73a9dd` / rollback `02d3dd9`。
-2. 验证服务器 build、migration status、容器、公网 route、精确 `__release`、absent failure marker、rollback tree 与公网 no-write E2E。
-3. 用户直接浏览公网入口后只收集轮廓、纸墨质感、可爱程度、菜单密度和动作反馈；明确接受后才迁移正式产品页。
+1. 用户直接浏览公网入口，反馈轮廓、纸墨质感、可爱程度、菜单密度、字体阅读和动作反馈。
+2. 未明确接受前继续只迭代视觉评审 route；接受后才整理正式页迁移范围与实施计划。
 
 ## Read first
 

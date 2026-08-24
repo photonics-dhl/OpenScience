@@ -214,12 +214,12 @@ project release script with the current production release as rollback.
 
 ## Task 12: Immutable production update
 
-- [ ] Re-read the deployment runbook, run ECS checkup and database backup, then
+- [x] Re-read the deployment runbook, run ECS checkup and database backup, then
   dry-run the exact application commit with current release as explicit rollback.
-- [ ] Deploy with `--confirm --skip-migrate`; do not run migration or seed.
-- [ ] Verify server build, containers, public route, exact `/__release`, absent
+- [x] Deploy with `--confirm --skip-migrate`; do not run migration or seed.
+- [x] Verify server build, containers, public route, exact `/__release`, absent
   `.release-failed`, rollback tree and the public no-write browser suite.
-- [ ] Synchronize progress, CURRENT handoff, deployment runbook and index with
+- [x] Synchronize progress, CURRENT handoff, deployment runbook and index with
   the exact release tuple in a docs-only follow-up commit that is not deployed.
-- [ ] Return the same public URL and ask for concrete feedback without claiming
+- [x] Return the same public URL and ask for concrete feedback without claiming
   aesthetic success.

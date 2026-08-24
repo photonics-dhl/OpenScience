@@ -1,6 +1,6 @@
 # Runbook: 部署（Deployment）
 
-> 状态：**CURRENT**。2026-08-24 13:10 +08 验收的 active application release 为 `b73a9dd5d6dc95b57349682a09e72525b8c033b2`，rollback tree 为 `02d3dd9c495fda18025d9f1698cf41a247094052`；docs-only HEAD 不得替代或触发应用部署。
+> 状态：**CURRENT**。2026-08-24 15:21 +08 验收的 active application release 为 `bba5f144fd082bc05fdbfb4d5d98dd7d094fe8cf`，rollback tree 为 `68d8be7248aef2f52b32f76624e9928f4242c45c`；docs-only HEAD 不得替代或触发应用部署。
 > 格式遵循 `.agents/skills/infra-runbook/SKILL.md` 四节强制要求。
 > 部署属 Spec §20.5"询问"级操作：执行前需用户确认，必须走 `infra/scripts/deploy.sh` + CI/CD，禁止手工改服务器代码。
 
@@ -579,3 +579,27 @@ Historical note for the 2026-08-11 release: it used fixed worker tags and a writ
   public route 200 and exact release identity. Public full E2E passed `5/5` and
   the keyboard scenario passed three additional concurrent repeats; failure
   marker remained absent and rollback `02d3dd9...` remained present.
+
+### 5.16 Hermes Research Session Folio visual-review release (2026-08-24)
+
+> Active release `bba5f14`; rollback `68d8be7`.
+
+- Scope remains the anonymous, `noindex`, no-write
+  `/_visual/research-workbench` route. The folio orders active research, open
+  decision, evidence and next version before review utility, and places exact
+  `360/200px` Hermes in the research margin. No authenticated route, API,
+  migration, seed or stored research data changed.
+- Local evidence before the first release: route E2E `7/7`, Web `395/395` plus
+  five Node contracts, typecheck, 19-page build, root lint, docs gates and diff
+  check passed. An independent read-only review found no remaining issue after
+  CTA, Chinese Portal tracking and project UI-font corrections.
+- Operation evidence: Git Bash checkup passed; DB backup returned
+  `432K files=7/7`. Exact `68d8be7` deployed with `--skip-migrate`; its immediate
+  public suite was `5/7` because CTA/right-click tests operated before hydration.
+  The CTA was converted to a real `href` with enhanced in-place navigation, and
+  the context-menu test now waits for Hermes readiness.
+- Exact hotfix `bba5f144fd082bc05fdbfb4d5d98dd7d094fe8cf` passed dry-run and
+  confirmed `--skip-migrate` deployment with `68d8be7...` as rollback. Server
+  build generated 19 pages; 27 migrations remained current; target containers
+  were healthy; route returned 200; `/__release` matched; `.release-failed` was
+  absent; rollback tree was present; stable public no-write E2E passed `7/7`.
