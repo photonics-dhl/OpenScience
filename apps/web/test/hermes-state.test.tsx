@@ -163,5 +163,6 @@ describe('Hermes dashboard guidance', () => {
     expect(markup).toContain('data-hermes-speech-origin="mouth"');
     expect(markup).toContain('guide.menu.quietFeedback');
     expect(markup).not.toContain('<span>guide.menu.companion</span>');
+    expect(markup.match(/data-hermes-mouth-anchor=/g) ?? []).toHaveLength(1);
   });
 });

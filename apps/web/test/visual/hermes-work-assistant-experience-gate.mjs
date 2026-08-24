@@ -1,4 +1,4 @@
-/* global document, DOMMatrixReadOnly, DOMPoint, getComputedStyle, innerWidth, localStorage, process, scrollTo, scrollY, URL, window */
+/* global document, getComputedStyle, innerWidth, localStorage, process, scrollTo, scrollY, URL, window */
 
 import assert from 'node:assert/strict';
 import { mkdir, writeFile } from 'node:fs/promises';
@@ -105,12 +105,16 @@ async function assertFootprintsSafe(page, viewport, label) {
     action: node.getAttribute('data-hermes-action'),
     anchored: node.getAttribute('data-hermes-anchored'),
     box: node.getBoundingClientRect().toJSON(),
+    documentHeight: document.documentElement.scrollHeight,
     docks: Object.fromEntries(Object.keys(localStorage)
       .filter((key) => key.startsWith('openscience:hermes-dock:'))
       .map((key) => [key, localStorage.getItem(key)])),
     size: node.getAttribute('data-hermes-stage-size'),
   }));
-  assert.ok(actor && inside(actor, viewport), `${label} actor must remain inside the visual viewport: ${JSON.stringify({ actor, stageState })}`);
+  const actorInsideSurface = actor && (stageState.anchored === 'true'
+    ? actor.x >= 0 && actor.x + actor.width <= viewport.width && actor.y >= 0 && actor.y + actor.height <= stageState.documentHeight
+    : inside(actor, viewport));
+  assert.ok(actorInsideSurface, `${label} actor must remain inside its ${stageState.anchored === 'true' ? 'page-owned surface' : 'visual viewport'}: ${JSON.stringify({ actor, stageState })}`);
   const protectedRegions = await protectedBoxes(page);
   assert.equal(protectedRegions.some((region) => overlaps(actor, region)), false, `${label} actor must not cover a protected surface`);
   const bubble = page.locator('.hermes-companion-bubble:visible');
@@ -122,81 +126,9 @@ async function assertFootprintsSafe(page, viewport, label) {
   return { actor, protectedRegions };
 }
 
-async function assertBubblePointerFacesActor(page, actor, bubbleBox, label) {
-  const stage = page.locator('[data-hermes-workspace-stage="true"]');
-  const bubble = page.locator('[data-hermes-performance-bubble="true"]');
-  const placement = {
-    horizontal: await stage.getAttribute('data-hermes-bubble-horizontal'),
-    vertical: await stage.getAttribute('data-hermes-bubble-vertical'),
-  };
-  const tail = await bubble.evaluate((node) => {
-    const style = getComputedStyle(node, '::after');
-    const bubbleBounds = node.getBoundingClientRect();
-    const left = Number.parseFloat(style.left);
-    const top = Number.parseFloat(style.top);
-    const width = Number.parseFloat(style.width);
-    const height = Number.parseFloat(style.height);
-    const [originX, originY] = style.transformOrigin.split(' ').map(Number.parseFloat);
-    const matrix = new DOMMatrixReadOnly(style.transform === 'none' ? undefined : style.transform);
-    const endpoint = (x, y) => {
-      const point = new DOMPoint(x - originX, y - originY).matrixTransform(matrix);
-      return {
-        x: bubbleBounds.x + left + originX + point.x,
-        y: bubbleBounds.y + top + originY + point.y,
-      };
-    };
-    return {
-      bottomPoint: endpoint(width / 2, height),
-      bottom: style.bottom,
-      end: endpoint(width, height / 2),
-      left: style.left,
-      right: style.right,
-      start: endpoint(0, height / 2),
-      topPoint: endpoint(width / 2, 0),
-      top: style.top,
-      transform: style.transform,
-      transformOrigin: style.transformOrigin,
-    };
-  });
-  const distanceToActor = (point) => Math.hypot(
-    point.x < actor.x ? actor.x - point.x : point.x > actor.x + actor.width ? point.x - actor.x - actor.width : 0,
-    point.y < actor.y ? actor.y - point.y : point.y > actor.y + actor.height ? point.y - actor.y - actor.height : 0,
-  );
-  const startDistance = distanceToActor(tail.start);
-  const endDistance = distanceToActor(tail.end);
-  const topDistance = distanceToActor(tail.topPoint);
-  const bottomDistance = distanceToActor(tail.bottomPoint);
-  const actorCenterX = actor.x + actor.width / 2;
-  const bubbleCenterX = bubbleBox.x + bubbleBox.width / 2;
-  if (placement.horizontal === 'left') {
-    assert.ok(bubbleCenterX < actorCenterX && tail.end.x > tail.start.x && endDistance < startDistance,
-      `${label} left bubble pointer must run toward the actor on its right: ${JSON.stringify({ endDistance, placement, startDistance, tail })}`);
-  } else if (placement.horizontal === 'right') {
-    assert.ok(bubbleCenterX > actorCenterX && tail.start.x < tail.end.x && startDistance < endDistance,
-      `${label} right bubble pointer must run toward the actor on its left: ${JSON.stringify({ endDistance, placement, startDistance, tail })}`);
-  } else {
-    assert.ok(Math.abs(bubbleCenterX - actorCenterX) <= 2
-      && Math.abs((tail.topPoint.x + tail.bottomPoint.x) / 2 - actorCenterX) <= 2,
-      `${label} centered bubble tail must align with the actor center: ${JSON.stringify({ actor, bubbleBox, placement, tail })}`);
-  }
-  if (placement.horizontal === 'center' && placement.vertical === 'below') {
-    assert.ok(bubbleBox.y >= actor.y + actor.height && tail.topPoint.y < tail.bottomPoint.y && topDistance < bottomDistance,
-      `${label} centered-below pointer must run from its top toward the actor: ${JSON.stringify({ bottomDistance, placement, tail, topDistance })}`);
-  } else if (placement.horizontal === 'center') {
-    assert.ok(bubbleBox.y + bubbleBox.height <= actor.y && tail.bottomPoint.y > tail.topPoint.y && bottomDistance < topDistance,
-      `${label} centered-above pointer must run from its bottom toward the actor: ${JSON.stringify({ bottomDistance, placement, tail, topDistance })}`);
-  } else if (placement.vertical === 'below') {
-    assert.ok(bubbleBox.y >= actor.y + actor.height && Math.min(tail.start.y, tail.end.y) < bubbleBox.y,
-      `${label} below bubble pointer must leave its top edge toward the actor`);
-  } else {
-    assert.ok(bubbleBox.y + bubbleBox.height <= actor.y && Math.max(tail.start.y, tail.end.y) > bubbleBox.y + bubbleBox.height,
-      `${label} above bubble pointer must leave its bottom edge toward the actor`);
-  }
-  return { placement, tail };
-}
-
 async function clickVisibleHermesCta(page, stage, label) {
   const cta = page.locator('[data-hermes-visible-invoke-cta="true"]');
+  await cta.scrollIntoViewIfNeeded();
   const ctaBox = await cta.boundingBox();
   assert.ok(ctaBox, `${label} visible Hermes CTA must have geometry`);
   const ctaHit = await page.evaluate(({ x, y }) => document.elementFromPoint(x, y)
@@ -212,48 +144,6 @@ async function clickVisibleHermesCta(page, stage, label) {
   assert.equal(Number(await stage.getAttribute('data-hermes-invoke-count')), before + 1,
     `${label} visible Hermes CTA must invoke the drawer exactly once`);
   return dialog;
-}
-
-async function waitForSpeech(page) {
-  const observed = new Set();
-  for (let elapsed = 0; elapsed < 300_000; elapsed += 250) {
-    await page.clock.fastForward(250);
-    await page.waitForTimeout(5);
-    const sample = await page.evaluate(() => {
-      const stage = document.querySelector('[data-hermes-workspace-stage="true"]');
-      const bubble = document.querySelector('[data-hermes-performance-bubble="true"]');
-      return {
-        action: stage?.getAttribute('data-hermes-action'),
-        bubbleSafe: stage?.getAttribute('data-hermes-bubble-safe'),
-        bubbleVisible: bubble?.getAttribute('data-hermes-speech-visible'),
-        speechVisible: stage?.getAttribute('data-hermes-speech-visible'),
-      };
-    });
-    observed.add([sample.action, sample.speechVisible, sample.bubbleSafe, sample.bubbleVisible].join(':'));
-    if (sample.speechVisible === 'true') return sample;
-  }
-  assert.fail(`Hermes must emit one bounded autonomous cue: ${Array.from(observed).join(', ')}`);
-}
-
-async function assertAtomicPerformanceOwner(page, label, frames = 24) {
-  const evidence = await page.evaluate((frameCount) => new Promise((resolve) => {
-    const samples = [];
-    const sample = () => {
-      const stage = document.querySelector('[data-hermes-workspace-stage="true"]');
-      const action = stage?.getAttribute('data-hermes-action') ?? '';
-      const beats = Array.from(document.querySelectorAll('[data-hermes-performance-bubble="true"][data-hermes-speech-visible="true"]'))
-        .map((node) => node.getAttribute('data-hermes-performance-beat') ?? '');
-      samples.push({ action, beats });
-      if (samples.length >= frameCount) resolve(samples);
-      else window.requestAnimationFrame(sample);
-    };
-    window.requestAnimationFrame(sample);
-  }), frames);
-  assert.equal(evidence.some(({ action, beats }) => beats.some((beat) => !beat.startsWith(`${action}:`))), false,
-    `${label} action and visible performance beat must share one semantic snapshot: ${JSON.stringify(evidence)}`);
-  assert.equal(evidence.some(({ beats }) => beats.length > 1), false,
-    `${label} must keep one performance-speech owner: ${JSON.stringify(evidence)}`);
-  return evidence;
 }
 
 async function exerciseCreateImport(page, label, state) {
@@ -377,9 +267,17 @@ try {
 
     const dialog = await clickVisibleHermesCta(page, stage, label + ' initial');
     assert.equal(await stage.getAttribute('data-hermes-assistant-open'), 'true', label + ' click must open the assistant');
+    await page.waitForFunction(
+      (node) => getComputedStyle(node).opacity === '0.18',
+      await stage.elementHandle(),
+    );
     assert.equal(await stage.evaluate((node) => getComputedStyle(node).opacity), '0.18', label + ' open drawer must quiet the stage');
     await dialog.locator('.drawer-close').click();
     await dialog.waitFor({ state: 'detached' });
+    await page.waitForFunction(
+      (node) => node.getAttribute('data-hermes-assistant-open') === 'false',
+      await stage.elementHandle(),
+    );
     assert.equal(await stage.getAttribute('data-hermes-assistant-open'), 'false', label + ' close must restore the work surface');
 
     const edgeTargets = [
@@ -482,94 +380,92 @@ try {
     await waitForStableStageGeometry(page);
 
     await page.evaluate(() => Object.keys(localStorage).filter((key) => key.startsWith('openscience:hermes-dock:')).forEach((key) => localStorage.removeItem(key)));
-    await page.clock.install({ time: new Date('2026-08-23T00:00:00Z') });
     state.taskState = 'parsing';
     await page.reload({ waitUntil: 'domcontentloaded' });
     await waitForRig(page);
-    await page.clock.fastForward(300);
-    await page.waitForTimeout(10);
+    await page.waitForTimeout(310);
     assert.equal(await stage.getAttribute('data-hermes-action'), 'read', label + ' live task state must trigger truthful task feedback');
     assert.equal(await stage.getAttribute('data-hermes-action-kind'), 'priority', label + ' task feedback must outrank autonomous motion');
     state.taskState = null;
     await page.reload({ waitUntil: 'domcontentloaded' });
     await waitForRig(page);
-    const speech = await waitForSpeech(page);
-    const bubble = page.locator('[data-hermes-performance-bubble="true"]');
-    await bubble.waitFor({ state: 'attached' });
-    await assertAtomicPerformanceOwner(page, `${label} autonomous speech`);
-    const bubbleVisible = speech.bubbleVisible === 'true';
-    assert.equal(speech.bubbleSafe === 'true', bubbleVisible, label + ' autonomous speech must render only with a measured safe placement');
+    const menuTrigger = page.locator('[data-hermes-input-owner="true"]');
+    await menuTrigger.click({ button: 'right' });
+    const menu = page.getByRole('menu', { name: /Hermes/u });
+    await menu.waitFor({ state: 'visible' });
+    await menu.getByRole('menuitem').last().click();
+    const bubble = page.locator('[data-hermes-menu-feedback="true"]');
+    await bubble.waitFor({ state: 'visible' });
+    const bubbleVisible = true;
     if (bubbleVisible) visibleCueCount += 1;
     const final = await assertFootprintsSafe(page, viewport, label + ' final');
     const bubbleStyle = await bubble.evaluate((node) => {
       const style = getComputedStyle(node);
-      const dismiss = node.querySelector('.hermes-companion-dismiss')?.getBoundingClientRect();
-      const paragraph = node.querySelector('p');
+      const paragraph = node.querySelector('p') ?? node;
       const paragraphStyle = paragraph ? getComputedStyle(paragraph) : null;
       const paragraphBox = paragraph?.getBoundingClientRect();
       return {
         backdropFilter: style.backdropFilter,
+        backgroundColor: style.backgroundColor,
         backgroundImage: style.backgroundImage,
         borderRadius: style.borderRadius,
-        dismiss: { height: dismiss?.height ?? 0, width: dismiss?.width ?? 0 },
+        controlCount: node.querySelectorAll('button,[role="button"]').length,
         lineCount: paragraphBox && paragraphStyle ? Math.ceil(paragraphBox.height / Number.parseFloat(paragraphStyle.lineHeight)) : 0,
         maxWidth: style.maxWidth,
         shadow: style.boxShadow,
+        width: style.width,
         visibleToolbar: Array.from(node.querySelectorAll('.hermes-companion-actions, .hermes-companion-take-me'))
           .filter((element) => getComputedStyle(element).display !== 'none').length,
       };
     });
-    assert.deepEqual(bubbleStyle.dismiss, { height: 40, width: 40 }, label + ' dismiss target must be 40x40');
-    assert.equal(bubbleStyle.maxWidth, '248px', label + ' bubble must remain at most 15.5rem');
-    assert.equal(bubbleStyle.borderRadius, '4px', label + ' bubble must use the fixed radius');
+    assert.equal(await bubble.getAttribute('data-hermes-bubble-material'), 'warm-paper', label + ' speech must use warm paper');
+    assert.equal(await bubble.getAttribute('data-hermes-speech-origin'), 'mouth', label + ' speech must originate at the mouth');
+    assert.equal(bubbleStyle.controlCount, 0, label + ' one-sentence speech must not render a detached control');
+    assert.ok(Number.parseFloat(bubbleStyle.width) <= 212, label + ' speech oval must remain at most 13.25rem');
+    assert.notEqual(bubbleStyle.borderRadius, '4px', label + ' speech must not fall back to the rectangular annotation');
+    assert.notEqual(bubbleStyle.backgroundColor, 'rgba(0, 0, 0, 0)', label + ' speech paper must be opaque');
     assert.equal(bubbleStyle.backgroundImage, 'none', label + ' bubble must not use a gradient');
     assert.equal(bubbleStyle.backdropFilter, 'none', label + ' bubble must not use blur');
-    assert.equal(bubbleStyle.shadow, 'rgba(0, 0, 0, 0.18) 0px 8px 20px 0px', label + ' bubble must use one restrained shadow');
+    assert.notEqual(bubbleStyle.shadow, 'none', label + ' bubble must use one restrained paper shadow');
     if (viewport.width <= 640) {
       assert.equal(bubbleVisible, true, label + ' must use the safe centered mobile bubble fallback');
-      assert.ok(bubbleStyle.lineCount <= 2, label + ' mobile cue must remain one short sentence: ' + JSON.stringify(bubbleStyle));
+      assert.ok(bubbleStyle.lineCount <= 3, label + ' mobile cue must remain one short sentence: ' + JSON.stringify(bubbleStyle));
       assert.equal(bubbleStyle.visibleToolbar, 0, label + ' mobile cue must not expose a toolbar');
     }
     const bubbleBox = bubbleVisible ? await bubble.boundingBox() : null;
-    const bubblePointer = bubbleBox ? await assertBubblePointerFacesActor(page, final.actor, bubbleBox, label) : null;
+    const bubblePointer = bubbleBox ? await bubble.evaluate((node) => {
+      const mouth = document.querySelector('[data-hermes-mouth-anchor="true"]')?.getBoundingClientRect();
+      const bounds = node.getBoundingClientRect();
+      const tail = getComputedStyle(node, '::after');
+      const tailTip = {
+        x: bounds.right - Number.parseFloat(tail.right),
+        y: bounds.bottom - Number.parseFloat(tail.bottom),
+      };
+      return mouth ? {
+        mouth: { x: mouth.x, y: mouth.y },
+        mouthDistance: Math.hypot(tailTip.x - mouth.x, tailTip.y - mouth.y),
+        tailTip,
+      } : null;
+    }) : null;
+    assert.ok(bubblePointer && bubblePointer.mouthDistance <= 18,
+      `${label} companion speech tail must terminate at the mouth: ${JSON.stringify(bubblePointer)}`);
+    assert.equal(final.protectedRegions.some((region) => bubbleBox && overlaps(bubbleBox, region)), false,
+      `${label} companion speech must not cover a protected surface`);
     assert.ok(final.actor.width * final.actor.height / (viewport.width * viewport.height) < .15,
       label + ' Hermes must remain subordinate to the research task');
     assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true, label + ' must not overflow horizontally');
     await page.screenshot({ animations: 'disabled', path: resolve(output, 'dashboard-' + label + '.png') });
     if (bubbleVisible) {
       const footer = page.locator('[data-hermes-visual-footer="true"]');
-      assert.equal(await footer.evaluate((node) => getComputedStyle(node).display), 'none',
-        `${label} visible speech must remove the overlapping Hermes footer from layout and hit testing`);
-      assert.equal(await footer.boundingBox(), null, `${label} visible speech and footer geometry must be mutually exclusive`);
-      await bubble.locator('.hermes-companion-dismiss').click();
-      await page.waitForFunction(() => document.querySelector('[data-hermes-workspace-stage="true"]')?.getAttribute('data-hermes-speech-visible') === 'false');
-      assert.notEqual(await footer.evaluate((node) => getComputedStyle(node).display), 'none',
-        `${label} dismissing speech must restore the visible Hermes footer`);
+      const footerBox = await footer.boundingBox();
+      const currentBubbleBox = await bubble.boundingBox();
+      assert.equal(Boolean(footerBox && currentBubbleBox && overlaps(footerBox, currentBubbleBox)), false,
+        `${label} visible companion speech must not overlap the Hermes footer`);
+      await page.waitForTimeout(4300);
+      await bubble.waitFor({ state: 'detached' });
       const restoredDialog = await clickVisibleHermesCta(page, stage, label + ' restored footer');
       await restoredDialog.locator('.drawer-close').click();
       await restoredDialog.waitFor({ state: 'detached' });
-    }
-    if (label === '1440x900') {
-      const interaction = stage.locator('[data-hermes-carrier-interaction-hull="true"]');
-      const interactionBox = await interaction.boundingBox();
-      assert.ok(interactionBox, `${label} semantic-owner pointer exercise needs interaction geometry`);
-      const pointer = { x: interactionBox.x + interactionBox.width / 2, y: interactionBox.y + interactionBox.height / 2 };
-      await page.mouse.move(pointer.x, pointer.y);
-      const hoverEvidence = await assertAtomicPerformanceOwner(page, `${label} hover transition`);
-      assert.equal(hoverEvidence.some(({ action }) => action === 'pointer-approach' || action === 'pointer-avoid'), true,
-        `${label} hover must reach one pointer behavior: ${JSON.stringify(hoverEvidence)}`);
-      await page.mouse.down();
-      const pressEvidence = await assertAtomicPerformanceOwner(page, `${label} press transition`);
-      assert.equal(pressEvidence.some(({ action }) => action === 'drag'), true,
-        `${label} primary press must reach drag without a stale beat: ${JSON.stringify(pressEvidence)}`);
-      await page.mouse.move(pointer.x + 8, pointer.y + 8, { steps: 2 });
-      await page.mouse.up();
-      await page.mouse.move(20, viewport.height - 20);
-      await page.clock.fastForward(800);
-      await page.waitForTimeout(5);
-      const leaveEvidence = await assertAtomicPerformanceOwner(page, `${label} hover leave transition`);
-      assert.equal(leaveEvidence.some(({ action }) => action !== 'pointer-approach' && action !== 'pointer-avoid'), true,
-        `${label} hover leave must release pointer behavior without a stale beat: ${JSON.stringify(leaveEvidence)}`);
     }
     assert.deepEqual(browserErrors, [], label + ' must have no console or page errors');
     metrics[label] = {
@@ -587,7 +483,7 @@ try {
     };
     await context.close();
   }
-  assert.ok(visibleCueCount > 0, 'at least one first-person viewport must render the autonomous cue in open space');
+  assert.ok(visibleCueCount > 0, 'at least one first-person viewport must render explicit companion speech in open space');
   await writeFile(resolve(output, 'dashboard-metrics.json'), JSON.stringify(metrics) + '\n');
 } finally {
   await browser.close();

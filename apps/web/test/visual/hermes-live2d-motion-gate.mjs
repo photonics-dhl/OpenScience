@@ -162,31 +162,28 @@ try {
   assert.match(await performanceBubble.getAttribute('data-hermes-performance-beat'), /^cap-check:/u);
   const bubbleMaterial = await performanceBubble.evaluate((node) => {
     const style = getComputedStyle(node);
-    const dismiss = node.querySelector('.hermes-companion-dismiss');
-    const dismissBox = dismiss?.getBoundingClientRect();
     return {
       backdropFilter: style.backdropFilter,
+      backgroundColor: style.backgroundColor,
       backgroundImage: style.backgroundImage,
       borderRadius: style.borderRadius,
-      dismissHeight: dismissBox?.height ?? 0,
-      dismissWidth: dismissBox?.width ?? 0,
+      controlCount: node.querySelectorAll('button,[role="button"]').length,
       maxWidth: style.maxWidth,
       shadow: style.boxShadow,
     };
   });
-  assert.deepEqual(bubbleMaterial, {
-    backdropFilter: 'none',
-    backgroundImage: 'none',
-    borderRadius: '4px',
-    dismissHeight: 40,
-    dismissWidth: 40,
-    maxWidth: '248px',
-    shadow: 'rgba(0, 0, 0, 0.18) 0px 8px 20px 0px',
-  });
+  assert.equal(await performanceBubble.getAttribute('data-hermes-bubble-material'), 'warm-paper');
+  assert.equal(await performanceBubble.getAttribute('data-hermes-speech-origin'), 'mouth');
+  assert.equal(await performanceBubble.getAttribute('data-hermes-speech-copy'), 'single');
+  assert.equal(bubbleMaterial.backdropFilter, 'none');
+  assert.equal(bubbleMaterial.backgroundImage, 'none');
+  assert.notEqual(bubbleMaterial.backgroundColor, 'rgba(0, 0, 0, 0)');
+  assert.notEqual(bubbleMaterial.borderRadius, '4px');
+  assert.equal(bubbleMaterial.controlCount, 0);
+  assert.equal(bubbleMaterial.maxWidth, '212px');
+  assert.notEqual(bubbleMaterial.shadow, 'none');
   await developerTray.evaluate((element) => { element.open = false; });
   await page.screenshot({ path: resolve(output, 'bubble-cap-check-desktop.png'), fullPage: true, animations: 'disabled' });
-  await performanceBubble.getByRole('button').click({ force: true });
-  assert.equal(await performanceBubble.getAttribute('data-hermes-speech-visible'), 'false');
   await developerTray.evaluate((element) => { element.open = true; });
 
   await page.locator('[data-hermes-action-control="read"]').click({ force: true });

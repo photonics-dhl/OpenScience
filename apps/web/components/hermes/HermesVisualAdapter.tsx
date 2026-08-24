@@ -315,7 +315,8 @@ export function HermesVisualAdapter({ action, actionStartedAtMs, assistantOpen =
           onPointerMove={(event) => { handlePointerMove(event); setGaze(event); }}
           onPointerUp={(event) => {
             clearLongPress();
-            window.setTimeout(() => event.currentTarget.removeAttribute('data-hermes-long-press-active'), 0);
+            const target = event.currentTarget;
+            window.setTimeout(() => target.removeAttribute('data-hermes-long-press-active'), 0);
           }}
           ref={linkRef}
           type="button"
@@ -345,6 +346,7 @@ export function HermesVisualAdapter({ action, actionStartedAtMs, assistantOpen =
               rendererGeneration={rendererGeneration}
               state={state}
             />
+            <span aria-hidden="true" className="hermes-speech-mouth-anchor" data-hermes-mouth-anchor="true" />
           </span>
           <span aria-hidden={!promptVisible} className="hermes-guide-nudge" data-visible={promptVisible ? 'true' : 'false'}>{t(suggestion.bodyKey)}</span>
         </button>
@@ -388,6 +390,7 @@ export function HermesVisualAdapter({ action, actionStartedAtMs, assistantOpen =
     {menuFeedback ? <p
       aria-live="polite"
       className="hermes-menu-feedback"
+      data-hermes-bubble-material="warm-paper"
       data-hermes-menu-feedback="true"
       data-hermes-speech-copy="single"
       data-hermes-speech-origin="mouth"

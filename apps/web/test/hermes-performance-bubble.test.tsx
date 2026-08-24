@@ -20,7 +20,7 @@ const globals = readFileSync(new URL('../app/globals.css', import.meta.url), 'ut
 
 function cssRule(selector: string): string {
   const escaped = selector.replace(/[.*+?^${}()|[\]\\]/gu, '\\$&');
-  return globals.match(new RegExp(`(?:^|\\n)${escaped}\\s*\\{([^}]*)\\}`, 'u'))?.[1] ?? '';
+  return globals.match(new RegExp(`(?:^|\\n)\\s*${escaped}\\s*\\{([^}]*)\\}`, 'u'))?.[1] ?? '';
 }
 
 describe('Hermes performance bubble', () => {
@@ -56,6 +56,10 @@ describe('Hermes performance bubble', () => {
   it('uses a compact warm-paper speech oval with a mouth-pointing tail', () => {
     const bubble = cssRule('.hermes-performance-bubble');
     const tail = cssRule('.hermes-performance-bubble::after');
+    const leftBelow = cssRule(".hermes-workspace-stage[data-hermes-bubble-horizontal='left'][data-hermes-bubble-vertical='below'] .hermes-performance-bubble::after");
+    const mobileBelow = cssRule(".hermes-workspace-stage[data-hermes-stage-size='200'][data-hermes-bubble-vertical='below'] .hermes-performance-bubble::after");
+    const rightAbove = cssRule(".hermes-workspace-stage[data-hermes-bubble-horizontal='right'][data-hermes-bubble-vertical='above'] .hermes-performance-bubble::after");
+    const reducedFeedback = cssRule(".hermes-workspace-stage[data-hermes-motion-preference='reduced'] .hermes-menu-feedback");
     const speakingFooter = cssRule(".hermes-workspace-stage[data-hermes-bubble-safe='true'][data-hermes-speech-visible='true'] .hermes-visual-invoke-label");
     const visibleCta = cssRule(".hermes-workspace-stage[data-hermes-anchored='true'][data-hermes-speech-visible='false'] .hermes-visible-invoke-cta");
 
@@ -68,6 +72,12 @@ describe('Hermes performance bubble', () => {
     expect(tail).toContain('background: var(--os-paper-strong);');
     expect(tail).toContain('border-right: 1px solid var(--os-ink);');
     expect(globals).toContain("[data-hermes-bubble-horizontal='left'] .hermes-performance-bubble::after");
+    expect(leftBelow).toContain('clip-path: polygon(0 100%, 100% 100%, 100% 0);');
+    expect(leftBelow).toContain('top: -2.7rem;');
+    expect(mobileBelow).toContain('top: -1.85rem;');
+    expect(mobileBelow).toContain('bottom: auto;');
+    expect(rightAbove).toContain('clip-path: polygon(0 0, 100% 0, 0 100%);');
+    expect(reducedFeedback).toContain('animation: none;');
     expect(speakingFooter).toContain('display: none;');
     expect(visibleCta).toContain('pointer-events: auto;');
     expect(globals).toContain("[data-hermes-stage-size='200'] .hermes-performance-bubble");

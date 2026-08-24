@@ -81,21 +81,14 @@ try {
   assert.ok(gaps.every((gap) => gap <= 8_500), `idle action gap exceeded 8.5s: ${gaps.join(', ')}`);
   assert.equal(duplicate, null, `consecutive actions must not repeat: ${JSON.stringify(duplicate)}`);
   assert.ok(new Set(actions.map((entry) => entry.frame)).size >= 8, 'classified actions must produce at least 8 distinct real Live2D canvas frames');
-  const completedPatrol = [...patrolTracks.values()].find((track) => {
-    if (track.length < 8) return false;
-    const origin = track[0];
-    const excursion = Math.max(...track.map((point) => Math.hypot(point.left - origin.left, point.top - origin.top)));
-    const returned = Math.hypot(track.at(-1).left - origin.left, track.at(-1).top - origin.top);
-    return excursion >= 30 && returned <= 6;
-  });
-  assert.ok(completedPatrol, `patrol must visibly leave and return to its dock: ${JSON.stringify([...patrolTracks.values()])}`);
+  assert.equal(patrolTracks.size, 0, 'anchored Dashboard Hermes must not patrol across the research surface');
   const visiblyMovingActions = new Set([...actionTracks.values()].filter(({ points }) => {
     if (points.length < 4) return false;
     const origin = points[0];
     return Math.max(...points.map((point) => Math.hypot(point.left - origin.left, point.top - origin.top))) >= 8;
   }).map(({ action }) => action));
-  assert.deepEqual([...visiblyMovingActions], ['patrol'],
-    `only the travelling patrol signature may move the enclosing silhouette >=8px: ${JSON.stringify([...visiblyMovingActions])}`);
+  assert.deepEqual([...visiblyMovingActions], [],
+    `anchored actions must articulate inside the reserved margin without moving the enclosing silhouette: ${JSON.stringify([...visiblyMovingActions])}`);
 
   const actor = page.locator('[data-hermes-companion-actor]');
   const inputOwner = page.locator('[data-hermes-input-owner="true"]');
