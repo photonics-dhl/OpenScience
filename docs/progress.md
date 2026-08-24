@@ -1,13 +1,13 @@
 # OpenScience 进度（CURRENT window）
 
-> 最新同步：2026-08-24 13:02 +08。完整历史由 Git history 保存；DEPRECATED、NO-GO、旧计划和 archive 不作为新 session 默认输入。
+> 最新同步：2026-08-24 13:10 +08。完整历史由 Git history 保存；DEPRECATED、NO-GO、旧计划和 archive 不作为新 session 默认输入。
 
 ## Current version tuple
 
-- Branch / deployed HEAD: `codex/hermes-wanko-live2d` / `02d3dd9c495fda18025d9f1698cf41a247094052`；其后的 keyboard-navigation hotfix 仍是未提交工作树。
-- Deployable application source: `02d3dd9c495fda18025d9f1698cf41a247094052`。
+- Branch / deployed application HEAD: `codex/hermes-wanko-live2d` / `b73a9dd5d6dc95b57349682a09e72525b8c033b2`；其后的变更仅为部署证据文档，不是另一份应用 release。
+- Deployable application source: `b73a9dd5d6dc95b57349682a09e72525b8c033b2`。
 - Local main / origin main: `c60ffdd16b85ea8f0d8b047493fa03a4c0230c05` / `7eb2f5bc4718ee445b79bd089acb64acb3691e62`；两者都早于当前工作分支，远端 Hermes feature 不存在。
-- ECS release / rollback: `02d3dd9c495fda18025d9f1698cf41a247094052` / `5f4e73c10dace9f2d18f8788ead238863cd33312`。
+- ECS release / rollback: `b73a9dd5d6dc95b57349682a09e72525b8c033b2` / `02d3dd9c495fda18025d9f1698cf41a247094052`。
 
 ## 2026-08-24 — Hermes warm-paper workbench candidate ready
 
@@ -16,7 +16,7 @@
 - 评审 route 展示 Dashboard 默认菜单与 focus、陪伴短句反馈、quiet editor、evidence review、explore、long reading、mobile long press；使用真实 v09 Hermes 与精确 `360/200px`。桌面右键、`Shift+F10`、Menu 键、移动长按和普通点击助手 dialog 均有浏览器合同。
 - Fresh local evidence：状态 RED→GREEN `5/5`，mutation 可杀死；Web `395/395` + 5 Node contracts、route E2E `5/5`、typecheck、19-page production build 与 root lint/docs-sync GREEN。六张 ignored WebGL 截图已按 original detail 复核并修正角色遮挡、移动裁切、过早画布与焦点轮廓。
 - 独立架构审查的四项发现均已收敛：菜单键监听只挂在 Hermes trigger，不吞掉输入区原生行为；菜单有双语可访问名；WebGL2 失败显示同尺寸真实 Wanko 静态帧；实施计划准确记录 route-local 字体边界。失败路径与焦点边界已加入浏览器合同。
-- 首次 ECS 发布 `02d3dd9` 已完成，backup `432K / 7/7`、服务器 build、容器 health、route HTTP 200、精确 `/__release`、absent `.release-failed` 与 rollback tree 均通过。公网浏览器验收为 `4/5`：快速 Editor→Review→Editor 后 Shift+F10 暴露同一路由异步 query 导航竞态；其余四项通过。根因已由同步 URL 的 RED 测试锁定，hotfix 使用 History API 原子更新本地 scene 与 query，待精确提交和二次部署。
+- 首次 ECS 发布 `02d3dd9` 后，公网 `4/5` 暴露快速 Editor→Review→Editor 的异步 query 竞态；RED 测试证明本地 state 已变而 URL 仍旧。hotfix `b73a9dd` 使用 History API 原子更新 scene/query，二次 `--skip-migrate` 发布完成。最终服务器 build/containers、route HTTP 200、精确 `/__release=b73a9dd...`、absent `.release-failed`、rollback `02d3dd9...` 均通过；公网完整 route E2E `5/5`，键盘竞态额外并发复跑 `3/3`。
 
 ## 2026-08-24 — UI taste toolchain correction
 

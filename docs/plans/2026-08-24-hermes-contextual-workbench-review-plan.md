@@ -141,13 +141,13 @@ project release script with the current production release as rollback.
 ## Task 8: Deploy and verify the public visual URL
 
 - [x] Run the read-only ECS checkup and database backup from Windows Git Bash.
-- [ ] Run deployment dry-run, then confirmed deployment with `--skip-migrate`
+- [x] Run deployment dry-run, then confirmed deployment with `--skip-migrate`
   and explicit rollback ref after revalidating the exact candidate SHA.
-- [ ] Verify target containers, public route HTTP 200, exact `/__release` SHA,
+- [x] Verify target containers, public route HTTP 200, exact `/__release` SHA,
   no `.release-failed` marker and retained rollback release.
-- [ ] Run the no-write Playwright acceptance against the public URL and capture
+- [x] Run the no-write Playwright acceptance against the public URL and capture
   production screenshots.
-- [ ] Update deployment evidence in progress, handoff, runbook and index in a
+- [x] Update deployment evidence in progress, handoff, runbook and index in a
   docs-only follow-up commit; do not redeploy that documentation-only HEAD.
-- [ ] Give the user the direct public URL and ask only for concrete feedback on
+- [x] Give the user the direct public URL and ask only for concrete feedback on
   silhouette, paper/ink texture, cuteness, menu density and action feedback.

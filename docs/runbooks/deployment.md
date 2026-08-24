@@ -1,6 +1,6 @@
 # Runbook: 部署（Deployment）
 
-> 状态：**CURRENT**。2026-08-24 09:22 +08 只读核验的 active application release 为 `5f4e73c10dace9f2d18f8788ead238863cd33312`，rollback tree 为 `c97926ab4188d5d5fc7a6e58e0333d20a600c692`；docs-only HEAD 不得替代或触发应用部署。
+> 状态：**CURRENT**。2026-08-24 13:10 +08 验收的 active application release 为 `b73a9dd5d6dc95b57349682a09e72525b8c033b2`，rollback tree 为 `02d3dd9c495fda18025d9f1698cf41a247094052`；docs-only HEAD 不得替代或触发应用部署。
 > 格式遵循 `.agents/skills/infra-runbook/SKILL.md` 四节强制要求。
 > 部署属 Spec §20.5"询问"级操作：执行前需用户确认，必须走 `infra/scripts/deploy.sh` + CI/CD，禁止手工改服务器代码。
 
@@ -547,8 +547,7 @@ Historical note for the 2026-08-11 release: it used fixed worker tags and a writ
 
 ### 5.15 Hermes warm-paper workbench visual-review candidate (2026-08-24)
 
-> Initial authorized release `02d3dd9` is active with rollback `5f4e73c`;
-> production-browser keyboard-navigation hotfix is pending a second switch.
+> Final authorized release `b73a9dd` is active with rollback `02d3dd9`.
 
 - Scope: anonymous, `noindex`, no-write `/_visual/research-workbench` route with
   six deep-linked review scenes, real v09 Hermes at exact `360/200px`, desktop
@@ -574,5 +573,9 @@ Historical note for the 2026-08-11 release: it used fixed worker tags and a writ
   returned `02d3dd9c495fda18025d9f1698cf41a247094052`; `.release-failed` was absent
   and the `5f4e73c...` rollback tree remained. The first public E2E was `4/5`
   because rapid scene switching exposed an async same-route query race. The
-  hotfix synchronizes reducer state and query via History API and must repeat
-  dry-run, confirmed `--skip-migrate` deployment and public `5/5` acceptance.
+  hotfix synchronizes reducer state and query via History API. Exact hotfix
+  `b73a9dd5d6dc95b57349682a09e72525b8c033b2` then passed dry-run, confirmed
+  `--skip-migrate` deployment, 19-page server build, healthy service switch,
+  public route 200 and exact release identity. Public full E2E passed `5/5` and
+  the keyboard scenario passed three additional concurrent repeats; failure
+  marker remained absent and rollback `02d3dd9...` remained present.
