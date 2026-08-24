@@ -1,13 +1,13 @@
 # OpenScience 进度（CURRENT window）
 
-> 最新同步：2026-08-24 20:58 +08。完整历史由 Git history 保存；DEPRECATED、NO-GO、旧计划和 archive 不作为新 session 默认输入。
+> 最新同步：2026-08-24 19:06 +08。完整历史由 Git history 保存；DEPRECATED、NO-GO、旧计划和 archive 不作为新 session 默认输入。
 
 ## Current version tuple
 
-- Branch / application source: `codex/hermes-wanko-live2d` / `56f6cf4c36b418f7aa2a2742a7fbcefc086b3519` + candidate metadata；ECS currently serves the first Research Folio release `2abfe42e56881ae7b7a3e7f0a0b3a97b31762326`.
-- Deployable application source: `56f6cf4c36b418f7aa2a2742a7fbcefc086b3519`；post-visual-review hotfix candidate suppresses unsolicited anchored Hermes speech/nudges while retaining explicit guide/menu/drawer feedback.
+- Branch / application source: `codex/hermes-wanko-live2d` / `56f6cf4c36b418f7aa2a2742a7fbcefc086b3519` + release metadata at deployed commit `33418fdf9e4c13cd3e34eba0a15f6f0208fc5183`.
+- Deployable application source: `56f6cf4c36b418f7aa2a2742a7fbcefc086b3519`；post-visual-review hotfix suppresses unsolicited anchored Hermes speech/nudges while retaining explicit guide/menu/drawer feedback.
 - Local main / origin main: `c60ffdd16b85ea8f0d8b047493fa03a4c0230c05` / `7eb2f5bc4718ee445b79bd089acb64acb3691e62`；两者都早于当前工作分支，远端 Hermes feature 不存在。
-- ECS release / rollback: `2abfe42e56881ae7b7a3e7f0a0b3a97b31762326` / `bba5f144fd082bc05fdbfb4d5d98dd7d094fe8cf`。
+- ECS release / rollback: `33418fdf9e4c13cd3e34eba0a15f6f0208fc5183` / `2abfe42e56881ae7b7a3e7f0a0b3a97b31762326`。
 
 ## 2026-08-24 — Research Folio whole-product candidate
 
@@ -15,7 +15,8 @@
 - 真实用户路径已统一为 `identity → active research → create/import → structure/evidence → human decision → version → publish → public verification`。登录/注册表单优先，Dashboard 活跃研究优先，创建 RO 显式两阶段，RO 工作区、公阅、探索、设置和管理端共用暖纸 Research Folio；graphite 只保留给代码/diff/原始证据。
 - Hermes 默认进入页面预留研究页边：desktop `360px`、compact/mobile `200px`，锚定态不再 fixed 或跨字段移动；右键、`Shift+F10`、Menu 键、移动长按打开一张连续纸墨菜单，普通点击仍开 assistant drawer。反馈是角色旁短行，不覆盖表单或正文。
 - 首次 immutable release `2abfe42` 已经 ECS checkup/backup、server full build、27 migrations current、healthy containers、精确 release/rollback/failure-marker、真实 route/assets 与公网 no-write `57/57` 验收；Landing 未改，未 migration/seed/data write。
-- 发布后原尺寸截图复核发现旧自动 nudge 仍会压住 Hermes 状态与动效控制。hotfix `56f6cf4` 关闭锚定产品页的未请求 speech/nudge，保留右键菜单、点击 drawer、显式字段 guide 与动作反馈；修复后截图无覆盖，production release matrix 再次 `60/60`，Web 58 files / 402 tests + 5 Node contracts、typecheck、19-page build GREEN。待完成 exact hotfix 部署与公网 focused gate。
+- 发布后原尺寸截图复核发现旧自动 nudge 仍会压住 Hermes 状态与动效控制。hotfix `56f6cf4` 关闭锚定产品页的未请求 speech/nudge，保留右键菜单、点击 drawer、显式字段 guide 与动作反馈；修复后截图无覆盖，production release matrix 再次 `60/60`，Web 58 files / 402 tests + 5 Node contracts、typecheck、19-page build GREEN。
+- exact release `33418fd` 已以 `2abfe42` 为 rollback、`--skip-migrate` 发布；fresh backup `432K files=7/7`、server full build、27 migrations current、release/failure/rollback marker、healthy runtime、真实 route/Live2D assets 与公网 focused `4/4` 均通过。无 migration、seed 或研究数据写入。
 
 ## 2026-08-24 — Research Session Folio deployed for visual review
 
@@ -50,9 +51,9 @@
 
 ## Constraints and next action
 
-- 当前 ECS application release / rollback 是 `2abfe42` / `bba5f14`；hotfix 发布前不得把 `56f6cf4` 写成 active release。
+- 当前 ECS application release / rollback 是 `33418fd` / `2abfe42`；后续 docs-only HEAD 不得误写成另一份 application release。
 - Task 21 计划已经完成并降级为 HISTORICAL evidence；唯一 CURRENT Hermes design 仍是 `docs/specs/2026-08-19-hermes-wanko-live2d-design.md`。
-- 用户已批准把 Research Folio 落到真实产品并部署；下一步是 exact hotfix 发布与公网 focused gate，然后让用户直接在登录、Dashboard、创建 RO、编辑和公开阅读页验收。
+- Research Folio 实现、发布与 hotfix 已完成；下一步由用户直接在登录、Dashboard、创建 RO、编辑和公开阅读页验收，继续反馈信息层级、阅读节奏与 Hermes 协调。
 - 可选剩余证据：取得现有安全测试会话后，补一次不创建新数据的 authenticated Dashboard smoke。
 
 ## Read first

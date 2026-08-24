@@ -1,6 +1,7 @@
 # Research Folio Product System Implementation Plan
 
 > **Execution target:** `codex/hermes-wanko-live2d` in `E:/Miscellaneous/XGS/.worktrees/readable-hermes-guidance` only. Landing is explicitly out of scope. Deploy with `--skip-migrate` after local and server gates.
+> **Status:** COMPLETE — production release `33418fdf9e4c13cd3e34eba0a15f6f0208fc5183`, rollback `2abfe42e56881ae7b7a3e7f0a0b3a97b31762326`.
 
 **Goal:** Replace the fragmented instrument-black treatment on every real non-Landing route with the approved Research Folio system, make the primary research workflow readable and self-explanatory, and guarantee that anchored Hermes never covers product content.
 

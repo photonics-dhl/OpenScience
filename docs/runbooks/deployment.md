@@ -606,8 +606,8 @@ Historical note for the 2026-08-11 release: it used fixed worker tags and a writ
 
 ### 5.17 Research Folio whole-product release (2026-08-24)
 
-> Active release `2abfe42`; rollback `bba5f14`. Visual-review hotfix application
-> source `56f6cf4` is locally verified and awaits the exact release operation.
+> Active release `33418fd`; rollback `2abfe42`. Visual-review hotfix application
+> source is `56f6cf4`.
 
 - Scope: all real non-Landing product surfaces now share the warm-paper Research
   Folio information hierarchy, evidence-only graphite tools and reserved Hermes
@@ -628,3 +628,10 @@ Historical note for the 2026-08-11 release: it used fixed worker tags and a writ
   context menu, drawer and selected-action feedback. Fresh screenshots show no
   obstruction; Web `402/402` plus five Node contracts, typecheck, 19-page build,
   focused Hermes `3/3` and the full production matrix `60/60` pass.
+- Hotfix operation: fresh pre/post checkup and DB backup `432K files=7/7`
+  passed. Exact `33418fdf9e4c13cd3e34eba0a15f6f0208fc5183` deployed with
+  `--skip-migrate` and `2abfe42...` as rollback. The server full-workspace build
+  generated 19 Web pages; target runtime is healthy; 27 migrations remain
+  current; release/failure/rollback markers, real routes and Live2D assets pass.
+  Public Dashboard plus three Hermes interaction gates pass `4/4`. No migration,
+  seed or research-data write ran.
