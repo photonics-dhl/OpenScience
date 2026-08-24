@@ -465,7 +465,16 @@ function DashboardScene({
           <div><dt>{t('dashboard.evidence')}</dt><dd>12 / 14</dd></div>
           <div><dt>{t('dashboard.output')}</dt><dd>{t('dashboard.outputValue')}</dd></div>
         </dl>
-        <button className={styles.primaryAction} onClick={onContinue} type="button">{t('dashboard.continue')} <ChevronRight aria-hidden="true" size={18} /></button>
+        <a
+          className={styles.primaryAction}
+          href="?view=review"
+          onClick={(event) => {
+            event.preventDefault();
+            onContinue();
+          }}
+        >
+          {t('dashboard.continue')} <ChevronRight aria-hidden="true" size={18} />
+        </a>
       </section>
       <section className={styles.activity}>
         <p className={styles.sectionLabel}>{t('dashboard.activity')}</p>

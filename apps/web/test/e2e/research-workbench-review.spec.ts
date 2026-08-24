@@ -70,7 +70,7 @@ test('returning researchers see the active decision before review chrome with lo
 test('the primary decision action advances to evidence review', async ({ page }) => {
   await openReview(page);
 
-  await page.getByRole('button', { name: /打开证据对照|Open evidence comparison/u }).click();
+  await page.getByRole('link', { name: /打开证据对照|Open evidence comparison/u }).click();
   await expect(page.getByRole('tab', { name: /审阅|Review/u })).toHaveAttribute('aria-selected', 'true');
   expect(new URL(page.url()).searchParams.get('view')).toBe('review');
   await expect(page.locator('[data-evidence-rail="true"]')).toBeVisible();
@@ -83,10 +83,10 @@ test('Dashboard exposes the real-size Hermes contextual menu and assistant click
   await expect(page.getByRole('heading', { name: /层状材料中的超快电荷转移|Ultrafast charge transfer in layered matter/iu })).toBeVisible();
   await expect(page.getByRole('tab')).toHaveCount(6);
   await expect(page.getByRole('menu')).toHaveCount(0);
+  await expect(page.locator('[data-hermes-rig="live2d-wanko"]')).toHaveAttribute('data-hermes-rig-status', 'ready', { timeout: 20_000 });
   await page.locator('[data-review-hermes-trigger="true"]').click({ button: 'right' });
   await expect(page.getByRole('menu')).toBeVisible();
   await expect(page.locator('[data-review-hermes-size="360"]')).toHaveCSS('width', '360px');
-  await expect(page.locator('[data-hermes-rig="live2d-wanko"]')).toHaveAttribute('data-hermes-rig-status', 'ready', { timeout: 20_000 });
   await page.screenshot({ fullPage: true, path: `${outDir}/dashboard-default-menu.png` });
 
   await page.keyboard.press('Escape');
