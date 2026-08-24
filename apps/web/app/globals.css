@@ -2099,6 +2099,16 @@ body {
   transform-origin: var(--radix-context-menu-content-transform-origin);
 }
 
+.hermes-context-menu::before {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 3rem;
+  border-left: 1px solid rgb(163 79 50 / .22);
+  content: '';
+  pointer-events: none;
+}
+
 .hermes-context-menu[data-state='open'] {
   animation: hermes-context-menu-open 160ms ease-out;
 }
@@ -2114,15 +2124,16 @@ body {
 .hermes-context-menu[data-side='left']::after,
 .hermes-context-menu[data-side='right']::after {
   position: absolute;
-  top: 1.75rem;
-  width: 1rem;
-  border-top: 1px solid var(--os-vermilion-ink);
+  top: 1.35rem;
+  width: .35rem;
+  height: 2.75rem;
+  background: var(--os-vermilion-ink);
   content: '';
 }
 
-.hermes-context-menu[data-side='left']::after { right: -1rem; }
-.hermes-context-menu[data-side='right']::after { left: -1rem; }
-.hermes-context-menu[data-compact='true'] { width: min(10.5rem, calc(100vw - 1rem)); }
+.hermes-context-menu[data-side='left']::after { right: -.35rem; }
+.hermes-context-menu[data-side='right']::after { left: -.35rem; }
+.hermes-context-menu[data-compact='true'] { width: min(14rem, calc(100vw - 1rem)); }
 .hermes-context-menu[data-compact='true'] .hermes-context-menu-item { grid-template-columns: 1rem minmax(0, 1fr) auto; padding-inline: .7rem; }
 .hermes-context-menu[data-compact='true'] :is(.hermes-context-menu-item small, .hermes-context-menu-shortcut) { display: none; }
 
@@ -2153,11 +2164,15 @@ body {
   cursor: pointer;
   user-select: none;
 }
-.hermes-context-menu-item[data-highlighted] { background: var(--os-graphite); color: var(--os-paper-strong); }
+.hermes-context-menu-item[data-highlighted] {
+  background: rgb(163 79 50 / .1);
+  color: var(--os-ink);
+  box-shadow: inset 3px 0 0 var(--os-vermilion-ink);
+}
 .hermes-context-menu-item > span:not(.hermes-context-menu-shortcut) { min-width: 0; display: grid; gap: .1rem; }
 .hermes-context-menu-item strong { font-size: .9375rem; font-weight: 650; }
 .hermes-context-menu-item small { color: var(--os-muted-paper); font-size: .8125rem; line-height: 1.35; overflow-wrap: anywhere; }
-.hermes-context-menu-item[data-highlighted] :is(small, .hermes-context-menu-shortcut) { color: #c9c8c1; }
+.hermes-context-menu-item[data-highlighted] :is(small, .hermes-context-menu-shortcut) { color: var(--os-muted-paper); }
 .hermes-context-menu-shortcut { color: var(--os-muted-paper); font-family: var(--font-data); font-size: .625rem; letter-spacing: .04em; }
 .hermes-context-menu-rule { height: 1px; margin: .3rem .875rem; background: rgb(25 26 24 / .2); }
 .hermes-context-menu-hint { display: none; }
@@ -2165,24 +2180,38 @@ body {
 .hermes-menu-feedback {
   position: absolute;
   z-index: 65;
-  top: -5.25rem;
-  left: 0;
-  width: 100%;
+  top: .75rem;
+  left: .625rem;
+  width: min(13.25rem, calc(100vw - 1.5rem));
+  max-width: 13.25rem;
   margin: 0;
-  border-left: 2px solid var(--os-vermilion-ink);
-  padding: .5rem .75rem;
+  border: 1px solid var(--os-ink);
+  border-radius: 50% 47% 52% 46% / 55% 51% 49% 45%;
+  padding: 1rem 1.15rem 1.05rem;
   background: var(--os-paper-strong);
   color: var(--os-ink);
-  box-shadow: 0 1px 0 rgb(25 26 24 / .1);
-  font-size: .875rem;
-  line-height: 1.5;
-  pointer-events: auto;
+  box-shadow: 2px 3px 0 rgb(32 37 34 / .1);
+  font-family: var(--font-ui), system-ui, sans-serif;
+  font-size: .9375rem;
+  line-height: 1.45;
+  text-align: center;
+  text-wrap: balance;
+  pointer-events: none;
+  animation: hermes-speech-enter 160ms cubic-bezier(.16, 1, .3, 1) both;
 }
-.hermes-menu-feedback span {
-  display: block;
-  color: var(--os-vermilion-ink);
-  font-family: var(--font-data);
-  font-size: var(--text-caption);
+
+.hermes-menu-feedback::after {
+  position: absolute;
+  right: 2.75rem;
+  bottom: -2.7rem;
+  width: 2.2rem;
+  height: 2.75rem;
+  clip-path: polygon(0 0, 100% 0, 100% 100%);
+  border-right: 1px solid var(--os-ink);
+  border-bottom: 1px solid var(--os-ink);
+  background: var(--os-paper-strong);
+  content: '';
+  pointer-events: none;
 }
 
 .hermes-companion-actor {
@@ -2228,6 +2257,49 @@ body {
   line-height: 1.42;
   text-wrap: pretty;
   animation: hermes-bubble-enter 220ms cubic-bezier(.16, 1, .3, 1) both;
+}
+
+.hermes-performance-bubble {
+  top: .75rem;
+  right: 4.5rem;
+  bottom: auto;
+  width: min(13.25rem, calc(100vw - 1.5rem));
+  max-width: 13.25rem;
+  border: 1px solid var(--os-ink);
+  border-radius: 50% 47% 52% 46% / 55% 51% 49% 45%;
+  padding: 1rem 1.15rem 1.05rem;
+  background: var(--os-paper-strong);
+  color: var(--os-ink);
+  box-shadow: 2px 3px 0 rgb(32 37 34 / .1);
+  font-size: .9375rem;
+  line-height: 1.45;
+  text-align: center;
+  text-wrap: balance;
+  pointer-events: none;
+  animation: hermes-speech-enter 160ms cubic-bezier(.16, 1, .3, 1) both;
+}
+
+.hermes-performance-bubble::after {
+  right: 6.5rem;
+  bottom: -2.7rem;
+  left: auto;
+  width: 2.2rem;
+  height: 2.75rem;
+  clip-path: polygon(0 0, 100% 0, 100% 100%);
+  border-right: 1px solid var(--os-ink);
+  border-bottom: 1px solid var(--os-ink);
+  background: var(--os-paper-strong);
+  transform: none;
+}
+
+@keyframes hermes-speech-enter {
+  from { opacity: 0; transform: translateY(3px) scale(.985); }
+  to { opacity: 1; transform: none; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .hermes-menu-feedback,
+  .hermes-performance-bubble { animation: none; }
 }
 
 .hermes-workspace-stage[data-hermes-guide-target] .hermes-functional-bubble {
@@ -2435,6 +2507,26 @@ body {
   bottom: auto;
 }
 
+/* Performance speech keeps a triangular mouth pointer after the functional
+   guide-bubble placement rules above have selected its safe side. */
+.hermes-workspace-stage[data-hermes-bubble-horizontal='left'] .hermes-performance-bubble::after {
+  right: 2.75rem;
+  left: auto;
+  width: 2.2rem;
+  height: 2.75rem;
+  transform: none;
+  transform-origin: center;
+}
+
+.hermes-workspace-stage[data-hermes-bubble-horizontal='center'] .hermes-performance-bubble::after {
+  right: auto;
+  left: 50%;
+  width: 2.2rem;
+  height: 2.75rem;
+  transform: translateX(-50%);
+  transform-origin: center;
+}
+
 /* A 200 px mobile companion may guide active work, but its autonomous
    performance cue must not become a second toolbar over the form. */
 @media (max-width: 640px) {
@@ -2449,6 +2541,25 @@ body {
     padding: .55rem 2.35rem .58rem .68rem;
     font-size: .72rem;
     line-height: 1.34;
+  }
+
+  .hermes-workspace-stage[data-hermes-stage-size='200'] .hermes-performance-bubble,
+  .hermes-workspace-stage[data-hermes-stage-size='200'] .hermes-menu-feedback {
+    top: .35rem;
+    right: auto;
+    left: .25rem;
+    width: 10.25rem;
+    max-width: calc(100vw - .75rem);
+    padding: .75rem .85rem .8rem;
+    font-size: .8125rem;
+    line-height: 1.4;
+  }
+
+  .hermes-workspace-stage[data-hermes-stage-size='200'] :is(.hermes-performance-bubble, .hermes-menu-feedback)::after {
+    right: 1.65rem;
+    bottom: -1.85rem;
+    width: 1.6rem;
+    height: 1.9rem;
   }
 
   .hermes-workspace-stage[data-hermes-stage-size='200'][data-hermes-bubble-horizontal='left'] .hermes-companion-bubble {

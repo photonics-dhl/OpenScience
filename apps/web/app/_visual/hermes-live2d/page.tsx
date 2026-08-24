@@ -185,7 +185,6 @@ export default function HermesLive2DVisualRoute() {
           {speechCue ? (
             <HermesPerformanceBubble
               cue={speechCue}
-              onDismiss={() => setSpeechDismissed(true)}
               visible={!speechDismissed}
             />
           ) : null}

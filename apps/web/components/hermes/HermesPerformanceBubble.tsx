@@ -7,13 +7,12 @@ import type { HermesSpeechCue } from '@/lib/hermes/performance-beat';
 
 interface HermesPerformanceBubbleProps {
   cue: HermesSpeechCue;
-  onDismiss: () => void;
   style?: React.CSSProperties;
   visible: boolean;
 }
 
 export const HermesPerformanceBubble = React.forwardRef<HTMLElement, HermesPerformanceBubbleProps>(function HermesPerformanceBubble(
-  { cue, onDismiss, style, visible },
+  { cue, style, visible },
   ref,
 ) {
   const t = useTranslations('hermesCompanion');
@@ -22,25 +21,19 @@ export const HermesPerformanceBubble = React.forwardRef<HTMLElement, HermesPerfo
       aria-hidden={!visible}
       aria-live="polite"
       className="hermes-companion-bubble hermes-performance-bubble"
-      data-hermes-bubble-material="ink-edge"
+      data-hermes-bubble-material="warm-paper"
       data-hermes-performance-bubble="true"
       data-hermes-performance-beat={cue.beatId}
+      data-hermes-speech-copy="single"
       data-hermes-speech-cue={cue.messageKey}
+      data-hermes-speech-origin="mouth"
       data-hermes-speech-tone={cue.tone}
       data-hermes-speech-visible={visible ? 'true' : 'false'}
       onPointerDown={(event) => event.stopPropagation()}
       ref={ref}
       style={style}
     >
-      <span className="hermes-companion-kicker">{t(`performance.tones.${cue.tone}`)}</span>
       <p>{t(cue.messageKey)}</p>
-      <button
-        aria-label={t('dismissSpeech')}
-        className="hermes-companion-dismiss"
-        onClick={onDismiss}
-        tabIndex={visible ? 0 : -1}
-        type="button"
-      >×</button>
     </aside>
   );
 });

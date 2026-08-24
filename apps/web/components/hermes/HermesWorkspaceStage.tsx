@@ -1340,10 +1340,6 @@ function HermesWorkspaceStage({ fallbackAssistantOpen, fallbackOnInvoke, guideTa
       {!guideTarget && speech.cue ? (
         <HermesPerformanceBubble
           cue={speech.cue}
-          onDismiss={() => setPerformanceState((current) => ({
-            ...current,
-            speech: { ...current.speech, cue: null },
-          }))}
           ref={bubbleRef}
           style={!anchored && bubblePlacement ? {
             bottom: 'auto',

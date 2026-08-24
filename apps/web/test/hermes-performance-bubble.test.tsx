@@ -26,57 +26,57 @@ function cssRule(selector: string): string {
 describe('Hermes performance bubble', () => {
   it('renders one synchronized polite annotation for the active performance beat', () => {
     const html = renderToStaticMarkup(
-      <HermesPerformanceBubble cue={cue} onDismiss={() => undefined} visible />,
+      <HermesPerformanceBubble cue={cue} visible />,
     );
 
     expect(html).toContain('aria-live="polite"');
     expect(html).toContain('aria-hidden="false"');
     expect(html).toContain('data-hermes-performance-bubble="true"');
-    expect(html).toContain('data-hermes-bubble-material="ink-edge"');
+    expect(html).toContain('data-hermes-bubble-material="warm-paper"');
     expect(html).toContain('data-hermes-performance-beat="cap-check:42000"');
     expect(html).toContain('data-hermes-speech-cue="performance.capCheck.one"');
-    expect(html).toContain('translated:performance.tones.focused');
+    expect(html).toContain('data-hermes-speech-copy="single"');
+    expect(html).toContain('data-hermes-speech-origin="mouth"');
     expect(html).toContain('translated:performance.capCheck.one');
-    expect(html).toContain('translated:dismissSpeech');
+    expect(html).not.toContain('translated:performance.tones.focused');
+    expect(html).not.toContain('translated:dismissSpeech');
+    expect(html).not.toContain('<button');
   });
 
-  it('removes hidden speech controls from the tab order', () => {
+  it('hides an inactive sentence without leaving a speech control behind', () => {
     const html = renderToStaticMarkup(
-      <HermesPerformanceBubble cue={cue} onDismiss={() => undefined} visible={false} />,
+      <HermesPerformanceBubble cue={cue} visible={false} />,
     );
 
     expect(html).toContain('aria-hidden="true"');
-    expect(html).toContain('tabindex="-1"');
     expect(html).toContain('data-hermes-speech-visible="false"');
+    expect(html).not.toContain('tabindex=');
   });
 
-  it('keeps the ink-edge annotation compact, restrained and touch accessible', () => {
-    const bubble = cssRule('.hermes-companion-bubble');
-    const dismiss = cssRule('.hermes-companion-dismiss');
-    const tail = cssRule('.hermes-companion-bubble::after');
-    const leftTail = cssRule(".hermes-workspace-stage[data-hermes-bubble-horizontal='left'] .hermes-companion-bubble::after");
+  it('uses a compact warm-paper speech oval with a mouth-pointing tail', () => {
+    const bubble = cssRule('.hermes-performance-bubble');
+    const tail = cssRule('.hermes-performance-bubble::after');
     const speakingFooter = cssRule(".hermes-workspace-stage[data-hermes-bubble-safe='true'][data-hermes-speech-visible='true'] .hermes-visual-invoke-label");
     const visibleCta = cssRule(".hermes-workspace-stage[data-hermes-anchored='true'][data-hermes-speech-visible='false'] .hermes-visible-invoke-cta");
 
-    expect(bubble).toContain('max-width: 15.5rem;');
-    expect(bubble).toContain('border: 1px solid rgb(241 238 231 / .14);');
-    expect(bubble).toContain('border-radius: 4px;');
-    expect(bubble).toContain('background: rgb(12 15 14 / .97);');
-    expect(bubble).toContain('box-shadow: 0 8px 20px rgb(0 0 0 / .18);');
+    expect(bubble).toContain('max-width: 13.25rem;');
+    expect(bubble).toContain('border-radius: 50% 47% 52% 46% / 55% 51% 49% 45%;');
+    expect(bubble).toContain('background: var(--os-paper-strong);');
+    expect(bubble).toContain('font-size: .9375rem;');
     expect(bubble).not.toMatch(/gradient|blur/iu);
-    expect(dismiss).toContain('width: 40px;');
-    expect(dismiss).toContain('height: 40px;');
-    expect(tail).toContain('left: 1.25rem;');
-    expect(leftTail).toContain('right: 1.25rem;');
+    expect(tail).toContain('clip-path: polygon(0 0, 100% 0, 100% 100%);');
+    expect(tail).toContain('background: var(--os-paper-strong);');
+    expect(tail).toContain('border-right: 1px solid var(--os-ink);');
+    expect(globals).toContain("[data-hermes-bubble-horizontal='left'] .hermes-performance-bubble::after");
     expect(speakingFooter).toContain('display: none;');
     expect(visibleCta).toContain('pointer-events: auto;');
-    expect(globals).toContain("[data-hermes-stage-size='200'] .hermes-companion-bubble");
+    expect(globals).toContain("[data-hermes-stage-size='200'] .hermes-performance-bubble");
     expect(globals).not.toContain("[data-hermes-stage-size='176']");
   });
 
   it('renders one short sentence without a mobile action toolbar', () => {
     const html = renderToStaticMarkup(
-      <HermesPerformanceBubble cue={cue} onDismiss={() => undefined} visible />,
+      <HermesPerformanceBubble cue={cue} visible />,
     );
 
     expect(html.match(/<p>/gu)).toHaveLength(1);

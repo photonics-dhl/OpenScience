@@ -152,4 +152,16 @@ describe('Hermes dashboard guidance', () => {
     expect(idle).toContain('data-hermes-presence="idle"');
     expect(open).toContain('data-hermes-presence="open"');
   });
+
+  it('renders companion feedback as one mouth-origin sentence without a detached label', () => {
+    const markup = renderToStaticMarkup(createElement(HermesVisualAdapter, {
+      menuFeedback: true, state: 'idle', suggestion: neutralSuggestion, onInvoke: () => undefined,
+    }));
+
+    expect(markup).toContain('data-hermes-menu-feedback="true"');
+    expect(markup).toContain('data-hermes-speech-copy="single"');
+    expect(markup).toContain('data-hermes-speech-origin="mouth"');
+    expect(markup).toContain('guide.menu.quietFeedback');
+    expect(markup).not.toContain('<span>guide.menu.companion</span>');
+  });
 });

@@ -140,7 +140,7 @@ export function HermesVisualAdapter({ action, actionStartedAtMs, assistantOpen =
       if (Math.abs(scrollDelta) > 1) window.scrollBy({ behavior: 'auto', top: scrollDelta });
     }
     const bounds = trigger.getBoundingClientRect();
-    const menuWidth = compactMenu ? 168 : 344;
+    const menuWidth = compactMenu ? 224 : 344;
     trigger.dispatchEvent(new MouseEvent('contextmenu', {
       bubbles: true,
       button: 2,
@@ -385,8 +385,14 @@ export function HermesVisualAdapter({ action, actionStartedAtMs, assistantOpen =
         <p className="hermes-context-menu-hint">{t(compactMenu ? 'guide.menu.mobileHint' : 'guide.menu.keyboardHint')}</p>
       </ContextMenuContent>
     </ContextMenu>
-    {menuFeedback ? <p aria-live="polite" className="hermes-menu-feedback" data-hermes-menu-feedback="true">
-      <span>{t('guide.menu.companion')}</span>{t('guide.menu.quietFeedback')}
+    {menuFeedback ? <p
+      aria-live="polite"
+      className="hermes-menu-feedback"
+      data-hermes-menu-feedback="true"
+      data-hermes-speech-copy="single"
+      data-hermes-speech-origin="mouth"
+    >
+      {t('guide.menu.quietFeedback')}
     </p> : null}
   </>;
 }

@@ -285,6 +285,8 @@ test('Hermes action menu / editor companion feedback stays in the research margi
   await menu.getByRole('menuitem').last().click();
   const feedback = page.locator('[data-hermes-menu-feedback="true"]');
   await expect(feedback).toBeVisible();
+  await expect(feedback).toHaveAttribute('data-hermes-speech-origin', 'mouth');
+  await expect(feedback).toHaveAttribute('data-hermes-speech-copy', 'single');
   await expect(page.locator('[data-hermes-guide-bubble][data-hermes-guide-visible="true"]')).toHaveCount(0);
   const geometry = await page.evaluate(() => {
     const feedback = document.querySelector<HTMLElement>('[data-hermes-menu-feedback="true"]')!.getBoundingClientRect();
@@ -294,10 +296,10 @@ test('Hermes action menu / editor companion feedback stays in the research margi
       actorVisible: actor.width > 0 && actor.height > 0,
       contained: feedback.left >= margin.left && feedback.right <= margin.right && feedback.top >= margin.top && feedback.bottom <= margin.bottom,
       excess: document.documentElement.scrollWidth - document.documentElement.clientWidth,
-      overlapsActor: feedback.left < actor.right && feedback.right > actor.left && feedback.top < actor.bottom && feedback.bottom > actor.top,
+      locallyAttached: feedback.right >= actor.left && feedback.left <= actor.right,
     };
   });
-  expect(geometry).toEqual({ actorVisible: true, contained: true, excess: 0, overlapsActor: false });
+  expect(geometry).toEqual({ actorVisible: true, contained: true, excess: 0, locallyAttached: true });
   await page.screenshot({ fullPage: true, path: `${outDir}/hermes-menu-editor-feedback.png`, animations: 'disabled' });
   await expect(feedback).toBeHidden({ timeout: 5000 });
 });
