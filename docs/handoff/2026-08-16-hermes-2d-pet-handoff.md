@@ -1,6 +1,6 @@
 # Handoff — Hermes Wanko Live2D Companion
 
-> **CURRENT active-memory，2026-08-24 20:10 +08。** 旧灯体、帽子、流苏、Cubism GUI 试验和被否决候选只从 Git history 查阅，不再作为实施入口。
+> **CURRENT active-memory，2026-08-24 20:58 +08。** 旧灯体、帽子、流苏、Cubism GUI 试验和被否决候选只从 Git history 查阅，不再作为实施入口。
 
 ## Goal
 
@@ -10,11 +10,11 @@
 
 ## Version tuple
 
-- Working branch / application source: `codex/hermes-wanko-live2d` / `fe0d2b64309b3b5d11f1f08690ba53149ed44602` + candidate metadata；deployed application remains `bba5f144fd082bc05fdbfb4d5d98dd7d094fe8cf` until the release gate passes.
-- Deployable application source: `bba5f144fd082bc05fdbfb4d5d98dd7d094fe8cf`。
+- Working branch / application source: `codex/hermes-wanko-live2d` / `56f6cf4c36b418f7aa2a2742a7fbcefc086b3519` + candidate metadata；ECS currently serves first Research Folio release `2abfe42e56881ae7b7a3e7f0a0b3a97b31762326`.
+- Deployable application source: `56f6cf4c36b418f7aa2a2742a7fbcefc086b3519`。
 - Local main / origin main: `c60ffdd16b85ea8f0d8b047493fa03a4c0230c05` / `7eb2f5bc4718ee445b79bd089acb64acb3691e62`；`origin/main` 是 local main 的祖先，二者都早于当前工作分支。
 - Remote feature: `origin/codex/hermes-wanko-live2d` 不存在；旧 `origin/codex/readable-hermes-guidance@c88c780` 不是本次候选。
-- ECS release / rollback: `bba5f144fd082bc05fdbfb4d5d98dd7d094fe8cf` / `68d8be7248aef2f52b32f76624e9928f4242c45c`。
+- ECS release / rollback: `2abfe42e56881ae7b7a3e7f0a0b3a97b31762326` / `bba5f144fd082bc05fdbfb4d5d98dd7d094fe8cf`。
 
 ## Done
 
@@ -34,6 +34,8 @@
 - 最新数据库备份返回 `432K files=7/7`。未读取备份内容。
 - 用户随后明确否决只优化评审 route，批准真实非 Landing 页面系统化实施与部署。候选已统一 identity、Dashboard、创建 RO、全部 RO 工作表面、Explore、公阅、Settings 与 Admin；Landing 未改。Hermes 锚定态进入预留研究页边，实际 Radix context menu 支持右键/键盘/长按，反馈不再悬浮压住内容。
 - Fresh candidate evidence：真实 production product release matrix `60/60`（18 个真实表面、三视口、Landing reduced-motion、三条 Hermes 交互）；Web 58 files / 402 tests + 5 Node contracts、typecheck、19-page production build GREEN。优化构建发现的移动菜单 7px overlap 与 feedback remount 丢失均已修复，最终架构/Hermes 复审无剩余实质问题。旧自动旅行 E2E 与新“锚定不跨字段”合同冲突，33 条历史断言尚待重写，不能冒充通过。
+- 首次 whole-product release `2abfe42` 已部署：checkup、`432K files=7/7` backup、server full build、27 migrations current、healthy target containers、route/runtime asset 200、精确 release、absent failure marker、rollback `bba5f14` 与公网 no-write `57/57` 通过；未 migration/seed/data write。
+- 发布后原尺寸截图而非自动断言发现旧首次 nudge 仍在 Dashboard 压住 Hermes 标签/动效控制。hotfix `56f6cf4` 同时禁止锚定态未请求的 performance speech 与 adapter nudge，保留显式 guide、菜单、drawer 与菜单动作反馈；修复截图无覆盖，focused Hermes `3/3`、完整 release matrix `60/60`、Web `402/402` + 5 Node、typecheck/build GREEN。
 
 ## Constraints
 
@@ -50,8 +52,8 @@
 
 ## Next action
 
-1. 根级 lint/build/typecheck/test、docs 与 diff 门禁已 GREEN；提交唯一 Research Folio 候选。
-2. 走 checkup、backup、exact dry-run 与 `deploy.sh --confirm --skip-migrate`；验证服务器 build、27 migrations current、目标容器、`/__release`、failure marker、rollback tree 和公网真实页。
+1. hotfix `56f6cf4` 已通过本地视觉与代码门禁；提交同步 metadata 后，以 `2abfe42` 为 rollback 做 exact `--skip-migrate` 发布。
+2. 验证服务器 build、27 migrations current、目标容器、`/__release`、failure marker、rollback tree，并在公网重跑 Dashboard 与三条 Hermes focused gate。
 3. 用户直接浏览登录、Dashboard、创建 RO、编辑与公开阅读入口，反馈信息层级、阅读、Hermes 协调、菜单密度及动作反馈。
 
 ## Read first

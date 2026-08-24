@@ -603,3 +603,28 @@ Historical note for the 2026-08-11 release: it used fixed worker tags and a writ
   build generated 19 pages; 27 migrations remained current; target containers
   were healthy; route returned 200; `/__release` matched; `.release-failed` was
   absent; rollback tree was present; stable public no-write E2E passed `7/7`.
+
+### 5.17 Research Folio whole-product release (2026-08-24)
+
+> Active release `2abfe42`; rollback `bba5f14`. Visual-review hotfix application
+> source `56f6cf4` is locally verified and awaits the exact release operation.
+
+- Scope: all real non-Landing product surfaces now share the warm-paper Research
+  Folio information hierarchy, evidence-only graphite tools and reserved Hermes
+  research margin. Identity, Dashboard, create/import RO, every RO workspace
+  plane, Explore, Collections, Settings, Admin and public reading are included;
+  Landing is unchanged.
+- Initial operation evidence: canonical checkup and backup
+  `432K files=7/7` passed; exact `2abfe42...` `--skip-migrate` deployment built
+  19 web pages on ECS. All target services were running/healthy, 27 migrations
+  remained current, real routes and Live2D runtime assets returned 200,
+  `/__release` matched, `.release-failed` was absent and rollback `bba5f14...`
+  remained present. Public no-write acceptance passed `57/57` outside the
+  Nginx-protected Admin route; the complete local release matrix passed `60/60`.
+- Post-release visual inspection found one issue the automated performance-bubble
+  selector did not cover: the legacy adapter nudge appeared automatically inside
+  the anchored Hermes rail and obscured labels. Hotfix `56f6cf4` suppresses all
+  unsolicited anchored speech/nudges while retaining explicit field guides,
+  context menu, drawer and selected-action feedback. Fresh screenshots show no
+  obstruction; Web `402/402` plus five Node contracts, typecheck, 19-page build,
+  focused Hermes `3/3` and the full production matrix `60/60` pass.
