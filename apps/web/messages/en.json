@@ -483,6 +483,7 @@
     "loading": "Restoring your research context…",
     "context": {
       "navigation": "Dashboard utilities",
+      "skip": "Skip to research workspace",
       "help": "Help",
       "settings": "Settings"
     },
@@ -503,6 +504,7 @@
     },
     "hermes": {
       "title": "Hermes tasks",
+      "liveQueue": "Hermes / live queue",
       "empty": "No tasks need your attention.",
       "review": "Review evidence",
       "retry": "Retry task",
@@ -518,6 +520,22 @@
         "neutral": { "title": "What would you like to advance today?", "body": "I will understand the goal first, then propose a verifiable and actionable research path." },
       "invoke": "Invoke Hermes",
       "eyebrow": "Hermes / contextual guide",
+      "menu": {
+        "trigger": "Hermes: click for the assistant; right-click or long-press for actions",
+        "label": "Hermes action menu",
+        "eyebrow": "Hermes · research margin",
+        "title": "Around this step",
+        "evidence": "Inspect evidence and sources",
+        "evidenceNote": "Return to this research object's evidence ledger",
+        "explore": "Open the research index",
+        "exploreNote": "Continue through public research records",
+        "quiet": "Read quietly with me",
+        "quietNote": "Put reminders aside and stay in the margin",
+        "quietFeedback": "I’ve put the reminders away. Read on; I’ll stay in the margin.",
+        "companion": "Companion",
+        "keyboardHint": "Shift+F10 or Menu key to open · Esc to close",
+        "mobileHint": "Long-press Hermes to open · tap still enters the assistant"
+      },
       "dialogLabel": "Hermes research guide",
         "title": "Start with the goal. I will guide the route.",
         "close": "Close Hermes",
@@ -549,6 +567,7 @@
       }
     },
     "errors": {
+      "kicker": "System / interrupted",
       "title": "Dashboard unavailable",
       "load": "We could not restore your research context.",
       "retry": "Reload"
@@ -571,7 +590,34 @@
     "evidenceBody": "The original artifact, extraction proposal and your decisions remain separate and traceable.",
     "stepStore": "Store source artifacts with content hashes",
     "stepParse": "Locate claims, methods and source anchors",
-    "stepConfirm": "You confirm every SDF write"
+    "stepConfirm": "You confirm every SDF write",
+    "navigationLabel": "Research Object tools",
+    "skipLabel": "Skip to Research Object creation",
+    "progressLabel": "Creation progress",
+    "identityStep": "Research identity",
+    "evidenceStep": "Evidence source",
+    "eyebrow": "OpenScience / Research Object"
+  },
+  "hermesReview": {
+    "missingTask": "The task identifier is missing.",
+    "back": "Back to Dashboard",
+    "eyebrow": "Hermes / Evidence review",
+    "title": "Confirm your research structure",
+    "description": "Hermes proposes changes but never writes for you. Review all six SDF fields; only your confirmation creates a new traceable version.",
+    "loading": "Reading the material and suggestions…",
+    "loadError": "Unable to load the Hermes suggestion",
+    "confirmError": "Confirmation failed. Refresh and try again.",
+    "fieldLabel": "Review SDF fields",
+    "taskState": "Task status: {state}",
+    "boundary": "Suggestion boundary",
+    "boundaryNote": "Hermes stays quiet here. Right-click or long-press for the current evidence tools.",
+    "saved": "Confirmed and recorded in a new version.",
+    "ready": "All six fields are complete and ready to confirm.",
+    "incomplete": "Complete all fields before confirming.",
+    "saving": "Recording…",
+    "confirmed": "Confirmed",
+    "confirm": "Confirm and create version",
+    "marginLabel": "Hermes research margin"
   },
   "ingestion": {
     "status": {
@@ -627,6 +673,7 @@
     },
     "intake": {
       "title": "Arrange the evidence set",
+      "stepLabel": "02 / Evidence intake",
       "localOnly": "Files remain on this device until you explicitly create the Research Object.",
       "dropTitle": "Drop source material into the working set",
       "formats": "PDF · Word · TeX/ZIP · Markdown · images · CSV/TSV · JSON/YAML · Notebook · Python/R",

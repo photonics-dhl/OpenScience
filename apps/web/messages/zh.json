@@ -483,6 +483,7 @@
     "loading": "正在恢复研究上下文…",
     "context": {
       "navigation": "工作台工具",
+      "skip": "跳到研究工作区",
       "help": "帮助",
       "settings": "设置"
     },
@@ -503,6 +504,7 @@
     },
     "hermes": {
       "title": "Hermes 任务",
+      "liveQueue": "Hermes / 实时队列",
       "empty": "当前没有需要你处理的任务。",
       "review": "核对证据",
       "retry": "重试任务",
@@ -518,6 +520,22 @@
         "neutral": { "title": "告诉我今天想推进什么", "body": "我会先理解目标，再给出可核查、可执行的研究路径。" },
       "invoke": "唤起 Hermes",
       "eyebrow": "Hermes / 情境引导员",
+      "menu": {
+        "trigger": "Hermes：点击打开助手，右键或长按打开动作菜单",
+        "label": "Hermes 动作菜单",
+        "eyebrow": "Hermes · 研究页边",
+        "title": "围绕这一步",
+        "evidence": "查看证据与来源",
+        "evidenceNote": "回到当前科研对象的证据清单",
+        "explore": "打开研究索引",
+        "exploreNote": "在公开研究记录中继续查找",
+        "quiet": "陪我安静读一会",
+        "quietNote": "收起提醒，留在页边",
+        "quietFeedback": "我把提醒收好了。你先读，我就在页边。",
+        "companion": "陪伴",
+        "keyboardHint": "Shift+F10 或菜单键打开 · Esc 关闭",
+        "mobileHint": "长按 Hermes 打开 · 点按仍进入助手"
+      },
       "dialogLabel": "Hermes 科研引导员",
         "title": "从目标开始，我来带路。",
         "close": "关闭 Hermes",
@@ -549,6 +567,7 @@
       }
     },
     "errors": {
+      "kicker": "系统 / 已中断",
       "title": "无法加载工作台",
       "load": "暂时无法恢复研究上下文。",
       "retry": "重新加载"
@@ -571,7 +590,34 @@
     "evidenceBody": "原始 Artifact、提取建议与您的决定保持分离并可追溯。",
     "stepStore": "以内容哈希保存原始资料",
     "stepParse": "定位主张、方法与来源锚点",
-    "stepConfirm": "每一项 SDF 写入都由您确认"
+    "stepConfirm": "每一项 SDF 写入都由您确认",
+    "navigationLabel": "Research Object 工具",
+    "skipLabel": "跳到 Research Object 创建表单",
+    "progressLabel": "创建进度",
+    "identityStep": "研究身份",
+    "evidenceStep": "证据来源",
+    "eyebrow": "OpenScience / Research Object"
+  },
+  "hermesReview": {
+    "missingTask": "缺少任务标识。",
+    "back": "返回工作台",
+    "eyebrow": "Hermes / 证据审核",
+    "title": "确认你的研究结构",
+    "description": "Hermes 只提出建议，不替你写入。逐项检查六个 SDF 字段；只有你确认后，内容才会进入新的可追踪版本。",
+    "loading": "正在读取材料与建议…",
+    "loadError": "无法加载 Hermes 建议",
+    "confirmError": "确认失败，请刷新后重试",
+    "fieldLabel": "SDF 字段审阅",
+    "taskState": "任务状态：{state}",
+    "boundary": "建议边界",
+    "boundaryNote": "角色保持安静；右键或长按可查看当前证据工具。",
+    "saved": "已确认并写入新版本。",
+    "ready": "六项内容已填写，可以确认。",
+    "incomplete": "请补齐所有字段后确认。",
+    "saving": "正在写入…",
+    "confirmed": "已确认",
+    "confirm": "确认并创建版本",
+    "marginLabel": "Hermes 研究页边"
   },
   "ingestion": {
     "status": {
@@ -627,6 +673,7 @@
     },
     "intake": {
       "title": "编排证据集合",
+      "stepLabel": "02 / 证据接收",
       "localOnly": "在您明确创建 Research Object 前，文件只保留在当前设备。",
       "dropTitle": "将原始材料放入工作集合",
       "formats": "PDF · Word · TeX/ZIP · Markdown · 图片 · CSV/TSV · JSON/YAML · Notebook · Python/R",

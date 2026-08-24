@@ -7,15 +7,15 @@ export function EditorialCollection({ collection }: { collection: EditorialColle
   const t = useTranslations('editorial');
   return (
     <section className="min-h-screen bg-os-paper px-4 py-12 text-os-ink sm:px-8 lg:px-16 lg:py-20" data-editorial-collection="true">
-      <div className="mx-auto max-w-[112rem]">
+      <div className="mx-auto max-w-[88rem]">
         <div className="flex items-start justify-between gap-8 border-b border-os-rule-paper pb-5">
           <Link href="/" className="font-data text-xs uppercase tracking-[0.18em] text-os-ink no-underline hover:text-os-vermilion">OpenScience.</Link>
           <span className="font-data text-[0.65rem] uppercase tracking-[0.18em] text-os-muted-paper">{t('edition')}</span>
         </div>
-        <header className="grid gap-10 border-b border-os-rule-paper py-16 lg:grid-cols-[1.15fr_0.85fr] lg:items-end lg:py-24">
+        <header className="grid gap-6 border-b border-os-rule-paper py-10 lg:grid-cols-[1.15fr_0.85fr] lg:items-end lg:py-14">
           <div>
-            <p className="mb-5 font-data text-xs uppercase tracking-[0.2em] text-os-vermilion">{t('eyebrow')}</p>
-            <h1 className="m-0 max-w-5xl font-editorial text-[clamp(4rem,10vw,10.5rem)] font-normal leading-[0.82] tracking-[-0.07em]">{collection.title}</h1>
+            <p data-reading-role="caption" className="mb-4 text-os-vermilion-ink">{t('eyebrow')}</p>
+            <h1 className="m-0 max-w-4xl font-reading text-[clamp(2.5rem,5vw,4.5rem)] font-normal leading-[1.02] tracking-[-0.045em]">{collection.title}</h1>
           </div>
           <p className="m-0 max-w-xl text-lg leading-8 text-os-muted-paper">{t('description')}</p>
         </header>
@@ -27,9 +27,9 @@ export function EditorialCollection({ collection }: { collection: EditorialColle
                 <Link href={`/research/${selection.publicId}/v/${selection.versionNo}`} className="group grid gap-5 no-underline outline-none focus-visible:ring-2 focus-visible:ring-os-vermilion lg:grid-cols-[4rem_minmax(0,1fr)_15rem]">
                   <span className="font-data text-xs text-os-vermilion">{String(index + 1).padStart(2, '0')}</span>
                   <span>
-                    <span className="block font-editorial text-4xl leading-[0.95] tracking-[-0.04em] text-os-ink transition-colors group-hover:text-os-vermilion sm:text-6xl">{selection.title}</span>
-                    <span className="mt-5 block max-w-3xl text-sm leading-7 text-os-muted-paper">{selection.note || t('defaultNote')}</span>
-                    <span className="mt-5 block font-data text-[0.65rem] uppercase tracking-[0.16em] text-os-muted-paper">{selection.publicId} · v{selection.versionNo}</span>
+                    <span className="block font-reading text-3xl leading-[1.08] tracking-[-0.03em] text-os-ink transition-colors group-hover:text-os-vermilion-ink sm:text-4xl">{selection.title}</span>
+                    <span className="mt-4 block max-w-3xl text-base leading-7 text-os-muted-paper">{selection.note || t('defaultNote')}</span>
+                    <span className="mt-4 block font-data text-xs text-os-muted-paper">{selection.publicId} · v{selection.versionNo}</span>
                   </span>
                   <span className="grid content-start gap-3 font-data text-[0.65rem] uppercase tracking-[0.12em] text-os-muted-paper lg:text-right">
                     <span>{selection.media.length ? t('mediaCount', { count: selection.media.length }) : t('noMedia')}</span>

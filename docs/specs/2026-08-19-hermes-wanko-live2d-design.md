@@ -694,3 +694,20 @@ evidence, human decision and recorded version remain visibly connected. Hermes
 points out boundaries and carries tools, while the researcher retains authorship
 and every consequential decision. Motion is limited to the menu's origin, one
 small character orientation response and the selected workflow result.
+
+## 13. Real-product Research Folio integration (approved 2026-08-24)
+
+The user approved replacing the isolated review-route boundary with the real
+non-Landing product system. `2026-08-24-research-folio-product-system-design.md`
+is the unique CURRENT specification for product information architecture,
+typography, surface hierarchy and page-owned Hermes space. This document remains
+CURRENT for the Wanko renderer, exact `360/200px` relationship, interaction and
+motion semantics.
+
+Anchored Hermes is rendered in a page-owned research margin and does not travel
+across inputs or evidence rows. The production adapter owns the Radix context
+menu for right click, `Shift+F10`, Menu key and mobile long press; ordinary click
+continues to open the existing assistant drawer. Contextual work entries use the
+active Research Object and route. A companion result renders as a short inline
+margin note; when no safe margin exists, the drawer is the overflow surface.
+Landing, source artwork, APIs, data contracts, voice and TTS remain unchanged.

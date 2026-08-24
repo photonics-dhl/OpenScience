@@ -61,10 +61,10 @@ export default function EditorialAdminPage() {
   }
 
   return (
-    <main className="min-h-screen bg-os-night px-5 py-10 text-os-paper sm:px-10 lg:px-16" data-editorial-admin="true">
+    <main className="surface-folio min-h-dvh px-5 py-10 sm:px-10 lg:px-16" data-editorial-admin="true">
       <div className="mx-auto max-w-[100rem]">
         <header className="flex flex-wrap items-end justify-between gap-6 border-b border-white/20 pb-6">
-          <div><p className="font-data text-xs uppercase tracking-[0.2em] text-os-vermilion">{t('eyebrow')}</p><h1 className="mt-4 font-editorial text-6xl font-normal leading-none tracking-[-0.05em]">{collection?.title ?? 'Ultrafast Science'}</h1></div>
+          <div><p data-reading-role="caption" className="text-os-vermilion-ink">{t('eyebrow')}</p><h1 className="mt-3 text-[clamp(2rem,4vw,2.75rem)] font-normal leading-[1.08] tracking-[-0.03em] text-os-ink">{collection?.title ?? 'Ultrafast Science'}</h1></div>
           <p className="max-w-md text-sm leading-6 text-os-muted-night">{t('description')}</p>
         </header>
         {error ? <p className="border-b border-os-vermilion py-4 text-sm text-os-paper" role="alert">{error}</p> : null}

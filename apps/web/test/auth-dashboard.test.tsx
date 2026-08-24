@@ -59,6 +59,7 @@ const translations: Record<string, string> = {
 };
 
 vi.mock('next-intl', () => ({
+  useLocale: () => 'en',
   useTranslations: (namespace: string) => (key: string, values?: Record<string, unknown>) => {
     if (key === 'dashboard.continue.version') return `Version ${String(values?.version ?? 3)}`;
     if (key === 'dashboard.continue.pending') return `${String(values?.count ?? 2)} items need attention`;
@@ -318,7 +319,7 @@ describe('code-based auth forms', () => {
     const login = renderToStaticMarkup(createElement(LoginForm, { returnTo: '/dashboard' }));
 
     expect(context).toContain('data-research-identity-context="create"');
-    expect(context).toContain('font-editorial');
+    expect(context).toContain('font-reading');
     expect(signup).toContain('data-auth-flow="signup-code"');
     expect(login).toContain('data-auth-flow="login"');
     expect(signup).not.toContain('rounded-card');

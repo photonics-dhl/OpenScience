@@ -12,7 +12,6 @@ export default async function RegisterPage({ searchParams }: { searchParams?: { 
   const t = await getTranslations('auth');
   return (
     <IdentityShell
-      className="surface-dark"
       context={<ResearchIdentityPanel eyebrow={t('identity.createEyebrow')} title={t('identity.createTitle')} description={t('identity.createDescription')} intent="create" tagline={t('identity.tagline')} />}
       mainClassName="justify-center"
       skipLabel={t('identity.skipToForm')}

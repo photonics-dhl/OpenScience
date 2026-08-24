@@ -3,7 +3,10 @@ import { describe, expect, it } from 'vitest';
 
 import { PRODUCT_RELEASE_CASES, PRODUCT_RELEASE_VIEWPORTS } from './visual/product-release-manifest.mjs';
 
-const expectedSurfaces = ['auth', 'collection', 'dashboard', 'explore', 'intake', 'landing', 'public', 'workspace'];
+const expectedSurfaces = [
+  'admin', 'auth', 'collaboration', 'collection', 'dashboard', 'explore', 'files', 'intake', 'landing',
+  'login', 'overview', 'public', 'publish', 'review', 'sandbox', 'settings', 'versions', 'workspace',
+];
 
 describe('product visual release manifest', () => {
   it('covers every canonical product surface at all approved viewports', () => {

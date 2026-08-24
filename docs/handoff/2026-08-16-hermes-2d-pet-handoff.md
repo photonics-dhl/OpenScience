@@ -1,16 +1,16 @@
 # Handoff — Hermes Wanko Live2D Companion
 
-> **CURRENT active-memory，2026-08-24 15:21 +08。** 旧灯体、帽子、流苏、Cubism GUI 试验和被否决候选只从 Git history 查阅，不再作为实施入口。
+> **CURRENT active-memory，2026-08-24 20:10 +08。** 旧灯体、帽子、流苏、Cubism GUI 试验和被否决候选只从 Git history 查阅，不再作为实施入口。
 
 ## Goal
 
 - 已交付的 v09 Hermes 是可移动工作助手，不是主页面内容：Dashboard 默认右栏停靠，整角色拖动后脱离；桌面/紧凑移动端精确为 `360/200px`。
 - 保持 RO 创建流程为主任务；气泡、字段引导和 32 动作只提供短暂、可打断、不遮挡的辅助反馈。
-- 当前交付目标是公开 `/_visual/research-workbench` 视觉验收入口：先让用户在真实服务器判断暖纸工作台与情境菜单，不提前覆盖认证产品页面。
+- 当前交付目标是把获批的 Research Folio 迁移到所有真实非 Landing 产品页并发布：用户要直接验收登录、Dashboard、创建 RO、工作区、公阅及 Hermes 协调，而不是继续验收孤立 fixture。
 
 ## Version tuple
 
-- Working branch / deployed application HEAD: `codex/hermes-wanko-live2d` / `bba5f144fd082bc05fdbfb4d5d98dd7d094fe8cf`；其后的变更只记录部署证据。
+- Working branch / local candidate base: `codex/hermes-wanko-live2d` / `d36e2e0bb515155737f0325539f11b215b642e80` + uncommitted Research Folio candidate；deployed application remains `bba5f144fd082bc05fdbfb4d5d98dd7d094fe8cf` until the release gate passes.
 - Deployable application source: `bba5f144fd082bc05fdbfb4d5d98dd7d094fe8cf`。
 - Local main / origin main: `c60ffdd16b85ea8f0d8b047493fa03a4c0230c05` / `7eb2f5bc4718ee445b79bd089acb64acb3691e62`；`origin/main` 是 local main 的祖先，二者都早于当前工作分支。
 - Remote feature: `origin/codex/hermes-wanko-live2d` 不存在；旧 `origin/codex/readable-hermes-guidance@c88c780` 不是本次候选。
@@ -32,30 +32,33 @@
 - ECS checkup 与 DB backup `432K files=7/7` 通过。即时公网验收发现 hydration 前核心 CTA 可吞点击，hotfix `bba5f14` 将它改为真实 `href` 渐进增强链接；右键合同在 Hermes ready 后执行。
 - 最终 `bba5f14` 以 `--skip-migrate` 发布：服务器 19-page build、27 migrations current、目标容器 healthy、route 200、精确 release、absent failure marker、rollback `68d8be7` 和公网 no-write E2E `7/7` 全部通过。
 - 最新数据库备份返回 `432K files=7/7`。未读取备份内容。
+- 用户随后明确否决只优化评审 route，批准真实非 Landing 页面系统化实施与部署。候选已统一 identity、Dashboard、创建 RO、全部 RO 工作表面、Explore、公阅、Settings 与 Admin；Landing 未改。Hermes 锚定态进入预留研究页边，实际 Radix context menu 支持右键/键盘/长按，反馈不再悬浮压住内容。
+- Fresh candidate evidence：真实 production product release matrix `60/60`（18 个真实表面、三视口、Landing reduced-motion、三条 Hermes 交互）；Web 58 files / 402 tests + 5 Node contracts、typecheck、19-page production build GREEN。优化构建发现的移动菜单 7px overlap 与 feedback remount 丢失均已修复，最终架构/Hermes 复审无剩余实质问题。旧自动旅行 E2E 与新“锚定不跨字段”合同冲突，33 条历史断言尚待重写，不能冒充通过。
 
 ## Constraints
 
 - 不读取/记录 `.env`、Secret 或真实用户内容；不删除用户资产、受保护 v09 母版或私有验收 RO。
-- 用户已对本次视觉评审 route 的生产部署明确确认；授权不扩展到 migration、seed、真实数据写入或正式产品页整体替换。
+- 用户已明确授权本次真实非 Landing 产品页整体替换与生产部署；授权不扩展到 Landing、migration、seed 或真实研究数据写入。
 - 只有用户显式接受的证据文本可进入 SDF；Hermes 必须如实披露 missing evidence。
 - 不恢复旧 `336/176`、动作画廊、大卡片气泡、旧 pet/carrier runtime 或被否决美术路径。
 
 ## Open risk
 
-- 评审 route 是匿名 fixture，不读取账号或研究数据；它验证真实运行时、布局和交互，不替代认证产品纵向流程。
+- 发布矩阵使用 no-write fixtures 验证真实页面编译、布局和交互；没有安全测试 session，因此不能冒充真实账号/数据库纵向验收。
 - 新工具只能提供约束、检索和真实组件证据，不能替代用户审美验收；不得把资料库首次命中或 registry block 直接当成产品视觉方向。
 - 工作分支尚未与 `main` 做集成决策。开始新任务前必须明确 merge / PR / 保留分支之一，禁止直接从较旧 local main 猜测现状。
 
 ## Next action
 
-1. 用户直接浏览公网入口，反馈轮廓、纸墨质感、可爱程度、菜单密度、字体阅读和动作反馈。
-2. 未明确接受前继续只迭代视觉评审 route；接受后才整理正式页迁移范围与实施计划。
+1. 根级 lint/build/typecheck/test、docs 与 diff 门禁已 GREEN；提交唯一 Research Folio 候选。
+2. 走 checkup、backup、exact dry-run 与 `deploy.sh --confirm --skip-migrate`；验证服务器 build、27 migrations current、目标容器、`/__release`、failure marker、rollback tree 和公网真实页。
+3. 用户直接浏览登录、Dashboard、创建 RO、编辑与公开阅读入口，反馈信息层级、阅读、Hermes 协调、菜单密度及动作反馈。
 
 ## Read first
 
 1. `AGENTS.md`
 2. 本 handoff
-3. `docs/specs/2026-08-19-hermes-wanko-live2d-design.md`
+3. `docs/specs/2026-08-24-research-folio-product-system-design.md`（非 Landing UI）与 `docs/specs/2026-08-19-hermes-wanko-live2d-design.md`（renderer/Hermes）
 4. `docs/progress.md`
 5. `docs/OpenScience_Kimi_Development_Spec.md` 的当前任务相关章节
 

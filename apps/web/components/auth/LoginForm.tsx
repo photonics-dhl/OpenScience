@@ -40,20 +40,20 @@ export function LoginForm({ returnTo, nextPath }: LoginFormProps) {
   }
 
   return (
-    <section className="w-full max-w-2xl" data-auth-flow="login">
-      <p className="mb-5 border-b border-os-rule-dark pb-4 font-mono text-[0.65rem] uppercase tracking-[0.24em] text-os-vermilion">
+    <section className="w-full max-w-xl surface-folio-sheet px-5 py-8 sm:px-9 sm:py-10" data-auth-flow="login">
+      <p data-reading-role="caption" className="mb-4 border-b border-os-rule-paper pb-3 text-os-vermilion-ink">
         {t('identity.loginEyebrow')}
       </p>
-      <h1 className="max-w-[12ch] font-editorial text-[clamp(2.8rem,5vw,5.6rem)] font-normal leading-[0.92] tracking-[-0.055em] text-workbench-text">
+      <h1 className="max-w-[16ch] text-[clamp(2rem,4vw,2.75rem)] font-normal leading-[1.08] tracking-[-0.03em] text-os-ink">
         {t('login.title')}
       </h1>
-      <p className="mt-5 max-w-md text-sm leading-7 text-workbench-muted">{t('login.description')}</p>
+      <p className="mt-4 max-w-md text-base leading-7 text-os-muted-paper">{t('login.description')}</p>
 
-      <form className="mt-10 grid gap-7" onSubmit={handleSubmit}>
-        <label className="grid gap-2 font-mono text-[0.68rem] uppercase tracking-[0.18em] text-workbench-muted">
+      <form className="mt-8 grid gap-6" onSubmit={handleSubmit}>
+        <label className="grid gap-2 text-sm font-medium text-os-ink">
           {t('login.email')}
           <Input
-            className="h-12 rounded-none border-0 border-b border-os-rule-dark bg-transparent px-0 font-sans text-base normal-case tracking-normal focus-visible:border-os-paper focus-visible:ring-0 [.surface-dark_&]:bg-transparent"
+            className="h-12 rounded-none border-0 border-b border-os-rule-paper bg-transparent px-0 text-base focus-visible:border-os-vermilion-ink focus-visible:ring-0"
             name="email"
             type="email"
             autoComplete="email"
@@ -62,10 +62,10 @@ export function LoginForm({ returnTo, nextPath }: LoginFormProps) {
             onChange={(event) => setEmail(event.target.value)}
           />
         </label>
-        <label className="grid gap-2 font-mono text-[0.68rem] uppercase tracking-[0.18em] text-workbench-muted">
+        <label className="grid gap-2 text-sm font-medium text-os-ink">
           {t('login.password')}
           <Input
-            className="h-12 rounded-none border-0 border-b border-os-rule-dark bg-transparent px-0 font-sans text-base normal-case tracking-normal focus-visible:border-os-paper focus-visible:ring-0 [.surface-dark_&]:bg-transparent"
+            className="h-12 rounded-none border-0 border-b border-os-rule-paper bg-transparent px-0 text-base focus-visible:border-os-vermilion-ink focus-visible:ring-0"
             name="password"
             type="password"
             autoComplete="current-password"
@@ -74,7 +74,7 @@ export function LoginForm({ returnTo, nextPath }: LoginFormProps) {
             onChange={(event) => setPassword(event.target.value)}
           />
         </label>
-        <Button className="min-h-12 rounded-panel bg-os-vermilion text-os-black-0 active:translate-y-px" type="submit" size="lg" disabled={pending}>
+        <Button className="min-h-12 rounded-control bg-os-vermilion-ink text-os-paper active:translate-y-px" type="submit" size="lg" disabled={pending}>
           {pending ? t('login.signingIn') : t('login.submit')}
         </Button>
       </form>
@@ -86,9 +86,9 @@ export function LoginForm({ returnTo, nextPath }: LoginFormProps) {
           </p>
         ) : null}
       </div>
-      <p className="mt-4 border-t border-os-rule-dark pt-5 text-sm text-workbench-muted">
+      <p className="mt-4 border-t border-os-rule-paper pt-5 text-sm text-os-muted-paper">
         {t('login.noAccount')}{' '}
-        <Link className="font-semibold text-accent-primary hover:underline" href={`/auth/register?returnTo=${encodeURIComponent(safeReturnTo(returnTo))}`}>
+        <Link className="font-semibold text-os-vermilion-ink hover:underline" href={`/auth/register?returnTo=${encodeURIComponent(safeReturnTo(returnTo))}`}>
           {t('login.register')}
         </Link>
       </p>

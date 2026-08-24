@@ -29,7 +29,7 @@ export default function EditorLayout({
       leftRail={outline}
       mainClassName="p-0 lg:p-0"
       mobileNavigation={
-        <div className="fixed inset-x-0 bottom-0 z-(--z-header) border-t border-os-rule-dark bg-os-black-0 p-2 lg:hidden" data-mobile-workspace-navigation="true">
+        <div className="fixed inset-x-0 bottom-0 z-(--z-header) border-t border-os-rule-paper bg-os-paper pb-[max(.5rem,env(safe-area-inset-bottom))] pl-2 pr-2 pt-2 lg:hidden" data-mobile-workspace-navigation="true">
           <MobileTabs active={mobileTab} onSelect={setMobileTab} />
         </div>
       }

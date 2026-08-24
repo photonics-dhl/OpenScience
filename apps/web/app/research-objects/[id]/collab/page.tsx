@@ -3,7 +3,7 @@
 import { useEffect, useReducer, useState } from 'react';
 import { useTranslations } from 'next-intl';
 import { getResearchObject, type ResearchObjectSummary } from '../../../../lib/api';
-import { ResearchSurfaceShell, SurfaceState } from '../../../../components/research/ResearchSurfaceShell';
+import { ResearchSurfaceShell, ResearchSurfaceStateShell } from '../../../../components/research/ResearchSurfaceShell';
 import { collabReducer, initialCollabState } from '../../../../lib/collab-state';
 import CollabTabs from '../../../../components/collab/CollabTabs';
 import IssueList, { IssueDetail } from '../../../../components/collab/IssueList';
@@ -53,8 +53,8 @@ export default function CollabPage({ params }: { params: { id: string } }) {
     return () => { cancelled = true; };
   }, [roId]);
 
-  if (!object && !error) return <SurfaceState detail={t('loading')} kind="loading" title={t('title')} />;
-  if (!object) return <SurfaceState detail={error ?? t('error')} kind="error" title={t('title')} />;
+  if (!object && !error) return <ResearchSurfaceStateShell active="collaboration" detail={t('loading')} kind="loading" objectId={params.id} title={t('title')} />;
+  if (!object) return <ResearchSurfaceStateShell active="collaboration" detail={error ?? t('error')} kind="error" objectId={params.id} title={t('title')} />;
   return (
     <ResearchSurfaceShell active="collaboration" object={object}>
       <div className="collab-page">

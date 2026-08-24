@@ -12,7 +12,7 @@ describe('workspace readability foundation', () => {
     expect(tokens).toContain('--text-caption: 0.75rem');
     expect(tokens).toContain('--text-control: 0.875rem');
     expect(tokens).toContain('--text-body: 1rem');
-    expect(tokens).toContain('--text-reading: 1.0625rem');
+    expect(tokens).toContain('--text-reading: 1.125rem');
     expect(tokens).toContain('--leading-body: 1.6');
     expect(tokens).toContain('--leading-reading: 1.7');
   });

@@ -102,23 +102,28 @@ export function SignupCodeForm({ returnTo }: SignupCodeFormProps) {
   }
 
   return (
-    <section className="w-full max-w-2xl" data-auth-flow="signup-code">
-      <p className="mb-5 border-b border-os-rule-dark pb-4 font-mono text-[0.65rem] uppercase tracking-[0.24em] text-os-vermilion">
+    <section className="w-full max-w-xl surface-folio-sheet px-5 py-8 sm:px-9 sm:py-10" data-auth-flow="signup-code">
+      <p data-reading-role="caption" className="mb-4 border-b border-os-rule-paper pb-3 text-os-vermilion-ink">
         {t('identity.verificationEyebrow')}
       </p>
-      <h1 className="max-w-[12ch] font-editorial text-[clamp(2.8rem,5vw,5.6rem)] font-normal leading-[0.92] tracking-[-0.055em] text-workbench-text">
+      <h1 className="max-w-[16ch] text-[clamp(2rem,4vw,2.75rem)] font-normal leading-[1.08] tracking-[-0.03em] text-os-ink">
         {t('register.title')}
       </h1>
-      <p className="mt-5 max-w-md text-sm leading-7 text-workbench-muted">
+      <p className="mt-4 max-w-md text-base leading-7 text-os-muted-paper">
         {t('register.description')}
       </p>
 
+      <ol aria-label={t('identity.verificationEyebrow')} className="mt-6 flex list-none gap-4 border-y border-os-rule-paper py-3 text-sm text-os-muted-paper">
+        <li aria-current={stage === 'details' ? 'step' : undefined} className={stage === 'details' ? 'font-semibold text-os-ink' : undefined}>1 · {t('register.displayName')}</li>
+        <li aria-current={stage === 'code' ? 'step' : undefined} className={stage === 'code' ? 'font-semibold text-os-ink' : undefined}>2 · {t('register.code')}</li>
+      </ol>
+
       {stage === 'details' ? (
-        <form className="mt-10 grid gap-7" onSubmit={handleDetails}>
-          <label className="grid gap-2 font-mono text-[0.68rem] uppercase tracking-[0.18em] text-workbench-muted">
+        <form className="mt-7 grid gap-6" onSubmit={handleDetails}>
+          <label className="grid gap-2 text-sm font-medium text-os-ink">
             {t('register.displayName')}
             <Input
-              className="h-12 rounded-none border-0 border-b border-os-rule-dark bg-transparent px-0 font-sans text-base normal-case tracking-normal focus-visible:border-os-paper focus-visible:ring-0 [.surface-dark_&]:bg-transparent"
+              className="h-12 rounded-none border-0 border-b border-os-rule-paper bg-transparent px-0 text-base focus-visible:border-os-vermilion-ink focus-visible:ring-0"
               name="displayName"
               autoComplete="name"
               required
@@ -127,10 +132,10 @@ export function SignupCodeForm({ returnTo }: SignupCodeFormProps) {
               onChange={(event) => setDisplayName(event.target.value)}
             />
           </label>
-          <label className="grid gap-2 font-mono text-[0.68rem] uppercase tracking-[0.18em] text-workbench-muted">
+          <label className="grid gap-2 text-sm font-medium text-os-ink">
             {t('register.email')}
             <Input
-              className="h-12 rounded-none border-0 border-b border-os-rule-dark bg-transparent px-0 font-sans text-base normal-case tracking-normal focus-visible:border-os-paper focus-visible:ring-0 [.surface-dark_&]:bg-transparent"
+              className="h-12 rounded-none border-0 border-b border-os-rule-paper bg-transparent px-0 text-base focus-visible:border-os-vermilion-ink focus-visible:ring-0"
               name="email"
               type="email"
               autoComplete="email"
@@ -139,10 +144,10 @@ export function SignupCodeForm({ returnTo }: SignupCodeFormProps) {
               onChange={(event) => setEmail(event.target.value)}
             />
           </label>
-          <label className="grid gap-2 font-mono text-[0.68rem] uppercase tracking-[0.18em] text-workbench-muted">
+          <label className="grid gap-2 text-sm font-medium text-os-ink">
             {t('register.password')}
             <Input
-              className="h-12 rounded-none border-0 border-b border-os-rule-dark bg-transparent px-0 font-sans text-base normal-case tracking-normal focus-visible:border-os-paper focus-visible:ring-0 [.surface-dark_&]:bg-transparent"
+              className="h-12 rounded-none border-0 border-b border-os-rule-paper bg-transparent px-0 text-base focus-visible:border-os-vermilion-ink focus-visible:ring-0"
               name="password"
               type="password"
               autoComplete="new-password"
@@ -153,25 +158,25 @@ export function SignupCodeForm({ returnTo }: SignupCodeFormProps) {
               onChange={(event) => setPassword(event.target.value)}
             />
           </label>
-          <p id="signup-password-hint" className="-mt-3 text-xs leading-5 text-workbench-muted">
+          <p id="signup-password-hint" className="-mt-3 text-sm leading-6 text-os-muted-paper">
             {t('register.passwordHint')}
           </p>
-          <Button className="min-h-12 rounded-panel bg-os-vermilion text-os-black-0 active:translate-y-px" type="submit" size="lg" disabled={pending}>
+          <Button className="min-h-12 rounded-control bg-os-vermilion-ink text-os-paper active:translate-y-px" type="submit" size="lg" disabled={pending}>
             {pending ? t('register.sending') : t('register.requestCode')}
           </Button>
         </form>
       ) : (
-        <form className="mt-10 grid gap-7" onSubmit={handleConfirmation}>
-          <div className="border-y border-os-rule-dark py-4 font-mono text-xs leading-6 text-workbench-muted">
+        <form className="mt-7 grid gap-6" onSubmit={handleConfirmation}>
+          <div className="border-y border-os-rule-paper py-4 text-sm leading-6 text-os-muted-paper">
             {t('register.codeSent', { email })}
           </div>
-          <label className="grid gap-2 font-mono text-[0.68rem] uppercase tracking-[0.18em] text-workbench-muted">
+          <label className="grid gap-2 text-sm font-medium text-os-ink">
             {t('register.code')}
             <Input
               ref={codeInputRef}
               autoFocus
               data-code-focus-target="true"
-              className="h-16 rounded-none border-0 border-b border-os-rule-dark bg-transparent px-0 font-mono text-2xl tracking-[0.42em] focus-visible:border-os-paper focus-visible:ring-0 [.surface-dark_&]:bg-transparent"
+              className="h-16 rounded-none border-0 border-b border-os-rule-paper bg-transparent px-0 font-mono text-2xl tracking-[0.28em] focus-visible:border-os-vermilion-ink focus-visible:ring-0"
               name="code"
               inputMode="numeric"
               autoComplete="one-time-code"
@@ -182,7 +187,7 @@ export function SignupCodeForm({ returnTo }: SignupCodeFormProps) {
               onChange={(event) => setCode(event.target.value.replace(/\D/g, ''))}
             />
           </label>
-          <Button className="min-h-12 rounded-panel bg-os-vermilion text-os-black-0 active:translate-y-px" type="submit" size="lg" disabled={pending || code.length !== 6}>
+          <Button className="min-h-12 rounded-control bg-os-vermilion-ink text-os-paper active:translate-y-px" type="submit" size="lg" disabled={pending || code.length !== 6}>
             {pending ? t('register.confirming') : t('register.confirm')}
           </Button>
           <Button type="button" variant="ghost" disabled={cooldown > 0 || pending} onClick={handleResend}>
@@ -198,9 +203,9 @@ export function SignupCodeForm({ returnTo }: SignupCodeFormProps) {
           </p>
         ) : null}
       </div>
-      <p className="mt-4 border-t border-os-rule-dark pt-5 text-sm text-workbench-muted">
+      <p className="mt-4 border-t border-os-rule-paper pt-5 text-sm text-os-muted-paper">
         {t('register.haveAccount')}{' '}
-        <Link className="font-semibold text-accent-primary hover:underline" href={`/auth/login?returnTo=${encodeURIComponent(safeReturnTo(returnTo))}`}>
+        <Link className="font-semibold text-os-vermilion-ink hover:underline" href={`/auth/login?returnTo=${encodeURIComponent(safeReturnTo(returnTo))}`}>
           {t('register.login')}
         </Link>
       </p>

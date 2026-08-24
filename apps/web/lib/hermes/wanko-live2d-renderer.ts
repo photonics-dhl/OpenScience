@@ -162,6 +162,14 @@ export async function createWankoLive2DRenderer(
       setupClippingContext: () => {},
     };
     app.stage.addChild(model);
+    // Hermes already exposes one semantic HTML button around the canvas. Pixi's
+    // accessibility plugin otherwise adds a second absolutely-positioned DOM
+    // layer when the user presses Tab; because the canvas lives in an anchored
+    // companion margin, that duplicate layer is calculated in canvas rather
+    // than document coordinates and can widen the whole page.
+    app.stage.accessibleChildren = false;
+    model.accessible = false;
+    model.accessibleChildren = false;
 
     let presentationActionKey = '';
     let currentParameters: WankoPerformance['parameters'] = {};

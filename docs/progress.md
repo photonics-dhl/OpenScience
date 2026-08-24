@@ -1,13 +1,21 @@
 # OpenScience 进度（CURRENT window）
 
-> 最新同步：2026-08-24 15:21 +08。完整历史由 Git history 保存；DEPRECATED、NO-GO、旧计划和 archive 不作为新 session 默认输入。
+> 最新同步：2026-08-24 20:10 +08。完整历史由 Git history 保存；DEPRECATED、NO-GO、旧计划和 archive 不作为新 session 默认输入。
 
 ## Current version tuple
 
-- Branch / deployed application HEAD: `codex/hermes-wanko-live2d` / `bba5f144fd082bc05fdbfb4d5d98dd7d094fe8cf`；后续 deployment-evidence docs-only HEAD 不是另一份应用 release。
+- Branch / local candidate base: `codex/hermes-wanko-live2d` / `d36e2e0bb515155737f0325539f11b215b642e80` + uncommitted Research Folio candidate；deployed application remains `bba5f144fd082bc05fdbfb4d5d98dd7d094fe8cf` until immutable deployment passes.
 - Deployable application source: `bba5f144fd082bc05fdbfb4d5d98dd7d094fe8cf`。
 - Local main / origin main: `c60ffdd16b85ea8f0d8b047493fa03a4c0230c05` / `7eb2f5bc4718ee445b79bd089acb64acb3691e62`；两者都早于当前工作分支，远端 Hermes feature 不存在。
 - ECS release / rollback: `bba5f144fd082bc05fdbfb4d5d98dd7d094fe8cf` / `68d8be7248aef2f52b32f76624e9928f4242c45c`。
+
+## 2026-08-24 — Research Folio whole-product candidate
+
+- 用户明确批准从评审 route 扩展到全部真实非 Landing 页面并部署；唯一 CURRENT 非 Landing 视觉规范为 `docs/specs/2026-08-24-research-folio-product-system-design.md`，Landing 保持不变。
+- 真实用户路径已统一为 `identity → active research → create/import → structure/evidence → human decision → version → publish → public verification`。登录/注册表单优先，Dashboard 活跃研究优先，创建 RO 显式两阶段，RO 工作区、公阅、探索、设置和管理端共用暖纸 Research Folio；graphite 只保留给代码/diff/原始证据。
+- Hermes 默认进入页面预留研究页边：desktop `360px`、compact/mobile `200px`，锚定态不再 fixed 或跨字段移动；右键、`Shift+F10`、Menu 键、移动长按打开一张连续纸墨菜单，普通点击仍开 assistant drawer。反馈是角色旁短行，不覆盖表单或正文。
+- Production release matrix 扩展为 18 个真实表面 × 3 视口，加 Landing reduced-motion 与 3 条真实 Hermes 交互，共 `60/60`；最新 Web 门禁为 58 files / 402 tests + 5 Node contracts，产品候选 production build/typecheck GREEN。门禁在优化构建中额外抓到并关闭移动菜单 7px actor overlap 与局部反馈重挂丢失；最终架构/Hermes 复审无剩余 Critical/Major/Moderate/P2/P3。旧 Hermes 自动旅行 E2E 的 33 条历史断言与新锚定合同冲突，不作为本次发布门禁，保留为显式迁移债务而不伪装通过。
+- 根级 lint/build/typecheck/test、docs:lint、audit:docs-sync 与 diff check 均 GREEN；待完成：候选 commit、ECS checkup/backup、exact dry-run 与 `--skip-migrate` 部署、服务器与公网 no-write 验收。
 
 ## 2026-08-24 — Research Session Folio deployed for visual review
 
@@ -42,10 +50,9 @@
 
 ## Constraints and next action
 
-- 当前 ECS application release / rollback 是 `bba5f14` / `68d8be7`；其后的 docs-only HEAD 不得写成另一份应用 release。
+- 当前 ECS application release / rollback 在新候选部署完成前仍是 `bba5f14` / `68d8be7`；其后的 docs-only HEAD 不得写成另一份应用 release。
 - Task 21 计划已经完成并降级为 HISTORICAL evidence；唯一 CURRENT Hermes design 仍是 `docs/specs/2026-08-19-hermes-wanko-live2d-design.md`。
-- 当前生产验收入口已发布；下一步只收集用户对轮廓、纸墨质感、可爱程度、菜单密度、字体阅读和动作反馈的具体意见。
-- 用户浏览公网评审入口并确认具体视觉后，才把同一系统迁移到 Dashboard、编辑、审阅、Explore 与公开阅读正式页；Landing 不在此次改造范围。
+- 用户已批准把 Research Folio 落到真实产品并部署；下一步是完成候选门禁与 ECS 发布，让用户直接在登录、Dashboard、创建 RO、编辑和公开阅读页验收。
 - 可选剩余证据：取得现有安全测试会话后，补一次不创建新数据的 authenticated Dashboard smoke。
 
 ## Read first

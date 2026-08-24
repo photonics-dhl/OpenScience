@@ -5,6 +5,7 @@ import {
   Bricolage_Grotesque,
   IBM_Plex_Mono,
   Noto_Serif_SC,
+  Source_Serif_4,
 } from "next/font/google";
 import { NextIntlClientProvider } from "next-intl";
 import { getLocale, getMessages } from "next-intl/server";
@@ -27,6 +28,12 @@ const editorialSerif = Bodoni_Moda({
   adjustFontFallback: false,
 });
 
+const readingSerif = Source_Serif_4({
+  subsets: ["latin"],
+  display: "swap",
+  variable: "--font-source-serif",
+});
+
 const dataMono = IBM_Plex_Mono({
   weight: "400",
   subsets: ["latin"],
@@ -37,7 +44,10 @@ const dataMono = IBM_Plex_Mono({
 // Noto Serif SC has no CJK subset flag in next/font's manifest. Disabling preload
 // preserves its unicode-range shards so browsers request only the glyphs in use.
 const cjkSerif = Noto_Serif_SC({
-  weight: ["400", "600", "900"],
+  // Keep one readable text face. Loading three CJK weight families adds several
+  // megabytes before a researcher can read or act; browsers synthesize display
+  // emphasis while the 400 face preserves the long-form reading texture.
+  weight: "400",
   display: "swap",
   variable: "--font-noto-serif-sc",
   preload: false,
@@ -65,7 +75,7 @@ export default async function RootLayout({ children }: { children: ReactNode }) 
     <html
       suppressHydrationWarning
       lang={locale === "zh" ? "zh-CN" : "en"}
-      className={`${displayGrotesk.variable} ${editorialSerif.variable} ${dataMono.variable} ${cjkSerif.variable}`}
+      className={`${displayGrotesk.variable} ${editorialSerif.variable} ${readingSerif.variable} ${dataMono.variable} ${cjkSerif.variable}`}
     >
       <body>
         {/* Task 9：JS 可用性标记，CSS 滚动进入动效以 html.js 门控（无 JS 时内容始终可见） */}

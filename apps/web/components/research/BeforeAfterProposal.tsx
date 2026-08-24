@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { useTranslations } from 'next-intl';
-import * as Dialog from '@radix-ui/react-dialog';
+import { Dialog, DialogClose, DialogContent, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 
 export interface BeforeAfterProposalProps {
   after: string;
@@ -97,35 +97,32 @@ function BeforeAfterProposal({
             <button className="min-h-10 rounded-panel border border-os-rule-dark bg-transparent px-3 text-sm text-os-paper" onClick={() => setEditing(true)}>{t('editSuggestion')}</button>
           )}
           {!editing && (risk === 'high' ? (
-            <Dialog.Root onOpenChange={setReviewing} open={reviewing}>
-              <Dialog.Trigger asChild>
+            <Dialog onOpenChange={setReviewing} open={reviewing}>
+              <DialogTrigger asChild>
                 <button className="min-h-10 rounded-panel border border-os-paper bg-transparent px-3 text-sm font-semibold text-os-paper" ref={highRiskTriggerRef}>{t('reviewChanges')}</button>
-              </Dialog.Trigger>
-              <Dialog.Portal>
-                <Dialog.Overlay className="fixed inset-0 z-(--z-modal) bg-os-black-0/95" />
-                <Dialog.Content
+              </DialogTrigger>
+                <DialogContent
                   aria-describedby={undefined}
-                  className="fixed inset-0 z-(--z-modal) overflow-y-auto bg-os-black-0 p-4 sm:p-8"
+                  className="inset-0 left-0 top-0 max-w-none translate-x-0 translate-y-0 overflow-y-auto rounded-none border-0 bg-os-paper-strong p-4 text-os-ink sm:p-8"
                   onCloseAutoFocus={(event) => {
                     event.preventDefault();
                     highRiskTriggerRef.current?.focus();
                   }}
                 >
-                  <div className="mx-auto max-w-5xl border-y border-os-rule-dark py-8">
-                    <p className="font-data text-xs uppercase tracking-[0.15em] text-os-vermilion">{t('highImpactChange')} / {scope}</p>
-                    <Dialog.Title className="font-editorial text-4xl font-normal text-os-paper sm:text-5xl">{t('reviewCompleteChange')}</Dialog.Title>
-                    <div className="grid gap-px bg-os-rule-dark sm:grid-cols-2">
-                      <p className="m-0 bg-os-black-1 p-5 text-os-muted-dark">{before || t('proposalEmpty')}</p>
-                      <p className="m-0 bg-os-black-1 p-5 text-os-paper">{reviewValue}</p>
+                  <div className="mx-auto max-w-5xl border-y border-os-rule-paper py-8">
+                    <p className="font-data text-xs text-os-vermilion-ink">{t('highImpactChange')} / {scope}</p>
+                    <DialogTitle className="font-reading text-4xl font-normal text-os-ink sm:text-5xl">{t('reviewCompleteChange')}</DialogTitle>
+                    <div className="mt-6 grid gap-px bg-os-rule-paper sm:grid-cols-2">
+                      <p className="m-0 bg-os-paper p-5 font-reading text-lg leading-8 text-os-muted-paper">{before || t('proposalEmpty')}</p>
+                      <p className="m-0 bg-os-paper-strong p-5 font-reading text-lg leading-8 text-os-ink">{reviewValue}</p>
                     </div>
                     <div className="mt-6 flex justify-end gap-3">
-                      <Dialog.Close asChild><button className="min-h-11 rounded-panel border border-os-rule-dark bg-transparent px-4 text-os-paper">{t('returnToProposal')}</button></Dialog.Close>
-                      <button className="min-h-11 rounded-panel border-0 bg-os-vermilion px-4 font-semibold text-os-black-0" onClick={() => finishReview()}>{t('applyReviewedChange')}</button>
+                      <DialogClose asChild><button className="min-h-11 rounded-panel border border-os-rule-paper bg-transparent px-4 text-os-ink">{t('returnToProposal')}</button></DialogClose>
+                      <button className="min-h-11 rounded-panel border-0 bg-os-vermilion px-4 font-semibold text-white" onClick={() => finishReview()}>{t('applyReviewedChange')}</button>
                     </div>
                   </div>
-                </Dialog.Content>
-              </Dialog.Portal>
-            </Dialog.Root>
+                </DialogContent>
+            </Dialog>
           ) : (
             <button className="min-h-10 rounded-panel border border-os-paper bg-transparent px-3 text-sm font-semibold text-os-paper" onClick={() => finishReview(after)}>{t('reviewChanges')}</button>
           ))}

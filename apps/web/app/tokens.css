@@ -52,11 +52,11 @@
   --text-caption: 0.75rem;
   --text-control: 0.875rem;
   --text-body: 1rem;
-  --text-reading: 1.0625rem;
-  --text-reading-long: 1.1875rem;
+  --text-reading: 1.125rem;
+  --text-reading-long: 1.125rem;
   --leading-body: 1.6;
   --leading-reading: 1.7;
-  --leading-reading-long: 1.72;
+  --leading-reading-long: 1.76;
 
   /* Semantic motion: focus, reveal, scan and long optical drift. */
   --motion-fast: 160ms;
@@ -163,6 +163,7 @@
 
   --font-display: var(--font-display-grotesk);
   --font-editorial: var(--font-editorial-serif);
+  --font-reading: var(--font-reading-serif);
   --font-mono: var(--font-data);
   --radius-control: 4px;
   --radius-panel: 8px;

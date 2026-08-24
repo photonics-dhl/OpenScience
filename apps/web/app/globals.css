@@ -151,6 +151,66 @@ body {
   color-scheme: dark;
 }
 
+/* Research Folio is the product surface. The optical black treatment remains
+   available to Landing and deliberately contained scientific instruments. */
+.surface-folio {
+  color: var(--os-ink);
+  background: var(--os-canvas-warm);
+  color-scheme: light;
+  font-family: var(--font-ui);
+}
+
+.surface-folio-sheet {
+  color: var(--os-ink);
+  background: var(--os-paper-strong);
+  box-shadow: var(--shadow-card);
+}
+
+.surface-graphite-tool {
+  color: var(--os-paper);
+  background: var(--os-graphite);
+  color-scheme: dark;
+}
+
+.surface-folio :is(h1, h2, [data-reading-role='title']) {
+  font-family: var(--font-reading-serif);
+  text-wrap: balance;
+}
+
+.surface-folio [data-reading-role='body'],
+.surface-folio [data-reading-role='long-form'] {
+  max-width: 75ch;
+  font-size: var(--text-reading);
+  line-height: var(--leading-reading-long);
+  text-wrap: pretty;
+}
+
+.surface-folio [data-reading-role='caption'] {
+  font-family: var(--font-ui);
+  font-size: var(--text-caption);
+  letter-spacing: 0.03em;
+  text-transform: none;
+}
+
+:lang(zh) .surface-folio :is([class*='tracking-'], [data-reading-role='caption']) {
+  letter-spacing: 0;
+}
+
+/* Compatibility bridge while legacy product components are migrated through
+   the shared shells. Graphite tools opt back into their own palette below. */
+.surface-folio :is(.text-os-paper, .text-workbench-text) { color: var(--os-ink); }
+.surface-folio :is(.text-os-muted-dark, .text-workbench-muted) { color: var(--os-muted-paper); }
+.surface-folio .text-os-vermilion { color: var(--os-vermilion-ink); }
+.surface-folio .text-os-muted-night { color: var(--os-muted-paper); }
+.surface-folio .border-os-rule-dark { border-color: var(--os-rule-paper); }
+.surface-folio [class*='border-white/'] { border-color: var(--os-rule-paper); }
+.surface-folio :is(.bg-os-black-0, .bg-os-black-1, .bg-os-black-2) { background: var(--os-paper); }
+.surface-folio .bg-os-night { background: var(--os-paper); }
+.surface-folio .surface-graphite-tool,
+.surface-folio .surface-graphite-tool .text-os-paper { color: var(--os-paper); }
+.surface-folio .surface-graphite-tool :is(.text-os-muted-dark, .text-workbench-muted) { color: var(--os-muted-dark); }
+.surface-folio .surface-graphite-tool :is(.bg-os-black-0, .bg-os-black-1, .bg-os-black-2) { background: var(--os-graphite); }
+
 .surface-evidence {
   color: var(--evidence-ink);
   background: var(--evidence-paper);
@@ -1123,8 +1183,7 @@ textarea::placeholder {
 .pub-reading-surface {
   min-height: 100dvh;
   padding: clamp(2rem, 5vw, 5.5rem) clamp(1rem, 4vw, 4rem);
-  background-color: var(--os-paper);
-  background-image: repeating-linear-gradient(0deg, rgb(25 26 24 / .018) 0, rgb(25 26 24 / .018) 1px, transparent 1px, transparent 4px);
+  background: var(--os-paper);
 }
 
 .pub-reading-layout {
@@ -1137,9 +1196,9 @@ textarea::placeholder {
 
 .pub-reading-column {
   min-width: 0;
-  font-family: var(--font-editorial-serif);
-  font-size: clamp(1.05rem, 1.3vw, 1.2rem);
-  line-height: 1.75;
+  font-family: var(--font-reading-serif);
+  font-size: 1.125rem;
+  line-height: 1.78;
 }
 
 .pub-reading-identity {
@@ -1150,18 +1209,18 @@ textarea::placeholder {
 .pub-reading-identity h1 {
   max-width: 19ch;
   margin: .45rem 0 1.5rem;
-  font-family: var(--font-editorial-serif);
-  font-size: clamp(3.2rem, 6.3vw, 6.6rem);
+  font-family: var(--font-reading-serif);
+  font-size: clamp(2.5rem, 4.5vw, 4rem);
   font-weight: 400;
-  line-height: .95;
-  letter-spacing: -.06em;
+  line-height: 1.02;
+  letter-spacing: -.045em;
 }
 
 .pub-kicker,
 .pub-rail-label {
   margin: 0;
   font-family: var(--font-data);
-  font-size: .75rem;
+  font-size: .875rem;
   line-height: 1.4;
   letter-spacing: .16em;
   text-transform: uppercase;
@@ -1213,9 +1272,8 @@ textarea::placeholder {
 .pub-reading-column h2 {
   margin: 0 0 1.5rem;
   font-family: var(--font-ui);
-  font-size: .875rem;
-  letter-spacing: .14em;
-  text-transform: uppercase;
+  font-size: 1rem;
+  letter-spacing: .02em;
 }
 
 .pub-reading-sdf > section {
@@ -1244,11 +1302,10 @@ textarea::placeholder {
 }
 
 .pub-reading-rail {
-  position: sticky;
-  top: 2rem;
+  position: static;
   border-top: 1px solid var(--os-ink);
   font-family: var(--font-data);
-  font-size: .75rem;
+  font-size: .875rem;
   line-height: 1.55;
 }
 
@@ -1284,7 +1341,7 @@ textarea::placeholder {
   gap: 1rem;
   margin-top: 1.5rem;
   font-family: var(--font-data);
-  font-size: .75rem;
+  font-size: .875rem;
   color: var(--os-muted-paper);
 }
 
@@ -1316,7 +1373,7 @@ textarea::placeholder {
 
 @media (max-width: 640px) {
   .pub-reading-surface { padding: 2rem 1rem 4rem; }
-  .pub-reading-identity h1 { font-size: clamp(2.8rem, 15vw, 4.4rem); }
+  .pub-reading-identity h1 { font-size: clamp(2.25rem, 11vw, 3.25rem); }
   .pub-reading-rail { grid-template-columns: 1fr; }
   .pub-reading-sdf > section,
   .pub-license-line,
@@ -1860,16 +1917,15 @@ body {
 .hermes-visual {
   --hermes-gaze-x: 0px;
   --hermes-gaze-y: 0px;
-  background:
-    radial-gradient(circle at 50% 48%, rgb(255 78 34 / .055), transparent 31%),
-    linear-gradient(90deg, transparent 49.8%, rgb(241 238 231 / .045) 50%, transparent 50.2%);
+  background: transparent;
 }
 
 .hermes-dock-anchor {
-  min-height: 22.5rem;
+  position: relative;
+  display: flow-root;
+  min-height: 29rem;
   width: 100%;
   pointer-events: none;
-  translate: 0 -2.25rem;
 }
 
 .hermes-workspace-stage {
@@ -1879,7 +1935,83 @@ body {
   min-height: 7.5rem;
   pointer-events: none;
   touch-action: none;
-  transition: left 520ms cubic-bezier(.16, 1, .3, 1), top 520ms cubic-bezier(.16, 1, .3, 1), width 320ms ease, height 320ms ease;
+  transition: transform var(--motion-focus) var(--ease-standard), opacity var(--motion-focus) var(--ease-standard);
+}
+
+.hermes-workspace-stage[data-hermes-placement='anchored'] {
+  position: relative;
+  z-index: 1;
+  margin: 6.5rem auto 0;
+}
+
+.hermes-workspace-stage[data-hermes-placement='anchored'] .hermes-visual {
+  overflow: visible;
+  border: 0;
+}
+
+.hermes-workspace-stage[data-hermes-placement='anchored'] :is(.hermes-visual-state-label, .hermes-visual-invoke-label) {
+  background: transparent;
+  color: var(--os-muted-paper);
+}
+
+.hermes-workspace-stage[data-hermes-placement='anchored'] .hermes-visual-state-label {
+  padding: 0;
+  font-family: var(--font-ui);
+  font-size: var(--text-caption);
+  letter-spacing: 0.02em;
+  text-transform: none;
+}
+
+.hermes-workspace-stage[data-hermes-placement='anchored'] .hermes-visual-invoke-label {
+  inset-inline: 0;
+  bottom: 0;
+  border-color: var(--os-rule-paper);
+  padding: .55rem 0 0;
+  font-size: var(--text-caption);
+}
+
+.hermes-workspace-stage[data-hermes-placement='anchored'] .hermes-visual-invoke-label .text-os-vermilion {
+  color: var(--os-vermilion-ink);
+}
+
+.hermes-workspace-stage[data-hermes-placement='anchored'] .hermes-companion-bubble {
+  border-color: var(--os-rule-paper);
+  background: var(--os-paper-strong);
+  color: var(--os-ink);
+  box-shadow: 0 1px 0 rgb(25 26 24 / .08);
+  font-size: var(--text-control);
+  line-height: 1.5;
+}
+
+.hermes-workspace-stage[data-hermes-placement='anchored'] .hermes-companion-kicker {
+  color: var(--os-vermilion-ink);
+  font-size: var(--text-caption);
+  letter-spacing: .03em;
+  text-transform: none;
+}
+
+.hermes-workspace-stage[data-hermes-placement='anchored'] .hermes-companion-dismiss {
+  color: var(--os-muted-paper);
+}
+
+.hermes-workspace-stage[data-hermes-placement='anchored'] .hermes-motion-enable {
+  position: absolute;
+  top: -3rem;
+  right: 0;
+  bottom: auto;
+  min-height: 2.5rem;
+  border: 0;
+  border-bottom: 1px solid var(--os-rule-paper);
+  border-radius: 0;
+  padding: .35rem 0;
+  background: transparent;
+  color: var(--os-muted-paper);
+  box-shadow: none;
+}
+
+.hermes-workspace-stage[data-hermes-placement='anchored'] .hermes-motion-enable::before {
+  background: var(--os-vermilion-ink);
+  box-shadow: none;
 }
 
 .hermes-workspace-stage[data-hermes-dragging='true'] {
@@ -1954,11 +2086,109 @@ body {
   pointer-events: auto;
 }
 
+.hermes-context-menu {
+  z-index: 70;
+  width: min(21.5rem, calc(100vw - 1.5rem));
+  overflow: visible;
+  border: 1px solid #484a45;
+  border-radius: 2px;
+  padding: 0;
+  background: var(--os-paper-strong);
+  color: var(--os-ink);
+  box-shadow: 6px 8px 0 rgb(32 37 34 / .12);
+  transform-origin: var(--radix-context-menu-content-transform-origin);
+}
+
+.hermes-context-menu[data-state='open'] {
+  animation: hermes-context-menu-open 160ms ease-out;
+}
+
+.hermes-context-menu[data-hermes-reduced-motion='true'][data-state='open'] {
+  animation: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .hermes-context-menu[data-state='open'] { animation: none; }
+}
+
+.hermes-context-menu[data-side='left']::after,
+.hermes-context-menu[data-side='right']::after {
+  position: absolute;
+  top: 1.75rem;
+  width: 1rem;
+  border-top: 1px solid var(--os-vermilion-ink);
+  content: '';
+}
+
+.hermes-context-menu[data-side='left']::after { right: -1rem; }
+.hermes-context-menu[data-side='right']::after { left: -1rem; }
+.hermes-context-menu[data-compact='true'] { width: min(10.5rem, calc(100vw - 1rem)); }
+.hermes-context-menu[data-compact='true'] .hermes-context-menu-item { grid-template-columns: 1rem minmax(0, 1fr) auto; padding-inline: .7rem; }
+.hermes-context-menu[data-compact='true'] :is(.hermes-context-menu-item small, .hermes-context-menu-shortcut) { display: none; }
+
+@keyframes hermes-context-menu-open {
+  from { opacity: 0; transform: translate(-5px, 3px) scale(.985); }
+  to { opacity: 1; transform: none; }
+}
+
+.hermes-context-menu-label { padding: .95rem 1rem .75rem; }
+.hermes-context-menu-label span {
+  display: block;
+  margin-bottom: .15rem;
+  color: var(--os-vermilion-ink);
+  font-family: var(--font-data);
+  font-size: var(--text-caption);
+  letter-spacing: .04em;
+}
+.hermes-context-menu[data-locale='zh'] :is(.hermes-context-menu-label span, .hermes-context-menu-shortcut) { letter-spacing: 0; }
+.hermes-context-menu-label strong { font-size: 1rem; font-weight: 650; }
+.hermes-context-menu-item {
+  min-height: 3.375rem;
+  display: grid;
+  grid-template-columns: 1.25rem minmax(0, 1fr) auto;
+  align-items: center;
+  gap: .625rem;
+  padding: .5rem .875rem;
+  outline: none;
+  cursor: pointer;
+  user-select: none;
+}
+.hermes-context-menu-item[data-highlighted] { background: var(--os-graphite); color: var(--os-paper-strong); }
+.hermes-context-menu-item > span:not(.hermes-context-menu-shortcut) { min-width: 0; display: grid; gap: .1rem; }
+.hermes-context-menu-item strong { font-size: .9375rem; font-weight: 650; }
+.hermes-context-menu-item small { color: var(--os-muted-paper); font-size: .8125rem; line-height: 1.35; overflow-wrap: anywhere; }
+.hermes-context-menu-item[data-highlighted] :is(small, .hermes-context-menu-shortcut) { color: #c9c8c1; }
+.hermes-context-menu-shortcut { color: var(--os-muted-paper); font-family: var(--font-data); font-size: .625rem; letter-spacing: .04em; }
+.hermes-context-menu-rule { height: 1px; margin: .3rem .875rem; background: rgb(25 26 24 / .2); }
+.hermes-context-menu-hint { display: none; }
+
+.hermes-menu-feedback {
+  position: absolute;
+  z-index: 65;
+  top: -5.25rem;
+  left: 0;
+  width: 100%;
+  margin: 0;
+  border-left: 2px solid var(--os-vermilion-ink);
+  padding: .5rem .75rem;
+  background: var(--os-paper-strong);
+  color: var(--os-ink);
+  box-shadow: 0 1px 0 rgb(25 26 24 / .1);
+  font-size: .875rem;
+  line-height: 1.5;
+  pointer-events: auto;
+}
+.hermes-menu-feedback span {
+  display: block;
+  color: var(--os-vermilion-ink);
+  font-family: var(--font-data);
+  font-size: var(--text-caption);
+}
+
 .hermes-companion-actor {
   transform: translate3d(0, 0, 0);
   transform-origin: 50% 58%;
   transition: transform 180ms cubic-bezier(.2, .8, .2, 1);
-  will-change: transform;
 }
 
 .hermes-workspace-stage[data-hermes-action='patrol'] .hermes-companion-actor {
@@ -2090,6 +2320,19 @@ body {
 }
 
 @media (max-width: 640px) {
+  .hermes-dock-anchor {
+    min-height: 17rem;
+  }
+
+  .hermes-workspace-stage[data-hermes-placement='anchored'] {
+    margin-right: 0;
+    margin-left: auto;
+  }
+
+  .hermes-workspace-stage[data-hermes-placement='anchored'] {
+    margin-top: 4.5rem;
+  }
+
   .hermes-performance-bubble {
     --hermes-bubble-x: 0%;
     right: 0;
@@ -2393,24 +2636,23 @@ body [data-reading-role='reading'] {
 }
 
 .drawer-overlay.hermes-assistant-overlay {
-  background: rgb(0 0 0 / .68);
-  backdrop-filter: blur(3px);
+  background: rgb(25 26 24 / .34);
 }
 
 .drawer.hermes-assistant-shell {
   width: min(30rem, calc(100vw - 2rem));
   max-width: none;
   padding: 2rem 2rem 2.5rem;
-  border-left: 1px solid var(--os-rule-dark, #303630);
-  background: #0b0f0c;
-  box-shadow: -24px 0 70px rgb(0 0 0 / .48);
-  color: var(--os-paper, #f1eee7);
+  border-left: 1px solid var(--os-rule-paper);
+  background: var(--os-paper-strong);
+  box-shadow: -16px 0 44px rgb(25 26 24 / .18);
+  color: var(--os-ink);
 }
 
 .hermes-assistant-shell .drawer-close {
-  color: var(--os-paper, #f1eee7);
+  color: var(--os-ink);
   background: transparent;
-  border: 1px solid var(--os-rule-dark, #303630);
+  border: 1px solid var(--os-rule-paper);
 }
 
 @media (max-width: 640px) {
@@ -2420,7 +2662,7 @@ body [data-reading-role='reading'] {
     height: 100dvh;
     padding: 1.75rem 1rem 2rem;
     border-left: 0;
-    border-top: 1px solid var(--os-rule-dark, #303630);
+    border-top: 1px solid var(--os-rule-paper);
   }
 }
 
@@ -2448,6 +2690,10 @@ body [data-reading-role='reading'] {
   opacity: 0;
   pointer-events: none;
   transition: opacity 180ms ease;
+  /* Pixi writes pixel dimensions inline during renderer.resize(). The canvas
+     backing store may be large, but its layout box must stay inside Hermes. */
+  width: 100% !important;
+  height: 100% !important;
 }
 
 .hermes-rig-vector-fallback {
@@ -2488,6 +2734,14 @@ body [data-reading-role='reading'] {
   min-width: 44px;
   min-height: 44px;
   pointer-events: none;
+}
+
+/* Pixi installs a classless accessibility overlay beside the canvas after a
+   Tab press. The surrounding HermesVisualAdapter is already the single
+   labelled keyboard control, so keep that duplicate renderer surface out of
+   both the tab model and document geometry. */
+.hermes-carrier-interaction-hull > div {
+  display: none !important;
 }
 
 .hermes-carrier-interaction-hull::after {
@@ -2707,5 +2961,34 @@ body [data-reading-role='reading'] {
 
   html.js .landing-inview--seen {
     animation: landing-reveal 0.7s var(--ease-entrance) forwards;
+  }
+}
+
+/* Anchored field guidance is part of the research margin, not a floating
+   viewport layer. Reserve its full reading height so actions never cover SDF
+   text, inputs, or evidence controls. */
+.hermes-dock-anchor:has(.hermes-workspace-stage[data-hermes-placement='anchored'][data-hermes-guide-target]) {
+  min-height: 42rem;
+}
+
+.hermes-workspace-stage[data-hermes-placement='anchored'][data-hermes-guide-target] {
+  margin-top: 17rem;
+}
+
+.hermes-workspace-stage[data-hermes-placement='anchored'][data-hermes-guide-target] .hermes-functional-bubble {
+  right: 0;
+  bottom: calc(100% + .75rem);
+  left: auto;
+  width: 100%;
+  max-width: 100%;
+}
+
+@media (max-width: 640px) {
+  .hermes-dock-anchor:has(.hermes-workspace-stage[data-hermes-placement='anchored'][data-hermes-guide-target]) {
+    min-height: 31rem;
+  }
+
+  .hermes-workspace-stage[data-hermes-placement='anchored'][data-hermes-guide-target] {
+    margin-top: 17rem;
   }
 }

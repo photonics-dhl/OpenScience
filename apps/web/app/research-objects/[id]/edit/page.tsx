@@ -1,7 +1,7 @@
 'use client';
 
-import { useEffect, useReducer, useRef, useState } from 'react';
-import { useTranslations } from 'next-intl';
+import { useEffect, useMemo, useReducer, useRef, useState } from 'react';
+import { useLocale, useTranslations } from 'next-intl';
 import EditorLayout from '../../../../components/editor/EditorLayout';
 import OutlinePanel from '../../../../components/editor/OutlinePanel';
 import CoreEditor from '../../../../components/editor/CoreEditor';
@@ -9,7 +9,10 @@ import SuggestionsPanel from '../../../../components/editor/SuggestionsPanel';
 import ArtifactUploader from '../../../../components/editor/ArtifactUploader';
 import { ObjectHeader } from '../../../../components/research/ObjectHeader';
 import { HermesAnchor } from '../../../../components/hermes/HermesAnchor';
+import { HermesAssistantDrawer } from '../../../../components/hermes/HermesAssistantDrawer';
+import { HermesDockAnchor } from '../../../../components/hermes/HermesDockAnchor';
 import { HermesDraftDiff, type HermesDraftTarget } from '../../../../components/hermes/HermesDraftDiff';
+import type { HermesGuideSuggestion } from '../../../../components/hermes/hermes-guide';
 import { useOptionalHermesWorkspaceStage } from '../../../../components/hermes/HermesWorkspaceStage';
 import {
   createCommit,
@@ -44,6 +47,7 @@ import {
   suggestionReducer,
   type SdfField,
 } from '../../../../lib/suggestions';
+import type { Locale } from '../../../../i18n/locale';
 
 type FieldKey = keyof Omit<SdfCore, 'schemaVersion'>;
 type ActiveExtraction = Pick<ExtractReviewCheckpoint, 'idempotencyKey' | 'taskId' | 'retryAvailable' | 'dismissedFields' | 'acknowledgedMissingFields'> & {
@@ -52,7 +56,6 @@ type ActiveExtraction = Pick<ExtractReviewCheckpoint, 'idempotencyKey' | 'taskId
 };
 
 const HERMES_DIFF_SIDES: Array<'left' | 'top'> = ['left', 'top'];
-
 interface VersionRow {
   versionId: string;
   versionNo: number;
@@ -61,7 +64,15 @@ interface VersionRow {
 
 export default function EditorPage({ params }: { params: { id: string } }) {
   const t = useTranslations('editor');
+  const locale = useLocale() as Locale;
   const roId = params.id;
+  const editorSuggestion = useMemo<HermesGuideSuggestion>(() => ({
+    bodyKey: 'guide.continue.body',
+    href: `/research-objects/${encodeURIComponent(roId)}/edit`,
+    kind: 'continue-research',
+    researchObjectId: roId,
+    titleKey: 'guide.continue.title',
+  }), [roId]);
   const [state, dispatch] = useReducer(editorReducer, { core: emptyCore(), version: 1, dirty: false, lastSavedAt: null } as EditorState);
   const [suggestions, dispatchSuggestions] = useReducer(suggestionReducer, []);
   const [artifacts, setArtifacts] = useState<ArtifactReference[]>([]);
@@ -78,6 +89,7 @@ export default function EditorPage({ params }: { params: { id: string } }) {
   const [saveError, setSaveError] = useState<string | null>(null);
   const [committing, setCommitting] = useState(false);
   const [commitMsg, setCommitMsg] = useState('');
+  const [hermesOpen, setHermesOpen] = useState(false);
   // P1D-3：AI 提取状态（§5.4 + §18.3 进度可恢复）
   const [extracting, setExtracting] = useState(false);
   const [extractProgress, setExtractProgress] = useState(0);
@@ -484,18 +496,32 @@ export default function EditorPage({ params }: { params: { id: string } }) {
           </>
         }
         aside={
-          <HermesAnchor id="hermes-diff" sides={HERMES_DIFF_SIDES}>
-            <SuggestionsPanel
-              suggestions={suggestions}
-              missingFields={missingFields}
-              onAcknowledgeMissing={acknowledgeMissing}
-              onApply={applySuggestion}
-              onDismiss={dismissSuggestion}
-              onExtract={handleExtract}
-              extracting={extracting}
-              extractProgress={extractProgress}
+          <>
+            <HermesAnchor id="hermes-diff" sides={HERMES_DIFF_SIDES}>
+              <SuggestionsPanel
+                suggestions={suggestions}
+                missingFields={missingFields}
+                onAcknowledgeMissing={acknowledgeMissing}
+                onApply={applySuggestion}
+                onDismiss={dismissSuggestion}
+                onExtract={handleExtract}
+                extracting={extracting}
+                extractProgress={extractProgress}
+              />
+            </HermesAnchor>
+            <div className="mt-8 border-t border-os-rule-paper pt-4">
+              <HermesDockAnchor assistantOpen={hermesOpen} onInvoke={() => setHermesOpen(true)} state={hermesRouteState} suggestion={editorSuggestion} workspaceId={roId} />
+            </div>
+            <HermesAssistantDrawer
+              dashboardContext={{ tasks: [], researchObjects: [{ id: roId, title: objectMeta.title, status: 'draft' }] }}
+              locale={locale}
+              onOpenChange={setHermesOpen}
+              open={hermesOpen}
+              route="research-object-edit"
+              suggestion={editorSuggestion}
+              target={activeField ? `sdf-${activeField === 'reproducibility' ? 'evidence' : activeField}` as HermesDraftTarget : null}
             />
-          </HermesAnchor>
+          </>
         }
       />
   );
