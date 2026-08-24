@@ -604,14 +604,14 @@ the former full-page “instrument black” treatment is removed. The utility
 sequence is always orient, act, then inspect evidence. Landing-page theatrical
 typography is not carried into these working surfaces.
 
-Long-form research text targets `19px / 1.72` with a Source Serif 4 and Noto
-Serif SC reading stack. Bricolage Grotesque remains the interface face; IBM Plex
-Mono is limited to identifiers, measurements and evidence metadata. Important
-text must never rely on tiny size, tracking or low contrast. Surfaces use the
-existing flat and `4px` radii, rules instead of stacked shadows, and project
-spacing tokens. There are no gradients, glass blur, glow, purple, emoji icons,
-generic command palettes, pill clusters, individual menu-item cards or floating
-card grids.
+Long-form research text uses a Source Serif 4 and Noto Serif SC reading stack,
+with locale-aware targets of `18px / 1.68` for Latin and `18px / 1.82` for CJK.
+Bricolage Grotesque remains the interface face; IBM Plex Mono is limited to
+identifiers, measurements and evidence metadata. Important text must never rely
+on tiny size, tracking or low contrast. Surfaces use the existing flat and `4px`
+radii, rules instead of stacked shadows, and project spacing tokens. There are
+no gradients, glass blur, glow, purple, emoji icons, generic command palettes,
+pill clusters, individual menu-item cards or floating card grids.
 
 ### 12.2 Hermes menu semantics and scene variants
 
@@ -650,3 +650,47 @@ verification, healthy target containers and retained rollback tree. Product
 source pages remain unchanged until the user reviews the public URL and gives
 specific feedback on silhouette, paper/ink feel, cuteness, density and action
 feedback.
+
+### 12.4 Research Session Folio iteration (approved 2026-08-24)
+
+The first deployed review proved the interaction contracts but did not yet read
+like a natural research session. Its review-page introduction displaced the
+user's real orientation questions, the oversized isolated Hermes rail separated
+the character from the current decision, and the menu could appear over the
+research body rather than visibly belonging to Hermes. The approved iteration
+therefore treats a returning researcher with an active RO as the default user.
+
+The first viewport answers, in order: what study is active, which decision is
+open, which evidence must be checked, what version will result, and what Hermes
+can do at this boundary. A semantic path—working draft, evidence check, version
+record—replaces decorative progress and uses vermilion only for the current
+step. Research history, import and other objects remain available but secondary.
+The anonymous review controls stay present as a slim utility strip; they must no
+longer resemble a marketing hero or dominate the product fixture.
+
+The work surface is one continuous research folio with a readable central
+measure and a research margin, not a bordered dashboard-card assembly. Research
+titles and sustained prose use Source Serif 4 / Noto Serif SC; CJK long-form text
+targets `18px / 1.82`, Latin long-form text `18px / 1.68`, and essential UI text
+`14–16px`. IBM Plex Mono remains limited to time, version and evidence IDs.
+Bricolage Grotesque is not used for research titles or prose. Chinese labels do
+not inherit Latin uppercase tracking, and actionable status never falls below
+`12px`.
+
+Hermes sits in the folio margin and shares the open-decision anchor rather than
+occupying an empty standalone rail. The exact renderer stage remains `360px` on
+desktop and `200px` on mobile. Its resting state may show one factual boundary
+status such as one evidence discrepancy; it does not speak until a meaningful
+workflow boundary or explicit invocation. The context menu opens immediately
+beside the character, retains a visible origin mark, and offers concrete actions:
+inspect the current evidence, resume the relevant method paragraph, or accompany
+the user through the current reading segment. Generic AI commands such as
+"organize this page" are removed. Editor and approval scenes keep Hermes quiet;
+mobile keeps the same task order in a compact menu above the character without
+covering the primary decision.
+
+The OpenScience brand story is expressed by the work sequence itself: claim,
+evidence, human decision and recorded version remain visibly connected. Hermes
+points out boundaries and carries tools, while the researcher retains authorship
+and every consequential decision. Motion is limited to the menu's origin, one
+small character orientation response and the selected workflow result.

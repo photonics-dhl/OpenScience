@@ -812,25 +812,43 @@
     "close": "Close",
     "hermesTrigger": "Hermes: click for assistant, right-click for action menu",
     "measure": { "surface": "Work surface", "surfaceValue": "Warm paper", "reading": "Reading" },
+    "session": {
+      "eyebrow": "Current research session",
+      "openDecision": "The decision to make on return",
+      "decision": "Check the Figure 3C time constant",
+      "decisionNote": "Evidence and results differ by 12 fs; decide before recording a new version.",
+      "pathLabel": "Current research workflow",
+      "draft": "Working draft",
+      "evidence": "Evidence check",
+      "version": "Version record",
+      "open": "decision open",
+      "afterDecision": "after decision"
+    },
     "views": {
       "dashboard": { "label": "Workbench", "eyebrow": "01 / Return to research", "note": "Lively information, while the active study and primary action remain first." },
       "editor": { "label": "Editor", "eyebrow": "02 / Quiet writing", "note": "Less interface noise; sustained reading comes from type size, rhythm and margin notes." },
       "review": { "label": "Review", "eyebrow": "03 / Evidence comparison", "note": "Dark material serves source evidence only; suggestions and decisions stay on warm paper." },
       "explore": { "label": "Explore", "eyebrow": "04 / Scholarly discovery", "note": "A continuous index replaces the card wall so titles, questions and evidence scan naturally." },
-      "reading": { "label": "Reading", "eyebrow": "05 / Long reading", "note": "19px text at 1.72 leading supports sustained scholarly reading." },
+      "reading": { "label": "Reading", "eyebrow": "05 / Long reading", "note": "18px text at 1.68 leading supports sustained scholarly reading." },
       "mobile": { "label": "Mobile", "eyebrow": "06 / Long-press interaction", "note": "The compact layout keeps 200px Hermes and 44px targets without turning actions into icon riddles." }
     },
     "menu": {
-      "eyebrow": "Tools carried by Hermes", "title": "How should we continue?",
-      "quiet": "Read quietly with me", "quietNote": "Set reminders aside; keep the company",
-      "tidy": "Help me order this page", "tidyNote": "Mark the structure and next step",
-      "editor": "Continue editing method", "editorNote": "Return to the last paragraph",
-      "review": "Check one suggestion", "reviewNote": "Compare source and change",
+      "eyebrow": "Hermes · research margin", "title": "Around this decision",
+      "quiet": "Read with me to the end of this section", "quietNote": "Put reminders aside without interrupting",
+      "editor": "Return to the method", "editorNote": "Resume the last paragraph",
+      "review": "Check the Figure 3C time constant", "reviewNote": "Compare evidence with the current conclusion",
       "keyboardHint": "Shift+F10 or Menu key to open · Esc to close",
       "mobileHint": "Long-press Hermes to open · tap still enters assistant"
     },
     "bubble": { "intent": "Reading together" },
-    "status": { "ready": "Hermes is beside the research workbench.", "quiet": "I’ll stay with this page without interrupting.", "recorded": "Recorded. The suggestion remains linked to its evidence." },
+    "status": {
+      "ready": "Hermes is beside the research workbench.",
+      "quiet": "I’ve put the reminders away. Read to the end of this section; I’ll stay in the margin.",
+      "boundaryLabel": "Hermes noticed",
+      "boundary": "1 evidence difference",
+      "boundaryNote": "Figure 3C ↔ results",
+      "recorded": "Recorded. The suggestion remains linked to its evidence."
+    },
     "assistant": {
       "title": "Research assistant",
       "description": "Ordinary click preserves the existing assistant entry. This review fixture sends no request and writes no research data.",
@@ -840,8 +858,11 @@
     },
     "dashboard": {
       "active": "In progress", "title": "Ultrafast charge transfer in layered matter",
-      "summary": "The method and primary result are structured. Next, compare the Figure 3C time constant with the original experiment record.",
-      "evidence": "Evidence linked", "version": "Working version", "next": "Next decision", "nextValue": "Check result", "continue": "Continue this research",
+      "decisionLabel": "Your current decision",
+      "focusTitle": "The caption and results differ by 12 fs",
+      "summary": "The Figure 3C fit records 68 fs while the results currently state 80 fs. Both remain linked to the raw frames and calibration record; choose the supported wording before recording the next version.",
+      "evidence": "Evidence linked", "version": "Working version", "next": "Next decision", "nextValue": "Check result",
+      "output": "After this", "outputValue": "Record v0.5", "continue": "Open evidence comparison",
       "activity": "Research trail", "eventOne": "Method section saved", "eventOneNote": "Parameter bounds and calibration records linked.",
       "eventTwo": "Hermes found one difference", "eventTwoNote": "The caption and result use different time constants.",
       "eventThree": "Experiment notes imported", "eventThreeNote": "Four files entered the evidence library.", "yesterday": "Yesterday"

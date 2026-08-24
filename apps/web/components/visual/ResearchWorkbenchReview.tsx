@@ -13,7 +13,6 @@ import {
   Menu as MenuIcon,
   MessageSquareText,
   Search,
-  Sparkle,
   X,
 } from 'lucide-react';
 import dynamic from 'next/dynamic';
@@ -130,12 +129,6 @@ export function ResearchWorkbenchReview() {
     setMenuOpen(true);
   }
 
-  useEffect(() => {
-    if (state.view !== 'dashboard') return;
-    const frame = requestAnimationFrame(dispatchContextMenu);
-    return () => cancelAnimationFrame(frame);
-  }, [state.view]);
-
   useEffect(() => () => {
     if (longPressRef.current) clearTimeout(longPressRef.current);
     if (suppressClickTimerRef.current) clearTimeout(suppressClickTimerRef.current);
@@ -230,35 +223,50 @@ export function ResearchWorkbenchReview() {
       className={styles.root}
       data-motion={reducedMotion ? 'reduced' : 'full'}
       data-research-workbench-review="true"
+      lang={locale === 'zh' ? 'zh-CN' : 'en'}
     >
       <header className={styles.topbar}>
         <a className={styles.wordmark} href="/" aria-label={t('backHome')}>
           <span className={styles.wordmarkMark}>OS</span>
           <span>OpenScience</span>
         </a>
-        <div className={styles.reviewBadge}>
-          <span aria-hidden="true" />
-          {t('visualReview')}
-        </div>
         <a className={styles.exitLink} href="/dashboard">
           {t('exit')} <ArrowUpRight aria-hidden="true" size={16} />
         </a>
       </header>
 
-      <section className={styles.intro} aria-labelledby="research-workbench-title">
-        <div>
-          <p className={styles.kicker}>{t('kicker')}</p>
-          <h1 id="research-workbench-title">{t('title')}</h1>
-          <p>{t('introduction')}</p>
+      <section
+        aria-labelledby="research-workbench-title"
+        className={styles.sessionHeader}
+        data-review-session-priority="true"
+      >
+        <div className={styles.sessionIdentity}>
+          <p className={styles.kicker}>{t('session.eyebrow')}</p>
+          <h1 id="research-workbench-title">{t('dashboard.title')}</h1>
+          <p className={styles.sessionMeta}>
+            <span>RO · OSR-2026-0241</span>
+            <span>{t('dashboard.version')} · v0.4</span>
+          </p>
         </div>
-        <dl className={styles.measurements}>
-          <div><dt>{t('measure.surface')}</dt><dd>{t('measure.surfaceValue')}</dd></div>
-          <div><dt>{t('measure.reading')}</dt><dd>19 / 1.72</dd></div>
-          <div><dt>Hermes</dt><dd>360 / 200</dd></div>
-        </dl>
+        <div className={styles.openDecision}>
+          <p>{t('session.openDecision')}</p>
+          <strong>{t('session.decision')}</strong>
+          <span>{t('session.decisionNote')}</span>
+        </div>
+        <ol aria-label={t('session.pathLabel')} className={styles.sessionPath} data-session-path="true" role="list">
+          <li role="listitem"><span>01</span><strong>{t('session.draft')}</strong><small>v0.4</small></li>
+          <li aria-current="step" role="listitem"><span>02</span><strong>{t('session.evidence')}</strong><small>1 {t('session.open')}</small></li>
+          <li role="listitem"><span>03</span><strong>{t('session.version')}</strong><small>{t('session.afterDecision')}</small></li>
+        </ol>
       </section>
 
-      <nav className={styles.sceneTabs} aria-label={t('sceneLabel')} role="tablist">
+      <nav
+        className={styles.sceneTabs}
+        aria-label={t('sceneLabel')}
+        data-review-utility="true"
+        role="tablist"
+      >
+        <span className={styles.reviewUtility}>{t('visualReview')}</span>
         {scenes.map((scene) => {
           const Icon = VIEW_ICONS[scene.view];
           return (
@@ -287,18 +295,21 @@ export function ResearchWorkbenchReview() {
         id="research-workbench-scene"
         role="tabpanel"
       >
-        <header className={styles.canvasHeader}>
-          <div>
-            <p>{currentScene.eyebrow}</p>
-            <h2 id="scene-title">{currentScene.label}</h2>
-          </div>
-          <p>{currentScene.note}</p>
-        </header>
+        {state.view !== 'dashboard' ? (
+          <header className={styles.canvasHeader}>
+            <div>
+              <p>{currentScene.eyebrow}</p>
+              <h2 id="scene-title">{currentScene.label}</h2>
+            </div>
+            <p>{currentScene.note}</p>
+          </header>
+        ) : null}
 
         <div className={styles.sceneFrame} data-scene={state.view}>
           <Scene
             view={state.view}
             accepted={state.reviewAccepted}
+            onContinue={() => selectView('review')}
             onAccept={() => {
               setAction('success');
               dispatch({ type: 'accept-review' });
@@ -306,11 +317,20 @@ export function ResearchWorkbenchReview() {
             t={t}
           />
 
-          <aside className={isMobileScene ? styles.hermesMobileRail : styles.hermesRail}>
+          <aside
+            className={isMobileScene ? styles.hermesMobileRail : styles.hermesRail}
+            data-hermes-margin="true"
+          >
             {state.speech === 'quiet' ? (
               <div className={styles.hermesFeedback} data-review-hermes-feedback="true">
                 <span>{t('bubble.intent')}</span>
                 <p>{t('status.quiet')}</p>
+              </div>
+            ) : state.view === 'dashboard' ? (
+              <div className={styles.hermesBoundary} data-review-hermes-feedback="true">
+                <span>{t('status.boundaryLabel')}</span>
+                <strong>{t('status.boundary')}</strong>
+                <small>{t('status.boundaryNote')}</small>
               </div>
             ) : (
               <span aria-hidden="true" className={styles.feedbackMeasure} data-review-hermes-feedback="true" />
@@ -346,35 +366,30 @@ export function ResearchWorkbenchReview() {
                 aria-label={t('menu.title')}
                 className={styles.contextMenu}
                 data-compact={isMobileScene ? 'true' : 'false'}
+                data-locale={locale}
               >
                 <ContextMenuLabel className={styles.menuLabel}>
-                  <span>{t('menu.eyebrow')}</span>
+                  <span data-review-menu-eyebrow="true">{t('menu.eyebrow')}</span>
                   <strong>{t('menu.title')}</strong>
                 </ContextMenuLabel>
                 <ContextMenuGroup>
-                  <ContextMenuItem className={styles.menuItem} onSelect={quietTogether}>
-                    <BookOpen aria-hidden="true" size={18} />
-                    <span><strong>{t('menu.quiet')}</strong><small>{t('menu.quietNote')}</small></span>
-                    <ContextMenuShortcut className={styles.menuShortcut}>{locale === 'zh' ? '陪伴' : 'COMPANION'}</ContextMenuShortcut>
-                  </ContextMenuItem>
-                  <ContextMenuItem className={styles.menuItem} onSelect={() => { setAction('cap-check'); dispatch({ type: 'quiet' }); }}>
-                    <Sparkle aria-hidden="true" size={18} />
-                    <span><strong>{t('menu.tidy')}</strong><small>{t('menu.tidyNote')}</small></span>
-                  </ContextMenuItem>
-                </ContextMenuGroup>
-                <ContextMenuSeparator className={styles.menuRule} />
-                <ContextMenuGroup>
-                  <ContextMenuItem className={styles.menuItem} onSelect={() => selectView('editor')}>
-                    <FileText aria-hidden="true" size={18} />
-                    <span><strong>{t('menu.editor')}</strong><small>{t('menu.editorNote')}</small></span>
-                    <ChevronRight aria-hidden="true" className={styles.chevron} size={17} />
-                  </ContextMenuItem>
                   <ContextMenuItem className={styles.menuItem} onSelect={() => selectView('review')}>
                     <Focus aria-hidden="true" size={18} />
                     <span><strong>{t('menu.review')}</strong><small>{t('menu.reviewNote')}</small></span>
                     <ChevronRight aria-hidden="true" className={styles.chevron} size={17} />
                   </ContextMenuItem>
+                  <ContextMenuItem className={styles.menuItem} onSelect={() => selectView('editor')}>
+                    <FileText aria-hidden="true" size={18} />
+                    <span><strong>{t('menu.editor')}</strong><small>{t('menu.editorNote')}</small></span>
+                    <ChevronRight aria-hidden="true" className={styles.chevron} size={17} />
+                  </ContextMenuItem>
                 </ContextMenuGroup>
+                <ContextMenuSeparator className={styles.menuRule} />
+                <ContextMenuItem className={styles.menuItem} onSelect={quietTogether}>
+                  <BookOpen aria-hidden="true" size={18} />
+                  <span><strong>{t('menu.quiet')}</strong><small>{t('menu.quietNote')}</small></span>
+                  <ContextMenuShortcut className={styles.menuShortcut} data-review-menu-shortcut="true">{locale === 'zh' ? '陪伴' : 'COMPANION'}</ContextMenuShortcut>
+                </ContextMenuItem>
                 <p className={styles.menuHint}>{t(isMobileScene ? 'menu.mobileHint' : 'menu.keyboardHint')}</p>
               </ContextMenuContent>
             </ContextMenu>
@@ -414,15 +429,17 @@ export function ResearchWorkbenchReview() {
 function Scene({
   accepted,
   onAccept,
+  onContinue,
   t,
   view,
 }: {
   accepted: boolean;
   onAccept: () => void;
+  onContinue: () => void;
   t: ReturnType<typeof useTranslations>;
   view: ResearchWorkbenchView;
 }) {
-  if (view === 'dashboard') return <DashboardScene t={t} />;
+  if (view === 'dashboard') return <DashboardScene onContinue={onContinue} t={t} />;
   if (view === 'editor') return <EditorScene t={t} />;
   if (view === 'review') return <ReviewScene accepted={accepted} onAccept={onAccept} t={t} />;
   if (view === 'explore') return <ExploreScene t={t} />;
@@ -430,20 +447,25 @@ function Scene({
   return <MobileScene t={t} />;
 }
 
-function DashboardScene({ t }: { t: ReturnType<typeof useTranslations> }) {
+function DashboardScene({
+  onContinue,
+  t,
+}: {
+  onContinue: () => void;
+  t: ReturnType<typeof useTranslations>;
+}) {
   return (
     <div className={styles.dashboardScene}>
       <section className={styles.primaryWork}>
-        <p className={styles.sectionLabel}>{t('dashboard.active')}</p>
-        <h3>{t('dashboard.title')}</h3>
+        <p className={styles.sectionLabel}>{t('dashboard.decisionLabel')}</p>
+        <h3>{t('dashboard.focusTitle')}</h3>
         <p className={styles.readingLead} data-reading-copy="true">{t('dashboard.summary')}</p>
-        <div className={styles.progressRule}><span style={{ width: '68%' }} /></div>
         <dl className={styles.studyFacts}>
-          <div><dt>{t('dashboard.evidence')}</dt><dd>12 / 14</dd></div>
           <div><dt>{t('dashboard.version')}</dt><dd>v0.4</dd></div>
-          <div><dt>{t('dashboard.next')}</dt><dd>{t('dashboard.nextValue')}</dd></div>
+          <div><dt>{t('dashboard.evidence')}</dt><dd>12 / 14</dd></div>
+          <div><dt>{t('dashboard.output')}</dt><dd>{t('dashboard.outputValue')}</dd></div>
         </dl>
-        <button className={styles.primaryAction} type="button">{t('dashboard.continue')} <ChevronRight aria-hidden="true" size={18} /></button>
+        <button className={styles.primaryAction} onClick={onContinue} type="button">{t('dashboard.continue')} <ChevronRight aria-hidden="true" size={18} /></button>
       </section>
       <section className={styles.activity}>
         <p className={styles.sectionLabel}>{t('dashboard.activity')}</p>

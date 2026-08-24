@@ -151,3 +151,75 @@ project release script with the current production release as rollback.
   docs-only follow-up commit; do not redeploy that documentation-only HEAD.
 - [x] Give the user the direct public URL and ask only for concrete feedback on
   silhouette, paper/ink texture, cuteness, menu density and action feedback.
+
+## Task 9: Lock the returning-researcher session contract
+
+**Files:**
+
+- Modify `apps/web/test/e2e/research-workbench-review.spec.ts`.
+- Modify `docs/specs/2026-08-19-hermes-wanko-live2d-design.md`.
+
+- [x] Add a browser assertion that the active study and open decision precede
+  review metadata in DOM and visual order.
+- [x] Add a browser assertion for the semantic `draft → evidence → version`
+  path and its single current step.
+- [x] Add locale-aware reading assertions: CJK `18px / 1.82`, Latin
+  `18px / 1.68`, and essential menu text at least `14px`.
+- [x] Run the focused browser test against the current route and record the
+  expected hierarchy/typography RED before modifying production components.
+
+## Task 10: Build the Research Session Folio
+
+**Files:**
+
+- Modify `apps/web/components/visual/ResearchWorkbenchReview.tsx`.
+- Modify `apps/web/components/visual/research-workbench-review.module.css`.
+- Modify `apps/web/messages/en.json`.
+- Modify `apps/web/messages/zh.json`.
+
+- [x] Replace the review hero and measurement block with a slim review utility
+  strip so the fixture begins with the active research session.
+- [x] Recompose the Dashboard fixture as one continuous folio: research
+  identity and open decision first, semantic version path second, focused work
+  and secondary research trail after it.
+- [x] Move the exact `360px` Hermes stage into the decision margin without an
+  isolated full-height rail; keep the exact `200px` mobile stage.
+- [x] Anchor the menu immediately beside Hermes with a visible ink origin mark,
+  and replace generic AI actions with current-evidence/current-paragraph actions.
+- [x] Apply locale-aware reading roles and remove Latin tracking from Chinese
+  labels while preserving the project font files and one-accent constraint.
+- [x] Keep editor/review quiet, mobile safe-area aware, keyboard behavior,
+  ordinary-click assistant semantics and reduced-motion behavior unchanged.
+- [x] Run the focused browser test and make every new contract GREEN.
+
+## Task 11: Visual and regression acceptance
+
+**Files:**
+
+- Modify `apps/web/test/e2e/research-workbench-review.spec.ts` only if a real
+  user-visible regression discovered during inspection lacks a contract.
+- Store regenerated evidence under ignored
+  `apps/web/test/visual/out/research-workbench-review/`.
+
+- [x] Capture Dashboard default, menu focus, companion result, quiet editor,
+  focused review and mobile long-press at the existing desktop/mobile widths.
+- [x] Inspect every screenshot at original detail for research-first hierarchy,
+  CJK/Latin reading measure, menu-to-character origin, actor/content collision,
+  and template-like card residue.
+- [x] Run focused E2E, Web unit suite, typecheck, production build, root lint,
+  docs-sync, docs lint and `git diff --check` in that order.
+- [x] Review the final diff for authenticated-page edits, network/data writes,
+  accessibility regressions and secret exposure, then create a clean application
+  commit.
+
+## Task 12: Immutable production update
+
+- [ ] Re-read the deployment runbook, run ECS checkup and database backup, then
+  dry-run the exact application commit with current release as explicit rollback.
+- [ ] Deploy with `--confirm --skip-migrate`; do not run migration or seed.
+- [ ] Verify server build, containers, public route, exact `/__release`, absent
+  `.release-failed`, rollback tree and the public no-write browser suite.
+- [ ] Synchronize progress, CURRENT handoff, deployment runbook and index with
+  the exact release tuple in a docs-only follow-up commit that is not deployed.
+- [ ] Return the same public URL and ask for concrete feedback without claiming
+  aesthetic success.
