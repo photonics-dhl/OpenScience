@@ -1,6 +1,6 @@
 # Hermes Wanko Live2D Companion Design
 
-Status: **CURRENT — §13.4 application `9a7263e` deployed in release `cbf5737`; automated/original-scale operator gates pass and user visual acceptance remains pending**
+Status: **CURRENT — §13.6 application `8d1409e` is the approved deployment candidate; production remains release `cbf5737` until immutable deployment completes**
 
 Supersedes only the visual renderer and motion-authoring portions of:
 
@@ -928,3 +928,43 @@ Any broken contour, detached tail, covered label/control, illegible type,
 unbounded empty gap or actor jump rejects the candidate even when all automated
 tests are green. Skills inform this gate; they do not replace user aesthetic
 judgment or direct rendered inspection.
+
+### 13.6 Viewport-safe tool sheet and living action response (approved 2026-08-25)
+
+The production screenshot exposed two failures not covered by §13.4: Radix
+collision placement was followed by a fixed CSS translation that could push the
+tool sheet behind the browser edge, and each catalog action resolved to one
+unchanging sentence while speech appeared before the character performance was
+perceptible. A passing implementation must therefore prove both viewport
+containment and a visible action-first response rhythm.
+
+The open sheet is measured from its real portal element after layout. It stays
+inside the visual viewport with `8px` collision padding, clears protected
+navigation and readable content, and keeps the visible crown-to-sheet gap in
+the existing `24–48px` band. Desktop may move only the page-owned Hermes margin
+by the measured amount. Compact/mobile counter-scrolls that temporary change so
+the exact `200px` actor remains under the user's finger. Closing, navigating or
+unmounting restores the original scroll and stage offset; no estimated fixed
+menu height or post-collision transform may own placement.
+
+All twelve actions must trigger a real Wanko performance. `doze` and
+`thinking-pause` use existing compatible motions plus their semantic parameter
+profiles rather than speech alone. The motion starts immediately after menu
+selection; companion speech follows after `520ms`, research feedback after
+`320ms`. Each action owns three Chinese and three English action-matched lines.
+Selection may be random, but the immediately previous line for that action and
+locale cannot repeat.
+
+Typing, search, modal/drawer use and approval state interrupt pending speech.
+An action selected while already interrupted may perform quietly but must not
+schedule a delayed bubble. User-invoked feedback remains available on quiet
+editor routes when no interruption is active. `prefers-reduced-motion` keeps
+the same language, focus and destination while removing nonessential motion.
+
+Acceptance covers all twelve action profiles and phrase pools, consecutive
+no-repeat, action pixels changing before speech, desktop/mobile viewport and
+protected-region geometry, close/unmount scroll restoration, input and
+approval interruption, ordinary-click drawer behavior, keyboard access and
+mobile long press. Application `8d1409e` passes Web `411/411` plus five Node
+contracts, product release `65/65`, both focused Hermes visual gates, full root
+typecheck/lint/test/build and independent review with no remaining finding.

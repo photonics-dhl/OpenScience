@@ -1,7 +1,7 @@
 # Hermes Orbit Actions Implementation Plan
 
-> 执行依据：`docs/specs/2026-08-19-hermes-wanko-live2d-design.md` §13.2。用户已于 2026-08-25 明确批准实施与部署。
-> 状态：实现、修复后独立复审、immutable ECS 发布与公网验收均已完成；application source `e4a19d4`，release `7165e9b`，rollback `3010903`。
+> 执行依据：`docs/specs/2026-08-19-hermes-wanko-live2d-design.md` §13.2–§13.6。用户已于 2026-08-25 明确批准实施与部署。
+> 状态：§13.6 corrective application `8d1409e` 已完成实现、原尺寸复核、完整门禁和独立复审；production 仍为 `cbf5737`，等待按现行 immutable runbook 发布。
 
 **Goal:** 把当前单列页注菜单升级为围绕真实 Hermes 展开的 12 项情境动作系统，并让 Dashboard 两段式短句、动作反馈、移动端分组与安静工作场景形成一个不遮挡研究内容的连贯体验。
 
@@ -65,3 +65,19 @@
 3. 执行差异审查、安全/架构边界复核和 completion verification；保持 worktree clean、HEAD 与 release ref 一致。
 4. 按 immutable release runbook 部署 ECS，不执行迁移或 seed；验证服务器 build、容器状态、运行时资源、公网健康与 Hermes focused browser gate，并记录 release/rollback 元组。
 5. 同步 progress、handoff、project index 和 deployment runbook；提交最终证据后向用户提供公网验收入口与需要重点判断的视觉维度。
+
+## Task 5 — 修复菜单裁切与固定反馈的“死人感”
+
+**Files:** `HermesVisualAdapter.tsx`、`HermesWorkspaceStage.tsx`、动作目录、
+Wanko action director、双语 messages 与对应 Vitest/Playwright gates。
+
+1. 先以生产截图复现菜单越过顶边、动作仅有固定气泡、动作像素晚于语言的问题。
+2. 用真实 portal 高度与 protected regions 计算 placement；锁定 viewport
+   `8px`、crown gap `24–48px`、desktop margin-only shift、mobile counter-scroll
+   和 close/unmount 原始 scroll 恢复。
+3. 为 12 个动作锁定真实 performance profile 与每语言三句匹配短句；动作
+   先开始，短句延迟出现，同动作同语言不连续重复。
+4. 输入、搜索、drawer/modal 与 approval 可中断待显示短句；quiet editor 的
+   用户显式选择仍可反馈；reduced-motion 保留语义和目标。
+5. 已完成：application `8d1409e`；Web `411+5`、release `65/65`、focused
+   Live2D/work-assistant gates、root typecheck/lint/test/build 和独立复审均通过。

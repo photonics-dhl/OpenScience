@@ -1,12 +1,12 @@
 # Handoff — Hermes Wanko Live2D Companion
 
-> **CURRENT active-memory，2026-08-25 20:02 +08。** 旧灯体、帽子、流苏、Cubism GUI 试验和被否决候选只从 Git history 查阅，不再作为实施入口。
+> **CURRENT active-memory，2026-08-25 21:20 +08。** 旧灯体、帽子、流苏、Cubism GUI 试验和被否决候选只从 Git history 查阅，不再作为实施入口。
 
 ## Goal
 
 - 已交付的 v09 Hermes 是可移动工作助手，不是主页面内容：Dashboard 默认右栏停靠，整角色拖动后脱离；桌面/紧凑移动端精确为 `360/200px`。
 - 保持 RO 创建流程为主任务；气泡、字段引导和 32 动作只提供短暂、可打断、不遮挡的辅助反馈。
-- production `cbf5737` 已部署 §13.4 application `9a7263e`：单闭合轮廓、帽顶净空、slender mouth tail 和 renderer-ready 截图均通过 operator/public gates；用户视觉接受仍 pending。
+- production `cbf5737` 仍健康；§13.6 application `8d1409e` 已修复工具页顶边裁切、固定短句与动作不可感，完整门禁通过并等待 immutable 部署。
 
 ## Version tuple
 
@@ -18,6 +18,7 @@
 
 ## Done
 
+- §13.6 candidate `8d1409e` 使用真实 portal/protected-region 测量保持 viewport 与 `24–48px` crown gap，mobile 开合不跳；12 动作各有真实 Wanko performance 与中英各三句不连重复，动作先于 speech，input/search/modal/drawer/approval 可中断。Web `411+5`、release `65/65`、focused gates、root gates 与独立复审 GREEN。
 - §13.4 local application candidate `9a7263e` 以单闭合 SVG contour 和 slender mouth tail 替换 CSS 拼接气泡；主体保持在可见帽顶上方，反馈时 Hermes 标签/控件退场，截图等待真实 renderer ready。工具页保持可见帽顶 `24–48px` 邻接且排除阅读栏；已修复 mobile control 遮挡和短 research 分组 `32→118px` 漂移。永久门见 §13.5。
 - v09 母版、帽子/流苏/灯/烟雾、两张 zero-alpha RGB-clean texture 和 12 motions 均保持不变；公网 runtime 与 immutable release tree 的五个关键 SHA 已一致。
 - Task 21 已完成并部署：`360/200px`、drag-detach、viewport clamp、断点恢复、位置持久化、角色/气泡独立测量、protected-region/guide 避让与固定 4 秒 atomic autonomous beat。

@@ -1,6 +1,6 @@
 # OpenScience 进度（CURRENT window）
 
-> 最新同步：2026-08-25 20:02 +08。历史由 Git 保存；旧计划和 archive 不作为默认输入。
+> 最新同步：2026-08-25 21:20 +08。历史由 Git 保存；旧计划和 archive 不作为默认输入。
 
 ## Current version tuple
 
@@ -8,6 +8,13 @@
 - Current rollback 为功能健康的首次 correction `cc6cff6275b069c8ad89eddcfcda0e3d6011b0bf`；post-deploy docs HEAD 不与应用身份混写。
 - Local main / origin main: `c60ffdd16b85ea8f0d8b047493fa03a4c0230c05` / `7eb2f5bc4718ee445b79bd089acb64acb3691e62`；两者都早于当前工作分支，远端 Hermes feature 不存在。
 - ECS release / rollback: `cbf5737bdffd50e9ba6d629d4ea9c5e006226263` / `cc6cff6275b069c8ad89eddcfcda0e3d6011b0bf`。
+
+## 2026-08-25 — Hermes viewport-safe lively interaction candidate
+
+- 用户生产截图证明右键工具页越过浏览器顶边，动作反馈又退化为固定气泡；根因是 Radix collision 后仍叠加固定 CSS 位移，以及每动作只有一句且语言先于角色 performance。
+- Application `8d1409e` 改为测量真实 portal 后约束 viewport/protected regions；desktop 只移动页边，mobile counter-scroll，关闭/卸载恢复原始 scroll。12 动作均有真实 Wanko performance，每动作每语言三句且不连续重复，动作先行 `320/520ms` 后再说话。
+- 输入、搜索、drawer/modal 和 approval 会取消待显示短句；已处于中断状态的动作不创建 timer。quiet editor 无中断时仍允许用户显式反馈，reduced-motion 保留文案与目的地。
+- Fresh evidence：Web `411/411` + 5 Node、product release `65/65`、focused Live2D/work-assistant gates、全仓 typecheck/lint/test/build、`git diff --check` 与独立复审 GREEN。production 尚保持健康的 `cbf5737`，本候选等待 immutable `--skip-migrate` 发布。
 
 ## 2026-08-25 — Hermes carried tool sheet deployed
 
@@ -72,14 +79,6 @@
 - 紧凑 ink-edge bubble、字段引导、protected-region travel、主流程避让和 32-action semantic director 已完成；自主短句与动作是固定 4 秒 atomic beat，交互和优先任务可即时打断。
 - release 前 fresh evidence：Web `390/390` + 5 Node contracts、typecheck、18-page build、Live2D/work-assistant gates、canonical product E2E `40/40`；独立最终 review 无 Critical/Important/Minor。
 - 生产以 `--skip-migrate` 部署；未 migration、未 seed。公网三视口 Dashboard click/drag/reload/resize/bubble/Create gate 通过且使用无写入 API 拦截；没有生产 session token，因此未声称真实账号/数据库纵向 gate。
-
-## 2026-08-24 — Fresh local/server cognition audit
-
-- Git：`origin/main` 是 local main 的祖先；当前 Hermes 分支在 local main 之后且未推送。主工作区的未跟踪 `docs/live_2D/` 与 `docs/user_ideas/8.10/` 用户资产保持原样。
-- ECS：`.release-id` 与公网 `/__release` 精确为 `5f4e73c...`，`.release-failed` absent，rollback tree `c97926a...` present；公网 Cloudflare 与 loopback HTTPS 均 200。
-- Runtime：API、Agent Worker、Document Parser、Postgres、Redis、SeaweedFS、Malware Scanner 全部 running/healthy；Web running。Parser 保持 `node/read-only/network=none/536870912 bytes/64 PID`。
-- Database：27 migrations found，schema up to date；2026-08-24 03:00 +08 最新 DB dump 为 441,411 bytes，当前保留 7 个。未读取备份或 `.env` 内容。
-- Windows SSH：09:22 +08 用 `C:\Program Files\Git\bin\bash.exe` 直接调用 `checkup.sh` 复验通过。系统 `bash.exe` 会进入 WSL `/root`，无法加载 Windows 侧 `id_ed25519_xgs`；canonical 调用已提升到 deployment runbook §1.1。
 
 ## Constraints and next action
 

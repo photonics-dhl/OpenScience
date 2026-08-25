@@ -762,3 +762,18 @@ Historical note for the 2026-08-11 release: it used fixed worker tags and a writ
   renderer-ready Hermes scenarios pass `5/5`, and their desktop/mobile/editor
   screenshots were opened at original scale. User visual acceptance remains
   pending; no migration, seed or research-data write ran.
+
+### 5.22 Hermes viewport-safe lively interaction candidate (2026-08-25)
+
+> Application source `8d1409e`; production remains `cbf5737` with rollback
+> `cc6cff6` until the immutable candidate is deployed.
+
+- Scope is Web-only: real portal/protected-region menu measurement, exact scroll
+  restoration, twelve action-first Wanko performances, three localized lines
+  per action with consecutive no-repeat, and interruption-safe delayed speech.
+- Local evidence: Web `411/411` plus five Node contracts, product release
+  `65/65`, focused Live2D/work-assistant gates, full root typecheck/lint/test/
+  build, diff check and independent review all pass.
+- Execute canonical pre-checkup, database backup, clean exact dry-run and
+  confirmed `--skip-migrate` deployment using the actual active `cbf5737` as
+  rollback. Do not run migration, seed or any research-data write.
