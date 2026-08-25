@@ -228,10 +228,16 @@ test('Hermes action menu / desktop pointer and keyboard preserve the assistant e
   const desktopMenuGeometry = await page.evaluate(() => {
     const menuRect = document.querySelector<HTMLElement>('[data-hermes-action-menu="true"]')!.getBoundingClientRect();
     const actorRect = document.querySelector<HTMLElement>('[data-hermes-companion-actor="true"]')!.getBoundingClientRect();
-    return { actor: actorRect.toJSON(), menu: menuRect.toJSON(), overlap: menuRect.left < actorRect.right && menuRect.right > actorRect.left && menuRect.top < actorRect.bottom && menuRect.bottom > actorRect.top };
+    return {
+      actor: actorRect.toJSON(),
+      gap: actorRect.top - menuRect.bottom,
+      menu: menuRect.toJSON(),
+      overlap: menuRect.left < actorRect.right && menuRect.right > actorRect.left && menuRect.top < actorRect.bottom && menuRect.bottom > actorRect.top,
+    };
   });
-  expect(desktopMenuGeometry.overlap, JSON.stringify(desktopMenuGeometry)).toBe(true);
-  expect(await page.evaluate(() => window.scrollY)).toBe(scrollBeforeMenu);
+  expect(desktopMenuGeometry.overlap, JSON.stringify(desktopMenuGeometry)).toBe(false);
+  expect(desktopMenuGeometry.gap, JSON.stringify(desktopMenuGeometry)).toBeGreaterThanOrEqual(31.5);
+  expect(await page.evaluate(() => window.scrollY)).toBeLessThanOrEqual(scrollBeforeMenu);
   expect(await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)).toBe(0);
   await page.screenshot({ fullPage: true, path: `${outDir}/hermes-menu-dashboard-default.png`, animations: 'disabled' });
   await page.keyboard.press('Escape');
@@ -264,6 +270,14 @@ test('Hermes action menu / mobile long press is compact and does not invoke the 
   await page.goto(`${baseUrl}/dashboard`, { waitUntil: 'networkidle' });
   const trigger = page.locator('[data-hermes-input-owner="true"]');
   await trigger.scrollIntoViewIfNeeded();
+  const closedGeometry = await page.evaluate(() => {
+    const actor = document.querySelector<HTMLElement>('[data-hermes-companion-actor="true"]')!.getBoundingClientRect();
+    const nearestProtectedBottom = Math.max(...Array.from(document.querySelectorAll<HTMLElement>('[data-hermes-protected="true"]'))
+      .map((node) => node.getBoundingClientRect().bottom)
+      .filter((bottom) => bottom <= actor.top));
+    return { actorTop: actor.top, precedingGap: actor.top - nearestProtectedBottom };
+  });
+  expect(closedGeometry.precedingGap, JSON.stringify(closedGeometry)).toBeLessThanOrEqual(160);
   await trigger.dispatchEvent('pointerdown', { button: 0, isPrimary: true, pointerId: 7, pointerType: 'touch' });
   await page.waitForTimeout(560);
   await trigger.dispatchEvent('pointerup', { button: 0, isPrimary: true, pointerId: 7, pointerType: 'touch' });
@@ -274,13 +288,32 @@ test('Hermes action menu / mobile long press is compact and does not invoke the 
   const mobileMenuGeometry = await page.evaluate(() => {
     const menuRect = document.querySelector<HTMLElement>('[data-hermes-action-menu="true"]')!.getBoundingClientRect();
     const actorRect = document.querySelector<HTMLElement>('[data-hermes-companion-actor="true"]')!.getBoundingClientRect();
-    return { actor: actorRect.toJSON(), menu: menuRect.toJSON(), overlap: menuRect.left < actorRect.right && menuRect.right > actorRect.left && menuRect.top < actorRect.bottom && menuRect.bottom > actorRect.top };
+    const protectedOverlap = Array.from(document.querySelectorAll<HTMLElement>('[data-hermes-protected="true"]'))
+      .filter((node) => {
+        const rect = node.getBoundingClientRect();
+        return menuRect.left < rect.right && menuRect.right > rect.left && menuRect.top < rect.bottom && menuRect.bottom > rect.top;
+      })
+      .length;
+    return {
+      actor: actorRect.toJSON(),
+      gap: actorRect.top - menuRect.bottom,
+      menu: menuRect.toJSON(),
+      overlap: menuRect.left < actorRect.right && menuRect.right > actorRect.left && menuRect.top < actorRect.bottom && menuRect.bottom > actorRect.top,
+      protectedOverlap,
+    };
   });
   expect(mobileMenuGeometry.overlap, JSON.stringify(mobileMenuGeometry)).toBe(false);
+  expect(Math.abs(mobileMenuGeometry.actor.top - closedGeometry.actorTop), JSON.stringify({ closedGeometry, mobileMenuGeometry })).toBeLessThanOrEqual(1.5);
+  expect(mobileMenuGeometry.gap, JSON.stringify(mobileMenuGeometry)).toBeGreaterThanOrEqual(31.5);
+  expect(mobileMenuGeometry.protectedOverlap, JSON.stringify(mobileMenuGeometry)).toBe(0);
   await trigger.dispatchEvent('click');
   await expect(page.getByRole('dialog', { name: /Hermes/u })).toHaveCount(0);
   expect(await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)).toBe(0);
   await page.screenshot({ path: `${outDir}/hermes-menu-mobile-long-press.png`, animations: 'disabled' });
+  await page.keyboard.press('Escape');
+  await expect(menu).toBeHidden();
+  const restoredActorTop = await page.locator('[data-hermes-companion-actor="true"]').evaluate((node) => node.getBoundingClientRect().top);
+  expect(Math.abs(restoredActorTop - closedGeometry.actorTop)).toBeLessThanOrEqual(1.5);
 });
 
 test('Hermes action menu / editor companion feedback stays in the research margin', async ({ page }) => {
@@ -318,6 +351,8 @@ test('Hermes action menu / editor companion feedback stays in the research margi
   await menu.locator('[data-hermes-action-key="greet"]').click();
   const feedback = page.locator('[data-hermes-menu-feedback="true"]');
   await expect(feedback).toBeVisible();
+  await expect(feedback).toContainText('Hello — I’m right here.');
+  await expect(feedback).toHaveAttribute('data-hermes-feedback-action', 'ear-perk');
   await expect(feedback).toHaveAttribute('data-hermes-speech-origin', 'mouth');
   await expect(feedback).toHaveAttribute('data-hermes-speech-copy', 'single');
   await expect(page.locator('[data-hermes-guide-bubble][data-hermes-guide-visible="true"]')).toHaveCount(0);

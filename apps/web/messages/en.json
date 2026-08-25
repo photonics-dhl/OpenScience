@@ -523,8 +523,8 @@
       "menu": {
         "trigger": "Hermes: click for the assistant; right-click or long-press for actions",
         "label": "Hermes action menu",
-        "eyebrow": "Hermes · research margin",
-        "title": "Around this step",
+        "eyebrow": "Hermes · with you",
+        "title": "What shall we do?",
         "evidence": "Inspect evidence and sources",
         "evidenceNote": "Return to this research object's evidence ledger",
         "explore": "Open the research index",
@@ -541,18 +541,18 @@
           "neutral": "We can begin with whatever you want to understand."
         },
         "actions": {
-          "greet": { "label": "Say hello", "feedback": "I’m here — I was looking at this page too." },
-          "encourage": { "label": "Encourage me", "feedback": "This step is taking shape. Let’s keep going." },
-          "think": { "label": "Think together", "feedback": "No need to decide yet. Let’s sort it out." },
+          "greet": { "label": "Say hello", "feedback": "Hello — I’m right here." },
+          "encourage": { "label": "Encourage me", "feedback": "You’ve come this far. Let’s take one more step." },
+          "think": { "label": "Think together", "feedback": "Let’s pause and sort the clues together." },
           "listen": { "label": "Listen to me", "feedback": "I’m listening. Take your time." },
-          "stretch": { "label": "Take a stretch", "feedback": "All right. Let’s loosen our shoulders first." },
-          "rest": { "label": "Rest a moment", "feedback": "I’ll put the reminders away and read quietly with you." },
-          "celebrate": { "label": "Mark this step", "feedback": "This small step is worth remembering." },
-          "read-together": { "label": "Read with me", "feedback": "I’ll stay in the margin. Let’s read one more passage." },
-          "continue": { "label": "Continue this step", "feedback": "I’ll take you back to the step we were working on." },
-          "evidence": { "label": "Review evidence", "feedback": "Let’s inspect the evidence before deciding." },
-          "sources": { "label": "Trace sources", "feedback": "Let’s follow this thread back through its sources." },
-          "compare": { "label": "Compare versions", "feedback": "The differences will be easier to judge side by side." }
+          "stretch": { "label": "Take a stretch", "feedback": "Stretch with me — let your shoulders soften." },
+          "rest": { "label": "Rest a moment", "feedback": "Rest a moment. I’ll keep your place." },
+          "celebrate": { "label": "Mark this step", "feedback": "This step is done. Let’s celebrate it." },
+          "read-together": { "label": "Read with me", "feedback": "We’re here. I’ll read the next passage with you." },
+          "continue": { "label": "Continue this step", "feedback": "Back to our last step — let’s continue." },
+          "evidence": { "label": "Review evidence", "feedback": "Hold this conclusion — let’s check its evidence." },
+          "sources": { "label": "Trace sources", "feedback": "Let’s trace the citation back to its source." },
+          "compare": { "label": "Compare versions", "feedback": "Let’s place the versions side by side and inspect the differences." }
         },
         "keyboardHint": "Shift+F10 or Menu key to open · Esc to close",
         "mobileHint": "Long-press Hermes to open · tap still enters the assistant"

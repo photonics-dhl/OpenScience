@@ -56,7 +56,9 @@ async function mockProduct(page, state) {
 }
 
 async function waitForRig(page) {
-  await page.locator('[data-hermes-workspace-stage="true"]').waitFor({ state: 'visible' });
+  const stage = page.locator('[data-hermes-workspace-stage="true"]');
+  await stage.waitFor({ state: 'visible' });
+  await stage.scrollIntoViewIfNeeded();
   await page.waitForFunction(() => document.querySelector('[data-hermes-rig="live2d-wanko"]')?.getAttribute('data-hermes-rig-status') === 'ready');
 }
 
