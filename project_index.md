@@ -131,7 +131,7 @@
 | `docs/specs/2026-08-15-hermes-constellation-dragon-prototype-design.md` | Hermes 少年星图龙轻量 Blender 原型历史设计 | **用户视觉 NO-GO**；不得作为当前候选 |
 | `docs/specs/2026-08-15-hermes-2d-pet-design.md` | Hermes 2.5D 整图 PNG/CSS-signal 历史原型 | **DEPRECATED / VISUAL NO-GO**；资产可复用，renderer 不得继续 |
 | `docs/specs/2026-08-17-hermes-workspace-companion-motion-design.md` | Hermes Workspace Companion 已实施 guide/anchor/travel/dock/diff foundation 与历史 OGL visual contract | **IMPLEMENTED FOUNDATION / VISUAL SUPERSEDED**；CURRENT renderer 见 2026-08-19 Wanko spec |
-| `docs/specs/2026-08-19-hermes-wanko-live2d-design.md` | Wanko 第一阶段角色与 runtime；§11 movable `360/200px`；§12 Research Session Folio；§13.1 approved mouth-anchored single-sentence speech 与 carried-tool ledger | **CURRENT Hermes visual/guide design**；§13.1 application `eb55820` deployed in `3010903` |
+| `docs/specs/2026-08-19-hermes-wanko-live2d-design.md` | Wanko 第一阶段角色与 runtime；§11 movable `360/200px`；§12 Research Session Folio；§13.1 mouth speech；§13.2 approved two-beat presence、12 项 orbit actions 与 quiet editor/mobile contract | **CURRENT Hermes visual/guide design**；§13.1 application `eb55820` deployed in `3010903`；§13.2 待书面复核后实施 |
 | `docs/specs/2026-08-24-research-folio-product-system-design.md` | 登录到公开验证的全部真实非 Landing 产品视觉与信息架构；暖纸阅读、graphite 证据工具、18 表面、预留 Hermes 研究页边与无覆盖合同 | **CURRENT non-Landing product UI spec / IMPLEMENTED**；Landing unchanged |
 | `docs/specs/2026-08-22-wanko-scholar-hat-design.md` | canonical Wanko 常驻学者帽视觉、佩戴遮挡、流苏运动和 visual-before-Cubism 门 | **CURRENT accessory design COMPLETE / DEPLOYED**；v09 母版与 2026-08-23 runtime bundle 已随 release `5f4e73c` 部署 |
 | `docs/specs/2026-08-18-readable-workspace-hermes-guidance-design.md` | B 平衡学者工作台、三视觉系统阅读基线、浏览器无关控件样式、Hermes 不遮挡引导编舞与公网 blank RO→六字段→diff→commit 真实验收 | **IMPLEMENTED FOUNDATION / CARRIED FORWARD**；首次公网真实验收 `06072c1`，现行 release `5f4e73c` |
@@ -312,6 +312,7 @@
 | `docs/handoff/2026-08-06-frontend-p0-p1-sdd-handoff.md` | 前端 P0/P1 SDD 执行交接：7.1–7.3 done（2bacb65/fd46359/61d19a4），7.4–7.11 移交 GPT；含工作流/约束/遗留 minor/验收门 | 活文档（执行中） |
 | `docs/CODEBASE_AUDIT.md` | Phase 0 Scholars Tea 只读审计报告（地图/模块分类/风险登记/迁移含义） | 活文档 |
 | `docs/proposals/` | 方案/脑暴稿 | 含前端设计方向 v1（旧方案0723已废弃不归档） |
+| `docs/proposals/2026-08-25-openscience-patent-product-introduction.md` / `.docx` | OpenScience 完整产品与技术方案介绍：RO/SDF、证据、版本、AI 审批、隔离解析、沙箱、协作发布、Hermes 与可拆分技术点；DOCX 为专利技术交底用途交付件，Markdown 为可维护源稿 | **CURRENT patent-introduction draft**；需专利代理人完成现有技术检索与权利要求撰写 |
 | `docs/proposals/2026-08-06-frontend-design-direction-v1.md` | 前端整体设计方向（三方讨论稿，文末「v2 终稿决策层」D1–D9 效力最高：符号=Evolving RO 映射 SDF 六节点/纯 SVG 辉光/三套视觉+token/Live2D 一步到位/分期 P0–P4，下一步转 specs+plan） | **已定稿 v2** |
 | `docs/user_ideas/竞品分析报告.docx` | 用户竞品分析（34 竞品/11 类，战略与 IA 层启发，前端设计 v1 的输入材料） | 只读原件 |
 | `docs/user_ideas/OpenScience-Kimi-Handoff-v2.zip` | 用户×GPT 讨论交接 v2（HANDOFF.md + hero 参考图；已解压至 handoff-v2-extract/ 并入设计方向 v2 定稿） | 只读原件 |

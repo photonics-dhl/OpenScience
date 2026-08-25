@@ -742,3 +742,46 @@ keeps `200px`, opens by long press from the Hermes/lamp hit region and preserves
 ordinary tap for the assistant drawer. The menu uses the existing project fonts,
 warm paper, ink, icons and focus primitive; it adds no gradient, glass, glow,
 pill cluster or default command-palette styling.
+
+### 13.2 Two-beat presence and orbiting action tools (approved 2026-08-25)
+
+The approved interaction adopts Scholar's Tea's behavior grammar without
+copying its orb styling. On the Dashboard, Hermes may introduce itself with two
+short consecutive lines in the same mouth-anchored bubble: a presence line,
+then one truthful context line. The lines never appear as simultaneous boxes,
+never repeat on every navigation, and stop when the user starts typing, opens a
+dialog, or enables quiet reactions.
+
+Desktop invocation expands twelve discrete, readable action points from Hermes
+rather than opening a rectangular ledger or command palette. Eight companion
+actions are available: greet, encourage, think, listen, stretch, rest,
+celebrate, and read together. Four research actions are available: continue the
+current step, review evidence, inspect sources, and compare versions. Every item
+has a 44px minimum target, a project icon, a visible 14px-or-larger label, a
+single focus treatment, and an action ID from the existing catalog. No item is
+an individual card. The points use free space above and beside the exact 360px
+actor and preserve research text and form controls.
+
+Choosing an item is one atomic performance beat: the menu closes, Hermes gives
+an immediate action-specific reaction, and one short mouth-anchored sentence
+appears. Menu and speech never coexist. A selected work action then opens the
+existing product destination or assistant flow; companion actions perform no
+hidden data write. Ordinary click continues to open the assistant drawer.
+Right click, Shift+F10 and the Menu key invoke the same Radix-owned menu state.
+
+On compact/mobile surfaces the actor remains exactly 200px. Long press opens
+the same catalog through two labeled groups, With Hermes and Research tools,
+with 44px targets around the actor and no horizontal overflow. An action closes
+the points before its reaction and text appear. Editor, input, diff, review and
+approval contexts do not produce unsolicited speech; they show only a small
+Hermes presence control through which the user may keep the 200px compact size,
+restore the 360px original size where space permits, or retain quiet reactions.
+
+All entrance motion is transform/opacity only, finishes within 200ms, and
+preserves spatial continuity from the actor. Reduced motion removes expansion
+and character motion but keeps focus, labels, selection, speech and destination
+behavior. The visual language is warm paper, high-contrast ink, one restrained
+vermilion accent, project serif reading type and sans-serif controls. It
+excludes gradients, glass, glow, emoji, low-contrast microtype, a translucent
+radial disc and shadcn's default visual skin; Radix/shadcn evidence is used only
+for semantics, focus and keyboard behavior.

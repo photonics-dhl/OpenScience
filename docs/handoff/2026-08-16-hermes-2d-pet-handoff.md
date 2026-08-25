@@ -39,6 +39,8 @@
 - exact release `33418fd` 已以 `2abfe42` 为 rollback、`--skip-migrate` 发布。pre/post checkup、fresh `432K files=7/7` backup、server full build、27 migrations current、healthy target runtime、精确 release/absent failure/rollback markers、真实 route/Live2D assets 与公网 Dashboard + Hermes `4/4` 均通过；未 migration/seed/data write。
 - 2026-08-25 mouth-anchored speech candidate `eb55820` 已完成：显式 feedback 为一条暖纸椭圆短句，纸尾按 desktop/mobile 口部锚点校准；连续 ledger 菜单、224px 移动菜单、方向翻转、应用内 reduced-motion 与 pointer-up 竞态均有回归覆盖。Fresh evidence 为 Web `403+5`、targeted `14/14`、work-assistant 三视口、Hermes aggregate `19+3`、product release `60/60`、全仓 typecheck/lint/test/build GREEN；两轮独立复审无部署阻断。旧 40 条 E2E 中 21 条 travel/dark prompt/旧 dock 断言已被批准锚定契约取代，19 条仍适用的 runtime/guide 场景继续进 CURRENT gate。
 - Immutable release `3010903` 已以 `33418fd` 为 rollback、`--skip-migrate` 发布。pre/post checkup、backup `432K files=7/7`、服务器 19-page build、27 migrations current、目标 runtime/Parser isolation、route/assets、精确 release/failure/rollback markers 均通过；公网无写入 Hermes 三场景 `3/3`，原尺寸 editor 截图确认口部气泡留在研究页边且不遮正文。未 migration、seed 或写研究数据。
+- 用户已批准新的 Scholar's Tea 行为语法转译稿；CURRENT Wanko spec §13.2 现定义同一口部气泡的两段短话、8 个陪伴动作 + 4 个研究动作的 orbit menu、选择后的原子反馈、移动长按和 quiet editor。该增量等待书面 spec 复核，尚未进入产品代码或部署。
+- 专利技术交底用途的完整产品介绍已形成 `docs/proposals/2026-08-25-openscience-patent-product-introduction.{md,docx}`，现状、规划与候选技术点分开表述。
 
 ## Constraints
 
@@ -55,8 +57,8 @@
 
 ## Next action
 
-1. 用户直接浏览登录、Dashboard、创建 RO、编辑与公开阅读入口，反馈信息层级、阅读、Hermes 协调、菜单密度及动作反馈。
-2. 若继续迭代，保持 Landing 不变；工作分支尚未进入 main，另开集成任务时明确 merge / PR / 保留分支。
+1. 用户复核 Wanko spec §13.2 与专利产品介绍；批准书面 spec 后创建唯一实施计划，并以 TDD 实现、验证和部署 orbit menu 增量。
+2. 保持 Landing 不变；工作分支尚未进入 main，另开集成任务时明确 merge / PR / 保留分支。
 
 ## Read first
 
