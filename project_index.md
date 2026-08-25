@@ -131,7 +131,7 @@
 | `docs/specs/2026-08-15-hermes-constellation-dragon-prototype-design.md` | Hermes 少年星图龙轻量 Blender 原型历史设计 | **用户视觉 NO-GO**；不得作为当前候选 |
 | `docs/specs/2026-08-15-hermes-2d-pet-design.md` | Hermes 2.5D 整图 PNG/CSS-signal 历史原型 | **DEPRECATED / VISUAL NO-GO**；资产可复用，renderer 不得继续 |
 | `docs/specs/2026-08-17-hermes-workspace-companion-motion-design.md` | Hermes Workspace Companion 已实施 guide/anchor/travel/dock/diff foundation 与历史 OGL visual contract | **IMPLEMENTED FOUNDATION / VISUAL SUPERSEDED**；CURRENT renderer 见 2026-08-19 Wanko spec |
-| `docs/specs/2026-08-19-hermes-wanko-live2d-design.md` | Wanko 第一阶段角色与 runtime；§11 movable `360/200px`；§12 Research Session Folio；§13.1 mouth speech；§13.2 approved two-beat presence、12 项 orbit actions 与 quiet editor/mobile contract | **CURRENT Hermes visual/guide design / IMPLEMENTED**；§13.2 application `e4a19d4` deployed in `7165e9b` |
+| `docs/specs/2026-08-19-hermes-wanko-live2d-design.md` | Wanko renderer、`360/200px`、Research Folio；§13.3 把 12 项动作改为与 Hermes 分带的 carried tool sheet，并锁定动作/Live2D/双语短句 | **CURRENT Hermes visual/guide design / §13.3 APPROVED, IMPLEMENTING**；production 仍为 `7165e9b` |
 | `docs/specs/2026-08-24-research-folio-product-system-design.md` | 登录到公开验证的全部真实非 Landing 产品视觉与信息架构；暖纸阅读、graphite 证据工具、18 表面、预留 Hermes 研究页边与无覆盖合同 | **CURRENT non-Landing product UI spec / IMPLEMENTED**；Landing unchanged |
 | `docs/specs/2026-08-22-wanko-scholar-hat-design.md` | canonical Wanko 常驻学者帽视觉、佩戴遮挡、流苏运动和 visual-before-Cubism 门 | **CURRENT accessory design COMPLETE / DEPLOYED**；v09 母版与 2026-08-23 runtime bundle 已随 release `5f4e73c` 部署 |
 | `docs/specs/2026-08-18-readable-workspace-hermes-guidance-design.md` | B 平衡学者工作台、三视觉系统阅读基线、浏览器无关控件样式、Hermes 不遮挡引导编舞与公网 blank RO→六字段→diff→commit 真实验收 | **IMPLEMENTED FOUNDATION / CARRIED FORWARD**；首次公网真实验收 `06072c1`，现行 release `5f4e73c` |
@@ -140,6 +140,7 @@
 | `docs/plans/2026-08-24-hermes-contextual-workbench-review-plan.md` | 暖纸视觉评审 route 的 TDD、真实 Hermes、键盘/长按/assistant、浏览器截图、docs-sync 与 immutable ECS 部署任务链 | **COMPLETED REVIEW RELEASE**；Tasks 1–12 complete，release `bba5f14` |
 | `docs/plans/2026-08-24-research-folio-product-system-plan.md` | Research Folio 的合同、共享 shell、Hermes 锚定几何、identity/Dashboard/create/RO/public/admin 迁移、60-case production browser 门禁与 immutable ECS 发布链；Tasks 9–10 为口部 speech/menu refinement | **Tasks 1–10 COMPLETE**；application `eb55820`，ECS `3010903` / `33418fd` |
 | `docs/plans/2026-08-25-hermes-orbit-actions-plan.md` | 已批准的 Hermes 两段式发言、12 项情境动作、桌面环绕布局、移动分组、安静场景与 ECS 验收实施链 | **COMPLETED / DEPLOYED**；application `e4a19d4`，ECS `7165e9b` / rollback `3010903` |
+| `docs/plans/2026-08-25-hermes-carried-tool-sheet-plan.md` | §13.3 的动作/语言合同、工具页—32px 间隙—Hermes 物理分带、Radix 键盘/长按、视觉门禁和 immutable ECS 发布链 | **CURRENT IMPLEMENTATION PLAN**；candidate 尚未形成，production `7165e9b` |
 | `docs/specs/2026-08-16-hermes-articulated-mesh-pet-design.md` | Hermes 原创 OGL 2D mesh-rig 历史设计：真实角色像素关节、旧待机语法与严格 lifecycle | **DEPRECATED**；由 2026-08-17 Workspace Companion spec 取代 |
 | `docs/specs/2026-08-16-hermes-contextual-guide-design.md` | Hermes 情境引导员历史设计：Dashboard 提示、助手抽屉与正式 `workspace.guide` 闭环 | **DEPRECATED**；由 2026-08-17 Workspace Companion spec 取代 |
 | `docs/data/launch-research-corpus.md` | 18 条公开启动语料的范围、免责声明、真实来源、上游许可证证据与 ECS seed 操作边界 | 活文档；本地完成，待生产 seed |

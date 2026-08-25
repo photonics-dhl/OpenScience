@@ -1,6 +1,6 @@
 # Hermes Wanko Live2D Companion Design
 
-Status: **CURRENT — implemented and deployed as ECS release `5f4e73c` (rollback `c97926a`)**
+Status: **CURRENT — §13.3 approved for implementation on 2026-08-25; production remains ECS release `7165e9b` (rollback `3010903`) until the new visual gate passes**
 
 Supersedes only the visual renderer and motion-authoring portions of:
 
@@ -743,7 +743,7 @@ ordinary tap for the assistant drawer. The menu uses the existing project fonts,
 warm paper, ink, icons and focus primitive; it adds no gradient, glass, glow,
 pill cluster or default command-palette styling.
 
-### 13.2 Two-beat presence and orbiting action tools (approved 2026-08-25)
+### 13.2 Two-beat presence and orbiting action tools (superseded visually by §13.3)
 
 The approved interaction adopts Scholar's Tea's behavior grammar without
 copying its orb styling. On the Dashboard, Hermes may introduce itself with two
@@ -785,3 +785,62 @@ vermilion accent, project serif reading type and sans-serif controls. It
 excludes gradients, glass, glow, emoji, low-contrast microtype, a translucent
 radial disc and shadcn's default visual skin; Radix/shadcn evidence is used only
 for semantics, focus and keyboard behavior.
+
+### 13.3 Carried tool sheet and action-language lock (approved 2026-08-25)
+
+The twelve actions and two-beat Dashboard presence from §13.2 remain, but the
+desktop orbit presentation is replaced. Right-click, `Shift+F10` and the Menu
+key open one warm-paper tool sheet in the page-owned research margin directly
+above Hermes. The sheet and the actor are sibling physical bands: the desktop
+sheet uses the same `360px` column as the exact `360px` actor and leaves `32px`
+of clear space between the sheet's lower edge and the actor's upper footprint.
+The actor does not translate, shrink, fade or become a background layer when
+the sheet opens. A short vermilion source mark may occupy only the empty gap;
+it never crosses the hat, body, lamp or an action target. The sheet may scroll
+with its research margin into view, but it never covers research copy or form
+controls.
+
+The sheet is one lightly irregular research folio, not twelve cards. It has a
+left-aligned Hermes heading, two continuous two-column row groups, thin ruled
+separators, `44px` minimum targets, visible `14px`-or-larger labels, existing
+Lucide icons and one vermilion focus/hover response. The companion group appears
+first and the real research destinations second. The menu and speech bubble are
+mutually exclusive. Focus order remains DOM order and Radix remains the sole
+owner of roving focus, Escape and selection semantics; the shadcn skin is not
+used.
+
+On compact/mobile surfaces the same physical order is preserved with one group
+visible at a time: a maximum `304px` sheet, `32px` empty band and exact `200px`
+Hermes. Long press opens the sheet, tap opens the assistant drawer, and the two
+group controls do not hide any action. The sheet respects safe-area insets and
+does not create horizontal overflow. Editor, input, diff, review and approval
+surfaces retain the quiet `200px` presence until the user explicitly invokes
+the tool sheet.
+
+Every selection is a single locked performance beat. The catalog action ID
+chooses the Live2D motion and the same catalog entry chooses exactly one
+localized sentence; neither is selected independently. The approved mappings
+are:
+
+| Action | Motion | Chinese response | English response |
+|---|---|---|---|
+| Greet | `ear-perk` | 你来了，我也在。 | Hello — I’m right here. |
+| Encourage | `happy-wiggle` | 已经走到这里了，再往前一点。 | You’ve come this far. Let’s take one more step. |
+| Think together | `thinking-pause` | 先停一下，我陪你把线索理顺。 | Let’s pause and sort the clues together. |
+| Listen | `lamp-listen` | 我在听，你慢慢说。 | I’m listening. Take your time. |
+| Stretch | `stretch` | 一起伸伸懒腰，肩膀放松一下。 | Stretch with me — let your shoulders soften. |
+| Rest | `doze` | 先歇一会，我替你守着这一页。 | Rest a moment. I’ll keep your place. |
+| Celebrate | `milestone-dance` | 这一步完成了，值得庆祝一下。 | This step is done. Let’s celebrate it. |
+| Read together | `read` | 翻到这里了，我陪你再读一段。 | We’re here. I’ll read the next passage with you. |
+| Continue | `return-dock` | 回到刚才那一步，我们接着做。 | Back to our last step — let’s continue. |
+| Review evidence | `evidence-check` | 这条结论先别过，和我核对证据。 | Hold this conclusion — let’s check its evidence. |
+| Trace sources | `citation-trace` | 沿着引用往回走，看看它从哪里来。 | Let’s trace the citation back to its source. |
+| Compare versions | `compare` | 把两个版本并排放好，我们看差异。 | Let’s place the versions side by side and inspect the differences. |
+
+Selecting an item closes the sheet before motion and speech begin. The sentence
+remains visible for four seconds; a research action begins its existing route
+transition after the immediate action-specific response. Reduced motion keeps
+the same copy, focus and destination but removes character and entrance motion.
+Automated gates must assert a disjoint actor/menu bounding-box relationship at
+desktop and mobile sizes, all twelve action/motion/message triples, keyboard
+focus, long press, ordinary-click drawer behavior and menu/speech exclusion.
