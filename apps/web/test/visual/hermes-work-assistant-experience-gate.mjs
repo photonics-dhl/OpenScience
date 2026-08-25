@@ -393,7 +393,28 @@ try {
     await menuTrigger.click({ button: 'right' });
     const menu = page.getByRole('menu', { name: /Hermes/u });
     await menu.waitFor({ state: 'visible' });
-    await menu.getByRole('menuitem').last().click();
+    assert.equal(await menu.locator('[data-hermes-action-key]').count(), 12, label + ' must expose all twelve approved actions');
+    let visibleActions = menu.locator('[data-hermes-action-key]:visible');
+    assert.equal(await visibleActions.count(), viewport.width <= 640 ? 8 : 12,
+      label + ' must expose the correct compact or desktop action set');
+    await page.screenshot({ animations: 'disabled', path: resolve(output, 'menu-dashboard-' + label + '.png') });
+    await visibleActions.nth(Math.min(2, await visibleActions.count() - 1)).hover();
+    await page.screenshot({ animations: 'disabled', path: resolve(output, 'menu-focus-' + label + '.png') });
+    const actionTargets = await visibleActions.evaluateAll((items) => items.map((item) => {
+      const bounds = item.getBoundingClientRect();
+      const style = getComputedStyle(item);
+      return { fontSize: Number.parseFloat(style.fontSize), height: bounds.height, width: bounds.width };
+    }));
+    assert.equal(actionTargets.every((target) => target.height >= 44 && target.width >= 44), true,
+      label + ' action targets must remain at least 44px: ' + JSON.stringify(actionTargets));
+    if (viewport.width <= 640) {
+      await menu.locator('[data-hermes-mobile-group-switch] [data-active="false"]').click();
+      visibleActions = menu.locator('[data-hermes-action-key]:visible');
+      assert.equal(await visibleActions.count(), 4, label + ' research-tool group must expose all four work actions');
+      await page.screenshot({ animations: 'disabled', path: resolve(output, 'menu-research-' + label + '.png') });
+      await menu.locator('[data-hermes-mobile-group-switch] [data-active="false"]').click();
+    }
+    await menu.locator('[data-hermes-action-key="greet"]').click();
     const bubble = page.locator('[data-hermes-menu-feedback="true"]');
     await bubble.waitFor({ state: 'visible' });
     const bubbleVisible = true;
@@ -403,7 +424,9 @@ try {
       const style = getComputedStyle(node);
       const paragraph = node.querySelector('p') ?? node;
       const paragraphStyle = paragraph ? getComputedStyle(paragraph) : null;
-      const paragraphBox = paragraph?.getBoundingClientRect();
+      const paragraphRange = paragraph ? document.createRange() : null;
+      paragraphRange?.selectNodeContents(paragraph);
+      const paragraphBox = paragraphRange?.getBoundingClientRect();
       return {
         backdropFilter: style.backdropFilter,
         backgroundColor: style.backgroundColor,

@@ -34,6 +34,7 @@ import {
   type HermesRuntimeStatus,
 } from '@/lib/hermes/hermes-runtime-status';
 import { createHermesPerformanceState, stepHermesPerformance } from '@/lib/hermes/performance-director';
+import { resolveHermesIntroSequence, type HermesMenuFeedback } from '@/lib/hermes/context-menu-actions';
 import { resolveHermesStageSize } from '@/lib/hermes/stage-sizing';
 import {
   expandHermesFootprintForMotion,
@@ -50,6 +51,7 @@ import type { HermesVisualState } from './hermes-state';
 import { HermesVisualAdapter } from './HermesVisualAdapter';
 import { HermesGuideBubble } from './HermesGuideBubble';
 import { HermesPerformanceBubble } from './HermesPerformanceBubble';
+import { HermesPresenceControl, type HermesPresenceMode } from './HermesPresenceControl';
 
 interface HermesStagePresentation {
   anchor: HTMLElement;
@@ -277,12 +279,16 @@ function HermesWorkspaceStage({ fallbackAssistantOpen, fallbackOnInvoke, guideTa
   const stageRef = useRef<HTMLDivElement | null>(null);
   const bubbleRef = useRef<HTMLElement | null>(null);
   const menuFeedbackTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const introTimersRef = useRef<Array<ReturnType<typeof setTimeout>>>([]);
+  const introPlayedRef = useRef<string | null>(null);
   const guideBubbleLayoutSizeRef = useRef('');
   const guideBubbleLayoutPhaseRef = useRef<'idle' | 'awaiting-measure' | 'measured'>('idle');
   const [anchorRect, setAnchorRect] = useState<DOMRectReadOnly | null>(null);
-  const [menuFeedback, setMenuFeedback] = useState(false);
+  const [menuFeedback, setMenuFeedback] = useState<(HermesMenuFeedback & { source: 'intro' | 'menu'; startedAtMs: number }) | null>(null);
+  const [pageInterruptionActive, setPageInterruptionActive] = useState(false);
   const [customDock, setCustomDock] = useState(false);
   const [compactGuide, setCompactGuide] = useState(false);
+  const [presenceMode, setPresenceMode] = useState<HermesPresenceMode>('original');
   const [viewportSize, setViewportSize] = useState<HermesViewportRect>({ bottom: 0, height: 0, left: 0, right: 0, top: 0, width: 0 });
   const [dockReady, setDockReady] = useState(false);
   const [dockKind, setDockKind] = useState<HermesViewportClass | null>(null);
@@ -324,7 +330,8 @@ function HermesWorkspaceStage({ fallbackAssistantOpen, fallbackOnInvoke, guideTa
   const [guideDiagnostics, setGuideDiagnostics] = useState<GuideDiagnostics>({
     phase: 'idle', routeStart: null, settledSource: null, timelineCount: 0,
   });
-  const visualAction = behavior.primary === 'patrol' && !patrolEnvelopeSafe ? 'blink-single' : behavior.primary;
+  const autonomousAction = behavior.primary === 'patrol' && !patrolEnvelopeSafe ? 'blink-single' : behavior.primary;
+  const visualAction = menuFeedback?.action ?? autonomousAction;
   const guidePlanCountRef = useRef(0);
   const guideSettledReplanCountRef = useRef(0);
   const lastPlannedSettledEpochRef = useRef(0);
@@ -333,13 +340,13 @@ function HermesWorkspaceStage({ fallbackAssistantOpen, fallbackOnInvoke, guideTa
     pointerRef.current = nextPointer;
     const input = behaviorInput(state, nextPointer, nextDragging, effectiveReducedMotion);
     input.guide = guideTarget ? (guideReady ? 'arrived' : 'travel') : 'idle';
-    input.writing = writing;
+    input.writing = writing || pageInterruptionActive;
     const assistantOpen = presentation?.assistantOpen ?? fallbackAssistantOpen;
     const modalOpen = Boolean(document.querySelector('[role="dialog"][aria-modal="true"]'));
-    const speechAllowed = !effectiveReducedMotion && !writing && !guideTarget && !presentation?.anchor && state !== 'awaiting_approval'
+    const speechAllowed = !effectiveReducedMotion && presenceMode !== 'quiet' && !writing && !pageInterruptionActive && !guideTarget && !presentation?.anchor && state !== 'awaiting_approval'
       && !assistantOpen && !modalOpen && document.visibilityState === 'visible';
     setPerformanceState((previous) => stepHermesPerformance(previous, { behaviorInput: input, speechAllowed }));
-  }, [dragging, effectiveReducedMotion, fallbackAssistantOpen, guideReady, guideTarget, presentation?.anchor, presentation?.assistantOpen, state, writing]);
+  }, [dragging, effectiveReducedMotion, fallbackAssistantOpen, guideReady, guideTarget, pageInterruptionActive, presenceMode, presentation?.anchor, presentation?.assistantOpen, state, writing]);
 
   React.useLayoutEffect(() => { positionRef.current = position; }, [position]);
 
@@ -353,14 +360,45 @@ function HermesWorkspaceStage({ fallbackAssistantOpen, fallbackOnInvoke, guideTa
   guideContextKeyRef.current = guideContextKey;
 
   useEffect(() => {
-    setMenuFeedback(false);
+    setMenuFeedback(null);
     if (menuFeedbackTimerRef.current) clearTimeout(menuFeedbackTimerRef.current);
     menuFeedbackTimerRef.current = null;
   }, [pathname, state, workspaceId]);
 
   useEffect(() => () => {
     if (menuFeedbackTimerRef.current) clearTimeout(menuFeedbackTimerRef.current);
+    introTimersRef.current.forEach((timer) => clearTimeout(timer));
   }, []);
+
+  useEffect(() => {
+    const isTextEntry = (node: Element | null) => node instanceof HTMLElement && (
+      node.matches('textarea, [contenteditable="true"]')
+      || (node instanceof HTMLInputElement && !['button', 'checkbox', 'radio', 'range', 'reset', 'submit'].includes(node.type))
+    );
+    const sync = () => setPageInterruptionActive(
+      isTextEntry(document.activeElement)
+      || Boolean(document.querySelector('[role="dialog"][aria-modal="true"]')),
+    );
+    const onFocus = () => sync();
+    const onBlur = () => window.requestAnimationFrame(sync);
+    const observer = new MutationObserver(sync);
+    document.addEventListener('focusin', onFocus);
+    document.addEventListener('focusout', onBlur);
+    observer.observe(document.body, {
+      attributeFilter: ['aria-modal', 'open', 'role'], attributes: true, childList: true, subtree: true,
+    });
+    sync();
+    return () => {
+      document.removeEventListener('focusin', onFocus);
+      document.removeEventListener('focusout', onBlur);
+      observer.disconnect();
+    };
+  }, []);
+
+  useEffect(() => {
+    const stored = window.localStorage.getItem(`openscience:hermes-presence:${workspaceId}`);
+    setPresenceMode(stored === 'compact' || stored === 'quiet' ? stored : 'original');
+  }, [workspaceId]);
 
   const movePositionAwaitingSettledReplan = useCallback((point: { x: number; y: number }, contextKey: string) => {
     if (Math.hypot(point.x - positionRef.current.x, point.y - positionRef.current.y) < .05) return false;
@@ -482,14 +520,14 @@ function HermesWorkspaceStage({ fallbackAssistantOpen, fallbackOnInvoke, guideTa
     setDockStored(stored);
     setCustomDock(stored);
     if (stored || !presentation?.anchor) {
-      const size = resolveHermesStageSize(false, kind === 'mobile');
+      const size = resolveHermesStageSize(false, kind === 'mobile' || presenceMode !== 'original');
       const resolved = resolveHermesDock(preferences, { height: window.innerHeight, width: window.innerWidth }, { height: size, width: size }, true);
       positionRef.current = resolved;
       setPosition(resolved);
     }
     setDockKind(kind);
     setDockReady(true);
-  }, [compactGuide, presentation?.anchor, workspaceId]);
+  }, [compactGuide, presenceMode, presentation?.anchor, workspaceId]);
 
   React.useLayoutEffect(() => {
     const currentPathname = window.location.pathname;
@@ -707,6 +745,33 @@ function HermesWorkspaceStage({ fallbackAssistantOpen, fallbackOnInvoke, guideTa
   }, [anchorRect, guideTarget, position, protectedGeometryVersion, speech.cue, stageMotionVersion, viewportSize, visualAction]);
 
   const assistantOpen = presentation?.assistantOpen ?? fallbackAssistantOpen;
+  const activeSuggestion = presentation?.suggestion ?? neutralSuggestion;
+  useEffect(() => {
+    introTimersRef.current.forEach((timer) => clearTimeout(timer));
+    introTimersRef.current = [];
+    const introKey = `${workspaceId}:${pathname}`;
+    const disallowed = pathname !== '/dashboard' || presenceMode === 'quiet' || writing || pageInterruptionActive || guideTarget || assistantOpen || state === 'awaiting_approval';
+    if (disallowed || introPlayedRef.current === introKey) {
+      if (disallowed) setMenuFeedback((current) => current?.source === 'intro' ? null : current);
+      return;
+    }
+    introPlayedRef.current = introKey;
+    const [presenceLine, contextLine] = resolveHermesIntroSequence(activeSuggestion.kind);
+    const show = (feedback: HermesMenuFeedback) => {
+      if (document.hidden || document.querySelector('[role="dialog"][aria-modal="true"]')) return;
+      setPerformanceState((current) => ({ ...current, speech: { ...current.speech, cue: null } }));
+      setMenuFeedback({ ...feedback, source: 'intro', startedAtMs: Date.now() });
+    };
+    introTimersRef.current = [
+      setTimeout(() => show(presenceLine), 1_600),
+      setTimeout(() => show(contextLine), 4_200),
+      setTimeout(() => setMenuFeedback((current) => current?.source === 'intro' ? null : current), 8_000),
+    ];
+    return () => {
+      introTimersRef.current.forEach((timer) => clearTimeout(timer));
+      introTimersRef.current = [];
+    };
+  }, [activeSuggestion.kind, assistantOpen, guideTarget, pageInterruptionActive, pathname, presenceMode, state, workspaceId, writing]);
   const setStageNode = useCallback((node: HTMLDivElement | null) => {
     stageRef.current = node;
     if (node) node.inert = assistantOpen;
@@ -882,7 +947,7 @@ function HermesWorkspaceStage({ fallbackAssistantOpen, fallbackOnInvoke, guideTa
   useEffect(() => {
     if (!dockReady || viewportSize.width <= 0 || viewportSize.height <= 0) return;
     if (guideTarget) return;
-    const size = resolveHermesStageSize(false, compactGuide);
+    const size = resolveHermesStageSize(false, compactGuide || presenceMode !== 'original');
     const half = size / 2;
     const viewportLeft = 0;
     const viewportTop = 0;
@@ -894,7 +959,7 @@ function HermesWorkspaceStage({ fallbackAssistantOpen, fallbackOnInvoke, guideTa
       y: Math.min(viewportBottom - half, Math.max(viewportTop + half, current.y)),
     };
     if (Math.hypot(next.x - current.x, next.y - current.y) >= .05) setPosition(next);
-  }, [compactGuide, dockReady, guideTarget, viewportSize]);
+  }, [compactGuide, dockReady, guideTarget, presenceMode, viewportSize]);
 
   React.useLayoutEffect(() => {
     if (customDock || dockStored !== false || !dockReady || dockKind !== 'desktop' || dockKind !== viewportClass() || dragging || guideTarget || speech.cue
@@ -947,7 +1012,7 @@ function HermesWorkspaceStage({ fallbackAssistantOpen, fallbackOnInvoke, guideTa
     const stage = stageRef.current;
     if (!stage) return;
     const stageBounds = stage.getBoundingClientRect();
-    const settledStageSize = resolveHermesStageSize(false, dockKind === 'mobile');
+    const settledStageSize = resolveHermesStageSize(false, dockKind === 'mobile' || presenceMode !== 'original');
     if (Math.abs(stageBounds.width - settledStageSize) >= 1 || Math.abs(stageBounds.height - settledStageSize) >= 1) return;
     if (Math.abs(stageBounds.left - (position.x - settledStageSize / 2)) >= 1
       || Math.abs(stageBounds.top - (position.y - settledStageSize / 2)) >= 1) return;
@@ -1011,7 +1076,7 @@ function HermesWorkspaceStage({ fallbackAssistantOpen, fallbackOnInvoke, guideTa
       xRatio: settled.point.x / window.innerWidth,
       yRatio: settled.point.y / window.innerHeight,
     });
-  }, [behavior.primary, customDock, dockKind, dockReady, dragging, guideTarget, position, protectedGeometryVersion,
+  }, [behavior.primary, customDock, dockKind, dockReady, dragging, guideTarget, position, presenceMode, protectedGeometryVersion,
     settlingDockReady, settlingNewDock, stageMotionVersion, viewportSize, workspaceId]);
 
   useEffect(() => {
@@ -1228,7 +1293,7 @@ function HermesWorkspaceStage({ fallbackAssistantOpen, fallbackOnInvoke, guideTa
   };
 
   const anchored = Boolean(anchorRect && !customDock);
-  const stageSize = resolveHermesStageSize(false, compactGuide);
+  const stageSize = resolveHermesStageSize(false, compactGuide || presenceMode !== 'original');
   const stageCenterX = anchored && anchorRect ? anchorRect.left + anchorRect.width / 2 : position.x;
   const stageCenterY = anchored && anchorRect ? anchorRect.top + anchorRect.height / 2 : position.y;
   const fallbackBubbleHorizontal = viewportSize.width > 0 && stageCenterX < (viewportSize.left + viewportSize.right) / 2 ? 'right' : 'left';
@@ -1250,8 +1315,9 @@ function HermesWorkspaceStage({ fallbackAssistantOpen, fallbackOnInvoke, guideTa
     transition: settlingNewDock ? 'none' : undefined,
     width: stageSize,
   };
-  const ageMs = Math.max(0, Date.now() - behavior.startedAtMs);
-  const actionStartedAtMs = behavior.startedAtMs === 0 || typeof performance === 'undefined' ? undefined : performance.now() - ageMs;
+  const visualActionStartedAtMs = menuFeedback?.startedAtMs ?? behavior.startedAtMs;
+  const ageMs = Math.max(0, Date.now() - visualActionStartedAtMs);
+  const actionStartedAtMs = visualActionStartedAtMs === 0 || typeof performance === 'undefined' ? undefined : performance.now() - ageMs;
   const motionControl = resolveHermesMotionControl(effectiveReducedMotion, runtimeStatus);
 
   const stageElement = (
@@ -1287,8 +1353,9 @@ function HermesWorkspaceStage({ fallbackAssistantOpen, fallbackOnInvoke, guideTa
       data-hermes-motion-envelope-safe={patrolEnvelopeSafe ? 'true' : 'false'}
       data-hermes-placement={anchored ? 'anchored' : 'detached'}
       data-hermes-presentation-state={state}
+      data-hermes-presence-mode={presenceMode}
       data-hermes-protected-geometry-version={protectedGeometryVersion}
-      data-hermes-speech-visible={speech.cue ? 'true' : 'false'}
+      data-hermes-speech-visible={speech.cue || menuFeedback ? 'true' : 'false'}
       data-hermes-stage-size={stageSize}
       data-hermes-workspace-stage="true"
       data-hermes-assistant-open={assistantOpen ? 'true' : 'false'}
@@ -1308,17 +1375,20 @@ function HermesWorkspaceStage({ fallbackAssistantOpen, fallbackOnInvoke, guideTa
         action={visualAction}
         actionStartedAtMs={actionStartedAtMs}
         assistantOpen={presentation?.assistantOpen ?? fallbackAssistantOpen}
+        compactPresentation={stageSize === 200}
         onInvoke={() => {
           if (suppressClickRef.current) { suppressClickRef.current = false; return; }
           invokeHermes();
         }}
-        onQuiet={() => {
+        onMenuAction={(feedback) => {
           onDismissGuide();
+          introTimersRef.current.forEach((timer) => clearTimeout(timer));
+          introTimersRef.current = [];
           setPerformanceState((current) => ({ ...current, speech: { ...current.speech, cue: null } }));
           if (menuFeedbackTimerRef.current) clearTimeout(menuFeedbackTimerRef.current);
-          setMenuFeedback(true);
+          setMenuFeedback({ ...feedback, source: 'menu', startedAtMs: Date.now() });
           menuFeedbackTimerRef.current = setTimeout(() => {
-            setMenuFeedback(false);
+            setMenuFeedback(null);
             menuFeedbackTimerRef.current = null;
           }, 4200);
         }}
@@ -1331,7 +1401,7 @@ function HermesWorkspaceStage({ fallbackAssistantOpen, fallbackOnInvoke, guideTa
           }
           setRuntimeStatus(status);
         }}
-        promptSuppressed={anchored || Boolean(speech.cue) || Boolean(guideTarget)}
+        promptSuppressed={anchored || Boolean(speech.cue) || Boolean(menuFeedback) || Boolean(guideTarget)}
         reducedMotion={effectiveReducedMotion}
         rendererGeneration={runtimeStatus.generation}
         state={state}
@@ -1373,6 +1443,17 @@ function HermesWorkspaceStage({ fallbackAssistantOpen, fallbackOnInvoke, guideTa
         : motionControl.label === 'disable' ? 'disableMotion'
           : motionControl.label === 'retry' ? 'retryMotion'
             : 'startingMotion')}</button> : null}
+      {pathname.startsWith('/research-objects/') ? <HermesPresenceControl
+        mode={presenceMode}
+        onChange={(nextMode) => {
+          window.localStorage.setItem(`openscience:hermes-presence:${workspaceId}`, nextMode);
+          setPresenceMode(nextMode);
+          if (nextMode === 'quiet') {
+            setPerformanceState((current) => ({ ...current, speech: { ...current.speech, cue: null } }));
+            setMenuFeedback((current) => current?.source === 'intro' ? null : current);
+          }
+        }}
+      /> : null}
       {guideTarget ? (
         <HermesGuideBubble
           actions={guideActions}

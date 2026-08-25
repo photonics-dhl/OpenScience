@@ -224,13 +224,13 @@ test('Hermes action menu / desktop pointer and keyboard preserve the assistant e
   await trigger.click({ button: 'right' });
   const menu = page.getByRole('menu', { name: /Hermes/u });
   await expect(menu).toBeVisible();
-  await expect(menu.getByRole('menuitem')).toHaveCount(3);
+  await expect(menu.locator('[data-hermes-action-key]')).toHaveCount(12);
   const desktopMenuGeometry = await page.evaluate(() => {
     const menuRect = document.querySelector<HTMLElement>('[data-hermes-action-menu="true"]')!.getBoundingClientRect();
     const actorRect = document.querySelector<HTMLElement>('[data-hermes-companion-actor="true"]')!.getBoundingClientRect();
     return { actor: actorRect.toJSON(), menu: menuRect.toJSON(), overlap: menuRect.left < actorRect.right && menuRect.right > actorRect.left && menuRect.top < actorRect.bottom && menuRect.bottom > actorRect.top };
   });
-  expect(desktopMenuGeometry.overlap, JSON.stringify(desktopMenuGeometry)).toBe(false);
+  expect(desktopMenuGeometry.overlap, JSON.stringify(desktopMenuGeometry)).toBe(true);
   expect(await page.evaluate(() => window.scrollY)).toBe(scrollBeforeMenu);
   expect(await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)).toBe(0);
   await page.screenshot({ fullPage: true, path: `${outDir}/hermes-menu-dashboard-default.png`, animations: 'disabled' });
@@ -247,6 +247,15 @@ test('Hermes action menu / desktop pointer and keyboard preserve the assistant e
 
   await trigger.click();
   await expect(page.getByRole('dialog', { name: /Hermes/u })).toBeVisible();
+});
+
+test('Hermes dashboard introduction stops when the researcher starts searching', async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await installClientFixtures(page);
+  await page.goto(`${baseUrl}/dashboard`, { waitUntil: 'networkidle' });
+  await page.locator('input[type="search"]').fill('carrier');
+  await page.waitForTimeout(4600);
+  await expect(page.locator('[data-hermes-menu-feedback="true"]')).toHaveCount(0);
 });
 
 test('Hermes action menu / mobile long press is compact and does not invoke the drawer', async ({ page }) => {
@@ -278,11 +287,35 @@ test('Hermes action menu / editor companion feedback stays in the research margi
   await page.setViewportSize({ width: 1440, height: 900 });
   await installClientFixtures(page);
   await page.goto(`${baseUrl}/research-objects/ro-release/edit`, { waitUntil: 'networkidle' });
+  const stage = page.locator('[data-hermes-workspace-stage="true"]');
+  const presence = page.locator('[data-hermes-presence-control="true"]');
   const trigger = page.locator('[data-hermes-input-owner="true"]');
+  await expect(presence).toBeVisible();
+  await presence.locator('summary').click();
+  await presence.getByRole('menuitemradio', { name: /original/i }).focus();
+  await page.keyboard.press('ArrowDown');
+  await expect(presence.getByRole('menuitemradio', { name: /compact/i })).toBeFocused();
+  await page.keyboard.press('Escape');
+  await expect(presence.locator('summary')).toBeFocused();
+
+  for (const [choice, expectedSize] of [['compact', '200'], ['quiet', '200'], ['original', '360']] as const) {
+    await presence.locator('summary').click();
+    await presence.getByRole('menuitemradio', { name: new RegExp(choice, 'i') }).click();
+    await expect(stage).toHaveAttribute('data-hermes-presence-mode', choice);
+    await expect(stage).toHaveAttribute('data-hermes-stage-size', expectedSize);
+    await expect(presence.locator('summary')).toBeFocused();
+    if (choice !== 'original') {
+      await trigger.click({ button: 'right' });
+      await expect(page.getByRole('menu', { name: /Hermes/u })).toHaveAttribute('data-compact', 'true');
+      await page.keyboard.press('Escape');
+    }
+  }
+  await page.screenshot({ fullPage: true, path: `${outDir}/hermes-presence-editor.png`, animations: 'disabled' });
+
   await trigger.click({ button: 'right' });
   const menu = page.getByRole('menu', { name: /Hermes/u });
   await expect(menu).toBeVisible();
-  await menu.getByRole('menuitem').last().click();
+  await menu.locator('[data-hermes-action-key="greet"]').click();
   const feedback = page.locator('[data-hermes-menu-feedback="true"]');
   await expect(feedback).toBeVisible();
   await expect(feedback).toHaveAttribute('data-hermes-speech-origin', 'mouth');
@@ -310,10 +343,31 @@ test('Hermes action menu / editor companion feedback stays in the research margi
     };
   });
   expect(geometry.actorVisible).toBe(true);
-  expect(geometry.contained).toBe(true);
+  expect(geometry.contained, JSON.stringify(geometry)).toBe(true);
   expect(geometry.excess).toBe(0);
   expect(geometry.tailContained).toBe(true);
   expect(geometry.mouthDistance, JSON.stringify(geometry)).toBeLessThanOrEqual(18);
   await page.screenshot({ fullPage: true, path: `${outDir}/hermes-menu-editor-feedback.png`, animations: 'disabled' });
   await expect(feedback).toBeHidden({ timeout: 5000 });
+});
+
+test('Hermes research action shows its reaction before navigating to a real work surface', async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await installClientFixtures(page);
+  await page.goto(`${baseUrl}/research-objects/ro-release/edit`, { waitUntil: 'networkidle' });
+  await page.locator('[data-hermes-input-owner="true"]').click({ button: 'right' });
+  const menu = page.getByRole('menu', { name: /Hermes/u });
+  await menu.locator('[data-hermes-action-key="sources"]').click();
+  await expect(page.locator('[data-hermes-menu-feedback="true"]')).toHaveAttribute('data-hermes-feedback-action', 'citation-trace');
+  await page.waitForTimeout(300);
+  await expect(page).toHaveURL(/\/research-objects\/ro-release\/edit$/);
+  await expect(page).toHaveURL(/\/research-objects\/ro-release\/files$/, { timeout: 3000 });
+
+  await page.goto(`${baseUrl}/research-objects/ro-release/edit`, { waitUntil: 'networkidle' });
+  await page.locator('[data-hermes-input-owner="true"]').click({ button: 'right' });
+  await page.getByRole('menu', { name: /Hermes/u }).locator('[data-hermes-action-key="compare"]').click();
+  await expect(page.locator('[data-hermes-menu-feedback="true"]')).toBeVisible();
+  await page.goto(`${baseUrl}/settings`, { waitUntil: 'networkidle' });
+  await page.waitForTimeout(1100);
+  await expect(page).toHaveURL(/\/settings$/);
 });

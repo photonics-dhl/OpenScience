@@ -86,7 +86,7 @@ const runProductE2E = () => {
     '--config',
     'playwright.release.config.ts',
     '--grep',
-    'Hermes action menu',
+    'Hermes action menu|Hermes dashboard introduction|Hermes research action',
   ], productEnv, 'Hermes product E2E');
 };
 

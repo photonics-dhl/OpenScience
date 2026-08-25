@@ -533,6 +533,27 @@
         "quietNote": "Put reminders aside and stay in the margin",
         "quietFeedback": "I’m here. Let’s think slowly.",
         "companion": "Companion",
+        "groups": { "companion": "With Hermes", "research": "Research tools" },
+        "intro": {
+          "presence": "I’m here. I’ve kept your place.",
+          "actionable": "There is evidence ready for your review.",
+          "continue": "Your latest research is ready to continue.",
+          "neutral": "We can begin with whatever you want to understand."
+        },
+        "actions": {
+          "greet": { "label": "Say hello", "feedback": "I’m here — I was looking at this page too." },
+          "encourage": { "label": "Encourage me", "feedback": "This step is taking shape. Let’s keep going." },
+          "think": { "label": "Think together", "feedback": "No need to decide yet. Let’s sort it out." },
+          "listen": { "label": "Listen to me", "feedback": "I’m listening. Take your time." },
+          "stretch": { "label": "Take a stretch", "feedback": "All right. Let’s loosen our shoulders first." },
+          "rest": { "label": "Rest a moment", "feedback": "I’ll put the reminders away and read quietly with you." },
+          "celebrate": { "label": "Mark this step", "feedback": "This small step is worth remembering." },
+          "read-together": { "label": "Read with me", "feedback": "I’ll stay in the margin. Let’s read one more passage." },
+          "continue": { "label": "Continue this step", "feedback": "I’ll take you back to the step we were working on." },
+          "evidence": { "label": "Review evidence", "feedback": "Let’s inspect the evidence before deciding." },
+          "sources": { "label": "Trace sources", "feedback": "Let’s follow this thread back through its sources." },
+          "compare": { "label": "Compare versions", "feedback": "The differences will be easier to judge side by side." }
+        },
         "keyboardHint": "Shift+F10 or Menu key to open · Esc to close",
         "mobileHint": "Long-press Hermes to open · tap still enters the assistant"
       },
@@ -807,6 +828,12 @@
     "disableMotion": "Reduce Hermes motion",
     "startingMotion": "Starting Hermes motion",
     "retryMotion": "Retry Hermes motion",
+    "presenceControl": {
+      "label": "Hermes size and presence",
+      "original": "Original · 360px",
+      "compact": "Compact · 200px",
+      "quiet": "Quiet reactions"
+    },
     "takeMeThere": "Take me there",
     "performance": {
       "tones": { "curious": "Noticing", "focused": "Checking", "friendly": "Alongside", "reflective": "Thinking" },

@@ -61,9 +61,9 @@ describe('Research Folio product system', () => {
     expect(adapter).toContain('router.push(href)');
     expect(adapter).not.toContain('window.location.assign');
     expect(stage).toContain('menuFeedbackTimerRef');
-    expect(stage).toContain('setMenuFeedback(true)');
+    expect(stage).toContain("setMenuFeedback({ ...feedback, source: 'menu', startedAtMs: Date.now() })");
     expect(stage).toContain('&& !presentation?.anchor');
-    expect(stage).toContain('promptSuppressed={anchored || Boolean(speech.cue) || Boolean(guideTarget)}');
+    expect(stage).toContain('promptSuppressed={anchored || Boolean(speech.cue) || Boolean(menuFeedback) || Boolean(guideTarget)}');
     expect(adapter).toContain('meshInputRef.current.action = action');
     expect(adapter).not.toContain('ignoreQuietActionChangeRef');
     expect(adapter).not.toContain('scrollIntoView');

@@ -533,6 +533,27 @@
         "quietNote": "收起提醒，留在页边",
         "quietFeedback": "我在。我们慢慢想。",
         "companion": "陪伴",
+        "groups": { "companion": "和 Hermes 一起", "research": "研究工具" },
+        "intro": {
+          "presence": "我在，也替你留着刚才的位置。",
+          "actionable": "有一份证据，正等你来确认。",
+          "continue": "最近的研究已经可以接着做了。",
+          "neutral": "从你现在最想弄明白的事开始吧。"
+        },
+        "actions": {
+          "greet": { "label": "打个招呼", "feedback": "我在，刚好也在看这一页。" },
+          "encourage": { "label": "给我一点鼓励", "feedback": "这一步已经有眉目了，我们继续。" },
+          "think": { "label": "一起想想", "feedback": "先不急着下结论，我陪你理一理。" },
+          "listen": { "label": "听我说", "feedback": "我在听，你慢慢说。" },
+          "stretch": { "label": "伸个懒腰", "feedback": "好，先把肩膀放松一下。" },
+          "rest": { "label": "安静一会", "feedback": "提醒先收好，我陪你安静读。" },
+          "celebrate": { "label": "庆祝这一步", "feedback": "这一小步，值得好好记住。" },
+          "read-together": { "label": "陪我读", "feedback": "我就在页边，再读一段吧。" },
+          "continue": { "label": "继续这一步", "feedback": "我带你回到刚才那一步。" },
+          "evidence": { "label": "核对证据", "feedback": "先看证据，再决定要不要接受。" },
+          "sources": { "label": "追溯来源", "feedback": "我们从来源把这条线索接起来。" },
+          "compare": { "label": "对照版本", "feedback": "把差异并排看，会更容易判断。" }
+        },
         "keyboardHint": "Shift+F10 或菜单键打开 · Esc 关闭",
         "mobileHint": "长按 Hermes 打开 · 点按仍进入助手"
       },
@@ -807,6 +828,12 @@
     "disableMotion": "关闭 Hermes 动效",
     "startingMotion": "Hermes 动效启动中",
     "retryMotion": "重试 Hermes 动效",
+    "presenceControl": {
+      "label": "Hermes 尺寸与陪伴方式",
+      "original": "原样 · 360px",
+      "compact": "缩小 · 200px",
+      "quiet": "安静回应"
+    },
     "takeMeThere": "带我过去",
     "performance": {
       "tones": { "curious": "发现", "focused": "校读", "friendly": "同行", "reflective": "片刻思考" },
