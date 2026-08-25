@@ -1,17 +1,17 @@
 # OpenScience 进度（CURRENT window）
 
-> 最新同步：2026-08-25 19:50 +08。历史由 Git 保存；旧计划和 archive 不作为默认输入。
+> 最新同步：2026-08-25 20:02 +08。历史由 Git 保存；旧计划和 archive 不作为默认输入。
 
 ## Current version tuple
 
-- Branch / local application candidate: `codex/hermes-wanko-live2d` / `9a7263e41f78b250f11b2f8e3413ddc997def8a4`；deployed release `cc6cff6275b069c8ad89eddcfcda0e3d6011b0bf` 含 application `a404ca7`，仍待二次视觉 hotfix。
-- Current rollback 为被用户否决但功能健康的 `8ed2f3cb895e46cd1b355db0e40883c703140b22`；本地文档 HEAD 与应用身份不混写。
+- Branch / deployed application source: `codex/hermes-wanko-live2d` / `9a7263e41f78b250f11b2f8e3413ddc997def8a4`；immutable release 为 `cbf5737bdffd50e9ba6d629d4ea9c5e006226263`。
+- Current rollback 为功能健康的首次 correction `cc6cff6275b069c8ad89eddcfcda0e3d6011b0bf`；post-deploy docs HEAD 不与应用身份混写。
 - Local main / origin main: `c60ffdd16b85ea8f0d8b047493fa03a4c0230c05` / `7eb2f5bc4718ee445b79bd089acb64acb3691e62`；两者都早于当前工作分支，远端 Hermes feature 不存在。
-- ECS release / rollback: `cc6cff6275b069c8ad89eddcfcda0e3d6011b0bf` / `8ed2f3cb895e46cd1b355db0e40883c703140b22`。
+- ECS release / rollback: `cbf5737bdffd50e9ba6d629d4ea9c5e006226263` / `cc6cff6275b069c8ad89eddcfcda0e3d6011b0bf`。
 
 ## 2026-08-25 — Hermes carried tool sheet deployed
 
-- **§13.4 local correction candidate:** `9a7263e` 使用单闭合 SVG；首次 `cc6cff6` 公网审图仍发现宽尾压帽/脸和 editor renderer 未 ready 空帧，故未判通过。二次修正锁定气泡主体在可见帽顶之上、slender tail 到嘴部 `≤8px`、说话时内部标签/控件退场，并等待真实 Wanko ready 后截图。
+- **§13.4 deployed correction:** application `9a7263e` / release `cbf5737` 使用单闭合 SVG；气泡主体在可见帽顶之上、slender tail 到嘴部 `≤8px`、说话时内部标签/控件退场，截图必须等待真实 Wanko ready。首次 `cc6cff6` 的宽尾/空帧仅保留为 rollback evidence，不冒充视觉通过。
 - 工具页已移除悬空页注，以可见帽顶而非透明 wrapper 为邻接基准，并锁定 `24–48px` 间距。菜单打开时角色不跳动；Hermes 标签/控件让位，工具页留在页边且不覆盖阅读栏。
 - **Deep visual review:** 已修复 mobile motion-control 遮挡、research 分组 `32→118px` 漂移、宽尾压住角色和空 renderer 截图。当前 Web `408/408` + 5 Node、root lint/typecheck、19-page build、product release `62/62` 与 Hermes 三视口门均 GREEN；最终原尺寸图已逐张打开，用户视觉接受仍 pending。
 - 设计技能失效根因见 CURRENT spec §13.5：此前把 skill 当建议、以弱检索和伪锚点替代可见几何、只测最小间距且未逐张审图。今后非 Landing UI 必须先形成 reject/accept 约束，再打开原尺寸 desktop/mobile/quiet-editor 证据；断线、遮挡、字小、无物理来源或状态跳动均直接拒绝。
@@ -83,7 +83,7 @@
 
 ## Constraints and next action
 
-- production `cc6cff6` 功能健康但未获视觉接受；下一步部署 local application `9a7263e` hotfix，完成 immutable ECS 与公网无写入验收。
+- production `cbf5737` 已完成 immutable ECS 与公网无写入验收；下一步由用户在真实 Dashboard/mobile/editor 复核轮廓、嘴部连续感、菜单密度和动作反馈。
 - 用户随后在 Dashboard、移动端和 quiet editor 验收轮廓连续、嘴部连接、菜单密度/间距与动作反馈；明确接受前不得称视觉通过。
 - Landing 不变；分支未集成，后续单独决定 merge / PR / 保留。
 

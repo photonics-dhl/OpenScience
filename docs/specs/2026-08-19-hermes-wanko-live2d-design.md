@@ -1,6 +1,6 @@
 # Hermes Wanko Live2D Companion Design
 
-Status: **CURRENT — §13.4 local application candidate `9a7263e` verified; deployed release `cc6cff6` remains visually unaccepted pending the slender-tail hotfix and user review**
+Status: **CURRENT — §13.4 application `9a7263e` deployed in release `cbf5737`; automated/original-scale operator gates pass and user visual acceptance remains pending**
 
 Supersedes only the visual renderer and motion-authoring portions of:
 
@@ -894,13 +894,14 @@ Dashboard mobile and quiet editor. A synthetic DOM marker or endpoint-distance
 number alone cannot approve the visual result. The production release remains
 visually rejected until the user reviews the new deployed result.
 
-Implementation status (2026-08-25): local candidate `9a7263e`. After the first
+Implementation status (2026-08-25): deployed application `9a7263e` in immutable
+release `cbf5737`, rollback `cc6cff6`. After the first
 `cc6cff6` deployment, original-scale public screenshots rejected a tail base
 that still covered the hat/face and an editor capture taken before Live2D was
-ready. The candidate narrows the same closed contour into a slender mouth line,
+ready. The deployed correction narrows the same closed contour into a slender mouth line,
 keeps the speech body above the visible crown, temporarily recedes Hermes
 labels/controls while speaking, and requires renderer-ready screenshots. This
-status is not production or user visual acceptance.
+operator and public gates pass; user visual acceptance remains pending.
 
 ### 13.5 Design-skill enforcement and visual rejection gate
 

@@ -1,6 +1,6 @@
 # Runbook: 部署（Deployment）
 
-> 状态：**CURRENT**。2026-08-25 active immutable release 为 `cc6cff6275b069c8ad89eddcfcda0e3d6011b0bf`，rollback tree 为 `8ed2f3cb895e46cd1b355db0e40883c703140b22`；该 release 含 Hermes application `a404ca7`，原尺寸审图后待 application `9a7263e` hotfix。post-deploy docs-only HEAD 不得冒充 application source。
+> 状态：**CURRENT**。2026-08-25 active immutable release 为 `cbf5737bdffd50e9ba6d629d4ea9c5e006226263`，rollback tree 为 `cc6cff6275b069c8ad89eddcfcda0e3d6011b0bf`；Hermes application source 为 `9a7263e41f78b250f11b2f8e3413ddc997def8a4`。post-deploy docs-only HEAD 不得冒充 application source。
 > 格式遵循 `.agents/skills/infra-runbook/SKILL.md` 四节强制要求。
 > 部署属 Spec §20.5"询问"级操作：执行前需用户确认，必须走 `infra/scripts/deploy.sh` + CI/CD，禁止手工改服务器代码。
 
@@ -736,9 +736,9 @@ Historical note for the 2026-08-11 release: it used fixed worker tags and a writ
 
 ### 5.21 Hermes continuous-speech correction (2026-08-25)
 
-> Active release `cc6cff6275b069c8ad89eddcfcda0e3d6011b0bf`;
-> rollback `8ed2f3cb895e46cd1b355db0e40883c703140b22`;
-> local hotfix application `9a7263e41f78b250f11b2f8e3413ddc997def8a4`.
+> Active release `cbf5737bdffd50e9ba6d629d4ea9c5e006226263`;
+> rollback `cc6cff6275b069c8ad89eddcfcda0e3d6011b0bf`;
+> application `9a7263e41f78b250f11b2f8e3413ddc997def8a4`.
 
 - The first correction release replaced the split CSS bubble and free-floating
   menu tether with one closed SVG contour, visible-mouth calibration and a
@@ -753,4 +753,12 @@ Historical note for the 2026-08-11 release: it used fixed worker tags and a writ
   recedes Hermes labels/controls during the four-second response and makes
   renderer-ready screenshots mandatory. Web `408/408` plus five Node contracts,
   root lint/typecheck, 19-page build, product release `62/62` and the three-
-  viewport Hermes gate pass. Deployment and user visual acceptance remain open.
+  viewport Hermes gate pass.
+- The exact `cbf5737...` release then passed dry-run and confirmed
+  `--skip-migrate` deployment with `cc6cff6...` as rollback. Server full build,
+  target health, 27 current migrations, model/moc assets, Parser non-root/
+  read-only/network-none/512MiB/64-PID bounds, loopback/Cloudflare ingress,
+  exact release identity, absent failure marker and rollback tree pass. Public
+  renderer-ready Hermes scenarios pass `5/5`, and their desktop/mobile/editor
+  screenshots were opened at original scale. User visual acceptance remains
+  pending; no migration, seed or research-data write ran.

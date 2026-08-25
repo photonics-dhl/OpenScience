@@ -1,20 +1,20 @@
 # Handoff — Hermes Wanko Live2D Companion
 
-> **CURRENT active-memory，2026-08-25 19:50 +08。** 旧灯体、帽子、流苏、Cubism GUI 试验和被否决候选只从 Git history 查阅，不再作为实施入口。
+> **CURRENT active-memory，2026-08-25 20:02 +08。** 旧灯体、帽子、流苏、Cubism GUI 试验和被否决候选只从 Git history 查阅，不再作为实施入口。
 
 ## Goal
 
 - 已交付的 v09 Hermes 是可移动工作助手，不是主页面内容：Dashboard 默认右栏停靠，整角色拖动后脱离；桌面/紧凑移动端精确为 `360/200px`。
 - 保持 RO 创建流程为主任务；气泡、字段引导和 32 动作只提供短暂、可打断、不遮挡的辅助反馈。
-- production `cc6cff6` 已替换旧断裂气泡，但原尺寸公网审图仍否决宽尾压帽/脸与 editor renderer 未 ready 空帧；§13.4 local application candidate `9a7263e` 已收窄尾线、抬高主体并锁定 renderer-ready 证据，尚未部署或获用户接受。
+- production `cbf5737` 已部署 §13.4 application `9a7263e`：单闭合轮廓、帽顶净空、slender mouth tail 和 renderer-ready 截图均通过 operator/public gates；用户视觉接受仍 pending。
 
 ## Version tuple
 
-- Working branch / local application candidate: `codex/hermes-wanko-live2d` / `9a7263e41f78b250f11b2f8e3413ddc997def8a4`；deployed `cc6cff6` contains application `a404ca7`。
-- Current immutable deployed release: `cc6cff6275b069c8ad89eddcfcda0e3d6011b0bf`；后续 docs-only HEAD 不改变该产品身份。
+- Working branch / deployed application source: `codex/hermes-wanko-live2d` / `9a7263e41f78b250f11b2f8e3413ddc997def8a4`。
+- Current immutable deployed release: `cbf5737bdffd50e9ba6d629d4ea9c5e006226263`；后续 docs-only HEAD 不改变该产品身份。
 - Local main / origin main: `c60ffdd16b85ea8f0d8b047493fa03a4c0230c05` / `7eb2f5bc4718ee445b79bd089acb64acb3691e62`；`origin/main` 是 local main 的祖先，二者都早于当前工作分支。
 - Remote feature: `origin/codex/hermes-wanko-live2d` 不存在；旧 `origin/codex/readable-hermes-guidance@c88c780` 不是本次候选。
-- ECS release / rollback: `cc6cff6275b069c8ad89eddcfcda0e3d6011b0bf` / `8ed2f3cb895e46cd1b355db0e40883c703140b22`。
+- ECS release / rollback: `cbf5737bdffd50e9ba6d629d4ea9c5e006226263` / `cc6cff6275b069c8ad89eddcfcda0e3d6011b0bf`。
 
 ## Done
 
@@ -62,9 +62,8 @@
 
 ## Next action
 
-1. 提交已同步文档后，以 `--skip-migrate` 部署 application candidate `9a7263e`；核对 server build、27 migrations current、目标容器、runtime 资产、loopback/public health、精确 `/__release`、failure/rollback markers，并跑公网无写入 Hermes gate。
-2. 用户在生产 Dashboard、移动端与 quiet editor 复核连续轮廓、可见嘴部连接、菜单密度/间距和动作反馈；在明确接受前保持 visual acceptance pending。
-3. 保持 Landing 不变。工作分支尚未进入 main，另开集成任务时明确 merge / PR / 保留分支。
+1. 用户在生产 Dashboard、移动端与 quiet editor 复核连续轮廓、可见嘴部连接、菜单密度/间距和动作反馈；在明确接受前保持 visual acceptance pending。
+2. 保持 Landing 不变。工作分支尚未进入 main，另开集成任务时明确 merge / PR / 保留分支。
 
 ## Read first
 
