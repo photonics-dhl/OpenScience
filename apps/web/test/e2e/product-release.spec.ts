@@ -346,6 +346,17 @@ test('Hermes action menu / mobile long press is compact and does not invoke the 
   expect(mobileMenuGeometry.controlOverlap, JSON.stringify(mobileMenuGeometry)).toBe(0);
   expect(mobileMenuGeometry.protectedOverlap, JSON.stringify(mobileMenuGeometry)).toBe(0);
   expect(mobileMenuGeometry.tetherContent, JSON.stringify(mobileMenuGeometry)).toBe('none');
+  await menu.locator('[data-hermes-mobile-group-switch] [data-active="false"]').click();
+  await expect(menu.locator('[data-hermes-action-key]:visible')).toHaveCount(4);
+  const researchGroupGap = await page.evaluate(() => {
+    const menuRect = document.querySelector<HTMLElement>('[data-hermes-action-menu="true"]')!.getBoundingClientRect();
+    const crownRect = document.querySelector<HTMLElement>('[data-hermes-visible-crown-anchor="true"]')!.getBoundingClientRect();
+    return crownRect.top + crownRect.height / 2 - menuRect.bottom;
+  });
+  expect(researchGroupGap).toBeGreaterThanOrEqual(23.5);
+  expect(researchGroupGap).toBeLessThanOrEqual(48.5);
+  await menu.locator('[data-hermes-mobile-group-switch] [data-active="false"]').click();
+  await expect(menu.locator('[data-hermes-action-key]:visible')).toHaveCount(8);
   await trigger.dispatchEvent('click');
   await expect(page.getByRole('dialog', { name: /Hermes/u })).toHaveCount(0);
   expect(await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)).toBe(0);

@@ -210,7 +210,7 @@ export function HermesVisualAdapter({ action, actionStartedAtMs, assistantOpen =
       menu.style.setProperty('--hermes-menu-correction-y', `${visibleGap - 32}px`);
     });
     return () => window.cancelAnimationFrame(frame);
-  }, [compactMenu, menuOpen]);
+  }, [compactGroup, compactMenu, menuOpen]);
 
   const dispatchContextMenu = () => {
     const trigger = linkRef.current;

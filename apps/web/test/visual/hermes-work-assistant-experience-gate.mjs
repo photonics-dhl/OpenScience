@@ -441,6 +441,13 @@ try {
       await menu.locator('[data-hermes-mobile-group-switch] [data-active="false"]').click();
       visibleActions = menu.locator('[data-hermes-action-key]:visible');
       assert.equal(await visibleActions.count(), 4, label + ' research-tool group must expose all four work actions');
+      const researchGroupGap = await menu.evaluate((node) => {
+        const bounds = node.getBoundingClientRect();
+        const crown = document.querySelector('[data-hermes-visible-crown-anchor="true"]')?.getBoundingClientRect();
+        return crown ? crown.top + crown.height / 2 - bounds.bottom : Number.NaN;
+      });
+      assert.ok(researchGroupGap >= 23.5 && researchGroupGap <= 48.5,
+        label + ' compact research group must remain joined to visible Hermes: ' + researchGroupGap);
       await page.screenshot({ animations: 'disabled', path: resolve(output, 'menu-research-' + label + '.png') });
       await menu.locator('[data-hermes-mobile-group-switch] [data-active="false"]').click();
     }
