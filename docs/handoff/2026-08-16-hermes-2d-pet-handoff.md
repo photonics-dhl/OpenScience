@@ -1,20 +1,20 @@
 # Handoff — Hermes Wanko Live2D Companion
 
-> **CURRENT active-memory，2026-08-25 12:47 +08。** 旧灯体、帽子、流苏、Cubism GUI 试验和被否决候选只从 Git history 查阅，不再作为实施入口。
+> **CURRENT active-memory，2026-08-25 13:05 +08。** 旧灯体、帽子、流苏、Cubism GUI 试验和被否决候选只从 Git history 查阅，不再作为实施入口。
 
 ## Goal
 
 - 已交付的 v09 Hermes 是可移动工作助手，不是主页面内容：Dashboard 默认右栏停靠，整角色拖动后脱离；桌面/紧凑移动端精确为 `360/200px`。
 - 保持 RO 创建流程为主任务；气泡、字段引导和 32 动作只提供短暂、可打断、不遮挡的辅助反馈。
-- 当前交付目标是把获批的 Research Folio 迁移到所有真实非 Landing 产品页并发布：用户要直接验收登录、Dashboard、创建 RO、工作区、公阅及 Hermes 协调，而不是继续验收孤立 fixture。
+- 当前 Hermes orbit actions 已部署到真实非 Landing 产品页；下一步是用户在公网直接体验菜单密度、阅读、动作反馈和工作流协调，再按具体反馈迭代。
 
 ## Version tuple
 
-- Working branch / deployment candidate application source: `codex/hermes-wanko-live2d` / `e4a19d4aff0d2cc9e324a8275cb156f938ffccc0`。
-- Current deployed application source / immutable release: `eb55820ee67d00b0924797ccbbd1db395412f07a` / `3010903e3058ba49c6d6dceb7fa938ea2fd0eb3e`；orbit candidate 尚未切换 ECS。
+- Working branch / deployed application source: `codex/hermes-wanko-live2d` / `e4a19d4aff0d2cc9e324a8275cb156f938ffccc0`。
+- Current immutable deployed release: `7165e9b73df55b00d907080d300ccf97476575e8`；后续 docs-only HEAD 不改变该产品身份。
 - Local main / origin main: `c60ffdd16b85ea8f0d8b047493fa03a4c0230c05` / `7eb2f5bc4718ee445b79bd089acb64acb3691e62`；`origin/main` 是 local main 的祖先，二者都早于当前工作分支。
 - Remote feature: `origin/codex/hermes-wanko-live2d` 不存在；旧 `origin/codex/readable-hermes-guidance@c88c780` 不是本次候选。
-- ECS release / rollback: `3010903e3058ba49c6d6dceb7fa938ea2fd0eb3e` / `33418fdf9e4c13cd3e34eba0a15f6f0208fc5183`。
+- ECS release / rollback: `7165e9b73df55b00d907080d300ccf97476575e8` / `3010903e3058ba49c6d6dceb7fa938ea2fd0eb3e`。
 
 ## Done
 
@@ -39,9 +39,9 @@
 - exact release `33418fd` 已以 `2abfe42` 为 rollback、`--skip-migrate` 发布。pre/post checkup、fresh `432K files=7/7` backup、server full build、27 migrations current、healthy target runtime、精确 release/absent failure/rollback markers、真实 route/Live2D assets 与公网 Dashboard + Hermes `4/4` 均通过；未 migration/seed/data write。
 - 2026-08-25 mouth-anchored speech candidate `eb55820` 已完成：显式 feedback 为一条暖纸椭圆短句，纸尾按 desktop/mobile 口部锚点校准；连续 ledger 菜单、224px 移动菜单、方向翻转、应用内 reduced-motion 与 pointer-up 竞态均有回归覆盖。Fresh evidence 为 Web `403+5`、targeted `14/14`、work-assistant 三视口、Hermes aggregate `19+3`、product release `60/60`、全仓 typecheck/lint/test/build GREEN；两轮独立复审无部署阻断。旧 40 条 E2E 中 21 条 travel/dark prompt/旧 dock 断言已被批准锚定契约取代，19 条仍适用的 runtime/guide 场景继续进 CURRENT gate。
 - Immutable release `3010903` 已以 `33418fd` 为 rollback、`--skip-migrate` 发布。pre/post checkup、backup `432K files=7/7`、服务器 19-page build、27 migrations current、目标 runtime/Parser isolation、route/assets、精确 release/failure/rollback markers 均通过；公网无写入 Hermes 三场景 `3/3`，原尺寸 editor 截图确认口部气泡留在研究页边且不遮正文。未 migration、seed 或写研究数据。
-- 用户已批准新的 Scholar's Tea 行为语法转译稿；CURRENT Wanko spec §13.2 定义同一口部气泡的两段短话、8 个陪伴动作 + 4 个研究动作的 orbit menu、选择后的原子反馈、移动长按和 quiet editor；本地实现已完成，ECS 尚未切换。
+- 用户已批准新的 Scholar's Tea 行为语法转译稿；CURRENT Wanko spec §13.2 定义同一口部气泡的两段短话、8 个陪伴动作 + 4 个研究动作的 orbit menu、选择后的原子反馈、移动长按和 quiet editor；实现与 ECS 发布均已完成。
 - Orbit candidate `e4a19d4` 已进入产品：Dashboard 两拍短句会被输入/modal/quiet/审批打断；桌面 12 个 action points 围绕真实 360px Wanko，mobile/compact/quiet 使用 200px 分组菜单；研究动作接到真实 `/hermes`、`/files`、`/versions`，先反馈 900ms 再导航且离页清理 timer；尺寸控制支持焦点回归、方向键与 Escape。
-- Fresh candidate evidence：Web `406+5`、Hermes aggregate `19+5`、全仓 typecheck/lint/docs-sync/test/build 与独立修复后复审 Ready。当前仅待 immutable ECS 发布与公网 no-write 验收；未 migration/seed/data write。
+- Fresh evidence：Web `406+5`、Hermes aggregate `19+5`、全仓 typecheck/lint/docs-sync/test/build 与独立修复后复审 Ready；release `7165e9b` 的服务器 full build、27 migrations、容器/Parser isolation、public routes/assets/release identity 与公网 no-write Hermes `5/5` 均通过。未 migration/seed/data write。
 - 专利技术交底用途的完整产品介绍已形成 `docs/proposals/2026-08-25-openscience-patent-product-introduction.{md,docx}`，现状、规划与候选技术点分开表述。
 
 ## Constraints
@@ -59,8 +59,8 @@
 
 ## Next action
 
-1. 以 active `3010903` 为 rollback，部署包含 application source `e4a19d4` 的精确 immutable candidate；执行 backup、server full build、健康/版本/资源与公网 no-write Hermes `5/5` 验收。
-2. 保持 Landing 不变；部署后更新 release tuple。工作分支尚未进入 main，另开集成任务时明确 merge / PR / 保留分支。
+1. 用户直接访问生产站体验 Dashboard、编辑页和移动端 Hermes，反馈菜单密度、字体清晰度、可爱程度、气泡连续性与动作结果；按具体问题继续迭代。
+2. 保持 Landing 不变。工作分支尚未进入 main，另开集成任务时明确 merge / PR / 保留分支。
 
 ## Read first
 

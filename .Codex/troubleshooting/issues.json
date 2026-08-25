@@ -166,7 +166,28 @@
         "apps/web/test/e2e/research-workbench-review.spec.ts"
       ],
       "prevention": "For local-only same-route visual controls, do not mix immediate reducer state with an asynchronous server navigation solely to mirror a query parameter. Assert state and URL move atomically before testing subsequent keyboard input."
+    },
+    {
+      "id": "issue-009",
+      "title": "Isolated worktree deployment could not locate cloud sync configuration",
+      "date": "2026-08-25",
+      "status": "resolved",
+      "tags": [
+        "troubleshooting/deployment",
+        "troubleshooting/worktree",
+        "troubleshooting/configuration"
+      ],
+      "description": "A confirmed immutable deployment from the Hermes feature worktree stopped before upload because the worktree did not contain the ignored cloud sync configuration file.",
+      "root_cause": "Deployment configuration is intentionally stored only at the main repository root, while the release command ran from an isolated worktree. The deploy script supports an explicit configuration root, but the first invocation did not set it.",
+      "solution": "Keep the feature worktree as the release source and set XGS_CONFIG_ROOT to the main repository root for the deployment process. This lets the sync helper locate the existing ignored configuration without copying it into the worktree or exposing its contents.",
+      "verification": "The first call failed before upload and left the active release, failure marker and candidate tree unchanged. The corrected call materialized the exact clean release, completed the server build and healthy container switch, and passed exact release plus public 5/5 Hermes acceptance.",
+      "files": [
+        "infra/scripts/deploy.sh",
+        "infra/scripts/cloud-sync.mjs",
+        "docs/runbooks/deployment.md"
+      ],
+      "prevention": "When deploying from an isolated worktree, always set XGS_CONFIG_ROOT to the main repository root before dry-run and confirmed release commands; never copy or commit the ignored deployment configuration into the worktree."
     }
   ],
-  "last_updated": "2026-08-24"
+  "last_updated": "2026-08-25"
 }

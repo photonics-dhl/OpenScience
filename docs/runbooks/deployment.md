@@ -669,10 +669,11 @@ Historical note for the 2026-08-11 release: it used fixed worker tags and a writ
   API interception and is not a claim of a fresh real-account/database vertical
   journey; that remains optional when a safe existing test session is available.
 
-### 5.19 Hermes orbit actions candidate (2026-08-25)
+### 5.19 Hermes orbit actions release (2026-08-25)
 
-> Pre-deploy application source `e4a19d4aff0d2cc9e324a8275cb156f938ffccc0`;
-> active release before the operation `3010903e3058ba49c6d6dceb7fa938ea2fd0eb3e`.
+> Application source `e4a19d4aff0d2cc9e324a8275cb156f938ffccc0`;
+> immutable release `7165e9b73df55b00d907080d300ccf97476575e8`;
+> rollback `3010903e3058ba49c6d6dceb7fa938ea2fd0eb3e`.
 
 - Scope: Dashboard two-beat mouth speech; eight companion and four real-work
   actions around the native `360px` Wanko; mobile/compact `200px` grouped menu;
@@ -682,8 +683,17 @@ Historical note for the 2026-08-11 release: it used fixed worker tags and a writ
   runtime/guide `19/19` plus product interaction `5/5`; full root typecheck,
   lint/docs-sync, test and build; independent repair review Ready. Runtime
   first-ready `889ms`; idle and pointer samples had zero dropped frames.
-- Planned operation: canonical Git Bash checkup, DB backup, exact dry-run, then
-  `deploy.sh --confirm --skip-migrate --rollback-ref 3010903... <candidate>`.
-  Do not migrate, seed or write research data. Record the exact immutable
-  release, backup retention, server build/runtime, failure marker, rollback tree
-  and public no-write browser evidence after the operation.
+- Operation: canonical Git Bash pre/post checkup and DB backup
+  `432K files=7/7` passed. The first confirmed invocation stopped before upload
+  because the isolated worktree had no `.cloud-sync-env`; setting the documented
+  `XGS_CONFIG_ROOT=E:/Miscellaneous/XGS` allowed the exact same clean release to
+  use the main repository's deployment configuration without reading it.
+- Exact `7165e9b...` then deployed through `--skip-migrate`. Server full build
+  generated 19 Web pages; 27 migrations are current; API, Agent Worker and
+  Document Parser are healthy and Web is running. Parser is `node`, read-only,
+  network-none, 512MiB/64 PID, with only `/parser-jobs` mounted.
+- Acceptance: Cloudflare and loopback HTTPS, identity, Dashboard, create,
+  Explore, model/moc assets and exact `/__release` passed; failure marker is
+  absent and rollback tree remains. Public no-write desktop/keyboard, input
+  suppression, mobile long press, editor geometry and research navigation pass
+  `5/5`. No migration, seed or research-data write ran.

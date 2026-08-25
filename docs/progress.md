@@ -1,20 +1,20 @@
 # OpenScience 进度（CURRENT window）
 
-> 最新同步：2026-08-25 12:47 +08。完整历史由 Git history 保存；DEPRECATED、NO-GO、旧计划和 archive 不作为新 session 默认输入。
+> 最新同步：2026-08-25 13:05 +08。完整历史由 Git history 保存；DEPRECATED、NO-GO、旧计划和 archive 不作为新 session 默认输入。
 
 ## Current version tuple
 
-- Branch / deployment candidate application source: `codex/hermes-wanko-live2d` / `e4a19d4aff0d2cc9e324a8275cb156f938ffccc0`；当前 immutable deployed release（含候选元数据）仍为 `3010903e3058ba49c6d6dceb7fa938ea2fd0eb3e`。
-- Deployed application source: `eb55820ee67d00b0924797ccbbd1db395412f07a`；新 orbit candidate 尚未切换 ECS，部署前后不得把 candidate 与 active release 混写。
+- Branch / deployed application source: `codex/hermes-wanko-live2d` / `e4a19d4aff0d2cc9e324a8275cb156f938ffccc0`；immutable deployed release（含发布元数据）为 `7165e9b73df55b00d907080d300ccf97476575e8`。
+- Post-deploy documentation HEAD 将晚于 deployed release；产品代码身份仍以 application source `e4a19d4` 和 `/__release` 的 `7165e9b` 为准，不与文档提交混写。
 - Local main / origin main: `c60ffdd16b85ea8f0d8b047493fa03a4c0230c05` / `7eb2f5bc4718ee445b79bd089acb64acb3691e62`；两者都早于当前工作分支，远端 Hermes feature 不存在。
-- ECS release / rollback: `3010903e3058ba49c6d6dceb7fa938ea2fd0eb3e` / `33418fdf9e4c13cd3e34eba0a15f6f0208fc5183`。
+- ECS release / rollback: `7165e9b73df55b00d907080d300ccf97476575e8` / `3010903e3058ba49c6d6dceb7fa938ea2fd0eb3e`。
 
-## 2026-08-25 — Hermes orbit actions implemented; ECS candidate ready
+## 2026-08-25 — Hermes orbit actions deployed
 
 - `e4a19d4` 已实现同一口部气泡的 Dashboard 两拍短句、真实 `360px` Wanko 周围 8 个陪伴动作 + 4 个研究入口、移动/compact `200px` 分组菜单，以及 original/compact/quiet 小型控制；普通点击 drawer、右键、Shift+F10、Menu 键和长按保持。
 - 研究动作接入真实 RO surfaces：证据复核 `/hermes`、来源 `/files`、版本 `/versions`；选择后先给 900ms 角色/短句反馈再导航，离页清理 timer。搜索/文本输入、modal、quiet、审批均停止自动问候，显式交互仍可用。
 - 独立审查最初发现错误研究路由、反馈截断、搜索未抑制和 desktop compact 菜单问题；全部修复后复审 Ready。Fresh evidence：Web `406/406` + 5 Node、Hermes runtime/guide `19/19` + product interaction `5/5`、全仓 typecheck/lint/docs-sync/test/build、`git diff --check` GREEN；WebGL first-ready `889ms`，idle/pointer 零掉帧。
-- 当前仅完成本地 candidate，未迁移、未 seed、未写研究数据；下一步按 immutable release runbook 以 active `3010903` 为 rollback 执行 ECS dry-run、backup、`--skip-migrate` 发布与公网 no-write 验收。
+- Immutable release `7165e9b` 已以 `3010903` 为 rollback、`--skip-migrate` 发布。pre/post checkup、backup `432K files=7/7`、服务器 19-page build、27 migrations current、目标 runtime/Parser isolation、route/assets、精确 release/failure/rollback markers 均通过；公网无写入 Hermes 五场景 `5/5`。首次调用因隔离 worktree 未指定主仓库配置根而在上传前 fail-closed，补充 `XGS_CONFIG_ROOT=E:/Miscellaneous/XGS` 后完成；未 migration、seed 或写研究数据。
 
 ## 2026-08-25 — Hermes orbit design approved; patent introduction drafted
 
