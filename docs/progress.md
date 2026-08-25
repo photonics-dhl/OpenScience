@@ -1,19 +1,19 @@
 # OpenScience 进度（CURRENT window）
 
-> 最新同步：2026-08-25 19:30 +08。历史由 Git 保存；旧计划和 archive 不作为默认输入。
+> 最新同步：2026-08-25 19:50 +08。历史由 Git 保存；旧计划和 archive 不作为默认输入。
 
 ## Current version tuple
 
-- Branch / local application candidate: `codex/hermes-wanko-live2d` / `a404ca7e6655fb0fbba0f6b307a65d167c6906fe`；deployed application source 仍为被否决的 `1b3badaec5af3330e10b8ca0abb9163ff2af0883`。
-- Immutable deployed release（含代理部署修复）仍为 `8ed2f3cb895e46cd1b355db0e40883c703140b22`；本地文档 HEAD 晚于 application candidate，不与产品代码身份混写。
+- Branch / local application candidate: `codex/hermes-wanko-live2d` / `9a7263e41f78b250f11b2f8e3413ddc997def8a4`；deployed release `cc6cff6275b069c8ad89eddcfcda0e3d6011b0bf` 含 application `a404ca7`，仍待二次视觉 hotfix。
+- Current rollback 为被用户否决但功能健康的 `8ed2f3cb895e46cd1b355db0e40883c703140b22`；本地文档 HEAD 与应用身份不混写。
 - Local main / origin main: `c60ffdd16b85ea8f0d8b047493fa03a4c0230c05` / `7eb2f5bc4718ee445b79bd089acb64acb3691e62`；两者都早于当前工作分支，远端 Hermes feature 不存在。
-- ECS release / rollback: `8ed2f3cb895e46cd1b355db0e40883c703140b22` / `7165e9b73df55b00d907080d300ccf97476575e8`。
+- ECS release / rollback: `cc6cff6275b069c8ad89eddcfcda0e3d6011b0bf` / `8ed2f3cb895e46cd1b355db0e40883c703140b22`。
 
 ## 2026-08-25 — Hermes carried tool sheet deployed
 
-- **§13.4 local correction candidate:** `a404ca7` 已将气泡改成一条闭合 SVG 轮廓，语义文字与装饰轮廓分层；尾端按 `360/200px` 可见嘴部校准。移动端首次回归测到尾端偏差 `53px`，修正后被 `≤8px` 双断点合同锁定。
+- **§13.4 local correction candidate:** `9a7263e` 使用单闭合 SVG；首次 `cc6cff6` 公网审图仍发现宽尾压帽/脸和 editor renderer 未 ready 空帧，故未判通过。二次修正锁定气泡主体在可见帽顶之上、slender tail 到嘴部 `≤8px`、说话时内部标签/控件退场，并等待真实 Wanko ready 后截图。
 - 工具页已移除悬空页注，以可见帽顶而非透明 wrapper 为邻接基准，并锁定 `24–48px` 间距。菜单打开时角色不跳动；Hermes 标签/控件让位，工具页留在页边且不覆盖阅读栏。
-- **Deep visual review:** 原尺寸人工审图发现移动端菜单压住 motion 控件；补回归后修复。随后对短 research 分组做对抗检查，先复现间距由约 `32px` 漂到 `118px`，再把 `compactGroup` 纳入几何重算依赖并锁定。当前 Web `408/408` + 5 Node、typecheck、19-page build、product release `62/62`、Hermes work-assistant 三视口门禁均 GREEN。
+- **Deep visual review:** 已修复 mobile motion-control 遮挡、research 分组 `32→118px` 漂移、宽尾压住角色和空 renderer 截图。当前 Web `408/408` + 5 Node、root lint/typecheck、19-page build、product release `62/62` 与 Hermes 三视口门均 GREEN；最终原尺寸图已逐张打开，用户视觉接受仍 pending。
 - 设计技能失效根因见 CURRENT spec §13.5：此前把 skill 当建议、以弱检索和伪锚点替代可见几何、只测最小间距且未逐张审图。今后非 Landing UI 必须先形成 reject/accept 约束，再打开原尺寸 desktop/mobile/quiet-editor 证据；断线、遮挡、字小、无物理来源或状态跳动均直接拒绝。
 - **Visual rejection correction:** 用户生产截图证明气泡右下轮廓断裂、尾端指向帽子、气泡压住 Hermes 状态字，工具页红色页注悬空且桌面菜单覆盖阅读内容。此前 `62/62` 与公网 Hermes `5/5` 只验证了伪 mouth marker、最小间距和部分 protected geometry，不能证明真实轮廓连续或可见嘴部连接；“原尺寸截图通过”的结论撤回。当前 production `8ed2f3c` 功能在线但视觉未获用户接受。
 - 用户已要求并批准完成修复。CURRENT spec §13.4 锁定一条 SVG 闭合气泡轮廓、真实可见嘴部校准、隐藏/避让 Hermes 内部标签、移除悬空页注、菜单 `24–48px` 双向间距和 desktop/mobile 阅读栏排除；本地候选已实现，等待替换生产版本并由用户复核。
@@ -64,9 +64,7 @@
 
 ## 2026-08-24 — UI taste toolchain correction
 
-- 用户否决首轮 Hermes 互动菜单视觉：结构可用，但模板化、AI 感生硬；方向 B（情境墨水菜单）只保留交互意图，不保留被否决造型；该阶段仍处 design gate，未改产品代码。
-- 经 GitHub 活跃度、许可、内容与脚本审计后，本机 Codex 安装 `ui-ux-pro-max@bc826e2` 与 `baseline-ui@bdbcc56`；安装树与审计副本规范化内容逐文件一致，检索脚本可运行，安装包运行时适用测试 `130/130`。前者提供本地风格/字体/色彩/交互资料，后者专门抑制渐变、光晕、无意义动画等 AI UI slop；两个依赖仓库根维护脚本的上游测试不属于 Skill 安装包运行边界，未伪装成通过。
-- 既有 `shadcn` MCP 从 disabled 改为 enabled，固定 `shadcn@4.19.0` 并锁定本 worktree `apps/web`；MCP `initialize` 握手成功（protocol `2025-06-18`，server `1.0.0`）。21st.dev 因需要外部 API Key 未安装。
+- 首轮模板化视觉已否决；`ui-ux-pro-max`、`baseline-ui` 与 worktree-scoped `shadcn@4.19.0` 可用。工具只提供约束/原语证据，最终方向受 CURRENT spec §13.5 的 reject/accept 与原尺寸人工审图门约束。
 
 ## 2026-08-24 — Hermes movable work assistant deployed
 
@@ -85,7 +83,7 @@
 
 ## Constraints and next action
 
-- production `8ed2f3c` 仍是被否决版本；下一步部署 local application `a404ca7`，完成 immutable ECS 与公网无写入验收。
+- production `cc6cff6` 功能健康但未获视觉接受；下一步部署 local application `9a7263e` hotfix，完成 immutable ECS 与公网无写入验收。
 - 用户随后在 Dashboard、移动端和 quiet editor 验收轮廓连续、嘴部连接、菜单密度/间距与动作反馈；明确接受前不得称视觉通过。
 - Landing 不变；分支未集成，后续单独决定 merge / PR / 保留。
 

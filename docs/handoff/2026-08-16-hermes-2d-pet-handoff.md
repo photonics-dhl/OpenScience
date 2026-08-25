@@ -1,24 +1,24 @@
 # Handoff — Hermes Wanko Live2D Companion
 
-> **CURRENT active-memory，2026-08-25 19:30 +08。** 旧灯体、帽子、流苏、Cubism GUI 试验和被否决候选只从 Git history 查阅，不再作为实施入口。
+> **CURRENT active-memory，2026-08-25 19:50 +08。** 旧灯体、帽子、流苏、Cubism GUI 试验和被否决候选只从 Git history 查阅，不再作为实施入口。
 
 ## Goal
 
 - 已交付的 v09 Hermes 是可移动工作助手，不是主页面内容：Dashboard 默认右栏停靠，整角色拖动后脱离；桌面/紧凑移动端精确为 `360/200px`。
 - 保持 RO 创建流程为主任务；气泡、字段引导和 32 动作只提供短暂、可打断、不遮挡的辅助反馈。
-- production `8ed2f3c` 的气泡轮廓、可见嘴部连接、悬空页注与桌面遮字已被用户否决；§13.4 local application candidate `a404ca7` 已完成并通过原尺寸审图与回归，尚未替换 production，也不得提前称为用户视觉通过。
+- production `cc6cff6` 已替换旧断裂气泡，但原尺寸公网审图仍否决宽尾压帽/脸与 editor renderer 未 ready 空帧；§13.4 local application candidate `9a7263e` 已收窄尾线、抬高主体并锁定 renderer-ready 证据，尚未部署或获用户接受。
 
 ## Version tuple
 
-- Working branch / local application candidate: `codex/hermes-wanko-live2d` / `a404ca7e6655fb0fbba0f6b307a65d167c6906fe`；deployed application source 仍为 `1b3badaec5af3330e10b8ca0abb9163ff2af0883`。
-- Current immutable deployed release: `8ed2f3cb895e46cd1b355db0e40883c703140b22`；后续 docs-only HEAD 不改变该产品身份。
+- Working branch / local application candidate: `codex/hermes-wanko-live2d` / `9a7263e41f78b250f11b2f8e3413ddc997def8a4`；deployed `cc6cff6` contains application `a404ca7`。
+- Current immutable deployed release: `cc6cff6275b069c8ad89eddcfcda0e3d6011b0bf`；后续 docs-only HEAD 不改变该产品身份。
 - Local main / origin main: `c60ffdd16b85ea8f0d8b047493fa03a4c0230c05` / `7eb2f5bc4718ee445b79bd089acb64acb3691e62`；`origin/main` 是 local main 的祖先，二者都早于当前工作分支。
 - Remote feature: `origin/codex/hermes-wanko-live2d` 不存在；旧 `origin/codex/readable-hermes-guidance@c88c780` 不是本次候选。
-- ECS release / rollback: `8ed2f3cb895e46cd1b355db0e40883c703140b22` / `7165e9b73df55b00d907080d300ccf97476575e8`。
+- ECS release / rollback: `cc6cff6275b069c8ad89eddcfcda0e3d6011b0bf` / `8ed2f3cb895e46cd1b355db0e40883c703140b22`。
 
 ## Done
 
-- §13.4 local application candidate `a404ca7` 以单闭合 SVG contour 替换 CSS 拼接气泡，按 desktop/compact 可见嘴部校准；工具页移除悬空页注，以可见帽顶保持 `24–48px` 邻接，并排除阅读栏与 Hermes 控件。深度原尺寸复核额外发现并修复 mobile motion-control 遮挡和短 research 分组 `32→118px` 漂移；永久 design-skill rejection gate 见 CURRENT spec §13.5。
+- §13.4 local application candidate `9a7263e` 以单闭合 SVG contour 和 slender mouth tail 替换 CSS 拼接气泡；主体保持在可见帽顶上方，反馈时 Hermes 标签/控件退场，截图等待真实 renderer ready。工具页保持可见帽顶 `24–48px` 邻接且排除阅读栏；已修复 mobile control 遮挡和短 research 分组 `32→118px` 漂移。永久门见 §13.5。
 - v09 母版、帽子/流苏/灯/烟雾、两张 zero-alpha RGB-clean texture 和 12 motions 均保持不变；公网 runtime 与 immutable release tree 的五个关键 SHA 已一致。
 - Task 21 已完成并部署：`360/200px`、drag-detach、viewport clamp、断点恢复、位置持久化、角色/气泡独立测量、protected-region/guide 避让与固定 4 秒 atomic autonomous beat。
 - release 前门禁：Web `390/390`、5 个 Node contracts、typecheck、18 页 production build、Live2D/work-assistant gates、canonical product E2E `40/40`；两轮独立 Sol High review 无 Critical/Important/Minor。
@@ -62,7 +62,7 @@
 
 ## Next action
 
-1. 提交已同步文档后，以 `--skip-migrate` 部署 application candidate `a404ca7`；核对 server build、27 migrations current、目标容器、runtime 资产、loopback/public health、精确 `/__release`、failure/rollback markers，并跑公网无写入 Hermes gate。
+1. 提交已同步文档后，以 `--skip-migrate` 部署 application candidate `9a7263e`；核对 server build、27 migrations current、目标容器、runtime 资产、loopback/public health、精确 `/__release`、failure/rollback markers，并跑公网无写入 Hermes gate。
 2. 用户在生产 Dashboard、移动端与 quiet editor 复核连续轮廓、可见嘴部连接、菜单密度/间距和动作反馈；在明确接受前保持 visual acceptance pending。
 3. 保持 Landing 不变。工作分支尚未进入 main，另开集成任务时明确 merge / PR / 保留分支。
 

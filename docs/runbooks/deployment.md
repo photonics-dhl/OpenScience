@@ -1,6 +1,6 @@
 # Runbook: 部署（Deployment）
 
-> 状态：**CURRENT**。2026-08-25 验收的 active immutable release 为 `8ed2f3cb895e46cd1b355db0e40883c703140b22`，rollback tree 为 `7165e9b73df55b00d907080d300ccf97476575e8`；Hermes carried-tool-sheet application source 为 `1b3badaec5af3330e10b8ca0abb9163ff2af0883`。post-deploy docs-only HEAD 不得冒充 application source。
+> 状态：**CURRENT**。2026-08-25 active immutable release 为 `cc6cff6275b069c8ad89eddcfcda0e3d6011b0bf`，rollback tree 为 `8ed2f3cb895e46cd1b355db0e40883c703140b22`；该 release 含 Hermes application `a404ca7`，原尺寸审图后待 application `9a7263e` hotfix。post-deploy docs-only HEAD 不得冒充 application source。
 > 格式遵循 `.agents/skills/infra-runbook/SKILL.md` 四节强制要求。
 > 部署属 Spec §20.5"询问"级操作：执行前需用户确认，必须走 `infra/scripts/deploy.sh` + CI/CD，禁止手工改服务器代码。
 
@@ -733,3 +733,24 @@ Historical note for the 2026-08-11 release: it used fixed worker tags and a writ
 - No migration, seed or research-data write ran. Optional native dependencies
   attempted local rebuilds without `g++`, but pnpm treated them as optional and
   the full production build completed; this is not a runtime failure.
+
+### 5.21 Hermes continuous-speech correction (2026-08-25)
+
+> Active release `cc6cff6275b069c8ad89eddcfcda0e3d6011b0bf`;
+> rollback `8ed2f3cb895e46cd1b355db0e40883c703140b22`;
+> local hotfix application `9a7263e41f78b250f11b2f8e3413ddc997def8a4`.
+
+- The first correction release replaced the split CSS bubble and free-floating
+  menu tether with one closed SVG contour, visible-mouth calibration and a
+  crown-relative `24–48px` tool sheet. Pre/post checkup, backup `432K files=7/7`,
+  full 19-workspace/19-page build, 27 current migrations, healthy targets,
+  exact release/failure/rollback checks, runtime assets and public Hermes `5/5`
+  passed without migration, seed or research-data writes.
+- The design gate did not accept that first release. Public original-scale
+  screenshots showed the still-wide tail covering the hat/face, and one editor
+  screenshot captured before the real Wanko renderer was ready. Local hotfix
+  `9a7263e` keeps the speech body above the visible crown, uses a slender tail,
+  recedes Hermes labels/controls during the four-second response and makes
+  renderer-ready screenshots mandatory. Web `408/408` plus five Node contracts,
+  root lint/typecheck, 19-page build, product release `62/62` and the three-
+  viewport Hermes gate pass. Deployment and user visual acceptance remain open.
