@@ -1,13 +1,20 @@
 # OpenScience 进度（CURRENT window）
 
-> 最新同步：2026-08-25 13:05 +08。完整历史由 Git history 保存；DEPRECATED、NO-GO、旧计划和 archive 不作为新 session 默认输入。
+> 最新同步：2026-08-25 17:26 +08。完整历史由 Git history 保存；DEPRECATED、NO-GO、旧计划和 archive 不作为新 session 默认输入。
 
 ## Current version tuple
 
-- Branch / deployed application source: `codex/hermes-wanko-live2d` / `e4a19d4aff0d2cc9e324a8275cb156f938ffccc0`；immutable deployed release（含发布元数据）为 `7165e9b73df55b00d907080d300ccf97476575e8`。
-- Post-deploy documentation HEAD 将晚于 deployed release；产品代码身份仍以 application source `e4a19d4` 和 `/__release` 的 `7165e9b` 为准，不与文档提交混写。
+- Branch / deployed application source: `codex/hermes-wanko-live2d` / `1b3badaec5af3330e10b8ca0abb9163ff2af0883`；immutable deployed release（含代理部署修复）为 `8ed2f3cb895e46cd1b355db0e40883c703140b22`。
+- Post-deploy documentation HEAD 将晚于 deployed release；产品代码身份仍以 application source `1b3bada` 和 `/__release` 的 `8ed2f3c` 为准，不与文档提交混写。
 - Local main / origin main: `c60ffdd16b85ea8f0d8b047493fa03a4c0230c05` / `7eb2f5bc4718ee445b79bd089acb64acb3691e62`；两者都早于当前工作分支，远端 Hermes feature 不存在。
-- ECS release / rollback: `7165e9b73df55b00d907080d300ccf97476575e8` / `3010903e3058ba49c6d6dceb7fa938ea2fd0eb3e`。
+- ECS release / rollback: `8ed2f3cb895e46cd1b355db0e40883c703140b22` / `7165e9b73df55b00d907080d300ccf97476575e8`。
+
+## 2026-08-25 — Hermes carried tool sheet deployed
+
+- 用户批准按当前 carried-tool-sheet 版实施，并要求每个动作的文字与动作严格匹配。`1b3bada` 将 orbit 改为一张不透明暖纸工具页：desktop/compact 分别围绕精确 `360/200px` Hermes，在角色上方保留至少 `32px` 空带；菜单、气泡和产品正文不互相覆盖，移动端仅在菜单打开时扩展工具带且角色视觉位置不跳动。
+- 12 个 companion/research action 的 action ID、Live2D motion、中文短句和英文短句已由同一 catalog 与表驱动测试锁定；反馈气泡改用 mouth-relative bottom anchor，长短句均保持纸尾指向口部。普通点击 drawer、右键、Shift+F10、Menu 键、移动长按、focus 与 reduced-motion 合同保持。
+- Fresh local evidence：Web `408/408` + 5 Node、Hermes runtime/guide `19/19` + product interaction `5/5`、product release `62/62`、全仓 typecheck/lint/build、`git diff --check` GREEN；原尺寸 Dashboard/menu/focus/editor/mobile 截图通过 actor/menu、正文和口部连接几何复核。
+- 首次服务器候选在流量切换前因直接 `npx` 的 registry timeout 退出，旧 release 未受影响。`8ed2f3c` 为两条 immutable release build 路径补上 ECS `with-proxy`，15 项部署契约与 Shell 语法通过后，以 `7165e9b` 为 rollback、`--skip-migrate` 发布。backup `432K files=7/7`、server full build、27 migrations current、目标容器、Cloudflare/loopback、精确 `/__release`、failure/rollback markers 均通过；公网 Hermes `5/5`。完整公网矩阵 `59/62`，唯一 3 项为 `/admin` 在应用前被生产 Basic Auth 正常返回 401；未 migration、seed 或写研究数据。
 
 ## 2026-08-25 — Hermes orbit actions deployed
 

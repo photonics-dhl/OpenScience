@@ -1,20 +1,20 @@
 # Handoff — Hermes Wanko Live2D Companion
 
-> **CURRENT active-memory，2026-08-25 13:05 +08。** 旧灯体、帽子、流苏、Cubism GUI 试验和被否决候选只从 Git history 查阅，不再作为实施入口。
+> **CURRENT active-memory，2026-08-25 17:26 +08。** 旧灯体、帽子、流苏、Cubism GUI 试验和被否决候选只从 Git history 查阅，不再作为实施入口。
 
 ## Goal
 
 - 已交付的 v09 Hermes 是可移动工作助手，不是主页面内容：Dashboard 默认右栏停靠，整角色拖动后脱离；桌面/紧凑移动端精确为 `360/200px`。
 - 保持 RO 创建流程为主任务；气泡、字段引导和 32 动作只提供短暂、可打断、不遮挡的辅助反馈。
-- 当前 Hermes orbit actions 已部署到真实非 Landing 产品页；下一步是用户在公网直接体验菜单密度、阅读、动作反馈和工作流协调，再按具体反馈迭代。
+- 当前 Hermes carried tool sheet 已部署到真实非 Landing 产品页；下一步是用户在公网直接体验菜单密度、阅读、动作反馈和工作流协调，再按具体反馈迭代。
 
 ## Version tuple
 
-- Working branch / deployed application source: `codex/hermes-wanko-live2d` / `e4a19d4aff0d2cc9e324a8275cb156f938ffccc0`。
-- Current immutable deployed release: `7165e9b73df55b00d907080d300ccf97476575e8`；后续 docs-only HEAD 不改变该产品身份。
+- Working branch / deployed application source: `codex/hermes-wanko-live2d` / `1b3badaec5af3330e10b8ca0abb9163ff2af0883`。
+- Current immutable deployed release: `8ed2f3cb895e46cd1b355db0e40883c703140b22`；后续 docs-only HEAD 不改变该产品身份。
 - Local main / origin main: `c60ffdd16b85ea8f0d8b047493fa03a4c0230c05` / `7eb2f5bc4718ee445b79bd089acb64acb3691e62`；`origin/main` 是 local main 的祖先，二者都早于当前工作分支。
 - Remote feature: `origin/codex/hermes-wanko-live2d` 不存在；旧 `origin/codex/readable-hermes-guidance@c88c780` 不是本次候选。
-- ECS release / rollback: `7165e9b73df55b00d907080d300ccf97476575e8` / `3010903e3058ba49c6d6dceb7fa938ea2fd0eb3e`。
+- ECS release / rollback: `8ed2f3cb895e46cd1b355db0e40883c703140b22` / `7165e9b73df55b00d907080d300ccf97476575e8`。
 
 ## Done
 
@@ -43,6 +43,8 @@
 - Orbit candidate `e4a19d4` 已进入产品：Dashboard 两拍短句会被输入/modal/quiet/审批打断；桌面 12 个 action points 围绕真实 360px Wanko，mobile/compact/quiet 使用 200px 分组菜单；研究动作接到真实 `/hermes`、`/files`、`/versions`，先反馈 900ms 再导航且离页清理 timer；尺寸控制支持焦点回归、方向键与 Escape。
 - Fresh evidence：Web `406+5`、Hermes aggregate `19+5`、全仓 typecheck/lint/docs-sync/test/build 与独立修复后复审 Ready；release `7165e9b` 的服务器 full build、27 migrations、容器/Parser isolation、public routes/assets/release identity 与公网 no-write Hermes `5/5` 均通过。未 migration/seed/data write。
 - 专利技术交底用途的完整产品介绍已形成 `docs/proposals/2026-08-25-openscience-patent-product-introduction.{md,docx}`，现状、规划与候选技术点分开表述。
+- 用户批准 §13.3 carried tool sheet 与动作语言锁。Application `1b3bada` 用一张 warm-paper folio 取代 orbit：desktop/mobile 工具页与精确 `360/200px` Hermes 保持至少 `32px` 空带，移动开合不产生角色跳动或关闭态大空洞，口部气泡按 bottom anchor 维持长短句连续性；12 项 action/motion/zh/en 映射有独立表驱动契约。
+- Immutable release `8ed2f3c` 已以 `7165e9b` 为 rollback、`--skip-migrate` 发布。首次尝试因未使用 ECS 出网代理在切换前 timeout；同一 release 增加两条 `with-proxy` 构建契约后，backup、服务器全量 build、27 migrations current、容器/公网/release identity/markers 与公网 Hermes `5/5` 通过。公网全矩阵另有 `/admin` 三视口被预期 Basic Auth 401 拦截；未 migration、seed 或研究数据写入。
 
 ## Constraints
 

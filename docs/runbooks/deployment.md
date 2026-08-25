@@ -1,6 +1,6 @@
 # Runbook: 部署（Deployment）
 
-> 状态：**CURRENT**。2026-08-25 验收的 active immutable release 为 `3010903e3058ba49c6d6dceb7fa938ea2fd0eb3e`，rollback tree 为 `33418fdf9e4c13cd3e34eba0a15f6f0208fc5183`；mouth-anchored speech application source 为 `eb55820ee67d00b0924797ccbbd1db395412f07a`。post-deploy docs-only HEAD 不得冒充 application source。
+> 状态：**CURRENT**。2026-08-25 验收的 active immutable release 为 `8ed2f3cb895e46cd1b355db0e40883c703140b22`，rollback tree 为 `7165e9b73df55b00d907080d300ccf97476575e8`；Hermes carried-tool-sheet application source 为 `1b3badaec5af3330e10b8ca0abb9163ff2af0883`。post-deploy docs-only HEAD 不得冒充 application source。
 > 格式遵循 `.agents/skills/infra-runbook/SKILL.md` 四节强制要求。
 > 部署属 Spec §20.5"询问"级操作：执行前需用户确认，必须走 `infra/scripts/deploy.sh` + CI/CD，禁止手工改服务器代码。
 
@@ -697,3 +697,39 @@ Historical note for the 2026-08-11 release: it used fixed worker tags and a writ
   absent and rollback tree remains. Public no-write desktop/keyboard, input
   suppression, mobile long press, editor geometry and research navigation pass
   `5/5`. No migration, seed or research-data write ran.
+
+### 5.20 Hermes carried tool sheet release (2026-08-25)
+
+> Application source `1b3badaec5af3330e10b8ca0abb9163ff2af0883`;
+> immutable release `8ed2f3cb895e46cd1b355db0e40883c703140b22`;
+> rollback `7165e9b73df55b00d907080d300ccf97476575e8`.
+
+- Scope: replace the orbit display with one opaque warm-paper carried tool
+  sheet that remains at least `32px` above the exact `360/200px` Hermes. The
+  compact tool band exists only while open and counter-scroll keeps the actor
+  visually stationary. Twelve catalog entries now lock action ID, Live2D
+  motion and exact Chinese/English response; mouth-relative bottom anchoring
+  keeps short and long feedback attached to the actor. Landing, API, schema,
+  voice and TTS are unchanged.
+- Local evidence: Web `408/408` plus five Node contracts; Hermes current
+  runtime/guide `19/19` plus product interactions `5/5`; product release
+  `62/62`; full typecheck, lint/docs-sync and production build passed. Native
+  desktop/mobile screenshots were inspected for actor/menu intersection,
+  protected-copy overlap, clipped labels, focus, closed-state dead space,
+  actor jumps and detached speech tails.
+- Operation: preflight and DB backup `432K files=7/7` passed. The first
+  confirmed candidate stopped before service switching when an unproxied
+  `npx` registry request timed out, leaving `7165e9b...` active and healthy.
+  Release `8ed2f3c...` adds `with-proxy` to both immutable release build paths;
+  its 15 deployment contracts and Shell syntax passed before a new dry run and
+  confirmed `--skip-migrate` deployment.
+- Server evidence: the full 19-workspace install/build and 19-page Next build
+  passed; API, Web, Agent Worker and Document Parser converged healthy; 27
+  migrations are current; Cloudflare and loopback ingress pass; `/__release`
+  is exact, `.release-failed` is absent and the rollback tree remains. Public
+  no-write Hermes acceptance passes `5/5`. The full public matrix passes
+  `59/62`; only the three `/admin` viewports are intentionally stopped by
+  production Nginx Basic Auth with 401 before the application shell.
+- No migration, seed or research-data write ran. Optional native dependencies
+  attempted local rebuilds without `g++`, but pnpm treated them as optional and
+  the full production build completed; this is not a runtime failure.

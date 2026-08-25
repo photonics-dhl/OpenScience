@@ -2,6 +2,8 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
+**Status: COMPLETED AND DEPLOYED 2026-08-25.** Application source `1b3badaec5af3330e10b8ca0abb9163ff2af0883`; immutable release `8ed2f3cb895e46cd1b355db0e40883c703140b22`; rollback `7165e9b73df55b00d907080d300ccf97476575e8`. The unchecked boxes below preserve the original execution recipe rather than current task state.
+
 **Goal:** Replace the deployed orbit menu with the approved non-overlapping carried tool sheet and lock each of the twelve menu actions to its matching Live2D motion and localized sentence.
 
 **Architecture:** Keep Radix Context Menu as the only focus and keyboard primitive. `context-menu-actions.ts` remains the single action/motion/message catalog, `HermesVisualAdapter` computes a virtual anchor above the actor and renders one folio sheet, and `HermesWorkspaceStage` continues to own the atomic menu-close → motion → speech → optional navigation beat. CSS owns only the sheet material and the fixed menu-gap-actor geometry.

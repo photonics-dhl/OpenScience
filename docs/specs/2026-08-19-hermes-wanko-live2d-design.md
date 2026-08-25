@@ -844,3 +844,8 @@ the same copy, focus and destination but removes character and entrance motion.
 Automated gates must assert a disjoint actor/menu bounding-box relationship at
 desktop and mobile sizes, all twelve action/motion/message triples, keyboard
 focus, long press, ordinary-click drawer behavior and menu/speech exclusion.
+
+Implementation status (2026-08-25): deployed. Application source `1b3bada`
+implements this section; immutable ECS release `8ed2f3c` adds the release-build
+proxy correction and uses `7165e9b` as rollback. Public no-write Hermes
+acceptance is `5/5`; the complete local product release matrix is `62/62`.
