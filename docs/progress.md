@@ -1,13 +1,20 @@
 # OpenScience 进度（CURRENT window）
 
-> 最新同步：2026-08-25 21:30 +08。历史由 Git 保存；旧计划和 archive 不作为默认输入。
+> 最新同步：2026-08-25 22:45 +08。历史由 Git 保存；旧计划和 archive 不作为默认输入。
 
 ## Current version tuple
 
-- Branch / deployed application source: `codex/hermes-wanko-live2d` / `8d1409e56f9883a3a711944f80cb2a1e4d71e73e`；immutable release 为 `6b804f716a81c3b162262e369c7b08c4f25725e1`。
+- Branch / local application candidate: `codex/hermes-wanko-live2d` / `5323ba8d8bfff484a49d4e919d3364a447c17924`；deployed application / immutable release 仍为 `8d1409e56f9883a3a711944f80cb2a1e4d71e73e` / `6b804f716a81c3b162262e369c7b08c4f25725e1`。
 - Current rollback 为前一健康 release `cbf5737bdffd50e9ba6d629d4ea9c5e006226263`；post-deploy docs HEAD 不与应用身份混写。
 - Local main / origin main: `c60ffdd16b85ea8f0d8b047493fa03a4c0230c05` / `7eb2f5bc4718ee445b79bd089acb64acb3691e62`；两者都早于当前工作分支，远端 Hermes feature 不存在。
 - ECS release / rollback: `6b804f716a81c3b162262e369c7b08c4f25725e1` / `cbf5737bdffd50e9ba6d629d4ea9c5e006226263`。
+
+## 2026-08-25 — Hermes short-viewport collision correction ready to deploy
+
+- 用户生产截图再次证明 1612×729 CSS viewport（约 DPR 1.875）下工具页顶部会被裁切。根因是角色页边位移、Radix portal 校正和上游页面重排分属不同的一次性测量，能短暂或持续失配。
+- Application `5323ba8` 将菜单、可见帽顶、角色底部、visual viewport 与 protected regions 合并为同一稳定器；同步校正首帧并以双 rAF 吸收 portal settling，监听菜单/页边尺寸、上游 geometry version、visualViewport 与 compact 分组变化，关闭/卸载恢复原 translate、scroll 和 focus。
+- 新回归精确覆盖 `1612×729 / DPR 1.875`、菜单打开后的上游受保护 header 重排、上下边界、横向页边、无 protected overlap、`24–48px` crown gap、角色底部、Shift+F10/Menu 首项 focus 与 Escape 回归。旧实现 RED；修复后关键路径连续 `10/10`、Hermes `9/9`、Web `411+5`、product release `66/66`、work-assistant 三视口和 19-page build GREEN；独立复审 Ready，无 Important/Minor。
+- 当前仅完成本地候选与文档同步；生产仍为 `6b804f7`，待 clean immutable release 以 `6b804f7` 为 rollback、`--skip-migrate` 发布。无 API/schema/migration/seed/研究数据写入。
 
 ## 2026-08-25 — Hermes viewport-safe lively interaction deployed
 
@@ -18,16 +25,9 @@
 
 ## 2026-08-25 — Hermes carried tool sheet deployed
 
-- **§13.4 deployed correction:** application `9a7263e` / release `cbf5737` 使用单闭合 SVG；气泡主体在可见帽顶之上、slender tail 到嘴部 `≤8px`、说话时内部标签/控件退场，截图必须等待真实 Wanko ready。首次 `cc6cff6` 的宽尾/空帧仅保留为 rollback evidence，不冒充视觉通过。
-- 工具页已移除悬空页注，以可见帽顶而非透明 wrapper 为邻接基准，并锁定 `24–48px` 间距。菜单打开时角色不跳动；Hermes 标签/控件让位，工具页留在页边且不覆盖阅读栏。
-- **Deep visual review:** 已修复 mobile motion-control 遮挡、research 分组 `32→118px` 漂移、宽尾压住角色和空 renderer 截图。当前 Web `408/408` + 5 Node、root lint/typecheck、19-page build、product release `62/62` 与 Hermes 三视口门均 GREEN；最终原尺寸图已逐张打开，用户视觉接受仍 pending。
-- 设计技能失效根因见 CURRENT spec §13.5：此前把 skill 当建议、以弱检索和伪锚点替代可见几何、只测最小间距且未逐张审图。今后非 Landing UI 必须先形成 reject/accept 约束，再打开原尺寸 desktop/mobile/quiet-editor 证据；断线、遮挡、字小、无物理来源或状态跳动均直接拒绝。
-- **Visual rejection correction:** 用户生产截图证明气泡右下轮廓断裂、尾端指向帽子、气泡压住 Hermes 状态字，工具页红色页注悬空且桌面菜单覆盖阅读内容。此前 `62/62` 与公网 Hermes `5/5` 只验证了伪 mouth marker、最小间距和部分 protected geometry，不能证明真实轮廓连续或可见嘴部连接；“原尺寸截图通过”的结论撤回。当前 production `8ed2f3c` 功能在线但视觉未获用户接受。
-- 用户已要求并批准完成修复。CURRENT spec §13.4 锁定一条 SVG 闭合气泡轮廓、真实可见嘴部校准、隐藏/避让 Hermes 内部标签、移除悬空页注、菜单 `24–48px` 双向间距和 desktop/mobile 阅读栏排除；本地候选已实现，等待替换生产版本并由用户复核。
-- 用户批准按当前 carried-tool-sheet 版实施，并要求每个动作的文字与动作严格匹配。`1b3bada` 将 orbit 改为一张不透明暖纸工具页：desktop/compact 分别围绕精确 `360/200px` Hermes，在角色上方保留至少 `32px` 空带；菜单、气泡和产品正文不互相覆盖，移动端仅在菜单打开时扩展工具带且角色视觉位置不跳动。
-- 12 个 companion/research action 的 action ID、Live2D motion、中文短句和英文短句已由同一 catalog 与表驱动测试锁定；反馈气泡改用 mouth-relative bottom anchor，长短句均保持纸尾指向口部。普通点击 drawer、右键、Shift+F10、Menu 键、移动长按、focus 与 reduced-motion 合同保持。
-- Historical functional evidence：Web `408/408` + 5 Node、Hermes runtime/guide `19/19` + product interaction `5/5`、product release `62/62`、全仓 typecheck/lint/build、`git diff --check` GREEN；这些结果不再作为 §13.4 视觉连续性的通过证据。
-- 首次服务器候选在流量切换前因直接 `npx` 的 registry timeout 退出，旧 release 未受影响。`8ed2f3c` 为两条 immutable release build 路径补上 ECS `with-proxy`，15 项部署契约与 Shell 语法通过后，以 `7165e9b` 为 rollback、`--skip-migrate` 发布。backup `432K files=7/7`、server full build、27 migrations current、目标容器、Cloudflare/loopback、精确 `/__release`、failure/rollback markers 均通过；公网 Hermes `5/5`。完整公网矩阵 `59/62`，唯一 3 项为 `/admin` 在应用前被生产 Basic Auth 正常返回 401；未 migration、seed 或写研究数据。
+- §13.3–13.5 的历史试错已收敛为一张暖纸 carried tool sheet、单闭合 SVG 口部气泡、可见帽顶 `24–48px` 间距和真实 `360/200px` 角色；悬空页注、宽尾、内部标签遮挡、移动 control overlap 与 research 分组漂移均已废止。
+- 12 项 action/motion/zh/en 映射、右键/Shift+F10/Menu/长按、普通点击 drawer、focus、reduced-motion 与 mouth-relative bottom anchor 均有合同；历史 `62/62` 只能证明功能，视觉接受仍以 §13.5 原尺寸人工审图为门。
+- `8ed2f3c`、`cbf5737` 等历史发布的 build、27 migrations、容器、入口和 no-write 证据由 Git 与 deployment runbook 保存；本 CURRENT window 不再重复完整部署日志。
 
 ## 2026-08-25 — Hermes orbit actions deployed
 

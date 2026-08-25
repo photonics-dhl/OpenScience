@@ -785,3 +785,22 @@ Historical note for the 2026-08-11 release: it used fixed worker tags and a writ
   reproduced as Playwright clearing an offscreen WebGL buffer; full-page WebGL
   composites are not valid actor-presence evidence. No migration, seed or
   research-data write ran.
+
+### 5.23 Hermes short-viewport collision correction (2026-08-25)
+
+> Local application candidate `5323ba8`; pre-operation active release
+> `6b804f7`; planned rollback `6b804f7`.
+
+- Scope is Web-only: jointly stabilize the real portalled menu, visible crown,
+  actor bottom, visual viewport and protected geometry; respond to upstream
+  reflow; make the first correction synchronous; restore translate, scroll and
+  keyboard focus on close. No API, schema, migration, seed or data write.
+- Local preflight: Web `411/411` plus five Node contracts, critical repeat
+  `10/10`, Hermes `9/9`, full product release `66/66`, work-assistant three
+  viewports, 19-page build and independent review Ready.
+- Execute only from a clean immutable HEAD with canonical Git Bash scripts:
+  checkup, backup, dry-run, then confirmed `deploy.sh --skip-migrate` with exact
+  pre-operation release `6b804f7...` as rollback. Record the resulting full
+  release SHA, backup result, server build, 27/27 migrations, container health,
+  ingress/assets, release/failure/rollback markers and public no-write evidence
+  after the operation; do not predeclare them.

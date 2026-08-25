@@ -973,3 +973,30 @@ Public no-write interaction acceptance passes `6/6`; current-viewport and actor
 screenshots confirm Wanko and mouth-linked speech are present together. A
 Playwright full-page stitched screenshot can clear an offscreen WebGL canvas and
 is not valid evidence of actor absence; use current-viewport or element capture.
+
+### 13.7 Short-viewport joint geometry stabilizer (approved 2026-08-25)
+
+The §13.6 release still allowed a one-frame and, after upstream reflow, lasting
+split between three coordinate owners: the page-owned Hermes stage, the Radix
+portal and the post-placement menu correction. At `1612×729` with DPR `1.875`,
+this could leave the carried sheet behind the browser edge even though the
+actor and the initial collision calculation were individually valid.
+
+The sheet and actor now form one constrained composition. Each stabilization
+restores the opening stage offset, measures the real portal, visible crown,
+actor bottom, visual viewport and horizontally intersecting protected regions,
+then preserves a `24–48px` crown gap while keeping both sheet and actor inside
+the viewport. The first correction occurs in the current layout cycle; two
+following animation frames absorb Radix settling without exposing an invalid
+intermediate state. Menu/margin resize, upstream protected-geometry changes,
+visualViewport changes and compact group changes all schedule the same routine.
+
+Closing or unmounting restores the exact pre-open translate and scroll. Shift+
+F10 and the Menu key focus the first action; Escape returns focus to Hermes.
+The release gate must reproduce the reported `1612×729 / DPR 1.875` geometry,
+mutate an upstream protected header while the menu is open, and assert viewport
+edges, actor bottom, horizontal margin containment, zero protected overlap and
+the bounded crown gap. Application `5323ba8` passes that regression, five
+consecutive repetitions of both critical desktop paths (`10/10`), all Hermes
+product interactions (`9/9`), the full product matrix (`66/66`), Web `411+5`,
+the three-viewport work-assistant gate and independent review with no finding.
