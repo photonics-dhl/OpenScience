@@ -139,6 +139,7 @@
 | `docs/plans/2026-08-19-hermes-wanko-live2d-plan.md` | Tasks 1–20 与 Task 21 的 Wanko、`360/200px` movable companion、protected-region/bubble collision、三视口 Dashboard 与 ECS rollback 实施证据 | **COMPLETED / HISTORICAL EXECUTION EVIDENCE**；release `5f4e73c`，不得作为下个任务的 CURRENT plan |
 | `docs/plans/2026-08-24-hermes-contextual-workbench-review-plan.md` | 暖纸视觉评审 route 的 TDD、真实 Hermes、键盘/长按/assistant、浏览器截图、docs-sync 与 immutable ECS 部署任务链 | **COMPLETED REVIEW RELEASE**；Tasks 1–12 complete，release `bba5f14` |
 | `docs/plans/2026-08-24-research-folio-product-system-plan.md` | Research Folio 的合同、共享 shell、Hermes 锚定几何、identity/Dashboard/create/RO/public/admin 迁移、60-case production browser 门禁与 immutable ECS 发布链；Tasks 9–10 为口部 speech/menu refinement | **Tasks 1–10 COMPLETE**；application `eb55820`，ECS `3010903` / `33418fd` |
+| `docs/plans/2026-08-25-hermes-orbit-actions-plan.md` | 已批准的 Hermes 两段式发言、12 项情境动作、桌面环绕布局、移动分组、安静场景与 ECS 验收实施链 | **CURRENT / IN PROGRESS**；依据 Wanko spec §13.2，2026-08-25 用户批准实施 |
 | `docs/specs/2026-08-16-hermes-articulated-mesh-pet-design.md` | Hermes 原创 OGL 2D mesh-rig 历史设计：真实角色像素关节、旧待机语法与严格 lifecycle | **DEPRECATED**；由 2026-08-17 Workspace Companion spec 取代 |
 | `docs/specs/2026-08-16-hermes-contextual-guide-design.md` | Hermes 情境引导员历史设计：Dashboard 提示、助手抽屉与正式 `workspace.guide` 闭环 | **DEPRECATED**；由 2026-08-17 Workspace Companion spec 取代 |
 | `docs/data/launch-research-corpus.md` | 18 条公开启动语料的范围、免责声明、真实来源、上游许可证证据与 ECS seed 操作边界 | 活文档；本地完成，待生产 seed |
