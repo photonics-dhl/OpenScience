@@ -217,6 +217,7 @@ test('Hermes action menu / desktop pointer and keyboard preserve the assistant e
   await installClientFixtures(page);
   await page.goto(`${baseUrl}/dashboard`, { waitUntil: 'networkidle' });
   const trigger = page.locator('[data-hermes-input-owner="true"]');
+  await expect(trigger.locator('[data-hermes-rig="live2d-wanko"]')).toHaveAttribute('data-hermes-rig-status', 'ready', { timeout: 20_000 });
   await page.waitForTimeout(4500);
   expect(await page.locator('[data-hermes-placement="anchored"] [data-hermes-performance-bubble][data-hermes-speech-visible="true"]').count()).toBe(0);
   expect(await page.locator('[data-hermes-placement="anchored"] .hermes-guide-nudge[data-visible="true"]').count()).toBe(0);
@@ -289,6 +290,7 @@ test('Hermes action menu / mobile long press is compact and does not invoke the 
   await installClientFixtures(page);
   await page.goto(`${baseUrl}/dashboard`, { waitUntil: 'networkidle' });
   const trigger = page.locator('[data-hermes-input-owner="true"]');
+  await expect(trigger.locator('[data-hermes-rig="live2d-wanko"]')).toHaveAttribute('data-hermes-rig-status', 'ready', { timeout: 20_000 });
   await trigger.scrollIntoViewIfNeeded();
   const closedGeometry = await page.evaluate(() => {
     const actor = document.querySelector<HTMLElement>('[data-hermes-companion-actor="true"]')!.getBoundingClientRect();
@@ -368,12 +370,21 @@ test('Hermes action menu / mobile long press is compact and does not invoke the 
   await expect(mobileFeedback.locator('[data-hermes-speech-contour="single"]')).toHaveCount(1);
   const mobileSpeechGeometry = await page.evaluate(() => {
     const mouth = document.querySelector<HTMLElement>('[data-hermes-visible-mouth-anchor="true"]')!.getBoundingClientRect();
+    const crown = document.querySelector<HTMLElement>('[data-hermes-visible-crown-anchor="true"]')!.getBoundingClientRect();
+    const feedback = document.querySelector<HTMLElement>('[data-hermes-menu-feedback="true"]')!.getBoundingClientRect();
     const tip = document.querySelector<HTMLElement>('[data-hermes-speech-tip="true"]')!.getBoundingClientRect();
     const mouthPoint = { x: mouth.left + mouth.width / 2, y: mouth.top + mouth.height / 2 };
     const tipPoint = { x: tip.left + tip.width / 2, y: tip.top + tip.height / 2 };
-    return { distance: Math.hypot(tipPoint.x - mouthPoint.x, tipPoint.y - mouthPoint.y), mouthPoint, tipPoint };
+    const bodyBottom = feedback.top + feedback.height * (92 / 148);
+    return {
+      bodyClearance: crown.top + crown.height / 2 - bodyBottom,
+      distance: Math.hypot(tipPoint.x - mouthPoint.x, tipPoint.y - mouthPoint.y),
+      mouthPoint,
+      tipPoint,
+    };
   });
   await page.screenshot({ path: `${outDir}/hermes-menu-mobile-feedback.png`, animations: 'disabled' });
+  expect(mobileSpeechGeometry.bodyClearance, JSON.stringify(mobileSpeechGeometry)).toBeGreaterThanOrEqual(0);
   expect(mobileSpeechGeometry.distance, JSON.stringify(mobileSpeechGeometry)).toBeLessThanOrEqual(8);
   const restoredActorTop = await page.locator('[data-hermes-companion-actor="true"]').evaluate((node) => node.getBoundingClientRect().top);
   expect(Math.abs(restoredActorTop - closedGeometry.actorTop)).toBeLessThanOrEqual(1.5);
@@ -386,6 +397,7 @@ test('Hermes action menu / editor companion feedback stays in the research margi
   const stage = page.locator('[data-hermes-workspace-stage="true"]');
   const presence = page.locator('[data-hermes-presence-control="true"]');
   const trigger = page.locator('[data-hermes-input-owner="true"]');
+  await expect(trigger.locator('[data-hermes-rig="live2d-wanko"]')).toHaveAttribute('data-hermes-rig-status', 'ready', { timeout: 20_000 });
   await expect(presence).toBeVisible();
   await presence.locator('summary').click();
   await presence.getByRole('menuitemradio', { name: /original/i }).focus();
@@ -428,6 +440,7 @@ test('Hermes action menu / editor companion feedback stays in the research margi
     const feedback = feedbackNode.getBoundingClientRect();
     const margin = document.querySelector<HTMLElement>('[data-hermes-companion-margin="true"]')!.getBoundingClientRect();
     const actor = document.querySelector<HTMLElement>('[data-hermes-companion-actor="true"]')!.getBoundingClientRect();
+    const crown = document.querySelector<HTMLElement>('[data-hermes-visible-crown-anchor="true"]')!.getBoundingClientRect();
     const mouth = document.querySelector<HTMLElement>('[data-hermes-visible-mouth-anchor="true"]')!.getBoundingClientRect();
     const tail = document.querySelector<HTMLElement>('[data-hermes-speech-tip="true"]')!.getBoundingClientRect();
     const stateLabel = document.querySelector<HTMLElement>('.hermes-visual-state-label')!.getBoundingClientRect();
@@ -440,6 +453,7 @@ test('Hermes action menu / editor companion feedback stays in the research margi
     const overlaps = (first: DOMRect, second: DOMRect) => first.left < second.right && first.right > second.left && first.top < second.bottom && first.bottom > second.top;
     return {
       actorVisible: actor.width > 0 && actor.height > 0,
+      bodyClearance: crown.top + crown.height / 2 - (feedback.top + feedback.height * (92 / 148)),
       contained: feedback.left >= margin.left && feedback.right <= margin.right && feedback.top >= margin.top && feedback.bottom <= margin.bottom,
       excess: document.documentElement.scrollWidth - document.documentElement.clientWidth,
       mouth: { x: mouth.left + mouth.width / 2, y: mouth.top + mouth.height / 2 },
@@ -453,6 +467,7 @@ test('Hermes action menu / editor companion feedback stays in the research margi
     };
   });
   expect(geometry.actorVisible).toBe(true);
+  expect(geometry.bodyClearance, JSON.stringify(geometry)).toBeGreaterThanOrEqual(0);
   expect(geometry.contained, JSON.stringify(geometry)).toBe(true);
   expect(geometry.excess).toBe(0);
   expect(geometry.tailContained).toBe(true);

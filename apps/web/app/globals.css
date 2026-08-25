@@ -2370,11 +2370,11 @@ body {
 .hermes-menu-feedback {
   position: absolute;
   z-index: 65;
-  top: 1.375rem;
+  top: -1.25rem;
   bottom: auto;
-  left: 0;
-  width: min(14rem, calc(100vw - 1.5rem));
-  height: 8.5rem;
+  left: .8rem;
+  width: min(13rem, calc(100vw - 1.5rem));
+  height: 9.25rem;
   margin: 0;
   border: 0;
   padding: 0;
@@ -2416,7 +2416,7 @@ body {
 
 .hermes-menu-feedback-tip {
   position: absolute;
-  top: calc(134 / 136 * 100%);
+  top: calc(146 / 148 * 100%);
   left: calc(180 / 224 * 100%);
   width: 2px;
   height: 2px;
@@ -2432,7 +2432,7 @@ body {
 
 .hermes-visible-mouth-anchor {
   position: absolute;
-  top: 42%;
+  top: 34%;
   left: 50%;
   width: 2px;
   height: 2px;
@@ -2452,6 +2452,12 @@ body {
 
 .hermes-visual[data-hermes-menu-open='true'] .hermes-visual-state-label {
   opacity: 0;
+}
+
+.hermes-workspace-stage:has([data-hermes-menu-feedback='true']) .hermes-visual-state-label,
+.hermes-workspace-stage:has([data-hermes-menu-feedback='true']) .hermes-motion-enable,
+.hermes-dock-anchor:has([data-hermes-menu-feedback='true']) .hermes-presence-control {
+  display: none;
 }
 
 .hermes-workspace-stage[data-hermes-action='patrol'] .hermes-companion-actor {
@@ -2847,15 +2853,15 @@ body {
   .hermes-workspace-stage[data-hermes-stage-size='200'] .hermes-menu-feedback {
     top: -1.4rem;
     bottom: auto;
-    left: -2.55rem;
-    width: 11rem;
+    left: -1.75rem;
+    width: 10rem;
     height: 6.7rem;
     padding: 0;
   }
 
   .hermes-workspace-stage[data-hermes-stage-size='200'] .hermes-menu-feedback-copy {
     top: 1rem;
-    left: .85rem;
+    left: .55rem;
     width: 8.9rem;
   }
 

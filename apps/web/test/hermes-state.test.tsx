@@ -209,6 +209,7 @@ describe('Hermes dashboard guidance', () => {
     expect(markup).toContain('data-hermes-speech-silhouette="true"');
     expect(markup.match(/data-hermes-speech-contour=/g) ?? []).toHaveLength(1);
     expect(markup).toContain('data-hermes-speech-contour="single"');
+    expect(markup).toContain('data-hermes-speech-tail-profile="slender"');
     expect(markup).toContain('data-hermes-speech-tip="true"');
     expect(markup).toContain('data-hermes-visible-mouth-anchor="true"');
     expect(markup).toContain('data-hermes-visible-crown-anchor="true"');
