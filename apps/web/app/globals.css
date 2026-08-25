@@ -2366,50 +2366,58 @@ body {
 .hermes-menu-feedback {
   position: absolute;
   z-index: 65;
-  top: auto;
-  bottom: calc(100% - 5.125rem);
+  top: 1.375rem;
+  bottom: auto;
   left: 0;
-  width: min(12.75rem, calc(100vw - 1.5rem));
-  max-width: 12.75rem;
+  width: min(14rem, calc(100vw - 1.5rem));
+  height: 8.5rem;
   margin: 0;
-  border: 1px solid var(--os-ink);
-  border-radius: 52% 46% 50% 47% / 56% 51% 48% 44%;
-  padding: .9rem 1.05rem 1rem;
-  background: var(--os-paper-strong);
+  border: 0;
+  padding: 0;
+  background: transparent;
   color: var(--os-ink);
-  box-shadow: 2px 3px 0 rgb(32 37 34 / .1);
   font-family: var(--font-ui), system-ui, sans-serif;
   font-size: .9375rem;
-  line-height: 1.45;
-  text-align: center;
-  text-wrap: balance;
+  line-height: 1.4;
   pointer-events: none;
   animation: hermes-speech-enter 160ms cubic-bezier(.16, 1, .3, 1) both;
 }
 
-.hermes-menu-feedback::after {
+.hermes-menu-feedback-silhouette {
   position: absolute;
-  right: 1.1rem;
-  bottom: -3.1rem;
-  width: 1.2rem;
-  height: 3.3rem;
-  clip-path: polygon(0 0, 100% 0, 100% 100%, 68% 18%);
-  background: var(--os-paper-strong);
-  content: '';
-  pointer-events: none;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+  filter: drop-shadow(2px 3px 0 rgb(32 37 34 / .1));
 }
 
-.hermes-menu-feedback::before {
+.hermes-menu-feedback-silhouette path {
+  fill: var(--os-paper-strong);
+  stroke: var(--os-ink);
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 1.35px;
+}
+
+.hermes-menu-feedback-copy {
   position: absolute;
-  z-index: -1;
-  right: 1.03rem;
-  bottom: -3.22rem;
-  width: 1.34rem;
-  height: 3.42rem;
-  clip-path: polygon(0 0, 100% 0, 100% 100%, 66% 17%);
-  background: var(--os-ink);
-  content: '';
+  z-index: 1;
+  top: 1.35rem;
+  left: 1.15rem;
+  width: 11rem;
+  text-align: center;
+  text-wrap: balance;
+}
+
+.hermes-menu-feedback-tip {
+  position: absolute;
+  top: calc(134 / 136 * 100%);
+  left: calc(180 / 224 * 100%);
+  width: 2px;
+  height: 2px;
   pointer-events: none;
+  transform: translate(-50%, -50%);
 }
 
 .hermes-companion-actor {
@@ -2418,13 +2426,14 @@ body {
   transition: transform 180ms cubic-bezier(.2, .8, .2, 1);
 }
 
-.hermes-speech-mouth-anchor {
+.hermes-visible-mouth-anchor {
   position: absolute;
-  top: 34%;
+  top: 42%;
   left: 50%;
-  width: 1px;
-  height: 1px;
+  width: 2px;
+  height: 2px;
   pointer-events: none;
+  transform: translate(-50%, -50%);
 }
 
 .hermes-workspace-stage[data-hermes-action='patrol'] .hermes-companion-actor {
@@ -2818,26 +2827,22 @@ body {
   }
 
   .hermes-workspace-stage[data-hermes-stage-size='200'] .hermes-menu-feedback {
-    top: auto;
-    bottom: calc(100% - 4.58rem);
+    top: -.9rem;
+    bottom: auto;
+    left: .75rem;
+    width: 11rem;
+    height: 6.7rem;
+    padding: 0;
   }
 
-  .hermes-workspace-stage[data-hermes-stage-size='200'] :is(.hermes-performance-bubble, .hermes-menu-feedback)::after {
-    right: 1.65rem;
-    bottom: -.4rem;
-    width: 1.6rem;
-    height: 1.9rem;
+  .hermes-workspace-stage[data-hermes-stage-size='200'] .hermes-menu-feedback-copy {
+    top: 1rem;
+    left: .85rem;
+    width: 8.9rem;
   }
 
-  .hermes-workspace-stage[data-hermes-stage-size='200'] .hermes-menu-feedback::after {
-    right: 5.95rem;
-  }
-
-  .hermes-workspace-stage[data-hermes-stage-size='200'] .hermes-menu-feedback::before {
-    right: 5.88rem;
-    bottom: -.52rem;
-    width: 1.74rem;
-    height: 2.02rem;
+  .hermes-workspace-stage[data-hermes-stage-size='200'] .hermes-visible-mouth-anchor {
+    top: 38%;
   }
 
   .hermes-workspace-stage[data-hermes-stage-size='200'][data-hermes-bubble-vertical='below'] .hermes-performance-bubble::after {

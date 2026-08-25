@@ -41,6 +41,7 @@ import {
 import type { HermesRuntimeStatus } from '@/lib/hermes/hermes-runtime-status';
 
 import { HermesRiggedPortrait } from './HermesRiggedPortrait';
+import { HermesSpeechBalloon } from './HermesSpeechBalloon';
 import type { HermesGuideSuggestion } from './hermes-guide';
 import type { HermesVisualState } from './hermes-state';
 
@@ -424,7 +425,7 @@ export function HermesVisualAdapter({ action, actionStartedAtMs, assistantOpen =
               rendererGeneration={rendererGeneration}
               state={state}
             />
-            <span aria-hidden="true" className="hermes-speech-mouth-anchor" data-hermes-mouth-anchor="true" />
+            <span aria-hidden="true" className="hermes-visible-mouth-anchor" data-hermes-visible-mouth-anchor="true" />
           </span>
           <span aria-hidden={!promptVisible} className="hermes-guide-nudge" data-visible={promptVisible ? 'true' : 'false'}>{t(suggestion.bodyKey)}</span>
         </button>
@@ -495,16 +496,10 @@ export function HermesVisualAdapter({ action, actionStartedAtMs, assistantOpen =
         <p className="hermes-context-menu-hint">{t(compactMenu ? 'guide.menu.mobileHint' : 'guide.menu.keyboardHint')}</p>
       </ContextMenuContent>
     </ContextMenu>
-    {menuFeedback && !menuOpen ? <p
-      aria-live="polite"
-      className="hermes-menu-feedback"
-      data-hermes-bubble-material="warm-paper"
-      data-hermes-feedback-action={menuFeedback.action}
-      data-hermes-menu-feedback="true"
-      data-hermes-speech-copy="single"
-      data-hermes-speech-origin="mouth"
-    >
-      {t(menuFeedback.messageKey)}
-    </p> : null}
+    {menuFeedback && !menuOpen ? (
+      <HermesSpeechBalloon action={menuFeedback.action} compact={compactMenu}>
+        {t(menuFeedback.messageKey)}
+      </HermesSpeechBalloon>
+    ) : null}
   </>;
 }

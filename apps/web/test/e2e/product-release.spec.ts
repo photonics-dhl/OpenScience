@@ -355,24 +355,36 @@ test('Hermes action menu / editor companion feedback stays in the research margi
   await expect(feedback).toHaveAttribute('data-hermes-feedback-action', 'ear-perk');
   await expect(feedback).toHaveAttribute('data-hermes-speech-origin', 'mouth');
   await expect(feedback).toHaveAttribute('data-hermes-speech-copy', 'single');
+  await expect(feedback.locator('[data-hermes-speech-silhouette="true"]')).toHaveCount(1);
+  await expect(feedback.locator('[data-hermes-speech-contour="single"]')).toHaveCount(1);
+  await expect(feedback.locator('[data-hermes-speech-tip="true"]')).toHaveCount(1);
+  await expect(page.locator('[data-hermes-visible-mouth-anchor="true"]')).toHaveCount(1);
   await expect(page.locator('[data-hermes-guide-bubble][data-hermes-guide-visible="true"]')).toHaveCount(0);
   const geometry = await page.evaluate(() => {
     const feedbackNode = document.querySelector<HTMLElement>('[data-hermes-menu-feedback="true"]')!;
     const feedback = feedbackNode.getBoundingClientRect();
     const margin = document.querySelector<HTMLElement>('[data-hermes-companion-margin="true"]')!.getBoundingClientRect();
     const actor = document.querySelector<HTMLElement>('[data-hermes-companion-actor="true"]')!.getBoundingClientRect();
-    const mouth = document.querySelector<HTMLElement>('[data-hermes-mouth-anchor="true"]')!.getBoundingClientRect();
-    const tail = getComputedStyle(feedbackNode, '::after');
+    const mouth = document.querySelector<HTMLElement>('[data-hermes-visible-mouth-anchor="true"]')!.getBoundingClientRect();
+    const tail = document.querySelector<HTMLElement>('[data-hermes-speech-tip="true"]')!.getBoundingClientRect();
+    const stateLabel = document.querySelector<HTMLElement>('.hermes-visual-state-label')!.getBoundingClientRect();
+    const presence = document.querySelector<HTMLElement>('[data-hermes-presence-control="true"]')!.getBoundingClientRect();
+    const motion = document.querySelector<HTMLElement>('.hermes-motion-enable')!.getBoundingClientRect();
     const tailTip = {
-      x: feedback.right - Number.parseFloat(tail.right),
-      y: feedback.bottom - Number.parseFloat(tail.bottom),
+      x: tail.left + tail.width / 2,
+      y: tail.top + tail.height / 2,
     };
+    const overlaps = (first: DOMRect, second: DOMRect) => first.left < second.right && first.right > second.left && first.top < second.bottom && first.bottom > second.top;
     return {
       actorVisible: actor.width > 0 && actor.height > 0,
       contained: feedback.left >= margin.left && feedback.right <= margin.right && feedback.top >= margin.top && feedback.bottom <= margin.bottom,
       excess: document.documentElement.scrollWidth - document.documentElement.clientWidth,
-      mouth: { x: mouth.x, y: mouth.y },
-      mouthDistance: Math.hypot(tailTip.x - mouth.x, tailTip.y - mouth.y),
+      mouth: { x: mouth.left + mouth.width / 2, y: mouth.top + mouth.height / 2 },
+      mouthDistance: Math.hypot(tailTip.x - (mouth.left + mouth.width / 2), tailTip.y - (mouth.top + mouth.height / 2)),
+      pseudoTailCount: [getComputedStyle(feedbackNode, '::before').content, getComputedStyle(feedbackNode, '::after').content].filter((content) => content !== 'none').length,
+      stateCollision: overlaps(feedback, stateLabel),
+      presenceCollision: overlaps(feedback, presence),
+      motionCollision: overlaps(feedback, motion),
       tailTip,
       tailContained: tailTip.x >= margin.left && tailTip.x <= margin.right && tailTip.y >= margin.top && tailTip.y <= margin.bottom,
     };
@@ -381,7 +393,11 @@ test('Hermes action menu / editor companion feedback stays in the research margi
   expect(geometry.contained, JSON.stringify(geometry)).toBe(true);
   expect(geometry.excess).toBe(0);
   expect(geometry.tailContained).toBe(true);
-  expect(geometry.mouthDistance, JSON.stringify(geometry)).toBeLessThanOrEqual(18);
+  expect(geometry.mouthDistance, JSON.stringify(geometry)).toBeLessThanOrEqual(8);
+  expect(geometry.pseudoTailCount, JSON.stringify(geometry)).toBe(0);
+  expect(geometry.stateCollision, JSON.stringify(geometry)).toBe(false);
+  expect(geometry.presenceCollision, JSON.stringify(geometry)).toBe(false);
+  expect(geometry.motionCollision, JSON.stringify(geometry)).toBe(false);
   await page.screenshot({ fullPage: true, path: `${outDir}/hermes-menu-editor-feedback.png`, animations: 'disabled' });
   await expect(feedback).toBeHidden({ timeout: 5000 });
 });
