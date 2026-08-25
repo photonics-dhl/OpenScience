@@ -1,6 +1,6 @@
 # Runbook: 部署（Deployment）
 
-> 状态：**CURRENT**。2026-08-25 active immutable release 为 `bf54eaa2cd499f68eee8ce311a1ed178027a5348`，rollback tree 为 `6b804f716a81c3b162262e369c7b08c4f25725e1`；Hermes application source 为 `5323ba8d8bfff484a49d4e919d3364a447c17924`。post-deploy docs-only HEAD 不得冒充 application source。
+> 状态：**CURRENT**。2026-08-26 active immutable release 为 `8395b4d5cc11cb444aac3b638cff4ccc993ef9f2`，rollback tree 为 `bf54eaa2cd499f68eee8ce311a1ed178027a5348`；Hermes application source 为 `9aef5c4d54d10b27a59389fa6865d179feb1891a`。post-deploy docs-only HEAD 不得冒充 application source。
 > 格式遵循 `.agents/skills/infra-runbook/SKILL.md` 四节强制要求。
 > 部署属 Spec §20.5"询问"级操作：执行前需用户确认，必须走 `infra/scripts/deploy.sh` + CI/CD，禁止手工改服务器代码。
 
@@ -809,8 +809,9 @@ Historical note for the 2026-08-11 release: it used fixed worker tags and a writ
 
 ### 5.24 Hermes detached-dock composition correction (2026-08-26)
 
-> Candidate application source `9aef5c4`; production remains release `bf54eaa`
-> with rollback `6b804f7` until the operation below completes.
+> Active release `8395b4d5cc11cb444aac3b638cff4ccc993ef9f2`;
+> rollback `bf54eaa2cd499f68eee8ce311a1ed178027a5348`;
+> application `9aef5c4d54d10b27a59389fa6865d179feb1891a`.
 
 - Scope is Web-only: include persisted detached docks in the portal/crown/
   travel-hull stabilizer; bound temporary movement by visual viewport and
@@ -821,9 +822,13 @@ Historical note for the 2026-08-11 release: it used fixed worker tags and a writ
   the exact custom-dock state. Final critical repeats are `10/10`, constrained
   repeats `5/5`, product release `67/67`, Web `411+5`, root test/typecheck/lint,
   19-page build and diff check GREEN; independent review is Ready.
-- Deploy only through the canonical Windows Git Bash scripts with
-  `XGS_CONFIG_ROOT=E:/Miscellaneous/XGS`, exact clean release SHA,
-  `--skip-migrate` and explicit rollback `bf54eaa...`. Record backup, server
-  full build, 27/27 migration status, target health, Parser isolation,
-  Cloudflare/loopback, runtime assets, exact release/failure/rollback markers
-  and the public no-write detached regression after completion.
+- Operation: canonical Windows Git Bash scripts used
+  `XGS_CONFIG_ROOT=E:/Miscellaneous/XGS`, exact release `8395b4d...`,
+  `--skip-migrate` and explicit rollback `bf54eaa...`. Preflight and backup
+  `432K files=7/7` passed; the server completed its full workspace/19-page build.
+- Post-deploy evidence: 27/27 migrations are current; target services are
+  healthy; Parser is `network=none`, read-only, UID 1000, 512 MiB and 64 PIDs;
+  Cloudflare/loopback Dashboard and model/moc/motion assets return 200. Exact
+  release/source, absent failure marker, rollback tree and rollback images pass.
+  Public no-write Hermes acceptance is `10/10`, including the reported detached
+  high-DPI geometry. No migration, seed or research-data write ran.

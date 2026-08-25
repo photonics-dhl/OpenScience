@@ -1038,9 +1038,10 @@ close or unmount. Acceptance must cover the reported `1612×729 / DPR 1.875`
 custom dock, twelve items, viewport containment, protected clearance, bounded
 attachment, actor/menu separation, focus restoration and repeat stability.
 
-Implementation status (2026-08-26): application candidate `9aef5c4` passes the
+Implementation status (2026-08-26): application `9aef5c4` passes the
 two critical paths repeated `10/10`, constrained fallback repeated `5/5`, the
 full product release `67/67`, Web `411+5`, root test/typecheck/lint, 19-page
-production build and independent review Ready. Production remains `bf54eaa`
-until the immutable release operation completes; user visual acceptance remains
-pending.
+production build and independent review Ready. Immutable release `8395b4d` is
+active with `bf54eaa` retained as rollback; server build, 27 current migrations,
+runtime isolation, ingress/assets/markers and public no-write Hermes `10/10`
+pass. User visual acceptance remains pending.
