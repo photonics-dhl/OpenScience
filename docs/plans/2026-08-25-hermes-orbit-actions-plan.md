@@ -1,6 +1,7 @@
 # Hermes Orbit Actions Implementation Plan
 
 > 执行依据：`docs/specs/2026-08-19-hermes-wanko-live2d-design.md` §13.2。用户已于 2026-08-25 明确批准实施与部署。
+> 状态：本地实现与修复后独立复审已完成，application source `e4a19d4`；等待 immutable ECS 发布与公网验收。
 
 **Goal:** 把当前单列页注菜单升级为围绕真实 Hermes 展开的 12 项情境动作系统，并让 Dashboard 两段式短句、动作反馈、移动端分组与安静工作场景形成一个不遮挡研究内容的连贯体验。
 

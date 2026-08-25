@@ -668,3 +668,22 @@ Historical note for the 2026-08-11 release: it used fixed worker tags and a writ
 - No migration, seed or research-data write ran. The public check uses no-write
   API interception and is not a claim of a fresh real-account/database vertical
   journey; that remains optional when a safe existing test session is available.
+
+### 5.19 Hermes orbit actions candidate (2026-08-25)
+
+> Pre-deploy application source `e4a19d4aff0d2cc9e324a8275cb156f938ffccc0`;
+> active release before the operation `3010903e3058ba49c6d6dceb7fa938ea2fd0eb3e`.
+
+- Scope: Dashboard two-beat mouth speech; eight companion and four real-work
+  actions around the native `360px` Wanko; mobile/compact `200px` grouped menu;
+  original/compact/quiet control; input/modal suppression; real Hermes, Files
+  and Versions destinations. Landing, schema and API contracts are unchanged.
+- Local evidence: Web `406/406` plus five Node contracts; Hermes aggregate
+  runtime/guide `19/19` plus product interaction `5/5`; full root typecheck,
+  lint/docs-sync, test and build; independent repair review Ready. Runtime
+  first-ready `889ms`; idle and pointer samples had zero dropped frames.
+- Planned operation: canonical Git Bash checkup, DB backup, exact dry-run, then
+  `deploy.sh --confirm --skip-migrate --rollback-ref 3010903... <candidate>`.
+  Do not migrate, seed or write research data. Record the exact immutable
+  release, backup retention, server build/runtime, failure marker, rollback tree
+  and public no-write browser evidence after the operation.

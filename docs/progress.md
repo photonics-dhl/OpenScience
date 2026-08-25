@@ -1,18 +1,25 @@
 # OpenScience 进度（CURRENT window）
 
-> 最新同步：2026-08-25 02:05 +08。完整历史由 Git history 保存；DEPRECATED、NO-GO、旧计划和 archive 不作为新 session 默认输入。
+> 最新同步：2026-08-25 12:47 +08。完整历史由 Git history 保存；DEPRECATED、NO-GO、旧计划和 archive 不作为新 session 默认输入。
 
 ## Current version tuple
 
-- Branch / application source: `codex/hermes-wanko-live2d` / `eb55820ee67d00b0924797ccbbd1db395412f07a`；immutable deployed release（含候选元数据）为 `3010903e3058ba49c6d6dceb7fa938ea2fd0eb3e`。
-- Deployable application source: `eb55820ee67d00b0924797ccbbd1db395412f07a`；显式 Hermes 反馈已改为口部锚定的单句暖纸气泡，菜单为连续纸墨 ledger，保留 guide/menu/drawer 与全部入口语义。
+- Branch / deployment candidate application source: `codex/hermes-wanko-live2d` / `e4a19d4aff0d2cc9e324a8275cb156f938ffccc0`；当前 immutable deployed release（含候选元数据）仍为 `3010903e3058ba49c6d6dceb7fa938ea2fd0eb3e`。
+- Deployed application source: `eb55820ee67d00b0924797ccbbd1db395412f07a`；新 orbit candidate 尚未切换 ECS，部署前后不得把 candidate 与 active release 混写。
 - Local main / origin main: `c60ffdd16b85ea8f0d8b047493fa03a4c0230c05` / `7eb2f5bc4718ee445b79bd089acb64acb3691e62`；两者都早于当前工作分支，远端 Hermes feature 不存在。
 - ECS release / rollback: `3010903e3058ba49c6d6dceb7fa938ea2fd0eb3e` / `33418fdf9e4c13cd3e34eba0a15f6f0208fc5183`。
+
+## 2026-08-25 — Hermes orbit actions implemented; ECS candidate ready
+
+- `e4a19d4` 已实现同一口部气泡的 Dashboard 两拍短句、真实 `360px` Wanko 周围 8 个陪伴动作 + 4 个研究入口、移动/compact `200px` 分组菜单，以及 original/compact/quiet 小型控制；普通点击 drawer、右键、Shift+F10、Menu 键和长按保持。
+- 研究动作接入真实 RO surfaces：证据复核 `/hermes`、来源 `/files`、版本 `/versions`；选择后先给 900ms 角色/短句反馈再导航，离页清理 timer。搜索/文本输入、modal、quiet、审批均停止自动问候，显式交互仍可用。
+- 独立审查最初发现错误研究路由、反馈截断、搜索未抑制和 desktop compact 菜单问题；全部修复后复审 Ready。Fresh evidence：Web `406/406` + 5 Node、Hermes runtime/guide `19/19` + product interaction `5/5`、全仓 typecheck/lint/docs-sync/test/build、`git diff --check` GREEN；WebGL first-ready `889ms`，idle/pointer 零掉帧。
+- 当前仅完成本地 candidate，未迁移、未 seed、未写研究数据；下一步按 immutable release runbook 以 active `3010903` 为 rollback 执行 ECS dry-run、backup、`--skip-migrate` 发布与公网 no-write 验收。
 
 ## 2026-08-25 — Hermes orbit design approved; patent introduction drafted
 
 - 用户批准基于 Scholar's Tea 行为语法重建的动态方向：Dashboard 同一口部气泡顺序出现两句短话；桌面 12 项清晰 action points 从真实 `360px` Hermes 周围展开；选择后菜单关闭、角色动作与短句组成一个反馈节拍；移动 `200px` 长按与安静编辑状态保留完整入口。
-- 唯一 CURRENT Hermes spec 已新增 §13.2，明确 8 个陪伴动作、4 个研究动作、右键/Shift+F10/Menu/长按、普通点击 drawer、44px 目标、字体、reduced-motion 和不遮挡合同。当前等待用户书面复核，尚未修改产品源代码或部署该增量。
+- 唯一 CURRENT Hermes spec 已新增 §13.2，明确 8 个陪伴动作、4 个研究动作、右键/Shift+F10/Menu/长按、普通点击 drawer、44px 目标、字体、reduced-motion 和不遮挡合同；该设计阶段已被上方 `e4a19d4` 实现条目取代。
 - 新增 `docs/proposals/2026-08-25-openscience-patent-product-introduction.{md,docx}`：按当前需求基线、产品叙事、已实现架构和边界编写，分开陈述现状与规划，并列出供代理人检索拆分的技术点；不冒充权利要求或可专利性结论。
 
 ## 2026-08-25 — Hermes mouth-anchored speech deployed
@@ -65,9 +72,9 @@
 
 ## Constraints and next action
 
-- 当前 ECS application release / rollback 为 `3010903` / `33418fd`；实际 application source 为 `eb55820`，post-deploy docs-only HEAD 不得误写成另一份 application source。
+- 当前 ECS application release / rollback 为 `3010903` / `33418fd`；已验证本地 candidate application source 为 `e4a19d4`，尚未部署。
 - Task 21 计划已经完成并降级为 HISTORICAL evidence；唯一 CURRENT Hermes design 仍是 `docs/specs/2026-08-19-hermes-wanko-live2d-design.md`。
-- 下一步由用户直接在登录、Dashboard、创建 RO、编辑和公开阅读页验收信息层级、阅读节奏、Hermes 协调、菜单密度与动作反馈。
+- 下一步部署 `e4a19d4` 所在精确 immutable candidate，并由用户在 Dashboard、编辑和移动端直接验收菜单密度、可爱程度、动作反馈与工作流协调。
 - 可选剩余证据：取得现有安全测试会话后，补一次不创建新数据的 authenticated Dashboard smoke。
 
 ## Read first
