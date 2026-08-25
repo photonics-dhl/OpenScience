@@ -141,6 +141,7 @@
 | `docs/plans/2026-08-24-research-folio-product-system-plan.md` | Research Folio 的合同、共享 shell、Hermes 锚定几何、identity/Dashboard/create/RO/public/admin 迁移、60-case production browser 门禁与 immutable ECS 发布链；Tasks 9–10 为口部 speech/menu refinement | **Tasks 1–10 COMPLETE**；application `eb55820`，ECS `3010903` / `33418fd` |
 | `docs/plans/2026-08-25-hermes-orbit-actions-plan.md` | 已批准的 Hermes 两段式发言、12 项情境动作、桌面环绕布局、移动分组、安静场景与 ECS 验收实施链 | **COMPLETED / DEPLOYED**；application `e4a19d4`，ECS `7165e9b` / rollback `3010903` |
 | `docs/plans/2026-08-25-hermes-carried-tool-sheet-plan.md` | §13.3 的动作/语言合同、工具页—32px 间隙—Hermes 物理分带、Radix 键盘/长按、视觉门禁和 immutable ECS 发布链 | **COMPLETED / DEPLOYED EXECUTION EVIDENCE**；application `1b3bada`，release/rollback `8ed2f3c` / `7165e9b` |
+| `docs/plans/2026-08-25-hermes-continuous-speech-correction-plan.md` | §13.4 视觉纠错实施链：单闭合 SVG 气泡轮廓、真实口部连接、菜单 `24–48px` 有界间距、阅读区避让、原尺寸审图与 immutable ECS 验收 | **CURRENT / APPROVED FOR IMPLEMENTATION**；production `8ed2f3c` visually rejected，rollback `7165e9b` |
 | `docs/specs/2026-08-16-hermes-articulated-mesh-pet-design.md` | Hermes 原创 OGL 2D mesh-rig 历史设计：真实角色像素关节、旧待机语法与严格 lifecycle | **DEPRECATED**；由 2026-08-17 Workspace Companion spec 取代 |
 | `docs/specs/2026-08-16-hermes-contextual-guide-design.md` | Hermes 情境引导员历史设计：Dashboard 提示、助手抽屉与正式 `workspace.guide` 闭环 | **DEPRECATED**；由 2026-08-17 Workspace Companion spec 取代 |
 | `docs/data/launch-research-corpus.md` | 18 条公开启动语料的范围、免责声明、真实来源、上游许可证证据与 ECS seed 操作边界 | 活文档；本地完成，待生产 seed |
