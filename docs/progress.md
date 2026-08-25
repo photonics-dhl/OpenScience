@@ -4,17 +4,17 @@
 
 ## Current version tuple
 
-- Branch / local application candidate: `codex/hermes-wanko-live2d` / `5323ba8d8bfff484a49d4e919d3364a447c17924`；deployed application / immutable release 仍为 `8d1409e56f9883a3a711944f80cb2a1e4d71e73e` / `6b804f716a81c3b162262e369c7b08c4f25725e1`。
-- Current rollback 为前一健康 release `cbf5737bdffd50e9ba6d629d4ea9c5e006226263`；post-deploy docs HEAD 不与应用身份混写。
+- Branch / deployed application source: `codex/hermes-wanko-live2d` / `5323ba8d8bfff484a49d4e919d3364a447c17924`；immutable release 为 `bf54eaa2cd499f68eee8ce311a1ed178027a5348`。
+- Current rollback 为前一健康 release `6b804f716a81c3b162262e369c7b08c4f25725e1`；post-deploy docs HEAD 不与应用身份混写。
 - Local main / origin main: `c60ffdd16b85ea8f0d8b047493fa03a4c0230c05` / `7eb2f5bc4718ee445b79bd089acb64acb3691e62`；两者都早于当前工作分支，远端 Hermes feature 不存在。
-- ECS release / rollback: `6b804f716a81c3b162262e369c7b08c4f25725e1` / `cbf5737bdffd50e9ba6d629d4ea9c5e006226263`。
+- ECS release / rollback: `bf54eaa2cd499f68eee8ce311a1ed178027a5348` / `6b804f716a81c3b162262e369c7b08c4f25725e1`。
 
-## 2026-08-25 — Hermes short-viewport collision correction ready to deploy
+## 2026-08-25 — Hermes short-viewport collision correction deployed
 
 - 用户生产截图再次证明 1612×729 CSS viewport（约 DPR 1.875）下工具页顶部会被裁切。根因是角色页边位移、Radix portal 校正和上游页面重排分属不同的一次性测量，能短暂或持续失配。
 - Application `5323ba8` 将菜单、可见帽顶、角色底部、visual viewport 与 protected regions 合并为同一稳定器；同步校正首帧并以双 rAF 吸收 portal settling，监听菜单/页边尺寸、上游 geometry version、visualViewport 与 compact 分组变化，关闭/卸载恢复原 translate、scroll 和 focus。
 - 新回归精确覆盖 `1612×729 / DPR 1.875`、菜单打开后的上游受保护 header 重排、上下边界、横向页边、无 protected overlap、`24–48px` crown gap、角色底部、Shift+F10/Menu 首项 focus 与 Escape 回归。旧实现 RED；修复后关键路径连续 `10/10`、Hermes `9/9`、Web `411+5`、product release `66/66`、work-assistant 三视口和 19-page build GREEN；独立复审 Ready，无 Important/Minor。
-- 当前仅完成本地候选与文档同步；生产仍为 `6b804f7`，待 clean immutable release 以 `6b804f7` 为 rollback、`--skip-migrate` 发布。无 API/schema/migration/seed/研究数据写入。
+- Immutable release `bf54eaa` 已以 `6b804f7` 为 rollback、`--skip-migrate` 发布。backup `432K files=7/7`、server full 19-workspace/19-page build、27/27 migrations current、目标容器与 Parser isolation、Cloudflare/loopback、真实 Hermes assets、精确 release/failure/rollback markers 均通过；公网 no-write Hermes `9/9`，包含用户问题尺寸。无 API/schema/migration/seed/研究数据写入。
 
 ## 2026-08-25 — Hermes viewport-safe lively interaction deployed
 
@@ -82,7 +82,7 @@
 
 ## Constraints and next action
 
-- production `6b804f7` 已完成 immutable ECS 与公网无写入验收；下一步由用户在真实 Dashboard/mobile/editor 复核菜单可见性、动作生动程度、话语变化和整体节奏。
+- production `bf54eaa` 已完成 immutable ECS 与公网无写入 `9/9` 验收；下一步由用户在真实 Dashboard/mobile/editor 复核菜单可见性、动作生动程度、话语变化和整体节奏。
 - 用户随后在 Dashboard、移动端和 quiet editor 验收轮廓连续、嘴部连接、菜单密度/间距与动作反馈；明确接受前不得称视觉通过。
 - Landing 不变；分支未集成，后续单独决定 merge / PR / 保留。
 

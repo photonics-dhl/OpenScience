@@ -1000,3 +1000,6 @@ the bounded crown gap. Application `5323ba8` passes that regression, five
 consecutive repetitions of both critical desktop paths (`10/10`), all Hermes
 product interactions (`9/9`), the full product matrix (`66/66`), Web `411+5`,
 the three-viewport work-assistant gate and independent review with no finding.
+Immutable release `bf54eaa` is active with `6b804f7` retained as rollback;
+server build, 27 current migrations, runtime isolation, ingress/assets/markers
+and public no-write Hermes `9/9` pass. Visual acceptance remains with the user.

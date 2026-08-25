@@ -1,6 +1,6 @@
 # Runbook: 部署（Deployment）
 
-> 状态：**CURRENT**。2026-08-25 active immutable release 为 `6b804f716a81c3b162262e369c7b08c4f25725e1`，rollback tree 为 `cbf5737bdffd50e9ba6d629d4ea9c5e006226263`；Hermes application source 为 `8d1409e56f9883a3a711944f80cb2a1e4d71e73e`。post-deploy docs-only HEAD 不得冒充 application source。
+> 状态：**CURRENT**。2026-08-25 active immutable release 为 `bf54eaa2cd499f68eee8ce311a1ed178027a5348`，rollback tree 为 `6b804f716a81c3b162262e369c7b08c4f25725e1`；Hermes application source 为 `5323ba8d8bfff484a49d4e919d3364a447c17924`。post-deploy docs-only HEAD 不得冒充 application source。
 > 格式遵循 `.agents/skills/infra-runbook/SKILL.md` 四节强制要求。
 > 部署属 Spec §20.5"询问"级操作：执行前需用户确认，必须走 `infra/scripts/deploy.sh` + CI/CD，禁止手工改服务器代码。
 
@@ -788,8 +788,8 @@ Historical note for the 2026-08-11 release: it used fixed worker tags and a writ
 
 ### 5.23 Hermes short-viewport collision correction (2026-08-25)
 
-> Local application candidate `5323ba8`; pre-operation active release
-> `6b804f7`; planned rollback `6b804f7`.
+> Application source `5323ba8`; active immutable release `bf54eaa`;
+> rollback `6b804f7`.
 
 - Scope is Web-only: jointly stabilize the real portalled menu, visible crown,
   actor bottom, visual viewport and protected geometry; respond to upstream
@@ -798,9 +798,11 @@ Historical note for the 2026-08-11 release: it used fixed worker tags and a writ
 - Local preflight: Web `411/411` plus five Node contracts, critical repeat
   `10/10`, Hermes `9/9`, full product release `66/66`, work-assistant three
   viewports, 19-page build and independent review Ready.
-- Execute only from a clean immutable HEAD with canonical Git Bash scripts:
-  checkup, backup, dry-run, then confirmed `deploy.sh --skip-migrate` with exact
-  pre-operation release `6b804f7...` as rollback. Record the resulting full
-  release SHA, backup result, server build, 27/27 migrations, container health,
-  ingress/assets, release/failure/rollback markers and public no-write evidence
-  after the operation; do not predeclare them.
+- Operation passed through canonical Git Bash scripts: pre/post checkup, backup
+  `432K files=7/7`, exact dry-run, then confirmed `deploy.sh --skip-migrate`
+  with `6b804f7...` as rollback. Server full 19-workspace/19-page build, 27/27
+  current migrations, healthy API/Web/Worker/Parser/data services, Parser
+  `node/read-only/network-none/512MiB/64PID`, Cloudflare/loopback Dashboard 200,
+  real Wanko/Cubism/model/moc/motion assets 200, exact release, absent failure
+  marker and retained rollback tree pass. Public no-write Hermes is `9/9`,
+  including `1612×729 / DPR 1.875`. No migration, seed or research-data write.
