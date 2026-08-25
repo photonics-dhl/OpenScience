@@ -57,7 +57,7 @@ const profiles: Record<Exclude<HermesActionId, 'blink-single'>, WankoPerformance
     presentation: 'evidence',
   },
   doze: {
-    motion: null,
+    motion: motion('Idle', 2),
     parameters: {
       PARAM_ANGLE_Y: 14, PARAM_ANGLE_Z: -10, PARAM_BODY_ANGLE_X: -12, PARAM_BODY_ANGLE_Y: 10,
       PARAM_BREATH: .16, PARAM_EAR_L: -.85, PARAM_EAR_R: -.85,
@@ -192,7 +192,7 @@ const profiles: Record<Exclude<HermesActionId, 'blink-single'>, WankoPerformance
     presentation: 'celebrate',
   },
   'thinking-pause': {
-    motion: null,
+    motion: motion('Tap', 0),
     parameters: { PARAM_ANGLE_Z: -6, PARAM_FACE_01: .55, PARAM_HAND_L: .42 },
     presentation: 'evidence',
   },

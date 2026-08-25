@@ -541,18 +541,18 @@
           "neutral": "从你现在最想弄明白的事开始吧。"
         },
         "actions": {
-          "greet": { "label": "打个招呼", "feedback": "你来了，我也在。" },
-          "encourage": { "label": "给我一点鼓励", "feedback": "已经走到这里了，再往前一点。" },
-          "think": { "label": "一起想想", "feedback": "先停一下，我陪你把线索理顺。" },
-          "listen": { "label": "听我说", "feedback": "我在听，你慢慢说。" },
-          "stretch": { "label": "伸个懒腰", "feedback": "一起伸伸懒腰，肩膀放松一下。" },
-          "rest": { "label": "安静一会", "feedback": "先歇一会，我替你守着这一页。" },
-          "celebrate": { "label": "庆祝这一步", "feedback": "这一步完成了，值得庆祝一下。" },
-          "read-together": { "label": "陪我读", "feedback": "翻到这里了，我陪你再读一段。" },
-          "continue": { "label": "继续这一步", "feedback": "回到刚才那一步，我们接着做。" },
-          "evidence": { "label": "核对证据", "feedback": "这条结论先别过，和我核对证据。" },
-          "sources": { "label": "追溯来源", "feedback": "沿着引用往回走，看看它从哪里来。" },
-          "compare": { "label": "对照版本", "feedback": "把两个版本并排放好，我们看差异。" }
+          "greet": { "label": "打个招呼", "feedback": { "one": "你来了，我也在。", "two": "找到你了，刚才的位置还留着。", "three": "你好呀，今天想弄明白什么？" } },
+          "encourage": { "label": "给我一点鼓励", "feedback": { "one": "已经走到这里了，再往前一点。", "two": "难题在动，你也在往前走。", "three": "认真走好一小步，也算进展。" } },
+          "think": { "label": "一起想想", "feedback": { "one": "先停一下，我陪你把线索理顺。", "two": "给我一点时间，这些线索能连起来。", "three": "先把问题稳稳放在这里，再看一遍。" } },
+          "listen": { "label": "听我说", "feedback": { "one": "我在听，你慢慢说。", "two": "继续说，我正顺着你的思路走。", "three": "告诉我，哪一部分还让你放心不下？" } },
+          "stretch": { "label": "伸个懒腰", "feedback": { "one": "一起伸伸懒腰，肩膀放松一下。", "two": "来，伸展开，给后背留一点空间。", "three": "舒展一下，回来再用新的眼光看。" } },
+          "rest": { "label": "安静一会", "feedback": { "one": "先歇一会，我替你守着这一页。", "two": "安静一会也好，这里的东西不会跑。", "three": "闭眼缓一口气，我帮你看着这一页。" } },
+          "celebrate": { "label": "庆祝这一步", "feedback": { "one": "这一步完成了，值得庆祝一下。", "two": "这次进展，值得认真高兴一下。", "three": "研究往前走了，把这一刻记下来吧。" } },
+          "read-together": { "label": "陪我读", "feedback": { "one": "翻到这里了，我陪你再读一段。", "two": "这一段，我们按主张一条条读。", "three": "我陪你守着文字，你来决定速度。" } },
+          "continue": { "label": "继续这一步", "feedback": { "one": "回到刚才那一步，我们接着做。", "two": "找到刚才的位置了，从这里继续。", "three": "下一步已经在这里，准备好就出发。" } },
+          "evidence": { "label": "核对证据", "feedback": { "one": "这条结论先别过，和我核对证据。", "two": "看看究竟是哪份来源支撑了这条主张。", "three": "先看证据，再决定结果说明了什么。" } },
+          "sources": { "label": "追溯来源", "feedback": { "one": "沿着引用往回走，看看它从哪里来。", "two": "我陪你顺着参考文献一路找回去。", "three": "看看这条主张最早从哪里进入记录。" } },
+          "compare": { "label": "对照版本", "feedback": { "one": "把两个版本并排放好，我们看差异。", "two": "我来对齐变化，别让细节从眼前溜走。", "three": "同一项研究的两个时刻，看看哪里变了。" } }
         },
         "keyboardHint": "Shift+F10 或菜单键打开 · Esc 关闭",
         "mobileHint": "长按 Hermes 打开 · 点按仍进入助手"

@@ -127,7 +127,7 @@ describe('Wanko action director', () => {
     expect(resolve).toBeTypeOf('function');
     if (!resolve) return;
 
-    expect(resolve('doze').motion).toBeNull();
+    expect(resolve('doze').motion).toMatchObject({ group: 'Idle', index: 2 });
     expect(resolve('doze').parameters).toMatchObject({
       PARAM_ANGLE_Y: 14,
       PARAM_ANGLE_Z: -10,
@@ -138,6 +138,15 @@ describe('Wanko action director', () => {
       PARAM_EYE_L_OPEN: .08,
       PARAM_EYE_R_OPEN: .08,
     });
+  });
+
+  it('gives the thinking action a visible hand-led motion before its reflective hold', () => {
+    const resolve = getResolver();
+    expect(resolve).toBeTypeOf('function');
+    if (!resolve) return;
+
+    expect(resolve('thinking-pause').motion).toMatchObject({ group: 'Tap', index: 0 });
+    expect(resolve('thinking-pause').parameters).toMatchObject({ PARAM_ANGLE_Z: -6, PARAM_HAND_L: .42 });
   });
 
   it('gives the five new lively ambient actions distinct bounded performances', () => {

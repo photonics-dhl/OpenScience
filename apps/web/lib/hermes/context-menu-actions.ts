@@ -31,7 +31,7 @@ export type HermesContextActionIcon =
 
 export interface HermesContextAction {
   action: HermesActionId;
-  feedbackKey: string;
+  feedbackKeys: readonly [string, string, string];
   group: HermesContextActionGroup;
   icon: HermesContextActionIcon;
   key: HermesContextActionKey;
@@ -41,7 +41,14 @@ export interface HermesContextAction {
 export interface HermesMenuFeedback {
   action: HermesActionId;
   messageKey: string;
+  speechDelayMs?: number;
 }
+
+const feedbackKeys = (key: HermesContextActionKey): readonly [string, string, string] => [
+  `guide.menu.actions.${key}.feedback.one`,
+  `guide.menu.actions.${key}.feedback.two`,
+  `guide.menu.actions.${key}.feedback.three`,
+];
 
 export function resolveHermesIntroSequence(
   kind: 'actionable-task' | 'continue-research' | 'neutral',
@@ -63,7 +70,7 @@ const companion = (
   icon: HermesContextActionIcon,
 ): HermesContextAction => ({
   action,
-  feedbackKey: `guide.menu.actions.${key}.feedback`,
+  feedbackKeys: feedbackKeys(key),
   group: 'companion',
   icon,
   key,
@@ -76,7 +83,7 @@ const research = (
   icon: HermesContextActionIcon,
 ): HermesContextAction => ({
   action,
-  feedbackKey: `guide.menu.actions.${key}.feedback`,
+  feedbackKeys: feedbackKeys(key),
   group: 'research',
   icon,
   key,
@@ -97,6 +104,21 @@ export const HERMES_CONTEXT_ACTIONS: readonly HermesContextAction[] = [
   research('sources', 'citation-trace', 'sources'),
   research('compare', 'compare', 'compare'),
 ] as const;
+
+export function resolveHermesActionFeedback(
+  item: HermesContextAction,
+  seed: number,
+  previousMessageKey: string | null,
+): HermesMenuFeedback {
+  let index = Math.abs(Math.trunc(seed)) % item.feedbackKeys.length;
+  if (item.feedbackKeys[index] === previousMessageKey) index = (index + 1) % item.feedbackKeys.length;
+  return {
+    action: item.action,
+    messageKey: item.feedbackKeys[index],
+    // Give the physical reaction a readable beat before language arrives.
+    speechDelayMs: item.group === 'companion' ? 520 : 320,
+  };
+}
 
 export interface HermesResearchRouteContext {
   href?: string;

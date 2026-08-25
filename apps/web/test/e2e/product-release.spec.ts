@@ -213,7 +213,7 @@ for (const releaseCase of PRODUCT_RELEASE_CASES) {
 }
 
 test('Hermes action menu / desktop pointer and keyboard preserve the assistant entry', async ({ page }) => {
-  await page.setViewportSize({ width: 1440, height: 1200 });
+  await page.setViewportSize({ width: 1440, height: 720 });
   await installClientFixtures(page);
   await page.goto(`${baseUrl}/dashboard`, { waitUntil: 'networkidle' });
   const trigger = page.locator('[data-hermes-input-owner="true"]');
@@ -221,6 +221,11 @@ test('Hermes action menu / desktop pointer and keyboard preserve the assistant e
   await page.waitForTimeout(4500);
   expect(await page.locator('[data-hermes-placement="anchored"] [data-hermes-performance-bubble][data-hermes-speech-visible="true"]').count()).toBe(0);
   expect(await page.locator('[data-hermes-placement="anchored"] .hermes-guide-nudge[data-visible="true"]').count()).toBe(0);
+  await page.locator('[data-hermes-companion-margin="true"]').evaluate((margin) => {
+    const actor = margin.querySelector<HTMLElement>('[data-hermes-companion-actor="true"]');
+    if (!actor) throw new Error('Hermes actor is missing');
+    margin.style.translate = `0 ${320 - actor.getBoundingClientRect().top}px`;
+  });
   const actorTopBeforeMenu = await page.locator('[data-hermes-companion-actor="true"]').evaluate((node) => node.getBoundingClientRect().top);
   await trigger.click({ button: 'right' });
   const menu = page.getByRole('menu', { name: /Hermes/u });
@@ -232,6 +237,7 @@ test('Hermes action menu / desktop pointer and keyboard preserve the assistant e
     const actorRect = document.querySelector<HTMLElement>('[data-hermes-companion-actor="true"]')!.getBoundingClientRect();
     const crownRect = document.querySelector<HTMLElement>('[data-hermes-visible-crown-anchor="true"]')!.getBoundingClientRect();
     const marginRect = document.querySelector<HTMLElement>('[data-hermes-companion-margin="true"]')!.getBoundingClientRect();
+    const stage = document.querySelector<HTMLElement>('[data-hermes-workspace-stage="true"]');
     const protectedOverlaps = Array.from(document.querySelectorAll<HTMLElement>('[data-hermes-protected="true"]'))
       .filter((node) => {
         const rect = node.getBoundingClientRect();
@@ -240,7 +246,10 @@ test('Hermes action menu / desktop pointer and keyboard preserve the assistant e
       .map((node) => ({ tag: node.tagName, rect: node.getBoundingClientRect().toJSON() }));
     return {
       actor: actorRect.toJSON(),
-      contained: menuRect.left >= marginRect.left - 1 && menuRect.right <= marginRect.right + 1 && menuRect.top >= marginRect.top - 1 && menuRect.bottom <= marginRect.bottom + 1,
+      stageInlineTranslate: stage?.style.translate ?? null,
+      stageLayoutShift: stage?.getAttribute('data-hermes-menu-layout-shift') ?? null,
+      stageTranslate: stage ? getComputedStyle(stage).translate : null,
+      contained: menuRect.left >= marginRect.left - 1 && menuRect.right <= marginRect.right + 1,
       gap: actorRect.top - menuRect.bottom,
       visibleGap: crownRect.top + crownRect.height / 2 - menuRect.bottom,
       margin: marginRect.toJSON(),
@@ -248,6 +257,7 @@ test('Hermes action menu / desktop pointer and keyboard preserve the assistant e
       overlap: menuRect.bottom > crownRect.top + crownRect.height / 2,
       protectedOverlaps,
       tetherContent: getComputedStyle(menuNode, '::after').content,
+      viewportContained: menuRect.top >= 8 && menuRect.bottom <= window.innerHeight - 8,
     };
   });
   expect(desktopMenuGeometry.overlap, JSON.stringify(desktopMenuGeometry)).toBe(false);
@@ -256,7 +266,10 @@ test('Hermes action menu / desktop pointer and keyboard preserve the assistant e
   expect(desktopMenuGeometry.contained, JSON.stringify(desktopMenuGeometry)).toBe(true);
   expect(desktopMenuGeometry.protectedOverlaps, JSON.stringify(desktopMenuGeometry)).toEqual([]);
   expect(desktopMenuGeometry.tetherContent, JSON.stringify(desktopMenuGeometry)).toBe('none');
-  expect(Math.abs(desktopMenuGeometry.actor.top - actorTopBeforeMenu), JSON.stringify({ actorTopBeforeMenu, desktopMenuGeometry })).toBeLessThanOrEqual(1.5);
+  expect(desktopMenuGeometry.viewportContained, JSON.stringify(desktopMenuGeometry)).toBe(true);
+  const actorLayoutShift = desktopMenuGeometry.actor.top - actorTopBeforeMenu;
+  expect(actorLayoutShift, JSON.stringify({ actorTopBeforeMenu, desktopMenuGeometry })).toBeGreaterThanOrEqual(0);
+  expect(desktopMenuGeometry.actor.bottom, JSON.stringify(desktopMenuGeometry)).toBeLessThanOrEqual(720);
   expect(await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)).toBe(0);
   await page.screenshot({ fullPage: true, path: `${outDir}/hermes-menu-dashboard-default.png`, animations: 'disabled' });
   await page.keyboard.press('Escape');
@@ -276,13 +289,87 @@ test('Hermes action menu / desktop pointer and keyboard preserve the assistant e
   await expect(page.getByRole('dialog', { name: /Hermes/u })).toBeVisible();
 });
 
+test('Hermes action menu restores the researcher scroll position after closing', async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await installClientFixtures(page);
+  await page.goto(`${baseUrl}/dashboard`, { waitUntil: 'networkidle' });
+  const trigger = page.locator('[data-hermes-input-owner="true"]');
+  await expect(trigger.locator('[data-hermes-rig="live2d-wanko"]')).toHaveAttribute('data-hermes-rig-status', 'ready', { timeout: 20_000 });
+  await page.waitForTimeout(4500);
+  await page.evaluate(() => window.scrollTo({ behavior: 'auto', top: 220 }));
+  await page.locator('[data-hermes-companion-margin="true"]').evaluate((margin) => {
+    const actor = margin.querySelector<HTMLElement>('[data-hermes-companion-actor="true"]');
+    if (!actor) throw new Error('Hermes actor is missing');
+    margin.style.translate = `0 ${240 - actor.getBoundingClientRect().top}px`;
+  });
+  const before = await page.evaluate(() => ({ scrollY: window.scrollY }));
+  await trigger.click({ button: 'right' });
+  await expect(page.getByRole('menu', { name: /Hermes/u })).toBeVisible();
+  await expect.poll(() => page.evaluate(() => window.scrollY)).not.toBe(before.scrollY);
+  await page.keyboard.press('Escape');
+  await expect.poll(() => page.evaluate(() => window.scrollY)).toBe(before.scrollY);
+});
+
+test('Hermes companion choice moves before its varied speech appears', async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await installClientFixtures(page);
+  await page.goto(`${baseUrl}/dashboard?hermes-motion=full`, { waitUntil: 'networkidle' });
+  const trigger = page.locator('[data-hermes-input-owner="true"]');
+  const actor = page.locator('[data-hermes-companion-actor="true"]');
+  await expect(trigger.locator('[data-hermes-rig="live2d-wanko"]')).toHaveAttribute('data-hermes-rig-status', 'ready', { timeout: 20_000 });
+  await page.waitForTimeout(4500);
+
+  const lines: string[] = [];
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    await trigger.click({ button: 'right' });
+    await page.getByRole('menu', { name: /Hermes/u }).locator('[data-hermes-action-key="greet"]').click();
+    await expect(page.locator('[data-hermes-workspace-stage="true"]')).toHaveAttribute('data-hermes-action', 'ear-perk');
+    expect(await page.locator('[data-hermes-menu-feedback="true"]').count()).toBe(0);
+    const firstFrame = await actor.screenshot({ animations: 'allow' });
+    await page.waitForTimeout(120);
+    const secondFrame = await actor.screenshot({ animations: 'allow' });
+    expect(secondFrame.equals(firstFrame), `attempt ${attempt + 1} must produce real actor pixel motion`).toBe(false);
+    expect(await page.locator('[data-hermes-menu-feedback="true"]').count()).toBe(0);
+    const feedback = page.locator('[data-hermes-menu-feedback="true"]');
+    await expect(feedback).toBeVisible();
+    lines.push((await feedback.innerText()).trim());
+    await expect(feedback).toBeHidden({ timeout: 5000 });
+  }
+  expect(new Set(lines).size).toBeGreaterThanOrEqual(2);
+  expect(lines[1]).not.toBe(lines[0]);
+  expect(lines[2]).not.toBe(lines[1]);
+});
+
 test('Hermes dashboard introduction stops when the researcher starts searching', async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 900 });
   await installClientFixtures(page);
   await page.goto(`${baseUrl}/dashboard`, { waitUntil: 'networkidle' });
-  await page.locator('input[type="search"]').fill('carrier');
-  await page.waitForTimeout(4600);
+  await expect(page.locator('[data-hermes-menu-feedback="true"]')).toBeVisible({ timeout: 2500 });
+  const search = page.locator('input[type="search"]');
+  await search.fill('carrier');
   await expect(page.locator('[data-hermes-menu-feedback="true"]')).toHaveCount(0);
+  await expect(page.locator('[data-hermes-workspace-stage="true"]')).toHaveAttribute('data-hermes-speech-visible', 'false');
+
+  await search.fill('');
+  await page.locator('[data-hermes-input-owner="true"]').click({ button: 'right' });
+  await page.getByRole('menu', { name: /Hermes/u }).locator('[data-hermes-action-key="greet"]').click();
+  await search.fill('carrier');
+  await page.waitForTimeout(650);
+  await expect(page.locator('[data-hermes-menu-feedback="true"]')).toHaveCount(0);
+  await expect(page.locator('[data-hermes-workspace-stage="true"]')).toHaveAttribute('data-hermes-speech-visible', 'false');
+});
+
+test('Hermes keeps approval work quiet when an action is selected', async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await installClientFixtures(page);
+  await page.goto(`${baseUrl}/research-objects/ro-release/hermes?task=ingestion-release`, { waitUntil: 'networkidle' });
+  const stage = page.locator('[data-hermes-workspace-stage="true"]');
+  await expect(stage).toHaveAttribute('data-hermes-presentation-state', 'awaiting_approval');
+  await stage.locator('[data-hermes-input-owner="true"]').click({ button: 'right' });
+  await page.getByRole('menu', { name: /Hermes/u }).locator('[data-hermes-action-key="greet"]').click();
+  await page.waitForTimeout(650);
+  await expect(page.locator('[data-hermes-menu-feedback="true"]')).toHaveCount(0);
+  await expect(stage).toHaveAttribute('data-hermes-speech-visible', 'false');
 });
 
 test('Hermes action menu / mobile long press is compact and does not invoke the drawer', async ({ page }) => {
@@ -426,7 +513,7 @@ test('Hermes action menu / editor companion feedback stays in the research margi
   await menu.locator('[data-hermes-action-key="greet"]').click();
   const feedback = page.locator('[data-hermes-menu-feedback="true"]');
   await expect(feedback).toBeVisible();
-  await expect(feedback).toContainText('Hello — I’m right here.');
+  await expect(feedback).toContainText(/Hello — I’m right here\.|There you are\. I kept your place\.|Hi\. What are we curious about today\?/u);
   await expect(feedback).toHaveAttribute('data-hermes-feedback-action', 'ear-perk');
   await expect(feedback).toHaveAttribute('data-hermes-speech-origin', 'mouth');
   await expect(feedback).toHaveAttribute('data-hermes-speech-copy', 'single');

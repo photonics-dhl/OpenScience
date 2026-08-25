@@ -33,6 +33,7 @@ import type { HermesPetMeshInput } from '@/lib/hermes/pet-mesh-renderer';
 import type { HermesActionId } from '@/lib/hermes/action-catalog';
 import {
   HERMES_CONTEXT_ACTIONS,
+  resolveHermesActionFeedback,
   resolveHermesResearchHref,
   type HermesContextAction,
   type HermesContextActionIcon,
@@ -127,6 +128,8 @@ export function HermesVisualAdapter({ action, actionStartedAtMs, assistantOpen =
   const suppressClickRef = useRef(false);
   const suppressClickTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const navigationTimerRef = useRef<number | null>(null);
+  const feedbackSeedRef = useRef(0);
+  const previousFeedbackRef = useRef<Partial<Record<HermesContextAction['key'], string>>>({});
   const engagedRef = useRef(false);
   const meshInputRef = useRef<HermesPetMeshInput>({ engaged: false, pointer: { x: 0, y: 0 }, state });
   const [interactiveReady, setInteractiveReady] = useState(false);
@@ -135,7 +138,7 @@ export function HermesVisualAdapter({ action, actionStartedAtMs, assistantOpen =
   const [compactMenu, setCompactMenu] = useState(false);
   const [compactGroup, setCompactGroup] = useState<'companion' | 'research'>('companion');
   const [menuOpen, setMenuOpen] = useState(false);
-  const menuLayoutActorTopRef = useRef<number | null>(null);
+  const menuLayoutRef = useRef<{ actorTop: number; scrollY: number; stage: HTMLElement | null } | null>(null);
   const promptPlayedRef = useRef(false);
   const still = state === 'awaiting_approval';
   const presence = still ? 'still' : state === 'scanning' ? 'working' : assistantOpen ? 'open' : engaged ? 'attentive' : 'idle';
@@ -177,25 +180,79 @@ export function HermesVisualAdapter({ action, actionStartedAtMs, assistantOpen =
 
   const updateMenuOpen = (open: boolean) => {
     const trigger = linkRef.current;
-    menuLayoutActorTopRef.current = trigger?.closest('[data-hermes-placement="anchored"]')
-      ? getActorBounds()?.top ?? null
-      : null;
+    if (open && !menuLayoutRef.current && trigger?.closest('[data-hermes-placement="anchored"]')) {
+      const actorTop = getActorBounds()?.top;
+      if (actorTop !== undefined) menuLayoutRef.current = {
+        actorTop,
+        scrollY: window.scrollY,
+        stage: trigger.closest<HTMLElement>('[data-hermes-workspace-stage="true"]'),
+      };
+    }
     setMenuOpen(open);
     if (open) setCompactGroup('companion');
   };
 
   useClientLayoutEffect(() => {
-    const actorTopBeforeLayout = menuLayoutActorTopRef.current;
-    menuLayoutActorTopRef.current = null;
     const trigger = linkRef.current;
-    if (actorTopBeforeLayout === null || !trigger?.closest('[data-hermes-placement="anchored"]')) return;
-    const actorTopAfterLayout = getActorBounds()?.top;
-    if (actorTopAfterLayout === undefined) return;
-    // The carried tool band joins the document flow; counter-scroll keeps Hermes
-    // visually stationary while the protected research surface moves clear.
-    const layoutShift = actorTopAfterLayout - actorTopBeforeLayout;
-    if (Math.abs(layoutShift) > 1) window.scrollBy({ behavior: 'auto', top: layoutShift });
-  }, [menuOpen]);
+    const layout = menuLayoutRef.current;
+    if (!layout || !trigger?.closest('[data-hermes-placement="anchored"]')) return;
+    const stage = layout.stage;
+    if (!menuOpen) {
+      stage?.style.removeProperty('translate');
+      stage?.removeAttribute('data-hermes-menu-layout-shift');
+      window.scrollTo({ behavior: 'auto', top: layout.scrollY });
+      menuLayoutRef.current = null;
+      return;
+    }
+    // Radix mounts portalled content after the parent layout effect. Measure in
+    // the next frame so the calculation uses the real sheet, not an estimate.
+    const frame = window.requestAnimationFrame(() => {
+      const actorTopAfterLayout = getActorBounds()?.top;
+      const menu = menuContentRef.current;
+      const crown = trigger.querySelector<HTMLElement>('[data-hermes-visible-crown-anchor="true"]');
+      if (actorTopAfterLayout === undefined || !menu || !crown) return;
+      if (compactMenu) {
+        // The compact sheet reserves document flow below the long-press point.
+        // Counter-scroll that reflow so the 200 px actor stays under the finger.
+        window.scrollTo({ behavior: 'auto', top: window.scrollY + actorTopAfterLayout - layout.actorTop });
+        return;
+      }
+      const crownBounds = crown.getBoundingClientRect();
+      const crownOffset = crownBounds.top + crownBounds.height / 2 - actorTopAfterLayout;
+      const viewportTop = window.visualViewport?.offsetTop ?? 0;
+      const viewportBottom = viewportTop + (window.visualViewport?.height ?? window.innerHeight);
+      const menuBounds = menu.getBoundingClientRect();
+      const protectedClearanceTop = Array.from(document.querySelectorAll<HTMLElement>('[data-hermes-protected="true"]'))
+        .reduce((clearance, node) => {
+          const bounds = node.getBoundingClientRect();
+          const horizontallyOverlaps = menuBounds.left < bounds.right && menuBounds.right > bounds.left;
+          const sitsAboveHermes = bounds.top < crownBounds.top + crownBounds.height / 2;
+          return horizontallyOverlaps && sitsAboveHermes ? Math.max(clearance, bounds.bottom + 8) : clearance;
+        }, viewportTop + 8);
+      const minimumActorTop = protectedClearanceTop + menuBounds.height + 32 - crownOffset;
+      const maximumActorTop = viewportBottom - 8 + 32 - crownOffset;
+      const neededDown = Math.max(0, minimumActorTop - layout.actorTop);
+      const scrollUp = Math.min(layout.scrollY, neededDown);
+      const layoutShift = neededDown - scrollUp;
+      if (stage && layoutShift > 0) {
+        stage.style.translate = `0 ${layoutShift}px`;
+        stage.setAttribute('data-hermes-menu-layout-shift', `${layoutShift}`);
+      }
+      const targetActorTop = layout.actorTop + scrollUp + layoutShift;
+      const scrollDown = Math.max(0, targetActorTop - maximumActorTop);
+      window.scrollTo({ behavior: 'auto', top: Math.max(0, layout.scrollY - scrollUp + scrollDown) });
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [compactMenu, menuOpen]);
+
+  useEffect(() => () => {
+    const layout = menuLayoutRef.current;
+    if (!layout) return;
+    layout.stage?.style.removeProperty('translate');
+    layout.stage?.removeAttribute('data-hermes-menu-layout-shift');
+    window.scrollTo({ behavior: 'auto', top: layout.scrollY });
+    menuLayoutRef.current = null;
+  }, []);
 
   useClientLayoutEffect(() => {
     if (!menuOpen) return;
@@ -218,6 +275,11 @@ export function HermesVisualAdapter({ action, actionStartedAtMs, assistantOpen =
     const estimatedMenuHeight = compactMenu ? 366 : 380;
     if (trigger.closest('[data-hermes-placement="anchored"]')) {
       const initialBounds = getActorBounds() ?? trigger.getBoundingClientRect();
+      if (!menuLayoutRef.current) menuLayoutRef.current = {
+        actorTop: initialBounds.top,
+        scrollY: window.scrollY,
+        stage: trigger.closest<HTMLElement>('[data-hermes-workspace-stage="true"]'),
+      };
       const viewportTop = window.visualViewport?.offsetTop ?? 0;
       const requiredActorTop = viewportTop + estimatedMenuHeight + 80;
       const availableScroll = window.scrollY;
@@ -263,7 +325,17 @@ export function HermesVisualAdapter({ action, actionStartedAtMs, assistantOpen =
 
   const chooseAction = (item: HermesContextAction) => {
     updateMenuOpen(false);
-    onMenuAction?.({ action: item.action, messageKey: item.feedbackKey });
+    const random = typeof crypto !== 'undefined' && 'getRandomValues' in crypto
+      ? crypto.getRandomValues(new Uint32Array(1))[0]
+      : Date.now();
+    feedbackSeedRef.current += 1;
+    const feedback = resolveHermesActionFeedback(
+      item,
+      random ^ feedbackSeedRef.current,
+      previousFeedbackRef.current[item.key] ?? null,
+    );
+    previousFeedbackRef.current[item.key] = feedback.messageKey;
+    onMenuAction?.(feedback);
     if (item.group !== 'research') return;
     const href = resolveHermesResearchHref(item.key as 'continue' | 'evidence' | 'sources' | 'compare', {
       href: suggestion.href,
@@ -457,6 +529,7 @@ export function HermesVisualAdapter({ action, actionStartedAtMs, assistantOpen =
       <ContextMenuContent
         aria-label={t('guide.menu.label')}
         className="hermes-context-menu"
+        collisionPadding={8}
         data-compact={compactMenu ? 'true' : 'false'}
         data-hermes-action-menu="true"
         data-hermes-menu-layout="carried-sheet"

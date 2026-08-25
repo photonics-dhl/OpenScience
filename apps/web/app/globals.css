@@ -2189,10 +2189,6 @@ body {
   min-height: 46rem;
 }
 
-.hermes-dock-anchor:has(.hermes-visual[data-hermes-menu-open='true']) .hermes-workspace-stage[data-hermes-placement='anchored'] {
-  margin-top: 23.5rem;
-}
-
 .hermes-dock-anchor:has(.hermes-visual[data-hermes-menu-open='true']) :is(.hermes-presence-control, .hermes-motion-enable) {
   visibility: hidden;
 }

@@ -414,16 +414,18 @@ try {
           && bounds.left < region.right && bounds.right > region.left && bounds.top < region.bottom && bounds.bottom > region.top;
       }).length;
       return crown && margin ? {
-        contained: bounds.left >= margin.left - 1 && bounds.right <= margin.right + 1 && bounds.top >= margin.top - 1 && bounds.bottom <= margin.bottom + 1,
+        contained: bounds.left >= margin.left - 1 && bounds.right <= margin.right + 1,
         controlOverlap,
         protectedOverlap,
         tetherContent: getComputedStyle(node, '::after').content,
         visibleGap: crown.top + crown.height / 2 - bounds.bottom,
+        viewportContained: bounds.top >= 8 && bounds.bottom <= window.innerHeight - 8,
       } : null;
     });
     assert.ok(menuGeometry && menuGeometry.visibleGap >= 23.5 && menuGeometry.visibleGap <= 48.5,
       label + ' tool sheet must stay 24-48px from visible Hermes: ' + JSON.stringify(menuGeometry));
     assert.equal(menuGeometry?.contained, true, label + ' tool sheet must remain in the page-owned Hermes margin');
+    assert.equal(menuGeometry?.viewportContained, true, label + ' tool sheet must remain fully visible in the viewport');
     assert.equal(menuGeometry?.protectedOverlap, 0, label + ' tool sheet must not cover protected research content');
     assert.equal(menuGeometry?.controlOverlap, 0, label + ' tool sheet must not cover Hermes presence or motion controls');
     assert.equal(menuGeometry?.tetherContent, 'none', label + ' tool sheet must not draw a detached page-note tether');
@@ -441,6 +443,13 @@ try {
       await menu.locator('[data-hermes-mobile-group-switch] [data-active="false"]').click();
       visibleActions = menu.locator('[data-hermes-action-key]:visible');
       assert.equal(await visibleActions.count(), 4, label + ' research-tool group must expose all four work actions');
+      await page.waitForFunction(() => {
+        const menuNode = document.querySelector('[data-hermes-action-menu="true"]');
+        const crown = document.querySelector('[data-hermes-visible-crown-anchor="true"]')?.getBoundingClientRect();
+        if (!menuNode || !crown) return false;
+        const gap = crown.top + crown.height / 2 - menuNode.getBoundingClientRect().bottom;
+        return gap >= 23.5 && gap <= 48.5;
+      });
       const researchGroupGap = await menu.evaluate((node) => {
         const bounds = node.getBoundingClientRect();
         const crown = document.querySelector('[data-hermes-visible-crown-anchor="true"]')?.getBoundingClientRect();

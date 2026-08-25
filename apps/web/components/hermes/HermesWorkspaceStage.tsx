@@ -279,12 +279,14 @@ function HermesWorkspaceStage({ fallbackAssistantOpen, fallbackOnInvoke, guideTa
   const stageRef = useRef<HTMLDivElement | null>(null);
   const bubbleRef = useRef<HTMLElement | null>(null);
   const menuFeedbackTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const menuSpeechTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const introTimersRef = useRef<Array<ReturnType<typeof setTimeout>>>([]);
   const introPlayedRef = useRef<string | null>(null);
   const guideBubbleLayoutSizeRef = useRef('');
   const guideBubbleLayoutPhaseRef = useRef<'idle' | 'awaiting-measure' | 'measured'>('idle');
   const [anchorRect, setAnchorRect] = useState<DOMRectReadOnly | null>(null);
   const [menuFeedback, setMenuFeedback] = useState<(HermesMenuFeedback & { source: 'intro' | 'menu'; startedAtMs: number }) | null>(null);
+  const [menuSpeechVisible, setMenuSpeechVisible] = useState(false);
   const [pageInterruptionActive, setPageInterruptionActive] = useState(false);
   const [customDock, setCustomDock] = useState(false);
   const [compactGuide, setCompactGuide] = useState(false);
@@ -362,11 +364,15 @@ function HermesWorkspaceStage({ fallbackAssistantOpen, fallbackOnInvoke, guideTa
   useEffect(() => {
     setMenuFeedback(null);
     if (menuFeedbackTimerRef.current) clearTimeout(menuFeedbackTimerRef.current);
+    if (menuSpeechTimerRef.current) clearTimeout(menuSpeechTimerRef.current);
     menuFeedbackTimerRef.current = null;
+    menuSpeechTimerRef.current = null;
+    setMenuSpeechVisible(false);
   }, [pathname, state, workspaceId]);
 
   useEffect(() => () => {
     if (menuFeedbackTimerRef.current) clearTimeout(menuFeedbackTimerRef.current);
+    if (menuSpeechTimerRef.current) clearTimeout(menuSpeechTimerRef.current);
     introTimersRef.current.forEach((timer) => clearTimeout(timer));
   }, []);
 
@@ -746,13 +752,17 @@ function HermesWorkspaceStage({ fallbackAssistantOpen, fallbackOnInvoke, guideTa
 
   const assistantOpen = presentation?.assistantOpen ?? fallbackAssistantOpen;
   const activeSuggestion = presentation?.suggestion ?? neutralSuggestion;
+  const interactionInterrupted = writing || pageInterruptionActive || assistantOpen || state === 'awaiting_approval';
   useEffect(() => {
     introTimersRef.current.forEach((timer) => clearTimeout(timer));
     introTimersRef.current = [];
     const introKey = `${workspaceId}:${pathname}`;
     const disallowed = pathname !== '/dashboard' || presenceMode === 'quiet' || writing || pageInterruptionActive || guideTarget || assistantOpen || state === 'awaiting_approval';
     if (disallowed || introPlayedRef.current === introKey) {
-      if (disallowed) setMenuFeedback((current) => current?.source === 'intro' ? null : current);
+      if (disallowed) {
+        setMenuFeedback((current) => current?.source === 'intro' ? null : current);
+        if (!menuSpeechTimerRef.current) setMenuSpeechVisible(false);
+      }
       return;
     }
     introPlayedRef.current = introKey;
@@ -761,17 +771,28 @@ function HermesWorkspaceStage({ fallbackAssistantOpen, fallbackOnInvoke, guideTa
       if (document.hidden || document.querySelector('[role="dialog"][aria-modal="true"]')) return;
       setPerformanceState((current) => ({ ...current, speech: { ...current.speech, cue: null } }));
       setMenuFeedback({ ...feedback, source: 'intro', startedAtMs: Date.now() });
+      setMenuSpeechVisible(true);
     };
     introTimersRef.current = [
       setTimeout(() => show(presenceLine), 1_600),
       setTimeout(() => show(contextLine), 4_200),
-      setTimeout(() => setMenuFeedback((current) => current?.source === 'intro' ? null : current), 8_000),
+      setTimeout(() => {
+        setMenuFeedback((current) => current?.source === 'intro' ? null : current);
+        setMenuSpeechVisible(false);
+      }, 8_000),
     ];
     return () => {
       introTimersRef.current.forEach((timer) => clearTimeout(timer));
       introTimersRef.current = [];
     };
   }, [activeSuggestion.kind, assistantOpen, guideTarget, pageInterruptionActive, pathname, presenceMode, state, workspaceId, writing]);
+
+  useEffect(() => {
+    if (!interactionInterrupted) return;
+    if (menuSpeechTimerRef.current) clearTimeout(menuSpeechTimerRef.current);
+    menuSpeechTimerRef.current = null;
+    setMenuSpeechVisible(false);
+  }, [interactionInterrupted]);
   const setStageNode = useCallback((node: HTMLDivElement | null) => {
     stageRef.current = node;
     if (node) node.inert = assistantOpen;
@@ -1325,7 +1346,7 @@ function HermesWorkspaceStage({ fallbackAssistantOpen, fallbackOnInvoke, guideTa
       className="hermes-workspace-stage"
       data-hermes-action={visualAction}
       data-hermes-action-kind={behavior.kind}
-      data-hermes-action-started-at={behavior.startedAtMs}
+      data-hermes-action-started-at={visualActionStartedAtMs}
       data-hermes-anchored={anchored ? 'true' : 'false'}
       data-hermes-bubble-horizontal={bubbleHorizontal}
       data-hermes-bubble-safe={speech.cue ? (anchored || bubblePlacement ? 'true' : 'false') : 'true'}
@@ -1355,7 +1376,7 @@ function HermesWorkspaceStage({ fallbackAssistantOpen, fallbackOnInvoke, guideTa
       data-hermes-presentation-state={state}
       data-hermes-presence-mode={presenceMode}
       data-hermes-protected-geometry-version={protectedGeometryVersion}
-      data-hermes-speech-visible={speech.cue || menuFeedback ? 'true' : 'false'}
+      data-hermes-speech-visible={speech.cue || menuSpeechVisible ? 'true' : 'false'}
       data-hermes-stage-size={stageSize}
       data-hermes-workspace-stage="true"
       data-hermes-assistant-open={assistantOpen ? 'true' : 'false'}
@@ -1386,13 +1407,24 @@ function HermesWorkspaceStage({ fallbackAssistantOpen, fallbackOnInvoke, guideTa
           introTimersRef.current = [];
           setPerformanceState((current) => ({ ...current, speech: { ...current.speech, cue: null } }));
           if (menuFeedbackTimerRef.current) clearTimeout(menuFeedbackTimerRef.current);
+          if (menuSpeechTimerRef.current) clearTimeout(menuSpeechTimerRef.current);
           setMenuFeedback({ ...feedback, source: 'menu', startedAtMs: Date.now() });
+          setMenuSpeechVisible(false);
+          if (!interactionInterrupted) {
+            menuSpeechTimerRef.current = setTimeout(() => {
+              setMenuSpeechVisible(true);
+              menuSpeechTimerRef.current = null;
+            }, feedback.speechDelayMs ?? 200);
+          } else {
+            menuSpeechTimerRef.current = null;
+          }
           menuFeedbackTimerRef.current = setTimeout(() => {
             setMenuFeedback(null);
+            setMenuSpeechVisible(false);
             menuFeedbackTimerRef.current = null;
           }, 4200);
         }}
-        menuFeedback={menuFeedback}
+        menuFeedback={menuSpeechVisible ? menuFeedback : null}
         onRuntimeStatus={(status) => {
           if (status.phase === 'fallback' && status.reason === 'context-lost' && contextLossRecoveriesRef.current < 1) {
             contextLossRecoveriesRef.current += 1;

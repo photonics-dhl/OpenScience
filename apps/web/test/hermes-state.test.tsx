@@ -29,7 +29,7 @@ describe('Hermes dashboard guidance', () => {
     expect(research).toHaveLength(4);
     expect(new Set(HERMES_CONTEXT_ACTIONS.map((item) => item.key)).size).toBe(12);
     expect(HERMES_CONTEXT_ACTIONS.every((item) => HERMES_ACTION_CATALOG[item.action])).toBe(true);
-    expect(HERMES_CONTEXT_ACTIONS.every((item) => item.labelKey && item.feedbackKey && item.icon)).toBe(true);
+    expect(HERMES_CONTEXT_ACTIONS.every((item) => item.labelKey && item.feedbackKeys.length >= 3 && item.icon)).toBe(true);
     expect(resolveHermesResearchHref('continue', {
       href: '/research-objects/ro-1/edit', researchObjectId: 'ro-1',
     })).toBe('/research-objects/ro-1/edit');
@@ -198,7 +198,7 @@ describe('Hermes dashboard guidance', () => {
 
   it('renders the selected action feedback as one mouth-origin sentence without a detached label', () => {
     const markup = renderToStaticMarkup(createElement(HermesVisualAdapter, {
-      menuFeedback: { action: 'read', messageKey: 'guide.menu.actions.read-together.feedback' },
+      menuFeedback: { action: 'read', messageKey: 'guide.menu.actions.read-together.feedback.one' },
       state: 'idle', suggestion: neutralSuggestion, onInvoke: () => undefined,
     }));
 

@@ -541,18 +541,18 @@
           "neutral": "We can begin with whatever you want to understand."
         },
         "actions": {
-          "greet": { "label": "Say hello", "feedback": "Hello — I’m right here." },
-          "encourage": { "label": "Encourage me", "feedback": "You’ve come this far. Let’s take one more step." },
-          "think": { "label": "Think together", "feedback": "Let’s pause and sort the clues together." },
-          "listen": { "label": "Listen to me", "feedback": "I’m listening. Take your time." },
-          "stretch": { "label": "Take a stretch", "feedback": "Stretch with me — let your shoulders soften." },
-          "rest": { "label": "Rest a moment", "feedback": "Rest a moment. I’ll keep your place." },
-          "celebrate": { "label": "Mark this step", "feedback": "This step is done. Let’s celebrate it." },
-          "read-together": { "label": "Read with me", "feedback": "We’re here. I’ll read the next passage with you." },
-          "continue": { "label": "Continue this step", "feedback": "Back to our last step — let’s continue." },
-          "evidence": { "label": "Review evidence", "feedback": "Hold this conclusion — let’s check its evidence." },
-          "sources": { "label": "Trace sources", "feedback": "Let’s trace the citation back to its source." },
-          "compare": { "label": "Compare versions", "feedback": "Let’s place the versions side by side and inspect the differences." }
+          "greet": { "label": "Say hello", "feedback": { "one": "Hello — I’m right here.", "two": "There you are. I kept your place.", "three": "Hi. What are we curious about today?" } },
+          "encourage": { "label": "Encourage me", "feedback": { "one": "You’ve come this far. Let’s take one more step.", "two": "The difficult part is moving. So are you.", "three": "One careful step is still progress." } },
+          "think": { "label": "Think together", "feedback": { "one": "Let’s pause and sort the clues together.", "two": "Give me a moment — these pieces do connect.", "three": "Let’s hold the question still and look again." } },
+          "listen": { "label": "Listen to me", "feedback": { "one": "I’m listening. Take your time.", "two": "Go on. I’m following the thread.", "three": "Tell me the part that still feels unresolved." } },
+          "stretch": { "label": "Take a stretch", "feedback": { "one": "Stretch with me — let your shoulders soften.", "two": "Up we go. Give your back a little room.", "three": "A small stretch, then we return with fresh eyes." } },
+          "rest": { "label": "Rest a moment", "feedback": { "one": "Rest a moment. I’ll keep your place.", "two": "We can be quiet. Nothing here will run away.", "three": "Close your eyes for a breath; I’ll watch the page." } },
+          "celebrate": { "label": "Mark this step", "feedback": { "one": "This step is done. Let’s celebrate it.", "two": "That deserves a proper little victory.", "three": "We moved the work forward — mark this moment." } },
+          "read-together": { "label": "Read with me", "feedback": { "one": "We’re here. I’ll read the next passage with you.", "two": "Let’s follow this paragraph one claim at a time.", "three": "I’ll stay with the text; you set the pace." } },
+          "continue": { "label": "Continue this step", "feedback": { "one": "Back to our last step — let’s continue.", "two": "I found our place. We can carry on from here.", "three": "The next step is ready when you are." } },
+          "evidence": { "label": "Review evidence", "feedback": { "one": "Hold this conclusion — let’s check its evidence.", "two": "Let’s see which source actually supports this claim.", "three": "Evidence first. Then we decide what the result means." } },
+          "sources": { "label": "Trace sources", "feedback": { "one": "Let’s trace the citation back to its source.", "two": "I’ll follow the reference trail with you.", "three": "Let’s find where this claim first entered the record." } },
+          "compare": { "label": "Compare versions", "feedback": { "one": "Let’s place the versions side by side and inspect the differences.", "two": "I’ll line up the changes so nothing slips past us.", "three": "Same research, two moments — let’s see what changed." } }
         },
         "keyboardHint": "Shift+F10 or Menu key to open · Esc to close",
         "mobileHint": "Long-press Hermes to open · tap still enters the assistant"
