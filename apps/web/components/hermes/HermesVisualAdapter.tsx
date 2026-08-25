@@ -186,7 +186,7 @@ export function HermesVisualAdapter({ action, actionStartedAtMs, assistantOpen =
 
   const updateMenuOpen = (open: boolean) => {
     const trigger = linkRef.current;
-    if (open && !menuLayoutRef.current && trigger?.closest('[data-hermes-placement="anchored"]')) {
+    if (open && !menuLayoutRef.current && trigger) {
       const actorTop = getActorBounds()?.top;
       if (actorTop !== undefined) menuLayoutRef.current = {
         actorTop,
@@ -202,7 +202,8 @@ export function HermesVisualAdapter({ action, actionStartedAtMs, assistantOpen =
   useClientLayoutEffect(() => {
     const trigger = linkRef.current;
     const layout = menuLayoutRef.current;
-    if (!layout || !trigger?.closest('[data-hermes-placement="anchored"]')) return;
+    if (!layout || !trigger) return;
+    const anchored = Boolean(trigger.closest('[data-hermes-placement="anchored"]'));
     const stage = layout.stage;
     const restoreStageTranslate = () => {
       if (!stage) return;
@@ -225,6 +226,10 @@ export function HermesVisualAdapter({ action, actionStartedAtMs, assistantOpen =
     let observedMenu: HTMLElement | null = null;
     let scheduleStabilization = () => {};
     const resizeObserver = new ResizeObserver(() => scheduleStabilization());
+    const observeProtectedGeometry = () => {
+      document.querySelectorAll<HTMLElement>('[data-hermes-protected="true"]')
+        .forEach((node) => resizeObserver.observe(node));
+    };
 
     const viewportBounds = () => {
       const top = window.visualViewport?.offsetTop ?? 0;
@@ -240,10 +245,88 @@ export function HermesVisualAdapter({ action, actionStartedAtMs, assistantOpen =
           return horizontallyOverlaps && sitsAboveHermes ? Math.max(clearance, bounds.bottom + 8) : clearance;
         }, viewport.top + 8);
     };
+    const maximumDetachedDownwardShift = (actorBounds: DOMRect, viewportBottom: number) => {
+      const viewportLimit = Math.max(0, viewportBottom - actorBounds.bottom);
+      return Array.from(document.querySelectorAll<HTMLElement>('[data-hermes-protected="true"]'))
+        .reduce((maximum, node) => {
+          const bounds = node.getBoundingClientRect();
+          const horizontallyOverlaps = actorBounds.left < bounds.right && actorBounds.right > bounds.left;
+          const liesInDownwardPath = bounds.bottom > actorBounds.top && bounds.top < viewportBottom;
+          if (!horizontallyOverlaps || !liesInDownwardPath) return maximum;
+          return Math.min(maximum, Math.max(0, bounds.top - 8 - actorBounds.bottom));
+        }, viewportLimit);
+    };
+    const alignMenuBesideActor = (actorBounds: DOMRect) => {
+      const menu = menuContentRef.current;
+      if (!menu) return false;
+      menu.removeAttribute('data-hermes-menu-fallback');
+      menu.style.setProperty('--hermes-menu-correction-x', '0px');
+      menu.style.setProperty('--hermes-menu-correction-y', '0px');
+      const menuBounds = menu.getBoundingClientRect();
+      const crownBounds = crown.getBoundingClientRect();
+      const viewport = viewportBounds();
+      const protectedBounds = Array.from(document.querySelectorAll<HTMLElement>('[data-hermes-protected="true"]'))
+        .map((node) => node.getBoundingClientRect())
+        .filter((bounds) => bounds.width > 0 && bounds.height > 0);
+      const preferredTop = crownBounds.top + crownBounds.height / 2 - menuBounds.height / 2;
+      const minimumTop = viewport.top + 8;
+      const maximumTop = viewport.bottom - 8 - menuBounds.height;
+      const clampTop = (top: number) => Math.max(minimumTop, Math.min(maximumTop, top));
+      const verticalCandidates = [
+        clampTop(preferredTop),
+        minimumTop,
+        maximumTop,
+        ...protectedBounds.flatMap((bounds) => [bounds.bottom + 8, bounds.top - menuBounds.height - 8]),
+      ].filter((top, index, values) => top >= minimumTop && top <= maximumTop
+        && values.findIndex((candidate) => Math.abs(candidate - top) < .5) === index)
+        .sort((a, b) => Math.abs(a - preferredTop) - Math.abs(b - preferredTop));
+      const horizontalCandidates = [
+        { attachment: 'left', left: actorBounds.left - menuBounds.width - 32 },
+        { attachment: 'right', left: actorBounds.right + 32 },
+      ] as const;
+      const candidate = horizontalCandidates.flatMap(({ attachment, left }) => verticalCandidates.map((top) => ({ attachment, left, top })))
+        .find(({ left, top }) => {
+          const right = left + menuBounds.width;
+          const bottom = top + menuBounds.height;
+          if (left < 8 || right > window.innerWidth - 8) return false;
+          return protectedBounds.every((bounds) => right + 8 <= bounds.left || left - 8 >= bounds.right
+            || bottom + 8 <= bounds.top || top - 8 >= bounds.bottom);
+        });
+      if (!candidate) return false;
+      menu.setAttribute('data-hermes-menu-attachment', candidate.attachment);
+      menu.style.setProperty('--hermes-menu-correction-x', `${candidate.left - menuBounds.left}px`);
+      menu.style.setProperty('--hermes-menu-correction-y', `${candidate.top - menuBounds.top}px`);
+      return true;
+    };
+    const alignMenuAsWideFolio = (actorBounds: DOMRect) => {
+      const menu = menuContentRef.current;
+      if (!menu) return false;
+      menu.setAttribute('data-hermes-menu-fallback', 'wide');
+      menu.setAttribute('data-hermes-menu-attachment', 'above-wide');
+      menu.style.setProperty('--hermes-menu-correction-x', '0px');
+      menu.style.setProperty('--hermes-menu-correction-y', '0px');
+      let menuBounds = menu.getBoundingClientRect();
+      const viewport = viewportBounds();
+      const preferredLeft = actorBounds.left + actorBounds.width / 2 - menuBounds.width / 2;
+      const boundedLeft = Math.max(8, Math.min(window.innerWidth - 8 - menuBounds.width, preferredLeft));
+      menu.style.setProperty('--hermes-menu-correction-x', `${boundedLeft - menuBounds.left}px`);
+      menuBounds = menu.getBoundingClientRect();
+      const crownBounds = crown.getBoundingClientRect();
+      const crownCenter = crownBounds.top + crownBounds.height / 2;
+      const minimumTop = protectedClearanceTop(menuBounds, crownCenter);
+      const maximumTop = viewport.bottom - 8 - menuBounds.height;
+      const preferredTop = crownCenter - menuBounds.height - 32;
+      const boundedTop = Math.max(viewport.top + 8, Math.min(maximumTop, Math.max(minimumTop, preferredTop)));
+      menu.style.setProperty('--hermes-menu-correction-y', `${boundedTop - menuBounds.top}px`);
+      return true;
+    };
     const alignMenuToCrown = () => {
       const menu = menuContentRef.current;
       if (!menu) return;
+      menu.removeAttribute('data-hermes-menu-fallback');
+      menu.style.setProperty('--hermes-menu-correction-x', '0px');
       menu.style.setProperty('--hermes-menu-correction-y', '0px');
+      menu.setAttribute('data-hermes-menu-attachment', 'above');
       const menuBounds = menu.getBoundingClientRect();
       const crownBounds = crown.getBoundingClientRect();
       const crownCenter = crownBounds.top + crownBounds.height / 2;
@@ -266,10 +349,12 @@ export function HermesVisualAdapter({ action, actionStartedAtMs, assistantOpen =
         resizeObserver.observe(menu);
       }
       restoreStageTranslate();
+      menu.removeAttribute('data-hermes-menu-fallback');
+      menu.style.setProperty('--hermes-menu-correction-x', '0px');
       menu.style.setProperty('--hermes-menu-correction-y', '0px');
       const actorTopAfterLayout = getActorBounds()?.top;
       if (actorTopAfterLayout === undefined) return;
-      if (compactMenu) {
+      if (compactMenu && anchored) {
         // The compact sheet reserves document flow below the long-press point.
         // Counter-scroll that reflow so the 200 px actor stays under the finger.
         window.scrollTo({ behavior: 'auto', top: window.scrollY + actorTopAfterLayout - layout.actorTop });
@@ -277,13 +362,15 @@ export function HermesVisualAdapter({ action, actionStartedAtMs, assistantOpen =
         menuFrame = window.requestAnimationFrame(alignMenuToCrown);
         return;
       }
-      const reflowShift = layout.actorTop - actorTopAfterLayout;
-      if (stage && Math.abs(reflowShift) > .5) {
+      const reflowShift = anchored ? layout.actorTop - actorTopAfterLayout : 0;
+      if (anchored && stage && Math.abs(reflowShift) > .5) {
         stage.style.translate = `0 ${reflowShift}px`;
         stage.setAttribute('data-hermes-menu-layout-shift', `${reflowShift}`);
       }
       const actorBounds = getActorBounds();
-      if (!actorBounds) return;
+      const visibleActorBounds = trigger.querySelector<HTMLElement>('[data-hermes-carrier-travel-hull="true"]')?.getBoundingClientRect()
+        ?? actorBounds;
+      if (!actorBounds || !visibleActorBounds) return;
       const crownBounds = crown.getBoundingClientRect();
       const menuBounds = menu.getBoundingClientRect();
       const crownCenter = crownBounds.top + crownBounds.height / 2;
@@ -291,16 +378,29 @@ export function HermesVisualAdapter({ action, actionStartedAtMs, assistantOpen =
       const clearanceTop = protectedClearanceTop(menuBounds, crownCenter);
       const preferredShift = Math.max(0, clearanceTop + menuBounds.height + 32 - crownCenter);
       const minimumShift = Math.max(0, clearanceTop + menuBounds.height + 24 - crownCenter);
-      const maximumShift = viewport.bottom - 8 - actorBounds.bottom;
+      const maximumShift = anchored
+        ? viewport.bottom - 8 - actorBounds.bottom
+        : maximumDetachedDownwardShift(visibleActorBounds, viewport.bottom);
       const layoutShift = Math.min(preferredShift, maximumShift);
-      if (stage && layoutShift >= Math.min(minimumShift, maximumShift) && Math.abs(reflowShift + layoutShift) > .5) {
+      const useSideFallback = !anchored && maximumShift + .5 < minimumShift;
+      const hasSufficientShift = anchored
+        ? layoutShift >= Math.min(minimumShift, maximumShift)
+        : layoutShift >= minimumShift;
+      if (!useSideFallback && stage && hasSufficientShift && Math.abs(reflowShift + layoutShift) > .5) {
         stage.style.translate = `0 ${reflowShift + layoutShift}px`;
         stage.setAttribute('data-hermes-menu-layout-shift', `${reflowShift + layoutShift}`);
       }
-      alignMenuToCrown();
-      menuFrame = window.requestAnimationFrame(() => {
+      const alignResolvedMenu = () => {
+        const currentActorBounds = trigger.querySelector<HTMLElement>('[data-hermes-carrier-travel-hull="true"]')?.getBoundingClientRect()
+          ?? getActorBounds();
+        if (useSideFallback && currentActorBounds
+          && (alignMenuBesideActor(currentActorBounds) || alignMenuAsWideFolio(currentActorBounds))) return;
         alignMenuToCrown();
-        settleFrame = window.requestAnimationFrame(alignMenuToCrown);
+      };
+      alignResolvedMenu();
+      menuFrame = window.requestAnimationFrame(() => {
+        alignResolvedMenu();
+        settleFrame = window.requestAnimationFrame(alignResolvedMenu);
       });
     };
     scheduleStabilization = () => {
@@ -313,14 +413,31 @@ export function HermesVisualAdapter({ action, actionStartedAtMs, assistantOpen =
     if (menuContentRef.current) stabilizeLayout();
     else scheduleStabilization();
     if (margin) resizeObserver.observe(margin);
+    observeProtectedGeometry();
     const mutationObserver = margin ? new MutationObserver(scheduleStabilization) : null;
     mutationObserver?.observe(margin!, { attributeFilter: ['class', 'style'], attributes: true });
+    const protectedMutationObserver = new MutationObserver((records) => {
+      const protectedSelector = '[data-hermes-protected]';
+      const changed = records.some((record) => record.attributeName === 'data-hermes-protected'
+        || Array.from(record.addedNodes).some((node) => node instanceof Element
+          && (node.matches(protectedSelector) || Boolean(node.querySelector(protectedSelector)))));
+      if (!changed) return;
+      observeProtectedGeometry();
+      scheduleStabilization();
+    });
+    protectedMutationObserver.observe(document.body, {
+      attributeFilter: ['data-hermes-protected'],
+      attributes: true,
+      childList: true,
+      subtree: true,
+    });
     window.addEventListener('resize', scheduleStabilization);
     window.visualViewport?.addEventListener('resize', scheduleStabilization);
     window.visualViewport?.addEventListener('scroll', scheduleStabilization);
     return () => {
       resizeObserver.disconnect();
       mutationObserver?.disconnect();
+      protectedMutationObserver.disconnect();
       window.removeEventListener('resize', scheduleStabilization);
       window.visualViewport?.removeEventListener('resize', scheduleStabilization);
       window.visualViewport?.removeEventListener('scroll', scheduleStabilization);
@@ -344,14 +461,14 @@ export function HermesVisualAdapter({ action, actionStartedAtMs, assistantOpen =
     const trigger = linkRef.current;
     if (!trigger) return;
     const estimatedMenuHeight = compactMenu ? 366 : 380;
+    const initialBounds = getActorBounds() ?? trigger.getBoundingClientRect();
+    if (!menuLayoutRef.current) menuLayoutRef.current = {
+      actorTop: initialBounds.top,
+      scrollY: window.scrollY,
+      stage: trigger.closest<HTMLElement>('[data-hermes-workspace-stage="true"]'),
+      stageTranslate: trigger.closest<HTMLElement>('[data-hermes-workspace-stage="true"]')?.style.translate ?? '',
+    };
     if (trigger.closest('[data-hermes-placement="anchored"]')) {
-      const initialBounds = getActorBounds() ?? trigger.getBoundingClientRect();
-      if (!menuLayoutRef.current) menuLayoutRef.current = {
-        actorTop: initialBounds.top,
-        scrollY: window.scrollY,
-        stage: trigger.closest<HTMLElement>('[data-hermes-workspace-stage="true"]'),
-        stageTranslate: trigger.closest<HTMLElement>('[data-hermes-workspace-stage="true"]')?.style.translate ?? '',
-      };
       const viewportTop = window.visualViewport?.offsetTop ?? 0;
       const requiredActorTop = viewportTop + estimatedMenuHeight + 80;
       const availableScroll = window.scrollY;

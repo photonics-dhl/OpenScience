@@ -385,6 +385,151 @@ test('Hermes action menu / high-DPI wide short viewport remains fully visible', 
   await context.close();
 });
 
+test('Hermes action menu / detached desktop dock remains joined to the visible crown', async ({ browser }) => {
+  const context = await browser.newContext({
+    viewport: { width: 1612, height: 729 },
+    deviceScaleFactor: 1.875,
+  });
+  await context.addInitScript(() => {
+    window.localStorage.setItem('openscience:hermes-dock:v1:workspace-current:desktop', JSON.stringify({
+      activity: 'balanced',
+      particles: true,
+      proactiveHints: true,
+      sound: false,
+      xRatio: .86,
+      yRatio: .72,
+    }));
+  });
+  const page = await context.newPage();
+  await installClientFixtures(page);
+  await page.goto(`${baseUrl}/dashboard`, { waitUntil: 'networkidle' });
+  const stage = page.locator('[data-hermes-workspace-stage="true"]');
+  const trigger = page.locator('[data-hermes-input-owner="true"]');
+  await expect(trigger.locator('[data-hermes-rig="live2d-wanko"]')).toHaveAttribute('data-hermes-rig-status', 'ready', { timeout: 20_000 });
+  await expect(stage).toHaveAttribute('data-hermes-placement', 'detached');
+  const actorBeforeOpen = await page.locator('[data-hermes-companion-actor="true"]').evaluate((node) => node.getBoundingClientRect().toJSON());
+
+  await trigger.click({ button: 'right' });
+  const menu = page.getByRole('menu', { name: /Hermes/u });
+  await expect(menu).toBeVisible();
+  await expect(menu.locator('[data-hermes-action-key]')).toHaveCount(12);
+
+  const readGeometry = () => page.evaluate(() => {
+    const menuRect = document.querySelector<HTMLElement>('[data-hermes-action-menu="true"]')!.getBoundingClientRect();
+    const crownRect = document.querySelector<HTMLElement>('[data-hermes-visible-crown-anchor="true"]')!.getBoundingClientRect();
+    const actorRect = document.querySelector<HTMLElement>('[data-hermes-carrier-travel-hull="true"]')!.getBoundingClientRect();
+    const viewport = window.visualViewport;
+    const viewportTop = viewport?.offsetTop ?? 0;
+    const viewportBottom = viewportTop + (viewport?.height ?? window.innerHeight);
+    return {
+      actor: actorRect.toJSON(),
+      attachment: document.querySelector<HTMLElement>('[data-hermes-action-menu="true"]')!.dataset.hermesMenuAttachment,
+      gap: crownRect.top + crownRect.height / 2 - menuRect.bottom,
+      menu: menuRect.toJSON(),
+      overlap: menuRect.left < actorRect.right && menuRect.right > actorRect.left && menuRect.top < actorRect.bottom && menuRect.bottom > actorRect.top,
+      viewportBottom,
+      viewportTop,
+    };
+  });
+
+  await expect.poll(async () => (await readGeometry()).menu.top).toBeGreaterThanOrEqual(8);
+  await expect.poll(async () => {
+    const geometry = await readGeometry();
+    return geometry.viewportBottom - geometry.menu.bottom;
+  }).toBeGreaterThanOrEqual(8);
+  await expect.poll(async () => (await readGeometry()).attachment).toBe('above');
+  await expect.poll(async () => (await readGeometry()).gap).toBeGreaterThanOrEqual(24);
+  await expect.poll(async () => (await readGeometry()).gap).toBeLessThanOrEqual(48);
+  const geometry = await readGeometry();
+  await page.screenshot({ animations: 'disabled', path: `${outDir}/hermes-menu-detached-desktop.png` });
+  expect(geometry.menu.top, JSON.stringify(geometry)).toBeGreaterThanOrEqual(geometry.viewportTop + 8);
+  expect(geometry.menu.bottom, JSON.stringify(geometry)).toBeLessThanOrEqual(geometry.viewportBottom - 8);
+  expect(geometry.attachment, JSON.stringify(geometry)).toBe('above');
+  expect(geometry.gap, JSON.stringify(geometry)).toBeGreaterThanOrEqual(24);
+  expect(geometry.gap, JSON.stringify(geometry)).toBeLessThanOrEqual(48);
+  expect(geometry.overlap, JSON.stringify(geometry)).toBe(false);
+  expect(geometry.actor.top, JSON.stringify(geometry)).toBeGreaterThanOrEqual(geometry.viewportTop);
+  expect(geometry.actor.bottom, JSON.stringify(geometry)).toBeLessThanOrEqual(geometry.viewportBottom);
+  await page.keyboard.press('Escape');
+  await expect(trigger).toBeFocused();
+  const actorAfterClose = await page.locator('[data-hermes-companion-actor="true"]').evaluate((node) => node.getBoundingClientRect().toJSON());
+  expect(Math.abs(actorAfterClose.left - actorBeforeOpen.left), JSON.stringify({ actorAfterClose, actorBeforeOpen })).toBeLessThanOrEqual(1.5);
+  expect(Math.abs(actorAfterClose.top - actorBeforeOpen.top), JSON.stringify({ actorAfterClose, actorBeforeOpen })).toBeLessThanOrEqual(1.5);
+
+  // A detached Hermes may be parked in clear space immediately above a protected
+  // surface. Opening the menu must not translate the visible actor through it.
+  await stage.evaluate((node) => {
+    node.style.top = `${Number.parseFloat(window.getComputedStyle(node).top) - 80}px`;
+  });
+  const actorBeforeProtectedOpen = await page.locator('[data-hermes-companion-actor="true"]').evaluate((node) => node.getBoundingClientRect().toJSON());
+  const hullBeforeProtectedOpen = await page.locator('[data-hermes-carrier-travel-hull="true"]').evaluate((node) => node.getBoundingClientRect().toJSON());
+  await trigger.click({ button: 'right' });
+  await expect(menu).toBeVisible();
+  await page.evaluate((actor) => {
+    const blocker = document.createElement('div');
+    blocker.dataset.hermesProtected = 'true';
+    blocker.dataset.hermesProtectedTest = 'detached-menu';
+    blocker.style.cssText = `position:fixed;left:${actor.left}px;top:${actor.bottom + 8}px;width:${actor.width}px;height:56px;pointer-events:none;`;
+    document.body.append(blocker);
+  }, hullBeforeProtectedOpen);
+  const readProtectedGeometry = () => page.evaluate(() => {
+    const actor = document.querySelector<HTMLElement>('[data-hermes-carrier-travel-hull="true"]')!.getBoundingClientRect();
+    const blocker = document.querySelector<HTMLElement>('[data-hermes-protected-test="detached-menu"]')!.getBoundingClientRect();
+    const menuRect = document.querySelector<HTMLElement>('[data-hermes-action-menu="true"]')!.getBoundingClientRect();
+    const viewport = window.visualViewport;
+    const viewportTop = viewport?.offsetTop ?? 0;
+    const viewportBottom = viewportTop + (viewport?.height ?? window.innerHeight);
+    const attachment = document.querySelector<HTMLElement>('[data-hermes-action-menu="true"]')!.dataset.hermesMenuAttachment;
+    const crown = document.querySelector<HTMLElement>('[data-hermes-visible-crown-anchor="true"]')!.getBoundingClientRect();
+    return {
+      actor: actor.toJSON(),
+      attachment,
+      attachmentGap: attachment === 'left'
+        ? actor.left - menuRect.right
+        : attachment === 'right'
+          ? menuRect.left - actor.right
+          : crown.top + crown.height / 2 - menuRect.bottom,
+      blocker: blocker.toJSON(),
+      menu: menuRect.toJSON(),
+      menuActorOverlap: menuRect.left < actor.right && menuRect.right > actor.left && menuRect.top < actor.bottom && menuRect.bottom > actor.top,
+      menuActorHorizontalContinuity: menuRect.left < actor.right && menuRect.right > actor.left,
+      protectedGap: blocker.top - actor.bottom,
+      protectedOverlap: actor.left < blocker.right && actor.right > blocker.left && actor.top < blocker.bottom && actor.bottom > blocker.top,
+      viewportBottom,
+      viewportTop,
+    };
+  });
+  await expect.poll(async () => (await readProtectedGeometry()).protectedGap).toBeGreaterThanOrEqual(0);
+  const protectedGeometry = await readProtectedGeometry();
+  expect(protectedGeometry.protectedGap, JSON.stringify(protectedGeometry)).toBeGreaterThanOrEqual(0);
+  expect(protectedGeometry.actor.top, JSON.stringify(protectedGeometry)).toBeGreaterThanOrEqual(protectedGeometry.viewportTop);
+  expect(protectedGeometry.actor.bottom, JSON.stringify(protectedGeometry)).toBeLessThanOrEqual(protectedGeometry.viewportBottom);
+  expect(protectedGeometry.menu.top, JSON.stringify(protectedGeometry)).toBeGreaterThanOrEqual(protectedGeometry.viewportTop + 8);
+  expect(protectedGeometry.menu.bottom, JSON.stringify(protectedGeometry)).toBeLessThanOrEqual(protectedGeometry.viewportBottom - 8);
+  expect(['left', 'right', 'above-wide'], JSON.stringify(protectedGeometry)).toContain(protectedGeometry.attachment);
+  expect(protectedGeometry.attachmentGap, JSON.stringify(protectedGeometry)).toBeGreaterThanOrEqual(24);
+  expect(protectedGeometry.attachmentGap, JSON.stringify(protectedGeometry)).toBeLessThanOrEqual(48);
+  expect(protectedGeometry.menuActorOverlap, JSON.stringify(protectedGeometry)).toBe(false);
+  if (protectedGeometry.attachment === 'above-wide') {
+    expect(protectedGeometry.menuActorHorizontalContinuity, JSON.stringify(protectedGeometry)).toBe(true);
+  }
+  await page.screenshot({ animations: 'disabled', path: `${outDir}/hermes-menu-detached-constrained.png` });
+  await page.keyboard.press('Escape');
+  await expect(trigger).toBeFocused();
+  const actorAfterProtectedClose = await page.locator('[data-hermes-companion-actor="true"]').evaluate((node) => node.getBoundingClientRect().toJSON());
+  expect(Math.abs(actorAfterProtectedClose.left - actorBeforeProtectedOpen.left), JSON.stringify({ actorAfterProtectedClose, actorBeforeProtectedOpen })).toBeLessThanOrEqual(1.5);
+  expect(Math.abs(actorAfterProtectedClose.top - actorBeforeProtectedOpen.top), JSON.stringify({ actorAfterProtectedClose, actorBeforeProtectedOpen })).toBeLessThanOrEqual(1.5);
+  await page.locator('[data-hermes-protected-test="detached-menu"]').evaluate((node) => node.remove());
+
+  await trigger.click({ button: 'right' });
+  await expect(menu).toBeVisible();
+  await page.keyboard.press('Escape');
+  const actorAfterRepeatedClose = await page.locator('[data-hermes-companion-actor="true"]').evaluate((node) => node.getBoundingClientRect().toJSON());
+  expect(Math.abs(actorAfterRepeatedClose.left - actorBeforeProtectedOpen.left), JSON.stringify({ actorAfterRepeatedClose, actorBeforeProtectedOpen })).toBeLessThanOrEqual(1.5);
+  expect(Math.abs(actorAfterRepeatedClose.top - actorBeforeProtectedOpen.top), JSON.stringify({ actorAfterRepeatedClose, actorBeforeProtectedOpen })).toBeLessThanOrEqual(1.5);
+  await context.close();
+});
+
 test('Hermes action menu restores the researcher scroll position after closing', async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 900 });
   await installClientFixtures(page);
