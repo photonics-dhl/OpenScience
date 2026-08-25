@@ -399,6 +399,34 @@ try {
     let visibleActions = menu.locator('[data-hermes-action-key]:visible');
     assert.equal(await visibleActions.count(), viewport.width <= 640 ? 8 : 12,
       label + ' must expose the correct compact or desktop action set');
+    const menuGeometry = await menu.evaluate((node) => {
+      const bounds = node.getBoundingClientRect();
+      const crown = document.querySelector('[data-hermes-visible-crown-anchor="true"]')?.getBoundingClientRect();
+      const margin = document.querySelector('[data-hermes-companion-margin="true"]')?.getBoundingClientRect();
+      const protectedOverlap = Array.from(document.querySelectorAll('[data-hermes-protected="true"]')).filter((element) => {
+        const region = element.getBoundingClientRect();
+        return bounds.left < region.right && bounds.right > region.left && bounds.top < region.bottom && bounds.bottom > region.top;
+      }).length;
+      const controlOverlap = Array.from(document.querySelectorAll('[data-hermes-presence-control="true"], .hermes-motion-enable')).filter((element) => {
+        const region = element.getBoundingClientRect();
+        const style = getComputedStyle(element);
+        return style.visibility !== 'hidden' && style.display !== 'none'
+          && bounds.left < region.right && bounds.right > region.left && bounds.top < region.bottom && bounds.bottom > region.top;
+      }).length;
+      return crown && margin ? {
+        contained: bounds.left >= margin.left - 1 && bounds.right <= margin.right + 1 && bounds.top >= margin.top - 1 && bounds.bottom <= margin.bottom + 1,
+        controlOverlap,
+        protectedOverlap,
+        tetherContent: getComputedStyle(node, '::after').content,
+        visibleGap: crown.top + crown.height / 2 - bounds.bottom,
+      } : null;
+    });
+    assert.ok(menuGeometry && menuGeometry.visibleGap >= 23.5 && menuGeometry.visibleGap <= 48.5,
+      label + ' tool sheet must stay 24-48px from visible Hermes: ' + JSON.stringify(menuGeometry));
+    assert.equal(menuGeometry?.contained, true, label + ' tool sheet must remain in the page-owned Hermes margin');
+    assert.equal(menuGeometry?.protectedOverlap, 0, label + ' tool sheet must not cover protected research content');
+    assert.equal(menuGeometry?.controlOverlap, 0, label + ' tool sheet must not cover Hermes presence or motion controls');
+    assert.equal(menuGeometry?.tetherContent, 'none', label + ' tool sheet must not draw a detached page-note tether');
     await page.screenshot({ animations: 'disabled', path: resolve(output, 'menu-dashboard-' + label + '.png') });
     await visibleActions.nth(Math.min(2, await visibleActions.count() - 1)).hover();
     await page.screenshot({ animations: 'disabled', path: resolve(output, 'menu-focus-' + label + '.png') });
@@ -424,20 +452,25 @@ try {
     const final = await assertFootprintsSafe(page, viewport, label + ' final');
     const bubbleStyle = await bubble.evaluate((node) => {
       const style = getComputedStyle(node);
-      const paragraph = node.querySelector('p') ?? node;
+      const paragraph = node.querySelector('.hermes-menu-feedback-copy') ?? node;
       const paragraphStyle = paragraph ? getComputedStyle(paragraph) : null;
       const paragraphRange = paragraph ? document.createRange() : null;
       paragraphRange?.selectNodeContents(paragraph);
       const paragraphBox = paragraphRange?.getBoundingClientRect();
+      const silhouette = node.querySelector('[data-hermes-speech-silhouette="true"]');
+      const contour = silhouette?.querySelector('[data-hermes-speech-contour="single"]');
+      const contourStyle = contour ? getComputedStyle(contour) : null;
       return {
         backdropFilter: style.backdropFilter,
         backgroundColor: style.backgroundColor,
         backgroundImage: style.backgroundImage,
-        borderRadius: style.borderRadius,
+        contourCount: silhouette?.querySelectorAll('path').length ?? 0,
+        contourFill: contourStyle?.fill,
+        contourStroke: contourStyle?.stroke,
         controlCount: node.querySelectorAll('button,[role="button"]').length,
         lineCount: paragraphBox && paragraphStyle ? Math.ceil(paragraphBox.height / Number.parseFloat(paragraphStyle.lineHeight)) : 0,
-        maxWidth: style.maxWidth,
-        shadow: style.boxShadow,
+        pseudoTailCount: [getComputedStyle(node, '::before').content, getComputedStyle(node, '::after').content].filter((content) => content !== 'none').length,
+        silhouetteFilter: silhouette ? getComputedStyle(silhouette).filter : 'none',
         width: style.width,
         visibleToolbar: Array.from(node.querySelectorAll('.hermes-companion-actions, .hermes-companion-take-me'))
           .filter((element) => getComputedStyle(element).display !== 'none').length,
@@ -446,12 +479,15 @@ try {
     assert.equal(await bubble.getAttribute('data-hermes-bubble-material'), 'warm-paper', label + ' speech must use warm paper');
     assert.equal(await bubble.getAttribute('data-hermes-speech-origin'), 'mouth', label + ' speech must originate at the mouth');
     assert.equal(bubbleStyle.controlCount, 0, label + ' one-sentence speech must not render a detached control');
-    assert.ok(Number.parseFloat(bubbleStyle.width) <= 212, label + ' speech oval must remain at most 13.25rem');
-    assert.notEqual(bubbleStyle.borderRadius, '4px', label + ' speech must not fall back to the rectangular annotation');
-    assert.notEqual(bubbleStyle.backgroundColor, 'rgba(0, 0, 0, 0)', label + ' speech paper must be opaque');
+    assert.ok(Number.parseFloat(bubbleStyle.width) <= 224, label + ' speech silhouette must remain compact');
+    assert.equal(bubbleStyle.contourCount, 1, label + ' speech paper and tail must share one SVG contour');
+    assert.notEqual(bubbleStyle.contourFill, 'none', label + ' speech contour must own the warm-paper fill');
+    assert.notEqual(bubbleStyle.contourStroke, 'none', label + ' speech contour must own the continuous ink outline');
+    assert.equal(bubbleStyle.pseudoTailCount, 0, label + ' speech must not reconstruct its tail from CSS pseudo-elements');
+    assert.notEqual(bubbleStyle.silhouetteFilter, 'none', label + ' speech must use one restrained paper shadow');
+    assert.equal(bubbleStyle.backgroundColor, 'rgba(0, 0, 0, 0)', label + ' semantic speech wrapper must not add a second paper shape');
     assert.equal(bubbleStyle.backgroundImage, 'none', label + ' bubble must not use a gradient');
     assert.equal(bubbleStyle.backdropFilter, 'none', label + ' bubble must not use blur');
-    assert.notEqual(bubbleStyle.shadow, 'none', label + ' bubble must use one restrained paper shadow');
     if (viewport.width <= 640) {
       assert.equal(bubbleVisible, true, label + ' must use the safe centered mobile bubble fallback');
       assert.ok(bubbleStyle.lineCount <= 3, label + ' mobile cue must remain one short sentence: ' + JSON.stringify(bubbleStyle));
@@ -459,20 +495,19 @@ try {
     }
     const bubbleBox = bubbleVisible ? await bubble.boundingBox() : null;
     const bubblePointer = bubbleBox ? await bubble.evaluate((node) => {
-      const mouth = document.querySelector('[data-hermes-mouth-anchor="true"]')?.getBoundingClientRect();
-      const bounds = node.getBoundingClientRect();
-      const tail = getComputedStyle(node, '::after');
+      const mouth = document.querySelector('[data-hermes-visible-mouth-anchor="true"]')?.getBoundingClientRect();
+      const tail = node.querySelector('[data-hermes-speech-tip="true"]')?.getBoundingClientRect();
       const tailTip = {
-        x: bounds.right - Number.parseFloat(tail.right),
-        y: bounds.bottom - Number.parseFloat(tail.bottom),
+        x: tail ? tail.left + tail.width / 2 : Number.NaN,
+        y: tail ? tail.top + tail.height / 2 : Number.NaN,
       };
       return mouth ? {
-        mouth: { x: mouth.x, y: mouth.y },
-        mouthDistance: Math.hypot(tailTip.x - mouth.x, tailTip.y - mouth.y),
+        mouth: { x: mouth.left + mouth.width / 2, y: mouth.top + mouth.height / 2 },
+        mouthDistance: Math.hypot(tailTip.x - (mouth.left + mouth.width / 2), tailTip.y - (mouth.top + mouth.height / 2)),
         tailTip,
       } : null;
     }) : null;
-    assert.ok(bubblePointer && bubblePointer.mouthDistance <= 18,
+    assert.ok(bubblePointer && bubblePointer.mouthDistance <= 8,
       `${label} companion speech tail must terminate at the mouth: ${JSON.stringify(bubblePointer)}`);
     assert.equal(final.protectedRegions.some((region) => bubbleBox && overlaps(bubbleBox, region)), false,
       `${label} companion speech must not cover a protected surface`);

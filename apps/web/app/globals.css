@@ -2163,12 +2163,12 @@ body {
   background: transparent;
   color: var(--os-ink);
   box-shadow: none;
-  translate: 0 0;
+  translate: 0 calc(2.25rem + var(--hermes-menu-correction-y, 0px));
   transform-origin: var(--radix-context-menu-content-transform-origin);
 }
 
-.hermes-context-menu[data-side='left'] { translate: 50% 0; }
-.hermes-context-menu[data-side='right'] { translate: -50% 0; }
+.hermes-context-menu[data-side='left'] { translate: 50% calc(2.25rem + var(--hermes-menu-correction-y, 0px)); }
+.hermes-context-menu[data-side='right'] { translate: -50% calc(2.25rem + var(--hermes-menu-correction-y, 0px)); }
 
 .hermes-context-menu::before {
   position: absolute;
@@ -2181,21 +2181,21 @@ body {
   pointer-events: none;
 }
 
-.hermes-context-menu::after {
-  position: absolute;
-  z-index: 0;
-  right: 4.6rem;
-  bottom: -1.625rem;
-  width: 2px;
-  height: 1.625rem;
-  background: var(--os-vermilion-ink);
-  content: '';
-  pointer-events: none;
-  transform: rotate(14deg);
-  transform-origin: top;
+.hermes-context-menu > * { position: relative; z-index: 1; }
+
+/* The open sheet occupies the page-owned Hermes margin. Expanding the flow
+   band and counter-scrolling in HermesVisualAdapter keeps the actor still. */
+.hermes-dock-anchor:has(.hermes-visual[data-hermes-menu-open='true']) {
+  min-height: 46rem;
 }
 
-.hermes-context-menu > * { position: relative; z-index: 1; }
+.hermes-dock-anchor:has(.hermes-visual[data-hermes-menu-open='true']) .hermes-workspace-stage[data-hermes-placement='anchored'] {
+  margin-top: 23.5rem;
+}
+
+.hermes-dock-anchor:has(.hermes-visual[data-hermes-menu-open='true']) :is(.hermes-presence-control, .hermes-motion-enable) {
+  visibility: hidden;
+}
 
 .hermes-context-menu[data-state='open'] {
   animation: hermes-context-menu-open 160ms ease-out;
@@ -2215,7 +2215,11 @@ body {
   max-height: none;
   overflow: visible;
   padding: .8rem .9rem .68rem;
+  translate: 0 calc(1.25rem + var(--hermes-menu-correction-y, 0px));
 }
+
+.hermes-context-menu[data-compact='true'][data-side='left'] { translate: 50% calc(1.25rem + var(--hermes-menu-correction-y, 0px)); }
+.hermes-context-menu[data-compact='true'][data-side='right'] { translate: -50% calc(1.25rem + var(--hermes-menu-correction-y, 0px)); }
 
 .hermes-context-menu[data-compact='true']::before {
   inset: 0;
@@ -2434,6 +2438,20 @@ body {
   height: 2px;
   pointer-events: none;
   transform: translate(-50%, -50%);
+}
+
+.hermes-visible-crown-anchor {
+  position: absolute;
+  top: 13%;
+  left: 50%;
+  width: 2px;
+  height: 2px;
+  pointer-events: none;
+  transform: translate(-50%, -50%);
+}
+
+.hermes-visual[data-hermes-menu-open='true'] .hermes-visual-state-label {
+  opacity: 0;
 }
 
 .hermes-workspace-stage[data-hermes-action='patrol'] .hermes-companion-actor {
@@ -2827,9 +2845,9 @@ body {
   }
 
   .hermes-workspace-stage[data-hermes-stage-size='200'] .hermes-menu-feedback {
-    top: -.9rem;
+    top: -1.4rem;
     bottom: auto;
-    left: .75rem;
+    left: -2.55rem;
     width: 11rem;
     height: 6.7rem;
     padding: 0;
@@ -2843,6 +2861,10 @@ body {
 
   .hermes-workspace-stage[data-hermes-stage-size='200'] .hermes-visible-mouth-anchor {
     top: 38%;
+  }
+
+  .hermes-workspace-stage[data-hermes-stage-size='200'] .hermes-visible-crown-anchor {
+    top: 17%;
   }
 
   .hermes-workspace-stage[data-hermes-stage-size='200'][data-hermes-bubble-vertical='below'] .hermes-performance-bubble::after {

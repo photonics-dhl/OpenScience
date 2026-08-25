@@ -211,6 +211,7 @@ describe('Hermes dashboard guidance', () => {
     expect(markup).toContain('data-hermes-speech-contour="single"');
     expect(markup).toContain('data-hermes-speech-tip="true"');
     expect(markup).toContain('data-hermes-visible-mouth-anchor="true"');
+    expect(markup).toContain('data-hermes-visible-crown-anchor="true"');
     expect(markup).toContain('guide.menu.actions.read-together.feedback');
     expect(markup).not.toContain('<span>guide.menu.companion</span>');
     expect(markup).not.toContain('data-hermes-mouth-anchor=');

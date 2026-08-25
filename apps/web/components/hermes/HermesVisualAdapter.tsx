@@ -121,6 +121,7 @@ export function HermesVisualAdapter({ action, actionStartedAtMs, assistantOpen =
   const locale = useLocale();
   const router = useRouter();
   const linkRef = useRef<HTMLButtonElement>(null);
+  const menuContentRef = useRef<HTMLDivElement>(null);
   const longPressRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const longPressStartRef = useRef<{ x: number; y: number } | null>(null);
   const suppressClickRef = useRef(false);
@@ -176,7 +177,7 @@ export function HermesVisualAdapter({ action, actionStartedAtMs, assistantOpen =
 
   const updateMenuOpen = (open: boolean) => {
     const trigger = linkRef.current;
-    menuLayoutActorTopRef.current = compactMenu && trigger?.closest('[data-hermes-placement="anchored"]')
+    menuLayoutActorTopRef.current = trigger?.closest('[data-hermes-placement="anchored"]')
       ? getActorBounds()?.top ?? null
       : null;
     setMenuOpen(open);
@@ -187,13 +188,28 @@ export function HermesVisualAdapter({ action, actionStartedAtMs, assistantOpen =
     const actorTopBeforeLayout = menuLayoutActorTopRef.current;
     menuLayoutActorTopRef.current = null;
     const trigger = linkRef.current;
-    if (actorTopBeforeLayout === null || !compactMenu || !trigger?.closest('[data-hermes-placement="anchored"]')) return;
+    if (actorTopBeforeLayout === null || !trigger?.closest('[data-hermes-placement="anchored"]')) return;
     const actorTopAfterLayout = getActorBounds()?.top;
     if (actorTopAfterLayout === undefined) return;
-    // The compact tool band joins the document flow; counter-scroll keeps Hermes
+    // The carried tool band joins the document flow; counter-scroll keeps Hermes
     // visually stationary while the protected research surface moves clear.
     const layoutShift = actorTopAfterLayout - actorTopBeforeLayout;
     if (Math.abs(layoutShift) > 1) window.scrollBy({ behavior: 'auto', top: layoutShift });
+  }, [menuOpen]);
+
+  useClientLayoutEffect(() => {
+    if (!menuOpen) return;
+    const frame = window.requestAnimationFrame(() => {
+      const menu = menuContentRef.current;
+      const crown = linkRef.current?.querySelector<HTMLElement>('[data-hermes-visible-crown-anchor="true"]');
+      if (!menu || !crown) return;
+      menu.style.setProperty('--hermes-menu-correction-y', '0px');
+      const menuBounds = menu.getBoundingClientRect();
+      const crownBounds = crown.getBoundingClientRect();
+      const visibleGap = crownBounds.top + crownBounds.height / 2 - menuBounds.bottom;
+      menu.style.setProperty('--hermes-menu-correction-y', `${visibleGap - 32}px`);
+    });
+    return () => window.cancelAnimationFrame(frame);
   }, [compactMenu, menuOpen]);
 
   const dispatchContextMenu = () => {
@@ -203,14 +219,21 @@ export function HermesVisualAdapter({ action, actionStartedAtMs, assistantOpen =
     if (trigger.closest('[data-hermes-placement="anchored"]')) {
       const initialBounds = getActorBounds() ?? trigger.getBoundingClientRect();
       const viewportTop = window.visualViewport?.offsetTop ?? 0;
-      const requiredActorTop = viewportTop + estimatedMenuHeight + 40;
+      const requiredActorTop = viewportTop + estimatedMenuHeight + 80;
       const availableScroll = window.scrollY;
       const scrollDelta = Math.max(-availableScroll, initialBounds.top - requiredActorTop);
       if (scrollDelta < -1) window.scrollBy({ behavior: 'auto', top: scrollDelta });
     }
     const bounds = getActorBounds() ?? trigger.getBoundingClientRect();
     const menuWidth = compactMenu ? 304 : 360;
-    const menuX = Math.max(menuWidth / 2 + 8, Math.min(window.innerWidth - menuWidth / 2 - 8, bounds.left + bounds.width / 2));
+    const marginBounds = trigger.closest<HTMLElement>('[data-hermes-companion-margin="true"]')?.getBoundingClientRect();
+    const horizontalBounds = marginBounds ?? { left: 0, right: window.innerWidth };
+    const preferredX = marginBounds ? marginBounds.left + marginBounds.width / 2 : bounds.left + bounds.width / 2;
+    const minimumX = horizontalBounds.left + menuWidth / 2 + 8;
+    const maximumX = horizontalBounds.right - menuWidth / 2 - 8;
+    const menuX = maximumX >= minimumX
+      ? Math.max(minimumX, Math.min(maximumX, preferredX))
+      : preferredX;
     const menuY = bounds.top - 32 - estimatedMenuHeight;
     trigger.dispatchEvent(new MouseEvent('contextmenu', {
       bubbles: true,
@@ -425,6 +448,7 @@ export function HermesVisualAdapter({ action, actionStartedAtMs, assistantOpen =
               rendererGeneration={rendererGeneration}
               state={state}
             />
+            <span aria-hidden="true" className="hermes-visible-crown-anchor" data-hermes-visible-crown-anchor="true" />
             <span aria-hidden="true" className="hermes-visible-mouth-anchor" data-hermes-visible-mouth-anchor="true" />
           </span>
           <span aria-hidden={!promptVisible} className="hermes-guide-nudge" data-visible={promptVisible ? 'true' : 'false'}>{t(suggestion.bodyKey)}</span>
@@ -439,6 +463,7 @@ export function HermesVisualAdapter({ action, actionStartedAtMs, assistantOpen =
         data-hermes-reduced-motion={reducedMotion ? 'true' : 'false'}
         data-locale={locale}
         loop
+        ref={menuContentRef}
       >
         <ContextMenuLabel className="hermes-context-menu-label">
           <span>{t('guide.menu.eyebrow')}</span>
