@@ -1,20 +1,20 @@
 # OpenScience 进度（CURRENT window）
 
-> 最新同步：2026-08-25 21:20 +08。历史由 Git 保存；旧计划和 archive 不作为默认输入。
+> 最新同步：2026-08-25 21:30 +08。历史由 Git 保存；旧计划和 archive 不作为默认输入。
 
 ## Current version tuple
 
-- Branch / deployed application source: `codex/hermes-wanko-live2d` / `9a7263e41f78b250f11b2f8e3413ddc997def8a4`；immutable release 为 `cbf5737bdffd50e9ba6d629d4ea9c5e006226263`。
-- Current rollback 为功能健康的首次 correction `cc6cff6275b069c8ad89eddcfcda0e3d6011b0bf`；post-deploy docs HEAD 不与应用身份混写。
+- Branch / deployed application source: `codex/hermes-wanko-live2d` / `8d1409e56f9883a3a711944f80cb2a1e4d71e73e`；immutable release 为 `6b804f716a81c3b162262e369c7b08c4f25725e1`。
+- Current rollback 为前一健康 release `cbf5737bdffd50e9ba6d629d4ea9c5e006226263`；post-deploy docs HEAD 不与应用身份混写。
 - Local main / origin main: `c60ffdd16b85ea8f0d8b047493fa03a4c0230c05` / `7eb2f5bc4718ee445b79bd089acb64acb3691e62`；两者都早于当前工作分支，远端 Hermes feature 不存在。
-- ECS release / rollback: `cbf5737bdffd50e9ba6d629d4ea9c5e006226263` / `cc6cff6275b069c8ad89eddcfcda0e3d6011b0bf`。
+- ECS release / rollback: `6b804f716a81c3b162262e369c7b08c4f25725e1` / `cbf5737bdffd50e9ba6d629d4ea9c5e006226263`。
 
-## 2026-08-25 — Hermes viewport-safe lively interaction candidate
+## 2026-08-25 — Hermes viewport-safe lively interaction deployed
 
 - 用户生产截图证明右键工具页越过浏览器顶边，动作反馈又退化为固定气泡；根因是 Radix collision 后仍叠加固定 CSS 位移，以及每动作只有一句且语言先于角色 performance。
 - Application `8d1409e` 改为测量真实 portal 后约束 viewport/protected regions；desktop 只移动页边，mobile counter-scroll，关闭/卸载恢复原始 scroll。12 动作均有真实 Wanko performance，每动作每语言三句且不连续重复，动作先行 `320/520ms` 后再说话。
 - 输入、搜索、drawer/modal 和 approval 会取消待显示短句；已处于中断状态的动作不创建 timer。quiet editor 无中断时仍允许用户显式反馈，reduced-motion 保留文案与目的地。
-- Fresh evidence：Web `411/411` + 5 Node、product release `65/65`、focused Live2D/work-assistant gates、全仓 typecheck/lint/test/build、`git diff --check` 与独立复审 GREEN。production 尚保持健康的 `cbf5737`，本候选等待 immutable `--skip-migrate` 发布。
+- Fresh evidence：Web `411/411` + 5 Node、product release `65/65`、focused Live2D/work-assistant gates、全仓 typecheck/lint/test/build、`git diff --check` 与独立复审 GREEN。release `6b804f7` 已以 `cbf5737` 为 rollback、`--skip-migrate` 发布；backup `432K files=7/7`、server 19-page build、27/27 migrations current、容器/入口/资源/markers 全绿，公网 no-write `6/6`。当前视口/actor 截图确认角色与口部 speech 同屏；full-page WebGL 空帧只属 stitched capture 限制。
 
 ## 2026-08-25 — Hermes carried tool sheet deployed
 
@@ -82,7 +82,7 @@
 
 ## Constraints and next action
 
-- production `cbf5737` 已完成 immutable ECS 与公网无写入验收；下一步由用户在真实 Dashboard/mobile/editor 复核轮廓、嘴部连续感、菜单密度和动作反馈。
+- production `6b804f7` 已完成 immutable ECS 与公网无写入验收；下一步由用户在真实 Dashboard/mobile/editor 复核菜单可见性、动作生动程度、话语变化和整体节奏。
 - 用户随后在 Dashboard、移动端和 quiet editor 验收轮廓连续、嘴部连接、菜单密度/间距与动作反馈；明确接受前不得称视觉通过。
 - Landing 不变；分支未集成，后续单独决定 merge / PR / 保留。
 

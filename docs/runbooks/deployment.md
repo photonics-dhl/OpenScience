@@ -1,6 +1,6 @@
 # Runbook: 部署（Deployment）
 
-> 状态：**CURRENT**。2026-08-25 active immutable release 为 `cbf5737bdffd50e9ba6d629d4ea9c5e006226263`，rollback tree 为 `cc6cff6275b069c8ad89eddcfcda0e3d6011b0bf`；Hermes application source 为 `9a7263e41f78b250f11b2f8e3413ddc997def8a4`。post-deploy docs-only HEAD 不得冒充 application source。
+> 状态：**CURRENT**。2026-08-25 active immutable release 为 `6b804f716a81c3b162262e369c7b08c4f25725e1`，rollback tree 为 `cbf5737bdffd50e9ba6d629d4ea9c5e006226263`；Hermes application source 为 `8d1409e56f9883a3a711944f80cb2a1e4d71e73e`。post-deploy docs-only HEAD 不得冒充 application source。
 > 格式遵循 `.agents/skills/infra-runbook/SKILL.md` 四节强制要求。
 > 部署属 Spec §20.5"询问"级操作：执行前需用户确认，必须走 `infra/scripts/deploy.sh` + CI/CD，禁止手工改服务器代码。
 
@@ -763,10 +763,10 @@ Historical note for the 2026-08-11 release: it used fixed worker tags and a writ
   screenshots were opened at original scale. User visual acceptance remains
   pending; no migration, seed or research-data write ran.
 
-### 5.22 Hermes viewport-safe lively interaction candidate (2026-08-25)
+### 5.22 Hermes viewport-safe lively interaction release (2026-08-25)
 
-> Application source `8d1409e`; production remains `cbf5737` with rollback
-> `cc6cff6` until the immutable candidate is deployed.
+> Application source `8d1409e`; active immutable release `6b804f7`; rollback
+> `cbf5737`.
 
 - Scope is Web-only: real portal/protected-region menu measurement, exact scroll
   restoration, twelve action-first Wanko performances, three localized lines
@@ -774,6 +774,14 @@ Historical note for the 2026-08-11 release: it used fixed worker tags and a writ
 - Local evidence: Web `411/411` plus five Node contracts, product release
   `65/65`, focused Live2D/work-assistant gates, full root typecheck/lint/test/
   build, diff check and independent review all pass.
-- Execute canonical pre-checkup, database backup, clean exact dry-run and
-  confirmed `--skip-migrate` deployment using the actual active `cbf5737` as
-  rollback. Do not run migration, seed or any research-data write.
+- Operation: canonical pre/post checkup passed; backup returned `432K files=7/7`.
+  Exact dry-run preceded the confirmed `--skip-migrate` deployment with
+  `cbf5737` as rollback. Server full workspace/19-page build, healthy target
+  containers, 27/27 current migrations, Cloudflare/loopback ingress, real
+  Dashboard/model/moc/motion assets, exact release, absent failure marker and
+  retained rollback tree pass. Public no-write Hermes acceptance is `6/6`.
+- Original current-viewport and actor captures show Wanko and mouth-linked
+  speech together. The blank actor in a full-page stitched screenshot was
+  reproduced as Playwright clearing an offscreen WebGL buffer; full-page WebGL
+  composites are not valid actor-presence evidence. No migration, seed or
+  research-data write ran.

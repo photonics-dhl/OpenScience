@@ -1,6 +1,6 @@
 # Hermes Wanko Live2D Companion Design
 
-Status: **CURRENT — §13.6 application `8d1409e` is the approved deployment candidate; production remains release `cbf5737` until immutable deployment completes**
+Status: **CURRENT — §13.6 application `8d1409e` is deployed in immutable release `6b804f7`; automated, public and original-viewport operator gates pass; user visual acceptance remains pending**
 
 Supersedes only the visual renderer and motion-authoring portions of:
 
@@ -968,3 +968,8 @@ approval interruption, ordinary-click drawer behavior, keyboard access and
 mobile long press. Application `8d1409e` passes Web `411/411` plus five Node
 contracts, product release `65/65`, both focused Hermes visual gates, full root
 typecheck/lint/test/build and independent review with no remaining finding.
+Immutable release `6b804f7` is active with `cbf5737` retained as rollback.
+Public no-write interaction acceptance passes `6/6`; current-viewport and actor
+screenshots confirm Wanko and mouth-linked speech are present together. A
+Playwright full-page stitched screenshot can clear an offscreen WebGL canvas and
+is not valid evidence of actor absence; use current-viewport or element capture.
