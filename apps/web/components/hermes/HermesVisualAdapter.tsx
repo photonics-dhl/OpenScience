@@ -98,6 +98,7 @@ export interface HermesVisualAdapterProps {
   menuFeedback?: HermesMenuFeedback | null;
   onRuntimeStatus?: (status: HermesRuntimeStatus) => void;
   promptSuppressed?: boolean;
+  protectedGeometryVersion: number;
   reducedMotion: boolean;
   rendererGeneration?: number;
 }
@@ -117,7 +118,7 @@ const HERMES_ACTION_ICONS: Record<HermesContextActionIcon, LucideIcon> = {
   thought: Brain,
 };
 
-export function HermesVisualAdapter({ action, actionStartedAtMs, assistantOpen = false, compactPresentation = false, state, suggestion, onInvoke, onMenuAction, menuFeedback = null, onRuntimeStatus, promptSuppressed = false, reducedMotion, rendererGeneration }: HermesVisualAdapterProps) {
+export function HermesVisualAdapter({ action, actionStartedAtMs, assistantOpen = false, compactPresentation = false, state, suggestion, onInvoke, onMenuAction, menuFeedback = null, onRuntimeStatus, promptSuppressed = false, protectedGeometryVersion, reducedMotion, rendererGeneration }: HermesVisualAdapterProps) {
   const t = useTranslations('dashboard.hermes');
   const locale = useLocale();
   const router = useRouter();
@@ -138,7 +139,12 @@ export function HermesVisualAdapter({ action, actionStartedAtMs, assistantOpen =
   const [compactMenu, setCompactMenu] = useState(false);
   const [compactGroup, setCompactGroup] = useState<'companion' | 'research'>('companion');
   const [menuOpen, setMenuOpen] = useState(false);
-  const menuLayoutRef = useRef<{ actorTop: number; scrollY: number; stage: HTMLElement | null } | null>(null);
+  const menuLayoutRef = useRef<{
+    actorTop: number;
+    scrollY: number;
+    stage: HTMLElement | null;
+    stageTranslate: string;
+  } | null>(null);
   const promptPlayedRef = useRef(false);
   const still = state === 'awaiting_approval';
   const presence = still ? 'still' : state === 'scanning' ? 'working' : assistantOpen ? 'open' : engaged ? 'attentive' : 'idle';
@@ -186,6 +192,7 @@ export function HermesVisualAdapter({ action, actionStartedAtMs, assistantOpen =
         actorTop,
         scrollY: window.scrollY,
         stage: trigger.closest<HTMLElement>('[data-hermes-workspace-stage="true"]'),
+        stageTranslate: trigger.closest<HTMLElement>('[data-hermes-workspace-stage="true"]')?.style.translate ?? '',
       };
     }
     setMenuOpen(open);
@@ -197,77 +204,141 @@ export function HermesVisualAdapter({ action, actionStartedAtMs, assistantOpen =
     const layout = menuLayoutRef.current;
     if (!layout || !trigger?.closest('[data-hermes-placement="anchored"]')) return;
     const stage = layout.stage;
+    const restoreStageTranslate = () => {
+      if (!stage) return;
+      if (layout.stageTranslate) stage.style.translate = layout.stageTranslate;
+      else stage.style.removeProperty('translate');
+      stage.removeAttribute('data-hermes-menu-layout-shift');
+    };
     if (!menuOpen) {
-      stage?.style.removeProperty('translate');
-      stage?.removeAttribute('data-hermes-menu-layout-shift');
+      restoreStageTranslate();
       window.scrollTo({ behavior: 'auto', top: layout.scrollY });
       menuLayoutRef.current = null;
       return;
     }
-    // Radix mounts portalled content after the parent layout effect. Measure in
-    // the next frame so the calculation uses the real sheet, not an estimate.
-    const frame = window.requestAnimationFrame(() => {
-      const actorTopAfterLayout = getActorBounds()?.top;
+    let layoutFrame = 0;
+    let menuFrame = 0;
+    let settleFrame = 0;
+    const crown = trigger.querySelector<HTMLElement>('[data-hermes-visible-crown-anchor="true"]');
+    const margin = trigger.closest<HTMLElement>('[data-hermes-companion-margin="true"]');
+    if (!crown) return;
+    let observedMenu: HTMLElement | null = null;
+    let scheduleStabilization = () => {};
+    const resizeObserver = new ResizeObserver(() => scheduleStabilization());
+
+    const viewportBounds = () => {
+      const top = window.visualViewport?.offsetTop ?? 0;
+      return { bottom: top + (window.visualViewport?.height ?? window.innerHeight), top };
+    };
+    const protectedClearanceTop = (menuBounds: DOMRect, crownCenter: number) => {
+      const viewport = viewportBounds();
+      return Array.from(document.querySelectorAll<HTMLElement>('[data-hermes-protected="true"]'))
+        .reduce((clearance, node) => {
+          const bounds = node.getBoundingClientRect();
+          const horizontallyOverlaps = menuBounds.left < bounds.right && menuBounds.right > bounds.left;
+          const sitsAboveHermes = bounds.top < crownCenter;
+          return horizontallyOverlaps && sitsAboveHermes ? Math.max(clearance, bounds.bottom + 8) : clearance;
+        }, viewport.top + 8);
+    };
+    const alignMenuToCrown = () => {
       const menu = menuContentRef.current;
-      const crown = trigger.querySelector<HTMLElement>('[data-hermes-visible-crown-anchor="true"]');
-      if (actorTopAfterLayout === undefined || !menu || !crown) return;
+      if (!menu) return;
+      menu.style.setProperty('--hermes-menu-correction-y', '0px');
+      const menuBounds = menu.getBoundingClientRect();
+      const crownBounds = crown.getBoundingClientRect();
+      const crownCenter = crownBounds.top + crownBounds.height / 2;
+      const viewport = viewportBounds();
+      const minimumTop = protectedClearanceTop(menuBounds, crownCenter);
+      const maximumTop = Math.max(viewport.top + 8, viewport.bottom - 8 - menuBounds.height);
+      const preferredTop = crownCenter - menuBounds.height - 32;
+      const boundedTop = Math.max(viewport.top + 8, Math.min(maximumTop, Math.max(minimumTop, preferredTop)));
+      menu.style.setProperty('--hermes-menu-correction-y', `${boundedTop - menuBounds.top}px`);
+    };
+    const stabilizeLayout = () => {
+      const menu = menuContentRef.current;
+      if (!menu) {
+        layoutFrame = window.requestAnimationFrame(stabilizeLayout);
+        return;
+      }
+      if (menu !== observedMenu) {
+        if (observedMenu) resizeObserver.unobserve(observedMenu);
+        observedMenu = menu;
+        resizeObserver.observe(menu);
+      }
+      restoreStageTranslate();
+      menu.style.setProperty('--hermes-menu-correction-y', '0px');
+      const actorTopAfterLayout = getActorBounds()?.top;
+      if (actorTopAfterLayout === undefined) return;
       if (compactMenu) {
         // The compact sheet reserves document flow below the long-press point.
         // Counter-scroll that reflow so the 200 px actor stays under the finger.
         window.scrollTo({ behavior: 'auto', top: window.scrollY + actorTopAfterLayout - layout.actorTop });
+        alignMenuToCrown();
+        menuFrame = window.requestAnimationFrame(alignMenuToCrown);
         return;
       }
-      const crownBounds = crown.getBoundingClientRect();
-      const crownOffset = crownBounds.top + crownBounds.height / 2 - actorTopAfterLayout;
-      const viewportTop = window.visualViewport?.offsetTop ?? 0;
-      const viewportBottom = viewportTop + (window.visualViewport?.height ?? window.innerHeight);
-      const menuBounds = menu.getBoundingClientRect();
-      const protectedClearanceTop = Array.from(document.querySelectorAll<HTMLElement>('[data-hermes-protected="true"]'))
-        .reduce((clearance, node) => {
-          const bounds = node.getBoundingClientRect();
-          const horizontallyOverlaps = menuBounds.left < bounds.right && menuBounds.right > bounds.left;
-          const sitsAboveHermes = bounds.top < crownBounds.top + crownBounds.height / 2;
-          return horizontallyOverlaps && sitsAboveHermes ? Math.max(clearance, bounds.bottom + 8) : clearance;
-        }, viewportTop + 8);
-      const minimumActorTop = protectedClearanceTop + menuBounds.height + 32 - crownOffset;
-      const maximumActorTop = viewportBottom - 8 + 32 - crownOffset;
-      const neededDown = Math.max(0, minimumActorTop - layout.actorTop);
-      const scrollUp = Math.min(layout.scrollY, neededDown);
-      const layoutShift = neededDown - scrollUp;
-      if (stage && layoutShift > 0) {
-        stage.style.translate = `0 ${layoutShift}px`;
-        stage.setAttribute('data-hermes-menu-layout-shift', `${layoutShift}`);
+      const reflowShift = layout.actorTop - actorTopAfterLayout;
+      if (stage && Math.abs(reflowShift) > .5) {
+        stage.style.translate = `0 ${reflowShift}px`;
+        stage.setAttribute('data-hermes-menu-layout-shift', `${reflowShift}`);
       }
-      const targetActorTop = layout.actorTop + scrollUp + layoutShift;
-      const scrollDown = Math.max(0, targetActorTop - maximumActorTop);
-      window.scrollTo({ behavior: 'auto', top: Math.max(0, layout.scrollY - scrollUp + scrollDown) });
-    });
-    return () => window.cancelAnimationFrame(frame);
-  }, [compactMenu, menuOpen]);
+      const actorBounds = getActorBounds();
+      if (!actorBounds) return;
+      const crownBounds = crown.getBoundingClientRect();
+      const menuBounds = menu.getBoundingClientRect();
+      const crownCenter = crownBounds.top + crownBounds.height / 2;
+      const viewport = viewportBounds();
+      const clearanceTop = protectedClearanceTop(menuBounds, crownCenter);
+      const preferredShift = Math.max(0, clearanceTop + menuBounds.height + 32 - crownCenter);
+      const minimumShift = Math.max(0, clearanceTop + menuBounds.height + 24 - crownCenter);
+      const maximumShift = viewport.bottom - 8 - actorBounds.bottom;
+      const layoutShift = Math.min(preferredShift, maximumShift);
+      if (stage && layoutShift >= Math.min(minimumShift, maximumShift) && Math.abs(reflowShift + layoutShift) > .5) {
+        stage.style.translate = `0 ${reflowShift + layoutShift}px`;
+        stage.setAttribute('data-hermes-menu-layout-shift', `${reflowShift + layoutShift}`);
+      }
+      alignMenuToCrown();
+      menuFrame = window.requestAnimationFrame(() => {
+        alignMenuToCrown();
+        settleFrame = window.requestAnimationFrame(alignMenuToCrown);
+      });
+    };
+    scheduleStabilization = () => {
+      window.cancelAnimationFrame(layoutFrame);
+      window.cancelAnimationFrame(menuFrame);
+      window.cancelAnimationFrame(settleFrame);
+      layoutFrame = window.requestAnimationFrame(stabilizeLayout);
+    };
+
+    if (menuContentRef.current) stabilizeLayout();
+    else scheduleStabilization();
+    if (margin) resizeObserver.observe(margin);
+    const mutationObserver = margin ? new MutationObserver(scheduleStabilization) : null;
+    mutationObserver?.observe(margin!, { attributeFilter: ['class', 'style'], attributes: true });
+    window.addEventListener('resize', scheduleStabilization);
+    window.visualViewport?.addEventListener('resize', scheduleStabilization);
+    window.visualViewport?.addEventListener('scroll', scheduleStabilization);
+    return () => {
+      resizeObserver.disconnect();
+      mutationObserver?.disconnect();
+      window.removeEventListener('resize', scheduleStabilization);
+      window.visualViewport?.removeEventListener('resize', scheduleStabilization);
+      window.visualViewport?.removeEventListener('scroll', scheduleStabilization);
+      window.cancelAnimationFrame(layoutFrame);
+      window.cancelAnimationFrame(menuFrame);
+      window.cancelAnimationFrame(settleFrame);
+    };
+  }, [compactGroup, compactMenu, menuOpen, protectedGeometryVersion]);
 
   useEffect(() => () => {
     const layout = menuLayoutRef.current;
     if (!layout) return;
-    layout.stage?.style.removeProperty('translate');
+    if (layout.stageTranslate) layout.stage?.style.setProperty('translate', layout.stageTranslate);
+    else layout.stage?.style.removeProperty('translate');
     layout.stage?.removeAttribute('data-hermes-menu-layout-shift');
     window.scrollTo({ behavior: 'auto', top: layout.scrollY });
     menuLayoutRef.current = null;
   }, []);
-
-  useClientLayoutEffect(() => {
-    if (!menuOpen) return;
-    const frame = window.requestAnimationFrame(() => {
-      const menu = menuContentRef.current;
-      const crown = linkRef.current?.querySelector<HTMLElement>('[data-hermes-visible-crown-anchor="true"]');
-      if (!menu || !crown) return;
-      menu.style.setProperty('--hermes-menu-correction-y', '0px');
-      const menuBounds = menu.getBoundingClientRect();
-      const crownBounds = crown.getBoundingClientRect();
-      const visibleGap = crownBounds.top + crownBounds.height / 2 - menuBounds.bottom;
-      menu.style.setProperty('--hermes-menu-correction-y', `${visibleGap - 32}px`);
-    });
-    return () => window.cancelAnimationFrame(frame);
-  }, [compactGroup, compactMenu, menuOpen]);
 
   const dispatchContextMenu = () => {
     const trigger = linkRef.current;
@@ -279,6 +350,7 @@ export function HermesVisualAdapter({ action, actionStartedAtMs, assistantOpen =
         actorTop: initialBounds.top,
         scrollY: window.scrollY,
         stage: trigger.closest<HTMLElement>('[data-hermes-workspace-stage="true"]'),
+        stageTranslate: trigger.closest<HTMLElement>('[data-hermes-workspace-stage="true"]')?.style.translate ?? '',
       };
       const viewportTop = window.visualViewport?.offsetTop ?? 0;
       const requiredActorTop = viewportTop + estimatedMenuHeight + 80;

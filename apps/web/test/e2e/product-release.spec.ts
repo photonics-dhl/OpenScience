@@ -279,14 +279,110 @@ test('Hermes action menu / desktop pointer and keyboard preserve the assistant e
   await trigger.focus();
   await page.keyboard.press('Shift+F10');
   await expect(menu).toBeVisible();
+  await expect(menu.locator('[data-hermes-action-key]').first()).toBeFocused();
   await page.keyboard.press('Escape');
-  await trigger.focus();
+  await expect(trigger).toBeFocused();
   await page.keyboard.press('ContextMenu');
   await expect(menu).toBeVisible();
+  await expect(menu.locator('[data-hermes-action-key]').first()).toBeFocused();
   await page.keyboard.press('Escape');
+  await expect(trigger).toBeFocused();
 
   await trigger.click();
   await expect(page.getByRole('dialog', { name: /Hermes/u })).toBeVisible();
+});
+
+test('Hermes action menu / high-DPI wide short viewport remains fully visible', async ({ browser }) => {
+  const context = await browser.newContext({
+    viewport: { width: 1612, height: 729 },
+    deviceScaleFactor: 1.875,
+  });
+  const page = await context.newPage();
+  await installClientFixtures(page);
+  await page.goto(`${baseUrl}/dashboard`, { waitUntil: 'networkidle' });
+  const trigger = page.locator('[data-hermes-input-owner="true"]');
+  await expect(trigger.locator('[data-hermes-rig="live2d-wanko"]')).toHaveAttribute('data-hermes-rig-status', 'ready', { timeout: 20_000 });
+
+  const triggerBox = await trigger.boundingBox();
+  expect(triggerBox).not.toBeNull();
+  await page.mouse.click(
+    triggerBox!.x + triggerBox!.width / 2,
+    Math.min(triggerBox!.y + triggerBox!.height / 2, 728),
+    { button: 'right' },
+  );
+  const menu = page.getByRole('menu', { name: /Hermes/u });
+  await expect(menu).toBeVisible();
+  await expect(menu.locator('[data-hermes-action-key]')).toHaveCount(12);
+  const upstreamProtected = page.locator('[data-hermes-primary-navigation="true"][data-hermes-protected="true"]');
+  await upstreamProtected.evaluate((navigation) => {
+    const header = navigation.closest<HTMLElement>('header');
+    if (!header) throw new Error('Protected navigation header is missing');
+    header.style.height = '32px';
+    header.style.minHeight = '32px';
+  });
+
+  const readGeometry = () => page.evaluate(() => {
+    const menuRect = document.querySelector<HTMLElement>('[data-hermes-action-menu="true"]')!.getBoundingClientRect();
+    const actorRect = document.querySelector<HTMLElement>('[data-hermes-companion-actor="true"]')!.getBoundingClientRect();
+    const crownRect = document.querySelector<HTMLElement>('[data-hermes-visible-crown-anchor="true"]')!.getBoundingClientRect();
+    const marginRect = document.querySelector<HTMLElement>('[data-hermes-companion-margin="true"]')!.getBoundingClientRect();
+    const stage = document.querySelector<HTMLElement>('[data-hermes-workspace-stage="true"]')!;
+    const protectedOverlaps = Array.from(document.querySelectorAll<HTMLElement>('[data-hermes-protected="true"]'))
+      .filter((node) => {
+        const rect = node.getBoundingClientRect();
+        return menuRect.left < rect.right && menuRect.right > rect.left && menuRect.top < rect.bottom && menuRect.bottom > rect.top;
+      }).length;
+    return {
+      actor: actorRect.toJSON(),
+      contained: menuRect.left >= marginRect.left - 1 && menuRect.right <= marginRect.right + 1,
+      crown: crownRect.toJSON(),
+      devicePixelRatio: window.devicePixelRatio,
+      gap: crownRect.top + crownRect.height / 2 - menuRect.bottom,
+      menu: menuRect.toJSON(),
+      menuTranslate: getComputedStyle(document.querySelector<HTMLElement>('[data-hermes-action-menu="true"]')!).translate,
+      protectedOverlaps,
+      scrollY: window.scrollY,
+      stageLayoutShift: stage.getAttribute('data-hermes-menu-layout-shift'),
+      stageTranslate: getComputedStyle(stage).translate,
+      visualViewport: window.visualViewport ? {
+        height: window.visualViewport.height,
+        offsetTop: window.visualViewport.offsetTop,
+        scale: window.visualViewport.scale,
+        width: window.visualViewport.width,
+      } : null,
+      viewport: { height: window.innerHeight, width: window.innerWidth },
+    };
+  });
+  await expect.poll(async () => (await readGeometry()).menu.top, { timeout: 2_000 }).toBeGreaterThanOrEqual(8);
+  await expect.poll(async () => {
+    const candidate = await readGeometry();
+    return candidate.viewport.height - candidate.menu.bottom;
+  }, { timeout: 2_000 }).toBeGreaterThanOrEqual(8);
+  await expect.poll(async () => {
+    const candidate = await readGeometry();
+    return candidate.viewport.height - candidate.actor.bottom;
+  }, { timeout: 2_000 }).toBeGreaterThanOrEqual(0);
+  await expect.poll(async () => (await readGeometry()).gap, { timeout: 2_000 }).toBeGreaterThanOrEqual(24);
+  await expect.poll(async () => (await readGeometry()).gap, { timeout: 2_000 }).toBeLessThanOrEqual(48);
+  await expect.poll(async () => (await readGeometry()).contained, { timeout: 2_000 }).toBe(true);
+  await expect.poll(async () => (await readGeometry()).protectedOverlaps, { timeout: 2_000 }).toBe(0);
+  const geometry = await readGeometry();
+  await page.screenshot({ animations: 'disabled', path: `${outDir}/hermes-menu-high-dpi-wide-short.png` });
+  expect(geometry.menu.top, JSON.stringify(geometry)).toBeGreaterThanOrEqual(8);
+  expect(geometry.menu.bottom, JSON.stringify(geometry)).toBeLessThanOrEqual(geometry.viewport.height - 8);
+  expect(geometry.gap, JSON.stringify(geometry)).toBeGreaterThanOrEqual(24);
+  expect(geometry.gap, JSON.stringify(geometry)).toBeLessThanOrEqual(48);
+  expect(geometry.contained, JSON.stringify(geometry)).toBe(true);
+  expect(geometry.protectedOverlaps, JSON.stringify(geometry)).toBe(0);
+  expect(geometry.actor.bottom, JSON.stringify(geometry)).toBeLessThanOrEqual(geometry.viewport.height);
+  await page.keyboard.press('Escape');
+  await expect(trigger).toBeFocused();
+  await upstreamProtected.evaluate((navigation) => {
+    const header = navigation.closest<HTMLElement>('header');
+    header?.style.removeProperty('height');
+    header?.style.removeProperty('min-height');
+  });
+  await context.close();
 });
 
 test('Hermes action menu restores the researcher scroll position after closing', async ({ page }) => {

@@ -1434,6 +1434,7 @@ function HermesWorkspaceStage({ fallbackAssistantOpen, fallbackOnInvoke, guideTa
           setRuntimeStatus(status);
         }}
         promptSuppressed={anchored || Boolean(speech.cue) || Boolean(menuFeedback) || Boolean(guideTarget)}
+        protectedGeometryVersion={protectedGeometryVersion}
         reducedMotion={effectiveReducedMotion}
         rendererGeneration={runtimeStatus.generation}
         state={state}
