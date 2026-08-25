@@ -1,13 +1,19 @@
 # OpenScience 进度（CURRENT window）
 
-> 最新同步：2026-08-25 22:45 +08。历史由 Git 保存；旧计划和 archive 不作为默认输入。
+> 最新同步：2026-08-26 00:31 +08。历史由 Git 保存；旧计划和 archive 不作为默认输入。
 
 ## Current version tuple
 
-- Branch / deployed application source: `codex/hermes-wanko-live2d` / `5323ba8d8bfff484a49d4e919d3364a447c17924`；immutable release 为 `bf54eaa2cd499f68eee8ce311a1ed178027a5348`。
+- Branch / candidate application / deployed application: `codex/hermes-wanko-live2d` / `9aef5c4d54d10b27a59389fa6865d179feb1891a` / `5323ba8d8bfff484a49d4e919d3364a447c17924`；immutable release 仍为 `bf54eaa2cd499f68eee8ce311a1ed178027a5348`。
 - Current rollback 为前一健康 release `6b804f716a81c3b162262e369c7b08c4f25725e1`；post-deploy docs HEAD 不与应用身份混写。
 - Local main / origin main: `c60ffdd16b85ea8f0d8b047493fa03a4c0230c05` / `7eb2f5bc4718ee445b79bd089acb64acb3691e62`；两者都早于当前工作分支，远端 Hermes feature 不存在。
 - ECS release / rollback: `bf54eaa2cd499f68eee8ce311a1ed178027a5348` / `6b804f716a81c3b162262e369c7b08c4f25725e1`。
+
+## 2026-08-26 — Detached Hermes menu correction ready to deploy
+
+- 用户截图对应的不是整页缩放，而是已持久化拖动位置的 `detached` Hermes；旧稳定器只处理 `anchored`，因此右侧裁剪中菜单可越过顶部并与角色形成大段断裂空白。Application `9aef5c4` 让 portalled sheet、真实帽顶与 travel hull 在 detached 状态进入同一几何计算，关闭后恢复原位置、滚动和焦点。
+- 正常空间保持完整 12 项纸页位于帽顶上方 `24–48px`；临时下移同时受 visual viewport 和 protected surfaces 限制。若上下空间物理冲突，只在该状态使用不碰内容的侧向纸页；侧向也不可用时改用较矮的上方宽幅 folio，不缩放角色、不压研究控件。
+- 旧生产构建在精确 custom-dock 回归中以 `menu.top=-31.7px` RED；protected 紧邻场景也先 RED。最终关键路径 repeat `10/10`、constrained repeat `5/5`、product release `67/67`、Web `411+5`、全仓 test/typecheck/lint、19-page build 与 `git diff --check` GREEN；独立复审 Ready，只有“侧向 fallback 未被单独强制命中”的非阻断覆盖缺口。ECS 尚未切换，当前 production 仍为 `bf54eaa`。
 
 ## 2026-08-25 — Hermes short-viewport collision correction deployed
 

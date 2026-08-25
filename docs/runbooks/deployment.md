@@ -806,3 +806,24 @@ Historical note for the 2026-08-11 release: it used fixed worker tags and a writ
   real Wanko/Cubism/model/moc/motion assets 200, exact release, absent failure
   marker and retained rollback tree pass. Public no-write Hermes is `9/9`,
   including `1612×729 / DPR 1.875`. No migration, seed or research-data write.
+
+### 5.24 Hermes detached-dock composition correction (2026-08-26)
+
+> Candidate application source `9aef5c4`; production remains release `bf54eaa`
+> with rollback `6b804f7` until the operation below completes.
+
+- Scope is Web-only: include persisted detached docks in the portal/crown/
+  travel-hull stabilizer; bound temporary movement by visual viewport and
+  protected surfaces; use side or shorter wide-folio geometry only when the
+  normal `24–48px` attachment is physically impossible. Restore dragged
+  position, scroll and focus on close. No API/schema/migration/seed/data write.
+- Local preflight: the old production build reproduces `menu.top=-31.7px` in
+  the exact custom-dock state. Final critical repeats are `10/10`, constrained
+  repeats `5/5`, product release `67/67`, Web `411+5`, root test/typecheck/lint,
+  19-page build and diff check GREEN; independent review is Ready.
+- Deploy only through the canonical Windows Git Bash scripts with
+  `XGS_CONFIG_ROOT=E:/Miscellaneous/XGS`, exact clean release SHA,
+  `--skip-migrate` and explicit rollback `bf54eaa...`. Record backup, server
+  full build, 27/27 migration status, target health, Parser isolation,
+  Cloudflare/loopback, runtime assets, exact release/failure/rollback markers
+  and the public no-write detached regression after completion.

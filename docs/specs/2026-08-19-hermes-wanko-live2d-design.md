@@ -1003,3 +1003,44 @@ the three-viewport work-assistant gate and independent review with no finding.
 Immutable release `bf54eaa` is active with `6b804f7` retained as rollback;
 server build, 27 current migrations, runtime isolation, ingress/assets/markers
 and public no-write Hermes `9/9` pass. Visual acceptance remains with the user.
+
+### 13.8 Detached-dock composition and physical fallback (approved 2026-08-26)
+
+The screenshot that followed §13.7 is a crop of the right-side companion area,
+not evidence of page zoom. It exposes a persisted dragged dock, identified by
+`data-hermes-placement="detached"`. The previous stabilizer captured only the
+anchored research-margin stage, so a detached menu could retain Radix's clipped
+portal position and leave a large unowned gap above Hermes.
+
+Anchored and detached triggers now share the same opening snapshot, real portal
+measurement and close/unmount restoration. The default detached composition is
+still the complete twelve-action carried sheet directly above the visible
+crown with a `24–48px` gap. The sheet, crown and carrier travel hull must all
+remain inside the visual viewport; closing restores the exact dragged position,
+scroll and keyboard focus, including after repeated open/close cycles.
+
+Temporary downward clearance is permitted only inside the page-owned stage and
+is bounded by both the visual viewport and every horizontally intersecting
+`data-hermes-protected` surface in its motion path. It must never move Wanko
+through a research card, navigation, input or approval control. If the minimum
+`24px` crown attachment cannot be achieved safely, the composition uses an
+explicit physical fallback: first the unchanged paper sheet beside the actor
+when a protected-free side rectangle exists; otherwise the same sheet becomes
+a shorter, wide folio above the crown. The fallback changes only geometry and
+column count. It does not shrink Hermes, hide actions, adopt a command-palette
+skin or cover protected work.
+
+The geometry decision always begins from the natural sheet dimensions before
+applying a fallback, preventing ResizeObserver oscillation between tall and
+wide states. Protected additions and size changes re-run the same calculation;
+all observers, visualViewport listeners and animation frames are disposed on
+close or unmount. Acceptance must cover the reported `1612×729 / DPR 1.875`
+custom dock, twelve items, viewport containment, protected clearance, bounded
+attachment, actor/menu separation, focus restoration and repeat stability.
+
+Implementation status (2026-08-26): application candidate `9aef5c4` passes the
+two critical paths repeated `10/10`, constrained fallback repeated `5/5`, the
+full product release `67/67`, Web `411+5`, root test/typecheck/lint, 19-page
+production build and independent review Ready. Production remains `bf54eaa`
+until the immutable release operation completes; user visual acceptance remains
+pending.
