@@ -1,18 +1,22 @@
 # OpenScience 进度（CURRENT window）
 
-> 最新同步：2026-08-25 18:45 +08。完整历史由 Git history 保存；DEPRECATED、NO-GO、旧计划和 archive 不作为新 session 默认输入。
+> 最新同步：2026-08-25 19:30 +08。历史由 Git 保存；旧计划和 archive 不作为默认输入。
 
 ## Current version tuple
 
-- Branch / deployed application source: `codex/hermes-wanko-live2d` / `1b3badaec5af3330e10b8ca0abb9163ff2af0883`；immutable deployed release（含代理部署修复）为 `8ed2f3cb895e46cd1b355db0e40883c703140b22`。
-- Post-deploy documentation HEAD 将晚于 deployed release；产品代码身份仍以 application source `1b3bada` 和 `/__release` 的 `8ed2f3c` 为准，不与文档提交混写。
+- Branch / local application candidate: `codex/hermes-wanko-live2d` / `a404ca7e6655fb0fbba0f6b307a65d167c6906fe`；deployed application source 仍为被否决的 `1b3badaec5af3330e10b8ca0abb9163ff2af0883`。
+- Immutable deployed release（含代理部署修复）仍为 `8ed2f3cb895e46cd1b355db0e40883c703140b22`；本地文档 HEAD 晚于 application candidate，不与产品代码身份混写。
 - Local main / origin main: `c60ffdd16b85ea8f0d8b047493fa03a4c0230c05` / `7eb2f5bc4718ee445b79bd089acb64acb3691e62`；两者都早于当前工作分支，远端 Hermes feature 不存在。
 - ECS release / rollback: `8ed2f3cb895e46cd1b355db0e40883c703140b22` / `7165e9b73df55b00d907080d300ccf97476575e8`。
 
 ## 2026-08-25 — Hermes carried tool sheet deployed
 
+- **§13.4 local correction candidate:** `a404ca7` 已将气泡改成一条闭合 SVG 轮廓，语义文字与装饰轮廓分层；尾端按 `360/200px` 可见嘴部校准。移动端首次回归测到尾端偏差 `53px`，修正后被 `≤8px` 双断点合同锁定。
+- 工具页已移除悬空页注，以可见帽顶而非透明 wrapper 为邻接基准，并锁定 `24–48px` 间距。菜单打开时角色不跳动；Hermes 标签/控件让位，工具页留在页边且不覆盖阅读栏。
+- **Deep visual review:** 原尺寸人工审图发现移动端菜单压住 motion 控件；补回归后修复。随后对短 research 分组做对抗检查，先复现间距由约 `32px` 漂到 `118px`，再把 `compactGroup` 纳入几何重算依赖并锁定。当前 Web `408/408` + 5 Node、typecheck、19-page build、product release `62/62`、Hermes work-assistant 三视口门禁均 GREEN。
+- 设计技能失效根因见 CURRENT spec §13.5：此前把 skill 当建议、以弱检索和伪锚点替代可见几何、只测最小间距且未逐张审图。今后非 Landing UI 必须先形成 reject/accept 约束，再打开原尺寸 desktop/mobile/quiet-editor 证据；断线、遮挡、字小、无物理来源或状态跳动均直接拒绝。
 - **Visual rejection correction:** 用户生产截图证明气泡右下轮廓断裂、尾端指向帽子、气泡压住 Hermes 状态字，工具页红色页注悬空且桌面菜单覆盖阅读内容。此前 `62/62` 与公网 Hermes `5/5` 只验证了伪 mouth marker、最小间距和部分 protected geometry，不能证明真实轮廓连续或可见嘴部连接；“原尺寸截图通过”的结论撤回。当前 production `8ed2f3c` 功能在线但视觉未获用户接受。
-- 用户已要求完成修复。CURRENT spec §13.4 锁定一条 SVG 闭合气泡轮廓、真实可见嘴部校准、隐藏/避让 Hermes 内部标签、移除悬空页注、菜单 `24–48px` 双向间距和 desktop/mobile 阅读栏排除；写入产品代码前等待用户复核该书面边界。
+- 用户已要求并批准完成修复。CURRENT spec §13.4 锁定一条 SVG 闭合气泡轮廓、真实可见嘴部校准、隐藏/避让 Hermes 内部标签、移除悬空页注、菜单 `24–48px` 双向间距和 desktop/mobile 阅读栏排除；本地候选已实现，等待替换生产版本并由用户复核。
 - 用户批准按当前 carried-tool-sheet 版实施，并要求每个动作的文字与动作严格匹配。`1b3bada` 将 orbit 改为一张不透明暖纸工具页：desktop/compact 分别围绕精确 `360/200px` Hermes，在角色上方保留至少 `32px` 空带；菜单、气泡和产品正文不互相覆盖，移动端仅在菜单打开时扩展工具带且角色视觉位置不跳动。
 - 12 个 companion/research action 的 action ID、Live2D motion、中文短句和英文短句已由同一 catalog 与表驱动测试锁定；反馈气泡改用 mouth-relative bottom anchor，长短句均保持纸尾指向口部。普通点击 drawer、右键、Shift+F10、Menu 键、移动长按、focus 与 reduced-motion 合同保持。
 - Historical functional evidence：Web `408/408` + 5 Node、Hermes runtime/guide `19/19` + product interaction `5/5`、product release `62/62`、全仓 typecheck/lint/build、`git diff --check` GREEN；这些结果不再作为 §13.4 视觉连续性的通过证据。
@@ -81,10 +85,9 @@
 
 ## Constraints and next action
 
-- 当前 ECS application release / rollback 为 `3010903` / `33418fd`；已验证本地 candidate application source 为 `e4a19d4`，尚未部署。
-- Task 21 计划已经完成并降级为 HISTORICAL evidence；唯一 CURRENT Hermes design 仍是 `docs/specs/2026-08-19-hermes-wanko-live2d-design.md`。
-- 下一步部署 `e4a19d4` 所在精确 immutable candidate，并由用户在 Dashboard、编辑和移动端直接验收菜单密度、可爱程度、动作反馈与工作流协调。
-- 可选剩余证据：取得现有安全测试会话后，补一次不创建新数据的 authenticated Dashboard smoke。
+- production `8ed2f3c` 仍是被否决版本；下一步部署 local application `a404ca7`，完成 immutable ECS 与公网无写入验收。
+- 用户随后在 Dashboard、移动端和 quiet editor 验收轮廓连续、嘴部连接、菜单密度/间距与动作反馈；明确接受前不得称视觉通过。
+- Landing 不变；分支未集成，后续单独决定 merge / PR / 保留。
 
 ## Read first
 

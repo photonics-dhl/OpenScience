@@ -1,6 +1,6 @@
 # Hermes Wanko Live2D Companion Design
 
-Status: **CURRENT — deployed §13.3 release `8ed2f3c` is VISUALLY REJECTED; §13.4 is the approved correction design pending implementation**
+Status: **CURRENT — §13.4 local application candidate `a404ca7` implemented and verified; deployed §13.3 release `8ed2f3c` remains VISUALLY REJECTED pending replacement and user review**
 
 Supersedes only the visual renderer and motion-authoring portions of:
 
@@ -893,3 +893,34 @@ junction and a tail endpoint at the visible mouth on Dashboard desktop,
 Dashboard mobile and quiet editor. A synthetic DOM marker or endpoint-distance
 number alone cannot approve the visual result. The production release remains
 visually rejected until the user reviews the new deployed result.
+
+Implementation status (2026-08-25): local candidate `a404ca7`. The speech uses
+one semantic text node over a one-path SVG contour; desktop and compact mouth
+attachment, tool-sheet bounds and protected controls are covered by structural
+and browser geometry tests. This status is not production visual acceptance.
+
+### 13.5 Design-skill enforcement and visual rejection gate
+
+The rejected result was not caused by missing skill invocation. The design,
+frontend, baseline and UI/UX skills were consulted, but their output was treated
+as optional guidance rather than as rejection criteria. Weak or empty search
+matches were allowed to stand in for design evidence; automated tests measured
+a synthetic wrapper marker instead of the visible mouth; the menu asserted only
+a minimum gap; and screenshot generation was mistaken for screenshot review.
+Those practices are invalid for future Hermes and non-Landing UI work.
+
+Before implementation, the selected skills must produce explicit reject/accept
+constraints for typography, hierarchy, physical source, collision, state
+transitions and responsive geometry. A weak search result is not positive
+evidence and must fall back to established interaction and accessibility
+principles plus the current OpenScience visual language. Implementation tests
+must reference visible actor landmarks and use bounded relationships on both
+sides. Every state that changes menu or speech dimensions must be remeasured;
+passing the default group is not evidence for a shorter or longer group.
+
+Before a visual candidate is shown or deployed, an operator must open the
+original-scale Dashboard desktop, Dashboard mobile and quiet-editor screenshots.
+Any broken contour, detached tail, covered label/control, illegible type,
+unbounded empty gap or actor jump rejects the candidate even when all automated
+tests are green. Skills inform this gate; they do not replace user aesthetic
+judgment or direct rendered inspection.
