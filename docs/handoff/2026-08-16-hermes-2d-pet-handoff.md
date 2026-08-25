@@ -1,12 +1,12 @@
 # Handoff — Hermes Wanko Live2D Companion
 
-> **CURRENT active-memory，2026-08-25 17:26 +08。** 旧灯体、帽子、流苏、Cubism GUI 试验和被否决候选只从 Git history 查阅，不再作为实施入口。
+> **CURRENT active-memory，2026-08-25 18:45 +08。** 旧灯体、帽子、流苏、Cubism GUI 试验和被否决候选只从 Git history 查阅，不再作为实施入口。
 
 ## Goal
 
 - 已交付的 v09 Hermes 是可移动工作助手，不是主页面内容：Dashboard 默认右栏停靠，整角色拖动后脱离；桌面/紧凑移动端精确为 `360/200px`。
 - 保持 RO 创建流程为主任务；气泡、字段引导和 32 动作只提供短暂、可打断、不遮挡的辅助反馈。
-- 当前 Hermes carried tool sheet 已部署到真实非 Landing 产品页；下一步是用户在公网直接体验菜单密度、阅读、动作反馈和工作流协调，再按具体反馈迭代。
+- 当前 Hermes carried tool sheet 功能已部署，但用户生产截图已否决气泡轮廓、可见嘴部连接、悬空页注与桌面遮字；§13.4 是唯一修复边界，production `8ed2f3c` 不得再称视觉通过。
 
 ## Version tuple
 
@@ -61,7 +61,7 @@
 
 ## Next action
 
-1. 用户直接访问生产站体验 Dashboard、编辑页和移动端 Hermes，反馈菜单密度、字体清晰度、可爱程度、气泡连续性与动作结果；按具体问题继续迭代。
+1. 用户复核 CURRENT spec §13.4；批准后按 TDD 实现单一 SVG 连续气泡、真实嘴部校准、无页注的 `24–48px` 工具页邻接与桌面/移动阅读栏排除，再做原尺寸可视化和部署验收。
 2. 保持 Landing 不变。工作分支尚未进入 main，另开集成任务时明确 merge / PR / 保留分支。
 
 ## Read first

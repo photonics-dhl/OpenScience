@@ -1,6 +1,6 @@
 # Hermes Wanko Live2D Companion Design
 
-Status: **CURRENT — §13.3 approved for implementation on 2026-08-25; production remains ECS release `7165e9b` (rollback `3010903`) until the new visual gate passes**
+Status: **CURRENT — deployed §13.3 release `8ed2f3c` is VISUALLY REJECTED; §13.4 is the approved correction design pending implementation**
 
 Supersedes only the visual renderer and motion-authoring portions of:
 
@@ -849,3 +849,47 @@ Implementation status (2026-08-25): deployed. Application source `1b3bada`
 implements this section; immutable ECS release `8ed2f3c` adds the release-build
 proxy correction and uses `7165e9b` as rollback. Public no-write Hermes
 acceptance is `5/5`; the complete local product release matrix is `62/62`.
+
+### 13.4 Continuous speech contour and bounded tool adjacency (approved correction 2026-08-25)
+
+The user rejected the deployed §13.3 visual result after inspecting production
+screenshots. This correction supersedes only the speech silhouette, visible
+mouth attachment, tool-sheet source treatment and their visual acceptance
+contracts. The twelve action/motion/localized-sentence mappings, Radix input
+semantics, exact `360/200px` actor sizes and ordinary-click drawer remain.
+
+Speech is one accessible text element over one decorative SVG silhouette. One
+closed SVG path owns the warm-paper fill, ink outline and short tail; CSS
+`::before`/`::after` triangles, clipped border patches and separately drawn
+tail strokes are forbidden. The path must have no visible seam where the tail
+leaves the body. It uses a compact asymmetric rounded shape rather than a large
+ellipse and may contain two or three balanced lines without touching the
+outline.
+
+The tail endpoint is calibrated against the visible Wanko mouth in renderer
+local coordinates for both the `360px` desktop and `200px` compact
+presentations. A generic percentage marker in the actor wrapper is not evidence
+of mouth attachment. The tail must end at the visible mouth region, not the
+hat, ear or wrapper center, and must remain short enough that actor and speech
+read as one unit. While speech is visible it must neither cover nor visually
+collide with the Hermes state label, presence control, motion control, product
+copy or form controls.
+
+The tool sheet has no free-floating vermilion tether or page-note stroke.
+Desktop and compact placement must keep the sheet and actor disjoint while
+also bounding the open gap to `24–48px`; a minimum-only assertion is invalid.
+The entire sheet must remain inside the page-owned Hermes margin and must not
+intersect the readable research column, headings, body copy, controls or
+focusable content. If the preferred band cannot fit, the page scrolls the
+Hermes margin into a valid placement before opening; the sheet does not cover
+content and the actor does not visually jump.
+
+Acceptance requires both structural and rendered evidence. Structural tests
+assert a single SVG silhouette, absence of pseudo-element tail geometry,
+bounded actor/menu gap, desktop and mobile content exclusion, stable actor
+position, menu/speech mutual exclusion and the existing action-language lock.
+Rendered original-scale screenshots must show continuous ink at the bubble-tail
+junction and a tail endpoint at the visible mouth on Dashboard desktop,
+Dashboard mobile and quiet editor. A synthetic DOM marker or endpoint-distance
+number alone cannot approve the visual result. The production release remains
+visually rejected until the user reviews the new deployed result.
