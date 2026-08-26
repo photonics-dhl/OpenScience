@@ -917,3 +917,48 @@ Historical note for the 2026-08-11 release: it used fixed worker tags and a writ
   `--force-prefers-reduced-motion` before investigating the application.
 - The user confirmed normal motion returned after the Chrome-specific override
   was removed. No CF purge, source change or deployment was required.
+
+### 5.29 Research Intelligence core/search foundation (2026-08-26)
+
+> Active application/release `e0828a6118c92c87b7869493413441bba0e76a95`;
+> rollback `29344767b350e0a44ef74c04b9b5a55b342ef011`.
+
+- All Docker, database, image-build and runtime acceptance operations ran on
+  ECS. Windows invoked the canonical scripts only through explicit Git for
+  Windows Bash; local Docker is outside this workflow.
+- Exact SHA `e0828a6` passed GitHub CI run `32977425693`: build, typecheck,
+  lint, unit, product visual and Hermes release gates. The same release includes
+  the context-loss recovery-control accessibility fix without changing the
+  accepted Hermes/Landing composition.
+- A disposable ECS PostgreSQL rehearsal applied core migration 28 and search
+  baseline 1, verified five core tables and nine scoped constraints, rolled
+  both ledgers back, re-applied them, and removed only the two temporary
+  databases created for the rehearsal.
+- Production search database `openscience_search` was created separately from
+  core. `SEARCH_DATABASE_URL` was injected without displaying its value;
+  `/opt/openscience/.env.prod` remained mode `600`, with rollback copy
+  `/opt/openscience/.env.prod.pre-search-e0828a6`.
+- Pre-deploy checkup and backup passed (`436K files=7/7`). The exact release ran
+  the server full workspace/19-page build, SHA-tagged Worker/Parser image build,
+  physical core/search isolation, core and search migrations, and the existing
+  idempotent quota seed `8/8`. It ran no research-data seed and wrote no real
+  research content.
+- Independent post-deploy verification found current-repository core migrations
+  `28/28`, search `1/1`, and no failed migrations. Core has 29 active ledger
+  rows because historical `20260809010000_ro_create_idempotency` is preserved;
+  do not delete or rename that ledger row merely to force a 28-row count.
+- API, Web, Worker, PostgreSQL, Redis and object storage are healthy. Parser is
+  `network=none`, read-only, non-root, capped at 512 MiB, mounts only
+  `/parser-jobs`, exposes no secret-named environment key, and uses the exact
+  SHA image. Public `/` is 200; protected auth/admin probes are 401; the release
+  marker is exact and `.release-failed` is absent.
+
+#### Search backup follow-up
+
+The daily `backup.sh --db` path currently backs up only core PostgreSQL. The
+search database presently contains only an empty, reproducible baseline, so
+Task 2 may ship with this limitation recorded. Before Task 6 writes search
+business data or sends real traffic to it, extend backup/restore to address the
+search database independently and complete a server-side restore rehearsal.
+Until that gate passes, do not describe the storage-separation backup boundary
+as complete.

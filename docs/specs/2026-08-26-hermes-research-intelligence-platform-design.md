@@ -1,6 +1,6 @@
 # Hermes Research Intelligence Platform Design
 
-> 状态：**CURRENT / REQUIREMENTS APPROVED / IMPLEMENTATION NOT STARTED**
+> 状态：**CURRENT / REQUIREMENTS APPROVED / FOUNDATION TASKS 1–2 DEPLOYED**
 > 日期：2026-08-26
 > 产品基线：`docs/OpenScience_Kimi_Development_Spec.md`
 > 视觉基线：`docs/specs/2026-08-24-research-folio-product-system-design.md` 与 `docs/specs/2026-08-19-hermes-wanko-live2d-design.md`
@@ -442,10 +442,18 @@ export type ExtractionResult =
 
 每一阶段都必须能独立回滚，且不能以视觉完成替代证据正确性验收。
 
+### 16.1 Current implementation checkpoint
+
+- Taskmaster `hermes-research-intelligence` 已完成 Task 1–2，进度 `2/12`；下一唯一 ready 项是 Task 3 `DocumentSourceMap Contract and Parser Interfaces`。
+- Task 1 已交付能力台账机器门禁、13-case 自著权 corpus 与 current-parser baseline；没有安装新 parser、OCR、模型或 MCP。
+- Task 2 已交付 Claim/Evidence/locator 严格合同、发布事务门禁、核心 migration 28、独立 `packages/search`/`infra/search` 与 `SEARCH_DATABASE_URL` 边界，并随 ECS release `e0828a6` 部署。
+- 生产 core 当前仓库迁移 `28/28`、search `1/1`；core ledger 额外保留一条历史 `20260809010000_ro_create_idempotency`，failed migration 为 0。
+- core/search 的连接、迁移、隔离检查与健康探针已独立；现有每日 `backup.sh --db` 仍只覆盖 core。在 search 写入业务数据或接受真实流量前，必须完成独立 search backup 与 restore 演练，届时才可声称 §8.2 的备份边界完整闭合。
+
 ## 17. Out of scope
 
 - 本阶段不重做 Landing 或现行 Wanko 视觉。
 - 不建立用户可见的 Hermes 模式切换。
 - 不承诺绕过出版商访问控制或替用户判断版权。
 - 不在首期启用 BGE-M3 multi-vector、GPU reranker、本地生图或本地生视频。
-- 不把能力安装到生产服务器；安装与发布属于后续实施任务并需单独确认。
+- Task 1–2 不安装 parser、OCR、向量模型或第三方检索能力；这些能力按后续 Task 的 corpus 评测与 ECS-only 发布门逐项启用。

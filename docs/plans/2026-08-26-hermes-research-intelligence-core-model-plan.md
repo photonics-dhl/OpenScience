@@ -1,6 +1,6 @@
 # Hermes Research Intelligence Core Model Implementation Plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+> **Status:** COMPLETED / TASKMASTER TASK 2 DONE / ECS RELEASE `e0828a6` DEPLOYED. Steps use checkbox syntax as retained execution evidence.
 
 **Goal:** Complete Taskmaster `hermes-research-intelligence` Task 2 with strict Claim/Evidence domain contracts, an expand-only core migration, and a separately configurable and migratable search database boundary.
 
@@ -31,7 +31,7 @@
 - Consumes: approved types from `docs/specs/2026-08-26-hermes-research-intelligence-platform-design.md` §§4–6 and §13.
 - Produces: `ResearchIdentity`, `ResearchIdentityProfile`, `ClaimKind`, `ClaimAssessment`, `EvidenceKind`, `ClaimRelation`, `ExtractionStatus`, `PresentationAssetKind`, `PresentationAsset`, `ExtractionProvenance`, and their canonical readonly value arrays.
 
-- [ ] **Step 1: Write the failing vocabulary test**
+- [x] **Step 1: Write the failing vocabulary test**
 
 ```ts
 expect(RESEARCH_IDENTITIES).toEqual([
@@ -40,13 +40,13 @@ expect(RESEARCH_IDENTITIES).toEqual([
 expect(PRESENTATION_ASSET_LABEL).toBe('presentation_not_evidence');
 ```
 
-- [ ] **Step 2: Run the test and verify RED**
+- [x] **Step 2: Run the test and verify RED**
 
 Run: `npx pnpm@9.15.0 --filter @openscience/domain test -- test/research-intelligence/types.test.ts`
 
 Expected: FAIL because `src/research-intelligence/types.ts` does not exist.
 
-- [ ] **Step 3: Add the exact readonly constants and structural types**
+- [x] **Step 3: Add the exact readonly constants and structural types**
 
 ```ts
 export const CLAIM_KINDS = ['core', 'supporting', 'method', 'boundary', 'counter'] as const;
@@ -62,7 +62,7 @@ export interface ExtractionProvenance {
 
 `PresentationAsset` includes `objectKey`, `contentHash`, source Claim IDs, generator/version, optional prompt hash, status and the literal label. It never contains binary bytes.
 
-- [ ] **Step 4: Export the domain vocabulary and verify GREEN**
+- [x] **Step 4: Export the domain vocabulary and verify GREEN**
 
 Run: `npx pnpm@9.15.0 --filter @openscience/domain test -- test/research-intelligence/types.test.ts`
 
@@ -79,7 +79,7 @@ Expected: PASS.
 - Consumes: `ResearchIdentityProfile`, `SourceLocator` and constants from Task 1.
 - Produces: `validateResearchIdentityProfile(profile): ResearchIdentityProfile`, `validateSourceLocator(locator): SourceLocator`, and `ResearchIntelligenceValidationError`.
 
-- [ ] **Step 1: Write failing identity and locator behavior tests**
+- [x] **Step 1: Write failing identity and locator behavior tests**
 
 ```ts
 expect(() => validateResearchIdentityProfile({
@@ -92,17 +92,17 @@ expect(() => validateSourceLocator({
 })).toThrow(/boundingBox/);
 ```
 
-- [ ] **Step 2: Run the test and verify RED**
+- [x] **Step 2: Run the test and verify RED**
 
 Run: `npx pnpm@9.15.0 --filter @openscience/domain test -- test/research-intelligence/validation.test.ts`
 
 Expected: FAIL because the validators do not exist.
 
-- [ ] **Step 3: Implement strict validation without provider-specific fields**
+- [x] **Step 3: Implement strict validation without provider-specific fields**
 
 `validateSourceLocator` requires a non-empty artifact ID, lowercase or uppercase SHA-256 hex, and at least one of page, char range, table cell or code range. Bounding boxes require a page, non-negative origin and positive dimensions; character ranges are half-open and increasing; table rows/columns are non-negative; code lines are one-based and increasing. Unknown top-level and nested keys are rejected.
 
-- [ ] **Step 4: Verify valid page/bbox, char, table and code variants round-trip**
+- [x] **Step 4: Verify valid page/bbox, char, table and code variants round-trip**
 
 Run: `npx pnpm@9.15.0 --filter @openscience/domain test -- test/research-intelligence/validation.test.ts`
 
@@ -121,7 +121,7 @@ Expected: PASS.
 - Consumes: `ClaimNode`, `ExtractionStatus` and source-map decoder callbacks.
 - Produces: `validateClaimGraph(claims): readonly ClaimNode[]`, generic `ExtractionResult<TSourceMap>`, `serializeExtractionResult(result): string`, and `parseExtractionResult(json, parseSourceMap): ExtractionResult<TSourceMap>`.
 
-- [ ] **Step 1: Write failing graph tests for all publish constraints**
+- [x] **Step 1: Write failing graph tests for all publish constraints**
 
 ```ts
 expect(() => validateClaimGraph(twoCoreClaims)).toThrow(/3.*7/);
@@ -131,17 +131,17 @@ expect(() => validateClaimGraph(cyclicClaims)).toThrow(/cycle/);
 
 Tests also reject duplicate IDs, a parent from another RO/version, and a core Claim with a parent.
 
-- [ ] **Step 2: Verify Claim graph RED**
+- [x] **Step 2: Verify Claim graph RED**
 
 Run: `npx pnpm@9.15.0 --filter @openscience/domain test -- test/research-intelligence/claim-graph.test.ts`
 
 Expected: FAIL because `validateClaimGraph` does not exist.
 
-- [ ] **Step 3: Implement graph validation with iterative parent traversal**
+- [x] **Step 3: Implement graph validation with iterative parent traversal**
 
 Use an ID map and a three-state visitation map. Return the original readonly graph only after the core count, uniqueness, same-scope parent, root/child and cycle checks all pass.
 
-- [ ] **Step 4: Write and verify failing ExtractionResult round-trip tests**
+- [x] **Step 4: Write and verify failing ExtractionResult round-trip tests**
 
 ```ts
 const encoded = serializeExtractionResult({ status: 'needs_review', sourceMap, reasons: ['bbox_low_confidence'] });
@@ -154,7 +154,7 @@ Run: `npx pnpm@9.15.0 --filter @openscience/domain test -- test/research-intelli
 
 Expected: FAIL because serialization/parsing does not exist.
 
-- [ ] **Step 5: Implement strict discriminated-union parsing and verify GREEN**
+- [x] **Step 5: Implement strict discriminated-union parsing and verify GREEN**
 
 Succeeded and needs-review results call the supplied strict source-map decoder. Blocked accepts only `rights_unknown | malware | limit_exceeded`; failed requires a boolean `retryable`, non-empty provider and message. Unknown fields or statuses fail closed.
 
@@ -173,21 +173,21 @@ Expected: all Research Intelligence domain tests PASS.
 - Consumes: existing `User`, `ResearchObject`, `Version` and `Artifact` primary keys.
 - Produces: `ResearchIdentityProfile`, `ClaimNode`, `EvidenceRecord`, `PresentationAsset` Prisma models and corresponding relations/enums.
 
-- [ ] **Step 1: Add schema models, run validation and observe migration drift**
+- [x] **Step 1: Add schema models, run validation and observe migration drift**
 
 Run: `npx pnpm@9.15.0 exec prisma validate --schema infra/schema.prisma`
 
 Expected before DDL is added: schema validates, but migration history does not yet describe the new models.
 
-- [ ] **Step 2: Write explicit additive DDL**
+- [x] **Step 2: Write explicit additive DDL**
 
 Create enums and four tables with UUID keys, timestamps, metadata-only columns and foreign keys. `EvidenceRecord` stores the locator as validated JSON plus separately indexed `artifact_id` and 64-character `content_hash`; `PresentationAsset` stores `object_key` and hashes, never asset bytes. Add RO/version/claim lookup indexes and no destructive `ALTER`.
 
-- [ ] **Step 3: Write reverse-order rollback**
+- [x] **Step 3: Write reverse-order rollback**
 
 Drop `presentation_assets`, `evidence_records`, `claim_nodes`, `research_identity_profiles`, then the new enum types. The rollback touches no pre-existing table or enum.
 
-- [ ] **Step 4: Format and validate the schema**
+- [x] **Step 4: Format and validate the schema**
 
 Run: `npx pnpm@9.15.0 exec prisma format --schema infra/schema.prisma`
 
@@ -218,7 +218,7 @@ Expected: both PASS.
 - Consumes: `SEARCH_DATABASE_URL` and the generated client from `infra/search/schema.prisma`.
 - Produces: `loadSearchEnv`, `createSearchPrismaClient`, `search:generate`, `search:migrate:deploy`, and `search:migrate:status` without importing the core Prisma client.
 
-- [ ] **Step 1: Write failing config and client tests**
+- [x] **Step 1: Write failing config and client tests**
 
 ```ts
 expect(() => loadSearchEnv({ NODE_ENV: 'production' })).toThrow(/SEARCH_DATABASE_URL/);
@@ -228,17 +228,17 @@ expect(loadSearchEnv({ SEARCH_DATABASE_URL: 'postgresql://search-host/search' })
 
 The client test creates a lazy client with an explicit URL and disconnects it without opening a database connection.
 
-- [ ] **Step 2: Verify RED**
+- [x] **Step 2: Verify RED**
 
 Run: `npx pnpm@9.15.0 --filter @openscience/config test -- test/search-env.test.ts`
 
 Expected: FAIL because `loadSearchEnv` does not exist.
 
-- [ ] **Step 3: Implement config and a separate Prisma generator**
+- [x] **Step 3: Implement config and a separate Prisma generator**
 
 The development default is `postgresql://openscience:openscience_dev@127.0.0.1:5432/openscience_search`; production has no fallback. The search schema owns only `SearchSchemaMeta` in this task, proving a separate migration ledger without prematurely adding chunk/embedding tables.
 
-- [ ] **Step 4: Add package scripts and regenerate the lockfile mechanically**
+- [x] **Step 4: Add package scripts and regenerate the lockfile mechanically**
 
 Run: `npx pnpm@9.15.0 install --lockfile-only`
 
@@ -246,7 +246,7 @@ Run: `npx pnpm@9.15.0 --filter @openscience/search generate`
 
 The generated client directory is ignored and recreated by build/typecheck/test.
 
-- [ ] **Step 5: Validate both schemas and verify GREEN**
+- [x] **Step 5: Validate both schemas and verify GREEN**
 
 Run: `npx pnpm@9.15.0 --filter @openscience/config test -- test/search-env.test.ts`
 
@@ -269,11 +269,11 @@ Expected: all PASS without connecting to the core database.
 - Consumes: both migration ledgers and all Task 2 tests.
 - Produces: fresh migration/rollback evidence, Taskmaster Task 2 `done`, and Task 3 as the next unique ready task.
 
-- [ ] **Step 1: Run core and search migrations against disposable ECS databases**
+- [x] **Step 1: Run core and search migrations against disposable ECS databases**
 
 Use uniquely named temporary databases inside the server's existing dev PostgreSQL container. Apply migration 28 and the search baseline, assert all expected tables and constraints, execute each `rollback.sql`, assert the new tables are absent, then re-apply. Drop only the two databases created by this test after their results are recorded; do not start local Docker or touch the production database during this disposable test.
 
-- [ ] **Step 2: Run focused and whole-package gates**
+- [x] **Step 2: Run focused and whole-package gates**
 
 Run: `npx pnpm@9.15.0 --filter @openscience/domain test`
 
@@ -287,11 +287,11 @@ Run: `npx pnpm@9.15.0 lint`
 
 Run: `npx pnpm@9.15.0 build`
 
-- [ ] **Step 3: Mark Task 2 done only after every acceptance item is green**
+- [x] **Step 3: Mark Task 2 done only after every acceptance item is green**
 
 Update the current Taskmaster tag, verify Task 3 `DocumentSourceMap Contract and Parser Interfaces` is the only dependency-ready next item, and keep Tasks 4–12 blocked by their declared dependencies.
 
-- [ ] **Step 4: Synchronize CURRENT documentation and final gates**
+- [x] **Step 4: Synchronize CURRENT documentation and final gates**
 
 Run: `npx pnpm@9.15.0 audit:docs-sync`
 
@@ -301,10 +301,10 @@ Run: `git diff --check`
 
 Expected: `DOCS_SYNC_OK`, Markdown has zero issues, and the diff check is clean.
 
-- [ ] **Step 5: Review the complete diff before commit**
+- [x] **Step 5: Review the complete diff before commit**
 
 Verify expand-only compatibility, rollback safety, cross-database isolation, no binary storage, no `.env` values, no provider SDK imports and no unrelated UI/Hermes changes. Commit only the Task 2 implementation and its documentation.
 
-- [ ] **Step 6: Deploy the exact accepted commit on ECS**
+- [x] **Step 6: Deploy the exact accepted commit on ECS**
 
-Push the feature ref, wait for CI, run canonical pre-checkup and database backup, create the production `openscience_search` database and inject `SEARCH_DATABASE_URL` without printing any value, then run `infra/scripts/deploy.sh` without `--skip-migrate`. Verify server full build, 28/28 core migrations, the independent search baseline migration, target container health, Parser isolation, loopback/public health, exact `/__release`, absent failure marker and the previous immutable release as rollback. The existing idempotent quota seed remains part of the canonical deploy chain; no research-data seed or unrelated data write is allowed.
+Push the feature ref, wait for CI, run canonical pre-checkup and database backup, create the production `openscience_search` database and inject `SEARCH_DATABASE_URL` without printing any value, then run `infra/scripts/deploy.sh` without `--skip-migrate`. Verify server full build, current-repository core migrations 28/28, the independent search baseline migration 1/1, target container health, Parser isolation, loopback/public health, exact `/__release`, absent failure marker and the previous immutable release as rollback. Preserve the one historical core ledger row `20260809010000_ro_create_idempotency`; it is not a current repository migration and must not be deleted. The existing idempotent quota seed remains part of the canonical deploy chain; no research-data seed or unrelated data write is allowed.
