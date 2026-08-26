@@ -106,4 +106,13 @@ describe('validateSourceLocator', () => {
       providerPayload: { pageIndex: 0 },
     })).toThrow(/unknown field/);
   });
+
+  it('accepts an optional block ID but rejects invalid or unknown locator fields', async () => {
+    const { validateSourceLocator } = await loadValidators();
+    const locator = { ...base, blockId: 'paragraph-1', page: 1 };
+
+    expect(validateSourceLocator(locator)).toEqual(locator);
+    expect(() => validateSourceLocator({ ...locator, blockId: '' })).toThrow(/blockId/);
+    expect(() => validateSourceLocator({ ...locator, blockId: 'paragraph-1', providerBlock: {} })).toThrow(/unknown field/);
+  });
 });

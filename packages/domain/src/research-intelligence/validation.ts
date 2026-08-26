@@ -129,7 +129,7 @@ export function validateSourceLocator(value: unknown): SourceLocator {
   const locator = plainObject(value, 'SourceLocator', 'INVALID_SOURCE_LOCATOR');
   assertOnlyKeys(
     locator,
-    ['artifactId', 'contentHash', 'page', 'boundingBox', 'charRange', 'tableCell', 'codeRange'],
+    ['artifactId', 'contentHash', 'blockId', 'page', 'boundingBox', 'charRange', 'tableCell', 'codeRange'],
     'SourceLocator',
     'INVALID_SOURCE_LOCATOR',
   );
@@ -138,6 +138,9 @@ export function validateSourceLocator(value: unknown): SourceLocator {
   }
   if (typeof locator.contentHash !== 'string' || !/^[a-f0-9]{64}$/i.test(locator.contentHash)) {
     throw new ResearchIntelligenceValidationError('INVALID_SOURCE_LOCATOR', 'contentHash must be a SHA-256 hex digest');
+  }
+  if (locator.blockId !== undefined && !nonEmptyString(locator.blockId, 200)) {
+    throw new ResearchIntelligenceValidationError('INVALID_SOURCE_LOCATOR', 'blockId is invalid');
   }
 
   const hasPage = locator.page !== undefined;

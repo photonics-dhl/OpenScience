@@ -71,6 +71,7 @@ export interface BoundingBox {
 export interface SourceLocator {
   artifactId: string;
   contentHash: string;
+  blockId?: string;
   page?: number;
   boundingBox?: BoundingBox;
   charRange?: { start: number; end: number };

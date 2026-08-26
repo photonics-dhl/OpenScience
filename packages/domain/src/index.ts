@@ -258,3 +258,11 @@ export {
   type DocumentPage,
   type DocumentSourceMap,
 } from './research-intelligence/document-source-map';
+export {
+  createBlockSourceLocator,
+  createTableCellSourceLocator,
+  createCodeSourceLocator,
+  resolveSourceLocator,
+  serializeSourceLocator,
+  deserializeSourceLocator,
+} from './research-intelligence/source-locator';
