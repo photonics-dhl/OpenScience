@@ -379,6 +379,14 @@
   inset: 0;
 }
 
+.candidate[data-context-status='unavailable'] .targetTypographyPlate {
+  opacity: 0;
+}
+
+.assetInteractionSlot [data-optical-fallback-field='true'] canvas {
+  opacity: 1;
+}
+
 .candidate[data-asset-candidate='true'] {
   touch-action: pan-y;
 }

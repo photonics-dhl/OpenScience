@@ -530,6 +530,12 @@ try {
     1,
     'normal-motion Landing must retain one existing Canvas optical field when WebGL is unavailable',
   );
+  assert.equal(
+    await fallbackSurface.locator('[data-optical-lab-target-typography-plate="true"]')
+      .evaluate((node) => getComputedStyle(node).opacity),
+    '0',
+    'Canvas fallback must replace the static typography plate instead of drawing a doubled wordmark',
+  );
   await fallbackPage.waitForFunction(() => (
     Number(document.querySelector('[data-optical-fallback-field="true"] canvas')
       ?.getAttribute('data-optical-glyph-particles') ?? 0) > 0
