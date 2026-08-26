@@ -68,6 +68,18 @@ describe('research-intelligence corpus contract', () => {
 
     const notebook = RESEARCH_INTELLIGENCE_CORPUS.find(({ id }) => id === 'notebook-en');
     expect(JSON.parse(notebook?.content.toString('utf8') ?? '{}')).toMatchObject({ nbformat: 4 });
+
+    const scannedPdf = RESEARCH_INTELLIGENCE_CORPUS.find(({ id }) => id === 'scan-pdf-image-only');
+    expect(scannedPdf?.expectedLocators).toEqual(expect.arrayContaining([
+      expect.objectContaining({ kind: 'page-text', quote: 'PULSE 42 FS' }),
+    ]));
+    expect(buildResearchIntelligenceManifest()).toMatchObject({
+      locatorContract: {
+        indexBase: 1,
+        bboxOrder: ['x0', 'y0', 'x1', 'y1'],
+        coordinateSpace: 'fixture-native',
+      },
+    });
   });
 
   it('keeps the tracked manifest byte-stable', async () => {

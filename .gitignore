@@ -61,7 +61,7 @@ apps/web/test/visual/out/
 .cloud-sync-env
 
 # Generated Hermes research-intelligence benchmarks and local model environments
-test/research-intelligence/out/
-.venv/
-.cache/huggingface/
-models/
+/test/research-intelligence/out/
+/.venv/
+/.cache/huggingface/
+/models/

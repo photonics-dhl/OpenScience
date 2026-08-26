@@ -37,4 +37,8 @@ test('rejects incomplete rows, invalid statuses, and credential-shaped values', 
     () => verifyCapabilityRegistry(`${header}\n| Demo | Purpose | \`APPROVED_PILOT\` | Auth | Runtime | Gate |`),
     /CANDIDATE_EVALUATION_TABLE_MISSING/,
   );
+  assert.throws(
+    () => verifyCapabilityRegistry(`${header.split('\n')[0]}\n| Demo | Purpose | \`BLOCKED\` | Auth | Runtime | Gate |`),
+    /CAPABILITY_BAD_SEPARATOR/,
+  );
 });

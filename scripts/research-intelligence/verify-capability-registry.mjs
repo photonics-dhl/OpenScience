@@ -22,6 +22,13 @@ function parseTable(lines, header, columnCount, name) {
   if (headerIndex < 0) {
     throw new Error(`${name}_TABLE_MISSING`);
   }
+  const separatorCells = cellsFromRow(lines[headerIndex + 1] ?? '');
+  if (
+    separatorCells.length !== columnCount
+    || separatorCells.some((cell) => !/^:?-{3,}:?$/.test(cell))
+  ) {
+    throw new Error(`${name}_BAD_SEPARATOR`);
+  }
 
   const rows = [];
   for (const line of lines.slice(headerIndex + 2)) {

@@ -26,6 +26,7 @@ export type ResearchExpectedLocator =
   | { kind: 'file' }
   | { kind: 'page-text'; page: number; quote: string }
   | { kind: 'page-region'; page: number; bbox: [number, number, number, number] }
+  | { kind: 'image-region'; bbox: [number, number, number, number] }
   | { kind: 'paragraph-text'; paragraph: number; quote: string }
   | { kind: 'line-text'; line: number; quote: string }
   | { kind: 'table-cell'; row: number; column: number; quote: string; sheet?: string }
@@ -96,15 +97,57 @@ function createDualColumnPdf(): Buffer {
   ]);
 }
 
-function createImageOnlyPdf(): Buffer {
-  const content = Buffer.from('q 100 0 0 100 72 600 cm /Im0 Do Q', 'ascii');
+const rasterGlyphs: Record<string, string[]> = {
+  ' ': ['00000', '00000', '00000', '00000', '00000', '00000', '00000'],
+  2: ['01110', '10001', '00001', '00010', '00100', '01000', '11111'],
+  4: ['00010', '00110', '01010', '10010', '11111', '00010', '00010'],
+  E: ['11111', '10000', '10000', '11110', '10000', '10000', '11111'],
+  F: ['11111', '10000', '10000', '11110', '10000', '10000', '10000'],
+  L: ['10000', '10000', '10000', '10000', '10000', '10000', '11111'],
+  P: ['11110', '10001', '10001', '11110', '10000', '10000', '10000'],
+  S: ['01111', '10000', '10000', '01110', '00001', '00001', '11110'],
+  U: ['10001', '10001', '10001', '10001', '10001', '10001', '01110'],
+};
+
+function rasterizeText(text: string): { width: number; height: number; pixels: Buffer } {
+  const scale = 3;
+  const margin = 2;
+  const width = margin * 2 + text.length * 6 * scale;
+  const height = margin * 2 + 7 * scale;
+  const pixels = Buffer.alloc(width * height, 0xff);
+
+  [...text].forEach((character, characterIndex) => {
+    const glyph = rasterGlyphs[character];
+    if (!glyph) throw new Error(`unsupported raster glyph: ${character}`);
+    glyph.forEach((row, rowIndex) => {
+      [...row].forEach((pixel, columnIndex) => {
+        if (pixel !== '1') return;
+        for (let y = 0; y < scale; y += 1) {
+          for (let x = 0; x < scale; x += 1) {
+            const targetX = margin + characterIndex * 6 * scale + columnIndex * scale + x;
+            const targetY = margin + rowIndex * scale + y;
+            pixels[targetY * width + targetX] = 0;
+          }
+        }
+      });
+    });
+  });
+  return { width, height, pixels };
+}
+
+function createScannedTextPdf(): Buffer {
+  const raster = rasterizeText('PULSE 42 FS');
+  const content = Buffer.from('q 360 0 0 45 72 600 cm /Im0 Do Q', 'ascii');
   return buildPdf([
     Buffer.from('<< /Type /Catalog /Pages 2 0 R >>', 'ascii'),
     Buffer.from('<< /Type /Pages /Kids [3 0 R] /Count 1 >>', 'ascii'),
     Buffer.from('<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /XObject << /Im0 6 0 R >> >> /Contents 5 0 R >>', 'ascii'),
     Buffer.from('<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>', 'ascii'),
     pdfStream(content),
-    pdfStream(Buffer.from([0x80]), '/Type /XObject /Subtype /Image /Width 1 /Height 1 /ColorSpace /DeviceGray /BitsPerComponent 8 '),
+    pdfStream(
+      raster.pixels,
+      `/Type /XObject /Subtype /Image /Width ${raster.width} /Height ${raster.height} /ColorSpace /DeviceGray /BitsPerComponent 8 `,
+    ),
   ]);
 }
 
@@ -242,7 +285,7 @@ export const RESEARCH_INTELLIGENCE_CORPUS: ResearchCorpusCase[] = [
     language: 'en',
     features: ['scan'],
     rights: 'self-authored',
-    expectedLocators: [{ kind: 'page-region', page: 1, bbox: [0, 0, 1, 1] }],
+    expectedLocators: [{ kind: 'image-region', bbox: [0, 0, 1, 1] }],
     expectedCurrentStatus: 'needs_review',
   },
   {
@@ -284,11 +327,14 @@ export const RESEARCH_INTELLIGENCE_CORPUS: ResearchCorpusCase[] = [
   {
     id: 'scan-pdf-image-only',
     filename: 'scan.pdf',
-    content: createImageOnlyPdf(),
+    content: createScannedTextPdf(),
     language: 'en',
     features: ['scan'],
     rights: 'self-authored',
-    expectedLocators: [{ kind: 'page-region', page: 1, bbox: [72, 600, 172, 700] }],
+    expectedLocators: [
+      { kind: 'page-text', page: 1, quote: 'PULSE 42 FS' },
+      { kind: 'page-region', page: 1, bbox: [72, 600, 432, 645] },
+    ],
     expectedCurrentStatus: 'ready',
   },
   {
@@ -341,6 +387,11 @@ export const RESEARCH_INTELLIGENCE_CORPUS: ResearchCorpusCase[] = [
 export function buildResearchIntelligenceManifest() {
   return {
     schemaVersion: 1,
+    locatorContract: {
+      indexBase: 1,
+      bboxOrder: ['x0', 'y0', 'x1', 'y1'],
+      coordinateSpace: 'fixture-native',
+    },
     cases: [...RESEARCH_INTELLIGENCE_CORPUS]
       .sort((left, right) => left.id.localeCompare(right.id))
       .map((corpusCase) => ({
