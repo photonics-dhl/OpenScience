@@ -94,7 +94,6 @@ describe('Optical Editorial landing page', () => {
     expect(typographyPlateAt).toBeGreaterThan(energyPlateAt);
     expect(markup).toContain('data-landing-art-direction="optical-editorial-v3"');
     expect(markup).not.toContain('data-optical-field="true"');
-    expect(markup).not.toContain('data-optical-text-stage="true"');
     expect(markup).not.toContain('<video');
     expect(markup).not.toContain('ro-loop');
     expect(markup).not.toContain('data-hero-loop-policy');

@@ -18,10 +18,11 @@ declare global {
 }
 
 export interface OpticalFieldProps {
+  presentation?: 'embedded' | 'fallback';
   reducedMotion?: boolean;
 }
 
-function OpticalField({ reducedMotion = false }: OpticalFieldProps) {
+function OpticalField({ presentation = 'embedded', reducedMotion = false }: OpticalFieldProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const pointerRef = useRef<OpticalInteraction | null>(null);
   const targetRef = useRef<OpticalInteraction | null>(null);
@@ -53,8 +54,10 @@ function OpticalField({ reducedMotion = false }: OpticalFieldProps) {
 
       const fieldBounds = canvas.parentElement?.getBoundingClientRect() ?? stage.getBoundingClientRect();
       const sources = [
-        stage.querySelector<HTMLElement>('[data-optical-science="true"]'),
-        stage.querySelector<HTMLElement>('[data-optical-evolves="true"]'),
+        stage.querySelector<HTMLElement>('[data-optical-science="true"]')
+          ?? stage.querySelector<HTMLElement>('[data-optical-lab-science="true"]'),
+        stage.querySelector<HTMLElement>('[data-optical-evolves="true"]')
+          ?? stage.querySelector<HTMLElement>('[data-optical-lab-evolves="true"]'),
       ].filter((element): element is HTMLElement => Boolean(element));
 
       sourceContext.fillStyle = '#fff';
@@ -76,8 +79,12 @@ function OpticalField({ reducedMotion = false }: OpticalFieldProps) {
       const spacing = size.width < 640 ? 4 : 3;
       const apertureX = size.width * 0.5;
       const fieldWidth = Math.min(size.width * 0.22, size.width < 640 ? 104 : 230);
-      const minimumX = Math.max(0, Math.floor(apertureX - fieldWidth));
-      const maximumX = Math.min(sourceCanvas.width, Math.ceil(apertureX + fieldWidth));
+      const minimumX = presentation === 'fallback'
+        ? 0
+        : Math.max(0, Math.floor(apertureX - fieldWidth));
+      const maximumX = presentation === 'fallback'
+        ? sourceCanvas.width
+        : Math.min(sourceCanvas.width, Math.ceil(apertureX + fieldWidth));
 
       for (let y = 0; y < sourceCanvas.height; y += spacing) {
         for (let x = minimumX; x < maximumX; x += spacing) {
@@ -90,9 +97,12 @@ function OpticalField({ reducedMotion = false }: OpticalFieldProps) {
     };
 
     const rebuildGlyphParticles = () => {
+      glyphParticles = rasterizeHeadline();
+      canvas.dataset.opticalGlyphParticles = String(glyphParticles.length);
       void document.fonts.ready.then(() => {
         if (stopped) return;
         glyphParticles = rasterizeHeadline();
+        canvas.dataset.opticalGlyphParticles = String(glyphParticles.length);
         if (shouldReduceMotion() && visible && !document.hidden) draw(0);
       });
     };
@@ -127,7 +137,18 @@ function OpticalField({ reducedMotion = false }: OpticalFieldProps) {
       previousFrameAt = now;
       const visualClock = window.__OPENSCIENCE_VISUAL_CLOCK__;
       const sample = sampleOpticalField(pointerRef.current, size, visualClock ?? now);
-      renderOpticalField(context, sample, size, glyphParticles);
+      const acceptedPlate = presentation === 'fallback'
+        ? stage?.querySelector<HTMLImageElement>('[data-optical-lab-target-typography-plate="true"]')
+        : null;
+      renderOpticalField(
+        context,
+        sample,
+        size,
+        glyphParticles,
+        presentation === 'fallback' ? 2.1 : 1,
+        presentation === 'fallback' ? 3.4 : 1,
+        acceptedPlate?.complete && acceptedPlate.naturalWidth > 0 ? acceptedPlate : null,
+      );
       if (stage) {
         stage.style.setProperty('--os-optical-pointer-x', `${pointerRef.current?.x ?? sample.origin.x}px`);
         stage.style.setProperty('--os-optical-x', `${sample.aperture.x}px`);
@@ -217,12 +238,13 @@ function OpticalField({ reducedMotion = false }: OpticalFieldProps) {
       resizeObserver.disconnect();
       intersectionObserver.disconnect();
     };
-  }, [reducedMotion]);
+  }, [presentation, reducedMotion]);
 
   return (
     <div
       aria-hidden="true"
       className="optical-field-viewport pointer-events-none absolute overflow-hidden [background-image:linear-gradient(rgba(241,238,231,0.025)_1px,transparent_1px)] [background-size:100%_12px]"
+      data-optical-fallback-field={presentation === 'fallback' ? 'true' : undefined}
       data-optical-field="true"
     >
       <canvas className="absolute inset-0 h-full w-full opacity-90 motion-reduce:opacity-45" ref={canvasRef} />

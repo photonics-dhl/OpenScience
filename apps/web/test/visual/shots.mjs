@@ -1,4 +1,4 @@
-/* global Buffer, HTMLElement, createImageBitmap, document, fetch, getComputedStyle, process, window */
+/* global Buffer, HTMLCanvasElement, HTMLElement, createImageBitmap, document, fetch, getComputedStyle, process, window */
 
 import { chromium } from 'playwright';
 import assert from 'node:assert/strict';
@@ -137,6 +137,58 @@ async function measureTemporalQuadrants(page, before, after, threshold = 1) {
     afterBase64: after.toString('base64'),
     beforeBase64: before.toString('base64'),
     thresholdValue: threshold,
+  });
+}
+
+async function measureReadableGlyphMotion(page, before, after) {
+  return page.evaluate(async ({ afterBase64, beforeBase64 }) => {
+    const decode = async (encoded) => {
+      const blob = await (await fetch(`data:image/png;base64,${encoded}`)).blob();
+      const bitmap = await createImageBitmap(blob);
+      const canvas = document.createElement('canvas');
+      canvas.width = bitmap.width;
+      canvas.height = bitmap.height;
+      const context = canvas.getContext('2d', { willReadFrequently: true });
+      context.drawImage(bitmap, 0, 0);
+      return context.getImageData(0, 0, bitmap.width, bitmap.height);
+    };
+    const first = await decode(beforeBase64);
+    const second = await decode(afterBase64);
+    let changed = 0;
+    let delta = 0;
+    let sampled = 0;
+    for (let y = Math.floor(first.height * .30); y <= first.height * .70; y += 1) {
+      for (let x = 0; x < first.width; x += 1) {
+        const offset = (y * first.width + x) * 4;
+        const firstMaximum = Math.max(
+          first.data[offset],
+          first.data[offset + 1],
+          first.data[offset + 2],
+        );
+        const secondMaximum = Math.max(
+          second.data[offset],
+          second.data[offset + 1],
+          second.data[offset + 2],
+        );
+        if (Math.max(firstMaximum, secondMaximum) < 96) continue;
+        sampled += 1;
+        const pixelDelta = Math.max(
+          Math.abs(first.data[offset] - second.data[offset]),
+          Math.abs(first.data[offset + 1] - second.data[offset + 1]),
+          Math.abs(first.data[offset + 2] - second.data[offset + 2]),
+        );
+        delta += pixelDelta;
+        if (pixelDelta >= 10) changed += 1;
+      }
+    }
+    return {
+      averageDelta: sampled > 0 ? delta / sampled : 0,
+      changedRatio: sampled > 0 ? changed / sampled : 0,
+      sampled,
+    };
+  }, {
+    afterBase64: after.toString('base64'),
+    beforeBase64: before.toString('base64'),
   });
 }
 
@@ -337,6 +389,7 @@ try {
         );
         idleWindows.push({
           chromaticBands: await measureChromaticBandCoverage(page, idleBefore, 8),
+          readableGlyphs: await measureReadableGlyphMotion(page, idleBefore, idleAfter),
           ...await measureTemporalQuadrants(page, idleBefore, idleAfter, 3),
           phaseAfter,
           phaseBefore,
@@ -357,6 +410,11 @@ try {
         && motion.connected.spanColumns >= 2
         && motion.connected.spanRows >= 2
       )), `Landing idle motion must read as one connected current instead of sparse pixel noise: ${JSON.stringify(idleWindows)}`);
+      assert(idleWindows.every((motion) => (
+        motion.readableGlyphs.sampled > 0
+        && motion.readableGlyphs.changedRatio >= .08
+        && motion.readableGlyphs.averageDelta >= 2.5
+      )), `Landing idle water must visibly move the bright letterforms, not only dark background pixels: ${JSON.stringify(idleWindows)}`);
       assert(idleWindows.every((motion) => (
         motion.chromaticBands.maximumRowRatio <= .20
         && motion.chromaticBands.maximumColumnRatio <= .20
@@ -447,6 +505,62 @@ try {
     assert.deepEqual(runtimeErrors, [], `landing emitted browser errors: ${runtimeErrors.join(' | ')}`);
     await page.close();
   }
+
+  const fallbackPage = await browser.newPage({
+    viewport: { width: 1365, height: 768 },
+    deviceScaleFactor: 1,
+    reducedMotion: 'no-preference',
+  });
+  await fallbackPage.addInitScript(() => {
+    const getContext = HTMLCanvasElement.prototype.getContext;
+    HTMLCanvasElement.prototype.getContext = function getContextWithoutWebGl(type, ...options) {
+      if (type === 'webgl2' || type === 'webgl' || type === 'experimental-webgl') return null;
+      return getContext.call(this, type, ...options);
+    };
+  });
+  await fallbackPage.goto(`${baseUrl}/`, { waitUntil: 'networkidle' });
+  await fallbackPage.evaluate(() => document.fonts.ready.then(() => true));
+  const fallbackSurface = fallbackPage.locator('[data-accepted-optical-surface="landing"]');
+  await fallbackPage.waitForFunction(() => (
+    document.querySelector('[data-accepted-optical-surface="landing"]')?.getAttribute('data-context-status')
+      === 'unavailable'
+  ));
+  assert.equal(
+    await fallbackSurface.locator('[data-optical-field="true"] canvas').count(),
+    1,
+    'normal-motion Landing must retain one existing Canvas optical field when WebGL is unavailable',
+  );
+  await fallbackPage.waitForFunction(() => (
+    Number(document.querySelector('[data-optical-fallback-field="true"] canvas')
+      ?.getAttribute('data-optical-glyph-particles') ?? 0) > 0
+  ));
+  const fallbackBefore = await fallbackSurface.screenshot();
+  await fallbackPage.waitForTimeout(650);
+  const fallbackAfter = await fallbackSurface.screenshot();
+  const fallbackMotion = await measureTemporalQuadrants(
+    fallbackPage,
+    fallbackBefore,
+    fallbackAfter,
+    3,
+  );
+  assert(
+    fallbackMotion.titleCount / fallbackMotion.titleTotal >= .02,
+    `Canvas fallback must visibly animate the title band: ${JSON.stringify(fallbackMotion)}`,
+  );
+  assert(
+    ['auto', 'default'].includes(await fallbackSurface.evaluate((node) => getComputedStyle(node).cursor)),
+    'Canvas fallback must preserve the operating-system cursor',
+  );
+  await fallbackPage.evaluate(() => window.scrollTo(0, document.body.scrollHeight));
+  await fallbackPage.waitForTimeout(150);
+  await fallbackPage.evaluate(() => window.scrollTo(0, 0));
+  await fallbackPage.waitForTimeout(150);
+  assert.equal(
+    await fallbackSurface.locator('[data-optical-field="true"] canvas').count(),
+    1,
+    'Canvas fallback must survive leaving and re-entering the viewport after WebGL failure',
+  );
+  await fallbackPage.close();
 } finally {
   await browser.close();
 }

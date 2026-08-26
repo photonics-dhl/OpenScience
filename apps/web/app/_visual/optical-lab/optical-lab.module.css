@@ -375,6 +375,10 @@
   pointer-events: none;
 }
 
+.assetInteractionSlot [data-optical-fallback-field='true'] {
+  inset: 0;
+}
+
 .candidate[data-asset-candidate='true'] {
   touch-action: pan-y;
 }
