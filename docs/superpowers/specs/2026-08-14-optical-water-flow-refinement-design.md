@@ -118,3 +118,16 @@ Production evidence identifies both causes:
   typography completeness and contamination gates remain green.
 - Final approval requires an original-size production screenshot sequence or
   recording inspected as a user, in addition to automated telemetry.
+
+### WebGL-unavailable continuity amendment
+
+Production review on 2026-08-26 established that a browser without WebGL or
+WebGL2 bypasses every OGL motion proof and receives only the exact static plate.
+Normal WebGL remains the primary and exclusive OGL owner. In normal-motion mode
+only, an unavailable context must therefore mount the retained Canvas optical
+field inside the same accepted surface and animate the accepted typography
+plate as one clipped title-band water material. It must retain the system
+cursor, mobile geometry, offscreen pause/resume and pointer response. It may not
+change the composition, introduce a second visible command layer, or run under
+`prefers-reduced-motion: reduce`. A production gate must explicitly disable
+WebGL and prove visible bright-glyph motion plus viewport leave/re-entry.

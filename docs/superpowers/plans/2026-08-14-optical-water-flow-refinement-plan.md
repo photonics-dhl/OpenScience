@@ -244,3 +244,15 @@ follow of about `.007`, even though the result reads as a static image.
   27 current migrations, healthy targets, Parser isolation, exact markers and
   public Landing normal/reduced `6/6` are GREEN. No migration, seed or research
   data write ran.
+
+- [x] **Step 7: Close the WebGL-unavailable production gap**
+
+  Reproduce the user-visible static state by denying WebGL/WebGL2, then retain
+  OGL unchanged when available and mount the existing Canvas field only for
+  normal-motion `contextStatus=unavailable`. Render the accepted typography
+  plate through a clipped, smoothly sliced title-band water pass; keep the OS
+  cursor and exact reduced-motion plate. The browser gate must prove visible
+  bright-glyph motion, one Canvas owner, no overflow, and survival after the
+  Landing leaves and re-enters the viewport. Local application `2b0c011` is
+  GREEN for shots, Web `421+5`, typecheck, root lint/docs-sync/build and
+  original-size desktop/mobile/reduced review; production deployment is next.

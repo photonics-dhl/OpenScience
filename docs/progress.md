@@ -1,6 +1,6 @@
 # OpenScience 进度（CURRENT window）
 
-> 最新同步：2026-08-26 11:33 +08。历史由 Git 保存；旧计划和 archive 不作为默认输入。
+> 最新同步：2026-08-26 12:46 +08。历史由 Git 保存；旧计划和 archive 不作为默认输入。
 
 ## Current version tuple
 
@@ -13,6 +13,7 @@
 
 - 用户确认 Task 24 只恢复既有 OGL 水流并封死回归；Hermes、导航、字体、accepted plates 与非 Landing 表面冻结。Git 证明最近 navigation release 未删除 OGL：`8edf6fa` 隐藏 OS cursor，`8fe2094` 又把 descendants `!important` 和错误发布门禁固化。
 - 根因已闭合：线性速度使慢速 traverse `follow≈.007`，而 10s/2.2px presentation 与 aggregate-pixel gate 仍可 GREEN。Candidate `47c8aa9` 移除 `cursor:none!important`，以 `sqrt(magnitude)` 恢复慢速 wake，并把原 ambient clock 收紧为 7s；未重建 renderer、恢复 Canvas2D、改构图或 shader。
+- 用户实际浏览器仍为静止图的后续根因是 WebGL/WebGL2 初始化失败时只剩 exact static plate；既有公网门禁只覆盖可用的 SwiftShader/WebGL 路径。Local candidate `2b0c011` 保持 OGL 为唯一正常 owner，仅在 normal-motion + `contextStatus=unavailable` 时挂载已有 Canvas field，以 accepted typography plate 做标题带水纹；系统 cursor、构图、Hermes 与导航不变，reduced-motion 仍无 canvas。新增 RED→GREEN 覆盖 WebGL 禁用、亮字形可见运动、滚出/滚回生命周期和 cursor；原尺寸桌面/390px/reduced 截图人工复核，fresh shots、Web `421+5`、typecheck、全仓 lint/docs-sync/build 与 diff check GREEN，待无迁移部署和公网同路径复测。
 - 新合同已进入 canonical product release：系统 cursor 与所有 descendants 可见；24×10 网格要求 650ms 内存在至少 6 格、横纵各跨 2 格的连通水流；慢/快轨迹分别验证位置、强度和 900ms 恢复，reduced-motion 仍静态无 canvas。Fresh Landing `6/6`、focused `23/23`、Web `421+5`、全仓 test/build、Web typecheck、targeted ESLint 与 diff check GREEN，桌面/移动原尺寸截图已复核。
 - Broader Optical Lab capture 的既有 `evolves` 边界 `.899336 < .9` 在 10s/7s 下相同，未放宽阈值。Application/release/rollback `47c8aa9` / `73677d5` / `263c783` 已部署：pre/post checkup、backup `436K files=7/7`、服务器全量 build、27 migrations、目标容器、Parser isolation、release markers 与公网 Landing `6/6` GREEN；未 migration/seed/data write。
 - 新增全站一级研究入口：Research desk / Explore / New research / Settings；公开阅读与 collection 同时保留 Home wordmark、Desk、Explore、Create、Login；RO 内继续使用 Overview/SDF/Files/Versions/Collaboration/Publish/Sandbox 二级导航。Dashboard loading/error、注册/登录、Hermes evidence review 与 curator 均不再是死路。
@@ -75,16 +76,6 @@
 - 首次 immutable release `2abfe42` 已经 ECS checkup/backup、server full build、27 migrations current、healthy containers、精确 release/rollback/failure-marker、真实 route/assets 与公网 no-write `57/57` 验收；Landing 未改，未 migration/seed/data write。
 - 发布后原尺寸截图复核发现旧自动 nudge 仍会压住 Hermes 状态与动效控制。hotfix `56f6cf4` 关闭锚定产品页的未请求 speech/nudge，保留右键菜单、点击 drawer、显式字段 guide 与动作反馈；修复后截图无覆盖，production release matrix 再次 `60/60`，Web 58 files / 402 tests + 5 Node contracts、typecheck、19-page build GREEN。
 - exact release `33418fd` 已以 `2abfe42` 为 rollback、`--skip-migrate` 发布；fresh backup `432K files=7/7`、server full build、27 migrations current、release/failure/rollback marker、healthy runtime、真实 route/Live2D assets 与公网 focused `4/4` 均通过。无 migration、seed 或研究数据写入。
-
-## 2026-08-24 — UI taste toolchain correction
-
-- 首轮模板化视觉已否决；`ui-ux-pro-max`、`baseline-ui` 与 worktree-scoped `shadcn@4.19.0` 可用。工具只提供约束/原语证据，最终方向受 CURRENT spec §13.5 的 reject/accept 与原尺寸人工审图门约束。
-
-## Constraints and next action
-
-- Hermes 形象阶段已收口；本候选只允许保持现有回归，不得顺带修改角色、菜单、气泡或动作。
-- Landing 视觉参数不变；新 release gate 必须证明正常模式 final-composite visible motion 与 reduced-motion 静态回退。
-- 本地候选尚未 commit/push/deploy；部署前记录 immutable application/rollback 并再次取得 cloud-write confirmation。
 
 ## Read first
 
