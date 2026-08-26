@@ -82,14 +82,15 @@ describe('research-intelligence corpus contract', () => {
     });
   });
 
-  it('keeps the tracked manifest byte-stable', async () => {
+  it('keeps the tracked manifest content stable across checkout line endings', async () => {
     const expected = `${JSON.stringify(buildResearchIntelligenceManifest(), null, 2)}\n`;
     if (process.env.WRITE_RESEARCH_INTELLIGENCE_MANIFEST === '1') {
       await mkdir(new URL('../../../test/research-intelligence/', import.meta.url), { recursive: true });
       await writeFile(manifestPath, expected, 'utf8');
     }
 
-    await expect(readFile(manifestPath, 'utf8')).resolves.toBe(expected);
+    const tracked = await readFile(manifestPath, 'utf8');
+    expect(tracked.replaceAll('\r\n', '\n')).toBe(expected);
   });
 
   it('matches the current parser status and expected text contract', async () => {
