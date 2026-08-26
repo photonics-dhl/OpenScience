@@ -54,6 +54,9 @@ async function measureTemporalQuadrants(page, before, after, threshold = 1) {
     let titleCount = 0;
     let titleDelta = 0;
     let titleTotal = 0;
+    const gridColumns = 24;
+    const gridRows = 10;
+    const grid = Array.from({ length: gridColumns * gridRows }, () => ({ changed: 0, delta: 0, total: 0 }));
     for (let y = 0; y < first.height; y += 1) {
       for (let x = 0; x < first.width; x += 1) {
         const offset = (y * first.width + x) * 4;
@@ -63,7 +66,18 @@ async function measureTemporalQuadrants(page, before, after, threshold = 1) {
           Math.abs(first.data[offset + 2] - second.data[offset + 2]),
         );
         const inTitleBand = y >= first.height * .30 && y <= first.height * .70;
-        if (inTitleBand) titleTotal += 1;
+        if (inTitleBand) {
+          titleTotal += 1;
+          const gridX = Math.min(gridColumns - 1, Math.floor(x / first.width * gridColumns));
+          const gridY = Math.min(
+            gridRows - 1,
+            Math.floor((y / first.height - .30) / .40 * gridRows),
+          );
+          const cell = grid[gridY * gridColumns + gridX];
+          cell.total += 1;
+          cell.delta += delta;
+          if (delta >= 3) cell.changed += 1;
+        }
         if (delta < thresholdValue) continue;
         count += 1;
         if (inTitleBand) {
@@ -73,7 +87,52 @@ async function measureTemporalQuadrants(page, before, after, threshold = 1) {
         quadrants[(y >= first.height / 2 ? 2 : 0) + (x >= first.width / 2 ? 1 : 0)] += 1;
       }
     }
-    return { count, quadrants, titleCount, titleDelta, titleTotal, total: first.width * first.height };
+    const active = new Set(grid.flatMap((cell, index) => (
+      cell.total > 0 && cell.changed / cell.total >= .06 && cell.delta / cell.total >= 1.5
+        ? [index]
+        : []
+    )));
+    let largestComponent = { cells: 0, spanColumns: 0, spanRows: 0 };
+    while (active.size > 0) {
+      const [firstIndex] = active;
+      const queue = [firstIndex];
+      active.delete(firstIndex);
+      const component = [];
+      while (queue.length > 0) {
+        const index = queue.shift();
+        if (index === undefined) continue;
+        component.push(index);
+        const x = index % gridColumns;
+        const y = Math.floor(index / gridColumns);
+        for (const neighbour of [
+          x > 0 ? index - 1 : -1,
+          x < gridColumns - 1 ? index + 1 : -1,
+          y > 0 ? index - gridColumns : -1,
+          y < gridRows - 1 ? index + gridColumns : -1,
+        ]) {
+          if (!active.has(neighbour)) continue;
+          active.delete(neighbour);
+          queue.push(neighbour);
+        }
+      }
+      const columns = component.map((index) => index % gridColumns);
+      const rows = component.map((index) => Math.floor(index / gridColumns));
+      const candidate = {
+        cells: component.length,
+        spanColumns: Math.max(...columns) - Math.min(...columns) + 1,
+        spanRows: Math.max(...rows) - Math.min(...rows) + 1,
+      };
+      if (candidate.cells > largestComponent.cells) largestComponent = candidate;
+    }
+    return {
+      connected: largestComponent,
+      count,
+      quadrants,
+      titleCount,
+      titleDelta,
+      titleTotal,
+      total: first.width * first.height,
+    };
   }, {
     afterBase64: after.toString('base64'),
     beforeBase64: before.toString('base64'),
@@ -209,17 +268,16 @@ try {
     assert.equal(await surface.locator('[data-optical-lab-asset-plate="true"]').count(), 1, 'accepted energy plate must remain mounted');
     assert.equal(await surface.locator('[data-optical-lab-target-typography-plate="true"]').count(), 1, 'accepted typography plate must remain mounted');
     assert.equal(await page.locator('#landing-optical-diagnostics').isVisible(), false, 'shared diagnostics must remain visually hidden');
-    assert.equal(
-      await surface.evaluate((node) => getComputedStyle(node).cursor),
-      'none',
-      'the optical surface must not expose the black operating-system arrow over its dark field',
+    assert(
+      ['auto', 'default'].includes(await surface.evaluate((node) => getComputedStyle(node).cursor)),
+      'the optical surface must preserve the operating-system cursor over its dark field',
     );
     assert.deepEqual(
       await surface.evaluate((node) => [...node.querySelectorAll('*')]
-        .filter((child) => getComputedStyle(child).cursor !== 'none')
+        .filter((child) => getComputedStyle(child).cursor === 'none')
         .map((child) => ({ cursor: getComputedStyle(child).cursor, tag: child.tagName }))),
       [],
-      'every Landing optical descendant must keep the operating-system cursor hidden',
+      'no Landing optical descendant may hide the operating-system cursor',
     );
     assert.equal(
       await surface.evaluate((node) => getComputedStyle(
@@ -265,7 +323,7 @@ try {
         const phaseBefore = await page.evaluate(() => window.__OPENSCIENCE_OPTICAL_ASSET_INTERACTION__?.ambientPhase);
         const idleRendererBefore = await captureRendererFrame(page);
         const idleBefore = await surface.screenshot();
-        await page.waitForTimeout(1200);
+        await page.waitForTimeout(650);
         const idleAfter = await surface.screenshot();
         const phaseAfter = await page.evaluate(() => window.__OPENSCIENCE_OPTICAL_ASSET_INTERACTION__?.ambientPhase);
         if (testCase.name === 'desktop' && index === 0) {
@@ -295,11 +353,49 @@ try {
         && motion.quadrants.every((count) => count > 0)
       )), `Landing idle motion must visibly animate the title band in every window and all four quadrants: ${JSON.stringify(idleWindows)}`);
       assert(idleWindows.every((motion) => (
+        motion.connected.cells >= 6
+        && motion.connected.spanColumns >= 2
+        && motion.connected.spanRows >= 2
+      )), `Landing idle motion must read as one connected current instead of sparse pixel noise: ${JSON.stringify(idleWindows)}`);
+      assert(idleWindows.every((motion) => (
         motion.chromaticBands.maximumRowRatio <= .20
         && motion.chromaticBands.maximumColumnRatio <= .20
       )), `Landing idle grazing light must remain narrow instead of becoming a broad chromatic band: ${JSON.stringify(idleWindows)}`);
       await surface.screenshot({
         path: path.join(outDir, `landing-idle-${testCase.width}x${testCase.height}.png`),
+      });
+      const slowStartX = bounds.x + bounds.width * .36;
+      const slowY = bounds.y + bounds.height * .48;
+      await page.mouse.move(slowStartX, slowY);
+      await page.waitForTimeout(180);
+      let slowPeak = 0;
+      let slowResponse = null;
+      let slowEndResponse = null;
+      for (let index = 1; index <= 6; index += 1) {
+        await page.mouse.move(slowStartX + index * 2, slowY);
+        await page.waitForTimeout(75);
+        const snapshot = await page.evaluate(() => window.__OPENSCIENCE_OPTICAL_ASSET_INTERACTION__);
+        slowEndResponse = snapshot;
+        if ((snapshot?.follow ?? 0) > slowPeak) {
+          slowPeak = snapshot.follow;
+          slowResponse = snapshot;
+        }
+        if (testCase.name === 'desktop' && index === 6) {
+          await surface.screenshot({
+            path: path.join(outDir, `landing-slow-wake-${testCase.width}x${testCase.height}.png`),
+          });
+        }
+        await page.waitForTimeout(105);
+      }
+      assert(slowPeak >= .05, `ordinary slow pointer movement must create a visible wake: ${JSON.stringify(slowResponse)}`);
+      assert(
+        slowEndResponse && Math.abs(slowEndResponse.pointerX - ((slowStartX + 12 - bounds.x) / bounds.width)) <= .02,
+        `slow wake must remain at the real pointer location: ${JSON.stringify(slowEndResponse)}`,
+      );
+      await page.mouse.move(bounds.x + bounds.width * .5, Math.max(0, bounds.y - 10));
+      await page.waitForFunction(() => window.__OPENSCIENCE_OPTICAL_ASSET_INTERACTION__?.follow === 0, undefined, {
+        polling: 'raf',
+        timeout: 900,
       });
       const startX = bounds.x + bounds.width * .3;
       const endX = bounds.x + bounds.width * .7;
@@ -307,21 +403,28 @@ try {
       await page.mouse.move(startX, y);
       await page.waitForTimeout(48);
       await page.mouse.move(endX, y, { steps: 2 });
-      await page.waitForFunction(() => {
-        const snapshot = window.__OPENSCIENCE_OPTICAL_ASSET_INTERACTION__;
-        return Boolean(snapshot && snapshot.follow > .05 && snapshot.activeRaf);
-      }, undefined, { polling: 'raf', timeout: 2_000 });
+      await page.waitForTimeout(75);
       const response = await page.evaluate(() => window.__OPENSCIENCE_OPTICAL_ASSET_INTERACTION__);
-      assert(response && response.follow > .05, 'pointer movement must activate the amplified shared field');
+      if (testCase.name === 'desktop') {
+        await surface.screenshot({
+          path: path.join(outDir, `landing-fast-wake-${testCase.width}x${testCase.height}.png`),
+        });
+      }
+      assert(response && response.follow > slowPeak, 'fast pointer movement must remain stronger than the slow wake');
+      assert(response.follow <= 1, 'fast pointer movement must remain inside the accepted follow cap');
       assert(response.pointerX > .5, 'pointer response must follow the production Hero input position');
-      assert.equal(
-        await page.evaluate(({ pointerX, pointerY }) => {
+      assert(
+        ['auto', 'default'].includes(await page.evaluate(({ pointerX, pointerY }) => {
           const hit = document.elementFromPoint(pointerX, pointerY);
           return hit ? getComputedStyle(hit).cursor : null;
-        }, { pointerX: endX, pointerY: y }),
-        'none',
-        'the live pointer hit target must not reveal a black operating-system cursor during interaction',
+        }, { pointerX: endX, pointerY: y })),
+        'the live pointer hit target must preserve the operating-system cursor during interaction',
       );
+      await page.mouse.move(bounds.x + bounds.width * .5, Math.max(0, bounds.y - 10));
+      await page.waitForFunction(() => window.__OPENSCIENCE_OPTICAL_ASSET_INTERACTION__?.follow === 0, undefined, {
+        polling: 'raf',
+        timeout: 900,
+      });
     }
 
     await page.locator('[data-hero-action="primary"]').focus();

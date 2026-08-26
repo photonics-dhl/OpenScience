@@ -50,7 +50,7 @@ export interface AssetInteractionFrameCapture {
 }
 
 const ASSET_AMBIENT_STRENGTH = .05;
-const ASSET_AMBIENT_CYCLE_MS = 10_000;
+const ASSET_AMBIENT_CYCLE_MS = 7_000;
 
 export function sampleAssetAmbientClock(elapsedMs: number) {
   const shaderTime = Math.max(0, elapsedMs) / ASSET_AMBIENT_CYCLE_MS;

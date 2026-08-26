@@ -108,6 +108,9 @@ async function measureOpticalTitleMotion(page: Page, before: Buffer, after: Buff
     let titleCount = 0;
     let titleDelta = 0;
     let titleTotal = 0;
+    const gridColumns = 24;
+    const gridRows = 10;
+    const grid = Array.from({ length: gridColumns * gridRows }, () => ({ changed: 0, delta: 0, total: 0 }));
     for (let y = 0; y < first.height; y += 1) {
       for (let x = 0; x < first.width; x += 1) {
         const offset = (y * first.width + x) * 4;
@@ -117,7 +120,18 @@ async function measureOpticalTitleMotion(page: Page, before: Buffer, after: Buff
           Math.abs(first.data[offset + 2] - second.data[offset + 2]),
         );
         const inTitleBand = y >= first.height * .30 && y <= first.height * .70;
-        if (inTitleBand) titleTotal += 1;
+        if (inTitleBand) {
+          titleTotal += 1;
+          const gridX = Math.min(gridColumns - 1, Math.floor(x / first.width * gridColumns));
+          const gridY = Math.min(
+            gridRows - 1,
+            Math.floor((y / first.height - .30) / .40 * gridRows),
+          );
+          const cell = grid[gridY * gridColumns + gridX];
+          cell.total += 1;
+          cell.delta += delta;
+          if (delta >= 3) cell.changed += 1;
+        }
         if (delta < 3) continue;
         if (inTitleBand) {
           titleCount += 1;
@@ -126,11 +140,56 @@ async function measureOpticalTitleMotion(page: Page, before: Buffer, after: Buff
         quadrants[(y >= first.height / 2 ? 2 : 0) + (x >= first.width / 2 ? 1 : 0)] += 1;
       }
     }
-    return { quadrants, titleCount, titleDelta, titleTotal };
+    const active = new Set(grid.flatMap((cell, index) => (
+      cell.total > 0 && cell.changed / cell.total >= .06 && cell.delta / cell.total >= 1.5
+        ? [index]
+        : []
+    )));
+    let largestComponent = { cells: 0, spanColumns: 0, spanRows: 0 };
+    while (active.size > 0) {
+      const [firstIndex] = active;
+      const queue = [firstIndex];
+      active.delete(firstIndex);
+      const component: number[] = [];
+      while (queue.length > 0) {
+        const index = queue.shift();
+        if (index === undefined) continue;
+        component.push(index);
+        const x = index % gridColumns;
+        const y = Math.floor(index / gridColumns);
+        for (const neighbour of [
+          x > 0 ? index - 1 : -1,
+          x < gridColumns - 1 ? index + 1 : -1,
+          y > 0 ? index - gridColumns : -1,
+          y < gridRows - 1 ? index + gridColumns : -1,
+        ]) {
+          if (!active.has(neighbour)) continue;
+          active.delete(neighbour);
+          queue.push(neighbour);
+        }
+      }
+      const columns = component.map((index) => index % gridColumns);
+      const rows = component.map((index) => Math.floor(index / gridColumns));
+      const candidate = {
+        cells: component.length,
+        spanColumns: Math.max(...columns) - Math.min(...columns) + 1,
+        spanRows: Math.max(...rows) - Math.min(...rows) + 1,
+      };
+      if (candidate.cells > largestComponent.cells) largestComponent = candidate;
+    }
+    return { connected: largestComponent, quadrants, titleCount, titleDelta, titleTotal };
   }, { afterBase64: after.toString('base64'), beforeBase64: before.toString('base64') });
 }
 
 async function assertVisibleOpticalMotion(page: Page, acceptedSurface: Locator) {
+  expect(
+    await acceptedSurface.evaluate((node) => getComputedStyle(node).cursor),
+  ).toMatch(/^(auto|default)$/u);
+  expect(
+    await acceptedSurface.evaluate((node) => [...node.querySelectorAll('*')]
+      .filter((child) => getComputedStyle(child).cursor === 'none')
+      .map((child) => child.tagName)),
+  ).toEqual([]);
   const canvas = acceptedSurface.locator('canvas[data-optical-asset-interaction-canvas="true"]');
   await expect(canvas).toHaveCount(1, { timeout: 10_000 });
   await expect(acceptedSurface).toHaveAttribute('data-render-mode', 'asset-interactive');
@@ -142,7 +201,7 @@ async function assertVisibleOpticalMotion(page: Page, acceptedSurface: Locator) 
   for (let index = 0; index < 3; index += 1) {
     const phaseBefore = await page.evaluate(() => window.__OPENSCIENCE_OPTICAL_ASSET_INTERACTION__?.ambientPhase);
     const before = await acceptedSurface.screenshot();
-    await page.waitForTimeout(1_200);
+    await page.waitForTimeout(650);
     const after = await acceptedSurface.screenshot();
     const phaseAfter = await page.evaluate(() => window.__OPENSCIENCE_OPTICAL_ASSET_INTERACTION__?.ambientPhase);
     const motion = await measureOpticalTitleMotion(page, before, after);
@@ -152,23 +211,46 @@ async function assertVisibleOpticalMotion(page: Page, acceptedSurface: Locator) 
     expect(motion.titleCount / motion.titleTotal).toBeGreaterThanOrEqual(.18);
     expect(motion.titleDelta / motion.titleTotal).toBeGreaterThanOrEqual(1.10);
     expect(motion.quadrants.every((count) => count > 0)).toBe(true);
+    expect(motion.connected.cells).toBeGreaterThanOrEqual(6);
+    expect(motion.connected.spanColumns).toBeGreaterThanOrEqual(2);
+    expect(motion.connected.spanRows).toBeGreaterThanOrEqual(2);
   }
 
   const bounds = await acceptedSurface.boundingBox();
   if (!bounds) throw new Error('Landing optical surface has no visible bounds');
+  const slowStartX = bounds.x + bounds.width * .36;
+  const slowY = bounds.y + bounds.height * .48;
+  await page.mouse.move(slowStartX, slowY);
+  await page.waitForTimeout(180);
+  let slowPeak = 0;
+  let slowEndPointerX = 0;
+  for (let index = 1; index <= 6; index += 1) {
+    await page.mouse.move(slowStartX + index * 2, slowY);
+    await page.waitForTimeout(75);
+    const snapshot = await page.evaluate(() => window.__OPENSCIENCE_OPTICAL_ASSET_INTERACTION__);
+    slowPeak = Math.max(slowPeak, snapshot?.follow ?? 0);
+    slowEndPointerX = snapshot?.pointerX ?? slowEndPointerX;
+    await page.waitForTimeout(105);
+  }
+  expect(slowPeak).toBeGreaterThanOrEqual(.05);
+  expect(Math.abs(slowEndPointerX - ((slowStartX + 12 - bounds.x) / bounds.width))).toBeLessThanOrEqual(.02);
+  await page.mouse.move(bounds.x + bounds.width * .5, Math.max(0, bounds.y - 10));
+  await page.waitForFunction(() => window.__OPENSCIENCE_OPTICAL_ASSET_INTERACTION__?.follow === 0, undefined, {
+    polling: 'raf',
+    timeout: 900,
+  });
   const startX = bounds.x + bounds.width * .3;
   const endX = bounds.x + bounds.width * .7;
   const y = bounds.y + bounds.height * .45;
   await page.mouse.move(startX, y);
   await page.waitForTimeout(48);
   await page.mouse.move(endX, y, { steps: 2 });
-  await page.waitForFunction(() => {
-    const snapshot = window.__OPENSCIENCE_OPTICAL_ASSET_INTERACTION__;
-    return Boolean(snapshot && snapshot.activeRaf && snapshot.follow > .05);
-  }, undefined, { polling: 'raf', timeout: 2_000 });
+  await page.waitForTimeout(75);
   const response = await page.evaluate(() => window.__OPENSCIENCE_OPTICAL_ASSET_INTERACTION__);
-  expect(response?.follow).toBeGreaterThan(.05);
+  expect(response?.follow).toBeGreaterThan(slowPeak);
+  expect(response?.follow).toBeLessThanOrEqual(1);
   expect(response?.pointerX).toBeGreaterThan(.5);
+  await page.mouse.move(bounds.x + bounds.width * .5, Math.max(0, bounds.y - 10));
   await page.waitForFunction(() => {
     const snapshot = window.__OPENSCIENCE_OPTICAL_ASSET_INTERACTION__;
     return Boolean(snapshot && snapshot.follow === 0 && snapshot.causticGain === 0);

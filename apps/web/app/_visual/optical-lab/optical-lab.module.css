@@ -379,11 +379,6 @@
   touch-action: pan-y;
 }
 
-.candidate[data-accepted-optical-surface='landing'],
-.candidate[data-accepted-optical-surface='landing'] * {
-  cursor: none !important;
-}
-
 .diagnostics {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
