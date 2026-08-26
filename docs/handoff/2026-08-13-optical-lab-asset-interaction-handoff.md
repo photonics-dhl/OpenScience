@@ -1,6 +1,11 @@
-# Handoff — 2026-08-13 Optical Lab Asset Interaction
+# Handoff — 2026-08-13 Optical Lab Asset Interaction (HISTORICAL)
 
-## Current canonical state — Task 23 deployed and publicly verified (2026-08-15)
+> Task 24 reopened the user-visible Landing water/cursor contract on
+> 2026-08-26. Current design truth is the 2026-08-14 water-flow spec; current
+> execution state is the compact 2026-08-16 Hermes handoff. The implementation
+> history below remains evidence and must not route current work.
+
+## Historical canonical state — Task 23 deployed and publicly verified (2026-08-15)
 
 > **2026-08-15 closeout:** The user accepted the current Landing visual. The
 > complete product branch was consolidated into local `main`; the invalid

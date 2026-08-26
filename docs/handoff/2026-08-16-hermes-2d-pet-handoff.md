@@ -1,6 +1,6 @@
 # Handoff — Hermes Wanko Live2D Companion
 
-> **CURRENT active-memory，2026-08-26 10:30 +08。** Hermes 形象阶段按用户决定收口；旧灯体、帽子、流苏、Cubism GUI 试验和被否决候选只从 Git history 查阅，不再作为实施入口。
+> **CURRENT active-memory，2026-08-26 11:05 +08。** Hermes 形象阶段按用户决定收口；旧灯体、帽子、流苏、Cubism GUI 试验和被否决候选只从 Git history 查阅，不再作为实施入口。
 
 ## Goal
 
@@ -65,8 +65,8 @@
 
 ## Next action
 
-1. 请用户在生产站直接验收 Landing 水波与全站入口；Hermes 形象保持冻结。
-2. 若发现具体页面联动缺口，只在对应 shell/navigation 层修复，不顺带改 Landing optical runtime 或 Hermes 本体。
+1. 用户已确认 Task 24“真实系统鼠标 + 慢速也响应的局部水纹”方向；先审阅 CURRENT optical spec 书面合同。
+2. 获确认后为 Landing 单独建实施计划并按 TDD 修复；Hermes、导航与非 Landing 页面保持冻结。
 
 ## Read first
 
