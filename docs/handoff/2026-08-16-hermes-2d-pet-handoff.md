@@ -1,6 +1,6 @@
 # Handoff — Hermes Wanko Live2D Companion
 
-> **CURRENT active-memory，2026-08-26 11:05 +08。** Hermes 形象阶段按用户决定收口；旧灯体、帽子、流苏、Cubism GUI 试验和被否决候选只从 Git history 查阅，不再作为实施入口。
+> **CURRENT active-memory，2026-08-26 11:27 +08。** Hermes 形象阶段按用户决定收口；旧灯体、帽子、流苏、Cubism GUI 试验和被否决候选只从 Git history 查阅，不再作为实施入口。
 
 ## Goal
 
@@ -10,14 +10,14 @@
 
 ## Version tuple
 
-- Working branch / deployed application: `codex/hermes-wanko-live2d` / `c80f739072054e6ababfee511a6a9ecbaa296020`。
+- Working branch / local application candidate / deployed application: `codex/hermes-wanko-live2d` / `47c8aa9e6b78c3ec26e4d0320097e1c5260d794a` / `c80f739072054e6ababfee511a6a9ecbaa296020`。
 - Current immutable deployed release: `263c78372a1a6114016bba9ca3d8dbfce94ee0ce`；后续 docs-only HEAD 不改变该产品身份。
 - Local main / origin main: `c60ffdd16b85ea8f0d8b047493fa03a4c0230c05` / `7eb2f5bc4718ee445b79bd089acb64acb3691e62`，都早于当前分支；remote feature 不存在，旧 `origin/codex/readable-hermes-guidance@c88c780` 不是本次候选。
 - ECS release / rollback: `263c78372a1a6114016bba9ca3d8dbfce94ee0ce` / `8395b4d5cc11cb444aac3b638cff4ccc993ef9f2`。
 
 ## Done
 
-- 2026-08-26 application `c80f739` 冻结 Hermes 并修复产品联动：正常 Landing final-composite visible motion 进入 canonical release gate；Dashboard/Auth/Create/Settings/Explore/公开 RO/Collection/Admin/Hermes review 与全部 RO workspace 获得一级/二级入口，390px 首项 `6px` 裁切已 RED→GREEN。Fresh Web `420+5`、product matrix `72/72`、全仓 typecheck/lint/test/build/docs 与 19-page build GREEN。Release `263c783` / rollback `8395b4d` 的 backup、server build、27 migrations、容器/Parser/入口/markers 全绿；公网匿名产品矩阵 `69/69`，Admin 三视口由预期 Basic Auth 401 阻断且本地 `3/3`。无 migration/seed/data write。
+- Task 24 candidate `47c8aa9` 在当前 deployed application/release/rollback `c80f739` / `263c783` / `8395b4d` 上恢复既有 OGL 水流：移除 descendants 隐藏 cursor 合同，以 concave 速度映射恢复慢速 wake，ambient 10s→7s；未改 Landing 构图、字体、shader、Hermes 或已部署的全站导航。Canonical Landing desktop/wide/mobile normal+reduced `6/6`、focused `23/23`、Web `421+5`、全仓 test/build、Web typecheck、targeted ESLint 与原尺寸截图 GREEN。Broader Optical Lab 的既有 `evolves` 边界 `.899336 < .9` 在 10s/7s 相同，未放宽；ECS 部署 pending。
 - §13.8 application `9aef5c4` 将 detached custom dock 纳入 portal/crown/travel-hull 稳定器；默认纸页保持帽顶上方 `24–48px`，下移避开 viewport/protected surfaces，空间冲突才退到安全侧页或较矮上方 folio。旧 production 在 custom-dock 下 `menu.top=-31.7px` RED；最终关键 repeat `10/10`、constrained `5/5`、release `67/67`、Web `411+5`、root test/typecheck/lint、19-page build GREEN，独立复审 Ready。Release `8395b4d` / rollback `bf54eaa` 的 server build、27 migrations、容器/Parser/入口/assets/markers 与公网 Hermes `10/10` 均通过。
 - §13.7 application `5323ba8` 用一个可重复稳定器联合约束 portal、可见帽顶、actor bottom、visual viewport 与 protected geometry；首帧同步 + 双 rAF、上游重排、compact 切组、关闭/卸载恢复和键盘 focus 均有回归。旧实现在精确 `1612×729 / DPR 1.875` 与上游 header reflow 下 RED；关键 `10/10`、Hermes `9/9`、Web `411+5`、release `66/66`、work-assistant 与 root gates GREEN，独立复审 Ready。Release `bf54eaa` / rollback `6b804f7` 的 server build、27 migrations、容器/Parser/入口/assets/markers 与公网 Hermes `9/9` 均通过。
 - §13.6 application `8d1409e` 使用真实 portal/protected-region 测量保持 viewport 与 `24–48px` crown gap，mobile 开合不跳；12 动作各有真实 Wanko performance 与中英各三句不连重复，动作先于 speech，input/search/modal/drawer/approval 可中断。Release `6b804f7` / rollback `cbf5737`；Web `411+5`、release `65/65`、public `6/6`、focused/root gates 与独立复审 GREEN。

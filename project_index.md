@@ -1,7 +1,7 @@
 # OpenScience (XGS) 项目文件索引
 
 > 维护规则：创建/修改/移动文件后必须更新本索引。创建新文件前先查本表防重复。
-> **CURRENT source/deployment anchor（2026-08-26 11:15 +08）：** working branch/HEAD `codex/hermes-wanko-live2d@5fa43da`；deployed application / immutable release 为 `c80f739` / `263c783`；local main / origin main `c60ffdd` / `7eb2f5b`；ECS release / rollback 为 `263c783` / `8395b4d`。只有本锚点与主题唯一 CURRENT handoff 可决定当前状态。
+> **CURRENT source/deployment anchor（2026-08-26 11:27 +08）：** working branch/HEAD `codex/hermes-wanko-live2d@47c8aa9`；deployed application / immutable release 为 `c80f739` / `263c783`；local main / origin main `c60ffdd` / `7eb2f5b`；ECS release / rollback 为 `263c783` / `8395b4d`。只有本锚点与主题唯一 CURRENT handoff 可决定当前状态。
 
 ## 根目录
 | 路径 | 用途 | 状态 |
@@ -161,7 +161,7 @@
 | `apps/web/lib/extract-review-state.ts` / `apps/web/test/e2e/hermes-blank-ro-flow.spec.ts` / `apps/web/test/visual/hermes-blank-ro-production-gate.mjs` | blank RO 字段级 evidence diff、accept/edit-accept/reject/missing/save/reload/commit；checkpoint 只存 task/决策元数据，storage/transport/Redis 失败复用同一付费 task；公网 gate 要求真实账号/MiniMax、零拦截、credit/audit/immutable snapshot、完整 footprint、真实 Wanko idle/work/review/celebration pixels 与 zh/en/mobile/reduced | **IMPLEMENTED FOUNDATION / CARRIED FORWARD**；真实账号纵向证据来自 `06072c1`，现行 `5f4e73c` 仅重跑无写入 Dashboard UI gate |
 | `apps/web/test/visual/hermes-real-ro-production-gate.mjs` / `packages/domain/test/artifact/scan.test.ts` | ECS-only 真实论文纵向门禁：固定 arXiv 2009.06045v1 SHA-256、浏览器创建/上传、MiniMax 六字段决策与原文证据、确认前 SDF 不变、显式缺失披露、bulk confirm/version commit、Hermes runtime；上传响应与状态轮询均允许 300 秒生产边缘延迟，同时锁定合法 PDF `../` 不误判而真实 ZIP traversal 继续拒绝 | **ECS-ONLY SMOKE TOOL**；最近完整真实证据来自 `06072c1`，`5f4e73c` 未重跑；不使用本机 Docker、不拦截 API，输出仅写 ignored visual evidence |
 | `docs/handoff/2026-08-15-hermes-constellation-dragon-prototype-handoff.md` | 少年星图龙静态 Blender 原型、结构门禁与用户 NO-GO 结论 | 历史交接；不得按其 next action 恢复 3D |
-| `docs/handoff/2026-08-16-hermes-2d-pet-handoff.md` | 唯一 compact CURRENT 交接：Hermes 冻结、Landing Task 24 design gate、本地/ECS version tuple、约束与验收入口 | **CURRENT active-memory**；application/release/rollback `c80f739` / `263c783` / `8395b4d` |
+| `docs/handoff/2026-08-16-hermes-2d-pet-handoff.md` | 唯一 compact CURRENT 交接：Hermes 冻结、Landing Task 24 本地候选与部署边界、本地/ECS version tuple、约束与验收入口 | **CURRENT active-memory**；local candidate `47c8aa9`，deployed application/release/rollback `c80f739` / `263c783` / `8395b4d` |
 | `docs/plans/2026-08-26-landing-motion-navigation-continuity-plan.md` | 冻结 Hermes、补全 Landing final-composite gate 与真实产品页一级/RO 二级入口 | **COMPLETED / DEPLOYED**；application/release/rollback `c80f739` / `263c783` / `8395b4d` |
 | `docs/design/optical-editorial-figma-map.md` | 长期账号 Figma canonical 的 V3 variables/styles/components/八表面节点映射、代码对应关系与 Code Connect 边界 | Task 13 canonical 映射 |
 | `docs/superpowers/specs/2026-08-09-researcher-ingestion-product-slice-design.md` | 研究者第一条产品级前端闭环设计：注册、Dashboard、资料导入、Hermes 证据确认、RO Workspace；待用户审阅 | 设计 spec |
@@ -339,8 +339,8 @@
 | `docs/runbooks/visual-release.md` | Optical Editorial production-build 视觉/无障碍/性能发布门禁：27-case 矩阵、accepted shared surface/reduced exact/pointer focused gate、实测 route/static 预算、physical desktop/mobile cadence contract 与人工审美拒绝项；物理手机风险豁免由 Task 19 建立并明确续签至 Task 23 | 活 runbook；模拟 mobile 不冒充硬件证据，Task 23 后需重新授权 |
 | `docs/superpowers/specs/2026-08-14-optical-idle-attention-design.md` | Task 21 首屏自主光流与黑色系统光标修复设计：Landing-only idle/pointer 双态、标题带人眼感知门槛、reduced-motion 边界 | 已实现并随 `8edf6fa` 部署 |
 | `docs/superpowers/plans/2026-08-14-optical-idle-attention-plan.md` | Task 21 单任务 TDD 实施计划；弱 idle 与系统 cursor RED 已闭合，Landing-only presentation owner 通过完整本地/公网门禁 | 已完成；release `8edf6fa`，rollback `28c7789` |
-| `docs/superpowers/specs/2026-08-14-optical-water-flow-refinement-design.md` | 唯一 CURRENT Landing water spec；Task 24 恢复系统 cursor，并以慢速/快速真实轨迹、局部位置和连贯水流替代 aggregate pixel-noise 放行 | **TASK 24 WRITTEN SPEC APPROVED**；production 仍为 `263c783` |
-| `docs/superpowers/plans/2026-08-14-optical-water-flow-refinement-plan.md` | Task 22/23 历史实施；Task 24 追溯隐藏 cursor/弱慢速/aggregate gate 根因，并恢复既有 OGL 水流、建立跨发布回归保护 | **TASK 24 PLAN READY / TDD PENDING**；不重建 renderer，不恢复旧 Canvas2D field |
+| `docs/superpowers/specs/2026-08-14-optical-water-flow-refinement-design.md` | 唯一 CURRENT Landing water spec；Task 24 恢复系统 cursor，并以慢速/快速真实轨迹、局部位置和连贯水流替代 aggregate pixel-noise 放行 | **TASK 24 IMPLEMENTED LOCALLY**；candidate `47c8aa9`，production 仍为 `263c783` |
+| `docs/superpowers/plans/2026-08-14-optical-water-flow-refinement-plan.md` | Task 22/23 历史实施；Task 24 追溯隐藏 cursor/弱慢速/aggregate gate 根因，并恢复既有 OGL 水流、建立跨发布回归保护 | **TASK 24 STEPS 1–5 COMPLETE / DEPLOY PENDING**；不重建 renderer，不恢复旧 Canvas2D field |
 
 ## infra/
 | 路径 | 用途 | 状态 |

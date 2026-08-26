@@ -152,7 +152,6 @@ follow of about `.007`, even though the result reads as a static image.
 - Modify: `apps/web/app/_visual/optical-lab/optical-lab.module.css`
 - Modify: `apps/web/lib/optical-lab/asset-interaction-model.ts`
 - Modify: `apps/web/lib/optical-lab/ogl/asset-interaction-renderer.ts`
-- Modify: `apps/web/lib/optical-lab/ogl/shaders/asset-composite.ts`
 - Modify: `docs/progress.md`
 - Modify: `docs/handoff/2026-08-16-hermes-2d-pet-handoff.md`
 - Modify: `project_index.md`
@@ -167,7 +166,7 @@ follow of about `.007`, even though the result reads as a static image.
   final-composite evidence and a release gate that cannot reinstate the old
   hidden/static contract.
 
-- [ ] **Step 1: Write the focused model RED**
+- [x] **Step 1: Write the focused model RED**
 
   Add a real-behavior test that maps a slow `12px / 1000ms` movement and a fast
   `120px / 100ms` movement, then feeds each result through
@@ -176,7 +175,7 @@ follow of about `.007`, even though the result reads as a static image.
   sample and both must remain `<= 1`. The current linear mapping must fail the
   slow assertion at about `.009`.
 
-- [ ] **Step 2: Write the production-browser RED**
+- [x] **Step 2: Write the production-browser RED**
 
   Replace the `cursor:none` assertions in both browser gates with computed
   `auto`/`default` system-cursor assertions and an explicit scan proving that no
@@ -187,7 +186,7 @@ follow of about `.007`, even though the result reads as a static image.
   composites and require the slow change centroid to remain near the pointer,
   with recovery at zero within 900ms.
 
-- [ ] **Step 3: Replace aggregate idle noise with connected-motion evidence**
+- [x] **Step 3: Replace aggregate idle noise with connected-motion evidence**
 
   Bin the title band into a 24×10 grid. A cell is active only when at least 6%
   of its pixels change by 3 or more and its mean delta is at least 1.5. Use a
@@ -197,19 +196,21 @@ follow of about `.007`, even though the result reads as a static image.
   presentation must fail this shorter perceptual window before production code
   changes.
 
-- [ ] **Step 4: Restore visible output in the existing owner**
+- [x] **Step 4: Restore visible output in the existing owner**
 
   Remove the Landing `cursor: none !important` selector without adding a custom
   cursor. Shape the already calculated non-zero pointer magnitude with
   `sqrt(magnitude)` before normalizing its direction; this raises slow movement
   while preserving zero input, direction, fast-over-slow ordering and the
-  existing cap. Change the existing ambient cycle from `10_000ms` to `7_000ms`
-  and the Landing-only presentation drift from `2.2px` to `3.2px`; retain the
-  shared `.05` flow strength, 6px ambient budget, 10px combined cap, accepted
+  existing cap. Change the existing ambient cycle from `10_000ms` to `7_000ms`;
+  retain the accepted `2.2px` Landing-only presentation drift because the new
+  650ms connected-motion gate and original-size review already pass without
+  changing the shader. Retain the shared `.05` flow strength, 6px ambient
+  budget, 10px combined cap, accepted
   textures, renderer ownership and all reduced-motion/failure behavior. Do not
   remount the historical Canvas2D `OpticalField` or add another animation layer.
 
-- [ ] **Step 5: Verify GREEN and inspect the actual experience**
+- [x] **Step 5: Verify GREEN and inspect the actual experience**
 
   Run the focused Vitest after each production change, then the Landing visual
   gate and canonical product release Landing cases at 1672×941, 390×844 and
@@ -218,6 +219,15 @@ follow of about `.007`, even though the result reads as a static image.
   local wake, no broad sweep/halo/band, clean typography and static canvas-free
   reduced motion. Run full Web tests, typecheck, lint, build, docs gates and
   `git diff --check`; retain the known native PNG timing RED as RED.
+
+  Application candidate `47c8aa9` is GREEN in the canonical Landing matrix
+  (`6/6`: desktop/wide/mobile normal and reduced), focused `23/23`, Web
+  `421+5`, full workspace test/build, Web typecheck, targeted ESLint and diff
+  check. Desktop/mobile screenshots were inspected at original size. The
+  broader Optical Lab development capture remains independently RED at the
+  pre-existing `evolves` silhouette boundary (`.899336 < .9`) under both the
+  original 10-second and final 7-second clocks; its threshold was not weakened
+  or relabelled as a water regression.
 
 - [ ] **Step 6: Protect future unrelated releases and deploy**
 
