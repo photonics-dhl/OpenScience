@@ -962,3 +962,12 @@ business data or sends real traffic to it, extend backup/restore to address the
 search database independently and complete a server-side restore rehearsal.
 Until that gate passes, do not describe the storage-separation backup boundary
 as complete.
+
+### 5.30 DocumentSourceMap contract deployment (2026-08-27)
+
+> Application/immutable release `ef043ebb8e51332effe75a5639cb207aec7bfc47`; reviewed implementation parent `c47b3f182ba857897c3c33ee21c250f6b4db3f3c` (the release commit is an identical-tree empty CI marker); rollback `e0828a6118c92c87b7869493413441bba0e76a95`.
+
+- **Precheck:** exact GitHub Actions run `32992769105` succeeded in 12m18s with build, typecheck, lint, unit, product visual and Hermes gates, despite a temporary Actions major outage. Fresh local gates passed: domain `429/429`, worker `95/95`, full typecheck/lint/unit/build/diff; local Docker was not started. ECS preflight recorded disk 22%, available memory 26GiB, ingress 200 and egress 204.
+- **Execution:** after backup `452K files=7/7`, use the canonical Bash `deploy.sh --skip-migrate` for the exact SHA. This contract-only release has no migration, seed or research-data write; never substitute a docs-only HEAD for the application SHA.
+- **Rollback:** retain the immutable `e0828a6...` release tree and use the canonical deploy rollback route; no database reversal is required for this release. Do not delete the historical extra core ledger entry.
+- **Verification:** current-repo core `28/28`, search `1/1`, failed `0/0`; target containers healthy and agent/parser exact-SHA images. Parser is network none, read-only, user `node`, 512MiB/64PID, only `/parser-jobs`, no secret-named environment, and production worker emits `DOCUMENT_PARSER_CONTRACT_OK`. Public/loopback probes return 200, auth/admin 401, release marker is exact and `.release-failed` absent.

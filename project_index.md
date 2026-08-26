@@ -1,7 +1,7 @@
 # OpenScience (XGS) 项目文件索引
 
 > 维护规则：创建/修改/移动文件后必须更新本索引。创建新文件前先查本表防重复。
-> **CURRENT source/deployment anchor（2026-08-26 22:26 +08）：** working branch/application/immutable release `codex/hermes-wanko-live2d@e0828a6`；local main / origin main `b9616cb` / `7eb2f5b`；ECS release / rollback 为 `e0828a6` / `2934476`。后续 docs-only HEAD 不改变 application 身份；只有本锚点与主题唯一 CURRENT handoff 可决定当前状态。
+> **CURRENT source/deployment anchor（2026-08-27）：** branch `codex/hermes-wanko-live2d`；application/immutable release `ef043ebb8e51332effe75a5639cb207aec7bfc47`；reviewed implementation tree parent `c47b3f182ba857897c3c33ee21c250f6b4db3f3c`（`ef043eb` 是相同 tree 的空 CI marker）；rollback `e0828a6118c92c87b7869493413441bba0e76a95`。后续 docs-only HEAD 不改变 application 身份。
 
 ## 根目录
 | 路径 | 用途 | 状态 |
@@ -106,7 +106,7 @@
 | Rejected local Hermes Blender prototype (not repository content) | 少年星图龙只保留 `hermes-constellation-dragon/apps/web/assets/hermes/HermesConstellationDragon.blend`（SHA-256 `9CF4694D…DDFA5`）；`.blend1`、渲染/contact sheet、manifest、旧脚本/合同已清理 | **用户视觉 NO-GO / HISTORICAL SOURCE ONLY**；二进制进回收站，禁止误读为候选资产 |
 | `.github/workflows/ci.yml` | PR/main 全仓 build/typecheck/lint/test 与生产视觉门禁；在任何会启动 Chromium 的 unit/visual gate 前安装固定 lockfile 对应浏览器，失败前无 evidence 目录时 artifact 上传只告警 | CURRENT CI gate；禁止用本地浏览器缓存替代 clean Ubuntu runner |
 | `.cursor/` | Cursor 编辑器配置 | 工具自管 |
-| `.taskmaster/` | task-master 任务状态；`optical-editorial-v3` 15/15 done；CURRENT `hermes-research-intelligence` 为 2/12 done，下一唯一 ready 项为 Task 3 `DocumentSourceMap Contract and Parser Interfaces` | 工具自管；Task 1–2 已关闭，进度 16.7% |
+| `.taskmaster/` | task-master 任务状态；`optical-editorial-v3` 15/15 done；CURRENT `hermes-research-intelligence` 为 3/12 done，唯一 ready 项为 Task 5 `AI Gateway and LLM OCR Routing`；Task 4、6 分别在 Task 5 完成后解锁 | 工具自管；Task 1–3 已关闭，进度 25% |
 | `.memory/memory.jsonl` | Memory MCP 知识图谱存储（MEMORY_FILE_PATH 指定） | 工具自管，随 git 备份 |
 | `src/` | 未来代码 | 空 |
 
@@ -137,10 +137,10 @@
 | `docs/specs/2026-08-17-hermes-workspace-companion-motion-design.md` | Hermes Workspace Companion 已实施 guide/anchor/travel/dock/diff foundation 与历史 OGL visual contract | **IMPLEMENTED FOUNDATION / VISUAL SUPERSEDED**；CURRENT renderer 见 2026-08-19 Wanko spec |
 | `docs/specs/2026-08-19-hermes-wanko-live2d-design.md` | Wanko renderer、`360/200px`、Research Folio；§13.3–13.7 carried sheet、speech、skill reject、action-first 与联合稳定器；§13.8 detached/protected physical fallback | **CURRENT Hermes visual/guide design / §13.8 deployed**；application/release/rollback `9aef5c4` / `8395b4d` / `bf54eaa`，public no-write `10/10`，user review pending |
 | `docs/specs/2026-08-24-research-folio-product-system-design.md` | 登录到公开验证的全部真实非 Landing 产品视觉与信息架构；暖纸阅读、graphite 证据工具、18 表面、预留 Hermes 研究页边与无覆盖合同 | **CURRENT non-Landing product UI spec / IMPLEMENTED**；Landing unchanged |
-| `docs/specs/2026-08-26-hermes-research-intelligence-platform-design.md` | Claim-first RO、可定位 Evidence、身份静默路由、CPU parser/OCR、BGE-M3 hybrid retrieval、数据库分离、富媒体与 Hermes 受控权限的统一产品/技术合同 | **CURRENT / REQUIREMENTS APPROVED / TASKS 1–2 DEPLOYED**；Taskmaster 2/12 |
+| `docs/specs/2026-08-26-hermes-research-intelligence-platform-design.md` | Claim-first RO、可定位 Evidence、身份静默路由、CPU parser/OCR、BGE-M3 hybrid retrieval、数据库分离、富媒体与 Hermes 受控权限的统一产品/技术合同 | **CURRENT / REQUIREMENTS APPROVED / TASKS 1–3 DEPLOYED**；application/release `ef043eb`，Taskmaster 3/12 |
 | `docs/plans/2026-08-26-hermes-research-intelligence-foundation-plan.md` | Taskmaster Task 1 的可执行 TDD 计划：能力台账门禁、自有 corpus、现状 parser 基准、零污染输出与全仓验收；后续三计划按实测结果展开 | **COMPLETED / TASKMASTER TASK 1 DONE**；能力候选尚未安装 |
 | `docs/plans/2026-08-26-hermes-research-intelligence-core-model-plan.md` | Taskmaster Task 2 的可执行 TDD/迁移/部署计划：Claim/Evidence/locator 合同、核心迁移 28、独立搜索数据库与 ECS-only 验收 | **COMPLETED / TASKMASTER TASK 2 DONE / ECS DEPLOYED `e0828a6`** |
-| `docs/plans/2026-08-26-hermes-document-source-map-contract-plan.md` | Taskmaster Task 3 的可执行 TDD 计划：严格 DocumentSourceMap、locator 构造/复验、Worker parser boundary、image-only false-ready 与 ECS-only 验收 | **CURRENT / IMPLEMENTING**；Task 3 in progress |
+| `docs/plans/2026-08-26-hermes-document-source-map-contract-plan.md` | Taskmaster Task 3 的可执行 TDD 计划：严格 DocumentSourceMap、locator 构造/复验、Worker parser boundary、image-only false-ready 与 ECS-only 验收 | **COMPLETED / ECS DEPLOYED `ef043eb`**；Task 3 done |
 | `docs/specs/2026-08-22-wanko-scholar-hat-design.md` | canonical Wanko 常驻学者帽视觉、佩戴遮挡、流苏运动和 visual-before-Cubism 门 | **CURRENT accessory design COMPLETE / DEPLOYED**；v09 母版与 2026-08-23 runtime bundle 已随 release `5f4e73c` 部署 |
 | `docs/specs/2026-08-18-readable-workspace-hermes-guidance-design.md` | B 平衡学者工作台、三视觉系统阅读基线、浏览器无关控件样式、Hermes 不遮挡引导编舞与公网 blank RO→六字段→diff→commit 真实验收 | **IMPLEMENTED FOUNDATION / CARRIED FORWARD**；首次公网真实验收 `06072c1`，现行 release `5f4e73c` |
 | `docs/plans/2026-08-18-readable-workspace-hermes-guidance-plan.md` | 可读性基础→代表页面→完整 Hermes footprint 避让→edit-before-accept/缺失证据→语义动作→公网 blank RO gate→ECS checkpoint 的 TDD 实施链 | **COMPLETED**；release `06072c1` / rollback `8ecf96c` |
@@ -170,7 +170,7 @@
 | `apps/web/lib/extract-review-state.ts` / `apps/web/test/e2e/hermes-blank-ro-flow.spec.ts` / `apps/web/test/visual/hermes-blank-ro-production-gate.mjs` | blank RO 字段级 evidence diff、accept/edit-accept/reject/missing/save/reload/commit；checkpoint 只存 task/决策元数据，storage/transport/Redis 失败复用同一付费 task；公网 gate 要求真实账号/MiniMax、零拦截、credit/audit/immutable snapshot、完整 footprint、真实 Wanko idle/work/review/celebration pixels 与 zh/en/mobile/reduced | **IMPLEMENTED FOUNDATION / CARRIED FORWARD**；真实账号纵向证据来自 `06072c1`，现行 `5f4e73c` 仅重跑无写入 Dashboard UI gate |
 | `apps/web/test/visual/hermes-real-ro-production-gate.mjs` / `packages/domain/test/artifact/scan.test.ts` | ECS-only 真实论文纵向门禁：固定 arXiv 2009.06045v1 SHA-256、浏览器创建/上传、MiniMax 六字段决策与原文证据、确认前 SDF 不变、显式缺失披露、bulk confirm/version commit、Hermes runtime；上传响应与状态轮询均允许 300 秒生产边缘延迟，同时锁定合法 PDF `../` 不误判而真实 ZIP traversal 继续拒绝 | **ECS-ONLY SMOKE TOOL**；最近完整真实证据来自 `06072c1`，`5f4e73c` 未重跑；不使用本机 Docker、不拦截 API，输出仅写 ignored visual evidence |
 | `docs/handoff/2026-08-15-hermes-constellation-dragon-prototype-handoff.md` | 少年星图龙静态 Blender 原型、结构门禁与用户 NO-GO 结论 | 历史交接；不得按其 next action 恢复 3D |
-| `docs/handoff/2026-08-16-hermes-2d-pet-handoff.md` | 唯一 compact CURRENT 交接：Research Intelligence Task 1–2、ECS 验收、固定约束、Task 3 接续与 version tuple | **CURRENT active-memory**；application/release/rollback `e0828a6` / `e0828a6` / `2934476` |
+| `docs/handoff/2026-08-16-hermes-2d-pet-handoff.md` | 唯一 compact CURRENT 交接：Research Intelligence Task 1–3、ECS 验收、固定约束、Task 5 接续与 version tuple | **CURRENT active-memory**；application/release/rollback `ef043eb` / `ef043eb` / `e0828a6` |
 | `docs/plans/2026-08-26-landing-motion-navigation-continuity-plan.md` | 冻结 Hermes、补全 Landing final-composite gate 与真实产品页一级/RO 二级入口 | **COMPLETED / DEPLOYED**；application/release/rollback `c80f739` / `263c783` / `8395b4d` |
 | `docs/design/optical-editorial-figma-map.md` | 长期账号 Figma canonical 的 V3 variables/styles/components/八表面节点映射、代码对应关系与 Code Connect 边界 | Task 13 canonical 映射 |
 | `docs/superpowers/specs/2026-08-09-researcher-ingestion-product-slice-design.md` | 研究者第一条产品级前端闭环设计：注册、Dashboard、资料导入、Hermes 证据确认、RO Workspace；待用户审阅 | 设计 spec |
@@ -364,7 +364,7 @@
 | `infra/scripts/proxy-tunnel.sh` / `proxy-tunnel.vbs` | 本机侧 SSH 反向隧道常驻（Windows 计划任务 `OpenScience-ProxyTunnel` 登录自启 + 断线重连，2026-08-01） | 已启用 |
 | `infra/scripts/deploy-cloudflare-tunnel.ps1` | 使用项目 Secret 幂等部署/查询/回滚 ECS 常驻 Cloudflare Tunnel；同步版本化 unit/watchdog，token 仅经 stdin 写入服务器 | 已执行验证（2026-08-15） |
 | `infra/scripts/cloudflared-watchdog.sh` / `infra/scripts/cloudflared-resilience.test.mjs` | HA metrics + 公网状态 watchdog（180 秒冷却）及配置/metrics 失败回归门禁 | 4/4 GREEN，已部署（2026-08-15） |
-| `infra/scripts/deploy.sh` / `infra/scripts/deploy.test.mjs` | ECS-only immutable release 部署；core/search isolation、双迁移账本、继承 env、无 URL 日志、回滚与运行验收 | **CURRENT / DEPLOYED `e0828a6`**；合同 `17/17` GREEN |
+| `infra/scripts/deploy.sh` / `infra/scripts/deploy.test.mjs` | ECS-only immutable release 部署；core/search isolation、双迁移账本、继承 env、无 URL 日志、回滚与运行验收 | **CURRENT / DEPLOYED `ef043eb`**；Task 3 使用 `--skip-migrate`，合同 `17/17` GREEN |
 | `infra/systemd/cloudflared.service` / `infra/systemd/cloudflared-watchdog.service` / `infra/systemd/cloudflared-watchdog.timer` | 固定 SJC IPv4/HTTP2 Edge 池、loopback metrics 与每分钟恢复 timer | 已部署（2026-08-15） |
 | `infra/compose/` | dev/monitor/prod compose；生产栈 data/app 分段，API/Web/worker + SeaweedFS 4.41 S3；Web SSR 以 `API_ORIGIN=http://api:3001` 走 app_net 并依赖 API healthy；合同测试固化私有端口/凭据/健康依赖 | ECS 已重部署并通过 SSR live gate（2026-08-10） |
 | `infra/nginx/` | 反代配置：Portainer/监控入口；OpenScience Web/API、`/__release`、Curator 与 `/api/admin/` Basic Auth；验证后清除上游 `Authorization`，Fastify 只接收 session/角色边界 | CURRENT config；release `06072c1` Nginx syntax/public routing GREEN |

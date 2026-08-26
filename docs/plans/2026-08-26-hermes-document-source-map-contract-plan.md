@@ -1,6 +1,6 @@
 # Hermes DocumentSourceMap Contract Implementation Plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+> **Status: COMPLETED (2026-08-27).** The tracked steps use checkbox syntax; Task 3 is deployed as immutable application/release `ef043ebb8e51332effe75a5639cb207aec7bfc47`.
 
 **Goal:** Complete Taskmaster `hermes-research-intelligence` Task 3 with a strict, provider-neutral `DocumentSourceMap`, deterministic `SourceLocator` construction and resolution, and a runtime-validated parser interface that future CPU/OCR parsers must implement.
 
@@ -36,7 +36,7 @@
 - Produces: `DocumentParserMetadata`, `DocumentTransformation`, `DocumentBlock`, `DocumentPage`, `DocumentSourceMap`, `parseDocumentSourceMap`, `serializeDocumentSourceMap`, `deserializeDocumentSourceMap`.
 - Consumes: the existing SHA-256 and strict-object conventions in `research-intelligence/validation.ts` and the generic `ExtractionResult<TSourceMap>` parser.
 
-- [ ] **Step 1: Write the failing source-map round-trip test**
+- [x] **Step 1: Write the failing source-map round-trip test**
 
 Create a literal one-page map with decimal page dimensions, two blocks, per-block parser metadata, confidence and transformation history. Assert `deserializeDocumentSourceMap(serializeDocumentSourceMap(map))` equals the literal exactly, including decimal bounding-box values.
 
@@ -63,21 +63,21 @@ const map = {
 expect(deserializeDocumentSourceMap(serializeDocumentSourceMap(map))).toEqual(map);
 ```
 
-- [ ] **Step 2: Run the focused test and verify RED**
+- [x] **Step 2: Run the focused test and verify RED**
 
 Run: `npx pnpm@9.15.0 --filter @openscience/domain test -- document-source-map.test.ts`
 
 Expected: FAIL because `document-source-map.ts` and its exports do not exist.
 
-- [ ] **Step 3: Add strict vocabulary and parsing**
+- [x] **Step 3: Add strict vocabulary and parsing**
 
 Implement readonly constants for block kinds and transformation stages `extract_text`, `detect_layout`, `classify`, `ocr`, `normalize`, `merge`. Parse every nested object with an allowlist, validate IDs/non-empty bounded strings, enforce unique page numbers and globally unique block IDs, require text for text-bearing block kinds, and bound boxes within their page.
 
-- [ ] **Step 4: Add malformed-contract tests**
+- [x] **Step 4: Add malformed-contract tests**
 
 Add table-driven cases for: unknown provider fields, duplicate page number, duplicate block ID, non-finite dimensions, out-of-page bounding boxes, confidence below zero/above one, invalid content hash, missing paragraph text and unsupported block/transformation kinds.
 
-- [ ] **Step 5: Verify GREEN and commit the domain contract**
+- [x] **Step 5: Verify GREEN and commit the domain contract**
 
 Run: `npx pnpm@9.15.0 --filter @openscience/domain test -- document-source-map.test.ts`
 
@@ -103,7 +103,7 @@ Commit: `feat: add document source map contract`
 - Produces: optional `SourceLocator.blockId`, `createBlockSourceLocator`, `createTableCellSourceLocator`, `createCodeSourceLocator`, `resolveSourceLocator`, `serializeSourceLocator`, `deserializeSourceLocator`.
 - Consumes: validated `DocumentSourceMap`, `DocumentBlock`, existing `SourceLocator`, `validateSourceLocator`.
 
-- [ ] **Step 1: Write failing literal locator tests**
+- [x] **Step 1: Write failing literal locator tests**
 
 Use a hand-written source map and assert exact results for:
 
@@ -120,21 +120,21 @@ expect(createBlockSourceLocator(map, 'paragraph-1', { charRange: { start: 0, end
 
 Add equivalent exact literals for a figure block, table block plus `{ sheet: 'Evidence', row: 2, column: 2 }`, and code `{ commit, path, startLine, endLine }`.
 
-- [ ] **Step 2: Verify locator tests RED**
+- [x] **Step 2: Verify locator tests RED**
 
 Run: `npx pnpm@9.15.0 --filter @openscience/domain test -- source-locator.test.ts`
 
 Expected: FAIL because the builders and `blockId` contract do not exist.
 
-- [ ] **Step 3: Implement builders and unambiguous resolution**
+- [x] **Step 3: Implement builders and unambiguous resolution**
 
 Generated page locators copy artifact/hash/page/bbox/blockId from the validated map. Text `charRange` is block-relative and must not exceed block text. Figure/table builders reject the wrong block kind. `resolveSourceLocator` requires artifact/hash equality, finds the exact page and block ID, and verifies the locator bbox still matches the versioned map.
 
-- [ ] **Step 4: Implement strict locator serialization and negative cases**
+- [x] **Step 4: Implement strict locator serialization and negative cases**
 
 Round-trip all four literal locators through JSON and `validateSourceLocator`. Reject unknown fields, missing block ID on generated-map resolution, mismatched hash/artifact, missing block, out-of-range text offsets, wrong table/figure kind, changed bbox and invalid code lines.
 
-- [ ] **Step 5: Verify GREEN and commit locator behavior**
+- [x] **Step 5: Verify GREEN and commit locator behavior**
 
 Run: `npx pnpm@9.15.0 --filter @openscience/domain test -- source-locator.test.ts validation.test.ts`
 
@@ -159,29 +159,29 @@ Commit: `feat: add source locator round trips`
 - Produces: `ParserInput`, `DocumentParser`, `ParserContractError`, `runDocumentParser`, `runDocumentParserContractSelfTest`.
 - Consumes: `ExtractionResult<DocumentSourceMap>`, `DocumentParserMetadata`, `parseDocumentSourceMap`, `parseExtractionResult`, locator builders and Node SHA-256.
 
-- [ ] **Step 1: Write failing runner tests**
+- [x] **Step 1: Write failing runner tests**
 
 Use a small in-memory parser implementation and a literal Buffer whose hash is computed independently in test setup. Assert the runner returns a strict succeeded result, preserves decimal coordinates, and calls the parser only after validating the input hash and `supports()` result.
 
-- [ ] **Step 2: Add contract-violation tests**
+- [x] **Step 2: Add contract-violation tests**
 
 Assert `ParserContractError` for input hash mismatch, unsupported input, source-map artifact/hash mismatch, map-level parser metadata mismatch, unknown nested field, succeeded result with zero blocks, and malformed confidence/bbox. Assert a valid `needs_review` result with a page and no blocks remains allowed.
 
-- [ ] **Step 3: Verify runner tests RED**
+- [x] **Step 3: Verify runner tests RED**
 
 Run: `npx pnpm@9.15.0 --filter @openscience/agent-worker test -- parser-contract.test.ts`
 
 Expected: FAIL because `parsers/types.ts` and `parsers/base-parser.ts` do not exist.
 
-- [ ] **Step 4: Implement the minimal runtime boundary**
+- [x] **Step 4: Implement the minimal runtime boundary**
 
 `runDocumentParser` computes SHA-256 from `input.content`, checks `supports`, executes the parser, serializes/parses `ExtractionResult` with `parseDocumentSourceMap`, enforces input/map/parser identity, and rejects empty succeeded maps. It does not catch contract errors and relabel them as provider failures.
 
-- [ ] **Step 5: Add the operational self-test**
+- [x] **Step 5: Add the operational self-test**
 
 The self-test uses only fixed synthetic metadata/text, runs source-map and all locator round-trips, and prints only `DOCUMENT_PARSER_CONTRACT_OK` on success or `DOCUMENT_PARSER_CONTRACT_FAILED` on failure. Add package script `selftest:document-contract` invoking compiled `dist/parsers/contract-self-test.js`.
 
-- [ ] **Step 6: Verify GREEN and commit the worker boundary**
+- [x] **Step 6: Verify GREEN and commit the worker boundary**
 
 Run: `npx pnpm@9.15.0 --filter @openscience/agent-worker test -- parser-contract.test.ts`
 
@@ -208,25 +208,25 @@ Commit: `feat: add document parser interface`
 - Produces: existing `parseIngestionWithAdapters` now returns `needs_review / empty-parsed-text` for Unicode control/space and parser page-marker boilerplate with no letter or number evidence.
 - Consumes: the existing self-authored `scan-pdf-image-only` fixture; no new parser or OCR dependency.
 
-- [ ] **Step 1: Change only the corpus expectation and verify RED**
+- [x] **Step 1: Change only the corpus expectation and verify RED**
 
 Set `scan-pdf-image-only.expectedCurrentStatus` and its tracked manifest row to `needs_review`; update the baseline assertion from `ready` to `needs_review`. Add a direct adapter case returning `\f\n-- 1 of 1 --\n` and expect `empty-parsed-text`.
 
-- [ ] **Step 2: Run focused corpus tests and confirm the real defect**
+- [x] **Step 2: Run focused corpus tests and confirm the real defect**
 
 Run: `npx pnpm@9.15.0 --filter @openscience/agent-worker test -- ingestion-parser.test.ts research-intelligence-corpus.test.ts`
 
 Expected: FAIL because the current parser labels page-marker/control-only output ready.
 
-- [ ] **Step 3: Add the minimal meaningful-text gate**
+- [x] **Step 3: Add the minimal meaningful-text gate**
 
 Before returning ready, remove parser page markers matching `-- <page> of <count> --`, Unicode control and separator characters; require at least one remaining Unicode letter or number. Preserve the original extracted text when it is meaningful.
 
-- [ ] **Step 4: Verify GREEN and mutation coverage**
+- [x] **Step 4: Verify GREEN and mutation coverage**
 
 Run the focused command again. Confirm the tests fail if the page-marker removal or Unicode letter/number requirement is removed, then restore the implementation and rerun GREEN.
 
-- [ ] **Step 5: Commit the compatibility fix**
+- [x] **Step 5: Commit the compatibility fix**
 
 Commit: `fix: reject empty scanned document output`
 
@@ -248,7 +248,7 @@ Commit: `fix: reject empty scanned document output`
 
 - Produces: Task 3 completion evidence, exact branch/HEAD/release/rollback tuple and Taskmaster Task 4/5 readiness.
 
-- [ ] **Step 1: Run focused and whole-repository gates**
+- [x] **Step 1: Run focused and whole-repository gates**
 
 Run:
 
@@ -264,27 +264,27 @@ git diff --check
 
 Expected: zero failures. No local integration command may start Docker.
 
-- [ ] **Step 2: Review architecture, security and contract boundaries**
+- [x] **Step 2: Review architecture, security and contract boundaries**
 
 Verify no provider SDK/import/key appears outside AI Gateway; binary bytes remain worker-local; source maps reject unknown fields; locators cannot resolve across artifact/hash/versioned maps; no DB/migration/UI/Hermes file changed; parser output and self-test are bounded and secret-free.
 
-- [ ] **Step 3: Push the accepted implementation and wait for exact-SHA CI**
+- [x] **Step 3: Push the accepted implementation and wait for exact-SHA CI**
 
 Push through explicit Git for Windows Bash. Require build, typecheck, lint, unit, product visual and Hermes release gates green for the exact candidate SHA before server mutation.
 
-- [ ] **Step 4: Run ECS preflight and candidate runtime acceptance**
+- [x] **Step 4: Run ECS preflight and candidate runtime acceptance**
 
 Through `infra/scripts/checkup.sh` and `infra/scripts/ssh-run.sh`, verify disk/memory/ingress/egress, materialize the immutable candidate, install/generate/build on ECS, run focused domain/worker tests, and execute compiled `selftest:document-contract`. Do not use local Docker and do not read `.env` values.
 
-- [ ] **Step 5: Deploy the exact accepted commit on ECS**
+- [x] **Step 5: Deploy the exact accepted commit on ECS**
 
 Run a fresh backup, deploy the exact SHA with canonical `infra/scripts/deploy.sh` and `--skip-migrate` because Task 3 has no schema change, and preserve the previous immutable release as rollback. Verify current core `28/28`, search `1/1`, full server build, target container health, Parser isolation/image tag, compiled contract self-test inside the production agent-worker, loopback/public health, exact release marker and absent failure marker. Run no research-data seed or real research write.
 
-- [ ] **Step 6: Close Taskmaster and synchronize CURRENT memory**
+- [x] **Step 6: Close Taskmaster and synchronize CURRENT memory**
 
 Mark Task 3 done only after server acceptance. Confirm Task 4 and Task 5 are the dependency-ready next tasks and Task 6 remains blocked on Task 5. Update CURRENT spec/progress/handoff/index/runbook and this plan without duplicating full logs.
 
-- [ ] **Step 7: Run final documentation and credential gates**
+- [x] **Step 7: Run final documentation and credential gates**
 
 Run:
 
