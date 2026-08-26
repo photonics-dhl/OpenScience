@@ -14,6 +14,13 @@ const DOCX_FIXTURE = Buffer.from(
   'base64',
 );
 
+export function createParserSelfTestFixtures(): { pdf: Buffer; docx: Buffer } {
+  return {
+    pdf: Buffer.from(PDF_FIXTURE),
+    docx: Buffer.from(DOCX_FIXTURE),
+  };
+}
+
 type SelfTestItem = {
   format: string;
   status: ParsedIngestion['status'];
@@ -30,9 +37,10 @@ function summarize(parsed: ParsedIngestion): SelfTestItem {
 
 export async function runParserSelfTest(): Promise<{ pdf: SelfTestItem; docx: SelfTestItem }> {
   const adapters = createDefaultIngestionAdapters();
+  const fixtures = createParserSelfTestFixtures();
   const [pdf, docx] = await Promise.all([
-    parseIngestionWithAdapters('fixture.pdf', PDF_FIXTURE, adapters),
-    parseIngestionWithAdapters('fixture.docx', DOCX_FIXTURE, adapters),
+    parseIngestionWithAdapters('fixture.pdf', fixtures.pdf, adapters),
+    parseIngestionWithAdapters('fixture.docx', fixtures.docx, adapters),
   ]);
   return { pdf: summarize(pdf), docx: summarize(docx) };
 }
