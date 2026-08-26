@@ -59,3 +59,9 @@ apps/web/test/visual/out/
 
 # cloud-sync 服务器凭据（本机生成不入库，同 .mcp.json 模式）
 .cloud-sync-env
+
+# Generated Hermes research-intelligence benchmarks and local model environments
+test/research-intelligence/out/
+.venv/
+.cache/huggingface/
+models/

@@ -4,12 +4,14 @@ import { describe, expect, it } from 'vitest';
 
 import { createParserSelfTestFixtures } from '../src/parser-self-test';
 import {
+  buildCurrentParserBaseline,
   buildResearchIntelligenceManifest,
   parseResearchCorpusCase,
   RESEARCH_INTELLIGENCE_CORPUS,
 } from './support/research-intelligence-corpus';
 
 const manifestPath = new URL('../../../test/research-intelligence/manifest.json', import.meta.url);
+const baselinePath = new URL('../../../test/research-intelligence/out/current-parser.json', import.meta.url);
 
 describe('research-intelligence fixture contract', () => {
   it('returns fresh deterministic copies', () => {
@@ -57,5 +59,39 @@ describe('research-intelligence corpus contract', () => {
         expect(parsed.status === 'ready' && parsed.text.includes(corpusCase.expectedText), corpusCase.id).toBe(true);
       }
     }
+  }, 30_000);
+
+  it('writes a bounded current-parser baseline report', async () => {
+    const report = await buildCurrentParserBaseline();
+
+    expect(report).toMatchObject({
+      schemaVersion: 1,
+      runtime: 'current-agent-worker',
+      cases: expect.arrayContaining([
+        expect.objectContaining({
+          id: 'native-pdf-en',
+          status: 'ready',
+          contentHash: expect.stringMatching(/^[a-f0-9]{64}$/),
+        }),
+        expect.objectContaining({ id: 'scan-png-empty', status: 'needs_review' }),
+      ]),
+    });
+    const allowedCaseKeys = new Set([
+      'id',
+      'contentHash',
+      'status',
+      'reason',
+      'textMatched',
+      'elapsedMs',
+      'rssDeltaBytes',
+    ]);
+    expect(report.cases.every((item) => (
+      Object.keys(item).every((key) => allowedCaseKeys.has(key))
+    ))).toBe(true);
+    expect(JSON.stringify(report)).not.toContain('OpenScience evidence document');
+    expect(JSON.stringify(report)).not.toContain(process.cwd());
+
+    await mkdir(new URL('../../../test/research-intelligence/out/', import.meta.url), { recursive: true });
+    await writeFile(baselinePath, `${JSON.stringify(report, null, 2)}\n`, 'utf8');
   }, 30_000);
 });

@@ -98,9 +98,14 @@ export function buildResearchIntelligenceManifest() {
     schemaVersion: 1,
     cases: [...RESEARCH_INTELLIGENCE_CORPUS]
       .sort((left, right) => left.id.localeCompare(right.id))
-      .map(({ content, expectedText: _expectedText, ...corpusCase }) => ({
-        ...corpusCase,
-        sha256: createHash('sha256').update(content).digest('hex'),
+      .map((corpusCase) => ({
+        id: corpusCase.id,
+        filename: corpusCase.filename,
+        language: corpusCase.language,
+        features: corpusCase.features,
+        rights: corpusCase.rights,
+        expectedCurrentStatus: corpusCase.expectedCurrentStatus,
+        sha256: createHash('sha256').update(corpusCase.content).digest('hex'),
       })),
   };
 }
@@ -111,4 +116,34 @@ export function parseResearchCorpusCase(corpusCase: ResearchCorpusCase): Promise
     corpusCase.content,
     createDefaultIngestionAdapters(),
   );
+}
+
+export async function buildCurrentParserBaseline() {
+  const cases = [];
+
+  for (const corpusCase of RESEARCH_INTELLIGENCE_CORPUS) {
+    const rssBefore = process.memoryUsage().rss;
+    const startedAt = performance.now();
+    const parsed = await parseResearchCorpusCase(corpusCase);
+    const elapsedMs = performance.now() - startedAt;
+    const rssDeltaBytes = process.memoryUsage().rss - rssBefore;
+
+    cases.push({
+      id: corpusCase.id,
+      contentHash: createHash('sha256').update(corpusCase.content).digest('hex'),
+      status: parsed.status,
+      reason: parsed.status === 'needs_review' ? parsed.reason : undefined,
+      textMatched: corpusCase.expectedText
+        ? parsed.status === 'ready' && parsed.text.includes(corpusCase.expectedText)
+        : undefined,
+      elapsedMs: Math.round(elapsedMs * 100) / 100,
+      rssDeltaBytes,
+    });
+  }
+
+  return {
+    schemaVersion: 1,
+    runtime: 'current-agent-worker',
+    cases,
+  } as const;
 }
