@@ -1,6 +1,6 @@
 # Handoff — Hermes Wanko Live2D Companion
 
-> **CURRENT active-memory，2026-08-26 12:46 +08。** Hermes 形象阶段按用户决定收口；旧灯体、帽子、流苏、Cubism GUI 试验和被否决候选只从 Git history 查阅，不再作为实施入口。
+> **CURRENT active-memory，2026-08-26 13:03 +08。** Hermes 形象阶段按用户决定收口；旧灯体、帽子、流苏、Cubism GUI 试验和被否决候选只从 Git history 查阅，不再作为实施入口。
 
 ## Goal
 
@@ -10,14 +10,14 @@
 
 ## Version tuple
 
-- Working branch / local application candidate / deployed application: `codex/hermes-wanko-live2d` / `2b0c01132222817fae9114232890db78cd51bd83` / `47c8aa9e6b78c3ec26e4d0320097e1c5260d794a`。
-- Current immutable deployed release: `73677d57ef9afd55fb75fd027cb4c514a7b7f544`；后续 docs-only HEAD 不改变该产品身份。
+- Working branch / deployed application: `codex/hermes-wanko-live2d` / `29344767b350e0a44ef74c04b9b5a55b342ef011`。
+- Current immutable deployed release: `29344767b350e0a44ef74c04b9b5a55b342ef011`；后续 docs-only HEAD 不改变该产品身份。
 - Local main / origin main: `c60ffdd16b85ea8f0d8b047493fa03a4c0230c05` / `7eb2f5bc4718ee445b79bd089acb64acb3691e62`，都早于当前分支；remote feature 不存在，旧 `origin/codex/readable-hermes-guidance@c88c780` 不是本次候选。
-- ECS release / rollback: `73677d57ef9afd55fb75fd027cb4c514a7b7f544` / `263c78372a1a6114016bba9ca3d8dbfce94ee0ce`。
+- ECS release / rollback: `29344767b350e0a44ef74c04b9b5a55b342ef011` / `58614c07951374537ed146f164f8568e9957a9b5`。
 
 ## Done
 
-- Task 24 application/release/rollback `47c8aa9` / `73677d5` / `263c783` 已恢复既有 OGL 水流与系统 cursor。用户浏览器仍静止的根因进一步闭合为 WebGL 初始化失败只剩 exact static plate；local `2b0c011` 保持 OGL 正常路径不变，仅在 normal-motion + unavailable 时挂载已有 Canvas field，以 accepted plate 绘制同源标题水纹。WebGL 禁用、滚出/滚回、亮字形运动、cursor、390px 与 reduced-motion 均有 RED→GREEN/原尺寸证据；fresh shots、Web `421+5`、typecheck、全仓 lint/docs-sync/build GREEN，待无迁移部署与公网 no-WebGL 复测。Hermes、导航、字体、shader 与构图未改。
+- Task 24 application/release/rollback `2934476` / `2934476` / `58614c0` 已恢复既有 OGL 水流与系统 cursor，并闭合 WebGL 初始化失败只剩静态图的真实路径。OGL 正常路径不变；normal-motion + unavailable 才挂载已有 Canvas field，以 accepted plate 绘制单层标题水纹。WebGL 禁用、静态字版无双影、滚出/滚回、亮字形运动、cursor、390px 与 reduced-motion 均有 RED→GREEN/公网原尺寸证据；fresh shots、Web `421+5`、typecheck、全仓 lint/docs-sync/build、server build、27 migrations、容器/Parser/markers/rollback 全绿。Hermes、导航、字体、shader 与构图未改；无 migration/seed/data write。
 - §13.8 application `9aef5c4` 将 detached custom dock 纳入 portal/crown/travel-hull 稳定器；默认纸页保持帽顶上方 `24–48px`，下移避开 viewport/protected surfaces，空间冲突才退到安全侧页或较矮上方 folio。旧 production 在 custom-dock 下 `menu.top=-31.7px` RED；最终关键 repeat `10/10`、constrained `5/5`、release `67/67`、Web `411+5`、root test/typecheck/lint、19-page build GREEN，独立复审 Ready。Release `8395b4d` / rollback `bf54eaa` 的 server build、27 migrations、容器/Parser/入口/assets/markers 与公网 Hermes `10/10` 均通过。
 - §13.7 application `5323ba8` 用一个可重复稳定器联合约束 portal、可见帽顶、actor bottom、visual viewport 与 protected geometry；首帧同步 + 双 rAF、上游重排、compact 切组、关闭/卸载恢复和键盘 focus 均有回归。旧实现在精确 `1612×729 / DPR 1.875` 与上游 header reflow 下 RED；关键 `10/10`、Hermes `9/9`、Web `411+5`、release `66/66`、work-assistant 与 root gates GREEN，独立复审 Ready。Release `bf54eaa` / rollback `6b804f7` 的 server build、27 migrations、容器/Parser/入口/assets/markers 与公网 Hermes `9/9` 均通过。
 - §13.6 application `8d1409e` 使用真实 portal/protected-region 测量保持 viewport 与 `24–48px` crown gap，mobile 开合不跳；12 动作各有真实 Wanko performance 与中英各三句不连重复，动作先于 speech，input/search/modal/drawer/approval 可中断。Release `6b804f7` / rollback `cbf5737`；Web `411+5`、release `65/65`、public `6/6`、focused/root gates 与独立复审 GREEN。
@@ -65,8 +65,8 @@
 
 ## Next action
 
-1. 将 local application `2b0c011` 以 `--skip-migrate` 发布，记录 immutable release / rollback，复验服务器 build、27 migrations、容器与 Parser isolation。
-2. 公网分别以正常 WebGL、禁用 WebGL、390px 和 reduced-motion 验证可见水纹、系统 cursor 与滚出/滚回生命周期；Hermes、导航与非 Landing 页面保持冻结。
+1. 用户在 `https://OpenScience.428312321.xyz/` 以自己的浏览器直接验收 Landing 水纹与系统 cursor；若仍静止，记录浏览器/硬件加速状态，但不得再用自动 WebGL gate 代替用户证据。
+2. Hermes、导航与非 Landing 页面保持冻结；任何后续 Landing 调整继续保留 normal WebGL、no-WebGL、390px、reduced-motion 和滚出/滚回门禁。
 
 ## Read first
 

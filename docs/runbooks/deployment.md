@@ -1,6 +1,6 @@
 # Runbook: 部署（Deployment）
 
-> 状态：**CURRENT**。2026-08-26 active immutable release 为 `263c78372a1a6114016bba9ca3d8dbfce94ee0ce`，rollback tree 为 `8395b4d5cc11cb444aac3b638cff4ccc993ef9f2`；application source 为 `c80f739072054e6ababfee511a6a9ecbaa296020`。post-deploy docs-only HEAD 不得冒充 application source。
+> 状态：**CURRENT**。2026-08-26 active immutable release / application source 为 `29344767b350e0a44ef74c04b9b5a55b342ef011`，rollback tree 为 `58614c07951374537ed146f164f8568e9957a9b5`。post-deploy docs-only HEAD 不得冒充 application source。
 > 格式遵循 `.agents/skills/infra-runbook/SKILL.md` 四节强制要求。
 > 部署属 Spec §20.5"询问"级操作：执行前需用户确认，必须走 `infra/scripts/deploy.sh` + CI/CD，禁止手工改服务器代码。
 
@@ -876,3 +876,23 @@ Historical note for the 2026-08-11 release: it used fixed worker tags and a writ
 - Public canonical Landing normal/reduced matrix passes `6/6`, including visible
   system cursor, connected 650ms idle motion, slow/fast wake ordering and
   recovery. No migration, seed or research-data write ran.
+
+### 5.27 Landing WebGL-unavailable water continuity (2026-08-26)
+
+> Active release/application `29344767b350e0a44ef74c04b9b5a55b342ef011`;
+> rollback `58614c07951374537ed146f164f8568e9957a9b5`.
+
+- The user-visible static state was reproduced by denying WebGL/WebGL2. OGL
+  remains unchanged when available; normal-motion unavailable contexts mount
+  the retained Canvas field, while reduced motion remains exact and canvas-free.
+- Public screenshot review rejected the first continuity release because the
+  static typography plate remained under the moving layer. The final hotfix
+  makes Canvas the only visible typography plate during fallback and adds that
+  condition to the production browser gate.
+- Local shots, Web `421+5`, typecheck, root lint/docs-sync/build and original-size
+  desktop/390px/reduced review pass. Public normal/no-WebGL/mobile/reduced,
+  system cursor, bright-glyph motion and viewport leave/re-entry pass.
+- Pre/post checkup, backup `436K files=7/7`, server full workspace/19-page build,
+  27 current migrations, healthy targets, Parser network-none/read-only/non-root/
+  512MiB/64PID, exact release/failure marker and rollback tree/images pass. Both
+  switches used `--skip-migrate`; no migration, seed or research-data write ran.

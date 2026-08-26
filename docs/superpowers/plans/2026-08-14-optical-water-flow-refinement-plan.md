@@ -255,4 +255,9 @@ follow of about `.007`, even though the result reads as a static image.
   bright-glyph motion, one Canvas owner, no overflow, and survival after the
   Landing leaves and re-enters the viewport. Local application `2b0c011` is
   GREEN for shots, Web `421+5`, typecheck, root lint/docs-sync/build and
-  original-size desktop/mobile/reduced review; production deployment is next.
+  original-size desktop/mobile/reduced review. Final application/release
+  `2934476` replaced the static plate while Canvas is active, closing a doubled
+  wordmark found during public screenshot review. Backup `436K files=7/7`,
+  server build, 27 current migrations, healthy targets, Parser isolation,
+  exact markers, rollback `58614c0` and public normal/no-WebGL/mobile/reduced
+  gates are GREEN; no migration, seed or research-data write ran.
