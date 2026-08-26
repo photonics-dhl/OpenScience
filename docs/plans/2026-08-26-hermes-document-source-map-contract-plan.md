@@ -1,6 +1,6 @@
 # Hermes DocumentSourceMap Contract Implementation Plan
 
-> **Status: implementation acceptance complete; docs publication evidence pending (2026-08-27).** Task 3 is deployed as immutable application/release `ef043ebb8e51332effe75a5639cb207aec7bfc47`; Step 7 remains open for the docs-only push and exact docs-HEAD CI evidence.
+> **Status: complete (2026-08-27).** Task 3 is deployed as immutable application/release `ef043ebb8e51332effe75a5639cb207aec7bfc47`; the reviewed docs closeout at `4e47197955c7d3e5c926eb18243aaa9fa7dee3c8` passed exact CI run `32996254474` before this final attestation.
 
 **Goal:** Complete Taskmaster `hermes-research-intelligence` Task 3 with a strict, provider-neutral `DocumentSourceMap`, deterministic `SourceLocator` construction and resolution, and a runtime-validated parser interface that future CPU/OCR parsers must implement.
 
@@ -284,7 +284,7 @@ Run a fresh backup, deploy the exact SHA with canonical `infra/scripts/deploy.sh
 
 Mark Task 3 done only after server acceptance. Confirm only Task 5 is ready; Task 4 (3+5) and Task 6 (2+5) become ready after Task 5. Update CURRENT spec/progress/handoff/index/runbook and this plan without duplicating full logs.
 
-- [ ] **Step 7: Complete final documentation and credential evidence (two-phase)**
+- [x] **Step 7: Complete final documentation and credential evidence (two-phase)**
 
 Run:
 
@@ -295,6 +295,8 @@ git diff --check
 ```
 
 Scan added lines for key/token/credential URL patterns without printing matches. Commit the closeout, then push and wait for exact docs-HEAD CI before checking this step; require a clean worktree after that second phase.
+
+Phase A evidence: docs-only HEAD `4e47197955c7d3e5c926eb18243aaa9fa7dee3c8` passed exact GitHub Actions CI run `32996254474` in 12m28s (build, typecheck, lint, unit tests and both visual release gates). This final attestation is complete only when its own exact-HEAD CI also passes; no repository mutation follows that external evidence.
 
 ## Plan self-review
 
