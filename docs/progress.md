@@ -8,6 +8,7 @@
 - 仅检查注入状态、不读取或输出 `.env` 值：本机 Tavily 已注入但额度耗尽，Semantic Scholar 常用变量未进入当前进程；生产 `agent-worker` 已注入 MiniMax，尚未注入 Tavily/Semantic Scholar。用户在聊天中暴露的凭据必须轮换后再配置。
 - SSH key 已用同一密钥只读复验成功。历史误报由 Windows 裸 `bash` 命中 WSL 导致；`AGENTS.md` 与 deployment §1.1 已锁定显式 Git Bash 调用和 `wsl: Failed to translate` 根因签名，禁止再误判为密钥失败。未改产品代码、未写服务器、未部署。
 - Taskmaster `optical-editorial-v3` 的历史 Task 4 已按现行 Landing 生产证据从 stale `in-progress` 收口为 `done`，旧 tag 现为 15/15；CURRENT 已切到 `hermes-research-intelligence`，经生成后人工纠正为 12 个待办，实施尚未开始。
+- 已将实施拆为四个可回滚阶段，并写成 CURRENT Foundation 计划：先建立能力台账机器门禁、自有双语 corpus 与现状 parser 基准，禁止本阶段安装模型或修改生产；后续再依实测依次进入文档/OCR/搜索、兴趣/外部检索、RO/富媒体/生产验收。
 
 ## Current version tuple
 
