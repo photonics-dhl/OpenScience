@@ -108,12 +108,15 @@
 
 保留条件：质量在关键轴优于现有基线，或以显著更低资源达到同等质量；且无未缓解的安全/许可问题。否则停用并记录原因，不因已经安装而保留。
 
+2026-08-26 Foundation 仅建立 `BASELINE_ONLY`：Docling、LiteParse、GROBID、PaddleOCR 与 BGE-M3 仍为 `APPROVED_PILOT`，未安装、未保留、未升为生产；MiniMax OCR 在凭据轮换和最少页合同通过前继续 `BLOCKED`。
+
 ## 6. Change record template
 
 每次能力变更在本节顶部追加一行：
 
 | Date | Capability | From → To | Version/digest | Evidence | Rollback | Operator |
 |---|---|---|---|---|---|---|
+| 2026-08-26 | Current parser benchmark | unmeasured → `BASELINE_ONLY` | corpus schema 1 / 6 self-authored hashes | local run: 4 ready + text matched, 2 explicit review; P50 114.41 ms, P95 263.75 ms, max RSS delta 12,288 B；deterministic facts repeat stable | delete ignored report and revert benchmark commits；production unchanged | Codex |
 | 2026-08-26 | Registry baseline | untracked → registered | docs-only | local/process/container existence checks; Taskmaster alignment | revert docs commit | Codex |
 
 禁止把 key、cookie、学校账号、容器完整环境或认证响应写入 Evidence 栏。

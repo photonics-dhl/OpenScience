@@ -1,18 +1,25 @@
 # OpenScience 进度（CURRENT window）
 
-> 最新同步：2026-08-26 14:39 +08。历史由 Git 保存；旧计划和 archive 不作为默认输入。
+> 最新同步：2026-08-26 16:53 +08。历史由 Git 保存；旧计划和 archive 不作为默认输入。
+
+## 2026-08-26 — Hermes Research Intelligence Foundation 本地实现
+
+- Taskmaster Task 1 的 Foundation 实现已完成，正在执行最终全仓验收：能力台账新增机器门禁，21 行能力记录受列数、状态、空字段与凭据形态检查；入口为 `audit:hermes-capabilities`。
+- 新增 6 项自著权 deterministic corpus 与 schema 1 哈希清单，不使用用户文件：现有 PDF/DOCX、Markdown、TeX 为 4 项 `ready` 且文本命中，空白 scan PNG 与损坏 PDF 为 2 项显式 `needs_review`。
+- ignored current-parser report 只保存 ID/hash/status/reason/textMatched/elapsed/RSS delta；最近本地运行 P50 `114.41 ms`、P95 `263.75 ms`、最大 RSS 增量 `12,288 B`，连续两次 deterministic facts 相同。计时/RSS 是观测值，不作快照断言。
+- `test:research-intelligence`、agent-worker `57/57` 与全仓 typecheck 已通过。Docling/LiteParse/GROBID/PaddleOCR/BGE-M3 均保持 `APPROVED_PILOT`；MiniMax OCR 继续 `BLOCKED`。未安装依赖、未读取 `.env`、未写服务器、未部署或改变生产 release。
 
 ## 2026-08-26 — Hermes 能力核验与 SSH 误报收口
 
 - 用户确认 LLM OCR 作为平台自动处理能力，不再逐文档询问；仍须经 AI Gateway、最小页路由、来源标记与审计，生成结果不得冒充原始证据。
 - 仅检查注入状态、不读取或输出 `.env` 值：本机 Tavily 已注入但额度耗尽，Semantic Scholar 常用变量未进入当前进程；生产 `agent-worker` 已注入 MiniMax，尚未注入 Tavily/Semantic Scholar。用户在聊天中暴露的凭据必须轮换后再配置。
 - SSH key 已用同一密钥只读复验成功。历史误报由 Windows 裸 `bash` 命中 WSL 导致；`AGENTS.md` 与 deployment §1.1 已锁定显式 Git Bash 调用和 `wsl: Failed to translate` 根因签名，禁止再误判为密钥失败。未改产品代码、未写服务器、未部署。
-- Taskmaster `optical-editorial-v3` 的历史 Task 4 已按现行 Landing 生产证据从 stale `in-progress` 收口为 `done`，旧 tag 现为 15/15；CURRENT 已切到 `hermes-research-intelligence`，经生成后人工纠正为 12 个待办，实施尚未开始。
-- 已将实施拆为四个可回滚阶段，并写成 CURRENT Foundation 计划：先建立能力台账机器门禁、自有双语 corpus 与现状 parser 基准，禁止本阶段安装模型或修改生产；后续再依实测依次进入文档/OCR/搜索、兴趣/外部检索、RO/富媒体/生产验收。
+- Taskmaster `optical-editorial-v3` 历史 tag 为 15/15；CURRENT `hermes-research-intelligence` 共 12 项，Task 1 实现已完成、待全仓门禁后关闭，其余 11 项尚未开始。
+- 实施保持四个可回滚阶段：Foundation 已建立能力台账机器门禁、自有 corpus 与现状 parser 基准；后续再依实测依次进入文档/OCR/搜索、兴趣/外部检索、RO/富媒体/生产验收。
 
 ## Current version tuple
 
-- Branch / deployed application / immutable release: `codex/hermes-wanko-live2d` / `29344767b350e0a44ef74c04b9b5a55b342ef011` / `29344767b350e0a44ef74c04b9b5a55b342ef011`。
+- Branch / local implementation baseline HEAD / deployed application / immutable release: `codex/hermes-wanko-live2d` / `ed696b6` / `29344767b350e0a44ef74c04b9b5a55b342ef011` / `29344767b350e0a44ef74c04b9b5a55b342ef011`。
 - Current rollback 为前一健康 release `58614c07951374537ed146f164f8568e9957a9b5`；post-deploy docs HEAD 不与应用身份混写。
 - ECS release / rollback: `29344767b350e0a44ef74c04b9b5a55b342ef011` / `58614c07951374537ed146f164f8568e9957a9b5`。
 
