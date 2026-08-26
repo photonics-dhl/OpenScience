@@ -1,7 +1,7 @@
 # OpenScience (XGS) 项目文件索引
 
 > 维护规则：创建/修改/移动文件后必须更新本索引。创建新文件前先查本表防重复。
-> **CURRENT source/deployment anchor（2026-08-26 11:05 +08）：** working branch/HEAD `codex/hermes-wanko-live2d@a8dbdc0`；deployed application / immutable release 为 `c80f739` / `263c783`；local main / origin main `c60ffdd` / `7eb2f5b`；ECS release / rollback 为 `263c783` / `8395b4d`。只有本锚点与主题唯一 CURRENT handoff 可决定当前状态。
+> **CURRENT source/deployment anchor（2026-08-26 11:15 +08）：** working branch/HEAD `codex/hermes-wanko-live2d@5fa43da`；deployed application / immutable release 为 `c80f739` / `263c783`；local main / origin main `c60ffdd` / `7eb2f5b`；ECS release / rollback 为 `263c783` / `8395b4d`。只有本锚点与主题唯一 CURRENT handoff 可决定当前状态。
 
 ## 根目录
 | 路径 | 用途 | 状态 |
@@ -339,8 +339,8 @@
 | `docs/runbooks/visual-release.md` | Optical Editorial production-build 视觉/无障碍/性能发布门禁：27-case 矩阵、accepted shared surface/reduced exact/pointer focused gate、实测 route/static 预算、physical desktop/mobile cadence contract 与人工审美拒绝项；物理手机风险豁免由 Task 19 建立并明确续签至 Task 23 | 活 runbook；模拟 mobile 不冒充硬件证据，Task 23 后需重新授权 |
 | `docs/superpowers/specs/2026-08-14-optical-idle-attention-design.md` | Task 21 首屏自主光流与黑色系统光标修复设计：Landing-only idle/pointer 双态、标题带人眼感知门槛、reduced-motion 边界 | 已实现并随 `8edf6fa` 部署 |
 | `docs/superpowers/plans/2026-08-14-optical-idle-attention-plan.md` | Task 21 单任务 TDD 实施计划；弱 idle 与系统 cursor RED 已闭合，Landing-only presentation owner 通过完整本地/公网门禁 | 已完成；release `8edf6fa`，rollback `28c7789` |
-| `docs/superpowers/specs/2026-08-14-optical-water-flow-refinement-design.md` | 唯一 CURRENT Landing water spec；Task 24 恢复系统 cursor，并以慢速/快速真实轨迹、局部位置和连贯水流替代 aggregate pixel-noise 放行 | **TASK 24 DESIGN APPROVED / WRITTEN SPEC REVIEW PENDING**；production 仍为 `263c783` |
-| `docs/superpowers/plans/2026-08-14-optical-water-flow-refinement-plan.md` | Task 22 水流/污染计划与 Task 23 最终合成显著性纠偏计划 | Task 23 已部署；native PNG timing RED 由用户显式接受，未写成 GREEN |
+| `docs/superpowers/specs/2026-08-14-optical-water-flow-refinement-design.md` | 唯一 CURRENT Landing water spec；Task 24 恢复系统 cursor，并以慢速/快速真实轨迹、局部位置和连贯水流替代 aggregate pixel-noise 放行 | **TASK 24 WRITTEN SPEC APPROVED**；production 仍为 `263c783` |
+| `docs/superpowers/plans/2026-08-14-optical-water-flow-refinement-plan.md` | Task 22/23 历史实施；Task 24 追溯隐藏 cursor/弱慢速/aggregate gate 根因，并恢复既有 OGL 水流、建立跨发布回归保护 | **TASK 24 PLAN READY / TDD PENDING**；不重建 renderer，不恢复旧 Canvas2D field |
 
 ## infra/
 | 路径 | 用途 | 状态 |

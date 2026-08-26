@@ -65,8 +65,8 @@
 
 ## Next action
 
-1. 用户已确认 Task 24“真实系统鼠标 + 慢速也响应的局部水纹”方向；先审阅 CURRENT optical spec 书面合同。
-2. 获确认后为 Landing 单独建实施计划并按 TDD 修复；Hermes、导航与非 Landing 页面保持冻结。
+1. 用户已确认 Task 24 书面 spec；唯一 water-flow plan 已追加 Task 4，按 TDD 恢复既有 OGL 水流与系统 cursor。
+2. 先证明 cursor、慢速轨迹和连通 motion RED，再做最小参数恢复；Hermes、导航与非 Landing 页面保持冻结。
 
 ## Read first
 

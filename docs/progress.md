@@ -9,10 +9,11 @@
 - Local main / origin main: `c60ffdd16b85ea8f0d8b047493fa03a4c0230c05` / `7eb2f5bc4718ee445b79bd089acb64acb3691e62`；两者都早于当前工作分支，远端 Hermes feature 不存在。
 - ECS release / rollback: `263c78372a1a6114016bba9ca3d8dbfce94ee0ce` / `8395b4d5cc11cb444aac3b638cff4ccc993ef9f2`。
 
-## 2026-08-26 — Landing perceptual water correction design approved
+## 2026-08-26 — Landing water regression root cause and implementation plan
 
-- 用户确认采用“真实系统鼠标 + 慢速也响应的局部水纹”；Hermes、导航、字体、accepted plates 与非 Landing 表面保持冻结。CURRENT optical spec Task 24 已重开 design gate，实施计划与代码尚未开始。
-- 生产根因已测量：Landing 及全部 descendants 被 `cursor:none!important` 隐藏鼠标；local input 只按速度注入，普通慢速 traverse `follow≈.007`，快速两步移动才到 `≈.31`；10s/2.2px presentation 与旧 changed-pixel gate 可技术 GREEN 但人眼仍读成静态。
+- 用户已确认 CURRENT Task 24 书面 spec。任务不是新建水流系统，而是恢复既有 OGL 水流并封死回归路径；Hermes、导航、字体、accepted plates 与非 Landing 表面保持冻结。
+- Git 追踪确认：`5d1c573` 以 accepted OGL surface 替换旧 Canvas2D field；现行 OGL 从 `48809d6` 到生产 application `c80f739` 未被产品部署删除，唯一后续 optical 变更是 `b93fa9d` 内容哈希资源 URL。`8edf6fa` 首次隐藏 OS cursor，`8fe2094` 扩展为 descendants `!important` 并写入发布门禁；最近 navigation release 只复用了旧门禁，没有恢复效果。
+- 生产根因已测量：local input 只按线性速度注入，普通慢速 traverse `follow≈.007`，快速两步移动才到 `≈.31`；10s/2.2px presentation 与 aggregate changed-pixel gate 可技术 GREEN 但人眼仍读成静态。唯一现行水流实施计划已追加 Task 4：cursor、慢/快轨迹、连通运动、reduced-motion 与跨发布强制验收，代码尚未开始。
 - 新合同恢复 OS cursor；idle 必须读成连续黑色光学水流；慢速/快速轨迹分别验证局部 wake、位置、强度、700–900ms 恢复及无 halo/band；aggregate pixel noise 不再可单独放行，reduced-motion 仍静态无 canvas。
 - 新增全站一级研究入口：Research desk / Explore / New research / Settings；公开阅读与 collection 同时保留 Home wordmark、Desk、Explore、Create、Login；RO 内继续使用 Overview/SDF/Files/Versions/Collaboration/Publish/Sandbox 二级导航。Dashboard loading/error、注册/登录、Hermes evidence review 与 curator 均不再是死路。
 - 390px 原尺寸复核发现首项虽存在却裁切 `6px`，已用品牌/utility 第一行 + 四入口第二行及明确短标签修复；浏览器门禁现逐链接验证 visible 与 `scrollWidth <= clientWidth`。Application `c80f739` 的 fresh evidence：Web `420+5`、全仓 typecheck/lint/docs-sync/docs-lint/test/build、19-page build、product release `72/72` 与 `git diff --check` GREEN；新增 320px Dashboard/Auth/Public/Workspace/Review 五壳层实测。
