@@ -4,6 +4,7 @@ async function documentSourceMapContract() {
   return await import('../../src') as unknown as {
     DOCUMENT_BLOCK_KINDS: readonly string[];
     DOCUMENT_TRANSFORMATION_STAGES: readonly string[];
+    DOCUMENT_SOURCE_MAP_MAX_RAW_JSON_CHARACTERS: number;
     parseDocumentSourceMap(value: unknown): unknown;
     serializeDocumentSourceMap(value: unknown): string;
     deserializeDocumentSourceMap(json: string): unknown;
@@ -111,13 +112,26 @@ describe('DocumentSourceMap boundary', () => {
     expect(() => serializeDocumentSourceMap(map)).toThrow(/within its page/);
   });
 
-  it.each([
-    ['whitespace padding', () => `${JSON.stringify(validMap())}${' '.repeat(16_000_001)}`],
-    ['unknown payload', () => `{"privateProviderPayload":"${'x'.repeat(16_000_001)}"}`],
-  ])('rejects oversized raw JSON with %s before parsing', async (_label, createJson) => {
-    const { deserializeDocumentSourceMap } = await documentSourceMapContract();
+  it('round-trips escape-heavy content beyond the former raw JSON cap', async () => {
+    const map = { ...validMap(), pages: [{
+      ...validMap().pages[0],
+      blocks: Array.from({ length: 60 }, (_, index) => block(`escape-${index}`, {
+        kind: 'paragraph',
+        text: `a${'\u0001'.repeat(49_999)}`,
+      })),
+    }] };
+    const { deserializeDocumentSourceMap, serializeDocumentSourceMap } = await documentSourceMapContract();
 
-    expect(() => deserializeDocumentSourceMap(createJson())).toThrow(/limit_exceeded/);
+    const json = serializeDocumentSourceMap(map);
+    expect(json.length).toBeGreaterThan(16_000_000);
+    expect(deserializeDocumentSourceMap(json)).toEqual(map);
+  });
+
+  it('rejects raw input above the documented cap before parsing', async () => {
+    const { deserializeDocumentSourceMap, DOCUMENT_SOURCE_MAP_MAX_RAW_JSON_CHARACTERS } = await documentSourceMapContract();
+    const oversized = { length: DOCUMENT_SOURCE_MAP_MAX_RAW_JSON_CHARACTERS + 1 } as unknown as string;
+
+    expect(() => deserializeDocumentSourceMap(oversized)).toThrow(/limit_exceeded/);
   });
 
   it.each([

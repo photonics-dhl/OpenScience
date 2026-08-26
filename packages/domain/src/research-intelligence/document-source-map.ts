@@ -60,8 +60,8 @@ const MAX_TOTAL_BLOCKS = 10_000;
 const MAX_TOTAL_TRANSFORMATIONS = 25_000;
 const MAX_TOTAL_TEXT_CHARACTERS = 5_000_000;
 const MAX_SERIALIZED_CONTENT_CHARACTERS = 8_000_000;
-// The 8 MB string-content budget plus this equally sized structural allowance covers every valid bounded map.
-const MAX_RAW_JSON_CHARACTERS = 16_000_000;
+// 8 MB accepted string content can expand sixfold in JSON escapes; 16 MB covers all bounded structure and numbers.
+export const DOCUMENT_SOURCE_MAP_MAX_RAW_JSON_CHARACTERS = 64_000_000;
 
 interface ParseBudget {
   blocks: number;
@@ -225,7 +225,7 @@ export function serializeDocumentSourceMap(value: unknown): string {
 }
 
 export function deserializeDocumentSourceMap(json: string): DocumentSourceMap {
-  if (json.length > MAX_RAW_JSON_CHARACTERS) {
+  if (json.length > DOCUMENT_SOURCE_MAP_MAX_RAW_JSON_CHARACTERS) {
     throw new Error('DocumentSourceMap limit_exceeded: raw JSON');
   }
   let parsed: unknown;

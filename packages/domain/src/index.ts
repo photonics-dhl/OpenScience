@@ -246,6 +246,7 @@ export {
 export {
   DOCUMENT_BLOCK_KINDS,
   DOCUMENT_TRANSFORMATION_STAGES,
+  DOCUMENT_SOURCE_MAP_MAX_RAW_JSON_CHARACTERS,
   parseDocumentSourceMap,
   serializeDocumentSourceMap,
   deserializeDocumentSourceMap,
