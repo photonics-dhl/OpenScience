@@ -10,7 +10,7 @@
 | `project_index.md` | 本索引 | 活文档 |
 | `.mcp.json` | 项目级 MCP 配置（kimi-code/Cursor）；2026-08-08 保持 10 个：`semantic-scholar`、`github`、`mermaid`、`memory`、`context7`、`tavily-search`、`figma-temp`、`figma-primary`、`shadcn`、`task-master-ai`；双 Figma 直接使用官方 remote URL，过渡期移除低价值 `fetch` | 活文档，**本机持有，已移出 git 跟踪**（2026-07-31） |
 | Codex global `ui-ux-pro-max` / `baseline-ui` Skills + `shadcn` MCP | 2026-08-24 为 Hermes 互动视觉纠偏启用：Skills 固定审计提交 `bc826e2` / `bdbcc56`；shadcn 固定 `4.19.0`、cwd 为当前 worktree `apps/web`，MCP 初始化握手通过；不把资料库命中替代用户审美验收 | **本机工具能力，不入库**；重启 Codex 后自动发现 Skills/MCP |
-| `.Codex/troubleshooting/issues.json` | 项目工具/MCP/API 故障的结构化问题库；不记录账号、密钥、OAuth URL 或 token | 活文档 |
+| `.Codex/troubleshooting/issues.json` | 项目工具/MCP/API/CI 故障的结构化问题库；issue-010 固化 SwiftShader RAF、跨系统字体度量与软件渲染证据预算门禁；不记录账号、密钥、OAuth URL 或 token | 活文档 |
 | [OpenScience Web Design System — canonical](https://www.figma.com/design/gjhowMG7cG4clKwvhvF08E) | 长期项目账号持有的 Optical Editorial V3 canonical；44 variables、12 styles、4 component sets、8 surfaces；旧 `rWS3…` 文件仅为历史迁移来源 | Task 13 验收完成 |
 | `.vscode/mcp.json` | VS Code MCP 配置（task-master-ai 直连 node_modules 本地入口） | 活文档，**本机持有，不入库**（含 key） |
 | `.env` / `.env.example` | 密钥 / 密钥模板 | 只读，禁打印 |
@@ -50,7 +50,7 @@
 | `apps/web/app/research-objects/[id]/{overview,files,versions,publish,sandbox}/page.tsx` / `apps/web/app/settings/page.tsx` | Task 12 真实产品表面：对象概览、证据文件提交、版本比较、许可/审核/R3 发布、服务器沙箱、账户设置/退出登录 | ECS 已部署并通过真实账号验收 |
 | `apps/web/test/workspace-shell.test.tsx` / `apps/web/test/visual/workspace-shots.mjs` | RO Workspace 结构/证据/风险合同与 1440/390/320 production browser 门禁；校验三面状态保持、无溢出、console、focus trap/Escape/焦点恢复 | 测试工具 |
 | `apps/web/test/workspace-readability.test.ts` / `apps/web/test/e2e/workspace-readability.spec.ts` / `apps/web/test/visual/workspace-readability-gate.mjs` | 三视觉系统阅读与控件合同：14–17 px 语义角色、浏览器无关控件、真实颜色对比、水平/垂直裁切、可访问名与 focus 可见性；覆盖桌面/移动代表路由 | **IMPLEMENTED FOUNDATION / CARRIED FORWARD**；首次真实验收 `06072c1`，现行 release `5f4e73c` |
-| `apps/web/test/visual/product-release-manifest.mjs` / `apps/web/test/e2e/product-release.spec.ts` / `apps/web/playwright.release.config.ts` | 18 个真实产品表面 × 三视口、Landing normal/reduced、320px 五壳层与 Hermes 入口/菜单/反馈的 72 案 production browser 门禁 | **CURRENT local `72/72` GREEN**；public anonymous `69/69`，Admin 三视口由预期 Basic Auth 401 阻断 |
+| `apps/web/test/visual/product-release-manifest.mjs` / `apps/web/test/e2e/product-release.spec.ts` / `apps/web/playwright.release.config.ts` | 18 个真实产品表面 × 三视口、Landing normal/reduced、320px 五壳层与 Hermes 入口/菜单/反馈的 72 案 production browser 门禁；慢速光学输入同步 RAF，Hermes 保留零重叠硬门禁并容纳 2px 跨系统字体度量差 | **CURRENT local `72/72` GREEN**；public anonymous `69/69`，Admin 三视口由预期 Basic Auth 401 阻断 |
 | `apps/web/test/e2e/start-release-api.mjs` | 发布门禁专用的无用户数据 mock API，只为 canonical Public RO/Collection SSR 提供稳定数据；生产旅程不得使用 | 测试工具 |
 | `apps/web/components/landing/SiteHeader.tsx` | Landing 页极简 i18n 导航；提供真实 `/explore`、`/research-objects/new`、`/auth/login` 入口与 dark/paper 双表面样式 | 活文档 |
 | `apps/web/components/landing/Hero.tsx` / `apps/web/components/optical-lab/AcceptedOpticalSurface.tsx` | Landing Hero 保留 PublicShell 上下文、Create/Explore CTA 与 Open RO 过渡；视觉体与 asset Lab 共用 accepted energy→typography plates、唯一语义 h1、隐藏诊断和 amplified AssetInteractionMount，IDs 按 surface 唯一 | Task 23 已部署；release `48809d6` / rollback `744c631` |
