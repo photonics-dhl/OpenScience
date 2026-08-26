@@ -86,8 +86,50 @@ export function resolveSourceLocator(value: DocumentSourceMap, locatorValue: Sou
   return block;
 }
 
+function nullPrototype<T extends object>(): T {
+  return Object.create(null) as T;
+}
+
+function canonicalizeSourceLocator(locator: SourceLocator): SourceLocator {
+  const snapshot = nullPrototype<SourceLocator>();
+  snapshot.artifactId = locator.artifactId;
+  snapshot.contentHash = locator.contentHash;
+  if (locator.blockId !== undefined) snapshot.blockId = locator.blockId;
+  if (locator.page !== undefined) snapshot.page = locator.page;
+  if (locator.boundingBox !== undefined) {
+    const boundingBox = nullPrototype<NonNullable<SourceLocator['boundingBox']>>();
+    boundingBox.x = locator.boundingBox.x;
+    boundingBox.y = locator.boundingBox.y;
+    boundingBox.width = locator.boundingBox.width;
+    boundingBox.height = locator.boundingBox.height;
+    snapshot.boundingBox = boundingBox;
+  }
+  if (locator.charRange !== undefined) {
+    const charRange = nullPrototype<NonNullable<SourceLocator['charRange']>>();
+    charRange.start = locator.charRange.start;
+    charRange.end = locator.charRange.end;
+    snapshot.charRange = charRange;
+  }
+  if (locator.tableCell !== undefined) {
+    const tableCell = nullPrototype<NonNullable<SourceLocator['tableCell']>>();
+    if (locator.tableCell.sheet !== undefined) tableCell.sheet = locator.tableCell.sheet;
+    tableCell.row = locator.tableCell.row;
+    tableCell.column = locator.tableCell.column;
+    snapshot.tableCell = tableCell;
+  }
+  if (locator.codeRange !== undefined) {
+    const codeRange = nullPrototype<NonNullable<SourceLocator['codeRange']>>();
+    codeRange.commit = locator.codeRange.commit;
+    codeRange.path = locator.codeRange.path;
+    codeRange.startLine = locator.codeRange.startLine;
+    codeRange.endLine = locator.codeRange.endLine;
+    snapshot.codeRange = codeRange;
+  }
+  return snapshot;
+}
+
 export function serializeSourceLocator(value: unknown): string {
-  return JSON.stringify(validateSourceLocator(value));
+  return JSON.stringify(canonicalizeSourceLocator(validateSourceLocator(value)));
 }
 
 export function deserializeSourceLocator(json: string): SourceLocator {

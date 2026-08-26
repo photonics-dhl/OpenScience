@@ -93,4 +93,48 @@ describe('SourceLocator construction and resolution', () => {
     expect(() => createCodeSourceLocator('artifact-1', 'a'.repeat(64), { commit: 'abc1234', path: 'src/model.py', startLine: 9, endLine: 4 })).toThrow(/codeRange/);
     expect(() => deserializeSourceLocator(`${serializeSourceLocator(locators[0])}${' '.repeat(12_000)}`)).toThrow(/limit_exceeded/);
   });
+
+  it('serializes a canonical snapshot instead of caller toJSON hooks', async () => {
+    const { serializeSourceLocator, deserializeSourceLocator } = await sourceLocatorContract();
+    const locator = {
+      artifactId: 'artifact-1',
+      contentHash: 'a'.repeat(64),
+      codeRange: { commit: 'abc1234', path: 'src/model.py', startLine: 4, endLine: 9 },
+    };
+    Object.defineProperty(locator, 'toJSON', { enumerable: false, value: () => ({ providerPayload: 'root-hook' }) });
+    Object.defineProperty(locator.codeRange, 'toJSON', { enumerable: false, value: () => ({ providerPayload: 'nested-hook' }) });
+
+    const json = serializeSourceLocator(locator);
+
+    expect(json).not.toContain('providerPayload');
+    expect(deserializeSourceLocator(json)).toEqual({
+      artifactId: 'artifact-1', contentHash: 'a'.repeat(64),
+      codeRange: { commit: 'abc1234', path: 'src/model.py', startLine: 4, endLine: 9 },
+    });
+  });
+
+  it('serializes safely when Object.prototype is polluted with toJSON', async () => {
+    const { serializeSourceLocator, deserializeSourceLocator } = await sourceLocatorContract();
+    const previous = Object.getOwnPropertyDescriptor(Object.prototype, 'toJSON');
+    Object.defineProperty(Object.prototype, 'toJSON', {
+      configurable: true,
+      value: () => ({ providerPayload: 'global-hook', content: 'x'.repeat(20_000) }),
+    });
+
+    try {
+      const json = serializeSourceLocator({
+        artifactId: 'artifact-1',
+        contentHash: 'a'.repeat(64),
+        codeRange: { commit: 'abc1234', path: 'src/model.py', startLine: 4, endLine: 9 },
+      });
+      expect(json).not.toContain('providerPayload');
+      expect(deserializeSourceLocator(json)).toEqual({
+        artifactId: 'artifact-1', contentHash: 'a'.repeat(64),
+        codeRange: { commit: 'abc1234', path: 'src/model.py', startLine: 4, endLine: 9 },
+      });
+    } finally {
+      if (previous) Object.defineProperty(Object.prototype, 'toJSON', previous);
+      else delete (Object.prototype as { toJSON?: unknown }).toJSON;
+    }
+  });
 });
