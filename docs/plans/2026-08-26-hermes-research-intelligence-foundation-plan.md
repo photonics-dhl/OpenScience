@@ -2,7 +2,7 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 >
-> **Execution status (2026-08-26):** Implemented locally. During final Taskmaster reconciliation, the initial six-case seed was expanded to the explicit 13-case native/scanned/dual-column/table/formula/references/DOCX/TeX/Markdown/CSV/XLSX/notebook/code matrix with expected locators; full acceptance evidence is recorded in the capability registry and progress window.
+> **Execution status (2026-08-26): COMPLETED.** Taskmaster Task 1 is `done`; the initial six-case seed was expanded to the explicit 13-case native/scanned/dual-column/table/formula/references/DOCX/TeX/Markdown/CSV/XLSX/notebook/code matrix with expected locators. Full acceptance evidence is recorded in the capability registry and progress window; Task 2 is the next ready task.
 
 **Goal:** Establish the measurable, non-polluting foundation that every later Hermes parser, OCR, retrieval and presentation capability must beat before it can be retained or deployed.
 
@@ -51,7 +51,7 @@
 - Consumes: `docs/runbooks/hermes-capability-registry.md` Markdown table.
 - Produces: `verifyCapabilityRegistry(markdown): { rows: number; capabilities: string[] }` and CLI marker `HERMES_CAPABILITY_REGISTRY_OK rows=<n>`.
 
-- [ ] **Step 1: Write the failing registry test**
+- [x] **Step 1: Write the failing registry test**
 
 ```js
 import assert from 'node:assert/strict';
@@ -69,7 +69,7 @@ test('CURRENT registry has complete rows and no credential-shaped values', async
 });
 ```
 
-- [ ] **Step 2: Run the test and observe the missing module failure**
+- [x] **Step 2: Run the test and observe the missing module failure**
 
 Run:
 
@@ -79,7 +79,7 @@ node --test scripts/research-intelligence/verify-capability-registry.test.mjs
 
 Expected: FAIL with `ERR_MODULE_NOT_FOUND` for `verify-capability-registry.mjs`.
 
-- [ ] **Step 3: Implement the registry verifier**
+- [x] **Step 3: Implement the registry verifier**
 
 ```js
 const allowedStatuses = new Set([
@@ -110,7 +110,7 @@ export function verifyCapabilityRegistry(markdown) {
 
 The CLI branch reads only the tracked registry, calls the function, prints the success marker and exits non-zero on the first validation error.
 
-- [ ] **Step 4: Add and run the root audit command**
+- [x] **Step 4: Add and run the root audit command**
 
 Add to `package.json`:
 
@@ -126,7 +126,7 @@ npx pnpm@9.15.0 audit:hermes-capabilities
 
 Expected: Node test PASS followed by `HERMES_CAPABILITY_REGISTRY_OK`.
 
-- [ ] **Step 5: Commit the registry gate**
+- [x] **Step 5: Commit the registry gate**
 
 ```powershell
 git add package.json scripts/research-intelligence/verify-capability-registry.mjs scripts/research-intelligence/verify-capability-registry.test.mjs
@@ -147,7 +147,7 @@ git commit -m "test: gate Hermes capability registry"
 - Consumes: existing deterministic PDF/DOCX buffers and `parseIngestionWithAdapters`.
 - Produces: `createParserSelfTestFixtures()` and `RESEARCH_INTELLIGENCE_CORPUS: ResearchCorpusCase[]`.
 
-- [ ] **Step 1: Write the failing fixture-export test**
+- [x] **Step 1: Write the failing fixture-export test**
 
 ```ts
 import { createHash } from 'node:crypto';
@@ -165,7 +165,7 @@ describe('research-intelligence fixture contract', () => {
 });
 ```
 
-- [ ] **Step 2: Run the focused test and observe the missing export**
+- [x] **Step 2: Run the focused test and observe the missing export**
 
 Run:
 
@@ -175,7 +175,7 @@ npx pnpm@9.15.0 --filter @openscience/agent-worker test -- research-intelligence
 
 Expected: FAIL because `createParserSelfTestFixtures` is not exported.
 
-- [ ] **Step 3: Export defensive fixture copies without changing the self-test**
+- [x] **Step 3: Export defensive fixture copies without changing the self-test**
 
 Add to `parser-self-test.ts`:
 
@@ -187,7 +187,7 @@ export function createParserSelfTestFixtures(): { pdf: Buffer; docx: Buffer } {
 
 Change `runParserSelfTest()` to consume the returned copies. Its public result and `PARSER_SELF_TEST_OK` marker remain byte-for-byte compatible.
 
-- [ ] **Step 4: Define the corpus contract**
+- [x] **Step 4: Define the corpus contract**
 
 ```ts
 export interface ResearchCorpusCase {
@@ -204,7 +204,7 @@ export interface ResearchCorpusCase {
 
 The tracked matrix contains 13 self-authored cases: existing native PDF and DOCX, Markdown/table, TeX/formula, references, deterministic dual-column PDF, image-only scanned PDF, minimal scan-shaped PNG, CSV, valid minimal XLSX, notebook, code and a corrupt PDF. Every case receives a SHA-256 content hash and one or more expected locators in `manifest.json`; the manifest contains no external URL or user file. The current parser's image-only PDF page-marker false-ready remains explicit baseline evidence rather than being hidden by the harness.
 
-- [ ] **Step 5: Generate and review the tracked manifest**
+- [x] **Step 5: Generate and review the tracked manifest**
 
 The corpus test supports `WRITE_RESEARCH_INTELLIGENCE_MANIFEST=1` only for explicit regeneration and writes stable JSON sorted by `id`.
 
@@ -219,7 +219,7 @@ git diff -- test/research-intelligence/manifest.json
 
 Expected: 13 self-authored cases, unique 64-character lowercase hashes, declared language/features/rights/locators and current expected status.
 
-- [ ] **Step 6: Commit the corpus contract**
+- [x] **Step 6: Commit the corpus contract**
 
 ```powershell
 git add apps/agent-worker/src/parser-self-test.ts apps/agent-worker/test/support/research-intelligence-corpus.ts apps/agent-worker/test/research-intelligence-corpus.test.ts test/research-intelligence/manifest.json
@@ -240,7 +240,7 @@ git commit -m "test: establish Hermes research corpus"
 - Consumes: `RESEARCH_INTELLIGENCE_CORPUS` and current ingestion adapters.
 - Produces: ignored `test/research-intelligence/out/current-parser.json` with status, reason, text match, elapsed time and RSS delta per case.
 
-- [ ] **Step 1: Write the failing baseline schema test**
+- [x] **Step 1: Write the failing baseline schema test**
 
 ```ts
 expect(report).toMatchObject({
@@ -253,11 +253,11 @@ expect(report).toMatchObject({
 });
 ```
 
-- [ ] **Step 2: Run the focused test and observe the missing report failure**
+- [x] **Step 2: Run the focused test and observe the missing report failure**
 
 Run the focused worker command from Task 2. Expected: FAIL because the report builder does not exist.
 
-- [ ] **Step 3: Implement a bounded baseline report**
+- [x] **Step 3: Implement a bounded baseline report**
 
 For each case, capture `performance.now()` before/after parsing and `process.memoryUsage().rss` before/after. Store only:
 
@@ -275,7 +275,7 @@ For each case, capture `performance.now()` before/after parsing and `process.mem
 
 Do not store source text, binary content, environment variables or absolute paths.
 
-- [ ] **Step 4: Add output isolation and scripts**
+- [x] **Step 4: Add output isolation and scripts**
 
 Add to `.gitignore`:
 
@@ -293,7 +293,7 @@ Add `test:research-intelligence` to `apps/agent-worker/package.json`, and add th
 "test:research-intelligence": "pnpm --filter @openscience/agent-worker test -- research-intelligence-corpus.test.ts"
 ```
 
-- [ ] **Step 5: Run twice and prove deterministic facts are stable**
+- [x] **Step 5: Run twice and prove deterministic facts are stable**
 
 ```powershell
 npx pnpm@9.15.0 test:research-intelligence
@@ -303,7 +303,7 @@ npx pnpm@9.15.0 test:research-intelligence
 
 Expected: IDs, hashes, statuses, reasons and text matches are identical. Timing and RSS may differ and are compared as measurements, not snapshot assertions.
 
-- [ ] **Step 6: Commit the baseline runner**
+- [x] **Step 6: Commit the baseline runner**
 
 ```powershell
 git add .gitignore package.json apps/agent-worker/package.json apps/agent-worker/test/research-intelligence-corpus.test.ts
@@ -323,7 +323,7 @@ git commit -m "test: measure current Hermes parser baseline"
 - Consumes: current-parser report and registry gate.
 - Produces: one dated registry change record and explicit `BASELINE_ONLY` language for candidates not yet evaluated.
 
-- [ ] **Step 1: Run the complete foundation gate**
+- [x] **Step 1: Run the complete foundation gate**
 
 ```powershell
 npx pnpm@9.15.0 audit:hermes-capabilities
@@ -334,19 +334,19 @@ npx pnpm@9.15.0 typecheck
 
 Expected: all commands exit 0. The current baseline may contain `needs_review`; that is an honest baseline, not a test failure.
 
-- [ ] **Step 2: Update the capability record from measurements**
+- [x] **Step 2: Update the capability record from measurements**
 
 Add a dated change-record row that includes current parser case counts, successful deterministic text cases, explicit review cases, P50/P95 timing and peak RSS from the ignored report. Do not copy raw source text or absolute paths.
 
-- [ ] **Step 3: Lock candidate status**
+- [x] **Step 3: Lock candidate status**
 
 Docling, LiteParse, GROBID, PaddleOCR and BGE-M3 remain `APPROVED_PILOT`; none becomes `PRODUCTION` or `retained` during this plan. MiniMax OCR remains blocked until exposed credentials are rotated and a minimal-page contract test exists.
 
-- [ ] **Step 4: Synchronize CURRENT docs**
+- [x] **Step 4: Synchronize CURRENT docs**
 
 Update `docs/progress.md` with Taskmaster Task 1 evidence and update the existing `.taskmaster/` and capability-registry rows in `project_index.md`. Keep progress ≤120 lines and ≤16 KiB.
 
-- [ ] **Step 5: Commit the measured foundation**
+- [x] **Step 5: Commit the measured foundation**
 
 ```powershell
 git add docs/runbooks/hermes-capability-registry.md docs/progress.md project_index.md
@@ -366,7 +366,7 @@ git commit -m "docs: record Hermes capability baseline"
 - Consumes: all Task 1–4 commits and fresh verification output.
 - Produces: Taskmaster `hermes-research-intelligence` Task 1 `done`; Task 2 becomes the only next ready task.
 
-- [ ] **Step 1: Run the complete local acceptance gate**
+- [x] **Step 1: Run the complete local acceptance gate**
 
 ```powershell
 npx pnpm@9.15.0 test
@@ -381,15 +381,15 @@ git diff --check
 
 Expected: every command exits 0; `DOCS_SYNC_OK`; Markdown reports 0 issues.
 
-- [ ] **Step 2: Review the diff against the design boundaries**
+- [x] **Step 2: Review the diff against the design boundaries**
 
 Confirm: no runtime dependency installed, no server files changed, no model/cache committed, no `.env` value read or printed, no product behavior changed, and application/release/rollback remain unchanged.
 
-- [ ] **Step 3: Set Taskmaster status only after evidence exists**
+- [x] **Step 3: Set Taskmaster status only after evidence exists**
 
 Use Taskmaster tag `hermes-research-intelligence` and set Task 1 to `done`. Query `next_task`; expected next task is Task 2, `Prisma Schema and Core Domain Models`.
 
-- [ ] **Step 4: Commit the final task-status synchronization**
+- [x] **Step 4: Commit the final task-status synchronization**
 
 ```powershell
 git add .taskmaster/tasks/tasks.json docs/progress.md project_index.md

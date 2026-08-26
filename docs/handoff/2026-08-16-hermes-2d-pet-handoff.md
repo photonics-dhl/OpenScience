@@ -1,6 +1,6 @@
 # Handoff — Hermes Wanko Live2D Companion
 
-> **CURRENT active-memory，2026-08-26 14:39 +08。** Hermes 形象阶段按用户决定收口；旧灯体、帽子、流苏、Cubism GUI 试验和被否决候选只从 Git history 查阅，不再作为实施入口。
+> **CURRENT active-memory，2026-08-26 17:19 +08。** Hermes 形象阶段按用户决定收口；旧灯体、帽子、流苏、Cubism GUI 试验和被否决候选只从 Git history 查阅，不再作为实施入口。
 
 ## Goal
 
@@ -61,18 +61,18 @@
 
 - 发布矩阵使用 no-write fixtures 验证真实页面编译、布局和交互；没有安全测试 session，因此不能冒充真实账号/数据库纵向验收。
 - 新工具只能提供约束、检索和真实组件证据，不能替代用户审美验收；不得把资料库首次命中或 registry block 直接当成产品视觉方向。
-- 工作分支尚未与 `main` 做集成决策。开始新任务前必须明确 merge / PR / 保留分支之一，禁止直接从较旧 local main 猜测现状。
+- Hermes Research Intelligence Taskmaster Task 1 已关闭：13 项自著权 corpus、能力台账机器门禁和完整本地 acceptance 全绿；Task 2 `Prisma Schema and Core Domain Models` 是下一唯一 ready 项。工作分支尚未与 `main` 做集成决策，禁止直接从较旧 local main 猜测现状。
 
 ## Next action
 
-1. 本主题已由用户确认恢复正常；新 session 从本 handoff 和新任务相关 CURRENT spec 开始，不再重复清 CF、重做水流或修改已冻结 Hermes。
-2. 若未来 Landing 再现静止，先按 deployment runbook §5.28 区分浏览器 motion override、WebGL fallback 与真实发布回归；任何调整继续保留 normal WebGL、no-WebGL、390px、reduced-motion 和滚出/滚回门禁。
+1. 下一 session 从 Taskmaster Task 2 开始：先为 schema/domain/database/search separation 写独立 spec 与 plan，再按 TDD 和 expand-contract migration 实施；不要提前安装 parser/OCR/model 候选。
+2. Landing/Hermes UI 保持冻结；若未来 Landing 再现静止，按 deployment runbook §5.28 区分浏览器 motion override、WebGL fallback 与真实发布回归。
 
 ## Read first
 
 1. `AGENTS.md`
 2. 本 handoff
-3. `docs/specs/2026-08-24-research-folio-product-system-design.md`（非 Landing UI）与 `docs/specs/2026-08-19-hermes-wanko-live2d-design.md`（renderer/Hermes）
+3. `docs/specs/2026-08-26-hermes-research-intelligence-platform-design.md`（Task 2）与 `docs/specs/2026-08-19-hermes-wanko-live2d-design.md`（冻结 renderer/Hermes）
 4. `docs/progress.md`
 5. `docs/OpenScience_Kimi_Development_Spec.md` 的当前任务相关章节
 

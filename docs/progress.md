@@ -1,25 +1,25 @@
 # OpenScience 进度（CURRENT window）
 
-> 最新同步：2026-08-26 16:53 +08。历史由 Git 保存；旧计划和 archive 不作为默认输入。
+> 最新同步：2026-08-26 17:19 +08。历史由 Git 保存；旧计划和 archive 不作为默认输入。
 
 ## 2026-08-26 — Hermes Research Intelligence Foundation 本地实现
 
-- Taskmaster Task 1 的 Foundation 实现已完成，正在执行最终全仓验收：能力台账新增机器门禁，21 行能力主表及 11 行候选 owner/license/version/resource/latency/cost/data-flow/evaluation/kill-switch/rollback 矩阵受一一对应、列数、状态、空字段、占位符与凭据形态检查；入口为 `audit:hermes-capabilities`。
+- Taskmaster Task 1 Foundation 已完成并关闭：能力台账新增机器门禁，21 行能力主表及 11 行候选 owner/license/version/resource/latency/cost/data-flow/evaluation/kill-switch/rollback 矩阵受一一对应、列数、状态、空字段、占位符与凭据形态检查；入口为 `audit:hermes-capabilities`。
 - 新增 13 项自著权 deterministic corpus 与 schema 1 哈希/locator 清单，不使用用户文件，覆盖 native/scanned/dual-column PDF、table、formula、references、DOCX、TeX、Markdown、CSV/XLSX、notebook 与 code。
 - ignored current-parser report 只保存 ID/hash/status/reason/textMatched/elapsed/RSS delta；记录运行有 7 项 `ready`、6 项 expected-text matched、6 项显式复核，P50 `0.03 ms`、P95 `226.09 ms`、最大 RSS 增量 `28,672 B`。image-only PDF 因 `pdf-parse` 页分隔符出现 1 项 false-ready，已作为后续候选必须消除的基线缺陷；计时/RSS 仅为观测值。
-- `test:research-intelligence`、agent-worker `57/57` 与全仓 typecheck 已通过。Docling/LiteParse/GROBID/PaddleOCR/BGE-M3 均保持 `APPROVED_PILOT`；MiniMax OCR 继续 `BLOCKED`。未安装依赖、未读取 `.env`、未写服务器、未部署或改变生产 release。
+- Fresh acceptance：全仓 test/typecheck/lint/build、`audit:hermes-capabilities`、`docs:lint`（223 文件、0 问题）、`audit:docs-sync`（8/8，`DOCS_SYNC_OK`）与 `git diff --check` 全绿；agent-worker `57/57`。Docling/LiteParse/GROBID/PaddleOCR/BGE-M3 均保持 `APPROVED_PILOT`；MiniMax OCR 继续 `BLOCKED`。未安装依赖、未读取 `.env`、未写服务器、未部署或改变生产 release。
 
 ## 2026-08-26 — Hermes 能力核验与 SSH 误报收口
 
 - 用户确认 LLM OCR 作为平台自动处理能力，不再逐文档询问；仍须经 AI Gateway、最小页路由、来源标记与审计，生成结果不得冒充原始证据。
 - 仅检查注入状态、不读取或输出 `.env` 值：本机 Tavily 已注入但额度耗尽，Semantic Scholar 常用变量未进入当前进程；生产 `agent-worker` 已注入 MiniMax，尚未注入 Tavily/Semantic Scholar。用户在聊天中暴露的凭据必须轮换后再配置。
 - SSH key 已用同一密钥只读复验成功。历史误报由 Windows 裸 `bash` 命中 WSL 导致；`AGENTS.md` 与 deployment §1.1 已锁定显式 Git Bash 调用和 `wsl: Failed to translate` 根因签名，禁止再误判为密钥失败。未改产品代码、未写服务器、未部署。
-- Taskmaster `optical-editorial-v3` 历史 tag 为 15/15；CURRENT `hermes-research-intelligence` 共 12 项，Task 1 实现已完成、待全仓门禁后关闭，其余 11 项尚未开始。
+- Taskmaster `optical-editorial-v3` 历史 tag 为 15/15；CURRENT `hermes-research-intelligence` 为 1/12 done，下一唯一 ready 项为 Task 2 `Prisma Schema and Core Domain Models`，其余 10 项等待依赖。
 - 实施保持四个可回滚阶段：Foundation 已建立能力台账机器门禁、自有 corpus 与现状 parser 基准；后续再依实测依次进入文档/OCR/搜索、兴趣/外部检索、RO/富媒体/生产验收。
 
 ## Current version tuple
 
-- Branch / local pre-matrix HEAD / deployed application / immutable release: `codex/hermes-wanko-live2d` / `cd98bd2` / `29344767b350e0a44ef74c04b9b5a55b342ef011` / `29344767b350e0a44ef74c04b9b5a55b342ef011`。
+- Branch / local Foundation code HEAD / deployed application / immutable release: `codex/hermes-wanko-live2d` / `c264bec` / `29344767b350e0a44ef74c04b9b5a55b342ef011` / `29344767b350e0a44ef74c04b9b5a55b342ef011`。
 - Current rollback 为前一健康 release `58614c07951374537ed146f164f8568e9957a9b5`；post-deploy docs HEAD 不与应用身份混写。
 - ECS release / rollback: `29344767b350e0a44ef74c04b9b5a55b342ef011` / `58614c07951374537ed146f164f8568e9957a9b5`。
 
