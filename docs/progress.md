@@ -1,6 +1,6 @@
 # OpenScience 进度（CURRENT window）
 
-> 最新同步：2026-08-26 19:16 +08。历史由 Git 保存；旧计划和 archive 不作为默认输入。
+> 最新同步：2026-08-26 19:40 +08。历史由 Git 保存；旧计划和 archive 不作为默认输入。
 
 ## 2026-08-26 — Hermes Research Intelligence Foundation 本地实现
 
@@ -8,6 +8,7 @@
 - 新增 13 项自著权 deterministic corpus 与 schema 1 哈希/locator 清单，不使用用户文件，覆盖 native/scanned/dual-column PDF、table、formula、references、DOCX、TeX、Markdown、CSV/XLSX、notebook 与 code；清单稳定性门禁仅规范化 Git checkout 的 CRLF/LF 差异，其他内容仍须逐字一致。
 - ignored current-parser report 只保存 ID/hash/status/reason/textMatched/elapsed/RSS delta；记录运行有 7 项 `ready`、6 项 expected-text matched、6 项显式复核，P50 `0.03 ms`、P95 `226.09 ms`、最大 RSS 增量 `28,672 B`。image-only PDF 因 `pdf-parse` 页分隔符出现 1 项 false-ready，已作为后续候选必须消除的基线缺陷；计时/RSS 仅为观测值。
 - PR #4 Ubuntu 视觉门禁已修复：Landing `.05` 硬阈值不变并连续采样真实 RAF，Hermes 仅增加 2px 字体度量容差，零重叠/上界不变；高成本光学证据用例总预算 120s。model `18/18`、build、optical `10/10`、Hermes cold-start `10/10`、release `72/72` 通过，UI 与生产 release 未改。
+- CI run `32962638531` 在产品 release `72/72` 通过后暴露 Hermes loading 用例的错误 DOM 契约：测试查找 `main[aria-busy]`，而 `DashboardShell` 始终把 `aria-busy` 交给 dashboard surface 根节点。候选 `a14f0ea` 改为验证真实 shell + `aria-live`，并以 mocked 503 response 驱动错误态断言；production Web build、Hermes compatible runtime `19/19` 与 product interaction `8/8` 本地全绿，等待刷新 CI。
 - Fresh acceptance：全仓 test/typecheck/lint/build、`audit:hermes-capabilities`、`docs:lint`（223 文件、0 问题）、`audit:docs-sync`（8/8，`DOCS_SYNC_OK`）与 `git diff --check` 全绿；agent-worker `57/57`。Docling/LiteParse/GROBID/PaddleOCR/BGE-M3 均保持 `APPROVED_PILOT`；MiniMax OCR 继续 `BLOCKED`。未安装依赖、未读取 `.env`、未写服务器、未部署或改变生产 release。
 
 ## 2026-08-26 — Hermes 能力核验与 SSH 误报收口
@@ -20,7 +21,7 @@
 
 ## Current version tuple
 
-- Branch / local Foundation code HEAD / deployed application / immutable release: `codex/hermes-wanko-live2d` / `c264bec` / `29344767b350e0a44ef74c04b9b5a55b342ef011` / `29344767b350e0a44ef74c04b9b5a55b342ef011`。
+- Branch / local Foundation code HEAD / deployed application / immutable release: `codex/hermes-wanko-live2d` / `a14f0ea` / `29344767b350e0a44ef74c04b9b5a55b342ef011` / `29344767b350e0a44ef74c04b9b5a55b342ef011`。
 - Current rollback 为前一健康 release `58614c07951374537ed146f164f8568e9957a9b5`；post-deploy docs HEAD 不与应用身份混写。
 - ECS release / rollback: `29344767b350e0a44ef74c04b9b5a55b342ef011` / `58614c07951374537ed146f164f8568e9957a9b5`。
 
@@ -69,12 +70,6 @@
 - 研究动作接入真实 RO surfaces：证据复核 `/hermes`、来源 `/files`、版本 `/versions`；选择后先给 900ms 角色/短句反馈再导航，离页清理 timer。搜索/文本输入、modal、quiet、审批均停止自动问候，显式交互仍可用。
 - 独立审查最初发现错误研究路由、反馈截断、搜索未抑制和 desktop compact 菜单问题；全部修复后复审 Ready。Fresh evidence：Web `406/406` + 5 Node、Hermes runtime/guide `19/19` + product interaction `5/5`、全仓 typecheck/lint/docs-sync/test/build、`git diff --check` GREEN；WebGL first-ready `889ms`，idle/pointer 零掉帧。
 - Immutable release `7165e9b` 已以 `3010903` 为 rollback、`--skip-migrate` 发布。pre/post checkup、backup `432K files=7/7`、服务器 19-page build、27 migrations current、目标 runtime/Parser isolation、route/assets、精确 release/failure/rollback markers 均通过；公网无写入 Hermes 五场景 `5/5`。首次调用因隔离 worktree 未指定主仓库配置根而在上传前 fail-closed，补充 `XGS_CONFIG_ROOT=E:/Miscellaneous/XGS` 后完成；未 migration、seed 或写研究数据。
-
-## 2026-08-25 — Hermes orbit design approved; patent introduction drafted
-
-- 用户批准基于 Scholar's Tea 行为语法重建的动态方向：Dashboard 同一口部气泡顺序出现两句短话；桌面 12 项清晰 action points 从真实 `360px` Hermes 周围展开；选择后菜单关闭、角色动作与短句组成一个反馈节拍；移动 `200px` 长按与安静编辑状态保留完整入口。
-- 唯一 CURRENT Hermes spec 已新增 §13.2，明确 8 个陪伴动作、4 个研究动作、右键/Shift+F10/Menu/长按、普通点击 drawer、44px 目标、字体、reduced-motion 和不遮挡合同；该设计阶段已被上方 `e4a19d4` 实现条目取代。
-- 新增 `docs/proposals/2026-08-25-openscience-patent-product-introduction.{md,docx}`：按当前需求基线、产品叙事、已实现架构和边界编写，分开陈述现状与规划，并列出供代理人检索拆分的技术点；不冒充权利要求或可专利性结论。
 
 ## Read first
 
