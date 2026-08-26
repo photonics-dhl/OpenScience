@@ -1,5 +1,14 @@
 import { createPrismaAuditSink, createPrismaClient, createRedisClient } from '@openscience/database';
-import { AiGateway, AnthropicCompatProvider, OpenAiCompatProvider } from '@openscience/ai-gateway';
+import {
+  AiGateway,
+  AnthropicCompatProvider,
+  MiniMaxCodingPlanVisionProvider,
+  MutableProviderKillSwitch,
+  OpenAiCompatProvider,
+  type ExternalProcessingPolicy,
+  type MiniMaxVisionPricing,
+  type ProviderCapabilityPolicy,
+} from '@openscience/ai-gateway';
 import {
   claimAgentTask, markTaskProgress, prepareAgentTaskForCrashRecovery, recoverUndispatchedAgentTasks,
   AGENT_TASK_QUEUE, type AgentDeps,
@@ -170,6 +179,8 @@ export function buildGateway(
   env: NodeJS.ProcessEnv = process.env,
   fetcher: typeof fetch = globalThis.fetch,
   audit?: ConstructorParameters<typeof AiGateway>[0]['audit'],
+  externalProcessingPolicy: ExternalProcessingPolicy = async () => false,
+  runtimeCapabilityPolicy: ProviderCapabilityPolicy = new MutableProviderKillSwitch(),
 ): AiGateway {
   const primaryModel = env.MINIMAX_MODEL ?? 'MiniMax-M3';
   const fallbackModels = (env.AI_FALLBACK_MODELS ?? '').split(',').map((s) => s.trim()).filter(Boolean);
@@ -192,7 +203,68 @@ export function buildGateway(
         : new OpenAiCompatProvider(name, config, fetcher);
     });
   });
-  return new AiGateway({ providers, audit, logger: console });
+
+  const ocrProviders = env.MINIMAX_VISION_ENABLED === 'true' && keys[0]
+    ? [new MiniMaxCodingPlanVisionProvider('minimax-vision', {
+        baseUrl: visionOrigin(env),
+        apiKey: keys[0],
+        model: env.MINIMAX_VISION_MODEL ?? 'coding-plan-vlm',
+        pricing: visionPricing(env),
+        maxPageBytes: optionalBoundedInteger(env.MINIMAX_VISION_MAX_PAGE_BYTES, 4 * 1024 * 1024, 'MINIMAX_VISION_MAX_PAGE_BYTES'),
+      }, fetcher)]
+    : [];
+  const staticallyDisabled = new Set((env.AI_DISABLED_PROVIDERS ?? '').split(',').map((value) => value.trim()).filter(Boolean));
+  const killSwitch: ProviderCapabilityPolicy = {
+    async isEnabled(provider, capability) {
+      if (staticallyDisabled.has(provider)) return { enabled: false, reason: 'operator_disabled' };
+      return runtimeCapabilityPolicy.isEnabled(provider, capability);
+    },
+  };
+  const ocrLimits = {
+    maxPages: optionalBoundedInteger(env.LLM_OCR_MAX_PAGES, 4, 'LLM_OCR_MAX_PAGES'),
+    maxPageBytes: optionalBoundedInteger(env.LLM_OCR_MAX_PAGE_BYTES, 4 * 1024 * 1024, 'LLM_OCR_MAX_PAGE_BYTES'),
+    maxTotalBytes: optionalBoundedInteger(env.LLM_OCR_MAX_TOTAL_BYTES, 8 * 1024 * 1024, 'LLM_OCR_MAX_TOTAL_BYTES'),
+  };
+  return new AiGateway({
+    providers,
+    ocrProviders,
+    audit,
+    logger: console,
+    killSwitch,
+    externalProcessingPolicy,
+    ocrLimits,
+  });
+}
+
+function visionOrigin(env: NodeJS.ProcessEnv): string {
+  const region = env.MINIMAX_VISION_REGION ?? 'global';
+  if (region === 'global') return 'https://api.minimax.io';
+  if (region === 'cn') return 'https://api.minimaxi.com';
+  throw new Error('MINIMAX_VISION_REGION must be global or cn');
+}
+
+function visionPricing(env: NodeJS.ProcessEnv): MiniMaxVisionPricing | undefined {
+  const rawCost = env.MINIMAX_VISION_USD_MICROS_PER_PAGE;
+  if (rawCost === undefined || rawCost.trim() === '') return undefined;
+  const usdMicrosPerPage = Number(rawCost);
+  if (!Number.isSafeInteger(usdMicrosPerPage) || usdMicrosPerPage < 0 || usdMicrosPerPage > 1_000_000_000) {
+    throw new Error('MINIMAX_VISION_USD_MICROS_PER_PAGE must be a non-negative integer');
+  }
+  const version = env.MINIMAX_VISION_PRICING_VERSION ?? '';
+  const effectiveDate = env.MINIMAX_VISION_PRICING_EFFECTIVE_DATE ?? '';
+  const serviceTier = env.MINIMAX_VISION_SERVICE_TIER ?? '';
+  if (!/^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/.test(version) || !/^\d{4}-\d{2}-\d{2}$/.test(effectiveDate) ||
+    !/^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/.test(serviceTier)) {
+    throw new Error('MiniMax vision pricing metadata is incomplete or invalid');
+  }
+  return { usdMicrosPerPage, version, effectiveDate, serviceTier };
+}
+
+function optionalBoundedInteger(raw: string | undefined, maximum: number, name: string): number {
+  if (raw === undefined || raw.trim() === '') return maximum;
+  const value = Number(raw);
+  if (!Number.isSafeInteger(value) || value < 1 || value > maximum) throw new Error(`${name} must be an integer between 1 and ${maximum}`);
+  return value;
 }
 
 // 主进程入口；被测试 import 时不启动
