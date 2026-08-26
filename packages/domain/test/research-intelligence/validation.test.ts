@@ -68,7 +68,7 @@ describe('validateSourceLocator', () => {
     { ...base, page: 2, boundingBox: { x: 10, y: 20, width: 30, height: 40 } },
     { ...base, charRange: { start: 0, end: 18 } },
     { ...base, tableCell: { sheet: 'Results', row: 0, column: 3 } },
-    { ...base, codeRange: { commit: 'abc123', path: 'src/model.py', startLine: 4, endLine: 9 } },
+    { ...base, codeRange: { commit: 'abc1234', path: 'src/model.py', startLine: 4, endLine: 9 } },
   ])('accepts a deterministic locator variant %#', async (locator) => {
     const { validateSourceLocator } = await loadValidators();
 
@@ -114,5 +114,31 @@ describe('validateSourceLocator', () => {
     expect(validateSourceLocator(locator)).toEqual(locator);
     expect(() => validateSourceLocator({ ...locator, blockId: '' })).toThrow(/blockId/);
     expect(() => validateSourceLocator({ ...locator, blockId: 'paragraph-1', providerBlock: {} })).toThrow(/unknown field/);
+  });
+
+  it.each([
+    { commit: ' abc1234', path: 'src/model.py', startLine: 1, endLine: 1 },
+    { commit: 'abc1234\n', path: 'src/model.py', startLine: 1, endLine: 1 },
+    { commit: 'abc123', path: 'src/model.py', startLine: 1, endLine: 1 },
+    { commit: 'g'.repeat(65), path: 'src/model.py', startLine: 1, endLine: 1 },
+    { commit: 'abc1234', path: '/src/model.py', startLine: 1, endLine: 1 },
+    { commit: 'abc1234', path: 'C:/src/model.py', startLine: 1, endLine: 1 },
+    { commit: 'abc1234', path: 'src\\model.py', startLine: 1, endLine: 1 },
+    { commit: 'abc1234', path: 'src/../model.py', startLine: 1, endLine: 1 },
+    { commit: 'abc1234', path: 'src//model.py', startLine: 1, endLine: 1 },
+    { commit: 'abc1234', path: 'src/\u0000model.py', startLine: 1, endLine: 1 },
+    { commit: 'abc1234', path: 'src/model.py', startLine: Number.MAX_SAFE_INTEGER + 1, endLine: Number.MAX_SAFE_INTEGER + 1 },
+    { commit: 'abc1234', path: 'src/model.py', startLine: 10_000_001, endLine: 10_000_001 },
+  ])('rejects unsafe code provenance %#', async (codeRange) => {
+    const { validateSourceLocator } = await loadValidators();
+
+    expect(() => validateSourceLocator({ ...base, codeRange })).toThrow(/codeRange/);
+  });
+
+  it('accepts the maximum safe practical code line', async () => {
+    const { validateSourceLocator } = await loadValidators();
+    const locator = { ...base, codeRange: { commit: 'abcdef0', path: 'src/model.py', startLine: 10_000_000, endLine: 10_000_000 } };
+
+    expect(validateSourceLocator(locator)).toEqual(locator);
   });
 });

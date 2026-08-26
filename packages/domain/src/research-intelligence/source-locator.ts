@@ -6,6 +6,7 @@ import { validateSourceLocator } from './validation';
 type CharRange = NonNullable<SourceLocator['charRange']>;
 type TableCell = NonNullable<SourceLocator['tableCell']>;
 type CodeRange = NonNullable<SourceLocator['codeRange']>;
+const SOURCE_LOCATOR_MAX_RAW_JSON_CHARACTERS = 12_000;
 
 function locatorError(message: string): Error {
   return new Error(`SourceLocator ${message}`);
@@ -69,8 +70,9 @@ function sameBoundingBox(a: NonNullable<SourceLocator['boundingBox']>, b: Docume
 }
 
 export function resolveSourceLocator(value: DocumentSourceMap, locatorValue: SourceLocator): DocumentBlock {
-  const sourceMap = parseDocumentSourceMap(value);
   const locator = validateSourceLocator(locatorValue);
+  if (locator.codeRange !== undefined) throw locatorError('codeRange cannot resolve against a document source map');
+  const sourceMap = parseDocumentSourceMap(value);
   if (locator.artifactId !== sourceMap.artifactId) throw locatorError('artifactId does not match the document source map');
   if (locator.contentHash !== sourceMap.contentHash) throw locatorError('contentHash does not match the document source map');
   if (!locator.blockId) throw locatorError('blockId is required for document source map resolution');
@@ -89,6 +91,9 @@ export function serializeSourceLocator(value: unknown): string {
 }
 
 export function deserializeSourceLocator(json: string): SourceLocator {
+  if (json.length > SOURCE_LOCATOR_MAX_RAW_JSON_CHARACTERS) {
+    throw locatorError('limit_exceeded: raw JSON');
+  }
   let parsed: unknown;
   try {
     parsed = JSON.parse(json);

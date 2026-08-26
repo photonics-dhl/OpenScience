@@ -48,9 +48,9 @@ describe('SourceLocator construction and resolution', () => {
       artifactId: 'artifact-1', contentHash: 'a'.repeat(64), blockId: 'table-1', page: 1,
       boundingBox: { x: 10, y: 200, width: 200, height: 100 }, tableCell: { sheet: 'Evidence', row: 2, column: 2 },
     });
-    expect(createCodeSourceLocator('artifact-1', 'a'.repeat(64), { commit: 'abc123', path: 'src/model.py', startLine: 4, endLine: 9 })).toEqual({
+    expect(createCodeSourceLocator('artifact-1', 'a'.repeat(64), { commit: 'abc1234', path: 'src/model.py', startLine: 4, endLine: 9 })).toEqual({
       artifactId: 'artifact-1', contentHash: 'a'.repeat(64),
-      codeRange: { commit: 'abc123', path: 'src/model.py', startLine: 4, endLine: 9 },
+      codeRange: { commit: 'abc1234', path: 'src/model.py', startLine: 4, endLine: 9 },
     });
   });
 
@@ -65,6 +65,8 @@ describe('SourceLocator construction and resolution', () => {
     expect(() => resolveSourceLocator(map, { ...locator as object, contentHash: 'b'.repeat(64) })).toThrow(/contentHash/);
     expect(() => resolveSourceLocator(map, { ...locator as object, blockId: 'missing' })).toThrow(/blockId/);
     expect(() => resolveSourceLocator(map, { ...locator as object, boundingBox: { x: 1, y: 2, width: 3, height: 4 } })).toThrow(/boundingBox/);
+    expect(() => resolveSourceLocator(map, { ...locator as object, codeRange: { commit: 'abc1234', path: 'src/model.py', startLine: 4, endLine: 9 } })).toThrow(/codeRange/);
+    expect(() => resolveSourceLocator(map, { artifactId: 'artifact-1', contentHash: 'a'.repeat(64), codeRange: { commit: 'abc1234', path: 'src/model.py', startLine: 4, endLine: 9 } })).toThrow(/codeRange/);
   });
 
   it('rejects invalid map-derived selections', async () => {
@@ -83,11 +85,12 @@ describe('SourceLocator construction and resolution', () => {
       createBlockSourceLocator(map, 'paragraph-1', { charRange: { start: 0, end: 8 } }),
       createBlockSourceLocator(map, 'figure-1'),
       createTableCellSourceLocator(map, 'table-1', { sheet: 'Evidence', row: 2, column: 2 }),
-      createCodeSourceLocator('artifact-1', 'a'.repeat(64), { commit: 'abc123', path: 'src/model.py', startLine: 4, endLine: 9 }),
+      createCodeSourceLocator('artifact-1', 'a'.repeat(64), { commit: 'abc1234', path: 'src/model.py', startLine: 4, endLine: 9 }),
     ];
 
     for (const locator of locators) expect(deserializeSourceLocator(serializeSourceLocator(locator))).toEqual(validateSourceLocator(locator));
     expect(() => deserializeSourceLocator(JSON.stringify({ ...locators[0] as object, providerPayload: {} }))).toThrow(/unknown field/);
-    expect(() => createCodeSourceLocator('artifact-1', 'a'.repeat(64), { commit: 'abc123', path: 'src/model.py', startLine: 9, endLine: 4 })).toThrow(/codeRange/);
+    expect(() => createCodeSourceLocator('artifact-1', 'a'.repeat(64), { commit: 'abc1234', path: 'src/model.py', startLine: 9, endLine: 4 })).toThrow(/codeRange/);
+    expect(() => deserializeSourceLocator(`${serializeSourceLocator(locators[0])}${' '.repeat(12_000)}`)).toThrow(/limit_exceeded/);
   });
 });

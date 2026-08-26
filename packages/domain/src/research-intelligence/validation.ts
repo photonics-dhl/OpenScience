@@ -117,12 +117,26 @@ function validateTableCell(value: unknown): void {
 function validateCodeRange(value: unknown): void {
   const range = plainObject(value, 'codeRange', 'INVALID_SOURCE_LOCATOR');
   assertOnlyKeys(range, ['commit', 'path', 'startLine', 'endLine'], 'codeRange', 'INVALID_SOURCE_LOCATOR');
-  if (!nonEmptyString(range.commit, 200) || !nonEmptyString(range.path, 1_000)) {
-    throw new ResearchIntelligenceValidationError('INVALID_SOURCE_LOCATOR', 'codeRange commit and path are required');
+  if (typeof range.commit !== 'string' || !/^[a-f0-9]{7,64}$/i.test(range.commit)) {
+    throw new ResearchIntelligenceValidationError('INVALID_SOURCE_LOCATOR', 'codeRange commit must be a 7-64 character hexadecimal Git revision');
   }
-  if (!Number.isInteger(range.startLine) || !Number.isInteger(range.endLine) || (range.startLine as number) < 1 || (range.endLine as number) < (range.startLine as number)) {
-    throw new ResearchIntelligenceValidationError('INVALID_SOURCE_LOCATOR', 'codeRange lines must be increasing one-based integers');
+  if (!isNormalizedRepositoryPath(range.path)) {
+    throw new ResearchIntelligenceValidationError('INVALID_SOURCE_LOCATOR', 'codeRange path must be a normalized repository-relative POSIX path');
   }
+  if (!isPracticalLineNumber(range.startLine) || !isPracticalLineNumber(range.endLine) || (range.endLine as number) < (range.startLine as number)) {
+    throw new ResearchIntelligenceValidationError('INVALID_SOURCE_LOCATOR', 'codeRange lines must be increasing practical one-based integers');
+  }
+}
+
+const MAX_CODE_LINE = 10_000_000;
+
+function isPracticalLineNumber(value: unknown): value is number {
+  return typeof value === 'number' && Number.isSafeInteger(value) && value >= 1 && value <= MAX_CODE_LINE;
+}
+
+function isNormalizedRepositoryPath(value: unknown): value is string {
+  if (!nonEmptyString(value, 1_000) || /[\x00-\x1F\x7F\\]/.test(value) || value.startsWith('/') || /^[A-Za-z]:/.test(value)) return false;
+  return value.split('/').every((segment) => segment !== '' && segment !== '.' && segment !== '..');
 }
 
 export function validateSourceLocator(value: unknown): SourceLocator {
