@@ -10,7 +10,7 @@
 | `project_index.md` | 本索引 | 活文档 |
 | `.mcp.json` | 项目级 MCP 配置（kimi-code/Cursor）；2026-08-08 保持 10 个：`semantic-scholar`、`github`、`mermaid`、`memory`、`context7`、`tavily-search`、`figma-temp`、`figma-primary`、`shadcn`、`task-master-ai`；双 Figma 直接使用官方 remote URL，过渡期移除低价值 `fetch` | 活文档，**本机持有，已移出 git 跟踪**（2026-07-31） |
 | Codex global `ui-ux-pro-max` / `baseline-ui` Skills + `shadcn` MCP | 2026-08-24 为 Hermes 互动视觉纠偏启用：Skills 固定审计提交 `bc826e2` / `bdbcc56`；shadcn 固定 `4.19.0`、cwd 为当前 worktree `apps/web`，MCP 初始化握手通过；不把资料库命中替代用户审美验收 | **本机工具能力，不入库**；重启 Codex 后自动发现 Skills/MCP |
-| `.Codex/troubleshooting/issues.json` | 项目工具/MCP/API/CI 故障的结构化问题库；issue-010 固化 SwiftShader RAF、跨系统字体度量、软件渲染证据预算与 shell DOM 契约门禁；不记录账号、密钥、OAuth URL 或 token | 活文档 |
+| `.Codex/troubleshooting/issues.json` | 项目工具/MCP/API/CI 故障的结构化问题库；issue-010 固化 SwiftShader RAF、跨系统字体度量、软件渲染证据预算、shell DOM 契约与 motion preference 前置条件；不记录账号、密钥、OAuth URL 或 token | 活文档 |
 | [OpenScience Web Design System — canonical](https://www.figma.com/design/gjhowMG7cG4clKwvhvF08E) | 长期项目账号持有的 Optical Editorial V3 canonical；44 variables、12 styles、4 component sets、8 surfaces；旧 `rWS3…` 文件仅为历史迁移来源 | Task 13 验收完成 |
 | `.vscode/mcp.json` | VS Code MCP 配置（task-master-ai 直连 node_modules 本地入口） | 活文档，**本机持有，不入库**（含 key） |
 | `.env` / `.env.example` | 密钥 / 密钥模板 | 只读，禁打印 |

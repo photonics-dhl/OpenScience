@@ -1,6 +1,6 @@
 # OpenScience 进度（CURRENT window）
 
-> 最新同步：2026-08-26 19:40 +08。历史由 Git 保存；旧计划和 archive 不作为默认输入。
+> 最新同步：2026-08-26 19:59 +08。历史由 Git 保存；旧计划和 archive 不作为默认输入。
 
 ## 2026-08-26 — Hermes Research Intelligence Foundation 本地实现
 
@@ -8,7 +8,7 @@
 - 新增 13 项自著权 deterministic corpus 与 schema 1 哈希/locator 清单，不使用用户文件，覆盖 native/scanned/dual-column PDF、table、formula、references、DOCX、TeX、Markdown、CSV/XLSX、notebook 与 code；清单稳定性门禁仅规范化 Git checkout 的 CRLF/LF 差异，其他内容仍须逐字一致。
 - ignored current-parser report 只保存 ID/hash/status/reason/textMatched/elapsed/RSS delta；记录运行有 7 项 `ready`、6 项 expected-text matched、6 项显式复核，P50 `0.03 ms`、P95 `226.09 ms`、最大 RSS 增量 `28,672 B`。image-only PDF 因 `pdf-parse` 页分隔符出现 1 项 false-ready，已作为后续候选必须消除的基线缺陷；计时/RSS 仅为观测值。
 - PR #4 Ubuntu 视觉门禁已修复：Landing `.05` 硬阈值不变并连续采样真实 RAF，Hermes 仅增加 2px 字体度量容差，零重叠/上界不变；高成本光学证据用例总预算 120s。model `18/18`、build、optical `10/10`、Hermes cold-start `10/10`、release `72/72` 通过，UI 与生产 release 未改。
-- CI run `32962638531` 在产品 release `72/72` 通过后暴露 Hermes loading 用例的错误 DOM 契约：测试查找 `main[aria-busy]`，而 `DashboardShell` 始终把 `aria-busy` 交给 dashboard surface 根节点。候选 `a14f0ea` 改为验证真实 shell + `aria-live`，并以 mocked 503 response 驱动错误态断言；production Web build、Hermes compatible runtime `19/19` 与 product interaction `8/8` 本地全绿，等待刷新 CI。
+- CI runs `32962638531` / `32964668644` 在产品 release `72/72` 通过后暴露两个 Hermes 测试前提缺陷：loading 用例查错 `aria-busy` owner，context-loss 用例要求 Retry 却未固定 full motion。候选 `a14f0ea` / `da15abe` 分别对齐真实 shell/API 事件与 `hermes-motion=full` + toggle runtime 合同；production Web build、Hermes compatible runtime `19/19` 与 product interaction `8/8` 本地全绿，等待刷新 CI。
 - Fresh acceptance：全仓 test/typecheck/lint/build、`audit:hermes-capabilities`、`docs:lint`（223 文件、0 问题）、`audit:docs-sync`（8/8，`DOCS_SYNC_OK`）与 `git diff --check` 全绿；agent-worker `57/57`。Docling/LiteParse/GROBID/PaddleOCR/BGE-M3 均保持 `APPROVED_PILOT`；MiniMax OCR 继续 `BLOCKED`。未安装依赖、未读取 `.env`、未写服务器、未部署或改变生产 release。
 
 ## 2026-08-26 — Hermes 能力核验与 SSH 误报收口
@@ -21,7 +21,7 @@
 
 ## Current version tuple
 
-- Branch / local Foundation code HEAD / deployed application / immutable release: `codex/hermes-wanko-live2d` / `a14f0ea` / `29344767b350e0a44ef74c04b9b5a55b342ef011` / `29344767b350e0a44ef74c04b9b5a55b342ef011`。
+- Branch / local Foundation code HEAD / deployed application / immutable release: `codex/hermes-wanko-live2d` / `da15abe` / `29344767b350e0a44ef74c04b9b5a55b342ef011` / `29344767b350e0a44ef74c04b9b5a55b342ef011`。
 - Current rollback 为前一健康 release `58614c07951374537ed146f164f8568e9957a9b5`；post-deploy docs HEAD 不与应用身份混写。
 - ECS release / rollback: `29344767b350e0a44ef74c04b9b5a55b342ef011` / `58614c07951374537ed146f164f8568e9957a9b5`。
 
