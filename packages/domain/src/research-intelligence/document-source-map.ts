@@ -60,6 +60,8 @@ const MAX_TOTAL_BLOCKS = 10_000;
 const MAX_TOTAL_TRANSFORMATIONS = 25_000;
 const MAX_TOTAL_TEXT_CHARACTERS = 5_000_000;
 const MAX_SERIALIZED_CONTENT_CHARACTERS = 8_000_000;
+// The 8 MB string-content budget plus this equally sized structural allowance covers every valid bounded map.
+const MAX_RAW_JSON_CHARACTERS = 16_000_000;
 
 interface ParseBudget {
   blocks: number;
@@ -116,9 +118,9 @@ function parseBoundingBox(value: unknown, page: DocumentPage): DocumentBlock['bo
   const y = typeof box.y === 'number' && Number.isFinite(box.y) && box.y >= 0 ? box.y : undefined;
   const width = finitePositive(box.width, 'DocumentBlock boundingBox width');
   const height = finitePositive(box.height, 'DocumentBlock boundingBox height');
-  const scale = Math.max(1, Math.abs(x ?? 0), Math.abs(y ?? 0), width, height, page.width, page.height);
-  const tolerance = Number.EPSILON * scale * 16;
-  if (x === undefined || y === undefined || x + width - page.width > tolerance || y + height - page.height > tolerance) {
+  const xTolerance = Number.EPSILON * Math.max(1, Math.abs(x ?? 0), width, page.width) * 16;
+  const yTolerance = Number.EPSILON * Math.max(1, Math.abs(y ?? 0), height, page.height) * 16;
+  if (x === undefined || y === undefined || x + width - page.width > xTolerance || y + height - page.height > yTolerance) {
     throw new Error('DocumentBlock boundingBox must be within its page');
   }
   return { x, y, width, height };
@@ -223,6 +225,9 @@ export function serializeDocumentSourceMap(value: unknown): string {
 }
 
 export function deserializeDocumentSourceMap(json: string): DocumentSourceMap {
+  if (json.length > MAX_RAW_JSON_CHARACTERS) {
+    throw new Error('DocumentSourceMap limit_exceeded: raw JSON');
+  }
   let parsed: unknown;
   try {
     parsed = JSON.parse(json);

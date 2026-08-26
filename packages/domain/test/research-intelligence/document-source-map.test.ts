@@ -99,6 +99,27 @@ describe('DocumentSourceMap boundary', () => {
     expect(() => serializeDocumentSourceMap(map)).toThrow(/within its page/);
   });
 
+  it('does not let a large y-axis scale relax x-axis bounds', async () => {
+    const map = { ...validMap(), pages: [{
+      page: 1,
+      width: 1,
+      height: 1e15,
+      blocks: [block('asymmetric-outside', { boundingBox: { x: 0, y: 0, width: 4, height: 1 } })],
+    }] };
+    const { serializeDocumentSourceMap } = await documentSourceMapContract();
+
+    expect(() => serializeDocumentSourceMap(map)).toThrow(/within its page/);
+  });
+
+  it.each([
+    ['whitespace padding', () => `${JSON.stringify(validMap())}${' '.repeat(16_000_001)}`],
+    ['unknown payload', () => `{"privateProviderPayload":"${'x'.repeat(16_000_001)}"}`],
+  ])('rejects oversized raw JSON with %s before parsing', async (_label, createJson) => {
+    const { deserializeDocumentSourceMap } = await documentSourceMapContract();
+
+    expect(() => deserializeDocumentSourceMap(createJson())).toThrow(/limit_exceeded/);
+  });
+
   it.each([
     ['total blocks', () => ({ ...validMap(), pages: [{ page: 1, width: 2, height: 2, blocks: Array.from({ length: 10_001 }, (_, index) => block(`block-${index}`)) }] })],
     ['total transformations', () => ({ ...validMap(), pages: [{ page: 1, width: 2, height: 2, blocks: Array.from({ length: 251 }, (_, index) => block(`block-${index}`, {
