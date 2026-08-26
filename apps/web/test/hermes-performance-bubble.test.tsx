@@ -93,4 +93,13 @@ describe('Hermes performance bubble', () => {
     expect(html).not.toContain('hermes-companion-actions');
     expect(html).not.toContain('hermes-companion-take-me');
   });
+
+  it('keeps the renderer recovery control accessible while Hermes feedback is visible', () => {
+    expect(globals).toContain(
+      ".hermes-workspace-stage:has([data-hermes-menu-feedback='true']) .hermes-motion-enable:not([data-motion-runtime='fallback'])",
+    );
+    expect(globals).not.toContain(
+      ".hermes-workspace-stage:has([data-hermes-menu-feedback='true']) .hermes-motion-enable,",
+    );
+  });
 });

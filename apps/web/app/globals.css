@@ -2463,7 +2463,7 @@ body {
 }
 
 .hermes-workspace-stage:has([data-hermes-menu-feedback='true']) .hermes-visual-state-label,
-.hermes-workspace-stage:has([data-hermes-menu-feedback='true']) .hermes-motion-enable,
+.hermes-workspace-stage:has([data-hermes-menu-feedback='true']) .hermes-motion-enable:not([data-motion-runtime='fallback']),
 .hermes-dock-anchor:has([data-hermes-menu-feedback='true']) .hermes-presence-control {
   display: none;
 }
