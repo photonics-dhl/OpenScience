@@ -1,20 +1,20 @@
 # OpenScience 进度（CURRENT window）
 
-> 最新同步：2026-08-26 11:27 +08。历史由 Git 保存；旧计划和 archive 不作为默认输入。
+> 最新同步：2026-08-26 11:33 +08。历史由 Git 保存；旧计划和 archive 不作为默认输入。
 
 ## Current version tuple
 
-- Branch / local application candidate / deployed application / immutable release: `codex/hermes-wanko-live2d` / `47c8aa9e6b78c3ec26e4d0320097e1c5260d794a` / `c80f739072054e6ababfee511a6a9ecbaa296020` / `263c78372a1a6114016bba9ca3d8dbfce94ee0ce`。
-- Current rollback 为前一健康 release `8395b4d5cc11cb444aac3b638cff4ccc993ef9f2`；post-deploy docs HEAD 不与应用身份混写。
+- Branch / deployed application / immutable release: `codex/hermes-wanko-live2d` / `47c8aa9e6b78c3ec26e4d0320097e1c5260d794a` / `73677d57ef9afd55fb75fd027cb4c514a7b7f544`。
+- Current rollback 为前一健康 release `263c78372a1a6114016bba9ca3d8dbfce94ee0ce`；post-deploy docs HEAD 不与应用身份混写。
 - Local main / origin main: `c60ffdd16b85ea8f0d8b047493fa03a4c0230c05` / `7eb2f5bc4718ee445b79bd089acb64acb3691e62`；两者都早于当前工作分支，远端 Hermes feature 不存在。
-- ECS release / rollback: `263c78372a1a6114016bba9ca3d8dbfce94ee0ce` / `8395b4d5cc11cb444aac3b638cff4ccc993ef9f2`。
+- ECS release / rollback: `73677d57ef9afd55fb75fd027cb4c514a7b7f544` / `263c78372a1a6114016bba9ca3d8dbfce94ee0ce`。
 
 ## 2026-08-26 — Landing water regression root cause and implementation plan
 
 - 用户确认 Task 24 只恢复既有 OGL 水流并封死回归；Hermes、导航、字体、accepted plates 与非 Landing 表面冻结。Git 证明最近 navigation release 未删除 OGL：`8edf6fa` 隐藏 OS cursor，`8fe2094` 又把 descendants `!important` 和错误发布门禁固化。
 - 根因已闭合：线性速度使慢速 traverse `follow≈.007`，而 10s/2.2px presentation 与 aggregate-pixel gate 仍可 GREEN。Candidate `47c8aa9` 移除 `cursor:none!important`，以 `sqrt(magnitude)` 恢复慢速 wake，并把原 ambient clock 收紧为 7s；未重建 renderer、恢复 Canvas2D、改构图或 shader。
 - 新合同已进入 canonical product release：系统 cursor 与所有 descendants 可见；24×10 网格要求 650ms 内存在至少 6 格、横纵各跨 2 格的连通水流；慢/快轨迹分别验证位置、强度和 900ms 恢复，reduced-motion 仍静态无 canvas。Fresh Landing `6/6`、focused `23/23`、Web `421+5`、全仓 test/build、Web typecheck、targeted ESLint 与 diff check GREEN，桌面/移动原尺寸截图已复核。
-- Broader Optical Lab capture 的既有 `evolves` 边界 `.899336 < .9` 在 10s/7s 下相同，未放宽阈值。部署尚未开始，ECS 仍为 `c80f739` / `263c783` / `8395b4d`。
+- Broader Optical Lab capture 的既有 `evolves` 边界 `.899336 < .9` 在 10s/7s 下相同，未放宽阈值。Application/release/rollback `47c8aa9` / `73677d5` / `263c783` 已部署：pre/post checkup、backup `436K files=7/7`、服务器全量 build、27 migrations、目标容器、Parser isolation、release markers 与公网 Landing `6/6` GREEN；未 migration/seed/data write。
 - 新增全站一级研究入口：Research desk / Explore / New research / Settings；公开阅读与 collection 同时保留 Home wordmark、Desk、Explore、Create、Login；RO 内继续使用 Overview/SDF/Files/Versions/Collaboration/Publish/Sandbox 二级导航。Dashboard loading/error、注册/登录、Hermes evidence review 与 curator 均不再是死路。
 - 390px 原尺寸复核发现首项虽存在却裁切 `6px`，已用品牌/utility 第一行 + 四入口第二行及明确短标签修复；浏览器门禁现逐链接验证 visible 与 `scrollWidth <= clientWidth`。Application `c80f739` 的 fresh evidence：Web `420+5`、全仓 typecheck/lint/docs-sync/docs-lint/test/build、19-page build、product release `72/72` 与 `git diff --check` GREEN；新增 320px Dashboard/Auth/Public/Workspace/Review 五壳层实测。
 - Immutable release `263c783` 已以 `8395b4d` 为 rollback、`--skip-migrate` 发布。pre/post checkup、backup `432K files=7/7`、服务器 19-page build、27/27 migrations、目标容器/Parser isolation、Cloudflare/loopback、精确 release/failure/rollback markers 与公开路由均通过。公网 no-write 产品矩阵可匿名部分 `69/69`，其中 Landing normal/reduced 与 320px 五壳层全绿；Admin 三视口按生产 Basic Auth 正确返回 401，本地 release gate 为 `3/3`。未 migration、seed 或写研究数据。

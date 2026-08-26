@@ -855,3 +855,24 @@ Historical note for the 2026-08-11 release: it used fixed worker tags and a writ
   cases, including Landing normal/reduced and five 320px shells; three Admin
   viewports correctly stop at production Basic Auth 401 and pass locally 3/3.
   No migration, seed or research-data write ran.
+
+### 5.26 Landing water regression recovery (2026-08-26)
+
+> Active release `73677d57ef9afd55fb75fd027cb4c514a7b7f544`;
+> rollback `263c78372a1a6114016bba9ca3d8dbfce94ee0ce`;
+> application `47c8aa9e6b78c3ec26e4d0320097e1c5260d794a`.
+
+- Scope is Web-only and restores the existing OGL water: preserve the approved
+  Landing composition, Hermes and navigation; restore the operating-system
+  cursor, ordinary slow-pointer wake and a readable seven-second ambient cycle.
+- Local evidence: canonical Landing desktop/wide/mobile normal+reduced `6/6`,
+  focused `23/23`, Web `421+5`, full workspace test/build, Web typecheck,
+  lint/docs gates and original-size desktop/mobile review pass.
+- Operation used exact dry-run, pre/post checkup, DB backup `436K files=7/7`,
+  `--skip-migrate` and explicit rollback `263c783...`. Server full workspace /
+  19-page build, 27 current migrations, healthy targets, exact release/failure/
+  rollback markers and retained rollback tree pass. Parser remains network-none,
+  read-only, non-root, 512 MiB and 64 PIDs.
+- Public canonical Landing normal/reduced matrix passes `6/6`, including visible
+  system cursor, connected 650ms idle motion, slow/fast wake ordering and
+  recovery. No migration, seed or research-data write ran.

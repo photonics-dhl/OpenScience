@@ -229,7 +229,7 @@ follow of about `.007`, even though the result reads as a static image.
   original 10-second and final 7-second clocks; its threshold was not weakened
   or relabelled as a water regression.
 
-- [ ] **Step 6: Protect future unrelated releases and deploy**
+- [x] **Step 6: Protect future unrelated releases and deploy**
 
   Keep the normal Landing motion contract in the canonical product release
   matrix and make its evidence mandatory for any release that ships the Web
@@ -238,3 +238,9 @@ follow of about `.007`, even though the result reads as a static image.
   checkup and backup, deploy with `--skip-migrate`, then repeat the cursor,
   normal/reduced water, route, container, dependency and public health checks
   against the immutable ECS release.
+
+  Immutable release `73677d5` deployed with application `47c8aa9` and rollback
+  `263c783`. Pre/post checkup, backup `436K files=7/7`, server full build,
+  27 current migrations, healthy targets, Parser isolation, exact markers and
+  public Landing normal/reduced `6/6` are GREEN. No migration, seed or research
+  data write ran.
