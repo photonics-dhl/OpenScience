@@ -10,10 +10,11 @@ export default async function ExplorePage() {
 
   return (
     <PublicShell
-      headerActions={<SiteHeader tone="paper" />}
+      headerActions={<SiteHeader active="explore" context="public-product" tone="paper" />}
       navigationLabel={shell('primaryNavigation')}
       skipLabel={shell('skipToContent')}
       tone="paper"
+      wrapHeaderActionsOnMobile
     >
       <section className="px-4 py-10 sm:px-6 lg:px-8 lg:py-14" data-explore-index="true">
         <div className="mx-auto max-w-[88rem]">

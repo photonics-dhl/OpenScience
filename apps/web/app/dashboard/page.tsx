@@ -1,6 +1,5 @@
 'use client';
 
-import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useLocale, useTranslations } from 'next-intl';
 import * as React from 'react';
@@ -63,15 +62,26 @@ export default function DashboardPage() {
 
   if (!user && !error) {
     return (
-      <main className="surface-folio grid min-h-dvh place-items-center" aria-busy="true">
+      <DashboardShell
+        activeRoute="dashboard"
+        aria-busy="true"
+        mainClassName="grid place-items-center"
+        navigationLabel={t('context.navigation')}
+        skipLabel={t('context.skip')}
+      >
         <p className="text-base text-os-muted-paper" aria-live="polite">{t('loading')}</p>
-      </main>
+      </DashboardShell>
     );
   }
 
   if (error) {
     return (
-      <main className="surface-folio grid min-h-dvh place-items-center px-4">
+      <DashboardShell
+        activeRoute="dashboard"
+        mainClassName="grid place-items-center px-4"
+        navigationLabel={t('context.navigation')}
+        skipLabel={t('context.skip')}
+      >
         <section className="surface-folio-sheet w-full max-w-xl border-y border-os-rule-paper px-6 py-10 text-center">
           <p data-reading-role="caption" className="text-os-vermilion-ink">{t('errors.kicker')}</p>
           <h1 className="mt-4 text-4xl">{t('errors.title')}</h1>
@@ -80,7 +90,7 @@ export default function DashboardPage() {
             {t('errors.retry')}
           </button>
         </section>
-      </main>
+      </DashboardShell>
     );
   }
 
@@ -94,12 +104,11 @@ export default function DashboardPage() {
 
   return (
     <DashboardShell
+      activeRoute="dashboard"
       headerActions={(
-        <div className="ml-auto flex items-center justify-end gap-3">
+        <div className="ml-auto flex items-center justify-end gap-2">
           <span data-reading-role="caption" className="hidden text-os-muted-paper sm:inline">{user?.displayName}</span>
           <LocaleSwitcher locale={locale} />
-          <Link data-reading-role="control" className="text-sm text-os-muted-paper hover:text-os-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-os-vermilion-ink" href="/settings">{t('context.settings')}</Link>
-          <Link data-reading-role="control" className="text-sm text-os-muted-paper hover:text-os-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-os-vermilion-ink" href="/#about">{t('context.help')}</Link>
         </div>
       )}
       navigationLabel={t('context.navigation')}

@@ -29,6 +29,20 @@ describe('product visual release manifest', () => {
     expect(PRODUCT_RELEASE_CASES.filter(({ reducedMotion }) => reducedMotion).map(({ surface }) => surface)).toEqual(['landing', 'landing', 'landing']);
   });
 
+  it('requires visible optical motion on every normal Landing release case', () => {
+    const landingCases = PRODUCT_RELEASE_CASES.filter(({ surface }) => surface === 'landing');
+    expect(landingCases.filter(({ reducedMotion }) => !reducedMotion).map(({ motionContract }) => motionContract)).toEqual([
+      'visible-optical',
+      'visible-optical',
+      'visible-optical',
+    ]);
+    expect(landingCases.filter(({ reducedMotion }) => reducedMotion).map(({ motionContract }) => motionContract)).toEqual([
+      'static-optical',
+      'static-optical',
+      'static-optical',
+    ]);
+  });
+
   it('requires a deterministic optical clock and CI artifact upload', () => {
     const opticalSource = readFileSync(new URL('../components/brand/OpticalField.tsx', import.meta.url), 'utf8');
     const workflow = readFileSync(new URL('../../../.github/workflows/ci.yml', import.meta.url), 'utf8');

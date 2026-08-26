@@ -28,13 +28,16 @@ interface ShellHeaderProps {
   compactBrandOnMobile?: boolean;
   navigationLabel?: string;
   tone: 'dark' | 'paper';
+  utilities?: React.ReactNode;
+  wrapActionsOnMobile?: boolean;
 }
 
-function ShellHeader({ actions, actionsKind = 'navigation', compactBrandOnMobile = false, navigationLabel, tone }: ShellHeaderProps) {
+function ShellHeader({ actions, actionsKind = 'navigation', compactBrandOnMobile = false, navigationLabel, tone, utilities, wrapActionsOnMobile = false }: ShellHeaderProps) {
   return (
     <header
       className={cn(
-        'flex min-h-14 min-w-0 items-center justify-between gap-3 overflow-hidden border-b px-4 sm:gap-6 sm:px-6 lg:px-8',
+        'flex min-h-14 min-w-0 items-center justify-between gap-3 border-b px-4 sm:gap-6 sm:px-6 lg:px-8',
+        wrapActionsOnMobile && 'flex-wrap py-1 sm:flex-nowrap sm:py-0',
         tone === 'dark' ? 'border-os-rule-dark' : 'border-os-rule-paper',
       )}
     >
@@ -46,7 +49,11 @@ function ShellHeader({ actions, actionsKind = 'navigation', compactBrandOnMobile
       ) : <OpenScienceWordmark tone={tone} />}
       {actions ? actionsKind === 'navigation' ? (
         <nav aria-label={navigationLabel}
-          className="ml-auto min-w-0 [&_a]:rounded-panel [&_button]:rounded-panel [&_a]:active:translate-y-px [&_button]:active:translate-y-px motion-reduce:[&_a]:transform-none motion-reduce:[&_button]:transform-none"
+          className={cn(
+            'ml-auto min-w-0 max-w-full overflow-x-auto overscroll-x-contain [&_a]:rounded-panel [&_button]:rounded-panel [&_a]:active:translate-y-px [&_button]:active:translate-y-px motion-reduce:[&_a]:transform-none motion-reduce:[&_button]:transform-none',
+            wrapActionsOnMobile && 'order-3 basis-full sm:order-none sm:basis-auto',
+          )}
+          data-mobile-navigation-layout={wrapActionsOnMobile ? 'wrapped' : undefined}
           data-hermes-primary-navigation="true"
           data-hermes-protected="true"
         >
@@ -57,6 +64,7 @@ function ShellHeader({ actions, actionsKind = 'navigation', compactBrandOnMobile
           {actions}
         </div>
       ) : null}
+      {utilities ? <div className="ml-auto flex shrink-0 items-center gap-2 sm:ml-0" data-shell-utility="true">{utilities}</div> : null}
     </header>
   );
 }

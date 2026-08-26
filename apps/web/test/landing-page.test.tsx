@@ -10,6 +10,7 @@ vi.mock('next-intl', () => ({
       'nav.create': 'Create',
       'nav.about': 'About',
       'nav.login': 'Log in',
+      'nav.desk': 'Research desk',
       'hero.kicker': 'Research, as a living object',
       'hero.subtitle': 'Evidence, structure and versions remain connected.',
       'hero.ctaExplore': 'Explore research',
@@ -167,5 +168,19 @@ describe('Optical Editorial landing page', () => {
     expect(navigation).toContain('text-os-muted-paper');
     expect(navigation).toContain('border-os-rule-paper text-os-ink');
     expect(navigation).not.toContain('text-os-muted-dark');
+  });
+
+  it('keeps Landing navigation frozen while public product pages expose the research desk', async () => {
+    const { default: SiteHeader } = await import('../components/landing/SiteHeader');
+    const landing = renderToStaticMarkup(<SiteHeader />);
+    const publicProduct = renderToStaticMarkup(<SiteHeader active="explore" context="public-product" tone="paper" />);
+
+    expect(landing).not.toContain('href="/dashboard"');
+    expect(publicProduct).toContain('href="/dashboard"');
+    expect(publicProduct).toMatch(/aria-current="page"[^>]*href="\/explore"/u);
+    expect(publicProduct).toContain('href="/research-objects/new"');
+    expect(publicProduct).toContain('href="/auth/login"');
+    expect(publicProduct).toContain('data-mobile-navigation-grid="true"');
+    expect(landing).not.toContain('data-mobile-navigation-grid="true"');
   });
 });

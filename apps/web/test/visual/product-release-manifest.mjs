@@ -5,7 +5,7 @@ export const PRODUCT_RELEASE_VIEWPORTS = Object.freeze([
 ]);
 
 const surfaces = Object.freeze([
-  { surface: 'landing', route: '/', state: 'optical-resting' },
+  { surface: 'landing', route: '/', state: 'optical-resting', motionContract: 'visible-optical' },
   { surface: 'workspace', route: '/research-objects/ro-release/edit', state: 'proposal-ready' },
   { surface: 'public', route: '/research/OSR-DEMO-000001/v/1', state: 'published-reading' },
   { surface: 'auth', route: '/auth/register', state: 'request-code' },
@@ -27,7 +27,13 @@ const surfaces = Object.freeze([
 
 export const PRODUCT_RELEASE_CASES = Object.freeze([
   ...surfaces.flatMap((surface) => PRODUCT_RELEASE_VIEWPORTS.map((viewport) => ({ ...surface, viewport, reducedMotion: false }))),
-  ...PRODUCT_RELEASE_VIEWPORTS.map((viewport) => ({ ...surfaces[0], state: 'optical-reduced', viewport, reducedMotion: true })),
+  ...PRODUCT_RELEASE_VIEWPORTS.map((viewport) => ({
+    ...surfaces[0],
+    state: 'optical-reduced',
+    viewport,
+    reducedMotion: true,
+    motionContract: 'static-optical',
+  })),
 ]);
 
 export const PRODUCT_RELEASE_BUDGETS = Object.freeze({

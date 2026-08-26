@@ -1,4 +1,4 @@
-import { expect, test, type Page, type Route } from 'playwright/test';
+import { expect, test, type Locator, type Page, type Route } from 'playwright/test';
 
 import { PRODUCT_RELEASE_BUDGETS, PRODUCT_RELEASE_CASES } from '../visual/product-release-manifest.mjs';
 
@@ -89,8 +89,112 @@ async function prepareNamedState(page: Page, surface: string, viewportWidth: num
   }
 }
 
+async function measureOpticalTitleMotion(page: Page, before: Buffer, after: Buffer) {
+  return page.evaluate(async ({ afterBase64, beforeBase64 }) => {
+    const decode = async (encoded: string) => {
+      const blob = await (await fetch(`data:image/png;base64,${encoded}`)).blob();
+      const bitmap = await createImageBitmap(blob);
+      const canvas = document.createElement('canvas');
+      canvas.width = bitmap.width;
+      canvas.height = bitmap.height;
+      const context = canvas.getContext('2d', { willReadFrequently: true });
+      if (!context) throw new Error('Landing release gate could not decode the final composite');
+      context.drawImage(bitmap, 0, 0);
+      return context.getImageData(0, 0, bitmap.width, bitmap.height);
+    };
+    const first = await decode(beforeBase64);
+    const second = await decode(afterBase64);
+    const quadrants = [0, 0, 0, 0];
+    let titleCount = 0;
+    let titleDelta = 0;
+    let titleTotal = 0;
+    for (let y = 0; y < first.height; y += 1) {
+      for (let x = 0; x < first.width; x += 1) {
+        const offset = (y * first.width + x) * 4;
+        const delta = Math.max(
+          Math.abs(first.data[offset] - second.data[offset]),
+          Math.abs(first.data[offset + 1] - second.data[offset + 1]),
+          Math.abs(first.data[offset + 2] - second.data[offset + 2]),
+        );
+        const inTitleBand = y >= first.height * .30 && y <= first.height * .70;
+        if (inTitleBand) titleTotal += 1;
+        if (delta < 3) continue;
+        if (inTitleBand) {
+          titleCount += 1;
+          titleDelta += delta;
+        }
+        quadrants[(y >= first.height / 2 ? 2 : 0) + (x >= first.width / 2 ? 1 : 0)] += 1;
+      }
+    }
+    return { quadrants, titleCount, titleDelta, titleTotal };
+  }, { afterBase64: after.toString('base64'), beforeBase64: before.toString('base64') });
+}
+
+async function assertVisibleOpticalMotion(page: Page, acceptedSurface: Locator) {
+  const canvas = acceptedSurface.locator('canvas[data-optical-asset-interaction-canvas="true"]');
+  await expect(canvas).toHaveCount(1, { timeout: 10_000 });
+  await expect(acceptedSurface).toHaveAttribute('data-render-mode', 'asset-interactive');
+  await page.waitForFunction(() => window.__OPENSCIENCE_OPTICAL_ASSET_INTERACTION__?.activeRaf === true);
+  const idle = await page.evaluate(() => window.__OPENSCIENCE_OPTICAL_ASSET_INTERACTION__);
+  expect(idle?.ambientStrength).toBe(.05);
+  expect(idle?.follow).toBe(0);
+
+  for (let index = 0; index < 3; index += 1) {
+    const phaseBefore = await page.evaluate(() => window.__OPENSCIENCE_OPTICAL_ASSET_INTERACTION__?.ambientPhase);
+    const before = await acceptedSurface.screenshot();
+    await page.waitForTimeout(1_200);
+    const after = await acceptedSurface.screenshot();
+    const phaseAfter = await page.evaluate(() => window.__OPENSCIENCE_OPTICAL_ASSET_INTERACTION__?.ambientPhase);
+    const motion = await measureOpticalTitleMotion(page, before, after);
+    expect(phaseBefore).toEqual(expect.any(Number));
+    expect(phaseAfter).toEqual(expect.any(Number));
+    expect(phaseAfter).not.toBe(phaseBefore);
+    expect(motion.titleCount / motion.titleTotal).toBeGreaterThanOrEqual(.18);
+    expect(motion.titleDelta / motion.titleTotal).toBeGreaterThanOrEqual(1.10);
+    expect(motion.quadrants.every((count) => count > 0)).toBe(true);
+  }
+
+  const bounds = await acceptedSurface.boundingBox();
+  if (!bounds) throw new Error('Landing optical surface has no visible bounds');
+  const startX = bounds.x + bounds.width * .3;
+  const endX = bounds.x + bounds.width * .7;
+  const y = bounds.y + bounds.height * .45;
+  await page.mouse.move(startX, y);
+  await page.waitForTimeout(48);
+  await page.mouse.move(endX, y, { steps: 2 });
+  await page.waitForFunction(() => {
+    const snapshot = window.__OPENSCIENCE_OPTICAL_ASSET_INTERACTION__;
+    return Boolean(snapshot && snapshot.activeRaf && snapshot.follow > .05);
+  }, undefined, { polling: 'raf', timeout: 2_000 });
+  const response = await page.evaluate(() => window.__OPENSCIENCE_OPTICAL_ASSET_INTERACTION__);
+  expect(response?.follow).toBeGreaterThan(.05);
+  expect(response?.pointerX).toBeGreaterThan(.5);
+  await page.waitForFunction(() => {
+    const snapshot = window.__OPENSCIENCE_OPTICAL_ASSET_INTERACTION__;
+    return Boolean(snapshot && snapshot.follow === 0 && snapshot.causticGain === 0);
+  }, undefined, { polling: 'raf', timeout: 1_500 });
+}
+
+function expectedGlobalRoutes(surface: string) {
+  if (surface === 'landing') return ['/explore', '/research-objects/new', '/auth/login'];
+  if (surface === 'auth' || surface === 'login') return ['/dashboard', '/explore'];
+  if (surface === 'public' || surface === 'explore' || surface === 'collection') {
+    return ['/dashboard', '/explore', '/research-objects/new', '/auth/login'];
+  }
+  return ['/dashboard', '/explore', '/research-objects/new', '/settings'];
+}
+
+async function assertGlobalRouteNavigation(page: Page, surface: string) {
+  for (const href of expectedGlobalRoutes(surface)) {
+    const routeLink = page.locator(`header a[href="${href}"]`);
+    await expect(routeLink, `${surface} must expose ${href} in its page header`).toHaveCount(1);
+    await expect(routeLink, `${surface} must keep ${href} visibly reachable`).toBeVisible();
+    expect(await routeLink.evaluate((element) => element.scrollWidth - element.clientWidth), `${surface} must not clip the ${href} label`).toBeLessThanOrEqual(1);
+  }
+}
+
 for (const releaseCase of PRODUCT_RELEASE_CASES) {
-  const { surface, route, state, viewport, reducedMotion } = releaseCase;
+  const { surface, route, state, viewport, reducedMotion, motionContract } = releaseCase;
   const name = `${surface} / ${state} / ${viewport.name}${reducedMotion ? ' / reduced' : ''}`;
 
   test(name, async ({ browser }) => {
@@ -116,6 +220,7 @@ for (const releaseCase of PRODUCT_RELEASE_CASES) {
     });
     await expect(page.locator('main')).toHaveCount(1);
     await expect(page.locator('h1')).toHaveCount(1);
+    await assertGlobalRouteNavigation(page, surface);
     expect(await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)).toBe(0);
     expect(await page.evaluate(() => [...document.querySelectorAll<HTMLElement>('button,input:not([type="hidden"]),select,textarea')]
       .filter((element) => {
@@ -178,7 +283,7 @@ for (const releaseCase of PRODUCT_RELEASE_CASES) {
     expect(postStateGeometry.companionOverlaps).toEqual([]);
     expect(await page.locator('[data-hermes-placement="anchored"] [data-hermes-performance-bubble][data-hermes-speech-visible="true"]').count()).toBe(0);
 
-    if (reducedMotion) {
+    if (motionContract === 'static-optical') {
       expect(await page.evaluate(() => matchMedia('(prefers-reduced-motion: reduce)').matches)).toBe(true);
       const acceptedSurface = page.locator('[data-accepted-optical-surface="landing"]');
       await expect(acceptedSurface).toHaveCount(1);
@@ -186,6 +291,9 @@ for (const releaseCase of PRODUCT_RELEASE_CASES) {
       await expect(acceptedSurface.locator('[data-optical-lab-target-typography-plate="true"]')).toHaveCount(1);
       await expect(acceptedSurface.locator('canvas[data-optical-asset-interaction-canvas="true"]')).toHaveCount(0);
       await expect(acceptedSurface).toHaveAttribute('data-render-mode', 'asset-static');
+    }
+    if (motionContract === 'visible-optical') {
+      await assertVisibleOpticalMotion(page, page.locator('[data-accepted-optical-surface="landing"]'));
     }
 
     const metrics = await page.evaluate(() => {
@@ -208,6 +316,26 @@ for (const releaseCase of PRODUCT_RELEASE_CASES) {
       fullPage: true,
       animations: 'disabled',
     });
+    await context.close();
+  });
+}
+
+for (const compactCase of [
+  { surface: 'dashboard', route: '/dashboard' },
+  { surface: 'auth', route: '/auth/register' },
+  { surface: 'public', route: '/research/OSR-DEMO-000001/v/1' },
+  { surface: 'workspace', route: '/research-objects/ro-release/edit' },
+  { surface: 'review', route: '/research-objects/ro-release/hermes?task=ingestion-release' },
+]) {
+  test(`compact navigation / ${compactCase.surface} / 320px`, async ({ browser }) => {
+    const context = await browser.newContext({ viewport: { width: 320, height: 740 }, deviceScaleFactor: 1 });
+    const page = await context.newPage();
+    await installClientFixtures(page);
+    await page.goto(`${baseUrl}${compactCase.route}`, { waitUntil: 'networkidle' });
+    await page.evaluate(() => document.fonts.ready);
+    await assertGlobalRouteNavigation(page, compactCase.surface);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)).toBe(0);
+    await page.screenshot({ path: `${outDir}/compact-navigation-${compactCase.surface}-320x740.png`, animations: 'disabled' });
     await context.close();
   });
 }

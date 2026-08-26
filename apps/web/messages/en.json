@@ -15,6 +15,16 @@
     "skipToContent": "Skip to research content",
     "primaryNavigation": "Primary navigation"
   },
+  "productNavigation": {
+    "dashboard": "Research desk",
+    "dashboardShort": "Desk",
+    "explore": "Explore",
+    "exploreShort": "Explore",
+    "create": "New research",
+    "createShort": "New RO",
+    "settings": "Settings",
+    "settingsShort": "Settings"
+  },
   "editor": {
     "common": {
       "cancel": "Cancel"
@@ -323,7 +333,8 @@
       "explore": "Explore",
       "create": "Create",
       "about": "About",
-      "login": "Log in"
+      "login": "Log in",
+      "desk": "Research desk"
     },
     "hero": {
       "kicker": "Research, as a living object",

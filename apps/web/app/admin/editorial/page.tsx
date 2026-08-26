@@ -2,6 +2,7 @@
 
 import * as React from 'react';
 import { useTranslations } from 'next-intl';
+import { DashboardShell } from '@/components/shell/DashboardShell';
 import {
   createEditorialSelectionApi,
   getAdminEditorialCollection,
@@ -15,6 +16,7 @@ const SLUG = 'ultrafast-science';
 
 export default function EditorialAdminPage() {
   const t = useTranslations('editorialAdmin');
+  const shell = useTranslations('shell');
   const [collection, setCollection] = React.useState<EditorialCollectionApi | null>(null);
   const [candidates, setCandidates] = React.useState<EditorialCandidateApi[]>([]);
   const [candidate, setCandidate] = React.useState('');
@@ -61,7 +63,12 @@ export default function EditorialAdminPage() {
   }
 
   return (
-    <main className="surface-folio min-h-dvh px-5 py-10 sm:px-10 lg:px-16" data-editorial-admin="true">
+    <DashboardShell
+      data-editorial-admin="true"
+      mainClassName="px-5 py-10 sm:px-10 lg:px-16"
+      navigationLabel={shell('primaryNavigation')}
+      skipLabel={shell('skipToContent')}
+    >
       <div className="mx-auto max-w-[100rem]">
         <header className="flex flex-wrap items-end justify-between gap-6 border-b border-white/20 pb-6">
           <div><p data-reading-role="caption" className="text-os-vermilion-ink">{t('eyebrow')}</p><h1 className="mt-3 text-[clamp(2rem,4vw,2.75rem)] font-normal leading-[1.08] tracking-[-0.03em] text-os-ink">{collection?.title ?? 'Ultrafast Science'}</h1></div>
@@ -82,6 +89,6 @@ export default function EditorialAdminPage() {
           </section>
         </div>
       </div>
-    </main>
+    </DashboardShell>
   );
 }

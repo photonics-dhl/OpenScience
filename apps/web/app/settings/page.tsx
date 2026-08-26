@@ -19,10 +19,10 @@ export default function SettingsPage() {
   const [busy, setBusy] = useState(false);
   useEffect(() => { void getCurrentUser().then(setUser).catch(setError); }, []);
   async function signOut() { setBusy(true); try { await logout(); router.replace('/auth/login'); } catch (cause) { setError(cause as Error); setBusy(false); } }
-  if (error) return <DashboardShell navigationLabel={t('settings.navigation')} skipLabel={t('settings.skip')}><SurfaceState detail={error.message} kind={error instanceof ApiClientError && error.status === 403 ? 'forbidden' : 'error'} title={t('state.errorTitle')} /></DashboardShell>;
-  if (!user) return <DashboardShell navigationLabel={t('settings.navigation')} skipLabel={t('settings.skip')}><SurfaceState detail={t('state.loadingBody')} kind="loading" title={t('settings.title')} /></DashboardShell>;
+  if (error) return <DashboardShell activeRoute="settings" navigationLabel={t('settings.navigation')} skipLabel={t('settings.skip')}><SurfaceState detail={error.message} kind={error instanceof ApiClientError && error.status === 403 ? 'forbidden' : 'error'} title={t('state.errorTitle')} /></DashboardShell>;
+  if (!user) return <DashboardShell activeRoute="settings" navigationLabel={t('settings.navigation')} skipLabel={t('settings.skip')}><SurfaceState detail={t('state.loadingBody')} kind="loading" title={t('settings.title')} /></DashboardShell>;
   return (
-    <DashboardShell navigationLabel={t('settings.navigation')} skipLabel={t('settings.skip')}>
+    <DashboardShell activeRoute="settings" navigationLabel={t('settings.navigation')} skipLabel={t('settings.skip')}>
       <header className="max-w-3xl border-b border-os-rule-paper pb-6">
         <p data-reading-role="caption" className="text-os-vermilion-ink">{t('settings.kicker')}</p>
         <h1 className="mt-2 text-[clamp(2rem,4vw,2.75rem)] font-normal text-os-ink">{t('settings.title')}</h1>

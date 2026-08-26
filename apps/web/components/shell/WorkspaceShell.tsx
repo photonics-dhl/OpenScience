@@ -1,6 +1,7 @@
 import * as React from 'react';
 
 import { cn } from '@/lib/utils';
+import { ProductRouteNavigation } from '@/components/navigation/ProductRouteNavigation';
 import { ShellHeader, SkipLink } from './ShellPrimitives';
 
 export interface WorkspaceShellProps extends React.HTMLAttributes<HTMLDivElement> {
@@ -35,7 +36,14 @@ function WorkspaceShell({
   return (
     <div className={cn('surface-folio min-h-dvh', className)} data-os-surface="workspace" {...props}>
       <SkipLink tone="paper">{skipLabel}</SkipLink>
-      <ShellHeader actions={headerActions} actionsKind="group" compactBrandOnMobile navigationLabel={navigationLabel} tone="paper" />
+      <ShellHeader
+        actions={<ProductRouteNavigation />}
+        compactBrandOnMobile
+        navigationLabel={navigationLabel}
+        tone="paper"
+        utilities={headerActions}
+        wrapActionsOnMobile
+      />
       <div className="flex min-h-16 items-center border-b border-os-rule-paper px-4 sm:px-6 lg:px-8" data-object-context-bar="true">
         {objectHeader}
       </div>

@@ -6,16 +6,19 @@ import { useSearchParams } from 'next/navigation';
 import { useEffect, useMemo, useState } from 'react';
 import { HermesAssistantDrawer } from '@/components/hermes/HermesAssistantDrawer';
 import { HermesDockAnchor } from '@/components/hermes/HermesDockAnchor';
+import { ResearchWorkspaceNav } from '@/components/research/ResearchWorkspaceNav';
+import { DashboardShell } from '@/components/shell/DashboardShell';
 import { ApiClientError, confirmIngestionTask, getIngestionTask, type IngestionTaskDetail, type SdfCore } from '@/lib/api';
 
 const fields: Array<keyof SdfCore> = ['problem', 'insight', 'method', 'results', 'limitations', 'reproducibility'];
 const emptyCore = (): SdfCore => ({ schemaVersion: '0.1.0', problem: '', insight: '', method: '', results: '', limitations: '', reproducibility: '' });
-export default function HermesReviewPage() {
-  const params = useSearchParams();
+export default function HermesReviewPage({ params: routeParams }: { params: { id: string } }) {
+  const searchParams = useSearchParams();
   const locale = useLocale() as 'zh' | 'en';
   const t = useTranslations('hermesReview');
+  const shell = useTranslations('shell');
   const statusT = useTranslations('ingestion.status');
-  const taskId = params.get('task') ?? '';
+  const taskId = searchParams.get('task') ?? '';
   const [detail, setDetail] = useState<IngestionTaskDetail | null>(null);
   const [core, setCore] = useState<SdfCore>(emptyCore);
   const [error, setError] = useState('');
@@ -51,8 +54,21 @@ export default function HermesReviewPage() {
     finally { setSaving(false); }
   }
 
-  if (!taskId) return <main className="surface-folio min-h-screen p-8 text-os-ink"><p role="alert">{t('missingTask')}</p></main>;
-  return <main className="surface-folio min-h-screen px-4 py-7 text-os-ink sm:px-8 lg:px-12">
+  const workspaceNavigation = (
+    <div className="overflow-x-auto border-b border-os-rule-paper" data-workspace-mode-tabs="true">
+      <ResearchWorkspaceNav active="sdf" objectId={routeParams.id} />
+    </div>
+  );
+
+  if (!taskId) return (
+    <DashboardShell mainClassName="p-0" navigationLabel={shell('primaryNavigation')} skipLabel={shell('skipToContent')}>
+      {workspaceNavigation}
+      <div className="min-h-[calc(100dvh-7rem)] p-8 text-os-ink"><p role="alert">{t('missingTask')}</p></div>
+    </DashboardShell>
+  );
+  return <DashboardShell mainClassName="p-0" navigationLabel={shell('primaryNavigation')} skipLabel={shell('skipToContent')}>
+    {workspaceNavigation}
+    <div className="min-h-[calc(100dvh-7rem)] px-4 py-7 text-os-ink sm:px-8 lg:px-12">
     <div className="mx-auto max-w-[90rem]">
       <Link href="/dashboard" className="inline-flex min-h-11 items-center text-sm font-semibold text-os-vermilion-ink hover:underline">← {t('back')}</Link>
       <header className="mt-5 max-w-3xl border-l-2 border-os-vermilion-ink pl-5">
@@ -91,5 +107,6 @@ export default function HermesReviewPage() {
         />
       </div>}
     </div>
-  </main>;
+    </div>
+  </DashboardShell>;
 }

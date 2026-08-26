@@ -1,13 +1,20 @@
 # OpenScience 进度（CURRENT window）
 
-> 最新同步：2026-08-26 00:42 +08。历史由 Git 保存；旧计划和 archive 不作为默认输入。
+> 最新同步：2026-08-26 09:52 +08。历史由 Git 保存；旧计划和 archive 不作为默认输入。
 
 ## Current version tuple
 
-- Branch / application / immutable release: `codex/hermes-wanko-live2d` / `9aef5c4d54d10b27a59389fa6865d179feb1891a` / `8395b4d5cc11cb444aac3b638cff4ccc993ef9f2`。
+- Branch / local candidate base / deployed application / immutable release: `codex/hermes-wanko-live2d` / `460bd8780eefa1d6a656ad389fde23d388e684e7` + uncommitted candidate / `9aef5c4d54d10b27a59389fa6865d179feb1891a` / `8395b4d5cc11cb444aac3b638cff4ccc993ef9f2`。
 - Current rollback 为前一健康 release `bf54eaa2cd499f68eee8ce311a1ed178027a5348`；post-deploy docs HEAD 不与应用身份混写。
 - Local main / origin main: `c60ffdd16b85ea8f0d8b047493fa03a4c0230c05` / `7eb2f5bc4718ee445b79bd089acb64acb3691e62`；两者都早于当前工作分支，远端 Hermes feature 不存在。
 - ECS release / rollback: `8395b4d5cc11cb444aac3b638cff4ccc993ef9f2` / `bf54eaa2cd499f68eee8ce311a1ed178027a5348`。
+
+## 2026-08-26 — Landing motion and product-route continuity candidate
+
+- 用户将 Hermes 形象阶段收口；本候选不改 Hermes 组件、资产、尺寸、动作、语言或布局，只保留 10 条现行 Hermes 浏览器回归。
+- 公网检查确认当前 `8395b4d` Landing 仍有 interactive canvas、RAF、`.05` ambient 与 pointer response；真正缺口是 canonical product release 过去只检查 DOM/reduced-motion，Hermes 部署也未强制运行 final-composite visible-motion gate。本候选将正常 Landing 的标题区连续像素变化、四象限覆盖、指针跟随与恢复纳入 release contract，保留 approved optical 参数不变。
+- 新增全站一级研究入口：Research desk / Explore / New research / Settings；公开阅读与 collection 同时保留 Home wordmark、Desk、Explore、Create、Login；RO 内继续使用 Overview/SDF/Files/Versions/Collaboration/Publish/Sandbox 二级导航。Dashboard loading/error、注册/登录、Hermes evidence review 与 curator 均不再是死路。
+- 390px 原尺寸复核发现首项虽存在却裁切 `6px`，已用品牌/utility 第一行 + 四入口第二行及明确短标签修复；浏览器门禁现逐链接验证 visible 与 `scrollWidth <= clientWidth`。Fresh candidate evidence：Web `420+5`、全仓 typecheck/lint/docs-sync/docs-lint/test/build、19-page build、product release `72/72` 与 `git diff --check` GREEN；新增 320px Dashboard/Auth/Public/Workspace/Review 五壳层实测。尚未 commit、push 或部署，ECS 仍为 `8395b4d`。
 
 ## 2026-08-26 — Detached Hermes menu correction deployed
 
@@ -66,32 +73,15 @@
 - 发布后原尺寸截图复核发现旧自动 nudge 仍会压住 Hermes 状态与动效控制。hotfix `56f6cf4` 关闭锚定产品页的未请求 speech/nudge，保留右键菜单、点击 drawer、显式字段 guide 与动作反馈；修复后截图无覆盖，production release matrix 再次 `60/60`，Web 58 files / 402 tests + 5 Node contracts、typecheck、19-page build GREEN。
 - exact release `33418fd` 已以 `2abfe42` 为 rollback、`--skip-migrate` 发布；fresh backup `432K files=7/7`、server full build、27 migrations current、release/failure/rollback marker、healthy runtime、真实 route/Live2D assets 与公网 focused `4/4` 均通过。无 migration、seed 或研究数据写入。
 
-## 2026-08-24 — Research Session Folio deployed for visual review
-
-- 用户确认继续优化并授权部署；范围仍是匿名、`noindex`、零 API/数据库写入的 `/_visual/research-workbench`，没有修改认证产品页或 Landing。
-- application `bba5f14` 将首屏改为 active study → open decision → evidence → version 的真实研究会话；Hermes 进入研究页边并与决策共享锚点，菜单只在右键、`Shift+F10`、Menu 键或移动长按后出现，普通点击保持 assistant dialog。
-- 阅读字体修复为实际加载的 Source Serif 4 / Noto Serif SC；Latin `18px / 1.68`，CJK `18px / 1.82`，UI 恢复项目 Bricolage。菜单是一张低圆角纸面，不使用默认 shadcn 视觉、渐变、玻璃或独立项目卡片。
-- 主 CTA 现进入 evidence review；中文 Portal 菜单无拉丁字距；移动长按后的 synthetic click 被抑制。独立只读审查确认无 API、存储、数据写和范围漂移，全部 P2/P3 已回归覆盖。
-- Fresh local evidence：route E2E `7/7`、Web `395/395` + 5 Node contracts、typecheck、19-page production build、root lint、docs-sync、docs lint 与 `git diff --check` GREEN；ignored 原尺寸桌面/中文/反馈/editor/mobile 截图已复核。
-- ECS checkup 与 DB backup `432K files=7/7` 通过。首个 `68d8be7` 发布后的即时公网 E2E 为 `5/7`，暴露 CTA 与右键在 hydration 前操作的验收时序；CTA hotfix 使用真实 `href` 渐进增强，右键合同等待 Hermes ready。
-- hotfix `bba5f14` 经第二次 exact dry-run 与 `--skip-migrate` 部署；服务器 19-page build、27 migrations current、目标容器 healthy、route 200、精确 `/__release`、absent failure marker 和 rollback `68d8be7` 均通过。稳定公网 no-write E2E `7/7`。
-
 ## 2026-08-24 — UI taste toolchain correction
 
 - 首轮模板化视觉已否决；`ui-ux-pro-max`、`baseline-ui` 与 worktree-scoped `shadcn@4.19.0` 可用。工具只提供约束/原语证据，最终方向受 CURRENT spec §13.5 的 reject/accept 与原尺寸人工审图门约束。
 
-## 2026-08-24 — Hermes movable work assistant deployed
-
-- v09 形象和 runtime bundle 不再改动。产品尺寸为 desktop `360px`、compact/mobile `200px`；默认右栏 anchor，拖动后成为 viewport-clamped companion，位置按 desktop/mobile 持久化。
-- 紧凑 ink-edge bubble、字段引导、protected-region travel、主流程避让和 32-action semantic director 已完成；自主短句与动作是固定 4 秒 atomic beat，交互和优先任务可即时打断。
-- release 前 fresh evidence：Web `390/390` + 5 Node contracts、typecheck、18-page build、Live2D/work-assistant gates、canonical product E2E `40/40`；独立最终 review 无 Critical/Important/Minor。
-- 生产以 `--skip-migrate` 部署；未 migration、未 seed。公网三视口 Dashboard click/drag/reload/resize/bubble/Create gate 通过且使用无写入 API 拦截；没有生产 session token，因此未声称真实账号/数据库纵向 gate。
-
 ## Constraints and next action
 
-- production `bf54eaa` 已完成 immutable ECS 与公网无写入 `9/9` 验收；下一步由用户在真实 Dashboard/mobile/editor 复核菜单可见性、动作生动程度、话语变化和整体节奏。
-- 用户随后在 Dashboard、移动端和 quiet editor 验收轮廓连续、嘴部连接、菜单密度/间距与动作反馈；明确接受前不得称视觉通过。
-- Landing 不变；分支未集成，后续单独决定 merge / PR / 保留。
+- Hermes 形象阶段已收口；本候选只允许保持现有回归，不得顺带修改角色、菜单、气泡或动作。
+- Landing 视觉参数不变；新 release gate 必须证明正常模式 final-composite visible motion 与 reduced-motion 静态回退。
+- 本地候选尚未 commit/push/deploy；部署前记录 immutable application/rollback 并再次取得 cloud-write confirmation。
 
 ## Read first
 

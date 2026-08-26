@@ -15,6 +15,16 @@
     "skipToContent": "跳到科研内容",
     "primaryNavigation": "主导航"
   },
+  "productNavigation": {
+    "dashboard": "研究桌面",
+    "dashboardShort": "工作台",
+    "explore": "探索",
+    "exploreShort": "探索",
+    "create": "新建研究",
+    "createShort": "新建 RO",
+    "settings": "设置",
+    "settingsShort": "设置"
+  },
   "editor": {
     "common": {
       "cancel": "取消"
@@ -323,7 +333,8 @@
       "explore": "探索",
       "create": "创建",
       "about": "关于",
-      "login": "登录"
+      "login": "登录",
+      "desk": "研究桌面"
     },
     "hero": {
       "kicker": "研究，作为持续演化的对象",

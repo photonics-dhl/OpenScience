@@ -183,7 +183,7 @@ export default function NewResearchObjectPage() {
 
   return (
     <DashboardShell
-      headerActions={<Link data-reading-role="control" className="text-sm text-os-muted-paper hover:text-os-ink" href="/dashboard">← {t('back')}</Link>}
+      activeRoute="create"
       navigationLabel={t('navigationLabel')}
       skipLabel={t('skipLabel')}
     >

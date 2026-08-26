@@ -9,7 +9,7 @@ export function EditorialCollection({ collection }: { collection: EditorialColle
     <section className="min-h-screen bg-os-paper px-4 py-12 text-os-ink sm:px-8 lg:px-16 lg:py-20" data-editorial-collection="true">
       <div className="mx-auto max-w-[88rem]">
         <div className="flex items-start justify-between gap-8 border-b border-os-rule-paper pb-5">
-          <Link href="/" className="font-data text-xs uppercase tracking-[0.18em] text-os-ink no-underline hover:text-os-vermilion">OpenScience.</Link>
+          <span className="font-data text-xs uppercase tracking-[0.18em] text-os-vermilion">{t('eyebrow')}</span>
           <span className="font-data text-[0.65rem] uppercase tracking-[0.18em] text-os-muted-paper">{t('edition')}</span>
         </div>
         <header className="grid gap-6 border-b border-os-rule-paper py-10 lg:grid-cols-[1.15fr_0.85fr] lg:items-end lg:py-14">

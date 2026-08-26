@@ -3,6 +3,8 @@ import { getLatestPublicResearchVersion, PublicServerApiError } from '../../../l
 import type { Metadata } from 'next';
 import { notFound } from 'next/navigation';
 import { getTranslations } from 'next-intl/server';
+import SiteHeader from '@/components/landing/SiteHeader';
+import { PublicShell } from '@/components/shell/PublicShell';
 
 /** P1D-9：RO 概览（最新版本，§6.1 稳定 URL）。 */
 
@@ -31,14 +33,37 @@ export async function generateMetadata({ params }: { params: { publicId: string 
 }
 
 export default async function Page({ params }: { params: { publicId: string } }) {
+  const shell = await getTranslations('shell');
   try {
     const res = await getLatestPublicResearchVersion(params.publicId);
     const r = res.research;
-    return <main className="pub-page-tabbed"><PublicReadingSurface research={r} /></main>;
+    return (
+      <PublicShell
+        headerActions={<SiteHeader context="public-product" tone="paper" />}
+        navigationLabel={shell('primaryNavigation')}
+        skipLabel={shell('skipToContent')}
+        tone="paper"
+        wrapHeaderActionsOnMobile
+      >
+        <div className="pub-page-tabbed"><PublicReadingSurface research={r} /></div>
+      </PublicShell>
+    );
   } catch (err) {
     if (err instanceof PublicServerApiError && err.status === 404) notFound();
     const t = await getTranslations('public');
     const limited = err instanceof PublicServerApiError && err.status === 429;
-    return <main className="pub-page"><h1>{t(limited ? 'rateLimited.title' : 'unavailable.title')}</h1><p>{t(limited ? 'rateLimited.body' : 'unavailable.body')}</p></main>;
+    return (
+      <PublicShell
+        headerActions={<SiteHeader context="public-product" tone="paper" />}
+        mainClassName="pub-page"
+        navigationLabel={shell('primaryNavigation')}
+        skipLabel={shell('skipToContent')}
+        tone="paper"
+        wrapHeaderActionsOnMobile
+      >
+        <h1>{t(limited ? 'rateLimited.title' : 'unavailable.title')}</h1>
+        <p>{t(limited ? 'rateLimited.body' : 'unavailable.body')}</p>
+      </PublicShell>
+    );
   }
 }
