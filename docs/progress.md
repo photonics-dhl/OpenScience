@@ -5,7 +5,7 @@
 ## 2026-08-26 — Hermes Research Intelligence Foundation 本地实现
 
 - Taskmaster Task 1 Foundation 已完成并关闭：能力台账新增机器门禁，21 行能力主表及 11 行候选 owner/license/version/resource/latency/cost/data-flow/evaluation/kill-switch/rollback 矩阵受一一对应、列数、状态、空字段、占位符与凭据形态检查；入口为 `audit:hermes-capabilities`。
-- 新增 13 项自著权 deterministic corpus 与 schema 1 哈希/locator 清单，不使用用户文件，覆盖 native/scanned/dual-column PDF、table、formula、references、DOCX、TeX、Markdown、CSV/XLSX、notebook 与 code。
+- 新增 13 项自著权 deterministic corpus 与 schema 1 哈希/locator 清单，不使用用户文件，覆盖 native/scanned/dual-column PDF、table、formula、references、DOCX、TeX、Markdown、CSV/XLSX、notebook 与 code；`.gitattributes` 为机器清单强制 LF，避免 Windows fresh checkout 破坏 byte-stable 门禁。
 - ignored current-parser report 只保存 ID/hash/status/reason/textMatched/elapsed/RSS delta；记录运行有 7 项 `ready`、6 项 expected-text matched、6 项显式复核，P50 `0.03 ms`、P95 `226.09 ms`、最大 RSS 增量 `28,672 B`。image-only PDF 因 `pdf-parse` 页分隔符出现 1 项 false-ready，已作为后续候选必须消除的基线缺陷；计时/RSS 仅为观测值。
 - Fresh acceptance：全仓 test/typecheck/lint/build、`audit:hermes-capabilities`、`docs:lint`（223 文件、0 问题）、`audit:docs-sync`（8/8，`DOCS_SYNC_OK`）与 `git diff --check` 全绿；agent-worker `57/57`。Docling/LiteParse/GROBID/PaddleOCR/BGE-M3 均保持 `APPROVED_PILOT`；MiniMax OCR 继续 `BLOCKED`。未安装依赖、未读取 `.env`、未写服务器、未部署或改变生产 release。
 
