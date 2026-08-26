@@ -80,6 +80,63 @@ describe('runDocumentParser', () => {
   });
 
   it.each([
+    ['object', { supported: true }],
+    ['string', 'yes'],
+    ['number', 1],
+  ])('rejects a truthy non-boolean %s supports result without calling parse', async (_name, supportsResult) => {
+    let supportsCalls = 0;
+    let parseCalled = false;
+    const candidate = parser({ status: 'succeeded', sourceMap: sourceMap(), warnings: [] }, {
+      supports: (() => { supportsCalls += 1; return supportsResult; }) as DocumentParser['supports'],
+      parse: async () => { parseCalled = true; return { status: 'succeeded', sourceMap: sourceMap(), warnings: [] }; },
+    });
+
+    await expect(runDocumentParser(input(), candidate)).rejects.toBeInstanceOf(ParserContractError);
+    expect(supportsCalls).toBe(1);
+    expect(parseCalled).toBe(false);
+  });
+
+  it('awaits a thenable supports result once and rejects its non-boolean resolution', async () => {
+    let supportsCalls = 0;
+    let thenCalls = 0;
+    let parseCalled = false;
+    const thenable = {
+      then: (resolve: (value: unknown) => void) => {
+        thenCalls += 1;
+        resolve({ supported: true });
+      },
+    };
+    const candidate = parser({ status: 'succeeded', sourceMap: sourceMap(), warnings: [] }, {
+      supports: (() => { supportsCalls += 1; return thenable; }) as DocumentParser['supports'],
+      parse: async () => { parseCalled = true; return { status: 'succeeded', sourceMap: sourceMap(), warnings: [] }; },
+    });
+
+    await expect(runDocumentParser(input(), candidate)).rejects.toBeInstanceOf(ParserContractError);
+    expect(supportsCalls).toBe(1);
+    expect(thenCalls).toBe(1);
+    expect(parseCalled).toBe(false);
+  });
+
+  it('reads a changing supports callback once before validating its result', async () => {
+    let supportsReads = 0;
+    let parseCalled = false;
+    const candidate = parser({ status: 'succeeded', sourceMap: sourceMap(), warnings: [] }, {
+      parse: async () => { parseCalled = true; return { status: 'succeeded', sourceMap: sourceMap(), warnings: [] }; },
+    });
+    Object.defineProperty(candidate, 'supports', {
+      configurable: true,
+      get: () => {
+        supportsReads += 1;
+        return supportsReads === 1 ? () => ({ supported: true }) : () => true;
+      },
+    });
+
+    await expect(runDocumentParser(input(), candidate)).rejects.toBeInstanceOf(ParserContractError);
+    expect(supportsReads).toBe(1);
+    expect(parseCalled).toBe(false);
+  });
+
+  it.each([
     ['source-map artifact mismatch', sourceMap({ artifactId: 'artifact-2' })],
     ['source-map hash mismatch', sourceMap({ contentHash: 'b'.repeat(64) })],
     ['map parser metadata mismatch', sourceMap({ parser: { name: 'other-parser', version: '1.0.0' } })],
@@ -218,6 +275,27 @@ describe('runDocumentParser', () => {
     });
 
     await expect(runDocumentParser(proxiedInput, candidate)).rejects.toBeInstanceOf(ParserContractError);
+    expect(trapCalls).toBe(0);
+    expect(supportsCalled).toBe(false);
+    expect(parseCalled).toBe(false);
+  });
+
+  it('rejects proxied Buffer content without invoking traps or parser callbacks', async () => {
+    let trapCalls = 0;
+    let supportsCalled = false;
+    let parseCalled = false;
+    const proxiedContent = new Proxy(Buffer.from(content), {
+      get: () => { trapCalls += 1; throw new Error('get trap reached'); },
+      getPrototypeOf: () => { trapCalls += 1; throw new Error('prototype trap reached'); },
+      getOwnPropertyDescriptor: () => { trapCalls += 1; throw new Error('descriptor trap reached'); },
+      ownKeys: () => { trapCalls += 1; throw new Error('ownKeys trap reached'); },
+    });
+    const candidate = parser({ status: 'succeeded', sourceMap: sourceMap(), warnings: [] }, {
+      supports: () => { supportsCalled = true; return true; },
+      parse: async () => { parseCalled = true; return { status: 'succeeded', sourceMap: sourceMap(), warnings: [] }; },
+    });
+
+    await expect(runDocumentParser(input({ content: proxiedContent }), candidate)).rejects.toBeInstanceOf(ParserContractError);
     expect(trapCalls).toBe(0);
     expect(supportsCalled).toBe(false);
     expect(parseCalled).toBe(false);

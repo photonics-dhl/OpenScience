@@ -239,9 +239,13 @@ function equalMetadata(actual: DocumentParserMetadata, expected: DocumentParserM
 /** Executes an untrusted parser behind a bounded, canonicalized domain contract. */
 export async function runDocumentParser(input: ParserInput, parser: DocumentParser): Promise<ExtractionResult<DocumentSourceMap>> {
   const snapshot = snapshotInput(input, parser);
-  if (typeof parser.supports !== 'function' || typeof parser.parse !== 'function') contract('DocumentParser must implement supports and parse');
-  if (!await parser.supports(callbackInput(snapshot.input))) contract('Document parser does not support this input');
-  const result = parseResult(await parser.parse(callbackInput(snapshot.input)));
+  const supports = parser.supports;
+  const parse = parser.parse;
+  if (typeof supports !== 'function' || typeof parse !== 'function') contract('DocumentParser must implement supports and parse');
+  const supported = await supports.call(parser, callbackInput(snapshot.input));
+  if (typeof supported !== 'boolean') contract('DocumentParser supports must return a boolean');
+  if (!supported) contract('Document parser does not support this input');
+  const result = parseResult(await parse.call(parser, callbackInput(snapshot.input)));
   if (result.status !== 'succeeded' && result.status !== 'needs_review') return result;
   if (result.sourceMap.artifactId !== snapshot.input.artifactId) contract('DocumentSourceMap artifactId does not match parser input');
   if (result.sourceMap.contentHash !== snapshot.input.contentHash) contract('DocumentSourceMap contentHash does not match parser input');
