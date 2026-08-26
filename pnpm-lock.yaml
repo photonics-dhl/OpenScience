@@ -427,7 +427,24 @@ importers:
         specifier: ^2
         version: 2.1.9(@types/node@20.14.10)(lightningcss@1.32.0)
 
-  packages/search: {}
+  packages/search:
+    dependencies:
+      '@openscience/config':
+        specifier: workspace:^
+        version: link:../config
+      '@prisma/client':
+        specifier: 5.22.0
+        version: 5.22.0(prisma@5.22.0)
+    devDependencies:
+      '@types/node':
+        specifier: 20.14.10
+        version: 20.14.10
+      prisma:
+        specifier: 5.22.0
+        version: 5.22.0
+      vitest:
+        specifier: ^2
+        version: 2.1.9(@types/node@20.14.10)(lightningcss@1.32.0)
 
   packages/storage:
     dependencies:

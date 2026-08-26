@@ -31,6 +31,8 @@ node_modules/
 dist/
 .next/
 *.tsbuildinfo
+/packages/search/generated/
+/packages/search/src/generated/
 
 # Agent scratch (SDD workspace 等，过程产物不入库)
 .superpowers/

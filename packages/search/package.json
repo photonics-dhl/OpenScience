@@ -2,8 +2,23 @@
   "name": "@openscience/search",
   "private": true,
   "version": "0.0.0",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
   "scripts": {
-    "build": "tsc -p tsconfig.json",
-    "typecheck": "tsc -p tsconfig.json --noEmit"
+    "generate": "prisma generate --schema ../../infra/search/schema.prisma",
+    "build": "pnpm run generate && tsc -p tsconfig.json",
+    "typecheck": "pnpm run generate && tsc -p tsconfig.json --noEmit",
+    "test": "pnpm run generate && vitest run",
+    "migrate:deploy": "prisma migrate deploy --schema ../../infra/search/schema.prisma",
+    "migrate:status": "prisma migrate status --schema ../../infra/search/schema.prisma"
+  },
+  "dependencies": {
+    "@openscience/config": "workspace:^",
+    "@prisma/client": "5.22.0"
+  },
+  "devDependencies": {
+    "@types/node": "20.14.10",
+    "prisma": "5.22.0",
+    "vitest": "^2"
   }
 }

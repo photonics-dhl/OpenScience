@@ -21,7 +21,19 @@ test('production compose up receives the same env file used by migrate and valid
     /XGS_RELEASE_IMAGE_TAG=\$RELEASE_SHA docker compose --env-file \$PROD_ENV -f \$COMPOSE_FILE \$1/,
   );
   assert.match(source, /compose_current "up -d --wait --wait-timeout 300 \$\{services\[\*\]\}"/);
+  assert.match(source, /compose_current "run --rm --no-deps[^"]+verify-database-isolation\.mjs"/);
   assert.match(source, /compose_current "run --rm --no-deps[^"]+migrate-cli\.js deploy"/);
+  assert.match(
+    source,
+    /compose_current "run --rm --no-deps[^"]+node_modules\/prisma\/build\/index\.js migrate deploy --schema \/opt\/openscience\/infra\/search\/schema\.prisma"/,
+  );
+  assert.match(source, /grep -q '\^SEARCH_DATABASE_URL=\.' \$PROD_ENV/);
+  assert.match(source, /拒绝把搜索索引写入核心数据库/);
+  assert.doesNotMatch(source, /-e (?:SEARCH_)?DATABASE_URL=/);
+  assert.ok(
+    source.indexOf('verify-database-isolation.mjs') < source.indexOf('migrate-cli.js deploy'),
+    'database identity must be checked before the first migration',
+  );
 });
 
 test('parser starts first and must become healthy before the worker is converged', () => {

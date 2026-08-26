@@ -202,3 +202,44 @@ export {
 export { INGESTION_TASK_STATES, type ActionableIngestionTaskView, type IngestionTaskState, type IngestionFileInput, type IngestionTaskView, type IngestionBatchView } from './ingestion/ingestion-types';
 export { authorizeIngestionWrite, confirmIngestionTask, createIngestionBatch, getIngestionBatch, getIngestionTask, listActionableIngestionTasks, retryIngestionTask, type IngestionDeps } from './ingestion/ingestion-service';
 export { parseWorkspaceGuidePayload, type WorkspaceGuidePayload } from './agent/workspace-guide-contract';
+export {
+  RESEARCH_IDENTITIES,
+  CLAIM_KINDS,
+  CLAIM_ASSESSMENTS,
+  EVIDENCE_KINDS,
+  CLAIM_RELATIONS,
+  EXTRACTION_STATUSES,
+  PRESENTATION_ASSET_KINDS,
+  PRESENTATION_ASSET_STATUSES,
+  PRESENTATION_ASSET_LABEL,
+  type ResearchIdentity,
+  type ResearchIdentityProfile,
+  type InterestContext,
+  type ClaimKind,
+  type ClaimAssessment,
+  type EvidenceKind,
+  type ClaimRelation,
+  type ExtractionStatus,
+  type ExtractionProvenance,
+  type BoundingBox,
+  type SourceLocator,
+  type ClaimNode,
+  type EvidenceRecord,
+  type PresentationAssetKind,
+  type PresentationAssetStatus,
+  type PresentationAsset,
+} from './research-intelligence/types';
+export {
+  ResearchIntelligenceValidationError,
+  validateResearchIdentityProfile,
+  validateSourceLocator,
+  type ResearchIntelligenceValidationCode,
+} from './research-intelligence/validation';
+export { validateClaimGraph, type ClaimGraphNode } from './research-intelligence/claim-graph';
+export {
+  EXTRACTION_BLOCK_CODES,
+  serializeExtractionResult,
+  parseExtractionResult,
+  type ExtractionBlockCode,
+  type ExtractionResult,
+} from './research-intelligence/extraction-result';

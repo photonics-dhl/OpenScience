@@ -191,10 +191,18 @@ rollback_application() {
 trap 'rollback_application' ERR
 
 if [ "$SKIP_MIGRATE" -ne 1 ]; then
+  run_remote "grep -q '^SEARCH_DATABASE_URL=.' $PROD_ENV" || {
+    echo "错误：生产环境缺少 SEARCH_DATABASE_URL，拒绝把搜索索引写入核心数据库" >&2
+    exit 66
+  }
+  log "[2c] 验证核心库/搜索库物理隔离..."
+  compose_current "run --rm --no-deps -T -w /opt/openscience api node scripts/verify-database-isolation.mjs"
   log "[3] 迁移 deploy..."
-  compose_current "run --rm --no-deps -T -e DATABASE_URL=\$(grep '^DATABASE_URL=' $PROD_ENV | cut -d= -f2-) -w /opt/openscience api node packages/database/dist/migrate-cli.js deploy"
+  compose_current "run --rm --no-deps -T -w /opt/openscience api node packages/database/dist/migrate-cli.js deploy"
+  log "[3b] 搜索库迁移 deploy..."
+  compose_current "run --rm --no-deps -T -w /opt/openscience api node node_modules/prisma/build/index.js migrate deploy --schema /opt/openscience/infra/search/schema.prisma"
   log "[4] seed-quota..."
-  compose_current "run --rm --no-deps -T -e DATABASE_URL=\$(grep '^DATABASE_URL=' $PROD_ENV | cut -d= -f2-) -w /opt/openscience api node scripts/seed-quota.mjs --confirm"
+  compose_current "run --rm --no-deps -T -w /opt/openscience api node scripts/seed-quota.mjs --confirm"
 fi
 
 SWITCH_STARTED=1

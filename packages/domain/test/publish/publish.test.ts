@@ -30,6 +30,16 @@ async function makePublishable() {
   await setLicenses(ctx.deps, { researchObjectId: ctx.ro.id, userId: ctx.user.id, licenses: { text: 'CC-BY-4.0', code: 'MIT', data: 'CC0-1.0' } });
   const review = await runPublicationReview(ctx.deps, { versionId: ctx.versionId, userId: ctx.user.id });
   expect(review.status).toBe('passed');
+  for (let index = 1; index <= 3; index += 1) {
+    ctx.db.claimNodes.push({
+      id: `claim-${index}`,
+      researchObjectId: ctx.ro.id,
+      versionId: ctx.versionId,
+      parentClaimId: null,
+      kind: 'core',
+      statement: `Core claim ${index}`,
+    });
+  }
   return ctx;
 }
 
@@ -43,6 +53,16 @@ describe('状态机推进（§4.1）', () => {
 
   it('draft → published 非法（需经 approved）', async () => {
     const { deps, user, versionId } = await makeDeps();
+    await expect(
+      transitionVersionStatus(deps, { versionId, userId: user.id, status: 'published' }),
+    ).rejects.toThrow(/非法/);
+  });
+
+  it('approved → published 只能走原子 publishVersion 管线', async () => {
+    const { deps, user, versionId } = await makeDeps();
+    await transitionVersionStatus(deps, { versionId, userId: user.id, status: 'under_review' });
+    await transitionVersionStatus(deps, { versionId, userId: user.id, status: 'approved' });
+
     await expect(
       transitionVersionStatus(deps, { versionId, userId: user.id, status: 'published' }),
     ).rejects.toThrow(/非法/);
@@ -76,6 +96,15 @@ describe('publishVersion（§2.1-6 + 三重前置）', () => {
     ).rejects.toThrow(/R3 高影响/);
   });
 
+  it('缺少 3–7 个核心 Claim 时硬阻断发布', async () => {
+    const { deps, db, user, versionId } = await makePublishable();
+    db.claimNodes.length = 0;
+
+    await expect(
+      publishVersion(deps, { versionId, userId: user.id, r3Confirmed: true, publicIdPrefix: 'OSR' }),
+    ).rejects.toThrow(/3-7 core Claims/);
+  });
+
   it('发布成功：publicId + publicVersionId + UTC 时间戳 + 哈希 + 免责声明 + 事件', async () => {
     const { deps, user, versionId } = await makePublishable();
     const published = await publishVersion(deps, { versionId, userId: user.id, r3Confirmed: true, publicIdPrefix: 'OSR' });
@@ -93,6 +122,34 @@ describe('publishVersion（§2.1-6 + 三重前置）', () => {
     expect(notif.some((n: { type: string }) => n.type === 'version.published')).toBe(true);
     // 审计只追加
     expect(pub!.contentSha256).toBe(published.contentSha256);
+  });
+
+  it('在 Serializable 发布事务内读取并验证 Claim 图', async () => {
+    const { deps, user, versionId } = await makePublishable();
+    const prisma = deps.prisma as never as {
+      $transaction: (fn: (tx: unknown) => Promise<unknown>, options?: { isolationLevel?: string }) => Promise<unknown>;
+      claimNode: { findMany: (args: unknown) => Promise<unknown> };
+    };
+    const transaction = prisma.$transaction.bind(prisma);
+    const findMany = prisma.claimNode.findMany.bind(prisma.claimNode);
+    let inTransaction = false;
+    let isolationLevel: string | undefined;
+    prisma.$transaction = async (fn, options) => {
+      isolationLevel = options?.isolationLevel;
+      inTransaction = true;
+      try {
+        return await transaction(fn, options);
+      } finally {
+        inTransaction = false;
+      }
+    };
+    prisma.claimNode.findMany = async (args) => {
+      expect(inTransaction).toBe(true);
+      return findMany(args);
+    };
+
+    await publishVersion(deps, { versionId, userId: user.id, r3Confirmed: true, publicIdPrefix: 'OSR' });
+    expect(isolationLevel).toBe('Serializable');
   });
 
   it('幂等：已 published 再发布 → 返回既有（§2.2-3 不可原地修改）', async () => {

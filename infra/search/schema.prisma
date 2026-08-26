@@ -1,0 +1,18 @@
+generator client {
+  provider      = "prisma-client-js"
+  output        = "../../packages/search/generated/client"
+  binaryTargets = ["native", "linux-musl"]
+}
+
+datasource search {
+  provider = "postgresql"
+  url      = env("SEARCH_DATABASE_URL")
+}
+
+model SearchSchemaMeta {
+  key       String   @id
+  value     Json
+  updatedAt DateTime @default(now()) @updatedAt @map("updated_at")
+
+  @@map("search_schema_meta")
+}

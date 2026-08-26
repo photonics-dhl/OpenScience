@@ -6,6 +6,8 @@ import { notify } from '../notification/notifications';
 import { getEffectiveLicenses } from '../license/licenses';
 import { generatePublicId, versionPublicId } from '@openscience/identity';
 import type { ArtifactDeps } from '../artifact/artifacts';
+import { validateClaimGraph } from '../research-intelligence/claim-graph';
+import { ResearchIntelligenceValidationError } from '../research-intelligence/validation';
 import { PublishError } from './errors';
 
 export type VersionStatus = 'draft' | 'under_review' | 'approved' | 'published' | 'revised' | 'withdrawn' | 'rejected' | 'restricted';
@@ -14,7 +16,7 @@ export type VersionStatus = 'draft' | 'under_review' | 'approved' | 'published' 
 const TRANSITIONS: Record<VersionStatus, VersionStatus[]> = {
   draft: ['under_review', 'rejected', 'withdrawn'],
   under_review: ['approved', 'rejected'],
-  approved: ['published', 'withdrawn'],
+  approved: ['withdrawn'],
   published: ['revised', 'withdrawn', 'restricted'],
   revised: ['under_review', 'withdrawn'],
   withdrawn: [],
@@ -107,8 +109,30 @@ export async function publishVersion(
   if (!input.r3Confirmed) {
     throw new PublishError('R3_CONFIRMATION_REQUIRED', '发布属 R3 高影响操作，需显式确认（§9.4）');
   }
-
   const result = await deps.prisma.$transaction(async (tx) => {
+    const claims = await tx.claimNode.findMany({
+      where: { researchObjectId: version.researchObjectId, versionId: version.id },
+      select: {
+        id: true,
+        researchObjectId: true,
+        versionId: true,
+        parentClaimId: true,
+        kind: true,
+        statement: true,
+      },
+    });
+    try {
+      validateClaimGraph(claims.map((claim) => ({
+        ...claim,
+        parentClaimId: claim.parentClaimId ?? undefined,
+      })));
+    } catch (error) {
+      if (error instanceof ResearchIntelligenceValidationError) {
+        throw new PublishError('VALIDATION_ERROR', error.message, error);
+      }
+      throw error;
+    }
+
     // §6.1 unique ID（外层事务已开 → 内联分配）
     const year = version.researchObject.createdAt.getUTCFullYear();
     const { publicId, publicVersionId } = await assignPublicIdInternal(
@@ -140,7 +164,7 @@ export async function publishVersion(
       metadata: { researchObjectId: version.researchObjectId, publicId, publicVersionId, contentSha256 },
     }, ctx);
     return { publicId, publicVersionId, contentSha256, publishedAt, pub };
-  });
+  }, { isolationLevel: 'Serializable' });
 
   await notify(deps, {
     userId: input.userId,

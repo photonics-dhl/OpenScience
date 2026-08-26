@@ -9,6 +9,8 @@ module.exports = [
     ignores: [
       '**/dist/**',
       '**/node_modules/**',
+      'packages/search/generated/**',
+      'packages/search/src/generated/**',
       '**/.next/**',
       'infra/**',
       '**/.worktrees/**',

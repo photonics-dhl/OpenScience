@@ -42,11 +42,12 @@ interface FakeDb {
   appeals: any[];
   ingestionBatches: any[];
   ingestionTasks: any[];
+  claimNodes: any[];
 }
 
 /** 内存版 Prisma 子集：覆盖 workspace 领域用到的调用面。 */
 export function createFakePrisma(): { prisma: PrismaClient; db: FakeDb } {
-  const db: FakeDb = { users: [], workspaces: [], memberships: [], workspaceInvitations: [], mailOutbox: [], quotaPolicies: [], usageLedger: [], researchObjects: [], sdfDocuments: [], sdfNodes: [], blobs: [], artifacts: [], branches: [], commits: [], changesets: [], versions: [], versionManifests: [], manifestEntries: [], identifiers: [], publications: [], visibilityGrants: [], visibilityRequests: [], pullRequests: [], issues: [], comments: [], reviews: [], licenseAssignments: [], forkRelations: [], notifications: [], authors: [], contributions: [], agentSessions: [], agentTasks: [], toolApprovals: [], aiReviews: [], appeals: [], ingestionBatches: [], ingestionTasks: [] };
+  const db: FakeDb = { users: [], workspaces: [], memberships: [], workspaceInvitations: [], mailOutbox: [], quotaPolicies: [], usageLedger: [], researchObjects: [], sdfDocuments: [], sdfNodes: [], blobs: [], artifacts: [], branches: [], commits: [], changesets: [], versions: [], versionManifests: [], manifestEntries: [], identifiers: [], publications: [], visibilityGrants: [], visibilityRequests: [], pullRequests: [], issues: [], comments: [], reviews: [], licenseAssignments: [], forkRelations: [], notifications: [], authors: [], contributions: [], agentSessions: [], agentTasks: [], toolApprovals: [], aiReviews: [], appeals: [], ingestionBatches: [], ingestionTasks: [], claimNodes: [] };
   let seq = 0;
   const nextId = () => `00000000-0000-4000-8000-${String(++seq).padStart(12, '0')}`;
   const p2002 = () => {
@@ -532,6 +533,13 @@ export function createFakePrisma(): { prisma: PrismaClient; db: FakeDb } {
         db.versions.filter((v) => (where.researchObjectId === undefined || v.researchObjectId === where.researchObjectId)).length,
       findMany: async ({ where }: any) =>
         db.versions.filter((v) => (where.researchObjectId === undefined || v.researchObjectId === where.researchObjectId)),
+    },
+    claimNode: {
+      findMany: async ({ where }: any) =>
+        db.claimNodes.filter((claim) =>
+          (where.researchObjectId === undefined || claim.researchObjectId === where.researchObjectId) &&
+          (where.versionId === undefined || claim.versionId === where.versionId),
+        ),
     },
     versionManifest: {
       findUnique: async ({ where, include }: any) => {
