@@ -56,6 +56,17 @@ export interface DocumentSourceMap {
 }
 
 const TEXT_BEARING_BLOCK_KINDS = new Set<DocumentBlockKind>(['heading', 'paragraph', 'caption', 'reference']);
+const MAX_TOTAL_BLOCKS = 10_000;
+const MAX_TOTAL_TRANSFORMATIONS = 25_000;
+const MAX_TOTAL_TEXT_CHARACTERS = 5_000_000;
+const MAX_SERIALIZED_CONTENT_CHARACTERS = 8_000_000;
+
+interface ParseBudget {
+  blocks: number;
+  transformations: number;
+  textCharacters: number;
+  serializedContentCharacters: number;
+}
 
 function record(value: unknown, label: string): Record<string, unknown> {
   if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error(`${label} must be an object`);
@@ -67,10 +78,16 @@ function onlyKeys(value: Record<string, unknown>, allowed: readonly string[], la
   if (unknown) throw new Error(`${label} has unknown field "${unknown}"`);
 }
 
-function requiredString(value: unknown, label: string, maxLength = 2_000): string {
+function consume(budget: ParseBudget, field: keyof ParseBudget, amount: number, maximum: number): void {
+  budget[field] += amount;
+  if (budget[field] > maximum) throw new Error(`DocumentSourceMap limit_exceeded: ${field}`);
+}
+
+function requiredString(value: unknown, label: string, maxLength = 2_000, budget?: ParseBudget): string {
   if (typeof value !== 'string' || !value.trim() || value.length > maxLength) {
     throw new Error(`${label} must be a non-empty string`);
   }
+  if (budget) consume(budget, 'serializedContentCharacters', value.length, MAX_SERIALIZED_CONTENT_CHARACTERS);
   return value;
 }
 
@@ -81,14 +98,14 @@ function finitePositive(value: unknown, label: string): number {
   return value;
 }
 
-function parseParserMetadata(value: unknown, label: string): DocumentParserMetadata {
+function parseParserMetadata(value: unknown, label: string, budget: ParseBudget): DocumentParserMetadata {
   const metadata = record(value, label);
   onlyKeys(metadata, ['name', 'version', 'modelHash'], label);
   const result: DocumentParserMetadata = {
-    name: requiredString(metadata.name, `${label} name`, 200),
-    version: requiredString(metadata.version, `${label} version`, 200),
+    name: requiredString(metadata.name, `${label} name`, 200, budget),
+    version: requiredString(metadata.version, `${label} version`, 200, budget),
   };
-  if (metadata.modelHash !== undefined) result.modelHash = requiredString(metadata.modelHash, `${label} modelHash`, 200);
+  if (metadata.modelHash !== undefined) result.modelHash = requiredString(metadata.modelHash, `${label} modelHash`, 200, budget);
   return result;
 }
 
@@ -99,27 +116,34 @@ function parseBoundingBox(value: unknown, page: DocumentPage): DocumentBlock['bo
   const y = typeof box.y === 'number' && Number.isFinite(box.y) && box.y >= 0 ? box.y : undefined;
   const width = finitePositive(box.width, 'DocumentBlock boundingBox width');
   const height = finitePositive(box.height, 'DocumentBlock boundingBox height');
-  if (x === undefined || y === undefined || x + width > page.width || y + height > page.height) {
+  const scale = Math.max(1, Math.abs(x ?? 0), Math.abs(y ?? 0), width, height, page.width, page.height);
+  const tolerance = Number.EPSILON * scale * 16;
+  if (x === undefined || y === undefined || x + width - page.width > tolerance || y + height - page.height > tolerance) {
     throw new Error('DocumentBlock boundingBox must be within its page');
   }
   return { x, y, width, height };
 }
 
-function parseBlock(value: unknown, page: DocumentPage, blockIds: Set<string>): DocumentBlock {
+function parseBlock(value: unknown, page: DocumentPage, blockIds: Set<string>, budget: ParseBudget): DocumentBlock {
   const block = record(value, 'DocumentBlock');
   onlyKeys(block, ['id', 'kind', 'text', 'boundingBox', 'confidence', 'parser', 'transformations'], 'DocumentBlock');
-  const id = requiredString(block.id, 'DocumentBlock id', 200);
+  consume(budget, 'blocks', 1, MAX_TOTAL_BLOCKS);
+  const id = requiredString(block.id, 'DocumentBlock id', 200, budget);
   if (blockIds.has(id)) throw new Error('DocumentBlock id must be globally unique');
   if (typeof block.kind !== 'string' || !DOCUMENT_BLOCK_KINDS.includes(block.kind as DocumentBlockKind)) {
     throw new Error('DocumentBlock kind is unsupported');
   }
   const kind = block.kind as DocumentBlockKind;
   if (block.text !== undefined && typeof block.text !== 'string') throw new Error('DocumentBlock text must be a string');
-  if (TEXT_BEARING_BLOCK_KINDS.has(kind) && !requiredString(block.text, 'DocumentBlock text', 50_000)) {
+  if (TEXT_BEARING_BLOCK_KINDS.has(kind) && !requiredString(block.text, 'DocumentBlock text', 50_000, budget)) {
     throw new Error('DocumentBlock text is required');
   }
   if (block.text !== undefined && (!block.text.trim() || block.text.length > 50_000)) {
     throw new Error('DocumentBlock text must be a non-empty string');
+  }
+  if (block.text !== undefined) {
+    if (!TEXT_BEARING_BLOCK_KINDS.has(kind)) requiredString(block.text, 'DocumentBlock text', 50_000, budget);
+    consume(budget, 'textCharacters', block.text.length, MAX_TOTAL_TEXT_CHARACTERS);
   }
   let confidence: number | undefined;
   if (block.confidence !== undefined) {
@@ -132,6 +156,7 @@ function parseBlock(value: unknown, page: DocumentPage, blockIds: Set<string>): 
     throw new Error('DocumentBlock transformations must be an array');
   }
   const transformations = block.transformations.map((value) => {
+    consume(budget, 'transformations', 1, MAX_TOTAL_TRANSFORMATIONS);
     const transformation = record(value, 'DocumentTransformation');
     onlyKeys(transformation, ['stage', 'processor'], 'DocumentTransformation');
     if (typeof transformation.stage !== 'string'
@@ -140,7 +165,7 @@ function parseBlock(value: unknown, page: DocumentPage, blockIds: Set<string>): 
     }
     return {
       stage: transformation.stage as DocumentTransformationStage,
-      processor: parseParserMetadata(transformation.processor, 'DocumentTransformation processor'),
+      processor: parseParserMetadata(transformation.processor, 'DocumentTransformation processor', budget),
     };
   });
   blockIds.add(id);
@@ -150,7 +175,7 @@ function parseBlock(value: unknown, page: DocumentPage, blockIds: Set<string>): 
     ...(block.text === undefined ? {} : { text: block.text }),
     boundingBox: parseBoundingBox(block.boundingBox, page),
     ...(confidence === undefined ? {} : { confidence }),
-    parser: parseParserMetadata(block.parser, 'DocumentBlock parser'),
+    parser: parseParserMetadata(block.parser, 'DocumentBlock parser', budget),
     transformations,
   };
 }
@@ -167,6 +192,8 @@ export function parseDocumentSourceMap(value: unknown): DocumentSourceMap {
   }
   const pageNumbers = new Set<number>();
   const blockIds = new Set<string>();
+  const budget: ParseBudget = { blocks: 0, transformations: 0, textCharacters: 0, serializedContentCharacters: 0 };
+  const parser = parseParserMetadata(sourceMap.parser, 'DocumentSourceMap parser', budget);
   const pages = sourceMap.pages.map((value) => {
     const page = record(value, 'DocumentPage');
     onlyKeys(page, ['page', 'width', 'height', 'blocks'], 'DocumentPage');
@@ -180,13 +207,13 @@ export function parseDocumentSourceMap(value: unknown): DocumentSourceMap {
     };
     if (!Array.isArray(page.blocks) || page.blocks.length > 100_000) throw new Error('DocumentPage blocks must be an array');
     pageNumbers.add(parsedPage.page);
-    parsedPage.blocks = page.blocks.map((block) => parseBlock(block, parsedPage, blockIds));
+    parsedPage.blocks = page.blocks.map((block) => parseBlock(block, parsedPage, blockIds, budget));
     return parsedPage;
   });
   return {
     artifactId,
     contentHash: sourceMap.contentHash,
-    parser: parseParserMetadata(sourceMap.parser, 'DocumentSourceMap parser'),
+    parser,
     pages,
   };
 }

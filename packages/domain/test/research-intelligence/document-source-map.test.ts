@@ -2,6 +2,9 @@ import { describe, expect, it } from 'vitest';
 
 async function documentSourceMapContract() {
   return await import('../../src') as unknown as {
+    DOCUMENT_BLOCK_KINDS: readonly string[];
+    DOCUMENT_TRANSFORMATION_STAGES: readonly string[];
+    parseDocumentSourceMap(value: unknown): unknown;
     serializeDocumentSourceMap(value: unknown): string;
     deserializeDocumentSourceMap(json: string): unknown;
   };
@@ -36,6 +39,17 @@ function validMap() {
   };
 }
 
+function block(id: string, options: Record<string, unknown> = {}) {
+  return {
+    id,
+    kind: 'figure',
+    boundingBox: { x: 0, y: 0, width: 1, height: 1 },
+    parser: { name: 'parser', version: '1' },
+    transformations: [],
+    ...options,
+  };
+}
+
 describe('DocumentSourceMap boundary', () => {
   it('round-trips a page map without changing decimal coordinates', async () => {
     const map = validMap();
@@ -44,8 +58,69 @@ describe('DocumentSourceMap boundary', () => {
     expect(deserializeDocumentSourceMap(serializeDocumentSourceMap(map))).toEqual(map);
   });
 
+  it('exports the exact block and transformation vocabularies', async () => {
+    const { DOCUMENT_BLOCK_KINDS, DOCUMENT_TRANSFORMATION_STAGES } = await documentSourceMapContract();
+
+    expect(DOCUMENT_BLOCK_KINDS).toEqual(['heading', 'paragraph', 'figure', 'table', 'equation', 'caption', 'reference']);
+    expect(DOCUMENT_TRANSFORMATION_STAGES).toEqual(['extract_text', 'detect_layout', 'classify', 'ocr', 'normalize', 'merge']);
+  });
+
+  it('parses model provenance through the direct public decoder', async () => {
+    const map = validMap();
+    map.parser.modelHash = 'model-hash-1';
+    map.pages[0].blocks[0].parser.modelHash = 'model-hash-2';
+    map.pages[0].blocks[0].transformations[0].processor.modelHash = 'model-hash-3';
+    const { parseDocumentSourceMap } = await documentSourceMapContract();
+
+    expect(parseDocumentSourceMap(map)).toEqual(map);
+  });
+
+  it('accepts a decimal bounding box aligned with the page edge', async () => {
+    const map = { ...validMap(), pages: [{
+      page: 1,
+      width: 0.3,
+      height: 0.3,
+      blocks: [block('decimal-edge', { boundingBox: { x: 0.1, y: 0.1, width: 0.2, height: 0.2 } })],
+    }] };
+    const { serializeDocumentSourceMap } = await documentSourceMapContract();
+
+    expect(() => serializeDocumentSourceMap(map)).not.toThrow();
+  });
+
+  it('rejects a bounding box materially beyond a decimal page edge', async () => {
+    const map = { ...validMap(), pages: [{
+      page: 1,
+      width: 0.3,
+      height: 0.3,
+      blocks: [block('decimal-outside', { boundingBox: { x: 0.1, y: 0.1, width: 0.200001, height: 0.2 } })],
+    }] };
+    const { serializeDocumentSourceMap } = await documentSourceMapContract();
+
+    expect(() => serializeDocumentSourceMap(map)).toThrow(/within its page/);
+  });
+
+  it.each([
+    ['total blocks', () => ({ ...validMap(), pages: [{ page: 1, width: 2, height: 2, blocks: Array.from({ length: 10_001 }, (_, index) => block(`block-${index}`)) }] })],
+    ['total transformations', () => ({ ...validMap(), pages: [{ page: 1, width: 2, height: 2, blocks: Array.from({ length: 251 }, (_, index) => block(`block-${index}`, {
+      transformations: Array.from({ length: 100 }, () => ({ stage: 'extract_text', processor: { name: 'parser', version: '1' } })),
+    })) }] })],
+    ['total text', () => ({ ...validMap(), pages: [{ page: 1, width: 2, height: 2, blocks: Array.from({ length: 101 }, (_, index) => block(`block-${index}`, { text: 'x'.repeat(50_000) })) }] })],
+    ['serialized content', () => ({ ...validMap(), pages: [{ page: 1, width: 2, height: 2, blocks: Array.from({ length: 10_000 }, (_, index) => block(`block-${index.toString().padStart(194, 'x')}`, {
+      text: 'x'.repeat(500),
+      parser: { name: 'n'.repeat(200), version: 'v'.repeat(200) },
+    })) }] })],
+  ])('rejects source maps exceeding the %s budget', async (_label, createMap) => {
+    const { serializeDocumentSourceMap } = await documentSourceMapContract();
+
+    expect(() => serializeDocumentSourceMap(createMap())).toThrow(/limit_exceeded/);
+  });
+
   it.each([
     ['unknown provider field', () => ({ ...validMap(), parser: { ...validMap().parser, privateProviderPayload: {} } })],
+    ['unknown source-map field', () => ({ ...validMap(), privateProviderPayload: {} })],
+    ['unknown page field', () => ({ ...validMap(), pages: [{ ...validMap().pages[0], privateProviderPage: {} }] })],
+    ['unknown block field', () => ({ ...validMap(), pages: [{ ...validMap().pages[0], blocks: [{ ...validMap().pages[0].blocks[0], privateProviderBlock: {} }] }] })],
+    ['unknown transformation field', () => ({ ...validMap(), pages: [{ ...validMap().pages[0], blocks: [{ ...validMap().pages[0].blocks[0], transformations: [{ ...validMap().pages[0].blocks[0].transformations[0], privateProviderStage: {} }] }] }] })],
     ['duplicate page number', () => ({ ...validMap(), pages: [...validMap().pages, { ...validMap().pages[0], blocks: [] }] })],
     ['duplicate block ID across pages', () => ({ ...validMap(), pages: [validMap().pages[0], { ...validMap().pages[0], page: 2, blocks: [{ ...validMap().pages[0].blocks[0] }] }] })],
     ['non-finite dimensions', () => ({ ...validMap(), pages: [{ ...validMap().pages[0], width: Number.POSITIVE_INFINITY }] })],
@@ -62,5 +137,12 @@ describe('DocumentSourceMap boundary', () => {
     const { serializeDocumentSourceMap } = await documentSourceMapContract();
 
     expect(() => serializeDocumentSourceMap(createMalformedMap())).toThrow();
+  });
+
+  it.each(['heading', 'paragraph', 'caption', 'reference'])('requires text for %s blocks', async (kind) => {
+    const map = { ...validMap(), pages: [{ ...validMap().pages[0], blocks: [{ ...validMap().pages[0].blocks[0], kind, text: undefined }] }] };
+    const { parseDocumentSourceMap } = await documentSourceMapContract();
+
+    expect(() => parseDocumentSourceMap(map)).toThrow(/text/);
   });
 });
