@@ -335,7 +335,7 @@ export const RESEARCH_INTELLIGENCE_CORPUS: ResearchCorpusCase[] = [
       { kind: 'page-text', page: 1, quote: 'PULSE 42 FS' },
       { kind: 'page-region', page: 1, bbox: [72, 600, 432, 645] },
     ],
-    expectedCurrentStatus: 'ready',
+    expectedCurrentStatus: 'needs_review',
   },
   {
     id: 'table-csv-mixed',

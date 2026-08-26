@@ -142,10 +142,15 @@ export async function parseIngestionWithAdapters(
   if (!adapter) return parseIngestion(filename, content);
   let text: string;
   try {
-    text = (await adapter(content)).trim();
+    text = await adapter(content);
   } catch {
     return { status: 'needs_review', format: extension.slice(1), reason: 'parser-failed' };
   }
-  if (!text) return { status: 'needs_review', format: extension.slice(1), reason: 'empty-parsed-text' };
+  const meaningfulText = text
+    .replace(/-- \d+ of \d+ --/gu, '')
+    .replace(/[\p{C}\p{Z}]/gu, '');
+  if (!/[\p{L}\p{N}]/u.test(meaningfulText)) {
+    return { status: 'needs_review', format: extension.slice(1), reason: 'empty-parsed-text' };
+  }
   return { status: 'ready', text, format: extension.slice(1) };
 }

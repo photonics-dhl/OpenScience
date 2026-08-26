@@ -122,7 +122,7 @@ describe('research-intelligence corpus contract', () => {
     expect(report.cases).toEqual(expect.arrayContaining([
       expect.objectContaining({
         id: 'scan-pdf-image-only',
-        status: 'ready',
+        status: 'needs_review',
         textMatched: undefined,
       }),
     ]));
