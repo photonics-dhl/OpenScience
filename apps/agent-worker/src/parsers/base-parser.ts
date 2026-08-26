@@ -27,6 +27,16 @@ interface ParserSnapshot { input: ParserInput; metadata: DocumentParserMetadata 
 
 function contract(message: string): never { throw new ParserContractError(message); }
 
+function safeObject<T extends Record<string, unknown>>(value: T): T {
+  return Object.assign(Object.create(null) as T, value);
+}
+
+function safeArray<T>(values: readonly T[]): T[] {
+  const result = Array.from(values);
+  Object.defineProperty(result, 'toJSON', { value: undefined, enumerable: false });
+  return result;
+}
+
 function dataObject(value: unknown, label: string, allowed: readonly string[]): Descriptors {
   if (!value || typeof value !== 'object' || Array.isArray(value) || Object.getPrototypeOf(value) !== Object.prototype) {
     contract(`preflight ${label} must be a plain object`);
@@ -71,22 +81,24 @@ function finiteNumber(value: unknown, label: string): number {
 
 function dataArray(value: unknown, label: string, maximum: number): unknown[] {
   if (!Array.isArray(value) || Object.getPrototypeOf(value) !== Array.prototype) contract(`preflight ${label} must be an ordinary array`);
-  const descriptors = Object.getOwnPropertyDescriptors(value) as Descriptors;
-  const lengthDescriptor = descriptors['length'];
+  const lengthDescriptor = Object.getOwnPropertyDescriptor(value, 'length');
   if (!lengthDescriptor || !Object.prototype.hasOwnProperty.call(lengthDescriptor, 'value') || typeof lengthDescriptor.value !== 'number') {
     contract(`preflight ${label} has an invalid length`);
   }
   const length = lengthDescriptor.value;
   if (length > maximum) contract(`preflight ${label} exceeds its maximum length`);
+  if (Object.getOwnPropertyDescriptor(value, 'toJSON')) contract(`preflight ${label} must not define toJSON`);
   const values: unknown[] = new Array(length);
   for (let index = 0; index < length; index += 1) {
-    const descriptor = descriptors[String(index)];
+    const descriptor = Object.getOwnPropertyDescriptor(value, String(index));
     if (!descriptor || !descriptor.enumerable || !Object.prototype.hasOwnProperty.call(descriptor, 'value')) contract(`preflight ${label} must not be sparse or contain accessors`);
     values[index] = descriptor.value;
   }
-  const keys = Reflect.ownKeys(descriptors);
-  if (keys.some((key) => key !== 'length' && (typeof key !== 'string' || !/^(0|[1-9]\d*)$/.test(key) || Number(key) >= length))) {
-    contract(`preflight ${label} has unsupported properties`);
+  let seen = 0;
+  for (const key in value) {
+    if (!Object.prototype.hasOwnProperty.call(value, key)) continue;
+    seen += 1;
+    if (seen > length || !/^(0|[1-9]\d*)$/.test(key) || Number(key) >= length) contract(`preflight ${label} has unsupported properties`);
   }
   return values;
 }
@@ -96,59 +108,59 @@ function canonicalMetadata(value: unknown, label: string, budget: Budget): Docum
   const name = boundedString(required(fields, 'name', `${label} name`), `${label} name`, MAX_IDENTIFIER_LENGTH, budget);
   const version = boundedString(required(fields, 'version', `${label} version`), `${label} version`, MAX_IDENTIFIER_LENGTH, budget);
   const modelHash = optional(fields, 'modelHash', `${label} modelHash`);
-  return { name, version, ...(modelHash === undefined ? {} : { modelHash: boundedString(modelHash, `${label} modelHash`, MAX_IDENTIFIER_LENGTH, budget) }) };
+  return safeObject({ name, version, ...(modelHash === undefined ? {} : { modelHash: boundedString(modelHash, `${label} modelHash`, MAX_IDENTIFIER_LENGTH, budget) }) });
 }
 
 function canonicalBox(value: unknown): { x: number; y: number; width: number; height: number } {
   const fields = dataObject(value, 'boundingBox', ['x', 'y', 'width', 'height']);
-  return {
+  return safeObject({
     x: finiteNumber(required(fields, 'x', 'boundingBox x'), 'boundingBox x'),
     y: finiteNumber(required(fields, 'y', 'boundingBox y'), 'boundingBox y'),
     width: finiteNumber(required(fields, 'width', 'boundingBox width'), 'boundingBox width'),
     height: finiteNumber(required(fields, 'height', 'boundingBox height'), 'boundingBox height'),
-  };
+  });
 }
 
 function canonicalSourceMap(value: unknown, budget: Budget): unknown {
   const fields = dataObject(value, 'DocumentSourceMap', ['artifactId', 'contentHash', 'parser', 'pages']);
-  const pages = dataArray(required(fields, 'pages', 'DocumentSourceMap pages'), 'DocumentSourceMap pages', MAX_PAGE_COUNT).map((pageValue) => {
+  const pages = safeArray(dataArray(required(fields, 'pages', 'DocumentSourceMap pages'), 'DocumentSourceMap pages', MAX_PAGE_COUNT).map((pageValue) => {
     const page = dataObject(pageValue, 'DocumentPage', ['page', 'width', 'height', 'blocks']);
     const blocks = dataArray(required(page, 'blocks', 'DocumentPage blocks'), 'DocumentPage blocks', MAX_BLOCK_COUNT - budget.blocks);
     budget.blocks += blocks.length;
-    return {
+    return safeObject({
       page: finiteNumber(required(page, 'page', 'DocumentPage page'), 'DocumentPage page'),
       width: finiteNumber(required(page, 'width', 'DocumentPage width'), 'DocumentPage width'),
       height: finiteNumber(required(page, 'height', 'DocumentPage height'), 'DocumentPage height'),
-      blocks: blocks.map((blockValue) => {
+      blocks: safeArray(blocks.map((blockValue) => {
         const block = dataObject(blockValue, 'DocumentBlock', ['id', 'kind', 'text', 'boundingBox', 'confidence', 'parser', 'transformations']);
         const text = optional(block, 'text', 'DocumentBlock text');
         const confidence = optional(block, 'confidence', 'DocumentBlock confidence');
         const transformations = dataArray(required(block, 'transformations', 'DocumentBlock transformations'), 'DocumentBlock transformations', Math.min(100, MAX_TRANSFORMATION_COUNT - budget.transformations));
         budget.transformations += transformations.length;
-        return {
+        return safeObject({
           id: boundedString(required(block, 'id', 'DocumentBlock id'), 'DocumentBlock id', MAX_IDENTIFIER_LENGTH, budget),
           kind: boundedString(required(block, 'kind', 'DocumentBlock kind'), 'DocumentBlock kind', 20, budget),
           ...(text === undefined ? {} : { text: boundedString(text, 'DocumentBlock text', MAX_TEXT_LENGTH, budget) }),
           boundingBox: canonicalBox(required(block, 'boundingBox', 'DocumentBlock boundingBox')),
           ...(confidence === undefined ? {} : { confidence: finiteNumber(confidence, 'DocumentBlock confidence') }),
           parser: canonicalMetadata(required(block, 'parser', 'DocumentBlock parser'), 'DocumentBlock parser', budget),
-          transformations: transformations.map((transformationValue) => {
+          transformations: safeArray(transformations.map((transformationValue) => {
             const transformation = dataObject(transformationValue, 'DocumentTransformation', ['stage', 'processor']);
-            return {
+            return safeObject({
               stage: boundedString(required(transformation, 'stage', 'DocumentTransformation stage'), 'DocumentTransformation stage', 20, budget),
               processor: canonicalMetadata(required(transformation, 'processor', 'DocumentTransformation processor'), 'DocumentTransformation processor', budget),
-            };
-          }),
-        };
-      }),
-    };
-  });
-  return {
+            });
+          })),
+        });
+      })),
+    });
+  }));
+  return safeObject({
     artifactId: boundedString(required(fields, 'artifactId', 'DocumentSourceMap artifactId'), 'DocumentSourceMap artifactId', MAX_IDENTIFIER_LENGTH, budget),
     contentHash: boundedString(required(fields, 'contentHash', 'DocumentSourceMap contentHash'), 'DocumentSourceMap contentHash', 64, budget),
     parser: canonicalMetadata(required(fields, 'parser', 'DocumentSourceMap parser'), 'DocumentSourceMap parser', budget),
     pages,
-  };
+  });
 }
 
 /** Copies only bounded own data properties; the provider object is never serialized. */
@@ -159,21 +171,21 @@ function canonicalExtractionResult(value: unknown): unknown {
   if (status === 'succeeded' || status === 'needs_review') {
     const allowed = status === 'succeeded' ? ['status', 'sourceMap', 'warnings'] : ['status', 'sourceMap', 'reasons'];
     dataObject(value, 'ExtractionResult', allowed);
-    const entries = dataArray(required(fields, status === 'succeeded' ? 'warnings' : 'reasons', 'ExtractionResult entries'), 'ExtractionResult entries', MAX_WARNING_OR_REASON_COUNT)
-      .map((entry) => boundedString(entry, 'ExtractionResult entry', 500, budget));
+    const entries = safeArray(dataArray(required(fields, status === 'succeeded' ? 'warnings' : 'reasons', 'ExtractionResult entries'), 'ExtractionResult entries', MAX_WARNING_OR_REASON_COUNT)
+      .map((entry) => boundedString(entry, 'ExtractionResult entry', 500, budget)));
     return status === 'succeeded'
-      ? { status, sourceMap: canonicalSourceMap(required(fields, 'sourceMap', 'ExtractionResult sourceMap'), budget), warnings: entries }
-      : { status, sourceMap: canonicalSourceMap(required(fields, 'sourceMap', 'ExtractionResult sourceMap'), budget), reasons: entries };
+      ? safeObject({ status, sourceMap: canonicalSourceMap(required(fields, 'sourceMap', 'ExtractionResult sourceMap'), budget), warnings: entries })
+      : safeObject({ status, sourceMap: canonicalSourceMap(required(fields, 'sourceMap', 'ExtractionResult sourceMap'), budget), reasons: entries });
   }
   if (status === 'blocked') {
     dataObject(value, 'ExtractionResult', ['status', 'code', 'message']);
-    return { status, code: boundedString(required(fields, 'code', 'ExtractionResult code'), 'ExtractionResult code', 50, budget), message: boundedString(required(fields, 'message', 'ExtractionResult message'), 'ExtractionResult message', 2_000, budget) };
+    return safeObject({ status, code: boundedString(required(fields, 'code', 'ExtractionResult code'), 'ExtractionResult code', 50, budget), message: boundedString(required(fields, 'message', 'ExtractionResult message'), 'ExtractionResult message', 2_000, budget) });
   }
   if (status === 'failed') {
     dataObject(value, 'ExtractionResult', ['status', 'retryable', 'provider', 'message']);
     const retryable = required(fields, 'retryable', 'ExtractionResult retryable');
     if (typeof retryable !== 'boolean') contract('preflight ExtractionResult retryable must be boolean');
-    return { status, retryable, provider: boundedString(required(fields, 'provider', 'ExtractionResult provider'), 'ExtractionResult provider', 2_000, budget), message: boundedString(required(fields, 'message', 'ExtractionResult message'), 'ExtractionResult message', 2_000, budget) };
+    return safeObject({ status, retryable, provider: boundedString(required(fields, 'provider', 'ExtractionResult provider'), 'ExtractionResult provider', 2_000, budget), message: boundedString(required(fields, 'message', 'ExtractionResult message'), 'ExtractionResult message', 2_000, budget) });
   }
   contract('preflight ExtractionResult status is invalid');
 }

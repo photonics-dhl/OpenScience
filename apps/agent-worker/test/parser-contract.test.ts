@@ -191,4 +191,24 @@ describe('runDocumentParser', () => {
   it('rejects oversized whitespace before trim work', async () => {
     await expect(runDocumentParser(input({ mediaType: ' '.repeat(201) }), parser({ status: 'succeeded', sourceMap: sourceMap(), warnings: [] }))).rejects.toThrow(/preflight/);
   });
+
+  it('rejects an oversized array before descriptor enumeration', async () => {
+    const hugeWarnings = new Proxy(new Array(101), {
+      ownKeys: () => { throw new Error('descriptor enumeration reached'); },
+    });
+    await expect(runDocumentParser(input(), parser({ status: 'succeeded', sourceMap: sourceMap(), warnings: hugeWarnings }))).rejects.toThrow(/exceeds its maximum length/);
+  });
+
+  it('serializes canonical output safely when global prototypes gain toJSON hooks', async () => {
+    const objectHook = Object.getOwnPropertyDescriptor(Object.prototype, 'toJSON');
+    const arrayHook = Object.getOwnPropertyDescriptor(Array.prototype, 'toJSON');
+    Object.defineProperty(Object.prototype, 'toJSON', { configurable: true, value: () => { throw new Error('object hook reached'); } });
+    Object.defineProperty(Array.prototype, 'toJSON', { configurable: true, value: () => { throw new Error('array hook reached'); } });
+    try {
+      await expect(runDocumentParser(input(), parser({ status: 'succeeded', sourceMap: sourceMap(), warnings: [] }))).resolves.toEqual({ status: 'succeeded', sourceMap: sourceMap(), warnings: [] });
+    } finally {
+      if (objectHook) Object.defineProperty(Object.prototype, 'toJSON', objectHook); else delete (Object.prototype as { toJSON?: unknown }).toJSON;
+      if (arrayHook) Object.defineProperty(Array.prototype, 'toJSON', arrayHook); else delete (Array.prototype as { toJSON?: unknown }).toJSON;
+    }
+  });
 });
