@@ -1,6 +1,6 @@
 # OpenScience 进度（CURRENT window）
 
-> 最新同步：2026-08-26 13:03 +08。历史由 Git 保存；旧计划和 archive 不作为默认输入。
+> 最新同步：2026-08-26 14:39 +08。历史由 Git 保存；旧计划和 archive 不作为默认输入。
 
 ## Current version tuple
 
@@ -13,6 +13,7 @@
 - 用户确认 Task 24 只恢复既有 OGL 水流并封死回归；Hermes、导航、字体、accepted plates 与非 Landing 表面冻结。Git 证明最近 navigation release 未删除 OGL：`8edf6fa` 隐藏 OS cursor，`8fe2094` 又把 descendants `!important` 和错误发布门禁固化。
 - 根因已闭合：线性速度使慢速 traverse `follow≈.007`，而 10s/2.2px presentation 与 aggregate-pixel gate 仍可 GREEN。Candidate `47c8aa9` 移除 `cursor:none!important`，以 `sqrt(magnitude)` 恢复慢速 wake，并把原 ambient clock 收紧为 7s；未重建 renderer、恢复 Canvas2D、改构图或 shader。
 - 用户实际浏览器仍为静止图的后续根因是 WebGL/WebGL2 初始化失败时只剩 exact static plate；既有公网门禁只覆盖可用的 SwiftShader/WebGL 路径。Application/release `2934476` 保持 OGL 为唯一正常 owner，仅在 normal-motion + `contextStatus=unavailable` 时挂载已有 Canvas field，以 accepted typography plate 做单层标题水纹；系统 cursor、构图、Hermes 与导航不变，reduced-motion 仍无 canvas。RED→GREEN 覆盖 WebGL 禁用、亮字形运动、静态字版不叠加、滚出/滚回生命周期和 cursor；原尺寸桌面/390px/reduced 本地与公网截图复核，fresh shots、Web `421+5`、typecheck、全仓 lint/docs-sync/build 与 diff check GREEN。两次 `--skip-migrate` 切换用于先恢复再消除人工审图发现的双影；最终 rollback `58614c0`。Backup `436K files=7/7`、server build、27 migrations、容器/Parser isolation、release/failure/rollback evidence、公网 normal/no-WebGL/mobile/reduced 全绿；无 migration/seed/data write。
+- 用户最终确认桌面静止的剩余原因是 Chrome 单独报告 `prefers-reduced-motion: reduce`，而非 Cloudflare 或新发布回归：桌面/移动响应均为 `CF-Cache-Status: DYNAMIC`、`no-store`、相同 HTML/hashed chunks；公网桌面 `no-preference` 连续帧变化而 `reduce` 精确静止。Windows 动画已开启但 DevTools/Chrome override 仍生效；恢复 Rendering `No emulation` 并重启 Chrome 后用户确认正常。未清 CF、未改代码、未重新部署；唯一操作记录见 deployment runbook §5.28。
 - 新合同已进入 canonical product release：系统 cursor 与所有 descendants 可见；24×10 网格要求 650ms 内存在至少 6 格、横纵各跨 2 格的连通水流；慢/快轨迹分别验证位置、强度和 900ms 恢复，reduced-motion 仍静态无 canvas。Fresh Landing `6/6`、focused `23/23`、Web `421+5`、全仓 test/build、Web typecheck、targeted ESLint 与 diff check GREEN，桌面/移动原尺寸截图已复核。
 - Broader Optical Lab capture 的既有 `evolves` 边界 `.899336 < .9` 在 10s/7s 下相同，未放宽阈值。Application/release/rollback `47c8aa9` / `73677d5` / `263c783` 已部署：pre/post checkup、backup `436K files=7/7`、服务器全量 build、27 migrations、目标容器、Parser isolation、release markers 与公网 Landing `6/6` GREEN；未 migration/seed/data write。
 - 新增全站一级研究入口：Research desk / Explore / New research / Settings；公开阅读与 collection 同时保留 Home wordmark、Desk、Explore、Create、Login；RO 内继续使用 Overview/SDF/Files/Versions/Collaboration/Publish/Sandbox 二级导航。Dashboard loading/error、注册/登录、Hermes evidence review 与 curator 均不再是死路。
@@ -69,12 +70,8 @@
 
 ## 2026-08-24 — Research Folio whole-product candidate
 
-- 用户明确批准从评审 route 扩展到全部真实非 Landing 页面并部署；唯一 CURRENT 非 Landing 视觉规范为 `docs/specs/2026-08-24-research-folio-product-system-design.md`，Landing 保持不变。
-- 真实用户路径已统一为 `identity → active research → create/import → structure/evidence → human decision → version → publish → public verification`。登录/注册表单优先，Dashboard 活跃研究优先，创建 RO 显式两阶段，RO 工作区、公阅、探索、设置和管理端共用暖纸 Research Folio；graphite 只保留给代码/diff/原始证据。
-- Hermes 默认进入页面预留研究页边：desktop `360px`、compact/mobile `200px`，锚定态不再 fixed 或跨字段移动；右键、`Shift+F10`、Menu 键、移动长按打开一张连续纸墨菜单，普通点击仍开 assistant drawer。反馈是角色旁短行，不覆盖表单或正文。
-- 首次 immutable release `2abfe42` 已经 ECS checkup/backup、server full build、27 migrations current、healthy containers、精确 release/rollback/failure-marker、真实 route/assets 与公网 no-write `57/57` 验收；Landing 未改，未 migration/seed/data write。
-- 发布后原尺寸截图复核发现旧自动 nudge 仍会压住 Hermes 状态与动效控制。hotfix `56f6cf4` 关闭锚定产品页的未请求 speech/nudge，保留右键菜单、点击 drawer、显式字段 guide 与动作反馈；修复后截图无覆盖，production release matrix 再次 `60/60`，Web 58 files / 402 tests + 5 Node contracts、typecheck、19-page build GREEN。
-- exact release `33418fd` 已以 `2abfe42` 为 rollback、`--skip-migrate` 发布；fresh backup `432K files=7/7`、server full build、27 migrations current、release/failure/rollback marker、healthy runtime、真实 route/Live2D assets 与公网 focused `4/4` 均通过。无 migration、seed 或研究数据写入。
+- 用户批准并部署全部真实非 Landing 页面 Research Folio；唯一 CURRENT 规范为 `docs/specs/2026-08-24-research-folio-product-system-design.md`。用户路径、暖纸阅读表面、`360/200px` 锚定 Hermes、右键/键盘/长按菜单和点击 drawer 已统一，Landing 未改。
+- Application `56f6cf4` / release `33418fd` / rollback `2abfe42` 已消除未请求 speech/nudge 覆盖；公网 focused `4/4`、product matrix `60/60`、Web `402+5`、server build、27 migrations、runtime/assets/markers GREEN。无 migration、seed 或研究数据写入；细节从 Git history 与 CURRENT handoff 查阅。
 
 ## Read first
 

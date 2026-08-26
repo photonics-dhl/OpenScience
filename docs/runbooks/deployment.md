@@ -896,3 +896,20 @@ Historical note for the 2026-08-11 release: it used fixed worker tags and a writ
   27 current migrations, healthy targets, Parser network-none/read-only/non-root/
   512MiB/64PID, exact release/failure marker and rollback tree/images pass. Both
   switches used `--skip-migrate`; no migration, seed or research-data write ran.
+
+### 5.28 Landing static-water browser preference diagnosis (2026-08-26)
+
+- Do not purge Cloudflare merely because desktop is static while mobile moves.
+  First compare desktop/mobile response headers and hashed app chunks. In the
+  confirmed incident both were `CF-Cache-Status: DYNAMIC`, `no-store`, with the
+  same HTML and chunks; cache was not the cause.
+- Probe `matchMedia('(prefers-reduced-motion: reduce)').matches`. The deployed
+  contract intentionally keeps reduced motion exact, static and canvas-free;
+  public Chromium verification showed changing frames for `no-preference` and
+  byte-stable frames for `reduce` on the same release.
+- If Windows animation is enabled but Chrome still reports `true`, open DevTools
+  Rendering and set the `prefers-reduced-motion` emulation to `No emulation`,
+  then restart Chrome. If it persists, inspect `chrome://version` for
+  `--force-prefers-reduced-motion` before investigating the application.
+- The user confirmed normal motion returned after the Chrome-specific override
+  was removed. No CF purge, source change or deployment was required.
