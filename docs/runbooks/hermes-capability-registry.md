@@ -74,7 +74,7 @@
 
 “仓库或服务器 `.env` 中存在”不等于“目标进程已注入”。以后排障按四层分别记录：配置文件变量存在性、Compose 映射、容器环境存在性、provider 最小健康探测。任一层失败都不得笼统写成“API key 失败”。
 
-用户在聊天中提供的 MiniMax 与 Semantic Scholar 凭据视为已暴露。后续配置顺序固定为：轮换 → 只写本地/生产 Secret → 只检查存在性 → 最小健康探测 → 记录日期和状态；旧值不得用于测试。
+用户在聊天中提供的 MiniMax 与 Semantic Scholar 凭据视为已暴露。后续配置顺序固定为：轮换 → 只写本地/生产 Secret → 只检查存在性 → 最小健康探测 → 记录日期和状态；旧值不得用于测试。2026-08-27 presence-only 复核确认生产仅有 MiniMax key，Vision route disabled；Tavily/Semantic Scholar 尚未注入生产，须等 Task 10 consumer 与权限边界完成后再配置。
 
 ## 4. Installation and directory policy
 
@@ -134,7 +134,7 @@
 
 | Date | Capability | From → To | Version/digest | Evidence | Rollback | Operator |
 |---|---|---|---|---|---|---|
-| 2026-08-27 | MiniMax LLM OCR Gateway route | absent → implemented/default disabled | `openscience-ocr-v1`；provider model unresolved | mocked provider route、strict input/result bounds、policy/kill-switch、redacted hash/cost/latency audit and compiled `AI_GATEWAY_OCR_CONTRACT_OK`；no paid call | keep `MINIMAX_VISION_ENABLED=false` and external policy deny；revert Task 5 release | Codex |
+| 2026-08-27 | MiniMax LLM OCR Gateway route | absent → deployed/default disabled | `openscience-ocr-v1`；release `f965966`；provider model unresolved | mocked route、strict image/input/result bounds、policy/kill-switch、redacted audit、ECS `AI_GATEWAY_OCR_CONTRACT_OK`；no paid call | keep vision disabled and external policy deny；rollback `ef043eb` | Codex |
 | 2026-08-26 | Current parser benchmark | unmeasured → `BASELINE_ONLY` | corpus schema 1 / 13 self-authored hashes + locators | recorded local run: 7 ready、6 expected-text matched、6 explicit review；image-only PDF 的页分隔符造成 1 项 false-ready；P50 0.03 ms、P95 226.09 ms、max RSS delta 28,672 B；deterministic facts repeat stable | delete ignored report and revert benchmark commits；production unchanged | Codex |
 | 2026-08-26 | Registry baseline | untracked → registered | docs-only | local/process/container existence checks; Taskmaster alignment | revert docs commit | Codex |
 

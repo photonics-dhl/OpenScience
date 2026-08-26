@@ -1,6 +1,6 @@
 # Runbook: 部署（Deployment）
 
-> 状态：**CURRENT**。active immutable release / application source 为 `ef043ebb8e51332effe75a5639cb207aec7bfc47`，rollback tree 为 `e0828a6118c92c87b7869493413441bba0e76a95`。post-deploy docs-only HEAD 不得冒充 application source。
+> 状态：**CURRENT**。active immutable release / application source 为 `f9659668b237b70b4c018b866e20498689d327c2`，rollback tree 为 `ef043ebb8e51332effe75a5639cb207aec7bfc47`。post-deploy docs-only HEAD 不得冒充 application source。
 > 格式遵循 `.agents/skills/infra-runbook/SKILL.md` 四节强制要求。
 > 部署属 Spec §20.5"询问"级操作：执行前需用户确认，必须走 `infra/scripts/deploy.sh` + CI/CD，禁止手工改服务器代码。
 
@@ -971,3 +971,34 @@ as complete.
 - **Execution:** after backup `452K files=7/7`, use the canonical Bash `deploy.sh --skip-migrate` for the exact SHA. This contract-only release has no migration, seed or research-data write; never substitute a docs-only HEAD for the application SHA.
 - **Rollback:** retain the immutable `e0828a6...` release tree and use the canonical deploy rollback route; no database reversal is required for this release. Do not delete the historical extra core ledger entry.
 - **Verification:** current-repo core `28/28`, search `1/1`, failed `0/0`; target containers healthy and agent/parser exact-SHA images. Parser is network none, read-only, user `node`, 512MiB/64PID, only `/parser-jobs`, no secret-named environment, and production worker emits `DOCUMENT_PARSER_CONTRACT_OK`. Public/loopback probes return 200, auth/admin 401, release marker is exact and `.release-failed` absent.
+
+### 5.31 AI Gateway LLM OCR routing deployment (2026-08-27)
+
+> Application/immutable release `f9659668b237b70b4c018b866e20498689d327c2`;
+> rollback `ef043ebb8e51332effe75a5639cb207aec7bfc47`.
+
+- Exact GitHub Actions run `33002216562` succeeded in 12m22s with build,
+  typecheck, lint, unit, product visual and Hermes gates. Independent
+  architecture/security review returned `DEPLOYABLE / CLEAN`; local AI Gateway
+  `48/48`, Worker `102/102`, full workspace and docs gates passed. Local Docker
+  was not started.
+- Pre/post canonical checkup passed at 22% disk and 26 GiB available memory;
+  backup returned `452K files=7/7`. The fixed worktree intentionally does not
+  duplicate ignored deployment credentials, so PowerShell set
+  `XGS_CONFIG_ROOT=E:/Miscellaneous/XGS` only for the Git Bash deploy process;
+  no config value was copied or printed.
+- The exact dry-run preceded confirmed `deploy.sh --skip-migrate`. ECS performed
+  the full workspace/19-page build and SHA-tagged Worker/Parser image build.
+  No migration, seed, research-data write or provider call ran; core remains
+  `28/28`, search `1/1` and both schemas are current.
+- ECS focused mocked gates passed: AI Gateway OCR/provider/boundary `36/36` and
+  Worker gateway configuration `9/9`; the production Worker emitted
+  `AI_GATEWAY_OCR_CONTRACT_OK`. MiniMax key presence was verified without
+  outputting it, while the Vision route remains disabled. Tavily and Semantic
+  Scholar keys are not present in production and must wait for Task 10's actual
+  consumer and permission boundary.
+- API, Web, Worker, Parser and data services are healthy. Parser remains
+  `network=none`, read-only, user `node`, 512 MiB/64 PID and mounts only
+  `/parser-jobs`. Public `/` is 200, protected auth/admin probes are 401, the
+  exact release marker matches, `.release-failed` is absent and the rollback
+  release tree remains available.

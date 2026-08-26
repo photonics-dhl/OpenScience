@@ -2,6 +2,17 @@
 
 > 最新同步：2026-08-27。历史由 Git 保存；旧计划和 archive 不作为默认输入。
 
+## 2026-08-27 — Research Intelligence Task 5 已部署
+
+- Taskmaster `hermes-research-intelligence`：Task 1–3、5 done（4/12）；Tasks 4、6 ready，下一步按依赖先执行 Task 4 CPU parser cascade。
+- Application/immutable release `f9659668b237b70b4c018b866e20498689d327c2`；rollback `ef043ebb8e51332effe75a5639cb207aec7bfc47`；exact CI run `33002216562` 12m22s 全绿，独立复审 `DEPLOYABLE / CLEAN`。
+- AI Gateway 新增 provider-neutral LLM OCR candidate contract：Gateway-owned prompt/hash、真实图片 header/尺寸核对、4 页/4 MiB 单页/8 MiB 总量、external-processing policy、运行时 kill switch、逐页 fallback、成本/latency 脱敏审计。
+- MiniMax Coding Plan VLM adapter 只允许官方 origin；provider wire payload 不越过 `packages/ai-gateway`，API/Domain/Web 无 SDK 或 schema 扩散。Vision 默认 disabled，未做真实或付费调用。
+- Fresh gates：AI Gateway `48/48`、worker `102/102`、全仓 build/typecheck/lint/test、docs 226 files/0、docs-sync 8/8、`AI_GATEWAY_OCR_CONTRACT_OK`、diff 通过；本机 Docker 零调用。
+- ECS：pre/post checkup 健康，backup `452K files=7/7`，服务器 full build 与 SHA-tagged Worker/Parser images 完成，`--skip-migrate` 无 migration/seed/research write；core `28/28`、search `1/1`。
+- Runtime：Parser network none/read-only/user node/512MiB/64PID/仅 `/parser-jobs`；公网 `/` 200、auth/admin 401、release exact、failure marker absent。
+- Secret presence-only 检查：MiniMax key present；Vision route disabled；Tavily/Semantic Scholar keys 尚未进入生产，留待 Task 10 有 consumer 和权限边界后注入。
+
 ## 2026-08-27 — Research Intelligence Task 3 已部署
 
 - Taskmaster `hermes-research-intelligence`：Task 1–3 done（3/12）。严格 DocumentSourceMap、deterministic locator round-trip、worker parser contract 与 image-only false-ready gate 已随 immutable application/release `ef043ebb8e51332effe75a5639cb207aec7bfc47` 部署；rollback `e0828a6118c92c87b7869493413441bba0e76a95`。
@@ -24,7 +35,7 @@
 
 ## Current version tuple
 
-- Branch: `codex/hermes-wanko-live2d`；application/release: `ef043ebb8e51332effe75a5639cb207aec7bfc47`；rollback: `e0828a6118c92c87b7869493413441bba0e76a95`。
+- Branch: `codex/hermes-wanko-live2d`；application/release: `f9659668b237b70b4c018b866e20498689d327c2`；rollback: `ef043ebb8e51332effe75a5639cb207aec7bfc47`。
 - 后续 docs-only commit 不改变已部署 application/release 身份。
 
 ## Constraints and open risk
@@ -36,5 +47,5 @@
 
 ## Next action
 
-1. 仅 Taskmaster Task 5 `AI Gateway and LLM OCR Routing` ready；Task 4（3+5）与 Task 6（2+5）在其完成后 ready。
+1. Taskmaster Tasks 4、6 ready；先执行 Task 4 `CPU Parser Cascade Implementation`，不在本机安装或运行容器。
 2. 在搜索库开始承载可重建之外的数据前，补独立 search backup/restore gate。

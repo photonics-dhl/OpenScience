@@ -1,6 +1,6 @@
 # Hermes Research Intelligence Platform Design
 
-> 状态：**CURRENT / REQUIREMENTS APPROVED / FOUNDATION TASKS 1–3 DEPLOYED**
+> 状态：**CURRENT / REQUIREMENTS APPROVED / TASKS 1–3、5 DEPLOYED**
 > 日期：2026-08-26
 > 产品基线：`docs/OpenScience_Kimi_Development_Spec.md`
 > 视觉基线：`docs/specs/2026-08-24-research-folio-product-system-design.md` 与 `docs/specs/2026-08-19-hermes-wanko-live2d-design.md`
@@ -444,10 +444,11 @@ export type ExtractionResult =
 
 ### 16.1 Current implementation checkpoint
 
-- Taskmaster `hermes-research-intelligence` 已完成 Task 1–3；Task 3 的实施计划 `docs/plans/2026-08-26-hermes-document-source-map-contract-plan.md` 已闭合。
+- Taskmaster `hermes-research-intelligence` 已完成 Task 1–3、5（4/12）；Tasks 4、6 ready，下一步先执行 Task 4。
 - Task 1 已交付能力台账机器门禁、13-case 自著权 corpus 与 current-parser baseline；没有安装新 parser、OCR、模型或 MCP。
 - Task 2 已交付 Claim/Evidence/locator 严格合同、发布事务门禁、核心 migration 28、独立 `packages/search`/`infra/search` 与 `SEARCH_DATABASE_URL` 边界，并随 ECS release `e0828a6` 部署。
 - Task 3 已在 application/immutable release `ef043ebb8e51332effe75a5639cb207aec7bfc47` 部署：严格 provider-neutral DocumentSourceMap、跨 artifact/hash/versioned map 的 locator 拒绝与 worker 运行时合同；其实现树父提交 `c47b3f182ba857897c3c33ee21c250f6b4db3f3c` 已审阅，`ef043eb` 是同树的空 CI 标记。回滚为 `e0828a6118c92c87b7869493413441bba0e76a95`。
+- Task 5 已在 application/immutable release `f9659668b237b70b4c018b866e20498689d327c2` 部署：独立 OCR provider pool、最少页与图片结构/尺寸/字节硬边界、严格 external-processing/kill policies、逐页 fallback、candidate-only provenance 和脱敏 cost/latency audit。Vision 默认 disabled，未做付费调用；rollback 为 `ef043ebb8e51332effe75a5639cb207aec7bfc47`。
 - 生产 core 当前仓库迁移 `28/28`、search `1/1`；core ledger 额外保留一条历史 `20260809010000_ro_create_idempotency`，failed migration 为 0。
 - core/search 的连接、迁移、隔离检查与健康探针已独立；现有每日 `backup.sh --db` 仍只覆盖 core。在 search 写入业务数据或接受真实流量前，必须完成独立 search backup 与 restore 演练，届时才可声称 §8.2 的备份边界完整闭合。
 

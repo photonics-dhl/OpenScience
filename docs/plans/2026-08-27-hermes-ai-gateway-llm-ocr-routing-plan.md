@@ -1,6 +1,6 @@
 # Hermes AI Gateway and LLM OCR Routing Implementation Plan
 
-> **Status: in progress (2026-08-27).** Taskmaster tag `hermes-research-intelligence`, Task 5. Production application/release remains `ef043ebb8e51332effe75a5639cb207aec7bfc47` until the exact implementation SHA passes review, CI and ECS acceptance.
+> **Status: completed and deployed (2026-08-27).** Taskmaster tag `hermes-research-intelligence`, Task 5. Application/immutable release `f9659668b237b70b4c018b866e20498689d327c2`; rollback `ef043ebb8e51332effe75a5639cb207aec7bfc47`.
 
 **Goal:** Add a provider-neutral, bounded LLM OCR route to the existing AI Gateway with per-provider kill switches, computed prompt/input hashes, page-level provenance, explicit cost/latency audit fields and a MiniMax Coding Plan VLM adapter, without exposing provider payloads to API, Domain or Web.
 
@@ -81,12 +81,12 @@
 - Modify: `project_index.md`
 - Modify: this plan
 
-- [ ] Run focused AI Gateway/Worker tests, full typecheck/lint/unit/build, docs-sync/docs lint and diff/credential checks.
-- [ ] Obtain independent architecture/security review; close every Critical/Important finding.
-- [ ] Push the exact reviewed implementation and require exact-SHA CI success.
-- [ ] On ECS only: preflight, full build, focused tests, a no-secret compiled OCR contract self-test, backup, immutable deploy and independent postdeploy verification.
-- [ ] Verify no migration/seed/research write, vision remains disabled without the explicit flag, text providers remain healthy, current core/search migration sets remain unchanged, public/loopback health passes and rollback remains available.
-- [ ] Mark Taskmaster Task 5 done only after server acceptance. Then confirm Tasks 4 and 6 become ready, synchronize CURRENT memory, publish docs-only closeout and wait for exact final docs-HEAD CI.
+- [x] Run focused AI Gateway/Worker tests, full typecheck/lint/unit/build, docs-sync/docs lint and diff/credential checks.
+- [x] Obtain independent architecture/security review; close every Critical/Important finding.
+- [x] Push the exact reviewed implementation and require exact-SHA CI success.
+- [x] On ECS only: preflight, full build, focused tests, a no-secret compiled OCR contract self-test, backup, immutable deploy and independent postdeploy verification.
+- [x] Verify no migration/seed/research write, vision remains disabled without the explicit flag, text providers remain healthy, current core/search migration sets remain unchanged, public/loopback health passes and rollback remains available.
+- [x] Mark Taskmaster Task 5 done only after server acceptance. Then confirm Tasks 4 and 6 become ready, synchronize CURRENT memory, publish docs-only closeout and wait for exact final docs-HEAD CI.
 
 ## Acceptance invariants
 
