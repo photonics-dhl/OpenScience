@@ -1,6 +1,6 @@
 # Hermes DocumentSourceMap Contract Implementation Plan
 
-> **Status: COMPLETED (2026-08-27).** The tracked steps use checkbox syntax; Task 3 is deployed as immutable application/release `ef043ebb8e51332effe75a5639cb207aec7bfc47`.
+> **Status: implementation acceptance complete; docs publication evidence pending (2026-08-27).** Task 3 is deployed as immutable application/release `ef043ebb8e51332effe75a5639cb207aec7bfc47`; Step 7 remains open for the docs-only push and exact docs-HEAD CI evidence.
 
 **Goal:** Complete Taskmaster `hermes-research-intelligence` Task 3 with a strict, provider-neutral `DocumentSourceMap`, deterministic `SourceLocator` construction and resolution, and a runtime-validated parser interface that future CPU/OCR parsers must implement.
 
@@ -242,7 +242,7 @@ Commit: `fix: reject empty scanned document output`
 - Modify: `docs/handoff/2026-08-16-hermes-2d-pet-handoff.md`
 - Modify: `docs/runbooks/deployment.md`
 - Modify: `project_index.md`
-- Modify: this plan (mark all steps complete)
+- Modify: this plan (record the two-phase final documentation evidence)
 
 **Interfaces:**
 
@@ -282,9 +282,9 @@ Run a fresh backup, deploy the exact SHA with canonical `infra/scripts/deploy.sh
 
 - [x] **Step 6: Close Taskmaster and synchronize CURRENT memory**
 
-Mark Task 3 done only after server acceptance. Confirm Task 4 and Task 5 are the dependency-ready next tasks and Task 6 remains blocked on Task 5. Update CURRENT spec/progress/handoff/index/runbook and this plan without duplicating full logs.
+Mark Task 3 done only after server acceptance. Confirm only Task 5 is ready; Task 4 (3+5) and Task 6 (2+5) become ready after Task 5. Update CURRENT spec/progress/handoff/index/runbook and this plan without duplicating full logs.
 
-- [x] **Step 7: Run final documentation and credential gates**
+- [ ] **Step 7: Complete final documentation and credential evidence (two-phase)**
 
 Run:
 
@@ -294,7 +294,7 @@ npx pnpm@9.15.0 docs:lint
 git diff --check
 ```
 
-Scan added lines for key/token/credential URL patterns without printing matches. Commit the closeout, push, wait for exact docs HEAD CI, and require a clean worktree.
+Scan added lines for key/token/credential URL patterns without printing matches. Commit the closeout, then push and wait for exact docs-HEAD CI before checking this step; require a clean worktree after that second phase.
 
 ## Plan self-review
 

@@ -12,7 +12,8 @@
 ## Version tuple
 
 - Worktree: `E:/Miscellaneous/XGS/.worktrees/readable-hermes-guidance`
-- Branch / docs HEAD: `codex/hermes-wanko-live2d` / subsequent docs-only commits (not application identity)
+- Branch / docs closeout base: `codex/hermes-wanko-live2d` / `db6c4f76d81125f9e421643ed44b6ec4d6962977` (`docs: close document source map task`)
+- Any subsequent closeout-fix commit is a docs-only descendant resolved by `git HEAD`, never an application release; do not embed a self-hash in this handoff.
 - Deployed application / immutable release: `ef043ebb8e51332effe75a5639cb207aec7bfc47`
 - Reviewed implementation tree parent: `c47b3f182ba857897c3c33ee21c250f6b4db3f3c`; `ef043eb` is an empty CI marker with the identical tree.
 - Rollback: `e0828a6118c92c87b7869493413441bba0e76a95`

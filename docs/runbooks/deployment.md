@@ -1,6 +1,6 @@
 # Runbook: 部署（Deployment）
 
-> 状态：**CURRENT**。2026-08-26 active immutable release / application source 为 `29344767b350e0a44ef74c04b9b5a55b342ef011`，rollback tree 为 `58614c07951374537ed146f164f8568e9957a9b5`。post-deploy docs-only HEAD 不得冒充 application source。
+> 状态：**CURRENT**。active immutable release / application source 为 `ef043ebb8e51332effe75a5639cb207aec7bfc47`，rollback tree 为 `e0828a6118c92c87b7869493413441bba0e76a95`。post-deploy docs-only HEAD 不得冒充 application source。
 > 格式遵循 `.agents/skills/infra-runbook/SKILL.md` 四节强制要求。
 > 部署属 Spec §20.5"询问"级操作：执行前需用户确认，必须走 `infra/scripts/deploy.sh` + CI/CD，禁止手工改服务器代码。
 
@@ -918,10 +918,10 @@ Historical note for the 2026-08-11 release: it used fixed worker tags and a writ
 - The user confirmed normal motion returned after the Chrome-specific override
   was removed. No CF purge, source change or deployment was required.
 
-### 5.29 Research Intelligence core/search foundation (2026-08-26)
+### 5.29 Historical — Research Intelligence core/search foundation (2026-08-26)
 
-> Active application/release `e0828a6118c92c87b7869493413441bba0e76a95`;
-> rollback `29344767b350e0a44ef74c04b9b5a55b342ef011`.
+> **HISTORICAL / SUPERSEDED by §5.30.** Former application/release `e0828a6118c92c87b7869493413441bba0e76a95`;
+> former rollback `29344767b350e0a44ef74c04b9b5a55b342ef011`.
 
 - All Docker, database, image-build and runtime acceptance operations ran on
   ECS. Windows invoked the canonical scripts only through explicit Git for

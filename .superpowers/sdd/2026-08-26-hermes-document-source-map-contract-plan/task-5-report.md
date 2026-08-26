@@ -28,3 +28,11 @@ Run `audit:docs-sync`, `docs:lint`, `git diff --check`, placeholder scan and an
 added-lines credential-pattern scan after this report is committed to the
 closeout diff. Taskmaster Task 3 is done; only Task 5 is ready next, with Tasks
 4 and 6 waiting on Task 5.
+
+## Review round 2 — pre-publication correction
+
+- Base closeout commit: `db6c4f76d81125f9e421643ed44b6ec4d6962977`.
+- The follow-up is a docs-only descendant resolved by `git HEAD`, never the
+  application release. It corrects the CURRENT deployment anchor, demotes the
+  prior Task 2 release record to historical, and leaves Plan Step 7 open until
+  the docs-only push and exact docs-HEAD CI supply the second-phase evidence.
