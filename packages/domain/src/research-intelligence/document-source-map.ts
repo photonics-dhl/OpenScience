@@ -118,8 +118,8 @@ function parseBoundingBox(value: unknown, page: DocumentPage): DocumentBlock['bo
   const y = typeof box.y === 'number' && Number.isFinite(box.y) && box.y >= 0 ? box.y : undefined;
   const width = finitePositive(box.width, 'DocumentBlock boundingBox width');
   const height = finitePositive(box.height, 'DocumentBlock boundingBox height');
-  const xTolerance = Number.EPSILON * Math.max(1, Math.abs(x ?? 0), width, page.width) * 16;
-  const yTolerance = Number.EPSILON * Math.max(1, Math.abs(y ?? 0), height, page.height) * 16;
+  const xTolerance = Number.EPSILON * Math.max(Math.abs(x ?? 0), width, page.width) * 16;
+  const yTolerance = Number.EPSILON * Math.max(Math.abs(y ?? 0), height, page.height) * 16;
   if (x === undefined || y === undefined || x + width - page.width > xTolerance || y + height - page.height > yTolerance) {
     throw new Error('DocumentBlock boundingBox must be within its page');
   }

@@ -112,6 +112,30 @@ describe('DocumentSourceMap boundary', () => {
     expect(() => serializeDocumentSourceMap(map)).toThrow(/within its page/);
   });
 
+  it('accepts a block exactly contained by a tiny page', async () => {
+    const map = { ...validMap(), pages: [{
+      page: 1,
+      width: Number.MIN_VALUE,
+      height: Number.MIN_VALUE,
+      blocks: [block('tiny-edge', { boundingBox: { x: 0, y: 0, width: Number.MIN_VALUE, height: Number.MIN_VALUE } })],
+    }] };
+    const { serializeDocumentSourceMap } = await documentSourceMapContract();
+
+    expect(() => serializeDocumentSourceMap(map)).not.toThrow();
+  });
+
+  it('rejects a material overflow on a tiny page', async () => {
+    const map = { ...validMap(), pages: [{
+      page: 1,
+      width: Number.MIN_VALUE,
+      height: Number.MIN_VALUE,
+      blocks: [block('tiny-outside', { boundingBox: { x: 0, y: 0, width: 1e-16, height: 1e-16 } })],
+    }] };
+    const { serializeDocumentSourceMap } = await documentSourceMapContract();
+
+    expect(() => serializeDocumentSourceMap(map)).toThrow(/within its page/);
+  });
+
   it('round-trips escape-heavy content beyond the former raw JSON cap', async () => {
     const map = { ...validMap(), pages: [{
       ...validMap().pages[0],
