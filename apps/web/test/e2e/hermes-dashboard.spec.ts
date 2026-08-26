@@ -746,10 +746,12 @@ test('Hermes focus and open presence drive real mesh articulation', async ({ pag
 
 test('Hermes remounts a fresh canvas after a live WebGL context loss', async ({ page }) => {
   await mockDashboard(page);
-  await page.goto(`${baseUrl}/dashboard`, { waitUntil: 'networkidle' });
+  await page.goto(`${baseUrl}/dashboard?hermes-motion=full`, { waitUntil: 'networkidle' });
   const stage = page.locator('[data-hermes-rig="live2d-wanko"]');
+  const motionToggle = page.locator('[data-hermes-motion-toggle]');
   const oldCanvas = await page.locator('[data-hermes-articulated-canvas]').elementHandle();
   await expect(stage).toHaveAttribute('data-hermes-rig-status', 'ready');
+  await expect(motionToggle).toHaveAttribute('data-motion-active', 'true');
   await page.locator('[data-hermes-articulated-canvas]').evaluate((canvas: HTMLCanvasElement) => {
     canvas.getContext('webgl2')?.getExtension('WEBGL_lose_context')?.loseContext();
   });
@@ -765,7 +767,9 @@ test('Hermes remounts a fresh canvas after a live WebGL context loss', async ({ 
   const boundedGeneration = await stage.getAttribute('data-hermes-runtime-generation');
   await page.waitForTimeout(500);
   await expect(stage).toHaveAttribute('data-hermes-runtime-generation', boundedGeneration!);
-  await expect(page.getByRole('button', { name: /Retry Hermes motion|重试 Hermes 动效/i })).toBeEnabled();
+  await expect(motionToggle).toHaveAttribute('data-motion-runtime', 'fallback');
+  await expect(motionToggle).toHaveAccessibleName(/Retry Hermes motion|重试 Hermes 动效/i);
+  await expect(motionToggle).toBeEnabled();
 });
 
 test('Hermes retries with a fresh runtime after the required Cubism model fails', async ({ page }) => {
