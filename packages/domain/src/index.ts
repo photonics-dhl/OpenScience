@@ -243,3 +243,17 @@ export {
   type ExtractionBlockCode,
   type ExtractionResult,
 } from './research-intelligence/extraction-result';
+export {
+  DOCUMENT_BLOCK_KINDS,
+  DOCUMENT_TRANSFORMATION_STAGES,
+  parseDocumentSourceMap,
+  serializeDocumentSourceMap,
+  deserializeDocumentSourceMap,
+  type DocumentBlockKind,
+  type DocumentTransformationStage,
+  type DocumentParserMetadata,
+  type DocumentTransformation,
+  type DocumentBlock,
+  type DocumentPage,
+  type DocumentSourceMap,
+} from './research-intelligence/document-source-map';
