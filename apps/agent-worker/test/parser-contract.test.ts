@@ -41,6 +41,12 @@ function parser(result: ExtractionResult<DocumentSourceMap>, overrides: Partial<
   };
 }
 
+const nestedProxyTrapCases: Array<[string, (fail: () => never) => ProxyHandler<object>]> = [
+  ['prototype', (fail) => ({ getPrototypeOf: fail })],
+  ['descriptor', (fail) => ({ getOwnPropertyDescriptor: fail })],
+  ['ownKeys', (fail) => ({ ownKeys: fail })],
+];
+
 describe('runDocumentParser', () => {
   it('returns a strict succeeded result with decimal coordinates', async () => {
     const result = await runDocumentParser(input(), parser({ status: 'succeeded', sourceMap: sourceMap(), warnings: [] }));
@@ -192,11 +198,72 @@ describe('runDocumentParser', () => {
     await expect(runDocumentParser(input({ mediaType: ' '.repeat(201) }), parser({ status: 'succeeded', sourceMap: sourceMap(), warnings: [] }))).rejects.toThrow(/preflight/);
   });
 
-  it('rejects an oversized array before descriptor enumeration', async () => {
-    const hugeWarnings = new Proxy(new Array(101), {
-      ownKeys: () => { throw new Error('descriptor enumeration reached'); },
-    });
+  it('rejects an oversized array before inspecting its entries', async () => {
+    const hugeWarnings = new Array(101) as string[];
     await expect(runDocumentParser(input(), parser({ status: 'succeeded', sourceMap: sourceMap(), warnings: hugeWarnings }))).rejects.toThrow(/exceeds its maximum length/);
+  });
+
+  it('rejects a proxied input container without invoking traps or parser callbacks', async () => {
+    let trapCalls = 0;
+    let supportsCalled = false;
+    let parseCalled = false;
+    const proxiedInput = new Proxy(input(), {
+      getPrototypeOf: () => { trapCalls += 1; throw new Error('prototype trap reached'); },
+      getOwnPropertyDescriptor: () => { trapCalls += 1; throw new Error('descriptor trap reached'); },
+      ownKeys: () => { trapCalls += 1; throw new Error('ownKeys trap reached'); },
+    });
+    const candidate = parser({ status: 'succeeded', sourceMap: sourceMap(), warnings: [] }, {
+      supports: () => { supportsCalled = true; return true; },
+      parse: async () => { parseCalled = true; return { status: 'succeeded', sourceMap: sourceMap(), warnings: [] }; },
+    });
+
+    await expect(runDocumentParser(proxiedInput, candidate)).rejects.toBeInstanceOf(ParserContractError);
+    expect(trapCalls).toBe(0);
+    expect(supportsCalled).toBe(false);
+    expect(parseCalled).toBe(false);
+  });
+
+  it('rejects a proxied parser container before metadata descriptors or callbacks', async () => {
+    let trapCalls = 0;
+    let supportsCalled = false;
+    let parseCalled = false;
+    const candidate = new Proxy(parser({ status: 'succeeded', sourceMap: sourceMap(), warnings: [] }, {
+      supports: () => { supportsCalled = true; return true; },
+      parse: async () => { parseCalled = true; return { status: 'succeeded', sourceMap: sourceMap(), warnings: [] }; },
+    }), {
+      getPrototypeOf: () => { trapCalls += 1; throw new Error('prototype trap reached'); },
+      getOwnPropertyDescriptor: () => { trapCalls += 1; throw new Error('descriptor trap reached'); },
+      ownKeys: () => { trapCalls += 1; throw new Error('ownKeys trap reached'); },
+    });
+
+    await expect(runDocumentParser(input(), candidate)).rejects.toBeInstanceOf(ParserContractError);
+    expect(trapCalls).toBe(0);
+    expect(supportsCalled).toBe(false);
+    expect(parseCalled).toBe(false);
+  });
+
+  it.each(nestedProxyTrapCases)('rejects a nested plain-object proxy before its %s trap', async (trapName, createHandler) => {
+    let trapCalls = 0;
+    const fail = (): never => {
+      trapCalls += 1;
+      throw new Error(`${trapName} trap reached`);
+    };
+    const map = sourceMap();
+    const block = map.pages[0]!.blocks[0]!;
+    block.boundingBox = new Proxy(block.boundingBox, createHandler(fail));
+
+    await expect(runDocumentParser(input(), parser({ status: 'succeeded', sourceMap: map, warnings: [] }))).rejects.toBeInstanceOf(ParserContractError);
+    expect(trapCalls).toBe(0);
+  });
+
+  it('rejects a bounded array proxy before any proxy trap', async () => {
+    let trapCalls = 0;
+    const warnings = new Proxy(['warning'], {
+      ownKeys: () => { trapCalls += 1; throw new Error('ownKeys trap reached'); },
+    });
+
+    await expect(runDocumentParser(input(), parser({ status: 'succeeded', sourceMap: sourceMap(), warnings }))).rejects.toBeInstanceOf(ParserContractError);
+    expect(trapCalls).toBe(0);
   });
 
   it('serializes canonical output safely when global prototypes gain toJSON hooks', async () => {

@@ -1,4 +1,5 @@
 import { createHash } from 'node:crypto';
+import { isProxy } from 'node:util/types';
 import {
   parseDocumentSourceMap, parseExtractionResult,
   type DocumentParserMetadata, type DocumentSourceMap, type ExtractionResult,
@@ -27,6 +28,10 @@ interface ParserSnapshot { input: ParserInput; metadata: DocumentParserMetadata 
 
 function contract(message: string): never { throw new ParserContractError(message); }
 
+function rejectProxy(value: unknown, label: string): void {
+  if (isProxy(value)) contract(`preflight ${label} must not be a Proxy`);
+}
+
 function safeObject<T extends Record<string, unknown>>(value: T): T {
   return Object.assign(Object.create(null) as T, value);
 }
@@ -38,6 +43,7 @@ function safeArray<T>(values: readonly T[]): T[] {
 }
 
 function dataObject(value: unknown, label: string, allowed: readonly string[]): Descriptors {
+  rejectProxy(value, label);
   if (!value || typeof value !== 'object' || Array.isArray(value) || Object.getPrototypeOf(value) !== Object.prototype) {
     contract(`preflight ${label} must be a plain object`);
   }
@@ -80,6 +86,7 @@ function finiteNumber(value: unknown, label: string): number {
 }
 
 function dataArray(value: unknown, label: string, maximum: number): unknown[] {
+  rejectProxy(value, label);
   if (!Array.isArray(value) || Object.getPrototypeOf(value) !== Array.prototype) contract(`preflight ${label} must be an ordinary array`);
   const lengthDescriptor = Object.getOwnPropertyDescriptor(value, 'length');
   if (!lengthDescriptor || !Object.prototype.hasOwnProperty.call(lengthDescriptor, 'value') || typeof lengthDescriptor.value !== 'number') {
@@ -198,10 +205,12 @@ function snapshotInput(input: unknown, parser: DocumentParser): ParserSnapshot {
     const mediaType = boundedString(required(fields, 'mediaType', 'ParserInput mediaType'), 'ParserInput mediaType', MAX_IDENTIFIER_LENGTH);
     const sourceContent = required(fields, 'content', 'ParserInput content');
     if (!/^[a-f0-9]{64}$/.test(contentHash)) contract('ParserInput contentHash must be a SHA-256 hex digest');
+    rejectProxy(sourceContent, 'ParserInput content');
     if (!Buffer.isBuffer(sourceContent)) contract('ParserInput content must be a Buffer');
     if (sourceContent.length > MAX_INPUT_BYTES) contract('ParserInput content exceeds maximum size');
     const privateContent = Buffer.from(sourceContent);
     if (contentHash !== createHash('sha256').update(privateContent).digest('hex')) contract('ParserInput contentHash does not match content');
+    rejectProxy(parser, 'DocumentParser');
     const metadata = canonicalMetadata(Object.getOwnPropertyDescriptor(parser, 'metadata')?.value, 'DocumentParser metadata', { strings: 0, blocks: 0, transformations: 0 });
     return { input: { artifactId, contentHash, mediaType, content: privateContent }, metadata };
   } catch (error) {
