@@ -92,4 +92,68 @@ describe('runDocumentParser', () => {
     const map = sourceMap({ pages: [{ page: 1, width: 612.25, height: 792.5, blocks: [] }] });
     await expect(runDocumentParser(input(), parser({ status: 'needs_review', sourceMap: map, reasons: ['layout ambiguous'] }))).resolves.toEqual({ status: 'needs_review', sourceMap: map, reasons: ['layout ambiguous'] });
   });
+
+  it.each([
+    ['null input', null],
+    ['non-Buffer content', { ...input(), content: 'not-a-buffer' }],
+    ['non-string artifact id', { ...input(), artifactId: 1 }],
+    ['unbounded media type', { ...input(), mediaType: 'x'.repeat(201) }],
+    ['invalid content hash type', { ...input(), contentHash: null }],
+  ])('turns %s into ParserContractError', async (_name, malformedInput) => {
+    await expect(runDocumentParser(malformedInput as ParserInput, parser({ status: 'succeeded', sourceMap: sourceMap(), warnings: [] }))).rejects.toBeInstanceOf(ParserContractError);
+  });
+
+  it('rejects oversized and sparse output arrays before JSON serialization', async () => {
+    const oversizedWarnings = new Array(101) as string[];
+    Object.defineProperty(oversizedWarnings, 'toJSON', { value: () => { throw new Error('JSON serialization reached'); } });
+    const sparseWarnings = new Array(2) as string[];
+    sparseWarnings[0] = 'warning';
+    Object.defineProperty(sparseWarnings, 'toJSON', { value: () => { throw new Error('JSON serialization reached'); } });
+
+    for (const warnings of [oversizedWarnings, sparseWarnings]) {
+      await expect(runDocumentParser(input(), parser({ status: 'succeeded', sourceMap: sourceMap(), warnings }))).rejects.toThrow(/preflight/);
+    }
+  });
+
+  it('rejects unselected result branches before JSON serialization', async () => {
+    const hiddenBranch = new Array(1) as string[];
+    hiddenBranch[0] = 'unselected';
+    Object.defineProperty(hiddenBranch, 'toJSON', { value: () => { throw new Error('JSON serialization reached'); } });
+    const result = { status: 'succeeded' as const, sourceMap: sourceMap(), warnings: [], reasons: hiddenBranch };
+
+    await expect(runDocumentParser(input(), parser(result as ExtractionResult<DocumentSourceMap>))).rejects.toThrow(/preflight/);
+  });
+
+  it('isolates caller input and snapshots parser metadata across untrusted callbacks', async () => {
+    const callerInput = input({ content: Buffer.from(content) });
+    const mutableMetadata: DocumentParserMetadata = { name: 'memory-parser', version: '1.0.0' };
+    const expectedMap = sourceMap({ parser: { ...mutableMetadata } });
+    let parseInput: ParserInput | undefined;
+    let parseContentBeforeMutation: Buffer | undefined;
+    const candidate: DocumentParser = {
+      metadata: mutableMetadata,
+      supports: (received) => {
+        received.artifactId = 'mutated-artifact';
+        received.contentHash = '0'.repeat(64);
+        received.mediaType = 'text/plain';
+        received.content.fill(0);
+        mutableMetadata.name = 'mutated-parser';
+        mutableMetadata.version = '9.9.9';
+        return true;
+      },
+      parse: async (received) => {
+        parseInput = received;
+        parseContentBeforeMutation = Buffer.from(received.content);
+        received.content.fill(1);
+        mutableMetadata.name = 'mutated-again';
+        return { status: 'succeeded', sourceMap: expectedMap, warnings: [] };
+      },
+    };
+
+    await expect(runDocumentParser(callerInput, candidate)).resolves.toEqual({ status: 'succeeded', sourceMap: expectedMap, warnings: [] });
+    expect(parseInput).toMatchObject({ artifactId: 'artifact-1', contentHash, mediaType: 'application/pdf' });
+    expect(parseContentBeforeMutation?.equals(content)).toBe(true);
+    expect(callerInput).toMatchObject({ artifactId: 'artifact-1', contentHash, mediaType: 'application/pdf' });
+    expect(callerInput.content.equals(content)).toBe(true);
+  });
 });
