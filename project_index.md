@@ -334,7 +334,7 @@
 | `docs/decisions/ADR-006-cloudflare-tunnel-public-ingress.md` | 未备案域名公网入口改由 ECS 常驻 Cloudflare Tunnel 承载；Nginx 继续作为统一回源与安全边界 | Accepted |
 | `docs/handoff/2026-08-15-cloudflare-tunnel-egress-incident-handoff.md` | Cloudflare Tunnel 502/530 事故根因、生产修复、回滚证据与后续观察项 | 当前基础设施交接 |
 | `docs/specs/2026-08-16-edge-cache-asset-versioning-design.md` / `docs/plans/2026-08-16-edge-cache-asset-versioning-plan.md` / `docs/handoff/2026-08-16-edge-cache-asset-versioning-handoff.md` | Landing 大型光学资产内容寻址缓存的设计、实施与部署证据 | 已完成历史主题；release `b93fa9d`，不作为当前 Hermes 入口 |
-| `docs/runbooks/deployment.md` | 部署 runbook（cloud-sync/迁移/seed/nginx/验证、Parser 隔离、Windows 显式 Git Bash 专用密钥调用与版本化资产）；§1.1 锁定裸 `bash` 命中 WSL 的误报签名，§5.26–5.28 登记 Landing water recovery、WebGL fallback 与 Chrome reduced-motion 排障 | CURRENT；application/release/rollback `2934476` / `2934476` / `58614c0`，用户已确认正常 |
+| `docs/runbooks/deployment.md` | 部署 runbook（cloud-sync/迁移/seed/nginx/验证、Parser 隔离、Windows 显式 Git Bash 专用密钥调用与版本化资产）；§1.1 锁定裸 `bash` 或自动化 `shell=` 抽象层误入 WSL 的签名，只接受 PowerShell 显式执行 Git for Windows Bash；§5.26–5.28 登记 Landing water recovery、WebGL fallback 与 Chrome reduced-motion 排障 | CURRENT；application/release/rollback `2934476` / `2934476` / `58614c0`，用户已确认正常 |
 | `docs/runbooks/hermes-capability-registry.md` | Hermes Skill/MCP/model/parser/provider 能力台账：注入状态、授权/成本、项目级安装目录、72h PDF TTL、10min signed URL、评测/回滚/退役规则 | **CURRENT capability registry / MACHINE-GATED**；21 行主表、11 行候选评测矩阵、13-case `BASELINE_ONLY` 已记录；凭据值不入文档，尚未安装或部署新能力 |
 | `docs/runbooks/backup-restore.md` | 备份与恢复 runbook（四节骨架，Phase 1A 填充） | 骨架 |
 | `docs/runbooks/incident.md` | 故障响应 runbook（四节骨架，Phase 1A 填充） | 骨架 |

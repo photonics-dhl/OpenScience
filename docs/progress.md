@@ -13,7 +13,7 @@
 
 - 用户确认 LLM OCR 作为平台自动处理能力，不再逐文档询问；仍须经 AI Gateway、最小页路由、来源标记与审计，生成结果不得冒充原始证据。
 - 仅检查注入状态、不读取或输出 `.env` 值：本机 Tavily 已注入但额度耗尽，Semantic Scholar 常用变量未进入当前进程；生产 `agent-worker` 已注入 MiniMax，尚未注入 Tavily/Semantic Scholar。用户在聊天中暴露的凭据必须轮换后再配置。
-- SSH key 已用同一密钥只读复验成功。历史误报由 Windows 裸 `bash` 命中 WSL 导致；`AGENTS.md` 与 deployment §1.1 已锁定显式 Git Bash 调用和 `wsl: Failed to translate` 根因签名，禁止再误判为密钥失败。未改产品代码、未写服务器、未部署。
+- SSH key 已用同一密钥只读复验成功。历史误报由 Windows 裸 `bash` 命中 WSL 导致；2026-08-26 又确认自动化执行器的 `shell=` 抽象层也会误入 WSL，只有 PowerShell 显式 `& 'C:\Program Files\Git\bin\bash.exe'` 才是可靠入口。`AGENTS.md` 与 deployment §1.1 已锁定根因签名，禁止再误判为密钥失败；未改产品代码、未写服务器、未部署。
 - Taskmaster `optical-editorial-v3` 历史 tag 为 15/15；CURRENT `hermes-research-intelligence` 为 1/12 done，下一唯一 ready 项为 Task 2 `Prisma Schema and Core Domain Models`，其余 10 项等待依赖。
 - 实施保持四个可回滚阶段：Foundation 已建立能力台账机器门禁、自有 corpus 与现状 parser 基准；后续再依实测依次进入文档/OCR/搜索、兴趣/外部检索、RO/富媒体/生产验收。
 

@@ -29,6 +29,8 @@ Windows 上不要用系统 `bash.exe`、WSL 或 `wsl bash` 调用 `infra/scripts
 & 'C:\Program Files\Git\bin\bash.exe' ./infra/scripts/ssh-run.sh '<read-only command>'
 ```
 
+自动化执行器的 `shell`/`shell=` 参数不视为“显式调用”：2026-08-26 实测该抽象层仍可能落到 WSL，并把 Git worktree 路径拼成 `/mnt/e/.../E:/...`。Windows 自动化必须让 PowerShell 直接执行 `& 'C:\Program Files\Git\bin\bash.exe' ...`；先以 `& 'C:\Program Files\Git\bin\bash.exe' --version` 确认输出包含 `x86_64-pc-msys`，再运行 Git/SSH 命令。
+
 Git Bash 会沿用 Windows 用户目录中的 SSH 配置和项目专用密钥。出现“SSH 认证失败”时，先检查实际调用的是不是 `C:\Program Files\Git\bin\bash.exe`；不要改用密码，不要复制、打印或放宽私钥权限。2026-08-26 已再次复现“裸 `bash` → WSL 误报”，并用同一密钥、上述显式 Git Bash 命令完成只读复验。
 
 ## 2. 执行步骤
