@@ -516,7 +516,9 @@ test('Hermes loading and error surfaces are explicit', async ({ page }) => {
     await json(route, { tasks: [] });
   });
   await page.goto(`${baseUrl}/dashboard`, { waitUntil: 'domcontentloaded' });
-  await expect(page.locator('main[aria-busy="true"]')).toBeVisible();
+  const loadingSurface = page.locator('[data-os-surface="dashboard"][aria-busy="true"]');
+  await expect(loadingSurface).toBeVisible();
+  await expect(loadingSurface.locator('[aria-live="polite"]')).toBeVisible();
   await page.screenshot({ path: `${outDir}/loading-390x844.png`, fullPage: true });
   releaseLoading();
 
@@ -526,7 +528,14 @@ test('Hermes loading and error surfaces are explicit', async ({ page }) => {
   }));
   await page.route('**/api/research-objects?limit=20', (route) => json(route, { error: { message: 'Research index unavailable' } }, 503));
   await page.route('**/api/ingestion?actionable=true', (route) => json(route, { tasks: [] }));
-  await page.reload({ waitUntil: 'networkidle' });
+  const researchErrorResponse = page.waitForResponse((response) => {
+    const url = new URL(response.url());
+    return url.pathname === '/api/research-objects'
+      && url.searchParams.get('limit') === '20'
+      && response.status() === 503;
+  });
+  await page.reload({ waitUntil: 'domcontentloaded' });
+  await researchErrorResponse;
   await expect(page.locator('p[role="alert"]')).toContainText('Research index unavailable');
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(390);
   await page.screenshot({ path: `${outDir}/error-390x844.png`, fullPage: true, animations: 'disabled' });
