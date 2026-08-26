@@ -135,7 +135,7 @@ function isPracticalLineNumber(value: unknown): value is number {
 }
 
 function isNormalizedRepositoryPath(value: unknown): value is string {
-  if (!nonEmptyString(value, 1_000) || /[\x00-\x1F\x7F\\]/.test(value) || value.startsWith('/') || /^[A-Za-z]:/.test(value)) return false;
+  if (!nonEmptyString(value, 1_000) || /\p{Cc}|\\/u.test(value) || value.startsWith('/') || /^[A-Za-z]:/.test(value)) return false;
   return value.split('/').every((segment) => segment !== '' && segment !== '.' && segment !== '..');
 }
 

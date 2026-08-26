@@ -127,6 +127,7 @@ describe('validateSourceLocator', () => {
     { commit: 'abc1234', path: 'src/../model.py', startLine: 1, endLine: 1 },
     { commit: 'abc1234', path: 'src//model.py', startLine: 1, endLine: 1 },
     { commit: 'abc1234', path: 'src/\u0000model.py', startLine: 1, endLine: 1 },
+    { commit: 'abc1234', path: 'src/\u0085model.py', startLine: 1, endLine: 1 },
     { commit: 'abc1234', path: 'src/model.py', startLine: Number.MAX_SAFE_INTEGER + 1, endLine: Number.MAX_SAFE_INTEGER + 1 },
     { commit: 'abc1234', path: 'src/model.py', startLine: 10_000_001, endLine: 10_000_001 },
   ])('rejects unsafe code provenance %#', async (codeRange) => {
