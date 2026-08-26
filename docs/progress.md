@@ -4,7 +4,7 @@
 
 ## 2026-08-26 — Research Intelligence Task 2 已部署
 
-- Taskmaster CURRENT tag `hermes-research-intelligence`：Task 1–2 已完成，进度 `2/12 = 16.7%`；下一唯一 ready 项是 Task 3 `DocumentSourceMap Contract and Parser Interfaces`。
+- Taskmaster CURRENT tag `hermes-research-intelligence`：Task 1–2 已完成，Task 3 `DocumentSourceMap Contract and Parser Interfaces` 已进入 `in-progress`；实施入口为 `docs/plans/2026-08-26-hermes-document-source-map-contract-plan.md`。
 - 核心领域合同已实现：ResearchIdentity/Profile、Claim、Evidence、PresentationAsset、严格 locator 与 ExtractionResult；Claim graph 要求每个公开 Version 有 3–7 个核心 Claim、同 RO/version、无环，发布校验与状态切换位于同一 Serializable 事务。
 - 核心迁移 28 新增 `ResearchIdentityProfile`、`ClaimNode`、`EvidenceRecord`、`PresentationAsset` 与关联表；只保存元数据、哈希、locator 与对象键，不保存 PDF/图片/视频字节。
 - `packages/search`、`infra/search/schema.prisma`、独立迁移账本和 `SEARCH_DATABASE_URL` 已建立；core/search URL 物理隔离门禁和迁移链已接入部署，API/domain 不直接依赖搜索 client。
@@ -24,7 +24,7 @@
 
 ## Current version tuple
 
-- Branch / branch HEAD: `codex/hermes-wanko-live2d` / `e0828a6118c92c87b7869493413441bba0e76a95`。
+- Branch / planning base HEAD: `codex/hermes-wanko-live2d` / `6120c3cc1db1ff364879d36adfb68e4045ca4189`。
 - Deployed application / immutable release / rollback: `e0828a6118c92c87b7869493413441bba0e76a95` / `e0828a6118c92c87b7869493413441bba0e76a95` / `29344767b350e0a44ef74c04b9b5a55b342ef011`。
 - Local main / origin main: `b9616cb92dc83437b1b2094291ff43e2a4c34337` / `7eb2f5bc4718ee445b79bd089acb64acb3691e62`；二者均不能代替 CURRENT handoff 判断现状。
 - 后续 docs-only commit 不改变已部署 application/release 身份。
@@ -38,6 +38,6 @@
 
 ## Next action
 
-1. 执行 Taskmaster Task 3：DocumentSourceMap、parser interfaces、CPU parser cascade 与 image-only PDF false-ready 门禁。
-2. Task 3 仍先写独立 plan 并按 TDD 实施；所有容器/解析 runtime 与最终验收只在 ECS。
+1. 按 CURRENT Task 3 plan 实施严格 DocumentSourceMap、parser interface、locator round-trip 与 image-only PDF false-ready 门禁；CPU parser cascade 仍属于 Task 4。
+2. 所有容器/解析 runtime 与最终验收只在 ECS。
 3. 在搜索库开始承载可重建之外的数据前，补独立 search backup/restore gate。

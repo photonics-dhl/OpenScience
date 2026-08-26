@@ -5,14 +5,14 @@
 ## Objective and status
 
 - 用户目标：以 3–7 个 Claim 为公开 RO 中心，提供可定位 Evidence、条件/限制、身份静默路由、CPU 文档解析、混合检索和可版本化富媒体。
-- Taskmaster tag `hermes-research-intelligence` 已完成 Task 1–2，`2/12 = 16.7%`；下一唯一 ready 项是 Task 3 `DocumentSourceMap Contract and Parser Interfaces`。
+- Taskmaster tag `hermes-research-intelligence` 已完成 Task 1–2；Task 3 `DocumentSourceMap Contract and Parser Interfaces` 已进入 `in-progress`，CURRENT 计划为 `docs/plans/2026-08-26-hermes-document-source-map-contract-plan.md`。
 - Task 1 建立能力台账、13-case 自著权 corpus 与现状 parser baseline；尚未安装新 parser/OCR/model/MCP。
 - Task 2 已完成实现、独立复审、CI、ECS 迁移演练、生产部署和运行验收。
 
 ## Version tuple
 
 - Worktree: `E:/Miscellaneous/XGS/.worktrees/readable-hermes-guidance`
-- Branch / implementation HEAD: `codex/hermes-wanko-live2d` / `e0828a6118c92c87b7869493413441bba0e76a95`
+- Branch / planning base HEAD: `codex/hermes-wanko-live2d` / `6120c3cc1db1ff364879d36adfb68e4045ca4189`
 - Deployed application / immutable release: `e0828a6118c92c87b7869493413441bba0e76a95`
 - Rollback: `29344767b350e0a44ef74c04b9b5a55b342ef011`
 - Local main / origin main: `b9616cb92dc83437b1b2094291ff43e2a4c34337` / `7eb2f5bc4718ee445b79bd089acb64acb3691e62`
@@ -49,7 +49,7 @@
 ## Open risk and next action
 
 - `backup.sh --db` 目前只备份 core。search baseline 仍为空且派生数据可重建；在 Task 6 写入搜索数据或接受真实流量前，必须实现并恢复演练独立 search backup。
-- 下一 session 执行 Task 3：先读 CURRENT design 的 document intelligence 部分和 Task 3 详情，写独立 plan，按 TDD 建立 DocumentSourceMap、parser interfaces 与 image-only PDF false-ready 门禁。
+- 当前按 Task 3 CURRENT plan 直接实施 DocumentSourceMap、parser interfaces、locator round-trip 与 image-only PDF false-ready 门禁；CPU cascade、OCR/provider 安装仍留给 Task 4/5。
 - Task 3 的容器/parser runtime 和最终验收仍只在 ECS；不要安装尚未通过 corpus 评测的候选。
 
 ## Read first
@@ -57,7 +57,7 @@
 1. `AGENTS.md`
 2. 本 handoff
 3. `docs/specs/2026-08-26-hermes-research-intelligence-platform-design.md`
-4. Task 3 实施计划（创建后）
+4. `docs/plans/2026-08-26-hermes-document-source-map-contract-plan.md`
 5. `docs/progress.md`
 6. `docs/OpenScience_Kimi_Development_Spec.md` 的相关章节
 

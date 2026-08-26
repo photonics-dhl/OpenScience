@@ -444,7 +444,7 @@ export type ExtractionResult =
 
 ### 16.1 Current implementation checkpoint
 
-- Taskmaster `hermes-research-intelligence` 已完成 Task 1–2，进度 `2/12`；下一唯一 ready 项是 Task 3 `DocumentSourceMap Contract and Parser Interfaces`。
+- Taskmaster `hermes-research-intelligence` 已完成 Task 1–2；Task 3 `DocumentSourceMap Contract and Parser Interfaces` 已进入 `in-progress`，实施入口为 `docs/plans/2026-08-26-hermes-document-source-map-contract-plan.md`。
 - Task 1 已交付能力台账机器门禁、13-case 自著权 corpus 与 current-parser baseline；没有安装新 parser、OCR、模型或 MCP。
 - Task 2 已交付 Claim/Evidence/locator 严格合同、发布事务门禁、核心 migration 28、独立 `packages/search`/`infra/search` 与 `SEARCH_DATABASE_URL` 边界，并随 ECS release `e0828a6` 部署。
 - 生产 core 当前仓库迁移 `28/28`、search `1/1`；core ledger 额外保留一条历史 `20260809010000_ro_create_idempotency`，failed migration 为 0。
