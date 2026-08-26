@@ -1,16 +1,12 @@
 import { createHash } from 'node:crypto';
 import {
-  parseDocumentSourceMap,
-  parseExtractionResult,
-  type DocumentParserMetadata,
-  type DocumentSourceMap,
-  type ExtractionResult,
+  parseDocumentSourceMap, parseExtractionResult,
+  type DocumentParserMetadata, type DocumentSourceMap, type ExtractionResult,
 } from '@openscience/domain';
 import type { DocumentParser, ParserInput } from './types';
 
 const MAX_INPUT_BYTES = 50 * 1024 * 1024;
 const MAX_IDENTIFIER_LENGTH = 200;
-const MAX_MEDIA_TYPE_LENGTH = 200;
 const MAX_WARNING_OR_REASON_COUNT = 100;
 const MAX_PAGE_COUNT = 10_000;
 const MAX_BLOCK_COUNT = 10_000;
@@ -25,29 +21,42 @@ export class ParserContractError extends Error {
   }
 }
 
-type UnknownRecord = Record<string, unknown>;
-interface ParseBudget { strings: number; blocks: number; transformations: number }
-interface InputSnapshot { input: ParserInput; metadata: DocumentParserMetadata }
+type Descriptors = Record<string, PropertyDescriptor>;
+interface Budget { strings: number; blocks: number; transformations: number }
+interface ParserSnapshot { input: ParserInput; metadata: DocumentParserMetadata }
 
 function contract(message: string): never { throw new ParserContractError(message); }
 
-function object(value: unknown, label: string, allowed: readonly string[]): UnknownRecord {
+function dataObject(value: unknown, label: string, allowed: readonly string[]): Descriptors {
   if (!value || typeof value !== 'object' || Array.isArray(value) || Object.getPrototypeOf(value) !== Object.prototype) {
     contract(`preflight ${label} must be a plain object`);
   }
-  if (Object.prototype.hasOwnProperty.call(value, 'toJSON')) contract(`preflight ${label} must not define toJSON`);
-  const keys = Object.keys(value);
-  if (keys.length > allowed.length || keys.some((key) => !allowed.includes(key))) contract(`preflight ${label} has an unknown field`);
-  return value as UnknownRecord;
+  const descriptors = Object.getOwnPropertyDescriptors(value) as Descriptors;
+  const keys = Reflect.ownKeys(descriptors);
+  if (keys.some((key) => typeof key !== 'string' || !allowed.includes(key))) contract(`preflight ${label} has an unknown field`);
+  for (const key of keys as string[]) {
+    const descriptor = descriptors[key]!;
+    if (!descriptor.enumerable || !Object.prototype.hasOwnProperty.call(descriptor, 'value')) contract(`preflight ${label} must use enumerable data properties`);
+  }
+  if (Object.prototype.hasOwnProperty.call(descriptors, 'toJSON')) contract(`preflight ${label} must not define toJSON`);
+  return descriptors;
 }
 
-function onlyKeys(value: UnknownRecord, label: string, allowed: readonly string[]): void {
-  const keys = Object.keys(value);
-  if (keys.length > allowed.length || keys.some((key) => !allowed.includes(key))) contract(`preflight ${label} has an unknown field`);
+function required(descriptors: Descriptors, key: string, label: string): unknown {
+  const descriptor = descriptors[key];
+  if (!descriptor || !Object.prototype.hasOwnProperty.call(descriptor, 'value')) contract(`preflight ${label} is required and must be a data property`);
+  return descriptor.value;
 }
 
-function string(value: unknown, label: string, maximum: number, budget?: ParseBudget): string {
-  if (typeof value !== 'string' || !value.trim() || value.length > maximum) contract(`preflight ${label} must be a bounded non-empty string`);
+function optional(descriptors: Descriptors, key: string, label: string): unknown {
+  const descriptor = descriptors[key];
+  if (!descriptor) return undefined;
+  if (!Object.prototype.hasOwnProperty.call(descriptor, 'value')) contract(`preflight ${label} must be a data property`);
+  return descriptor.value;
+}
+
+function boundedString(value: unknown, label: string, maximum: number, budget?: Budget): string {
+  if (typeof value !== 'string' || value.length > maximum || !value.trim()) contract(`preflight ${label} must be a bounded non-empty string`);
   if (budget) {
     budget.strings += value.length;
     if (budget.strings > MAX_SERIALIZED_STRING_LENGTH) contract('preflight string budget exceeded');
@@ -55,144 +64,167 @@ function string(value: unknown, label: string, maximum: number, budget?: ParseBu
   return value;
 }
 
-function number(value: unknown, label: string): void {
+function finiteNumber(value: unknown, label: string): number {
   if (typeof value !== 'number' || !Number.isFinite(value)) contract(`preflight ${label} must be a finite number`);
-}
-
-function array(value: unknown, label: string, maximum: number): unknown[] {
-  if (!Array.isArray(value) || Object.getPrototypeOf(value) !== Array.prototype) contract(`preflight ${label} must be an array`);
-  if (value.length > maximum) contract(`preflight ${label} exceeds its maximum length`);
-  if (Object.prototype.hasOwnProperty.call(value, 'toJSON')) contract(`preflight ${label} must not define toJSON`);
-  for (let index = 0; index < value.length; index += 1) {
-    if (!Object.prototype.hasOwnProperty.call(value, index)) contract(`preflight ${label} must not be sparse`);
-  }
-  if (Object.keys(value).length !== value.length) contract(`preflight ${label} has unsupported properties`);
   return value;
 }
 
-function metadata(value: unknown, label: string, budget: ParseBudget): void {
-  const candidate = object(value, label, ['name', 'version', 'modelHash']);
-  string(candidate.name, `${label} name`, MAX_IDENTIFIER_LENGTH, budget);
-  string(candidate.version, `${label} version`, MAX_IDENTIFIER_LENGTH, budget);
-  if (candidate.modelHash !== undefined) string(candidate.modelHash, `${label} modelHash`, MAX_IDENTIFIER_LENGTH, budget);
-}
-
-function boundingBox(value: unknown): void {
-  const candidate = object(value, 'boundingBox', ['x', 'y', 'width', 'height']);
-  number(candidate.x, 'boundingBox x'); number(candidate.y, 'boundingBox y');
-  number(candidate.width, 'boundingBox width'); number(candidate.height, 'boundingBox height');
-}
-
-function sourceMap(value: unknown, budget: ParseBudget): void {
-  const candidate = object(value, 'DocumentSourceMap', ['artifactId', 'contentHash', 'parser', 'pages']);
-  string(candidate.artifactId, 'DocumentSourceMap artifactId', MAX_IDENTIFIER_LENGTH, budget);
-  string(candidate.contentHash, 'DocumentSourceMap contentHash', 64, budget);
-  metadata(candidate.parser, 'DocumentSourceMap parser', budget);
-  const pages = array(candidate.pages, 'DocumentSourceMap pages', MAX_PAGE_COUNT);
-  for (const pageValue of pages) {
-    const page = object(pageValue, 'DocumentPage', ['page', 'width', 'height', 'blocks']);
-    number(page.page, 'DocumentPage page'); number(page.width, 'DocumentPage width'); number(page.height, 'DocumentPage height');
-    const blocks = array(page.blocks, 'DocumentPage blocks', MAX_BLOCK_COUNT - budget.blocks);
-    budget.blocks += blocks.length;
-    for (const blockValue of blocks) {
-      const block = object(blockValue, 'DocumentBlock', ['id', 'kind', 'text', 'boundingBox', 'confidence', 'parser', 'transformations']);
-      string(block.id, 'DocumentBlock id', MAX_IDENTIFIER_LENGTH, budget);
-      string(block.kind, 'DocumentBlock kind', 20, budget);
-      if (block.text !== undefined) string(block.text, 'DocumentBlock text', MAX_TEXT_LENGTH, budget);
-      boundingBox(block.boundingBox);
-      if (block.confidence !== undefined) number(block.confidence, 'DocumentBlock confidence');
-      metadata(block.parser, 'DocumentBlock parser', budget);
-      const transformations = array(block.transformations, 'DocumentBlock transformations', Math.min(100, MAX_TRANSFORMATION_COUNT - budget.transformations));
-      budget.transformations += transformations.length;
-      for (const transformationValue of transformations) {
-        const transformation = object(transformationValue, 'DocumentTransformation', ['stage', 'processor']);
-        string(transformation.stage, 'DocumentTransformation stage', 20, budget);
-        metadata(transformation.processor, 'DocumentTransformation processor', budget);
-      }
-    }
+function dataArray(value: unknown, label: string, maximum: number): unknown[] {
+  if (!Array.isArray(value) || Object.getPrototypeOf(value) !== Array.prototype) contract(`preflight ${label} must be an ordinary array`);
+  const descriptors = Object.getOwnPropertyDescriptors(value) as Descriptors;
+  const lengthDescriptor = descriptors['length'];
+  if (!lengthDescriptor || !Object.prototype.hasOwnProperty.call(lengthDescriptor, 'value') || typeof lengthDescriptor.value !== 'number') {
+    contract(`preflight ${label} has an invalid length`);
   }
+  const length = lengthDescriptor.value;
+  if (length > maximum) contract(`preflight ${label} exceeds its maximum length`);
+  const values: unknown[] = new Array(length);
+  for (let index = 0; index < length; index += 1) {
+    const descriptor = descriptors[String(index)];
+    if (!descriptor || !descriptor.enumerable || !Object.prototype.hasOwnProperty.call(descriptor, 'value')) contract(`preflight ${label} must not be sparse or contain accessors`);
+    values[index] = descriptor.value;
+  }
+  const keys = Reflect.ownKeys(descriptors);
+  if (keys.some((key) => key !== 'length' && (typeof key !== 'string' || !/^(0|[1-9]\d*)$/.test(key) || Number(key) >= length))) {
+    contract(`preflight ${label} has unsupported properties`);
+  }
+  return values;
 }
 
-/** Rejects unbounded or non-JSON-shaped provider output before JSON.stringify can traverse it. */
-function preflightExtractionResult(value: unknown): void {
-  const result = object(value, 'ExtractionResult', ['status', 'sourceMap', 'warnings', 'reasons', 'code', 'message', 'retryable', 'provider']);
-  const status = string(result.status, 'ExtractionResult status', 20);
-  const budget: ParseBudget = { strings: status.length, blocks: 0, transformations: 0 };
+function canonicalMetadata(value: unknown, label: string, budget: Budget): DocumentParserMetadata {
+  const fields = dataObject(value, label, ['name', 'version', 'modelHash']);
+  const name = boundedString(required(fields, 'name', `${label} name`), `${label} name`, MAX_IDENTIFIER_LENGTH, budget);
+  const version = boundedString(required(fields, 'version', `${label} version`), `${label} version`, MAX_IDENTIFIER_LENGTH, budget);
+  const modelHash = optional(fields, 'modelHash', `${label} modelHash`);
+  return { name, version, ...(modelHash === undefined ? {} : { modelHash: boundedString(modelHash, `${label} modelHash`, MAX_IDENTIFIER_LENGTH, budget) }) };
+}
+
+function canonicalBox(value: unknown): { x: number; y: number; width: number; height: number } {
+  const fields = dataObject(value, 'boundingBox', ['x', 'y', 'width', 'height']);
+  return {
+    x: finiteNumber(required(fields, 'x', 'boundingBox x'), 'boundingBox x'),
+    y: finiteNumber(required(fields, 'y', 'boundingBox y'), 'boundingBox y'),
+    width: finiteNumber(required(fields, 'width', 'boundingBox width'), 'boundingBox width'),
+    height: finiteNumber(required(fields, 'height', 'boundingBox height'), 'boundingBox height'),
+  };
+}
+
+function canonicalSourceMap(value: unknown, budget: Budget): unknown {
+  const fields = dataObject(value, 'DocumentSourceMap', ['artifactId', 'contentHash', 'parser', 'pages']);
+  const pages = dataArray(required(fields, 'pages', 'DocumentSourceMap pages'), 'DocumentSourceMap pages', MAX_PAGE_COUNT).map((pageValue) => {
+    const page = dataObject(pageValue, 'DocumentPage', ['page', 'width', 'height', 'blocks']);
+    const blocks = dataArray(required(page, 'blocks', 'DocumentPage blocks'), 'DocumentPage blocks', MAX_BLOCK_COUNT - budget.blocks);
+    budget.blocks += blocks.length;
+    return {
+      page: finiteNumber(required(page, 'page', 'DocumentPage page'), 'DocumentPage page'),
+      width: finiteNumber(required(page, 'width', 'DocumentPage width'), 'DocumentPage width'),
+      height: finiteNumber(required(page, 'height', 'DocumentPage height'), 'DocumentPage height'),
+      blocks: blocks.map((blockValue) => {
+        const block = dataObject(blockValue, 'DocumentBlock', ['id', 'kind', 'text', 'boundingBox', 'confidence', 'parser', 'transformations']);
+        const text = optional(block, 'text', 'DocumentBlock text');
+        const confidence = optional(block, 'confidence', 'DocumentBlock confidence');
+        const transformations = dataArray(required(block, 'transformations', 'DocumentBlock transformations'), 'DocumentBlock transformations', Math.min(100, MAX_TRANSFORMATION_COUNT - budget.transformations));
+        budget.transformations += transformations.length;
+        return {
+          id: boundedString(required(block, 'id', 'DocumentBlock id'), 'DocumentBlock id', MAX_IDENTIFIER_LENGTH, budget),
+          kind: boundedString(required(block, 'kind', 'DocumentBlock kind'), 'DocumentBlock kind', 20, budget),
+          ...(text === undefined ? {} : { text: boundedString(text, 'DocumentBlock text', MAX_TEXT_LENGTH, budget) }),
+          boundingBox: canonicalBox(required(block, 'boundingBox', 'DocumentBlock boundingBox')),
+          ...(confidence === undefined ? {} : { confidence: finiteNumber(confidence, 'DocumentBlock confidence') }),
+          parser: canonicalMetadata(required(block, 'parser', 'DocumentBlock parser'), 'DocumentBlock parser', budget),
+          transformations: transformations.map((transformationValue) => {
+            const transformation = dataObject(transformationValue, 'DocumentTransformation', ['stage', 'processor']);
+            return {
+              stage: boundedString(required(transformation, 'stage', 'DocumentTransformation stage'), 'DocumentTransformation stage', 20, budget),
+              processor: canonicalMetadata(required(transformation, 'processor', 'DocumentTransformation processor'), 'DocumentTransformation processor', budget),
+            };
+          }),
+        };
+      }),
+    };
+  });
+  return {
+    artifactId: boundedString(required(fields, 'artifactId', 'DocumentSourceMap artifactId'), 'DocumentSourceMap artifactId', MAX_IDENTIFIER_LENGTH, budget),
+    contentHash: boundedString(required(fields, 'contentHash', 'DocumentSourceMap contentHash'), 'DocumentSourceMap contentHash', 64, budget),
+    parser: canonicalMetadata(required(fields, 'parser', 'DocumentSourceMap parser'), 'DocumentSourceMap parser', budget),
+    pages,
+  };
+}
+
+/** Copies only bounded own data properties; the provider object is never serialized. */
+function canonicalExtractionResult(value: unknown): unknown {
+  const fields = dataObject(value, 'ExtractionResult', ['status', 'sourceMap', 'warnings', 'reasons', 'code', 'message', 'retryable', 'provider']);
+  const status = boundedString(required(fields, 'status', 'ExtractionResult status'), 'ExtractionResult status', 20);
+  const budget: Budget = { strings: status.length, blocks: 0, transformations: 0 };
   if (status === 'succeeded' || status === 'needs_review') {
-    onlyKeys(result, 'ExtractionResult', status === 'succeeded' ? ['status', 'sourceMap', 'warnings'] : ['status', 'sourceMap', 'reasons']);
-    sourceMap(result.sourceMap, budget);
-    const entries = array(status === 'succeeded' ? result.warnings : result.reasons, `ExtractionResult ${status === 'succeeded' ? 'warnings' : 'reasons'}`, MAX_WARNING_OR_REASON_COUNT);
-    for (const entry of entries) string(entry, 'ExtractionResult entry', 500, budget);
-    return;
+    const allowed = status === 'succeeded' ? ['status', 'sourceMap', 'warnings'] : ['status', 'sourceMap', 'reasons'];
+    dataObject(value, 'ExtractionResult', allowed);
+    const entries = dataArray(required(fields, status === 'succeeded' ? 'warnings' : 'reasons', 'ExtractionResult entries'), 'ExtractionResult entries', MAX_WARNING_OR_REASON_COUNT)
+      .map((entry) => boundedString(entry, 'ExtractionResult entry', 500, budget));
+    return status === 'succeeded'
+      ? { status, sourceMap: canonicalSourceMap(required(fields, 'sourceMap', 'ExtractionResult sourceMap'), budget), warnings: entries }
+      : { status, sourceMap: canonicalSourceMap(required(fields, 'sourceMap', 'ExtractionResult sourceMap'), budget), reasons: entries };
   }
   if (status === 'blocked') {
-    onlyKeys(result, 'ExtractionResult', ['status', 'code', 'message']);
-    string(result.code, 'ExtractionResult code', 50, budget); string(result.message, 'ExtractionResult message', 2_000, budget); return;
+    dataObject(value, 'ExtractionResult', ['status', 'code', 'message']);
+    return { status, code: boundedString(required(fields, 'code', 'ExtractionResult code'), 'ExtractionResult code', 50, budget), message: boundedString(required(fields, 'message', 'ExtractionResult message'), 'ExtractionResult message', 2_000, budget) };
   }
   if (status === 'failed') {
-    onlyKeys(result, 'ExtractionResult', ['status', 'retryable', 'provider', 'message']);
-    if (typeof result.retryable !== 'boolean') contract('preflight ExtractionResult retryable must be boolean');
-    string(result.provider, 'ExtractionResult provider', 2_000, budget); string(result.message, 'ExtractionResult message', 2_000, budget); return;
+    dataObject(value, 'ExtractionResult', ['status', 'retryable', 'provider', 'message']);
+    const retryable = required(fields, 'retryable', 'ExtractionResult retryable');
+    if (typeof retryable !== 'boolean') contract('preflight ExtractionResult retryable must be boolean');
+    return { status, retryable, provider: boundedString(required(fields, 'provider', 'ExtractionResult provider'), 'ExtractionResult provider', 2_000, budget), message: boundedString(required(fields, 'message', 'ExtractionResult message'), 'ExtractionResult message', 2_000, budget) };
   }
   contract('preflight ExtractionResult status is invalid');
 }
 
-function snapshotMetadata(value: unknown): DocumentParserMetadata {
-  const budget: ParseBudget = { strings: 0, blocks: 0, transformations: 0 };
-  metadata(value, 'DocumentParser metadata', budget);
-  const candidate = value as DocumentParserMetadata;
-  return { name: candidate.name, version: candidate.version, ...(candidate.modelHash === undefined ? {} : { modelHash: candidate.modelHash }) };
-}
-
-function snapshotInput(input: unknown, parser: unknown): InputSnapshot {
-  const value = object(input, 'ParserInput', ['artifactId', 'contentHash', 'content', 'mediaType']);
-  const artifactId = string(value.artifactId, 'ParserInput artifactId', MAX_IDENTIFIER_LENGTH);
-  const contentHash = string(value.contentHash, 'ParserInput contentHash', 64);
-  const mediaType = string(value.mediaType, 'ParserInput mediaType', MAX_MEDIA_TYPE_LENGTH);
-  if (!/^[a-f0-9]{64}$/.test(contentHash)) contract('ParserInput contentHash must be a SHA-256 hex digest');
-  if (!Buffer.isBuffer(value.content)) contract('ParserInput content must be a Buffer');
-  if (value.content.length > MAX_INPUT_BYTES) contract('ParserInput content exceeds maximum size');
-  if (!parser || typeof parser !== 'object') contract('DocumentParser must be an object');
-  const selected = parser as DocumentParser;
-  const privateContent = Buffer.from(value.content);
-  const actualHash = createHash('sha256').update(privateContent).digest('hex');
-  if (contentHash !== actualHash) contract('ParserInput contentHash does not match content');
-  return { input: { artifactId, contentHash, mediaType, content: privateContent }, metadata: snapshotMetadata(selected.metadata) };
+function snapshotInput(input: unknown, parser: DocumentParser): ParserSnapshot {
+  try {
+    const fields = dataObject(input, 'ParserInput', ['artifactId', 'contentHash', 'content', 'mediaType']);
+    const artifactId = boundedString(required(fields, 'artifactId', 'ParserInput artifactId'), 'ParserInput artifactId', MAX_IDENTIFIER_LENGTH);
+    const contentHash = boundedString(required(fields, 'contentHash', 'ParserInput contentHash'), 'ParserInput contentHash', 64);
+    const mediaType = boundedString(required(fields, 'mediaType', 'ParserInput mediaType'), 'ParserInput mediaType', MAX_IDENTIFIER_LENGTH);
+    const sourceContent = required(fields, 'content', 'ParserInput content');
+    if (!/^[a-f0-9]{64}$/.test(contentHash)) contract('ParserInput contentHash must be a SHA-256 hex digest');
+    if (!Buffer.isBuffer(sourceContent)) contract('ParserInput content must be a Buffer');
+    if (sourceContent.length > MAX_INPUT_BYTES) contract('ParserInput content exceeds maximum size');
+    const privateContent = Buffer.from(sourceContent);
+    if (contentHash !== createHash('sha256').update(privateContent).digest('hex')) contract('ParserInput contentHash does not match content');
+    const metadata = canonicalMetadata(Object.getOwnPropertyDescriptor(parser, 'metadata')?.value, 'DocumentParser metadata', { strings: 0, blocks: 0, transformations: 0 });
+    return { input: { artifactId, contentHash, mediaType, content: privateContent }, metadata };
+  } catch (error) {
+    if (error instanceof ParserContractError) throw error;
+    throw new ParserContractError('ParserInput preflight failed', { cause: error });
+  }
 }
 
 function callbackInput(snapshot: ParserInput): ParserInput {
   return { artifactId: snapshot.artifactId, contentHash: snapshot.contentHash, mediaType: snapshot.mediaType, content: Buffer.from(snapshot.content) };
 }
 
-function equalMetadata(actual: DocumentParserMetadata, expected: DocumentParserMetadata): boolean {
-  return actual.name === expected.name && actual.version === expected.version && actual.modelHash === expected.modelHash;
-}
-
 function parseResult(value: unknown): ExtractionResult<DocumentSourceMap> {
-  preflightExtractionResult(value);
   try {
-    return parseExtractionResult(JSON.stringify(value), parseDocumentSourceMap);
+    return parseExtractionResult(JSON.stringify(canonicalExtractionResult(value)), parseDocumentSourceMap);
   } catch (error) {
+    if (error instanceof ParserContractError) throw error;
     throw new ParserContractError('Document parser returned an invalid extraction result', { cause: error });
   }
 }
 
-function validateSourceMapIdentity(sourceMapValue: DocumentSourceMap, input: ParserInput, parserMetadata: DocumentParserMetadata): void {
-  if (sourceMapValue.artifactId !== input.artifactId) contract('DocumentSourceMap artifactId does not match parser input');
-  if (sourceMapValue.contentHash !== input.contentHash) contract('DocumentSourceMap contentHash does not match parser input');
-  if (!equalMetadata(sourceMapValue.parser, parserMetadata)) contract('DocumentSourceMap parser metadata does not match selected parser');
+function equalMetadata(actual: DocumentParserMetadata, expected: DocumentParserMetadata): boolean {
+  return actual.name === expected.name && actual.version === expected.version && actual.modelHash === expected.modelHash;
 }
 
-/** Executes an untrusted parser behind a bounded, snapshot-based domain contract. */
+/** Executes an untrusted parser behind a bounded, canonicalized domain contract. */
 export async function runDocumentParser(input: ParserInput, parser: DocumentParser): Promise<ExtractionResult<DocumentSourceMap>> {
   const snapshot = snapshotInput(input, parser);
   if (typeof parser.supports !== 'function' || typeof parser.parse !== 'function') contract('DocumentParser must implement supports and parse');
   if (!await parser.supports(callbackInput(snapshot.input))) contract('Document parser does not support this input');
   const result = parseResult(await parser.parse(callbackInput(snapshot.input)));
   if (result.status !== 'succeeded' && result.status !== 'needs_review') return result;
-  validateSourceMapIdentity(result.sourceMap, snapshot.input, snapshot.metadata);
-  if (result.status === 'succeeded' && result.sourceMap.pages.every((page) => page.blocks.length === 0)) {
-    contract('Succeeded DocumentSourceMap must contain at least one block');
-  }
+  if (result.sourceMap.artifactId !== snapshot.input.artifactId) contract('DocumentSourceMap artifactId does not match parser input');
+  if (result.sourceMap.contentHash !== snapshot.input.contentHash) contract('DocumentSourceMap contentHash does not match parser input');
+  if (!equalMetadata(result.sourceMap.parser, snapshot.metadata)) contract('DocumentSourceMap parser metadata does not match selected parser');
+  if (result.status === 'succeeded' && result.sourceMap.pages.every((page) => page.blocks.length === 0)) contract('Succeeded DocumentSourceMap must contain at least one block');
   return result;
 }

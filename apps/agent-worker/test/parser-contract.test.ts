@@ -156,4 +156,39 @@ describe('runDocumentParser', () => {
     expect(callerInput).toMatchObject({ artifactId: 'artifact-1', contentHash, mediaType: 'application/pdf' });
     expect(callerInput.content.equals(content)).toBe(true);
   });
+
+  it('rejects changing and throwing input accessors before parser callbacks', async () => {
+    let supportsCalled = false;
+    const candidate = parser({ status: 'succeeded', sourceMap: sourceMap(), warnings: [] }, { supports: () => { supportsCalled = true; return true; } });
+    const changingContent = { ...input() } as Record<string, unknown>;
+    Object.defineProperty(changingContent, 'content', { enumerable: true, get: () => Buffer.from(content) });
+    const throwingArtifact = { ...input() } as Record<string, unknown>;
+    Object.defineProperty(throwingArtifact, 'artifactId', { enumerable: true, get: () => { throw new Error('getter reached'); } });
+
+    for (const malformedInput of [changingContent, throwingArtifact]) {
+      await expect(runDocumentParser(malformedInput as ParserInput, candidate)).rejects.toBeInstanceOf(ParserContractError);
+    }
+    expect(supportsCalled).toBe(false);
+  });
+
+  it('rejects accessors and prototype/toJSON tricks before serializing provider output', async () => {
+    const changingWarnings = { status: 'succeeded', sourceMap: sourceMap(), warnings: [] as string[] } as Record<string, unknown>;
+    Object.defineProperty(changingWarnings, 'warnings', { enumerable: true, get: () => [] });
+    const nestedAccessorMap = sourceMap();
+    Object.defineProperty(nestedAccessorMap.pages[0]!.blocks[0]!, 'text', { enumerable: true, get: () => 'safe then unsafe' });
+    const nestedAccessor = { status: 'succeeded' as const, sourceMap: nestedAccessorMap, warnings: [] };
+    const inheritedToJson = Object.create({ toJSON: () => { throw new Error('serialization reached'); } }) as DocumentSourceMap;
+    Object.assign(inheritedToJson, sourceMap());
+    const prototypeTrick = { status: 'succeeded' as const, sourceMap: inheritedToJson, warnings: [] };
+    const throwingStatus = { sourceMap: sourceMap(), warnings: [] } as Record<string, unknown>;
+    Object.defineProperty(throwingStatus, 'status', { enumerable: true, get: () => { throw new Error('getter reached'); } });
+
+    for (const result of [changingWarnings, nestedAccessor, prototypeTrick, throwingStatus]) {
+      await expect(runDocumentParser(input(), parser(result as ExtractionResult<DocumentSourceMap>))).rejects.toThrow(/preflight/);
+    }
+  });
+
+  it('rejects oversized whitespace before trim work', async () => {
+    await expect(runDocumentParser(input({ mediaType: ' '.repeat(201) }), parser({ status: 'succeeded', sourceMap: sourceMap(), warnings: [] }))).rejects.toThrow(/preflight/);
+  });
 });
