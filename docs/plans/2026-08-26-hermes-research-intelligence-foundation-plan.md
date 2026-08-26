@@ -1,6 +1,8 @@
 # Hermes Research Intelligence Foundation Implementation Plan
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+>
+> **Execution status (2026-08-26):** Implemented locally. During final Taskmaster reconciliation, the initial six-case seed was expanded to the explicit 13-case native/scanned/dual-column/table/formula/references/DOCX/TeX/Markdown/CSV/XLSX/notebook/code matrix with expected locators; full acceptance evidence is recorded in the capability registry and progress window.
 
 **Goal:** Establish the measurable, non-polluting foundation that every later Hermes parser, OCR, retrieval and presentation capability must beat before it can be retained or deployed.
 
@@ -200,7 +202,7 @@ export interface ResearchCorpusCase {
 }
 ```
 
-The initial cases are the existing native PDF and DOCX, self-authored Markdown and TeX, a minimal scan-shaped PNG that is expected to remain `needs_review`, and a corrupt PDF that is expected to remain `needs_review`. Every case receives a SHA-256 content hash in `manifest.json`; the manifest contains no external URL or user file.
+The tracked matrix contains 13 self-authored cases: existing native PDF and DOCX, Markdown/table, TeX/formula, references, deterministic dual-column PDF, image-only scanned PDF, minimal scan-shaped PNG, CSV, valid minimal XLSX, notebook, code and a corrupt PDF. Every case receives a SHA-256 content hash and one or more expected locators in `manifest.json`; the manifest contains no external URL or user file. The current parser's image-only PDF page-marker false-ready remains explicit baseline evidence rather than being hidden by the harness.
 
 - [ ] **Step 5: Generate and review the tracked manifest**
 
@@ -215,7 +217,7 @@ Remove-Item Env:WRITE_RESEARCH_INTELLIGENCE_MANIFEST
 git diff -- test/research-intelligence/manifest.json
 ```
 
-Expected: six self-authored cases, unique 64-character lowercase hashes, declared language/features/rights and current expected status.
+Expected: 13 self-authored cases, unique 64-character lowercase hashes, declared language/features/rights/locators and current expected status.
 
 - [ ] **Step 6: Commit the corpus contract**
 

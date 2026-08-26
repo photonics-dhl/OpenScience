@@ -28,16 +28,46 @@ describe('research-intelligence fixture contract', () => {
 });
 
 describe('research-intelligence corpus contract', () => {
-  it('defines six deterministic self-authored cases with unique hashes', () => {
-    expect(RESEARCH_INTELLIGENCE_CORPUS).toHaveLength(6);
-    expect(new Set(RESEARCH_INTELLIGENCE_CORPUS.map(({ id }) => id)).size).toBe(6);
+  it('covers the Taskmaster fixture matrix with locators and unique hashes', () => {
+    const requiredFeatures = [
+      'native_text',
+      'scan',
+      'dual_column',
+      'table',
+      'formula',
+      'references',
+      'docx',
+      'markdown',
+      'tex',
+      'csv',
+      'xlsx',
+      'notebook',
+      'code',
+    ];
+    const features = RESEARCH_INTELLIGENCE_CORPUS.flatMap(({ features: itemFeatures }) => itemFeatures);
+
+    expect(RESEARCH_INTELLIGENCE_CORPUS.length).toBeGreaterThanOrEqual(12);
+    expect(new Set(RESEARCH_INTELLIGENCE_CORPUS.map(({ id }) => id)).size)
+      .toBe(RESEARCH_INTELLIGENCE_CORPUS.length);
+    expect(features).toEqual(expect.arrayContaining(requiredFeatures));
     expect(RESEARCH_INTELLIGENCE_CORPUS.every(({ rights }) => rights === 'self-authored')).toBe(true);
+    expect(RESEARCH_INTELLIGENCE_CORPUS.every(({ expectedLocators }) => (
+      expectedLocators.length > 0
+    ))).toBe(true);
 
     const hashes = RESEARCH_INTELLIGENCE_CORPUS.map(({ content }) => (
       createHash('sha256').update(content).digest('hex')
     ));
-    expect(new Set(hashes).size).toBe(6);
+    expect(new Set(hashes).size).toBe(RESEARCH_INTELLIGENCE_CORPUS.length);
     expect(hashes.every((hash) => /^[a-f0-9]{64}$/.test(hash))).toBe(true);
+
+    const xlsx = RESEARCH_INTELLIGENCE_CORPUS.find(({ id }) => id === 'table-xlsx-en');
+    expect(xlsx?.content.readUInt32LE(0)).toBe(0x04034b50);
+    expect(xlsx?.content.readUInt32LE((xlsx?.content.length ?? 22) - 22)).toBe(0x06054b50);
+    expect(xlsx?.content.includes(Buffer.from('xl/worksheets/sheet1.xml'))).toBe(true);
+
+    const notebook = RESEARCH_INTELLIGENCE_CORPUS.find(({ id }) => id === 'notebook-en');
+    expect(JSON.parse(notebook?.content.toString('utf8') ?? '{}')).toMatchObject({ nbformat: 4 });
   });
 
   it('keeps the tracked manifest byte-stable', async () => {
@@ -76,6 +106,13 @@ describe('research-intelligence corpus contract', () => {
         expect.objectContaining({ id: 'scan-png-empty', status: 'needs_review' }),
       ]),
     });
+    expect(report.cases).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        id: 'scan-pdf-image-only',
+        status: 'ready',
+        textMatched: undefined,
+      }),
+    ]));
     const allowedCaseKeys = new Set([
       'id',
       'contentHash',

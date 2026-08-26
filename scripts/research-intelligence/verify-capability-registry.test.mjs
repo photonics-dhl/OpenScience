@@ -9,6 +9,7 @@ test('CURRENT registry has complete rows and no credential-shaped values', async
   const result = verifyCapabilityRegistry(markdown);
 
   assert.ok(result.rows >= 20);
+  assert.ok(result.candidateRows >= 10);
   assert.ok(result.capabilities.includes('BGE-M3'));
   assert.ok(result.capabilities.includes('ScanSci PDF'));
   assert.ok(result.capabilities.includes('Semantic Scholar MCP/API'));
@@ -31,5 +32,9 @@ test('rejects incomplete rows, invalid statuses, and credential-shaped values', 
   assert.throws(
     () => verifyCapabilityRegistry(`${header}\n| Demo | Purpose | \`BLOCKED\` | s2k-example | Runtime | Gate |`),
     /CREDENTIAL_SHAPED_VALUE/,
+  );
+  assert.throws(
+    () => verifyCapabilityRegistry(`${header}\n| Demo | Purpose | \`APPROVED_PILOT\` | Auth | Runtime | Gate |`),
+    /CANDIDATE_EVALUATION_TABLE_MISSING/,
   );
 });

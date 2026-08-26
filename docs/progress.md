@@ -4,9 +4,9 @@
 
 ## 2026-08-26 — Hermes Research Intelligence Foundation 本地实现
 
-- Taskmaster Task 1 的 Foundation 实现已完成，正在执行最终全仓验收：能力台账新增机器门禁，21 行能力记录受列数、状态、空字段与凭据形态检查；入口为 `audit:hermes-capabilities`。
-- 新增 6 项自著权 deterministic corpus 与 schema 1 哈希清单，不使用用户文件：现有 PDF/DOCX、Markdown、TeX 为 4 项 `ready` 且文本命中，空白 scan PNG 与损坏 PDF 为 2 项显式 `needs_review`。
-- ignored current-parser report 只保存 ID/hash/status/reason/textMatched/elapsed/RSS delta；最近本地运行 P50 `114.41 ms`、P95 `263.75 ms`、最大 RSS 增量 `12,288 B`，连续两次 deterministic facts 相同。计时/RSS 是观测值，不作快照断言。
+- Taskmaster Task 1 的 Foundation 实现已完成，正在执行最终全仓验收：能力台账新增机器门禁，21 行能力主表及 11 行候选 owner/license/version/resource/latency/cost/data-flow/evaluation/kill-switch/rollback 矩阵受一一对应、列数、状态、空字段、占位符与凭据形态检查；入口为 `audit:hermes-capabilities`。
+- 新增 13 项自著权 deterministic corpus 与 schema 1 哈希/locator 清单，不使用用户文件，覆盖 native/scanned/dual-column PDF、table、formula、references、DOCX、TeX、Markdown、CSV/XLSX、notebook 与 code。
+- ignored current-parser report 只保存 ID/hash/status/reason/textMatched/elapsed/RSS delta；记录运行有 7 项 `ready`、6 项 expected-text matched、6 项显式复核，P50 `0.03 ms`、P95 `226.09 ms`、最大 RSS 增量 `28,672 B`。image-only PDF 因 `pdf-parse` 页分隔符出现 1 项 false-ready，已作为后续候选必须消除的基线缺陷；计时/RSS 仅为观测值。
 - `test:research-intelligence`、agent-worker `57/57` 与全仓 typecheck 已通过。Docling/LiteParse/GROBID/PaddleOCR/BGE-M3 均保持 `APPROVED_PILOT`；MiniMax OCR 继续 `BLOCKED`。未安装依赖、未读取 `.env`、未写服务器、未部署或改变生产 release。
 
 ## 2026-08-26 — Hermes 能力核验与 SSH 误报收口
@@ -19,7 +19,7 @@
 
 ## Current version tuple
 
-- Branch / local implementation baseline HEAD / deployed application / immutable release: `codex/hermes-wanko-live2d` / `ed696b6` / `29344767b350e0a44ef74c04b9b5a55b342ef011` / `29344767b350e0a44ef74c04b9b5a55b342ef011`。
+- Branch / local pre-matrix HEAD / deployed application / immutable release: `codex/hermes-wanko-live2d` / `cd98bd2` / `29344767b350e0a44ef74c04b9b5a55b342ef011` / `29344767b350e0a44ef74c04b9b5a55b342ef011`。
 - Current rollback 为前一健康 release `58614c07951374537ed146f164f8568e9957a9b5`；post-deploy docs HEAD 不与应用身份混写。
 - ECS release / rollback: `29344767b350e0a44ef74c04b9b5a55b342ef011` / `58614c07951374537ed146f164f8568e9957a9b5`。
 
