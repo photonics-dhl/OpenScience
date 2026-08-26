@@ -20,6 +20,8 @@
 
 Windows 上不要用系统 `bash.exe`、WSL 或 `wsl bash` 调用 `infra/scripts/ssh-run.sh`、`checkup.sh` 和部署脚本。WSL 的 HOME 是 `/root`，看不到 Windows SSH 配置；Windows 挂载的 `C:/Users/Mac/.ssh/id_ed25519_xgs` 在 WSL 中又显示为 `0777`，OpenSSH 会以私钥权限过宽为由拒绝加载。
 
+若日志先出现 `wsl: Failed to translate '<Windows path>'`，根因已经确定为裸 `bash` 命中了 WSL，并非 SSH key 失效。立即停止该诊断路径，改用下方固定 Git Bash 命令；不得重建、复制、打印、改权限或替换项目密钥。
+
 在 PowerShell 中显式调用 Git for Windows Bash：
 
 ```powershell
@@ -27,7 +29,7 @@ Windows 上不要用系统 `bash.exe`、WSL 或 `wsl bash` 调用 `infra/scripts
 & 'C:\Program Files\Git\bin\bash.exe' ./infra/scripts/ssh-run.sh '<read-only command>'
 ```
 
-Git Bash 会沿用 Windows 用户目录中的 SSH 配置和项目专用密钥。出现“SSH 认证失败”时，先检查实际调用的是不是 `C:\Program Files\Git\bin\bash.exe`；不要改用密码，不要复制、打印或放宽私钥权限。2026-08-24 09:22 +08 已用上述 `checkup.sh` 命令完成只读复验。
+Git Bash 会沿用 Windows 用户目录中的 SSH 配置和项目专用密钥。出现“SSH 认证失败”时，先检查实际调用的是不是 `C:\Program Files\Git\bin\bash.exe`；不要改用密码，不要复制、打印或放宽私钥权限。2026-08-26 已再次复现“裸 `bash` → WSL 误报”，并用同一密钥、上述显式 Git Bash 命令完成只读复验。
 
 ## 2. 执行步骤
 

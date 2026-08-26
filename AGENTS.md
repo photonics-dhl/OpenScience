@@ -19,7 +19,7 @@ OpenScience：AI 时代科研基础设施平台（Research Object / SDF / 预印
 
 ## 云服务器（2026-07-31 上线）
 - 阿里云 ECS（Alibaba Cloud Linux 4），代码在 `/opt/openscience`；Node 22 + docker compose 插件 + nginx + acme.sh（cronie 续期）。
-- 远程操作只走 `infra/scripts/ssh-run.sh` / `checkup.sh`（项目专用密钥 `~/.ssh/id_ed25519_xgs`，服务器仅 publickey）。
+- 远程操作只走 `infra/scripts/ssh-run.sh` / `checkup.sh`（项目专用密钥 `~/.ssh/id_ed25519_xgs`，服务器仅 publickey）。Windows 必须由 PowerShell 显式调用 `C:\Program Files\Git\bin\bash.exe`；禁止裸 `bash`、系统 `bash.exe` 或 WSL。日志出现 `wsl: Failed to translate` 说明选错 shell，不得误报 SSH key 失效。
 - DNS/公网入口：`OpenScience.428312321.xyz` 已切到 ECS 常驻 Cloudflare Tunnel（proxied CNAME，回源 ECS Nginx）；`portainer.428312321.xyz` 仍为 DNS-only → ECS 公网 IP。面板 `https://portainer.428312321.xyz`。
 - 安全组放行 22/80/443；dev 栈端口仅 127.0.0.1；云上写操作前需用户确认。
 - 监控面板（2026-08-01）：统一入口导航 `https://portainer.428312321.xyz/nav/` → `/traffic/`（vnStat 流量账单）与 `/monitor/`（Netdata 实时）；basic_auth 账号 admin，凭据云上 `/etc/nginx/.htpasswd-monitor`（不入库）；runbook 见 `docs/runbooks/monitoring.md`。

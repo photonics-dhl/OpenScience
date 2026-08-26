@@ -1183,7 +1183,7 @@
         "id": "4",
         "title": "在完整 Landing 原型上增强 DOM Typography + Optical Field",
         "description": "以用户确认的 80c8312 pre-distortion Optical Editorial 构图为基线；Science evolves./科学，持续演化。保持单一可访问 DOM 标题，Canvas/SVG 实现局部折射、固定狭缝衍射与半色调场，下一屏以 paper surface 展示 Open RO 六层 SDF 结构。",
-        "status": "in-progress",
+        "status": "done",
         "dependencies": [
           "3"
         ],
@@ -1191,7 +1191,7 @@
         "details": "2026-08-11 用户视觉否决 cd5be36；其 161/161、生产部署和路由证据只证明工程正确，不再构成审美接受。根因是 CPU Canvas 每帧逐点 arc() + 独立 focal/Fresnel 装饰，连续 DOM 字形没有共享 displacement 材质，形成灰色覆盖、机械竖线和波纹。外部调研已实际运行并读源码：ehaakana/codrops-text-demo（MIT，HTML-first WebGL text sync）、brunoimbrizi/interactive-particles（package MIT，glyph/image instancing + touch texture）、akella/DistortedPixels（MIT，DataTexture velocity + relaxation）、OGL Flowmap（Unlicense，ping-pong FBO）；无明确许可证项目不复制。ECS 探测确认仅虚拟 Cirrus VGA、无 render node/NVIDIA/ROCm/GPU module/Docker GPU runtime/compose GPU 声明；因此第四轮为纯客户端 continuous glyph material + shared GPU flow/displacement field + sparse instanced particles，禁止服务器 GPU 依赖，必须保留 SSR h1、WebGL2→WebGL1→DOM fallback 与 context-loss 恢复。Optical Lab Steps 3–5 已在 8485dac22edb15041e61884f47f3118ea2ef4708 实现并由主代理复验 9/9 focused、170/170 Web、typecheck/build；尚未部署，独立 review 未回传。人工证据仍见低对比叠字与弱 aperture topology，因此只可部署为隔离对照，用户选中前不替换生产 Landing。",
         "testStrategy": "第四轮先在非生产 Optical Lab 做 reference/current/candidate 三列比较。RED/GREEN 必须覆盖：连续字形主体可读、WebGL 与 DOM bounds/字体同步、fixed aperture 拓扑、无 radial visible boundary、flow texture 衰减、sparse instanced edge particles、context-loss/reduced-motion/390px 降级；捕获独立 left/slit/right 60/150/300ms 帧并记录 gzip chunk、FPS、CPU/GPU frame time。用户选中前禁止替换生产 Landing。",
         "subtasks": [],
-        "updatedAt": "2026-08-11T10:08:00.000Z"
+        "updatedAt": "2026-08-26T08:14:19.152Z"
       },
       {
         "id": "5",
@@ -1378,12 +1378,186 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-08-11T08:52:43.775Z",
+      "lastModified": "2026-08-26T08:14:19.153Z",
       "taskCount": 15,
-      "completedCount": 14,
+      "completedCount": 15,
       "tags": [
         "optical-editorial-v3"
       ]
+    }
+  },
+  "hermes-research-intelligence": {
+    "tasks": [
+      {
+        "id": 1,
+        "title": "Lock Existing Platform Baseline and Evaluation Harness",
+        "description": "Preserve the existing pnpm monorepo, deployed parser/sandbox/AI Gateway boundaries and immutable release tuple; complete the capability registry and a bilingual golden-corpus harness before adding any runtime dependency.",
+        "details": "Audit the existing apps/api, apps/web, apps/agent-worker, packages/domain, packages/search, packages/ai-gateway and infra/compose owners without reinitializing them. Record the current production baseline and capability status in docs/runbooks/hermes-capability-registry.md. Add only the missing license/resource/evaluation fields and project-scoped evaluation fixtures. Define native PDF, scanned PDF, dual-column, table, formula, references, DOCX, TeX, Markdown, CSV/XLSX, notebook and code fixtures with fixed content hashes and expected locators. Keep Python evaluation in a project .venv or uvx; production candidates remain isolated digest-pinned images and versioned model volumes.",
+        "testStrategy": "Verify the existing workspace and release tuple before edits. Validate every candidate has owner, license, version, CPU/RSS, latency, cost, data flow, evaluation, kill switch and rollback fields. Run corpus manifest/hash tests plus pnpm test, typecheck, lint, build, docs-sync and docs-lint.",
+        "priority": "high",
+        "dependencies": [],
+        "status": "pending",
+        "subtasks": []
+      },
+      {
+        "id": 2,
+        "title": "Prisma Schema and Core Domain Models",
+        "description": "Extend the existing Prisma/domain model through the next expand-contract migration with identity profiles, Claims, Evidence, source locators and presentation assets; preserve existing RO, Version, Audit and Approval models.",
+        "details": "Allocate the next verified infra/migrations number (currently 28) and extend infra/schema.prisma instead of recreating existing tables. Add ResearchIdentityProfile, ClaimNode, EvidenceRecord and PresentationAsset plus the minimum relations to existing User, ResearchObject and Version. Implement ResearchIdentity, ClaimKind, ClaimAssessment, EvidenceKind, ClaimRelation and ExtractionStatus domain enums/types. Store contentHash and provenance, enforce 3-7 core Claims at the domain/publish boundary, and validate page/bbox/charRange/tableCell/codeRange locator variants. Introduce SEARCH_DATABASE_URL and an independently migratable search schema/connection without coupling core transactions to embedding tables.",
+        "testStrategy": "Run prisma validate and ensure migrations generate cleanly. Write domain unit tests for Claim graph constraints (3-7 core claims limit, parent-child relationships, no circular dependencies). Test ExtractionResult discriminated union serialization/deserialization round-trips.",
+        "priority": "high",
+        "dependencies": [
+          1
+        ],
+        "status": "pending",
+        "subtasks": []
+      },
+      {
+        "id": 3,
+        "title": "DocumentSourceMap Contract and Parser Interfaces",
+        "description": "Implement the unified DocumentSourceMap interface and parser contract that all document processors must output, preventing dependency on Docling, LiteParse, GROBID, or OCR private formats.",
+        "details": "Create packages/domain/src/document-source-map.ts with DocumentSourceMap interface containing artifactId, contentHash, parser metadata, and pages array with blocks (heading/paragraph/figure/table/equation/caption/reference). Implement packages/agent-worker/src/parsers/base-parser.ts defining the contract: parse(file) -> Promise<ExtractionResult>, with SourceLocator generation and confidence scoring. Create packages/agent-worker/src/parsers/types.ts with all block type definitions. Implement SourceLocator generator utility that produces consistent locators for passages, figures, tables, code ranges. Add round-trip validation: parser output -> serialize -> deserialize -> reconstruct locator must match original.",
+        "testStrategy": "Test DocumentSourceMap serialization preserves all fields including boundingBox precision. Verify SourceLocator round-trip for all EvidenceKind types (passage, figure, table, codeRange). Create golden corpus fixtures with known contentHash and expected locators.",
+        "priority": "high",
+        "dependencies": [
+          2
+        ],
+        "status": "pending",
+        "subtasks": []
+      },
+      {
+        "id": 4,
+        "title": "CPU Parser Cascade Implementation",
+        "description": "Implement the fixed execution order parser cascade: deterministic text extraction → Docling/LiteParse layout → GROBID metadata → Tesseract/PaddleOCR scans → minimal LLM OCR fallback. Ensure cascade preserves all provenance and confidence scores.",
+        "details": "Create apps/agent-worker/src/parsers/text-extractor.ts for PDF text layer, Markdown, TeX, DOCX, CSV/XLSX with deterministic output. Implement apps/agent-worker/src/parsers/layout-parser.ts wrapping selected layout parser (post evaluation), generating DocumentSourceMap with block coordinates. Create apps/agent-worker/src/parsers/grobid-parser.ts for bibliography, section headers, and reference extraction. Implement apps/agent-worker/src/parsers/ocr-parser.ts with Tesseract/PaddleOCR for low-confidence pages. Build apps/agent-worker/src/parsers/llm-ocr-fallback.ts that routes only pages meeting threshold criteria to MiniMax LLM OCR via AI Gateway, preserving original blocks as candidates alongside LLM output. Implement apps/agent-worker/src/parsers/cascade-orchestrator.ts executing fixed order and merging source maps with transformation history.",
+        "testStrategy": "Run full cascade on golden corpus: native PDFs, scanned PDFs, dual-column, tables, equations, references. Measure confidence scores at each stage. Verify LLM OCR only invoked for pages below threshold. Confirm merged source map contains parser/version/confidence for each block.",
+        "priority": "high",
+        "dependencies": [
+          3,
+          5
+        ],
+        "status": "pending",
+        "subtasks": []
+      },
+      {
+        "id": 5,
+        "title": "AI Gateway and LLM OCR Routing",
+        "description": "Extend the existing packages/ai-gateway routing and call-log implementation with vision/LLM OCR, provider kill switches, source marking, prompt hashes and explicit cost/latency audit fields.",
+        "details": "Preserve the deployed OpenAI-compatible and MiniMax Token Plan providers in packages/ai-gateway. Add an OCR request/result contract, per-provider kill switch, prompt hash, input content hash, page selection, token/cost estimate, latency and fallback reason to the existing gateway path. Reuse the current usage/rate-limit infrastructure rather than creating a model-side CPU limiter. Add MiniMax vision only as a minimal-page fallback and ensure API, Domain and Web never import provider SDKs or read provider-specific payloads.",
+        "testStrategy": "Verify LLM OCR calls route through AI Gateway with complete audit log entries. Test cost tracking accuracy. Verify kill switch immediately halts routing to affected provider. Confirm no direct model SDK imports in API, Domain, or Web packages.",
+        "priority": "high",
+        "dependencies": [
+          3
+        ],
+        "status": "pending",
+        "subtasks": []
+      },
+      {
+        "id": 6,
+        "title": "Semantic Retrieval with BGE-M3 and Hybrid Fusion",
+        "description": "Implement packages/search with hybrid retrieval pipeline: PostgreSQL FTS/BM25 → CPU BGE-M3 dense embeddings → reciprocal rank fusion. Ensure search storage separation with distinct SEARCH_DATABASE_URL.",
+        "details": "Create packages/search/src/index.ts as the single retrieval entry point (API/Domain/Worker cannot import model SDKs directly). Implement packages/search/src/embedder.ts wrapping BGE-M3 with CPU inference, versioned model weights in Docker volume. Build packages/search/src/lexical.ts with PostgreSQL FTS/BM25 candidate retrieval. Create packages/search/src/fusion.ts implementing reciprocal rank fusion. Implement packages/search/src/chunker.ts with 512-1024 token semantic chunks preserving artifact/page/bbox/claim locator. Build packages/search/src/storage.ts managing chunk/embedding/index-task tables in SEARCH_DATABASE_URL. Implement graceful degradation when SEARCH_DATABASE_URL unavailable (lexical-only fallback).",
+        "testStrategy": "Run P95 latency benchmarks on CPU baseline corpus target ≤2.5s. Verify memory stays within container limits. Test search degradation when embedding service unavailable. Confirm locator recovery in search results round-trips correctly.",
+        "priority": "high",
+        "dependencies": [
+          2,
+          5
+        ],
+        "status": "pending",
+        "subtasks": []
+      },
+      {
+        "id": 7,
+        "title": "Research Identity Profile and Hermes Routing",
+        "description": "Implement ResearchIdentityProfile registration, InterestContext management, and silent Hermes routing based on identity, page, current goal, and correctable interest signals.",
+        "details": "Create packages/domain/src/identity/research-profile.ts with ResearchIdentityProfile interface (identities[], primaryIdentity, disciplines, methods, topics, languages). Implement packages/domain/src/identity/interest-context.ts with InterestContext interface and priority rules (explicit goal > current page > primary identity > persistent interest > correctable history). Build packages/domain/src/identity/interest-signal.ts with acceptedSignals, rejectedSignals tracking and persistence. Create packages/domain/src/identity/routing.ts determining Hermes behavior based on context without mode switching UI. Implement packages/domain/src/identity/profile-service.ts for registration and settings modification. Ensure no sensitive attributes or off-site tracking influence routing.",
+        "testStrategy": "Test InterestContext priority rules with all combinations. Verify routing decisions are deterministic and explainable. Test profile modification doesn't cause data loss. Validate no sensitive attribute inference in routing logic.",
+        "priority": "high",
+        "dependencies": [
+          2,
+          6
+        ],
+        "status": "pending",
+        "subtasks": []
+      },
+      {
+        "id": 8,
+        "title": "Research Object API and Claim/Evidence Operations",
+        "description": "Implement HTTP routes in apps/api for Research Object CRUD, Claim/Evidence management, version control, and approval workflows. Enforce publish blockers and audit requirements from PRD Section 5.3.",
+        "details": "Extend the existing research-object, versions, agent-approvals, publish-review and audit routes instead of recreating them. Add Claim/Evidence endpoints and locator verification, then connect them to the existing immutable version, proposal/diff and approval services. Enforce publish blockers for locator mismatch, missing contentHash, hidden conflicts, presentation media used as Evidence and unauthorized distribution. Preserve current RBAC, visibility, idempotency, optimistic-lock and audit conventions.",
+        "testStrategy": "Test all publish blockers trigger correctly with expected error codes. Verify approval workflow enforces required evidence. Test version comparison API returns accurate diffs. Verify audit log captures all automatic actions with required evidence fields.",
+        "priority": "high",
+        "dependencies": [
+          2,
+          7
+        ],
+        "status": "pending",
+        "subtasks": []
+      },
+      {
+        "id": 9,
+        "title": "Public RO Presentation and Claim-First UI",
+        "description": "Build Claim-first public Research Object reading experience in apps/web with 760px reading column, 280px evidence rail, default-expanded evidence, and mobile bottom sheet. Implement the reading order from PRD Section 6.1.",
+        "details": "Extend the existing apps/web/app/research/[publicId] public route and apps/web/components/research primitives. Implement title/author/version/license/citation → one-line positioning → 3-7 core Claims → evidence/conditions/limitations → methods/data/code/environment/reuse → history/review/provenance → presentation assets. Add a desktop Evidence rail and mobile bottom sheet with page/region/source preview. Evidence is expanded by default; persist the user's collapsed-default preference in their settings, with a safe local fallback before authentication. Collapse must not affect indexing, print, export or accessibility.",
+        "testStrategy": "Test reading order matches PRD Section 6.1 exactly. Verify evidence defaults to expanded. Test mobile sheet interactions. Run WCAG AA accessibility audit. Verify keyboard navigation works throughout. Test print/export includes all evidence regardless of UI collapse state.",
+        "priority": "high",
+        "dependencies": [
+          8
+        ],
+        "status": "pending",
+        "subtasks": []
+      },
+      {
+        "id": 10,
+        "title": "External Retrieval and Temporary Document Lifecycle",
+        "description": "Implement external source retrieval (Semantic Scholar, Tavily, ScanSci) with proper rights decisions, 72-hour TTL caching, 10-minute signed download links, and provenance tracking.",
+        "details": "Create apps/agent-worker/src/retrieval/semantic-scholar.ts for paper metadata, citation graph, and open access links. Implement apps/agent-worker/src/retrieval/tavily.ts for web discovery (non-authoritative). Build apps/agent-worker/src/retrieval/scansci.ts for institution-authenticated PDF retrieval within legal bounds. Create apps/agent-worker/src/storage/temp-documents.ts implementing 72-hour TTL cleanup for cached files. Implement apps/agent-worker/src/storage/signed-links.ts generating 10-minute expiration links for authorized downloads. Build apps/agent-worker/src/rights/decision-engine.ts determining distribution rights and storing rights decisions with contentHash. Ensure contentHash, source URL, rights decision, parser provenance, and locator always persisted even when file is deleted.",
+        "testStrategy": "Test Semantic Scholar metadata retrieval accuracy. Verify 72-hour TTL cleanup executes reliably. Test signed link generation and expiration. Verify rights decisions are logged and auditable. Test graceful degradation when external APIs unavailable.",
+        "priority": "medium",
+        "dependencies": [
+          4,
+          5
+        ],
+        "status": "pending",
+        "subtasks": []
+      },
+      {
+        "id": 11,
+        "title": "Deterministic Presentation Assets Generation",
+        "description": "Implement deterministic chart and interactive HTML generation from real Claim data as PresentationAssets. Configure admin-only MiniMax image/video generation for representative public results with approval workflow.",
+        "details": "Create apps/agent-worker/src/presentation/chart-generator.ts generating Plotly/SVG charts from verified data with sourceClaimIds, generator version. Build apps/agent-worker/src/presentation/interactive-html.ts creating Claim/Evidence/conditions/limitations interaction HTML deterministically. Implement apps/agent-worker/src/presentation/minimax-admin.ts as admin-only endpoint for MiniMax image/video generation with cost logging, prompt hash, source claims, and approval requirement. Create apps/api/src/routes/presentation-assets.ts with draft/approved/rejected status workflow. Implement packages/domain/src/assets/presentation-asset.ts with label: 'presentation_not_evidence' enforcement. Ensure video generation is last priority after charts/interactive HTML prove stable.",
+        "testStrategy": "Test chart generation produces identical output for same input data (deterministic). Verify interactive HTML contains no LLM-generated evidence, only structured data. Test admin MiniMax workflow requires approval before publication. Verify presentation_not_evidence label prevents asset use as Claim evidence.",
+        "priority": "medium",
+        "dependencies": [
+          9
+        ],
+        "status": "pending",
+        "subtasks": []
+      },
+      {
+        "id": 12,
+        "title": "Full Golden-Corpus Gate and Production Acceptance",
+        "description": "Run the foundation corpus through every completed subsystem, enforce quantitative release thresholds, canary capability switches and the real ECS end-to-end acceptance journey.",
+        "details": "Extend the Task 1 corpus runner to cover the complete parser, OCR, Claim/Evidence, hybrid retrieval, identity routing, external retrieval, public RO and presentation paths. Enforce citation locator round-trip 100%, core Claim precision ≥0.90, evidence relation precision ≥0.90, evidence page/bbox hit rate ≥0.95, CPU search P95 ≤2.5s, and TTL/signed-link expiration 100%. Add the real upload → parse/OCR → Claim review → version → publish → public reuse journey. Verify server full build, migration status, target containers/model digests, runtime dependency loading, internal/public health, kill switches and rollback before release.",
+        "testStrategy": "Run full golden corpus suite before any release. Verify all thresholds pass individually. Test canary deployment with real traffic. Verify rollback capability at each phase. Confirm production acceptance test suite passes on target infrastructure before go-live.",
+        "priority": "high",
+        "dependencies": [
+          4,
+          6,
+          7,
+          8,
+          9,
+          10,
+          11
+        ],
+        "status": "pending",
+        "subtasks": []
+      }
+    ],
+    "metadata": {
+      "created": "2026-08-26T08:23:44.365Z",
+      "updated": "2026-08-26T08:23:44.365Z",
+      "description": "CURRENT tasks for the approved Hermes Research Intelligence platform design"
     }
   }
 }

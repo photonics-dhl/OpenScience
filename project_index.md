@@ -102,7 +102,7 @@
 | `apps/agent-worker/Dockerfile` / `apps/agent-worker/Dockerfile.parser` / `apps/agent-worker/parser-image/{package.json,package-lock.json}` / `apps/agent-worker/src/{clamav,ingestion-parser,parser-job-isolation,parser-service}.ts` | Worker 与 lockfile 固定的自包含 document-parser；构建期经 ECS Squid，运行时无网络/Secret、非 root、只读、512MiB/64 PID、128MiB bounded IPC；Tesseract `eng+chi_sim`、ClamAV fail-closed | CURRENT；ECS 隔离 inspect 与固定哈希 24.7MiB PDF 纵向 gate GREEN（2026-08-17） |
 | Rejected local Hermes Blender prototype (not repository content) | 少年星图龙只保留 `hermes-constellation-dragon/apps/web/assets/hermes/HermesConstellationDragon.blend`（SHA-256 `9CF4694D…DDFA5`）；`.blend1`、渲染/contact sheet、manifest、旧脚本/合同已清理 | **用户视觉 NO-GO / HISTORICAL SOURCE ONLY**；二进制进回收站，禁止误读为候选资产 |
 | `.cursor/` | Cursor 编辑器配置 | 工具自管 |
-| `.taskmaster/` | task-master 任务状态 | 工具自管 |
+| `.taskmaster/` | task-master 任务状态；`optical-editorial-v3` 15/15 done，CURRENT `hermes-research-intelligence` 为经人工纠偏的 12 个待办 | 工具自管；CURRENT tag 已切换 |
 | `.memory/memory.jsonl` | Memory MCP 知识图谱存储（MEMORY_FILE_PATH 指定） | 工具自管，随 git 备份 |
 | `src/` | 未来代码 | 空 |
 
@@ -133,6 +133,7 @@
 | `docs/specs/2026-08-17-hermes-workspace-companion-motion-design.md` | Hermes Workspace Companion 已实施 guide/anchor/travel/dock/diff foundation 与历史 OGL visual contract | **IMPLEMENTED FOUNDATION / VISUAL SUPERSEDED**；CURRENT renderer 见 2026-08-19 Wanko spec |
 | `docs/specs/2026-08-19-hermes-wanko-live2d-design.md` | Wanko renderer、`360/200px`、Research Folio；§13.3–13.7 carried sheet、speech、skill reject、action-first 与联合稳定器；§13.8 detached/protected physical fallback | **CURRENT Hermes visual/guide design / §13.8 deployed**；application/release/rollback `9aef5c4` / `8395b4d` / `bf54eaa`，public no-write `10/10`，user review pending |
 | `docs/specs/2026-08-24-research-folio-product-system-design.md` | 登录到公开验证的全部真实非 Landing 产品视觉与信息架构；暖纸阅读、graphite 证据工具、18 表面、预留 Hermes 研究页边与无覆盖合同 | **CURRENT non-Landing product UI spec / IMPLEMENTED**；Landing unchanged |
+| `docs/specs/2026-08-26-hermes-research-intelligence-platform-design.md` | Claim-first RO、可定位 Evidence、身份静默路由、CPU parser/OCR、BGE-M3 hybrid retrieval、数据库分离、富媒体与 Hermes 受控权限的统一产品/技术合同 | **CURRENT research-intelligence design / REQUIREMENTS APPROVED / IMPLEMENTATION NOT STARTED** |
 | `docs/specs/2026-08-22-wanko-scholar-hat-design.md` | canonical Wanko 常驻学者帽视觉、佩戴遮挡、流苏运动和 visual-before-Cubism 门 | **CURRENT accessory design COMPLETE / DEPLOYED**；v09 母版与 2026-08-23 runtime bundle 已随 release `5f4e73c` 部署 |
 | `docs/specs/2026-08-18-readable-workspace-hermes-guidance-design.md` | B 平衡学者工作台、三视觉系统阅读基线、浏览器无关控件样式、Hermes 不遮挡引导编舞与公网 blank RO→六字段→diff→commit 真实验收 | **IMPLEMENTED FOUNDATION / CARRIED FORWARD**；首次公网真实验收 `06072c1`，现行 release `5f4e73c` |
 | `docs/plans/2026-08-18-readable-workspace-hermes-guidance-plan.md` | 可读性基础→代表页面→完整 Hermes footprint 避让→edit-before-accept/缺失证据→语义动作→公网 blank RO gate→ECS checkpoint 的 TDD 实施链 | **COMPLETED**；release `06072c1` / rollback `8ecf96c` |
@@ -331,7 +332,8 @@
 | `docs/decisions/ADR-006-cloudflare-tunnel-public-ingress.md` | 未备案域名公网入口改由 ECS 常驻 Cloudflare Tunnel 承载；Nginx 继续作为统一回源与安全边界 | Accepted |
 | `docs/handoff/2026-08-15-cloudflare-tunnel-egress-incident-handoff.md` | Cloudflare Tunnel 502/530 事故根因、生产修复、回滚证据与后续观察项 | 当前基础设施交接 |
 | `docs/specs/2026-08-16-edge-cache-asset-versioning-design.md` / `docs/plans/2026-08-16-edge-cache-asset-versioning-plan.md` / `docs/handoff/2026-08-16-edge-cache-asset-versioning-handoff.md` | Landing 大型光学资产内容寻址缓存的设计、实施与部署证据 | 已完成历史主题；release `b93fa9d`，不作为当前 Hermes 入口 |
-| `docs/runbooks/deployment.md` | 部署 runbook（cloud-sync/迁移/seed/nginx/验证、Parser 隔离、Windows Git Bash 专用密钥调用与版本化资产）；§5.26–5.28 登记 Landing water recovery、WebGL fallback 与 Chrome reduced-motion 排障 | CURRENT；application/release/rollback `2934476` / `2934476` / `58614c0`，用户已确认正常 |
+| `docs/runbooks/deployment.md` | 部署 runbook（cloud-sync/迁移/seed/nginx/验证、Parser 隔离、Windows 显式 Git Bash 专用密钥调用与版本化资产）；§1.1 锁定裸 `bash` 命中 WSL 的误报签名，§5.26–5.28 登记 Landing water recovery、WebGL fallback 与 Chrome reduced-motion 排障 | CURRENT；application/release/rollback `2934476` / `2934476` / `58614c0`，用户已确认正常 |
+| `docs/runbooks/hermes-capability-registry.md` | Hermes Skill/MCP/model/parser/provider 能力台账：注入状态、授权/成本、项目级安装目录、72h PDF TTL、10min signed URL、评测/回滚/退役规则 | **CURRENT capability registry**；仅核验存在性，凭据值不入文档；尚未安装或部署新能力 |
 | `docs/runbooks/backup-restore.md` | 备份与恢复 runbook（四节骨架，Phase 1A 填充） | 骨架 |
 | `docs/runbooks/incident.md` | 故障响应 runbook（四节骨架，Phase 1A 填充） | 骨架 |
 | `docs/runbooks/monitoring.md` | 监控面板 runbook（Netdata + vnStat，同域 /monitor/ /traffic/ 路径，2026-08-01） | 已上线 |

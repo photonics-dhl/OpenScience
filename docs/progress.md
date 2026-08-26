@@ -2,6 +2,13 @@
 
 > 最新同步：2026-08-26 14:39 +08。历史由 Git 保存；旧计划和 archive 不作为默认输入。
 
+## 2026-08-26 — Hermes 能力核验与 SSH 误报收口
+
+- 用户确认 LLM OCR 作为平台自动处理能力，不再逐文档询问；仍须经 AI Gateway、最小页路由、来源标记与审计，生成结果不得冒充原始证据。
+- 仅检查注入状态、不读取或输出 `.env` 值：本机 Tavily 已注入但额度耗尽，Semantic Scholar 常用变量未进入当前进程；生产 `agent-worker` 已注入 MiniMax，尚未注入 Tavily/Semantic Scholar。用户在聊天中暴露的凭据必须轮换后再配置。
+- SSH key 已用同一密钥只读复验成功。历史误报由 Windows 裸 `bash` 命中 WSL 导致；`AGENTS.md` 与 deployment §1.1 已锁定显式 Git Bash 调用和 `wsl: Failed to translate` 根因签名，禁止再误判为密钥失败。未改产品代码、未写服务器、未部署。
+- Taskmaster `optical-editorial-v3` 的历史 Task 4 已按现行 Landing 生产证据从 stale `in-progress` 收口为 `done`，旧 tag 现为 15/15；CURRENT 已切到 `hermes-research-intelligence`，经生成后人工纠正为 12 个待办，实施尚未开始。
+
 ## Current version tuple
 
 - Branch / deployed application / immutable release: `codex/hermes-wanko-live2d` / `29344767b350e0a44ef74c04b9b5a55b342ef011` / `29344767b350e0a44ef74c04b9b5a55b342ef011`。
@@ -59,19 +66,6 @@
 - 用户批准基于 Scholar's Tea 行为语法重建的动态方向：Dashboard 同一口部气泡顺序出现两句短话；桌面 12 项清晰 action points 从真实 `360px` Hermes 周围展开；选择后菜单关闭、角色动作与短句组成一个反馈节拍；移动 `200px` 长按与安静编辑状态保留完整入口。
 - 唯一 CURRENT Hermes spec 已新增 §13.2，明确 8 个陪伴动作、4 个研究动作、右键/Shift+F10/Menu/长按、普通点击 drawer、44px 目标、字体、reduced-motion 和不遮挡合同；该设计阶段已被上方 `e4a19d4` 实现条目取代。
 - 新增 `docs/proposals/2026-08-25-openscience-patent-product-introduction.{md,docx}`：按当前需求基线、产品叙事、已实现架构和边界编写，分开陈述现状与规划，并列出供代理人检索拆分的技术点；不冒充权利要求或可专利性结论。
-
-## 2026-08-25 — Hermes mouth-anchored speech deployed
-
-- 用户批准实现并部署 §13.1。显式 companion feedback 现为无 speaker/tone/toolbar 的单句暖纸椭圆，三角纸尾以真实 `360/200px` Wanko 口部锚点为目标；桌面、移动端和方向翻转均有几何门禁，移动端菜单宽度为 224px。
-- Radix 右键、`Shift+F10`、Menu 键、长按与普通点击 drawer 保持；菜单使用连续 ruled ledger，应用内与系统 reduced-motion 均关闭无必要入场动画。修复了 pointer-up 异步读取失效 React `currentTarget` 的真实竞态。
-- Fresh local evidence：Web `403/403` + 5 Node contracts、targeted `14/14`、work-assistant 三视口、Hermes aggregate（19 个现行 runtime/guide + 3 个菜单）、product release `60/60`、全仓 typecheck/lint/docs-sync/test/build、`git diff --check` GREEN；WebGL first-ready `857ms`，idle/pointer 均零掉帧。
-- 两轮独立复审无部署阻断。原 40 条旧 Hermes E2E 中 21 条要求已被批准锚定契约取代的 cross-field travel/dark prompt/旧 dock 语义，不再作为 CURRENT gate；剩余 19 条 runtime/guide 回归继续进入 Hermes 聚合门禁，旧文件保留为 historical evidence。
-- Immutable release `3010903` 已以 `33418fd` 为 rollback、`--skip-migrate` 部署。pre/post checkup、fresh backup `432K files=7/7`、服务器 19-page full build、27 migrations current、API/Worker/Parser healthy、Web running、runtime dependencies、Parser isolation、真实 route/Live2D assets、精确 `/__release`、absent failure marker 与 rollback tree 均通过；公网无写入 Hermes desktop/keyboard、mobile long-press、editor feedback `3/3`，原尺寸截图确认气泡留在研究页边且不覆盖正文。未 migration、seed 或写研究数据。
-
-## 2026-08-24 — Research Folio whole-product candidate
-
-- 用户批准并部署全部真实非 Landing 页面 Research Folio；唯一 CURRENT 规范为 `docs/specs/2026-08-24-research-folio-product-system-design.md`。用户路径、暖纸阅读表面、`360/200px` 锚定 Hermes、右键/键盘/长按菜单和点击 drawer 已统一，Landing 未改。
-- Application `56f6cf4` / release `33418fd` / rollback `2abfe42` 已消除未请求 speech/nudge 覆盖；公网 focused `4/4`、product matrix `60/60`、Web `402+5`、server build、27 migrations、runtime/assets/markers GREEN。无 migration、seed 或研究数据写入；细节从 Git history 与 CURRENT handoff 查阅。
 
 ## Read first
 
