@@ -1,6 +1,6 @@
 # Runbook: 部署（Deployment）
 
-> 状态：**CURRENT**。2026-08-26 active immutable release 为 `8395b4d5cc11cb444aac3b638cff4ccc993ef9f2`，rollback tree 为 `bf54eaa2cd499f68eee8ce311a1ed178027a5348`；Hermes application source 为 `9aef5c4d54d10b27a59389fa6865d179feb1891a`。post-deploy docs-only HEAD 不得冒充 application source。
+> 状态：**CURRENT**。2026-08-26 active immutable release 为 `263c78372a1a6114016bba9ca3d8dbfce94ee0ce`，rollback tree 为 `8395b4d5cc11cb444aac3b638cff4ccc993ef9f2`；application source 为 `c80f739072054e6ababfee511a6a9ecbaa296020`。post-deploy docs-only HEAD 不得冒充 application source。
 > 格式遵循 `.agents/skills/infra-runbook/SKILL.md` 四节强制要求。
 > 部署属 Spec §20.5"询问"级操作：执行前需用户确认，必须走 `infra/scripts/deploy.sh` + CI/CD，禁止手工改服务器代码。
 
@@ -832,3 +832,26 @@ Historical note for the 2026-08-11 release: it used fixed worker tags and a writ
   release/source, absent failure marker, rollback tree and rollback images pass.
   Public no-write Hermes acceptance is `10/10`, including the reported detached
   high-DPI geometry. No migration, seed or research-data write ran.
+
+### 5.25 Landing motion and product-route continuity (2026-08-26)
+
+> Active release `263c78372a1a6114016bba9ca3d8dbfce94ee0ce`;
+> rollback `8395b4d5cc11cb444aac3b638cff4ccc993ef9f2`;
+> application `c80f739072054e6ababfee511a6a9ecbaa296020`.
+
+- Scope is Web-only: freeze Hermes; preserve the approved Landing optical
+  implementation and add final-composite visible-motion coverage; add shared
+  first-level navigation to non-Landing product shells and retain RO mode links.
+- Local evidence: Web `420+5`, canonical product release `72/72`, full root
+  typecheck/lint/test/build/docs gates and 19-page build pass. Original-size
+  320/390px review fixed a real 6px navigation clip before release.
+- Operation used canonical Git Bash scripts with
+  `XGS_CONFIG_ROOT=E:/Miscellaneous/XGS`, exact dry-run, pre/post checkup,
+  backup `432K files=7/7`, `--skip-migrate` and explicit rollback `8395b4d...`.
+- Server evidence: full workspace/19-page build, 27/27 current migrations,
+  healthy target services, Parser network-none/read-only/512MiB/64PID,
+  Cloudflare/loopback routes, exact release/source, absent failure marker and
+  retained rollback tree pass. Public no-write matrix passes all 69 anonymous
+  cases, including Landing normal/reduced and five 320px shells; three Admin
+  viewports correctly stop at production Basic Auth 401 and pass locally 3/3.
+  No migration, seed or research-data write ran.

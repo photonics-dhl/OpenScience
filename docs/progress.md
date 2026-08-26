@@ -1,20 +1,21 @@
 # OpenScience 进度（CURRENT window）
 
-> 最新同步：2026-08-26 10:18 +08。历史由 Git 保存；旧计划和 archive 不作为默认输入。
+> 最新同步：2026-08-26 10:30 +08。历史由 Git 保存；旧计划和 archive 不作为默认输入。
 
 ## Current version tuple
 
-- Branch / application candidate / deployed application / immutable release: `codex/hermes-wanko-live2d` / `c80f739072054e6ababfee511a6a9ecbaa296020` / `9aef5c4d54d10b27a59389fa6865d179feb1891a` / `8395b4d5cc11cb444aac3b638cff4ccc993ef9f2`。
-- Current rollback 为前一健康 release `bf54eaa2cd499f68eee8ce311a1ed178027a5348`；post-deploy docs HEAD 不与应用身份混写。
+- Branch / deployed application / immutable release: `codex/hermes-wanko-live2d` / `c80f739072054e6ababfee511a6a9ecbaa296020` / `263c78372a1a6114016bba9ca3d8dbfce94ee0ce`。
+- Current rollback 为前一健康 release `8395b4d5cc11cb444aac3b638cff4ccc993ef9f2`；post-deploy docs HEAD 不与应用身份混写。
 - Local main / origin main: `c60ffdd16b85ea8f0d8b047493fa03a4c0230c05` / `7eb2f5bc4718ee445b79bd089acb64acb3691e62`；两者都早于当前工作分支，远端 Hermes feature 不存在。
-- ECS release / rollback: `8395b4d5cc11cb444aac3b638cff4ccc993ef9f2` / `bf54eaa2cd499f68eee8ce311a1ed178027a5348`。
+- ECS release / rollback: `263c78372a1a6114016bba9ca3d8dbfce94ee0ce` / `8395b4d5cc11cb444aac3b638cff4ccc993ef9f2`。
 
 ## 2026-08-26 — Landing motion and product-route continuity candidate
 
 - 用户将 Hermes 形象阶段收口；本候选不改 Hermes 组件、资产、尺寸、动作、语言或布局，只保留 10 条现行 Hermes 浏览器回归。
 - 公网检查确认当前 `8395b4d` Landing 仍有 interactive canvas、RAF、`.05` ambient 与 pointer response；真正缺口是 canonical product release 过去只检查 DOM/reduced-motion，Hermes 部署也未强制运行 final-composite visible-motion gate。本候选将正常 Landing 的标题区连续像素变化、四象限覆盖、指针跟随与恢复纳入 release contract，保留 approved optical 参数不变。
 - 新增全站一级研究入口：Research desk / Explore / New research / Settings；公开阅读与 collection 同时保留 Home wordmark、Desk、Explore、Create、Login；RO 内继续使用 Overview/SDF/Files/Versions/Collaboration/Publish/Sandbox 二级导航。Dashboard loading/error、注册/登录、Hermes evidence review 与 curator 均不再是死路。
-- 390px 原尺寸复核发现首项虽存在却裁切 `6px`，已用品牌/utility 第一行 + 四入口第二行及明确短标签修复；浏览器门禁现逐链接验证 visible 与 `scrollWidth <= clientWidth`。Application `c80f739` 的 fresh evidence：Web `420+5`、全仓 typecheck/lint/docs-sync/docs-lint/test/build、19-page build、product release `72/72` 与 `git diff --check` GREEN；新增 320px Dashboard/Auth/Public/Workspace/Review 五壳层实测。用户已确认 cloud write；ECS 在 canonical dry-run/checkup 与部署完成前仍为 `8395b4d`。
+- 390px 原尺寸复核发现首项虽存在却裁切 `6px`，已用品牌/utility 第一行 + 四入口第二行及明确短标签修复；浏览器门禁现逐链接验证 visible 与 `scrollWidth <= clientWidth`。Application `c80f739` 的 fresh evidence：Web `420+5`、全仓 typecheck/lint/docs-sync/docs-lint/test/build、19-page build、product release `72/72` 与 `git diff --check` GREEN；新增 320px Dashboard/Auth/Public/Workspace/Review 五壳层实测。
+- Immutable release `263c783` 已以 `8395b4d` 为 rollback、`--skip-migrate` 发布。pre/post checkup、backup `432K files=7/7`、服务器 19-page build、27/27 migrations、目标容器/Parser isolation、Cloudflare/loopback、精确 release/failure/rollback markers 与公开路由均通过。公网 no-write 产品矩阵可匿名部分 `69/69`，其中 Landing normal/reduced 与 320px 五壳层全绿；Admin 三视口按生产 Basic Auth 正确返回 401，本地 release gate 为 `3/3`。未 migration、seed 或写研究数据。
 
 ## 2026-08-26 — Detached Hermes menu correction deployed
 

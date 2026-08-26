@@ -147,10 +147,10 @@
 
   Review correctness, navigation/accessibility, product visual continuity and scope protection. Current session policy prohibited spawning reviewers, so architecture and adversarial passes were completed sequentially in the primary session; the discovered 390px clipping and loading/error dead ends were fixed and re-verified.
 
-- [ ] **Step 5: Prepare immutable release and request cloud-write confirmation**
+- [x] **Step 5: Prepare immutable release and request cloud-write confirmation**
 
   Commit a clean candidate, record application/release/rollback refs, run dry-run and checkup. Do not execute the confirmed deployment until the user authorizes the cloud write.
 
-- [ ] **Step 6: Deploy and verify production**
+- [x] **Step 6: Deploy and verify production**
 
   After confirmation, run backup and the canonical immutable deployment with `--skip-migrate`; verify server full build, 27 migrations current, target container health, runtime dependencies, exact `/__release`, absent failure marker, rollback tree, public route status, Landing normal/reduced motion and no-write cross-page navigation E2E.
