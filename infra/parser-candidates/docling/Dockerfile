@@ -13,9 +13,9 @@ ENV DEBIAN_FRONTEND=noninteractive \
 
 ADD --checksum=sha256:95c0a4d9bc1beafc6097c8573ec3a8dc317e8bcf67e3234aa7c050b7d73fde9c \
     https://files.pythonhosted.org/packages/32/4b/cdea48e4e914d246ece99f1bf97b3f983f4db91ec355024d50657cf587f1/docling-2.123.0-py3-none-any.whl \
-    /tmp/docling.whl
+    /tmp/docling-2.123.0-py3-none-any.whl
 
-RUN python -m pip install --no-cache-dir /tmp/docling.whl \
+RUN python -m pip install --no-cache-dir /tmp/docling-2.123.0-py3-none-any.whl \
     && python -c "from importlib.metadata import version; assert version('docling') == '2.123.0'" \
     && docling-tools models download --output-dir /opt/docling-models \
     && install -d -m 0755 /opt/docling-lock /app \
@@ -23,7 +23,7 @@ RUN python -m pip install --no-cache-dir /tmp/docling.whl \
     && cd /opt/docling-models \
     && find . -type f -print0 | LC_ALL=C sort -z | xargs -0 sha256sum > /opt/docling-lock/model-sha256.txt \
     && test -s /opt/docling-lock/model-sha256.txt \
-    && rm -f /tmp/docling.whl \
+    && rm -f /tmp/docling-2.123.0-py3-none-any.whl \
     && chmod -R a-w /opt/docling-models /opt/docling-lock
 
 ENV HF_HUB_OFFLINE=1 \
