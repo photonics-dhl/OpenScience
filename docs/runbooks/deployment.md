@@ -1034,3 +1034,30 @@ an isolated evaluation image, not a production deployment.
   image digest, package/model manifest hashes, non-root/read-only/network-none
   sandbox, and zero GPU packages. A failed lock must stop the evaluation and
   leave production release `f965966...` unchanged.
+
+### 5.33 Detached ECS evaluation and exact-SHA discipline (2026-08-27)
+
+**Status:** required for every long parser/model build. Candidate evaluation is
+isolated from production and does not change the application release.
+
+- A foreground Docling build was attached to the SSH session for several hours.
+  When that connection reset, Docker discarded the uncommitted dependency layer;
+  this was an SSH lifetime failure, not a public-key failure. The previously
+  committed CPU Torch image layer remained reusable.
+- Windows must invoke `infra/scripts/ssh-run.sh` through the explicit Git for
+  Windows Bash path. Start long builds and evaluations as named `systemd` units,
+  then inspect bounded `systemctl show` and `journalctl -n` output through short
+  SSH connections. Never keep a model download dependent on one interactive SSH
+  process.
+- Obtain the candidate identifier with `git rev-parse HEAD`, verify the same
+  object after the ECS fetch, and use that exact 40-character value for the
+  evaluation root and unit metadata. Never expand or guess a short SHA. Preserve
+  failed content-addressed roots as diagnostic evidence unless deletion is
+  explicitly approved.
+- The current exact evaluator source is
+  `efa6367ef4d0bf18a9c4e1c6e073ba338bfe7ee1`, materialized under
+  `/opt/openscience-evals/document-parser/<exact-sha>/source`. The detached
+  attempt `openscience-parser-eval-docling-efa6367-a2.service` reuses the pinned
+  CPU Torch layer and isolates SciPy, OpenCV and RapidOCR into separate cacheable
+  layers. Build completion alone is not acceptance: the source lock, sandbox,
+  seven-PDF corpus, locator, latency and peak-RSS gates must all complete.

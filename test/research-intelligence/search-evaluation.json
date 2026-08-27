@@ -1,0 +1,128 @@
+{
+  "schemaVersion": 1,
+  "rights": "self-authored",
+  "chunks": [
+    {
+      "id": "ufs-method-en",
+      "language": "en",
+      "text": "A 35 femtosecond pump pulse excited the perovskite film at 515 nanometres. The transient absorption trace was chirp-corrected against a sapphire reference before global fitting, so the reported 0.8 picosecond component represents carrier cooling rather than an instrument response artifact.",
+      "locator": { "artifactId": "10000000-0000-4000-8000-000000000001", "contentHash": "1111111111111111111111111111111111111111111111111111111111111111", "page": 2, "bbox": [54, 96, 558, 172] }
+    },
+    {
+      "id": "ufs-limit-en",
+      "language": "en",
+      "text": "The 0.8 picosecond decay should not be interpreted as recombination. Fluence-dependent measurements show that the amplitude changes while the lifetime remains nearly constant, and the experiment does not resolve dynamics faster than the measured 62 femtosecond cross-correlation width.",
+      "locator": { "artifactId": "10000000-0000-4000-8000-000000000001", "contentHash": "1111111111111111111111111111111111111111111111111111111111111111", "page": 5, "bbox": [54, 310, 558, 398] }
+    },
+    {
+      "id": "comb-calibration-zh",
+      "language": "zh",
+      "text": "光学频率梳实验以铷钟作为十兆赫兹参考，对重复频率和载波包络偏移同时锁定。每次扫描前记录环境温度与拍频信噪比，只有连续三十秒锁定误差低于二赫兹的数据才进入最终谱线拟合。",
+      "locator": { "artifactId": "20000000-0000-4000-8000-000000000002", "contentHash": "2222222222222222222222222222222222222222222222222222222222222222", "page": 3, "bbox": [48, 88, 548, 168] }
+    },
+    {
+      "id": "comb-drift-zh",
+      "language": "zh",
+      "text": "长时间稳定性受实验室温漂限制。十二小时 Allan 偏差在一千秒平均时间后不再按白频率噪声下降，因此文中精度只适用于主动温控开启的六小时窗口，不能外推到无人值守的全天运行。",
+      "locator": { "artifactId": "20000000-0000-4000-8000-000000000002", "contentHash": "2222222222222222222222222222222222222222222222222222222222222222", "page": 7, "bbox": [48, 244, 548, 332] }
+    },
+    {
+      "id": "battery-interface-en",
+      "language": "en",
+      "text": "Operando impedance separates the solid-electrolyte bulk response from the lithium interface. Adding two weight percent lithium iodide lowers the interfacial resistance after ten cycles, but the conductivity of the sulfide pellet itself remains within experimental uncertainty.",
+      "locator": { "artifactId": "30000000-0000-4000-8000-000000000003", "contentHash": "3333333333333333333333333333333333333333333333333333333333333333", "page": 4, "bbox": [60, 118, 552, 204] }
+    },
+    {
+      "id": "battery-humidity-en",
+      "language": "en",
+      "text": "All sulfide-electrolyte handling occurred below 0.1 parts per million water in an argon glovebox. A deliberately humidified control produced hydrogen sulfide and a larger impedance arc, so the reported cycling gain cannot be assumed for ambient-air manufacturing.",
+      "locator": { "artifactId": "30000000-0000-4000-8000-000000000003", "contentHash": "3333333333333333333333333333333333333333333333333333333333333333", "page": 8, "bbox": [60, 402, 552, 486] }
+    },
+    {
+      "id": "crispr-assay-zh",
+      "language": "zh",
+      "text": "研究使用无偏倚的全基因组断裂捕获检测脱靶位点，并用独立的靶向扩增测序复验排名前二十的候选。只有两种方法都超过预设背景阈值的位点才计入脱靶率，单纯由算法预测的位点不作为实验阳性。",
+      "locator": { "artifactId": "40000000-0000-4000-8000-000000000004", "contentHash": "4444444444444444444444444444444444444444444444444444444444444444", "page": 6, "bbox": [52, 102, 556, 196] }
+    },
+    {
+      "id": "crispr-scope-zh",
+      "language": "zh",
+      "text": "结论仅覆盖三名供体的原代T细胞和一个编辑窗口，不包含造血干细胞或体内递送。样本量足以发现高频脱靶事件，却不足以排除十万分之一以下的罕见编辑，因此不能直接推导临床安全性。",
+      "locator": { "artifactId": "40000000-0000-4000-8000-000000000004", "contentHash": "4444444444444444444444444444444444444444444444444444444444444444", "page": 10, "bbox": [52, 286, 556, 378] }
+    },
+    {
+      "id": "cryoem-classification-en",
+      "language": "en",
+      "text": "Particles were split before three-dimensional classification, and no symmetry was imposed during the initial refinement. The minor open conformation contains eleven percent of accepted particles and remains visible in both half maps, reducing the chance that it is a masking artifact.",
+      "locator": { "artifactId": "50000000-0000-4000-8000-000000000005", "contentHash": "5555555555555555555555555555555555555555555555555555555555555555", "page": 9, "bbox": [58, 126, 550, 216] }
+    },
+    {
+      "id": "cryoem-resolution-en",
+      "language": "en",
+      "text": "The headline 2.7 angstrom resolution is a global Fourier shell correlation estimate. Local resolution near the flexible extracellular loop is worse than 4.5 angstrom, so side-chain identities in that region are modelled from sequence constraints rather than directly resolved density.",
+      "locator": { "artifactId": "50000000-0000-4000-8000-000000000005", "contentHash": "5555555555555555555555555555555555555555555555555555555555555555", "page": 11, "bbox": [58, 344, 550, 432] }
+    },
+    {
+      "id": "rainfall-bias-zh",
+      "language": "zh",
+      "text": "区域气候模型在山地迎风坡系统性高估夏季降水。研究用分位数映射订正日尺度分布，并将一九九一至二〇二〇年作为独立校准期；订正后极端降水频次改善，但空间相关长度没有被强制调整。",
+      "locator": { "artifactId": "60000000-0000-4000-8000-000000000006", "contentHash": "6666666666666666666666666666666666666666666666666666666666666666", "page": 4, "bbox": [50, 92, 554, 186] }
+    },
+    {
+      "id": "rainfall-transfer-zh",
+      "language": "zh",
+      "text": "分位数映射假设偏差关系在未来情景中近似稳定。若环流型或雨雪相态发生结构性变化，历史校准可能失效；因此二〇八〇年代结果同时给出未经订正的模式集合范围，而不是把单一订正曲线视为真值。",
+      "locator": { "artifactId": "60000000-0000-4000-8000-000000000006", "contentHash": "6666666666666666666666666666666666666666666666666666666666666666", "page": 12, "bbox": [50, 264, 554, 356] }
+    },
+    {
+      "id": "spatial-normalization-en",
+      "language": "en",
+      "text": "Spatial transcript counts were normalized with a negative-binomial model that includes sequencing depth and tissue area as offsets. Mitochondrial fraction was retained as a quality covariate rather than used to discard an entire ischemic region, preserving the biological stress gradient.",
+      "locator": { "artifactId": "70000000-0000-4000-8000-000000000007", "contentHash": "7777777777777777777777777777777777777777777777777777777777777777", "page": 5, "bbox": [56, 110, 552, 198] }
+    },
+    {
+      "id": "spatial-validation-en",
+      "language": "en",
+      "text": "The inferred macrophage niche was validated by multiplex fluorescence imaging on adjacent sections. Because the validation tissue is adjacent rather than identical, the analysis supports neighbourhood enrichment but cannot prove direct cell-to-cell contact for every inferred pair.",
+      "locator": { "artifactId": "70000000-0000-4000-8000-000000000007", "contentHash": "7777777777777777777777777777777777777777777777777777777777777777", "page": 9, "bbox": [56, 322, 552, 410] }
+    },
+    {
+      "id": "quantum-sensitivity-zh",
+      "language": "zh",
+      "text": "金刚石氮空位磁传感器采用双量子相干序列抑制共同模式温度漂移。在屏蔽室内、八十微秒相干时间和一秒积分条件下，灵敏度达到每根号赫兹九皮特斯拉；该数字已经扣除微波占空比。",
+      "locator": { "artifactId": "80000000-0000-4000-8000-000000000008", "contentHash": "8888888888888888888888888888888888888888888888888888888888888888", "page": 3, "bbox": [54, 116, 552, 206] }
+    },
+    {
+      "id": "quantum-field-limit-zh",
+      "language": "zh",
+      "text": "九皮特斯拉灵敏度不是开放环境指标。移出磁屏蔽后，五十赫兹工频及机械振动使噪声底升高约六倍；作者只验证了实验室近场样品，也没有进行野外长期漂移校准，不支持把结果外推到远距离地磁勘探。",
+      "locator": { "artifactId": "80000000-0000-4000-8000-000000000008", "contentHash": "8888888888888888888888888888888888888888888888888888888888888888", "page": 8, "bbox": [54, 294, 552, 382] }
+    }
+  ],
+  "queries": [
+    { "id": "q01-en", "language": "en", "text": "What physical process was assigned to the 0.8 ps component?", "relevantChunkIds": ["ufs-method-en", "ufs-limit-en"] },
+    { "id": "q02-zh", "language": "zh", "text": "为什么零点八皮秒衰减不能解释为载流子复合？", "relevantChunkIds": ["ufs-limit-en", "ufs-method-en"] },
+    { "id": "q03-en", "language": "en", "text": "What limits dynamics faster than sixty femtoseconds?", "relevantChunkIds": ["ufs-limit-en"] },
+    { "id": "q04-zh", "language": "zh", "text": "频率梳的重复频率和载波包络偏移如何校准？", "relevantChunkIds": ["comb-calibration-zh"] },
+    { "id": "q05-en", "language": "en", "text": "Which atomic clock reference was used for the frequency comb?", "relevantChunkIds": ["comb-calibration-zh"] },
+    { "id": "q06-zh", "language": "zh", "text": "为什么频率梳稳定性不能外推到全天无人值守？", "relevantChunkIds": ["comb-drift-zh"] },
+    { "id": "q07-en", "language": "en", "text": "Did lithium iodide improve bulk conductivity or interface resistance?", "relevantChunkIds": ["battery-interface-en"] },
+    { "id": "q08-zh", "language": "zh", "text": "硫化物电解质为何不能直接用于潮湿空气制造？", "relevantChunkIds": ["battery-humidity-en"] },
+    { "id": "q09-en", "language": "en", "text": "What happened in the deliberately humidified battery control?", "relevantChunkIds": ["battery-humidity-en"] },
+    { "id": "q10-zh", "language": "zh", "text": "哪些脱靶位点才被计入实验阳性？", "relevantChunkIds": ["crispr-assay-zh"] },
+    { "id": "q11-en", "language": "en", "text": "Were computationally predicted CRISPR sites counted without validation?", "relevantChunkIds": ["crispr-assay-zh"] },
+    { "id": "q12-zh", "language": "zh", "text": "三名供体的T细胞结果为何不能证明临床安全？", "relevantChunkIds": ["crispr-scope-zh"] },
+    { "id": "q13-en", "language": "en", "text": "What evidence suggests the minor cryo-EM conformation is not a mask artifact?", "relevantChunkIds": ["cryoem-classification-en"] },
+    { "id": "q14-zh", "language": "zh", "text": "冷冻电镜柔性环区域能否直接分辨侧链？", "relevantChunkIds": ["cryoem-resolution-en"] },
+    { "id": "q15-en", "language": "en", "text": "Where is the local resolution worse than the global 2.7 angstrom value?", "relevantChunkIds": ["cryoem-resolution-en"] },
+    { "id": "q16-zh", "language": "zh", "text": "山地降水的分位数映射订正改善了什么？", "relevantChunkIds": ["rainfall-bias-zh"] },
+    { "id": "q17-en", "language": "en", "text": "Why might historical quantile mapping fail in future climate scenarios?", "relevantChunkIds": ["rainfall-transfer-zh"] },
+    { "id": "q18-zh", "language": "zh", "text": "未来环流型变化时为什么仍需给出未经订正的集合范围？", "relevantChunkIds": ["rainfall-transfer-zh"] },
+    { "id": "q19-en", "language": "en", "text": "How was mitochondrial fraction handled in spatial transcriptomics?", "relevantChunkIds": ["spatial-normalization-en"] },
+    { "id": "q20-zh", "language": "zh", "text": "相邻切片成像为何不能证明每一对细胞直接接触？", "relevantChunkIds": ["spatial-validation-en"] },
+    { "id": "q21-en", "language": "en", "text": "What validation supported macrophage neighbourhood enrichment?", "relevantChunkIds": ["spatial-validation-en"] },
+    { "id": "q22-zh", "language": "zh", "text": "氮空位磁传感器九皮特斯拉灵敏度的测试条件是什么？", "relevantChunkIds": ["quantum-sensitivity-zh"] },
+    { "id": "q23-en", "language": "en", "text": "Does the nine picotesla sensitivity apply outside magnetic shielding?", "relevantChunkIds": ["quantum-field-limit-zh", "quantum-sensitivity-zh"] },
+    { "id": "q24-zh", "language": "zh", "text": "开放环境中哪些噪声使量子磁传感器性能下降？", "relevantChunkIds": ["quantum-field-limit-zh"] }
+  ]
+}
