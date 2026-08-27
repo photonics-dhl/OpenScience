@@ -201,6 +201,8 @@ class ModelInitializationTests(unittest.TestCase):
         self.assertIn("--requirement /tmp/requirements.lock", dockerfile)
         self.assertIn("--print-source-sha256", dockerfile)
         self.assertLess(dockerfile.index("snapshot_download"), dockerfile.index("COPY apps/embedding-worker/app.py"))
+        self.assertIn("rm -rf -- /opt/bge-m3-seed/.cache", dockerfile)
+        self.assertGreaterEqual(dockerfile.count("--write-manifest --seed /opt/bge-m3-seed"), 2)
         self.assertIn("chmod -R a+rX,a-w /opt/bge-m3-seed", dockerfile)
         self.assertIn("USER 10001:10001", dockerfile)
         self.assertNotIn("COPY --chmod", dockerfile)

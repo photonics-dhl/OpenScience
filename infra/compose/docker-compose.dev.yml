@@ -65,7 +65,7 @@ services:
     command: ["--initialize", "--seed", "/opt/bge-m3-seed", "--target", "/models/bge-m3"]
     user: "10001:10001"
     volumes:
-      - bge-m3-5617a9f61b028005a4858fdac845db406aefb181:/models/bge-m3
+      - bge-m3-5617a9f61b028005a4858fdac845db406aefb181-08cc5a668e89:/models/bge-m3
     network_mode: none
     read_only: true
     tmpfs:
@@ -79,7 +79,7 @@ services:
       embedding-model-init:
         condition: service_completed_successfully
     volumes:
-      - bge-m3-5617a9f61b028005a4858fdac845db406aefb181:/models/bge-m3:ro
+      - bge-m3-5617a9f61b028005a4858fdac845db406aefb181-08cc5a668e89:/models/bge-m3:ro
     read_only: true
     tmpfs:
       - /tmp:size=256m,noexec,nosuid,nodev,uid=10001,gid=10001,mode=0700
@@ -101,4 +101,4 @@ volumes:
   postgres-data:
   redis-data:
   minio-data:
-  bge-m3-5617a9f61b028005a4858fdac845db406aefb181:
+  bge-m3-5617a9f61b028005a4858fdac845db406aefb181-08cc5a668e89:

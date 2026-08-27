@@ -232,7 +232,7 @@ services:
     command: ["--initialize", "--seed", "/opt/bge-m3-seed", "--target", "/models/bge-m3"]
     user: "10001:10001"
     volumes:
-      - bge-m3-5617a9f61b028005a4858fdac845db406aefb181:/models/bge-m3
+      - bge-m3-5617a9f61b028005a4858fdac845db406aefb181-08cc5a668e89:/models/bge-m3
     network_mode: none
     read_only: true
     tmpfs:
@@ -258,7 +258,7 @@ services:
     image: openscience-embedding-worker:${XGS_RELEASE_IMAGE_TAG:?XGS_RELEASE_IMAGE_TAG required}
     user: "10001:10001"
     volumes:
-      - bge-m3-5617a9f61b028005a4858fdac845db406aefb181:/models/bge-m3:ro
+      - bge-m3-5617a9f61b028005a4858fdac845db406aefb181-08cc5a668e89:/models/bge-m3:ro
     depends_on:
       embedding-model-init:
         condition: service_completed_successfully
@@ -325,4 +325,4 @@ volumes:
       device: tmpfs
       o: size=128m,uid=1000,gid=1000,mode=0770
   clamav-data:
-  bge-m3-5617a9f61b028005a4858fdac845db406aefb181:
+  bge-m3-5617a9f61b028005a4858fdac845db406aefb181-08cc5a668e89:

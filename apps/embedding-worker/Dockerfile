@@ -41,7 +41,11 @@ RUN python -c "from huggingface_hub import snapshot_download; snapshot_download(
     && chmod -R a-w /opt/bge-m3-seed \
     && chmod 0444 /opt/bge-m3-lock/package-freeze.txt
 
-RUN chmod -R a+rX,a-w /opt/bge-m3-seed
+RUN chmod -R u+w /opt/bge-m3-seed \
+    && rm -rf -- /opt/bge-m3-seed/.cache \
+    && python /app/model-init.py --write-manifest --seed /opt/bge-m3-seed \
+    && python /app/model-init.py --validate --target /opt/bge-m3-seed \
+    && chmod -R a+rX,a-w /opt/bge-m3-seed
 
 COPY apps/embedding-worker/app.py /app/app.py
 

@@ -37,6 +37,10 @@ test('production search runtime is isolated, bounded and source locked', () => {
   assert.doesNotMatch(embeddingWorker, /env_file:|ports:|data_net/);
   assert.match(embeddingInit + embeddingWorker, /network: host/);
   assert.match(embeddingInit + embeddingWorker, /http:\/\/127\.0\.0\.1:7891/);
+  assert.match(
+    embeddingInit + embeddingWorker,
+    /bge-m3-5617a9f61b028005a4858fdac845db406aefb181-08cc5a668e89:\/models\/bge-m3/,
+  );
   assert.doesNotMatch(api, /embedding_net/);
   assert.doesNotMatch(agentWorker, /embedding-worker:\s*\n\s*condition:/);
   assert.match(productionCompose, /embedding_net:[\s\S]*internal: true/);
