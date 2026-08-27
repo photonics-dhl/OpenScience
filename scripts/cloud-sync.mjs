@@ -16,7 +16,11 @@ const releaseRoot = `/opt/openscience-releases/${releaseSha}`;
 const cfg = JSON.parse(readFileSync(path.join(configRoot, '.cloud-sync-env'), 'utf8'));
 const key = cfg.key.replace(/^~/, os.homedir());
 
-const archive = spawn('git', ['archive', '--format=tar.gz', releaseSha], { cwd: sourceRoot });
+const archive = spawn(
+  'git',
+  ['-c', 'core.autocrlf=false', 'archive', '--format=tar.gz', releaseSha],
+  { cwd: sourceRoot },
+);
 const remote = buildReleaseMaterializeCommand(releaseRoot, releaseSha);
 const ssh = spawn('ssh', ['-o', 'BatchMode=yes', '-o', 'ConnectTimeout=20', '-i', key, '-p', String(cfg.port), `${cfg.user}@${cfg.host}`, remote], { cwd: process.cwd() });
 

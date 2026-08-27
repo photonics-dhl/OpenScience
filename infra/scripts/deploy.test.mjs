@@ -221,7 +221,11 @@ test('release source guard rejects dirty trees and refs other than HEAD', async 
 });
 
 test('cloud sync materializes the complete commit in an immutable release directory', () => {
-  assert.match(cloudSync, /spawn\('git', \['archive', '--format=tar\.gz', releaseSha\]/);
+  assert.match(
+    cloudSync,
+    /\['-c', 'core\.autocrlf=false', 'archive', '--format=tar\.gz', releaseSha\]/,
+  );
+  assert.doesNotMatch(cloudSync, /\['archive', '--format=tar\.gz', releaseSha\]/);
   assert.match(cloudSync, /const releaseRoot = `\/opt\/openscience-releases\/\$\{releaseSha\}`/);
   assert.doesNotMatch(cloudSync, /process\.env\.XGS_RELEASE_ROOT/);
   assert.doesNotMatch(cloudSync, /ENTRIES|MANAGED_DIRS|MANAGED_FILES|--', \.\.\./);
