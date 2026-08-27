@@ -171,14 +171,24 @@ if [ "$EMBEDDING_DEPLOY" -eq 1 ]; then
 fi
 verify_release_capability() {
   local file="$1"
-  [ "$(read_capability_value "$file" schema)" = 2 ]
-  [ "$(read_capability_value "$file" embedding_deploy)" = "$BGE_M3_DEPLOY_VALUE" ]
-  [ "$(read_capability_value "$file" bge_m3_enabled)" = "$BGE_M3_ENABLED_VALUE" ]
-  [ "$(read_capability_value "$file" model_version_id)" = "$BGE_M3_MODEL_VERSION_ID" ]
-  [ "$(read_capability_value "$file" model_revision)" = "$BGE_M3_MODEL_REVISION" ]
-  [ "$(read_capability_value "$file" source_sha256)" = "$BGE_M3_SOURCE_SHA256" ]
-  [ "$(read_capability_value "$file" package_freeze_sha256)" = "$BGE_M3_PACKAGE_FREEZE_SHA256" ]
-  [ "$(read_capability_value "$file" model_manifest_sha256)" = "$BGE_M3_MODEL_MANIFEST_SHA256" ]
+  local schema embedding_deploy bge_m3_enabled model_version_id model_revision
+  local source_sha256 package_freeze_sha256 model_manifest_sha256
+  schema="$(read_capability_value "$file" schema)" || return
+  embedding_deploy="$(read_capability_value "$file" embedding_deploy)" || return
+  bge_m3_enabled="$(read_capability_value "$file" bge_m3_enabled)" || return
+  model_version_id="$(read_capability_value "$file" model_version_id)" || return
+  model_revision="$(read_capability_value "$file" model_revision)" || return
+  source_sha256="$(read_capability_value "$file" source_sha256)" || return
+  package_freeze_sha256="$(read_capability_value "$file" package_freeze_sha256)" || return
+  model_manifest_sha256="$(read_capability_value "$file" model_manifest_sha256)" || return
+  [ "$schema" = 2 ]
+  [ "$embedding_deploy" = "$BGE_M3_DEPLOY_VALUE" ]
+  [ "$bge_m3_enabled" = "$BGE_M3_ENABLED_VALUE" ]
+  [ "$model_version_id" = "$BGE_M3_MODEL_VERSION_ID" ]
+  [ "$model_revision" = "$BGE_M3_MODEL_REVISION" ]
+  [ "$source_sha256" = "$BGE_M3_SOURCE_SHA256" ]
+  [ "$package_freeze_sha256" = "$BGE_M3_PACKAGE_FREEZE_SHA256" ]
+  [ "$model_manifest_sha256" = "$BGE_M3_MODEL_MANIFEST_SHA256" ]
 }
 if [ -n "$ACTIVE_RELEASE_SHA" ] && [[ ! "$ACTIVE_RELEASE_SHA" =~ ^[0-9a-f]{40}$ ]]; then
   echo "错误：云上 active release identity 非法" >&2
@@ -189,6 +199,14 @@ if [ -z "$ACTIVE_RELEASE_SHA" ]; then
 fi
 
 if [ "$ACTIVE_RELEASE_SHA" = "$RELEASE_SHA" ]; then
+  same_sha_verification_failed() {
+    local original_status=$?
+    trap - ERR
+    run_remote "set -e; printf 'active=%s\nfailed_at=%s\nreason=same-sha-verification\n' '$RELEASE_SHA' \"\$(date -u +%Y-%m-%dT%H:%M:%SZ)\" > '$REMOTE_ROOT/.release-failed.next'; mv '$REMOTE_ROOT/.release-failed.next' '$REMOTE_ROOT/.release-failed'" || \
+      echo "SAME_SHA_VERIFICATION_FAILED: unable to publish failure marker" >&2
+    exit "$original_status"
+  }
+  trap 'same_sha_verification_failed' ERR
   run_remote "test \"\$(cat '$RELEASE_ROOT/.release-source')\" = '$RELEASE_SHA'"
   verify_release_capability "$REMOTE_ROOT/.release-capabilities/$RELEASE_SHA"
   if [ "$EMBEDDING_DEPLOY" -eq 1 ]; then
@@ -199,6 +217,12 @@ if [ "$ACTIVE_RELEASE_SHA" = "$RELEASE_SHA" ]; then
   expect_http_status https://OpenScience.428312321.xyz/auth/me 401
   expect_http_status https://OpenScience.428312321.xyz/admin/ 401
   expect_http_body https://OpenScience.428312321.xyz/__release "$RELEASE_SHA"
+  if [ "$EMBEDDING_DEPLOY" -eq 0 ]; then
+    log "same-SHA disabled：收敛残留 embedding-worker..."
+    compose_embedding_current "stop embedding-worker"
+    compose_embedding_current "ps --status running --services | if grep -qx embedding-worker; then exit 1; else exit 0; fi"
+  fi
+  trap - ERR
   log "already active: release=$RELEASE_SHA"
   exit 0
 fi
@@ -260,6 +284,9 @@ if [ -n "$ACTIVE_RELEASE_SHA" ]; then
         ;;
       *) echo "错误：旧 release capability schema 不受支持" >&2; exit 66 ;;
     esac
+  elif run_remote "grep -q '^  embedding-worker:' '$ROLLBACK_COMPOSE_FILE'"; then
+    echo "错误：旧 release 含 embedding 服务但 capability sidecar 缺失，拒绝猜测回滚身份" >&2
+    exit 66
   fi
 else
   log "[0] 首次版本化发布：物化并构建 rollback-ref..."

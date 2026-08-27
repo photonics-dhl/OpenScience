@@ -84,6 +84,15 @@ test('database backup atomically publishes a private, single-flight dual-databas
   assert.match(backupRunbook, /核心库.*搜索库|core.*search/i);
   assert.match(backupRunbook, /DB_ADMIN_ROLE/);
   assert.doesNotMatch(backupRunbook, /-U openscience/);
+  assert.match(backupRunbook, /set -euo pipefail/);
+  assert.match(backupRunbook, /\^openscience_core_restore_\[a-z0-9\]\{8,40\}\$/);
+  assert.match(backupRunbook, /\^openscience_search_restore_\[a-z0-9\]\{8,40\}\$/);
+  assert.match(backupRunbook, /PROD_DATABASES/);
+  assert.match(backupRunbook, /CORE_PROD_DB/);
+  assert.match(backupRunbook, /SEARCH_PROD_DB/);
+  assert.match(backupRunbook, /createdb --username="\$DB_ADMIN_ROLE" --/);
+  assert.match(backupRunbook, /--dbname="\$CORE_RESTORE"/);
+  assert.match(backupRunbook, /--dbname="\$SEARCH_RESTORE"/);
 });
 
 test('embedding capability is strict, release-versioned and rollback-safe', () => {
@@ -110,10 +119,21 @@ test('embedding capability is strict, release-versioned and rollback-safe', () =
   assert.match(source, /PREVIOUS_BGE_M3_MODEL_MANIFEST_SHA256/);
   assert.match(source, /PREVIOUS_RUNTIME_ENV[^\n]*BGE_M3_ENABLED/);
   assert.match(source, /PREVIOUS_RUNTIME_ENV[\s\S]*verify-embedding-runtime\.mjs/);
+  assert.match(source, /capability sidecar 缺失/);
+  assert.match(source, /grep -q '\^  embedding-worker:'/);
   assert.match(source, /停止上一 release 的 embedding-worker/);
   assert.ok(
     source.indexOf('公网与精确 release 验收') < source.indexOf('停止上一 release 的 embedding-worker'),
     'disabled cleanup must only happen after public acceptance',
+  );
+  assert.match(source, /same_sha_verification_failed\(\)/);
+  assert.match(source, /model_version_id="\$\(read_capability_value[^\n]+" \|\| return/);
+  assert.match(source, /reason=same-sha-verification/);
+  assert.match(source, /same-SHA disabled：收敛残留 embedding-worker/);
+  assert.ok(
+    source.indexOf('expect_http_body https://OpenScience.428312321.xyz/__release "$RELEASE_SHA"')
+      < source.indexOf('same-SHA disabled：收敛残留 embedding-worker'),
+    'same-SHA cleanup must only happen after public identity verification',
   );
 });
 

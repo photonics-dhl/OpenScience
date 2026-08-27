@@ -45,6 +45,8 @@
 ## 4. 验证与双库恢复演练
 
 ```bash
+set -euo pipefail
+
 SET=/var/backups/openscience/db-set-<UTC>-<PID>
 test -d "$SET" && test -s "$SET/manifest" \
   && test -s "$SET/core.sql" && test -s "$SET/search.sql"
@@ -59,26 +61,46 @@ set_release="$(sed -n 's/^release=//p' manifest)"
 test "$set_release" = "$(cat /opt/openscience/.release-id)"
 test "$(cat "/opt/openscience-releases/$set_release/.release-source")" = "$set_release"
 
-# 在现有 PostgreSQL 容器中建立两个唯一、隔离的临时库（名称示例需替换）。
-CORE_RESTORE=openscience_core_restore_<SHA>
-SEARCH_RESTORE=openscience_search_restore_<SHA>
+# 在现有 PostgreSQL 容器中建立两个唯一、隔离的临时库；UTC ID 避免误复用旧演练库。
+RESTORE_ID="$(date -u +%Y%m%d%H%M%S)"
+CORE_RESTORE="openscience_core_restore_$RESTORE_ID"
+SEARCH_RESTORE="openscience_search_restore_$RESTORE_ID"
+[[ "$CORE_RESTORE" =~ ^openscience_core_restore_[a-z0-9]{8,40}$ ]]
+[[ "$SEARCH_RESTORE" =~ ^openscience_search_restore_[a-z0-9]{8,40}$ ]]
+test "$CORE_RESTORE" != "$SEARCH_RESTORE"
 release_root="/opt/openscience-releases/$set_release"
 export XGS_RELEASE_ROOT="$release_root" XGS_RELEASE_IMAGE_TAG="$set_release"
 COMPOSE=(docker compose --env-file /opt/openscience/.env.prod \
   -f "$release_root/infra/compose/docker-compose.prod.yml")
+# API 容器只输出两个已校验的生产库名；不输出 URL、用户或密码。
+mapfile -t PROD_DATABASES < <("${COMPOSE[@]}" exec -T api node - <<'NODE'
+for (const key of ['DATABASE_URL', 'SEARCH_DATABASE_URL']) {
+  const raw = process.env[key];
+  if (!raw) throw new Error(`missing:${key}`);
+  const name = decodeURIComponent(new URL(raw).pathname.replace(/^\//, ''));
+  if (!/^[A-Za-z_][A-Za-z0-9_$-]{0,62}$/.test(name)) throw new Error(`invalid:${key}`);
+  process.stdout.write(`${name}\n`);
+}
+NODE
+)
+test "${#PROD_DATABASES[@]}" -eq 2
+CORE_PROD_DB="${PROD_DATABASES[0]}"
+SEARCH_PROD_DB="${PROD_DATABASES[1]}"
+test "$CORE_RESTORE" != "$CORE_PROD_DB" && test "$CORE_RESTORE" != "$SEARCH_PROD_DB"
+test "$SEARCH_RESTORE" != "$CORE_PROD_DB" && test "$SEARCH_RESTORE" != "$SEARCH_PROD_DB"
 # 从 PostgreSQL 容器环境取得实际管理角色，只输出已校验的标识符，不读取密码或 .env.prod。
 DB_ADMIN_ROLE="$("${COMPOSE[@]}" exec -T postgres sh -ceu \
   'case "$POSTGRES_USER" in (*[!A-Za-z0-9_]*|"") exit 64;; esac; printf "%s" "$POSTGRES_USER"')"
 case "$DB_ADMIN_ROLE" in (*[!A-Za-z0-9_]*|"") exit 64;; esac
-"${COMPOSE[@]}" exec -T postgres createdb -U "$DB_ADMIN_ROLE" "$CORE_RESTORE"
-"${COMPOSE[@]}" exec -T postgres createdb -U "$DB_ADMIN_ROLE" "$SEARCH_RESTORE"
-"${COMPOSE[@]}" exec -T postgres psql -v ON_ERROR_STOP=1 -U "$DB_ADMIN_ROLE" -d "$CORE_RESTORE" < core.sql
-"${COMPOSE[@]}" exec -T postgres psql -v ON_ERROR_STOP=1 -U "$DB_ADMIN_ROLE" -d "$SEARCH_RESTORE" < search.sql
+"${COMPOSE[@]}" exec -T postgres createdb --username="$DB_ADMIN_ROLE" -- "$CORE_RESTORE"
+"${COMPOSE[@]}" exec -T postgres createdb --username="$DB_ADMIN_ROLE" -- "$SEARCH_RESTORE"
+"${COMPOSE[@]}" exec -T postgres psql -v ON_ERROR_STOP=1 --username="$DB_ADMIN_ROLE" --dbname="$CORE_RESTORE" < core.sql
+"${COMPOSE[@]}" exec -T postgres psql -v ON_ERROR_STOP=1 --username="$DB_ADMIN_ROLE" --dbname="$SEARCH_RESTORE" < search.sql
 
 # 验收：核心库与搜索库分别核对迁移账本和 schema；禁止只验一个库。
-"${COMPOSE[@]}" exec -T postgres psql -v ON_ERROR_STOP=1 -U "$DB_ADMIN_ROLE" -d "$CORE_RESTORE" \
+"${COMPOSE[@]}" exec -T postgres psql -v ON_ERROR_STOP=1 --username="$DB_ADMIN_ROLE" --dbname="$CORE_RESTORE" \
   -tAc 'SELECT count(*) FROM schema_migrations;'
-"${COMPOSE[@]}" exec -T postgres psql -v ON_ERROR_STOP=1 -U "$DB_ADMIN_ROLE" -d "$SEARCH_RESTORE" \
+"${COMPOSE[@]}" exec -T postgres psql -v ON_ERROR_STOP=1 --username="$DB_ADMIN_ROLE" --dbname="$SEARCH_RESTORE" \
   -tAc 'SELECT count(*) FROM "_prisma_migrations" WHERE finished_at IS NOT NULL AND rolled_back_at IS NULL;'
 ```
 
