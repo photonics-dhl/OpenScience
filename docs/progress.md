@@ -6,6 +6,7 @@
 
 - 生产只读复验：release `f965966` exact，Web/API/Worker/Parser healthy；真实 PDF/DOCX sidecar self-test、`DOCUMENT_PARSER_CONTRACT_OK`、`AI_GATEWAY_OCR_CONTRACT_OK` 均通过。Vision 仍 disabled，因此未声称真实 LLM OCR 质量。
 - Task 4 ECS-only bake-off harness 已交付无正文/路径泄漏、false-ready 禁止、失败计入 P95 的报告合同、schema-v2 16-case content-addressed exporter、7-PDF layout 子集和 ECS-only 沙箱脚本；clean-checkout dependency closure、Prisma generate 时序、stop 后 tmpfs 丢失与 attached-stream 超限分类均经真实 ECS 预跑封闭。LiteParse `2.14.0`/Apache-2.0 exact SHA `b0910b5` 镜像 `sha256:b2c9bf96…eaa60f`：5 succeeded、1 image-only scan needs_review、1 corrupt PDF failed，13/16 locator，P50 `8 ms`、P95 `163 ms`、peak RSS `61,599,744` bytes。超限/timeout canary 均为 shell capture `0`、残留容器 `0`，分别归类 `limit_exceeded`/`timeout`；生产 release 仍为 `f965966`。本地无 Docker门禁 runner `4/4`、worker `19/19`、build/typecheck/bash/docs/diff GREEN，Sol High 复审 `SAFE TO COMMIT`。LiteParse 仍为 `APPROVED_PILOT`，须与同 corpus 的 Docling/current baseline 比较后才能保留，未部署。
+- Docling `2.123.0`/MIT 候选已在本地以 wheel SHA-256 `95c0a4d…fde9c` source-lock：OCR/remote services/plugins 均 disabled，CPU 2 threads；镜像构建期下载模型并生成 package freeze 与逐文件模型 hash manifest，运行前经 64 KiB content-free lock preflight。纯逻辑 `3/3`、评测脚本 `14/14` 与 Bash 语法 GREEN；尚未在 ECS 构建或跑 corpus，不得声称质量、RSS 或保留。
 
 ## 2026-08-27 — Research Intelligence Task 5 已部署
 

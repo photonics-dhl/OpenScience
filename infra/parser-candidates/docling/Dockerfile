@@ -1,0 +1,38 @@
+FROM python:3.12-slim
+
+ENV DEBIAN_FRONTEND=noninteractive \
+    HF_HUB_DISABLE_TELEMETRY=1 \
+    OMP_NUM_THREADS=2 \
+    MKL_NUM_THREADS=2 \
+    OPENBLAS_NUM_THREADS=2 \
+    NUMEXPR_NUM_THREADS=2 \
+    PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    XDG_CACHE_HOME=/tmp/cache \
+    HOME=/tmp/home
+
+ADD --checksum=sha256:95c0a4d9bc1beafc6097c8573ec3a8dc317e8bcf67e3234aa7c050b7d73fde9c \
+    https://files.pythonhosted.org/packages/32/4b/cdea48e4e914d246ece99f1bf97b3f983f4db91ec355024d50657cf587f1/docling-2.123.0-py3-none-any.whl \
+    /tmp/docling.whl
+
+RUN python -m pip install --no-cache-dir /tmp/docling.whl \
+    && python -c "from importlib.metadata import version; assert version('docling') == '2.123.0'" \
+    && docling-tools models download --output-dir /opt/docling-models \
+    && install -d -m 0755 /opt/docling-lock /app \
+    && python -m pip freeze --all | LC_ALL=C sort > /opt/docling-lock/package-freeze.txt \
+    && cd /opt/docling-models \
+    && find . -type f -print0 | LC_ALL=C sort -z | xargs -0 sha256sum > /opt/docling-lock/model-sha256.txt \
+    && test -s /opt/docling-lock/model-sha256.txt \
+    && rm -f /tmp/docling.whl \
+    && chmod -R a-w /opt/docling-models /opt/docling-lock
+
+ENV HF_HUB_OFFLINE=1 \
+    TRANSFORMERS_OFFLINE=1
+
+COPY --chmod=0555 infra/parser-candidates/docling/runner.py /app/runner.py
+
+RUN groupadd --gid 10001 candidate \
+    && useradd --uid 10001 --gid 10001 --no-create-home --shell /usr/sbin/nologin candidate
+
+USER 10001:10001
+ENTRYPOINT ["python", "/app/runner.py"]

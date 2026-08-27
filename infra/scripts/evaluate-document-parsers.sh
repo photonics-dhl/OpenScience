@@ -3,7 +3,7 @@
 set -euo pipefail
 
 usage() {
-  echo "usage: $0 --print-run-contract|--normalize-outcome|--execute <current-parser|liteparse|docling|tesseract|paddleocr|grobid>" >&2
+  echo "usage: $0 --print-run-contract|--normalize-outcome|--normalize-candidate-lock|--execute <current-parser|liteparse|docling|tesseract|paddleocr|grobid>" >&2
   exit 64
 }
 
@@ -11,12 +11,35 @@ MODE="${1:-}"
 CANDIDATE="${2:-}"
 [[ "$#" -eq 2 ]] || usage
 case "$MODE" in
-  --print-run-contract|--normalize-outcome|--execute) ;;
+  --print-run-contract|--normalize-outcome|--normalize-candidate-lock|--execute) ;;
   *) usage ;;
 esac
 case "$CANDIDATE" in
   current-parser|liteparse|docling|tesseract|paddleocr|grobid) ;;
   *) echo "unsupported candidate: $CANDIDATE" >&2; exit 64 ;;
+esac
+
+case "$CANDIDATE" in
+  current-parser)
+    CANDIDATE_VERSION='production-release'
+    CANDIDATE_LICENSE='project'
+    CANDIDATE_SOURCE_SHA256='not-applicable'
+    ;;
+  liteparse)
+    CANDIDATE_VERSION='2.14.0'
+    CANDIDATE_LICENSE='Apache-2.0'
+    CANDIDATE_SOURCE_SHA256='npm-integrity-lock'
+    ;;
+  docling)
+    CANDIDATE_VERSION='2.123.0'
+    CANDIDATE_LICENSE='MIT'
+    CANDIDATE_SOURCE_SHA256='95c0a4d9bc1beafc6097c8573ec3a8dc317e8bcf67e3234aa7c050b7d73fde9c'
+    ;;
+  *)
+    CANDIDATE_VERSION='unevaluated'
+    CANDIDATE_LICENSE='unverified'
+    CANDIDATE_SOURCE_SHA256='unverified'
+    ;;
 esac
 
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)"
@@ -29,6 +52,11 @@ print_run_contract() {
   printf '%s\n' "{
   \"schemaVersion\": 1,
   \"candidate\": \"$CANDIDATE\",
+  \"candidateIdentity\": {
+    \"version\": \"$CANDIDATE_VERSION\",
+    \"license\": \"$CANDIDATE_LICENSE\",
+    \"sourceSha256\": \"$CANDIDATE_SOURCE_SHA256\"
+  },
   \"gitSha\": \"$GIT_SHA\",
   \"evaluationRoot\": \"$EVALUATION_ROOT\",
   \"sandbox\": {
@@ -83,12 +111,41 @@ normalize_outcome() {
   '
 }
 
+normalize_candidate_lock() {
+  [[ "$CANDIDATE" == 'docling' ]] || exit 64
+  node -e '
+    const [candidate, version] = process.argv.slice(1);
+    const chunks = [];
+    let bytes = 0;
+    process.stdin.on("data", (chunk) => {
+      bytes += chunk.length;
+      if (bytes > 65536) process.exit(75);
+      chunks.push(chunk);
+    });
+    process.stdin.on("end", () => {
+      try {
+        const value = JSON.parse(Buffer.concat(chunks, bytes).toString("utf8"));
+        const keys = ["candidate", "modelFileCount", "modelManifestSha256", "packageFreezeSha256", "schemaVersion", "version"];
+        if (!value || Array.isArray(value) || Object.keys(value).sort().join("\0") !== keys.sort().join("\0")) throw new Error();
+        if (value.schemaVersion !== 1 || value.candidate !== candidate || value.version !== version) throw new Error();
+        if (!/^[a-f0-9]{64}$/.test(value.packageFreezeSha256) || !/^[a-f0-9]{64}$/.test(value.modelManifestSha256)) throw new Error();
+        if (!Number.isSafeInteger(value.modelFileCount) || value.modelFileCount < 1 || value.modelFileCount > 100000) throw new Error();
+        process.stdout.write(JSON.stringify(value));
+      } catch { process.exit(1); }
+    });
+  ' "$CANDIDATE" "$CANDIDATE_VERSION"
+}
+
 if [[ "$MODE" == '--print-run-contract' ]]; then
   print_run_contract
   exit 0
 fi
 if [[ "$MODE" == '--normalize-outcome' ]]; then
   normalize_outcome
+  exit 0
+fi
+if [[ "$MODE" == '--normalize-candidate-lock' ]]; then
+  normalize_candidate_lock
   exit 0
 fi
 
@@ -104,7 +161,7 @@ case "$REAL_REPOSITORY_ROOT" in
   *) echo 'evaluation source is outside an immutable ECS release or evaluation root' >&2; exit 69 ;;
 esac
 
-if [[ "$CANDIDATE" != 'liteparse' ]]; then
+if [[ "$CANDIDATE" != 'liteparse' && "$CANDIDATE" != 'docling' ]]; then
   echo "candidate execution is not implemented: $CANDIDATE" >&2
   exit 70
 fi
@@ -199,6 +256,55 @@ cleanup_active_container() {
 trap cleanup_active_container EXIT
 trap 'cleanup_active_container; exit 130' HUP INT TERM
 
+if [[ "$CANDIDATE" == 'docling' ]]; then
+  LOCK_CONTAINER_NAME="openscience-parser-eval-$CANDIDATE-${GIT_SHA:0:12}-lock-${STAGING_ROOT##*.}"
+  ACTIVE_CONTAINER_ID="$(docker create \
+    --name "$LOCK_CONTAINER_NAME" \
+    --label "org.openscience.source=$GIT_SHA" \
+    --label "org.openscience.candidate=$CANDIDATE" \
+    --label 'org.openscience.case=candidate-lock' \
+    --log-driver none \
+    --restart no \
+    --stop-timeout 1 \
+    --network none \
+    --read-only \
+    --user 10001:10001 \
+    --cpus 2 \
+    --memory 2g \
+    --memory-swap 2g \
+    --pids-limit 64 \
+    --security-opt no-new-privileges \
+    --cap-drop ALL \
+    --ulimit nofile=256:256 \
+    --ulimit nproc=64:64 \
+    --tmpfs /tmp:rw,noexec,nosuid,nodev,size=16777216,uid=10001,gid=10001,mode=0700 \
+    "$IMAGE_TAG" --print-lock)"
+  [[ "$ACTIVE_CONTAINER_ID" =~ ^[a-f0-9]{64}$ ]] || { echo 'invalid lock container id' >&2; exit 70; }
+  set +e
+  LOCK_CAPTURE="$({
+    timeout --signal=TERM --kill-after=5s 120s docker start --attach "$ACTIVE_CONTAINER_ID" 2>/dev/null \
+      | normalize_candidate_lock
+    LOCK_PIPE_STATUSES=("${PIPESTATUS[@]}")
+    printf '\n%s %s' "${LOCK_PIPE_STATUSES[0]}" "${LOCK_PIPE_STATUSES[1]}"
+  })"
+  set -e
+  LOCK_STATUS_LINE="${LOCK_CAPTURE##*$'\n'}"
+  NORMALIZED_LOCK="${LOCK_CAPTURE%$'\n'*}"
+  read -r LOCK_START_STATUS LOCK_NORMALIZE_STATUS <<< "$LOCK_STATUS_LINE"
+  if [[ ! "$LOCK_START_STATUS" =~ ^[0-9]+$ || ! "$LOCK_NORMALIZE_STATUS" =~ ^[0-9]+$ \
+    || "$LOCK_START_STATUS" -ne 0 || "$LOCK_NORMALIZE_STATUS" -ne 0 ]]; then
+    cleanup_active_container
+    echo 'Docling candidate lock preflight failed' >&2
+    exit 70
+  fi
+  LOCK_RUNNING="$(docker inspect --format '{{.State.Running}}' "$ACTIVE_CONTAINER_ID")"
+  LOCK_EXIT="$(docker inspect --format '{{.State.ExitCode}}' "$ACTIVE_CONTAINER_ID")"
+  [[ "$LOCK_RUNNING" == 'false' && "$LOCK_EXIT" -eq 0 ]] \
+    || { cleanup_active_container; echo 'Docling candidate lock did not exit cleanly' >&2; exit 70; }
+  cleanup_active_container
+  (set -o noclobber; printf '%s\n' "$NORMALIZED_LOCK" > "$STAGING_ROOT/candidate-lock.json")
+fi
+
 CASE_IDS=(
   corrupt-pdf-en
   native-pdf-en
@@ -285,7 +391,7 @@ for CASE_ID in "${CASE_IDS[@]}"; do
 done
 
 node - "$PARSER_EVALUATION_MODULE" "$MANIFEST_PATH" "$RESULTS_DIR" "$REPORT_PATH" \
-  "$CANDIDATE" '2.14.0' "$IMAGE_DIGEST" 'Apache-2.0' "${CASE_IDS[@]}" <<'NODE'
+  "$CANDIDATE" "$CANDIDATE_VERSION" "$IMAGE_DIGEST" "$CANDIDATE_LICENSE" "${CASE_IDS[@]}" <<'NODE'
 const { readFileSync, writeFileSync } = require('node:fs');
 const { join } = require('node:path');
 const [modulePath, manifestPath, resultsDir, reportPath, name, version, imageDigest, license, ...caseIds] = process.argv.slice(2);

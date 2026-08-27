@@ -245,6 +245,33 @@ describe('document parser evaluation script', () => {
     expect(script).not.toContain('--tmpfs /out:');
   });
 
+  it('publishes the source-locked Docling identity through the same sandbox contract', () => {
+    const output = execFileSync(bash, [evaluationScriptArgument, '--print-run-contract', 'docling'], {
+      cwd: repositoryRoot,
+      encoding: 'utf8',
+    });
+    const contract = JSON.parse(output);
+
+    expect(contract).toMatchObject({
+      schemaVersion: 1,
+      candidate: 'docling',
+      candidateIdentity: {
+        version: '2.123.0',
+        license: 'MIT',
+        sourceSha256: '95c0a4d9bc1beafc6097c8573ec3a8dc317e8bcf67e3234aa7c050b7d73fde9c',
+      },
+      sandbox: {
+        network: 'none',
+        readOnlyRoot: true,
+        user: '10001:10001',
+        cpus: 2,
+        memoryBytes: 2_147_483_648,
+        pidsLimit: 64,
+        outputMaxBytes: 65_536,
+      },
+    });
+  });
+
   it('rejects candidates outside the explicit allowlist', () => {
     const result = spawnSync(bash, [evaluationScriptArgument, '--print-run-contract', 'unknown-parser'], {
       cwd: repositoryRoot,
@@ -286,6 +313,31 @@ describe('document parser evaluation script', () => {
       input: 'x'.repeat(65_537),
     });
     expect(oversizedResult.status).toBe(75);
+  });
+
+  it('normalizes the Docling package and model lock before corpus execution', () => {
+    const lock = {
+      schemaVersion: 1,
+      candidate: 'docling',
+      version: '2.123.0',
+      packageFreezeSha256: sha('a'),
+      modelManifestSha256: sha('b'),
+      modelFileCount: 42,
+    };
+    const result = spawnSync(bash, [evaluationScriptArgument, '--normalize-candidate-lock', 'docling'], {
+      cwd: repositoryRoot,
+      encoding: 'utf8',
+      input: `${JSON.stringify(lock)}\n`,
+    });
+
+    expect(result.status).toBe(0);
+    expect(JSON.parse(result.stdout)).toEqual(lock);
+    const privateResult = spawnSync(bash, [evaluationScriptArgument, '--normalize-candidate-lock', 'docling'], {
+      cwd: repositoryRoot,
+      encoding: 'utf8',
+      input: JSON.stringify({ ...lock, modelPath: '/opt/docling-models/private' }),
+    });
+    expect(privateResult.status).not.toBe(0);
   });
 
   it.runIf(process.platform !== 'linux')('refuses candidate execution outside the ECS host', () => {
