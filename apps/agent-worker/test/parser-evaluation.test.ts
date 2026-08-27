@@ -272,6 +272,25 @@ describe('document parser evaluation script', () => {
     });
   });
 
+  it('commits heavyweight Docling CPU dependencies in restart-safe cache layers', () => {
+    const dockerfile = readFileSync(
+      resolve(repositoryRoot, 'infra/parser-candidates/docling/Dockerfile'),
+      'utf8',
+    );
+    const scipyIndex = dockerfile.indexOf("'scipy==1.18.1'");
+    const opencvIndex = dockerfile.indexOf("'opencv-python==5.0.0.93'");
+    const rapidOcrIndex = dockerfile.indexOf("'rapidocr==3.9.2'");
+    const doclingIndex = dockerfile.indexOf('      /tmp/docling-2.123.0-py3-none-any.whl');
+
+    expect(scipyIndex).toBeGreaterThan(-1);
+    expect(opencvIndex).toBeGreaterThan(scipyIndex);
+    expect(rapidOcrIndex).toBeGreaterThan(opencvIndex);
+    expect(doclingIndex).toBeGreaterThan(rapidOcrIndex);
+
+    const prefix = dockerfile.slice(0, doclingIndex);
+    expect(prefix.match(/^RUN python -m pip install/gm)).toHaveLength(5);
+  });
+
   it('rejects candidates outside the explicit allowlist', () => {
     const result = spawnSync(bash, [evaluationScriptArgument, '--print-run-contract', 'unknown-parser'], {
       cwd: repositoryRoot,
