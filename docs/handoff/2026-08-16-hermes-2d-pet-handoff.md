@@ -11,6 +11,7 @@
 - Task 4 LiteParse `2.14.0` exact-SHA ECS bake-off 已真实完成：image `sha256:b2c9bf96…eaa60f`，7-PDF 为 5 succeeded/1 scan needs_review/1 corrupt failed，13/16 locator，P50 `8 ms`、P95 `163 ms`、peak RSS `61,599,744` bytes；超限/timeout canary 均无 Shell 原文捕获和容器残留。结果通道为 log-driver none 的 64 KiB attached stdout normalizer，Sol High 复审安全；仍须与 Docling/current baseline 同门禁比较，候选保持 `APPROVED_PILOT`、未部署。
 - Docling `2.123.0`/MIT 候选已 source-lock 到官方 wheel SHA-256 `95c0a4d…fde9c`，本地无 Docker runner `3/3`、评测脚本 `16/16`、Bash 语法 GREEN；OCR/remote/plugin disabled，模型只在 ECS image build 获取并生成 package/model lock。exact source `efa6367ef4d0bf18a9c4e1c6e073ba338bfe7ee1` 已在 ECS frozen prepare 完成；CPU Torch 层 `sha256:1542d393…924f` 可复用，SciPy/OpenCV/RapidOCR 已拆成独立缓存层。前台 SSH reset 丢失未提交 layer 后，长任务改由 `openscience-parser-eval-docling-efa6367-a2.service` 托管；该 unit 仍在构建，尚无 Docling image/质量/RSS 证据，不得视为已接受。
 - Task 6 的 ECS-first TDD 计划与 Task 1 本地候选 harness 已完成：BGE-M3 exact revision `5617a9f…b181`、FlagEmbedding `1.4.2` wheel SHA-256 `35e33a0…9bf2`，16 chunk/24 query 自著双语 corpus、官方 `encode_queries`/`encode_corpus` 分流、content-free metrics、2 CPU/6 GiB/128 PID ECS gate；Python `5/5`、corpus `1/1`、Bash contract/syntax GREEN。计划/静态实现不等于模型已下载、安装或启用；生产 route 仍 disabled。
+- Task 6 search migration 2 已完成本地 TDD：五表、tenant 复合外键、locator-safe chunk、generated `tsvector`/GIN、1024×float32 byte/hash/norm 约束、content-free query telemetry 和 rollback；Search `5/5`、Prisma generate/build/typecheck GREEN。它仍是未部署候选，下一步只在 ECS disposable search DB 演练，生产 ledger 保持 `1/1`。
 
 ## Version tuple
 

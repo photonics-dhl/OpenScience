@@ -146,7 +146,7 @@
 | `docs/plans/2026-08-26-hermes-document-source-map-contract-plan.md` | Taskmaster Task 3 的可执行 TDD 计划：严格 DocumentSourceMap、locator 构造/复验、Worker parser boundary、image-only false-ready 与 ECS-only 验收 | **COMPLETED / ECS DEPLOYED `ef043eb`**；final docs CI `32997554922` GREEN |
 | `docs/plans/2026-08-27-hermes-ai-gateway-llm-ocr-routing-plan.md` | Taskmaster Task 5 的可执行 TDD 计划：provider-neutral OCR、MiniMax Coding Plan VLM adapter、逐页 fallback、kill switch、hash/cost/latency 审计与 ECS-only 验收 | **COMPLETED / ECS DEPLOYED `f965966`**；默认不启用付费 vision route |
 | `docs/plans/2026-08-27-hermes-cpu-parser-cascade-plan.md` | Taskmaster Task 4 的 ECS-only 实施计划：结构化 sidecar v2、确定性 source map、候选 bake-off、坐标 OCR、受控 LLM candidate、真实 corpus/资源/部署门禁 | **CURRENT / EXECUTION STARTED**；候选仍为 `APPROVED_PILOT`，MiniMax Vision disabled |
-| `docs/plans/2026-08-27-hermes-semantic-retrieval-bge-m3-plan.md` | Taskmaster Task 6 的 ECS-first TDD 实施计划：BGE-M3 source-lock/CPU bake-off、独立 search migration、locator-safe chunk、BM25+dense RRF、降级、独立备份恢复与生产验收 | **CURRENT / PLAN COMPLETE / EXECUTION PENDING**；模型与生产 route 均未安装或启用 |
+| `docs/plans/2026-08-27-hermes-semantic-retrieval-bge-m3-plan.md` | Taskmaster Task 6 的 ECS-first TDD 实施计划：BGE-M3 source-lock/CPU bake-off、独立 search migration、locator-safe chunk、BM25+dense RRF、降级、独立备份恢复与生产验收 | **CURRENT / EXECUTION STARTED**；Task 1 local harness GREEN，Task 2 local schema GREEN/ECS drill pending；模型与生产 route 均未安装或启用 |
 | `docs/specs/2026-08-22-wanko-scholar-hat-design.md` | canonical Wanko 常驻学者帽视觉、佩戴遮挡、流苏运动和 visual-before-Cubism 门 | **CURRENT accessory design COMPLETE / DEPLOYED**；v09 母版与 2026-08-23 runtime bundle 已随 release `5f4e73c` 部署 |
 | `docs/specs/2026-08-18-readable-workspace-hermes-guidance-design.md` | B 平衡学者工作台、三视觉系统阅读基线、浏览器无关控件样式、Hermes 不遮挡引导编舞与公网 blank RO→六字段→diff→commit 真实验收 | **IMPLEMENTED FOUNDATION / CARRIED FORWARD**；首次公网真实验收 `06072c1`，现行 release `5f4e73c` |
 | `docs/plans/2026-08-18-readable-workspace-hermes-guidance-plan.md` | 可读性基础→代表页面→完整 Hermes footprint 避让→edit-before-accept/缺失证据→语义动作→公网 blank RO gate→ECS checkpoint 的 TDD 实施链 | **COMPLETED**；release `06072c1` / rollback `8ecf96c` |
@@ -379,7 +379,7 @@
 | `infra/sandbox/` | 沙箱配置占位（P1A-1） | 骨架 |
 | `infra/migrations/` | Prisma 迁移 1–28（28 = Research Intelligence core metadata；27 = `agent_tasks.retry_count`），各附 rollback.sql | ECS 当前仓库 28/28；生产 ledger 29 含需保留的历史 `20260809010000_ro_create_idempotency`，failed 0 |
 | `infra/schema.prisma` | core Prisma schema：既有平台模型 + ResearchIdentityProfile、ClaimNode、EvidenceRecord、PresentationAsset 与 scoped relations | **TASK 2 DEPLOYED `e0828a6`** |
-| `infra/search/schema.prisma` / `infra/search/migrations/` | search 独立 Prisma schema、generator 与迁移账本；baseline `search_meta`，不与 core ledger 混用 | **TASK 2 DEPLOYED**；production search 1/1，当前无检索业务数据 |
+| `infra/search/schema.prisma` / `infra/search/migrations/` / `packages/search/test/migration.test.ts` | search 独立 Prisma schema、generator 与迁移账本；baseline `search_meta` 不与 core ledger 混用；Task 6 migration 2 增加 tenant-scoped chunk/embedding/index/model/telemetry、GIN 与机械 rollback | **CURRENT CANDIDATE**；migration 2 local GREEN/ECS disposable drill pending，production search 仍为 1/1 且无检索业务数据 |
 | `scripts/verify-database-isolation.mjs` / `scripts/verify-database-isolation.test.mjs` | 拒绝 core/search 指向同一物理数据库，并以脱敏元数据给出部署门禁 | **CURRENT**；focused contract 与 ECS `DATABASE_ISOLATION_OK` GREEN |
 
 ## .agents/skills/（项目级 Skills，Spec §20.3）

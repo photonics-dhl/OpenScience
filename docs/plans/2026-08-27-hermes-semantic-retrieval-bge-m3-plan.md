@@ -109,7 +109,7 @@ Materialize the exact commit under `/opt/openscience-evals/embedding/<git-sha>/s
 - Consumes: independent `SEARCH_DATABASE_URL` and baseline search migration `20260826011000_search_baseline`.
 - Produces: `SearchChunk`, `SearchEmbedding`, `SearchModelVersion`, `SearchIndexTask` and `SearchQueryMetric` tables plus lexical indexes.
 
-- [ ] **Step 1: Write migration shape and rollback tests**
+- [x] **Step 1: Write migration shape and rollback tests**
 
 ```ts
 expect(migration).toContain('CREATE TABLE "search_chunks"');
@@ -121,13 +121,13 @@ expect(rollback).toContain('DROP TABLE IF EXISTS "search_query_metrics"');
 expect(rollback).toContain("DELETE FROM \"_prisma_migrations\"");
 ```
 
-- [ ] **Step 2: Run the test and verify RED**
+- [x] **Step 2: Run the test and verify RED**
 
 Run: `npx pnpm@9.15.0 --filter @openscience/search test -- migration.test.ts`
 
 Expected: fail because migration 2 and retrieval models are absent.
 
-- [ ] **Step 3: Add portable search records**
+- [x] **Step 3: Add portable search records**
 
 `SearchChunk` stores tenant scope, RO/artifact/content hashes, ordinal, bounded text, token count, JSON locators, claim IDs, lexical terms and term frequencies. `SearchEmbedding` stores model-version ID, 1024 dimension, normalized float32 bytes, vector SHA-256 and norm. `SearchQueryMetric` stores only query hash, component availability, result count, bounded error code and component/total latency. Add a generated `tsvector` column and GIN indexes with manual SQL while keeping Prisma's representation `Unsupported("tsvector")`.
 
@@ -135,7 +135,7 @@ Expected: fail because migration 2 and retrieval models are absent.
 
 Create a uniquely named disposable database inside the existing production PostgreSQL container, point only the migration command at it, deploy migrations 1–2, verify tables/indexes, execute migration 2 rollback, verify migration 1 remains, then redeploy migration 2. Never run the rollback against production data.
 
-- [ ] **Step 5: Commit the schema expansion**
+- [x] **Step 5: Commit the schema expansion**
 
 ```bash
 git add infra/search packages/search/test/migration.test.ts
