@@ -1,6 +1,6 @@
 # Runbook: 部署（Deployment）
 
-> 状态：**CURRENT**。active immutable release / application source 为 `f9659668b237b70b4c018b866e20498689d327c2`，rollback tree 为 `ef043ebb8e51332effe75a5639cb207aec7bfc47`。post-deploy docs-only HEAD 不得冒充 application source。
+> 状态：**CURRENT**。active immutable release / application source 为 `8163f8b4218e529ee4be41bb9fc732ff6497931a`，rollback tree 为 `f9659668b237b70b4c018b866e20498689d327c2`。post-deploy docs-only HEAD 不得冒充 application source。
 > 格式遵循 `.agents/skills/infra-runbook/SKILL.md` 四节强制要求。
 > 部署属 Spec §20.5"询问"级操作：执行前需用户确认，必须走 `infra/scripts/deploy.sh` + CI/CD，禁止手工改服务器代码。
 
@@ -1175,3 +1175,13 @@ application remained `f965966...` and production search remained `1/1`.
 3. The GIN test establishes index eligibility under a bounded same-tenant corpus;
    it is not representative-scale performance acceptance. Task 9 must still run
    `EXPLAIN (ANALYZE, BUFFERS)` and latency/RSS gates with the final corpus.
+
+### 5.36 BGE-M3 hybrid retrieval production deployment (2026-08-28)
+
+- Application/release `8163f8b4218e529ee4be41bb9fc732ff6497931a` was deployed with canonical `deploy.sh`; rollback is `f9659668b237b70b4c018b866e20498689d327c2`. Server full build, core `29/29`, search `2/2`, quota seed, physical database isolation, nginx reload, public/loopback release markers and all container health gates passed. No local Docker was used.
+- Exact BGE-M3 revision is `5617a9f61b028005a4858fdac845db406aefb181`; model manifest is `08cc5a668e899e216e8ce66e7f3a5e144cefd9600a082997483c5dd0c66478e4`, package freeze is `dc2bc38e5ddda73889d15265eac0cdfa8eaaebe311bc2e63a9b2e32e19cd0fc3`, and the production image digest is `sha256:137352df4cb1c0937693f3b61d897d22c578232cc8ac15c5a088d0fcb08a0a3e`.
+- ECS exact-SHA evaluation used 16 self-authored chunks and 24 queries: nDCG@10 `0.996655`, Recall@10 `1`, P50 `232 ms`, P95 `240 ms`, peak RSS `2,244,235,264` bytes and GPU package count `0`. Production isolation is internal network only, no published port, user `10001:10001`, read-only rootfs, cap-drop ALL, no-new-privileges, 2 CPU, 6 GiB and 128 PIDs.
+- Failure drill stopped the production embedding worker and verified a real worker response of `lexical_only / embedding_unavailable` with a lexical candidate. Restart plus strict model-identity vector canary returned `EMBEDDING_RUNTIME_OK`; the drill used fake storage and wrote no production search data.
+- `/usr/local/bin/backup.sh --db` published atomic dual-database set `db-set-20260827T155422Z-1676593`. Checksums, 0700/0600 permissions and release binding passed; both dumps restored into isolated retained databases and schema/data fingerprints matched (search schema after PostgreSQL deparse normalization).
+- Operational warning: when a multi-command remote script itself arrives through stdin, `docker compose exec -T` can consume the remaining script. Redirect non-input exec calls from `/dev/null`, or send steps separately. Never place database URLs or passwords in argv or logs.
+- Rollback options are immediate lexical-only routing via `BGE_M3_ENABLED`, or immutable release `f9659668…`. Old model/evaluation volumes and restore databases remain preserved; cleanup requires explicit authorization.

@@ -9,7 +9,9 @@ test('CURRENT registry has complete rows and no credential-shaped values', async
   const result = verifyCapabilityRegistry(markdown);
 
   assert.ok(result.rows >= 20);
-  assert.ok(result.candidateRows >= 10);
+  // BGE-M3 and PostgreSQL lexical search left the candidate table after
+  // exact-SHA ECS production acceptance; nine approved pilots remain.
+  assert.equal(result.candidateRows, 9);
   assert.ok(result.capabilities.includes('BGE-M3'));
   assert.ok(result.capabilities.includes('ScanSci PDF'));
   assert.ok(result.capabilities.includes('Semantic Scholar MCP/API'));

@@ -72,6 +72,8 @@ release_root="/opt/openscience-releases/$set_release"
 export XGS_RELEASE_ROOT="$release_root" XGS_RELEASE_IMAGE_TAG="$set_release"
 COMPOSE=(docker compose --env-file /opt/openscience/.env.prod \
   -f "$release_root/infra/compose/docker-compose.prod.yml")
+# 若整个演练脚本本身经 stdin 送入远端 bash，所有不需要输入的
+# `docker compose exec -T` 必须追加 `</dev/null`；否则 exec 会吞掉后续脚本。
 # API 容器只输出两个已校验的生产库名；不输出 URL、用户或密码。
 mapfile -t PROD_DATABASES < <("${COMPOSE[@]}" exec -T api node - <<'NODE'
 for (const key of ['DATABASE_URL', 'SEARCH_DATABASE_URL']) {
@@ -90,18 +92,18 @@ test "$CORE_RESTORE" != "$CORE_PROD_DB" && test "$CORE_RESTORE" != "$SEARCH_PROD
 test "$SEARCH_RESTORE" != "$CORE_PROD_DB" && test "$SEARCH_RESTORE" != "$SEARCH_PROD_DB"
 # 从 PostgreSQL 容器环境取得实际管理角色，只输出已校验的标识符，不读取密码或 .env.prod。
 DB_ADMIN_ROLE="$("${COMPOSE[@]}" exec -T postgres sh -ceu \
-  'case "$POSTGRES_USER" in (*[!A-Za-z0-9_]*|"") exit 64;; esac; printf "%s" "$POSTGRES_USER"')"
+  'case "$POSTGRES_USER" in (*[!A-Za-z0-9_]*|"") exit 64;; esac; printf "%s" "$POSTGRES_USER"' </dev/null)"
 case "$DB_ADMIN_ROLE" in (*[!A-Za-z0-9_]*|"") exit 64;; esac
-"${COMPOSE[@]}" exec -T postgres createdb --username="$DB_ADMIN_ROLE" -- "$CORE_RESTORE"
-"${COMPOSE[@]}" exec -T postgres createdb --username="$DB_ADMIN_ROLE" -- "$SEARCH_RESTORE"
+"${COMPOSE[@]}" exec -T postgres createdb --username="$DB_ADMIN_ROLE" -- "$CORE_RESTORE" </dev/null
+"${COMPOSE[@]}" exec -T postgres createdb --username="$DB_ADMIN_ROLE" -- "$SEARCH_RESTORE" </dev/null
 "${COMPOSE[@]}" exec -T postgres psql -v ON_ERROR_STOP=1 --username="$DB_ADMIN_ROLE" --dbname="$CORE_RESTORE" < core.sql
 "${COMPOSE[@]}" exec -T postgres psql -v ON_ERROR_STOP=1 --username="$DB_ADMIN_ROLE" --dbname="$SEARCH_RESTORE" < search.sql
 
 # 验收：核心库与搜索库分别核对迁移账本和 schema；禁止只验一个库。
 "${COMPOSE[@]}" exec -T postgres psql -v ON_ERROR_STOP=1 --username="$DB_ADMIN_ROLE" --dbname="$CORE_RESTORE" \
-  -tAc 'SELECT count(*) FROM schema_migrations;'
+  -tAc 'SELECT count(*) FROM "_prisma_migrations" WHERE finished_at IS NOT NULL AND rolled_back_at IS NULL;' </dev/null
 "${COMPOSE[@]}" exec -T postgres psql -v ON_ERROR_STOP=1 --username="$DB_ADMIN_ROLE" --dbname="$SEARCH_RESTORE" \
-  -tAc 'SELECT count(*) FROM "_prisma_migrations" WHERE finished_at IS NOT NULL AND rolled_back_at IS NULL;'
+  -tAc 'SELECT count(*) FROM "_prisma_migrations" WHERE finished_at IS NOT NULL AND rolled_back_at IS NULL;' </dev/null
 ```
 
 还需比对生产与临时库的关键表计数或 schema 指纹，但只记录计数/哈希，不读取行内容。演练完成后保留临时库，直到阶段验收明确批准清理。
@@ -110,4 +112,5 @@ case "$DB_ADMIN_ROLE" in (*[!A-Za-z0-9_]*|"") exit 64;; esac
 
 | 日期 | 集合 / release | 核心库 | 搜索库 | 结果 |
 |---|---|---|---|---|
+| 2026-08-28 | `db-set-20260827T155422Z-1676593` / `8163f8b…` | restored；active ledger 30；schema/data hash exact | restored；active ledger 2；normalized schema/data hash exact | 通过；两个临时库保留；确认 stdin guard |
 | 2026-08-27 | 旧格式 `20260827T123813Z` / `f9659668…` | dump 校验并恢复 | dump 校验并恢复；迁移 1/1 | 通过；临时库保留 |

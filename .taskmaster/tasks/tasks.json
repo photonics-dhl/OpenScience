@@ -1470,8 +1470,9 @@
           "2",
           "5"
         ],
-        "status": "pending",
-        "subtasks": []
+        "status": "done",
+        "subtasks": [],
+        "updatedAt": "2026-08-27T16:14:29.000Z"
       },
       {
         "id": "7",

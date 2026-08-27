@@ -1,5 +1,6 @@
 # Hermes Semantic Retrieval and BGE-M3 Implementation Plan
 
+> **Status: COMPLETED / DEPLOYED（2026-08-28）.** Taskmaster Task 6 is done. Production release `8163f8b4218e529ee4be41bb9fc732ff6497931a`; rollback `f9659668b237b70b4c018b866e20498689d327c2`.
 > **For agentic workers:** REQUIRED SUB-SKILL: Use `executing-plans` to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Deliver tenant-safe lexical+dense hybrid retrieval through `packages/search`, backed by an independently migrated search database and a source-locked CPU BGE-M3 service that is deployed and accepted on the ECS.
@@ -93,7 +94,7 @@ git add test/research-intelligence/search-evaluation.json apps/agent-worker/test
 git commit -m "test(search): add source-locked BGE-M3 ECS gate"
 ```
 
-- [ ] **Step 6: Run the candidate gate on ECS under a detached systemd unit**
+- [x] **Step 6: Run the candidate gate on ECS under a detached systemd unit**
 
 Materialize the exact commit under `/opt/openscience-evals/embedding/<git-sha>/source`, run frozen pnpm install, then start the evaluator with `systemd-run`. Record the image digest, model revision, package/model aggregate hashes, file count, query metrics, peak RSS and residue count. Do not promote the candidate when any hard gate fails.
 
@@ -264,7 +265,7 @@ and neither migration 2 nor the retrieval route was deployed.
 - Consumes: bounded query/chunk text batches through internal HTTP.
 - Produces: `EmbeddingClient.embed(input): Promise<DenseEmbeddingBatch>` and `/health`, `/v1/tokenize`, `/v1/embeddings` worker endpoints.
 
-- [ ] **Step 1: Write protocol rejection tests**
+- [x] **Step 1: Write protocol rejection tests**
 
 ```ts
 await expect(client.embed({ purpose: 'query', texts: ['x'.repeat(20_001)] }))
@@ -276,20 +277,20 @@ expect(loggerOutput).not.toContain('bounded');
 
 Python tests require schema version 1, batch size 1–16, query max 512 tokens, chunk max 1024 tokens, exactly 1024 finite float values, normalized vectors and no input reflection in errors or logs.
 
-- [ ] **Step 2: Run TypeScript/Python tests and verify RED**
+- [x] **Step 2: Run TypeScript/Python tests and verify RED**
 
 ```powershell
 npx pnpm@9.15.0 --filter @openscience/search test -- embedder.test.ts
 python -m unittest apps/embedding-worker/app_test.py
 ```
 
-- [ ] **Step 3: Implement the protocol adapter and offline worker**
+- [x] **Step 3: Implement the protocol adapter and offline worker**
 
 `EmbeddingClient` uses injected `fetch`, an internal base URL, 30-second request timeout, one retry only before response bytes, 256 KiB response cap and strict unknown-field rejection. The Python worker loads only `/models/bge-m3`, validates the model manifest before readiness, disables telemetry/network, uses CPU and dense-only inference, and emits base64 little-endian float32 vectors plus model revision/dimension.
 
 The image runs as UID/GID 10001. `model-init.py` copies the exact built-in seed into an empty versioned named volume only when the manifest matches; an existing mismatched volume fails closed and is never deleted automatically.
 
-- [ ] **Step 4: Run non-container gates and commit**
+- [x] **Step 4: Run non-container gates and commit**
 
 ```bash
 npx pnpm@9.15.0 --filter @openscience/search test
@@ -314,7 +315,7 @@ git commit -m "feat(search): add bounded CPU embedding service"
 - Consumes: `SearchStorage`, `EmbeddingClient`, tenant scope and query.
 - Produces: `createHybridSearchService(dependencies).search(input): Promise<HybridSearchResponse>`.
 
-- [ ] **Step 1: Write failing cosine, RRF and degradation tests**
+- [x] **Step 1: Write failing cosine, RRF and degradation tests**
 
 ```ts
 expect(cosineSimilarity(new Float32Array([1, 0]), new Float32Array([0, 1]))).toBe(0);
@@ -325,17 +326,17 @@ await expect(service.search(query)).resolves.toMatchObject({
 });
 ```
 
-- [ ] **Step 2: Run the focused tests and verify RED**
+- [x] **Step 2: Run the focused tests and verify RED**
 
 Run: `npx pnpm@9.15.0 --filter @openscience/search test -- dense.test.ts fusion.test.ts service.test.ts`
 
-- [ ] **Step 3: Implement bounded exact dense search and RRF**
+- [x] **Step 3: Implement bounded exact dense search and RRF**
 
 The initial storage adapter scans at most 10,000 tenant-scoped normalized embeddings and computes cosine similarity in process; above that bound dense returns `dense_capacity_exceeded` and lexical continues. This deliberately portable implementation avoids changing the production PostgreSQL image. `SearchStorage.denseCandidates` remains replaceable by a future pgvector or managed-database adapter.
 
 RRF uses `1 / (60 + rank)` with one-based ranks, stable chunk-ID ties and configurable lexical/dense result limits capped at 100. Locator validation runs after fusion; invalid results are omitted and counted as `needs_review`. Telemetry stores hashes and timings only.
 
-- [ ] **Step 4: Run package gates and commit**
+- [x] **Step 4: Run package gates and commit**
 
 ```bash
 npx pnpm@9.15.0 --filter @openscience/search test
@@ -357,7 +358,7 @@ git commit -m "feat(search): add dense RRF retrieval with fallback"
 - Consumes: ready `DocumentSourceMap`, Claim IDs, `SearchStorage` and `EmbeddingClient` through `@openscience/search`.
 - Produces: idempotent `search.index` AgentTask processing with queued/running/succeeded/needs_review/failed states.
 
-- [ ] **Step 1: Write idempotency, stale-input and fallback tests**
+- [x] **Step 1: Write idempotency, stale-input and fallback tests**
 
 ```ts
 await indexDocument(job);
@@ -368,15 +369,15 @@ await expect(indexDocument({ ...job, contentHash: 'f'.repeat(64) }))
 expect(await indexDocument(job, { embeddingUnavailable: true })).toMatchObject({ status: 'needs_review' });
 ```
 
-- [ ] **Step 2: Run the test and verify RED**
+- [x] **Step 2: Run the test and verify RED**
 
 Run: `npx pnpm@9.15.0 --filter @openscience/agent-worker test -- search-indexer.test.ts`
 
-- [ ] **Step 3: Implement indexing and atomic replacement**
+- [x] **Step 3: Implement indexing and atomic replacement**
 
 Validate the source map and locators before chunking. Upsert chunk metadata first, request embeddings in batches of at most 8, then atomically activate the new content-hash/model-version generation. An embedding failure leaves lexical chunks active and marks the index task `needs_review`; it never deletes the last successful dense generation. No raw text enters AgentTask result or logs.
 
-- [ ] **Step 4: Run worker/search gates and commit**
+- [x] **Step 4: Run worker/search gates and commit**
 
 ```bash
 npx pnpm@9.15.0 --filter @openscience/search... --filter @openscience/agent-worker... test
@@ -401,7 +402,7 @@ git commit -m "feat(worker): add idempotent hybrid search indexing"
 - Consumes: accepted BGE-M3 image/model locks and search migration 2.
 - Produces: internal-only `embedding-worker`, versioned model volume, independent search backup/restore and documented rollback.
 
-- [ ] **Step 1: Write failing topology and deployment assertions**
+- [x] **Step 1: Write failing topology and deployment assertions**
 
 ```js
 assert.match(compose, /embedding-worker:/);
@@ -413,19 +414,19 @@ assert.match(deploy, /migrate:deploy/);
 assert.match(backup, /SEARCH_DATABASE_URL/);
 ```
 
-- [ ] **Step 2: Run tests and verify RED**
+- [x] **Step 2: Run tests and verify RED**
 
 Run: `node --test infra/scripts/deploy.test.mjs scripts/verify-database-isolation.test.mjs`
 
-- [ ] **Step 3: Add isolated runtime and model volume**
+- [x] **Step 3: Add isolated runtime and model volume**
 
 Attach only Agent Worker and embedding worker to `embedding_net`; set it `internal: true`. Put model services behind the explicit `embedding` Compose profile and `BGE_M3_DEPLOY` gate so disabled releases neither build nor start the model. Embedding worker receives no `env_file`, no `data_net`, no ports, no capabilities and no external network. Mount `openscience-bge-m3-5617a9f61b028005a4858fdac845db406aefb181` read-only after a one-shot manifest-verified init. Set 2 CPU, 6 GiB and 128 PID limits. Keep `BGE_M3_ENABLED=false` until migration, volume init, strict identity health and a real-vector canary are green.
 
-- [ ] **Step 4: Extend independent search backup and restore**
+- [x] **Step 4: Extend independent search backup and restore**
 
 `backup.sh --db` must create separate core and search dumps with independent checksums and retention metadata without printing either URL. The runbook includes four complete sections: preflight, numbered deployment, rollback, and verification. The restore drill targets a disposable search database and verifies search migrations 2/2 and row/hash parity.
 
-- [ ] **Step 5: Run local static gates and commit**
+- [x] **Step 5: Run local static gates and commit**
 
 ```bash
 node --test infra/scripts/deploy.test.mjs scripts/verify-database-isolation.test.mjs
@@ -449,7 +450,7 @@ The Compose config command runs on ECS only; local validation is limited to YAML
 - Consumes: all prior tasks and accepted candidate evidence.
 - Produces: immutable production release evidence, rollback tuple, Taskmaster Task 6 `done`, and the next dependency-correct task.
 
-- [ ] **Step 1: Run pre-deploy review and repository gates**
+- [x] **Step 1: Run pre-deploy review and repository gates**
 
 Run focused security/architecture review, then:
 
@@ -466,15 +467,15 @@ npx pnpm@9.15.0 docs:lint
 git diff --check
 ```
 
-- [ ] **Step 2: Perform ECS backup and disposable migration/restore drill**
+- [x] **Step 2: Perform ECS backup and disposable migration/restore drill**
 
 Fetch the exact branch, run `checkup.sh`, verify current release/rollback and create core+search backups. Exercise search migration 2 forward/rollback/redeploy against a disposable database, then restore the independent search dump to another disposable database and verify hashes. Preserve all logs outside the repository and report only bounded evidence.
 
-- [ ] **Step 3: Deploy the immutable release**
+- [x] **Step 3: Deploy the immutable release**
 
 Use `infra/scripts/deploy.sh` from explicit Git Bash. The server must perform full pnpm build, core migration status, search migration 2/2, model-volume manifest verification, embedding image digest verification and Compose rollout. Do not enable the dense route until the worker is healthy and a bounded internal canary passes.
 
-- [ ] **Step 4: Run production acceptance**
+- [x] **Step 4: Run production acceptance**
 
 Verify:
 
@@ -487,7 +488,7 @@ Verify:
 7. production release marker updated and failure marker absent;
 8. previous immutable release remains the rollback target.
 
-- [ ] **Step 5: Close Taskmaster and project memory**
+- [x] **Step 5: Close Taskmaster and project memory**
 
 Set Task 6 to `done` only after all ECS gates pass. Update the CURRENT spec, capability registry, progress, handoff and index with the exact model revision, image/model/package hashes, migration status, metrics, release and rollback. Run docs sync and Markdown lint again, commit, push, and verify worktree clean.
 
