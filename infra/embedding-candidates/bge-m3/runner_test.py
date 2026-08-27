@@ -3,8 +3,11 @@ import importlib.util
 import json
 from pathlib import Path
 import struct
+import sys
 import tempfile
+import types
 import unittest
+from unittest.mock import patch
 
 
 RUNNER_PATH = Path(__file__).with_name("runner.py")
@@ -25,6 +28,24 @@ class BgeM3RunnerTest(unittest.TestCase):
     def test_default_model_root_matches_inherited_runtime_seed(self):
         runner = load_runner()
         self.assertEqual(runner.MODEL_ROOT, Path("/opt/bge-m3-seed"))
+
+    def test_load_model_pins_the_m3_model_class_instead_of_guessing_from_path(self):
+        runner = load_runner()
+        captured = {}
+
+        class FakeFlagAutoModel:
+            @staticmethod
+            def from_finetuned(path, **kwargs):
+                captured.update({"path": path, **kwargs})
+                return "model"
+
+        fake_module = types.SimpleNamespace(FlagAutoModel=FakeFlagAutoModel)
+        with patch.dict(sys.modules, {"FlagEmbedding": fake_module}):
+            self.assertEqual(runner._load_model(), "model")
+        self.assertEqual(captured["path"].replace("\\", "/"), "/opt/bge-m3-seed")
+        self.assertEqual(captured["model_class"], "encoder-only-m3")
+        self.assertEqual(captured["devices"], "cpu")
+        self.assertFalse(captured["use_fp16"])
 
     def test_validates_bounded_dense_only_requests(self):
         runner = load_runner()

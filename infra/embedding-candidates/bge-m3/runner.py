@@ -233,6 +233,7 @@ def _load_model():
 
     return FlagAutoModel.from_finetuned(
         str(MODEL_ROOT),
+        model_class="encoder-only-m3",
         devices="cpu",
         use_fp16=False,
     )
