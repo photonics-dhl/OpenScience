@@ -10,10 +10,10 @@ fi
   || { echo 'credential rotation is restricted to the ECS host' >&2; exit 69; }
 
 ENV_FILE='/opt/openscience/.env.prod'
-COMPOSE_FILE='/opt/openscience/infra/compose/docker-compose.prod.yml'
 RELEASE="$(cat /opt/openscience/.release-id)"
 [[ "$RELEASE" =~ ^[a-f0-9]{40}$ ]] || { echo 'invalid release marker' >&2; exit 69; }
 RELEASE_ROOT="/opt/openscience-releases/$RELEASE"
+COMPOSE_FILE="$RELEASE_ROOT/infra/compose/docker-compose.prod.yml"
 [[ -d "$RELEASE_ROOT" && -f "$ENV_FILE" && -f "$COMPOSE_FILE" ]] \
   || { echo 'production credential inputs are incomplete' >&2; exit 69; }
 

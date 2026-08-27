@@ -12,6 +12,7 @@ test('database credential rotation keeps secrets out of command arguments and su
   assert.match(script, /docker exec -i/);
   assert.match(script, /fs\.renameSync\(temporary, path\)/);
   assert.match(script, /rollback_on_exit/);
+  assert.match(script, /COMPOSE_FILE="\$RELEASE_ROOT\/infra\/compose\/docker-compose\.prod\.yml"/);
   assert.match(script, /--force-recreate postgres api agent-worker web/);
   assert.match(script, /DB_CREDENTIAL_ROTATION_OK/);
   assert.doesNotMatch(script, /docker run[^\n]*-e (?:DATABASE_URL|SEARCH_DATABASE_URL)=/);
