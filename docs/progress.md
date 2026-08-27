@@ -2,6 +2,11 @@
 
 > 最新同步：2026-08-27。历史由 Git 保存；旧计划和 archive 不作为默认输入。
 
+## 2026-08-27 — Research Intelligence Task 4 启动
+
+- 生产只读复验：release `f965966` exact，Web/API/Worker/Parser healthy；真实 PDF/DOCX sidecar self-test、`DOCUMENT_PARSER_CONTRACT_OK`、`AI_GATEWAY_OCR_CONTRACT_OK` 均通过。Vision 仍 disabled，因此未声称真实 LLM OCR 质量。
+- Task 4 ECS-only 计划已建立；首个 TDD slice 交付无正文/路径泄漏、失败计入 P95 的候选评测报告合同（`3/3` + worker typecheck）。Docling/LiteParse/GROBID/PaddleOCR 仍为 `APPROVED_PILOT`，未预选、未部署。
+
 ## 2026-08-27 — Research Intelligence Task 5 已部署
 
 - Taskmaster `hermes-research-intelligence`：Task 1–3、5 done（4/12）；Tasks 4、6 ready，下一步按依赖先执行 Task 4 CPU parser cascade。
