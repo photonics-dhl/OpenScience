@@ -173,7 +173,25 @@ describe.skipIf(DATABASE_URL === undefined)('SearchStorage ECS integration', () 
       .resolves.toEqual({ status: 'unavailable', code: 'lexical_capacity_exceeded' });
   });
 
-  it('uses the GIN index for the exact production candidate SQL shape', async () => {
+  it('keeps the exact production candidate SQL GIN-eligible with tenant indexes present', async () => {
+    await client.$executeRaw(Prisma.sql`
+      INSERT INTO "search_chunks" (
+        "id", "workspace_id", "research_object_id", "artifact_id", "content_hash", "ordinal",
+        "language", "text", "token_count", "locators", "claim_ids", "lexical_terms",
+        "term_frequencies", "lexical_text", "active"
+      )
+      SELECT repeat('f', 56) || lpad(to_hex(series), 8, '0'),
+             ${WORKSPACE_A}::uuid, ${RESEARCH_OBJECT}::uuid, ${ARTIFACT_A}::uuid, ${HASH_A}, 1000 + series,
+             'en', 'unrelated filler', 2,
+             jsonb_build_array(jsonb_build_object(
+               'artifactId', ${ARTIFACT_A}, 'contentHash', ${HASH_A},
+               'blockId', 'gin-filler-' || series, 'page', 1
+             )),
+             '[]'::jsonb, '["filler", "unrelated"]'::jsonb,
+             '{"filler": 1, "unrelated": 1}'::jsonb, 'filler unrelated', true
+      FROM generate_series(1, 2048) AS series
+    `);
+    await client.$executeRaw(Prisma.sql`ANALYZE "search_chunks"`);
     const plan = await client.$transaction(async (transaction) => {
       await transaction.$executeRaw(Prisma.sql`SET LOCAL enable_seqscan = off`);
       await transaction.$executeRaw(Prisma.sql`SET LOCAL enable_indexscan = off`);
