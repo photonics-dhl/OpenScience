@@ -21,5 +21,11 @@ export {
   type SearchStorageFailure,
 } from './lexical';
 export { SearchStorage, type UpsertSearchChunksInput } from './storage';
+export {
+  EmbeddingClient,
+  type EmbeddingClientOptions,
+  type EmbeddingPurpose,
+  type EmbeddingResult,
+} from './embedder';
 export { tokenizeSearchText, tokenizeSearchTextWithOffsets, type SearchToken } from './tokenizer';
 export { SEARCH_CHUNK_SCHEMA_VERSION, type ChunkDocumentInput, type SearchChunkDraft } from './types';

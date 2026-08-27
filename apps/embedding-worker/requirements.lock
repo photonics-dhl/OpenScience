@@ -1,0 +1,6 @@
+# Direct build-input lock. The image also records the complete resolved package
+# set at /opt/bge-m3-lock/package-freeze.txt during the ECS image build.
+--index-url https://download.pytorch.org/whl/cpu
+--extra-index-url https://pypi.org/simple
+torch==2.13.0+cpu
+FlagEmbedding @ file:///tmp/flagembedding-1.4.2-py3-none-any.whl
