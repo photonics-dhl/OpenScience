@@ -176,6 +176,7 @@ describe.skipIf(DATABASE_URL === undefined)('SearchStorage ECS integration', () 
   it('uses the GIN index for the exact production candidate SQL shape', async () => {
     const plan = await client.$transaction(async (transaction) => {
       await transaction.$executeRaw(Prisma.sql`SET LOCAL enable_seqscan = off`);
+      await transaction.$executeRaw(Prisma.sql`SET LOCAL enable_indexscan = off`);
       const query = buildLexicalCandidateQuery({
         tenantId: WORKSPACE_A,
         query: 'pulse experiment',
