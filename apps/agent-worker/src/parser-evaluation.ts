@@ -27,6 +27,20 @@ export interface CandidateCaseResult {
   errorCode?: CandidateEvaluationErrorCode;
 }
 
+export interface CandidateCase {
+  id: string;
+  fixtureName: string;
+  contentHash: string;
+  locatorTotal: number;
+}
+
+export type CandidateRunOutcome = Omit<CandidateCaseResult, 'id' | 'contentHash' | 'locatorTotal'>;
+
+export interface CandidateRunner {
+  candidate: CandidateIdentity;
+  run(item: Readonly<CandidateCase>): Promise<CandidateRunOutcome>;
+}
+
 export interface CandidateEvaluationReport {
   schemaVersion: 1;
   candidate: CandidateIdentity;
@@ -104,6 +118,12 @@ function canonicalCase(value: unknown): CandidateCaseResult {
     }
     errorCode = item.errorCode as CandidateEvaluationErrorCode;
   }
+  if (status === 'succeeded' && locatorMatches !== locatorTotal) {
+    throw new Error('succeeded candidate case must match all locators');
+  }
+  if (status === 'succeeded' && errorCode !== undefined) {
+    throw new Error('succeeded candidate case cannot carry an error code');
+  }
   return {
     id,
     contentHash,
@@ -114,6 +134,40 @@ function canonicalCase(value: unknown): CandidateCaseResult {
     peakRssBytes,
     ...(errorCode === undefined ? {} : { errorCode }),
   };
+}
+
+function canonicalCorpusCase(value: unknown): CandidateCase {
+  const item = exactObject(value, ['id', 'fixtureName', 'contentHash', 'locatorTotal'], 'candidate corpus case');
+  const id = boundedString(item.id, 'corpus case id');
+  const fixtureName = boundedString(item.fixtureName, 'corpus fixture name');
+  const contentHash = boundedString(item.contentHash, 'corpus content hash', 64);
+  const locatorTotal = safeNonNegativeInteger(item.locatorTotal, 'corpus locator total');
+  if (!SAFE_IDENTIFIER.test(id) || !SAFE_IDENTIFIER.test(fixtureName)) throw new Error('candidate corpus identity is invalid');
+  if (!SHA256.test(contentHash)) throw new Error('corpus content hash must be a SHA-256 digest');
+  return { id, fixtureName, contentHash, locatorTotal };
+}
+
+export function parseCandidateRunOutcome(value: unknown): CandidateRunOutcome {
+  const item = exactObject(value, ['status', 'locatorMatches', 'elapsedMs', 'peakRssBytes', 'errorCode'], 'candidate outcome');
+  const status = item.status;
+  if (status !== 'succeeded' && status !== 'needs_review' && status !== 'failed') {
+    throw new Error('candidate outcome status is invalid');
+  }
+  const locatorMatches = safeNonNegativeInteger(item.locatorMatches, 'locator matches');
+  const elapsedMs = safeNonNegativeInteger(item.elapsedMs, 'elapsed milliseconds');
+  const peakRssBytes = safeNonNegativeInteger(item.peakRssBytes, 'peak RSS bytes');
+  let errorCode: CandidateEvaluationErrorCode | undefined;
+  if (item.errorCode !== undefined) {
+    if (typeof item.errorCode !== 'string'
+      || !CANDIDATE_EVALUATION_ERROR_CODES.includes(item.errorCode as CandidateEvaluationErrorCode)) {
+      throw new Error('candidate outcome error code is invalid');
+    }
+    errorCode = item.errorCode as CandidateEvaluationErrorCode;
+  }
+  if (status === 'succeeded' && errorCode !== undefined) {
+    throw new Error('succeeded candidate outcome cannot carry an error code');
+  }
+  return { status, locatorMatches, elapsedMs, peakRssBytes, ...(errorCode === undefined ? {} : { errorCode }) };
 }
 
 function nearestRank(values: readonly number[], percentile: number): number {
@@ -156,4 +210,26 @@ export function serializeCandidateEvaluationReport(value: {
   cases: CandidateCaseResult[];
 }): string {
   return `${JSON.stringify(buildCandidateEvaluationReport(value), null, 2)}\n`;
+}
+
+export async function evaluateParserCandidate(
+  runner: CandidateRunner,
+  corpus: CandidateCase[],
+): Promise<CandidateEvaluationReport> {
+  if (!Array.isArray(corpus) || corpus.length === 0 || corpus.length > 1_000) {
+    throw new Error('candidate corpus must be a bounded non-empty array');
+  }
+  const cases = corpus.map(canonicalCorpusCase);
+  if (new Set(cases.map(({ id }) => id)).size !== cases.length) throw new Error('duplicate candidate corpus case id');
+  const results: CandidateCaseResult[] = [];
+  for (const item of cases) {
+    const outcome = parseCandidateRunOutcome(await runner.run(Object.freeze({ ...item })));
+    results.push({
+      ...outcome,
+      id: item.id,
+      contentHash: item.contentHash,
+      locatorTotal: item.locatorTotal,
+    });
+  }
+  return buildCandidateEvaluationReport({ candidate: runner.candidate, cases: results });
 }

@@ -25,6 +25,8 @@ export type ResearchCorpusFeature =
 export type ResearchExpectedLocator =
   | { kind: 'file' }
   | { kind: 'page-text'; page: number; quote: string }
+  | { kind: 'page-text-order'; page: number; quotes: string[] }
+  | { kind: 'page-region-text'; page: number; bbox: [number, number, number, number]; quote: string }
   | { kind: 'page-region'; page: number; bbox: [number, number, number, number] }
   | { kind: 'image-region'; bbox: [number, number, number, number] }
   | { kind: 'paragraph-text'; paragraph: number; quote: string }
@@ -87,6 +89,51 @@ function createDualColumnPdf(): Buffer {
   const content = Buffer.from([
     'BT /F1 12 Tf 54 720 Td (Left claim: reproducible pulse.) Tj ET',
     'BT /F1 12 Tf 320 720 Td (Right evidence: calibrated trace.) Tj ET',
+  ].join('\n'), 'ascii');
+  return buildPdf([
+    Buffer.from('<< /Type /Catalog /Pages 2 0 R >>', 'ascii'),
+    Buffer.from('<< /Type /Pages /Kids [3 0 R] /Count 1 >>', 'ascii'),
+    Buffer.from('<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 4 0 R >> >> /Contents 5 0 R >>', 'ascii'),
+    Buffer.from('<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>', 'ascii'),
+    pdfStream(content),
+  ]);
+}
+
+function createTableLayoutPdf(): Buffer {
+  const content = Buffer.from([
+    'BT /F1 14 Tf 54 740 Td (Evidence table) Tj ET',
+    'BT /F1 12 Tf 54 700 Td (Metric) Tj ET',
+    'BT /F1 12 Tf 320 700 Td (Value) Tj ET',
+    'BT /F1 12 Tf 54 660 Td (pulse_width) Tj ET',
+    'BT /F1 12 Tf 320 660 Td (42 fs) Tj ET',
+  ].join('\n'), 'ascii');
+  return buildPdf([
+    Buffer.from('<< /Type /Catalog /Pages 2 0 R >>', 'ascii'),
+    Buffer.from('<< /Type /Pages /Kids [3 0 R] /Count 1 >>', 'ascii'),
+    Buffer.from('<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 4 0 R >> >> /Contents 5 0 R >>', 'ascii'),
+    Buffer.from('<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>', 'ascii'),
+    pdfStream(content),
+  ]);
+}
+
+function createFormulaLayoutPdf(): Buffer {
+  const content = Buffer.from([
+    'BT /F1 14 Tf 54 720 Td (Fitted signal) Tj ET',
+    'BT /F1 12 Tf 54 680 Td (I\\(t\\) = I0 exp\\(-t/tau\\)) Tj ET',
+  ].join('\n'), 'ascii');
+  return buildPdf([
+    Buffer.from('<< /Type /Catalog /Pages 2 0 R >>', 'ascii'),
+    Buffer.from('<< /Type /Pages /Kids [3 0 R] /Count 1 >>', 'ascii'),
+    Buffer.from('<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 4 0 R >> >> /Contents 5 0 R >>', 'ascii'),
+    Buffer.from('<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>', 'ascii'),
+    pdfStream(content),
+  ]);
+}
+
+function createReferencesLayoutPdf(): Buffer {
+  const content = Buffer.from([
+    'BT /F1 14 Tf 54 720 Td (References) Tj ET',
+    'BT /F1 12 Tf 54 680 Td ([1] OpenScience Team. Reproducible evidence object. 2026.) Tj ET',
   ].join('\n'), 'ascii');
   return buildPdf([
     Buffer.from('<< /Type /Catalog /Pages 2 0 R >>', 'ascii'),
@@ -309,9 +356,55 @@ export const RESEARCH_INTELLIGENCE_CORPUS: ResearchCorpusCase[] = [
     expectedLocators: [
       { kind: 'page-text', page: 1, quote: 'Left claim: reproducible pulse.' },
       { kind: 'page-text', page: 1, quote: 'Right evidence: calibrated trace.' },
+      { kind: 'page-text-order', page: 1, quotes: ['Left claim: reproducible pulse.', 'Right evidence: calibrated trace.'] },
+      { kind: 'page-region-text', page: 1, bbox: [0, 0, 306, 792], quote: 'Left claim: reproducible pulse.' },
+      { kind: 'page-region-text', page: 1, bbox: [306, 0, 612, 792], quote: 'Right evidence: calibrated trace.' },
     ],
     expectedCurrentStatus: 'ready',
     expectedText: 'Left claim: reproducible pulse.',
+  },
+  {
+    id: 'table-pdf-en',
+    filename: 'table.pdf',
+    content: createTableLayoutPdf(),
+    language: 'en',
+    features: ['native_text', 'table'],
+    rights: 'self-authored',
+    expectedLocators: [
+      { kind: 'page-text-order', page: 1, quotes: ['Metric', 'Value', 'pulse_width', '42 fs'] },
+      { kind: 'page-region-text', page: 1, bbox: [0, 0, 306, 792], quote: 'pulse_width' },
+      { kind: 'page-region-text', page: 1, bbox: [306, 0, 612, 792], quote: '42 fs' },
+    ],
+    expectedCurrentStatus: 'ready',
+    expectedText: 'pulse_width',
+  },
+  {
+    id: 'formula-pdf-en',
+    filename: 'formula.pdf',
+    content: createFormulaLayoutPdf(),
+    language: 'en',
+    features: ['native_text', 'formula'],
+    rights: 'self-authored',
+    expectedLocators: [
+      { kind: 'page-text-order', page: 1, quotes: ['Fitted signal', 'I(t) = I0 exp(-t/tau)'] },
+      { kind: 'page-region-text', page: 1, bbox: [0, 0, 612, 792], quote: 'I(t) = I0 exp(-t/tau)' },
+    ],
+    expectedCurrentStatus: 'ready',
+    expectedText: 'I(t) = I0 exp(-t/tau)',
+  },
+  {
+    id: 'references-pdf-en',
+    filename: 'references.pdf',
+    content: createReferencesLayoutPdf(),
+    language: 'en',
+    features: ['native_text', 'references'],
+    rights: 'self-authored',
+    expectedLocators: [
+      { kind: 'page-text-order', page: 1, quotes: ['References', 'Reproducible evidence object'] },
+      { kind: 'page-region-text', page: 1, bbox: [0, 0, 612, 792], quote: 'Reproducible evidence object' },
+    ],
+    expectedCurrentStatus: 'ready',
+    expectedText: 'Reproducible evidence object',
   },
   {
     id: 'references-markdown-en',
@@ -386,7 +479,7 @@ export const RESEARCH_INTELLIGENCE_CORPUS: ResearchCorpusCase[] = [
 
 export function buildResearchIntelligenceManifest() {
   return {
-    schemaVersion: 1,
+    schemaVersion: 2,
     locatorContract: {
       indexBase: 1,
       bboxOrder: ['x0', 'y0', 'x1', 'y1'],
@@ -404,6 +497,16 @@ export function buildResearchIntelligenceManifest() {
         expectedCurrentStatus: corpusCase.expectedCurrentStatus,
         sha256: createHash('sha256').update(corpusCase.content).digest('hex'),
       })),
+  };
+}
+
+export function buildResearchIntelligenceExport() {
+  return {
+    manifest: buildResearchIntelligenceManifest(),
+    files: RESEARCH_INTELLIGENCE_CORPUS.map(({ filename, content }) => ({
+      filename,
+      content: Buffer.from(content),
+    })),
   };
 }
 

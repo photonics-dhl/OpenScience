@@ -1,5 +1,5 @@
 {
-  "schemaVersion": 1,
+  "schemaVersion": 2,
   "locatorContract": {
     "indexBase": 1,
     "bboxOrder": [
@@ -46,10 +46,73 @@
           "kind": "page-text",
           "page": 1,
           "quote": "Right evidence: calibrated trace."
+        },
+        {
+          "kind": "page-text-order",
+          "page": 1,
+          "quotes": [
+            "Left claim: reproducible pulse.",
+            "Right evidence: calibrated trace."
+          ]
+        },
+        {
+          "kind": "page-region-text",
+          "page": 1,
+          "bbox": [
+            0,
+            0,
+            306,
+            792
+          ],
+          "quote": "Left claim: reproducible pulse."
+        },
+        {
+          "kind": "page-region-text",
+          "page": 1,
+          "bbox": [
+            306,
+            0,
+            612,
+            792
+          ],
+          "quote": "Right evidence: calibrated trace."
         }
       ],
       "expectedCurrentStatus": "ready",
       "sha256": "d68367dc72a42818acc508bd9302353c608a60bb1e627c4d7f2beb09956c4316"
+    },
+    {
+      "id": "formula-pdf-en",
+      "filename": "formula.pdf",
+      "language": "en",
+      "features": [
+        "native_text",
+        "formula"
+      ],
+      "rights": "self-authored",
+      "expectedLocators": [
+        {
+          "kind": "page-text-order",
+          "page": 1,
+          "quotes": [
+            "Fitted signal",
+            "I(t) = I0 exp(-t/tau)"
+          ]
+        },
+        {
+          "kind": "page-region-text",
+          "page": 1,
+          "bbox": [
+            0,
+            0,
+            612,
+            792
+          ],
+          "quote": "I(t) = I0 exp(-t/tau)"
+        }
+      ],
+      "expectedCurrentStatus": "ready",
+      "sha256": "e2048391202205cffe5132331b85148d23109add51130ac280a817ef0f583a48"
     },
     {
       "id": "markdown-mixed",
@@ -172,6 +235,39 @@
       "sha256": "8d452b4e5f0d5882796f761bee9257eeadd0b6726451d9bd1f401c271385fb1a"
     },
     {
+      "id": "references-pdf-en",
+      "filename": "references.pdf",
+      "language": "en",
+      "features": [
+        "native_text",
+        "references"
+      ],
+      "rights": "self-authored",
+      "expectedLocators": [
+        {
+          "kind": "page-text-order",
+          "page": 1,
+          "quotes": [
+            "References",
+            "Reproducible evidence object"
+          ]
+        },
+        {
+          "kind": "page-region-text",
+          "page": 1,
+          "bbox": [
+            0,
+            0,
+            612,
+            792
+          ],
+          "quote": "Reproducible evidence object"
+        }
+      ],
+      "expectedCurrentStatus": "ready",
+      "sha256": "79555938f5fd533905d894308738917475abbe7e00f43e43d58234c111555d87"
+    },
+    {
       "id": "scan-pdf-image-only",
       "filename": "scan.pdf",
       "language": "en",
@@ -240,6 +336,52 @@
       ],
       "expectedCurrentStatus": "needs_review",
       "sha256": "e71f6e5c40db4f3e257ee99961e81b899c817a7b00ed2e03b9c055d537aefa20"
+    },
+    {
+      "id": "table-pdf-en",
+      "filename": "table.pdf",
+      "language": "en",
+      "features": [
+        "native_text",
+        "table"
+      ],
+      "rights": "self-authored",
+      "expectedLocators": [
+        {
+          "kind": "page-text-order",
+          "page": 1,
+          "quotes": [
+            "Metric",
+            "Value",
+            "pulse_width",
+            "42 fs"
+          ]
+        },
+        {
+          "kind": "page-region-text",
+          "page": 1,
+          "bbox": [
+            0,
+            0,
+            306,
+            792
+          ],
+          "quote": "pulse_width"
+        },
+        {
+          "kind": "page-region-text",
+          "page": 1,
+          "bbox": [
+            306,
+            0,
+            612,
+            792
+          ],
+          "quote": "42 fs"
+        }
+      ],
+      "expectedCurrentStatus": "ready",
+      "sha256": "1890fb43169ebea80d59a9a5688158caff5bf1da6001b0b528f0c3274608657a"
     },
     {
       "id": "table-xlsx-en",

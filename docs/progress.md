@@ -5,7 +5,7 @@
 ## 2026-08-27 — Research Intelligence Task 4 启动
 
 - 生产只读复验：release `f965966` exact，Web/API/Worker/Parser healthy；真实 PDF/DOCX sidecar self-test、`DOCUMENT_PARSER_CONTRACT_OK`、`AI_GATEWAY_OCR_CONTRACT_OK` 均通过。Vision 仍 disabled，因此未声称真实 LLM OCR 质量。
-- Task 4 ECS-only 计划已建立；首个 TDD slice 交付无正文/路径泄漏、失败计入 P95 的候选评测报告合同（`3/3` + worker typecheck）。Docling/LiteParse/GROBID/PaddleOCR 仍为 `APPROVED_PILOT`，未预选、未部署。
+- Task 4 ECS-only 计划已建立；评测 slice 已交付无正文/路径泄漏、false-ready 禁止、失败计入 P95 的报告合同、schema-v2 16-case content-addressed exporter、候选进程输出双重校验与 ECS-only 沙箱脚本。新增表格/公式/参考文献 PDF 和 dual-column 顺序/区域定位器，形成同一 7-PDF layout 子集；LiteParse `2.14.0`/Apache-2.0 及 Linux x64 原生包已独立锁定。Docker 生命周期现为 create/start/bounded-wait/显式 kill+remove，`log-driver=none`，结果仅经 64 KiB tmpfs；输出父链 canonical/owner/non-symlink 校验，报告 staging 原子发布。本地无 Docker门禁为 runner `3/3`、worker `18/18`、build/typecheck/bash syntax/lock integrity/diff GREEN。镜像尚未在 ECS 构建或评测，因此所有候选仍为 `APPROVED_PILOT`，未预选、未部署。
 
 ## 2026-08-27 — Research Intelligence Task 5 已部署
 

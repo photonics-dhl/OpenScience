@@ -9,6 +9,7 @@
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "vitest run",
     "test:research-intelligence": "vitest run research-intelligence-corpus.test.ts",
+    "export:parser-evaluation-corpus": "vitest run parser-evaluation-corpus-export.test.ts",
     "selftest:document-contract": "node dist/parsers/contract-self-test.js"
   },
   "dependencies": {

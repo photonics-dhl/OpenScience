@@ -6,14 +6,15 @@
 
 - 用户目标：以 3–7 个 Claim 为公开 RO 中心，提供可定位 Evidence、条件/限制、身份静默路由、CPU 文档解析、混合检索和可版本化富媒体。
 - Taskmaster tag `hermes-research-intelligence` 已完成 Task 1–3、5（4/12）；Task 5 `AI Gateway and LLM OCR Routing` 已部署，Tasks 4、6 均已解锁。
-- Task 1 建立能力台账、13-case 自著权 corpus 与现状 parser baseline；尚未安装新 parser/OCR/model/MCP。
+- Task 1 建立能力台账、初始 13-case 自著权 corpus 与现状 parser baseline；Task 4 已将 corpus 升为 schema-v2 16-case，补入表格/公式/参考文献 PDF 与顺序/区域 locator；尚未安装生产 parser/OCR/model/MCP。
 - Task 5 已完成实现、独立安全/架构复审、精确 CI、ECS 构建、生产部署与运行验收；未新增 schema、migration、seed、研究数据写入或真实付费调用。
+- Task 4 已进入候选 bake-off：content-free/false-ready-safe 报告、schema-v2 16-case exporter、7-PDF layout 子集、安全生命周期脚本和 LiteParse 2.14.0 source lock 本地门禁通过；ECS 镜像/质量/RSS 尚未评测，候选仍为 `APPROVED_PILOT`。
 
 ## Version tuple
 
 - Worktree: `E:/Miscellaneous/XGS/.worktrees/readable-hermes-guidance`
 - Branch / application implementation: `codex/hermes-wanko-live2d` / `f9659668b237b70b4c018b866e20498689d327c2`
-- Any subsequent closeout-fix commit is a docs-only descendant resolved by `git HEAD`, never an application release; do not embed a self-hash in this handoff.
+- Candidate branch HEAD 由 `git HEAD` 解析；Task 4 后续提交是未部署候选，不得误写成 application release，也不在 handoff 中嵌入 self-hash。
 - Deployed application / immutable release: `f9659668b237b70b4c018b866e20498689d327c2`
 - Exact implementation CI: run `33002216562`，12m22s；independent review `DEPLOYABLE / CLEAN`。
 - Rollback: `ef043ebb8e51332effe75a5639cb207aec7bfc47`
@@ -55,7 +56,7 @@
 ## Open risk and next action
 
 - `backup.sh --db` 目前只备份 core。search baseline 仍为空且派生数据可重建；在 Task 6 写入搜索数据或接受真实流量前，必须实现并恢复演练独立 search backup。
-- Tasks 4 `CPU Parser Cascade Implementation` 与 6 `Semantic Retrieval with BGE-M3 and Hybrid Fusion` 均 ready。按产品依赖先执行 Task 4；任何 Docling/LiteParse/GROBID/PaddleOCR 候选必须先经 corpus/ECS CPU 评测再保留。
+- Task 4 `CPU Parser Cascade Implementation` 正在执行候选 bake-off；Task 6 `Semantic Retrieval with BGE-M3 and Hybrid Fusion` 保持 ready。先把 LiteParse/Docling 与 OCR 候选经同一 corpus/ECS CPU 门禁，再按真实质量和资源证据决定保留，禁止预选。
 - 生产 `.env.prod` 中 MiniMax key 存在且 Vision route disabled；Tavily/Semantic Scholar key 尚未注入生产。它们在 Task 10 有实际 consumer 与权限边界前不提前暴露给容器。
 
 ## Read first

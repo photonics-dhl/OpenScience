@@ -43,7 +43,7 @@
 - [x] Implement the minimal report builder and JSON serializer; keep Docker execution in the shell script rather than granting Docker access to the worker.
 - [ ] Add candidate Dockerfiles with CPU-only entrypoints and non-root users. Initial source pins are Docling `2.123.0` wheel SHA-256 `95c0a4d9bc1beafc6097c8573ec3a8dc317e8bcf67e3234aa7c050b7d73fde9c`, `@llamaindex/liteparse@2.14.0` npm integrity `sha512-lIFBbTRs87Bpp45Lm986hUDEPndm85pT9l/BM1dtWhQs0zTLEkpHLrgbOxGG2rjBqDgJM5fdChT8LWUd4ZThWA==`, and PaddleOCR `3.7.0` wheel SHA-256 `c0f0a81ad4112727f30c6fcf986ac0ef6a120d31ee0991a01fae0357ee32d338`; the built image digest and all model hashes are recorded before execution. Disable Docling OCR during the layout comparison; disable LiteParse OCR with `--no-ocr`; the layout comparison must measure layout rather than bundling an OCR advantage.
 - [ ] Implement the ECS script with explicit candidate names, CPU/RSS/time limits, `--network none`, read-only rootfs and a single read-only corpus mount plus bounded output mount. The script must refuse to run outside the ECS host marker and must not mutate production Compose.
-- [ ] Export the 13 self-authored corpus fixtures to the dedicated evaluation directory and measure the current parser, Docling and LiteParse on native PDF, dual-column PDF, tables, formula and references; measure Tesseract and PaddleOCR only on selected scan images/pages.
+- [ ] Export the schema-v2 16-case self-authored corpus to the dedicated evaluation directory. Use the same seven-PDF layout subset (corrupt/native/dual-column/table/formula/references/image-only scan) for current parser, Docling and LiteParse; use the selected scan image/pages for Tesseract and PaddleOCR. The three added PDF cases close the original 13-case matrix's lack of geometry assertions for table/formula/reference layout.
 - [ ] Apply the retention gate: no false-ready; all claimed locators reproduce; no supported-case regression from baseline; at least one measurable dual-column/table/formula/scan improvement; layout P95 at or below 30 seconds/page; candidate hard RSS at or below 2 GiB. GROBID is evaluated separately with 4 GiB hard RSS because upstream full-text guidance requires that class of allocation.
 - [ ] Record exact tag, image digest, license source, P50/P95, peak RSS, pass/fail and reason in the capability registry. Do not change a failed or unevaluated candidate from `APPROVED_PILOT`.
 - [ ] Commit the harness and immutable evaluation contract before adding a retained runtime.
@@ -90,7 +90,7 @@
 - [ ] Implement source-map builders with zero provider knowledge. Use the winner retained by Task 1 only for binary layout/geometry; keep plain text formats dependency-free. Do not hand-write an unbounded XLSX ZIP/XML reader: use a project-pinned dependency with entry-count, per-entry/aggregate expansion, compression-ratio, shared-string/cell-count and XML-entity limits.
 - [ ] Version non-paginated logical geometry as `openscience-virtual-page-v1`: width `1000`, line height `24`, line `n` at `y=(n-1)*24`, and page height `max(24,lineCount*24)`. This is deterministic logical geometry, not PDF pixel precision.
 - [ ] Require `needs_review` for empty/control-only output and preserve the current 50 MiB input cap.
-- [ ] Run focused tests, the 13-case corpus and parser contract; commit after GREEN.
+- [ ] Run focused tests, the schema-v2 16-case corpus and parser contract; commit after GREEN.
 
 ### Task 4: Normalize the retained layout parser and GROBID enrichment
 
@@ -193,7 +193,7 @@
 - [ ] Obtain independent architecture/security review and resolve every material finding before deployment.
 - [ ] Push the exact implementation SHA and require exact-SHA CI success.
 - [ ] Run ECS preflight/backup; build all workspace packages and candidate/production images only on ECS; verify core migration `28/28` and search migration `1/1` without applying a new migration.
-- [ ] Run the full 13-case corpus through the actual production sidecars. Record locator reproduction, per-stage confidence, false-ready count, P50/P95, peak CPU/RSS and failure status; no mocked adapter counts as this gate.
+- [ ] Run the full schema-v2 16-case corpus through the actual production sidecars. Record locator reproduction, per-stage confidence, false-ready count, P50/P95, peak CPU/RSS and failure status; no mocked adapter counts as this gate.
 - [ ] Deploy through the canonical immutable release script. Verify exact release marker, absent failure marker, rollback tree, SHA-tagged healthy worker/parser images, container user/rootfs/network/Secret/CPU/RSS/PID/volume limits, public `/` 200, auth/admin 401 and exact `/__release`.
 - [ ] Keep MiniMax Vision disabled. A later credential rotation plus explicitly approved paid canary is required before claiming real LLM OCR quality.
 - [ ] Update the capability registry with retained and rejected candidate evidence, mark Taskmaster Task 4 done only after production acceptance, and refresh the CURRENT version tuple and next ready task.

@@ -5,6 +5,7 @@ import { describe, expect, it } from 'vitest';
 import { createParserSelfTestFixtures } from '../src/parser-self-test';
 import {
   buildCurrentParserBaseline,
+  buildResearchIntelligenceExport,
   buildResearchIntelligenceManifest,
   parseResearchCorpusCase,
   RESEARCH_INTELLIGENCE_CORPUS,
@@ -46,7 +47,7 @@ describe('research-intelligence corpus contract', () => {
     ];
     const features = RESEARCH_INTELLIGENCE_CORPUS.flatMap(({ features: itemFeatures }) => itemFeatures);
 
-    expect(RESEARCH_INTELLIGENCE_CORPUS.length).toBeGreaterThanOrEqual(12);
+    expect(RESEARCH_INTELLIGENCE_CORPUS.length).toBe(16);
     expect(new Set(RESEARCH_INTELLIGENCE_CORPUS.map(({ id }) => id)).size)
       .toBe(RESEARCH_INTELLIGENCE_CORPUS.length);
     expect(features).toEqual(expect.arrayContaining(requiredFeatures));
@@ -73,13 +74,43 @@ describe('research-intelligence corpus contract', () => {
     expect(scannedPdf?.expectedLocators).toEqual(expect.arrayContaining([
       expect.objectContaining({ kind: 'page-text', quote: 'PULSE 42 FS' }),
     ]));
+    for (const id of ['table-pdf-en', 'formula-pdf-en', 'references-pdf-en']) {
+      const layoutCase = RESEARCH_INTELLIGENCE_CORPUS.find((item) => item.id === id);
+      expect(layoutCase?.filename.endsWith('.pdf'), id).toBe(true);
+      expect(layoutCase?.expectedLocators).toEqual(expect.arrayContaining([
+        expect.objectContaining({ kind: 'page-text-order' }),
+        expect.objectContaining({ kind: 'page-region-text' }),
+      ]));
+    }
     expect(buildResearchIntelligenceManifest()).toMatchObject({
+      schemaVersion: 2,
       locatorContract: {
         indexBase: 1,
         bboxOrder: ['x0', 'y0', 'x1', 'y1'],
         coordinateSpace: 'fixture-native',
       },
     });
+    const manifestCases = buildResearchIntelligenceManifest().cases;
+    expect(manifestCases.every(({ filename }) => (
+      typeof filename === 'string' && /^[A-Za-z0-9][A-Za-z0-9._-]{0,199}$/.test(filename)
+    ))).toBe(true);
+    expect(manifestCases.map(({ filename }) => filename).sort()).toEqual(
+      RESEARCH_INTELLIGENCE_CORPUS.map(({ filename }) => filename).sort(),
+    );
+  });
+
+  it('builds a content-addressed export without absolute paths', () => {
+    const exported = buildResearchIntelligenceExport();
+
+    expect(exported.files).toHaveLength(RESEARCH_INTELLIGENCE_CORPUS.length);
+    expect(exported.files.map(({ filename }) => filename).sort()).toEqual(
+      RESEARCH_INTELLIGENCE_CORPUS.map(({ filename }) => filename).sort(),
+    );
+    for (const file of exported.files) {
+      const manifestCase = exported.manifest.cases.find(({ filename }) => filename === file.filename);
+      expect(manifestCase?.sha256).toBe(createHash('sha256').update(file.content).digest('hex'));
+    }
+    expect(JSON.stringify(exported.manifest)).not.toContain(process.cwd());
   });
 
   it('keeps the tracked manifest content stable across checkout line endings', async () => {
