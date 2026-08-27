@@ -1,6 +1,6 @@
 import type { HermesActionId } from './action-catalog';
 
-export type WankoMotionGroup = 'Flick' | 'Flick3' | 'FlickLeft' | 'FlickUp' | 'Idle' | 'Shake' | 'Tap';
+type WankoMotionGroup = 'Flick' | 'Flick3' | 'FlickLeft' | 'FlickUp' | 'Idle' | 'Shake' | 'Tap';
 
 export type WankoParameterId =
   | 'PARAM_ANGLE_X'

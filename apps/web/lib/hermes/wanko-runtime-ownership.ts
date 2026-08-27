@@ -1,4 +1,4 @@
-export interface WankoMotionTarget {
+interface WankoMotionTarget {
   group: string;
   index: number;
 }

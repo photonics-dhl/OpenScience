@@ -1,4 +1,4 @@
-export const CANDIDATE_EVALUATION_ERROR_CODES = [
+const CANDIDATE_EVALUATION_ERROR_CODES = [
   'locator_miss',
   'parser_exit',
   'timeout',
@@ -6,8 +6,8 @@ export const CANDIDATE_EVALUATION_ERROR_CODES = [
   'invalid_output',
 ] as const;
 
-export type CandidateEvaluationErrorCode = (typeof CANDIDATE_EVALUATION_ERROR_CODES)[number];
-export type CandidateEvaluationStatus = 'succeeded' | 'needs_review' | 'failed';
+type CandidateEvaluationErrorCode = (typeof CANDIDATE_EVALUATION_ERROR_CODES)[number];
+type CandidateEvaluationStatus = 'succeeded' | 'needs_review' | 'failed';
 
 export interface CandidateIdentity {
   name: string;

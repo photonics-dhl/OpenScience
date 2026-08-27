@@ -4,7 +4,7 @@ import { cn } from '@/lib/utils';
 import { ProductRouteNavigation } from '@/components/navigation/ProductRouteNavigation';
 import { ShellHeader, SkipLink } from './ShellPrimitives';
 
-export interface WorkspaceShellProps extends React.HTMLAttributes<HTMLDivElement> {
+interface WorkspaceShellProps extends React.HTMLAttributes<HTMLDivElement> {
   activeMobilePlane?: 'left' | 'main' | 'right';
   headerActions?: React.ReactNode;
   leftRail?: React.ReactNode;

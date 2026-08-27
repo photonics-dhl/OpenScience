@@ -4,7 +4,7 @@ import { createOpticalOglResourceLedger, type OpticalOglResourceCounts } from '.
 import { OPTICAL_ASSET_FLOW_FRAGMENT_SHADER } from './shaders/asset-flow';
 import { OPTICAL_FULLSCREEN_VERTEX_SHADER } from './shaders/fullscreen';
 
-export interface AssetFlowSample {
+interface AssetFlowSample {
   ambientPhase: number;
   aspect: number;
   localStrength: number;

@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react';
 import { useTranslations } from 'next-intl';
 
-export interface ObjectHeaderProps {
+interface ObjectHeaderProps {
   objectId: string;
   title: string;
   version: number;

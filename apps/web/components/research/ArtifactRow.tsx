@@ -1,4 +1,4 @@
-export interface ArtifactRowProps {
+interface ArtifactRowProps {
   meta?: string;
   name: string;
   status: string;

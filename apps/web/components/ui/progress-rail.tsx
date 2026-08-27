@@ -7,7 +7,7 @@ import { cn } from '@/lib/utils';
 import { Button } from './button';
 import { StatusBadge, type StatusBadgeStatus } from './status-badge';
 
-export type ProgressRailState = Extract<
+type ProgressRailState = Extract<
   StatusBadgeStatus,
   | 'queued'
   | 'uploading'
@@ -20,7 +20,7 @@ export type ProgressRailState = Extract<
   | 'failed_blocked'
 >;
 
-export interface ProgressRailProps extends React.HTMLAttributes<HTMLElement> {
+interface ProgressRailProps extends React.HTMLAttributes<HTMLElement> {
   current: number;
   total: number;
   state: ProgressRailState;

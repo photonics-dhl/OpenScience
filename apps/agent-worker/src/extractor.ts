@@ -12,14 +12,14 @@ export interface ExtractedCore {
   reproducibility: string;
 }
 
-export interface ExtractedFieldProposal {
+interface ExtractedFieldProposal {
   summary: string;
   sourceQuote: string;
   sourceLocator?: string;
   needsMoreInformation: boolean;
 }
 
-export interface ExtractedProposal {
+interface ExtractedProposal {
   schemaVersion: string;
   fields: Record<(typeof SDF_CORE_FIELDS)[number], ExtractedFieldProposal>;
 }
@@ -43,7 +43,7 @@ export const sdfCoreGuard: SchemaGuard<ExtractedCore> = (v: unknown): v is Extra
   return true;
 };
 
-export const sdfProposalGuard: SchemaGuard<ExtractedProposal> = (value: unknown): value is ExtractedProposal => {
+const sdfProposalGuard: SchemaGuard<ExtractedProposal> = (value: unknown): value is ExtractedProposal => {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
   const proposal = value as Record<string, unknown>;
   if (proposal.schemaVersion !== SDF_CORE_VERSION || !proposal.fields || typeof proposal.fields !== 'object' || Array.isArray(proposal.fields)) return false;

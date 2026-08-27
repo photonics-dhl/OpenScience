@@ -10,8 +10,17 @@
     "apps/api": {
       "ignoreDependencies": ["archiver", "@types/archiver"]
     },
+    "apps/agent-worker": {
+      "entry": ["src/index.ts", "src/parser-service.ts"],
+      "project": ["src/**/*.ts", "test/**/*.ts"],
+      "ignoreDependencies": ["mammoth", "pdf-parse"]
+    },
     "apps/web": {
       "project": ["app/**/*.{ts,tsx}", "components/**/*.{ts,tsx}", "lib/**/*.{ts,tsx}", "*.{ts,mjs}"]
+    },
+    "infra/parser-candidates/liteparse": {
+      "entry": ["runner.mjs"],
+      "project": ["*.mjs"]
     },
     "apps/*": {
       "entry": ["src/index.ts"],

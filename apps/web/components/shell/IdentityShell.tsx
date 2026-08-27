@@ -4,7 +4,7 @@ import { cn } from '@/lib/utils';
 import { ProductRouteNavigation } from '@/components/navigation/ProductRouteNavigation';
 import { ShellHeader, SkipLink } from './ShellPrimitives';
 
-export interface IdentityShellProps extends React.HTMLAttributes<HTMLDivElement> {
+interface IdentityShellProps extends React.HTMLAttributes<HTMLDivElement> {
   context?: React.ReactNode;
   mainClassName?: string;
   navigationLabel?: string;

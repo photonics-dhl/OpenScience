@@ -242,12 +242,6 @@ export function HermesWorkspaceStageProvider({ children }: { children: React.Rea
   );
 }
 
-export function useHermesWorkspaceStage() {
-  const context = React.useContext(HermesWorkspaceStageContext);
-  if (!context) throw new Error('HermesDockAnchor must be rendered within HermesWorkspaceStageProvider');
-  return context;
-}
-
 export function useOptionalHermesWorkspaceStage() {
   return React.useContext(HermesWorkspaceStageContext);
 }

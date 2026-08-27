@@ -7,7 +7,6 @@ import { cn } from '@/lib/utils';
 
 const ContextMenu = ContextMenuPrimitive.Root;
 const ContextMenuTrigger = ContextMenuPrimitive.Trigger;
-const ContextMenuPortal = ContextMenuPrimitive.Portal;
 const ContextMenuGroup = ContextMenuPrimitive.Group;
 
 const ContextMenuContent = React.forwardRef<
@@ -55,7 +54,6 @@ export {
   ContextMenuGroup,
   ContextMenuItem,
   ContextMenuLabel,
-  ContextMenuPortal,
   ContextMenuSeparator,
   ContextMenuShortcut,
   ContextMenuTrigger,

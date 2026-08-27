@@ -36,6 +36,13 @@ const research = {
 } as const;
 
 describe('Optical Editorial public reading surface', () => {
+  it('retains the downstream LegacyOverviewTab compatibility export', async () => {
+    const { LegacyOverviewTab } = await import('../components/public/PublicVersionPage');
+    const markup = renderToStaticMarkup(<LegacyOverviewTab research={research as never} />);
+    expect(markup).toContain('class="pub-article"');
+    expect(markup).toContain('class="copy-btn"');
+  });
+
   it('proves identity, license, citation and Insight before deep navigation', async () => {
     const { PublicReadingSurface } = await import('../components/public/PublicVersionPage');
     const markup = renderToStaticMarkup(<PublicReadingSurface research={research as never} />);

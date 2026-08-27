@@ -7,7 +7,7 @@ import {
 } from './motion-mixer';
 
 export type HermesPetVisualState = 'idle' | 'guiding' | 'suggesting' | 'scanning' | 'awaiting_approval' | 'failed';
-export type HermesPetGesture = 'rest' | 'observe' | 'blink' | 'page-flick' | 'citation-swish' | 'evidence-check' | 'focus' | 'failed-settle' | 'still';
+type HermesPetGesture = 'rest' | 'observe' | 'blink' | 'page-flick' | 'citation-swish' | 'evidence-check' | 'focus' | 'failed-settle' | 'still';
 
 export interface HermesMotionInput {
   action?: HermesActionId;

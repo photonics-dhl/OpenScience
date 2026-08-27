@@ -4,7 +4,7 @@ import { cn } from '@/lib/utils';
 import { ProductRouteNavigation, type ProductRouteId } from '@/components/navigation/ProductRouteNavigation';
 import { ShellHeader, SkipLink } from './ShellPrimitives';
 
-export interface DashboardShellProps extends React.HTMLAttributes<HTMLDivElement> {
+interface DashboardShellProps extends React.HTMLAttributes<HTMLDivElement> {
   headerActions?: React.ReactNode;
   mainClassName?: string;
   navigationLabel?: string;

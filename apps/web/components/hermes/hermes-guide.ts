@@ -1,7 +1,7 @@
 import type { HermesRailTask } from './HermesRail';
 import { hermesTaskHref } from './hermes-state';
 
-export type HermesGuideKind = 'actionable-task' | 'continue-research' | 'neutral';
+type HermesGuideKind = 'actionable-task' | 'continue-research' | 'neutral';
 
 export interface HermesGuideSuggestion {
   kind: HermesGuideKind;

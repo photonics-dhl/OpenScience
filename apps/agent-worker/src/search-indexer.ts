@@ -31,7 +31,7 @@ export interface SearchIndexJob {
   claimIdsByBlockId?: Readonly<Record<string, readonly string[]>>;
 }
 
-export interface DenseEmbeddingDraft {
+interface DenseEmbeddingDraft {
   chunkId: string;
   vector: Buffer;
   vectorSha256: string;
@@ -78,7 +78,7 @@ export interface SearchIndexStorage {
   }): Promise<{ activated: boolean }>;
 }
 
-export type SearchIndexResult =
+type SearchIndexResult =
   | { status: 'succeeded'; chunkCount: number; denseChunkCount: number; activated: boolean }
   | { status: 'needs_review'; chunkCount: number; errorCode: 'embedding_unavailable' | 'no_searchable_content' };
 

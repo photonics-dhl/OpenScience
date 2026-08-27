@@ -3362,52 +3362,6 @@ body [data-reading-role='reading'] {
   font-variant-numeric: tabular-nums;
 }
 
-/* ===== Landing hero 符号呼吸动效（仅 opacity/transform 级；reduced-motion 不加载） ===== */
-@keyframes hero-symbol-breathe {
-  from { transform: scale(1); }
-  to { transform: scale(1.015); }
-}
-
-@media (prefers-reduced-motion: no-preference) {
-  .hero-symbol-breathe {
-    animation: hero-symbol-breathe 12s ease-in-out infinite alternate;
-  }
-}
-
-/* ===== Task 9: landing 进入动效（fade+rise stagger；reduced-motion 整体不加载） ===== */
-@keyframes landing-reveal {
-  from { opacity: 0; transform: translateY(24px); }
-  to { opacity: 1; transform: none; }
-}
-
-@keyframes landing-symbol-in {
-  from { opacity: 0; }
-  to { opacity: 1; }
-}
-
-@media (prefers-reduced-motion: no-preference) {
-  /* 首屏元素：挂载即播，animation-delay 由元素 inline style 控制 stagger。
-     opacity:0 与 forwards 保证 delay 期间与播完后状态正确。 */
-  .landing-reveal {
-    opacity: 0;
-    animation: landing-reveal 0.7s var(--ease-entrance) forwards;
-  }
-
-  .landing-symbol-in {
-    opacity: 0;
-    animation: landing-symbol-in 1.2s ease-out forwards;
-  }
-
-  /* 滚动进入：html.js 门控（无 JS 时内容始终可见），由 InView 组件加 --seen 触发 */
-  html.js .landing-inview {
-    opacity: 0;
-  }
-
-  html.js .landing-inview--seen {
-    animation: landing-reveal 0.7s var(--ease-entrance) forwards;
-  }
-}
-
 /* Anchored field guidance is part of the research margin, not a floating
    viewport layer. Reserve its full reading height so actions never cover SDF
    text, inputs, or evidence controls. */

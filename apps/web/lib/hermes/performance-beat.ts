@@ -31,7 +31,7 @@ interface SpeechDefinition {
 
 // One short sentence needs enough time to read and reach its dismiss target,
 // while remaining visibly subordinate to the research workspace.
-export const HERMES_AUTONOMOUS_CUE_VISIBLE_MS = 4_000;
+const HERMES_AUTONOMOUS_CUE_VISIBLE_MS = 4_000;
 
 const speechByAction: Partial<Record<HermesActionId, SpeechDefinition>> = {
   'cap-check': { keys: ['performance.capCheck.one', 'performance.capCheck.two'], tone: 'focused' },

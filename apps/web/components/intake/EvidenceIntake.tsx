@@ -7,7 +7,7 @@ import { useTranslations } from 'next-intl';
 import { MaterialQueue } from './MaterialQueue';
 import { createIntakeMaterials, setPrimaryMaterial, type IntakeMaterial, type MaterialRole } from './intake-model';
 
-export const EVIDENCE_ACCEPT = '.pdf,.doc,.docx,.tex,.zip,.md,.markdown,.png,.jpg,.jpeg,.webp,.svg,.csv,.tsv,.json,.yaml,.yml,.ipynb,.py,.r';
+const EVIDENCE_ACCEPT = '.pdf,.doc,.docx,.tex,.zip,.md,.markdown,.png,.jpg,.jpeg,.webp,.svg,.csv,.tsv,.json,.yaml,.yml,.ipynb,.py,.r';
 
 export function EvidenceIntake({ materials, onChange, onRetry }: {
   materials: IntakeMaterial[];

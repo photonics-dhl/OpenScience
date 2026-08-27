@@ -1,7 +1,7 @@
 import type { AiGateway, SchemaGuard } from '@openscience/ai-gateway';
 import { parseWorkspaceGuidePayload, type AgentDeps, type WorkspaceGuidePayload } from '@openscience/domain';
 
-export type WorkspaceGuideIntent = 'open-task' | 'open-ro' | 'start-import';
+type WorkspaceGuideIntent = 'open-task' | 'open-ro' | 'start-import';
 
 export interface WorkspaceGuideResult extends Record<string, unknown> {
   summary: string;

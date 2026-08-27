@@ -16,13 +16,13 @@ export interface HermesPartDefinition {
   pivot: { x: number; y: number };
 }
 
-export interface HermesRigidPartPose {
+interface HermesRigidPartPose {
   angle: number;
   x: number;
   y: number;
 }
 
-export interface HermesFacePose {
+interface HermesFacePose {
   textureMix: number;
 }
 

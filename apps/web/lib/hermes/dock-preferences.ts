@@ -1,6 +1,6 @@
 import { resolveHermesSettledDock } from './companion-placement';
 
-export type HermesActivityLevel = 'quiet' | 'balanced' | 'active';
+type HermesActivityLevel = 'quiet' | 'balanced' | 'active';
 export type HermesViewportClass = 'desktop' | 'mobile';
 
 export interface HermesDockPreferences {

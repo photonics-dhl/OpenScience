@@ -1,5 +1,5 @@
-export const PRODUCT_SURFACE_STATES = ['loading', 'empty', 'error', 'forbidden', 'ready'] as const;
-export type ProductSurfaceState = (typeof PRODUCT_SURFACE_STATES)[number];
+const PRODUCT_SURFACE_STATES = ['loading', 'empty', 'error', 'forbidden', 'ready'] as const;
+type ProductSurfaceState = (typeof PRODUCT_SURFACE_STATES)[number];
 
 export type ProductSurfaceId =
   | 'overview'

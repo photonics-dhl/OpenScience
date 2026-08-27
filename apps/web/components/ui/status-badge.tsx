@@ -34,7 +34,7 @@ const statusTone: Record<StatusBadgeStatus, string> = {
   rejected: 'bg-status-neutral-bg text-status-neutral-text',
 };
 
-export interface StatusBadgeProps extends React.HTMLAttributes<HTMLSpanElement> {
+interface StatusBadgeProps extends React.HTMLAttributes<HTMLSpanElement> {
   status: StatusBadgeStatus;
 }
 

@@ -1,6 +1,6 @@
 import * as React from 'react';
 
-export interface ResearchIdentityPanelProps {
+interface ResearchIdentityPanelProps {
   description: string;
   eyebrow: string;
   intent: 'create' | 'return';

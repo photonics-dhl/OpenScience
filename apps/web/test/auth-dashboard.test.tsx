@@ -83,7 +83,7 @@ import {
   planMaterialLogicalPaths,
   safeReturnTo,
 } from '../lib/api';
-import { LoginForm } from '../components/auth/LoginForm';
+import DefaultLoginForm, { LoginForm } from '../components/auth/LoginForm';
 import { ResearchIdentityPanel } from '../components/auth/ResearchIdentityPanel';
 import { SignupCodeForm, validateSignupPassword } from '../components/auth/SignupCodeForm';
 import { ContinueResearch } from '../components/dashboard/ContinueResearch';
@@ -98,6 +98,11 @@ afterEach(() => {
 });
 
 describe('auth API contract', () => {
+  it('retains the rolling-sync default LoginForm export', () => {
+    const markup = renderToStaticMarkup(createElement(DefaultLoginForm, { returnTo: '/dashboard' }));
+    expect(markup).toContain('data-auth-flow="login"');
+  });
+
   it('attaches every selected source file to the initial research-object commit', async () => {
     const create = vi.fn().mockResolvedValue({ researchObject: { id: 'ro-1', workspaceId: 'ws-1', version: 1 } });
     const upload = vi

@@ -37,7 +37,7 @@ const DATA_EXTENSIONS = new Set(['csv', 'tsv', 'json', 'yaml', 'yml']);
 const CODE_EXTENSIONS = new Set(['ipynb', 'py', 'r']);
 const MANUSCRIPT_EXTENSIONS = new Set(['pdf', 'doc', 'docx', 'tex', 'zip', 'md', 'markdown']);
 
-export function inferMaterialRole(file: File): MaterialRole {
+function inferMaterialRole(file: File): MaterialRole {
   const extension = file.name.split('.').pop()?.toLowerCase() ?? '';
   if (FIGURE_EXTENSIONS.has(extension)) return 'figure';
   if (DATA_EXTENSIONS.has(extension)) return 'data';

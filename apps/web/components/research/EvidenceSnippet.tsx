@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react';
 
-export interface EvidenceSnippetProps {
+interface EvidenceSnippetProps {
   children: ReactNode;
   label: string;
   source: string;

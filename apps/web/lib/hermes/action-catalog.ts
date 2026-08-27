@@ -116,7 +116,4 @@ export const HERMES_SIGNATURE_ACTIONS: readonly HermesActionId[] = [
 
 export {
   resolveWankoPerformance,
-  type WankoMotionGroup,
-  type WankoParameterId,
-  type WankoPerformance,
 } from './wanko-action-director';

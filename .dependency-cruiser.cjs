@@ -1,3 +1,5 @@
+const path = require('node:path');
+
 /** @type {import('dependency-cruiser').IConfiguration} */
 module.exports = {
   forbidden: [
@@ -31,7 +33,11 @@ module.exports = {
           '(^|/)(test|__tests__)/', // 测试文件本就是入口
           '\\.(spec|test)\\.[jt]sx?$',
           '[/.-]config\\.[cm]?[jt]s$', // vitest/next 等配置文件由工具加载
-          'app/(layout|page)\\.tsx$', // Next.js App Router 入口由框架加载
+          '/(layout|page|route|loading|error|not-found|template|default)\\.[jt]sx?$', // Next.js App Router 入口由框架加载
+          '^apps/web/scripts/', // package scripts are command entrypoints
+          '^packages/ui/src/index\\.ts$', // package entrypoint retained while the shared UI package is staged
+          '^apps/sandbox-controller/src/index\\.ts$', // declared app entrypoint; implementation currently lives in science-worker
+          '^(packages/storage/src/types|packages/observability/src/audit|apps/agent-worker/src/parsers/types)\\.ts$', // type-only contract modules are not roots
         ],
       },
       to: {},
@@ -40,13 +46,29 @@ module.exports = {
       name: 'not-to-dev-dep',
       severity: 'error',
       comment: '源码（非测试/配置）不得依赖 devDependencies',
-      from: { pathNot: ['(^|/)(test|__tests__)/', '\\.(spec|test)\\.[jt]sx?$', '[/.-]config\\.[cm]?[jt]s$'] },
+      from: {
+        pathNot: [
+          '(^|/)(test|__tests__)/',
+          '\\.(spec|test)\\.[jt]sx?$',
+          '[/.-]config\\.[cm]?[jt]s$',
+          '^apps/web/scripts/',
+        ],
+      },
       to: { dependencyTypes: ['npm-dev'] },
     },
   ],
   options: {
+    // The Web workspace owns the monorepo's only path alias (`@/*`). Loading its
+    // tsconfig keeps those dependency edges visible to circular/orphan rules.
+    tsConfig: { fileName: path.resolve('apps/web/tsconfig.json') },
     doNotFollow: { path: 'node_modules' },
-    exclude: { path: ['(^|/)(dist|\\.next)(/|$)', '\\.d\\.ts$'] },
+    exclude: {
+      path: [
+        '(^|/)(dist|\\.next)(/|$)',
+        '^packages/search/(src/)?generated/',
+        '\\.d\\.ts$',
+      ],
+    },
     enhancedResolveOptions: {
       exportsFields: ['exports'],
       conditionNames: ['import', 'require', 'node', 'default'],

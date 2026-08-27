@@ -4,7 +4,7 @@ import { createOpticalOglResourceLedger, type OpticalOglResourceCounts } from '.
 import { OPTICAL_FLOW_FRAGMENT_SHADER } from './shaders/flow';
 import { OPTICAL_FULLSCREEN_VERTEX_SHADER } from './shaders/fullscreen';
 
-export interface OpticalFlowSample {
+interface OpticalFlowSample {
   follow: number;
   pointer: [number, number];
   velocity: [number, number];

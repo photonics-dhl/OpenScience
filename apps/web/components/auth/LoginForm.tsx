@@ -97,4 +97,6 @@ export function LoginForm({ returnTo, nextPath }: LoginFormProps) {
 }
 
 // Compatibility export for a pre-existing server-side /login route during rolling sync.
-export default LoginForm;
+export default function LoginFormCompatibility(props: LoginFormProps) {
+  return <LoginForm {...props} />;
+}

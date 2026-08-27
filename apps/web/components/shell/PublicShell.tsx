@@ -3,7 +3,7 @@ import * as React from 'react';
 import { cn } from '@/lib/utils';
 import { ShellHeader, SkipLink } from './ShellPrimitives';
 
-export interface PublicShellProps extends React.HTMLAttributes<HTMLDivElement> {
+interface PublicShellProps extends React.HTMLAttributes<HTMLDivElement> {
   headerActions?: React.ReactNode;
   mainClassName?: string;
   navigationLabel?: string;

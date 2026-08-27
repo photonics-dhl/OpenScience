@@ -1,6 +1,6 @@
 import type { HermesActionId } from './action-catalog';
 
-export type HermesContextActionGroup = 'companion' | 'research';
+type HermesContextActionGroup = 'companion' | 'research';
 export type HermesContextActionKey =
   | 'greet'
   | 'encourage'
