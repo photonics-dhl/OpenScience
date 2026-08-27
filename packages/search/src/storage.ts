@@ -1,3 +1,5 @@
+import { createHash } from 'node:crypto';
+
 import { validateSourceLocator, type SourceLocator } from '@openscience/domain';
 
 import { Prisma, type PrismaClient } from '../generated/client';
@@ -7,6 +9,8 @@ import type {
   LexicalHydrationSet,
   LexicalScoringDocument,
 } from './lexical';
+import type { DenseCandidateSet, DenseModelIdentity, DenseStorageFailure } from './dense';
+import type { QueryMetricInput } from './service';
 import { tokenizeSearchText } from './tokenizer';
 import type { SearchChunkDraft } from './types';
 
@@ -20,6 +24,9 @@ const MAX_LEXICAL_CORPUS_DOCUMENTS = 10_000;
 const MAX_BM25_SCORE_CELLS = 1_000_000;
 const MAX_HYDRATED_PAYLOAD_BYTES = 8 * 1_024 * 1_024;
 const MAX_CHUNKS_PER_UPSERT = 100;
+const MAX_DENSE_CORPUS_DOCUMENTS = 10_000;
+const EMBEDDING_DIMENSION = 1_024;
+const BGE_M3_REVISION = '5617a9f61b028005a4858fdac845db406aefb181';
 const MAX_UPSERT_TEXT_CHARACTERS = 8 * 1_024 * 1_024;
 const MAX_UPSERT_LOCATORS = 10_000;
 const MAX_UPSERT_CLAIM_CHARACTERS = 1_000_000;
@@ -53,6 +60,19 @@ interface CountRow {
 
 interface PayloadSizeRow {
   payload_bytes: bigint | number;
+}
+
+interface DenseRow {
+  id: string;
+  tenant_id: string;
+  dimension: number;
+  vector: Buffer;
+  vector_sha256: string;
+  norm: number;
+}
+
+interface ModelIdentityRow {
+  id: string;
 }
 
 export interface UpsertSearchChunksInput {
@@ -164,6 +184,45 @@ function validateUpsertBatch(chunks: readonly SearchChunkDraft[]): void {
       || locatorCount > MAX_UPSERT_LOCATORS
       || claimCharacters > MAX_UPSERT_CLAIM_CHARACTERS) throw new Error('chunk batch payload limit exceeded');
   }
+}
+
+function decodeStoredVector(row: DenseRow): Float32Array | undefined {
+  if (
+    !HASH_PATTERN.test(row.id)
+    || !UUID_PATTERN.test(row.tenant_id)
+    || row.dimension !== EMBEDDING_DIMENSION
+    || !Buffer.isBuffer(row.vector)
+    || row.vector.length !== EMBEDDING_DIMENSION * Float32Array.BYTES_PER_ELEMENT
+    || !HASH_PATTERN.test(row.vector_sha256)
+    || createHash('sha256').update(row.vector).digest('hex') !== row.vector_sha256
+    || !Number.isFinite(row.norm)
+    || Math.abs(row.norm - 1) > 1e-4
+  ) return undefined;
+  const vector = new Float32Array(EMBEDDING_DIMENSION);
+  let squaredNorm = 0;
+  for (let offset = 0; offset < row.vector.length; offset += Float32Array.BYTES_PER_ELEMENT) {
+    const value = row.vector.readFloatLE(offset);
+    if (!Number.isFinite(value)) return undefined;
+    vector[offset / Float32Array.BYTES_PER_ELEMENT] = value;
+    squaredNorm += value * value;
+  }
+  return Number.isFinite(squaredNorm) && Math.abs(Math.sqrt(squaredNorm) - 1) <= 1e-4
+    ? vector
+    : undefined;
+}
+
+function validateMetric(metric: QueryMetricInput): void {
+  assertUuid(metric.tenantId, 'tenantId');
+  if (!HASH_PATTERN.test(metric.queryHash)
+    || typeof metric.lexicalAvailable !== 'boolean' || typeof metric.denseAvailable !== 'boolean'
+    || !Number.isInteger(metric.resultCount) || metric.resultCount < 0 || metric.resultCount > MAX_RESULT_LIMIT
+    || !Number.isInteger(metric.totalLatencyMs) || metric.totalLatencyMs < 0 || metric.totalLatencyMs > 3_600_000
+    || [metric.lexicalLatencyMs, metric.denseLatencyMs].some((value) => value !== undefined
+      && (!Number.isInteger(value) || value < 0 || value > 3_600_000))
+    || (metric.errorCode !== undefined && ![
+      'embedding_unavailable', 'dense_capacity_exceeded', 'lexical_unavailable', 'model_identity_unavailable',
+      'payload_capacity_exceeded', 'search_unavailable', 'search_storage_unavailable',
+    ].includes(metric.errorCode))) throw new Error('query metric is outside storage bounds');
 }
 
 export function buildLexicalCandidateQuery(input: {
@@ -406,5 +465,107 @@ export class SearchStorage {
     } catch {
       return { status: 'unavailable', code: 'search_storage_unavailable' };
     }
+  }
+
+  async denseCandidates(input: {
+    tenantId: string;
+    modelIdentity: DenseModelIdentity;
+  }): Promise<DenseCandidateSet | DenseStorageFailure> {
+    assertUuid(input.tenantId, 'tenantId');
+    assertUuid(input.modelIdentity.modelVersionId, 'modelVersionId');
+    if (input.modelIdentity.modelRevision !== BGE_M3_REVISION
+      || !HASH_PATTERN.test(input.modelIdentity.sourceSha256)
+      || !HASH_PATTERN.test(input.modelIdentity.packageFreezeSha256)
+      || !HASH_PATTERN.test(input.modelIdentity.modelManifestSha256)) {
+      throw new Error('model identity is invalid');
+    }
+    try {
+      return await this.client.$transaction(async (transaction) => {
+        await transaction.$executeRaw(Prisma.sql`
+          SELECT set_config('statement_timeout', ${String(STATEMENT_TIMEOUT_MILLISECONDS)}, true)
+        `);
+        const modelRows = await transaction.$queryRaw<ModelIdentityRow[]>(Prisma.sql`
+          SELECT "id"::text AS "id"
+          FROM "search_model_versions"
+          WHERE "id" = ${input.modelIdentity.modelVersionId}::uuid
+            AND "provider" = 'BAAI'
+            AND "model" = 'bge-m3'
+            AND "revision" = ${input.modelIdentity.modelRevision}
+            AND "dimension" = ${EMBEDDING_DIMENSION}
+            AND "source_sha256" = ${input.modelIdentity.sourceSha256}
+            AND "package_freeze_sha256" = ${input.modelIdentity.packageFreezeSha256}
+            AND "model_manifest_sha256" = ${input.modelIdentity.modelManifestSha256}
+            AND "status" = 'active'
+          LIMIT 2
+        `);
+        if (modelRows.length !== 1 || modelRows[0]?.id !== input.modelIdentity.modelVersionId) {
+          return { status: 'unavailable', code: 'model_identity_unavailable' } as const;
+        }
+        const rows = await transaction.$queryRaw<DenseRow[]>(Prisma.sql`
+          SELECT chunk."id", chunk."workspace_id"::text AS tenant_id,
+                 embedding."dimension", embedding."vector", embedding."vector_sha256", embedding."norm"
+          FROM "search_embeddings" AS embedding
+          JOIN "search_chunks" AS chunk
+            ON chunk."workspace_id" = embedding."workspace_id" AND chunk."id" = embedding."chunk_id"
+          JOIN "search_model_versions" AS model
+            ON model."id" = embedding."model_version_id"
+          WHERE chunk."workspace_id" = ${input.tenantId}::uuid
+            AND chunk."active" = true
+            AND model."id" = ${input.modelIdentity.modelVersionId}::uuid
+            AND model."provider" = 'BAAI'
+            AND model."model" = 'bge-m3'
+            AND model."revision" = ${input.modelIdentity.modelRevision}
+            AND model."dimension" = ${EMBEDDING_DIMENSION}
+            AND model."source_sha256" = ${input.modelIdentity.sourceSha256}
+            AND model."package_freeze_sha256" = ${input.modelIdentity.packageFreezeSha256}
+            AND model."model_manifest_sha256" = ${input.modelIdentity.modelManifestSha256}
+            AND model."status" = 'active'
+          ORDER BY chunk."id" ASC
+          LIMIT ${MAX_DENSE_CORPUS_DOCUMENTS + 1}
+        `);
+        if (rows.length > MAX_DENSE_CORPUS_DOCUMENTS) {
+          return { status: 'unavailable', code: 'dense_capacity_exceeded' } as const;
+        }
+        const candidates: DenseCandidateSet['candidates'] = [];
+        let needsReviewCount = 0;
+        for (const row of rows) {
+          const vector = decodeStoredVector(row);
+          if (row.tenant_id !== input.tenantId || vector === undefined) {
+            needsReviewCount += 1;
+            continue;
+          }
+          candidates.push({ id: row.id, tenantId: row.tenant_id, vector });
+        }
+        return { status: 'ok', candidates, needsReviewCount } as const;
+      }, {
+        isolationLevel: Prisma.TransactionIsolationLevel.RepeatableRead,
+        maxWait: 2_000,
+        timeout: 5_000,
+      });
+    } catch {
+      return { status: 'unavailable', code: 'search_storage_unavailable' };
+    }
+  }
+
+  async recordQueryMetric(metric: QueryMetricInput): Promise<void> {
+    validateMetric(metric);
+    await this.client.$transaction(async (transaction) => {
+      await transaction.$executeRaw(Prisma.sql`
+        SELECT set_config('statement_timeout', '500', true)
+      `);
+      await transaction.searchQueryMetric.create({
+        data: {
+          workspaceId: metric.tenantId,
+          queryHash: metric.queryHash,
+          lexicalAvailable: metric.lexicalAvailable,
+          denseAvailable: metric.denseAvailable,
+          resultCount: metric.resultCount,
+          lexicalLatencyMs: metric.lexicalLatencyMs,
+          denseLatencyMs: metric.denseLatencyMs,
+          totalLatencyMs: metric.totalLatencyMs,
+          errorCode: metric.errorCode,
+        },
+      });
+    }, { maxWait: 500, timeout: 1_000 });
   }
 }

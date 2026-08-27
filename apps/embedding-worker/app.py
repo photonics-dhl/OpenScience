@@ -2,18 +2,22 @@ from __future__ import annotations
 
 import base64
 from collections.abc import Callable, Mapping, Sequence
+import hashlib
+import hmac
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import json
 import math
 import os
 from pathlib import Path
 import struct
+import sys
 import threading
 from typing import Any
 
 
 MODEL_REVISION = "5617a9f61b028005a4858fdac845db406aefb181"
 MODEL_ROOT = Path("/models/bge-m3")
+LOCK_ROOT = Path("/opt/bge-m3-lock")
 DIMENSION = 1024
 MAX_BATCH_SIZE = 16
 MAX_TEXT_CHARACTERS = 20_000
@@ -22,6 +26,43 @@ MAX_QUERY_TOKENS = 512
 MAX_CHUNK_TOKENS = 1024
 MAX_CONNECTIONS = 4
 SOCKET_TIMEOUT_SECONDS = 10
+HASH_FIELDS = {"sourceSha256", "packageFreezeSha256", "modelManifestSha256"}
+
+
+def _file_sha256(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as handle:
+        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def source_sha256() -> str:
+    digest = hashlib.sha256()
+    sources = (
+        ("app.py", Path(__file__)),
+        ("model-init.py", Path(__file__).with_name("model-init.py")),
+        ("requirements.lock", LOCK_ROOT / "requirements.lock"),
+    )
+    for label, path in sources:
+        payload = path.read_bytes()
+        digest.update(label.encode("ascii"))
+        digest.update(b"\0")
+        digest.update(len(payload).to_bytes(8, "big"))
+        digest.update(payload)
+    return digest.hexdigest()
+
+
+def load_runtime_identity(trusted_manifest: bytes) -> dict[str, str]:
+    calculated_source = source_sha256()
+    locked_source = (LOCK_ROOT / "source-sha256.txt").read_text(encoding="ascii").strip()
+    if len(locked_source) != 64 or not hmac.compare_digest(calculated_source, locked_source):
+        raise ValueError("runtime_identity_invalid")
+    return {
+        "sourceSha256": calculated_source,
+        "packageFreezeSha256": _file_sha256(LOCK_ROOT / "package-freeze.txt"),
+        "modelManifestSha256": hashlib.sha256(trusted_manifest).hexdigest(),
+    }
 
 
 def validate_request(value: Any, token_counter: Callable[[list[str]], list[int]]) -> tuple[str, list[str], list[int]]:
@@ -81,11 +122,23 @@ def _decode_body(body: bytes) -> Any:
 
 
 class EmbeddingApplication:
-    def __init__(self, model: Any, model_revision: str) -> None:
+    def __init__(self, model: Any, model_revision: str, runtime_identity: Mapping[str, str]) -> None:
         if model_revision != MODEL_REVISION:
             raise ValueError("model_revision_invalid")
+        if (
+            not isinstance(runtime_identity, Mapping)
+            or set(runtime_identity) != HASH_FIELDS
+            or any(
+                not isinstance(value, str)
+                or len(value) != 64
+                or any(character not in "0123456789abcdef" for character in value)
+                for value in runtime_identity.values()
+            )
+        ):
+            raise ValueError("runtime_identity_invalid")
         self.model = model
         self.model_revision = model_revision
+        self.runtime_identity = dict(runtime_identity)
         self.inference_slot = threading.BoundedSemaphore(value=1)
 
     def handle(self, method: str, path: str, body: bytes) -> tuple[int, dict[str, Any]]:
@@ -94,6 +147,7 @@ class EmbeddingApplication:
                 "schemaVersion": 1,
                 "status": "ready",
                 "modelRevision": self.model_revision,
+                **self.runtime_identity,
                 "dimension": DIMENSION,
                 "computePlatform": "cpu",
             }
@@ -128,6 +182,7 @@ class EmbeddingApplication:
         return 200, {
             "schemaVersion": 1,
             "modelRevision": self.model_revision,
+            **self.runtime_identity,
             "dimension": DIMENSION,
             "encoding": "base64-f32le",
             "vectors": encode_vectors(vectors),
@@ -247,11 +302,12 @@ def load_application() -> EmbeddingApplication:
     spec.loader.exec_module(model_init)
     trusted_manifest = (Path("/opt/bge-m3-seed") / model_init.MANIFEST_NAME).read_bytes()
     model_init.validate_model(MODEL_ROOT, trusted_manifest)
+    runtime_identity = load_runtime_identity(trusted_manifest)
 
     from FlagEmbedding import FlagAutoModel
 
     model = FlagAutoModel.from_finetuned(str(MODEL_ROOT), devices="cpu", use_fp16=False)
-    return EmbeddingApplication(BgeM3Model(model), MODEL_REVISION)
+    return EmbeddingApplication(BgeM3Model(model), MODEL_REVISION, runtime_identity)
 
 
 def main() -> None:
@@ -264,4 +320,9 @@ def main() -> None:
 
 
 if __name__ == "__main__":
-    main()
+    if sys.argv[1:] == ["--print-source-sha256"]:
+        print(source_sha256())
+    elif sys.argv[1:]:
+        raise SystemExit(2)
+    else:
+        main()

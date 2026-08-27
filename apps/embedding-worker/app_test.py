@@ -12,6 +12,11 @@ import unittest
 
 
 ROOT = Path(__file__).resolve().parent
+RUNTIME_IDENTITY = {
+    "sourceSha256": "1" * 64,
+    "packageFreezeSha256": "2" * 64,
+    "modelManifestSha256": "3" * 64,
+}
 
 
 def load_module(filename: str, name: str):
@@ -57,7 +62,9 @@ class EmbeddingWorkerTests(unittest.TestCase):
 
     def test_embeddings_endpoint_is_dense_normalized_and_purpose_specific(self) -> None:
         model = FakeModel()
-        application = self.app.EmbeddingApplication(model=model, model_revision=self.app.MODEL_REVISION)
+        application = self.app.EmbeddingApplication(
+            model=model, model_revision=self.app.MODEL_REVISION, runtime_identity=RUNTIME_IDENTITY,
+        )
 
         status, response = application.handle("POST", "/v1/embeddings", json.dumps({
             "schemaVersion": 1,
@@ -66,7 +73,13 @@ class EmbeddingWorkerTests(unittest.TestCase):
         }).encode("utf-8"))
 
         self.assertEqual(status, 200)
-        self.assertEqual(set(response), {"schemaVersion", "modelRevision", "dimension", "encoding", "vectors"})
+        self.assertEqual(set(response), {
+            "schemaVersion", "modelRevision", "sourceSha256", "packageFreezeSha256",
+            "modelManifestSha256", "dimension", "encoding", "vectors",
+        })
+        self.assertRegex(response["sourceSha256"], r"^[0-9a-f]{64}$")
+        self.assertRegex(response["packageFreezeSha256"], r"^[0-9a-f]{64}$")
+        self.assertRegex(response["modelManifestSha256"], r"^[0-9a-f]{64}$")
         self.assertEqual(response["dimension"], 1024)
         raw = base64.b64decode(response["vectors"][0], validate=True)
         vector = struct.unpack("<1024f", raw)
@@ -75,7 +88,9 @@ class EmbeddingWorkerTests(unittest.TestCase):
         self.assertEqual(model.calls, [("query", ["bounded query"])])
 
     def test_health_and_tokenize_contracts_are_strict(self) -> None:
-        application = self.app.EmbeddingApplication(model=FakeModel(), model_revision=self.app.MODEL_REVISION)
+        application = self.app.EmbeddingApplication(
+            model=FakeModel(), model_revision=self.app.MODEL_REVISION, runtime_identity=RUNTIME_IDENTITY,
+        )
         health_status, health = application.handle("GET", "/health", b"")
         token_status, tokens = application.handle("POST", "/v1/tokenize", json.dumps({
             "schemaVersion": 1,
@@ -86,6 +101,7 @@ class EmbeddingWorkerTests(unittest.TestCase):
             "schemaVersion": 1,
             "status": "ready",
             "modelRevision": self.app.MODEL_REVISION,
+            **RUNTIME_IDENTITY,
             "dimension": 1024,
             "computePlatform": "cpu",
         }))
@@ -97,6 +113,26 @@ class EmbeddingWorkerTests(unittest.TestCase):
                 with self.assertRaisesRegex(ValueError, "vector_invalid"):
                     self.app.encode_vectors([vector])
 
+    def test_runtime_identity_is_derived_and_source_locked(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            original_lock_root = self.app.LOCK_ROOT
+            try:
+                lock_root = Path(temporary)
+                self.app.LOCK_ROOT = lock_root
+                (lock_root / "requirements.lock").write_text("bounded==1\n", encoding="ascii")
+                (lock_root / "package-freeze.txt").write_text("bounded==1\n", encoding="ascii")
+                source_hash = self.app.source_sha256()
+                (lock_root / "source-sha256.txt").write_text(source_hash + "\n", encoding="ascii")
+                identity = self.app.load_runtime_identity(b"trusted-model-manifest")
+                self.assertEqual(identity["sourceSha256"], source_hash)
+                self.assertRegex(identity["packageFreezeSha256"], r"^[0-9a-f]{64}$")
+                self.assertRegex(identity["modelManifestSha256"], r"^[0-9a-f]{64}$")
+                (lock_root / "source-sha256.txt").write_text("0" * 64, encoding="ascii")
+                with self.assertRaisesRegex(ValueError, "runtime_identity_invalid"):
+                    self.app.load_runtime_identity(b"trusted-model-manifest")
+            finally:
+                self.app.LOCK_ROOT = original_lock_root
+
     def test_allows_only_one_model_operation_at_a_time(self) -> None:
         entered = threading.Event()
         release = threading.Event()
@@ -107,7 +143,9 @@ class EmbeddingWorkerTests(unittest.TestCase):
                 release.wait(timeout=2)
                 return super().token_counts(texts)
 
-        application = self.app.EmbeddingApplication(model=BlockingModel(), model_revision=self.app.MODEL_REVISION)
+        application = self.app.EmbeddingApplication(
+            model=BlockingModel(), model_revision=self.app.MODEL_REVISION, runtime_identity=RUNTIME_IDENTITY,
+        )
         body = json.dumps({"schemaVersion": 1, "purpose": "query", "texts": ["bounded"]}).encode("utf-8")
         first_result: list[tuple[int, dict]] = []
         first = threading.Thread(target=lambda: first_result.append(application.handle("POST", "/v1/tokenize", body)))
@@ -159,6 +197,7 @@ class ModelInitializationTests(unittest.TestCase):
         self.assertRegex(dockerfile.splitlines()[0], r"^FROM python:3\.12-slim@sha256:[0-9a-f]{64}$")
         self.assertIn("--checksum=sha256:35e33a08e8ed5e299eabbe3bc23518eb66a424dd29ee08fb3802bf9aef9e9bf2", dockerfile)
         self.assertIn("--requirement /tmp/requirements.lock", dockerfile)
+        self.assertIn("--print-source-sha256", dockerfile)
         self.assertIn("USER 10001:10001", dockerfile)
         self.assertNotIn("COPY --chmod", dockerfile)
 

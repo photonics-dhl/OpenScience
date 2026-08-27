@@ -3,6 +3,9 @@ import { describe, expect, it, vi } from 'vitest';
 import { EmbeddingClient } from '../src/embedder';
 
 const MODEL_REVISION = '5617a9f61b028005a4858fdac845db406aefb181';
+const SOURCE_SHA256 = '1'.repeat(64);
+const PACKAGE_FREEZE_SHA256 = '2'.repeat(64);
+const MODEL_MANIFEST_SHA256 = '3'.repeat(64);
 
 function encodedUnitVector(): string {
   const bytes = Buffer.alloc(1024 * Float32Array.BYTES_PER_ELEMENT);
@@ -14,6 +17,9 @@ function validResponse(overrides: Record<string, unknown> = {}): Response {
   return new Response(JSON.stringify({
     schemaVersion: 1,
     modelRevision: MODEL_REVISION,
+    sourceSha256: SOURCE_SHA256,
+    packageFreezeSha256: PACKAGE_FREEZE_SHA256,
+    modelManifestSha256: MODEL_MANIFEST_SHA256,
     dimension: 1024,
     encoding: 'base64-f32le',
     vectors: [encodedUnitVector()],
@@ -57,7 +63,13 @@ describe('EmbeddingClient', () => {
 
     expect(JSON.parse(requestBody)).toEqual({ schemaVersion: 1, purpose: 'query', texts: ['bounded'] });
     expect(redirectMode).toBe('error');
-    expect(result).toMatchObject({ modelRevision: MODEL_REVISION, dimension: 1024 });
+    expect(result).toMatchObject({
+      modelRevision: MODEL_REVISION,
+      sourceSha256: SOURCE_SHA256,
+      packageFreezeSha256: PACKAGE_FREEZE_SHA256,
+      modelManifestSha256: MODEL_MANIFEST_SHA256,
+      dimension: 1024,
+    });
     expect(result.vectors).toHaveLength(1);
     expect(result.vectors[0]?.[0]).toBe(1);
     expect(result.vectors[0]?.[1]).toBe(0);
@@ -80,6 +92,15 @@ describe('EmbeddingClient', () => {
     const client = new EmbeddingClient({
       baseUrl: 'http://embedding-worker:8080',
       fetchImpl: async () => validResponse({ modelRevision: 'a'.repeat(40) }),
+    });
+    await expect(client.embed({ purpose: 'query', texts: ['bounded'] }))
+      .rejects.toThrow('embedding_response_invalid');
+  });
+
+  it('rejects malformed runtime identity hashes', async () => {
+    const client = new EmbeddingClient({
+      baseUrl: 'http://embedding-worker:8080',
+      fetchImpl: async () => validResponse({ packageFreezeSha256: 'not-a-hash' }),
     });
     await expect(client.embed({ purpose: 'query', texts: ['bounded'] }))
       .rejects.toThrow('embedding_response_invalid');

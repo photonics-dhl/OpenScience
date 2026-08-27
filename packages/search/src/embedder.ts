@@ -13,6 +13,9 @@ export type EmbeddingPurpose = 'query' | 'chunk';
 
 export interface EmbeddingResult {
   modelRevision: string;
+  sourceSha256: string;
+  packageFreezeSha256: string;
+  modelManifestSha256: string;
   dimension: 1024;
   vectors: number[][];
 }
@@ -26,10 +29,15 @@ export interface EmbeddingClientOptions {
 type EmbeddingResponse = {
   schemaVersion: number;
   modelRevision: string;
+  sourceSha256: string;
+  packageFreezeSha256: string;
+  modelManifestSha256: string;
   dimension: number;
   encoding: string;
   vectors: unknown;
 };
+
+const HASH_PATTERN = /^[0-9a-f]{64}$/;
 
 class EmbeddingClientError extends Error {
   constructor(readonly code: string) {
@@ -147,7 +155,10 @@ function decodeResponse(rawBody: Buffer, expectedCount: number): EmbeddingResult
   if (!isPlainObject(raw)) {
     return fail('embedding_response_invalid');
   }
-  const expectedKeys = ['dimension', 'encoding', 'modelRevision', 'schemaVersion', 'vectors'];
+  const expectedKeys = [
+    'dimension', 'encoding', 'modelManifestSha256', 'modelRevision', 'packageFreezeSha256',
+    'schemaVersion', 'sourceSha256', 'vectors',
+  ];
   if (Object.keys(raw).sort().join('\0') !== expectedKeys.join('\0')) {
     return fail('embedding_response_invalid');
   }
@@ -155,6 +166,9 @@ function decodeResponse(rawBody: Buffer, expectedCount: number): EmbeddingResult
   if (
     response.schemaVersion !== EMBEDDING_SCHEMA_VERSION
     || response.modelRevision !== EXPECTED_MODEL_REVISION
+    || !HASH_PATTERN.test(response.sourceSha256)
+    || !HASH_PATTERN.test(response.packageFreezeSha256)
+    || !HASH_PATTERN.test(response.modelManifestSha256)
     || response.dimension !== EMBEDDING_DIMENSION
     || response.encoding !== 'base64-f32le'
     || !Array.isArray(response.vectors)
@@ -164,6 +178,9 @@ function decodeResponse(rawBody: Buffer, expectedCount: number): EmbeddingResult
   }
   return {
     modelRevision: response.modelRevision,
+    sourceSha256: response.sourceSha256,
+    packageFreezeSha256: response.packageFreezeSha256,
+    modelManifestSha256: response.modelManifestSha256,
     dimension: EMBEDDING_DIMENSION,
     vectors: response.vectors.map(decodeVector),
   };

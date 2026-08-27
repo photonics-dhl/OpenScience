@@ -81,6 +81,15 @@ export interface RankedCandidate extends LexicalCandidateDocument {
   rank: number;
 }
 
+export interface RankedLexicalCandidate extends LexicalScoringDocument {
+  score: number;
+  rank: number;
+}
+
+export type LexicalRankResult =
+  | { status: 'ok'; candidates: RankedLexicalCandidate[]; needsReviewCount: number }
+  | { status: 'unavailable'; code: SearchStorageFailure['code']; candidates: [] };
+
 export type LexicalSearchResult =
   | { status: 'ok'; candidates: RankedCandidate[]; needsReviewCount: number }
   | { status: 'unavailable'; code: SearchStorageFailure['code']; candidates: [] };
@@ -132,6 +141,30 @@ function validateSearchInput(input: LexicalSearchInput): { query: string; terms:
 }
 
 export async function lexicalSearch(input: LexicalSearchInput): Promise<LexicalSearchResult> {
+  const rankedResult = await rankLexicalCandidates(input);
+  if (rankedResult.status === 'unavailable') return rankedResult;
+  const hydrated = await input.storage.hydrateCandidates({
+    tenantId: input.tenantId,
+    ids: rankedResult.candidates.map((candidate) => candidate.id),
+  });
+  if (hydrated.status === 'unavailable') {
+    return { status: 'unavailable', code: hydrated.code, candidates: [] };
+  }
+  const payloadById = new Map(hydrated.candidates.map((candidate) => [candidate.id, candidate]));
+  const ranked: RankedCandidate[] = [];
+  for (const candidate of rankedResult.candidates) {
+    const payload = payloadById.get(candidate.id);
+    if (payload === undefined) continue;
+    ranked.push({ ...candidate, ...payload, rank: ranked.length + 1 });
+  }
+  return {
+    status: 'ok',
+    candidates: ranked,
+    needsReviewCount: rankedResult.needsReviewCount + hydrated.needsReviewCount,
+  };
+}
+
+export async function rankLexicalCandidates(input: LexicalSearchInput): Promise<LexicalRankResult> {
   const { query, terms, limit } = validateSearchInput(input);
   const stored = await input.storage.lexicalCandidates({
     tenantId: input.tenantId,
@@ -160,24 +193,9 @@ export async function lexicalSearch(input: LexicalSearchInput): Promise<LexicalS
     return { ...candidate, score, rank: 0 };
   });
   candidates.sort((left, right) => right.score - left.score || left.id.localeCompare(right.id));
-  const selected = candidates.slice(0, limit);
-  const hydrated = await input.storage.hydrateCandidates({
-    tenantId: input.tenantId,
-    ids: selected.map((candidate) => candidate.id),
-  });
-  if (hydrated.status === 'unavailable') {
-    return { status: 'unavailable', code: hydrated.code, candidates: [] };
-  }
-  const payloadById = new Map(hydrated.candidates.map((candidate) => [candidate.id, candidate]));
-  const ranked: RankedCandidate[] = [];
-  for (const candidate of selected) {
-    const payload = payloadById.get(candidate.id);
-    if (payload === undefined) continue;
-    ranked.push({ ...candidate, ...payload, rank: ranked.length + 1 });
-  }
   return {
     status: 'ok',
-    candidates: ranked,
-    needsReviewCount: stored.needsReviewCount + hydrated.needsReviewCount,
+    candidates: candidates.slice(0, limit).map((candidate, index) => ({ ...candidate, rank: index + 1 })),
+    needsReviewCount: stored.needsReviewCount,
   };
 }

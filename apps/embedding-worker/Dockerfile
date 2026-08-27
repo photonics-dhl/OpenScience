@@ -32,7 +32,9 @@ COPY apps/embedding-worker/model-init.py /app/model-init.py
 COPY apps/embedding-worker/requirements.lock /opt/bge-m3-lock/requirements.lock
 
 RUN chmod 0555 /app/app.py /app/model-init.py \
-    && chmod 0444 /opt/bge-m3-lock/requirements.lock
+    && chmod 0444 /opt/bge-m3-lock/requirements.lock \
+    && python /app/app.py --print-source-sha256 > /opt/bge-m3-lock/source-sha256.txt \
+    && chmod 0444 /opt/bge-m3-lock/source-sha256.txt
 
 RUN python -c "from huggingface_hub import snapshot_download; snapshot_download(repo_id='BAAI/bge-m3', revision='5617a9f61b028005a4858fdac845db406aefb181', local_dir='/opt/bge-m3-seed')" \
     && python /app/model-init.py --write-manifest --seed /opt/bge-m3-seed \

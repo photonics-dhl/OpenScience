@@ -19,6 +19,13 @@ const CORRUPT_TF_CHUNKS = Array.from({ length: 4 }, (_, index) =>
 const COMPRESSED_PAYLOAD_CHUNK = createHash('sha256').update(`${WORKSPACE_A}:compressed-payload`).digest('hex');
 const HASH_A = createHash('sha256').update(`${WORKSPACE_A}:content`).digest('hex');
 const HASH_B = createHash('sha256').update(`${WORKSPACE_B}:content`).digest('hex');
+const MODEL_IDENTITY = {
+  modelVersionId: randomUUID(),
+  modelRevision: '5617a9f61b028005a4858fdac845db406aefb181',
+  sourceSha256: '1'.repeat(64),
+  packageFreezeSha256: '2'.repeat(64),
+  modelManifestSha256: '3'.repeat(64),
+};
 
 function expectedDisposableDatabaseName(): string {
   if (process.env.SEARCH_TEST_MUTATION_CONFIRM !== 'DISPOSABLE_SEARCH_DB') {
@@ -73,11 +80,35 @@ describe.skipIf(DATABASE_URL === undefined)('SearchStorage ECS integration', () 
         claimIds: [], lexicalTerms: ['private', 'pulse', 'tenant'], termFrequencies: { pulse: 1, private: 1, tenant: 1 },
       }],
     });
+    await client.searchModelVersion.create({ data: {
+      id: MODEL_IDENTITY.modelVersionId,
+      provider: 'BAAI',
+      model: 'bge-m3',
+      revision: MODEL_IDENTITY.modelRevision,
+      dimension: 1024,
+      sourceSha256: MODEL_IDENTITY.sourceSha256,
+      packageFreezeSha256: MODEL_IDENTITY.packageFreezeSha256,
+      modelManifestSha256: MODEL_IDENTITY.modelManifestSha256,
+      status: 'active',
+    } });
+    const vector = Buffer.alloc(1024 * Float32Array.BYTES_PER_ELEMENT);
+    vector.writeFloatLE(1, 0);
+    await client.searchEmbedding.create({ data: {
+      workspaceId: WORKSPACE_A,
+      chunkId: CHUNK_A,
+      modelVersionId: MODEL_IDENTITY.modelVersionId,
+      dimension: 1024,
+      vector,
+      vectorSha256: createHash('sha256').update(vector).digest('hex'),
+      norm: 1,
+    } });
   });
 
   afterAll(async () => {
     if (mutationAllowed) {
       await client.searchChunk.deleteMany({ where: { workspaceId: { in: [WORKSPACE_A, WORKSPACE_B] } } });
+      await client.searchQueryMetric.deleteMany({ where: { workspaceId: { in: [WORKSPACE_A, WORKSPACE_B] } } });
+      await client.searchModelVersion.deleteMany({ where: { id: MODEL_IDENTITY.modelVersionId } });
     }
     await client.$disconnect();
   });
@@ -88,6 +119,38 @@ describe.skipIf(DATABASE_URL === undefined)('SearchStorage ECS integration', () 
     if (result.status !== 'ok') throw new Error('search storage unavailable');
     expect(result.candidates).toHaveLength(1);
     expect(result.candidates[0]).toMatchObject({ id: CHUNK_A, tenantId: WORKSPACE_A, rank: 1 });
+  });
+
+  it('binds dense rows to the active full model identity and tenant', async () => {
+    const result = await storage.denseCandidates({ tenantId: WORKSPACE_A, modelIdentity: MODEL_IDENTITY });
+    expect(result).toMatchObject({ status: 'ok', needsReviewCount: 0 });
+    if (result.status !== 'ok') throw new Error('dense storage unavailable');
+    expect(result.candidates).toHaveLength(1);
+    expect(result.candidates[0]?.id).toBe(CHUNK_A);
+    expect(result.candidates[0]?.vector[0]).toBe(1);
+
+    await expect(storage.denseCandidates({ tenantId: WORKSPACE_B, modelIdentity: MODEL_IDENTITY }))
+      .resolves.toEqual({ status: 'ok', candidates: [], needsReviewCount: 0 });
+    await expect(storage.denseCandidates({
+      tenantId: WORKSPACE_A,
+      modelIdentity: { ...MODEL_IDENTITY, modelManifestSha256: '4'.repeat(64) },
+    })).resolves.toEqual({ status: 'unavailable', code: 'model_identity_unavailable' });
+  });
+
+  it('persists content-free query telemetry through the bounded transaction', async () => {
+    const queryHash = createHash('sha256').update(`${WORKSPACE_A}:opaque`).digest('hex');
+    await storage.recordQueryMetric({
+      tenantId: WORKSPACE_A,
+      queryHash,
+      lexicalAvailable: true,
+      denseAvailable: true,
+      resultCount: 1,
+      lexicalLatencyMs: 2,
+      denseLatencyMs: 3,
+      totalLatencyMs: 4,
+    });
+    await expect(client.searchQueryMetric.findFirst({ where: { workspaceId: WORKSPACE_A, queryHash } }))
+      .resolves.toMatchObject({ queryHash, lexicalAvailable: true, denseAvailable: true, resultCount: 1 });
   });
 
   it('fails closed on a real cross-tenant global chunk-ID collision', async () => {
