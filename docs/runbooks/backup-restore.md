@@ -1,67 +1,87 @@
 # Runbook: 备份与恢复（Backup & Restore）
 
-> 状态：已填充（P1A-9）。格式遵循 `.agents/skills/infra-runbook/SKILL.md` 四节强制要求。
-> 安全红线（Spec §20.1-9）：备份文件与真实用户数据**不得拉入本地 Kimi/Agent 上下文**。
-> 恢复演练属 Spec §21.1 测试层，每次演练需留记录（见 §5）。
+> 状态：CURRENT（双库原子备份集合）。备份文件与真实用户数据不得进入本地 Agent 上下文。
+> 所有命令仅在 ECS 上通过项目 `ssh-run.sh` 执行；恢复演练使用隔离临时库，不触碰生产库。
 
 ## 1. 前置检查
 
-- [ ] 生产栈运行中：先读取 `/opt/openscience/.release-id`，并用对应 compose、`XGS_RELEASE_ROOT` 与同值 `XGS_RELEASE_IMAGE_TAG` 执行 `docker compose ps`
-- [ ] 备份目录可写：`mkdir -p /var/backups/openscience && touch /var/backups/openscience/.write-test && rm /var/backups/openscience/.write-test`
-- [ ] 磁盘余量：`df -h /var/backups`（单次 dump 数 MB 级，7 轮远低于 1G，安全）
-- [ ] 上一次备份时间：`ls -lt /var/backups/openscience/`
-- [ ] cron 注册：`crontab -l | grep backup`（每日 3:00）
+- 读取 `/opt/openscience/.release-id`，核对对应不可变 release 目录与 `.release-source` 一致。
+- 检查生产 Compose 服务健康、`/var/backups` 空间和 cron：`0 3 * * * /usr/local/bin/backup.sh --confirm --db`。
+- `/var/backups/openscience` 必须为 `0700`；备份文件为 `0600`。脚本设置 `umask 077` 并用 `flock` 拒绝并发运行。
+- 不读取、回显或复制 `.env.prod`；数据库身份由 API 容器解析并仅返回已校验的用户名和库名。
 
 ## 2. 执行步骤
 
 ```bash
-# 每日备份（cron 0 3 * * *）：
-#   /usr/local/bin/backup.sh --confirm --db
-#   deploy.sh 会把当前 release 的脚本安装为 /usr/local/bin/backup.sh；脚本自行校验 active SHA。
+# 每日双库备份；脚本自行绑定 active release。
+/usr/local/bin/backup.sh --confirm --db
+
+# 可选对象存储快照。
+/usr/local/bin/backup.sh --confirm --objects
 ```
 
-- 备份内容：`pg_dump` 经生产 postgres 容器导出全库 → `/var/backups/openscience/db-YYYY-MM-DD.sql`；对象存储可追加 `--objects`，脚本会对 SeaweedFS Docker volume 创建本机压缩快照 `/var/backups/openscience/objects-YYYY-MM-DD.tar.gz`，不读取或输出对象内容。
-- 保留策略：`KEEP_BACKUPS=7` 轮（参数化），超出的轮转删除（--confirm 放行 rm）
-- 输出仅 `BACKUP_OK size=... files=N/7`，不输出备份内容（Spec §20.1-9）
-- 对象快照输出仅 `OBJECT_BACKUP_OK size=...`；恢复时先停止写入，再将 tar 解压回同一 volume，完成 SeaweedFS healthcheck 后恢复 API/worker。
+每次数据库备份先写入私有 staging 目录，两个 `pg_dump`、非空校验、SHA-256 和 manifest 全部成功后，才以同文件系统目录 rename 原子发布：
+
+```text
+/var/backups/openscience/db-set-<UTC>-<PID>/
+├── core.sql
+├── core.sql.sha256
+├── search.sql
+├── search.sql.sha256
+└── manifest
+```
+
+- `core.sql` 与 `search.sql` 分别对应核心库和搜索库；两库身份必须物理隔离。
+- `manifest` 记录 schema、时间、精确 release、保留轮数和两个固定文件名，不含 URL、密码或业务内容。
+- `KEEP_BACKUPS=7` 默认保留 7 个完整目录；只有 `--confirm` 才会轮转完整旧集合。失败 staging 由受限路径 trap 清理，不会发布半套备份。
+- 成功输出只含两个大小与集合计数：`BACKUP_OK core_size=... search_size=... sets=N/7`。
 
 ## 3. 回滚步骤
 
-- 恢复失败/备份损坏时回到操作前状态：
-  - 生产库未动则无需回滚（备份只读 dump，不触碰生产）
-  - 若演练中已导入临时库，删临时容器即可（`docker rm -f` 该容器）
-  - 生产库损坏需恢复：停 api → 恢复 dump 到生产库 → 校验 → 起 api（详见 §4 恢复命令）
+- 备份阶段只读生产数据库；失败时生产无需回滚，且旧的已发布集合不变。
+- 恢复演练只写两个显式命名的临时库。演练失败时保留临时库和日志供排障，未经批准不删除。
+- 生产恢复属于单独高风险操作：先冻结 API/worker 写入，校验集合与 release，按“核心库 → 搜索库”顺序恢复并验证迁移状态，再恢复服务。不得直接拿演练命令覆盖生产库。
 
-## 4. 验证命令
+## 4. 验证与双库恢复演练
 
 ```bash
-# 备份完整性校验
-ls -l /var/backups/openscience/db-*.sql                    # 文件存在 + 大小非零
-head -c 100 /var/backups/openscience/db-latest.sql | grep -q "PostgreSQL"  # 头部 PG 魔数
+SET=/var/backups/openscience/db-set-<UTC>-<PID>
+test -d "$SET" && test -s "$SET/manifest" \
+  && test -s "$SET/core.sql" && test -s "$SET/search.sql"
+cd "$SET"
+sha256sum -c core.sql.sha256
+sha256sum -c search.sql.sha256
+test "$(stat -c '%a' "$SET")" = 700
+test "$(stat -c '%a' core.sql)" = 600
 
-# 恢复演练（临时库，不碰生产）——见 §5 日志
-# 1) 起临时 postgres 容器
-docker run -d --name openscience-restore-test \
-  -e POSTGRES_PASSWORD=test -e POSTGRES_DB=restore \
-  postgres:16-alpine
-# 2) 导入 dump
-docker exec -i openscience-restore-test psql -U postgres -d restore \
-  < /var/backups/openscience/db-YYYY-MM-DD.sql
-# 3) 行数对比（临时库 vs 生产）
-docker exec openscience-restore-test psql -U postgres -d restore \
-  -tAc "SELECT count(*) FROM users"
-release_sha="$(cat /opt/openscience/.release-id)"
-release_root="/opt/openscience-releases/$release_sha"
-XGS_RELEASE_ROOT="$release_root" XGS_RELEASE_IMAGE_TAG="$release_sha" docker compose \
-  -f "$release_root/infra/compose/docker-compose.prod.yml" \
-  exec -T postgres psql -U $POSTGRES_USER -d $POSTGRES_DB \
-  -tAc "SELECT count(*) FROM users"
-# 4) 清理
-docker rm -f openscience-restore-test
+# 从 manifest 读取 release 后，核对不可变源码身份；不得输出 dump 内容。
+set_release="$(sed -n 's/^release=//p' manifest)"
+test "$set_release" = "$(cat /opt/openscience/.release-id)"
+test "$(cat "/opt/openscience-releases/$set_release/.release-source")" = "$set_release"
+
+# 在现有 PostgreSQL 容器中建立两个唯一、隔离的临时库（名称示例需替换）。
+CORE_RESTORE=openscience_core_restore_<SHA>
+SEARCH_RESTORE=openscience_search_restore_<SHA>
+release_root="/opt/openscience-releases/$set_release"
+export XGS_RELEASE_ROOT="$release_root" XGS_RELEASE_IMAGE_TAG="$set_release"
+COMPOSE=(docker compose --env-file /opt/openscience/.env.prod \
+  -f "$release_root/infra/compose/docker-compose.prod.yml")
+"${COMPOSE[@]}" exec -T postgres createdb -U openscience "$CORE_RESTORE"
+"${COMPOSE[@]}" exec -T postgres createdb -U openscience "$SEARCH_RESTORE"
+"${COMPOSE[@]}" exec -T postgres psql -v ON_ERROR_STOP=1 -U openscience -d "$CORE_RESTORE" < core.sql
+"${COMPOSE[@]}" exec -T postgres psql -v ON_ERROR_STOP=1 -U openscience -d "$SEARCH_RESTORE" < search.sql
+
+# 验收：核心库与搜索库分别核对迁移账本和 schema；禁止只验一个库。
+"${COMPOSE[@]}" exec -T postgres psql -v ON_ERROR_STOP=1 -U openscience -d "$CORE_RESTORE" \
+  -tAc 'SELECT count(*) FROM schema_migrations;'
+"${COMPOSE[@]}" exec -T postgres psql -v ON_ERROR_STOP=1 -U openscience -d "$SEARCH_RESTORE" \
+  -tAc 'SELECT count(*) FROM "_prisma_migrations" WHERE finished_at IS NOT NULL AND rolled_back_at IS NULL;'
 ```
+
+还需比对生产与临时库的关键表计数或 schema 指纹，但只记录计数/哈希，不读取行内容。演练完成后保留临时库，直到阶段验收明确批准清理。
 
 ## 5. 演练日志
 
-| 日期 | 演练内容 | dump 行数 vs 生产 | 结果 |
-|---|---|---|---|
-| 2026-08-03 | 临时库导入 db-2026-08-03.sql（24K） | users=0/workspaces=0 一致，migrations=6 | 通过 |
+| 日期 | 集合 / release | 核心库 | 搜索库 | 结果 |
+|---|---|---|---|---|
+| 2026-08-27 | 旧格式 `20260827T123813Z` / `f9659668…` | dump 校验并恢复 | dump 校验并恢复；迁移 1/1 | 通过；临时库保留 |

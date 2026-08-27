@@ -20,6 +20,7 @@ ADD --checksum=sha256:35e33a08e8ed5e299eabbe3bc23518eb66a424dd29ee08fb3802bf9aef
 COPY apps/embedding-worker/requirements.lock /tmp/requirements.lock
 
 RUN python -m pip install --no-cache-dir --timeout 600 --retries 5 \
+      --require-hashes --no-deps --only-binary=:all: \
       --requirement /tmp/requirements.lock \
     && python -c "from importlib.metadata import version; assert version('FlagEmbedding') == '1.4.2'" \
     && python -c "import importlib.metadata as m, torch; names=[d.metadata['Name'].lower() for d in m.distributions() if d.metadata.get('Name')]; assert torch.version.cuda is None; assert not any(n.startswith(('cuda-', 'nvidia-', 'rocm', 'triton')) for n in names)" \

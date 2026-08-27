@@ -183,14 +183,18 @@ def _file_sha256(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
-def build_candidate_lock(lock_root: Path, gpu_package_count: int) -> dict[str, Any]:
+def build_candidate_lock(
+    lock_root: Path,
+    gpu_package_count: int,
+    model_root: Path = MODEL_ROOT,
+) -> dict[str, Any]:
     if gpu_package_count != 0:
         raise ValueError("GPU dependency detected in CPU candidate")
     return {
         "schemaVersion": 1,
         "candidate": "bge-m3",
         "modelRevision": MODEL_REVISION,
-        "modelManifestSha256": _file_sha256(lock_root / "model-sha256.txt"),
+        "modelManifestSha256": _file_sha256(model_root / "openscience-model-manifest.json"),
         "packageFreezeSha256": _file_sha256(lock_root / "package-freeze.txt"),
         "dimension": EXPECTED_DIMENSION,
         "computePlatform": "cpu",

@@ -14,10 +14,19 @@ const productionCompose = readFileSync(new URL('../compose/docker-compose.prod.y
 const cloudSync = readFileSync(new URL('../../scripts/cloud-sync.mjs', import.meta.url), 'utf8');
 const releaseSyncCommand = readFileSync(new URL('../../scripts/release-sync-command.mjs', import.meta.url), 'utf8');
 const backup = readFileSync(new URL('./backup.sh', import.meta.url), 'utf8');
+const backupRunbook = readFileSync(new URL('../../docs/runbooks/backup-restore.md', import.meta.url), 'utf8');
+const embeddingDockerfile = readFileSync(new URL('../../apps/embedding-worker/Dockerfile', import.meta.url), 'utf8');
+const embeddingRequirements = readFileSync(new URL('../../apps/embedding-worker/requirements.lock', import.meta.url), 'utf8');
+const embeddingEvaluatorDockerfile = readFileSync(new URL('../embedding-candidates/bge-m3/Dockerfile', import.meta.url), 'utf8');
 
 test('production search runtime is isolated, bounded and source locked', () => {
+  const api = productionCompose.split('\n  api:')[1]?.split('\n  malware-scanner:')[0] ?? '';
+  const agentWorker = productionCompose.split('\n  agent-worker:')[1]?.split('\n  document-parser:')[0] ?? '';
+  const embeddingInit = productionCompose.split('\n  embedding-model-init:')[1]?.split('\n  embedding-worker:')[0] ?? '';
   const embeddingWorker = productionCompose.split('\n  embedding-worker:')[1]?.split('\n  web:')[0] ?? '';
   assert.match(productionCompose, /embedding-model-init:/);
+  assert.match(embeddingInit, /profiles:\s*\["embedding"\]/);
+  assert.match(embeddingWorker, /profiles:\s*\["embedding"\]/);
   assert.match(embeddingWorker, /read_only: true/);
   assert.match(embeddingWorker, /user: "10001:10001"/);
   assert.match(embeddingWorker, /pids_limit: 128/);
@@ -26,18 +35,53 @@ test('production search runtime is isolated, bounded and source locked', () => {
   assert.match(embeddingWorker, /cap_drop:[\s\S]*- ALL/);
   assert.match(embeddingWorker, /no-new-privileges:true/);
   assert.doesNotMatch(embeddingWorker, /env_file:|ports:|data_net/);
+  assert.match(embeddingInit + embeddingWorker, /network: host/);
+  assert.match(embeddingInit + embeddingWorker, /http:\/\/127\.0\.0\.1:7891/);
+  assert.doesNotMatch(api, /embedding_net/);
+  assert.doesNotMatch(agentWorker, /embedding-worker:\s*\n\s*condition:/);
   assert.match(productionCompose, /embedding_net:[\s\S]*internal: true/);
-  assert.match(source, /build agent-worker document-parser embedding-worker/);
+  assert.match(source, /build agent-worker document-parser/);
+  assert.match(source, /EMBEDDING_DEPLOY=/);
+  assert.match(source, /--profile embedding/);
+  assert.match(source, /if \[ "\$EMBEDDING_DEPLOY" -eq 1 \]/);
   assert.match(source, /search migration status=2\/2/);
-  assert.match(source, /embedding model manifest verified/);
+  assert.match(source, /embedding model manifest and runtime identity verified/);
 });
 
-test('database backup writes independent core and search dumps with checksums', () => {
-  assert.match(backup, /core-db-/);
-  assert.match(backup, /search-db-/);
+test('embedding Python supply chain is complete, immutable and hash enforced', () => {
+  const requirementLines = embeddingRequirements
+    .split(/\r?\n/)
+    .filter((line) => line !== '' && !line.startsWith('#') && !line.startsWith('--'));
+  assert.ok(requirementLines.length >= 60, 'the complete resolved package set must be locked');
+  assert.ok(requirementLines.every((line) => /--hash=sha256:[0-9a-f]{64}|#sha256=[0-9a-f]{64}/.test(line)));
+  assert.match(embeddingDockerfile, /--require-hashes/);
+  assert.match(embeddingDockerfile, /--no-deps/);
+  assert.match(embeddingDockerfile, /--only-binary=:all:/);
+  assert.doesNotMatch(embeddingEvaluatorDockerfile, /COPY --chmod/);
+  assert.match(embeddingEvaluatorDockerfile, /RUN chmod 0555 \/app\/runner\.py/);
+  assert.match(embeddingEvaluatorDockerfile, /ARG RUNTIME_IMAGE/);
+  assert.match(embeddingEvaluatorDockerfile, /FROM \$\{RUNTIME_IMAGE\}/);
+  assert.match(readFileSync(new URL('./evaluate-embedding-models.sh', import.meta.url), 'utf8'), /apps\/embedding-worker\/Dockerfile/);
+});
+
+test('database backup atomically publishes a private, single-flight dual-database set', () => {
+  assert.match(backup, /umask 077/);
+  assert.match(backup, /flock -n/);
+  assert.match(backup, /install -d -m 0700/);
+  assert.match(backup, /\.db-set-\$DATE\.[^\n]*\.staging/);
+  assert.match(backup, /trap .*cleanup_db_stage/);
+  assert.match(backup, /core\.sql/);
+  assert.match(backup, /search\.sql/);
   assert.match(backup, /sha256sum/);
+  assert.match(backup, /mv -- "\$STAGING_DIR" "\$FINAL_SET_DIR"/);
+  assert.doesNotMatch(backup, /> "\$DUMP_DIR\/core-/);
+  assert.doesNotMatch(backup, /> "\$DUMP_DIR\/search-/);
   assert.match(backup, /SEARCH_DATABASE_URL/);
   assert.doesNotMatch(backup, /echo[^\n]*(?:DATABASE_URL|POSTGRES_PASSWORD)/i);
+  assert.match(backupRunbook, /db-set-<UTC>/);
+  assert.match(backupRunbook, /sha256sum -c core\.sql\.sha256/);
+  assert.match(backupRunbook, /sha256sum -c search\.sql\.sha256/);
+  assert.match(backupRunbook, /核心库.*搜索库|core.*search/i);
 });
 
 test('production compose up receives the same env file used by migrate and validation', () => {
@@ -62,7 +106,7 @@ test('production compose up receives the same env file used by migrate and valid
 });
 
 test('parser starts first and must become healthy before the worker is converged', () => {
-  assert.match(source, /compose_current "build agent-worker document-parser embedding-worker"/);
+  assert.match(source, /compose_current "build agent-worker document-parser"/);
   assert.match(
     source,
     /compose_current "up -d --force-recreate --wait --wait-timeout 300 document-parser"/,
@@ -73,7 +117,8 @@ test('parser starts first and must become healthy before the worker is converged
 });
 
 test('deployment fails unless application health and public status checks pass', () => {
-  assert.match(source, /wait_for_healthy embedding-worker api web agent-worker/);
+  assert.match(source, /wait_for_healthy api web agent-worker/);
+  assert.match(source, /verify-embedding-runtime\.mjs/);
   assert.match(source, /expect_http_status .*auth\/me 401/);
   assert.doesNotMatch(source, /curl[^\n]+\|\| true/);
 });
@@ -155,6 +200,11 @@ test('deployment keeps an application rollback trap until public health succeeds
   assert.match(source, /ROLLBACK_FAILED/);
   assert.match(source, /ROLLBACK_COMPOSE_FILE="\$PREVIOUS_RELEASE_ROOT\/infra\/compose\/docker-compose\.prod\.yml"/);
   assert.match(source, /ROLLBACK_COMPOSE_MODE="first-transition-adapter"/);
+  assert.match(source, /PREVIOUS_HAS_EMBEDDING=/);
+  assert.match(source, /\.release-capabilities/);
+  assert.match(source, /embedding=1/);
+  assert.match(source, /openscience-embedding-worker:\$PREVIOUS_RELEASE_SHA/);
+  assert.match(source, /--profile embedding[^\n]+embedding-worker/);
   assert.match(source, /-f \$ROLLBACK_COMPOSE_FILE up -d --force-recreate/);
   assert.match(source, /rm -f \$REMOTE_ROOT\/\.release-id/);
   assert.match(source, /\.release-failed/);
@@ -200,8 +250,10 @@ test('scheduled backup resolves the active immutable release and is refreshed by
   assert.match(backup, /export XGS_RELEASE_ROOT="\$RELEASE_ROOT" XGS_RELEASE_IMAGE_TAG="\$RELEASE_SHA"/);
   assert.match(backup, /COMPOSE=\(docker compose --env-file/);
   assert.match(backup, /"\$\{COMPOSE\[@\]\}" exec -T postgres/);
-  assert.match(source, /install -m 0755 \$RELEASE_ROOT\/infra\/scripts\/backup\.sh \/usr\/local\/bin\/backup\.sh/);
-  assert.ok(source.indexOf('expect_http_body') < source.lastIndexOf('install -m 0755 $RELEASE_ROOT/infra/scripts/backup.sh'));
+  assert.match(source, /backup\.sh\.next/);
+  assert.match(source, /bash -n .*backup\.sh\.next/);
+  assert.match(source, /mv .*backup\.sh\.next \/usr\/local\/bin\/backup\.sh/);
+  assert.ok(source.indexOf('expect_http_body') < source.lastIndexOf('backup.sh.next'));
 });
 
 function expectNonzero(result) {

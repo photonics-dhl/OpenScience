@@ -71,6 +71,10 @@ compose_current() {
   run_remote "cd $RELEASE_ROOT && XGS_RELEASE_ROOT=$RELEASE_ROOT XGS_RELEASE_IMAGE_TAG=$RELEASE_SHA docker compose --env-file $PROD_ENV -f $COMPOSE_FILE $1"
 }
 
+compose_embedding_current() {
+  run_remote "cd $RELEASE_ROOT && XGS_RELEASE_ROOT=$RELEASE_ROOT XGS_RELEASE_IMAGE_TAG=$RELEASE_SHA docker compose --profile embedding --env-file $PROD_ENV -f $COMPOSE_FILE $1"
+}
+
 wait_for_healthy() {
   local services=("$@")
   [ "${#services[@]}" -gt 0 ] || { echo "错误：wait_for_healthy 需要明确 service" >&2; return 64; }
@@ -108,6 +112,14 @@ run_remote "test ! -e $REMOTE_ROOT/.release-failed" || {
   exit 1
 }
 ACTIVE_RELEASE_SHA="$(run_remote "cat $REMOTE_ROOT/.release-id 2>/dev/null || true")"
+EMBEDDING_DEPLOY=0
+BGE_M3_ENABLED=0
+if run_remote "grep -Eq '^BGE_M3_DEPLOY=(true|1)$' $PROD_ENV"; then EMBEDDING_DEPLOY=1; fi
+if run_remote "grep -Eq '^BGE_M3_ENABLED=(true|1)$' $PROD_ENV"; then BGE_M3_ENABLED=1; fi
+[ "$BGE_M3_ENABLED" -eq 0 ] || [ "$EMBEDDING_DEPLOY" -eq 1 ] || {
+  echo "错误：BGE_M3_ENABLED=true 时必须同时设置 BGE_M3_DEPLOY=true" >&2
+  exit 66
+}
 if [ -n "$ACTIVE_RELEASE_SHA" ] && [[ ! "$ACTIVE_RELEASE_SHA" =~ ^[0-9a-f]{40}$ ]]; then
   echo "错误：云上 active release identity 非法" >&2
   exit 1
@@ -118,6 +130,7 @@ fi
 
 if [ "$ACTIVE_RELEASE_SHA" = "$RELEASE_SHA" ]; then
   run_remote "test \"\$(cat '$RELEASE_ROOT/.release-source')\" = '$RELEASE_SHA'"
+  run_remote "test -f '$REMOTE_ROOT/.release-capabilities/$RELEASE_SHA' && grep -q '^embedding=$EMBEDDING_DEPLOY$' '$REMOTE_ROOT/.release-capabilities/$RELEASE_SHA'"
   expect_http_status https://OpenScience.428312321.xyz/ 200
   expect_http_status https://OpenScience.428312321.xyz/auth/me 401
   expect_http_status https://OpenScience.428312321.xyz/admin/ 401
@@ -130,10 +143,18 @@ PREVIOUS_RELEASE_SHA="${ACTIVE_RELEASE_SHA:-$ROLLBACK_SHA}"
 PREVIOUS_RELEASE_ROOT="/opt/openscience-releases/$PREVIOUS_RELEASE_SHA"
 ROLLBACK_COMPOSE_FILE="$PREVIOUS_RELEASE_ROOT/infra/compose/docker-compose.prod.yml"
 ROLLBACK_COMPOSE_MODE="previous-release"
+RELEASE_CAPABILITIES_DIR="$REMOTE_ROOT/.release-capabilities"
+PREVIOUS_CAPABILITIES_FILE="$RELEASE_CAPABILITIES_DIR/$PREVIOUS_RELEASE_SHA"
+PREVIOUS_HAS_EMBEDDING=0
 if [ -n "$ACTIVE_RELEASE_SHA" ]; then
   run_remote "test \"\$(cat '$PREVIOUS_RELEASE_ROOT/.release-source')\" = '$PREVIOUS_RELEASE_SHA'"
   run_remote "test -f '$ROLLBACK_COMPOSE_FILE'"
   run_remote "docker image inspect openscience-agent-worker:$PREVIOUS_RELEASE_SHA openscience-document-parser:$PREVIOUS_RELEASE_SHA >/dev/null"
+  if run_remote "test -f '$PREVIOUS_CAPABILITIES_FILE' && grep -q '^embedding=1$' '$PREVIOUS_CAPABILITIES_FILE'"; then
+    PREVIOUS_HAS_EMBEDDING=1
+    run_remote "grep -q '^  embedding-worker:' '$ROLLBACK_COMPOSE_FILE'"
+    run_remote "docker image inspect openscience-embedding-worker:$PREVIOUS_RELEASE_SHA >/dev/null"
+  fi
 else
   log "[0] 首次版本化发布：物化并构建 rollback-ref..."
   # 旧版 Compose 不理解 release root/image tag；首次切换只能用新 Compose
@@ -152,7 +173,10 @@ log "[2] install + 全量 build..."
 run_remote "cd $RELEASE_ROOT && with-proxy npx pnpm@9.15.0 install && with-proxy npx pnpm@9.15.0 --filter @openscience/database generate && with-proxy npx pnpm@9.15.0 build"
 
 log "[2b] 构建 SHA-tagged release 镜像..."
-compose_current "build agent-worker document-parser embedding-worker"
+compose_current "build agent-worker document-parser"
+if [ "$EMBEDDING_DEPLOY" -eq 1 ]; then
+  compose_embedding_current "build embedding-worker"
+fi
 
 SWITCH_STARTED=0
 rollback_application() {
@@ -168,7 +192,12 @@ rollback_application() {
     run_remote "docker image inspect openscience-agent-worker:$PREVIOUS_RELEASE_SHA openscience-document-parser:$PREVIOUS_RELEASE_SHA >/dev/null" || rollback_ok=0
   fi
   if [ "$rollback_ok" -eq 1 ]; then
-    compose_current "stop embedding-worker" || true
+    if [ "$EMBEDDING_DEPLOY" -eq 1 ]; then compose_embedding_current "stop embedding-worker" || true; fi
+    if [ "$PREVIOUS_HAS_EMBEDDING" -eq 1 ]; then
+      run_remote "cd $PREVIOUS_RELEASE_ROOT && XGS_RELEASE_ROOT=$PREVIOUS_RELEASE_ROOT XGS_RELEASE_IMAGE_TAG=$PREVIOUS_RELEASE_SHA docker compose --profile embedding --env-file $PROD_ENV -f $ROLLBACK_COMPOSE_FILE up -d --force-recreate --wait --wait-timeout 900 embedding-worker" || rollback_ok=0
+    fi
+  fi
+  if [ "$rollback_ok" -eq 1 ]; then
     run_remote "cd $PREVIOUS_RELEASE_ROOT && XGS_RELEASE_ROOT=$PREVIOUS_RELEASE_ROOT XGS_RELEASE_IMAGE_TAG=$PREVIOUS_RELEASE_SHA docker compose --env-file $PROD_ENV -f $ROLLBACK_COMPOSE_FILE up -d --force-recreate --wait --wait-timeout 300 document-parser api web agent-worker" || rollback_ok=0
   fi
   if [ "$rollback_ok" -eq 1 ]; then
@@ -209,21 +238,26 @@ if [ "$SKIP_MIGRATE" -ne 1 ]; then
 fi
 
 SWITCH_STARTED=1
-log "[5] 初始化并验证 BGE-M3 模型卷..."
-compose_current "up -d --force-recreate --wait --wait-timeout 900 embedding-worker"
-compose_current "run --rm --no-deps -T --entrypoint python embedding-worker /app/model-init.py --validate --seed /opt/bge-m3-seed --target /models/bge-m3"
-log "[5a] embedding model manifest verified"
+if [ "$EMBEDDING_DEPLOY" -eq 1 ]; then
+  log "[5] 初始化并验证 BGE-M3 模型卷..."
+  compose_embedding_current "up -d --force-recreate --wait --wait-timeout 900 embedding-worker"
+  compose_embedding_current "run --rm --no-deps -T --entrypoint python embedding-worker /app/model-init.py --validate --seed /opt/bge-m3-seed --target /models/bge-m3"
+  compose_embedding_current "run --rm --no-deps -T -w /opt/openscience agent-worker node scripts/verify-embedding-runtime.mjs"
+  log "[5a] embedding model manifest and runtime identity verified"
+else
+  log "[5] BGE-M3 deploy disabled; model image/service untouched"
+fi
 
 log "[5b] Parser 先行并等待 healthy..."
 compose_current "up -d --force-recreate --wait --wait-timeout 300 document-parser"
 
 log "[5c] 切换 API/Web/Worker 并等待 healthy..."
 compose_current "up -d --force-recreate --wait --wait-timeout 300 api web agent-worker"
-wait_for_healthy embedding-worker api web agent-worker
+wait_for_healthy api web agent-worker
 
 log "[6] 切换 nginx 与 release identity..."
 run_remote "set -e; backup=${NGINX_CONF}.pre-deploy-\$(date +%Y%m%d%H%M%S); cp -p $NGINX_CONF \$backup; install -m 0644 $RELEASE_ROOT/infra/nginx/openscience.conf $NGINX_CONF; if ! nginx -t; then cp -p \$backup $NGINX_CONF; nginx -t; exit 1; fi; systemctl reload nginx"
-run_remote "set -e; printf '%s\n' '$RELEASE_SHA' > $REMOTE_ROOT/.release-id.next; mv $REMOTE_ROOT/.release-id.next $REMOTE_ROOT/.release-id"
+run_remote "set -e; install -d -m 0755 '$RELEASE_CAPABILITIES_DIR'; printf 'schema=1\nembedding=%s\n' '$EMBEDDING_DEPLOY' > '$RELEASE_CAPABILITIES_DIR/$RELEASE_SHA.next'; chmod 0644 '$RELEASE_CAPABILITIES_DIR/$RELEASE_SHA.next'; mv '$RELEASE_CAPABILITIES_DIR/$RELEASE_SHA.next' '$RELEASE_CAPABILITIES_DIR/$RELEASE_SHA'; printf '%s\n' '$RELEASE_SHA' > $REMOTE_ROOT/.release-id.next; mv $REMOTE_ROOT/.release-id.next $REMOTE_ROOT/.release-id"
 run_remote "test -f $HTPASSWD || echo 'WARN: $HTPASSWD 不存在——首次需手动生成（见 runbook）'"
 
 log "[7] 公网与精确 release 验收..."
@@ -233,8 +267,9 @@ expect_http_status https://OpenScience.428312321.xyz/admin/ 401
 expect_http_body https://OpenScience.428312321.xyz/__release "$RELEASE_SHA"
 run_remote "rm -f $REMOTE_ROOT/.release-failed"
 
-# 只有新 release 已从公网确认后，才替换定时任务调用的备份脚本。
-run_remote "install -m 0755 $RELEASE_ROOT/infra/scripts/backup.sh /usr/local/bin/backup.sh"
+# 只有新 release 已从公网确认后，才以同目录 rename 原子替换定时任务脚本；
+# install/bash -n 任一步失败都不会破坏当前可执行文件。
+run_remote "set -e; install -m 0755 $RELEASE_ROOT/infra/scripts/backup.sh /usr/local/bin/backup.sh.next; bash -n /usr/local/bin/backup.sh.next; mv /usr/local/bin/backup.sh.next /usr/local/bin/backup.sh"
 
 trap - ERR
 log "=== 部署完成（release=$RELEASE_SHA rollback=$PREVIOUS_RELEASE_SHA）==="

@@ -105,7 +105,6 @@ services:
     networks:
       - app_net
       - data_net
-      - embedding_net
     restart: unless-stopped
 
   malware-scanner:
@@ -168,8 +167,6 @@ services:
         condition: service_healthy
       document-parser:
         condition: service_healthy
-      embedding-worker:
-        condition: service_healthy
     healthcheck:
       test: ["CMD-SHELL", "kill -0 1"]
       interval: 10s
@@ -221,6 +218,7 @@ services:
     restart: unless-stopped
 
   embedding-model-init:
+    profiles: ["embedding"]
     build:
       context: ${XGS_RELEASE_ROOT:?XGS_RELEASE_ROOT required}
       dockerfile: apps/embedding-worker/Dockerfile
@@ -248,6 +246,7 @@ services:
     restart: "no"
 
   embedding-worker:
+    profiles: ["embedding"]
     build:
       context: ${XGS_RELEASE_ROOT:?XGS_RELEASE_ROOT required}
       dockerfile: apps/embedding-worker/Dockerfile

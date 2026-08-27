@@ -419,7 +419,7 @@ Run: `node --test infra/scripts/deploy.test.mjs scripts/verify-database-isolatio
 
 - [ ] **Step 3: Add isolated runtime and model volume**
 
-Attach only API, Agent Worker and embedding worker to `embedding_net`; set it `internal: true`. Embedding worker receives no `env_file`, no `data_net`, no ports, no capabilities and no external network. Mount `openscience-bge-m3-5617a9f61b028005a4858fdac845db406aefb181` read-only after a one-shot manifest-verified init. Set 2 CPU, 6 GiB and 128 PID limits. Keep `BGE_M3_ENABLED=false` until migration, volume init, health and canary are green.
+Attach only Agent Worker and embedding worker to `embedding_net`; set it `internal: true`. Put model services behind the explicit `embedding` Compose profile and `BGE_M3_DEPLOY` gate so disabled releases neither build nor start the model. Embedding worker receives no `env_file`, no `data_net`, no ports, no capabilities and no external network. Mount `openscience-bge-m3-5617a9f61b028005a4858fdac845db406aefb181` read-only after a one-shot manifest-verified init. Set 2 CPU, 6 GiB and 128 PID limits. Keep `BGE_M3_ENABLED=false` until migration, volume init, strict identity health and a real-vector canary are green.
 
 - [ ] **Step 4: Extend independent search backup and restore**
 

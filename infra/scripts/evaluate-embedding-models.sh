@@ -65,9 +65,11 @@ done
 
 CORPUS_PATH="$REPOSITORY_ROOT/test/research-intelligence/search-evaluation.json"
 DOCKERFILE="$REPOSITORY_ROOT/infra/embedding-candidates/bge-m3/Dockerfile"
+RUNTIME_DOCKERFILE="$REPOSITORY_ROOT/apps/embedding-worker/Dockerfile"
+RUNTIME_IMAGE_TAG="openscience/embedding-runtime-bge-m3:$GIT_SHA"
 IMAGE_TAG="openscience/embedding-eval-bge-m3:$GIT_SHA"
 CANDIDATE_ROOT="$EVALUATION_ROOT/bge-m3"
-[[ -f "$CORPUS_PATH" && -f "$DOCKERFILE" ]] || { echo 'candidate source is incomplete' >&2; exit 70; }
+[[ -f "$CORPUS_PATH" && -f "$DOCKERFILE" && -f "$RUNTIME_DOCKERFILE" ]] || { echo 'candidate source is incomplete' >&2; exit 70; }
 
 validate_owned_directory() {
   node - "$1" "$2" <<'NODE'
@@ -105,15 +107,28 @@ validate_owned_directory /opt/openscience-evals/embedding /opt/openscience-evals
 validate_owned_directory "$EVALUATION_ROOT" /opt/openscience-evals/embedding
 [[ ! -e "$CANDIDATE_ROOT" ]] || { echo 'candidate evaluation output already exists; refusing overwrite' >&2; exit 73; }
 
-if docker image inspect "$IMAGE_TAG" >/dev/null 2>&1; then
-  [[ "$(docker image inspect --format '{{index .Config.Labels "org.openscience.source"}}' "$IMAGE_TAG")" == "$GIT_SHA" ]] \
-    || { echo 'candidate image tag has an unexpected source label' >&2; exit 73; }
+if docker image inspect "$RUNTIME_IMAGE_TAG" >/dev/null 2>&1; then
+  [[ "$(docker image inspect --format '{{index .Config.Labels "org.openscience.source"}}' "$RUNTIME_IMAGE_TAG")" == "$GIT_SHA" ]] \
+    || { echo 'runtime image tag has an unexpected source label' >&2; exit 73; }
 else
   docker build --pull \
     --network host \
     --build-arg HTTP_PROXY=http://127.0.0.1:7891 \
     --build-arg HTTPS_PROXY=http://127.0.0.1:7891 \
     --build-arg NO_PROXY=localhost,127.0.0.1 \
+    --label "org.openscience.source=$GIT_SHA" \
+    --label 'org.openscience.candidate=bge-m3-runtime' \
+    --label "org.openscience.model-revision=$MODEL_REVISION" \
+    --file "$RUNTIME_DOCKERFILE" --tag "$RUNTIME_IMAGE_TAG" "$REPOSITORY_ROOT"
+fi
+
+if docker image inspect "$IMAGE_TAG" >/dev/null 2>&1; then
+  [[ "$(docker image inspect --format '{{index .Config.Labels "org.openscience.source"}}' "$IMAGE_TAG")" == "$GIT_SHA" ]] \
+    || { echo 'candidate image tag has an unexpected source label' >&2; exit 73; }
+else
+  docker build \
+    --network none \
+    --build-arg "RUNTIME_IMAGE=$RUNTIME_IMAGE_TAG" \
     --label "org.openscience.source=$GIT_SHA" \
     --label 'org.openscience.candidate=bge-m3' \
     --label "org.openscience.model-revision=$MODEL_REVISION" \

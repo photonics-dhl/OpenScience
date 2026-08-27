@@ -61,9 +61,12 @@ class BgeM3RunnerTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temporary_directory:
             lock_root = Path(temporary_directory)
             (lock_root / "package-freeze.txt").write_text("flagembedding==1.4.2\n", encoding="utf-8")
-            (lock_root / "model-sha256.txt").write_text("a" * 64 + "  config.json\n", encoding="utf-8")
+            (lock_root / "openscience-model-manifest.json").write_text(
+                '{"files":[],"modelRevision":"5617a9f61b028005a4858fdac845db406aefb181","schemaVersion":1}',
+                encoding="ascii",
+            )
 
-            lock = runner.build_candidate_lock(lock_root, gpu_package_count=0)
+            lock = runner.build_candidate_lock(lock_root, gpu_package_count=0, model_root=lock_root)
 
         self.assertEqual(
             set(lock),
