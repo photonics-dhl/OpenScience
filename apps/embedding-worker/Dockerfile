@@ -13,9 +13,9 @@ ENV DEBIAN_FRONTEND=noninteractive \
     XDG_CACHE_HOME=/tmp/cache \
     HOME=/tmp/home
 
-ADD --checksum=sha256:35e33a08e8ed5e299eabbe3bc23518eb66a424dd29ee08fb3802bf9aef9e9bf2 \
-    https://files.pythonhosted.org/packages/6e/4a/eb1a033d744e5a854f0918b2a002fca0d7db72078aa70b5145d5100141c1/flagembedding-1.4.2-py3-none-any.whl \
-    /tmp/flagembedding-1.4.2-py3-none-any.whl
+RUN python -c "from pathlib import Path; from urllib.request import urlopen; Path('/tmp/flagembedding-1.4.2-py3-none-any.whl').write_bytes(urlopen('https://files.pythonhosted.org/packages/6e/4a/eb1a033d744e5a854f0918b2a002fca0d7db72078aa70b5145d5100141c1/flagembedding-1.4.2-py3-none-any.whl', timeout=600).read())" \
+    && printf '%s\n' '35e33a08e8ed5e299eabbe3bc23518eb66a424dd29ee08fb3802bf9aef9e9bf2  /tmp/flagembedding-1.4.2-py3-none-any.whl' \
+      | sha256sum --check --strict
 
 COPY apps/embedding-worker/requirements.lock /tmp/requirements.lock
 

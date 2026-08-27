@@ -195,7 +195,9 @@ class ModelInitializationTests(unittest.TestCase):
     def test_docker_build_inputs_are_pinned_and_consumed(self) -> None:
         dockerfile = (ROOT / "Dockerfile").read_text(encoding="utf-8")
         self.assertRegex(dockerfile.splitlines()[0], r"^FROM python:3\.12-slim@sha256:[0-9a-f]{64}$")
-        self.assertIn("--checksum=sha256:35e33a08e8ed5e299eabbe3bc23518eb66a424dd29ee08fb3802bf9aef9e9bf2", dockerfile)
+        self.assertNotRegex(dockerfile, r"(?m)^ADD --checksum=")
+        self.assertIn("35e33a08e8ed5e299eabbe3bc23518eb66a424dd29ee08fb3802bf9aef9e9bf2  /tmp/flagembedding-1.4.2-py3-none-any.whl", dockerfile)
+        self.assertIn("sha256sum --check", dockerfile)
         self.assertIn("--requirement /tmp/requirements.lock", dockerfile)
         self.assertIn("--print-source-sha256", dockerfile)
         self.assertLess(dockerfile.index("snapshot_download"), dockerfile.index("COPY apps/embedding-worker/app.py"))
