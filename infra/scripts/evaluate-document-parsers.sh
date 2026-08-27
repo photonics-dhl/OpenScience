@@ -253,7 +253,11 @@ for CASE_ID in "${CASE_IDS[@]}"; do
   if [[ "$START_STATUS" -eq 124 || "$START_STATUS" -eq 137 ]]; then
     docker kill "$ACTIVE_CONTAINER_ID" >/dev/null 2>&1 || true
     timeout --signal=TERM --kill-after=1s 5s docker wait "$ACTIVE_CONTAINER_ID" >/dev/null 2>&1 || true
-    NORMALIZED_OUTPUT="{\"status\":\"failed\",\"locatorMatches\":0,\"elapsedMs\":$ELAPSED_MS,\"peakRssBytes\":0,\"errorCode\":\"timeout\"}"
+    if [[ "$NORMALIZE_STATUS" -eq 75 ]]; then
+      NORMALIZED_OUTPUT='{"status":"failed","locatorMatches":0,"elapsedMs":0,"peakRssBytes":0,"errorCode":"limit_exceeded"}'
+    else
+      NORMALIZED_OUTPUT="{\"status\":\"failed\",\"locatorMatches\":0,\"elapsedMs\":$ELAPSED_MS,\"peakRssBytes\":0,\"errorCode\":\"timeout\"}"
+    fi
   else
     RUNNING="$(docker inspect --format '{{.State.Running}}' "$ACTIVE_CONTAINER_ID")"
     RUN_EXIT="$(docker inspect --format '{{.State.ExitCode}}' "$ACTIVE_CONTAINER_ID")"
