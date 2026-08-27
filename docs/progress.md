@@ -6,7 +6,7 @@
 
 - 仓库复现并清理 10 个无引用文件、19 个无用导出、44 个无用导出类型和 1 个重复导出；Compose 动态 parser 入口、隔离子进程 `mammoth`/`pdf-parse` 依赖及 LiteParse 独立 workspace 已显式建模。`audit:knip` 仅余非阻断 configuration hints，`audit:dep` 为 0 violation；聚焦公开阅读面 `5/5`、全仓单测、build、typecheck、lint、docs-sync、Markdown lint 与 diff check 均已复跑通过。
 - ECS 按精确 ID/名称删除 7 个退出候选容器、6 个恢复/测试数据库、3 个无引用卷、旧 BGE/LiteParse/agent/parser 镜像世代与 build cache；保留 current/rollback、生产 BGE worker/版本卷及通过门禁的 LiteParse 候选。Docker images 从 `35.63 GB` 降至 `12.56 GB`，volumes 从 `11.44 GB` 降至 `6.754 GB`，volume reclaimable 为 `0 B`。
-- 清理后 `.release-id` 与公网 `/__release` 仍为 `8163f8b…`，生产容器健康，BGE-M3 exact revision/manifest/package-freeze + 1024 维/4096-byte CPU vector canary 返回 `EMBEDDING_RUNTIME_OK`。仓库卫生候选为 `d37d7a8…`、尚未部署；生产 application release 仍为 `8163f8b…`。
+- 卫生 implementation `d37d7a8…` 随 immutable application/release `e2c0eaf…` 部署，rollback 为 `8163f8b…`；服务器全量 build、core `29/29`、search `2/2`、所有目标容器、公网/loopback、失败标记与精确 release 通过。BGE CPU canary 返回 `EMBEDDING_RUNTIME_OK`，真实 `OpenScience_Kimi_Development_Spec.docx` 经生产 sidecar 提取 `18,118` 字符并返回 `DOCUMENT_PARSE_CANARY_OK`。
 - 文档处理能力仍未全部配齐：现有 sidecar/Tesseract/ClamAV/strict source-map 与 BGE-M3 为生产能力；LiteParse 仍是 `APPROVED_PILOT`，Docling/GROBID/PaddleOCR 尚无保留门禁，复杂版式/表格公式/参考文献/扫描件级联不得声称完成。
 
 ## 2026-08-28 — Research Intelligence Task 6 生产收口
@@ -65,8 +65,8 @@
 
 ## Current version tuple
 
-- Branch: `codex/hermes-wanko-live2d`；candidate implementation: `d37d7a8acb4ff74e8f7b511e518fc84b888065f8`；production application/release: `8163f8b4218e529ee4be41bb9fc732ff6497931a`；rollback: `f9659668b237b70b4c018b866e20498689d327c2`。
-- 候选、生产 release 与 docs-only HEAD 分开记录，部署后再更新 application/release 身份。
+- Branch: `codex/hermes-wanko-live2d`；hygiene implementation: `d37d7a8acb4ff74e8f7b511e518fc84b888065f8`；production application/release: `e2c0eaf3b13a220a8bc2cd49b2c1dfe40a6fd61f`；rollback: `8163f8b4218e529ee4be41bb9fc732ff6497931a`。
+- 后续 docs-only HEAD 不改变已部署 application/release 身份。
 
 ## Constraints and open risk
 

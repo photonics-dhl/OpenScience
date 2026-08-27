@@ -17,11 +17,11 @@
 ## Version tuple
 
 - Worktree: `E:/Miscellaneous/XGS/.worktrees/readable-hermes-guidance`
-- Branch / candidate implementation: `codex/hermes-wanko-live2d` / `d37d7a8acb4ff74e8f7b511e518fc84b888065f8`
-- Deployed immutable application/release: `8163f8b4218e529ee4be41bb9fc732ff6497931a`；卫生候选尚未部署。
-- Rollback: `f9659668b237b70b4c018b866e20498689d327c2`
+- Branch / hygiene implementation: `codex/hermes-wanko-live2d` / `d37d7a8acb4ff74e8f7b511e518fc84b888065f8`
+- Deployed immutable application/release: `e2c0eaf3b13a220a8bc2cd49b2c1dfe40a6fd61f`
+- Rollback: `8163f8b4218e529ee4be41bb9fc732ff6497931a`
 - Local main / origin main: `b9616cb92dc83437b1b2094291ff43e2a4c34337` / `7eb2f5bc4718ee445b79bd089acb64acb3691e62`
-- 候选、生产 application/release 与 docs-only HEAD 必须分开记录；不得从较旧 main 推断现状。
+- 后续 docs-only HEAD 不改变 production application/release；不得从较旧 main 推断现状。
 
 ## Delivered foundation
 
@@ -60,7 +60,7 @@
 
 ## Open risk and next action
 
-- 2026-08-28 授权卫生轮次已删除退出候选容器、恢复/测试库、旧评测镜像/卷与 build cache；images `35.63→12.56 GB`、volumes `11.44→6.754 GB`。`audit:knip` 无 unused findings，`audit:dep` 0 violation；清理后 release/health/strict vector canary 通过。
+- 2026-08-28 授权卫生轮次已删除退出候选容器、恢复/测试库、旧评测镜像/卷与 build cache；images `35.63→12.56 GB`、volumes `11.44→6.754 GB`。`audit:knip` 无 unused findings，`audit:dep` 0 violation；release `e2c0eaf…` 部署后 health、strict vector 与真实 DOCX `18,118` 字符 canary 通过。
 - Task 4 Docling 仍无可接受 image/质量/RSS 证据；取得同一 7-PDF corpus 完整门禁后再与 LiteParse/current 比较，禁止预选。Task 7 已解锁，所有部署验收继续只在 ECS。
 - 生产 `.env.prod` 中 MiniMax key 存在且 Vision route disabled；Tavily/Semantic Scholar key 尚未注入生产。它们在 Task 10 有实际 consumer 与权限边界前不提前暴露给容器。
 
