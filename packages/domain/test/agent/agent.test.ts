@@ -3,7 +3,7 @@ import { createFakePrisma, seedUser } from '../helpers/fakes';
 import { createResearchObject } from '../../src/research-object/research-objects';
 import {
   claimAgentTask, createAgentSession, submitAgentTask, getAgentTask, listAgentTasks, markTaskProgress,
-  recoverUndispatchedAgentTasks, retryAgentTask,
+  prepareAgentTaskForCrashRecovery, recoverUndispatchedAgentTasks, retryAgentTask,
 } from '../../src/agent/agent';
 
 /** 内存 Redis fake（队列：agent:queue）。 */
@@ -184,8 +184,35 @@ describe('AgentSession/AgentTask（§15 + §16 幂等 + §9.1 配额）', () => 
     const { deps, user, ro } = await makeDeps();
     const session = await createAgentSession(deps, { userId: user.id, researchObjectId: ro.id, kind: 'extract' });
     const task = await submitAgentTask(deps, { sessionId: session.id, userId: user.id, kind: 'demo.echo', payload: {} });
-    expect((await claimAgentTask(deps, task.id))?.status).toBe('running');
+    expect(await claimAgentTask(deps, task.id)).toMatchObject({ status: 'running', executionAttempt: 1 });
     expect(await claimAgentTask(deps, task.id)).toBeNull();
+  });
+
+  it('rejects terminal writes from a stale worker execution epoch', async () => {
+    const { deps, user, ro } = await makeDeps();
+    const session = await createAgentSession(deps, { userId: user.id, researchObjectId: ro.id, kind: 'extract' });
+    const task = await submitAgentTask(deps, {
+      sessionId: session.id, userId: user.id, kind: 'demo.echo', payload: {},
+    });
+    const first = await claimAgentTask(deps, task.id);
+    expect(first?.executionAttempt).toBe(1);
+    expect(await prepareAgentTaskForCrashRecovery(deps, task.id)).toBe(true);
+    const second = await claimAgentTask(deps, task.id);
+    expect(second?.executionAttempt).toBe(2);
+
+    await expect(markTaskProgress(deps, {
+      taskId: task.id,
+      status: 'failed',
+      error: 'stale worker failed',
+      expectedExecutionAttempt: first!.executionAttempt,
+    })).rejects.toThrow(/新的 worker/);
+    await expect(markTaskProgress(deps, {
+      taskId: task.id,
+      status: 'succeeded',
+      progress: 100,
+      result: { ok: true },
+      expectedExecutionAttempt: second!.executionAttempt,
+    })).resolves.toMatchObject({ status: 'succeeded', executionAttempt: 2 });
   });
 
   it('任务幂等键不能跨 Hermes 会话重放', async () => {
@@ -318,7 +345,7 @@ describe('AgentSession/AgentTask（§15 + §16 幂等 + §9.1 配额）', () => 
   it('任务状态机：非法迁移拒绝 + 终态幂等', async () => {
     const { deps, user, ro, db } = await makeDeps();
     const session = await createAgentSession(deps, { userId: user.id, researchObjectId: ro.id, kind: 'extract' });
-    const task = await submitAgentTask(deps, { sessionId: session.id, userId: user.id, kind: 'x', payload: {} });
+    const task = await submitAgentTask(deps, { sessionId: session.id, userId: user.id, kind: 'demo.echo', payload: {} });
     // pending → succeeded 非法（需经 running）
     await expect(
       markTaskProgress(deps, { taskId: task.id, status: 'succeeded' }),
@@ -332,6 +359,16 @@ describe('AgentSession/AgentTask（§15 + §16 幂等 + §9.1 配额）', () => 
     const replay = await markTaskProgress(deps, { taskId: task.id, status: 'running', progress: 10 });
     expect(replay.status).toBe('succeeded');
     expect(replay.progress).toBe(100);
+  });
+
+  it('rejects an unknown task kind before persistence or credit reservation', async () => {
+    const { deps, user, ro, db } = await makeDeps(1);
+    const session = await createAgentSession(deps, { userId: user.id, researchObjectId: ro.id, kind: 'extract' });
+    await expect(submitAgentTask(deps, {
+      sessionId: session.id, userId: user.id, kind: 'not.registered', payload: {},
+    })).rejects.toThrow(/不支持/);
+    expect(db.agentTasks).toHaveLength(0);
+    expect(db.usageLedger.filter((entry) => entry.delta < 0)).toHaveLength(0);
   });
 
   it('永久阻断错误同步为 failed_blocked，不允许普通 retry', async () => {

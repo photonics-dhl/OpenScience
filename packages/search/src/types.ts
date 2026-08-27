@@ -1,6 +1,7 @@
 import type { DocumentSourceMap, SourceLocator } from '@openscience/domain';
 
 export const SEARCH_CHUNK_SCHEMA_VERSION = 1;
+export const MAX_SEARCH_CHUNKS_PER_DOCUMENT = 100;
 
 export interface ChunkDocumentInput {
   sourceMap: DocumentSourceMap;

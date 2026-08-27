@@ -41,6 +41,9 @@ model SearchChunk {
   workspaceId      String                   @map("workspace_id") @search.Uuid
   researchObjectId String                   @map("research_object_id") @search.Uuid
   artifactId       String                   @map("artifact_id") @search.Uuid
+  sourceVersionId  String?                  @map("source_version_id") @search.Uuid
+  sourceVersionNo  Int?                     @map("source_version_no")
+  indexTaskId      String?                  @map("index_task_id") @search.Uuid
   contentHash      String                   @map("content_hash") @search.Char(64)
   ordinal          Int
   language         String                   @search.VarChar(16)
@@ -56,9 +59,10 @@ model SearchChunk {
   createdAt        DateTime                 @default(now()) @map("created_at")
   updatedAt        DateTime                 @default(now()) @updatedAt @map("updated_at")
   embeddings       SearchEmbedding[]
+  indexTask        SearchIndexTask?         @relation(fields: [indexTaskId], references: [id], onDelete: Cascade)
 
   @@unique([workspaceId, id], map: "search_chunks_workspace_id_id_key")
-  @@unique([workspaceId, artifactId, contentHash, ordinal], map: "search_chunks_generation_ordinal_key")
+  @@unique([workspaceId, indexTaskId, ordinal], map: "search_chunks_generation_ordinal_key")
   @@index([workspaceId, researchObjectId, active], map: "search_chunks_workspace_ro_active_idx")
   @@index([workspaceId, artifactId, contentHash], map: "search_chunks_workspace_artifact_hash_idx")
   @@map("search_chunks")
@@ -83,23 +87,35 @@ model SearchEmbedding {
 }
 
 model SearchIndexTask {
-  id               String             @id @default(uuid()) @search.Uuid
-  workspaceId      String             @map("workspace_id") @search.Uuid
-  researchObjectId String             @map("research_object_id") @search.Uuid
-  artifactId       String             @map("artifact_id") @search.Uuid
-  contentHash      String             @map("content_hash") @search.Char(64)
-  modelVersionId   String             @map("model_version_id") @search.Uuid
-  status           String             @default("queued") @search.VarChar(32)
-  attemptCount     Int                @default(0) @map("attempt_count")
-  errorCode        String?            @map("error_code") @search.VarChar(64)
-  createdAt        DateTime           @default(now()) @map("created_at")
-  startedAt        DateTime?          @map("started_at")
-  finishedAt       DateTime?          @map("finished_at")
-  modelVersion     SearchModelVersion @relation(fields: [modelVersionId], references: [id], onDelete: Restrict)
+  id                     String             @id @default(uuid()) @search.Uuid
+  workspaceId            String             @map("workspace_id") @search.Uuid
+  researchObjectId       String             @map("research_object_id") @search.Uuid
+  artifactId             String             @map("artifact_id") @search.Uuid
+  sourceVersionId        String             @map("source_version_id") @search.Uuid
+  sourceVersionNo        Int                @map("source_version_no")
+  contentHash            String             @map("content_hash") @search.Char(64)
+  modelVersionId         String             @map("model_version_id") @search.Uuid
+  sourceGenerationSha256 String             @map("source_generation_sha256") @search.Char(64)
+  sourceCreatedAt        DateTime           @map("source_created_at")
+  status                 String             @default("queued") @search.VarChar(32)
+  attemptCount           Int                @default(0) @map("attempt_count")
+  errorCode              String?            @map("error_code") @search.VarChar(64)
+  leaseToken             String?            @map("lease_token") @search.Char(64)
+  fenceOwnerTaskId       String?            @map("fence_owner_task_id") @search.Uuid
+  fenceOwnerCreatedAt    DateTime?          @map("fence_owner_created_at")
+  fenceOwnerAttempt      Int?               @map("fence_owner_attempt")
+  leaseExpiresAt         DateTime?          @map("lease_expires_at")
+  isCurrent              Boolean            @default(false) @map("is_current")
+  createdAt              DateTime           @default(now()) @map("created_at")
+  startedAt              DateTime?          @map("started_at")
+  finishedAt             DateTime?          @map("finished_at")
+  modelVersion           SearchModelVersion @relation(fields: [modelVersionId], references: [id], onDelete: Restrict)
+  chunks                 SearchChunk[]
 
-  @@unique([workspaceId, artifactId, contentHash, modelVersionId], map: "search_index_tasks_generation_model_key")
+  @@unique([workspaceId, researchObjectId, artifactId, sourceVersionId, contentHash, modelVersionId, sourceGenerationSha256], map: "search_index_tasks_generation_model_key")
   @@index([status, createdAt], map: "search_index_tasks_status_created_idx")
   @@index([workspaceId, researchObjectId], map: "search_index_tasks_workspace_ro_idx")
+  @@index([workspaceId, researchObjectId, artifactId, isCurrent], map: "search_index_tasks_current_idx")
   @@map("search_index_tasks")
 }
 

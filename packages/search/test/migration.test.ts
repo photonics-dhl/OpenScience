@@ -31,6 +31,20 @@ describe('search retrieval migration', () => {
     expect(migration).toContain('octet_length("vector") = 4096');
     expect(migration).toContain('"dimension" = 1024');
     expect(migration).toContain('FOREIGN KEY ("workspace_id", "chunk_id")');
+    expect(migration).toContain('"index_task_id" UUID');
+    expect(migration).toContain('"source_generation_sha256" CHAR(64) NOT NULL');
+    expect(migration).toContain('"source_created_at" TIMESTAMP(3) NOT NULL');
+    expect(migration).toContain('"source_version_id" UUID NOT NULL');
+    expect(migration).toContain('"source_version_no" INTEGER NOT NULL');
+    expect(migration).toContain('"source_version_id" IS NULL AND "source_version_no" IS NULL');
+    expect(migration).toContain('"lease_token" CHAR(64)');
+    expect(migration).toContain('"fence_owner_task_id" UUID');
+    expect(migration).toContain('"fence_owner_created_at" TIMESTAMP(3)');
+    expect(migration).toContain('"fence_owner_attempt" INTEGER');
+    expect(migration).toContain('"fence_owner_attempt" >= 1');
+    expect(migration).toContain('CREATE UNIQUE INDEX "search_index_tasks_one_current_key"');
+    expect(migration).toContain('WHERE "is_current" = true');
+    expect(migration).toContain('FOREIGN KEY ("index_task_id")');
     expect(migration).not.toContain('DROP TABLE');
     expect(migration).not.toContain('CREATE EXTENSION');
   });
@@ -46,6 +60,8 @@ describe('search retrieval migration', () => {
     expect(metricTable).not.toMatch(/"(query|text|payload|embedding)"\s/);
     expect(rollback).toContain('DROP TABLE IF EXISTS "search_query_metrics"');
     expect(rollback).toContain('DROP TABLE IF EXISTS "search_chunks"');
+    expect(rollback.indexOf('DROP TABLE IF EXISTS "search_chunks"'))
+      .toBeLessThan(rollback.indexOf('DROP TABLE IF EXISTS "search_index_tasks"'));
     expect(rollback).toContain(
       'DELETE FROM "_prisma_migrations" WHERE "migration_name" = \'20260827010000_search_retrieval\'',
     );

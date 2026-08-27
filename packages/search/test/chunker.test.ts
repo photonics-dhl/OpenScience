@@ -115,6 +115,25 @@ describe('locator-safe semantic chunking', () => {
     expect(() => chunkDocument({ sourceMap: invalidArtifact })).toThrow(/canonical lowercase UUID/);
   });
 
+  it('changes chunk identity when its evidence claim binding changes', () => {
+    const map = sourceMap();
+    const [first] = chunkDocument({
+      sourceMap: map,
+      claimIdsByBlockId: { 'paragraph-1': ['claim-a', 'claim-b'] },
+    });
+    const [sameClaimsDifferentOrder] = chunkDocument({
+      sourceMap: map,
+      claimIdsByBlockId: { 'paragraph-1': ['claim-b', 'claim-a'] },
+    });
+    const [differentClaim] = chunkDocument({
+      sourceMap: map,
+      claimIdsByBlockId: { 'paragraph-1': ['claim-c'] },
+    });
+
+    expect(first!.id).toBe(sameClaimsDifferentOrder!.id);
+    expect(first!.id).not.toBe(differentClaim!.id);
+  });
+
   it('never splits an oversized indivisible scholarly block', () => {
     const map = sourceMap();
     map.pages[0]!.blocks = [
@@ -122,5 +141,17 @@ describe('locator-safe semantic chunking', () => {
     ];
 
     expect(() => chunkDocument({ sourceMap: map })).toThrow(/indivisible block exceeds 1024 tokens/);
+  });
+
+  it('stops generation as soon as the persisted chunk cap is exceeded', () => {
+    const map = sourceMap();
+    map.pages[0]!.blocks = Array.from({ length: 101 }, (_, blockIndex) => block(
+      `reference-${blockIndex}`,
+      'reference',
+      Array.from({ length: 1_024 }, (_, tokenIndex) => `term${blockIndex}x${tokenIndex}`).join(' '),
+      10,
+    ));
+
+    expect(() => chunkDocument({ sourceMap: map })).toThrow('search chunk limit exceeded');
   });
 });

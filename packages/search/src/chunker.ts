@@ -7,7 +7,12 @@ import {
   type SourceLocator,
 } from '@openscience/domain';
 import { tokenizeSearchText, tokenizeSearchTextWithOffsets, type SearchToken } from './tokenizer';
-import { SEARCH_CHUNK_SCHEMA_VERSION, type ChunkDocumentInput, type SearchChunkDraft } from './types';
+import {
+  MAX_SEARCH_CHUNKS_PER_DOCUMENT,
+  SEARCH_CHUNK_SCHEMA_VERSION,
+  type ChunkDocumentInput,
+  type SearchChunkDraft,
+} from './types';
 
 const MIN_CHUNK_TOKENS = 512;
 const MAX_CHUNK_TOKENS = 1_024;
@@ -113,24 +118,35 @@ function languageOf(text: string): SearchChunkDraft['language'] {
   return 'und';
 }
 
-function stableChunkId(sourceMap: DocumentSourceMap, ordinal: number, units: ChunkUnit[]): string {
+function stableChunkId(
+  sourceMap: DocumentSourceMap,
+  sourceMapSha256: string,
+  ordinal: number,
+  units: ChunkUnit[],
+): string {
   const identity = JSON.stringify({
     schemaVersion: SEARCH_CHUNK_SCHEMA_VERSION,
     artifactId: sourceMap.artifactId,
     contentHash: sourceMap.contentHash,
+    sourceMapSha256,
     ordinal,
-    segments: units.map((unit) => ({ blockId: unit.blockId, locator: unit.locator })),
+    segments: units.map((unit) => ({ blockId: unit.blockId, locator: unit.locator, claimIds: unit.claimIds })),
   });
   return createHash('sha256').update(identity).digest('hex');
 }
 
-function materializeChunk(sourceMap: DocumentSourceMap, ordinal: number, units: ChunkUnit[]): SearchChunkDraft {
+function materializeChunk(
+  sourceMap: DocumentSourceMap,
+  sourceMapSha256: string,
+  ordinal: number,
+  units: ChunkUnit[],
+): SearchChunkDraft {
   const text = units.map((unit) => unit.text).join('\n\n');
   const terms = tokenizeSearchText(text);
   const termFrequencies = Object.create(null) as Record<string, number>;
   for (const term of terms) termFrequencies[term] = (termFrequencies[term] ?? 0) + 1;
   return {
-    id: stableChunkId(sourceMap, ordinal, units),
+    id: stableChunkId(sourceMap, sourceMapSha256, ordinal, units),
     artifactId: sourceMap.artifactId,
     contentHash: sourceMap.contentHash,
     ordinal,
@@ -154,11 +170,15 @@ export function chunkDocument(input: ChunkDocumentInput): SearchChunkDraft[] {
     throw new Error('search artifactId must be a canonical lowercase UUID');
   }
   const groups: ChunkUnit[][] = [];
+  const sourceMapSha256 = createHash('sha256').update(JSON.stringify(sourceMap)).digest('hex');
   let current: ChunkUnit[] = [];
   let currentTokens = 0;
   let currentCharacters = 0;
   const flush = (): void => {
-    if (current.length > 0) groups.push(current);
+    if (current.length > 0) {
+      if (groups.length >= MAX_SEARCH_CHUNKS_PER_DOCUMENT) throw new Error('search chunk limit exceeded');
+      groups.push(current);
+    }
     current = [];
     currentTokens = 0;
     currentCharacters = 0;
@@ -220,7 +240,7 @@ export function chunkDocument(input: ChunkDocumentInput): SearchChunkDraft[] {
   if (current.length > 0) flush();
   if (groups.length === 0) return [];
 
-  const chunks = groups.map((group, ordinal) => materializeChunk(sourceMap, ordinal, group));
+  const chunks = groups.map((group, ordinal) => materializeChunk(sourceMap, sourceMapSha256, ordinal, group));
   const invalid = chunks.slice(0, -1).find((chunk) => chunk.tokenCount < MIN_CHUNK_TOKENS);
   if (invalid) {
     throw new Error(`cannot satisfy ${MIN_CHUNK_TOKENS}-${MAX_CHUNK_TOKENS} token bounds without splitting an indivisible block`);

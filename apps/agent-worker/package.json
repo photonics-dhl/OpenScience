@@ -16,6 +16,7 @@
     "@openscience/ai-gateway": "workspace:^",
     "@openscience/database": "workspace:^",
     "@openscience/domain": "workspace:^",
+    "@openscience/search": "workspace:^",
     "@openscience/sdf-schema": "workspace:^",
     "@openscience/storage": "workspace:^",
     "mammoth": "1.12.0",

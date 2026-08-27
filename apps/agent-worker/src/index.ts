@@ -22,10 +22,14 @@ import { visualizationPlanHandler } from './planner';
 import { workspaceGuideHandler } from './workspace-guide';
 import { createClamAvScanner, type MalwareScanner } from './clamav';
 import { createParserJobAdapters } from './parser-job-isolation';
+import { authorizeSearchIndexJob, type SearchIndexer } from './search-indexer';
 
 /** 任务处理器注册表（Q4：kind → 执行函数）。 */
 export type WorkerDeps = AgentDeps & { storage?: StorageAdapter; ingestionAdapters?: IngestionAdapters; malwareScanner?: MalwareScanner };
-export type TaskHandler = (deps: WorkerDeps, task: { id: string; payload: Record<string, unknown> }) => Promise<Record<string, unknown>>;
+export type TaskHandler = (
+  deps: WorkerDeps,
+  task: { id: string; payload: Record<string, unknown>; executionAttempt: number },
+) => Promise<Record<string, unknown>>;
 
 export async function streamToBufferBounded(stream: Readable, maxBytes: number): Promise<Buffer> {
   const chunks: Buffer[] = [];
@@ -43,7 +47,10 @@ export async function streamToBufferBounded(stream: Readable, maxBytes: number):
 }
 
 /** 构造处理器注册表（P1D-3 挂 sdf.extract；后续 5.5 审核等挂接）。 */
-export function createHandlers(gateway: AiGateway): Record<string, TaskHandler> {
+export function createHandlers(
+  gateway: AiGateway,
+  options: { searchIndexer?: SearchIndexer } = {},
+): Record<string, TaskHandler> {
   return {
     'demo.echo': async () => {
       await sleep(300);
@@ -89,6 +96,10 @@ export function createHandlers(gateway: AiGateway): Record<string, TaskHandler> 
     'review.analyze': async (deps, task) => reviewAnalyzeHandler(gateway, deps, task),
     'visualization.plan': async (_deps, task) => visualizationPlanHandler(gateway, task), // P1E-1
     'workspace.guide': async (deps, task) => workspaceGuideHandler(gateway, deps, task),
+    ...(options.searchIndexer === undefined ? {} : {
+      'search.index': async (_deps: WorkerDeps, task) =>
+        options.searchIndexer!.index(await authorizeSearchIndexJob(_deps, task)),
+    }),
   };
 }
 
@@ -125,17 +136,33 @@ export async function createPollOnce(handlers: Record<string, TaskHandler>): Pro
     const taskId = await deps.redis.brpoplpush(AGENT_TASK_QUEUE, AGENT_TASK_PROCESSING_QUEUE, 1);
     if (!taskId) return false;
 
+    let claimed: Awaited<ReturnType<typeof claimAgentTask>> = null;
     try {
       const task = await deps.prisma.agentTask.findUnique({ where: { id: taskId } });
       if (!task) return true;
-      if (!await claimAgentTask(deps, taskId)) return true;
-      const handler = handlers[task.kind] ?? handlers['demo.echo'];
-      const result = await handler(deps, { id: task.id, payload: (task.payload ?? {}) as Record<string, unknown> });
-      await markTaskProgress(deps, { taskId, status: 'succeeded', progress: 100, result });
+      claimed = await claimAgentTask(deps, taskId);
+      if (!claimed) return true;
+      const handler = handlers[task.kind];
+      if (!handler) throw new Error('unsupported agent task kind');
+      const result = await handler(deps, {
+        id: task.id,
+        payload: (task.payload ?? {}) as Record<string, unknown>,
+        executionAttempt: claimed.executionAttempt,
+      });
+      await markTaskProgress(deps, {
+        taskId,
+        status: 'succeeded',
+        progress: 100,
+        result,
+        expectedExecutionAttempt: claimed.executionAttempt,
+      });
       return true;
     } catch (e) {
       await markTaskProgress(deps, {
-        taskId, status: 'failed', error: e instanceof Error ? e.message.slice(0, 1000) : String(e),
+        taskId,
+        status: 'failed',
+        error: e instanceof Error ? e.message.slice(0, 1000) : String(e),
+        expectedExecutionAttempt: claimed?.executionAttempt,
       }).catch(() => undefined);
       return true;
     } finally {

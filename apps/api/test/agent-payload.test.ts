@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { agentTaskBodySchema } from '../src/routes/agent';
+import { agentSessionBodySchema, agentTaskBodySchema } from '../src/routes/agent';
 
 const validGuide = {
   sessionId: '00000000-0000-4000-8000-000000000001',
@@ -15,6 +15,11 @@ const validGuide = {
 };
 
 describe('agent task payload boundary', () => {
+  it('reserves internal task names from public session creation', () => {
+    expect(() => agentSessionBodySchema.parse({ kind: 'search.index' })).toThrow();
+    expect(agentSessionBodySchema.parse({ kind: 'extract' })).toEqual({ kind: 'extract' });
+  });
+
   it('accepts the bounded workspace.guide contract', () => {
     expect(agentTaskBodySchema.parse(validGuide)).toEqual(validGuide);
   });
@@ -30,6 +35,19 @@ describe('agent task payload boundary', () => {
         ...validGuide.payload,
         context: { tasks: Array.from({ length: 21 }, (_, index) => ({ id: `t-${index}`, researchObjectId: 'ro', state: 'queued' })), researchObjects: [] },
       },
+    })).toThrow();
+  });
+
+  it('reserves search.index for trusted server-side producers', () => {
+    expect(() => agentTaskBodySchema.parse({
+      sessionId: validGuide.sessionId,
+      kind: 'search.index',
+      payload: {},
+    })).toThrow();
+    expect(() => agentTaskBodySchema.parse({
+      sessionId: validGuide.sessionId,
+      kind: 'not.registered',
+      payload: {},
     })).toThrow();
   });
 });

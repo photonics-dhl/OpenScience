@@ -156,7 +156,7 @@ export { AgentError, type AgentErrorCode } from './agent/errors';
 export {
   claimAgentTask, createAgentSession, dispatchAgentTask, submitAgentTask, getAgentTask, retryAgentTask, listAgentSessions, listAgentTasks, markTaskProgress,
   prepareAgentTaskForCrashRecovery, recoverUndispatchedAgentTasks,
-  AGENT_TASK_QUEUE, AI_CREDIT_RESOURCE,
+  AGENT_TASK_QUEUE, AI_CREDIT_RESOURCE, AGENT_TASK_KINDS, PUBLIC_AGENT_SESSION_KINDS, PUBLIC_AGENT_TASK_KINDS,
   type AgentDeps, type AgentTaskView, type AgentSessionView, type AgentTaskStatus,
 } from './agent/agent';
 export { ApprovalError, type ApprovalErrorCode } from './approval/errors';

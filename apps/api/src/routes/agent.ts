@@ -1,7 +1,7 @@
 import type { FastifyInstance, FastifyRequest } from 'fastify';
 import { z } from 'zod';
 import type { AuthDeps } from '@openscience/auth';
-import { createAgentSession, getAgentTask, retryAgentTask, listAgentSessions, listAgentTasks, parseWorkspaceGuidePayload, submitAgentTask, approveApproval, listPendingApprovals, rejectApproval, revokeApproval } from '@openscience/domain';
+import { createAgentSession, getAgentTask, retryAgentTask, listAgentSessions, listAgentTasks, parseWorkspaceGuidePayload, PUBLIC_AGENT_SESSION_KINDS, PUBLIC_AGENT_TASK_KINDS, submitAgentTask, approveApproval, listPendingApprovals, rejectApproval, revokeApproval } from '@openscience/domain';
 import type { AuditContext } from '@openscience/observability';
 import { requireCurrentUser } from './session-guard';
 
@@ -12,9 +12,9 @@ function auditCtx(req: FastifyRequest): AuditContext {
   return { requestId: String(req.id), ip: req.ip };
 }
 
-const sessionBody = z.object({
+export const agentSessionBodySchema = z.object({
   researchObjectId: z.string().uuid().optional(),
-  kind: z.string().min(1).max(64),
+  kind: z.enum(PUBLIC_AGENT_SESSION_KINDS),
   title: z.string().max(200).optional(),
 });
 const workspaceGuideTaskBody = z.object({
@@ -30,7 +30,7 @@ const workspaceGuideTaskBody = z.object({
 }).strict();
 const genericTaskBody = z.object({
   sessionId: z.string().uuid(),
-  kind: z.string().min(1).max(64).refine((kind) => kind !== 'workspace.guide'),
+  kind: z.enum(PUBLIC_AGENT_TASK_KINDS),
   payload: z.record(z.string(), z.unknown()).default({}),
 }).strict().superRefine((value, ctx) => {
   if (JSON.stringify(value.payload).length > 65_536) ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'payload exceeds 64KB' });
@@ -48,7 +48,7 @@ export function registerAgentRoutes(app: FastifyInstance, deps: AgentRouteDeps):
   app.post('/agent/sessions', async (req, reply) => {
     const user = await requireCurrentUser(deps, req, reply);
     if (!user) return;
-    const body = sessionBody.parse(req.body);
+    const body = agentSessionBodySchema.parse(req.body);
     const idempotencyKey = req.headers['idempotency-key'];
     const session = await createAgentSession(
       deps,

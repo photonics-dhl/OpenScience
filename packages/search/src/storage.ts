@@ -12,7 +12,7 @@ import type {
 import type { DenseCandidateSet, DenseModelIdentity, DenseStorageFailure } from './dense';
 import type { QueryMetricInput } from './service';
 import { tokenizeSearchText } from './tokenizer';
-import type { SearchChunkDraft } from './types';
+import { MAX_SEARCH_CHUNKS_PER_DOCUMENT, type SearchChunkDraft } from './types';
 
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 const HASH_PATTERN = /^[0-9a-f]{64}$/;
@@ -23,7 +23,7 @@ const MAX_RESULT_LIMIT = 100;
 const MAX_LEXICAL_CORPUS_DOCUMENTS = 10_000;
 const MAX_BM25_SCORE_CELLS = 1_000_000;
 const MAX_HYDRATED_PAYLOAD_BYTES = 8 * 1_024 * 1_024;
-const MAX_CHUNKS_PER_UPSERT = 100;
+const MAX_CHUNKS_PER_UPSERT = MAX_SEARCH_CHUNKS_PER_DOCUMENT;
 const MAX_DENSE_CORPUS_DOCUMENTS = 10_000;
 const EMBEDDING_DIMENSION = 1_024;
 const BGE_M3_REVISION = '5617a9f61b028005a4858fdac845db406aefb181';
@@ -31,6 +31,7 @@ const MAX_UPSERT_TEXT_CHARACTERS = 8 * 1_024 * 1_024;
 const MAX_UPSERT_LOCATORS = 10_000;
 const MAX_UPSERT_CLAIM_CHARACTERS = 1_000_000;
 const STATEMENT_TIMEOUT_MILLISECONDS = 2_000;
+const INDEX_LEASE_MILLISECONDS = 15 * 60_000;
 
 interface CorpusRow {
   document_count: bigint | number;
@@ -79,6 +80,57 @@ export interface UpsertSearchChunksInput {
   tenantId: string;
   researchObjectId: string;
   chunks: readonly SearchChunkDraft[];
+}
+
+export interface SearchEmbeddingDraft {
+  chunkId: string;
+  vector: Buffer;
+  vectorSha256: string;
+  norm: number;
+}
+
+export interface BeginIndexTaskInput {
+  taskId: string;
+  tenantId: string;
+  researchObjectId: string;
+  artifactId: string;
+  sourceVersionId: string;
+  sourceVersionNo: number;
+  contentHash: string;
+  sourceGenerationSha256: string;
+  sourceCreatedAt: Date;
+  leaseToken: string;
+  executionAttempt: number;
+  modelIdentity: DenseModelIdentity;
+}
+
+export type BeginIndexTaskResult =
+  | { action: 'run'; taskId: string; leaseToken: string }
+  | { action: 'skip'; taskId: string; status: 'running' | 'succeeded' | 'failed' }
+  | {
+    action: 'skip';
+    taskId: string;
+    status: 'needs_review';
+    errorCode: 'embedding_unavailable' | 'no_searchable_content';
+  };
+
+export interface StageIndexGenerationInput {
+  taskId: string;
+  leaseToken: string;
+  chunks: readonly SearchChunkDraft[];
+}
+
+export interface FinalizeIndexGenerationInput {
+  taskId: string;
+  leaseToken: string;
+  status: 'succeeded' | 'needs_review';
+  errorCode?: 'embedding_unavailable' | 'no_searchable_content';
+  embeddings: readonly SearchEmbeddingDraft[];
+}
+
+export interface IndexTaskLeaseInput {
+  taskId: string;
+  leaseToken: string;
 }
 
 function assertUuid(value: string, field: string): void {
@@ -186,6 +238,110 @@ function validateUpsertBatch(chunks: readonly SearchChunkDraft[]): void {
   }
 }
 
+function validateModelIdentity(identity: DenseModelIdentity): void {
+  assertUuid(identity.modelVersionId, 'modelVersionId');
+  if (identity.modelRevision !== BGE_M3_REVISION
+    || !HASH_PATTERN.test(identity.sourceSha256)
+    || !HASH_PATTERN.test(identity.packageFreezeSha256)
+    || !HASH_PATTERN.test(identity.modelManifestSha256)) throw new Error('model identity is invalid');
+}
+
+function validateEmbeddingDrafts(embeddings: readonly SearchEmbeddingDraft[]): void {
+  if (embeddings.length > MAX_CHUNKS_PER_UPSERT
+    || new Set(embeddings.map(({ chunkId }) => chunkId)).size !== embeddings.length) {
+    throw new Error('embedding batch is outside storage bounds');
+  }
+  for (const embedding of embeddings) {
+    let squaredNorm = 0;
+    if (Buffer.isBuffer(embedding.vector)
+      && embedding.vector.length === EMBEDDING_DIMENSION * Float32Array.BYTES_PER_ELEMENT) {
+      for (let offset = 0; offset < embedding.vector.length; offset += Float32Array.BYTES_PER_ELEMENT) {
+        const value = embedding.vector.readFloatLE(offset);
+        if (!Number.isFinite(value)) {
+          squaredNorm = Number.NaN;
+          break;
+        }
+        squaredNorm += value * value;
+      }
+    }
+    const actualNorm = Math.sqrt(squaredNorm);
+    if (!HASH_PATTERN.test(embedding.chunkId)
+      || !Buffer.isBuffer(embedding.vector)
+      || embedding.vector.length !== EMBEDDING_DIMENSION * Float32Array.BYTES_PER_ELEMENT
+      || !HASH_PATTERN.test(embedding.vectorSha256)
+      || createHash('sha256').update(embedding.vector).digest('hex') !== embedding.vectorSha256
+      || !Number.isFinite(embedding.norm)
+      || !Number.isFinite(actualNorm)
+      || Math.abs(actualNorm - 1) > 1e-4
+      || Math.abs(actualNorm - embedding.norm) > 1e-4) throw new Error('embedding batch is outside storage bounds');
+  }
+}
+
+async function upsertChunkRows(transaction: Prisma.TransactionClient, input: UpsertSearchChunksInput): Promise<void> {
+  for (const chunk of input.chunks) {
+    const data = chunkRowData(input.tenantId, input.researchObjectId, chunk, null, true);
+    await transaction.searchChunk.upsert({
+      where: { workspaceId_id: { workspaceId: input.tenantId, id: chunk.id } },
+      create: { id: chunk.id, ...data },
+      update: data,
+    });
+  }
+}
+
+function chunkRowData(
+  tenantId: string,
+  researchObjectId: string,
+  chunk: SearchChunkDraft,
+  indexTaskId: string | null,
+  active: boolean,
+  sourceVersion?: { id: string; versionNo: number },
+) {
+  return {
+    workspaceId: tenantId,
+    researchObjectId,
+    artifactId: chunk.artifactId,
+    sourceVersionId: sourceVersion?.id ?? null,
+    sourceVersionNo: sourceVersion?.versionNo ?? null,
+    indexTaskId,
+    contentHash: chunk.contentHash,
+    ordinal: chunk.ordinal,
+    language: chunk.language,
+    text: chunk.text,
+    tokenCount: chunk.tokenCount,
+    locators: chunk.locators as unknown as Prisma.InputJsonValue,
+    claimIds: chunk.claimIds as Prisma.InputJsonValue,
+    lexicalTerms: chunk.lexicalTerms as Prisma.InputJsonValue,
+    termFrequencies: chunk.termFrequencies as Prisma.InputJsonValue,
+    lexicalText: chunk.lexicalTerms.join(' '),
+    active,
+  };
+}
+
+function sourceCreatedAtIsValid(value: Date): boolean {
+  const time = value.getTime();
+  return Number.isFinite(time) && time >= Date.UTC(2020, 0, 1) && time <= Date.now() + 5 * 60_000;
+}
+
+function compareExecutionFence(
+  incoming: { taskId: string; createdAt: Date; attempt: number },
+  current: { taskId: string; createdAt: Date; attempt: number },
+): number {
+  const timeDifference = incoming.createdAt.getTime() - current.createdAt.getTime();
+  if (timeDifference !== 0) return timeDifference;
+  if (incoming.taskId !== current.taskId) return incoming.taskId < current.taskId ? -1 : 1;
+  return incoming.attempt - current.attempt;
+}
+
+function isNewerGeneration(
+  incoming: { sourceVersionNo: number; sourceCreatedAt: Date; id: string },
+  current: { sourceVersionNo: number; sourceCreatedAt: Date; id: string },
+): boolean {
+  const versionDifference = incoming.sourceVersionNo - current.sourceVersionNo;
+  if (versionDifference !== 0) return versionDifference > 0;
+  const timeDifference = incoming.sourceCreatedAt.getTime() - current.sourceCreatedAt.getTime();
+  return timeDifference > 0 || (timeDifference === 0 && incoming.id > current.id);
+}
+
 function decodeStoredVector(row: DenseRow): Float32Array | undefined {
   if (
     !HASH_PATTERN.test(row.id)
@@ -291,31 +447,325 @@ export class SearchStorage {
     assertUuid(input.tenantId, 'tenantId');
     assertUuid(input.researchObjectId, 'researchObjectId');
     validateUpsertBatch(input.chunks);
-    await this.client.$transaction(async (transaction) => {
-      for (const chunk of input.chunks) {
-        const data = {
+    await this.client.$transaction((transaction) => upsertChunkRows(transaction, input));
+  }
+
+  async beginIndexTask(input: BeginIndexTaskInput): Promise<BeginIndexTaskResult> {
+    assertUuid(input.taskId, 'taskId');
+    assertUuid(input.tenantId, 'tenantId');
+    assertUuid(input.researchObjectId, 'researchObjectId');
+    assertUuid(input.artifactId, 'artifactId');
+    assertUuid(input.sourceVersionId, 'sourceVersionId');
+    if (!HASH_PATTERN.test(input.contentHash) || !HASH_PATTERN.test(input.sourceGenerationSha256)
+      || !HASH_PATTERN.test(input.leaseToken) || !sourceCreatedAtIsValid(input.sourceCreatedAt)
+      || !Number.isInteger(input.sourceVersionNo) || input.sourceVersionNo < 1
+      || !Number.isInteger(input.executionAttempt) || input.executionAttempt < 1) {
+      throw new Error('index task source identity is invalid');
+    }
+    validateModelIdentity(input.modelIdentity);
+    return this.client.$transaction(async (transaction) => {
+      const modelRows = await transaction.$queryRaw<ModelIdentityRow[]>(Prisma.sql`
+        SELECT "id"::text AS "id" FROM "search_model_versions"
+        WHERE "id" = ${input.modelIdentity.modelVersionId}::uuid
+          AND "provider" = 'BAAI' AND "model" = 'bge-m3'
+          AND "revision" = ${input.modelIdentity.modelRevision}
+          AND "dimension" = ${EMBEDDING_DIMENSION}
+          AND "source_sha256" = ${input.modelIdentity.sourceSha256}
+          AND "package_freeze_sha256" = ${input.modelIdentity.packageFreezeSha256}
+          AND "model_manifest_sha256" = ${input.modelIdentity.modelManifestSha256}
+          AND "status" = 'active'
+        LIMIT 2
+      `);
+      if (modelRows.length !== 1 || modelRows[0]?.id !== input.modelIdentity.modelVersionId) {
+        throw new Error('active model identity is unavailable');
+      }
+      const task = await transaction.searchIndexTask.upsert({
+        where: { workspaceId_researchObjectId_artifactId_sourceVersionId_contentHash_modelVersionId_sourceGenerationSha256: {
           workspaceId: input.tenantId,
           researchObjectId: input.researchObjectId,
-          artifactId: chunk.artifactId,
-          contentHash: chunk.contentHash,
-          ordinal: chunk.ordinal,
-          language: chunk.language,
-          text: chunk.text,
-          tokenCount: chunk.tokenCount,
-          locators: chunk.locators as unknown as Prisma.InputJsonValue,
-          claimIds: chunk.claimIds as Prisma.InputJsonValue,
-          lexicalTerms: chunk.lexicalTerms as Prisma.InputJsonValue,
-          termFrequencies: chunk.termFrequencies as Prisma.InputJsonValue,
-          lexicalText: chunk.lexicalTerms.join(' '),
+          artifactId: input.artifactId,
+          sourceVersionId: input.sourceVersionId,
+          contentHash: input.contentHash,
+          modelVersionId: input.modelIdentity.modelVersionId,
+          sourceGenerationSha256: input.sourceGenerationSha256,
+        } },
+        create: {
+          id: input.taskId,
+          workspaceId: input.tenantId,
+          researchObjectId: input.researchObjectId,
+          artifactId: input.artifactId,
+          sourceVersionId: input.sourceVersionId,
+          sourceVersionNo: input.sourceVersionNo,
+          contentHash: input.contentHash,
+          modelVersionId: input.modelIdentity.modelVersionId,
+          sourceGenerationSha256: input.sourceGenerationSha256,
+          sourceCreatedAt: input.sourceCreatedAt,
+          status: 'running',
+          attemptCount: 1,
+          leaseToken: input.leaseToken,
+          fenceOwnerTaskId: input.taskId,
+          fenceOwnerCreatedAt: input.sourceCreatedAt,
+          fenceOwnerAttempt: input.executionAttempt,
+          leaseExpiresAt: new Date(Date.now() + INDEX_LEASE_MILLISECONDS),
+          startedAt: new Date(),
+        },
+        update: {},
+      });
+      if (task.workspaceId !== input.tenantId || task.researchObjectId !== input.researchObjectId
+        || task.artifactId !== input.artifactId || task.contentHash !== input.contentHash
+        || task.sourceVersionId !== input.sourceVersionId || task.sourceVersionNo !== input.sourceVersionNo
+        || task.modelVersionId !== input.modelIdentity.modelVersionId
+        || task.sourceGenerationSha256 !== input.sourceGenerationSha256) throw new Error('index task identity mismatch');
+      if (task.status === 'succeeded') return { action: 'skip', taskId: task.id, status: 'succeeded' };
+      const initialLease = task.id === input.taskId && task.attemptCount === 1
+        && task.leaseToken === input.leaseToken && task.fenceOwnerTaskId === input.taskId
+        && task.fenceOwnerCreatedAt?.getTime() === input.sourceCreatedAt.getTime()
+        && task.fenceOwnerAttempt === input.executionAttempt;
+      const hasFence = task.fenceOwnerTaskId !== null && task.fenceOwnerCreatedAt !== null
+        && task.fenceOwnerAttempt !== null;
+      const newerFence = !hasFence || compareExecutionFence({
+        taskId: input.taskId,
+        createdAt: input.sourceCreatedAt,
+        attempt: input.executionAttempt,
+      }, {
+        taskId: task.fenceOwnerTaskId!,
+        createdAt: task.fenceOwnerCreatedAt!,
+        attempt: task.fenceOwnerAttempt!,
+      }) > 0;
+      if (!initialLease && !newerFence) {
+        if (task.status === 'needs_review') {
+          if (task.errorCode !== 'embedding_unavailable' && task.errorCode !== 'no_searchable_content') {
+            throw new Error('index task review reason is invalid');
+          }
+          return { action: 'skip', taskId: task.id, status: 'needs_review', errorCode: task.errorCode };
+        }
+        if (task.status === 'running' || task.status === 'failed') {
+          return { action: 'skip', taskId: task.id, status: task.status };
+        }
+        throw new Error('index task state is invalid');
+      }
+      if (task.status === 'running' && !initialLease
+        && task.leaseExpiresAt !== null && task.leaseExpiresAt.getTime() > Date.now()) {
+        const newerSameOwnerEpoch = task.fenceOwnerTaskId === input.taskId
+          && task.fenceOwnerAttempt !== null
+          && input.executionAttempt > task.fenceOwnerAttempt;
+        if (!newerSameOwnerEpoch) return { action: 'skip', taskId: task.id, status: 'running' };
+      }
+      if (task.attemptCount >= 3) {
+        if (task.status === 'needs_review') {
+          if (task.errorCode !== 'embedding_unavailable' && task.errorCode !== 'no_searchable_content') {
+            throw new Error('index task review reason is invalid');
+          }
+          return { action: 'skip', taskId: task.id, status: 'needs_review', errorCode: task.errorCode };
+        }
+        if (!task.isCurrent) {
+          await transaction.searchChunk.deleteMany({ where: { indexTaskId: task.id, active: false } });
+        }
+        const exhausted = await transaction.searchIndexTask.updateMany({
+          where: { id: task.id, status: task.status, attemptCount: task.attemptCount },
+          data: {
+            status: 'failed',
+            errorCode: 'attempts_exhausted',
+            leaseToken: null,
+            leaseExpiresAt: null,
+            finishedAt: new Date(),
+          },
+        });
+        if (exhausted.count !== 1) throw new Error('index task lease contention');
+        return { action: 'skip', taskId: task.id, status: 'failed' };
+      }
+      if (!initialLease) {
+        const claimed = await transaction.searchIndexTask.updateMany({
+          where: { id: task.id, status: task.status, attemptCount: task.attemptCount },
+          data: {
+            status: 'running',
+            attemptCount: { increment: 1 },
+            errorCode: null,
+            leaseToken: input.leaseToken,
+            fenceOwnerTaskId: input.taskId,
+            fenceOwnerCreatedAt: input.sourceCreatedAt,
+            fenceOwnerAttempt: input.executionAttempt,
+            leaseExpiresAt: new Date(Date.now() + INDEX_LEASE_MILLISECONDS),
+            startedAt: new Date(),
+            finishedAt: null,
+          },
+        });
+        if (claimed.count !== 1) throw new Error('index task lease contention');
+      }
+      return { action: 'run', taskId: task.id, leaseToken: input.leaseToken };
+    }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable, maxWait: 2_000, timeout: 5_000 });
+  }
+
+  async renewIndexTaskLease(input: IndexTaskLeaseInput): Promise<void> {
+    assertUuid(input.taskId, 'taskId');
+    if (!HASH_PATTERN.test(input.leaseToken)) throw new Error('index task lease is invalid');
+    const renewed = await this.client.searchIndexTask.updateMany({
+      where: { id: input.taskId, status: 'running', leaseToken: input.leaseToken },
+      data: { leaseExpiresAt: new Date(Date.now() + INDEX_LEASE_MILLISECONDS) },
+    });
+    if (renewed.count !== 1) throw new Error('running index task lease is unavailable');
+  }
+
+  async failIndexTask(input: IndexTaskLeaseInput): Promise<void> {
+    assertUuid(input.taskId, 'taskId');
+    if (!HASH_PATTERN.test(input.leaseToken)) throw new Error('index task lease is invalid');
+    await this.client.$transaction(async (transaction) => {
+      const task = await transaction.searchIndexTask.findUnique({ where: { id: input.taskId } });
+      if (!task || task.status !== 'running' || task.leaseToken !== input.leaseToken) return;
+      if (!task.isCurrent) {
+        await transaction.searchChunk.deleteMany({ where: { indexTaskId: task.id, active: false } });
+      }
+      const failed = await transaction.searchIndexTask.updateMany({
+        where: { id: task.id, status: 'running', leaseToken: input.leaseToken },
+        data: {
+          status: 'failed',
+          errorCode: 'index_storage_unavailable',
+          leaseToken: null,
+          leaseExpiresAt: null,
+          finishedAt: new Date(),
+        },
+      });
+      if (failed.count !== 1) throw new Error('index task lease contention');
+    }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable, maxWait: 2_000, timeout: 5_000 });
+  }
+
+  async stageIndexGeneration(input: StageIndexGenerationInput): Promise<void> {
+    assertUuid(input.taskId, 'taskId');
+    if (!HASH_PATTERN.test(input.leaseToken)) throw new Error('index task lease is invalid');
+    validateUpsertBatch(input.chunks);
+    await this.client.$transaction(async (transaction) => {
+      const task = await transaction.searchIndexTask.findUnique({ where: { id: input.taskId } });
+      if (!task || task.status !== 'running' || task.leaseToken !== input.leaseToken
+        || input.chunks.some((chunk) => chunk.artifactId !== task.artifactId
+          || chunk.contentHash !== task.contentHash)) throw new Error('running index task lease is unavailable');
+      const existing = await transaction.searchChunk.findMany({
+        where: { indexTaskId: task.id }, select: { id: true, active: true }, orderBy: { id: 'asc' },
+      });
+      const incomingIds = input.chunks.map(({ id }) => id).sort();
+      if (task.isCurrent) {
+        if (existing.length !== incomingIds.length || existing.some(({ id }, index) => id !== incomingIds[index])) {
+          throw new Error('current index generation does not match staged chunks');
+        }
+        return;
+      }
+      if (existing.some(({ active }) => active)) throw new Error('inactive staging generation is invalid');
+      await transaction.searchChunk.deleteMany({ where: { indexTaskId: task.id, active: false } });
+      for (const chunk of input.chunks) {
+        await transaction.searchChunk.create({
+          data: {
+            id: chunk.id,
+            ...chunkRowData(task.workspaceId, task.researchObjectId, chunk, task.id, false, {
+              id: task.sourceVersionId,
+              versionNo: task.sourceVersionNo,
+            }),
+          },
+        });
+      }
+    }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable, maxWait: 2_000, timeout: 5_000 });
+  }
+
+  async finalizeIndexGeneration(input: FinalizeIndexGenerationInput): Promise<{ activated: boolean }> {
+    assertUuid(input.taskId, 'taskId');
+    if (!HASH_PATTERN.test(input.leaseToken)
+      || (input.status === 'succeeded' && input.errorCode !== undefined)
+      || (input.status === 'needs_review' && !['embedding_unavailable', 'no_searchable_content'].includes(input.errorCode ?? ''))
+      || (input.status === 'needs_review' && input.embeddings.length !== 0)) {
+      throw new Error('index generation result is invalid');
+    }
+    validateEmbeddingDrafts(input.embeddings);
+    return this.client.$transaction(async (transaction) => {
+      const task = await transaction.searchIndexTask.findUnique({ where: { id: input.taskId } });
+      if (!task) throw new Error('index task is unavailable');
+      if (task.status === input.status && task.leaseToken === null) return { activated: task.isCurrent };
+      if (task.status !== 'running' || task.leaseToken !== input.leaseToken) {
+        throw new Error('running index task lease is unavailable');
+      }
+      await transaction.$executeRaw(Prisma.sql`
+        SELECT pg_advisory_xact_lock(
+          hashtextextended(${`${task.workspaceId}:${task.researchObjectId}:${task.artifactId}`}::text, 0)
+        )
+      `);
+      const staged = await transaction.searchChunk.findMany({
+        where: { indexTaskId: task.id }, select: { id: true }, orderBy: { id: 'asc' },
+      });
+      const embeddingIds = input.embeddings.map(({ chunkId }) => chunkId).sort();
+      if ((staged.length === 0 && input.errorCode !== 'no_searchable_content') || (input.status === 'succeeded'
+        && (staged.length !== embeddingIds.length || staged.some(({ id }, index) => id !== embeddingIds[index])))) {
+        throw new Error('staged index generation is incomplete');
+      }
+      const current = await transaction.searchIndexTask.findFirst({
+        where: {
+          workspaceId: task.workspaceId,
+          researchObjectId: task.researchObjectId,
+          artifactId: task.artifactId,
+          isCurrent: true,
+        },
+      });
+      if (current && current.id !== task.id && !isNewerGeneration(task, current)) {
+        await transaction.searchIndexTask.update({
+          where: { id: task.id },
+          data: {
+            status: input.status, errorCode: input.errorCode ?? null, leaseToken: null,
+            leaseExpiresAt: null,
+            isCurrent: false, finishedAt: new Date(),
+          },
+        });
+        return { activated: false };
+      }
+      if (current && current.id !== task.id) {
+        await transaction.searchIndexTask.update({ where: { id: current.id }, data: { isCurrent: false } });
+      }
+      await transaction.searchChunk.updateMany({
+        where: {
+          workspaceId: task.workspaceId,
+          researchObjectId: task.researchObjectId,
+          artifactId: task.artifactId,
           active: true,
+          NOT: { indexTaskId: task.id },
+        },
+        data: { active: false },
+      });
+      await transaction.searchChunk.updateMany({ where: { indexTaskId: task.id }, data: { active: true } });
+      if (input.status === 'needs_review') {
+        await transaction.searchEmbedding.deleteMany({
+          where: { workspaceId: task.workspaceId, modelVersionId: task.modelVersionId, chunkId: { in: staged.map(({ id }) => id) } },
+        });
+      }
+      for (const embedding of input.embeddings) {
+        const data = {
+          dimension: EMBEDDING_DIMENSION,
+          vector: embedding.vector,
+          vectorSha256: embedding.vectorSha256,
+          norm: embedding.norm,
         };
-        await transaction.searchChunk.upsert({
-          where: { workspaceId_id: { workspaceId: input.tenantId, id: chunk.id } },
-          create: { id: chunk.id, ...data },
+        await transaction.searchEmbedding.upsert({
+          where: { workspaceId_chunkId_modelVersionId: {
+            workspaceId: task.workspaceId,
+            chunkId: embedding.chunkId,
+            modelVersionId: task.modelVersionId,
+          } },
+          create: {
+            workspaceId: task.workspaceId,
+            chunkId: embedding.chunkId,
+            modelVersionId: task.modelVersionId,
+            ...data,
+          },
           update: data,
         });
       }
-    });
+      await transaction.searchIndexTask.update({
+        where: { id: task.id },
+        data: {
+          status: input.status,
+          errorCode: input.errorCode ?? null,
+          leaseToken: null,
+          leaseExpiresAt: null,
+          isCurrent: true,
+          finishedAt: new Date(),
+        },
+      });
+      return { activated: true };
+    }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable, maxWait: 2_000, timeout: 5_000 });
   }
 
   async lexicalCandidates(input: {
@@ -472,13 +922,7 @@ export class SearchStorage {
     modelIdentity: DenseModelIdentity;
   }): Promise<DenseCandidateSet | DenseStorageFailure> {
     assertUuid(input.tenantId, 'tenantId');
-    assertUuid(input.modelIdentity.modelVersionId, 'modelVersionId');
-    if (input.modelIdentity.modelRevision !== BGE_M3_REVISION
-      || !HASH_PATTERN.test(input.modelIdentity.sourceSha256)
-      || !HASH_PATTERN.test(input.modelIdentity.packageFreezeSha256)
-      || !HASH_PATTERN.test(input.modelIdentity.modelManifestSha256)) {
-      throw new Error('model identity is invalid');
-    }
+    validateModelIdentity(input.modelIdentity);
     try {
       return await this.client.$transaction(async (transaction) => {
         await transaction.$executeRaw(Prisma.sql`

@@ -8,9 +8,14 @@ import { Prisma } from '../generated/client';
 const DATABASE_URL = process.env.SEARCH_TEST_DATABASE_URL;
 const WORKSPACE_A = randomUUID();
 const WORKSPACE_B = randomUUID();
+const WORKSPACE_INDEX = randomUUID();
 const RESEARCH_OBJECT = randomUUID();
+const RESEARCH_OBJECT_INDEX = randomUUID();
 const ARTIFACT_A = randomUUID();
 const ARTIFACT_B = randomUUID();
+const ARTIFACT_INDEX = randomUUID();
+const SOURCE_VERSION_A = randomUUID();
+const SOURCE_VERSION_B = randomUUID();
 const CHUNK_A = createHash('sha256').update(`${WORKSPACE_A}:chunk-a`).digest('hex');
 const CHUNK_B = createHash('sha256').update(`${WORKSPACE_B}:chunk-b`).digest('hex');
 const COLLISION_CHUNK = createHash('sha256').update(`${WORKSPACE_B}:collision`).digest('hex');
@@ -19,6 +24,20 @@ const CORRUPT_TF_CHUNKS = Array.from({ length: 4 }, (_, index) =>
 const COMPRESSED_PAYLOAD_CHUNK = createHash('sha256').update(`${WORKSPACE_A}:compressed-payload`).digest('hex');
 const HASH_A = createHash('sha256').update(`${WORKSPACE_A}:content`).digest('hex');
 const HASH_B = createHash('sha256').update(`${WORKSPACE_B}:content`).digest('hex');
+const INDEX_HASH_A = createHash('sha256').update(`${WORKSPACE_INDEX}:generation-a`).digest('hex');
+const INDEX_CHUNK_A = createHash('sha256').update(`${WORKSPACE_INDEX}:chunk-a`).digest('hex');
+const INDEX_CHUNK_B = createHash('sha256').update(`${WORKSPACE_INDEX}:chunk-b`).digest('hex');
+const INDEX_CHUNK_C = createHash('sha256').update(`${WORKSPACE_INDEX}:chunk-c`).digest('hex');
+const INDEX_TASK_A = randomUUID();
+const INDEX_TASK_B = randomUUID();
+const INDEX_TASK_C = randomUUID();
+const INDEX_LEASE_A = '4'.repeat(64);
+const INDEX_LEASE_B = '5'.repeat(64);
+const INDEX_LEASE_C = '9'.repeat(64);
+const INDEX_RECOVERY_LEASE = 'b'.repeat(64);
+const INDEX_SOURCE_MAP_A = '6'.repeat(64);
+const INDEX_SOURCE_MAP_B = '7'.repeat(64);
+const INDEX_SOURCE_MAP_C = 'a'.repeat(64);
 const MODEL_IDENTITY = {
   modelVersionId: randomUUID(),
   modelRevision: '5617a9f61b028005a4858fdac845db406aefb181',
@@ -106,8 +125,9 @@ describe.skipIf(DATABASE_URL === undefined)('SearchStorage ECS integration', () 
 
   afterAll(async () => {
     if (mutationAllowed) {
-      await client.searchChunk.deleteMany({ where: { workspaceId: { in: [WORKSPACE_A, WORKSPACE_B] } } });
-      await client.searchQueryMetric.deleteMany({ where: { workspaceId: { in: [WORKSPACE_A, WORKSPACE_B] } } });
+      await client.searchIndexTask.deleteMany({ where: { workspaceId: { in: [WORKSPACE_A, WORKSPACE_B, WORKSPACE_INDEX] } } });
+      await client.searchChunk.deleteMany({ where: { workspaceId: { in: [WORKSPACE_A, WORKSPACE_B, WORKSPACE_INDEX] } } });
+      await client.searchQueryMetric.deleteMany({ where: { workspaceId: { in: [WORKSPACE_A, WORKSPACE_B, WORKSPACE_INDEX] } } });
       await client.searchModelVersion.deleteMany({ where: { id: MODEL_IDENTITY.modelVersionId } });
     }
     await client.$disconnect();
@@ -151,6 +171,179 @@ describe.skipIf(DATABASE_URL === undefined)('SearchStorage ECS integration', () 
     });
     await expect(client.searchQueryMetric.findFirst({ where: { workspaceId: WORKSPACE_A, queryHash } }))
       .resolves.toMatchObject({ queryHash, lexicalAvailable: true, denseAvailable: true, resultCount: 1 });
+  });
+
+  it('stages generations, atomically flips lexical+dense state, and keeps an older replay inactive', async () => {
+    const draft = (id: string, contentHash: string, text: string) => ({
+      id,
+      artifactId: ARTIFACT_INDEX,
+      contentHash,
+      ordinal: 0,
+      language: 'en' as const,
+      text,
+      tokenCount: 2,
+      locators: [{ artifactId: ARTIFACT_INDEX, contentHash, blockId: `block-${id.slice(0, 4)}`, page: 1 }],
+      claimIds: [],
+      lexicalTerms: text.split(' ').sort(),
+      termFrequencies: Object.fromEntries(text.split(' ').map((term) => [term, 1])),
+    });
+    const vector = Buffer.alloc(1024 * Float32Array.BYTES_PER_ELEMENT);
+    vector.writeFloatLE(1, 0);
+    const embedding = (chunkId: string) => ({
+      chunkId,
+      vector,
+      vectorSha256: createHash('sha256').update(vector).digest('hex'),
+      norm: 1,
+    });
+
+    await expect(storage.beginIndexTask({
+      taskId: INDEX_TASK_A,
+      tenantId: WORKSPACE_INDEX,
+      researchObjectId: RESEARCH_OBJECT_INDEX,
+      artifactId: ARTIFACT_INDEX,
+      sourceVersionId: SOURCE_VERSION_A,
+      sourceVersionNo: 1,
+      contentHash: INDEX_HASH_A,
+      sourceGenerationSha256: INDEX_SOURCE_MAP_A,
+      sourceCreatedAt: new Date('2026-08-27T08:00:00.000Z'),
+      leaseToken: INDEX_LEASE_A,
+      executionAttempt: 1,
+      modelIdentity: MODEL_IDENTITY,
+    })).resolves.toEqual({ action: 'run', taskId: INDEX_TASK_A, leaseToken: INDEX_LEASE_A });
+    await expect(storage.beginIndexTask({
+      taskId: INDEX_TASK_A,
+      tenantId: WORKSPACE_INDEX,
+      researchObjectId: RESEARCH_OBJECT_INDEX,
+      artifactId: ARTIFACT_INDEX,
+      sourceVersionId: SOURCE_VERSION_A,
+      sourceVersionNo: 1,
+      contentHash: INDEX_HASH_A,
+      sourceGenerationSha256: INDEX_SOURCE_MAP_A,
+      sourceCreatedAt: new Date('2026-08-27T08:00:00.000Z'),
+      leaseToken: INDEX_RECOVERY_LEASE,
+      executionAttempt: 2,
+      modelIdentity: MODEL_IDENTITY,
+    })).resolves.toEqual({ action: 'run', taskId: INDEX_TASK_A, leaseToken: INDEX_RECOVERY_LEASE });
+    await storage.stageIndexGeneration({
+      taskId: INDEX_TASK_A,
+      leaseToken: INDEX_RECOVERY_LEASE,
+      chunks: [draft(INDEX_CHUNK_A, INDEX_HASH_A, 'alpha pulse')],
+    });
+    await expect(storage.finalizeIndexGeneration({
+      taskId: INDEX_TASK_A,
+      leaseToken: INDEX_RECOVERY_LEASE,
+      status: 'succeeded',
+      embeddings: [embedding(INDEX_CHUNK_A)],
+    })).resolves.toEqual({ activated: true });
+
+    await expect(storage.beginIndexTask({
+      taskId: INDEX_TASK_B,
+      tenantId: WORKSPACE_INDEX,
+      researchObjectId: RESEARCH_OBJECT_INDEX,
+      artifactId: ARTIFACT_INDEX,
+      sourceVersionId: SOURCE_VERSION_B,
+      sourceVersionNo: 2,
+      contentHash: INDEX_HASH_A,
+      sourceGenerationSha256: INDEX_SOURCE_MAP_B,
+      sourceCreatedAt: new Date('2026-08-27T09:00:00.000Z'),
+      leaseToken: INDEX_LEASE_B,
+      executionAttempt: 1,
+      modelIdentity: MODEL_IDENTITY,
+    })).resolves.toEqual({ action: 'run', taskId: INDEX_TASK_B, leaseToken: INDEX_LEASE_B });
+    await storage.stageIndexGeneration({
+      taskId: INDEX_TASK_B,
+      leaseToken: INDEX_LEASE_B,
+      chunks: [draft(INDEX_CHUNK_B, INDEX_HASH_A, 'beta pulse')],
+    });
+
+    // Staging is invisible: the prior lexical+dense generation remains current.
+    await expect(client.searchChunk.findUnique({ where: { id: INDEX_CHUNK_A } }))
+      .resolves.toMatchObject({ active: true });
+    await expect(client.searchChunk.findUnique({ where: { id: INDEX_CHUNK_B } }))
+      .resolves.toMatchObject({ active: false });
+    await expect(storage.finalizeIndexGeneration({
+      taskId: INDEX_TASK_B,
+      leaseToken: INDEX_LEASE_B,
+      status: 'needs_review',
+      errorCode: 'embedding_unavailable',
+      embeddings: [],
+    })).resolves.toEqual({ activated: true });
+
+    await expect(client.searchChunk.findUnique({ where: { id: INDEX_CHUNK_A } }))
+      .resolves.toMatchObject({ active: false });
+    await expect(client.searchChunk.findUnique({ where: { id: INDEX_CHUNK_B } }))
+      .resolves.toMatchObject({ active: true });
+    await expect(client.searchEmbedding.count({ where: { workspaceId: WORKSPACE_INDEX, chunkId: INDEX_CHUNK_A } }))
+      .resolves.toBe(1);
+    await expect(storage.denseCandidates({ tenantId: WORKSPACE_INDEX, modelIdentity: MODEL_IDENTITY }))
+      .resolves.toEqual({ status: 'ok', candidates: [], needsReviewCount: 0 });
+
+    // Reclaiming needs_review keeps the current lexical rows active until dense succeeds.
+    const retryLease = '8'.repeat(64);
+    await expect(storage.beginIndexTask({
+      taskId: INDEX_TASK_B,
+      tenantId: WORKSPACE_INDEX,
+      researchObjectId: RESEARCH_OBJECT_INDEX,
+      artifactId: ARTIFACT_INDEX,
+      sourceVersionId: SOURCE_VERSION_B,
+      sourceVersionNo: 2,
+      contentHash: INDEX_HASH_A,
+      sourceGenerationSha256: INDEX_SOURCE_MAP_B,
+      sourceCreatedAt: new Date('2026-08-27T09:00:00.000Z'),
+      leaseToken: retryLease,
+      executionAttempt: 2,
+      modelIdentity: MODEL_IDENTITY,
+    })).resolves.toEqual({ action: 'run', taskId: INDEX_TASK_B, leaseToken: retryLease });
+    await storage.stageIndexGeneration({
+      taskId: INDEX_TASK_B,
+      leaseToken: retryLease,
+      chunks: [draft(INDEX_CHUNK_B, INDEX_HASH_A, 'beta pulse')],
+    });
+    await expect(storage.finalizeIndexGeneration({
+      taskId: INDEX_TASK_B,
+      leaseToken: retryLease,
+      status: 'succeeded',
+      embeddings: [embedding(INDEX_CHUNK_B)],
+    })).resolves.toEqual({ activated: true });
+    await expect(client.searchIndexTask.findUnique({ where: { id: INDEX_TASK_B } }))
+      .resolves.toMatchObject({ status: 'succeeded', attemptCount: 2, errorCode: null, isCurrent: true });
+    const dense = await storage.denseCandidates({ tenantId: WORKSPACE_INDEX, modelIdentity: MODEL_IDENTITY });
+    expect(dense).toMatchObject({ status: 'ok', needsReviewCount: 0 });
+    if (dense.status !== 'ok') throw new Error('dense generation unavailable');
+    expect(dense.candidates.map(({ id }) => id)).toEqual([INDEX_CHUNK_B]);
+
+    // A delayed older source can finish successfully, but it cannot replace the current generation.
+    await expect(storage.beginIndexTask({
+      taskId: INDEX_TASK_C,
+      tenantId: WORKSPACE_INDEX,
+      researchObjectId: RESEARCH_OBJECT_INDEX,
+      artifactId: ARTIFACT_INDEX,
+      sourceVersionId: SOURCE_VERSION_A,
+      sourceVersionNo: 1,
+      contentHash: INDEX_HASH_A,
+      sourceGenerationSha256: INDEX_SOURCE_MAP_C,
+      sourceCreatedAt: new Date('2026-08-27T10:00:00.000Z'),
+      leaseToken: INDEX_LEASE_C,
+      executionAttempt: 1,
+      modelIdentity: MODEL_IDENTITY,
+    })).resolves.toEqual({ action: 'run', taskId: INDEX_TASK_C, leaseToken: INDEX_LEASE_C });
+    await storage.stageIndexGeneration({
+      taskId: INDEX_TASK_C,
+      leaseToken: INDEX_LEASE_C,
+      chunks: [draft(INDEX_CHUNK_C, INDEX_HASH_A, 'stale pulse')],
+    });
+    await expect(storage.finalizeIndexGeneration({
+      taskId: INDEX_TASK_C,
+      leaseToken: INDEX_LEASE_C,
+      status: 'succeeded',
+      embeddings: [embedding(INDEX_CHUNK_C)],
+    })).resolves.toEqual({ activated: false });
+    await expect(client.searchChunk.findUnique({ where: { id: INDEX_CHUNK_B } }))
+      .resolves.toMatchObject({ active: true });
+    await expect(client.searchChunk.findUnique({ where: { id: INDEX_CHUNK_C } }))
+      .resolves.toMatchObject({ active: false });
+    await expect(client.searchEmbedding.count({ where: { workspaceId: WORKSPACE_INDEX, chunkId: INDEX_CHUNK_C } }))
+      .resolves.toBe(0);
   });
 
   it('fails closed on a real cross-tenant global chunk-ID collision', async () => {

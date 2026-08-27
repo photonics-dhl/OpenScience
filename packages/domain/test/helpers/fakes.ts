@@ -674,7 +674,7 @@ export function createFakePrisma(): { prisma: PrismaClient; db: FakeDb } {
     agentTask: {
       create: async ({ data }: any) => {
         if (data.idempotencyKey && db.agentTasks.some((t) => t.idempotencyKey === data.idempotencyKey)) throw p2002();
-        const row = { id: nextId(), status: 'pending', progress: 0, retryCount: 0, dispatchedAt: null, createdAt: new Date(), updatedAt: new Date(), ...data };
+        const row = { id: nextId(), status: 'pending', progress: 0, retryCount: 0, executionAttempt: 0, dispatchedAt: null, createdAt: new Date(), updatedAt: new Date(), ...data };
         db.agentTasks.push(row);
         return row;
       },
@@ -700,11 +700,17 @@ export function createFakePrisma(): { prisma: PrismaClient; db: FakeDb } {
           (where.dispatchedAt === undefined || task.dispatchedAt === where.dispatchedAt) &&
           (where.kind === undefined || task.kind === where.kind) &&
           (where.retryCount === undefined || task.retryCount === where.retryCount) &&
+          (where.executionAttempt === undefined || task.executionAttempt === where.executionAttempt) &&
           (where.error === undefined || task.error === where.error) &&
           (typeof where.status !== 'string' || task.status === where.status) &&
           (where.status?.in === undefined || where.status.in.includes(task.status)),
         );
-        rows.forEach((row) => Object.assign(row, data, { updatedAt: new Date() }));
+        rows.forEach((row) => {
+          const executionAttempt = data.executionAttempt?.increment
+            ? row.executionAttempt + data.executionAttempt.increment
+            : (data.executionAttempt ?? row.executionAttempt);
+          Object.assign(row, { ...data, executionAttempt, updatedAt: new Date() });
+        });
         return { count: rows.length };
       },
       findMany: async ({ where, include, orderBy, take }: any) => {

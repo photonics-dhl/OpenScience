@@ -23,7 +23,16 @@ export {
   type LexicalRankResult,
   type SearchStorageFailure,
 } from './lexical';
-export { SearchStorage, type UpsertSearchChunksInput } from './storage';
+export {
+  SearchStorage,
+  type BeginIndexTaskInput,
+  type BeginIndexTaskResult,
+  type FinalizeIndexGenerationInput,
+  type IndexTaskLeaseInput,
+  type SearchEmbeddingDraft,
+  type StageIndexGenerationInput,
+  type UpsertSearchChunksInput,
+} from './storage';
 export {
   EmbeddingClient,
   type EmbeddingClientOptions,

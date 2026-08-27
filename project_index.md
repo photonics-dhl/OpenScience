@@ -33,6 +33,7 @@
 | `apps/agent-worker/src/{ingestion-parser,parser-self-test,parser-job-isolation,parser-service,index}.ts` / `apps/agent-worker/test/parser-job-isolation.test.ts` | Artifact→Blob→Hermes 桥接：Markdown/TeX 确定性解码；PDF/DOCX/OCR 只经 shared-volume sidecar；sidecar 无网络/Secret、只读非 root、512MB/64 PID；self-test 用无用户数据 fixture 验证运行时；超限永久阻断、解析失败显式复核 | CURRENT production parser boundary |
 | `packages/domain/test/ingestion-service.test.ts` / `apps/api/test/ingestion.integration.test.ts` / `apps/web/test/evidence-intake.test.ts` | PDF/DOCX/TeX-ZIP/Markdown/图片/CSV/TSV/JSON/YAML/Notebook/Python/R、consent、越权、幂等恢复、worker 状态同步、Intake role/primary/progress 与真实存储合同 | 测试工具 |
 | `packages/database/test/signup-challenge-migration{,.integration}.test.ts` | migration 23 SQL 顺序门禁与真实 PostgreSQL 预存重复 active challenge 收敛验收 | 测试工具 |
+| `packages/database/test/agent-task-execution-attempt-migration.test.ts` | migration 29 `agent_tasks.execution_attempt` 单调 worker 领取代际与 rollback SQL 契约门禁 | 候选实现，待 ECS 验收/部署 |
 | `apps/web/lib/api.ts` / `apps/web/next.config.mjs` / `infra/nginx/openscience.conf` | web 同源 `/api` 传输层：开发 rewrite、生产反代、受保护写请求 CSRF 获取与一次刷新重试；`/auth/login`、`/auth/register` 精确走 Next，其余 direct `/auth/*` 兼容 API 仍走 Fastify | 活文档；2026-08-10 ECS 登录入口冲突已补回归测试 |
 | `apps/web/test/ingestion-foundations.test.ts` / `apps/web/test/visual/ingestion-shots.mjs` / `apps/web/app/{%5Fvisual,_visual}/ingestion-foundations/page.tsx` | 研究者导入视觉地基 TDD 合同与 1440/768/375 三视口浏览器截图门禁；脚本访问仅开发态可用的真实编译原语预览 | 活文档 |
 | `apps/web/app/tokens.css` / `apps/web/app/layout.tsx` / `apps/web/test/{tokens-contrast,optical-foundations}.test.ts` | Optical Editorial v3 视觉地基：黑/纸白/朱红 token、0/4/8px 半径、四字体角色、语义 motion、AA/禁蓝紫/降级门禁 | 活文档 |
@@ -378,7 +379,7 @@
 | `infra/nginx/openscience.test.mjs` | 生产 Nginx 合同：`/api` rewrite、Auth 页面/API 分流、Curator/Admin API 保护、Basic credential 不转发、Tunnel 真实 IP 与部署同步 | 8/8 GREEN |
 | `infra/www/` | `nav/index.html` 服务器面板导航静态页（/var/www/nav，2026-08-01） | 已部署云上 |
 | `infra/sandbox/` | 沙箱配置占位（P1A-1） | 骨架 |
-| `infra/migrations/` | Prisma 迁移 1–28（28 = Research Intelligence core metadata；27 = `agent_tasks.retry_count`），各附 rollback.sql | ECS 当前仓库 28/28；生产 ledger 29 含需保留的历史 `20260809010000_ro_create_idempotency`，failed 0 |
+| `infra/migrations/` | Prisma 迁移 1–29（29 = `agent_tasks.execution_attempt` worker fencing；28 = Research Intelligence core metadata；27 = `agent_tasks.retry_count`），各附 rollback.sql | 候选仓库 29/29；生产 release 仍为仓库 28/28，ledger 29 含需保留的历史 `20260809010000_ro_create_idempotency`，新 migration 29 尚未部署 |
 | `infra/schema.prisma` | core Prisma schema：既有平台模型 + ResearchIdentityProfile、ClaimNode、EvidenceRecord、PresentationAsset 与 scoped relations | **TASK 2 DEPLOYED `e0828a6`** |
 | `infra/search/schema.prisma` / `infra/search/migrations/` / `packages/search/test/migration.test.ts` | search 独立 Prisma schema、generator 与迁移账本；baseline `search_meta` 不与 core ledger 混用；Task 6 migration 2 增加 tenant-scoped chunk/embedding/index/model/telemetry、GIN 与机械 rollback | **CURRENT CANDIDATE / ECS DRILL GREEN**；`c8fc590` migration drill 与 `7d489c5` lexical drill 均完成 forward/rollback/redeploy；production search 仍为 1/1 且无检索业务数据 |
 | `scripts/verify-database-isolation.mjs` / `scripts/verify-database-isolation.test.mjs` | 拒绝 core/search 指向同一物理数据库，并以脱敏元数据给出部署门禁 | **CURRENT**；focused contract 与 ECS `DATABASE_ISOLATION_OK` GREEN |

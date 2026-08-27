@@ -10,6 +10,15 @@ import { AgentError } from './errors';
 
 export const AGENT_TASK_QUEUE = 'agent:queue';
 export const AI_CREDIT_RESOURCE = 'ai_credit'; // §2.4-7 配额骨架（P1A-7）
+export const AGENT_TASK_KINDS = [
+  'demo.echo', 'sdf.extract', 'review.analyze', 'visualization.plan', 'workspace.guide', 'search.index',
+] as const;
+export const PUBLIC_AGENT_TASK_KINDS = [
+  'demo.echo', 'sdf.extract', 'review.analyze', 'visualization.plan',
+] as const;
+export const PUBLIC_AGENT_SESSION_KINDS = [
+  'extract', 'review', 'visualization', 'publish', 'ingestion', 'workspace.guide',
+] as const;
 
 export type AgentTaskStatus = 'pending' | 'running' | 'succeeded' | 'failed';
 
@@ -33,6 +42,7 @@ export interface AgentTaskView {
   status: AgentTaskStatus;
   progress: number;
   retryCount: number;
+  executionAttempt: number;
   result: Record<string, unknown> | null;
   error: string | null;
   createdAt: Date;
@@ -151,6 +161,9 @@ export async function submitAgentTask(
   if (!session || session.userId !== input.userId) {
     throw new AgentError('RESEARCH_OBJECT_NOT_FOUND', '会话不存在');
   }
+  if (!(AGENT_TASK_KINDS as readonly string[]).includes(input.kind)) {
+    throw new AgentError('VALIDATION_ERROR', '不支持的 Hermes 任务类型');
+  }
   if ((session.kind === 'workspace.guide') !== (input.kind === 'workspace.guide')) {
     throw new AgentError('VALIDATION_ERROR', 'Hermes 任务与会话类型不匹配');
   }
@@ -253,7 +266,7 @@ export async function dispatchAgentTask(deps: AgentDeps, taskId: string): Promis
 /** DB task rows with dispatchedAt=null are the durable queue outbox. */
 export async function recoverUndispatchedAgentTasks(deps: AgentDeps, limit = 50): Promise<number> {
   const tasks = await deps.prisma.agentTask.findMany({
-    where: { kind: { in: ['workspace.guide', 'sdf.extract'] }, status: 'pending', dispatchedAt: null },
+    where: { kind: { in: ['workspace.guide', 'sdf.extract', 'search.index'] }, status: 'pending', dispatchedAt: null },
     orderBy: { createdAt: 'asc' },
     take: limit,
   });
@@ -279,12 +292,14 @@ export async function prepareAgentTaskForCrashRecovery(deps: AgentDeps, taskId: 
 }
 
 export async function claimAgentTask(deps: AgentDeps, taskId: string): Promise<AgentTaskView | null> {
-  const claimed = await deps.prisma.agentTask.updateMany({
-    where: { id: taskId, status: { in: ['pending', 'failed'] } },
-    data: { status: 'running', progress: 10, error: null },
-  });
-  if (claimed.count !== 1) return null;
-  const task = await deps.prisma.agentTask.findUnique({ where: { id: taskId } });
+  const task = await deps.prisma.$transaction(async (tx) => {
+    const claimed = await tx.agentTask.updateMany({
+      where: { id: taskId, status: { in: ['pending', 'failed'] } },
+      data: { status: 'running', progress: 10, error: null, executionAttempt: { increment: 1 } },
+    });
+    if (claimed.count !== 1) return null;
+    return tx.agentTask.findUnique({ where: { id: taskId } });
+  }, { isolationLevel: 'Serializable' });
   if (!task) return null;
   await syncIngestionState(deps, task.id, 'running');
   return taskToView(task);
@@ -371,11 +386,22 @@ export async function listAgentSessions(
  */
 export async function markTaskProgress(
   deps: AgentDeps,
-  input: { taskId: string; status: AgentTaskStatus; progress?: number; result?: Record<string, unknown>; error?: string | null },
+  input: {
+    taskId: string;
+    status: AgentTaskStatus;
+    progress?: number;
+    result?: Record<string, unknown>;
+    error?: string | null;
+    expectedExecutionAttempt?: number;
+  },
 ): Promise<AgentTaskView> {
   const task = await deps.prisma.agentTask.findUnique({ where: { id: input.taskId }, include: { session: true } });
   if (!task) throw new AgentError('RESEARCH_OBJECT_NOT_FOUND', '任务不存在');
   const from = task.status as AgentTaskStatus;
+  if (input.expectedExecutionAttempt !== undefined
+    && task.executionAttempt !== input.expectedExecutionAttempt) {
+    throw new AgentError('ILLEGAL_TRANSITION', '任务执行代际已被新的 worker 接管');
+  }
 
   // 消费者幂等：终态 succeeded 后 skip（§16 重放不重复副作用）
   if (from === 'succeeded') return taskToView(task);
@@ -383,7 +409,17 @@ export async function markTaskProgress(
   if (from === input.status) {
     // 同状态仅更新 progress（running→running 进度推进）
     if (input.progress !== undefined && input.progress >= (task.progress ?? 0)) {
-      await deps.prisma.agentTask.update({ where: { id: task.id }, data: { progress: input.progress } });
+      const changed = await deps.prisma.agentTask.updateMany({
+        where: {
+          id: task.id,
+          status: from,
+          ...(input.expectedExecutionAttempt === undefined
+            ? {}
+            : { executionAttempt: input.expectedExecutionAttempt }),
+        },
+        data: { progress: input.progress },
+      });
+      if (changed.count !== 1) throw new AgentError('ILLEGAL_TRANSITION', '任务执行代际已被新的 worker 接管');
     }
     await syncIngestionState(deps, task.id, input.status, input.error);
     return taskToView(task);
@@ -394,8 +430,14 @@ export async function markTaskProgress(
   }
 
   const updated = await deps.prisma.$transaction(async (tx) => {
-    const row = await tx.agentTask.update({
-      where: { id: task.id },
+    const changed = await tx.agentTask.updateMany({
+      where: {
+        id: task.id,
+        status: from,
+        ...(input.expectedExecutionAttempt === undefined
+          ? {}
+          : { executionAttempt: input.expectedExecutionAttempt }),
+      },
       data: {
         status: input.status,
         ...(input.progress !== undefined ? { progress: input.progress } : {}),
@@ -403,6 +445,9 @@ export async function markTaskProgress(
         ...(input.error !== undefined ? { error: input.error } : {}),
       },
     });
+    if (changed.count !== 1) throw new AgentError('ILLEGAL_TRANSITION', '任务执行代际已被新的 worker 接管');
+    const row = await tx.agentTask.findUnique({ where: { id: task.id } });
+    if (!row) throw new AgentError('RESEARCH_OBJECT_NOT_FOUND', '任务不存在');
     return row;
   });
   await syncIngestionState(deps, task.id, input.status, input.error);
@@ -430,11 +475,13 @@ async function syncIngestionState(
 
 function taskToView(task: {
   id: string; sessionId: string; kind: string; status: AgentTaskStatus;
-  progress: number; retryCount: number; result: unknown; error: string | null; createdAt: Date; updatedAt: Date;
+  progress: number; retryCount: number; executionAttempt: number;
+  result: unknown; error: string | null; createdAt: Date; updatedAt: Date;
 }): AgentTaskView {
   return {
     id: task.id, sessionId: task.sessionId, kind: task.kind, status: task.status,
-    progress: task.progress, retryCount: task.retryCount, result: (task.result ?? null) as Record<string, unknown> | null,
+    progress: task.progress, retryCount: task.retryCount, executionAttempt: task.executionAttempt,
+    result: (task.result ?? null) as Record<string, unknown> | null,
     error: task.error, createdAt: task.createdAt, updatedAt: task.updatedAt,
   };
 }

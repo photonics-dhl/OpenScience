@@ -68,6 +68,9 @@ importers:
       '@openscience/sdf-schema':
         specifier: workspace:^
         version: link:../../packages/sdf-schema
+      '@openscience/search':
+        specifier: workspace:^
+        version: link:../../packages/search
       '@openscience/storage':
         specifier: workspace:^
         version: link:../../packages/storage
