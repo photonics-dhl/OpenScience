@@ -17,7 +17,7 @@ ADD --checksum=sha256:35e33a08e8ed5e299eabbe3bc23518eb66a424dd29ee08fb3802bf9aef
     https://files.pythonhosted.org/packages/6e/4a/eb1a033d744e5a854f0918b2a002fca0d7db72078aa70b5145d5100141c1/flagembedding-1.4.2-py3-none-any.whl \
     /tmp/flagembedding-1.4.2-py3-none-any.whl
 
-COPY --chmod=0444 apps/embedding-worker/requirements.lock /tmp/requirements.lock
+COPY apps/embedding-worker/requirements.lock /tmp/requirements.lock
 
 RUN python -m pip install --no-cache-dir --timeout 600 --retries 5 \
       --requirement /tmp/requirements.lock \
@@ -27,9 +27,12 @@ RUN python -m pip install --no-cache-dir --timeout 600 --retries 5 \
 
 RUN install -d -m 0755 /app /opt/bge-m3-seed /opt/bge-m3-lock /models/bge-m3
 
-COPY --chmod=0555 apps/embedding-worker/app.py /app/app.py
-COPY --chmod=0555 apps/embedding-worker/model-init.py /app/model-init.py
-COPY --chmod=0444 apps/embedding-worker/requirements.lock /opt/bge-m3-lock/requirements.lock
+COPY apps/embedding-worker/app.py /app/app.py
+COPY apps/embedding-worker/model-init.py /app/model-init.py
+COPY apps/embedding-worker/requirements.lock /opt/bge-m3-lock/requirements.lock
+
+RUN chmod 0555 /app/app.py /app/model-init.py \
+    && chmod 0444 /opt/bge-m3-lock/requirements.lock
 
 RUN python -c "from huggingface_hub import snapshot_download; snapshot_download(repo_id='BAAI/bge-m3', revision='5617a9f61b028005a4858fdac845db406aefb181', local_dir='/opt/bge-m3-seed')" \
     && python /app/model-init.py --write-manifest --seed /opt/bge-m3-seed \

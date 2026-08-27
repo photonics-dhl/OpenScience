@@ -160,6 +160,7 @@ class ModelInitializationTests(unittest.TestCase):
         self.assertIn("--checksum=sha256:35e33a08e8ed5e299eabbe3bc23518eb66a424dd29ee08fb3802bf9aef9e9bf2", dockerfile)
         self.assertIn("--requirement /tmp/requirements.lock", dockerfile)
         self.assertIn("USER 10001:10001", dockerfile)
+        self.assertNotIn("COPY --chmod", dockerfile)
 
 
 if __name__ == "__main__":
