@@ -28,6 +28,7 @@ type SearchEvaluationCorpus = {
 };
 
 const corpusPath = new URL('../../../test/research-intelligence/search-evaluation.json', import.meta.url);
+const evaluationScriptPath = new URL('../../../infra/scripts/evaluate-embedding-models.sh', import.meta.url);
 
 describe('search evaluation corpus', () => {
   it('provides a self-authored bilingual retrieval gate with valid locators', async () => {
@@ -60,5 +61,14 @@ describe('search evaluation corpus', () => {
       expect(query.relevantChunkIds.length, query.id).toBeGreaterThan(0);
       expect(query.relevantChunkIds.every((id) => chunkIds.has(id)), query.id).toBe(true);
     }
+  });
+
+  it('routes image-build downloads through the ECS host proxy without weakening runtime isolation', async () => {
+    const script = await readFile(evaluationScriptPath, 'utf8');
+    expect(script).toMatch(/docker build --pull[\s\\]*--network host/);
+    expect(script).toContain('--build-arg HTTP_PROXY=http://127.0.0.1:7891');
+    expect(script).toContain('--build-arg HTTPS_PROXY=http://127.0.0.1:7891');
+    expect(script).toContain('--network none');
+    expect(script).toContain('--read-only');
   });
 });

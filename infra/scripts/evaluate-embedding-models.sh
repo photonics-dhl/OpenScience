@@ -110,6 +110,10 @@ if docker image inspect "$IMAGE_TAG" >/dev/null 2>&1; then
     || { echo 'candidate image tag has an unexpected source label' >&2; exit 73; }
 else
   docker build --pull \
+    --network host \
+    --build-arg HTTP_PROXY=http://127.0.0.1:7891 \
+    --build-arg HTTPS_PROXY=http://127.0.0.1:7891 \
+    --build-arg NO_PROXY=localhost,127.0.0.1 \
     --label "org.openscience.source=$GIT_SHA" \
     --label 'org.openscience.candidate=bge-m3' \
     --label "org.openscience.model-revision=$MODEL_REVISION" \

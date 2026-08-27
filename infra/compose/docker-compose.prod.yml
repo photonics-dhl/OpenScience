@@ -24,6 +24,7 @@ services:
       POSTGRES_USER: ${POSTGRES_USER:?POSTGRES_USER required}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD required}
       POSTGRES_DB: ${POSTGRES_DB:-openscience}
+      POSTGRES_SEARCH_DB: ${SEARCH_POSTGRES_DB:-openscience_search}
     volumes:
       - postgres-data:/var/lib/postgresql/data
     healthcheck:
@@ -104,6 +105,7 @@ services:
     networks:
       - app_net
       - data_net
+      - embedding_net
     restart: unless-stopped
 
   malware-scanner:
@@ -148,6 +150,13 @@ services:
       CLAMAV_HOST: malware-scanner
       CLAMAV_PORT: "3310"
       PARSER_JOB_DIR: /parser-jobs
+      BGE_M3_ENABLED: ${BGE_M3_ENABLED:-false}
+      BGE_M3_MODEL_VERSION_ID: ${BGE_M3_MODEL_VERSION_ID:-}
+      BGE_M3_MODEL_REVISION: ${BGE_M3_MODEL_REVISION:-}
+      BGE_M3_SOURCE_SHA256: ${BGE_M3_SOURCE_SHA256:-}
+      BGE_M3_PACKAGE_FREEZE_SHA256: ${BGE_M3_PACKAGE_FREEZE_SHA256:-}
+      BGE_M3_MODEL_MANIFEST_SHA256: ${BGE_M3_MODEL_MANIFEST_SHA256:-}
+      EMBEDDING_WORKER_URL: http://embedding-worker:8080
     depends_on:
       postgres:
         condition: service_healthy
@@ -159,6 +168,8 @@ services:
         condition: service_healthy
       document-parser:
         condition: service_healthy
+      embedding-worker:
+        condition: service_healthy
     healthcheck:
       test: ["CMD-SHELL", "kill -0 1"]
       interval: 10s
@@ -168,6 +179,7 @@ services:
     networks:
       - app_net
       - data_net
+      - embedding_net
     restart: unless-stopped
 
   document-parser:
@@ -208,6 +220,69 @@ services:
       start_period: 20s
     restart: unless-stopped
 
+  embedding-model-init:
+    build:
+      context: ${XGS_RELEASE_ROOT:?XGS_RELEASE_ROOT required}
+      dockerfile: apps/embedding-worker/Dockerfile
+      network: host
+      args:
+        HTTP_PROXY: http://127.0.0.1:7891
+        HTTPS_PROXY: http://127.0.0.1:7891
+        NO_PROXY: localhost,127.0.0.1
+    image: openscience-embedding-worker:${XGS_RELEASE_IMAGE_TAG:?XGS_RELEASE_IMAGE_TAG required}
+    entrypoint: ["python", "/app/model-init.py"]
+    command: ["--initialize", "--seed", "/opt/bge-m3-seed", "--target", "/models/bge-m3"]
+    user: "10001:10001"
+    volumes:
+      - bge-m3-5617a9f61b028005a4858fdac845db406aefb181:/models/bge-m3
+    network_mode: none
+    read_only: true
+    tmpfs:
+      - /tmp:size=64m,noexec,nosuid,nodev,uid=10001,gid=10001,mode=0700
+    mem_limit: 1g
+    pids_limit: 64
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    restart: "no"
+
+  embedding-worker:
+    build:
+      context: ${XGS_RELEASE_ROOT:?XGS_RELEASE_ROOT required}
+      dockerfile: apps/embedding-worker/Dockerfile
+      network: host
+      args:
+        HTTP_PROXY: http://127.0.0.1:7891
+        HTTPS_PROXY: http://127.0.0.1:7891
+        NO_PROXY: localhost,127.0.0.1
+    image: openscience-embedding-worker:${XGS_RELEASE_IMAGE_TAG:?XGS_RELEASE_IMAGE_TAG required}
+    user: "10001:10001"
+    volumes:
+      - bge-m3-5617a9f61b028005a4858fdac845db406aefb181:/models/bge-m3:ro
+    depends_on:
+      embedding-model-init:
+        condition: service_completed_successfully
+    read_only: true
+    tmpfs:
+      - /tmp:size=256m,noexec,nosuid,nodev,uid=10001,gid=10001,mode=0700
+    mem_limit: 6g
+    cpus: 2
+    pids_limit: 128
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    healthcheck:
+      test: ["CMD", "python", "-c", "import sys,urllib.request; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8080/health',timeout=3).status == 200 else 1)"]
+      interval: 30s
+      timeout: 5s
+      retries: 20
+      start_period: 180s
+    networks:
+      - embedding_net
+    restart: unless-stopped
+
   web:
     image: node:22
     user: node
@@ -236,6 +311,9 @@ networks:
     internal: false
   app_net:
     driver: bridge
+  embedding_net:
+    driver: bridge
+    internal: true
 
 volumes:
   postgres-data:
@@ -248,3 +326,4 @@ volumes:
       device: tmpfs
       o: size=128m,uid=1000,gid=1000,mode=0770
   clamav-data:
+  bge-m3-5617a9f61b028005a4858fdac845db406aefb181:

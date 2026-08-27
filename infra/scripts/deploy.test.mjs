@@ -15,6 +15,31 @@ const cloudSync = readFileSync(new URL('../../scripts/cloud-sync.mjs', import.me
 const releaseSyncCommand = readFileSync(new URL('../../scripts/release-sync-command.mjs', import.meta.url), 'utf8');
 const backup = readFileSync(new URL('./backup.sh', import.meta.url), 'utf8');
 
+test('production search runtime is isolated, bounded and source locked', () => {
+  const embeddingWorker = productionCompose.split('\n  embedding-worker:')[1]?.split('\n  web:')[0] ?? '';
+  assert.match(productionCompose, /embedding-model-init:/);
+  assert.match(embeddingWorker, /read_only: true/);
+  assert.match(embeddingWorker, /user: "10001:10001"/);
+  assert.match(embeddingWorker, /pids_limit: 128/);
+  assert.match(embeddingWorker, /mem_limit: 6g/);
+  assert.match(embeddingWorker, /cpus: 2/);
+  assert.match(embeddingWorker, /cap_drop:[\s\S]*- ALL/);
+  assert.match(embeddingWorker, /no-new-privileges:true/);
+  assert.doesNotMatch(embeddingWorker, /env_file:|ports:|data_net/);
+  assert.match(productionCompose, /embedding_net:[\s\S]*internal: true/);
+  assert.match(source, /build agent-worker document-parser embedding-worker/);
+  assert.match(source, /search migration status=2\/2/);
+  assert.match(source, /embedding model manifest verified/);
+});
+
+test('database backup writes independent core and search dumps with checksums', () => {
+  assert.match(backup, /core-db-/);
+  assert.match(backup, /search-db-/);
+  assert.match(backup, /sha256sum/);
+  assert.match(backup, /SEARCH_DATABASE_URL/);
+  assert.doesNotMatch(backup, /echo[^\n]*(?:DATABASE_URL|POSTGRES_PASSWORD)/i);
+});
+
 test('production compose up receives the same env file used by migrate and validation', () => {
   assert.match(
     source,
@@ -37,7 +62,7 @@ test('production compose up receives the same env file used by migrate and valid
 });
 
 test('parser starts first and must become healthy before the worker is converged', () => {
-  assert.match(source, /compose_current "build agent-worker document-parser"/);
+  assert.match(source, /compose_current "build agent-worker document-parser embedding-worker"/);
   assert.match(
     source,
     /compose_current "up -d --force-recreate --wait --wait-timeout 300 document-parser"/,
@@ -48,7 +73,7 @@ test('parser starts first and must become healthy before the worker is converged
 });
 
 test('deployment fails unless application health and public status checks pass', () => {
-  assert.match(source, /wait_for_healthy api web agent-worker/);
+  assert.match(source, /wait_for_healthy embedding-worker api web agent-worker/);
   assert.match(source, /expect_http_status .*auth\/me 401/);
   assert.doesNotMatch(source, /curl[^\n]+\|\| true/);
 });
@@ -172,7 +197,9 @@ test('an already-active SHA exits before install or build', () => {
 
 test('scheduled backup resolves the active immutable release and is refreshed by deployment', () => {
   assert.match(backup, /RELEASE_SHA=.*\.release-id/);
-  assert.match(backup, /XGS_RELEASE_ROOT="\$RELEASE_ROOT" XGS_RELEASE_IMAGE_TAG="\$RELEASE_SHA" docker compose/);
+  assert.match(backup, /export XGS_RELEASE_ROOT="\$RELEASE_ROOT" XGS_RELEASE_IMAGE_TAG="\$RELEASE_SHA"/);
+  assert.match(backup, /COMPOSE=\(docker compose --env-file/);
+  assert.match(backup, /"\$\{COMPOSE\[@\]\}" exec -T postgres/);
   assert.match(source, /install -m 0755 \$RELEASE_ROOT\/infra\/scripts\/backup\.sh \/usr\/local\/bin\/backup\.sh/);
   assert.ok(source.indexOf('expect_http_body') < source.lastIndexOf('install -m 0755 $RELEASE_ROOT/infra/scripts/backup.sh'));
 });

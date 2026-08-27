@@ -41,29 +41,57 @@ DB_USER="${POSTGRES_USER:-openscience}"
 DB_NAME="${POSTGRES_DB:-openscience}"
 
 mkdir -p "$DUMP_DIR"
-DATE="$(date +%F)"
+DATE="$(date -u +%Y%m%dT%H%M%SZ)"
 
 if [ "$BACKUP_DB" -eq 1 ]; then
-DUMP_FILE="$DUMP_DIR/db-$DATE.sql"
+export XGS_RELEASE_ROOT="$RELEASE_ROOT" XGS_RELEASE_IMAGE_TAG="$RELEASE_SHA"
+COMPOSE=(docker compose --env-file "$REMOTE_ROOT/.env.prod" -f "$COMPOSE_FILE")
+"${COMPOSE[@]}" exec -T -w /opt/openscience api node scripts/verify-database-isolation.mjs >/dev/null
+SEARCH_DB_NAME="$("${COMPOSE[@]}" exec -T api node -e '
+  const core = new URL(process.env.DATABASE_URL);
+  const search = new URL(process.env.SEARCH_DATABASE_URL);
+  if (core.hostname !== search.hostname || core.port !== search.port) process.exit(65);
+  const name = decodeURIComponent(search.pathname.replace(/^\//, ""));
+  if (!/^[a-zA-Z0-9_]{1,63}$/.test(name)) process.exit(66);
+  process.stdout.write(name);
+')"
+[ -n "$SEARCH_DB_NAME" ] || { echo "BACKUP_FAIL: search database identity unavailable" >&2; exit 1; }
+[ "$DB_NAME" != "$SEARCH_DB_NAME" ] || { echo "BACKUP_FAIL: core/search database identity collision" >&2; exit 1; }
 
-# pg_dump：经生产 postgres 容器导出；内容不向 stdout 输出（Spec §20.1-9）
-XGS_RELEASE_ROOT="$RELEASE_ROOT" XGS_RELEASE_IMAGE_TAG="$RELEASE_SHA" docker compose --env-file "$REMOTE_ROOT/.env.prod" -f "$COMPOSE_FILE" exec -T postgres \
-  pg_dump -U "$DB_USER" -d "$DB_NAME" > "$DUMP_FILE"
+CORE_DUMP_FILE="$DUMP_DIR/core-db-$DATE.sql"
+SEARCH_DUMP_FILE="$DUMP_DIR/search-db-$DATE.sql"
+MANIFEST_FILE="$DUMP_DIR/db-set-$DATE.manifest"
 
-# 校验 dump 非空
-[ -s "$DUMP_FILE" ] || { echo "BACKUP_FAIL: $DUMP_FILE 为空" >&2; exit 1; }
+# 两个逻辑库独立导出；URL/凭据不进入命令输出或备份元数据。
+"${COMPOSE[@]}" exec -T postgres \
+  pg_dump -U "$DB_USER" -d "$DB_NAME" > "$CORE_DUMP_FILE"
+"${COMPOSE[@]}" exec -T postgres \
+  pg_dump -U "$DB_USER" -d "$SEARCH_DB_NAME" > "$SEARCH_DUMP_FILE"
+
+# 校验两个 dump 非空并生成独立校验和与集合元数据。
+[ -s "$CORE_DUMP_FILE" ] || { echo "BACKUP_FAIL: core dump empty" >&2; exit 1; }
+[ -s "$SEARCH_DUMP_FILE" ] || { echo "BACKUP_FAIL: search dump empty" >&2; exit 1; }
+sha256sum "$CORE_DUMP_FILE" > "$CORE_DUMP_FILE.sha256"
+sha256sum "$SEARCH_DUMP_FILE" > "$SEARCH_DUMP_FILE.sha256"
+printf 'schema=1\ncreated_at=%s\nrelease=%s\nretention_sets=%s\ncore=%s\nsearch=%s\n' \
+  "$DATE" "$RELEASE_SHA" "$KEEP" "$(basename "$CORE_DUMP_FILE")" "$(basename "$SEARCH_DUMP_FILE")" > "$MANIFEST_FILE"
 
 # 保留轮转（rm 命中危险命令，--confirm 才放行）
-OLD_COUNT="$(ls -t "$DUMP_DIR"/db-*.sql 2>/dev/null | tail -n +$((KEEP + 1)) | wc -l)"
+OLD_COUNT="$(ls -t "$DUMP_DIR"/db-set-*.manifest 2>/dev/null | tail -n +$((KEEP + 1)) | wc -l)"
 if [ "$OLD_COUNT" -gt 0 ]; then
   if [ "$CONFIRM" -ne 1 ]; then
     echo "轮转需删除 $OLD_COUNT 旧备份，加 --confirm 放行" >&2
   else
-    ls -t "$DUMP_DIR"/db-*.sql | tail -n +$((KEEP + 1)) | xargs -r rm -f
+    while IFS= read -r manifest; do
+      suffix="${manifest##*/db-set-}"
+      suffix="${suffix%.manifest}"
+      rm -f -- "$DUMP_DIR/core-db-$suffix.sql" "$DUMP_DIR/core-db-$suffix.sql.sha256" \
+        "$DUMP_DIR/search-db-$suffix.sql" "$DUMP_DIR/search-db-$suffix.sql.sha256" "$manifest"
+    done < <(ls -t "$DUMP_DIR"/db-set-*.manifest | tail -n +$((KEEP + 1)))
   fi
 fi
 
-echo "BACKUP_OK size=$(du -h "$DUMP_FILE" | cut -f1) files=$(ls -t "$DUMP_DIR"/db-*.sql | wc -l)/$KEEP"
+echo "BACKUP_OK core_size=$(du -h "$CORE_DUMP_FILE" | cut -f1) search_size=$(du -h "$SEARCH_DUMP_FILE" | cut -f1) sets=$(ls -t "$DUMP_DIR"/db-set-*.manifest | wc -l)/$KEEP"
 fi
 
 if [ "$BACKUP_OBJECTS" -eq 1 ]; then

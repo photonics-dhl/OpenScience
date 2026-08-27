@@ -14,6 +14,12 @@ import {
   AGENT_TASK_QUEUE, type AgentDeps,
 } from '@openscience/domain';
 import { createStorageAdapter, getBlob, storageConfigFromEnv, type StorageAdapter } from '@openscience/storage';
+import {
+  createSearchPrismaClient,
+  EmbeddingClient,
+  SearchStorage,
+  type DenseModelIdentity,
+} from '@openscience/search';
 import type { Readable } from 'node:stream';
 import { extractHandler } from './extractor';
 import { MAX_PARSER_INPUT, parseIngestion, parseIngestionWithAdapters, type IngestionAdapters } from './ingestion-parser';
@@ -22,7 +28,69 @@ import { visualizationPlanHandler } from './planner';
 import { workspaceGuideHandler } from './workspace-guide';
 import { createClamAvScanner, type MalwareScanner } from './clamav';
 import { createParserJobAdapters } from './parser-job-isolation';
-import { authorizeSearchIndexJob, type SearchIndexer } from './search-indexer';
+import { authorizeSearchIndexJob, createSearchIndexer, type SearchIndexer } from './search-indexer';
+
+const BGE_M3_REVISION = '5617a9f61b028005a4858fdac845db406aefb181';
+const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
+const SHA256_PATTERN = /^[0-9a-f]{64}$/;
+
+export type SearchIndexRuntimeConfig =
+  | { enabled: false }
+  | { enabled: true; endpoint: string; modelIdentity: DenseModelIdentity };
+
+export function loadSearchIndexRuntimeConfig(env: NodeJS.ProcessEnv = process.env): SearchIndexRuntimeConfig {
+  const enabled = env.BGE_M3_ENABLED ?? 'false';
+  if (enabled === 'false') return { enabled: false };
+  if (enabled !== 'true') throw new Error('BGE_M3_ENABLED must be true or false');
+
+  const modelVersionId = env.BGE_M3_MODEL_VERSION_ID ?? '';
+  const modelRevision = env.BGE_M3_MODEL_REVISION ?? '';
+  const sourceSha256 = env.BGE_M3_SOURCE_SHA256 ?? '';
+  const packageFreezeSha256 = env.BGE_M3_PACKAGE_FREEZE_SHA256 ?? '';
+  const modelManifestSha256 = env.BGE_M3_MODEL_MANIFEST_SHA256 ?? '';
+  const endpoint = env.EMBEDDING_WORKER_URL ?? 'http://embedding-worker:8080';
+  if (!UUID_PATTERN.test(modelVersionId)) throw new Error('BGE_M3_MODEL_VERSION_ID is invalid');
+  if (modelRevision !== BGE_M3_REVISION) throw new Error('BGE_M3_MODEL_REVISION is invalid');
+  for (const [name, value] of [
+    ['BGE_M3_SOURCE_SHA256', sourceSha256],
+    ['BGE_M3_PACKAGE_FREEZE_SHA256', packageFreezeSha256],
+    ['BGE_M3_MODEL_MANIFEST_SHA256', modelManifestSha256],
+  ] as const) {
+    if (!SHA256_PATTERN.test(value)) throw new Error(`${name} is invalid`);
+  }
+  if (env.NODE_ENV === 'production' && endpoint !== 'http://embedding-worker:8080') {
+    throw new Error('EMBEDDING_WORKER_URL must use the internal embedding worker in production');
+  }
+  return {
+    enabled: true,
+    endpoint,
+    modelIdentity: {
+      modelVersionId,
+      modelRevision,
+      sourceSha256,
+      packageFreezeSha256,
+      modelManifestSha256,
+    },
+  };
+}
+
+export function buildSearchIndexerFromEnv(
+  env: NodeJS.ProcessEnv = process.env,
+  fetcher: typeof fetch = globalThis.fetch,
+): SearchIndexer | undefined {
+  const config = loadSearchIndexRuntimeConfig(env);
+  if (!config.enabled) return undefined;
+  const client = createSearchPrismaClient({ env });
+  return createSearchIndexer({
+    storage: new SearchStorage(client),
+    embedder: new EmbeddingClient({
+      baseUrl: config.endpoint,
+      fetchImpl: fetcher,
+      logger: (message) => console.warn(message),
+    }),
+    modelIdentity: config.modelIdentity,
+  });
+}
 
 /** 任务处理器注册表（Q4：kind → 执行函数）。 */
 export type WorkerDeps = AgentDeps & { storage?: StorageAdapter; ingestionAdapters?: IngestionAdapters; malwareScanner?: MalwareScanner };
@@ -187,7 +255,7 @@ async function main(): Promise<void> {
   };
   // Gateway（§24 占位：AI_ENABLED=false 时懒加载；生产 env 注入密钥，§17）
   const gateway = buildGateway(process.env, globalThis.fetch, createPrismaAuditSink(prisma));
-  const handlers = createHandlers(gateway);
+  const handlers = createHandlers(gateway, { searchIndexer: buildSearchIndexerFromEnv(process.env) });
   const pollOnce = await createPollOnce(handlers);
   await recoverProcessingQueue(deps);
   console.log('agent-worker 启动（P1D-2/3）');

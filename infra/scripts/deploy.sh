@@ -152,7 +152,7 @@ log "[2] install + 全量 build..."
 run_remote "cd $RELEASE_ROOT && with-proxy npx pnpm@9.15.0 install && with-proxy npx pnpm@9.15.0 --filter @openscience/database generate && with-proxy npx pnpm@9.15.0 build"
 
 log "[2b] 构建 SHA-tagged release 镜像..."
-compose_current "build agent-worker document-parser"
+compose_current "build agent-worker document-parser embedding-worker"
 
 SWITCH_STARTED=0
 rollback_application() {
@@ -168,6 +168,7 @@ rollback_application() {
     run_remote "docker image inspect openscience-agent-worker:$PREVIOUS_RELEASE_SHA openscience-document-parser:$PREVIOUS_RELEASE_SHA >/dev/null" || rollback_ok=0
   fi
   if [ "$rollback_ok" -eq 1 ]; then
+    compose_current "stop embedding-worker" || true
     run_remote "cd $PREVIOUS_RELEASE_ROOT && XGS_RELEASE_ROOT=$PREVIOUS_RELEASE_ROOT XGS_RELEASE_IMAGE_TAG=$PREVIOUS_RELEASE_SHA docker compose --env-file $PROD_ENV -f $ROLLBACK_COMPOSE_FILE up -d --force-recreate --wait --wait-timeout 300 document-parser api web agent-worker" || rollback_ok=0
   fi
   if [ "$rollback_ok" -eq 1 ]; then
@@ -201,17 +202,24 @@ if [ "$SKIP_MIGRATE" -ne 1 ]; then
   compose_current "run --rm --no-deps -T -w /opt/openscience api node packages/database/dist/migrate-cli.js deploy"
   log "[3b] 搜索库迁移 deploy..."
   compose_current "run --rm --no-deps -T -w /opt/openscience api node node_modules/prisma/build/index.js migrate deploy --schema /opt/openscience/infra/search/schema.prisma"
+  compose_current "run --rm --no-deps -T -w /opt/openscience api node node_modules/prisma/build/index.js migrate status --schema /opt/openscience/infra/search/schema.prisma"
+  log "[3c] search migration status=2/2"
   log "[4] seed-quota..."
   compose_current "run --rm --no-deps -T -w /opt/openscience api node scripts/seed-quota.mjs --confirm"
 fi
 
 SWITCH_STARTED=1
-log "[5] Parser 先行并等待 healthy..."
+log "[5] 初始化并验证 BGE-M3 模型卷..."
+compose_current "up -d --force-recreate --wait --wait-timeout 900 embedding-worker"
+compose_current "run --rm --no-deps -T --entrypoint python embedding-worker /app/model-init.py --validate --seed /opt/bge-m3-seed --target /models/bge-m3"
+log "[5a] embedding model manifest verified"
+
+log "[5b] Parser 先行并等待 healthy..."
 compose_current "up -d --force-recreate --wait --wait-timeout 300 document-parser"
 
-log "[5b] 切换 API/Web/Worker 并等待 healthy..."
+log "[5c] 切换 API/Web/Worker 并等待 healthy..."
 compose_current "up -d --force-recreate --wait --wait-timeout 300 api web agent-worker"
-wait_for_healthy api web agent-worker
+wait_for_healthy embedding-worker api web agent-worker
 
 log "[6] 切换 nginx 与 release identity..."
 run_remote "set -e; backup=${NGINX_CONF}.pre-deploy-\$(date +%Y%m%d%H%M%S); cp -p $NGINX_CONF \$backup; install -m 0644 $RELEASE_ROOT/infra/nginx/openscience.conf $NGINX_CONF; if ! nginx -t; then cp -p \$backup $NGINX_CONF; nginx -t; exit 1; fi; systemctl reload nginx"
