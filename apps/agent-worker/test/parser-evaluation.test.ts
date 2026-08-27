@@ -1,4 +1,5 @@
 import { execFileSync, spawnSync } from 'node:child_process';
+import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 
 import { describe, expect, it } from 'vitest';
@@ -230,6 +231,12 @@ describe('document parser evaluation script', () => {
       },
     });
     expect(contract.gitSha).toMatch(/^[a-f0-9]{40}$/);
+  });
+
+  it('builds the worker dependency closure for a clean content-addressed checkout', () => {
+    const script = readFileSync(evaluationScript, 'utf8');
+
+    expect(script).toContain('npx pnpm@9.15.0 --filter @openscience/agent-worker... build');
   });
 
   it('rejects candidates outside the explicit allowlist', () => {

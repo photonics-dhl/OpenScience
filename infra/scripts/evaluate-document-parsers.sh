@@ -176,7 +176,7 @@ fi
 IMAGE_DIGEST="$(docker image inspect --format '{{.Id}}' "$IMAGE_TAG")"
 [[ "$IMAGE_DIGEST" =~ ^sha256:[a-f0-9]{64}$ ]] || { echo 'invalid candidate image digest' >&2; exit 70; }
 
-npx pnpm@9.15.0 --filter @openscience/agent-worker build
+npx pnpm@9.15.0 --filter @openscience/agent-worker... build
 PARSER_EVALUATION_MODULE="$REPOSITORY_ROOT/apps/agent-worker/dist/parser-evaluation.js"
 [[ -f "$PARSER_EVALUATION_MODULE" ]] || { echo 'parser evaluation module build is missing' >&2; exit 70; }
 

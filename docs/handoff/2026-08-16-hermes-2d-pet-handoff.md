@@ -8,7 +8,7 @@
 - Taskmaster tag `hermes-research-intelligence` 已完成 Task 1–3、5（4/12）；Task 5 `AI Gateway and LLM OCR Routing` 已部署，Tasks 4、6 均已解锁。
 - Task 1 建立能力台账、初始 13-case 自著权 corpus 与现状 parser baseline；Task 4 已将 corpus 升为 schema-v2 16-case，补入表格/公式/参考文献 PDF 与顺序/区域 locator；尚未安装生产 parser/OCR/model/MCP。
 - Task 5 已完成实现、独立安全/架构复审、精确 CI、ECS 构建、生产部署与运行验收；未新增 schema、migration、seed、研究数据写入或真实付费调用。
-- Task 4 已进入候选 bake-off：content-free/false-ready-safe 报告、schema-v2 16-case exporter、7-PDF layout 子集、安全生命周期脚本和 LiteParse 2.14.0 source lock 本地门禁通过；ECS 镜像/质量/RSS 尚未评测，候选仍为 `APPROVED_PILOT`。
+- Task 4 已进入候选 bake-off：content-free/false-ready-safe 报告、schema-v2 16-case exporter、7-PDF layout 子集、安全生命周期脚本和 LiteParse 2.14.0 source lock 本地门禁通过。ECS 首轮已构建隔离镜像但在 clean checkout 暴露 workspace dependency build closure 缺口；报告未生成、无残留容器，修复后须按新 SHA 重跑，候选仍为 `APPROVED_PILOT`。
 
 ## Version tuple
 
