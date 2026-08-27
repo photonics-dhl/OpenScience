@@ -1061,3 +1061,41 @@ isolated from production and does not change the application release.
   CPU Torch layer and isolates SciPy, OpenCV and RapidOCR into separate cacheable
   layers. Build completion alone is not acceptance: the source lock, sandbox,
   seven-PDF corpus, locator, latency and peak-RSS gates must all complete.
+
+### 5.34 Secret-safe migration drills and release identity recovery (2026-08-27)
+
+**Status:** mandatory for database credential operations and disposable migration
+drills. Production application release remains `f965966...`; search migration 2
+has not been applied to production.
+
+- Never place `DATABASE_URL`, `SEARCH_DATABASE_URL`, passwords or API keys in
+  `docker run -e NAME=value`, process arguments, unit descriptions or diagnostic
+  process listings. A temporary migration command violated this rule; treat any
+  such URL as compromised even when it only appeared in controlled tool output.
+- Stop the affected unit, clean its disposable database, and rotate the
+  application database credential with
+  `infra/scripts/rotate-database-credentials.sh --confirm`. The script sends SQL
+  over stdin, atomically rewrites the server-only environment file, recreates
+  consumers, waits for health and rolls back on failure. It must use the Compose
+  file under `/opt/openscience-releases/<active-release>/`, never the mutable
+  legacy `/opt/openscience` tree.
+- Reconcile all production consumers from the active immutable release after a
+  credential rotation. API, Worker and Web must mount that exact release root;
+  Worker and Parser image tags must equal the release SHA. The Parser is a
+  self-contained image: it must not mount the release root and must have exactly
+  one `/parser-jobs` mount.
+- Verify the public release endpoint as plain text, not JSON. Require target
+  container health, exact images/mounts, loopback/public 200 and exact public
+  release before closing the incident.
+- For a disposable migration drill, pipe only the required environment entry to
+  Docker stdin and use `--env-file /dev/stdin`, or pass a protected env-file path.
+  Mount exact-SHA source read-only, use the production data network without
+  published ports, and apply CPU/memory/PID/capability limits. Never inspect that
+  process's environment or full arguments.
+- Accepted credential/version evidence: credential rotation unit
+  `openscience-db-credential-rotation-20260827-a2.service`; version identity
+  `f965966...` exact and healthy. Accepted migration evidence is
+  `openscience-search-migration-drill-c8fc590-a4.service` using exact source
+  `c8fc590...`: forward `2/5/1/3`, rollback `1/0/0/0`, redeploy `2/5/1/3`
+  for migrations/tables/GIN/revised columns, followed by disposable database
+  cleanup. Production search remains `1/1`.

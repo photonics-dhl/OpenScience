@@ -131,9 +131,16 @@ Expected: fail because migration 2 and retrieval models are absent.
 
 `SearchChunk` stores tenant scope, RO/artifact/content hashes, ordinal, bounded text, token count, JSON locators, claim IDs, lexical terms and term frequencies. `SearchEmbedding` stores model-version ID, 1024 dimension, normalized float32 bytes, vector SHA-256 and norm. `SearchQueryMetric` stores only query hash, component availability, result count, bounded error code and component/total latency. Add a generated `tsvector` column and GIN indexes with manual SQL while keeping Prisma's representation `Unsupported("tsvector")`.
 
-- [ ] **Step 4: Exercise forward and rollback migrations on an ECS disposable search database**
+- [x] **Step 4: Exercise forward and rollback migrations on an ECS disposable search database**
 
 Create a uniquely named disposable database inside the existing production PostgreSQL container, point only the migration command at it, deploy migrations 1–2, verify tables/indexes, execute migration 2 rollback, verify migration 1 remains, then redeploy migration 2. Never run the rollback against production data.
+
+Exact-SHA ECS evidence: `openscience-search-migration-drill-c8fc590-a4.service`
+used source `c8fc590751c605ea583cdfa7b81d972dc2b9a5cf`. Forward, rollback
+and redeploy counts were respectively `2/5/1/3`, `1/0/0/0` and `2/5/1/3`
+for active migrations/retrieval tables/GIN indexes/revised contract columns.
+The disposable database was dropped afterward. Production search remains at
+migration `1/1`.
 
 - [x] **Step 5: Commit the schema expansion**
 
@@ -156,7 +163,7 @@ git commit -m "feat(search): add portable retrieval storage"
 - Consumes: `DocumentSourceMap`, optional Claim IDs and validated `SourceLocator` values.
 - Produces: `chunkDocument(input: ChunkDocumentInput): SearchChunkDraft[]` with 512–1024 deterministic search tokens, ordered locator segments and stable IDs.
 
-- [ ] **Step 1: Write failing chunk boundary and locator tests**
+- [x] **Step 1: Write failing chunk boundary and locator tests**
 
 ```ts
 const chunks = chunkDocument({ sourceMap, claimIdsByBlockId });
@@ -168,15 +175,15 @@ expect(chunks.flatMap((chunk) => chunk.locators).every((locator) =>
 expect(chunkDocument({ sourceMap, claimIdsByBlockId })).toEqual(chunks);
 ```
 
-- [ ] **Step 2: Run the test and verify RED**
+- [x] **Step 2: Run the test and verify RED**
 
 Run: `npx pnpm@9.15.0 --filter @openscience/search test -- chunker.test.ts`
 
-- [ ] **Step 3: Implement bounded multilingual tokenization and chunking**
+- [x] **Step 3: Implement bounded multilingual tokenization and chunking**
 
 Use Unicode word segmentation plus CJK bigrams for deterministic lexical terms. Do not split tables, equations or reference entries across chunks. Preserve one locator segment per contributing block, including artifact ID, content hash, page, bounding box and char range where present. Stable chunk IDs are SHA-256 over schema version, artifact/content hash, ordered block IDs and ordinal; raw text is never part of logs.
 
-- [ ] **Step 4: Run package tests and commit**
+- [x] **Step 4: Run package tests and commit**
 
 ```bash
 npx pnpm@9.15.0 --filter @openscience/search test
