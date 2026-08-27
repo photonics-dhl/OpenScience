@@ -1,4 +1,4 @@
-import { readFile, stat, writeFile } from 'node:fs/promises';
+import { readFile, stat } from 'node:fs/promises';
 import { basename, dirname, join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 
@@ -80,7 +80,7 @@ function boundedPeakRssBytes() {
 }
 
 function writeOutcome(outcome) {
-  return writeFile('/out/result.json', `${JSON.stringify(outcome)}\n`, { flag: 'wx', mode: 0o444 });
+  process.stdout.write(`${JSON.stringify(outcome)}\n`);
 }
 
 async function loadCase(manifestPath, caseId) {
@@ -121,21 +121,21 @@ async function run() {
     });
     const result = await parser.parse(sourcePath);
     const evaluation = evaluateLiteParseLocators(result, item.expectedLocators);
-    await writeOutcome({
+    writeOutcome({
       ...evaluation,
       elapsedMs: Math.max(0, Math.round(performance.now() - startedAt)),
       peakRssBytes: boundedPeakRssBytes(),
     });
   } catch {
     try {
-      await writeOutcome({
+      writeOutcome({
         status: 'failed',
         locatorMatches: 0,
         elapsedMs: Math.max(0, Math.round(performance.now() - startedAt)),
         peakRssBytes: boundedPeakRssBytes(),
         errorCode: 'parser_exit',
       });
-    } catch { /* a missing/occupied output is an invalid candidate result */ }
+    } catch { /* a closed output stream is an invalid candidate result */ }
     process.exitCode = 1;
   }
 }

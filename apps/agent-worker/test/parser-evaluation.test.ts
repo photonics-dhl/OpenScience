@@ -218,13 +218,13 @@ describe('document parser evaluation script', () => {
         noNewPrivileges: true,
         capDrop: 'ALL',
         corpusReadOnly: true,
-        outputKind: 'tmpfs',
+        outputKind: 'attached-stdout',
         outputMaxBytes: 65_536,
       },
       processBoundary: {
         logDriver: 'none',
         hostCaptureMaxBytes: 65_536,
-        copyTimeoutSeconds: 5,
+        attachTimeoutSeconds: 120,
         nonzeroExit: 'failed',
         timeoutAction: 'kill-container',
         publish: 'atomic-staging-rename',
@@ -240,6 +240,9 @@ describe('document parser evaluation script', () => {
 
     expect(generateIndex).toBeGreaterThan(-1);
     expect(buildIndex).toBeGreaterThan(generateIndex);
+    expect(script).toContain('docker start --attach "$ACTIVE_CONTAINER_ID"');
+    expect(script).not.toContain('docker cp ');
+    expect(script).not.toContain('--tmpfs /out:');
   });
 
   it('rejects candidates outside the explicit allowlist', () => {
@@ -276,6 +279,13 @@ describe('document parser evaluation script', () => {
       input: '{"status":"succeeded","locatorMatches":2,"elapsedMs":14,"peakRssBytes":1024,"errorCode":"parser_exit"}\n',
     });
     expect(contradictoryResult.status).not.toBe(0);
+
+    const oversizedResult = spawnSync(bash, [evaluationScriptArgument, '--normalize-outcome', 'liteparse'], {
+      cwd: repositoryRoot,
+      encoding: 'utf8',
+      input: 'x'.repeat(65_537),
+    });
+    expect(oversizedResult.status).toBe(75);
   });
 
   it.runIf(process.platform !== 'linux')('refuses candidate execution outside the ECS host', () => {

@@ -41,13 +41,13 @@ print_run_contract() {
     \"noNewPrivileges\": true,
     \"capDrop\": \"ALL\",
     \"corpusReadOnly\": true,
-    \"outputKind\": \"tmpfs\",
+    \"outputKind\": \"attached-stdout\",
     \"outputMaxBytes\": 65536
   },
   \"processBoundary\": {
     \"logDriver\": \"none\",
     \"hostCaptureMaxBytes\": 65536,
-    \"copyTimeoutSeconds\": 5,
+    \"attachTimeoutSeconds\": 120,
     \"nonzeroExit\": \"failed\",
     \"timeoutAction\": \"kill-container\",
     \"publish\": \"atomic-staging-rename\"
@@ -61,7 +61,7 @@ normalize_outcome() {
     let bytes = 0;
     process.stdin.on("data", (chunk) => {
       bytes += chunk.length;
-      if (bytes > 65536) process.exit(1);
+      if (bytes > 65536) process.exit(75);
       chunks.push(chunk);
     });
     process.stdin.on("end", () => {
@@ -231,43 +231,44 @@ for CASE_ID in "${CASE_IDS[@]}"; do
     --ulimit nproc=64:64 \
     --mount "type=bind,src=$CORPUS_DIR,dst=/corpus,readonly" \
     --tmpfs /tmp:rw,noexec,nosuid,nodev,size=16777216,uid=10001,gid=10001,mode=0700 \
-    --tmpfs /out:rw,noexec,nosuid,nodev,size=65536,uid=10001,gid=10001,mode=0700 \
     "$IMAGE_TAG" /corpus/manifest.json "$CASE_ID")"
   [[ "$ACTIVE_CONTAINER_ID" =~ ^[a-f0-9]{64}$ ]] || { echo 'invalid candidate container id' >&2; exit 70; }
   STARTED_MS="$(date +%s%3N)"
-  docker start "$ACTIVE_CONTAINER_ID" >/dev/null
   set +e
-  timeout --signal=TERM --kill-after=5s 120s docker wait "$ACTIVE_CONTAINER_ID" >/dev/null 2>&1
-  WAIT_STATUS=$?
+  CAPTURED_OUTPUT="$(
+    timeout --signal=TERM --kill-after=5s 120s \
+      docker start --attach "$ACTIVE_CONTAINER_ID" 2>/dev/null \
+      | normalize_outcome
+    PIPE_STATUSES=("${PIPESTATUS[@]}")
+    printf '\n%s %s' "${PIPE_STATUSES[0]}" "${PIPE_STATUSES[1]}"
+  )"
   set -e
   ELAPSED_MS=$(( $(date +%s%3N) - STARTED_MS ))
+  PIPE_STATUS_LINE="${CAPTURED_OUTPUT##*$'\n'}"
+  NORMALIZED_OUTPUT="${CAPTURED_OUTPUT%$'\n'*}"
+  read -r START_STATUS NORMALIZE_STATUS <<< "$PIPE_STATUS_LINE"
+  [[ "$START_STATUS" =~ ^[0-9]+$ && "$NORMALIZE_STATUS" =~ ^[0-9]+$ ]] \
+    || { echo 'invalid attached process status' >&2; exit 70; }
 
-  if [[ "$WAIT_STATUS" -eq 124 || "$WAIT_STATUS" -eq 137 ]]; then
+  if [[ "$START_STATUS" -eq 124 || "$START_STATUS" -eq 137 ]]; then
     docker kill "$ACTIVE_CONTAINER_ID" >/dev/null 2>&1 || true
-    docker wait "$ACTIVE_CONTAINER_ID" >/dev/null 2>&1 || true
+    timeout --signal=TERM --kill-after=1s 5s docker wait "$ACTIVE_CONTAINER_ID" >/dev/null 2>&1 || true
     NORMALIZED_OUTPUT="{\"status\":\"failed\",\"locatorMatches\":0,\"elapsedMs\":$ELAPSED_MS,\"peakRssBytes\":0,\"errorCode\":\"timeout\"}"
-  elif [[ "$WAIT_STATUS" -ne 0 ]]; then
-    docker kill "$ACTIVE_CONTAINER_ID" >/dev/null 2>&1 || true
-    docker wait "$ACTIVE_CONTAINER_ID" >/dev/null 2>&1 || true
-    NORMALIZED_OUTPUT="{\"status\":\"failed\",\"locatorMatches\":0,\"elapsedMs\":$ELAPSED_MS,\"peakRssBytes\":0,\"errorCode\":\"parser_exit\"}"
   else
+    RUNNING="$(docker inspect --format '{{.State.Running}}' "$ACTIVE_CONTAINER_ID")"
     RUN_EXIT="$(docker inspect --format '{{.State.ExitCode}}' "$ACTIVE_CONTAINER_ID")"
-    [[ "$RUN_EXIT" =~ ^[0-9]+$ ]] || { echo 'invalid candidate exit code' >&2; exit 70; }
-    if [[ "$RUN_EXIT" -ne 0 ]]; then
+    [[ "$RUNNING" =~ ^(true|false)$ && "$RUN_EXIT" =~ ^[0-9]+$ ]] \
+      || { echo 'invalid candidate terminal state' >&2; exit 70; }
+    if [[ "$RUNNING" == 'true' ]]; then
+      docker kill "$ACTIVE_CONTAINER_ID" >/dev/null 2>&1 || true
+      timeout --signal=TERM --kill-after=1s 5s docker wait "$ACTIVE_CONTAINER_ID" >/dev/null 2>&1 || true
+    fi
+    if [[ "$NORMALIZE_STATUS" -eq 75 ]]; then
+      NORMALIZED_OUTPUT='{"status":"failed","locatorMatches":0,"elapsedMs":0,"peakRssBytes":0,"errorCode":"limit_exceeded"}'
+    elif [[ "$NORMALIZE_STATUS" -ne 0 || "$RUNNING" == 'true' ]]; then
+      NORMALIZED_OUTPUT='{"status":"failed","locatorMatches":0,"elapsedMs":0,"peakRssBytes":0,"errorCode":"invalid_output"}'
+    elif [[ "$RUN_EXIT" -ne 0 || "$START_STATUS" -ne 0 ]]; then
       NORMALIZED_OUTPUT="{\"status\":\"failed\",\"locatorMatches\":0,\"elapsedMs\":$ELAPSED_MS,\"peakRssBytes\":0,\"errorCode\":\"parser_exit\"}"
-    else
-      set +e
-      NORMALIZED_OUTPUT="$(
-        timeout --signal=TERM --kill-after=1s 5s \
-          docker cp "$ACTIVE_CONTAINER_ID:/out/result.json" - 2>/dev/null \
-          | timeout --signal=TERM --kill-after=1s 5s tar -xO 2>/dev/null \
-          | normalize_outcome
-      )"
-      COPY_STATUS=$?
-      set -e
-      if [[ "$COPY_STATUS" -ne 0 ]]; then
-        NORMALIZED_OUTPUT='{"status":"failed","locatorMatches":0,"elapsedMs":0,"peakRssBytes":0,"errorCode":"invalid_output"}'
-      fi
     fi
   fi
   cleanup_active_container

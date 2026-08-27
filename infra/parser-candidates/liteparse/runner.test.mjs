@@ -1,7 +1,15 @@
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import { test } from 'node:test';
 
 import { evaluateLiteParseLocators } from './runner.mjs';
+
+test('publishes only the bounded process outcome through attached stdout', () => {
+  const source = readFileSync(new URL('./runner.mjs', import.meta.url), 'utf8');
+
+  assert.match(source, /process\.stdout\.write/);
+  assert.doesNotMatch(source, /\/out\/result\.json/);
+});
 
 test('matches page text from page text and spatial items without returning content', () => {
   const evaluation = evaluateLiteParseLocators({
