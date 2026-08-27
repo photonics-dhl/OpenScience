@@ -121,6 +121,11 @@ test('embedding capability is strict, release-versioned and rollback-safe', () =
   assert.match(source, /PREVIOUS_RUNTIME_ENV[\s\S]*verify-embedding-runtime\.mjs/);
   assert.match(source, /capability sidecar 缺失/);
   assert.match(source, /grep -q '\^  embedding-worker:'/);
+  assert.match(source, /PREVIOUS_CAPABILITY_STATE="\$\(run_remote "set -euo pipefail/);
+  assert.match(source, /probe_status=\\\$\?/);
+  assert.match(source, /\[ \\"\\\$probe_status\\" -eq 1 \]/);
+  assert.match(source, /旧 release capability 探测失败/);
+  assert.doesNotMatch(source, /elif run_remote "grep -q '\^  embedding-worker:'/);
   assert.match(source, /停止上一 release 的 embedding-worker/);
   assert.ok(
     source.indexOf('公网与精确 release 验收') < source.indexOf('停止上一 release 的 embedding-worker'),

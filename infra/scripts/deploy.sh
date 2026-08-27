@@ -244,7 +244,12 @@ if [ -n "$ACTIVE_RELEASE_SHA" ]; then
   run_remote "test \"\$(cat '$PREVIOUS_RELEASE_ROOT/.release-source')\" = '$PREVIOUS_RELEASE_SHA'"
   run_remote "test -f '$ROLLBACK_COMPOSE_FILE'"
   run_remote "docker image inspect openscience-agent-worker:$PREVIOUS_RELEASE_SHA openscience-document-parser:$PREVIOUS_RELEASE_SHA >/dev/null"
-  if run_remote "test -f '$PREVIOUS_CAPABILITIES_FILE'"; then
+  PREVIOUS_CAPABILITY_STATE="$(run_remote "set -euo pipefail; if [ -f '$PREVIOUS_CAPABILITIES_FILE' ]; then printf present; elif [ -e '$PREVIOUS_CAPABILITIES_FILE' ]; then exit 65; elif grep -q '^  embedding-worker:' '$ROLLBACK_COMPOSE_FILE'; then printf missing-with-embedding; else probe_status=\$?; if [ \"\$probe_status\" -eq 1 ]; then printf absent-no-embedding; else exit \"\$probe_status\"; fi; fi")" || {
+    echo "错误：旧 release capability 探测失败，拒绝猜测回滚身份" >&2
+    exit 66
+  }
+  case "$PREVIOUS_CAPABILITY_STATE" in
+    present)
     PREVIOUS_CAPABILITY_SCHEMA="$(read_capability_value "$PREVIOUS_CAPABILITIES_FILE" schema)"
     case "$PREVIOUS_CAPABILITY_SCHEMA" in
       1)
@@ -284,10 +289,14 @@ if [ -n "$ACTIVE_RELEASE_SHA" ]; then
         ;;
       *) echo "错误：旧 release capability schema 不受支持" >&2; exit 66 ;;
     esac
-  elif run_remote "grep -q '^  embedding-worker:' '$ROLLBACK_COMPOSE_FILE'"; then
-    echo "错误：旧 release 含 embedding 服务但 capability sidecar 缺失，拒绝猜测回滚身份" >&2
-    exit 66
-  fi
+      ;;
+    absent-no-embedding) ;;
+    missing-with-embedding)
+      echo "错误：旧 release 含 embedding 服务但 capability sidecar 缺失，拒绝猜测回滚身份" >&2
+      exit 66
+      ;;
+    *) echo "错误：旧 release capability 探测返回未知状态" >&2; exit 66 ;;
+  esac
 else
   log "[0] 首次版本化发布：物化并构建 rollback-ref..."
   # 旧版 Compose 不理解 release root/image tag；首次切换只能用新 Compose
