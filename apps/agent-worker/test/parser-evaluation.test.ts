@@ -323,6 +323,8 @@ describe('document parser evaluation script', () => {
       packageFreezeSha256: sha('a'),
       modelManifestSha256: sha('b'),
       modelFileCount: 42,
+      computePlatform: 'cpu',
+      gpuPackageCount: 0,
     };
     const result = spawnSync(bash, [evaluationScriptArgument, '--normalize-candidate-lock', 'docling'], {
       cwd: repositoryRoot,
@@ -338,6 +340,12 @@ describe('document parser evaluation script', () => {
       input: JSON.stringify({ ...lock, modelPath: '/opt/docling-models/private' }),
     });
     expect(privateResult.status).not.toBe(0);
+    const gpuResult = spawnSync(bash, [evaluationScriptArgument, '--normalize-candidate-lock', 'docling'], {
+      cwd: repositoryRoot,
+      encoding: 'utf8',
+      input: JSON.stringify({ ...lock, computePlatform: 'cuda', gpuPackageCount: 4 }),
+    });
+    expect(gpuResult.status).not.toBe(0);
   });
 
   it.runIf(process.platform !== 'linux')('refuses candidate execution outside the ECS host', () => {

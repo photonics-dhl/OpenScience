@@ -125,9 +125,10 @@ normalize_candidate_lock() {
     process.stdin.on("end", () => {
       try {
         const value = JSON.parse(Buffer.concat(chunks, bytes).toString("utf8"));
-        const keys = ["candidate", "modelFileCount", "modelManifestSha256", "packageFreezeSha256", "schemaVersion", "version"];
+        const keys = ["candidate", "computePlatform", "gpuPackageCount", "modelFileCount", "modelManifestSha256", "packageFreezeSha256", "schemaVersion", "version"];
         if (!value || Array.isArray(value) || Object.keys(value).sort().join("\0") !== keys.sort().join("\0")) throw new Error();
         if (value.schemaVersion !== 1 || value.candidate !== candidate || value.version !== version) throw new Error();
+        if (value.computePlatform !== "cpu" || value.gpuPackageCount !== 0) throw new Error();
         if (!/^[a-f0-9]{64}$/.test(value.packageFreezeSha256) || !/^[a-f0-9]{64}$/.test(value.modelManifestSha256)) throw new Error();
         if (!Number.isSafeInteger(value.modelFileCount) || value.modelFileCount < 1 || value.modelFileCount > 100000) throw new Error();
         process.stdout.write(JSON.stringify(value));

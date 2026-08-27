@@ -1002,3 +1002,31 @@ as complete.
   `/parser-jobs`. Public `/` is 200, protected auth/admin probes are 401, the
   exact release marker matches, `.release-failed` is absent and the rollback
   release tree remains available.
+
+### 5.32 Docling CPU candidate build diagnosis (2026-08-27)
+
+**Status:** mitigation implemented, exact-SHA ECS revalidation pending. This is
+an isolated evaluation image, not a production deployment.
+
+- **Problem:** the first ECS build stopped before corpus execution because pip
+  rejected the shortened `docling.whl` filename. After preserving the official
+  wheel filename, dependency resolution showed default PyPI Torch selecting
+  CUDA 13, cuDNN and NCCL packages on the CPU-only host; the build was
+  immediately interrupted. A separate PyPI read timeout was transient: ECS
+  egress remained 204, `files.pythonhosted.org` returned HTTP 200, and an
+  unchanged retry progressed beyond the prior dependency.
+- **Root cause:** wheel tags are parsed from the local filename, and the default
+  Linux PyPI Torch distribution is not a CPU-only dependency boundary. Merely
+  setting `AcceleratorDevice.CPU` at runtime cannot prevent GPU packages from
+  entering the image.
+- **Resolution:** retain the official Docling wheel filename and SHA-256; install
+  pinned `torch 2.13.0+cpu` and `torchvision 0.28.0+cpu` from the official
+  PyTorch CPU index before installing Docling. The image build asserts
+  `torch.version.cuda is None` and rejects CUDA/NVIDIA/ROCm/Triton distributions;
+  the bounded pre-corpus lock independently requires `computePlatform=cpu` and
+  `gpuPackageCount=0`.
+- **Validation:** build and run only from a new content-addressed ECS evaluation
+  root. Before any corpus case, preserve `candidate-lock.json`, verify the exact
+  image digest, package/model manifest hashes, non-root/read-only/network-none
+  sandbox, and zero GPU packages. A failed lock must stop the evaluation and
+  leave production release `f965966...` unchanged.

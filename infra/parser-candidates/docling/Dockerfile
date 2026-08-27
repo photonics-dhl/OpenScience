@@ -15,8 +15,13 @@ ADD --checksum=sha256:95c0a4d9bc1beafc6097c8573ec3a8dc317e8bcf67e3234aa7c050b7d7
     https://files.pythonhosted.org/packages/32/4b/cdea48e4e914d246ece99f1bf97b3f983f4db91ec355024d50657cf587f1/docling-2.123.0-py3-none-any.whl \
     /tmp/docling-2.123.0-py3-none-any.whl
 
-RUN python -m pip install --no-cache-dir /tmp/docling-2.123.0-py3-none-any.whl \
+RUN python -m pip install --no-cache-dir --timeout 120 --retries 5 \
+      --index-url https://download.pytorch.org/whl/cpu \
+      'torch==2.13.0+cpu' 'torchvision==0.28.0+cpu' \
+    && python -m pip install --no-cache-dir --timeout 120 --retries 5 \
+      /tmp/docling-2.123.0-py3-none-any.whl \
     && python -c "from importlib.metadata import version; assert version('docling') == '2.123.0'" \
+    && python -c "import importlib.metadata as m, torch; names=[d.metadata['Name'].lower() for d in m.distributions() if d.metadata.get('Name')]; assert torch.version.cuda is None; assert not any(n.startswith(('cuda-', 'nvidia-', 'rocm', 'triton')) for n in names)" \
     && docling-tools models download --output-dir /opt/docling-models \
     && install -d -m 0755 /opt/docling-lock /app \
     && python -m pip freeze --all | LC_ALL=C sort > /opt/docling-lock/package-freeze.txt \

@@ -233,15 +233,28 @@ def _file_sha256(path: Path) -> str:
 
 
 def _print_lock() -> None:
+    from importlib.metadata import distributions
+    import torch
+
     package_freeze = LOCK_ROOT / "package-freeze.txt"
     model_manifest = LOCK_ROOT / "model-sha256.txt"
     if not package_freeze.is_file() or not model_manifest.is_file():
         raise ValueError("candidate lock is missing")
+    gpu_prefixes = ("cuda-", "nvidia-", "rocm", "triton")
+    gpu_packages = [
+        distribution.metadata["Name"].lower()
+        for distribution in distributions()
+        if distribution.metadata.get("Name", "").lower().startswith(gpu_prefixes)
+    ]
+    if torch.version.cuda is not None or gpu_packages:
+        raise ValueError("GPU dependency detected in CPU candidate")
     model_file_count = sum(1 for line in model_manifest.read_text(encoding="utf-8").splitlines() if line)
     _write_json({
         "schemaVersion": 1,
         "candidate": "docling",
         "version": "2.123.0",
+        "computePlatform": "cpu",
+        "gpuPackageCount": 0,
         "packageFreezeSha256": _file_sha256(package_freeze),
         "modelManifestSha256": _file_sha256(model_manifest),
         "modelFileCount": model_file_count,
