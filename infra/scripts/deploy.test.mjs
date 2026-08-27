@@ -130,6 +130,8 @@ test('embedding capability is strict, release-versioned and rollback-safe', () =
   assert.match(source, /model_version_id="\$\(read_capability_value[^\n]+" \|\| return/);
   assert.match(source, /reason=same-sha-verification/);
   assert.match(source, /same-SHA disabled：收敛残留 embedding-worker/);
+  assert.match(source, /services=\\\$\(XGS_RELEASE_ROOT=[^\n]+ps --status running --services\)/);
+  assert.doesNotMatch(source, /ps --status running --services \| if grep -qx embedding-worker/);
   assert.ok(
     source.indexOf('expect_http_body https://OpenScience.428312321.xyz/__release "$RELEASE_SHA"')
       < source.indexOf('same-SHA disabled：收敛残留 embedding-worker'),
