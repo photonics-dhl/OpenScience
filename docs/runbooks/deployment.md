@@ -1057,10 +1057,15 @@ isolated from production and does not change the application release.
 - The current exact evaluator source is
   `efa6367ef4d0bf18a9c4e1c6e073ba338bfe7ee1`, materialized under
   `/opt/openscience-evals/document-parser/<exact-sha>/source`. The detached
-  attempt `openscience-parser-eval-docling-efa6367-a2.service` reuses the pinned
-  CPU Torch layer and isolates SciPy, OpenCV and RapidOCR into separate cacheable
-  layers. Build completion alone is not acceptance: the source lock, sandbox,
-  seven-PDF corpus, locator, latency and peak-RSS gates must all complete.
+  attempt `openscience-parser-eval-docling-efa6367-a2.service` reused the pinned
+  CPU Torch, SciPy and OpenCV layers but failed in the isolated RapidOCR layer
+  when `files.pythonhosted.org` metadata exceeded pip's read timeout. ECS egress
+  and production remained healthy; no image/quality/RSS acceptance exists from
+  a2. Retry the unchanged exact source with a new named unit so prior evidence
+  remains intact; `openscience-parser-eval-docling-efa6367-a3.service` is that
+  bounded retry and reuses the completed layers. Build completion alone is not
+  acceptance: the source lock, sandbox, seven-PDF corpus, locator, latency and
+  peak-RSS gates must all complete.
 
 ### 5.34 Secret-safe migration drills and release identity recovery (2026-08-27)
 
@@ -1099,3 +1104,74 @@ has not been applied to production.
   `c8fc590...`: forward `2/5/1/3`, rollback `1/0/0/0`, redeploy `2/5/1/3`
   for migrations/tables/GIN/revised columns, followed by disposable database
   cleanup. Production search remains `1/1`.
+
+### 5.35 Exact-SHA lexical retrieval ECS drill (2026-08-27)
+
+**Status:** accepted candidate evidence only. This drill does not deploy an
+application release, apply search migration 2 to production, or enable a
+retrieval route. Accepted unit `openscience-search-lexical-drill-7d489c5-a1`
+used exact source `7d489c51e0005206b2714283ae722df1354b1eed`; production
+application remained `f965966...` and production search remained `1/1`.
+
+#### Preflight
+
+1. Run `infra/scripts/checkup.sh` from explicit Git for Windows Bash and record
+   the active release, public/loopback status, disk and memory.
+2. Require a pushed immutable commit and a new
+   `/opt/openscience-evals/search-lexical/<sha>/` root. Never patch an older
+   exact-source root or delete failed evidence.
+3. Confirm the disposable database name matches
+   `^openscience_search_test_[a-z0-9]{8,48}$`; tests must also require
+   `SEARCH_TEST_MUTATION_CONFIRM=DISPOSABLE_SEARCH_DB` and reject the production
+   URL.
+4. Send multiline scripts through the canonical SSH wrapper with CR removal:
+   PowerShell here-string → explicit `C:/Program Files/Git/bin/bash.exe` →
+   `tr -d "\r"` → `infra/scripts/ssh-run.sh "bash -s"`. A path ending in
+   `\r` is a shell transport error, not an SSH-key failure.
+
+#### Execution
+
+1. Fetch `https://github.com/photonics-dhl/OpenScience/archive/<sha>.tar.gz`
+   only through server `with-proxy`, extract with one stripped path component,
+   and run `with-proxy npx pnpm@9.15.0 install --frozen-lockfile`.
+2. A clean archive has no generated core Prisma client. Before the full build,
+   run the project-local binary for both schemas in this order:
+   `./node_modules/.bin/prisma generate --schema infra/schema.prisma`, then
+   `./node_modules/.bin/prisma generate --schema infra/search/schema.prisma`.
+   Run `with-proxy npx pnpm@9.15.0 build` only after both succeed.
+3. Use the Compose file under the active immutable release to identify the
+   production PostgreSQL container and its internal data network. Pass only the
+   required protected environment line through stdin and Docker
+   `--env-file /dev/stdin`; never put a URL or password in argv/logs.
+4. Create the uniquely named disposable database, apply search migrations,
+   assert `2/5/1/3` for migrations/tables/GIN/contract columns, run the checked-in
+   reverse migration and assert `1/0/0/0`, then redeploy and reassert `2/5/1/3`.
+5. Run `packages/search/test/storage.integration.test.ts` in a read-only,
+   capability-dropped Node container with bounded tmpfs, 2 CPU, 2 GiB and 256
+   PIDs. The five gates cover tenant isolation/ranking, cross-tenant global-ID
+   collision, malformed TF availability, logical hydration bytes and exact SQL
+   GIN/BitmapOr eligibility.
+
+#### Rollback
+
+1. Install an EXIT trap before database creation. Terminate sessions to the
+   approved disposable name and drop only that database, whether the drill passes
+   or fails.
+2. Because production schema/release are never mutated, rollback is cleanup plus
+   verification, not a production rollout. Preserve failed unit logs and eval
+   roots; do not delete them without explicit authorization.
+3. If any production marker, search ledger or container identity differs from
+   preflight, stop and use the active immutable release runbook before making a
+   completion claim.
+
+#### Verification
+
+1. Require full workspace build success, migration assertions
+   `2/5/1/3 → 1/0/0/0 → 2/5/1/3`, integration `5/5`, zero disposable databases
+   and zero `xgs-search-*` candidate containers.
+2. Re-run `checkup.sh`; require healthy production containers, public and
+   loopback 200, exact `/__release`, absent `.release-failed`, production search
+   migration count `1` and production retrieval-table count `0`.
+3. The GIN test establishes index eligibility under a bounded same-tenant corpus;
+   it is not representative-scale performance acceptance. Task 9 must still run
+   `EXPLAIN (ANALYZE, BUFFERS)` and latency/RSS gates with the final corpus.

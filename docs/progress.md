@@ -11,6 +11,7 @@
 - Task 6 Task 1 候选 harness 已完成本地无模型/无 Docker 的 TDD 切片：16 个自著中英 evidence chunk、24 个含跨语言与相近干扰项的 query，BGE-M3 runner 明确区分 `encode_queries`/`encode_corpus`，仅输出 bounded base64 float32 或 content-free nDCG/Recall/P50/P95/RSS；FlagEmbedding/model exact lock 与 ECS-only 2 CPU/6 GiB/128 PID/network-none/read-only gate 已编码。Python `5/5`、corpus `1/1`、Bash contract/syntax/diff GREEN；尚未在 ECS build/download/run，因此不得声称模型效果或可保留。
 - Task 6 Task 2 search migration 2 已完成 expand-only TDD 与 exact-SHA ECS drill：五表 tenant scope、stable SHA `CHAR(64)` chunk ID、locator array、database-owned `tsvector`+GIN、1024-dimension/4096-byte/vector hash+norm 约束、复合 workspace/chunk FK、content-free query telemetry 与逆序 rollback；未引入 pgvector/extension。`openscience-search-migration-drill-c8fc590-a4.service` 使用 `c8fc590…` 实测 forward `2/5/1/3`、rollback `1/0/0/0`、redeploy `2/5/1/3` 后清理一次性数据库；生产 search 仍为 `1/1`，migration 2 未部署。
 - Task 6 Task 3 locator-safe chunking 已完成 TDD、双专家复审与提交 `c8fc590`：Unicode Latin/数字词与 CJK bigram、稳定 schema-version hash、512–1024 token/65,536-character 双边界、流式可拆段落填充、表格/公式/参考文献不可拆分、Claim 分层预算、null-prototype 词频、canonical UUID/hash 和 O(1) locator 构造/round-trip；未知 Claim block 与不可持久化输入 fail-closed。Search `11/11`、Domain full `430/430` + focused `43/43`、全仓 lint/typecheck GREEN；未连接模型或生产 route。
+- Task 6 Task 4 tenant-safe BM25 已完成实现、独立复审与 exact-SHA ECS 验收：固定 `k1=1.2/b=0.75`、chunk-ID 稳定 tie-break、tenant scope、10,000 chunks/1,000,000 score-cells/8 MiB hydration 硬上限、两阶段读取、locator/hash 复验、malformed TF fail-soft、Secret 仅经 stdin。`openscience-search-lexical-drill-7d489c5-a1.service` 对 exact `7d489c51…` 完成 full workspace build，migration forward `2/5/1/3`→rollback `1/0/0/0`→redeploy `2/5/1/3`，真实 PostgreSQL `5/5`，临时 DB/容器残留 `0`。GIN gate 只证明生产 SQL eligibility，不替代真实规模 `EXPLAIN ANALYZE`；生产 release 仍为 `f965966`，search 仍 `1/1`，migration 2/route 未部署。
 - 安全处置与版本恢复：一次诊断误将临时迁移容器 argv 中的数据库 URL 暴露到受控工具输出后，立即停止失败 unit、清理一次性数据库并以 `openscience-db-credential-rotation-20260827-a2.service` 轮换 PostgreSQL 应用凭据；仓库未写入 Secret。轮换脚本现固定 active immutable release Compose，并加入 `flock` 单飞、mutation-intent、旧/旧或新/新补偿与两端认证/健康核验。生产已按 `f965966…` 强制协调并实测 exact images/mounts/health/public release；巡检 public/local 200、egress 204、约 105 GiB 磁盘及 26 GiB available memory。后续迁移 Secret 只可通过 stdin 或 `--env-file` 路径传递，禁止进入 argv/诊断输出。
 
 ## 2026-08-27 — Research Intelligence Task 5 已部署
@@ -58,5 +59,5 @@
 
 ## Next action
 
-1. Taskmaster Tasks 4、6 ready；先执行 Task 4 `CPU Parser Cascade Implementation`，不在本机安装或运行容器。
+1. Task 4 Docling a2 已在 `rapidocr==3.9.2` 层因 PyPI metadata read timeout 失败；a3 已用同 exact source 与 2 CPU/8 GiB/512 tasks 外层上限复用缓存层重试，待完成 bake-off。Task 6 已完成 Tasks 1–4，下一步实现 Task 5 bounded embedding protocol/CPU worker；所有模型、镜像、迁移和运行门禁仍只在 ECS。
 2. 在搜索库开始承载可重建之外的数据前，补独立 search backup/restore gate。

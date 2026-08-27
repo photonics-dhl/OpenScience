@@ -205,7 +205,7 @@ git commit -m "feat(search): add locator-safe semantic chunking"
 - Consumes: query text, tenant scope, `SearchChunkDraft` and `SearchPrismaClient`.
 - Produces: `lexicalSearch(input: LexicalSearchInput): Promise<RankedCandidate[]>` and `SearchStorage` upsert/query methods.
 
-- [ ] **Step 1: Write deterministic BM25 and tenant-isolation tests**
+- [x] **Step 1: Write deterministic BM25 and tenant-isolation tests**
 
 ```ts
 expect(scoreBm25({ tf: 3, df: 2, documentLength: 100, documentCount: 10, averageLength: 120 }))
@@ -214,24 +214,38 @@ expect(await storage.lexicalCandidates({ tenantId: 'workspace-a', query: 'pulse'
   .not.toContainEqual(expect.objectContaining({ tenantId: 'workspace-b' }));
 ```
 
-- [ ] **Step 2: Run unit tests and verify RED**
+- [x] **Step 2: Run unit tests and verify RED**
 
 Run: `npx pnpm@9.15.0 --filter @openscience/search test -- lexical.test.ts`
 
-- [ ] **Step 3: Implement candidate retrieval and scoring**
+- [x] **Step 3: Implement candidate retrieval and scoring**
 
 Select candidates with the union of PostgreSQL `websearch_to_tsquery('simple', ...)` and GIN-indexed lexical term overlap, always filtered by tenant scope before ranking. Calculate BM25 in TypeScript with fixed `k1=1.2` and `b=0.75`, using bounded term-frequency JSON and current corpus statistics. Stable tie-break is chunk ID. Empty or oversized queries fail validation; database errors return a typed `search_storage_unavailable` result rather than leaking connection details.
 
-- [ ] **Step 4: Run integration tests only on ECS**
+- [x] **Step 4: Run integration tests only on ECS**
 
 Run a full repository build first, then execute the search integration suite against a uniquely named disposable search database. Verify tenant isolation, deterministic ranking and an explain plan using the GIN index.
 
-- [ ] **Step 5: Commit lexical retrieval**
+- [x] **Step 5: Commit lexical retrieval**
 
 ```bash
 git add packages/search
 git commit -m "feat(search): add tenant-safe BM25 retrieval"
 ```
+
+**Acceptance (2026-08-27):** tenant-safe upsert/query, bounded exact BM25,
+two-stage hydration, malformed-TF fail-soft behavior and typed capacity/storage
+failures are implemented through candidate commits `8c484b5`–`7d489c5`.
+`openscience-search-lexical-drill-7d489c5-a1.service` fetched exact source
+`7d489c51e0005206b2714283ae722df1354b1eed` through `with-proxy`, generated
+both Prisma clients, completed the full ECS workspace build, exercised migration
+forward `2/5/1/3`, rollback `1/0/0/0` and redeploy `2/5/1/3`, then passed all
+five real PostgreSQL integration tests with zero disposable database/container
+residue. The GIN assertion proves the exact production candidate SQL remains
+GIN/BitmapOr-eligible with tenant indexes present; representative-scale planner
+performance remains a later Task 9 gate. Production release stayed
+`f9659668b237b70b4c018b866e20498689d327c2`, production search stayed `1/1`,
+and neither migration 2 nor the retrieval route was deployed.
 
 ### Task 5: Add the bounded embedding protocol and production CPU worker
 
