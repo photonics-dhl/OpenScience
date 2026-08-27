@@ -65,5 +65,7 @@ apps/web/test/visual/out/
 # Generated Hermes research-intelligence benchmarks and local model environments
 /test/research-intelligence/out/
 /.venv/
+__pycache__/
+*.py[cod]
 /.cache/huggingface/
 /models/
