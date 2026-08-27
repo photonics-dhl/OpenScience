@@ -9,6 +9,10 @@ fi
 [[ "$(uname -s)" == 'Linux' && -f /opt/openscience/.release-id ]] \
   || { echo 'credential rotation is restricted to the ECS host' >&2; exit 69; }
 
+LOCK_FILE='/run/lock/openscience-database-credential-rotation.lock'
+exec 9>"$LOCK_FILE"
+flock -n 9 || { echo 'DB_CREDENTIAL_ROTATION_ALREADY_RUNNING' >&2; exit 75; }
+
 ENV_FILE='/opt/openscience/.env.prod'
 RELEASE="$(cat /opt/openscience/.release-id)"
 [[ "$RELEASE" =~ ^[a-f0-9]{40}$ ]] || { echo 'invalid release marker' >&2; exit 69; }
@@ -100,6 +104,35 @@ alter_database_role() {
       'psql -v ON_ERROR_STOP=1 -U "$POSTGRES_USER" -d "$POSTGRES_DB"' >/dev/null
 }
 
+environment_uses_password() {
+  local password="$1"
+  printf '%s' "$password" | ENV_PATH="$ENV_FILE" node -e '
+    const fs = require("node:fs");
+    const expected = fs.readFileSync(0, "utf8");
+    const text = fs.readFileSync(process.env.ENV_PATH, "utf8");
+    const values = new Map();
+    for (const line of text.split(/\r?\n/)) {
+      const match = line.match(/^(POSTGRES_PASSWORD|DATABASE_URL|SEARCH_DATABASE_URL)=(.*)$/);
+      if (match) values.set(match[1], match[2]);
+    }
+    if (values.size !== 3 || values.get("POSTGRES_PASSWORD") !== expected) process.exit(1);
+    for (const key of ["DATABASE_URL", "SEARCH_DATABASE_URL"]) {
+      if (decodeURIComponent(new URL(values.get(key)).password) !== expected) process.exit(1);
+    }
+  '
+}
+
+role_accepts_password() {
+  local password="$1"
+  local postgres_id
+  postgres_id="$(current_postgres_id)"
+  printf '%s\n' "$password" | docker exec -i "$postgres_id" sh -c '
+    IFS= read -r PGPASSWORD
+    export PGPASSWORD
+    psql -h 127.0.0.1 -v ON_ERROR_STOP=1 -U "$1" -d "$POSTGRES_DB" -c "SELECT 1" >/dev/null 2>&1
+  ' sh "$DATABASE_ROLE"
+}
+
 recreate_database_consumers() {
   "${COMPOSE[@]}" up -d --force-recreate postgres api agent-worker web
 }
@@ -129,26 +162,49 @@ ROLE_CHANGED=0
 ROTATION_COMPLETE=0
 rollback_on_exit() {
   local status=$?
+  local rollback_status=0
   trap - EXIT
   if [[ "$status" -ne 0 && "$ROLE_CHANGED" -eq 1 && "$ROTATION_COMPLETE" -eq 0 ]]; then
     set +e
-    rewrite_env_password "$OLD_PASSWORD"
-    alter_database_role "$OLD_PASSWORD"
-    recreate_database_consumers >/dev/null
-    wait_for_database_consumers
-    echo 'DB_CREDENTIAL_ROTATION_ROLLED_BACK' >&2
+    if rewrite_env_password "$OLD_PASSWORD" \
+      && alter_database_role "$OLD_PASSWORD" \
+      && environment_uses_password "$OLD_PASSWORD" \
+      && role_accepts_password "$OLD_PASSWORD"; then
+      rollback_status=0
+    else
+      rollback_status=1
+      rewrite_env_password "$NEW_PASSWORD" \
+        && alter_database_role "$NEW_PASSWORD" \
+        && environment_uses_password "$NEW_PASSWORD" \
+        && role_accepts_password "$NEW_PASSWORD" \
+        || rollback_status=2
+    fi
+    recreate_database_consumers >/dev/null || rollback_status=2
+    wait_for_database_consumers || rollback_status=2
+    [[ "$(stat -c '%a' "$ENV_FILE" 2>/dev/null)" == '600' ]] || rollback_status=2
     set -e
+    if [[ "$rollback_status" -eq 0 ]]; then
+      echo 'DB_CREDENTIAL_ROTATION_ROLLED_BACK' >&2
+    elif [[ "$rollback_status" -eq 1 ]]; then
+      echo 'DB_CREDENTIAL_ROTATION_ROLLBACK_FAILED_STATE_ALIGNED' >&2
+      status=71
+    else
+      echo 'DB_CREDENTIAL_ROTATION_ROLLBACK_FAILED_STATE_UNKNOWN' >&2
+      status=71
+    fi
   fi
   unset OLD_PASSWORD NEW_PASSWORD DATABASE_CREDENTIALS
   exit "$status"
 }
 trap rollback_on_exit EXIT
 
-alter_database_role "$NEW_PASSWORD"
 ROLE_CHANGED=1
+alter_database_role "$NEW_PASSWORD"
 rewrite_env_password "$NEW_PASSWORD"
 recreate_database_consumers
 wait_for_database_consumers
+environment_uses_password "$NEW_PASSWORD"
+role_accepts_password "$NEW_PASSWORD"
 [[ "$(stat -c '%a' "$ENV_FILE")" == '600' ]] || { echo 'production env mode changed' >&2; exit 70; }
 
 ROTATION_COMPLETE=1
