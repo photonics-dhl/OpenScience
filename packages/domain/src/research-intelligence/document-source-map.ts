@@ -214,7 +214,7 @@ export function parseDocumentSourceMap(value: unknown): DocumentSourceMap {
   });
   return {
     artifactId,
-    contentHash: sourceMap.contentHash,
+    contentHash: sourceMap.contentHash.toLowerCase(),
     parser,
     pages,
   };

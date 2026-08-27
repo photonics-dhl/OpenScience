@@ -59,6 +59,14 @@ describe('DocumentSourceMap boundary', () => {
     expect(deserializeDocumentSourceMap(serializeDocumentSourceMap(map))).toEqual(map);
   });
 
+  it('canonicalizes SHA-256 content hashes to lowercase', async () => {
+    const map = validMap();
+    map.contentHash = 'A'.repeat(64);
+    const { parseDocumentSourceMap } = await documentSourceMapContract();
+
+    expect(parseDocumentSourceMap(map)).toMatchObject({ contentHash: 'a'.repeat(64) });
+  });
+
   it('exports the exact block and transformation vocabularies', async () => {
     const { DOCUMENT_BLOCK_KINDS, DOCUMENT_TRANSFORMATION_STAGES } = await documentSourceMapContract();
 

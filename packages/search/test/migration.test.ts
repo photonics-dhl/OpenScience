@@ -21,7 +21,10 @@ describe('search retrieval migration', () => {
       expect(migration).toContain(`CREATE TABLE "${table}"`);
     }
     expect(migration).toContain('"workspace_id" UUID NOT NULL');
-    expect(migration).toContain('"locator" JSONB NOT NULL');
+    expect(migration).toContain('"id" CHAR(64) NOT NULL');
+    expect(migration).toContain('"locators" JSONB NOT NULL');
+    expect(migration).toContain('jsonb_typeof("locators") = \'array\'');
+    expect(migration).toContain('"chunk_id" CHAR(64) NOT NULL');
     expect(migration).toContain('"search_vector" TSVECTOR GENERATED ALWAYS AS');
     expect(migration).toContain('CREATE INDEX "search_chunks_search_vector_idx"');
     expect(migration).toContain('USING GIN');
@@ -62,6 +65,9 @@ describe('search retrieval migration', () => {
     }
     expect(schema).toMatch(/searchVector\s+Unsupported\("tsvector"\)\?/);
     expect(schema).toMatch(/vector\s+Bytes/);
+    expect(schema).toMatch(/model SearchChunk \{[\s\S]*?id\s+String\s+@id\s+@search\.Char\(64\)/);
+    expect(schema).toMatch(/locators\s+Json/);
+    expect(schema).toMatch(/chunkId\s+String\s+@map\("chunk_id"\)\s+@search\.Char\(64\)/);
     expect(schema).not.toContain('env("DATABASE_URL")');
     expect(schema).toContain('env("SEARCH_DATABASE_URL")');
   });

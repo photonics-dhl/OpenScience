@@ -22,7 +22,7 @@ CREATE UNIQUE INDEX "search_model_versions_identity_key"
   ON "search_model_versions" ("provider", "model", "revision");
 
 CREATE TABLE "search_chunks" (
-  "id" UUID NOT NULL,
+  "id" CHAR(64) NOT NULL,
   "workspace_id" UUID NOT NULL,
   "research_object_id" UUID NOT NULL,
   "artifact_id" UUID NOT NULL,
@@ -31,7 +31,7 @@ CREATE TABLE "search_chunks" (
   "language" VARCHAR(16) NOT NULL,
   "text" TEXT NOT NULL,
   "token_count" INTEGER NOT NULL,
-  "locator" JSONB NOT NULL,
+  "locators" JSONB NOT NULL,
   "claim_ids" JSONB NOT NULL,
   "lexical_terms" JSONB NOT NULL,
   "term_frequencies" JSONB NOT NULL,
@@ -41,11 +41,15 @@ CREATE TABLE "search_chunks" (
   "created_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
   "updated_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
   CONSTRAINT "search_chunks_pkey" PRIMARY KEY ("id"),
+  CONSTRAINT "search_chunks_id_check" CHECK ("id" ~ '^[0-9a-f]{64}$'),
   CONSTRAINT "search_chunks_hash_check" CHECK ("content_hash" ~ '^[0-9a-f]{64}$'),
   CONSTRAINT "search_chunks_ordinal_check" CHECK ("ordinal" >= 0),
   CONSTRAINT "search_chunks_text_check" CHECK (char_length("text") BETWEEN 1 AND 65536),
   CONSTRAINT "search_chunks_token_count_check" CHECK ("token_count" BETWEEN 1 AND 1024),
-  CONSTRAINT "search_chunks_locator_check" CHECK (jsonb_typeof("locator") = 'object'),
+  CONSTRAINT "search_chunks_locators_check" CHECK (
+    jsonb_typeof("locators") = 'array'
+    AND jsonb_array_length("locators") BETWEEN 1 AND 1024
+  ),
   CONSTRAINT "search_chunks_claim_ids_check" CHECK (jsonb_typeof("claim_ids") = 'array'),
   CONSTRAINT "search_chunks_lexical_terms_check" CHECK (jsonb_typeof("lexical_terms") = 'array'),
   CONSTRAINT "search_chunks_term_frequencies_check" CHECK (jsonb_typeof("term_frequencies") = 'object')
@@ -65,7 +69,7 @@ CREATE INDEX "search_chunks_search_vector_idx"
 CREATE TABLE "search_embeddings" (
   "id" UUID NOT NULL,
   "workspace_id" UUID NOT NULL,
-  "chunk_id" UUID NOT NULL,
+  "chunk_id" CHAR(64) NOT NULL,
   "model_version_id" UUID NOT NULL,
   "dimension" INTEGER NOT NULL,
   "vector" BYTEA NOT NULL,

@@ -69,6 +69,19 @@ describe('SourceLocator construction and resolution', () => {
     expect(() => resolveSourceLocator(map, { artifactId: 'artifact-1', contentHash: 'a'.repeat(64), codeRange: { commit: 'abc1234', path: 'src/model.py', startLine: 4, endLine: 9 } })).toThrow(/codeRange/);
   });
 
+  it('canonicalizes uppercase map and locator hashes before resolution', async () => {
+    const map = sourceMap();
+    map.contentHash = 'A'.repeat(64);
+    const { createBlockSourceLocator, resolveSourceLocator, validateSourceLocator } = await sourceLocatorContract();
+    const locator = createBlockSourceLocator(map, 'paragraph-1');
+
+    expect(locator).toMatchObject({ contentHash: 'a'.repeat(64) });
+    expect(validateSourceLocator({ ...(locator as object), contentHash: 'A'.repeat(64) }))
+      .toMatchObject({ contentHash: 'a'.repeat(64) });
+    expect(resolveSourceLocator(map, { ...(locator as object), contentHash: 'A'.repeat(64) }))
+      .toMatchObject({ id: 'paragraph-1' });
+  });
+
   it('rejects invalid map-derived selections', async () => {
     const map = sourceMap();
     const { createBlockSourceLocator, createTableCellSourceLocator } = await sourceLocatorContract();

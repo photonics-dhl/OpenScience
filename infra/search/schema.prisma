@@ -37,7 +37,7 @@ model SearchModelVersion {
 }
 
 model SearchChunk {
-  id               String                   @id @default(uuid()) @search.Uuid
+  id               String                   @id @search.Char(64)
   workspaceId      String                   @map("workspace_id") @search.Uuid
   researchObjectId String                   @map("research_object_id") @search.Uuid
   artifactId       String                   @map("artifact_id") @search.Uuid
@@ -46,7 +46,7 @@ model SearchChunk {
   language         String                   @search.VarChar(16)
   text             String                   @search.Text
   tokenCount       Int                      @map("token_count")
-  locator          Json
+  locators         Json
   claimIds         Json                     @map("claim_ids")
   lexicalTerms     Json                     @map("lexical_terms")
   termFrequencies  Json                     @map("term_frequencies")
@@ -67,7 +67,7 @@ model SearchChunk {
 model SearchEmbedding {
   id             String             @id @default(uuid()) @search.Uuid
   workspaceId    String             @map("workspace_id") @search.Uuid
-  chunkId        String             @map("chunk_id") @search.Uuid
+  chunkId        String             @map("chunk_id") @search.Char(64)
   modelVersionId String             @map("model_version_id") @search.Uuid
   dimension      Int
   vector         Bytes              @search.ByteA

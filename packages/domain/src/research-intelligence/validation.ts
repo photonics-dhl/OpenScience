@@ -171,5 +171,5 @@ export function validateSourceLocator(value: unknown): SourceLocator {
   if (locator.tableCell !== undefined) validateTableCell(locator.tableCell);
   if (locator.codeRange !== undefined) validateCodeRange(locator.codeRange);
 
-  return value as SourceLocator;
+  return { ...(value as SourceLocator), contentHash: locator.contentHash.toLowerCase() };
 }
