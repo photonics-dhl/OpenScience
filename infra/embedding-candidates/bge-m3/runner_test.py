@@ -22,6 +22,10 @@ def load_runner():
 
 
 class BgeM3RunnerTest(unittest.TestCase):
+    def test_default_model_root_matches_inherited_runtime_seed(self):
+        runner = load_runner()
+        self.assertEqual(runner.MODEL_ROOT, Path("/opt/bge-m3-seed"))
+
     def test_validates_bounded_dense_only_requests(self):
         runner = load_runner()
 

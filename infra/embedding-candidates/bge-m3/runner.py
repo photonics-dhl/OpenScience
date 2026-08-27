@@ -13,7 +13,7 @@ from typing import Any, Mapping, Sequence
 
 
 MODEL_REVISION = "5617a9f61b028005a4858fdac845db406aefb181"
-MODEL_ROOT = Path("/opt/bge-m3-model")
+MODEL_ROOT = Path("/opt/bge-m3-seed")
 LOCK_ROOT = Path("/opt/bge-m3-lock")
 MAX_INPUT_BYTES = 131_072
 MAX_OUTPUT_BYTES = 65_536

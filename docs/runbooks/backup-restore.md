@@ -66,15 +66,19 @@ release_root="/opt/openscience-releases/$set_release"
 export XGS_RELEASE_ROOT="$release_root" XGS_RELEASE_IMAGE_TAG="$set_release"
 COMPOSE=(docker compose --env-file /opt/openscience/.env.prod \
   -f "$release_root/infra/compose/docker-compose.prod.yml")
-"${COMPOSE[@]}" exec -T postgres createdb -U openscience "$CORE_RESTORE"
-"${COMPOSE[@]}" exec -T postgres createdb -U openscience "$SEARCH_RESTORE"
-"${COMPOSE[@]}" exec -T postgres psql -v ON_ERROR_STOP=1 -U openscience -d "$CORE_RESTORE" < core.sql
-"${COMPOSE[@]}" exec -T postgres psql -v ON_ERROR_STOP=1 -U openscience -d "$SEARCH_RESTORE" < search.sql
+# 从 PostgreSQL 容器环境取得实际管理角色，只输出已校验的标识符，不读取密码或 .env.prod。
+DB_ADMIN_ROLE="$("${COMPOSE[@]}" exec -T postgres sh -ceu \
+  'case "$POSTGRES_USER" in (*[!A-Za-z0-9_]*|"") exit 64;; esac; printf "%s" "$POSTGRES_USER"')"
+case "$DB_ADMIN_ROLE" in (*[!A-Za-z0-9_]*|"") exit 64;; esac
+"${COMPOSE[@]}" exec -T postgres createdb -U "$DB_ADMIN_ROLE" "$CORE_RESTORE"
+"${COMPOSE[@]}" exec -T postgres createdb -U "$DB_ADMIN_ROLE" "$SEARCH_RESTORE"
+"${COMPOSE[@]}" exec -T postgres psql -v ON_ERROR_STOP=1 -U "$DB_ADMIN_ROLE" -d "$CORE_RESTORE" < core.sql
+"${COMPOSE[@]}" exec -T postgres psql -v ON_ERROR_STOP=1 -U "$DB_ADMIN_ROLE" -d "$SEARCH_RESTORE" < search.sql
 
 # 验收：核心库与搜索库分别核对迁移账本和 schema；禁止只验一个库。
-"${COMPOSE[@]}" exec -T postgres psql -v ON_ERROR_STOP=1 -U openscience -d "$CORE_RESTORE" \
+"${COMPOSE[@]}" exec -T postgres psql -v ON_ERROR_STOP=1 -U "$DB_ADMIN_ROLE" -d "$CORE_RESTORE" \
   -tAc 'SELECT count(*) FROM schema_migrations;'
-"${COMPOSE[@]}" exec -T postgres psql -v ON_ERROR_STOP=1 -U openscience -d "$SEARCH_RESTORE" \
+"${COMPOSE[@]}" exec -T postgres psql -v ON_ERROR_STOP=1 -U "$DB_ADMIN_ROLE" -d "$SEARCH_RESTORE" \
   -tAc 'SELECT count(*) FROM "_prisma_migrations" WHERE finished_at IS NOT NULL AND rolled_back_at IS NULL;'
 ```
 

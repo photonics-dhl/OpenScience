@@ -82,6 +82,39 @@ test('database backup atomically publishes a private, single-flight dual-databas
   assert.match(backupRunbook, /sha256sum -c core\.sql\.sha256/);
   assert.match(backupRunbook, /sha256sum -c search\.sql\.sha256/);
   assert.match(backupRunbook, /核心库.*搜索库|core.*search/i);
+  assert.match(backupRunbook, /DB_ADMIN_ROLE/);
+  assert.doesNotMatch(backupRunbook, /-U openscience/);
+});
+
+test('embedding capability is strict, release-versioned and rollback-safe', () => {
+  assert.match(source, /count=\\\$\(grep -c '\^\$\{key\}='/);
+  assert.match(source, /read_prod_value BGE_M3_DEPLOY/);
+  assert.match(source, /case "\$BGE_M3_DEPLOY_VALUE" in[\s\S]*true\)[\s\S]*false\)[\s\S]*\*\)/);
+  assert.doesNotMatch(source, /BGE_M3_DEPLOY=\(true\|1\)/);
+  assert.match(source, /schema=2/);
+  for (const key of [
+    'embedding_deploy',
+    'bge_m3_enabled',
+    'model_version_id',
+    'model_revision',
+    'source_sha256',
+    'package_freeze_sha256',
+    'model_manifest_sha256',
+  ]) {
+    assert.match(source, new RegExp(`${key}=`));
+  }
+  assert.match(source, /PREVIOUS_BGE_M3_MODEL_VERSION_ID/);
+  assert.match(source, /PREVIOUS_BGE_M3_MODEL_REVISION/);
+  assert.match(source, /PREVIOUS_BGE_M3_SOURCE_SHA256/);
+  assert.match(source, /PREVIOUS_BGE_M3_PACKAGE_FREEZE_SHA256/);
+  assert.match(source, /PREVIOUS_BGE_M3_MODEL_MANIFEST_SHA256/);
+  assert.match(source, /PREVIOUS_RUNTIME_ENV[^\n]*BGE_M3_ENABLED/);
+  assert.match(source, /PREVIOUS_RUNTIME_ENV[\s\S]*verify-embedding-runtime\.mjs/);
+  assert.match(source, /停止上一 release 的 embedding-worker/);
+  assert.ok(
+    source.indexOf('公网与精确 release 验收') < source.indexOf('停止上一 release 的 embedding-worker'),
+    'disabled cleanup must only happen after public acceptance',
+  );
 });
 
 test('production compose up receives the same env file used by migrate and validation', () => {
@@ -202,7 +235,7 @@ test('deployment keeps an application rollback trap until public health succeeds
   assert.match(source, /ROLLBACK_COMPOSE_MODE="first-transition-adapter"/);
   assert.match(source, /PREVIOUS_HAS_EMBEDDING=/);
   assert.match(source, /\.release-capabilities/);
-  assert.match(source, /embedding=1/);
+  assert.match(source, /embedding_deploy=%s/);
   assert.match(source, /openscience-embedding-worker:\$PREVIOUS_RELEASE_SHA/);
   assert.match(source, /--profile embedding[^\n]+embedding-worker/);
   assert.match(source, /-f \$ROLLBACK_COMPOSE_FILE up -d --force-recreate/);

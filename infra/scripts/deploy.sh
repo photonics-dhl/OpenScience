@@ -59,6 +59,24 @@ run_remote() {
   ssh "${SSH_OPTS[@]}" "${SSH_USER}@${SSH_HOST}" "$1"
 }
 
+read_prod_value() {
+  local key="$1"
+  run_remote "set -e; count=\$(grep -c '^${key}=' '$PROD_ENV' || true); test \"\$count\" -eq 1; sed -n 's/^${key}=//p' '$PROD_ENV' | tr -d '\r'"
+}
+
+read_capability_value() {
+  local file="$1" key="$2"
+  run_remote "set -e; count=\$(grep -c '^${key}=' '$file' || true); test \"\$count\" -eq 1; sed -n 's/^${key}=//p' '$file' | tr -d '\r'"
+}
+
+require_match() {
+  local name="$1" value="$2" pattern="$3"
+  [[ "$value" =~ $pattern ]] || {
+    echo "错误：$name 格式非法" >&2
+    exit 66
+  }
+}
+
 REMOTE_ROOT="/opt/openscience"
 RELEASE_ROOT="/opt/openscience-releases/$RELEASE_SHA"
 PROD_ENV="$REMOTE_ROOT/.env.prod"
@@ -112,13 +130,55 @@ run_remote "test ! -e $REMOTE_ROOT/.release-failed" || {
   exit 1
 }
 ACTIVE_RELEASE_SHA="$(run_remote "cat $REMOTE_ROOT/.release-id 2>/dev/null || true")"
-EMBEDDING_DEPLOY=0
-BGE_M3_ENABLED=0
-if run_remote "grep -Eq '^BGE_M3_DEPLOY=(true|1)$' $PROD_ENV"; then EMBEDDING_DEPLOY=1; fi
-if run_remote "grep -Eq '^BGE_M3_ENABLED=(true|1)$' $PROD_ENV"; then BGE_M3_ENABLED=1; fi
+BGE_M3_DEPLOY_VALUE="$(read_prod_value BGE_M3_DEPLOY)" || {
+  echo "错误：BGE_M3_DEPLOY 必须且只能配置一次" >&2
+  exit 66
+}
+case "$BGE_M3_DEPLOY_VALUE" in
+  true) EMBEDDING_DEPLOY=1 ;;
+  false) EMBEDDING_DEPLOY=0 ;;
+  *) echo "错误：BGE_M3_DEPLOY 仅允许精确 true 或 false" >&2; exit 66 ;;
+esac
+BGE_M3_ENABLED_VALUE="$(read_prod_value BGE_M3_ENABLED)" || {
+  echo "错误：BGE_M3_ENABLED 必须且只能配置一次" >&2
+  exit 66
+}
+case "$BGE_M3_ENABLED_VALUE" in
+  true) BGE_M3_ENABLED=1 ;;
+  false) BGE_M3_ENABLED=0 ;;
+  *) echo "错误：BGE_M3_ENABLED 仅允许精确 true 或 false" >&2; exit 66 ;;
+esac
 [ "$BGE_M3_ENABLED" -eq 0 ] || [ "$EMBEDDING_DEPLOY" -eq 1 ] || {
   echo "错误：BGE_M3_ENABLED=true 时必须同时设置 BGE_M3_DEPLOY=true" >&2
   exit 66
+}
+BGE_M3_MODEL_VERSION_ID=""
+BGE_M3_MODEL_REVISION=""
+BGE_M3_SOURCE_SHA256=""
+BGE_M3_PACKAGE_FREEZE_SHA256=""
+BGE_M3_MODEL_MANIFEST_SHA256=""
+if [ "$EMBEDDING_DEPLOY" -eq 1 ]; then
+  BGE_M3_MODEL_VERSION_ID="$(read_prod_value BGE_M3_MODEL_VERSION_ID)"
+  BGE_M3_MODEL_REVISION="$(read_prod_value BGE_M3_MODEL_REVISION)"
+  BGE_M3_SOURCE_SHA256="$(read_prod_value BGE_M3_SOURCE_SHA256)"
+  BGE_M3_PACKAGE_FREEZE_SHA256="$(read_prod_value BGE_M3_PACKAGE_FREEZE_SHA256)"
+  BGE_M3_MODEL_MANIFEST_SHA256="$(read_prod_value BGE_M3_MODEL_MANIFEST_SHA256)"
+  require_match BGE_M3_MODEL_VERSION_ID "$BGE_M3_MODEL_VERSION_ID" '^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$'
+  require_match BGE_M3_MODEL_REVISION "$BGE_M3_MODEL_REVISION" '^[0-9a-f]{40}$'
+  require_match BGE_M3_SOURCE_SHA256 "$BGE_M3_SOURCE_SHA256" '^[0-9a-f]{64}$'
+  require_match BGE_M3_PACKAGE_FREEZE_SHA256 "$BGE_M3_PACKAGE_FREEZE_SHA256" '^[0-9a-f]{64}$'
+  require_match BGE_M3_MODEL_MANIFEST_SHA256 "$BGE_M3_MODEL_MANIFEST_SHA256" '^[0-9a-f]{64}$'
+fi
+verify_release_capability() {
+  local file="$1"
+  [ "$(read_capability_value "$file" schema)" = 2 ]
+  [ "$(read_capability_value "$file" embedding_deploy)" = "$BGE_M3_DEPLOY_VALUE" ]
+  [ "$(read_capability_value "$file" bge_m3_enabled)" = "$BGE_M3_ENABLED_VALUE" ]
+  [ "$(read_capability_value "$file" model_version_id)" = "$BGE_M3_MODEL_VERSION_ID" ]
+  [ "$(read_capability_value "$file" model_revision)" = "$BGE_M3_MODEL_REVISION" ]
+  [ "$(read_capability_value "$file" source_sha256)" = "$BGE_M3_SOURCE_SHA256" ]
+  [ "$(read_capability_value "$file" package_freeze_sha256)" = "$BGE_M3_PACKAGE_FREEZE_SHA256" ]
+  [ "$(read_capability_value "$file" model_manifest_sha256)" = "$BGE_M3_MODEL_MANIFEST_SHA256" ]
 }
 if [ -n "$ACTIVE_RELEASE_SHA" ] && [[ ! "$ACTIVE_RELEASE_SHA" =~ ^[0-9a-f]{40}$ ]]; then
   echo "错误：云上 active release identity 非法" >&2
@@ -130,7 +190,11 @@ fi
 
 if [ "$ACTIVE_RELEASE_SHA" = "$RELEASE_SHA" ]; then
   run_remote "test \"\$(cat '$RELEASE_ROOT/.release-source')\" = '$RELEASE_SHA'"
-  run_remote "test -f '$REMOTE_ROOT/.release-capabilities/$RELEASE_SHA' && grep -q '^embedding=$EMBEDDING_DEPLOY$' '$REMOTE_ROOT/.release-capabilities/$RELEASE_SHA'"
+  verify_release_capability "$REMOTE_ROOT/.release-capabilities/$RELEASE_SHA"
+  if [ "$EMBEDDING_DEPLOY" -eq 1 ]; then
+    compose_embedding_current "ps --status running --services | grep -qx embedding-worker"
+    compose_embedding_current "run --rm --no-deps -T -w /opt/openscience agent-worker node scripts/verify-embedding-runtime.mjs"
+  fi
   expect_http_status https://OpenScience.428312321.xyz/ 200
   expect_http_status https://OpenScience.428312321.xyz/auth/me 401
   expect_http_status https://OpenScience.428312321.xyz/admin/ 401
@@ -146,14 +210,56 @@ ROLLBACK_COMPOSE_MODE="previous-release"
 RELEASE_CAPABILITIES_DIR="$REMOTE_ROOT/.release-capabilities"
 PREVIOUS_CAPABILITIES_FILE="$RELEASE_CAPABILITIES_DIR/$PREVIOUS_RELEASE_SHA"
 PREVIOUS_HAS_EMBEDDING=0
+PREVIOUS_BGE_M3_ENABLED_VALUE=false
+PREVIOUS_BGE_M3_MODEL_VERSION_ID=""
+PREVIOUS_BGE_M3_MODEL_REVISION=""
+PREVIOUS_BGE_M3_SOURCE_SHA256=""
+PREVIOUS_BGE_M3_PACKAGE_FREEZE_SHA256=""
+PREVIOUS_BGE_M3_MODEL_MANIFEST_SHA256=""
 if [ -n "$ACTIVE_RELEASE_SHA" ]; then
   run_remote "test \"\$(cat '$PREVIOUS_RELEASE_ROOT/.release-source')\" = '$PREVIOUS_RELEASE_SHA'"
   run_remote "test -f '$ROLLBACK_COMPOSE_FILE'"
   run_remote "docker image inspect openscience-agent-worker:$PREVIOUS_RELEASE_SHA openscience-document-parser:$PREVIOUS_RELEASE_SHA >/dev/null"
-  if run_remote "test -f '$PREVIOUS_CAPABILITIES_FILE' && grep -q '^embedding=1$' '$PREVIOUS_CAPABILITIES_FILE'"; then
-    PREVIOUS_HAS_EMBEDDING=1
-    run_remote "grep -q '^  embedding-worker:' '$ROLLBACK_COMPOSE_FILE'"
-    run_remote "docker image inspect openscience-embedding-worker:$PREVIOUS_RELEASE_SHA >/dev/null"
+  if run_remote "test -f '$PREVIOUS_CAPABILITIES_FILE'"; then
+    PREVIOUS_CAPABILITY_SCHEMA="$(read_capability_value "$PREVIOUS_CAPABILITIES_FILE" schema)"
+    case "$PREVIOUS_CAPABILITY_SCHEMA" in
+      1)
+        # 兼容 embedding 上线前的 release：只接受明确 disabled；schema 1 的 enabled
+        # 没有保存身份，不能安全回滚，必须拒绝。
+        [ "$(read_capability_value "$PREVIOUS_CAPABILITIES_FILE" embedding)" = 0 ] || {
+          echo "错误：旧 release 的 embedding capability 无完整身份，无法安全回滚" >&2
+          exit 66
+        }
+        ;;
+      2)
+        PREVIOUS_EMBEDDING_DEPLOY_VALUE="$(read_capability_value "$PREVIOUS_CAPABILITIES_FILE" embedding_deploy)"
+        PREVIOUS_BGE_M3_ENABLED_VALUE="$(read_capability_value "$PREVIOUS_CAPABILITIES_FILE" bge_m3_enabled)"
+        PREVIOUS_BGE_M3_MODEL_VERSION_ID="$(read_capability_value "$PREVIOUS_CAPABILITIES_FILE" model_version_id)"
+        PREVIOUS_BGE_M3_MODEL_REVISION="$(read_capability_value "$PREVIOUS_CAPABILITIES_FILE" model_revision)"
+        PREVIOUS_BGE_M3_SOURCE_SHA256="$(read_capability_value "$PREVIOUS_CAPABILITIES_FILE" source_sha256)"
+        PREVIOUS_BGE_M3_PACKAGE_FREEZE_SHA256="$(read_capability_value "$PREVIOUS_CAPABILITIES_FILE" package_freeze_sha256)"
+        PREVIOUS_BGE_M3_MODEL_MANIFEST_SHA256="$(read_capability_value "$PREVIOUS_CAPABILITIES_FILE" model_manifest_sha256)"
+        case "$PREVIOUS_EMBEDDING_DEPLOY_VALUE" in true|false) ;; *) echo "错误：旧 release embedding_deploy 非法" >&2; exit 66 ;; esac
+        case "$PREVIOUS_BGE_M3_ENABLED_VALUE" in true|false) ;; *) echo "错误：旧 release bge_m3_enabled 非法" >&2; exit 66 ;; esac
+        if [ "$PREVIOUS_EMBEDDING_DEPLOY_VALUE" = true ]; then
+          PREVIOUS_HAS_EMBEDDING=1
+          require_match previous_model_version_id "$PREVIOUS_BGE_M3_MODEL_VERSION_ID" '^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$'
+          require_match previous_model_revision "$PREVIOUS_BGE_M3_MODEL_REVISION" '^[0-9a-f]{40}$'
+          require_match previous_source_sha256 "$PREVIOUS_BGE_M3_SOURCE_SHA256" '^[0-9a-f]{64}$'
+          require_match previous_package_freeze_sha256 "$PREVIOUS_BGE_M3_PACKAGE_FREEZE_SHA256" '^[0-9a-f]{64}$'
+          require_match previous_model_manifest_sha256 "$PREVIOUS_BGE_M3_MODEL_MANIFEST_SHA256" '^[0-9a-f]{64}$'
+          run_remote "grep -q '^  embedding-worker:' '$ROLLBACK_COMPOSE_FILE'"
+          run_remote "docker image inspect openscience-embedding-worker:$PREVIOUS_RELEASE_SHA >/dev/null"
+        elif [ "$PREVIOUS_BGE_M3_ENABLED_VALUE" = true ]; then
+          echo "错误：旧 release enabled=true 但 embedding_deploy=false" >&2
+          exit 66
+        elif [ -n "$PREVIOUS_BGE_M3_MODEL_VERSION_ID$PREVIOUS_BGE_M3_MODEL_REVISION$PREVIOUS_BGE_M3_SOURCE_SHA256$PREVIOUS_BGE_M3_PACKAGE_FREEZE_SHA256$PREVIOUS_BGE_M3_MODEL_MANIFEST_SHA256" ]; then
+          echo "错误：旧 release disabled capability 不得携带模型身份" >&2
+          exit 66
+        fi
+        ;;
+      *) echo "错误：旧 release capability schema 不受支持" >&2; exit 66 ;;
+    esac
   fi
 else
   log "[0] 首次版本化发布：物化并构建 rollback-ref..."
@@ -165,6 +271,7 @@ else
   run_remote "cd $PREVIOUS_RELEASE_ROOT && with-proxy npx pnpm@9.15.0 install && with-proxy npx pnpm@9.15.0 --filter @openscience/database generate && with-proxy npx pnpm@9.15.0 build"
   run_remote "set -e; worker_container=\$(docker compose --env-file $PROD_ENV -f $LEGACY_COMPOSE_FILE ps -q agent-worker); parser_container=\$(docker compose --env-file $PROD_ENV -f $LEGACY_COMPOSE_FILE ps -q document-parser); test -n \"\$worker_container\"; test -n \"\$parser_container\"; worker_image=\$(docker inspect --format='{{.Image}}' \"\$worker_container\"); parser_image=\$(docker inspect --format='{{.Image}}' \"\$parser_container\"); test -n \"\$worker_image\"; test -n \"\$parser_image\"; docker image inspect \"\$worker_image\" \"\$parser_image\" >/dev/null; docker tag \"\$worker_image\" openscience-agent-worker:$PREVIOUS_RELEASE_SHA; docker tag \"\$parser_image\" openscience-document-parser:$PREVIOUS_RELEASE_SHA"
 fi
+PREVIOUS_RUNTIME_ENV="BGE_M3_ENABLED=$PREVIOUS_BGE_M3_ENABLED_VALUE BGE_M3_MODEL_VERSION_ID=$PREVIOUS_BGE_M3_MODEL_VERSION_ID BGE_M3_MODEL_REVISION=$PREVIOUS_BGE_M3_MODEL_REVISION BGE_M3_SOURCE_SHA256=$PREVIOUS_BGE_M3_SOURCE_SHA256 BGE_M3_PACKAGE_FREEZE_SHA256=$PREVIOUS_BGE_M3_PACKAGE_FREEZE_SHA256 BGE_M3_MODEL_MANIFEST_SHA256=$PREVIOUS_BGE_M3_MODEL_MANIFEST_SHA256"
 
 log "[1] 物化完整 Git release..."
 XGS_SOURCE_ROOT="$PROJECT_ROOT" XGS_CONFIG_ROOT="$CONFIG_ROOT" XGS_RELEASE_SHA="$RELEASE_SHA" node "$PROJECT_ROOT/scripts/cloud-sync.mjs"
@@ -194,11 +301,14 @@ rollback_application() {
   if [ "$rollback_ok" -eq 1 ]; then
     if [ "$EMBEDDING_DEPLOY" -eq 1 ]; then compose_embedding_current "stop embedding-worker" || true; fi
     if [ "$PREVIOUS_HAS_EMBEDDING" -eq 1 ]; then
-      run_remote "cd $PREVIOUS_RELEASE_ROOT && XGS_RELEASE_ROOT=$PREVIOUS_RELEASE_ROOT XGS_RELEASE_IMAGE_TAG=$PREVIOUS_RELEASE_SHA docker compose --profile embedding --env-file $PROD_ENV -f $ROLLBACK_COMPOSE_FILE up -d --force-recreate --wait --wait-timeout 900 embedding-worker" || rollback_ok=0
+      run_remote "cd $PREVIOUS_RELEASE_ROOT && env $PREVIOUS_RUNTIME_ENV XGS_RELEASE_ROOT=$PREVIOUS_RELEASE_ROOT XGS_RELEASE_IMAGE_TAG=$PREVIOUS_RELEASE_SHA docker compose --profile embedding --env-file $PROD_ENV -f $ROLLBACK_COMPOSE_FILE up -d --force-recreate --wait --wait-timeout 900 embedding-worker" || rollback_ok=0
+      if [ "$rollback_ok" -eq 1 ]; then
+        run_remote "cd $PREVIOUS_RELEASE_ROOT && env $PREVIOUS_RUNTIME_ENV XGS_RELEASE_ROOT=$PREVIOUS_RELEASE_ROOT XGS_RELEASE_IMAGE_TAG=$PREVIOUS_RELEASE_SHA docker compose --profile embedding --env-file $PROD_ENV -f $ROLLBACK_COMPOSE_FILE run --rm --no-deps -T -w /opt/openscience agent-worker node scripts/verify-embedding-runtime.mjs" || rollback_ok=0
+      fi
     fi
   fi
   if [ "$rollback_ok" -eq 1 ]; then
-    run_remote "cd $PREVIOUS_RELEASE_ROOT && XGS_RELEASE_ROOT=$PREVIOUS_RELEASE_ROOT XGS_RELEASE_IMAGE_TAG=$PREVIOUS_RELEASE_SHA docker compose --env-file $PROD_ENV -f $ROLLBACK_COMPOSE_FILE up -d --force-recreate --wait --wait-timeout 300 document-parser api web agent-worker" || rollback_ok=0
+    run_remote "cd $PREVIOUS_RELEASE_ROOT && env $PREVIOUS_RUNTIME_ENV XGS_RELEASE_ROOT=$PREVIOUS_RELEASE_ROOT XGS_RELEASE_IMAGE_TAG=$PREVIOUS_RELEASE_SHA docker compose --env-file $PROD_ENV -f $ROLLBACK_COMPOSE_FILE up -d --force-recreate --wait --wait-timeout 300 document-parser api web agent-worker" || rollback_ok=0
   fi
   if [ "$rollback_ok" -eq 1 ]; then
     run_remote "install -m 0644 $PREVIOUS_RELEASE_ROOT/infra/nginx/openscience.conf $NGINX_CONF && nginx -t && systemctl reload nginx" || rollback_ok=0
@@ -254,10 +364,15 @@ compose_current "up -d --force-recreate --wait --wait-timeout 300 document-parse
 log "[5c] 切换 API/Web/Worker 并等待 healthy..."
 compose_current "up -d --force-recreate --wait --wait-timeout 300 api web agent-worker"
 wait_for_healthy api web agent-worker
+if [ "$EMBEDDING_DEPLOY" -eq 1 ]; then
+  log "[5d] 切换后再次验证 embedding 健康、身份与真实向量..."
+  compose_embedding_current "ps --status running --services | grep -qx embedding-worker"
+  compose_embedding_current "run --rm --no-deps -T -w /opt/openscience agent-worker node scripts/verify-embedding-runtime.mjs"
+fi
 
 log "[6] 切换 nginx 与 release identity..."
 run_remote "set -e; backup=${NGINX_CONF}.pre-deploy-\$(date +%Y%m%d%H%M%S); cp -p $NGINX_CONF \$backup; install -m 0644 $RELEASE_ROOT/infra/nginx/openscience.conf $NGINX_CONF; if ! nginx -t; then cp -p \$backup $NGINX_CONF; nginx -t; exit 1; fi; systemctl reload nginx"
-run_remote "set -e; install -d -m 0755 '$RELEASE_CAPABILITIES_DIR'; printf 'schema=1\nembedding=%s\n' '$EMBEDDING_DEPLOY' > '$RELEASE_CAPABILITIES_DIR/$RELEASE_SHA.next'; chmod 0644 '$RELEASE_CAPABILITIES_DIR/$RELEASE_SHA.next'; mv '$RELEASE_CAPABILITIES_DIR/$RELEASE_SHA.next' '$RELEASE_CAPABILITIES_DIR/$RELEASE_SHA'; printf '%s\n' '$RELEASE_SHA' > $REMOTE_ROOT/.release-id.next; mv $REMOTE_ROOT/.release-id.next $REMOTE_ROOT/.release-id"
+run_remote "set -e; install -d -m 0755 '$RELEASE_CAPABILITIES_DIR'; printf 'schema=2\nembedding_deploy=%s\nbge_m3_enabled=%s\nmodel_version_id=%s\nmodel_revision=%s\nsource_sha256=%s\npackage_freeze_sha256=%s\nmodel_manifest_sha256=%s\n' '$BGE_M3_DEPLOY_VALUE' '$BGE_M3_ENABLED_VALUE' '$BGE_M3_MODEL_VERSION_ID' '$BGE_M3_MODEL_REVISION' '$BGE_M3_SOURCE_SHA256' '$BGE_M3_PACKAGE_FREEZE_SHA256' '$BGE_M3_MODEL_MANIFEST_SHA256' > '$RELEASE_CAPABILITIES_DIR/$RELEASE_SHA.next'; chmod 0644 '$RELEASE_CAPABILITIES_DIR/$RELEASE_SHA.next'; mv '$RELEASE_CAPABILITIES_DIR/$RELEASE_SHA.next' '$RELEASE_CAPABILITIES_DIR/$RELEASE_SHA'; printf '%s\n' '$RELEASE_SHA' > $REMOTE_ROOT/.release-id.next; mv $REMOTE_ROOT/.release-id.next $REMOTE_ROOT/.release-id"
 run_remote "test -f $HTPASSWD || echo 'WARN: $HTPASSWD 不存在——首次需手动生成（见 runbook）'"
 
 log "[7] 公网与精确 release 验收..."
@@ -265,6 +380,10 @@ expect_http_status https://OpenScience.428312321.xyz/ 200
 expect_http_status https://OpenScience.428312321.xyz/auth/me 401
 expect_http_status https://OpenScience.428312321.xyz/admin/ 401
 expect_http_body https://OpenScience.428312321.xyz/__release "$RELEASE_SHA"
+if [ "$EMBEDDING_DEPLOY" -eq 0 ] && [ "$PREVIOUS_HAS_EMBEDDING" -eq 1 ]; then
+  log "[7a] 公网验收后停止上一 release 的 embedding-worker..."
+  run_remote "cd $PREVIOUS_RELEASE_ROOT && env $PREVIOUS_RUNTIME_ENV XGS_RELEASE_ROOT=$PREVIOUS_RELEASE_ROOT XGS_RELEASE_IMAGE_TAG=$PREVIOUS_RELEASE_SHA docker compose --profile embedding --env-file $PROD_ENV -f $ROLLBACK_COMPOSE_FILE stop embedding-worker"
+fi
 run_remote "rm -f $REMOTE_ROOT/.release-failed"
 
 # 只有新 release 已从公网确认后，才以同目录 rename 原子替换定时任务脚本；
