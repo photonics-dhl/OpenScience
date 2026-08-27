@@ -18,7 +18,10 @@ ADD --checksum=sha256:95c0a4d9bc1beafc6097c8573ec3a8dc317e8bcf67e3234aa7c050b7d7
 RUN python -m pip install --no-cache-dir --timeout 120 --retries 5 \
       --index-url https://download.pytorch.org/whl/cpu \
       'torch==2.13.0+cpu' 'torchvision==0.28.0+cpu' \
-    && python -m pip install --no-cache-dir --timeout 120 --retries 5 \
+    && python -c "import importlib.metadata as m, torch; names=[d.metadata['Name'].lower() for d in m.distributions() if d.metadata.get('Name')]; assert torch.version.cuda is None; assert not any(n.startswith(('cuda-', 'nvidia-', 'rocm', 'triton')) for n in names)"
+
+RUN python -m pip install --no-cache-dir --timeout 120 --retries 5 \
+      --index-url https://pypi.org/simple \
       /tmp/docling-2.123.0-py3-none-any.whl \
     && python -c "from importlib.metadata import version; assert version('docling') == '2.123.0'" \
     && python -c "import importlib.metadata as m, torch; names=[d.metadata['Name'].lower() for d in m.distributions() if d.metadata.get('Name')]; assert torch.version.cuda is None; assert not any(n.startswith(('cuda-', 'nvidia-', 'rocm', 'triton')) for n in names)" \

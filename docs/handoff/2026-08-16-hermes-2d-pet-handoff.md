@@ -9,7 +9,7 @@
 - Task 1 建立能力台账、初始 13-case 自著权 corpus 与现状 parser baseline；Task 4 已将 corpus 升为 schema-v2 16-case，补入表格/公式/参考文献 PDF 与顺序/区域 locator；尚未安装生产 parser/OCR/model/MCP。
 - Task 5 已完成实现、独立安全/架构复审、精确 CI、ECS 构建、生产部署与运行验收；未新增 schema、migration、seed、研究数据写入或真实付费调用。
 - Task 4 LiteParse `2.14.0` exact-SHA ECS bake-off 已真实完成：image `sha256:b2c9bf96…eaa60f`，7-PDF 为 5 succeeded/1 scan needs_review/1 corrupt failed，13/16 locator，P50 `8 ms`、P95 `163 ms`、peak RSS `61,599,744` bytes；超限/timeout canary 均无 Shell 原文捕获和容器残留。结果通道为 log-driver none 的 64 KiB attached stdout normalizer，Sol High 复审安全；仍须与 Docling/current baseline 同门禁比较，候选保持 `APPROVED_PILOT`、未部署。
-- Docling `2.123.0`/MIT 候选已 source-lock 到官方 wheel SHA-256 `95c0a4d…fde9c`，本地无 Docker runner `3/3`、评测脚本 `14/14`、Bash 语法 GREEN；OCR/remote/plugin disabled，模型只在 ECS image build 获取并生成 package/model lock。两次 ECS build 均在 corpus 前 fail-closed：临时 wheel 文件名已修，默认 PyPI Torch 的 CUDA 13/cuDNN/NCCL 解析已主动中止；现锁官方 CPU wheel `torch 2.13.0+cpu`/`torchvision 0.28.0+cpu` 并在 build/preflight 双重拒绝 GPU 包。尚无 image/质量/RSS 证据，下一步必须从新 SHA 重跑同一 7-PDF gate。
+- Docling `2.123.0`/MIT 候选已 source-lock 到官方 wheel SHA-256 `95c0a4d…fde9c`，本地无 Docker runner `3/3`、评测脚本 `14/14`、Bash 语法 GREEN；OCR/remote/plugin disabled，模型只在 ECS image build 获取并生成 package/model lock。ECS 已在 corpus 前捕获非法 wheel 名、默认 Torch CUDA 解析和共层依赖索引失败；现把官方 CPU `torch 2.13.0+cpu`/`torchvision 0.28.0+cpu` 独立成缓存/验证层，Docling 显式使用 PyPI official index，build/preflight 双重拒绝 GPU 包。尚无 image/质量/RSS 证据，下一步必须从新 SHA 重跑同一 7-PDF gate。
 
 ## Version tuple
 
