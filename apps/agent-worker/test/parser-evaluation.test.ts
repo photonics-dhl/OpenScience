@@ -235,8 +235,11 @@ describe('document parser evaluation script', () => {
 
   it('builds the worker dependency closure for a clean content-addressed checkout', () => {
     const script = readFileSync(evaluationScript, 'utf8');
+    const generateIndex = script.indexOf('npx pnpm@9.15.0 --filter @openscience/database generate');
+    const buildIndex = script.indexOf('npx pnpm@9.15.0 --filter @openscience/agent-worker... build');
 
-    expect(script).toContain('npx pnpm@9.15.0 --filter @openscience/agent-worker... build');
+    expect(generateIndex).toBeGreaterThan(-1);
+    expect(buildIndex).toBeGreaterThan(generateIndex);
   });
 
   it('rejects candidates outside the explicit allowlist', () => {
