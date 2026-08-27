@@ -2,6 +2,13 @@
 
 > 最新同步：2026-08-28。历史由 Git 保存；旧计划和 archive 不作为默认输入。
 
+## 2026-08-28 — 卫生债与 ECS 临时资源清理
+
+- 仓库复现并清理 10 个无引用文件、19 个无用导出、44 个无用导出类型和 1 个重复导出；Compose 动态 parser 入口、隔离子进程 `mammoth`/`pdf-parse` 依赖及 LiteParse 独立 workspace 已显式建模。`audit:knip` 仅余非阻断 configuration hints，`audit:dep` 为 0 violation；聚焦公开阅读面 `5/5`、全仓单测、build、typecheck、lint、docs-sync、Markdown lint 与 diff check 均已复跑通过。
+- ECS 按精确 ID/名称删除 7 个退出候选容器、6 个恢复/测试数据库、3 个无引用卷、旧 BGE/LiteParse/agent/parser 镜像世代与 build cache；保留 current/rollback、生产 BGE worker/版本卷及通过门禁的 LiteParse 候选。Docker images 从 `35.63 GB` 降至 `12.56 GB`，volumes 从 `11.44 GB` 降至 `6.754 GB`，volume reclaimable 为 `0 B`。
+- 清理后 `.release-id` 与公网 `/__release` 仍为 `8163f8b…`，生产容器健康，BGE-M3 exact revision/manifest/package-freeze + 1024 维/4096-byte CPU vector canary 返回 `EMBEDDING_RUNTIME_OK`。仓库卫生候选为 `d37d7a8…`、尚未部署；生产 application release 仍为 `8163f8b…`。
+- 文档处理能力仍未全部配齐：现有 sidecar/Tesseract/ClamAV/strict source-map 与 BGE-M3 为生产能力；LiteParse 仍是 `APPROVED_PILOT`，Docling/GROBID/PaddleOCR 尚无保留门禁，复杂版式/表格公式/参考文献/扫描件级联不得声称完成。
+
 ## 2026-08-28 — Research Intelligence Task 6 生产收口
 
 - Taskmaster Task 6 `Semantic Retrieval with BGE-M3 and Hybrid Fusion` 已完成，Research Intelligence 现为 5/12；Tasks 4、7 dependency-ready，Task 10 仍等待 Task 4。
@@ -10,9 +17,9 @@
 - 生产 release `8163f8b4218e529ee4be41bb9fc732ff6497931a`、rollback `f9659668b237b70b4c018b866e20498689d327c2`；core/search migration 当前 `29/29`、`2/2`，物理库隔离通过，公网与 loopback release marker 一致且 `.release-failed` absent。
 - `embedding-worker` 仅 internal network，无 published port，user `10001:10001`、read-only、cap-drop ALL、no-new-privileges、2 CPU/6 GiB/128 PID；生产 image digest `sha256:137352df4cb1c0937693f3b61d897d22c578232cc8ac15c5a088d0fcb08a0a3e`。
 - 人工停止 embedding worker 后，真实生产 worker 返回 `lexical_only / embedding_unavailable`；恢复服务后 strict model-identity vector canary 再次通过，未写生产搜索数据。
-- 双库原子备份集合 `db-set-20260827T155422Z-1676593` 校验和、0700/0600 权限与 release 绑定通过；core/search 均恢复到隔离临时库，schema/data hash 与生产一致或 PostgreSQL 规范化后一致。临时恢复库按“不删除”红线保留。
+- 双库原子备份集合 `db-set-20260827T155422Z-1676593` 校验和、0700/0600 权限与 release 绑定通过；core/search 均恢复到隔离临时库，schema/data hash 与生产一致或 PostgreSQL 规范化后一致；恢复与测试临时库已在后续明确授权下精确清理。
 - fresh gates：Python embedding `8/8`、deploy contract `19/19`、Web `422/422`、Search `66/66`（8 个 ECS-only integration 本地跳过）、Agent Worker `140/140`、Domain `433/433`、全仓 build/typecheck/lint/unit/docs/diff GREEN；无本地 Docker。
-- `audit:knip` 与 `audit:dep` 仍因既有 unused/orphan/dev-dependency 基线为红；已核对不构成 Task 6 runtime、隔离或部署阻断，后续独立卫生任务处理，禁止把它们误报成全绿。
+- 当时 `audit:knip`/`audit:dep` 的既有红线已在本文件顶部卫生轮次闭合；不得再沿用旧红线判断当前状态。
 
 ## 2026-08-27 — Research Intelligence Task 4 启动
 
@@ -58,14 +65,14 @@
 
 ## Current version tuple
 
-- Branch: `codex/hermes-wanko-live2d`；application/release: `8163f8b4218e529ee4be41bb9fc732ff6497931a`；rollback: `f9659668b237b70b4c018b866e20498689d327c2`。
-- 后续 docs-only commit 不改变已部署 application/release 身份。
+- Branch: `codex/hermes-wanko-live2d`；candidate implementation: `d37d7a8acb4ff74e8f7b511e518fc84b888065f8`；production application/release: `8163f8b4218e529ee4be41bb9fc732ff6497931a`；rollback: `f9659668b237b70b4c018b866e20498689d327c2`。
+- 候选、生产 release 与 docs-only HEAD 分开记录，部署后再更新 application/release 身份。
 
 ## Constraints and open risk
 
 - 所有 Docker、数据库迁移、镜像构建和生产验收只在 ECS 执行；Windows 远程操作必须由 PowerShell 显式调用 Git for Windows Bash，再走 canonical scripts。
 - Landing/Hermes 视觉冻结；Task 2 只含一次 context-loss 恢复控件可访问性修复。
-- 每日 `backup.sh --db` 已原子覆盖 core/search；恢复演练库与旧候选模型卷按“不删除”规则保留，未来清理须显式批准。
+- 每日 `backup.sh --db` 已原子覆盖 core/search；恢复演练库与旧候选模型卷已在 2026-08-28 明确授权后精确清理，current/rollback、生产 BGE 模型卷及通过门禁的 LiteParse 候选继续保留。
 - 不读取、打印或提交 `.env` 值；不安装 GPU 栈；不把生成内容冒充 Evidence。
 
 ## Next action

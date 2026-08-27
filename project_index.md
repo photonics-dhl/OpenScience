@@ -1,7 +1,7 @@
 # OpenScience (XGS) 项目文件索引
 
 > 维护规则：创建/修改/移动文件后必须更新本索引。创建新文件前先查本表防重复。
-> **CURRENT source/deployment anchor（2026-08-28）：** branch `codex/hermes-wanko-live2d`；application/immutable release `8163f8b4218e529ee4be41bb9fc732ff6497931a`；rollback `f9659668b237b70b4c018b866e20498689d327c2`。后续 docs-only HEAD 不改变 application 身份。
+> **CURRENT source/deployment anchor（2026-08-28）：** branch `codex/hermes-wanko-live2d`；candidate implementation `d37d7a8acb4ff74e8f7b511e518fc84b888065f8`；production application/release `8163f8b4218e529ee4be41bb9fc732ff6497931a`；rollback `f9659668b237b70b4c018b866e20498689d327c2`。候选尚未部署，禁止把 HEAD 与生产 release 混写。
 
 ## 根目录
 | 路径 | 用途 | 状态 |
@@ -38,7 +38,7 @@
 | `apps/web/test/ingestion-foundations.test.ts` / `apps/web/test/visual/ingestion-shots.mjs` / `apps/web/app/{%5Fvisual,_visual}/ingestion-foundations/page.tsx` | 研究者导入视觉地基 TDD 合同与 1440/768/375 三视口浏览器截图门禁；脚本访问仅开发态可用的真实编译原语预览 | 活文档 |
 | `apps/web/app/tokens.css` / `apps/web/app/layout.tsx` / `apps/web/test/{tokens-contrast,optical-foundations}.test.ts` | Optical Editorial v3 视觉地基：黑/纸白/朱红 token、0/4/8px 半径、四字体角色、语义 motion、AA/禁蓝紫/降级门禁 | 活文档 |
 | `apps/web/components/brand/OpenScienceWordmark.tsx` / `apps/web/components/shell/*.tsx` / `apps/web/test/surface-shells.test.tsx` | Optical Editorial 品牌与 Public/Identity/Dashboard/Workspace 四类无 Card shell；单一 main、skip link、19/56/25 工作区平面与动作反馈门禁 | 活文档 |
-| `apps/web/components/shell/ResearchFolioPrimitives.tsx` / `apps/web/app/{layout.tsx,tokens.css,globals.css}` | Research Folio 非 Landing 产品地基：全局 Source Serif 4/Noto Serif SC 阅读、暖纸层级、graphite 工具例外、workflow/evidence/decision 原语与旧暗色类兼容桥 | **CURRENT DEPLOYED**；Landing selectors unchanged |
+| `apps/web/app/{layout.tsx,tokens.css,globals.css}` | Research Folio 非 Landing 产品地基：全局 Source Serif 4/Noto Serif SC 阅读、暖纸层级、graphite 工具例外与旧暗色类兼容桥；未接线的原语文件已清理 | **CURRENT DEPLOYED**；Landing selectors unchanged |
 | `apps/web/components/hermes/{HermesVisualAdapter,HermesSpeechBalloon,HermesPresenceControl,HermesRiggedPortrait,HermesWorkspaceStage,HermesPerformanceBubble,HermesGuideBubble,HermesDockAnchor,HermesAnchor,HermesDraftDiff,hermes-state}.ts(x)` / `apps/web/lib/hermes/{context-menu-actions,action-catalog,behavior-director,performance-beat,performance-director,companion-placement,stage-sizing,anchor-registry,travel-path,dock-preferences,motion-preference,hermes-runtime-status}.ts` | Workspace-wide Hermes：精确 `360/200px`；单路径 speech；真实 viewport/protected-region 工具页测量与 scroll 恢复；12 个 action-first performance、每动作中英各三句不连重复；input/search/modal/drawer/approval 中断；guide/menu/drawer 与 reduced-motion 保留 | **§13.6 CURRENT DEPLOYED `8d1409e` / USER REVIEW PENDING**；release/rollback `6b804f7` / `cbf5737` |
 | `apps/web/public/hermes/live2d/{NOTICE.md,live2dcubismcore.min.js,wanko/**}` / `apps/web/test/hermes-live2d-asset-contract.test.ts` / external `C:/Users/Mac/AppData/Local/OpenScience/Live2D/wanko-genie-v1/runtime-v09-export-20260823/` | v09 SDK 4.0 runtime：两张 texture zero-alpha RGB clean、12 motion 参数兼容、manifest 闭合；active renderer 只有单一 Cubism model/canvas，旧 pet/carrier 公开 URL 为 404 | **CURRENT ECS development deployment** `5f4e73c`；母版 SHA `BA111D4E...1121ADD` 未改，operator exception 与版权 notice 已部署，rollback `c97926a` |
 | `apps/web/lib/hermes/{live2d-core-loader,wanko-action-director,wanko-renderer-controller,wanko-live2d-renderer,wanko-model-presentation,wanko-runtime-ownership}.ts` / `apps/web/test/{hermes-wanko-action-director,hermes-wanko-renderer-contract,hermes-wanko-runtime-ownership}.test.ts` | 浏览器单 Wanko canvas/model/RAF owner；32-action profile 复用 byte-identical v09 12 motions，旧 OGL pet renderer、三张 pet PNG、carrier decoder/asset/exporter/CSS 已按授权永久移出当前 tree | **CURRENT v09 ECS runtime** `5f4e73c`；五个关键 runtime 文件公网 SHA 与 release tree 一致 |
@@ -55,21 +55,10 @@
 | `apps/web/test/e2e/start-release-api.mjs` | 发布门禁专用的无用户数据 mock API，只为 canonical Public RO/Collection SSR 提供稳定数据；生产旅程不得使用 | 测试工具 |
 | `apps/web/components/landing/SiteHeader.tsx` | Landing 页极简 i18n 导航；提供真实 `/explore`、`/research-objects/new`、`/auth/login` 入口与 dark/paper 双表面样式 | 活文档 |
 | `apps/web/components/landing/Hero.tsx` / `apps/web/components/optical-lab/AcceptedOpticalSurface.tsx` | Landing Hero 保留 PublicShell 上下文、Create/Explore CTA 与 Open RO 过渡；视觉体与 asset Lab 共用 accepted energy→typography plates、唯一语义 h1、隐藏诊断和 amplified AssetInteractionMount，IDs 按 surface 唯一 | Task 23 已部署；release `48809d6` / rollback `744c631` |
-| `apps/web/components/landing/HeroLoopMedia.tsx` / `apps/web/lib/landing-motion.ts` | Landing 动效资源策略：loop video 仅桌面非 reduced-motion 挂载；移动/reduced-motion 只加载 poster；Evolution reduced-motion 禁止自动轮播 | 活文档 |
 | `apps/web/components/landing/LatestResearch.tsx` | Landing 下滑第二屏（legacy 文件名）：paper `OPEN RO.` 构图、稳定身份说明、N1–N6 六层 SDF anatomy 与真实 `/explore` 入口；不虚构公开研究数据 | 活文档 |
-| `apps/web/components/landing/TrustBand.tsx` | Landing 页 `#trust` 信任区（版本/provenance、许可作者贡献、AI+人工复核三支柱） | 活文档 |
-| `apps/web/components/landing/EvolutionPanel.tsx` | Landing 页四阶段演化面板（create/parse/diff/publish stage morph + 自动演示一轮即停，2026-08-07） | 活文档 |
-| `apps/web/components/landing/HermesBand.tsx` | Landing 页 Hermes 能力带（上下文/证据/审批三卡，2026-08-07） | 活文档 |
-| `apps/web/components/landing/evolving-ro-symbol.tsx` | Landing 页 Evolving RO Symbol（Task 7.7，server-safe SVG，两种变体、六面 SDF 结构、减弱动效支持；2026-08-07 重写为计算环形楔形几何 + stage prop） | 活文档 |
-| `apps/web/components/landing/in-view.tsx` | Landing 滚动进入触发器（IntersectionObserver 加 `landing-inview--seen` 播 landing-reveal；html.js 门控无 JS 可见、reduced-motion 直过，Task 9） | 活文档 |
-| `apps/web/public/hero/ro-loop.{webm,mp4}` + `ro-loop-poster.webp` | Landing Hero 循环视频资产（Gemini 图生视频 video1.mp4 → ffmpeg 首尾 1s 叠化无缝循环 + 中央方形裁切去水印；webm 715KB/mp4 1.0MB/poster 31KB，2026-08-07） | 活文档 |
-| `apps/web/public/hero/{ro-symbol,hero-ambient}.{png,webp}` | Landing Hero 生成资产（figA 玻璃楔形环 + figB 氛围底，Gemini 生成，源 `docs/user_ideas/figA.png`/`figB.png`；ro-symbol 自 Task 9 起不再被引用，Task 12 待清理，hero-ambient 仍作氛围底） | 活文档 |
-| `apps/web/public/hero/landing-hero.png` | Landing Hero bitmap 主视觉资产（本地 Playwright 生成，已被生成资产路线取代，Task 12 待清理） | 活文档 |
-| `apps/web/scripts/generate-landing-hero.mjs` | Landing Hero bitmap 生成脚本（Playwright 渲染 SVG/HTML 合成图至 public/hero） | 活文档 |
 | `apps/web/lib/utils.ts` | `cn` class merge 工具（Task 7.4） | 活文档 |
 | `apps/web/test/ui-components.test.ts` | 原语 storyless server-rendering 断言（Task 7.4；Task 8 追加双表面 `.surface-dark` 与 state-danger 断言） | 活文档 |
-| `apps/web/test/evolving-ro-symbol.test.tsx` | Task 7.7 Evolving RO Symbol server-rendering、变体、动效与 SVG 层级断言 | 活文档 |
-| `apps/web/components/brand/{OpticalHeadline,OpticalField}.tsx` / `apps/web/lib/optical-field/*.ts` | 保留的 Canvas/glyph-particle 媒介与模型；OGL 可用时不挂载，仅在 normal-motion + WebGL unavailable 时以 accepted plate 提供单层同源标题水纹 fallback | **Task 24 CURRENT DEPLOYED `2934476`**；reduced-motion 不挂载，勿误删 |
+| `apps/web/components/brand/OpticalField.tsx` / `apps/web/lib/optical-field/*.ts` | AssetInteractionMount 的 WebGL 不可用 fallback：Canvas/glyph-particle 同源标题水纹；已清理无入口的旧 `OpticalHeadline` 壳层 | **CURRENT fallback**；reduced-motion 不挂载 |
 | `apps/web/app/{%5Fvisual,_visual}/optical-lab/page.tsx` / `apps/web/components/optical-lab/{OpticalLabClientMount,OpticalLabPage}.tsx` / `apps/web/lib/optical-lab/{layout,runtime-policy,model,ogl/*}.ts` | 精确 `/_visual/optical-lab` 比较页；`?candidate=asset` 以单面 shared AcceptedOpticalSurface 为真源，non-asset procedural 路径仅保留历史比较 | HISTORICAL non-asset Task 7 的 650ms rest 不适用于 asset；Task 15 本地共享晋升，未部署 |
 | `apps/web/components/optical-lab/AssetInteractionMount.tsx` / `apps/web/lib/optical-lab/asset-interaction-model.ts` / `apps/web/lib/optical-lab/ogl/{asset-interaction-renderer,asset-flow-pass}.ts` / `apps/web/lib/optical-lab/ogl/shaders/asset-{flow,composite,overlay}.ts` | accepted shared surface 的 OGL 层；Task 22 idle `.05/6px`、三尺度流与不回绕 10s shader clock；Task 23 Landing-only presentation path 以 `uPresentationAlpha` 增加完整合成透明度、`2.2px` 非线性漂移、中央曲率呼吸和字缘高光，全部在 local input 下让位且 Lab 为零；交互仍为 70ms/5px/10px/.18、700ms local zero | Task 23 `48809d6` 已部署并通过公网最终 surface 门禁 |
 | `apps/web/public/optical-lab/{target-reference,current-production,accepted-resting,energy-plate-black-alpha-v1}.png` / `apps/web/test/visual/promote-optical-lab-resting.mjs` | 用户授权参考/current、Task 5 decorative fallback 与用户确认的 1672×941 RGBA 黑底发光分解能量层；promotion 仅接受批准输出并记录 SHA-256 | Landing 与 asset Lab 共用 accepted plates；Task 19 已部署 ECS |
@@ -80,7 +69,7 @@
 | `packages/domain/src/editorial/` / `apps/api/src/routes/{editorial,admin-editorial}.ts` | Ultrafast Science 策展域：版本绑定快照、媒体 provenance、draft→internal_review→scheduled→published 状态机、platform_admin scoped API 与公开过滤 | ECS 已部署并完成真实 published/audit 验收（2026-08-10） |
 | `apps/web/components/editorial/EditorialCollection.tsx` / `apps/web/app/collections/[slug]` / `apps/web/app/editorial/curator` | 纸面期刊精选阅读页与管理员策展工作台；媒体/视频预览、来源说明、非同行评审公开标签；管理 API 走 Nginx Basic Auth `/admin/*` | ECS HTTPS desktop/mobile gate 通过（2026-08-10） |
 | `scripts/{demo-research-corpus,seed-demo-research}.{mjs,test.mjs}` | 6 完整 + 12 轻量启动语料清单与默认 dry-run seeder；Git license blob evidence、source idempotency、无删除、完整项内容寻址 provenance artifact | ECS 已 confirmed seed/replay；18 demo RO + 6 provenance artifacts（2026-08-10） |
-| `apps/web/test/{landing-page,optical-field,landing-motion-policy}.test.ts{,x}` | Landing SSR 路由/唯一 accepted surface 与 h1、导航/CTA/Open RO/Latest Research 保留、无 legacy runtime；历史 optical model 与 motion policy 继续独立回归 | Task 15 本地 GREEN |
+| `apps/web/test/{landing-page,optical-field}.test.ts{,x}` | Landing SSR 路由/唯一 accepted surface 与 h1、导航/CTA/Open RO/Latest Research 保留、无 legacy runtime；当前 optical fallback 独立回归 | CURRENT GREEN |
 | `apps/web/components/public/{PublicVersionPage,CitationRail,ProvenanceCaption,TabNavigation}.tsx` / `apps/web/app/research/[publicId]/**` | Public RO warm-paper 760/280 阅读 surface、持续对象/不可变版本引用、六 SDF 文本状态、SSR route 与 print provenance | 活文档 |
 | `apps/web/test/public-reading-surface.test.tsx` / `apps/web/test/visual/public-reading-shots.mjs` / `apps/web/app/visual-public-reading/page.tsx` | Public RO render contract 与 1440/390/print production browser gate；visual route 仅为确定性验收夹具 | 活文档 |
 | `apps/web/test/visual/shots.mjs` | Landing production browser gate：1672×941/390×844 normal/reduced、唯一 main/h1/shared surface、导航/CTA/Latest Research、overflow/errors/focus、bounded pointer；Task 23 normal 最终 surface 连续三段 `1200ms` 验证标题 coverage `>=18%` / average delta `>=1.10`、四象限与色带 `<=20%`，desktop reduced exact fixture | Task 23 本地与公网 production GREEN |
@@ -88,7 +77,7 @@
 | `apps/web/.gitignore` | web 局部生成物忽略（Task 7.10 截图输出 `test/visual/out/` 不入库） | 活文档 |
 | `apps/web/vitest.config.ts` | Vitest Node 环境、`@/` alias 解析与 `.ts/.tsx` 测试发现（Task 7.4/7.7） | 活文档 |
 | `tsconfig.base.json` / `eslint.config.cjs` / `.npmrc` | 共享 TypeScript/ESLint/pnpm 基线；ESLint 9 flat config 只忽略构建、agent 与 gitignored 的本地临时/视觉证据目录，正式 visual gate 源文件持续受 lint | 活文档；Hermes 本地预览证据不污染 canonical lint |
-| `knip.json` / `.dependency-cruiser.cjs` / `.markdownlint-cli2.jsonc` | 卫生工具配置：knip（未用代码）、dependency-cruiser（依赖边界）、markdownlint（文档门禁）（2026-07-28 落地） | 活文档 |
+| `knip.json` / `.dependency-cruiser.cjs` / `.markdownlint-cli2.jsonc` | 卫生工具配置：Knip 覆盖 Compose 动态入口、隔离子进程依赖与候选 workspace；dependency-cruiser 负责依赖边界并将 Next alias/orphan 交由 Knip；markdownlint 为文档门禁 | **CURRENT GREEN**；unused/dependency/orphan 0 |
 | `scripts/verify-workspace.mjs` | Monorepo 结构校验脚本（lint 的第二段，`verify:workspace` 入口） | 活文档 |
 | `scripts/docs/check-docs-sync.mjs` / `scripts/docs/docs-sync-skill.test.mjs` | 文档同步门禁：索引存在/反向登记/迁移一致性，并锁定 worktree-first、唯一 CURRENT、版本元组、bounded read、active-memory 压缩与 canonical lint wiring | CURRENT；`audit:docs-sync` 先跑 skill `8/8` 再跑结构审计 |
 | `scripts/invite.mjs` | 邀请码管理 CLI（create/list/revoke，P1A-3） | 活文档 |
@@ -102,7 +91,7 @@
 | `packages/domain/src/publish/publish.ts` / `apps/api/src/routes/publications.ts` | 公开发布的单一 domain boundary；移除 generic approved→published 绕过，在事务内加载并验证 Claim graph | **TASK 2 DEPLOYED**；publish safety gate GREEN |
 | `packages/config/src/search-env.ts` / `packages/search/src/{chunker,lexical,storage,index}.ts` / `packages/search/test/{chunker,lexical,storage.integration}.test.ts` | 独立 `SEARCH_DATABASE_URL`/Prisma client；locator-safe chunk、tenant-safe exact BM25、两阶段有界 hydration、typed degradation；core domain/API 不导入 search client | **TASK 2 BOUNDARY DEPLOYED / TASK 6 TASKS 3–4 ECS ACCEPTED CANDIDATE `7d489c5`**；生产 route disabled、search 1/1 |
 | `packages/domain/src/ingestion/ingestion-service.ts` / `apps/api/src/routes/ingestion.ts` / `apps/web/app/research-objects/[id]/hermes/page.tsx` | Hermes ingestion 建议读取、SDF 六字段人工确认、乐观锁写入与 `needs_review → confirmed` 状态流 | 本地实现，待服务器验收（2026-08-10） |
-| `infra/scripts/backup.sh` / `docs/runbooks/backup-restore.md` | core/search PostgreSQL 私有单飞原子备份集合、独立 SHA-256/manifest + SeaweedFS 原子快照；校验 active release、数据库隔离与双库恢复顺序 | **CURRENT PRODUCTION**；`db-set-20260827T155422Z-1676593` 双库 ECS restore drill GREEN，临时库保留 |
+| `infra/scripts/backup.sh` / `docs/runbooks/backup-restore.md` | core/search PostgreSQL 私有单飞原子备份集合、独立 SHA-256/manifest + SeaweedFS 原子快照；校验 active release、数据库隔离与双库恢复顺序 | **CURRENT PRODUCTION**；`db-set-20260827T155422Z-1676593` 双库 ECS restore drill GREEN，6 个临时库已按授权清理 |
 | `infra/scripts/deploy.sh` / `infra/scripts/deploy.test.mjs` / `scripts/verify-embedding-runtime.mjs` | ECS immutable release 部署；双账本迁移、BGE profile/显式严格 deploy gate、逐 release 完整运行时身份与回滚资产、停用收敛、模型卷及切换前后/same-SHA identity + 真实向量 canary | **CURRENT PRODUCTION `8163f8b`**；19/19 合同与 strict vector canary GREEN，rollback `f9659668` |
 | `infra/scripts/rotate-database-credentials.sh` / `infra/scripts/rotate-database-credentials.test.mjs` | ECS-only PostgreSQL 应用凭据原子轮换：Secret 不入 argv/log、active release Compose、`flock` 单飞、mutation-intent、旧/旧或新/新补偿、角色/env 双认证与消费者健康核验 | **CURRENT SECURITY OPERATION**；只可显式 `--confirm`，执行后须复验 release/公网/容器健康 |
 | `apps/agent-worker/Dockerfile` / `apps/agent-worker/Dockerfile.parser` / `apps/agent-worker/parser-image/{package.json,package-lock.json}` / `apps/agent-worker/src/{clamav,ingestion-parser,parser-job-isolation,parser-service}.ts` | Worker 与 lockfile 固定的自包含 document-parser；构建期经 ECS Squid，运行时无网络/Secret、非 root、只读、512MiB/64 PID、128MiB bounded IPC；Tesseract `eng+chi_sim`、ClamAV fail-closed | CURRENT；ECS 隔离 inspect 与固定哈希 24.7MiB PDF 纵向 gate GREEN（2026-08-17） |
@@ -340,7 +329,7 @@
 | `docs/user_ideas/OpenScience-Kimi-Handoff-v2.zip` | 用户×GPT 讨论交接 v2（HANDOFF.md + hero 参考图；已解压至 handoff-v2-extract/ 并入设计方向 v2 定稿） | 只读原件 |
 | `docs/user_ideas/handoff-v2-extract/` | 上述 zip 的解压工作副本（HANDOFF.md + assets/openscience-homepage-hero-v3.png） | 工作副本 |
 | `docs/user_ideas/主页原型图.png` | 首页 art-direction 参考图（1672×941，Evolving RO 六面环+暗场 hero；禁止直接作上线资产） | 只读原件 |
-| `docs/user_ideas/generated_figures/` | Gemini 生成素材目录（figA/figB/figD1 等图 + `video/video1.mp4` 图生视频源；figD1 六面板 Hermes 枢纽版为用户选定方向，video1 已加工为 public/hero/ro-loop.* 上线资产） | 只读原件 |
+| `docs/user_ideas/generated_figures/` | Gemini 生成素材目录（figA/figB/figD1 等图 + `video/video1.mp4` 原始图生视频）；旧 public/hero 加工副本已在无生产引用后清理，原件保持只读 | 只读原件 |
 | `docs/decisions/` | 决策记录 ADR | ADR-001 已接受；ADR-002 已建 |
 | `docs/decisions/ADR-001-target-architecture.md` | 目标架构决策：选择性抽取 Scholars Tea，按 Baseline 重建平台底座 | 活文档（已接受） |
 | `docs/decisions/ADR-002-agent-tooling-portability.md` | Agent 工具能力与可迁移性决策（项目内安装/密钥不入库/分阶段工具候选） | 活文档 |
@@ -351,7 +340,7 @@
 | `docs/specs/2026-08-16-edge-cache-asset-versioning-design.md` / `docs/plans/2026-08-16-edge-cache-asset-versioning-plan.md` / `docs/handoff/2026-08-16-edge-cache-asset-versioning-handoff.md` | Landing 大型光学资产内容寻址缓存的设计、实施与部署证据 | 已完成历史主题；release `b93fa9d`，不作为当前 Hermes 入口 |
 | `docs/runbooks/deployment.md` | 部署 runbook（cloud-sync/迁移/seed/nginx/验证、Parser/BGE 隔离、Windows 显式 Git Bash 专用密钥调用与版本化资产）；§5.35 lexical drill，§5.36 BGE 生产验收 | **CURRENT**；application/release `8163f8b`，rollback `f9659668` |
 | `docs/runbooks/hermes-capability-registry.md` | Hermes Skill/MCP/model/parser/provider 能力台账：注入状态、授权/成本、项目级安装目录、72h PDF TTL、10min signed URL、评测/回滚/退役规则 | **CURRENT / MACHINE-GATED**；BGE-M3 与 PostgreSQL lexical search 为 `PRODUCTION`，parser 候选状态及凭据边界继续记录 |
-| `docs/runbooks/backup-restore.md` | core/search 原子备份集合、权限/release 校验、双临时库恢复与 schema/data 指纹比对；含 remote stdin guard | **CURRENT / ECS RESTORE GREEN**；恢复库按不删除规则保留 |
+| `docs/runbooks/backup-restore.md` | core/search 原子备份集合、权限/release 校验、双临时库恢复与 schema/data 指纹比对；含 remote stdin guard | **CURRENT / ECS RESTORE GREEN**；验证后临时库按用户授权精确清理 |
 | `docs/runbooks/incident.md` | 故障响应 runbook（四节骨架，Phase 1A 填充） | 骨架 |
 | `docs/runbooks/monitoring.md` | 监控面板 runbook（Netdata + vnStat，同域 /monitor/ /traffic/ 路径，2026-08-01） | 已上线 |
 | `docs/runbooks/cloudflare-tunnel.md` | Cloudflare Tunnel 公网入口、固定 Edge/HTTP2、HA watchdog、回滚与移动端验收 | 已部署并完成 2026-08-15 出口事故修复 |

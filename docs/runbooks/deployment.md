@@ -485,8 +485,9 @@ Historical note for the 2026-08-11 release: it used fixed worker tags and a writ
   `inputReady=true`, no fallback reason, and zero browser errors. Renderer
   heartbeat advanced by 516.6ms; idle pose/PNG and pointer PNG changed, with
   pointer gesture `focus`. The short-lived verification session was deleted.
-- Source integrity: remote/local SHA-256 matched for `part-rig-shaders.ts`,
-  `pet-mesh-renderer.ts`, `hermes-state.ts`, and the real Hermes approval page.
+- Historical source integrity at that release matched the then-active part-rig
+  shader, pet mesh renderer, Hermes state and real approval page. Superseded
+  unreferenced renderer files were removed in the 2026-08-28 hygiene pass.
   `/`, `/dashboard`, and `/explore` returned `200`; anonymous `/auth/me`
   returned expected `401`.
 
@@ -1184,4 +1185,5 @@ application remained `f965966...` and production search remained `1/1`.
 - Failure drill stopped the production embedding worker and verified a real worker response of `lexical_only / embedding_unavailable` with a lexical candidate. Restart plus strict model-identity vector canary returned `EMBEDDING_RUNTIME_OK`; the drill used fake storage and wrote no production search data.
 - `/usr/local/bin/backup.sh --db` published atomic dual-database set `db-set-20260827T155422Z-1676593`. Checksums, 0700/0600 permissions and release binding passed; both dumps restored into isolated retained databases and schema/data fingerprints matched (search schema after PostgreSQL deparse normalization).
 - Operational warning: when a multi-command remote script itself arrives through stdin, `docker compose exec -T` can consume the remaining script. Redirect non-input exec calls from `/dev/null`, or send steps separately. Never place database URLs or passwords in argv or logs.
-- Rollback options are immediate lexical-only routing via `BGE_M3_ENABLED`, or immutable release `f9659668…`. Old model/evaluation volumes and restore databases remain preserved; cleanup requires explicit authorization.
+- Rollback options are immediate lexical-only routing via `BGE_M3_ENABLED`, or immutable release `f9659668…`.
+- 2026-08-28 authorized hygiene pass removed 7 exited candidate containers, 6 temporary restore/test databases, 3 unreferenced volumes, obsolete BGE/LiteParse/app image generations and build cache. Docker footprint changed from `35.63 GB` images + `11.44 GB` volumes to `12.56 GB` images + `6.754 GB` volumes; only the active versioned BGE model volume, production worker image, rollback images and accepted LiteParse candidate remain. Post-cleanup release markers, container health and strict CPU vector canary returned `8163f8b…` / `EMBEDDING_RUNTIME_OK`.

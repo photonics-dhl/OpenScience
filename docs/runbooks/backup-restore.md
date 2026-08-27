@@ -112,5 +112,5 @@ case "$DB_ADMIN_ROLE" in (*[!A-Za-z0-9_]*|"") exit 64;; esac
 
 | 日期 | 集合 / release | 核心库 | 搜索库 | 结果 |
 |---|---|---|---|---|
-| 2026-08-28 | `db-set-20260827T155422Z-1676593` / `8163f8b…` | restored；active ledger 30；schema/data hash exact | restored；active ledger 2；normalized schema/data hash exact | 通过；两个临时库保留；确认 stdin guard |
+| 2026-08-28 | `db-set-20260827T155422Z-1676593` / `8163f8b…` | restored；active ledger 30；schema/data hash exact | restored；active ledger 2；normalized schema/data hash exact | 通过；确认 stdin guard；恢复库及同轮测试库已按授权精确清理 |
 | 2026-08-27 | 旧格式 `20260827T123813Z` / `f9659668…` | dump 校验并恢复 | dump 校验并恢复；迁移 1/1 | 通过；临时库保留 |
