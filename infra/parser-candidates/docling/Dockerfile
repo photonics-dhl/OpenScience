@@ -43,7 +43,6 @@ RUN python -m pip install --no-cache-dir --timeout 120 --retries 5 \
     && cd /opt/docling-models \
     && find . -type f -print0 | LC_ALL=C sort -z | xargs -0 sha256sum > /opt/docling-lock/model-sha256.txt \
     && test -s /opt/docling-lock/model-sha256.txt \
-    && rm -f /tmp/docling-2.123.0-py3-none-any.whl \
     && chmod -R a-w /opt/docling-models /opt/docling-lock
 
 ENV HF_HUB_OFFLINE=1 \
