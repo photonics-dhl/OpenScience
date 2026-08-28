@@ -107,6 +107,7 @@ async function walk(root) {
       } else if (info.isDirectory()) {
         entries.push({
           path, type: 'directory', absolute, mode: info.mode & 0o7777, uid: info.uid, gid: info.gid,
+          dev: info.dev, ino: info.ino,
         });
         pending.push(absolute);
       } else if (info.isFile()) {
@@ -119,6 +120,8 @@ async function walk(root) {
           uid: info.uid,
           gid: info.gid,
           nlink: info.nlink,
+          dev: info.dev,
+          ino: info.ino,
         });
       } else {
         throw new Error(`unsupported release source entry: ${path}`);
@@ -243,6 +246,67 @@ export async function verifyReleaseInputManifest({ root, sourceSha }) {
     }
   }
   return manifest;
+}
+
+export function normalizedRuntimeMode(type, mode) {
+  if (!['directory', 'file'].includes(type)
+    || !Number.isSafeInteger(mode) || mode < 0 || mode > 0o7777) {
+    throw new Error('generated runtime mode is invalid');
+  }
+  const executable = type === 'directory' || (mode & 0o111) !== 0;
+  return mode | 0o444 | (executable ? 0o111 : 0);
+}
+
+async function normalizeRuntimeEntry(item) {
+  const normalizedMode = normalizedRuntimeMode(item.type, item.mode);
+  if (normalizedMode === item.mode) return false;
+  if (item.type === 'file' && item.nlink !== 1) {
+    throw new Error(`generated runtime file is not an exclusive file: ${item.path}`);
+  }
+  const flags = constants.O_RDONLY | (constants.O_NOFOLLOW ?? 0)
+    | (item.type === 'directory' ? (constants.O_DIRECTORY ?? 0) : 0);
+  const handle = await open(item.absolute, flags);
+  try {
+    const before = await handle.stat();
+    const expectedType = item.type === 'directory' ? before.isDirectory() : before.isFile();
+    if (!expectedType || before.dev !== item.dev || before.ino !== item.ino
+      || (item.type === 'file' && before.nlink !== 1)) {
+      throw new Error(`generated runtime entry changed before permission normalization: ${item.path}`);
+    }
+    await handle.chmod(normalizedMode);
+    const after = await handle.stat();
+    if (after.dev !== before.dev || after.ino !== before.ino
+      || (item.type === 'file' && after.nlink !== 1)
+      || (after.mode & 0o7777) !== normalizedMode) {
+      throw new Error(`generated runtime permission normalization failed: ${item.path}`);
+    }
+  } finally {
+    await handle.close();
+  }
+  return true;
+}
+
+export async function normalizeReleaseRuntimePermissions({ root, sourceSha }) {
+  if (!SHA_PATTERN.test(sourceSha)) throw new Error('source SHA must be a full Git commit SHA');
+  const canonical = await canonicalRoot(root);
+  await verifySourceMarker(canonical, sourceSha);
+  await verifyReleaseInputManifest({ root: canonical, sourceSha });
+  const runtimeEntries = (await walk(canonical)).filter(({ path, type }) => (
+    isWorkerRuntimePath(path) && ['directory', 'file'].includes(type)
+  ));
+  if (runtimeEntries.length === 0) throw new Error('generated runtime permission set is empty');
+  let normalizedEntries = 0;
+  for (const item of runtimeEntries) {
+    if (await normalizeRuntimeEntry(item)) normalizedEntries += 1;
+  }
+  const unreadable = (await walk(canonical)).find(({ path, type, mode }) => (
+    isWorkerRuntimePath(path)
+      && ((type === 'directory' && (mode & 0o555) !== 0o555)
+        || (type === 'file' && (mode & 0o444) !== 0o444))
+  ));
+  if (unreadable) throw new Error(`generated runtime entry remains unreadable: ${unreadable.path}`);
+  await verifyReleaseInputManifest({ root: canonical, sourceSha });
+  return { normalizedEntries, runtimeEntries: runtimeEntries.length };
 }
 
 function pathIsInside(root, candidate) {
@@ -407,9 +471,9 @@ async function readRuntimeSnapshot(path) {
 
 function parseCli(argv) {
   const [command, ...tokens] = argv;
-  if (!['create', 'verify', 'runtime-snapshot', 'runtime-verify'].includes(command)
+  if (!['create', 'verify', 'runtime-normalize', 'runtime-snapshot', 'runtime-verify'].includes(command)
     || tokens.length % 2 !== 0) {
-    throw new Error('usage: release-input-manifest.mjs <create|verify|runtime-snapshot|runtime-verify> --root <release-root> --sha <source-sha> [--snapshot <snapshot-path>]');
+    throw new Error('usage: release-input-manifest.mjs <create|verify|runtime-normalize|runtime-snapshot|runtime-verify> --root <release-root> --sha <source-sha> [--snapshot <snapshot-path>]');
   }
   const values = new Map();
   for (let index = 0; index < tokens.length; index += 2) {
@@ -439,6 +503,7 @@ async function main() {
   const options = parseCli(process.argv.slice(2));
   if (options.command === 'create') await createReleaseInputManifest(options);
   else if (options.command === 'verify') await verifyReleaseInputManifest(options);
+  else if (options.command === 'runtime-normalize') await normalizeReleaseRuntimePermissions(options);
   else if (options.command === 'runtime-snapshot') {
     process.stdout.write(`${JSON.stringify(await createReleaseRuntimeSnapshot(options))}\n`);
   } else {

@@ -110,12 +110,18 @@ if /usr/bin/find "$RELEASE_ROOT" -xdev -type f \( -name '.env' -o -name '.env.*'
   echo 'exact release root contains an environment secret file' >&2
   exit 65
 fi
-/usr/bin/npx pnpm@9.15.0 --dir "$RELEASE_ROOT" --filter @openscience/agent-worker... build >/dev/null
+(
+  umask 022
+  /usr/bin/npx pnpm@9.15.0 --dir "$RELEASE_ROOT" --filter @openscience/agent-worker... build >/dev/null
+)
 [[ "$(capture_trust_snapshot)" == "$TRUST_SNAPSHOT" ]] \
   || { echo 'trusted acceptance path identity was replaced during build' >&2; exit 65; }
 verify_release_inputs 'after-build' || exit 65
 [[ -f "$CONTRACT_JS" && -f "$RUNNER_JS" ]] \
   || { echo 'fresh acceptance build outputs missing from exact release' >&2; exit 66; }
+/usr/bin/node "$SOURCE_MANIFEST_TOOL" runtime-normalize --root "$RELEASE_ROOT" --sha "$SOURCE_SHA" >/dev/null \
+  || { echo 'generated runtime permissions could not be normalized' >&2; exit 66; }
+verify_release_inputs 'after-runtime-permission-normalization' || exit 65
 hash_build_outputs() {
   /usr/bin/node - "$RUNNER_JS" "$CONTRACT_JS" <<'NODE'
 const { createHash } = require('node:crypto');

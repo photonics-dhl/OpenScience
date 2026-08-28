@@ -107,11 +107,14 @@ test('Task 8 acceptance launcher exposes its exact isolated topology and rejects
   assert.ok(releaseWorker > terminalWorkerSample, 'worker may exit only after terminal sampling');
 
   const build = source.indexOf('--filter @openscience/agent-worker... build');
+  assert.match(source, /\(\s*umask 022\s*\/usr\/bin\/npx pnpm@9\.15\.0 --dir "\$RELEASE_ROOT" --filter @openscience\/agent-worker\.\.\. build >\/dev\/null\s*\)/u,
+    'fresh runtime build must use a readable umask for the non-root worker');
   const sourceBeforeBuild = source.indexOf("verify_release_inputs 'before-build'");
   const sourceAfterBuild = source.indexOf("verify_release_inputs 'after-build'");
   const sourceBeforeStart = source.indexOf("verify_release_inputs 'before-container-start'");
   const sourceBeforePublication = source.indexOf("verify_release_inputs 'before-publication'");
   const sourceBeforeAtomicPublication = source.indexOf("verify_release_inputs 'before-atomic-publication'");
+  const normalizeRuntimePermissions = source.indexOf('runtime-normalize --root "$RELEASE_ROOT" --sha "$SOURCE_SHA"');
   const immediatelyAfterBuild = source.indexOf("verify_runtime_graph 'immediately-after-build'");
   const runtimeInputsAfterBuild = source.indexOf("verify_runtime_inputs 'immediately-after-build'");
   const beforeContainerStart = source.indexOf("verify_runtime_graph 'before-container-start'");
@@ -132,6 +135,8 @@ test('Task 8 acceptance launcher exposes its exact isolated topology and rejects
     'archived source marker and manifest must be verified before build');
   assert.ok(sourceAfterBuild > build && sourceAfterBuild < immediatelyAfterBuild,
     'archived source marker and manifest must be reverified after build');
+  assert.ok(normalizeRuntimePermissions > sourceAfterBuild && normalizeRuntimePermissions < immediatelyAfterBuild,
+    'restrictive retry outputs must be normalized before runtime identity is fixed');
   assert.ok(sourceBeforeStart > sourceAfterBuild && sourceBeforeStart < parserStart,
     'archived source marker and manifest must be reverified before container start');
   assert.ok(sourceBeforePublication > afterWorkerCompletion && sourceBeforePublication < finalize,
@@ -311,7 +316,7 @@ find() { printf '%s\\n' find >> '${bashPath(marker)}'; return 0; }
 npx() {
   printf '%s\\n' npx >> '${bashPath(marker)}'
   mv "$TEST_RELEASE_ROOT" "$TEST_RELEASE_ROOT.replaced"
-  mkdir -m 700 "$TEST_RELEASE_ROOT"
+  mkdir "$TEST_RELEASE_ROOT"
   return 0
 }
 docker() { printf '%s\\n' docker >> '${bashPath(marker)}'; return 1; }
@@ -367,7 +372,7 @@ export -f git find npx docker
       ...baseEnv, TEST_RELEASE_ROOT: `${secondBashRoot}/releases/${sha}`,
     },
   });
-  assert.equal(swapped.status, 65);
+  assert.equal(swapped.status, 65, swapped.stderr);
   assert.match(swapped.stderr, /identity|replaced|trusted|canonical/i);
   assert.deepEqual((await readFile(marker, 'utf8')).trim().split(/\r?\n/u), ['find', 'npx']);
 });
