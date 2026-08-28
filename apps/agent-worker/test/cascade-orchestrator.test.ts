@@ -196,9 +196,10 @@ describe('runParserCascade', () => {
   it('accepts verified OCR when the merged page retains native blocks without confidence', async () => {
     const textMetadata = { name: 'sidecar-text', version: '2.0.0' };
     const tesseract = { name: 'tesseract', version: '5.3.0' };
-    const { confidence: _confidence, ...nativeBlock } = block(
+    const { confidence, ...nativeBlock } = block(
       'native-1', 'OpenScience native evidence', 1, textMetadata,
     );
+    expect(confidence).toBe(1);
     const extractText = parser(textMetadata, () => ({
       status: 'succeeded', sourceMap: map(textMetadata, [{ page: 1, blocks: [nativeBlock] }]), warnings: [],
     }));
