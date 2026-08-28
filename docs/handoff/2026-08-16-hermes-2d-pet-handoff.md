@@ -1,17 +1,17 @@
 # Hermes Research Intelligence CURRENT Handoff
 
-> **CURRENT active-memory，2026-08-28。** 产品主线是 Research Intelligence；Landing/Hermes 视觉冻结，旧候选只从 Git history 查阅。
+> **CURRENT active-memory，2026-08-29。** 产品主线是 Research Intelligence；Landing/Hermes 视觉冻结，旧候选只从 Git history 查阅。
 
 ## Goal and state
 
 - 目标：以 3–7 个 Claim 为公开 RO 中心，提供可定位 Evidence、条件/限制、身份静默路由、CPU 文档解析、混合检索和可版本化富媒体。
 - Taskmaster `hermes-research-intelligence` 仍为 5/12：Tasks 1–3、5、6 已生产部署；Task 4 parser cascade 尚未完成；Task 7 dependency-ready；Task 10 等待 Task 4。
-- CPU parser cascade Tasks 2–7 已完成；Task 8 的两个预部署 breaker 已在 `0ac37fe` 以 TDD 和双复审闭合，exact CI 运行中，ECS Phase B 未启动。
+- CPU parser cascade Tasks 2–7 已完成；Task 8 的 parser 打包/几何与 immutable release transaction 阻断已在 `0ac37fe..82e9986` 以 TDD 和独立复审闭合，exact Ubuntu CI 全绿，ECS Phase B 未启动。
 
 ## Version tuple
 
 - Worktree: `E:/Miscellaneous/XGS/.worktrees/readable-hermes-guidance`
-- Branch / candidate implementation: `codex/hermes-wanko-live2d` / `0ac37fe6e97ac77eda5c4582f1c4116adacdab33`
+- Branch / candidate implementation: `codex/hermes-wanko-live2d` / `82e99869a87ac025000aa3edefc851fe85b03303`
 - Deployed immutable application/release: `e2c0eaf3b13a220a8bc2cd49b2c1dfe40a6fd61f`
 - Rollback: `8163f8b4218e529ee4be41bb9fc732ff6497931a`
 - Local main / origin main: `b9616cb92dc83437b1b2094291ff43e2a4c34337` / `7eb2f5bc4718ee445b79bd089acb64acb3691e62`
@@ -27,16 +27,18 @@
 
 ## Candidate evidence, not production acceptance
 
-- Candidate `0ac37fe` 已推送；exact-SHA GitHub Actions run `33177667772` 运行中。
-- Compiled packaging/geometry `5/5`、Agent Worker `366/366`、typecheck/lint/docs-sync/dependency/duplicate/diff gates 全绿；独立架构与安全复审均为 Critical/Important/Minor `0`。
+- Candidate `82e9986` 已推送；exact-SHA GitHub Actions run `33192991542` 完整成功，Ubuntu 实跑 release transaction 的 flock/ownership/signal/journal 门禁。
+- Compiled packaging/geometry `5/5`、Agent Worker `366/366`、release-contract、root test/build/typecheck/lint/docs-sync/dependency/diff 与两套视觉门禁全绿；最终独立架构与安全复审均为 Critical/Important/Minor `0`。
 - 以上只证明代码/CI；没有本机 Docker，也没有 ECS 候选镜像、运行时 corpus、资源峰值或生产部署证据。
 
 ## Closed breaker findings
 
 1. `Dockerfile.parser` 的显式 allowlist 已加入两个 native-PDF 模块；compiled packaging contract 从真实 entrypoint 递归相对依赖并验证 spawned child，仍禁止 broad COPY。
 2. `native-pdf-text-items.ts` 已直接使用 PDF.js transformed `minY/maxY`；literal 回归覆盖非旋转上下区与 90° 旋转页。
+3. `git archive` release 以 schema-v2 source manifest 绑定输入、权限与 runtime closure；acceptance report 绑定 exact source/runtime/worker/parser image IDs。
+4. confirmed deploy 在 immutable materialization 后仅启动一个 exact-candidate transaction runner；同一远端进程持 FD9 完成 active 校验、build、migration、switch、实际容器镜像验证、CAS、公网验收与锁内回滚，durable journal 对 SIGKILL/掉电 fail-closed。
 
-以上只闭合代码阻断；exact CI 与 ECS 镜像/运行时证据未完成，因此不得声称服务器验收或生产可用。
+以上只闭合代码与 Ubuntu CI 阻断；ECS 镜像/运行时证据未完成，因此不得声称服务器验收或生产可用。
 
 ## Fixed constraints
 
@@ -47,8 +49,8 @@
 
 ## Next action
 
-1. 等待实现 SHA 与本轮 docs closeout SHA 的 exact GitHub CI。
-2. CI 全绿后进入 ECS Phase B：exact images、schema-v2 16-case、locator/false-ready、P50/P95、CPU/RSS、worker responsiveness、隔离与清理。
+1. 提交本轮 docs-only closeout 并取得 exact GitHub CI。
+2. docs CI 全绿后进入 ECS Phase B：exact images、schema-v2 16-case、locator/false-ready、P50/P95、CPU/RSS、worker responsiveness、隔离与清理。
 3. Phase B 全绿后才通过 canonical immutable release 部署并复验公网/回滚；失败不修改生产。
 
 ## Read first

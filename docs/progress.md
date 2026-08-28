@@ -1,20 +1,27 @@
 # OpenScience 进度（CURRENT window）
 
-> 最新同步：2026-08-28。历史由 Git 保存；旧计划和 archive 不作为默认输入。
+> 最新同步：2026-08-29。历史由 Git 保存；旧计划和 archive 不作为默认输入。
 
 ## Current version tuple
 
-- Branch / candidate implementation: `codex/hermes-wanko-live2d` / `0ac37fe6e97ac77eda5c4582f1c4116adacdab33`；docs closeout HEAD 待本轮提交。
+- Branch / candidate implementation: `codex/hermes-wanko-live2d` / `82e99869a87ac025000aa3edefc851fe85b03303`；docs closeout HEAD 待本轮提交。
 - Production application/release: `e2c0eaf3b13a220a8bc2cd49b2c1dfe40a6fd61f`。
 - Rollback: `8163f8b4218e529ee4be41bb9fc732ff6497931a`。
 - 候选 HEAD 与生产 release 严格分离；Task 8 Phase B 未启动，生产没有修改或重新部署。
+
+## 2026-08-29 — Task 8 predeploy release contract closed
+
+- `0ac37fe` 闭合 parser 镜像窄 allowlist 与 PDF.js Y 几何；`65e934b..f2636be` 进一步闭合 archive source manifest、acceptance report/runtime/image identity、active rollback、single-runner FD9 transaction、durable journal、原子 CAS 与锁内回滚；`82e9986` 修正 Linux gate harness，不改生产代码。
+- confirmed deploy 只允许 immutable cloud-sync 后由 exact candidate 的单一远端 runner 持同一 FD9 完成 active 校验、build/migration/switch/health/actual image/CAS/public/rollback；test hook 已与生产入口物理分离。
+- 最终架构与安全复审均为 Critical/Important/Minor `0`。exact Ubuntu CI run `33192991542` 完整成功，包含本机无法执行的 flock、ownership、TERM/HUP/EXIT/SIGKILL、journal 与 CAS 行为门禁；两套视觉门禁也通过。
+- 没有运行本机 Docker；ECS Phase B、迁移、候选镜像构建与生产部署尚未启动，生产仍为 `e2c0eaf…`。
 
 ## 2026-08-28 — CPU parser cascade breaker recovery
 
 - Task 2–7 已完成代码与独立复审：V2 隔离协议、确定性多格式 `DocumentParser`、provider-neutral layout/GROBID enrichment、本地 Tesseract 选页 OCR、受控 LLM OCR candidate、`sdf.extract` 真实级联组合与执行时权限重建均已落地。MiniMax Vision 仍默认 disabled，未晋升 GROBID/PaddleOCR/Docling。
 - `0ac37fe` 已补齐 parser 镜像窄 allowlist 的两个 native-PDF 模块，并以真实 compiled entrypoint closure/spawned-child 合同防止再次漏包；PDF.js transformed corners 直接使用 top-left `minY/maxY`，手算覆盖上下非对称与 90° 旋转页。
 - TDD RED 精确复现两个缺失模块、非旋转 `y=40→250` 与旋转 `y=20→156`；GREEN 为 compiled `5/5`、Agent Worker `366/366`、typecheck、lint、docs-sync、dependency/duplicate/diff 门禁通过。独立架构和安全复审均为 Critical/Important/Minor `0`。
-- 实现 SHA 已推送；exact-SHA GitHub Actions run `33177667772` 运行中。只有实现与 docs closeout 的 exact CI 全绿后才允许进入 ECS Phase B。
+- 原 `0ac37fe` exact CI 已全绿；其后发现并闭合 release transaction 合同，现行候选与证据以上一节 `82e9986` / run `33192991542` 为准。
 - 没有运行本机 Docker；没有启动 ECS 候选部署、迁移、provider 调用或生产写入。
 
 ## Production foundation retained
@@ -29,4 +36,4 @@
 
 - 所有 Docker、数据库迁移、镜像构建与最终运行验收只在 ECS；本地仅做代码、静态检查与单测。Windows 远程操作必须由 PowerShell 显式调用 Git for Windows Bash，再走 canonical scripts。
 - 不读取、打印或提交 `.env` 值；不安装 GPU 栈；不把生成内容冒充 Evidence；Landing/Hermes 视觉冻结。
-- 下一步先取得 exact-SHA CI；随后仅在 ECS 执行 exact-image build、真实 schema-v2 corpus、CPU/RSS/worker responsiveness、隔离与清理门禁；全部通过后才部署，失败则不触碰生产。
+- 下一步先取得 docs-only closeout 的 exact-SHA CI；随后仅在 ECS 执行 exact-image build、真实 schema-v2 corpus、CPU/RSS/worker responsiveness、隔离与清理门禁；全部通过后才部署，失败则不触碰生产。
