@@ -204,6 +204,7 @@ services:
     tmpfs:
       - /tmp:size=64m,noexec,nosuid,nodev
     mem_limit: 512m
+    cpus: 1
     pids_limit: 64
     cap_drop:
       - ALL

@@ -12,6 +12,8 @@ RUN npm ci --omit=dev --no-audit --no-fund \
 
 COPY --chown=node:node apps/agent-worker/dist/ingestion-parser.js ./dist/ingestion-parser.js
 COPY --chown=node:node apps/agent-worker/dist/parsers/job-protocol.js ./dist/parsers/job-protocol.js
+COPY --chown=node:node apps/agent-worker/dist/parsers/page-quality.js ./dist/parsers/page-quality.js
+COPY --chown=node:node apps/agent-worker/dist/parsers/ocr-parser.js ./dist/parsers/ocr-parser.js
 COPY --chown=node:node apps/agent-worker/dist/parser-job-isolation.js ./dist/parser-job-isolation.js
 COPY --chown=node:node apps/agent-worker/dist/parser-service.js ./dist/parser-service.js
 
