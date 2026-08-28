@@ -10,6 +10,7 @@ import { fileURLToPath } from 'node:url';
 import test from 'node:test';
 
 import {
+  classifyPnpmWorkspaceCatalogSymlink,
   createReleaseRuntimeSnapshot,
   findUncoveredDirectorySymlinkDescendant,
   verifyReleaseRuntimeSnapshot,
@@ -46,6 +47,48 @@ test('runtime-covered directory symlinks do not scan the complete release tree',
       uncovered,
     ],
   }), uncovered);
+});
+
+test('pnpm workspace catalog symlinks fail closed against the source manifest', () => {
+  const sourceEntries = new Map([
+    ['apps/web', { path: 'apps/web', type: 'directory' }],
+    ['apps/web/package.json', { path: 'apps/web/package.json', type: 'file' }],
+    ['packages/search', { path: 'packages/search', type: 'directory' }],
+    ['packages/search/package.json', { path: 'packages/search/package.json', type: 'file' }],
+  ]);
+  assert.equal(classifyPnpmWorkspaceCatalogSymlink({
+    path: 'node_modules/.pnpm/node_modules/@openscience/web',
+    canonicalTargetPath: 'apps/web',
+    sourceEntries,
+  }), true);
+  assert.equal(classifyPnpmWorkspaceCatalogSymlink({
+    path: 'node_modules/runtime-package/workspace',
+    canonicalTargetPath: 'apps/web',
+    sourceEntries,
+  }), false);
+  assert.throws(() => classifyPnpmWorkspaceCatalogSymlink({
+    path: 'node_modules/.pnpm/node_modules/@openscience/web',
+    canonicalTargetPath: 'packages/search',
+    sourceEntries,
+  }), /catalog|workspace|target|manifest/i);
+
+  const missingPackageManifest = new Map(sourceEntries);
+  missingPackageManifest.delete('apps/web/package.json');
+  assert.throws(() => classifyPnpmWorkspaceCatalogSymlink({
+    path: 'node_modules/.pnpm/node_modules/@openscience/web',
+    canonicalTargetPath: 'apps/web',
+    sourceEntries: missingPackageManifest,
+  }), /catalog|workspace|package|manifest/i);
+
+  const directoryPackageManifest = new Map(sourceEntries);
+  directoryPackageManifest.set('apps/web/package.json', {
+    path: 'apps/web/package.json', type: 'directory',
+  });
+  assert.throws(() => classifyPnpmWorkspaceCatalogSymlink({
+    path: 'node_modules/.pnpm/node_modules/@openscience/web',
+    canonicalTargetPath: 'apps/web',
+    sourceEntries: directoryPackageManifest,
+  }), /catalog|workspace|package|manifest/i);
 });
 
 function bashPath(path) {
@@ -308,6 +351,54 @@ test('runtime snapshot permits a source-covered workspace symlink and binds its 
     await assert.rejects(verifyReleaseRuntimeSnapshot({
       root: state.releaseRoot, sourceSha: state.sha, expected: snapshot,
     }), /runtime|generated|identity|digest/i);
+  } finally {
+    await rm(state.sandbox, { recursive: true, force: true });
+  }
+});
+
+test('runtime snapshot binds pnpm workspace catalog symlinks without treating unrelated build output as worker runtime', async () => {
+  const state = await fixture();
+  try {
+    const nextOutput = join(state.releaseRoot, 'apps', 'web', '.next', 'server.js');
+    await mkdir(dirname(nextOutput), { recursive: true });
+    await writeFile(nextOutput, 'unrelated-web-build-v1\n');
+    const dependencyRoot = join(state.releaseRoot, 'node_modules', 'runtime-package');
+    await mkdir(dependencyRoot, { recursive: true });
+    await writeFile(join(dependencyRoot, 'metadata.json'), '{"runtime":true}\n');
+    const catalog = join(state.releaseRoot, 'node_modules', '.pnpm', 'node_modules', '@openscience');
+    await mkdir(catalog, { recursive: true });
+    const workspaceLink = join(catalog, 'web');
+    await symlink(
+      join(state.releaseRoot, 'packages', 'search'),
+      workspaceLink,
+      process.platform === 'win32' ? 'junction' : 'dir',
+    );
+    await assert.rejects(
+      createReleaseRuntimeSnapshot({ root: state.releaseRoot, sourceSha: state.sha }),
+      /catalog|workspace|target|manifest|symlink/i,
+    );
+    await rm(workspaceLink);
+    await symlink(
+      join(state.releaseRoot, 'apps', 'web'),
+      workspaceLink,
+      process.platform === 'win32' ? 'junction' : 'dir',
+    );
+
+    const snapshot = await createReleaseRuntimeSnapshot({ root: state.releaseRoot, sourceSha: state.sha });
+    await writeFile(nextOutput, 'unrelated-web-build-v2\n');
+    await assert.doesNotReject(verifyReleaseRuntimeSnapshot({
+      root: state.releaseRoot, sourceSha: state.sha, expected: snapshot,
+    }));
+
+    await rm(workspaceLink);
+    await symlink(
+      join(state.releaseRoot, 'packages', 'search'),
+      workspaceLink,
+      process.platform === 'win32' ? 'junction' : 'dir',
+    );
+    await assert.rejects(verifyReleaseRuntimeSnapshot({
+      root: state.releaseRoot, sourceSha: state.sha, expected: snapshot,
+    }), /runtime|generated|identity|digest|symlink|catalog|workspace|manifest/i);
   } finally {
     await rm(state.sandbox, { recursive: true, force: true });
   }

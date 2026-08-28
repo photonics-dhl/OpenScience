@@ -261,6 +261,23 @@ export function findUncoveredDirectorySymlinkDescendant({
     && !sourceTargets.has(path) && !isWorkerRuntimePath(path));
 }
 
+export function classifyPnpmWorkspaceCatalogSymlink({
+  path, canonicalTargetPath, sourceEntries,
+}) {
+  const match = /^node_modules\/\.pnpm\/node_modules\/@openscience\/([^/]+)$/u.exec(path);
+  if (!match) return false;
+  const workspaceName = match[1];
+  const expectedTargets = new Set([`apps/${workspaceName}`, `packages/${workspaceName}`]);
+  const targetEntry = sourceEntries.get(canonicalTargetPath);
+  const packageEntry = sourceEntries.get(`${canonicalTargetPath}/package.json`);
+  if (!expectedTargets.has(canonicalTargetPath)
+    || targetEntry?.type !== 'directory'
+    || packageEntry?.type !== 'file') {
+    throw new Error(`pnpm workspace catalog target is outside the source manifest: ${path}`);
+  }
+  return true;
+}
+
 async function generatedSymlinkIdentity(root, item, closure) {
   let canonicalTarget;
   try {
@@ -277,7 +294,12 @@ async function generatedSymlinkIdentity(root, item, closure) {
     throw new Error(`generated runtime symlink target is outside the source/runtime closure: ${item.path}`);
   }
   const targetInfo = await lstat(canonicalTarget);
-  if (closure && targetInfo.isDirectory()) {
+  const pnpmWorkspaceCatalog = closure && classifyPnpmWorkspaceCatalogSymlink({
+    path: item.path,
+    canonicalTargetPath,
+    sourceEntries: closure.sourceEntries,
+  });
+  if (closure && targetInfo.isDirectory() && !pnpmWorkspaceCatalog) {
     const uncovered = findUncoveredDirectorySymlinkDescendant({
       canonicalTargetPath,
       sourceTargets: closure.sourceTargets,
@@ -314,7 +336,8 @@ export async function createReleaseRuntimeSnapshot({ root, sourceSha }) {
   const canonical = await canonicalRoot(root);
   await verifySourceMarker(canonical, sourceSha);
   const sourceManifest = await verifyReleaseInputManifest({ root: canonical, sourceSha });
-  const sourceTargets = new Set(sourceManifest.entries.map(({ path }) => path));
+  const sourceEntries = new Map(sourceManifest.entries.map((entry) => [entry.path, entry]));
+  const sourceTargets = new Set(sourceEntries.keys());
   const walked = await walk(canonical);
   const runtimeLeaves = walked.filter(({ path, type }) => type !== 'directory' && isWorkerRuntimePath(path));
   if (runtimeLeaves.length === 0) throw new Error('generated runtime snapshot is empty');
@@ -347,7 +370,7 @@ export async function createReleaseRuntimeSnapshot({ root, sourceSha }) {
         gid: item.gid,
       };
     } else if (item.type === 'symlink') {
-      identity = await generatedSymlinkIdentity(canonical, item, { sourceTargets, walked });
+      identity = await generatedSymlinkIdentity(canonical, item, { sourceEntries, sourceTargets, walked });
     } else if (item.type === 'directory') {
       identity = {
         path: item.path, type: 'directory', mode: item.mode, uid: item.uid, gid: item.gid,
