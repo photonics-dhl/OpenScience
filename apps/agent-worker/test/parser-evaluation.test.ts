@@ -18,6 +18,10 @@ const sha = (digit: string) => digit.repeat(64);
 const repositoryRoot = resolve(import.meta.dirname, '../../..');
 const evaluationScript = resolve(repositoryRoot, 'infra/scripts/evaluate-document-parsers.sh');
 const evaluationScriptArgument = evaluationScript.replaceAll('\\', '/');
+const failureAccountingScript = resolve(
+  repositoryRoot,
+  'infra/parser-candidates/current-parser/failure-accounting.mjs',
+);
 const bash = process.platform === 'win32' ? 'C:/Program Files/Git/bin/bash.exe' : 'bash';
 
 describe('buildCandidateEvaluationReport', () => {
@@ -420,6 +424,38 @@ describe('document parser evaluation script', () => {
       input: 'x'.repeat(65_537),
     });
     expect(oversizedResult.status).toBe(75);
+  });
+
+  it('keeps validated failure measurements and conservatively accounts invalid output', () => {
+    const measuredFailure = spawnSync(
+      process.execPath,
+      [failureAccountingScript, 'parser_exit', '100', '1200'],
+      {
+        cwd: repositoryRoot,
+        encoding: 'utf8',
+        input: '{"status":"failed","locatorMatches":0,"elapsedMs":190,"peakRssBytes":1900,"errorCode":"parser_exit"}',
+      },
+    );
+    expect(measuredFailure.status).toBe(0);
+    expect(JSON.parse(measuredFailure.stdout)).toEqual({
+      status: 'failed', locatorMatches: 0, elapsedMs: 190, peakRssBytes: 1900, errorCode: 'parser_exit',
+    });
+
+    const invalidOutput = spawnSync(
+      process.execPath,
+      [failureAccountingScript, 'invalid_output', '37', '2147483648'],
+      { cwd: repositoryRoot, encoding: 'utf8', input: '' },
+    );
+    expect(invalidOutput.status).toBe(0);
+    expect(JSON.parse(invalidOutput.stdout)).toEqual({
+      status: 'failed', locatorMatches: 0, elapsedMs: 37, peakRssBytes: 2_147_483_648, errorCode: 'invalid_output',
+    });
+
+    const script = readFileSync(evaluationScript, 'utf8');
+    expect(script).toContain('/sys/fs/cgroup/system.slice/docker-${container_id}.scope/memory.peak');
+    expect(script).toContain('/sys/fs/cgroup/docker/${container_id}/memory.peak');
+    expect(script).toContain('FAIL_CLOSED_PEAK_RSS_BYTES=2147483648');
+    expect(script).toContain('failure-accounting.mjs');
   });
 
   it('normalizes the Docling package and model lock before corpus execution', () => {

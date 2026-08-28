@@ -31,6 +31,34 @@ def _intersects(left: Sequence[float], right: Sequence[float]) -> bool:
     return min(left[2], right[2]) > max(left[0], right[0]) and min(left[3], right[3]) > max(left[1], right[1])
 
 
+def _pdf_bbox(
+    left: Any,
+    top: Any,
+    right: Any,
+    bottom: Any,
+    image_width: float,
+    image_height: float,
+) -> tuple[float, float, float, float]:
+    left, top, right, bottom = (_finite_number(value) for value in (left, top, right, bottom))
+    if image_width <= 0 or image_height <= 0:
+        raise ValueError("invalid OCR image dimensions")
+    if not (0 <= left < right <= image_width and 0 <= top < bottom <= image_height):
+        raise ValueError("OCR box is outside image bounds")
+    normalized = (
+        left * PAGE_WIDTH / image_width,
+        PAGE_HEIGHT - bottom * PAGE_HEIGHT / image_height,
+        right * PAGE_WIDTH / image_width,
+        PAGE_HEIGHT - top * PAGE_HEIGHT / image_height,
+    )
+    if not (
+        0 <= normalized[0] < normalized[2] <= PAGE_WIDTH
+        and 0 <= normalized[1] < normalized[3] <= PAGE_HEIGHT
+        and all(math.isfinite(value) for value in normalized)
+    ):
+        raise ValueError("normalized OCR box is outside page bounds")
+    return normalized
+
+
 def _page_text(page: Mapping[str, Any]) -> str:
     return " ".join(str(item.get("text", "")).strip() for item in page.get("items", []) if str(item.get("text", "")).strip())
 
@@ -105,28 +133,29 @@ def _pages_from_results(results: Sequence[Any]) -> dict[int, dict[str, Any]]:
         shape = getattr(input_image, "shape", None)
         image_height = _finite_number(shape[0]) if isinstance(shape, Sequence) and len(shape) >= 2 else PAGE_HEIGHT
         image_width = _finite_number(shape[1]) if isinstance(shape, Sequence) and len(shape) >= 2 else PAGE_WIDTH
+        if image_height <= 0 or image_width <= 0:
+            raise ValueError("invalid OCR image dimensions")
         items = []
         for text, raw_box in zip(texts, boxes):
             box = _array_values(raw_box)
             if not isinstance(text, str) or not text.strip() or not box:
                 continue
-            if len(box) == 4 and all(isinstance(value, Real) and not isinstance(value, bool) for value in box):
-                left, top, right, bottom = (_finite_number(value) for value in box)
-            else:
-                points = [_array_values(point) for point in box]
-                if len(points) < 4 or not all(len(point) >= 2 for point in points):
-                    continue
-                xs = [_finite_number(point[0]) for point in points]
-                ys = [_finite_number(point[1]) for point in points]
-                left, top, right, bottom = min(xs), min(ys), max(xs), max(ys)
+            try:
+                if len(box) == 4 and all(isinstance(value, Real) and not isinstance(value, bool) for value in box):
+                    left, top, right, bottom = box
+                else:
+                    points = [_array_values(point) for point in box]
+                    if len(points) < 4 or not all(len(point) >= 2 for point in points):
+                        continue
+                    xs = [_finite_number(point[0]) for point in points]
+                    ys = [_finite_number(point[1]) for point in points]
+                    left, top, right, bottom = min(xs), min(ys), max(xs), max(ys)
+                normalized_bbox = _pdf_bbox(left, top, right, bottom, image_width, image_height)
+            except (TypeError, ValueError, OverflowError):
+                continue
             items.append({
                 "text": " ".join(text.split()),
-                "bbox": (
-                    left * PAGE_WIDTH / image_width,
-                    PAGE_HEIGHT - bottom * PAGE_HEIGHT / image_height,
-                    right * PAGE_WIDTH / image_width,
-                    PAGE_HEIGHT - top * PAGE_HEIGHT / image_height,
-                ),
+                "bbox": normalized_bbox,
             })
         pages[page_number] = {"width": PAGE_WIDTH, "height": PAGE_HEIGHT, "items": items}
     return pages

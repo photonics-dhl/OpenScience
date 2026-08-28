@@ -58,6 +58,40 @@ class PaddleOcrRunnerTest(unittest.TestCase):
             {"status": "succeeded", "locatorMatches": 2},
         )
 
+    def test_rejects_invalid_and_oversized_ocr_boxes_before_locator_matching(self):
+        runner = load_runner()
+
+        class Image:
+            shape = (792, 612, 3)
+
+        invalid_boxes = [
+            [-1, 147, 432, 192],
+            [432, 147, 72, 192],
+            [72, 147, 72, 192],
+            [72, 192, 432, 147],
+            [72, 147, 432, float("inf")],
+            [0, 0, 613, 792],
+        ]
+        pages = runner._pages_from_results([
+            {
+                "res": {
+                    "page_index": 0,
+                    "rec_texts": ["INVALID"] * len(invalid_boxes),
+                    "rec_boxes": invalid_boxes,
+                },
+                "input_img": Image(),
+            }
+        ])
+
+        self.assertEqual(pages[1]["items"], [])
+        self.assertEqual(
+            runner.evaluate_locators(
+                pages,
+                [{"kind": "page-region", "page": 1, "bbox": [0, 0, 612, 792]}],
+            ),
+            {"status": "needs_review", "locatorMatches": 0, "errorCode": "locator_miss"},
+        )
+
     def test_reproduces_scan_text_and_region_without_returning_content(self):
         runner = load_runner()
         pages = {

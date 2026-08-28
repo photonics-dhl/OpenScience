@@ -18,6 +18,7 @@ Production anchor remained `e2c0eaf3b13a220a8bc2cd49b2c1dfe40a6fd61f`; rollback 
 - `apps/agent-worker/test/parser-evaluation.test.ts`
 - `infra/scripts/evaluate-document-parsers.sh`
 - `infra/parser-candidates/current-parser/execution-path.mjs`
+- `infra/parser-candidates/current-parser/failure-accounting.mjs`
 - `infra/parser-candidates/current-parser/runner.mjs`
 - `infra/parser-candidates/current-parser/runner.test.mjs`
 - `infra/parser-candidates/paddleocr/Dockerfile`
@@ -43,6 +44,8 @@ RED was captured before each correction:
 - Archive-only evaluation source could not prove its exact commit identity.
 - The source-sync command did not yet have a fail-closed evaluation-root contract.
 - An absolute evaluation script invoked from an unrelated workspace left pnpm on the caller's ambient cwd.
+- Nonzero, invalid and overflow runs replaced trustworthy runner or wall/cgroup measurements with misleading zero elapsed/RSS fields.
+- Paddle normalization allowed negative, inverted, degenerate and oversized OCR boxes to reach locator matching, while non-finite input escaped normalization.
 
 GREEN behavior now requires:
 
@@ -52,12 +55,14 @@ GREEN behavior now requires:
 - Tesseract and Paddle convert image top-left boxes to the corpus PDF bottom-left coordinate system. The non-symmetric fixture `[72,147,432,192]` becomes `[72,600,432,645]` on the 792-point page.
 - Successful OCR outcomes require the candidate cgroup peak (`memory.peak` or v1 `memory.max_usage_in_bytes`) and report `max(self, container)` so OCR children are included.
 - After the dedicated-source validator passes, the script immediately enters `REPOSITORY_ROOT`; all subsequent pnpm workspace commands are therefore rooted in the validated evaluation source even when the absolute script path is invoked from another workspace.
+- Nonzero runs retain the maximum of validated runner and external measurements. Invalid/overflow/timeout paths use wall elapsed plus Docker cgroup peak sampling, with the 2 GiB hard limit as a conservative fallback; every failure therefore remains nonzero in percentile/resource accounting.
+- Paddle boxes are finite and strictly positive-area within the source image and normalized PDF page before locator matching; malformed and oversized boxes are discarded fail-closed.
 
 Fresh GREEN evidence after the corrections:
 
-- `npx pnpm@9.15.0 --filter @openscience/agent-worker test -- parser-evaluation.test.ts`: 20/20, including an absolute-script invocation from a temporary unrelated cwd.
+- `npx pnpm@9.15.0 --filter @openscience/agent-worker test -- parser-evaluation.test.ts`: 21/21, including unrelated-cwd execution and failure-accounting regressions.
 - `node --test infra/parser-candidates/current-parser/runner.test.mjs`: 6/6.
-- `python infra/parser-candidates/paddleocr/runner_test.py`: 4/4.
+- `python infra/parser-candidates/paddleocr/runner_test.py`: 5/5, including an explicit oversized-box regression.
 - `node --test scripts/evaluation-source-sync-command.test.mjs`: 1/1.
 - `python infra/parser-candidates/docling/runner_test.py`: 3/3.
 - `node --test infra/parser-candidates/liteparse/runner.test.mjs`: 4/4.

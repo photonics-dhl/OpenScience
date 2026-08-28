@@ -59,6 +59,7 @@ else
 fi
 [[ "$GIT_SHA" =~ ^[a-f0-9]{40}$ ]] || { echo 'invalid git sha' >&2; exit 65; }
 EVALUATION_ROOT="/opt/openscience-evals/document-parser/$GIT_SHA"
+FAIL_CLOSED_PEAK_RSS_BYTES=2147483648
 
 case "$CANDIDATE" in
   paddleocr|tesseract) CONTRACT_CASE_IDS='["scan-pdf-image-only"]' ;;
@@ -284,6 +285,32 @@ cleanup_active_container() {
   fi
   ACTIVE_CONTAINER_ID=''
 }
+
+container_peak_rss_bytes() {
+  local container_id="$1" path value
+  local paths=(
+    "/sys/fs/cgroup/system.slice/docker-${container_id}.scope/memory.peak"
+    "/sys/fs/cgroup/docker/${container_id}/memory.peak"
+    "/sys/fs/cgroup/memory/docker/${container_id}/memory.max_usage_in_bytes"
+  )
+  for path in "${paths[@]}"; do
+    if [[ -r "$path" ]]; then
+      value="$(< "$path")"
+      if [[ "$value" =~ ^[0-9]+$ ]] && (( 10#$value > 0 )); then
+        printf '%s\n' "$value"
+        return
+      fi
+    fi
+  done
+  printf '%s\n' "$FAIL_CLOSED_PEAK_RSS_BYTES"
+}
+
+account_failed_outcome() {
+  local error_code="$1" elapsed_ms="$2" peak_rss_bytes="$3" normalized_output="$4"
+  printf '%s' "$normalized_output" \
+    | node "$REPOSITORY_ROOT/infra/parser-candidates/current-parser/failure-accounting.mjs" \
+      "$error_code" "$elapsed_ms" "$peak_rss_bytes"
+}
 trap cleanup_active_container EXIT
 trap 'cleanup_active_container; exit 130' HUP INT TERM
 
@@ -397,13 +424,14 @@ for CASE_ID in "${CASE_IDS[@]}"; do
   [[ "$START_STATUS" =~ ^[0-9]+$ && "$NORMALIZE_STATUS" =~ ^[0-9]+$ ]] \
     || { echo 'invalid attached process status' >&2; exit 70; }
 
+  FAILURE_CODE=''
   if [[ "$START_STATUS" -eq 124 || "$START_STATUS" -eq 137 ]]; then
     docker kill "$ACTIVE_CONTAINER_ID" >/dev/null 2>&1 || true
     timeout --signal=TERM --kill-after=1s 5s docker wait "$ACTIVE_CONTAINER_ID" >/dev/null 2>&1 || true
     if [[ "$NORMALIZE_STATUS" -eq 75 ]]; then
-      NORMALIZED_OUTPUT='{"status":"failed","locatorMatches":0,"elapsedMs":0,"peakRssBytes":0,"errorCode":"limit_exceeded"}'
+      FAILURE_CODE='limit_exceeded'
     else
-      NORMALIZED_OUTPUT="{\"status\":\"failed\",\"locatorMatches\":0,\"elapsedMs\":$ELAPSED_MS,\"peakRssBytes\":0,\"errorCode\":\"timeout\"}"
+      FAILURE_CODE='timeout'
     fi
   else
     RUNNING="$(docker inspect --format '{{.State.Running}}' "$ACTIVE_CONTAINER_ID")"
@@ -415,18 +443,26 @@ for CASE_ID in "${CASE_IDS[@]}"; do
       timeout --signal=TERM --kill-after=1s 5s docker wait "$ACTIVE_CONTAINER_ID" >/dev/null 2>&1 || true
     fi
     if [[ "$NORMALIZE_STATUS" -eq 75 ]]; then
-      NORMALIZED_OUTPUT='{"status":"failed","locatorMatches":0,"elapsedMs":0,"peakRssBytes":0,"errorCode":"limit_exceeded"}'
+      FAILURE_CODE='limit_exceeded'
     elif [[ "$NORMALIZE_STATUS" -ne 0 || "$RUNNING" == 'true' ]]; then
-      NORMALIZED_OUTPUT='{"status":"failed","locatorMatches":0,"elapsedMs":0,"peakRssBytes":0,"errorCode":"invalid_output"}'
+      FAILURE_CODE='invalid_output'
     elif [[ "$RUN_EXIT" -ne 0 || "$START_STATUS" -ne 0 ]]; then
-      NORMALIZED_OUTPUT="{\"status\":\"failed\",\"locatorMatches\":0,\"elapsedMs\":$ELAPSED_MS,\"peakRssBytes\":0,\"errorCode\":\"parser_exit\"}"
+      FAILURE_CODE='parser_exit'
     fi
   fi
-  cleanup_active_container
+
+  if [[ -n "$FAILURE_CODE" ]]; then
+    EXTERNAL_PEAK_RSS_BYTES="$(container_peak_rss_bytes "$ACTIVE_CONTAINER_ID")"
+    NORMALIZED_OUTPUT="$(account_failed_outcome \
+      "$FAILURE_CODE" "$ELAPSED_MS" "$EXTERNAL_PEAK_RSS_BYTES" "$NORMALIZED_OUTPUT")"
+  fi
 
   if [[ "${#NORMALIZED_OUTPUT}" -gt 65536 ]]; then
-    NORMALIZED_OUTPUT='{"status":"failed","locatorMatches":0,"elapsedMs":0,"peakRssBytes":0,"errorCode":"limit_exceeded"}'
+    EXTERNAL_PEAK_RSS_BYTES="$(container_peak_rss_bytes "$ACTIVE_CONTAINER_ID")"
+    NORMALIZED_OUTPUT="$(account_failed_outcome \
+      limit_exceeded "$ELAPSED_MS" "$EXTERNAL_PEAK_RSS_BYTES" '')"
   fi
+  cleanup_active_container
 
   (set -o noclobber; printf '%s\n' "$NORMALIZED_OUTPUT" > "$RESULTS_DIR/$CASE_ID.json")
 done
