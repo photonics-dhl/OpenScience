@@ -474,7 +474,7 @@ describe('Task 8 acceptance contract', () => {
   it('accepts only exact sdf.extract success and needs-review handler result shapes', () => {
     const fields = ['problem', 'insight', 'method', 'results', 'limitations', 'reproducibility'];
     const completed = {
-      core: Object.fromEntries(fields.map((field) => [field, ''])),
+      core: { schemaVersion: '0.1.0', ...Object.fromEntries(fields.map((field) => [field, ''])) },
       evidence: Object.fromEntries(fields.map((field) => [field, { quote: '', locator: '' }])),
       needsMoreInformation: fields,
     };
@@ -483,6 +483,9 @@ describe('Task 8 acceptance contract', () => {
       .toBe('needs_review');
     expect(() => classifyAcceptanceHandlerResult({ status: 'failed' })).toThrow(/handler result/i);
     expect(() => classifyAcceptanceHandlerResult({ ...completed, evidence: {} })).toThrow(/handler result/i);
+    expect(() => classifyAcceptanceHandlerResult({
+      ...completed, core: { ...completed.core, schemaVersion: '9.9.9' },
+    })).toThrow(/handler result/i);
     expect(() => classifyAcceptanceHandlerResult('completed')).toThrow(/handler result/i);
   });
 

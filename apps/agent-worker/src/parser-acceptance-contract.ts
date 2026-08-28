@@ -4,6 +4,7 @@ import { chown, link, lstat, mkdir, open, readdir, realpath, rm, writeFile } fro
 import { basename, dirname, join, relative, resolve } from 'node:path';
 
 import type { DocumentSourceMap } from '@openscience/domain';
+import { SDF_CORE_VERSION } from '@openscience/sdf-schema';
 
 import { PDF_TEXT_ITEM_METADATA } from './parsers/native-pdf-contract';
 
@@ -465,7 +466,8 @@ export function classifyAcceptanceHandlerResult(value: unknown): 'completed' | '
   const core = value.core;
   const evidenceByField = value.evidence;
   const needsMoreInformation = value.needsMoreInformation;
-  if (!hasExactKeys(core, SDF_FIELDS)
+  if (!hasExactKeys(core, ['schemaVersion', ...SDF_FIELDS])
+    || core.schemaVersion !== SDF_CORE_VERSION
     || SDF_FIELDS.some((field) => typeof core[field] !== 'string')
     || !hasExactKeys(evidenceByField, SDF_FIELDS)
     || SDF_FIELDS.some((field) => {
