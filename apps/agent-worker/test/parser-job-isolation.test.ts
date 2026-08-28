@@ -6,8 +6,8 @@ import { describe, expect, it } from 'vitest';
 
 import {
   createParserStageJobClient,
+  createSidecarParserStageProcessor,
   createTransitionParserStageProcessor,
-  createParserJobAdapters,
   processParserJobsOnce,
   readVerifiedParserInput,
   reapParserJobOrphans,
@@ -56,6 +56,51 @@ function v2Stage(text = 'safe text'): ParserStageResult {
 }
 
 describe('document parser sidecar IPC', () => {
+  it('keeps PDF inventory, selected rendering, and Tesseract word boxes inside the V2 sidecar processor', async () => {
+    const content = Buffer.from('%PDF image-only');
+    const png = Buffer.alloc(24);
+    Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]).copy(png);
+    png.writeUInt32BE(13, 8);
+    png.write('IHDR', 12, 'ascii');
+    png.writeUInt32BE(100, 16);
+    png.writeUInt32BE(100, 20);
+    const inventory = v2Stage();
+    inventory.parser = { name: 'pdfjs-page-inventory', version: '2.4.5' };
+    inventory.pages = [{ page: 1, width: 612, height: 792, blocks: [] }];
+    const processor = createSidecarParserStageProcessor({}, {
+      inventoryPages: async () => inventory,
+      localOcr: {
+        metadata: { name: 'tesseract', version: '5.3.0' },
+        renderPdfPages: async () => [{
+          pageNumber: 1, mediaType: 'image/png', bytes: png, width: 100, height: 100,
+          contentHash: createHash('sha256').update(png).digest('hex'),
+        }],
+        recognizePage: async () => [
+          'level\tpage_num\tblock_num\tpar_num\tline_num\tword_num\tleft\ttop\twidth\theight\tconf\ttext',
+          '5\t1\t1\t1\t1\t1\t10\t20\t30\t10\t96\tEvidence',
+        ].join('\n'),
+      },
+    });
+
+    await expect(processor(v2Request(content, { operation: 'inventory_pages', options: {} }), content))
+      .resolves.toEqual(inventory);
+    await expect(processor(v2Request(content, {
+      operation: 'render_page', options: { pageNumbers: [1] },
+    }), content)).resolves.toMatchObject({
+      parser: { name: 'tesseract', version: '5.3.0' },
+      pages: [{ page: 1, width: 100, height: 100, blocks: [] }],
+    });
+    await expect(processor(v2Request(content, {
+      operation: 'ocr_page', options: { pageNumbers: [1] },
+    }), content)).resolves.toMatchObject({
+      parser: { name: 'tesseract', version: '5.3.0' },
+      pages: [{ page: 1, width: 612, height: 792, blocks: [{
+        text: 'Evidence', confidence: 0.96,
+        boundingBox: { x: 61.2, y: 554.4, width: 183.6, height: 79.2 },
+      }] }],
+      warnings: ['ocr_applied'],
+    });
+  });
   it('never overwrites an attacker-created cancellation target', async () => {
     const jobDir = await mkdtemp(join(tmpdir(), 'openscience-parser-'));
     const target = join(jobDir, 'existing.cancelled');
@@ -67,28 +112,22 @@ describe('document parser sidecar IPC', () => {
       await rm(jobDir, { recursive: true, force: true });
     }
   });
-  it('moves binary parsing through the bounded shared-volume request contract', async () => {
+  it.each([
+    { kind: 'pdf' },
+    { schemaVersion: 1, kind: 'docx' },
+  ])('fails closed and removes schema-less/V1 jobs without invoking a parser', async (request) => {
     const jobDir = await mkdtemp(join(tmpdir(), 'openscience-parser-'));
     try {
-      const adapters = createParserJobAdapters(jobDir, 2_000);
-      const pending = adapters.pdf!(Buffer.from('%PDF fixture'));
-      await new Promise((resolve) => setTimeout(resolve, 20));
-      await expect(processParserJobsOnce(jobDir, { pdf: async (content) => `parsed:${content.length}` })).resolves.toBe(1);
-      await expect(pending).resolves.toBe('parsed:12');
-    } finally {
-      await rm(jobDir, { recursive: true, force: true });
-    }
-  });
-
-  it('returns only a closed safe code for a V1 parser failure', async () => {
-    const jobDir = await mkdtemp(join(tmpdir(), 'openscience-parser-'));
-    try {
-      const adapters = createParserJobAdapters(jobDir, 2_000);
-      const pending = adapters.docx!(Buffer.from('bad'));
-      await new Promise((resolve) => setTimeout(resolve, 20));
-      await processParserJobsOnce(jobDir, { docx: async () => { throw new Error('/secret/path: manuscript fragment'); } });
-      await expect(pending).rejects.toThrow(SafeParserErrorCode.PARSER_FAILED);
-      await expect(pending).rejects.not.toThrow(/secret|manuscript/i);
+      const id = '12345678-1234-1234-1234-123456789abc';
+      await writeFile(join(jobDir, `${id}.input`), 'untrusted');
+      await writeFile(join(jobDir, `${id}.request.json`), JSON.stringify(request));
+      let invoked = false;
+      await expect(processParserJobsOnce(jobDir, async () => {
+        invoked = true;
+        return v2Stage();
+      })).resolves.toBe(1);
+      expect(invoked).toBe(false);
+      expect(await readdir(jobDir)).toEqual([]);
     } finally {
       await rm(jobDir, { recursive: true, force: true });
     }
@@ -161,25 +200,6 @@ describe('document parser sidecar IPC', () => {
     expect(invoked).toBe(false);
   });
 
-  it('maps malformed V1 sidecar output to a closed invalid-response code', async () => {
-    const jobDir = await mkdtemp(join(tmpdir(), 'openscience-parser-'));
-    try {
-      const adapters = createParserJobAdapters(jobDir, 2_000);
-      const pending = adapters.pdf!(Buffer.from('%PDF malformed response'));
-      let requestName = '';
-      await expect.poll(async () => {
-        requestName = (await readdir(jobDir)).find((name) => name.endsWith('.request.json')) ?? '';
-        return requestName.length > 0;
-      }, { interval: 5, timeout: 1_000 }).toBe(true);
-      const id = requestName.replace(/\.request\.json$/, '');
-      await writeFile(join(jobDir, `${id}.response.json`), 'null');
-
-      await expect(pending).rejects.toThrow(SafeParserErrorCode.INVALID_RESPONSE);
-    } finally {
-      await rm(jobDir, { recursive: true, force: true });
-    }
-  });
-
   it('reopens V2 input with no-follow and rejects non-regular, oversized or hash-mismatched files', async () => {
     const jobDir = await mkdtemp(join(tmpdir(), 'openscience-parser-'));
     const content = Buffer.from('verified input');
@@ -243,8 +263,15 @@ describe('document parser sidecar IPC', () => {
         return v2Stage('later job succeeds');
       })).resolves.toBe(2);
 
-      await expect(badPending).rejects.toThrow(SafeParserErrorCode.INVALID_RESPONSE);
-      await expect(badPending).rejects.not.toThrow(/secret|manuscript/i);
+      let failure: unknown;
+      try {
+        await badPending;
+      } catch (error) {
+        failure = error;
+      }
+      expect(failure).toBeInstanceOf(Error);
+      expect((failure as Error).message).toContain(SafeParserErrorCode.INVALID_RESPONSE);
+      expect((failure as Error).message).not.toMatch(/secret|manuscript/i);
       await expect(goodPending).resolves.toEqual(v2Stage('later job succeeds'));
     } finally {
       await rm(jobDir, { recursive: true, force: true });
@@ -339,15 +366,12 @@ describe('document parser sidecar IPC', () => {
       await writeFile(join(jobDir, `${id}.input`), '%PDF version mismatch');
       await writeFile(join(jobDir, `${id}.request.json`), JSON.stringify({ schemaVersion: 3, kind: 'pdf' }));
 
-      await expect(processParserJobsOnce(jobDir, { pdf: async () => {
+      await expect(processParserJobsOnce(jobDir, async () => {
         invoked = true;
-        return 'downgraded';
-      } })).resolves.toBe(1);
+        return v2Stage('downgraded');
+      })).resolves.toBe(1);
       expect(invoked).toBe(false);
-      await expect(readFile(join(jobDir, `${id}.response.json`), 'utf8')).resolves.toBe(JSON.stringify({
-        ok: false,
-        errorCode: SafeParserErrorCode.INVALID_REQUEST,
-      }));
+      expect(await readdir(jobDir)).toEqual([]);
     } finally {
       await rm(jobDir, { recursive: true, force: true });
     }
@@ -406,11 +430,12 @@ describe('document parser sidecar IPC', () => {
   it('marks timed-out work cancelled so a late sidecar cannot publish an orphan response', async () => {
     const jobDir = await mkdtemp(join(tmpdir(), 'openscience-parser-'));
     try {
-      const adapters = createParserJobAdapters(jobDir, 30);
-      await expect(adapters.pdf!(Buffer.from('%PDF delayed'))).rejects.toThrow(/timeout/);
+      const content = Buffer.from('%PDF delayed');
+      const submit = createParserStageJobClient(jobDir, parserMetadata, 30);
+      await expect(submit(v2Request(content), content)).rejects.toThrow(/timeout/);
       expect(await readdir(jobDir)).toEqual(expect.arrayContaining([expect.stringMatching(/\.cancelled$/)]));
       let invoked = false;
-      await processParserJobsOnce(jobDir, { pdf: async () => { invoked = true; return 'late'; } });
+      await processParserJobsOnce(jobDir, async () => { invoked = true; return v2Stage('late'); });
       expect(invoked).toBe(false);
       expect((await readdir(jobDir)).filter((name) => name !== '.ready')).toEqual([]);
     } finally {
@@ -452,16 +477,15 @@ describe('document parser sidecar IPC', () => {
   it('removes a response published during the cancellation race', async () => {
     const jobDir = await mkdtemp(join(tmpdir(), 'openscience-parser-'));
     try {
-      const adapters = createParserJobAdapters(jobDir, 40);
-      const pending = adapters.pdf!(Buffer.from('%PDF racing'));
+      const content = Buffer.from('%PDF racing');
+      const submit = createParserStageJobClient(jobDir, parserMetadata, 40);
+      const pending = submit(v2Request(content), content);
       await expect.poll(async () => (
         (await readdir(jobDir)).some((name) => name.endsWith('.request.json'))
       ), { interval: 5, timeout: 1_000 }).toBe(true);
-      const processing = processParserJobsOnce(jobDir, {
-        pdf: async () => {
-          await new Promise((resolve) => setTimeout(resolve, 60));
-          return 'late response';
-        },
+      const processing = processParserJobsOnce(jobDir, async () => {
+        await new Promise((resolve) => setTimeout(resolve, 60));
+        return v2Stage('late response');
       });
       await expect(pending).rejects.toThrow(/timeout/);
       await processing;

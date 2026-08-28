@@ -94,6 +94,42 @@ function stage(overrides: Partial<ParserStageResult> = {}): ParserStageResult {
 }
 
 describe('deterministic text DocumentParser', () => {
+  it('routes XLSX bytes through the isolated V2 adapter instead of opening ZIP/XML in the worker', async () => {
+    const parserInput = input(Buffer.from('sidecar-owned-xlsx'), 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    const parser = createTextExtractor({
+      xlsx: async (request, content) => {
+        expect(request).toMatchObject({ schemaVersion: 2, operation: 'extract_text', mediaType: parserInput.mediaType });
+        expect(content).toEqual(parserInput.content);
+        return stage({
+          pages: [{ page: 1, width: 1000, height: 24, blocks: [{
+            kind: 'paragraph', text: 'isolated workbook value',
+            boundingBox: { x: 0, y: 0, width: 1000, height: 24 },
+          }] }],
+        });
+      },
+    });
+
+    await expect(executeDocumentParser(parser, parserInput)).resolves.toMatchObject({
+      status: 'succeeded',
+      sourceMap: { pages: [{ blocks: [{ text: 'isolated workbook value' }] }] },
+    });
+  });
+
+  it('cuts off adversarial XLSX XML entities without monopolizing the worker', async () => {
+    const malicious = xlsxWithCellReference('A1');
+    const entities = '&amp;'.repeat(100_001);
+    const workbook = storedZip({
+      'xl/workbook.xml': `<workbook>${entities}</workbook>`,
+      'xl/_rels/workbook.xml.rels': '<Relationships/>',
+    });
+    const parser = createTextExtractor({});
+    const started = performance.now();
+
+    await expect(executeDocumentParser(parser, input(workbook, 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')))
+      .resolves.toMatchObject({ status: 'blocked', code: 'limit_exceeded' });
+    expect(performance.now() - started).toBeLessThan(2_000);
+    expect(malicious.length).toBeGreaterThan(0);
+  });
   it.each([
     ['text/markdown', '# Heading\nBody', ['heading', 'paragraph']],
     ['application/x-tex', '\\section{Heading}\nBody', ['heading', 'paragraph']],

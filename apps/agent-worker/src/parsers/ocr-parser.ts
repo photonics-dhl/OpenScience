@@ -52,6 +52,10 @@ export const TESSERACT_METADATA: DocumentParserMetadata = Object.freeze({
   name: 'tesseract',
   version: '5.3.0',
 });
+export const PDF_PAGE_INVENTORY_METADATA: DocumentParserMetadata = Object.freeze({
+  name: 'pdfjs-page-inventory',
+  version: '2.4.5',
+});
 
 const PNG_MAGIC = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
 const TSV_COLUMNS = [
@@ -86,6 +90,23 @@ try {
     };
   });
   process.stdout.write(JSON.stringify(pages));
+} finally {
+  await parser.destroy();
+}
+`;
+const ISOLATED_INVENTORY_SOURCE = `
+const chunks = [];
+for await (const chunk of process.stdin) chunks.push(chunk);
+const { PDFParse } = await import('pdf-parse');
+const parser = new PDFParse({ data: new Uint8Array(Buffer.concat(chunks)) });
+try {
+  const result = await parser.getInfo({ parsePageInfo: true });
+  if (!Array.isArray(result.pages) || result.pages.length !== result.total) throw new Error('invalid page inventory');
+  process.stdout.write(JSON.stringify(result.pages.map((page, index) => ({
+    page: index + 1,
+    width: page.width,
+    height: page.height,
+  }))));
 } finally {
   await parser.destroy();
 }
@@ -332,14 +353,18 @@ function runBoundedProcess(
   maxOutputBytes: number,
 ): Promise<Buffer> {
   return new Promise((resolve, reject) => {
-    const child = spawn(command, [...args], { stdio: ['pipe', 'pipe', 'ignore'], windowsHide: true });
+    const child = spawn(command, [...args], {
+      stdio: ['pipe', 'pipe', 'ignore'],
+      windowsHide: true,
+      detached: process.platform !== 'win32',
+    });
     const chunks: Buffer[] = [];
     let size = 0;
     let failure: Error | undefined;
     let closed = false;
     const terminate = (error: Error) => {
       if (!failure) failure = error;
-      if (!closed && child.exitCode === null) child.kill('SIGKILL');
+      if (!closed && child.exitCode === null) terminateProcessTree(child);
     };
     const timer = setTimeout(() => terminate(new Error('local parser timeout')), timeoutMs);
     child.stdout.on('data', (chunk: Buffer) => {
@@ -359,6 +384,45 @@ function runBoundedProcess(
     });
     child.stdin.once('error', () => terminate(new Error('local parser input failed')));
     child.stdin.end(input);
+  });
+}
+
+function terminateProcessTree(child: { pid?: number; kill(signal?: NodeJS.Signals | number): boolean }): void {
+  if (process.platform !== 'win32' && typeof child.pid === 'number') {
+    try {
+      process.kill(-child.pid, 'SIGKILL');
+      return;
+    } catch {
+      // Fall through when the child exited between the state check and group signal.
+    }
+  }
+  child.kill('SIGKILL');
+}
+
+export async function inventoryPdfPages(
+  input: ParserInput,
+  timeoutMs: number = LOCAL_OCR_LIMITS.timeoutMs,
+): Promise<ParserStageResult> {
+  if (input.mediaType !== 'application/pdf') throw new Error('page inventory requires a PDF input');
+  const output = await runBoundedProcess(
+    process.execPath,
+    ['--max-old-space-size=256', '--input-type=module', '-e', ISOLATED_INVENTORY_SOURCE],
+    input.content,
+    timeoutMs,
+    2 * 1024 * 1024,
+  );
+  let pages: unknown;
+  try {
+    pages = JSON.parse(output.toString('utf8'));
+  } catch {
+    throw new Error('invalid page inventory');
+  }
+  if (!Array.isArray(pages)) throw new Error('invalid page inventory');
+  return parseParserStageResult({
+    schemaVersion: 2,
+    parser: { ...PDF_PAGE_INVENTORY_METADATA },
+    pages: pages.map((page) => ({ ...(page as Record<string, unknown>), blocks: [] })),
+    warnings: [],
   });
 }
 

@@ -131,6 +131,41 @@ function baseContext(extractText: DocumentParser): CascadeContext {
 }
 
 describe('runParserCascade', () => {
+  it('uses isolated V2 page inventory and selected-page OCR for an image-only PDF', async () => {
+    const textMetadata = { name: 'sidecar-text', version: '2.0.0' };
+    const tesseract = { name: 'tesseract', version: '5.3.0' };
+    const extractText = parser(textMetadata, () => ({
+      status: 'needs_review', sourceMap: map(textMetadata, []), reasons: ['empty-parsed-text'],
+    }));
+    const inventoryPages = vi.fn().mockResolvedValue({
+      schemaVersion: 2, parser: textMetadata,
+      pages: [{ page: 1, width: 612, height: 792, blocks: [] }], warnings: [],
+    });
+    const ocrPages = vi.fn().mockResolvedValue({
+      schemaVersion: 2, parser: tesseract,
+      pages: [{ page: 1, width: 612, height: 792, blocks: [{
+        kind: 'paragraph', text: 'Scanned evidence with enough deterministic text to satisfy local page quality', confidence: 0.97,
+        boundingBox: { x: 72, y: 700, width: 220, height: 18 },
+      }] }], warnings: ['ocr_applied'],
+    });
+
+    const result = await runParserCascade(input(), {
+      adapters: { extractText, isolatedLocalOcr: { inventoryPages, ocrPages } },
+      featureFlags: { detectLayout: false, grobid: false, localOcr: true, llmOcr: false },
+      externalProcessingEligible: false,
+    });
+
+    expect(result.status).toBe('succeeded');
+    if (result.status !== 'succeeded') throw new Error('expected scanned PDF success');
+    expect(result.sourceMap.pages[0]?.blocks[0]).toMatchObject({
+      text: 'Scanned evidence with enough deterministic text to satisfy local page quality', confidence: 0.97, parser: tesseract,
+      boundingBox: { x: 72, y: 700, width: 220, height: 18 },
+    });
+    expect(inventoryPages).toHaveBeenCalledTimes(1);
+    expect(ocrPages).toHaveBeenCalledWith(expect.anything(), [{
+      page: 1, width: 612, height: 792, blocks: [], reason: 'low_confidence',
+    }]);
+  });
   it('executes the fixed stage order and stamps orchestrator metadata', async () => {
     const order: string[] = [];
     const textMetadata = { name: 'text', version: '1' };

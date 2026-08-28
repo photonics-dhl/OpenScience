@@ -25,10 +25,51 @@ const SCAN_FIXTURE = Buffer.from(
   'base64',
 );
 
-export function createParserSelfTestFixtures(): { pdf: Buffer; docx: Buffer } {
+function imageOnlyPdf(png: Buffer): Buffer {
+  const width = png.readUInt32BE(16);
+  const height = png.readUInt32BE(20);
+  const compressed: Buffer[] = [];
+  for (let offset = 8; offset + 12 <= png.length;) {
+    const length = png.readUInt32BE(offset);
+    const kind = png.toString('ascii', offset + 4, offset + 8);
+    if (kind === 'IDAT') compressed.push(png.subarray(offset + 8, offset + 8 + length));
+    offset += 12 + length;
+  }
+  const imageBytes = Buffer.concat(compressed);
+  const content = Buffer.from(`q\n${width} 0 0 ${height} 0 0 cm\n/Im0 Do\nQ\n`);
+  const objects = [
+    Buffer.from('1 0 obj\n<< /Type /Catalog /Pages 2 0 R >>\nendobj\n'),
+    Buffer.from('2 0 obj\n<< /Type /Pages /Kids [3 0 R] /Count 1 >>\nendobj\n'),
+    Buffer.from(`3 0 obj\n<< /Type /Page /Parent 2 0 R /MediaBox [0 0 ${width} ${height}] /Resources << /XObject << /Im0 4 0 R >> >> /Contents 5 0 R >>\nendobj\n`),
+    Buffer.concat([
+      Buffer.from(`4 0 obj\n<< /Type /XObject /Subtype /Image /Width ${width} /Height ${height} /ColorSpace /DeviceGray /BitsPerComponent 8 /Filter /FlateDecode /DecodeParms << /Predictor 15 /Colors 1 /BitsPerComponent 8 /Columns ${width} >> /Length ${imageBytes.length} >>\nstream\n`),
+      imageBytes,
+      Buffer.from('\nendstream\nendobj\n'),
+    ]),
+    Buffer.concat([
+      Buffer.from(`5 0 obj\n<< /Length ${content.length} >>\nstream\n`),
+      content,
+      Buffer.from('endstream\nendobj\n'),
+    ]),
+  ];
+  const header = Buffer.from('%PDF-1.4\n%\xE2\xE3\xCF\xD3\n', 'binary');
+  const offsets: number[] = [];
+  let position = header.length;
+  for (const object of objects) {
+    offsets.push(position);
+    position += object.length;
+  }
+  const xref = Buffer.from(`xref\n0 6\n0000000000 65535 f \n${offsets.map((offset) => `${String(offset).padStart(10, '0')} 00000 n `).join('\n')}\ntrailer\n<< /Size 6 /Root 1 0 R >>\nstartxref\n${position}\n%%EOF\n`);
+  return Buffer.concat([header, ...objects, xref]);
+}
+
+const SCANNED_PDF_FIXTURE = imageOnlyPdf(SCAN_FIXTURE);
+
+export function createParserSelfTestFixtures(): { pdf: Buffer; docx: Buffer; scanPdf: Buffer } {
   return {
     pdf: Buffer.from(PDF_FIXTURE),
     docx: Buffer.from(DOCX_FIXTURE),
+    scanPdf: Buffer.from(SCANNED_PDF_FIXTURE),
   };
 }
 
@@ -47,7 +88,12 @@ type SelfTestItem = {
   textMatched: boolean;
 };
 
-type ScanSelfTestItem = SelfTestItem & { locatorMatched: boolean };
+type ScanSelfTestItem = SelfTestItem & {
+  locatorMatched: boolean;
+  tesseractMatched: boolean;
+  confidenceMatched: boolean;
+  boundingBoxMatched: boolean;
+};
 
 function summarize(parsed: ParsedIngestion): SelfTestItem {
   return {
@@ -74,7 +120,10 @@ export async function runParserCascadeSelfTest(parserCascade: ParserCascadeRunne
   scan: ScanSelfTestItem;
   candidateFallbackDisabled: boolean;
 }> {
-  const candidateFallbackDisabled = Object.values(parserCascade.featureFlags).every((enabled) => !enabled);
+  const candidateFallbackDisabled = parserCascade.featureFlags.localOcr
+    && !parserCascade.featureFlags.detectLayout
+    && !parserCascade.featureFlags.grobid
+    && !parserCascade.featureFlags.llmOcr;
   if (!candidateFallbackDisabled) throw new Error('parser cascade self-test failed: candidate fallback enabled');
   const fixtures = createParserSelfTestFixtures();
   const authorization = {
@@ -90,7 +139,7 @@ export async function runParserCascadeSelfTest(parserCascade: ParserCascadeRunne
       fixtures.docx,
       'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
     ), authorization),
-    parserCascade(parserInput('self-test-scan', SCAN_FIXTURE, 'image/png'), authorization),
+    parserCascade(parserInput('self-test-scan', fixtures.scanPdf, 'application/pdf'), authorization),
   ]);
   const summarizeCascade = (
     result: Awaited<ReturnType<ParserCascadeRunner>>,
@@ -107,12 +156,18 @@ export async function runParserCascadeSelfTest(parserCascade: ParserCascadeRunne
   const docxSummary = summarizeCascade(docx, 'docx');
   const scanSummary: ScanSelfTestItem = (() => {
     if (scan.status !== 'succeeded') {
-      return { format: 'png', status: 'needs_review', textMatched: false, locatorMatched: false };
+      return {
+        format: 'pdf', status: 'needs_review', textMatched: false, locatorMatched: false,
+        tesseractMatched: false, confidenceMatched: false, boundingBoxMatched: false,
+      };
     }
     const block = scan.sourceMap.pages
       .flatMap((page) => page.blocks)
       .find((candidate) => candidate.text?.includes(EXPECTED_SCAN_TEXT));
-    if (!block) return { format: 'png', status: 'ready', textMatched: false, locatorMatched: false };
+    if (!block) return {
+      format: 'pdf', status: 'ready', textMatched: false, locatorMatched: false,
+      tesseractMatched: false, confidenceMatched: false, boundingBoxMatched: false,
+    };
     let locatorMatched = false;
     try {
       const locator = createBlockSourceLocator(scan.sourceMap, block.id, {
@@ -125,12 +180,18 @@ export async function runParserCascadeSelfTest(parserCascade: ParserCascadeRunne
     } catch {
       locatorMatched = false;
     }
-    return { format: 'png', status: 'ready', textMatched: true, locatorMatched };
+    return {
+      format: 'pdf', status: 'ready', textMatched: true, locatorMatched,
+      tesseractMatched: block.parser.name === 'tesseract' && block.parser.version === '5.3.0',
+      confidenceMatched: typeof block.confidence === 'number' && block.confidence > 0 && block.confidence <= 1,
+      boundingBoxMatched: block.boundingBox.width > 0 && block.boundingBox.height > 0,
+    };
   })();
   if (!pdfSummary.textMatched || !docxSummary.textMatched) {
     throw new Error('parser cascade self-test failed: native text missing');
   }
-  if (!scanSummary.textMatched || !scanSummary.locatorMatched) {
+  if (!scanSummary.textMatched || !scanSummary.locatorMatched || !scanSummary.tesseractMatched
+    || !scanSummary.confidenceMatched || !scanSummary.boundingBoxMatched) {
     throw new Error('parser cascade self-test failed: scan OCR text/locator missing');
   }
   return {

@@ -1,13 +1,37 @@
 import { createHash } from 'node:crypto';
+import { EventEmitter } from 'node:events';
+import { PassThrough } from 'node:stream';
 import { describe, expect, it, vi } from 'vitest';
 import type { AiGateway } from '@openscience/ai-gateway';
 import { createWorkerParserCascade } from '../src/index';
 import { sourceMapToManuscriptText } from '../src/extractor';
-import { createDefaultIngestionAdapters, parseIngestion, parseIngestionWithAdapters } from '../src/ingestion-parser';
+import { createDefaultIngestionAdapters, parseIngestion, parseIngestionWithAdapters, runTesseractOcr } from '../src/ingestion-parser';
 import { runParserCascadeSelfTest, runParserSelfTest } from '../src/parser-self-test';
 import { TRANSITION_PARSER_METADATA } from '../src/parser-job-isolation';
+import { PDF_PAGE_INVENTORY_METADATA, TESSERACT_METADATA } from '../src/parsers/ocr-parser';
 
 describe('parseIngestion', () => {
+  it('settles once and waits for close when Tesseract exits before reading stdin', async () => {
+    const child = new EventEmitter() as EventEmitter & {
+      stdin: PassThrough; stdout: PassThrough; exitCode: number | null; kill: ReturnType<typeof vi.fn>;
+    };
+    child.stdin = new PassThrough();
+    child.stdout = new PassThrough();
+    child.exitCode = null;
+    child.kill = vi.fn(() => {
+      child.exitCode = 1;
+      queueMicrotask(() => child.emit('close', 1));
+      return true;
+    });
+    const spawnProcess = vi.fn(() => child) as never;
+    queueMicrotask(() => {
+      const error = Object.assign(new Error('broken pipe'), { code: 'EPIPE' });
+      child.stdin.emit('error', error);
+    });
+
+    await expect(runTesseractOcr(Buffer.alloc(128 * 1024), spawnProcess)).rejects.toThrow('OCR input failed: EPIPE');
+    expect(child.kill).toHaveBeenCalledTimes(1);
+  });
   it.each([
     ['paper.pdf', 'application/pdf', '%PDF-1.7', 'Native PDF evidence'],
     ['paper.docx', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', 'PK fixture', 'Native DOCX evidence'],
@@ -107,14 +131,44 @@ describe('parseIngestion', () => {
 });
 
 describe('production parser self-test', () => {
+  it('uses a valid image-only scanned PDF fixture with no native text layer', async () => {
+    const { PDFParse } = await import('pdf-parse');
+    const fixture = (await import('../src/parser-self-test')).createParserSelfTestFixtures().scanPdf;
+    const parser = new PDFParse({ data: new Uint8Array(fixture) });
+    try {
+      const info = await parser.getInfo({ parsePageInfo: true });
+      expect(info.total).toBe(1);
+    } finally {
+      await parser.destroy();
+    }
+    const textParser = new PDFParse({ data: new Uint8Array(fixture) });
+    try {
+      const nativeText = (await textParser.getText()).text.replace(/--\s*\d+\s+of\s+\d+\s*--/gu, '').trim();
+      expect(nativeText).toBe('');
+    } finally {
+      await textParser.destroy();
+    }
+  });
+
   it('requires V2 native text plus deterministic scan OCR text/locator through the real cascade seam', async () => {
     const parserJobAdapter = vi.fn(async (request, content: Buffer) => {
-      if (request.mediaType === 'image/png') {
-        expect(content.readUInt32BE(16)).toBe(305);
-        expect(content.readUInt32BE(20)).toBe(55);
-        expect(content[25]).toBe(0); // grayscale: no alpha channel may hide the glyphs
-        expect(createHash('sha256').update(content).digest('hex'))
-          .toBe('d96594ae3c33e18c43e0162d8def9055dc32c88ba1788e6154b1dbce0bbb0b9d');
+      if (request.artifactId === 'self-test-scan') {
+        expect(content.subarray(0, 8).toString('binary')).toContain('%PDF-1.4');
+        if (request.operation === 'extract_text') {
+          return { schemaVersion: 2 as const, parser: TRANSITION_PARSER_METADATA, pages: [], warnings: [] };
+        }
+        if (request.operation === 'inventory_pages') {
+          return { schemaVersion: 2 as const, parser: PDF_PAGE_INVENTORY_METADATA,
+            pages: [{ page: 1, width: 305, height: 55, blocks: [] }], warnings: [] };
+        }
+        if (request.operation === 'ocr_page') {
+          return { schemaVersion: 2 as const, parser: TESSERACT_METADATA, pages: [{
+            page: 1, width: 305, height: 55, blocks: [{
+              kind: 'paragraph' as const, text: 'OCR 42 FS',
+              boundingBox: { x: 8, y: 8, width: 180, height: 24 }, confidence: 0.96,
+            }],
+          }], warnings: [] };
+        }
       }
       return ({
       schemaVersion: 2 as const,
@@ -123,7 +177,7 @@ describe('production parser self-test', () => {
         page: 1, width: 1000, height: 24,
         blocks: [{
           kind: 'paragraph' as const,
-          text: request.mediaType === 'image/png' ? 'OCR 42 FS' : 'OpenScience evidence document',
+          text: 'OpenScience evidence document',
           boundingBox: { x: 0, y: 0, width: 1000, height: 24 }, confidence: 1,
         }],
       }],
@@ -137,26 +191,38 @@ describe('production parser self-test', () => {
       schemaVersion: 2,
       pdf: { format: 'pdf', status: 'ready', textMatched: true },
       docx: { format: 'docx', status: 'ready', textMatched: true },
-      scan: { format: 'png', status: 'ready', textMatched: true, locatorMatched: true },
+      scan: {
+        format: 'pdf', status: 'ready', textMatched: true, locatorMatched: true,
+        tesseractMatched: true, confidenceMatched: true, boundingBoxMatched: true,
+      },
       candidateFallbackDisabled: true,
     });
-    expect(parserJobAdapter).toHaveBeenCalledTimes(3);
+    expect(parserJobAdapter).toHaveBeenCalledTimes(5);
     expect(ocr).not.toHaveBeenCalled();
   });
 
   it('fails closed when the composed OCR stage returns no scan text', async () => {
-    const parserJobAdapter = vi.fn(async (request) => ({
-      schemaVersion: 2 as const,
-      parser: TRANSITION_PARSER_METADATA,
-      pages: [{
-        page: 1, width: 1000, height: 24,
-        blocks: request.mediaType === 'image/png' ? [] : [{
+    const parserJobAdapter = vi.fn(async (request) => {
+      if (request.artifactId === 'self-test-scan' && request.operation === 'extract_text') {
+        return { schemaVersion: 2 as const, parser: TRANSITION_PARSER_METADATA, pages: [], warnings: [] };
+      }
+      if (request.artifactId === 'self-test-scan' && request.operation === 'inventory_pages') {
+        return { schemaVersion: 2 as const, parser: PDF_PAGE_INVENTORY_METADATA,
+          pages: [{ page: 1, width: 305, height: 55, blocks: [] }], warnings: [] };
+      }
+      return {
+        schemaVersion: 2 as const,
+        parser: request.operation === 'ocr_page' ? TESSERACT_METADATA : TRANSITION_PARSER_METADATA,
+        pages: [{
+          page: 1, width: 1000, height: 24,
+          blocks: request.operation === 'ocr_page' ? [] : [{
           kind: 'paragraph' as const, text: 'OpenScience evidence document',
           boundingBox: { x: 0, y: 0, width: 1000, height: 24 }, confidence: 1,
         }],
-      }],
-      warnings: [],
-    }));
+        }],
+        warnings: [],
+      };
+    });
     const cascade = createWorkerParserCascade({ ocr: vi.fn() } as never, parserJobAdapter);
 
     await expect(runParserCascadeSelfTest(cascade)).rejects.toThrow(/scan OCR text\/locator/);

@@ -128,6 +128,7 @@ services:
       dockerfile: apps/agent-worker/Dockerfile
       network: host
       args:
+        XGS_RELEASE_IMAGE_TAG: ${XGS_RELEASE_IMAGE_TAG:?XGS_RELEASE_IMAGE_TAG required}
         HTTP_PROXY: http://127.0.0.1:7891
         HTTPS_PROXY: http://127.0.0.1:7891
         NO_PROXY: localhost,127.0.0.1
@@ -186,6 +187,7 @@ services:
       dockerfile: apps/agent-worker/Dockerfile.parser
       network: host
       args:
+        XGS_RELEASE_IMAGE_TAG: ${XGS_RELEASE_IMAGE_TAG:?XGS_RELEASE_IMAGE_TAG required}
         HTTP_PROXY: http://127.0.0.1:7891
         HTTPS_PROXY: http://127.0.0.1:7891
         NO_PROXY: localhost,127.0.0.1

@@ -5,11 +5,19 @@ import { join } from 'node:path';
 
 import type { IngestionAdapters } from './ingestion-parser';
 import {
+  createTesseractOcrAdapter,
+  inventoryPdfPages,
+  ocrSelectedPages,
+  type LocalOcrAdapter,
+} from './parsers/ocr-parser';
+import type { ParserInput } from './parsers/types';
+import {
   PARSER_JOB_RESPONSE_MAX_BYTES,
   ParserJobProtocolError,
   SafeParserErrorCode,
   SafeParserWarningCode,
   deserializeParserJobResponseV2,
+  parseParserStageResult,
   parseParserJobRequestV2,
   serializeParserJobRequestV2,
   serializeParserJobResponseV2,
@@ -19,8 +27,7 @@ import {
   type DocumentParserMetadata,
 } from './parsers/job-protocol';
 
-type ParserKind = 'pdf' | 'docx' | 'image';
-type ParserResponseV1 = { ok: true; text: string } | { ok: false; errorCode: SafeParserErrorCode };
+type ParserKind = 'pdf' | 'docx' | 'image' | 'xlsx';
 export type ParserStageProcessor = (request: ParserJobRequestV2, content: Buffer) => Promise<ParserStageResult>;
 export const TRANSITION_PARSER_METADATA = Object.freeze({ name: 'v1-text-transition', version: '2.0.0' });
 const MAX_INPUT_BYTES = 50 * 1024 * 1024;
@@ -46,49 +53,6 @@ export class SafeParserBoundaryError extends Error {
 function safeErrorCode(error: unknown, fallback = SafeParserErrorCode.PARSER_FAILED): SafeParserErrorCode {
   if (error instanceof SafeParserBoundaryError || error instanceof ParserJobProtocolError) return error.code;
   return fallback;
-}
-
-function parseParserResponseV1(value: unknown): ParserResponseV1 {
-  if (!value || typeof value !== 'object' || Array.isArray(value) || Object.getPrototypeOf(value) !== Object.prototype) {
-    throw new SafeParserBoundaryError(SafeParserErrorCode.INVALID_RESPONSE);
-  }
-  const descriptors = Object.getOwnPropertyDescriptors(value);
-  const ok = descriptors.ok?.value;
-  const allowed = ok === true ? ['ok', 'text'] : ok === false ? ['ok', 'errorCode'] : [];
-  const keys = Reflect.ownKeys(descriptors);
-  if (allowed.length === 0 || keys.some((key) => typeof key !== 'string' || !allowed.includes(key))) {
-    throw new SafeParserBoundaryError(SafeParserErrorCode.INVALID_RESPONSE);
-  }
-  if (keys.some((key) => {
-    const descriptor = descriptors[key as string];
-    return !descriptor?.enumerable || !Object.prototype.hasOwnProperty.call(descriptor, 'value');
-  })) {
-    throw new SafeParserBoundaryError(SafeParserErrorCode.INVALID_RESPONSE);
-  }
-  if (ok === true && typeof descriptors.text?.value === 'string') return { ok: true, text: descriptors.text.value };
-  const errorCode = descriptors.errorCode?.value;
-  if (ok === false && typeof errorCode === 'string' && Object.values(SafeParserErrorCode).includes(errorCode as SafeParserErrorCode)) {
-    return { ok: false, errorCode: errorCode as SafeParserErrorCode };
-  }
-  throw new SafeParserBoundaryError(SafeParserErrorCode.INVALID_RESPONSE);
-}
-
-function parseParserRequestV1(value: unknown): ParserKind {
-  if (!value || typeof value !== 'object' || Array.isArray(value) || Object.getPrototypeOf(value) !== Object.prototype) {
-    throw new SafeParserBoundaryError(SafeParserErrorCode.INVALID_REQUEST);
-  }
-  const descriptors = Object.getOwnPropertyDescriptors(value);
-  const keys = Reflect.ownKeys(descriptors);
-  const kindDescriptor = descriptors.kind;
-  if (keys.length !== 1 || keys[0] !== 'kind' || !kindDescriptor?.enumerable
-    || !Object.prototype.hasOwnProperty.call(kindDescriptor, 'value')) {
-    throw new SafeParserBoundaryError(SafeParserErrorCode.INVALID_REQUEST);
-  }
-  const kind: unknown = kindDescriptor.value;
-  if (kind !== 'pdf' && kind !== 'docx' && kind !== 'image') {
-    throw new SafeParserBoundaryError(SafeParserErrorCode.INVALID_REQUEST);
-  }
-  return kind;
 }
 
 async function readRegularFileNoFollow(path: string, maximumBytes: number, oversizedCode: SafeParserErrorCode): Promise<Buffer> {
@@ -197,65 +161,9 @@ export async function reapParserJobOrphans(
   return reaped;
 }
 
-export function createParserJobAdapters(jobDir: string, timeoutMs = 75_000): IngestionAdapters {
-  const submit = async (kind: ParserKind, content: Buffer): Promise<string> => {
-    if (!Buffer.isBuffer(content) || content.byteLength > MAX_INPUT_BYTES) {
-      throw new SafeParserBoundaryError(SafeParserErrorCode.INPUT_TOO_LARGE);
-    }
-    const id = randomUUID();
-    const inputPath = jobPath(jobDir, id, 'input');
-    const requestPath = jobPath(jobDir, id, 'request.json');
-    const responsePath = jobPath(jobDir, id, 'response.json');
-    const cancelledPath = jobPath(jobDir, id, 'cancelled');
-    await createClientJobFiles(jobDir, inputPath, requestPath, content, JSON.stringify({ kind }));
-    const deadline = Date.now() + timeoutMs;
-    let timedOut = false;
-    try {
-      while (Date.now() < deadline) {
-        try {
-          const serialized = await readRegularFileNoFollow(
-            responsePath,
-            PARSER_JOB_RESPONSE_MAX_BYTES,
-            SafeParserErrorCode.RESPONSE_TOO_LARGE,
-          );
-          let response: ParserResponseV1;
-          try {
-            response = parseParserResponseV1(JSON.parse(serialized.toString('utf8')));
-          } catch {
-            throw new SafeParserBoundaryError(SafeParserErrorCode.INVALID_RESPONSE);
-          }
-          if (response.ok && typeof response.text === 'string') return response.text;
-          if (!response.ok && Object.values(SafeParserErrorCode).includes(response.errorCode)) {
-            throw new SafeParserBoundaryError(response.errorCode);
-          }
-          throw new SafeParserBoundaryError(SafeParserErrorCode.INVALID_RESPONSE);
-        } catch (error) {
-          if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
-        }
-        await sleep(50);
-      }
-      timedOut = true;
-      await writeClientCancellationMarker(cancelledPath);
-      throw new SafeParserBoundaryError(SafeParserErrorCode.TIMEOUT);
-    } finally {
-      const cleanupSuffixes = timedOut
-        ? ['response.tmp', 'response.json']
-        : ['input', 'request.json', 'processing.json', 'response.tmp', 'response.json', 'cancelled'];
-      await Promise.all(cleanupSuffixes.map((suffix) => (
-        rm(jobPath(jobDir, id, suffix), { force: true }).catch(() => undefined)
-      )));
-    }
-  };
-  return {
-    pdf: (content) => submit('pdf', content),
-    docx: (content) => submit('docx', content),
-    image: (content) => submit('image', content),
-  };
-}
-
 export function createParserStageJobClient(
   jobDir: string,
-  expectedParser: DocumentParserMetadata,
+  expectedParser: DocumentParserMetadata | ((request: ParserJobRequestV2) => DocumentParserMetadata),
   timeoutMs = 75_000,
 ): (request: ParserJobRequestV2, content: Buffer) => Promise<ParserStageResult> {
   return async (requestValue: ParserJobRequestV2, content: Buffer): Promise<ParserStageResult> => {
@@ -283,7 +191,11 @@ export function createParserStageJobClient(
             PARSER_JOB_RESPONSE_MAX_BYTES,
             SafeParserErrorCode.RESPONSE_TOO_LARGE,
           );
-          const response = deserializeParserJobResponseV2(serialized, request, expectedParser);
+          const response = deserializeParserJobResponseV2(
+            serialized,
+            request,
+            typeof expectedParser === 'function' ? expectedParser(request) : expectedParser,
+          );
           if (response.ok) return response.result;
           throw new SafeParserBoundaryError(response.errorCode);
         } catch (error) {
@@ -319,6 +231,8 @@ export function createTransitionParserStageProcessor(adapters: IngestionAdapters
       ? 'pdf'
       : request.mediaType === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
         ? 'docx'
+        : request.mediaType === 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+          ? 'xlsx'
         : request.mediaType.startsWith('image/')
           ? 'image'
           : undefined;
@@ -356,6 +270,65 @@ export function createTransitionParserStageProcessor(adapters: IngestionAdapters
   };
 }
 
+export function createSidecarParserStageProcessor(
+  adapters: IngestionAdapters,
+  options: {
+    inventoryPages?: (input: ParserInput, timeoutMs?: number) => Promise<ParserStageResult>;
+    localOcr?: LocalOcrAdapter;
+  } = {},
+): ParserStageProcessor {
+  const extractText = createTransitionParserStageProcessor(adapters);
+  const localOcr = options.localOcr ?? createTesseractOcrAdapter();
+  const inventory = options.inventoryPages ?? inventoryPdfPages;
+  return async (requestValue, content) => {
+    const request = parseParserJobRequestV2(requestValue);
+    const input: ParserInput = Object.freeze({
+      artifactId: request.artifactId,
+      contentHash: request.contentHash,
+      mediaType: request.mediaType,
+      content: Buffer.from(content),
+    });
+    if (request.operation === 'extract_text') return extractText(request, content);
+    if (request.mediaType !== 'application/pdf') {
+      throw new SafeParserBoundaryError(SafeParserErrorCode.UNSUPPORTED_OPERATION);
+    }
+    if (request.operation === 'inventory_pages') {
+      if (Reflect.ownKeys(request.options).length !== 0) {
+        throw new SafeParserBoundaryError(SafeParserErrorCode.UNSUPPORTED_OPERATION);
+      }
+      return inventory(input, localOcr.timeoutMs);
+    }
+    const pageNumbers = request.options.pageNumbers;
+    if (!pageNumbers || Object.keys(request.options).some((key) => key !== 'pageNumbers')) {
+      throw new SafeParserBoundaryError(SafeParserErrorCode.UNSUPPORTED_OPERATION);
+    }
+    if (request.operation === 'render_page') {
+      const rendered = await localOcr.renderPdfPages(input, pageNumbers, localOcr.timeoutMs);
+      return parseParserStageResult({
+        schemaVersion: 2,
+        parser: { ...localOcr.metadata },
+        pages: rendered.map((page) => ({
+          page: page.pageNumber,
+          width: page.width,
+          height: page.height,
+          blocks: [],
+        })),
+        warnings: [],
+      });
+    }
+    if (request.operation === 'ocr_page') {
+      const pageInventory = await inventory(input, localOcr.timeoutMs);
+      const selected = pageNumbers.map((pageNumber) => {
+        const page = pageInventory.pages.find(({ page }) => page === pageNumber);
+        if (!page) throw new SafeParserBoundaryError(SafeParserErrorCode.INVALID_REQUEST);
+        return page;
+      });
+      return ocrSelectedPages(input, selected, localOcr);
+    }
+    throw new SafeParserBoundaryError(SafeParserErrorCode.UNSUPPORTED_OPERATION);
+  };
+}
+
 function responseV2Failure(request: ParserJobRequestV2, errorCode: SafeParserErrorCode): ParserJobResponseV2 {
   return {
     schemaVersion: 2,
@@ -383,9 +356,13 @@ async function publishAtomicResponse(temporaryPath: string, responsePath: string
 
 export async function processParserJobsOnce(
   jobDir: string,
-  adapters: IngestionAdapters,
-  stageProcessor?: ParserStageProcessor,
+  processorOrRemovedV1Adapters: ParserStageProcessor | IngestionAdapters,
+  v2Processor?: ParserStageProcessor,
 ): Promise<number> {
+  const stageProcessor = typeof processorOrRemovedV1Adapters === 'function'
+    ? processorOrRemovedV1Adapters
+    : v2Processor;
+  if (!stageProcessor) throw new SafeParserBoundaryError(SafeParserErrorCode.PARSER_UNAVAILABLE);
   await mkdir(jobDir, { recursive: true });
   const entries = await readdir(jobDir);
   const requests = entries.filter((name) => name.endsWith('.request.json') || name.endsWith('.processing.json')).sort();
@@ -416,7 +393,7 @@ export async function processParserJobsOnce(
         throw error;
       }
     }
-    let response: ParserResponseV1 | ParserJobResponseV2;
+    let response: ParserJobResponseV2;
     let requestV2: ParserJobRequestV2 | undefined;
     try {
       const requestBytes = await readRegularFileNoFollow(
@@ -430,40 +407,23 @@ export async function processParserJobsOnce(
       } catch {
         throw new SafeParserBoundaryError(SafeParserErrorCode.INVALID_REQUEST);
       }
-      const schemaVersion = request && typeof request === 'object' && !Array.isArray(request)
-        ? Object.getOwnPropertyDescriptor(request, 'schemaVersion')
-        : undefined;
-      if (schemaVersion) {
-        if (!schemaVersion.enumerable || !Object.prototype.hasOwnProperty.call(schemaVersion, 'value')
-          || schemaVersion.value !== 2) {
-          throw new SafeParserBoundaryError(SafeParserErrorCode.INVALID_REQUEST);
-        }
-        requestV2 = parseParserJobRequestV2(request);
-        if (!stageProcessor) throw new SafeParserBoundaryError(SafeParserErrorCode.PARSER_UNAVAILABLE);
-        const content = await readVerifiedParserInput(jobPath(jobDir, id, 'input'), requestV2);
-        response = {
-          schemaVersion: 2,
-          ok: true,
-          artifactId: requestV2.artifactId,
-          contentHash: requestV2.contentHash,
-          result: await stageProcessor(requestV2, content),
-        };
-      } else {
-        const kind = parseParserRequestV1(request);
-        const adapter = adapters[kind];
-        if (!adapter) throw new SafeParserBoundaryError(SafeParserErrorCode.PARSER_UNAVAILABLE);
-        const content = await readRegularFileNoFollow(
-          jobPath(jobDir, id, 'input'),
-          MAX_INPUT_BYTES,
-          SafeParserErrorCode.INPUT_TOO_LARGE,
-        );
-        response = { ok: true, text: await adapter(content) };
-      }
+      requestV2 = parseParserJobRequestV2(request);
+      const content = await readVerifiedParserInput(jobPath(jobDir, id, 'input'), requestV2);
+      response = {
+        schemaVersion: 2,
+        ok: true,
+        artifactId: requestV2.artifactId,
+        contentHash: requestV2.contentHash,
+        result: await stageProcessor(requestV2, content),
+      };
     } catch (error) {
       const errorCode = safeErrorCode(error);
-      response = requestV2
-        ? responseV2Failure(requestV2, errorCode)
-        : { ok: false, errorCode };
+      if (!requestV2) {
+        await cleanupCancelled();
+        processed += 1;
+        continue;
+      }
+      response = responseV2Failure(requestV2, errorCode);
     }
     try {
       await access(cancelledPath);
@@ -476,20 +436,14 @@ export async function processParserJobsOnce(
     const temporaryResponse = jobPath(jobDir, id, 'response.tmp');
     let serialized: string;
     try {
-      serialized = 'schemaVersion' in response
-        ? serializeParserJobResponseV2(response)
-        : JSON.stringify(response);
+      serialized = serializeParserJobResponseV2(response);
       if (Buffer.byteLength(serialized) > PARSER_JOB_RESPONSE_MAX_BYTES) {
         throw new SafeParserBoundaryError(SafeParserErrorCode.RESPONSE_TOO_LARGE);
       }
     } catch (error) {
       const errorCode = safeErrorCode(error, SafeParserErrorCode.INVALID_RESPONSE);
-      response = requestV2
-        ? responseV2Failure(requestV2, errorCode)
-        : { ok: false, errorCode };
-      serialized = 'schemaVersion' in response
-        ? serializeParserJobResponseV2(response)
-        : JSON.stringify(response);
+      response = responseV2Failure(requestV2!, errorCode);
+      serialized = serializeParserJobResponseV2(response);
     }
     await publishAtomicResponse(temporaryResponse, jobPath(jobDir, id, 'response.json'), serialized);
     try {

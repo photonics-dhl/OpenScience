@@ -279,7 +279,7 @@ function intersectionRatio(left: DocumentBlock['boundingBox'], right: DocumentBl
 }
 
 function sameText(left: string | undefined, right: string): boolean {
-  return left?.replace(/\s+/g, ' ').trim().toLocaleLowerCase() === right.replace(/\s+/g, ' ').trim().toLocaleLowerCase();
+  return left?.replace(/\s+/g, ' ').trim().toLowerCase() === right.replace(/\s+/g, ' ').trim().toLowerCase();
 }
 
 function candidateId(contentHash: string, candidate: GrobidCandidate): string {

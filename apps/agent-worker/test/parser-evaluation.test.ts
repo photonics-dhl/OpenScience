@@ -458,6 +458,15 @@ describe('document parser evaluation script', () => {
     expect(script).toContain('failure-accounting.mjs');
   });
 
+  it('cleans only the failed evaluation run staging directory and image before publication', () => {
+    const script = readFileSync(evaluationScript, 'utf8');
+    expect(script).toContain('trap cleanup_evaluation_run EXIT');
+    expect(script).toContain('"$(dirname -- "$STAGING_ROOT")" == "$EVALUATION_ROOT"');
+    expect(script).toContain('"$(basename -- "$STAGING_ROOT")" == ".$CANDIDATE.staging."*');
+    expect(script).toContain('docker image rm "$IMAGE_TAG"');
+    expect(script.indexOf('RUN_PUBLISHED=1')).toBeGreaterThan(script.indexOf('renameSync(source, target)'));
+  });
+
   it('normalizes the Docling package and model lock before corpus execution', () => {
     const lock = {
       schemaVersion: 1,

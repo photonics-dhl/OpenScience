@@ -83,6 +83,7 @@ export interface TextExtractionAdapters {
   pdf?: TextStageAdapter;
   docx?: TextStageAdapter;
   image?: TextStageAdapter;
+  xlsx?: TextStageAdapter;
 }
 
 class ParsingLimitError extends Error {}
@@ -327,10 +328,17 @@ function decodeXmlText(text: string): string {
 function boundedXml(content: Buffer): string {
   const xml = decodeUtf8(content);
   if (/<!DOCTYPE|<!ENTITY/iu.test(xml)) throw new ParsingLimitError();
-  const entities = xml.match(/&[^;\s]{1,40};/gu) ?? [];
-  if (entities.length > MAX_XML_ENTITIES
-    || entities.some((entity) => !/^&(amp|lt|gt|quot|apos|#\d+|#x[\da-f]+);$/iu.test(entity))) {
-    throw new ParsingLimitError();
+  let entityCount = 0;
+  for (let start = xml.indexOf('&'); start !== -1; start = xml.indexOf('&', start + 1)) {
+    const end = xml.indexOf(';', start + 1);
+    if (end === -1 || end - start > 41) throw new ParsingLimitError();
+    const entity = xml.slice(start, end + 1);
+    entityCount += 1;
+    if (entityCount > MAX_XML_ENTITIES
+      || !/^&(amp|lt|gt|quot|apos|#\d+|#x[\da-f]+);$/iu.test(entity)) {
+      throw new ParsingLimitError();
+    }
+    start = end;
   }
   return xml;
 }
@@ -542,6 +550,7 @@ export function createTextExtractor(adapters: TextExtractionAdapters): DocumentP
         const type = mediaType(input);
         if (type === 'application/pdf') return await parseBinary(input, adapters.pdf, 'pdf');
         if (type === DOCX_MEDIA_TYPE) return await parseBinary(input, adapters.docx, 'docx');
+        if (type === XLSX_MEDIA_TYPE && adapters.xlsx) return await parseBinary(input, adapters.xlsx, 'docx');
         if (type.startsWith('image/')) return await parseBinary(input, adapters.image, 'image');
         const pages = type === 'text/csv'
           ? parseCsv(input.content)

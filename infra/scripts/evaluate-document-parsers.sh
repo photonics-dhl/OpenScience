@@ -195,6 +195,7 @@ done
 CORPUS_DIR="$EVALUATION_ROOT/corpus"
 MANIFEST_PATH="$CORPUS_DIR/manifest.json"
 CANDIDATE_ROOT="$EVALUATION_ROOT/$CANDIDATE"
+IMAGE_CREATED_BY_RUN=0
 if [[ "$CANDIDATE" == 'current-parser' || "$CANDIDATE" == 'tesseract' ]]; then
   CANDIDATE_VERSION="$ACTIVE_RELEASE"
   [[ "$CANDIDATE" == 'tesseract' ]] && CANDIDATE_VERSION="${ACTIVE_RELEASE}-eng-chi_sim"
@@ -261,6 +262,7 @@ else
     --label "org.openscience.source=$GIT_SHA" \
     --label "org.openscience.candidate=$CANDIDATE" \
     --file "$DOCKERFILE" --tag "$IMAGE_TAG" "$REPOSITORY_ROOT"
+  IMAGE_CREATED_BY_RUN=1
 fi
 IMAGE_DIGEST="$(docker image inspect --format '{{.Id}}' "$IMAGE_TAG")"
 [[ "$IMAGE_DIGEST" =~ ^sha256:[a-f0-9]{64}$ ]] || { echo 'invalid candidate image digest' >&2; exit 70; }
@@ -278,12 +280,25 @@ REPORT_PATH="$STAGING_ROOT/report.json"
 mkdir -m 0755 "$RESULTS_DIR"
 
 ACTIVE_CONTAINER_ID=''
+RUN_PUBLISHED=0
 cleanup_active_container() {
   if [[ "$ACTIVE_CONTAINER_ID" =~ ^[a-f0-9]{64}$ ]]; then
     docker kill "$ACTIVE_CONTAINER_ID" >/dev/null 2>&1 || true
     docker rm -f "$ACTIVE_CONTAINER_ID" >/dev/null 2>&1 || true
   fi
   ACTIVE_CONTAINER_ID=''
+}
+
+cleanup_evaluation_run() {
+  cleanup_active_container
+  if [[ "$RUN_PUBLISHED" -eq 0 && -n "${STAGING_ROOT:-}" && -d "$STAGING_ROOT"
+    && "$(dirname -- "$STAGING_ROOT")" == "$EVALUATION_ROOT"
+    && "$(basename -- "$STAGING_ROOT")" == ".$CANDIDATE.staging."* ]]; then
+    rm -rf -- "$STAGING_ROOT"
+  fi
+  if [[ "$RUN_PUBLISHED" -eq 0 && "$IMAGE_CREATED_BY_RUN" -eq 1 ]]; then
+    docker image rm "$IMAGE_TAG" >/dev/null 2>&1 || true
+  fi
 }
 
 container_peak_rss_bytes() {
@@ -311,8 +326,8 @@ account_failed_outcome() {
     | node "$REPOSITORY_ROOT/infra/parser-candidates/current-parser/failure-accounting.mjs" \
       "$error_code" "$elapsed_ms" "$peak_rss_bytes"
 }
-trap cleanup_active_container EXIT
-trap 'cleanup_active_container; exit 130' HUP INT TERM
+trap cleanup_evaluation_run EXIT
+trap 'cleanup_evaluation_run; exit 130' HUP INT TERM
 
 if [[ "$CANDIDATE" == 'docling' || "$CANDIDATE" == 'paddleocr' ]]; then
   LOCK_CONTAINER_NAME="openscience-parser-eval-$CANDIDATE-${GIT_SHA:0:12}-lock-${STAGING_ROOT##*.}"
@@ -491,6 +506,7 @@ const [source, target] = process.argv.slice(2);
 if (existsSync(target)) throw new Error('candidate report target already exists');
 renameSync(source, target);
 NODE
+RUN_PUBLISHED=1
 REPORT_PATH="$CANDIDATE_ROOT/report.json"
 
 node - "$REPORT_PATH" <<'NODE'

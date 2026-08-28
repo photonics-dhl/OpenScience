@@ -199,6 +199,42 @@ describe('extractHandler（§9.2 提取 + §9.3 结构化校验 + 不写 SDF）'
     await expect(streamToBufferBounded(Readable.from([Buffer.from('123'), Buffer.from('456')]), 5))
       .rejects.toThrow(/exceeds limit/);
   });
+
+  it.each([
+    { logicalPath: 'direct-same.md', mimeType: 'text/markdown', stored: Buffer.from('same-size-A'), declared: Buffer.from('same-size-B') },
+    { logicalPath: 'direct-truncated.md', mimeType: 'text/markdown', stored: Buffer.from('truncated'), declared: Buffer.from('truncated-and-more') },
+    { logicalPath: 'sidecar-same.pdf', mimeType: 'application/pdf', stored: Buffer.from('%PDF-same-A'), declared: Buffer.from('%PDF-same-B') },
+    { logicalPath: 'sidecar-truncated.pdf', mimeType: 'application/pdf', stored: Buffer.from('%PDF-truncated'), declared: Buffer.from('%PDF-truncated-and-more') },
+  ])('在 $logicalPath 进入扫描器或解析器前校验实际长度与摘要', async ({ logicalPath, mimeType, stored, declared }) => {
+    const malwareScanner = vi.fn();
+    const parserCascade = vi.fn();
+    const handlers = createHandlers({ completeStructured: vi.fn() } as unknown as AiGateway, { parserCascade });
+    const deps = {
+      storage: { getObject: vi.fn().mockResolvedValue({ body: Readable.from([stored]), size: stored.length }) },
+      malwareScanner,
+      prisma: {
+        agentTask: { findUnique: vi.fn().mockResolvedValue({
+          id: 'agent-task-1', kind: 'sdf.extract', status: 'running',
+          session: { userId: 'user-1', researchObject: {
+            id: 'ro-1', workspaceId: 'workspace-1', workspace: { id: 'workspace-1', status: 'active' },
+          } },
+        }) },
+        membership: { findUnique: vi.fn().mockResolvedValue({
+          userId: 'user-1', workspaceId: 'workspace-1', role: 'author',
+        }) },
+        artifact: { findUnique: vi.fn().mockResolvedValue({
+          id: 'artifact-1', workspaceId: 'workspace-1', size: declared.length,
+          blobSha256: createHash('sha256').update(declared).digest('hex'), logicalPath, mimeType,
+        }) },
+      },
+    };
+
+    await expect(handlers['sdf.extract']!(deps as never, {
+      id: 'agent-task-1', payload: { artifactId: 'artifact-1', researchObjectId: 'ro-1' }, executionAttempt: 1,
+    })).rejects.toThrow(/artifact integrity mismatch/);
+    expect(malwareScanner).not.toHaveBeenCalled();
+    expect(parserCascade).not.toHaveBeenCalled();
+  });
   it('长文即使前段关键词窗口很多也始终保留正文尾部', () => {
     const earlyWindows = Array.from({ length: 10 }, (_, index) => `LIMITATIONS early-${index} ${'x'.repeat(2_500)}`).join('\n');
     const manuscript = `${earlyWindows}${'m'.repeat(20_000)}TAIL-REPRODUCIBILITY-MARKER`;

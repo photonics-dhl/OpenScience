@@ -22,6 +22,7 @@ import {
 } from '@openscience/search';
 import type { OcrAuthorizationContext } from '@openscience/ai-gateway';
 import type { DocumentSourceMap, ExtractionResult as ParserExtractionResult } from '@openscience/domain';
+import { createHash } from 'node:crypto';
 import type { Readable } from 'node:stream';
 import { extractHandler, sourceMapToManuscriptText } from './extractor';
 import { MAX_PARSER_INPUT, type IngestionAdapters } from './ingestion-parser';
@@ -37,6 +38,7 @@ import {
   type ParserCascadeFeatureFlags,
 } from './parsers/cascade-orchestrator';
 import { createTextExtractor, type TextStageAdapter } from './parsers/text-extractor';
+import { PDF_PAGE_INVENTORY_METADATA, TESSERACT_METADATA } from './parsers/ocr-parser';
 import type { ParserInput } from './parsers/types';
 
 const BGE_M3_REVISION = '5617a9f61b028005a4858fdac845db406aefb181';
@@ -130,16 +132,37 @@ export function createWorkerParserCascade(
     pdf: parserJobAdapter,
     docx: parserJobAdapter,
     image: parserJobAdapter,
+    xlsx: parserJobAdapter,
   });
   const featureFlags: Readonly<ParserCascadeFeatureFlags> = Object.freeze({
     detectLayout: false,
     grobid: false,
-    localOcr: false,
+    localOcr: true,
     llmOcr: false,
   });
   return Object.assign(
     (input: ParserInput, authorization: ParserCascadeAuthorization) => runParserCascade(input, {
-      adapters: { extractText },
+      adapters: {
+        extractText,
+        isolatedLocalOcr: {
+          inventoryPages: (stageInput) => parserJobAdapter({
+            schemaVersion: 2,
+            operation: 'inventory_pages',
+            artifactId: stageInput.artifactId,
+            contentHash: stageInput.contentHash,
+            mediaType: stageInput.mediaType,
+            options: {},
+          }, Buffer.from(stageInput.content)),
+          ocrPages: (stageInput, pages) => parserJobAdapter({
+            schemaVersion: 2,
+            operation: 'ocr_page',
+            artifactId: stageInput.artifactId,
+            contentHash: stageInput.contentHash,
+            mediaType: stageInput.mediaType,
+            options: { pageNumbers: pages.map(({ page }) => page) },
+          }, Buffer.from(stageInput.content)),
+        },
+      },
       aiGateway: gateway,
       trustedAuthorizationContext: authorization.trustedAuthorizationContext,
       externalProcessingEligible: authorization.externalProcessingEligible,
@@ -208,6 +231,10 @@ export function createHandlers(
       if (!deps.malwareScanner) throw new Error('[blocked] malware scanner unavailable');
       const blob = await getBlob(deps.storage, artifact.blobSha256);
       const bytes = await streamToBufferBounded(blob.body, MAX_PARSER_INPUT);
+      if (bytes.byteLength !== Number(artifact.size)
+        || createHash('sha256').update(bytes).digest('hex') !== artifact.blobSha256) {
+        throw new Error('[blocked] artifact integrity mismatch');
+      }
       await deps.malwareScanner(bytes);
       if (!options.parserCascade) throw new Error('[blocked] parser cascade unavailable');
       const trustedAuthorizationContext = Object.freeze({
@@ -367,11 +394,19 @@ async function main(): Promise<void> {
     createPrismaAuditSink(prisma),
     externalProcessingPolicy,
   );
-  const parserJobAdapter = createParserStageJobClient(parserJobDir, TRANSITION_PARSER_METADATA);
+  const parserJobAdapter = createParserStageJobClient(parserJobDir, (request) => (
+    request.operation === 'inventory_pages'
+      ? PDF_PAGE_INVENTORY_METADATA
+      : request.operation === 'render_page' || request.operation === 'ocr_page'
+        ? TESSERACT_METADATA
+        : TRANSITION_PARSER_METADATA
+  ));
   const parserCascade = createWorkerParserCascade(gateway, parserJobAdapter);
   const parserSelfTest = await runParserCascadeSelfTest(parserCascade);
   if (!parserSelfTest.pdf.textMatched || !parserSelfTest.docx.textMatched
     || !parserSelfTest.scan.textMatched || !parserSelfTest.scan.locatorMatched
+    || !parserSelfTest.scan.tesseractMatched || !parserSelfTest.scan.confidenceMatched
+    || !parserSelfTest.scan.boundingBoxMatched
     || !parserSelfTest.candidateFallbackDisabled) {
     throw new Error('parser cascade startup self-test failed');
   }

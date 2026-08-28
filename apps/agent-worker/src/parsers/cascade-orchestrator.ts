@@ -33,6 +33,10 @@ export interface ParserCascadeAdapters {
   detectLayout?: DocumentParser;
   grobid?: (input: ParserInput) => Promise<GrobidEnrichmentResult>;
   localOcr?: LocalOcrAdapter;
+  isolatedLocalOcr?: {
+    inventoryPages(input: ParserInput): Promise<ParserStageResult>;
+    ocrPages(input: ParserInput, pages: readonly (StagePage & { reason: OcrSelectionReason })[]): Promise<ParserStageResult>;
+  };
 }
 
 export interface CascadeContext {
@@ -242,6 +246,24 @@ function localOcrSourceMap(input: ParserInput, result: ParserStageResult): Docum
   }
 }
 
+function inventorySourceMap(input: ParserInput, result: ParserStageResult): DocumentSourceMap | undefined {
+  try {
+    return parseDocumentSourceMap({
+      artifactId: input.artifactId,
+      contentHash: input.contentHash,
+      parser: metadataCopy(result.parser),
+      pages: result.pages.map((page) => ({
+        page: page.page,
+        width: page.width,
+        height: page.height,
+        blocks: [],
+      })),
+    });
+  } catch {
+    return undefined;
+  }
+}
+
 function unresolvedPages(sourceMap: DocumentSourceMap): Array<StagePage & { reason: OcrSelectionReason }> {
   return stagePages(sourceMap).flatMap((page) => {
     const assessment = assessPageQuality(page);
@@ -331,12 +353,29 @@ export async function runParserCascade(
     }
   }
 
+  if (context.featureFlags.localOcr && context.adapters.isolatedLocalOcr
+    && canonicalInput.mediaType === 'application/pdf' && current.pages.length === 0) {
+    try {
+      const inventory = await context.adapters.isolatedLocalOcr.inventoryPages(adapterInput(canonicalInput));
+      const inventoryMap = inventorySourceMap(canonicalInput, inventory);
+      const merged = inventoryMap ? mergeDeterministicMaps(current, inventoryMap) : undefined;
+      if (!merged) reasons.push('critical locator could not round-trip');
+      else current = merged;
+    } catch {
+      reasons.push('page_inventory failed');
+    }
+  }
+
   const initialUnresolved = unresolvedPages(current);
   const locallyResolved = new Set<number>();
-  if (context.featureFlags.localOcr && context.adapters.localOcr && initialUnresolved.length > 0) {
+  if (context.featureFlags.localOcr
+    && (context.adapters.isolatedLocalOcr || context.adapters.localOcr)
+    && initialUnresolved.length > 0) {
     const selected = initialUnresolved.slice(0, 4);
     try {
-      const result = await ocrSelectedPages(adapterInput(canonicalInput), selected, context.adapters.localOcr);
+      const result = context.adapters.isolatedLocalOcr
+        ? await context.adapters.isolatedLocalOcr.ocrPages(adapterInput(canonicalInput), selected)
+        : await ocrSelectedPages(adapterInput(canonicalInput), selected, context.adapters.localOcr!);
       const localMap = localOcrSourceMap(canonicalInput, result);
       const merged = localMap ? mergeDeterministicMaps(current, localMap) : undefined;
       if (!merged) reasons.push('critical locator could not round-trip');
@@ -389,7 +428,10 @@ export async function runParserCascade(
   if (!localStageSucceeded) reasons.push('all local parser stages failed');
   if (remaining.length > 0) reasons.push('unresolved pages remain');
   const sourceMap = withOrchestratorMetadata(current) ?? emptySourceMap(canonicalInput);
-  const finalReasons = boundedUniqueStrings(reasons);
+  const recoveredReasons = localStageSucceeded
+    ? reasons.filter((reason) => reason !== 'empty-parsed-text' && reason !== 'extract_text failed')
+    : reasons;
+  const finalReasons = boundedUniqueStrings(recoveredReasons);
   return finalReasons.length > 0
     ? { status: 'needs_review', sourceMap, reasons: finalReasons }
     : { status: 'succeeded', sourceMap, warnings: boundedUniqueStrings(warnings) };

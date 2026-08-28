@@ -2,7 +2,7 @@ import { writeFile } from 'node:fs/promises';
 
 import { createDefaultIngestionAdapters } from './ingestion-parser';
 import {
-  createTransitionParserStageProcessor,
+  createSidecarParserStageProcessor,
   processParserJobsOnce,
   reapParserJobOrphans,
 } from './parser-job-isolation';
@@ -12,7 +12,7 @@ const jobDir = process.env.PARSER_JOB_DIR ?? '/parser-jobs';
 
 async function main(): Promise<void> {
   const adapters = createDefaultIngestionAdapters();
-  const stageProcessor = createTransitionParserStageProcessor(adapters);
+  const stageProcessor = createSidecarParserStageProcessor(adapters);
   let nextHeartbeat = 0;
   while (true) {
     if (Date.now() >= nextHeartbeat) {
@@ -20,7 +20,7 @@ async function main(): Promise<void> {
       await reapParserJobOrphans(jobDir);
       nextHeartbeat = Date.now() + 5_000;
     }
-    const processed = await processParserJobsOnce(jobDir, adapters, stageProcessor);
+    const processed = await processParserJobsOnce(jobDir, stageProcessor);
     await new Promise((resolve) => setTimeout(resolve, processed ? 10 : 100));
   }
 }

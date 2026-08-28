@@ -23,6 +23,7 @@ export const PARSER_JOB_RESPONSE_MAX_BYTES = 24 * 1024 * 1024;
 
 export const PARSER_JOB_OPERATIONS = [
   'extract_text',
+  'inventory_pages',
   'detect_layout',
   'render_page',
   'ocr_page',

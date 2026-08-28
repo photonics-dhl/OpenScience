@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import type { DocumentBlock, DocumentSourceMap } from '@openscience/domain';
 import {
   enrichWithGrobid,
@@ -170,6 +170,24 @@ describe('enrichWithGrobid', () => {
         { stage: 'classify', processor: GROBID },
       ],
     });
+  });
+
+  it('matches ASCII I deterministically without consulting the host Turkish locale', () => {
+    const localeLower = vi.spyOn(String.prototype, 'toLocaleLowerCase').mockImplementation(() => {
+      throw new Error('host locale must not participate in parser output');
+    });
+    try {
+      const originalBlock = nativeBlock({ text: 'INTRODUCTION I', confidence: 0.45 });
+      const original = sourceMap([originalBlock]);
+      const enriched = enrichWithGrobid(original, succeeded(
+        '<TEI xmlns="http://www.tei-c.org/ns/1.0"><text><head coords="1,50,80,500,30">introduction i</head></text></TEI>',
+      ));
+
+      expect(enriched.pages[0]?.blocks[0]).toMatchObject({ id: originalBlock.id, kind: 'heading' });
+      expect(localeLower).not.toHaveBeenCalled();
+    } finally {
+      localeLower.mockRestore();
+    }
   });
 
   it('does not replace or duplicate higher-confidence native text on a conflicting region', () => {

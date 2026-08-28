@@ -19,6 +19,16 @@ const embeddingDockerfile = readFileSync(new URL('../../apps/embedding-worker/Do
 const embeddingRequirements = readFileSync(new URL('../../apps/embedding-worker/requirements.lock', import.meta.url), 'utf8');
 const embeddingEvaluatorDockerfile = readFileSync(new URL('../embedding-candidates/bge-m3/Dockerfile', import.meta.url), 'utf8');
 
+test('Tesseract is packaged only in the isolated document parser image', () => {
+  assert.doesNotMatch(workerDockerfile, /tesseract(?:-ocr)?/i);
+  assert.match(parserDockerfile, /tesseract-ocr/);
+  assert.match(parserDockerfile, /USER node/);
+  assert.match(workerDockerfile, /LABEL org\.openscience\.source=\$XGS_RELEASE_IMAGE_TAG/);
+  assert.match(parserDockerfile, /LABEL org\.openscience\.source=\$XGS_RELEASE_IMAGE_TAG/);
+  const parserServices = productionCompose.split('\n  agent-worker:')[1]?.split('\n  embedding-model-init:')[0] ?? '';
+  assert.equal(parserServices.match(/XGS_RELEASE_IMAGE_TAG: \$\{XGS_RELEASE_IMAGE_TAG:\?XGS_RELEASE_IMAGE_TAG required\}/g)?.length, 2);
+});
+
 test('production search runtime is isolated, bounded and source locked', () => {
   const api = productionCompose.split('\n  api:')[1]?.split('\n  malware-scanner:')[0] ?? '';
   const agentWorker = productionCompose.split('\n  agent-worker:')[1]?.split('\n  document-parser:')[0] ?? '';
