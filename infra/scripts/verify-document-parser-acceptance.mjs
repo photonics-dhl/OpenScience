@@ -33,9 +33,12 @@ function requireIdentity(sourceSha, workerImageId, parserImageId) {
 }
 
 export async function verifyParserAcceptance({
-  releaseRoot, reportPath, sourceSha, workerImageId, parserImageId,
+  releaseRoot, reportPath, sourceSha, workerImageId, parserImageId, requiredUid,
 }) {
   requireIdentity(sourceSha, workerImageId, parserImageId);
+  if (!Number.isSafeInteger(requiredUid) || requiredUid < 0) {
+    throw new Error('parser acceptance report owner UID is required');
+  }
   const canonicalReleaseRoot = resolve(releaseRoot);
   if (basename(canonicalReleaseRoot) !== sourceSha || await realpath(canonicalReleaseRoot) !== canonicalReleaseRoot) {
     throw new Error('parser acceptance release source path is not the exact SHA root');
@@ -48,7 +51,8 @@ export async function verifyParserAcceptance({
     || reportInfo.size > MAX_REPORT_BYTES || await realpath(canonicalReport) !== canonicalReport) {
     throw new Error('parser acceptance report is missing, unsafe or too large');
   }
-  if (process.platform !== 'win32' && (reportInfo.uid !== 0 || (reportInfo.mode & 0o022) !== 0)) {
+  if (reportInfo.uid !== requiredUid
+    || (process.platform !== 'win32' && (reportInfo.mode & 0o022) !== 0)) {
     throw new Error('parser acceptance report owner or mode is unsafe');
   }
   const report = JSON.parse(await readFile(canonicalReport, 'utf8'));
@@ -88,7 +92,7 @@ export async function verifyParserAcceptance({
   await verifyReleaseInputManifest({ root: canonicalReleaseRoot, sourceSha });
 }
 
-function parseCli(argv) {
+export function parseCli(argv) {
   const values = new Map();
   for (let index = 0; index < argv.length; index += 2) {
     const flag = argv[index];
@@ -110,6 +114,7 @@ function parseCli(argv) {
   return {
     releaseRoot, reportPath, sourceSha,
     workerImageId: values.get('--worker-image-id'), parserImageId: values.get('--parser-image-id'),
+    requiredUid: 0,
   };
 }
 

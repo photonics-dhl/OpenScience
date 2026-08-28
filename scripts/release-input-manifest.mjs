@@ -59,15 +59,18 @@ function validFilesystemIdentity(value) {
     && Number.isSafeInteger(value.gid) && value.gid >= 0;
 }
 
-async function sha256(path) {
+async function sha256(path, { requireExclusiveLink = false } = {}) {
   const handle = await open(path, constants.O_RDONLY | (constants.O_NOFOLLOW ?? 0));
   const hash = createHash('sha256');
   try {
     const before = await handle.stat();
-    if (!before.isFile()) throw new Error('release input is not a regular file');
+    if (!before.isFile() || (requireExclusiveLink && before.nlink !== 1)) {
+      throw new Error('release input is not an exclusive regular file');
+    }
     for await (const chunk of handle.createReadStream({ autoClose: false })) hash.update(chunk);
     const after = await handle.stat();
-    if (!after.isFile() || after.dev !== before.dev || after.ino !== before.ino
+    if (!after.isFile() || (requireExclusiveLink && after.nlink !== 1)
+      || after.dev !== before.dev || after.ino !== before.ino
       || after.size !== before.size || after.mtimeMs !== before.mtimeMs) {
       throw new Error('release input identity changed while hashing');
     }
@@ -115,6 +118,7 @@ async function walk(root) {
           mode: info.mode & 0o7777,
           uid: info.uid,
           gid: info.gid,
+          nlink: info.nlink,
         });
       } else {
         throw new Error(`unsupported release source entry: ${path}`);
@@ -143,7 +147,11 @@ export async function createReleaseInputManifest({ root, sourceSha }) {
   const entries = [];
   for (const item of sourceInputs) {
     const identity = { path: item.path, type: item.type, ...filesystemIdentity(item) };
-    if (item.type === 'file') identity.sha256 = await sha256(item.absolute);
+    if (item.type === 'file') {
+      if (item.nlink !== 1) throw new Error(`archive source file has unsafe hardlink count: ${item.path}`);
+      identity.nlink = 1;
+      identity.sha256 = await sha256(item.absolute, { requireExclusiveLink: true });
+    }
     entries.push(identity);
   }
   const manifest = {
@@ -198,12 +206,12 @@ export async function verifyReleaseInputManifest({ root, sourceSha }) {
   let previous = '';
   for (const entry of manifest.entries) {
     const expectedKeys = entry?.type === 'file'
-      ? 'gid,mode,path,sha256,type,uid' : 'gid,mode,path,type,uid';
+      ? 'gid,mode,nlink,path,sha256,type,uid' : 'gid,mode,path,type,uid';
     if (!entry || typeof entry !== 'object' || Array.isArray(entry)
       || Object.keys(entry).sort().join(',') !== expectedKeys
       || !['file', 'directory'].includes(entry.type) || !validFilesystemIdentity(entry)
       || !validEntryPath(entry.path) || isGeneratedPath(entry.path) || isMetadataPath(entry.path)
-      || (entry.type === 'file' && !DIGEST_PATTERN.test(entry.sha256))
+      || (entry.type === 'file' && (entry.nlink !== 1 || !DIGEST_PATTERN.test(entry.sha256)))
       || entry.path <= previous || expected.has(entry.path)) {
       throw new Error('release input manifest entry is invalid, duplicate or unsorted');
     }
@@ -225,7 +233,11 @@ export async function verifyReleaseInputManifest({ root, sourceSha }) {
     const identity = expected.get(item.path);
     if (!identity) throw new Error(`release source has unmanifested content: ${item.path}`);
     const currentIdentity = { path: item.path, type: item.type, ...filesystemIdentity(item) };
-    if (item.type === 'file') currentIdentity.sha256 = await sha256(item.absolute);
+    if (item.type === 'file') {
+      if (item.nlink !== 1) throw new Error(`release source file has unsafe hardlink count: ${item.path}`);
+      currentIdentity.nlink = 1;
+      currentIdentity.sha256 = await sha256(item.absolute, { requireExclusiveLink: true });
+    }
     if (JSON.stringify(currentIdentity) !== JSON.stringify(identity)) {
       throw new Error(`release source hash, ownership or mode mismatch: ${item.path}`);
     }
@@ -238,7 +250,18 @@ function pathIsInside(root, candidate) {
   return rel === '' || (!isAbsolute(rel) && rel !== '..' && !rel.startsWith(`..${sep}`));
 }
 
-async function generatedSymlinkIdentity(root, item) {
+export function findUncoveredDirectorySymlinkDescendant({
+  canonicalTargetPath, sourceTargets, walked,
+}) {
+  if (!sourceTargets.has(canonicalTargetPath) || isWorkerRuntimePath(canonicalTargetPath)) {
+    return undefined;
+  }
+  const prefix = `${canonicalTargetPath}/`;
+  return walked.find(({ path }) => path.startsWith(prefix)
+    && !sourceTargets.has(path) && !isWorkerRuntimePath(path));
+}
+
+async function generatedSymlinkIdentity(root, item, closure) {
   let canonicalTarget;
   try {
     canonicalTarget = await realpath(item.absolute);
@@ -248,11 +271,27 @@ async function generatedSymlinkIdentity(root, item) {
   if (!pathIsInside(root, canonicalTarget)) {
     throw new Error(`generated runtime symlink escaped release root: ${item.path}`);
   }
+  const canonicalTargetPath = portablePath(root, canonicalTarget);
+  if (closure && !closure.sourceTargets.has(canonicalTargetPath)
+    && !isWorkerRuntimePath(canonicalTargetPath)) {
+    throw new Error(`generated runtime symlink target is outside the source/runtime closure: ${item.path}`);
+  }
+  const targetInfo = await lstat(canonicalTarget);
+  if (closure && targetInfo.isDirectory()) {
+    const uncovered = findUncoveredDirectorySymlinkDescendant({
+      canonicalTargetPath,
+      sourceTargets: closure.sourceTargets,
+      walked: closure.walked,
+    });
+    if (uncovered) {
+      throw new Error(`generated runtime symlink exposes an uncovered descendant: ${item.path}`);
+    }
+  }
   return {
     path: item.path,
     type: 'symlink',
     target: await readlink(item.absolute),
-    canonicalTarget: portablePath(root, canonicalTarget),
+    canonicalTarget: canonicalTargetPath,
     mode: item.mode,
     uid: item.uid,
     gid: item.gid,
@@ -274,6 +313,8 @@ export async function createReleaseRuntimeSnapshot({ root, sourceSha }) {
   if (!SHA_PATTERN.test(sourceSha)) throw new Error('source SHA must be a full Git commit SHA');
   const canonical = await canonicalRoot(root);
   await verifySourceMarker(canonical, sourceSha);
+  const sourceManifest = await verifyReleaseInputManifest({ root: canonical, sourceSha });
+  const sourceTargets = new Set(sourceManifest.entries.map(({ path }) => path));
   const walked = await walk(canonical);
   const runtimeLeaves = walked.filter(({ path, type }) => type !== 'directory' && isWorkerRuntimePath(path));
   if (runtimeLeaves.length === 0) throw new Error('generated runtime snapshot is empty');
@@ -306,7 +347,7 @@ export async function createReleaseRuntimeSnapshot({ root, sourceSha }) {
         gid: item.gid,
       };
     } else if (item.type === 'symlink') {
-      identity = await generatedSymlinkIdentity(canonical, item);
+      identity = await generatedSymlinkIdentity(canonical, item, { sourceTargets, walked });
     } else if (item.type === 'directory') {
       identity = {
         path: item.path, type: 'directory', mode: item.mode, uid: item.uid, gid: item.gid,

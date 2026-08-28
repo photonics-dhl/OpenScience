@@ -1,13 +1,20 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
-import { mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { existsSync, readFileSync } from 'node:fs';
+import {
+  chmod, mkdir, mkdtemp, readFile, rm, symlink, writeFile,
+} from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { execFileSync, spawnSync } from 'node:child_process';
+import { execFileSync, spawn, spawnSync } from 'node:child_process';
+import { once } from 'node:events';
 import { fileURLToPath } from 'node:url';
 
-const source = readFileSync(new URL('./deploy.sh', import.meta.url), 'utf8');
+const launcherSource = readFileSync(new URL('./deploy.sh', import.meta.url), 'utf8');
+const transactionSource = readFileSync(new URL('./production-deploy-transaction.sh', import.meta.url), 'utf8');
+const transactionStateSource = readFileSync(new URL('./production-deploy-transaction-state.sh', import.meta.url), 'utf8');
+const transactionStatePath = fileURLToPath(new URL('./production-deploy-transaction-state.sh', import.meta.url));
+const source = `${launcherSource}\n${transactionSource}\n${transactionStateSource}`;
 const workerDockerfile = readFileSync(new URL('../../apps/agent-worker/Dockerfile', import.meta.url), 'utf8');
 const parserDockerfile = readFileSync(new URL('../../apps/agent-worker/Dockerfile.parser', import.meta.url), 'utf8');
 const productionCompose = readFileSync(new URL('../compose/docker-compose.prod.yml', import.meta.url), 'utf8');
@@ -18,6 +25,10 @@ const backupRunbook = readFileSync(new URL('../../docs/runbooks/backup-restore.m
 const embeddingDockerfile = readFileSync(new URL('../../apps/embedding-worker/Dockerfile', import.meta.url), 'utf8');
 const embeddingRequirements = readFileSync(new URL('../../apps/embedding-worker/requirements.lock', import.meta.url), 'utf8');
 const embeddingEvaluatorDockerfile = readFileSync(new URL('../embedding-candidates/bge-m3/Dockerfile', import.meta.url), 'utf8');
+const rootPackage = JSON.parse(readFileSync(new URL('../../package.json', import.meta.url), 'utf8'));
+const bash = process.platform === 'win32' && existsSync('C:/Program Files/Git/bin/bash.exe')
+  ? 'C:/Program Files/Git/bin/bash.exe'
+  : 'bash';
 
 test('Tesseract is packaged only in the isolated document parser image', () => {
   assert.doesNotMatch(workerDockerfile, /tesseract(?:-ocr)?/i);
@@ -205,7 +216,7 @@ test('clean release builds generate Prisma before compiling any workspace packag
 
 test('deployment publishes and verifies the exact immutable release identity', () => {
   assert.match(source, /verify-release-source\.mjs" --root "\$PROJECT_ROOT" --ref "\$RELEASE_REF"/);
-  assert.match(source, /printf '%s\\n' '\$RELEASE_SHA'[^\n]+\.release-id\.next; mv[^\n]+\.release-id/);
+  assert.match(source, /cas-active --marker '\$REMOTE_ROOT\/\.release-id' --expected '\$ROLLBACK_SHA' --next '\$RELEASE_SHA' --lock-fd 9/);
   assert.match(source, /expect_http_body .*\/__release "\$RELEASE_SHA"/);
 });
 
@@ -271,9 +282,13 @@ test('deployment keeps an application rollback trap until public health succeeds
   assert.match(source, /ROLLBACK_SHA=/);
   assert.match(source, /ACTIVE_RELEASE_SHA=.*\.release-id/);
   assert.match(source, /PREVIOUS_RELEASE_SHA="\$ACTIVE_RELEASE_SHA"/);
-  assert.match(source, /rollback_application\(\)/);
-  assert.match(source, /trap 'rollback_application' ERR/);
-  assert.match(source, /trap - ERR[\s\S]*部署完成/);
+  assert.match(source, /transaction_rollback_application\(\)/);
+  assert.match(source, /trap 'transaction_rollback_application \$\?' ERR/);
+  assert.match(transactionStateSource, /trap - ERR EXIT HUP INT TERM/);
+  assert.ok(
+    transactionSource.lastIndexOf('transaction_commit') < transactionSource.lastIndexOf('部署完成'),
+    'rollback traps remain installed until the final locked commit point',
+  );
   assert.match(source, /ROLLBACK_FAILED/);
   assert.match(source, /ROLLBACK_COMPOSE_FILE="\$PREVIOUS_RELEASE_ROOT\/infra\/compose\/docker-compose\.prod\.yml"/);
   assert.match(source, /ROLLBACK_COMPOSE_MODE="previous-release"/);
@@ -286,23 +301,497 @@ test('deployment keeps an application rollback trap until public health succeeds
   assert.match(source, /-f \$ROLLBACK_COMPOSE_FILE up -d --force-recreate/);
   assert.match(source, /rm -f \$REMOTE_ROOT\/\.release-id/);
   assert.match(source, /\.release-failed/);
-  assert.match(source, /test ! -e \$REMOTE_ROOT\/\.release-failed/);
+  assert.match(source, /! -e "\$REMOTE_ROOT\/\.release-failed"/);
   assert.match(source, /云上缺少 active release identity，拒绝猜测 rollback/);
   assert.doesNotMatch(source, /systemctl reload nginx" \|\| exit 1/);
 });
 
-test('confirmed deployment requires the parser acceptance gate and binds rollback to active before materialization', () => {
+test('confirmed deployment materializes only an immutable candidate before the lock-in active check', () => {
   assert.match(source, /--require-parser-acceptance/);
   assert.match(source, /REQUIRE_PARSER_ACCEPTANCE=1/);
   assert.match(source, /--confirm[^\n]+--require-parser-acceptance|--require-parser-acceptance[^\n]+--confirm/);
   assert.match(source, /\[ "\$ROLLBACK_SHA" = "\$ACTIVE_RELEASE_SHA" \]/);
-  const activeRead = source.indexOf('ACTIVE_RELEASE_SHA=');
-  const rollbackMatch = source.indexOf('[ "$ROLLBACK_SHA" = "$ACTIVE_RELEASE_SHA" ]');
-  const materialize = source.indexOf('node "$PROJECT_ROOT/scripts/cloud-sync.mjs"', rollbackMatch);
-  const build = source.indexOf('npx pnpm@9.15.0 install', rollbackMatch);
+  const materialize = launcherSource.indexOf('node "$PROJECT_ROOT/scripts/cloud-sync.mjs"');
+  const transactionSsh = launcherSource.indexOf("exec /bin/bash '$REMOTE_TRANSACTION_RUNNER'", materialize);
+  const activeRead = transactionSource.indexOf('ACTIVE_RELEASE_SHA=');
+  const rollbackMatch = transactionSource.indexOf('[ "$ROLLBACK_SHA" = "$ACTIVE_RELEASE_SHA" ]');
+  const build = transactionSource.indexOf('npx pnpm@9.15.0 install', rollbackMatch);
+  assert.ok(materialize >= 0 && transactionSsh > materialize, 'immutable materialization precedes the one transaction SSH');
   assert.ok(activeRead >= 0 && rollbackMatch > activeRead, 'active identity must be read before rollback comparison');
-  assert.ok(materialize > rollbackMatch, 'wrong rollback must block before cloud materialization');
   assert.ok(build > rollbackMatch, 'wrong rollback must block before package/image build');
+  assert.doesNotMatch(
+    transactionSource,
+    /\$SCRIPT_DIR\/release-input-manifest\.mjs/,
+    'the source verifier lives under the immutable release root scripts directory',
+  );
+});
+
+test('one foreground SSH runs the complete transaction under its own inherited FD9', () => {
+  const runRemote = transactionSource.match(/run_remote\(\) \{([\s\S]*?)\n\}/)?.[1] ?? '';
+  assert.equal((launcherSource.match(/^ssh /gm) ?? []).length, 1);
+  assert.match(launcherSource, /exec \/bin\/bash '\$REMOTE_TRANSACTION_RUNNER'[^\n]+<\/dev\/null/);
+  assert.doesNotMatch(launcherSource, /\| ssh |bash -s/);
+  assert.match(transactionSource, /exec 9<>/);
+  assert.match(transactionSource, /flock -n -E 73 9/);
+  assert.match(runRemote, /bash -c/);
+  assert.doesNotMatch(runRemote, /\bssh\b/);
+  assert.doesNotMatch(source, /coproc|DEPLOY_LOCK_ASSERT_COMMAND|lock-command|assert-command/);
+  assert.doesNotMatch(transactionSource, /release-contract-test|TRANSACTION_TEST|XGS_TEST/);
+  assert.match(transactionSource, /\[ "\$#" -eq 3 \]/);
+  assert.doesNotMatch(transactionStateSource, /release-contract-test|TRANSACTION_TEST|XGS_TEST|^\s*\[ "\$#"/m);
+  const manifestVerify = transactionSource.indexOf('release-input-manifest.mjs" verify');
+  const stateSource = transactionSource.indexOf('source "$SCRIPT_DIR/production-deploy-transaction-state.sh"');
+  assert.ok(manifestVerify >= 0 && stateSource > manifestVerify, 'state module loads only after locked source verification');
+  assert.match(transactionSource, /cas-active[^\n]+--lock-fd 9/);
+  assert.match(transactionSource, /journal-start[\s\S]*journal-update[\s\S]*journal-clear/);
+});
+
+function transactionLockHarness(lockDirectory, requiredUid, body) {
+  const acquire = transactionSource.match(/acquire_production_deploy_lock\(\) \{[\s\S]*?\n\}/)?.[0] ?? '';
+  const assertion = transactionSource.match(/assert_production_deploy_lock\(\) \{[\s\S]*?\n\}/)?.[0] ?? '';
+  const functions = `${acquire}\n${assertion}`.replaceAll('[ "$1" = 0 ]', `[ "$1" = ${requiredUid} ]`);
+  return [
+    'set -eEuo pipefail',
+    `DEPLOY_LOCK_DIRECTORY='${lockDirectory}'`,
+    `DEPLOY_LOCK_PATH='${lockDirectory}/lock'`,
+    functions,
+    'acquire_production_deploy_lock',
+    'assert_production_deploy_lock',
+    body,
+  ].join('\n');
+}
+
+function transactionStateHarness(root, requiredUid, phase, event) {
+  const acquire = transactionSource.match(/acquire_production_deploy_lock\(\) \{[\s\S]*?\n\}/)?.[0] ?? '';
+  const assertion = transactionSource.match(/assert_production_deploy_lock\(\) \{[\s\S]*?\n\}/)?.[0] ?? '';
+  const lockFunctions = `${acquire}\n${assertion}`.replaceAll('[ "$1" = 0 ]', `[ "$1" = ${requiredUid} ]`);
+  const quote = (value) => `'${value.replaceAll("'", "'\"'\"'")}'`;
+  return [
+    'set -eEuo pipefail',
+    `TEST_ROOT=${quote(root)}`,
+    'REMOTE_ROOT="$TEST_ROOT/remote"',
+    'RELEASE_ROOT="$TEST_ROOT/release"',
+    'PROD_ENV="$TEST_ROOT/prod.env"',
+    'COMPOSE_FILE="$TEST_ROOT/compose.yml"',
+    'DEPLOY_LOCK_DIRECTORY="$TEST_ROOT/lock-private"',
+    'DEPLOY_LOCK_PATH="$DEPLOY_LOCK_DIRECTORY/lock"',
+    'DEPLOY_JOURNAL="$REMOTE_ROOT/.deploy-transaction.json"',
+    `TRANSACTION_PHASE_UNDER_TEST=${quote(phase)}`,
+    `TRANSACTION_EVENT_UNDER_TEST=${quote(event)}`,
+    `RELEASE_SHA=${quote('b'.repeat(40))}`,
+    `ROLLBACK_SHA=${quote('a'.repeat(40))}`,
+    'PREVIOUS_RELEASE_SHA="$ROLLBACK_SHA"',
+    'ACTIVE_RELEASE_SHA="$RELEASE_SHA"',
+    'EMBEDDING_DEPLOY=0',
+    lockFunctions,
+    'transaction_assert_lock() { assert_production_deploy_lock; }',
+    'transaction_journal_start() { [ ! -e "$DEPLOY_JOURNAL" ] || return 75; printf "phase=prepared\\n" > "$DEPLOY_JOURNAL.next"; chmod 0600 "$DEPLOY_JOURNAL.next"; mv "$DEPLOY_JOURNAL.next" "$DEPLOY_JOURNAL"; }',
+    'transaction_journal_update() { [ -f "$DEPLOY_JOURNAL" ] || return 75; printf "phase=%s\\n" "$1" > "$DEPLOY_JOURNAL.next"; chmod 0600 "$DEPLOY_JOURNAL.next"; mv "$DEPLOY_JOURNAL.next" "$DEPLOY_JOURNAL"; }',
+    'transaction_journal_clear() { if [ "${XGS_TEST_TERM_DURING_CLEAR:-0}" = 1 ]; then kill -TERM $$; fi; rm -- "$DEPLOY_JOURNAL"; }',
+    'transaction_perform_application_rollback() { active="$(cat "$REMOTE_ROOT/.release-id")"; case "$active" in "$ROLLBACK_SHA"|"$RELEASE_SHA") ;; *) echo ROLLBACK_FAILED_STALE_ACTIVE >&2; return 70 ;; esac; printf "ROLLBACK_IN_LOCK\\n" >&2; if [ "${XGS_TEST_ROLLBACK_DELAY:-0}" != 0 ]; then sleep "$XGS_TEST_ROLLBACK_DELAY"; fi; [ "${XGS_TEST_ROLLBACK_FAIL:-0}" != 1 ] || return 70; printf "%s\\n" "$ROLLBACK_SHA" > "$REMOTE_ROOT/.release-id"; }',
+    `source ${quote(transactionStatePath.replaceAll('\\', '/'))}`,
+    'mkdir -p "$REMOTE_ROOT" "$RELEASE_ROOT"',
+    'acquire_production_deploy_lock',
+    'assert_production_deploy_lock',
+    'transaction_initialize_state',
+    'transaction_install_traps',
+    '[ ! -e "$DEPLOY_JOURNAL" ] || exit 75',
+    'if [ "$TRANSACTION_EVENT_UNDER_TEST" = already-active ]; then',
+    '  require_match() { [[ "$2" =~ $3 ]]; }',
+    '  log() { printf "%s\\n" "$*"; }',
+    '  run_remote() { case "$1" in *"cat \'$RELEASE_ROOT/.release-source\'"*) [ "${XGS_TEST_SAME_SHA_FAILURE:-}" != source ] ;; *"docker image inspect --format=\'{{.Id}}\' openscience-agent-worker"*) if [ "${XGS_TEST_SAME_SHA_FAILURE:-}" = tag ]; then printf "sha256:bad\\n"; else printf "sha256:%064d\\n" 0; fi ;; *"docker image inspect --format=\'{{.Id}}\' openscience-document-parser"*) printf "sha256:%064d\\n" 1 ;; *verify-document-parser-acceptance.mjs*) printf called > "$TEST_ROOT/formal-verifier-called"; case "${XGS_TEST_SAME_SHA_FAILURE:-}" in report|runtime) return 65 ;; esac ;; *"docker inspect --format=\'{{.Image}}\'"*111111111111*) if [ "${XGS_TEST_SAME_SHA_FAILURE:-}" = running ]; then printf "sha256:%064d\\n" 9; else printf "sha256:%064d\\n" 0; fi ;; *"docker inspect --format=\'{{.Image}}\'"*222222222222*) printf "sha256:%064d\\n" 1 ;; *production-deploy-lock.mjs*verify-state*) [ "${XGS_TEST_SAME_SHA_FAILURE:-}" != running ] ;; *"ps --status running --services"*) printf "\\n" ;; *) return 0 ;; esac; }',
+    '  compose_current() { case "$1" in "ps -q agent-worker") printf "111111111111\\n" ;; "ps -q document-parser") printf "222222222222\\n" ;; *) return 0 ;; esac; }',
+    '  compose_embedding_current() { return 0; }',
+    '  verify_release_capability() { [ "${XGS_TEST_SAME_SHA_FAILURE:-}" != capability ]; }',
+    '  expect_http_status() { [ "${XGS_TEST_SAME_SHA_FAILURE:-}" != public ]; }',
+    '  expect_http_body() { [ "${XGS_TEST_SAME_SHA_FAILURE:-}" != public ]; }',
+    '  transaction_verify_already_active_release',
+    '  printf "ALREADY_ACTIVE_OK\\n"',
+    '  exit 0',
+    'fi',
+    '[ -e "$REMOTE_ROOT/.release-id" ] || printf "%s\\n" "$ROLLBACK_SHA" > "$REMOTE_ROOT/.release-id"',
+    'transaction_begin',
+    'case "$TRANSACTION_PHASE_UNDER_TEST" in migrating) transaction_mark_phase migrating ;; switching) transaction_mark_phase switching; printf "%s\\n" "$RELEASE_SHA" > "$REMOTE_ROOT/.release-id" ;; published) transaction_mark_phase switching; printf "%s\\n" "$RELEASE_SHA" > "$REMOTE_ROOT/.release-id"; transaction_mark_phase published ;; esac',
+    'if [ -n "${XGS_TEST_FORCE_ACTIVE_SHA:-}" ]; then printf "%s\\n" "$XGS_TEST_FORCE_ACTIVE_SHA" > "$REMOTE_ROOT/.release-id"; fi',
+    'case "$TRANSACTION_EVENT_UNDER_TEST" in stdin) bash -c "cat >/dev/null"; printf "AFTER_STDIN\\n"; transaction_commit ;; err) false ;; term) kill -TERM $$ ;; hup) kill -HUP $$ ;; exit) exit 42 ;; sigkill) printf "READY_FOR_SIGKILL\\n" >&2; sleep 30 ;; commit-term) XGS_TEST_TERM_DURING_CLEAR=1; transaction_commit; printf "COMMIT_SURVIVED_TERM\\n" ;; esac',
+  ].join('\n');
+}
+
+test('production transaction lock is nonblocking and remains held throughout its payload', async (t) => {
+  if (spawnSync(bash, ['-c', 'command -v flock >/dev/null 2>&1']).status !== 0) {
+    t.skip('flock is unavailable in the local Git Bash; Linux CI executes this behavior gate');
+    return;
+  }
+  const sandbox = await mkdtemp(join(tmpdir(), 'xgs-production-lock-'));
+  const lockDirectory = join(sandbox, 'private').replaceAll('\\', '/');
+  const requiredUid = process.getuid?.() ?? 0;
+  const start = async () => {
+    const child = spawn(bash, ['-c', transactionLockHarness(
+      lockDirectory, requiredUid, 'printf "LOCKED\\n"; cat >/dev/null',
+    )], { stdio: ['pipe', 'pipe', 'pipe'] });
+    const [chunk] = await once(child.stdout, 'data');
+    assert.equal(chunk.toString().trim(), 'LOCKED');
+    return child;
+  };
+  try {
+    const missingFlock = spawnSync(bash, ['-c', transactionLockHarness(
+      lockDirectory, requiredUid, ':',
+    )], { encoding: 'utf8', env: { ...process.env, PATH: sandbox } });
+    assert.equal(missingFlock.status, 69, missingFlock.stderr);
+    const first = await start();
+    for (const attempt of [1, 2]) {
+      const blocked = spawnSync(bash, ['-c', transactionLockHarness(
+        lockDirectory, requiredUid, `printf 'unexpected-${attempt}\\n'`,
+      )], { encoding: 'utf8' });
+      assert.equal(blocked.status, 73, blocked.stderr);
+    }
+    first.stdin.end();
+    const [status] = await once(first, 'exit');
+    assert.equal(status, 0);
+  } finally {
+    await rm(sandbox, { recursive: true, force: true });
+  }
+});
+
+test('production transaction lock rejects pre-positioned directory and lock symlinks without truncating targets', async (t) => {
+  if (process.platform === 'win32') {
+    t.skip('Linux ownership and no-follow semantics are enforced by this gate');
+    return;
+  }
+  const sandbox = await mkdtemp(join(tmpdir(), 'xgs-production-lock-symlink-'));
+  const requiredUid = process.getuid();
+  const target = join(sandbox, 'sentinel');
+  const privatePath = join(sandbox, 'private');
+  try {
+    await mkdir(target);
+    await writeFile(join(target, 'unchanged'), 'sentinel\n');
+    await symlink(target, privatePath, 'dir');
+    let rejected = spawnSync(bash, ['-c', transactionLockHarness(privatePath, requiredUid, ':')], { encoding: 'utf8' });
+    assert.equal(rejected.status, 71, rejected.stderr);
+    assert.equal(await readFile(join(target, 'unchanged'), 'utf8'), 'sentinel\n');
+
+    await rm(privatePath);
+    await mkdir(privatePath, { mode: 0o700 });
+    await chmod(privatePath, 0o700);
+    const outsideOwner = join(sandbox, 'outside-lock');
+    await writeFile(outsideOwner, 'do-not-truncate\n');
+    await symlink(outsideOwner, join(privatePath, 'lock'));
+    rejected = spawnSync(bash, ['-c', transactionLockHarness(privatePath, requiredUid, ':')], { encoding: 'utf8' });
+    assert.equal(rejected.status, 71, rejected.stderr);
+    assert.equal(await readFile(outsideOwner, 'utf8'), 'do-not-truncate\n');
+  } finally {
+    await rm(sandbox, { recursive: true, force: true });
+  }
+});
+
+test('terminating the transaction connection process group stops its in-lock payload', async (t) => {
+  if (spawnSync(bash, ['-c', 'command -v flock >/dev/null 2>&1']).status !== 0) {
+    t.skip('flock is unavailable in the local Git Bash; Linux CI executes this behavior gate');
+    return;
+  }
+  const sandbox = await mkdtemp(join(tmpdir(), 'xgs-production-lock-death-'));
+  const lockDirectory = join(sandbox, 'private').replaceAll('\\', '/');
+  const requiredUid = process.getuid?.() ?? 0;
+  const unsafeMarker = join(sandbox, 'unsafe').replaceAll('\\', '/');
+  const child = spawn(bash, ['-c', transactionLockHarness(
+    lockDirectory,
+    requiredUid,
+    `printf 'PAYLOAD_STARTED\\n' >&2; sleep 2; printf unsafe > '${unsafeMarker}'`,
+  )], { stdio: ['ignore', 'pipe', 'pipe'], detached: true });
+  try {
+    const [chunk] = await once(child.stderr, 'data');
+    assert.match(chunk.toString(), /PAYLOAD_STARTED/);
+    const childExit = once(child, 'exit');
+    process.kill(-child.pid, 'SIGTERM');
+    await childExit;
+    await new Promise((resolvePromise) => setTimeout(resolvePromise, 2200));
+    assert.equal(existsSync(unsafeMarker), false);
+    const replacement = spawnSync(bash, ['-c', transactionLockHarness(
+      lockDirectory, requiredUid, ':',
+    )], { encoding: 'utf8' });
+    assert.equal(replacement.status, 0, replacement.stderr);
+  } finally {
+    try { process.kill(-child.pid, 'SIGKILL'); } catch {}
+    await rm(sandbox, { recursive: true, force: true });
+  }
+});
+
+test('durable journal and active CAS stay on inherited FD9 across crash and TERM recovery', async (t) => {
+  if (process.platform === 'win32'
+    || spawnSync(bash, ['-c', 'command -v flock >/dev/null 2>&1']).status !== 0) {
+    t.skip('Linux CI executes the real inherited-FD, signal and durable-journal gate');
+    return;
+  }
+  const sandbox = await mkdtemp(join(tmpdir(), 'xgs-production-journal-'));
+  const lockDirectory = join(sandbox, 'private').replaceAll('\\', '/');
+  const journalPath = join(sandbox, 'journal.json').replaceAll('\\', '/');
+  const markerPath = join(sandbox, '.release-id').replaceAll('\\', '/');
+  const helperPath = join(sandbox, 'journal-helper.mjs').replaceAll('\\', '/');
+  const utilityUrl = new URL('./production-deploy-lock.mjs', import.meta.url).href;
+  const requiredUid = process.getuid();
+  const oldSha = 'a'.repeat(40);
+  const newSha = 'b'.repeat(40);
+  const helper = `
+import {
+  clearProductionDeployJournal,
+  compareAndSwapActiveRelease,
+  writeProductionDeployJournal,
+} from ${JSON.stringify(utilityUrl)};
+const [operation, lockDirectory, journalPath, markerPath, requiredUidText, candidateSha, rollbackSha] = process.argv.slice(2);
+const common = { lockDirectory, requiredUid: Number(requiredUidText), lockFd: 9 };
+try {
+  if (operation === 'start') await writeProductionDeployJournal({ ...common, journalPath, candidateSha, rollbackSha, phase: 'prepared', create: true });
+  else if (operation === 'clear') await clearProductionDeployJournal({ ...common, journalPath, candidateSha, rollbackSha });
+  else if (operation === 'cas') await compareAndSwapActiveRelease({ ...common, markerPath, expectedSha: rollbackSha, nextSha: candidateSha });
+  else throw new Error('unknown helper operation');
+} catch (error) {
+  console.error(error.message);
+  process.exitCode = 65;
+}
+`;
+  const invoke = (operation, candidate = newSha, rollback = oldSha) => (
+    `node '${helperPath}' '${operation}' '${lockDirectory}' '${journalPath}' '${markerPath}' '${requiredUid}' '${candidate}' '${rollback}'`
+  );
+  try {
+    await writeFile(helperPath, helper);
+    await writeFile(markerPath, `${oldSha}\n`);
+
+    let result = spawnSync(bash, ['-c', transactionLockHarness(
+      lockDirectory, requiredUid, invoke('cas', newSha, 'c'.repeat(40)),
+    )], { encoding: 'utf8' });
+    assert.notEqual(result.status, 0);
+    assert.equal((await readFile(markerPath, 'utf8')).trim(), oldSha);
+
+    result = spawnSync(bash, ['-c', transactionLockHarness(
+      lockDirectory,
+      requiredUid,
+      `${invoke('start')}; ${invoke('cas')}; ${invoke('clear')}`,
+    )], { encoding: 'utf8' });
+    assert.equal(result.status, 0, result.stderr);
+    assert.equal((await readFile(markerPath, 'utf8')).trim(), newSha);
+    assert.equal(existsSync(journalPath), false);
+
+    result = spawnSync(process.execPath, [helperPath, 'cas', lockDirectory, journalPath,
+      markerPath, String(requiredUid), oldSha, newSha], { encoding: 'utf8' });
+    assert.notEqual(result.status, 0, 'CAS without inherited FD9 must fail closed');
+    assert.equal((await readFile(markerPath, 'utf8')).trim(), newSha);
+
+    const crash = spawn(bash, ['-c', transactionLockHarness(
+      lockDirectory,
+      requiredUid,
+      `${invoke('start')}; printf 'JOURNAL_DURABLE\\n' >&2; sleep 30`,
+    )], { stdio: ['ignore', 'pipe', 'pipe'], detached: true });
+    let [chunk] = await once(crash.stderr, 'data');
+    assert.match(chunk.toString(), /JOURNAL_DURABLE/);
+    const crashExit = once(crash, 'exit');
+    process.kill(-crash.pid, 'SIGKILL');
+    await crashExit;
+    assert.equal(existsSync(journalPath), true);
+    result = spawnSync(bash, ['-c', transactionLockHarness(
+      lockDirectory, requiredUid, `[ ! -e '${journalPath}' ] || exit 75`,
+    )], { encoding: 'utf8' });
+    assert.equal(result.status, 75, result.stderr);
+    await rm(journalPath);
+
+    await writeFile(markerPath, `${oldSha}\n`);
+    const rollbackTrap = [
+      `rollback_handler() { ${invoke('cas', oldSha, newSha)}; printf "ROLLBACK_IN_LOCK\\n" >&2; sleep 1; ${invoke('clear')}; exit 143; }`,
+      'trap rollback_handler TERM',
+      invoke('start'),
+      invoke('cas'),
+      'printf "SWITCHED\\n" >&2',
+      'sleep 30',
+    ].join('; ');
+    const interrupted = spawn(bash, ['-c', transactionLockHarness(
+      lockDirectory, requiredUid, rollbackTrap,
+    )], { stdio: ['ignore', 'pipe', 'pipe'], detached: true });
+    [chunk] = await once(interrupted.stderr, 'data');
+    assert.match(chunk.toString(), /SWITCHED/);
+    const interruptedExit = once(interrupted, 'exit');
+    process.kill(-interrupted.pid, 'SIGTERM');
+    [chunk] = await once(interrupted.stderr, 'data');
+    assert.match(chunk.toString(), /ROLLBACK_IN_LOCK/);
+    const competitor = spawnSync(bash, ['-c', transactionLockHarness(
+      lockDirectory, requiredUid, ':',
+    )], { encoding: 'utf8' });
+    assert.equal(competitor.status, 73, competitor.stderr);
+    await interruptedExit;
+    assert.equal((await readFile(markerPath, 'utf8')).trim(), oldSha);
+    assert.equal(existsSync(journalPath), false);
+  } finally {
+    await rm(sandbox, { recursive: true, force: true });
+  }
+});
+
+test('shared production state machine traps every durable phase and commits without stdin or signal ambiguity', async (t) => {
+  if (process.platform === 'win32'
+    || spawnSync(bash, ['-c', 'command -v flock >/dev/null 2>&1']).status !== 0) {
+    t.skip('Ubuntu CI executes the production state module with isolated test adapters');
+    return;
+  }
+  const oldSha = 'a'.repeat(40);
+  const candidateSha = 'b'.repeat(40);
+  const staleSha = 'c'.repeat(40);
+  const createFixture = async () => {
+    const root = await mkdtemp('/tmp/xgs-production-transaction-test-');
+    await chmod(root, 0o700);
+    return {
+      root,
+      journal: join(root, 'remote', '.deploy-transaction.json'),
+      marker: join(root, 'remote', '.release-id'),
+    };
+  };
+  const requiredUid = process.getuid();
+  const run = (fixture, phase, event, env = {}) => spawnSync(
+    bash,
+    ['-c', transactionStateHarness(fixture.root, requiredUid, phase, event)],
+    { encoding: 'utf8', input: 'CONSUME_ME\n', env: { ...process.env, ...env } },
+  );
+
+  const fixtures = [];
+  try {
+    for (const phase of ['prepared', 'migrating', 'switching', 'published']) {
+      for (const event of ['err', 'term', 'hup', 'exit']) {
+        const fixture = await createFixture();
+        fixtures.push(fixture.root);
+        const result = run(fixture, phase, event);
+        assert.notEqual(result.status, 0, `${phase}/${event} unexpectedly succeeded`);
+        if (phase === 'migrating') {
+          assert.equal(result.status, 70, result.stderr);
+          assert.equal(existsSync(fixture.journal), true, `${phase}/${event} must retain its journal`);
+        } else {
+          assert.equal(existsSync(fixture.journal), false, `${phase}/${event} must close its journal`);
+        }
+        assert.equal((await readFile(fixture.marker, 'utf8')).trim(), oldSha);
+      }
+    }
+
+    let fixture = await createFixture();
+    fixtures.push(fixture.root);
+    let result = run(fixture, 'switching', 'term', { XGS_TEST_ROLLBACK_FAIL: '1' });
+    assert.equal(result.status, 70, result.stderr);
+    assert.equal(existsSync(fixture.journal), true);
+    assert.equal((await readFile(fixture.marker, 'utf8')).trim(), candidateSha);
+
+    fixture = await createFixture();
+    fixtures.push(fixture.root);
+    result = run(fixture, 'switching', 'term', { XGS_TEST_FORCE_ACTIVE_SHA: staleSha });
+    assert.equal(result.status, 70, result.stderr);
+    assert.match(result.stderr, /ROLLBACK_FAILED_STALE_ACTIVE/);
+    assert.equal(existsSync(fixture.journal), true);
+    assert.equal((await readFile(fixture.marker, 'utf8')).trim(), staleSha);
+
+    fixture = await createFixture();
+    fixtures.push(fixture.root);
+    await mkdir(join(fixture.root, 'remote'), { recursive: true });
+    await writeFile(fixture.journal, 'unfinished\n');
+    result = run(fixture, 'prepared', 'err');
+    assert.equal(result.status, 75, result.stderr);
+    assert.equal(await readFile(fixture.journal, 'utf8'), 'unfinished\n');
+
+    fixture = await createFixture();
+    fixtures.push(fixture.root);
+    result = run(fixture, 'prepared', 'stdin');
+    assert.equal(result.status, 0, result.stderr);
+    assert.match(result.stdout, /AFTER_STDIN/);
+    assert.equal(existsSync(fixture.journal), false);
+
+    for (const failure of ['', 'source', 'report', 'runtime', 'tag', 'running', 'capability', 'public']) {
+      fixture = await createFixture();
+      fixtures.push(fixture.root);
+      result = run(fixture, 'prepared', 'already-active', failure ? { XGS_TEST_SAME_SHA_FAILURE: failure } : {});
+      if (failure) {
+        assert.notEqual(result.status, 0, `same-SHA ${failure} mismatch must fail closed`);
+      } else {
+        assert.equal(result.status, 0, result.stderr);
+        assert.match(result.stdout, /ALREADY_ACTIVE_OK/);
+      }
+      assert.equal(
+        existsSync(join(fixture.root, 'formal-verifier-called')),
+        !['source', 'tag'].includes(failure),
+        `same-SHA ${failure || 'success'} formal verifier reachability differs`,
+      );
+      assert.equal(existsSync(fixture.journal), false);
+    }
+
+    fixture = await createFixture();
+    fixtures.push(fixture.root);
+    result = run(fixture, 'published', 'commit-term');
+    assert.equal(result.status, 0, result.stderr);
+    assert.match(result.stdout, /COMMIT_SURVIVED_TERM/);
+    assert.equal(existsSync(fixture.journal), false);
+    assert.equal((await readFile(fixture.marker, 'utf8')).trim(), candidateSha);
+
+    fixture = await createFixture();
+    fixtures.push(fixture.root);
+    const interrupted = spawn(
+      bash,
+      ['-c', transactionStateHarness(fixture.root, requiredUid, 'switching', 'term')],
+      { stdio: ['ignore', 'pipe', 'pipe'], env: { ...process.env, XGS_TEST_ROLLBACK_DELAY: '1' } },
+    );
+    const [rollbackChunk] = await once(interrupted.stderr, 'data');
+    assert.match(rollbackChunk.toString(), /ROLLBACK_IN_LOCK/);
+    const competitor = run(fixture, 'prepared', 'err');
+    assert.equal(competitor.status, 73, competitor.stderr);
+    await once(interrupted, 'exit');
+    assert.equal(existsSync(fixture.journal), false);
+
+    fixture = await createFixture();
+    fixtures.push(fixture.root);
+    const crashed = spawn(
+      bash,
+      ['-c', transactionStateHarness(fixture.root, requiredUid, 'switching', 'sigkill')],
+      { stdio: ['ignore', 'pipe', 'pipe'], detached: true },
+    );
+    const [readyChunk] = await once(crashed.stderr, 'data');
+    assert.match(readyChunk.toString(), /READY_FOR_SIGKILL/);
+    const crashedExit = once(crashed, 'exit');
+    process.kill(-crashed.pid, 'SIGKILL');
+    await crashedExit;
+    assert.equal(existsSync(fixture.journal), true);
+    result = run(fixture, 'prepared', 'err');
+    assert.equal(result.status, 75, result.stderr);
+  } finally {
+    for (const root of fixtures) await rm(root, { recursive: true, force: true });
+  }
+});
+
+test('active release mutator rejects every call without the inherited production FD9', async () => {
+  const { compareAndSwapActiveRelease } = await import('./production-deploy-lock.mjs');
+  const sandbox = await mkdtemp(join(tmpdir(), 'xgs-active-cas-'));
+  const markerPath = join(sandbox, '.release-id');
+  const oldSha = 'a'.repeat(40);
+  const newSha = 'b'.repeat(40);
+  try {
+    await writeFile(markerPath, `${oldSha}\n`);
+    await assert.rejects(compareAndSwapActiveRelease({
+      markerPath, expectedSha: 'c'.repeat(40), nextSha: newSha,
+    }), /inherited production lock FD9/i);
+    assert.equal((await readFile(markerPath, 'utf8')).trim(), oldSha);
+    await assert.rejects(compareAndSwapActiveRelease({
+      markerPath, expectedSha: oldSha, nextSha: newSha, lockFd: 8,
+    }), /inherited production lock FD9/i);
+    assert.equal((await readFile(markerPath, 'utf8')).trim(), oldSha);
+  } finally {
+    await rm(sandbox, { recursive: true, force: true });
+  }
+});
+
+test('confirmed deployment acquires the remote flock before reading active state and retains it through publication', () => {
+  const execution = transactionSource.indexOf('=== 执行单一 SSH/flock');
+  const acquire = transactionSource.indexOf('acquire_production_deploy_lock', execution);
+  const activeRead = transactionSource.indexOf('ACTIVE_RELEASE_SHA=', acquire);
+  const releasePublish = transactionSource.lastIndexOf('cas-active');
+  const journalClear = transactionSource.lastIndexOf('transaction_commit');
+  const releaseLock = transactionSource.lastIndexOf('exec 9>&-');
+  assert.ok(execution >= 0 && acquire > execution && activeRead > acquire);
+  assert.ok(releasePublish > activeRead && journalClear > releasePublish && releaseLock > journalClear);
+  assert.match(transactionSource, /flock|production-deploy-lock\.mjs/);
+  assert.match(transactionStateSource, /ROLLBACK_FAILED_LOCK_UNAVAILABLE/);
+  assert.match(transactionStateSource, /trap 'transaction_rollback_application 129' HUP/);
+  assert.match(transactionStateSource, /trap 'transaction_rollback_application 143' TERM/);
+  assert.match(transactionStateSource, /trap 'transaction_on_exit' EXIT/);
+  assert.match(transactionStateSource, /trap - ERR EXIT HUP INT TERM/);
 });
 
 test('final parser acceptance report and exact image IDs are verified after build and before switch', () => {
@@ -311,11 +800,69 @@ test('final parser acceptance report and exact image IDs are verified after buil
   const parserImage = source.indexOf('openscience-document-parser:$RELEASE_SHA', imageBuild);
   const report = source.indexOf('/opt/openscience-acceptance/document-parser/$RELEASE_SHA/report.json', imageBuild);
   const verifier = source.indexOf('verify-document-parser-acceptance.mjs', imageBuild);
-  const switchBoundary = source.indexOf('SWITCH_STARTED=0', imageBuild);
+  const switchBoundary = transactionSource.indexOf('transaction_mark_phase switching', imageBuild);
   assert.ok(imageBuild >= 0, 'exact worker/parser images must be built');
   assert.ok(workerImage > imageBuild && parserImage > imageBuild, 'final exact image IDs must be inspected after build');
   assert.ok(report > imageBuild && verifier > report, 'fixed acceptance report must be passed to the formal verifier');
   assert.ok(verifier < switchBoundary, 'acceptance mismatch must block before SWITCH_STARTED');
+});
+
+test('deployment revalidates active source, report and mutable image tags after migrations and checks started container image IDs', () => {
+  const migration = transactionSource.indexOf('seed-quota.mjs --confirm');
+  const preSwitch = transactionSource.indexOf('verify_candidate_switch_contract', migration);
+  const switchBoundary = transactionSource.indexOf('transaction_mark_phase switching', migration);
+  const parserUp = transactionSource.indexOf('document-parser"', switchBoundary);
+  const parserImage = transactionSource.indexOf('verify_running_container_image document-parser', parserUp);
+  const workerUp = transactionSource.indexOf('api web agent-worker"', parserImage);
+  const workerImage = transactionSource.indexOf('verify_running_container_image agent-worker', workerUp);
+  const publication = transactionSource.indexOf('cas-active', workerImage);
+  assert.ok(migration >= 0 && preSwitch > migration && switchBoundary > preSwitch);
+  assert.ok(parserUp > switchBoundary && parserImage > parserUp);
+  assert.ok(workerUp > parserImage && workerImage > workerUp && publication > workerImage);
+  assert.match(source, /current_active[\s\S]*ROLLBACK_SHA/);
+  assert.match(source, /FINAL_WORKER_IMAGE_ID[\s\S]*FINAL_PARSER_IMAGE_ID/);
+});
+
+test('switch identity validator rejects active drift, post-acceptance retags and wrong running images', async () => {
+  const { validateProductionSwitchState } = await import('./production-deploy-lock.mjs');
+  const activeSha = 'a'.repeat(40);
+  const acceptedWorkerImageId = `sha256:${'b'.repeat(64)}`;
+  const acceptedParserImageId = `sha256:${'c'.repeat(64)}`;
+  const valid = {
+    activeSha,
+    rollbackSha: activeSha,
+    acceptedWorkerImageId,
+    acceptedParserImageId,
+    currentWorkerImageId: acceptedWorkerImageId,
+    currentParserImageId: acceptedParserImageId,
+    runningWorkerImageId: acceptedWorkerImageId,
+    runningParserImageId: acceptedParserImageId,
+  };
+  assert.doesNotThrow(() => validateProductionSwitchState(valid));
+  assert.throws(() => validateProductionSwitchState({
+    ...valid, activeSha: 'd'.repeat(40),
+  }), /active release changed/i);
+  assert.throws(() => validateProductionSwitchState({
+    ...valid, currentWorkerImageId: `sha256:${'e'.repeat(64)}`,
+  }), /tag changed/i);
+  assert.throws(() => validateProductionSwitchState({
+    ...valid, runningParserImageId: `sha256:${'f'.repeat(64)}`,
+  }), /container image differs/i);
+});
+
+test('root unit-test command includes the release-contract gate exactly once', () => {
+  const focused = [
+    'scripts/release-input-manifest.test.mjs',
+    'infra/scripts/accept-document-parser-release.test.mjs',
+    'infra/scripts/verify-document-parser-acceptance.test.mjs',
+    'infra/scripts/deploy.test.mjs',
+  ];
+  assert.equal(typeof rootPackage.scripts['test:release-contract'], 'string');
+  for (const path of focused) {
+    assert.equal(rootPackage.scripts['test:release-contract'].split(path).length - 1, 1);
+  }
+  assert.match(rootPackage.scripts.test, /test:release-contract/);
+  assert.equal(rootPackage.scripts.test.split('test:release-contract').length - 1, 1);
 });
 
 test('worker and parser images are immutable per release and rollback uses exact previous tags', () => {

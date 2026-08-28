@@ -10,11 +10,12 @@ import {
   createReleaseInputManifest,
   createReleaseRuntimeSnapshot,
 } from '../../scripts/release-input-manifest.mjs';
-import { verifyParserAcceptance } from './verify-document-parser-acceptance.mjs';
+import { parseCli, verifyParserAcceptance } from './verify-document-parser-acceptance.mjs';
 
 const sha = 'a'.repeat(40);
 const workerImageId = `sha256:${'b'.repeat(64)}`;
 const parserImageId = `sha256:${'c'.repeat(64)}`;
+const requiredUid = process.getuid?.() ?? 0;
 
 async function fixture() {
   const sandbox = await mkdtemp(join(tmpdir(), 'xgs-parser-deploy-contract-'));
@@ -80,6 +81,7 @@ test('formal deploy verifier binds accepted source, runtime graph and exact fina
       sourceSha: sha,
       workerImageId,
       parserImageId,
+      requiredUid,
     });
   } finally {
     await rm(state.sandbox, { recursive: true, force: true });
@@ -121,6 +123,7 @@ test('formal deploy verifier rejects missing, tampered, wrong-source and image-m
           sourceSha: sha,
           workerImageId,
           parserImageId,
+          requiredUid,
           ...overrides,
         }), /acceptance|report|source|image|JSON|ENOENT|identity/i);
       } finally {
@@ -140,6 +143,7 @@ test('formal deploy verifier rejects release-source tampering before trusting th
       sourceSha: sha,
       workerImageId,
       parserImageId,
+      requiredUid,
     }), /manifest|source|hash/i);
     assert.equal(existsSync(state.reportPath), true);
     assert.match(await readFile(state.reportPath, 'utf8'), /fixed-runtime-graph/);
@@ -161,8 +165,43 @@ test('formal deploy verifier rejects accepted generated runtime dependency tampe
       sourceSha: sha,
       workerImageId,
       parserImageId,
+      requiredUid,
     }), /runtime|generated|identity|digest/i);
   } finally {
     await rm(state.sandbox, { recursive: true, force: true });
   }
+});
+
+test('formal deploy verifier requires the explicitly trusted report owner UID', async () => {
+  const state = await fixture();
+  try {
+    await assert.rejects(verifyParserAcceptance({
+      releaseRoot: state.releaseRoot,
+      reportPath: state.reportPath,
+      sourceSha: sha,
+      workerImageId,
+      parserImageId,
+      requiredUid: requiredUid + 1,
+    }), /owner|uid|unsafe/i);
+    await assert.rejects(verifyParserAcceptance({
+      releaseRoot: state.releaseRoot,
+      reportPath: state.reportPath,
+      sourceSha: sha,
+      workerImageId,
+      parserImageId,
+    }), /owner|uid|required/i);
+  } finally {
+    await rm(state.sandbox, { recursive: true, force: true });
+  }
+});
+
+test('production CLI pins the trusted acceptance report owner to root', () => {
+  const parsed = parseCli([
+    '--release-root', `/opt/openscience-releases/${sha}`,
+    '--report', `/opt/openscience-acceptance/document-parser/${sha}/report.json`,
+    '--source-sha', sha,
+    '--worker-image-id', workerImageId,
+    '--parser-image-id', parserImageId,
+  ]);
+  assert.equal(parsed.requiredUid, 0);
 });
