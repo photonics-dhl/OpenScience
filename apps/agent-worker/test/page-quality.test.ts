@@ -43,6 +43,30 @@ describe('assessPageQuality', () => {
     expect(result.reasons).toEqual(['low_confidence']);
   });
 
+  it('uses OCR confidence without reapplying the native-text density trigger', () => {
+    const result = assessPageQuality(page([
+      paragraph('PULSE', 0.95034515),
+      paragraph('42', 0.70393005),
+      paragraph('FS', 0.9483197),
+    ], { width: 612, height: 792, signals: { localOcrApplied: true } }));
+
+    expect(result.confidence).toBeGreaterThan(PAGE_QUALITY_THRESHOLDS_V1.llmCandidate);
+    expect(result.localOcrRequired).toBe(true);
+    expect(result.llmCandidateReason).toBeUndefined();
+    expect(assessPageQuality(page([
+      paragraph('PULSE 42 FS', 0.69),
+    ], { width: 612, height: 792, signals: { localOcrApplied: true } })).llmCandidateReason)
+      .toBe('low_confidence');
+    expect(assessPageQuality(page([
+      paragraph('A', 0.99),
+    ], { width: 612, height: 792, signals: { localOcrApplied: true } })).llmCandidateReason)
+      .toBe('low_confidence');
+    expect(assessPageQuality(page([{
+      kind: 'paragraph', text: 'PULSE 42 FS', boundingBox: { x: 0, y: 0, width: 200, height: 20 },
+    }], { width: 612, height: 792, signals: { localOcrApplied: true } })).llmCandidateReason)
+      .toBe('low_confidence');
+  });
+
   it('accepts dense native Chinese and English text at or above the versioned threshold', () => {
     const result = assessPageQuality(page([
       paragraph('OpenScience 可定位证据 '.repeat(20), 0.98),

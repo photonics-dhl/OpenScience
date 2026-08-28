@@ -272,12 +272,6 @@ function unresolvedPages(sourceMap: DocumentSourceMap): Array<StagePage & { reas
   });
 }
 
-function llmCandidatePageNumbers(sourceMap: DocumentSourceMap): Set<number> {
-  return new Set(stagePages(sourceMap).flatMap((page) => (
-    assessPageQuality(page).llmCandidateReason === undefined ? [] : [page.page]
-  )));
-}
-
 function boundedUniqueStrings(values: readonly string[]): string[] {
   const result: string[] = [];
   const seen = new Set<string>();
@@ -367,6 +361,7 @@ export async function runParserCascade(
   }
 
   const initialUnresolved = unresolvedPages(current);
+  const initialReasonByPage = new Map(initialUnresolved.map(({ page, reason }) => [page, reason]));
   const locallyResolved = new Set<number>();
   if (context.featureFlags.localOcr
     && (context.adapters.isolatedLocalOcr || context.adapters.localOcr)
@@ -381,9 +376,21 @@ export async function runParserCascade(
       if (!merged) reasons.push('critical locator could not round-trip');
       else {
         current = merged;
-        const llmCandidates = llmCandidatePageNumbers(current);
+        const mergedPages = new Map(stagePages(current).map((page) => [page.page, page]));
         for (const page of result.pages) {
-          if (page.blocks.length > 0 && !llmCandidates.has(page.page)) locallyResolved.add(page.page);
+          const mergedPage = mergedPages.get(page.page);
+          const rawOcrAssessment = assessPageQuality({
+            ...page, signals: { localOcrApplied: true },
+          });
+          const ocrAssessment = mergedPage && assessPageQuality({
+            ...mergedPage, signals: { localOcrApplied: true },
+          });
+          if (page.blocks.length > 0
+            && initialReasonByPage.get(page.page) === 'low_confidence'
+            && rawOcrAssessment.llmCandidateReason === undefined
+            && ocrAssessment?.llmCandidateReason === undefined) {
+            locallyResolved.add(page.page);
+          }
         }
       }
       localStageSucceeded ||= locallyResolved.size > 0;

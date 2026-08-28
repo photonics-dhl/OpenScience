@@ -166,6 +166,85 @@ describe('runParserCascade', () => {
       page: 1, width: 612, height: 792, blocks: [], reason: 'low_confidence',
     }]);
   });
+  it('accepts sparse OCR text when its weighted OCR confidence clears the LLM threshold', async () => {
+    const textMetadata = { name: 'sidecar-text', version: '2.0.0' };
+    const tesseract = { name: 'tesseract', version: '5.3.0' };
+    const extractText = parser(textMetadata, () => ({
+      status: 'needs_review', sourceMap: map(textMetadata, []), reasons: ['empty-parsed-text'],
+    }));
+    const inventoryPages = vi.fn().mockResolvedValue({
+      schemaVersion: 2, parser: textMetadata,
+      pages: [{ page: 1, width: 612, height: 792, blocks: [] }], warnings: [],
+    });
+    const ocrPages = vi.fn().mockResolvedValue({
+      schemaVersion: 2, parser: tesseract,
+      pages: [{ page: 1, width: 612, height: 792, blocks: [
+        { kind: 'paragraph', text: 'PULSE', confidence: 0.95034515, boundingBox: { x: 76, y: 603, width: 155, height: 38 } },
+        { kind: 'paragraph', text: '42', confidence: 0.70393005, boundingBox: { x: 268, y: 603, width: 59, height: 38 } },
+        { kind: 'paragraph', text: 'FS', confidence: 0.9483197, boundingBox: { x: 364, y: 603, width: 59, height: 38 } },
+      ] }], warnings: ['ocr_applied'],
+    });
+
+    const result = await runParserCascade(input(), {
+      adapters: { extractText, isolatedLocalOcr: { inventoryPages, ocrPages } },
+      featureFlags: { detectLayout: false, grobid: false, localOcr: true, llmOcr: false },
+      externalProcessingEligible: false,
+    });
+
+    expect(result.status).toBe('succeeded');
+  });
+  it('keeps a structurally complex page unresolved after high-confidence local OCR', async () => {
+    const textMetadata = { name: 'sidecar-text', version: '2.0.0' };
+    const tesseract = { name: 'tesseract', version: '5.3.0' };
+    const equation = { ...block('equation-1', 'E = mc²', 0.99, textMetadata), kind: 'equation' as const };
+    const extractText = parser(textMetadata, () => ({
+      status: 'succeeded', sourceMap: map(textMetadata, [{ page: 1, blocks: [equation] }]), warnings: [],
+    }));
+    const inventoryPages = vi.fn();
+    const ocrPages = vi.fn().mockResolvedValue({
+      schemaVersion: 2, parser: tesseract,
+      pages: [{ page: 1, width: 500, height: 700, blocks: [{
+        kind: 'paragraph', text: 'High confidence OCR text', confidence: 0.99,
+        boundingBox: { x: 10, y: 100, width: 240, height: 30 },
+      }] }], warnings: ['ocr_applied'],
+    });
+
+    const result = await runParserCascade(input(), {
+      adapters: { extractText, isolatedLocalOcr: { inventoryPages, ocrPages } },
+      featureFlags: { detectLayout: false, grobid: false, localOcr: true, llmOcr: false },
+      externalProcessingEligible: false,
+    });
+
+    expect(result.status).toBe('needs_review');
+    if (result.status === 'needs_review') expect(result.reasons).toContain('unresolved pages remain');
+  });
+  it('keeps insufficient or confidence-free local OCR evidence under review', async () => {
+    const textMetadata = { name: 'sidecar-text', version: '2.0.0' };
+    const tesseract = { name: 'tesseract', version: '5.3.0' };
+    const variants = [
+      [{ kind: 'paragraph' as const, text: 'A', confidence: 0.99, boundingBox: { x: 10, y: 100, width: 20, height: 30 } }],
+      [{ kind: 'paragraph' as const, text: 'PULSE 42 FS', boundingBox: { x: 10, y: 100, width: 240, height: 30 } }],
+    ];
+    for (const blocks of variants) {
+      const extractText = parser(textMetadata, () => ({
+        status: 'needs_review', sourceMap: map(textMetadata, []), reasons: ['empty-parsed-text'],
+      }));
+      const inventoryPages = vi.fn().mockResolvedValue({
+        schemaVersion: 2, parser: textMetadata,
+        pages: [{ page: 1, width: 612, height: 792, blocks: [] }], warnings: [],
+      });
+      const ocrPages = vi.fn().mockResolvedValue({
+        schemaVersion: 2, parser: tesseract,
+        pages: [{ page: 1, width: 612, height: 792, blocks }], warnings: ['ocr_applied'],
+      });
+      const result = await runParserCascade(input(), {
+        adapters: { extractText, isolatedLocalOcr: { inventoryPages, ocrPages } },
+        featureFlags: { detectLayout: false, grobid: false, localOcr: true, llmOcr: false },
+        externalProcessingEligible: false,
+      });
+      expect(result.status).toBe('needs_review');
+    }
+  });
   it('executes the fixed stage order and stamps orchestrator metadata', async () => {
     const order: string[] = [];
     const textMetadata = { name: 'text', version: '1' };

@@ -80,6 +80,56 @@ function quoteMatches(block: DocumentSourceMap['pages'][number]['blocks'][number
   return typeof block.text === 'string' && block.text.indexOf(quote) >= 0;
 }
 
+function scannedLineQuoteMatches(
+  blocks: DocumentSourceMap['pages'][number]['blocks'],
+  quote: string,
+): boolean {
+  const lines: Array<DocumentSourceMap['pages'][number]['blocks']> = [];
+  const verticalOrder = [...blocks].sort((left, right) => left.boundingBox.y - right.boundingBox.y
+    || left.boundingBox.x - right.boundingBox.x);
+  for (const block of verticalOrder) {
+    const line = lines.find((candidate) => {
+      const anchor = candidate[0];
+      if (!anchor) return false;
+      const overlap = Math.min(anchor.boundingBox.y + anchor.boundingBox.height,
+        block.boundingBox.y + block.boundingBox.height)
+        - Math.max(anchor.boundingBox.y, block.boundingBox.y);
+      const minimumHeight = Math.min(anchor.boundingBox.height, block.boundingBox.height);
+      const maximumHeight = Math.max(anchor.boundingBox.height, block.boundingBox.height);
+      return overlap > 0
+        && overlap / minimumHeight >= 0.5
+        && maximumHeight / minimumHeight <= 2;
+    });
+    if (line) line.push(block);
+    else lines.push([block]);
+  }
+  const normalizedQuote = quote.replace(/\s+/gu, ' ').trim();
+  if (normalizedQuote.length === 0) return false;
+  const matchesRun = (run: DocumentSourceMap['pages'][number]['blocks']): boolean => run
+    .map(({ text }) => text?.replace(/\s+/gu, ' ').trim() ?? '')
+    .filter(Boolean)
+    .join(' ')
+    .includes(normalizedQuote);
+  return lines.some((line) => {
+    const horizontalOrder = [...line].sort((left, right) => left.boundingBox.x - right.boundingBox.x);
+    let run: DocumentSourceMap['pages'][number]['blocks'] = [];
+    for (const block of horizontalOrder) {
+      const previous = run.at(-1);
+      const gap = previous
+        ? block.boundingBox.x - (previous.boundingBox.x + previous.boundingBox.width)
+        : 0;
+      const boundedGap = !previous || (gap >= 0
+        && gap <= 2 * Math.min(previous.boundingBox.height, block.boundingBox.height));
+      if (!boundedGap) {
+        if (matchesRun(run)) return true;
+        run = [];
+      }
+      run.push(block);
+    }
+    return matchesRun(run);
+  });
+}
+
 function matchesVirtualLine(
   block: DocumentSourceMap['pages'][number]['blocks'][number],
   line: number,
@@ -181,6 +231,7 @@ export function reproduceAcceptanceLocator(
     ? blocks.filter((block) => meaningfullyMatchesPhysicalRegion(block, region))
     : blocks;
   if (locator.kind === 'page-region' || locator.kind === 'image-region') return candidates.length > 0;
+  if (quote && locator.kind === 'page-text' && scannedPdf) return scannedLineQuoteMatches(candidates, quote);
   if (quote) return candidates.some((block) => quoteMatches(block, quote));
   return false;
 }

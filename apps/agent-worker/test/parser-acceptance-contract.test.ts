@@ -366,6 +366,31 @@ describe('Task 8 acceptance contract', () => {
     })]);
     expect(reproduceAcceptanceLocator(correct, quote)).toBe(true);
     expect(reproduceAcceptanceLocator(correct, region)).toBe(true);
+    const splitLine = sourceMap(scanHash, [
+      sourceBlock({ id: 'ocr-pulse', text: 'PULSE', x: 76, y: 603, width: 155, height: 38, tesseract: true }),
+      sourceBlock({ id: 'ocr-42', text: '42', x: 268, y: 602, width: 59, height: 38, tesseract: true }),
+      sourceBlock({ id: 'ocr-fs', text: 'FS', x: 364, y: 604, width: 59, height: 38, tesseract: true }),
+    ]);
+    expect(reproduceAcceptanceLocator(splitLine, quote)).toBe(true);
+    expect(reproduceAcceptanceLocator(splitLine, region)).toBe(true);
+    const brokenLine = sourceMap(scanHash, [
+      sourceBlock({ id: 'ocr-pulse', text: 'PULSE', x: 76, y: 603, width: 155, height: 38, tesseract: true }),
+      sourceBlock({ id: 'ocr-42', text: '42', x: 268, y: 603, width: 59, height: 38, tesseract: true }),
+      sourceBlock({ id: 'ocr-fs', text: 'FS', x: 364, y: 700, width: 59, height: 38, tesseract: true }),
+    ]);
+    expect(reproduceAcceptanceLocator(brokenLine, quote)).toBe(false);
+    const distantSameLine = sourceMap(scanHash, [
+      sourceBlock({ id: 'ocr-pulse', text: 'PULSE', x: 76, y: 603, width: 155, height: 38, tesseract: true }),
+      sourceBlock({ id: 'ocr-42', text: '42', x: 800, y: 603, width: 59, height: 38, tesseract: true }),
+      sourceBlock({ id: 'ocr-fs', text: 'FS', x: 896, y: 603, width: 59, height: 38, tesseract: true }),
+    ]);
+    expect(reproduceAcceptanceLocator(distantSameLine, quote)).toBe(false);
+    const tallBoxBridge = sourceMap(scanHash, [
+      sourceBlock({ id: 'ocr-pulse', text: 'PULSE', x: 76, y: 603, width: 155, height: 38, tesseract: true }),
+      sourceBlock({ id: 'ocr-42', text: '42', x: 268, y: 550, width: 59, height: 200, tesseract: true }),
+      sourceBlock({ id: 'ocr-fs', text: 'FS', x: 364, y: 700, width: 59, height: 38, tesseract: true }),
+    ]);
+    expect(reproduceAcceptanceLocator(tallBoxBridge, quote)).toBe(false);
   });
 
   it('builds a deterministic complete runtime manifest and rejects transitive output tampering', async () => {

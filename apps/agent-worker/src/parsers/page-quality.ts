@@ -6,11 +6,13 @@ export const PAGE_QUALITY_THRESHOLDS_V1 = Object.freeze({
   nativeAccept: 0.92,
   llmCandidate: 0.70,
   minimumUnicodeDensity: 0.0001,
+  minimumOcrUnicodeCharacters: 7,
 });
 
 export interface PageQualitySignals {
   complexTable?: boolean;
   layoutFailure?: boolean;
+  localOcrApplied?: boolean;
 }
 
 export type PageQualityInput = StagePage & { signals?: PageQualitySignals };
@@ -50,8 +52,17 @@ export function assessPageQuality(page: PageQualityInput): PageQualityAssessment
     ? page.width * page.height
     : Number.POSITIVE_INFINITY;
   const density = weighted.characters / pageArea;
-  const densityFactor = Math.min(1, density / PAGE_QUALITY_THRESHOLDS_V1.minimumUnicodeDensity);
-  const aggregate = weighted.characters === 0 ? 0 : weighted.confidence / weighted.characters;
+  const explicitOcrConfidence = page.blocks.every((block) => unicodeCharacterCount(block.text) === 0
+    || (typeof block.confidence === 'number' && Number.isFinite(block.confidence)
+      && block.confidence >= 0 && block.confidence <= 1));
+  const sufficientOcrEvidence = explicitOcrConfidence
+    && weighted.characters >= PAGE_QUALITY_THRESHOLDS_V1.minimumOcrUnicodeCharacters;
+  const densityFactor = page.signals?.localOcrApplied
+    ? (sufficientOcrEvidence ? 1 : 0)
+    : Math.min(1, density / PAGE_QUALITY_THRESHOLDS_V1.minimumUnicodeDensity);
+  const aggregate = weighted.characters === 0 || (page.signals?.localOcrApplied && !sufficientOcrEvidence)
+    ? 0
+    : weighted.confidence / weighted.characters;
   const confidence = roundedConfidence(aggregate * densityFactor);
   const localOcrRequired = weighted.characters === 0 || confidence < PAGE_QUALITY_THRESHOLDS_V1.nativeAccept;
 
