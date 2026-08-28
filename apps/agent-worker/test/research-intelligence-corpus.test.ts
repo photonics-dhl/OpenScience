@@ -28,6 +28,10 @@ describe('research-intelligence fixture contract', () => {
       .toBe(createHash('sha256').update(second.pdf).digest('hex'));
     expect(createHash('sha256').update(first.docx).digest('hex'))
       .toBe(createHash('sha256').update(second.docx).digest('hex'));
+    expect(createHash('sha256').update(first.scanPdf).digest('hex'))
+      .toBe('b327e6fece61a3e5bd52842250c51012b7672d81ff3dd4f11107b0e4aee6d2e0');
+    expect(RESEARCH_INTELLIGENCE_CORPUS.find(({ id }) => id === 'scan-pdf-image-only')?.content)
+      .toEqual(first.scanPdf);
   });
 });
 

@@ -2,10 +2,11 @@ import { createHash } from 'node:crypto';
 import { createBlockSourceLocator, resolveSourceLocator } from '@openscience/domain';
 import { createDefaultIngestionAdapters, parseIngestionWithAdapters, type ParsedIngestion } from './ingestion-parser';
 import { sourceMapToManuscriptText } from './extractor';
+import { reproduceAcceptanceLocator } from './parser-acceptance-contract';
 import type { ParserCascadeRunner } from './index';
 
 const EXPECTED_TEXT = 'OpenScience evidence document';
-const EXPECTED_SCAN_TEXT = 'OCR 42 FS';
+const EXPECTED_SCAN_TEXT = 'PULSE 42 FS';
 
 // Small deterministic fixtures generated from the ISO PDF and OOXML container structures.
 // They contain no user data and let the deployed worker prove its native parser runtime.
@@ -19,51 +20,92 @@ const DOCX_FIXTURE = Buffer.from(
   'base64',
 );
 
-const SCAN_FIXTURE = Buffer.from(
-  // 305x55 grayscale PNG: opaque black 5x7 glyphs spelling "OCR 42 FS" on white.
-  'iVBORw0KGgoAAAANSUhEUgAAATEAAAA3CAAAAABBICIdAAAAu0lEQVR42u3ZSwqAMAwFwN7/0roW2pr0g6jztpLQzCYEyyG5FATEiBEjRkyIESP2arFyTbWkkujX8LO6ZYPtSyu5AYkRI0bsO2LN4ugg0S7RuVa3H3x9e1cSI0aMGLF1I+WNiREjRozYo2Kbz5jpLZw6A4kRI0aM2JZ9t2WtTVdUDYgRI0aM2GxFfrgtTYkRI0bsh2KBCyFwbEz/GelX5A+p1TceMWLEiH1NTG7dERAjRowYMSFGjNircgLBi0PCBIe/PAAAAABJRU5ErkJggg==',
-  'base64',
-);
+const RASTER_GLYPHS: Record<string, string[]> = {
+  ' ': ['00000', '00000', '00000', '00000', '00000', '00000', '00000'],
+  2: ['01110', '10001', '00001', '00010', '00100', '01000', '11111'],
+  4: ['00010', '00110', '01010', '10010', '11111', '00010', '00010'],
+  E: ['11111', '10000', '10000', '11110', '10000', '10000', '11111'],
+  F: ['11111', '10000', '10000', '11110', '10000', '10000', '10000'],
+  L: ['10000', '10000', '10000', '10000', '10000', '10000', '11111'],
+  P: ['11110', '10001', '10001', '11110', '10000', '10000', '10000'],
+  S: ['01111', '10000', '10000', '01110', '00001', '00001', '11110'],
+  U: ['10001', '10001', '10001', '10001', '10001', '10001', '01110'],
+};
 
-function imageOnlyPdf(png: Buffer): Buffer {
-  const width = png.readUInt32BE(16);
-  const height = png.readUInt32BE(20);
-  const compressed: Buffer[] = [];
-  for (let offset = 8; offset + 12 <= png.length;) {
-    const length = png.readUInt32BE(offset);
-    const kind = png.toString('ascii', offset + 4, offset + 8);
-    if (kind === 'IDAT') compressed.push(png.subarray(offset + 8, offset + 8 + length));
-    offset += 12 + length;
-  }
-  const imageBytes = Buffer.concat(compressed);
-  const content = Buffer.from(`q\n${width} 0 0 ${height} 0 0 cm\n/Im0 Do\nQ\n`);
-  const objects = [
-    Buffer.from('1 0 obj\n<< /Type /Catalog /Pages 2 0 R >>\nendobj\n'),
-    Buffer.from('2 0 obj\n<< /Type /Pages /Kids [3 0 R] /Count 1 >>\nendobj\n'),
-    Buffer.from(`3 0 obj\n<< /Type /Page /Parent 2 0 R /MediaBox [0 0 ${width} ${height}] /Resources << /XObject << /Im0 4 0 R >> >> /Contents 5 0 R >>\nendobj\n`),
-    Buffer.concat([
-      Buffer.from(`4 0 obj\n<< /Type /XObject /Subtype /Image /Width ${width} /Height ${height} /ColorSpace /DeviceGray /BitsPerComponent 8 /Filter /FlateDecode /DecodeParms << /Predictor 15 /Colors 1 /BitsPerComponent 8 /Columns ${width} >> /Length ${imageBytes.length} >>\nstream\n`),
-      imageBytes,
-      Buffer.from('\nendstream\nendobj\n'),
-    ]),
-    Buffer.concat([
-      Buffer.from(`5 0 obj\n<< /Length ${content.length} >>\nstream\n`),
-      content,
-      Buffer.from('endstream\nendobj\n'),
-    ]),
-  ];
-  const header = Buffer.from('%PDF-1.4\n%\xE2\xE3\xCF\xD3\n', 'binary');
-  const offsets: number[] = [];
-  let position = header.length;
-  for (const object of objects) {
-    offsets.push(position);
-    position += object.length;
-  }
-  const xref = Buffer.from(`xref\n0 6\n0000000000 65535 f \n${offsets.map((offset) => `${String(offset).padStart(10, '0')} 00000 n `).join('\n')}\ntrailer\n<< /Size 6 /Root 1 0 R >>\nstartxref\n${position}\n%%EOF\n`);
-  return Buffer.concat([header, ...objects, xref]);
+function buildPdf(objects: Buffer[]): Buffer {
+  const chunks: Buffer[] = [Buffer.from('%PDF-1.4\n%\xe2\xe3\xcf\xd3\n', 'latin1')];
+  const offsets = [0];
+  let length = chunks[0].length;
+  objects.forEach((object, index) => {
+    offsets.push(length);
+    const chunk = Buffer.concat([
+      Buffer.from(`${index + 1} 0 obj\n`, 'ascii'), object, Buffer.from('\nendobj\n', 'ascii'),
+    ]);
+    chunks.push(chunk);
+    length += chunk.length;
+  });
+  const xrefOffset = length;
+  const xrefRows = offsets.slice(1)
+    .map((offset) => `${String(offset).padStart(10, '0')} 00000 n \n`).join('');
+  chunks.push(Buffer.from(
+    `xref\n0 ${objects.length + 1}\n0000000000 65535 f \n${xrefRows}`
+      + `trailer\n<< /Size ${objects.length + 1} /Root 1 0 R >>\n`
+      + `startxref\n${xrefOffset}\n%%EOF\n`,
+    'ascii',
+  ));
+  return Buffer.concat(chunks);
 }
 
-const SCANNED_PDF_FIXTURE = imageOnlyPdf(SCAN_FIXTURE);
+function pdfStream(content: Buffer, dictionary = ''): Buffer {
+  return Buffer.concat([
+    Buffer.from(`<< ${dictionary}/Length ${content.length} >>\nstream\n`, 'ascii'),
+    content,
+    Buffer.from('\nendstream', 'ascii'),
+  ]);
+}
+
+function rasterizeText(text: string): { width: number; height: number; pixels: Buffer } {
+  const scale = 3;
+  const margin = 2;
+  const width = margin * 2 + text.length * 6 * scale;
+  const height = margin * 2 + 7 * scale;
+  const pixels = Buffer.alloc(width * height, 0xff);
+  [...text].forEach((character, characterIndex) => {
+    const glyph = RASTER_GLYPHS[character];
+    if (!glyph) throw new Error(`unsupported raster glyph: ${character}`);
+    glyph.forEach((row, rowIndex) => {
+      [...row].forEach((pixel, columnIndex) => {
+        if (pixel !== '1') return;
+        for (let y = 0; y < scale; y += 1) {
+          for (let x = 0; x < scale; x += 1) {
+            const targetX = margin + characterIndex * 6 * scale + columnIndex * scale + x;
+            const targetY = margin + rowIndex * scale + y;
+            pixels[targetY * width + targetX] = 0;
+          }
+        }
+      });
+    });
+  });
+  return { width, height, pixels };
+}
+
+function createScannedTextPdf(): Buffer {
+  const raster = rasterizeText(EXPECTED_SCAN_TEXT);
+  const content = Buffer.from('q 360 0 0 45 72 600 cm /Im0 Do Q', 'ascii');
+  return buildPdf([
+    Buffer.from('<< /Type /Catalog /Pages 2 0 R >>', 'ascii'),
+    Buffer.from('<< /Type /Pages /Kids [3 0 R] /Count 1 >>', 'ascii'),
+    Buffer.from('<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /XObject << /Im0 6 0 R >> >> /Contents 5 0 R >>', 'ascii'),
+    Buffer.from('<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>', 'ascii'),
+    pdfStream(content),
+    pdfStream(
+      raster.pixels,
+      `/Type /XObject /Subtype /Image /Width ${raster.width} /Height ${raster.height} /ColorSpace /DeviceGray /BitsPerComponent 8 `,
+    ),
+  ]);
+}
+
+const SCANNED_PDF_FIXTURE = createScannedTextPdf();
 
 export function createParserSelfTestFixtures(): { pdf: Buffer; docx: Buffer; scanPdf: Buffer } {
   return {
@@ -161,30 +203,27 @@ export async function runParserCascadeSelfTest(parserCascade: ParserCascadeRunne
         tesseractMatched: false, confidenceMatched: false, boundingBoxMatched: false,
       };
     }
-    const block = scan.sourceMap.pages
-      .flatMap((page) => page.blocks)
-      .find((candidate) => candidate.text?.includes(EXPECTED_SCAN_TEXT));
-    if (!block) return {
-      format: 'pdf', status: 'ready', textMatched: false, locatorMatched: false,
-      tesseractMatched: false, confidenceMatched: false, boundingBoxMatched: false,
-    };
-    let locatorMatched = false;
-    try {
-      const locator = createBlockSourceLocator(scan.sourceMap, block.id, {
-        charRange: {
-          start: block.text!.indexOf(EXPECTED_SCAN_TEXT),
-          end: block.text!.indexOf(EXPECTED_SCAN_TEXT) + EXPECTED_SCAN_TEXT.length,
-        },
-      });
-      locatorMatched = resolveSourceLocator(scan.sourceMap, locator).id === block.id;
-    } catch {
-      locatorMatched = false;
-    }
+    const blocks = scan.sourceMap.pages.flatMap((page) => page.blocks);
+    const tesseractBlocks = blocks.filter((block) => block.parser.name === 'tesseract');
+    const textMatched = reproduceAcceptanceLocator(scan.sourceMap, {
+      kind: 'page-text', page: 1, quote: EXPECTED_SCAN_TEXT,
+    });
+    const locatorMatched = textMatched && tesseractBlocks.length > 0 && tesseractBlocks.every((block) => {
+      try {
+        const locator = createBlockSourceLocator(scan.sourceMap, block.id);
+        return resolveSourceLocator(scan.sourceMap, locator).id === block.id;
+      } catch {
+        return false;
+      }
+    });
     return {
-      format: 'pdf', status: 'ready', textMatched: true, locatorMatched,
-      tesseractMatched: block.parser.name === 'tesseract' && block.parser.version === '5.3.0',
-      confidenceMatched: typeof block.confidence === 'number' && block.confidence > 0 && block.confidence <= 1,
-      boundingBoxMatched: block.boundingBox.width > 0 && block.boundingBox.height > 0,
+      format: 'pdf', status: 'ready', textMatched, locatorMatched,
+      tesseractMatched: tesseractBlocks.length > 0
+        && tesseractBlocks.every((block) => block.parser.version === '5.3.0'),
+      confidenceMatched: tesseractBlocks.length > 0 && tesseractBlocks.every((block) =>
+        typeof block.confidence === 'number' && block.confidence > 0 && block.confidence <= 1),
+      boundingBoxMatched: tesseractBlocks.length > 0
+        && tesseractBlocks.every((block) => block.boundingBox.width > 0 && block.boundingBox.height > 0),
     };
   })();
   if (!pdfSummary.textMatched || !docxSummary.textMatched) {
@@ -192,7 +231,11 @@ export async function runParserCascadeSelfTest(parserCascade: ParserCascadeRunne
   }
   if (!scanSummary.textMatched || !scanSummary.locatorMatched || !scanSummary.tesseractMatched
     || !scanSummary.confidenceMatched || !scanSummary.boundingBoxMatched) {
-    throw new Error('parser cascade self-test failed: scan OCR text/locator missing');
+    const failedChecks = Object.entries(scanSummary)
+      .filter(([, value]) => value === false)
+      .map(([name]) => name)
+      .join(',');
+    throw new Error(`parser cascade self-test failed: scan OCR text/locator missing (${failedChecks})`);
   }
   return {
     schemaVersion: 2,

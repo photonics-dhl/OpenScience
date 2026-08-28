@@ -434,14 +434,24 @@ describe('production parser self-test', () => {
         }
         if (request.operation === 'inventory_pages') {
           return { schemaVersion: 2 as const, parser: PDF_PAGE_INVENTORY_METADATA,
-            pages: [{ page: 1, width: 305, height: 55, blocks: [] }], warnings: [] };
+            pages: [{ page: 1, width: 612, height: 792, blocks: [] }], warnings: [] };
         }
         if (request.operation === 'ocr_page') {
           return { schemaVersion: 2 as const, parser: TESSERACT_METADATA, pages: [{
-            page: 1, width: 305, height: 55, blocks: [{
-              kind: 'paragraph' as const, text: 'OCR 42 FS',
-              boundingBox: { x: 8, y: 8, width: 180, height: 24 }, confidence: 0.96,
-            }],
+            page: 1, width: 612, height: 792, blocks: [
+              {
+                kind: 'paragraph' as const, text: 'PULSE',
+                boundingBox: { x: 76, y: 603, width: 155, height: 38 }, confidence: 0.96,
+              },
+              {
+                kind: 'paragraph' as const, text: '42',
+                boundingBox: { x: 268, y: 602, width: 59, height: 38 }, confidence: 0.95,
+              },
+              {
+                kind: 'paragraph' as const, text: 'FS',
+                boundingBox: { x: 364, y: 604, width: 59, height: 38 }, confidence: 0.94,
+              },
+            ],
           }], warnings: [] };
         }
       }

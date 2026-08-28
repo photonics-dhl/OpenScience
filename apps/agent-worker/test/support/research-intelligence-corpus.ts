@@ -144,60 +144,6 @@ function createReferencesLayoutPdf(): Buffer {
   ]);
 }
 
-const rasterGlyphs: Record<string, string[]> = {
-  ' ': ['00000', '00000', '00000', '00000', '00000', '00000', '00000'],
-  2: ['01110', '10001', '00001', '00010', '00100', '01000', '11111'],
-  4: ['00010', '00110', '01010', '10010', '11111', '00010', '00010'],
-  E: ['11111', '10000', '10000', '11110', '10000', '10000', '11111'],
-  F: ['11111', '10000', '10000', '11110', '10000', '10000', '10000'],
-  L: ['10000', '10000', '10000', '10000', '10000', '10000', '11111'],
-  P: ['11110', '10001', '10001', '11110', '10000', '10000', '10000'],
-  S: ['01111', '10000', '10000', '01110', '00001', '00001', '11110'],
-  U: ['10001', '10001', '10001', '10001', '10001', '10001', '01110'],
-};
-
-function rasterizeText(text: string): { width: number; height: number; pixels: Buffer } {
-  const scale = 3;
-  const margin = 2;
-  const width = margin * 2 + text.length * 6 * scale;
-  const height = margin * 2 + 7 * scale;
-  const pixels = Buffer.alloc(width * height, 0xff);
-
-  [...text].forEach((character, characterIndex) => {
-    const glyph = rasterGlyphs[character];
-    if (!glyph) throw new Error(`unsupported raster glyph: ${character}`);
-    glyph.forEach((row, rowIndex) => {
-      [...row].forEach((pixel, columnIndex) => {
-        if (pixel !== '1') return;
-        for (let y = 0; y < scale; y += 1) {
-          for (let x = 0; x < scale; x += 1) {
-            const targetX = margin + characterIndex * 6 * scale + columnIndex * scale + x;
-            const targetY = margin + rowIndex * scale + y;
-            pixels[targetY * width + targetX] = 0;
-          }
-        }
-      });
-    });
-  });
-  return { width, height, pixels };
-}
-
-function createScannedTextPdf(): Buffer {
-  const raster = rasterizeText('PULSE 42 FS');
-  const content = Buffer.from('q 360 0 0 45 72 600 cm /Im0 Do Q', 'ascii');
-  return buildPdf([
-    Buffer.from('<< /Type /Catalog /Pages 2 0 R >>', 'ascii'),
-    Buffer.from('<< /Type /Pages /Kids [3 0 R] /Count 1 >>', 'ascii'),
-    Buffer.from('<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /XObject << /Im0 6 0 R >> >> /Contents 5 0 R >>', 'ascii'),
-    Buffer.from('<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>', 'ascii'),
-    pdfStream(content),
-    pdfStream(
-      raster.pixels,
-      `/Type /XObject /Subtype /Image /Width ${raster.width} /Height ${raster.height} /ColorSpace /DeviceGray /BitsPerComponent 8 `,
-    ),
-  ]);
-}
-
 function crc32(content: Buffer): number {
   let crc = 0xffffffff;
   for (const byte of content) {
@@ -420,7 +366,7 @@ export const RESEARCH_INTELLIGENCE_CORPUS: ResearchCorpusCase[] = [
   {
     id: 'scan-pdf-image-only',
     filename: 'scan.pdf',
-    content: createScannedTextPdf(),
+    content: Buffer.from(fixtures.scanPdf),
     language: 'en',
     features: ['scan'],
     rights: 'self-authored',
