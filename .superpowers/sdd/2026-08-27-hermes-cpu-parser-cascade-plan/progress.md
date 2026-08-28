@@ -7,7 +7,7 @@ Task 1: in progress (implementation/spec review clean at `5bcef6f`; external evi
 Task 2: complete. V2 protocol (including canonical response-envelope closure), isolated transport, same-release V1 transition, concrete parser-service composition and production-image module packaging passed all local gates and independent review; ECS image start remains final-acceptance evidence.
 Task 3: complete at `49cd909` + review fix `ac94ebc`. Deterministic Markdown/TeX/CSV/XLSX/DOCX/native-PDF `DocumentParser`, versioned virtual geometry, bounded `yauzl@2.10.0` XLSX handling, scan-time row/field/block caps, controlled PDF/DOCX expansion budgets, strict `A1:XFD1048576` references, deterministic IDs and exact provenance passed focused `62/62`, full worker `210/210`, build/typecheck/lint and runtime contract gates; no layout candidate was promoted.
 Task 4: complete at `85ba051`. Provider-neutral V2 layout normalization and bounded fail-closed GROBID TEI enrichment passed focused `20/20`, worker/build/typecheck/lint and independent review; no concrete layout route was promoted. The single exact-SHA ECS GROBID attempt hit its 180s image-pull cutoff before digest/container/corpus execution, cleaned exact resources to 0 and remains `APPROVED_PILOT`; production Compose is unchanged.
-Task 5: pending.
+Task 5: code complete at `622cc24`; independent review Ready with no findings. Local OCR/routing/resource gates and exact-SHA ECS full source build pass. Final packaged-image/runtime OCR and capped-load worker-responsiveness acceptance remain pending after the single bounded image build was terminated and exact candidate resources were verified clean; no Paddle promotion and production unchanged.
 Task 6: pending.
 Task 7: pending.
 Task 8: pending.

@@ -2,6 +2,12 @@
 
 > 最新同步：2026-08-28。历史由 Git 保存；旧计划和 archive 不作为默认输入。
 
+## 2026-08-28 — CPU parser cascade Task 5 code complete / ECS runtime pending
+
+- `622cc24` 完成本地 Tesseract 选页 OCR 与 page-quality routing：页/阶段级 bytes、pixels、blocks、text 硬预算，串行 OCR，bounded child kill-and-close，TSV top-left→PDF bottom-left bbox；parser Compose 锁 2 CPU，既有无网、只读、非 root、512 MiB/64 PID 隔离不变，未引入/晋升 Paddle。
+- 独立复核最终无 Critical/Important/Minor、Ready Yes；focused `75/75`、OCR `18/18`、deploy `19/19`、worker build/typecheck/ESLint/diff GREEN。exact-SHA ECS frozen install、Prisma generate 与全仓 build GREEN。
+- 最终 parser image build 超过 bounded cutoff 后按精确 PID 终止；候选 container/image 已清理并返回 `FINAL_ECS_ATTEMPT_CLEAN`。真实 packaged `pdf-parse` + Tesseract scan、2-CPU inspect、peak resource 与生产 worker responsiveness 尚无证据，Task 5 不得标为 ECS accepted；production 仍为 `e2c0eaf…` / rollback `8163f8b…`。
+
 ## 2026-08-28 — 卫生债与 ECS 临时资源清理
 
 - 仓库复现并清理 10 个无引用文件、19 个无用导出、44 个无用导出类型和 1 个重复导出；Compose 动态 parser 入口、隔离子进程 `mammoth`/`pdf-parse` 依赖及 LiteParse 独立 workspace 已显式建模。`audit:knip` 仅余非阻断 configuration hints，`audit:dep` 为 0 violation；聚焦公开阅读面 `5/5`、全仓单测、build、typecheck、lint、docs-sync、Markdown lint 与 diff check 均已复跑通过。
