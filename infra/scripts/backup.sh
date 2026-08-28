@@ -122,7 +122,19 @@ if [ "$OLD_COUNT" -gt 0 ]; then
   fi
 fi
 
-echo "BACKUP_OK core_size=$(du -h "$CORE_DUMP_FILE" | cut -f1) search_size=$(du -h "$SEARCH_DUMP_FILE" | cut -f1) sets=${#DB_SETS[@]}/$KEEP"
+count_retained_db_sets() {
+  local count
+  if ! count="$(find "$DUMP_DIR" -mindepth 1 -maxdepth 1 -type d -name 'db-set-*' -printf '.\n' | awk 'END { print NR }')"; then
+    return 1
+  fi
+  [[ "$count" =~ ^[0-9]+$ ]] || return 1
+  printf '%s\n' "$count"
+}
+if ! RETAINED_SET_COUNT="$(count_retained_db_sets)"; then
+  echo "BACKUP_FAIL: retention inventory failed" >&2
+  exit 1
+fi
+echo "BACKUP_OK core_size=$(du -h "$CORE_DUMP_FILE" | cut -f1) search_size=$(du -h "$SEARCH_DUMP_FILE" | cut -f1) sets=${RETAINED_SET_COUNT}/$KEEP"
 fi
 
 if [ "$BACKUP_OBJECTS" -eq 1 ]; then

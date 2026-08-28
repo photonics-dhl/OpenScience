@@ -125,6 +125,14 @@ test('database backup atomically publishes a private, single-flight dual-databas
   assert.match(backup, /core\.sql/);
   assert.match(backup, /search\.sql/);
   assert.match(backup, /sha256sum/);
+  assert.match(backup, /if ! RETAINED_SET_COUNT="\$\(count_retained_db_sets\)"/);
+  assert.match(backup, /sets=\$\{RETAINED_SET_COUNT\}/);
+  assert.doesNotMatch(backup, /sets=\$\{#DB_SETS\[@\]\}/);
+  assert.ok(
+    backup.indexOf('if ! RETAINED_SET_COUNT="$(count_retained_db_sets)"')
+      > backup.indexOf('for set_name in "${DB_SETS[@]:$KEEP}"'),
+    'retained backup sets must be enumerated after rotation',
+  );
   assert.match(backup, /mv -- "\$STAGING_DIR" "\$FINAL_SET_DIR"/);
   assert.doesNotMatch(backup, /> "\$DUMP_DIR\/core-/);
   assert.doesNotMatch(backup, /> "\$DUMP_DIR\/search-/);
@@ -145,6 +153,26 @@ test('database backup atomically publishes a private, single-flight dual-databas
   assert.match(backupRunbook, /createdb --username="\$DB_ADMIN_ROLE" --/);
   assert.match(backupRunbook, /--dbname="\$CORE_RESTORE"/);
   assert.match(backupRunbook, /--dbname="\$SEARCH_RESTORE"/);
+});
+
+test('database backup retention inventory fails closed when its producer fails', () => {
+  const inventoryFunction = backup.match(/count_retained_db_sets\(\) \{[\s\S]*?^\}/m)?.[0];
+  assert.ok(inventoryFunction, 'backup must expose the exact retention inventory function under test');
+  const result = spawnSync(bash, ['-c', `
+set -euo pipefail
+${inventoryFunction}
+DUMP_DIR=/tmp
+find() { printf '.\\n'; return 42; }
+if count_retained_db_sets >/dev/null; then
+  echo BACKUP_OK
+else
+  echo BACKUP_FAIL >&2
+  exit 42
+fi
+`], { encoding: 'utf8' });
+  assert.equal(result.status, 42, result.stderr);
+  assert.doesNotMatch(result.stdout, /BACKUP_OK/);
+  assert.match(result.stderr, /BACKUP_FAIL/);
 });
 
 test('embedding capability is strict, release-versioned and rollback-safe', () => {
