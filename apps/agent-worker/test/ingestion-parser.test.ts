@@ -6,9 +6,36 @@ import type { AiGateway } from '@openscience/ai-gateway';
 import { createWorkerParserCascade } from '../src/index';
 import { sourceMapToManuscriptText } from '../src/extractor';
 import { createDefaultIngestionAdapters, parseIngestion, parseIngestionWithAdapters, runTesseractOcr } from '../src/ingestion-parser';
+import { reproduceAcceptanceLocator } from '../src/parser-acceptance-contract';
 import { runParserCascadeSelfTest, runParserSelfTest } from '../src/parser-self-test';
-import { TRANSITION_PARSER_METADATA } from '../src/parser-job-isolation';
+import { createSidecarParserStageProcessor, TRANSITION_PARSER_METADATA } from '../src/parser-job-isolation';
+import {
+  deserializeParserJobResponseV2,
+  parseParserJobRequestV2,
+  serializeParserJobRequestV2,
+  serializeParserJobResponseV2,
+  type ParserJobRequestV2,
+  type ParserStageResult,
+} from '../src/parsers/job-protocol';
 import { PDF_PAGE_INVENTORY_METADATA, TESSERACT_METADATA } from '../src/parsers/ocr-parser';
+import { RESEARCH_INTELLIGENCE_CORPUS } from './support/research-intelligence-corpus';
+
+function serializedSidecarAdapter() {
+  const sidecar = createSidecarParserStageProcessor(createDefaultIngestionAdapters());
+  return async (requestValue: ParserJobRequestV2, content: Buffer): Promise<ParserStageResult> => {
+    const request = parseParserJobRequestV2(JSON.parse(serializeParserJobRequestV2(requestValue)));
+    const serialized = serializeParserJobResponseV2({
+      schemaVersion: 2,
+      ok: true,
+      artifactId: request.artifactId,
+      contentHash: request.contentHash,
+      result: await sidecar(request, content),
+    });
+    const response = deserializeParserJobResponseV2(serialized, request, TRANSITION_PARSER_METADATA);
+    if (!response.ok) throw new Error(response.errorCode);
+    return response.result;
+  };
+}
 
 describe('parseIngestion', () => {
   it('settles once and waits for close when Tesseract exits before reading stdin', async () => {
@@ -76,6 +103,188 @@ describe('parseIngestion', () => {
       expect.any(Buffer),
     );
     expect(ocr).not.toHaveBeenCalled();
+  });
+
+  it('round-trips canonical XLSX sheet, row and column geometry through the production V2 composition', async () => {
+    const fixture = RESEARCH_INTELLIGENCE_CORPUS.find(({ id }) => id === 'table-xlsx-en');
+    expect(fixture).toBeDefined();
+    if (!fixture) return;
+    const contentHash = createHash('sha256').update(fixture.content).digest('hex');
+    const artifactId = 'artifact-table-xlsx-en';
+    const locator = { kind: 'table-cell', sheet: 'Evidence', row: 2, column: 2, quote: '42' } as const;
+    expect(fixture.expectedLocators).toEqual([locator]);
+    const cascade = createWorkerParserCascade({ ocr: vi.fn() } as never, serializedSidecarAdapter());
+
+    const result = await cascade({
+      artifactId,
+      contentHash,
+      content: fixture.content,
+      mediaType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    }, {
+      trustedAuthorizationContext: { taskId: 'task-xlsx', workspaceId: 'workspace-1', actorId: 'actor-1' },
+      externalProcessingEligible: false,
+    });
+
+    expect(result.status).toBe('succeeded');
+    if (result.status !== 'succeeded') return;
+    expect(result.sourceMap.pages).toHaveLength(1);
+    expect(result.sourceMap.pages[0]?.blocks.map(({ text, boundingBox }) => ({ text, boundingBox }))).toEqual([
+      { text: 'Evidence', boundingBox: { x: 0, y: 0, width: 1000, height: 24 } },
+      { text: 'Claim', boundingBox: { x: 0, y: 24, width: 500, height: 24 } },
+      { text: 'Value', boundingBox: { x: 500, y: 24, width: 500, height: 24 } },
+      { text: 'pulse_width_fs', boundingBox: { x: 0, y: 48, width: 500, height: 24 } },
+      { text: '42', boundingBox: { x: 500, y: 48, width: 500, height: 24 } },
+    ]);
+    const identity = { artifactId, contentHash };
+    expect(reproduceAcceptanceLocator(result.sourceMap, locator, identity)).toBe(true);
+
+    const wrongSheet = structuredClone(result.sourceMap);
+    wrongSheet.pages[0]!.blocks[0]!.text = 'Other';
+    expect(reproduceAcceptanceLocator(wrongSheet, locator, identity)).toBe(false);
+    const containingSheet = structuredClone(result.sourceMap);
+    containingSheet.pages[0]!.blocks[0]!.text = 'Evidence Archive';
+    expect(reproduceAcceptanceLocator(containingSheet, locator, identity)).toBe(false);
+    const wrongRow = structuredClone(result.sourceMap);
+    wrongRow.pages[0]!.blocks.at(-1)!.boundingBox.y = 72;
+    expect(reproduceAcceptanceLocator(wrongRow, locator, identity)).toBe(false);
+    const wrongColumn = structuredClone(result.sourceMap);
+    wrongColumn.pages[0]!.blocks.at(-1)!.boundingBox.x = 0;
+    expect(reproduceAcceptanceLocator(wrongColumn, locator, identity)).toBe(false);
+  });
+
+  it.each([15, 29, 30, 51, 63])(
+    'round-trips XLSX V2 geometry without rejecting floating column width for %i columns',
+    async (columnCount) => {
+      const content = Buffer.from(`xlsx-v2-${columnCount}`);
+      const contentHash = createHash('sha256').update(content).digest('hex');
+      const width = 1000 / columnCount;
+      const stageResult: ParserStageResult = {
+        schemaVersion: 2,
+        parser: TRANSITION_PARSER_METADATA,
+        pages: [{
+          page: 1,
+          width: 1000,
+          height: 48,
+          blocks: [
+            {
+              kind: 'heading', text: 'Evidence',
+              boundingBox: { x: 0, y: 0, width: 1000, height: 24 }, confidence: 1,
+            },
+            {
+              kind: 'table', text: 'last-column',
+              boundingBox: { x: (columnCount - 1) * width, y: 24, width, height: 24 }, confidence: 1,
+            },
+          ],
+        }],
+        warnings: [],
+      };
+      const stageAdapter = async (requestValue: ParserJobRequestV2): Promise<ParserStageResult> => {
+        const request = parseParserJobRequestV2(JSON.parse(serializeParserJobRequestV2(requestValue)));
+        const response = deserializeParserJobResponseV2(serializeParserJobResponseV2({
+          schemaVersion: 2,
+          ok: true,
+          artifactId: request.artifactId,
+          contentHash: request.contentHash,
+          result: stageResult,
+        }), request, TRANSITION_PARSER_METADATA);
+        if (!response.ok) throw new Error(response.errorCode);
+        return response.result;
+      };
+      const cascade = createWorkerParserCascade({ ocr: vi.fn() } as never, stageAdapter);
+
+      const result = await cascade({
+        artifactId: `artifact-xlsx-${columnCount}`,
+        contentHash,
+        content,
+        mediaType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      }, {
+        trustedAuthorizationContext: { taskId: 'task-xlsx', workspaceId: 'workspace-1', actorId: 'actor-1' },
+        externalProcessingEligible: false,
+      });
+
+      expect(result.status).toBe('succeeded');
+      if (result.status !== 'succeeded') return;
+      expect(result.sourceMap.pages[0]?.blocks.at(-1)?.boundingBox).toEqual({
+        x: (columnCount - 1) * width,
+        y: 24,
+        width,
+        height: 24,
+      });
+    },
+  );
+
+  it('rejects transition-parser physical locators for wrong-column and synthetic full-width blocks', async () => {
+    const quote = 'Left claim: reproducible pulse.';
+    const locator = { kind: 'page-region-text', page: 1, bbox: [0, 0, 306, 792], quote } as const;
+    const parse = async (boundingBox: { x: number; y: number; width: number; height: number }) => {
+      const content = Buffer.from('%PDF-1.7 transition geometry');
+      const cascade = createWorkerParserCascade({ ocr: vi.fn() } as never, async () => ({
+        schemaVersion: 2,
+        parser: TRANSITION_PARSER_METADATA,
+        pages: [{
+          page: 1,
+          width: 612,
+          height: 792,
+          blocks: [{
+            kind: 'paragraph' as const,
+            text: `${quote} Repeated native text keeps page quality high. `.repeat(4),
+            boundingBox,
+            confidence: 1,
+          }],
+        }],
+        warnings: [],
+      }));
+      return cascade({
+        artifactId: 'transition-pdf',
+        contentHash: createHash('sha256').update(content).digest('hex'),
+        content,
+        mediaType: 'application/pdf',
+      }, {
+        trustedAuthorizationContext: { taskId: 'task-region', workspaceId: 'workspace-1', actorId: 'actor-1' },
+        externalProcessingEligible: false,
+      });
+    };
+
+    for (const boundingBox of [
+      { x: 250, y: 100, width: 200, height: 40 },
+      { x: 0, y: 100, width: 612, height: 40 },
+    ]) {
+      const result = await parse(boundingBox);
+      expect(result.status).toBe('succeeded');
+      if (result.status === 'succeeded') {
+        expect(reproduceAcceptanceLocator(result.sourceMap, locator)).toBe(false);
+      }
+    }
+
+    const docxContent = Buffer.from('PK\u0003\u0004paragraph order');
+    const docxCascade = createWorkerParserCascade({ ocr: vi.fn() } as never, async () => ({
+      schemaVersion: 2,
+      parser: TRANSITION_PARSER_METADATA,
+      pages: [{
+        page: 1, width: 1000, height: 24,
+        blocks: [{
+          kind: 'paragraph' as const,
+          text: `Introductory paragraph\n${quote}`,
+          boundingBox: { x: 0, y: 0, width: 1000, height: 24 },
+        }],
+      }],
+      warnings: [],
+    }));
+    const docx = await docxCascade({
+      artifactId: 'transition-docx',
+      contentHash: createHash('sha256').update(docxContent).digest('hex'),
+      content: docxContent,
+      mediaType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    }, {
+      trustedAuthorizationContext: { taskId: 'task-paragraph', workspaceId: 'workspace-1', actorId: 'actor-1' },
+      externalProcessingEligible: false,
+    });
+    expect(docx.status).toBe('succeeded');
+    if (docx.status === 'succeeded') {
+      expect(reproduceAcceptanceLocator(docx.sourceMap, {
+        kind: 'paragraph-text', paragraph: 1, quote,
+      })).toBe(false);
+    }
   });
 
   it('解码 markdown 与 tex', () => {

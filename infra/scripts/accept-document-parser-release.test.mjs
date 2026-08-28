@@ -56,7 +56,14 @@ test('Task 8 acceptance launcher exposes its exact isolated topology and rejects
     parser: { user: '1000:1000', effectiveEnvCount: 0, hostBindMounts: 0, releaseMounts: 0 },
     network: 'none',
     calls: { structuredFake: 10, externalProvider: 0, forbiddenGateway: 0 },
-    freshBuildIdentity: { required: true, runnerSha256: true, contractSha256: true },
+    freshBuildIdentity: {
+      required: true,
+      runnerSha256: true,
+      contractSha256: true,
+      runtimeGraphManifest: true,
+      runtimeGraphScope: 'agent-worker-and-workspace-dist-js',
+      verifyAt: ['immediately-after-build', 'before-container-start', 'after-worker-completion', 'before-publication'],
+    },
     deadlineSeconds: 900,
     resourceOwnership: { preflightAbsent: true, randomTokenLabel: true, removeOnlyOwned: true },
     independentCgroupSampling: ['worker', 'parser'],
@@ -78,7 +85,7 @@ test('Task 8 acceptance launcher exposes its exact isolated topology and rejects
     },
   });
 
-  const source = spawnSync(bash, ['-lc', `sed -n '1,520p' '${script.replaceAll("'", "'\\''")}'`], {
+  const source = spawnSync(bash, ['-lc', `sed -n '1,760p' '${script.replaceAll("'", "'\\''")}'`], {
     encoding: 'utf8',
   }).stdout;
   const completedMarker = source.indexOf('WORKER_COMPLETED_MARKER=');
@@ -89,6 +96,28 @@ test('Task 8 acceptance launcher exposes its exact isolated topology and rejects
   assert.ok(waitForCompletion > completedMarker, 'host must wait for the controlled worker completion marker');
   assert.ok(terminalWorkerSample > waitForCompletion, 'terminal sample must happen while worker is retained');
   assert.ok(releaseWorker > terminalWorkerSample, 'worker may exit only after terminal sampling');
+
+  const build = source.indexOf('--filter @openscience/agent-worker... build');
+  const immediatelyAfterBuild = source.indexOf("verify_runtime_graph 'immediately-after-build'");
+  const beforeContainerStart = source.indexOf("verify_runtime_graph 'before-container-start'");
+  const parserStart = source.indexOf('PARSER_CONTAINER_ID="$(docker run');
+  const afterWorkerCompletion = source.indexOf("verify_runtime_graph 'after-worker-completion'");
+  const beforePublication = source.indexOf("verify_runtime_graph 'before-publication'");
+  const finalize = source.indexOf('"$CONTRACT_JS" finalize');
+  const strictCleanup = source.indexOf('cleanup_strict', finalize);
+  const publish = source.indexOf('"$CONTRACT_JS" publish', strictCleanup);
+  const publishVerifierIdentity = source.indexOf("verify_build_hashes 'before-atomic-publication'", strictCleanup);
+  assert.ok(immediatelyAfterBuild > build, 'complete runtime graph must be fixed immediately after build');
+  assert.ok(beforeContainerStart > immediatelyAfterBuild && beforeContainerStart < parserStart,
+    'complete runtime graph must be reverified before either container starts');
+  assert.ok(afterWorkerCompletion > waitForCompletion,
+    'complete runtime graph must be reverified after worker completion');
+  assert.ok(beforePublication > afterWorkerCompletion && beforePublication < finalize,
+    'complete runtime graph must be reverified before finalization');
+  assert.ok(publish > strictCleanup,
+    'the publish command must reverify the embedded runtime graph immediately after strict cleanup');
+  assert.ok(publishVerifierIdentity > strictCleanup && publishVerifierIdentity < publish,
+    'the independently hashed contract verifier must retain its build identity at atomic publication');
 });
 
 test('Task 8 launcher rejects untrusted roots before invoking release commands or package scripts', async () => {

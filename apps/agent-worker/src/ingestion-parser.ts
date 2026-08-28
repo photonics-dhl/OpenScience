@@ -1,5 +1,12 @@
 import { extname } from 'node:path';
 import { spawn } from 'node:child_process';
+import { createRequire } from 'node:module';
+import {
+  PARSER_JOB_RESPONSE_MAX_BYTES,
+  parseParserStageResult,
+  type ParserStageResult,
+  type StagePage,
+} from './parsers/job-protocol';
 import type { DocumentParser, ParserInput } from './parsers/types';
 
 export type ParsedIngestion =
@@ -10,7 +17,7 @@ export interface IngestionAdapters {
   pdf?: (content: Buffer) => Promise<string>;
   docx?: (content: Buffer) => Promise<string>;
   image?: (content: Buffer) => Promise<string>;
-  xlsx?: (content: Buffer) => Promise<string>;
+  xlsx?: (content: Buffer) => Promise<ParserStageResult>;
 }
 
 const PARSER_TIMEOUT_MS = 60_000;
@@ -38,77 +45,348 @@ const ISOLATED_PARSER_SOURCE = `
   process.exitCode = 1;
 });
 `;
-const ISOLATED_XLSX_SOURCE = `
+const ISOLATED_TYPESCRIPT_XLSX_SOURCE = `
 (async () => {
-const chunks = [];
-for await (const chunk of process.stdin) chunks.push(chunk);
-const content = Buffer.concat(chunks);
-const yauzl = require('yauzl');
-const MAX_ENTRIES = 256;
-const MAX_ENTRY = 8 * 1024 * 1024;
-const MAX_EXPANDED = 24 * 1024 * 1024;
-const MAX_ENTITIES = 100000;
-const entries = await new Promise((resolve, reject) => {
-  yauzl.fromBuffer(content, { lazyEntries: true, decodeStrings: true, validateEntrySizes: true }, (error, zip) => {
-    if (error || !zip) return reject(error || new Error('ZIP unavailable'));
-    if (zip.entryCount > MAX_ENTRIES) { zip.close(); return reject(new Error('entry limit')); }
-    const result = [];
-    let count = 0;
-    let expanded = 0;
-    let settled = false;
-    const fail = (reason) => { if (settled) return; settled = true; zip.close(); reject(reason); };
-    zip.on('error', fail);
-    zip.on('entry', (entry) => {
-      (async () => {
-        count += 1;
-        expanded += entry.uncompressedSize;
-        if (count > MAX_ENTRIES || expanded > MAX_EXPANDED || entry.uncompressedSize > MAX_ENTRY
-          || (entry.generalPurposeBitFlag & 1) !== 0
-          || (entry.uncompressedSize > 0 && entry.uncompressedSize / Math.max(1, entry.compressedSize) > 100)) {
-          throw new Error('ZIP limit');
-        }
-        if (!/^xl\\/(workbook|sharedStrings|worksheets\\/[^/]+)\\.xml$/.test(entry.fileName)) {
-          zip.readEntry(); return;
-        }
-        const data = await new Promise((done, failed) => zip.openReadStream(entry, (openError, stream) => {
-          if (openError || !stream) return failed(openError || new Error('stream unavailable'));
-          const parts = []; let bytes = 0;
-          stream.on('data', (part) => { bytes += part.length; if (bytes > entry.uncompressedSize || bytes > MAX_ENTRY) stream.destroy(new Error('entry limit')); else parts.push(part); });
-          stream.once('error', failed);
-          stream.once('end', () => bytes === entry.uncompressedSize ? done(Buffer.concat(parts, bytes)) : failed(new Error('entry size')));
-        }));
-        result.push(data);
-        zip.readEntry();
-      })().catch(fail);
-    });
-    zip.on('end', () => { if (!settled) { settled = true; resolve(result); } });
-    zip.readEntry();
-  });
-});
-const lines = [];
-for (const bytes of entries) {
-  const xml = new TextDecoder('utf-8', { fatal: true }).decode(bytes);
-  if (/<!DOCTYPE|<!ENTITY/i.test(xml)) throw new Error('XML entity declaration');
-  let entities = 0;
-  for (let start = xml.indexOf('&'); start !== -1; start = xml.indexOf('&', start + 1)) {
-    const end = xml.indexOf(';', start + 1);
-    if (end === -1 || end - start > 41 || ++entities > MAX_ENTITIES
-      || !/^&(amp|lt|gt|quot|apos|#\\d+|#x[\\da-f]+);$/i.test(xml.slice(start, end + 1))) throw new Error('XML entity limit');
-    start = end;
+  const { readFileSync } = require('node:fs');
+  const ts = require('typescript');
+  require.extensions['.ts'] = (module, filename) => {
+    const source = readFileSync(filename, 'utf8');
+    module._compile(ts.transpileModule(source, {
+      compilerOptions: {
+        module: ts.ModuleKind.CommonJS,
+        target: ts.ScriptTarget.ES2022,
+        esModuleInterop: true,
+      },
+      fileName: filename,
+    }).outputText, filename);
+  };
+  const modulePath = process.argv[1];
+  const maxInput = Number(process.argv[2]);
+  const maxOutput = Number(process.argv[3]);
+  const chunks = [];
+  let size = 0;
+  for await (const chunk of process.stdin) {
+    size += chunk.length;
+    if (size > maxInput) throw new Error('xlsx parser input too large');
+    chunks.push(chunk);
   }
-  for (const match of xml.matchAll(/<t(?:\\s[^>]*)?>([\\s\\S]*?)<\\/t>/g)) {
-    lines.push(match[1].replace(/&(amp|lt|gt|quot|apos);/g, (_, code) => ({ amp: '&', lt: '<', gt: '>', quot: '"', apos: "'" })[code]));
-    if (lines.length > 10000) throw new Error('cell limit');
-  }
-}
-const text = lines.join('\\n');
-if (!text.trim() || text.length > ${MAX_PARSED_TEXT_CHARS}) throw new Error('parsed text limit');
-process.stdout.write(text);
+  const parser = require(modulePath);
+  const serialized = JSON.stringify(await parser.parseStructuredXlsxResult(Buffer.concat(chunks, size)));
+  if (Buffer.byteLength(serialized) > maxOutput) throw new Error('xlsx parser output too large');
+  process.stdout.write(serialized);
 })().catch((error) => {
   process.stderr.write(error instanceof Error ? error.message : String(error));
   process.exitCode = 1;
 });
 `;
+const MAX_ZIP_ENTRIES = 256;
+const MAX_ZIP_ENTRY_BYTES = 8 * 1024 * 1024;
+const MAX_ZIP_EXPANDED_BYTES = 24 * 1024 * 1024;
+const MAX_ZIP_COMPRESSION_RATIO = 100;
+const MAX_SHARED_STRINGS = 100_000;
+const MAX_XLSX_CELLS = 9_900;
+const MAX_XLSX_BLOCKS = 10_000;
+const MAX_XML_ENTITIES = 100_000;
+const MAX_XLSX_COLUMN = 16_384;
+const MAX_XLSX_ROW = 1_048_576;
+const VIRTUAL_PAGE_WIDTH = 1000;
+const VIRTUAL_LINE_HEIGHT = 24;
+const XLSX_TRANSITION_PARSER_METADATA = Object.freeze({ name: 'v1-text-transition', version: '2.0.0' });
+
+interface ZipEntry {
+  fileName: string;
+  compressedSize: number;
+  uncompressedSize: number;
+  generalPurposeBitFlag: number;
+}
+
+interface ZipFile {
+  entryCount: number;
+  readEntry(): void;
+  close(): void;
+  on(event: 'entry', listener: (entry: ZipEntry) => void): this;
+  on(event: 'end', listener: () => void): this;
+  on(event: 'error', listener: (error: Error) => void): this;
+  openReadStream(
+    entry: ZipEntry,
+    callback: (error: Error | null, stream?: NodeJS.ReadableStream & { destroy(error?: Error): void }) => void,
+  ): void;
+}
+
+interface YauzlModule {
+  fromBuffer(
+    content: Buffer,
+    options: { lazyEntries: boolean; decodeStrings: boolean; validateEntrySizes: boolean },
+    callback: (error: Error | null, zipFile?: ZipFile) => void,
+  ): void;
+}
+
+export class XlsxParsingLimitError extends Error {}
+
+const loadRuntimeModule = createRequire(__filename);
+const yauzl = loadRuntimeModule('yauzl') as YauzlModule;
+
+function decodeUtf8(content: Buffer): string {
+  return new TextDecoder('utf-8', { fatal: true }).decode(content);
+}
+
+function readZipEntry(zipFile: ZipFile, entry: ZipEntry): Promise<Buffer> {
+  return new Promise((resolve, reject) => {
+    zipFile.openReadStream(entry, (error, stream) => {
+      if (error || !stream) {
+        reject(error ?? new Error('ZIP entry stream unavailable'));
+        return;
+      }
+      const chunks: Buffer[] = [];
+      let size = 0;
+      stream.on('data', (chunk: Buffer) => {
+        size += chunk.byteLength;
+        if (size > entry.uncompressedSize || size > MAX_ZIP_ENTRY_BYTES) {
+          stream.destroy(new XlsxParsingLimitError());
+          return;
+        }
+        chunks.push(Buffer.from(chunk));
+      });
+      stream.once('error', reject);
+      stream.once('end', () => {
+        if (size !== entry.uncompressedSize) reject(new Error('ZIP entry size mismatch'));
+        else resolve(Buffer.concat(chunks, size));
+      });
+    });
+  });
+}
+
+function isRelevantXlsxEntry(fileName: string): boolean {
+  return fileName === 'xl/workbook.xml'
+    || fileName === 'xl/_rels/workbook.xml.rels'
+    || fileName === 'xl/sharedStrings.xml'
+    || /^xl\/worksheets\/[^/]+\.xml$/u.test(fileName);
+}
+
+function readBoundedXlsxEntries(content: Buffer): Promise<Map<string, Buffer>> {
+  return new Promise((resolve, reject) => {
+    yauzl.fromBuffer(content, {
+      lazyEntries: true,
+      decodeStrings: true,
+      validateEntrySizes: true,
+    }, (openError, zipFile) => {
+      if (openError || !zipFile) {
+        reject(openError ?? new Error('ZIP unavailable'));
+        return;
+      }
+      let settled = false;
+      let entryCount = 0;
+      let expandedBytes = 0;
+      const entries = new Map<string, Buffer>();
+      const fail = (error: unknown) => {
+        if (settled) return;
+        settled = true;
+        zipFile.close();
+        reject(error);
+      };
+      if (zipFile.entryCount > MAX_ZIP_ENTRIES) {
+        fail(new XlsxParsingLimitError());
+        return;
+      }
+      zipFile.on('error', fail);
+      zipFile.on('entry', (entry) => {
+        void (async () => {
+          entryCount += 1;
+          if (entryCount > MAX_ZIP_ENTRIES || (entry.generalPurposeBitFlag & 0x1) !== 0) {
+            throw new XlsxParsingLimitError();
+          }
+          if (entry.uncompressedSize > MAX_ZIP_ENTRY_BYTES) throw new XlsxParsingLimitError();
+          expandedBytes += entry.uncompressedSize;
+          if (expandedBytes > MAX_ZIP_EXPANDED_BYTES) throw new XlsxParsingLimitError();
+          if (entry.uncompressedSize > 0
+            && entry.uncompressedSize / Math.max(1, entry.compressedSize) > MAX_ZIP_COMPRESSION_RATIO) {
+            throw new XlsxParsingLimitError();
+          }
+          if (!entry.fileName.endsWith('/') && isRelevantXlsxEntry(entry.fileName)) {
+            entries.set(entry.fileName, await readZipEntry(zipFile, entry));
+          }
+          zipFile.readEntry();
+        })().catch(fail);
+      });
+      zipFile.on('end', () => {
+        if (settled) return;
+        settled = true;
+        resolve(entries);
+      });
+      zipFile.readEntry();
+    });
+  });
+}
+
+function decodeXmlText(text: string): string {
+  return text.replace(/&(amp|lt|gt|quot|apos|#\d+|#x[\da-f]+);/giu, (entity, code: string) => {
+    if (code === 'amp') return '&';
+    if (code === 'lt') return '<';
+    if (code === 'gt') return '>';
+    if (code === 'quot') return '"';
+    if (code === 'apos') return "'";
+    const value = code[1]?.toLowerCase() === 'x'
+      ? Number.parseInt(code.slice(2), 16)
+      : Number.parseInt(code.slice(1), 10);
+    return Number.isInteger(value) && value >= 0 && value <= 0x10ffff ? String.fromCodePoint(value) : entity;
+  });
+}
+
+function boundedXml(content: Buffer): string {
+  const xml = decodeUtf8(content);
+  if (/<!DOCTYPE|<!ENTITY/iu.test(xml)) throw new XlsxParsingLimitError();
+  let entityCount = 0;
+  for (let start = xml.indexOf('&'); start !== -1; start = xml.indexOf('&', start + 1)) {
+    const end = xml.indexOf(';', start + 1);
+    if (end === -1 || end - start > 41) throw new XlsxParsingLimitError();
+    const entity = xml.slice(start, end + 1);
+    entityCount += 1;
+    if (entityCount > MAX_XML_ENTITIES
+      || !/^&(amp|lt|gt|quot|apos|#\d+|#x[\da-f]+);$/iu.test(entity)) {
+      throw new XlsxParsingLimitError();
+    }
+    start = end;
+  }
+  return xml;
+}
+
+function attribute(attributes: string, name: string): string | undefined {
+  const escaped = name.replace(/[.*+?^$()|[\]\\{}]/gu, '\\$&');
+  const match = new RegExp("(?:^|\\s)" + escaped + "=(?:\"([^\"]*)\"|'([^']*)')", 'u').exec(attributes);
+  const value = match?.[1] ?? match?.[2];
+  return value === undefined ? undefined : decodeXmlText(value);
+}
+
+function textElements(xml: string): string {
+  let result = '';
+  for (const match of xml.matchAll(/<t(?:\s[^>]*)?>([\s\S]*?)<\/t>/gu)) result += decodeXmlText(match[1]!);
+  return result;
+}
+
+function sharedStrings(xml: string | undefined): string[] {
+  if (!xml) return [];
+  const strings: string[] = [];
+  for (const match of xml.matchAll(/<si(?:\s[^>]*)?>([\s\S]*?)<\/si>/gu)) {
+    strings.push(textElements(match[1]!));
+    if (strings.length > MAX_SHARED_STRINGS) throw new XlsxParsingLimitError();
+  }
+  return strings;
+}
+
+function workbookSheets(workbookXml: string, relationshipsXml: string): Array<{ name: string; path: string }> {
+  const relationships = new Map<string, string>();
+  for (const match of relationshipsXml.matchAll(/<Relationship\b([^>]*)\/?\s*>/gu)) {
+    const id = attribute(match[1]!, 'Id');
+    const target = attribute(match[1]!, 'Target');
+    if (!id || !target || target.includes('..') || target.includes('\\')) continue;
+    const path = target.startsWith('/') ? target.slice(1) : 'xl/' + target.replace(/^\.\//u, '');
+    if (/^xl\/worksheets\/[^/]+\.xml$/u.test(path)) relationships.set(id, path);
+  }
+  const sheets: Array<{ name: string; path: string }> = [];
+  for (const match of workbookXml.matchAll(/<sheet\b([^>]*)\/?\s*>/gu)) {
+    const name = attribute(match[1]!, 'name');
+    const relationshipId = attribute(match[1]!, 'r:id');
+    const path = relationshipId ? relationships.get(relationshipId) : undefined;
+    if (!name || !path) throw new Error('malformed workbook relationship');
+    sheets.push({ name, path });
+    if (sheets.length > 10_000) throw new XlsxParsingLimitError();
+  }
+  return sheets;
+}
+
+function parseCellReference(reference: string): { row: number; column: number } {
+  const match = /^([A-Z]{1,3})([1-9]\d{0,6})$/u.exec(reference);
+  if (!match) throw new Error('malformed cell reference');
+  let column = 0;
+  for (const letter of match[1]!) column = column * 26 + letter.charCodeAt(0) - 64;
+  const row = Number.parseInt(match[2]!, 10);
+  if (!Number.isSafeInteger(column) || column < 1 || column > MAX_XLSX_COLUMN
+    || !Number.isSafeInteger(row) || row < 1 || row > MAX_XLSX_ROW) {
+    throw new Error('cell reference outside XLSX bounds');
+  }
+  return { row, column };
+}
+
+function worksheetCells(xml: string, strings: readonly string[]): Array<{ row: number; column: number; text: string }> {
+  const cells: Array<{ row: number; column: number; text: string }> = [];
+  for (const match of xml.matchAll(/<c\b([^>]*)>([\s\S]*?)<\/c>/gu)) {
+    const reference = attribute(match[1]!, 'r');
+    if (!reference) throw new Error('cell reference missing');
+    const coordinates = parseCellReference(reference);
+    const type = attribute(match[1]!, 't');
+    const body = match[2]!;
+    const rawValue = /<v(?:\s[^>]*)?>([\s\S]*?)<\/v>/u.exec(body)?.[1];
+    let text = '';
+    if (type === 'inlineStr') text = textElements(body);
+    else if (type === 's') {
+      const index = rawValue === undefined ? -1 : Number.parseInt(rawValue, 10);
+      if (!Number.isSafeInteger(index) || index < 0 || index >= strings.length) {
+        throw new Error('shared string index invalid');
+      }
+      text = strings[index]!;
+    } else if (rawValue !== undefined) {
+      text = decodeXmlText(rawValue);
+    }
+    if (text.trim()) cells.push({ ...coordinates, text });
+    if (cells.length > MAX_XLSX_CELLS) throw new XlsxParsingLimitError();
+  }
+  return cells;
+}
+
+export async function parseStructuredXlsxPages(content: Buffer): Promise<StagePage[]> {
+  const entries = await readBoundedXlsxEntries(content);
+  const workbook = entries.get('xl/workbook.xml');
+  const relationships = entries.get('xl/_rels/workbook.xml.rels');
+  if (!workbook || !relationships) throw new Error('workbook manifest missing');
+  const sharedStringsEntry = entries.get('xl/sharedStrings.xml');
+  const strings = sharedStrings(sharedStringsEntry ? boundedXml(sharedStringsEntry) : undefined);
+  const sheets = workbookSheets(boundedXml(workbook), boundedXml(relationships));
+  if (sheets.length === 0) throw new Error('workbook has no sheets');
+  let totalCells = 0;
+  return sheets.map((sheet, pageIndex): StagePage => {
+    const worksheet = entries.get(sheet.path);
+    if (!worksheet) throw new Error('worksheet missing');
+    const cells = worksheetCells(boundedXml(worksheet), strings);
+    totalCells += cells.length;
+    if (totalCells > MAX_XLSX_CELLS || totalCells + sheets.length > MAX_XLSX_BLOCKS) {
+      throw new XlsxParsingLimitError();
+    }
+    const columnCount = Math.max(1, ...cells.map((cell) => cell.column));
+    const maxRow = Math.max(0, ...cells.map((cell) => cell.row));
+    const cellWidth = VIRTUAL_PAGE_WIDTH / columnCount;
+    return {
+      page: pageIndex + 1,
+      width: VIRTUAL_PAGE_WIDTH,
+      height: Math.max(VIRTUAL_LINE_HEIGHT, (maxRow + 1) * VIRTUAL_LINE_HEIGHT),
+      blocks: [
+        {
+          kind: 'heading',
+          text: sheet.name,
+          boundingBox: { x: 0, y: 0, width: VIRTUAL_PAGE_WIDTH, height: VIRTUAL_LINE_HEIGHT },
+        },
+        ...cells.map((cell) => ({
+          kind: 'paragraph' as const,
+          text: cell.text,
+          boundingBox: {
+            x: (cell.column - 1) * cellWidth,
+            y: cell.row * VIRTUAL_LINE_HEIGHT,
+            width: cellWidth,
+            height: VIRTUAL_LINE_HEIGHT,
+          },
+        })),
+      ],
+    };
+  });
+}
+
+export async function parseStructuredXlsxResult(content: Buffer): Promise<ParserStageResult> {
+  return parseParserStageResult({
+    schemaVersion: 2,
+    parser: XLSX_TRANSITION_PARSER_METADATA,
+    pages: await parseStructuredXlsxPages(content),
+    warnings: [],
+  });
+}
 
 function parseBinaryIsolated(kind: 'pdf' | 'docx', content: Buffer): Promise<string> {
   return new Promise((resolve, reject) => {
@@ -188,36 +466,69 @@ export async function runTesseractOcr(
   });
 }
 
-function parseXlsxIsolated(content: Buffer): Promise<string> {
+function parseXlsxIsolated(content: Buffer): Promise<ParserStageResult> {
   return new Promise((resolve, reject) => {
-    const child = spawn(process.execPath, ['--max-old-space-size=256', '-e', ISOLATED_XLSX_SOURCE], {
+    const childArguments = extname(__filename) === '.ts'
+      ? [
+        '--max-old-space-size=256',
+        '-e',
+        ISOLATED_TYPESCRIPT_XLSX_SOURCE,
+        __filename,
+        String(MAX_PARSER_INPUT),
+        String(PARSER_JOB_RESPONSE_MAX_BYTES),
+      ]
+      : ['--max-old-space-size=256', __filename, '--xlsx-stage-child'];
+    const child = spawn(process.execPath, childArguments, {
       stdio: ['pipe', 'pipe', 'pipe'],
     });
     const chunks: Buffer[] = [];
     let size = 0;
     let failure = '';
     let settled = false;
-    const finish = (error?: Error, value?: string) => {
+    const finish = (error?: Error, value?: ParserStageResult) => {
       if (settled) return;
       settled = true;
       clearTimeout(timer);
       if (child.exitCode === null) child.kill('SIGKILL');
-      if (error) reject(error); else resolve(value ?? '');
+      if (error) reject(error);
+      else if (value) resolve(value);
+      else reject(new Error('xlsx parser result missing'));
     };
     const timer = setTimeout(() => finish(new Error('xlsx parser timeout')), PARSER_TIMEOUT_MS);
     child.stdout.on('data', (chunk: Buffer) => {
       size += chunk.length;
-      if (size > MAX_PARSED_TEXT_CHARS * 4) finish(new Error('xlsx parser output too large'));
+      if (size > PARSER_JOB_RESPONSE_MAX_BYTES) finish(new Error('xlsx parser output too large'));
       else chunks.push(chunk);
     });
     child.stderr.on('data', (chunk: Buffer) => { if (failure.length < 1024) failure += chunk.toString('utf8', 0, 1024 - failure.length); });
     child.once('error', (error) => finish(error));
-    child.once('close', (code) => code === 0
-      ? finish(undefined, Buffer.concat(chunks, size).toString('utf8'))
-      : finish(new Error(failure || `xlsx parser exited ${code}`)));
+    child.once('close', (code) => {
+      if (code !== 0) {
+        finish(new Error(failure || `xlsx parser exited ${code}`));
+        return;
+      }
+      try {
+        finish(undefined, parseParserStageResult(JSON.parse(Buffer.concat(chunks, size).toString('utf8'))));
+      } catch {
+        finish(new Error('xlsx parser returned an invalid V2 stage result'));
+      }
+    });
     child.stdin.once('error', (error) => finish(error));
     child.stdin.end(content);
   });
+}
+
+async function runXlsxStageChild(): Promise<void> {
+  const chunks: Buffer[] = [];
+  let size = 0;
+  for await (const chunk of process.stdin) {
+    size += chunk.length;
+    if (size > MAX_PARSER_INPUT) throw new XlsxParsingLimitError();
+    chunks.push(Buffer.from(chunk));
+  }
+  const serialized = JSON.stringify(await parseStructuredXlsxResult(Buffer.concat(chunks, size)));
+  if (Buffer.byteLength(serialized) > PARSER_JOB_RESPONSE_MAX_BYTES) throw new XlsxParsingLimitError();
+  process.stdout.write(serialized);
 }
 
 export function createDefaultIngestionAdapters(): IngestionAdapters {
@@ -289,4 +600,11 @@ export async function parseIngestionWithAdapters(
     return { status: 'needs_review', format: extension.slice(1), reason: 'empty-parsed-text' };
   }
   return { status: 'ready', text, format: extension.slice(1) };
+}
+
+if (require.main === module && process.argv[2] === '--xlsx-stage-child') {
+  void runXlsxStageChild().catch((error) => {
+    process.stderr.write(error instanceof Error ? error.message : 'xlsx parser failed');
+    process.exitCode = 1;
+  });
 }

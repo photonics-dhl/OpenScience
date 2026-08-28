@@ -27,7 +27,12 @@ print_contract() {
   \"parser\": { \"user\": \"1000:1000\", \"effectiveEnvCount\": 0, \"hostBindMounts\": 0, \"releaseMounts\": 0 },
   \"network\": \"none\",
   \"calls\": { \"structuredFake\": 10, \"externalProvider\": 0, \"forbiddenGateway\": 0 },
-  \"freshBuildIdentity\": { \"required\": true, \"runnerSha256\": true, \"contractSha256\": true },
+  \"freshBuildIdentity\": {
+    \"required\": true, \"runnerSha256\": true, \"contractSha256\": true,
+    \"runtimeGraphManifest\": true,
+    \"runtimeGraphScope\": \"agent-worker-and-workspace-dist-js\",
+    \"verifyAt\": [\"immediately-after-build\", \"before-container-start\", \"after-worker-completion\", \"before-publication\"]
+  },
   \"deadlineSeconds\": 900,
   \"resourceOwnership\": { \"preflightAbsent\": true, \"randomTokenLabel\": true, \"removeOnlyOwned\": true },
   \"independentCgroupSampling\": [\"worker\", \"parser\"],
@@ -122,6 +127,9 @@ BUILD_HASHES="$(hash_build_outputs)"
 read -r RUNNER_BUILD_SHA256 CONTRACT_BUILD_SHA256 <<<"$BUILD_HASHES"
 [[ "$RUNNER_BUILD_SHA256" =~ ^[a-f0-9]{64}$ && "$CONTRACT_BUILD_SHA256" =~ ^[a-f0-9]{64}$ ]] \
   || { echo 'fresh acceptance build identity missing' >&2; exit 66; }
+RUN_ID="${SOURCE_SHA:0:12}-$$"
+RUNTIME_GRAPH_JSON="$(/usr/bin/node "$CONTRACT_JS" runtime-manifest "$SOURCE_SHA" "$RUN_ID")" \
+  || { echo 'complete acceptance runtime graph could not be fixed' >&2; exit 66; }
 
 WORKER_IMAGE="openscience-agent-worker:$SOURCE_SHA"
 PARSER_IMAGE="openscience-document-parser:$SOURCE_SHA"
@@ -134,7 +142,6 @@ PARSER_IMAGE_ID="$(docker image inspect --format '{{.Id}}' "$PARSER_IMAGE")"
 [[ "$WORKER_IMAGE_ID" =~ ^sha256:[a-f0-9]{64}$ && "$PARSER_IMAGE_ID" =~ ^sha256:[a-f0-9]{64}$ ]] \
   || { echo 'invalid exact image ID' >&2; exit 65; }
 
-RUN_ID="${SOURCE_SHA:0:12}-$$"
 RUN_ROOT="$ACCEPTANCE_ROOT/.run-$RUN_ID"
 WORKER_OUTPUT_ROOT="$RUN_ROOT/worker-output"
 DRAFT_REPORT="$WORKER_OUTPUT_ROOT/report.draft.json"
@@ -152,6 +159,19 @@ WORKER_OWNED=false
 VOLUME_OWNED=false
 PARSER_CONTAINER_ID=''
 WORKER_CONTAINER_ID=''
+
+verify_runtime_graph() {
+  local stage="$1"
+  verify_build_hashes "$stage" || return
+  /usr/bin/node "$CONTRACT_JS" verify-runtime-manifest "$SOURCE_SHA" "$RUN_ID" \
+    || { echo "complete acceptance runtime graph changed at $stage" >&2; return 1; }
+}
+
+verify_build_hashes() {
+  local stage="$1"
+  [[ "$(hash_build_outputs)" == "$BUILD_HASHES" ]] \
+    || { echo "acceptance build outputs changed at $stage" >&2; return 1; }
+}
 
 container_owned() {
   [[ "$(docker inspect --format '{{index .Config.Labels "org.openscience.acceptance.sha"}}' "$1" 2>/dev/null)" == "$SOURCE_SHA" \
@@ -204,6 +224,11 @@ fi
 
 /usr/bin/node "$CONTRACT_JS" prepare "$SOURCE_SHA" "$RUN_ID" >/dev/null
 PREPARED=true
+set -o noclobber
+printf '%s\n' "$RUNTIME_GRAPH_JSON" >"$RUN_ROOT/runtime-graph.json"
+set +o noclobber
+verify_runtime_graph 'immediately-after-build' \
+  || { echo 'fresh acceptance runtime graph identity missing' >&2; exit 66; }
 
 docker volume create \
   --label "org.openscience.acceptance.sha=$SOURCE_SHA" \
@@ -220,6 +245,8 @@ COMMON_LIMITS=(
   --user 1000:1000 --entrypoint /usr/bin/env
 )
 
+verify_runtime_graph 'before-container-start' \
+  || { echo 'acceptance runtime graph changed before container start' >&2; exit 70; }
 PARSER_CONTAINER_ID="$(docker run -d --name "$PARSER_NAME" \
   --label "org.openscience.acceptance.sha=$SOURCE_SHA" \
   --label "org.openscience.acceptance.run=$RUN_ID" \
@@ -371,6 +398,8 @@ IFS= read -r WORKER_RUNNER_STATUS <"$WORKER_COMPLETED_MARKER" \
   || { echo 'acceptance worker completion marker is unreadable' >&2; exit 70; }
 [[ "$WORKER_RUNNER_STATUS" =~ ^[0-9]+$ ]] \
   || { echo 'acceptance worker completion status is invalid' >&2; exit 70; }
+verify_runtime_graph 'after-worker-completion' \
+  || { echo 'acceptance runtime graph changed after worker completion' >&2; exit 70; }
 set -o noclobber
 : >"$WORKER_RELEASE_MARKER"
 set +o noclobber
@@ -383,9 +412,6 @@ WORKER_WAIT_STATUS="$(docker wait "$WORKER_NAME")" \
 [[ -f "$DRAFT_REPORT" ]] || { echo 'acceptance draft report missing' >&2; exit 70; }
 [[ "$WORKER_ENV_COUNT" == 0 && "$PARSER_ENV_COUNT" == 0 ]] \
   || { echo 'acceptance container effective environment was not empty' >&2; exit 70; }
-[[ "$(hash_build_outputs)" == "$BUILD_HASHES" ]] \
-  || { echo 'acceptance build outputs changed during the run' >&2; exit 70; }
-
 set -o noclobber
 docker inspect "$WORKER_NAME" >"$RUN_ROOT/worker.inspect.json"
 docker inspect "$PARSER_NAME" >"$RUN_ROOT/parser.inspect.json"
@@ -405,6 +431,7 @@ const read = (name) => JSON.parse(readFileSync(join(root, name), 'utf8'))[0];
 const workerInspect = read('worker.inspect.json');
 const parserInspect = read('parser.inspect.json');
 const volumeInspect = read('volume.inspect.json');
+const runtimeGraph = JSON.parse(readFileSync(join(root, 'runtime-graph.json'), 'utf8'));
 const mount = (item) => ({
   type: item.Type,
   source: item.Type === 'volume' ? item.Name : item.Source,
@@ -476,7 +503,7 @@ const parser = resource(
   parserInspect, 'parser.samples.tsv', parserPid, parserCgroup, parserCgroupIdentity, parserEnv,
 );
 const report = {
-  build: { sourceSha, runnerSha256, contractSha256 },
+  build: { sourceSha, runnerSha256, contractSha256, runtimeGraph },
   worker,
   parser,
   maxima: {
@@ -488,10 +515,14 @@ const report = {
 writeFileSync(join(root, 'resources.json'), `${JSON.stringify(report, null, 2)}\n`, { flag: 'wx', mode: 0o600 });
 NODE
 
+verify_runtime_graph 'before-publication' \
+  || { echo 'acceptance runtime graph changed before publication' >&2; exit 70; }
 /usr/bin/node "$CONTRACT_JS" finalize "$SOURCE_SHA" "$RUN_ID"
 [[ -f "$UNPUBLISHED_REPORT" && ! -e "$FINAL_REPORT" ]] \
   || { echo 'unpublished acceptance report candidate missing' >&2; exit 70; }
 cleanup_strict
+verify_build_hashes 'before-atomic-publication' \
+  || { echo 'acceptance contract verifier changed before atomic publication' >&2; exit 70; }
 /usr/bin/node "$CONTRACT_JS" publish "$SOURCE_SHA" "$RUN_ID"
 [[ -f "$FINAL_REPORT" && ! -e "$UNPUBLISHED_REPORT" ]] \
   || { echo 'atomic acceptance report publication failed' >&2; exit 70; }

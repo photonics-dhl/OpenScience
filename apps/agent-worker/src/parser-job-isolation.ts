@@ -239,12 +239,26 @@ export function createTransitionParserStageProcessor(adapters: IngestionAdapters
     if (!kind) throw new SafeParserBoundaryError(SafeParserErrorCode.UNSUPPORTED_OPERATION);
     const adapter = adapters[kind];
     if (!adapter) throw new SafeParserBoundaryError(SafeParserErrorCode.PARSER_UNAVAILABLE);
-    let text: string;
+    let parsed: string | ParserStageResult;
     try {
-      text = await adapter(Buffer.from(content));
+      parsed = await adapter(Buffer.from(content));
     } catch {
       throw new SafeParserBoundaryError(SafeParserErrorCode.PARSER_FAILED);
     }
+    if (kind === 'xlsx') {
+      try {
+        const result = parseParserStageResult(parsed);
+        if (result.parser.name !== TRANSITION_PARSER_METADATA.name
+          || result.parser.version !== TRANSITION_PARSER_METADATA.version
+          || result.parser.modelHash !== undefined) {
+          throw new Error('unexpected XLSX transition parser identity');
+        }
+        return result;
+      } catch {
+        throw new SafeParserBoundaryError(SafeParserErrorCode.PARSER_FAILED);
+      }
+    }
+    const text = parsed;
     if (typeof text !== 'string' || !text.trim() || text.length > 5_000_000) {
       throw new SafeParserBoundaryError(SafeParserErrorCode.PARSER_FAILED);
     }

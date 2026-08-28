@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto';
 import { constants } from 'node:fs';
 import { chown, link, lstat, mkdir, open, readdir, realpath, rm, writeFile } from 'node:fs/promises';
-import { basename, dirname, join, resolve } from 'node:path';
+import { basename, dirname, join, relative, resolve } from 'node:path';
 
 import type { DocumentSourceMap } from '@openscience/domain';
 
@@ -16,12 +16,6 @@ export interface AcceptanceManifestCase {
   expectedLocators: AcceptanceLocator[];
 }
 export interface AcceptanceManifest { schemaVersion: 2; cases: AcceptanceManifestCase[] }
-
-function overlaps(block: { x: number; y: number; width: number; height: number }, box: readonly number[]): boolean {
-  return box.length === 4
-    && block.x < Number(box[2]) && block.x + block.width > Number(box[0])
-    && block.y < Number(box[3]) && block.y + block.height > Number(box[1]);
-}
 
 const VIRTUAL_LINE_HEIGHT = 24;
 const SCANNED_PDF_HASH = 'b327e6fece61a3e5bd52842250c51012b7672d81ff3dd4f11107b0e4aee6d2e0';
@@ -44,6 +38,34 @@ function isVirtualBlock(block: DocumentSourceMap['pages'][number]['blocks'][numb
   return block.transformations.some(({ stage, processor }) => stage === 'normalize'
     && processor.name === 'openscience-virtual-page'
     && processor.version === 'openscience-virtual-page-v1');
+}
+
+function hasPhysicalGeometryProvenance(
+  block: DocumentSourceMap['pages'][number]['blocks'][number],
+): boolean {
+  return block.transformations.some(({ stage }) => stage === 'detect_layout' || stage === 'ocr');
+}
+
+function meaningfullyMatchesPhysicalRegion(
+  block: DocumentSourceMap['pages'][number]['blocks'][number],
+  box: readonly number[],
+): boolean {
+  if (!hasPhysicalGeometryProvenance(block) || box.length !== 4) return false;
+  const [left, top, right, bottom] = box.map(Number);
+  if (![left, top, right, bottom].every(Number.isFinite) || right! <= left! || bottom! <= top!) return false;
+  const blockRight = block.boundingBox.x + block.boundingBox.width;
+  const blockBottom = block.boundingBox.y + block.boundingBox.height;
+  const intersectionWidth = Math.min(blockRight, right!) - Math.max(block.boundingBox.x, left!);
+  const intersectionHeight = Math.min(blockBottom, bottom!) - Math.max(block.boundingBox.y, top!);
+  if (intersectionWidth <= 0 || intersectionHeight <= 0) return false;
+  const centroidX = block.boundingBox.x + block.boundingBox.width / 2;
+  const centroidY = block.boundingBox.y + block.boundingBox.height / 2;
+  const centroidInside = centroidX > left! && centroidX < right! && centroidY > top! && centroidY < bottom!;
+  const contained = block.boundingBox.x >= left! && blockRight <= right!
+    && block.boundingBox.y >= top! && blockBottom <= bottom!;
+  const intersectionRatio = (intersectionWidth * intersectionHeight)
+    / (block.boundingBox.width * block.boundingBox.height);
+  return centroidInside || contained || intersectionRatio > 0.5;
 }
 
 function quoteMatches(block: DocumentSourceMap['pages'][number]['blocks'][number], quote: string): boolean {
@@ -118,8 +140,7 @@ export function reproduceAcceptanceLocator(
   if (quote && locator.kind === 'paragraph-text') {
     const paragraph = Number(locator.paragraph);
     return Number.isSafeInteger(paragraph) && paragraph > 0
-      && blocks.some((block) => sameCoordinate(block.boundingBox.y, (paragraph - 1) * VIRTUAL_LINE_HEIGHT)
-        && sameCoordinate(block.boundingBox.height, VIRTUAL_LINE_HEIGHT) && quoteMatches(block, quote));
+      && blocks.some((block) => matchesVirtualLine(block, paragraph) && quoteMatches(block, quote));
   }
   if (quote && locator.kind === 'notebook-cell') {
     const cell = Number(locator.cell);
@@ -138,7 +159,7 @@ export function reproduceAcceptanceLocator(
     if (sourceMap.contentHash === XLSX_TABLE_HASH && typeof locator.sheet === 'string' && locator.sheet) {
       return pages.some(({ blocks: pageBlocks }) => {
         const sheetMatches = pageBlocks.some((block) => matchesVirtualLine(block, 1)
-          && quoteMatches(block, String(locator.sheet)));
+          && block.text === locator.sheet);
         return sheetMatches && pageBlocks.some((block) => matchesVirtualLine(block, row + 1)
           && virtualColumn(block) === column && quoteMatches(block, quote));
       });
@@ -146,7 +167,9 @@ export function reproduceAcceptanceLocator(
     return false;
   }
   const region = Array.isArray(locator.bbox) ? locator.bbox.map(Number) : undefined;
-  const candidates = region ? blocks.filter(({ boundingBox }) => overlaps(boundingBox, region)) : blocks;
+  const candidates = region
+    ? blocks.filter((block) => meaningfullyMatchesPhysicalRegion(block, region))
+    : blocks;
   if (locator.kind === 'page-region' || locator.kind === 'image-region') return candidates.length > 0;
   if (quote) return candidates.some((block) => quoteMatches(block, quote));
   return false;
@@ -266,6 +289,153 @@ const SDF_FIELDS = Object.freeze([
 function hasExactKeys(value: Record<string, unknown>, expected: readonly string[]): boolean {
   const keys = Object.keys(value).sort();
   return keys.length === expected.length && [...expected].sort().every((key, index) => keys[index] === key);
+}
+
+export interface AcceptanceRuntimeGraphEntry {
+  path: string;
+  sha256: string;
+}
+
+export interface AcceptanceRuntimeGraphManifest {
+  schemaVersion: 1;
+  manifestSha256: string;
+  entries: AcceptanceRuntimeGraphEntry[];
+}
+
+const REQUIRED_ACCEPTANCE_RUNTIME_PATHS = Object.freeze([
+  'apps/agent-worker/dist/index.js',
+  'apps/agent-worker/dist/parser-acceptance-contract.js',
+  'apps/agent-worker/dist/parser-acceptance-runner.js',
+  'apps/agent-worker/dist/parser-job-isolation.js',
+  'apps/agent-worker/dist/parsers/text-extractor.js',
+  'packages/ai-gateway/dist/index.js',
+  'packages/domain/dist/index.js',
+] as const);
+const ACCEPTANCE_RUNTIME_PATH = /^(?:apps\/agent-worker|packages\/[A-Za-z0-9._-]+)\/dist\/(?:[A-Za-z0-9._-]+\/)*[A-Za-z0-9._-]+\.js$/u;
+
+function compareRuntimePath(left: string, right: string): number {
+  return left < right ? -1 : left > right ? 1 : 0;
+}
+
+function runtimeGraphPayload(entries: readonly AcceptanceRuntimeGraphEntry[]): string {
+  return JSON.stringify({ schemaVersion: 1, entries });
+}
+
+export function validateAcceptanceRuntimeGraphManifest(value: unknown): AcceptanceRuntimeGraphManifest {
+  if (!isRecord(value) || !hasExactKeys(value, ['schemaVersion', 'manifestSha256', 'entries'])
+    || value.schemaVersion !== 1 || !/^[a-f0-9]{64}$/u.test(String(value.manifestSha256))
+    || !Array.isArray(value.entries) || value.entries.length < REQUIRED_ACCEPTANCE_RUNTIME_PATHS.length
+    || value.entries.length > 20_000) {
+    throw new Error('complete runtime graph manifest missing or invalid');
+  }
+  let previousPath = '';
+  const seen = new Set<string>();
+  const entries = value.entries.map((entryValue): AcceptanceRuntimeGraphEntry => {
+    if (!isRecord(entryValue) || !hasExactKeys(entryValue, ['path', 'sha256'])
+      || typeof entryValue.path !== 'string'
+      || entryValue.path.length > 1_000 || !ACCEPTANCE_RUNTIME_PATH.test(entryValue.path)
+      || !/^[a-f0-9]{64}$/u.test(String(entryValue.sha256))
+      || entryValue.path <= previousPath || seen.has(entryValue.path)) {
+      throw new Error('complete runtime graph manifest entry invalid');
+    }
+    previousPath = entryValue.path;
+    seen.add(entryValue.path);
+    return { path: entryValue.path, sha256: String(entryValue.sha256) };
+  });
+  if (REQUIRED_ACCEPTANCE_RUNTIME_PATHS.some((path) => !seen.has(path))) {
+    throw new Error('complete runtime graph is missing a transitive build output');
+  }
+  const digest = createHash('sha256').update(runtimeGraphPayload(entries)).digest('hex');
+  if (digest !== value.manifestSha256) throw new Error('complete runtime graph manifest digest mismatch');
+  return { schemaVersion: 1, manifestSha256: digest, entries };
+}
+
+async function buildOutputEntry(
+  releaseRoot: string,
+  path: string,
+): Promise<AcceptanceRuntimeGraphEntry> {
+  let handle;
+  try {
+    handle = await open(path, constants.O_RDONLY | constants.O_NOFOLLOW);
+    const before = await handle.stat();
+    const canonical = await realpath(path);
+    const relativePath = relative(releaseRoot, canonical).replaceAll('\\', '/');
+    if (!before.isFile() || relativePath.startsWith('../') || relativePath === ''
+      || !ACCEPTANCE_RUNTIME_PATH.test(relativePath)) {
+      throw new Error('runtime build output escaped the exact release root');
+    }
+    const bytes = await handle.readFile();
+    const after = await handle.stat();
+    if (!after.isFile() || after.dev !== before.dev || after.ino !== before.ino || after.size !== before.size) {
+      throw new Error('runtime build output identity changed while hashing');
+    }
+    return { path: relativePath, sha256: createHash('sha256').update(bytes).digest('hex') };
+  } finally {
+    await handle?.close();
+  }
+}
+
+async function collectRuntimeBuildOutputs(
+  releaseRoot: string,
+  directory: string,
+  output: AcceptanceRuntimeGraphEntry[],
+): Promise<void> {
+  const directoryInfo = await lstat(directory);
+  if (!directoryInfo.isDirectory() || directoryInfo.isSymbolicLink() || await realpath(directory) !== resolve(directory)) {
+    throw new Error('runtime build output directory is not canonical');
+  }
+  const entries = await readdir(directory, { withFileTypes: true });
+  entries.sort((left, right) => compareRuntimePath(left.name, right.name));
+  for (const entry of entries) {
+    const path = join(directory, entry.name);
+    if (entry.isSymbolicLink()) throw new Error('runtime build output must not be a symlink');
+    if (entry.isDirectory()) {
+      await collectRuntimeBuildOutputs(releaseRoot, path, output);
+    } else if (entry.isFile() && entry.name.endsWith('.js')) {
+      output.push(await buildOutputEntry(releaseRoot, path));
+    }
+  }
+}
+
+export async function buildAcceptanceRuntimeGraphManifest(
+  releaseRootValue: string,
+): Promise<AcceptanceRuntimeGraphManifest> {
+  const releaseRoot = resolve(releaseRootValue);
+  if (await realpath(releaseRoot) !== releaseRoot) throw new Error('exact release root is not canonical');
+  const entries: AcceptanceRuntimeGraphEntry[] = [];
+  await collectRuntimeBuildOutputs(releaseRoot, join(releaseRoot, 'apps', 'agent-worker', 'dist'), entries);
+  const packagesRoot = join(releaseRoot, 'packages');
+  const packages = await readdir(packagesRoot, { withFileTypes: true });
+  packages.sort((left, right) => compareRuntimePath(left.name, right.name));
+  for (const entry of packages) {
+    if (entry.isSymbolicLink()) throw new Error('workspace package must not be a symlink');
+    if (!entry.isDirectory()) continue;
+    const dist = join(packagesRoot, entry.name, 'dist');
+    try {
+      await collectRuntimeBuildOutputs(releaseRoot, dist, entries);
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
+    }
+  }
+  entries.sort((left, right) => compareRuntimePath(left.path, right.path));
+  const manifest = {
+    schemaVersion: 1 as const,
+    manifestSha256: createHash('sha256').update(runtimeGraphPayload(entries)).digest('hex'),
+    entries,
+  };
+  return validateAcceptanceRuntimeGraphManifest(manifest);
+}
+
+export async function verifyAcceptanceRuntimeGraphManifest(
+  releaseRoot: string,
+  expectedValue: unknown,
+): Promise<void> {
+  const expected = validateAcceptanceRuntimeGraphManifest(expectedValue);
+  const current = await buildAcceptanceRuntimeGraphManifest(releaseRoot);
+  if (current.manifestSha256 !== expected.manifestSha256
+    || JSON.stringify(current.entries) !== JSON.stringify(expected.entries)) {
+    throw new Error('complete runtime graph build output identity changed');
+  }
 }
 
 export function classifyAcceptanceHandlerResult(value: unknown): 'completed' | 'needs_review' {
@@ -440,7 +610,12 @@ interface ContainerResourceEvidence {
   mounts: AcceptanceMount[];
 }
 export interface AcceptanceRuntimeEvidence {
-  build: { sourceSha: string; runnerSha256: string; contractSha256: string };
+  build: {
+    sourceSha: string;
+    runnerSha256: string;
+    contractSha256: string;
+    runtimeGraph: AcceptanceRuntimeGraphManifest;
+  };
   worker: ContainerResourceEvidence;
   parser: ContainerResourceEvidence;
   maxima: {
@@ -556,6 +731,7 @@ export function validateRuntimeEvidence(value: unknown, draftValue: unknown): Ac
     || !/^[a-f0-9]{64}$/.test(String(build.contractSha256))) {
     throw new Error('fresh build identity evidence mismatch');
   }
+  validateAcceptanceRuntimeGraphManifest(build.runtimeGraph);
   validateContainerBounds('worker', value.worker, draft.images.worker, 1_073_741_824);
   validateContainerBounds('parser', value.parser, draft.images.parser, 536_870_912);
   const worker = value.worker;
@@ -651,6 +827,7 @@ export interface PreparedAcceptancePaths {
   corpusRoot: string;
   runRoot: string;
   workerOutputRoot: string;
+  runtimeGraphPath: string;
   draftReportPath: string;
   unpublishedReportPath: string;
   finalReportPath: string;
@@ -720,6 +897,7 @@ export async function prepareAcceptancePaths(options: {
   }
   return {
     releaseRoot, acceptanceRoot, corpusRoot, runRoot, workerOutputRoot,
+    runtimeGraphPath: join(runRoot, 'runtime-graph.json'),
     draftReportPath: join(workerOutputRoot, 'report.draft.json'),
     unpublishedReportPath: join(acceptanceRoot, `.report-unpublished-${runId}.json`),
     finalReportPath,
@@ -775,6 +953,21 @@ export async function publishAcceptanceCandidate(
   await readBoundedAcceptanceJson(candidatePath);
   await link(candidatePath, finalPath);
   await rm(candidatePath);
+}
+
+export async function verifyAndPublishAcceptanceCandidate(
+  releaseRoot: string,
+  candidatePath: string,
+  finalPath: string,
+  requiredUid = 0,
+): Promise<void> {
+  const report = await readBoundedAcceptanceJson(candidatePath);
+  if (!isRecord(report) || !isRecord(report.resources)) {
+    throw new Error('unpublished acceptance report runtime evidence missing');
+  }
+  const resources = validateRuntimeEvidence(report.resources, report);
+  await verifyAcceptanceRuntimeGraphManifest(releaseRoot, resources.build.runtimeGraph);
+  await publishAcceptanceCandidate(candidatePath, finalPath, requiredUid);
 }
 
 export async function writeAtomicAcceptanceReport(
@@ -882,6 +1075,7 @@ export function deriveFixedAcceptancePaths(sourceSha: string, runId: string): Pr
     corpusRoot: `${acceptanceRoot}/corpus`,
     runRoot,
     workerOutputRoot,
+    runtimeGraphPath: `${runRoot}/runtime-graph.json`,
     draftReportPath: `${workerOutputRoot}/report.draft.json`,
     unpublishedReportPath: `${acceptanceRoot}/.report-unpublished-${runId}.json`,
     finalReportPath: `${acceptanceRoot}/report.json`,
@@ -891,7 +1085,7 @@ export function deriveFixedAcceptancePaths(sourceSha: string, runId: string): Pr
 async function contractCli(): Promise<void> {
   const [command, sourceSha, runId, ...extra] = process.argv.slice(2);
   if (extra.length !== 0 || !command || !sourceSha || !runId) {
-    throw new Error('usage: parser-acceptance-contract <prepare|finalize|cleanup-run|cleanup|publish> <source-sha> <run-id>');
+    throw new Error('usage: parser-acceptance-contract <prepare|runtime-manifest|verify-runtime-manifest|finalize|cleanup-run|cleanup|publish> <source-sha> <run-id>');
   }
   if (command === 'prepare') {
     const paths = await prepareAcceptancePaths({
@@ -901,6 +1095,15 @@ async function contractCli(): Promise<void> {
     return;
   }
   const paths = deriveFixedAcceptancePaths(sourceSha, runId);
+  if (command === 'runtime-manifest') {
+    process.stdout.write(`${JSON.stringify(await buildAcceptanceRuntimeGraphManifest(paths.releaseRoot))}\n`);
+    return;
+  }
+  if (command === 'verify-runtime-manifest') {
+    const manifest = await readBoundedAcceptanceJson(paths.runtimeGraphPath);
+    await verifyAcceptanceRuntimeGraphManifest(paths.releaseRoot, manifest);
+    return;
+  }
   if (command === 'cleanup') {
     await cleanupAcceptanceRun(paths.runRoot, paths.acceptanceRoot);
     return;
@@ -910,6 +1113,8 @@ async function contractCli(): Promise<void> {
     return;
   }
   if (command === 'finalize') {
+    const runtimeGraph = await readBoundedAcceptanceJson(paths.runtimeGraphPath);
+    await verifyAcceptanceRuntimeGraphManifest(paths.releaseRoot, runtimeGraph);
     const draft = await readBoundedAcceptanceJson(paths.draftReportPath);
     const resources = await readBoundedAcceptanceJson(join(paths.runRoot, 'resources.json'));
     await writeUnpublishedAcceptanceCandidate(
@@ -919,7 +1124,11 @@ async function contractCli(): Promise<void> {
     return;
   }
   if (command === 'publish') {
-    await publishAcceptanceCandidate(paths.unpublishedReportPath, paths.finalReportPath);
+    await verifyAndPublishAcceptanceCandidate(
+      paths.releaseRoot,
+      paths.unpublishedReportPath,
+      paths.finalReportPath,
+    );
     return;
   }
   throw new Error('unknown parser acceptance contract command');

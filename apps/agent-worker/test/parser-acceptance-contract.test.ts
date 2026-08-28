@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { access, lstat, mkdir, mkdtemp, readFile, readdir, stat, symlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
@@ -41,8 +42,14 @@ function sourceBlock(options: {
   width?: number;
   height?: number;
   tesseract?: boolean;
+  virtual?: boolean;
+  layout?: boolean;
 }) {
-  const blockParser = options.tesseract ? { name: 'tesseract', version: '5.3.0' } : parser;
+  const blockParser = options.tesseract
+    ? { name: 'tesseract', version: '5.3.0' }
+    : options.layout
+      ? { name: 'normalized-layout-fixture', version: '2.0.0' }
+      : parser;
   return {
     id: options.id,
     kind: 'paragraph' as const,
@@ -55,7 +62,11 @@ function sourceBlock(options: {
     parser: blockParser,
     transformations: options.tesseract
       ? [{ stage: 'ocr' as const, processor: blockParser }]
-      : [
+      : options.layout
+        ? [{ stage: 'detect_layout' as const, processor: blockParser }]
+        : options.virtual === false
+          ? [{ stage: 'extract_text' as const, processor: parser }]
+          : [
         { stage: 'extract_text' as const, processor: parser },
         { stage: 'normalize' as const, processor: virtualParser },
       ],
@@ -154,8 +165,28 @@ function validResources(draft = validDraft()) {
       { elapsedMs: 400, cpuUsageMicros: 63_456, memoryPeakBytes: 134_217_728, terminal: true },
     ],
   };
+  const runtimeEntries = [
+    { path: 'apps/agent-worker/dist/index.js', sha256: '3'.repeat(64) },
+    { path: 'apps/agent-worker/dist/parser-acceptance-contract.js', sha256: '4'.repeat(64) },
+    { path: 'apps/agent-worker/dist/parser-acceptance-runner.js', sha256: '5'.repeat(64) },
+    { path: 'apps/agent-worker/dist/parser-job-isolation.js', sha256: '6'.repeat(64) },
+    { path: 'apps/agent-worker/dist/parsers/text-extractor.js', sha256: '7'.repeat(64) },
+    { path: 'packages/ai-gateway/dist/index.js', sha256: '8'.repeat(64) },
+    { path: 'packages/domain/dist/index.js', sha256: '9'.repeat(64) },
+  ];
+  const runtimePayload = JSON.stringify({ schemaVersion: 1, entries: runtimeEntries });
+  const runtimeGraph = {
+    schemaVersion: 1,
+    manifestSha256: createHash('sha256').update(runtimePayload).digest('hex'),
+    entries: runtimeEntries,
+  };
   return {
-    build: { sourceSha: draft.sourceSha, runnerSha256: '1'.repeat(64), contractSha256: '2'.repeat(64) },
+    build: {
+      sourceSha: draft.sourceSha,
+      runnerSha256: '1'.repeat(64),
+      contractSha256: '2'.repeat(64),
+      runtimeGraph,
+    },
     worker: {
       ...common, containerId: 'd'.repeat(64), imageId: draft.images.worker,
       running: false, exitCode: 0,
@@ -226,6 +257,31 @@ describe('Task 8 acceptance contract', () => {
     expect(reproduceAcceptanceLocator(sourceMap(docxHash, [sourceBlock({
       id: 'paragraph-2', text: 'OpenScience evidence document', y: 24,
     })]), paragraph)).toBe(false);
+    expect(reproduceAcceptanceLocator(sourceMap(docxHash, [sourceBlock({
+      id: 'physical-paragraph-1', text: 'OpenScience evidence document', y: 0, virtual: false,
+    })]), paragraph)).toBe(false);
+  });
+
+  it('requires geometry-capable provenance and meaningful physical-region intersection', () => {
+    const hash = '84c2c268eab3dd978e4514c9042ed7f3e580e9a61d9e4f978c1697080aa0f913';
+    const locator = {
+      kind: 'page-region-text', page: 1, bbox: [0, 0, 306, 792], quote: 'Left claim',
+    };
+    expect(reproduceAcceptanceLocator(sourceMap(hash, [sourceBlock({
+      id: 'layout-left', text: 'Left claim', x: 20, y: 100, width: 200, height: 40, layout: true,
+    })]), locator)).toBe(true);
+    expect(reproduceAcceptanceLocator(sourceMap(hash, [sourceBlock({
+      id: 'layout-wrong-column', text: 'Left claim', x: 250, y: 100, width: 200, height: 40, layout: true,
+    })]), locator)).toBe(false);
+    expect(reproduceAcceptanceLocator(sourceMap(hash, [sourceBlock({
+      id: 'layout-full-width', text: 'Left claim', x: 0, y: 100, width: 612, height: 40, layout: true,
+    })]), locator)).toBe(false);
+    expect(reproduceAcceptanceLocator(sourceMap(hash, [sourceBlock({
+      id: 'transition-full-width', text: 'Left claim', x: 0, y: 100, width: 1000, height: 40, virtual: false,
+    })]), locator)).toBe(false);
+    expect(reproduceAcceptanceLocator(sourceMap(hash, [sourceBlock({
+      id: 'unproven-physical-left', text: 'Left claim', x: 20, y: 100, width: 200, height: 40, virtual: false,
+    })]), locator)).toBe(false);
   });
 
   it('reproduces ordered page quotes within one block without crossing block boundaries', () => {
@@ -278,6 +334,10 @@ describe('Task 8 acceptance contract', () => {
       sourceBlock({ id: 'xlsx-r2-c2', text: '42', x: 500, y: 48, width: 500 }),
     ]), xlsx)).toBe(false);
     expect(reproduceAcceptanceLocator(sourceMap(xlsxHash, [
+      sourceBlock({ id: 'containing-sheet', text: 'Evidence Archive', y: 0 }),
+      sourceBlock({ id: 'xlsx-r2-c2', text: '42', x: 500, y: 48, width: 500 }),
+    ]), xlsx)).toBe(false);
+    expect(reproduceAcceptanceLocator(sourceMap(xlsxHash, [
       sourceBlock({ id: 'sheet-name', text: 'Evidence', y: 0 }),
       sourceBlock({ id: 'xlsx-r3-c1', text: '42', x: 0, y: 72, width: 500 }),
     ]), xlsx)).toBe(false);
@@ -298,6 +358,49 @@ describe('Task 8 acceptance contract', () => {
     })]);
     expect(reproduceAcceptanceLocator(correct, quote)).toBe(true);
     expect(reproduceAcceptanceLocator(correct, region)).toBe(true);
+  });
+
+  it('builds a deterministic complete runtime manifest and rejects transitive output tampering', async () => {
+    const contract = await import('../src/parser-acceptance-contract');
+    expect(contract).toHaveProperty('buildAcceptanceRuntimeGraphManifest');
+    expect(contract).toHaveProperty('verifyAcceptanceRuntimeGraphManifest');
+    const buildManifest = Reflect.get(contract, 'buildAcceptanceRuntimeGraphManifest') as (
+      releaseRoot: string,
+    ) => Promise<{ entries: Array<{ path: string; sha256: string }> }>;
+    const verifyManifest = Reflect.get(contract, 'verifyAcceptanceRuntimeGraphManifest') as (
+      releaseRoot: string,
+      manifest: unknown,
+    ) => Promise<void>;
+    const releaseRoot = await mkdtemp(join(tmpdir(), 'task8-runtime-graph-'));
+    const outputs = [
+      'apps/agent-worker/dist/index.js',
+      'apps/agent-worker/dist/parser-acceptance-contract.js',
+      'apps/agent-worker/dist/parser-acceptance-runner.js',
+      'apps/agent-worker/dist/parser-job-isolation.js',
+      'apps/agent-worker/dist/parsers/text-extractor.js',
+      'packages/ai-gateway/dist/index.js',
+      'packages/domain/dist/index.js',
+    ];
+    for (const [index, relative] of outputs.entries()) {
+      const path = join(releaseRoot, ...relative.split('/'));
+      await mkdir(join(path, '..'), { recursive: true });
+      await writeFile(path, `module.exports = ${index};\n`);
+    }
+
+    const manifest = await buildManifest(releaseRoot);
+    expect(manifest.entries.map(({ path }) => path)).toEqual(outputs);
+    await expect(verifyManifest(releaseRoot, manifest)).resolves.toBeUndefined();
+    for (const relative of [
+      'apps/agent-worker/dist/index.js',
+      'apps/agent-worker/dist/parser-job-isolation.js',
+      'packages/domain/dist/index.js',
+    ]) {
+      const path = join(releaseRoot, ...relative.split('/'));
+      const original = await readFile(path, 'utf8');
+      await writeFile(path, `${original}// tampered\n`);
+      await expect(verifyManifest(releaseRoot, manifest)).rejects.toThrow(/runtime graph|build output|identity/i);
+      await writeFile(path, original);
+    }
   });
 
   it('binds locator reproduction to the exact source identity', () => {
@@ -378,6 +481,17 @@ describe('Task 8 acceptance contract', () => {
   it.each([
     ['missing parser resource', (resources: ReturnType<typeof validResources>) => { delete (resources as Partial<typeof resources>).parser; }, /parser resource/i],
     ['wrong fresh build identity', (resources: ReturnType<typeof validResources>) => { resources.build.sourceSha = 'f'.repeat(40); }, /build identity/i],
+    ['missing complete runtime graph', (resources: ReturnType<typeof validResources>) => {
+      delete (resources.build as Partial<typeof resources.build>).runtimeGraph;
+    }, /runtime graph/i],
+    ['missing transitive runtime output', (resources: ReturnType<typeof validResources>) => {
+      resources.build.runtimeGraph.entries = resources.build.runtimeGraph.entries.filter(({ path }) => (
+        path !== 'apps/agent-worker/dist/index.js'
+      ));
+    }, /runtime graph/i],
+    ['wrong runtime graph digest', (resources: ReturnType<typeof validResources>) => {
+      resources.build.runtimeGraph.manifestSha256 = 'f'.repeat(64);
+    }, /runtime graph/i],
     ['invalid worker image', (resources: ReturnType<typeof validResources>) => { resources.worker.imageId = `sha256:${'f'.repeat(64)}`; }, /image identity/i],
     ['parser release bind', (resources: ReturnType<typeof validResources>) => { resources.parser.mounts.push(resources.worker.mounts[1]!); }, /parser mount/i],
     ['worker mounts root evidence directory writable', (resources: ReturnType<typeof validResources>) => {
@@ -509,6 +623,55 @@ describe('Task 8 acceptance contract', () => {
     await publishCandidate(candidate, final, testUid);
     await expect(access(candidate)).rejects.toThrow();
     expect(JSON.parse(await readFile(final, 'utf8'))).toMatchObject({ schemaVersion: 2 });
+  });
+
+  it('reverifies the embedded runtime graph at the atomic publication boundary', async () => {
+    const contract = await import('../src/parser-acceptance-contract');
+    expect(contract).toHaveProperty('verifyAndPublishAcceptanceCandidate');
+    const buildManifest = Reflect.get(contract, 'buildAcceptanceRuntimeGraphManifest') as (
+      releaseRoot: string,
+    ) => Promise<unknown>;
+    const verifyAndPublish = Reflect.get(contract, 'verifyAndPublishAcceptanceCandidate') as (
+      releaseRoot: string, candidatePath: string, finalPath: string, requiredUid?: number,
+    ) => Promise<void>;
+    const testUid = process.getuid?.() ?? 0;
+    const releaseRoot = await mkdtemp(join(tmpdir(), 'task8-publication-runtime-'));
+    const outputs = [
+      'apps/agent-worker/dist/index.js',
+      'apps/agent-worker/dist/parser-acceptance-contract.js',
+      'apps/agent-worker/dist/parser-acceptance-runner.js',
+      'apps/agent-worker/dist/parser-job-isolation.js',
+      'apps/agent-worker/dist/parsers/text-extractor.js',
+      'packages/ai-gateway/dist/index.js',
+      'packages/domain/dist/index.js',
+    ];
+    for (const [index, relative] of outputs.entries()) {
+      const path = join(releaseRoot, ...relative.split('/'));
+      await mkdir(join(path, '..'), { recursive: true });
+      await writeFile(path, `module.exports = ${index};\n`);
+    }
+    const runtimeGraph = await buildManifest(releaseRoot);
+    const acceptanceRoot = await mkdtemp(join(tmpdir(), 'task8-publication-boundary-'));
+    const runId = 'aaaaaaaaaaaa-1234';
+    const candidate = join(acceptanceRoot, `.report-unpublished-${runId}.json`);
+    const final = join(acceptanceRoot, 'report.json');
+    const resources = validResources();
+    resources.build.runtimeGraph = runtimeGraph as typeof resources.build.runtimeGraph;
+    const report = buildFinalAcceptanceReport(validDraft(), resources);
+    await (Reflect.get(contract, 'writeUnpublishedAcceptanceCandidate') as (
+      path: string, value: unknown, requiredUid?: number,
+    ) => Promise<void>)(candidate, report, testUid);
+
+    await writeFile(join(releaseRoot, 'packages/domain/dist/index.js'), 'module.exports = "tampered";\n');
+    await expect(verifyAndPublish(releaseRoot, candidate, final, testUid))
+      .rejects.toThrow(/runtime graph|build output|identity/i);
+    await expect(access(candidate)).resolves.toBeUndefined();
+    await expect(access(final)).rejects.toThrow();
+
+    await writeFile(join(releaseRoot, 'packages/domain/dist/index.js'), 'module.exports = 6;\n');
+    await expect(verifyAndPublish(releaseRoot, candidate, final, testUid)).resolves.toBeUndefined();
+    await expect(access(candidate)).rejects.toThrow();
+    await expect(access(final)).resolves.toBeUndefined();
   });
 
   it('aborts an unpublished candidate after injected cleanup failure and permits a clean retry', async () => {
