@@ -101,6 +101,16 @@ describe('parseTesseractTsv', () => {
       { text: '证据', confidence: 0.92 },
     ]);
   });
+
+  it('accepts a mathematically edge-aligned box on a fractional PDF page', () => {
+    const blocks = parseTesseractTsv(
+      tsv('5\t1\t1\t1\t1\t1\t1\t0\t12\t13\t90\tedge'),
+      raster(1, 13, 13),
+      { ...page(1), width: 612.3, height: 792.1 },
+    );
+
+    expect(blocks[0]?.boundingBox.x + blocks[0]!.boundingBox.width).toBeCloseTo(612.3, 10);
+  });
 });
 
 describe('ocrSelectedPages', () => {
@@ -144,6 +154,34 @@ describe('ocrSelectedPages', () => {
     large.contentHash = createHash('sha256').update(large.bytes).digest('hex');
     const result = await ocrSelectedPages(input(), [page(1)], adapter(async () => '', async () => [large]));
     expect(result.warnings).toEqual([SafeParserWarningCode.PARTIAL_RESULT]);
+
+    const aggregate = [raster(1), raster(2), raster(3)].map((value) => {
+      value.bytes = Buffer.concat([value.bytes, Buffer.alloc(3 * 1024 * 1024)]);
+      value.contentHash = createHash('sha256').update(value.bytes).digest('hex');
+      return value;
+    });
+    const aggregateResult = await ocrSelectedPages(
+      input(),
+      [page(1), page(2), page(3)],
+      adapter(async () => 'must-not-run', async () => aggregate),
+    );
+    expect(aggregateResult.pages.every(({ blocks }) => blocks.length === 0)).toBe(true);
+    expect(aggregateResult.warnings).toEqual([SafeParserWarningCode.PARTIAL_RESULT]);
+  });
+
+  it('serializes page OCR so one CPU is not split across four Tesseract jobs', async () => {
+    let active = 0;
+    let maximum = 0;
+    const result = await ocrSelectedPages(input(), [page(1), page(2), page(3), page(4)], adapter(async () => {
+      active += 1;
+      maximum = Math.max(maximum, active);
+      await new Promise((resolve) => setTimeout(resolve, 2));
+      active -= 1;
+      return tsv('5\t1\t1\t1\t1\t1\t1\t1\t1\t1\t90\tword');
+    }));
+
+    expect(maximum).toBe(1);
+    expect(result.pages.every(({ blocks }) => blocks.length === 1)).toBe(true);
   });
 
   it('times out one page without discarding a successful page', async () => {
@@ -186,5 +224,23 @@ describe('ocrSelectedPages', () => {
 
     expect(result.pages[0]?.blocks).toEqual([]);
     expect(result.warnings).toEqual([SafeParserWarningCode.PARTIAL_RESULT]);
+  });
+
+  it('applies block budgets across the whole stage and retains earlier pages deterministically', async () => {
+    const output = tsv(...Array.from({ length: 2_501 }, (_, index) => (
+      `5\t1\t1\t1\t1\t${index + 1}\t1\t1\t1\t1\t90\tA`
+    )));
+    const result = await ocrSelectedPages(
+      input(),
+      [page(1), page(2), page(3), page(4)],
+      adapter(async () => output),
+    );
+
+    expect(result.pages.slice(0, 3).map(({ blocks }) => blocks.length)).toEqual([2_501, 2_501, 2_501]);
+    expect(result.pages[3]?.blocks).toEqual([]);
+    expect(result.warnings).toEqual([
+      SafeParserWarningCode.OCR_APPLIED,
+      SafeParserWarningCode.PARTIAL_RESULT,
+    ]);
   });
 });

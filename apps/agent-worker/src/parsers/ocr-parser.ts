@@ -1,7 +1,6 @@
 import { spawn } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import type { DocumentParserMetadata } from '@openscience/domain';
-import { PDFParse } from 'pdf-parse';
 import {
   parseParserStageResult,
   SafeParserWarningCode,
@@ -17,12 +16,15 @@ export const LOCAL_OCR_LIMITS = Object.freeze({
   maxTotalBytes: 8 * 1024 * 1024,
   maxDimension: 8192,
   maxPixels: 40_000_000,
+  maxTotalPixels: 40_000_000,
   maxTsvBytes: 4 * 1024 * 1024,
+  maxRenderOutputBytes: 12 * 1024 * 1024,
   maxBlocks: 10_000,
   maxBlockTextCharacters: 50_000,
   maxTotalTextCharacters: 5_000_000,
   renderWidth: 2048,
   timeoutMs: 30_000,
+  maxStageTimeoutMs: 120_000,
 });
 
 export interface OcrRasterPage {
@@ -52,6 +54,37 @@ const TSV_COLUMNS = [
   'left', 'top', 'width', 'height', 'conf', 'text',
 ] as const;
 const LANGUAGE_LIST = /^[A-Za-z0-9_+.-]{1,64}$/;
+const ISOLATED_RENDER_SOURCE = `
+const chunks = [];
+for await (const chunk of process.stdin) chunks.push(chunk);
+const content = Buffer.concat(chunks);
+const pageNumbers = JSON.parse(process.argv[1]);
+const { PDFParse } = await import('pdf-parse');
+const parser = new PDFParse({ data: new Uint8Array(content) });
+try {
+  const result = await parser.getScreenshot({
+    partial: pageNumbers,
+    desiredWidth: ${LOCAL_OCR_LIMITS.renderWidth},
+    imageBuffer: true,
+    imageDataUrl: false,
+  });
+  let totalBytes = 0;
+  const pages = result.pages.map((page) => {
+    totalBytes += page.data.byteLength;
+    if (page.data.byteLength > ${LOCAL_OCR_LIMITS.maxPageBytes}
+      || totalBytes > ${LOCAL_OCR_LIMITS.maxTotalBytes}) throw new Error('render limit exceeded');
+    return {
+      pageNumber: page.pageNumber,
+      width: page.width,
+      height: page.height,
+      bytes: Buffer.from(page.data).toString('base64'),
+    };
+  });
+  process.stdout.write(JSON.stringify(pages));
+} finally {
+  await parser.destroy();
+}
+`;
 
 function sha256(bytes: Uint8Array): string {
   return createHash('sha256').update(bytes).digest('hex');
@@ -141,9 +174,12 @@ export function parseTesseractTsv(tsv: string, raster: OcrRasterPage, page: Stag
     const y = page.height - (top + height) / raster.height * page.height;
     const normalizedWidth = width / raster.width * page.width;
     const normalizedHeight = height / raster.height * page.height;
+    const xTolerance = Number.EPSILON * Math.max(Math.abs(x), normalizedWidth, page.width) * 16;
+    const yTolerance = Number.EPSILON * Math.max(Math.abs(y), normalizedHeight, page.height) * 16;
     if (![x, y, normalizedWidth, normalizedHeight].every(Number.isFinite)
       || x < 0 || y < 0 || normalizedWidth <= 0 || normalizedHeight <= 0
-      || x + normalizedWidth > page.width || y + normalizedHeight > page.height) {
+      || x + normalizedWidth - page.width > xTolerance
+      || y + normalizedHeight - page.height > yTolerance) {
       throw new Error('invalid OCR bounding box');
     }
     blocks.push({
@@ -202,6 +238,10 @@ export async function ocrSelectedPages(
   if (!Number.isSafeInteger(timeoutMs) || timeoutMs < 1 || timeoutMs > LOCAL_OCR_LIMITS.timeoutMs) {
     throw new Error('invalid local OCR timeout');
   }
+  const stageDeadline = Date.now() + Math.min(
+    LOCAL_OCR_LIMITS.maxStageTimeoutMs,
+    timeoutMs * (pages.length + 1),
+  );
 
   const outputPages = emptyOutputPages(pages);
   let rendered: OcrRasterPage[];
@@ -219,24 +259,46 @@ export async function ocrSelectedPages(
   const totalBytes = rendered.reduce((total, value) => (
     total + (value?.bytes instanceof Uint8Array ? value.bytes.byteLength : 0)
   ), 0);
+  const totalPixels = rendered.reduce((total, value) => (
+    total + (Number.isSafeInteger(value?.width) && Number.isSafeInteger(value?.height)
+      ? value.width * value.height
+      : LOCAL_OCR_LIMITS.maxTotalPixels + 1)
+  ), 0);
   const renderedByPage = new Map(rendered.map((value) => [value.pageNumber, value]));
   const invalidSelection = rendered.length !== pages.length
     || renderedByPage.size !== rendered.length
     || rendered.some(({ pageNumber }) => !pageNumbers.includes(pageNumber));
   let succeeded = 0;
-  let failed = invalidSelection || totalBytes > LOCAL_OCR_LIMITS.maxTotalBytes ? pages.length : 0;
+  let failed = invalidSelection
+    || totalBytes > LOCAL_OCR_LIMITS.maxTotalBytes
+    || totalPixels > LOCAL_OCR_LIMITS.maxTotalPixels
+    ? pages.length
+    : 0;
 
   if (failed === 0) {
-    await Promise.all(pages.map(async (page, index) => {
+    let stageBlocks = 0;
+    let stageTextCharacters = 0;
+    for (let index = 0; index < pages.length; index += 1) {
+      const page = pages[index]!;
       try {
         const raster = validateRaster(renderedByPage.get(page.page) as OcrRasterPage, page.page);
-        const recognized = await withTimeout(adapter.recognizePage(raster), timeoutMs);
-        outputPages[index] = { ...outputPages[index]!, blocks: parseTesseractTsv(recognized, raster, page) };
+        const remainingMs = stageDeadline - Date.now();
+        if (remainingMs < 1) throw new Error('local OCR stage timeout');
+        const recognized = await withTimeout(adapter.recognizePage(raster), Math.min(timeoutMs, remainingMs));
+        const blocks = parseTesseractTsv(recognized, raster, page);
+        const textCharacters = blocks.reduce((total, block) => total + (block.text?.length ?? 0), 0);
+        if (stageBlocks + blocks.length > LOCAL_OCR_LIMITS.maxBlocks
+          || stageTextCharacters + textCharacters > LOCAL_OCR_LIMITS.maxTotalTextCharacters) {
+          throw new Error('OCR stage exceeds aggregate limits');
+        }
+        outputPages[index] = { ...outputPages[index]!, blocks };
+        stageBlocks += blocks.length;
+        stageTextCharacters += textCharacters;
         succeeded += 1;
       } catch {
         failed += 1;
       }
-    }));
+    }
   }
 
   const warnings: SafeParserWarningCode[] = [];
@@ -250,72 +312,92 @@ export async function ocrSelectedPages(
   });
 }
 
-async function renderPdfPages(input: ParserInput, pageNumbers: readonly number[]): Promise<OcrRasterPage[]> {
-  const parser = new PDFParse({ data: Uint8Array.from(input.content) });
-  try {
-    const result = await parser.getScreenshot({
-      partial: [...pageNumbers],
-      desiredWidth: LOCAL_OCR_LIMITS.renderWidth,
-      imageBuffer: true,
-      imageDataUrl: false,
-    });
-    return result.pages.map((page) => {
-      const dimensions = pngDimensions(page.data);
-      if (Math.abs(page.width - dimensions.width) > 1 || Math.abs(page.height - dimensions.height) > 1) {
-        throw new Error('invalid OCR raster');
-      }
-      return {
-        pageNumber: page.pageNumber,
-        mediaType: 'image/png' as const,
-        bytes: Uint8Array.from(page.data),
-        width: dimensions.width,
-        height: dimensions.height,
-        contentHash: sha256(page.data),
-      };
-    });
-  } finally {
-    await parser.destroy();
-  }
-}
-
-function recognizeWithTesseract(page: OcrRasterPage, timeoutMs: number): Promise<string> {
+function runBoundedProcess(
+  command: string,
+  args: readonly string[],
+  input: Uint8Array,
+  timeoutMs: number,
+  maxOutputBytes: number,
+): Promise<Buffer> {
   return new Promise((resolve, reject) => {
-    const languageList = process.env.TESSERACT_LANGS ?? 'eng+chi_sim';
-    if (!LANGUAGE_LIST.test(languageList)) {
-      reject(new Error('invalid OCR language configuration'));
-      return;
-    }
-    const child = spawn(process.env.TESSERACT_BIN ?? 'tesseract', [
-      'stdin', 'stdout', '-l', languageList, 'tsv',
-    ], { stdio: ['pipe', 'pipe', 'ignore'], windowsHide: true });
+    const child = spawn(command, [...args], { stdio: ['pipe', 'pipe', 'ignore'], windowsHide: true });
     const chunks: Buffer[] = [];
     let size = 0;
-    let settled = false;
-    const finish = (error?: Error, value?: string) => {
-      if (settled) return;
-      settled = true;
-      clearTimeout(timer);
-      if (child.exitCode === null) child.kill('SIGKILL');
-      if (error) reject(error);
-      else resolve(value ?? '');
+    let failure: Error | undefined;
+    let closed = false;
+    const terminate = (error: Error) => {
+      if (!failure) failure = error;
+      if (!closed && child.exitCode === null) child.kill('SIGKILL');
     };
-    const timer = setTimeout(() => finish(new Error('local OCR timeout')), timeoutMs);
+    const timer = setTimeout(() => terminate(new Error('local parser timeout')), timeoutMs);
     child.stdout.on('data', (chunk: Buffer) => {
       size += chunk.byteLength;
-      if (size > LOCAL_OCR_LIMITS.maxTsvBytes) {
-        finish(new Error('OCR TSV exceeds limit'));
+      if (size > maxOutputBytes) {
+        terminate(new Error('local parser output exceeds limit'));
         return;
       }
       chunks.push(chunk);
     });
-    child.once('error', () => finish(new Error('local OCR unavailable')));
+    child.once('error', () => terminate(new Error('local parser unavailable')));
     child.once('close', (code) => {
-      if (code === 0) finish(undefined, Buffer.concat(chunks).toString('utf8'));
-      else finish(new Error('local OCR failed'));
+      closed = true;
+      clearTimeout(timer);
+      if (failure || code !== 0) reject(failure ?? new Error('local parser failed'));
+      else resolve(Buffer.concat(chunks, size));
     });
-    child.stdin.once('error', () => finish(new Error('local OCR failed')));
-    child.stdin.end(page.bytes);
+    child.stdin.once('error', () => terminate(new Error('local parser input failed')));
+    child.stdin.end(input);
   });
+}
+
+async function renderPdfPages(input: ParserInput, pageNumbers: readonly number[]): Promise<OcrRasterPage[]> {
+  const output = await runBoundedProcess(
+    process.execPath,
+    ['--max-old-space-size=256', '--input-type=module', '-e', ISOLATED_RENDER_SOURCE, JSON.stringify(pageNumbers)],
+    input.content,
+    LOCAL_OCR_LIMITS.timeoutMs,
+    LOCAL_OCR_LIMITS.maxRenderOutputBytes,
+  );
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(output.toString('utf8'));
+  } catch {
+    throw new Error('invalid OCR render response');
+  }
+  if (!Array.isArray(parsed) || parsed.length !== pageNumbers.length) throw new Error('invalid OCR render response');
+  return parsed.map((value): OcrRasterPage => {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error('invalid OCR render response');
+    const item = value as Record<string, unknown>;
+    if (Object.keys(item).some((key) => !['pageNumber', 'width', 'height', 'bytes'].includes(key))
+      || typeof item.bytes !== 'string') throw new Error('invalid OCR render response');
+    const bytes = Buffer.from(item.bytes, 'base64');
+    const dimensions = pngDimensions(bytes);
+    if (typeof item.width !== 'number' || typeof item.height !== 'number'
+      || Math.abs(item.width - dimensions.width) > 1 || Math.abs(item.height - dimensions.height) > 1) {
+      throw new Error('invalid OCR raster');
+    }
+    return {
+      pageNumber: item.pageNumber as number,
+      mediaType: 'image/png',
+      bytes,
+      width: dimensions.width,
+      height: dimensions.height,
+      contentHash: sha256(bytes),
+    };
+  });
+}
+
+async function recognizeWithTesseract(page: OcrRasterPage, timeoutMs: number): Promise<string> {
+  const languageList = process.env.TESSERACT_LANGS ?? 'eng+chi_sim';
+  if (!LANGUAGE_LIST.test(languageList)) throw new Error('invalid OCR language configuration');
+  const output = await runBoundedProcess(
+    process.env.TESSERACT_BIN ?? 'tesseract',
+    ['stdin', 'stdout', '-l', languageList, 'tsv'],
+    page.bytes,
+    timeoutMs,
+    LOCAL_OCR_LIMITS.maxTsvBytes,
+  );
+  return output.toString('utf8');
 }
 
 export function createTesseractOcrAdapter(): LocalOcrAdapter {
