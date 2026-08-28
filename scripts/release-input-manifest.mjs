@@ -38,12 +38,19 @@ function isGeneratedPath(path) {
     || path.split('/').some((segment) => segment === 'node_modules' || segment === 'dist' || segment === '.next');
 }
 
+function isWorkerDistPath(path) {
+  return path === 'apps/agent-worker/dist'
+    || path.startsWith('apps/agent-worker/dist/')
+    || /^packages\/[^/]+\/dist(?:\/|$)/u.test(path);
+}
+
 function isWorkerRuntimePath(path) {
   return path === 'packages/search/generated'
     || path.startsWith('packages/search/generated/')
     || path === 'packages/search/src/generated'
     || path.startsWith('packages/search/src/generated/')
-    || path.split('/').some((segment) => segment === 'node_modules' || segment === 'dist');
+    || path.split('/').includes('node_modules')
+    || isWorkerDistPath(path);
 }
 
 function isWorkerRuntimeLeafPath(path) {
@@ -54,7 +61,7 @@ function isWorkerRuntimeLeafPath(path) {
     || path === 'packages/search/src/generated'
     || path.startsWith('packages/search/src/generated/')
     || segments.includes('node_modules')
-    || (segments.includes('dist') && path.endsWith('.js'));
+    || (isWorkerDistPath(path) && path.endsWith('.js'));
 }
 
 function isMetadataPath(path) {

@@ -399,6 +399,33 @@ test('runtime snapshot binds executable dist JavaScript but ignores compiler-onl
   }
 });
 
+test('runtime snapshot excludes executable output from services outside the worker runtime graph', async () => {
+  const state = await fixture();
+  try {
+    const workerDist = join(state.releaseRoot, 'apps', 'agent-worker', 'dist');
+    const unrelatedDist = join(state.releaseRoot, 'apps', 'web', 'dist');
+    const workerRuntime = join(workerDist, 'index.js');
+    const unrelatedRuntime = join(unrelatedDist, 'index.js');
+    await mkdir(workerDist, { recursive: true });
+    await mkdir(unrelatedDist, { recursive: true });
+    await writeFile(workerRuntime, 'export const worker = true;\n');
+    await writeFile(unrelatedRuntime, 'export const web = true;\n');
+
+    const snapshot = await createReleaseRuntimeSnapshot({ root: state.releaseRoot, sourceSha: state.sha });
+    await writeFile(unrelatedRuntime, 'export const web = false;\n');
+    await assert.doesNotReject(verifyReleaseRuntimeSnapshot({
+      root: state.releaseRoot, sourceSha: state.sha, expected: snapshot,
+    }));
+
+    await writeFile(workerRuntime, 'export const worker = false;\n');
+    await assert.rejects(verifyReleaseRuntimeSnapshot({
+      root: state.releaseRoot, sourceSha: state.sha, expected: snapshot,
+    }), /runtime|generated|identity|digest/i);
+  } finally {
+    await rm(state.sandbox, { recursive: true, force: true });
+  }
+});
+
 test('runtime snapshot rejects executable symlinks to excluded dist adjuncts and binds JavaScript targets', async () => {
   const state = await fixture();
   try {
