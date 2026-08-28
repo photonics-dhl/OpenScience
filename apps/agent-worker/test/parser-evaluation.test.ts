@@ -322,6 +322,15 @@ describe('document parser evaluation script', () => {
     });
   });
 
+  it('declares the PaddleOCR CPU native runtime in the candidate image', () => {
+    const dockerfile = readFileSync(
+      resolve(repositoryRoot, 'infra/parser-candidates/paddleocr/Dockerfile'),
+      'utf8',
+    );
+
+    expect(dockerfile).toMatch(/apt-get install[^\n]*libgomp1/);
+  });
+
   it('commits heavyweight Docling CPU dependencies in restart-safe cache layers', () => {
     const dockerfile = readFileSync(
       resolve(repositoryRoot, 'infra/parser-candidates/docling/Dockerfile'),

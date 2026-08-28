@@ -10,6 +10,10 @@ ENV HF_HUB_DISABLE_TELEMETRY=1 \
     PADDLE_PDX_MODEL_SOURCE=BOS \
     HOME=/tmp/home
 
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends libgomp1 \
+    && rm -rf /var/lib/apt/lists/*
+
 ADD --checksum=sha256:c0f0a81ad4112727f30c6fcf986ac0ef6a120d31ee0991a01fae0357ee32d338 \
     https://files.pythonhosted.org/packages/d2/79/2ade66cf72074a3d2a013e2ba1f256d6116fec797b908fc1b4f9c320d8c4/paddleocr-3.7.0-py3-none-any.whl \
     /tmp/paddleocr-3.7.0-py3-none-any.whl
