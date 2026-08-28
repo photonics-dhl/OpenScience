@@ -1,5 +1,6 @@
 import { extname } from 'node:path';
 import { spawn } from 'node:child_process';
+import type { DocumentParser, ParserInput } from './parsers/types';
 
 export type ParsedIngestion =
   | { status: 'ready'; text: string; format: string }
@@ -102,6 +103,14 @@ export function createDefaultIngestionAdapters(): IngestionAdapters {
 }
 
 export const MAX_PARSER_INPUT = 50 * 1024 * 1024;
+
+/** Canonical execution path for provider-neutral DocumentParser implementations. */
+export async function executeDocumentParser(parser: DocumentParser, input: ParserInput) {
+  // Keep the legacy sidecar's ingestion-parser module graph loadable without
+  // packaging the worker-only DocumentParser contract into that image.
+  const { runDocumentParser } = await import('./parsers/base-parser.js');
+  return runDocumentParser(input, parser);
+}
 
 /**
  * 将已通过上传内容门禁的 Blob 转成 Hermes 可消费的正文。

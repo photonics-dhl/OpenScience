@@ -80,6 +80,9 @@ importers:
       pdf-parse:
         specifier: 2.4.5
         version: 2.4.5
+      yauzl:
+        specifier: 2.10.0
+        version: 2.10.0
     devDependencies:
       '@types/node':
         specifier: 20.14.10

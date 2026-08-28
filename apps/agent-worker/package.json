@@ -20,7 +20,8 @@
     "@openscience/sdf-schema": "workspace:^",
     "@openscience/storage": "workspace:^",
     "mammoth": "1.12.0",
-    "pdf-parse": "2.4.5"
+    "pdf-parse": "2.4.5",
+    "yauzl": "2.10.0"
   },
   "devDependencies": {
     "@types/node": "20.14.10",
