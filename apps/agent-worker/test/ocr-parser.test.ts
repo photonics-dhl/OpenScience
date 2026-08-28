@@ -175,4 +175,16 @@ describe('ocrSelectedPages', () => {
     expect(result.pages[1]?.blocks).toEqual([]);
     expect(result.warnings).toContain(SafeParserWarningCode.PARTIAL_RESULT);
   });
+
+  it.each([
+    ['one oversized word', tsv(`5\t1\t1\t1\t1\t1\t1\t1\t1\t1\t90\t${'A'.repeat(50_001)}`)],
+    ['too many word boxes', tsv(...Array.from({ length: 10_001 }, (_, index) => (
+      `5\t1\t1\t1\t1\t${index + 1}\t1\t1\t1\t1\t90\tA`
+    )))],
+  ])('contains a provider %s as a partial page instead of escaping the stage contract', async (_label, output) => {
+    const result = await ocrSelectedPages(input(), [page(1)], adapter(async () => output));
+
+    expect(result.pages[0]?.blocks).toEqual([]);
+    expect(result.warnings).toEqual([SafeParserWarningCode.PARTIAL_RESULT]);
+  });
 });

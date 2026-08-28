@@ -18,6 +18,9 @@ export const LOCAL_OCR_LIMITS = Object.freeze({
   maxDimension: 8192,
   maxPixels: 40_000_000,
   maxTsvBytes: 4 * 1024 * 1024,
+  maxBlocks: 10_000,
+  maxBlockTextCharacters: 50_000,
+  maxTotalTextCharacters: 5_000_000,
   renderWidth: 2048,
   timeoutMs: 30_000,
 });
@@ -108,6 +111,7 @@ export function parseTesseractTsv(tsv: string, raster: OcrRasterPage, page: Stag
     throw new Error('invalid OCR TSV');
   }
   const blocks: StageBlock[] = [];
+  let textCharacters = 0;
   for (const line of lines) {
     if (!line) continue;
     const columns = line.split('\t');
@@ -115,6 +119,12 @@ export function parseTesseractTsv(tsv: string, raster: OcrRasterPage, page: Stag
     if (parseFinite(columns[0]!) !== 5) continue;
     const text = columns.slice(11).join('\t').trim();
     if (!text) continue;
+    textCharacters += text.length;
+    if (text.length > LOCAL_OCR_LIMITS.maxBlockTextCharacters
+      || textCharacters > LOCAL_OCR_LIMITS.maxTotalTextCharacters
+      || blocks.length >= LOCAL_OCR_LIMITS.maxBlocks) {
+      throw new Error('OCR TSV exceeds stage limits');
+    }
     const left = parseFinite(columns[6]!);
     const top = parseFinite(columns[7]!);
     const width = parseFinite(columns[8]!);
