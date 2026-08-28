@@ -4,6 +4,7 @@ import hashlib
 import json
 import logging
 import math
+from numbers import Real
 from pathlib import Path
 import sys
 import time
@@ -18,7 +19,7 @@ PAGE_HEIGHT = 792.0
 
 
 def _finite_number(value: Any) -> float:
-    if isinstance(value, bool) or not isinstance(value, (int, float)):
+    if isinstance(value, bool) or not isinstance(value, Real):
         raise ValueError("coordinate must be numeric")
     result = float(value)
     if not math.isfinite(result):
@@ -77,6 +78,17 @@ def _result_mapping(value: Any) -> Mapping[str, Any]:
     raise ValueError("invalid PaddleOCR result")
 
 
+def _array_values(value: Any) -> Sequence[Any]:
+    if value is None:
+        return []
+    tolist = getattr(value, "tolist", None)
+    if callable(tolist):
+        value = tolist()
+    if isinstance(value, Sequence) and not isinstance(value, (str, bytes)):
+        return value
+    return []
+
+
 def _pages_from_results(results: Sequence[Any]) -> dict[int, dict[str, Any]]:
     pages: dict[int, dict[str, Any]] = {}
     for fallback_index, raw_result in enumerate(results):
@@ -84,31 +96,36 @@ def _pages_from_results(results: Sequence[Any]) -> dict[int, dict[str, Any]]:
         payload = raw.get("res") if isinstance(raw.get("res"), Mapping) else raw
         page_index = payload.get("page_index", fallback_index)
         page_number = int(page_index) + 1
-        texts = payload.get("rec_texts") or []
-        boxes = payload.get("rec_boxes") or payload.get("rec_polys") or []
+        texts = _array_values(payload.get("rec_texts"))
+        raw_boxes = payload.get("rec_boxes")
+        if raw_boxes is None:
+            raw_boxes = payload.get("rec_polys")
+        boxes = _array_values(raw_boxes)
         input_image = raw.get("input_img")
         shape = getattr(input_image, "shape", None)
         image_height = _finite_number(shape[0]) if isinstance(shape, Sequence) and len(shape) >= 2 else PAGE_HEIGHT
         image_width = _finite_number(shape[1]) if isinstance(shape, Sequence) and len(shape) >= 2 else PAGE_WIDTH
         items = []
-        for text, box in zip(texts, boxes):
-            if not isinstance(text, str) or not text.strip() or not isinstance(box, Sequence):
+        for text, raw_box in zip(texts, boxes):
+            box = _array_values(raw_box)
+            if not isinstance(text, str) or not text.strip() or not box:
                 continue
-            if len(box) == 4 and all(isinstance(value, (int, float)) for value in box):
+            if len(box) == 4 and all(isinstance(value, Real) and not isinstance(value, bool) for value in box):
                 left, top, right, bottom = (_finite_number(value) for value in box)
-            elif len(box) >= 4 and all(isinstance(point, Sequence) and len(point) >= 2 for point in box):
-                xs = [_finite_number(point[0]) for point in box]
-                ys = [_finite_number(point[1]) for point in box]
-                left, top, right, bottom = min(xs), min(ys), max(xs), max(ys)
             else:
-                continue
+                points = [_array_values(point) for point in box]
+                if len(points) < 4 or not all(len(point) >= 2 for point in points):
+                    continue
+                xs = [_finite_number(point[0]) for point in points]
+                ys = [_finite_number(point[1]) for point in points]
+                left, top, right, bottom = min(xs), min(ys), max(xs), max(ys)
             items.append({
                 "text": " ".join(text.split()),
                 "bbox": (
                     left * PAGE_WIDTH / image_width,
-                    top * PAGE_HEIGHT / image_height,
+                    PAGE_HEIGHT - bottom * PAGE_HEIGHT / image_height,
                     right * PAGE_WIDTH / image_width,
-                    bottom * PAGE_HEIGHT / image_height,
+                    PAGE_HEIGHT - top * PAGE_HEIGHT / image_height,
                 ),
             })
         pages[page_number] = {"width": PAGE_WIDTH, "height": PAGE_HEIGHT, "items": items}
@@ -135,10 +152,27 @@ def _safe_case(manifest_path: Path, case_id: str) -> tuple[Path, list[Mapping[st
     return source_path, item["expectedLocators"]
 
 
-def _peak_rss_bytes() -> int:
+def _candidate_peak_rss_bytes(own_peak_rss_bytes: int, cgroup_peak_text: str | None, require_container_peak: bool = False) -> int:
+    own_peak = own_peak_rss_bytes if isinstance(own_peak_rss_bytes, int) and own_peak_rss_bytes >= 0 else 0
+    normalized = cgroup_peak_text.strip() if isinstance(cgroup_peak_text, str) else ""
+    container_peak = int(normalized) if normalized.isdigit() else None
+    if container_peak is None and require_container_peak:
+        raise ValueError("container peak RSS is unavailable")
+    return max(own_peak, container_peak) if container_peak is not None else own_peak
+
+
+def _peak_rss_bytes(require_container_peak: bool = False) -> int:
     import resource
 
-    return max(0, int(resource.getrusage(resource.RUSAGE_SELF).ru_maxrss) * 1024)
+    cgroup_peak_text = None
+    for path in (Path("/sys/fs/cgroup/memory.peak"), Path("/sys/fs/cgroup/memory/memory.max_usage_in_bytes")):
+        try:
+            cgroup_peak_text = path.read_text(encoding="ascii")
+            break
+        except OSError:
+            continue
+    own_peak = max(0, int(resource.getrusage(resource.RUSAGE_SELF).ru_maxrss) * 1024)
+    return _candidate_peak_rss_bytes(own_peak, cgroup_peak_text, require_container_peak)
 
 
 def _write_json(value: Mapping[str, Any]) -> None:
@@ -208,7 +242,7 @@ def run() -> None:
         _write_json({
             **outcome,
             "elapsedMs": max(0, round((time.monotonic() - started_at) * 1000)),
-            "peakRssBytes": _peak_rss_bytes(),
+            "peakRssBytes": _peak_rss_bytes(True),
         })
     except Exception:
         _write_json({

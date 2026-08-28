@@ -1,4 +1,5 @@
 import { createHash } from 'node:crypto';
+import { readFileSync } from 'node:fs';
 import { readFile, stat } from 'node:fs/promises';
 import { basename, dirname, join } from 'node:path';
 import { spawnSync } from 'node:child_process';
@@ -117,7 +118,7 @@ async function loadCase(manifestPath, caseId, candidate) {
   return { item, source };
 }
 
-function parseTesseractTsv(tsv, page) {
+export function parseTesseractTsv(tsv, page) {
   const items = [];
   for (const line of tsv.split(/\r?\n/u).slice(1)) {
     const columns = line.split('\t');
@@ -129,18 +130,37 @@ function parseTesseractTsv(tsv, page) {
       text,
       bbox: [
         left * 612 / page.width,
-        top * 792 / page.height,
+        792 - (top + height) * 792 / page.height,
         (left + width) * 612 / page.width,
-        (top + height) * 792 / page.height,
+        792 - top * 792 / page.height,
       ],
     });
   }
   return { page: page.pageNumber, width: 612, height: 792, items };
 }
 
-function peakRssBytes() {
+export function candidatePeakRssBytes(ownPeakRssBytes, cgroupPeakText, requireContainerPeak = false) {
+  const ownPeak = Number.isSafeInteger(ownPeakRssBytes) && ownPeakRssBytes >= 0 ? ownPeakRssBytes : 0;
+  const normalized = typeof cgroupPeakText === 'string' ? cgroupPeakText.trim() : '';
+  const containerPeak = /^\d+$/u.test(normalized) ? Number(normalized) : Number.NaN;
+  if ((!Number.isSafeInteger(containerPeak) || containerPeak < 0) && requireContainerPeak) {
+    throw new Error('container peak RSS is unavailable');
+  }
+  return Number.isSafeInteger(containerPeak) && containerPeak >= 0
+    ? Math.max(ownPeak, containerPeak)
+    : ownPeak;
+}
+
+function peakRssBytes(requireContainerPeak = false) {
   const ownPeak = process.resourceUsage().maxRSS * 1024;
-  return Number.isSafeInteger(ownPeak) && ownPeak >= 0 ? ownPeak : 0;
+  let cgroupPeakText;
+  for (const path of ['/sys/fs/cgroup/memory.peak', '/sys/fs/cgroup/memory/memory.max_usage_in_bytes']) {
+    try {
+      cgroupPeakText = readFileSync(path, 'utf8');
+      break;
+    } catch { /* try the other cgroup layout */ }
+  }
+  return candidatePeakRssBytes(ownPeak, cgroupPeakText, requireContainerPeak);
 }
 
 function writeOutcome(value) {
@@ -187,9 +207,11 @@ async function evaluateTesseract(source, locators) {
 
 export async function run() {
   const startedAt = performance.now();
+  let candidate;
   try {
     const offset = ['current-parser', 'tesseract'].includes(process.argv[1]) ? 1 : 2;
-    const [candidate, manifestPath, caseId] = process.argv.slice(offset);
+    const [, manifestPath, caseId] = process.argv.slice(offset);
+    candidate = process.argv[offset];
     if (!['current-parser', 'tesseract'].includes(candidate) || !manifestPath || !caseId
       || process.argv.length !== offset + 3) {
       throw new Error('invalid arguments');
@@ -202,7 +224,7 @@ export async function run() {
     writeOutcome({
       ...evaluation,
       elapsedMs: Math.max(0, Math.round(performance.now() - startedAt)),
-      peakRssBytes: peakRssBytes(),
+      peakRssBytes: peakRssBytes(candidate === 'tesseract'),
     });
   } catch {
     try {

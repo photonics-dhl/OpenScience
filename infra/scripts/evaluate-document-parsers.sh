@@ -169,10 +169,9 @@ ACTIVE_RELEASE="$(cat /opt/openscience/.release-id)"
 [[ "$ACTIVE_RELEASE" =~ ^[a-f0-9]{40}$ && -d "/opt/openscience-releases/$ACTIVE_RELEASE" ]] \
   || { echo 'invalid ECS release marker' >&2; exit 69; }
 REAL_REPOSITORY_ROOT="$(readlink -f "$REPOSITORY_ROOT")"
-case "$REAL_REPOSITORY_ROOT" in
-  "/opt/openscience-releases/$GIT_SHA"|"$EVALUATION_ROOT/source") ;;
-  *) echo 'evaluation source is outside an immutable ECS release or evaluation root' >&2; exit 69 ;;
-esac
+node "$REPOSITORY_ROOT/infra/parser-candidates/current-parser/execution-path.mjs" \
+  "$REAL_REPOSITORY_ROOT" "$EVALUATION_ROOT/source" \
+  || { echo 'evaluation source is outside its dedicated evaluation root' >&2; exit 69; }
 
 if [[ "$CANDIDATE" != 'current-parser' && "$CANDIDATE" != 'tesseract' \
   && "$CANDIDATE" != 'liteparse' && "$CANDIDATE" != 'docling' && "$CANDIDATE" != 'paddleocr' ]]; then

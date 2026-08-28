@@ -19,6 +19,45 @@ def load_runner():
 
 
 class PaddleOcrRunnerTest(unittest.TestCase):
+    def test_normalizes_ndarray_boxes_and_flips_image_y_to_pdf_coordinates(self):
+        runner = load_runner()
+
+        class AmbiguousArray:
+            def __init__(self, values):
+                self.values = values
+
+            def __bool__(self):
+                raise ValueError("ambiguous ndarray truth")
+
+            def tolist(self):
+                return self.values
+
+        class Image:
+            shape = (792, 612, 3)
+
+        pages = runner._pages_from_results([
+            {
+                "res": {
+                    "page_index": 0,
+                    "rec_texts": ["PULSE 42 FS"],
+                    "rec_boxes": AmbiguousArray([[72, 147, 432, 192]]),
+                },
+                "input_img": Image(),
+            }
+        ])
+
+        self.assertEqual(pages[1]["items"][0]["bbox"], (72, 600, 432, 645))
+        self.assertEqual(
+            runner.evaluate_locators(
+                pages,
+                [
+                    {"kind": "page-text", "page": 1, "quote": "PULSE 42 FS"},
+                    {"kind": "page-region", "page": 1, "bbox": [72, 600, 432, 645]},
+                ],
+            ),
+            {"status": "succeeded", "locatorMatches": 2},
+        )
+
     def test_reproduces_scan_text_and_region_without_returning_content(self):
         runner = load_runner()
         pages = {
@@ -52,6 +91,16 @@ class PaddleOcrRunnerTest(unittest.TestCase):
             outcome,
             {"status": "needs_review", "locatorMatches": 0, "errorCode": "locator_miss"},
         )
+
+    def test_candidate_rss_uses_the_container_peak(self):
+        runner = load_runner()
+
+        self.assertEqual(
+            runner._candidate_peak_rss_bytes(64_000_000, "123000000\n", True),
+            123_000_000,
+        )
+        with self.assertRaisesRegex(ValueError, "container peak RSS"):
+            runner._candidate_peak_rss_bytes(64_000_000, None, True)
 
 
 if __name__ == "__main__":
