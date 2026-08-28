@@ -5,7 +5,6 @@ export function buildEvaluationSourceMaterializeCommand(target, sourceSha) {
   if (target !== expectedTarget) throw new Error('evaluation source target must be the exact SHA source directory');
 
   const stage = `${expectedTarget}.stage`;
-  const marker = `${expectedTarget}/.evaluation-source`;
   const command = [
     'set -eu',
     `test '${target}' = '${expectedTarget}'`,
