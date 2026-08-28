@@ -1,4 +1,5 @@
 import { createRequire } from 'node:module';
+import { parseDocumentSourceMap, type DocumentSourceMap } from '@openscience/domain';
 import { parseParserStageResult, type ParserJobRequestV2, type ParserStageResult } from './job-protocol';
 import {
   buildPhysicalPages,
@@ -32,6 +33,12 @@ const MAX_CELLS = 9_900;
 const MAX_XML_ENTITIES = 100_000;
 const MAX_BLOCK_TEXT_CHARACTERS = 50_000;
 const MAX_TOTAL_TEXT_CHARACTERS = 5_000_000;
+const MAX_SOURCE_MAP_BLOCKS = 10_000;
+const MAX_LOGICAL_ROWS = 10_000;
+const MAX_CSV_FIELDS = 10_000;
+const MAX_XLSX_COLUMN = 16_384;
+const MAX_XLSX_ROW = 1_048_576;
+const MAX_SERIALIZED_RESULT_CHARACTERS = 8_000_000;
 
 interface ZipEntry {
   fileName: string;
@@ -102,49 +109,95 @@ function classifyLine(text: string, kind: 'markdown' | 'tex') {
   return heading ? 'heading' as const : 'paragraph' as const;
 }
 
-function parsePlainLines(content: Buffer, kind: 'markdown' | 'tex'): SourceMapPageDraft[] {
-  const lines = decodeUtf8(content).replace(/\r\n?/gu, '\n').split('\n');
-  const cells: VirtualTextCell[] = [];
-  for (let index = 0; index < lines.length; index += 1) {
-    const text = lines[index]!;
-    if (!text.trim()) continue;
-    cells.push({ line: index + 1, kind: classifyLine(text, kind), text });
-  }
-  return [buildVirtualPage(1, cells, lines.length)];
+function scanLogicalLines(text: string, maximum: number, visit: (line: string, lineNumber: number) => void): number {
+  let start = 0;
+  let lineNumber = 0;
+  do {
+    lineNumber += 1;
+    if (lineNumber > maximum) throw new ParsingLimitError();
+    let end = start;
+    while (end < text.length && text[end] !== '\r' && text[end] !== '\n') {
+      end += 1;
+      if (end - start > MAX_BLOCK_TEXT_CHARACTERS) throw new ParsingLimitError();
+    }
+    visit(text.slice(start, end), lineNumber);
+    if (end === text.length) break;
+    start = end + (text[end] === '\r' && text[end + 1] === '\n' ? 2 : 1);
+  } while (start <= text.length);
+  return lineNumber;
 }
 
-function parseCsvRows(text: string): string[][] {
-  const rows: string[][] = [];
-  let row: string[] = [];
+function parsePlainLines(content: Buffer, kind: 'markdown' | 'tex'): SourceMapPageDraft[] {
+  const cells: VirtualTextCell[] = [];
+  let textCharacters = 0;
+  const lineCount = scanLogicalLines(decodeUtf8(content), MAX_LOGICAL_ROWS, (text, lineNumber) => {
+    if (!text.trim()) return;
+    textCharacters += text.length;
+    if (textCharacters > MAX_TOTAL_TEXT_CHARACTERS) throw new ParsingLimitError();
+    cells.push({ line: lineNumber, kind: classifyLine(text, kind), text });
+  });
+  return [buildVirtualPage(1, cells, lineCount)];
+}
+
+function parseCsv(content: Buffer): SourceMapPageDraft[] {
+  const text = decodeUtf8(content);
+  const rawCells: Array<Omit<VirtualTextCell, 'columnCount'>> = [];
   let cell = '';
+  let row = 1;
+  let column = 1;
+  let fieldCount = 0;
+  let maximumColumn = 1;
   let quoted = false;
   let closedQuote = false;
+  let endedWithRowBreak = false;
+  let textCharacters = 0;
+  const append = (character: string) => {
+    cell += character;
+    if (cell.length > MAX_BLOCK_TEXT_CHARACTERS) throw new ParsingLimitError();
+  };
+  const finishField = () => {
+    fieldCount += 1;
+    if (fieldCount > MAX_CSV_FIELDS) throw new ParsingLimitError();
+    maximumColumn = Math.max(maximumColumn, column);
+    if (cell.trim()) {
+      textCharacters += cell.length;
+      if (textCharacters > MAX_TOTAL_TEXT_CHARACTERS) throw new ParsingLimitError();
+      rawCells.push({ line: row, column, kind: 'paragraph', text: cell });
+    }
+    cell = '';
+    column += 1;
+  };
+  const finishRow = () => {
+    finishField();
+    if (row > MAX_LOGICAL_ROWS) throw new ParsingLimitError();
+    row += 1;
+    column = 1;
+    endedWithRowBreak = true;
+  };
+
   for (let index = 0; index < text.length; index += 1) {
     const character = text[index]!;
+    endedWithRowBreak = false;
     if (quoted) {
       if (character === '"') {
         if (text[index + 1] === '"') {
-          cell += '"';
+          append('"');
           index += 1;
         } else {
           quoted = false;
           closedQuote = true;
         }
       } else {
-        cell += character;
+        append(character);
       }
       continue;
     }
     if (closedQuote) {
       if (character === ',') {
-        row.push(cell);
-        cell = '';
+        finishField();
         closedQuote = false;
       } else if (character === '\n') {
-        row.push(cell);
-        rows.push(row);
-        row = [];
-        cell = '';
+        finishRow();
         closedQuote = false;
       } else if (character !== '\r') {
         throw new Error('malformed CSV');
@@ -152,46 +205,18 @@ function parseCsvRows(text: string): string[][] {
     } else if (character === '"' && cell.length === 0) {
       quoted = true;
     } else if (character === ',') {
-      row.push(cell);
-      cell = '';
+      finishField();
     } else if (character === '\n') {
-      row.push(cell);
-      rows.push(row);
-      row = [];
-      cell = '';
+      finishRow();
     } else if (character !== '\r') {
-      cell += character;
+      append(character);
     }
   }
   if (quoted) throw new Error('malformed CSV');
-  if (cell.length > 0 || row.length > 0) {
-    row.push(cell);
-    rows.push(row);
-  }
-  return rows;
-}
-
-function parseCsv(content: Buffer): SourceMapPageDraft[] {
-  const rows = parseCsvRows(decodeUtf8(content));
-  if (rows.length > 10_000) throw new ParsingLimitError();
-  const columnCount = Math.max(1, ...rows.map((row) => row.length));
-  const cells: VirtualTextCell[] = [];
-  for (let rowIndex = 0; rowIndex < rows.length; rowIndex += 1) {
-    const row = rows[rowIndex]!;
-    for (let columnIndex = 0; columnIndex < row.length; columnIndex += 1) {
-      const text = row[columnIndex]!;
-      if (!text.trim()) continue;
-      cells.push({
-        line: rowIndex + 1,
-        column: columnIndex + 1,
-        columnCount,
-        kind: 'paragraph',
-        text,
-      });
-      if (cells.length > MAX_CELLS) throw new ParsingLimitError();
-    }
-  }
-  return [buildVirtualPage(1, cells, rows.length)];
+  if (text.length > 0 && !endedWithRowBreak) finishField();
+  const rowCount = text.length === 0 ? 1 : Math.min(endedWithRowBreak ? row - 1 : row, MAX_LOGICAL_ROWS);
+  const cells = rawCells.map((rawCell): VirtualTextCell => ({ ...rawCell, columnCount: maximumColumn }));
+  return [buildVirtualPage(1, cells, rowCount)];
 }
 
 function readZipEntry(zipFile: ZipFile, entry: ZipEntry): Promise<Buffer> {
@@ -349,19 +374,17 @@ function workbookSheets(workbookXml: string, relationshipsXml: string): Array<{ 
   return sheets;
 }
 
-function columnNumber(reference: string): number {
-  const letters = /^([A-Z]+)[1-9]\d*$/u.exec(reference)?.[1];
-  if (!letters) throw new Error('malformed cell reference');
-  let result = 0;
-  for (const letter of letters) result = result * 26 + letter.charCodeAt(0) - 64;
-  return result;
-}
-
-function rowNumber(reference: string): number {
-  const value = /^[A-Z]+([1-9]\d*)$/u.exec(reference)?.[1];
-  const parsed = value ? Number.parseInt(value, 10) : 0;
-  if (!Number.isSafeInteger(parsed) || parsed < 1 || parsed > 9_999) throw new ParsingLimitError();
-  return parsed;
+function parseCellReference(reference: string): { row: number; column: number } {
+  const match = /^([A-Z]{1,3})([1-9]\d{0,6})$/u.exec(reference);
+  if (!match) throw new Error('malformed cell reference');
+  let column = 0;
+  for (const letter of match[1]!) column = column * 26 + letter.charCodeAt(0) - 64;
+  const row = Number.parseInt(match[2]!, 10);
+  if (!Number.isSafeInteger(column) || column < 1 || column > MAX_XLSX_COLUMN
+    || !Number.isSafeInteger(row) || row < 1 || row > MAX_XLSX_ROW) {
+    throw new Error('cell reference outside XLSX bounds');
+  }
+  return { row, column };
 }
 
 function worksheetCells(xml: string, strings: readonly string[]): Array<{ row: number; column: number; text: string }> {
@@ -369,6 +392,7 @@ function worksheetCells(xml: string, strings: readonly string[]): Array<{ row: n
   for (const match of xml.matchAll(/<c\b([^>]*)>([\s\S]*?)<\/c>/gu)) {
     const reference = attribute(match[1]!, 'r');
     if (!reference) throw new Error('cell reference missing');
+    const coordinates = parseCellReference(reference);
     const type = attribute(match[1]!, 't');
     const body = match[2]!;
     const rawValue = /<v(?:\s[^>]*)?>([\s\S]*?)<\/v>/u.exec(body)?.[1];
@@ -381,7 +405,7 @@ function worksheetCells(xml: string, strings: readonly string[]): Array<{ row: n
     } else if (rawValue !== undefined) {
       text = decodeXmlText(rawValue);
     }
-    if (text.trim()) cells.push({ row: rowNumber(reference), column: columnNumber(reference), text });
+    if (text.trim()) cells.push({ ...coordinates, text });
     if (cells.length > MAX_CELLS) throw new ParsingLimitError();
   }
   return cells;
@@ -434,34 +458,36 @@ async function parseBinary(input: ParserInput, adapter: TextStageAdapter | undef
   const result = parseParserStageResult(await adapter(stageRequest(input), Buffer.from(input.content)));
   if (kind === 'pdf') {
     const pages = buildPhysicalPages(result.pages, result.parser);
+    assertSourceMapBudgets(pages);
     if (!pages.some((page) => page.blocks.some((block) => block.text && meaningful(block.text)))) {
       return needsReview(input, 'empty-parsed-text');
     }
-    return {
-      status: 'succeeded' as const,
-      sourceMap: mergeSourceMapPages(input, TEXT_EXTRACTOR_METADATA, pages),
-      warnings: [...result.warnings],
-    };
+    return succeeded(input, pages, result.warnings);
   }
 
-  const paragraphs = result.pages
-    .slice()
-    .sort((left, right) => left.page - right.page)
-    .flatMap((page) => page.blocks)
-    .flatMap((block) => block.text?.replace(/\r\n?/gu, '\n').split(/\n+/gu) ?? [])
-    .filter((paragraph) => paragraph.trim());
-  const page = buildVirtualPage(1, paragraphs.map((text, index) => ({
-    line: index + 1,
-    kind: 'paragraph',
-    text,
-    parser: result.parser,
-  })), paragraphs.length);
-  if (!paragraphs.some(meaningful)) return needsReview(input, 'empty-parsed-text');
-  return {
-    status: 'succeeded' as const,
-    sourceMap: mergeSourceMapPages(input, TEXT_EXTRACTOR_METADATA, [page]),
-    warnings: [...result.warnings],
-  };
+  const paragraphCells: VirtualTextCell[] = [];
+  let textCharacters = 0;
+  for (const page of [...result.pages].sort((left, right) => left.page - right.page)) {
+    for (const block of page.blocks) {
+      if (block.text === undefined) continue;
+      scanLogicalLines(block.text, MAX_BLOCK_TEXT_CHARACTERS + 1, (paragraph) => {
+        if (!paragraph.trim()) return;
+        if (paragraphCells.length >= MAX_SOURCE_MAP_BLOCKS) throw new ParsingLimitError();
+        textCharacters += paragraph.length;
+        if (textCharacters > MAX_TOTAL_TEXT_CHARACTERS) throw new ParsingLimitError();
+        paragraphCells.push({
+          line: paragraphCells.length + 1,
+          kind: 'paragraph',
+          text: paragraph,
+          parser: result.parser,
+        });
+      });
+    }
+  }
+  const page = buildVirtualPage(1, paragraphCells, paragraphCells.length);
+  assertSourceMapBudgets([page]);
+  if (!paragraphCells.some((paragraph) => meaningful(paragraph.text))) return needsReview(input, 'empty-parsed-text');
+  return succeeded(input, [page], result.warnings);
 }
 
 function assertSourceMapBudgets(pages: readonly SourceMapPageDraft[]): void {
@@ -469,7 +495,7 @@ function assertSourceMapBudgets(pages: readonly SourceMapPageDraft[]): void {
   let textCharacters = 0;
   for (const page of pages) {
     blocks += page.blocks.length;
-    if (blocks > 10_000) throw new ParsingLimitError();
+    if (blocks > MAX_SOURCE_MAP_BLOCKS) throw new ParsingLimitError();
     for (const block of page.blocks) {
       if (block.text === undefined) continue;
       if (block.text.length > MAX_BLOCK_TEXT_CHARACTERS) throw new ParsingLimitError();
@@ -477,6 +503,29 @@ function assertSourceMapBudgets(pages: readonly SourceMapPageDraft[]): void {
       if (textCharacters > MAX_TOTAL_TEXT_CHARACTERS) throw new ParsingLimitError();
     }
   }
+}
+
+function validatedSourceMap(input: ParserInput, pages: readonly SourceMapPageDraft[]) {
+  assertSourceMapBudgets(pages);
+  try {
+    return parseDocumentSourceMap(mergeSourceMapPages(input, TEXT_EXTRACTOR_METADATA, pages));
+  } catch {
+    throw new ParsingLimitError();
+  }
+}
+
+function succeeded(input: ParserInput, pages: readonly SourceMapPageDraft[], warnings: readonly string[]) {
+  return succeededSourceMap(validatedSourceMap(input, pages), warnings);
+}
+
+function succeededSourceMap(sourceMap: DocumentSourceMap, warnings: readonly string[]) {
+  const result = {
+    status: 'succeeded' as const,
+    sourceMap,
+    warnings: [...warnings],
+  };
+  if (JSON.stringify(result).length > MAX_SERIALIZED_RESULT_CHARACTERS) throw new ParsingLimitError();
+  return result;
 }
 
 export function createTextExtractor(adapters: TextExtractionAdapters): DocumentParser {
@@ -494,11 +543,11 @@ export function createTextExtractor(adapters: TextExtractionAdapters): DocumentP
             ? await parseXlsx(input.content)
             : parsePlainLines(input.content, type === 'application/x-tex' || type === 'text/x-tex' ? 'tex' : 'markdown');
         assertSourceMapBudgets(pages);
-        const sourceMap = mergeSourceMapPages(input, TEXT_EXTRACTOR_METADATA, pages);
+        const sourceMap = validatedSourceMap(input, pages);
         if (!sourceMap.pages.some((page) => page.blocks.some((block) => block.text && meaningful(block.text)))) {
           return needsReview(input, 'empty-parsed-text');
         }
-        return { status: 'succeeded', sourceMap, warnings: [] };
+        return succeededSourceMap(sourceMap, []);
       } catch (error) {
         if (error instanceof ParsingLimitError) {
           return { status: 'blocked', code: 'limit_exceeded', message: 'document parsing safety limit exceeded' };

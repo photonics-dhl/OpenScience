@@ -24,6 +24,62 @@ function expectedId(contentHash: string, page: number, ordinal: number): string 
   return `block:${contentHash}:${page}:${ordinal}`;
 }
 
+function crc32(content: Buffer): number {
+  let crc = 0xffffffff;
+  for (const byte of content) {
+    crc ^= byte;
+    for (let bit = 0; bit < 8; bit += 1) crc = (crc >>> 1) ^ (crc & 1 ? 0xedb88320 : 0);
+  }
+  return (crc ^ 0xffffffff) >>> 0;
+}
+
+function storedZip(entries: Record<string, string>): Buffer {
+  const localParts: Buffer[] = [];
+  const centralParts: Buffer[] = [];
+  let offset = 0;
+  for (const [name, value] of Object.entries(entries)) {
+    const fileName = Buffer.from(name);
+    const content = Buffer.from(value);
+    const checksum = crc32(content);
+    const local = Buffer.alloc(30);
+    local.writeUInt32LE(0x04034b50, 0);
+    local.writeUInt16LE(20, 4);
+    local.writeUInt32LE(checksum, 14);
+    local.writeUInt32LE(content.length, 18);
+    local.writeUInt32LE(content.length, 22);
+    local.writeUInt16LE(fileName.length, 26);
+    localParts.push(local, fileName, content);
+
+    const central = Buffer.alloc(46);
+    central.writeUInt32LE(0x02014b50, 0);
+    central.writeUInt16LE(20, 4);
+    central.writeUInt16LE(20, 6);
+    central.writeUInt32LE(checksum, 16);
+    central.writeUInt32LE(content.length, 20);
+    central.writeUInt32LE(content.length, 24);
+    central.writeUInt16LE(fileName.length, 28);
+    central.writeUInt32LE(offset, 42);
+    centralParts.push(central, fileName);
+    offset += local.length + fileName.length + content.length;
+  }
+  const centralSize = centralParts.reduce((total, part) => total + part.length, 0);
+  const end = Buffer.alloc(22);
+  end.writeUInt32LE(0x06054b50, 0);
+  end.writeUInt16LE(Object.keys(entries).length, 8);
+  end.writeUInt16LE(Object.keys(entries).length, 10);
+  end.writeUInt32LE(centralSize, 12);
+  end.writeUInt32LE(offset, 16);
+  return Buffer.concat([...localParts, ...centralParts, end]);
+}
+
+function xlsxWithCellReference(reference: string): Buffer {
+  return storedZip({
+    'xl/workbook.xml': '<workbook xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheets><sheet name="Sheet" r:id="rId1"/></sheets></workbook>',
+    'xl/_rels/workbook.xml.rels': '<Relationships><Relationship Id="rId1" Target="worksheets/sheet1.xml"/></Relationships>',
+    'xl/worksheets/sheet1.xml': `<worksheet><sheetData><row r="1"><c r="${reference}" t="inlineStr"><is><t>value</t></is></c></row></sheetData></worksheet>`,
+  });
+}
+
 const virtualGeometry = { name: 'openscience-virtual-page', version: 'openscience-virtual-page-v1' };
 const extractorMetadata = { name: 'openscience-text-extractor', version: '1.0.0' };
 
@@ -231,4 +287,75 @@ describe('deterministic text DocumentParser', () => {
       reasons: ['parser-failed'],
     });
   });
+
+  it('counts empty Markdown rows while scanning and blocks before materializing them', async () => {
+    const parserInput = input(Buffer.alloc(48 * 1024 * 1024, 0x0a), 'text/markdown');
+    await expect(executeDocumentParser(createTextExtractor({}), parserInput)).resolves.toMatchObject({
+      status: 'blocked',
+      code: 'limit_exceeded',
+    });
+  });
+
+  it('counts empty CSV fields during scanning and blocks before building a wide row', async () => {
+    const parserInput = input(Buffer.alloc(48 * 1024 * 1024, 0x2c), 'text/csv');
+    await expect(executeDocumentParser(createTextExtractor({}), parserInput)).resolves.toMatchObject({
+      status: 'blocked',
+      code: 'limit_exceeded',
+    });
+  });
+
+  it('maps DOCX paragraph expansion beyond the source-map block budget to a controlled result', async () => {
+    const content = Buffer.from('PK\u0003\u0004docx-many-paragraphs');
+    const parserInput = input(content, 'application/vnd.openxmlformats-officedocument.wordprocessingml.document');
+    const parser = createTextExtractor({
+      docx: async () => stage({
+        pages: [{
+          page: 1,
+          width: 1000,
+          height: 24,
+          blocks: [{
+            kind: 'paragraph',
+            text: 'x\n'.repeat(10_001),
+            boundingBox: { x: 0, y: 0, width: 1000, height: 24 },
+          }],
+        }],
+      }),
+    });
+    await expect(executeDocumentParser(parser, parserInput)).resolves.toMatchObject({
+      status: 'blocked',
+      code: 'limit_exceeded',
+    });
+  });
+
+  it('maps PDF source-map serialization growth from repeated provenance to a controlled result', async () => {
+    const content = Buffer.from('%PDF source-map budget');
+    const parserInput = input(content, 'application/pdf');
+    const longParser = { name: 'p'.repeat(200), version: 'v'.repeat(200) };
+    const blocks = Array.from({ length: 10_000 }, () => ({
+      kind: 'paragraph' as const,
+      text: 'x'.repeat(499),
+      boundingBox: { x: 0, y: 0, width: 1, height: 1 },
+    }));
+    const parser = createTextExtractor({
+      pdf: async () => stage({
+        parser: longParser,
+        pages: [{ page: 1, width: 1, height: 1, blocks }],
+      }),
+    });
+    await expect(executeDocumentParser(parser, parserInput)).resolves.toMatchObject({
+      status: 'blocked',
+      code: 'limit_exceeded',
+    });
+  });
+
+  it.each(['XFE1', `${'A'.repeat(128)}1`, 'A1048577'])(
+    'rejects XLSX cell reference %s before constructing geometry',
+    async (reference) => {
+      const parserInput = input(xlsxWithCellReference(reference), 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+      await expect(executeDocumentParser(createTextExtractor({}), parserInput)).resolves.toMatchObject({
+        status: 'needs_review',
+        reasons: ['parser-failed'],
+      });
+    },
+  );
 });
