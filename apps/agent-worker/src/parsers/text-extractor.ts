@@ -37,6 +37,7 @@ const MAX_LOGICAL_ROWS = 10_000;
 const MAX_CSV_FIELDS = 10_000;
 const MAX_SERIALIZED_RESULT_CHARACTERS = 8_000_000;
 const XLSX_REVIEW_REASON = 'structured-xlsx-review-required';
+const CSV_REVIEW_REASON = 'structured-csv-review-required';
 
 export type TextStageAdapter = (request: ParserJobRequestV2, content: Buffer) => Promise<ParserStageResult>;
 
@@ -352,6 +353,7 @@ export function createTextExtractor(adapters: TextExtractionAdapters): DocumentP
         if (!sourceMap.pages.some((page) => page.blocks.some((block) => block.text && meaningful(block.text)))) {
           return needsReview(input, 'empty-parsed-text');
         }
+        if (type === 'text/csv') return needsReviewSourceMap(sourceMap, CSV_REVIEW_REASON);
         if (type === XLSX_MEDIA_TYPE) return needsReviewSourceMap(sourceMap, XLSX_REVIEW_REASON);
         return succeededSourceMap(sourceMap, []);
       } catch (error) {

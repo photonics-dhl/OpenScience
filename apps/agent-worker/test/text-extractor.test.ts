@@ -169,8 +169,9 @@ describe('deterministic text DocumentParser', () => {
     const parserInput = input('"alpha, one",beta\r\n"line\nbreak",gamma', 'text/csv');
     const result = await executeDocumentParser(createTextExtractor({}), parserInput);
 
-    expect(result.status).toBe('succeeded');
-    if (result.status !== 'succeeded') return;
+    expect(result.status).toBe('needs_review');
+    if (result.status !== 'needs_review') return;
+    expect(result.reasons).toEqual(['structured-csv-review-required']);
     expect(result.sourceMap.pages[0]).toMatchObject({ page: 1, width: 1000, height: 48 });
     expect(result.sourceMap.pages[0]?.blocks.map((block) => ({ text: block.text, boundingBox: block.boundingBox }))).toEqual([
       { text: 'alpha, one', boundingBox: { x: 0, y: 0, width: 500, height: 24 } },

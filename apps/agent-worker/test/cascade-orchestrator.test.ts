@@ -193,6 +193,33 @@ describe('runParserCascade', () => {
 
     expect(result.status).toBe('succeeded');
   });
+  it('accepts verified OCR when the merged page retains native blocks without confidence', async () => {
+    const textMetadata = { name: 'sidecar-text', version: '2.0.0' };
+    const tesseract = { name: 'tesseract', version: '5.3.0' };
+    const { confidence: _confidence, ...nativeBlock } = block(
+      'native-1', 'OpenScience native evidence', 1, textMetadata,
+    );
+    const extractText = parser(textMetadata, () => ({
+      status: 'succeeded', sourceMap: map(textMetadata, [{ page: 1, blocks: [nativeBlock] }]), warnings: [],
+    }));
+    const inventoryPages = vi.fn();
+    const ocrPages = vi.fn().mockResolvedValue({
+      schemaVersion: 2, parser: tesseract,
+      pages: [{ page: 1, width: 500, height: 700, blocks: [
+        { kind: 'paragraph', text: 'PULSE', confidence: 0.95, boundingBox: { x: 10, y: 100, width: 100, height: 30 } },
+        { kind: 'paragraph', text: '42', confidence: 0.75, boundingBox: { x: 120, y: 100, width: 40, height: 30 } },
+        { kind: 'paragraph', text: 'FS', confidence: 0.95, boundingBox: { x: 170, y: 100, width: 40, height: 30 } },
+      ] }], warnings: ['ocr_applied'],
+    });
+
+    const result = await runParserCascade(input(), {
+      adapters: { extractText, isolatedLocalOcr: { inventoryPages, ocrPages } },
+      featureFlags: { detectLayout: false, grobid: false, localOcr: true, llmOcr: false },
+      externalProcessingEligible: false,
+    });
+
+    expect(result.status).toBe('succeeded');
+  });
   it('keeps a structurally complex page unresolved after high-confidence local OCR', async () => {
     const textMetadata = { name: 'sidecar-text', version: '2.0.0' };
     const tesseract = { name: 'tesseract', version: '5.3.0' };

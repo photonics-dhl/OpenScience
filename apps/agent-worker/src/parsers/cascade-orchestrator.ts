@@ -382,13 +382,14 @@ export async function runParserCascade(
           const rawOcrAssessment = assessPageQuality({
             ...page, signals: { localOcrApplied: true },
           });
-          const ocrAssessment = mergedPage && assessPageQuality({
-            ...mergedPage, signals: { localOcrApplied: true },
-          });
+          const mergedAssessment = mergedPage && assessPageQuality(mergedPage);
+          const mergedHasStructuralConcern = mergedAssessment?.reasons.some(
+            (reason) => reason !== 'low_confidence',
+          );
           if (page.blocks.length > 0
             && initialReasonByPage.get(page.page) === 'low_confidence'
             && rawOcrAssessment.llmCandidateReason === undefined
-            && ocrAssessment?.llmCandidateReason === undefined) {
+            && mergedHasStructuralConcern === false) {
             locallyResolved.add(page.page);
           }
         }

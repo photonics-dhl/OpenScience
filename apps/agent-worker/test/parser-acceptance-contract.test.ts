@@ -94,7 +94,7 @@ function validDraft() {
     ['references-pdf-en', 'succeeded', 2, 2],
     ['scan-pdf-image-only', 'succeeded', 2, 2],
     ['scan-png-empty', 'needs_review', 0, 1],
-    ['table-csv-mixed', 'needs_review', 0, 1],
+    ['table-csv-mixed', 'needs_review', 1, 1],
     ['table-pdf-en', 'succeeded', 3, 3],
     ['table-xlsx-en', 'needs_review', 1, 1],
     ['tex-formula-en', 'succeeded', 1, 1],
