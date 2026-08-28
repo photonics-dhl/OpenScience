@@ -105,6 +105,8 @@ test('Task 8 acceptance launcher exposes its exact isolated topology and rejects
   assert.ok(waitForCompletion > completedMarker, 'host must wait for the controlled worker completion marker');
   assert.ok(terminalWorkerSample > waitForCompletion, 'terminal sample must happen while worker is retained');
   assert.ok(releaseWorker > terminalWorkerSample, 'worker may exit only after terminal sampling');
+  assert.match(source, /\/usr\/bin\/env -i \/usr\/local\/bin\/node "\$@"/u,
+    'the worker shell must clear its automatically exported PWD before starting the acceptance runner');
 
   const build = source.indexOf('--filter @openscience/agent-worker... build');
   assert.match(source, /\(\s*umask 022\s*\/usr\/bin\/npx pnpm@9\.15\.0 --dir "\$RELEASE_ROOT" --filter @openscience\/agent-worker\.\.\. build >\/dev\/null\s*\)/u,

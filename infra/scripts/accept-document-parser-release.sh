@@ -298,7 +298,7 @@ WORKER_CONTAINER_ID="$(docker run -d --name "$WORKER_NAME" \
     release="$2"
     shift 2
     status=0
-    /usr/local/bin/node "$@" || status=$?
+    /usr/bin/env -i /usr/local/bin/node "$@" || status=$?
     printf "%s\n" "$status" >"$completion"
     while [ ! -f "$release" ]; do /bin/sleep 0.1; done
     exit "$status"
