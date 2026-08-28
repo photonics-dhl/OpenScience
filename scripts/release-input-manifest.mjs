@@ -45,6 +45,16 @@ function isWorkerRuntimePath(path) {
     || path.split('/').some((segment) => segment === 'node_modules' || segment === 'dist');
 }
 
+function isWorkerRuntimeLeafPath(path) {
+  const segments = path.split('/');
+  return path === 'packages/search/generated'
+    || path.startsWith('packages/search/generated/')
+    || path === 'packages/search/src/generated'
+    || path.startsWith('packages/search/src/generated/')
+    || segments.includes('node_modules')
+    || (segments.includes('dist') && path.endsWith('.js'));
+}
+
 function isMetadataPath(path) {
   return path === SOURCE_MARKER || path === MANIFEST_NAME;
 }
@@ -292,7 +302,8 @@ export async function normalizeReleaseRuntimePermissions({ root, sourceSha }) {
   await verifySourceMarker(canonical, sourceSha);
   await verifyReleaseInputManifest({ root: canonical, sourceSha });
   const runtimeEntries = (await walk(canonical)).filter(({ path, type }) => (
-    isWorkerRuntimePath(path) && ['directory', 'file'].includes(type)
+    ['directory', 'file'].includes(type)
+      && (type === 'directory' ? isWorkerRuntimePath(path) : isWorkerRuntimeLeafPath(path))
   ));
   if (runtimeEntries.length === 0) throw new Error('generated runtime permission set is empty');
   let normalizedEntries = 0;
@@ -300,7 +311,7 @@ export async function normalizeReleaseRuntimePermissions({ root, sourceSha }) {
     if (await normalizeRuntimeEntry(item)) normalizedEntries += 1;
   }
   const unreadable = (await walk(canonical)).find(({ path, type, mode }) => (
-    isWorkerRuntimePath(path)
+    (type === 'directory' ? isWorkerRuntimePath(path) : isWorkerRuntimeLeafPath(path))
       && ((type === 'directory' && (mode & 0o555) !== 0o555)
         || (type === 'file' && (mode & 0o444) !== 0o444))
   ));
@@ -353,11 +364,13 @@ async function generatedSymlinkIdentity(root, item, closure) {
     throw new Error(`generated runtime symlink escaped release root: ${item.path}`);
   }
   const canonicalTargetPath = portablePath(root, canonicalTarget);
-  if (closure && !closure.sourceTargets.has(canonicalTargetPath)
-    && !isWorkerRuntimePath(canonicalTargetPath)) {
+  const targetInfo = await lstat(canonicalTarget);
+  const coveredRuntimeTarget = targetInfo.isDirectory()
+    ? isWorkerRuntimePath(canonicalTargetPath)
+    : targetInfo.isFile() && isWorkerRuntimeLeafPath(canonicalTargetPath);
+  if (closure && !closure.sourceTargets.has(canonicalTargetPath) && !coveredRuntimeTarget) {
     throw new Error(`generated runtime symlink target is outside the source/runtime closure: ${item.path}`);
   }
-  const targetInfo = await lstat(canonicalTarget);
   const pnpmWorkspaceCatalog = closure && classifyPnpmWorkspaceCatalogSymlink({
     path: item.path,
     canonicalTargetPath,
@@ -403,7 +416,9 @@ export async function createReleaseRuntimeSnapshot({ root, sourceSha }) {
   const sourceEntries = new Map(sourceManifest.entries.map((entry) => [entry.path, entry]));
   const sourceTargets = new Set(sourceEntries.keys());
   const walked = await walk(canonical);
-  const runtimeLeaves = walked.filter(({ path, type }) => type !== 'directory' && isWorkerRuntimePath(path));
+  const runtimeLeaves = walked.filter(({ path, type }) => (
+    type !== 'directory' && isWorkerRuntimeLeafPath(path)
+  ));
   if (runtimeLeaves.length === 0) throw new Error('generated runtime snapshot is empty');
   const requiredDirectories = new Set();
   for (const { path } of runtimeLeaves) {
