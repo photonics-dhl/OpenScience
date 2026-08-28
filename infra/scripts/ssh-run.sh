@@ -93,7 +93,8 @@ rc=$?
 set -e
 
 if [ $rc -ne 0 ]; then
-  if grep -qiE 'permission denied|host key verification|no supported authentication' "$SSH_ERR"; then
+  if [ $rc -eq 255 ] \
+    && grep -qiE 'permission denied \((publickey|password|keyboard-interactive)(,[^)]*)?\)|host key verification failed|no supported authentication methods available' "$SSH_ERR"; then
     echo "SSH 认证失败：请配置 SSH 密钥，本脚本不处理密码。" >&2
   else
     echo "远程命令失败（exit=$rc）：" >&2

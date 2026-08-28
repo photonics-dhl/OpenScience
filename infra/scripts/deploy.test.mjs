@@ -21,6 +21,7 @@ const productionCompose = readFileSync(new URL('../compose/docker-compose.prod.y
 const cloudSync = readFileSync(new URL('../../scripts/cloud-sync.mjs', import.meta.url), 'utf8');
 const releaseSyncCommand = readFileSync(new URL('../../scripts/release-sync-command.mjs', import.meta.url), 'utf8');
 const backup = readFileSync(new URL('./backup.sh', import.meta.url), 'utf8');
+const sshRun = readFileSync(new URL('./ssh-run.sh', import.meta.url), 'utf8');
 const backupRunbook = readFileSync(new URL('../../docs/runbooks/backup-restore.md', import.meta.url), 'utf8');
 const embeddingDockerfile = readFileSync(new URL('../../apps/embedding-worker/Dockerfile', import.meta.url), 'utf8');
 const embeddingRequirements = readFileSync(new URL('../../apps/embedding-worker/requirements.lock', import.meta.url), 'utf8');
@@ -29,6 +30,12 @@ const rootPackage = JSON.parse(readFileSync(new URL('../../package.json', import
 const bash = process.platform === 'win32' && existsSync('C:/Program Files/Git/bin/bash.exe')
   ? 'C:/Program Files/Git/bin/bash.exe'
   : '/bin/bash';
+
+test('SSH runner does not misclassify a remote permission error as key authentication failure', () => {
+  assert.match(sshRun, /\[ \$rc -eq 255 \]/u);
+  assert.match(sshRun, /permission denied \\?\([^)]*(?:publickey|password|keyboard-interactive)[^)]*\\?\)/iu);
+  assert.doesNotMatch(sshRun, /permission denied\|host key verification/iu);
+});
 
 function waitForStreamMatch(stream, pattern, label, timeoutMs = 5000) {
   return new Promise((resolvePromise, rejectPromise) => {
@@ -264,7 +271,7 @@ test('deployment fails unless application health and public status checks pass',
 });
 
 test('clean release uses the frozen lockfile and generates Prisma before compiling any workspace package', () => {
-  const candidateBuild = 'cd $RELEASE_ROOT && with-proxy npx pnpm@9.15.0 install --frozen-lockfile && with-proxy npx pnpm@9.15.0 --filter @openscience/database generate && with-proxy npx pnpm@9.15.0 build';
+  const candidateBuild = 'cd $RELEASE_ROOT && with-proxy npx pnpm@9.15.0 install --ignore-scripts --frozen-lockfile && with-proxy npx pnpm@9.15.0 --filter @openscience/database generate && with-proxy npx pnpm@9.15.0 build';
   assert.ok(source.includes(candidateBuild));
   assert.doesNotMatch(source, /首次版本化发布|first-transition-adapter/);
 });

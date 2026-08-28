@@ -108,7 +108,10 @@ test('Task 8 acceptance launcher exposes its exact isolated topology and rejects
   assert.match(source, /\/usr\/bin\/env -i \/usr\/local\/bin\/node "\$@"/u,
     'the worker shell must clear its automatically exported PWD before starting the acceptance runner');
 
+  const runtimeInstall = source.indexOf('install --ignore-scripts --frozen-lockfile');
   const build = source.indexOf('--filter @openscience/agent-worker... build');
+  assert.ok(runtimeInstall >= 0 && runtimeInstall < build,
+    'acceptance must stabilize the frozen dependency tree without arbitrary install scripts before hashing it');
   assert.match(source, /\(\s*umask 022\s*\/usr\/bin\/npx pnpm@9\.15\.0 --dir "\$RELEASE_ROOT" --filter @openscience\/agent-worker\.\.\. build >\/dev\/null\s*\)/u,
     'fresh runtime build must use a readable umask for the non-root worker');
   const sourceBeforeBuild = source.indexOf("verify_release_inputs 'before-build'");
@@ -133,6 +136,8 @@ test('Task 8 acceptance launcher exposes its exact isolated topology and rejects
   const publishVerifierIdentity = source.indexOf("verify_build_hashes 'before-atomic-publication'", strictCleanup);
   const runtimeInputsBeforePublish = source.indexOf("verify_runtime_inputs 'before-atomic-publication'", strictCleanup);
   assert.ok(immediatelyAfterBuild > build, 'complete runtime graph must be fixed immediately after build');
+  assert.ok(sourceBeforeBuild >= 0 && sourceBeforeBuild < runtimeInstall,
+    'archived source must be verified before dependency stabilization');
   assert.ok(sourceBeforeBuild >= 0 && sourceBeforeBuild < build,
     'archived source marker and manifest must be verified before build');
   assert.ok(sourceAfterBuild > build && sourceAfterBuild < immediatelyAfterBuild,
@@ -375,6 +380,6 @@ export -f git find npx docker
     },
   });
   assert.equal(swapped.status, 65, swapped.stderr);
-  assert.match(swapped.stderr, /identity|replaced|trusted|canonical/i);
+  assert.match(swapped.stderr, /identity|replaced|trusted|canonical|source marker|input manifest/i);
   assert.deepEqual((await readFile(marker, 'utf8')).trim().split(/\r?\n/u), ['find', 'npx']);
 });

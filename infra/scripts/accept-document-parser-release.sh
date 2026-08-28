@@ -110,6 +110,8 @@ if /usr/bin/find "$RELEASE_ROOT" -xdev -type f \( -name '.env' -o -name '.env.*'
   echo 'exact release root contains an environment secret file' >&2
   exit 65
 fi
+/usr/bin/npx pnpm@9.15.0 --dir "$RELEASE_ROOT" install --ignore-scripts --frozen-lockfile >/dev/null
+verify_release_inputs 'after-runtime-install' || exit 65
 (
   umask 022
   /usr/bin/npx pnpm@9.15.0 --dir "$RELEASE_ROOT" --filter @openscience/agent-worker... build >/dev/null
