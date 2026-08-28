@@ -31,6 +31,7 @@ print_contract() {
     \"required\": true, \"runnerSha256\": true, \"contractSha256\": true,
     \"runtimeGraphManifest\": true,
     \"runtimeGraphScope\": \"agent-worker-and-workspace-dist-js\",
+    \"runtimeInputsDigest\": \"worker-node-modules-workspace-dist-search-generated-bytes-modes-owners\",
     \"verifyAt\": [\"immediately-after-build\", \"before-container-start\", \"after-worker-completion\", \"before-publication\"]
   },
   \"deadlineSeconds\": 900,
@@ -68,6 +69,7 @@ CORPUS_ROOT="$ACCEPTANCE_ROOT/corpus"
 FINAL_REPORT="$ACCEPTANCE_ROOT/report.json"
 CONTRACT_JS="$RELEASE_ROOT/apps/agent-worker/dist/parser-acceptance-contract.js"
 RUNNER_JS="$RELEASE_ROOT/apps/agent-worker/dist/parser-acceptance-runner.js"
+SOURCE_MANIFEST_TOOL="$RELEASE_ROOT/scripts/release-input-manifest.mjs"
 EXPECTED_TRUST_UID=0
 
 trusted_directory_snapshot() {
@@ -98,10 +100,12 @@ capture_trust_snapshot() {
 
 TRUST_SNAPSHOT="$(capture_trust_snapshot)" \
   || { echo 'acceptance trusted-root preflight failed' >&2; exit 65; }
-[[ "$(/usr/bin/git -C "$RELEASE_ROOT" rev-parse HEAD)" == "$SOURCE_SHA" ]] \
-  || { echo 'release root is not the exact source SHA' >&2; exit 65; }
-[[ -z "$(/usr/bin/git -C "$RELEASE_ROOT" status --porcelain --untracked-files=normal)" ]] \
-  || { echo 'exact release root is not immutable and clean' >&2; exit 65; }
+verify_release_inputs() {
+  local stage="$1"
+  /usr/bin/node "$SOURCE_MANIFEST_TOOL" verify --root "$RELEASE_ROOT" --sha "$SOURCE_SHA" \
+    || { echo "release source marker or input manifest changed at $stage" >&2; return 1; }
+}
+verify_release_inputs 'before-build' || exit 65
 if /usr/bin/find "$RELEASE_ROOT" -xdev -type f \( -name '.env' -o -name '.env.*' \) ! -name '.env.example' -print -quit | grep -q .; then
   echo 'exact release root contains an environment secret file' >&2
   exit 65
@@ -109,9 +113,7 @@ fi
 /usr/bin/npx pnpm@9.15.0 --dir "$RELEASE_ROOT" --filter @openscience/agent-worker... build >/dev/null
 [[ "$(capture_trust_snapshot)" == "$TRUST_SNAPSHOT" ]] \
   || { echo 'trusted acceptance path identity was replaced during build' >&2; exit 65; }
-[[ "$(/usr/bin/git -C "$RELEASE_ROOT" rev-parse HEAD)" == "$SOURCE_SHA" \
-  && -z "$(/usr/bin/git -C "$RELEASE_ROOT" status --porcelain --untracked-files=normal)" ]] \
-  || { echo 'exact release root SHA or cleanliness changed during build' >&2; exit 65; }
+verify_release_inputs 'after-build' || exit 65
 [[ -f "$CONTRACT_JS" && -f "$RUNNER_JS" ]] \
   || { echo 'fresh acceptance build outputs missing from exact release' >&2; exit 66; }
 hash_build_outputs() {
@@ -130,6 +132,8 @@ read -r RUNNER_BUILD_SHA256 CONTRACT_BUILD_SHA256 <<<"$BUILD_HASHES"
 RUN_ID="${SOURCE_SHA:0:12}-$$"
 RUNTIME_GRAPH_JSON="$(/usr/bin/node "$CONTRACT_JS" runtime-manifest "$SOURCE_SHA" "$RUN_ID")" \
   || { echo 'complete acceptance runtime graph could not be fixed' >&2; exit 66; }
+RUNTIME_INPUTS_JSON="$(/usr/bin/node "$SOURCE_MANIFEST_TOOL" runtime-snapshot --root "$RELEASE_ROOT" --sha "$SOURCE_SHA")" \
+  || { echo 'complete generated runtime inputs could not be fixed' >&2; exit 66; }
 
 WORKER_IMAGE="openscience-agent-worker:$SOURCE_SHA"
 PARSER_IMAGE="openscience-document-parser:$SOURCE_SHA"
@@ -165,6 +169,13 @@ verify_runtime_graph() {
   verify_build_hashes "$stage" || return
   /usr/bin/node "$CONTRACT_JS" verify-runtime-manifest "$SOURCE_SHA" "$RUN_ID" \
     || { echo "complete acceptance runtime graph changed at $stage" >&2; return 1; }
+}
+
+verify_runtime_inputs() {
+  local stage="$1"
+  /usr/bin/node "$SOURCE_MANIFEST_TOOL" runtime-verify \
+    --root "$RELEASE_ROOT" --sha "$SOURCE_SHA" --snapshot-json "$RUNTIME_INPUTS_JSON" \
+    || { echo "complete generated runtime inputs changed at $stage" >&2; return 1; }
 }
 
 verify_build_hashes() {
@@ -226,9 +237,12 @@ fi
 PREPARED=true
 set -o noclobber
 printf '%s\n' "$RUNTIME_GRAPH_JSON" >"$RUN_ROOT/runtime-graph.json"
+printf '%s\n' "$RUNTIME_INPUTS_JSON" >"$RUN_ROOT/runtime-inputs.json"
 set +o noclobber
 verify_runtime_graph 'immediately-after-build' \
   || { echo 'fresh acceptance runtime graph identity missing' >&2; exit 66; }
+verify_runtime_inputs 'immediately-after-build' \
+  || { echo 'fresh generated runtime input identity missing' >&2; exit 66; }
 
 docker volume create \
   --label "org.openscience.acceptance.sha=$SOURCE_SHA" \
@@ -245,8 +259,12 @@ COMMON_LIMITS=(
   --user 1000:1000 --entrypoint /usr/bin/env
 )
 
+verify_release_inputs 'before-container-start' \
+  || { echo 'release source changed before container start' >&2; exit 70; }
 verify_runtime_graph 'before-container-start' \
   || { echo 'acceptance runtime graph changed before container start' >&2; exit 70; }
+verify_runtime_inputs 'before-container-start' \
+  || { echo 'generated runtime inputs changed before container start' >&2; exit 70; }
 PARSER_CONTAINER_ID="$(docker run -d --name "$PARSER_NAME" \
   --label "org.openscience.acceptance.sha=$SOURCE_SHA" \
   --label "org.openscience.acceptance.run=$RUN_ID" \
@@ -400,6 +418,8 @@ IFS= read -r WORKER_RUNNER_STATUS <"$WORKER_COMPLETED_MARKER" \
   || { echo 'acceptance worker completion status is invalid' >&2; exit 70; }
 verify_runtime_graph 'after-worker-completion' \
   || { echo 'acceptance runtime graph changed after worker completion' >&2; exit 70; }
+verify_runtime_inputs 'after-worker-completion' \
+  || { echo 'generated runtime inputs changed after worker completion' >&2; exit 70; }
 set -o noclobber
 : >"$WORKER_RELEASE_MARKER"
 set +o noclobber
@@ -432,6 +452,7 @@ const workerInspect = read('worker.inspect.json');
 const parserInspect = read('parser.inspect.json');
 const volumeInspect = read('volume.inspect.json');
 const runtimeGraph = JSON.parse(readFileSync(join(root, 'runtime-graph.json'), 'utf8'));
+const runtimeInputs = JSON.parse(readFileSync(join(root, 'runtime-inputs.json'), 'utf8'));
 const mount = (item) => ({
   type: item.Type,
   source: item.Type === 'volume' ? item.Name : item.Source,
@@ -503,7 +524,7 @@ const parser = resource(
   parserInspect, 'parser.samples.tsv', parserPid, parserCgroup, parserCgroupIdentity, parserEnv,
 );
 const report = {
-  build: { sourceSha, runnerSha256, contractSha256, runtimeGraph },
+  build: { sourceSha, runnerSha256, contractSha256, runtimeGraph, runtimeInputs },
   worker,
   parser,
   maxima: {
@@ -515,14 +536,30 @@ const report = {
 writeFileSync(join(root, 'resources.json'), `${JSON.stringify(report, null, 2)}\n`, { flag: 'wx', mode: 0o600 });
 NODE
 
+verify_release_inputs 'before-publication' \
+  || { echo 'release source changed before publication' >&2; exit 70; }
 verify_runtime_graph 'before-publication' \
   || { echo 'acceptance runtime graph changed before publication' >&2; exit 70; }
+verify_runtime_inputs 'before-publication' \
+  || { echo 'generated runtime inputs changed before publication' >&2; exit 70; }
 /usr/bin/node "$CONTRACT_JS" finalize "$SOURCE_SHA" "$RUN_ID"
 [[ -f "$UNPUBLISHED_REPORT" && ! -e "$FINAL_REPORT" ]] \
   || { echo 'unpublished acceptance report candidate missing' >&2; exit 70; }
+REPORT_RUNTIME_INPUTS_JSON="$(/usr/bin/node - "$UNPUBLISHED_REPORT" <<'NODE'
+const { readFileSync } = require('node:fs');
+const report = JSON.parse(readFileSync(process.argv[2], 'utf8'));
+process.stdout.write(JSON.stringify(report?.resources?.build?.runtimeInputs));
+NODE
+)" || { echo 'unpublished report generated runtime identity is unreadable' >&2; exit 70; }
+[[ "$REPORT_RUNTIME_INPUTS_JSON" == "$RUNTIME_INPUTS_JSON" ]] \
+  || { echo 'unpublished report generated runtime identity mismatch' >&2; exit 70; }
 cleanup_strict
 verify_build_hashes 'before-atomic-publication' \
   || { echo 'acceptance contract verifier changed before atomic publication' >&2; exit 70; }
+verify_release_inputs 'before-atomic-publication' \
+  || { echo 'release source changed before atomic publication' >&2; exit 70; }
+verify_runtime_inputs 'before-atomic-publication' \
+  || { echo 'generated runtime inputs changed before atomic publication' >&2; exit 70; }
 /usr/bin/node "$CONTRACT_JS" publish "$SOURCE_SHA" "$RUN_ID"
 [[ -f "$FINAL_REPORT" && ! -e "$UNPUBLISHED_REPORT" ]] \
   || { echo 'atomic acceptance report publication failed' >&2; exit 70; }

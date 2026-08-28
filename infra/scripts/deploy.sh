@@ -12,18 +12,20 @@ ENV_FILE="$CONFIG_ROOT/.env"
 CONFIRM=0
 SKIP_BUILD=0
 SKIP_MIGRATE=0
+REQUIRE_PARSER_ACCEPTANCE=0
 ROLLBACK_REF=""
 while [ $# -gt 0 ]; do
   case "$1" in
     --confirm) CONFIRM=1; shift ;;
     --skip-build) SKIP_BUILD=1; shift ;;
     --skip-migrate) SKIP_MIGRATE=1; shift ;;
+    --require-parser-acceptance) REQUIRE_PARSER_ACCEPTANCE=1; shift ;;
     --rollback-ref) [ $# -ge 2 ] || { echo "错误：--rollback-ref 缺少值" >&2; exit 64; }; ROLLBACK_REF="$2"; shift 2 ;;
     -*) echo "未知参数: $1" >&2; exit 64 ;;
     *) RELEASE_REF="$1"; shift ;;
   esac
 done
-[ -n "${RELEASE_REF:-}" ] || { echo "用法: deploy.sh [--confirm] --rollback-ref <rollback-ref> <release-ref>" >&2; exit 64; }
+[ -n "${RELEASE_REF:-}" ] || { echo "用法: deploy.sh [--confirm] [--require-parser-acceptance] --rollback-ref <active-release-ref> <release-ref>" >&2; exit 64; }
 [ "$SKIP_BUILD" -eq 0 ] || { echo "错误：精确 Git tree 部署必须重新 build，禁止 --skip-build" >&2; exit 64; }
 
 RELEASE_SHA="$(node "$PROJECT_ROOT/scripts/verify-release-source.mjs" --root "$PROJECT_ROOT" --ref "$RELEASE_REF")" \
@@ -81,7 +83,6 @@ REMOTE_ROOT="/opt/openscience"
 RELEASE_ROOT="/opt/openscience-releases/$RELEASE_SHA"
 PROD_ENV="$REMOTE_ROOT/.env.prod"
 COMPOSE_FILE="$RELEASE_ROOT/infra/compose/docker-compose.prod.yml"
-LEGACY_COMPOSE_FILE="$REMOTE_ROOT/infra/compose/docker-compose.prod.yml"
 NGINX_CONF="/etc/nginx/conf.d/openscience.conf"
 HTPASSWD="/etc/nginx/.htpasswd-admin"
 
@@ -119,10 +120,11 @@ if [ "$CONFIRM" -ne 1 ]; then
   plan "迁移/seed 后按 Parser→API/Web/Worker 顺序切换"
   plan "公网与 /__release 验收；失败自动恢复 rollback-ref/上一 active SHA"
   [ -n "$ROLLBACK_REF" ] || plan "执行 --confirm 前必须补 --rollback-ref <已验证 Git ref>"
+  [ "$REQUIRE_PARSER_ACCEPTANCE" -eq 1 ] || plan "执行 --confirm 前必须补 --require-parser-acceptance"
   exit 0
 fi
 [ -n "$ROLLBACK_SHA" ] || { echo "错误：--confirm 必须提供 --rollback-ref" >&2; exit 64; }
-[ "$ROLLBACK_SHA" != "$RELEASE_SHA" ] || { echo "错误：rollback-ref 不能等于 release-ref" >&2; exit 64; }
+[ "$REQUIRE_PARSER_ACCEPTANCE" -eq 1 ] || { echo "错误：--confirm 必须提供 --require-parser-acceptance" >&2; exit 64; }
 
 log "=== 执行部署（--confirm）==="
 run_remote "test ! -e $REMOTE_ROOT/.release-failed" || {
@@ -130,6 +132,18 @@ run_remote "test ! -e $REMOTE_ROOT/.release-failed" || {
   exit 1
 }
 ACTIVE_RELEASE_SHA="$(run_remote "cat $REMOTE_ROOT/.release-id 2>/dev/null || true")"
+if [ -n "$ACTIVE_RELEASE_SHA" ] && [[ ! "$ACTIVE_RELEASE_SHA" =~ ^[0-9a-f]{40}$ ]]; then
+  echo "错误：云上 active release identity 非法" >&2
+  exit 1
+fi
+[ -n "$ACTIVE_RELEASE_SHA" ] || {
+  echo "错误：云上缺少 active release identity，拒绝猜测 rollback" >&2
+  exit 66
+}
+[ "$ROLLBACK_SHA" = "$ACTIVE_RELEASE_SHA" ] || {
+  echo "错误：rollback-ref 必须精确等于当前 active production release" >&2
+  exit 66
+}
 BGE_M3_DEPLOY_VALUE="$(read_prod_value BGE_M3_DEPLOY)" || {
   echo "错误：BGE_M3_DEPLOY 必须且只能配置一次" >&2
   exit 66
@@ -190,14 +204,6 @@ verify_release_capability() {
   [ "$package_freeze_sha256" = "$BGE_M3_PACKAGE_FREEZE_SHA256" ]
   [ "$model_manifest_sha256" = "$BGE_M3_MODEL_MANIFEST_SHA256" ]
 }
-if [ -n "$ACTIVE_RELEASE_SHA" ] && [[ ! "$ACTIVE_RELEASE_SHA" =~ ^[0-9a-f]{40}$ ]]; then
-  echo "错误：云上 active release identity 非法" >&2
-  exit 1
-fi
-if [ -z "$ACTIVE_RELEASE_SHA" ]; then
-  run_remote "set -euo pipefail; containers=\$(docker ps -aq); if [ -n \"\$containers\" ]; then mounts=\$(docker inspect --format='{{range .Mounts}}{{println .Source}}{{end}}' \$containers); if printf '%s\n' \"\$mounts\" | grep -q '^/opt/openscience-releases/'; then echo 'versioned release mounts exist without .release-id' >&2; exit 1; fi; fi"
-fi
-
 if [ "$ACTIVE_RELEASE_SHA" = "$RELEASE_SHA" ]; then
   same_sha_verification_failed() {
     local original_status=$?
@@ -227,7 +233,7 @@ if [ "$ACTIVE_RELEASE_SHA" = "$RELEASE_SHA" ]; then
   exit 0
 fi
 
-PREVIOUS_RELEASE_SHA="${ACTIVE_RELEASE_SHA:-$ROLLBACK_SHA}"
+PREVIOUS_RELEASE_SHA="$ACTIVE_RELEASE_SHA"
 PREVIOUS_RELEASE_ROOT="/opt/openscience-releases/$PREVIOUS_RELEASE_SHA"
 ROLLBACK_COMPOSE_FILE="$PREVIOUS_RELEASE_ROOT/infra/compose/docker-compose.prod.yml"
 ROLLBACK_COMPOSE_MODE="previous-release"
@@ -240,16 +246,15 @@ PREVIOUS_BGE_M3_MODEL_REVISION=""
 PREVIOUS_BGE_M3_SOURCE_SHA256=""
 PREVIOUS_BGE_M3_PACKAGE_FREEZE_SHA256=""
 PREVIOUS_BGE_M3_MODEL_MANIFEST_SHA256=""
-if [ -n "$ACTIVE_RELEASE_SHA" ]; then
-  run_remote "test \"\$(cat '$PREVIOUS_RELEASE_ROOT/.release-source')\" = '$PREVIOUS_RELEASE_SHA'"
-  run_remote "test -f '$ROLLBACK_COMPOSE_FILE'"
-  run_remote "docker image inspect openscience-agent-worker:$PREVIOUS_RELEASE_SHA openscience-document-parser:$PREVIOUS_RELEASE_SHA >/dev/null"
-  PREVIOUS_CAPABILITY_STATE="$(run_remote "set -euo pipefail; if [ -f '$PREVIOUS_CAPABILITIES_FILE' ]; then printf present; elif [ -e '$PREVIOUS_CAPABILITIES_FILE' ]; then exit 65; elif grep -q '^  embedding-worker:' '$ROLLBACK_COMPOSE_FILE'; then printf missing-with-embedding; else probe_status=\$?; if [ \"\$probe_status\" -eq 1 ]; then printf absent-no-embedding; else exit \"\$probe_status\"; fi; fi")" || {
-    echo "错误：旧 release capability 探测失败，拒绝猜测回滚身份" >&2
-    exit 66
-  }
-  case "$PREVIOUS_CAPABILITY_STATE" in
-    present)
+run_remote "test \"\$(cat '$PREVIOUS_RELEASE_ROOT/.release-source')\" = '$PREVIOUS_RELEASE_SHA'"
+run_remote "test -f '$ROLLBACK_COMPOSE_FILE'"
+run_remote "docker image inspect openscience-agent-worker:$PREVIOUS_RELEASE_SHA openscience-document-parser:$PREVIOUS_RELEASE_SHA >/dev/null"
+PREVIOUS_CAPABILITY_STATE="$(run_remote "set -euo pipefail; if [ -f '$PREVIOUS_CAPABILITIES_FILE' ]; then printf present; elif [ -e '$PREVIOUS_CAPABILITIES_FILE' ]; then exit 65; elif grep -q '^  embedding-worker:' '$ROLLBACK_COMPOSE_FILE'; then printf missing-with-embedding; else probe_status=\$?; if [ \"\$probe_status\" -eq 1 ]; then printf absent-no-embedding; else exit \"\$probe_status\"; fi; fi")" || {
+  echo "错误：旧 release capability 探测失败，拒绝猜测回滚身份" >&2
+  exit 66
+}
+case "$PREVIOUS_CAPABILITY_STATE" in
+  present)
     PREVIOUS_CAPABILITY_SCHEMA="$(read_capability_value "$PREVIOUS_CAPABILITIES_FILE" schema)"
     case "$PREVIOUS_CAPABILITY_SCHEMA" in
       1)
@@ -289,24 +294,14 @@ if [ -n "$ACTIVE_RELEASE_SHA" ]; then
         ;;
       *) echo "错误：旧 release capability schema 不受支持" >&2; exit 66 ;;
     esac
-      ;;
-    absent-no-embedding) ;;
-    missing-with-embedding)
-      echo "错误：旧 release 含 embedding 服务但 capability sidecar 缺失，拒绝猜测回滚身份" >&2
-      exit 66
-      ;;
-    *) echo "错误：旧 release capability 探测返回未知状态" >&2; exit 66 ;;
-  esac
-else
-  log "[0] 首次版本化发布：物化并构建 rollback-ref..."
-  # 旧版 Compose 不理解 release root/image tag；首次切换只能用新 Compose
-  # 作为显式兼容适配器，并把切换前正在运行的不可变镜像 ID 保存为 rollback tag。
-  ROLLBACK_COMPOSE_FILE="$COMPOSE_FILE"
-  ROLLBACK_COMPOSE_MODE="first-transition-adapter"
-  XGS_SOURCE_ROOT="$PROJECT_ROOT" XGS_CONFIG_ROOT="$CONFIG_ROOT" XGS_RELEASE_SHA="$PREVIOUS_RELEASE_SHA" node "$PROJECT_ROOT/scripts/cloud-sync.mjs"
-  run_remote "cd $PREVIOUS_RELEASE_ROOT && with-proxy npx pnpm@9.15.0 install && with-proxy npx pnpm@9.15.0 --filter @openscience/database generate && with-proxy npx pnpm@9.15.0 build"
-  run_remote "set -e; worker_container=\$(docker compose --env-file $PROD_ENV -f $LEGACY_COMPOSE_FILE ps -q agent-worker); parser_container=\$(docker compose --env-file $PROD_ENV -f $LEGACY_COMPOSE_FILE ps -q document-parser); test -n \"\$worker_container\"; test -n \"\$parser_container\"; worker_image=\$(docker inspect --format='{{.Image}}' \"\$worker_container\"); parser_image=\$(docker inspect --format='{{.Image}}' \"\$parser_container\"); test -n \"\$worker_image\"; test -n \"\$parser_image\"; docker image inspect \"\$worker_image\" \"\$parser_image\" >/dev/null; docker tag \"\$worker_image\" openscience-agent-worker:$PREVIOUS_RELEASE_SHA; docker tag \"\$parser_image\" openscience-document-parser:$PREVIOUS_RELEASE_SHA"
-fi
+    ;;
+  absent-no-embedding) ;;
+  missing-with-embedding)
+    echo "错误：旧 release 含 embedding 服务但 capability sidecar 缺失，拒绝猜测回滚身份" >&2
+    exit 66
+    ;;
+  *) echo "错误：旧 release capability 探测返回未知状态" >&2; exit 66 ;;
+esac
 PREVIOUS_RUNTIME_ENV="BGE_M3_ENABLED=$PREVIOUS_BGE_M3_ENABLED_VALUE BGE_M3_MODEL_VERSION_ID=$PREVIOUS_BGE_M3_MODEL_VERSION_ID BGE_M3_MODEL_REVISION=$PREVIOUS_BGE_M3_MODEL_REVISION BGE_M3_SOURCE_SHA256=$PREVIOUS_BGE_M3_SOURCE_SHA256 BGE_M3_PACKAGE_FREEZE_SHA256=$PREVIOUS_BGE_M3_PACKAGE_FREEZE_SHA256 BGE_M3_MODEL_MANIFEST_SHA256=$PREVIOUS_BGE_M3_MODEL_MANIFEST_SHA256"
 
 log "[1] 物化完整 Git release..."
@@ -320,6 +315,13 @@ compose_current "build agent-worker document-parser"
 if [ "$EMBEDDING_DEPLOY" -eq 1 ]; then
   compose_embedding_current "build embedding-worker"
 fi
+
+PARSER_ACCEPTANCE_REPORT="/opt/openscience-acceptance/document-parser/$RELEASE_SHA/report.json"
+FINAL_WORKER_IMAGE_ID="$(run_remote "docker image inspect --format='{{.Id}}' openscience-agent-worker:$RELEASE_SHA")"
+FINAL_PARSER_IMAGE_ID="$(run_remote "docker image inspect --format='{{.Id}}' openscience-document-parser:$RELEASE_SHA")"
+require_match final_worker_image_id "$FINAL_WORKER_IMAGE_ID" '^sha256:[0-9a-f]{64}$'
+require_match final_parser_image_id "$FINAL_PARSER_IMAGE_ID" '^sha256:[0-9a-f]{64}$'
+run_remote "/usr/bin/node '$RELEASE_ROOT/infra/scripts/verify-document-parser-acceptance.mjs' --release-root '$RELEASE_ROOT' --report '$PARSER_ACCEPTANCE_REPORT' --source-sha '$RELEASE_SHA' --worker-image-id '$FINAL_WORKER_IMAGE_ID' --parser-image-id '$FINAL_PARSER_IMAGE_ID'"
 
 SWITCH_STARTED=0
 rollback_application() {

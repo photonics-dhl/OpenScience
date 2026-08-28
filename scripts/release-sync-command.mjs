@@ -5,11 +5,12 @@ export function buildReleaseMaterializeCommand(releaseRoot, releaseSha) {
 
   const stage = `${releaseRoot}.stage`;
   const marker = `${releaseRoot}/.release-source`;
+  const manifestTool = `${releaseRoot}/scripts/release-input-manifest.mjs`;
   return [
     'set -eu',
     `test '${releaseRoot}' = '${expectedRoot}'`,
     `mkdir -p '/opt/openscience-releases'`,
-    `if [ -d '${releaseRoot}' ]; then test "$(cat '${marker}')" = '${releaseSha}'; tar -tzf - >/dev/null; exit 0; fi`,
+    `if [ -d '${releaseRoot}' ]; then tar -tzf - >/dev/null; test "$(cat '${marker}')" = '${releaseSha}'; /usr/bin/node '${manifestTool}' verify --root '${releaseRoot}' --sha '${releaseSha}'; exit 0; fi`,
     `if [ -e '${stage}' ]; then rm -rf -- '${stage}'; fi`,
     `cleanup_stage() { rm -rf -- '${stage}'; }`,
     `trap 'cleanup_stage' EXIT HUP INT TERM`,
@@ -18,7 +19,12 @@ export function buildReleaseMaterializeCommand(releaseRoot, releaseSha) {
     `test -f '${stage}/.dockerignore'`,
     `test -f '${stage}/package.json'`,
     `test -f '${stage}/infra/compose/docker-compose.prod.yml'`,
+    `test ! -e '${stage}/.release-source'`,
+    `test ! -e '${stage}/.release-inputs.sha256'`,
     `printf '%s\\n' '${releaseSha}' > '${stage}/.release-source'`,
+    `chmod 0444 '${stage}/.release-source'`,
+    `/usr/bin/node '${stage}/scripts/release-input-manifest.mjs' create --root '${stage}' --sha '${releaseSha}'`,
+    `/usr/bin/node '${stage}/scripts/release-input-manifest.mjs' verify --root '${stage}' --sha '${releaseSha}'`,
     `mv '${stage}' '${releaseRoot}'`,
     'trap - EXIT HUP INT TERM',
   ].join('\n');

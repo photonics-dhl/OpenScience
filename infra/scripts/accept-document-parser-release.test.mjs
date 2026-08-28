@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { existsSync } from 'node:fs';
-import { chmod, mkdir, mkdtemp, readFile, symlink, writeFile } from 'node:fs/promises';
+import { chmod, cp, mkdir, mkdtemp, readFile, rm, symlink, writeFile } from 'node:fs/promises';
 import { spawnSync } from 'node:child_process';
 import { tmpdir } from 'node:os';
 import { fileURLToPath } from 'node:url';
@@ -11,6 +11,14 @@ const script = resolve(dirname(fileURLToPath(import.meta.url)), 'accept-document
 const bash = process.platform === 'win32' && existsSync('C:/Program Files/Git/bin/bash.exe')
   ? 'C:/Program Files/Git/bin/bash.exe'
   : 'bash';
+
+const manifestTool = resolve(dirname(fileURLToPath(import.meta.url)), '../../scripts/release-input-manifest.mjs');
+
+function bashPath(path) {
+  return process.platform === 'win32'
+    ? spawnSync(bash, ['-lc', `cygpath -u '${path.replaceAll("'", "'\\''")}'`], { encoding: 'utf8' }).stdout.trim()
+    : path;
+}
 
 test('Task 8 acceptance launcher exposes its exact isolated topology and rejects unsafe arguments before Docker', () => {
   const syntax = spawnSync(bash, ['-n', script], { encoding: 'utf8' });
@@ -62,6 +70,7 @@ test('Task 8 acceptance launcher exposes its exact isolated topology and rejects
       contractSha256: true,
       runtimeGraphManifest: true,
       runtimeGraphScope: 'agent-worker-and-workspace-dist-js',
+      runtimeInputsDigest: 'worker-node-modules-workspace-dist-search-generated-bytes-modes-owners',
       verifyAt: ['immediately-after-build', 'before-container-start', 'after-worker-completion', 'before-publication'],
     },
     deadlineSeconds: 900,
@@ -98,26 +107,59 @@ test('Task 8 acceptance launcher exposes its exact isolated topology and rejects
   assert.ok(releaseWorker > terminalWorkerSample, 'worker may exit only after terminal sampling');
 
   const build = source.indexOf('--filter @openscience/agent-worker... build');
+  const sourceBeforeBuild = source.indexOf("verify_release_inputs 'before-build'");
+  const sourceAfterBuild = source.indexOf("verify_release_inputs 'after-build'");
+  const sourceBeforeStart = source.indexOf("verify_release_inputs 'before-container-start'");
+  const sourceBeforePublication = source.indexOf("verify_release_inputs 'before-publication'");
+  const sourceBeforeAtomicPublication = source.indexOf("verify_release_inputs 'before-atomic-publication'");
   const immediatelyAfterBuild = source.indexOf("verify_runtime_graph 'immediately-after-build'");
+  const runtimeInputsAfterBuild = source.indexOf("verify_runtime_inputs 'immediately-after-build'");
   const beforeContainerStart = source.indexOf("verify_runtime_graph 'before-container-start'");
+  const runtimeInputsBeforeStart = source.indexOf("verify_runtime_inputs 'before-container-start'");
   const parserStart = source.indexOf('PARSER_CONTAINER_ID="$(docker run');
   const afterWorkerCompletion = source.indexOf("verify_runtime_graph 'after-worker-completion'");
+  const runtimeInputsAfterWorker = source.indexOf("verify_runtime_inputs 'after-worker-completion'");
   const beforePublication = source.indexOf("verify_runtime_graph 'before-publication'");
+  const runtimeInputsBeforePublication = source.indexOf("verify_runtime_inputs 'before-publication'");
   const finalize = source.indexOf('"$CONTRACT_JS" finalize');
   const strictCleanup = source.indexOf('cleanup_strict', finalize);
+  const reportRuntimeIdentity = source.indexOf('REPORT_RUNTIME_INPUTS_JSON=', finalize);
   const publish = source.indexOf('"$CONTRACT_JS" publish', strictCleanup);
   const publishVerifierIdentity = source.indexOf("verify_build_hashes 'before-atomic-publication'", strictCleanup);
+  const runtimeInputsBeforePublish = source.indexOf("verify_runtime_inputs 'before-atomic-publication'", strictCleanup);
   assert.ok(immediatelyAfterBuild > build, 'complete runtime graph must be fixed immediately after build');
+  assert.ok(sourceBeforeBuild >= 0 && sourceBeforeBuild < build,
+    'archived source marker and manifest must be verified before build');
+  assert.ok(sourceAfterBuild > build && sourceAfterBuild < immediatelyAfterBuild,
+    'archived source marker and manifest must be reverified after build');
+  assert.ok(sourceBeforeStart > sourceAfterBuild && sourceBeforeStart < parserStart,
+    'archived source marker and manifest must be reverified before container start');
+  assert.ok(sourceBeforePublication > afterWorkerCompletion && sourceBeforePublication < finalize,
+    'archived source marker and manifest must be reverified before finalization');
+  assert.ok(sourceBeforeAtomicPublication > strictCleanup && sourceBeforeAtomicPublication < publish,
+    'archived source marker and manifest must be reverified immediately before atomic publication');
   assert.ok(beforeContainerStart > immediatelyAfterBuild && beforeContainerStart < parserStart,
     'complete runtime graph must be reverified before either container starts');
+  assert.ok(runtimeInputsAfterBuild > immediatelyAfterBuild && runtimeInputsAfterBuild < parserStart,
+    'complete generated runtime inputs must be fixed immediately after build');
+  assert.ok(runtimeInputsBeforeStart > runtimeInputsAfterBuild && runtimeInputsBeforeStart < parserStart,
+    'complete generated runtime inputs must be reverified before either container starts');
   assert.ok(afterWorkerCompletion > waitForCompletion,
     'complete runtime graph must be reverified after worker completion');
   assert.ok(beforePublication > afterWorkerCompletion && beforePublication < finalize,
     'complete runtime graph must be reverified before finalization');
+  assert.ok(runtimeInputsAfterWorker > afterWorkerCompletion && runtimeInputsAfterWorker < finalize,
+    'complete generated runtime inputs must be reverified after worker completion');
+  assert.ok(runtimeInputsBeforePublication > runtimeInputsAfterWorker && runtimeInputsBeforePublication < finalize,
+    'complete generated runtime inputs must be reverified before finalization');
   assert.ok(publish > strictCleanup,
     'the publish command must reverify the embedded runtime graph immediately after strict cleanup');
+  assert.ok(reportRuntimeIdentity > finalize && reportRuntimeIdentity < strictCleanup,
+    'the unpublished report must retain the exact verified generated runtime identity before cleanup');
   assert.ok(publishVerifierIdentity > strictCleanup && publishVerifierIdentity < publish,
     'the independently hashed contract verifier must retain its build identity at atomic publication');
+  assert.ok(runtimeInputsBeforePublish > strictCleanup && runtimeInputsBeforePublish < publish,
+    'complete generated runtime inputs must be reverified immediately before atomic publication');
 });
 
 test('Task 8 launcher rejects untrusted roots before invoking release commands or package scripts', async () => {
@@ -136,6 +178,107 @@ test('Task 8 launcher rejects untrusted roots before invoking release commands o
   assert.equal(existsSync(marker), false, existsSync(marker) ? await readFile(marker, 'utf8') : '');
 });
 
+test('archive-style source manifest replaces Git metadata and is reverified after build', async (t) => {
+  async function setup() {
+    const sandbox = await mkdtemp(join(tmpdir(), 'task8-manifest-preflight-'));
+    const root = bashPath(sandbox);
+    const uid = spawnSync(bash, ['-lc', 'id -u'], { encoding: 'utf8' }).stdout.trim();
+    const sha = 'd'.repeat(40);
+    const releaseRoot = join(sandbox, 'releases', sha);
+    const acceptanceRoot = join(sandbox, 'acceptance', sha);
+    await mkdir(join(releaseRoot, 'scripts'), { recursive: true, mode: 0o700 });
+    await mkdir(join(acceptanceRoot, 'corpus'), { recursive: true, mode: 0o700 });
+    for (const path of [
+      join(sandbox, 'releases'), releaseRoot, join(sandbox, 'acceptance'), acceptanceRoot,
+      join(acceptanceRoot, 'corpus'),
+    ]) await chmod(path, 0o700);
+    await cp(manifestTool, join(releaseRoot, 'scripts', 'release-input-manifest.mjs'));
+    await writeFile(join(releaseRoot, 'package.json'), '{"name":"fixture"}\n');
+    await writeFile(join(releaseRoot, '.release-source'), `${sha}\n`);
+    const created = spawnSync(process.execPath, [manifestTool, 'create', '--root', releaseRoot, '--sha', sha], {
+      encoding: 'utf8',
+    });
+    assert.equal(created.status, 0, created.stderr);
+    const source = await readFile(script, 'utf8');
+    const launcher = join(sandbox, 'launcher.sh');
+    await writeFile(launcher, source
+      .replaceAll('/opt/openscience-releases', `${root}/releases`)
+      .replaceAll('/opt/openscience-acceptance/document-parser', `${root}/acceptance`)
+      .replace('EXPECTED_TRUST_UID=0', `EXPECTED_TRUST_UID=${uid}`)
+      .replaceAll('/usr/bin/node', 'node')
+      .replaceAll('/usr/bin/find', 'find')
+      .replaceAll('/usr/bin/npx', 'npx'));
+    await chmod(launcher, 0o700);
+    return { sandbox, sha, releaseRoot, launcher };
+  }
+
+  await t.test('clean archived source reaches the package build without .git', async () => {
+    const state = await setup();
+    try {
+      const marker = join(state.sandbox, 'commands');
+      const bashEnv = join(state.sandbox, 'bash-env');
+      await writeFile(bashEnv, `
+npx() { printf '%s\\n' npx >> '${bashPath(marker)}'; return 91; }
+docker() { printf '%s\\n' docker >> '${bashPath(marker)}'; return 92; }
+export -f npx docker
+`);
+      const run = spawnSync(bash, [state.launcher, state.sha], {
+        encoding: 'utf8', env: { PATH: process.env.PATH ?? '', BASH_ENV: bashPath(bashEnv) },
+      });
+      assert.equal(run.status, 91, run.stderr);
+      assert.deepEqual((await readFile(marker, 'utf8')).trim().split(/\r?\n/u), ['npx']);
+      assert.doesNotMatch(`${run.stdout}${run.stderr}`, /not a git repository/i);
+    } finally {
+      await rm(state.sandbox, { recursive: true, force: true });
+    }
+  });
+
+  await t.test('tracked tampering is rejected before package build or Docker', async () => {
+    const state = await setup();
+    try {
+      await writeFile(join(state.releaseRoot, 'package.json'), '{"name":"tampered"}\n');
+      const marker = join(state.sandbox, 'commands');
+      const bashEnv = join(state.sandbox, 'bash-env');
+      await writeFile(bashEnv, `
+npx() { printf '%s\\n' npx >> '${bashPath(marker)}'; return 0; }
+docker() { printf '%s\\n' docker >> '${bashPath(marker)}'; return 0; }
+export -f npx docker
+`);
+      const run = spawnSync(bash, [state.launcher, state.sha], {
+        encoding: 'utf8', env: { PATH: process.env.PATH ?? '', BASH_ENV: bashPath(bashEnv) },
+      });
+      assert.equal(run.status, 65, run.stderr);
+      assert.equal(existsSync(marker), false);
+    } finally {
+      await rm(state.sandbox, { recursive: true, force: true });
+    }
+  });
+
+  await t.test('source changed by the build is rejected before Docker', async () => {
+    const state = await setup();
+    try {
+      const marker = join(state.sandbox, 'commands');
+      const bashEnv = join(state.sandbox, 'bash-env');
+      await writeFile(bashEnv, `
+npx() {
+  printf '%s\\n' npx >> '${bashPath(marker)}'
+  printf '%s\\n' '{"name":"changed-during-build"}' > '${bashPath(join(state.releaseRoot, 'package.json'))}'
+  return 0
+}
+docker() { printf '%s\\n' docker >> '${bashPath(marker)}'; return 0; }
+export -f npx docker
+`);
+      const run = spawnSync(bash, [state.launcher, state.sha], {
+        encoding: 'utf8', env: { PATH: process.env.PATH ?? '', BASH_ENV: bashPath(bashEnv) },
+      });
+      assert.equal(run.status, 65, run.stderr);
+      assert.deepEqual((await readFile(marker, 'utf8')).trim().split(/\r?\n/u), ['npx']);
+    } finally {
+      await rm(state.sandbox, { recursive: true, force: true });
+    }
+  });
+});
+
 test('Task 8 launcher rejects a symlink and a post-build root replacement before Docker', async () => {
   const sandbox = await mkdtemp(join(tmpdir(), 'task8-pretrust-replacement-'));
   const bashPath = (path) => process.platform === 'win32'
@@ -149,6 +292,7 @@ test('Task 8 launcher rejects a symlink and a post-build root replacement before
     .replaceAll('/opt/openscience-releases', `${root}/releases`)
     .replaceAll('/opt/openscience-acceptance/document-parser', `${root}/acceptance`)
     .replace('EXPECTED_TRUST_UID=0', `EXPECTED_TRUST_UID=${uid}`)
+    .replaceAll('/usr/bin/node', 'node')
     .replaceAll('/usr/bin/git', 'git')
     .replaceAll('/usr/bin/find', 'find')
     .replaceAll('/usr/bin/npx', 'npx'));
@@ -199,17 +343,25 @@ export -f git find npx docker
     .replaceAll('/opt/openscience-releases', `${secondBashRoot}/releases`)
     .replaceAll('/opt/openscience-acceptance/document-parser', `${secondBashRoot}/acceptance`)
     .replace('EXPECTED_TRUST_UID=0', `EXPECTED_TRUST_UID=${uid}`)
+    .replaceAll('/usr/bin/node', 'node')
     .replaceAll('/usr/bin/git', 'git')
     .replaceAll('/usr/bin/find', 'find')
     .replaceAll('/usr/bin/npx', 'npx'));
   await chmod(secondScript, 0o700);
   await mkdir(join(secondRoot, 'releases', sha), { recursive: true, mode: 0o700 });
+  await mkdir(join(secondRoot, 'releases', sha, 'scripts'), { recursive: true, mode: 0o700 });
   await mkdir(join(secondRoot, 'acceptance', sha, 'corpus'), { recursive: true, mode: 0o700 });
   for (const path of [
     join(secondRoot, 'releases'), join(secondRoot, 'releases', sha),
     join(secondRoot, 'acceptance'), join(secondRoot, 'acceptance', sha),
     join(secondRoot, 'acceptance', sha, 'corpus'),
   ]) await chmod(path, 0o700);
+  await cp(manifestTool, join(secondRoot, 'releases', sha, 'scripts', 'release-input-manifest.mjs'));
+  await writeFile(join(secondRoot, 'releases', sha, 'package.json'), '{"name":"fixture"}\n');
+  await writeFile(join(secondRoot, 'releases', sha, '.release-source'), `${sha}\n`);
+  const manifested = spawnSync(process.execPath, [manifestTool, 'create',
+    '--root', join(secondRoot, 'releases', sha), '--sha', sha], { encoding: 'utf8' });
+  assert.equal(manifested.status, 0, manifested.stderr);
   const swapped = spawnSync(bash, [secondScript, sha], {
     encoding: 'utf8', env: {
       ...baseEnv, TEST_RELEASE_ROOT: `${secondBashRoot}/releases/${sha}`,
@@ -217,5 +369,5 @@ export -f git find npx docker
   });
   assert.equal(swapped.status, 65);
   assert.match(swapped.stderr, /identity|replaced|trusted|canonical/i);
-  assert.deepEqual((await readFile(marker, 'utf8')).trim().split(/\r?\n/u), ['git', 'git', 'find', 'npx']);
+  assert.deepEqual((await readFile(marker, 'utf8')).trim().split(/\r?\n/u), ['find', 'npx']);
 });

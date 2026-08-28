@@ -198,10 +198,9 @@ test('deployment fails unless application health and public status checks pass',
 });
 
 test('clean release builds generate Prisma before compiling any workspace package', () => {
-  const rollbackBuild = 'cd $PREVIOUS_RELEASE_ROOT && with-proxy npx pnpm@9.15.0 install && with-proxy npx pnpm@9.15.0 --filter @openscience/database generate && with-proxy npx pnpm@9.15.0 build';
   const candidateBuild = 'cd $RELEASE_ROOT && with-proxy npx pnpm@9.15.0 install && with-proxy npx pnpm@9.15.0 --filter @openscience/database generate && with-proxy npx pnpm@9.15.0 build';
-  assert.ok(source.includes(rollbackBuild));
   assert.ok(source.includes(candidateBuild));
+  assert.doesNotMatch(source, /首次版本化发布|first-transition-adapter/);
 });
 
 test('deployment publishes and verifies the exact immutable release identity', () => {
@@ -260,7 +259,7 @@ test('release materialization is write-once and cleans only a failed stage', asy
   assert.match(command, /trap .*stage/);
   assert.match(command, /tar -tzf -/);
   assert.doesNotMatch(command, /active_release/);
-  assert.match(command, /if \[ -d '[^']+' \]; then test[^\n]+tar -tzf - >\/dev\/null; exit 0; fi/);
+  assert.match(command, /if \[ -d '[^']+' \]; then tar -tzf - >\/dev\/null; test[^\n]+release-input-manifest\.mjs' verify[^\n]+exit 0; fi/);
   assert.doesNotMatch(command, new RegExp(`rm -rf -- '${releaseRoot.replaceAll('/', '\\/')}'`));
   const parsed = spawnSync('bash', ['-n', '-c', command], { encoding: 'utf8' });
   assert.equal(parsed.status, 0, parsed.stderr);
@@ -271,13 +270,14 @@ test('deployment keeps an application rollback trap until public health succeeds
   assert.match(source, /--rollback-ref/);
   assert.match(source, /ROLLBACK_SHA=/);
   assert.match(source, /ACTIVE_RELEASE_SHA=.*\.release-id/);
-  assert.match(source, /PREVIOUS_RELEASE_SHA="\$\{ACTIVE_RELEASE_SHA:-\$ROLLBACK_SHA\}"/);
+  assert.match(source, /PREVIOUS_RELEASE_SHA="\$ACTIVE_RELEASE_SHA"/);
   assert.match(source, /rollback_application\(\)/);
   assert.match(source, /trap 'rollback_application' ERR/);
   assert.match(source, /trap - ERR[\s\S]*部署完成/);
   assert.match(source, /ROLLBACK_FAILED/);
   assert.match(source, /ROLLBACK_COMPOSE_FILE="\$PREVIOUS_RELEASE_ROOT\/infra\/compose\/docker-compose\.prod\.yml"/);
-  assert.match(source, /ROLLBACK_COMPOSE_MODE="first-transition-adapter"/);
+  assert.match(source, /ROLLBACK_COMPOSE_MODE="previous-release"/);
+  assert.doesNotMatch(source, /ROLLBACK_COMPOSE_MODE="first-transition-adapter"/);
   assert.match(source, /PREVIOUS_HAS_EMBEDDING=/);
   assert.match(source, /\.release-capabilities/);
   assert.match(source, /embedding_deploy=%s/);
@@ -287,22 +287,43 @@ test('deployment keeps an application rollback trap until public health succeeds
   assert.match(source, /rm -f \$REMOTE_ROOT\/\.release-id/);
   assert.match(source, /\.release-failed/);
   assert.match(source, /test ! -e \$REMOTE_ROOT\/\.release-failed/);
-  assert.match(source, /set -euo pipefail; containers=\\\$\(docker ps -aq\)/);
-  assert.match(source, /mounts=\\\$\(docker inspect --format=/);
-  assert.ok(source.includes(String.raw`printf '%s\n' \"\$mounts\" | grep -q '^/opt/openscience-releases/'`));
+  assert.match(source, /云上缺少 active release identity，拒绝猜测 rollback/);
   assert.doesNotMatch(source, /systemctl reload nginx" \|\| exit 1/);
 });
 
-test('worker and parser images are immutable per release and legacy images are preserved', () => {
+test('confirmed deployment requires the parser acceptance gate and binds rollback to active before materialization', () => {
+  assert.match(source, /--require-parser-acceptance/);
+  assert.match(source, /REQUIRE_PARSER_ACCEPTANCE=1/);
+  assert.match(source, /--confirm[^\n]+--require-parser-acceptance|--require-parser-acceptance[^\n]+--confirm/);
+  assert.match(source, /\[ "\$ROLLBACK_SHA" = "\$ACTIVE_RELEASE_SHA" \]/);
+  const activeRead = source.indexOf('ACTIVE_RELEASE_SHA=');
+  const rollbackMatch = source.indexOf('[ "$ROLLBACK_SHA" = "$ACTIVE_RELEASE_SHA" ]');
+  const materialize = source.indexOf('node "$PROJECT_ROOT/scripts/cloud-sync.mjs"', rollbackMatch);
+  const build = source.indexOf('npx pnpm@9.15.0 install', rollbackMatch);
+  assert.ok(activeRead >= 0 && rollbackMatch > activeRead, 'active identity must be read before rollback comparison');
+  assert.ok(materialize > rollbackMatch, 'wrong rollback must block before cloud materialization');
+  assert.ok(build > rollbackMatch, 'wrong rollback must block before package/image build');
+});
+
+test('final parser acceptance report and exact image IDs are verified after build and before switch', () => {
+  const imageBuild = source.indexOf('compose_current "build agent-worker document-parser"');
+  const workerImage = source.indexOf('openscience-agent-worker:$RELEASE_SHA', imageBuild);
+  const parserImage = source.indexOf('openscience-document-parser:$RELEASE_SHA', imageBuild);
+  const report = source.indexOf('/opt/openscience-acceptance/document-parser/$RELEASE_SHA/report.json', imageBuild);
+  const verifier = source.indexOf('verify-document-parser-acceptance.mjs', imageBuild);
+  const switchBoundary = source.indexOf('SWITCH_STARTED=0', imageBuild);
+  assert.ok(imageBuild >= 0, 'exact worker/parser images must be built');
+  assert.ok(workerImage > imageBuild && parserImage > imageBuild, 'final exact image IDs must be inspected after build');
+  assert.ok(report > imageBuild && verifier > report, 'fixed acceptance report must be passed to the formal verifier');
+  assert.ok(verifier < switchBoundary, 'acceptance mismatch must block before SWITCH_STARTED');
+});
+
+test('worker and parser images are immutable per release and rollback uses exact previous tags', () => {
   assert.match(productionCompose, /image: openscience-agent-worker:\$\{XGS_RELEASE_IMAGE_TAG:\?XGS_RELEASE_IMAGE_TAG required\}/);
   assert.match(productionCompose, /image: openscience-document-parser:\$\{XGS_RELEASE_IMAGE_TAG:\?XGS_RELEASE_IMAGE_TAG required\}/);
-  assert.match(source, /docker compose[^\n]+ps -q agent-worker/);
-  assert.match(source, /docker compose[^\n]+ps -q document-parser/);
-  assert.match(source, /docker inspect --format='\{\{\.Image\}\}'/);
-  assert.ok(source.includes(String.raw`docker tag \"\$worker_image\" openscience-agent-worker:$PREVIOUS_RELEASE_SHA`));
-  assert.ok(source.includes(String.raw`docker tag \"\$parser_image\" openscience-document-parser:$PREVIOUS_RELEASE_SHA`));
-  assert.match(source, /XGS_RELEASE_SHA="\$PREVIOUS_RELEASE_SHA" node/);
-  assert.match(source, /cd \$PREVIOUS_RELEASE_ROOT && with-proxy npx pnpm@9\.15\.0 install && with-proxy npx pnpm@9\.15\.0 --filter @openscience\/database generate && with-proxy npx pnpm@9\.15\.0 build/);
+  assert.match(source, /docker image inspect openscience-agent-worker:\$PREVIOUS_RELEASE_SHA openscience-document-parser:\$PREVIOUS_RELEASE_SHA/);
+  assert.doesNotMatch(source, /docker tag "\$worker_image"|docker tag "\$parser_image"/);
+  assert.doesNotMatch(source, /cd \$PREVIOUS_RELEASE_ROOT && with-proxy npx pnpm@9\.15\.0 install/);
   assert.match(source, /XGS_RELEASE_IMAGE_TAG=\$RELEASE_SHA/);
   assert.match(source, /XGS_RELEASE_IMAGE_TAG=\$PREVIOUS_RELEASE_SHA/);
 });
