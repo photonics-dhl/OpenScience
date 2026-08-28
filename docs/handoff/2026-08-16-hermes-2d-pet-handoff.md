@@ -6,12 +6,12 @@
 
 - 目标：以 3–7 个 Claim 为公开 RO 中心，提供可定位 Evidence、条件/限制、身份静默路由、CPU 文档解析、混合检索和可版本化富媒体。
 - Taskmaster `hermes-research-intelligence` 仍为 5/12：Tasks 1–3、5、6 已生产部署；Task 4 parser cascade 尚未完成；Task 7 dependency-ready；Task 10 等待 Task 4。
-- CPU parser cascade Tasks 2–7 已完成代码与独立复审；Task 8 在最终预部署 breaker 复审中被阻断，ECS Phase B 未启动。
+- CPU parser cascade Tasks 2–7 已完成；Task 8 的两个预部署 breaker 已在 `0ac37fe` 以 TDD 和双复审闭合，exact CI 运行中，ECS Phase B 未启动。
 
 ## Version tuple
 
 - Worktree: `E:/Miscellaneous/XGS/.worktrees/readable-hermes-guidance`
-- Branch / candidate HEAD: `codex/hermes-wanko-live2d` / `6268be376b70378e78fb09ee0f129abfd83ccc33`
+- Branch / candidate implementation: `codex/hermes-wanko-live2d` / `0ac37fe6e97ac77eda5c4582f1c4116adacdab33`
 - Deployed immutable application/release: `e2c0eaf3b13a220a8bc2cd49b2c1dfe40a6fd61f`
 - Rollback: `8163f8b4218e529ee4be41bb9fc732ff6497931a`
 - Local main / origin main: `b9616cb92dc83437b1b2094291ff43e2a4c34337` / `7eb2f5bc4718ee445b79bd089acb64acb3691e62`
@@ -27,16 +27,16 @@
 
 ## Candidate evidence, not production acceptance
 
-- Candidate `6268be3` exact-SHA GitHub Actions run `33173849289` / job `98857320148` 成功。
-- Focused `139/139`、Agent Worker `366/366`、compiled composition `2/2`、API `68/68`；build/typecheck/lint/audits/docs/diff/credential gates 全绿。
+- Candidate `0ac37fe` 已推送；exact-SHA GitHub Actions run `33177667772` 运行中。
+- Compiled packaging/geometry `5/5`、Agent Worker `366/366`、typecheck/lint/docs-sync/dependency/duplicate/diff gates 全绿；独立架构与安全复审均为 Critical/Important/Minor `0`。
 - 以上只证明代码/CI；没有本机 Docker，也没有 ECS 候选镜像、运行时 corpus、资源峰值或生产部署证据。
 
-## Blocking findings
+## Closed breaker findings
 
-1. `apps/agent-worker/Dockerfile.parser` 的显式 copy allowlist 漏掉 `dist/parsers/native-pdf-contract.js` 与 `dist/parsers/native-pdf-text-items.js`；完整 workspace tests 看不到该打包缺口，真实 parser image 会启动失败。
-2. `native-pdf-text-items.ts` 对 PDF.js viewport 已转换的 top-left Y 再次翻转，导致原生 PDF locator 垂直位置错误；需用 transformed `minY/maxY` 并覆盖上下非对称及旋转页测试。
+1. `Dockerfile.parser` 的显式 allowlist 已加入两个 native-PDF 模块；compiled packaging contract 从真实 entrypoint 递归相对依赖并验证 spawned child，仍禁止 broad COPY。
+2. `native-pdf-text-items.ts` 已直接使用 PDF.js transformed `minY/maxY`；literal 回归覆盖非旋转上下区与 90° 旋转页。
 
-按 SDD fix round 5/5 上限，Task 8 当前为 `BLOCKED`；不得继续派发修复循环或启动 Phase B，直到下一轮明确恢复任务。
+以上只闭合代码阻断；exact CI 与 ECS 镜像/运行时证据未完成，因此不得声称服务器验收或生产可用。
 
 ## Fixed constraints
 
@@ -47,10 +47,9 @@
 
 ## Next action
 
-1. 修复 parser 镜像 allowlist 并新增真实 packaging-contract 回归。
-2. 修复 PDF.js Y 几何，新增 asymmetric top/bottom 与 rotated-page 测试。
-3. 生成新 exact SHA，完成独立架构/安全复审与 CI。
-4. 仅在全部通过后进入 ECS Phase B：exact images、schema-v2 16-case、locator/false-ready、P50/P95、CPU/RSS、worker responsiveness、隔离与清理；失败不修改生产。
+1. 等待实现 SHA 与本轮 docs closeout SHA 的 exact GitHub CI。
+2. CI 全绿后进入 ECS Phase B：exact images、schema-v2 16-case、locator/false-ready、P50/P95、CPU/RSS、worker responsiveness、隔离与清理。
+3. Phase B 全绿后才通过 canonical immutable release 部署并复验公网/回滚；失败不修改生产。
 
 ## Read first
 

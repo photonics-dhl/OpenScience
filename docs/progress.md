@@ -4,17 +4,17 @@
 
 ## Current version tuple
 
-- Branch / candidate HEAD: `codex/hermes-wanko-live2d` / `6268be376b70378e78fb09ee0f129abfd83ccc33`。
+- Branch / candidate implementation: `codex/hermes-wanko-live2d` / `0ac37fe6e97ac77eda5c4582f1c4116adacdab33`；docs closeout HEAD 待本轮提交。
 - Production application/release: `e2c0eaf3b13a220a8bc2cd49b2c1dfe40a6fd61f`。
 - Rollback: `8163f8b4218e529ee4be41bb9fc732ff6497931a`。
 - 候选 HEAD 与生产 release 严格分离；Task 8 Phase B 未启动，生产没有修改或重新部署。
 
-## 2026-08-28 — CPU parser cascade 预部署阻断
+## 2026-08-28 — CPU parser cascade breaker recovery
 
 - Task 2–7 已完成代码与独立复审：V2 隔离协议、确定性多格式 `DocumentParser`、provider-neutral layout/GROBID enrichment、本地 Tesseract 选页 OCR、受控 LLM OCR candidate、`sdf.extract` 真实级联组合与执行时权限重建均已落地。MiniMax Vision 仍默认 disabled，未晋升 GROBID/PaddleOCR/Docling。
-- Task 8 候选 `6268be3` 的 exact-SHA GitHub Actions run `33173849289` / job `98857320148` 成功；focused `139/139`、Agent Worker `366/366`、composition `2/2`、API `68/68`，build/typecheck/lint/audits/docs/diff/credential gates 全绿。这些仅是代码/CI 证据，不是生产验收。
-- 最终 breaker 复审发现两个真实阻断：`Dockerfile.parser` allowlist 漏拷 `native-pdf-contract.js` 与 `native-pdf-text-items.js`，会导致打包后的 parser service 启动失败；PDF.js viewport 坐标已是 top-left，当前实现再次翻转 Y，导致原生 PDF locator 垂直位置错误。
-- 按 SDD 5/5 修复回合上限，Task 8 标记 `BLOCKED`。必须先补镜像 packaging-contract 回归，修复 Y 几何并增加上下非对称及旋转页测试，再生成新 exact SHA、完成复审与 CI，之后才允许进入 ECS Phase B。
+- `0ac37fe` 已补齐 parser 镜像窄 allowlist 的两个 native-PDF 模块，并以真实 compiled entrypoint closure/spawned-child 合同防止再次漏包；PDF.js transformed corners 直接使用 top-left `minY/maxY`，手算覆盖上下非对称与 90° 旋转页。
+- TDD RED 精确复现两个缺失模块、非旋转 `y=40→250` 与旋转 `y=20→156`；GREEN 为 compiled `5/5`、Agent Worker `366/366`、typecheck、lint、docs-sync、dependency/duplicate/diff 门禁通过。独立架构和安全复审均为 Critical/Important/Minor `0`。
+- 实现 SHA 已推送；exact-SHA GitHub Actions run `33177667772` 运行中。只有实现与 docs closeout 的 exact CI 全绿后才允许进入 ECS Phase B。
 - 没有运行本机 Docker；没有启动 ECS 候选部署、迁移、provider 调用或生产写入。
 
 ## Production foundation retained
@@ -29,4 +29,4 @@
 
 - 所有 Docker、数据库迁移、镜像构建与最终运行验收只在 ECS；本地仅做代码、静态检查与单测。Windows 远程操作必须由 PowerShell 显式调用 Git for Windows Bash，再走 canonical scripts。
 - 不读取、打印或提交 `.env` 值；不安装 GPU 栈；不把生成内容冒充 Evidence；Landing/Hermes 视觉冻结。
-- 下一轮只修复两个 breaker，完成新 SHA 的复审与 CI 后，才执行 ECS exact-image build、真实 schema-v2 corpus、CPU/RSS/worker responsiveness、隔离与清理门禁；全部通过后再决定部署，失败则不触碰生产。
+- 下一步先取得 exact-SHA CI；随后仅在 ECS 执行 exact-image build、真实 schema-v2 corpus、CPU/RSS/worker responsiveness、隔离与清理门禁；全部通过后才部署，失败则不触碰生产。
