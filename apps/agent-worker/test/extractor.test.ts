@@ -94,7 +94,10 @@ describe('extractHandler（§9.2 提取 + §9.3 结构化校验 + 不写 SDF）'
     const completeStructured = vi.fn().mockResolvedValue(proposal);
     const gateway = { completeStructured } as unknown as AiGateway;
     const parserCascade = vi.fn().mockResolvedValue({ status: 'succeeded', sourceMap, warnings: [] });
-    const handlers = createHandlers(gateway, { parserCascade });
+    const handlers = createHandlers(gateway, {
+      parserCascade,
+      externalProcessingPolicy: async () => true,
+    });
     const storage = {
       getObject: vi.fn().mockResolvedValue({ body: Readable.from([bytes]), size: bytes.length }),
     };
@@ -104,7 +107,12 @@ describe('extractHandler（§9.2 提取 + §9.3 结构化校验 + 不写 SDF）'
       prisma: {
         agentTask: { findUnique: vi.fn().mockResolvedValue({
           id: 'agent-task-1', kind: 'sdf.extract', status: 'running',
-          session: { userId: 'user-1', researchObject: { id: 'ro-1', workspaceId: 'workspace-1' } },
+          session: {
+            userId: 'user-1',
+            researchObject: {
+              id: 'ro-1', workspaceId: 'workspace-1', workspace: { id: 'workspace-1', status: 'active' },
+            },
+          },
         }) },
         membership: { findUnique: vi.fn().mockResolvedValue({
           userId: 'user-1', workspaceId: 'workspace-1', role: 'author',
@@ -134,6 +142,57 @@ describe('extractHandler（§9.2 提取 + §9.3 结构化校验 + 不写 SDF）'
     expect(completeStructured).toHaveBeenCalledTimes(1);
     expect(JSON.stringify(completeStructured.mock.calls[0])).toContain('Canonical parser text');
     expect(JSON.stringify(completeStructured.mock.calls[0])).not.toContain('%PDF-1.7');
+  });
+
+  it.each([
+    { role: 'reviewer', workspaceStatus: 'active', policyAllows: true, label: 'reviewer downgrade' },
+    { role: 'viewer', workspaceStatus: 'active', policyAllows: true, label: 'viewer downgrade' },
+    { role: 'author', workspaceStatus: 'archived', policyAllows: true, label: 'archived workspace' },
+    { role: 'author', workspaceStatus: 'active', policyAllows: false, label: 'policy denial' },
+  ])('执行时 $label 不得获得 external processing eligibility', async ({ role, workspaceStatus, policyAllows }) => {
+    const bytes = Buffer.from('%PDF-1.7 authorization fixture', 'utf8');
+    const contentHash = createHash('sha256').update(bytes).digest('hex');
+    const parserCascade = vi.fn().mockResolvedValue({
+      status: 'needs_review', reasons: ['fixture stopped after authorization'],
+    });
+    const handlers = createHandlers({ completeStructured: vi.fn() } as unknown as AiGateway, {
+      parserCascade,
+      externalProcessingPolicy: async () => policyAllows,
+    });
+    const deps = {
+      storage: { getObject: vi.fn().mockResolvedValue({ body: Readable.from([bytes]), size: bytes.length }) },
+      malwareScanner: vi.fn().mockResolvedValue(undefined),
+      prisma: {
+        agentTask: { findUnique: vi.fn().mockResolvedValue({
+          id: 'agent-task-1', kind: 'sdf.extract', status: 'running',
+          session: {
+            userId: 'user-1',
+            researchObject: {
+              id: 'ro-1', workspaceId: 'workspace-1', workspace: { id: 'workspace-1', status: workspaceStatus },
+            },
+          },
+        }) },
+        membership: { findUnique: vi.fn().mockResolvedValue({
+          userId: 'user-1', workspaceId: 'workspace-1', role,
+        }) },
+        artifact: { findUnique: vi.fn().mockResolvedValue({
+          id: 'artifact-1', workspaceId: 'workspace-1', size: bytes.length,
+          blobSha256: contentHash, logicalPath: 'paper.pdf', mimeType: 'application/pdf',
+        }) },
+      },
+    };
+
+    await handlers['sdf.extract']!(deps as never, {
+      id: 'agent-task-1',
+      payload: {
+        artifactId: 'artifact-1', researchObjectId: 'ro-1', externalProcessingEligible: true,
+      },
+      executionAttempt: 1,
+    });
+
+    expect(parserCascade).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({
+      externalProcessingEligible: false,
+    }));
   });
 
   it('对象存储实际字节超过声明上限时停止缓冲', async () => {

@@ -107,7 +107,44 @@ describe('parseIngestion', () => {
 });
 
 describe('production parser self-test', () => {
-  it('covers V2 native formats, scan review and disabled candidate fallback through the real cascade seam', async () => {
+  it('requires V2 native text plus deterministic scan OCR text/locator through the real cascade seam', async () => {
+    const parserJobAdapter = vi.fn(async (request, content: Buffer) => {
+      if (request.mediaType === 'image/png') {
+        expect(content.readUInt32BE(16)).toBe(305);
+        expect(content.readUInt32BE(20)).toBe(55);
+        expect(content[25]).toBe(0); // grayscale: no alpha channel may hide the glyphs
+        expect(createHash('sha256').update(content).digest('hex'))
+          .toBe('d96594ae3c33e18c43e0162d8def9055dc32c88ba1788e6154b1dbce0bbb0b9d');
+      }
+      return ({
+      schemaVersion: 2 as const,
+      parser: TRANSITION_PARSER_METADATA,
+      pages: [{
+        page: 1, width: 1000, height: 24,
+        blocks: [{
+          kind: 'paragraph' as const,
+          text: request.mediaType === 'image/png' ? 'OCR 42 FS' : 'OpenScience evidence document',
+          boundingBox: { x: 0, y: 0, width: 1000, height: 24 }, confidence: 1,
+        }],
+      }],
+      warnings: [],
+      });
+    });
+    const ocr = vi.fn();
+    const cascade = createWorkerParserCascade({ ocr } as never, parserJobAdapter);
+
+    await expect(runParserCascadeSelfTest(cascade)).resolves.toEqual({
+      schemaVersion: 2,
+      pdf: { format: 'pdf', status: 'ready', textMatched: true },
+      docx: { format: 'docx', status: 'ready', textMatched: true },
+      scan: { format: 'png', status: 'ready', textMatched: true, locatorMatched: true },
+      candidateFallbackDisabled: true,
+    });
+    expect(parserJobAdapter).toHaveBeenCalledTimes(3);
+    expect(ocr).not.toHaveBeenCalled();
+  });
+
+  it('fails closed when the composed OCR stage returns no scan text', async () => {
     const parserJobAdapter = vi.fn(async (request) => ({
       schemaVersion: 2 as const,
       parser: TRANSITION_PARSER_METADATA,
@@ -120,18 +157,33 @@ describe('production parser self-test', () => {
       }],
       warnings: [],
     }));
-    const ocr = vi.fn();
-    const cascade = createWorkerParserCascade({ ocr } as never, parserJobAdapter);
+    const cascade = createWorkerParserCascade({ ocr: vi.fn() } as never, parserJobAdapter);
 
-    await expect(runParserCascadeSelfTest(cascade)).resolves.toEqual({
-      schemaVersion: 2,
-      pdf: { format: 'pdf', status: 'ready', textMatched: true },
-      docx: { format: 'docx', status: 'ready', textMatched: true },
-      scan: { format: 'png', status: 'needs_review', textMatched: false },
-      candidateFallbackDisabled: true,
-    });
-    expect(parserJobAdapter).toHaveBeenCalledTimes(3);
-    expect(ocr).not.toHaveBeenCalled();
+    await expect(runParserCascadeSelfTest(cascade)).rejects.toThrow(/scan OCR text\/locator/);
+  });
+
+  it('fails closed when the observable production composition enables candidate fallback', async () => {
+    const parserJobAdapter = vi.fn(async (request) => ({
+      schemaVersion: 2 as const,
+      parser: TRANSITION_PARSER_METADATA,
+      pages: [{
+        page: 1, width: 1000, height: 24,
+        blocks: [{
+          kind: 'paragraph' as const,
+          text: request.mediaType === 'image/png' ? 'OCR 42 FS' : 'OpenScience evidence document',
+          boundingBox: { x: 0, y: 0, width: 1000, height: 24 }, confidence: 1,
+        }],
+      }],
+      warnings: [],
+    }));
+    const productionCascade = createWorkerParserCascade({ ocr: vi.fn() } as never, parserJobAdapter);
+    const candidateEnabledCascade = Object.assign(
+      async (...args: Parameters<typeof productionCascade>) => productionCascade(...args),
+      { featureFlags: { ...productionCascade.featureFlags, llmOcr: true } },
+    );
+
+    await expect(runParserCascadeSelfTest(candidateEnabledCascade)).rejects.toThrow(/candidate fallback enabled/);
+    expect(parserJobAdapter).not.toHaveBeenCalled();
   });
 
   it('extracts deterministic text from realistic PDF and DOCX fixtures', async () => {

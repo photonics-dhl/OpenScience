@@ -32,13 +32,17 @@ import { createClamAvScanner, type MalwareScanner } from './clamav';
 import { createParserStageJobClient, TRANSITION_PARSER_METADATA } from './parser-job-isolation';
 import { runParserCascadeSelfTest } from './parser-self-test';
 import { authorizeSearchIndexJob, createSearchIndexer, type SearchIndexer } from './search-indexer';
-import { runParserCascade } from './parsers/cascade-orchestrator';
+import {
+  runParserCascade,
+  type ParserCascadeFeatureFlags,
+} from './parsers/cascade-orchestrator';
 import { createTextExtractor, type TextStageAdapter } from './parsers/text-extractor';
 import type { ParserInput } from './parsers/types';
 
 const BGE_M3_REVISION = '5617a9f61b028005a4858fdac845db406aefb181';
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
 const SHA256_PATTERN = /^[0-9a-f]{64}$/;
+const INGESTION_EXTERNAL_PROCESSING_ROLES = new Set(['owner', 'maintainer', 'author', 'contributor']);
 
 export type SearchIndexRuntimeConfig =
   | { enabled: false }
@@ -104,10 +108,12 @@ export interface ParserCascadeAuthorization {
   externalProcessingEligible: boolean;
 }
 
-export type ParserCascadeRunner = (
+export type ParserCascadeRunner = ((
   input: ParserInput,
   authorization: ParserCascadeAuthorization,
-) => Promise<ParserExtractionResult<DocumentSourceMap>>;
+) => Promise<ParserExtractionResult<DocumentSourceMap>>) & {
+  readonly featureFlags: Readonly<ParserCascadeFeatureFlags>;
+};
 
 export type WorkerDeps = AgentDeps & { storage?: StorageAdapter; ingestionAdapters?: IngestionAdapters; malwareScanner?: MalwareScanner };
 export type TaskHandler = (
@@ -125,18 +131,22 @@ export function createWorkerParserCascade(
     docx: parserJobAdapter,
     image: parserJobAdapter,
   });
-  return (input, authorization) => runParserCascade(input, {
-    adapters: { extractText },
-    aiGateway: gateway,
-    trustedAuthorizationContext: authorization.trustedAuthorizationContext,
-    externalProcessingEligible: authorization.externalProcessingEligible,
-    featureFlags: {
-      detectLayout: false,
-      grobid: false,
-      localOcr: false,
-      llmOcr: false,
-    },
+  const featureFlags: Readonly<ParserCascadeFeatureFlags> = Object.freeze({
+    detectLayout: false,
+    grobid: false,
+    localOcr: false,
+    llmOcr: false,
   });
+  return Object.assign(
+    (input: ParserInput, authorization: ParserCascadeAuthorization) => runParserCascade(input, {
+      adapters: { extractText },
+      aiGateway: gateway,
+      trustedAuthorizationContext: authorization.trustedAuthorizationContext,
+      externalProcessingEligible: authorization.externalProcessingEligible,
+      featureFlags,
+    }),
+    { featureFlags },
+  );
 }
 
 export async function streamToBufferBounded(stream: Readable, maxBytes: number): Promise<Buffer> {
@@ -157,7 +167,11 @@ export async function streamToBufferBounded(stream: Readable, maxBytes: number):
 /** 构造处理器注册表（P1D-3 挂 sdf.extract；后续 5.5 审核等挂接）。 */
 export function createHandlers(
   gateway: AiGateway,
-  options: { searchIndexer?: SearchIndexer; parserCascade?: ParserCascadeRunner } = {},
+  options: {
+    searchIndexer?: SearchIndexer;
+    parserCascade?: ParserCascadeRunner;
+    externalProcessingPolicy?: ExternalProcessingPolicy;
+  } = {},
 ): Record<string, TaskHandler> {
   return {
     'demo.echo': async () => {
@@ -170,7 +184,7 @@ export function createHandlers(
       if (!deps.storage) throw new Error('缺少对象存储适配器，无法读取 Artifact');
       const ownerTask = await deps.prisma.agentTask.findUnique({
         where: { id: task.id },
-        include: { session: { include: { researchObject: true } } },
+        include: { session: { include: { researchObject: { include: { workspace: true } } } } },
       });
       const artifact = await deps.prisma.artifact.findUnique({ where: { id: artifactId } });
       const ownerResearchObject = ownerTask?.session.researchObject;
@@ -201,13 +215,16 @@ export function createHandlers(
         workspaceId: ownerResearchObject.workspaceId,
         actorId: ownerTask.session.userId,
       });
-      const externalProcessingEligible = ownerTask.id === task.id
+      const serverDerivedEligibility = ownerTask.id === task.id
         && ownerTask.kind === 'sdf.extract'
         && ownerTask.status === 'running'
+        && ownerResearchObject.workspace.status === 'active'
         && membership.userId === ownerTask.session.userId
         && membership.workspaceId === ownerResearchObject.workspaceId
         && typeof membership.role === 'string'
-        && membership.role.length > 0;
+        && INGESTION_EXTERNAL_PROCESSING_ROLES.has(membership.role);
+      const externalProcessingEligible = serverDerivedEligibility
+        && await (options.externalProcessingPolicy?.(trustedAuthorizationContext) ?? false);
       const parsed = await options.parserCascade({
         artifactId: artifact.id,
         contentHash: artifact.blobSha256,
@@ -343,16 +360,24 @@ async function main(): Promise<void> {
     mailer: { send: async () => undefined },
   };
   // Gateway（§24 占位：AI_ENABLED=false 时懒加载；生产 env 注入密钥，§17）
-  const gateway = buildGateway(process.env, globalThis.fetch, createPrismaAuditSink(prisma));
+  const externalProcessingPolicy: ExternalProcessingPolicy = async () => false;
+  const gateway = buildGateway(
+    process.env,
+    globalThis.fetch,
+    createPrismaAuditSink(prisma),
+    externalProcessingPolicy,
+  );
   const parserJobAdapter = createParserStageJobClient(parserJobDir, TRANSITION_PARSER_METADATA);
   const parserCascade = createWorkerParserCascade(gateway, parserJobAdapter);
   const parserSelfTest = await runParserCascadeSelfTest(parserCascade);
   if (!parserSelfTest.pdf.textMatched || !parserSelfTest.docx.textMatched
-    || parserSelfTest.scan.status !== 'needs_review' || !parserSelfTest.candidateFallbackDisabled) {
+    || !parserSelfTest.scan.textMatched || !parserSelfTest.scan.locatorMatched
+    || !parserSelfTest.candidateFallbackDisabled) {
     throw new Error('parser cascade startup self-test failed');
   }
   const handlers = createHandlers(gateway, {
     parserCascade,
+    externalProcessingPolicy,
     searchIndexer: buildSearchIndexerFromEnv(process.env),
   });
   const pollOnce = await createPollOnce(handlers);

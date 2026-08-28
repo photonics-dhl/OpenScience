@@ -1,9 +1,11 @@
 import { createHash } from 'node:crypto';
+import { createBlockSourceLocator, resolveSourceLocator } from '@openscience/domain';
 import { createDefaultIngestionAdapters, parseIngestionWithAdapters, type ParsedIngestion } from './ingestion-parser';
 import { sourceMapToManuscriptText } from './extractor';
 import type { ParserCascadeRunner } from './index';
 
 const EXPECTED_TEXT = 'OpenScience evidence document';
+const EXPECTED_SCAN_TEXT = 'OCR 42 FS';
 
 // Small deterministic fixtures generated from the ISO PDF and OOXML container structures.
 // They contain no user data and let the deployed worker prove its native parser runtime.
@@ -18,7 +20,8 @@ const DOCX_FIXTURE = Buffer.from(
 );
 
 const SCAN_FIXTURE = Buffer.from(
-  'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=',
+  // 305x55 grayscale PNG: opaque black 5x7 glyphs spelling "OCR 42 FS" on white.
+  'iVBORw0KGgoAAAANSUhEUgAAATEAAAA3CAAAAABBICIdAAAAu0lEQVR42u3ZSwqAMAwFwN7/0roW2pr0g6jztpLQzCYEyyG5FATEiBEjRkyIESP2arFyTbWkkujX8LO6ZYPtSyu5AYkRI0bsO2LN4ugg0S7RuVa3H3x9e1cSI0aMGLF1I+WNiREjRozYo2Kbz5jpLZw6A4kRI0aM2JZ9t2WtTVdUDYgRI0aM2GxFfrgtTYkRI0bsh2KBCyFwbEz/GelX5A+p1TceMWLEiH1NTG7dERAjRowYMSFGjNircgLBi0PCBIe/PAAAAABJRU5ErkJggg==',
   'base64',
 );
 
@@ -44,6 +47,8 @@ type SelfTestItem = {
   textMatched: boolean;
 };
 
+type ScanSelfTestItem = SelfTestItem & { locatorMatched: boolean };
+
 function summarize(parsed: ParsedIngestion): SelfTestItem {
   return {
     format: parsed.format,
@@ -66,9 +71,11 @@ export async function runParserCascadeSelfTest(parserCascade: ParserCascadeRunne
   schemaVersion: 2;
   pdf: SelfTestItem;
   docx: SelfTestItem;
-  scan: SelfTestItem;
-  candidateFallbackDisabled: true;
+  scan: ScanSelfTestItem;
+  candidateFallbackDisabled: boolean;
 }> {
+  const candidateFallbackDisabled = Object.values(parserCascade.featureFlags).every((enabled) => !enabled);
+  if (!candidateFallbackDisabled) throw new Error('parser cascade self-test failed: candidate fallback enabled');
   const fixtures = createParserSelfTestFixtures();
   const authorization = {
     trustedAuthorizationContext: {
@@ -96,12 +103,42 @@ export async function runParserCascadeSelfTest(parserCascade: ParserCascadeRunne
       textMatched: text.includes(EXPECTED_TEXT),
     };
   };
+  const pdfSummary = summarizeCascade(pdf, 'pdf');
+  const docxSummary = summarizeCascade(docx, 'docx');
+  const scanSummary: ScanSelfTestItem = (() => {
+    if (scan.status !== 'succeeded') {
+      return { format: 'png', status: 'needs_review', textMatched: false, locatorMatched: false };
+    }
+    const block = scan.sourceMap.pages
+      .flatMap((page) => page.blocks)
+      .find((candidate) => candidate.text?.includes(EXPECTED_SCAN_TEXT));
+    if (!block) return { format: 'png', status: 'ready', textMatched: false, locatorMatched: false };
+    let locatorMatched = false;
+    try {
+      const locator = createBlockSourceLocator(scan.sourceMap, block.id, {
+        charRange: {
+          start: block.text!.indexOf(EXPECTED_SCAN_TEXT),
+          end: block.text!.indexOf(EXPECTED_SCAN_TEXT) + EXPECTED_SCAN_TEXT.length,
+        },
+      });
+      locatorMatched = resolveSourceLocator(scan.sourceMap, locator).id === block.id;
+    } catch {
+      locatorMatched = false;
+    }
+    return { format: 'png', status: 'ready', textMatched: true, locatorMatched };
+  })();
+  if (!pdfSummary.textMatched || !docxSummary.textMatched) {
+    throw new Error('parser cascade self-test failed: native text missing');
+  }
+  if (!scanSummary.textMatched || !scanSummary.locatorMatched) {
+    throw new Error('parser cascade self-test failed: scan OCR text/locator missing');
+  }
   return {
     schemaVersion: 2,
-    pdf: summarizeCascade(pdf, 'pdf'),
-    docx: summarizeCascade(docx, 'docx'),
-    scan: summarizeCascade(scan, 'png'),
-    candidateFallbackDisabled: true,
+    pdf: pdfSummary,
+    docx: docxSummary,
+    scan: scanSummary,
+    candidateFallbackDisabled,
   };
 }
 
