@@ -241,6 +241,24 @@ describe('parser job protocol v2', () => {
     expect(() => deserializeParserJobResponseV2(Buffer.from(serializeParserJobResponseV2({ ...response, result: stageResult({ parser: { ...metadata, version: 'other' } }) })), request(), metadata)).toThrow(/metadata_mismatch/i);
   });
 
+  it('keeps canonical success responses closed under deserialize, serialize, and deserialize', () => {
+    const serialized = serializeParserJobResponseV2({
+      schemaVersion: 2,
+      ok: true,
+      artifactId: 'artifact-1',
+      contentHash: CONTENT_HASH,
+      result: stageResult(),
+    });
+    const canonical = deserializeParserJobResponseV2(serialized, request(), metadata);
+    const reparsed = deserializeParserJobResponseV2(
+      serializeParserJobResponseV2(canonical),
+      request(),
+      metadata,
+    );
+
+    expect(reparsed).toEqual(canonical);
+  });
+
   it('uses a closed safe error code response with no provider detail field', () => {
     const response = {
       schemaVersion: 2 as const,
@@ -252,6 +270,37 @@ describe('parser job protocol v2', () => {
     expect(deserializeParserJobResponseV2(Buffer.from(serializeParserJobResponseV2(response)), request())).toEqual(response);
     expect(() => serializeParserJobResponseV2({ ...response, providerStderr: '/secret/path: manuscript fragment' } as never)).toThrow(/unknown field/i);
     expect(() => deserializeParserJobResponseV2(Buffer.from(JSON.stringify({ ...response, errorCode: 'vendor_crash' })), request())).toThrow(/invalid_response/i);
+  });
+
+  it('keeps canonical error responses closed without accepting forged null-prototype envelopes', () => {
+    const serialized = serializeParserJobResponseV2({
+      schemaVersion: 2,
+      ok: false,
+      artifactId: 'artifact-1',
+      contentHash: CONTENT_HASH,
+      errorCode: SafeParserErrorCode.PARSER_FAILED,
+    });
+    const canonical = deserializeParserJobResponseV2(serialized, request());
+
+    expect(deserializeParserJobResponseV2(serializeParserJobResponseV2(canonical), request())).toEqual(canonical);
+    expect(() => serializeParserJobResponseV2(Object.assign(Object.create(null), {
+      schemaVersion: 2,
+      ok: false,
+      artifactId: 'artifact-1',
+      contentHash: CONTENT_HASH,
+      errorCode: SafeParserErrorCode.PARSER_FAILED,
+    }))).toThrow(/plain object/i);
+
+    const forgedFromCanonicalRequest = parseParserJobRequestV2(request()) as unknown as Record<string, unknown>;
+    for (const key of Reflect.ownKeys(forgedFromCanonicalRequest)) delete forgedFromCanonicalRequest[key as string];
+    Object.assign(forgedFromCanonicalRequest, {
+      schemaVersion: 2,
+      ok: false,
+      artifactId: 'artifact-1',
+      contentHash: CONTENT_HASH,
+      errorCode: SafeParserErrorCode.PARSER_FAILED,
+    });
+    expect(() => serializeParserJobResponseV2(forgedFromCanonicalRequest)).toThrow(/plain object/i);
   });
 
   it('serializes canonical snapshots without inherited toJSON hooks', () => {

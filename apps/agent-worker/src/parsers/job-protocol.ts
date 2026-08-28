@@ -147,6 +147,7 @@ const MAX_SERIALIZED_STRING_CHARACTERS = 8_000_000;
 const TEXT_BEARING_KINDS = new Set<DocumentBlockKind>(['heading', 'paragraph', 'caption', 'reference']);
 const SAFE_ERROR_CODES = new Set<string>(Object.values(SafeParserErrorCode));
 const SAFE_WARNING_CODES = new Set<string>(Object.values(SafeParserWarningCode));
+const canonicalResponses = new WeakSet<object>();
 
 function fail(code: SafeParserErrorCode, detail: string): never {
   throw new ParserJobProtocolError(code, detail);
@@ -154,6 +155,12 @@ function fail(code: SafeParserErrorCode, detail: string): never {
 
 function safeObject<T extends Record<string, unknown>>(value: T): T {
   return Object.assign(Object.create(null) as T, value);
+}
+
+function safeResponseObject<T extends ParserJobResponseV2>(value: T): T {
+  const result = safeObject(value);
+  canonicalResponses.add(result);
+  return result;
 }
 
 function safeArray<T>(values: readonly T[]): T[] {
@@ -407,7 +414,8 @@ export function parseParserStageResult(value: unknown): ParserStageResult {
 function canonicalResponse(value: unknown): ParserJobResponseV2 {
   const code = SafeParserErrorCode.INVALID_RESPONSE;
   if (isProxy(value)) fail(code, 'ParserJobResponseV2 must not be a Proxy');
-  if (!value || typeof value !== 'object' || Array.isArray(value) || Object.getPrototypeOf(value) !== Object.prototype) {
+  if (!value || typeof value !== 'object' || Array.isArray(value)
+    || (Object.getPrototypeOf(value) !== Object.prototype && !canonicalResponses.has(value))) {
     fail(code, 'ParserJobResponseV2 must be a plain object');
   }
   const okDescriptor = Object.getOwnPropertyDescriptor(value, 'ok');
@@ -423,7 +431,7 @@ function canonicalResponse(value: unknown): ParserJobResponseV2 {
   const artifactId = boundedString(required(fields, 'artifactId', 'artifactId', code), 'artifactId', MAX_IDENTIFIER_LENGTH, code);
   const hash = contentHash(required(fields, 'contentHash', 'contentHash', code), code);
   if (okDescriptor.value === true) {
-    return safeObject({
+    return safeResponseObject({
       schemaVersion: PARSER_JOB_SCHEMA_VERSION,
       ok: true,
       artifactId,
@@ -433,7 +441,7 @@ function canonicalResponse(value: unknown): ParserJobResponseV2 {
   }
   const errorCode = required(fields, 'errorCode', 'errorCode', code);
   if (typeof errorCode !== 'string' || !SAFE_ERROR_CODES.has(errorCode)) fail(code, 'errorCode is not a safe parser code');
-  return safeObject({
+  return safeResponseObject({
     schemaVersion: PARSER_JOB_SCHEMA_VERSION,
     ok: false,
     artifactId,

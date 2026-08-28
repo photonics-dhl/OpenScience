@@ -37,6 +37,7 @@ GREEN behavior now provides:
 - exact V2 request, options, response and stage-result validation with proxy, accessor, sparse-array, symbol, prototype, `toJSON`, private-field and unknown-field rejection;
 - fixed page, block, text, warning, geometry, confidence, request and 24 MiB serialized-response budgets;
 - canonical null-prototype snapshots that remain serializable and reparsable;
+- success and error response envelopes remain closed under deserialize, serialize and deserialize; a module-private provenance marker admits only validator-created null-prototype envelopes, while forged null-prototype inputs remain rejected;
 - closed error and warning enums only, with no provider stderr, document fragments or absolute paths crossing the boundary or entering parser-service logs;
 - handle-based `limit + 1` reads after regular-file and no-follow checks for inputs, requests and responses, followed by SHA-256 verification for V2 input;
 - atomic request-to-processing and response-temp-to-response publication, timeout/cancellation race handling and orphan reaping;
@@ -52,8 +53,8 @@ The first security/architecture review found four Important boundary issues and 
 
 Fresh local gates:
 
-- Focused protocol/isolation tests: 49/49 passed.
-- Full `@openscience/agent-worker` tests: 188/188 passed across 16 files.
+- Focused protocol/isolation tests: 51/51 passed.
+- Full `@openscience/agent-worker` tests: 190/190 passed across 16 files.
 - `npx pnpm@9.15.0 --filter @openscience/agent-worker build`: passed.
 - `npx pnpm@9.15.0 --filter @openscience/agent-worker typecheck`: passed.
 - Targeted ESLint over the Task 2 TypeScript files: passed.
