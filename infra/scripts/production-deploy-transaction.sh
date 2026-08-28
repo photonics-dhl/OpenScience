@@ -301,6 +301,13 @@ assert_production_deploy_lock
 log "[2] install + 全量 build..."
 run_remote "cd $RELEASE_ROOT && with-proxy npx pnpm@9.15.0 install && with-proxy npx pnpm@9.15.0 --filter @openscience/database generate && with-proxy npx pnpm@9.15.0 build"
 
+log "[2a] 归一化验收运行闭包权限..."
+assert_production_deploy_lock
+/usr/bin/node "$PROJECT_ROOT/scripts/release-input-manifest.mjs" runtime-normalize --root "$RELEASE_ROOT" --sha "$RELEASE_SHA" >/dev/null \
+  || { echo "错误：生产 build 后运行闭包权限归一化失败" >&2; exit 66; }
+/usr/bin/node "$PROJECT_ROOT/scripts/release-input-manifest.mjs" verify --root "$RELEASE_ROOT" --sha "$RELEASE_SHA"
+assert_production_deploy_lock
+
 log "[2b] 构建 SHA-tagged release 镜像..."
 compose_current "build agent-worker document-parser"
 if [ "$EMBEDDING_DEPLOY" -eq 1 ]; then

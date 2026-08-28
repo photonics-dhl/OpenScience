@@ -863,6 +863,20 @@ test('final parser acceptance report and exact image IDs are verified after buil
   assert.ok(verifier < switchBoundary, 'acceptance mismatch must block before SWITCH_STARTED');
 });
 
+test('production rebuild restores the accepted runtime permissions before image and report verification', () => {
+  const workspaceBuild = transactionSource.indexOf('npx pnpm@9.15.0 build');
+  const normalize = transactionSource.indexOf(
+    'runtime-normalize --root "$RELEASE_ROOT" --sha "$RELEASE_SHA"',
+    workspaceBuild,
+  );
+  const imageBuild = transactionSource.indexOf('compose_current "build agent-worker document-parser"', workspaceBuild);
+  const verifier = transactionSource.indexOf('verify-document-parser-acceptance.mjs', imageBuild);
+  assert.ok(workspaceBuild >= 0, 'production transaction must perform a fresh workspace build');
+  assert.ok(normalize > workspaceBuild, 'fresh build outputs must be permission-normalized');
+  assert.ok(imageBuild > normalize, 'images must use the normalized runtime closure');
+  assert.ok(verifier > imageBuild, 'formal acceptance verification must follow normalization and image build');
+});
+
 test('deployment revalidates active source, report and mutable image tags after migrations and checks started container image IDs', () => {
   const migration = transactionSource.indexOf('seed-quota.mjs --confirm');
   const preSwitch = transactionSource.indexOf('verify_candidate_switch_contract', migration);
