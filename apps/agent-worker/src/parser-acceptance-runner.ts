@@ -4,7 +4,6 @@ import { basename, extname, join } from 'node:path';
 import { Readable } from 'node:stream';
 
 import type { AiGateway } from '@openscience/ai-gateway';
-import type { DocumentSourceMap } from '@openscience/domain';
 
 import { createHandlers, createWorkerParserCascade } from './index';
 import {
@@ -12,9 +11,9 @@ import {
   classifyAcceptanceHandlerResult,
   createAcceptanceGatewaySeam,
   parseCanonicalManifest,
+  reproduceAcceptanceLocator,
   validateAcceptanceDraft,
   writeAtomicAcceptanceReport,
-  type AcceptanceLocator,
 } from './parser-acceptance-contract';
 import {
   createParserStageJobClient,
@@ -28,36 +27,6 @@ const MEDIA_TYPES: Record<string, string> = {
   '.png': 'image/png', '.tex': 'application/x-tex',
   '.xlsx': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
 };
-
-function overlaps(block: { x: number; y: number; width: number; height: number }, box: readonly number[]): boolean {
-  return box.length === 4
-    && block.x < Number(box[2]) && block.x + block.width > Number(box[0])
-    && block.y < Number(box[3]) && block.y + block.height > Number(box[1]);
-}
-
-function locatorMatches(sourceMap: DocumentSourceMap, locator: AcceptanceLocator): boolean {
-  if (locator.kind === 'file') return true;
-  const quote = typeof locator.quote === 'string' ? locator.quote : undefined;
-  const pageNumber = typeof locator.page === 'number' ? locator.page : undefined;
-  const pages = pageNumber === undefined ? sourceMap.pages : sourceMap.pages.filter(({ page }) => page === pageNumber);
-  const blocks = pages.flatMap(({ blocks: pageBlocks }) => pageBlocks);
-  if (locator.kind === 'page-text-order' && Array.isArray(locator.quotes)) {
-    const text = blocks.map(({ text }) => text ?? '').join('\n');
-    let offset = 0;
-    return locator.quotes.every((candidate) => {
-      if (typeof candidate !== 'string') return false;
-      const index = text.indexOf(candidate, offset);
-      if (index < 0) return false;
-      offset = index + candidate.length;
-      return true;
-    });
-  }
-  const region = Array.isArray(locator.bbox) ? locator.bbox.map(Number) : undefined;
-  const candidates = region ? blocks.filter(({ boundingBox }) => overlaps(boundingBox, region)) : blocks;
-  if (locator.kind === 'page-region' || locator.kind === 'image-region') return candidates.length > 0;
-  if (quote) return candidates.some(({ text }) => text?.includes(quote));
-  return false;
-}
 
 function percentile(values: readonly number[], fraction: number): number {
   const sorted = [...values].sort((left, right) => left - right);
@@ -142,7 +111,10 @@ async function main(): Promise<void> {
     const elapsedMs = Math.round((performance.now() - started) * 100) / 100;
     const sourceMap = cascadeResult && cascadeResult.status !== 'blocked' && cascadeResult.status !== 'failed'
       ? cascadeResult.sourceMap : undefined;
-    const reproduced = sourceMap ? item.expectedLocators.filter((locator) => locatorMatches(sourceMap, locator)).length : 0;
+    const reproduced = sourceMap
+      ? item.expectedLocators.filter((locator) => reproduceAcceptanceLocator(sourceMap, locator, {
+        artifactId: `artifact-${item.id}`, contentHash: digest,
+      })).length : 0;
     const ready = cascadeResult?.status === 'succeeded';
     const falseReady = ready && reproduced !== item.expectedLocators.length;
     if (falseReady) falseReadyCount += 1;

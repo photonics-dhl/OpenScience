@@ -3,6 +3,8 @@ import { constants } from 'node:fs';
 import { chown, link, lstat, mkdir, open, readdir, realpath, rm, writeFile } from 'node:fs/promises';
 import { basename, dirname, join, resolve } from 'node:path';
 
+import type { DocumentSourceMap } from '@openscience/domain';
+
 export const CANONICAL_CORPUS_MANIFEST_SHA256 = '34b46c5405c7d2114183cfb8e3b938a392ddf1e43941fed0818f7a3ab3b7fae6';
 
 export interface AcceptanceLocator extends Record<string, unknown> { kind: string }
@@ -14,6 +16,141 @@ export interface AcceptanceManifestCase {
   expectedLocators: AcceptanceLocator[];
 }
 export interface AcceptanceManifest { schemaVersion: 2; cases: AcceptanceManifestCase[] }
+
+function overlaps(block: { x: number; y: number; width: number; height: number }, box: readonly number[]): boolean {
+  return box.length === 4
+    && block.x < Number(box[2]) && block.x + block.width > Number(box[0])
+    && block.y < Number(box[3]) && block.y + block.height > Number(box[1]);
+}
+
+const VIRTUAL_LINE_HEIGHT = 24;
+const SCANNED_PDF_HASH = 'b327e6fece61a3e5bd52842250c51012b7672d81ff3dd4f11107b0e4aee6d2e0';
+const MARKDOWN_TABLE_HASH = '66f861e5049bd0e33e68ae11aec6965928853e0c95c7a4c88a7f99c1f7497406';
+const CSV_TABLE_HASH = 'e71f6e5c40db4f3e257ee99961e81b899c817a7b00ed2e03b9c055d537aefa20';
+const XLSX_TABLE_HASH = 'c371bc99687ba51d51d4081f2ae09274f1a52b95839c543870008d9fc34f4b1f';
+
+function sameCoordinate(left: number, right: number): boolean {
+  return Math.abs(left - right) <= Number.EPSILON * Math.max(1, Math.abs(left), Math.abs(right)) * 16;
+}
+
+function isTesseractBlock(block: DocumentSourceMap['pages'][number]['blocks'][number]): boolean {
+  return block.parser.name === 'tesseract' && block.parser.version === '5.3.0'
+    && typeof block.confidence === 'number' && block.confidence > 0
+    && block.transformations.some(({ stage, processor }) => stage === 'ocr'
+      && processor.name === 'tesseract' && processor.version === '5.3.0');
+}
+
+function isVirtualBlock(block: DocumentSourceMap['pages'][number]['blocks'][number]): boolean {
+  return block.transformations.some(({ stage, processor }) => stage === 'normalize'
+    && processor.name === 'openscience-virtual-page'
+    && processor.version === 'openscience-virtual-page-v1');
+}
+
+function quoteMatches(block: DocumentSourceMap['pages'][number]['blocks'][number], quote: string): boolean {
+  return typeof block.text === 'string' && block.text.indexOf(quote) >= 0;
+}
+
+function matchesVirtualLine(
+  block: DocumentSourceMap['pages'][number]['blocks'][number],
+  line: number,
+): boolean {
+  return isVirtualBlock(block) && sameCoordinate(block.boundingBox.y, (line - 1) * VIRTUAL_LINE_HEIGHT)
+    && sameCoordinate(block.boundingBox.height, VIRTUAL_LINE_HEIGHT);
+}
+
+function virtualColumn(block: DocumentSourceMap['pages'][number]['blocks'][number]): number | undefined {
+  if (!isVirtualBlock(block) || block.boundingBox.width <= 0) return undefined;
+  const raw = block.boundingBox.x / block.boundingBox.width;
+  const index = Math.round(raw);
+  return sameCoordinate(raw, index) ? index + 1 : undefined;
+}
+
+function markdownTableCellMatches(sourceMap: DocumentSourceMap, locator: AcceptanceLocator, quote: string): boolean {
+  const row = Number(locator.row);
+  const column = Number(locator.column);
+  if (!Number.isSafeInteger(row) || row < 1 || !Number.isSafeInteger(column) || column < 1) return false;
+  const tableRows = sourceMap.pages.flatMap(({ blocks }) => blocks)
+    .filter((block) => isVirtualBlock(block) && typeof block.text === 'string' && block.text.includes('|'))
+    .sort((left, right) => left.boundingBox.y - right.boundingBox.y)
+    .map((block) => block.text!.trim().replace(/^\|/u, '').replace(/\|$/u, ''))
+    .filter((line) => !line.split('|').every((cell) => /^\s*:?-{3,}:?\s*$/u.test(cell)))
+    .map((line) => line.split('|').map((cell) => cell.trim()));
+  return tableRows[row - 1]?.[column - 1]?.includes(quote) ?? false;
+}
+
+export function reproduceAcceptanceLocator(
+  sourceMap: DocumentSourceMap,
+  locator: AcceptanceLocator,
+  expectedSource?: { artifactId: string; contentHash: string },
+): boolean {
+  if (expectedSource && (sourceMap.artifactId !== expectedSource.artifactId
+    || sourceMap.contentHash !== expectedSource.contentHash)) return false;
+  if (locator.kind === 'file') return true;
+  const quote = typeof locator.quote === 'string' ? locator.quote : undefined;
+  const pageNumber = typeof locator.page === 'number' ? locator.page : undefined;
+  const pages = pageNumber === undefined ? sourceMap.pages : sourceMap.pages.filter(({ page }) => page === pageNumber);
+  const scannedPdf = sourceMap.contentHash === SCANNED_PDF_HASH;
+  const blocks = pages.flatMap(({ blocks: pageBlocks }) => pageBlocks)
+    .filter((block) => !scannedPdf || isTesseractBlock(block));
+  if (locator.kind === 'page-text-order' && Array.isArray(locator.quotes)) {
+    let blockIndex = 0;
+    let characterOffset = 0;
+    return locator.quotes.every((candidate) => {
+      if (typeof candidate !== 'string') return false;
+      for (let index = blockIndex; index < blocks.length; index += 1) {
+        const text = blocks[index]?.text;
+        if (typeof text !== 'string') continue;
+        const found = text.indexOf(candidate, index === blockIndex ? characterOffset : 0);
+        if (found < 0) continue;
+        blockIndex = index;
+        characterOffset = found + candidate.length;
+        return true;
+      }
+      return false;
+    });
+  }
+  if (!quote && locator.kind !== 'page-region' && locator.kind !== 'image-region') return false;
+  if (quote && locator.kind === 'line-text') {
+    const line = Number(locator.line);
+    return Number.isSafeInteger(line) && line > 0
+      && blocks.some((block) => matchesVirtualLine(block, line) && quoteMatches(block, quote));
+  }
+  if (quote && locator.kind === 'paragraph-text') {
+    const paragraph = Number(locator.paragraph);
+    return Number.isSafeInteger(paragraph) && paragraph > 0
+      && blocks.some((block) => sameCoordinate(block.boundingBox.y, (paragraph - 1) * VIRTUAL_LINE_HEIGHT)
+        && sameCoordinate(block.boundingBox.height, VIRTUAL_LINE_HEIGHT) && quoteMatches(block, quote));
+  }
+  if (quote && locator.kind === 'notebook-cell') {
+    const cell = Number(locator.cell);
+    return Number.isSafeInteger(cell) && cell > 0
+      && blocks.some((block) => matchesVirtualLine(block, cell) && quoteMatches(block, quote));
+  }
+  if (quote && locator.kind === 'table-cell') {
+    if (sourceMap.contentHash === MARKDOWN_TABLE_HASH) return markdownTableCellMatches(sourceMap, locator, quote);
+    const row = Number(locator.row);
+    const column = Number(locator.column);
+    if (!Number.isSafeInteger(row) || row < 1 || !Number.isSafeInteger(column) || column < 1) return false;
+    if (sourceMap.contentHash === CSV_TABLE_HASH) {
+      return blocks.some((block) => matchesVirtualLine(block, row) && virtualColumn(block) === column
+        && quoteMatches(block, quote));
+    }
+    if (sourceMap.contentHash === XLSX_TABLE_HASH && typeof locator.sheet === 'string' && locator.sheet) {
+      return pages.some(({ blocks: pageBlocks }) => {
+        const sheetMatches = pageBlocks.some((block) => matchesVirtualLine(block, 1)
+          && quoteMatches(block, String(locator.sheet)));
+        return sheetMatches && pageBlocks.some((block) => matchesVirtualLine(block, row + 1)
+          && virtualColumn(block) === column && quoteMatches(block, quote));
+      });
+    }
+    return false;
+  }
+  const region = Array.isArray(locator.bbox) ? locator.bbox.map(Number) : undefined;
+  const candidates = region ? blocks.filter(({ boundingBox }) => overlaps(boundingBox, region)) : blocks;
+  if (locator.kind === 'page-region' || locator.kind === 'image-region') return candidates.length > 0;
+  if (quote) return candidates.some((block) => quoteMatches(block, quote));
+  return false;
+}
 
 export const CANONICAL_CASE_IDENTITIES = Object.freeze([
   ['corrupt-pdf-en', 'corrupt.pdf', 'needs_review', 1],
@@ -241,7 +378,7 @@ export function validateAcceptanceDraft(value: unknown): AcceptanceDraft {
     if (item.id === 'scan-pdf-image-only') {
       const tesseract = item.stages.find((stage) => stage.parser === 'tesseract' && stage.version === '5.3.0'
         && typeof stage.confidence === 'number' && stage.confidence > 0
-        && stage.transformations.some((entry) => entry.stage === 'local_ocr'
+        && stage.transformations.some((entry) => entry.stage === 'ocr'
           && entry.parser === 'tesseract' && entry.version === '5.3.0'));
       if (!tesseract) throw new Error('mandatory scanned-PDF Tesseract provenance missing');
     }
@@ -264,6 +401,21 @@ interface AcceptanceMount {
   destination: string;
   readOnly: boolean;
 }
+interface CgroupSample {
+  elapsedMs: number;
+  cpuUsageMicros: number;
+  memoryPeakBytes: number;
+  terminal: boolean;
+}
+interface HostCgroupSamplingEvidence {
+  source: 'host-cgroup-v2';
+  clock: 'host-monotonic';
+  cgroupVersion: 2;
+  hostPid: number;
+  cgroupPath: string;
+  cgroupIdentity: string;
+  samples: CgroupSample[];
+}
 interface ContainerResourceEvidence {
   containerId: string;
   imageId: string;
@@ -281,15 +433,82 @@ interface ContainerResourceEvidence {
   pidsLimit: number;
   tmpfsBytes: number;
   jobVolumeBytes: number;
-  cpuUsageMicros: number;
-  peakRssBytes: number;
+  sampling: HostCgroupSamplingEvidence;
+  cumulativeCpuUsageMicros: number;
+  peakCpuQuotaPercent: number;
+  peakMemoryBytes: number;
   mounts: AcceptanceMount[];
 }
 export interface AcceptanceRuntimeEvidence {
   build: { sourceSha: string; runnerSha256: string; contractSha256: string };
   worker: ContainerResourceEvidence;
   parser: ContainerResourceEvidence;
-  maxima: { cpuUsageMicros: number; peakRssBytes: number };
+  maxima: {
+    cumulativeCpuUsageMicros: number;
+    peakCpuQuotaPercent: number;
+    peakMemoryBytes: number;
+  };
+}
+
+function roundedRate(value: number): number {
+  return Math.round(value * 10_000) / 10_000;
+}
+
+function validateHostCgroupSampling(
+  role: 'worker' | 'parser',
+  value: Record<string, unknown>,
+  containerId: string,
+  memoryBytes: number,
+): void {
+  const sampling = value.sampling;
+  if (!isRecord(sampling) || sampling.source !== 'host-cgroup-v2'
+    || sampling.clock !== 'host-monotonic' || sampling.cgroupVersion !== 2) {
+    throw new Error(`${role} host cgroup v2 sampling series missing`);
+  }
+  if (!Number.isSafeInteger(sampling.hostPid) || Number(sampling.hostPid) <= 1
+    || typeof sampling.cgroupPath !== 'string'
+    || !sampling.cgroupPath.startsWith('/sys/fs/cgroup/') || !sampling.cgroupPath.includes(containerId)
+    || sampling.cgroupPath.split('/').some((segment) => segment === '.' || segment === '..')
+    || typeof sampling.cgroupIdentity !== 'string' || !/^\d+:\d+:\d+$/u.test(sampling.cgroupIdentity)) {
+    throw new Error(`${role} cgroup container identity mismatch`);
+  }
+  if (!Array.isArray(sampling.samples) || sampling.samples.length < 2) {
+    throw new Error(`${role} host cgroup sampling series missing`);
+  }
+  const samples = sampling.samples;
+  let previousElapsed = -1;
+  let previousCpu = -1;
+  let previousMemory = -1;
+  let peakCpuQuotaPercent = 0;
+  samples.forEach((raw, index) => {
+    if (!isRecord(raw) || !Number.isSafeInteger(raw.elapsedMs) || Number(raw.elapsedMs) < 0
+      || !Number.isSafeInteger(raw.cpuUsageMicros) || Number(raw.cpuUsageMicros) < 0
+      || !Number.isSafeInteger(raw.memoryPeakBytes) || Number(raw.memoryPeakBytes) <= 0
+      || Number(raw.memoryPeakBytes) > memoryBytes || typeof raw.terminal !== 'boolean') {
+      throw new Error(`${role} host cgroup sampling series invalid`);
+    }
+    const elapsed = Number(raw.elapsedMs);
+    const cpu = Number(raw.cpuUsageMicros);
+    const memory = Number(raw.memoryPeakBytes);
+    if ((index === 0 && elapsed !== 0) || (index > 0 && elapsed <= previousElapsed)
+      || cpu < previousCpu || memory < previousMemory || (index < samples.length - 1 && raw.terminal)) {
+      throw new Error(`${role} host cgroup sampling series invalid`);
+    }
+    if (index > 0) {
+      const rate = ((cpu - previousCpu) / ((elapsed - previousElapsed) * 1_000)) / 2 * 100;
+      peakCpuQuotaPercent = Math.max(peakCpuQuotaPercent, roundedRate(rate));
+    }
+    previousElapsed = elapsed;
+    previousCpu = cpu;
+    previousMemory = memory;
+  });
+  const terminal = samples.at(-1) as CgroupSample;
+  if (terminal.terminal !== true) throw new Error(`${role} terminal cgroup sample missing`);
+  if (value.cumulativeCpuUsageMicros !== terminal.cpuUsageMicros
+    || value.peakMemoryBytes !== terminal.memoryPeakBytes
+    || value.peakCpuQuotaPercent !== peakCpuQuotaPercent) {
+    throw new Error(`${role} interval CPU formula or memory peak mismatch`);
+  }
 }
 
 function validateContainerBounds(
@@ -316,11 +535,7 @@ function validateContainerBounds(
     || value.tmpfsBytes !== 67_108_864 || value.jobVolumeBytes !== 67_108_864) {
     throw new Error(`${role} runtime limit mismatch`);
   }
-  if (!Number.isSafeInteger(value.cpuUsageMicros) || Number(value.cpuUsageMicros) <= 0
-    || !Number.isSafeInteger(value.peakRssBytes) || Number(value.peakRssBytes) <= 0
-    || Number(value.peakRssBytes) > memoryBytes) {
-    throw new Error(`${role} cgroup resource evidence missing or out of range`);
-  }
+  validateHostCgroupSampling(role, value, String(value.containerId), memoryBytes);
   if (!Array.isArray(value.mounts)) throw new Error(`${role} mount evidence missing`);
 }
 
@@ -345,6 +560,11 @@ export function validateRuntimeEvidence(value: unknown, draftValue: unknown): Ac
   validateContainerBounds('parser', value.parser, draft.images.parser, 536_870_912);
   const worker = value.worker;
   const parser = value.parser;
+  if (worker.sampling.hostPid === parser.sampling.hostPid
+    || worker.sampling.cgroupPath === parser.sampling.cgroupPath
+    || worker.sampling.cgroupIdentity === parser.sampling.cgroupIdentity) {
+    throw new Error('worker/parser cgroup identity must be independent');
+  }
   const releaseRoot = `/opt/openscience-releases/${draft.sourceSha}`;
   const acceptanceRoot = `/opt/openscience-acceptance/document-parser/${draft.sourceSha}`;
   const outputMount = worker.mounts.find((mount) => mount.destination === '/acceptance-output');
@@ -374,8 +594,11 @@ export function validateRuntimeEvidence(value: unknown, draftValue: unknown): Ac
   }
   const maxima = value.maxima;
   if (!isRecord(maxima)
-    || maxima.cpuUsageMicros !== Math.max(worker.cpuUsageMicros, parser.cpuUsageMicros)
-    || maxima.peakRssBytes !== Math.max(worker.peakRssBytes, parser.peakRssBytes)) {
+    || maxima.cumulativeCpuUsageMicros !== Math.max(
+      worker.cumulativeCpuUsageMicros, parser.cumulativeCpuUsageMicros,
+    )
+    || maxima.peakCpuQuotaPercent !== Math.max(worker.peakCpuQuotaPercent, parser.peakCpuQuotaPercent)
+    || maxima.peakMemoryBytes !== Math.max(worker.peakMemoryBytes, parser.peakMemoryBytes)) {
     throw new Error('topology maxima mismatch');
   }
   return value as unknown as AcceptanceRuntimeEvidence;
@@ -429,6 +652,7 @@ export interface PreparedAcceptancePaths {
   runRoot: string;
   workerOutputRoot: string;
   draftReportPath: string;
+  unpublishedReportPath: string;
   finalReportPath: string;
 }
 
@@ -496,8 +720,49 @@ export async function prepareAcceptancePaths(options: {
   }
   return {
     releaseRoot, acceptanceRoot, corpusRoot, runRoot, workerOutputRoot,
-    draftReportPath: join(workerOutputRoot, 'report.draft.json'), finalReportPath,
+    draftReportPath: join(workerOutputRoot, 'report.draft.json'),
+    unpublishedReportPath: join(acceptanceRoot, `.report-unpublished-${runId}.json`),
+    finalReportPath,
   };
+}
+
+function exactUnpublishedPath(path: string): { acceptanceRoot: string; runId: string } {
+  const candidate = resolve(path);
+  const name = basename(candidate);
+  const match = /^\.report-unpublished-([a-f0-9]{12}-[1-9][0-9]*)\.json$/u.exec(name);
+  if (!match) throw new Error('invalid unpublished acceptance report path');
+  return { acceptanceRoot: dirname(candidate), runId: match[1]! };
+}
+
+export async function writeUnpublishedAcceptanceCandidate(path: string, report: unknown): Promise<void> {
+  exactUnpublishedPath(path);
+  await writeFile(path, `${JSON.stringify(report, null, 2)}\n`, { flag: 'wx', mode: 0o600 });
+  const info = await lstat(path);
+  const currentUid = process.getuid?.();
+  if (!info.isFile() || info.isSymbolicLink()
+    || (currentUid !== undefined && (currentUid !== 0 || info.uid !== 0 || (info.mode & 0o077) !== 0))
+    || await realpath(path) !== resolve(path)) {
+    await rm(path, { force: true });
+    throw new Error('unpublished acceptance report is not a root-owned regular file');
+  }
+}
+
+export async function publishAcceptanceCandidate(candidatePath: string, finalPath: string): Promise<void> {
+  const { acceptanceRoot } = exactUnpublishedPath(candidatePath);
+  if (resolve(finalPath) !== join(acceptanceRoot, 'report.json')) {
+    throw new Error('invalid final acceptance report path');
+  }
+  const candidateInfo = await lstat(candidatePath);
+  const parentInfo = await lstat(acceptanceRoot);
+  const currentUid = process.getuid?.();
+  if (!candidateInfo.isFile() || candidateInfo.isSymbolicLink() || candidateInfo.uid !== parentInfo.uid
+    || (currentUid !== undefined && (currentUid !== 0 || candidateInfo.uid !== 0 || (candidateInfo.mode & 0o077) !== 0))
+    || await realpath(candidatePath) !== resolve(candidatePath)) {
+    throw new Error('unpublished acceptance report ownership mismatch');
+  }
+  await readBoundedAcceptanceJson(candidatePath);
+  await link(candidatePath, finalPath);
+  await rm(candidatePath);
 }
 
 export async function writeAtomicAcceptanceReport(
@@ -532,7 +797,11 @@ export async function readBoundedAcceptanceJson(path: string, maxBytes = 16 * 10
   }
 }
 
-export async function cleanupAcceptanceRun(runRootValue: string, acceptanceRootValue: string): Promise<void> {
+export async function cleanupAcceptanceRun(
+  runRootValue: string,
+  acceptanceRootValue: string,
+  preserveUnpublishedCandidate = false,
+): Promise<void> {
   const acceptanceRoot = resolve(acceptanceRootValue);
   const runRoot = resolve(runRootValue);
   if (dirname(runRoot) !== acceptanceRoot || !/^\.run-[a-f0-9]{12}-[1-9][0-9]*$/u.test(basename(runRoot))) {
@@ -540,12 +809,14 @@ export async function cleanupAcceptanceRun(runRootValue: string, acceptanceRootV
   }
   const runId = basename(runRoot).slice('.run-'.length);
   const exactTemporaryReport = join(acceptanceRoot, `report.json.tmp-${runId}`);
+  const unpublishedReport = join(acceptanceRoot, `.report-unpublished-${runId}.json`);
   let info;
   try {
     info = await lstat(runRoot);
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
       await rm(exactTemporaryReport, { force: true });
+      if (!preserveUnpublishedCandidate) await rm(unpublishedReport, { force: true });
       return;
     }
     throw error;
@@ -555,6 +826,7 @@ export async function cleanupAcceptanceRun(runRootValue: string, acceptanceRootV
   }
   await rm(runRoot, { recursive: true });
   await rm(exactTemporaryReport, { force: true });
+  if (!preserveUnpublishedCandidate) await rm(unpublishedReport, { force: true });
 }
 
 export function parseCanonicalManifest(serialized: Buffer | string): AcceptanceManifest {
@@ -599,6 +871,7 @@ export function deriveFixedAcceptancePaths(sourceSha: string, runId: string): Pr
     runRoot,
     workerOutputRoot,
     draftReportPath: `${workerOutputRoot}/report.draft.json`,
+    unpublishedReportPath: `${acceptanceRoot}/.report-unpublished-${runId}.json`,
     finalReportPath: `${acceptanceRoot}/report.json`,
   };
 }
@@ -606,7 +879,7 @@ export function deriveFixedAcceptancePaths(sourceSha: string, runId: string): Pr
 async function contractCli(): Promise<void> {
   const [command, sourceSha, runId, ...extra] = process.argv.slice(2);
   if (extra.length !== 0 || !command || !sourceSha || !runId) {
-    throw new Error('usage: parser-acceptance-contract <prepare|finalize|cleanup> <source-sha> <run-id>');
+    throw new Error('usage: parser-acceptance-contract <prepare|finalize|cleanup-run|cleanup|publish> <source-sha> <run-id>');
   }
   if (command === 'prepare') {
     const paths = await prepareAcceptancePaths({
@@ -620,10 +893,21 @@ async function contractCli(): Promise<void> {
     await cleanupAcceptanceRun(paths.runRoot, paths.acceptanceRoot);
     return;
   }
+  if (command === 'cleanup-run') {
+    await cleanupAcceptanceRun(paths.runRoot, paths.acceptanceRoot, true);
+    return;
+  }
   if (command === 'finalize') {
     const draft = await readBoundedAcceptanceJson(paths.draftReportPath);
     const resources = await readBoundedAcceptanceJson(join(paths.runRoot, 'resources.json'));
-    await writeAtomicAcceptanceReport(paths.finalReportPath, buildFinalAcceptanceReport(draft, resources), runId);
+    await writeUnpublishedAcceptanceCandidate(
+      paths.unpublishedReportPath,
+      buildFinalAcceptanceReport(draft, resources),
+    );
+    return;
+  }
+  if (command === 'publish') {
+    await publishAcceptanceCandidate(paths.unpublishedReportPath, paths.finalReportPath);
     return;
   }
   throw new Error('unknown parser acceptance contract command');

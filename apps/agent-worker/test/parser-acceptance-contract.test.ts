@@ -4,6 +4,8 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
+import type { DocumentSourceMap } from '@openscience/domain';
+
 import {
   CANONICAL_CORPUS_MANIFEST_SHA256,
   buildFinalAcceptanceReport,
@@ -14,6 +16,7 @@ import {
   parseCanonicalManifest,
   prepareAcceptancePaths,
   readBoundedAcceptanceJson,
+  reproduceAcceptanceLocator,
   validateAcceptanceDraft,
   validateRuntimeEvidence,
   writeAtomicAcceptanceReport,
@@ -26,6 +29,45 @@ const canonicalIds = [
   'references-markdown-en', 'references-pdf-en', 'scan-pdf-image-only', 'scan-png-empty',
   'table-csv-mixed', 'table-pdf-en', 'table-xlsx-en', 'tex-formula-en',
 ];
+
+const parser = { name: 'openscience-text-extractor', version: '1.0.0' };
+const virtualParser = { name: 'openscience-virtual-page', version: 'openscience-virtual-page-v1' };
+
+function sourceBlock(options: {
+  id: string;
+  text: string;
+  x?: number;
+  y?: number;
+  width?: number;
+  height?: number;
+  tesseract?: boolean;
+}) {
+  const blockParser = options.tesseract ? { name: 'tesseract', version: '5.3.0' } : parser;
+  return {
+    id: options.id,
+    kind: 'paragraph' as const,
+    text: options.text,
+    boundingBox: {
+      x: options.x ?? 0, y: options.y ?? 0,
+      width: options.width ?? 1000, height: options.height ?? 24,
+    },
+    ...(options.tesseract ? { confidence: 0.97 } : {}),
+    parser: blockParser,
+    transformations: options.tesseract
+      ? [{ stage: 'ocr' as const, processor: blockParser }]
+      : [
+        { stage: 'extract_text' as const, processor: parser },
+        { stage: 'normalize' as const, processor: virtualParser },
+      ],
+  };
+}
+
+function sourceMap(contentHash: string, blocks: ReturnType<typeof sourceBlock>[], page = 1): DocumentSourceMap {
+  return {
+    artifactId: 'acceptance-artifact', contentHash, parser,
+    pages: [{ page, width: 1000, height: 1000, blocks }],
+  };
+}
 
 function validDraft() {
   const identities = [
@@ -62,7 +104,7 @@ function validDraft() {
       confidence: id === 'scan-pdf-image-only' ? 0.97 : null,
       boundingBox: { x: 10, y: 20, width: 30, height: 40 },
       transformations: [{
-        stage: id === 'scan-pdf-image-only' ? 'local_ocr' : 'extract_text',
+        stage: id === 'scan-pdf-image-only' ? 'ocr' : 'extract_text',
         parser: id === 'scan-pdf-image-only' ? 'tesseract' : 'v1-text-transition',
         version: id === 'scan-pdf-image-only' ? '5.3.0' : '2.0.0',
       }],
@@ -94,13 +136,32 @@ function validResources(draft = validDraft()) {
     capDrop: ['ALL'], noNewPrivileges: true, nanoCpus: 2_000_000_000, pidsLimit: 64,
     tmpfsBytes: 67_108_864, jobVolumeBytes: 67_108_864,
   };
+  const workerSampling = {
+    source: 'host-cgroup-v2', clock: 'host-monotonic', cgroupVersion: 2, hostPid: 4123,
+    cgroupPath: `/sys/fs/cgroup/system.slice/docker-${'d'.repeat(64)}.scope`,
+    cgroupIdentity: '0:30:40123',
+    samples: [
+      { elapsedMs: 0, cpuUsageMicros: 12_345, memoryPeakBytes: 134_217_728, terminal: false },
+      { elapsedMs: 200, cpuUsageMicros: 52_345, memoryPeakBytes: 268_435_456, terminal: true },
+    ],
+  };
+  const parserSampling = {
+    source: 'host-cgroup-v2', clock: 'host-monotonic', cgroupVersion: 2, hostPid: 4124,
+    cgroupPath: `/sys/fs/cgroup/system.slice/docker-${'e'.repeat(64)}.scope`,
+    cgroupIdentity: '0:30:40124',
+    samples: [
+      { elapsedMs: 0, cpuUsageMicros: 23_456, memoryPeakBytes: 67_108_864, terminal: false },
+      { elapsedMs: 400, cpuUsageMicros: 63_456, memoryPeakBytes: 134_217_728, terminal: true },
+    ],
+  };
   return {
     build: { sourceSha: draft.sourceSha, runnerSha256: '1'.repeat(64), contractSha256: '2'.repeat(64) },
     worker: {
       ...common, containerId: 'd'.repeat(64), imageId: draft.images.worker,
       running: false, exitCode: 0,
       memoryBytes: 1_073_741_824, memorySwapBytes: 1_073_741_824,
-      cpuUsageMicros: 12_345, peakRssBytes: 268_435_456,
+      sampling: workerSampling, cumulativeCpuUsageMicros: 52_345,
+      peakCpuQuotaPercent: 10, peakMemoryBytes: 268_435_456,
       mounts: [
         { type: 'volume', source: jobVolume, destination: '/parser-jobs', readOnly: false },
         { type: 'bind', source: releaseRoot, destination: '/opt/openscience', readOnly: true },
@@ -112,10 +173,14 @@ function validResources(draft = validDraft()) {
       ...common, containerId: 'e'.repeat(64), imageId: draft.images.parser,
       running: true, exitCode: 0,
       memoryBytes: 536_870_912, memorySwapBytes: 536_870_912,
-      cpuUsageMicros: 23_456, peakRssBytes: 134_217_728,
+      sampling: parserSampling, cumulativeCpuUsageMicros: 63_456,
+      peakCpuQuotaPercent: 5, peakMemoryBytes: 134_217_728,
       mounts: [{ type: 'volume', source: jobVolume, destination: '/parser-jobs', readOnly: false }],
     },
-    maxima: { cpuUsageMicros: 23_456, peakRssBytes: 268_435_456 },
+    maxima: {
+      peakCpuQuotaPercent: 10, cumulativeCpuUsageMicros: 63_456,
+      peakMemoryBytes: 268_435_456,
+    },
   };
 }
 
@@ -144,6 +209,114 @@ describe('Task 8 acceptance contract', () => {
     });
   });
 
+  it('binds line and paragraph quotes to their exact virtual coordinates', () => {
+    const markdownHash = '66f861e5049bd0e33e68ae11aec6965928853e0c95c7a4c88a7f99c1f7497406';
+    const docxHash = '9641d86b9ed1e3614b448ca4159d4943c11d9d08e8561d0ae01a8357c579ea3c';
+    const line = { kind: 'line-text', line: 3, quote: 'OpenScience evidence supports' };
+    const paragraph = { kind: 'paragraph-text', paragraph: 1, quote: 'OpenScience evidence document' };
+    expect(reproduceAcceptanceLocator(sourceMap(markdownHash, [sourceBlock({
+      id: 'line-3', text: 'OpenScience evidence supports exact locators.', y: 48,
+    })]), line)).toBe(true);
+    expect(reproduceAcceptanceLocator(sourceMap(markdownHash, [sourceBlock({
+      id: 'line-4', text: 'OpenScience evidence supports exact locators.', y: 72,
+    })]), line)).toBe(false);
+    expect(reproduceAcceptanceLocator(sourceMap(docxHash, [sourceBlock({
+      id: 'paragraph-1', text: 'OpenScience evidence document', y: 0,
+    })]), paragraph)).toBe(true);
+    expect(reproduceAcceptanceLocator(sourceMap(docxHash, [sourceBlock({
+      id: 'paragraph-2', text: 'OpenScience evidence document', y: 24,
+    })]), paragraph)).toBe(false);
+  });
+
+  it('reproduces ordered page quotes within one block without crossing block boundaries', () => {
+    const hash = 'e2048391202205cffe5132331b85148d23109add51130ac280a817ef0f583a48';
+    const locator = { kind: 'page-text-order', page: 1, quotes: ['Fitted signal', 'I(t) = I0 exp(-t/tau)'] };
+    expect(reproduceAcceptanceLocator(sourceMap(hash, [sourceBlock({
+      id: 'formula', text: 'Fitted signal\nI(t) = I0 exp(-t/tau)', y: 0,
+    })]), locator)).toBe(true);
+    expect(reproduceAcceptanceLocator(sourceMap(hash, [sourceBlock({
+      id: 'reversed', text: 'I(t) = I0 exp(-t/tau)\nFitted signal', y: 0,
+    })]), locator)).toBe(false);
+    expect(reproduceAcceptanceLocator(sourceMap(hash, [
+      sourceBlock({ id: 'left', text: 'Fitted sig', y: 0 }),
+      sourceBlock({ id: 'right', text: 'nal\nI(t) = I0 exp(-t/tau)', y: 24 }),
+    ]), locator)).toBe(false);
+  });
+
+  it('binds table quotes to the exact row, column and sheet geometry', () => {
+    const markdownHash = '66f861e5049bd0e33e68ae11aec6965928853e0c95c7a4c88a7f99c1f7497406';
+    const csvHash = 'e71f6e5c40db4f3e257ee99961e81b899c817a7b00ed2e03b9c055d537aefa20';
+    const xlsxHash = 'c371bc99687ba51d51d4081f2ae09274f1a52b95839c543870008d9fc34f4b1f';
+    const csv = { kind: 'table-cell', row: 2, column: 2, quote: '42' };
+    const xlsx = { kind: 'table-cell', sheet: 'Evidence', row: 2, column: 2, quote: '42' };
+    const markdown = sourceMap(markdownHash, [
+      sourceBlock({ id: 'table-header', text: '| Metric | Value |', y: 72 }),
+      sourceBlock({ id: 'table-separator', text: '| --- | --- |', y: 96 }),
+      sourceBlock({ id: 'table-row', text: '| pulse | 42 fs |', y: 120 }),
+    ]);
+    expect(reproduceAcceptanceLocator(markdown, {
+      kind: 'table-cell', row: 2, column: 2, quote: '42 fs',
+    })).toBe(true);
+    expect(reproduceAcceptanceLocator(sourceMap(markdownHash, [
+      sourceBlock({ id: 'table-header', text: '| Metric | Value |', y: 72 }),
+      sourceBlock({ id: 'table-separator', text: '| --- | --- |', y: 96 }),
+      sourceBlock({ id: 'wrong-cell', text: '| 42 fs | pulse |', y: 120 }),
+    ]), { kind: 'table-cell', row: 2, column: 2, quote: '42 fs' })).toBe(false);
+    expect(reproduceAcceptanceLocator(sourceMap(csvHash, [sourceBlock({
+      id: 'csv-r2-c2', text: '42', x: 500, y: 24, width: 500,
+    })]), csv)).toBe(true);
+    expect(reproduceAcceptanceLocator(sourceMap(csvHash, [sourceBlock({
+      id: 'csv-r3-c1', text: '42', x: 0, y: 48, width: 500,
+    })]), csv)).toBe(false);
+    const workbook = sourceMap(xlsxHash, [
+      sourceBlock({ id: 'sheet-name', text: 'Evidence', y: 0 }),
+      sourceBlock({ id: 'xlsx-r2-c2', text: '42', x: 500, y: 48, width: 500 }),
+    ]);
+    expect(reproduceAcceptanceLocator(workbook, xlsx)).toBe(true);
+    expect(reproduceAcceptanceLocator(sourceMap(xlsxHash, [
+      sourceBlock({ id: 'wrong-sheet', text: 'Other', y: 0 }),
+      sourceBlock({ id: 'xlsx-r2-c2', text: '42', x: 500, y: 48, width: 500 }),
+    ]), xlsx)).toBe(false);
+    expect(reproduceAcceptanceLocator(sourceMap(xlsxHash, [
+      sourceBlock({ id: 'sheet-name', text: 'Evidence', y: 0 }),
+      sourceBlock({ id: 'xlsx-r3-c1', text: '42', x: 0, y: 72, width: 500 }),
+    ]), xlsx)).toBe(false);
+  });
+
+  it('binds a scanned-PDF quote and region to the matching Tesseract block', () => {
+    const scanHash = 'b327e6fece61a3e5bd52842250c51012b7672d81ff3dd4f11107b0e4aee6d2e0';
+    const quote = { kind: 'page-text', page: 1, quote: 'PULSE 42 FS' };
+    const region = { kind: 'page-region', page: 1, bbox: [72, 600, 432, 645] };
+    const wrong = sourceMap(scanHash, [
+      sourceBlock({ id: 'native-quote', text: 'PULSE 42 FS', x: 72, y: 600, width: 360, height: 45 }),
+      sourceBlock({ id: 'ocr-other', text: 'OTHER', x: 500, y: 700, width: 100, height: 20, tesseract: true }),
+    ]);
+    expect(reproduceAcceptanceLocator(wrong, quote)).toBe(false);
+    expect(reproduceAcceptanceLocator(wrong, region)).toBe(false);
+    const correct = sourceMap(scanHash, [sourceBlock({
+      id: 'ocr-quote', text: 'PULSE 42 FS', x: 72, y: 600, width: 360, height: 45, tesseract: true,
+    })]);
+    expect(reproduceAcceptanceLocator(correct, quote)).toBe(true);
+    expect(reproduceAcceptanceLocator(correct, region)).toBe(true);
+  });
+
+  it('binds locator reproduction to the exact source identity', () => {
+    const map = sourceMap('66f861e5049bd0e33e68ae11aec6965928853e0c95c7a4c88a7f99c1f7497406', [
+      sourceBlock({ id: 'line-3', text: 'OpenScience evidence supports exact locators.', y: 48 }),
+    ]);
+    const reproduce = reproduceAcceptanceLocator as unknown as (
+      source: DocumentSourceMap,
+      locator: { kind: string; line: number; quote: string },
+      identity: { artifactId: string; contentHash: string },
+    ) => boolean;
+    expect(reproduce(map, { kind: 'line-text', line: 3, quote: 'OpenScience evidence supports' }, {
+      artifactId: map.artifactId, contentHash: map.contentHash,
+    })).toBe(true);
+    expect(reproduce(map, { kind: 'line-text', line: 3, quote: 'OpenScience evidence supports' }, {
+      artifactId: 'wrong-artifact', contentHash: map.contentHash,
+    })).toBe(false);
+  });
+
   it.each([
     ['all handler failures', (draft: ReturnType<typeof validDraft>) => {
       draft.cases = draft.cases.map((item) => ({ ...item, status: 'failed' as const, handlerStatus: 'failed', failureStatus: 'injected' }));
@@ -167,9 +340,9 @@ describe('Task 8 acceptance contract', () => {
     const draft = validDraft();
     const resources = validResources(draft);
     expect(validateRuntimeEvidence(resources, draft)).toMatchObject({
-      worker: { cpuUsageMicros: 12_345, peakRssBytes: 268_435_456 },
-      parser: { cpuUsageMicros: 23_456, peakRssBytes: 134_217_728 },
-      maxima: { cpuUsageMicros: 23_456, peakRssBytes: 268_435_456 },
+      worker: { cumulativeCpuUsageMicros: 52_345, peakCpuQuotaPercent: 10, peakMemoryBytes: 268_435_456 },
+      parser: { cumulativeCpuUsageMicros: 63_456, peakCpuQuotaPercent: 5, peakMemoryBytes: 134_217_728 },
+      maxima: { cumulativeCpuUsageMicros: 63_456, peakCpuQuotaPercent: 10, peakMemoryBytes: 268_435_456 },
     });
     expect(buildFinalAcceptanceReport(draft, resources)).toMatchObject({
       schemaVersion: 2, resources: { worker: { user: '1000:1000' }, parser: { effectiveEnvCount: 0 } },
@@ -212,7 +385,31 @@ describe('Task 8 acceptance contract', () => {
     }, /worker output mount/i],
     ['hidden environment', (resources: ReturnType<typeof validResources>) => { resources.parser.effectiveEnvCount = 1; }, /effective environment/i],
     ['root user', (resources: ReturnType<typeof validResources>) => { resources.worker.user = '0:0'; }, /numeric non-root/i],
-    ['missing RSS', (resources: ReturnType<typeof validResources>) => { resources.parser.peakRssBytes = 0; }, /cgroup resource/i],
+    ['missing memory peak', (resources: ReturnType<typeof validResources>) => {
+      resources.parser.sampling.samples[1]!.memoryPeakBytes = 0;
+      resources.parser.peakMemoryBytes = 0;
+    }, /cgroup sampling series/i],
+    ['missing host series', (resources: ReturnType<typeof validResources>) => {
+      delete (resources.worker as Partial<typeof resources.worker>).sampling;
+    }, /host cgroup|sampling series/i],
+    ['missing monotonic clock identity', (resources: ReturnType<typeof validResources>) => {
+      delete (resources.worker.sampling as Partial<typeof resources.worker.sampling>).clock;
+    }, /monotonic|sampling series/i],
+    ['wrong interval CPU formula', (resources: ReturnType<typeof validResources>) => {
+      resources.worker.peakCpuQuotaPercent = 9;
+    }, /CPU.*formula|sampling series/i],
+    ['missing terminal sample', (resources: ReturnType<typeof validResources>) => {
+      resources.parser.sampling.samples[1]!.terminal = false;
+    }, /terminal/i],
+    ['wrong cgroup version', (resources: ReturnType<typeof validResources>) => {
+      resources.parser.sampling.cgroupVersion = 1;
+    }, /cgroup v2/i],
+    ['cgroup container identity mismatch', (resources: ReturnType<typeof validResources>) => {
+      resources.worker.sampling.cgroupPath = '/sys/fs/cgroup/system.slice/docker-not-the-worker.scope';
+    }, /cgroup.*identity/i],
+    ['noncanonical cgroup path', (resources: ReturnType<typeof validResources>) => {
+      resources.worker.sampling.cgroupPath = `/sys/fs/cgroup/../docker-${'d'.repeat(64)}.scope`;
+    }, /cgroup.*identity/i],
     ['failed parser lifecycle', (resources: ReturnType<typeof validResources>) => { resources.parser.running = false; resources.parser.exitCode = 137; }, /lifecycle/i],
     ['unbounded swap', (resources: ReturnType<typeof validResources>) => { resources.worker.memorySwapBytes = -1; }, /runtime limit/i],
   ])('rejects $0 evidence', (_name, mutate, expected) => {
@@ -277,6 +474,69 @@ describe('Task 8 acceptance contract', () => {
   it('derives no cleanup/finalization path from unvalidated CLI identity', () => {
     expect(() => deriveFixedAcceptancePaths('../escape', 'aaaaaaaaaaaa-1234')).toThrow(/source SHA/i);
     expect(() => deriveFixedAcceptancePaths('a'.repeat(40), '../escape')).toThrow(/run id/i);
+    expect(deriveFixedAcceptancePaths('a'.repeat(40), 'aaaaaaaaaaaa-1234')).toMatchObject({
+      unpublishedReportPath: '/opt/openscience-acceptance/document-parser/'
+        + `${'a'.repeat(40)}/.report-unpublished-aaaaaaaaaaaa-1234.json`,
+    });
+  });
+
+  it('keeps the validated report unpublished until strict run cleanup succeeds', async () => {
+    const contract = await import('../src/parser-acceptance-contract');
+    expect(contract).toHaveProperty('writeUnpublishedAcceptanceCandidate');
+    expect(contract).toHaveProperty('publishAcceptanceCandidate');
+    const writeCandidate = Reflect.get(contract, 'writeUnpublishedAcceptanceCandidate') as (
+      path: string, report: unknown,
+    ) => Promise<void>;
+    const publishCandidate = Reflect.get(contract, 'publishAcceptanceCandidate') as (
+      candidate: string, final: string,
+    ) => Promise<void>;
+    const acceptanceRoot = await mkdtemp(join(tmpdir(), 'task8-acceptance-unpublished-'));
+    const runId = 'aaaaaaaaaaaa-1234';
+    const runRoot = join(acceptanceRoot, `.run-${runId}`);
+    const candidate = join(acceptanceRoot, `.report-unpublished-${runId}.json`);
+    const final = join(acceptanceRoot, 'report.json');
+    await mkdir(runRoot);
+    const report = buildFinalAcceptanceReport(validDraft(), validResources());
+    await writeCandidate(candidate, report);
+    await expect(access(candidate)).resolves.toBeUndefined();
+    await expect(access(final)).rejects.toThrow();
+
+    await cleanupAcceptanceRun(runRoot, acceptanceRoot, true);
+    await expect(access(runRoot)).rejects.toThrow();
+    await expect(access(candidate)).resolves.toBeUndefined();
+    await expect(access(final)).rejects.toThrow();
+    await publishCandidate(candidate, final);
+    await expect(access(candidate)).rejects.toThrow();
+    expect(JSON.parse(await readFile(final, 'utf8'))).toMatchObject({ schemaVersion: 2 });
+  });
+
+  it('aborts an unpublished candidate after injected cleanup failure and permits a clean retry', async () => {
+    const contract = await import('../src/parser-acceptance-contract');
+    expect(contract).toHaveProperty('writeUnpublishedAcceptanceCandidate');
+    const writeCandidate = Reflect.get(contract, 'writeUnpublishedAcceptanceCandidate') as (
+      path: string, report: unknown,
+    ) => Promise<void>;
+    const acceptanceRoot = await mkdtemp(join(tmpdir(), 'task8-acceptance-retry-'));
+    const runId = 'aaaaaaaaaaaa-1234';
+    const runRoot = join(acceptanceRoot, `.run-${runId}`);
+    const candidate = join(acceptanceRoot, `.report-unpublished-${runId}.json`);
+    const final = join(acceptanceRoot, 'report.json');
+    const temp = join(acceptanceRoot, `report.json.tmp-${runId}`);
+    const report = buildFinalAcceptanceReport(validDraft(), validResources());
+    await mkdir(runRoot);
+    await writeFile(temp, 'injected-partial');
+    await writeCandidate(candidate, report);
+
+    await cleanupAcceptanceRun(runRoot, acceptanceRoot);
+    for (const path of [runRoot, candidate, final, temp]) await expect(access(path)).rejects.toThrow();
+
+    await mkdir(runRoot);
+    await writeCandidate(candidate, report);
+    await cleanupAcceptanceRun(runRoot, acceptanceRoot, true);
+    await (Reflect.get(contract, 'publishAcceptanceCandidate') as (
+      candidatePath: string, finalPath: string,
+    ) => Promise<void>)(candidate, final);
+    await expect(access(final)).resolves.toBeUndefined();
   });
 
   it('removes the exact adjacent temp report when atomic publication fails', async () => {

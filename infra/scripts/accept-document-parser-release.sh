@@ -31,8 +31,13 @@ print_contract() {
   \"deadlineSeconds\": 900,
   \"resourceOwnership\": { \"preflightAbsent\": true, \"randomTokenLabel\": true, \"removeOnlyOwned\": true },
   \"independentCgroupSampling\": [\"worker\", \"parser\"],
+  \"resourceSampling\": {
+    \"source\": \"host-cgroup-v2\", \"memoryPeak\": \"memory.peak\", \"cpuUsage\": \"cpu.stat usage_usec\",
+    \"clock\": \"host-monotonic\", \"intervalCpuQuotaRate\": true, \"cumulativeCpu\": true,
+    \"terminalSamples\": true, \"dockerExec\": false
+  },
   \"topologyMaxima\": true,
-  \"atomicPublication\": true,
+  \"publicationStateMachine\": [\"root-owned-unpublished\", \"strict-cleanup\", \"atomic-no-clobber-publish\"],
   \"cleanupScope\": \"exact-run-root-and-adjacent-temp-report\",
   \"parserLimits\": { \"readOnly\": true, \"capDrop\": \"ALL\", \"noNewPrivileges\": true, \"memoryBytes\": 536870912, \"cpus\": 2, \"pids\": 64, \"jobVolumeBytes\": 67108864, \"tmpfsBytes\": 67108864 },
   \"workerLimits\": { \"readOnly\": true, \"capDrop\": \"ALL\", \"noNewPrivileges\": true, \"memoryBytes\": 1073741824, \"cpus\": 2, \"pids\": 64, \"tmpfsBytes\": 67108864 }
@@ -50,21 +55,58 @@ fi
 SOURCE_SHA="$1"
 [[ "$SOURCE_SHA" =~ ^[a-f0-9]{40}$ ]] || { echo 'invalid exact source SHA' >&2; exit 64; }
 
-RELEASE_ROOT="/opt/openscience-releases/$SOURCE_SHA"
-ACCEPTANCE_ROOT="/opt/openscience-acceptance/document-parser/$SOURCE_SHA"
+RELEASE_BASE='/opt/openscience-releases'
+ACCEPTANCE_BASE='/opt/openscience-acceptance/document-parser'
+RELEASE_ROOT="$RELEASE_BASE/$SOURCE_SHA"
+ACCEPTANCE_ROOT="$ACCEPTANCE_BASE/$SOURCE_SHA"
 CORPUS_ROOT="$ACCEPTANCE_ROOT/corpus"
 FINAL_REPORT="$ACCEPTANCE_ROOT/report.json"
 CONTRACT_JS="$RELEASE_ROOT/apps/agent-worker/dist/parser-acceptance-contract.js"
 RUNNER_JS="$RELEASE_ROOT/apps/agent-worker/dist/parser-acceptance-runner.js"
-[[ "$(git -C "$RELEASE_ROOT" rev-parse HEAD)" == "$SOURCE_SHA" ]] \
+EXPECTED_TRUST_UID=0
+
+trusted_directory_snapshot() {
+  local path="$1" canonical metadata uid mode
+  [[ -d "$path" && ! -L "$path" ]] \
+    || { echo "trusted directory is missing, a symlink or not a directory: $path" >&2; return 1; }
+  canonical="$(/usr/bin/readlink -f -- "$path")" \
+    || { echo "trusted directory cannot be canonicalized: $path" >&2; return 1; }
+  [[ "$canonical" == "$path" ]] \
+    || { echo "trusted directory is noncanonical or has a symlink component: $path" >&2; return 1; }
+  metadata="$(/usr/bin/stat -Lc '%u %g %a %d %i' -- "$path")" \
+    || { echo "trusted directory metadata is unavailable: $path" >&2; return 1; }
+  read -r uid _ mode _ _ <<<"$metadata"
+  [[ "$uid" == "$EXPECTED_TRUST_UID" && "$mode" =~ ^[0-7]{3,4}$ ]] \
+    || { echo "trusted directory owner or mode is invalid: $path" >&2; return 1; }
+  (( (8#$mode & 8#22) == 0 )) \
+    || { echo "trusted directory is group/world writable: $path" >&2; return 1; }
+  printf '%s|%s\n' "$canonical" "$metadata"
+}
+
+capture_trust_snapshot() {
+  trusted_directory_snapshot "$RELEASE_BASE" || return
+  trusted_directory_snapshot "$RELEASE_ROOT" || return
+  trusted_directory_snapshot "$ACCEPTANCE_BASE" || return
+  trusted_directory_snapshot "$ACCEPTANCE_ROOT" || return
+  trusted_directory_snapshot "$CORPUS_ROOT" || return
+}
+
+TRUST_SNAPSHOT="$(capture_trust_snapshot)" \
+  || { echo 'acceptance trusted-root preflight failed' >&2; exit 65; }
+[[ "$(/usr/bin/git -C "$RELEASE_ROOT" rev-parse HEAD)" == "$SOURCE_SHA" ]] \
   || { echo 'release root is not the exact source SHA' >&2; exit 65; }
-[[ -z "$(git -C "$RELEASE_ROOT" status --porcelain --untracked-files=normal)" ]] \
+[[ -z "$(/usr/bin/git -C "$RELEASE_ROOT" status --porcelain --untracked-files=normal)" ]] \
   || { echo 'exact release root is not immutable and clean' >&2; exit 65; }
-if find "$RELEASE_ROOT" -xdev -type f \( -name '.env' -o -name '.env.*' \) ! -name '.env.example' -print -quit | grep -q .; then
+if /usr/bin/find "$RELEASE_ROOT" -xdev -type f \( -name '.env' -o -name '.env.*' \) ! -name '.env.example' -print -quit | grep -q .; then
   echo 'exact release root contains an environment secret file' >&2
   exit 65
 fi
-npx pnpm@9.15.0 --dir "$RELEASE_ROOT" --filter @openscience/agent-worker... build >/dev/null
+/usr/bin/npx pnpm@9.15.0 --dir "$RELEASE_ROOT" --filter @openscience/agent-worker... build >/dev/null
+[[ "$(capture_trust_snapshot)" == "$TRUST_SNAPSHOT" ]] \
+  || { echo 'trusted acceptance path identity was replaced during build' >&2; exit 65; }
+[[ "$(/usr/bin/git -C "$RELEASE_ROOT" rev-parse HEAD)" == "$SOURCE_SHA" \
+  && -z "$(/usr/bin/git -C "$RELEASE_ROOT" status --porcelain --untracked-files=normal)" ]] \
+  || { echo 'exact release root SHA or cleanliness changed during build' >&2; exit 65; }
 [[ -f "$CONTRACT_JS" && -f "$RUNNER_JS" ]] \
   || { echo 'fresh acceptance build outputs missing from exact release' >&2; exit 66; }
 hash_build_outputs() {
@@ -96,6 +138,9 @@ RUN_ID="${SOURCE_SHA:0:12}-$$"
 RUN_ROOT="$ACCEPTANCE_ROOT/.run-$RUN_ID"
 WORKER_OUTPUT_ROOT="$RUN_ROOT/worker-output"
 DRAFT_REPORT="$WORKER_OUTPUT_ROOT/report.draft.json"
+WORKER_COMPLETED_MARKER="$WORKER_OUTPUT_ROOT/.worker-completed-$RUN_ID"
+WORKER_RELEASE_MARKER="$WORKER_OUTPUT_ROOT/.worker-release-$RUN_ID"
+UNPUBLISHED_REPORT="$ACCEPTANCE_ROOT/.report-unpublished-$RUN_ID.json"
 FINAL_REPORT="$ACCEPTANCE_ROOT/report.json"
 PARSER_NAME="openscience-parser-accept-$RUN_ID"
 WORKER_NAME="openscience-worker-accept-$RUN_ID"
@@ -139,10 +184,11 @@ cleanup_strict() {
   container_owned "$WORKER_CONTAINER_ID" && docker rm -f "$WORKER_CONTAINER_ID" >/dev/null
   container_owned "$PARSER_CONTAINER_ID" && docker rm -f "$PARSER_CONTAINER_ID" >/dev/null
   volume_owned "$JOB_VOLUME" && docker volume rm "$JOB_VOLUME" >/dev/null
-  /usr/bin/node "$CONTRACT_JS" cleanup "$SOURCE_SHA" "$RUN_ID"
-  [[ ! -e "$RUN_ROOT" && ! -e "$ACCEPTANCE_ROOT/report.json.tmp-$RUN_ID" ]]
   ! docker inspect "$WORKER_NAME" "$PARSER_NAME" >/dev/null 2>&1
   ! docker volume inspect "$JOB_VOLUME" >/dev/null 2>&1
+  /usr/bin/node "$CONTRACT_JS" cleanup-run "$SOURCE_SHA" "$RUN_ID"
+  [[ ! -e "$RUN_ROOT" && ! -e "$ACCEPTANCE_ROOT/report.json.tmp-$RUN_ID" \
+    && -f "$UNPUBLISHED_REPORT" && ! -e "$FINAL_REPORT" ]]
 }
 trap cleanup EXIT
 trap 'exit 129' HUP
@@ -186,13 +232,6 @@ PARSER_CONTAINER_ID="$(docker run -d --name "$PARSER_NAME" \
 PARSER_OWNED=true
 container_owned "$PARSER_CONTAINER_ID" || { echo 'acceptance parser ownership mismatch' >&2; exit 65; }
 
-for _ in $(seq 1 60); do
-  docker exec "$PARSER_NAME" test -f /parser-jobs/.ready && break
-  sleep 1
-done
-docker exec "$PARSER_NAME" test -f /parser-jobs/.ready \
-  || { echo 'document parser sidecar did not become ready' >&2; exit 70; }
-
 WORKER_CONTAINER_ID="$(docker run -d --name "$WORKER_NAME" \
   --label "org.openscience.acceptance.sha=$SOURCE_SHA" \
   --label "org.openscience.acceptance.run=$RUN_ID" \
@@ -203,61 +242,143 @@ WORKER_CONTAINER_ID="$(docker run -d --name "$WORKER_NAME" \
   --mount "type=bind,src=$RELEASE_ROOT,dst=/opt/openscience,readonly" \
   --mount "type=bind,src=$CORPUS_ROOT,dst=/acceptance-corpus,readonly" \
   --mount "type=bind,src=$WORKER_OUTPUT_ROOT,dst=/acceptance-output" \
-  "$WORKER_IMAGE" -i /usr/local/bin/node dist/parser-acceptance-runner.js \
-    /acceptance-corpus /acceptance-output/report.draft.json \
+  "$WORKER_IMAGE" -i /bin/sh -c '
+    completion="$1"
+    release="$2"
+    shift 2
+    status=0
+    /usr/local/bin/node "$@" || status=$?
+    printf "%s\n" "$status" >"$completion"
+    while [ ! -f "$release" ]; do /bin/sleep 0.1; done
+    exit "$status"
+  ' task8-controlled-exit \
+    "/acceptance-output/.worker-completed-$RUN_ID" "/acceptance-output/.worker-release-$RUN_ID" \
+    dist/parser-acceptance-runner.js /acceptance-corpus /acceptance-output/report.draft.json \
     "$SOURCE_SHA" "$WORKER_IMAGE_ID" "$PARSER_IMAGE_ID")"
 [[ "$WORKER_CONTAINER_ID" =~ ^[a-f0-9]{64}$ ]] \
   || { echo 'invalid acceptance worker container ID' >&2; exit 65; }
 WORKER_OWNED=true
 container_owned "$WORKER_CONTAINER_ID" || { echo 'acceptance worker ownership mismatch' >&2; exit 65; }
 
-sample_container() {
-  docker exec "$1" /usr/local/bin/node -e '
-const fs = require("node:fs");
-const cpu = fs.readFileSync("/sys/fs/cgroup/cpu.stat", "utf8").match(/^usage_usec (\d+)$/m);
-const rss = Number(fs.readFileSync("/sys/fs/cgroup/memory.stat", "utf8").match(/^anon (\d+)$/m)?.[1]);
-if (!cpu || !Number.isSafeInteger(rss)) process.exit(1);
-process.stdout.write(`${cpu[1]} ${rss}`);'
+container_host_identity() {
+  local identity pid id
+  identity="$(docker inspect --format '{{.State.Pid}} {{.Id}}' "$1")" || return
+  read -r pid id <<<"$identity"
+  [[ "$id" == "$2" && "$pid" =~ ^[1-9][0-9]*$ && "$pid" -gt 1 ]] || return
+  printf '%s\n' "$pid"
 }
 
-process_env_count() {
-  docker exec "$1" /usr/local/bin/node -e '
-const value = require("node:fs").readFileSync("/proc/1/environ");
-process.stdout.write(String(value.length === 0 ? 0 : value.toString("binary").split("\0").filter(Boolean).length));'
+resolve_host_cgroup() {
+  local pid="$1" container_id="$2" entry='' extra='' relative canonical base identity
+  [[ -f /sys/fs/cgroup/cgroup.controllers ]] || return
+  IFS= read -r entry <"/proc/$pid/cgroup" || return
+  IFS= read -r extra < <(/usr/bin/tail -n +2 "/proc/$pid/cgroup") || true
+  [[ -z "$extra" && "$entry" == 0::* ]] || return
+  relative="${entry#0::}"
+  [[ "$relative" == /* && "$relative" != *'..'* ]] || return
+  base="$(/usr/bin/readlink -f -- /sys/fs/cgroup)" || return
+  canonical="$(/usr/bin/readlink -f -- "/sys/fs/cgroup$relative")" || return
+  [[ "$canonical" == "$base/"* && "$canonical" == *"$container_id"* && ! -L "$canonical" ]] || return
+  identity="$(/usr/bin/stat -Lc '%u:%d:%i' -- "$canonical")" || return
+  [[ "$identity" =~ ^[0-9]+:[0-9]+:[0-9]+$ ]] || return
+  printf '%s|%s\n' "$canonical" "$identity"
 }
 
-WORKER_CPU=0
-WORKER_RSS=0
-PARSER_CPU=0
-PARSER_RSS=0
-WORKER_ENV_COUNT=-1
-PARSER_ENV_COUNT="$(process_env_count "$PARSER_NAME")"
+host_process_env_count() {
+  /usr/bin/node - "$1" <<'NODE'
+const { readFileSync } = require('node:fs');
+const value = readFileSync(`/proc/${process.argv[2]}/environ`);
+process.stdout.write(String(value.length === 0 ? 0 : value.toString('binary').split('\0').filter(Boolean).length));
+NODE
+}
+
+sample_host_cgroup() {
+  local cgroup="$1" identity="$2" started_ms="$3" terminal="$4" output="$5"
+  local canonical current_identity usage='' memory='' now elapsed key value
+  canonical="$(/usr/bin/readlink -f -- "$cgroup")" || return
+  current_identity="$(/usr/bin/stat -Lc '%u:%d:%i' -- "$cgroup")" || return
+  [[ "$canonical" == "$cgroup" && "$current_identity" == "$identity" ]] || return
+  while read -r key value; do
+    [[ "$key" == usage_usec ]] && usage="$value"
+  done <"$cgroup/cpu.stat"
+  IFS= read -r memory <"$cgroup/memory.peak" || return
+  now="$(monotonic_millis)" || return
+  [[ "$usage" =~ ^[0-9]+$ && "$memory" =~ ^[0-9]+$ && "$now" =~ ^[0-9]+$ ]] || return
+  elapsed=$((now - started_ms))
+  (( elapsed >= 0 )) || return
+  printf '%s\t%s\t%s\t%s\n' "$elapsed" "$usage" "$memory" "$terminal" >>"$output"
+}
+
+monotonic_millis() {
+  local uptime seconds fraction millis
+  read -r uptime _ < /proc/uptime || return
+  [[ "$uptime" =~ ^([0-9]+)\.([0-9]+)$ ]] || return
+  seconds="${BASH_REMATCH[1]}"
+  fraction="${BASH_REMATCH[2]}000"
+  millis="${fraction:0:3}"
+  printf '%s\n' "$((10#$seconds * 1000 + 10#$millis))"
+}
+
+PARSER_PID="$(container_host_identity "$PARSER_NAME" "$PARSER_CONTAINER_ID")" \
+  || { echo 'acceptance parser host PID identity failed' >&2; exit 70; }
+WORKER_PID="$(container_host_identity "$WORKER_NAME" "$WORKER_CONTAINER_ID")" \
+  || { echo 'acceptance worker host PID identity failed' >&2; exit 70; }
+IFS='|' read -r PARSER_CGROUP PARSER_CGROUP_IDENTITY <<<"$(resolve_host_cgroup "$PARSER_PID" "$PARSER_CONTAINER_ID")" \
+  || { echo 'acceptance parser cgroup v2 identity failed' >&2; exit 70; }
+IFS='|' read -r WORKER_CGROUP WORKER_CGROUP_IDENTITY <<<"$(resolve_host_cgroup "$WORKER_PID" "$WORKER_CONTAINER_ID")" \
+  || { echo 'acceptance worker cgroup v2 identity failed' >&2; exit 70; }
+[[ -n "$PARSER_CGROUP" && -n "$PARSER_CGROUP_IDENTITY" ]] \
+  || { echo 'acceptance parser cgroup v2 identity failed' >&2; exit 70; }
+[[ -n "$WORKER_CGROUP" && -n "$WORKER_CGROUP_IDENTITY" ]] \
+  || { echo 'acceptance worker cgroup v2 identity failed' >&2; exit 70; }
+PARSER_ENV_COUNT="$(host_process_env_count "$PARSER_PID")" \
+  || { echo 'acceptance parser host environment sampling failed' >&2; exit 70; }
+WORKER_ENV_COUNT="$(host_process_env_count "$WORKER_PID")" \
+  || { echo 'acceptance worker host environment sampling failed' >&2; exit 70; }
+PARSER_SAMPLES="$RUN_ROOT/parser.samples.tsv"
+WORKER_SAMPLES="$RUN_ROOT/worker.samples.tsv"
+set -o noclobber
+: >"$PARSER_SAMPLES"
+: >"$WORKER_SAMPLES"
+set +o noclobber
+SAMPLING_STARTED_MS="$(monotonic_millis)"
+sample_host_cgroup "$PARSER_CGROUP" "$PARSER_CGROUP_IDENTITY" "$SAMPLING_STARTED_MS" false "$PARSER_SAMPLES" \
+  || { echo 'acceptance parser initial host cgroup sampling failed' >&2; exit 70; }
+sample_host_cgroup "$WORKER_CGROUP" "$WORKER_CGROUP_IDENTITY" "$SAMPLING_STARTED_MS" false "$WORKER_SAMPLES" \
+  || { echo 'acceptance worker initial host cgroup sampling failed' >&2; exit 70; }
 ACCEPTANCE_DEADLINE=$((SECONDS + 900))
 while true; do
   [[ "$(docker inspect --format '{{.State.Running}}' "$PARSER_NAME")" == true ]] \
     || { echo 'acceptance parser stopped during the run' >&2; exit 70; }
-  sample="$(sample_container "$PARSER_NAME")" \
-    || { echo 'acceptance parser cgroup sampling failed' >&2; exit 70; }
-  read -r cpu rss <<<"$sample"
-  (( cpu > PARSER_CPU )) && PARSER_CPU="$cpu"
-  (( rss > PARSER_RSS )) && PARSER_RSS="$rss"
-  WORKER_RUNNING="$(docker inspect --format '{{.State.Running}}' "$WORKER_NAME")"
-  [[ "$WORKER_RUNNING" == true ]] || break
-  sample="$(sample_container "$WORKER_NAME")" \
-    || { echo 'acceptance worker cgroup sampling failed' >&2; exit 70; }
-  read -r cpu rss <<<"$sample"
-  (( cpu > WORKER_CPU )) && WORKER_CPU="$cpu"
-  (( rss > WORKER_RSS )) && WORKER_RSS="$rss"
-  if [[ "$WORKER_ENV_COUNT" -lt 0 ]]; then
-    WORKER_ENV_COUNT="$(process_env_count "$WORKER_NAME")" \
-      || { echo 'acceptance worker environment sampling failed' >&2; exit 70; }
-  fi
+  [[ "$(docker inspect --format '{{.State.Running}}' "$WORKER_NAME")" == true ]] \
+    || { echo 'acceptance worker stopped before its completion marker' >&2; exit 70; }
+  [[ ! -f "$WORKER_COMPLETED_MARKER" ]] || break
   (( SECONDS < ACCEPTANCE_DEADLINE )) \
     || { echo 'acceptance worker exceeded the 900-second deadline' >&2; exit 70; }
   sleep 0.2
+  sample_host_cgroup "$PARSER_CGROUP" "$PARSER_CGROUP_IDENTITY" "$SAMPLING_STARTED_MS" false "$PARSER_SAMPLES" \
+    || { echo 'acceptance parser host cgroup sampling failed' >&2; exit 70; }
+  sample_host_cgroup "$WORKER_CGROUP" "$WORKER_CGROUP_IDENTITY" "$SAMPLING_STARTED_MS" false "$WORKER_SAMPLES" \
+    || { echo 'acceptance worker host cgroup sampling failed' >&2; exit 70; }
 done
+sleep 0.01
+sample_host_cgroup "$WORKER_CGROUP" "$WORKER_CGROUP_IDENTITY" "$SAMPLING_STARTED_MS" true "$WORKER_SAMPLES" \
+  || { echo 'acceptance worker terminal host cgroup sampling failed' >&2; exit 70; }
+sample_host_cgroup "$PARSER_CGROUP" "$PARSER_CGROUP_IDENTITY" "$SAMPLING_STARTED_MS" true "$PARSER_SAMPLES" \
+  || { echo 'acceptance parser terminal host cgroup sampling failed' >&2; exit 70; }
 
-[[ "$(docker inspect --format '{{.State.ExitCode}}' "$WORKER_NAME")" == 0 ]] \
+IFS= read -r WORKER_RUNNER_STATUS <"$WORKER_COMPLETED_MARKER" \
+  || { echo 'acceptance worker completion marker is unreadable' >&2; exit 70; }
+[[ "$WORKER_RUNNER_STATUS" =~ ^[0-9]+$ ]] \
+  || { echo 'acceptance worker completion status is invalid' >&2; exit 70; }
+set -o noclobber
+: >"$WORKER_RELEASE_MARKER"
+set +o noclobber
+WORKER_WAIT_STATUS="$(docker wait "$WORKER_NAME")" \
+  || { echo 'acceptance worker controlled exit failed' >&2; exit 70; }
+
+[[ "$WORKER_RUNNER_STATUS" == 0 && "$WORKER_WAIT_STATUS" == 0 \
+  && "$(docker inspect --format '{{.State.ExitCode}}' "$WORKER_NAME")" == 0 ]] \
   || { echo 'acceptance worker failed' >&2; exit 70; }
 [[ -f "$DRAFT_REPORT" ]] || { echo 'acceptance draft report missing' >&2; exit 70; }
 [[ "$WORKER_ENV_COUNT" == 0 && "$PARSER_ENV_COUNT" == 0 ]] \
@@ -271,13 +392,15 @@ docker inspect "$PARSER_NAME" >"$RUN_ROOT/parser.inspect.json"
 docker volume inspect "$JOB_VOLUME" >"$RUN_ROOT/volume.inspect.json"
 set +o noclobber
 
-/usr/bin/node - "$RUN_ROOT" "$WORKER_CPU" "$WORKER_RSS" "$PARSER_CPU" "$PARSER_RSS" \
-  "$WORKER_ENV_COUNT" "$PARSER_ENV_COUNT" "$SOURCE_SHA" "$RUNNER_BUILD_SHA256" \
-  "$CONTRACT_BUILD_SHA256" <<'NODE'
+/usr/bin/node - "$RUN_ROOT" "$WORKER_ENV_COUNT" "$PARSER_ENV_COUNT" "$SOURCE_SHA" \
+  "$RUNNER_BUILD_SHA256" "$CONTRACT_BUILD_SHA256" \
+  "$WORKER_PID" "$WORKER_CGROUP" "$WORKER_CGROUP_IDENTITY" \
+  "$PARSER_PID" "$PARSER_CGROUP" "$PARSER_CGROUP_IDENTITY" <<'NODE'
 const { readFileSync, writeFileSync } = require('node:fs');
 const { join } = require('node:path');
-const [root, workerCpu, workerRss, parserCpu, parserRss, workerEnv, parserEnv,
-  sourceSha, runnerSha256, contractSha256] = process.argv.slice(2);
+const [root, workerEnv, parserEnv, sourceSha, runnerSha256, contractSha256,
+  workerPid, workerCgroup, workerCgroupIdentity,
+  parserPid, parserCgroup, parserCgroupIdentity] = process.argv.slice(2);
 const read = (name) => JSON.parse(readFileSync(join(root, name), 'utf8'))[0];
 const workerInspect = read('worker.inspect.json');
 const parserInspect = read('parser.inspect.json');
@@ -295,44 +418,82 @@ const tmpfsBytes = (inspect) => hasOptions(inspect.HostConfig.Tmpfs?.['/tmp'] ??
 const volumeOptions = volumeInspect.Options ?? {};
 const jobVolumeBytes = volumeOptions.type === 'tmpfs' && volumeOptions.device === 'tmpfs'
   && hasOptions(volumeOptions.o ?? '', ['size=64m', 'uid=1000', 'gid=1000', 'mode=0770']) ? 67108864 : 0;
-const resource = (inspect, cpu, rss, env) => ({
-  containerId: inspect.Id,
-  imageId: inspect.Image,
-  running: inspect.State.Running,
-  exitCode: inspect.State.ExitCode,
-  user: inspect.Config.User,
-  effectiveEnvCount: Number(env),
-  networkMode: inspect.HostConfig.NetworkMode,
-  readOnlyRootfs: inspect.HostConfig.ReadonlyRootfs,
-  capDrop: inspect.HostConfig.CapDrop ?? [],
-  noNewPrivileges: (inspect.HostConfig.SecurityOpt ?? []).some((item) => item === 'no-new-privileges'),
-  memoryBytes: inspect.HostConfig.Memory,
-  memorySwapBytes: inspect.HostConfig.MemorySwap,
-  nanoCpus: inspect.HostConfig.NanoCpus,
-  pidsLimit: inspect.HostConfig.PidsLimit,
-  tmpfsBytes: tmpfsBytes(inspect),
-  jobVolumeBytes,
-  cpuUsageMicros: Number(cpu),
-  peakRssBytes: Number(rss),
-  mounts: inspect.Mounts.map(mount),
-});
-const worker = resource(workerInspect, workerCpu, workerRss, workerEnv);
-const parser = resource(parserInspect, parserCpu, parserRss, parserEnv);
+const samples = (name) => {
+  const rows = readFileSync(join(root, name), 'utf8').trim().split(/\r?\n/u).filter(Boolean).map((line) => {
+    const [elapsed, cpu, memory, terminal] = line.split('\t');
+    return {
+      elapsedMs: Number(elapsed), cpuUsageMicros: Number(cpu), memoryPeakBytes: Number(memory),
+      terminal: terminal === 'true',
+    };
+  });
+  const initial = rows[0]?.elapsedMs ?? 0;
+  return rows.map((sample) => ({ ...sample, elapsedMs: sample.elapsedMs - initial }));
+};
+const roundRate = (value) => Math.round(value * 10_000) / 10_000;
+const resource = (inspect, sampleFile, pid, cgroupPath, cgroupIdentity, env) => {
+  const series = samples(sampleFile);
+  const cpus = inspect.HostConfig.NanoCpus / 1_000_000_000;
+  let peakCpuQuotaPercent = 0;
+  for (let index = 1; index < series.length; index += 1) {
+    const previous = series[index - 1];
+    const current = series[index];
+    const rate = ((current.cpuUsageMicros - previous.cpuUsageMicros)
+      / ((current.elapsedMs - previous.elapsedMs) * 1_000)) / cpus * 100;
+    peakCpuQuotaPercent = Math.max(peakCpuQuotaPercent, roundRate(rate));
+  }
+  const terminal = series.at(-1);
+  return {
+    containerId: inspect.Id,
+    imageId: inspect.Image,
+    running: inspect.State.Running,
+    exitCode: inspect.State.ExitCode,
+    user: inspect.Config.User,
+    effectiveEnvCount: Number(env),
+    networkMode: inspect.HostConfig.NetworkMode,
+    readOnlyRootfs: inspect.HostConfig.ReadonlyRootfs,
+    capDrop: inspect.HostConfig.CapDrop ?? [],
+    noNewPrivileges: (inspect.HostConfig.SecurityOpt ?? []).some((item) => item === 'no-new-privileges'),
+    memoryBytes: inspect.HostConfig.Memory,
+    memorySwapBytes: inspect.HostConfig.MemorySwap,
+    nanoCpus: inspect.HostConfig.NanoCpus,
+    pidsLimit: inspect.HostConfig.PidsLimit,
+    tmpfsBytes: tmpfsBytes(inspect),
+    jobVolumeBytes,
+    sampling: {
+      source: 'host-cgroup-v2', clock: 'host-monotonic', cgroupVersion: 2, hostPid: Number(pid),
+      cgroupPath, cgroupIdentity, samples: series,
+    },
+    cumulativeCpuUsageMicros: terminal?.cpuUsageMicros ?? 0,
+    peakCpuQuotaPercent,
+    peakMemoryBytes: terminal?.memoryPeakBytes ?? 0,
+    mounts: inspect.Mounts.map(mount),
+  };
+};
+const worker = resource(
+  workerInspect, 'worker.samples.tsv', workerPid, workerCgroup, workerCgroupIdentity, workerEnv,
+);
+const parser = resource(
+  parserInspect, 'parser.samples.tsv', parserPid, parserCgroup, parserCgroupIdentity, parserEnv,
+);
 const report = {
   build: { sourceSha, runnerSha256, contractSha256 },
   worker,
   parser,
   maxima: {
-    cpuUsageMicros: Math.max(worker.cpuUsageMicros, parser.cpuUsageMicros),
-    peakRssBytes: Math.max(worker.peakRssBytes, parser.peakRssBytes),
+    cumulativeCpuUsageMicros: Math.max(worker.cumulativeCpuUsageMicros, parser.cumulativeCpuUsageMicros),
+    peakCpuQuotaPercent: Math.max(worker.peakCpuQuotaPercent, parser.peakCpuQuotaPercent),
+    peakMemoryBytes: Math.max(worker.peakMemoryBytes, parser.peakMemoryBytes),
   },
 };
 writeFileSync(join(root, 'resources.json'), `${JSON.stringify(report, null, 2)}\n`, { flag: 'wx', mode: 0o600 });
 NODE
 
 /usr/bin/node "$CONTRACT_JS" finalize "$SOURCE_SHA" "$RUN_ID"
-[[ -f "$FINAL_REPORT" ]] || { echo 'atomic acceptance report publication failed' >&2; exit 70; }
-
+[[ -f "$UNPUBLISHED_REPORT" && ! -e "$FINAL_REPORT" ]] \
+  || { echo 'unpublished acceptance report candidate missing' >&2; exit 70; }
 cleanup_strict
+/usr/bin/node "$CONTRACT_JS" publish "$SOURCE_SHA" "$RUN_ID"
+[[ -f "$FINAL_REPORT" && ! -e "$UNPUBLISHED_REPORT" ]] \
+  || { echo 'atomic acceptance report publication failed' >&2; exit 70; }
 trap - EXIT HUP INT TERM
 echo "TASK8_PARSER_ACCEPTANCE_OK sha=$SOURCE_SHA report=$FINAL_REPORT"
