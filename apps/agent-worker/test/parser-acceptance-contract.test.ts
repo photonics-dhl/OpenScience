@@ -240,6 +240,14 @@ describe('Task 8 acceptance contract', () => {
     });
   });
 
+  it('does not reproduce a file-level evidence locator from an empty corrupt-document source map', () => {
+    const corruptHash = '75de1813b71e3d6612c90ea885ecbbcf5455b45ca6f8338503c047c91dd71ad9';
+    expect(reproduceAcceptanceLocator(sourceMap(corruptHash, []), { kind: 'file' })).toBe(false);
+    expect(reproduceAcceptanceLocator(sourceMap(corruptHash, [sourceBlock({
+      id: 'recovered-evidence', text: 'Recovered evidence',
+    })]), { kind: 'file' })).toBe(true);
+  });
+
   it('binds line and paragraph quotes to their exact virtual coordinates', () => {
     const markdownHash = '66f861e5049bd0e33e68ae11aec6965928853e0c95c7a4c88a7f99c1f7497406';
     const docxHash = '9641d86b9ed1e3614b448ca4159d4943c11d9d08e8561d0ae01a8357c579ea3c';

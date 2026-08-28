@@ -114,7 +114,9 @@ export function reproduceAcceptanceLocator(
 ): boolean {
   if (expectedSource && (sourceMap.artifactId !== expectedSource.artifactId
     || sourceMap.contentHash !== expectedSource.contentHash)) return false;
-  if (locator.kind === 'file') return true;
+  if (locator.kind === 'file') {
+    return sourceMap.pages.some(({ blocks }) => blocks.length > 0);
+  }
   const quote = typeof locator.quote === 'string' ? locator.quote : undefined;
   const pageNumber = typeof locator.page === 'number' ? locator.page : undefined;
   const pages = pageNumber === undefined ? sourceMap.pages : sourceMap.pages.filter(({ page }) => page === pageNumber);
