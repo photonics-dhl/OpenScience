@@ -1,4 +1,5 @@
 import type { AiGateway, SchemaGuard } from '@openscience/ai-gateway';
+import type { DocumentSourceMap } from '@openscience/domain';
 import { SDF_CORE_FIELDS, SDF_CORE_VERSION } from '@openscience/sdf-schema';
 
 /** 六字段 core 结构（§5.1：schemaVersion + 6 字段，全部 string）。 */
@@ -60,6 +61,16 @@ const sdfProposalGuard: SchemaGuard<ExtractedProposal> = (value: unknown): value
 
 const KEY_EVIDENCE = /limitations?|constraints?|uncertaint|data availability|code availability|reproduc|materials? and methods?|experimental setup|results?|discussion|局限|限制|不确定|数据可用|代码可用|复现|方法|结果/gi;
 const MAX_EXCERPT_CHARS = 24_000;
+
+/** Compatibility text for the existing SDF prompt, derived only from canonical parser output. */
+export function sourceMapToManuscriptText(sourceMap: DocumentSourceMap): string {
+  return sourceMap.pages
+    .flatMap((page) => page.blocks.flatMap((block) => {
+      const text = block.text?.trim();
+      return text ? [text] : [];
+    }))
+    .join('\n');
+}
 
 export function selectManuscriptEvidence(manuscriptText: string): string {
   const text = manuscriptText.replace(/\r\n/g, '\n').trim();

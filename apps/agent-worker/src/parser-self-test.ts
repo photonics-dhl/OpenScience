@@ -1,4 +1,7 @@
+import { createHash } from 'node:crypto';
 import { createDefaultIngestionAdapters, parseIngestionWithAdapters, type ParsedIngestion } from './ingestion-parser';
+import { sourceMapToManuscriptText } from './extractor';
+import type { ParserCascadeRunner } from './index';
 
 const EXPECTED_TEXT = 'OpenScience evidence document';
 
@@ -14,10 +17,24 @@ const DOCX_FIXTURE = Buffer.from(
   'base64',
 );
 
+const SCAN_FIXTURE = Buffer.from(
+  'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=',
+  'base64',
+);
+
 export function createParserSelfTestFixtures(): { pdf: Buffer; docx: Buffer } {
   return {
     pdf: Buffer.from(PDF_FIXTURE),
     docx: Buffer.from(DOCX_FIXTURE),
+  };
+}
+
+function parserInput(artifactId: string, content: Buffer, mediaType: string) {
+  return {
+    artifactId,
+    contentHash: createHash('sha256').update(content).digest('hex'),
+    content: Buffer.from(content),
+    mediaType,
   };
 }
 
@@ -43,6 +60,49 @@ export async function runParserSelfTest(): Promise<{ pdf: SelfTestItem; docx: Se
     parseIngestionWithAdapters('fixture.docx', fixtures.docx, adapters),
   ]);
   return { pdf: summarize(pdf), docx: summarize(docx) };
+}
+
+export async function runParserCascadeSelfTest(parserCascade: ParserCascadeRunner): Promise<{
+  schemaVersion: 2;
+  pdf: SelfTestItem;
+  docx: SelfTestItem;
+  scan: SelfTestItem;
+  candidateFallbackDisabled: true;
+}> {
+  const fixtures = createParserSelfTestFixtures();
+  const authorization = {
+    trustedAuthorizationContext: {
+      taskId: 'parser-self-test', workspaceId: 'parser-self-test', actorId: 'parser-self-test',
+    },
+    externalProcessingEligible: false,
+  };
+  const [pdf, docx, scan] = await Promise.all([
+    parserCascade(parserInput('self-test-pdf', fixtures.pdf, 'application/pdf'), authorization),
+    parserCascade(parserInput(
+      'self-test-docx',
+      fixtures.docx,
+      'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    ), authorization),
+    parserCascade(parserInput('self-test-scan', SCAN_FIXTURE, 'image/png'), authorization),
+  ]);
+  const summarizeCascade = (
+    result: Awaited<ReturnType<ParserCascadeRunner>>,
+    format: string,
+  ): SelfTestItem => {
+    const text = result.status === 'succeeded' ? sourceMapToManuscriptText(result.sourceMap) : '';
+    return {
+      format,
+      status: result.status === 'succeeded' ? 'ready' : 'needs_review',
+      textMatched: text.includes(EXPECTED_TEXT),
+    };
+  };
+  return {
+    schemaVersion: 2,
+    pdf: summarizeCascade(pdf, 'pdf'),
+    docx: summarizeCascade(docx, 'docx'),
+    scan: summarizeCascade(scan, 'png'),
+    candidateFallbackDisabled: true,
+  };
 }
 
 if (require.main === module) {

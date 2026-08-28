@@ -1,7 +1,10 @@
 import { createHash } from 'node:crypto';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
+import { buildGateway, createWorkerParserCascade } from '../src/index';
+import { sourceMapToManuscriptText } from '../src/extractor';
+import { TRANSITION_PARSER_METADATA } from '../src/parser-job-isolation';
 import { createParserSelfTestFixtures } from '../src/parser-self-test';
 import {
   buildCurrentParserBaseline,
@@ -29,6 +32,76 @@ describe('research-intelligence fixture contract', () => {
 });
 
 describe('research-intelligence corpus contract', () => {
+  it('routes corpus Markdown and scan OCR through canonical cascade statuses without candidate fallback', async () => {
+    const markdown = RESEARCH_INTELLIGENCE_CORPUS.find(({ id }) => id === 'markdown-mixed')!;
+    const scan = RESEARCH_INTELLIGENCE_CORPUS.find(({ id }) => id === 'scan-png-empty')!;
+    const parserJobAdapter = vi.fn(async (request) => ({
+      schemaVersion: 2 as const,
+      parser: TRANSITION_PARSER_METADATA,
+      pages: [{
+        page: 1, width: 1000, height: 24,
+        blocks: request.mediaType === 'image/png' ? [] : [{
+          kind: 'paragraph' as const, text: 'unexpected',
+          boundingBox: { x: 0, y: 0, width: 1000, height: 24 }, confidence: 1,
+        }],
+      }],
+      warnings: [],
+    }));
+    const ocr = vi.fn();
+    const cascade = createWorkerParserCascade({ ocr } as never, parserJobAdapter);
+    const authorization = {
+      trustedAuthorizationContext: { taskId: 'task-1', workspaceId: 'workspace-1', actorId: 'actor-1' },
+      externalProcessingEligible: false,
+    };
+    const parse = (corpusCase: typeof markdown, mediaType: string) => cascade({
+      artifactId: corpusCase.id,
+      contentHash: createHash('sha256').update(corpusCase.content).digest('hex'),
+      content: corpusCase.content,
+      mediaType,
+    }, authorization);
+
+    const markdownResult = await parse(markdown, 'text/markdown');
+    const scanResult = await parse(scan, 'image/png');
+
+    expect(markdownResult.status).toBe('succeeded');
+    expect(markdownResult.status === 'succeeded' && sourceMapToManuscriptText(markdownResult.sourceMap))
+      .toContain(markdown.expectedText);
+    expect(scanResult.status).toBe('needs_review');
+    expect(parserJobAdapter).toHaveBeenCalledTimes(1);
+    expect(ocr).not.toHaveBeenCalled();
+  });
+
+  it('hard-disables the Vision provider in production even when env and policy request enablement', async () => {
+    const scan = RESEARCH_INTELLIGENCE_CORPUS.find(({ id }) => id === 'scan-png-empty')!;
+    const fetchMock = vi.fn(async () => new Response(JSON.stringify({
+      content: 'candidate text', base_resp: { status_code: 0 },
+    }), { status: 200 }));
+    const gateway = buildGateway({
+      NODE_ENV: 'production',
+      MINIMAX_API_KEY: 'test-key',
+      MINIMAX_VISION_ENABLED: 'true',
+      MINIMAX_VISION_USD_MICROS_PER_PAGE: '1',
+      MINIMAX_VISION_PRICING_VERSION: 'test-v1',
+      MINIMAX_VISION_PRICING_EFFECTIVE_DATE: '2026-08-28',
+      MINIMAX_VISION_SERVICE_TIER: 'test',
+    }, fetchMock as never, undefined, async () => true);
+
+    const result = await gateway.ocr({
+      authorizationContext: { taskId: 'task-1', workspaceId: 'workspace-1', actorId: 'actor-1' },
+      source: {
+        artifactId: scan.id,
+        documentSha256: createHash('sha256').update(scan.content).digest('hex'),
+      },
+      pages: [{
+        pageNumber: 1, mediaType: 'image/png', bytes: scan.content,
+        width: 1, height: 1, selectionReason: 'low_confidence',
+      }],
+    });
+
+    expect(result.status).toBe('failed');
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
   it('covers the Taskmaster fixture matrix with locators and unique hashes', () => {
     const requiredFeatures = [
       'native_text',

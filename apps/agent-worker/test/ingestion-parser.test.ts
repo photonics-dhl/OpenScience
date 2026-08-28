@@ -1,8 +1,59 @@
-import { describe, expect, it } from 'vitest';
+import { createHash } from 'node:crypto';
+import { describe, expect, it, vi } from 'vitest';
+import type { AiGateway } from '@openscience/ai-gateway';
+import { createWorkerParserCascade } from '../src/index';
+import { sourceMapToManuscriptText } from '../src/extractor';
 import { createDefaultIngestionAdapters, parseIngestion, parseIngestionWithAdapters } from '../src/ingestion-parser';
-import { runParserSelfTest } from '../src/parser-self-test';
+import { runParserCascadeSelfTest, runParserSelfTest } from '../src/parser-self-test';
+import { TRANSITION_PARSER_METADATA } from '../src/parser-job-isolation';
 
 describe('parseIngestion', () => {
+  it.each([
+    ['paper.pdf', 'application/pdf', '%PDF-1.7', 'Native PDF evidence'],
+    ['paper.docx', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', 'PK fixture', 'Native DOCX evidence'],
+    ['scan.png', 'image/png', '\x89PNG fixture', 'Scanned OCR evidence'],
+  ])('production cascade uses one V2 parser stage for %s and keeps candidate fallback disabled', async (
+    filename, mediaType, raw, extractedText,
+  ) => {
+    const content = Buffer.from(raw, 'utf8');
+    const stageAdapter = vi.fn().mockImplementation(async () => ({
+      schemaVersion: 2,
+      parser: TRANSITION_PARSER_METADATA,
+      pages: [{
+        page: 1, width: 1000, height: 24,
+        blocks: [{
+          kind: 'paragraph', text: extractedText,
+          boundingBox: { x: 0, y: 0, width: 1000, height: 24 }, confidence: 1,
+        }],
+      }],
+      warnings: [],
+    }));
+    const ocr = vi.fn();
+    const cascade = createWorkerParserCascade(
+      { ocr } as unknown as AiGateway,
+      stageAdapter,
+    );
+
+    const result = await cascade({
+      artifactId: filename,
+      contentHash: createHash('sha256').update(content).digest('hex'),
+      content,
+      mediaType,
+    }, {
+      trustedAuthorizationContext: { taskId: 'task-1', workspaceId: 'workspace-1', actorId: 'actor-1' },
+      externalProcessingEligible: true,
+    });
+
+    expect(result.status).toBe('succeeded');
+    expect(result.status === 'succeeded' && sourceMapToManuscriptText(result.sourceMap)).toContain(extractedText);
+    expect(stageAdapter).toHaveBeenCalledTimes(1);
+    expect(stageAdapter).toHaveBeenCalledWith(
+      expect.objectContaining({ schemaVersion: 2, operation: 'extract_text', mediaType }),
+      expect.any(Buffer),
+    );
+    expect(ocr).not.toHaveBeenCalled();
+  });
+
   it('解码 markdown 与 tex', () => {
     expect(parseIngestion('paper.md', Buffer.from('# Title\n正文'))).toMatchObject({ status: 'ready', format: 'md' });
     expect(parseIngestion('paper.tex', Buffer.from('\\section{Title}'))).toMatchObject({ status: 'ready', format: 'tex' });
@@ -56,6 +107,33 @@ describe('parseIngestion', () => {
 });
 
 describe('production parser self-test', () => {
+  it('covers V2 native formats, scan review and disabled candidate fallback through the real cascade seam', async () => {
+    const parserJobAdapter = vi.fn(async (request) => ({
+      schemaVersion: 2 as const,
+      parser: TRANSITION_PARSER_METADATA,
+      pages: [{
+        page: 1, width: 1000, height: 24,
+        blocks: request.mediaType === 'image/png' ? [] : [{
+          kind: 'paragraph' as const, text: 'OpenScience evidence document',
+          boundingBox: { x: 0, y: 0, width: 1000, height: 24 }, confidence: 1,
+        }],
+      }],
+      warnings: [],
+    }));
+    const ocr = vi.fn();
+    const cascade = createWorkerParserCascade({ ocr } as never, parserJobAdapter);
+
+    await expect(runParserCascadeSelfTest(cascade)).resolves.toEqual({
+      schemaVersion: 2,
+      pdf: { format: 'pdf', status: 'ready', textMatched: true },
+      docx: { format: 'docx', status: 'ready', textMatched: true },
+      scan: { format: 'png', status: 'needs_review', textMatched: false },
+      candidateFallbackDisabled: true,
+    });
+    expect(parserJobAdapter).toHaveBeenCalledTimes(3);
+    expect(ocr).not.toHaveBeenCalled();
+  });
+
   it('extracts deterministic text from realistic PDF and DOCX fixtures', async () => {
     await expect(runParserSelfTest()).resolves.toEqual({
       pdf: { format: 'pdf', status: 'ready', textMatched: true },

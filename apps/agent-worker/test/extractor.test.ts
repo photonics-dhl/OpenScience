@@ -1,7 +1,15 @@
+import { createHash } from 'node:crypto';
 import { describe, expect, it, vi } from 'vitest';
 import { Readable } from 'node:stream';
 import type { AiGateway, Provider } from '@openscience/ai-gateway';
-import { extractHandler, sdfCoreGuard, selectManuscriptEvidence, type ExtractedCore } from '../src/extractor';
+import type { DocumentSourceMap } from '@openscience/domain';
+import {
+  extractHandler,
+  sdfCoreGuard,
+  selectManuscriptEvidence,
+  sourceMapToManuscriptText,
+  type ExtractedCore,
+} from '../src/extractor';
 import { createHandlers, streamToBufferBounded } from '../src/index';
 
 const VALID: ExtractedCore = {
@@ -30,6 +38,104 @@ describe('sdfCoreGuard（§9.3 Schema 校验 + §5.1 六字段）', () => {
 });
 
 describe('extractHandler（§9.2 提取 + §9.3 结构化校验 + 不写 SDF）', () => {
+  it('从 canonical source map 的页块顺序派生兼容正文', () => {
+    const sourceMap: DocumentSourceMap = {
+      artifactId: 'artifact-1',
+      contentHash: 'a'.repeat(64),
+      parser: { name: 'cascade', version: '1' },
+      pages: [{
+        page: 1, width: 100, height: 100,
+        blocks: [
+          {
+            id: 'block-1', kind: 'heading', text: 'Problem: Canonical evidence',
+            boundingBox: { x: 0, y: 80, width: 100, height: 10 },
+            parser: { name: 'native', version: '1' }, transformations: [],
+          },
+          {
+            id: 'block-2', kind: 'figure',
+            boundingBox: { x: 0, y: 20, width: 100, height: 50 },
+            parser: { name: 'native', version: '1' }, transformations: [],
+          },
+          {
+            id: 'block-3', kind: 'paragraph', text: 'Method: Reproducible protocol',
+            boundingBox: { x: 0, y: 5, width: 100, height: 10 },
+            parser: { name: 'native', version: '1' }, transformations: [],
+          },
+        ],
+      }],
+    };
+
+    expect(sourceMapToManuscriptText(sourceMap)).toBe(
+      'Problem: Canonical evidence\nMethod: Reproducible protocol',
+    );
+  });
+
+  it('binary sdf.extract 调用一次 cascade，并只用 canonical source map 正文进入 SDF prompt', async () => {
+    const bytes = Buffer.from('%PDF-1.7 canonical fixture', 'utf8');
+    const contentHash = createHash('sha256').update(bytes).digest('hex');
+    const sourceMap: DocumentSourceMap = {
+      artifactId: 'artifact-1', contentHash,
+      parser: { name: 'openscience-parser-cascade', version: '1.0.0' },
+      pages: [{
+        page: 1, width: 612, height: 792,
+        blocks: [{
+          id: 'block-1', kind: 'paragraph', text: 'Problem: Canonical parser text',
+          boundingBox: { x: 72, y: 700, width: 400, height: 20 },
+          parser: { name: 'native-pdf', version: '1' }, transformations: [],
+        }],
+      }],
+    };
+    const proposal = {
+      schemaVersion: '0.1.0',
+      fields: Object.fromEntries(Object.keys(VALID_PROPOSAL.fields).map((field) => [field, {
+        summary: '', sourceQuote: '', needsMoreInformation: true,
+      }])),
+    };
+    const completeStructured = vi.fn().mockResolvedValue(proposal);
+    const gateway = { completeStructured } as unknown as AiGateway;
+    const parserCascade = vi.fn().mockResolvedValue({ status: 'succeeded', sourceMap, warnings: [] });
+    const handlers = createHandlers(gateway, { parserCascade });
+    const storage = {
+      getObject: vi.fn().mockResolvedValue({ body: Readable.from([bytes]), size: bytes.length }),
+    };
+    const deps = {
+      storage,
+      malwareScanner: vi.fn().mockResolvedValue(undefined),
+      prisma: {
+        agentTask: { findUnique: vi.fn().mockResolvedValue({
+          id: 'agent-task-1', kind: 'sdf.extract', status: 'running',
+          session: { userId: 'user-1', researchObject: { id: 'ro-1', workspaceId: 'workspace-1' } },
+        }) },
+        membership: { findUnique: vi.fn().mockResolvedValue({
+          userId: 'user-1', workspaceId: 'workspace-1', role: 'author',
+        }) },
+        artifact: { findUnique: vi.fn().mockResolvedValue({
+          id: 'artifact-1', workspaceId: 'workspace-1', size: bytes.length,
+          blobSha256: contentHash, logicalPath: 'paper.pdf', mimeType: 'application/pdf',
+        }) },
+      },
+    };
+
+    await handlers['sdf.extract']!(deps as never, {
+      id: 'agent-task-1', payload: { artifactId: 'artifact-1', researchObjectId: 'ro-1' },
+      executionAttempt: 1,
+    });
+
+    expect(parserCascade).toHaveBeenCalledTimes(1);
+    expect(parserCascade).toHaveBeenCalledWith(
+      expect.objectContaining({ artifactId: 'artifact-1', contentHash, mediaType: 'application/pdf' }),
+      {
+        trustedAuthorizationContext: {
+          taskId: 'agent-task-1', workspaceId: 'workspace-1', actorId: 'user-1',
+        },
+        externalProcessingEligible: true,
+      },
+    );
+    expect(completeStructured).toHaveBeenCalledTimes(1);
+    expect(JSON.stringify(completeStructured.mock.calls[0])).toContain('Canonical parser text');
+    expect(JSON.stringify(completeStructured.mock.calls[0])).not.toContain('%PDF-1.7');
+  });
+
   it('对象存储实际字节超过声明上限时停止缓冲', async () => {
     await expect(streamToBufferBounded(Readable.from([Buffer.from('123'), Buffer.from('456')]), 5))
       .rejects.toThrow(/exceeds limit/);

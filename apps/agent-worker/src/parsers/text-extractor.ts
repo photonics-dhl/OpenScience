@@ -22,6 +22,10 @@ const SUPPORTED_MEDIA_TYPES = new Set([
   XLSX_MEDIA_TYPE,
   DOCX_MEDIA_TYPE,
   'application/pdf',
+  'image/jpeg',
+  'image/png',
+  'image/webp',
+  'image/tiff',
 ]);
 
 const MAX_ZIP_ENTRIES = 256;
@@ -78,6 +82,7 @@ export type TextStageAdapter = (request: ParserJobRequestV2, content: Buffer) =>
 export interface TextExtractionAdapters {
   pdf?: TextStageAdapter;
   docx?: TextStageAdapter;
+  image?: TextStageAdapter;
 }
 
 class ParsingLimitError extends Error {}
@@ -453,10 +458,10 @@ function stageRequest(input: ParserInput): ParserJobRequestV2 {
   };
 }
 
-async function parseBinary(input: ParserInput, adapter: TextStageAdapter | undefined, kind: 'pdf' | 'docx') {
+async function parseBinary(input: ParserInput, adapter: TextStageAdapter | undefined, kind: 'pdf' | 'docx' | 'image') {
   if (!adapter) return needsReview(input, 'parser-unavailable');
   const result = parseParserStageResult(await adapter(stageRequest(input), Buffer.from(input.content)));
-  if (kind === 'pdf') {
+  if (kind === 'pdf' || kind === 'image') {
     const pages = buildPhysicalPages(result.pages, result.parser);
     assertSourceMapBudgets(pages);
     if (!pages.some((page) => page.blocks.some((block) => block.text && meaningful(block.text)))) {
@@ -537,6 +542,7 @@ export function createTextExtractor(adapters: TextExtractionAdapters): DocumentP
         const type = mediaType(input);
         if (type === 'application/pdf') return await parseBinary(input, adapters.pdf, 'pdf');
         if (type === DOCX_MEDIA_TYPE) return await parseBinary(input, adapters.docx, 'docx');
+        if (type.startsWith('image/')) return await parseBinary(input, adapters.image, 'image');
         const pages = type === 'text/csv'
           ? parseCsv(input.content)
           : type === XLSX_MEDIA_TYPE

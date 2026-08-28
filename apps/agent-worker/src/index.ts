@@ -20,15 +20,21 @@ import {
   SearchStorage,
   type DenseModelIdentity,
 } from '@openscience/search';
+import type { OcrAuthorizationContext } from '@openscience/ai-gateway';
+import type { DocumentSourceMap, ExtractionResult as ParserExtractionResult } from '@openscience/domain';
 import type { Readable } from 'node:stream';
-import { extractHandler } from './extractor';
-import { MAX_PARSER_INPUT, parseIngestion, parseIngestionWithAdapters, type IngestionAdapters } from './ingestion-parser';
+import { extractHandler, sourceMapToManuscriptText } from './extractor';
+import { MAX_PARSER_INPUT, type IngestionAdapters } from './ingestion-parser';
 import { reviewAnalyzeHandler } from './reviewer';
 import { visualizationPlanHandler } from './planner';
 import { workspaceGuideHandler } from './workspace-guide';
 import { createClamAvScanner, type MalwareScanner } from './clamav';
-import { createParserJobAdapters } from './parser-job-isolation';
+import { createParserStageJobClient, TRANSITION_PARSER_METADATA } from './parser-job-isolation';
+import { runParserCascadeSelfTest } from './parser-self-test';
 import { authorizeSearchIndexJob, createSearchIndexer, type SearchIndexer } from './search-indexer';
+import { runParserCascade } from './parsers/cascade-orchestrator';
+import { createTextExtractor, type TextStageAdapter } from './parsers/text-extractor';
+import type { ParserInput } from './parsers/types';
 
 const BGE_M3_REVISION = '5617a9f61b028005a4858fdac845db406aefb181';
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
@@ -93,11 +99,45 @@ export function buildSearchIndexerFromEnv(
 }
 
 /** 任务处理器注册表（Q4：kind → 执行函数）。 */
+export interface ParserCascadeAuthorization {
+  trustedAuthorizationContext: Readonly<OcrAuthorizationContext>;
+  externalProcessingEligible: boolean;
+}
+
+export type ParserCascadeRunner = (
+  input: ParserInput,
+  authorization: ParserCascadeAuthorization,
+) => Promise<ParserExtractionResult<DocumentSourceMap>>;
+
 export type WorkerDeps = AgentDeps & { storage?: StorageAdapter; ingestionAdapters?: IngestionAdapters; malwareScanner?: MalwareScanner };
 export type TaskHandler = (
   deps: WorkerDeps,
   task: { id: string; payload: Record<string, unknown>; executionAttempt: number },
 ) => Promise<Record<string, unknown>>;
+
+/** Production-safe cascade composition: one V2 sidecar stage plus disabled candidate routes. */
+export function createWorkerParserCascade(
+  gateway: Pick<AiGateway, 'ocr'>,
+  parserJobAdapter: TextStageAdapter,
+): ParserCascadeRunner {
+  const extractText = createTextExtractor({
+    pdf: parserJobAdapter,
+    docx: parserJobAdapter,
+    image: parserJobAdapter,
+  });
+  return (input, authorization) => runParserCascade(input, {
+    adapters: { extractText },
+    aiGateway: gateway,
+    trustedAuthorizationContext: authorization.trustedAuthorizationContext,
+    externalProcessingEligible: authorization.externalProcessingEligible,
+    featureFlags: {
+      detectLayout: false,
+      grobid: false,
+      localOcr: false,
+      llmOcr: false,
+    },
+  });
+}
 
 export async function streamToBufferBounded(stream: Readable, maxBytes: number): Promise<Buffer> {
   const chunks: Buffer[] = [];
@@ -117,7 +157,7 @@ export async function streamToBufferBounded(stream: Readable, maxBytes: number):
 /** 构造处理器注册表（P1D-3 挂 sdf.extract；后续 5.5 审核等挂接）。 */
 export function createHandlers(
   gateway: AiGateway,
-  options: { searchIndexer?: SearchIndexer } = {},
+  options: { searchIndexer?: SearchIndexer; parserCascade?: ParserCascadeRunner } = {},
 ): Record<string, TaskHandler> {
   return {
     'demo.echo': async () => {
@@ -155,11 +195,37 @@ export function createHandlers(
       const blob = await getBlob(deps.storage, artifact.blobSha256);
       const bytes = await streamToBufferBounded(blob.body, MAX_PARSER_INPUT);
       await deps.malwareScanner(bytes);
-      const parsed = deps.ingestionAdapters
-        ? await parseIngestionWithAdapters(artifact.logicalPath, bytes, deps.ingestionAdapters)
-        : parseIngestion(artifact.logicalPath, bytes);
-      if (parsed.status === 'needs_review') return { status: parsed.status, format: parsed.format, reason: parsed.reason };
-      return extractHandler(gateway, { payload: { manuscriptText: parsed.text } });
+      if (!options.parserCascade) throw new Error('[blocked] parser cascade unavailable');
+      const trustedAuthorizationContext = Object.freeze({
+        taskId: ownerTask.id,
+        workspaceId: ownerResearchObject.workspaceId,
+        actorId: ownerTask.session.userId,
+      });
+      const externalProcessingEligible = ownerTask.id === task.id
+        && ownerTask.kind === 'sdf.extract'
+        && ownerTask.status === 'running'
+        && membership.userId === ownerTask.session.userId
+        && membership.workspaceId === ownerResearchObject.workspaceId
+        && typeof membership.role === 'string'
+        && membership.role.length > 0;
+      const parsed = await options.parserCascade({
+        artifactId: artifact.id,
+        contentHash: artifact.blobSha256,
+        content: bytes,
+        mediaType: parserMediaType(artifact.logicalPath, artifact.mimeType),
+      }, { trustedAuthorizationContext, externalProcessingEligible });
+      const format = artifact.logicalPath.split('.').at(-1)?.toLowerCase() ?? 'unknown';
+      if (parsed.status === 'blocked') throw new Error(`[blocked] ${parsed.code}`);
+      if (parsed.status !== 'succeeded') {
+        return {
+          status: 'needs_review',
+          format,
+          reason: parsed.status === 'failed' ? parsed.message : parsed.reasons.join('; '),
+        };
+      }
+      const manuscriptText = sourceMapToManuscriptText(parsed.sourceMap);
+      if (!manuscriptText.trim()) return { status: 'needs_review', format, reason: 'empty-parsed-text' };
+      return extractHandler(gateway, { payload: { manuscriptText } });
     },
     'review.analyze': async (deps, task) => reviewAnalyzeHandler(gateway, deps, task),
     'visualization.plan': async (_deps, task) => visualizationPlanHandler(gateway, task), // P1E-1
@@ -169,6 +235,29 @@ export function createHandlers(
         options.searchIndexer!.index(await authorizeSearchIndexJob(_deps, task)),
     }),
   };
+}
+
+const PARSER_MEDIA_TYPES: Readonly<Record<string, string>> = Object.freeze({
+  md: 'text/markdown',
+  markdown: 'text/markdown',
+  tex: 'text/x-tex',
+  csv: 'text/csv',
+  xlsx: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  pdf: 'application/pdf',
+  docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  png: 'image/png',
+  jpg: 'image/jpeg',
+  jpeg: 'image/jpeg',
+  webp: 'image/webp',
+  tif: 'image/tiff',
+  tiff: 'image/tiff',
+});
+
+function parserMediaType(logicalPath: string, storedMimeType: string | null | undefined): string {
+  const normalized = storedMimeType?.split(';', 1)[0]?.trim().toLowerCase();
+  if (normalized && normalized !== 'application/octet-stream') return normalized;
+  const extension = logicalPath.split('.').at(-1)?.toLowerCase() ?? '';
+  return PARSER_MEDIA_TYPES[extension] ?? 'application/octet-stream';
 }
 
 export async function sleep(ms: number): Promise<void> {
@@ -248,14 +337,24 @@ async function main(): Promise<void> {
   const redis = createRedisClient();
   const storage = createStorageAdapter(storageConfigFromEnv());
   const deps: WorkerDeps = {
-    prisma, redis, storage, ingestionAdapters: createParserJobAdapters(parserJobDir),
+    prisma, redis, storage,
     audit: createPrismaAuditSink(prisma),
     malwareScanner: process.env.CLAMAV_HOST ? createClamAvScanner(process.env.CLAMAV_HOST, Number(process.env.CLAMAV_PORT ?? 3310)) : undefined,
     mailer: { send: async () => undefined },
   };
   // Gateway（§24 占位：AI_ENABLED=false 时懒加载；生产 env 注入密钥，§17）
   const gateway = buildGateway(process.env, globalThis.fetch, createPrismaAuditSink(prisma));
-  const handlers = createHandlers(gateway, { searchIndexer: buildSearchIndexerFromEnv(process.env) });
+  const parserJobAdapter = createParserStageJobClient(parserJobDir, TRANSITION_PARSER_METADATA);
+  const parserCascade = createWorkerParserCascade(gateway, parserJobAdapter);
+  const parserSelfTest = await runParserCascadeSelfTest(parserCascade);
+  if (!parserSelfTest.pdf.textMatched || !parserSelfTest.docx.textMatched
+    || parserSelfTest.scan.status !== 'needs_review' || !parserSelfTest.candidateFallbackDisabled) {
+    throw new Error('parser cascade startup self-test failed');
+  }
+  const handlers = createHandlers(gateway, {
+    parserCascade,
+    searchIndexer: buildSearchIndexerFromEnv(process.env),
+  });
   const pollOnce = await createPollOnce(handlers);
   await recoverProcessingQueue(deps);
   console.log('agent-worker 启动（P1D-2/3）');
@@ -299,7 +398,7 @@ export function buildGateway(
     });
   });
 
-  const ocrProviders = env.MINIMAX_VISION_ENABLED === 'true' && keys[0]
+  const ocrProviders = env.NODE_ENV !== 'production' && env.MINIMAX_VISION_ENABLED === 'true' && keys[0]
     ? [new MiniMaxCodingPlanVisionProvider('minimax-vision', {
         baseUrl: visionOrigin(env),
         apiKey: keys[0],
