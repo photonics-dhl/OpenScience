@@ -2,7 +2,8 @@
 
 ## Status and version tuple
 
-Task 3 is **complete** at code commit `49cd909` on
+Task 3 is **complete** at initial code commit `49cd909` and review-fix commit
+`ac94ebc` on
 `codex/hermes-wanko-live2d`. The implementation base was `9133635`.
 Production was not changed: application/release remains
 `e2c0eaf3b13a220a8bc2cd49b2c1dfe40a6fd61f`; rollback remains
@@ -51,10 +52,28 @@ now dynamically loads the worker-only contract, and the compiled legacy
 ingestion module remains independently loadable. No unresolved review finding
 remains.
 
+The final review requested three additional adversarial boundaries. TDD repros
+proved that repeated rows/fields were materialized before caps, DOCX paragraph
+expansion and PDF provenance growth could escape as `ParserContractError`, and
+XLSX references beyond `XFD1048576` were not rejected consistently. The fix:
+
+- scans Markdown/TeX rows and CSV rows/fields in one pass, counting empty
+  fields and stopping at row, field, block, per-block and total-text budgets;
+- covers exact 48 MiB newline/comma inputs without unbounded row/field arrays;
+- validates the complete PDF/DOCX source map and a conservative serialized
+  success envelope before returning, mapping every overflow to controlled
+  `limit_exceeded`;
+- parses XLSX references only within `A1:XFD1048576`, before any geometry is
+  built, so columns and page coordinates remain safe finite numbers.
+
+The first 48 MiB test exposed an O(n²) delimiter search when one newline style
+was absent. The scanner was changed to a single forward pass; the same tests
+then completed within the focused suite.
+
 ## Fresh validation
 
-- Focused extractor + parser contract + schema-v2 corpus: `55/55` passed.
-- Full `@openscience/agent-worker` suite: `203/203` passed across 17 files.
+- Focused extractor + parser contract + schema-v2 corpus: `62/62` passed.
+- Full `@openscience/agent-worker` suite: `210/210` passed across 17 files.
 - Agent-worker build: passed.
 - Agent-worker typecheck: passed.
 - Targeted ESLint for Task 3 TypeScript: passed.
@@ -64,4 +83,4 @@ remains.
 
 The 16-case schema-v2 corpus is exercised by
 `research-intelligence-corpus.test.ts`; its six contract assertions and the
-new 13-case extractor suite are included in the totals above.
+new 20-case extractor suite are included in the totals above.

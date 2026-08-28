@@ -5,7 +5,7 @@ Operational production baseline: application/release `e2c0eaf3b13a220a8bc2cd49b2
 
 Task 1: in progress (implementation/spec review clean at `5bcef6f`; external evidence only). Current/Tesseract/LiteParse ECS evidence, isolation, cleanup and registry are complete. Docling lacks final model/image/corpus evidence; corrected PaddleOCR lacks completed image/model/preflight/scan evidence. Neither candidate is promoted.
 Task 2: complete. V2 protocol (including canonical response-envelope closure), isolated transport, same-release V1 transition, concrete parser-service composition and production-image module packaging passed all local gates and independent review; ECS image start remains final-acceptance evidence.
-Task 3: complete at `49cd909`. Deterministic Markdown/TeX/CSV/XLSX/DOCX/native-PDF `DocumentParser`, versioned virtual geometry, bounded `yauzl@2.10.0` XLSX handling, deterministic IDs and exact provenance passed focused `55/55`, full worker `203/203`, build/typecheck/lint and runtime contract gates; no layout candidate was promoted.
+Task 3: complete at `49cd909` + review fix `ac94ebc`. Deterministic Markdown/TeX/CSV/XLSX/DOCX/native-PDF `DocumentParser`, versioned virtual geometry, bounded `yauzl@2.10.0` XLSX handling, scan-time row/field/block caps, controlled PDF/DOCX expansion budgets, strict `A1:XFD1048576` references, deterministic IDs and exact provenance passed focused `62/62`, full worker `210/210`, build/typecheck/lint and runtime contract gates; no layout candidate was promoted.
 Task 4: pending.
 Task 5: pending.
 Task 6: pending.
