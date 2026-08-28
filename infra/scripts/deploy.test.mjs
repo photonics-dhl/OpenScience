@@ -263,8 +263,8 @@ test('deployment fails unless application health and public status checks pass',
   assert.doesNotMatch(source, /curl[^\n]+\|\| true/);
 });
 
-test('clean release builds generate Prisma before compiling any workspace package', () => {
-  const candidateBuild = 'cd $RELEASE_ROOT && with-proxy npx pnpm@9.15.0 install && with-proxy npx pnpm@9.15.0 --filter @openscience/database generate && with-proxy npx pnpm@9.15.0 build';
+test('clean release uses the frozen lockfile and generates Prisma before compiling any workspace package', () => {
+  const candidateBuild = 'cd $RELEASE_ROOT && with-proxy npx pnpm@9.15.0 install --frozen-lockfile && with-proxy npx pnpm@9.15.0 --filter @openscience/database generate && with-proxy npx pnpm@9.15.0 build';
   assert.ok(source.includes(candidateBuild));
   assert.doesNotMatch(source, /首次版本化发布|first-transition-adapter/);
 });

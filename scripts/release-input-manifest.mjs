@@ -15,6 +15,7 @@ const MAX_MANIFEST_BYTES = 32 * 1024 * 1024;
 const MAX_MANIFEST_ENTRIES = 100_000;
 const MAX_WALK_ENTRIES = 350_000;
 const MAX_RUNTIME_SNAPSHOT_BYTES = 4096;
+const PNPM_INSTALL_STATE_PATH = 'node_modules/.modules.yaml';
 const SHA_PATTERN = /^[a-f0-9]{40}$/u;
 const DIGEST_PATTERN = /^[a-f0-9]{64}$/u;
 
@@ -46,6 +47,7 @@ function isWorkerRuntimePath(path) {
 }
 
 function isWorkerRuntimeLeafPath(path) {
+  if (path === PNPM_INSTALL_STATE_PATH) return false;
   const segments = path.split('/');
   return path === 'packages/search/generated'
     || path.startsWith('packages/search/generated/')
