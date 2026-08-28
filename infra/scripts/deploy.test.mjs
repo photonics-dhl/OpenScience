@@ -28,7 +28,34 @@ const embeddingEvaluatorDockerfile = readFileSync(new URL('../embedding-candidat
 const rootPackage = JSON.parse(readFileSync(new URL('../../package.json', import.meta.url), 'utf8'));
 const bash = process.platform === 'win32' && existsSync('C:/Program Files/Git/bin/bash.exe')
   ? 'C:/Program Files/Git/bin/bash.exe'
-  : 'bash';
+  : '/bin/bash';
+
+function waitForStreamMatch(stream, pattern, label, timeoutMs = 5000) {
+  return new Promise((resolvePromise, rejectPromise) => {
+    let output = '';
+    const finish = (error) => {
+      clearTimeout(timeout);
+      stream.off('data', onData);
+      stream.off('end', onEnd);
+      stream.off('error', onError);
+      if (error) rejectPromise(error);
+      else resolvePromise(output);
+    };
+    const onData = (chunk) => {
+      output += chunk.toString();
+      if (pattern.test(output)) finish();
+    };
+    const onEnd = () => finish(new Error(`${label} stream ended before ${pattern}; output=${JSON.stringify(output)}`));
+    const onError = (error) => finish(error);
+    const timeout = setTimeout(
+      () => finish(new Error(`${label} timed out before ${pattern}; output=${JSON.stringify(output)}`)),
+      timeoutMs,
+    );
+    stream.on('data', onData);
+    stream.once('end', onEnd);
+    stream.once('error', onError);
+  });
+}
 
 test('Tesseract is packaged only in the isolated document parser image', () => {
   assert.doesNotMatch(workerDockerfile, /tesseract(?:-ocr)?/i);
@@ -437,6 +464,7 @@ test('production transaction lock is nonblocking and remains held throughout its
     const missingFlock = spawnSync(bash, ['-c', transactionLockHarness(
       lockDirectory, requiredUid, ':',
     )], { encoding: 'utf8', env: { ...process.env, PATH: sandbox } });
+    assert.equal(missingFlock.error, undefined, 'absolute Bash path must survive the missing-flock PATH fixture');
     assert.equal(missingFlock.status, 69, missingFlock.stderr);
     const first = await start();
     for (const attempt of [1, 2]) {
@@ -608,9 +636,9 @@ try {
     [chunk] = await once(interrupted.stderr, 'data');
     assert.match(chunk.toString(), /SWITCHED/);
     const interruptedExit = once(interrupted, 'exit');
+    const rollbackOutput = waitForStreamMatch(interrupted.stderr, /ROLLBACK_IN_LOCK/, 'TERM rollback');
     process.kill(-interrupted.pid, 'SIGTERM');
-    [chunk] = await once(interrupted.stderr, 'data');
-    assert.match(chunk.toString(), /ROLLBACK_IN_LOCK/);
+    assert.match(await rollbackOutput, /ROLLBACK_IN_LOCK/);
     const competitor = spawnSync(bash, ['-c', transactionLockHarness(
       lockDirectory, requiredUid, ':',
     )], { encoding: 'utf8' });
