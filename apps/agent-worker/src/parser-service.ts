@@ -1,12 +1,18 @@
 import { writeFile } from 'node:fs/promises';
 
 import { createDefaultIngestionAdapters } from './ingestion-parser';
-import { processParserJobsOnce, reapParserJobOrphans } from './parser-job-isolation';
+import {
+  createTransitionParserStageProcessor,
+  processParserJobsOnce,
+  reapParserJobOrphans,
+} from './parser-job-isolation';
+import { SafeParserErrorCode } from './parsers/job-protocol';
 
 const jobDir = process.env.PARSER_JOB_DIR ?? '/parser-jobs';
 
 async function main(): Promise<void> {
   const adapters = createDefaultIngestionAdapters();
+  const stageProcessor = createTransitionParserStageProcessor(adapters);
   let nextHeartbeat = 0;
   while (true) {
     if (Date.now() >= nextHeartbeat) {
@@ -14,12 +20,12 @@ async function main(): Promise<void> {
       await reapParserJobOrphans(jobDir);
       nextHeartbeat = Date.now() + 5_000;
     }
-    const processed = await processParserJobsOnce(jobDir, adapters);
+    const processed = await processParserJobsOnce(jobDir, adapters, stageProcessor);
     await new Promise((resolve) => setTimeout(resolve, processed ? 10 : 100));
   }
 }
 
-void main().catch((error) => {
-  console.error('document parser service failed', error instanceof Error ? error.message : String(error));
+void main().catch(() => {
+  console.error('document parser service failed', SafeParserErrorCode.SERVICE_FAILED);
   process.exitCode = 1;
 });
