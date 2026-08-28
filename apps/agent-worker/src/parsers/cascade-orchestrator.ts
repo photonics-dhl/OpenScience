@@ -43,6 +43,26 @@ export interface CascadeContext {
   featureFlags: ParserCascadeFeatureFlags;
 }
 
+type CanonicalParserInput = Readonly<ParserInput>;
+
+function snapshotParserInput(input: ParserInput): CanonicalParserInput {
+  return Object.freeze({
+    artifactId: input.artifactId,
+    contentHash: input.contentHash,
+    content: Buffer.from(input.content),
+    mediaType: input.mediaType,
+  });
+}
+
+function adapterInput(input: CanonicalParserInput): ParserInput {
+  return Object.freeze({
+    artifactId: input.artifactId,
+    contentHash: input.contentHash,
+    content: Buffer.from(input.content),
+    mediaType: input.mediaType,
+  });
+}
+
 function metadataCopy(metadata: DocumentParserMetadata): DocumentParserMetadata {
   return {
     name: metadata.name,
@@ -61,7 +81,7 @@ function emptySourceMap(input: ParserInput): DocumentSourceMap {
 }
 
 function normalizedText(value: string | undefined): string | undefined {
-  const normalized = value?.replace(/\s+/g, ' ').trim().toLocaleLowerCase();
+  const normalized = value?.replace(/\s+/g, ' ').trim().toLowerCase();
   return normalized ? normalized : undefined;
 }
 
@@ -230,21 +250,36 @@ function unresolvedPages(sourceMap: DocumentSourceMap): Array<StagePage & { reas
   });
 }
 
-function uniqueStrings(values: readonly string[]): string[] {
-  return [...new Set(values)];
+function llmCandidatePageNumbers(sourceMap: DocumentSourceMap): Set<number> {
+  return new Set(stagePages(sourceMap).flatMap((page) => (
+    assessPageQuality(page).llmCandidateReason === undefined ? [] : [page.page]
+  )));
+}
+
+function boundedUniqueStrings(values: readonly string[]): string[] {
+  const result: string[] = [];
+  const seen = new Set<string>();
+  for (const value of values) {
+    if (seen.has(value)) continue;
+    seen.add(value);
+    result.push(value);
+    if (result.length === 100) break;
+  }
+  return result;
 }
 
 export async function runParserCascade(
   input: ParserInput,
   context: CascadeContext,
 ): Promise<ExtractionResult<DocumentSourceMap>> {
+  const canonicalInput = snapshotParserInput(input);
   const reasons: string[] = [];
   const warnings: string[] = [];
-  let current = emptySourceMap(input);
+  let current = emptySourceMap(canonicalInput);
   let localStageSucceeded = false;
 
   try {
-    const extracted = await runDocumentParser(input, context.adapters.extractText);
+    const extracted = await runDocumentParser(adapterInput(canonicalInput), context.adapters.extractText);
     if (extracted.status === 'blocked') return extracted;
     if (extracted.status === 'failed') {
       reasons.push('extract_text failed');
@@ -264,7 +299,7 @@ export async function runParserCascade(
 
   if (context.featureFlags.detectLayout && context.adapters.detectLayout) {
     try {
-      const layout = await runDocumentParser(input, context.adapters.detectLayout);
+      const layout = await runDocumentParser(adapterInput(canonicalInput), context.adapters.detectLayout);
       if (layout.status === 'blocked') return layout;
       if (layout.status === 'failed') reasons.push('detect_layout failed');
       else {
@@ -284,7 +319,7 @@ export async function runParserCascade(
 
   if (context.featureFlags.grobid && context.adapters.grobid) {
     try {
-      const result = await context.adapters.grobid(input);
+      const result = await context.adapters.grobid(adapterInput(canonicalInput));
       const enriched = enrichWithGrobid(current, result);
       if (result.status === 'failed') warnings.push(`grobid ${result.errorCode}`);
       else {
@@ -301,12 +336,17 @@ export async function runParserCascade(
   if (context.featureFlags.localOcr && context.adapters.localOcr && initialUnresolved.length > 0) {
     const selected = initialUnresolved.slice(0, 4);
     try {
-      const result = await ocrSelectedPages(input, selected, context.adapters.localOcr);
-      for (const page of result.pages) if (page.blocks.length > 0) locallyResolved.add(page.page);
-      const localMap = localOcrSourceMap(input, result);
+      const result = await ocrSelectedPages(adapterInput(canonicalInput), selected, context.adapters.localOcr);
+      const localMap = localOcrSourceMap(canonicalInput, result);
       const merged = localMap ? mergeDeterministicMaps(current, localMap) : undefined;
       if (!merged) reasons.push('critical locator could not round-trip');
-      else current = merged;
+      else {
+        current = merged;
+        const llmCandidates = llmCandidatePageNumbers(current);
+        for (const page of result.pages) {
+          if (page.blocks.length > 0 && !llmCandidates.has(page.page)) locallyResolved.add(page.page);
+        }
+      }
       localStageSucceeded ||= locallyResolved.size > 0;
       warnings.push(...result.warnings);
     } catch {
@@ -318,13 +358,16 @@ export async function runParserCascade(
   if (context.featureFlags.llmOcr && remaining.length > 0 && context.adapters.localOcr) {
     const selected = remaining.slice(0, 4);
     try {
-      const rasters = await context.adapters.localOcr.renderPdfPages(input, selected.map(({ page }) => page));
+      const rasters = await context.adapters.localOcr.renderPdfPages(
+        adapterInput(canonicalInput),
+        selected.map(({ page }) => page),
+      );
       const reasonsByPage = new Map(selected.map((page) => [page.page, page.reason]));
       const candidates: LlmOcrCandidatePage[] = rasters.map((raster) => ({
         ...raster,
         selectionReason: reasonsByPage.get(raster.pageNumber) ?? 'low_confidence',
       }));
-      const fallback = await runLlmOcrFallback(input, current, candidates, {
+      const fallback = await runLlmOcrFallback(canonicalInput, current, candidates, {
         aiGateway: context.aiGateway,
         enabled: context.featureFlags.llmOcr,
         externalProcessingEligible: context.externalProcessingEligible,
@@ -345,9 +388,9 @@ export async function runParserCascade(
 
   if (!localStageSucceeded) reasons.push('all local parser stages failed');
   if (remaining.length > 0) reasons.push('unresolved pages remain');
-  const sourceMap = withOrchestratorMetadata(current) ?? emptySourceMap(input);
-  const finalReasons = uniqueStrings(reasons);
+  const sourceMap = withOrchestratorMetadata(current) ?? emptySourceMap(canonicalInput);
+  const finalReasons = boundedUniqueStrings(reasons);
   return finalReasons.length > 0
     ? { status: 'needs_review', sourceMap, reasons: finalReasons }
-    : { status: 'succeeded', sourceMap, warnings: uniqueStrings(warnings) };
+    : { status: 'succeeded', sourceMap, warnings: boundedUniqueStrings(warnings) };
 }

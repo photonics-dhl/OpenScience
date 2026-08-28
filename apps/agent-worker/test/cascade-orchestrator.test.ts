@@ -14,6 +14,7 @@ import {
   type CascadeContext,
   type ParserCascadeFeatureFlags,
 } from '../src/parsers/cascade-orchestrator';
+import { runDocumentParser } from '../src/parsers/base-parser';
 import type { GrobidEnrichmentResult } from '../src/parsers/grobid-parser';
 import type { LocalOcrAdapter, OcrRasterPage } from '../src/parsers/ocr-parser';
 import type { DocumentParser, ParserInput } from '../src/parsers/types';
@@ -84,8 +85,8 @@ function raster(pageNumber: number): OcrRasterPage {
   };
 }
 
-function tsv(text: string): string {
-  return `${TSV_HEADER}\n5\t1\t1\t1\t1\t1\t0\t1300\t500\t100\t98\t${text}`;
+function tsv(text: string, confidence = 98): string {
+  return `${TSV_HEADER}\n5\t1\t1\t1\t1\t1\t0\t1300\t500\t100\t${confidence}\t${text}`;
 }
 
 function gatewayResult(request: OcrRequest): OcrResult {
@@ -202,7 +203,7 @@ describe('runParserCascade', () => {
         renderCalls.push([...pageNumbers]);
         return pageNumbers.map(raster);
       },
-      recognizePage: async (page) => page.pageNumber === 1 ? tsv('local-success') : `${TSV_HEADER}\n`,
+      recognizePage: async (page) => page.pageNumber === 1 ? tsv('A'.repeat(200)) : `${TSV_HEADER}\n`,
     };
     const ocr = vi.fn(async (request: OcrRequest) => gatewayResult(request));
 
@@ -219,6 +220,35 @@ describe('runParserCascade', () => {
 
     expect(renderCalls).toEqual([[1, 2], [2]]);
     expect(ocr.mock.calls[0]?.[0].pages.map(({ pageNumber }) => pageNumber)).toEqual([2]);
+  });
+
+  it('keeps non-empty local OCR below the LLM threshold unresolved', async () => {
+    const metadata = { name: 'text', version: '1' };
+    const renderCalls: number[][] = [];
+    const localOcr: LocalOcrAdapter = {
+      metadata: { name: 'local-ocr', version: '1' },
+      renderPdfPages: async (_input, pageNumbers) => {
+        renderCalls.push([...pageNumbers]);
+        return pageNumbers.map(raster);
+      },
+      recognizePage: async () => tsv('blurred'.repeat(20), 10),
+    };
+    const ocr = vi.fn(async (request: OcrRequest) => gatewayResult(request));
+
+    const result = await runParserCascade(input(), {
+      adapters: {
+        extractText: parser(metadata, () => ({ status: 'succeeded', sourceMap: map(metadata), warnings: [] })),
+        localOcr,
+      },
+      featureFlags: { detectLayout: false, grobid: false, localOcr: true, llmOcr: true },
+      aiGateway: { ocr } as Pick<AiGateway, 'ocr'>,
+      trustedAuthorizationContext: { taskId: 'task-1', workspaceId: 'workspace-1', actorId: 'actor-1' },
+      externalProcessingEligible: true,
+    });
+
+    expect(renderCalls).toEqual([[1], [1]]);
+    expect(ocr.mock.calls[0]?.[0].pages.map(({ pageNumber }) => pageNumber)).toEqual([1]);
+    expect(result.status).toBe('succeeded');
   });
 
   it('keeps a page unresolved when candidate rasterization returns only a partial batch', async () => {
@@ -247,6 +277,41 @@ describe('runParserCascade', () => {
       expect(result.sourceMap.pages[0]?.blocks.some(({ text }) => text === 'llm-1')).toBe(true);
       expect(result.sourceMap.pages[1]?.blocks.some(({ text }) => text === 'llm-2')).toBe(false);
     }
+  });
+
+  it('isolates every injected adapter from caller and sibling input mutation', async () => {
+    const parserInput = input();
+    const originalFirstByte = parserInput.content[0];
+    const observedFirstBytes: number[] = [];
+    const metadata = { name: 'text', version: '1' };
+    const localOcr: LocalOcrAdapter = {
+      metadata: { name: 'local-ocr', version: '1' },
+      renderPdfPages: async (stageInput, pageNumbers) => {
+        observedFirstBytes.push(stageInput.content[0]!);
+        stageInput.content[0] = 0;
+        return pageNumbers.map(raster);
+      },
+      recognizePage: async () => `${TSV_HEADER}\n`,
+    };
+
+    await runParserCascade(parserInput, {
+      adapters: {
+        extractText: parser(metadata, () => ({ status: 'succeeded', sourceMap: map(metadata), warnings: [] })),
+        grobid: async (stageInput) => {
+          observedFirstBytes.push(stageInput.content[0]!);
+          stageInput.content[0] = 0;
+          return { status: 'failed', errorCode: 'unavailable' };
+        },
+        localOcr,
+      },
+      featureFlags: { detectLayout: false, grobid: true, localOcr: true, llmOcr: true },
+      aiGateway: { ocr: async (request) => gatewayResult(request) } as Pick<AiGateway, 'ocr'>,
+      trustedAuthorizationContext: { taskId: 'task-1', workspaceId: 'workspace-1', actorId: 'actor-1' },
+      externalProcessingEligible: true,
+    });
+
+    expect(observedFirstBytes).toEqual([originalFirstByte, originalFirstByte, originalFirstByte]);
+    expect(parserInput.content[0]).toBe(originalFirstByte);
   });
 
   it('preserves successful deterministic output when a later stage fails', async () => {
@@ -317,6 +382,34 @@ describe('runParserCascade', () => {
     }
   });
 
+  it('normalizes ASCII I deterministically even when the host locale behaves as Turkish', async () => {
+    const originalLocaleLowerCase = String.prototype.toLocaleLowerCase;
+    const localeSpy = vi.spyOn(String.prototype, 'toLocaleLowerCase').mockImplementation(function () {
+      return originalLocaleLowerCase.call(this, 'tr-TR');
+    });
+    const textMetadata = { name: 'text', version: '1' };
+    const layoutMetadata = { name: 'layout', version: '1' };
+    const original = map(textMetadata, [{ page: 1, blocks: [block('original-id', 'I CLAIM', 0.98, textMetadata)] }]);
+    const layout = map(layoutMetadata, [{ page: 1, blocks: [block('layout-id', 'i claim', 0.7, layoutMetadata)] }]);
+
+    try {
+      const result = await runParserCascade(input(), {
+        adapters: {
+          extractText: parser(textMetadata, () => ({ status: 'succeeded', sourceMap: original, warnings: [] })),
+          detectLayout: parser(layoutMetadata, () => ({ status: 'succeeded', sourceMap: layout, warnings: [] })),
+        },
+        featureFlags: { detectLayout: true, grobid: false, localOcr: false, llmOcr: false },
+        externalProcessingEligible: false,
+      });
+
+      if (result.status !== 'succeeded' && result.status !== 'needs_review') throw new Error('unexpected cascade result');
+      expect(result.sourceMap.pages[0]?.blocks).toHaveLength(1);
+      expect(result.sourceMap.pages[0]?.blocks[0]).toMatchObject({ id: 'original-id', text: 'I CLAIM' });
+    } finally {
+      localeSpy.mockRestore();
+    }
+  });
+
   it('returns needs_review rather than failed when all local stages and LLM fallback are unavailable', async () => {
     const metadata = { name: 'text', version: '1' };
     const empty = map(metadata, [{ page: 1, blocks: [] }]);
@@ -332,5 +425,37 @@ describe('runParserCascade', () => {
       expect(result.reasons).toEqual(expect.arrayContaining(['all local parser stages failed', 'unresolved pages remain']));
       expect(result.sourceMap.parser).toEqual(CASCADE_ORCHESTRATOR_METADATA);
     }
+  });
+
+  it.each(['reasons', 'warnings'] as const)('bounds aggregate child %s to the strict result contract', async (field) => {
+    const textMetadata = { name: 'text', version: '1' };
+    const layoutMetadata = { name: 'layout', version: '1' };
+    const denseText = 'A'.repeat(200);
+    const textMap = map(textMetadata, [{ page: 1, blocks: [block('text-dense', denseText, 1, textMetadata)] }]);
+    const layoutMap = map(layoutMetadata, [{ page: 1, blocks: [block('layout-dense', denseText, 1, layoutMetadata)] }]);
+    const textEntries = Array.from({ length: 100 }, (_, index) => `text-${field}-${index}`);
+    const layoutEntries = Array.from({ length: 100 }, (_, index) => `layout-${field}-${index}`);
+    const extractText = parser(textMetadata, () => field === 'reasons'
+      ? { status: 'needs_review', sourceMap: textMap, reasons: textEntries }
+      : { status: 'succeeded', sourceMap: textMap, warnings: textEntries });
+    const detectLayout = parser(layoutMetadata, () => field === 'reasons'
+      ? { status: 'needs_review', sourceMap: layoutMap, reasons: layoutEntries }
+      : { status: 'succeeded', sourceMap: layoutMap, warnings: layoutEntries });
+    const cascadeContext: CascadeContext = {
+      adapters: { extractText, detectLayout },
+      featureFlags: { detectLayout: true, grobid: false, localOcr: false, llmOcr: false },
+      externalProcessingEligible: false,
+    };
+    const cascadeParser: DocumentParser = {
+      metadata: CASCADE_ORCHESTRATOR_METADATA,
+      supports: () => true,
+      parse: (parserInput) => runParserCascade(parserInput, cascadeContext),
+    };
+
+    const result = await runDocumentParser(input(), cascadeParser);
+
+    expect(result.status).toBe(field === 'reasons' ? 'needs_review' : 'succeeded');
+    if (result.status === 'needs_review') expect(result.reasons).toEqual(textEntries);
+    if (result.status === 'succeeded') expect(result.warnings).toEqual(textEntries);
   });
 });

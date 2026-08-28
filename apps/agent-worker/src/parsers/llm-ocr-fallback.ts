@@ -150,6 +150,9 @@ export async function runLlmOcrFallback(
   const ordered = [...unique.values()].sort((left, right) => left.pageNumber - right.pageNumber);
   const unresolved = ordered.map(({ pageNumber }) => pageNumber);
   if (ordered.length === 0) return { sourceMap, unresolvedPageNumbers: [], warnings: [] };
+  if (sourceMap.artifactId !== input.artifactId || sourceMap.contentHash !== input.contentHash) {
+    return { sourceMap, unresolvedPageNumbers: unresolved, warnings: ['llm OCR source identity mismatch'] };
+  }
   if (context.enabled !== true || context.externalProcessingEligible !== true
     || !context.trustedAuthorizationContext || !context.aiGateway) {
     return { sourceMap, unresolvedPageNumbers: unresolved, warnings: ['llm OCR disabled or unauthorized'] };

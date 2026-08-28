@@ -137,6 +137,21 @@ describe('runLlmOcrFallback', () => {
   });
 
   it.each([
+    ['artifact identity', { artifactId: 'different-artifact' }],
+    ['content identity', { contentHash: 'f'.repeat(64) }],
+  ])('rejects mismatched source-map %s before the AI Gateway boundary', async (_label, override) => {
+    const ocr = vi.fn(async (request: OcrRequest) => succeeded(request));
+    const mismatched = { ...sourceMap(), ...override };
+
+    const result = await runLlmOcrFallback(input(), mismatched, [raster(1)], context(ocr));
+
+    expect(ocr).not.toHaveBeenCalled();
+    expect(result.sourceMap).toBe(mismatched);
+    expect(result.unresolvedPageNumbers).toEqual([1]);
+    expect(result.warnings).toContain('llm OCR source identity mismatch');
+  });
+
+  it.each([
     ['missing trusted authorization', { trustedAuthorizationContext: undefined }],
     ['external processing ineligible', { externalProcessingEligible: false }],
     ['runtime route disabled', { enabled: false }],
