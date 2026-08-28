@@ -39,8 +39,13 @@ export interface OcrRasterPage {
 export interface LocalOcrAdapter {
   readonly metadata: DocumentParserMetadata;
   readonly timeoutMs?: number;
-  renderPdfPages(input: ParserInput, pageNumbers: readonly number[]): Promise<OcrRasterPage[]>;
-  recognizePage(page: OcrRasterPage): Promise<string>;
+  managesProcessTimeouts?: boolean;
+  renderPdfPages(
+    input: ParserInput,
+    pageNumbers: readonly number[],
+    processTimeoutMs?: number,
+  ): Promise<OcrRasterPage[]>;
+  recognizePage(page: OcrRasterPage, processTimeoutMs?: number): Promise<string>;
 }
 
 export const TESSERACT_METADATA: DocumentParserMetadata = Object.freeze({
@@ -246,7 +251,10 @@ export async function ocrSelectedPages(
   const outputPages = emptyOutputPages(pages);
   let rendered: OcrRasterPage[];
   try {
-    rendered = await withTimeout(adapter.renderPdfPages(input, pageNumbers), timeoutMs);
+    const renderOperation = adapter.renderPdfPages(input, pageNumbers, timeoutMs);
+    rendered = adapter.managesProcessTimeouts
+      ? await renderOperation
+      : await withTimeout(renderOperation, timeoutMs);
   } catch {
     return parseParserStageResult({
       schemaVersion: 2,
@@ -284,7 +292,11 @@ export async function ocrSelectedPages(
         const raster = validateRaster(renderedByPage.get(page.page) as OcrRasterPage, page.page);
         const remainingMs = stageDeadline - Date.now();
         if (remainingMs < 1) throw new Error('local OCR stage timeout');
-        const recognized = await withTimeout(adapter.recognizePage(raster), Math.min(timeoutMs, remainingMs));
+        const processTimeoutMs = Math.min(timeoutMs, remainingMs);
+        const recognizeOperation = adapter.recognizePage(raster, processTimeoutMs);
+        const recognized = adapter.managesProcessTimeouts
+          ? await recognizeOperation
+          : await withTimeout(recognizeOperation, processTimeoutMs);
         const blocks = parseTesseractTsv(recognized, raster, page);
         const textCharacters = blocks.reduce((total, block) => total + (block.text?.length ?? 0), 0);
         if (stageBlocks + blocks.length > LOCAL_OCR_LIMITS.maxBlocks
@@ -350,12 +362,16 @@ function runBoundedProcess(
   });
 }
 
-async function renderPdfPages(input: ParserInput, pageNumbers: readonly number[]): Promise<OcrRasterPage[]> {
+async function renderPdfPages(
+  input: ParserInput,
+  pageNumbers: readonly number[],
+  timeoutMs: number,
+): Promise<OcrRasterPage[]> {
   const output = await runBoundedProcess(
     process.execPath,
     ['--max-old-space-size=256', '--input-type=module', '-e', ISOLATED_RENDER_SOURCE, JSON.stringify(pageNumbers)],
     input.content,
-    LOCAL_OCR_LIMITS.timeoutMs,
+    timeoutMs,
     LOCAL_OCR_LIMITS.maxRenderOutputBytes,
   );
   let parsed: unknown;
@@ -404,7 +420,12 @@ export function createTesseractOcrAdapter(): LocalOcrAdapter {
   return {
     metadata: { ...TESSERACT_METADATA },
     timeoutMs: LOCAL_OCR_LIMITS.timeoutMs,
-    renderPdfPages,
-    recognizePage: (page) => recognizeWithTesseract(page, LOCAL_OCR_LIMITS.timeoutMs),
+    managesProcessTimeouts: true,
+    renderPdfPages: (input, pageNumbers, processTimeoutMs = LOCAL_OCR_LIMITS.timeoutMs) => (
+      renderPdfPages(input, pageNumbers, processTimeoutMs)
+    ),
+    recognizePage: (page, processTimeoutMs = LOCAL_OCR_LIMITS.timeoutMs) => (
+      recognizeWithTesseract(page, processTimeoutMs)
+    ),
   };
 }

@@ -342,4 +342,5 @@ test('parser build reaches registries through the ECS egress proxy without chang
   assert.match(workerService, /build:\r?\n[\s\S]*network: host/);
   assert.match(workerService, /HTTPS_PROXY: http:\/\/127\.0\.0\.1:7891/);
   assert.match(parserService, /network_mode: none/);
+  assert.match(parserService, /cpus: 2/);
 });

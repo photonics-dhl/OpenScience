@@ -160,13 +160,50 @@ describe('ocrSelectedPages', () => {
       value.contentHash = createHash('sha256').update(value.bytes).digest('hex');
       return value;
     });
+    let aggregateRecognitions = 0;
     const aggregateResult = await ocrSelectedPages(
       input(),
       [page(1), page(2), page(3)],
-      adapter(async () => 'must-not-run', async () => aggregate),
+      adapter(async () => {
+        aggregateRecognitions += 1;
+        return tsv('5\t1\t1\t1\t1\t1\t1\t1\t1\t1\t90\tword');
+      }, async () => aggregate),
     );
+    expect(aggregateRecognitions).toBe(0);
     expect(aggregateResult.pages.every(({ blocks }) => blocks.length === 0)).toBe(true);
     expect(aggregateResult.warnings).toEqual([SafeParserWarningCode.PARTIAL_RESULT]);
+  });
+
+  it('enforces aggregate decoded-pixel bounds before OCR', async () => {
+    let recognitions = 0;
+    const aggregate = [1, 2, 3].map((pageNumber) => raster(pageNumber, 4_000, 4_000));
+    const result = await ocrSelectedPages(
+      input(),
+      [page(1), page(2), page(3)],
+      adapter(async () => {
+        recognitions += 1;
+        return tsv('5\t1\t1\t1\t1\t1\t1\t1\t1\t1\t90\tword');
+      }, async () => aggregate),
+    );
+
+    expect(recognitions).toBe(0);
+    expect(result.warnings).toEqual([SafeParserWarningCode.PARTIAL_RESULT]);
+  });
+
+  it('waits for a process-managed adapter to finish timeout cleanup', async () => {
+    let closed = false;
+    const managed = adapter(async (_page, processTimeoutMs) => {
+      expect(processTimeoutMs).toBe(10);
+      await new Promise((resolve) => setTimeout(resolve, 15));
+      closed = true;
+      throw new Error('process closed after timeout');
+    }, undefined, 10);
+    managed.managesProcessTimeouts = true;
+
+    const result = await ocrSelectedPages(input(), [page(1)], managed);
+
+    expect(closed).toBe(true);
+    expect(result.warnings).toEqual([SafeParserWarningCode.PARTIAL_RESULT]);
   });
 
   it('serializes page OCR so one CPU is not split across four Tesseract jobs', async () => {
