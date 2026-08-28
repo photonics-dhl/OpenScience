@@ -15,6 +15,16 @@ export function assertDedicatedEvaluationSource(actualSource, expectedSource) {
   return actual;
 }
 
+export function assertEvaluationSourceIdentity(actualSource, sourceSha) {
+  if (!/^[0-9a-f]{40}$/u.test(sourceSha)) throw new Error('evaluation source identity mismatch');
+  const expectedSource = `/opt/openscience-evals/document-parser/${sourceSha}/source`;
+  try {
+    return assertDedicatedEvaluationSource(actualSource, expectedSource);
+  } catch {
+    throw new Error('evaluation source identity mismatch');
+  }
+}
+
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   const [actualSource, expectedSource] = process.argv.slice(2);
   if (!actualSource || !expectedSource || process.argv.length !== 4) process.exit(64);

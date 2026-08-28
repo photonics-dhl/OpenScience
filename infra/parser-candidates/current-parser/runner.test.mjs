@@ -29,6 +29,18 @@ test('execution source rejects a production release checkout', async () => {
   );
 });
 
+test('archive source identity must match the SHA embedded in its evaluation path', async () => {
+  const { assertEvaluationSourceIdentity } = await import('./execution-path.mjs');
+  const sha = 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa';
+  const source = `/opt/openscience-evals/document-parser/${sha}/source`;
+
+  assert.equal(assertEvaluationSourceIdentity(source, sha), source);
+  assert.throws(
+    () => assertEvaluationSourceIdentity(source, 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb'),
+    /identity mismatch/,
+  );
+});
+
 test('current parser keeps unsupported geometry locators in review', () => {
   const outcome = evaluateTextLocators(
     [{ num: 1, text: 'Left claim Right evidence' }],

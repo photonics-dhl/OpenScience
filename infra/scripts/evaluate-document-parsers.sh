@@ -49,7 +49,14 @@ esac
 
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)"
 REPOSITORY_ROOT="$(cd -- "$SCRIPT_DIR/../.." && pwd -P)"
-GIT_SHA="$(git -C "$REPOSITORY_ROOT" rev-parse HEAD)"
+if git -C "$REPOSITORY_ROOT" rev-parse HEAD >/dev/null 2>&1; then
+  GIT_SHA="$(git -C "$REPOSITORY_ROOT" rev-parse HEAD)"
+elif [[ -f "$REPOSITORY_ROOT/.evaluation-source" && ! -L "$REPOSITORY_ROOT/.evaluation-source" ]]; then
+  GIT_SHA="$(< "$REPOSITORY_ROOT/.evaluation-source")"
+else
+  echo 'evaluation source identity is unavailable' >&2
+  exit 65
+fi
 [[ "$GIT_SHA" =~ ^[a-f0-9]{40}$ ]] || { echo 'invalid git sha' >&2; exit 65; }
 EVALUATION_ROOT="/opt/openscience-evals/document-parser/$GIT_SHA"
 
