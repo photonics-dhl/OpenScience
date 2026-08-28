@@ -1,6 +1,7 @@
 import { execFileSync, spawnSync } from 'node:child_process';
-import { readFileSync } from 'node:fs';
-import { resolve } from 'node:path';
+import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join, resolve } from 'node:path';
 
 import { describe, expect, it } from 'vitest';
 
@@ -197,6 +198,34 @@ describe('buildCandidateEvaluationReport', () => {
 });
 
 describe('document parser evaluation script', () => {
+  it('roots workspace commands in the validated evaluation source, not the caller cwd', () => {
+    const unrelatedWorkspace = mkdtempSync(join(tmpdir(), 'parser-eval-caller-'));
+    try {
+      const contract = JSON.parse(execFileSync(
+        bash,
+        [evaluationScriptArgument, '--print-run-contract', 'current-parser'],
+        { cwd: unrelatedWorkspace, encoding: 'utf8' },
+      ));
+      const expectedSha = execFileSync('git', ['rev-parse', 'HEAD'], {
+        cwd: repositoryRoot,
+        encoding: 'utf8',
+      }).trim();
+      const script = readFileSync(evaluationScript, 'utf8');
+      const sourceValidationIndex = script.indexOf(
+        'node "$REPOSITORY_ROOT/infra/parser-candidates/current-parser/execution-path.mjs"',
+      );
+      const repositoryCdIndex = script.indexOf('cd -- "$REPOSITORY_ROOT"', sourceValidationIndex);
+      const firstWorkspaceCommandIndex = script.indexOf('npx pnpm@9.15.0', sourceValidationIndex);
+
+      expect(contract.gitSha).toBe(expectedSha);
+      expect(sourceValidationIndex).toBeGreaterThan(-1);
+      expect(repositoryCdIndex).toBeGreaterThan(sourceValidationIndex);
+      expect(repositoryCdIndex).toBeLessThan(firstWorkspaceCommandIndex);
+    } finally {
+      rmSync(unrelatedWorkspace, { recursive: true, force: true });
+    }
+  });
+
   it('publishes the immutable ECS sandbox contract without invoking Docker', () => {
     const output = execFileSync(bash, [evaluationScriptArgument, '--print-run-contract', 'liteparse'], {
       cwd: repositoryRoot,

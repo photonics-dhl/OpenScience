@@ -179,6 +179,7 @@ REAL_REPOSITORY_ROOT="$(readlink -f "$REPOSITORY_ROOT")"
 node "$REPOSITORY_ROOT/infra/parser-candidates/current-parser/execution-path.mjs" \
   "$REAL_REPOSITORY_ROOT" "$EVALUATION_ROOT/source" \
   || { echo 'evaluation source is outside its dedicated evaluation root' >&2; exit 69; }
+cd -- "$REPOSITORY_ROOT"
 
 if [[ "$CANDIDATE" != 'current-parser' && "$CANDIDATE" != 'tesseract' \
   && "$CANDIDATE" != 'liteparse' && "$CANDIDATE" != 'docling' && "$CANDIDATE" != 'paddleocr' ]]; then

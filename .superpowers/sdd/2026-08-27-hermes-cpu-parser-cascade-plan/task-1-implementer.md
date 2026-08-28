@@ -42,6 +42,7 @@ RED was captured before each correction:
 - OCR child/container memory was absent from the reported candidate peak.
 - Archive-only evaluation source could not prove its exact commit identity.
 - The source-sync command did not yet have a fail-closed evaluation-root contract.
+- An absolute evaluation script invoked from an unrelated workspace left pnpm on the caller's ambient cwd.
 
 GREEN behavior now requires:
 
@@ -50,10 +51,11 @@ GREEN behavior now requires:
 - Paddle ndarray-like values are normalized with `tolist()` without boolean evaluation or `Sequence` assumptions, including NumPy scalar coordinates.
 - Tesseract and Paddle convert image top-left boxes to the corpus PDF bottom-left coordinate system. The non-symmetric fixture `[72,147,432,192]` becomes `[72,600,432,645]` on the 792-point page.
 - Successful OCR outcomes require the candidate cgroup peak (`memory.peak` or v1 `memory.max_usage_in_bytes`) and report `max(self, container)` so OCR children are included.
+- After the dedicated-source validator passes, the script immediately enters `REPOSITORY_ROOT`; all subsequent pnpm workspace commands are therefore rooted in the validated evaluation source even when the absolute script path is invoked from another workspace.
 
 Fresh GREEN evidence after the corrections:
 
-- `npx pnpm@9.15.0 --filter @openscience/agent-worker test -- parser-evaluation.test.ts`: 19/19.
+- `npx pnpm@9.15.0 --filter @openscience/agent-worker test -- parser-evaluation.test.ts`: 20/20, including an absolute-script invocation from a temporary unrelated cwd.
 - `node --test infra/parser-candidates/current-parser/runner.test.mjs`: 6/6.
 - `python infra/parser-candidates/paddleocr/runner_test.py`: 4/4.
 - `node --test scripts/evaluation-source-sync-command.test.mjs`: 1/1.
