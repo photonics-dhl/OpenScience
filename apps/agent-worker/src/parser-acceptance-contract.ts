@@ -734,20 +734,31 @@ function exactUnpublishedPath(path: string): { acceptanceRoot: string; runId: st
   return { acceptanceRoot: dirname(candidate), runId: match[1]! };
 }
 
-export async function writeUnpublishedAcceptanceCandidate(path: string, report: unknown): Promise<void> {
+export async function writeUnpublishedAcceptanceCandidate(
+  path: string,
+  report: unknown,
+  requiredUid = 0,
+): Promise<void> {
+  if (!Number.isSafeInteger(requiredUid) || requiredUid < 0) throw new Error('invalid required acceptance owner');
   exactUnpublishedPath(path);
   await writeFile(path, `${JSON.stringify(report, null, 2)}\n`, { flag: 'wx', mode: 0o600 });
   const info = await lstat(path);
   const currentUid = process.getuid?.();
   if (!info.isFile() || info.isSymbolicLink()
-    || (currentUid !== undefined && (currentUid !== 0 || info.uid !== 0 || (info.mode & 0o077) !== 0))
+    || (currentUid !== undefined
+      && (currentUid !== requiredUid || info.uid !== requiredUid || (info.mode & 0o077) !== 0))
     || await realpath(path) !== resolve(path)) {
     await rm(path, { force: true });
     throw new Error('unpublished acceptance report is not a root-owned regular file');
   }
 }
 
-export async function publishAcceptanceCandidate(candidatePath: string, finalPath: string): Promise<void> {
+export async function publishAcceptanceCandidate(
+  candidatePath: string,
+  finalPath: string,
+  requiredUid = 0,
+): Promise<void> {
+  if (!Number.isSafeInteger(requiredUid) || requiredUid < 0) throw new Error('invalid required acceptance owner');
   const { acceptanceRoot } = exactUnpublishedPath(candidatePath);
   if (resolve(finalPath) !== join(acceptanceRoot, 'report.json')) {
     throw new Error('invalid final acceptance report path');
@@ -756,7 +767,8 @@ export async function publishAcceptanceCandidate(candidatePath: string, finalPat
   const parentInfo = await lstat(acceptanceRoot);
   const currentUid = process.getuid?.();
   if (!candidateInfo.isFile() || candidateInfo.isSymbolicLink() || candidateInfo.uid !== parentInfo.uid
-    || (currentUid !== undefined && (currentUid !== 0 || candidateInfo.uid !== 0 || (candidateInfo.mode & 0o077) !== 0))
+    || (currentUid !== undefined && (currentUid !== requiredUid || candidateInfo.uid !== requiredUid
+      || parentInfo.uid !== requiredUid || (candidateInfo.mode & 0o077) !== 0))
     || await realpath(candidatePath) !== resolve(candidatePath)) {
     throw new Error('unpublished acceptance report ownership mismatch');
   }

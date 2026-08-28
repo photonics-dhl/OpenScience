@@ -485,11 +485,12 @@ describe('Task 8 acceptance contract', () => {
     expect(contract).toHaveProperty('writeUnpublishedAcceptanceCandidate');
     expect(contract).toHaveProperty('publishAcceptanceCandidate');
     const writeCandidate = Reflect.get(contract, 'writeUnpublishedAcceptanceCandidate') as (
-      path: string, report: unknown,
+      path: string, report: unknown, requiredUid?: number,
     ) => Promise<void>;
     const publishCandidate = Reflect.get(contract, 'publishAcceptanceCandidate') as (
-      candidate: string, final: string,
+      candidate: string, final: string, requiredUid?: number,
     ) => Promise<void>;
+    const testUid = process.getuid?.() ?? 0;
     const acceptanceRoot = await mkdtemp(join(tmpdir(), 'task8-acceptance-unpublished-'));
     const runId = 'aaaaaaaaaaaa-1234';
     const runRoot = join(acceptanceRoot, `.run-${runId}`);
@@ -497,7 +498,7 @@ describe('Task 8 acceptance contract', () => {
     const final = join(acceptanceRoot, 'report.json');
     await mkdir(runRoot);
     const report = buildFinalAcceptanceReport(validDraft(), validResources());
-    await writeCandidate(candidate, report);
+    await writeCandidate(candidate, report, testUid);
     await expect(access(candidate)).resolves.toBeUndefined();
     await expect(access(final)).rejects.toThrow();
 
@@ -505,7 +506,7 @@ describe('Task 8 acceptance contract', () => {
     await expect(access(runRoot)).rejects.toThrow();
     await expect(access(candidate)).resolves.toBeUndefined();
     await expect(access(final)).rejects.toThrow();
-    await publishCandidate(candidate, final);
+    await publishCandidate(candidate, final, testUid);
     await expect(access(candidate)).rejects.toThrow();
     expect(JSON.parse(await readFile(final, 'utf8'))).toMatchObject({ schemaVersion: 2 });
   });
@@ -514,8 +515,9 @@ describe('Task 8 acceptance contract', () => {
     const contract = await import('../src/parser-acceptance-contract');
     expect(contract).toHaveProperty('writeUnpublishedAcceptanceCandidate');
     const writeCandidate = Reflect.get(contract, 'writeUnpublishedAcceptanceCandidate') as (
-      path: string, report: unknown,
+      path: string, report: unknown, requiredUid?: number,
     ) => Promise<void>;
+    const testUid = process.getuid?.() ?? 0;
     const acceptanceRoot = await mkdtemp(join(tmpdir(), 'task8-acceptance-retry-'));
     const runId = 'aaaaaaaaaaaa-1234';
     const runRoot = join(acceptanceRoot, `.run-${runId}`);
@@ -525,17 +527,17 @@ describe('Task 8 acceptance contract', () => {
     const report = buildFinalAcceptanceReport(validDraft(), validResources());
     await mkdir(runRoot);
     await writeFile(temp, 'injected-partial');
-    await writeCandidate(candidate, report);
+    await writeCandidate(candidate, report, testUid);
 
     await cleanupAcceptanceRun(runRoot, acceptanceRoot);
     for (const path of [runRoot, candidate, final, temp]) await expect(access(path)).rejects.toThrow();
 
     await mkdir(runRoot);
-    await writeCandidate(candidate, report);
+    await writeCandidate(candidate, report, testUid);
     await cleanupAcceptanceRun(runRoot, acceptanceRoot, true);
     await (Reflect.get(contract, 'publishAcceptanceCandidate') as (
-      candidatePath: string, finalPath: string,
-    ) => Promise<void>)(candidate, final);
+      candidatePath: string, finalPath: string, requiredUid?: number,
+    ) => Promise<void>)(candidate, final, testUid);
     await expect(access(final)).resolves.toBeUndefined();
   });
 
