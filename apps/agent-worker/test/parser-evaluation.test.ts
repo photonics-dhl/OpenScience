@@ -245,6 +245,28 @@ describe('document parser evaluation script', () => {
     expect(script).not.toContain('--tmpfs /out:');
   });
 
+  it('evaluates current parser and Tesseract from the active production parser image', () => {
+    const script = readFileSync(evaluationScript, 'utf8');
+    const currentContract = JSON.parse(execFileSync(
+      bash,
+      [evaluationScriptArgument, '--print-run-contract', 'current-parser'],
+      { cwd: repositoryRoot, encoding: 'utf8' },
+    ));
+    const tesseractContract = JSON.parse(execFileSync(
+      bash,
+      [evaluationScriptArgument, '--print-run-contract', 'tesseract'],
+      { cwd: repositoryRoot, encoding: 'utf8' },
+    ));
+
+    expect(currentContract.caseIds).toEqual([
+      'corrupt-pdf-en', 'native-pdf-en', 'dual-column-pdf-en', 'table-pdf-en',
+      'formula-pdf-en', 'references-pdf-en', 'scan-pdf-image-only',
+    ]);
+    expect(tesseractContract.caseIds).toEqual(['scan-pdf-image-only']);
+    expect(script).toContain('openscience-document-parser:$ACTIVE_RELEASE');
+    expect(script).toContain('infra/parser-candidates/current-parser/runner.mjs');
+  });
+
   it('publishes the source-locked Docling identity through the same sandbox contract', () => {
     const output = execFileSync(bash, [evaluationScriptArgument, '--print-run-contract', 'docling'], {
       cwd: repositoryRoot,
@@ -260,6 +282,34 @@ describe('document parser evaluation script', () => {
         license: 'MIT',
         sourceSha256: '95c0a4d9bc1beafc6097c8573ec3a8dc317e8bcf67e3234aa7c050b7d73fde9c',
       },
+      sandbox: {
+        network: 'none',
+        readOnlyRoot: true,
+        user: '10001:10001',
+        cpus: 2,
+        memoryBytes: 2_147_483_648,
+        pidsLimit: 64,
+        outputMaxBytes: 65_536,
+      },
+    });
+  });
+
+  it('publishes the source-locked PaddleOCR identity for the scan-only comparison', () => {
+    const output = execFileSync(bash, [evaluationScriptArgument, '--print-run-contract', 'paddleocr'], {
+      cwd: repositoryRoot,
+      encoding: 'utf8',
+    });
+    const contract = JSON.parse(output);
+
+    expect(contract).toMatchObject({
+      schemaVersion: 1,
+      candidate: 'paddleocr',
+      candidateIdentity: {
+        version: '3.7.0',
+        license: 'Apache-2.0',
+        sourceSha256: 'c0f0a81ad4112727f30c6fcf986ac0ef6a120d31ee0991a01fae0357ee32d338',
+      },
+      caseIds: ['scan-pdf-image-only'],
       sandbox: {
         network: 'none',
         readOnlyRoot: true,
@@ -363,6 +413,33 @@ describe('document parser evaluation script', () => {
       cwd: repositoryRoot,
       encoding: 'utf8',
       input: JSON.stringify({ ...lock, computePlatform: 'cuda', gpuPackageCount: 4 }),
+    });
+    expect(gpuResult.status).not.toBe(0);
+  });
+
+  it('normalizes the PaddleOCR CPU package and model lock before scan execution', () => {
+    const lock = {
+      schemaVersion: 1,
+      candidate: 'paddleocr',
+      version: '3.7.0',
+      packageFreezeSha256: sha('c'),
+      modelManifestSha256: sha('d'),
+      modelFileCount: 6,
+      computePlatform: 'cpu',
+      gpuPackageCount: 0,
+    };
+    const result = spawnSync(bash, [evaluationScriptArgument, '--normalize-candidate-lock', 'paddleocr'], {
+      cwd: repositoryRoot,
+      encoding: 'utf8',
+      input: `${JSON.stringify(lock)}\n`,
+    });
+
+    expect(result.status).toBe(0);
+    expect(JSON.parse(result.stdout)).toEqual(lock);
+    const gpuResult = spawnSync(bash, [evaluationScriptArgument, '--normalize-candidate-lock', 'paddleocr'], {
+      cwd: repositoryRoot,
+      encoding: 'utf8',
+      input: JSON.stringify({ ...lock, computePlatform: 'cuda', gpuPackageCount: 1 }),
     });
     expect(gpuResult.status).not.toBe(0);
   });
