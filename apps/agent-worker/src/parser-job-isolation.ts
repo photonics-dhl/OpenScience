@@ -8,9 +8,12 @@ import {
   createTesseractOcrAdapter,
   inventoryPdfPages,
   ocrSelectedPages,
+  PDF_PAGE_INVENTORY_METADATA,
+  TESSERACT_METADATA,
   type LocalOcrAdapter,
 } from './parsers/ocr-parser';
 import type { ParserInput } from './parsers/types';
+import { PDF_TEXT_ITEM_METADATA } from './parsers/native-pdf-contract';
 import {
   PARSER_JOB_RESPONSE_MAX_BYTES,
   ParserJobProtocolError,
@@ -48,6 +51,17 @@ export class SafeParserBoundaryError extends Error {
     this.name = 'SafeParserBoundaryError';
     this.code = code;
   }
+}
+
+export function expectedSidecarParserMetadata(
+  request: Pick<ParserJobRequestV2, 'operation' | 'mediaType'>,
+): DocumentParserMetadata {
+  if (request.operation === 'inventory_pages') return PDF_PAGE_INVENTORY_METADATA;
+  if (request.operation === 'render_page' || request.operation === 'ocr_page') return TESSERACT_METADATA;
+  if (request.operation === 'extract_text' && request.mediaType === 'application/pdf') {
+    return PDF_TEXT_ITEM_METADATA;
+  }
+  return TRANSITION_PARSER_METADATA;
 }
 
 function safeErrorCode(error: unknown, fallback = SafeParserErrorCode.PARSER_FAILED): SafeParserErrorCode {
@@ -245,13 +259,14 @@ export function createTransitionParserStageProcessor(adapters: IngestionAdapters
     } catch {
       throw new SafeParserBoundaryError(SafeParserErrorCode.PARSER_FAILED);
     }
-    if (kind === 'xlsx') {
+    if (kind === 'pdf' || kind === 'xlsx') {
       try {
         const result = parseParserStageResult(parsed);
-        if (result.parser.name !== TRANSITION_PARSER_METADATA.name
-          || result.parser.version !== TRANSITION_PARSER_METADATA.version
+        const expected = kind === 'pdf' ? PDF_TEXT_ITEM_METADATA : TRANSITION_PARSER_METADATA;
+        if (result.parser.name !== expected.name
+          || result.parser.version !== expected.version
           || result.parser.modelHash !== undefined) {
-          throw new Error('unexpected XLSX transition parser identity');
+          throw new Error('unexpected structured parser identity');
         }
         return result;
       } catch {

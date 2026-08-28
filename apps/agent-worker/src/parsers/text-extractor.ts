@@ -36,6 +36,7 @@ const MAX_SOURCE_MAP_BLOCKS = 10_000;
 const MAX_LOGICAL_ROWS = 10_000;
 const MAX_CSV_FIELDS = 10_000;
 const MAX_SERIALIZED_RESULT_CHARACTERS = 8_000_000;
+const XLSX_REVIEW_REASON = 'structured-xlsx-review-required';
 
 export type TextStageAdapter = (request: ParserJobRequestV2, content: Buffer) => Promise<ParserStageResult>;
 
@@ -58,6 +59,10 @@ function emptySourceMap(input: ParserInput) {
 
 function needsReview(input: ParserInput, reason: string) {
   return { status: 'needs_review' as const, sourceMap: emptySourceMap(input), reasons: [reason] };
+}
+
+function needsReviewSourceMap(sourceMap: DocumentSourceMap, reason: string) {
+  return { status: 'needs_review' as const, sourceMap, reasons: [reason] };
 }
 
 function meaningful(text: string): boolean {
@@ -252,7 +257,7 @@ async function parseBinary(
     if (!pages.some((page) => page.blocks.some((block) => block.text && meaningful(block.text)))) {
       return needsReview(input, 'empty-parsed-text');
     }
-    return succeeded(input, pages, result.warnings);
+    return needsReviewSourceMap(validatedSourceMap(input, pages), XLSX_REVIEW_REASON);
   }
   if (kind === 'pdf' || kind === 'image') {
     const pages = buildPhysicalPages(result.pages, result.parser);
@@ -347,6 +352,7 @@ export function createTextExtractor(adapters: TextExtractionAdapters): DocumentP
         if (!sourceMap.pages.some((page) => page.blocks.some((block) => block.text && meaningful(block.text)))) {
           return needsReview(input, 'empty-parsed-text');
         }
+        if (type === XLSX_MEDIA_TYPE) return needsReviewSourceMap(sourceMap, XLSX_REVIEW_REASON);
         return succeededSourceMap(sourceMap, []);
       } catch (error) {
         if (error instanceof ParsingLimitError) {

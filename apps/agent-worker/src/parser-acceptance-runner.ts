@@ -17,9 +17,8 @@ import {
 } from './parser-acceptance-contract';
 import {
   createParserStageJobClient,
-  TRANSITION_PARSER_METADATA,
+  expectedSidecarParserMetadata,
 } from './parser-job-isolation';
-import { PDF_PAGE_INVENTORY_METADATA, TESSERACT_METADATA } from './parsers/ocr-parser';
 
 const MEDIA_TYPES: Record<string, string> = {
   '.csv': 'text/csv', '.docx': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
@@ -52,11 +51,7 @@ async function main(): Promise<void> {
   }
   const manifest = parseCanonicalManifest(await readFile(join(corpusDir, 'manifest.json')));
   const jobDir = process.env.PARSER_JOB_DIR ?? '/parser-jobs';
-  const stageAdapter = createParserStageJobClient(jobDir, (request) => (
-    request.operation === 'inventory_pages' ? PDF_PAGE_INVENTORY_METADATA
-      : request.operation === 'render_page' || request.operation === 'ocr_page' ? TESSERACT_METADATA
-        : TRANSITION_PARSER_METADATA
-  ));
+  const stageAdapter = createParserStageJobClient(jobDir, expectedSidecarParserMetadata);
   const gatewaySeam = createAcceptanceGatewaySeam(proposal());
   const gateway = gatewaySeam.gateway as unknown as AiGateway;
   const canonicalCascade = createWorkerParserCascade(gateway, stageAdapter);

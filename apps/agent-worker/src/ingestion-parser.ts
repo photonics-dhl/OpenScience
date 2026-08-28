@@ -1,4 +1,4 @@
-import { extname } from 'node:path';
+import { extname, join } from 'node:path';
 import { spawn } from 'node:child_process';
 import { createRequire } from 'node:module';
 import {
@@ -14,11 +14,15 @@ export type ParsedIngestion =
   | { status: 'needs_review'; format: string; reason: string };
 
 export interface IngestionAdapters {
-  pdf?: (content: Buffer) => Promise<string>;
+  pdf?: (content: Buffer) => Promise<ParserStageResult>;
   docx?: (content: Buffer) => Promise<string>;
   image?: (content: Buffer) => Promise<string>;
   xlsx?: (content: Buffer) => Promise<ParserStageResult>;
 }
+
+export type LegacyIngestionAdapters = Omit<IngestionAdapters, 'pdf'> & {
+  pdf?: (content: Buffer) => Promise<string | ParserStageResult>;
+};
 
 const PARSER_TIMEOUT_MS = 60_000;
 const MAX_PARSED_TEXT_CHARS = 5 * 1024 * 1024;
@@ -28,16 +32,8 @@ const ISOLATED_PARSER_SOURCE = `
   for await (const chunk of process.stdin) chunks.push(chunk);
   const content = Buffer.concat(chunks);
   const kind = process.argv[1];
-  let text = '';
-  if (kind === 'pdf') {
-    const { PDFParse } = require('pdf-parse');
-    const parser = new PDFParse({ data: content });
-    try { text = (await parser.getText()).text; } finally { await parser.destroy(); }
-  } else if (kind === 'docx') {
-    text = (await require('mammoth').extractRawText({ buffer: content })).value;
-  } else {
-    throw new Error('unsupported isolated parser');
-  }
+  if (kind !== 'docx') throw new Error('unsupported isolated parser');
+  const text = (await require('mammoth').extractRawText({ buffer: content })).value;
   if (text.length > ${MAX_PARSED_TEXT_CHARS}) throw new Error('parsed text too large');
   process.stdout.write(text);
 })().catch((error) => {
@@ -45,7 +41,7 @@ const ISOLATED_PARSER_SOURCE = `
   process.exitCode = 1;
 });
 `;
-const ISOLATED_TYPESCRIPT_XLSX_SOURCE = `
+const ISOLATED_TYPESCRIPT_STAGE_SOURCE = `
 (async () => {
   const { readFileSync } = require('node:fs');
   const ts = require('typescript');
@@ -61,8 +57,9 @@ const ISOLATED_TYPESCRIPT_XLSX_SOURCE = `
     }).outputText, filename);
   };
   const modulePath = process.argv[1];
-  const maxInput = Number(process.argv[2]);
-  const maxOutput = Number(process.argv[3]);
+  const stage = process.argv[2];
+  const maxInput = Number(process.argv[3]);
+  const maxOutput = Number(process.argv[4]);
   const chunks = [];
   let size = 0;
   for await (const chunk of process.stdin) {
@@ -71,7 +68,10 @@ const ISOLATED_TYPESCRIPT_XLSX_SOURCE = `
     chunks.push(chunk);
   }
   const parser = require(modulePath);
-  const serialized = JSON.stringify(await parser.parseStructuredXlsxResult(Buffer.concat(chunks, size)));
+  const parse = stage === 'pdf' ? parser.parseStructuredPdfResult
+    : stage === 'xlsx' ? parser.parseStructuredXlsxResult : undefined;
+  if (typeof parse !== 'function') throw new Error('unsupported structured parser stage');
+  const serialized = JSON.stringify(await parse(Buffer.concat(chunks, size)));
   if (Buffer.byteLength(serialized) > maxOutput) throw new Error('xlsx parser output too large');
   process.stdout.write(serialized);
 })().catch((error) => {
@@ -388,7 +388,7 @@ export async function parseStructuredXlsxResult(content: Buffer): Promise<Parser
   });
 }
 
-function parseBinaryIsolated(kind: 'pdf' | 'docx', content: Buffer): Promise<string> {
+function parseBinaryIsolated(kind: 'docx', content: Buffer): Promise<string> {
   return new Promise((resolve, reject) => {
     const child = spawn(process.execPath, ['--max-old-space-size=256', '-e', ISOLATED_PARSER_SOURCE, kind], {
       stdio: ['pipe', 'pipe', 'pipe'],
@@ -466,18 +466,22 @@ export async function runTesseractOcr(
   });
 }
 
-function parseXlsxIsolated(content: Buffer): Promise<ParserStageResult> {
+function parseStructuredStageIsolated(kind: 'pdf' | 'xlsx', content: Buffer): Promise<ParserStageResult> {
   return new Promise((resolve, reject) => {
-    const childArguments = extname(__filename) === '.ts'
+    const modulePath = kind === 'pdf'
+      ? join(__dirname, 'parsers', `native-pdf-text-items${extname(__filename)}`)
+      : __filename;
+    const childArguments = extname(modulePath) === '.ts'
       ? [
         '--max-old-space-size=256',
         '-e',
-        ISOLATED_TYPESCRIPT_XLSX_SOURCE,
-        __filename,
+        ISOLATED_TYPESCRIPT_STAGE_SOURCE,
+        modulePath,
+        kind,
         String(MAX_PARSER_INPUT),
         String(PARSER_JOB_RESPONSE_MAX_BYTES),
       ]
-      : ['--max-old-space-size=256', __filename, '--xlsx-stage-child'];
+      : ['--max-old-space-size=256', modulePath, `--${kind}-stage-child`];
     const child = spawn(process.execPath, childArguments, {
       stdio: ['pipe', 'pipe', 'pipe'],
     });
@@ -492,25 +496,25 @@ function parseXlsxIsolated(content: Buffer): Promise<ParserStageResult> {
       if (child.exitCode === null) child.kill('SIGKILL');
       if (error) reject(error);
       else if (value) resolve(value);
-      else reject(new Error('xlsx parser result missing'));
+      else reject(new Error(`${kind} parser result missing`));
     };
-    const timer = setTimeout(() => finish(new Error('xlsx parser timeout')), PARSER_TIMEOUT_MS);
+    const timer = setTimeout(() => finish(new Error(`${kind} parser timeout`)), PARSER_TIMEOUT_MS);
     child.stdout.on('data', (chunk: Buffer) => {
       size += chunk.length;
-      if (size > PARSER_JOB_RESPONSE_MAX_BYTES) finish(new Error('xlsx parser output too large'));
+      if (size > PARSER_JOB_RESPONSE_MAX_BYTES) finish(new Error(`${kind} parser output too large`));
       else chunks.push(chunk);
     });
     child.stderr.on('data', (chunk: Buffer) => { if (failure.length < 1024) failure += chunk.toString('utf8', 0, 1024 - failure.length); });
     child.once('error', (error) => finish(error));
     child.once('close', (code) => {
       if (code !== 0) {
-        finish(new Error(failure || `xlsx parser exited ${code}`));
+        finish(new Error(failure || `${kind} parser exited ${code}`));
         return;
       }
       try {
         finish(undefined, parseParserStageResult(JSON.parse(Buffer.concat(chunks, size).toString('utf8'))));
       } catch {
-        finish(new Error('xlsx parser returned an invalid V2 stage result'));
+        finish(new Error(`${kind} parser returned an invalid V2 stage result`));
       }
     });
     child.stdin.once('error', (error) => finish(error));
@@ -518,7 +522,7 @@ function parseXlsxIsolated(content: Buffer): Promise<ParserStageResult> {
   });
 }
 
-async function runXlsxStageChild(): Promise<void> {
+async function runStructuredXlsxStageChild(): Promise<void> {
   const chunks: Buffer[] = [];
   let size = 0;
   for await (const chunk of process.stdin) {
@@ -526,17 +530,18 @@ async function runXlsxStageChild(): Promise<void> {
     if (size > MAX_PARSER_INPUT) throw new XlsxParsingLimitError();
     chunks.push(Buffer.from(chunk));
   }
-  const serialized = JSON.stringify(await parseStructuredXlsxResult(Buffer.concat(chunks, size)));
+  const content = Buffer.concat(chunks, size);
+  const serialized = JSON.stringify(await parseStructuredXlsxResult(content));
   if (Buffer.byteLength(serialized) > PARSER_JOB_RESPONSE_MAX_BYTES) throw new XlsxParsingLimitError();
   process.stdout.write(serialized);
 }
 
 export function createDefaultIngestionAdapters(): IngestionAdapters {
   return {
-    pdf: (content) => parseBinaryIsolated('pdf', content),
+    pdf: (content) => parseStructuredStageIsolated('pdf', content),
     docx: (content) => parseBinaryIsolated('docx', content),
     image: runTesseractOcr,
-    xlsx: parseXlsxIsolated,
+    xlsx: (content) => parseStructuredStageIsolated('xlsx', content),
   };
 }
 
@@ -573,7 +578,7 @@ export function parseIngestion(filename: string, content: Buffer): ParsedIngesti
 export async function parseIngestionWithAdapters(
   filename: string,
   content: Buffer,
-  adapters: IngestionAdapters,
+  adapters: LegacyIngestionAdapters,
 ): Promise<ParsedIngestion> {
   if (content.byteLength > MAX_PARSER_INPUT) {
     return { status: 'needs_review', format: extname(filename).slice(1).toLowerCase() || 'unknown', reason: 'parser-input-too-large' };
@@ -587,12 +592,17 @@ export async function parseIngestionWithAdapters(
         ? adapters.image
         : undefined;
   if (!adapter) return parseIngestion(filename, content);
-  let text: string;
+  let parsed: string | ParserStageResult;
   try {
-    text = await adapter(content);
+    parsed = await adapter(content);
   } catch {
     return { status: 'needs_review', format: extension.slice(1), reason: 'parser-failed' };
   }
+  const text = typeof parsed === 'string'
+    ? parsed
+    : parseParserStageResult(parsed).pages
+      .flatMap(({ blocks }) => blocks.flatMap(({ text: blockText }) => blockText === undefined ? [] : [blockText]))
+      .join('\n');
   const meaningfulText = text
     .replace(/-- \d+ of \d+ --/gu, '')
     .replace(/[\p{C}\p{Z}]/gu, '');
@@ -603,7 +613,7 @@ export async function parseIngestionWithAdapters(
 }
 
 if (require.main === module && process.argv[2] === '--xlsx-stage-child') {
-  void runXlsxStageChild().catch((error) => {
+  void runStructuredXlsxStageChild().catch((error) => {
     process.stderr.write(error instanceof Error ? error.message : 'xlsx parser failed');
     process.exitCode = 1;
   });

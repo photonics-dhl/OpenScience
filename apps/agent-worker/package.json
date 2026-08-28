@@ -5,10 +5,11 @@
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "scripts": {
-    "build": "tsc -p tsconfig.json",
+    "build": "tsc -p tsconfig.json && pnpm run test:parser-compiled",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "test": "vitest run",
+    "test": "vitest run --exclude test/parser-compiled-composition.test.mjs",
     "test:research-intelligence": "vitest run research-intelligence-corpus.test.ts",
+    "test:parser-compiled": "node --test test/parser-compiled-composition.test.mjs",
     "export:parser-evaluation-corpus": "vitest run parser-evaluation-corpus-export.test.ts",
     "selftest:document-contract": "node dist/parsers/contract-self-test.js"
   },

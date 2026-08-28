@@ -30,7 +30,7 @@ import { reviewAnalyzeHandler } from './reviewer';
 import { visualizationPlanHandler } from './planner';
 import { workspaceGuideHandler } from './workspace-guide';
 import { createClamAvScanner, type MalwareScanner } from './clamav';
-import { createParserStageJobClient, TRANSITION_PARSER_METADATA } from './parser-job-isolation';
+import { createParserStageJobClient, expectedSidecarParserMetadata } from './parser-job-isolation';
 import { runParserCascadeSelfTest } from './parser-self-test';
 import { authorizeSearchIndexJob, createSearchIndexer, type SearchIndexer } from './search-indexer';
 import {
@@ -38,7 +38,6 @@ import {
   type ParserCascadeFeatureFlags,
 } from './parsers/cascade-orchestrator';
 import { createTextExtractor, type TextStageAdapter } from './parsers/text-extractor';
-import { PDF_PAGE_INVENTORY_METADATA, TESSERACT_METADATA } from './parsers/ocr-parser';
 import type { ParserInput } from './parsers/types';
 
 const BGE_M3_REVISION = '5617a9f61b028005a4858fdac845db406aefb181';
@@ -394,13 +393,7 @@ async function main(): Promise<void> {
     createPrismaAuditSink(prisma),
     externalProcessingPolicy,
   );
-  const parserJobAdapter = createParserStageJobClient(parserJobDir, (request) => (
-    request.operation === 'inventory_pages'
-      ? PDF_PAGE_INVENTORY_METADATA
-      : request.operation === 'render_page' || request.operation === 'ocr_page'
-        ? TESSERACT_METADATA
-        : TRANSITION_PARSER_METADATA
-  ));
+  const parserJobAdapter = createParserStageJobClient(parserJobDir, expectedSidecarParserMetadata);
   const parserCascade = createWorkerParserCascade(gateway, parserJobAdapter);
   const parserSelfTest = await runParserCascadeSelfTest(parserCascade);
   if (!parserSelfTest.pdf.textMatched || !parserSelfTest.docx.textMatched

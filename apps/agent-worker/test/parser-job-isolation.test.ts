@@ -2,7 +2,9 @@ import { createHash } from 'node:crypto';
 import { appendFile, mkdtemp, mkdir, readFile, readdir, rm, symlink, truncate, utimes, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, expectTypeOf, it } from 'vitest';
+
+import type { IngestionAdapters, LegacyIngestionAdapters } from '../src/ingestion-parser';
 
 import {
   createParserStageJobClient,
@@ -56,6 +58,13 @@ function v2Stage(text = 'safe text'): ParserStageResult {
 }
 
 describe('document parser sidecar IPC', () => {
+  it('separates native PDF sidecar adapters from the legacy string ingestion seam', () => {
+    expectTypeOf<Awaited<ReturnType<NonNullable<IngestionAdapters['pdf']>>>>()
+      .toEqualTypeOf<ParserStageResult>();
+    expectTypeOf<Awaited<ReturnType<NonNullable<LegacyIngestionAdapters['pdf']>>>>()
+      .toEqualTypeOf<string | ParserStageResult>();
+  });
+
   it('keeps PDF inventory, selected rendering, and Tesseract word boxes inside the V2 sidecar processor', async () => {
     const content = Buffer.from('%PDF image-only');
     const png = Buffer.alloc(24);
@@ -155,10 +164,10 @@ describe('document parser sidecar IPC', () => {
     }
   });
 
-  it('serves V2 extract_text through the provider-neutral transition processor', async () => {
-    const content = Buffer.from('%PDF transition fixture');
+  it('serves legacy DOCX extract_text through the provider-neutral transition processor', async () => {
+    const content = Buffer.from('PK\\x03\\x04 transition fixture');
     const processor = createTransitionParserStageProcessor({
-      pdf: async (actualContent) => {
+      docx: async (actualContent) => {
         expect(actualContent).toEqual(content);
         return 'Transition text with no provider payload.';
       },
@@ -166,6 +175,7 @@ describe('document parser sidecar IPC', () => {
 
     await expect(processor(v2Request(content, {
       operation: 'extract_text',
+      mediaType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
       options: {},
     }), content)).resolves.toEqual({
       schemaVersion: 2,
@@ -184,12 +194,24 @@ describe('document parser sidecar IPC', () => {
     });
   });
 
+  it('rejects an untyped legacy string PDF adapter instead of emitting mismatched metadata', async () => {
+    const content = Buffer.from('%PDF legacy fixture');
+    const processor = createTransitionParserStageProcessor({
+      pdf: (async () => 'synthetic PDF text') as unknown as NonNullable<IngestionAdapters['pdf']>,
+    });
+
+    await expect(processor(v2Request(content, {
+      operation: 'extract_text',
+      options: {},
+    }), content)).rejects.toThrow(SafeParserErrorCode.PARSER_FAILED);
+  });
+
   it('fails unsupported V2 transition operations without invoking a legacy adapter', async () => {
     let invoked = false;
     const processor = createTransitionParserStageProcessor({
       pdf: async () => {
         invoked = true;
-        return 'not allowed';
+        return v2Stage();
       },
     });
     const content = Buffer.from('%PDF layout fixture');

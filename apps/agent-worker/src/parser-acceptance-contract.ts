@@ -5,6 +5,8 @@ import { basename, dirname, join, relative, resolve } from 'node:path';
 
 import type { DocumentSourceMap } from '@openscience/domain';
 
+import { PDF_TEXT_ITEM_METADATA } from './parsers/native-pdf-contract';
+
 export const CANONICAL_CORPUS_MANIFEST_SHA256 = '34b46c5405c7d2114183cfb8e3b938a392ddf1e43941fed0818f7a3ab3b7fae6';
 
 export interface AcceptanceLocator extends Record<string, unknown> { kind: string }
@@ -22,7 +24,6 @@ const SCANNED_PDF_HASH = 'b327e6fece61a3e5bd52842250c51012b7672d81ff3dd4f11107b0
 const MARKDOWN_TABLE_HASH = '66f861e5049bd0e33e68ae11aec6965928853e0c95c7a4c88a7f99c1f7497406';
 const CSV_TABLE_HASH = 'e71f6e5c40db4f3e257ee99961e81b899c817a7b00ed2e03b9c055d537aefa20';
 const XLSX_TABLE_HASH = 'c371bc99687ba51d51d4081f2ae09274f1a52b95839c543870008d9fc34f4b1f';
-
 function sameCoordinate(left: number, right: number): boolean {
   return Math.abs(left - right) <= Number.EPSILON * Math.max(1, Math.abs(left), Math.abs(right)) * 16;
 }
@@ -43,7 +44,13 @@ function isVirtualBlock(block: DocumentSourceMap['pages'][number]['blocks'][numb
 function hasPhysicalGeometryProvenance(
   block: DocumentSourceMap['pages'][number]['blocks'][number],
 ): boolean {
-  return block.transformations.some(({ stage }) => stage === 'detect_layout' || stage === 'ocr');
+  const nativeTextItems = block.parser.name === PDF_TEXT_ITEM_METADATA.name
+    && block.parser.version === PDF_TEXT_ITEM_METADATA.version
+    && block.transformations.some(({ stage, processor }) => stage === 'extract_text'
+      && processor.name === PDF_TEXT_ITEM_METADATA.name
+      && processor.version === PDF_TEXT_ITEM_METADATA.version);
+  return nativeTextItems
+    || block.transformations.some(({ stage }) => stage === 'detect_layout' || stage === 'ocr');
 }
 
 function meaningfullyMatchesPhysicalRegion(

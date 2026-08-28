@@ -20,6 +20,11 @@ import {
 import { PDF_PAGE_INVENTORY_METADATA, TESSERACT_METADATA } from '../src/parsers/ocr-parser';
 import { RESEARCH_INTELLIGENCE_CORPUS } from './support/research-intelligence-corpus';
 
+const NATIVE_PDF_TEXT_ITEM_METADATA = Object.freeze({
+  name: 'pdf-parse-pdfjs-text-items',
+  version: '2.4.5+pdfjs-dist.5.4.296',
+});
+
 function serializedSidecarAdapter() {
   const sidecar = createSidecarParserStageProcessor(createDefaultIngestionAdapters());
   return async (requestValue: ParserJobRequestV2, content: Buffer): Promise<ParserStageResult> => {
@@ -31,7 +36,10 @@ function serializedSidecarAdapter() {
       contentHash: request.contentHash,
       result: await sidecar(request, content),
     });
-    const response = deserializeParserJobResponseV2(serialized, request, TRANSITION_PARSER_METADATA);
+    const expectedParser = request.operation === 'extract_text' && request.mediaType === 'application/pdf'
+      ? NATIVE_PDF_TEXT_ITEM_METADATA
+      : TRANSITION_PARSER_METADATA;
+    const response = deserializeParserJobResponseV2(serialized, request, expectedParser);
     if (!response.ok) throw new Error(response.errorCode);
     return response.result;
   };
@@ -125,8 +133,9 @@ describe('parseIngestion', () => {
       externalProcessingEligible: false,
     });
 
-    expect(result.status).toBe('succeeded');
-    if (result.status !== 'succeeded') return;
+    expect(result.status).toBe('needs_review');
+    if (result.status !== 'needs_review') return;
+    expect(result.reasons).toEqual(['structured-xlsx-review-required']);
     expect(result.sourceMap.pages).toHaveLength(1);
     expect(result.sourceMap.pages[0]?.blocks.map(({ text, boundingBox }) => ({ text, boundingBox }))).toEqual([
       { text: 'Evidence', boundingBox: { x: 0, y: 0, width: 1000, height: 24 } },
@@ -202,8 +211,9 @@ describe('parseIngestion', () => {
         externalProcessingEligible: false,
       });
 
-      expect(result.status).toBe('succeeded');
-      if (result.status !== 'succeeded') return;
+      expect(result.status).toBe('needs_review');
+      if (result.status !== 'needs_review') return;
+      expect(result.reasons).toEqual(['structured-xlsx-review-required']);
       expect(result.sourceMap.pages[0]?.blocks.at(-1)?.boundingBox).toEqual({
         x: (columnCount - 1) * width,
         y: 24,
@@ -212,6 +222,62 @@ describe('parseIngestion', () => {
       });
     },
   );
+
+  it.each([
+    'dual-column-pdf-en',
+    'table-pdf-en',
+    'formula-pdf-en',
+    'references-pdf-en',
+  ])('uses genuine canonical PDF text-item geometry in the production V2 composition for %s', async (caseId) => {
+    const fixture = RESEARCH_INTELLIGENCE_CORPUS.find(({ id }) => id === caseId);
+    expect(fixture).toBeDefined();
+    if (!fixture) return;
+    const artifactId = `artifact-${fixture.id}`;
+    const contentHash = createHash('sha256').update(fixture.content).digest('hex');
+    const cascade = createWorkerParserCascade({ ocr: vi.fn() } as never, serializedSidecarAdapter());
+
+    const result = await cascade({
+      artifactId,
+      contentHash,
+      content: fixture.content,
+      mediaType: 'application/pdf',
+    }, {
+      trustedAuthorizationContext: { taskId: 'task-pdf', workspaceId: 'workspace-1', actorId: 'actor-1' },
+      externalProcessingEligible: false,
+    });
+
+    expect(cascade.featureFlags).toEqual({
+      detectLayout: false, grobid: false, localOcr: true, llmOcr: false,
+    });
+    expect(['succeeded', 'needs_review']).toContain(result.status);
+    if (result.status === 'blocked' || result.status === 'failed') return;
+    expect(result.sourceMap).toMatchObject({ artifactId, contentHash });
+    expect(result.sourceMap.pages.map(({ page }) => page)).toEqual([1]);
+    expect(result.sourceMap.pages[0]).toMatchObject({ width: 612, height: 792 });
+    const blocks = result.sourceMap.pages.flatMap(({ blocks: pageBlocks }) => pageBlocks)
+      .filter(({ parser }) => parser.name === NATIVE_PDF_TEXT_ITEM_METADATA.name);
+    expect(blocks.length).toBeGreaterThan(0);
+    for (const block of blocks) {
+      const page = result.sourceMap.pages.find(({ page: pageNumber }) => pageNumber === 1)!;
+      expect(block.parser).toEqual(NATIVE_PDF_TEXT_ITEM_METADATA);
+      expect(block.transformations).toContainEqual({
+        stage: 'extract_text', processor: NATIVE_PDF_TEXT_ITEM_METADATA,
+      });
+      expect(block.transformations.some(({ stage }) => stage === 'detect_layout')).toBe(false);
+      expect([block.boundingBox.x, block.boundingBox.y, block.boundingBox.width, block.boundingBox.height]
+        .every(Number.isFinite)).toBe(true);
+      expect(block.boundingBox.x).toBeGreaterThanOrEqual(0);
+      expect(block.boundingBox.y).toBeGreaterThanOrEqual(0);
+      expect(block.boundingBox.width).toBeGreaterThan(0);
+      expect(block.boundingBox.height).toBeGreaterThan(0);
+      expect(block.boundingBox.x + block.boundingBox.width).toBeLessThanOrEqual(page.width);
+      expect(block.boundingBox.y + block.boundingBox.height).toBeLessThanOrEqual(page.height);
+    }
+    const identity = { artifactId, contentHash };
+    for (const locator of fixture.expectedLocators) {
+      expect(reproduceAcceptanceLocator(result.sourceMap, locator, identity), JSON.stringify(locator)).toBe(true);
+    }
+  });
 
   it('rejects transition-parser physical locators for wrong-column and synthetic full-width blocks', async () => {
     const quote = 'Left claim: reproducible pulse.';

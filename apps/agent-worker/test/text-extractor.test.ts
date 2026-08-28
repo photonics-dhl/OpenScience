@@ -110,7 +110,8 @@ describe('deterministic text DocumentParser', () => {
     });
 
     await expect(executeDocumentParser(parser, parserInput)).resolves.toMatchObject({
-      status: 'succeeded',
+      status: 'needs_review',
+      reasons: ['structured-xlsx-review-required'],
       sourceMap: { pages: [{ blocks: [{ text: 'isolated workbook value' }] }] },
     });
   });
@@ -183,8 +184,9 @@ describe('deterministic text DocumentParser', () => {
     const parserInput = input(XLSX_FIXTURE, 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
     const result = await executeDocumentParser(createTextExtractor({}), parserInput);
 
-    expect(result.status).toBe('succeeded');
-    if (result.status !== 'succeeded') return;
+    expect(result.status).toBe('needs_review');
+    if (result.status !== 'needs_review') return;
+    expect(result.reasons).toEqual(['structured-xlsx-review-required']);
     expect(result.sourceMap.pages).toHaveLength(2);
     expect(result.sourceMap.pages.map((page) => page.blocks.map((block) => block.text))).toEqual([
       ['Alpha', 'Header', 'Quoted, cell', 'second row'],
