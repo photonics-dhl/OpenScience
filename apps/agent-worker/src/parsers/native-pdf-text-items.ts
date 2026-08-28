@@ -90,22 +90,28 @@ function textItemBoundingBox(item: PdfTextItem, viewport: PdfViewport) {
     [transform[4]! + block.x, transform[5]! + block.y],
     [transform[4]! + inline.x + block.x, transform[5]! + inline.y + block.y],
   ];
-  const rawLeft = Math.min(...corners.map(([x]) => x!));
-  const rawRight = Math.max(...corners.map(([x]) => x!));
-  const rawTop = Math.min(...corners.map(([, y]) => y!));
-  const rawBottom = Math.max(...corners.map(([, y]) => y!));
-  const rawY = viewport.height - rawBottom;
-  const tolerance = Number.EPSILON * Math.max(viewport.width, viewport.height, rawRight, rawBottom) * 64;
-  if (rawLeft < -tolerance || rawY < -tolerance
-    || rawRight - viewport.width > tolerance || rawBottom - viewport.height > tolerance) {
+  const minX = Math.min(...corners.map(([x]) => x!));
+  const maxX = Math.max(...corners.map(([x]) => x!));
+  const minY = Math.min(...corners.map(([, y]) => y!));
+  const maxY = Math.max(...corners.map(([, y]) => y!));
+  const tolerance = Number.EPSILON * Math.max(
+    viewport.width,
+    viewport.height,
+    Math.abs(minX),
+    Math.abs(maxX),
+    Math.abs(minY),
+    Math.abs(maxY),
+  ) * 64;
+  if (minX < -tolerance || minY < -tolerance
+    || maxX - viewport.width > tolerance || maxY - viewport.height > tolerance) {
     throw new Error('PDF text geometry outside page');
   }
-  const x = Math.max(0, rawLeft);
-  const y = Math.max(0, rawY);
-  const right = Math.min(viewport.width, rawRight);
-  const top = Math.min(viewport.height, viewport.height - rawTop);
+  const x = Math.max(0, minX);
+  const y = Math.max(0, minY);
+  const right = Math.min(viewport.width, maxX);
+  const bottom = Math.min(viewport.height, maxY);
   const width = right - x;
-  const height = top - y;
+  const height = bottom - y;
   if (![x, y, width, height].every(Number.isFinite) || width <= 0 || height <= 0) {
     throw new Error('invalid PDF text geometry');
   }
