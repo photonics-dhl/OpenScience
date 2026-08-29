@@ -2,10 +2,18 @@ import assert from 'node:assert/strict';
 import { Buffer } from 'node:buffer';
 import { spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { existsSync, readFileSync } from 'node:fs';
+import {
+  copyFileSync,
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+} from 'node:fs';
 import { createRequire } from 'node:module';
-import { dirname, extname, relative, resolve, sep } from 'node:path';
+import { dirname, extname, join, relative, resolve, sep } from 'node:path';
 import process from 'node:process';
+import { tmpdir } from 'node:os';
 import { test } from 'node:test';
 import { fileURLToPath, URL } from 'node:url';
 
@@ -37,14 +45,27 @@ const NATIVE_PDF_TEXT_ITEM_METADATA = {
 
 const agentWorkerRoot = fileURLToPath(new URL('..', import.meta.url));
 const compiledRoot = resolve(agentWorkerRoot, 'dist');
+const workspaceRoot = resolve(agentWorkerRoot, '../..');
+
+function parserImageCopies() {
+  const dockerfile = readFileSync(new URL('../Dockerfile.parser', import.meta.url), 'utf8');
+  const copies = new Map();
+  const copyPattern = /^COPY(?:\s+--\S+)*\s+(\S+)\s+(\S+)\s*$/gmu;
+  for (const match of dockerfile.matchAll(copyPattern)) {
+    copies.set(match[2].replace(/^\.\//u, ''), match[1]);
+  }
+  return copies;
+}
 
 function parserImageDistAllowlist() {
-  const dockerfile = readFileSync(new URL('../Dockerfile.parser', import.meta.url), 'utf8');
+  const copies = parserImageCopies();
   const copied = new Set();
-  const copyPattern = /^COPY(?:\s+--\S+)*\s+apps\/agent-worker\/dist\/(\S+)\s+\.\/dist\/(\S+)\s*$/gmu;
-  for (const match of dockerfile.matchAll(copyPattern)) {
-    assert.equal(match[1], match[2], 'parser image dist COPY must preserve the compiled relative path');
-    copied.add(resolve(compiledRoot, match[2]));
+  for (const [target, source] of copies) {
+    if (!source.startsWith('apps/agent-worker/dist/')) continue;
+    const sourceRelative = source.slice('apps/agent-worker/dist/'.length);
+    const targetRelative = target.startsWith('dist/') ? target.slice('dist/'.length) : undefined;
+    assert.equal(sourceRelative, targetRelative, 'parser image dist COPY must preserve the compiled relative path');
+    copied.add(resolve(compiledRoot, sourceRelative));
   }
   return copied;
 }
@@ -52,6 +73,7 @@ function parserImageDistAllowlist() {
 function compiledParserRuntimeClosure(entry) {
   const pending = [entry];
   const runtimeFiles = new Set();
+  const workspaceImports = new Set();
   let spawnedModuleCount = 0;
   while (pending.length > 0) {
     const current = pending.pop();
@@ -59,9 +81,13 @@ function compiledParserRuntimeClosure(entry) {
     assert.ok(existsSync(current), `compiled parser runtime file is missing: ${relative(agentWorkerRoot, current)}`);
     runtimeFiles.add(current);
     const source = readFileSync(current, 'utf8');
-    for (const match of source.matchAll(/require\((['"])(\.[^'"]+)\1\)/gu)) {
-      const dependency = resolve(dirname(current), extname(match[2]) ? match[2] : `${match[2]}.js`);
-      pending.push(dependency);
+    for (const match of source.matchAll(/require\((['"])([^'"]+)\1\)/gu)) {
+      if (match[2].startsWith('.')) {
+        const dependency = resolve(dirname(current), extname(match[2]) ? match[2] : `${match[2]}.js`);
+        pending.push(dependency);
+      } else if (match[2].startsWith('@openscience/')) {
+        workspaceImports.add(match[2]);
+      }
     }
     for (const match of source.matchAll(/join\)\(__dirname,\s*['"]([^'"]+)['"],\s*`([^$`]+)\$\{[^`]*extname\)\(__filename\)\}`\)/gu)) {
       spawnedModuleCount += 1;
@@ -69,7 +95,24 @@ function compiledParserRuntimeClosure(entry) {
     }
   }
   assert.ok(spawnedModuleCount > 0, 'compiled parser runtime closure must include its spawned module child');
-  return runtimeFiles;
+  return { runtimeFiles, workspaceImports };
+}
+
+function compiledLeafRuntimeDependencySyntax(source, filename) {
+  const sourceFile = ts.createSourceFile(filename, source, ts.ScriptTarget.ESNext, true, ts.ScriptKind.JS);
+  const findings = new Set();
+  function visit(node) {
+    if (ts.isImportDeclaration(node) || (ts.isExportDeclaration(node) && node.moduleSpecifier !== undefined)) {
+      findings.add('static module edge');
+    }
+    if (node.kind === ts.SyntaxKind.ImportKeyword) findings.add('dynamic import');
+    if (ts.isIdentifier(node) && (node.text === 'require' || node.text === 'createRequire')) {
+      findings.add(node.text);
+    }
+    ts.forEachChild(node, visit);
+  }
+  visit(sourceFile);
+  return [...findings].sort();
 }
 
 function buildPdf(objects) {
@@ -129,12 +172,59 @@ function assertBoxApproximately(actual, expected) {
 
 test('parser image allowlist contains the compiled entrypoint runtime closure and spawned children', () => {
   const allowlist = parserImageDistAllowlist();
-  const runtimeFiles = compiledParserRuntimeClosure(resolve(compiledRoot, 'parser-service.js'));
+  const { runtimeFiles } = compiledParserRuntimeClosure(resolve(compiledRoot, 'parser-service.js'));
   const missing = [...runtimeFiles]
     .filter((runtimeFile) => !allowlist.has(runtimeFile))
     .map((runtimeFile) => relative(agentWorkerRoot, runtimeFile).split(sep).join('/'))
     .sort();
   assert.deepEqual(missing, []);
+});
+
+test('parser image explicitly packages every workspace import as an isolated zero-dependency leaf', () => {
+  const copies = parserImageCopies();
+  const { workspaceImports } = compiledParserRuntimeClosure(resolve(compiledRoot, 'parser-service.js'));
+  assert.ok(workspaceImports.size > 0, 'parser runtime must exercise its workspace leaf packaging contract');
+
+  const sandbox = mkdtempSync(join(tmpdir(), 'openscience-parser-runtime-'));
+  try {
+    for (const request of workspaceImports) {
+      const segments = request.split('/');
+      const packageName = segments.slice(0, 2).join('/');
+      const exportName = segments.length === 2 ? '.' : `./${segments.slice(2).join('/')}`;
+      const packageTarget = `node_modules/${packageName}/package.json`;
+      const packageSource = copies.get(packageTarget);
+      assert.ok(packageSource, `${request} requires an explicit parser-image package.json COPY`);
+
+      const packageJson = JSON.parse(readFileSync(resolve(workspaceRoot, packageSource), 'utf8'));
+      const exportEntry = packageJson.exports?.[exportName];
+      const exportTarget = typeof exportEntry === 'string' ? exportEntry : exportEntry?.default;
+      assert.equal(typeof exportTarget, 'string', `${request} must be a declared runtime package export`);
+      const moduleTarget = `node_modules/${packageName}/${exportTarget.replace(/^\.\//u, '')}`;
+      const moduleSource = copies.get(moduleTarget);
+      assert.ok(moduleSource, `${request} requires an explicit parser-image compiled leaf COPY`);
+
+      const compiledLeaf = readFileSync(resolve(workspaceRoot, moduleSource), 'utf8');
+      assert.deepEqual(
+        compiledLeafRuntimeDependencySyntax(compiledLeaf, moduleSource),
+        [],
+        `${request} parser-image leaf must have zero runtime dependencies`,
+      );
+
+      for (const [target, source] of [[packageTarget, packageSource], [moduleTarget, moduleSource]]) {
+        const isolatedTarget = resolve(sandbox, target);
+        mkdirSync(dirname(isolatedTarget), { recursive: true });
+        copyFileSync(resolve(workspaceRoot, source), isolatedTarget);
+      }
+      const probe = spawnSync(process.execPath, ['-e', `require(${JSON.stringify(request)})`], {
+        cwd: sandbox,
+        encoding: 'utf8',
+        env: { ...process.env, NODE_PATH: '' },
+      });
+      assert.equal(probe.status, 0, `${request} must load without monorepo node_modules:\n${probe.stderr}`);
+    }
+  } finally {
+    rmSync(sandbox, { recursive: true, force: true });
+  }
 });
 
 test('native PDF geometry keeps asymmetric top and bottom text in PDF.js viewport coordinates', async () => {

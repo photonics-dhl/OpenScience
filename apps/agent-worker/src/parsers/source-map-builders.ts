@@ -1,10 +1,12 @@
 import {
-  VIRTUAL_LINE_HEIGHT,
-  VIRTUAL_PAGE_METADATA,
-  VIRTUAL_PAGE_WIDTH,
   type DocumentBlockKind,
   type DocumentParserMetadata,
 } from '@openscience/domain';
+import {
+  VIRTUAL_LINE_HEIGHT,
+  VIRTUAL_PAGE_METADATA,
+  VIRTUAL_PAGE_WIDTH,
+} from '@openscience/domain/virtual-page';
 import type { StagePage } from './job-protocol';
 import type { SourceMapBlockDraft, SourceMapPageDraft } from './source-map-merge';
 

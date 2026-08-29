@@ -6,6 +6,10 @@
   "types": "dist/index.d.ts",
   "exports": {
     ".": { "types": "./dist/index.d.ts", "default": "./dist/index.js" },
+    "./virtual-page": {
+      "types": "./dist/research-intelligence/virtual-page.d.ts",
+      "default": "./dist/research-intelligence/virtual-page.js"
+    },
     "./test-helpers": { "types": "./test/helpers/fakes.ts", "default": "./test/helpers/fakes.ts" }
   },
   "scripts": {

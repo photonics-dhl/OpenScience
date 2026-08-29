@@ -1,7 +1,7 @@
 import { extname, join } from 'node:path';
 import { spawn } from 'node:child_process';
 import { createRequire } from 'node:module';
-import { VIRTUAL_LINE_HEIGHT, VIRTUAL_PAGE_WIDTH } from '@openscience/domain';
+import { VIRTUAL_LINE_HEIGHT, VIRTUAL_PAGE_WIDTH } from '@openscience/domain/virtual-page';
 import {
   PARSER_JOB_RESPONSE_MAX_BYTES,
   parseParserStageResult,

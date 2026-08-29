@@ -21,6 +21,8 @@ COPY --chown=node:node apps/agent-worker/dist/parsers/native-pdf-contract.js ./d
 COPY --chown=node:node apps/agent-worker/dist/parsers/native-pdf-text-items.js ./dist/parsers/native-pdf-text-items.js
 COPY --chown=node:node apps/agent-worker/dist/parser-job-isolation.js ./dist/parser-job-isolation.js
 COPY --chown=node:node apps/agent-worker/dist/parser-service.js ./dist/parser-service.js
+COPY --chown=node:node packages/domain/package.json ./node_modules/@openscience/domain/package.json
+COPY --chown=node:node packages/domain/dist/research-intelligence/virtual-page.js ./node_modules/@openscience/domain/dist/research-intelligence/virtual-page.js
 
 USER node
 CMD ["node", "dist/parser-service.js"]

@@ -54,9 +54,9 @@ function stageResult(overrides: Partial<ParserStageResult> = {}): ParserStageRes
 }
 
 describe('parser job protocol v2', () => {
-  it('packages every compiled V2 runtime module without adding the Domain runtime', () => {
+  it('packages every compiled V2 runtime module without coupling the protocol to the Domain root', () => {
     expect(parserDockerfile).toMatch(/dist\/parsers\/job-protocol\.js/);
-    expect(parserDockerfile).not.toMatch(/@openscience\/domain/);
+    expect(parserDockerfile).not.toMatch(/packages\/domain\/dist\/index\.(?:js|d\.ts)/);
     expect(protocolSource).not.toMatch(/@openscience\/domain/);
   });
   it('serializes an exact canonical request snapshot', () => {
