@@ -570,6 +570,32 @@ describe('deterministic text DocumentParser', () => {
     expect(result).toMatchObject({ status: 'needs_review', reasons: ['parser-failed'], sourceMap: { pages: [] } });
   });
 
+  it.each([
+    ['heading only', false, undefined, 'needs_review'],
+    ['blank table cell', true, '\u200b', 'needs_review'],
+    ['undefined table cell', true, undefined, 'blocked'],
+  ])('fails closed when the isolated XLSX stage contains %s', async (_label, includeTable, text, expectedStatus) => {
+    const parserInput = input(Buffer.from(`incomplete-xlsx-${_label}`), 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    const tableBlock = {
+      kind: 'table' as const,
+      ...(text === undefined ? {} : { text }),
+      boundingBox: { x: 0, y: 24, width: 1000, height: 24 },
+    };
+    const result = await executeDocumentParser(createTextExtractor({
+      xlsx: async () => stage({
+        pages: [{ page: 1, width: 1000, height: 48, blocks: [
+          { kind: 'heading', text: 'Evidence', boundingBox: { x: 0, y: 0, width: 1000, height: 24 } },
+          ...(includeTable ? [tableBlock] : []),
+        ] }],
+      }),
+    }), parserInput);
+
+    expect(result.status).toBe(expectedStatus);
+    if (result.status === 'needs_review') {
+      expect(result).toMatchObject({ reasons: ['parser-failed'], sourceMap: { pages: [] } });
+    }
+  });
+
   it('fails closed when the isolated XLSX stage has duplicate row-zero sheet headings', async () => {
     const parserInput = input(Buffer.from('duplicate-sheet-headings'), 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
     const result = await executeDocumentParser(createTextExtractor({

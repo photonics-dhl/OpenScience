@@ -430,6 +430,7 @@ function assertStructuredTableSourceMap(sourceMap: DocumentSourceMap, kind: 'csv
       && processor.version === VIRTUAL_PAGE_METADATA.version)
   );
   let tableCells = 0;
+  let meaningfulTableCells = 0;
   let firstEvidence: TableCellEvidence | undefined;
   let lastEvidence: TableCellEvidence | undefined;
   for (const page of sourceMap.pages) {
@@ -448,6 +449,7 @@ function assertStructuredTableSourceMap(sourceMap: DocumentSourceMap, kind: 'csv
     }
     for (const block of page.blocks.filter(({ kind: blockKind }) => blockKind === 'table')) {
       tableCells += 1;
+      if (block.text !== undefined && meaningful(block.text)) meaningfulTableCells += 1;
       const rawVirtualRow = block.boundingBox.y / VIRTUAL_LINE_HEIGHT + 1;
       const rawColumnCount = VIRTUAL_PAGE_WIDTH / block.boundingBox.width;
       const rawColumn = block.boundingBox.x / block.boundingBox.width + 1;
@@ -475,6 +477,7 @@ function assertStructuredTableSourceMap(sourceMap: DocumentSourceMap, kind: 'csv
     }
   }
   if (tableCells === 0) throw new Error('structured table source map contains no cells');
+  if (meaningfulTableCells === 0) throw new Error('structured table source map contains no meaningful cells');
   const formalEvidence = firstEvidence?.blockId === lastEvidence?.blockId
     ? [firstEvidence]
     : [firstEvidence, lastEvidence];
