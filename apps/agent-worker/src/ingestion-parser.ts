@@ -88,6 +88,8 @@ const MAX_SHARED_STRINGS = 100_000;
 const MAX_XLSX_CELLS = 9_900;
 const MAX_XLSX_BLOCKS = 10_000;
 const MAX_XML_ENTITIES = 100_000;
+const MAX_XML_NODES = 200_000;
+const MAX_XML_NAMESPACE_DECLARATIONS = 4_096;
 const MAX_XLSX_COLUMN = 16_384;
 const MAX_XLSX_ROW = 1_048_576;
 const XLSX_TRANSITION_PARSER_METADATA = Object.freeze({ name: 'v1-text-transition', version: '2.0.0' });
@@ -227,9 +229,13 @@ interface XmlNode {
   namespaceUri: string | undefined;
   attributes: ReadonlyMap<string, string>;
   attributeNamespaces: ReadonlyMap<string, string | undefined>;
-  namespaceBindings: ReadonlyMap<string, string>;
   children: XmlNode[];
   text: string;
+}
+
+interface XmlParseFrame {
+  node: XmlNode;
+  pushedPrefixes: string[];
 }
 
 const XML_NAME = /^(?:[A-Za-z_][\w.-]*:)?[A-Za-z_][\w.-]*$/u;
@@ -292,31 +298,55 @@ function xmlPrefix(name: string): string | undefined {
   return separator === -1 ? undefined : name.slice(0, separator);
 }
 
-function namespaceBindingsFor(
-  parent: ReadonlyMap<string, string> | undefined,
+function pushNamespaceDeclarations(
   attributes: ReadonlyMap<string, string>,
-): Map<string, string> {
-  const bindings = new Map(parent ?? [['xml', XML_NAMESPACE]]);
+  namespaceStacks: Map<string, string[]>,
+  declarationCount: number,
+): { pushedPrefixes: string[]; declarationCount: number } {
+  let additions = 0;
   for (const [name, value] of attributes) {
     if (name !== 'xmlns' && !name.startsWith('xmlns:')) continue;
+    additions += 1;
     const prefix = name === 'xmlns' ? '' : name.slice('xmlns:'.length);
     if ((name !== 'xmlns' && !prefix) || prefix === 'xmlns'
       || (prefix === 'xml' && value !== XML_NAMESPACE) || !value) {
       throw new Error('invalid XML namespace binding');
     }
-    bindings.set(prefix, value);
   }
-  return bindings;
+  if (declarationCount + additions > MAX_XML_NAMESPACE_DECLARATIONS) throw new XlsxParsingLimitError();
+  const pushedPrefixes: string[] = [];
+  for (const [name, value] of attributes) {
+    if (name !== 'xmlns' && !name.startsWith('xmlns:')) continue;
+    const prefix = name === 'xmlns' ? '' : name.slice('xmlns:'.length);
+    const values = namespaceStacks.get(prefix) ?? [];
+    values.push(value);
+    namespaceStacks.set(prefix, values);
+    pushedPrefixes.push(prefix);
+  }
+  return { pushedPrefixes, declarationCount: declarationCount + additions };
+}
+
+function rollbackNamespaceDeclarations(
+  namespaceStacks: Map<string, string[]>,
+  pushedPrefixes: readonly string[],
+): void {
+  for (let index = pushedPrefixes.length - 1; index >= 0; index -= 1) {
+    const prefix = pushedPrefixes[index]!;
+    const values = namespaceStacks.get(prefix);
+    if (!values) throw new Error('XML namespace scope mismatch');
+    values.pop();
+    if (values.length === 0) namespaceStacks.delete(prefix);
+  }
 }
 
 function namespaceForName(
   name: string,
-  bindings: ReadonlyMap<string, string>,
+  namespaceStacks: ReadonlyMap<string, readonly string[]>,
   attribute = false,
 ): string | undefined {
   const prefix = xmlPrefix(name);
-  if (prefix === undefined) return attribute ? undefined : bindings.get('');
-  const namespaceUri = bindings.get(prefix);
+  if (prefix === undefined) return attribute ? undefined : namespaceStacks.get('')?.at(-1);
+  const namespaceUri = namespaceStacks.get(prefix)?.at(-1);
   if (!namespaceUri) throw new Error('unbound XML namespace prefix');
   return namespaceUri;
 }
@@ -333,7 +363,10 @@ function xmlTagEnd(xml: string, start: number): number {
   throw new Error('unterminated XML tag');
 }
 
-function parseXmlStartTag(source: string): { name: string; attributes: Map<string, string>; selfClosing: boolean } {
+function parseXmlStartTag(
+  source: string,
+  remainingNamespaceDeclarations: number,
+): { name: string; attributes: Map<string, string>; selfClosing: boolean } {
   const body = source.trim();
   const selfClosing = body.endsWith('/');
   const content = selfClosing ? body.slice(0, -1).trimEnd() : body;
@@ -341,6 +374,7 @@ function parseXmlStartTag(source: string): { name: string; attributes: Map<strin
   if (!nameMatch || !XML_NAME.test(nameMatch[1]!)) throw new Error('malformed XML opening tag');
   const name = nameMatch[1]!;
   const attributes = new Map<string, string>();
+  let namespaceDeclarations = 0;
   let cursor = name.length;
   while (cursor < content.length) {
     while (/\s/u.test(content[cursor]!)) cursor += 1;
@@ -348,6 +382,10 @@ function parseXmlStartTag(source: string): { name: string; attributes: Map<strin
     const attributeMatch = /^([^\s=/>]+)\s*=\s*/u.exec(content.slice(cursor));
     if (!attributeMatch || !XML_NAME.test(attributeMatch[1]!)) throw new Error('malformed XML attribute');
     const attributeName = attributeMatch[1]!;
+    if (attributeName === 'xmlns' || attributeName.startsWith('xmlns:')) {
+      namespaceDeclarations += 1;
+      if (namespaceDeclarations > remainingNamespaceDeclarations) throw new XlsxParsingLimitError();
+    }
     cursor += attributeMatch[0].length;
     const quote = content[cursor];
     if (quote !== '"' && quote !== "'") throw new Error('XML attribute must be quoted');
@@ -362,17 +400,19 @@ function parseXmlStartTag(source: string): { name: string; attributes: Map<strin
 
 function parseStrictXml(content: Buffer): XmlNode {
   const xml = boundedXml(content);
-  const stack: XmlNode[] = [];
+  const stack: XmlParseFrame[] = [];
+  const namespaceStacks = new Map<string, string[]>([['xml', [XML_NAMESPACE]]]);
   let root: XmlNode | undefined;
   let cursor = 0;
   let nodeCount = 0;
+  let declarationCount = 0;
   const appendText = (text: string) => {
     if (!text) return;
     if (stack.length === 0) {
       if (text.trim()) throw new Error('XML content outside root element');
       return;
     }
-    stack[stack.length - 1]!.text += decodeXmlText(text);
+    stack[stack.length - 1]!.node.text += decodeXmlText(text);
   };
   while (cursor < xml.length) {
     const opening = xml.indexOf('<', cursor);
@@ -392,35 +432,41 @@ function parseStrictXml(content: Buffer): XmlNode {
     const tag = xml.slice(opening + 1, close);
     if (tag.startsWith('/')) {
       const name = tag.slice(1).trim();
-      if (!XML_NAME.test(name) || stack.length === 0 || stack[stack.length - 1]!.name !== name) {
+      if (!XML_NAME.test(name) || stack.length === 0 || stack[stack.length - 1]!.node.name !== name) {
         throw new Error('mismatched XML closing tag');
       }
-      stack.pop();
+      const frame = stack.pop()!;
+      rollbackNamespaceDeclarations(namespaceStacks, frame.pushedPrefixes);
+      declarationCount -= frame.pushedPrefixes.length;
     } else {
       if (root && stack.length === 0) throw new Error('multiple XML root elements');
-      const parsed = parseXmlStartTag(tag);
-      const namespaceBindings = namespaceBindingsFor(stack.at(-1)?.namespaceBindings, parsed.attributes);
+      if (nodeCount >= MAX_XML_NODES) throw new XlsxParsingLimitError();
+      const parsed = parseXmlStartTag(tag, MAX_XML_NAMESPACE_DECLARATIONS - declarationCount);
+      const pushed = pushNamespaceDeclarations(parsed.attributes, namespaceStacks, declarationCount);
+      declarationCount = pushed.declarationCount;
       const attributeNamespaces = new Map<string, string | undefined>();
       for (const name of parsed.attributes.keys()) {
         if (name !== 'xmlns' && !name.startsWith('xmlns:')) {
-          attributeNamespaces.set(name, namespaceForName(name, namespaceBindings, true));
+          attributeNamespaces.set(name, namespaceForName(name, namespaceStacks, true));
         }
       }
       const node: XmlNode = {
         name: parsed.name,
         localName: xmlLocalName(parsed.name),
-        namespaceUri: namespaceForName(parsed.name, namespaceBindings),
+        namespaceUri: namespaceForName(parsed.name, namespaceStacks),
         attributes: parsed.attributes,
         attributeNamespaces,
-        namespaceBindings,
         children: [],
         text: '',
       };
       nodeCount += 1;
-      if (nodeCount > 200_000) throw new XlsxParsingLimitError();
       if (stack.length === 0) root = node;
-      else stack[stack.length - 1]!.children.push(node);
-      if (!parsed.selfClosing) stack.push(node);
+      else stack[stack.length - 1]!.node.children.push(node);
+      if (!parsed.selfClosing) stack.push({ node, pushedPrefixes: pushed.pushedPrefixes });
+      else {
+        rollbackNamespaceDeclarations(namespaceStacks, pushed.pushedPrefixes);
+        declarationCount -= pushed.pushedPrefixes.length;
+      }
     }
     cursor = close + 1;
   }

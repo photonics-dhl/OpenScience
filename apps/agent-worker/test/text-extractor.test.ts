@@ -1,4 +1,6 @@
 import { createHash } from 'node:crypto';
+import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
 import { describe, expect, it, vi } from 'vitest';
 import { executeDocumentParser, parseStructuredXlsxPages } from '../src/ingestion-parser';
 import {
@@ -633,6 +635,14 @@ describe('deterministic text DocumentParser', () => {
     ['arbitrary untyped OOXML value', () => strictXlsxFixture(`<worksheet xmlns="${SPREADSHEETML_NAMESPACE}"><sheetData><row r="1"><c r="A1"><v>not-a-number</v></c></row></sheetData></worksheet>`)],
   ])('rejects strict-subset XLSX %s', async (_label, createFixture) => {
     await expect(parseStructuredXlsxPages(createFixture())).rejects.toThrow();
+  });
+
+  it('uses linear namespace scope state instead of retaining inherited maps per XML node', () => {
+    const parserSource = readFileSync(fileURLToPath(new URL('../src/ingestion-parser.ts', import.meta.url)), 'utf8');
+
+    expect(parserSource).not.toContain('namespaceBindings: ReadonlyMap');
+    expect(parserSource).not.toContain('new Map(parent');
+    expect(parserSource).toContain('namespaceStacks');
   });
 
   it('fails closed when the isolated XLSX stage reports a warning', async () => {
