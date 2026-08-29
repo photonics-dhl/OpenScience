@@ -43,12 +43,14 @@ interface FakeDb {
   ingestionBatches: any[];
   ingestionTasks: any[];
   claimNodes: any[];
+  evidenceRecords: any[];
+  presentationAssets: any[];
   researchIdentityProfiles: any[];
 }
 
 /** 内存版 Prisma 子集：覆盖 workspace 领域用到的调用面。 */
 export function createFakePrisma(): { prisma: PrismaClient; db: FakeDb } {
-  const db: FakeDb = { users: [], workspaces: [], memberships: [], workspaceInvitations: [], mailOutbox: [], quotaPolicies: [], usageLedger: [], researchObjects: [], sdfDocuments: [], sdfNodes: [], blobs: [], artifacts: [], branches: [], commits: [], changesets: [], versions: [], versionManifests: [], manifestEntries: [], identifiers: [], publications: [], visibilityGrants: [], visibilityRequests: [], pullRequests: [], issues: [], comments: [], reviews: [], licenseAssignments: [], forkRelations: [], notifications: [], authors: [], contributions: [], agentSessions: [], agentTasks: [], toolApprovals: [], aiReviews: [], appeals: [], ingestionBatches: [], ingestionTasks: [], claimNodes: [], researchIdentityProfiles: [] };
+  const db: FakeDb = { users: [], workspaces: [], memberships: [], workspaceInvitations: [], mailOutbox: [], quotaPolicies: [], usageLedger: [], researchObjects: [], sdfDocuments: [], sdfNodes: [], blobs: [], artifacts: [], branches: [], commits: [], changesets: [], versions: [], versionManifests: [], manifestEntries: [], identifiers: [], publications: [], visibilityGrants: [], visibilityRequests: [], pullRequests: [], issues: [], comments: [], reviews: [], licenseAssignments: [], forkRelations: [], notifications: [], authors: [], contributions: [], agentSessions: [], agentTasks: [], toolApprovals: [], aiReviews: [], appeals: [], ingestionBatches: [], ingestionTasks: [], claimNodes: [], evidenceRecords: [], presentationAssets: [], researchIdentityProfiles: [] };
   let seq = 0;
   const nextId = () => `00000000-0000-4000-8000-${String(++seq).padStart(12, '0')}`;
   const p2002 = () => {
@@ -533,6 +535,13 @@ export function createFakePrisma(): { prisma: PrismaClient; db: FakeDb } {
         Object.assign(row, data);
         return { ...row };
       },
+      updateMany: async ({ where, data }: any) => {
+        const rows = db.versions.filter((v) =>
+          (where.id === undefined || v.id === where.id) &&
+          (where.status === undefined || v.status === where.status));
+        rows.forEach((row) => Object.assign(row, data));
+        return { count: rows.length };
+      },
       count: async ({ where }: any) =>
         db.versions.filter((v) => (where.researchObjectId === undefined || v.researchObjectId === where.researchObjectId)).length,
       findMany: async ({ where }: any) =>
@@ -544,6 +553,30 @@ export function createFakePrisma(): { prisma: PrismaClient; db: FakeDb } {
           (where.researchObjectId === undefined || claim.researchObjectId === where.researchObjectId) &&
           (where.versionId === undefined || claim.versionId === where.versionId),
         ),
+      findFirst: async ({ where, orderBy }: any) => {
+        const rows = db.claimNodes.filter((claim) =>
+          (where.researchObjectId === undefined || claim.researchObjectId === where.researchObjectId) &&
+          (where.versionId === undefined || claim.versionId === where.versionId));
+        if (orderBy?.updatedAt === 'desc') rows.sort((a, b) => (b.updatedAt?.getTime?.() ?? 0) - (a.updatedAt?.getTime?.() ?? 0));
+        return rows[0] ?? null;
+      },
+    },
+    evidenceRecord: {
+      findMany: async ({ where }: any) => db.evidenceRecords.filter((evidence) =>
+        (where.researchObjectId === undefined || evidence.researchObjectId === where.researchObjectId) &&
+        (where.versionId === undefined || evidence.versionId === where.versionId)),
+      findFirst: async ({ where, orderBy }: any) => {
+        const rows = db.evidenceRecords.filter((evidence) =>
+          (where.researchObjectId === undefined || evidence.researchObjectId === where.researchObjectId) &&
+          (where.versionId === undefined || evidence.versionId === where.versionId));
+        if (orderBy?.updatedAt === 'desc') rows.sort((a, b) => (b.updatedAt?.getTime?.() ?? 0) - (a.updatedAt?.getTime?.() ?? 0));
+        return rows[0] ?? null;
+      },
+    },
+    presentationAsset: {
+      findMany: async ({ where }: any) => db.presentationAssets.filter((asset) =>
+        (where.researchObjectId === undefined || asset.researchObjectId === where.researchObjectId) &&
+        (where.versionId === undefined || asset.versionId === where.versionId)),
     },
     versionManifest: {
       findUnique: async ({ where, include }: any) => {
@@ -778,6 +811,7 @@ export function createFakePrisma(): { prisma: PrismaClient; db: FakeDb } {
         return {
           ...row,
           artifact: db.artifacts.find((artifact) => artifact.id === row.artifactId),
+          agentTask: include.agentTask ? db.agentTasks.find((task) => task.id === row.agentTaskId) ?? null : undefined,
           batch: batch ? { ...batch, researchObject } : null,
         };
       },
@@ -869,6 +903,19 @@ export function createFakePrisma(): { prisma: PrismaClient; db: FakeDb } {
         return { ...row };
       },
       findUnique: async ({ where }: any) => db.aiReviews.find((r) => r.versionId === where.versionId) ?? null,
+      update: async ({ where, data }: any) => {
+        const row = db.aiReviews.find((review) => review.versionId === where.versionId);
+        if (!row) throw new Error('AIReview not found');
+        Object.assign(row, data);
+        return { ...row };
+      },
+      updateMany: async ({ where, data }: any) => {
+        const rows = db.aiReviews.filter((review) =>
+          (where.versionId === undefined || review.versionId === where.versionId) &&
+          (where.status === undefined || review.status === where.status));
+        rows.forEach((row) => Object.assign(row, data));
+        return { count: rows.length };
+      },
     },
     appeal: {
       create: async ({ data }: any) => {

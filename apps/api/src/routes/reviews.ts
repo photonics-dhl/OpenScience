@@ -83,8 +83,11 @@ export function registerReviewRoutes(app: FastifyInstance, deps: ReviewRouteDeps
     void (async () => {
       try {
         const version = await deps.prisma.version.findUnique({ where: { id: versionId }, include: { manifest: true } });
+        if (!version) return;
         const coreText = JSON.stringify(version?.manifest?.coreJson ?? {});
-        const session = await createAgentSession(deps, { userId: user.userId, kind: 'review' });
+        const session = await createAgentSession(deps, {
+          userId: user.userId, researchObjectId: version.researchObjectId, kind: 'review',
+        });
         await submitAgentTask(deps, { sessionId: session.id, userId: user.userId, kind: 'review.analyze', payload: { versionId, coreText } });
       } catch { /* 异步分析失败不阻塞审核响应 */ }
     })();

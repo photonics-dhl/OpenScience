@@ -4,9 +4,23 @@
 
 ## Current version tuple
 
-- Branch / application source: `codex/hermes-wanko-live2d` / `5e5ae36a08ae314d0c35ee2b976e306aec73d219`；后续 docs-only closeout HEAD 只同步事实。
+- Worktree branch / HEAD: `codex/hermes-wanko-live2d` / `2add415853570c4cd3cacbca13dfeb0f1e3825d4`；当前保留尚未提交的 Task 8 工作树改动。
+- Production application source / immutable release: `5e5ae36a08ae314d0c35ee2b976e306aec73d219`；docs HEAD、本地 main 与生产身份不得混写。
 - Production immutable release: `5e5ae36a08ae314d0c35ee2b976e306aec73d219`；rollback `6cabe422a8459dfa358786c9f5aae84558949f6b`；core/search migrations `30/30` / `2/2`。
-- Taskmaster `hermes-research-intelligence` 为 7/12：Tasks 1–7 done；Task 8 next，Task 10 也 dependency-ready，但产品顺序先完成 Claim/Evidence API。
+- Taskmaster `hermes-research-intelligence` 为 7/12：Tasks 1–7 done；Task 8 为 `in-progress`、未提交/未部署，Task 10 仍 dependency-ready。
+
+## 2026-08-29 — Task 8 review blockers closed locally
+
+- Claim/Evidence 的 SourceMap/object-storage 预检已移到 Serializable 事务外；事务内重新校验 version/manifest/artifact/hash/ref 与 CAS。Evidence 幂等重放不依赖对象存储在线。
+- `codeRange` 在没有权威 source revision 前由 API/Domain 失败关闭；`review.analyze` 在 API、Domain、Worker 三层绑定同一 RO，Worker 只消费持久化 payload。
+- 发布展示资产复用检查改为按全部受审 Evidence hash 精确查询，关闭截断前缀绕过。共享 content-addressed SourceMap 不盲删，引用安全 GC/retention 明确归 Task 10。
+- 新鲜本地证据：全仓 build/typecheck/lint/test 通过；Domain 52/470、API 14/78、Worker 26/452 全绿，release contract 91 pass / 7 platform skips / 0 fail；CI 与 ECS 真实 RO journey 尚未完成。
+
+## 2026-08-29 — Task 8 evidence package and handoff prepared
+
+- 按用户要求暂停 Task 8 继续开发，先整理 `docs/proposals/2026-08-29-project-development-deployment-evidence-pack.md`：包含分支/时间线 Git 记录、网站四层上线口径、当前 release/rollback/TLS/container 证据，以及 suggested / confirmed 的数据库字段、生产聚合与完整展示 API 样例；样例为自编演示数据，不是生产用户记录。
+- ECS 只读复核：public/loopback `/__release` 均为 `5e5ae36…`，rollback `6cabe422…`，生产服务健康；`agent_tasks.result` 为 JSONB，`IngestionTaskState` 含 `needs_review`/`confirmed`。聚合为 14 条待确认建议、7 条 confirmed、21 条总计，无业务正文或用户信息输出。
+- Task 8 本地已形成 Claim/Evidence CRUD、可信 SourceMap ref、发布阻断与快照等实现及测试；该时点仍有复审阻断项，现状以上一节为准。
 
 ## 2026-08-29 — Task 7 identity routing deployed and accepted
 

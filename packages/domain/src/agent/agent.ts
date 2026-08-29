@@ -259,6 +259,19 @@ export async function submitAgentTask(
       throw new AgentError('RESEARCH_OBJECT_NOT_FOUND', 'Artifact 不存在或不可访问');
     }
   }
+  if (input.kind === 'review.analyze') {
+    const versionId = input.payload.versionId;
+    const coreText = input.payload.coreText;
+    if (session.kind !== 'review' || !session.researchObjectId
+      || typeof versionId !== 'string' || typeof coreText !== 'string'
+      || !coreText.trim() || coreText.length > 8_000) {
+      throw new AgentError('VALIDATION_ERROR', 'review.analyze 任务缺少有效的会话、Version 或 coreText');
+    }
+    const version = await deps.prisma.version.findUnique({ where: { id: versionId } });
+    if (!version || version.researchObjectId !== session.researchObjectId) {
+      throw new AgentError('VALIDATION_ERROR', 'Version 不属于当前研究对象');
+    }
+  }
   let requestedContext: InterestContext | undefined;
   try {
     requestedContext = input.interestContext ? validateInterestContext(input.interestContext) : undefined;
@@ -564,10 +577,18 @@ function taskToView(task: {
   progress: number; retryCount: number; executionAttempt: number;
   result: unknown; error: string | null; createdAt: Date; updatedAt: Date;
 }): AgentTaskView {
+  let result: Record<string, unknown> | null = null;
+  if (task.result && typeof task.result === 'object' && !Array.isArray(task.result)) {
+    const { sourceMapRef, ...publicResult } = task.result as Record<string, unknown>;
+    result = {
+      ...publicResult,
+      ...(sourceMapRef === undefined ? {} : { sourceMapAvailable: true }),
+    };
+  }
   return {
     id: task.id, sessionId: task.sessionId, kind: task.kind, status: task.status,
     progress: task.progress, retryCount: task.retryCount, executionAttempt: task.executionAttempt,
-    result: (task.result ?? null) as Record<string, unknown> | null,
+    result,
     error: task.error, createdAt: task.createdAt, updatedAt: task.updatedAt,
   };
 }

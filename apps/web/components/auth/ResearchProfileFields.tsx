@@ -19,7 +19,7 @@ export const EMPTY_RESEARCH_PROFILE: ResearchIdentityProfileInput = {
   languages: [],
 };
 
-export function parseProfileTokens(value: string): string[] {
+function parseProfileTokens(value: string): string[] {
   return [...new Set(value.split(/[,，\n]/u).map((token) => token.trim()).filter(Boolean))].slice(0, 100);
 }
 

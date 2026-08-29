@@ -46,12 +46,22 @@ export const aiWarningGuard: SchemaGuard<AiWarning[]> = (v: unknown): v is AiWar
 export async function reviewAnalyzeHandler(
   gateway: AiGateway,
   deps: AgentDeps,
-  task: { payload: Record<string, unknown> },
+  task: { id: string },
 ): Promise<{ warningCount: number }> {
-  const coreText = typeof task.payload?.coreText === 'string' ? task.payload.coreText : '';
-  const versionId = typeof task.payload?.versionId === 'string' ? task.payload.versionId : '';
+  const persistedTask = await deps.prisma.agentTask.findUnique({
+    where: { id: task.id }, include: { session: true },
+  });
+  const payload = persistedTask?.payload && typeof persistedTask.payload === 'object' && !Array.isArray(persistedTask.payload)
+    ? persistedTask.payload as Record<string, unknown> : {};
+  const coreText = typeof payload.coreText === 'string' ? payload.coreText : '';
+  const versionId = typeof payload.versionId === 'string' ? payload.versionId : '';
   if (!coreText.trim() || !versionId) {
     throw new Error('缺少 coreText/versionId');
+  }
+  const version = await deps.prisma.version.findUnique({ where: { id: versionId } });
+  if (!persistedTask || persistedTask.kind !== 'review.analyze' || !persistedTask.session?.researchObjectId || !version
+    || version.researchObjectId !== persistedTask.session.researchObjectId) {
+    throw new Error('review task Version does not belong to its research object');
   }
   const prompt = [
     { role: 'system' as const, content: '你是科研评审助手。基于 SDF core 文本生成结构化警告。只输出 JSON 数组，每项含 category（method_logic/statistical/figure_spec/data_consistency/reproducibility/missing_citation/overreach）、evidence（具体证据位置）、uncertainty（不确定性说明）、suggestion（建议）。只报告疑点，不裁定研究对错，不伪造引用来源。' },

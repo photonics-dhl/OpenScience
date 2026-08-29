@@ -200,6 +200,32 @@ export {
   type EditorialState, type EditorialMedia, type EditorialSelectionView, type EditorialCollectionView,
 } from './editorial/editorial';
 export { INGESTION_TASK_STATES, type ActionableIngestionTaskView, type IngestionTaskState, type IngestionFileInput, type IngestionTaskView, type IngestionBatchView } from './ingestion/ingestion-types';
+export {
+  loadDocumentSourceMapReference,
+  parseDocumentSourceMapReference,
+  persistDocumentSourceMapReference,
+  type DocumentSourceMapReference,
+} from './research-intelligence/source-map-ref';
+export { ClaimEvidenceError, type ClaimEvidenceErrorCode } from './research-intelligence/claim-evidence-errors';
+export { evaluateEvidencePublicationBlocks } from './research-intelligence/publication-evidence';
+export {
+  createClaim,
+  createEvidence,
+  deleteClaim,
+  deleteEvidence,
+  getEvidenceSource,
+  listClaims,
+  listEvidence,
+  resolveEvidenceSource,
+  updateClaim,
+  updateEvidence,
+  verifyEvidence,
+  type ClaimInput,
+  type EvidenceInput,
+  type EvidenceRightsInput,
+  type UpdateClaimInput,
+  type UpdateEvidenceInput,
+} from './research-intelligence/claim-evidence-service';
 export { authorizeIngestionWrite, confirmIngestionTask, createIngestionBatch, getIngestionBatch, getIngestionTask, listActionableIngestionTasks, retryIngestionTask, type IngestionDeps } from './ingestion/ingestion-service';
 export { parseWorkspaceGuidePayload, type WorkspaceGuidePayload } from './agent/workspace-guide-contract';
 export {

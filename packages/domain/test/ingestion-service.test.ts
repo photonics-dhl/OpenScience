@@ -2,7 +2,7 @@ import { Readable } from 'node:stream';
 import { describe, expect, it, vi } from 'vitest';
 import type { StorageAdapter } from '@openscience/storage';
 import { createFakePrisma, seedUser } from './helpers/fakes';
-import { authorizeIngestionWrite, createIngestionBatch, getIngestionBatch, listActionableIngestionTasks, retryIngestionTask } from '../src/ingestion/ingestion-service';
+import { authorizeIngestionWrite, createIngestionBatch, getIngestionBatch, getIngestionTask, listActionableIngestionTasks, retryIngestionTask } from '../src/ingestion/ingestion-service';
 import { markTaskProgress } from '../src/agent/agent';
 
 const TEST_RO_ID = '00000000-0000-4000-8000-000000000101';
@@ -125,6 +125,25 @@ describe('multi-format ingestion service', () => {
     const result = await createIngestionBatch(deps, { userId: user.id, researchObjectId: TEST_RO_ID, processingConsent: true, files: [file('paper.pdf')] });
     const outsider = seedUser(db, { id: 'outsider' });
     await expect(getIngestionBatch(deps, { userId: outsider.id, batchId: result.batchId })).rejects.toThrow(/空间不存在/);
+  });
+
+  it('keeps the internal SourceMap object key out of ingestion API results', async () => {
+    const { deps, db, user } = makeDeps();
+    const batch = await createIngestionBatch(deps, {
+      userId: user.id, researchObjectId: TEST_RO_ID, processingConsent: true, files: [file('paper.pdf')],
+    });
+    const ingestionTask = db.ingestionTasks.find((row) => row.id === batch.tasks[0].id)!;
+    const agentTask = db.agentTasks.find((row) => row.id === ingestionTask.agentTaskId)!;
+    agentTask.result = {
+      core: { title: 'Parsed title' },
+      sourceMapRef: { objectKey: 'derived/source-maps/internal.json', serializedSha256: 'secret-internal-digest' },
+    };
+
+    const response = await getIngestionTask(deps, { userId: user.id, taskId: ingestionTask.id });
+
+    expect(response.task.result).toEqual({ core: { title: 'Parsed title' }, sourceMapAvailable: true });
+    expect(JSON.stringify(response)).not.toContain('derived/source-maps');
+    expect(JSON.stringify(response)).not.toContain('secret-internal-digest');
   });
 
   it('lists the caller-owned ingestion task id and RO context for dashboard review links', async () => {

@@ -438,6 +438,29 @@ describe('AgentSession/AgentTask（§15 + §16 幂等 + §9.1 配额）', () => 
     expect(db.agentTasks).toHaveLength(0);
   });
 
+  it('rejects review.analyze when the target Version belongs to another research object', async () => {
+    const { deps, db, user, ro } = await makeDeps(1);
+    const session = await createAgentSession(deps, { userId: user.id, researchObjectId: ro.id, kind: 'review' });
+    db.researchObjects.push({
+      id: 'ro-other', workspaceId: 'ws-1', title: 'Other RO', createdBy: user.id,
+      status: 'draft', visibility: 'private', version: 1, createdAt: new Date(), updatedAt: new Date(),
+    });
+    db.versions.push({
+      id: 'version-other', researchObjectId: 'ro-other', commitId: 'commit-other',
+      versionNo: 1, status: 'draft', createdAt: new Date(),
+    });
+
+    await expect(submitAgentTask(deps, {
+      sessionId: session.id,
+      userId: user.id,
+      kind: 'review.analyze',
+      payload: { versionId: 'version-other', coreText: 'Private text from another RO' },
+      dispatch: false,
+    })).rejects.toThrow(/Version.*研究对象/i);
+    expect(db.agentTasks).toHaveLength(0);
+    expect(db.usageLedger.filter((entry) => entry.delta < 0)).toHaveLength(0);
+  });
+
   it('任务状态机：非法迁移拒绝 + 终态幂等', async () => {
     const { deps, user, ro, db } = await makeDeps();
     const session = await createAgentSession(deps, { userId: user.id, researchObjectId: ro.id, kind: 'extract' });

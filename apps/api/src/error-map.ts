@@ -1,5 +1,5 @@
 import { AuthError, type AuthErrorCode } from '@openscience/auth';
-import { AgentError, AppealError, ApprovalError, ArtifactError, AuthorError, BranchError, CommitError, EditorialError, ForkError, IngestionError, IssueError, LicenseError, NotificationError, PrError, PublishError, ResearchIdentityProfileError, ResearchIntelligenceValidationError, ResearchObjectError, ReviewError, UsageError, VisibilityError, WorkspaceError, type ResearchIdentityProfileErrorCode, type WorkspaceErrorCode } from '@openscience/domain';
+import { AgentError, AppealError, ApprovalError, ArtifactError, AuthorError, BranchError, ClaimEvidenceError, CommitError, EditorialError, ForkError, IngestionError, IssueError, LicenseError, NotificationError, PrError, PublishError, ResearchIdentityProfileError, ResearchIntelligenceValidationError, ResearchObjectError, ReviewError, UsageError, VisibilityError, WorkspaceError, type ResearchIdentityProfileErrorCode, type WorkspaceErrorCode } from '@openscience/domain';
 import { buildErrorBody, type ErrorBody } from '@openscience/observability';
 
 const AUTH_ERROR_HTTP: Record<AuthErrorCode, number> = {
@@ -189,10 +189,25 @@ const RESEARCH_IDENTITY_ERROR_HTTP: Record<ResearchIdentityProfileErrorCode, num
   INVALID_INTEREST_SIGNAL: 400,
 };
 
+const CLAIM_EVIDENCE_ERROR_HTTP: Record<ClaimEvidenceError['code'], number> = {
+  NOT_FOUND: 404,
+  FORBIDDEN: 403,
+  VALIDATION_ERROR: 400,
+  VERSION_IMMUTABLE: 409,
+  CONCURRENT_UPDATE: 409,
+  IDEMPOTENCY_CONFLICT: 409,
+  LOCATOR_MISMATCH: 409,
+  ORIGINAL_MISSING: 409,
+  DEPENDENT_RECORDS: 409,
+};
+
 export type { ErrorBody };
 
 /** 统一错误映射（2.6 扩展为全局标准前的最小版：/auth + /workspaces + /usage）；requestId 三方串联（Spec §17）。 */
 export function httpStatusForError(err: unknown, requestId?: string): { status: number; body: ErrorBody } {
+  if (err instanceof ClaimEvidenceError) {
+    return { status: CLAIM_EVIDENCE_ERROR_HTTP[err.code], body: buildErrorBody(err.code, err.message, requestId) };
+  }
   if (err instanceof ResearchIntelligenceValidationError) {
     return { status: 400, body: buildErrorBody(err.code, err.message, requestId) };
   }

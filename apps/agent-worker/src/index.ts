@@ -11,7 +11,7 @@ import {
 } from '@openscience/ai-gateway';
 import {
   claimAgentTask, markTaskProgress, prepareAgentTaskForCrashRecovery, recoverUndispatchedAgentTasks,
-  AGENT_TASK_QUEUE, type AgentDeps,
+  AGENT_TASK_QUEUE, persistDocumentSourceMapReference, type AgentDeps,
 } from '@openscience/domain';
 import { createStorageAdapter, getBlob, storageConfigFromEnv, type StorageAdapter } from '@openscience/storage';
 import {
@@ -260,16 +260,24 @@ export function createHandlers(
       }, { trustedAuthorizationContext, externalProcessingEligible });
       const format = artifact.logicalPath.split('.').at(-1)?.toLowerCase() ?? 'unknown';
       if (parsed.status === 'blocked') throw new Error(`[blocked] ${parsed.code}`);
+      const sourceMapRef = (parsed.status === 'succeeded' || parsed.status === 'needs_review') && parsed.sourceMap
+        ? await persistDocumentSourceMapReference(deps.storage, parsed.sourceMap, parsed.status)
+        : undefined;
       if (parsed.status !== 'succeeded') {
         return {
           status: 'needs_review',
           format,
           reason: parsed.status === 'failed' ? parsed.message : parsed.reasons.join('; '),
+          ...(sourceMapRef ? { sourceMapRef } : {}),
         };
       }
       const manuscriptText = sourceMapToManuscriptText(parsed.sourceMap);
-      if (!manuscriptText.trim()) return { status: 'needs_review', format, reason: 'empty-parsed-text' };
-      return extractHandler(gateway, { payload: { manuscriptText } });
+      if (!manuscriptText.trim()) return { status: 'needs_review', format, reason: 'empty-parsed-text', sourceMapRef };
+      try {
+        return { ...await extractHandler(gateway, { payload: { manuscriptText } }), sourceMapRef };
+      } catch {
+        return { status: 'needs_review', format, reason: 'sdf-proposal-unavailable', sourceMapRef };
+      }
     },
     'review.analyze': async (deps, task) => reviewAnalyzeHandler(gateway, deps, task),
     'visualization.plan': async (_deps, task) => visualizationPlanHandler(gateway, task), // P1E-1

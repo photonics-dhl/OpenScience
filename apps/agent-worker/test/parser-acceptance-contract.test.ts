@@ -584,6 +584,8 @@ describe('Task 8 acceptance contract', () => {
       .toBe('needs_review');
     expect(() => classifyAcceptanceHandlerResult({ status: 'failed' })).toThrow(/handler result/i);
     expect(() => classifyAcceptanceHandlerResult({ ...completed, evidence: {} })).toThrow(/handler result/i);
+    expect(() => classifyAcceptanceHandlerResult({ ...completed, sourceMapRef: { schemaVersion: 1 } }))
+      .toThrow(/handler result/i);
     expect(() => classifyAcceptanceHandlerResult({
       ...completed, core: { ...completed.core, schemaVersion: '9.9.9' },
     })).toThrow(/handler result/i);

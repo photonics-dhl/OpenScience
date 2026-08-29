@@ -25,10 +25,23 @@ describe('agent task payload boundary', () => {
     expect(agentTaskBodySchema.parse({
       sessionId: validGuide.sessionId,
       kind: 'review.analyze',
-      payload: {},
+      payload: { versionId: validGuide.sessionId, coreText: 'Review this research object.' },
       currentGoal: 'Check the central claim',
       activeClaimId: '00000000-0000-4000-8000-000000000002',
     })).toMatchObject({ currentGoal: 'Check the central claim' });
+  });
+
+  it('requires the bounded review target contract at the public boundary', () => {
+    expect(() => agentTaskBodySchema.parse({
+      sessionId: validGuide.sessionId,
+      kind: 'review.analyze',
+      payload: {},
+    })).toThrow();
+    expect(() => agentTaskBodySchema.parse({
+      sessionId: validGuide.sessionId,
+      kind: 'review.analyze',
+      payload: { versionId: validGuide.sessionId, coreText: 'x'.repeat(8_001) },
+    })).toThrow();
   });
 
   it('rejects client-supplied InterestContext and inferred traits', () => {

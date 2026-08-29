@@ -74,8 +74,29 @@ describe('Task 8 acceptance runner production composition', () => {
       parserCascade,
       externalProcessingPolicy: async () => false,
     });
+    const derivedObjects = new Map<string, Buffer>();
     const dependencies = {
-      storage: { getObject: async () => ({ body: Readable.from([fixture.content]), size: fixture.content.length }) },
+      storage: {
+        getObject: async (key: string) => {
+          const derived = derivedObjects.get(key);
+          return derived
+            ? { body: Readable.from([derived]), size: derived.length }
+            : { body: Readable.from([fixture.content]), size: fixture.content.length };
+        },
+        headObject: async (key: string) => {
+          const derived = derivedObjects.get(key);
+          return derived ? { size: derived.length, etag: 'fixture' } : null;
+        },
+        putObject: async (key: string, body: Buffer | Readable) => {
+          const chunks: Buffer[] = [];
+          if (Buffer.isBuffer(body)) chunks.push(body);
+          else for await (const chunk of body) chunks.push(Buffer.from(chunk));
+          const value = Buffer.concat(chunks);
+          derivedObjects.set(key, value);
+          return { key, size: value.length, etag: 'fixture' };
+        },
+        deleteObject: async (key: string) => void derivedObjects.delete(key),
+      },
       malwareScanner: vi.fn(async () => undefined),
       prisma: {
         agentTask: { findUnique: async () => ({

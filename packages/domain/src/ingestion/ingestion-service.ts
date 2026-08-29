@@ -144,7 +144,16 @@ export async function getIngestionTask(
   const task = await deps.prisma.ingestionTask.findUnique({ where: { id: input.taskId }, include: { artifact: true, agentTask: true, batch: { include: { researchObject: true }, } } });
   if (!task) throw new IngestionError('INGESTION_NOT_FOUND', 'Ingestion task not found');
   await requireMembership(deps, task.batch.researchObject.workspaceId, input.userId);
-  return { task: { ...taskToView(task), result: task.agentTask ? (task.agentTask.result as Record<string, unknown> | null) : null }, batchId: task.batchId, researchObjectId: task.batch.researchObjectId, version: task.batch.researchObject.version };
+  const rawResult = task.agentTask?.result;
+  let result: Record<string, unknown> | null = null;
+  if (rawResult && typeof rawResult === 'object' && !Array.isArray(rawResult)) {
+    const { sourceMapRef, ...publicResult } = rawResult as Record<string, unknown>;
+    result = {
+      ...publicResult,
+      ...(sourceMapRef === undefined ? {} : { sourceMapAvailable: true }),
+    };
+  }
+  return { task: { ...taskToView(task), result }, batchId: task.batchId, researchObjectId: task.batch.researchObjectId, version: task.batch.researchObject.version };
 }
 
 const ACTIONABLE_INGESTION_STATES = [

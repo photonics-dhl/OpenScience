@@ -98,8 +98,14 @@ describe('extractHandler（§9.2 提取 + §9.3 结构化校验 + 不写 SDF）'
       parserCascade,
       externalProcessingPolicy: async () => true,
     });
+    const storedDerived = new Map<string, Buffer>();
     const storage = {
       getObject: vi.fn().mockResolvedValue({ body: Readable.from([bytes]), size: bytes.length }),
+      headObject: vi.fn().mockResolvedValue(null),
+      putObject: vi.fn(async (key: string, body: Buffer) => {
+        storedDerived.set(key, body);
+        return { key, size: body.length, etag: 'fixture' };
+      }),
     };
     const deps = {
       storage,
@@ -124,7 +130,7 @@ describe('extractHandler（§9.2 提取 + §9.3 结构化校验 + 不写 SDF）'
       },
     };
 
-    await handlers['sdf.extract']!(deps as never, {
+    const result = await handlers['sdf.extract']!(deps as never, {
       id: 'agent-task-1', payload: { artifactId: 'artifact-1', researchObjectId: 'ro-1' },
       executionAttempt: 1,
     });
@@ -142,6 +148,62 @@ describe('extractHandler（§9.2 提取 + §9.3 结构化校验 + 不写 SDF）'
     expect(completeStructured).toHaveBeenCalledTimes(1);
     expect(JSON.stringify(completeStructured.mock.calls[0])).toContain('Canonical parser text');
     expect(JSON.stringify(completeStructured.mock.calls[0])).not.toContain('%PDF-1.7');
+    expect(result.sourceMapRef).toMatchObject({
+      schemaVersion: 1,
+      parserStatus: 'succeeded',
+      artifactId: 'artifact-1',
+      contentHash,
+    });
+    expect(storage.putObject).toHaveBeenCalledWith(
+      expect.stringMatching(/^derived\/source-maps\/[a-f0-9]{64}\.json$/),
+      expect.any(Buffer),
+      expect.objectContaining({ contentType: 'application/json' }),
+    );
+  });
+
+  it('SDF proposal provider fails after parsing without orphaning the trusted SourceMap reference', async () => {
+    const bytes = Buffer.from('%PDF-1.7 proposal failure fixture', 'utf8');
+    const contentHash = createHash('sha256').update(bytes).digest('hex');
+    const sourceMap: DocumentSourceMap = {
+      artifactId: 'artifact-1', contentHash,
+      parser: { name: 'openscience-parser-cascade', version: '1.0.0' },
+      pages: [{ page: 1, width: 100, height: 100, blocks: [{
+        id: 'block-1', kind: 'paragraph', text: 'Problem: Canonical parser text',
+        boundingBox: { x: 1, y: 1, width: 10, height: 10 },
+        parser: { name: 'native-pdf', version: '1' }, transformations: [],
+      }] }],
+    };
+    const handlers = createHandlers({ completeStructured: vi.fn().mockRejectedValue(new Error('provider down')) } as unknown as AiGateway, {
+      parserCascade: vi.fn().mockResolvedValue({ status: 'succeeded', sourceMap, warnings: [] }),
+    });
+    const stored = new Map<string, Buffer>();
+    const result = await handlers['sdf.extract']!({
+      storage: {
+        getObject: vi.fn().mockResolvedValue({ body: Readable.from([bytes]), size: bytes.length }),
+        headObject: vi.fn().mockResolvedValue(null),
+        putObject: vi.fn(async (key: string, body: Buffer) => {
+          stored.set(key, body);
+          return { key, size: body.length, etag: 'fixture' };
+        }),
+      },
+      malwareScanner: vi.fn().mockResolvedValue(undefined),
+      prisma: {
+        agentTask: { findUnique: vi.fn().mockResolvedValue({
+          id: 'agent-task-1', kind: 'sdf.extract', status: 'running',
+          session: { userId: 'user-1', researchObject: {
+            id: 'ro-1', workspaceId: 'workspace-1', workspace: { id: 'workspace-1', status: 'active' },
+          } },
+        }) },
+        membership: { findUnique: vi.fn().mockResolvedValue({ userId: 'user-1', workspaceId: 'workspace-1', role: 'author' }) },
+        artifact: { findUnique: vi.fn().mockResolvedValue({
+          id: 'artifact-1', workspaceId: 'workspace-1', size: bytes.length,
+          blobSha256: contentHash, logicalPath: 'paper.pdf', mimeType: 'application/pdf',
+        }) },
+      },
+    } as never, { id: 'agent-task-1', payload: { artifactId: 'artifact-1', researchObjectId: 'ro-1' }, executionAttempt: 1 });
+
+    expect(result).toMatchObject({ status: 'needs_review', reason: 'sdf-proposal-unavailable', sourceMapRef: { parserStatus: 'succeeded' } });
+    expect(stored.size).toBe(1);
   });
 
   it.each([

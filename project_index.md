@@ -1,7 +1,7 @@
 # OpenScience (XGS) 项目文件索引
 
 > 维护规则：创建/修改/移动文件后必须更新本索引。创建新文件前先查本表防重复。
-> **CURRENT source/deployment anchor（2026-08-29）：** branch `codex/hermes-wanko-live2d`；application source/production release `5e5ae36a08ae314d0c35ee2b976e306aec73d219`；rollback `6cabe422a8459dfa358786c9f5aae84558949f6b`；core/search `30/30` / `2/2`。Exact CI `33246701963` / job `99085303687`、schema 3 `hermes-parser-14-2-v1` 14/2/0/0、26 locators/3 table-cell、BGE CPU、真实 MiniMax identity-routing journey、retention/backups/markers 全绿。Taskmaster 7/12，Task 8 next、Task 10 dependency-ready；后续 docs-only closeout HEAD 不改变 production 身份。
+> **CURRENT source/deployment anchor（2026-08-29）：** branch/HEAD `codex/hermes-wanko-live2d` / `2add415853570c4cd3cacbca13dfeb0f1e3825d4`，保留未提交 Task 8 改动；application source/production release `5e5ae36a08ae314d0c35ee2b976e306aec73d219`；rollback `6cabe422a8459dfa358786c9f5aae84558949f6b`；core/search `30/30` / `2/2`。Exact CI `33246701963` / job `99085303687`、schema 3 `hermes-parser-14-2-v1` 14/2/0/0、26 locators/3 table-cell、BGE CPU、真实 MiniMax identity-routing journey、retention/backups/markers 全绿。Taskmaster 7/12，Task 8 `in-progress`，本地 review blockers 与全仓门禁已关闭但尚未提交/CI/部署，Task 10 dependency-ready；本地 main 与 ECS production 身份不得混写。
 
 ## 根目录
 | 路径 | 用途 | 状态 |
@@ -103,7 +103,7 @@
 | Rejected local Hermes Blender prototype (not repository content) | 少年星图龙只保留 `hermes-constellation-dragon/apps/web/assets/hermes/HermesConstellationDragon.blend`（SHA-256 `9CF4694D…DDFA5`）；`.blend1`、渲染/contact sheet、manifest、旧脚本/合同已清理 | **用户视觉 NO-GO / HISTORICAL SOURCE ONLY**；二进制进回收站，禁止误读为候选资产 |
 | `.github/workflows/ci.yml` | PR/main 全仓 build/typecheck/lint/test 与生产视觉门禁；在任何会启动 Chromium 的 unit/visual gate 前安装固定 lockfile 对应浏览器，失败前无 evidence 目录时 artifact 上传只告警 | CURRENT CI gate；禁止用本地浏览器缓存替代 clean Ubuntu runner |
 | `.cursor/` | Cursor 编辑器配置 | 工具自管 |
-| `.taskmaster/` | task-master 任务状态；`optical-editorial-v3` 15/15 done；CURRENT `hermes-research-intelligence` 为 7/12，Tasks 1–7 done | 工具自管；Tasks 8 和 10 dependency-ready，产品顺序先 Task 8 |
+| `.taskmaster/` | task-master 任务状态；`optical-editorial-v3` 15/15 done；CURRENT `hermes-research-intelligence` 为 7/12，Tasks 1–7 done | 工具自管；Task 8 `in-progress`，Task 10 dependency-ready |
 | `.memory/memory.jsonl` | Memory MCP 知识图谱存储（MEMORY_FILE_PATH 指定） | 工具自管，随 git 备份 |
 | `src/` | 未来代码 | 空 |
 
@@ -141,6 +141,7 @@
 | `docs/plans/2026-08-29-hermes-parser-acceptance-debt-closeout-plan.md` | Taskmaster Task 4 follow-up 的 TDD 计划：共享 MIME、受控 Notebook/Python、正式 table locator、schema-v3 14/2 acceptance、ECS immutable deploy 与卫生证据 | **COMPLETED / ECS DEPLOYED `6cabe422`**；rollback `28a3d5c`，Tasks 1–6 checked |
 | `docs/plans/2026-08-29-production-release-retention-plan.md` | active+rollback 机器身份、durable pending intent 与精确 release retention 实施计划 | **DEPLOYED / ECS RETENTION GREEN**；active+rollback exact roots/tags，禁止 broad prune，exit 78 用 FD9 `resume` |
 | `docs/plans/2026-08-29-hermes-research-identity-routing-plan.md` | Taskmaster Task 7：注册身份、可纠正兴趣、服务端 InterestContext、Hermes 静默路由与生产真实旅程 | **COMPLETED / ECS DEPLOYED `5e5ae36`**；真实 MiniMax 双任务与 context version 1→2 GREEN |
+| `docs/plans/2026-08-29-hermes-claim-evidence-api-plan.md` | Taskmaster Task 8：可信 SourceMap 引用、Claim/Evidence CRUD/复验、乐观锁/审计与发布双重阻断；Task 9/10 的稳定数据边界 | **CURRENT / IN PROGRESS**；本地 blockers closed，code locator fail-closed，SourceMap GC 归 Task 10；最终以 ECS 真实 RO 旅程验收 |
 | `packages/domain/src/research-intelligence/{identity-profile-service,interest-context}.ts` / `apps/api/src/routes/research-identity.ts` / `apps/web/components/auth/ResearchProfileFields.tsx` | 注册身份、版本化可纠正兴趣、服务端确定性 InterestContext 与设置页；拒绝客户端伪造上下文、敏感字段和站外历史，Hermes 按上下文静默适配 | **TASK 7 PRODUCTION**；migration 30、exact CI、真实公网旅程与精确测试数据清理 GREEN |
 | `docs/plans/2026-08-27-hermes-ai-gateway-llm-ocr-routing-plan.md` | Taskmaster Task 5 的可执行 TDD 计划：provider-neutral OCR、MiniMax Coding Plan VLM adapter、逐页 fallback、kill switch、hash/cost/latency 审计与 ECS-only 验收 | **COMPLETED / ECS DEPLOYED `f965966`**；默认不启用付费 vision route |
 | `docs/plans/2026-08-27-hermes-cpu-parser-cascade-plan.md` / `.superpowers/sdd/2026-08-27-hermes-cpu-parser-cascade-plan/progress.md` | Taskmaster Task 4 的 ECS-only 实施计划与 SDD 唯一执行台账：结构化 sidecar v2、确定性 source map、候选 bake-off、坐标 OCR、受控 LLM candidate、真实 corpus/资源/部署门禁 | **COMPLETED / DEPLOYED `c581712`**；rollback `e2c0eaf`，MiniMax Vision disabled |
@@ -174,7 +175,7 @@
 | `apps/web/lib/extract-review-state.ts` / `apps/web/test/e2e/hermes-blank-ro-flow.spec.ts` / `apps/web/test/visual/hermes-blank-ro-production-gate.mjs` | blank RO 字段级 evidence diff、accept/edit-accept/reject/missing/save/reload/commit；checkpoint 只存 task/决策元数据，storage/transport/Redis 失败复用同一付费 task；公网 gate 要求真实账号/MiniMax、零拦截、credit/audit/immutable snapshot、完整 footprint、真实 Wanko idle/work/review/celebration pixels 与 zh/en/mobile/reduced | **IMPLEMENTED FOUNDATION / CARRIED FORWARD**；真实账号纵向证据来自 `06072c1`，现行 `5f4e73c` 仅重跑无写入 Dashboard UI gate |
 | `apps/web/test/visual/hermes-real-ro-production-gate.mjs` / `packages/domain/test/artifact/scan.test.ts` | ECS-only 真实论文纵向门禁：固定 arXiv 2009.06045v1 SHA-256、浏览器创建/上传、MiniMax 六字段决策与原文证据、确认前 SDF 不变、显式缺失披露、bulk confirm/version commit、Hermes runtime；上传响应与状态轮询均允许 300 秒生产边缘延迟，同时锁定合法 PDF `../` 不误判而真实 ZIP traversal 继续拒绝 | **ECS-ONLY SMOKE TOOL**；最近完整真实证据来自 `06072c1`，`5f4e73c` 未重跑；不使用本机 Docker、不拦截 API，输出仅写 ignored visual evidence |
 | `docs/handoff/2026-08-15-hermes-constellation-dragon-prototype-handoff.md` | 少年星图龙静态 Blender 原型、结构门禁与用户 NO-GO 结论 | 历史交接；不得按其 next action 恢复 3D |
-| `docs/handoff/2026-08-16-hermes-2d-pet-handoff.md` | 唯一 compact CURRENT 交接：Research Intelligence 生产基线、CPU parser 14/2 验收、磁盘分类、固定约束与 version tuple | **CURRENT active-memory**；branch/application/production `codex/hermes-wanko-live2d` / `5e5ae36`，rollback `6cabe422`；Task 8 next |
+| `docs/handoff/2026-08-16-hermes-2d-pet-handoff.md` | 唯一 compact CURRENT 交接：Research Intelligence 生产基线、Task 8 未提交工作树、复审决策、固定约束与 version tuple | **CURRENT active-memory**；branch/HEAD `codex/hermes-wanko-live2d` / `2add415`，production `5e5ae36`，rollback `6cabe422`；Task 8 `in-progress` |
 | `docs/plans/2026-08-26-landing-motion-navigation-continuity-plan.md` | 冻结 Hermes、补全 Landing final-composite gate 与真实产品页一级/RO 二级入口 | **COMPLETED / DEPLOYED**；application/release/rollback `c80f739` / `263c783` / `8395b4d` |
 | `docs/design/optical-editorial-figma-map.md` | 长期账号 Figma canonical 的 V3 variables/styles/components/八表面节点映射、代码对应关系与 Code Connect 边界 | Task 13 canonical 映射 |
 | `docs/superpowers/specs/2026-08-09-researcher-ingestion-product-slice-design.md` | 研究者第一条产品级前端闭环设计：注册、Dashboard、资料导入、Hermes 证据确认、RO Workspace；待用户审阅 | 设计 spec |
@@ -329,6 +330,7 @@
 | `docs/handoff/2026-08-06-frontend-p0-p1-sdd-handoff.md` | 前端 P0/P1 SDD 执行交接：7.1–7.3 done（2bacb65/fd46359/61d19a4），7.4–7.11 移交 GPT；含工作流/约束/遗留 minor/验收门 | 活文档（执行中） |
 | `docs/CODEBASE_AUDIT.md` | Phase 0 Scholars Tea 只读审计报告（地图/模块分类/风险登记/迁移含义） | 活文档 |
 | `docs/proposals/` | 方案/脑暴稿 | 含前端设计方向 v1（旧方案0723已废弃不归档） |
+| `docs/proposals/2026-08-29-project-development-deployment-evidence-pack.md` | 阶段取证整理稿：分支/时间线 Git 记录、ECS/域名四层上线口径、production release/rollback/TLS/container 证据，以及 suggested / confirmed 的字段、生产聚合与完整展示 API 样例 | **CURRENT evidence package**；2026-08-29 ECS read-only verified，样例为自编演示数据，不含 Secret/生产业务正文，Task 8 未部署事实已显式隔离 |
 | `docs/proposals/2026-08-25-openscience-patent-product-introduction.md` / `.docx` | OpenScience 完整产品与技术方案介绍：RO/SDF、证据、版本、AI 审批、隔离解析、沙箱、协作发布、Hermes 与可拆分技术点；DOCX 为专利技术交底用途交付件，Markdown 为可维护源稿 | **CURRENT patent-introduction draft**；需专利代理人完成现有技术检索与权利要求撰写 |
 | `docs/proposals/2026-08-06-frontend-design-direction-v1.md` | 前端整体设计方向（三方讨论稿，文末「v2 终稿决策层」D1–D9 效力最高：符号=Evolving RO 映射 SDF 六节点/纯 SVG 辉光/三套视觉+token/Live2D 一步到位/分期 P0–P4，下一步转 specs+plan） | **已定稿 v2** |
 | `docs/user_ideas/竞品分析报告.docx` | 用户竞品分析（34 竞品/11 类，战略与 IA 层启发，前端设计 v1 的输入材料） | 只读原件 |

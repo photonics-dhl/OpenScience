@@ -5,6 +5,7 @@ import { basename, dirname, join, relative, resolve } from 'node:path';
 
 import {
   createTableCellSourceLocator,
+  parseDocumentSourceMapReference,
   resolveSourceLocator,
   type DocumentSourceMap,
 } from '@openscience/domain';
@@ -512,15 +513,25 @@ export async function verifyAcceptanceRuntimeGraphManifest(
 
 export function classifyAcceptanceHandlerResult(value: unknown): 'completed' | 'needs_review' {
   if (!isRecord(value)) throw new Error('invalid sdf.extract handler result');
+  const hasSourceMapRef = value.sourceMapRef !== undefined;
+  if (hasSourceMapRef) {
+    try {
+      parseDocumentSourceMapReference(value.sourceMapRef);
+    } catch {
+      throw new Error('invalid sdf.extract handler result');
+    }
+  }
   if (value.status === 'needs_review') {
-    if (!hasExactKeys(value, ['status', 'format', 'reason'])
+    if (!hasExactKeys(value, hasSourceMapRef ? ['status', 'format', 'reason', 'sourceMapRef'] : ['status', 'format', 'reason'])
       || typeof value.format !== 'string' || !value.format
       || typeof value.reason !== 'string' || !value.reason) {
       throw new Error('invalid sdf.extract handler result');
     }
     return 'needs_review';
   }
-  if (!hasExactKeys(value, ['core', 'evidence', 'needsMoreInformation'])
+  if (!hasExactKeys(value, hasSourceMapRef
+    ? ['core', 'evidence', 'needsMoreInformation', 'sourceMapRef']
+    : ['core', 'evidence', 'needsMoreInformation'])
     || !isRecord(value.core) || !isRecord(value.evidence)
     || !Array.isArray(value.needsMoreInformation)) {
     throw new Error('invalid sdf.extract handler result');

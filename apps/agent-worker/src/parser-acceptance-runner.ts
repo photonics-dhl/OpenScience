@@ -91,8 +91,29 @@ async function main(): Promise<void> {
     }, { featureFlags: canonicalCascade.featureFlags });
     const handlers = createHandlers(gateway, { parserCascade, externalProcessingPolicy: async () => false });
     const malwareScanner = async () => undefined;
+    const derivedObjects = new Map<string, Buffer>();
     const deps = {
-      storage: { getObject: async () => ({ body: Readable.from([bytes]), size: bytes.length }) },
+      storage: {
+        getObject: async (key: string) => {
+          const derived = derivedObjects.get(key);
+          return derived
+            ? { body: Readable.from([derived]), size: derived.length }
+            : { body: Readable.from([bytes]), size: bytes.length };
+        },
+        headObject: async (key: string) => {
+          const derived = derivedObjects.get(key);
+          return derived ? { size: derived.length, etag: 'acceptance' } : null;
+        },
+        putObject: async (key: string, body: Buffer | Readable) => {
+          const chunks: Buffer[] = [];
+          if (Buffer.isBuffer(body)) chunks.push(body);
+          else for await (const chunk of body) chunks.push(Buffer.from(chunk));
+          const value = Buffer.concat(chunks);
+          derivedObjects.set(key, value);
+          return { key, size: value.length, etag: 'acceptance' };
+        },
+        deleteObject: async (key: string) => void derivedObjects.delete(key),
+      },
       malwareScanner,
       prisma: {
         agentTask: { findUnique: async () => ({
