@@ -9,4 +9,3 @@ const result = spawnSync(
 
 if (result.error) throw result.error;
 process.exit(result.status ?? 1);
-

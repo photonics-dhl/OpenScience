@@ -1,13 +1,20 @@
 # OpenScience 进度（CURRENT window）
 
-> 最新同步：2026-08-29。历史由 Git 保存；旧计划和 archive 不作为默认输入。
+> 最新同步：2026-08-30。历史由 Git 保存；旧计划和 archive 不作为默认输入。
 
 ## Current version tuple
 
-- Worktree branch / implementation HEAD: `codex/claim-first-public-ro` / `2abf0d6d678eb6768dac035d4c7ff6058ac81348`；分支基于 main `5105b1e…`。
+- Worktree branch / implementation HEAD: `codex/claim-first-public-ro` / `76db64fdd07f0facb53679e97970f8560270897b`；分支基于 main `5105b1e…`。
 - Production application source / immutable release: `4c73469fe24abe685054f1d917d452adc5371d35`；docs HEAD、本地 main 与生产身份不得混写。
 - Production rollback: `cf68bfa7baba9610dcd010fed0fcf5fd0deeab2f`；core/search migrations `30/30` / `2/2`。
 - Taskmaster `hermes-research-intelligence` 为 8/12：Tasks 1–8 done；Task 9 Claim-first 公开 RO 已 `in-progress`，Task 10 仍 dependency-ready。
+
+## 2026-08-30 — Task 9 implementation and browser gates complete locally
+
+- Tasks 1–7 已完成：匿名 DTO 仅暴露 `published + Publication`；R3 发布原子扩大 RO 为 public；generic PATCH 不再接受 visibility；migration 31 保存账号 Evidence 默认折叠偏好；公开 source/approved asset 端点在返回前复验原件、SourceMap、大小与 SHA-256，并隐藏 object key、workspace、验证者和私有 provenance。
+- Claim-first Research Folio 已实现 760px 正文 + 280px graphite Evidence rail、3–7 core/child/counter Claim、conditions/limitations、关系型 Evidence、按需原文/页码/归一化区域定位、移动 Radix bottom sheet、焦点返回、账号/匿名偏好与 approved PresentationAsset 的“展示而非证据”分标。Evidence 折叠不使用 `hidden`/`display:none`/`aria-hidden`，SSR、辅助技术与打印保留全文。
+- 新鲜本地证据：Web build 成功；Domain 478/478、API 85/85、Web 418/418；Chromium 1440/768/375/print 4/4，覆盖精确列宽、无横向溢出、键盘/焦点、AA 对比度、reduced motion 与折叠后打印全文。并行全量曾令两个原有 Domain 大对象测试超过 5 秒，单独复跑 478/478，判定为本机 CPU 争用而非断言回归。
+- 当前仅为本地候选；生产仍是 `4c73469…`、rollback `cf68bfa7…`、core/search `30/30`/`2/2`。Task 9 继续保持 `in-progress`，必须通过 exact CI、ECS migration 31、真实生产 RO 旅程与精确清理后才可置 done。
 
 ## 2026-08-29 — Main/branch consolidation and Task 9 started
 

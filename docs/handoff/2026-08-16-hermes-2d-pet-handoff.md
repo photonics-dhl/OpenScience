@@ -1,6 +1,6 @@
 # Hermes Research Intelligence CURRENT Handoff
 
-> **CURRENT active-memory，2026-08-29。** Task 8 已生产验收并完成磁盘/分支卫生；Task 9 Claim-first 公开 RO 已进入实施。Landing/Hermes 视觉仍冻结。
+> **CURRENT active-memory，2026-08-30。** Task 9 Claim-first 公开 RO 已完成本地实现与真实 Chromium 门禁，等待 exact CI/ECS 生产验收。Landing/Hermes 视觉仍冻结。
 
 ## Goal and state
 
@@ -11,7 +11,7 @@
 ## Version tuple
 
 - Worktree: `E:/Miscellaneous/XGS/.worktrees/readable-hermes-guidance`
-- Branch / implementation HEAD: `codex/claim-first-public-ro` / `2abf0d6d678eb6768dac035d4c7ff6058ac81348`；分支基于 main `5105b1e…`。
+- Branch / implementation HEAD: `codex/claim-first-public-ro` / `76db64fdd07f0facb53679e97970f8560270897b`；分支基于 main `5105b1e…`。
 - Production application source / immutable release: `4c73469fe24abe685054f1d917d452adc5371d35`
 - Rollback: `cf68bfa7baba9610dcd010fed0fcf5fd0deeab2f`; core/search migrations `30/30` / `2/2`
 - 本地 `main` 与其他 worktree 有用户改动，不得触碰或用它推断生产；上述 tuple 已从 ECS 重新实测。
@@ -38,7 +38,7 @@
 5. Task 8 已完成。公开页 journey 的 RO 由一次性 fixture 预置为 public；正式“扩大可见性审批”不得借 generic PATCH 绕过，应与 Task 9 的发布/公开衔接一起关闭。
 6. `/opt/openscience-evals` 的 40 个历史工作目录已在生产锁内精确清理；6 份小报告与 cleanup receipt 在 `/opt/openscience-acceptance/capability-evaluations`，7/7 checksum 通过。根盘当前约 36G used / 106G available。
 7. PR #4 已合并为 main `5105b1e…`；GitHub 旧 branches 已清至 main，独立旧 Live2D 历史由 `archive/hermes-2d-pet-20260829` 保留。当前短分支只承载 Task 9。
-8. Task 9 Tasks 1–3 已本地实现：publication-only Claim/Evidence DTO、R3 publish→public 原子边界、migration 31 账号 Evidence 阅读偏好/CAS API；生产仍为 migration 30，禁止提前声称已部署。
+8. Task 9 Tasks 1–7 已本地实现：publication-only DTO、R3 publish→public、migration 31 阅读偏好、可信 Evidence source/approved asset、760/280 Claim-first UI、移动 sheet、打印/WCAG/视觉门禁。Domain 478/478、API 85/85、Web 418/418、Chromium 4/4；生产仍为 migration 30，禁止提前声称已部署。
 
 ## Constraints
 
@@ -48,9 +48,9 @@
 
 ## Next action
 
-1. 从计划 Task 4 开始，交付 published Evidence source 与 approved PresentationAsset 安全端点。
-2. 随后做 760/280 Claim-first UI、移动 Evidence sheet、账号/匿名阅读偏好、打印/WCAG；禁止把视觉完成替代数据/权限正确性。
-3. 最终走 exact CI、ECS migration/parser/BGE/release 门禁与一次真实 public RO journey，精确清理后才置 done。
+1. 完成本地全仓 build/typecheck/lint/test、docs-sync/docs-lint 与安全/架构复审，形成 exact candidate SHA。
+2. 等候该 SHA 的 GitHub CI 全绿，再从显式 Git Bash 走 canonical ECS deploy；执行 migration 31、Parser/BGE/health/release/retention 门禁。
+3. 运行一次真实生产 public RO journey，验证 R3 publish→public、原文定位、Settings 偏好、桌面/移动/打印，并精确清理一次性行与对象；磁盘只做 bounded audit，不 broad prune。
 
 ## Read first
 

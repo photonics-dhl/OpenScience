@@ -1,4 +1,5 @@
 import { createServer } from 'node:http';
+import { Buffer } from 'node:buffer';
 import process from 'node:process';
 import { URL } from 'node:url';
 
