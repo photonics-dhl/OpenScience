@@ -779,6 +779,16 @@ test('Hermes action menu / detached desktop dock remains joined to the visible c
     };
   });
   await expect.poll(async () => (await readProtectedGeometry()).protectedGap).toBeGreaterThanOrEqual(0);
+  await expect.poll(async () => {
+    const candidate = await readProtectedGeometry();
+    const validAttachment = ['left', 'right', 'above-wide'].includes(candidate.attachment ?? '');
+    const joinedWideMenu = candidate.attachment !== 'above-wide' || candidate.menuActorHorizontalContinuity;
+    return validAttachment
+      && candidate.attachmentGap >= 24
+      && candidate.attachmentGap <= 48
+      && !candidate.menuActorOverlap
+      && joinedWideMenu;
+  }, { timeout: 2_000 }).toBe(true);
   const protectedGeometry = await readProtectedGeometry();
   expect(protectedGeometry.protectedGap, JSON.stringify(protectedGeometry)).toBeGreaterThanOrEqual(0);
   expect(protectedGeometry.actor.top, JSON.stringify(protectedGeometry)).toBeGreaterThanOrEqual(protectedGeometry.viewportTop);
