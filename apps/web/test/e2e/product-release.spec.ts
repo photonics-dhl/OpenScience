@@ -54,6 +54,11 @@ async function installClientFixtures(page: Page) {
   await page.route('**/api/workspaces', (route) => json(route, {
     workspaces: [{ id: 'workspace-release', name: 'Personal workspace', type: 'personal', role: 'owner' }],
   }));
+  await page.route('**/api/research-identity', (route) => json(route, { profile: {
+    identities: ['author'], primaryIdentity: 'author', disciplines: ['physics'],
+    methods: ['time-resolved spectroscopy'], topics: ['ultrafast dynamics'], languages: ['en'],
+    acceptedSignals: [], rejectedSignals: [], profileVersion: 1,
+  } }));
   await page.route('**/api/explore**', (route) => json(route, { items: [{
     publicId: 'OSR-DEMO-000001', title: 'WrightTools · multidimensional spectroscopy',
     url: '/research/OSR-DEMO-000001', latestVersion: 1, publishedAt: '2026-08-10T00:00:00.000Z',
