@@ -39,6 +39,7 @@ import {
 } from './parsers/cascade-orchestrator';
 import { createTextExtractor, type TextStageAdapter } from './parsers/text-extractor';
 import type { ParserInput } from './parsers/types';
+import { canonicalParserMediaType } from './parser-media-type';
 
 const BGE_M3_REVISION = '5617a9f61b028005a4858fdac845db406aefb181';
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
@@ -255,7 +256,7 @@ export function createHandlers(
         artifactId: artifact.id,
         contentHash: artifact.blobSha256,
         content: bytes,
-        mediaType: parserMediaType(artifact.logicalPath, artifact.mimeType),
+        mediaType: canonicalParserMediaType(artifact.logicalPath, artifact.mimeType),
       }, { trustedAuthorizationContext, externalProcessingEligible });
       const format = artifact.logicalPath.split('.').at(-1)?.toLowerCase() ?? 'unknown';
       if (parsed.status === 'blocked') throw new Error(`[blocked] ${parsed.code}`);
@@ -278,29 +279,6 @@ export function createHandlers(
         options.searchIndexer!.index(await authorizeSearchIndexJob(_deps, task)),
     }),
   };
-}
-
-const PARSER_MEDIA_TYPES: Readonly<Record<string, string>> = Object.freeze({
-  md: 'text/markdown',
-  markdown: 'text/markdown',
-  tex: 'text/x-tex',
-  csv: 'text/csv',
-  xlsx: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-  pdf: 'application/pdf',
-  docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-  png: 'image/png',
-  jpg: 'image/jpeg',
-  jpeg: 'image/jpeg',
-  webp: 'image/webp',
-  tif: 'image/tiff',
-  tiff: 'image/tiff',
-});
-
-function parserMediaType(logicalPath: string, storedMimeType: string | null | undefined): string {
-  const normalized = storedMimeType?.split(';', 1)[0]?.trim().toLowerCase();
-  if (normalized && normalized !== 'application/octet-stream') return normalized;
-  const extension = logicalPath.split('.').at(-1)?.toLowerCase() ?? '';
-  return PARSER_MEDIA_TYPES[extension] ?? 'application/octet-stream';
 }
 
 export async function sleep(ms: number): Promise<void> {

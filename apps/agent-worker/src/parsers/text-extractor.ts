@@ -20,6 +20,8 @@ const SUPPORTED_MEDIA_TYPES = new Set([
   'application/markdown',
   'application/x-tex',
   'text/x-tex',
+  'text/x-python',
+  'application/x-ipynb+json',
   'text/csv',
   XLSX_MEDIA_TYPE,
   DOCX_MEDIA_TYPE,
@@ -36,6 +38,10 @@ const MAX_SOURCE_MAP_BLOCKS = 10_000;
 const MAX_LOGICAL_ROWS = 10_000;
 const MAX_CSV_FIELDS = 10_000;
 const MAX_SERIALIZED_RESULT_CHARACTERS = 8_000_000;
+const MAX_NOTEBOOK_BYTES = 8 * 1024 * 1024;
+const MAX_NOTEBOOK_JSON_DEPTH = 64;
+const MAX_NOTEBOOK_JSON_VALUES = 100_000;
+const MAX_NOTEBOOK_SOURCE_PARTS = 10_000;
 const XLSX_REVIEW_REASON = 'structured-xlsx-review-required';
 const CSV_REVIEW_REASON = 'structured-csv-review-required';
 
@@ -74,7 +80,8 @@ function decodeUtf8(content: Buffer): string {
   return new TextDecoder('utf-8', { fatal: true }).decode(content);
 }
 
-function classifyLine(text: string, kind: 'markdown' | 'tex') {
+function classifyLine(text: string, kind: 'markdown' | 'tex' | 'python') {
+  if (kind === 'python') return 'paragraph' as const;
   const heading = kind === 'markdown'
     ? /^\s{0,3}#{1,6}(?:\s|$)/u.test(text)
     : /^\s*\\(?:part|chapter|section|subsection|subsubsection)(?:\*?\{|\b)/u.test(text);
@@ -99,7 +106,7 @@ function scanLogicalLines(text: string, maximum: number, visit: (line: string, l
   return lineNumber;
 }
 
-function parsePlainLines(content: Buffer, kind: 'markdown' | 'tex'): SourceMapPageDraft[] {
+function parsePlainLines(content: Buffer, kind: 'markdown' | 'tex' | 'python'): SourceMapPageDraft[] {
   const cells: VirtualTextCell[] = [];
   let textCharacters = 0;
   const lineCount = scanLogicalLines(decodeUtf8(content), MAX_LOGICAL_ROWS, (text, lineNumber) => {
@@ -109,6 +116,69 @@ function parsePlainLines(content: Buffer, kind: 'markdown' | 'tex'): SourceMapPa
     cells.push({ line: lineNumber, kind: classifyLine(text, kind), text });
   });
   return [buildVirtualPage(1, cells, lineCount)];
+}
+
+function isPlainObject(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
+    && Object.getPrototypeOf(value) === Object.prototype;
+}
+
+function assertNotebookJsonBudget(value: unknown): void {
+  const pending: Array<{ value: unknown; depth: number }> = [{ value, depth: 1 }];
+  let values = 0;
+  while (pending.length > 0) {
+    const current = pending.pop()!;
+    values += 1;
+    if (values > MAX_NOTEBOOK_JSON_VALUES) throw new ParsingLimitError();
+    if (current.depth > MAX_NOTEBOOK_JSON_DEPTH) throw new Error('Notebook JSON is too deeply nested');
+    if (Array.isArray(current.value)) {
+      for (const entry of current.value) pending.push({ value: entry, depth: current.depth + 1 });
+    } else if (isPlainObject(current.value)) {
+      for (const entry of Object.values(current.value)) pending.push({ value: entry, depth: current.depth + 1 });
+    }
+  }
+}
+
+function notebookSource(value: unknown): string {
+  if (typeof value === 'string') return value;
+  if (!Array.isArray(value) || value.length > MAX_NOTEBOOK_SOURCE_PARTS || value.some((entry) => typeof entry !== 'string')) {
+    throw new Error('Notebook source is invalid');
+  }
+  return value.join('');
+}
+
+function hasOnlyEmptyAttachments(value: unknown): boolean {
+  return isPlainObject(value) && Object.keys(value).length === 0;
+}
+
+function parseNotebook(content: Buffer): SourceMapPageDraft[] {
+  if (content.byteLength > MAX_NOTEBOOK_BYTES) throw new ParsingLimitError();
+  const parsed: unknown = JSON.parse(decodeUtf8(content));
+  assertNotebookJsonBudget(parsed);
+  if (!isPlainObject(parsed) || !Array.isArray(parsed.cells)) throw new Error('Notebook root is invalid');
+  if (parsed.cells.length > MAX_SOURCE_MAP_BLOCKS) throw new ParsingLimitError();
+
+  const cells: VirtualTextCell[] = [];
+  let textCharacters = 0;
+  for (const [index, value] of parsed.cells.entries()) {
+    if (!isPlainObject(value)) throw new Error('Notebook cell is invalid');
+    const cellType = value.cell_type;
+    if (cellType !== 'markdown' && cellType !== 'code' && cellType !== 'raw') {
+      throw new Error('Notebook cell type is unsupported');
+    }
+    if (value.outputs !== undefined && (!Array.isArray(value.outputs) || value.outputs.length > 0)) {
+      throw new Error('Notebook outputs are unsupported');
+    }
+    if (value.attachments !== undefined && !hasOnlyEmptyAttachments(value.attachments)) {
+      throw new Error('Notebook attachments are unsupported');
+    }
+    const text = notebookSource(value.source);
+    if (text.length > MAX_BLOCK_TEXT_CHARACTERS) throw new ParsingLimitError();
+    textCharacters += text.length;
+    if (textCharacters > MAX_TOTAL_TEXT_CHARACTERS) throw new ParsingLimitError();
+    if (text.trim()) cells.push({ line: index + 1, kind: 'paragraph', text });
+  }
+  return [buildVirtualPage(1, cells, parsed.cells.length)];
 }
 
 function parseCsv(content: Buffer): SourceMapPageDraft[] {
@@ -347,7 +417,11 @@ export function createTextExtractor(adapters: TextExtractionAdapters): DocumentP
           ? parseCsv(input.content)
           : type === XLSX_MEDIA_TYPE
             ? await parseXlsx(input.content)
-            : parsePlainLines(input.content, type === 'application/x-tex' || type === 'text/x-tex' ? 'tex' : 'markdown');
+            : type === 'application/x-ipynb+json'
+              ? parseNotebook(input.content)
+              : parsePlainLines(input.content, type === 'application/x-tex' || type === 'text/x-tex'
+                ? 'tex'
+                : type === 'text/x-python' ? 'python' : 'markdown');
         assertSourceMapBudgets(pages);
         const sourceMap = validatedSourceMap(input, pages);
         if (!sourceMap.pages.some((page) => page.blocks.some((block) => block.text && meaningful(block.text)))) {

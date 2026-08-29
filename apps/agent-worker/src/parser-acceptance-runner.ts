@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
-import { basename, extname, join } from 'node:path';
+import { basename, join } from 'node:path';
 import { Readable } from 'node:stream';
 
 import type { AiGateway } from '@openscience/ai-gateway';
@@ -19,13 +19,7 @@ import {
   createParserStageJobClient,
   expectedSidecarParserMetadata,
 } from './parser-job-isolation';
-
-const MEDIA_TYPES: Record<string, string> = {
-  '.csv': 'text/csv', '.docx': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-  '.jpeg': 'image/jpeg', '.jpg': 'image/jpeg', '.md': 'text/markdown', '.pdf': 'application/pdf',
-  '.png': 'image/png', '.tex': 'application/x-tex',
-  '.xlsx': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-};
+import { canonicalParserMediaType } from './parser-media-type';
 
 function percentile(values: readonly number[], fraction: number): number {
   const sorted = [...values].sort((left, right) => left - right);
@@ -86,7 +80,7 @@ async function main(): Promise<void> {
         artifact: { findUnique: async () => ({
           id: `artifact-${item.id}`, workspaceId: 'accept-workspace', size: bytes.length,
           blobSha256: digest, logicalPath: item.filename,
-          mimeType: MEDIA_TYPES[extname(item.filename).toLowerCase()] ?? 'application/octet-stream',
+          mimeType: canonicalParserMediaType(item.filename),
         }) },
       },
     };

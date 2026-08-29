@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { executeDocumentParser } from '../src/ingestion-parser';
 import { createTextExtractor, type TextExtractionAdapters } from '../src/parsers/text-extractor';
 import type { ParserStageResult } from '../src/parsers/job-protocol';
@@ -288,6 +288,107 @@ describe('deterministic text DocumentParser', () => {
     expect(second.status).toBe('succeeded');
     if (first.status !== 'succeeded' || second.status !== 'succeeded') return;
     expect(first.sourceMap.pages[0]?.blocks[0]?.id).toBe(second.sourceMap.pages[0]?.blocks[0]?.id);
+  });
+
+  it('parses Python with one-based virtual source lines without an external parser', async () => {
+    const externalAdapter = vi.fn(async () => stage());
+    const parserInput = input('# note\npulse_width_fs = 42\n', 'text/x-python');
+    const result = await executeDocumentParser(createTextExtractor({
+      pdf: externalAdapter,
+      docx: externalAdapter,
+      image: externalAdapter,
+      xlsx: externalAdapter,
+    }), parserInput);
+
+    expect(result).toMatchObject({ status: 'succeeded' });
+    expect(externalAdapter).not.toHaveBeenCalled();
+    if (result.status !== 'succeeded') return;
+    expect(result.sourceMap.pages[0]?.blocks.map((block) => ({
+      kind: block.kind,
+      text: block.text,
+      y: block.boundingBox.y,
+    }))).toEqual([
+      { kind: 'paragraph', text: '# note', y: 0 },
+      { kind: 'paragraph', text: 'pulse_width_fs = 42', y: 24 },
+    ]);
+  });
+
+  it('parses supported Notebook cells deterministically without an external parser', async () => {
+    const externalAdapter = vi.fn(async () => stage());
+    const notebook = JSON.stringify({
+      cells: [
+        { cell_type: 'markdown', source: '## Method\n', attachments: {} },
+        { cell_type: 'code', source: ['pulse_width_fs = 42\n'], outputs: [] },
+        { cell_type: 'raw', source: 'raw preservation\n' },
+      ],
+      metadata: {},
+      nbformat: 4,
+      nbformat_minor: 5,
+    });
+    const result = await executeDocumentParser(createTextExtractor({
+      pdf: externalAdapter,
+      docx: externalAdapter,
+      image: externalAdapter,
+      xlsx: externalAdapter,
+    }), input(notebook, 'application/x-ipynb+json'));
+
+    expect(result).toMatchObject({ status: 'succeeded' });
+    expect(externalAdapter).not.toHaveBeenCalled();
+    if (result.status !== 'succeeded') return;
+    expect(result.sourceMap.pages[0]?.blocks.map((block) => ({ text: block.text, y: block.boundingBox.y }))).toEqual([
+      { text: '## Method\n', y: 0 },
+      { text: 'pulse_width_fs = 42\n', y: 24 },
+      { text: 'raw preservation\n', y: 48 },
+    ]);
+  });
+
+  it.each([
+    ['invalid UTF-8 Python', input(Buffer.from([0xc3, 0x28]), 'text/x-python')],
+    ['malformed Notebook', input('{', 'application/x-ipynb+json')],
+    ['deep Notebook', input(JSON.stringify({
+      cells: [],
+      metadata: Array.from({ length: 65 }).reduce((value) => ({ value }), {}),
+    }), 'application/x-ipynb+json')],
+    ['unknown Notebook cell type', input(JSON.stringify({
+      cells: [{ cell_type: 'heading', source: 'not supported' }],
+    }), 'application/x-ipynb+json')],
+    ['non-empty Notebook attachment', input(JSON.stringify({
+      cells: [{ cell_type: 'markdown', source: 'visible text', attachments: { 'plot.png': {} } }],
+    }), 'application/x-ipynb+json')],
+  ])('sends %s to review without source-map text', async (_label, parserInput) => {
+    const result = await executeDocumentParser(createTextExtractor({}), parserInput);
+
+    expect(result).toMatchObject({ status: 'needs_review', reasons: ['parser-failed'] });
+    if (result.status !== 'needs_review') return;
+    expect(result.sourceMap.pages).toEqual([]);
+  });
+
+  it('does not include rejected Notebook output payloads in the source map', async () => {
+    const result = await executeDocumentParser(createTextExtractor({}), input(JSON.stringify({
+      cells: [{
+        cell_type: 'code', source: 'safe source',
+        outputs: [{ output_type: 'stream', text: 'must-not-enter-source-map' }],
+      }],
+    }), 'application/x-ipynb+json'));
+
+    expect(result).toMatchObject({ status: 'needs_review', reasons: ['parser-failed'] });
+    if (result.status !== 'needs_review') return;
+    expect(JSON.stringify(result.sourceMap)).not.toContain('must-not-enter-source-map');
+  });
+
+  it.each([
+    ['oversized Notebook bytes before JSON parsing', input(Buffer.alloc(8 * 1024 * 1024 + 1, 0x20), 'application/x-ipynb+json')],
+    ['Notebook with too many cells', input(JSON.stringify({
+      cells: Array.from({ length: 10_001 }, () => ({ cell_type: 'raw', source: '' })),
+    }), 'application/x-ipynb+json')],
+    ['Notebook source beyond the per-block budget', input(JSON.stringify({
+      cells: [{ cell_type: 'raw', source: 'a'.repeat(50_001) }],
+    }), 'application/x-ipynb+json')],
+  ])('blocks %s at a parsing safety limit', async (_label, parserInput) => {
+    await expect(executeDocumentParser(createTextExtractor({}), parserInput)).resolves.toMatchObject({
+      status: 'blocked',
+      code: 'limit_exceeded',
+    });
   });
 
   it.each([
