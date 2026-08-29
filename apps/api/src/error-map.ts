@@ -1,5 +1,5 @@
 import { AuthError, type AuthErrorCode } from '@openscience/auth';
-import { AgentError, AppealError, ApprovalError, ArtifactError, AuthorError, BranchError, ClaimEvidenceError, CommitError, EditorialError, ForkError, IngestionError, IssueError, LicenseError, NotificationError, PrError, PublishError, ResearchIdentityProfileError, ResearchIntelligenceValidationError, ResearchObjectError, ReviewError, UsageError, VisibilityError, WorkspaceError, type ResearchIdentityProfileErrorCode, type WorkspaceErrorCode } from '@openscience/domain';
+import { AgentError, AppealError, ApprovalError, ArtifactError, AuthorError, BranchError, ClaimEvidenceError, CommitError, EditorialError, ForkError, IngestionError, IssueError, LicenseError, NotificationError, PrError, PublishError, ReadingPreferenceError, ResearchIdentityProfileError, ResearchIntelligenceValidationError, ResearchObjectError, ReviewError, UsageError, VisibilityError, WorkspaceError, type ReadingPreferenceErrorCode, type ResearchIdentityProfileErrorCode, type WorkspaceErrorCode } from '@openscience/domain';
 import { buildErrorBody, type ErrorBody } from '@openscience/observability';
 
 const AUTH_ERROR_HTTP: Record<AuthErrorCode, number> = {
@@ -189,6 +189,11 @@ const RESEARCH_IDENTITY_ERROR_HTTP: Record<ResearchIdentityProfileErrorCode, num
   INVALID_INTEREST_SIGNAL: 400,
 };
 
+const READING_PREFERENCE_ERROR_HTTP: Record<ReadingPreferenceErrorCode, number> = {
+  PREFERENCE_VERSION_CONFLICT: 409,
+  INVALID_READING_PREFERENCE: 400,
+};
+
 const CLAIM_EVIDENCE_ERROR_HTTP: Record<ClaimEvidenceError['code'], number> = {
   NOT_FOUND: 404,
   FORBIDDEN: 403,
@@ -205,6 +210,9 @@ export type { ErrorBody };
 
 /** 统一错误映射（2.6 扩展为全局标准前的最小版：/auth + /workspaces + /usage）；requestId 三方串联（Spec §17）。 */
 export function httpStatusForError(err: unknown, requestId?: string): { status: number; body: ErrorBody } {
+  if (err instanceof ReadingPreferenceError) {
+    return { status: READING_PREFERENCE_ERROR_HTTP[err.code], body: buildErrorBody(err.code, err.message, requestId) };
+  }
   if (err instanceof ClaimEvidenceError) {
     return { status: CLAIM_EVIDENCE_ERROR_HTTP[err.code], body: buildErrorBody(err.code, err.message, requestId) };
   }

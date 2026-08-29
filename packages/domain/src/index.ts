@@ -307,6 +307,13 @@ export {
   deserializeSourceLocator,
 } from './research-intelligence/source-locator';
 export {
+  ReadingPreferenceError,
+  getReadingPreference,
+  updateReadingPreference,
+  type ReadingPreferenceErrorCode,
+  type ReadingPreferenceState,
+} from './preferences/reading-preferences';
+export {
   VIRTUAL_PAGE_WIDTH,
   VIRTUAL_LINE_HEIGHT,
   VIRTUAL_PAGE_METADATA,
