@@ -86,6 +86,7 @@ import {
 import DefaultLoginForm, { LoginForm } from '../components/auth/LoginForm';
 import { ResearchIdentityPanel } from '../components/auth/ResearchIdentityPanel';
 import { SignupCodeForm, validateSignupPassword } from '../components/auth/SignupCodeForm';
+import { applyProfileTokenDraft } from '../components/auth/ResearchProfileFields';
 import { ContinueResearch } from '../components/dashboard/ContinueResearch';
 import { HermesTaskRail } from '../components/dashboard/HermesTaskRail';
 import { ImportStage } from '../components/dashboard/ImportStage';
@@ -98,6 +99,13 @@ afterEach(() => {
 });
 
 describe('auth API contract', () => {
+  it('preserves a trailing separator while entering a second research-interest token', () => {
+    const afterComma = applyProfileTokenDraft('physics,');
+    expect(afterComma).toEqual({ draft: 'physics,', tokens: ['physics'] });
+    expect(applyProfileTokenDraft(`${afterComma.draft} optics`)).toEqual({
+      draft: 'physics, optics', tokens: ['physics', 'optics'],
+    });
+  });
   it('retains the rolling-sync default LoginForm export', () => {
     const markup = renderToStaticMarkup(createElement(DefaultLoginForm, { returnTo: '/dashboard' }));
     expect(markup).toContain('data-auth-flow="login"');
@@ -224,6 +232,14 @@ describe('auth API contract', () => {
       code: '123456',
       password: 'Method123',
       displayName: 'Ada Researcher',
+      researchIdentity: {
+        identities: ['author', 'reviewer'],
+        primaryIdentity: 'author',
+        disciplines: ['physics'],
+        methods: ['spectroscopy'],
+        topics: ['ultrafast optics'],
+        languages: ['en'],
+      },
     });
 
     expect(fetchMock).toHaveBeenNthCalledWith(
@@ -244,6 +260,14 @@ describe('auth API contract', () => {
           code: '123456',
           password: 'Method123',
           displayName: 'Ada Researcher',
+          researchIdentity: {
+            identities: ['author', 'reviewer'],
+            primaryIdentity: 'author',
+            disciplines: ['physics'],
+            methods: ['spectroscopy'],
+            topics: ['ultrafast optics'],
+            languages: ['en'],
+          },
         }),
       }),
     );

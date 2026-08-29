@@ -7,6 +7,11 @@ import { recordAudit } from '../workspace/audit';
 import { recordEntry } from '../usage/ledger';
 import type { WorkspaceDeps } from '../workspace/types';
 import { AgentError } from './errors';
+import type { InterestContext } from '../research-intelligence/types';
+import { buildInterestContext, validateInterestContext } from '../research-intelligence/interest-context';
+import { ResearchIdentityProfileError, validateResearchIdentityProfileState } from '../research-intelligence/identity-profile-service';
+import { ResearchIntelligenceValidationError } from '../research-intelligence/validation';
+import { parseWorkspaceGuidePayload } from './workspace-guide-contract';
 
 export const AGENT_TASK_QUEUE = 'agent:queue';
 export const AI_CREDIT_RESOURCE = 'ai_credit'; // §2.4-7 配额骨架（P1A-7）
@@ -73,11 +78,79 @@ function assertSessionReplay(
 }
 
 function assertTaskReplay(
-  existing: { sessionId: string; kind: string; payload: unknown },
+  existing: { sessionId: string; kind: string; payload: unknown; interestContext: unknown },
   input: { sessionId: string; kind: string; payload: Record<string, unknown> },
+  researchObjectId: string | null,
+  requestedContext: InterestContext | undefined,
 ): void {
   if (existing.sessionId !== input.sessionId || existing.kind !== input.kind || !isDeepStrictEqual(existing.payload, input.payload)) {
     throw new AgentError('VALIDATION_ERROR', '幂等键已用于其他 Hermes 任务');
+  }
+  if (existing.interestContext == null) {
+    if (requestedContext?.activeClaimId) {
+      throw new AgentError('VALIDATION_ERROR', '幂等键已用于缺少相同目标快照的旧 Hermes 任务');
+    }
+    if (requestedContext?.currentGoal) {
+      let legacyGoal: string | undefined;
+      try {
+        legacyGoal = existing.kind === 'workspace.guide' ? parseWorkspaceGuidePayload(existing.payload).goal : undefined;
+      } catch {
+        legacyGoal = undefined;
+      }
+      if (legacyGoal !== requestedContext.currentGoal) {
+        throw new AgentError('VALIDATION_ERROR', '幂等键已用于缺少相同目标快照的旧 Hermes 任务');
+      }
+    }
+    return;
+  }
+  let snapshot: InterestContext;
+  try {
+    snapshot = validateInterestContext(existing.interestContext);
+  } catch {
+    throw new AgentError('VALIDATION_ERROR', '既有 Hermes 任务缺少有效 interest context');
+  }
+  if (snapshot.activeResearchObjectId !== (researchObjectId ?? undefined)
+    || snapshot.currentGoal !== requestedContext?.currentGoal
+    || snapshot.activeClaimId !== requestedContext?.activeClaimId) {
+    throw new AgentError('VALIDATION_ERROR', '幂等键已用于其他 Hermes 任务');
+  }
+}
+
+async function resolveInterestContext(
+  deps: AgentDeps,
+  userId: string,
+  researchObjectId: string | null,
+  requested: InterestContext | undefined,
+): Promise<InterestContext> {
+  const row = await deps.prisma.researchIdentityProfile.findUnique({ where: { userId } });
+  try {
+    const profile = row ? validateResearchIdentityProfileState({
+      identities: row.identities,
+      primaryIdentity: row.primaryIdentity,
+      disciplines: row.disciplines,
+      methods: row.methods,
+      topics: row.topics,
+      languages: row.languages,
+      acceptedSignals: row.acceptedSignals,
+      rejectedSignals: row.rejectedSignals,
+      profileVersion: row.profileVersion,
+    }) : undefined;
+    const authoritative = buildInterestContext({
+      ...(profile ? { profile } : {}),
+      ...(requested?.currentGoal ? { currentGoal: requested.currentGoal } : {}),
+      ...(researchObjectId ? { activeResearchObjectId: researchObjectId } : {}),
+      ...(requested?.activeClaimId ? { activeClaimId: requested.activeClaimId } : {}),
+    });
+    if (requested && !isDeepStrictEqual(requested, authoritative)) {
+      throw new AgentError('VALIDATION_ERROR', 'Hermes interest context is stale or not server-owned');
+    }
+    return authoritative;
+  } catch (error) {
+    if (error instanceof AgentError) throw error;
+    if (error instanceof ResearchIdentityProfileError || error instanceof ResearchIntelligenceValidationError) {
+      throw new AgentError('VALIDATION_ERROR', 'Hermes interest context is invalid');
+    }
+    throw error;
   }
 }
 
@@ -154,7 +227,7 @@ export async function createAgentSession(
  */
 export async function submitAgentTask(
   deps: AgentDeps,
-  input: { sessionId: string; userId: string; kind: string; payload: Record<string, unknown>; idempotencyKey?: string; dispatch?: boolean },
+  input: { sessionId: string; userId: string; kind: string; payload: Record<string, unknown>; interestContext?: InterestContext; idempotencyKey?: string; dispatch?: boolean },
   ctx: AuditContext = {},
 ): Promise<AgentTaskView> {
   const session = await deps.prisma.agentSession.findUnique({ where: { id: input.sessionId } });
@@ -186,16 +259,28 @@ export async function submitAgentTask(
       throw new AgentError('RESEARCH_OBJECT_NOT_FOUND', 'Artifact 不存在或不可访问');
     }
   }
+  let requestedContext: InterestContext | undefined;
+  try {
+    requestedContext = input.interestContext ? validateInterestContext(input.interestContext) : undefined;
+  } catch {
+    throw new AgentError('VALIDATION_ERROR', 'Hermes interest context is invalid');
+  }
 
   // §16 幂等键：同 key 已存在 → 返回既有任务
   if (input.idempotencyKey) {
     const existing = await deps.prisma.agentTask.findUnique({ where: { idempotencyKey: input.idempotencyKey } });
     if (existing) {
-      assertTaskReplay(existing, input);
+      assertTaskReplay(existing, input, session.researchObjectId, requestedContext);
       if (input.dispatch !== false && existing.dispatchedAt == null) await dispatchAgentTask(deps, existing.id);
       return taskToView(existing);
     }
   }
+  const interestContext = await resolveInterestContext(
+    deps,
+    input.userId,
+    session.researchObjectId,
+    requestedContext,
+  );
 
   let task;
   for (let attempt = 0; ; attempt += 1) {
@@ -213,6 +298,7 @@ export async function submitAgentTask(
             sessionId: session.id,
             kind: input.kind,
             payload: input.payload as never,
+            interestContext: interestContext as never,
             idempotencyKey: input.idempotencyKey,
           },
         });
@@ -238,7 +324,7 @@ export async function submitAgentTask(
       if (code === 'P2002') {
         const duplicate = await deps.prisma.agentTask.findUnique({ where: { idempotencyKey: input.idempotencyKey ?? '' } });
         if (duplicate) {
-          assertTaskReplay(duplicate, input);
+          assertTaskReplay(duplicate, input, session.researchObjectId, requestedContext);
           task = duplicate;
           break;
         }

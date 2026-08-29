@@ -18,14 +18,47 @@ export interface ResearchIdentityProfile {
   languages: string[];
 }
 
+export interface ResearchIdentityProfileState extends ResearchIdentityProfile {
+  profileVersion: number;
+  acceptedSignals: string[];
+  rejectedSignals: string[];
+}
+
+export const INTEREST_ROUTING_REASON_CODES = [
+  'explicit_goal',
+  'active_claim',
+  'active_research_object',
+  'primary_identity',
+  'persistent_disciplines',
+  'persistent_methods',
+  'persistent_topics',
+  'persistent_languages',
+  'accepted_history',
+  'rejected_history',
+] as const;
+export type InterestRoutingReasonCode = (typeof INTEREST_ROUTING_REASON_CODES)[number];
+
+export interface InterestRoutingReason {
+  code: InterestRoutingReasonCode;
+  values: string[];
+}
+
 export interface InterestContext {
+  schemaVersion: 1;
   profileVersion: number;
   primaryIdentity: ResearchIdentity;
+  identities: ResearchIdentity[];
+  disciplines: string[];
+  methods: string[];
+  topics: string[];
+  languages: string[];
   currentGoal?: string;
   activeResearchObjectId?: string;
   activeClaimId?: string;
   acceptedSignals: string[];
   rejectedSignals: string[];
+  routingReasons: InterestRoutingReason[];
+  profileMissing?: true;
 }
 
 export const CLAIM_KINDS = ['core', 'supporting', 'method', 'boundary', 'counter'] as const;

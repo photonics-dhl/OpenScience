@@ -437,6 +437,37 @@
       }
     }
   },
+  "researchIdentity": {
+    "title": "你的科研身份",
+    "disclosure": "Hermes 会据此静默调整关注重点；不会出现模式开关，也不会推断敏感属性或站外行为。你可以随时在设置中修改。",
+    "primary": "主要",
+    "identities": {
+      "reader": "读者",
+      "author": "作者",
+      "reviewer": "审稿人",
+      "editor": "编辑",
+      "data_steward": "数据管理员",
+      "developer": "开发者",
+      "student": "学生"
+    },
+    "disciplines": "学科",
+    "disciplinesHint": "例如：光学、材料科学",
+    "methods": "方法",
+    "methodsHint": "例如：泵浦-探测、有限元",
+    "topics": "关注主题",
+    "topicsHint": "例如：超快科学、开放数据",
+    "languages": "阅读语言",
+    "languagesHint": "例如：中文、English",
+    "save": "保存科研身份",
+    "saving": "正在保存…",
+    "saved": "科研身份已更新",
+    "conflict": "资料已在其他位置更新。系统已载入最新版本，请检查后再次保存。",
+    "writeError": "科研身份暂时无法更新。",
+    "accepted": "已接受的兴趣信号",
+    "rejected": "已排除的兴趣信号",
+    "accept": "接受",
+    "reject": "排除"
+  },
   "auth": {
     "identity": {
       "skipToForm": "跳转到身份表单",

@@ -44,6 +44,25 @@ export interface ConfirmSignupInput {
   code: string;
   password: string;
   displayName: string;
+  researchIdentity: ResearchIdentityProfileInput;
+}
+
+export const RESEARCH_IDENTITIES = ['reader', 'author', 'reviewer', 'editor', 'data_steward', 'developer', 'student'] as const;
+export type ResearchIdentity = (typeof RESEARCH_IDENTITIES)[number];
+
+export interface ResearchIdentityProfileInput {
+  identities: ResearchIdentity[];
+  primaryIdentity: ResearchIdentity;
+  disciplines: string[];
+  methods: string[];
+  topics: string[];
+  languages: string[];
+}
+
+export interface ResearchIdentityProfile extends ResearchIdentityProfileInput {
+  profileVersion: number;
+  acceptedSignals: string[];
+  rejectedSignals: string[];
 }
 
 export interface ResearchObjectSummary {
@@ -808,6 +827,30 @@ export async function submitExtractTask(roId: string, manuscriptText: string, id
 export async function getAgentTask(roId: string, taskId: string): Promise<{ task: AgentTaskView }> {
   void roId;
   return request(`/api/agent/tasks/${taskId}`);
+}
+
+export async function getResearchIdentity(): Promise<ResearchIdentityProfile> {
+  return (await request<{ profile: ResearchIdentityProfile }>('/api/research-identity')).profile;
+}
+
+export async function updateResearchIdentity(
+  input: Partial<ResearchIdentityProfileInput> & { expectedProfileVersion: number },
+): Promise<ResearchIdentityProfile> {
+  return (await request<{ profile: ResearchIdentityProfile }>('/api/research-identity', {
+    method: 'PATCH',
+    body: JSON.stringify(input),
+  })).profile;
+}
+
+export async function correctResearchInterestSignal(input: {
+  expectedProfileVersion: number;
+  signal: string;
+  decision: 'accept' | 'reject';
+}): Promise<ResearchIdentityProfile> {
+  return (await request<{ profile: ResearchIdentityProfile }>('/api/research-identity/signals', {
+    method: 'POST',
+    body: JSON.stringify(input),
+  })).profile;
 }
 
 export async function retryAgentTask(taskId: string): Promise<{ task: AgentTaskView }> {

@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { AiGateway } from '@openscience/ai-gateway';
+import { buildInterestContext } from '@openscience/domain';
 
 import { createHandlers } from '../src/index';
 import {
@@ -26,6 +27,20 @@ const result = {
   ],
   needsMoreInformation: false,
 };
+const interestContext = buildInterestContext({
+  profile: {
+    identities: ['author', 'reviewer'],
+    primaryIdentity: 'reviewer',
+    disciplines: ['optics'],
+    methods: ['spectroscopy'],
+    topics: ['ultrafast science'],
+    languages: ['zh'],
+    profileVersion: 3,
+    acceptedSignals: ['open data'],
+    rejectedSignals: ['clinical medicine'],
+  },
+  currentGoal: payload.goal,
+});
 
 const CORE_FIELDS = ['problem', 'insight', 'method', 'evidence', 'results', 'limitations', 'reproducibility'] as const;
 
@@ -50,7 +65,7 @@ describe('workspace.guide handler', () => {
     const gateway = { completeStructured: vi.fn().mockResolvedValue(result) } as unknown as AiGateway;
     const deps = trustedDeps();
 
-    await expect(workspaceGuideHandler(gateway, deps as never, { id: 'guide-1', payload })).resolves.toEqual(result);
+    await expect(workspaceGuideHandler(gateway, deps as never, { id: 'guide-1', payload, interestContext })).resolves.toEqual(result);
     expect(gateway.completeStructured).toHaveBeenCalledOnce();
     const messages = (gateway.completeStructured as ReturnType<typeof vi.fn>).mock.calls[0]?.[1] as Array<{ role: string; content: string }>;
     const system = messages.find((message) => message.role === 'system')?.content ?? '';
@@ -61,6 +76,8 @@ describe('workspace.guide handler', () => {
     expect(system).toContain('open-ro 只能使用下列 research object id：ro-1');
     const userMessage = messages.find((message) => message.role === 'user')?.content ?? '';
     expect(userMessage).toContain('Existing optical memories lose phase information.');
+    expect(userMessage).toContain('"primaryIdentity":"reviewer"');
+    expect(userMessage).toContain('"rejectedSignals":["clinical medicine"]');
     expect(deps.prisma.researchObject.findMany).toHaveBeenCalledWith(expect.objectContaining({
       select: expect.objectContaining({ sdfDocument: { select: { coreJson: true } } }),
     }));

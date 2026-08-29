@@ -6,7 +6,7 @@
 
 - 目标：以 3–7 个 Claim 为公开 RO 中心，提供可定位 Evidence、条件/限制、身份静默路由、CPU 文档解析、混合检索和可版本化富媒体。
 - Taskmaster `hermes-research-intelligence` Tasks 1–6 已生产部署，保持 6/12；Task 4 最终 profile 为 14 succeeded / 2 intentional needs_review / 0 failed / 0 false-ready。
-- 最终 source review `READY`，0 Critical / 0 Important / 0 Minor；Task 7 next，Task 10 dependency-ready。
+- Task 7 身份/兴趣静默路由候选已完成本地实现与安全复审，0 Critical / 0 Important blocker；尚未提交/部署，Taskmaster 保持 6/12，Task 10 dependency-ready。
 
 ## Version tuple
 
@@ -15,6 +15,7 @@
 - Deployed immutable application/release: `6cabe422a8459dfa358786c9f5aae84558949f6b`
 - Rollback: `28a3d5ca681b7744fae521dfa9154100a24e8845`; migration: none
 - 后续 docs-only closeout HEAD 不改变 application source/release；docs HEAD、main 与 ECS release 不得混写。
+- 当前 worktree 含待提交的 Task 7 candidate；上述 tuple 在 immutable 部署成功前仍以 ECS 生产事实为准。
 
 ## Delivered and verified on ECS
 
@@ -28,12 +29,19 @@
 
 - 用户批准的精确清理已移除 40 个 inactive releases、失败证据 exact paths、旧 workspace backup、已审计 caches/old tags/dangling IDs/build cache；保留有效 evidence、7 backups、production/BGE/monitor volumes 与 logs。
 - `.rollback-id` 已在 FD9 锁内原子 bootstrap 为 `28a3d5c…`。自动 retention 候选已通过 release-contract 与最终安全复审：只删旧 release/capability/exact SHA image tags，pending v2+tombstone 可恢复，禁止 broad prune/wildcard。
-- 自动 retention 代码尚未部署；须先通过 Ubuntu CI 的 Linux/FD9 门禁，并随下一次 immutable ECS release 验收。Windows 只用显式 Git for Windows Bash + canonical scripts。
+- 自动 retention 已在候选 `7024fed6` 通过 exact Ubuntu CI `33244792397` / job `99080299130`；尚未部署，须随下一次 immutable ECS release 验收。Windows 只用显式 Git for Windows Bash + canonical scripts。
+
+## Task 7 candidate
+
+- 注册确认要求公开的研究身份输入；新注册、旧 invited、neutral backfill、Personal Workspace 与审计保持事务一致，产品无模式切换。
+- 身份/兴趣 API 使用 session、CSRF、CAS 与事务内审计；Settings 支持纠正信号及 409 自动重载。AgentTask 由服务端保存确定性 InterestContext，拒绝敏感/站外字段、伪造 Claim 和跨 RO。
+- 所有新 AgentTask 自动快照；旧 NULL context 幂等兼容受限于可证明相同 intent。全仓 build/typecheck/lint/test 和 migration contract 绿，最终安全复审无 blocker。
 
 ## Next action
 
-1. 完成 retention 候选 commit/push/Ubuntu CI 后，从 Task 7 身份/兴趣静默路由按 TDD 实施；Task 10 仍 dependency-ready。
-2. Vision 留到后续真实生产任务做管理员 canary；不新增 Docling，除非真实用户文档暴露现有 14/2 链的明确版式缺口。
+1. 提交/push Task 7 candidate，等待 exact CI；随后以当前 production `6cabe…` 为 rollback ref 执行 immutable ECS migration 30 + deploy，并验收 retention 收口。
+2. 在生产完成注册/身份读取与纠正/Hermes 任务快照真实旅程后才标 Task 7 done；Task 10 仍 dependency-ready。
+3. Vision 留到后续真实生产任务做管理员 canary；不新增 Docling，除非真实用户文档暴露现有 14/2 链的明确版式缺口。
 
 ## Read first
 

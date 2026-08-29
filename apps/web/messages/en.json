@@ -437,6 +437,37 @@
       }
     }
   },
+  "researchIdentity": {
+    "title": "Your research identity",
+    "disclosure": "Hermes quietly adapts its priorities from this profile. There is no mode switch, and it never infers sensitive traits or off-site behavior. You can change this in Settings.",
+    "primary": "Primary",
+    "identities": {
+      "reader": "Reader",
+      "author": "Author",
+      "reviewer": "Reviewer",
+      "editor": "Editor",
+      "data_steward": "Data steward",
+      "developer": "Developer",
+      "student": "Student"
+    },
+    "disciplines": "Disciplines",
+    "disciplinesHint": "e.g. optics, materials science",
+    "methods": "Methods",
+    "methodsHint": "e.g. pump-probe, finite elements",
+    "topics": "Topics of interest",
+    "topicsHint": "e.g. ultrafast science, open data",
+    "languages": "Reading languages",
+    "languagesHint": "e.g. English, 中文",
+    "save": "Save research identity",
+    "saving": "Saving…",
+    "saved": "Research identity updated",
+    "conflict": "This profile changed elsewhere. The latest version has been reloaded; review it and save again.",
+    "writeError": "The research identity could not be updated.",
+    "accepted": "Accepted interest signals",
+    "rejected": "Excluded interest signals",
+    "accept": "Accept",
+    "reject": "Exclude"
+  },
   "auth": {
     "identity": {
       "skipToForm": "Skip to identity form",

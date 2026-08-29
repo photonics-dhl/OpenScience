@@ -5,12 +5,14 @@ import { createFakePrisma, seedUser } from './helpers/fakes';
 import { authorizeIngestionWrite, createIngestionBatch, getIngestionBatch, listActionableIngestionTasks, retryIngestionTask } from '../src/ingestion/ingestion-service';
 import { markTaskProgress } from '../src/agent/agent';
 
+const TEST_RO_ID = '00000000-0000-4000-8000-000000000101';
+
 function makeDeps() {
   const { prisma, db } = createFakePrisma();
   const user = seedUser(db);
   db.workspaces.push({ id: 'ws-1', type: 'personal', name: 'Personal', status: 'active', ownerId: user.id, createdAt: new Date(), updatedAt: new Date() });
   db.memberships.push({ id: 'm-1', workspaceId: 'ws-1', userId: user.id, role: 'owner', createdAt: new Date(), updatedAt: new Date() });
-  db.researchObjects.push({ id: 'ro-1', workspaceId: 'ws-1', createdBy: user.id, title: 'Study', status: 'draft', visibility: 'private', version: 1, createdAt: new Date(), updatedAt: new Date() });
+  db.researchObjects.push({ id: TEST_RO_ID, workspaceId: 'ws-1', createdBy: user.id, title: 'Study', status: 'draft', visibility: 'private', version: 1, createdAt: new Date(), updatedAt: new Date() });
   db.usageLedger.push({ id: 'credit-1', userId: user.id, workspaceId: null, resource: 'ai_credit', delta: 100, reason: 'test', createdAt: new Date() });
   const objects = new Map<string, Buffer>();
   const storage: StorageAdapter = {
@@ -45,28 +47,29 @@ describe('multi-format ingestion service', () => {
     'measurements.csv', 'metadata.json', 'workflow.yaml', 'analysis.ipynb', 'fit.py', 'statistics.r',
   ])('accepts %s and queues extraction without raw content in payload', async (filename) => {
     const { deps, db, user } = makeDeps();
-    const result = await createIngestionBatch(deps, { userId: user.id, researchObjectId: 'ro-1', processingConsent: true, files: [file(filename)], idempotencyKey: `batch:${filename}` });
+    const result = await createIngestionBatch(deps, { userId: user.id, researchObjectId: TEST_RO_ID, processingConsent: true, files: [file(filename)], idempotencyKey: `batch:${filename}` });
     expect(result.tasks).toHaveLength(1);
     expect(result.tasks[0]).toMatchObject({ logicalPath: filename, state: 'queued' });
-    expect(db.agentTasks[0].payload).toEqual({ artifactId: result.tasks[0].artifactId, researchObjectId: 'ro-1' });
+    expect(db.agentTasks[0].payload).toEqual({ artifactId: result.tasks[0].artifactId, researchObjectId: TEST_RO_ID });
+    expect(db.agentTasks[0].interestContext).toMatchObject({ activeResearchObjectId: TEST_RO_ID, primaryIdentity: 'reader' });
     expect(JSON.stringify(db.agentTasks[0].payload)).not.toContain(`content:${filename}`);
   });
 
   it('requires explicit processing consent before persisting anything', async () => {
     const { deps, db, user } = makeDeps();
-    await expect(createIngestionBatch(deps, { userId: user.id, researchObjectId: 'ro-1', processingConsent: false, files: [file('paper.pdf')] })).rejects.toMatchObject({ code: 'PROCESSING_CONSENT_REQUIRED' });
+    await expect(createIngestionBatch(deps, { userId: user.id, researchObjectId: TEST_RO_ID, processingConsent: false, files: [file('paper.pdf')] })).rejects.toMatchObject({ code: 'PROCESSING_CONSENT_REQUIRED' });
     expect(db.artifacts).toHaveLength(0);
   });
 
   it('rejects unsupported formats with a typed error', async () => {
     const { deps, user } = makeDeps();
-    await expect(createIngestionBatch(deps, { userId: user.id, researchObjectId: 'ro-1', processingConsent: true, files: [file('malware.exe')] })).rejects.toMatchObject({ code: 'UNSUPPORTED_INGESTION_FORMAT' });
+    await expect(createIngestionBatch(deps, { userId: user.id, researchObjectId: TEST_RO_ID, processingConsent: true, files: [file('malware.exe')] })).rejects.toMatchObject({ code: 'UNSUPPORTED_INGESTION_FORMAT' });
   });
 
   it('rejects a supported extension with an executable MIME mismatch', async () => {
     const { deps, user } = makeDeps();
     await expect(createIngestionBatch(deps, {
-      userId: user.id, researchObjectId: 'ro-1', processingConsent: true,
+      userId: user.id, researchObjectId: TEST_RO_ID, processingConsent: true,
       files: [{ ...file('paper.pdf'), mimeType: 'application/x-msdownload' }],
     })).rejects.toMatchObject({ code: 'UNSUPPORTED_INGESTION_FORMAT' });
   });
@@ -82,14 +85,14 @@ describe('multi-format ingestion service', () => {
   ])('rejects content masquerading as %s', async (filename, content) => {
     const { deps, user } = makeDeps();
     await expect(createIngestionBatch(deps, {
-      userId: user.id, researchObjectId: 'ro-1', processingConsent: true, files: [{ filename, content }],
+      userId: user.id, researchObjectId: TEST_RO_ID, processingConsent: true, files: [{ filename, content }],
     })).rejects.toMatchObject({ code: 'UNSUPPORTED_INGESTION_FORMAT' });
   });
 
   it('blocks the EICAR test signature before creating an Artifact', async () => {
     const { deps, db, user } = makeDeps();
     await expect(createIngestionBatch(deps, {
-      userId: user.id, researchObjectId: 'ro-1', processingConsent: true,
+      userId: user.id, researchObjectId: TEST_RO_ID, processingConsent: true,
       files: [{ filename: 'notes.md', content: Buffer.from('X5O!P%@AP[4\\PZX54(P^)7CC)7}$EICAR-STANDARD-ANTIVIRUS-TEST-FILE!$H+H*') }],
     })).rejects.toMatchObject({ code: 'MALICIOUS_FILE' });
     expect(db.artifacts).toHaveLength(0);
@@ -98,7 +101,7 @@ describe('multi-format ingestion service', () => {
   it('does not persist an untrusted browser MIME as detected metadata', async () => {
     const { deps, db, user } = makeDeps();
     await createIngestionBatch(deps, {
-      userId: user.id, researchObjectId: 'ro-1', processingConsent: true,
+      userId: user.id, researchObjectId: TEST_RO_ID, processingConsent: true,
       files: [{ ...file('notes.md'), mimeType: 'text/markdown' }],
     });
     expect(db.artifacts[0].mimeType).toBeNull();
@@ -107,32 +110,32 @@ describe('multi-format ingestion service', () => {
   it('disambiguates duplicate filenames and rejects path-like names before creating a batch', async () => {
     const { deps, db, user } = makeDeps();
     const result = await createIngestionBatch(deps, {
-      userId: user.id, researchObjectId: 'ro-1', processingConsent: true,
+      userId: user.id, researchObjectId: TEST_RO_ID, processingConsent: true,
       files: [file('paper.pdf'), file('paper.pdf')],
     });
     expect(result.tasks.map((task) => task.logicalPath)).toEqual(['paper.pdf', 'paper (2).pdf']);
     await expect(createIngestionBatch(deps, {
-      userId: user.id, researchObjectId: 'ro-1', processingConsent: true, files: [file('../paper.pdf')],
+      userId: user.id, researchObjectId: TEST_RO_ID, processingConsent: true, files: [file('../paper.pdf')],
     })).rejects.toMatchObject({ code: 'VALIDATION_ERROR' });
     expect(db.ingestionBatches).toHaveLength(1);
   });
 
   it('enforces workspace membership on create and read', async () => {
     const { deps, db, user } = makeDeps();
-    const result = await createIngestionBatch(deps, { userId: user.id, researchObjectId: 'ro-1', processingConsent: true, files: [file('paper.pdf')] });
+    const result = await createIngestionBatch(deps, { userId: user.id, researchObjectId: TEST_RO_ID, processingConsent: true, files: [file('paper.pdf')] });
     const outsider = seedUser(db, { id: 'outsider' });
     await expect(getIngestionBatch(deps, { userId: outsider.id, batchId: result.batchId })).rejects.toThrow(/空间不存在/);
   });
 
   it('lists the caller-owned ingestion task id and RO context for dashboard review links', async () => {
     const { deps, db, user } = makeDeps();
-    const result = await createIngestionBatch(deps, { userId: user.id, researchObjectId: 'ro-1', processingConsent: true, files: [file('paper.pdf')] });
+    const result = await createIngestionBatch(deps, { userId: user.id, researchObjectId: TEST_RO_ID, processingConsent: true, files: [file('paper.pdf')] });
     db.ingestionTasks[0].state = 'needs_review';
 
     await expect(listActionableIngestionTasks(deps, { userId: user.id })).resolves.toEqual([
       expect.objectContaining({
         id: result.tasks[0].id,
-        researchObjectId: 'ro-1',
+        researchObjectId: TEST_RO_ID,
         researchTitle: 'Study',
         logicalPath: 'paper.pdf',
         state: 'needs_review',
@@ -144,10 +147,10 @@ describe('multi-format ingestion service', () => {
   it.each(['viewer', 'reviewer'])('rejects %s ingestion writes', async (role) => {
     const { deps, db, user } = makeDeps();
     db.memberships[0].role = role;
-    await expect(authorizeIngestionWrite(deps, { userId: user.id, researchObjectId: 'ro-1' }))
+    await expect(authorizeIngestionWrite(deps, { userId: user.id, researchObjectId: TEST_RO_ID }))
       .rejects.toMatchObject({ code: 'FORBIDDEN' });
     await expect(createIngestionBatch(deps, {
-      userId: user.id, researchObjectId: 'ro-1', processingConsent: true, files: [file('notes.md')],
+      userId: user.id, researchObjectId: TEST_RO_ID, processingConsent: true, files: [file('notes.md')],
     })).rejects.toMatchObject({ code: 'FORBIDDEN' });
     expect(db.ingestionBatches).toHaveLength(0);
   });
@@ -155,14 +158,14 @@ describe('multi-format ingestion service', () => {
   it('rejects writes to an archived workspace', async () => {
     const { deps, db, user } = makeDeps();
     db.workspaces[0].status = 'archived';
-    await expect(authorizeIngestionWrite(deps, { userId: user.id, researchObjectId: 'ro-1' }))
+    await expect(authorizeIngestionWrite(deps, { userId: user.id, researchObjectId: TEST_RO_ID }))
       .rejects.toMatchObject({ code: 'WORKSPACE_ARCHIVED' });
     expect(db.ingestionBatches).toHaveLength(0);
   });
 
   it('retries only failed_retryable tasks and requeues the existing agent task', async () => {
     const { deps, db, user, redis } = makeDeps();
-    const result = await createIngestionBatch(deps, { userId: user.id, researchObjectId: 'ro-1', processingConsent: true, files: [file('paper.pdf')] });
+    const result = await createIngestionBatch(deps, { userId: user.id, researchObjectId: TEST_RO_ID, processingConsent: true, files: [file('paper.pdf')] });
     const task = db.ingestionTasks.find((row) => row.id === result.tasks[0].id);
     task.state = 'failed_retryable';
     task.error = 'provider timeout';
@@ -174,7 +177,7 @@ describe('multi-format ingestion service', () => {
 
   it('retry dispatch 失败会恢复 failed_retryable 状态', async () => {
     const { deps, db, user, redis } = makeDeps();
-    const result = await createIngestionBatch(deps, { userId: user.id, researchObjectId: 'ro-1', processingConsent: true, files: [file('paper.pdf')] });
+    const result = await createIngestionBatch(deps, { userId: user.id, researchObjectId: TEST_RO_ID, processingConsent: true, files: [file('paper.pdf')] });
     const task = db.ingestionTasks.find((row) => row.id === result.tasks[0].id)!;
     task.state = 'failed_retryable';
     redis.lpush.mockRejectedValueOnce(new Error('redis unavailable'));
@@ -184,7 +187,7 @@ describe('multi-format ingestion service', () => {
 
   it('resumes the same batch idempotently without duplicating artifacts, sessions, or tasks', async () => {
     const { deps, db, user } = makeDeps();
-    const input = { userId: user.id, researchObjectId: 'ro-1', processingConsent: true, files: [file('paper.pdf')], idempotencyKey: 'stable-batch' };
+    const input = { userId: user.id, researchObjectId: TEST_RO_ID, processingConsent: true, files: [file('paper.pdf')], idempotencyKey: 'stable-batch' };
     const first = await createIngestionBatch(deps, input);
     const replay = await createIngestionBatch(deps, input);
     expect(replay.batchId).toBe(first.batchId);
@@ -202,20 +205,20 @@ describe('multi-format ingestion service', () => {
       return 1;
     });
     await createIngestionBatch(deps, {
-      userId: user.id, researchObjectId: 'ro-1', processingConsent: true, files: [file('notes.md')],
+      userId: user.id, researchObjectId: TEST_RO_ID, processingConsent: true, files: [file('notes.md')],
     });
   });
 
   it('rejects reuse of a batch key for a different material set', async () => {
     const { deps, user } = makeDeps();
-    const base = { userId: user.id, researchObjectId: 'ro-1', processingConsent: true, idempotencyKey: 'stable-batch' };
+    const base = { userId: user.id, researchObjectId: TEST_RO_ID, processingConsent: true, idempotencyKey: 'stable-batch' };
     await createIngestionBatch(deps, { ...base, files: [file('paper.pdf')] });
     await expect(createIngestionBatch(deps, { ...base, files: [file('changed.md')] })).rejects.toMatchObject({ code: 'VALIDATION_ERROR' });
   });
 
   it('mirrors worker progress into stable ingestion states', async () => {
     const { deps, db, user } = makeDeps();
-    const result = await createIngestionBatch(deps, { userId: user.id, researchObjectId: 'ro-1', processingConsent: true, files: [file('paper.pdf')] });
+    const result = await createIngestionBatch(deps, { userId: user.id, researchObjectId: TEST_RO_ID, processingConsent: true, files: [file('paper.pdf')] });
     const agentTaskId = result.tasks[0].agentTaskId!;
     await markTaskProgress(deps, { taskId: agentTaskId, status: 'running', progress: 10 });
     expect(db.ingestionTasks[0].state).toBe('parsing');

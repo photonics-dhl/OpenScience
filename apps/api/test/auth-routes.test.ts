@@ -5,7 +5,7 @@ import { buildApp } from '../src/app';
 /* eslint-disable @typescript-eslint/no-explicit-any -- 测试 fake 刻意脱离完整类型 */
 
 function makeFakeDeps() {
-  const db: any = { users: [], invitations: [], emailVerifications: [], mailOutbox: [], signupChallenges: [] };
+  const db: any = { users: [], invitations: [], emailVerifications: [], mailOutbox: [], signupChallenges: [], researchIdentityProfiles: [] };
   let seq = 0;
   const nextId = () => `id-${++seq}`;
   const prisma: any = {
@@ -67,6 +67,22 @@ function makeFakeDeps() {
         return { count };
       },
     },
+    researchIdentityProfile: {
+      create: async ({ data }: any) => {
+        if (db.researchIdentityProfiles.some((row: any) => row.userId === data.userId)) throw Object.assign(new Error('duplicate'), { code: 'P2002' });
+        const row = { id: nextId(), profileVersion: 1, acceptedSignals: [], rejectedSignals: [], ...data };
+        db.researchIdentityProfiles.push(row);
+        return row;
+      },
+      findUnique: async ({ where }: any) => db.researchIdentityProfiles.find((row: any) => row.userId === where.userId) ?? null,
+      upsert: async ({ where, create, update }: any) => {
+        const existing = db.researchIdentityProfiles.find((row: any) => row.userId === where.userId);
+        if (existing) return Object.assign(existing, update);
+        const row = { id: nextId(), profileVersion: 1, acceptedSignals: [], rejectedSignals: [], ...create };
+        db.researchIdentityProfiles.push(row);
+        return row;
+      },
+    },
     mailOutbox: { create: async ({ data }: any) => ({ id: nextId(), ...data }) },
     $transaction: async (fn: any) => fn(prisma),
   };
@@ -109,7 +125,7 @@ describe('/auth routes', () => {
   });
 
   it('request then confirm signup creates a verified session and invokes workspace provisioning', async () => {
-    const { app, sent, verified } = await makeApp();
+    const { app, sent, verified, db } = await makeApp();
     const requested = await app.inject({
       method: 'POST',
       url: '/auth/request-signup-code',
@@ -122,12 +138,66 @@ describe('/auth routes', () => {
     const confirmed = await app.inject({
       method: 'POST',
       url: '/auth/confirm-signup',
-      payload: { email: 'full-flow@example.com', code, password: 'passw0rd-x', displayName: 'Full Flow' },
+      payload: {
+        email: 'full-flow@example.com',
+        code,
+        password: 'passw0rd-x',
+        displayName: 'Full Flow',
+        researchIdentity: {
+          identities: ['author', 'reviewer'],
+          primaryIdentity: 'author',
+          disciplines: ['physics'],
+          methods: ['spectroscopy'],
+          topics: ['ultrafast optics'],
+          languages: ['zh'],
+        },
+      },
     });
     expect(confirmed.statusCode).toBe(201);
     expect(confirmed.json()).toMatchObject({ status: 'email_verified' });
     expect(confirmed.cookies.find((cookie) => cookie.name === 'openscience_session')).toBeDefined();
     expect(verified).toEqual([expect.objectContaining({ email: 'full-flow@example.com' })]);
+    expect(db.researchIdentityProfiles).toEqual([
+      expect.objectContaining({
+        identities: ['author', 'reviewer'],
+        primaryIdentity: 'author',
+        userId: confirmed.json().userId,
+      }),
+    ]);
+  });
+
+  it('updates a migration-backfilled invited profile when confirming signup', async () => {
+    const { app, db, sent } = await makeApp();
+    db.users.push({ id: 'legacy-invited', email: 'legacy-confirm@example.com', passwordHash: 'old', displayName: 'Legacy', status: 'invited' });
+    db.researchIdentityProfiles.push({
+      id: 'profile-legacy', userId: 'legacy-invited', identities: ['reader'], primaryIdentity: 'reader',
+      disciplines: [], methods: [], topics: [], languages: [], acceptedSignals: [], rejectedSignals: [], profileVersion: 1,
+    });
+    await app.inject({ method: 'POST', url: '/auth/request-signup-code', payload: { email: 'legacy-confirm@example.com' } });
+    const code = sent[0].text.match(/(\d{6})/)?.[1];
+    const confirmed = await app.inject({
+      method: 'POST', url: '/auth/confirm-signup', payload: {
+        email: 'legacy-confirm@example.com', code, password: 'passw0rd-x', displayName: 'Legacy Updated',
+        researchIdentity: { identities: ['author'], primaryIdentity: 'author', disciplines: ['physics'], methods: [], topics: [], languages: ['en'] },
+      },
+    });
+    expect(confirmed.statusCode).toBe(201);
+    expect(db.researchIdentityProfiles).toHaveLength(1);
+    expect(db.researchIdentityProfiles[0]).toMatchObject({ userId: 'legacy-invited', primaryIdentity: 'author', disciplines: ['physics'] });
+  });
+
+  it('maps cross-field identity validation failures to 400', async () => {
+    const { app, sent } = await makeApp();
+    await app.inject({ method: 'POST', url: '/auth/request-signup-code', payload: { email: 'invalid-profile@example.com' } });
+    const code = sent[0].text.match(/(\d{6})/)?.[1];
+    const response = await app.inject({
+      method: 'POST', url: '/auth/confirm-signup', payload: {
+        email: 'invalid-profile@example.com', code, password: 'passw0rd-x', displayName: 'Invalid',
+        researchIdentity: { identities: ['reader'], primaryIdentity: 'author', disciplines: [], methods: [], topics: [], languages: [] },
+      },
+    });
+    expect(response.statusCode).toBe(400);
+    expect(response.json().error.code).toBe('INVALID_IDENTITY_PROFILE');
   });
 
   it('rejects invalid register bodies with 400 VALIDATION_ERROR', async () => {
@@ -156,6 +226,7 @@ describe('/auth routes', () => {
     const code = sent[0].text.match(/(\d{6})/)![1];
     const ver = await app.inject({ method: 'POST', url: '/auth/verify-email', payload: { email: 'e2e@example.com', code } });
     expect(ver.statusCode).toBe(200);
+    expect(db.researchIdentityProfiles).toEqual([expect.objectContaining({ userId: ver.json().userId, primaryIdentity: 'reader' })]);
     const cookie = ver.cookies.find((c) => c.name === 'openscience_session');
     expect(cookie).toBeDefined();
     expect(cookie!.httpOnly).toBe(true);

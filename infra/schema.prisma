@@ -927,6 +927,7 @@ model AgentTask {
   status           AgentTaskStatus @default(pending)
   progress         Int             @default(0)
   payload          Json            @default("{}")
+  interestContext  Json?           @map("interest_context")
   result           Json?
   error            String?
   retryCount       Int             @default(0) @map("retry_count")
@@ -1144,6 +1145,8 @@ model ResearchIdentityProfile {
   methods         String[]           @default([])
   topics          String[]           @default([])
   languages       String[]           @default([])
+  acceptedSignals String[]           @default([]) @map("accepted_signals")
+  rejectedSignals String[]           @default([]) @map("rejected_signals")
   profileVersion  Int                @default(1) @map("profile_version")
   createdAt       DateTime           @default(now()) @map("created_at")
   updatedAt       DateTime           @updatedAt @map("updated_at")

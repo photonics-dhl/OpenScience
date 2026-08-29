@@ -9,6 +9,7 @@ import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { confirmSignup, requestSignupCode, safeReturnTo } from '@/lib/api';
+import { EMPTY_RESEARCH_PROFILE, ResearchProfileFields } from './ResearchProfileFields';
 
 const RESEND_COOLDOWN_SECONDS = 60;
 
@@ -34,6 +35,7 @@ export function SignupCodeForm({ returnTo }: SignupCodeFormProps) {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [code, setCode] = useState('');
+  const [researchIdentity, setResearchIdentity] = useState(EMPTY_RESEARCH_PROFILE);
   const [cooldown, setCooldown] = useState(0);
   const [pending, setPending] = useState(false);
   const [error, setError] = useState('');
@@ -78,7 +80,7 @@ export function SignupCodeForm({ returnTo }: SignupCodeFormProps) {
     setError('');
     setPending(true);
     try {
-      await confirmSignup({ email, code, password, displayName });
+      await confirmSignup({ email, code, password, displayName, researchIdentity });
       router.replace(safeReturnTo(returnTo));
       router.refresh();
     } catch (cause) {
@@ -161,6 +163,7 @@ export function SignupCodeForm({ returnTo }: SignupCodeFormProps) {
           <p id="signup-password-hint" className="-mt-3 text-sm leading-6 text-os-muted-paper">
             {t('register.passwordHint')}
           </p>
+          <ResearchProfileFields value={researchIdentity} onChange={setResearchIdentity} />
           <Button className="min-h-12 rounded-control bg-os-vermilion-ink text-os-paper active:translate-y-px" type="submit" size="lg" disabled={pending}>
             {pending ? t('register.sending') : t('register.requestCode')}
           </Button>

@@ -212,9 +212,13 @@ export {
   PRESENTATION_ASSET_KINDS,
   PRESENTATION_ASSET_STATUSES,
   PRESENTATION_ASSET_LABEL,
+  INTEREST_ROUTING_REASON_CODES,
   type ResearchIdentity,
   type ResearchIdentityProfile,
+  type ResearchIdentityProfileState,
   type InterestContext,
+  type InterestRoutingReason,
+  type InterestRoutingReasonCode,
   type ClaimKind,
   type ClaimAssessment,
   type EvidenceKind,
@@ -235,6 +239,16 @@ export {
   validateSourceLocator,
   type ResearchIntelligenceValidationCode,
 } from './research-intelligence/validation';
+export {
+  applyResearchIdentityProfilePatch,
+  correctResearchInterestSignal,
+  validateResearchIdentityProfileState,
+  ResearchIdentityProfileError,
+  type ResearchIdentityProfileErrorCode,
+  type ResearchIdentityProfilePatch,
+  type ResearchInterestSignalCorrection,
+} from './research-intelligence/identity-profile-service';
+export { buildInterestContext, validateInterestContext, type BuildInterestContextInput } from './research-intelligence/interest-context';
 export { validateClaimGraph, type ClaimGraphNode } from './research-intelligence/claim-graph';
 export {
   EXTRACTION_BLOCK_CODES,

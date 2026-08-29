@@ -120,7 +120,7 @@ export type ParserCascadeRunner = ((
 export type WorkerDeps = AgentDeps & { storage?: StorageAdapter; ingestionAdapters?: IngestionAdapters; malwareScanner?: MalwareScanner };
 export type TaskHandler = (
   deps: WorkerDeps,
-  task: { id: string; payload: Record<string, unknown>; executionAttempt: number },
+  task: { id: string; payload: Record<string, unknown>; interestContext?: unknown; executionAttempt: number },
 ) => Promise<Record<string, unknown>>;
 
 /** Production-safe cascade composition: one V2 sidecar stage plus disabled candidate routes. */
@@ -325,6 +325,7 @@ export async function createPollOnce(handlers: Record<string, TaskHandler>): Pro
       const result = await handler(deps, {
         id: task.id,
         payload: (task.payload ?? {}) as Record<string, unknown>,
+        interestContext: task.interestContext,
         executionAttempt: claimed.executionAttempt,
       });
       await markTaskProgress(deps, {

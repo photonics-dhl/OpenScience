@@ -22,6 +22,23 @@ describe('agent task payload boundary', () => {
 
   it('accepts the bounded workspace.guide contract', () => {
     expect(agentTaskBodySchema.parse(validGuide)).toEqual(validGuide);
+    expect(agentTaskBodySchema.parse({
+      sessionId: validGuide.sessionId,
+      kind: 'review.analyze',
+      payload: {},
+      currentGoal: 'Check the central claim',
+      activeClaimId: '00000000-0000-4000-8000-000000000002',
+    })).toMatchObject({ currentGoal: 'Check the central claim' });
+  });
+
+  it('rejects client-supplied InterestContext and inferred traits', () => {
+    expect(() => agentTaskBodySchema.parse({ ...validGuide, interestContext: { primaryIdentity: 'reviewer' } })).toThrow();
+    expect(() => agentTaskBodySchema.parse({
+      sessionId: validGuide.sessionId,
+      kind: 'review.analyze',
+      payload: {},
+      offsiteHistory: ['example.org'],
+    })).toThrow();
   });
 
   it('rejects oversized guide goals and context before persistence or dispatch', () => {
