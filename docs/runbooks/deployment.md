@@ -1402,3 +1402,29 @@ the candidate marker; treat the marker and source-manifest verification as the
 success contract, remove only the exact partial candidate, then retry through
 `C:/Program Files/Git/bin/bash.exe`. This is a shell-selection failure, not an
 SSH-key failure.
+
+### 5.44 Task 9 Claim-first public RO pre-deployment gate (2026-08-30)
+
+The implementation checkpoint is `76db64fdd07f0facb53679e97970f8560270897b`
+on `codex/claim-first-public-ro`; production remains `4c73469…`, rollback
+`cf68bfa7…`, and core/search `30/30` / `2/2` until the immutable deployment
+finishes. Repository migration 31 adds one account-scoped reading-preference
+row per user and must be applied by the canonical migration CLI, never by a
+host-side direct database connection.
+
+Before deployment, require exact-candidate GitHub CI plus local Domain 478/478,
+API 85/85, Web 418/418 and the Claim-first Chromium gate 4/4. The browser gate
+must prove 760/280 desktop geometry, the 768px rail transition, a 375px Radix
+sheet with Escape and focus return, AA text contrast, reduced motion, no
+horizontal overflow, and complete print Evidence while visually collapsed.
+
+The production journey must use one exact disposable user/RO/artifact scope and
+prove: draft versions are anonymous 404; R3 publish atomically creates the
+Publication and expands RO visibility to public; the anonymous page returns all
+Claims/Evidence but no private storage/provenance fields; a selected source
+resolves to its exact quote, page and normalized region; approved presentation
+media is explicitly labelled as presentation, not Evidence; and the Settings
+preference survives reload without removing Evidence from print. Remove only
+the exact journey rows and objects after recording counts/checksums. Finish with
+the canonical health, parser, BGE, migration, public/loopback release, retention
+and bounded disk checks. Do not use broad Docker or filesystem prune.

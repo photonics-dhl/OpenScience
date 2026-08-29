@@ -26,6 +26,7 @@ import { registerResearchRoutes } from './routes/research';
 import { registerExploreRoutes } from './routes/explore';
 import { registerEditorialRoutes } from './routes/editorial';
 import { registerResearchIdentityRoutes } from './routes/research-identity';
+import { registerReadingPreferenceRoutes } from './routes/reading-preferences';
 import { registerClaimEvidenceRoutes } from './routes/claim-evidence';
 import { registerAdminEditorialRoutes } from './routes/admin-editorial';
 import { registerSandboxJobsRoutes } from './routes/sandbox-jobs';
@@ -106,6 +107,7 @@ export async function buildApp(opts: BuildAppOptions): Promise<FastifyInstance> 
   await app.register(async (instance) => registerExploreRoutes(instance, opts), {});
   await app.register(async (instance) => registerEditorialRoutes(instance, opts), {});
   await app.register(async (instance) => registerResearchIdentityRoutes(instance, opts), {});
+  await app.register(async (instance) => registerReadingPreferenceRoutes(instance, opts), {});
   await app.register(async (instance) => registerSandboxJobsRoutes(instance, opts), {});
   if (opts.storage) {
     const storage = opts.storage;

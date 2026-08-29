@@ -349,7 +349,11 @@ async function deleteClaimInTransaction(
   }, ctx);
 }
 
-type ResolvedEvidenceSource = { text?: string; sourceMapRef?: DocumentSourceMapReference };
+type ResolvedEvidenceSource = {
+  text?: string;
+  sourceMapRef?: DocumentSourceMapReference;
+  region?: { x: number; y: number; width: number; height: number };
+};
 
 async function assertEvidenceSourceIdentity(
   deps: ArtifactDeps,
@@ -418,6 +422,14 @@ export async function resolveEvidenceSource(
     if (reference.parserStatus !== 'succeeded') throw new ClaimEvidenceError('LOCATOR_MISMATCH', 'Parser output still requires review');
     const sourceMap = await loadDocumentSourceMapReference(deps.storage, reference);
     const block = resolveSourceLocator(sourceMap, locator);
+    const page = locator.page === undefined ? undefined : sourceMap.pages.find((candidate) => candidate.page === locator.page);
+    const box = locator.boundingBox ?? block.boundingBox;
+    const region = page ? {
+      x: Math.min(1, box.x / page.width),
+      y: Math.min(1, box.y / page.height),
+      width: Math.min(1 - Math.min(1, box.x / page.width), box.width / page.width),
+      height: Math.min(1 - Math.min(1, box.y / page.height), box.height / page.height),
+    } : undefined;
     let text = block.text;
     if (input.exactQuote !== undefined) {
       if (!text) throw new ClaimEvidenceError('LOCATOR_MISMATCH', 'Quoted Evidence requires a text-bearing source');
@@ -427,7 +439,7 @@ export async function resolveEvidenceSource(
       }
       text = selected;
     }
-    return { ...(text === undefined ? {} : { text }), sourceMapRef: reference };
+    return { ...(text === undefined ? {} : { text }), sourceMapRef: reference, ...(region ? { region } : {}) };
   } catch (error) {
     if (error instanceof ClaimEvidenceError) throw error;
     throw new ClaimEvidenceError('LOCATOR_MISMATCH', 'Evidence locator could not be resolved', error);

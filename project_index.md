@@ -1,7 +1,7 @@
 # OpenScience (XGS) 项目文件索引
 
 > 维护规则：创建/修改/移动文件后必须更新本索引。创建新文件前先查本表防重复。
-> **CURRENT source/deployment anchor（2026-08-29）：** branch/application-code HEAD `codex/hermes-wanko-live2d` / `4c73469fe24abe685054f1d917d452adc5371d35`；application source/production release 同为 `4c73469fe24abe685054f1d917d452adc5371d35`；rollback `cf68bfa7baba9610dcd010fed0fcf5fd0deeab2f`；core/search `30/30` / `2/2`。Exact CI `33257516418` / job `99113706374`、parser acceptance、BGE CPU、真实 Claim/Evidence/review/publish journey 与公网 200 全绿；历史评测工作区精确清理后根盘 36G/26%。Taskmaster 8/12，Tasks 1–8 done，下一产品任务 Task 9，Task 10 dependency-ready；本地 main 与 ECS production 身份不得混写。
+> **CURRENT source/deployment anchor（2026-08-30）：** branch/implementation HEAD `codex/claim-first-public-ro` / `76db64fdd07f0facb53679e97970f8560270897b`；application source/production release `4c73469fe24abe685054f1d917d452adc5371d35`；rollback `cf68bfa7baba9610dcd010fed0fcf5fd0deeab2f`；production core/search `30/30` / `2/2`。Task 9 Tasks 1–7 已本地实现并通过 Chromium 4/4，repository migration 31 尚未部署；Taskmaster 8/12，Task 9 `in-progress`，Task 10 dependency-ready。本地 main 与 ECS production 身份不得混写。
 
 ## 根目录
 | 路径 | 用途 | 状态 |
@@ -103,7 +103,7 @@
 | Rejected local Hermes Blender prototype (not repository content) | 少年星图龙只保留 `hermes-constellation-dragon/apps/web/assets/hermes/HermesConstellationDragon.blend`（SHA-256 `9CF4694D…DDFA5`）；`.blend1`、渲染/contact sheet、manifest、旧脚本/合同已清理 | **用户视觉 NO-GO / HISTORICAL SOURCE ONLY**；二进制进回收站，禁止误读为候选资产 |
 | `.github/workflows/ci.yml` | PR/main 全仓 build/typecheck/lint/test 与生产视觉门禁；在任何会启动 Chromium 的 unit/visual gate 前安装固定 lockfile 对应浏览器，失败前无 evidence 目录时 artifact 上传只告警 | CURRENT CI gate；禁止用本地浏览器缓存替代 clean Ubuntu runner |
 | `.cursor/` | Cursor 编辑器配置 | 工具自管 |
-| `.taskmaster/` | task-master 任务状态；`optical-editorial-v3` 15/15 done；CURRENT `hermes-research-intelligence` 为 8/12，Tasks 1–8 done | 工具自管；Task 9 next，Task 10 dependency-ready |
+| `.taskmaster/` | task-master 任务状态；`optical-editorial-v3` 15/15 done；CURRENT `hermes-research-intelligence` 为 8/12，Tasks 1–8 done | 工具自管；Task 9 `in-progress`，Task 10 dependency-ready |
 | `.memory/memory.jsonl` | Memory MCP 知识图谱存储（MEMORY_FILE_PATH 指定） | 工具自管，随 git 备份 |
 | `src/` | 未来代码 | 空 |
 
@@ -142,6 +142,8 @@
 | `docs/plans/2026-08-29-production-release-retention-plan.md` | active+rollback 机器身份、durable pending intent 与精确 release retention 实施计划 | **DEPLOYED / ECS RETENTION GREEN**；active+rollback exact roots/tags，禁止 broad prune，exit 78 用 FD9 `resume` |
 | `docs/plans/2026-08-29-hermes-research-identity-routing-plan.md` | Taskmaster Task 7：注册身份、可纠正兴趣、服务端 InterestContext、Hermes 静默路由与生产真实旅程 | **COMPLETED / ECS DEPLOYED `5e5ae36`**；真实 MiniMax 双任务与 context version 1→2 GREEN |
 | `docs/plans/2026-08-29-hermes-claim-evidence-api-plan.md` | Taskmaster Task 8：可信 SourceMap 引用、Claim/Evidence CRUD/复验、乐观锁/审计与发布双重阻断；Task 9/10 的稳定数据边界 | **COMPLETE / PRODUCTION ACCEPTED `4c73469`**；exact CI、ECS parser、真实 RO journey 与 cleanup 全绿 |
+| `docs/plans/2026-08-29-hermes-claim-first-public-ro-plan.md` | Taskmaster Task 9：publication-only 公共 DTO、R3 publish→public、Evidence source resolver、账户阅读偏好、760/280 Claim-first 页面、移动 sheet、打印/WCAG 与 ECS journey | **CURRENT / TASKS 1–7 LOCAL COMPLETE**；exact CI/ECS journey pending |
+| `apps/api/src/routes/{research,reading-preferences}.ts` / `packages/domain/src/{preferences/reading-preferences,research-intelligence/public-evidence-source}.ts` / `apps/web/components/public/` | Task 9 publication-only DTO、账号阅读偏好、可信原文/展示资产交付、Claim-first UI、移动 sheet、归一化页内定位与打印/无障碍门禁 | **TASK 9 LOCAL IMPLEMENTATION** `76db64f`；Domain/API/Web/Chromium green，ECS migration/API journey pending |
 | `packages/domain/src/research-intelligence/{identity-profile-service,interest-context}.ts` / `apps/api/src/routes/research-identity.ts` / `apps/web/components/auth/ResearchProfileFields.tsx` | 注册身份、版本化可纠正兴趣、服务端确定性 InterestContext 与设置页；拒绝客户端伪造上下文、敏感字段和站外历史，Hermes 按上下文静默适配 | **TASK 7 PRODUCTION**；migration 30、exact CI、真实公网旅程与精确测试数据清理 GREEN |
 | `docs/plans/2026-08-27-hermes-ai-gateway-llm-ocr-routing-plan.md` | Taskmaster Task 5 的可执行 TDD 计划：provider-neutral OCR、MiniMax Coding Plan VLM adapter、逐页 fallback、kill switch、hash/cost/latency 审计与 ECS-only 验收 | **COMPLETED / ECS DEPLOYED `f965966`**；默认不启用付费 vision route |
 | `docs/plans/2026-08-27-hermes-cpu-parser-cascade-plan.md` / `.superpowers/sdd/2026-08-27-hermes-cpu-parser-cascade-plan/progress.md` | Taskmaster Task 4 的 ECS-only 实施计划与 SDD 唯一执行台账：结构化 sidecar v2、确定性 source map、候选 bake-off、坐标 OCR、受控 LLM candidate、真实 corpus/资源/部署门禁 | **COMPLETED / DEPLOYED `c581712`**；rollback `e2c0eaf`，MiniMax Vision disabled |
@@ -175,7 +177,7 @@
 | `apps/web/lib/extract-review-state.ts` / `apps/web/test/e2e/hermes-blank-ro-flow.spec.ts` / `apps/web/test/visual/hermes-blank-ro-production-gate.mjs` | blank RO 字段级 evidence diff、accept/edit-accept/reject/missing/save/reload/commit；checkpoint 只存 task/决策元数据，storage/transport/Redis 失败复用同一付费 task；公网 gate 要求真实账号/MiniMax、零拦截、credit/audit/immutable snapshot、完整 footprint、真实 Wanko idle/work/review/celebration pixels 与 zh/en/mobile/reduced | **IMPLEMENTED FOUNDATION / CARRIED FORWARD**；真实账号纵向证据来自 `06072c1`，现行 `5f4e73c` 仅重跑无写入 Dashboard UI gate |
 | `apps/web/test/visual/hermes-real-ro-production-gate.mjs` / `packages/domain/test/artifact/scan.test.ts` | ECS-only 真实论文纵向门禁：固定 arXiv 2009.06045v1 SHA-256、浏览器创建/上传、MiniMax 六字段决策与原文证据、确认前 SDF 不变、显式缺失披露、bulk confirm/version commit、Hermes runtime；上传响应与状态轮询均允许 300 秒生产边缘延迟，同时锁定合法 PDF `../` 不误判而真实 ZIP traversal 继续拒绝 | **ECS-ONLY SMOKE TOOL**；最近完整真实证据来自 `06072c1`，`5f4e73c` 未重跑；不使用本机 Docker、不拦截 API，输出仅写 ignored visual evidence |
 | `docs/handoff/2026-08-15-hermes-constellation-dragon-prototype-handoff.md` | 少年星图龙静态 Blender 原型、结构门禁与用户 NO-GO 结论 | 历史交接；不得按其 next action 恢复 3D |
-| `docs/handoff/2026-08-16-hermes-2d-pet-handoff.md` | 唯一 compact CURRENT 交接：Research Intelligence 生产基线、Task 8 验收、磁盘卫生、固定约束与下一任务 | **CURRENT active-memory**；branch/production `4c73469`，rollback `cf68bfa7`；Task 9 next |
+| `docs/handoff/2026-08-16-hermes-2d-pet-handoff.md` | 唯一 compact CURRENT 交接：Research Intelligence 生产基线、Task 9 本地候选、磁盘卫生、固定约束与下一动作 | **CURRENT active-memory**；branch `76db64f`，production `4c73469`，rollback `cf68bfa7`；exact CI/ECS next |
 | `docs/plans/2026-08-26-landing-motion-navigation-continuity-plan.md` | 冻结 Hermes、补全 Landing final-composite gate 与真实产品页一级/RO 二级入口 | **COMPLETED / DEPLOYED**；application/release/rollback `c80f739` / `263c783` / `8395b4d` |
 | `docs/design/optical-editorial-figma-map.md` | 长期账号 Figma canonical 的 V3 variables/styles/components/八表面节点映射、代码对应关系与 Code Connect 边界 | Task 13 canonical 映射 |
 | `docs/superpowers/specs/2026-08-09-researcher-ingestion-product-slice-design.md` | 研究者第一条产品级前端闭环设计：注册、Dashboard、资料导入、Hermes 证据确认、RO Workspace；待用户审阅 | 设计 spec |
@@ -377,8 +379,8 @@
 | `infra/nginx/openscience.test.mjs` | 生产 Nginx 合同：`/api` rewrite、Auth 页面/API 分流、Curator/Admin API 保护、Basic credential 不转发、Tunnel 真实 IP 与部署同步 | 8/8 GREEN |
 | `infra/www/` | `nav/index.html` 服务器面板导航静态页（/var/www/nav，2026-08-01） | 已部署云上 |
 | `infra/sandbox/` | 沙箱配置占位（P1A-1） | 骨架 |
-| `infra/migrations/` | Prisma 迁移 1–30（30 = Research Identity signals / AgentTask InterestContext；29 = `agent_tasks.execution_attempt` worker fencing；28 = Research Intelligence core metadata），各附 rollback.sql | **REPOSITORY/PRODUCTION 30/30**；active ledger 30 含需保留的历史 `20260809010000_ro_create_idempotency` |
-| `infra/schema.prisma` | core Prisma schema：既有平台模型 + ResearchIdentityProfile、ClaimNode、EvidenceRecord、PresentationAsset 与 scoped relations | **TASK 2 DEPLOYED `e0828a6`** |
+| `infra/migrations/` | Prisma 迁移 1–31（31 = 账号 Evidence 阅读偏好；30 = Research Identity signals / AgentTask InterestContext；29 = `agent_tasks.execution_attempt` worker fencing），各附 rollback.sql | **REPOSITORY 31 / PRODUCTION 30**；migration 31 待 Task 9 最终 ECS 部署，active ledger 30 含需保留的历史迁移 |
+| `infra/schema.prisma` | core Prisma schema：既有平台模型 + ResearchIdentityProfile、ReadingPreference、ClaimNode、EvidenceRecord、PresentationAsset 与 scoped relations | **TASK 9 LOCAL CANDIDATE**；production schema 仍为 migration 30 |
 | `infra/search/schema.prisma` / `infra/search/migrations/` / `packages/search/test/migration.test.ts` | search 独立 Prisma schema、generator 与迁移账本；baseline `search_meta` 不与 core ledger 混用；Task 6 migration 2 增加 tenant-scoped chunk/embedding/index/model/telemetry、GIN 与机械 rollback | **CURRENT PRODUCTION 2/2 `c581712`**；forward/rollback/redeploy、tenant-safe PostgreSQL integration 与双库恢复 GREEN |
 | `scripts/verify-database-isolation.mjs` / `scripts/verify-database-isolation.test.mjs` | 拒绝 core/search 指向同一物理数据库，并以脱敏元数据给出部署门禁 | **CURRENT**；focused contract 与 ECS `DATABASE_ISOLATION_OK` GREEN |
 

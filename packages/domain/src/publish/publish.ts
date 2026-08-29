@@ -97,6 +97,7 @@ export async function publishVersion(
   contentSha256: string;
   publishedAt: string;
   status: string;
+  visibility: 'public';
 }> {
   const version = await deps.prisma.version.findUnique({
     where: { id: input.versionId },
@@ -109,7 +110,38 @@ export async function publishVersion(
 
   // 幂等（§2.2-3 已公开不可原地修改）：已 published → 返回既有
   if (version.status === 'published') {
-    const pub = await deps.prisma.publication.findFirst({ where: { versionId: version.id } });
+    let pub = await deps.prisma.publication.findFirst({ where: { versionId: version.id } });
+    if (version.researchObject.visibility !== 'public') {
+      if (!input.r3Confirmed) {
+        throw new PublishError('R3_CONFIRMATION_REQUIRED', '公开可见性扩展属 R3 高影响操作，需显式确认（§9.4）');
+      }
+      pub = await deps.prisma.$transaction(async (tx) => {
+        const current = await tx.version.findUnique({
+          where: { id: version.id },
+          include: { researchObject: true },
+        });
+        if (!current || current.status !== 'published') {
+          throw new PublishError('ILLEGAL_TRANSITION', 'Version status changed before visibility expansion');
+        }
+        const existingPublication = await tx.publication.findFirst({ where: { versionId: version.id } });
+        if (current.researchObject.visibility !== 'public') {
+          await tx.researchObject.update({ where: { id: version.researchObjectId }, data: { visibility: 'public' } });
+          await recordAudit(deps, tx, {
+            actorId: input.userId, action: 'publication.publish', workspaceId: version.researchObject.workspaceId,
+            targetType: 'version', targetId: version.id,
+            metadata: {
+              researchObjectId: version.researchObjectId,
+              publicId: current.researchObject.publicId,
+              publicVersionId: existingPublication?.publicVersionId,
+              visibilityFrom: current.researchObject.visibility,
+              visibilityTo: 'public',
+              idempotentVisibilityRepair: true,
+            },
+          }, ctx);
+        }
+        return existingPublication;
+      }, { isolationLevel: 'Serializable' });
+    }
     return {
       versionId: version.id,
       publicId: version.researchObject.publicId ?? '',
@@ -117,6 +149,7 @@ export async function publishVersion(
       contentSha256: pub?.contentSha256 ?? '',
       publishedAt: pub?.publishedAt.toISOString() ?? '',
       status: 'published',
+      visibility: 'public',
     };
   }
 
@@ -194,11 +227,11 @@ export async function publishVersion(
     );
 
     // §6.2 UTC 事务时间 + 内容哈希（coreJson + entries 共同标识版本内容，§7.1 可重建）
-    const entryPart = (version.manifest?.entries ?? [])
+    const entryPart = (currentVersion.manifest?.entries ?? [])
       .map((e) => `${e.logicalPath}:${e.blobSha256}`)
       .sort((a, b) => a.localeCompare(b))
       .join('\n');
-    const corePart = JSON.stringify(version.manifest?.coreJson ?? {});
+    const corePart = JSON.stringify(currentVersion.manifest?.coreJson ?? {});
     const narrativePart = canonicalPublicationValue({
       schemaVersion: currentSnapshot.schemaVersion,
       claims: currentSnapshot.claims,
@@ -206,8 +239,12 @@ export async function publishVersion(
     });
     const contentSha256 = createHash('sha256').update(`${corePart}\n${entryPart}\n${narrativePart}`).digest('hex');
     const publishedAt = new Date();
+    const visibilityFrom = currentVersion.researchObject.visibility;
 
     await tx.version.update({ where: { id: version.id }, data: { status: 'published', publicVersionId } });
+    if (visibilityFrom !== 'public') {
+      await tx.researchObject.update({ where: { id: version.researchObjectId }, data: { visibility: 'public' } });
+    }
     const pub = await tx.publication.create({
       data: {
         versionId: version.id,
@@ -220,7 +257,14 @@ export async function publishVersion(
     await recordAudit(deps, tx, {
       actorId: input.userId, action: 'publication.publish', workspaceId: version.researchObject.workspaceId,
       targetType: 'version', targetId: version.id,
-      metadata: { researchObjectId: version.researchObjectId, publicId, publicVersionId, contentSha256 },
+      metadata: {
+        researchObjectId: version.researchObjectId,
+        publicId,
+        publicVersionId,
+        contentSha256,
+        visibilityFrom,
+        visibilityTo: 'public',
+      },
     }, ctx);
     return { publicId, publicVersionId, contentSha256, publishedAt, pub };
   }, { isolationLevel: 'Serializable' });
@@ -238,6 +282,7 @@ export async function publishVersion(
     contentSha256: result.contentSha256,
     publishedAt: result.publishedAt.toISOString(),
     status: 'published',
+    visibility: 'public',
   };
 }
 

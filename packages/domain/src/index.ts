@@ -306,6 +306,19 @@ export {
   serializeSourceLocator,
   deserializeSourceLocator,
 } from './research-intelligence/source-locator';
+export { DocumentSourceMapUnavailableError } from './research-intelligence/source-map-ref';
+export {
+  ReadingPreferenceError,
+  getReadingPreference,
+  updateReadingPreference,
+  type ReadingPreferenceErrorCode,
+  type ReadingPreferenceState,
+} from './preferences/reading-preferences';
+export {
+  PublicEvidenceSourceError,
+  getPublicEvidenceSource,
+  type PublicEvidenceSourceErrorCode,
+} from './research-intelligence/public-evidence-source';
 export {
   VIRTUAL_PAGE_WIDTH,
   VIRTUAL_LINE_HEIGHT,

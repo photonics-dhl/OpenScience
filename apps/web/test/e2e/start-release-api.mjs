@@ -1,4 +1,5 @@
 import { createServer } from 'node:http';
+import { Buffer } from 'node:buffer';
 import process from 'node:process';
 import { URL } from 'node:url';
 
@@ -29,7 +30,27 @@ const research = {
   aiReview: { status: 'passed', hardBlocks: {}, warnings: [] },
   citation: 'OpenScience Demo. Ultrafast charge transfer in layered matter. OSR-DEMO-000001-v1. 2026.',
   artifactPaths: [{ logicalPath: 'figures/charge-map.png', blobSha256: 'b'.repeat(64) }],
+  claims: [
+    { id: 'claim-transfer', parentClaimId: null, kind: 'core', statement: 'Interlayer charge transfer completes within 80 fs.', conditions: ['Room temperature', 'Resonant excitation'], limitations: ['Validated in one material family'], assessment: 'supported' },
+    { id: 'claim-channel', parentClaimId: 'claim-transfer', kind: 'supporting', statement: 'The transient signal follows the resolved transfer channel.', conditions: ['Three calibrated runs'], limitations: [], assessment: 'supported' },
+    { id: 'claim-boundary', parentClaimId: 'claim-transfer', kind: 'counter', statement: 'A thermal contribution cannot yet be excluded.', conditions: [], limitations: ['Temperature-dependent controls remain pending'], assessment: 'partial' },
+  ],
+  evidence: [
+    { id: 'evidence-timescale', claimId: 'claim-transfer', kind: 'passage', title: 'Resolved transfer timescale', exactQuote: 'The fitted transfer time is 78 ± 9 fs.', relation: 'supports', locator: { page: 4, boundingBox: { x: 60, y: 180, width: 480, height: 72 } }, extractionConfidence: 0.96, verified: true, artifact: { logicalPath: 'manuscript.pdf', mediaType: 'application/pdf', contentHash: 'c'.repeat(64) } },
+    { id: 'evidence-runs', claimId: 'claim-channel', kind: 'figure', title: 'Independent calibrated runs', exactQuote: 'All three runs resolve the same early-time component.', relation: 'supports', locator: { page: 5, boundingBox: { x: 80, y: 260, width: 430, height: 190 } }, extractionConfidence: 0.93, verified: true, artifact: { logicalPath: 'manuscript.pdf', mediaType: 'application/pdf', contentHash: 'c'.repeat(64) } },
+    { id: 'evidence-boundary', claimId: 'claim-boundary', kind: 'passage', title: 'Thermal-control limitation', exactQuote: 'Temperature-dependent controls are required to exclude a thermal contribution.', relation: 'qualifies', locator: { page: 7, boundingBox: { x: 65, y: 520, width: 470, height: 88 } }, extractionConfidence: 0.91, verified: true, artifact: { logicalPath: 'manuscript.pdf', mediaType: 'application/pdf', contentHash: 'c'.repeat(64) } },
+  ],
+  presentationAssets: [{ id: 'asset-transfer-map', kind: 'image', label: 'Charge-transfer pathway illustration', contentHash: 'd'.repeat(64), generator: { name: 'MiniMax', version: 'image-01' }, sourceClaimIds: ['claim-transfer'], url: '/api/research/OSR-DEMO-000001/v/1/presentation-assets/asset-transfer-map' }],
+  history: [{ versionNo: 1, publicVersionId: 'OSR-DEMO-000001-v1', publishedAt: '2026-08-10T00:00:00.000Z', contentSha256: 'a'.repeat(64), url: '/research/OSR-DEMO-000001/v/1' }],
 };
+
+const evidenceSources = {
+  'evidence-timescale': { text: 'The fitted transfer time is 78 ± 9 fs.', page: 4, region: { x: 0.1, y: 0.2, width: 0.8, height: 0.08 }, locator: { page: 4, boundingBox: { x: 60, y: 180, width: 480, height: 72 } }, artifact: { logicalPath: 'manuscript.pdf', mediaType: 'application/pdf' } },
+  'evidence-runs': { text: 'All three runs resolve the same early-time component.', page: 5, region: { x: 0.13, y: 0.29, width: 0.72, height: 0.21 }, locator: { page: 5, boundingBox: { x: 80, y: 260, width: 430, height: 190 } }, artifact: { logicalPath: 'manuscript.pdf', mediaType: 'application/pdf' } },
+  'evidence-boundary': { text: 'Temperature-dependent controls are required to exclude a thermal contribution.', page: 7, region: { x: 0.11, y: 0.58, width: 0.78, height: 0.1 }, locator: { page: 7, boundingBox: { x: 65, y: 520, width: 470, height: 88 } }, artifact: { logicalPath: 'manuscript.pdf', mediaType: 'application/pdf' } },
+};
+
+const presentationPng = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=', 'base64');
 
 const collection = {
   id: 'collection-release', slug: 'ultrafast-science', title: 'Ultrafast Science', description: 'A journal-curated reading layer.',
@@ -52,6 +73,15 @@ const server = createServer((request, response) => {
   let body;
   if (path === '/research/OSR-DEMO-000001') body = { research: { latestVersion: 1 } };
   else if (path === '/research/OSR-DEMO-000001/v/1') body = { research };
+  else if (path.startsWith('/research/OSR-DEMO-000001/v/1/evidence/') && path.endsWith('/source')) {
+    const evidenceId = path.split('/').at(-2);
+    body = evidenceSources[evidenceId];
+  }
+  else if (path === '/research/OSR-DEMO-000001/v/1/presentation-assets/asset-transfer-map') {
+    response.writeHead(200, { 'content-type': 'image/png', 'cache-control': 'public, max-age=31536000, immutable' });
+    response.end(presentationPng);
+    return;
+  }
   else if (path === '/editorial/collections/ultrafast-science') body = { collection };
   else {
     response.writeHead(404, { 'content-type': 'application/json' });

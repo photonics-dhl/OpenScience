@@ -7,7 +7,7 @@ export const PRODUCT_RELEASE_VIEWPORTS = Object.freeze([
 const surfaces = Object.freeze([
   { surface: 'landing', route: '/', state: 'optical-resting', motionContract: 'visible-optical' },
   { surface: 'workspace', route: '/research-objects/ro-release/edit', state: 'proposal-ready' },
-  { surface: 'public', route: '/research/OSR-DEMO-000001/v/1', state: 'published-reading' },
+  { surface: 'public', route: '/research/OSR-DEMO-000001/v/1', state: 'claim-first-published-reading' },
   { surface: 'auth', route: '/auth/register', state: 'request-code' },
   { surface: 'login', route: '/auth/login', state: 'returning-researcher' },
   { surface: 'dashboard', route: '/dashboard', state: 'approval-ready' },

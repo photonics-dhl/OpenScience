@@ -585,7 +585,7 @@ export async function transitionVersionStatus(versionId: string, status: string)
   return request(`/api/versions/${versionId}/status`, { method: 'POST', body: JSON.stringify({ status }) });
 }
 
-export async function publishVersion(versionId: string): Promise<{ published: { versionId: string; publicId: string; publicVersionId: string; publishedAt: string; status: string } }> {
+export async function publishVersion(versionId: string): Promise<{ published: { versionId: string; publicId: string; publicVersionId: string; publishedAt: string; status: string; visibility: 'public' } }> {
   return request(`/api/versions/${versionId}/publish`, { method: 'POST', body: JSON.stringify({ r3Confirmed: true }) });
 }
 
@@ -853,11 +853,79 @@ export async function correctResearchInterestSignal(input: {
   })).profile;
 }
 
+export interface ReadingPreference {
+  evidenceDefaultCollapsed: boolean;
+  version: number;
+}
+
+export function getReadingPreference(): Promise<ReadingPreference> {
+  return request('/api/reading-preferences');
+}
+
+export function updateReadingPreference(input: {
+  evidenceDefaultCollapsed: boolean;
+  expectedVersion: number;
+}): Promise<ReadingPreference> {
+  return request('/api/reading-preferences', {
+    method: 'PATCH',
+    body: JSON.stringify(input),
+  });
+}
+
 export async function retryAgentTask(taskId: string): Promise<{ task: AgentTaskView }> {
   return request(`/api/agent/tasks/${taskId}/retry`, { method: 'POST' });
 }
 
 // ===== P1D-9：公开页数据（§4.3 必显）=====
+
+export interface PublicClaim {
+  id: string;
+  parentClaimId: string | null;
+  kind: 'core' | 'supporting' | 'method' | 'boundary' | 'counter';
+  statement: string;
+  conditions: string[];
+  limitations: string[];
+  assessment: 'supported' | 'partial' | 'disputed' | 'missing';
+}
+
+export interface PublicEvidence {
+  id: string;
+  claimId: string;
+  kind: 'passage' | 'figure' | 'table' | 'dataset' | 'code' | 'notebook' | 'environment' | 'protocol' | 'supplement' | 'external_source';
+  title: string;
+  exactQuote: string | null;
+  relation: 'supports' | 'contradicts' | 'qualifies' | 'context';
+  locator: Record<string, unknown>;
+  extractionConfidence: number | null;
+  verified: boolean;
+  artifact: { logicalPath: string; mediaType: string; contentHash: string };
+}
+
+export interface PublicPresentationAsset {
+  id: string;
+  kind: 'svg' | 'chart' | 'interactive_html' | 'image' | 'video';
+  label: string;
+  contentHash: string;
+  generator: { name: string; version: string };
+  sourceClaimIds: string[];
+  url: string;
+}
+
+export interface PublicVersionHistoryItem {
+  versionNo: number;
+  publicVersionId: string;
+  publishedAt: string;
+  contentSha256: string;
+  url: string;
+}
+
+export interface PublicEvidenceSource {
+  text: string;
+  page: number | null;
+  region: { x: number; y: number; width: number; height: number } | null;
+  locator: Record<string, unknown>;
+  artifact: { logicalPath: string; mediaType: string };
+}
 
 export interface PublicResearchVersion {
   publicId: string;
@@ -879,11 +947,23 @@ export interface PublicResearchVersion {
   aiReview: { status: string; hardBlocks: unknown[]; warnings: unknown[] } | null;
   citation: string;
   artifactPaths: Array<{ logicalPath: string; blobSha256: string }>;
+  claims: PublicClaim[];
+  evidence: PublicEvidence[];
+  presentationAssets: PublicPresentationAsset[];
+  history: PublicVersionHistoryItem[];
 }
 
 /** 公开页版本详情（§4.3 必显 + 十标签数据；匿名可访问 public）。 */
 export async function getPublicResearchVersion(publicId: string, versionNo: number): Promise<{ research: PublicResearchVersion }> {
   return request(`/api/research/${publicId}/v/${versionNo}`);
+}
+
+export async function getPublicEvidenceSource(
+  publicId: string,
+  versionNo: number,
+  evidenceId: string,
+): Promise<PublicEvidenceSource> {
+  return request(`/api/research/${publicId}/v/${versionNo}/evidence/${evidenceId}/source`);
 }
 
 // ===== P1E-6：沙箱任务查询与产物下载 =====
