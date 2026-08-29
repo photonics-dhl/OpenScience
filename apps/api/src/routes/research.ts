@@ -1,12 +1,20 @@
 import type { FastifyInstance } from 'fastify';
+import { createHash } from 'node:crypto';
 import { z } from 'zod';
 import type { AuthDeps } from '@openscience/auth';
+import type { StorageAdapter } from '@openscience/storage';
+import { getPublicEvidenceSource, PublicEvidenceSourceError } from '@openscience/domain';
 
 /** /research 公开路由依赖：AuthDeps（仅用 prisma）。 */
-export type ResearchRouteDeps = AuthDeps;
+export type ResearchRouteDeps = AuthDeps & { storage?: StorageAdapter };
 
 const roParams = z.object({ publicId: z.string() });
 const versionParams = z.object({ publicId: z.string(), versionNo: z.coerce.number().int().positive() });
+const evidenceSourceParams = versionParams.extend({ evidenceId: z.string().uuid() });
+const presentationAssetParams = versionParams.extend({ assetId: z.string().uuid() });
+const MAX_PUBLIC_PRESENTATION_BYTES = 16 * 1024 * 1024;
+const safeInlineImages = new Set(['image/png', 'image/jpeg', 'image/webp', 'image/gif', 'image/avif']);
+const safeInlineVideos = new Set(['video/mp4', 'video/webm']);
 const publicLocatorSchema = z.object({
   blockId: z.string().min(1).optional(),
   page: z.number().int().positive().optional(),
@@ -244,5 +252,84 @@ export function registerResearchRoutes(app: FastifyInstance, deps: ResearchRoute
         }),
       },
     });
+  });
+
+  app.get('/research/:publicId/v/:versionNo/evidence/:evidenceId/source', async (req, reply) => {
+    if (!deps.storage) throw new PublicEvidenceSourceError('SOURCE_UNAVAILABLE', 'published source is temporarily unavailable');
+    const { publicId, versionNo, evidenceId } = evidenceSourceParams.parse(req.params);
+    return reply.send(await getPublicEvidenceSource({ ...deps, storage: deps.storage }, { publicId, versionNo, evidenceId }));
+  });
+
+  app.get('/research/:publicId/v/:versionNo/presentation-assets/:assetId', async (req, reply) => {
+    if (!deps.storage) throw new PublicEvidenceSourceError('SOURCE_UNAVAILABLE', 'published asset is temporarily unavailable');
+    const { publicId, versionNo, assetId } = presentationAssetParams.parse(req.params);
+    const ro = await deps.prisma.researchObject.findUnique({ where: { publicId } });
+    if (!ro || ro.visibility !== 'public') throw new PublicEvidenceSourceError('NOT_FOUND', 'published asset not found');
+    const version = await deps.prisma.version.findFirst({
+      where: {
+        researchObjectId: ro.id, versionNo, status: 'published', publications: { some: {} },
+      },
+      select: { id: true },
+    });
+    if (!version) throw new PublicEvidenceSourceError('NOT_FOUND', 'published asset not found');
+    const asset = await deps.prisma.presentationAsset.findFirst({ where: {
+      id: assetId, researchObjectId: ro.id, versionId: version.id, status: 'approved',
+    } });
+    if (!asset) throw new PublicEvidenceSourceError('NOT_FOUND', 'published asset not found');
+
+    let head;
+    try {
+      head = await deps.storage.headObject(asset.objectKey);
+    } catch (error) {
+      throw new PublicEvidenceSourceError('SOURCE_UNAVAILABLE', 'published asset is temporarily unavailable', { cause: error });
+    }
+    if (!head) throw new PublicEvidenceSourceError('SOURCE_UNAVAILABLE', 'published asset is temporarily unavailable');
+    if (head.size < 1 || head.size > MAX_PUBLIC_PRESENTATION_BYTES) {
+      throw new PublicEvidenceSourceError('NOT_FOUND', 'published asset not found');
+    }
+    let object;
+    try {
+      object = await deps.storage.getObject(asset.objectKey);
+    } catch (error) {
+      throw new PublicEvidenceSourceError('SOURCE_UNAVAILABLE', 'published asset is temporarily unavailable', { cause: error });
+    }
+    if (object.size !== head.size || object.size > MAX_PUBLIC_PRESENTATION_BYTES) {
+      object.body.destroy();
+      throw new PublicEvidenceSourceError('NOT_FOUND', 'published asset not found');
+    }
+    const chunks: Buffer[] = [];
+    const digest = createHash('sha256');
+    let received = 0;
+    try {
+      for await (const value of object.body) {
+        const chunk = Buffer.isBuffer(value) ? value : Buffer.from(value);
+        received += chunk.length;
+        if (received > object.size || received > MAX_PUBLIC_PRESENTATION_BYTES) {
+          object.body.destroy();
+          throw new PublicEvidenceSourceError('NOT_FOUND', 'published asset not found');
+        }
+        digest.update(chunk);
+        chunks.push(chunk);
+      }
+    } catch (error) {
+      if (error instanceof PublicEvidenceSourceError) throw error;
+      throw new PublicEvidenceSourceError('SOURCE_UNAVAILABLE', 'published asset is temporarily unavailable', { cause: error });
+    }
+    if (received !== object.size || digest.digest('hex') !== asset.contentHash.toLowerCase()) {
+      throw new PublicEvidenceSourceError('NOT_FOUND', 'published asset not found');
+    }
+
+    const storedType = (object.contentType ?? head.contentType ?? '').toLowerCase().split(';', 1)[0] ?? '';
+    const inline = ((asset.kind === 'image' || asset.kind === 'chart') && safeInlineImages.has(storedType))
+      || (asset.kind === 'video' && safeInlineVideos.has(storedType));
+    const contentType = inline ? storedType : 'application/octet-stream';
+    return reply
+      .header('Content-Type', contentType)
+      .header('Content-Disposition', `${inline ? 'inline' : 'attachment'}; filename="presentation-${asset.id}"`)
+      .header('Content-Length', String(received))
+      .header('X-Content-Type-Options', 'nosniff')
+      .header('Content-Security-Policy', "sandbox; default-src 'none'")
+      .header('Cache-Control', 'public, max-age=31536000, immutable')
+      .send(Buffer.concat(chunks));
   });
 }

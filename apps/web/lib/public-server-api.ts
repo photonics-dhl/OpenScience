@@ -1,4 +1,4 @@
-import type { PublicResearchVersion } from './api';
+import type { PublicEvidenceSource, PublicResearchVersion } from './api';
 import type { EditorialCollectionApi } from './api';
 
 export class PublicServerApiError extends Error {
@@ -19,6 +19,12 @@ async function serverRequest<T>(path: string): Promise<T> {
 
 export function getServerPublicResearchVersion(publicId: string, versionNo: number) {
   return serverRequest<{ research: PublicResearchVersion }>(`/research/${encodeURIComponent(publicId)}/v/${versionNo}`);
+}
+
+export function getServerPublicEvidenceSource(publicId: string, versionNo: number, evidenceId: string) {
+  return serverRequest<PublicEvidenceSource>(
+    `/research/${encodeURIComponent(publicId)}/v/${versionNo}/evidence/${encodeURIComponent(evidenceId)}/source`,
+  );
 }
 
 export async function getLatestPublicResearchVersion(publicId: string) {

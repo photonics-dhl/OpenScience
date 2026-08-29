@@ -7,6 +7,13 @@ const SOURCE_MAP_REFERENCE_VERSION = 1 as const;
 const MAX_SOURCE_MAP_BYTES = 32 * 1024 * 1024;
 const SOURCE_MAP_KEY = /^derived\/source-maps\/([a-f0-9]{64})\.json$/;
 
+export class DocumentSourceMapUnavailableError extends Error {
+  constructor(message: string, options?: ErrorOptions) {
+    super(message, options);
+    this.name = 'DocumentSourceMapUnavailableError';
+  }
+}
+
 export interface DocumentSourceMapReference {
   schemaVersion: typeof SOURCE_MAP_REFERENCE_VERSION;
   parserStatus: 'succeeded' | 'needs_review';
@@ -86,17 +93,28 @@ export async function loadDocumentSourceMapReference(
   value: unknown,
 ): Promise<DocumentSourceMap> {
   const reference = parseReference(value);
-  const object = await storage.getObject(reference.objectKey);
+  let object;
+  try {
+    object = await storage.getObject(reference.objectKey);
+  } catch (error) {
+    throw new DocumentSourceMapUnavailableError('DocumentSourceMap object is unavailable', { cause: error });
+  }
   if (object.size !== reference.size || object.size > MAX_SOURCE_MAP_BYTES) {
     throw new Error('DocumentSourceMap stored size does not match reference');
   }
   const chunks: Buffer[] = [];
   let size = 0;
-  for await (const chunk of object.body) {
-    const buffer = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
-    size += buffer.length;
-    if (size > reference.size || size > MAX_SOURCE_MAP_BYTES) throw new Error('DocumentSourceMap stream size exceeds reference');
-    chunks.push(buffer);
+  try {
+    for await (const chunk of object.body) {
+      const buffer = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
+      size += buffer.length;
+      if (size > reference.size || size > MAX_SOURCE_MAP_BYTES) throw new Error('DocumentSourceMap stream size exceeds reference');
+      chunks.push(buffer);
+    }
+  } catch (error) {
+    if (error instanceof DocumentSourceMapUnavailableError) throw error;
+    if (size > reference.size || size > MAX_SOURCE_MAP_BYTES) throw error;
+    throw new DocumentSourceMapUnavailableError('DocumentSourceMap stream is unavailable', { cause: error });
   }
   if (size !== reference.size) throw new Error('DocumentSourceMap stream size does not match reference');
   const serialized = Buffer.concat(chunks);

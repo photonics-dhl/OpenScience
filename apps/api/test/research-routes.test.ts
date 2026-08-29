@@ -1,7 +1,10 @@
 import Fastify from 'fastify';
+import { createHash } from 'node:crypto';
+import { Readable } from 'node:stream';
 import { describe, expect, it, vi } from 'vitest';
 
 import { registerResearchRoutes } from '../src/routes/research';
+import { httpStatusForError } from '../src/error-map';
 
 function publicResearchObject() {
   return {
@@ -22,7 +25,7 @@ function routePrisma() {
     licenseAssignment: { findMany: vi.fn().mockResolvedValue([]) },
     claimNode: { findMany: vi.fn().mockResolvedValue([]) },
     evidenceRecord: { findMany: vi.fn().mockResolvedValue([]) },
-    presentationAsset: { findMany: vi.fn().mockResolvedValue([]) },
+    presentationAsset: { findMany: vi.fn().mockResolvedValue([]), findFirst: vi.fn().mockResolvedValue(null) },
   };
 }
 
@@ -147,6 +150,96 @@ describe('anonymous public research contract', () => {
     expect(serialized).not.toContain('private/presentation/key');
     expect(serialized).not.toContain('private-prompt');
     expect(serialized).not.toContain('artifactId');
+    await app.close();
+  });
+
+  it('serves an approved, hash-verified raster asset inline with strict response headers', async () => {
+    const bytes = Buffer.from('safe-png-fixture');
+    const hash = createHash('sha256').update(bytes).digest('hex');
+    const prisma = routePrisma();
+    prisma.version.findFirst.mockResolvedValue({ id: 'version-1' });
+    prisma.presentationAsset.findFirst.mockResolvedValue({
+      id: '55555555-5555-4555-8555-555555555555', objectKey: 'private/asset-key',
+      kind: 'image', contentHash: hash,
+    });
+    const storage = {
+      headObject: vi.fn().mockResolvedValue({ size: bytes.length, etag: 'etag', contentType: 'image/png' }),
+      getObject: vi.fn().mockResolvedValue({ body: Readable.from([bytes]), size: bytes.length, contentType: 'image/png' }),
+    };
+    const app = Fastify();
+    app.setErrorHandler((error, req, reply) => {
+      const mapped = httpStatusForError(error, String(req.id));
+      void reply.status(mapped.status).send(mapped.body);
+    });
+    registerResearchRoutes(app, { prisma, storage } as never);
+
+    const response = await app.inject({
+      method: 'GET',
+      url: '/research/OSR-2026-000001/v/1/presentation-assets/55555555-5555-4555-8555-555555555555',
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.rawPayload).toEqual(bytes);
+    expect(response.headers['content-type']).toContain('image/png');
+    expect(response.headers['content-disposition']).toContain('inline');
+    expect(response.headers['x-content-type-options']).toBe('nosniff');
+    expect(prisma.presentationAsset.findFirst).toHaveBeenCalledWith({ where: {
+      id: '55555555-5555-4555-8555-555555555555', researchObjectId: publicResearchObject().id,
+      versionId: 'version-1', status: 'approved',
+    } });
+    await app.close();
+  });
+
+  it('forces HTML presentation bytes to download and rejects tampered assets', async () => {
+    const bytes = Buffer.from('<script>top.location="https://evil.example"</script>');
+    const hash = createHash('sha256').update(bytes).digest('hex');
+    const prisma = routePrisma();
+    prisma.version.findFirst.mockResolvedValue({ id: 'version-1' });
+    prisma.presentationAsset.findFirst.mockResolvedValue({
+      id: '55555555-5555-4555-8555-555555555555', objectKey: 'private/asset-key',
+      kind: 'interactive_html', contentHash: hash,
+    });
+    const storage = {
+      headObject: vi.fn().mockResolvedValue({ size: bytes.length, etag: 'etag', contentType: 'text/html' }),
+      getObject: vi.fn().mockResolvedValue({ body: Readable.from([bytes]), size: bytes.length, contentType: 'text/html' }),
+    };
+    const app = Fastify();
+    app.setErrorHandler((error, req, reply) => {
+      const mapped = httpStatusForError(error, String(req.id));
+      void reply.status(mapped.status).send(mapped.body);
+    });
+    registerResearchRoutes(app, { prisma, storage } as never);
+
+    const download = await app.inject({
+      method: 'GET',
+      url: '/research/OSR-2026-000001/v/1/presentation-assets/55555555-5555-4555-8555-555555555555',
+    });
+    expect(download.statusCode).toBe(200);
+    expect(download.headers['content-type']).toContain('application/octet-stream');
+    expect(download.headers['content-disposition']).toContain('attachment');
+    expect(download.headers['content-security-policy']).toBe("sandbox; default-src 'none'");
+
+    prisma.presentationAsset.findFirst.mockResolvedValue({
+      id: '55555555-5555-4555-8555-555555555555', objectKey: 'private/asset-key',
+      kind: 'interactive_html', contentHash: '0'.repeat(64),
+    });
+    const tampered = await app.inject({
+      method: 'GET',
+      url: '/research/OSR-2026-000001/v/1/presentation-assets/55555555-5555-4555-8555-555555555555',
+    });
+    expect(tampered.statusCode).toBe(404);
+
+    prisma.presentationAsset.findFirst.mockResolvedValue({
+      id: '55555555-5555-4555-8555-555555555555', objectKey: 'private/asset-key',
+      kind: 'interactive_html', contentHash: hash,
+    });
+    storage.headObject.mockResolvedValue(null);
+    const unavailable = await app.inject({
+      method: 'GET',
+      url: '/research/OSR-2026-000001/v/1/presentation-assets/55555555-5555-4555-8555-555555555555',
+    });
+    expect(unavailable.statusCode).toBe(503);
+    expect(unavailable.json().error.code).toBe('SOURCE_UNAVAILABLE');
     await app.close();
   });
 });

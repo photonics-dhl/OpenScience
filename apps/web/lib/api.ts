@@ -900,6 +900,13 @@ export interface PublicVersionHistoryItem {
   url: string;
 }
 
+export interface PublicEvidenceSource {
+  text: string;
+  page: number | null;
+  locator: Record<string, unknown>;
+  artifact: { logicalPath: string; mediaType: string };
+}
+
 export interface PublicResearchVersion {
   publicId: string;
   title: string;
@@ -929,6 +936,14 @@ export interface PublicResearchVersion {
 /** 公开页版本详情（§4.3 必显 + 十标签数据；匿名可访问 public）。 */
 export async function getPublicResearchVersion(publicId: string, versionNo: number): Promise<{ research: PublicResearchVersion }> {
   return request(`/api/research/${publicId}/v/${versionNo}`);
+}
+
+export async function getPublicEvidenceSource(
+  publicId: string,
+  versionNo: number,
+  evidenceId: string,
+): Promise<PublicEvidenceSource> {
+  return request(`/api/research/${publicId}/v/${versionNo}/evidence/${evidenceId}/source`);
 }
 
 // ===== P1E-6：沙箱任务查询与产物下载 =====
