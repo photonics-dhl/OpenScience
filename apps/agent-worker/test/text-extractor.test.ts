@@ -118,8 +118,8 @@ describe('deterministic text DocumentParser', () => {
     });
 
     const result = await executeDocumentParser(parser, parserInput);
-    expect(result).toMatchObject({ status: 'needs_review', reasons: ['structured-xlsx-review-required'] });
-    if (result.status === 'needs_review') {
+    expect(result).toMatchObject({ status: 'succeeded', warnings: [] });
+    if (result.status === 'succeeded') {
       expect(result.sourceMap.pages[0]?.blocks.some((block) => block.text === 'isolated workbook value' && block.kind === 'table')).toBe(true);
     }
   });
@@ -177,9 +177,9 @@ describe('deterministic text DocumentParser', () => {
     const parserInput = input('"alpha, one",beta\r\n"line\nbreak",gamma', 'text/csv');
     const result = await executeDocumentParser(createTextExtractor({}), parserInput);
 
-    expect(result.status).toBe('needs_review');
-    if (result.status !== 'needs_review') return;
-    expect(result.reasons).toEqual(['structured-csv-review-required']);
+    expect(result.status).toBe('succeeded');
+    if (result.status !== 'succeeded') return;
+    expect(result.warnings).toEqual([]);
     expect(result.sourceMap.pages[0]).toMatchObject({ page: 1, width: 1000, height: 48 });
     expect(result.sourceMap.pages[0]?.blocks.map((block) => ({ kind: block.kind, text: block.text, boundingBox: block.boundingBox }))).toEqual([
       { kind: 'table', text: 'alpha, one', boundingBox: { x: 0, y: 0, width: 500, height: 24 } },
@@ -189,13 +189,24 @@ describe('deterministic text DocumentParser', () => {
     ]);
   });
 
+  it('keeps strict CSV readiness validation bounded for a large supported table', async () => {
+    const content = Buffer.from(Array.from({ length: 2_000 }, (_, index) => `value-${index}`).join(','));
+    const started = performance.now();
+    const result = await executeDocumentParser(createTextExtractor({}), input(content, 'text/csv'));
+
+    expect(result.status).toBe('succeeded');
+    if (result.status !== 'succeeded') return;
+    expect(result.sourceMap.pages[0]?.blocks).toHaveLength(2_000);
+    expect(performance.now() - started).toBeLessThan(2_000);
+  }, 10_000);
+
   it('extracts bounded XLSX sheets in workbook order with sheet/row/cell coordinates', async () => {
     const parserInput = input(XLSX_FIXTURE, 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
     const result = await executeDocumentParser(createTextExtractor({}), parserInput);
 
-    expect(result.status).toBe('needs_review');
-    if (result.status !== 'needs_review') return;
-    expect(result.reasons).toEqual(['structured-xlsx-review-required']);
+    expect(result.status).toBe('succeeded');
+    if (result.status !== 'succeeded') return;
+    expect(result.warnings).toEqual([]);
     expect(result.sourceMap.pages).toHaveLength(2);
     expect(result.sourceMap.pages.map((page) => page.blocks.map((block) => block.text))).toEqual([
       ['Alpha', 'Header', 'Quoted, cell', 'second row'],

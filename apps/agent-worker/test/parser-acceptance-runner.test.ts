@@ -14,7 +14,6 @@ import {
 import { createSidecarParserStageProcessor } from '../src/parser-job-isolation';
 import {
   canonicalAcceptanceReviewReasons,
-  normalizeActionableAcceptanceResult,
 } from '../src/parser-acceptance-runner';
 import { RESEARCH_INTELLIGENCE_CORPUS } from './support/research-intelligence-corpus';
 
@@ -68,9 +67,7 @@ describe('Task 8 acceptance runner production composition', () => {
     );
     let cascadeResult: Awaited<ReturnType<typeof canonicalCascade>> | undefined;
     const parserCascade = Object.assign(async (...args: Parameters<typeof canonicalCascade>) => {
-      cascadeResult = normalizeActionableAcceptanceResult(fixture, await canonicalCascade(...args), {
-        artifactId, contentHash: digest,
-      });
+      cascadeResult = await canonicalCascade(...args);
       return cascadeResult;
     }, { featureFlags: canonicalCascade.featureFlags });
     const handlers = createHandlers(gatewaySeam.gateway as unknown as AiGateway, {

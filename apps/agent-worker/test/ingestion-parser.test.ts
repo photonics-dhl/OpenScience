@@ -3,6 +3,7 @@ import { EventEmitter } from 'node:events';
 import { PassThrough } from 'node:stream';
 import { describe, expect, it, vi } from 'vitest';
 import type { AiGateway } from '@openscience/ai-gateway';
+import { createTableCellSourceLocator, resolveSourceLocator } from '@openscience/domain';
 import { createWorkerParserCascade } from '../src/index';
 import { sourceMapToManuscriptText } from '../src/extractor';
 import { createDefaultIngestionAdapters, parseIngestion, parseIngestionWithAdapters, runTesseractOcr } from '../src/ingestion-parser';
@@ -133,9 +134,9 @@ describe('parseIngestion', () => {
       externalProcessingEligible: false,
     });
 
-    expect(result.status).toBe('needs_review');
-    if (result.status !== 'needs_review') return;
-    expect(result.reasons).toEqual(['structured-xlsx-review-required']);
+    expect(result.status).toBe('succeeded');
+    if (result.status !== 'succeeded') return;
+    expect(result.warnings).toEqual([]);
     expect(result.sourceMap.pages).toHaveLength(1);
     expect(result.sourceMap.pages[0]?.blocks.map(({ kind, text, boundingBox }) => ({ kind, text, boundingBox }))).toEqual([
       { kind: 'heading', text: 'Evidence', boundingBox: { x: 0, y: 0, width: 1000, height: 24 } },
@@ -146,6 +147,13 @@ describe('parseIngestion', () => {
     ]);
     const identity = { artifactId, contentHash };
     expect(reproduceAcceptanceLocator(result.sourceMap, locator, identity)).toBe(true);
+    const target = result.sourceMap.pages[0]?.blocks.find(({ text }) => text === '42');
+    expect(target).toBeDefined();
+    if (!target) return;
+    const formalLocator = createTableCellSourceLocator(result.sourceMap, target.id, {
+      sheet: 'Evidence', row: 2, column: 2,
+    });
+    expect(resolveSourceLocator(result.sourceMap, formalLocator).id).toBe(target.id);
 
     const wrongSheet = structuredClone(result.sourceMap);
     wrongSheet.pages[0]!.blocks[0]!.text = 'Other';
@@ -211,9 +219,9 @@ describe('parseIngestion', () => {
         externalProcessingEligible: false,
       });
 
-      expect(result.status).toBe('needs_review');
-      if (result.status !== 'needs_review') return;
-      expect(result.reasons).toEqual(['structured-xlsx-review-required']);
+      expect(result.status).toBe('succeeded');
+      if (result.status !== 'succeeded') return;
+      expect(result.warnings).toEqual([]);
       expect(result.sourceMap.pages[0]?.blocks.at(-1)?.boundingBox).toEqual({
         x: (columnCount - 1) * width,
         y: 24,
@@ -222,6 +230,39 @@ describe('parseIngestion', () => {
       });
     },
   );
+
+  it('returns canonical CSV as succeeded through the production cascade after formal table locator validation', async () => {
+    const fixture = RESEARCH_INTELLIGENCE_CORPUS.find(({ id }) => id === 'table-csv-mixed');
+    expect(fixture).toBeDefined();
+    if (!fixture) return;
+    const contentHash = createHash('sha256').update(fixture.content).digest('hex');
+    const artifactId = 'artifact-table-csv-mixed';
+    const stageAdapter = vi.fn(serializedSidecarAdapter());
+    const cascade = createWorkerParserCascade({ ocr: vi.fn() } as never, stageAdapter);
+
+    const result = await cascade({
+      artifactId,
+      contentHash,
+      content: fixture.content,
+      mediaType: 'text/csv',
+    }, {
+      trustedAuthorizationContext: { taskId: 'task-csv', workspaceId: 'workspace-1', actorId: 'actor-1' },
+      externalProcessingEligible: false,
+    });
+
+    expect(result.status).toBe('succeeded');
+    expect(stageAdapter).not.toHaveBeenCalled();
+    if (result.status !== 'succeeded') return;
+    expect(result.warnings).toEqual([]);
+    const target = result.sourceMap.pages[0]?.blocks.find(({ text }) => text === '42');
+    expect(target).toBeDefined();
+    if (!target) return;
+    const formalLocator = createTableCellSourceLocator(result.sourceMap, target.id, { row: 2, column: 2 });
+    expect(resolveSourceLocator(result.sourceMap, formalLocator).id).toBe(target.id);
+    expect(reproduceAcceptanceLocator(result.sourceMap, fixture.expectedLocators[0]!, {
+      artifactId, contentHash,
+    })).toBe(true);
+  });
 
   it.each([
     'dual-column-pdf-en',

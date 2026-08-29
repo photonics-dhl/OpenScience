@@ -472,9 +472,7 @@ export function parseResearchCorpusCase(corpusCase: ResearchCorpusCase): Promise
       content: corpusCase.content,
       mediaType: canonicalParserMediaType(corpusCase.filename),
     }).then((result): ParsedIngestion => {
-      const transitionAccepted = result.status === 'needs_review' && result.reasons.length === 1
-        && ['structured-csv-review-required', 'structured-xlsx-review-required'].includes(result.reasons[0]!);
-      if (result.status === 'succeeded' || transitionAccepted) {
+      if (result.status === 'succeeded') {
         const text = result.sourceMap.pages.flatMap(({ blocks }) => blocks.flatMap(({ text: value }) => value ?? [])).join('\n');
         if (text.trim()) {
           return { status: 'ready', text, format: corpusCase.filename.split('.').at(-1) ?? 'unknown' };

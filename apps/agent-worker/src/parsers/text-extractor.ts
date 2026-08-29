@@ -1,4 +1,9 @@
-import { parseDocumentSourceMap, type DocumentSourceMap } from '@openscience/domain';
+import {
+  createTableCellSourceLocator,
+  parseDocumentSourceMap,
+  resolveSourceLocator,
+  type DocumentSourceMap,
+} from '@openscience/domain';
 import { parseStructuredXlsxResult, XlsxParsingLimitError } from '../ingestion-parser';
 import { parseParserStageResult, type ParserJobRequestV2, type ParserStageResult } from './job-protocol';
 import {
@@ -6,6 +11,7 @@ import {
   buildVirtualPage,
   TEXT_EXTRACTOR_METADATA,
   VIRTUAL_LINE_HEIGHT,
+  VIRTUAL_PAGE_METADATA,
   VIRTUAL_PAGE_WIDTH,
   type VirtualTextCell,
 } from './source-map-builders';
@@ -42,8 +48,6 @@ const MAX_NOTEBOOK_BYTES = 8 * 1024 * 1024;
 const MAX_NOTEBOOK_JSON_DEPTH = 64;
 const MAX_NOTEBOOK_JSON_VALUES = 100_000;
 const MAX_NOTEBOOK_SOURCE_PARTS = 10_000;
-const XLSX_REVIEW_REASON = 'structured-xlsx-review-required';
-const CSV_REVIEW_REASON = 'structured-csv-review-required';
 
 export type TextStageAdapter = (request: ParserJobRequestV2, content: Buffer) => Promise<ParserStageResult>;
 
@@ -66,10 +70,6 @@ function emptySourceMap(input: ParserInput) {
 
 function needsReview(input: ParserInput, reason: string) {
   return { status: 'needs_review' as const, sourceMap: emptySourceMap(input), reasons: [reason] };
-}
-
-function needsReviewSourceMap(sourceMap: DocumentSourceMap, reason: string) {
-  return { status: 'needs_review' as const, sourceMap, reasons: [reason] };
 }
 
 function meaningful(text: string): boolean {
@@ -356,7 +356,9 @@ async function parseBinary(
     if (!pages.some((page) => page.blocks.some((block) => block.text && meaningful(block.text)))) {
       return needsReview(input, 'empty-parsed-text');
     }
-    return needsReviewSourceMap(validatedSourceMap(input, pages), XLSX_REVIEW_REASON);
+    const sourceMap = validatedSourceMap(input, pages);
+    assertStructuredTableSourceMap(sourceMap, 'xlsx');
+    return succeededSourceMap(sourceMap, []);
   }
   if (kind === 'pdf' || kind === 'image') {
     const pages = buildPhysicalPages(result.pages, result.parser);
@@ -416,6 +418,75 @@ function validatedSourceMap(input: ParserInput, pages: readonly SourceMapPageDra
   }
 }
 
+function assertStructuredTableSourceMap(sourceMap: DocumentSourceMap, kind: 'csv' | 'xlsx'): void {
+  type TableCellEvidence = {
+    blockId: string;
+    tableCell: { sheet?: string; row: number; column: number };
+  };
+  const closeTo = (left: number, right: number) => Math.abs(left - right) <= 1e-6;
+  const isVirtualNormalized = (block: DocumentSourceMap['pages'][number]['blocks'][number]) => (
+    block.transformations.some(({ stage, processor }) => stage === 'normalize'
+      && processor.name === VIRTUAL_PAGE_METADATA.name
+      && processor.version === VIRTUAL_PAGE_METADATA.version)
+  );
+  let tableCells = 0;
+  let firstEvidence: TableCellEvidence | undefined;
+  let lastEvidence: TableCellEvidence | undefined;
+  for (const page of sourceMap.pages) {
+    const headings = page.blocks.filter(({ kind: blockKind }) => blockKind === 'heading');
+    if (kind === 'csv' && headings.length > 0) throw new Error('CSV source map contains a heading');
+    if (kind === 'xlsx' && (headings.length !== 1 || typeof headings[0]!.text !== 'string'
+      || !meaningful(headings[0]!.text!) || !isVirtualNormalized(headings[0]!)
+      || !closeTo(headings[0]!.boundingBox.x, 0) || !closeTo(headings[0]!.boundingBox.y, 0)
+      || !closeTo(headings[0]!.boundingBox.width, VIRTUAL_PAGE_WIDTH)
+      || !closeTo(headings[0]!.boundingBox.height, VIRTUAL_LINE_HEIGHT))) {
+      throw new Error('XLSX source map requires one meaningful sheet heading');
+    }
+    if (page.blocks.some(({ kind: blockKind }) => blockKind !== 'table'
+      && (kind !== 'xlsx' || blockKind !== 'heading'))) {
+      throw new Error('structured table source map contains an unsupported block');
+    }
+    for (const block of page.blocks.filter(({ kind: blockKind }) => blockKind === 'table')) {
+      tableCells += 1;
+      const rawVirtualRow = block.boundingBox.y / VIRTUAL_LINE_HEIGHT + 1;
+      const rawColumnCount = VIRTUAL_PAGE_WIDTH / block.boundingBox.width;
+      const rawColumn = block.boundingBox.x / block.boundingBox.width + 1;
+      const virtualRow = Math.round(rawVirtualRow);
+      const columnCount = Math.round(rawColumnCount);
+      const column = Math.round(rawColumn);
+      const row = virtualRow - (kind === 'xlsx' ? 1 : 0);
+      if (!isVirtualNormalized(block) || !closeTo(page.width, VIRTUAL_PAGE_WIDTH)
+        || !closeTo(block.boundingBox.height, VIRTUAL_LINE_HEIGHT)
+        || !closeTo(rawVirtualRow, virtualRow) || !Number.isSafeInteger(virtualRow)
+        || !closeTo(rawColumnCount, columnCount) || !Number.isSafeInteger(columnCount) || columnCount < 1
+        || !closeTo(rawColumn, column) || !Number.isSafeInteger(column) || column < 1 || column > columnCount
+        || !closeTo(block.boundingBox.x, (column - 1) * block.boundingBox.width)
+        || !closeTo(block.boundingBox.width, VIRTUAL_PAGE_WIDTH / columnCount) || row < 1) {
+        throw new Error('structured table source map geometry is invalid');
+      }
+      const tableCell = {
+        ...(kind === 'xlsx' ? { sheet: headings[0]!.text! } : {}),
+        row,
+        column,
+      };
+      const evidence = { blockId: block.id, tableCell };
+      firstEvidence ??= evidence;
+      lastEvidence = evidence;
+    }
+  }
+  if (tableCells === 0) throw new Error('structured table source map contains no cells');
+  const formalEvidence = firstEvidence?.blockId === lastEvidence?.blockId
+    ? [firstEvidence]
+    : [firstEvidence, lastEvidence];
+  for (const evidence of formalEvidence) {
+    if (!evidence) throw new Error('structured table source map contains no formal evidence');
+    const locator = createTableCellSourceLocator(sourceMap, evidence.blockId, evidence.tableCell);
+    if (resolveSourceLocator(sourceMap, locator).id !== evidence.blockId) {
+      throw new Error('structured table source locator did not round-trip');
+    }
+  }
+}
+
 function succeeded(input: ParserInput, pages: readonly SourceMapPageDraft[], warnings: readonly string[]) {
   return succeededSourceMap(validatedSourceMap(input, pages), warnings);
 }
@@ -455,8 +526,9 @@ export function createTextExtractor(adapters: TextExtractionAdapters): DocumentP
         if (!sourceMap.pages.some((page) => page.blocks.some((block) => block.text && meaningful(block.text)))) {
           return needsReview(input, 'empty-parsed-text');
         }
-        if (type === 'text/csv') return needsReviewSourceMap(sourceMap, CSV_REVIEW_REASON);
-        if (type === XLSX_MEDIA_TYPE) return needsReviewSourceMap(sourceMap, XLSX_REVIEW_REASON);
+        if (type === 'text/csv' || type === XLSX_MEDIA_TYPE) {
+          assertStructuredTableSourceMap(sourceMap, type === 'text/csv' ? 'csv' : 'xlsx');
+        }
         return succeededSourceMap(sourceMap, []);
       } catch (error) {
         if (error instanceof ParsingLimitError) {

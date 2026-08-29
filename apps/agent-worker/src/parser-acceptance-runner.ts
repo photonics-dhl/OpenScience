@@ -40,11 +40,6 @@ function proposal() {
 
 type AcceptanceCascadeResult = Awaited<ReturnType<ReturnType<typeof createWorkerParserCascade>>>;
 
-const ACTIONABLE_TRANSITION_REASONS: Readonly<Record<string, string>> = Object.freeze({
-  'table-csv-mixed': 'structured-csv-review-required',
-  'table-xlsx-en': 'structured-xlsx-review-required',
-});
-
 const INTENTIONAL_REVIEW_EVIDENCE = Object.freeze({
   'corrupt-pdf-en': {
     canonical: 'unreadable-or-corrupt-document',
@@ -55,21 +50,6 @@ const INTENTIONAL_REVIEW_EVIDENCE = Object.freeze({
     cascadeReasons: ['parser-failed', 'all local parser stages failed'],
   },
 });
-
-export function normalizeActionableAcceptanceResult(
-  item: AcceptanceManifestCase,
-  result: AcceptanceCascadeResult,
-  expectedSource: { artifactId: string; contentHash: string },
-): AcceptanceCascadeResult {
-  const transitionReason = ACTIONABLE_TRANSITION_REASONS[item.id];
-  if (item.expectedCurrentStatus !== 'ready' || result.status !== 'needs_review'
-    || transitionReason === undefined || result.reasons.length !== 1
-    || result.reasons[0] !== transitionReason
-    || !item.expectedLocators.every((locator) => reproduceAcceptanceLocator(
-      result.sourceMap, locator, expectedSource,
-    ))) return result;
-  return { status: 'succeeded', sourceMap: result.sourceMap, warnings: [] };
-}
 
 export function canonicalAcceptanceReviewReasons(
   item: AcceptanceManifestCase,
@@ -106,9 +86,7 @@ async function main(): Promise<void> {
     if (digest !== item.sha256) throw new Error(`fixture hash mismatch: ${item.id}`);
     let cascadeResult: Awaited<ReturnType<typeof canonicalCascade>> | undefined;
     const parserCascade = Object.assign(async (...args: Parameters<typeof canonicalCascade>) => {
-      cascadeResult = normalizeActionableAcceptanceResult(item, await canonicalCascade(...args), {
-        artifactId: `artifact-${item.id}`, contentHash: digest,
-      });
+      cascadeResult = await canonicalCascade(...args);
       return cascadeResult;
     }, { featureFlags: canonicalCascade.featureFlags });
     const handlers = createHandlers(gateway, { parserCascade, externalProcessingPolicy: async () => false });
