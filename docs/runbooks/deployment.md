@@ -1,6 +1,6 @@
 # Runbook: 部署（Deployment）
 
-> 状态：**CURRENT**。active immutable release / application source 为 `6cabe422a8459dfa358786c9f5aae84558949f6b`，rollback tree 为 `28a3d5ca681b7744fae521dfa9154100a24e8845`。post-deploy docs-only HEAD 不得冒充 application source。
+> 状态：**CURRENT**。active immutable release / application source 为 `2fa10aa8ac3a541e794bdb40456b4f8dee826e4c`，rollback tree 为 `4c73469fe24abe685054f1d917d452adc5371d35`。post-deploy merge/docs-only HEAD 不得冒充 application source。
 > 格式遵循 `.agents/skills/infra-runbook/SKILL.md` 四节强制要求。
 > 部署属 Spec §20.5"询问"级操作：执行前需用户确认，必须走 `infra/scripts/deploy.sh` + CI/CD，禁止手工改服务器代码。
 
@@ -1428,3 +1428,28 @@ preference survives reload without removing Evidence from print. Remove only
 the exact journey rows and objects after recording counts/checksums. Finish with
 the canonical health, parser, BGE, migration, public/loopback release, retention
 and bounded disk checks. Do not use broad Docker or filesystem prune.
+
+### 5.45 Task 9 production acceptance and bounded cleanup (2026-08-30)
+
+Candidate `2fa10aa8ac3a541e794bdb40456b4f8dee826e4c` passed exact CI
+`33263991191` / job `99130646214`, then the canonical deploy applied core
+migration 31 while search remained 2/2. Parser 16-case acceptance, real CPU
+BGE-M3 loading, database isolation, target-container health, Nginx, and both
+public and loopback release identities passed. Active release is `2fa10aa…` and
+rollback is `4c73469…`.
+
+The production journey created one bounded fixture, used the real login/CSRF
+and public APIs to persist the collapsed Evidence preference, advanced one
+version through review to publication, and resolved all three published
+Evidence sources. Real Chromium then verified Settings, 760/280 desktop layout,
+375px mobile sheet/Escape/focus return, and three expanded print Evidence
+records. Exact database rows, Blob, and SourceMap object were deleted and
+verified at zero; the intentionally consumed public-id sequence value was not
+reused.
+
+Disk cleanup remained exact: the inactive `openscience-dev` compose project and
+its three named volumes, 390.7MB rebuildable builder cache, and two image IDs
+whose Node tags were no longer referenced by repository Dockerfiles/Compose
+were removed. No broad system/image/volume prune ran. Root usage changed from
+36G/148G (26%) to 35G/148G (25%); production, rollback, BGE model, sandbox,
+parser-evaluation, monitoring, backup, and acceptance assets were retained.
