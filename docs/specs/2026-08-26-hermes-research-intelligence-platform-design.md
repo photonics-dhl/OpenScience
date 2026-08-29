@@ -266,6 +266,38 @@ export interface DocumentSourceMap {
 
 LLM OCR 输出不能覆盖原 block；它作为候选层与原图坐标一起保存。
 
+#### 7.2.1 Parser acceptance debt closeout
+
+2026-08-29 的 16-case 生产验收后续必须从 `10 succeeded / 6
+needs_review` 收口为 `14 succeeded / 2 intentional needs_review / 0 failed /
+0 false-ready`。这不是把所有状态机械改成成功，而是按输入语义关闭四个
+actionable gap，并永久保留两个 fail-closed 控制：
+
+- `.py` 使用严格 UTF-8、逐行、限长的虚拟页确定性解析；`.ipynb` 只接受
+  有界且结构合法的 Notebook JSON，提取 markdown/code/raw cell 的 `source`，
+  不执行代码、不加载 output、不调用外部 parser/provider。存在非空 output、
+  attachment、未知 cell type、MIME 冲突或任一格式预算超限时不得静默成功。
+- CSV/XLSX 只有在受支持结构完整落入 source map 时才能成功。单元格 block
+  使用既有 `table` kind；row/column/sheet、virtual bbox 与正式
+  `createTableCellSourceLocator` → `resolveSourceLocator` 必须一致。公式、合并
+  单元格、错误 cell type、损坏关系、ZIP/XML 扩展风险或解析 warning 进入
+  `needs_review`/`blocked`，不能以 cached value 冒充完整 workbook。
+- 故意损坏的 PDF 保持 `needs_review: unreadable-or-corrupt-document`；无有意义
+  内容的空白 PNG 保持 `needs_review: no-meaningful-content`。二者是正确的产品
+  状态，不是待消除的自动成功率缺口。
+- Production 与 acceptance 共用一个 extension/MIME 规范化函数；冲突 MIME
+  fail closed。不得扩展 `DocumentBlockKind`，Notebook/Python 使用既有
+  `paragraph`，结构表格使用既有 `table`，避免无必要改变 Domain、sidecar、
+  检索和消费方合同。
+- 正式验收报告升级为 schema v3，并绑定 acceptance profile、manifest hash、
+  `14` 次 structured fake、每个 intentional review 的稳定安全原因码、全部
+  locator 的正式 round-trip 和零 external provider call。旧 v2 报告不能为新
+  release 提供部署授权。
+
+上述目标只能表述为“当前 16-case 中六个 actionable acceptance gap 已收口”。
+它不声称支持任意现实 Notebook output、Excel 公式/宏/合并单元格；这些超出
+明确子集的输入必须可解释地复核，不能静默丢失。
+
 ### 7.3 External retrieval and temporary documents
 
 - Semantic Scholar：论文元数据、引用关系与开放获取链接。
