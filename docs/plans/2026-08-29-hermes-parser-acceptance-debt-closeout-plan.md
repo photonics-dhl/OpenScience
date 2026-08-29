@@ -1,5 +1,9 @@
 # Hermes Parser Acceptance Debt Closeout Implementation Plan
 
+**Status: COMPLETED / ECS DEPLOYED（2026-08-29）.** Tasks 1–6 are complete.
+Production application/release is `28a3d5ca681b7744fae521dfa9154100a24e8845`;
+rollback is `c5817121bddbd065c5ecb38811da8e707e6e5d17`.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use
 > superpowers:subagent-driven-development (recommended) or
 > superpowers:executing-plans to implement this plan task-by-task. Steps use
@@ -58,7 +62,7 @@ document-parser sidecar, Docker Compose on ECS only.
 - Consumes the existing `ParserInput`, virtual-page builder and source-map
   budgets; no package or provider dependency is added.
 
-- [ ] **Step 1: Write failing MIME contract tests**
+- [x] **Step 1: Write failing MIME contract tests**
 
 ```ts
 expect(canonicalParserMediaType('analysis.py', 'text/plain')).toBe('text/x-python');
@@ -68,14 +72,14 @@ expect(canonicalParserMediaType('analysis.py', 'image/png'))
   .toBe('application/octet-stream');
 ```
 
-- [ ] **Step 2: Run the focused test and observe RED**
+- [x] **Step 2: Run the focused test and observe RED**
 
 Run:
 `npx pnpm@9.15.0 --filter @openscience/agent-worker test -- parser-media-type.test.ts`
 
 Expected: FAIL because the shared canonicalizer does not exist.
 
-- [ ] **Step 3: Add failing Python and Notebook parser tests**
+- [x] **Step 3: Add failing Python and Notebook parser tests**
 
 ```ts
 expect(await run('text/x-python', '# note\npulse_width_fs = 42\n'))
@@ -92,7 +96,7 @@ Also cover invalid UTF-8 Python, malformed/deep/over-cell/over-source Notebook,
 unknown cell type, non-empty attachment and an output payload that must never
 appear in source-map text.
 
-- [ ] **Step 4: Run focused parser tests and observe the intended RED**
+- [x] **Step 4: Run focused parser tests and observe the intended RED**
 
 Run:
 `npx pnpm@9.15.0 --filter @openscience/agent-worker test -- text-extractor.test.ts`
@@ -100,7 +104,7 @@ Run:
 Expected: valid `.py`/`.ipynb` are unsupported and the negative contracts do
 not yet have the required stable status.
 
-- [ ] **Step 5: Implement the minimal shared canonicalizer and bounded parsers**
+- [x] **Step 5: Implement the minimal shared canonicalizer and bounded parsers**
 
 The canonicalizer must compare the lower-cased basename extension with an
 explicit allowed stored-MIME set. Conflicts return `application/octet-stream`.
@@ -110,14 +114,14 @@ only a plain object with bounded `cells`, accepts only
 non-empty outputs/attachments, and applies existing per-block/total budgets.
 Python uses fatal UTF-8 decode and preserves one-based source line geometry.
 
-- [ ] **Step 6: Run the focused GREEN tests**
+- [x] **Step 6: Run the focused GREEN tests**
 
 Run:
 `npx pnpm@9.15.0 --filter @openscience/agent-worker test -- parser-media-type.test.ts text-extractor.test.ts`
 
 Expected: PASS with zero external parser/provider invocation for both formats.
 
-- [ ] **Step 7: Commit Task 1**
+- [x] **Step 7: Commit Task 1**
 
 ```bash
 git add apps/agent-worker/src/parser-media-type.ts \
@@ -147,7 +151,7 @@ git commit -m "feat(agent-worker): parse bounded notebooks and python"
   row/column and optional XLSX sheet heading against block geometry.
 - Physical table blocks retain the existing block/bbox behavior.
 
-- [ ] **Step 1: Write failing table-kind and locator geometry tests**
+- [x] **Step 1: Write failing table-kind and locator geometry tests**
 
 ```ts
 expect(csv.pages[0]!.blocks.find((block) => block.text === '42')?.kind)
@@ -161,7 +165,7 @@ expect(() => resolveSourceLocator(xlsx, {
 })).toThrow(/tableCell/);
 ```
 
-- [ ] **Step 2: Observe RED in Domain and Worker tests**
+- [x] **Step 2: Observe RED in Domain and Worker tests**
 
 Run:
 `npx pnpm@9.15.0 --filter @openscience/domain test -- source-locator.test.ts`
@@ -171,14 +175,14 @@ Run:
 
 Expected: cells are `paragraph` and forged row/column locators still resolve.
 
-- [ ] **Step 3: Add failing unsupported-XLSX subset tests**
+- [x] **Step 3: Add failing unsupported-XLSX subset tests**
 
 Add self-authored in-memory fixtures containing a formula, merged cell,
 unsupported/error cell type, invalid relationship, malformed reference and
 ZIP/XML limit case. Each must remain `needs_review` or `blocked`; no fixture may
 return `succeeded` from a cached formula value.
 
-- [ ] **Step 4: Implement strict table blocks and virtual locator validation**
+- [x] **Step 4: Implement strict table blocks and virtual locator validation**
 
 Mark data cells `table`, keep worksheet name as `heading`, reject formula and
 merge constructs before cell materialization, reject unsupported cell types and
@@ -186,12 +190,12 @@ warnings, and derive virtual one-based row/column from bbox. For a locator with
 `sheet`, require the same page's row-zero heading text and subtract that virtual
 header line before comparing the data row.
 
-- [ ] **Step 5: Run the focused GREEN tests**
+- [x] **Step 5: Run the focused GREEN tests**
 
 Run the two commands from Step 2. Expected: valid CSV/XLSX succeed; every
 unsupported subset remains fail-closed; forged table coordinates fail.
 
-- [ ] **Step 6: Commit Task 2**
+- [x] **Step 6: Commit Task 2**
 
 ```bash
 git add apps/agent-worker/src/ingestion-parser.ts \
@@ -229,7 +233,7 @@ git commit -m "feat(parser): validate structured table locators"
 - Summary is exactly `14/2/0/0`; fake structured calls are exactly `14`;
   external/forbidden provider calls remain zero.
 
-- [ ] **Step 1: Change contract tests first and observe RED**
+- [x] **Step 1: Change contract tests first and observe RED**
 
 Update the four actionable cases to succeeded with full locator matches. Require
 schema 3, profile identity, reason arrays, 14 structured fake calls and rejection
@@ -240,13 +244,13 @@ Run:
 
 Expected: FAIL on old 10/6 expectations and missing v3 evidence.
 
-- [ ] **Step 2: Update corpus status and regenerate only its manifest identity**
+- [x] **Step 2: Update corpus status and regenerate only its manifest identity**
 
 Set Notebook, Python, CSV and XLSX `expectedCurrentStatus` to `ready`; leave
 corpus bytes and content hashes unchanged. Recompute the tracked manifest
 SHA-256 and bind it in the contract. Do not hand-edit fixture content hashes.
 
-- [ ] **Step 3: Implement v3 report production and verification**
+- [x] **Step 3: Implement v3 report production and verification**
 
 Capture canonical cascade reason codes without raw exception/provider text,
 perform formal table SourceLocator construction/resolution for structured
@@ -254,7 +258,7 @@ locators, and update shell/Node deploy verifiers to require the exact new
 profile. Atomic report publication, ownership, cgroup/resource evidence and
 cleanup semantics remain unchanged.
 
-- [ ] **Step 4: Run all focused contract gates GREEN**
+- [x] **Step 4: Run all focused contract gates GREEN**
 
 Run:
 
@@ -268,7 +272,7 @@ node --test infra/scripts/accept-document-parser-release.test.mjs \
 Expected: PASS; deliberate mutations of status, reason, profile, locator,
 gateway count, image identity, resources and old schema are all rejected.
 
-- [ ] **Step 5: Commit Task 3**
+- [x] **Step 5: Commit Task 3**
 
 ```bash
 git add apps/agent-worker/src/parser-acceptance-contract.ts \
@@ -295,7 +299,7 @@ git commit -m "test(parser): require production 14-2 acceptance"
 
 - Produces a clean exact candidate SHA; does not build Docker locally.
 
-- [ ] **Step 1: Run quiet focused and package suites**
+- [x] **Step 1: Run quiet focused and package suites**
 
 ```bash
 npx pnpm@9.15.0 --filter @openscience/domain test
@@ -303,7 +307,7 @@ npx pnpm@9.15.0 --filter @openscience/agent-worker test
 npx pnpm@9.15.0 --filter @openscience/agent-worker build
 ```
 
-- [ ] **Step 2: Run workspace and release gates**
+- [x] **Step 2: Run workspace and release gates**
 
 ```bash
 npx pnpm@9.15.0 build
@@ -315,13 +319,13 @@ npx pnpm@9.15.0 audit:dep
 git diff --check
 ```
 
-- [ ] **Step 3: Obtain independent architecture and security review**
+- [x] **Step 3: Obtain independent architecture and security review**
 
 Require zero Critical/Important findings for MIME trust, parser budgets,
 Notebook execution/output, XLSX ZIP/XML/formula handling, SourceLocator
 integrity, acceptance-v3 fail-closed behavior and release rollback.
 
-- [ ] **Step 4: Fix findings with new RED/GREEN cycles and commit**
+- [x] **Step 4: Fix findings with new RED/GREEN cycles and commit**
 
 Every behavior fix begins with a reproducing failing test. Re-run Steps 1–2 and
 record only fresh evidence.
@@ -338,15 +342,15 @@ record only fresh evidence.
 - Produces one immutable active release whose rollback is the pre-deploy active
   `c5817121bddbd065c5ecb38811da8e707e6e5d17`.
 
-- [ ] **Step 1: Push the exact candidate and require exact-SHA CI success**
+- [x] **Step 1: Push the exact candidate and require exact-SHA CI success**
 
-- [ ] **Step 2: Refresh ECS facts using explicit Git for Windows Bash**
+- [x] **Step 2: Refresh ECS facts using explicit Git for Windows Bash**
 
 Run canonical `infra/scripts/checkup.sh`, verify `.release-id`, public and
 loopback `/__release`, absence of failure/journal markers, exact current
 rollback, free disk/RAM and seven valid backups. Never use bare Bash/WSL.
 
-- [ ] **Step 3: Build and accept only on ECS**
+- [x] **Step 3: Build and accept only on ECS**
 
 Materialize the exact SHA, run full workspace build, build exact Worker/Parser
 images and execute the canonical parser acceptance. Require:
@@ -365,13 +369,13 @@ externalProvider=0
 Require 100% locator reproduction, formal table locator round-trip, stable
 intentional reason codes, bounded CPU/RSS/PID/output and exact image IDs.
 
-- [ ] **Step 4: Deploy through the canonical immutable transaction**
+- [x] **Step 4: Deploy through the canonical immutable transaction**
 
 Run the existing confirmed transaction with parser-acceptance required and the
 execution-time current active SHA as rollback. Do not run a migration; this plan
 has no schema change.
 
-- [ ] **Step 5: Verify production runtime**
+- [x] **Step 5: Verify production runtime**
 
 Require core/search migration `29/29` and `2/2`, healthy API/Web/Worker/Parser/
 Embedding/PostgreSQL/Redis/SeaweedFS/ClamAV, parser startup self-test, BGE
@@ -396,18 +400,18 @@ markers and absent failure/journal state.
 - Produces one CURRENT version tuple, one capability-table truth and one exact
   disk inventory; does not delete any server object without explicit approval.
 
-- [ ] **Step 1: Record production evidence and close Taskmaster Task 4**
+- [x] **Step 1: Record production evidence and close Taskmaster Task 4**
 
 Set Task 4 and its closeout subtask done only after production 14/2 acceptance;
 restore completed count to 6/12. Keep Tasks 7 and 10 next-ready.
 
-- [ ] **Step 2: Record the read-only disk audit and exact cleanup candidates**
+- [x] **Step 2: Record the read-only disk audit and exact cleanup candidates**
 
 Document physical, non-duplicated sizes and classification for evals, releases,
 pnpm store, Docker cache/images, dev stack, production volumes and monitoring.
 Do not add logical hardlink/shared-layer sizes together.
 
-- [ ] **Step 3: Run documentation and final integrity gates**
+- [x] **Step 3: Run documentation and final integrity gates**
 
 ```bash
 npx pnpm@9.15.0 audit:docs-sync
@@ -415,7 +419,7 @@ npx pnpm@9.15.0 docs:lint
 git diff --check
 ```
 
-- [ ] **Step 4: Commit, push and require exact docs-HEAD CI**
+- [x] **Step 4: Commit, push and require exact docs-HEAD CI**
 
 ## Plan self-review
 

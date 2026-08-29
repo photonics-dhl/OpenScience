@@ -1442,7 +1442,7 @@
           "3",
           "5"
         ],
-        "status": "in-progress",
+        "status": "done",
         "subtasks": [
           {
             "id": "1",
@@ -1452,7 +1452,7 @@
             "testStrategy": "TDD unit/contract gates, formal SourceLocator table round-trip, negative MIME/Notebook/XLSX limits, schema-v3 mutation tests, exact-image ECS 16-case acceptance and immutable release verification.",
             "priority": "high",
             "dependencies": [],
-            "status": "in-progress"
+            "status": "done"
           }
         ]
       },
@@ -1575,9 +1575,9 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-08-29T02:00:00.000Z",
+      "lastModified": "2026-08-29T06:03:02.719Z",
       "taskCount": 12,
-      "completedCount": 5,
+      "completedCount": 6,
       "tags": [
         "hermes-research-intelligence"
       ]
