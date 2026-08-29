@@ -585,7 +585,7 @@ export async function transitionVersionStatus(versionId: string, status: string)
   return request(`/api/versions/${versionId}/status`, { method: 'POST', body: JSON.stringify({ status }) });
 }
 
-export async function publishVersion(versionId: string): Promise<{ published: { versionId: string; publicId: string; publicVersionId: string; publishedAt: string; status: string } }> {
+export async function publishVersion(versionId: string): Promise<{ published: { versionId: string; publicId: string; publicVersionId: string; publishedAt: string; status: string; visibility: 'public' } }> {
   return request(`/api/versions/${versionId}/publish`, { method: 'POST', body: JSON.stringify({ r3Confirmed: true }) });
 }
 

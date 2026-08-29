@@ -124,6 +124,26 @@ describe('P1B-2 RO/SDF（云上）', () => {
     await app.close();
   });
 
+  it('通用 PATCH 拒绝 visibility，公开扩展只能走 R3 发布', async () => {
+    const app = await makeApp();
+    const cookie = await registerAndVerify(app, 'ro-visibility-bypass@example.com');
+    const wsId = await getPersonalWorkspace('ro-visibility-bypass@example.com');
+    const create = await app.inject({
+      method: 'POST', url: '/research-objects', cookies: { openscience_session: cookie },
+      payload: { workspaceId: wsId, title: 'Visibility boundary' },
+    });
+    const ro = create.json().researchObject;
+
+    const bypass = await app.inject({
+      method: 'PATCH', url: `/research-objects/${ro.id}`, cookies: { openscience_session: cookie },
+      payload: { version: 1, visibility: 'public' },
+    });
+
+    expect(bypass.statusCode).toBe(400);
+    expect((await prisma.researchObject.findUnique({ where: { id: ro.id } }))?.visibility).toBe('private');
+    await app.close();
+  });
+
   it('SDF 读写：非法 core 400；合法更新成功', async () => {
     const app = await makeApp();
     const cookie = await registerAndVerify(app, 'ro3@example.com');

@@ -11,18 +11,21 @@ const CORE = { schemaVersion: '0.1.0', problem: 'P', insight: 'I', method: 'M', 
 
 async function makeDeps() {
   const { prisma, db } = createFakePrisma();
+  const auditEvents: Array<{ action: string; metadata?: Record<string, unknown> }> = [];
   const user = seedUser(db, { id: 'pub-user' });
   const ws = { id: 'ws-1', type: 'team', name: 'Lab', status: 'active', ownerId: user.id, createdAt: new Date(), updatedAt: new Date() };
   db.workspaces.push(ws);
   db.memberships.push({ id: 'm-1', workspaceId: 'ws-1', userId: user.id, role: 'owner', createdAt: new Date(), updatedAt: new Date() });
-  const deps = { prisma, mailer: {} as never, storage: {
+  const deps = { prisma, mailer: {} as never, audit: {
+    record: async (event: { action: string; metadata?: Record<string, unknown> }) => { auditEvents.push(event); },
+  }, storage: {
     putObject: async () => ({ key: 'k', size: 0, etag: 'e' }),
     getObject: async () => ({ body: Readable.from([Buffer.from('')]), size: 0 }),
     headObject: async () => null, deleteObject: async () => undefined,
   } };
   const ro = await createResearchObject(deps, { workspaceId: 'ws-1', userId: user.id, title: 'RO' });
   const commit = await createCommit(deps, { researchObjectId: ro.id, userId: user.id, message: 'v1', version: 1, sdfCore: CORE });
-  return { deps, db, user, ro, versionId: commit.versionId };
+  return { deps, db, user, ro, versionId: commit.versionId, auditEvents };
 }
 
 async function makePublishable() {
@@ -97,10 +100,11 @@ describe('publishVersion（§2.1-6 + 三重前置）', () => {
   });
 
   it('缺 R3 确认 → R3_CONFIRMATION_REQUIRED（§9.4）', async () => {
-    const { deps, user, versionId } = await makePublishable();
+    const { deps, db, user, ro, versionId } = await makePublishable();
     await expect(
       publishVersion(deps, { versionId, userId: user.id, r3Confirmed: false, publicIdPrefix: 'OSR' }),
     ).rejects.toThrow(/R3 高影响/);
+    expect(db.researchObjects.find((item) => item.id === ro.id)?.visibility).toBe('private');
   });
 
   it('rejects a Viewer attempting to reuse another author\'s passed review', async () => {
@@ -126,10 +130,14 @@ describe('publishVersion（§2.1-6 + 三重前置）', () => {
     ).rejects.toThrow(/3-7 core Claims/);
   });
 
-  it('发布成功：publicId + publicVersionId + UTC 时间戳 + 哈希 + 免责声明 + 事件', async () => {
-    const { deps, user, versionId } = await makePublishable();
+  it('发布成功：R3 原子扩展公开可见性并记录来源 + ID + 时间戳 + 哈希 + 事件', async () => {
+    const { deps, db, user, ro, versionId, auditEvents } = await makePublishable();
+    const storedRo = db.researchObjects.find((item) => item.id === ro.id)!;
+    storedRo.visibility = 'invite_only';
     const published = await publishVersion(deps, { versionId, userId: user.id, r3Confirmed: true, publicIdPrefix: 'OSR' });
     expect(published.status).toBe('published');
+    expect(published.visibility).toBe('public');
+    expect(storedRo.visibility).toBe('public');
     expect(published.publicId).toMatch(/^OSR-\d{4}-\d{6}$/);
     expect(published.publicVersionId).toMatch(/^OSR-\d{4}-\d{6}-v\d+$/);
     expect(published.contentSha256).toMatch(/^[0-9a-f]{64}$/);
@@ -143,6 +151,10 @@ describe('publishVersion（§2.1-6 + 三重前置）', () => {
     expect(notif.some((n: { type: string }) => n.type === 'version.published')).toBe(true);
     // 审计只追加
     expect(pub!.contentSha256).toBe(published.contentSha256);
+    expect(auditEvents).toContainEqual(expect.objectContaining({
+      action: 'publication.publish',
+      metadata: expect.objectContaining({ visibilityFrom: 'invite_only', visibilityTo: 'public' }),
+    }));
   });
 
   it('在 Serializable 发布事务内读取并验证 Claim 图', async () => {
@@ -182,6 +194,7 @@ describe('publishVersion（§2.1-6 + 三重前置）', () => {
     expect(second.publicId).toBe(first.publicId);
     expect(second.publicVersionId).toBe(first.publicVersionId);
     expect(second.contentSha256).toBe(first.contentSha256);
+    expect(second.visibility).toBe('public');
   });
 
   it('binds the Claim/Evidence narrative into the publication content hash', async () => {
