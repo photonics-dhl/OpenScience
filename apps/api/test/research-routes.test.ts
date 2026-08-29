@@ -136,7 +136,7 @@ describe('anonymous public research contract', () => {
     expect(research.presentationAssets).toEqual([{
       id: 'asset-1', kind: 'image', label: 'presentation_not_evidence', contentHash: 'c'.repeat(64),
       generator: { name: 'MiniMax', version: 'image-01' }, sourceClaimIds: ['core-claim'],
-      url: '/research/OSR-2026-000001/v/1/presentation-assets/asset-1',
+      url: '/api/research/OSR-2026-000001/v/1/presentation-assets/asset-1',
     }]);
     expect(research.history).toEqual([{
       versionNo: 1, publicVersionId: 'OSR-2026-000001-v1',

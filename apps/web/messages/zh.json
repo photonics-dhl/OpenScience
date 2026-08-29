@@ -312,6 +312,59 @@
     "hardBlocks": "硬阻断项 ({count})",
     "warnings": "警告项 ({count})",
     "legalDisclaimer": "法律免责声明",
+    "claimReader": {
+      "kicker": "可核验的研究叙事",
+      "title": "核心主张与证据",
+      "description": "每条主张都保留适用条件、已知边界以及可回到原文的证据关系。",
+      "empty": "该版本尚未发布结构化主张。",
+      "conditions": "适用条件",
+      "limitations": "已知边界",
+      "evidenceCount": "证据（{count}）",
+      "noEvidence": "尚无已核验的公开证据。",
+      "expandEvidence": "展开证据",
+      "collapseEvidence": "折叠证据",
+      "inspectSource": "核对原始来源",
+      "page": "第 {page} 页",
+      "sourceInspector": "原始证据核验",
+      "sourceInspectorDescription": "这里显示发布时核验过的原文、页码与规范化定位。",
+      "selectEvidence": "选择一条证据以查看原始来源。",
+      "loadingSource": "正在核对原始来源…",
+      "sourceUnavailable": "原始来源暂时无法读取，请稍后重试。",
+      "sourceFile": "来源文件",
+      "sourcePage": "页码",
+      "close": "关闭",
+      "kind": {
+        "core": "核心主张",
+        "supporting": "支撑主张",
+        "method": "方法主张",
+        "boundary": "边界条件",
+        "counter": "反证与保留"
+      },
+      "assessment": {
+        "supported": "证据支持",
+        "partial": "部分支持",
+        "disputed": "存在争议",
+        "missing": "证据缺失"
+      },
+      "relation": {
+        "supports": "支持",
+        "contradicts": "反驳",
+        "qualifies": "限定",
+        "context": "背景"
+      }
+    },
+    "presentation": {
+      "kicker": "研究展示",
+      "title": "富媒体导览",
+      "notEvidence": "以下内容用于帮助理解与传播，不作为科学证据。请以关联主张及其原始证据为准。",
+      "downloadOnly": "该格式不会在页面内执行，可安全下载后查看。",
+      "download": "下载展示文件",
+      "generatedBy": "生成工具：{name} {version}",
+      "sourceClaims": "关联主张"
+    },
+    "history": {
+      "title": "公开版本历史"
+    },
     "comingSoon": "该功能将在 Phase 1C 上线。",
     "tabsAriaLabel": "研究对象标签",
     "selectAriaLabel": "选择标签",

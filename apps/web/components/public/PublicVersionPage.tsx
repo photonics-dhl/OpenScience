@@ -1,11 +1,15 @@
 'use client';
 import * as React from 'react';
-import { getPublicResearchVersion } from '../../lib/api';
+import { getPublicEvidenceSource, getPublicResearchVersion, type PublicEvidence, type PublicEvidenceSource } from '../../lib/api';
 import { LEGAL_DISCLAIMER_DEFAULT, LICENSE_NAMES } from '../../lib/constants';
 import { useTranslations } from 'next-intl';
 import { TabNavigation, ComingSoonTab, type TabId } from './TabNavigation';
 import { CitationRail } from './CitationRail';
 import { ProvenanceCaption } from './ProvenanceCaption';
+import { ClaimNarrative } from './ClaimNarrative';
+import { EvidenceRail } from './EvidenceRail';
+import { EvidenceSheet } from './EvidenceSheet';
+import { PresentationAssetGallery } from './PresentationAssetGallery';
 
 type PublicResearch = Awaited<ReturnType<typeof getPublicResearchVersion>>['research'];
 
@@ -181,10 +185,34 @@ const PUBLIC_SDF_NODES = [
 export function PublicReadingSurface({ research, activeTab = 'overview', onTabChange = () => undefined }: { research: PublicResearch; activeTab?: TabId; onTabChange?: (tab: TabId) => void }) {
   const t = useTranslations('public');
   const version = research.version;
+  const [selectedEvidence, setSelectedEvidence] = React.useState<PublicEvidence | null>(null);
+  const [evidenceSource, setEvidenceSource] = React.useState<PublicEvidenceSource | null>(null);
+  const [sourceLoading, setSourceLoading] = React.useState(false);
+  const [sourceError, setSourceError] = React.useState(false);
+  const [sheetOpen, setSheetOpen] = React.useState(false);
   const disclaimer = version.legalDisclaimer || t('legalDisclaimerDefault');
   const objectCitation = research.citation.replace(version.publicVersionId, research.publicId);
   const publishedAt = version.publishedAt?.slice(0, 10) ?? t('unpublished');
   const hashShort = version.contentSha256 ? `${version.contentSha256.slice(0, 8)}…${version.contentSha256.slice(-8)}` : t('unpublished');
+
+  React.useEffect(() => {
+    if (!selectedEvidence) return;
+    let active = true;
+    setSourceLoading(true);
+    setSourceError(false);
+    setEvidenceSource(null);
+    getPublicEvidenceSource(research.publicId, version.versionNo, selectedEvidence.id)
+      .then((source) => { if (active) setEvidenceSource(source); })
+      .catch(() => { if (active) setSourceError(true); })
+      .finally(() => { if (active) setSourceLoading(false); });
+    return () => { active = false; };
+  }, [research.publicId, selectedEvidence, version.versionNo]);
+
+  const inspectEvidence = (evidence: PublicEvidence) => {
+    setSelectedEvidence(evidence);
+    if (typeof window !== 'undefined' && window.matchMedia('(max-width: 900px)').matches) setSheetOpen(true);
+  };
+
   return (
     <div className="pub-reading-surface" data-public-reading-surface="true">
       <div className="pub-reading-layout">
@@ -208,6 +236,8 @@ export function PublicReadingSurface({ research, activeTab = 'overview', onTabCh
             <p className="pub-kicker">{t('insight')}</p>
             <p>{version.core.insight || t('none')}</p>
           </section>
+
+          <ClaimNarrative claims={research.claims} evidence={research.evidence} onInspect={inspectEvidence} />
 
           <section className="pub-reading-abstract" aria-labelledby="public-abstract-heading">
             <h2 id="public-abstract-heading">{t('abstract')}</h2>
@@ -234,14 +264,26 @@ export function PublicReadingSurface({ research, activeTab = 'overview', onTabCh
           {research.aiReview && <section className="pub-reading-review" data-ai-review={research.aiReview.status}>
             <h2>{t('aiReview')}</h2><p>{t('status')}: {research.aiReview.status === 'passed' ? t('passed') : research.aiReview.status}</p>
           </section>}
+          {research.history.length > 0 && <section className="pub-reading-history" data-public-version-history="true">
+            <h2>{t('history.title')}</h2>
+            <ol>{research.history.map((item) => <li key={item.publicVersionId}>
+              <a href={item.url}>{item.publicVersionId}</a>
+              <span>{item.publishedAt.slice(0, 10)} · {item.contentSha256.slice(0, 8)}…{item.contentSha256.slice(-8)}</span>
+            </li>)}</ol>
+          </section>}
           {research.artifactPaths.length > 0 && <section className="pub-reading-artifacts" data-print-landmark="provenance">
             <h2>{t('artifactProvenance')}</h2>
             {research.artifactPaths.map((artifact) => <ProvenanceCaption key={`${artifact.logicalPath}-${artifact.blobSha256}`} label={artifact.logicalPath} value={`${artifact.blobSha256.slice(0, 8)}…${artifact.blobSha256.slice(-8)}`} landmark="provenance" />)}
           </section>}
+          <PresentationAssetGallery assets={research.presentationAssets} />
           <footer className="pub-disclaimer" data-print-landmark="provenance"><h3>{t('legalDisclaimer')}</h3><p>{disclaimer}</p></footer>
         </article>
-        <CitationRail publicId={research.publicId} versionId={version.publicVersionId} objectCitation={objectCitation} versionCitation={research.citation} />
+        <div className="pub-reading-sidecar">
+          <EvidenceRail evidence={selectedEvidence} source={evidenceSource} loading={sourceLoading} error={sourceError} />
+          <CitationRail publicId={research.publicId} versionId={version.publicVersionId} objectCitation={objectCitation} versionCitation={research.citation} />
+        </div>
       </div>
+      <EvidenceSheet open={sheetOpen} onOpenChange={setSheetOpen} evidence={selectedEvidence} source={evidenceSource} loading={sourceLoading} error={sourceError} />
       <div data-public-deep-navigation="true" className="pub-reading-tabs"><TabNavigation activeTab={activeTab} onTabChange={onTabChange} /></div>
       {activeTab !== 'overview' && <ComingSoonTab tabName={t(`tab.${activeTab}`)} />}
     </div>

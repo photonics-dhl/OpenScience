@@ -238,7 +238,7 @@ export function registerResearchRoutes(app: FastifyInstance, deps: ResearchRoute
           contentHash: asset.contentHash,
           generator: { name: asset.generator, version: asset.generatorVersion },
           sourceClaimIds: asset.sourceClaims.map((source) => source.claimId),
-          url: `/research/${publicId}/v/${versionNo}/presentation-assets/${asset.id}`,
+          url: `/api/research/${publicId}/v/${versionNo}/presentation-assets/${asset.id}`,
         })),
         history: history.flatMap((item) => {
           const published = item.publications[0];
