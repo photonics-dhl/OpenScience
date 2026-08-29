@@ -1,7 +1,7 @@
 # OpenScience (XGS) 项目文件索引
 
 > 维护规则：创建/修改/移动文件后必须更新本索引。创建新文件前先查本表防重复。
-> **CURRENT source/deployment anchor（2026-08-29）：** branch/base HEAD `codex/claim-first-public-ro` / `5105b1e75f6f021af6987d6741f22771d19ea036`；application source/production release `4c73469fe24abe685054f1d917d452adc5371d35`；rollback `cf68bfa7baba9610dcd010fed0fcf5fd0deeab2f`；core/search `30/30` / `2/2`。Task 8 exact CI/parser/BGE/真实 journey 全绿，根盘 36G/26%；PR #4 已合并，旧分支已归档/清理。Taskmaster 8/12，Task 9 `in-progress`，Task 10 dependency-ready；本地 main 与 ECS production 身份不得混写。
+> **CURRENT source/deployment anchor（2026-08-29）：** branch/implementation HEAD `codex/claim-first-public-ro` / `2abf0d6d678eb6768dac035d4c7ff6058ac81348`；application source/production release `4c73469fe24abe685054f1d917d452adc5371d35`；rollback `cf68bfa7baba9610dcd010fed0fcf5fd0deeab2f`；production core/search `30/30` / `2/2`。Task 9 backend Tasks 1–3 已本地实现，repository migration 31 尚未部署；Taskmaster 8/12，Task 9 `in-progress`，Task 10 dependency-ready。本地 main 与 ECS production 身份不得混写。
 
 ## 根目录
 | 路径 | 用途 | 状态 |
@@ -143,6 +143,7 @@
 | `docs/plans/2026-08-29-hermes-research-identity-routing-plan.md` | Taskmaster Task 7：注册身份、可纠正兴趣、服务端 InterestContext、Hermes 静默路由与生产真实旅程 | **COMPLETED / ECS DEPLOYED `5e5ae36`**；真实 MiniMax 双任务与 context version 1→2 GREEN |
 | `docs/plans/2026-08-29-hermes-claim-evidence-api-plan.md` | Taskmaster Task 8：可信 SourceMap 引用、Claim/Evidence CRUD/复验、乐观锁/审计与发布双重阻断；Task 9/10 的稳定数据边界 | **COMPLETE / PRODUCTION ACCEPTED `4c73469`**；exact CI、ECS parser、真实 RO journey 与 cleanup 全绿 |
 | `docs/plans/2026-08-29-hermes-claim-first-public-ro-plan.md` | Taskmaster Task 9：publication-only 公共 DTO、R3 publish→public、Evidence source resolver、账户阅读偏好、760/280 Claim-first 页面、移动 sheet、打印/WCAG 与 ECS journey | **CURRENT / IN PROGRESS**；基于已批准 Research Intelligence 与 Research Folio 规范 |
+| `apps/api/src/routes/{research,reading-preferences}.ts` / `packages/domain/src/preferences/reading-preferences.ts` | Task 9 publication-only Claim/Evidence/approved asset/history DTO；账号 Evidence 默认折叠 GET/PATCH、session-only identity、version CAS 与缺省 expanded | **TASK 9 LOCAL IMPLEMENTATION** `2abf0d6`；ECS migration/API journey 待最终候选验收 |
 | `packages/domain/src/research-intelligence/{identity-profile-service,interest-context}.ts` / `apps/api/src/routes/research-identity.ts` / `apps/web/components/auth/ResearchProfileFields.tsx` | 注册身份、版本化可纠正兴趣、服务端确定性 InterestContext 与设置页；拒绝客户端伪造上下文、敏感字段和站外历史，Hermes 按上下文静默适配 | **TASK 7 PRODUCTION**；migration 30、exact CI、真实公网旅程与精确测试数据清理 GREEN |
 | `docs/plans/2026-08-27-hermes-ai-gateway-llm-ocr-routing-plan.md` | Taskmaster Task 5 的可执行 TDD 计划：provider-neutral OCR、MiniMax Coding Plan VLM adapter、逐页 fallback、kill switch、hash/cost/latency 审计与 ECS-only 验收 | **COMPLETED / ECS DEPLOYED `f965966`**；默认不启用付费 vision route |
 | `docs/plans/2026-08-27-hermes-cpu-parser-cascade-plan.md` / `.superpowers/sdd/2026-08-27-hermes-cpu-parser-cascade-plan/progress.md` | Taskmaster Task 4 的 ECS-only 实施计划与 SDD 唯一执行台账：结构化 sidecar v2、确定性 source map、候选 bake-off、坐标 OCR、受控 LLM candidate、真实 corpus/资源/部署门禁 | **COMPLETED / DEPLOYED `c581712`**；rollback `e2c0eaf`，MiniMax Vision disabled |
@@ -378,8 +379,8 @@
 | `infra/nginx/openscience.test.mjs` | 生产 Nginx 合同：`/api` rewrite、Auth 页面/API 分流、Curator/Admin API 保护、Basic credential 不转发、Tunnel 真实 IP 与部署同步 | 8/8 GREEN |
 | `infra/www/` | `nav/index.html` 服务器面板导航静态页（/var/www/nav，2026-08-01） | 已部署云上 |
 | `infra/sandbox/` | 沙箱配置占位（P1A-1） | 骨架 |
-| `infra/migrations/` | Prisma 迁移 1–30（30 = Research Identity signals / AgentTask InterestContext；29 = `agent_tasks.execution_attempt` worker fencing；28 = Research Intelligence core metadata），各附 rollback.sql | **REPOSITORY/PRODUCTION 30/30**；active ledger 30 含需保留的历史 `20260809010000_ro_create_idempotency` |
-| `infra/schema.prisma` | core Prisma schema：既有平台模型 + ResearchIdentityProfile、ClaimNode、EvidenceRecord、PresentationAsset 与 scoped relations | **TASK 2 DEPLOYED `e0828a6`** |
+| `infra/migrations/` | Prisma 迁移 1–31（31 = 账号 Evidence 阅读偏好；30 = Research Identity signals / AgentTask InterestContext；29 = `agent_tasks.execution_attempt` worker fencing），各附 rollback.sql | **REPOSITORY 31 / PRODUCTION 30**；migration 31 待 Task 9 最终 ECS 部署，active ledger 30 含需保留的历史迁移 |
+| `infra/schema.prisma` | core Prisma schema：既有平台模型 + ResearchIdentityProfile、ReadingPreference、ClaimNode、EvidenceRecord、PresentationAsset 与 scoped relations | **TASK 9 LOCAL CANDIDATE**；production schema 仍为 migration 30 |
 | `infra/search/schema.prisma` / `infra/search/migrations/` / `packages/search/test/migration.test.ts` | search 独立 Prisma schema、generator 与迁移账本；baseline `search_meta` 不与 core ledger 混用；Task 6 migration 2 增加 tenant-scoped chunk/embedding/index/model/telemetry、GIN 与机械 rollback | **CURRENT PRODUCTION 2/2 `c581712`**；forward/rollback/redeploy、tenant-safe PostgreSQL integration 与双库恢复 GREEN |
 | `scripts/verify-database-isolation.mjs` / `scripts/verify-database-isolation.test.mjs` | 拒绝 core/search 指向同一物理数据库，并以脱敏元数据给出部署门禁 | **CURRENT**；focused contract 与 ECS `DATABASE_ISOLATION_OK` GREEN |
 

@@ -4,7 +4,7 @@
 
 ## Current version tuple
 
-- Worktree branch / base HEAD: `codex/claim-first-public-ro` / `5105b1e75f6f021af6987d6741f22771d19ea036`；Task 9 计划与 Taskmaster 状态待提交。
+- Worktree branch / implementation HEAD: `codex/claim-first-public-ro` / `2abf0d6d678eb6768dac035d4c7ff6058ac81348`；分支基于 main `5105b1e…`。
 - Production application source / immutable release: `4c73469fe24abe685054f1d917d452adc5371d35`；docs HEAD、本地 main 与生产身份不得混写。
 - Production rollback: `cf68bfa7baba9610dcd010fed0fcf5fd0deeab2f`；core/search migrations `30/30` / `2/2`。
 - Taskmaster `hermes-research-intelligence` 为 8/12：Tasks 1–8 done；Task 9 Claim-first 公开 RO 已 `in-progress`，Task 10 仍 dependency-ready。
@@ -13,6 +13,12 @@
 
 - PR #4 已在精确 CI `33259207780` 全绿后合并为 main `5105b1e…`；旧 PR #3 已关闭，其 9 个独立提交由 annotated tag `archive/hermes-2d-pet-20260829` 保留。GitHub 远端 6 个已合并/被取代分支已删除，收口后一度仅保留 `main`。
 - 固定 worktree 已从合并后的 main 创建短分支 `codex/claim-first-public-ro`。Task 9 实施计划登记为 `docs/plans/2026-08-29-hermes-claim-first-public-ro-plan.md`，覆盖 publication-only DTO、R3 publish→public、阅读偏好、Evidence source/asset 安全交付、760/280 页面、移动 sheet、打印/WCAG 与 ECS journey。
+
+## 2026-08-29 — Task 9 backend contracts 1–3 implemented locally
+
+- `82fb874` 将匿名公开读取限制为 `published + Publication`，显式映射 Claims/Evidence/approved PresentationAssets/history，并从 locator/DTO 排除 workspace、验证者、object key、prompt 与私有 provenance；API 81/81、API/Web typecheck 通过。
+- `f26d895` 关闭 generic RO PATCH 的 visibility 字段；R3 发布在同一 Serializable 事务内写 Version、Publication、RO public 与 `visibilityFrom/To` 审计，单一确认框明确永久公开 URL/所有人可见；Domain 471/471、API 81/81、Web 417/417。
+- `2abf0d6` 增加 core migration 31 `reading_preferences` 与认证 GET/PATCH CAS API：缺省 expanded=`false/version 0`，首次写版本 1，同值幂等，变更递增，用户 ID 只取 session；数据库 21/21、Domain 475/475、API 83/83。生产仍为 core/search `30/30`/`2/2`，migration 31 待最终 ECS 候选部署。
 
 ## 2026-08-29 — Task 8 production accepted and evaluation debt removed
 

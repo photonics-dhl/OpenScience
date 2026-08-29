@@ -11,7 +11,7 @@
 ## Version tuple
 
 - Worktree: `E:/Miscellaneous/XGS/.worktrees/readable-hermes-guidance`
-- Branch / base HEAD: `codex/claim-first-public-ro` / `5105b1e75f6f021af6987d6741f22771d19ea036`；Task 9 计划/状态待提交。
+- Branch / implementation HEAD: `codex/claim-first-public-ro` / `2abf0d6d678eb6768dac035d4c7ff6058ac81348`；分支基于 main `5105b1e…`。
 - Production application source / immutable release: `4c73469fe24abe685054f1d917d452adc5371d35`
 - Rollback: `cf68bfa7baba9610dcd010fed0fcf5fd0deeab2f`; core/search migrations `30/30` / `2/2`
 - 本地 `main` 与其他 worktree 有用户改动，不得触碰或用它推断生产；上述 tuple 已从 ECS 重新实测。
@@ -38,6 +38,7 @@
 5. Task 8 已完成。公开页 journey 的 RO 由一次性 fixture 预置为 public；正式“扩大可见性审批”不得借 generic PATCH 绕过，应与 Task 9 的发布/公开衔接一起关闭。
 6. `/opt/openscience-evals` 的 40 个历史工作目录已在生产锁内精确清理；6 份小报告与 cleanup receipt 在 `/opt/openscience-acceptance/capability-evaluations`，7/7 checksum 通过。根盘当前约 36G used / 106G available。
 7. PR #4 已合并为 main `5105b1e…`；GitHub 旧 branches 已清至 main，独立旧 Live2D 历史由 `archive/hermes-2d-pet-20260829` 保留。当前短分支只承载 Task 9。
+8. Task 9 Tasks 1–3 已本地实现：publication-only Claim/Evidence DTO、R3 publish→public 原子边界、migration 31 账号 Evidence 阅读偏好/CAS API；生产仍为 migration 30，禁止提前声称已部署。
 
 ## Constraints
 
@@ -47,8 +48,8 @@
 
 ## Next action
 
-1. 按 `docs/plans/2026-08-29-hermes-claim-first-public-ro-plan.md` TDD 执行 Task 9。
-2. 先关闭 publication-only 公共 DTO 与 R3 publish→public/generic PATCH 安全边界，再做阅读偏好与 UI；禁止把视觉完成替代数据/权限正确性。
+1. 从计划 Task 4 开始，交付 published Evidence source 与 approved PresentationAsset 安全端点。
+2. 随后做 760/280 Claim-first UI、移动 Evidence sheet、账号/匿名阅读偏好、打印/WCAG；禁止把视觉完成替代数据/权限正确性。
 3. 最终走 exact CI、ECS migration/parser/BGE/release 门禁与一次真实 public RO journey，精确清理后才置 done。
 
 ## Read first
