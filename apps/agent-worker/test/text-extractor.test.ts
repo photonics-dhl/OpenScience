@@ -1,7 +1,11 @@
 import { createHash } from 'node:crypto';
 import { describe, expect, it, vi } from 'vitest';
 import { executeDocumentParser } from '../src/ingestion-parser';
-import { createTextExtractor, type TextExtractionAdapters } from '../src/parsers/text-extractor';
+import {
+  assertNotebookJsonBudget,
+  createTextExtractor,
+  type TextExtractionAdapters,
+} from '../src/parsers/text-extractor';
 import type { ParserStageResult } from '../src/parsers/job-protocol';
 import type { ParserInput } from '../src/parsers/types';
 
@@ -394,18 +398,22 @@ describe('deterministic text DocumentParser', () => {
     });
   });
 
-  it('bounds a high-cardinality Notebook JSON array before allocating its complete traversal stack', async () => {
-    const parserInput = input(JSON.stringify({
-      cells: [],
-      metadata: Array.from({ length: 1_500_000 }, () => 0),
-    }), 'application/x-ipynb+json');
-    const started = performance.now();
-
-    await expect(executeDocumentParser(createTextExtractor({}), parserInput)).resolves.toMatchObject({
-      status: 'blocked',
-      code: 'limit_exceeded',
+  it('stops Notebook traversal at the discovery budget before materializing later array children', () => {
+    let largestReadIndex = -1;
+    const guardedChildren = new Proxy(Array.from({ length: 100_001 }, () => 0), {
+      get(target, property, receiver) {
+        if (/^\d+$/u.test(String(property))) {
+          const index = Number(property);
+          if (index > 99_998) throw new Error('read beyond Notebook discovery budget');
+          largestReadIndex = Math.max(largestReadIndex, index);
+        }
+        return Reflect.get(target, property, receiver);
+      },
     });
-    expect(performance.now() - started).toBeLessThan(100);
+
+    expect(() => assertNotebookJsonBudget({ metadata: guardedChildren }))
+      .toThrow('Notebook JSON value limit exceeded');
+    expect(largestReadIndex).toBe(99_998);
   });
 
   it.each([

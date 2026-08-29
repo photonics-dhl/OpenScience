@@ -129,7 +129,7 @@ function* plainObjectValues(value: Record<string, unknown>): Generator<unknown> 
   }
 }
 
-function assertNotebookJsonBudget(value: unknown): void {
+export function assertNotebookJsonBudget(value: unknown): void {
   const pending: Array<{ values: Iterator<unknown>; depth: number }> = [{
     values: [value].values(), depth: 1,
   }];
@@ -142,7 +142,9 @@ function assertNotebookJsonBudget(value: unknown): void {
       continue;
     }
     discoveredValues += 1;
-    if (discoveredValues > MAX_NOTEBOOK_JSON_VALUES) throw new ParsingLimitError();
+    if (discoveredValues > MAX_NOTEBOOK_JSON_VALUES) {
+      throw new ParsingLimitError('Notebook JSON value limit exceeded');
+    }
     if (current.depth > MAX_NOTEBOOK_JSON_DEPTH) throw new Error('Notebook JSON is too deeply nested');
     if (Array.isArray(entry.value)) {
       pending.push({ values: entry.value.values(), depth: current.depth + 1 });
