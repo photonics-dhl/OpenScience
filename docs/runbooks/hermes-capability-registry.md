@@ -124,7 +124,7 @@
 
 保留条件：质量在关键轴优于现有基线，或以显著更低资源达到同等质量；且无未缓解的安全/许可问题。否则停用并记录原因，不因已经安装而保留。
 
-2026-08-26 Foundation 当时仅建立 `BASELINE_ONLY`。截至 2026-08-29，CPU parser cascade/Tesseract、BGE-M3 与 PostgreSQL lexical search 已通过 exact-SHA ECS 评测、隔离部署、降级/恢复或 source-map 门禁升为 `PRODUCTION`；Docling、LiteParse、GROBID、PaddleOCR 仍为 `APPROVED_PILOT`，MiniMax OCR 继续 `BLOCKED`。
+2026-08-26 Foundation 当时仅建立 `BASELINE_ONLY`。截至 2026-08-29，CPU parser cascade/Tesseract、BGE-M3 与 PostgreSQL lexical search 已通过 exact-SHA ECS 评测、隔离部署、降级/恢复或 source-map 门禁升为 `PRODUCTION`；Docling、LiteParse、GROBID、PaddleOCR 仍为 `APPROVED_PILOT`，MiniMax OCR 继续 `BLOCKED`。现行 16-case parser 为 14 succeeded / 2 intentional needs_review / 0 failed / 0 false-ready，因此不再为“软件齐全”重试 Docling；只有真实用户文档暴露可归因的双栏、公式或表格缺口时，才以同一 ECS CPU/model/RSS/quality gate 重开评估。
 
 ## 6. Change record template
 
@@ -132,6 +132,7 @@
 
 | Date | Capability | From → To | Version/digest | Evidence | Rollback | Operator |
 |---|---|---|---|---|---|---|
+| 2026-08-29 | Task 7 identity-aware Hermes routing | candidate → `PRODUCTION` | release `5e5ae36…`；rollback `6cabe422…`；core/search `30/30` / `2/2` | CI `33246701963`；公网 signup/profile、两次真实 MiniMax guide、signal correction、InterestContext version 1→2/`accepted_history`、logout 与 exact cleanup GREEN | immutable rollback `6cabe422…`；profile/context columns rollback SQL only；no visible mode switch | Codex |
 | 2026-08-29 | Task 4 final source-safety deployment | schema-v3 14/2 profile retained → final reviewed production | source/release `6cabe422…`；Worker `sha256:11f36807…951a02`；Parser `sha256:4e4819ec…c70d8` | CI `33240457443` / job `99068791412` success 11m10s；14/2/0/0，gateway 14/0/0，26 locators/3 table-cell，runtime/core 29/29/search 2/2/BGE/backups 7/markers GREEN；source review READY 0/0/0 | immutable rollback `28a3d5c…`；no migration；Vision disabled；no cleanup | Codex |
 | 2026-08-29 | Task 4 parser acceptance debt closeout | 10/6 baseline → schema-v3 14/2 production profile | source/release `28a3d5c…`；Worker `sha256:35191f65…5ec5aa`；Parser `sha256:aed451e9…577dbe` | CI `33235948918`；ECS `hermes-parser-14-2-v1` 14/2/0/0；structured fake 14/external 0；formal locator/runtime/core 29/29/search 2/2/BGE/public/journal GREEN | immutable rollback `c581712…`；Vision disabled；failed `63eb…`/`9e9…` objects retained pending exact whitelist approval | Codex |
 | 2026-08-29 | Task 4 CPU parser cascade / Tesseract | candidate → `PRODUCTION` | source/release `c581712…`；Worker `sha256:ae98ea5f…cbe8`；Parser `sha256:0ac86bfc…d902` | CI `33221760698`；ECS 16-case 10/6/0/0、P50/P95 151.9/1255.32 ms；formal contract、isolated/production startup、core 29/29、search 2/2、BGE/public/journal GREEN | immutable rollback `e2c0eaf…`；Vision disabled；failed generations exact-cleaned to 0 | Codex |

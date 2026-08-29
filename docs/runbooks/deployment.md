@@ -1325,3 +1325,45 @@ drift, protected-image drift, or an unbound pending intent. It must never be
 expanded into wildcard deletion, Docker system/image/volume prune, evidence or
 backup retention, cache cleanup, log deletion, or volume cleanup. Those remain
 separate audited operations requiring an exact scope.
+
+### 5.42 Task 7 release, parser precondition and hygiene lessons (2026-08-29)
+
+Application/release `5e5ae36a08ae314d0c35ee2b976e306aec73d219`
+deployed with rollback `6cabe422a8459dfa358786c9f5aae84558949f6b` after
+exact CI `33246701963` / job `99085303687`. Core/search migrations are
+`30/30` and `2/2`; parser schema-v3 acceptance, BGE CPU inference, local/public
+release identity, container health, backup refresh and retention all passed.
+The production identity-routing journey completed signup, profile read, two
+real MiniMax guide tasks, signal correction, persisted context version 1→2,
+logout and exact disposable-data cleanup.
+
+Tracked shell scripts are Git mode `100644`; invoke the acceptance entrypoint
+as `bash /opt/openscience-releases/<sha>/infra/scripts/accept-document-parser-release.sh
+<sha>`, not as a directly executable file. Before that call, export the
+canonical 16-case corpus from the exact release and copy it into root-owned,
+non-group/world-writable
+`/opt/openscience-acceptance/document-parser/<sha>/corpus`. A missing trusted
+corpus root is a fail-closed preparation error and must not be reported as a
+parser or SSH failure. After the accepted report is copied, remove only the
+exact transient `/opt/openscience-evals/document-parser/<sha>` root.
+
+Post-release disk use is about 58 GiB used / 84 GiB available (41%). The two
+protected release-specific BGE images are about 6.27 GB each; Docker may label
+the rollback image reclaimable merely because no current container uses it.
+That is not hygiene debt. Keep exactly active+rollback release roots and image
+tags, all active volumes, accepted evidence and seven backups. Never use
+`docker system prune`; build cache was only about 29 KiB after deployment.
+
+If deployment exits `78`, inspect `.rollback-id.pending` without printing
+secrets, then resume under the same lock rather than rolling back the committed
+application:
+
+```bash
+exec 9>/run/lock/openscience-production-deploy/lock
+flock -x 9
+cd /opt/openscience/releases/<active-sha>
+node infra/scripts/production-release-retention.mjs resume \
+  --expected-active <active-sha> \
+  --expected-rollback <rollback-sha> \
+  --lock-fd 9
+```

@@ -4,16 +4,18 @@
 
 ## Current version tuple
 
-- Branch / application source: `codex/hermes-wanko-live2d` / `6cabe422a8459dfa358786c9f5aae84558949f6b`。
-- Production immutable release: `6cabe422a8459dfa358786c9f5aae84558949f6b`；rollback `28a3d5ca681b7744fae521dfa9154100a24e8845`；无迁移。
-- Taskmaster `hermes-research-intelligence` 保持 6/12：Tasks 1–6 done；Task 7 next，Task 10 dependency-ready。后续 docs-only closeout HEAD 只同步事实，不改变 application source/release。
+- Branch / application source: `codex/hermes-wanko-live2d` / `5e5ae36a08ae314d0c35ee2b976e306aec73d219`；后续 docs-only closeout HEAD 只同步事实。
+- Production immutable release: `5e5ae36a08ae314d0c35ee2b976e306aec73d219`；rollback `6cabe422a8459dfa358786c9f5aae84558949f6b`；core/search migrations `30/30` / `2/2`。
+- Taskmaster `hermes-research-intelligence` 为 7/12：Tasks 1–7 done；Task 8 next，Task 10 也 dependency-ready，但产品顺序先完成 Claim/Evidence API。
 
-## 2026-08-29 — Task 7 identity routing candidate in review
+## 2026-08-29 — Task 7 identity routing deployed and accepted
 
 - 注册确认现要求用户选择研究身份（默认中性 reader），与 User、默认 Workspace、身份 profile 和审计在同一数据库事务内创建；产品不暴露模式切换。
 - 新增认证后的身份/兴趣读取、版本化更新和 accept/reject 纠正接口。Agent API 只接受当前目标/Claim，服务端从本人 profile、当前 RO/Claim 构建并持久化确定性 `InterestContext`；拒绝客户端伪造上下文、敏感字段与站外历史。
 - Settings 已接入同一身份表单及兴趣纠正；Worker 把受控上下文注入 Hermes，并把 rejected signals 当作明确排除项。Migration 30 为旧用户补 neutral reader，新增 signals 与 AgentTask context；search 数据库保持独立 2/2。
-- 聚焦回归与全仓 build/typecheck/lint/test 已绿：release contract 98（91 pass / 7 Windows skips）、Web 412、Domain 452、Worker 450、API 74；docs-sync 8/8。最终安全复审 0 Critical / 0 Important blocker。当前仍是未部署候选，Taskmaster 保持 6/12；只在 exact CI、ECS migration 30 与真实产品旅程通过后关闭 Task 7。
+- Exact CI `33246701963` / job `99085303687` 全绿。ECS 完成 parser acceptance、migration 30、BGE CPU runtime、内外健康、active/rollback retention 与 immutable release；Taskmaster Task 7 已置 done。
+- 真实生产旅程从公网完成注册、身份读取、两次 MiniMax `workspace.guide`、信号 accept、第二次快照与登出。两次任务均一次成功；持久化 context 从 profileVersion 1/空 history 变为 version 2/`accepted_history`，随后精确清理用户、challenge、task、session、usage 与用户审计至 0。
+- Vision 仍关闭，留到后续管理员代表性生产任务调用；不为追求测试数量提前付费。CPU parser 16-case 仍为 14 succeeded / 2 intentional needs_review / 0 failed / 0 false-ready，暂不安装 Docling。
 
 ## 2026-08-29 — Final parser deployment and review closed
 

@@ -3,6 +3,7 @@
 > **Taskmaster:** `hermes-research-intelligence` Task 7. The approved product
 > contract is `docs/specs/2026-08-26-hermes-research-intelligence-platform-design.md`
 > §4. No visible mode switch is introduced.
+> **Completed 2026-08-29.** Application/release `5e5ae36a08ae314d0c35ee2b976e306aec73d219`, rollback `6cabe422a8459dfa358786c9f5aae84558949f6b`; exact CI `33246701963`; core/search migrations `30/30` / `2/2`; real production registration → identity → two MiniMax guides → corrected signal → changed persisted InterestContext → logout journey passed with exact test-data cleanup.
 
 ## Product outcome
 
