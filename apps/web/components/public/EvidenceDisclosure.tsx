@@ -5,6 +5,7 @@ import { useTranslations } from 'next-intl';
 import type { PublicEvidence } from '../../lib/api';
 import {
   readLocalEvidenceDefaultCollapsed,
+  subscribeEvidenceReadingPreference,
   writeLocalEvidenceDefaultCollapsed,
 } from '../../lib/evidence-reading-preference';
 
@@ -18,7 +19,10 @@ export function EvidenceDisclosure({
   const t = useTranslations('public.claimReader');
   const [collapsed, setCollapsed] = React.useState(false);
 
-  React.useEffect(() => setCollapsed(readLocalEvidenceDefaultCollapsed()), []);
+  React.useEffect(() => {
+    setCollapsed(readLocalEvidenceDefaultCollapsed());
+    return subscribeEvidenceReadingPreference(setCollapsed);
+  }, []);
 
   const toggle = () => {
     setCollapsed((current) => {
@@ -57,4 +61,3 @@ export function EvidenceDisclosure({
     </section>
   );
 }
-

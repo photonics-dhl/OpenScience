@@ -1,6 +1,7 @@
 'use client';
 import * as React from 'react';
-import { getPublicEvidenceSource, getPublicResearchVersion, type PublicEvidence, type PublicEvidenceSource } from '../../lib/api';
+import { getPublicEvidenceSource, getPublicResearchVersion, getReadingPreference, type PublicEvidence, type PublicEvidenceSource } from '../../lib/api';
+import { writeLocalEvidenceDefaultCollapsed } from '../../lib/evidence-reading-preference';
 import { LEGAL_DISCLAIMER_DEFAULT, LICENSE_NAMES } from '../../lib/constants';
 import { useTranslations } from 'next-intl';
 import { TabNavigation, ComingSoonTab, type TabId } from './TabNavigation';
@@ -194,6 +195,12 @@ export function PublicReadingSurface({ research, activeTab = 'overview', onTabCh
   const objectCitation = research.citation.replace(version.publicVersionId, research.publicId);
   const publishedAt = version.publishedAt?.slice(0, 10) ?? t('unpublished');
   const hashShort = version.contentSha256 ? `${version.contentSha256.slice(0, 8)}…${version.contentSha256.slice(-8)}` : t('unpublished');
+
+  React.useEffect(() => {
+    void getReadingPreference()
+      .then((preference) => writeLocalEvidenceDefaultCollapsed(preference.evidenceDefaultCollapsed))
+      .catch(() => undefined);
+  }, []);
 
   React.useEffect(() => {
     if (!selectedEvidence) return;

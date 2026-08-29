@@ -8,18 +8,23 @@ import { useEffect, useState } from 'react';
 import LocaleSwitcher from '@/components/LocaleSwitcher';
 import { ResearchProfileFields } from '@/components/auth/ResearchProfileFields';
 import { DashboardShell } from '@/components/shell/DashboardShell';
+import { EvidenceReadingPreferenceControl } from '@/components/settings/EvidenceReadingPreferenceControl';
 import { Button } from '@/components/ui/button';
 import {
   ApiClientError,
   correctResearchInterestSignal,
   getCurrentUser,
+  getReadingPreference,
   getResearchIdentity,
   logout,
+  updateReadingPreference,
   updateResearchIdentity,
   type CurrentUser,
+  type ReadingPreference,
   type ResearchIdentityProfile,
 } from '@/lib/api';
 import { SurfaceState } from '@/components/research/ResearchSurfaceShell';
+import { writeLocalEvidenceDefaultCollapsed } from '@/lib/evidence-reading-preference';
 
 export default function SettingsPage() {
   const t = useTranslations('productSurfaces');
@@ -28,13 +33,21 @@ export default function SettingsPage() {
   const router = useRouter();
   const [user, setUser] = useState<CurrentUser | null>(null);
   const [profile, setProfile] = useState<ResearchIdentityProfile | null>(null);
+  const [readingPreference, setReadingPreference] = useState<ReadingPreference | null>(null);
   const [error, setError] = useState<ApiClientError | Error | null>(null);
   const [busy, setBusy] = useState(false);
   const [writeStatus, setWriteStatus] = useState<'idle' | 'saved' | 'conflict'>('idle');
   const [writeError, setWriteError] = useState('');
+  const [preferenceBusy, setPreferenceBusy] = useState(false);
+  const [preferenceStatus, setPreferenceStatus] = useState<'idle' | 'saved' | 'conflict' | 'error'>('idle');
   useEffect(() => {
-    void Promise.all([getCurrentUser(), getResearchIdentity()])
-      .then(([nextUser, nextProfile]) => { setUser(nextUser); setProfile(nextProfile); })
+    void Promise.all([getCurrentUser(), getResearchIdentity(), getReadingPreference()])
+      .then(([nextUser, nextProfile, nextReadingPreference]) => {
+        setUser(nextUser);
+        setProfile(nextProfile);
+        setReadingPreference(nextReadingPreference);
+        writeLocalEvidenceDefaultCollapsed(nextReadingPreference.evidenceDefaultCollapsed);
+      })
       .catch(setError);
   }, []);
   async function signOut() { setBusy(true); try { await logout(); router.replace('/auth/login'); } catch (cause) { setError(cause as Error); setBusy(false); } }
@@ -75,8 +88,34 @@ export default function SettingsPage() {
       setWriteStatus('saved');
     } catch (cause) { await handleWriteFailure(cause); } finally { setBusy(false); }
   }
+  async function saveReadingPreference(evidenceDefaultCollapsed: boolean) {
+    if (!readingPreference) return;
+    setPreferenceBusy(true);
+    setPreferenceStatus('idle');
+    try {
+      const next = await updateReadingPreference({ evidenceDefaultCollapsed, expectedVersion: readingPreference.version });
+      setReadingPreference(next);
+      writeLocalEvidenceDefaultCollapsed(next.evidenceDefaultCollapsed);
+      setPreferenceStatus('saved');
+    } catch (cause) {
+      if (cause instanceof ApiClientError && cause.code === 'PREFERENCE_VERSION_CONFLICT') {
+        try {
+          const current = await getReadingPreference();
+          setReadingPreference(current);
+          writeLocalEvidenceDefaultCollapsed(current.evidenceDefaultCollapsed);
+          setPreferenceStatus('conflict');
+        } catch (reloadCause) {
+          setError(reloadCause as Error);
+        }
+      } else {
+        setPreferenceStatus('error');
+      }
+    } finally {
+      setPreferenceBusy(false);
+    }
+  }
   if (error) return <DashboardShell activeRoute="settings" navigationLabel={t('settings.navigation')} skipLabel={t('settings.skip')}><SurfaceState detail={error.message} kind={error instanceof ApiClientError && error.status === 403 ? 'forbidden' : 'error'} title={t('state.errorTitle')} /></DashboardShell>;
-  if (!user || !profile) return <DashboardShell activeRoute="settings" navigationLabel={t('settings.navigation')} skipLabel={t('settings.skip')}><SurfaceState detail={t('state.loadingBody')} kind="loading" title={t('settings.title')} /></DashboardShell>;
+  if (!user || !profile || !readingPreference) return <DashboardShell activeRoute="settings" navigationLabel={t('settings.navigation')} skipLabel={t('settings.skip')}><SurfaceState detail={t('state.loadingBody')} kind="loading" title={t('settings.title')} /></DashboardShell>;
   return (
     <DashboardShell activeRoute="settings" navigationLabel={t('settings.navigation')} skipLabel={t('settings.skip')}>
       <header className="max-w-3xl border-b border-os-rule-paper pb-6">
@@ -96,6 +135,7 @@ export default function SettingsPage() {
         <section className="surface-folio-sheet px-5 py-6">
           <h2 className="text-lg font-semibold text-os-ink">{t('settings.preferences')}</h2>
           <div className="mt-5 flex items-center justify-between border-y border-os-rule-paper py-4 text-base"><span className="text-os-muted-paper">{t('settings.language')}</span><LocaleSwitcher locale={locale as 'zh' | 'en'} /></div>
+          <EvidenceReadingPreferenceControl busy={preferenceBusy} checked={readingPreference.evidenceDefaultCollapsed} onChange={(checked) => void saveReadingPreference(checked)} status={preferenceStatus} />
           <button data-reading-role="control" className="mt-6 inline-flex min-h-11 items-center gap-2 rounded-control border border-os-rule-paper px-4 text-sm text-os-ink disabled:opacity-40" disabled={busy} onClick={signOut}><LogOut className="h-4 w-4" />{t('settings.signOut')}</button>
         </section>
         <section className="surface-folio-sheet px-5 py-6 md:col-span-2" data-settings-research-identity="true">

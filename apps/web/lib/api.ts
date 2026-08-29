@@ -853,6 +853,25 @@ export async function correctResearchInterestSignal(input: {
   })).profile;
 }
 
+export interface ReadingPreference {
+  evidenceDefaultCollapsed: boolean;
+  version: number;
+}
+
+export function getReadingPreference(): Promise<ReadingPreference> {
+  return request('/api/reading-preferences');
+}
+
+export function updateReadingPreference(input: {
+  evidenceDefaultCollapsed: boolean;
+  expectedVersion: number;
+}): Promise<ReadingPreference> {
+  return request('/api/reading-preferences', {
+    method: 'PATCH',
+    body: JSON.stringify(input),
+  });
+}
+
 export async function retryAgentTask(taskId: string): Promise<{ task: AgentTaskView }> {
   return request(`/api/agent/tasks/${taskId}/retry`, { method: 'POST' });
 }
