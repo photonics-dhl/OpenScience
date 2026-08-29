@@ -47,11 +47,14 @@ function closeTo(left: number, right: number): boolean {
   return Math.abs(left - right) <= 1e-6;
 }
 
-function virtualTableCoordinates(page: DocumentPage, block: DocumentBlock): { row: number; column: number } | undefined {
-  const normalized = block.transformations.some((transformation) => transformation.stage === 'normalize'
+function isVirtualNormalizedBlock(block: DocumentBlock): boolean {
+  return block.transformations.some((transformation) => transformation.stage === 'normalize'
     && transformation.processor.name === VIRTUAL_PAGE_PROCESSOR
     && transformation.processor.version === VIRTUAL_PAGE_PROCESSOR_VERSION);
-  if (!normalized) return undefined;
+}
+
+function virtualTableCoordinates(page: DocumentPage, block: DocumentBlock): { row: number; column: number } | undefined {
+  if (!isVirtualNormalizedBlock(block)) return undefined;
   const { x, y, width, height } = block.boundingBox;
   const rawRow = y / VIRTUAL_LINE_HEIGHT + 1;
   const rawColumnCount = VIRTUAL_PAGE_WIDTH / width;
@@ -74,13 +77,14 @@ function virtualTableCoordinates(page: DocumentPage, block: DocumentBlock): { ro
 function validateTableCell(page: DocumentPage, block: DocumentBlock, tableCell: TableCell): void {
   const coordinates = virtualTableCoordinates(page, block);
   if (!coordinates) return;
-  const sheetHeading = tableCell.sheet === undefined ? undefined : page.blocks.find((candidate) => candidate.kind === 'heading'
-    && candidate.text === tableCell.sheet
+  const sheetHeadings = page.blocks.filter((candidate) => candidate.kind === 'heading'
+    && isVirtualNormalizedBlock(candidate)
     && closeTo(candidate.boundingBox.x, 0)
     && closeTo(candidate.boundingBox.y, 0)
     && closeTo(candidate.boundingBox.width, VIRTUAL_PAGE_WIDTH)
     && closeTo(candidate.boundingBox.height, VIRTUAL_LINE_HEIGHT));
-  if (tableCell.sheet !== undefined && !sheetHeading) {
+  if (sheetHeadings.length > 1 || (tableCell.sheet !== undefined
+    && (sheetHeadings.length !== 1 || sheetHeadings[0]!.text !== tableCell.sheet))) {
     throw locatorError('tableCell sheet does not match the virtual page heading');
   }
   const row = coordinates.row - (tableCell.sheet === undefined ? 0 : 1);

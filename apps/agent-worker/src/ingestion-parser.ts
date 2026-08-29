@@ -92,6 +92,8 @@ const MAX_XLSX_ROW = 1_048_576;
 const VIRTUAL_PAGE_WIDTH = 1000;
 const VIRTUAL_LINE_HEIGHT = 24;
 const XLSX_TRANSITION_PARSER_METADATA = Object.freeze({ name: 'v1-text-transition', version: '2.0.0' });
+const XLSX_FORMULA_START_TAG = /<(?:[^\s/>:]+:)?f(?=[\s/>])/iu;
+const XLSX_MERGE_START_TAG = /<(?:[^\s/>:]+:)?mergeCells?(?=[\s/>])/iu;
 
 interface ZipEntry {
   fileName: string;
@@ -308,7 +310,8 @@ function parseCellReference(reference: string): { row: number; column: number } 
 }
 
 function worksheetCells(xml: string, strings: readonly string[]): Array<{ row: number; column: number; text: string }> {
-  if (/<mergeCells\b|<mergeCell\b/iu.test(xml)) throw new Error('merged XLSX cells are unsupported');
+  if (XLSX_FORMULA_START_TAG.test(xml)) throw new Error('XLSX formulas are unsupported');
+  if (XLSX_MERGE_START_TAG.test(xml)) throw new Error('merged XLSX cells are unsupported');
   const cells: Array<{ row: number; column: number; text: string }> = [];
   for (const match of xml.matchAll(/<c\b([^>]*)>([\s\S]*?)<\/c>/gu)) {
     const reference = attribute(match[1]!, 'r');
@@ -316,9 +319,6 @@ function worksheetCells(xml: string, strings: readonly string[]): Array<{ row: n
     const coordinates = parseCellReference(reference);
     const type = attribute(match[1]!, 't');
     const body = match[2]!;
-    if (/<f(?:\s[^>]*)?(?:\/\s*>|>[\s\S]*?<\/f>)/iu.test(body)) {
-      throw new Error('XLSX formulas are unsupported');
-    }
     if (type !== undefined && type !== 'inlineStr' && type !== 's') {
       throw new Error('XLSX cell type is unsupported');
     }

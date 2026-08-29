@@ -128,6 +128,27 @@ describe('SourceLocator construction and resolution', () => {
     })).toThrow(/tableCell/);
   });
 
+  it('rejects a virtual XLSX page with conflicting row-zero sheet headings', async () => {
+    const canonical = structuredTableSourceMap();
+    const valueBlock = canonical.pages[0]!.blocks.find((block) => block.text === '42')!;
+    const { createTableCellSourceLocator, resolveSourceLocator } = await sourceLocatorContract();
+    const locator = createTableCellSourceLocator(canonical, valueBlock.id, {
+      sheet: 'Evidence', row: 2, column: 2,
+    });
+    const duplicate = structuredClone(canonical);
+    duplicate.pages[0]!.blocks.splice(1, 0, {
+      ...duplicate.pages[0]!.blocks[0]!, id: 'other-sheet-heading', text: 'Other',
+    });
+
+    expect(() => createTableCellSourceLocator(duplicate, valueBlock.id, {
+      sheet: 'Evidence', row: 2, column: 2,
+    })).toThrow(/tableCell/);
+    expect(() => createTableCellSourceLocator(duplicate, valueBlock.id, {
+      row: 3, column: 2,
+    })).toThrow(/tableCell/);
+    expect(() => resolveSourceLocator(duplicate, locator)).toThrow(/tableCell/);
+  });
+
   it('keeps physical table locators bound only to their block and bounding box', async () => {
     const map = sourceMap();
     const { createTableCellSourceLocator, resolveSourceLocator } = await sourceLocatorContract();

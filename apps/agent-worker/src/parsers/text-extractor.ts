@@ -308,6 +308,7 @@ function buildStructuredXlsxPages(result: ParserStageResult): SourceMapPageDraft
       || !Number.isSafeInteger(lineCount) || lineCount < 1) {
       throw new ParsingLimitError();
     }
+    let rowZeroHeadings = 0;
     const cells = page.blocks.map((block): VirtualTextCell => {
       const { x, y, width, height } = block.boundingBox;
       const rawLine = y / VIRTUAL_LINE_HEIGHT + 1;
@@ -331,11 +332,13 @@ function buildStructuredXlsxPages(result: ParserStageResult): SourceMapPageDraft
         if (block.kind !== 'heading' || column !== 1 || columnCount !== 1) {
           throw new Error('XLSX sheet heading is invalid');
         }
+        rowZeroHeadings += 1;
       } else if (block.kind !== 'table') {
         throw new Error('XLSX cells must be table blocks');
       }
       return { line, column, columnCount, kind: block.kind, text: block.text, parser: result.parser };
     });
+    if (rowZeroHeadings !== 1) throw new Error('XLSX sheet heading must be unique');
     return buildVirtualPage(page.page, cells, lineCount);
   });
 }

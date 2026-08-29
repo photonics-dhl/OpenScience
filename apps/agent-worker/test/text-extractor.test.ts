@@ -530,7 +530,10 @@ describe('deterministic text DocumentParser', () => {
 
   it.each([
     ['formula with a cached value', xlsxFixture('<worksheet><sheetData><row r="1"><c r="A1"><f>1+1</f><v>2</v></c></row></sheetData></worksheet>')],
+    ['namespaced formula with a cached value', xlsxFixture('<worksheet xmlns:x="urn:test"><sheetData><row r="1"><c r="A1"><x:f>1+1</x:f><v>2</v></c></row></sheetData></worksheet>')],
+    ['malformed formula with a cached value', xlsxFixture('<worksheet><sheetData><row r="1"><c r="A1"><f>1+1<v>2</v></c></row></sheetData></worksheet>')],
     ['merged cells', xlsxFixture('<worksheet><sheetData><row r="1"><c r="A1" t="inlineStr"><is><t>merged</t></is></c></row></sheetData><mergeCells count="1"><mergeCell ref="A1:B1"/></mergeCells></worksheet>')],
+    ['namespaced merged cells', xlsxFixture('<worksheet xmlns:x="urn:test"><sheetData><row r="1"><c r="A1" t="inlineStr"><is><t>merged</t></is></c></row></sheetData><x:mergeCells count="1"><x:mergeCell ref="A1:B1"/></x:mergeCells></worksheet>')],
     ['error cell type', xlsxFixture('<worksheet><sheetData><row r="1"><c r="A1" t="e"><v>#DIV/0!</v></c></row></sheetData></worksheet>')],
     ['invalid workbook relationship', xlsxFixture('<worksheet><sheetData><row r="1"><c r="A1"><v>1</v></c></row></sheetData></worksheet>', '<Relationships><Relationship Id="rId1" Target="../worksheets/sheet1.xml"/></Relationships>')],
     ['malformed cell reference', xlsxWithCellReference('A0')],
@@ -548,6 +551,21 @@ describe('deterministic text DocumentParser', () => {
         warnings: ['partial_result'],
         pages: [{ page: 1, width: 1000, height: 48, blocks: [
           { kind: 'heading', text: 'Sheet', boundingBox: { x: 0, y: 0, width: 1000, height: 24 } },
+          { kind: 'table', text: '42', boundingBox: { x: 0, y: 24, width: 1000, height: 24 } },
+        ] }],
+      }),
+    }), parserInput);
+
+    expect(result).toMatchObject({ status: 'needs_review', reasons: ['parser-failed'], sourceMap: { pages: [] } });
+  });
+
+  it('fails closed when the isolated XLSX stage has duplicate row-zero sheet headings', async () => {
+    const parserInput = input(Buffer.from('duplicate-sheet-headings'), 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    const result = await executeDocumentParser(createTextExtractor({
+      xlsx: async () => stage({
+        pages: [{ page: 1, width: 1000, height: 48, blocks: [
+          { kind: 'heading', text: 'Evidence', boundingBox: { x: 0, y: 0, width: 1000, height: 24 } },
+          { kind: 'heading', text: 'Other', boundingBox: { x: 0, y: 0, width: 1000, height: 24 } },
           { kind: 'table', text: '42', boundingBox: { x: 0, y: 24, width: 1000, height: 24 } },
         ] }],
       }),
