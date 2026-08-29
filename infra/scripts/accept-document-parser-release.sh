@@ -2,7 +2,7 @@
 set -euo pipefail
 umask 077
 
-MANIFEST_SHA256='c50309017738e53eb7b06d946ba1388ffe028198250e0cd34096ba9b89f1dc1d'
+MANIFEST_SHA256='db62ae00bb3fb7ecb0b2daba5815d75b1960d4ff1e5ef9549dd1e7617925ac03'
 
 print_contract() {
   local source_sha="$1"

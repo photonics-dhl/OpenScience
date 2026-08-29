@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
-import { existsSync } from 'node:fs';
+import { createHash } from 'node:crypto';
+import { existsSync, readFileSync } from 'node:fs';
 import { chmod, cp, mkdir, mkdtemp, readFile, rm, symlink, writeFile } from 'node:fs/promises';
 import { spawnSync } from 'node:child_process';
 import { tmpdir } from 'node:os';
@@ -13,6 +14,10 @@ const bash = process.platform === 'win32' && existsSync('C:/Program Files/Git/bi
   : 'bash';
 
 const manifestTool = resolve(dirname(fileURLToPath(import.meta.url)), '../../scripts/release-input-manifest.mjs');
+const canonicalManifest = resolve(
+  dirname(fileURLToPath(import.meta.url)),
+  '../../test/research-intelligence/manifest.json',
+);
 
 function bashPath(path) {
   return process.platform === 'win32'
@@ -48,7 +53,7 @@ test('Task 8 acceptance launcher exposes its exact isolated topology and rejects
     acceptanceProfile: 'hermes-parser-14-2-v1',
     sourceSha: sha,
     corpusCases: 16,
-    manifestSha256: 'c50309017738e53eb7b06d946ba1388ffe028198250e0cd34096ba9b89f1dc1d',
+    manifestSha256: createHash('sha256').update(readFileSync(canonicalManifest)).digest('hex'),
     actualPath: 'artifact-backed-sdf.extract',
     paths: {
       releaseRoot: `/opt/openscience-releases/${sha}`,
