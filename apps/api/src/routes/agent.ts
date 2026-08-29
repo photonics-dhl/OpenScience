@@ -1,7 +1,7 @@
 import type { FastifyInstance, FastifyRequest } from 'fastify';
 import { z } from 'zod';
 import type { AuthDeps } from '@openscience/auth';
-import { createAgentSession, getAgentTask, listAgentSessions, listAgentTasks, parseWorkspaceGuidePayload, submitAgentTask, approveApproval, listPendingApprovals, rejectApproval, revokeApproval } from '@openscience/domain';
+import { AgentError, buildInterestContext, createAgentSession, getAgentTask, retryAgentTask, listAgentSessions, listAgentTasks, parseWorkspaceGuidePayload, PUBLIC_AGENT_SESSION_KINDS, PUBLIC_AGENT_TASK_KINDS, submitAgentTask, approveApproval, listPendingApprovals, rejectApproval, revokeApproval, validateResearchIdentityProfileState } from '@openscience/domain';
 import type { AuditContext } from '@openscience/observability';
 import { requireCurrentUser } from './session-guard';
 
@@ -12,9 +12,9 @@ function auditCtx(req: FastifyRequest): AuditContext {
   return { requestId: String(req.id), ip: req.ip };
 }
 
-const sessionBody = z.object({
+export const agentSessionBodySchema = z.object({
   researchObjectId: z.string().uuid().optional(),
-  kind: z.string().min(1).max(64),
+  kind: z.enum(PUBLIC_AGENT_SESSION_KINDS),
   title: z.string().max(200).optional(),
 });
 const workspaceGuideTaskBody = z.object({
@@ -27,15 +27,39 @@ const workspaceGuideTaskBody = z.object({
       return z.NEVER;
     }
   }),
+  activeClaimId: z.string().uuid().optional(),
 }).strict();
 const genericTaskBody = z.object({
   sessionId: z.string().uuid(),
-  kind: z.string().min(1).max(64).refine((kind) => kind !== 'workspace.guide'),
+  kind: z.enum(PUBLIC_AGENT_TASK_KINDS),
   payload: z.record(z.string(), z.unknown()).default({}),
+  currentGoal: z.string().trim().min(1).max(2_000).optional(),
+  activeClaimId: z.string().uuid().optional(),
 }).strict().superRefine((value, ctx) => {
   if (JSON.stringify(value.payload).length > 65_536) ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'payload exceeds 64KB' });
+  if (value.kind === 'review.analyze') {
+    const parsed = z.object({
+      versionId: z.string().uuid(),
+      coreText: z.string().trim().min(1).max(8_000),
+    }).strict().safeParse(value.payload);
+    if (!parsed.success) ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'review.analyze payload is invalid' });
+  }
 });
 export const agentTaskBodySchema = z.union([workspaceGuideTaskBody, genericTaskBody]);
+
+function identityStateFromRow(row: Record<string, unknown>) {
+  return validateResearchIdentityProfileState({
+    identities: row.identities,
+    primaryIdentity: row.primaryIdentity,
+    disciplines: row.disciplines,
+    methods: row.methods,
+    topics: row.topics,
+    languages: row.languages,
+    acceptedSignals: row.acceptedSignals,
+    rejectedSignals: row.rejectedSignals,
+    profileVersion: row.profileVersion,
+  });
+}
 
 /**
  * P1D-2：/agent Hermes 会话与异步任务 API（§9.3 长任务 + §16 幂等 + §18.3 进度可恢复 + §9.1 配额）。
@@ -48,7 +72,7 @@ export function registerAgentRoutes(app: FastifyInstance, deps: AgentRouteDeps):
   app.post('/agent/sessions', async (req, reply) => {
     const user = await requireCurrentUser(deps, req, reply);
     if (!user) return;
-    const body = sessionBody.parse(req.body);
+    const body = agentSessionBodySchema.parse(req.body);
     const idempotencyKey = req.headers['idempotency-key'];
     const session = await createAgentSession(
       deps,
@@ -82,6 +106,21 @@ export function registerAgentRoutes(app: FastifyInstance, deps: AgentRouteDeps):
     if (!user) return;
     const body = agentTaskBodySchema.parse(req.body);
     const idempotencyKey = req.headers['idempotency-key'];
+    const session = await deps.prisma.agentSession.findUnique({ where: { id: body.sessionId } });
+    if (!session || session.userId !== user.userId) throw new AgentError('RESEARCH_OBJECT_NOT_FOUND', '会话不存在');
+    if (body.activeClaimId) {
+      const claim = await deps.prisma.claimNode.findUnique({ where: { id: body.activeClaimId } });
+      if (!claim || !session.researchObjectId || claim.researchObjectId !== session.researchObjectId) {
+        throw new AgentError('RESEARCH_OBJECT_NOT_FOUND', 'Claim 不存在或不属于当前研究对象');
+      }
+    }
+    const profileRow = await deps.prisma.researchIdentityProfile.findUnique({ where: { userId: user.userId } });
+    const interestContext = buildInterestContext({
+      ...(profileRow ? { profile: identityStateFromRow(profileRow as unknown as Record<string, unknown>) } : {}),
+      currentGoal: body.kind === 'workspace.guide' ? body.payload.goal : body.currentGoal,
+      ...(session.researchObjectId ? { activeResearchObjectId: session.researchObjectId } : {}),
+      ...(body.activeClaimId ? { activeClaimId: body.activeClaimId } : {}),
+    });
     const task = await submitAgentTask(
       deps,
       {
@@ -89,6 +128,7 @@ export function registerAgentRoutes(app: FastifyInstance, deps: AgentRouteDeps):
         userId: user.userId,
         kind: body.kind,
         payload: body.payload,
+        interestContext,
         idempotencyKey: typeof idempotencyKey === 'string' ? idempotencyKey : undefined,
       },
       auditCtx(req),
@@ -101,6 +141,13 @@ export function registerAgentRoutes(app: FastifyInstance, deps: AgentRouteDeps):
     if (!user) return;
     const { id } = z.object({ id: z.string().uuid() }).parse(req.params);
     return reply.send({ task: await getAgentTask(deps, { userId: user.userId, taskId: id }) });
+  });
+
+  app.post('/agent/tasks/:id/retry', async (req, reply) => {
+    const user = await requireCurrentUser(deps, req, reply);
+    if (!user) return;
+    const { id } = z.object({ id: z.string().uuid() }).parse(req.params);
+    return reply.send({ task: await retryAgentTask(deps, { userId: user.userId, taskId: id }, auditCtx(req)) });
   });
 
   // P1D-4：R0-R4 审批（§9.4 + §15 ToolApproval）

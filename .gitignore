@@ -31,6 +31,8 @@ node_modules/
 dist/
 .next/
 *.tsbuildinfo
+/packages/search/generated/
+/packages/search/src/generated/
 
 # Agent scratch (SDD workspace 等，过程产物不入库)
 .superpowers/
@@ -59,3 +61,11 @@ apps/web/test/visual/out/
 
 # cloud-sync 服务器凭据（本机生成不入库，同 .mcp.json 模式）
 .cloud-sync-env
+
+# Generated Hermes research-intelligence benchmarks and local model environments
+/test/research-intelligence/out/
+/.venv/
+__pycache__/
+*.py[cod]
+/.cache/huggingface/
+/models/

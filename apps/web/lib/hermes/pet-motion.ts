@@ -7,7 +7,7 @@ import {
 } from './motion-mixer';
 
 export type HermesPetVisualState = 'idle' | 'guiding' | 'suggesting' | 'scanning' | 'awaiting_approval' | 'failed';
-export type HermesPetGesture = 'rest' | 'observe' | 'blink' | 'page-flick' | 'citation-swish' | 'evidence-check' | 'focus' | 'failed-settle' | 'still';
+type HermesPetGesture = 'rest' | 'observe' | 'blink' | 'page-flick' | 'citation-swish' | 'evidence-check' | 'focus' | 'failed-settle' | 'still';
 
 export interface HermesMotionInput {
   action?: HermesActionId;
@@ -31,6 +31,11 @@ const ACTION_GESTURES: Record<HermesActionId, HermesPetGesture> = {
   doze: 'rest',
   wake: 'observe',
   'surprise-settle': 'observe',
+  'cap-check': 'page-flick',
+  'ear-perk': 'observe',
+  'lamp-listen': 'evidence-check',
+  'happy-wiggle': 'citation-swish',
+  'thinking-pause': 'focus',
   patrol: 'citation-swish',
   'return-dock': 'observe',
   'pointer-approach': 'focus',
@@ -98,6 +103,16 @@ function sampleDirectedAction(action: HermesActionId, progress: number, pointer:
       return { gesture, pose: { blink: p < .18 ? 1 : 0, crownAngle: motion * 9.5, gaze: { y: -motion * .35 }, head: { angle: motion * 4, y: -motion * 6.5 }, tail: { angle: -motion * 7 }, torso: { scale: 1 + motion * .05, y: -motion * 2.8 } } };
     case 'surprise-settle':
       return { gesture, pose: { crownAngle: motion * 12, gaze: { y: -motion * .65 }, head: { angle: motion * 7, x: -motion * 7, y: -motion * 4 }, tail: { angle: motion * 11, curl: -motion * .08 }, torso: { scale: 1 - motion * .04, x: -motion * 2.5 } } };
+    case 'cap-check':
+      return { gesture, pose: { crownAngle: oscillate * 8, gaze: { y: -.25 }, head: { angle: motion * 3, y: -motion * 2 }, torso: { x: motion * 1.2 } } };
+    case 'ear-perk':
+      return { gesture, pose: { crownAngle: motion * 8, gaze: { y: -motion * .45 }, head: { angle: motion * 4, y: -motion * 4 }, tail: { angle: -motion * 5 } } };
+    case 'lamp-listen':
+      return { gesture, pose: { gaze: { x: -.45, y: .4 }, head: { angle: -motion * 6, x: -motion * 4, y: motion * 2 }, tail: { angle: motion * 4, curl: motion * .05 } } };
+    case 'happy-wiggle':
+      return { gesture, pose: { crownAngle: oscillate * 10, gaze: { y: -motion * .35 }, head: { angle: oscillate * 7, y: -motion * 4 }, tail: { angle: -oscillate * 15, curl: motion * .1 }, torso: { angle: oscillate * 3, y: -motion * 2 } } };
+    case 'thinking-pause':
+      return { gesture, pose: { crownAngle: -motion * 5, gaze: { x: -.32, y: .28 }, head: { angle: -motion * 7, x: -motion * 2 }, tail: { angle: motion * 3, curl: motion * .04 } } };
     case 'patrol':
       return { gesture, pose: { crownAngle: oscillate * 6, gaze: { x: oscillate * .8 }, head: { angle: oscillate * 6, x: oscillate * 10, y: -motion * 2.5 }, tail: { angle: -oscillate * 13, curl: motion * .1 }, torso: { angle: oscillate * 2, x: oscillate * 3.8 } } };
     case 'return-dock':

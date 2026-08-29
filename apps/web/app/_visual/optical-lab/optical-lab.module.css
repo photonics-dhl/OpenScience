@@ -375,13 +375,20 @@
   pointer-events: none;
 }
 
-.candidate[data-asset-candidate='true'] {
-  touch-action: pan-y;
+.assetInteractionSlot [data-optical-fallback-field='true'] {
+  inset: 0;
 }
 
-.candidate[data-accepted-optical-surface='landing'],
-.candidate[data-accepted-optical-surface='landing'] * {
-  cursor: none !important;
+.candidate[data-context-status='unavailable'] .targetTypographyPlate {
+  opacity: 0;
+}
+
+.assetInteractionSlot [data-optical-fallback-field='true'] canvas {
+  opacity: 1;
+}
+
+.candidate[data-asset-candidate='true'] {
+  touch-action: pan-y;
 }
 
 .diagnostics {

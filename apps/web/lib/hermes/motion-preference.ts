@@ -19,11 +19,12 @@ export function saveHermesMotionPreference(storage: Pick<HermesMotionStorage, 's
 export function resolveHermesReducedMotion(
   search: string,
   storedPreference: HermesMotionPreference | null = null,
+  systemReducedMotion = false,
 ): boolean {
   const preference = new URLSearchParams(search).get('hermes-motion');
   if (preference === 'full') return false;
   if (preference === 'reduced') return true;
   if (storedPreference === 'full') return false;
   if (storedPreference === 'reduced') return true;
-  return false;
+  return systemReducedMotion;
 }

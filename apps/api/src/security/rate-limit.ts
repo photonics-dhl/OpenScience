@@ -33,6 +33,7 @@ export const RATE_LIMIT_ROUTES: Record<string, RouteRule> = {
   '/sandbox-jobs': { limit: 10, windowSec: 60 },
   // Hermes/AI task submission: authenticated and credit-gated, but still bound burst traffic.
   '/agent/tasks': { limit: 20, windowSec: 60 },
+  '/agent/tasks/:id/retry': { limit: 10, windowSec: 60 },
   // Research ingestion: authenticated but memory/storage/AI intensive.
   '/research-objects/:id/ingest': { limit: 5, windowSec: 60 },
   '/ingestion/:taskId/retry': { limit: 10, windowSec: 60 },

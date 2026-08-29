@@ -49,9 +49,15 @@ const smoothstep = (value: number) => {
 
 export function mapAssetPointerVelocity(deltaX: number, deltaY: number, elapsedMs: number) {
   const sensitivity = ASSET_POINTER_VELOCITY_SENSITIVITY / Math.max(1, elapsedMs);
+  const rawX = deltaX * sensitivity;
+  const rawY = deltaY * sensitivity;
+  const magnitude = Math.hypot(rawX, rawY);
+  if (magnitude === 0) return { velocityX: 0, velocityY: 0 };
+  const shapedMagnitude = Math.min(1, Math.sqrt(magnitude));
+  const scale = shapedMagnitude / magnitude;
   return {
-    velocityX: deltaX * sensitivity,
-    velocityY: deltaY * sensitivity,
+    velocityX: rawX * scale,
+    velocityY: rawY * scale,
   };
 }
 

@@ -10,6 +10,11 @@ export type HermesActionId =
   | 'doze'
   | 'wake'
   | 'surprise-settle'
+  | 'cap-check'
+  | 'ear-perk'
+  | 'lamp-listen'
+  | 'happy-wiggle'
+  | 'thinking-pause'
   | 'patrol'
   | 'return-dock'
   | 'pointer-approach'
@@ -62,6 +67,11 @@ export const HERMES_ACTION_CATALOG: Record<HermesActionId, HermesActionDefinitio
   doze: action('doze', 'spirit-pet', 1_800),
   wake: action('wake', 'spirit-pet', 900, 'curious'),
   'surprise-settle': action('surprise-settle', 'spirit-pet', 850, 'curious'),
+  'cap-check': action('cap-check', 'spirit-pet', 1_150, 'focused'),
+  'ear-perk': action('ear-perk', 'spirit-pet', 850, 'curious'),
+  'lamp-listen': action('lamp-listen', 'spirit-pet', 1_500, 'curious'),
+  'happy-wiggle': action('happy-wiggle', 'spirit-pet', 1_300, 'success'),
+  'thinking-pause': action('thinking-pause', 'spirit-pet', 1_650, 'focused'),
   patrol: action('patrol', 'scholar', 4_200, 'curious', 'star-wake', true),
   'return-dock': action('return-dock', 'scholar', 2_800, 'neutral', 'star-wake', true),
   'pointer-approach': action('pointer-approach', 'spirit-pet', 900, 'curious'),
@@ -91,6 +101,11 @@ export const HERMES_MICRO_ACTIONS: readonly HermesActionId[] = [
   'doze',
   'wake',
   'surprise-settle',
+  'cap-check',
+  'ear-perk',
+  'lamp-listen',
+  'happy-wiggle',
+  'thinking-pause',
 ];
 
 export const HERMES_SIGNATURE_ACTIONS: readonly HermesActionId[] = [
@@ -98,3 +113,7 @@ export const HERMES_SIGNATURE_ACTIONS: readonly HermesActionId[] = [
   'patrol',
   'return-dock',
 ];
+
+export {
+  resolveWankoPerformance,
+} from './wanko-action-director';

@@ -1,16 +1,52 @@
 'use client';
 
-import { useTranslations } from 'next-intl';
+import {
+  BookOpen,
+  Brain,
+  Ear,
+  FileCheck2,
+  GitCompareArrows,
+  Library,
+  Moon,
+  MoveDiagonal2,
+  PartyPopper,
+  Route,
+  Sparkles,
+  Sunrise,
+  type LucideIcon,
+} from 'lucide-react';
+import { useLocale, useTranslations } from 'next-intl';
+import { useRouter } from 'next/navigation';
 import * as React from 'react';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 
+import {
+  ContextMenu,
+  ContextMenuContent,
+  ContextMenuGroup,
+  ContextMenuItem,
+  ContextMenuLabel,
+  ContextMenuSeparator,
+  ContextMenuTrigger,
+} from '@/components/ui/context-menu';
 import type { HermesPetMeshInput } from '@/lib/hermes/pet-mesh-renderer';
 import type { HermesActionId } from '@/lib/hermes/action-catalog';
+import {
+  HERMES_CONTEXT_ACTIONS,
+  resolveHermesActionFeedback,
+  resolveHermesResearchHref,
+  type HermesContextAction,
+  type HermesContextActionIcon,
+  type HermesMenuFeedback,
+} from '@/lib/hermes/context-menu-actions';
 import type { HermesRuntimeStatus } from '@/lib/hermes/hermes-runtime-status';
 
 import { HermesRiggedPortrait } from './HermesRiggedPortrait';
+import { HermesSpeechBalloon } from './HermesSpeechBalloon';
 import type { HermesGuideSuggestion } from './hermes-guide';
 import type { HermesVisualState } from './hermes-state';
+
+const useClientLayoutEffect = typeof window === 'undefined' ? useEffect : useLayoutEffect;
 
 function HermesStaticPortrait({ state }: { state: HermesVisualState }) {
   const nodes = [
@@ -36,7 +72,7 @@ function HermesStaticPortrait({ state }: { state: HermesVisualState }) {
         <path d="M70 177c42-29 72-43 110-43s68 14 110 43c-42 29-72 43-110 43s-68-14-110-43Z" fill="none" stroke="currentColor" strokeOpacity=".22" />
       </g>
       <g className="hermes-nodes">
-        {nodes.map(([cx, cy], index) => <circle cx={cx} cy={cy} fill={index === 0 ? '#ff4e22' : 'currentColor'} key={`${cx}-${cy}`} opacity={index === 0 ? 1 : 0.5} r={index === 0 ? 3 : 2} style={{ animationDelay: `${index * 90}ms` }} />)}
+        {nodes.map(([cx, cy], index) => <circle cx={cx} cy={cy} fill={index === 0 ? '#ff4e22' : 'currentColor'} key={`${cx}-${cy}`} opacity={index === 0 ? 1 : .5} r={index === 0 ? 3 : 2} />)}
       </g>
       <g className="hermes-gaze" data-hermes-gaze="true">
         <path d="M119 177c18-31 37-47 61-47s43 16 61 47c-18 31-37 47-61 47s-43-16-61-47Z" fill="#070a0d" stroke="currentColor" strokeWidth="1.2" />
@@ -46,10 +82,6 @@ function HermesStaticPortrait({ state }: { state: HermesVisualState }) {
       </g>
       <path className="hermes-wave" d="M48 177h53m158 0h53" fill="none" stroke="currentColor" strokeDasharray="2 7" strokeOpacity=".36" />
       <path className="hermes-scan" d="M50 106h260" stroke="url(#hermes-scan)" strokeWidth="2" data-hermes-scan={state === 'scanning' ? 'active' : 'still'} />
-      <g className="hermes-caption" fill="none" stroke="currentColor" strokeOpacity=".22">
-        <path d="M113 307h134" />
-        <path d="M139 320h82" />
-      </g>
     </svg>
   );
 }
@@ -58,22 +90,61 @@ export interface HermesVisualAdapterProps {
   action?: HermesActionId;
   actionStartedAtMs?: number;
   assistantOpen?: boolean;
+  compactPresentation?: boolean;
   state: HermesVisualState;
   suggestion: HermesGuideSuggestion;
   onInvoke: () => void;
+  onMenuAction?: (feedback: HermesMenuFeedback) => void;
+  menuFeedback?: HermesMenuFeedback | null;
   onRuntimeStatus?: (status: HermesRuntimeStatus) => void;
+  promptSuppressed?: boolean;
+  protectedGeometryVersion: number;
   reducedMotion: boolean;
   rendererGeneration?: number;
 }
 
-export function HermesVisualAdapter({ action, actionStartedAtMs, assistantOpen = false, state, suggestion, onInvoke, onRuntimeStatus, reducedMotion, rendererGeneration }: HermesVisualAdapterProps) {
+const HERMES_ACTION_ICONS: Record<HermesContextActionIcon, LucideIcon> = {
+  book: BookOpen,
+  celebrate: PartyPopper,
+  compare: GitCompareArrows,
+  evidence: FileCheck2,
+  listen: Ear,
+  rest: Moon,
+  route: Route,
+  sources: Library,
+  spark: Sparkles,
+  stretch: MoveDiagonal2,
+  sunrise: Sunrise,
+  thought: Brain,
+};
+
+export function HermesVisualAdapter({ action, actionStartedAtMs, assistantOpen = false, compactPresentation = false, state, suggestion, onInvoke, onMenuAction, menuFeedback = null, onRuntimeStatus, promptSuppressed = false, protectedGeometryVersion, reducedMotion, rendererGeneration }: HermesVisualAdapterProps) {
   const t = useTranslations('dashboard.hermes');
+  const locale = useLocale();
+  const router = useRouter();
   const linkRef = useRef<HTMLButtonElement>(null);
+  const menuContentRef = useRef<HTMLDivElement>(null);
+  const longPressRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const longPressStartRef = useRef<{ x: number; y: number } | null>(null);
+  const suppressClickRef = useRef(false);
+  const suppressClickTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const navigationTimerRef = useRef<number | null>(null);
+  const feedbackSeedRef = useRef(0);
+  const previousFeedbackRef = useRef<Partial<Record<HermesContextAction['key'], string>>>({});
   const engagedRef = useRef(false);
   const meshInputRef = useRef<HermesPetMeshInput>({ engaged: false, pointer: { x: 0, y: 0 }, state });
   const [interactiveReady, setInteractiveReady] = useState(false);
   const [engaged, setEngaged] = useState(false);
   const [promptVisible, setPromptVisible] = useState(false);
+  const [compactMenu, setCompactMenu] = useState(false);
+  const [compactGroup, setCompactGroup] = useState<'companion' | 'research'>('companion');
+  const [menuOpen, setMenuOpen] = useState(false);
+  const menuLayoutRef = useRef<{
+    actorTop: number;
+    scrollY: number;
+    stage: HTMLElement | null;
+    stageTranslate: string;
+  } | null>(null);
   const promptPlayedRef = useRef(false);
   const still = state === 'awaiting_approval';
   const presence = still ? 'still' : state === 'scanning' ? 'working' : assistantOpen ? 'open' : engaged ? 'attentive' : 'idle';
@@ -99,6 +170,386 @@ export function HermesVisualAdapter({ action, actionStartedAtMs, assistantOpen =
     linkRef.current?.style.setProperty('--hermes-pointer-x', `${pointer.x * 14}px`);
     linkRef.current?.style.setProperty('--hermes-pointer-y', `${pointer.y * 10}px`);
   };
+
+  const clearLongPress = () => {
+    if (longPressRef.current) clearTimeout(longPressRef.current);
+    longPressRef.current = null;
+    longPressStartRef.current = null;
+  };
+
+  const getActorBounds = () => {
+    const trigger = linkRef.current;
+    return trigger?.querySelector<HTMLElement>('[data-hermes-companion-actor="true"]')?.getBoundingClientRect()
+      ?? trigger?.getBoundingClientRect()
+      ?? null;
+  };
+
+  const updateMenuOpen = (open: boolean) => {
+    const trigger = linkRef.current;
+    if (open && !menuLayoutRef.current && trigger) {
+      const actorTop = getActorBounds()?.top;
+      if (actorTop !== undefined) menuLayoutRef.current = {
+        actorTop,
+        scrollY: window.scrollY,
+        stage: trigger.closest<HTMLElement>('[data-hermes-workspace-stage="true"]'),
+        stageTranslate: trigger.closest<HTMLElement>('[data-hermes-workspace-stage="true"]')?.style.translate ?? '',
+      };
+    }
+    setMenuOpen(open);
+    if (open) setCompactGroup('companion');
+  };
+
+  useClientLayoutEffect(() => {
+    const trigger = linkRef.current;
+    const layout = menuLayoutRef.current;
+    if (!layout || !trigger) return;
+    const anchored = Boolean(trigger.closest('[data-hermes-placement="anchored"]'));
+    const stage = layout.stage;
+    const restoreStageTranslate = () => {
+      if (!stage) return;
+      if (layout.stageTranslate) stage.style.translate = layout.stageTranslate;
+      else stage.style.removeProperty('translate');
+      stage.removeAttribute('data-hermes-menu-layout-shift');
+    };
+    if (!menuOpen) {
+      restoreStageTranslate();
+      window.scrollTo({ behavior: 'auto', top: layout.scrollY });
+      menuLayoutRef.current = null;
+      return;
+    }
+    let layoutFrame = 0;
+    let menuFrame = 0;
+    let settleFrame = 0;
+    const crown = trigger.querySelector<HTMLElement>('[data-hermes-visible-crown-anchor="true"]');
+    const margin = trigger.closest<HTMLElement>('[data-hermes-companion-margin="true"]');
+    if (!crown) return;
+    let observedMenu: HTMLElement | null = null;
+    let scheduleStabilization = () => {};
+    const resizeObserver = new ResizeObserver(() => scheduleStabilization());
+    const observeProtectedGeometry = () => {
+      document.querySelectorAll<HTMLElement>('[data-hermes-protected="true"]')
+        .forEach((node) => resizeObserver.observe(node));
+    };
+
+    const viewportBounds = () => {
+      const top = window.visualViewport?.offsetTop ?? 0;
+      return { bottom: top + (window.visualViewport?.height ?? window.innerHeight), top };
+    };
+    const protectedClearanceTop = (menuBounds: DOMRect, crownCenter: number) => {
+      const viewport = viewportBounds();
+      return Array.from(document.querySelectorAll<HTMLElement>('[data-hermes-protected="true"]'))
+        .reduce((clearance, node) => {
+          const bounds = node.getBoundingClientRect();
+          const horizontallyOverlaps = menuBounds.left < bounds.right && menuBounds.right > bounds.left;
+          const sitsAboveHermes = bounds.top < crownCenter;
+          return horizontallyOverlaps && sitsAboveHermes ? Math.max(clearance, bounds.bottom + 8) : clearance;
+        }, viewport.top + 8);
+    };
+    const maximumDetachedDownwardShift = (actorBounds: DOMRect, viewportBottom: number) => {
+      const viewportLimit = Math.max(0, viewportBottom - actorBounds.bottom);
+      return Array.from(document.querySelectorAll<HTMLElement>('[data-hermes-protected="true"]'))
+        .reduce((maximum, node) => {
+          const bounds = node.getBoundingClientRect();
+          const horizontallyOverlaps = actorBounds.left < bounds.right && actorBounds.right > bounds.left;
+          const liesInDownwardPath = bounds.bottom > actorBounds.top && bounds.top < viewportBottom;
+          if (!horizontallyOverlaps || !liesInDownwardPath) return maximum;
+          return Math.min(maximum, Math.max(0, bounds.top - 8 - actorBounds.bottom));
+        }, viewportLimit);
+    };
+    const alignMenuBesideActor = (actorBounds: DOMRect) => {
+      const menu = menuContentRef.current;
+      if (!menu) return false;
+      menu.removeAttribute('data-hermes-menu-fallback');
+      menu.style.setProperty('--hermes-menu-correction-x', '0px');
+      menu.style.setProperty('--hermes-menu-correction-y', '0px');
+      const menuBounds = menu.getBoundingClientRect();
+      const crownBounds = crown.getBoundingClientRect();
+      const viewport = viewportBounds();
+      const protectedBounds = Array.from(document.querySelectorAll<HTMLElement>('[data-hermes-protected="true"]'))
+        .map((node) => node.getBoundingClientRect())
+        .filter((bounds) => bounds.width > 0 && bounds.height > 0);
+      const preferredTop = crownBounds.top + crownBounds.height / 2 - menuBounds.height / 2;
+      const minimumTop = viewport.top + 8;
+      const maximumTop = viewport.bottom - 8 - menuBounds.height;
+      const clampTop = (top: number) => Math.max(minimumTop, Math.min(maximumTop, top));
+      const verticalCandidates = [
+        clampTop(preferredTop),
+        minimumTop,
+        maximumTop,
+        ...protectedBounds.flatMap((bounds) => [bounds.bottom + 8, bounds.top - menuBounds.height - 8]),
+      ].filter((top, index, values) => top >= minimumTop && top <= maximumTop
+        && values.findIndex((candidate) => Math.abs(candidate - top) < .5) === index)
+        .sort((a, b) => Math.abs(a - preferredTop) - Math.abs(b - preferredTop));
+      const horizontalCandidates = [
+        { attachment: 'left', left: actorBounds.left - menuBounds.width - 32 },
+        { attachment: 'right', left: actorBounds.right + 32 },
+      ] as const;
+      const candidate = horizontalCandidates.flatMap(({ attachment, left }) => verticalCandidates.map((top) => ({ attachment, left, top })))
+        .find(({ left, top }) => {
+          const right = left + menuBounds.width;
+          const bottom = top + menuBounds.height;
+          if (left < 8 || right > window.innerWidth - 8) return false;
+          return protectedBounds.every((bounds) => right + 8 <= bounds.left || left - 8 >= bounds.right
+            || bottom + 8 <= bounds.top || top - 8 >= bounds.bottom);
+        });
+      if (!candidate) return false;
+      menu.setAttribute('data-hermes-menu-attachment', candidate.attachment);
+      menu.style.setProperty('--hermes-menu-correction-x', `${candidate.left - menuBounds.left}px`);
+      menu.style.setProperty('--hermes-menu-correction-y', `${candidate.top - menuBounds.top}px`);
+      return true;
+    };
+    const alignMenuAsWideFolio = (actorBounds: DOMRect) => {
+      const menu = menuContentRef.current;
+      if (!menu) return false;
+      menu.setAttribute('data-hermes-menu-fallback', 'wide');
+      menu.setAttribute('data-hermes-menu-attachment', 'above-wide');
+      menu.style.setProperty('--hermes-menu-correction-x', '0px');
+      menu.style.setProperty('--hermes-menu-correction-y', '0px');
+      let menuBounds = menu.getBoundingClientRect();
+      const viewport = viewportBounds();
+      const preferredLeft = actorBounds.left + actorBounds.width / 2 - menuBounds.width / 2;
+      const boundedLeft = Math.max(8, Math.min(window.innerWidth - 8 - menuBounds.width, preferredLeft));
+      menu.style.setProperty('--hermes-menu-correction-x', `${boundedLeft - menuBounds.left}px`);
+      menuBounds = menu.getBoundingClientRect();
+      const crownBounds = crown.getBoundingClientRect();
+      const crownCenter = crownBounds.top + crownBounds.height / 2;
+      const minimumTop = protectedClearanceTop(menuBounds, crownCenter);
+      const maximumTop = viewport.bottom - 8 - menuBounds.height;
+      const preferredTop = crownCenter - menuBounds.height - 32;
+      const boundedTop = Math.max(viewport.top + 8, Math.min(maximumTop, Math.max(minimumTop, preferredTop)));
+      menu.style.setProperty('--hermes-menu-correction-y', `${boundedTop - menuBounds.top}px`);
+      return true;
+    };
+    const alignMenuToCrown = () => {
+      const menu = menuContentRef.current;
+      if (!menu) return;
+      menu.removeAttribute('data-hermes-menu-fallback');
+      menu.style.setProperty('--hermes-menu-correction-x', '0px');
+      menu.style.setProperty('--hermes-menu-correction-y', '0px');
+      menu.setAttribute('data-hermes-menu-attachment', 'above');
+      const menuBounds = menu.getBoundingClientRect();
+      const crownBounds = crown.getBoundingClientRect();
+      const crownCenter = crownBounds.top + crownBounds.height / 2;
+      const viewport = viewportBounds();
+      const minimumTop = protectedClearanceTop(menuBounds, crownCenter);
+      const maximumTop = Math.max(viewport.top + 8, viewport.bottom - 8 - menuBounds.height);
+      const preferredTop = crownCenter - menuBounds.height - 32;
+      const boundedTop = Math.max(viewport.top + 8, Math.min(maximumTop, Math.max(minimumTop, preferredTop)));
+      menu.style.setProperty('--hermes-menu-correction-y', `${boundedTop - menuBounds.top}px`);
+    };
+    const stabilizeLayout = () => {
+      const menu = menuContentRef.current;
+      if (!menu) {
+        layoutFrame = window.requestAnimationFrame(stabilizeLayout);
+        return;
+      }
+      if (menu !== observedMenu) {
+        if (observedMenu) resizeObserver.unobserve(observedMenu);
+        observedMenu = menu;
+        resizeObserver.observe(menu);
+      }
+      restoreStageTranslate();
+      menu.removeAttribute('data-hermes-menu-fallback');
+      menu.style.setProperty('--hermes-menu-correction-x', '0px');
+      menu.style.setProperty('--hermes-menu-correction-y', '0px');
+      const actorTopAfterLayout = getActorBounds()?.top;
+      if (actorTopAfterLayout === undefined) return;
+      if (compactMenu && anchored) {
+        // The compact sheet reserves document flow below the long-press point.
+        // Counter-scroll that reflow so the 200 px actor stays under the finger.
+        window.scrollTo({ behavior: 'auto', top: window.scrollY + actorTopAfterLayout - layout.actorTop });
+        alignMenuToCrown();
+        menuFrame = window.requestAnimationFrame(alignMenuToCrown);
+        return;
+      }
+      const reflowShift = anchored ? layout.actorTop - actorTopAfterLayout : 0;
+      if (anchored && stage && Math.abs(reflowShift) > .5) {
+        stage.style.translate = `0 ${reflowShift}px`;
+        stage.setAttribute('data-hermes-menu-layout-shift', `${reflowShift}`);
+      }
+      const actorBounds = getActorBounds();
+      const visibleActorBounds = trigger.querySelector<HTMLElement>('[data-hermes-carrier-travel-hull="true"]')?.getBoundingClientRect()
+        ?? actorBounds;
+      if (!actorBounds || !visibleActorBounds) return;
+      const crownBounds = crown.getBoundingClientRect();
+      const menuBounds = menu.getBoundingClientRect();
+      const crownCenter = crownBounds.top + crownBounds.height / 2;
+      const viewport = viewportBounds();
+      const clearanceTop = protectedClearanceTop(menuBounds, crownCenter);
+      const preferredShift = Math.max(0, clearanceTop + menuBounds.height + 32 - crownCenter);
+      const minimumShift = Math.max(0, clearanceTop + menuBounds.height + 24 - crownCenter);
+      const maximumShift = anchored
+        ? viewport.bottom - 8 - actorBounds.bottom
+        : maximumDetachedDownwardShift(visibleActorBounds, viewport.bottom);
+      const layoutShift = Math.min(preferredShift, maximumShift);
+      const useSideFallback = !anchored && maximumShift + .5 < minimumShift;
+      const hasSufficientShift = anchored
+        ? layoutShift >= Math.min(minimumShift, maximumShift)
+        : layoutShift >= minimumShift;
+      if (!useSideFallback && stage && hasSufficientShift && Math.abs(reflowShift + layoutShift) > .5) {
+        stage.style.translate = `0 ${reflowShift + layoutShift}px`;
+        stage.setAttribute('data-hermes-menu-layout-shift', `${reflowShift + layoutShift}`);
+      }
+      const alignResolvedMenu = () => {
+        const currentActorBounds = trigger.querySelector<HTMLElement>('[data-hermes-carrier-travel-hull="true"]')?.getBoundingClientRect()
+          ?? getActorBounds();
+        if (useSideFallback && currentActorBounds
+          && (alignMenuBesideActor(currentActorBounds) || alignMenuAsWideFolio(currentActorBounds))) return;
+        alignMenuToCrown();
+      };
+      alignResolvedMenu();
+      menuFrame = window.requestAnimationFrame(() => {
+        alignResolvedMenu();
+        settleFrame = window.requestAnimationFrame(alignResolvedMenu);
+      });
+    };
+    scheduleStabilization = () => {
+      window.cancelAnimationFrame(layoutFrame);
+      window.cancelAnimationFrame(menuFrame);
+      window.cancelAnimationFrame(settleFrame);
+      layoutFrame = window.requestAnimationFrame(stabilizeLayout);
+    };
+
+    if (menuContentRef.current) stabilizeLayout();
+    else scheduleStabilization();
+    if (margin) resizeObserver.observe(margin);
+    observeProtectedGeometry();
+    const mutationObserver = margin ? new MutationObserver(scheduleStabilization) : null;
+    mutationObserver?.observe(margin!, { attributeFilter: ['class', 'style'], attributes: true });
+    const protectedMutationObserver = new MutationObserver((records) => {
+      const protectedSelector = '[data-hermes-protected]';
+      const changed = records.some((record) => record.attributeName === 'data-hermes-protected'
+        || Array.from(record.addedNodes).some((node) => node instanceof Element
+          && (node.matches(protectedSelector) || Boolean(node.querySelector(protectedSelector)))));
+      if (!changed) return;
+      observeProtectedGeometry();
+      scheduleStabilization();
+    });
+    protectedMutationObserver.observe(document.body, {
+      attributeFilter: ['data-hermes-protected'],
+      attributes: true,
+      childList: true,
+      subtree: true,
+    });
+    window.addEventListener('resize', scheduleStabilization);
+    window.visualViewport?.addEventListener('resize', scheduleStabilization);
+    window.visualViewport?.addEventListener('scroll', scheduleStabilization);
+    return () => {
+      resizeObserver.disconnect();
+      mutationObserver?.disconnect();
+      protectedMutationObserver.disconnect();
+      window.removeEventListener('resize', scheduleStabilization);
+      window.visualViewport?.removeEventListener('resize', scheduleStabilization);
+      window.visualViewport?.removeEventListener('scroll', scheduleStabilization);
+      window.cancelAnimationFrame(layoutFrame);
+      window.cancelAnimationFrame(menuFrame);
+      window.cancelAnimationFrame(settleFrame);
+    };
+  }, [compactGroup, compactMenu, menuOpen, protectedGeometryVersion]);
+
+  useEffect(() => () => {
+    const layout = menuLayoutRef.current;
+    if (!layout) return;
+    if (layout.stageTranslate) layout.stage?.style.setProperty('translate', layout.stageTranslate);
+    else layout.stage?.style.removeProperty('translate');
+    layout.stage?.removeAttribute('data-hermes-menu-layout-shift');
+    window.scrollTo({ behavior: 'auto', top: layout.scrollY });
+    menuLayoutRef.current = null;
+  }, []);
+
+  const dispatchContextMenu = () => {
+    const trigger = linkRef.current;
+    if (!trigger) return;
+    const estimatedMenuHeight = compactMenu ? 366 : 380;
+    const initialBounds = getActorBounds() ?? trigger.getBoundingClientRect();
+    if (!menuLayoutRef.current) menuLayoutRef.current = {
+      actorTop: initialBounds.top,
+      scrollY: window.scrollY,
+      stage: trigger.closest<HTMLElement>('[data-hermes-workspace-stage="true"]'),
+      stageTranslate: trigger.closest<HTMLElement>('[data-hermes-workspace-stage="true"]')?.style.translate ?? '',
+    };
+    if (trigger.closest('[data-hermes-placement="anchored"]')) {
+      const viewportTop = window.visualViewport?.offsetTop ?? 0;
+      const requiredActorTop = viewportTop + estimatedMenuHeight + 80;
+      const availableScroll = window.scrollY;
+      const scrollDelta = Math.max(-availableScroll, initialBounds.top - requiredActorTop);
+      if (scrollDelta < -1) window.scrollBy({ behavior: 'auto', top: scrollDelta });
+    }
+    const bounds = getActorBounds() ?? trigger.getBoundingClientRect();
+    const menuWidth = compactMenu ? 304 : 360;
+    const marginBounds = trigger.closest<HTMLElement>('[data-hermes-companion-margin="true"]')?.getBoundingClientRect();
+    const horizontalBounds = marginBounds ?? { left: 0, right: window.innerWidth };
+    const preferredX = marginBounds ? marginBounds.left + marginBounds.width / 2 : bounds.left + bounds.width / 2;
+    const minimumX = horizontalBounds.left + menuWidth / 2 + 8;
+    const maximumX = horizontalBounds.right - menuWidth / 2 - 8;
+    const menuX = maximumX >= minimumX
+      ? Math.max(minimumX, Math.min(maximumX, preferredX))
+      : preferredX;
+    const menuY = bounds.top - 32 - estimatedMenuHeight;
+    trigger.dispatchEvent(new MouseEvent('contextmenu', {
+      bubbles: true,
+      button: 2,
+      clientX: menuX,
+      clientY: menuY,
+    }));
+    updateMenuOpen(true);
+  };
+
+  const handlePointerDown = (event: React.PointerEvent<HTMLButtonElement>) => {
+    if (event.pointerType !== 'touch') return;
+    event.currentTarget.removeAttribute('data-hermes-long-press-active');
+    longPressStartRef.current = { x: event.clientX, y: event.clientY };
+    longPressRef.current = setTimeout(() => {
+      linkRef.current?.setAttribute('data-hermes-long-press-active', 'true');
+      suppressClickRef.current = true;
+      suppressClickTimerRef.current = setTimeout(() => { suppressClickRef.current = false; }, 800);
+      dispatchContextMenu();
+    }, 520);
+  };
+
+  const handlePointerMove = (event: React.PointerEvent<HTMLButtonElement>) => {
+    const start = longPressStartRef.current;
+    if (event.pointerType === 'touch' && start && Math.hypot(event.clientX - start.x, event.clientY - start.y) > 10) clearLongPress();
+  };
+
+  const chooseAction = (item: HermesContextAction) => {
+    updateMenuOpen(false);
+    const random = typeof crypto !== 'undefined' && 'getRandomValues' in crypto
+      ? crypto.getRandomValues(new Uint32Array(1))[0]
+      : Date.now();
+    feedbackSeedRef.current += 1;
+    const feedback = resolveHermesActionFeedback(
+      item,
+      random ^ feedbackSeedRef.current,
+      previousFeedbackRef.current[item.key] ?? null,
+    );
+    previousFeedbackRef.current[item.key] = feedback.messageKey;
+    onMenuAction?.(feedback);
+    if (item.group !== 'research') return;
+    const href = resolveHermesResearchHref(item.key as 'continue' | 'evidence' | 'sources' | 'compare', {
+      href: suggestion.href,
+      researchObjectId: suggestion.researchObjectId,
+    });
+    if (navigationTimerRef.current) clearTimeout(navigationTimerRef.current);
+    navigationTimerRef.current = window.setTimeout(() => {
+      navigationTimerRef.current = null;
+      router.push(href);
+    }, 900);
+  };
+
+  useEffect(() => {
+    const media = window.matchMedia('(max-width: 640px)');
+    const sync = () => setCompactMenu(compactPresentation || media.matches);
+    sync();
+    media.addEventListener('change', sync);
+    return () => media.removeEventListener('change', sync);
+  }, [compactPresentation]);
+
+  useEffect(() => () => {
+    clearLongPress();
+    if (suppressClickTimerRef.current) clearTimeout(suppressClickTimerRef.current);
+    if (navigationTimerRef.current) clearTimeout(navigationTimerRef.current);
+  }, []);
 
   useEffect(() => {
     if (assistantOpen) engageArticulation({ x: .42, y: -.12 });
@@ -129,7 +580,7 @@ export function HermesVisualAdapter({ action, actionStartedAtMs, assistantOpen =
   }, [reducedMotion, still]);
 
   useEffect(() => {
-    if (still || assistantOpen) {
+    if (still || assistantOpen || promptSuppressed) {
       setPromptVisible(false);
       return;
     }
@@ -166,7 +617,7 @@ export function HermesVisualAdapter({ action, actionStartedAtMs, assistantOpen =
       window.clearTimeout(hideTimer);
       document.removeEventListener('visibilitychange', onVisibility);
     };
-  }, [assistantOpen, reducedMotion, still]);
+  }, [assistantOpen, promptSuppressed, reducedMotion, still]);
 
   const setGaze = (event: React.PointerEvent<HTMLButtonElement>) => {
     if (still || !interactiveReady) return;
@@ -188,46 +639,154 @@ export function HermesVisualAdapter({ action, actionStartedAtMs, assistantOpen =
     resetArticulation();
   };
 
-  return (
-    <button
-      aria-label={t('guide.invoke')}
-      className="hermes-visual group relative block min-h-72 w-full overflow-hidden border-b border-os-rule-dark text-left text-os-paper outline-none focus-visible:ring-2 focus-visible:ring-os-vermilion"
-      onClick={onInvoke}
-      ref={linkRef}
-      type="button"
-      data-hermes-fallback="static"
-      data-hermes-renderer="articulated-mesh"
-      data-hermes-state={state}
-      data-hermes-engaged={engaged ? 'true' : 'false'}
-      data-hermes-presence={presence}
-      data-motion={still ? 'still' : 'responsive'}
-      data-hermes-input-ready={interactiveReady ? 'true' : 'false'}
-      data-hermes-input-owner="true"
-      onPointerEnter={() => engageArticulation()}
-      onPointerLeave={resetGaze}
-      onPointerMove={setGaze}
-      onFocus={() => engageArticulation()}
-      onBlur={resetGaze}
-    >
-      <span className="absolute left-0 top-0 z-10 font-mono text-[0.65rem] uppercase tracking-[0.2em] text-os-muted-dark">Hermes / {state.replaceAll('_', ' ')}</span>
-      <span className="absolute inset-x-0 bottom-3 z-10 flex items-center justify-between gap-4 border-t border-os-rule-dark pt-3 text-xs text-os-muted-dark">
-        <span className="truncate">{t(suggestion.titleKey)}</span><span className="shrink-0 text-os-vermilion transition-transform group-hover:translate-x-1 motion-reduce:transform-none">{t('guide.invoke')} →</span>
-      </span>
-      <span
-        className="hermes-companion-actor absolute inset-x-2 bottom-9 top-9 flex justify-center text-os-paper"
-        data-hermes-companion-actor="true"
-        data-hermes-instance="single"
+  return <>
+    <ContextMenu open={menuOpen} onOpenChange={updateMenuOpen}>
+      <ContextMenuTrigger asChild>
+        <button
+          aria-label={t('guide.menu.trigger')}
+          className="hermes-visual group relative block min-h-72 w-full overflow-hidden border-b border-os-rule-dark text-left text-os-paper outline-none focus-visible:ring-2 focus-visible:ring-os-vermilion"
+          onBlur={resetGaze}
+          onClick={() => {
+            if (suppressClickRef.current) {
+              suppressClickRef.current = false;
+              if (suppressClickTimerRef.current) clearTimeout(suppressClickTimerRef.current);
+              suppressClickTimerRef.current = null;
+              return;
+            }
+            onInvoke();
+          }}
+          onContextMenuCapture={(event) => {
+            if (!event.nativeEvent.isTrusted) return;
+            event.preventDefault();
+            event.stopPropagation();
+            event.nativeEvent.stopImmediatePropagation();
+            requestAnimationFrame(dispatchContextMenu);
+          }}
+          onFocus={() => engageArticulation()}
+          onKeyDown={(event) => {
+            const menuKey = event.key === 'ContextMenu' || event.key === 'Apps';
+            if ((!event.shiftKey || event.key !== 'F10') && !menuKey) return;
+            event.preventDefault();
+            event.stopPropagation();
+            dispatchContextMenu();
+          }}
+          onPointerCancel={() => { clearLongPress(); resetGaze(); }}
+          onPointerDown={handlePointerDown}
+          onPointerEnter={() => engageArticulation()}
+          onPointerLeave={() => { clearLongPress(); resetGaze(); }}
+          onPointerMove={(event) => { handlePointerMove(event); setGaze(event); }}
+          onPointerUp={(event) => {
+            clearLongPress();
+            const target = event.currentTarget;
+            window.setTimeout(() => target.removeAttribute('data-hermes-long-press-active'), 0);
+          }}
+          ref={linkRef}
+          type="button"
+          data-hermes-fallback="static"
+          data-hermes-renderer="articulated-mesh"
+          data-hermes-state={state}
+          data-hermes-engaged={engaged ? 'true' : 'false'}
+          data-hermes-presence={presence}
+          data-motion={still ? 'still' : 'responsive'}
+          data-hermes-input-ready={interactiveReady ? 'true' : 'false'}
+          data-hermes-input-owner="true"
+          data-hermes-menu-open={menuOpen ? 'true' : 'false'}
+        >
+          <span data-reading-role="caption" className="hermes-visual-state-label absolute left-0 top-0 z-10 font-mono uppercase tracking-[0.1em] text-os-muted-dark">Hermes / {state.replaceAll('_', ' ')}</span>
+          <span className="hermes-visual-invoke-label absolute inset-x-0 bottom-3 z-10 flex items-center justify-between gap-4 border-t border-os-rule-dark pt-3 text-xs text-os-muted-dark" data-hermes-visual-footer="true">
+            <span className="truncate">{t(suggestion.titleKey)}</span><span className="hermes-visible-invoke-cta shrink-0 text-os-vermilion transition-transform group-hover:translate-x-1 motion-reduce:transform-none" data-hermes-visible-invoke-cta="true">{t('guide.invoke')} →</span>
+          </span>
+          <span
+            className="hermes-companion-actor absolute inset-x-2 bottom-9 top-9 flex justify-center text-os-paper"
+            data-hermes-companion-actor="true"
+            data-hermes-instance="single"
+          >
+            <HermesRiggedPortrait
+              fallback={<HermesStaticPortrait state={state} />}
+              inputRef={meshInputRef}
+              onRuntimeStatus={onRuntimeStatus}
+              reducedMotion={reducedMotion}
+              rendererGeneration={rendererGeneration}
+              state={state}
+            />
+            <span aria-hidden="true" className="hermes-visible-crown-anchor" data-hermes-visible-crown-anchor="true" />
+            <span aria-hidden="true" className="hermes-visible-mouth-anchor" data-hermes-visible-mouth-anchor="true" />
+          </span>
+          <span aria-hidden={!promptVisible} className="hermes-guide-nudge" data-visible={promptVisible ? 'true' : 'false'}>{t(suggestion.bodyKey)}</span>
+        </button>
+      </ContextMenuTrigger>
+      <ContextMenuContent
+        aria-label={t('guide.menu.label')}
+        className="hermes-context-menu"
+        collisionPadding={8}
+        data-compact={compactMenu ? 'true' : 'false'}
+        data-hermes-action-menu="true"
+        data-hermes-menu-layout="carried-sheet"
+        data-hermes-reduced-motion={reducedMotion ? 'true' : 'false'}
+        data-locale={locale}
+        loop
+        ref={menuContentRef}
       >
-        <HermesRiggedPortrait
-          fallback={<HermesStaticPortrait state={state} />}
-          inputRef={meshInputRef}
-          onRuntimeStatus={onRuntimeStatus}
-          reducedMotion={reducedMotion}
-          rendererGeneration={rendererGeneration}
-          state={state}
-        />
-      </span>
-      <span aria-hidden={!promptVisible} className="hermes-guide-nudge" data-visible={promptVisible ? 'true' : 'false'}>{t(suggestion.bodyKey)}</span>
-    </button>
-  );
+        <ContextMenuLabel className="hermes-context-menu-label">
+          <span>{t('guide.menu.eyebrow')}</span>
+          <strong>{t('guide.menu.title')}</strong>
+        </ContextMenuLabel>
+        <ContextMenuGroup className="hermes-context-menu-switch" data-hermes-mobile-group-switch="true">
+          {(['companion', 'research'] as const).map((group) => (
+            <ContextMenuItem
+              className="hermes-context-menu-switch-item"
+              data-active={compactGroup === group ? 'true' : 'false'}
+              key={group}
+              onSelect={(event) => {
+                event.preventDefault();
+                setCompactGroup(group);
+              }}
+            >
+              {t(`guide.menu.groups.${group}`)}
+            </ContextMenuItem>
+          ))}
+        </ContextMenuGroup>
+        {(['companion', 'research'] as const).map((group) => (
+          <React.Fragment key={group}>
+            {group === 'research' ? <ContextMenuSeparator className="hermes-context-menu-rule" /> : null}
+            <ContextMenuLabel
+              className="hermes-context-menu-group-label"
+              data-hermes-group-label={group}
+              hidden={compactMenu && compactGroup !== group}
+            >
+              {t(`guide.menu.groups.${group}`)}
+            </ContextMenuLabel>
+            <ContextMenuGroup
+              className={`hermes-context-menu-group hermes-context-menu-${group}`}
+              data-hermes-action-group={group}
+              hidden={compactMenu && compactGroup !== group}
+            >
+              {HERMES_CONTEXT_ACTIONS.filter((item) => item.group === group).map((item, index) => {
+                const Icon = HERMES_ACTION_ICONS[item.icon];
+                return (
+                  <ContextMenuItem
+                    className="hermes-context-menu-item"
+                    data-hermes-action-id={item.action}
+                    data-hermes-action-key={item.key}
+                    data-hermes-action-position={index + 1}
+                    key={item.key}
+                    onSelect={() => chooseAction(item)}
+                  >
+                    <span className="hermes-context-menu-icon"><Icon aria-hidden="true" size={17} /></span>
+                    <strong>{t(item.labelKey)}</strong>
+                  </ContextMenuItem>
+                );
+              })}
+            </ContextMenuGroup>
+          </React.Fragment>
+        ))}
+        <p className="hermes-context-menu-hint">{t(compactMenu ? 'guide.menu.mobileHint' : 'guide.menu.keyboardHint')}</p>
+      </ContextMenuContent>
+    </ContextMenu>
+    {menuFeedback && !menuOpen ? (
+      <HermesSpeechBalloon action={menuFeedback.action} compact={compactMenu}>
+        {t(menuFeedback.messageKey)}
+      </HermesSpeechBalloon>
+    ) : null}
+  </>;
 }

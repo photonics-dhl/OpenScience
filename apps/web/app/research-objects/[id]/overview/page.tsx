@@ -5,7 +5,7 @@ import { ArrowRight, CircleDot } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import { useEffect, useState } from 'react';
 
-import { ResearchSurfaceShell, SurfaceState } from '@/components/research/ResearchSurfaceShell';
+import { ResearchSurfaceShell, ResearchSurfaceStateShell } from '@/components/research/ResearchSurfaceShell';
 import { ApiClientError, getResearchObject, listVersions, type ResearchObjectSummary, type SdfCore, type VersionSummary } from '@/lib/api';
 
 export default function ResearchOverviewPage({ params }: { params: { id: string } }) {
@@ -14,8 +14,8 @@ export default function ResearchOverviewPage({ params }: { params: { id: string 
   const [versions, setVersions] = useState<VersionSummary[]>([]);
   const [error, setError] = useState<ApiClientError | Error | null>(null);
   useEffect(() => { void Promise.all([getResearchObject(params.id), listVersions(params.id)]).then(([ro, history]) => { setObject(ro.researchObject); setVersions(history.versions); }).catch(setError); }, [params.id]);
-  if (error) return <SurfaceState detail={error.message} kind={error instanceof ApiClientError && error.status === 403 ? 'forbidden' : 'error'} title={t(error instanceof ApiClientError && error.status === 403 ? 'state.forbiddenTitle' : 'state.errorTitle')} />;
-  if (!object) return <SurfaceState detail={t('state.loadingBody')} kind="loading" title={t('overview.title')} />;
+  if (error) return <ResearchSurfaceStateShell active="overview" detail={error.message} kind={error instanceof ApiClientError && error.status === 403 ? 'forbidden' : 'error'} objectId={params.id} title={t(error instanceof ApiClientError && error.status === 403 ? 'state.forbiddenTitle' : 'state.errorTitle')} />;
+  if (!object) return <ResearchSurfaceStateShell active="overview" detail={t('state.loadingBody')} kind="loading" objectId={params.id} title={t('overview.title')} />;
   const core = object.sdf.core;
   const entries = (['problem', 'insight', 'method', 'results', 'limitations', 'reproducibility'] as const).filter((field) => core[field]?.trim());
   return <ResearchSurfaceShell active="overview" object={object} rail={<div><p className="font-data text-[10px] uppercase tracking-[0.14em] text-os-muted-dark">{t('overview.status')}</p><dl className="mt-5 space-y-4 text-sm"><div><dt className="text-os-muted-dark">{t('overview.visibility')}</dt><dd className="mt-1 text-os-paper">{object.visibility}</dd></div><div><dt className="text-os-muted-dark">{t('overview.history')}</dt><dd className="mt-1 text-os-paper">{versions.length}</dd></div></dl></div>}>

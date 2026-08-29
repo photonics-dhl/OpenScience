@@ -4,7 +4,7 @@ import { GitCompareArrows } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import { useEffect, useState } from 'react';
 
-import { ResearchSurfaceShell, SurfaceState } from '@/components/research/ResearchSurfaceShell';
+import { ResearchSurfaceShell, ResearchSurfaceStateShell } from '@/components/research/ResearchSurfaceShell';
 import { ApiClientError, getResearchObject, getVersionDiff, listVersions, type ResearchObjectSummary, type VersionSummary } from '@/lib/api';
 
 export default function VersionsPage({ params }: { params: { id: string } }) {
@@ -16,8 +16,8 @@ export default function VersionsPage({ params }: { params: { id: string } }) {
   const [error, setError] = useState<ApiClientError | Error | null>(null);
   useEffect(() => { void Promise.all([getResearchObject(params.id), listVersions(params.id)]).then(([ro, history]) => { setObject(ro.researchObject); setVersions(history.versions); }).catch(setError); }, [params.id]);
   async function compare() { if (selected.length !== 2) return; setError(null); try { setDiff((await getVersionDiff(selected[1], selected[0])).diff); } catch (cause) { setError(cause as Error); } }
-  if (error && !object) return <SurfaceState detail={error.message} kind={error instanceof ApiClientError && error.status === 403 ? 'forbidden' : 'error'} title={t('state.errorTitle')} />;
-  if (!object) return <SurfaceState detail={t('state.loadingBody')} kind="loading" title={t('versions.title')} />;
+  if (error && !object) return <ResearchSurfaceStateShell active="versions" detail={error.message} kind={error instanceof ApiClientError && error.status === 403 ? 'forbidden' : 'error'} objectId={params.id} title={t('state.errorTitle')} />;
+  if (!object) return <ResearchSurfaceStateShell active="versions" detail={t('state.loadingBody')} kind="loading" objectId={params.id} title={t('versions.title')} />;
   return <ResearchSurfaceShell active="versions" object={object} actions={<button className="min-h-9 rounded-panel border border-os-rule-dark px-3 text-xs text-os-paper disabled:opacity-40" disabled={selected.length !== 2} onClick={compare}><GitCompareArrows className="mr-2 inline h-4 w-4" />{t('versions.compare')}</button>}>
     <header><p className="font-data text-[10px] uppercase tracking-[0.16em] text-os-vermilion">{t('versions.kicker')}</p><h1 className="mt-3 font-editorial text-5xl font-normal text-os-paper">{t('versions.title')}</h1><p className="mt-4 max-w-2xl text-sm leading-6 text-os-muted-dark">{t('versions.body')}</p></header>
     {error && <p className="mt-6 border-l-2 border-os-vermilion pl-4 text-sm text-os-paper" role="alert">{error.message}</p>}

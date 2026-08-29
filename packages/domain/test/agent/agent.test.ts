@@ -3,8 +3,9 @@ import { createFakePrisma, seedUser } from '../helpers/fakes';
 import { createResearchObject } from '../../src/research-object/research-objects';
 import {
   claimAgentTask, createAgentSession, submitAgentTask, getAgentTask, listAgentTasks, markTaskProgress,
-  recoverUndispatchedAgentTasks,
+  prepareAgentTaskForCrashRecovery, recoverUndispatchedAgentTasks, retryAgentTask,
 } from '../../src/agent/agent';
+import { buildInterestContext } from '../../src/research-intelligence/interest-context';
 
 /** 内存 Redis fake（队列：agent:queue）。 */
 function fakeRedis() {
@@ -51,6 +52,89 @@ async function makeDeps(credit = 100) {
 }
 
 describe('AgentSession/AgentTask（§15 + §16 幂等 + §9.1 配额）', () => {
+  it('retries one failed task without reserving a second AI credit', async () => {
+    const { deps, user, ro, redis, db } = await makeDeps(1);
+    const session = await createAgentSession(deps, { userId: user.id, researchObjectId: ro.id, kind: 'extract' });
+    const task = await submitAgentTask(deps, { sessionId: session.id, userId: user.id, kind: 'sdf.extract', payload: { manuscriptText: 'bounded' } });
+    await markTaskProgress(deps, { taskId: task.id, status: 'running' });
+    await markTaskProgress(deps, { taskId: task.id, status: 'failed', error: 'provider timeout' });
+    const retried = await retryAgentTask(deps, { userId: user.id, taskId: task.id });
+    expect(retried.status).toBe('pending');
+    expect(retried.retryCount).toBe(1);
+    expect(db.agentTasks[0].payload).toEqual({ manuscriptText: 'bounded' });
+    expect(db.agentTasks[0].retryCount).toBe(1);
+    expect(db.usageLedger.filter((entry) => entry.resource === 'ai_credit' && entry.delta < 0)).toHaveLength(1);
+    expect(redis.lists.get('agent:queue')?.filter((id) => id === task.id)).toHaveLength(2);
+    await markTaskProgress(deps, { taskId: task.id, status: 'running' });
+    await markTaskProgress(deps, { taskId: task.id, status: 'failed', error: 'provider timeout again' });
+    await expect(retryAgentTask(deps, { userId: user.id, taskId: task.id })).rejects.toThrow(/already retried/i);
+  });
+
+  it('persists server-owned interest context outside the client payload', async () => {
+    const { deps, user, ro, db } = await makeDeps(1);
+    const session = await createAgentSession(deps, { userId: user.id, researchObjectId: ro.id, kind: 'extract' });
+    const interestContext = buildInterestContext({
+      currentGoal: 'Inspect the evidence',
+      activeResearchObjectId: ro.id,
+    });
+    await submitAgentTask(deps, {
+      sessionId: session.id,
+      userId: user.id,
+      kind: 'sdf.extract',
+      payload: { manuscriptText: 'bounded' },
+      interestContext,
+    });
+
+    expect(db.agentTasks[0].payload).toEqual({ manuscriptText: 'bounded' });
+    expect(db.agentTasks[0].interestContext).toEqual(interestContext);
+  });
+
+  it('snapshots a neutral server context when an internal task caller omits it', async () => {
+    const { deps, user, ro, db } = await makeDeps(1);
+    const session = await createAgentSession(deps, { userId: user.id, researchObjectId: ro.id, kind: 'extract' });
+    await submitAgentTask(deps, { sessionId: session.id, userId: user.id, kind: 'sdf.extract', payload: { manuscriptText: 'bounded' } });
+    expect(db.agentTasks[0].interestContext).toMatchObject({
+      schemaVersion: 1, profileVersion: 0, primaryIdentity: 'reader', activeResearchObjectId: ro.id, profileMissing: true,
+    });
+  });
+
+  it('rejects retry for blocked, artifact-backed, and non-extractor tasks', async () => {
+    const { deps, user, ro, db } = await makeDeps(4);
+    const session = await createAgentSession(deps, { userId: user.id, researchObjectId: ro.id, kind: 'extract' });
+    for (const candidate of [
+      { kind: 'sdf.extract', payload: { manuscriptText: 'safe' }, error: '[blocked] malware detected' },
+      { kind: 'demo.echo', payload: {}, error: 'provider timeout' },
+    ]) {
+      const task = await submitAgentTask(deps, { sessionId: session.id, userId: user.id, ...candidate });
+      await markTaskProgress(deps, { taskId: task.id, status: 'running' });
+      await markTaskProgress(deps, { taskId: task.id, status: 'failed', error: candidate.error });
+      await expect(retryAgentTask(deps, { userId: user.id, taskId: task.id })).rejects.toThrow(/not retryable/i);
+    }
+    const artifactTask = await submitAgentTask(deps, {
+      sessionId: session.id, userId: user.id, kind: 'sdf.extract', payload: { manuscriptText: 'safe' },
+    });
+    db.agentTasks.find((task) => task.id === artifactTask.id).payload = {
+      manuscriptText: 'safe', artifactId: '00000000-0000-0000-0000-000000000001',
+    };
+    await markTaskProgress(deps, { taskId: artifactTask.id, status: 'running' });
+    await markTaskProgress(deps, { taskId: artifactTask.id, status: 'failed', error: 'provider timeout' });
+    await expect(retryAgentTask(deps, { userId: user.id, taskId: artifactTask.id })).rejects.toThrow(/not retryable/i);
+  });
+
+  it('durably reconciles an extractor retry when Redis dispatch fails', async () => {
+    const { deps, user, ro, redis, db } = await makeDeps(1);
+    const session = await createAgentSession(deps, { userId: user.id, researchObjectId: ro.id, kind: 'extract' });
+    const task = await submitAgentTask(deps, { sessionId: session.id, userId: user.id, kind: 'sdf.extract', payload: { manuscriptText: 'bounded' } });
+    await markTaskProgress(deps, { taskId: task.id, status: 'running' });
+    await markTaskProgress(deps, { taskId: task.id, status: 'failed', error: 'provider timeout' });
+    const originalLpush = redis.lpush;
+    redis.lpush = async () => { throw new Error('redis unavailable'); };
+    await expect(retryAgentTask(deps, { userId: user.id, taskId: task.id })).rejects.toThrow(/redis unavailable/);
+    expect(db.agentTasks[0]).toMatchObject({ status: 'pending', dispatchedAt: null, retryCount: 1 });
+    redis.lpush = originalLpush;
+    expect(await recoverUndispatchedAgentTasks(deps)).toBe(1);
+    expect(redis.lists.get('agent:queue')?.filter((id) => id === task.id)).toHaveLength(2);
+  });
   it('建会话 + 提交任务入队 + 进度查询', async () => {
     const { deps, user, ro, redis } = await makeDeps();
     const session = await createAgentSession(deps, { userId: user.id, researchObjectId: ro.id, kind: 'extract' });
@@ -129,8 +213,102 @@ describe('AgentSession/AgentTask（§15 + §16 幂等 + §9.1 配额）', () => 
     const { deps, user, ro } = await makeDeps();
     const session = await createAgentSession(deps, { userId: user.id, researchObjectId: ro.id, kind: 'extract' });
     const task = await submitAgentTask(deps, { sessionId: session.id, userId: user.id, kind: 'demo.echo', payload: {} });
-    expect((await claimAgentTask(deps, task.id))?.status).toBe('running');
+    expect(await claimAgentTask(deps, task.id)).toMatchObject({ status: 'running', executionAttempt: 1 });
     expect(await claimAgentTask(deps, task.id)).toBeNull();
+  });
+
+  it('幂等键不能重放不同的 server interest context', async () => {
+    const { deps, user, ro } = await makeDeps();
+    const session = await createAgentSession(deps, { userId: user.id, researchObjectId: ro.id, kind: 'extract' });
+    const firstContext = buildInterestContext({ currentGoal: 'Goal A', activeResearchObjectId: ro.id });
+    const secondContext = buildInterestContext({ currentGoal: 'Goal B', activeResearchObjectId: ro.id });
+    await submitAgentTask(deps, { sessionId: session.id, userId: user.id, kind: 'demo.echo', payload: {}, interestContext: firstContext, idempotencyKey: 'context-key' });
+    await expect(submitAgentTask(deps, {
+      sessionId: session.id, userId: user.id, kind: 'demo.echo', payload: {}, interestContext: secondContext, idempotencyKey: 'context-key',
+    })).rejects.toThrow(/幂等键/);
+  });
+
+  it('profile changes do not invalidate an otherwise identical idempotent replay', async () => {
+    const { deps, user, ro, db } = await makeDeps();
+    const session = await createAgentSession(deps, { userId: user.id, researchObjectId: ro.id, kind: 'extract' });
+    const input = { sessionId: session.id, userId: user.id, kind: 'demo.echo', payload: {}, idempotencyKey: 'profile-change-key' };
+    const first = await submitAgentTask(deps, input);
+    db.researchIdentityProfiles.push({
+      userId: user.id, identities: ['author'], primaryIdentity: 'author', disciplines: ['physics'], methods: [], topics: ['optics'],
+      languages: ['en'], acceptedSignals: [], rejectedSignals: [], profileVersion: 2,
+    });
+    await expect(submitAgentTask(deps, input)).resolves.toMatchObject({ id: first.id });
+  });
+
+  it('replays a pre-migration null-context task only when no explicit goal or claim was added', async () => {
+    const { deps, user, ro, db } = await makeDeps();
+    const session = await createAgentSession(deps, { userId: user.id, researchObjectId: ro.id, kind: 'extract' });
+    const input = { sessionId: session.id, userId: user.id, kind: 'demo.echo', payload: {}, idempotencyKey: 'legacy-null-context' };
+    const first = await submitAgentTask(deps, input);
+    db.agentTasks[0].interestContext = null;
+    await expect(submitAgentTask(deps, input)).resolves.toMatchObject({ id: first.id });
+    await expect(submitAgentTask(deps, {
+      ...input, interestContext: buildInterestContext({ currentGoal: 'new goal', activeResearchObjectId: ro.id }),
+    })).rejects.toThrow(/幂等键/);
+  });
+
+  it('replays a pre-migration workspace guide when its persisted payload proves the same goal', async () => {
+    const { deps, user, ro, db } = await makeDeps();
+    const session = await createAgentSession(deps, { userId: user.id, researchObjectId: ro.id, kind: 'workspace.guide' });
+    const payload = {
+      goal: 'Map this evidence', locale: 'en', route: 'research-object-edit', target: 'sdf-evidence',
+      context: { tasks: [], researchObjects: [] },
+    };
+    const interestContext = buildInterestContext({ currentGoal: payload.goal, activeResearchObjectId: ro.id });
+    const input = {
+      sessionId: session.id, userId: user.id, kind: 'workspace.guide', payload, interestContext,
+      idempotencyKey: 'legacy-workspace-guide',
+    };
+    const first = await submitAgentTask(deps, input);
+    db.agentTasks[0].interestContext = null;
+    await expect(submitAgentTask(deps, input)).resolves.toMatchObject({ id: first.id });
+    await expect(submitAgentTask(deps, {
+      ...input, payload: { ...payload, goal: 'Different goal' },
+      interestContext: buildInterestContext({ currentGoal: 'Different goal', activeResearchObjectId: ro.id }),
+    })).rejects.toThrow(/幂等键/);
+  });
+
+  it('preserves operational database errors while resolving a new task context', async () => {
+    const { deps, user, ro } = await makeDeps();
+    const session = await createAgentSession(deps, { userId: user.id, researchObjectId: ro.id, kind: 'extract' });
+    const operational = new Error('db unavailable');
+    const prisma = (deps as { prisma: { researchIdentityProfile: { findUnique: (args: unknown) => Promise<unknown> } } }).prisma;
+    prisma.researchIdentityProfile.findUnique = async () => { throw operational; };
+    await expect(submitAgentTask(deps, {
+      sessionId: session.id, userId: user.id, kind: 'demo.echo', payload: {},
+    })).rejects.toBe(operational);
+  });
+
+  it('rejects terminal writes from a stale worker execution epoch', async () => {
+    const { deps, user, ro } = await makeDeps();
+    const session = await createAgentSession(deps, { userId: user.id, researchObjectId: ro.id, kind: 'extract' });
+    const task = await submitAgentTask(deps, {
+      sessionId: session.id, userId: user.id, kind: 'demo.echo', payload: {},
+    });
+    const first = await claimAgentTask(deps, task.id);
+    expect(first?.executionAttempt).toBe(1);
+    expect(await prepareAgentTaskForCrashRecovery(deps, task.id)).toBe(true);
+    const second = await claimAgentTask(deps, task.id);
+    expect(second?.executionAttempt).toBe(2);
+
+    await expect(markTaskProgress(deps, {
+      taskId: task.id,
+      status: 'failed',
+      error: 'stale worker failed',
+      expectedExecutionAttempt: first!.executionAttempt,
+    })).rejects.toThrow(/新的 worker/);
+    await expect(markTaskProgress(deps, {
+      taskId: task.id,
+      status: 'succeeded',
+      progress: 100,
+      result: { ok: true },
+      expectedExecutionAttempt: second!.executionAttempt,
+    })).resolves.toMatchObject({ status: 'succeeded', executionAttempt: 2 });
   });
 
   it('任务幂等键不能跨 Hermes 会话重放', async () => {
@@ -260,10 +438,33 @@ describe('AgentSession/AgentTask（§15 + §16 幂等 + §9.1 配额）', () => 
     expect(db.agentTasks).toHaveLength(0);
   });
 
+  it('rejects review.analyze when the target Version belongs to another research object', async () => {
+    const { deps, db, user, ro } = await makeDeps(1);
+    const session = await createAgentSession(deps, { userId: user.id, researchObjectId: ro.id, kind: 'review' });
+    db.researchObjects.push({
+      id: 'ro-other', workspaceId: 'ws-1', title: 'Other RO', createdBy: user.id,
+      status: 'draft', visibility: 'private', version: 1, createdAt: new Date(), updatedAt: new Date(),
+    });
+    db.versions.push({
+      id: 'version-other', researchObjectId: 'ro-other', commitId: 'commit-other',
+      versionNo: 1, status: 'draft', createdAt: new Date(),
+    });
+
+    await expect(submitAgentTask(deps, {
+      sessionId: session.id,
+      userId: user.id,
+      kind: 'review.analyze',
+      payload: { versionId: 'version-other', coreText: 'Private text from another RO' },
+      dispatch: false,
+    })).rejects.toThrow(/Version.*研究对象/i);
+    expect(db.agentTasks).toHaveLength(0);
+    expect(db.usageLedger.filter((entry) => entry.delta < 0)).toHaveLength(0);
+  });
+
   it('任务状态机：非法迁移拒绝 + 终态幂等', async () => {
     const { deps, user, ro, db } = await makeDeps();
     const session = await createAgentSession(deps, { userId: user.id, researchObjectId: ro.id, kind: 'extract' });
-    const task = await submitAgentTask(deps, { sessionId: session.id, userId: user.id, kind: 'x', payload: {} });
+    const task = await submitAgentTask(deps, { sessionId: session.id, userId: user.id, kind: 'demo.echo', payload: {} });
     // pending → succeeded 非法（需经 running）
     await expect(
       markTaskProgress(deps, { taskId: task.id, status: 'succeeded' }),
@@ -277,6 +478,16 @@ describe('AgentSession/AgentTask（§15 + §16 幂等 + §9.1 配额）', () => 
     const replay = await markTaskProgress(deps, { taskId: task.id, status: 'running', progress: 10 });
     expect(replay.status).toBe('succeeded');
     expect(replay.progress).toBe(100);
+  });
+
+  it('rejects an unknown task kind before persistence or credit reservation', async () => {
+    const { deps, user, ro, db } = await makeDeps(1);
+    const session = await createAgentSession(deps, { userId: user.id, researchObjectId: ro.id, kind: 'extract' });
+    await expect(submitAgentTask(deps, {
+      sessionId: session.id, userId: user.id, kind: 'not.registered', payload: {},
+    })).rejects.toThrow(/不支持/);
+    expect(db.agentTasks).toHaveLength(0);
+    expect(db.usageLedger.filter((entry) => entry.delta < 0)).toHaveLength(0);
   });
 
   it('永久阻断错误同步为 failed_blocked，不允许普通 retry', async () => {

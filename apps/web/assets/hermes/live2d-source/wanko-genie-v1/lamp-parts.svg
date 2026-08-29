@@ -1,0 +1,95 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 2048 2048" width="2048" height="2048">
+  <defs>
+    <linearGradient id="enamel" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#1f3977"/>
+      <stop offset="0.42" stop-color="#132458"/>
+      <stop offset="1" stop-color="#091434"/>
+    </linearGradient>
+    <linearGradient id="enamel-soft" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#294887"/>
+      <stop offset="1" stop-color="#0d1b45"/>
+    </linearGradient>
+    <linearGradient id="gold" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#b96b31"/>
+      <stop offset="0.22" stop-color="#ffd486"/>
+      <stop offset="0.52" stop-color="#e6a24a"/>
+      <stop offset="0.78" stop-color="#ffe0a0"/>
+      <stop offset="1" stop-color="#a85b29"/>
+    </linearGradient>
+    <radialGradient id="mouth-glow" cx="50%" cy="40%" r="62%">
+      <stop offset="0" stop-color="#fff4ca" stop-opacity="0.96"/>
+      <stop offset="0.34" stop-color="#ffc96e" stop-opacity="0.78"/>
+      <stop offset="0.72" stop-color="#5bc7ff" stop-opacity="0.24"/>
+      <stop offset="1" stop-color="#5bc7ff" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="vapor-blue" x1="0" y1="1" x2="0.72" y2="0">
+      <stop offset="0" stop-color="#ffd687" stop-opacity="0.82"/>
+      <stop offset="0.38" stop-color="#83d9ff" stop-opacity="0.7"/>
+      <stop offset="1" stop-color="#678dff" stop-opacity="0"/>
+    </linearGradient>
+  </defs>
+
+  <g id="rear-handle" data-export="rear-handle.png" transform="translate(0 250)">
+    <path d="M1408 1089 C1503 986 1658 1007 1683 1121 C1704 1217 1626 1306 1536 1287 C1472 1274 1460 1205 1505 1171 C1542 1143 1596 1161 1605 1208 C1614 1254 1571 1292 1528 1278" fill="none" stroke="#512b23" stroke-width="76" stroke-linecap="round" stroke-linejoin="round"/>
+    <path d="M1408 1089 C1503 986 1658 1007 1683 1121 C1704 1217 1626 1306 1536 1287 C1472 1274 1460 1205 1505 1171 C1542 1143 1596 1161 1605 1208 C1614 1254 1571 1292 1528 1278" fill="none" stroke="url(#enamel)" stroke-width="48" stroke-linecap="round" stroke-linejoin="round"/>
+    <path d="M1450 1054 C1536 988 1651 1035 1657 1124" fill="none" stroke="url(#gold)" stroke-width="12" stroke-linecap="round"/>
+  </g>
+
+  <g id="rear-spout" data-export="rear-spout.png" transform="translate(0 250)">
+    <path d="M688 1116 C605 1111 551 1076 494 1044 C436 1011 384 1015 326 985 C297 970 299 942 333 929 C397 906 487 947 553 994 C612 1036 655 1053 731 1064 L710 1122 Z" fill="url(#enamel-soft)" stroke="#512b23" stroke-width="27" stroke-linejoin="round"/>
+    <path d="M329 947 C389 928 477 962 557 1015" fill="none" stroke="url(#gold)" stroke-width="15" stroke-linecap="round"/>
+    <path d="M316 948 C278 931 244 924 211 931" fill="none" stroke="#5bc7ff" stroke-width="12" stroke-linecap="round" data-navigation-trail="travel-only"/>
+    <path d="M316 948 C278 931 244 924 211 931" fill="none" stroke="#d7f4ff" stroke-opacity="0.54" stroke-width="4" stroke-linecap="round" data-navigation-trail-highlight="true"/>
+  </g>
+
+  <g id="rear-shell" data-export="rear-shell.png" transform="translate(0 250)">
+    <path d="M660 1023 C793 973 1259 973 1390 1023 L1376 1095 C1227 1138 813 1138 674 1095 Z" fill="url(#enamel-soft)" stroke="#512b23" stroke-width="27" stroke-linejoin="round"/>
+    <path d="M713 1024 C846 990 1211 990 1339 1024" fill="none" stroke="#5bc7ff" stroke-opacity="0.18" stroke-width="13" stroke-linecap="round"/>
+  </g>
+
+  <g id="rear-vapor" data-export="rear-vapor.png" transform="translate(0 250)">
+    <path d="M772 1047 C739 1017 750 975 796 951 C847 924 879 948 900 982" fill="none" stroke="url(#vapor-blue)" stroke-width="78" stroke-linecap="round" opacity="0.42"/>
+    <path d="M1259 1049 C1294 1018 1287 975 1245 948 C1199 919 1162 940 1138 974" fill="none" stroke="url(#vapor-blue)" stroke-width="74" stroke-linecap="round" opacity="0.38"/>
+    <path d="M778 1036 C765 1003 785 975 820 963" fill="none" stroke="#ffe0a0" stroke-opacity="0.36" stroke-width="13" stroke-linecap="round"/>
+    <path d="M1252 1038 C1265 1004 1243 975 1211 961" fill="none" stroke="#bdeaff" stroke-opacity="0.34" stroke-width="12" stroke-linecap="round"/>
+  </g>
+
+  <g id="opening-glow" data-export="opening-glow.png" transform="translate(0 250)">
+    <ellipse cx="1024" cy="1037" rx="353" ry="69" fill="url(#mouth-glow)" opacity="0.7"/>
+    <ellipse cx="1024" cy="1037" rx="320" ry="48" fill="none" stroke="#ffe0a0" stroke-opacity="0.7" stroke-width="12"/>
+  </g>
+
+  <g id="front-shell" data-export="front-shell.png" transform="translate(0 250)">
+    <path d="M528 1069 C552 1161 596 1242 670 1307 C732 1361 811 1395 905 1415 L879 1453 C925 1482 1125 1482 1172 1453 L1146 1415 C1244 1395 1322 1360 1385 1304 C1454 1243 1488 1163 1500 1069 C1265 1109 759 1109 528 1069 Z" fill="url(#enamel)" stroke="#512b23" stroke-width="30" stroke-linejoin="round"/>
+    <path d="M609 1148 C650 1256 758 1354 914 1390 C1078 1428 1260 1381 1374 1278" fill="none" stroke="#5bc7ff" stroke-opacity="0.13" stroke-width="19" stroke-linecap="round"/>
+  </g>
+
+  <g id="brand" data-export="brand.png" data-brand-story="sdf-evolution" transform="translate(0 190)">
+    <path d="M750 1225 C842 1224 884 1178 955 1175 C1031 1172 1056 1134 1122 1134 C1203 1134 1241 1182 1318 1211" fill="none" stroke="#5bc7ff" stroke-opacity="0.82" stroke-width="11" stroke-linecap="round" data-hermes-route="branch-merge"/>
+    <path d="M750 1225 C840 1226 889 1268 966 1293 C1051 1320 1145 1300 1212 1260 C1258 1233 1282 1218 1318 1211" fill="none" stroke="#5bc7ff" stroke-opacity="0.82" stroke-width="11" stroke-linecap="round" data-hermes-route="branch-merge"/>
+    <path d="M929 1179 C979 1203 1014 1235 1051 1266" fill="none" stroke="#8cdbff" stroke-opacity="0.72" stroke-width="8" stroke-linecap="round"/>
+    <path d="M1122 1134 C1132 1181 1154 1210 1195 1225" fill="none" stroke="#8cdbff" stroke-opacity="0.72" stroke-width="8" stroke-linecap="round"/>
+    <rect x="710" y="1193" width="58" height="67" rx="27" fill="#08132d" stroke="#5bc7ff" stroke-width="10" data-brand-open-centre="true"/>
+    <circle cx="945" cy="1176" r="18" fill="#5bc7ff" stroke="#e5f8ff" stroke-width="6" data-brand-node="blue" data-sdf-node="problem"/>
+    <circle cx="1049" cy="1144" r="18" fill="#5bc7ff" stroke="#e5f8ff" stroke-width="6" data-brand-node="blue" data-sdf-node="insight"/>
+    <circle cx="1051" cy="1266" r="18" fill="#5bc7ff" stroke="#e5f8ff" stroke-width="6" data-brand-node="blue" data-sdf-node="method"/>
+    <circle cx="1148" cy="1140" r="18" fill="#5bc7ff" stroke="#e5f8ff" stroke-width="6" data-brand-node="blue" data-sdf-node="results"/>
+    <circle cx="1195" cy="1225" r="18" fill="#5bc7ff" stroke="#e5f8ff" stroke-width="6" data-brand-node="blue" data-sdf-node="limitations"/>
+    <circle cx="1162" cy="1290" r="18" fill="#5bc7ff" stroke="#e5f8ff" stroke-width="6" data-brand-node="blue" data-sdf-node="reproducibility"/>
+    <path d="M1318 1211 L1361 1211" stroke="#ffbd73" stroke-width="9" stroke-linecap="round"/>
+    <circle cx="1384" cy="1211" r="23" fill="#ff6b2e" stroke="#fff0ca" stroke-width="7" data-diff-node="true"/>
+  </g>
+
+  <g id="front-rim" data-export="front-rim.png" transform="translate(0 250)">
+    <path d="M650 1025 C789 975 1263 975 1401 1025 L1381 1085 C1229 1124 815 1124 668 1085 Z" fill="url(#gold)" stroke="#512b23" stroke-width="26" stroke-linejoin="round"/>
+    <path d="M689 1028 C833 993 1216 993 1360 1028 C1271 1062 781 1062 689 1028 Z" fill="#091434" stroke="#f6c66f" stroke-width="13"/>
+    <path d="M730 1038 C865 1056 1181 1056 1318 1038" fill="none" stroke="#fff0bf" stroke-opacity="0.68" stroke-width="8" stroke-linecap="round"/>
+  </g>
+
+  <g id="front-highlight" data-export="front-highlight.png" transform="translate(0 250)">
+    <path d="M604 1147 C655 1272 760 1364 910 1390" fill="none" stroke="#eaf7ff" stroke-opacity="0.16" stroke-width="18" stroke-linecap="round"/>
+    <path d="M1404 1137 C1387 1196 1362 1247 1328 1291" fill="none" stroke="#ffd88a" stroke-opacity="0.38" stroke-width="13" stroke-linecap="round"/>
+    <circle cx="1284" cy="1350" r="8" fill="#ffd27c" opacity="0.58"/>
+    <circle cx="1326" cy="1312" r="6" fill="#8edfff" opacity="0.52"/>
+  </g>
+</svg>

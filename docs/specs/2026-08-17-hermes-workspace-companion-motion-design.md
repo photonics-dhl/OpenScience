@@ -1,13 +1,18 @@
 # Hermes Workspace Companion Motion Design
 
-Status: **CURRENT — user-approved for direct implementation on 2026-08-17; final visual acceptance pending**
+Status: **IMPLEMENTED FOUNDATION / VISUAL RENDERER SUPERSEDED on 2026-08-19**
+
+CURRENT visual renderer design:
+`docs/specs/2026-08-19-hermes-wanko-live2d-design.md`. This document remains the
+implemented guide, anchor, travel, dock and diff foundation; its OGL/mesh visual
+route is historical and must not be restored as the active candidate.
 
 Supersedes:
 
 - `docs/specs/2026-08-16-hermes-articulated-mesh-pet-design.md`
 - `docs/specs/2026-08-16-hermes-contextual-guide-design.md`
 
-The superseded documents remain historical implementation evidence. This document is the only CURRENT product and renderer design for Hermes motion, contextual guidance, and Workspace presence.
+The superseded documents remain historical implementation evidence.
 
 ## 1. Goal and invariant
 

@@ -3,7 +3,7 @@
 import { useEffect, useReducer, useState } from 'react';
 import { useTranslations } from 'next-intl';
 import { getResearchObject, type ResearchObjectSummary } from '../../../../lib/api';
-import { ResearchSurfaceShell, SurfaceState } from '../../../../components/research/ResearchSurfaceShell';
+import { ResearchSurfaceShell, ResearchSurfaceStateShell } from '../../../../components/research/ResearchSurfaceShell';
 import { collabReducer, initialCollabState } from '../../../../lib/collab-state';
 import CollabTabs from '../../../../components/collab/CollabTabs';
 import IssueList, { IssueDetail } from '../../../../components/collab/IssueList';
@@ -53,12 +53,12 @@ export default function CollabPage({ params }: { params: { id: string } }) {
     return () => { cancelled = true; };
   }, [roId]);
 
-  if (!object && !error) return <SurfaceState detail={t('loading')} kind="loading" title={t('title')} />;
-  if (!object) return <SurfaceState detail={error ?? t('error')} kind="error" title={t('title')} />;
+  if (!object && !error) return <ResearchSurfaceStateShell active="collaboration" detail={t('loading')} kind="loading" objectId={params.id} title={t('title')} />;
+  if (!object) return <ResearchSurfaceStateShell active="collaboration" detail={error ?? t('error')} kind="error" objectId={params.id} title={t('title')} />;
   return (
     <ResearchSurfaceShell active="collaboration" object={object}>
       <div className="collab-page">
-      <header className="mb-8 border-b border-os-rule-dark pb-6"><p className="font-data text-[10px] uppercase tracking-[0.16em] text-os-vermilion">RO / {t('title')}</p><h1 className="mt-3 font-editorial text-5xl font-normal text-os-paper">{t('title')}</h1><p className="mt-4 max-w-2xl text-sm leading-6 text-os-muted-dark">{t('description')}</p></header>
+      <header className="mb-8 border-b border-os-rule-dark pb-6"><p data-reading-role="caption" className="font-data uppercase tracking-[0.1em] text-os-vermilion">RO / {t('title')}</p><h1 className="mt-3 font-editorial text-5xl font-normal text-os-paper">{t('title')}</h1><p data-reading-role="body" className="mt-4 max-w-2xl text-base leading-[var(--leading-body)] text-os-muted-dark">{t('description')}</p></header>
       {error && <div className="error-panel" role="alert">{error}</div>}
       <CollabTabs tab={state.tab} onChange={(tab) => dispatch({ type: 'set_tab', tab })} />
 

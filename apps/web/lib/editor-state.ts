@@ -15,7 +15,7 @@ export interface EditorState {
 export type EditorAction =
   | { type: 'init'; core: SdfCore; version: number }
   | { type: 'edit_field'; field: keyof Omit<SdfCore, 'schemaVersion'>; value: string }
-  | { type: 'saved' }
+  | { type: 'saved'; version: number }
   | { type: 'reset' };
 
 export function editorReducer(state: EditorState, action: EditorAction): EditorState {
@@ -25,7 +25,7 @@ export function editorReducer(state: EditorState, action: EditorAction): EditorS
     case 'edit_field':
       return { ...state, core: { ...state.core, [action.field]: action.value }, dirty: true };
     case 'saved':
-      return { ...state, dirty: false, lastSavedAt: Date.now() };
+      return { ...state, version: action.version, dirty: false, lastSavedAt: Date.now() };
     case 'reset':
       return { ...state, dirty: false };
     default:

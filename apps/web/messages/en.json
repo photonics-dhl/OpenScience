@@ -15,7 +15,20 @@
     "skipToContent": "Skip to research content",
     "primaryNavigation": "Primary navigation"
   },
+  "productNavigation": {
+    "dashboard": "Research desk",
+    "dashboardShort": "Desk",
+    "explore": "Explore",
+    "exploreShort": "Explore",
+    "create": "New research",
+    "createShort": "New RO",
+    "settings": "Settings",
+    "settingsShort": "Settings"
+  },
   "editor": {
+    "common": {
+      "cancel": "Cancel"
+    },
     "title": "SDF Editor",
     "outline": "Outline",
     "versions": "Versions",
@@ -35,6 +48,9 @@
     "edit": "Edit",
     "applySuggestion": "Apply",
     "dismissSuggestion": "Dismiss",
+    "editSuggestion": "Edit suggestion",
+    "cancelEditSuggestion": "Cancel edit",
+    "applyEditedChange": "Apply edited change",
     "suggestionApplied": "Suggestion applied to draft",
     "suggestionDismissed": "Suggestion dismissed",
     "saveToSdf": "Save to SDF",
@@ -111,6 +127,10 @@
     "reviewCompleteChange": "Review the complete change.",
     "returnToProposal": "Return",
     "applyReviewedChange": "Apply reviewed change",
+    "missingEvidenceTitle": "Evidence missing · {field}",
+    "missingEvidenceDescription": "No supporting evidence was found for {field}. Hermes left this field empty rather than inventing content.",
+    "missingResultsEvidence": "No result evidence was found. Hermes left Results empty rather than inventing a finding.",
+    "acknowledgeMissingEvidence": "Acknowledge and continue",
     "hints": {
       "problem": "Define the scientific question and its boundary.",
       "insight": "State the central insight without promotional language.",
@@ -313,7 +333,8 @@
       "explore": "Explore",
       "create": "Create",
       "about": "About",
-      "login": "Log in"
+      "login": "Log in",
+      "desk": "Research desk"
     },
     "hero": {
       "kicker": "Research, as a living object",
@@ -416,6 +437,37 @@
       }
     }
   },
+  "researchIdentity": {
+    "title": "Your research identity",
+    "disclosure": "Hermes quietly adapts its priorities from this profile. There is no mode switch, and it never infers sensitive traits or off-site behavior. You can change this in Settings.",
+    "primary": "Primary",
+    "identities": {
+      "reader": "Reader",
+      "author": "Author",
+      "reviewer": "Reviewer",
+      "editor": "Editor",
+      "data_steward": "Data steward",
+      "developer": "Developer",
+      "student": "Student"
+    },
+    "disciplines": "Disciplines",
+    "disciplinesHint": "e.g. optics, materials science",
+    "methods": "Methods",
+    "methodsHint": "e.g. pump-probe, finite elements",
+    "topics": "Topics of interest",
+    "topicsHint": "e.g. ultrafast science, open data",
+    "languages": "Reading languages",
+    "languagesHint": "e.g. English, 中文",
+    "save": "Save research identity",
+    "saving": "Saving…",
+    "saved": "Research identity updated",
+    "conflict": "This profile changed elsewhere. The latest version has been reloaded; review it and save again.",
+    "writeError": "The research identity could not be updated.",
+    "accepted": "Accepted interest signals",
+    "rejected": "Excluded interest signals",
+    "accept": "Accept",
+    "reject": "Exclude"
+  },
   "auth": {
     "identity": {
       "skipToForm": "Skip to identity form",
@@ -473,6 +525,7 @@
     "loading": "Restoring your research context…",
     "context": {
       "navigation": "Dashboard utilities",
+      "skip": "Skip to research workspace",
       "help": "Help",
       "settings": "Settings"
     },
@@ -493,6 +546,7 @@
     },
     "hermes": {
       "title": "Hermes tasks",
+      "liveQueue": "Hermes / live queue",
       "empty": "No tasks need your attention.",
       "review": "Review evidence",
       "retry": "Retry task",
@@ -508,6 +562,43 @@
         "neutral": { "title": "What would you like to advance today?", "body": "I will understand the goal first, then propose a verifiable and actionable research path." },
       "invoke": "Invoke Hermes",
       "eyebrow": "Hermes / contextual guide",
+      "menu": {
+        "trigger": "Hermes: click for the assistant; right-click or long-press for actions",
+        "label": "Hermes action menu",
+        "eyebrow": "Hermes · with you",
+        "title": "What shall we do?",
+        "evidence": "Inspect evidence and sources",
+        "evidenceNote": "Return to this research object's evidence ledger",
+        "explore": "Open the research index",
+        "exploreNote": "Continue through public research records",
+        "quiet": "Read quietly with me",
+        "quietNote": "Put reminders aside and stay in the margin",
+        "quietFeedback": "I’m here. Let’s think slowly.",
+        "companion": "Companion",
+        "groups": { "companion": "With Hermes", "research": "Research tools" },
+        "intro": {
+          "presence": "I’m here. I’ve kept your place.",
+          "actionable": "There is evidence ready for your review.",
+          "continue": "Your latest research is ready to continue.",
+          "neutral": "We can begin with whatever you want to understand."
+        },
+        "actions": {
+          "greet": { "label": "Say hello", "feedback": { "one": "Hello — I’m right here.", "two": "There you are. I kept your place.", "three": "Hi. What are we curious about today?" } },
+          "encourage": { "label": "Encourage me", "feedback": { "one": "You’ve come this far. Let’s take one more step.", "two": "The difficult part is moving. So are you.", "three": "One careful step is still progress." } },
+          "think": { "label": "Think together", "feedback": { "one": "Let’s pause and sort the clues together.", "two": "Give me a moment — these pieces do connect.", "three": "Let’s hold the question still and look again." } },
+          "listen": { "label": "Listen to me", "feedback": { "one": "I’m listening. Take your time.", "two": "Go on. I’m following the thread.", "three": "Tell me the part that still feels unresolved." } },
+          "stretch": { "label": "Take a stretch", "feedback": { "one": "Stretch with me — let your shoulders soften.", "two": "Up we go. Give your back a little room.", "three": "A small stretch, then we return with fresh eyes." } },
+          "rest": { "label": "Rest a moment", "feedback": { "one": "Rest a moment. I’ll keep your place.", "two": "We can be quiet. Nothing here will run away.", "three": "Close your eyes for a breath; I’ll watch the page." } },
+          "celebrate": { "label": "Mark this step", "feedback": { "one": "This step is done. Let’s celebrate it.", "two": "That deserves a proper little victory.", "three": "We moved the work forward — mark this moment." } },
+          "read-together": { "label": "Read with me", "feedback": { "one": "We’re here. I’ll read the next passage with you.", "two": "Let’s follow this paragraph one claim at a time.", "three": "I’ll stay with the text; you set the pace." } },
+          "continue": { "label": "Continue this step", "feedback": { "one": "Back to our last step — let’s continue.", "two": "I found our place. We can carry on from here.", "three": "The next step is ready when you are." } },
+          "evidence": { "label": "Review evidence", "feedback": { "one": "Hold this conclusion — let’s check its evidence.", "two": "Let’s see which source actually supports this claim.", "three": "Evidence first. Then we decide what the result means." } },
+          "sources": { "label": "Trace sources", "feedback": { "one": "Let’s trace the citation back to its source.", "two": "I’ll follow the reference trail with you.", "three": "Let’s find where this claim first entered the record." } },
+          "compare": { "label": "Compare versions", "feedback": { "one": "Let’s place the versions side by side and inspect the differences.", "two": "I’ll line up the changes so nothing slips past us.", "three": "Same research, two moments — let’s see what changed." } }
+        },
+        "keyboardHint": "Shift+F10 or Menu key to open · Esc to close",
+        "mobileHint": "Long-press Hermes to open · tap still enters the assistant"
+      },
       "dialogLabel": "Hermes research guide",
         "title": "Start with the goal. I will guide the route.",
         "close": "Close Hermes",
@@ -539,6 +630,7 @@
       }
     },
     "errors": {
+      "kicker": "System / interrupted",
       "title": "Dashboard unavailable",
       "load": "We could not restore your research context.",
       "retry": "Reload"
@@ -561,7 +653,34 @@
     "evidenceBody": "The original artifact, extraction proposal and your decisions remain separate and traceable.",
     "stepStore": "Store source artifacts with content hashes",
     "stepParse": "Locate claims, methods and source anchors",
-    "stepConfirm": "You confirm every SDF write"
+    "stepConfirm": "You confirm every SDF write",
+    "navigationLabel": "Research Object tools",
+    "skipLabel": "Skip to Research Object creation",
+    "progressLabel": "Creation progress",
+    "identityStep": "Research identity",
+    "evidenceStep": "Evidence source",
+    "eyebrow": "OpenScience / Research Object"
+  },
+  "hermesReview": {
+    "missingTask": "The task identifier is missing.",
+    "back": "Back to Dashboard",
+    "eyebrow": "Hermes / Evidence review",
+    "title": "Confirm your research structure",
+    "description": "Hermes proposes changes but never writes for you. Review all six SDF fields; only your confirmation creates a new traceable version.",
+    "loading": "Reading the material and suggestions…",
+    "loadError": "Unable to load the Hermes suggestion",
+    "confirmError": "Confirmation failed. Refresh and try again.",
+    "fieldLabel": "Review SDF fields",
+    "taskState": "Task status: {state}",
+    "boundary": "Suggestion boundary",
+    "boundaryNote": "Hermes stays quiet here. Right-click or long-press for the current evidence tools.",
+    "saved": "Confirmed and recorded in a new version.",
+    "ready": "All six fields are complete and ready to confirm.",
+    "incomplete": "Complete all fields before confirming.",
+    "saving": "Recording…",
+    "confirmed": "Confirmed",
+    "confirm": "Confirm and create version",
+    "marginLabel": "Hermes research margin"
   },
   "ingestion": {
     "status": {
@@ -617,6 +736,7 @@
     },
     "intake": {
       "title": "Arrange the evidence set",
+      "stepLabel": "02 / Evidence intake",
       "localOnly": "Files remain on this device until you explicitly create the Research Object.",
       "dropTitle": "Drop source material into the working set",
       "formats": "PDF · Word · TeX/ZIP · Markdown · images · CSV/TSV · JSON/YAML · Notebook · Python/R",
@@ -741,6 +861,8 @@
   },
   "hermesCompanion": {
     "dismiss": "Dismiss Hermes guidance",
+    "dismissSpeech": "Dismiss Hermes note",
+    "guideLabel": "Field note",
     "explain": "Explain",
     "draft": "Draft",
     "check": "Check",
@@ -748,7 +870,26 @@
     "disableMotion": "Reduce Hermes motion",
     "startingMotion": "Starting Hermes motion",
     "retryMotion": "Retry Hermes motion",
+    "presenceControl": {
+      "label": "Hermes size and presence",
+      "original": "Original · 360px",
+      "compact": "Compact · 200px",
+      "quiet": "Quiet reactions"
+    },
     "takeMeThere": "Take me there",
+    "performance": {
+      "tones": { "curious": "Noticing", "focused": "Checking", "friendly": "Alongside", "reflective": "Thinking" },
+      "capCheck": { "one": "Hat straight. Thought steady.", "two": "Let me steady the thread." },
+      "earPerk": { "one": "I heard a new question.", "two": "That clue just moved." },
+      "lampListen": { "one": "There is an echo in the lamp.", "two": "The evidence is gathering." },
+      "happyWiggle": { "one": "That step is solid.", "two": "Good progress. Keep going." },
+      "thinkingPause": { "one": "Give me a moment to think.", "two": "Let us not conclude too soon." },
+      "evidenceCheck": { "one": "Evidence first, aligned.", "two": "I am checking the source." },
+      "observe": { "one": "There may be a clue over there.", "two": "One more look at the context." },
+      "possibleIssue": { "one": "One link is still missing.", "two": "This sentence needs evidence." },
+      "read": { "one": "I am reading the evidence chain.", "two": "Let us see what the source says." },
+      "success": { "one": "This step now closes cleanly.", "two": "Evidence and wording align." }
+    },
     "targets": {
       "ro-title": "Give this research object a precise title.",
       "source-import": "Bring the source evidence in here.",
@@ -774,6 +915,106 @@
       "sdf-limitations": "Make sample, method, generalisation, and unverified boundaries explicit.",
       "hermes-diff": "Check evidence and wording one change at a time. Only accepted changes are written.",
       "commit": "Confirm the version note and scope before committing; published versions are never overwritten."
+    }
+  },
+  "researchWorkbenchReview": {
+    "backHome": "Return to OpenScience",
+    "visualReview": "Public visual review",
+    "exit": "Enter current product",
+    "kicker": "Hermes / contextual research tools",
+    "title": "A research workbench, not an instrument panel",
+    "introduction": "Warm paper carries reading and thought. Deep graphite appears only for evidence inspection. Right-click Hermes to see its tools unfold from the character.",
+    "sceneLabel": "Visual review scenes",
+    "close": "Close",
+    "hermesTrigger": "Hermes: click for assistant, right-click for action menu",
+    "measure": { "surface": "Work surface", "surfaceValue": "Warm paper", "reading": "Reading" },
+    "session": {
+      "eyebrow": "Current research session",
+      "openDecision": "The decision to make on return",
+      "decision": "Check the Figure 3C time constant",
+      "decisionNote": "Evidence and results differ by 12 fs; decide before recording a new version.",
+      "pathLabel": "Current research workflow",
+      "draft": "Working draft",
+      "evidence": "Evidence check",
+      "version": "Version record",
+      "open": "decision open",
+      "afterDecision": "after decision"
+    },
+    "views": {
+      "dashboard": { "label": "Workbench", "eyebrow": "01 / Return to research", "note": "Lively information, while the active study and primary action remain first." },
+      "editor": { "label": "Editor", "eyebrow": "02 / Quiet writing", "note": "Less interface noise; sustained reading comes from type size, rhythm and margin notes." },
+      "review": { "label": "Review", "eyebrow": "03 / Evidence comparison", "note": "Dark material serves source evidence only; suggestions and decisions stay on warm paper." },
+      "explore": { "label": "Explore", "eyebrow": "04 / Scholarly discovery", "note": "A continuous index replaces the card wall so titles, questions and evidence scan naturally." },
+      "reading": { "label": "Reading", "eyebrow": "05 / Long reading", "note": "18px text at 1.68 leading supports sustained scholarly reading." },
+      "mobile": { "label": "Mobile", "eyebrow": "06 / Long-press interaction", "note": "The compact layout keeps 200px Hermes and 44px targets without turning actions into icon riddles." }
+    },
+    "menu": {
+      "eyebrow": "Hermes · research margin", "title": "Around this decision",
+      "quiet": "Read with me to the end of this section", "quietNote": "Put reminders aside without interrupting",
+      "editor": "Return to the method", "editorNote": "Resume the last paragraph",
+      "review": "Check the Figure 3C time constant", "reviewNote": "Compare evidence with the current conclusion",
+      "keyboardHint": "Shift+F10 or Menu key to open · Esc to close",
+      "mobileHint": "Long-press Hermes to open · tap still enters assistant"
+    },
+    "bubble": { "intent": "Reading together" },
+    "status": {
+      "ready": "Hermes is beside the research workbench.",
+      "quiet": "I’ve put the reminders away. Read to the end of this section; I’ll stay in the margin.",
+      "boundaryLabel": "Hermes noticed",
+      "boundary": "1 evidence difference",
+      "boundaryNote": "Figure 3C ↔ results",
+      "recorded": "Recorded. The suggestion remains linked to its evidence."
+    },
+    "assistant": {
+      "title": "Research assistant",
+      "description": "Ordinary click preserves the existing assistant entry. This review fixture sends no request and writes no research data.",
+      "prompt": "I can help order this page, but I will not accept evidence or rewrite a published version for you.",
+      "inputLabel": "Prepared question",
+      "draft": "Compare this method description with its evidence source."
+    },
+    "dashboard": {
+      "active": "In progress", "title": "Ultrafast charge transfer in layered matter",
+      "decisionLabel": "Your current decision",
+      "focusTitle": "The caption and results differ by 12 fs",
+      "summary": "The Figure 3C fit records 68 fs while the results currently state 80 fs. Both remain linked to the raw frames and calibration record; choose the supported wording before recording the next version.",
+      "evidence": "Evidence linked", "version": "Working version", "next": "Next decision", "nextValue": "Check result",
+      "output": "After this", "outputValue": "Record v0.5", "continue": "Open evidence comparison",
+      "activity": "Research trail", "eventOne": "Method section saved", "eventOneNote": "Parameter bounds and calibration records linked.",
+      "eventTwo": "Hermes found one difference", "eventTwoNote": "The caption and result use different time constants.",
+      "eventThree": "Experiment notes imported", "eventThreeNote": "Four files entered the evidence library.", "yesterday": "Yesterday"
+    },
+    "editor": {
+      "outline": "SDF structure", "problem": "Research problem", "method": "Method and boundary", "results": "Primary result", "limitations": "Limitations",
+      "paragraphOne": "We measured interlayer charge transfer with few-cycle pump-probe microscopy, constraining time zero through three independent calibrations. Every run retains raw frames, calibration parameters and the analysis environment.",
+      "paragraphTwo": "Fitting is limited to regions above the preregistered signal-to-noise threshold. The method resolves a fast channel before structural relaxation, but cannot determine its microscopic mechanism alone.",
+      "note": "Keeping reproducibility conditions beside the prose makes them easier to find than hiding them in a low-contrast settings panel.",
+      "notes": "Margin notes", "noteOne": "Time zero comes from calibration/run-03.", "noteTwo": "Mechanism remains an unverified interpretation."
+    },
+    "review": {
+      "source": "Source evidence", "quote": "All three independent calibration runs resolve an early transfer component below 80 fs.",
+      "confidence": "Extraction confidence", "provenance": "Provenance", "suggestion": "Hermes suggestion 01 / 01",
+      "title": "Keep the conclusion inside the evidence boundary",
+      "body": "The current sentence presents the fast component as a confirmed mechanism, while the evidence supports only its time scale and repeatability. Keep the observation and leave mechanism for later validation.",
+      "before": "We confirm a phonon-driven ultrafast interlayer transfer mechanism.",
+      "after": "We observe an interlayer transfer component below 80 fs across three independent calibrations.",
+      "accept": "Accept suggestion", "accepted": "Accepted"
+    },
+    "explore": {
+      "query": "ultrafast charge transfer · reproducible experiment", "results": "3 related research objects",
+      "oneTitle": "Nonequilibrium carrier dynamics in layered semiconductors", "oneNote": "Pump-probe · raw data · analysis code · 2026",
+      "twoTitle": "How time-zero calibration changes sub-100-fs claims", "twoNote": "Method · calibration records · replication report · 2025",
+      "threeTitle": "Early charge-separation channels in 2D heterojunctions", "threeNote": "Preprint · four public reviews · CC0 data · 2026"
+    },
+    "reading": {
+      "citation": "Public research object / version 4", "title": "Ultrafast charge transfer in layered matter",
+      "deck": "An evidence-first versioned record connecting claims, methods, raw data and reproducible environments.", "byline": "DHL · Zhejiang University",
+      "paragraphOne": "How interlayer charge moves before the lattice reaches equilibrium is central to nonequilibrium processes in two-dimensional heterostructures. Each primary claim stays in the same version as the raw frames, calibration record and analysis code that produced it.",
+      "paragraphTwo": "Three independent runs show a transfer component below 80 femtoseconds. The result supports an early channel but does not determine the microscopic mechanism alone; that limitation remains visible beside the reproduction conditions."
+    },
+    "mobile": {
+      "active": "Continue research", "title": "Check the Figure 3C time constant",
+      "summary": "One difference remains between the evidence and result. Hermes stays below the work without covering the decision.",
+      "hint": "Long-press Hermes below for the compact action menu. Ordinary tap still opens the assistant."
     }
   },
   "opticalLab": {

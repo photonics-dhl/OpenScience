@@ -8,7 +8,7 @@ const originalCore = {
   problem: 'Original research problem',
   insight: 'Original insight',
   method: 'Original method',
-  results: 'Original results',
+  results: '',
   limitations: 'Original limitations',
   reproducibility: 'Original reproducibility note',
 };
@@ -35,7 +35,10 @@ test('Hermes draft is single-flight and writes only an explicitly accepted diff'
   await page.route('**/api/agent/tasks/task-diff', (route) => json(route, {
     task: {
       id: 'task-diff', status: 'succeeded', progress: 100, error: null,
-      result: { core: { ...originalCore, problem: 'Hermes proposed problem', results: 'Hermes proposed results' } },
+      result: {
+        core: { ...originalCore, problem: 'Hermes proposed problem', insight: 'Hermes proposed insight' },
+        needsMoreInformation: ['results', 'limitations'],
+      },
     },
   }));
 
@@ -55,9 +58,23 @@ test('Hermes draft is single-flight and writes only an explicitly accepted diff'
   expect(taskPosts).toBe(1);
   expect(await page.locator('textarea').evaluateAll((nodes) => nodes.map((node) => (node as HTMLTextAreaElement).value))).toEqual(before);
 
-  await page.locator('[data-before-after-proposal]').filter({ hasText: 'Hermes proposed problem' }).getByRole('button', { name: /Review changes|审阅变更/ }).click();
-  await expect(problem).toHaveValue('Hermes proposed problem');
+  const problemProposal = page.locator('[data-before-after-proposal]').filter({ hasText: 'Hermes proposed problem' });
+  await problemProposal.getByRole('button', { name: /Edit suggestion|编辑建议/ }).click();
+  await problemProposal.getByRole('textbox').fill('Researcher-edited problem');
+  await page.getByRole('button', { name: /Apply edited change|应用已编辑内容/ }).click();
+  const stage = page.locator('[data-hermes-workspace-stage]');
+  await expect(stage).toHaveAttribute('data-hermes-guide-target', 'sdf-insight');
+  await page.getByRole('navigation', { name: /Outline|大纲/ }).getByRole('button', { name: /01 Problem|01 问题/, exact: true }).click();
+  await expect(problem).toHaveValue('Researcher-edited problem');
+  await page.locator('[data-before-after-proposal]').filter({ hasText: 'Hermes proposed insight' }).getByRole('button', { name: /Dismiss|忽略建议/ }).click();
+  await expect(stage).toHaveAttribute('data-hermes-guide-target', 'sdf-results');
+  await page.getByRole('navigation', { name: /Outline|大纲/ }).getByRole('button', { name: /02 Insight|02 洞见/, exact: true }).click();
+  await expect(page.getByRole('textbox', { name: /Insight|洞见/ })).toHaveValue(originalCore.insight);
   await page.getByRole('navigation', { name: /Outline|大纲/ }).getByRole('button', { name: /04 Results|04 结果/, exact: true }).click();
   const results = page.getByRole('textbox', { name: /Results|结果/ });
+  const resultsNotice = page.locator('[data-missing-evidence="results"]');
+  await expect(resultsNotice).toContainText(/no result evidence|没有结果证据/i);
   await expect(results).toHaveValue(originalCore.results);
+  await resultsNotice.getByRole('button', { name: /Acknowledge and continue|知悉并继续/ }).click();
+  await expect(stage).toHaveAttribute('data-hermes-guide-target', 'sdf-limitations');
 });

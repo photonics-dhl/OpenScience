@@ -1,36 +1,54 @@
-# OpenScience (XGS) Current Progress
+# OpenScience 进度（CURRENT window）
 
-> 本文件只保留 CURRENT window；完整历史由 Git history 保存，不作为新 session 默认输入。
+> 最新同步：2026-08-29。历史由 Git 保存；旧计划和 archive 不作为默认输入。
 
-## 2026-08-18 — Hermes 真实动效修复（已部署并通过公网真实账号验收）
+## Current version tuple
 
-- **根因与修复**：真实 Dashboard 把队列中的 `needs_review` 错映射成 `awaiting_approval`，导致 Hermes 按审批静止合同长期显示 fallback；旧录屏使用空任务 mock，掩盖了该分支。`main@39c752b` 已改为 Dashboard `needs_review → suggesting`，并让真实六字段审批页仅在服务端 task state 为 `needs_review` 时静止，确认/刷新后恢复 idle。
-- **自然运动修复**：废弃同一整图在六个重叠椭圆中被连续缩放/重复变形的路径；新 part-rig shader 从 bind UV 一次计算各语义部件的刚体位移，重叠区只归一化一次，不缩放解剖部位。新增 renderer heartbeat、真实 context-loss 单次自动恢复与有界手动 retry。
-- **产品职责基线**：Hermes 是常驻 Workspace 引导员和 Agent 入口；应理解当前页面/任务，在关键填写节点安全游动到语义锚点，提供 Explain/Draft/Check 与 reviewable diff，由用户显式 Apply；同时以可辨认的待机、指针、工作、成功、失败和审批动作维持生命感。
-- **文档卫生**：`docs/progress.md` 从永久历史日志改为不超过 120 行的 CURRENT window；CURRENT handoff 不超过 80 行，`AGENTS.md` 不超过 100 行；历史只从 Git history 或显式 archive 查阅，不得进入默认启动链。
-- **工程证据**：合并树 Web `308/308`、typecheck、17-page production build、production E2E `14/14`、Hermes release gate、根 lint/docs 与独立复审均 GREEN。真实像素门禁区分 affine mutation 与独立关节；idle/pointer 分别有 `451/505` 次 renderer draw。
-- **生产发布**：release `39c752b`，rollback `1b76b46`。前后巡检健康，备份 `384K / 7/7`，dry-run 后执行 `--confirm --skip-migrate`；远端 build、Parser-first health、应用重启、Nginx 与硬 HTTP 检查通过，未迁移/seed。
-- **公网真实账号**：真实管理员 Dashboard 含 9 个 `needs_review` 任务时呈 `suggesting`，而非错误的 approval-still；`preference=full`、`renderer=ready`、`inputReady=true`、fallback reason 为空，heartbeat 推进 `516.6ms`，待机 pose/PNG 与 pointer PNG 均变化，gesture=`focus`，浏览器错误 0。短时验收 session 已删除。
-- **下一步**：由用户直接体验公网自然度；后续只继续高级动作/主动提示与真实论文 per-field accept/edit/reject，不再重开已否决的整图重复拉伸路线。
+- Worktree branch / application-code HEAD: `codex/hermes-wanko-live2d` / `4c73469fe24abe685054f1d917d452adc5371d35`；其后仅有 Taskmaster/文档收口。
+- Production application source / immutable release: `4c73469fe24abe685054f1d917d452adc5371d35`；docs HEAD、本地 main 与生产身份不得混写。
+- Production rollback: `cf68bfa7baba9610dcd010fed0fcf5fd0deeab2f`；core/search migrations `30/30` / `2/2`。
+- Taskmaster `hermes-research-intelligence` 为 8/12：Tasks 1–8 done；下一产品任务为 Task 9 Claim-first 公开 RO，Task 10 仍 dependency-ready。
 
-## Version tuple
+## 2026-08-29 — Task 8 production accepted and evaluation debt removed
 
-- Local branch / application HEAD: `main` / `39c752b`
-- Integrated candidate source: `codex/hermes-2d-pet` / `b9db36e`
-- ECS release / rollback: `39c752b` / `1b76b46`
-- PR: <https://github.com/photonics-dhl/OpenScience/pull/3>
+- Task 8 Claim/Evidence API、可信 SourceMap、复验/审计、发布双重阻断与 narrative snapshot 已随 `4c73469…` 部署；SeaweedFS HEAD 缺少自定义 SHA metadata 时改为流式重算原件 SHA-256，并按对象去重读取。Exact CI `33257516418` / job `99113706374` 全绿。
+- ECS 正式 parser acceptance 通过。一次性真实 RO 旅程得到 5 个 source blocks、3 Claims、3 Evidence；未核验发布正确阻断，篡改 locator 返回冲突，核验后 review passed、publish 成功、公开页 200，测试用户/对象/存储引用精确清零。公开性由一次性 fixture 预置，不冒充可见性扩大审批验收。
+- Canonical deploy 全量 build、core/search `30/30`/`2/2`、BGE-M3 CPU 实向量、Parser/API/Web/Worker、Nginx、public/loopback release identity 与 retention 全绿；active `4c73469…`，rollback `cf68bfa7…`。
+- 用户批准的精确卫生操作归档 3 份 LiteParse 与 3 份 BGE 报告到 `/opt/openscience-acceptance/capability-evaluations`，7/7 SHA-256 通过；随后在部署锁内删除 40 个无挂载、无容器引用的历史评测工作目录。评测区 `15,405,977,600 → 28,672` bytes，根盘 `48G/34% → 36G/26%`，可用 `106G`；未执行 broad prune。
 
-## Current production facts
+## 2026-08-29 — Task 8 review blockers closed locally
 
-- ECS 已部署 `39c752b`，生产真实队列不再触发 Dashboard 误静止。
-- 现有代码声明首次默认 full，并提供常驻 full/reduced 切换；审批态和用户主动 reduced 必须静止。
-- 本轮 runtime/映射修复已通过公网真实账号自动验收；最终审美仍以用户直接体验为准。
-- 高级 Quiet/Balanced/Active、sound/particle/proactive 设置，以及真实论文 per-field accept/edit/reject 完整矩阵仍未完成。
+- Claim/Evidence 的 SourceMap/object-storage 预检已移到 Serializable 事务外；事务内重新校验 version/manifest/artifact/hash/ref 与 CAS。Evidence 幂等重放不依赖对象存储在线。
+- `codeRange` 在没有权威 source revision 前由 API/Domain 失败关闭；`review.analyze` 在 API、Domain、Worker 三层绑定同一 RO，Worker 只消费持久化 payload。
+- 发布展示资产复用检查改为按全部受审 Evidence hash 精确查询，关闭截断前缀绕过。共享 content-addressed SourceMap 不盲删，引用安全 GC/retention 明确归 Task 10。
+- 新鲜本地证据：全仓 build/typecheck/lint/test 通过；Domain 52/470、API 14/78、Worker 26/452 全绿，release contract 91 pass / 7 platform skips / 0 fail；CI 与 ECS 真实 RO journey 尚未完成。
 
-## Read first
+## 2026-08-29 — Task 8 evidence package and handoff prepared
 
-1. `AGENTS.md`
-2. `docs/handoff/2026-08-16-hermes-2d-pet-handoff.md`
-3. `docs/OpenScience_Kimi_Development_Spec.md`（只读 Hermes / 权限相关段落）
-4. `docs/specs/2026-08-17-hermes-workspace-companion-motion-design.md`（只读 CURRENT summary / acceptance）
-5. 本文件
+- 按用户要求暂停 Task 8 继续开发，先整理 `docs/proposals/2026-08-29-project-development-deployment-evidence-pack.md`：包含分支/时间线 Git 记录、网站四层上线口径、当前 release/rollback/TLS/container 证据，以及 suggested / confirmed 的数据库字段、生产聚合与完整展示 API 样例；样例为自编演示数据，不是生产用户记录。
+- ECS 只读复核：public/loopback `/__release` 均为 `5e5ae36…`，rollback `6cabe422…`，生产服务健康；`agent_tasks.result` 为 JSONB，`IngestionTaskState` 含 `needs_review`/`confirmed`。聚合为 14 条待确认建议、7 条 confirmed、21 条总计，无业务正文或用户信息输出。
+- Task 8 本地已形成 Claim/Evidence CRUD、可信 SourceMap ref、发布阻断与快照等实现及测试；该时点仍有复审阻断项，现状以上一节为准。
+
+## 2026-08-29 — Task 7 identity routing deployed and accepted
+
+- 注册确认现要求用户选择研究身份（默认中性 reader），与 User、默认 Workspace、身份 profile 和审计在同一数据库事务内创建；产品不暴露模式切换。
+- 新增认证后的身份/兴趣读取、版本化更新和 accept/reject 纠正接口。Agent API 只接受当前目标/Claim，服务端从本人 profile、当前 RO/Claim 构建并持久化确定性 `InterestContext`；拒绝客户端伪造上下文、敏感字段与站外历史。
+- Settings 已接入同一身份表单及兴趣纠正；Worker 把受控上下文注入 Hermes，并把 rejected signals 当作明确排除项。Migration 30 为旧用户补 neutral reader，新增 signals 与 AgentTask context；search 数据库保持独立 2/2。
+- Exact CI `33246701963` / job `99085303687` 全绿。ECS 完成 parser acceptance、migration 30、BGE CPU runtime、内外健康、active/rollback retention 与 immutable release；Taskmaster Task 7 已置 done。
+- 真实生产旅程从公网完成注册、身份读取、两次 MiniMax `workspace.guide`、信号 accept、第二次快照与登出。两次任务均一次成功；持久化 context 从 profileVersion 1/空 history 变为 version 2/`accepted_history`，随后精确清理用户、challenge、task、session、usage 与用户审计至 0。
+- Vision 仍关闭，留到后续管理员代表性生产任务调用；不为追求测试数量提前付费。CPU parser 16-case 仍为 14 succeeded / 2 intentional needs_review / 0 failed / 0 false-ready，暂不安装 Docling。
+
+## 2026-08-29 — Final parser deployment and review closed
+
+- Exact CI run `33240457443` / job `99068791412` success（11m10s）。ECS schema 3 / `hermes-parser-14-2-v1` 为 14 succeeded / 2 intentional needs review / 0 failed / 0 false-ready；gateway structured fake/external/error 为 14/0/0。
+- 26 个 locator 全复现，含 3 个正式 `table-cell`；最终 source review 为 `READY`，0 Critical / 0 Important / 0 Minor。
+- 接受镜像：Worker `sha256:11f36807956003cf47ca18ad1f4a85a3830af4c24b81b466d566da4b10951a02`；Parser `sha256:4e4819ecd4b45ce473fe5076f09e46410f1f16b601a65b7bb461f046e75c70d8`。Parser 仍为 CPU-only、`network=none`、无 Secret、非 root、只读、512 MiB/64 PID。
+- `.release-id`、public/loopback `/__release`、运行镜像、core/search `29/29`/`2/2`、BGE、startup self-test、7 组备份、failure/journal markers 均全绿；部署本身净增 `817,916 KiB`，未清理服务器对象。
+
+## 2026-08-29 — Exact cleanup and retention prevention
+
+- 用户批准的 ECS 精确清理在生产 FD9 锁内完成：移除 40 个 inactive release roots、3 个 exact failed eval/acceptance paths、旧 workspace backup、已审计 package/browser caches、16 个旧 Worker/Parser tags、3 个 dangling IDs 与 build cache。保留 active/rollback、有效证据、7 组备份、production/BGE/monitor volumes、logs、DNF 与项目 tool cache。
+- 根盘 used 从 `78,488,031,232` 降至 `48,109,350,912` bytes，释放 `30,378,680,320` bytes；52% → 32%，available `103,363,416,064` bytes。清理后 release roots 恰为 active `6cabe…` + rollback `28a…`，core/search、Parser、BGE、容器、公网/loopback、备份均复验全绿。
+- `/opt/openscience/.rollback-id` 已在 FD9 锁内按 root `0600` 原子 bootstrap 为 `28a3d5c…`。自动 retention 候选已实现：pending v2 冻结清单、tombstone 崩溃续跑、active/rollback 多层保护、全部容器/mount/image/capability 门禁、post-unlink 恢复；禁止 broad prune，自动范围仅旧 release/capability/exact SHA tags。
+- Fresh release-contract `98` tests：91 pass / 7 platform skips / 0 fail；安全复审 0 blocker。Exact Ubuntu CI `33244792397` / job `99080299130` 已 success（含 Linux/FD9 门禁）；代码尚未部署，下一次 immutable release 才会启用自动 retention。
+- 下一产品任务是 Task 7 身份/兴趣静默路由；Vision 只在后续真实生产任务中以管理员 canary 验证，不以脱离产品的循环测试替代进度。

@@ -17,7 +17,7 @@ export default function Hero({ locale }: HeroProps) {
       data-landing-module="hero"
     >
       <div className="mx-auto flex min-h-[calc(100svh-7.5rem)] max-w-[112rem] flex-col">
-        <div className="flex items-center justify-between gap-6 border-b border-os-rule-dark pb-3 font-data text-[10px] uppercase tracking-[0.18em] text-os-muted-dark sm:text-xs">
+        <div data-reading-role="caption" className="flex items-center justify-between gap-6 border-b border-os-rule-dark pb-3 font-data uppercase tracking-[0.1em] text-os-muted-dark">
           <span>{t('hero.kicker')}</span>
           <span>{t('hero.context')}</span>
         </div>
@@ -55,7 +55,7 @@ export default function Hero({ locale }: HeroProps) {
           </div>
         </div>
 
-        <a className="mx-auto mt-5 inline-flex min-h-10 items-center font-data text-[10px] uppercase tracking-[0.18em] text-os-muted-dark no-underline hover:text-os-paper focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring" href="#open-ro">
+        <a data-reading-role="control" className="mx-auto mt-5 inline-flex min-h-10 items-center font-data text-sm uppercase tracking-[0.08em] text-os-muted-dark no-underline hover:text-os-paper focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring" href="#open-ro">
           Open RO <span aria-hidden="true" className="ml-3">↓</span>
         </a>
       </div>

@@ -160,7 +160,7 @@ describe('P1D-5 发布审核硬阻断（云上，迁移 16）', () => {
     const gateway = new (await import('@openscience/ai-gateway')).AiGateway({ providers: [mockProvider], logger: console }) as AiGateway;
     const handlers = createHandlers(gateway);
     const pollOnce = await createPollOnce(handlers);
-    const session = await createAgentSession(deps, { userId: user!.id, kind: 'review' });
+    const session = await createAgentSession(deps, { userId: user!.id, researchObjectId: ro.id, kind: 'review' });
     const task = await submitAgentTask(deps, { sessionId: session.id, userId: user!.id, kind: 'review.analyze', payload: { versionId, coreText: '研究正文……' } });
     // 消费队列直至本任务完成（队列可能含路由异步入队的 analyze，逐项消费）
     for (let i = 0; i < 5; i++) {

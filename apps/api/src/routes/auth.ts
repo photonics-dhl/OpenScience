@@ -12,6 +12,7 @@ import {
   type AuthDeps,
 } from '@openscience/auth';
 import type { AuditContext } from '@openscience/observability';
+import { RESEARCH_IDENTITIES, validateResearchIdentityProfile } from '@openscience/domain';
 import { SESSION_COOKIE, sessionTokenFrom } from './session-guard';
 import { buildErrorBody } from '@openscience/observability';
 
@@ -46,6 +47,23 @@ const signupConfirmBody = signupRequestBody.extend({
   code: z.string().regex(/^\d{6}$/),
   password: passwordSchema,
   displayName: z.string().min(1).max(64),
+  researchIdentity: z.object({
+    identities: z.array(z.enum(RESEARCH_IDENTITIES)).min(1).max(RESEARCH_IDENTITIES.length),
+    primaryIdentity: z.enum(RESEARCH_IDENTITIES),
+    disciplines: z.array(z.string().trim().min(1).max(160)).max(100),
+    methods: z.array(z.string().trim().min(1).max(160)).max(100),
+    topics: z.array(z.string().trim().min(1).max(160)).max(100),
+    languages: z.array(z.string().trim().min(1).max(160)).max(100),
+  }).strict(),
+});
+
+const neutralResearchIdentity = validateResearchIdentityProfile({
+  identities: ['reader'],
+  primaryIdentity: 'reader',
+  disciplines: [] as string[],
+  methods: [] as string[],
+  topics: [] as string[],
+  languages: [] as string[],
 });
 
 function setSessionCookie(reply: FastifyReply, token: string, secure: boolean): void {
@@ -67,14 +85,33 @@ export function registerAuthRoutes(app: FastifyInstance, deps: AuthRouteDeps): v
 
   app.post('/confirm-signup', async (req, reply) => {
     const body = signupConfirmBody.parse(req.body);
-    const result = await confirmSignup(deps, body, auditCtx(req));
+    const profile = validateResearchIdentityProfile(body.researchIdentity);
+    const result = await confirmSignup(
+      deps,
+      {
+        email: body.email,
+        code: body.code,
+        password: body.password,
+        displayName: body.displayName,
+      },
+      auditCtx(req),
+      async (tx, user) => {
+        await tx.researchIdentityProfile.upsert({
+          where: { userId: user.id },
+          create: { userId: user.id, ...profile },
+          update: profile,
+        });
+      },
+    );
     setSessionCookie(reply, result.sessionToken, deps.secureCookies);
     return reply.status(201).send({ userId: result.userId, status: result.status });
   });
 
   app.post('/register', async (req, reply) => {
     const body = registerBody.parse(req.body);
-    const result = await register(deps, body, auditCtx(req));
+    const result = await register(deps, body, auditCtx(req), async (tx, user) => {
+      await tx.researchIdentityProfile.create({ data: { userId: user.id, ...neutralResearchIdentity } });
+    });
     return reply.status(201).send({ userId: result.userId, status: result.status });
   });
 

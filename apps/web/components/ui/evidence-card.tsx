@@ -7,13 +7,13 @@ import { cn } from '@/lib/utils';
 import { Button } from './button';
 import { StatusBadge, type StatusBadgeStatus } from './status-badge';
 
-export type EvidenceStatus = Extract<
+type EvidenceStatus = Extract<
   StatusBadgeStatus,
   'needs_review' | 'confirmed' | 'missing' | 'inferred' | 'rejected'
 >;
-export type EvidenceConfidence = 'high' | 'medium' | 'low';
+type EvidenceConfidence = 'high' | 'medium' | 'low';
 
-export interface EvidenceCardProps extends React.HTMLAttributes<HTMLElement> {
+interface EvidenceCardProps extends React.HTMLAttributes<HTMLElement> {
   field: string;
   value: string;
   status: EvidenceStatus;

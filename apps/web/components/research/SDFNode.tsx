@@ -2,7 +2,7 @@
 
 import type { ReactNode } from 'react';
 
-export interface SDFNodeProps {
+interface SDFNodeProps {
   active: boolean;
   children: ReactNode;
   hint?: string;

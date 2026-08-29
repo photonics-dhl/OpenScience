@@ -6,7 +6,7 @@ import * as React from 'react';
 
 import { StatusBadge, type StatusBadgeStatus } from '@/components/ui/status-badge';
 
-export type DashboardTaskStatus =
+type DashboardTaskStatus =
   | 'queued'
   | 'running'
   | 'needs_review'
@@ -14,7 +14,7 @@ export type DashboardTaskStatus =
   | 'failed_blocked'
   | 'written';
 
-export interface DashboardTask {
+interface DashboardTask {
   id: string;
   researchObjectId: string;
   title: string;

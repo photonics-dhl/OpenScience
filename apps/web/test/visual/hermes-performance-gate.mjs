@@ -16,8 +16,7 @@ await session.send('Network.setCacheDisabled', { cacheDisabled: true });
 await page.addInitScript(() => {
   const metricsWindow = window;
   metricsWindow.__hermesDrawCount = 0;
-  metricsWindow.__hermesDrawTimestamps = [];
-  metricsWindow.__hermesJointSamples = [];
+  metricsWindow.__hermesRendererFrameTimestamps = [];
   metricsWindow.__hermesRendererRafDurations = [];
   const wrappedContexts = new WeakSet();
   const originalGetContext = HTMLCanvasElement.prototype.getContext;
@@ -30,7 +29,6 @@ await page.addInitScript(() => {
         context[method] = (...drawArgs) => {
           const result = originalDraw(...drawArgs);
           metricsWindow.__hermesDrawCount += 1;
-          metricsWindow.__hermesDrawTimestamps.push(performance.now());
           return result;
         };
       }
@@ -44,12 +42,7 @@ await page.addInitScript(() => {
     callback(now);
     if (metricsWindow.__hermesDrawCount > beforeDraws) {
       metricsWindow.__hermesRendererRafDurations.push(performance.now() - started);
-      const canvas = document.querySelector('[data-hermes-articulated-canvas]');
-      metricsWindow.__hermesJointSamples.push([
-        canvas?.getAttribute('data-hermes-head') ?? '',
-        canvas?.getAttribute('data-hermes-torso') ?? '',
-        canvas?.getAttribute('data-hermes-tail') ?? '',
-      ].join('|'));
+      metricsWindow.__hermesRendererFrameTimestamps.push(now);
     }
   });
 });
@@ -60,7 +53,7 @@ await page.route('**/api/ingestion?actionable=true', (route) => route.fulfill({ 
 try {
   const navigationStartedAt = Date.now();
   await page.goto(`${baseUrl}/dashboard`, { waitUntil: 'networkidle' });
-  await page.waitForFunction(() => document.querySelector('[data-hermes-rig="mesh-2d"]')?.getAttribute('data-hermes-rig-status') === 'ready');
+  await page.waitForFunction(() => document.querySelector('[data-hermes-rig="live2d-wanko"]')?.getAttribute('data-hermes-rig-status') === 'ready');
   const firstReadyMs = Date.now() - navigationStartedAt;
   assert.ok(firstReadyMs <= 2_500, `Hermes first ready must complete within 2500ms, got ${firstReadyMs}`);
   const resources = await page.evaluate(() => performance.getEntriesByType('resource').map((entry) => {
@@ -75,23 +68,23 @@ try {
     };
   }));
   const scripts = resources.filter((entry) => entry.name.includes('/_next/static/') && entry.name.endsWith('.js'));
-  const textures = resources.filter((entry) => entry.name.includes('/hermes/pet/hermes-pet-') && entry.name.endsWith('.png'));
+  const textures = resources.filter((entry) => entry.name.includes('/hermes/live2d/wanko/') && entry.name.endsWith('.png'));
   const transferred = resources.reduce((sum, entry) => sum + entry.transferSize, 0);
   const scriptEncoded = scripts.reduce((sum, entry) => sum + entry.encodedBodySize, 0);
   const textureEncoded = textures.reduce((sum, entry) => sum + entry.encodedBodySize, 0);
-  assert.equal(new Set(textures.map((entry) => new URL(entry.name).pathname)).size, 3, `all three Hermes textures must be measured: ${JSON.stringify(textures)}`);
-  assert.ok(scriptEncoded <= 300_000, `Dashboard client scripts must stay <=300KB encoded, got ${scriptEncoded}`);
-  assert.ok(textureEncoded <= 1_600_000, `Hermes textures must stay <=1.6MB encoded, got ${textureEncoded}`);
-  assert.ok(transferred <= 2_600_000, `cold Dashboard transfer must stay <=2.6MB, got ${transferred}`);
+  assert.equal(new Set(textures.map((entry) => new URL(entry.name).pathname)).size, 2, `both pinned v09 Wanko textures must be measured: ${JSON.stringify(textures)}`);
+  assert.ok(scriptEncoded <= 650_000, `Dashboard client scripts must stay <=650KB encoded with Live2D, got ${scriptEncoded}`);
+  assert.ok(textureEncoded <= 1_750_000, `v09 Wanko textures must stay <=1.75MB encoded, got ${textureEncoded}`);
+  assert.ok(transferred <= 4_400_000, `cold Dashboard transfer must stay <=4.4MB, got ${transferred}`);
 
-  const rig = page.locator('[data-hermes-rig="mesh-2d"]');
+  const rig = page.locator('[data-hermes-rig="live2d-wanko"]');
   const bounds = await rig.boundingBox();
   assert.ok(bounds, 'Hermes performance stage must have geometry');
   const measure = async (label, interactive) => {
+    const beforeFrame = await page.locator('[data-hermes-articulated-canvas]').screenshot({ animations: 'allow' });
     await page.evaluate(() => {
       window.__hermesDrawCount = 0;
-      window.__hermesDrawTimestamps = [];
-      window.__hermesJointSamples = [];
+      window.__hermesRendererFrameTimestamps = [];
       window.__hermesRendererRafDurations = [];
     });
     if (interactive) {
@@ -106,8 +99,8 @@ try {
     } else await page.waitForTimeout(7_500);
     const measured = await page.evaluate(() => ({
       cpu: window.__hermesRendererRafDurations.slice(),
-      joints: window.__hermesJointSamples.slice(),
-      timestamps: window.__hermesDrawTimestamps.slice(),
+      drawCalls: window.__hermesDrawCount,
+      timestamps: window.__hermesRendererFrameTimestamps.slice(),
     }));
     const deltas = measured.timestamps.slice(1).map((timestamp, index) => timestamp - measured.timestamps[index]);
     const cpu = measured.cpu;
@@ -115,9 +108,11 @@ try {
     const p95 = percentile(deltas, .95);
     const cpuP95 = percentile(cpu, .95);
     const drops = deltas.filter((delta) => delta > Math.max(40, median * 1.8)).length;
-    const result = { cpuP95, draws: measured.timestamps.length, drops, frames: deltas.length, jointStates: new Set(measured.joints).size, label, median, p95 };
+    const afterFrame = await page.locator('[data-hermes-articulated-canvas]').screenshot({ animations: 'allow' });
+    const pixelChanged = !beforeFrame.equals(afterFrame);
+    const result = { cpuP95, drawCalls: measured.drawCalls, draws: measured.timestamps.length, drops, frames: deltas.length, label, median, p95, pixelChanged };
     assert.ok(result.draws >= 200, `${label} must sustain at least ~27fps, got ${result.draws} real Hermes draws`);
-    assert.ok(result.jointStates >= 3, `${label} must render changing Hermes joints, got ${result.jointStates} states`);
+    assert.equal(result.pixelChanged, true, `${label} must end on visibly different real Live2D pixels`);
     assert.ok(result.median <= 34, `${label} median frame interval must be <=34ms, got ${result.median}`);
     assert.ok(result.p95 <= 50, `${label} p95 frame interval must be <=50ms, got ${result.p95}`);
     assert.ok(result.cpuP95 <= 12, `${label} p95 RAF callback CPU must be <=12ms, got ${result.cpuP95}`);

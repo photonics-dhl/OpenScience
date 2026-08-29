@@ -1,5 +1,10 @@
 # Hermes Workspace Companion Motion Implementation Plan
 
+Status: **IMPLEMENTED FOUNDATION / HISTORICAL ENTRY**. The CURRENT visual
+renderer execution plan is
+`docs/plans/2026-08-19-hermes-wanko-live2d-plan.md`; do not resume unchecked
+visual-renderer steps in this file.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use `executing-plans` to implement this plan task-by-task. The user authorized direct implementation and reserved commit/deploy until final visual acceptance, so each task ends at a verified review boundary rather than a Git commit.
 
 **Goal:** Upgrade the current single-location Hermes mesh into a Workspace-wide scholarly companion with layered life, safe target travel, semantic field guidance, user-selected docking, and reviewable draft diffs.

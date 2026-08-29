@@ -50,7 +50,7 @@ export function ResearchIndex({ initialPage }: { initialPage?: ResearchIndexPage
             <select className="w-full appearance-none border-0 bg-transparent p-0 pr-7 text-sm text-os-ink shadow-none outline-none" value={field} onChange={(event) => setField(event.target.value)}>
               {FIELDS.map((value) => <option key={value} value={value}>{value ? t(`fields.${value}`) : t('allFields')}</option>)}
             </select>
-            <span aria-hidden="true" className="pointer-events-none absolute right-0 top-1/2 -translate-y-1/2 font-data text-[0.65rem] text-os-vermilion">↓</span>
+            <span aria-hidden="true" className="pointer-events-none absolute right-0 top-1/2 -translate-y-1/2 font-data text-xs text-os-vermilion">↓</span>
           </span>
         </label>
         <label className="border-b border-os-rule-paper pb-2">
@@ -59,7 +59,7 @@ export function ResearchIndex({ initialPage }: { initialPage?: ResearchIndexPage
             <select className="w-full appearance-none border-0 bg-transparent p-0 pr-7 text-sm text-os-ink shadow-none outline-none" value={artifactType} onChange={(event) => setArtifactType(event.target.value)}>
               {ARTIFACT_TYPES.map((value) => <option key={value} value={value}>{value ? t(`artifacts.${value}`) : t('allArtifacts')}</option>)}
             </select>
-            <span aria-hidden="true" className="pointer-events-none absolute right-0 top-1/2 -translate-y-1/2 font-data text-[0.65rem] text-os-vermilion">↓</span>
+            <span aria-hidden="true" className="pointer-events-none absolute right-0 top-1/2 -translate-y-1/2 font-data text-xs text-os-vermilion">↓</span>
           </span>
         </label>
         <button className="min-h-11 rounded-panel bg-os-ink px-5 text-sm font-semibold text-os-paper active:translate-y-px motion-reduce:transform-none" type="submit">{t('apply')}</button>
@@ -78,9 +78,9 @@ export function ResearchIndex({ initialPage }: { initialPage?: ResearchIndexPage
                 <span className="min-w-0">
                   <span className="block font-editorial text-3xl leading-tight text-os-ink group-hover:text-os-vermilion sm:text-4xl">{item.title}</span>
                   {item.insight ? <span className="mt-3 block max-w-3xl text-sm leading-6 text-os-muted-paper">{item.insight}</span> : null}
-                  <span className="mt-4 block font-data text-[0.68rem] uppercase tracking-[0.1em] text-os-muted-paper">{item.authors.join(' · ') || t('unknownAuthor')}</span>
+                  <span className="mt-4 block font-data text-xs uppercase tracking-[0.1em] text-os-muted-paper">{item.authors.join(' · ') || t('unknownAuthor')}</span>
                 </span>
-                <span className="grid gap-2 font-data text-[0.68rem] uppercase tracking-[0.1em] text-os-muted-paper md:text-right">
+                <span className="grid gap-2 font-data text-xs uppercase tracking-[0.1em] text-os-muted-paper md:text-right">
                   <span>{item.publicId} / v{item.latestVersion}</span>
                   <span>{item.fields.join(' · ')}</span>
                   <span>{item.artifactTypes.join(' · ') || t('noArtifacts')}</span>

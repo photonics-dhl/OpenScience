@@ -30,6 +30,8 @@ describe('Hermes articulated pet motion', () => {
     expect(preference.resolveHermesReducedMotion('?hermes-motion=full')).toBe(false);
     expect(preference.resolveHermesReducedMotion('?hermes-motion=reduced')).toBe(true);
     expect(preference.resolveHermesReducedMotion('')).toBe(false);
+    expect(preference.resolveHermesReducedMotion('', null, true)).toBe(true);
+    expect(preference.resolveHermesReducedMotion('?hermes-motion=full', null, true)).toBe(false);
 
     const values = new Map<string, string>();
     const storage = {

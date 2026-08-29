@@ -108,7 +108,7 @@ export async function getJobResult(jobId: string): Promise<CachedJobResult | nul
   });
 }
 
-export async function deleteExpired(): Promise<void> {
+async function deleteExpired(): Promise<void> {
   const db = await openDB();
   const now = Date.now();
 
@@ -131,7 +131,7 @@ export async function deleteExpired(): Promise<void> {
   });
 }
 
-export async function deleteJob(jobId: string): Promise<void> {
+async function deleteJob(jobId: string): Promise<void> {
   const db = await openDB();
 
   return new Promise((resolve, reject) => {

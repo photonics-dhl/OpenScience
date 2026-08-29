@@ -154,9 +154,9 @@ export {
 export { InAppChannel, EmailChannel } from './notification/channels';
 export { AgentError, type AgentErrorCode } from './agent/errors';
 export {
-  claimAgentTask, createAgentSession, dispatchAgentTask, submitAgentTask, getAgentTask, listAgentSessions, listAgentTasks, markTaskProgress,
+  claimAgentTask, createAgentSession, dispatchAgentTask, submitAgentTask, getAgentTask, retryAgentTask, listAgentSessions, listAgentTasks, markTaskProgress,
   prepareAgentTaskForCrashRecovery, recoverUndispatchedAgentTasks,
-  AGENT_TASK_QUEUE, AI_CREDIT_RESOURCE,
+  AGENT_TASK_QUEUE, AI_CREDIT_RESOURCE, AGENT_TASK_KINDS, PUBLIC_AGENT_SESSION_KINDS, PUBLIC_AGENT_TASK_KINDS,
   type AgentDeps, type AgentTaskView, type AgentSessionView, type AgentTaskStatus,
 } from './agent/agent';
 export { ApprovalError, type ApprovalErrorCode } from './approval/errors';
@@ -200,5 +200,116 @@ export {
   type EditorialState, type EditorialMedia, type EditorialSelectionView, type EditorialCollectionView,
 } from './editorial/editorial';
 export { INGESTION_TASK_STATES, type ActionableIngestionTaskView, type IngestionTaskState, type IngestionFileInput, type IngestionTaskView, type IngestionBatchView } from './ingestion/ingestion-types';
+export {
+  loadDocumentSourceMapReference,
+  parseDocumentSourceMapReference,
+  persistDocumentSourceMapReference,
+  type DocumentSourceMapReference,
+} from './research-intelligence/source-map-ref';
+export { ClaimEvidenceError, type ClaimEvidenceErrorCode } from './research-intelligence/claim-evidence-errors';
+export { evaluateEvidencePublicationBlocks } from './research-intelligence/publication-evidence';
+export {
+  createClaim,
+  createEvidence,
+  deleteClaim,
+  deleteEvidence,
+  getEvidenceSource,
+  listClaims,
+  listEvidence,
+  resolveEvidenceSource,
+  updateClaim,
+  updateEvidence,
+  verifyEvidence,
+  type ClaimInput,
+  type EvidenceInput,
+  type EvidenceRightsInput,
+  type UpdateClaimInput,
+  type UpdateEvidenceInput,
+} from './research-intelligence/claim-evidence-service';
 export { authorizeIngestionWrite, confirmIngestionTask, createIngestionBatch, getIngestionBatch, getIngestionTask, listActionableIngestionTasks, retryIngestionTask, type IngestionDeps } from './ingestion/ingestion-service';
 export { parseWorkspaceGuidePayload, type WorkspaceGuidePayload } from './agent/workspace-guide-contract';
+export {
+  RESEARCH_IDENTITIES,
+  CLAIM_KINDS,
+  CLAIM_ASSESSMENTS,
+  EVIDENCE_KINDS,
+  CLAIM_RELATIONS,
+  EXTRACTION_STATUSES,
+  PRESENTATION_ASSET_KINDS,
+  PRESENTATION_ASSET_STATUSES,
+  PRESENTATION_ASSET_LABEL,
+  INTEREST_ROUTING_REASON_CODES,
+  type ResearchIdentity,
+  type ResearchIdentityProfile,
+  type ResearchIdentityProfileState,
+  type InterestContext,
+  type InterestRoutingReason,
+  type InterestRoutingReasonCode,
+  type ClaimKind,
+  type ClaimAssessment,
+  type EvidenceKind,
+  type ClaimRelation,
+  type ExtractionStatus,
+  type ExtractionProvenance,
+  type BoundingBox,
+  type SourceLocator,
+  type ClaimNode,
+  type EvidenceRecord,
+  type PresentationAssetKind,
+  type PresentationAssetStatus,
+  type PresentationAsset,
+} from './research-intelligence/types';
+export {
+  ResearchIntelligenceValidationError,
+  validateResearchIdentityProfile,
+  validateSourceLocator,
+  type ResearchIntelligenceValidationCode,
+} from './research-intelligence/validation';
+export {
+  applyResearchIdentityProfilePatch,
+  correctResearchInterestSignal,
+  validateResearchIdentityProfileState,
+  ResearchIdentityProfileError,
+  type ResearchIdentityProfileErrorCode,
+  type ResearchIdentityProfilePatch,
+  type ResearchInterestSignalCorrection,
+} from './research-intelligence/identity-profile-service';
+export { buildInterestContext, validateInterestContext, type BuildInterestContextInput } from './research-intelligence/interest-context';
+export { validateClaimGraph, type ClaimGraphNode } from './research-intelligence/claim-graph';
+export {
+  EXTRACTION_BLOCK_CODES,
+  serializeExtractionResult,
+  parseExtractionResult,
+  type ExtractionBlockCode,
+  type ExtractionResult,
+} from './research-intelligence/extraction-result';
+export {
+  DOCUMENT_BLOCK_KINDS,
+  DOCUMENT_TRANSFORMATION_STAGES,
+  DOCUMENT_SOURCE_MAP_MAX_RAW_JSON_CHARACTERS,
+  parseDocumentSourceMap,
+  serializeDocumentSourceMap,
+  deserializeDocumentSourceMap,
+  type DocumentBlockKind,
+  type DocumentTransformationStage,
+  type DocumentParserMetadata,
+  type DocumentTransformation,
+  type DocumentBlock,
+  type DocumentPage,
+  type DocumentSourceMap,
+} from './research-intelligence/document-source-map';
+export {
+  createBlockSourceLocator,
+  createTableCellSourceLocator,
+  createCodeSourceLocator,
+  resolveSourceLocator,
+  serializeSourceLocator,
+  deserializeSourceLocator,
+} from './research-intelligence/source-locator';
+export {
+  VIRTUAL_PAGE_WIDTH,
+  VIRTUAL_LINE_HEIGHT,
+  VIRTUAL_PAGE_METADATA,
+  virtualPageNormalization,
+  deriveVirtualTableCoordinates,
+} from './research-intelligence/virtual-page';

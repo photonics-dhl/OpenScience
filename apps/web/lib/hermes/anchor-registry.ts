@@ -23,7 +23,7 @@ export interface HermesAnchorRegistration {
   sides: HermesDockSide[];
 }
 
-export interface HermesAnchorSnapshot {
+interface HermesAnchorSnapshot {
   actions: HermesAnchorAction[];
   clearancePx: number;
   id: HermesAnchorId;

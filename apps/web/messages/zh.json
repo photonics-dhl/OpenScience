@@ -15,7 +15,20 @@
     "skipToContent": "跳到科研内容",
     "primaryNavigation": "主导航"
   },
+  "productNavigation": {
+    "dashboard": "研究桌面",
+    "dashboardShort": "工作台",
+    "explore": "探索",
+    "exploreShort": "探索",
+    "create": "新建研究",
+    "createShort": "新建 RO",
+    "settings": "设置",
+    "settingsShort": "设置"
+  },
   "editor": {
+    "common": {
+      "cancel": "取消"
+    },
     "title": "SDF 编辑器",
     "outline": "大纲",
     "versions": "版本导航",
@@ -35,6 +48,9 @@
     "edit": "编辑",
     "applySuggestion": "应用建议",
     "dismissSuggestion": "忽略建议",
+    "editSuggestion": "编辑建议",
+    "cancelEditSuggestion": "取消编辑",
+    "applyEditedChange": "应用已编辑内容",
     "suggestionApplied": "建议已应用到草稿",
     "suggestionDismissed": "建议已忽略",
     "saveToSdf": "保存到 SDF",
@@ -111,6 +127,10 @@
     "reviewCompleteChange": "完整审阅这项变更。",
     "returnToProposal": "返回",
     "applyReviewedChange": "应用已审阅变更",
+    "missingEvidenceTitle": "证据缺失 · {field}",
+    "missingEvidenceDescription": "没有找到支持{field}的证据。Hermes 保持该字段为空，不会编造内容。",
+    "missingResultsEvidence": "没有结果证据。Hermes 保持结果字段为空，不会编造研究发现。",
+    "acknowledgeMissingEvidence": "知悉并继续",
     "hints": {
       "problem": "界定科学问题及其边界。",
       "insight": "陈述核心洞见，避免宣传性语言。",
@@ -313,7 +333,8 @@
       "explore": "探索",
       "create": "创建",
       "about": "关于",
-      "login": "登录"
+      "login": "登录",
+      "desk": "研究桌面"
     },
     "hero": {
       "kicker": "研究，作为持续演化的对象",
@@ -416,6 +437,37 @@
       }
     }
   },
+  "researchIdentity": {
+    "title": "你的科研身份",
+    "disclosure": "Hermes 会据此静默调整关注重点；不会出现模式开关，也不会推断敏感属性或站外行为。你可以随时在设置中修改。",
+    "primary": "主要",
+    "identities": {
+      "reader": "读者",
+      "author": "作者",
+      "reviewer": "审稿人",
+      "editor": "编辑",
+      "data_steward": "数据管理员",
+      "developer": "开发者",
+      "student": "学生"
+    },
+    "disciplines": "学科",
+    "disciplinesHint": "例如：光学、材料科学",
+    "methods": "方法",
+    "methodsHint": "例如：泵浦-探测、有限元",
+    "topics": "关注主题",
+    "topicsHint": "例如：超快科学、开放数据",
+    "languages": "阅读语言",
+    "languagesHint": "例如：中文、English",
+    "save": "保存科研身份",
+    "saving": "正在保存…",
+    "saved": "科研身份已更新",
+    "conflict": "资料已在其他位置更新。系统已载入最新版本，请检查后再次保存。",
+    "writeError": "科研身份暂时无法更新。",
+    "accepted": "已接受的兴趣信号",
+    "rejected": "已排除的兴趣信号",
+    "accept": "接受",
+    "reject": "排除"
+  },
   "auth": {
     "identity": {
       "skipToForm": "跳转到身份表单",
@@ -473,6 +525,7 @@
     "loading": "正在恢复研究上下文…",
     "context": {
       "navigation": "工作台工具",
+      "skip": "跳到研究工作区",
       "help": "帮助",
       "settings": "设置"
     },
@@ -493,6 +546,7 @@
     },
     "hermes": {
       "title": "Hermes 任务",
+      "liveQueue": "Hermes / 实时队列",
       "empty": "当前没有需要你处理的任务。",
       "review": "核对证据",
       "retry": "重试任务",
@@ -508,6 +562,43 @@
         "neutral": { "title": "告诉我今天想推进什么", "body": "我会先理解目标，再给出可核查、可执行的研究路径。" },
       "invoke": "唤起 Hermes",
       "eyebrow": "Hermes / 情境引导员",
+      "menu": {
+        "trigger": "Hermes：点击打开助手，右键或长按打开动作菜单",
+        "label": "Hermes 动作菜单",
+        "eyebrow": "Hermes · 和你一起",
+        "title": "想一起做什么？",
+        "evidence": "查看证据与来源",
+        "evidenceNote": "回到当前科研对象的证据清单",
+        "explore": "打开研究索引",
+        "exploreNote": "在公开研究记录中继续查找",
+        "quiet": "陪我安静读一会",
+        "quietNote": "收起提醒，留在页边",
+        "quietFeedback": "我在。我们慢慢想。",
+        "companion": "陪伴",
+        "groups": { "companion": "和 Hermes 一起", "research": "研究工具" },
+        "intro": {
+          "presence": "我在，也替你留着刚才的位置。",
+          "actionable": "有一份证据，正等你来确认。",
+          "continue": "最近的研究已经可以接着做了。",
+          "neutral": "从你现在最想弄明白的事开始吧。"
+        },
+        "actions": {
+          "greet": { "label": "打个招呼", "feedback": { "one": "你来了，我也在。", "two": "找到你了，刚才的位置还留着。", "three": "你好呀，今天想弄明白什么？" } },
+          "encourage": { "label": "给我一点鼓励", "feedback": { "one": "已经走到这里了，再往前一点。", "two": "难题在动，你也在往前走。", "three": "认真走好一小步，也算进展。" } },
+          "think": { "label": "一起想想", "feedback": { "one": "先停一下，我陪你把线索理顺。", "two": "给我一点时间，这些线索能连起来。", "three": "先把问题稳稳放在这里，再看一遍。" } },
+          "listen": { "label": "听我说", "feedback": { "one": "我在听，你慢慢说。", "two": "继续说，我正顺着你的思路走。", "three": "告诉我，哪一部分还让你放心不下？" } },
+          "stretch": { "label": "伸个懒腰", "feedback": { "one": "一起伸伸懒腰，肩膀放松一下。", "two": "来，伸展开，给后背留一点空间。", "three": "舒展一下，回来再用新的眼光看。" } },
+          "rest": { "label": "安静一会", "feedback": { "one": "先歇一会，我替你守着这一页。", "two": "安静一会也好，这里的东西不会跑。", "three": "闭眼缓一口气，我帮你看着这一页。" } },
+          "celebrate": { "label": "庆祝这一步", "feedback": { "one": "这一步完成了，值得庆祝一下。", "two": "这次进展，值得认真高兴一下。", "three": "研究往前走了，把这一刻记下来吧。" } },
+          "read-together": { "label": "陪我读", "feedback": { "one": "翻到这里了，我陪你再读一段。", "two": "这一段，我们按主张一条条读。", "three": "我陪你守着文字，你来决定速度。" } },
+          "continue": { "label": "继续这一步", "feedback": { "one": "回到刚才那一步，我们接着做。", "two": "找到刚才的位置了，从这里继续。", "three": "下一步已经在这里，准备好就出发。" } },
+          "evidence": { "label": "核对证据", "feedback": { "one": "这条结论先别过，和我核对证据。", "two": "看看究竟是哪份来源支撑了这条主张。", "three": "先看证据，再决定结果说明了什么。" } },
+          "sources": { "label": "追溯来源", "feedback": { "one": "沿着引用往回走，看看它从哪里来。", "two": "我陪你顺着参考文献一路找回去。", "three": "看看这条主张最早从哪里进入记录。" } },
+          "compare": { "label": "对照版本", "feedback": { "one": "把两个版本并排放好，我们看差异。", "two": "我来对齐变化，别让细节从眼前溜走。", "three": "同一项研究的两个时刻，看看哪里变了。" } }
+        },
+        "keyboardHint": "Shift+F10 或菜单键打开 · Esc 关闭",
+        "mobileHint": "长按 Hermes 打开 · 点按仍进入助手"
+      },
       "dialogLabel": "Hermes 科研引导员",
         "title": "从目标开始，我来带路。",
         "close": "关闭 Hermes",
@@ -539,6 +630,7 @@
       }
     },
     "errors": {
+      "kicker": "系统 / 已中断",
       "title": "无法加载工作台",
       "load": "暂时无法恢复研究上下文。",
       "retry": "重新加载"
@@ -561,7 +653,34 @@
     "evidenceBody": "原始 Artifact、提取建议与您的决定保持分离并可追溯。",
     "stepStore": "以内容哈希保存原始资料",
     "stepParse": "定位主张、方法与来源锚点",
-    "stepConfirm": "每一项 SDF 写入都由您确认"
+    "stepConfirm": "每一项 SDF 写入都由您确认",
+    "navigationLabel": "Research Object 工具",
+    "skipLabel": "跳到 Research Object 创建表单",
+    "progressLabel": "创建进度",
+    "identityStep": "研究身份",
+    "evidenceStep": "证据来源",
+    "eyebrow": "OpenScience / Research Object"
+  },
+  "hermesReview": {
+    "missingTask": "缺少任务标识。",
+    "back": "返回工作台",
+    "eyebrow": "Hermes / 证据审核",
+    "title": "确认你的研究结构",
+    "description": "Hermes 只提出建议，不替你写入。逐项检查六个 SDF 字段；只有你确认后，内容才会进入新的可追踪版本。",
+    "loading": "正在读取材料与建议…",
+    "loadError": "无法加载 Hermes 建议",
+    "confirmError": "确认失败，请刷新后重试",
+    "fieldLabel": "SDF 字段审阅",
+    "taskState": "任务状态：{state}",
+    "boundary": "建议边界",
+    "boundaryNote": "角色保持安静；右键或长按可查看当前证据工具。",
+    "saved": "已确认并写入新版本。",
+    "ready": "六项内容已填写，可以确认。",
+    "incomplete": "请补齐所有字段后确认。",
+    "saving": "正在写入…",
+    "confirmed": "已确认",
+    "confirm": "确认并创建版本",
+    "marginLabel": "Hermes 研究页边"
   },
   "ingestion": {
     "status": {
@@ -617,6 +736,7 @@
     },
     "intake": {
       "title": "编排证据集合",
+      "stepLabel": "02 / 证据接收",
       "localOnly": "在您明确创建 Research Object 前，文件只保留在当前设备。",
       "dropTitle": "将原始材料放入工作集合",
       "formats": "PDF · Word · TeX/ZIP · Markdown · 图片 · CSV/TSV · JSON/YAML · Notebook · Python/R",
@@ -741,6 +861,8 @@
   },
   "hermesCompanion": {
     "dismiss": "关闭 Hermes 引导",
+    "dismissSpeech": "收起 Hermes 的话",
+    "guideLabel": "字段批注",
     "explain": "解释",
     "draft": "草拟",
     "check": "检查",
@@ -748,7 +870,26 @@
     "disableMotion": "关闭 Hermes 动效",
     "startingMotion": "Hermes 动效启动中",
     "retryMotion": "重试 Hermes 动效",
+    "presenceControl": {
+      "label": "Hermes 尺寸与陪伴方式",
+      "original": "原样 · 360px",
+      "compact": "缩小 · 200px",
+      "quiet": "安静回应"
+    },
     "takeMeThere": "带我过去",
+    "performance": {
+      "tones": { "curious": "发现", "focused": "校读", "friendly": "同行", "reflective": "片刻思考" },
+      "capCheck": { "one": "帽子正，思路也正。", "two": "先把思路扶稳。" },
+      "earPerk": { "one": "我听见新问题了。", "two": "这条线索有动静。" },
+      "lampListen": { "one": "灯里有一点回声。", "two": "证据正在聚拢。" },
+      "happyWiggle": { "one": "这一步很扎实。", "two": "进展不错，继续。" },
+      "thinkingPause": { "one": "让我想一小会儿。", "two": "先别急着下结论。" },
+      "evidenceCheck": { "one": "证据先对齐。", "two": "我在核对出处。" },
+      "observe": { "one": "那边好像有线索。", "two": "我再看一眼上下文。" },
+      "possibleIssue": { "one": "这里还缺一环。", "two": "这句话需要证据。" },
+      "read": { "one": "我在读证据链。", "two": "先看原文怎么说。" },
+      "success": { "one": "这一步已经闭合。", "two": "证据和表述对上了。" }
+    },
     "targets": {
       "ro-title": "先给研究对象一个准确标题。",
       "source-import": "把原始证据带到这里。",
@@ -774,6 +915,142 @@
       "sdf-limitations": "明确样本、方法、外推范围与尚未验证的部分。",
       "hermes-diff": "逐项核对证据与措辞；只有你接受的差异才会写入。",
       "commit": "确认版本说明和变更范围后再提交，已发布版本不会被原地改写。"
+    }
+  },
+  "researchWorkbenchReview": {
+    "backHome": "返回 OpenScience",
+    "visualReview": "公开视觉评审",
+    "exit": "进入当前产品",
+    "kicker": "Hermes / 情境研究工具",
+    "title": "研究工作台，而不是仪器面板",
+    "introduction": "暖纸承担阅读与思考，深石墨只在证据核验时出现。右键 Hermes 查看它如何从角色身边自然展开。",
+    "sceneLabel": "视觉评审场景",
+    "close": "关闭",
+    "hermesTrigger": "Hermes：点击打开助手，右键打开动作菜单",
+    "measure": {
+      "surface": "工作表面",
+      "surfaceValue": "暖纸",
+      "reading": "正文"
+    },
+    "session": {
+      "eyebrow": "当前研究会话",
+      "openDecision": "这次回来，需要先决定",
+      "decision": "核对图 3C 的时间常数",
+      "decisionNote": "证据与结果段相差 12 fs；确认后再记录新版本。",
+      "pathLabel": "当前研究工作流",
+      "draft": "工作草稿",
+      "evidence": "证据核对",
+      "version": "记录版本",
+      "open": "项待决定",
+      "afterDecision": "决定后生成"
+    },
+    "views": {
+      "dashboard": { "label": "工作台", "eyebrow": "01 / 回到研究", "note": "信息活泼，但主动作和正在进行的研究始终先被看见。" },
+      "editor": { "label": "编辑", "eyebrow": "02 / 安静书写", "note": "降低界面噪声，用正文尺寸、行距和页边批注承载连续阅读。" },
+      "review": { "label": "审阅", "eyebrow": "03 / 对照证据", "note": "深色只服务于证据来源；建议和决定仍留在暖纸工作面。" },
+      "explore": { "label": "发现", "eyebrow": "04 / 学术发现", "note": "以连续索引取代卡片墙，让标题、问题和证据类型便于扫读。" },
+      "reading": { "label": "阅读", "eyebrow": "05 / 长文阅读", "note": "18px 正文与中文 1.82 行距，适合持续阅读和学术内容。" },
+      "mobile": { "label": "移动端", "eyebrow": "06 / 长按交互", "note": "紧凑布局保留 200px Hermes 和 44px 触点，不把菜单压成图标谜题。" }
+    },
+    "menu": {
+      "eyebrow": "Hermes · 研究页边",
+      "title": "围绕这一步",
+      "quiet": "陪我读到本段结束",
+      "quietNote": "收起提醒，不打断阅读",
+      "editor": "回到方法段",
+      "editorNote": "回到上次停留的段落",
+      "review": "核对图 3C 的时间常数",
+      "reviewNote": "并排查看证据与当前结论",
+      "keyboardHint": "Shift+F10 或菜单键打开 · Esc 关闭",
+      "mobileHint": "长按 Hermes 打开 · 点按仍进入助手"
+    },
+    "bubble": { "intent": "一起读" },
+    "status": {
+      "ready": "Hermes 已在研究工作台旁待命。",
+      "quiet": "我把提醒收好了。你先读到这段末尾，我就在页边。",
+      "boundaryLabel": "Hermes 注意到",
+      "boundary": "1 处证据差异",
+      "boundaryNote": "图 3C ↔ 结果段",
+      "recorded": "已记录这条建议，证据与表述保持关联。"
+    },
+    "assistant": {
+      "title": "研究助手",
+      "description": "普通点击保持原有助手入口；这个评审夹具不发送请求，也不会写入研究数据。",
+      "prompt": "我可以帮你梳理本页结构，但不会替你接受证据或改写已发布版本。",
+      "inputLabel": "准备询问",
+      "draft": "请比较这段方法描述与证据来源。"
+    },
+    "dashboard": {
+      "active": "正在进行",
+      "title": "层状材料中的超快电荷转移",
+      "decisionLabel": "当前需要你判断",
+      "focusTitle": "图注与结果段相差 12 fs",
+      "summary": "图 3C 的原始拟合记录为 68 fs，结果段目前写作 80 fs。两处都已关联原始帧和校准记录，需要在形成下一版本前确认采用哪一条表述。",
+      "evidence": "证据已关联",
+      "version": "工作版本",
+      "next": "下一决定",
+      "nextValue": "核对结果",
+      "output": "完成后",
+      "outputValue": "记录 v0.5",
+      "continue": "打开证据对照",
+      "activity": "研究轨迹",
+      "eventOne": "方法段已保存",
+      "eventOneNote": "参数范围与校准记录已关联。",
+      "eventTwo": "Hermes 找到一处差异",
+      "eventTwoNote": "图注与结果段的时间常数不一致。",
+      "eventThree": "导入实验笔记",
+      "eventThreeNote": "4 个文件进入证据库。",
+      "yesterday": "昨日"
+    },
+    "editor": {
+      "outline": "SDF 结构",
+      "problem": "研究问题",
+      "method": "方法与边界",
+      "results": "主要结果",
+      "limitations": "限制",
+      "paragraphOne": "我们使用少周期泵浦—探测显微术测量层间电荷转移，并以三次独立校准约束时间零点。每次测量都保留原始帧、校准参数与分析环境。",
+      "paragraphTwo": "拟合只在信噪比高于预先登记阈值的区域进行。该方法能够分辨结构弛豫之前出现的快速通道，但不能单独确定其微观机制。",
+      "note": "把可复现条件留在正文附近，比藏进一个低对比度设置面板更容易被研究者发现。",
+      "notes": "页边批注",
+      "noteOne": "时间零点来自 calibration/run-03。",
+      "noteTwo": "机制解释仍应标记为待验证。"
+    },
+    "review": {
+      "source": "原始证据",
+      "quote": "三个独立校准运行均解析出 80 fs 以内的早期转移分量。",
+      "confidence": "提取置信度",
+      "provenance": "来源",
+      "suggestion": "Hermes 建议 01 / 01",
+      "title": "让结论与证据边界一致",
+      "body": "原表述把快速分量写成已确定的机制，但现有证据只支持时间尺度与重复性。建议保留观察结果，把机制判断留作后续验证。",
+      "before": "我们确认了由声子驱动的超快层间转移机制。",
+      "after": "我们在三次独立校准中观察到 80 fs 以内的层间转移分量。",
+      "accept": "接受这条建议",
+      "accepted": "已接受"
+    },
+    "explore": {
+      "query": "超快电荷转移 · 可复现实验",
+      "results": "3 个相关研究对象",
+      "oneTitle": "层状半导体中的非平衡载流子动力学",
+      "oneNote": "泵浦—探测 · 原始数据 · 分析代码 · 2026",
+      "twoTitle": "时间零点校准对亚百飞秒结论的影响",
+      "twoNote": "方法学 · 校准记录 · 复现报告 · 2025",
+      "threeTitle": "二维异质结的早期电荷分离通道",
+      "threeNote": "预印本 · 公开评审 4 条 · 数据 CC0 · 2026"
+    },
+    "reading": {
+      "citation": "公开研究对象 / 版本 4",
+      "title": "层状物质中的超快电荷转移",
+      "deck": "证据优先的版本化记录，连接论断、方法、原始数据与可复现环境。",
+      "byline": "DHL · 浙江大学",
+      "paragraphOne": "层间电荷如何在晶格达到平衡之前移动，是理解二维异质结构中非平衡过程的关键问题。我们把每条主要论断与产生它的原始帧、校准记录和分析代码保持在同一版本中。",
+      "paragraphTwo": "三个独立运行均显示一个亚 80 飞秒的转移分量。结果支持早期转移通道的存在，但尚不足以单独判定微观机制；这一限制与复现条件一起保留在公开记录中。"
+    },
+    "mobile": {
+      "active": "继续研究",
+      "title": "核对图 3C 的时间常数",
+      "summary": "证据与结果段有一处需要确认。Hermes 会留在页面下方，不遮住主要决定。",
+      "hint": "长按下方 Hermes，查看紧凑动作菜单。普通点按仍打开助手。"
     }
   },
   "opticalLab": {

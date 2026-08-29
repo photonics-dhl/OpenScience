@@ -5,13 +5,22 @@
       "entry": ["scripts/*.mjs"],
       "project": ["scripts/**/*.mjs"],
       "ignoreDependencies": ["@prisma/client", "prisma", "task-master-ai"],
-      "ignoreBinaries": ["docker-compose"]
+      "ignoreBinaries": ["docker-compose", "flock"]
     },
     "apps/api": {
       "ignoreDependencies": ["archiver", "@types/archiver"]
     },
+    "apps/agent-worker": {
+      "entry": ["src/index.ts", "src/parser-service.ts", "src/parser-acceptance-runner.ts"],
+      "project": ["src/**/*.ts", "test/**/*.ts"],
+      "ignoreDependencies": ["mammoth", "pdf-parse", "yauzl"]
+    },
     "apps/web": {
       "project": ["app/**/*.{ts,tsx}", "components/**/*.{ts,tsx}", "lib/**/*.{ts,tsx}", "*.{ts,mjs}"]
+    },
+    "infra/parser-candidates/liteparse": {
+      "entry": ["runner.mjs"],
+      "project": ["*.mjs"]
     },
     "apps/*": {
       "entry": ["src/index.ts"],

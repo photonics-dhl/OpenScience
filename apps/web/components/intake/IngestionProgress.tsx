@@ -24,14 +24,14 @@ export function IngestionProgress({ status, progress }: { status: IntakeMaterial
         aria-valuemax={100}
         aria-valuemin={0}
         aria-valuenow={progress}
-        className="h-px bg-white/15"
+        className="h-px bg-os-rule-paper"
         role="progressbar"
       >
-        <span className="block h-px bg-[#ef4c2f] transition-[width] duration-300 motion-reduce:transition-none" style={{ width: `${progress}%` }} />
+        <span className="block h-px bg-os-vermilion-ink transition-[width] duration-300 motion-reduce:transition-none" style={{ width: `${progress}%` }} />
       </div>
-      <ol className="mt-2 grid grid-cols-5 gap-2 text-[10px] uppercase tracking-[0.12em] text-white/40">
+      <ol className="mt-2 grid grid-cols-5 gap-2 text-xs text-os-muted-paper">
         {STAGES.map((stage, index) => (
-          <li className={index <= activeIndex ? 'text-white/80' : undefined} key={stage}>{t(`stage.${stage}`)}</li>
+          <li className={index <= activeIndex ? 'font-medium text-os-ink' : undefined} key={stage}>{t(`stage.${stage}`)}</li>
         ))}
       </ol>
     </div>

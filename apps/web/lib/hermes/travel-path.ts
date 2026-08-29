@@ -1,9 +1,53 @@
 export type HermesDockSide = 'top' | 'right' | 'bottom' | 'left';
 
+export interface HermesFootprintInsets {
+  bottom: number;
+  left: number;
+  right: number;
+  top: number;
+}
+
+// The carrier is square, its travel hull is inset 12%/12%/14%, and guide travel
+// combines -3deg with the hover keyframes (-.6deg..+.6deg, y 0..-2px).
+// Deriving the outward-rounded envelope from the rendered stage size avoids
+// applying the desktop allowance to the narrower mobile carrier.
+export function resolveHermesGuideTravelMotionEnvelope(stageSize: number): HermesFootprintInsets {
+  const hull = { bottom: stageSize * .86, left: stageSize * .12, right: stageSize * .88, top: stageSize * .12 };
+  const origin = { x: stageSize * .5, y: stageSize * .65 };
+  const extrema = { bottom: Number.NEGATIVE_INFINITY, left: Number.POSITIVE_INFINITY, right: Number.NEGATIVE_INFINITY, top: Number.POSITIVE_INFINITY };
+  for (const degrees of [-3.6, -2.4]) {
+    const angle = degrees * Math.PI / 180;
+    for (const translateY of [0, -2]) {
+      for (const x of [hull.left, hull.right]) {
+        for (const y of [hull.top, hull.bottom]) {
+          const dx = x - origin.x;
+          const dy = y - origin.y;
+          const transformedX = origin.x + dx * Math.cos(angle) - dy * Math.sin(angle);
+          const transformedY = origin.y + dx * Math.sin(angle) + dy * Math.cos(angle) + translateY;
+          extrema.left = Math.min(extrema.left, transformedX);
+          extrema.right = Math.max(extrema.right, transformedX);
+          extrema.top = Math.min(extrema.top, transformedY);
+          extrema.bottom = Math.max(extrema.bottom, transformedY);
+        }
+      }
+    }
+  }
+  return {
+    bottom: Math.ceil(extrema.bottom - hull.bottom),
+    left: Math.ceil(hull.left - extrema.left),
+    right: Math.ceil(extrema.right - hull.right),
+    top: Math.ceil(hull.top - extrema.top),
+  };
+}
+
 export interface HermesTravelInput {
   bottomInsetPx?: number;
+  clearancePx?: number;
   editable: DOMRectReadOnly | null;
+  footprint: HermesFootprintInsets;
+  footprintVariants?: HermesTravelFootprintVariant[];
   from: DOMRectReadOnly;
+  obstacles?: DOMRectReadOnly[];
   preferredSides: HermesDockSide[];
   target: DOMRectReadOnly | null;
   viewport: DOMRectReadOnly;
@@ -13,6 +57,57 @@ export interface HermesTravelPlan {
   dock: { x: number; y: number };
   mode: 'travel' | 'edge-stop' | 'missing';
   points: Array<{ x: number; y: number }>;
+  placement?: HermesTravelPlacement;
+  safe: boolean;
+}
+
+export interface HermesTravelPlacement {
+  horizontal: 'left' | 'right';
+  vertical: 'above' | 'below';
+}
+
+export interface HermesTravelFootprintVariant {
+  footprint: HermesFootprintInsets;
+  parts: HermesFootprintInsets[];
+  placement: HermesTravelPlacement;
+}
+
+type NormalizedFootprintVariant = Omit<HermesTravelFootprintVariant, 'placement'> & {
+  placement?: HermesTravelPlacement;
+};
+
+export function createHermesTravelFootprintVariants(
+  actor: HermesFootprintInsets,
+  measuredBubble: HermesFootprintInsets,
+  measuredPlacement: HermesTravelPlacement,
+): HermesTravelFootprintVariant[] {
+  const placements: HermesTravelPlacement[] = [
+    measuredPlacement,
+    { ...measuredPlacement, vertical: measuredPlacement.vertical === 'above' ? 'below' : 'above' },
+    { ...measuredPlacement, horizontal: measuredPlacement.horizontal === 'left' ? 'right' : 'left' },
+    {
+      horizontal: measuredPlacement.horizontal === 'left' ? 'right' : 'left',
+      vertical: measuredPlacement.vertical === 'above' ? 'below' : 'above',
+    },
+  ];
+  return placements.map((placement) => {
+    const bubble = {
+      bottom: placement.vertical === measuredPlacement.vertical ? measuredBubble.bottom : measuredBubble.top,
+      left: placement.horizontal === measuredPlacement.horizontal ? measuredBubble.left : measuredBubble.right,
+      right: placement.horizontal === measuredPlacement.horizontal ? measuredBubble.right : measuredBubble.left,
+      top: placement.vertical === measuredPlacement.vertical ? measuredBubble.top : measuredBubble.bottom,
+    };
+    return {
+      footprint: {
+        bottom: Math.max(actor.bottom, bubble.bottom),
+        left: Math.max(actor.left, bubble.left),
+        right: Math.max(actor.right, bubble.right),
+        top: Math.max(actor.top, bubble.top),
+      },
+      parts: [actor, bubble],
+      placement,
+    };
+  });
 }
 
 export interface HermesTravelStep {
@@ -20,8 +115,66 @@ export interface HermesTravelStep {
   point: { x: number; y: number };
 }
 
-type Point = { x: number; y: number };
-type Bounds = { left: number; right: number; top: number; bottom: number };
+export type Point = { x: number; y: number };
+export type Bounds = { left: number; right: number; top: number; bottom: number };
+
+export interface HermesGuideSourceCandidate {
+  placement: HermesTravelPlacement;
+  point: Point;
+  requiresMove: boolean;
+}
+
+export function resolveHermesGuideSourceCandidate(input: {
+  current: Point;
+  editable?: DOMRectReadOnly | null;
+  guardPx: number;
+  obstacles?: DOMRectReadOnly[];
+  variants: HermesTravelFootprintVariant[];
+  viewport: DOMRectReadOnly;
+}): HermesGuideSourceCandidate | null {
+  const candidates = input.variants.slice(0, 4).flatMap(({ footprint, parts, placement }) => {
+    const bounds = {
+      bottom: input.viewport.bottom - footprint.bottom - input.guardPx,
+      left: input.viewport.left + footprint.left + input.guardPx,
+      right: input.viewport.right - footprint.right - input.guardPx,
+      top: input.viewport.top + footprint.top + input.guardPx,
+    };
+    if (bounds.left > bounds.right || bounds.top > bounds.bottom) return [];
+    const seed = clampPoint(input.current, bounds);
+    const candidateXs = [seed.x];
+    const candidateYs = [seed.y];
+    const addEscapePoints = (obstacle: DOMRectReadOnly, part: HermesFootprintInsets) => {
+      candidateYs.push(
+        clamp(obstacle.top - part.bottom - input.guardPx, bounds.top, bounds.bottom),
+        clamp(obstacle.bottom + part.top + input.guardPx, bounds.top, bounds.bottom),
+      );
+      candidateXs.push(
+        clamp(obstacle.left - part.right - input.guardPx, bounds.left, bounds.right),
+        clamp(obstacle.right + part.left + input.guardPx, bounds.left, bounds.right),
+      );
+    };
+    if (input.editable) addEscapePoints(input.editable, footprint);
+    for (const obstacle of input.obstacles ?? []) {
+      for (const part of parts) addEscapePoints(obstacle, part);
+    }
+    const points = candidateXs.flatMap((x) => candidateYs.map((y) => ({ x, y })));
+    return points.filter((point, index) => points.findIndex((candidate) => candidate.x === point.x && candidate.y === point.y) === index)
+      .filter((point) => (!input.editable || !rectsOverlap(rectForFootprint(point, footprint), input.editable))
+        && (input.obstacles ?? []).every((obstacle) => parts.every((part) => !rectsOverlap(rectForFootprint(point, part), obstacle))))
+      .map((point) => ({
+        distance: Math.hypot(point.x - input.current.x, point.y - input.current.y),
+        placement,
+        point,
+      }));
+  });
+  candidates.sort((a, b) => a.distance - b.distance);
+  const selected = candidates[0];
+  return selected ? {
+    placement: selected.placement,
+    point: selected.point,
+    requiresMove: selected.distance >= .05,
+  } : null;
+}
 
 const clamp = (value: number, minimum: number, maximum: number) => Math.min(maximum, Math.max(minimum, value));
 const center = (rectangle: DOMRectReadOnly): Point => ({ x: rectangle.left + rectangle.width / 2, y: rectangle.top + rectangle.height / 2 });
@@ -30,12 +183,55 @@ const clampPoint = (point: Point, bounds: Bounds): Point => ({
   y: clamp(point.y, bounds.top, bounds.bottom),
 });
 
+export function rectForFootprint(point: Point, footprint: HermesFootprintInsets): Bounds {
+  return {
+    bottom: point.y + footprint.bottom,
+    left: point.x - footprint.left,
+    right: point.x + footprint.right,
+    top: point.y - footprint.top,
+  };
+}
+
+export function resolveHermesStationaryGuidePlacement(input: {
+  at: Point;
+  obstacles: DOMRectReadOnly[];
+  variants: HermesTravelFootprintVariant[];
+  viewport: DOMRectReadOnly;
+}): HermesTravelFootprintVariant | null {
+  for (const variant of input.variants.slice(0, 4)) {
+    const composite = rectForFootprint(input.at, variant.footprint);
+    const inside = composite.left >= input.viewport.left && composite.right <= input.viewport.right
+      && composite.top >= input.viewport.top && composite.bottom <= input.viewport.bottom;
+    if (!inside) continue;
+    const partsAreSafe = variant.parts.every((part) => {
+      const bounds = rectForFootprint(input.at, part);
+      return input.obstacles.every((obstacle) => !rectsOverlap(bounds, obstacle));
+    });
+    if (partsAreSafe) return variant;
+  }
+  return null;
+}
+
 export function createHermesTravelTimeline(points: Point[], segmentMs: number): HermesTravelStep[] {
   return points.slice(1).map((point, index) => ({ atMs: index * segmentMs, point }));
 }
 
 function rectsOverlap(a: Bounds, b: DOMRectReadOnly) {
   return a.left < b.right && a.right > b.left && a.top < b.bottom && a.bottom > b.top;
+}
+
+function findSafeEdgeDock(safe: Bounds, isSafe: (candidate: Point) => boolean) {
+  const candidates = [
+    { x: safe.left, y: safe.top },
+    { x: safe.right, y: safe.top },
+    { x: safe.right, y: safe.bottom },
+    { x: safe.left, y: safe.bottom },
+    { x: (safe.left + safe.right) / 2, y: safe.top },
+    { x: safe.right, y: (safe.top + safe.bottom) / 2 },
+    { x: (safe.left + safe.right) / 2, y: safe.bottom },
+    { x: safe.left, y: (safe.top + safe.bottom) / 2 },
+  ];
+  return candidates.find(isSafe);
 }
 
 function segmentCrossesInterior(from: Point, to: Point, obstacle: Bounds): boolean {
@@ -69,91 +265,153 @@ function segmentCrossesInterior(from: Point, to: Point, obstacle: Bounds): boole
 
 function shortestVisiblePath(start: Point, end: Point, safe: Bounds, obstacle: Bounds): Point[] {
   if (!segmentCrossesInterior(start, end, obstacle)) return [start, end];
-  const candidates = [
+  const vertical = [obstacle.left, obstacle.right, safe.left, safe.right].map((x) => [
     start,
+    clampPoint({ x, y: start.y }, safe),
+    clampPoint({ x, y: end.y }, safe),
     end,
-    { x: obstacle.left, y: obstacle.top },
-    { x: obstacle.right, y: obstacle.top },
-    { x: obstacle.right, y: obstacle.bottom },
-    { x: obstacle.left, y: obstacle.bottom },
-    { x: safe.left, y: safe.top },
-    { x: safe.right, y: safe.top },
-    { x: safe.right, y: safe.bottom },
-    { x: safe.left, y: safe.bottom },
-  ].map((point) => clampPoint(point, safe));
-  const distance = candidates.map(() => Number.POSITIVE_INFINITY);
-  const previous = candidates.map(() => -1);
-  const visited = candidates.map(() => false);
-  distance[0] = 0;
-  for (let count = 0; count < candidates.length; count += 1) {
-    let current = -1;
-    for (let index = 0; index < candidates.length; index += 1) {
-      if (!visited[index] && (current === -1 || distance[index] < distance[current])) current = index;
-    }
-    if (current === -1 || !Number.isFinite(distance[current])) break;
-    visited[current] = true;
-    for (let next = 0; next < candidates.length; next += 1) {
-      if (visited[next] || next === current || segmentCrossesInterior(candidates[current], candidates[next], obstacle)) continue;
-      const step = Math.hypot(candidates[next].x - candidates[current].x, candidates[next].y - candidates[current].y);
-      if (distance[current] + step < distance[next]) {
-        distance[next] = distance[current] + step;
-        previous[next] = current;
-      }
-    }
-  }
-  if (!Number.isFinite(distance[1])) return [start, clampPoint({ x: safe.left, y: safe.top }, safe), end];
-  const path: Point[] = [];
-  for (let cursor = 1; cursor >= 0; cursor = previous[cursor]) {
-    path.unshift(candidates[cursor]);
-    if (cursor === 0) break;
-  }
-  return path;
+  ]);
+  const horizontal = [obstacle.top, obstacle.bottom, safe.top, safe.bottom].map((y) => [
+    start,
+    clampPoint({ x: start.x, y }, safe),
+    clampPoint({ x: end.x, y }, safe),
+    end,
+  ]);
+  const routes = [...vertical, ...horizontal]
+    .map((route) => route.filter((point, index) => index === 0 || point.x !== route[index - 1].x || point.y !== route[index - 1].y))
+    .filter((route) => route.slice(1).every((point, index) => !segmentCrossesInterior(route[index], point, obstacle)))
+    .sort((a, b) => {
+      const length = (route: Point[]) => route.slice(1).reduce((total, point, index) => total + Math.hypot(point.x - route[index].x, point.y - route[index].y), 0);
+      return length(a) - length(b);
+    });
+  return routes[0] ?? [start];
 }
 
 export function planHermesTravel(input: HermesTravelInput): HermesTravelPlan {
-  const halfWidth = input.from.width / 2;
-  const halfHeight = input.from.height / 2;
-  const safe: Bounds = {
-    left: input.viewport.left + halfWidth,
-    right: input.viewport.right - halfWidth,
-    top: input.viewport.top + halfHeight,
-    bottom: input.viewport.bottom - (input.bottomInsetPx ?? 0) - halfHeight,
+  const legacyVariant: NormalizedFootprintVariant = {
+    footprint: input.footprint,
+    parts: [input.footprint],
+    placement: undefined,
   };
-  const start = clampPoint(center(input.from), safe);
-  if (!input.target || !input.editable) return { dock: start, mode: 'missing', points: [start] };
+  const providedVariants = input.footprintVariants?.slice(0, 4) ?? [];
+  const usesCompositeVariants = providedVariants.length > 0;
+  const variants: NormalizedFootprintVariant[] = usesCompositeVariants
+    ? providedVariants
+    : [legacyVariant];
+  const boundsFor = (footprint: HermesFootprintInsets): Bounds => ({
+    left: input.viewport.left + footprint.left,
+    right: input.viewport.right - footprint.right,
+    top: input.viewport.top + footprint.top,
+    bottom: input.viewport.bottom - (input.bottomInsetPx ?? 0) - footprint.bottom,
+  });
+  const start = center(input.from);
+  const contains = (bounds: Bounds, point: Point) => point.x >= bounds.left && point.x <= bounds.right
+    && point.y >= bounds.top && point.y <= bounds.bottom;
+  const viewportEligibleVariants = usesCompositeVariants
+    ? variants.filter((variant) => contains(boundsFor(variant.footprint), start))
+    : variants;
+  const routeStartFor = (variant: NormalizedFootprintVariant) => usesCompositeVariants
+    ? start
+    : clampPoint(start, boundsFor(variant.footprint));
+  const fallbackVariant = variants[0];
+  const fallbackSafe = boundsFor(fallbackVariant.footprint);
+  const fallbackStart = routeStartFor(fallbackVariant);
+  if (!input.target || !input.editable) return { dock: fallbackStart, mode: 'missing', points: [fallbackStart], safe: true };
   const editable = input.editable;
   const target = input.target;
+  const obstacles = input.obstacles ?? [];
+  const candidateIsSafe = (candidate: Point, variant: NormalizedFootprintVariant) => (
+    !rectsOverlap(rectForFootprint(candidate, variant.footprint), editable)
+    && obstacles.every((obstacle) => variant.parts.every((part) => !rectsOverlap(rectForFootprint(candidate, part), obstacle)))
+  );
+  const eligibleVariants = usesCompositeVariants
+    ? viewportEligibleVariants.filter((variant) => !rectsOverlap(rectForFootprint(start, variant.footprint), editable))
+    : viewportEligibleVariants;
+  const safeEdge = () => {
+    for (const variant of eligibleVariants) {
+      const safe = boundsFor(variant.footprint);
+      if (safe.left > safe.right || safe.top > safe.bottom) continue;
+      const dock = findSafeEdgeDock(safe, (candidate) => candidateIsSafe(candidate, variant));
+      if (dock) return { dock, placement: variant.placement, variant };
+    }
+    return null;
+  };
 
   const targetVisible = rectsOverlap(target, input.viewport);
   if (!targetVisible) {
-    const dock = clampPoint(center(target), safe);
-    return { dock, mode: 'edge-stop', points: start.x === dock.x && start.y === dock.y ? [start] : [start, dock] };
+    const edge = safeEdge();
+    const dock = edge?.dock ?? (usesCompositeVariants ? start : clampPoint(center(target), fallbackSafe));
+    const routeStart = edge ? routeStartFor(edge.variant) : start;
+    return {
+      dock,
+      mode: 'edge-stop',
+      placement: edge?.placement,
+      points: routeStart.x === dock.x && routeStart.y === dock.y ? [routeStart] : [routeStart, dock],
+      safe: Boolean(edge),
+    };
   }
 
-  const clearance = 16;
+  const clearance = input.clearancePx ?? 16;
   const targetCenter = center(target);
-  const bySide: Record<HermesDockSide, Point> = {
-    top: { x: targetCenter.x, y: target.top - clearance - halfHeight },
-    right: { x: target.right + clearance + halfWidth, y: targetCenter.y },
-    bottom: { x: targetCenter.x, y: target.bottom + clearance + halfHeight },
-    left: { x: target.left - clearance - halfWidth, y: targetCenter.y },
-  };
   const sides = [...input.preferredSides, 'right', 'left', 'top', 'bottom'] as HermesDockSide[];
   const uniqueSides = sides.filter((side, index) => sides.indexOf(side) === index);
-  const dock = uniqueSides
-    .map((side) => clampPoint(bySide[side], safe))
-    .find((candidate) => !rectsOverlap({
-      left: candidate.x - halfWidth,
-      right: candidate.x + halfWidth,
-      top: candidate.y - halfHeight,
-      bottom: candidate.y + halfHeight,
-    }, editable)) ?? clampPoint(bySide.top, safe);
+  let selected: { dock: Point; placement?: HermesTravelPlacement; safe: Bounds; variant: NormalizedFootprintVariant } | null = null;
+  for (const side of uniqueSides) {
+    const safeCandidates = eligibleVariants.flatMap((variant) => {
+      const footprint = variant.footprint;
+      const safe = boundsFor(footprint);
+      if (safe.left > safe.right || safe.top > safe.bottom) return [];
+      const bySide: Record<HermesDockSide, Point> = {
+        top: { x: targetCenter.x, y: target.top - clearance - footprint.bottom },
+        right: { x: target.right + clearance + footprint.left, y: targetCenter.y },
+        bottom: { x: targetCenter.x, y: target.bottom + clearance + footprint.top },
+        left: { x: target.left - clearance - footprint.right, y: targetCenter.y },
+      };
+      const dock = clampPoint(bySide[side], safe);
+      return candidateIsSafe(dock, variant) ? [{ dock, safe, variant }] : [];
+    });
+    const score = ({ dock, variant }: (typeof safeCandidates)[number]) => {
+      if (!variant.placement) return 0;
+      const desiredPlacement: HermesTravelPlacement = {
+        horizontal: dock.x < (input.viewport.left + input.viewport.right) / 2 ? 'right' : 'left',
+        vertical: dock.y < (input.viewport.top + input.viewport.bottom) / 2 ? 'below' : 'above',
+      };
+      return Number(variant.placement.horizontal !== desiredPlacement.horizontal) * 2
+        + Number(variant.placement.vertical !== desiredPlacement.vertical);
+    };
+    safeCandidates.sort((a, b) => score(a) - score(b));
+    const candidate = safeCandidates[0];
+    if (candidate) selected = { ...candidate, placement: candidate.variant.placement };
+    if (selected) break;
+  }
+  if (!selected) {
+    const stationary = eligibleVariants.find((variant) => candidateIsSafe(start, variant));
+    if (stationary) {
+      selected = { dock: start, placement: stationary.placement, safe: boundsFor(stationary.footprint), variant: stationary };
+    }
+  }
+  if (!selected) {
+    const edge = safeEdge();
+    const edgeDock = edge?.dock ?? (usesCompositeVariants ? start : fallbackStart);
+    const routeStart = edge ? routeStartFor(edge.variant) : start;
+    return {
+      dock: edgeDock,
+      mode: 'edge-stop',
+      placement: edge?.placement,
+      points: routeStart.x === edgeDock.x && routeStart.y === edgeDock.y ? [routeStart] : [routeStart, edgeDock],
+      safe: Boolean(edge),
+    };
+  }
+  const { dock, placement, safe, variant } = selected;
+  const footprint = variant.footprint;
+  const routeStart = routeStartFor(variant);
+  const pathSafetyPx = 1;
   const expanded: Bounds = {
-    left: editable.left - halfWidth - clearance,
-    right: editable.right + halfWidth + clearance,
-    top: editable.top - halfHeight - clearance,
-    bottom: editable.bottom + halfHeight + clearance,
+    left: editable.left - footprint.right - pathSafetyPx,
+    right: editable.right + footprint.left + pathSafetyPx,
+    top: editable.top - footprint.bottom - pathSafetyPx,
+    bottom: editable.bottom + footprint.top + pathSafetyPx,
   };
-  const points = shortestVisiblePath(start, dock, safe, expanded);
-  return { dock, mode: 'travel', points };
+  const points = shortestVisiblePath(routeStart, dock, safe, expanded);
+  return { dock, mode: 'travel', placement, points, safe: true };
 }

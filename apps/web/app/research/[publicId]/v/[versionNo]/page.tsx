@@ -3,6 +3,8 @@ import { getServerPublicResearchVersion, PublicServerApiError } from '../../../.
 import type { Metadata } from 'next';
 import { notFound } from 'next/navigation';
 import { getTranslations } from 'next-intl/server';
+import SiteHeader from '@/components/landing/SiteHeader';
+import { PublicShell } from '@/components/shell/PublicShell';
 
 /** P1D-9：公开版本页（§6.1 /research/OSR-YYYY-NNNNNN/v/N，SSR 可索引 §4.3）。 */
 
@@ -35,15 +37,28 @@ export async function generateMetadata({ params }: { params: { publicId: string;
 export default async function Page({ params }: { params: { publicId: string; versionNo: string } }) {
   const versionNo = Number(params.versionNo);
   const t = await getTranslations('public');
+  const shell = await getTranslations('shell');
+  const publicShell = (children: React.ReactNode, mainClassName?: string) => (
+    <PublicShell
+      headerActions={<SiteHeader context="public-product" tone="paper" />}
+      mainClassName={mainClassName}
+      navigationLabel={shell('primaryNavigation')}
+      skipLabel={shell('skipToContent')}
+      tone="paper"
+      wrapHeaderActionsOnMobile
+    >
+      {children}
+    </PublicShell>
+  );
   if (!Number.isInteger(versionNo) || versionNo < 1) {
-    return <main className="pub-page"><h1>{t('invalidVersion')}</h1></main>;
+    return publicShell(<h1>{t('invalidVersion')}</h1>, 'pub-page');
   }
   try {
     const { research } = await getServerPublicResearchVersion(params.publicId, versionNo);
-    return <main className="pub-page-tabbed"><PublicReadingSurface research={research} /></main>;
+    return publicShell(<div className="pub-page-tabbed"><PublicReadingSurface research={research} /></div>);
   } catch (err) {
     if (err instanceof PublicServerApiError && err.status === 404) notFound();
     const limited = err instanceof PublicServerApiError && err.status === 429;
-    return <main className="pub-page"><h1>{t(limited ? 'rateLimited.title' : 'unavailable.title')}</h1><p>{t(limited ? 'rateLimited.body' : 'unavailable.body')}</p></main>;
+    return publicShell(<><h1>{t(limited ? 'rateLimited.title' : 'unavailable.title')}</h1><p>{t(limited ? 'rateLimited.body' : 'unavailable.body')}</p></>, 'pub-page');
   }
 }

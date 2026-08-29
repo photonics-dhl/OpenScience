@@ -1,7 +1,110 @@
 import { expect, test, type Page, type Route } from 'playwright/test';
 
+import { HERMES_PATROL_MOTION_ENVELOPE, HERMES_PATROL_TRANSLATION_ENVELOPE } from '../../lib/hermes/companion-placement';
+
 const baseUrl = process.env.WEB_BASE_URL ?? 'http://127.0.0.1:3010';
 const outDir = 'test/visual/out/hermes-dashboard';
+
+const overlaps = (a: { x: number; y: number; width: number; height: number }, b: { x: number; y: number; width: number; height: number }) => (
+  a.x < b.x + b.width && a.x + a.width > b.x && a.y < b.y + b.height && a.y + a.height > b.y
+);
+
+interface PerformanceBubbleEvidence {
+  action: string;
+  actor: { x: number; y: number; width: number; height: number };
+  bubble: { x: number; y: number; width: number; height: number };
+  bubbleTransformY: number;
+  cue: string;
+  horizontal: string;
+  protectedRegions: Array<{ x: number; y: number; width: number; height: number }>;
+  scrollY: number;
+  vertical: string;
+  viewport: { height: number; width: number };
+}
+
+async function readPerformanceBubbleEvidence(page: Page): Promise<PerformanceBubbleEvidence | null> {
+  return page.evaluate(() => {
+    const stage = document.querySelector<HTMLElement>('[data-hermes-workspace-stage="true"]');
+    const bubble = stage?.querySelector<HTMLElement>('[data-hermes-performance-bubble="true"]');
+    const actor = stage?.querySelector<HTMLElement>('[data-hermes-companion-actor="true"]');
+    const cue = bubble?.dataset.hermesSpeechCue;
+    const horizontal = stage?.dataset.hermesBubbleHorizontal;
+    const vertical = stage?.dataset.hermesBubbleVertical;
+    if (!stage || !bubble || !actor || !cue || !horizontal || !vertical
+      || stage.dataset.hermesSpeechVisible !== 'true'
+      || bubble.dataset.hermesSpeechVisible !== 'true'
+      || stage.dataset.hermesBubbleSafe !== 'true') return null;
+    const rect = (element: Element) => {
+      const bounds = element.getBoundingClientRect();
+      return { x: bounds.x, y: bounds.y, width: bounds.width, height: bounds.height };
+    };
+    const bubbleBounds = rect(bubble);
+    const actorBounds = rect(actor);
+    if (bubbleBounds.width <= 0 || bubbleBounds.height <= 0 || actorBounds.width <= 0 || actorBounds.height <= 0) return null;
+    return {
+      action: stage.dataset.hermesAction ?? 'missing',
+      actor: actorBounds,
+      bubble: bubbleBounds,
+      bubbleTransformY: new DOMMatrixReadOnly(getComputedStyle(bubble).transform).m42,
+      cue,
+      horizontal,
+      protectedRegions: Array.from(document.querySelectorAll('[data-hermes-protected="true"]')).map(rect)
+        .filter((bounds) => bounds.width > 0 && bounds.height > 0),
+      scrollY: window.scrollY,
+      vertical,
+      viewport: { height: window.innerHeight, width: window.innerWidth },
+    };
+  });
+}
+
+async function waitForPerformanceBubbleEvidence(
+  page: Page,
+  accept: (evidence: PerformanceBubbleEvidence) => boolean = isSafePerformanceBubble,
+): Promise<PerformanceBubbleEvidence> {
+  const actions = new Set<string>();
+  for (let elapsed = 0; elapsed < 300_000; elapsed += 500) {
+    const evidence = await readPerformanceBubbleEvidence(page);
+    if (evidence) {
+      actions.add(evidence.action);
+      if (accept(evidence)) return evidence;
+    }
+    await page.clock.fastForward(500);
+    await page.waitForTimeout(5);
+  }
+  throw new Error(`No measurable performance bubble; observed actions: ${Array.from(actions).join(', ')}`);
+}
+
+function isSafePerformanceBubble(evidence: PerformanceBubbleEvidence) {
+  return !evidence.protectedRegions.some((region) => overlaps(evidence.bubble, region))
+    && isPerformanceCompositeInsideViewport(evidence)
+    && /^(left|right)$/u.test(evidence.horizontal)
+    && /^(above|below)$/u.test(evidence.vertical);
+}
+
+function isPerformanceCompositeInsideViewport(evidence: PerformanceBubbleEvidence) {
+  return evidence.actor.x >= 0
+    && evidence.actor.y >= 0
+    && evidence.actor.x + evidence.actor.width <= evidence.viewport.width
+    && evidence.actor.y + evidence.actor.height <= evidence.viewport.height
+    && evidence.bubble.x >= 0
+    && evidence.bubble.y >= 0
+    && evidence.bubble.x + evidence.bubble.width <= evidence.viewport.width
+    && evidence.bubble.y + evidence.bubble.height <= evidence.viewport.height;
+}
+
+function expectSafePerformanceBubble(evidence: PerformanceBubbleEvidence) {
+  expect(evidence.protectedRegions.some((region) => overlaps(evidence.bubble, region))).toBe(false);
+  expect(evidence.actor.x).toBeGreaterThanOrEqual(0);
+  expect(evidence.actor.y).toBeGreaterThanOrEqual(0);
+  expect(evidence.actor.x + evidence.actor.width).toBeLessThanOrEqual(evidence.viewport.width);
+  expect(evidence.actor.y + evidence.actor.height).toBeLessThanOrEqual(evidence.viewport.height);
+  expect(evidence.bubble.x).toBeGreaterThanOrEqual(0);
+  expect(evidence.bubble.y).toBeGreaterThanOrEqual(0);
+  expect(evidence.bubble.x + evidence.bubble.width).toBeLessThanOrEqual(evidence.viewport.width);
+  expect(evidence.bubble.y + evidence.bubble.height).toBeLessThanOrEqual(evidence.viewport.height);
+  expect(evidence.horizontal).toMatch(/left|right/u);
+  expect(evidence.vertical).toMatch(/above|below/u);
+}
 
 async function json(route: Route, body: unknown, status = 200) {
   await route.fulfill({ status, contentType: 'application/json', body: JSON.stringify(body) });
@@ -27,6 +130,251 @@ async function mockDashboard(page: Page, taskState?: string) {
   });
 }
 
+async function expectDashboardProtectedRegions(page: Page) {
+  const regions = [
+    page.locator('header nav[data-hermes-primary-navigation="true"]'),
+    page.locator('section[aria-labelledby="continue-title"]'),
+    page.locator('section[aria-labelledby="import-stage-title"]'),
+    page.locator('aside[aria-labelledby="hermes-task-title"]'),
+  ];
+  for (const region of regions) {
+    await expect(region).toHaveCount(1);
+    await expect(region).toHaveAttribute('data-hermes-protected', 'true');
+  }
+  await expect.poll(() => page.locator('[data-hermes-protected="true"]').count()).toBeGreaterThanOrEqual(regions.length);
+}
+
+test('Dashboard protects semantic navigation, continuation, import and Hermes task regions', async ({ page }) => {
+  await mockDashboard(page);
+  await page.goto(`${baseUrl}/dashboard?hermes-motion=reduced`, { waitUntil: 'networkidle' });
+  await expectDashboardProtectedRegions(page);
+
+  await page.route('**/api/research-objects?limit=20', (route) => json(route, { researchObjects: [] }));
+  await page.reload({ waitUntil: 'networkidle' });
+  await expectDashboardProtectedRegions(page);
+});
+
+test('a patrol cycle stays inside its shared motion envelope and clears adjacent protected work', async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await mockDashboard(page);
+  await page.goto(`${baseUrl}/dashboard?hermes-motion=full`, { waitUntil: 'networkidle' });
+  const stage = page.locator('[data-hermes-workspace-stage="true"]');
+  const travelHull = stage.locator('[data-hermes-carrier-travel-hull="true"]');
+  await expect(travelHull).toBeVisible();
+  await expect(stage.locator('[data-hermes-rig="live2d-wanko"]')).toHaveAttribute('data-hermes-rig-status', 'ready', { timeout: 20_000 });
+  const geometryVersion = Number(await stage.getAttribute('data-hermes-protected-geometry-version'));
+  await page.evaluate((motionEnvelope) => {
+    const hull = document.querySelector<HTMLElement>('[data-hermes-carrier-travel-hull="true"]')!.getBoundingClientRect();
+    const blocker = document.createElement('div');
+    blocker.dataset.hermesProtected = 'true';
+    blocker.dataset.patrolEnvelopeBlocker = 'true';
+    const useRight = hull.right + motionEnvelope.right + 41 <= innerWidth;
+    Object.assign(blocker.style, {
+      height: `${hull.height}px`,
+      left: `${useRight ? hull.right + motionEnvelope.right + 1 : hull.left - motionEnvelope.left - 41}px`,
+      pointerEvents: 'none',
+      position: 'fixed', top: `${hull.top}px`, width: '40px', zIndex: '1',
+    });
+    document.body.append(blocker);
+  }, HERMES_PATROL_MOTION_ENVELOPE);
+  await expect.poll(async () => Number(await stage.getAttribute('data-hermes-protected-geometry-version'))).toBeGreaterThan(geometryVersion);
+  await expect.poll(async () => {
+    const [hull, blocker] = await Promise.all([
+      travelHull.boundingBox(), page.locator('[data-patrol-envelope-blocker="true"]').boundingBox(),
+    ]);
+    return hull && blocker ? !overlaps(hull, blocker) : false;
+  }).toBe(true);
+  await expect(stage).toHaveAttribute('data-hermes-motion-envelope-safe', 'true');
+
+  await page.evaluate(() => {
+    const stageNode = document.querySelector<HTMLElement>('[data-hermes-workspace-stage="true"]')!;
+    const forcePatrol = () => {
+      if (stageNode.dataset.hermesAction !== 'patrol') stageNode.dataset.hermesAction = 'patrol';
+    };
+    forcePatrol();
+    new MutationObserver(forcePatrol).observe(stageNode, { attributeFilter: ['data-hermes-action'], attributes: true });
+  });
+  await expect(stage).toHaveAttribute('data-hermes-action', 'patrol');
+  await expect(stage).toHaveAttribute('data-hermes-motion-envelope-safe', 'true');
+  const settledEnvelope = await page.evaluate((motionEnvelope) => {
+    const hull = document.querySelector<HTMLElement>('[data-hermes-carrier-travel-hull="true"]')!.getBoundingClientRect();
+    const blocker = document.querySelector<HTMLElement>('[data-patrol-envelope-blocker="true"]')!.getBoundingClientRect();
+    const envelope = {
+      bottom: hull.bottom + motionEnvelope.bottom, left: hull.left - motionEnvelope.left,
+      right: hull.right + motionEnvelope.right, top: hull.top - motionEnvelope.top,
+    };
+    const overlapsEnvelope = envelope.left < blocker.right && envelope.right > blocker.left
+      && envelope.top < blocker.bottom && envelope.bottom > blocker.top;
+    return { blocker: { bottom: blocker.bottom, left: blocker.left, right: blocker.right, top: blocker.top }, envelope, overlapsEnvelope };
+  }, HERMES_PATROL_MOTION_ENVELOPE);
+  expect(settledEnvelope.overlapsEnvelope, `settled patrol envelope: ${JSON.stringify(settledEnvelope)}`).toBe(false);
+  const patrolOrigin = await travelHull.boundingBox();
+  expect(patrolOrigin).not.toBeNull();
+  const evidence = await page.evaluate(() => new Promise<{
+    collisions: number; frames: number; maxBottomDelta: number; maxRightDelta: number; maxX: number; maxY: number;
+    minLeftDelta: number; minTopDelta: number; minX: number; minY: number; viewportViolations: number;
+  }>((resolveEvidence) => {
+    const stageNode = document.querySelector<HTMLElement>('[data-hermes-workspace-stage="true"]')!;
+    const actor = stageNode.querySelector<HTMLElement>('[data-hermes-companion-actor="true"]')!;
+    const hull = stageNode.querySelector<HTMLElement>('[data-hermes-carrier-travel-hull="true"]')!;
+    const blocker = document.querySelector<HTMLElement>('[data-patrol-envelope-blocker="true"]')!;
+    const origin = hull.getBoundingClientRect();
+    const result = {
+      collisions: 0, frames: 0, maxX: Number.NEGATIVE_INFINITY, maxY: Number.NEGATIVE_INFINITY,
+      maxBottomDelta: Number.NEGATIVE_INFINITY, maxRightDelta: Number.NEGATIVE_INFINITY,
+      minLeftDelta: Number.POSITIVE_INFINITY, minTopDelta: Number.POSITIVE_INFINITY,
+      minX: Number.POSITIVE_INFINITY, minY: Number.POSITIVE_INFINITY, viewportViolations: 0,
+    };
+    const started = performance.now();
+    const overlapsRect = (a: DOMRect, b: DOMRect) => a.left < b.right && a.right > b.left && a.top < b.bottom && a.bottom > b.top;
+    const sample = () => {
+      const bounds = hull.getBoundingClientRect();
+      const obstacle = blocker.getBoundingClientRect();
+      const matrix = new DOMMatrixReadOnly(getComputedStyle(actor).transform);
+      result.frames += 1;
+      result.minX = Math.min(result.minX, matrix.m41);
+      result.maxX = Math.max(result.maxX, matrix.m41);
+      result.minY = Math.min(result.minY, matrix.m42);
+      result.maxY = Math.max(result.maxY, matrix.m42);
+      result.minLeftDelta = Math.min(result.minLeftDelta, bounds.left - origin.left);
+      result.maxRightDelta = Math.max(result.maxRightDelta, bounds.right - origin.right);
+      result.minTopDelta = Math.min(result.minTopDelta, bounds.top - origin.top);
+      result.maxBottomDelta = Math.max(result.maxBottomDelta, bounds.bottom - origin.bottom);
+      result.collisions += Number(overlapsRect(bounds, obstacle));
+      result.viewportViolations += Number(bounds.left < 0 || bounds.top < 0 || bounds.right > innerWidth || bounds.bottom > innerHeight);
+      if (performance.now() - started >= 4_190) resolveEvidence(result);
+      else requestAnimationFrame(sample);
+    };
+    requestAnimationFrame(sample);
+  }));
+  expect(evidence.frames).toBeGreaterThan(120);
+  expect(evidence.collisions, `patrol evidence: ${JSON.stringify({ evidence, patrolOrigin, settledEnvelope })}`).toBe(0);
+  expect(evidence.viewportViolations, `patrol evidence: ${JSON.stringify(evidence)}`).toBe(0);
+  expect(evidence.minLeftDelta).toBeGreaterThanOrEqual(-HERMES_PATROL_MOTION_ENVELOPE.left);
+  expect(evidence.maxRightDelta).toBeLessThanOrEqual(HERMES_PATROL_MOTION_ENVELOPE.right);
+  expect(evidence.minTopDelta).toBeGreaterThanOrEqual(-HERMES_PATROL_MOTION_ENVELOPE.top);
+  expect(evidence.maxBottomDelta).toBeLessThanOrEqual(HERMES_PATROL_MOTION_ENVELOPE.bottom);
+  const cssExtrema = await page.evaluate(async () => {
+    const probeStage = document.createElement('div');
+    probeStage.className = 'hermes-workspace-stage';
+    probeStage.dataset.hermesAction = 'patrol';
+    probeStage.dataset.hermesMotionEnvelopeSafe = 'true';
+    probeStage.dataset.hermesMotionPreference = 'full';
+    probeStage.style.visibility = 'hidden';
+    const actor = document.createElement('div');
+    actor.className = 'hermes-companion-actor';
+    probeStage.append(actor);
+    document.body.append(probeStage);
+    await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
+    const animation = actor.getAnimations().find((candidate) => (candidate as CSSAnimation).animationName === 'hermes-companion-patrol')!;
+    animation.pause();
+    const result = { maxX: Number.NEGATIVE_INFINITY, maxY: Number.NEGATIVE_INFINITY, minX: Number.POSITIVE_INFINITY, minY: Number.POSITIVE_INFINITY };
+    for (const progress of [0, .18, .38, .58, .78, .9, 1]) {
+      animation.currentTime = 4_200 * progress;
+      const matrix = new DOMMatrixReadOnly(getComputedStyle(actor).transform);
+      result.minX = Math.min(result.minX, matrix.m41);
+      result.maxX = Math.max(result.maxX, matrix.m41);
+      result.minY = Math.min(result.minY, matrix.m42);
+      result.maxY = Math.max(result.maxY, matrix.m42);
+    }
+    probeStage.remove();
+    return result;
+  });
+  expect(Math.abs(cssExtrema.minX + HERMES_PATROL_TRANSLATION_ENVELOPE.left)).toBeLessThanOrEqual(1);
+  expect(Math.abs(cssExtrema.maxX - HERMES_PATROL_TRANSLATION_ENVELOPE.right)).toBeLessThanOrEqual(1);
+  expect(Math.abs(cssExtrema.minY + HERMES_PATROL_TRANSLATION_ENVELOPE.top)).toBeLessThanOrEqual(1);
+  expect(Math.abs(cssExtrema.maxY - HERMES_PATROL_TRANSLATION_ENVELOPE.bottom)).toBeLessThanOrEqual(1);
+});
+
+test('Hermes measures a real performance bubble into a protected-safe viewport placement', async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await mockDashboard(page);
+  await page.clock.install({ time: new Date('2026-08-23T00:00:00Z') });
+  await page.goto(`${baseUrl}/dashboard?hermes-motion=full`, { waitUntil: 'networkidle' });
+  const initialEvidence = await waitForPerformanceBubbleEvidence(page);
+  expectSafePerformanceBubble(initialEvidence);
+
+  const transitionTarget = initialEvidence.protectedRegions.find((region) => (
+    region.width >= initialEvidence.bubble.width && region.height >= initialEvidence.bubble.height
+  ));
+  expect(transitionTarget).toBeDefined();
+  const transitionDelta = {
+    x: transitionTarget!.x + (transitionTarget!.width - initialEvidence.bubble.width) / 2 - initialEvidence.bubble.x,
+    y: transitionTarget!.y + (transitionTarget!.height - initialEvidence.bubble.height) / 2 - initialEvidence.bubble.y,
+  };
+  const forcedBubble = {
+    ...initialEvidence.bubble,
+    x: initialEvidence.bubble.x + transitionDelta.x,
+    y: initialEvidence.bubble.y + transitionDelta.y,
+  };
+  expect(overlaps(forcedBubble, transitionTarget!)).toBe(true);
+  await page.evaluate(() => {
+    const stage = document.querySelector<HTMLElement>('[data-hermes-workspace-stage="true"]');
+    if (!stage) throw new Error('Hermes stage missing');
+    stage.dataset.hermesTestGeometryMutationCount = '0';
+    new MutationObserver(() => {
+      stage.dataset.hermesTestGeometryMutationCount = String(Number(stage.dataset.hermesTestGeometryMutationCount ?? '0') + 1);
+    }).observe(stage, {
+      attributeFilter: ['data-hermes-bubble-horizontal', 'data-hermes-bubble-safe', 'data-hermes-bubble-vertical', 'style'],
+      attributes: true,
+    });
+  });
+  await page.evaluate((delta) => {
+    const anchor = document.querySelector<HTMLElement>('[data-hermes-dock-anchor="true"]');
+    if (!anchor) throw new Error('Hermes anchor missing');
+    anchor.style.transform = `translate(${delta.x}px, ${delta.y}px)`;
+    window.dispatchEvent(new Event('resize'));
+  }, transitionDelta);
+  await expect.poll(async () => Number(await page.locator('[data-hermes-workspace-stage="true"]')
+    .getAttribute('data-hermes-test-geometry-mutation-count') ?? '0')).toBeGreaterThan(0);
+  const transitionedEvidence = await waitForPerformanceBubbleEvidence(page, (evidence) => {
+    const targetStillPresent = evidence.protectedRegions.some((region) => (
+      Math.abs(region.x - transitionTarget!.x) < 1
+      && Math.abs(region.y - transitionTarget!.y) < 1
+      && Math.abs(region.width - transitionTarget!.width) < 1
+      && Math.abs(region.height - transitionTarget!.height) < 1
+    ));
+    return targetStillPresent
+      && !overlaps(evidence.bubble, transitionTarget!)
+      && !overlaps(evidence.actor, transitionTarget!)
+      && isSafePerformanceBubble(evidence);
+  });
+  expectSafePerformanceBubble(transitionedEvidence);
+  expect(overlaps(transitionedEvidence.bubble, transitionTarget!) || overlaps(transitionedEvidence.actor, transitionTarget!)).toBe(false);
+
+  await page.evaluate(() => {
+    document.querySelectorAll('[data-hermes-protected="true"]').forEach((element) => element.removeAttribute('data-hermes-protected'));
+    const spacer = document.createElement('div');
+    spacer.style.height = '1000px';
+    document.body.append(spacer);
+    document.body.classList.add('hermes-bubble-scroll-fixture');
+  });
+  let scrollEvidence: { before: PerformanceBubbleEvidence; after: PerformanceBubbleEvidence } | null = null;
+  for (let attempt = 0; attempt < 4 && !scrollEvidence; attempt += 1) {
+    const before = await waitForPerformanceBubbleEvidence(page, isPerformanceCompositeInsideViewport);
+    await page.evaluate(() => window.scrollBy(0, 40));
+    let after: PerformanceBubbleEvidence | null = null;
+    await expect.poll(async () => {
+      const candidate = await readPerformanceBubbleEvidence(page);
+      if (!candidate
+        || candidate.cue !== before.cue
+        || candidate.horizontal !== before.horizontal
+        || candidate.vertical !== before.vertical
+        || candidate.scrollY < before.scrollY + 30) return false;
+      after = candidate;
+      return true;
+    }, { timeout: 1_000 }).toBe(true).catch(() => undefined);
+    if (after) scrollEvidence = { after, before };
+  }
+  expect(scrollEvidence).not.toBeNull();
+  const beforeScroll = scrollEvidence!.before;
+  const afterScroll = scrollEvidence!.after;
+  expect(Math.abs(
+    ((afterScroll.bubble.y - afterScroll.bubbleTransformY) - (beforeScroll.bubble.y - beforeScroll.bubbleTransformY))
+      - (afterScroll.actor.y - beforeScroll.actor.y),
+  )).toBeLessThan(3);
+});
+
 test('Hermes renders articulated, working and approval states with one visual owner', async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 900 });
   const browserErrors: string[] = [];
@@ -50,22 +398,22 @@ test('Hermes renders articulated, working and approval states with one visual ow
     const visual = page.locator('[data-hermes-renderer="articulated-mesh"]');
     await expect(visual).toHaveAttribute('data-hermes-state', visualState);
     await expect(page.locator('[data-hermes-instance]')).toHaveCount(1);
-    await expect(page.locator('[data-hermes-rig="mesh-2d"]')).toHaveCount(1);
-    await expect(page.locator('[data-hermes-frame]')).toHaveCount(1);
+    await expect(page.locator('[data-hermes-rig="live2d-wanko"]')).toHaveCount(1);
+    await expect(page.locator('[data-hermes-carrier="true"]')).toHaveCount(1);
+    await expect(page.locator('[data-hermes-carrier-rear], [data-hermes-carrier-front]')).toHaveCount(0);
+    await expect(page.locator('[data-hermes-carrier-travel-hull="true"]')).toHaveCount(1);
+    await expect(page.locator('[data-hermes-carrier-interaction-hull="true"]')).toHaveCount(1);
+    await expect(page.locator('[data-hermes-frame]')).toHaveCount(0);
     await expect(page.locator('[data-hermes-part], [data-hermes-idle-signal]')).toHaveCount(0);
-    await expect(page.locator('[data-live2d-instance]')).toHaveCount(0);
+    await expect(page.locator('[data-live2d-instance="wanko"]')).toHaveCount(1);
+    await expect(page.locator('.hermes-wanko-citation-thread, .hermes-wanko-paper-fibre, .hermes-wanko-ground-layer')).toHaveCount(0);
     await expect(visual).toHaveAttribute('data-hermes-input-ready', 'true');
-    const rig = page.locator('[data-hermes-rig="mesh-2d"]');
+    const rig = page.locator('[data-hermes-rig="live2d-wanko"]');
     const canvas = page.locator('[data-hermes-articulated-canvas="true"]');
     await expect(rig).toHaveAttribute('data-hermes-rig-status', 'ready', { timeout: 20_000 });
     await expect(canvas).toBeVisible();
     if (visualState === 'failed') {
       await expect(canvas).toHaveAttribute('data-hermes-gesture', 'failed-settle');
-      await expect.poll(async () => {
-        const actual = (await canvas.getAttribute('data-hermes-head'))?.split(',').map(Number) ?? [];
-        const expected = [0, 1.8, -1.8];
-        return Math.max(...expected.map((value, index) => Math.abs(value - (actual[index] ?? Number.POSITIVE_INFINITY))));
-      }).toBeLessThanOrEqual(.01);
       const failedPose = await Promise.all([
         canvas.getAttribute('data-hermes-head'),
         canvas.getAttribute('data-hermes-torso'),
@@ -92,9 +440,7 @@ test('Hermes renders articulated, working and approval states with one visual ow
       await page.screenshot({ path: `${outDir}/${visualState}-1440x900.png`, fullPage: true, animations: 'disabled' });
       continue;
     }
-    const before = await canvas.getAttribute('data-hermes-head');
-    await expect.poll(() => canvas.getAttribute('data-hermes-head')).not.toBe(before);
-    const box = await rig.boundingBox();
+    const box = await rig.locator('[data-hermes-carrier-interaction-hull="true"]').boundingBox();
     expect(box).not.toBeNull();
     await page.mouse.move(box!.x + box!.width * .86, box!.y + box!.height * .18);
     await expect(visual).toHaveAttribute('data-hermes-engaged', 'true');
@@ -118,6 +464,12 @@ test('Hermes renders articulated, working and approval states with one visual ow
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto(`${baseUrl}/dashboard`, { waitUntil: 'networkidle' });
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(390);
+  const mobileStageBox = await page.locator('[data-hermes-workspace-stage]').boundingBox();
+  const mobileMotionToggleBox = await page.locator('[data-hermes-motion-toggle]').boundingBox();
+  expect(mobileStageBox).not.toBeNull();
+  expect(mobileMotionToggleBox).not.toBeNull();
+  expect((mobileMotionToggleBox?.y ?? Infinity) + (mobileMotionToggleBox?.height ?? 0))
+    .toBeLessThanOrEqual(mobileStageBox?.y ?? 0);
   await page.screenshot({ path: `${outDir}/suggesting-needs-review-390x844.png`, fullPage: true, animations: 'disabled' });
 
   await page.unrouteAll({ behavior: 'wait' });
@@ -125,9 +477,9 @@ test('Hermes renders articulated, working and approval states with one visual ow
   await page.goto(`${baseUrl}/dashboard?hermes-motion=reduced`, { waitUntil: 'networkidle' });
   const reducedVisual = page.locator('[data-hermes-renderer="articulated-mesh"]');
   await expect(reducedVisual).toHaveAttribute('data-hermes-input-ready', 'false');
-  await expect(page.locator('[data-hermes-rig="mesh-2d"]')).toHaveAttribute('data-hermes-rig-status', 'fallback');
-  await expect(page.locator('.hermes-rig-canvas')).toHaveCSS('display', 'none');
-  await expect(page.locator('.hermes-rig-image-fallback')).toHaveCSS('opacity', '1');
+  await expect(page.locator('[data-hermes-rig="live2d-wanko"]')).toHaveAttribute('data-hermes-rig-status', 'ready', { timeout: 20_000 });
+  await expect(page.locator('[data-hermes-rig="live2d-wanko"]')).toHaveAttribute('data-hermes-static-frame', 'true');
+  await expect(page.locator('.hermes-rig-canvas')).toHaveCSS('display', 'block');
   await expect(page.locator('.hermes-guide-nudge')).toHaveAttribute('data-visible', 'true');
   await expect(page.locator('.hermes-guide-nudge')).toHaveCSS('opacity', '1');
   await expect(page.locator('.hermes-guide-nudge')).toHaveCSS('animation-name', 'none');
@@ -135,23 +487,40 @@ test('Hermes renders articulated, working and approval states with one visual ow
   expect(browserErrors).toEqual([]);
 });
 
+test('Hermes contextual prompt is an integrated dark bubble instead of a white strip', async ({ page }) => {
+  await mockDashboard(page);
+  await page.goto(`${baseUrl}/dashboard?hermes-motion=reduced`, { waitUntil: 'networkidle' });
+  const prompt = page.locator('.hermes-guide-nudge');
+  await expect(prompt).toHaveAttribute('data-visible', 'true');
+  const promptBackground = await prompt.evaluate((node) => getComputedStyle(node).backgroundColor);
+  const promptChannels = promptBackground.match(/[\d.]+/gu)?.map(Number) ?? [];
+  expect(promptChannels).toHaveLength(4);
+  expect(Math.max(...promptChannels.slice(0, 3))).toBeLessThan(48);
+  expect(promptChannels[3]).toBeGreaterThanOrEqual(.85);
+});
+
 test('Hermes loading and error surfaces are explicit', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
+  let releaseLoading!: () => void;
+  const loadingGate = new Promise<void>((resolve) => { releaseLoading = resolve; });
   await page.route('**/api/auth/me', async (route) => {
-    await new Promise((resolve) => setTimeout(resolve, 800));
+    await loadingGate;
     await json(route, { userId: 'hermes-user', email: 'hermes@example.invalid', displayName: 'Ada', status: 'email_verified', level: 'free' });
   });
   await page.route('**/api/research-objects?limit=20', async (route) => {
-    await new Promise((resolve) => setTimeout(resolve, 800));
+    await loadingGate;
     await json(route, { researchObjects: [] });
   });
   await page.route('**/api/ingestion?actionable=true', async (route) => {
-    await new Promise((resolve) => setTimeout(resolve, 800));
+    await loadingGate;
     await json(route, { tasks: [] });
   });
   await page.goto(`${baseUrl}/dashboard`, { waitUntil: 'domcontentloaded' });
-  await expect(page.locator('main[aria-busy="true"]')).toBeVisible();
+  const loadingSurface = page.locator('[data-os-surface="dashboard"][aria-busy="true"]');
+  await expect(loadingSurface).toBeVisible();
+  await expect(loadingSurface.locator('[aria-live="polite"]')).toBeVisible();
   await page.screenshot({ path: `${outDir}/loading-390x844.png`, fullPage: true });
+  releaseLoading();
 
   await page.unrouteAll({ behavior: 'wait' });
   await page.route('**/api/auth/me', (route) => json(route, {
@@ -159,7 +528,14 @@ test('Hermes loading and error surfaces are explicit', async ({ page }) => {
   }));
   await page.route('**/api/research-objects?limit=20', (route) => json(route, { error: { message: 'Research index unavailable' } }, 503));
   await page.route('**/api/ingestion?actionable=true', (route) => json(route, { tasks: [] }));
-  await page.reload({ waitUntil: 'networkidle' });
+  const researchErrorResponse = page.waitForResponse((response) => {
+    const url = new URL(response.url());
+    return url.pathname === '/api/research-objects'
+      && url.searchParams.get('limit') === '20'
+      && response.status() === 503;
+  });
+  await page.reload({ waitUntil: 'domcontentloaded' });
+  await researchErrorResponse;
   await expect(page.locator('p[role="alert"]')).toContainText('Research index unavailable');
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(390);
   await page.screenshot({ path: `${outDir}/error-390x844.png`, fullPage: true, animations: 'disabled' });
@@ -176,8 +552,10 @@ test('Hermes keeps the guide usable when WebGL2 is unavailable', async ({ page }
   }`);
   await mockDashboard(page);
   await page.goto(`${baseUrl}/dashboard`, { waitUntil: 'networkidle' });
+  await expect(page.getByRole('heading', { name: 'Research dashboard' })).toBeVisible();
   const visual = page.locator('[data-hermes-renderer="articulated-mesh"]');
-  const rig = page.locator('[data-hermes-rig="mesh-2d"]');
+  await expect(visual.locator('.hermes-rig-vector-fallback .hermes-portrait')).toBeVisible();
+  const rig = page.locator('[data-hermes-rig="live2d-wanko"]');
   await expect(rig).toHaveAttribute('data-hermes-rig-status', 'fallback');
   await expect(rig).toHaveAttribute('data-hermes-runtime-reason', 'webgl2-unavailable');
   const retry = page.getByRole('button', { name: /Retry Hermes motion|重试 Hermes 动效/i });
@@ -187,7 +565,6 @@ test('Hermes keeps the guide usable when WebGL2 is unavailable', async ({ page }
   await expect(rig).toHaveAttribute('data-hermes-runtime-generation', String(generation + 1));
   await expect(rig).toHaveAttribute('data-hermes-runtime-reason', 'webgl2-unavailable');
   await expect(page.locator('.hermes-rig-canvas')).toHaveCSS('opacity', '0');
-  await expect(page.locator('.hermes-rig-image-fallback')).toHaveCSS('opacity', '1');
   await visual.click();
   await expect(page.getByRole('dialog', { name: 'Hermes research guide' })).toBeVisible();
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(390);
@@ -196,12 +573,13 @@ test('Hermes keeps the guide usable when WebGL2 is unavailable', async ({ page }
 test('Hermes disposes and restores its mesh when the persistent motion control changes live', async ({ page }) => {
   await mockDashboard(page);
   await page.goto(`${baseUrl}/dashboard`, { waitUntil: 'networkidle' });
-  const rig = page.locator('[data-hermes-rig="mesh-2d"]');
+  const rig = page.locator('[data-hermes-rig="live2d-wanko"]');
   await expect(rig).toHaveAttribute('data-hermes-rig-status', 'ready', { timeout: 20_000 });
 
   await page.getByRole('button', { name: /Reduce Hermes motion|关闭 Hermes 动效/i }).click();
-  await expect(rig).toHaveAttribute('data-hermes-rig-status', 'fallback');
-  await expect(page.locator('.hermes-rig-canvas')).toHaveCSS('display', 'none');
+  await expect(rig).toHaveAttribute('data-hermes-rig-status', 'ready', { timeout: 20_000 });
+  await expect(rig).toHaveAttribute('data-hermes-static-frame', 'true');
+  await expect(page.locator('.hermes-rig-canvas')).toHaveCSS('display', 'block');
 
   await page.getByRole('button', { name: /Enable Hermes motion|开启 Hermes 动效/i }).click();
   await expect(rig).toHaveAttribute('data-hermes-rig-status', 'ready', { timeout: 20_000 });
@@ -209,12 +587,13 @@ test('Hermes disposes and restores its mesh when the persistent motion control c
 
 test('Hermes replaces a lost canvas when approval ends live', async ({ page }) => {
   await page.goto(`${baseUrl}/_visual/hermes-articulation`, { waitUntil: 'networkidle' });
-  const rig = page.locator('[data-hermes-rig="mesh-2d"]');
+  const rig = page.locator('[data-hermes-rig="live2d-wanko"]');
   await expect(rig).toHaveAttribute('data-hermes-rig-status', 'ready', { timeout: 20_000 });
   const firstCanvas = await page.locator('[data-hermes-articulated-canvas="true"]').elementHandle();
 
   await page.getByRole('button', { name: 'Approval' }).click();
-  await expect(rig).toHaveAttribute('data-hermes-rig-status', 'fallback');
+  await expect(rig).toHaveAttribute('data-hermes-rig-status', 'ready', { timeout: 20_000 });
+  await expect(rig).toHaveAttribute('data-hermes-static-frame', 'true');
   await page.getByRole('button', { name: 'Idle' }).click();
   await expect(rig).toHaveAttribute('data-hermes-rig-status', 'ready', { timeout: 20_000 });
   const resumedCanvas = await page.locator('[data-hermes-articulated-canvas="true"]').elementHandle();
@@ -225,7 +604,7 @@ test('Hermes replaces a lost canvas when approval ends live', async ({ page }) =
 test('Hermes releases a fallback WebGL context when WebGL2 initialization fails', async ({ page }) => {
   const textureRequests: string[] = [];
   page.on('request', (request) => {
-    if (request.url().includes('/hermes/pet/hermes-pet-')) textureRequests.push(request.url());
+    if (request.url().includes('/hermes/live2d/')) textureRequests.push(request.url());
   });
   await page.addInitScript(() => {
     const testWindow = window as Window & { __hermesContexts?: { acquired: number; lost: number } };
@@ -258,7 +637,7 @@ test('Hermes releases a fallback WebGL context when WebGL2 initialization fails'
   });
   await mockDashboard(page);
   await page.goto(`${baseUrl}/dashboard`, { waitUntil: 'networkidle' });
-  await expect(page.locator('[data-hermes-rig="mesh-2d"]')).toHaveAttribute('data-hermes-rig-status', 'fallback');
+  await expect(page.locator('[data-hermes-rig="live2d-wanko"]')).toHaveAttribute('data-hermes-rig-status', 'fallback');
   const fallbackAnimations = await page.locator('.hermes-rig-vector-fallback, .hermes-rig-vector-fallback *').evaluateAll((nodes) => nodes
     .map((node) => getComputedStyle(node).animationName)
     .filter((name) => name !== 'none'));
@@ -267,33 +646,26 @@ test('Hermes releases a fallback WebGL context when WebGL2 initialization fails'
     const counts = (window as Window & { __hermesContexts?: { acquired: number; lost: number } }).__hermesContexts;
     return (counts?.acquired ?? 0) - (counts?.lost ?? 0);
   })).toBe(0);
-  expect(textureRequests.filter((url) => !url.endsWith('/hermes-pet-idle.png'))).toEqual([]);
+  expect(textureRequests).toEqual([]);
 });
 
 test('Hermes applies offscreen suspension after delayed initialization', async ({ page }) => {
-  await page.addInitScript(() => {
-    const testWindow = window as Window & { __hermesPendingImageCount?: () => number; __releaseHermesImages?: () => void };
-    const originalDecode = HTMLImageElement.prototype.decode;
-    const pending: Array<() => void> = [];
-    HTMLImageElement.prototype.decode = function () {
-      if (!this.src.includes('/hermes/pet/')) return originalDecode.call(this);
-      return new Promise<void>((resolve, reject) => {
-        pending.push(() => { void originalDecode.call(this).then(resolve, reject); });
-      });
-    };
-    testWindow.__hermesPendingImageCount = () => pending.length;
-    testWindow.__releaseHermesImages = () => pending.splice(0).forEach((release) => release());
+  let releaseTexture: (() => void) | undefined;
+  const textureHold = new Promise<void>((resolve) => { releaseTexture = resolve; });
+  let textureRequested = false;
+  await page.route('**/hermes/live2d/wanko/wanko_touch.1024/texture_00.png', async (route) => {
+    textureRequested = true;
+    await textureHold;
+    await route.continue();
   });
   await mockDashboard(page);
   await page.goto(`${baseUrl}/dashboard`, { waitUntil: 'domcontentloaded' });
-  const rig = page.locator('[data-hermes-rig="mesh-2d"]');
+  const rig = page.locator('[data-hermes-rig="live2d-wanko"]');
   await expect(rig).toBeVisible();
-  await expect.poll(() => page.evaluate(() => (
-    (window as Window & { __hermesPendingImageCount?: () => number }).__hermesPendingImageCount?.() ?? 0
-  ))).toBeGreaterThanOrEqual(3);
-  const offscreenStyle = await page.addStyleTag({ content: '[data-hermes-rig="mesh-2d"] { transform: translateY(1800px) !important; }' });
+  await expect.poll(() => textureRequested).toBe(true);
+  const offscreenStyle = await page.addStyleTag({ content: '[data-hermes-rig="live2d-wanko"] { transform: translateY(1800px) !important; }' });
   await page.waitForTimeout(120);
-  await page.evaluate(() => (window as Window & { __releaseHermesImages?: () => void }).__releaseHermesImages?.());
+  releaseTexture?.();
   await page.waitForTimeout(600);
   await expect(rig).toHaveAttribute('data-hermes-rig-status', 'starting');
   await expect(page.locator('[data-hermes-articulated-canvas="true"]')).not.toHaveAttribute('data-hermes-head', /.+/);
@@ -336,7 +708,7 @@ test('Hermes aborts and releases a pending initialization on SPA unmount', async
     const originalDecode = HTMLImageElement.prototype.decode;
     const pending: Array<() => void> = [];
     HTMLImageElement.prototype.decode = function () {
-      if (!this.src.includes('/hermes/pet/')) return originalDecode.call(this);
+      if (!this.src.includes('/hermes/live2d/wanko/')) return originalDecode.call(this);
       return new Promise<void>((resolve, reject) => {
         pending.push(() => { void originalDecode.call(this).then(resolve, reject); });
       });
@@ -374,10 +746,12 @@ test('Hermes focus and open presence drive real mesh articulation', async ({ pag
 
 test('Hermes remounts a fresh canvas after a live WebGL context loss', async ({ page }) => {
   await mockDashboard(page);
-  await page.goto(`${baseUrl}/dashboard`, { waitUntil: 'networkidle' });
-  const stage = page.locator('[data-hermes-rig="mesh-2d"]');
+  await page.goto(`${baseUrl}/dashboard?hermes-motion=full`, { waitUntil: 'networkidle' });
+  const stage = page.locator('[data-hermes-rig="live2d-wanko"]');
+  const motionToggle = page.locator('[data-hermes-motion-toggle]');
   const oldCanvas = await page.locator('[data-hermes-articulated-canvas]').elementHandle();
   await expect(stage).toHaveAttribute('data-hermes-rig-status', 'ready');
+  await expect(motionToggle).toHaveAttribute('data-motion-active', 'true');
   await page.locator('[data-hermes-articulated-canvas]').evaluate((canvas: HTMLCanvasElement) => {
     canvas.getContext('webgl2')?.getExtension('WEBGL_lose_context')?.loseContext();
   });
@@ -389,10 +763,26 @@ test('Hermes remounts a fresh canvas after a live WebGL context loss', async ({ 
     canvas.getContext('webgl2')?.getExtension('WEBGL_lose_context')?.loseContext();
   });
   await expect(stage).toHaveAttribute('data-hermes-rig-status', 'fallback');
+  await expect(stage).toHaveAttribute('data-hermes-runtime-owner', 'stopped');
   const boundedGeneration = await stage.getAttribute('data-hermes-runtime-generation');
   await page.waitForTimeout(500);
   await expect(stage).toHaveAttribute('data-hermes-runtime-generation', boundedGeneration!);
-  await expect(page.getByRole('button', { name: /Retry Hermes motion|重试 Hermes 动效/i })).toBeEnabled();
+  await expect(motionToggle).toHaveAttribute('data-motion-runtime', 'fallback');
+  await expect(motionToggle).toHaveAccessibleName(/Retry Hermes motion|重试 Hermes 动效/i);
+  await expect(motionToggle).toBeEnabled();
+});
+
+test('Hermes retries with a fresh runtime after the required Cubism model fails', async ({ page }) => {
+  await mockDashboard(page);
+  await page.route('**/hermes/live2d/wanko/wanko_touch.model3.json', (route) => route.abort('failed'));
+  await page.goto(`${baseUrl}/dashboard?hermes-motion=full`, { waitUntil: 'networkidle' });
+  const rig = page.locator('[data-hermes-rig="live2d-wanko"]');
+  await expect(rig).toHaveAttribute('data-hermes-rig-status', 'fallback', { timeout: 20_000 });
+  await expect(rig).toHaveAttribute('data-hermes-runtime-reason', 'asset-load-failed');
+
+  await page.unroute('**/hermes/live2d/wanko/wanko_touch.model3.json');
+  await page.getByRole('button', { name: /Retry Hermes motion|重试 Hermes 动效/i }).click();
+  await expect(rig).toHaveAttribute('data-hermes-rig-status', 'ready', { timeout: 20_000 });
 });
 
 test('Hermes keeps the real six-field approval surface still until confirmation succeeds', async ({ page }) => {
@@ -418,13 +808,14 @@ test('Hermes keeps the real six-field approval surface still until confirmation 
   await page.goto(`${baseUrl}/research-objects/ro-hermes/hermes?task=task-review&hermes-motion=full`, { waitUntil: 'networkidle' });
   await expect(page.getByRole('heading', { name: '确认你的研究结构' })).toBeVisible();
   await expect(page.locator('[data-hermes-workspace-stage="true"]')).toHaveAttribute('data-hermes-presentation-state', 'awaiting_approval');
-  await expect(page.locator('[data-hermes-rig="mesh-2d"]')).toHaveAttribute('data-hermes-rig-status', 'fallback');
+  await expect(page.locator('[data-hermes-rig="live2d-wanko"]')).toHaveAttribute('data-hermes-rig-status', 'ready', { timeout: 20_000 });
+  await expect(page.locator('[data-hermes-rig="live2d-wanko"]')).toHaveAttribute('data-hermes-static-frame', 'true');
   await expect(page.locator('.hermes-companion-actor')).toHaveCSS('animation-name', 'none');
   await page.getByRole('button', { name: '确认并创建版本' }).click();
   await expect(page.getByText('已确认并写入新版本。')).toBeVisible();
   await expect(page.locator('[data-hermes-workspace-stage="true"]')).toHaveAttribute('data-hermes-presentation-state', 'idle');
   await page.evaluate(() => window.scrollTo(0, 0));
-  await expect(page.locator('[data-hermes-rig="mesh-2d"]')).toHaveAttribute('data-hermes-rig-status', 'ready', { timeout: 20_000 });
+  await expect(page.locator('[data-hermes-rig="live2d-wanko"]')).toHaveAttribute('data-hermes-rig-status', 'ready', { timeout: 20_000 });
   await page.reload({ waitUntil: 'networkidle' });
   await expect(page.locator('[data-hermes-workspace-stage="true"]')).toHaveAttribute('data-hermes-presentation-state', 'idle');
   await expect(page.getByRole('button', { name: '已确认' })).toBeDisabled();
@@ -433,7 +824,7 @@ test('Hermes keeps the real six-field approval surface still until confirmation 
 test('Hermes keeps visible renderer-owned draw heartbeat gaps within 750ms', async ({ page }) => {
   await mockDashboard(page);
   await page.goto(`${baseUrl}/dashboard?hermes-motion=full`, { waitUntil: 'networkidle' });
-  const rig = page.locator('[data-hermes-rig="mesh-2d"]');
+  const rig = page.locator('[data-hermes-rig="live2d-wanko"]');
   await expect(rig).toHaveAttribute('data-hermes-rig-status', 'ready', { timeout: 20_000 });
   const heartbeats = await rig.evaluate((node) => new Promise<number[]>((resolve, reject) => {
     const values = [Number(node.getAttribute('data-hermes-last-draw-at'))];
@@ -486,14 +877,20 @@ test('Hermes idle story opens a real contextual guide without leaving the worksp
   await page.goto(`${baseUrl}/dashboard`, { waitUntil: 'networkidle' });
   const visual = page.locator('[data-hermes-renderer="articulated-mesh"]');
   await expect(visual).toHaveAttribute('data-hermes-presence', 'idle');
-  await expect(page.locator('[data-hermes-rig="mesh-2d"]')).toHaveAttribute('data-hermes-rig-status', 'ready');
+  await expect(page.locator('[data-hermes-rig="live2d-wanko"]')).toHaveAttribute('data-hermes-rig-status', 'ready');
   await expect(page.locator('[data-hermes-part], [data-hermes-idle-signal]')).toHaveCount(0);
   await expect(page.locator('.hermes-guide-nudge')).toHaveAttribute('data-visible', 'true', { timeout: 5_000 });
   const promptBox = await page.locator('.hermes-guide-nudge').boundingBox();
-  const rigBox = await page.locator('[data-hermes-rig="mesh-2d"]').boundingBox();
   expect(promptBox).not.toBeNull();
-  expect(rigBox).not.toBeNull();
-  expect(promptBox!.y + promptBox!.height).toBeLessThanOrEqual(rigBox!.y);
+  expect(promptBox!.x).toBeGreaterThanOrEqual(0);
+  expect(promptBox!.y).toBeGreaterThanOrEqual(0);
+  expect(promptBox!.x + promptBox!.width).toBeLessThanOrEqual(1440);
+  expect(promptBox!.y + promptBox!.height).toBeLessThanOrEqual(900);
+  const protectedBoxes = await page.locator('[data-hermes-protected="true"]').evaluateAll((elements) => elements.map((element) => {
+    const bounds = element.getBoundingClientRect();
+    return { x: bounds.x, y: bounds.y, width: bounds.width, height: bounds.height };
+  }).filter((bounds) => bounds.width > 0 && bounds.height > 0));
+  expect(protectedBoxes.some((region) => overlaps(promptBox!, region))).toBe(false);
 
   await visual.click();
   const dialog = page.getByRole('dialog', { name: 'Hermes research guide' });

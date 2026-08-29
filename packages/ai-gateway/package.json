@@ -7,7 +7,8 @@
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "test": "vitest run"
+    "test": "vitest run",
+    "selftest:ocr-contract": "node dist/ocr-contract-self-test.js"
   },
   "dependencies": {
     "@openscience/observability": "workspace:^"

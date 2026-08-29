@@ -40,7 +40,7 @@ export interface HermesBehaviorFrame {
 const CADENCE = {
   quiet: { micro: [6_500, 8_000], signature: [28_000, 35_000] },
   balanced: { micro: [2_400, 4_200], signature: [14_000, 22_000] },
-  active: { micro: [4_000, 6_000], signature: [20_000, 28_000] },
+  active: { micro: [3_000, 6_000], signature: [12_000, 20_000] },
 } as const;
 
 function hash(seed: number, value: number, salt: number): number {

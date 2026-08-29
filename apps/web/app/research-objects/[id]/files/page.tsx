@@ -5,7 +5,7 @@ import { useTranslations } from 'next-intl';
 import { useEffect, useState } from 'react';
 
 import ArtifactUploader from '@/components/editor/ArtifactUploader';
-import { ResearchSurfaceShell, SurfaceState } from '@/components/research/ResearchSurfaceShell';
+import { ResearchSurfaceShell, ResearchSurfaceStateShell } from '@/components/research/ResearchSurfaceShell';
 import { ApiClientError, createCommit, getResearchObject, type ArtifactReference, type ResearchObjectSummary, type SdfCore } from '@/lib/api';
 
 export default function FilesPage({ params }: { params: { id: string } }) {
@@ -18,8 +18,8 @@ export default function FilesPage({ params }: { params: { id: string } }) {
   const [error, setError] = useState<ApiClientError | Error | null>(null);
   useEffect(() => { void getResearchObject(params.id).then(({ researchObject }) => setObject(researchObject)).catch(setError); }, [params.id]);
   async function attach() { if (!object || artifacts.length === 0) return; setSaving(true); setError(null); try { await createCommit(object.id, { message: message.trim() || t('files.defaultCommit'), version: object.version, sdfCore: object.sdf.core, artifacts }); setCommitted(true); setArtifacts([]); } catch (cause) { setError(cause as Error); } finally { setSaving(false); } }
-  if (error && !object) return <SurfaceState detail={error.message} kind={error instanceof ApiClientError && error.status === 403 ? 'forbidden' : 'error'} title={t('state.errorTitle')} />;
-  if (!object) return <SurfaceState detail={t('state.loadingBody')} kind="loading" title={t('files.title')} />;
+  if (error && !object) return <ResearchSurfaceStateShell active="files" detail={error.message} kind={error instanceof ApiClientError && error.status === 403 ? 'forbidden' : 'error'} objectId={params.id} title={t('state.errorTitle')} />;
+  if (!object) return <ResearchSurfaceStateShell active="files" detail={t('state.loadingBody')} kind="loading" objectId={params.id} title={t('files.title')} />;
   return <ResearchSurfaceShell active="files" object={object} rail={<div><p className="font-data text-[10px] uppercase tracking-[0.14em] text-os-muted-dark">{t('files.provenance')}</p><p className="mt-4 text-sm leading-6 text-os-muted-dark">{t('files.provenanceBody')}</p></div>}>
     <header><p className="font-data text-[10px] uppercase tracking-[0.16em] text-os-vermilion">{t('files.kicker')}</p><h1 className="mt-3 font-editorial text-5xl font-normal text-os-paper">{t('files.title')}</h1><p className="mt-4 max-w-2xl text-sm leading-6 text-os-muted-dark">{t('files.body')}</p></header>
     <ArtifactUploader artifacts={artifacts} onArtifactsChange={(next) => { setArtifacts(next); setCommitted(false); }} workspaceId={object.workspaceId} />

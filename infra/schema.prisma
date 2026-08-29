@@ -39,29 +39,31 @@ model User {
   emailVerifications EmailVerification[]
   usedInvitations    Invitation[]        @relation("InvitationUsedBy")
 
-  ownedWorkspaces          Workspace[]           @relation("WorkspaceOwner")
+  ownedWorkspaces          Workspace[]              @relation("WorkspaceOwner")
   memberships              Membership[]
-  sentWorkspaceInvitations WorkspaceInvitation[] @relation("WorkspaceInvitationInviter")
-  createdResearchObjects   ResearchObject[]      @relation("ResearchObjectCreator")
+  sentWorkspaceInvitations WorkspaceInvitation[]    @relation("WorkspaceInvitationInviter")
+  createdResearchObjects   ResearchObject[]         @relation("ResearchObjectCreator")
   ingestionBatches         IngestionBatch[]
-  uploadedArtifacts        Artifact[]            @relation("ArtifactUploader")
+  uploadedArtifacts        Artifact[]               @relation("ArtifactUploader")
   authoredCommits          Commit[]
-  grantedVisibilityGrants  VisibilityGrant[]     @relation("VisibilityGranter")
-  receivedVisibilityGrants VisibilityGrant[]     @relation("VisibilityGrantee")
-  visibilityRequests       VisibilityRequest[]   @relation("VisibilityRequester")
-  authoredIssues           Issue[]               @relation("IssueAuthor")
-  authoredPullRequests     PullRequest[]         @relation("PRAuthor")
-  authoredComments         Comment[]             @relation("CommentAuthor")
-  authoredReviews          Review[]              @relation("Reviewer")
-  authorEntries            Author[]              @relation("AuthorEntry")
-  contributions            Contribution[]        @relation("ContributionUser")
+  grantedVisibilityGrants  VisibilityGrant[]        @relation("VisibilityGranter")
+  receivedVisibilityGrants VisibilityGrant[]        @relation("VisibilityGrantee")
+  visibilityRequests       VisibilityRequest[]      @relation("VisibilityRequester")
+  authoredIssues           Issue[]                  @relation("IssueAuthor")
+  authoredPullRequests     PullRequest[]            @relation("PRAuthor")
+  authoredComments         Comment[]                @relation("CommentAuthor")
+  authoredReviews          Review[]                 @relation("Reviewer")
+  authorEntries            Author[]                 @relation("AuthorEntry")
+  contributions            Contribution[]           @relation("ContributionUser")
   notifications            Notification[]
   sandboxJobs              SandboxJob[]
   agentSessions            AgentSession[]
-  agentApprovals           ToolApproval[]        @relation("ToolApprover")
-  appealsFiled             Appeal[]              @relation("Appellant")
-  appealsModerated         Appeal[]              @relation("Moderator")
-  selectedEditorialEntries EditorialSelection[] @relation("EditorialSelector")
+  agentApprovals           ToolApproval[]           @relation("ToolApprover")
+  appealsFiled             Appeal[]                 @relation("Appellant")
+  appealsModerated         Appeal[]                 @relation("Moderator")
+  selectedEditorialEntries EditorialSelection[]     @relation("EditorialSelector")
+  researchIdentityProfile  ResearchIdentityProfile?
+  verifiedEvidenceRecords  EvidenceRecord[]         @relation("EvidenceVerifier")
 
   @@map("users")
 }
@@ -170,6 +172,7 @@ model Workspace {
   invitations     WorkspaceInvitation[]
   researchObjects ResearchObject[]
   artifacts       Artifact[]
+  evidenceRecords EvidenceRecord[]
   sandboxJobs     SandboxJob[]
 
   @@map("workspaces")
@@ -354,28 +357,32 @@ model ResearchObject {
   updatedAt      DateTime     @updatedAt @map("updated_at")
   idempotencyKey String?      @unique @map("idempotency_key")
 
-  workspace          Workspace           @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-  creator            User                @relation("ResearchObjectCreator", fields: [createdBy], references: [id], onDelete: Restrict)
-  sdfDocument        SdfDocument?
-  branches           Branch[]
-  commits            Commit[]            @relation("CommitResearchObject")
-  versions           Version[]           @relation("VersionResearchObject")
-  identifiers        Identifier[]
-  visibilityGrants   VisibilityGrant[]
-  visibilityRequests VisibilityRequest[]
-  forkResults        ForkRelation[]      @relation("ForkResult")
-  forkSources        ForkRelation[]      @relation("ForkSource")
-  issues             Issue[]
-  pullRequests       PullRequest[]
-  authors            Author[]
-  contributions      Contribution[]
-  licenseAssignments LicenseAssignment[]
-  agentSessions      AgentSession[]
-  aiReviews          AiReview[]
-  appeals            Appeal[]
-  ingestionBatches   IngestionBatch[]
+  workspace           Workspace            @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  creator             User                 @relation("ResearchObjectCreator", fields: [createdBy], references: [id], onDelete: Restrict)
+  sdfDocument         SdfDocument?
+  branches            Branch[]
+  commits             Commit[]             @relation("CommitResearchObject")
+  versions            Version[]            @relation("VersionResearchObject")
+  identifiers         Identifier[]
+  visibilityGrants    VisibilityGrant[]
+  visibilityRequests  VisibilityRequest[]
+  forkResults         ForkRelation[]       @relation("ForkResult")
+  forkSources         ForkRelation[]       @relation("ForkSource")
+  issues              Issue[]
+  pullRequests        PullRequest[]
+  authors             Author[]
+  contributions       Contribution[]
+  licenseAssignments  LicenseAssignment[]
+  agentSessions       AgentSession[]
+  aiReviews           AiReview[]
+  appeals             Appeal[]
+  ingestionBatches    IngestionBatch[]
   editorialSelections EditorialSelection[]
+  claimNodes          ClaimNode[]
+  evidenceRecords     EvidenceRecord[]
+  presentationAssets  PresentationAsset[]
 
+  @@unique([id, workspaceId], map: "research_objects_id_workspace_id_key")
   @@index([workspaceId])
   @@map("research_objects")
 }
@@ -434,11 +441,13 @@ model Artifact {
   createdAt      DateTime @default(now()) @map("created_at")
   idempotencyKey String?  @unique @map("idempotency_key")
 
-  blob      Blob      @relation(fields: [blobSha256], references: [sha256], onDelete: Restrict)
-  uploader  User      @relation("ArtifactUploader", fields: [uploadedBy], references: [id], onDelete: Restrict)
-  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-  ingestionTasks IngestionTask[]
+  blob            Blob             @relation(fields: [blobSha256], references: [sha256], onDelete: Restrict)
+  uploader        User             @relation("ArtifactUploader", fields: [uploadedBy], references: [id], onDelete: Restrict)
+  workspace       Workspace        @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  ingestionTasks  IngestionTask[]
+  evidenceRecords EvidenceRecord[]
 
+  @@unique([id, workspaceId], map: "artifacts_id_workspace_id_key")
   @@index([workspaceId])
   @@index([blobSha256])
   @@map("artifacts")
@@ -524,19 +533,23 @@ model Version {
   parentVersionId  String?       @map("parent_version_id") @db.Uuid
   createdAt        DateTime      @default(now()) @map("created_at")
 
-  researchObject     ResearchObject      @relation("VersionResearchObject", fields: [researchObjectId], references: [id], onDelete: Cascade)
-  commit             Commit              @relation(fields: [commitId], references: [id], onDelete: Restrict)
-  manifest           VersionManifest?
-  publications       Publication[]
-  forkSources        ForkRelation[]
-  licenseAssignments LicenseAssignment[]
-  aiReview           AiReview?
-  appeals            Appeal[]
-  parentVersion      Version?            @relation("VersionParent", fields: [parentVersionId], references: [id], onDelete: SetNull)
-  childVersions      Version[]           @relation("VersionParent")
+  researchObject      ResearchObject       @relation("VersionResearchObject", fields: [researchObjectId], references: [id], onDelete: Cascade)
+  commit              Commit               @relation(fields: [commitId], references: [id], onDelete: Restrict)
+  manifest            VersionManifest?
+  publications        Publication[]
+  forkSources         ForkRelation[]
+  licenseAssignments  LicenseAssignment[]
+  aiReview            AiReview?
+  appeals             Appeal[]
+  parentVersion       Version?             @relation("VersionParent", fields: [parentVersionId], references: [id], onDelete: SetNull)
+  childVersions       Version[]            @relation("VersionParent")
   editorialSelections EditorialSelection[]
+  claimNodes          ClaimNode[]
+  evidenceRecords     EvidenceRecord[]
+  presentationAssets  PresentationAsset[]
 
   @@unique([researchObjectId, versionNo])
+  @@unique([id, researchObjectId], map: "versions_id_research_object_id_key")
   @@index([researchObjectId])
   @@map("versions")
 }
@@ -618,24 +631,24 @@ model EditorialCollection {
 }
 
 model EditorialSelection {
-  id                   String                  @id @default(uuid()) @db.Uuid
-  collectionId         String                  @map("collection_id") @db.Uuid
-  researchObjectId     String                  @map("research_object_id") @db.Uuid
-  versionId            String                  @map("version_id") @db.Uuid
-  selectedBy           String                  @map("selected_by") @db.Uuid
-  titleSnapshot        String                  @map("title_snapshot")
-  publicIdSnapshot     String                  @map("public_id_snapshot")
-  versionNoSnapshot    Int                     @map("version_no_snapshot")
-  sdfSnapshot          Json                    @map("sdf_snapshot")
-  note                 String                  @default("")
-  media                Json                    @default("[]")
-  disclosure           String
-  sortOrder            Int                     @default(0) @map("sort_order")
-  state                EditorialSelectionState @default(draft)
-  scheduledAt          DateTime?               @map("scheduled_at")
-  publishedAt          DateTime?               @map("published_at")
-  createdAt            DateTime                @default(now()) @map("created_at")
-  updatedAt            DateTime                @updatedAt @map("updated_at")
+  id                String                  @id @default(uuid()) @db.Uuid
+  collectionId      String                  @map("collection_id") @db.Uuid
+  researchObjectId  String                  @map("research_object_id") @db.Uuid
+  versionId         String                  @map("version_id") @db.Uuid
+  selectedBy        String                  @map("selected_by") @db.Uuid
+  titleSnapshot     String                  @map("title_snapshot")
+  publicIdSnapshot  String                  @map("public_id_snapshot")
+  versionNoSnapshot Int                     @map("version_no_snapshot")
+  sdfSnapshot       Json                    @map("sdf_snapshot")
+  note              String                  @default("")
+  media             Json                    @default("[]")
+  disclosure        String
+  sortOrder         Int                     @default(0) @map("sort_order")
+  state             EditorialSelectionState @default(draft)
+  scheduledAt       DateTime?               @map("scheduled_at")
+  publishedAt       DateTime?               @map("published_at")
+  createdAt         DateTime                @default(now()) @map("created_at")
+  updatedAt         DateTime                @updatedAt @map("updated_at")
 
   collection     EditorialCollection @relation(fields: [collectionId], references: [id], onDelete: Cascade)
   researchObject ResearchObject      @relation(fields: [researchObjectId], references: [id], onDelete: Restrict)
@@ -908,22 +921,25 @@ model AgentSession {
 }
 
 model AgentTask {
-  id             String          @id @default(uuid()) @db.Uuid
-  sessionId      String          @map("session_id") @db.Uuid
-  kind           String
-  status         AgentTaskStatus @default(pending)
-  progress       Int             @default(0)
-  payload        Json            @default("{}")
-  result         Json?
-  error          String?
-  dispatchedAt   DateTime?       @map("dispatched_at")
+  id               String          @id @default(uuid()) @db.Uuid
+  sessionId        String          @map("session_id") @db.Uuid
+  kind             String
+  status           AgentTaskStatus @default(pending)
+  progress         Int             @default(0)
+  payload          Json            @default("{}")
+  interestContext  Json?           @map("interest_context")
+  result           Json?
+  error            String?
+  retryCount       Int             @default(0) @map("retry_count")
+  executionAttempt Int             @default(0) @map("execution_attempt")
+  dispatchedAt     DateTime?       @map("dispatched_at")
   // §16 幂等键：同 key 重发 → 返回既有任务（不重复执行）
-  idempotencyKey String?         @unique @map("idempotency_key")
-  createdAt      DateTime        @default(now()) @map("created_at")
-  updatedAt      DateTime        @updatedAt @map("updated_at")
+  idempotencyKey   String?         @unique @map("idempotency_key")
+  createdAt        DateTime        @default(now()) @map("created_at")
+  updatedAt        DateTime        @updatedAt @map("updated_at")
 
-  session   AgentSession   @relation(fields: [sessionId], references: [id], onDelete: Cascade)
-  approvals ToolApproval[]
+  session       AgentSession   @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  approvals     ToolApproval[]
   ingestionTask IngestionTask?
 
   @@index([sessionId])
@@ -997,8 +1013,8 @@ model IngestionTask {
   createdAt   DateTime           @default(now()) @map("created_at")
   updatedAt   DateTime           @updatedAt @map("updated_at")
 
-  batch    IngestionBatch @relation(fields: [batchId], references: [id], onDelete: Cascade)
-  artifact Artifact       @relation(fields: [artifactId], references: [id], onDelete: Restrict)
+  batch     IngestionBatch @relation(fields: [batchId], references: [id], onDelete: Cascade)
+  artifact  Artifact       @relation(fields: [artifactId], references: [id], onDelete: Restrict)
   agentTask AgentTask?     @relation(fields: [agentTaskId], references: [id], onDelete: SetNull)
 
   @@unique([batchId, artifactId])
@@ -1050,4 +1066,194 @@ model Appeal {
   @@index([versionId])
   @@index([status])
   @@map("appeals")
+}
+
+// --- Hermes Research Intelligence Task 2：身份、Claim/Evidence 与展示资产元数据（大对象仍走对象存储）---
+
+enum ResearchIdentity {
+  reader
+  author
+  reviewer
+  editor
+  data_steward
+  developer
+  student
+}
+
+enum ClaimKind {
+  core
+  supporting
+  method
+  boundary
+  counter
+}
+
+enum ClaimAssessment {
+  supported
+  partial
+  disputed
+  missing
+}
+
+enum EvidenceKind {
+  passage
+  figure
+  table
+  dataset
+  code
+  notebook
+  environment
+  protocol
+  supplement
+  external_source
+}
+
+enum ClaimRelation {
+  supports
+  contradicts
+  qualifies
+  context
+}
+
+enum ExtractionStatus {
+  succeeded
+  needs_review
+  blocked
+  failed
+}
+
+enum PresentationAssetKind {
+  svg
+  chart
+  interactive_html
+  image
+  video
+}
+
+enum PresentationAssetStatus {
+  draft
+  approved
+  rejected
+}
+
+model ResearchIdentityProfile {
+  id              String             @id @default(uuid()) @db.Uuid
+  userId          String             @unique @map("user_id") @db.Uuid
+  identities      ResearchIdentity[]
+  primaryIdentity ResearchIdentity   @map("primary_identity")
+  disciplines     String[]           @default([])
+  methods         String[]           @default([])
+  topics          String[]           @default([])
+  languages       String[]           @default([])
+  acceptedSignals String[]           @default([]) @map("accepted_signals")
+  rejectedSignals String[]           @default([]) @map("rejected_signals")
+  profileVersion  Int                @default(1) @map("profile_version")
+  createdAt       DateTime           @default(now()) @map("created_at")
+  updatedAt       DateTime           @updatedAt @map("updated_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("research_identity_profiles")
+}
+
+model ClaimNode {
+  id               String           @id @default(uuid()) @db.Uuid
+  researchObjectId String           @map("research_object_id") @db.Uuid
+  versionId        String           @map("version_id") @db.Uuid
+  parentClaimId    String?          @map("parent_claim_id") @db.Uuid
+  kind             ClaimKind
+  statement        String
+  assessment       ClaimAssessment
+  conditions       String[]         @default([])
+  limitations      String[]         @default([])
+  provenance       Json
+  extractionStatus ExtractionStatus @default(needs_review) @map("extraction_status")
+  createdAt        DateTime         @default(now()) @map("created_at")
+  updatedAt        DateTime         @updatedAt @map("updated_at")
+
+  researchObject          ResearchObject           @relation(fields: [researchObjectId], references: [id], onDelete: Cascade)
+  version                 Version                  @relation(fields: [versionId, researchObjectId], references: [id, researchObjectId], onDelete: Cascade, map: "claim_nodes_version_scope_fkey")
+  parentClaim             ClaimNode?               @relation("ClaimParent", fields: [parentClaimId, researchObjectId, versionId], references: [id, researchObjectId, versionId], onDelete: Cascade, map: "claim_nodes_parent_scope_fkey")
+  childClaims             ClaimNode[]              @relation("ClaimParent")
+  evidenceRecords         EvidenceRecord[]
+  presentationAssetClaims PresentationAssetClaim[]
+
+  @@unique([id, researchObjectId, versionId], map: "claim_nodes_id_ro_version_key")
+  @@index([researchObjectId, versionId, kind])
+  @@index([parentClaimId])
+  @@map("claim_nodes")
+}
+
+model EvidenceRecord {
+  id                   String           @id @default(uuid()) @db.Uuid
+  researchObjectId     String           @map("research_object_id") @db.Uuid
+  versionId            String           @map("version_id") @db.Uuid
+  workspaceId          String           @map("workspace_id") @db.Uuid
+  claimId              String           @map("claim_id") @db.Uuid
+  artifactId           String           @map("artifact_id") @db.Uuid
+  kind                 EvidenceKind
+  title                String
+  exactQuote           String?          @map("exact_quote") @db.Text
+  relation             ClaimRelation
+  locator              Json
+  contentHash          String           @map("content_hash") @db.Char(64)
+  extractionConfidence Float?           @map("extraction_confidence")
+  extractionStatus     ExtractionStatus @default(needs_review) @map("extraction_status")
+  verifiedByUserId     String?          @map("verified_by_user_id") @db.Uuid
+  provenance           Json
+  createdAt            DateTime         @default(now()) @map("created_at")
+  updatedAt            DateTime         @updatedAt @map("updated_at")
+
+  researchObject ResearchObject @relation(fields: [researchObjectId, workspaceId], references: [id, workspaceId], onDelete: Cascade, map: "evidence_records_research_object_workspace_fkey")
+  version        Version        @relation(fields: [versionId, researchObjectId], references: [id, researchObjectId], onDelete: Cascade, map: "evidence_records_version_scope_fkey")
+  workspace      Workspace      @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  claim          ClaimNode      @relation(fields: [claimId, researchObjectId, versionId], references: [id, researchObjectId, versionId], onDelete: Cascade, map: "evidence_records_claim_scope_fkey")
+  artifact       Artifact       @relation(fields: [artifactId, workspaceId], references: [id, workspaceId], onDelete: Restrict, map: "evidence_records_artifact_workspace_fkey")
+  verifiedBy     User?          @relation("EvidenceVerifier", fields: [verifiedByUserId], references: [id], onDelete: SetNull)
+
+  @@index([researchObjectId, versionId, relation])
+  @@index([claimId])
+  @@index([artifactId, contentHash])
+  @@index([verifiedByUserId])
+  @@map("evidence_records")
+}
+
+model PresentationAsset {
+  id               String                  @id @default(uuid()) @db.Uuid
+  researchObjectId String                  @map("research_object_id") @db.Uuid
+  versionId        String                  @map("version_id") @db.Uuid
+  kind             PresentationAssetKind
+  objectKey        String                  @map("object_key")
+  contentHash      String                  @map("content_hash") @db.Char(64)
+  generator        String
+  generatorVersion String                  @map("generator_version")
+  promptHash       String?                 @map("prompt_hash") @db.Char(64)
+  status           PresentationAssetStatus @default(draft)
+  label            String                  @default("presentation_not_evidence")
+  provenance       Json
+  createdAt        DateTime                @default(now()) @map("created_at")
+  updatedAt        DateTime                @updatedAt @map("updated_at")
+
+  researchObject ResearchObject           @relation(fields: [researchObjectId], references: [id], onDelete: Cascade)
+  version        Version                  @relation(fields: [versionId, researchObjectId], references: [id, researchObjectId], onDelete: Cascade, map: "presentation_assets_version_scope_fkey")
+  sourceClaims   PresentationAssetClaim[]
+
+  @@unique([id, researchObjectId, versionId], map: "presentation_assets_id_ro_version_key")
+  @@index([researchObjectId, versionId, status])
+  @@index([contentHash])
+  @@map("presentation_assets")
+}
+
+model PresentationAssetClaim {
+  presentationAssetId String @map("presentation_asset_id") @db.Uuid
+  claimId             String @map("claim_id") @db.Uuid
+  researchObjectId    String @map("research_object_id") @db.Uuid
+  versionId           String @map("version_id") @db.Uuid
+
+  presentationAsset PresentationAsset @relation(fields: [presentationAssetId, researchObjectId, versionId], references: [id, researchObjectId, versionId], onDelete: Cascade, map: "presentation_asset_claims_asset_scope_fkey")
+  claim             ClaimNode         @relation(fields: [claimId, researchObjectId, versionId], references: [id, researchObjectId, versionId], onDelete: Restrict, map: "presentation_asset_claims_claim_scope_fkey")
+
+  @@id([presentationAssetId, claimId])
+  @@index([claimId])
+  @@map("presentation_asset_claims")
 }

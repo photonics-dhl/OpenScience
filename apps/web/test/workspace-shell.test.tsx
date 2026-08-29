@@ -97,9 +97,9 @@ describe('Optical Editorial Research Object workspace', () => {
     expect(proposal).toContain('data-risk="high"');
     expect(proposal).not.toContain('suggestion-card');
     const proposalSource = readFileSync(new URL('../components/research/BeforeAfterProposal.tsx', import.meta.url), 'utf8');
-    expect(proposalSource).toContain('@radix-ui/react-dialog');
-    expect(proposalSource).toContain('Dialog.Portal');
-    expect(proposalSource).toContain('fixed inset-0');
+    expect(proposalSource).toContain('@/components/ui/dialog');
+    expect(proposalSource).toContain('<DialogContent');
+    expect(proposalSource).toContain('inset-0');
   });
 
   it('presents artifacts as rule-based rows instead of cards', () => {

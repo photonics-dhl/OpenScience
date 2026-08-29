@@ -48,6 +48,7 @@ export function AcceptedOpticalSurface({
         data-optical-lab-candidate="true"
         data-optical-lab-candidate-stage="true"
         data-optical-local-active="false"
+        data-optical-text-stage="true"
         data-optical-render-phase={OPTICAL_LAB_RENDER_PHASE}
         data-render-mode="asset-static"
         data-stable-bounds="stable"
@@ -70,10 +71,14 @@ export function AcceptedOpticalSurface({
         />
         <h1 className={styles.headline} data-optical-lab-semantic-title="true">
           <span className={styles.science} data-optical-lab-science="true">
-            <span className={styles.scienceInk}>Science</span>
+            <span className={styles.scienceInk} data-optical-science="true">Science</span>
           </span>{' '}
           <span className={styles.evolves} data-optical-lab-evolves="true">
-            <span className={styles.evolvesInk} data-optical-lab-evolves-ink="true">
+            <span
+              className={styles.evolvesInk}
+              data-optical-evolves="true"
+              data-optical-lab-evolves-ink="true"
+            >
               evolves<span className={styles.marker}>.</span>
             </span>
           </span>

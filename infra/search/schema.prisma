@@ -1,0 +1,137 @@
+generator client {
+  provider      = "prisma-client-js"
+  output        = "../../packages/search/generated/client"
+  binaryTargets = ["native", "linux-musl"]
+}
+
+datasource search {
+  provider = "postgresql"
+  url      = env("SEARCH_DATABASE_URL")
+}
+
+model SearchSchemaMeta {
+  key       String   @id
+  value     Json
+  updatedAt DateTime @default(now()) @updatedAt @map("updated_at")
+
+  @@map("search_schema_meta")
+}
+
+model SearchModelVersion {
+  id                  String            @id @default(uuid()) @search.Uuid
+  provider            String            @search.VarChar(64)
+  model               String            @search.VarChar(128)
+  revision            String            @search.VarChar(128)
+  dimension           Int
+  sourceSha256        String            @map("source_sha256") @search.Char(64)
+  packageFreezeSha256 String            @map("package_freeze_sha256") @search.Char(64)
+  modelManifestSha256 String            @map("model_manifest_sha256") @search.Char(64)
+  status              String            @default("candidate") @search.VarChar(32)
+  createdAt           DateTime          @default(now()) @map("created_at")
+  retiredAt           DateTime?         @map("retired_at")
+  embeddings          SearchEmbedding[]
+  indexTasks          SearchIndexTask[]
+
+  @@unique([provider, model, revision], map: "search_model_versions_identity_key")
+  @@map("search_model_versions")
+}
+
+model SearchChunk {
+  id               String                   @id @search.Char(64)
+  workspaceId      String                   @map("workspace_id") @search.Uuid
+  researchObjectId String                   @map("research_object_id") @search.Uuid
+  artifactId       String                   @map("artifact_id") @search.Uuid
+  sourceVersionId  String?                  @map("source_version_id") @search.Uuid
+  sourceVersionNo  Int?                     @map("source_version_no")
+  indexTaskId      String?                  @map("index_task_id") @search.Uuid
+  contentHash      String                   @map("content_hash") @search.Char(64)
+  ordinal          Int
+  language         String                   @search.VarChar(16)
+  text             String                   @search.Text
+  tokenCount       Int                      @map("token_count")
+  locators         Json
+  claimIds         Json                     @map("claim_ids")
+  lexicalTerms     Json                     @map("lexical_terms")
+  termFrequencies  Json                     @map("term_frequencies")
+  lexicalText      String                   @map("lexical_text") @search.Text
+  searchVector     Unsupported("tsvector")? @map("search_vector")
+  active           Boolean                  @default(true)
+  createdAt        DateTime                 @default(now()) @map("created_at")
+  updatedAt        DateTime                 @default(now()) @updatedAt @map("updated_at")
+  embeddings       SearchEmbedding[]
+  indexTask        SearchIndexTask?         @relation(fields: [indexTaskId], references: [id], onDelete: Cascade)
+
+  @@unique([workspaceId, id], map: "search_chunks_workspace_id_id_key")
+  @@unique([workspaceId, indexTaskId, ordinal], map: "search_chunks_generation_ordinal_key")
+  @@index([workspaceId, researchObjectId, active], map: "search_chunks_workspace_ro_active_idx")
+  @@index([workspaceId, artifactId, contentHash], map: "search_chunks_workspace_artifact_hash_idx")
+  @@map("search_chunks")
+}
+
+model SearchEmbedding {
+  id             String             @id @default(uuid()) @search.Uuid
+  workspaceId    String             @map("workspace_id") @search.Uuid
+  chunkId        String             @map("chunk_id") @search.Char(64)
+  modelVersionId String             @map("model_version_id") @search.Uuid
+  dimension      Int
+  vector         Bytes              @search.ByteA
+  vectorSha256   String             @map("vector_sha256") @search.Char(64)
+  norm           Float              @search.DoublePrecision
+  createdAt      DateTime           @default(now()) @map("created_at")
+  chunk          SearchChunk        @relation(fields: [workspaceId, chunkId], references: [workspaceId, id], onDelete: Cascade)
+  modelVersion   SearchModelVersion @relation(fields: [modelVersionId], references: [id], onDelete: Restrict)
+
+  @@unique([workspaceId, chunkId, modelVersionId], map: "search_embeddings_chunk_model_key")
+  @@index([workspaceId, modelVersionId], map: "search_embeddings_workspace_model_idx")
+  @@map("search_embeddings")
+}
+
+model SearchIndexTask {
+  id                     String             @id @default(uuid()) @search.Uuid
+  workspaceId            String             @map("workspace_id") @search.Uuid
+  researchObjectId       String             @map("research_object_id") @search.Uuid
+  artifactId             String             @map("artifact_id") @search.Uuid
+  sourceVersionId        String             @map("source_version_id") @search.Uuid
+  sourceVersionNo        Int                @map("source_version_no")
+  contentHash            String             @map("content_hash") @search.Char(64)
+  modelVersionId         String             @map("model_version_id") @search.Uuid
+  sourceGenerationSha256 String             @map("source_generation_sha256") @search.Char(64)
+  sourceCreatedAt        DateTime           @map("source_created_at")
+  status                 String             @default("queued") @search.VarChar(32)
+  attemptCount           Int                @default(0) @map("attempt_count")
+  errorCode              String?            @map("error_code") @search.VarChar(64)
+  leaseToken             String?            @map("lease_token") @search.Char(64)
+  fenceOwnerTaskId       String?            @map("fence_owner_task_id") @search.Uuid
+  fenceOwnerCreatedAt    DateTime?          @map("fence_owner_created_at")
+  fenceOwnerAttempt      Int?               @map("fence_owner_attempt")
+  leaseExpiresAt         DateTime?          @map("lease_expires_at")
+  isCurrent              Boolean            @default(false) @map("is_current")
+  createdAt              DateTime           @default(now()) @map("created_at")
+  startedAt              DateTime?          @map("started_at")
+  finishedAt             DateTime?          @map("finished_at")
+  modelVersion           SearchModelVersion @relation(fields: [modelVersionId], references: [id], onDelete: Restrict)
+  chunks                 SearchChunk[]
+
+  @@unique([workspaceId, researchObjectId, artifactId, sourceVersionId, contentHash, modelVersionId, sourceGenerationSha256], map: "search_index_tasks_generation_model_key")
+  @@index([status, createdAt], map: "search_index_tasks_status_created_idx")
+  @@index([workspaceId, researchObjectId], map: "search_index_tasks_workspace_ro_idx")
+  @@index([workspaceId, researchObjectId, artifactId, isCurrent], map: "search_index_tasks_current_idx")
+  @@map("search_index_tasks")
+}
+
+model SearchQueryMetric {
+  id               String   @id @default(uuid()) @search.Uuid
+  workspaceId      String   @map("workspace_id") @search.Uuid
+  queryHash        String   @map("query_hash") @search.Char(64)
+  lexicalAvailable Boolean  @map("lexical_available")
+  denseAvailable   Boolean  @map("dense_available")
+  resultCount      Int      @map("result_count")
+  lexicalLatencyMs Int?     @map("lexical_latency_ms")
+  denseLatencyMs   Int?     @map("dense_latency_ms")
+  totalLatencyMs   Int      @map("total_latency_ms")
+  errorCode        String?  @map("error_code") @search.VarChar(64)
+  createdAt        DateTime @default(now()) @map("created_at")
+
+  @@index([workspaceId, createdAt], map: "search_query_metrics_workspace_created_idx")
+  @@map("search_query_metrics")
+}

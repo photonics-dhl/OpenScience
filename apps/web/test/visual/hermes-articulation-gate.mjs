@@ -200,6 +200,8 @@ try {
   const regions = {
     full: [0, 0, 1, 1],
     head: [.06, .02, .52, .43],
+    forepaws: [.08, .28, .52, .70],
+    evidence: [.40, .20, .82, .66],
     torso: [.12, .30, .78, .78],
     tail: [.48, .52, .98, .98],
   };
@@ -257,6 +259,15 @@ try {
     stretch: await capturePerceptualAction('Stretch action', 'stretch', 725),
     surprise: await capturePerceptualAction('Surprise action', 'surprise', 325),
     wake: await capturePerceptualAction('Wake action', 'wake', 380),
+  };
+  const semantic = {
+    arrival: await capturePerceptualAction('Arrival action', 'arrival', 420),
+    compare: await capturePerceptualAction('Compare action', 'compare', 1_100),
+    evidence: await capturePerceptualAction('Evidence action', 'evidence', 720),
+    issue: await capturePerceptualAction('Issue action', 'issue', 820),
+    read: await capturePerceptualAction('Read action', 'read', 1_000),
+    success: await capturePerceptualAction('Success action', 'success', 540),
+    writing: await capturePerceptualAction('Writing action', 'writing', 720),
   };
 
   const probe = await context.newPage();
@@ -328,6 +339,13 @@ void main() {
   assert.ok(perceptual.surprise.full.changed >= 720, `288px surprise must visibly change the silhouette, got ${perceptual.surprise.full.changed}`);
   assert.ok(perceptual.patrol.torso.changed >= 220, `288px patrol must move more than the tail, got torso ${perceptual.patrol.torso.changed}`);
   assert.ok(perceptual.returning.torso.changed >= 180, `288px return must visibly land the body, got torso ${perceptual.returning.torso.changed}`);
+  assert.ok(semantic.evidence.evidence.changed >= 140, `evidence-check must visibly sequence evidence nodes, got ${semantic.evidence.evidence.changed}`);
+  assert.ok(semantic.read.evidence.changed >= 120, `read must visibly move the evidence region, got ${semantic.read.evidence.changed}`);
+  assert.ok(semantic.compare.evidence.changed >= 160, `compare must visibly separate evidence nodes, got ${semantic.compare.evidence.changed}`);
+  assert.ok(semantic.writing.forepaws.changed >= 120, `quiet-write must visibly articulate the forepaws, got ${semantic.writing.forepaws.changed}`);
+  assert.ok(semantic.issue.head.changed >= 220, `possible-issue must visibly change the head/crown expression, got ${semantic.issue.head.changed}`);
+  assert.ok(semantic.arrival.forepaws.changed >= 140, `arrival must visibly anticipate with the forepaws, got ${semantic.arrival.forepaws.changed}`);
+  assert.ok(semantic.success.evidence.changed >= 180, `success must visibly lift the evidence constellation, got ${semantic.success.evidence.changed}`);
   assert.ok(fixedControl.full.changed <= 12, `fixed-time pointer control must freeze autonomous pixels, got ${fixedControl.full.changed}`);
   const vectorDistance = (a, b) => Math.hypot(a.dx - b.dx, a.dy - b.dy);
   const maximumVectorSpread = (measurement) => Math.max(
@@ -343,7 +361,7 @@ void main() {
   assert.ok(maximumVectorSpread(affineMutation) < 2, `controlled whole-image affine mutation must produce one shared vector: ${JSON.stringify(affineMutation.regions)}`);
   assert.ok(maximumVectorSpread(articulation) >= 3, `production articulation must reject the affine mutation: ${JSON.stringify(articulation.regions)}`);
   assert.deepEqual(errors, []);
-  process.stdout.write(`${JSON.stringify({ affineMutation, articulation, breathing, citation, fixedControl, observe, perceptual, pointer }, null, 2)}\n`);
+  process.stdout.write(`${JSON.stringify({ affineMutation, articulation, breathing, citation, fixedControl, observe, perceptual, pointer, semantic }, null, 2)}\n`);
 } finally {
   await page.close();
   if (video) await video.saveAs(resolve(output, 'hermes-articulation-preview.webm'));

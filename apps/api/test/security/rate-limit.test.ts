@@ -116,6 +116,7 @@ describe('registerRateLimit（Fastify 封装）', () => {
     ['/research-objects/:id/ingest', '/research-objects/ro-1/ingest', 5],
     ['/ingestion/:taskId/retry', '/ingestion/task-1/retry', 10],
     ['/agent/tasks', '/agent/tasks', 20],
+    ['/agent/tasks/:id/retry', '/agent/tasks/00000000-0000-4000-8000-000000000001/retry', 10],
   ])('%s 超过资源密集型档位后返回 429', async (route, url, limit) => {
     const f = makeFakeRedis();
     const { sink } = makeAudit();

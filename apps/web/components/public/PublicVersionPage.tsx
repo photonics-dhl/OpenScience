@@ -1,8 +1,7 @@
 'use client';
 import * as React from 'react';
-import { getPublicResearchVersion, ApiClientError } from '../../lib/api';
+import { getPublicResearchVersion } from '../../lib/api';
 import { LEGAL_DISCLAIMER_DEFAULT, LICENSE_NAMES } from '../../lib/constants';
-import { useEffect, useState } from 'react';
 import { useTranslations } from 'next-intl';
 import { TabNavigation, ComingSoonTab, type TabId } from './TabNavigation';
 import { CitationRail } from './CitationRail';
@@ -10,35 +9,9 @@ import { ProvenanceCaption } from './ProvenanceCaption';
 
 type PublicResearch = Awaited<ReturnType<typeof getPublicResearchVersion>>['research'];
 
-function ErrorState({ status }: { status: 404 | 429 | 'other' }) {
-  const t = useTranslations('public');
-  if (status === 404) {
-    return (
-      <main className="pub-page">
-        <h1>{t('notFound.title')}</h1>
-        <p>{t('notFound.body')}</p>
-      </main>
-    );
-  }
-  if (status === 429) {
-    return (
-      <main className="pub-page">
-        <h1>{t('rateLimited.title')}</h1>
-        <p>{t('rateLimited.body')}</p>
-      </main>
-    );
-  }
-  return (
-    <main className="pub-page">
-      <h1>{t('unavailable.title')}</h1>
-      <p>{t('unavailable.body')}</p>
-    </main>
-  );
-}
-
 function CopyButton({ text, label }: { text: string; label?: string }) {
   const t = useTranslations('public');
-  const [copied, setCopied] = useState(false);
+  const [copied, setCopied] = React.useState(false);
   const handleCopy = async () => {
     await navigator.clipboard.writeText(text);
     setCopied(true);
@@ -51,7 +24,9 @@ function CopyButton({ text, label }: { text: string; label?: string }) {
   );
 }
 
-/** @deprecated Kept as a compatibility export while downstream embeds migrate to PublicReadingSurface. */
+/**
+ * @deprecated Compatibility export for downstream embeds migrating to PublicReadingSurface.
+ */
 export function LegacyOverviewTab({ research }: { research: PublicResearch }) {
   const t = useTranslations('public');
   const r = research;
@@ -229,14 +204,14 @@ export function PublicReadingSurface({ research, activeTab = 'overview', onTabCh
             </div>
           </header>
 
-          <section className="pub-reading-insight" data-sdf-node="insight" data-sdf-state={version.core.insight ? 'confirmed' : 'empty'}>
+          <section className="pub-reading-insight" data-reading-role="body" data-sdf-node="insight" data-sdf-state={version.core.insight ? 'confirmed' : 'empty'}>
             <p className="pub-kicker">{t('insight')}</p>
             <p>{version.core.insight || t('none')}</p>
           </section>
 
           <section className="pub-reading-abstract" aria-labelledby="public-abstract-heading">
             <h2 id="public-abstract-heading">{t('abstract')}</h2>
-            <p>{version.core.problem || t('none')}</p>
+            <p data-reading-role="body">{version.core.problem || t('none')}</p>
           </section>
 
           <section className="pub-reading-sdf" aria-labelledby="public-sdf-heading">
@@ -244,7 +219,7 @@ export function PublicReadingSurface({ research, activeTab = 'overview', onTabCh
             {PUBLIC_SDF_NODES.filter(([key]) => key !== 'insight').map(([key, label]) => {
               const value = version.core[key];
               return <section key={key} data-sdf-node={key} data-sdf-state={value ? 'confirmed' : 'empty'}>
-                <h3>{t(label)}</h3><p>{value || t('none')}</p>
+                <h3>{t(label)}</h3><p data-reading-role="reading">{value || t('none')}</p>
               </section>;
             })}
           </section>
@@ -270,34 +245,5 @@ export function PublicReadingSurface({ research, activeTab = 'overview', onTabCh
       <div data-public-deep-navigation="true" className="pub-reading-tabs"><TabNavigation activeTab={activeTab} onTabChange={onTabChange} /></div>
       {activeTab !== 'overview' && <ComingSoonTab tabName={t(`tab.${activeTab}`)} />}
     </div>
-  );
-}
-
-export default function PublicVersionPage({ publicId, versionNo }: { publicId: string; versionNo: number }) {
-  const t = useTranslations('public');
-  const [research, setResearch] = useState<PublicResearch | null>(null);
-  const [error, setError] = useState<404 | 429 | 'other' | null>(null);
-  const [activeTab, setActiveTab] = useState<TabId>('overview');
-
-  useEffect(() => {
-    getPublicResearchVersion(publicId, versionNo)
-      .then((res) => setResearch(res.research))
-      .catch((err) => {
-        if (err instanceof ApiClientError) {
-          if (err.status === 404) return setError(404);
-          if (err.status === 429) return setError(429);
-        }
-        console.error('[PublicVersionPage] Fetch error:', err);
-        setError('other');
-      });
-  }, [publicId, versionNo]);
-
-  if (error) return <ErrorState status={error} />;
-  if (!research) return <main className="pub-page"><p>{t('loading')}</p></main>;
-
-  return (
-    <main className="pub-page-tabbed">
-      <PublicReadingSurface research={research} activeTab={activeTab} onTabChange={setActiveTab} />
-    </main>
   );
 }

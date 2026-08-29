@@ -1,22 +1,176 @@
 import { createPrismaAuditSink, createPrismaClient, createRedisClient } from '@openscience/database';
-import { AiGateway, AnthropicCompatProvider, OpenAiCompatProvider } from '@openscience/ai-gateway';
+import {
+  AiGateway,
+  AnthropicCompatProvider,
+  MiniMaxCodingPlanVisionProvider,
+  MutableProviderKillSwitch,
+  OpenAiCompatProvider,
+  type ExternalProcessingPolicy,
+  type MiniMaxVisionPricing,
+  type ProviderCapabilityPolicy,
+} from '@openscience/ai-gateway';
 import {
   claimAgentTask, markTaskProgress, prepareAgentTaskForCrashRecovery, recoverUndispatchedAgentTasks,
-  AGENT_TASK_QUEUE, type AgentDeps,
+  AGENT_TASK_QUEUE, persistDocumentSourceMapReference, type AgentDeps,
 } from '@openscience/domain';
 import { createStorageAdapter, getBlob, storageConfigFromEnv, type StorageAdapter } from '@openscience/storage';
+import {
+  createSearchPrismaClient,
+  EmbeddingClient,
+  SearchStorage,
+  type DenseModelIdentity,
+} from '@openscience/search';
+import type { OcrAuthorizationContext } from '@openscience/ai-gateway';
+import type { DocumentSourceMap, ExtractionResult as ParserExtractionResult } from '@openscience/domain';
+import { createHash } from 'node:crypto';
 import type { Readable } from 'node:stream';
-import { extractHandler } from './extractor';
-import { MAX_PARSER_INPUT, parseIngestion, parseIngestionWithAdapters, type IngestionAdapters } from './ingestion-parser';
+import { extractHandler, sourceMapToManuscriptText } from './extractor';
+import { MAX_PARSER_INPUT, type IngestionAdapters } from './ingestion-parser';
 import { reviewAnalyzeHandler } from './reviewer';
 import { visualizationPlanHandler } from './planner';
 import { workspaceGuideHandler } from './workspace-guide';
 import { createClamAvScanner, type MalwareScanner } from './clamav';
-import { createParserJobAdapters } from './parser-job-isolation';
+import { createParserStageJobClient, expectedSidecarParserMetadata } from './parser-job-isolation';
+import { runParserCascadeSelfTest } from './parser-self-test';
+import { authorizeSearchIndexJob, createSearchIndexer, type SearchIndexer } from './search-indexer';
+import {
+  runParserCascade,
+  type ParserCascadeFeatureFlags,
+} from './parsers/cascade-orchestrator';
+import { createTextExtractor, type TextStageAdapter } from './parsers/text-extractor';
+import type { ParserInput } from './parsers/types';
+import { canonicalParserMediaType } from './parser-media-type';
+
+const BGE_M3_REVISION = '5617a9f61b028005a4858fdac845db406aefb181';
+const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
+const SHA256_PATTERN = /^[0-9a-f]{64}$/;
+const INGESTION_EXTERNAL_PROCESSING_ROLES = new Set(['owner', 'maintainer', 'author', 'contributor']);
+
+export type SearchIndexRuntimeConfig =
+  | { enabled: false }
+  | { enabled: true; endpoint: string; modelIdentity: DenseModelIdentity };
+
+export function loadSearchIndexRuntimeConfig(env: NodeJS.ProcessEnv = process.env): SearchIndexRuntimeConfig {
+  const enabled = env.BGE_M3_ENABLED ?? 'false';
+  if (enabled === 'false') return { enabled: false };
+  if (enabled !== 'true') throw new Error('BGE_M3_ENABLED must be true or false');
+
+  const modelVersionId = env.BGE_M3_MODEL_VERSION_ID ?? '';
+  const modelRevision = env.BGE_M3_MODEL_REVISION ?? '';
+  const sourceSha256 = env.BGE_M3_SOURCE_SHA256 ?? '';
+  const packageFreezeSha256 = env.BGE_M3_PACKAGE_FREEZE_SHA256 ?? '';
+  const modelManifestSha256 = env.BGE_M3_MODEL_MANIFEST_SHA256 ?? '';
+  const endpoint = env.EMBEDDING_WORKER_URL ?? 'http://embedding-worker:8080';
+  if (!UUID_PATTERN.test(modelVersionId)) throw new Error('BGE_M3_MODEL_VERSION_ID is invalid');
+  if (modelRevision !== BGE_M3_REVISION) throw new Error('BGE_M3_MODEL_REVISION is invalid');
+  for (const [name, value] of [
+    ['BGE_M3_SOURCE_SHA256', sourceSha256],
+    ['BGE_M3_PACKAGE_FREEZE_SHA256', packageFreezeSha256],
+    ['BGE_M3_MODEL_MANIFEST_SHA256', modelManifestSha256],
+  ] as const) {
+    if (!SHA256_PATTERN.test(value)) throw new Error(`${name} is invalid`);
+  }
+  if (env.NODE_ENV === 'production' && endpoint !== 'http://embedding-worker:8080') {
+    throw new Error('EMBEDDING_WORKER_URL must use the internal embedding worker in production');
+  }
+  return {
+    enabled: true,
+    endpoint,
+    modelIdentity: {
+      modelVersionId,
+      modelRevision,
+      sourceSha256,
+      packageFreezeSha256,
+      modelManifestSha256,
+    },
+  };
+}
+
+export function buildSearchIndexerFromEnv(
+  env: NodeJS.ProcessEnv = process.env,
+  fetcher: typeof fetch = globalThis.fetch,
+): SearchIndexer | undefined {
+  const config = loadSearchIndexRuntimeConfig(env);
+  if (!config.enabled) return undefined;
+  const client = createSearchPrismaClient({ env });
+  return createSearchIndexer({
+    storage: new SearchStorage(client),
+    embedder: new EmbeddingClient({
+      baseUrl: config.endpoint,
+      fetchImpl: fetcher,
+      logger: (message) => console.warn(message),
+    }),
+    modelIdentity: config.modelIdentity,
+  });
+}
 
 /** 任务处理器注册表（Q4：kind → 执行函数）。 */
+export interface ParserCascadeAuthorization {
+  trustedAuthorizationContext: Readonly<OcrAuthorizationContext>;
+  externalProcessingEligible: boolean;
+}
+
+export type ParserCascadeRunner = ((
+  input: ParserInput,
+  authorization: ParserCascadeAuthorization,
+) => Promise<ParserExtractionResult<DocumentSourceMap>>) & {
+  readonly featureFlags: Readonly<ParserCascadeFeatureFlags>;
+};
+
 export type WorkerDeps = AgentDeps & { storage?: StorageAdapter; ingestionAdapters?: IngestionAdapters; malwareScanner?: MalwareScanner };
-export type TaskHandler = (deps: WorkerDeps, task: { id: string; payload: Record<string, unknown> }) => Promise<Record<string, unknown>>;
+export type TaskHandler = (
+  deps: WorkerDeps,
+  task: { id: string; payload: Record<string, unknown>; interestContext?: unknown; executionAttempt: number },
+) => Promise<Record<string, unknown>>;
+
+/** Production-safe cascade composition: one V2 sidecar stage plus disabled candidate routes. */
+export function createWorkerParserCascade(
+  gateway: Pick<AiGateway, 'ocr'>,
+  parserJobAdapter: TextStageAdapter,
+): ParserCascadeRunner {
+  const extractText = createTextExtractor({
+    pdf: parserJobAdapter,
+    docx: parserJobAdapter,
+    image: parserJobAdapter,
+    xlsx: parserJobAdapter,
+  });
+  const featureFlags: Readonly<ParserCascadeFeatureFlags> = Object.freeze({
+    detectLayout: false,
+    grobid: false,
+    localOcr: true,
+    llmOcr: false,
+  });
+  return Object.assign(
+    (input: ParserInput, authorization: ParserCascadeAuthorization) => runParserCascade(input, {
+      adapters: {
+        extractText,
+        isolatedLocalOcr: {
+          inventoryPages: (stageInput) => parserJobAdapter({
+            schemaVersion: 2,
+            operation: 'inventory_pages',
+            artifactId: stageInput.artifactId,
+            contentHash: stageInput.contentHash,
+            mediaType: stageInput.mediaType,
+            options: {},
+          }, Buffer.from(stageInput.content)),
+          ocrPages: (stageInput, pages) => parserJobAdapter({
+            schemaVersion: 2,
+            operation: 'ocr_page',
+            artifactId: stageInput.artifactId,
+            contentHash: stageInput.contentHash,
+            mediaType: stageInput.mediaType,
+            options: { pageNumbers: pages.map(({ page }) => page) },
+          }, Buffer.from(stageInput.content)),
+        },
+      },
+      aiGateway: gateway,
+      trustedAuthorizationContext: authorization.trustedAuthorizationContext,
+      externalProcessingEligible: authorization.externalProcessingEligible,
+      featureFlags,
+    }),
+    { featureFlags },
+  );
+}
 
 export async function streamToBufferBounded(stream: Readable, maxBytes: number): Promise<Buffer> {
   const chunks: Buffer[] = [];
@@ -34,7 +188,14 @@ export async function streamToBufferBounded(stream: Readable, maxBytes: number):
 }
 
 /** 构造处理器注册表（P1D-3 挂 sdf.extract；后续 5.5 审核等挂接）。 */
-export function createHandlers(gateway: AiGateway): Record<string, TaskHandler> {
+export function createHandlers(
+  gateway: AiGateway,
+  options: {
+    searchIndexer?: SearchIndexer;
+    parserCascade?: ParserCascadeRunner;
+    externalProcessingPolicy?: ExternalProcessingPolicy;
+  } = {},
+): Record<string, TaskHandler> {
   return {
     'demo.echo': async () => {
       await sleep(300);
@@ -46,7 +207,7 @@ export function createHandlers(gateway: AiGateway): Record<string, TaskHandler> 
       if (!deps.storage) throw new Error('缺少对象存储适配器，无法读取 Artifact');
       const ownerTask = await deps.prisma.agentTask.findUnique({
         where: { id: task.id },
-        include: { session: { include: { researchObject: true } } },
+        include: { session: { include: { researchObject: { include: { workspace: true } } } } },
       });
       const artifact = await deps.prisma.artifact.findUnique({ where: { id: artifactId } });
       const ownerResearchObject = ownerTask?.session.researchObject;
@@ -70,16 +231,61 @@ export function createHandlers(gateway: AiGateway): Record<string, TaskHandler> 
       if (!deps.malwareScanner) throw new Error('[blocked] malware scanner unavailable');
       const blob = await getBlob(deps.storage, artifact.blobSha256);
       const bytes = await streamToBufferBounded(blob.body, MAX_PARSER_INPUT);
+      if (bytes.byteLength !== Number(artifact.size)
+        || createHash('sha256').update(bytes).digest('hex') !== artifact.blobSha256) {
+        throw new Error('[blocked] artifact integrity mismatch');
+      }
       await deps.malwareScanner(bytes);
-      const parsed = deps.ingestionAdapters
-        ? await parseIngestionWithAdapters(artifact.logicalPath, bytes, deps.ingestionAdapters)
-        : parseIngestion(artifact.logicalPath, bytes);
-      if (parsed.status === 'needs_review') return { status: parsed.status, format: parsed.format, reason: parsed.reason };
-      return extractHandler(gateway, { payload: { manuscriptText: parsed.text } });
+      if (!options.parserCascade) throw new Error('[blocked] parser cascade unavailable');
+      const trustedAuthorizationContext = Object.freeze({
+        taskId: ownerTask.id,
+        workspaceId: ownerResearchObject.workspaceId,
+        actorId: ownerTask.session.userId,
+      });
+      const serverDerivedEligibility = ownerTask.id === task.id
+        && ownerTask.kind === 'sdf.extract'
+        && ownerTask.status === 'running'
+        && ownerResearchObject.workspace.status === 'active'
+        && membership.userId === ownerTask.session.userId
+        && membership.workspaceId === ownerResearchObject.workspaceId
+        && typeof membership.role === 'string'
+        && INGESTION_EXTERNAL_PROCESSING_ROLES.has(membership.role);
+      const externalProcessingEligible = serverDerivedEligibility
+        && await (options.externalProcessingPolicy?.(trustedAuthorizationContext) ?? false);
+      const parsed = await options.parserCascade({
+        artifactId: artifact.id,
+        contentHash: artifact.blobSha256,
+        content: bytes,
+        mediaType: canonicalParserMediaType(artifact.logicalPath, artifact.mimeType),
+      }, { trustedAuthorizationContext, externalProcessingEligible });
+      const format = artifact.logicalPath.split('.').at(-1)?.toLowerCase() ?? 'unknown';
+      if (parsed.status === 'blocked') throw new Error(`[blocked] ${parsed.code}`);
+      const sourceMapRef = (parsed.status === 'succeeded' || parsed.status === 'needs_review') && parsed.sourceMap
+        ? await persistDocumentSourceMapReference(deps.storage, parsed.sourceMap, parsed.status)
+        : undefined;
+      if (parsed.status !== 'succeeded') {
+        return {
+          status: 'needs_review',
+          format,
+          reason: parsed.status === 'failed' ? parsed.message : parsed.reasons.join('; '),
+          ...(sourceMapRef ? { sourceMapRef } : {}),
+        };
+      }
+      const manuscriptText = sourceMapToManuscriptText(parsed.sourceMap);
+      if (!manuscriptText.trim()) return { status: 'needs_review', format, reason: 'empty-parsed-text', sourceMapRef };
+      try {
+        return { ...await extractHandler(gateway, { payload: { manuscriptText } }), sourceMapRef };
+      } catch {
+        return { status: 'needs_review', format, reason: 'sdf-proposal-unavailable', sourceMapRef };
+      }
     },
     'review.analyze': async (deps, task) => reviewAnalyzeHandler(gateway, deps, task),
     'visualization.plan': async (_deps, task) => visualizationPlanHandler(gateway, task), // P1E-1
     'workspace.guide': async (deps, task) => workspaceGuideHandler(gateway, deps, task),
+    ...(options.searchIndexer === undefined ? {} : {
+      'search.index': async (_deps: WorkerDeps, task) =>
+        options.searchIndexer!.index(await authorizeSearchIndexJob(_deps, task)),
+    }),
   };
 }
 
@@ -116,17 +322,34 @@ export async function createPollOnce(handlers: Record<string, TaskHandler>): Pro
     const taskId = await deps.redis.brpoplpush(AGENT_TASK_QUEUE, AGENT_TASK_PROCESSING_QUEUE, 1);
     if (!taskId) return false;
 
+    let claimed: Awaited<ReturnType<typeof claimAgentTask>> = null;
     try {
       const task = await deps.prisma.agentTask.findUnique({ where: { id: taskId } });
       if (!task) return true;
-      if (!await claimAgentTask(deps, taskId)) return true;
-      const handler = handlers[task.kind] ?? handlers['demo.echo'];
-      const result = await handler(deps, { id: task.id, payload: (task.payload ?? {}) as Record<string, unknown> });
-      await markTaskProgress(deps, { taskId, status: 'succeeded', progress: 100, result });
+      claimed = await claimAgentTask(deps, taskId);
+      if (!claimed) return true;
+      const handler = handlers[task.kind];
+      if (!handler) throw new Error('unsupported agent task kind');
+      const result = await handler(deps, {
+        id: task.id,
+        payload: (task.payload ?? {}) as Record<string, unknown>,
+        interestContext: task.interestContext,
+        executionAttempt: claimed.executionAttempt,
+      });
+      await markTaskProgress(deps, {
+        taskId,
+        status: 'succeeded',
+        progress: 100,
+        result,
+        expectedExecutionAttempt: claimed.executionAttempt,
+      });
       return true;
     } catch (e) {
       await markTaskProgress(deps, {
-        taskId, status: 'failed', error: e instanceof Error ? e.message.slice(0, 1000) : String(e),
+        taskId,
+        status: 'failed',
+        error: e instanceof Error ? e.message.slice(0, 1000) : String(e),
+        expectedExecutionAttempt: claimed?.executionAttempt,
       }).catch(() => undefined);
       return true;
     } finally {
@@ -144,14 +367,34 @@ async function main(): Promise<void> {
   const redis = createRedisClient();
   const storage = createStorageAdapter(storageConfigFromEnv());
   const deps: WorkerDeps = {
-    prisma, redis, storage, ingestionAdapters: createParserJobAdapters(parserJobDir),
+    prisma, redis, storage,
     audit: createPrismaAuditSink(prisma),
     malwareScanner: process.env.CLAMAV_HOST ? createClamAvScanner(process.env.CLAMAV_HOST, Number(process.env.CLAMAV_PORT ?? 3310)) : undefined,
     mailer: { send: async () => undefined },
   };
   // Gateway（§24 占位：AI_ENABLED=false 时懒加载；生产 env 注入密钥，§17）
-  const gateway = buildGateway(process.env, globalThis.fetch, createPrismaAuditSink(prisma));
-  const handlers = createHandlers(gateway);
+  const externalProcessingPolicy: ExternalProcessingPolicy = async () => false;
+  const gateway = buildGateway(
+    process.env,
+    globalThis.fetch,
+    createPrismaAuditSink(prisma),
+    externalProcessingPolicy,
+  );
+  const parserJobAdapter = createParserStageJobClient(parserJobDir, expectedSidecarParserMetadata);
+  const parserCascade = createWorkerParserCascade(gateway, parserJobAdapter);
+  const parserSelfTest = await runParserCascadeSelfTest(parserCascade);
+  if (!parserSelfTest.pdf.textMatched || !parserSelfTest.docx.textMatched
+    || !parserSelfTest.scan.textMatched || !parserSelfTest.scan.locatorMatched
+    || !parserSelfTest.scan.tesseractMatched || !parserSelfTest.scan.confidenceMatched
+    || !parserSelfTest.scan.boundingBoxMatched
+    || !parserSelfTest.candidateFallbackDisabled) {
+    throw new Error('parser cascade startup self-test failed');
+  }
+  const handlers = createHandlers(gateway, {
+    parserCascade,
+    externalProcessingPolicy,
+    searchIndexer: buildSearchIndexerFromEnv(process.env),
+  });
   const pollOnce = await createPollOnce(handlers);
   await recoverProcessingQueue(deps);
   console.log('agent-worker 启动（P1D-2/3）');
@@ -170,6 +413,8 @@ export function buildGateway(
   env: NodeJS.ProcessEnv = process.env,
   fetcher: typeof fetch = globalThis.fetch,
   audit?: ConstructorParameters<typeof AiGateway>[0]['audit'],
+  externalProcessingPolicy: ExternalProcessingPolicy = async () => false,
+  runtimeCapabilityPolicy: ProviderCapabilityPolicy = new MutableProviderKillSwitch(),
 ): AiGateway {
   const primaryModel = env.MINIMAX_MODEL ?? 'MiniMax-M3';
   const fallbackModels = (env.AI_FALLBACK_MODELS ?? '').split(',').map((s) => s.trim()).filter(Boolean);
@@ -192,7 +437,68 @@ export function buildGateway(
         : new OpenAiCompatProvider(name, config, fetcher);
     });
   });
-  return new AiGateway({ providers, audit, logger: console });
+
+  const ocrProviders = env.NODE_ENV !== 'production' && env.MINIMAX_VISION_ENABLED === 'true' && keys[0]
+    ? [new MiniMaxCodingPlanVisionProvider('minimax-vision', {
+        baseUrl: visionOrigin(env),
+        apiKey: keys[0],
+        model: env.MINIMAX_VISION_MODEL ?? 'coding-plan-vlm',
+        pricing: visionPricing(env),
+        maxPageBytes: optionalBoundedInteger(env.MINIMAX_VISION_MAX_PAGE_BYTES, 4 * 1024 * 1024, 'MINIMAX_VISION_MAX_PAGE_BYTES'),
+      }, fetcher)]
+    : [];
+  const staticallyDisabled = new Set((env.AI_DISABLED_PROVIDERS ?? '').split(',').map((value) => value.trim()).filter(Boolean));
+  const killSwitch: ProviderCapabilityPolicy = {
+    async isEnabled(provider, capability) {
+      if (staticallyDisabled.has(provider)) return { enabled: false, reason: 'operator_disabled' };
+      return runtimeCapabilityPolicy.isEnabled(provider, capability);
+    },
+  };
+  const ocrLimits = {
+    maxPages: optionalBoundedInteger(env.LLM_OCR_MAX_PAGES, 4, 'LLM_OCR_MAX_PAGES'),
+    maxPageBytes: optionalBoundedInteger(env.LLM_OCR_MAX_PAGE_BYTES, 4 * 1024 * 1024, 'LLM_OCR_MAX_PAGE_BYTES'),
+    maxTotalBytes: optionalBoundedInteger(env.LLM_OCR_MAX_TOTAL_BYTES, 8 * 1024 * 1024, 'LLM_OCR_MAX_TOTAL_BYTES'),
+  };
+  return new AiGateway({
+    providers,
+    ocrProviders,
+    audit,
+    logger: console,
+    killSwitch,
+    externalProcessingPolicy,
+    ocrLimits,
+  });
+}
+
+function visionOrigin(env: NodeJS.ProcessEnv): string {
+  const region = env.MINIMAX_VISION_REGION ?? 'global';
+  if (region === 'global') return 'https://api.minimax.io';
+  if (region === 'cn') return 'https://api.minimaxi.com';
+  throw new Error('MINIMAX_VISION_REGION must be global or cn');
+}
+
+function visionPricing(env: NodeJS.ProcessEnv): MiniMaxVisionPricing | undefined {
+  const rawCost = env.MINIMAX_VISION_USD_MICROS_PER_PAGE;
+  if (rawCost === undefined || rawCost.trim() === '') return undefined;
+  const usdMicrosPerPage = Number(rawCost);
+  if (!Number.isSafeInteger(usdMicrosPerPage) || usdMicrosPerPage < 0 || usdMicrosPerPage > 1_000_000_000) {
+    throw new Error('MINIMAX_VISION_USD_MICROS_PER_PAGE must be a non-negative integer');
+  }
+  const version = env.MINIMAX_VISION_PRICING_VERSION ?? '';
+  const effectiveDate = env.MINIMAX_VISION_PRICING_EFFECTIVE_DATE ?? '';
+  const serviceTier = env.MINIMAX_VISION_SERVICE_TIER ?? '';
+  if (!/^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/.test(version) || !/^\d{4}-\d{2}-\d{2}$/.test(effectiveDate) ||
+    !/^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/.test(serviceTier)) {
+    throw new Error('MiniMax vision pricing metadata is incomplete or invalid');
+  }
+  return { usdMicrosPerPage, version, effectiveDate, serviceTier };
+}
+
+function optionalBoundedInteger(raw: string | undefined, maximum: number, name: string): number {
+  if (raw === undefined || raw.trim() === '') return maximum;
+  const value = Number(raw);
+  if (!Number.isSafeInteger(value) || value < 1 || value > maximum) throw new Error(`${name} must be an integer between 1 and ${maximum}`);
+  return value;
 }
 
 // 主进程入口；被测试 import 时不启动

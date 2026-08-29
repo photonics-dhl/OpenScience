@@ -1,6 +1,5 @@
 'use client';
 
-import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useLocale, useTranslations } from 'next-intl';
 import * as React from 'react';
@@ -63,24 +62,35 @@ export default function DashboardPage() {
 
   if (!user && !error) {
     return (
-      <main className="surface-workbench grid min-h-screen place-items-center text-os-paper" aria-busy="true">
-        <p className="text-sm text-workbench-muted" aria-live="polite">{t('loading')}</p>
-      </main>
+      <DashboardShell
+        activeRoute="dashboard"
+        aria-busy="true"
+        mainClassName="grid place-items-center"
+        navigationLabel={t('context.navigation')}
+        skipLabel={t('context.skip')}
+      >
+        <p className="text-base text-os-muted-paper" aria-live="polite">{t('loading')}</p>
+      </DashboardShell>
     );
   }
 
   if (error) {
     return (
-      <main className="surface-workbench grid min-h-screen place-items-center px-4 text-os-paper">
-        <section className="w-full max-w-xl border-y border-os-rule-dark py-10 text-center">
-          <p className="font-mono text-[0.68rem] uppercase tracking-[0.22em] text-os-vermilion">System / interrupted</p>
-          <h1 className="mt-4 font-editorial text-4xl">{t('errors.title')}</h1>
-          <p role="alert" className="mt-3 text-sm text-os-muted-dark">{error}</p>
-          <button className="mt-6 border-b border-os-vermilion pb-1 text-sm font-semibold text-os-paper hover:text-os-vermilion" type="button" onClick={() => window.location.reload()}>
+      <DashboardShell
+        activeRoute="dashboard"
+        mainClassName="grid place-items-center px-4"
+        navigationLabel={t('context.navigation')}
+        skipLabel={t('context.skip')}
+      >
+        <section className="surface-folio-sheet w-full max-w-xl border-y border-os-rule-paper px-6 py-10 text-center">
+          <p data-reading-role="caption" className="text-os-vermilion-ink">{t('errors.kicker')}</p>
+          <h1 className="mt-4 text-4xl">{t('errors.title')}</h1>
+          <p role="alert" className="mt-3 text-base text-os-muted-paper">{error}</p>
+          <button className="mt-6 border-b border-os-vermilion-ink pb-1 text-sm font-semibold text-os-ink hover:text-os-vermilion-ink" type="button" onClick={() => window.location.reload()}>
             {t('errors.retry')}
           </button>
         </section>
-      </main>
+      </DashboardShell>
     );
   }
 
@@ -94,27 +104,25 @@ export default function DashboardPage() {
 
   return (
     <DashboardShell
-      className="text-os-paper"
+      activeRoute="dashboard"
       headerActions={(
-        <div className="ml-auto flex items-center justify-end gap-3">
-          <span className="hidden font-mono text-[0.68rem] uppercase tracking-[0.12em] text-os-muted-dark sm:inline">{user?.displayName}</span>
+        <div className="ml-auto flex items-center justify-end gap-2">
+          <span data-reading-role="caption" className="hidden text-os-muted-paper sm:inline">{user?.displayName}</span>
           <LocaleSwitcher locale={locale} />
-          <Link className="text-xs text-os-muted-dark hover:text-os-paper focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-os-vermilion" href="/settings">{t('context.settings')}</Link>
-          <Link className="text-xs text-os-muted-dark hover:text-os-paper focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-os-vermilion" href="/#about">{t('context.help')}</Link>
         </div>
       )}
       navigationLabel={t('context.navigation')}
-      skipLabel="Skip to research workspace"
+      skipLabel={t('context.skip')}
     >
-      <div className="mx-auto grid max-w-screen-2xl gap-x-8 gap-y-10 lg:grid-cols-12">
-        <header className="lg:col-span-12">
-          <p className="font-mono text-[0.68rem] uppercase tracking-[0.22em] text-os-muted-dark">
+      <div className="mx-auto grid max-w-[88rem] gap-x-10 gap-y-8 lg:grid-cols-12">
+        <header className="border-b border-os-rule-paper pb-6 lg:col-span-12">
+          <p data-reading-role="caption" className="text-os-muted-paper">
             {t('eyebrow')}
           </p>
-          <h1 className="mt-3 font-editorial text-4xl font-normal leading-none sm:text-6xl">
+          <h1 className="mt-2 text-[clamp(2rem,4vw,2.75rem)] font-normal leading-[1.08] tracking-[-0.03em] text-os-ink">
             {t('title')}
           </h1>
-          <p className="mt-4 max-w-2xl text-sm leading-6 text-os-muted-dark">
+          <p data-reading-role="body" className="mt-3 max-w-2xl text-os-muted-paper">
             {t('welcome', { name: user?.displayName ?? '' })}
           </p>
         </header>

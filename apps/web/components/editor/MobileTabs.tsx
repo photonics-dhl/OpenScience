@@ -17,8 +17,9 @@ export default function MobileTabs({ active, onSelect }: { active: MobileTab; on
         <button
           key={tab.key}
           className={active === tab.key
-            ? 'min-h-12 border-0 bg-os-paper px-2 font-data text-[10px] uppercase tracking-[0.08em] text-os-ink'
-            : 'min-h-12 border-0 bg-os-black-0 px-2 font-data text-[10px] uppercase tracking-[0.08em] text-os-muted-dark'}
+            ? 'min-h-12 border-0 bg-os-paper px-2 font-data text-sm uppercase tracking-[0.04em] text-os-ink'
+            : 'min-h-12 border-0 bg-os-black-0 px-2 font-data text-sm uppercase tracking-[0.04em] text-os-muted-dark'}
+          data-reading-role="control"
           onClick={() => onSelect(tab.key)}
           aria-current={active === tab.key ? 'page' : undefined}
         >

@@ -46,9 +46,38 @@ describe('Optical Lab accepted asset interaction envelope', () => {
 
     const velocity = mapVelocity(18, 0, 24);
 
-    expect(velocity.velocityX).toBeCloseTo(.5625, 5);
+    expect(velocity.velocityX).toBeCloseTo(.75, 5);
     expect(velocity.velocityY).toBe(0);
     expect(Math.hypot(velocity.velocityX, velocity.velocityY)).toBeGreaterThanOrEqual(.5);
+  });
+
+  it('keeps an ordinary slow traverse visible while preserving stronger fast movement', () => {
+    const createState = model?.createAssetInteractionState;
+    const inject = model?.injectAssetInteraction;
+    const mapVelocity = model?.mapAssetPointerVelocity;
+    const step = model?.stepAssetInteraction;
+
+    expect(createState && inject && mapVelocity && step).toBeTruthy();
+    if (!createState || !inject || !mapVelocity || !step) return;
+
+    const slowVelocity = mapVelocity(12, 0, 1_000);
+    const fastVelocity = mapVelocity(120, 0, 100);
+    const slow = step(inject(createState(), {
+      pointerX: .42,
+      pointerY: .48,
+      ...slowVelocity,
+    }, 1_000), 1_070);
+    const fast = step(inject(createState(), {
+      pointerX: .68,
+      pointerY: .48,
+      ...fastVelocity,
+    }, 2_000), 2_070);
+
+    expect(slow.follow).toBeGreaterThanOrEqual(.05);
+    expect(fast.follow).toBeGreaterThan(slow.follow);
+    expect(fast.follow).toBeLessThanOrEqual(1);
+    expect(slow.pointerX).toBe(.42);
+    expect(fast.pointerX).toBe(.68);
   });
 
   it('normalizes diagonal velocity while preserving the local pointer coordinates', () => {
@@ -302,18 +331,18 @@ describe('Optical Lab accepted asset OGL boundary', () => {
     expect(composite).toContain('* presentationIdle');
   });
 
-  it('keeps the rendered ambient clock continuous across its ten-second presentation cycle', () => {
+  it('keeps the rendered ambient clock continuous across its readable seven-second presentation cycle', () => {
     const sampleAmbientClock = interactionRenderer?.sampleAssetAmbientClock;
 
     expect(sampleAmbientClock).toBeTypeOf('function');
     if (!sampleAmbientClock) return;
 
-    const beforeBoundary = sampleAmbientClock(9_999);
-    const afterBoundary = sampleAmbientClock(10_001);
+    const beforeBoundary = sampleAmbientClock(6_999);
+    const afterBoundary = sampleAmbientClock(7_001);
 
-    expect(beforeBoundary.cycle).toBeCloseTo(.9999, 5);
-    expect(afterBoundary.cycle).toBeCloseTo(.0001, 5);
-    expect(afterBoundary.shaderTime - beforeBoundary.shaderTime).toBeCloseTo(.0002, 5);
+    expect(beforeBoundary.cycle).toBeCloseTo(.999857, 5);
+    expect(afterBoundary.cycle).toBeCloseTo(.000143, 5);
+    expect(afterBoundary.shaderTime - beforeBoundary.shaderTime).toBeCloseTo(.000286, 5);
     expect(afterBoundary.shaderTime).toBeGreaterThan(1);
   });
 

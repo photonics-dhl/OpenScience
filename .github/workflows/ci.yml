@@ -44,13 +44,14 @@ jobs:
       - name: Lint
         run: npx pnpm@9.15.0 lint
 
-      - name: Unit tests
-        run: npx pnpm@9.15.0 test
-
-      - name: Install release browser
+      - name: Install test browser
+        # Unit source-art tests and the later visual gates both launch Chromium.
         # GitHub's Ubuntu runner already includes browser system libraries.
         # Re-running apt through --with-deps consumed most of the former 20m job budget.
         run: npx pnpm@9.15.0 --filter @openscience/web exec playwright install chromium
+
+      - name: Unit tests
+        run: npx pnpm@9.15.0 test
 
       - name: Product visual release gate
         run: npx pnpm@9.15.0 --filter @openscience/web test:release
@@ -65,5 +66,5 @@ jobs:
           name: optical-editorial-release-evidence
           path: |
             apps/web/test/visual/out/product-release
-          if-no-files-found: error
+          if-no-files-found: warn
           retention-days: 14

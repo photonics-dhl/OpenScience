@@ -8,7 +8,7 @@ import { cn } from '@/lib/utils';
 
 const DEFAULT_ACCEPT = '.pdf,.docx,.tex,.md,.markdown,.png,.jpg,.jpeg,.webp,.svg';
 
-export interface DropzoneProps
+interface DropzoneProps
   extends Omit<React.LabelHTMLAttributes<HTMLLabelElement>, 'onDrop'> {
   onFiles: (files: File[]) => void;
   accept?: string;

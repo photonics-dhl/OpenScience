@@ -1,7 +1,8 @@
 'use client';
 
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
+import { OpticalField } from '@/components/brand/OpticalField';
 import {
   mapAssetPointerVelocity,
   type AssetInteractionInput,
@@ -54,6 +55,7 @@ const emptySnapshot = (
 
 export function AssetInteractionMount({ diagnosticsId, stageId }: AssetInteractionMountProps) {
   const hostRef = useRef<HTMLDivElement>(null);
+  const [fallbackActive, setFallbackActive] = useState(false);
 
   useEffect(() => {
     const host = hostRef.current;
@@ -66,6 +68,7 @@ export function AssetInteractionMount({ diagnosticsId, stageId }: AssetInteracti
     let contextLostListener: ((event: Event) => void) | null = null;
     let failed = false;
     let failureTeardownScheduled = false;
+    let fallbackVisible = false;
     let generation = 0;
     let intersecting = false;
     let intersectionObserver: IntersectionObserver | null = null;
@@ -76,6 +79,11 @@ export function AssetInteractionMount({ diagnosticsId, stageId }: AssetInteracti
     let rendererPromise: Promise<AssetInteractionRenderer> | null = null;
 
     const publish = (snapshot: AssetInteractionSnapshot) => {
+      const nextFallbackVisible = snapshot.contextStatus === 'unavailable' && !motionPolicy.matches;
+      if (mounted && fallbackVisible !== nextFallbackVisible) {
+        fallbackVisible = nextFallbackVisible;
+        setFallbackActive(nextFallbackVisible);
+      }
       window.__OPENSCIENCE_OPTICAL_ASSET_INTERACTION__ = snapshot;
       stage.dataset.contextStatus = snapshot.contextStatus;
       stage.dataset.opticalLocalActive = String(snapshot.follow > 0);
@@ -236,6 +244,10 @@ export function AssetInteractionMount({ diagnosticsId, stageId }: AssetInteracti
     };
     const onResize = () => renderer?.resize();
     const reconcileVisibility = () => {
+      if (failed) {
+        publish(emptySnapshot('unavailable', !canRender()));
+        return;
+      }
       if (canRender()) {
         if (canvas && !canvas.isConnected) host.append(canvas);
         ensureRenderer();
@@ -299,5 +311,9 @@ export function AssetInteractionMount({ diagnosticsId, stageId }: AssetInteracti
     };
   }, [diagnosticsId, stageId]);
 
-  return <div aria-hidden="true" data-optical-asset-interaction-host="true" ref={hostRef} />;
+  return (
+    <div aria-hidden="true" data-optical-asset-interaction-host="true" ref={hostRef}>
+      {fallbackActive ? <OpticalField presentation="fallback" /> : null}
+    </div>
+  );
 }

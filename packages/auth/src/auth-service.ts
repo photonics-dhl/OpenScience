@@ -67,6 +67,11 @@ export interface SignupConfirmation {
   code: string;
 }
 
+export type SignupTransactionHook = (
+  tx: Prisma.TransactionClient,
+  user: { id: string; email: string; displayName: string },
+) => Promise<void>;
+
 function now(deps: AuthDeps): Date {
   return deps.now ? deps.now() : new Date();
 }
@@ -94,7 +99,12 @@ async function issueVerificationCode(deps: AuthDeps, userId: string, email: stri
   });
 }
 
-export async function register(deps: AuthDeps, input: RegisterInput, ctx: AuditContext = {}): Promise<AuthResult> {
+export async function register(
+  deps: AuthDeps,
+  input: RegisterInput,
+  ctx: AuditContext = {},
+  onRegistered?: SignupTransactionHook,
+): Promise<AuthResult> {
   const at = now(deps);
   const passwordHash = await hashPassword(input.password);
   try {
@@ -112,6 +122,7 @@ export async function register(deps: AuthDeps, input: RegisterInput, ctx: AuditC
       if (redeemed.count !== 1) {
         throw new AuthError('INVITATION_INVALID', '邀请码已被使用');
       }
+      await onRegistered?.(tx, { id: created.id, email: created.email, displayName: created.displayName });
       await recordAuth(deps, { actorId: created.id, action: 'auth.register', targetType: 'user', targetId: created.id }, ctx, tx);
       return created;
     });
@@ -164,7 +175,12 @@ export async function requestSignupCode(deps: AuthDeps, input: SignupCodeRequest
 }
 
 /** Confirm a signup challenge and atomically create the verified user + personal workspace. */
-export async function confirmSignup(deps: AuthDeps, input: SignupConfirmation, ctx: AuditContext = {}): Promise<Required<AuthResult>> {
+export async function confirmSignup(
+  deps: AuthDeps,
+  input: SignupConfirmation,
+  ctx: AuditContext = {},
+  onSignupConfirmed?: SignupTransactionHook,
+): Promise<Required<AuthResult>> {
   const email = input.email.trim().toLowerCase();
   const at = now(deps);
   const existingUser = await deps.prisma.user.findUnique({ where: { email } });
@@ -200,6 +216,7 @@ export async function confirmSignup(deps: AuthDeps, input: SignupConfirmation, c
         ? await tx.user.update({ where: { id: existingUser.id }, data: { passwordHash, displayName: input.displayName.trim(), status: 'email_verified' } })
         : await tx.user.create({ data: { email, passwordHash, displayName: input.displayName.trim(), status: 'email_verified' } });
       await deps.onEmailVerified?.(tx, { id: created.id, email: created.email, displayName: created.displayName });
+      await onSignupConfirmed?.(tx, { id: created.id, email: created.email, displayName: created.displayName });
       await recordAuth(deps, { actorId: created.id, action: 'auth.signup_code.confirm', targetType: 'user', targetId: created.id }, ctx, tx);
       return created;
     });

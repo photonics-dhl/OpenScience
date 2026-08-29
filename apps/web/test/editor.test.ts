@@ -41,9 +41,10 @@ describe('editorReducer', () => {
     expect(s.dirty).toBe(true);
   });
 
-  it('saved → dirty=false + lastSavedAt 更新', () => {
-    const s = editorReducer({ core: core(), version: 1, dirty: true, lastSavedAt: null }, { type: 'saved' });
+  it('saved → 乐观锁版本前进 + dirty=false + lastSavedAt 更新', () => {
+    const s = editorReducer({ core: core(), version: 1, dirty: true, lastSavedAt: null }, { type: 'saved', version: 2 });
     expect(s.dirty).toBe(false);
+    expect(s.version).toBe(2);
     expect(s.lastSavedAt).not.toBeNull();
   });
 
@@ -109,6 +110,21 @@ describe('suggestionReducer（§5.4 MUST 确认后才写 SDF）', () => {
     const next = applySuggestionsToCore(emptyCore(), list);
     expect(next.problem).toBe('新问题'); // applied 合入
     expect(next.method).toBe(''); // dismissed 不合入
+  });
+
+  it('revise keeps a proposal pending and apply writes only the researcher-edited text', () => {
+    const revised = suggestionReducer(demo, {
+      type: 'revise',
+      id: 'demo-1',
+      suggestion: 'Researcher-edited text',
+    });
+    expect(revised.find((item) => item.id === 'demo-1')).toMatchObject({
+      status: 'pending',
+      suggestion: 'Researcher-edited text',
+    });
+
+    const applied = suggestionReducer(revised, { type: 'apply', id: 'demo-1' });
+    expect(applySuggestionsToCore(emptyCore(), applied).problem).toBe('Researcher-edited text');
   });
 });
 

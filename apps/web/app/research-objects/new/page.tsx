@@ -2,13 +2,17 @@
 
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { useTranslations } from 'next-intl';
+import { useLocale, useTranslations } from 'next-intl';
 import * as React from 'react';
 import { useCallback, useEffect, useMemo, useState, type FormEvent } from 'react';
 
 import { EvidenceIntake } from '@/components/intake/EvidenceIntake';
+import { HermesAssistantDrawer } from '@/components/hermes/HermesAssistantDrawer';
 import { HermesAnchor } from '@/components/hermes/HermesAnchor';
+import { HermesDockAnchor } from '@/components/hermes/HermesDockAnchor';
+import type { HermesGuideSuggestion } from '@/components/hermes/hermes-guide';
 import { useOptionalHermesWorkspaceStage } from '@/components/hermes/HermesWorkspaceStage';
+import { DashboardShell } from '@/components/shell/DashboardShell';
 import type { HermesAnchorAction } from '@/lib/hermes/anchor-registry';
 import { createIntakeMaterials, updateMaterialFromTask, type IntakeMaterial } from '@/components/intake/intake-model';
 import {
@@ -21,10 +25,16 @@ import {
   type IngestionTaskSummary,
   type WorkspaceApi,
 } from '@/lib/api';
+import type { Locale } from '@/i18n/locale';
 
 const CHECKPOINT_KEY = 'openscience.evidence-intake';
 const ACTIVE_STATES = new Set(['queued', 'uploading', 'stored', 'parsing']);
 const EXPLAIN_ONLY: HermesAnchorAction[] = ['explain'];
+const CREATION_SUGGESTION: HermesGuideSuggestion = {
+  bodyKey: 'guide.neutral.body',
+  kind: 'neutral',
+  titleKey: 'guide.neutral.title',
+};
 
 function mergeTasks(materials: IntakeMaterial[], tasks: IngestionTaskSummary[]): IntakeMaterial[] {
   return materials.map((material, index) => {
@@ -38,6 +48,7 @@ function mergeTasks(materials: IntakeMaterial[], tasks: IngestionTaskSummary[]):
 export default function NewResearchObjectPage() {
   const t = useTranslations('createResearch');
   const intakeT = useTranslations('ingestion.intake');
+  const locale = useLocale() as Locale;
   const router = useRouter();
   const searchParams = useSearchParams();
   const mode = searchParams.get('mode') === 'blank' ? 'blank' : 'import';
@@ -50,6 +61,7 @@ export default function NewResearchObjectPage() {
   const [pollRevision, setPollRevision] = useState(0);
   const [pending, setPending] = useState(false);
   const [error, setError] = useState('');
+  const [hermesOpen, setHermesOpen] = useState(false);
   const hermesStage = useOptionalHermesWorkspaceStage();
 
   useEffect(() => {
@@ -170,67 +182,74 @@ export default function NewResearchObjectPage() {
   }
 
   return (
-    <main className="surface-dark min-h-screen bg-[#0b0b0a] text-[#f4f0e8]">
-      <div className="mx-auto max-w-[92rem] px-5 pb-16 pt-6 sm:px-8 lg:px-12">
-        <header className="flex items-center justify-between border-b border-white/20 pb-5">
-          <Link className="text-xs uppercase tracking-[0.16em] text-white/55 hover:text-white" href="/dashboard">← {t('back')}</Link>
-          <p className="text-[10px] uppercase tracking-[0.2em] text-white/35">OpenScience / Research Object</p>
-        </header>
-
-        <div className="grid gap-12 pt-10 lg:grid-cols-[minmax(18rem,.55fr)_minmax(0,1.45fr)] lg:gap-20">
-          <aside className="lg:sticky lg:top-10 lg:self-start">
-            <p className="text-[11px] uppercase tracking-[0.22em] text-[#ff7457]">01 / Research identity</p>
-            <h1 className="mt-5 max-w-xl font-display text-4xl leading-[.98] sm:text-6xl lg:text-[4.7rem]">{t('title')}</h1>
-            <p className="mt-6 max-w-md text-sm leading-7 text-white/52">{t('description')}</p>
-            <div className="mt-10 border-t border-white/20 pt-5 text-xs leading-6 text-white/45">
+    <DashboardShell
+      activeRoute="create"
+      navigationLabel={t('navigationLabel')}
+      skipLabel={t('skipLabel')}
+    >
+      <div className="mx-auto max-w-[88rem]">
+        <div className="grid gap-10 lg:grid-cols-[minmax(17rem,.62fr)_minmax(0,1.38fr)] lg:gap-16">
+          <aside className="lg:sticky lg:top-8 lg:self-start">
+            <p data-reading-role="caption" className="text-os-vermilion-ink">{t('eyebrow')}</p>
+            <h1 className="mt-3 max-w-xl text-[clamp(2rem,4vw,2.75rem)] font-normal leading-[1.08] tracking-[-0.03em] text-os-ink">{t('title')}</h1>
+            <p data-reading-role="body" className="mt-4 max-w-md text-os-muted-paper">{t('description')}</p>
+            <ol className="mt-7 list-none border-y border-os-rule-paper p-0 text-sm" aria-label={t('progressLabel')}>
+              <li className="flex gap-3 border-b border-os-rule-paper py-3 font-semibold text-os-ink"><span className="font-data text-os-vermilion-ink">01</span><span>{t('identityStep')}</span></li>
+              <li className="flex gap-3 py-3 text-os-muted-paper"><span className="font-data">02</span><span>{t('evidenceStep')}</span></li>
+            </ol>
+            <div className="mt-7 border-l-2 border-os-vermilion-ink pl-5 text-sm leading-6 text-os-muted-paper">
               <p>{intakeT('provenance')}</p>
               <p className="mt-3">{intakeT('consent')}</p>
             </div>
+            <div className="mt-4">
+              <HermesDockAnchor assistantOpen={hermesOpen} onInvoke={() => setHermesOpen(true)} state={pending ? 'scanning' : error ? 'failed' : 'idle'} suggestion={CREATION_SUGGESTION} />
+            </div>
           </aside>
 
-          <form className="min-w-0" onSubmit={submit}>
-            <section className="grid gap-6 border-b border-white/25 pb-10 sm:grid-cols-2">
-              <label className="grid gap-2 text-[11px] uppercase tracking-[0.14em] text-white/45">
+          <form className="surface-folio-sheet min-w-0 px-5 py-7 sm:px-8 sm:py-9" onSubmit={submit}>
+            <section className="grid gap-6 border-b border-os-rule-paper pb-8 sm:grid-cols-2">
+              <label data-hermes-protected="true" data-reading-role="control" className="grid gap-2 text-sm font-medium text-os-ink">
                 {t('workspace')}
-                <select className="min-h-12 border-0 border-b border-white/25 bg-transparent text-base normal-case tracking-normal text-white outline-none focus:border-[#ef4c2f]" value={workspaceId} onChange={(event) => setWorkspaceId(event.target.value)} required>
-                  <option className="bg-[#11100f]" value="">{t('workspaceLoading')}</option>
-                  {workspaces.map((workspace) => <option className="bg-[#11100f]" key={workspace.id} value={workspace.id}>{workspace.name}</option>)}
+                <select data-reading-role="reading" className="min-h-12 border-0 border-b border-os-rule-paper bg-transparent text-lg text-os-ink outline-none focus:border-os-vermilion-ink" value={workspaceId} onChange={(event) => setWorkspaceId(event.target.value)} required>
+                  <option value="">{t('workspaceLoading')}</option>
+                  {workspaces.map((workspace) => <option key={workspace.id} value={workspace.id}>{workspace.name}</option>)}
                 </select>
               </label>
-              <label className="grid gap-2 text-[11px] uppercase tracking-[0.14em] text-white/45">
+              <label data-reading-role="control" className="grid gap-2 text-sm font-medium text-os-ink">
                 {t('researchTitle')}
                 <HermesAnchor actions={EXPLAIN_ONLY} id="ro-title">
-                  <input className="min-h-12 w-full border-0 border-b border-white/25 bg-transparent px-1 text-base normal-case tracking-normal text-white outline-none placeholder:text-white/25 focus:border-[#ef4c2f]" name="title" required maxLength={200} value={title} onChange={(event) => setTitle(event.target.value)} placeholder={intakeT('titlePlaceholder')} />
+                  <input data-reading-role="reading" className="min-h-12 w-full border-0 border-b border-os-rule-paper bg-transparent px-1 text-lg text-os-ink outline-none placeholder:text-os-muted-paper focus:border-os-vermilion-ink" name="title" required maxLength={200} value={title} onChange={(event) => setTitle(event.target.value)} placeholder={intakeT('titlePlaceholder')} />
                 </HermesAnchor>
               </label>
             </section>
 
             {mode === 'import' ? <div className="pt-10"><HermesAnchor actions={EXPLAIN_ONLY} id="source-import"><EvidenceIntake materials={materials} onChange={setMaterials} onRetry={retry} /></HermesAnchor></div> : (
-              <section className="border-b border-white/20 py-12">
-                <p className="font-display text-3xl">{intakeT('blankTitle')}</p>
-                <p className="mt-3 max-w-xl text-sm leading-6 text-white/50">{intakeT('blankBody')}</p>
+              <section className="border-b border-os-rule-paper py-10">
+                <h2 className="text-3xl font-normal text-os-ink">{intakeT('blankTitle')}</h2>
+                <p data-reading-role="body" className="mt-3 max-w-xl text-os-muted-paper">{intakeT('blankBody')}</p>
               </section>
             )}
 
-            {error ? <p className="mt-6 border-l-2 border-[#ef4c2f] pl-4 text-sm text-[#ffb09f]" role="alert">{error}</p> : null}
+            {error ? <p className="mt-6 border-l-2 border-os-vermilion-ink pl-4 text-sm text-state-danger" role="alert">{error}</p> : null}
             {reviewTasks.length > 0 ? (
-              <div className="mt-8 border-y border-[#ef4c2f]/60 py-6">
-                <p className="font-display text-2xl">{intakeT('reviewReady')}</p>
+              <div className="mt-8 border-y border-os-vermilion-ink py-6">
+                <h2 className="text-2xl font-normal text-os-ink">{intakeT('reviewReady')}</h2>
                 <div className="mt-4 flex flex-wrap gap-3">
-                  {reviewTasks.map((material) => <Link className="border-b border-[#ef4c2f] pb-1 text-sm text-[#ff8065]" key={material.localId} href={`/research-objects/${researchObjectId}/hermes?task=${material.taskId}`}>{material.file.name} →</Link>)}
+                  {reviewTasks.map((material) => <Link className="border-b border-os-vermilion-ink pb-1 text-sm text-os-vermilion-ink" key={material.localId} href={`/research-objects/${researchObjectId}/hermes?task=${material.taskId}`}>{material.file.name} →</Link>)}
                 </div>
               </div>
             ) : null}
-            <footer className="mt-10 flex flex-wrap items-center justify-between gap-5 border-t border-white/25 pt-6">
-              <p className="max-w-xl text-xs leading-5 text-white/42">{mode === 'import' ? intakeT('submitNote') : intakeT('blankNote')}</p>
+            <footer className="mt-10 flex flex-wrap items-center justify-between gap-5 border-t border-os-rule-paper pt-6">
+              <p className="max-w-xl text-sm leading-6 text-os-muted-paper">{mode === 'import' ? intakeT('submitNote') : intakeT('blankNote')}</p>
               <div className="flex gap-4">
-                {researchObjectId ? <Link className="min-h-12 px-5 py-3 text-xs uppercase tracking-[0.14em] text-white/60 hover:text-white" href={`/research-objects/${researchObjectId}/edit`}>{intakeT('openDraft')}</Link> : null}
-                {!batchId ? <button className="min-h-12 border-0 bg-[#ef4c2f] px-7 text-xs font-semibold uppercase tracking-[0.15em] text-white transition-colors hover:bg-[#ff6244] disabled:cursor-not-allowed disabled:opacity-45 motion-reduce:transition-none" disabled={pending || !workspaceId} type="submit">{pending ? t('creating') : researchObjectId ? intakeT('retryUpload') : t('create')}</button> : null}
+                {researchObjectId ? <Link className="min-h-12 px-5 py-3 text-sm text-os-muted-paper hover:text-os-ink" href={`/research-objects/${researchObjectId}/edit`}>{intakeT('openDraft')}</Link> : null}
+                {!batchId ? <button data-hermes-protected="true" data-reading-role="control" className="min-h-12 rounded-control border-0 bg-os-vermilion-ink px-7 text-sm font-semibold text-os-paper transition-colors hover:bg-[#9f301c] disabled:cursor-not-allowed disabled:opacity-60 motion-reduce:transition-none" disabled={pending || !workspaceId} type="submit">{pending ? t('creating') : researchObjectId ? intakeT('retryUpload') : t('create')}</button> : null}
               </div>
             </footer>
           </form>
         </div>
       </div>
-    </main>
+      <HermesAssistantDrawer dashboardContext={{ tasks: [], researchObjects: [] }} locale={locale} onOpenChange={setHermesOpen} open={hermesOpen} route="research-object-new" suggestion={CREATION_SUGGESTION} target={mode === 'import' && title.trim() ? 'source-import' : 'ro-title'} />
+    </DashboardShell>
   );
 }

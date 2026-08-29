@@ -1,4 +1,5 @@
 import type { AiGateway, SchemaGuard } from '@openscience/ai-gateway';
+import type { DocumentSourceMap } from '@openscience/domain';
 import { SDF_CORE_FIELDS, SDF_CORE_VERSION } from '@openscience/sdf-schema';
 
 /** 六字段 core 结构（§5.1：schemaVersion + 6 字段，全部 string）。 */
@@ -12,14 +13,14 @@ export interface ExtractedCore {
   reproducibility: string;
 }
 
-export interface ExtractedFieldProposal {
+interface ExtractedFieldProposal {
   summary: string;
   sourceQuote: string;
   sourceLocator?: string;
   needsMoreInformation: boolean;
 }
 
-export interface ExtractedProposal {
+interface ExtractedProposal {
   schemaVersion: string;
   fields: Record<(typeof SDF_CORE_FIELDS)[number], ExtractedFieldProposal>;
 }
@@ -43,7 +44,7 @@ export const sdfCoreGuard: SchemaGuard<ExtractedCore> = (v: unknown): v is Extra
   return true;
 };
 
-export const sdfProposalGuard: SchemaGuard<ExtractedProposal> = (value: unknown): value is ExtractedProposal => {
+const sdfProposalGuard: SchemaGuard<ExtractedProposal> = (value: unknown): value is ExtractedProposal => {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
   const proposal = value as Record<string, unknown>;
   if (proposal.schemaVersion !== SDF_CORE_VERSION || !proposal.fields || typeof proposal.fields !== 'object' || Array.isArray(proposal.fields)) return false;
@@ -60,6 +61,16 @@ export const sdfProposalGuard: SchemaGuard<ExtractedProposal> = (value: unknown)
 
 const KEY_EVIDENCE = /limitations?|constraints?|uncertaint|data availability|code availability|reproduc|materials? and methods?|experimental setup|results?|discussion|局限|限制|不确定|数据可用|代码可用|复现|方法|结果/gi;
 const MAX_EXCERPT_CHARS = 24_000;
+
+/** Compatibility text for the existing SDF prompt, derived only from canonical parser output. */
+export function sourceMapToManuscriptText(sourceMap: DocumentSourceMap): string {
+  return sourceMap.pages
+    .flatMap((page) => page.blocks.flatMap((block) => {
+      const text = block.text?.trim();
+      return text ? [text] : [];
+    }))
+    .join('\n');
+}
 
 export function selectManuscriptEvidence(manuscriptText: string): string {
   const text = manuscriptText.replace(/\r\n/g, '\n').trim();
@@ -170,6 +181,27 @@ function findEvidenceRange(source: string, proposedQuote: string): { start: numb
   return { start: startToken.start, end: endToken.end };
 }
 
+const EXPLICIT_FIELD_LABELS: Record<(typeof SDF_CORE_FIELDS)[number], string> = {
+  problem: 'Problem|问题',
+  insight: 'Insight|洞见',
+  method: 'Method|方法',
+  results: 'Results?|结果',
+  limitations: 'Limitations?|局限|限制',
+  reproducibility: 'Reproducibility|可复现性|复现',
+};
+
+function findExplicitFieldEvidence(
+  source: string,
+  field: (typeof SDF_CORE_FIELDS)[number],
+): { quote: string; start: number; end: number } | null {
+  const match = new RegExp(`^(?:${EXPLICIT_FIELD_LABELS[field]})\\s*[:：]\\s*([^\\r\\n]+)$`, 'im').exec(source);
+  if (!match?.[1]?.trim()) return null;
+  const raw = match[1];
+  const quote = raw.trim();
+  const start = (match.index ?? 0) + match[0].indexOf(raw) + raw.indexOf(quote);
+  return { quote, start, end: start + quote.length };
+}
+
 function materializeProposal(proposal: ExtractedProposal, manuscriptText: string): ExtractionResult {
   const core = { schemaVersion: SDF_CORE_VERSION } as ExtractedCore;
   const evidence = {} as ExtractionResult['evidence'];
@@ -177,12 +209,18 @@ function materializeProposal(proposal: ExtractedProposal, manuscriptText: string
   for (const field of SDF_CORE_FIELDS) {
     const candidate = proposal.fields[field];
     const range = findEvidenceRange(manuscriptText, candidate.sourceQuote);
-    const unsupported = candidate.needsMoreInformation || !range;
-    core[field] = unsupported ? '' : candidate.summary.trim();
-    evidence[field] = unsupported
-      ? { quote: '', locator: '' }
-      : { quote: manuscriptText.slice(range.start, range.end), locator: `chars:${range.start}-${range.end}` };
-    if (unsupported) needsMoreInformation.push(field);
+    const explicit = findExplicitFieldEvidence(manuscriptText, field);
+    if (!candidate.needsMoreInformation && range) {
+      core[field] = candidate.summary.trim();
+      evidence[field] = { quote: manuscriptText.slice(range.start, range.end), locator: `chars:${range.start}-${range.end}` };
+    } else if (explicit) {
+      core[field] = explicit.quote;
+      evidence[field] = { quote: explicit.quote, locator: `chars:${explicit.start}-${explicit.end}` };
+    } else {
+      core[field] = '';
+      evidence[field] = { quote: '', locator: '' };
+      needsMoreInformation.push(field);
+    }
   }
   return { core, evidence, needsMoreInformation };
 }

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { coreToSuggestions } from '../lib/suggestions';
+import { coreToSuggestions, extractMissingSdfFields } from '../lib/suggestions';
 
 const emptyCore = () => ({
   schemaVersion: '0.1.0', problem: '', insight: '', method: '', results: '', limitations: '', reproducibility: '',
@@ -31,5 +31,25 @@ describe('coreToSuggestions（P1D-3：Extractor core → AiSuggestion，§5.4 �
       expect.objectContaining({ field: 'results', sourceLocator: 'manuscript.pdf · p. 12', risk: 'high' }),
       expect.objectContaining({ field: 'reproducibility', sourceLocator: 'manuscript.pdf · p. 12', risk: 'high' }),
     ]));
+  });
+
+  it('把逐字段原文与 locator 带进可审阅建议', () => {
+    const core = { schemaVersion: '0.1.0', problem: 'P', insight: '', method: '', results: '', limitations: '', reproducibility: '' };
+    const suggestions = coreToSuggestions(core, emptyCore(), {
+      problem: { quote: 'Exact source sentence.', locator: 'chars:11-33' },
+    });
+    expect(suggestions[0]).toMatchObject({
+      field: 'problem',
+      evidence: { quote: 'Exact source sentence.', locator: 'chars:11-33' },
+    });
+  });
+
+  it('only exposes recognized missing-evidence fields from an extractor result', () => {
+    expect(extractMissingSdfFields({ needsMoreInformation: ['results', 'unknown', 3, 'limitations'] })).toEqual([
+      'results',
+      'limitations',
+    ]);
+    expect(extractMissingSdfFields({ needsMoreInformation: true })).toEqual([]);
+    expect(extractMissingSdfFields(null)).toEqual([]);
   });
 });

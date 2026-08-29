@@ -1,10 +1,10 @@
 'use client';
 
-import { useLayoutEffect, useRef } from 'react';
+import * as React from 'react';
 
 import type { HermesGuideSuggestion } from './hermes-guide';
 import type { HermesVisualState } from './hermes-state';
-import { useHermesWorkspaceStage } from './HermesWorkspaceStage';
+import { useOptionalHermesWorkspaceStage } from './HermesWorkspaceStage';
 
 export function HermesDockAnchor({ assistantOpen = false, onInvoke, state, suggestion, workspaceId = 'workspace-current' }: {
   assistantOpen?: boolean;
@@ -13,12 +13,12 @@ export function HermesDockAnchor({ assistantOpen = false, onInvoke, state, sugge
   suggestion: HermesGuideSuggestion;
   workspaceId?: string;
 }) {
-  const anchorRef = useRef<HTMLDivElement | null>(null);
-  const { register } = useHermesWorkspaceStage();
-  useLayoutEffect(() => {
+  const anchorRef = React.useRef<HTMLDivElement | null>(null);
+  const stage = useOptionalHermesWorkspaceStage();
+  React.useEffect(() => {
     const anchor = anchorRef.current;
-    if (!anchor) return;
-    return register({ anchor, assistantOpen, onInvoke, state, suggestion, workspaceId });
-  }, [assistantOpen, onInvoke, register, state, suggestion, workspaceId]);
-  return <div aria-hidden="true" className="hermes-dock-anchor" data-hermes-dock-anchor="true" ref={anchorRef} />;
+    if (!anchor || !stage) return;
+    return stage.register({ anchor, assistantOpen, onInvoke, state, suggestion, workspaceId });
+  }, [assistantOpen, onInvoke, stage, state, suggestion, workspaceId]);
+  return <div className="hermes-dock-anchor" data-hermes-companion-margin="true" data-hermes-dock-anchor="true" ref={anchorRef} />;
 }

@@ -7,7 +7,7 @@ import { useTranslations } from 'next-intl';
 import { MaterialQueue } from './MaterialQueue';
 import { createIntakeMaterials, setPrimaryMaterial, type IntakeMaterial, type MaterialRole } from './intake-model';
 
-export const EVIDENCE_ACCEPT = '.pdf,.doc,.docx,.tex,.zip,.md,.markdown,.png,.jpg,.jpeg,.webp,.svg,.csv,.tsv,.json,.yaml,.yml,.ipynb,.py,.r';
+const EVIDENCE_ACCEPT = '.pdf,.doc,.docx,.tex,.zip,.md,.markdown,.png,.jpg,.jpeg,.webp,.svg,.csv,.tsv,.json,.yaml,.yml,.ipynb,.py,.r';
 
 export function EvidenceIntake({ materials, onChange, onRetry }: {
   materials: IntakeMaterial[];
@@ -30,15 +30,15 @@ export function EvidenceIntake({ materials, onChange, onRetry }: {
 
   return (
     <section aria-labelledby="evidence-intake-title">
-      <div className="flex items-end justify-between gap-5 border-b border-white/25 pb-4">
+      <div className="flex items-end justify-between gap-5 border-b border-os-rule-paper pb-4">
         <div>
-          <p className="text-[11px] uppercase tracking-[0.22em] text-[#ff7457]">02 / Evidence intake</p>
-          <h2 className="mt-2 font-display text-2xl" id="evidence-intake-title">{t('title')}</h2>
+          <p data-reading-role="caption" className="text-os-vermilion-ink">{t('stepLabel')}</p>
+          <h2 className="mt-2 text-2xl font-normal text-os-ink" id="evidence-intake-title">{t('title')}</h2>
         </div>
-        <p className="hidden max-w-sm text-right text-xs leading-5 text-white/45 sm:block">{t('localOnly')}</p>
+        <p className="hidden max-w-sm text-right text-sm leading-5 text-os-muted-paper sm:block">{t('localOnly')}</p>
       </div>
       <div
-        className={`mt-6 flex min-h-36 items-center justify-center border border-dashed px-6 text-center transition-colors motion-reduce:transition-none ${dragging ? 'border-[#ef4c2f] bg-[#ef4c2f]/[.07]' : 'border-white/25 bg-white/[.025]'}`}
+        className={`mt-6 flex min-h-36 items-center justify-center border border-dashed px-6 text-center transition-colors motion-reduce:transition-none ${dragging ? 'border-os-vermilion-ink bg-[#b83b22]/[.06]' : 'border-os-rule-paper bg-os-paper'}`}
         onDragEnter={(event) => { event.preventDefault(); setDragging(true); }}
         onDragLeave={() => setDragging(false)}
         onDragOver={(event) => event.preventDefault()}
@@ -46,8 +46,8 @@ export function EvidenceIntake({ materials, onChange, onRetry }: {
       >
         <div>
           <p className="font-medium">{t('dropTitle')}</p>
-          <p className="mt-2 text-xs leading-5 text-white/45">{t('formats')}</p>
-          <button className="mt-4 border-x-0 border-t-0 border-b border-[#ef4c2f] bg-transparent p-0 pb-1 text-xs font-semibold uppercase tracking-[0.14em] text-[#ff8065]" type="button" onClick={() => input.current?.click()}>{t('browse')}</button>
+          <p className="mt-2 text-sm leading-5 text-os-muted-paper">{t('formats')}</p>
+          <button data-reading-role="control" className="mt-4 border-x-0 border-t-0 border-b border-os-vermilion-ink bg-transparent p-0 pb-1 text-sm font-semibold text-os-vermilion-ink" type="button" onClick={() => input.current?.click()}>{t('browse')}</button>
           <input ref={input} aria-label={t('browse')} className="sr-only" type="file" multiple accept={EVIDENCE_ACCEPT} onChange={(event) => add(Array.from(event.target.files ?? []))} />
         </div>
       </div>
@@ -60,7 +60,7 @@ export function EvidenceIntake({ materials, onChange, onRetry }: {
             onRetry={onRetry}
             onRoleChange={setRole}
           />
-          {materials.some(({ primary }) => primary) ? <button className="mt-4 border-0 bg-transparent p-0 text-xs text-white/45 hover:text-white" type="button" onClick={() => onChange(setPrimaryMaterial(materials, null))}>{t('clearPrimary')}</button> : null}
+          {materials.some(({ primary }) => primary) ? <button data-reading-role="control" className="mt-4 border-0 bg-transparent p-0 text-sm text-os-muted-paper hover:text-os-ink" type="button" onClick={() => onChange(setPrimaryMaterial(materials, null))}>{t('clearPrimary')}</button> : null}
         </div>
       ) : null}
     </section>

@@ -1,6 +1,6 @@
 import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
 
@@ -9,6 +9,8 @@ import { DashboardShell } from '../components/shell/DashboardShell';
 import { IdentityShell } from '../components/shell/IdentityShell';
 import { PublicShell } from '../components/shell/PublicShell';
 import { WorkspaceShell } from '../components/shell/WorkspaceShell';
+
+vi.mock('next-intl', () => ({ useTranslations: () => (key: string) => key }));
 
 const shellDirectory = path.join(__dirname, '../components/shell');
 
@@ -70,6 +72,66 @@ describe('Optical Editorial brand and surface shells', () => {
     expect(primitives).toContain('[&_button]:rounded-panel');
     expect(primitives).toContain('active:translate-y-px');
     expect(primitives).toContain('motion-reduce:[&_a]:transform-none');
+  });
+
+  it('marks primary shell navigation as protected from the Hermes travel footprint', () => {
+    const dashboard = renderToStaticMarkup(createElement(
+      DashboardShell,
+      {
+        headerActions: createElement('button', { type: 'button' }, 'Language'),
+        navigationLabel: 'Primary navigation',
+        skipLabel: 'Skip',
+      },
+      createElement('h1', null, 'Research content'),
+    ));
+
+    expect(dashboard).toMatch(/<nav\b[^>]*data-hermes-primary-navigation="true"[^>]*data-hermes-protected="true"/u);
+    const navigation = dashboard.match(/<nav\b[^>]*>[\s\S]*?<\/nav>/u)?.[0] ?? '';
+    expect(navigation).not.toContain('Language');
+    expect(dashboard).toContain('data-shell-utility="true"');
+  });
+
+  it.each([
+    ['research desk', DashboardShell, {}],
+    ['research workspace', WorkspaceShell, { leftRail: 'Outline', rightRail: 'Evidence' }],
+  ] as const)('%s keeps every global research destination reachable', (_name, Shell, extraProps) => {
+    const markup = renderToStaticMarkup(createElement(
+      Shell,
+      { skipLabel: 'Skip', ...extraProps },
+      createElement('h1', null, 'Research content'),
+    ));
+
+    expect(markup).toContain('data-product-route-navigation="true"');
+    for (const href of ['/dashboard', '/explore', '/research-objects/new', '/settings']) {
+      expect(markup).toContain(`href="${href}"`);
+    }
+  });
+
+  it('identity pages keep public discovery and the research desk reachable', () => {
+    const markup = renderToStaticMarkup(createElement(
+      IdentityShell,
+      { skipLabel: 'Skip' },
+      createElement('h1', null, 'Identity form'),
+    ));
+
+    expect(markup).toContain('data-product-route-navigation="true"');
+    expect(markup).toContain('href="/explore"');
+    expect(markup).toContain('href="/dashboard"');
+  });
+
+  it.each([
+    ['dashboard', DashboardShell, {}],
+    ['identity', IdentityShell, {}],
+    ['workspace', WorkspaceShell, { leftRail: 'Outline', rightRail: 'Evidence' }],
+    ['public product', PublicShell, { headerActions: createElement('span', null, 'Routes'), wrapHeaderActionsOnMobile: true }],
+  ] as const)('%s shell exposes the complete route row on narrow screens', (_name, Shell, extraProps) => {
+    const markup = renderToStaticMarkup(createElement(
+      Shell,
+      { skipLabel: 'Skip', ...extraProps },
+      createElement('h1', null, 'Research content'),
+    ));
+
+    expect(markup).toContain('data-mobile-navigation-layout="wrapped"');
   });
 
   it('keeps shell accessibility copy symmetric across locales', () => {

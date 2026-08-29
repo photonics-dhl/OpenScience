@@ -14,24 +14,28 @@ export function ImportStage({ compact = false }: ImportStageProps) {
   const t = useTranslations('dashboard');
 
   return (
-    <section className="border-t border-os-rule-dark pt-5" aria-labelledby="import-stage-title">
-      <p className="font-mono text-[0.68rem] uppercase tracking-[0.22em] text-os-muted-dark">
+    <section
+      aria-labelledby="import-stage-title"
+      className="border-t border-os-rule-paper pt-5"
+      data-hermes-protected="true"
+    >
+      <p data-reading-role="caption" className="text-os-muted-paper">
         {t('import.eyebrow')}
       </p>
-      <h2 id="import-stage-title" className="mt-2 text-xl font-medium text-os-paper">
+      <h2 id="import-stage-title" className="mt-2 text-2xl font-medium text-os-ink">
         {t('import.title')}
       </h2>
       {!compact ? (
-        <p className="mt-2 max-w-lg text-sm leading-6 text-os-muted-dark">
+        <p data-reading-role="reading" className="mt-2 max-w-lg text-lg leading-[var(--leading-reading)] text-os-muted-paper">
           {t('import.description')}
         </p>
       ) : null}
-      <nav className="mt-5 grid border-y border-os-rule-dark sm:grid-cols-2 sm:divide-x sm:divide-os-rule-dark" aria-label={t('import.title')}>
-          <Link className="group flex items-center justify-between px-1 py-4 text-sm font-medium text-os-paper outline-none hover:text-os-vermilion focus-visible:ring-2 focus-visible:ring-os-vermilion sm:pr-5" href="/research-objects/new?mode=import" data-action-priority="primary">
+      <nav className="mt-5 grid border-y border-os-rule-paper sm:grid-cols-2 sm:divide-x sm:divide-os-rule-paper" aria-label={t('import.title')}>
+          <Link className="group flex min-h-12 items-center justify-between px-1 py-4 text-sm font-medium text-os-ink outline-none hover:text-os-vermilion-ink focus-visible:ring-2 focus-visible:ring-os-vermilion-ink sm:pr-5" data-reading-role="control" href="/research-objects/new?mode=import" data-action-priority="primary">
             {t('import.upload')}
             <ArrowUpRight className="h-4 w-4 transition-transform group-hover:-translate-y-0.5 group-hover:translate-x-0.5 motion-reduce:transform-none" aria-hidden="true" />
           </Link>
-          <Link className="group flex items-center justify-between px-1 py-4 text-sm font-medium text-os-paper outline-none hover:text-os-vermilion focus-visible:ring-2 focus-visible:ring-os-vermilion sm:pl-5" href="/research-objects/new?mode=blank" data-action-priority="primary">
+          <Link className="group flex min-h-12 items-center justify-between px-1 py-4 text-sm font-medium text-os-ink outline-none hover:text-os-vermilion-ink focus-visible:ring-2 focus-visible:ring-os-vermilion-ink sm:pl-5" data-reading-role="control" href="/research-objects/new?mode=blank" data-action-priority="primary">
             {t('import.blank')}
             <ArrowUpRight className="h-4 w-4 transition-transform group-hover:-translate-y-0.5 group-hover:translate-x-0.5 motion-reduce:transform-none" aria-hidden="true" />
           </Link>

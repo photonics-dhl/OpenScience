@@ -25,7 +25,7 @@ export function registerPublicationRoutes(app: FastifyInstance, deps: Publicatio
     const user = await requireCurrentUser(deps, req, reply);
     if (!user) return;
     const { versionId } = versionParams.parse(req.params);
-    const body = z.object({ status: z.enum(['draft', 'under_review', 'approved', 'published', 'revised', 'withdrawn', 'rejected', 'restricted']) }).parse(req.body);
+    const body = z.object({ status: z.enum(['draft', 'under_review', 'approved', 'revised', 'withdrawn', 'rejected', 'restricted']) }).parse(req.body);
     return reply.send({ version: await transitionVersionStatus(deps, { versionId, userId: user.userId, status: body.status }, auditCtx(req)) });
   });
 

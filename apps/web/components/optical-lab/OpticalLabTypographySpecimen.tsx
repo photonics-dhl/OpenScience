@@ -8,7 +8,7 @@ const archivo = Archivo({
   display: 'swap',
 });
 
-export const opticalTypographyCandidates = [
+const opticalTypographyCandidates = [
   'bricolage',
   'archivo',
   'arial-black-reference',

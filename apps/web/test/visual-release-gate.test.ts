@@ -3,7 +3,10 @@ import { describe, expect, it } from 'vitest';
 
 import { PRODUCT_RELEASE_CASES, PRODUCT_RELEASE_VIEWPORTS } from './visual/product-release-manifest.mjs';
 
-const expectedSurfaces = ['auth', 'collection', 'dashboard', 'explore', 'intake', 'landing', 'public', 'workspace'];
+const expectedSurfaces = [
+  'admin', 'auth', 'collaboration', 'collection', 'dashboard', 'explore', 'files', 'intake', 'landing',
+  'login', 'overview', 'public', 'publish', 'review', 'sandbox', 'settings', 'versions', 'workspace',
+];
 
 describe('product visual release manifest', () => {
   it('covers every canonical product surface at all approved viewports', () => {
@@ -24,6 +27,20 @@ describe('product visual release manifest', () => {
     expect(PRODUCT_RELEASE_CASES.find(({ surface }) => surface === 'public')?.route).toContain('/research/');
     expect(PRODUCT_RELEASE_CASES.find(({ surface }) => surface === 'collection')?.route).toBe('/collections/ultrafast-science');
     expect(PRODUCT_RELEASE_CASES.filter(({ reducedMotion }) => reducedMotion).map(({ surface }) => surface)).toEqual(['landing', 'landing', 'landing']);
+  });
+
+  it('requires visible optical motion on every normal Landing release case', () => {
+    const landingCases = PRODUCT_RELEASE_CASES.filter(({ surface }) => surface === 'landing');
+    expect(landingCases.filter(({ reducedMotion }) => !reducedMotion).map(({ motionContract }) => motionContract)).toEqual([
+      'visible-optical',
+      'visible-optical',
+      'visible-optical',
+    ]);
+    expect(landingCases.filter(({ reducedMotion }) => reducedMotion).map(({ motionContract }) => motionContract)).toEqual([
+      'static-optical',
+      'static-optical',
+      'static-optical',
+    ]);
   });
 
   it('requires a deterministic optical clock and CI artifact upload', () => {

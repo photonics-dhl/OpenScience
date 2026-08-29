@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { HERMES_ACTION_CATALOG } from '@/lib/hermes/action-catalog';
+import { HERMES_ACTION_CATALOG, HERMES_MICRO_ACTIONS } from '@/lib/hermes/action-catalog';
 import {
   createInitialHermesBehavior,
   stepHermesBehavior,
@@ -8,7 +8,7 @@ import {
 } from '@/lib/hermes/behavior-director';
 
 const input = (overrides: Partial<HermesBehaviorInput> = {}): HermesBehaviorInput => ({
-  activity: 'balanced',
+  activity: 'active',
   dragging: false,
   guide: 'idle',
   nowMs: 10_000,
@@ -24,11 +24,13 @@ const input = (overrides: Partial<HermesBehaviorInput> = {}): HermesBehaviorInpu
 describe('Hermes behavior director', () => {
   it('ships a broad action vocabulary with the approved scholar-spirit balance', () => {
     const actions = Object.values(HERMES_ACTION_CATALOG);
-    const scholarCount = actions.filter((action) => action.personality === 'scholar').length;
+    const familiarCount = HERMES_MICRO_ACTIONS
+      .filter((id) => HERMES_ACTION_CATALOG[id].personality === 'spirit-pet').length;
 
-    expect(actions).toHaveLength(27);
-    expect(scholarCount / actions.length).toBeGreaterThanOrEqual(.68);
-    expect(scholarCount / actions.length).toBeLessThanOrEqual(.72);
+    expect(actions).toHaveLength(32);
+    expect(HERMES_MICRO_ACTIONS).toHaveLength(15);
+    expect(familiarCount / HERMES_MICRO_ACTIONS.length).toBeGreaterThanOrEqual(.5);
+    expect(familiarCount / HERMES_MICRO_ACTIONS.length).toBeLessThanOrEqual(.6);
     expect(new Set(actions.map((action) => action.id)).size).toBe(actions.length);
   });
 
@@ -87,28 +89,41 @@ describe('Hermes behavior director', () => {
   it('visits the complete micro-action deck before starting another seeded cycle', () => {
     let current = createInitialHermesBehavior(input({ nowMs: 0, seed: 91 }));
     const actions = [current.primary];
-    for (let index = 1; index < 10; index += 1) {
+    for (let index = 1; index < 15; index += 1) {
       current = stepHermesBehavior({ ...current, nextSignatureAtMs: 1_000_000 }, input({ nowMs: current.nextMicroAtMs, seed: 91 }));
       actions.push(current.primary);
     }
 
-    expect(new Set(actions).size).toBe(10);
+    expect(new Set(actions).size).toBe(15);
   });
 
-  it('keeps the balanced companion visibly alive instead of leaving multi-second static gaps', () => {
+  it('keeps a ninety-second idle session varied without immediate repeats', () => {
+    let current = createInitialHermesBehavior(input({ nowMs: 0, seed: 37 }));
+    const observed = [current.primary];
+    for (let nowMs = 250; nowMs <= 90_000; nowMs += 250) {
+      const next = stepHermesBehavior(current, input({ nowMs, seed: 37 }));
+      if (next.primary !== current.primary) observed.push(next.primary);
+      current = next;
+    }
+
+    expect(new Set(observed).size).toBeGreaterThanOrEqual(12);
+    expect(observed.every((action, index) => index === 0 || action !== observed[index - 1])).toBe(true);
+  });
+
+  it('keeps the lively companion visibly active without turning speech into constant chatter', () => {
     const start = 12_345;
     const first = createInitialHermesBehavior(input({ nowMs: start, seed: 13 }));
 
-    expect(first.nextMicroAtMs - start).toBeGreaterThanOrEqual(2_400);
-    expect(first.nextMicroAtMs - start).toBeLessThanOrEqual(4_200);
-    expect(first.nextSignatureAtMs - start).toBeGreaterThanOrEqual(14_000);
-    expect(first.nextSignatureAtMs - start).toBeLessThanOrEqual(22_000);
+    expect(first.nextMicroAtMs - start).toBeGreaterThanOrEqual(3_000);
+    expect(first.nextMicroAtMs - start).toBeLessThanOrEqual(6_000);
+    expect(first.nextSignatureAtMs - start).toBeGreaterThanOrEqual(12_000);
+    expect(first.nextSignatureAtMs - start).toBeLessThanOrEqual(20_000);
 
     const signature = stepHermesBehavior(first, input({ nowMs: first.nextSignatureAtMs, seed: 13 }));
     expect(signature.kind).toBe('signature');
     expect(HERMES_ACTION_CATALOG[signature.primary].signature).toBe(true);
-    expect(signature.nextSignatureAtMs - signature.startedAtMs).toBeGreaterThanOrEqual(14_000);
-    expect(signature.nextSignatureAtMs - signature.startedAtMs).toBeLessThanOrEqual(22_000);
+    expect(signature.nextSignatureAtMs - signature.startedAtMs).toBeGreaterThanOrEqual(12_000);
+    expect(signature.nextSignatureAtMs - signature.startedAtMs).toBeLessThanOrEqual(20_000);
   });
 
   it('lets an autonomous signature finish before scheduling the next idle action', () => {

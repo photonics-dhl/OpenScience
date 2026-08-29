@@ -40,4 +40,5 @@ export {
   type RegisterInput,
   type SignupCodeRequest,
   type SignupConfirmation,
+  type SignupTransactionHook,
 } from './auth-service';

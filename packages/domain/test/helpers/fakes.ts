@@ -42,11 +42,15 @@ interface FakeDb {
   appeals: any[];
   ingestionBatches: any[];
   ingestionTasks: any[];
+  claimNodes: any[];
+  evidenceRecords: any[];
+  presentationAssets: any[];
+  researchIdentityProfiles: any[];
 }
 
 /** 内存版 Prisma 子集：覆盖 workspace 领域用到的调用面。 */
 export function createFakePrisma(): { prisma: PrismaClient; db: FakeDb } {
-  const db: FakeDb = { users: [], workspaces: [], memberships: [], workspaceInvitations: [], mailOutbox: [], quotaPolicies: [], usageLedger: [], researchObjects: [], sdfDocuments: [], sdfNodes: [], blobs: [], artifacts: [], branches: [], commits: [], changesets: [], versions: [], versionManifests: [], manifestEntries: [], identifiers: [], publications: [], visibilityGrants: [], visibilityRequests: [], pullRequests: [], issues: [], comments: [], reviews: [], licenseAssignments: [], forkRelations: [], notifications: [], authors: [], contributions: [], agentSessions: [], agentTasks: [], toolApprovals: [], aiReviews: [], appeals: [], ingestionBatches: [], ingestionTasks: [] };
+  const db: FakeDb = { users: [], workspaces: [], memberships: [], workspaceInvitations: [], mailOutbox: [], quotaPolicies: [], usageLedger: [], researchObjects: [], sdfDocuments: [], sdfNodes: [], blobs: [], artifacts: [], branches: [], commits: [], changesets: [], versions: [], versionManifests: [], manifestEntries: [], identifiers: [], publications: [], visibilityGrants: [], visibilityRequests: [], pullRequests: [], issues: [], comments: [], reviews: [], licenseAssignments: [], forkRelations: [], notifications: [], authors: [], contributions: [], agentSessions: [], agentTasks: [], toolApprovals: [], aiReviews: [], appeals: [], ingestionBatches: [], ingestionTasks: [], claimNodes: [], evidenceRecords: [], presentationAssets: [], researchIdentityProfiles: [] };
   let seq = 0;
   const nextId = () => `00000000-0000-4000-8000-${String(++seq).padStart(12, '0')}`;
   const p2002 = () => {
@@ -56,6 +60,9 @@ export function createFakePrisma(): { prisma: PrismaClient; db: FakeDb } {
   };
 
   const prisma: any = {
+    researchIdentityProfile: {
+      findUnique: async ({ where }: any) => db.researchIdentityProfiles.find((row) => row.userId === where.userId) ?? null,
+    },
     user: {
       findUnique: async ({ where }: any) =>
         db.users.find((u) =>
@@ -528,10 +535,48 @@ export function createFakePrisma(): { prisma: PrismaClient; db: FakeDb } {
         Object.assign(row, data);
         return { ...row };
       },
+      updateMany: async ({ where, data }: any) => {
+        const rows = db.versions.filter((v) =>
+          (where.id === undefined || v.id === where.id) &&
+          (where.status === undefined || v.status === where.status));
+        rows.forEach((row) => Object.assign(row, data));
+        return { count: rows.length };
+      },
       count: async ({ where }: any) =>
         db.versions.filter((v) => (where.researchObjectId === undefined || v.researchObjectId === where.researchObjectId)).length,
       findMany: async ({ where }: any) =>
         db.versions.filter((v) => (where.researchObjectId === undefined || v.researchObjectId === where.researchObjectId)),
+    },
+    claimNode: {
+      findMany: async ({ where }: any) =>
+        db.claimNodes.filter((claim) =>
+          (where.researchObjectId === undefined || claim.researchObjectId === where.researchObjectId) &&
+          (where.versionId === undefined || claim.versionId === where.versionId),
+        ),
+      findFirst: async ({ where, orderBy }: any) => {
+        const rows = db.claimNodes.filter((claim) =>
+          (where.researchObjectId === undefined || claim.researchObjectId === where.researchObjectId) &&
+          (where.versionId === undefined || claim.versionId === where.versionId));
+        if (orderBy?.updatedAt === 'desc') rows.sort((a, b) => (b.updatedAt?.getTime?.() ?? 0) - (a.updatedAt?.getTime?.() ?? 0));
+        return rows[0] ?? null;
+      },
+    },
+    evidenceRecord: {
+      findMany: async ({ where }: any) => db.evidenceRecords.filter((evidence) =>
+        (where.researchObjectId === undefined || evidence.researchObjectId === where.researchObjectId) &&
+        (where.versionId === undefined || evidence.versionId === where.versionId)),
+      findFirst: async ({ where, orderBy }: any) => {
+        const rows = db.evidenceRecords.filter((evidence) =>
+          (where.researchObjectId === undefined || evidence.researchObjectId === where.researchObjectId) &&
+          (where.versionId === undefined || evidence.versionId === where.versionId));
+        if (orderBy?.updatedAt === 'desc') rows.sort((a, b) => (b.updatedAt?.getTime?.() ?? 0) - (a.updatedAt?.getTime?.() ?? 0));
+        return rows[0] ?? null;
+      },
+    },
+    presentationAsset: {
+      findMany: async ({ where }: any) => db.presentationAssets.filter((asset) =>
+        (where.researchObjectId === undefined || asset.researchObjectId === where.researchObjectId) &&
+        (where.versionId === undefined || asset.versionId === where.versionId)),
     },
     versionManifest: {
       findUnique: async ({ where, include }: any) => {
@@ -666,7 +711,7 @@ export function createFakePrisma(): { prisma: PrismaClient; db: FakeDb } {
     agentTask: {
       create: async ({ data }: any) => {
         if (data.idempotencyKey && db.agentTasks.some((t) => t.idempotencyKey === data.idempotencyKey)) throw p2002();
-        const row = { id: nextId(), status: 'pending', progress: 0, dispatchedAt: null, createdAt: new Date(), updatedAt: new Date(), ...data };
+        const row = { id: nextId(), status: 'pending', progress: 0, retryCount: 0, executionAttempt: 0, dispatchedAt: null, createdAt: new Date(), updatedAt: new Date(), ...data };
         db.agentTasks.push(row);
         return row;
       },
@@ -690,15 +735,25 @@ export function createFakePrisma(): { prisma: PrismaClient; db: FakeDb } {
         const rows = db.agentTasks.filter((task) =>
           (where.id === undefined || task.id === where.id) &&
           (where.dispatchedAt === undefined || task.dispatchedAt === where.dispatchedAt) &&
+          (where.kind === undefined || task.kind === where.kind) &&
+          (where.retryCount === undefined || task.retryCount === where.retryCount) &&
+          (where.executionAttempt === undefined || task.executionAttempt === where.executionAttempt) &&
+          (where.error === undefined || task.error === where.error) &&
+          (typeof where.status !== 'string' || task.status === where.status) &&
           (where.status?.in === undefined || where.status.in.includes(task.status)),
         );
-        rows.forEach((row) => Object.assign(row, data, { updatedAt: new Date() }));
+        rows.forEach((row) => {
+          const executionAttempt = data.executionAttempt?.increment
+            ? row.executionAttempt + data.executionAttempt.increment
+            : (data.executionAttempt ?? row.executionAttempt);
+          Object.assign(row, { ...data, executionAttempt, updatedAt: new Date() });
+        });
         return { count: rows.length };
       },
       findMany: async ({ where, include, orderBy, take }: any) => {
         let rows = db.agentTasks.filter((t) =>
           (where.session === undefined || (where.session.userId === undefined || db.agentSessions.find((s) => s.id === t.sessionId)?.userId === where.session.userId)) &&
-          (where.kind === undefined || t.kind === where.kind) &&
+          (where.kind === undefined || (typeof where.kind === 'string' ? t.kind === where.kind : where.kind.in.includes(t.kind))) &&
           (where.dispatchedAt === undefined || t.dispatchedAt === where.dispatchedAt) &&
           (typeof where.status !== 'string' || t.status === where.status),
         );
@@ -756,6 +811,7 @@ export function createFakePrisma(): { prisma: PrismaClient; db: FakeDb } {
         return {
           ...row,
           artifact: db.artifacts.find((artifact) => artifact.id === row.artifactId),
+          agentTask: include.agentTask ? db.agentTasks.find((task) => task.id === row.agentTaskId) ?? null : undefined,
           batch: batch ? { ...batch, researchObject } : null,
         };
       },
@@ -847,6 +903,19 @@ export function createFakePrisma(): { prisma: PrismaClient; db: FakeDb } {
         return { ...row };
       },
       findUnique: async ({ where }: any) => db.aiReviews.find((r) => r.versionId === where.versionId) ?? null,
+      update: async ({ where, data }: any) => {
+        const row = db.aiReviews.find((review) => review.versionId === where.versionId);
+        if (!row) throw new Error('AIReview not found');
+        Object.assign(row, data);
+        return { ...row };
+      },
+      updateMany: async ({ where, data }: any) => {
+        const rows = db.aiReviews.filter((review) =>
+          (where.versionId === undefined || review.versionId === where.versionId) &&
+          (where.status === undefined || review.status === where.status));
+        rows.forEach((row) => Object.assign(row, data));
+        return { count: rows.length };
+      },
     },
     appeal: {
       create: async ({ data }: any) => {

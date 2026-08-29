@@ -1,4 +1,6 @@
-export type HermesActivityLevel = 'quiet' | 'balanced' | 'active';
+import { resolveHermesSettledDock } from './companion-placement';
+
+type HermesActivityLevel = 'quiet' | 'balanced' | 'active';
 export type HermesViewportClass = 'desktop' | 'mobile';
 
 export interface HermesDockPreferences {
@@ -88,8 +90,15 @@ export function resolveHermesDock(
 ) {
   const desired = { x: preferences.xRatio * viewport.width, y: preferences.yRatio * viewport.height };
   if (!viewportChanged) return desired;
-  return {
-    x: Math.min(viewport.width - actor.width / 2, Math.max(actor.width / 2, desired.x)),
-    y: Math.min(viewport.height - actor.height / 2, Math.max(actor.height / 2, desired.y)),
-  };
+  return resolveHermesSettledDock({
+    desired,
+    footprint: {
+      bottom: actor.height / 2,
+      left: actor.width / 2,
+      right: actor.width / 2,
+      top: actor.height / 2,
+    },
+    obstacles: [],
+    viewport: { bottom: viewport.height, left: 0, right: viewport.width, top: 0 },
+  }).point;
 }

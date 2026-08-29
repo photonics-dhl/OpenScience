@@ -45,9 +45,11 @@ function renderGlyphDiffraction(
   context: CanvasRenderingContext2D,
   sample: OpticalSample,
   glyphParticles: readonly GlyphParticle[],
+  fieldScale: number,
+  motionScale: number,
 ) {
   const { aperture } = sample;
-  const fieldWidth = sample.radius * 0.95;
+  const fieldWidth = sample.radius * 0.95 * fieldScale;
 
   for (const particle of glyphParticles) {
     const dx = particle.x - aperture.x;
@@ -61,12 +63,15 @@ function renderGlyphDiffraction(
     if (dx <= 0) {
       const compression = Math.pow(proximity, 1.75) * 0.68;
       x += (aperture.x - particle.x) * compression;
-      y += Math.sin(particle.y * 0.105 + sample.phase * 2.1) * proximity * (1.8 + sample.evidence * 3.8);
+      y += Math.sin(particle.y * 0.105 + sample.phase * 2.1)
+        * proximity * (1.8 * motionScale + sample.evidence * 3.8);
       y += sample.verticalBias * proximity;
     } else {
       const refraction = Math.exp(-dx / (fieldWidth * 0.52));
-      x += Math.sin((particle.y - aperture.y) * 0.046 + sample.phase) * refraction * (4 + sample.evidence * 7);
-      y += Math.sin(dx * 0.052 + sample.phase * 2.4) * refraction * (2.5 + sample.evidence * 6.5);
+      x += Math.sin((particle.y - aperture.y) * 0.046 + sample.phase)
+        * refraction * (4 * motionScale + sample.evidence * 7);
+      y += Math.sin(dx * 0.052 + sample.phase * 2.4)
+        * refraction * (2.5 * motionScale + sample.evidence * 6.5);
       y += sample.verticalBias * refraction;
     }
 
@@ -124,17 +129,67 @@ function renderFresnelGrain(context: CanvasRenderingContext2D, sample: OpticalSa
   }
 }
 
+function renderAcceptedWaterBand(
+  context: CanvasRenderingContext2D,
+  sample: OpticalSample,
+  viewport: OpticalViewport,
+  plate: CanvasImageSource,
+) {
+  const { height, width } = viewport;
+  const sourceWidth = 'naturalWidth' in plate ? plate.naturalWidth : width;
+  const sourceHeight = 'naturalHeight' in plate ? plate.naturalHeight : height;
+  const top = height * .27;
+  const bottom = height * .62;
+  const strips = width < 640 ? 30 : 56;
+  const stripHeight = (bottom - top) / strips;
+  const baseAmplitude = width < 640 ? 2.6 : 4.2;
+  const amplitude = baseAmplitude + sample.evidence * (width < 640 ? 2 : 3.6);
+
+  context.save();
+  for (let strip = 0; strip < strips; strip += 1) {
+    const y = top + strip * stripHeight;
+    const progress = (strip + .5) / strips;
+    const envelope = Math.sin(progress * Math.PI);
+    const wave = Math.sin(sample.phase * 1.35 + progress * 10.5)
+      + Math.sin(sample.phase * .72 - progress * 18.0) * .34;
+    const shift = wave * amplitude * (.58 + envelope * .42);
+    const sourceY = y / height * sourceHeight;
+    const sourceStripHeight = (stripHeight + 1) / height * sourceHeight;
+    context.save();
+    context.beginPath();
+    context.rect(0, y, width, stripHeight + 1);
+    context.clip();
+    context.drawImage(
+      plate,
+      0,
+      sourceY,
+      sourceWidth,
+      sourceStripHeight,
+      shift,
+      y,
+      width,
+      stripHeight + 1,
+    );
+    context.restore();
+  }
+  context.restore();
+}
+
 export function renderOpticalField(
   context: CanvasRenderingContext2D,
   sample: OpticalSample,
   viewport: OpticalViewport,
   glyphParticles: readonly GlyphParticle[] = [],
+  motionScale = 1,
+  fieldScale = 1,
+  acceptedPlate: CanvasImageSource | null = null,
 ) {
   const { width, height, dpr } = viewport;
   context.setTransform(dpr, 0, 0, dpr, 0, 0);
   context.clearRect(0, 0, width, height);
 
-  renderGlyphDiffraction(context, sample, glyphParticles);
+  if (acceptedPlate) renderAcceptedWaterBand(context, sample, viewport, acceptedPlate);
+  renderGlyphDiffraction(context, sample, glyphParticles, fieldScale, motionScale);
   renderFocalCaustic(context, sample, viewport);
   renderFresnelGrain(context, sample, width < 640);
 }

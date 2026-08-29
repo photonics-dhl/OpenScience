@@ -9,7 +9,7 @@ export interface WorkspaceGuidePayload extends Record<string, unknown> {
   };
 }
 
-export type WorkspaceGuideTarget =
+type WorkspaceGuideTarget =
   | 'ro-title' | 'source-import' | 'research-question'
   | 'sdf-problem' | 'sdf-insight' | 'sdf-method' | 'sdf-evidence'
   | 'sdf-results' | 'sdf-limitations' | 'hermes-diff' | 'commit' | null;

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { SDF_CORE_FIELDS, validateSdfCore } from '../src';
+import { SDF_CORE_FIELDS, validateSdfCore, validateSdfDraftCore } from '../src';
 
 /** 合法六字段文档（§5.1）。 */
 function validCore() {
@@ -51,5 +51,22 @@ describe('validateSdfCore（六必填字段）', () => {
   it('非 object 输入拒绝', () => {
     expect(validateSdfCore('not-object').ok).toBe(false);
     expect(validateSdfCore(null).ok).toBe(false);
+  });
+});
+
+describe('validateSdfDraftCore（草稿允许显式未解决字段）', () => {
+  it('接受字段齐全但部分为空的 0.1.0 草稿', () => {
+    const draft = validCore();
+    draft.results = '';
+
+    expect(validateSdfDraftCore(draft)).toMatchObject({ ok: true });
+  });
+
+  it('仍拒绝缺字段与错误 schemaVersion', () => {
+    const missing = validCore() as Record<string, string>;
+    delete missing.results;
+
+    expect(validateSdfDraftCore(missing).ok).toBe(false);
+    expect(validateSdfDraftCore({ ...validCore(), schemaVersion: '0.2.0' }).ok).toBe(false);
   });
 });
