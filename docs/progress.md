@@ -4,36 +4,28 @@
 
 ## Current version tuple
 
-- Branch / candidate implementation: `codex/hermes-wanko-live2d` / `82e99869a87ac025000aa3edefc851fe85b03303`；docs closeout HEAD 待本轮提交。
-- Production application/release: `e2c0eaf3b13a220a8bc2cd49b2c1dfe40a6fd61f`。
-- Rollback: `8163f8b4218e529ee4be41bb9fc732ff6497931a`。
-- 候选 HEAD 与生产 release 严格分离；Task 8 Phase B 未启动，生产没有修改或重新部署。
+- Branch / implementation: `codex/hermes-wanko-live2d` / `c5817121bddbd065c5ecb38811da8e707e6e5d17`；本轮 docs-only HEAD 不改变产品身份。
+- Production application/release: `c5817121bddbd065c5ecb38811da8e707e6e5d17`。
+- Rollback: `e2c0eaf3b13a220a8bc2cd49b2c1dfe40a6fd61f`。
+- Taskmaster `hermes-research-intelligence` 为 6/12：Tasks 1–6 done；Tasks 7、10 dependency-ready。
 
-## 2026-08-29 — Task 8 predeploy release contract closed
+## 2026-08-29 — Task 4 CPU parser cascade deployed
 
-- `0ac37fe` 闭合 parser 镜像窄 allowlist 与 PDF.js Y 几何；`65e934b..f2636be` 进一步闭合 archive source manifest、acceptance report/runtime/image identity、active rollback、single-runner FD9 transaction、durable journal、原子 CAS 与锁内回滚；`82e9986` 修正 Linux gate harness，不改生产代码。
-- confirmed deploy 只允许 immutable cloud-sync 后由 exact candidate 的单一远端 runner 持同一 FD9 完成 active 校验、build/migration/switch/health/actual image/CAS/public/rollback；test hook 已与生产入口物理分离。
-- 最终架构与安全复审均为 Critical/Important/Minor `0`。exact Ubuntu CI run `33192991542` 完整成功，包含本机无法执行的 flock、ownership、TERM/HUP/EXIT/SIGKILL、journal 与 CAS 行为门禁；两套视觉门禁也通过。
-- 没有运行本机 Docker；ECS Phase B、迁移、候选镜像构建与生产部署尚未启动，生产仍为 `e2c0eaf…`。
+- Exact GitHub Actions run `33221760698` 全绿；本地 release-contract 89 tests（82 pass/7 Windows-only skip）、Agent Worker `373/373`、focused acceptance `91/91`、compiled composition `5/5`、build/typecheck/lint/docs-sync/diff 全绿。
+- ECS exact-image 16-case 正式验收为 10 succeeded / 6 needs_review / 0 failed / 0 false-ready，P50/P95 `151.9/1255.32 ms`，并返回 `TASK8_PARSER_ACCEPTANCE_OK` 与 `PARSER_ACCEPTANCE_DEPLOY_CONTRACT_OK`。
+- 接受镜像为 Agent Worker `sha256:ae98ea5ffeebb16c145b60207ca7a3b0499afd6e6e370c2c94ad61a45dc7cbe8`、Parser `sha256:0ac86bfc6dbcda36765f0829550735a1c7c6fb248d3d4006d26dc8611d7dc902`；隔离 startup self-test 与生产真实 scan self-test 均通过 text/locator/Tesseract/confidence/bbox。
+- Canonical immutable transaction 已把 `c581712…` 部署为 production，rollback 为 `e2c0eaf…`；core/search migration `29/29`、`2/2`，BGE runtime、Nginx、公网/loopback release 与实际镜像身份通过，journal/failure marker 均不存在。
+- Parser 仍为 CPU-only、`network=none`、无 Secret、非 root、只读、512 MiB/64 PID；MiniMax Vision 默认 disabled，未调用付费能力，GROBID/PaddleOCR/Docling/LiteParse 均未晋升生产。
 
-## 2026-08-28 — CPU parser cascade breaker recovery
+## Rollback recovery and hygiene
 
-- Task 2–7 已完成代码与独立复审：V2 隔离协议、确定性多格式 `DocumentParser`、provider-neutral layout/GROBID enrichment、本地 Tesseract 选页 OCR、受控 LLM OCR candidate、`sdf.extract` 真实级联组合与执行时权限重建均已落地。MiniMax Vision 仍默认 disabled，未晋升 GROBID/PaddleOCR/Docling。
-- `0ac37fe` 已补齐 parser 镜像窄 allowlist 的两个 native-PDF 模块，并以真实 compiled entrypoint closure/spawned-child 合同防止再次漏包；PDF.js transformed corners 直接使用 top-left `minY/maxY`，手算覆盖上下非对称与 90° 旋转页。
-- TDD RED 精确复现两个缺失模块、非旋转 `y=40→250` 与旋转 `y=20→156`；GREEN 为 compiled `5/5`、Agent Worker `366/366`、typecheck、lint、docs-sync、dependency/duplicate/diff 门禁通过。独立架构和安全复审均为 Critical/Important/Minor `0`。
-- 原 `0ac37fe` exact CI 已全绿；其后发现并闭合 release transaction 合同，现行候选与证据以上一节 `82e9986` / run `33192991542` 为准。
-- 没有运行本机 Docker；没有启动 ECS 候选部署、迁移、provider 调用或生产写入。
+- 首次候选 `0b431ef…` 在新 Worker startup self-test 因脆弱低分辨率 scan fixture 被 Tesseract 分为 `ULF`/`t2`/`FS` 后自动回滚；生产恢复 `e2c0eaf…` 且无残留。根因是 ECS 运行时 fixture/断词语义，不是本地/服务器依赖漂移或 SSH key。
+- TDD 修复 `c581712…` 统一 startup 与 16-case 的 canonical 612×792 scan fixture，并用跨 block locator 语义验证；同一 exact image 的隔离与生产验证均通过。
+- 已按精确白名单清理 12 个失败候选 release/acceptance 目录、候选 image tag 和诊断产物；当前 stale count 均为 0、备份 7 组、磁盘可用 72G。active、rollback、生产数据/模型卷和 Git 历史均保留。
+- 一次错误 search status CLI 和一次冗余 systemd cleanup 数组引用失败均已识别为操作命令问题；前者用真实 Prisma schema 复核 `2/2`，后者未执行删除且最终只读审计为 0。
 
-## Production foundation retained
+## Foundation and next action
 
-- Research Intelligence Taskmaster 仍为 5/12：Tasks 1–3、5、6 已部署；Task 4 的 parser candidate 工作尚未完成，Task 7 dependency-ready，Task 10 等待 Task 4。
-- 生产现有隔离 parser/Tesseract/ClamAV/strict source-map、BGE-M3 与 PostgreSQL lexical search；core/search migration 为 `29/29`、`2/2`，数据库与产品代码保持独立迁移边界。
-- 当前 parser 保持 `network=none`、read-only、非 root、512 MiB/64 PID、仅 `/parser-jobs`；BGE worker 为 internal-only、CPU-only、read-only。LiteParse 仍为 `APPROVED_PILOT`。
-- 2026-08-28 已完成 ECS 卫生清理：退出候选容器、恢复/测试库、无引用卷、旧候选镜像世代与 build cache 已按精确目标清除；current/rollback、生产模型卷与通过门禁的 LiteParse 候选保留。
-- 生产 `e2c0eaf…` 已有服务器全量 build、容器健康、公网/loopback release、BGE runtime 与真实 DOCX `18,118` 字符 canary 证据；这些证据不覆盖新候选 `6268be3`。
-
-## Constraints and next action
-
-- 所有 Docker、数据库迁移、镜像构建与最终运行验收只在 ECS；本地仅做代码、静态检查与单测。Windows 远程操作必须由 PowerShell 显式调用 Git for Windows Bash，再走 canonical scripts。
-- 不读取、打印或提交 `.env` 值；不安装 GPU 栈；不把生成内容冒充 Evidence；Landing/Hermes 视觉冻结。
-- 下一步先取得 docs-only closeout 的 exact-SHA CI；随后仅在 ECS 执行 exact-image build、真实 schema-v2 corpus、CPU/RSS/worker responsiveness、隔离与清理门禁；全部通过后才部署，失败则不触碰生产。
+- 生产现具备统一 source-map、确定性多格式解析、本地选页 OCR、受控 LLM OCR candidate、ClamAV、BGE-M3、tenant-safe lexical+dense retrieval，以及 core/search 独立迁移与恢复边界。
+- 下一步进入 Task 7：身份/兴趣画像与无用户模式开关的 Hermes 静默路由；Task 10 的 Semantic Scholar/Tavily/ScanSci、72h 临时 PDF 和 10min 签名链接已解除 Task 4 依赖。
+- Docker、数据库迁移、镜像和最终运行验收仍只在 ECS；Windows 必须显式 Git for Windows Bash + canonical scripts；不读取/打印 `.env`，不安装 GPU 栈，不把展示资产冒充 Evidence。

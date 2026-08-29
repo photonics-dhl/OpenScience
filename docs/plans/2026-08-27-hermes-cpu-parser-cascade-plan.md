@@ -1,6 +1,8 @@
 # Hermes CPU Parser Cascade Implementation Plan
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use `subagent-driven-development` or `executing-plans` to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+>
+> **Status (2026-08-29):** Taskmaster Task 4 and production deployment are complete at `c5817121bddbd065c5ecb38811da8e707e6e5d17`; rollback is `e2c0eaf3b13a220a8bc2cd49b2c1dfe40a6fd61f`. Only the docs-only closeout commit/CI remains in this session.
 
 **Goal:** Complete Taskmaster `hermes-research-intelligence` Task 4 with a CPU-only, provider-neutral document cascade that produces strict `DocumentSourceMap` results, selects local OCR by measured need, and can offer only the smallest unresolved pages to the already-controlled AI Gateway OCR route.
 
@@ -16,7 +18,7 @@
 - Do not read or print `.env`; configuration verification is presence-only. MiniMax Vision remains disabled and no paid call is part of Task 4 acceptance.
 - Every parser must normalize to `DocumentSourceMap`; API, Web, Domain and extraction consumers must never depend on Docling, LiteParse, GROBID, Tesseract or PaddleOCR private output.
 - LLM OCR never overwrites a source block. It remains a candidate layer carrying the original page coordinates and `llm_ocr_candidate` provenance.
-- Existing release `f9659668b237b70b4c018b866e20498689d327c2` is the rollback baseline until a new immutable release passes all ECS and public acceptance gates.
+- Historical planning rollback `f9659668b237b70b4c018b866e20498689d327c2` was superseded; the CURRENT deployed/rollback tuple is `c581712...` / `e2c0eaf...` and must still be refreshed from ECS before future production work.
 - No database migration, public API or UI change is required for Task 4.
 - Candidate retention requires exact version/digest/license, corpus metrics, resource boundary, kill switch and rollback evidence in `docs/runbooks/hermes-capability-registry.md`.
 
@@ -189,14 +191,14 @@
 - Modify: `project_index.md`
 - Modify: `.taskmaster/tasks/tasks.json`
 
-- [ ] Run quiet local non-Docker gates: focused tests, build, typecheck, lint, dependency/duplicate checks as applicable, `git diff --check`, docs-sync and Markdown lint.
-- [ ] Obtain independent architecture/security review and resolve every material finding before deployment.
-- [ ] Push the exact implementation SHA and require exact-SHA CI success.
-- [ ] Run ECS preflight/backup; build all workspace packages and candidate/production images only on ECS; verify core migration `28/28` and search migration `1/1` without applying a new migration.
-- [ ] Run the full schema-v2 16-case corpus through the actual production sidecars. Record locator reproduction, per-stage confidence, false-ready count, P50/P95, peak CPU/RSS and failure status; no mocked adapter counts as this gate.
-- [ ] Deploy through the canonical immutable release script. Verify exact release marker, absent failure marker, rollback tree, SHA-tagged healthy worker/parser images, container user/rootfs/network/Secret/CPU/RSS/PID/volume limits, public `/` 200, auth/admin 401 and exact `/__release`.
-- [ ] Keep MiniMax Vision disabled. A later credential rotation plus explicitly approved paid canary is required before claiming real LLM OCR quality.
-- [ ] Update the capability registry with retained and rejected candidate evidence, mark Taskmaster Task 4 done only after production acceptance, and refresh the CURRENT version tuple and next ready task.
+- [x] Run quiet local non-Docker gates: focused tests, build, typecheck, lint, dependency/duplicate checks as applicable, `git diff --check`, docs-sync and Markdown lint.
+- [x] Obtain independent architecture/security review and resolve every material finding before deployment.
+- [x] Push the exact implementation SHA and require exact-SHA CI success.
+- [x] Run ECS preflight/backup; build all workspace packages and candidate/production images only on ECS; verify current core migration `29/29` and search migration `2/2` without adding a migration.
+- [x] Run the full schema-v2 16-case corpus through the actual production sidecars. Record locator reproduction, per-stage confidence, false-ready count, P50/P95, peak CPU/RSS and failure status; no mocked adapter counts as this gate.
+- [x] Deploy through the canonical immutable release script. Verify exact release marker, absent failure marker, rollback tree, SHA-tagged healthy worker/parser images, container user/rootfs/network/Secret/CPU/RSS/PID/volume limits, public `/` 200, auth/admin 401 and exact `/__release`.
+- [x] Keep MiniMax Vision disabled. A later credential rotation plus explicitly approved paid canary is required before claiming real LLM OCR quality.
+- [x] Update the capability registry with retained and rejected candidate evidence, mark Taskmaster Task 4 done only after production acceptance, and refresh the CURRENT version tuple and next ready task.
 - [ ] Run docs-sync 8/8, Markdown lint, credential-pattern scan and `git diff --check`; commit and push the docs-only closeout, then require exact docs-HEAD CI.
 
 ## Plan self-review
@@ -204,5 +206,5 @@
 - Spec coverage: §7.1 is consumed unchanged; §7.2 stages 1–7 map to Tasks 3–7; CPU/isolation and retention gates map to Tasks 1, 4, 5 and 8; AI/provider boundary maps to Task 6.
 - Scope: no database, API, UI, retrieval, temporary-download lifecycle or rich-media work is included. Those remain later Taskmaster items.
 - Type consistency: all runtime parsers return the existing `ExtractionResult<DocumentSourceMap>` through `DocumentParser`; only internal V2 stage results are new and provider-neutral.
-- Rollback: failed candidates never enter production; retained services have route/feature kill switches; deployment preserves `f9659668b237b70b4c018b866e20498689d327c2` until the new release passes.
+- Rollback: failed candidates never remain active; retained services have route/feature kill switches. The completed transaction preserves `e2c0eaf3b13a220a8bc2cd49b2c1dfe40a6fd61f` as rollback for production `c581712...`.
 - Known acceptance boundary: Task 4 can prove deterministic/layout/local OCR quality and safe LLM routing, but cannot claim MiniMax Vision quality without credential rotation and an approved paid canary.

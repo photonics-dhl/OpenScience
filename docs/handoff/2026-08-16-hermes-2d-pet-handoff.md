@@ -5,61 +5,52 @@
 ## Goal and state
 
 - 目标：以 3–7 个 Claim 为公开 RO 中心，提供可定位 Evidence、条件/限制、身份静默路由、CPU 文档解析、混合检索和可版本化富媒体。
-- Taskmaster `hermes-research-intelligence` 仍为 5/12：Tasks 1–3、5、6 已生产部署；Task 4 parser cascade 尚未完成；Task 7 dependency-ready；Task 10 等待 Task 4。
-- CPU parser cascade Tasks 2–7 已完成；Task 8 的 parser 打包/几何与 immutable release transaction 阻断已在 `0ac37fe..82e9986` 以 TDD 和独立复审闭合，exact Ubuntu CI 全绿，ECS Phase B 未启动。
+- Taskmaster `hermes-research-intelligence` 为 6/12：Tasks 1–6 已完成；Task 4 CPU parser cascade 已生产部署，Tasks 7、10 dependency-ready。
+- Task 4 不再是阻断项；后续优先实现 Task 7 身份/兴趣静默路由，再推进 Task 10 外部检索与临时文档生命周期。
 
 ## Version tuple
 
 - Worktree: `E:/Miscellaneous/XGS/.worktrees/readable-hermes-guidance`
-- Branch / candidate implementation: `codex/hermes-wanko-live2d` / `82e99869a87ac025000aa3edefc851fe85b03303`
-- Deployed immutable application/release: `e2c0eaf3b13a220a8bc2cd49b2c1dfe40a6fd61f`
-- Rollback: `8163f8b4218e529ee4be41bb9fc732ff6497931a`
-- Local main / origin main: `b9616cb92dc83437b1b2094291ff43e2a4c34337` / `7eb2f5bc4718ee445b79bd089acb64acb3691e62`
-- 候选、main 与 ECS release 不得混写；后续 docs-only HEAD 不改变生产身份。
+- Branch / implementation: `codex/hermes-wanko-live2d` / `c5817121bddbd065c5ecb38811da8e707e6e5d17`
+- Deployed immutable application/release: `c5817121bddbd065c5ecb38811da8e707e6e5d17`
+- Rollback: `e2c0eaf3b13a220a8bc2cd49b2c1dfe40a6fd61f`
+- 本轮文档收口提交不改变生产 release；候选、docs-only HEAD、main 与 ECS release 不得混写。
 
-## Delivered foundation
+## Delivered and verified on ECS
 
-- 严格 ResearchIdentity/Profile、Claim、Evidence、PresentationAsset、DocumentSourceMap、SourceLocator 与 ExtractionResult 合同。
-- V2 隔离 parser 协议；Markdown/TeX/CSV/XLSX/DOCX/native-PDF 确定性解析；provider-neutral layout/GROBID enrichment；本地 Tesseract 选页 OCR；受控 LLM OCR candidate；artifact-backed `sdf.extract` 真实级联组合与执行时 workspace/role/policy 重建。
-- MiniMax Vision 缺省 disabled；不晋升 GROBID、PaddleOCR 或 Docling；二进制字节只在 worker，provider SDK/key 不越过 AI Gateway。
-- 生产已有隔离 parser/Tesseract/ClamAV/source-map、BGE-M3 与 PostgreSQL lexical search；core/search migration `29/29`、`2/2`，数据库具备独立迁移和恢复边界。
-- LiteParse `2.14.0` ECS pilot 为 5 succeeded/1 needs_review/1 failed、13/16 locator、P50/P95 `8/163 ms`、peak RSS `61,599,744` bytes，仍为 `APPROVED_PILOT`，未部署。
+- V2 隔离协议和统一 `DocumentSourceMap`：Markdown/TeX/CSV/XLSX/DOCX/native PDF 确定性解析、provider-neutral layout/GROBID enrichment、本地 Tesseract 选页 OCR、受控 LLM OCR candidate 与 artifact-backed `sdf.extract`。
+- Parser 保持 `network=none`、无 Secret、只读、非 root、512 MiB/64 PID；MiniMax Vision 默认 disabled，未晋升 GROBID、PaddleOCR、Docling 或 LiteParse。
+- Exact CI run `33221760698` 全绿；ECS 16-case 为 10 succeeded / 6 needs_review / 0 failed / 0 false-ready，P50/P95 `151.9/1255.32 ms`。
+- 接受镜像：Agent Worker `sha256:ae98ea5ffeebb16c145b60207ca7a3b0499afd6e6e370c2c94ad61a45dc7cbe8`；Parser `sha256:0ac86bfc6dbcda36765f0829550735a1c7c6fb248d3d4006d26dc8611d7dc902`。
+- 生产真实 scan startup self-test 的 text/locator/Tesseract/confidence/bbox 五项均通过；BGE runtime 通过；core/search migration 为 `29/29`、`2/2`。
+- `.release-id`、loopback/public `/__release` 均为 `c581712…`；失败标记和 durable journal 均不存在，关键容器健康。
+- 卫生收口后备份为 7 组、失败候选 release/acceptance/image tag 为 0，磁盘可用 72G；只清理精确白名单，保留 active、rollback、生产卷与 Git 历史。
 
-## Candidate evidence, not production acceptance
+## Incident and correction
 
-- Candidate `82e9986` 已推送；exact-SHA GitHub Actions run `33192991542` 完整成功，Ubuntu 实跑 release transaction 的 flock/ownership/signal/journal 门禁。
-- Compiled packaging/geometry `5/5`、Agent Worker `366/366`、release-contract、root test/build/typecheck/lint/docs-sync/dependency/diff 与两套视觉门禁全绿；最终独立架构与安全复审均为 Critical/Important/Minor `0`。
-- 以上只证明代码/CI；没有本机 Docker，也没有 ECS 候选镜像、运行时 corpus、资源峰值或生产部署证据。
-
-## Closed breaker findings
-
-1. `Dockerfile.parser` 的显式 allowlist 已加入两个 native-PDF 模块；compiled packaging contract 从真实 entrypoint 递归相对依赖并验证 spawned child，仍禁止 broad COPY。
-2. `native-pdf-text-items.ts` 已直接使用 PDF.js transformed `minY/maxY`；literal 回归覆盖非旋转上下区与 90° 旋转页。
-3. `git archive` release 以 schema-v2 source manifest 绑定输入、权限与 runtime closure；acceptance report 绑定 exact source/runtime/worker/parser image IDs。
-4. confirmed deploy 在 immutable materialization 后仅启动一个 exact-candidate transaction runner；同一远端进程持 FD9 完成 active 校验、build、migration、switch、实际容器镜像验证、CAS、公网验收与锁内回滚，durable journal 对 SIGKILL/掉电 fail-closed。
-
-以上只闭合代码与 Ubuntu CI 阻断；ECS 镜像/运行时证据未完成，因此不得声称服务器验收或生产可用。
+- 首次候选 `0b431ef…` 的 CI、16-case 和部署前门禁通过，但新 Worker 因低分辨率 startup fixture 被 Tesseract 分块为 `ULF` / `t2` / `FS` 而 unhealthy；事务自动回滚到 `e2c0eaf…`，未留下失败生产状态。
+- `c581712…` 以 TDD 统一 startup 与正式 acceptance 的确定性 scan fixture，并按跨 block locator 语义验收；同一 exact image 隔离自检和生产自检均通过。
+- 一次错误的 search migration CLI 路径已改用真实 Prisma schema 入口复核 `2/2`；冗余 cleanup systemd 命令的 Bash 数组引用失败未执行删除，随后只读审计确认目标已清零。两者均为操作命令问题，不是生产故障。
+- Windows 远程入口始终是显式 Git for Windows Bash + canonical SSH 脚本；不得再把 shell 选择错误误报为 SSH key 失败。
 
 ## Fixed constraints
 
-- Docker、迁移、镜像与最终运行验收只在 ECS；本地仅代码、静态检查和单测，不得以本地通过替代服务器证据。
-- Windows 禁止裸 `bash`/WSL；PowerShell 必须显式调用 `C:/Program Files/Git/bin/bash.exe` 后再走 `infra/scripts/ssh-run.sh` / `checkup.sh`。
+- Docker、迁移、镜像和最终运行验收只在 ECS；本地仅代码、静态检查和单测。
 - 不读取、打印或提交 `.env` 值；Secret 仅在服务器受控配置中。服务器纯 CPU，禁止 GPU 栈。
-- 不删除历史 migration ledger；不把生成内容冒充 Evidence；生产变更前刷新 branch/HEAD/release/rollback。
+- 不删除 migration ledger；不把生成内容冒充 Evidence；生产变更前刷新 branch/HEAD/release/rollback。
 
 ## Next action
 
-1. 提交本轮 docs-only closeout 并取得 exact GitHub CI。
-2. docs CI 全绿后进入 ECS Phase B：exact images、schema-v2 16-case、locator/false-ready、P50/P95、CPU/RSS、worker responsiveness、隔离与清理。
-3. Phase B 全绿后才通过 canonical immutable release 部署并复验公网/回滚；失败不修改生产。
+1. 完成本轮 docs-only 提交并取得 exact-SHA CI；生产继续保持 `c581712…`。
+2. 进入 Task 7：注册身份采集、兴趣画像与无显式模式开关的 Hermes 静默路由。
+3. 并行设计 Task 10 的 Semantic Scholar/Tavily/ScanSci 适配、72h 临时 PDF 和 10min 签名链接；生产启用仍逐项过能力台账门禁。
 
 ## Read first
 
 1. `AGENTS.md`
 2. 本 handoff
 3. `docs/specs/2026-08-26-hermes-research-intelligence-platform-design.md`
-4. `docs/plans/2026-08-27-hermes-cpu-parser-cascade-plan.md`
+4. `docs/progress.md`
 5. `.superpowers/sdd/2026-08-27-hermes-cpu-parser-cascade-plan/progress.md`
-6. `docs/progress.md`
 
-`project_index.md` 只用 `rg` 定向查 CURRENT；不要从较旧 `main` 或旧 Hermes 视觉计划推断现状。
+`project_index.md` 只用 `rg` 定向查 CURRENT；不要从较旧 `main` 推断服务器现状。

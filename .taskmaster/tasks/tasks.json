@@ -1442,7 +1442,7 @@
           "3",
           "5"
         ],
-        "status": "pending",
+        "status": "done",
         "subtasks": []
       },
       {
@@ -1564,9 +1564,9 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-08-26T19:13:50.264Z",
+      "lastModified": "2026-08-29T00:30:00.000Z",
       "taskCount": 12,
-      "completedCount": 4,
+      "completedCount": 6,
       "tags": [
         "hermes-research-intelligence"
       ]

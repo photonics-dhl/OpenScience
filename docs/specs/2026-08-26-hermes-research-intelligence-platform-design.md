@@ -444,15 +444,16 @@ export type ExtractionResult =
 
 ### 16.1 Current implementation checkpoint
 
-- Taskmaster `hermes-research-intelligence` 已完成 Task 1–3、5、6（5/12）；Tasks 4、7 dependency-ready，Task 10 仍等待 Task 4。
+- Taskmaster `hermes-research-intelligence` 已完成 Task 1–6（6/12）；Task 4 CPU parser cascade 已生产部署，Tasks 7、10 dependency-ready。
 - Task 1 已交付能力台账机器门禁、13-case 自著权 corpus 与 current-parser baseline；没有安装新 parser、OCR、模型或 MCP。
 - Task 2 已交付 Claim/Evidence/locator 严格合同、发布事务门禁、核心 migration 28、独立 `packages/search`/`infra/search` 与 `SEARCH_DATABASE_URL` 边界，并随 ECS release `e0828a6` 部署。
 - Task 3 已在 application/immutable release `ef043ebb8e51332effe75a5639cb207aec7bfc47` 部署：严格 provider-neutral DocumentSourceMap、跨 artifact/hash/versioned map 的 locator 拒绝与 worker 运行时合同；其实现树父提交 `c47b3f182ba857897c3c33ee21c250f6b4db3f3c` 已审阅，`ef043eb` 是同树的空 CI 标记。回滚为 `e0828a6118c92c87b7869493413441bba0e76a95`。
+- Task 4 已在 application/immutable release `c5817121bddbd065c5ecb38811da8e707e6e5d17` 部署：V2 隔离 parser、确定性多格式解析、provider-neutral enrichment、本地 Tesseract 选页 OCR、受控 LLM OCR candidate 与真实 `sdf.extract` 级联。ECS 16-case 为 10 succeeded / 6 needs_review / 0 failed / 0 false-ready，P50/P95 `151.9/1255.32 ms`；rollback 为 `e2c0eaf3b13a220a8bc2cd49b2c1dfe40a6fd61f`。
 - Task 5 已在 application/immutable release `f9659668b237b70b4c018b866e20498689d327c2` 部署：独立 OCR provider pool、最少页与图片结构/尺寸/字节硬边界、严格 external-processing/kill policies、逐页 fallback、candidate-only provenance 和脱敏 cost/latency audit。Vision 默认 disabled，未做付费调用；rollback 为 `ef043ebb8e51332effe75a5639cb207aec7bfc47`。
 - Task 6 已在 application/immutable release `8163f8b4218e529ee4be41bb9fc732ff6497931a` 部署：独立 search migration 2、locator-safe chunks、tenant-safe lexical+dense retrieval、RRF、幂等异步索引、显式 `lexical_only` 降级和 CPU-only BGE-M3。rollback 为 `f9659668b237b70b4c018b866e20498689d327c2`。
 - BGE-M3 锁定 revision `5617a9f61b028005a4858fdac845db406aefb181`、model manifest `08cc5a668e899e216e8ce66e7f3a5e144cefd9600a082997483c5dd0c66478e4`、package freeze `dc2bc38e5ddda73889d15265eac0cdfa8eaaebe311bc2e63a9b2e32e19cd0fc3`；16 chunks/24 queries 的 nDCG@10 `0.996655`、Recall@10 `1`、P95 `240 ms`、peak RSS `2,244,235,264` bytes，GPU package 0。
 - 生产 core 当前仓库迁移 `29/29`、search `2/2`；core active ledger 含需保留的历史兼容记录，failed migration 为 0。core/search 连接、迁移、物理隔离与健康探针独立。
-- 每日 `backup.sh --db` 已原子覆盖 core/search；集合校验和、release 绑定、权限和双临时库恢复演练通过，§8.2 的双库备份边界闭合。恢复临时库按不删除规则保留。
+- 每日 `backup.sh --db` 已原子覆盖 core/search；集合校验和、release 绑定、权限和双临时库恢复演练通过，§8.2 的双库备份边界闭合。当前保留 7 组备份，临时恢复库已按授权精确清理。
 
 ## 17. Out of scope
 
