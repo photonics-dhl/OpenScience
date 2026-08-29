@@ -1,24 +1,34 @@
 import { describe, expect, it, vi } from 'vitest';
+import { createHash } from 'node:crypto';
+import { Readable } from 'node:stream';
 import { evaluateEvidencePublicationBlocks } from '../../src/research-intelligence/publication-evidence';
 
 const HASH = 'a'.repeat(64);
 const OTHER_HASH = 'b'.repeat(64);
 
-function deps(overrides: { evidence?: Array<Record<string, unknown>>; claims?: Array<Record<string, unknown>> } = {}) {
+function deps(overrides: {
+  evidence?: Array<Record<string, unknown>>;
+  claims?: Array<Record<string, unknown>>;
+  hash?: string;
+  size?: number;
+  storage?: Record<string, unknown>;
+} = {}) {
+  const hash = overrides.hash ?? HASH;
+  const size = overrides.size ?? 100;
   const claims = overrides.claims ?? [{ id: 'claim-1', assessment: 'supported', provenance: { source: 'human' }, extractionStatus: 'succeeded' }];
   const evidence = overrides.evidence ?? [];
   return {
-    storage: { headObject: vi.fn(async () => ({ size: 100, etag: 'fixture', sha256: HASH })) },
+    storage: overrides.storage ?? { headObject: vi.fn(async () => ({ size, etag: 'fixture', sha256: hash })) },
     prisma: {
       version: { findUnique: vi.fn().mockResolvedValue({
         id: 'version-1', researchObjectId: 'ro-1', researchObject: { workspaceId: 'workspace-1' },
-        manifest: { entries: [{ artifactId: 'artifact-1', blobSha256: HASH }] },
+        manifest: { entries: [{ artifactId: 'artifact-1', blobSha256: hash }] },
       }) },
       claimNode: { findMany: vi.fn().mockResolvedValue(claims) },
       evidenceRecord: { findMany: vi.fn().mockResolvedValue(evidence) },
       presentationAsset: { findMany: vi.fn().mockResolvedValue([{ contentHash: OTHER_HASH }]) },
       artifact: { findUnique: vi.fn(async ({ where }: { where: { id: string } }) => where.id === 'artifact-1'
-        ? { id: 'artifact-1', workspaceId: 'workspace-1', blobSha256: HASH, size: 100n } : null) },
+        ? { id: 'artifact-1', workspaceId: 'workspace-1', blobSha256: hash, size: BigInt(size) } : null) },
     },
   } as never;
 }
@@ -57,6 +67,34 @@ describe('Evidence publication blockers', () => {
       where: { researchObjectId: 'ro-1', contentHash: { in: [HASH] } },
       select: { contentHash: true },
     });
+  });
+
+  it('streams and verifies the original when S3 HEAD omits custom checksum metadata', async () => {
+    const content = Buffer.from('production object store original');
+    const hash = createHash('sha256').update(content).digest('hex');
+    const evidence = row({
+      contentHash: hash,
+      locator: { artifactId: 'artifact-1', contentHash: hash, page: 1 },
+    });
+    const getObject = vi.fn(async () => ({ body: Readable.from(content), size: content.length }));
+    const context = deps({
+      evidence: [evidence, { ...evidence, id: 'evidence-2' }],
+      hash,
+      size: content.length,
+      storage: {
+        headObject: vi.fn(async () => ({ size: content.length, etag: 'fixture' })),
+        getObject,
+      },
+    });
+
+    const blocks = await evaluateEvidencePublicationBlocks(
+      context,
+      { researchObjectId: 'ro-1', versionId: 'version-1' },
+      vi.fn(async () => ({ text: 'verified' })),
+    );
+
+    expect(blocks).toEqual([]);
+    expect(getObject).toHaveBeenCalledTimes(1);
   });
 
   it('does not treat a browser reuse attestation as trusted distribution authority', async () => {

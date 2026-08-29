@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import { getBlobStorageKey } from '@openscience/storage';
 import type { ArtifactDeps } from '../artifact/artifacts';
 import type { HardBlock } from '../review/blocking';
@@ -26,6 +27,36 @@ function allowsExternalReuse(provenance: unknown): boolean {
   // distribution authority. Only a server-owned rights decision may unlock reuse.
   return rights.decision === 'reuse' && rights.authority === 'trusted_provider'
     && typeof rights.verifiedBy === 'string' && rights.verifiedBy.length > 0;
+}
+
+async function storedOriginalMatches(
+  storage: ArtifactDeps['storage'],
+  sha256: string,
+  expectedSize: number,
+): Promise<boolean> {
+  const key = getBlobStorageKey(sha256);
+  const head = await storage.headObject(key).catch(() => null);
+  if (!head || head.size !== expectedSize) return false;
+  if (head.sha256 !== undefined) return head.sha256.toLowerCase() === sha256.toLowerCase();
+
+  const object = await storage.getObject(key).catch(() => null);
+  if (!object || object.size !== expectedSize) return false;
+  const digest = createHash('sha256');
+  let received = 0;
+  try {
+    for await (const value of object.body) {
+      const chunk = Buffer.isBuffer(value) ? value : Buffer.from(value);
+      received += chunk.length;
+      if (received > expectedSize) {
+        object.body.destroy();
+        return false;
+      }
+      digest.update(chunk);
+    }
+  } catch {
+    return false;
+  }
+  return received === expectedSize && digest.digest('hex') === sha256.toLowerCase();
 }
 
 /**
@@ -64,6 +95,7 @@ export async function evaluateEvidencePublicationBlocks(
   const claimsById = new Map(claims.map((claim) => [claim.id, claim]));
   const entries = new Map((version.manifest?.entries ?? []).map((entry) => [entry.artifactId, entry]));
   const presentationHashes = new Set(presentation.map((asset) => asset.contentHash));
+  const storedOriginalChecks = new Map<string, Promise<boolean>>();
 
   if (claims.length > 500) pushOnce(blocks, 'claim_review_limit_exceeded', 'Claim count exceeds the bounded publication review limit');
   if (evidence.length > 200) pushOnce(blocks, 'evidence_review_limit_exceeded', 'Evidence count exceeds the bounded publication review limit');
@@ -112,8 +144,13 @@ export async function evaluateEvidencePublicationBlocks(
       pushOnce(blocks, 'evidence_original_missing', 'Evidence contentHash or original VersionManifest artifact is missing');
       continue;
     }
-    const stored = await deps.storage.headObject(getBlobStorageKey(artifact.blobSha256)).catch(() => null);
-    if (!stored || stored.size !== Number(artifact.size) || stored.sha256?.toLowerCase() !== artifact.blobSha256.toLowerCase()) {
+    const storageCheckKey = `${artifact.blobSha256}:${artifact.size.toString()}`;
+    let storedOriginalCheck = storedOriginalChecks.get(storageCheckKey);
+    if (!storedOriginalCheck) {
+      storedOriginalCheck = storedOriginalMatches(deps.storage, artifact.blobSha256, Number(artifact.size));
+      storedOriginalChecks.set(storageCheckKey, storedOriginalCheck);
+    }
+    if (!await storedOriginalCheck) {
       pushOnce(blocks, 'evidence_original_missing', 'Evidence original object is unavailable from object storage');
       continue;
     }
