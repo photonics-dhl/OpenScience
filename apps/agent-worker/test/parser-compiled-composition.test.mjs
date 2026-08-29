@@ -91,8 +91,10 @@ function parserImageDomainCopies(dockerfile) {
     }
     for (const rawSource of sources) {
       assert.doesNotMatch(rawSource, /[$*?[\]{}]/u, 'Docker COPY must use static one-source exact COPY syntax');
+      const sourceSegments = rawSource.split('/');
       assert.ok(
-        !rawSource.split('/').some((segment) => segment === '.' || segment === '..'),
+        !rawSource.includes('\\')
+          && sourceSegments.every((segment) => segment !== '' && segment !== '.' && segment !== '..'),
         'Docker COPY source path aliases are forbidden',
       );
     }
@@ -470,6 +472,9 @@ test('parser image Domain COPY instructions are an exact runtime-leaf allowlist'
     'COPY . /app',
     'COPY packages/. /app/packages',
     'COPY packages/domain/../domain/package.json /tmp/domain.json',
+    'COPY packages//domain/package.json /tmp/domain.json',
+    'COPY packages\\domain\\package.json /tmp/domain.json',
+    'COPY packages/domain\\dist/research-intelligence/virtual-page.js /tmp/domain.js',
     'COPY ${SOURCE_PATH} /app',
   ]) {
     assert.throws(
