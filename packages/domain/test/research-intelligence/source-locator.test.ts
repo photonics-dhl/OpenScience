@@ -31,6 +31,26 @@ function sourceMap() {
   };
 }
 
+function structuredTableSourceMap() {
+  const parser = { name: 'openscience-text-extractor', version: '1.0.0' };
+  const virtual = { name: 'openscience-virtual-page', version: 'openscience-virtual-page-v1' };
+  return {
+    artifactId: 'artifact-xlsx',
+    contentHash: 'b'.repeat(64),
+    parser,
+    pages: [{
+      page: 1,
+      width: 1000,
+      height: 72,
+      blocks: [
+        { id: 'sheet-heading', kind: 'heading', text: 'Evidence', boundingBox: { x: 0, y: 0, width: 1000, height: 24 }, parser, transformations: [{ stage: 'extract_text', processor: parser }, { stage: 'normalize', processor: virtual }] },
+        { id: 'claim-cell', kind: 'table', text: 'Claim', boundingBox: { x: 0, y: 24, width: 500, height: 24 }, parser, transformations: [{ stage: 'extract_text', processor: parser }, { stage: 'normalize', processor: virtual }] },
+        { id: 'value-cell', kind: 'table', text: '42', boundingBox: { x: 500, y: 48, width: 500, height: 24 }, parser, transformations: [{ stage: 'extract_text', processor: parser }, { stage: 'normalize', processor: virtual }] },
+      ],
+    }],
+  };
+}
+
 describe('SourceLocator construction and resolution', () => {
   it('creates exact, versioned locators for paragraph, figure, table, and code evidence', async () => {
     const map = sourceMap();
@@ -89,6 +109,31 @@ describe('SourceLocator construction and resolution', () => {
     expect(() => createBlockSourceLocator(map, 'paragraph-1', { charRange: { start: 0, end: 99 } })).toThrow(/charRange/);
     expect(() => createBlockSourceLocator(map, 'figure-1', { charRange: { start: 0, end: 1 } })).toThrow(/text/);
     expect(() => createTableCellSourceLocator(map, 'figure-1', { sheet: 'Evidence', row: 2, column: 2 })).toThrow(/table/);
+  });
+
+  it('validates virtual table coordinates and the XLSX sheet heading', async () => {
+    const xlsx = structuredTableSourceMap();
+    const valueBlock = xlsx.pages[0]!.blocks.find((block) => block.text === '42')!;
+    const { createTableCellSourceLocator, resolveSourceLocator } = await sourceLocatorContract();
+    const locator = createTableCellSourceLocator(xlsx, valueBlock.id, {
+      sheet: 'Evidence', row: 2, column: 2,
+    });
+
+    expect(resolveSourceLocator(xlsx, locator)).toMatchObject({ id: valueBlock.id });
+    expect(() => resolveSourceLocator(xlsx, {
+      ...locator as object, tableCell: { sheet: 'Evidence', row: 2, column: 1 },
+    })).toThrow(/tableCell/);
+    expect(() => createTableCellSourceLocator(xlsx, valueBlock.id, {
+      sheet: 'Evidence', row: 3, column: 2,
+    })).toThrow(/tableCell/);
+  });
+
+  it('keeps physical table locators bound only to their block and bounding box', async () => {
+    const map = sourceMap();
+    const { createTableCellSourceLocator, resolveSourceLocator } = await sourceLocatorContract();
+    const locator = createTableCellSourceLocator(map, 'table-1', { sheet: 'Evidence', row: 99, column: 99 });
+
+    expect(resolveSourceLocator(map, locator)).toMatchObject({ id: 'table-1', kind: 'table' });
   });
 
   it('round-trips strict locators and rejects malformed JSON payloads', async () => {

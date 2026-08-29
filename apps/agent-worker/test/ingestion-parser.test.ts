@@ -137,12 +137,12 @@ describe('parseIngestion', () => {
     if (result.status !== 'needs_review') return;
     expect(result.reasons).toEqual(['structured-xlsx-review-required']);
     expect(result.sourceMap.pages).toHaveLength(1);
-    expect(result.sourceMap.pages[0]?.blocks.map(({ text, boundingBox }) => ({ text, boundingBox }))).toEqual([
-      { text: 'Evidence', boundingBox: { x: 0, y: 0, width: 1000, height: 24 } },
-      { text: 'Claim', boundingBox: { x: 0, y: 24, width: 500, height: 24 } },
-      { text: 'Value', boundingBox: { x: 500, y: 24, width: 500, height: 24 } },
-      { text: 'pulse_width_fs', boundingBox: { x: 0, y: 48, width: 500, height: 24 } },
-      { text: '42', boundingBox: { x: 500, y: 48, width: 500, height: 24 } },
+    expect(result.sourceMap.pages[0]?.blocks.map(({ kind, text, boundingBox }) => ({ kind, text, boundingBox }))).toEqual([
+      { kind: 'heading', text: 'Evidence', boundingBox: { x: 0, y: 0, width: 1000, height: 24 } },
+      { kind: 'table', text: 'Claim', boundingBox: { x: 0, y: 24, width: 500, height: 24 } },
+      { kind: 'table', text: 'Value', boundingBox: { x: 500, y: 24, width: 500, height: 24 } },
+      { kind: 'table', text: 'pulse_width_fs', boundingBox: { x: 0, y: 48, width: 500, height: 24 } },
+      { kind: 'table', text: '42', boundingBox: { x: 500, y: 48, width: 500, height: 24 } },
     ]);
     const identity = { artifactId, contentHash };
     expect(reproduceAcceptanceLocator(result.sourceMap, locator, identity)).toBe(true);

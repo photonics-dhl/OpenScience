@@ -221,7 +221,7 @@ function parseCsv(content: Buffer): SourceMapPageDraft[] {
     if (cell.trim()) {
       textCharacters += cell.length;
       if (textCharacters > MAX_TOTAL_TEXT_CHARACTERS) throw new ParsingLimitError();
-      rawCells.push({ line: row, column, kind: 'paragraph', text: cell });
+      rawCells.push({ line: row, column, kind: 'table', text: cell });
     }
     cell = '';
     column += 1;
@@ -299,6 +299,7 @@ function stageRequest(input: ParserInput): ParserJobRequestV2 {
 }
 
 function buildStructuredXlsxPages(result: ParserStageResult): SourceMapPageDraft[] {
+  if (result.warnings.length > 0) throw new Error('XLSX parser returned warnings');
   const closeTo = (left: number, right: number) => Math.abs(left - right) <= 1e-6;
   return result.pages.map((page) => {
     const rawLineCount = page.height / VIRTUAL_LINE_HEIGHT;
@@ -325,6 +326,13 @@ function buildStructuredXlsxPages(result: ParserStageResult): SourceMapPageDraft
         || !closeTo(x, (column - 1) * width)
         || !closeTo(width, VIRTUAL_PAGE_WIDTH / columnCount)) {
         throw new ParsingLimitError();
+      }
+      if (line === 1) {
+        if (block.kind !== 'heading' || column !== 1 || columnCount !== 1) {
+          throw new Error('XLSX sheet heading is invalid');
+        }
+      } else if (block.kind !== 'table') {
+        throw new Error('XLSX cells must be table blocks');
       }
       return { line, column, columnCount, kind: block.kind, text: block.text, parser: result.parser };
     });

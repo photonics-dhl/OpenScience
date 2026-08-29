@@ -308,6 +308,7 @@ function parseCellReference(reference: string): { row: number; column: number } 
 }
 
 function worksheetCells(xml: string, strings: readonly string[]): Array<{ row: number; column: number; text: string }> {
+  if (/<mergeCells\b|<mergeCell\b/iu.test(xml)) throw new Error('merged XLSX cells are unsupported');
   const cells: Array<{ row: number; column: number; text: string }> = [];
   for (const match of xml.matchAll(/<c\b([^>]*)>([\s\S]*?)<\/c>/gu)) {
     const reference = attribute(match[1]!, 'r');
@@ -315,6 +316,12 @@ function worksheetCells(xml: string, strings: readonly string[]): Array<{ row: n
     const coordinates = parseCellReference(reference);
     const type = attribute(match[1]!, 't');
     const body = match[2]!;
+    if (/<f(?:\s[^>]*)?(?:\/\s*>|>[\s\S]*?<\/f>)/iu.test(body)) {
+      throw new Error('XLSX formulas are unsupported');
+    }
+    if (type !== undefined && type !== 'inlineStr' && type !== 's') {
+      throw new Error('XLSX cell type is unsupported');
+    }
     const rawValue = /<v(?:\s[^>]*)?>([\s\S]*?)<\/v>/u.exec(body)?.[1];
     let text = '';
     if (type === 'inlineStr') text = textElements(body);
@@ -365,7 +372,7 @@ export async function parseStructuredXlsxPages(content: Buffer): Promise<StagePa
           boundingBox: { x: 0, y: 0, width: VIRTUAL_PAGE_WIDTH, height: VIRTUAL_LINE_HEIGHT },
         },
         ...cells.map((cell) => ({
-          kind: 'paragraph' as const,
+          kind: 'table' as const,
           text: cell.text,
           boundingBox: {
             x: (cell.column - 1) * cellWidth,

@@ -1,4 +1,4 @@
-import type { DocumentBlock, DocumentSourceMap } from './document-source-map';
+import type { DocumentBlock, DocumentPage, DocumentSourceMap } from './document-source-map';
 import { parseDocumentSourceMap } from './document-source-map';
 import type { SourceLocator } from './types';
 import { validateSourceLocator } from './validation';
@@ -7,6 +7,10 @@ type CharRange = NonNullable<SourceLocator['charRange']>;
 type TableCell = NonNullable<SourceLocator['tableCell']>;
 type CodeRange = NonNullable<SourceLocator['codeRange']>;
 const SOURCE_LOCATOR_MAX_RAW_JSON_CHARACTERS = 12_000;
+const VIRTUAL_PAGE_WIDTH = 1000;
+const VIRTUAL_LINE_HEIGHT = 24;
+const VIRTUAL_PAGE_PROCESSOR = 'openscience-virtual-page';
+const VIRTUAL_PAGE_PROCESSOR_VERSION = 'openscience-virtual-page-v1';
 
 function locatorError(message: string): Error {
   return new Error(`SourceLocator ${message}`);
@@ -39,6 +43,58 @@ function validateBlockRange(block: DocumentBlock, charRange: CharRange): void {
   }
 }
 
+function closeTo(left: number, right: number): boolean {
+  return Math.abs(left - right) <= 1e-6;
+}
+
+function virtualTableCoordinates(page: DocumentPage, block: DocumentBlock): { row: number; column: number } | undefined {
+  const normalized = block.transformations.some((transformation) => transformation.stage === 'normalize'
+    && transformation.processor.name === VIRTUAL_PAGE_PROCESSOR
+    && transformation.processor.version === VIRTUAL_PAGE_PROCESSOR_VERSION);
+  if (!normalized) return undefined;
+  const { x, y, width, height } = block.boundingBox;
+  const rawRow = y / VIRTUAL_LINE_HEIGHT + 1;
+  const rawColumnCount = VIRTUAL_PAGE_WIDTH / width;
+  const rawColumn = x / width + 1;
+  const row = Math.round(rawRow);
+  const columnCount = Math.round(rawColumnCount);
+  const column = Math.round(rawColumn);
+  if (!closeTo(page.width, VIRTUAL_PAGE_WIDTH)
+    || !closeTo(height, VIRTUAL_LINE_HEIGHT)
+    || !closeTo(rawRow, row) || row < 1
+    || !closeTo(rawColumnCount, columnCount) || columnCount < 1
+    || !closeTo(rawColumn, column) || column < 1 || column > columnCount
+    || !closeTo(x, (column - 1) * width)
+    || !closeTo(width, VIRTUAL_PAGE_WIDTH / columnCount)) {
+    throw locatorError('tableCell virtual geometry does not match the document source map');
+  }
+  return { row, column };
+}
+
+function validateTableCell(page: DocumentPage, block: DocumentBlock, tableCell: TableCell): void {
+  const coordinates = virtualTableCoordinates(page, block);
+  if (!coordinates) return;
+  const sheetHeading = tableCell.sheet === undefined ? undefined : page.blocks.find((candidate) => candidate.kind === 'heading'
+    && candidate.text === tableCell.sheet
+    && closeTo(candidate.boundingBox.x, 0)
+    && closeTo(candidate.boundingBox.y, 0)
+    && closeTo(candidate.boundingBox.width, VIRTUAL_PAGE_WIDTH)
+    && closeTo(candidate.boundingBox.height, VIRTUAL_LINE_HEIGHT));
+  if (tableCell.sheet !== undefined && !sheetHeading) {
+    throw locatorError('tableCell sheet does not match the virtual page heading');
+  }
+  const row = coordinates.row - (tableCell.sheet === undefined ? 0 : 1);
+  if (row < 1 || tableCell.row !== row || tableCell.column !== coordinates.column) {
+    throw locatorError('tableCell does not match the virtual table geometry');
+  }
+}
+
+function sourceMapPage(sourceMap: DocumentSourceMap, page: number): DocumentPage {
+  const sourcePage = sourceMap.pages.find((candidate) => candidate.page === page);
+  if (!sourcePage) throw locatorError('page does not exist in the document source map');
+  return sourcePage;
+}
+
 export function createBlockSourceLocator(
   value: DocumentSourceMap,
   blockId: string,
@@ -58,6 +114,7 @@ export function createTableCellSourceLocator(value: DocumentSourceMap, blockId: 
   const sourceMap = parseDocumentSourceMap(value);
   const { page, block } = mapBlock(sourceMap, blockId);
   if (block.kind !== 'table') throw locatorError('tableCell requires a table block');
+  validateTableCell(sourceMapPage(sourceMap, page), block, tableCell);
   return validateSourceLocator({ ...pageLocator(sourceMap, page, block), tableCell: { ...tableCell } });
 }
 
@@ -82,7 +139,10 @@ export function resolveSourceLocator(value: DocumentSourceMap, locatorValue: Sou
     throw locatorError('boundingBox does not match the document source map');
   }
   if (locator.charRange !== undefined) validateBlockRange(block, locator.charRange);
-  if (locator.tableCell !== undefined && block.kind !== 'table') throw locatorError('tableCell requires a table block');
+  if (locator.tableCell !== undefined) {
+    if (block.kind !== 'table') throw locatorError('tableCell requires a table block');
+    validateTableCell(sourceMapPage(sourceMap, page), block, locator.tableCell);
+  }
   return block;
 }
 

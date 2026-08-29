@@ -77,10 +77,14 @@ function storedZip(entries: Record<string, string>): Buffer {
 }
 
 function xlsxWithCellReference(reference: string): Buffer {
+  return xlsxFixture(`<worksheet><sheetData><row r="1"><c r="${reference}" t="inlineStr"><is><t>value</t></is></c></row></sheetData></worksheet>`);
+}
+
+function xlsxFixture(worksheet: string, relationships = '<Relationships><Relationship Id="rId1" Target="worksheets/sheet1.xml"/></Relationships>'): Buffer {
   return storedZip({
     'xl/workbook.xml': '<workbook xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheets><sheet name="Sheet" r:id="rId1"/></sheets></workbook>',
-    'xl/_rels/workbook.xml.rels': '<Relationships><Relationship Id="rId1" Target="worksheets/sheet1.xml"/></Relationships>',
-    'xl/worksheets/sheet1.xml': `<worksheet><sheetData><row r="1"><c r="${reference}" t="inlineStr"><is><t>value</t></is></c></row></sheetData></worksheet>`,
+    'xl/_rels/workbook.xml.rels': relationships,
+    'xl/worksheets/sheet1.xml': worksheet,
   });
 }
 
@@ -105,19 +109,19 @@ describe('deterministic text DocumentParser', () => {
         expect(request).toMatchObject({ schemaVersion: 2, operation: 'extract_text', mediaType: parserInput.mediaType });
         expect(content).toEqual(parserInput.content);
         return stage({
-          pages: [{ page: 1, width: 1000, height: 24, blocks: [{
-            kind: 'paragraph', text: 'isolated workbook value',
-            boundingBox: { x: 0, y: 0, width: 1000, height: 24 },
-          }] }],
+          pages: [{ page: 1, width: 1000, height: 48, blocks: [
+            { kind: 'heading', text: 'Sheet', boundingBox: { x: 0, y: 0, width: 1000, height: 24 } },
+            { kind: 'table', text: 'isolated workbook value', boundingBox: { x: 0, y: 24, width: 1000, height: 24 } },
+          ] }],
         });
       },
     });
 
-    await expect(executeDocumentParser(parser, parserInput)).resolves.toMatchObject({
-      status: 'needs_review',
-      reasons: ['structured-xlsx-review-required'],
-      sourceMap: { pages: [{ blocks: [{ text: 'isolated workbook value' }] }] },
-    });
+    const result = await executeDocumentParser(parser, parserInput);
+    expect(result).toMatchObject({ status: 'needs_review', reasons: ['structured-xlsx-review-required'] });
+    if (result.status === 'needs_review') {
+      expect(result.sourceMap.pages[0]?.blocks.some((block) => block.text === 'isolated workbook value' && block.kind === 'table')).toBe(true);
+    }
   });
 
   it('cuts off adversarial XLSX XML entities without monopolizing the worker', async () => {
@@ -177,11 +181,11 @@ describe('deterministic text DocumentParser', () => {
     if (result.status !== 'needs_review') return;
     expect(result.reasons).toEqual(['structured-csv-review-required']);
     expect(result.sourceMap.pages[0]).toMatchObject({ page: 1, width: 1000, height: 48 });
-    expect(result.sourceMap.pages[0]?.blocks.map((block) => ({ text: block.text, boundingBox: block.boundingBox }))).toEqual([
-      { text: 'alpha, one', boundingBox: { x: 0, y: 0, width: 500, height: 24 } },
-      { text: 'beta', boundingBox: { x: 500, y: 0, width: 500, height: 24 } },
-      { text: 'line\nbreak', boundingBox: { x: 0, y: 24, width: 500, height: 24 } },
-      { text: 'gamma', boundingBox: { x: 500, y: 24, width: 500, height: 24 } },
+    expect(result.sourceMap.pages[0]?.blocks.map((block) => ({ kind: block.kind, text: block.text, boundingBox: block.boundingBox }))).toEqual([
+      { kind: 'table', text: 'alpha, one', boundingBox: { x: 0, y: 0, width: 500, height: 24 } },
+      { kind: 'table', text: 'beta', boundingBox: { x: 500, y: 0, width: 500, height: 24 } },
+      { kind: 'table', text: 'line\nbreak', boundingBox: { x: 0, y: 24, width: 500, height: 24 } },
+      { kind: 'table', text: 'gamma', boundingBox: { x: 500, y: 24, width: 500, height: 24 } },
     ]);
   });
 
@@ -203,9 +207,9 @@ describe('deterministic text DocumentParser', () => {
       height: 72,
       blocks: [
         { kind: 'heading', boundingBox: { x: 0, y: 0, width: 1000, height: 24 } },
-        { boundingBox: { x: 0, y: 24, width: 500, height: 24 } },
-        { boundingBox: { x: 500, y: 24, width: 500, height: 24 } },
-        { boundingBox: { x: 500, y: 48, width: 500, height: 24 } },
+        { kind: 'table', boundingBox: { x: 0, y: 24, width: 500, height: 24 } },
+        { kind: 'table', boundingBox: { x: 500, y: 24, width: 500, height: 24 } },
+        { kind: 'table', boundingBox: { x: 500, y: 48, width: 500, height: 24 } },
       ],
     });
     expect(result.sourceMap.pages[1]?.blocks[1]?.boundingBox).toEqual({ x: 2000 / 3, y: 72, width: 1000 / 3, height: 24 });
@@ -523,4 +527,32 @@ describe('deterministic text DocumentParser', () => {
       });
     },
   );
+
+  it.each([
+    ['formula with a cached value', xlsxFixture('<worksheet><sheetData><row r="1"><c r="A1"><f>1+1</f><v>2</v></c></row></sheetData></worksheet>')],
+    ['merged cells', xlsxFixture('<worksheet><sheetData><row r="1"><c r="A1" t="inlineStr"><is><t>merged</t></is></c></row></sheetData><mergeCells count="1"><mergeCell ref="A1:B1"/></mergeCells></worksheet>')],
+    ['error cell type', xlsxFixture('<worksheet><sheetData><row r="1"><c r="A1" t="e"><v>#DIV/0!</v></c></row></sheetData></worksheet>')],
+    ['invalid workbook relationship', xlsxFixture('<worksheet><sheetData><row r="1"><c r="A1"><v>1</v></c></row></sheetData></worksheet>', '<Relationships><Relationship Id="rId1" Target="../worksheets/sheet1.xml"/></Relationships>')],
+    ['malformed cell reference', xlsxWithCellReference('A0')],
+  ])('fails closed for XLSX %s', async (_label, content) => {
+    const result = await executeDocumentParser(createTextExtractor({}), input(content, 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'));
+
+    expect(result.status).toBe('needs_review');
+    if (result.status === 'needs_review') expect(result.sourceMap.pages).toEqual([]);
+  });
+
+  it('fails closed when the isolated XLSX stage reports a warning', async () => {
+    const parserInput = input(Buffer.from('warned-xlsx'), 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    const result = await executeDocumentParser(createTextExtractor({
+      xlsx: async () => stage({
+        warnings: ['partial_result'],
+        pages: [{ page: 1, width: 1000, height: 48, blocks: [
+          { kind: 'heading', text: 'Sheet', boundingBox: { x: 0, y: 0, width: 1000, height: 24 } },
+          { kind: 'table', text: '42', boundingBox: { x: 0, y: 24, width: 1000, height: 24 } },
+        ] }],
+      }),
+    }), parserInput);
+
+    expect(result).toMatchObject({ status: 'needs_review', reasons: ['parser-failed'], sourceMap: { pages: [] } });
+  });
 });
