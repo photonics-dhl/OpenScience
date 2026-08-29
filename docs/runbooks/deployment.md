@@ -1,6 +1,6 @@
 # Runbook: 部署（Deployment）
 
-> 状态：**CURRENT**。active immutable release / application source 为 `28a3d5ca681b7744fae521dfa9154100a24e8845`，rollback tree 为 `c5817121bddbd065c5ecb38811da8e707e6e5d17`。post-deploy docs-only HEAD 不得冒充 application source。
+> 状态：**CURRENT**。active immutable release / application source 为 `6cabe422a8459dfa358786c9f5aae84558949f6b`，rollback tree 为 `28a3d5ca681b7744fae521dfa9154100a24e8845`。post-deploy docs-only HEAD 不得冒充 application source。
 > 格式遵循 `.agents/skills/infra-runbook/SKILL.md` 四节强制要求。
 > 部署属 Spec §20.5"询问"级操作：执行前需用户确认，必须走 `infra/scripts/deploy.sh` + CI/CD，禁止手工改服务器代码。
 
@@ -1216,15 +1216,23 @@ application remained `f965966...` and production search remained `1/1`.
 - Authorized hygiene removed only a 12-SHA failed-candidate whitelist under release/acceptance roots, matching candidate image tags and exact diagnostics. It preserved active/rollback, production volumes and Git history. Final audit: stale release/acceptance/image/diagnostic counts `0`, backup sets `7`, available disk `72G`. Deletion is not recoverable from the host, but every source SHA remains in Git.
 - A redundant systemd cleanup unit later failed before deletion because systemd interpreted Bash array syntax incorrectly; the primary cleanup had already completed and the final read-only audit proved zero targets. Do not treat that quoting failure as cleanup rollback or rerun broad prune commands.
 
-### 5.40 Parser 14/2 closeout and read-only disk inventory (2026-08-29)
+### 5.40 Parser 14/2 final deployment and read-only disk inventory (2026-08-29)
 
-**Prechecks.** Exact GitHub Actions run `33235948918` is green for application
-SHA `28a3d5ca681b7744fae521dfa9154100a24e8845`. Canonical schema 3 profile
+**Prechecks.** Exact GitHub Actions run `33240457443`, job `99068791412`, is
+green in 11m10s for application SHA
+`6cabe422a8459dfa358786c9f5aae84558949f6b`. Final source review is `READY` with
+0 Critical / 0 Important / 0 Minor findings. Canonical schema 3 profile
 `hermes-parser-14-2-v1` passed 14 succeeded / 2 intentional needs review / 0
-failed / 0 false-ready, structured fake gateway 14 / external provider 0.
-Production and application source are exact `28a3d5c…`; rollback is
-`c581712…`; core/search are `29/29` and `2/2`; runtime and release markers are
-green. This audit authorizes no deletion.
+failed / 0 false-ready; gateway structured fake / external / error is 14/0/0,
+and all 26 locators including three `table-cell` locators reproduced.
+
+Production/application source and active release are exact `6cabe422…`;
+rollback is `28a3d5c…`. No migration ran. Worker image is
+`sha256:11f36807956003cf47ca18ad1f4a85a3830af4c24b81b466d566da4b10951a02`;
+Parser image is
+`sha256:4e4819ecd4b45ce473fe5076f09e46410f1f16b601a65b7bb461f046e75c70d8`.
+Production runtime, core/search `29/29` and `2/2`, BGE, seven backups and all
+release/failure/journal markers are green. This audit authorizes no deletion.
 
 **Read-only execution.** From PowerShell, use only explicit Git for Windows
 Bash and the canonical wrappers:
@@ -1234,42 +1242,48 @@ Bash and the canonical wrappers:
 & 'C:\Program Files\Git\bin\bash.exe' ./infra/scripts/ssh-run.sh 'df -B1 /; du -x -s -B1 /opt/openscience-releases /opt/openscience-evals /opt/openscience-acceptance /root/.local/share/pnpm/store; du -x --apparent-size -s -B1 /opt/openscience-releases /opt/openscience-evals /opt/openscience-acceptance /root/.local/share/pnpm/store; docker system df'
 ```
 
-The fresh audit at 13:58 +0800 produced the following byte inventory. `du`
-child rows can share hardlinks; Docker images can share layers. Therefore rows
-and standalone release sizes must not be summed into a reclaimable total. A
-single ordered cross-root `du` (releases → evals → acceptance → pnpm)
-is the non-duplicated physical/apparent view.
+The fresh post-deploy audit produced the following physical byte inventory.
+`du` children can share hardlinks and Docker images can share layers. Therefore
+standalone values, Docker total reclaimable, logical image sizes and unique
+layer estimates must not be added together. The ordered cross-root values are
+the non-duplicated physical view. The deployment itself consumed a net
+`817,916 KiB`; no cleanup was performed.
 
-| Category | Physical / apparent evidence | Class | Disposition |
+| Category | Non-duplicated physical evidence | Class | Disposition |
 |---|---:|---|---|
-| Root filesystem | total `158,132,850,688`; used `77,656,059,904`; free `73,816,707,072` bytes (52%) | `KEEP` | Capacity fact only |
-| `/opt/openscience-evals` | `15,406,067,712` / `13,083,532,536` bytes | `INVESTIGATE` | Preserve until each historical evaluator has an exact evidence-retention decision; child directories overlap through hardlinks |
-| Failed parser eval `63eb6b2…` / `9e9a0e8…` | each `90,112` / `23,081` bytes | `DELETE_CANDIDATE` | Failed candidates, not accepted evidence |
-| Accepted parser eval / acceptance `28a3d5c…` | eval `90,112` / `23,081`; acceptance `180,224` / `110,495` bytes | `KEEP` | Formal active-release evidence |
-| `/opt/openscience-acceptance` | `634,880` / `287,173` bytes | mixed | Keep `28a3d5c…`; failed `9e9a0e8…` path (`90,112` / `23,081`) is `DELETE_CANDIDATE`; `63eb6b2…` is absent |
-| `/opt/openscience-releases` | `22,499,897,344` / `19,399,624,994` bytes; 41 trees = 1 active + 1 rollback + 39 other | mixed | Keep `28a3d5c…` and `c581712…`; failed `63eb6b2…` and `9e9a0e8…` are `DELETE_CANDIDATE`; other 37 are `INVESTIGATE` |
-| Release non-duplicate ordered allocation | active `2,997,968,896`; rollback incremental `619,380,736`; other incremental `18,882,543,616` bytes | evidence | Order is active → rollback → other; do not use standalone release `du` as reclaimable space |
-| Cross-root non-duplicate allocation | releases `22,499,897,344` / `19,399,624,994`; eval incremental `12,947,496,960` / `10,800,309,307`; acceptance incremental `634,880` / `287,173`; pnpm incremental `3,593,535,488` / `3,570,062,172` bytes | evidence | This ordered row prevents hardlink double counting; do not add the standalone rows |
-| Root pnpm store | standalone `6,052,106,240` / `5,853,285,401`; cross-root incremental `3,593,535,488` / `3,570,062,172` bytes | `DELETE_CANDIDATE` | Regenerable build cache; exact path `/root/.local/share/pnpm/store`; approval still required |
-| Docker images / build cache | images `16.14GB`, reclaimable `6.336GB`; build cache `2.317GB`, all reclaimable | mixed | Keep active/rollback/BGE/runtime images; build cache is `DELETE_CANDIDATE` |
-| Failed candidate image tags | Worker unique `0B`, Parser unique `195.3MB` per `63eb6b2…` and `9e9a0e8…` | `DELETE_CANDIDATE` | Exact four SHA tags only; shared sizes are not additive |
-| Dangling images | three IDs: `ea452b0…` unique `195.3MB`, `16f7e83…` `862MB`, `6d00f2d…` `55.75MB` | `DELETE_CANDIDATE` | Docker-reported unique total is about `1.11305GB`; already included in Docker reclaimable size |
-| Server dev stack | four containers; three volumes total `71,417,856` physical bytes | `INVESTIGATE` | Not used by production, but confirm integration-test need before exact teardown approval |
-| Production volumes | six volumes total `4,873,039,872` physical bytes | `KEEP` | Includes versioned BGE `4,587,413,504`, PostgreSQL, Redis, SeaweedFS, ClamAV and parser-jobs |
-| Monitoring/Portainer volumes | five volumes total `1,681,838,080` physical bytes | `KEEP` | Netdata, vnStat and Portainer operational state |
-| Logs | `/var/log` `526,389,248` physical bytes; journal `422.9M`; Docker JSON logs `24,062,642` bytes | `KEEP` | Apply existing rotation only; no ad-hoc deletion |
-| Backups | `7,946,240` / `7,757,118` bytes; seven backup-set directories | `KEEP` | Preserve verified core/search backups and release binding |
-| Regenerable caches | `/var/cache/dnf` `63,049,728`; `/root/.npm` `194,285,568` physical bytes | `DELETE_CANDIDATE` | Exact caches only; do not broaden to `/var/cache` or `/root` |
-| Tool cache | `/root/.cache` `421,773,312` / `392,015,749` bytes | `INVESTIGATE` | Attribute contents before any whitelist request |
+| Root filesystem | total `158,132,850,688`; used `78,492,704,768`; free `72,980,062,208` bytes (52%) | `KEEP` | Capacity fact only |
+| `/opt/openscience-releases` | ordered total `23,119,495,168` bytes; active increment `2,997,985,280`; rollback increment `619,581,440`; other 40 increment `19,501,924,352` | mixed | Keep active `6cabe422…` and rollback `28a3d5c…`; other 40 are `INVESTIGATE`, not promised reclaim |
+| `/opt/openscience-evals` | cross-root increment `12,947,587,072` bytes | `INVESTIGATE` | Historical eval families need evidence-retention decisions; failed `63eb6b2…` / `9e9a0e8…` exact paths remain deletion candidates |
+| `/opt/openscience-acceptance` | `815,104` bytes | mixed | Keep formal `6cabe422…` and rollback evidence; exact failed `63eb6b2…` / `9e9a0e8…` paths are `DELETE_CANDIDATE` where present |
+| Root pnpm store | cross-root increment `3,593,535,488` bytes | `DELETE_CANDIDATE` | Regenerable exact `/root/.local/share/pnpm/store`; approval still required |
+| Old `/opt/openscience-backup-20260809-2218` workspace backup | cross-root increment `522,768,384` bytes; standalone about `2.82GB` | `DELETE_CANDIDATE` | Only the non-duplicate increment is reclaim evidence; never add the standalone hardlinked value |
+| Playwright tool cache | `687,366,144` bytes | `DELETE_CANDIDATE` | Redownloadable; exact cache path/scope must be whitelisted |
+| Root cache | `/root/.cache` `421,777,408` bytes | `DELETE_CANDIDATE` | Exact cache contents only; do not broaden to `/root` |
+| npm / dnf caches | `/root/.npm` `194,285,568`; `/var/cache/dnf` `63,049,728` bytes | `DELETE_CANDIDATE` | Regenerable exact caches only |
+| Docker images / build cache | images `16.33GB`, reclaimable `6.531GB`; build cache `2.317GB` | mixed | Keep active/rollback/BGE/runtime images; build cache is `DELETE_CANDIDATE`; do not add image totals to unique layers |
+| Failed, dangling and exited image tags | failed `63eb6b2…` / `9e9a0e8…`, dangling IDs, and exited former-rollback `c581712…` tags | `DELETE_CANDIDATE` | Exact tags/IDs only; current active and rollback images are excluded |
+| Historical accepted image tags | old accepted tags other than active/rollback | `INVESTIGATE` | Confirm rollback/evidence need before requesting exact deletion |
+| Server dev stack | volumes about `70.8MB` | `INVESTIGATE` | Not production; confirm integration-test need before exact teardown approval |
+| Production volumes | Docker volumes total `6.811GB`, `0B` reclaimable | `KEEP` | Includes BGE about `4.587GB`, PostgreSQL, Redis, SeaweedFS, ClamAV and parser jobs |
+| Monitoring/Portainer volumes | Netdata about `1.869GB` plus operational state | `KEEP` | Preserve monitoring history and Portainer state |
+| Logs | current rotated host/journal/container logs | `KEEP` | Existing rotation only; no ad-hoc deletion |
+| Backups | seven verified database backup sets | `KEEP` | Preserve core/search backups and release binding |
+
+**Conservative cleanup estimate.** The immediately identifiable non-duplicated
+candidate set is about `9.50GB`, based on the prior `9.303GB` exact candidate
+set plus about `195.3MB` for the exited `c581712…` Parser image. This estimate
+does not include the `19,501,924,352`-byte other-release increment or the
+`12,947,587,072`-byte eval increment, and it does not add Docker total
+reclaimable, shared layers or hardlinked standalone values a second time.
 
 **Rollback.** The audit made no server mutation, so rollback is not applicable.
 A future cleanup is not host-recoverable: request user approval for an exact
-path/image/cache whitelist, preserve active/rollback, accepted report,
-production/BGE/monitoring volumes, logs under rotation and all seven backups,
-and never run a broad prune or wildcard release deletion.
+path, image tag/ID and cache-scope whitelist. Preserve active/rollback,
+accepted reports, production/BGE/monitoring volumes, logs under rotation and
+all seven backups. Never run a broad prune or wildcard release deletion.
 
 **Verification.** After any separately approved cleanup, rerun canonical
-`checkup.sh`, confirm active/public/loopback release `28a3d5c…`, rollback tree
-`c581712…`, absent failure/journal markers, healthy production containers,
+`checkup.sh`, confirm active/public/loopback release `6cabe422…`, rollback tree
+`28a3d5c…`, absent failure/journal markers, healthy production containers,
 core/search `29/29` and `2/2`, `PARSER_ACCEPTANCE_DEPLOY_CONTRACT_OK`,
 `EMBEDDING_RUNTIME_OK`, seven backups and a fresh non-duplicated disk audit.

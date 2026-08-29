@@ -22,8 +22,8 @@
 
 | Capability | Purpose | Current state | Auth/cost policy | Runtime/install boundary | Retention gate |
 |---|---|---|---|---|---|
-| Existing `document-parser` sidecar | PDF/DOCX/OCR isolation | `PRODUCTION` | 无外部 API | release `28a3d5c…` / image `sha256:aed451e9…577dbe`；无网络/Secret、只读、非 root、512 MiB/64 PID、bounded IPC | schema 3 / `hermes-parser-14-2-v1`：14 succeeded/2 intentional review/0 failed/0 false-ready；structured fake 14/external 0；startup/runtime 通过 |
-| Tesseract `eng+chi_sim` | 扫描页 OCR fallback | `PRODUCTION` | 免费、本地 CPU | release `28a3d5c…`；仅 parser 镜像；禁止宿主全局安装 | canonical scan 的 text、跨 block locator、Tesseract 5.3.0、confidence、bbox 全通过 |
+| Existing `document-parser` sidecar | PDF/DOCX/OCR isolation | `PRODUCTION` | 无外部 API | release `6cabe422…` / image `sha256:4e4819ec…c70d8`；无网络/Secret、只读、非 root、512 MiB/64 PID、bounded IPC | schema 3 / `hermes-parser-14-2-v1` 14/2/0/0；gateway 14/0/0；26 locators/3 `table-cell`、startup/runtime 全通过 |
+| Tesseract `eng+chi_sim` | 扫描页 OCR fallback | `PRODUCTION` | 免费、本地 CPU | release `6cabe422…`；仅 parser 镜像；禁止宿主全局安装 | canonical scan 的 text、跨 block locator、Tesseract 5.3.0、confidence、bbox 全通过 |
 | ClamAV | 上传文件恶意内容扫描 | `PRODUCTION` | 免费、本地 CPU | agent-worker/隔离边界；fail-closed | signature freshness、blocked path、资源峰值 |
 | MiniMax text/vision | LLM OCR、复杂表格/公式补救 | `APPROVED_PILOT / BLOCKED` | 自动平台处理；最少页；凭据已在聊天暴露，轮换前不得调用 vision | 仅 AI Gateway；`openscience-ocr-v1` route 已实现但默认 disabled + external-policy deny；生产 worker 当前有变量注入，文档不记录值 | locator 复验、页成本、数据外发、错误率、审计 |
 | MiniMax image/video | 代表性 RO 展示资产 | `APPROVED_PILOT / BLOCKED` | 仅管理员；逐项批准公开；凭据轮换前阻断 | 外部 API，经 AI Gateway；不在 CPU 服务器部署模型 | 科学真实性、成本、prompt/source provenance、可撤回 |
@@ -132,6 +132,7 @@
 
 | Date | Capability | From → To | Version/digest | Evidence | Rollback | Operator |
 |---|---|---|---|---|---|---|
+| 2026-08-29 | Task 4 final source-safety deployment | schema-v3 14/2 profile retained → final reviewed production | source/release `6cabe422…`；Worker `sha256:11f36807…951a02`；Parser `sha256:4e4819ec…c70d8` | CI `33240457443` / job `99068791412` success 11m10s；14/2/0/0，gateway 14/0/0，26 locators/3 table-cell，runtime/core 29/29/search 2/2/BGE/backups 7/markers GREEN；source review READY 0/0/0 | immutable rollback `28a3d5c…`；no migration；Vision disabled；no cleanup | Codex |
 | 2026-08-29 | Task 4 parser acceptance debt closeout | 10/6 baseline → schema-v3 14/2 production profile | source/release `28a3d5c…`；Worker `sha256:35191f65…5ec5aa`；Parser `sha256:aed451e9…577dbe` | CI `33235948918`；ECS `hermes-parser-14-2-v1` 14/2/0/0；structured fake 14/external 0；formal locator/runtime/core 29/29/search 2/2/BGE/public/journal GREEN | immutable rollback `c581712…`；Vision disabled；failed `63eb…`/`9e9…` objects retained pending exact whitelist approval | Codex |
 | 2026-08-29 | Task 4 CPU parser cascade / Tesseract | candidate → `PRODUCTION` | source/release `c581712…`；Worker `sha256:ae98ea5f…cbe8`；Parser `sha256:0ac86bfc…d902` | CI `33221760698`；ECS 16-case 10/6/0/0、P50/P95 151.9/1255.32 ms；formal contract、isolated/production startup、core 29/29、search 2/2、BGE/public/journal GREEN | immutable rollback `e2c0eaf…`；Vision disabled；failed generations exact-cleaned to 0 | Codex |
 | 2026-08-28 | Task 5 selected-page local OCR cascade | production Tesseract route unchanged; new code pending ECS runtime | code `622cc24`；Tesseract `5.3.0` metadata；production remains `e2c0eaf…` | independent Ready/no findings；focused `75/75`、ECS exact-SHA full build GREEN；final image build bounded cutoff before packaged scan/CPU responsiveness，exact candidate cleanup `FINAL_ECS_ATTEMPT_CLEAN` | no deployment；retain current production parser and explicit review/LLM fallback policy | Codex |

@@ -1,8 +1,8 @@
 # Hermes Parser Acceptance Debt Closeout Implementation Plan
 
 **Status: COMPLETED / ECS DEPLOYED（2026-08-29）.** Tasks 1–6 are complete.
-Production application/release is `28a3d5ca681b7744fae521dfa9154100a24e8845`;
-rollback is `c5817121bddbd065c5ecb38811da8e707e6e5d17`.
+Final production application/release is `6cabe422a8459dfa358786c9f5aae84558949f6b`;
+rollback is `28a3d5ca681b7744fae521dfa9154100a24e8845`; no migration ran.
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use
 > superpowers:subagent-driven-development (recommended) or
@@ -31,8 +31,9 @@ document-parser sidecar, Docker Compose on ECS only.
   permitted by this plan.
 - Keep parser runtime `network=none`, no Secret, non-root, read-only, 512 MiB,
   64 PID and CPU-only.
-- Preserve current production `c5817121bddbd065c5ecb38811da8e707e6e5d17`.
-  A successful new immutable release uses it as rollback; any failed gate must
+- Preserve the execution-time production release. The completed final
+  transaction promoted `6cabe422a8459dfa358786c9f5aae84558949f6b` and retained
+  `28a3d5ca681b7744fae521dfa9154100a24e8845` as rollback; any failed gate had to
   leave production unchanged or transactionally restored.
 - Do not add `DocumentBlockKind`; Python/Notebook use `paragraph`, structured
   cells use `table`.
@@ -339,8 +340,9 @@ record only fresh evidence.
 **Interfaces:**
 
 - Consumes the clean reviewed candidate SHA.
-- Produces one immutable active release whose rollback is the pre-deploy active
-  `c5817121bddbd065c5ecb38811da8e707e6e5d17`.
+- Produces one immutable active release whose rollback is the execution-time
+  pre-deploy active release. Final result: active `6cabe422…`, rollback
+  `28a3d5c…`, no migration.
 
 - [x] **Step 1: Push the exact candidate and require exact-SHA CI success**
 
@@ -381,6 +383,12 @@ Require core/search migration `29/29` and `2/2`, healthy API/Web/Worker/Parser/
 Embedding/PostgreSQL/Redis/SeaweedFS/ClamAV, parser startup self-test, BGE
 runtime, exact running image IDs, public/local 200, auth/admin 401, exact release
 markers and absent failure/journal state.
+
+Final evidence: exact CI `33240457443` / job `99068791412` succeeded in 11m10s;
+Worker `sha256:11f36807…951a02`, Parser `sha256:4e4819ec…c70d8`; schema 3
+`hermes-parser-14-2-v1` 14/2/0/0, gateway 14/0/0, 26 locators including three
+`table-cell`, runtime/core/search/BGE/backups/markers all green. Final source
+review: `READY`, 0 Critical / 0 Important / 0 Minor.
 
 ### Task 6: Taskmaster, capability registry, hygiene evidence and CURRENT closeout
 
