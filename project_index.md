@@ -1,7 +1,7 @@
 # OpenScience (XGS) 项目文件索引
 
 > 维护规则：创建/修改/移动文件后必须更新本索引。创建新文件前先查本表防重复。
-> **CURRENT source/deployment anchor（2026-08-29）：** branch/application-code HEAD `codex/hermes-wanko-live2d` / `4c73469fe24abe685054f1d917d452adc5371d35`；application source/production release 同为 `4c73469fe24abe685054f1d917d452adc5371d35`；rollback `cf68bfa7baba9610dcd010fed0fcf5fd0deeab2f`；core/search `30/30` / `2/2`。Exact CI `33257516418` / job `99113706374`、parser acceptance、BGE CPU、真实 Claim/Evidence/review/publish journey 与公网 200 全绿；历史评测工作区精确清理后根盘 36G/26%。Taskmaster 8/12，Tasks 1–8 done，下一产品任务 Task 9，Task 10 dependency-ready；本地 main 与 ECS production 身份不得混写。
+> **CURRENT source/deployment anchor（2026-08-29）：** branch/base HEAD `codex/claim-first-public-ro` / `5105b1e75f6f021af6987d6741f22771d19ea036`；application source/production release `4c73469fe24abe685054f1d917d452adc5371d35`；rollback `cf68bfa7baba9610dcd010fed0fcf5fd0deeab2f`；core/search `30/30` / `2/2`。Task 8 exact CI/parser/BGE/真实 journey 全绿，根盘 36G/26%；PR #4 已合并，旧分支已归档/清理。Taskmaster 8/12，Task 9 `in-progress`，Task 10 dependency-ready；本地 main 与 ECS production 身份不得混写。
 
 ## 根目录
 | 路径 | 用途 | 状态 |
@@ -103,7 +103,7 @@
 | Rejected local Hermes Blender prototype (not repository content) | 少年星图龙只保留 `hermes-constellation-dragon/apps/web/assets/hermes/HermesConstellationDragon.blend`（SHA-256 `9CF4694D…DDFA5`）；`.blend1`、渲染/contact sheet、manifest、旧脚本/合同已清理 | **用户视觉 NO-GO / HISTORICAL SOURCE ONLY**；二进制进回收站，禁止误读为候选资产 |
 | `.github/workflows/ci.yml` | PR/main 全仓 build/typecheck/lint/test 与生产视觉门禁；在任何会启动 Chromium 的 unit/visual gate 前安装固定 lockfile 对应浏览器，失败前无 evidence 目录时 artifact 上传只告警 | CURRENT CI gate；禁止用本地浏览器缓存替代 clean Ubuntu runner |
 | `.cursor/` | Cursor 编辑器配置 | 工具自管 |
-| `.taskmaster/` | task-master 任务状态；`optical-editorial-v3` 15/15 done；CURRENT `hermes-research-intelligence` 为 8/12，Tasks 1–8 done | 工具自管；Task 9 next，Task 10 dependency-ready |
+| `.taskmaster/` | task-master 任务状态；`optical-editorial-v3` 15/15 done；CURRENT `hermes-research-intelligence` 为 8/12，Tasks 1–8 done | 工具自管；Task 9 `in-progress`，Task 10 dependency-ready |
 | `.memory/memory.jsonl` | Memory MCP 知识图谱存储（MEMORY_FILE_PATH 指定） | 工具自管，随 git 备份 |
 | `src/` | 未来代码 | 空 |
 
@@ -142,6 +142,7 @@
 | `docs/plans/2026-08-29-production-release-retention-plan.md` | active+rollback 机器身份、durable pending intent 与精确 release retention 实施计划 | **DEPLOYED / ECS RETENTION GREEN**；active+rollback exact roots/tags，禁止 broad prune，exit 78 用 FD9 `resume` |
 | `docs/plans/2026-08-29-hermes-research-identity-routing-plan.md` | Taskmaster Task 7：注册身份、可纠正兴趣、服务端 InterestContext、Hermes 静默路由与生产真实旅程 | **COMPLETED / ECS DEPLOYED `5e5ae36`**；真实 MiniMax 双任务与 context version 1→2 GREEN |
 | `docs/plans/2026-08-29-hermes-claim-evidence-api-plan.md` | Taskmaster Task 8：可信 SourceMap 引用、Claim/Evidence CRUD/复验、乐观锁/审计与发布双重阻断；Task 9/10 的稳定数据边界 | **COMPLETE / PRODUCTION ACCEPTED `4c73469`**；exact CI、ECS parser、真实 RO journey 与 cleanup 全绿 |
+| `docs/plans/2026-08-29-hermes-claim-first-public-ro-plan.md` | Taskmaster Task 9：publication-only 公共 DTO、R3 publish→public、Evidence source resolver、账户阅读偏好、760/280 Claim-first 页面、移动 sheet、打印/WCAG 与 ECS journey | **CURRENT / IN PROGRESS**；基于已批准 Research Intelligence 与 Research Folio 规范 |
 | `packages/domain/src/research-intelligence/{identity-profile-service,interest-context}.ts` / `apps/api/src/routes/research-identity.ts` / `apps/web/components/auth/ResearchProfileFields.tsx` | 注册身份、版本化可纠正兴趣、服务端确定性 InterestContext 与设置页；拒绝客户端伪造上下文、敏感字段和站外历史，Hermes 按上下文静默适配 | **TASK 7 PRODUCTION**；migration 30、exact CI、真实公网旅程与精确测试数据清理 GREEN |
 | `docs/plans/2026-08-27-hermes-ai-gateway-llm-ocr-routing-plan.md` | Taskmaster Task 5 的可执行 TDD 计划：provider-neutral OCR、MiniMax Coding Plan VLM adapter、逐页 fallback、kill switch、hash/cost/latency 审计与 ECS-only 验收 | **COMPLETED / ECS DEPLOYED `f965966`**；默认不启用付费 vision route |
 | `docs/plans/2026-08-27-hermes-cpu-parser-cascade-plan.md` / `.superpowers/sdd/2026-08-27-hermes-cpu-parser-cascade-plan/progress.md` | Taskmaster Task 4 的 ECS-only 实施计划与 SDD 唯一执行台账：结构化 sidecar v2、确定性 source map、候选 bake-off、坐标 OCR、受控 LLM candidate、真实 corpus/资源/部署门禁 | **COMPLETED / DEPLOYED `c581712`**；rollback `e2c0eaf`，MiniMax Vision disabled |
