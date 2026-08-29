@@ -326,3 +326,24 @@ export {
   virtualPageNormalization,
   deriveVirtualTableCoordinates,
 } from './research-intelligence/virtual-page';
+export {
+  EXTERNAL_SOURCE_PROVIDERS,
+  SOURCE_RIGHTS_BASES,
+  SOURCE_DOWNLOAD_POLICIES,
+  type ExternalSourceProvider,
+  type SourceAccessEvidence,
+  type SourceRightsBasis,
+  type SourceDownloadPolicy,
+  type SourceRightsDecision,
+} from './retrieval/types';
+export { decideSourceRights } from './retrieval/rights';
+export { parseSourceRetrievePayload, type SourceRetrievePayload } from './retrieval/retrieve-payload';
+export {
+  issueTemporaryDownloadToken,
+  verifyTemporaryDownloadToken,
+} from './retrieval/signed-links';
+export {
+  TEMPORARY_DOCUMENT_TTL_MS,
+  buildTemporaryDocumentObjectKey,
+  temporaryDocumentExpiresAt,
+} from './retrieval/temporary-document';

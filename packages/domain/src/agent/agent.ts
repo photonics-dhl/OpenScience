@@ -16,13 +16,13 @@ import { parseWorkspaceGuidePayload } from './workspace-guide-contract';
 export const AGENT_TASK_QUEUE = 'agent:queue';
 export const AI_CREDIT_RESOURCE = 'ai_credit'; // §2.4-7 配额骨架（P1A-7）
 export const AGENT_TASK_KINDS = [
-  'demo.echo', 'sdf.extract', 'review.analyze', 'visualization.plan', 'workspace.guide', 'search.index',
+  'demo.echo', 'sdf.extract', 'review.analyze', 'visualization.plan', 'workspace.guide', 'search.index', 'source.retrieve',
 ] as const;
 export const PUBLIC_AGENT_TASK_KINDS = [
-  'demo.echo', 'sdf.extract', 'review.analyze', 'visualization.plan',
+  'demo.echo', 'sdf.extract', 'review.analyze', 'visualization.plan', 'source.retrieve',
 ] as const;
 export const PUBLIC_AGENT_SESSION_KINDS = [
-  'extract', 'review', 'visualization', 'publish', 'ingestion', 'workspace.guide',
+  'extract', 'review', 'visualization', 'publish', 'ingestion', 'workspace.guide', 'retrieval',
 ] as const;
 
 export type AgentTaskStatus = 'pending' | 'running' | 'succeeded' | 'failed';
@@ -365,7 +365,7 @@ export async function dispatchAgentTask(deps: AgentDeps, taskId: string): Promis
 /** DB task rows with dispatchedAt=null are the durable queue outbox. */
 export async function recoverUndispatchedAgentTasks(deps: AgentDeps, limit = 50): Promise<number> {
   const tasks = await deps.prisma.agentTask.findMany({
-    where: { kind: { in: ['workspace.guide', 'sdf.extract', 'search.index'] }, status: 'pending', dispatchedAt: null },
+    where: { kind: { in: ['workspace.guide', 'sdf.extract', 'search.index', 'source.retrieve'] }, status: 'pending', dispatchedAt: null },
     orderBy: { createdAt: 'asc' },
     take: limit,
   });

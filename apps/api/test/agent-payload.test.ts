@@ -80,4 +80,18 @@ describe('agent task payload boundary', () => {
       payload: {},
     })).toThrow();
   });
+
+  it('accepts only the bounded public source retrieval contract', () => {
+    expect(agentSessionBodySchema.parse({ kind: 'retrieval' })).toEqual({ kind: 'retrieval' });
+    expect(agentTaskBodySchema.parse({
+      sessionId: validGuide.sessionId,
+      kind: 'source.retrieve',
+      payload: { query: 'ultrafast science', providers: ['semantic_scholar', 'tavily'], limit: 5 },
+    })).toMatchObject({ kind: 'source.retrieve' });
+    expect(() => agentTaskBodySchema.parse({
+      sessionId: validGuide.sessionId,
+      kind: 'source.retrieve',
+      payload: { query: 'x', includeFullText: true },
+    })).toThrow();
+  });
 });
