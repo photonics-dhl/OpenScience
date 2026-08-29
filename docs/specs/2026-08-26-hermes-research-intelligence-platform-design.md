@@ -476,7 +476,7 @@ export type ExtractionResult =
 
 ### 16.1 Current implementation checkpoint
 
-- Taskmaster `hermes-research-intelligence` 已完成 Task 1–6（6/12）；Task 4 CPU parser cascade 已生产部署，Tasks 7、10 dependency-ready。
+- Taskmaster `hermes-research-intelligence` 的 Tasks 1–6 基线均已部署；2026-08-29 Task 4 因 §7.2.1 acceptance debt closeout 暂时重新进入 in-progress，当前完成计数为 5/12。完成新的生产验收后才恢复 Tasks 7、10 dependency-ready。
 - Task 1 已交付能力台账机器门禁、13-case 自著权 corpus 与 current-parser baseline；没有安装新 parser、OCR、模型或 MCP。
 - Task 2 已交付 Claim/Evidence/locator 严格合同、发布事务门禁、核心 migration 28、独立 `packages/search`/`infra/search` 与 `SEARCH_DATABASE_URL` 边界，并随 ECS release `e0828a6` 部署。
 - Task 3 已在 application/immutable release `ef043ebb8e51332effe75a5639cb207aec7bfc47` 部署：严格 provider-neutral DocumentSourceMap、跨 artifact/hash/versioned map 的 locator 拒绝与 worker 运行时合同；其实现树父提交 `c47b3f182ba857897c3c33ee21c250f6b4db3f3c` 已审阅，`ef043eb` 是同树的空 CI 标记。回滚为 `e0828a6118c92c87b7869493413441bba0e76a95`。

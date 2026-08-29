@@ -1,7 +1,7 @@
 # OpenScience (XGS) 项目文件索引
 
 > 维护规则：创建/修改/移动文件后必须更新本索引。创建新文件前先查本表防重复。
-> **CURRENT source/deployment anchor（2026-08-29）：** branch `codex/hermes-wanko-live2d`；implementation/production application/release `c5817121bddbd065c5ecb38811da8e707e6e5d17`；rollback `e2c0eaf3b13a220a8bc2cd49b2c1dfe40a6fd61f`。Exact CI `33221760698`、ECS 16-case、formal contract、production startup/migrations/BGE/public/journal 全绿；Taskmaster 6/12。Docs-only HEAD 不改变 production 身份。
+> **CURRENT source/deployment anchor（2026-08-29）：** branch `codex/hermes-wanko-live2d`；implementation/production application/release `c5817121bddbd065c5ecb38811da8e707e6e5d17`；rollback `e2c0eaf3b13a220a8bc2cd49b2c1dfe40a6fd61f`。Exact CI `33221760698`、ECS 10/6 baseline、formal contract、production startup/migrations/BGE/public/journal 全绿；Taskmaster 当前 5/12，Task 4 parser 14/2 follow-up in-progress。Docs/plan HEAD 不改变 production 身份。
 
 ## 根目录
 | 路径 | 用途 | 状态 |
@@ -103,7 +103,7 @@
 | Rejected local Hermes Blender prototype (not repository content) | 少年星图龙只保留 `hermes-constellation-dragon/apps/web/assets/hermes/HermesConstellationDragon.blend`（SHA-256 `9CF4694D…DDFA5`）；`.blend1`、渲染/contact sheet、manifest、旧脚本/合同已清理 | **用户视觉 NO-GO / HISTORICAL SOURCE ONLY**；二进制进回收站，禁止误读为候选资产 |
 | `.github/workflows/ci.yml` | PR/main 全仓 build/typecheck/lint/test 与生产视觉门禁；在任何会启动 Chromium 的 unit/visual gate 前安装固定 lockfile 对应浏览器，失败前无 evidence 目录时 artifact 上传只告警 | CURRENT CI gate；禁止用本地浏览器缓存替代 clean Ubuntu runner |
 | `.cursor/` | Cursor 编辑器配置 | 工具自管 |
-| `.taskmaster/` | task-master 任务状态；`optical-editorial-v3` 15/15 done；CURRENT `hermes-research-intelligence` 为 6/12 done，Tasks 7、10 dependency-ready | 工具自管；Tasks 1–6 已关闭，进度 50% |
+| `.taskmaster/` | task-master 任务状态；`optical-editorial-v3` 15/15 done；CURRENT `hermes-research-intelligence` 为 5/12，Task 4 parser 14/2 follow-up in-progress | 工具自管；Tasks 1–3、5–6 done，Task 4 完成新生产验收后再关闭 |
 | `.memory/memory.jsonl` | Memory MCP 知识图谱存储（MEMORY_FILE_PATH 指定） | 工具自管，随 git 备份 |
 | `src/` | 未来代码 | 空 |
 
@@ -134,10 +134,11 @@
 | `docs/specs/2026-08-17-hermes-workspace-companion-motion-design.md` | Hermes Workspace Companion 已实施 guide/anchor/travel/dock/diff foundation 与历史 OGL visual contract | **IMPLEMENTED FOUNDATION / VISUAL SUPERSEDED**；CURRENT renderer 见 2026-08-19 Wanko spec |
 | `docs/specs/2026-08-19-hermes-wanko-live2d-design.md` | Wanko renderer、`360/200px`、Research Folio；§13.3–13.7 carried sheet、speech、skill reject、action-first 与联合稳定器；§13.8 detached/protected physical fallback | **CURRENT Hermes visual/guide design / §13.8 deployed**；application/release/rollback `9aef5c4` / `8395b4d` / `bf54eaa`，public no-write `10/10`，user review pending |
 | `docs/specs/2026-08-24-research-folio-product-system-design.md` | 登录到公开验证的全部真实非 Landing 产品视觉与信息架构；暖纸阅读、graphite 证据工具、18 表面、预留 Hermes 研究页边与无覆盖合同 | **CURRENT non-Landing product UI spec / IMPLEMENTED**；Landing unchanged |
-| `docs/specs/2026-08-26-hermes-research-intelligence-platform-design.md` | Claim-first RO、可定位 Evidence、身份静默路由、CPU parser/OCR、BGE-M3 hybrid retrieval、数据库分离、富媒体与 Hermes 受控权限的统一产品/技术合同；§7.2.1 固定 parser debt closeout 为 14/2/0/0、正式 table locator 与 v3 原因码报告 | **CURRENT / TASKS 1–6 DEPLOYED / PARSER FOLLOW-UP DESIGNED**；生产 application/release 仍为 `c581712`，Taskmaster 6/12 |
+| `docs/specs/2026-08-26-hermes-research-intelligence-platform-design.md` | Claim-first RO、可定位 Evidence、身份静默路由、CPU parser/OCR、BGE-M3 hybrid retrieval、数据库分离、富媒体与 Hermes 受控权限的统一产品/技术合同；§7.2.1 固定 parser debt closeout 为 14/2/0/0、正式 table locator 与 v3 原因码报告 | **CURRENT / TASKS 1–6 BASELINE DEPLOYED / PARSER FOLLOW-UP DESIGNED**；生产 application/release 仍为 `c581712`，Taskmaster 当前 5/12 |
 | `docs/plans/2026-08-26-hermes-research-intelligence-foundation-plan.md` | Taskmaster Task 1 的可执行 TDD 计划：能力台账门禁、自有 corpus、现状 parser 基准、零污染输出与全仓验收；后续三计划按实测结果展开 | **COMPLETED / TASKMASTER TASK 1 DONE**；能力候选尚未安装 |
 | `docs/plans/2026-08-26-hermes-research-intelligence-core-model-plan.md` | Taskmaster Task 2 的可执行 TDD/迁移/部署计划：Claim/Evidence/locator 合同、核心迁移 28、独立搜索数据库与 ECS-only 验收 | **COMPLETED / TASKMASTER TASK 2 DONE / ECS DEPLOYED `e0828a6`** |
 | `docs/plans/2026-08-26-hermes-document-source-map-contract-plan.md` | Taskmaster Task 3 的可执行 TDD 计划：严格 DocumentSourceMap、locator 构造/复验、Worker parser boundary、image-only false-ready 与 ECS-only 验收 | **COMPLETED / ECS DEPLOYED `ef043eb`**；final docs CI `32997554922` GREEN |
+| `docs/plans/2026-08-29-hermes-parser-acceptance-debt-closeout-plan.md` | Taskmaster Task 4 follow-up 的 TDD 计划：共享 MIME、受控 Notebook/Python、正式 table locator、schema-v3 14/2 acceptance、ECS immutable deploy 与卫生证据 | **CURRENT PARSER FOLLOW-UP PLAN**；生产仍为 `c581712`，未以设计/本地门禁替代服务器验收 |
 | `docs/plans/2026-08-27-hermes-ai-gateway-llm-ocr-routing-plan.md` | Taskmaster Task 5 的可执行 TDD 计划：provider-neutral OCR、MiniMax Coding Plan VLM adapter、逐页 fallback、kill switch、hash/cost/latency 审计与 ECS-only 验收 | **COMPLETED / ECS DEPLOYED `f965966`**；默认不启用付费 vision route |
 | `docs/plans/2026-08-27-hermes-cpu-parser-cascade-plan.md` / `.superpowers/sdd/2026-08-27-hermes-cpu-parser-cascade-plan/progress.md` | Taskmaster Task 4 的 ECS-only 实施计划与 SDD 唯一执行台账：结构化 sidecar v2、确定性 source map、候选 bake-off、坐标 OCR、受控 LLM candidate、真实 corpus/资源/部署门禁 | **COMPLETED / DEPLOYED `c581712`**；rollback `e2c0eaf`，MiniMax Vision disabled |
 | `docs/plans/2026-08-27-hermes-semantic-retrieval-bge-m3-plan.md` | Taskmaster Task 6 的 ECS-first TDD 实施计划：BGE-M3 source-lock/CPU bake-off、独立 search migration、locator-safe chunk、BM25+dense RRF、降级、独立备份恢复与生产验收 | **COMPLETED / DEPLOYED `8163f8b`**；Taskmaster Task 6 done，rollback `f9659668` |

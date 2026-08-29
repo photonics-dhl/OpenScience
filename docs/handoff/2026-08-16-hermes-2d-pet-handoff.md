@@ -5,8 +5,8 @@
 ## Goal and state
 
 - 目标：以 3–7 个 Claim 为公开 RO 中心，提供可定位 Evidence、条件/限制、身份静默路由、CPU 文档解析、混合检索和可版本化富媒体。
-- Taskmaster `hermes-research-intelligence` 为 6/12：Tasks 1–6 已完成；Task 4 CPU parser cascade 已生产部署，Tasks 7、10 dependency-ready。
-- Task 4 不再是阻断项；后续优先实现 Task 7 身份/兴趣静默路由，再推进 Task 10 外部检索与临时文档生命周期。
+- Taskmaster `hermes-research-intelligence` 的 Task 4 基线已生产部署；2026-08-29 按用户要求重新打开 acceptance debt closeout，目标为 `14 succeeded / 2 intentional needs_review / 0 failed / 0 false-ready`。
+- 当前优先关闭 Notebook/Python/CSV/XLSX 四个 actionable gap 和 schema-v3 原因码/正式 table locator；完成服务器部署后再恢复 Task 7、10 的 next-ready 顺序。
 
 ## Version tuple
 
@@ -41,9 +41,9 @@
 
 ## Next action
 
-1. 完成本轮 docs-only 提交并取得 exact-SHA CI；生产继续保持 `c581712…`。
-2. 进入 Task 7：注册身份采集、兴趣画像与无显式模式开关的 Hermes 静默路由。
-3. 并行设计 Task 10 的 Semantic Scholar/Tavily/ScanSci 适配、72h 临时 PDF 和 10min 签名链接；生产启用仍逐项过能力台账门禁。
+1. 执行 `docs/plans/2026-08-29-hermes-parser-acceptance-debt-closeout-plan.md`，生产在完整验收前继续保持 `c581712…`。
+2. 只删除经用户明确批准的服务器精确白名单；只读审计的保守候选为 eval 15G、pnpm store 5.7G、build cache 2.317G、dnf cache 61M 和 dangling image 最多 1.11G。
+3. Parser follow-up 部署后恢复 Task 7 身份/兴趣静默路由，再推进 Task 10 外部检索与临时文档生命周期。
 
 ## Read first
 
