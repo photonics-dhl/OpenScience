@@ -1367,3 +1367,38 @@ node infra/scripts/production-release-retention.mjs resume \
   --expected-rollback <rollback-sha> \
   --lock-fd 9
 ```
+
+### 5.43 Task 8 release and historical evaluation hygiene (2026-08-29)
+
+Application/release `4c73469fe24abe685054f1d917d452adc5371d35` was
+deployed with rollback `cf68bfa7baba9610dcd010fed0fcf5fd0deeab2f` after
+exact CI `33257516418` / job `99113706374`. Full server build, core/search
+`30/30` and `2/2`, SHA-tagged Parser/Worker/Embedding images, BGE-M3 real CPU
+vector, parser acceptance, container health, Nginx, public/loopback identity and
+retention all passed. A disposable real RO journey proved SourceMap-backed
+Claim/Evidence creation, unverified blocking, locator-tamper rejection, human
+verification, review, publication, public page 200 and zero residual test users.
+
+The production object store returns correct object size but may omit custom
+SHA-256 metadata on HEAD. Publication verification therefore uses the metadata
+when present and otherwise streams the immutable original through an exact-size
+SHA-256 check, caching repeated checks for the same object during one review.
+
+The authorized hygiene operation froze 40 direct-child evaluation working
+directories under `/opt/openscience-evals`, proved root ownership, canonical
+paths, no symlinks, no mounts and no running-container references, then acquired
+the production deployment lock. Before exact removal it archived three
+LiteParse and three BGE reports plus a cleanup receipt under root-owned,
+read-only `/opt/openscience-acceptance/capability-evaluations`; all seven files
+pass `SHA256SUMS`. Evaluation storage changed from `15,405,977,600` to `28,672`
+bytes, while root use changed from about `48G/34%` to `36G/26%` with `106G`
+available. No release root, image, volume, backup, product data or Git history
+was removed, and no Docker prune was used.
+
+On Windows, run `cloud-sync.mjs` from explicit Git Bash with the release/config
+environment exported inside that shell. A PowerShell invocation that lets the
+script discover the wrong Bash can report a launcher exit without materializing
+the candidate marker; treat the marker and source-manifest verification as the
+success contract, remove only the exact partial candidate, then retry through
+`C:/Program Files/Git/bin/bash.exe`. This is a shell-selection failure, not an
+SSH-key failure.

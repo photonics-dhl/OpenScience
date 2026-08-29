@@ -4,6 +4,9 @@
 > `docs/specs/2026-08-26-hermes-research-intelligence-platform-design.md` §5,
 > §9 and §14. This work extends the existing RO/version/review/publication
 > services; it does not create a parallel Research Object stack.
+>
+> **Status:** COMPLETE / PRODUCTION ACCEPTED on 2026-08-29 in release
+> `4c73469fe24abe685054f1d917d452adc5371d35`; rollback `cf68bfa7baba9610dcd010fed0fcf5fd0deeab2f`.
 
 ## Product outcome
 
@@ -134,3 +137,20 @@ audit rows. Remove only the journey's exact test records and stored objects.
 Do not substitute local Docker or repeated synthetic loops for this production
 journey; Vision remains outside Task 8 and is tested later through the real
 admin-only product path.
+
+## Completion evidence
+
+- Exact GitHub CI `33257516418` / job `99113706374` passed all build,
+  typecheck, lint, unit, product visual and Hermes gates.
+- ECS parser acceptance passed for the exact release. The disposable production
+  journey parsed five source blocks, created three Claims and three Evidence
+  records, proved unverified publication blocking and locator-tamper rejection,
+  then passed review, published and returned a 200 public page. Exact cleanup
+  left zero disposable users.
+- Production SeaweedFS omits custom SHA metadata on HEAD. The final fix streams
+  and hashes the immutable original when metadata is absent, enforces exact byte
+  length and caches repeated checks per object; metadata-present behavior is
+  unchanged.
+- Public visibility was pre-seeded only for this disposable fixture. Task 9 must
+  connect the existing explicit visibility-approval boundary to the public
+  publishing experience; generic PATCH is not acceptance evidence for that flow.

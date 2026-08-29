@@ -4,10 +4,17 @@
 
 ## Current version tuple
 
-- Worktree branch / HEAD: `codex/hermes-wanko-live2d` / `2add415853570c4cd3cacbca13dfeb0f1e3825d4`；当前保留尚未提交的 Task 8 工作树改动。
-- Production application source / immutable release: `5e5ae36a08ae314d0c35ee2b976e306aec73d219`；docs HEAD、本地 main 与生产身份不得混写。
-- Production immutable release: `5e5ae36a08ae314d0c35ee2b976e306aec73d219`；rollback `6cabe422a8459dfa358786c9f5aae84558949f6b`；core/search migrations `30/30` / `2/2`。
-- Taskmaster `hermes-research-intelligence` 为 7/12：Tasks 1–7 done；Task 8 为 `in-progress`、未提交/未部署，Task 10 仍 dependency-ready。
+- Worktree branch / application-code HEAD: `codex/hermes-wanko-live2d` / `4c73469fe24abe685054f1d917d452adc5371d35`；其后仅有 Taskmaster/文档收口。
+- Production application source / immutable release: `4c73469fe24abe685054f1d917d452adc5371d35`；docs HEAD、本地 main 与生产身份不得混写。
+- Production rollback: `cf68bfa7baba9610dcd010fed0fcf5fd0deeab2f`；core/search migrations `30/30` / `2/2`。
+- Taskmaster `hermes-research-intelligence` 为 8/12：Tasks 1–8 done；下一产品任务为 Task 9 Claim-first 公开 RO，Task 10 仍 dependency-ready。
+
+## 2026-08-29 — Task 8 production accepted and evaluation debt removed
+
+- Task 8 Claim/Evidence API、可信 SourceMap、复验/审计、发布双重阻断与 narrative snapshot 已随 `4c73469…` 部署；SeaweedFS HEAD 缺少自定义 SHA metadata 时改为流式重算原件 SHA-256，并按对象去重读取。Exact CI `33257516418` / job `99113706374` 全绿。
+- ECS 正式 parser acceptance 通过。一次性真实 RO 旅程得到 5 个 source blocks、3 Claims、3 Evidence；未核验发布正确阻断，篡改 locator 返回冲突，核验后 review passed、publish 成功、公开页 200，测试用户/对象/存储引用精确清零。公开性由一次性 fixture 预置，不冒充可见性扩大审批验收。
+- Canonical deploy 全量 build、core/search `30/30`/`2/2`、BGE-M3 CPU 实向量、Parser/API/Web/Worker、Nginx、public/loopback release identity 与 retention 全绿；active `4c73469…`，rollback `cf68bfa7…`。
+- 用户批准的精确卫生操作归档 3 份 LiteParse 与 3 份 BGE 报告到 `/opt/openscience-acceptance/capability-evaluations`，7/7 SHA-256 通过；随后在部署锁内删除 40 个无挂载、无容器引用的历史评测工作目录。评测区 `15,405,977,600 → 28,672` bytes，根盘 `48G/34% → 36G/26%`，可用 `106G`；未执行 broad prune。
 
 ## 2026-08-29 — Task 8 review blockers closed locally
 
