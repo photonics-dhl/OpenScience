@@ -1,6 +1,7 @@
 import { extname, join } from 'node:path';
 import { spawn } from 'node:child_process';
 import { createRequire } from 'node:module';
+import { VIRTUAL_LINE_HEIGHT, VIRTUAL_PAGE_WIDTH } from '@openscience/domain';
 import {
   PARSER_JOB_RESPONSE_MAX_BYTES,
   parseParserStageResult,
@@ -89,11 +90,10 @@ const MAX_XLSX_BLOCKS = 10_000;
 const MAX_XML_ENTITIES = 100_000;
 const MAX_XLSX_COLUMN = 16_384;
 const MAX_XLSX_ROW = 1_048_576;
-const VIRTUAL_PAGE_WIDTH = 1000;
-const VIRTUAL_LINE_HEIGHT = 24;
 const XLSX_TRANSITION_PARSER_METADATA = Object.freeze({ name: 'v1-text-transition', version: '2.0.0' });
-const XLSX_FORMULA_START_TAG = /<(?:[^\s/>:]+:)?f(?=[\s/>])/iu;
-const XLSX_MERGE_START_TAG = /<(?:[^\s/>:]+:)?mergeCells?(?=[\s/>])/iu;
+const MAX_XLSX_CELL_TEXT_CHARS = 32 * 1024;
+const MAX_XLSX_MATERIALIZED_TEXT_CHARS = 4 * 1024 * 1024;
+const MAX_XLSX_MATERIALIZED_OUTPUT_BYTES = PARSER_JOB_RESPONSE_MAX_BYTES - 1024;
 
 interface ZipEntry {
   fileName: string;
@@ -220,76 +220,247 @@ function readBoundedXlsxEntries(content: Buffer): Promise<Map<string, Buffer>> {
   });
 }
 
+interface XmlNode {
+  name: string;
+  attributes: ReadonlyMap<string, string>;
+  children: XmlNode[];
+  text: string;
+}
+
+const XML_NAME = /^(?:[A-Za-z_][\w.-]*:)?[A-Za-z_][\w.-]*$/u;
+const WORKSHEET_RELATIONSHIP_TYPE = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet';
+
 function decodeXmlText(text: string): string {
-  return text.replace(/&(amp|lt|gt|quot|apos|#\d+|#x[\da-f]+);/giu, (entity, code: string) => {
-    if (code === 'amp') return '&';
-    if (code === 'lt') return '<';
-    if (code === 'gt') return '>';
-    if (code === 'quot') return '"';
-    if (code === 'apos') return "'";
-    const value = code[1]?.toLowerCase() === 'x'
-      ? Number.parseInt(code.slice(2), 16)
-      : Number.parseInt(code.slice(1), 10);
-    return Number.isInteger(value) && value >= 0 && value <= 0x10ffff ? String.fromCodePoint(value) : entity;
-  });
+  let decoded = '';
+  for (let cursor = 0; cursor < text.length;) {
+    const ampersand = text.indexOf('&', cursor);
+    if (ampersand === -1) return decoded + text.slice(cursor);
+    decoded += text.slice(cursor, ampersand);
+    const semicolon = text.indexOf(';', ampersand + 1);
+    if (semicolon === -1 || semicolon - ampersand > 41) throw new Error('malformed XML entity');
+    const code = text.slice(ampersand + 1, semicolon);
+    if (code === 'amp') decoded += '&';
+    else if (code === 'lt') decoded += '<';
+    else if (code === 'gt') decoded += '>';
+    else if (code === 'quot') decoded += '"';
+    else if (code === 'apos') decoded += "'";
+    else {
+      const numeric = /^#x([\da-f]+)$/iu.exec(code) ?? /^#(\d+)$/u.exec(code);
+      if (!numeric) throw new Error('unsupported XML entity');
+      const value = Number.parseInt(numeric[1]!, code[1]!.toLowerCase() === 'x' ? 16 : 10);
+      if (!Number.isInteger(value) || value > 0x10ffff || (value >= 0xd800 && value <= 0xdfff)
+        || (value < 0x20 && value !== 0x9 && value !== 0xa && value !== 0xd)) {
+        throw new Error('invalid XML entity');
+      }
+      decoded += String.fromCodePoint(value);
+    }
+    cursor = semicolon + 1;
+  }
+  return decoded;
 }
 
 function boundedXml(content: Buffer): string {
   const xml = decodeUtf8(content);
-  if (/<!DOCTYPE|<!ENTITY/iu.test(xml)) throw new XlsxParsingLimitError();
+  if (/<!DOCTYPE|<!ENTITY|<!\[CDATA\[/iu.test(xml)) throw new XlsxParsingLimitError();
   let entityCount = 0;
   for (let start = xml.indexOf('&'); start !== -1; start = xml.indexOf('&', start + 1)) {
     const end = xml.indexOf(';', start + 1);
     if (end === -1 || end - start > 41) throw new XlsxParsingLimitError();
-    const entity = xml.slice(start, end + 1);
     entityCount += 1;
-    if (entityCount > MAX_XML_ENTITIES
-      || !/^&(amp|lt|gt|quot|apos|#\d+|#x[\da-f]+);$/iu.test(entity)) {
-      throw new XlsxParsingLimitError();
-    }
+    if (entityCount > MAX_XML_ENTITIES) throw new XlsxParsingLimitError();
     start = end;
   }
   return xml;
 }
 
-function attribute(attributes: string, name: string): string | undefined {
-  const escaped = name.replace(/[.*+?^$()|[\]\\{}]/gu, '\\$&');
-  const match = new RegExp("(?:^|\\s)" + escaped + "=(?:\"([^\"]*)\"|'([^']*)')", 'u').exec(attributes);
-  const value = match?.[1] ?? match?.[2];
-  return value === undefined ? undefined : decodeXmlText(value);
+function xmlLocalName(name: string): string {
+  if (!XML_NAME.test(name)) throw new Error('malformed XML name');
+  return name.slice(name.lastIndexOf(':') + 1);
 }
 
-function textElements(xml: string): string {
-  let result = '';
-  for (const match of xml.matchAll(/<t(?:\s[^>]*)?>([\s\S]*?)<\/t>/gu)) result += decodeXmlText(match[1]!);
-  return result;
+function xmlTagEnd(xml: string, start: number): number {
+  let quote = '';
+  for (let index = start; index < xml.length; index += 1) {
+    const character = xml[index]!;
+    if (quote) {
+      if (character === quote) quote = '';
+    } else if (character === '"' || character === "'") quote = character;
+    else if (character === '>') return index;
+  }
+  throw new Error('unterminated XML tag');
 }
 
-function sharedStrings(xml: string | undefined): string[] {
-  if (!xml) return [];
+function parseXmlStartTag(source: string): { name: string; attributes: Map<string, string>; selfClosing: boolean } {
+  const body = source.trim();
+  const selfClosing = body.endsWith('/');
+  const content = selfClosing ? body.slice(0, -1).trimEnd() : body;
+  const nameMatch = /^([^\s/>]+)/u.exec(content);
+  if (!nameMatch || !XML_NAME.test(nameMatch[1]!)) throw new Error('malformed XML opening tag');
+  const name = nameMatch[1]!;
+  const attributes = new Map<string, string>();
+  let cursor = name.length;
+  while (cursor < content.length) {
+    while (/\s/u.test(content[cursor]!)) cursor += 1;
+    if (cursor === content.length) break;
+    const attributeMatch = /^([^\s=/>]+)\s*=\s*/u.exec(content.slice(cursor));
+    if (!attributeMatch || !XML_NAME.test(attributeMatch[1]!)) throw new Error('malformed XML attribute');
+    const attributeName = attributeMatch[1]!;
+    cursor += attributeMatch[0].length;
+    const quote = content[cursor];
+    if (quote !== '"' && quote !== "'") throw new Error('XML attribute must be quoted');
+    const end = content.indexOf(quote, cursor + 1);
+    if (end === -1) throw new Error('unterminated XML attribute');
+    if (attributes.has(attributeName)) throw new Error('duplicate XML attribute');
+    attributes.set(attributeName, decodeXmlText(content.slice(cursor + 1, end)));
+    cursor = end + 1;
+  }
+  return { name, attributes, selfClosing };
+}
+
+function parseStrictXml(content: Buffer): XmlNode {
+  const xml = boundedXml(content);
+  const stack: XmlNode[] = [];
+  let root: XmlNode | undefined;
+  let cursor = 0;
+  let nodeCount = 0;
+  const appendText = (text: string) => {
+    if (!text) return;
+    if (stack.length === 0) {
+      if (text.trim()) throw new Error('XML content outside root element');
+      return;
+    }
+    stack[stack.length - 1]!.text += decodeXmlText(text);
+  };
+  while (cursor < xml.length) {
+    const opening = xml.indexOf('<', cursor);
+    if (opening === -1) {
+      appendText(xml.slice(cursor));
+      break;
+    }
+    appendText(xml.slice(cursor, opening));
+    if (xml.startsWith('<?', opening)) {
+      const close = xml.indexOf('?>', opening + 2);
+      if (close === -1 || stack.length > 0 || root) throw new Error('invalid XML processing instruction');
+      cursor = close + 2;
+      continue;
+    }
+    if (xml.startsWith('<!', opening)) throw new Error('unsupported XML declaration');
+    const close = xmlTagEnd(xml, opening + 1);
+    const tag = xml.slice(opening + 1, close);
+    if (tag.startsWith('/')) {
+      const name = tag.slice(1).trim();
+      if (!XML_NAME.test(name) || stack.length === 0 || stack[stack.length - 1]!.name !== name) {
+        throw new Error('mismatched XML closing tag');
+      }
+      stack.pop();
+    } else {
+      if (root && stack.length === 0) throw new Error('multiple XML root elements');
+      const parsed = parseXmlStartTag(tag);
+      const node: XmlNode = { name: parsed.name, attributes: parsed.attributes, children: [], text: '' };
+      nodeCount += 1;
+      if (nodeCount > 200_000) throw new XlsxParsingLimitError();
+      if (stack.length === 0) root = node;
+      else stack[stack.length - 1]!.children.push(node);
+      if (!parsed.selfClosing) stack.push(node);
+    }
+    cursor = close + 1;
+  }
+  if (!root || stack.length) throw new Error('malformed XML document');
+  return root;
+}
+
+function assertAttributes(node: XmlNode, allowed: readonly string[]): void {
+  const permitted = new Set(allowed);
+  for (const name of node.attributes.keys()) {
+    if (name === 'xmlns' || name.startsWith('xmlns:')) continue;
+    if (!permitted.has(name)) throw new Error(`unsupported XML attribute: ${name}`);
+  }
+}
+
+function assertOnlyChildren(node: XmlNode, allowed: readonly string[]): void {
+  const permitted = new Set(allowed);
+  for (const child of node.children) {
+    if (!permitted.has(xmlLocalName(child.name))) throw new Error(`unsupported ${xmlLocalName(node.name)} child`);
+  }
+  if (node.text.trim()) throw new Error(`unexpected text in ${xmlLocalName(node.name)}`);
+}
+
+function exactlyOneChild(node: XmlNode, localName: string): XmlNode {
+  const matching = node.children.filter((child) => xmlLocalName(child.name) === localName);
+  if (matching.length !== 1 || node.children.length !== 1 || node.text.trim()) {
+    throw new Error(`expected one ${localName} element`);
+  }
+  return matching[0]!;
+}
+
+function textOnly(node: XmlNode): string {
+  if (node.children.length) throw new Error(`unsupported nested XML in ${xmlLocalName(node.name)}`);
+  return node.text;
+}
+
+function sharedStrings(root: XmlNode | undefined): string[] {
+  if (!root) return [];
+  if (xmlLocalName(root.name) !== 'sst') throw new Error('invalid shared strings root');
+  assertAttributes(root, ['count', 'uniqueCount']);
+  assertOnlyChildren(root, ['si']);
   const strings: string[] = [];
-  for (const match of xml.matchAll(/<si(?:\s[^>]*)?>([\s\S]*?)<\/si>/gu)) {
-    strings.push(textElements(match[1]!));
+  for (const item of root.children) {
+    assertAttributes(item, []);
+    assertOnlyChildren(item, ['t', 'r']);
+    let value = '';
+    for (const child of item.children) {
+      if (xmlLocalName(child.name) === 't') {
+        assertAttributes(child, ['xml:space']);
+        value += textOnly(child);
+      } else {
+        assertAttributes(child, []);
+        assertOnlyChildren(child, ['t']);
+        for (const text of child.children) {
+          assertAttributes(text, ['xml:space']);
+          value += textOnly(text);
+        }
+      }
+    }
+    if (value.length > MAX_XLSX_CELL_TEXT_CHARS) throw new XlsxParsingLimitError();
+    strings.push(value);
     if (strings.length > MAX_SHARED_STRINGS) throw new XlsxParsingLimitError();
   }
   return strings;
 }
 
-function workbookSheets(workbookXml: string, relationshipsXml: string): Array<{ name: string; path: string }> {
+function workbookSheets(workbook: XmlNode, relationshipsDocument: XmlNode): Array<{ name: string; path: string }> {
+  if (xmlLocalName(relationshipsDocument.name) !== 'Relationships') throw new Error('invalid relationships root');
+  assertAttributes(relationshipsDocument, []);
+  assertOnlyChildren(relationshipsDocument, ['Relationship']);
   const relationships = new Map<string, string>();
-  for (const match of relationshipsXml.matchAll(/<Relationship\b([^>]*)\/?\s*>/gu)) {
-    const id = attribute(match[1]!, 'Id');
-    const target = attribute(match[1]!, 'Target');
-    if (!id || !target || target.includes('..') || target.includes('\\')) continue;
-    const path = target.startsWith('/') ? target.slice(1) : 'xl/' + target.replace(/^\.\//u, '');
-    if (/^xl\/worksheets\/[^/]+\.xml$/u.test(path)) relationships.set(id, path);
+  for (const relationship of relationshipsDocument.children) {
+    assertAttributes(relationship, ['Id', 'Target', 'Type', 'TargetMode']);
+    if (relationship.children.length || relationship.text.trim()) throw new Error('relationship must be empty');
+    const id = relationship.attributes.get('Id');
+    const target = relationship.attributes.get('Target');
+    const type = relationship.attributes.get('Type');
+    if (!id || !target || relationship.attributes.has('TargetMode') || relationships.has(id)) {
+      throw new Error('malformed workbook relationship');
+    }
+    if (type !== undefined && type !== WORKSHEET_RELATIONSHIP_TYPE) throw new Error('unsupported workbook relationship');
+    if (!/^worksheets\/[^/\\]+\.xml$/u.test(target)) throw new Error('malformed workbook relationship target');
+    relationships.set(id, `xl/${target}`);
   }
+  if (xmlLocalName(workbook.name) !== 'workbook') throw new Error('invalid workbook root');
+  assertAttributes(workbook, []);
+  const sheetsElement = exactlyOneChild(workbook, 'sheets');
+  assertAttributes(sheetsElement, []);
+  assertOnlyChildren(sheetsElement, ['sheet']);
   const sheets: Array<{ name: string; path: string }> = [];
-  for (const match of workbookXml.matchAll(/<sheet\b([^>]*)\/?\s*>/gu)) {
-    const name = attribute(match[1]!, 'name');
-    const relationshipId = attribute(match[1]!, 'r:id');
+  const names = new Set<string>();
+  for (const sheet of sheetsElement.children) {
+    assertAttributes(sheet, ['name', 'sheetId', 'r:id']);
+    if (sheet.children.length || sheet.text.trim()) throw new Error('sheet must be empty');
+    const name = sheet.attributes.get('name');
+    const relationshipId = sheet.attributes.get('r:id');
     const path = relationshipId ? relationships.get(relationshipId) : undefined;
-    if (!name || !path) throw new Error('malformed workbook relationship');
+    if (!name || !relationshipId || !path || names.has(name)) throw new Error('malformed workbook relationship');
+    names.add(name);
     sheets.push({ name, path });
     if (sheets.length > 10_000) throw new XlsxParsingLimitError();
   }
@@ -309,33 +480,70 @@ function parseCellReference(reference: string): { row: number; column: number } 
   return { row, column };
 }
 
-function worksheetCells(xml: string, strings: readonly string[]): Array<{ row: number; column: number; text: string }> {
-  if (XLSX_FORMULA_START_TAG.test(xml)) throw new Error('XLSX formulas are unsupported');
-  if (XLSX_MERGE_START_TAG.test(xml)) throw new Error('merged XLSX cells are unsupported');
+interface XlsxMaterializationBudget {
+  totalCells: number;
+  textChars: number;
+  outputBytes: number;
+}
+
+function addMaterializedText(budget: XlsxMaterializationBudget, text: string): void {
+  if (text.length > MAX_XLSX_CELL_TEXT_CHARS) throw new XlsxParsingLimitError();
+  budget.textChars += text.length;
+  if (budget.textChars > MAX_XLSX_MATERIALIZED_TEXT_CHARS) throw new XlsxParsingLimitError();
+  if (text.trim()) {
+    budget.outputBytes += Buffer.byteLength(text, 'utf8') + 320;
+    if (budget.outputBytes > MAX_XLSX_MATERIALIZED_OUTPUT_BYTES) throw new XlsxParsingLimitError();
+  }
+}
+
+function worksheetCells(worksheet: XmlNode, strings: readonly string[], budget: XlsxMaterializationBudget): Array<{ row: number; column: number; text: string }> {
+  if (xmlLocalName(worksheet.name) !== 'worksheet') throw new Error('invalid worksheet root');
+  assertAttributes(worksheet, []);
+  const sheetData = exactlyOneChild(worksheet, 'sheetData');
+  assertAttributes(sheetData, []);
+  assertOnlyChildren(sheetData, ['row']);
   const cells: Array<{ row: number; column: number; text: string }> = [];
-  for (const match of xml.matchAll(/<c\b([^>]*)>([\s\S]*?)<\/c>/gu)) {
-    const reference = attribute(match[1]!, 'r');
-    if (!reference) throw new Error('cell reference missing');
-    const coordinates = parseCellReference(reference);
-    const type = attribute(match[1]!, 't');
-    const body = match[2]!;
-    if (type !== undefined && type !== 'inlineStr' && type !== 's') {
-      throw new Error('XLSX cell type is unsupported');
-    }
-    const rawValue = /<v(?:\s[^>]*)?>([\s\S]*?)<\/v>/u.exec(body)?.[1];
-    let text = '';
-    if (type === 'inlineStr') text = textElements(body);
-    else if (type === 's') {
-      const index = rawValue === undefined ? -1 : Number.parseInt(rawValue, 10);
-      if (!Number.isSafeInteger(index) || index < 0 || index >= strings.length) {
-        throw new Error('shared string index invalid');
+  const references = new Set<string>();
+  for (const row of sheetData.children) {
+    assertAttributes(row, ['r']);
+    assertOnlyChildren(row, ['c']);
+    for (const cell of row.children) {
+      assertAttributes(cell, ['r', 't']);
+      const reference = cell.attributes.get('r');
+      if (!reference || references.has(reference)) throw new Error('duplicate or missing cell reference');
+      references.add(reference);
+      const coordinates = parseCellReference(reference);
+      const type = cell.attributes.get('t');
+      if (type !== undefined && type !== 'inlineStr' && type !== 's') throw new Error('XLSX cell type is unsupported');
+      let text = '';
+      if (type === 'inlineStr') {
+        const inline = exactlyOneChild(cell, 'is');
+        assertAttributes(inline, []);
+        assertOnlyChildren(inline, ['t']);
+        for (const textNode of inline.children) {
+          assertAttributes(textNode, ['xml:space']);
+          text += textOnly(textNode);
+        }
+      } else if (type === 's') {
+        const value = exactlyOneChild(cell, 'v');
+        assertAttributes(value, []);
+        const indexText = textOnly(value);
+        if (!/^(?:0|[1-9]\d*)$/u.test(indexText)) throw new Error('shared string index invalid');
+        const index = Number(indexText);
+        if (!Number.isSafeInteger(index) || index >= strings.length) throw new Error('shared string index invalid');
+        text = strings[index]!;
+      } else if (cell.children.length === 0) {
+        if (cell.text.trim()) throw new Error('unexpected cell text');
+      } else {
+        const value = exactlyOneChild(cell, 'v');
+        assertAttributes(value, []);
+        text = textOnly(value);
       }
-      text = strings[index]!;
-    } else if (rawValue !== undefined) {
-      text = decodeXmlText(rawValue);
+      budget.totalCells += 1;
+      if (budget.totalCells > MAX_XLSX_CELLS) throw new XlsxParsingLimitError();
+      addMaterializedText(budget, text);
+      if (text.trim()) cells.push({ ...coordinates, text });
     }
-    if (text.trim()) cells.push({ ...coordinates, text });
-    if (cells.length > MAX_XLSX_CELLS) throw new XlsxParsingLimitError();
   }
   return cells;
 }
@@ -346,22 +554,24 @@ export async function parseStructuredXlsxPages(content: Buffer): Promise<StagePa
   const relationships = entries.get('xl/_rels/workbook.xml.rels');
   if (!workbook || !relationships) throw new Error('workbook manifest missing');
   const sharedStringsEntry = entries.get('xl/sharedStrings.xml');
-  const strings = sharedStrings(sharedStringsEntry ? boundedXml(sharedStringsEntry) : undefined);
-  const sheets = workbookSheets(boundedXml(workbook), boundedXml(relationships));
+  const strings = sharedStrings(sharedStringsEntry ? parseStrictXml(sharedStringsEntry) : undefined);
+  const sheets = workbookSheets(parseStrictXml(workbook), parseStrictXml(relationships));
   if (sheets.length === 0) throw new Error('workbook has no sheets');
-  let totalCells = 0;
-  return sheets.map((sheet, pageIndex): StagePage => {
+  const budget: XlsxMaterializationBudget = { totalCells: 0, textChars: 0, outputBytes: 0 };
+  const pages: StagePage[] = [];
+  for (const [pageIndex, sheet] of sheets.entries()) {
     const worksheet = entries.get(sheet.path);
     if (!worksheet) throw new Error('worksheet missing');
-    const cells = worksheetCells(boundedXml(worksheet), strings);
-    totalCells += cells.length;
-    if (totalCells > MAX_XLSX_CELLS || totalCells + sheets.length > MAX_XLSX_BLOCKS) {
+    budget.outputBytes += Buffer.byteLength(sheet.name, 'utf8') + 320;
+    if (budget.outputBytes > MAX_XLSX_MATERIALIZED_OUTPUT_BYTES) throw new XlsxParsingLimitError();
+    const cells = worksheetCells(parseStrictXml(worksheet), strings, budget);
+    if (budget.totalCells + sheets.length > MAX_XLSX_BLOCKS) {
       throw new XlsxParsingLimitError();
     }
     const columnCount = Math.max(1, ...cells.map((cell) => cell.column));
     const maxRow = Math.max(0, ...cells.map((cell) => cell.row));
     const cellWidth = VIRTUAL_PAGE_WIDTH / columnCount;
-    return {
+    pages.push({
       page: pageIndex + 1,
       width: VIRTUAL_PAGE_WIDTH,
       height: Math.max(VIRTUAL_LINE_HEIGHT, (maxRow + 1) * VIRTUAL_LINE_HEIGHT),
@@ -382,8 +592,9 @@ export async function parseStructuredXlsxPages(content: Buffer): Promise<StagePa
           },
         })),
       ],
-    };
-  });
+    });
+  }
+  return pages;
 }
 
 export async function parseStructuredXlsxResult(content: Buffer): Promise<ParserStageResult> {

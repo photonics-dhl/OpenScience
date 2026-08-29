@@ -5,7 +5,7 @@
       "entry": ["scripts/*.mjs"],
       "project": ["scripts/**/*.mjs"],
       "ignoreDependencies": ["@prisma/client", "prisma", "task-master-ai"],
-      "ignoreBinaries": ["docker-compose"]
+      "ignoreBinaries": ["docker-compose", "flock"]
     },
     "apps/api": {
       "ignoreDependencies": ["archiver", "@types/archiver"]

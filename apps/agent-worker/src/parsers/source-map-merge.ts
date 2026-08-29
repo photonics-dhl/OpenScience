@@ -9,7 +9,7 @@ import type { ParserInput } from './types';
 export type SourceMapBlockDraft = Omit<DocumentBlock, 'id'>;
 export type SourceMapPageDraft = Omit<DocumentPage, 'blocks'> & { blocks: SourceMapBlockDraft[] };
 
-export function deterministicBlockId(contentHash: string, page: number, ordinal: number): string {
+function deterministicBlockId(contentHash: string, page: number, ordinal: number): string {
   return `block:${contentHash.toLowerCase()}:${page}:${ordinal}`;
 }
 

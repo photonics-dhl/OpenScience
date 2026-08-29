@@ -43,7 +43,7 @@ function jobPath(jobDir: string, id: string, suffix: string): string {
   return join(jobDir, `${id}.${suffix}`);
 }
 
-export class SafeParserBoundaryError extends Error {
+class SafeParserBoundaryError extends Error {
   readonly code: SafeParserErrorCode;
 
   constructor(code: SafeParserErrorCode) {

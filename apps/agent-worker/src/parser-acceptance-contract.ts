@@ -12,7 +12,7 @@ import { SDF_CORE_VERSION } from '@openscience/sdf-schema';
 
 import { PDF_TEXT_ITEM_METADATA } from './parsers/native-pdf-contract';
 
-export const CANONICAL_CORPUS_MANIFEST_SHA256 = 'c50309017738e53eb7b06d946ba1388ffe028198250e0cd34096ba9b89f1dc1d';
+export const CANONICAL_CORPUS_MANIFEST_SHA256 = 'db62ae00bb3fb7ecb0b2daba5815d75b1960d4ff1e5ef9549dd1e7617925ac03';
 export const ACCEPTANCE_PROFILE = 'hermes-parser-14-2-v1';
 
 export interface AcceptanceLocator extends Record<string, unknown> { kind: string }
@@ -256,7 +256,7 @@ export const CANONICAL_CASE_IDENTITIES = Object.freeze([
   ['python-code-en', 'analysis.py', 'ready', 1],
   ['references-markdown-en', 'references.md', 'ready', 1],
   ['references-pdf-en', 'references.pdf', 'ready', 2],
-  ['scan-pdf-image-only', 'scan.pdf', 'needs_review', 2],
+  ['scan-pdf-image-only', 'scan.pdf', 'ready', 2],
   ['scan-png-empty', 'scan.png', 'needs_review', 1],
   ['table-csv-mixed', 'evidence.csv', 'ready', 1],
   ['table-pdf-en', 'table.pdf', 'ready', 3],
@@ -622,6 +622,9 @@ export function validateAcceptanceDraft(value: unknown): AcceptanceDraft {
       throw new Error(`content hash mismatch: ${item.id}`);
     }
     if (item.status !== expected[1]) throw new Error(`status mismatch: ${item.id}`);
+    if (manifest[2] !== (item.status === 'succeeded' ? 'ready' : 'needs_review')) {
+      throw new Error(`canonical manifest status mismatch: ${item.id}`);
+    }
     const expectedReviewReasons = expected[3] === undefined ? [] : [expected[3]];
     if (!Array.isArray(item.reviewReasons) || item.reviewReasons.length > 1
       || item.reviewReasons.some((reason) => typeof reason !== 'string' || reason.length === 0 || reason.length > 64)
@@ -714,6 +717,7 @@ export interface AcceptanceRuntimeEvidence {
     runnerSha256: string;
     contractSha256: string;
     runtimeGraph: AcceptanceRuntimeGraphManifest;
+    runtimeInputs: { schemaVersion: 1; sourceSha: string; entryCount: number; sha256: string };
   };
   worker: ContainerResourceEvidence;
   parser: ContainerResourceEvidence;
@@ -735,7 +739,8 @@ function validateHostCgroupSampling(
   memoryBytes: number,
 ): void {
   const sampling = value.sampling;
-  if (!isRecord(sampling) || sampling.source !== 'host-cgroup-v2'
+  if (!isRecord(sampling) || !hasExactKeys(sampling, ['source', 'clock', 'cgroupVersion', 'hostPid', 'cgroupPath', 'cgroupIdentity', 'samples'])
+    || sampling.source !== 'host-cgroup-v2'
     || sampling.clock !== 'host-monotonic' || sampling.cgroupVersion !== 2) {
     throw new Error(`${role} host cgroup v2 sampling series missing`);
   }
@@ -755,7 +760,8 @@ function validateHostCgroupSampling(
   let previousMemory = -1;
   let peakCpuQuotaPercent = 0;
   samples.forEach((raw, index) => {
-    if (!isRecord(raw) || !Number.isSafeInteger(raw.elapsedMs) || Number(raw.elapsedMs) < 0
+    if (!isRecord(raw) || !hasExactKeys(raw, ['elapsedMs', 'cpuUsageMicros', 'memoryPeakBytes', 'terminal'])
+      || !Number.isSafeInteger(raw.elapsedMs) || Number(raw.elapsedMs) < 0
       || !Number.isSafeInteger(raw.cpuUsageMicros) || Number(raw.cpuUsageMicros) < 0
       || !Number.isSafeInteger(raw.memoryPeakBytes) || Number(raw.memoryPeakBytes) <= 0
       || Number(raw.memoryPeakBytes) > memoryBytes || typeof raw.terminal !== 'boolean') {
@@ -792,6 +798,9 @@ function validateContainerBounds(
   memoryBytes: number,
 ): asserts value is ContainerResourceEvidence {
   if (!isRecord(value)) throw new Error(`${role} resource evidence missing`);
+  if (!hasExactKeys(value, ['containerId', 'imageId', 'running', 'exitCode', 'user', 'effectiveEnvCount', 'networkMode', 'readOnlyRootfs', 'capDrop', 'noNewPrivileges', 'memoryBytes', 'memorySwapBytes', 'nanoCpus', 'pidsLimit', 'tmpfsBytes', 'jobVolumeBytes', 'sampling', 'cumulativeCpuUsageMicros', 'peakCpuQuotaPercent', 'peakMemoryBytes', 'mounts'])) {
+    throw new Error(`${role} resource evidence has unknown fields`);
+  }
   if (value.imageId !== imageId || !/^[a-f0-9]{64}$/.test(String(value.containerId))) {
     throw new Error(`${role} image identity mismatch`);
   }
@@ -810,7 +819,10 @@ function validateContainerBounds(
     throw new Error(`${role} runtime limit mismatch`);
   }
   validateHostCgroupSampling(role, value, String(value.containerId), memoryBytes);
-  if (!Array.isArray(value.mounts)) throw new Error(`${role} mount evidence missing`);
+  if (!Array.isArray(value.mounts) || value.mounts.some((mount) => !isRecord(mount)
+    || !hasExactKeys(mount, ['type', 'source', 'destination', 'readOnly']))) {
+    throw new Error(`${role} mount evidence missing or has unknown fields`);
+  }
 }
 
 function mountMatches(
@@ -823,14 +835,20 @@ function mountMatches(
 
 export function validateRuntimeEvidence(value: unknown, draftValue: unknown): AcceptanceRuntimeEvidence {
   const draft = validateAcceptanceDraft(draftValue);
-  if (!isRecord(value)) throw new Error('runtime resource evidence missing');
+  if (!isRecord(value) || !hasExactKeys(value, ['build', 'worker', 'parser', 'maxima'])) throw new Error('runtime resource evidence missing or has unknown fields');
   const build = value.build;
-  if (!isRecord(build) || build.sourceSha !== draft.sourceSha
+  if (!isRecord(build) || !hasExactKeys(build, ['sourceSha', 'runnerSha256', 'contractSha256', 'runtimeGraph', 'runtimeInputs']) || build.sourceSha !== draft.sourceSha
     || !/^[a-f0-9]{64}$/.test(String(build.runnerSha256))
     || !/^[a-f0-9]{64}$/.test(String(build.contractSha256))) {
     throw new Error('fresh build identity evidence mismatch');
   }
   validateAcceptanceRuntimeGraphManifest(build.runtimeGraph);
+  if (!isRecord(build.runtimeInputs) || !hasExactKeys(build.runtimeInputs, ['schemaVersion', 'sourceSha', 'entryCount', 'sha256'])
+    || build.runtimeInputs.schemaVersion !== 1 || build.runtimeInputs.sourceSha !== draft.sourceSha
+    || !Number.isSafeInteger(build.runtimeInputs.entryCount) || Number(build.runtimeInputs.entryCount) < 1
+    || !/^[a-f0-9]{64}$/u.test(String(build.runtimeInputs.sha256))) {
+    throw new Error('generated runtime inputs evidence invalid');
+  }
   validateContainerBounds('worker', value.worker, draft.images.worker, 1_073_741_824);
   validateContainerBounds('parser', value.parser, draft.images.parser, 536_870_912);
   const worker = value.worker;
@@ -868,7 +886,7 @@ export function validateRuntimeEvidence(value: unknown, draftValue: unknown): Ac
     throw new Error('parser mount evidence mismatch');
   }
   const maxima = value.maxima;
-  if (!isRecord(maxima)
+  if (!isRecord(maxima) || !hasExactKeys(maxima, ['cumulativeCpuUsageMicros', 'peakCpuQuotaPercent', 'peakMemoryBytes'])
     || maxima.cumulativeCpuUsageMicros !== Math.max(
       worker.cumulativeCpuUsageMicros, parser.cumulativeCpuUsageMicros,
     )

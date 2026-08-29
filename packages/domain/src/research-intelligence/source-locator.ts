@@ -2,15 +2,17 @@ import type { DocumentBlock, DocumentPage, DocumentSourceMap } from './document-
 import { parseDocumentSourceMap } from './document-source-map';
 import type { SourceLocator } from './types';
 import { validateSourceLocator } from './validation';
+import {
+  deriveVirtualTableCoordinates,
+  VIRTUAL_LINE_HEIGHT,
+  VIRTUAL_PAGE_WIDTH,
+  virtualPageNormalization,
+} from './virtual-page';
 
 type CharRange = NonNullable<SourceLocator['charRange']>;
 type TableCell = NonNullable<SourceLocator['tableCell']>;
 type CodeRange = NonNullable<SourceLocator['codeRange']>;
 const SOURCE_LOCATOR_MAX_RAW_JSON_CHARACTERS = 12_000;
-const VIRTUAL_PAGE_WIDTH = 1000;
-const VIRTUAL_LINE_HEIGHT = 24;
-const VIRTUAL_PAGE_PROCESSOR = 'openscience-virtual-page';
-const VIRTUAL_PAGE_PROCESSOR_VERSION = 'openscience-virtual-page-v1';
 
 function locatorError(message: string): Error {
   return new Error(`SourceLocator ${message}`);
@@ -47,38 +49,16 @@ function closeTo(left: number, right: number): boolean {
   return Math.abs(left - right) <= 1e-6;
 }
 
-function isVirtualNormalizedBlock(block: DocumentBlock): boolean {
-  return block.transformations.some((transformation) => transformation.stage === 'normalize'
-    && transformation.processor.name === VIRTUAL_PAGE_PROCESSOR
-    && transformation.processor.version === VIRTUAL_PAGE_PROCESSOR_VERSION);
-}
-
-function virtualTableCoordinates(page: DocumentPage, block: DocumentBlock): { row: number; column: number } | undefined {
-  if (!isVirtualNormalizedBlock(block)) return undefined;
-  const { x, y, width, height } = block.boundingBox;
-  const rawRow = y / VIRTUAL_LINE_HEIGHT + 1;
-  const rawColumnCount = VIRTUAL_PAGE_WIDTH / width;
-  const rawColumn = x / width + 1;
-  const row = Math.round(rawRow);
-  const columnCount = Math.round(rawColumnCount);
-  const column = Math.round(rawColumn);
-  if (!closeTo(page.width, VIRTUAL_PAGE_WIDTH)
-    || !closeTo(height, VIRTUAL_LINE_HEIGHT)
-    || !closeTo(rawRow, row) || row < 1
-    || !closeTo(rawColumnCount, columnCount) || columnCount < 1
-    || !closeTo(rawColumn, column) || column < 1 || column > columnCount
-    || !closeTo(x, (column - 1) * width)
-    || !closeTo(width, VIRTUAL_PAGE_WIDTH / columnCount)) {
-    throw locatorError('tableCell virtual geometry does not match the document source map');
-  }
-  return { row, column };
-}
-
 function validateTableCell(page: DocumentPage, block: DocumentBlock, tableCell: TableCell): void {
-  const coordinates = virtualTableCoordinates(page, block);
+  let coordinates: { row: number; column: number } | undefined;
+  try {
+    coordinates = deriveVirtualTableCoordinates(page, block);
+  } catch (error) {
+    throw locatorError(error instanceof Error ? error.message : 'virtual table geometry invalid');
+  }
   if (!coordinates) return;
   const sheetHeadings = page.blocks.filter((candidate) => candidate.kind === 'heading'
-    && isVirtualNormalizedBlock(candidate)
+    && virtualPageNormalization(candidate) === 'current'
     && closeTo(candidate.boundingBox.x, 0)
     && closeTo(candidate.boundingBox.y, 0)
     && closeTo(candidate.boundingBox.width, VIRTUAL_PAGE_WIDTH)

@@ -266,3 +266,10 @@ export {
   serializeSourceLocator,
   deserializeSourceLocator,
 } from './research-intelligence/source-locator';
+export {
+  VIRTUAL_PAGE_WIDTH,
+  VIRTUAL_LINE_HEIGHT,
+  VIRTUAL_PAGE_METADATA,
+  virtualPageNormalization,
+  deriveVirtualTableCoordinates,
+} from './research-intelligence/virtual-page';

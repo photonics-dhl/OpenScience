@@ -193,6 +193,12 @@ function validResources(draft = validDraft()) {
       runnerSha256: '1'.repeat(64),
       contractSha256: '2'.repeat(64),
       runtimeGraph,
+      runtimeInputs: {
+        schemaVersion: 1,
+        sourceSha: draft.sourceSha,
+        entryCount: 7,
+        sha256: 'a'.repeat(64),
+      },
     },
     worker: {
       ...common, containerId: 'd'.repeat(64), imageId: draft.images.worker,
@@ -228,7 +234,7 @@ describe('Task 8 acceptance contract', () => {
   });
 
   it('accepts only the byte-exact canonical corpus identity with all four actionable cases ready', () => {
-    expect(CANONICAL_CORPUS_MANIFEST_SHA256).toBe('c50309017738e53eb7b06d946ba1388ffe028198250e0cd34096ba9b89f1dc1d');
+    expect(CANONICAL_CORPUS_MANIFEST_SHA256).toBe('db62ae00bb3fb7ecb0b2daba5815d75b1960d4ff1e5ef9549dd1e7617925ac03');
     const parsed = parseCanonicalManifest(canonicalManifest);
     expect(parsed.cases.map(({ id }) => id)).toEqual(canonicalIds);
     expect(parsed.cases.filter(({ id }) => [
@@ -535,6 +541,26 @@ describe('Task 8 acceptance contract', () => {
     });
   });
 
+  it('binds the canonical scan-PDF manifest case to the 14/2 ready identity', () => {
+    const manifest = parseCanonicalManifest(canonicalManifest);
+    expect(manifest.cases.find(({ id }) => id === 'scan-pdf-image-only')).toMatchObject({ expectedCurrentStatus: 'ready' });
+  });
+
+  it.each([
+    ['top-level raw provider field', (resources: Record<string, unknown>) => { resources.rawProviderError = 'secret'; }],
+    ['build raw output field', (resources: Record<string, unknown>) => { (resources.build as Record<string, unknown>).rawOutput = 'secret'; }],
+    ['worker raw output field', (resources: Record<string, unknown>) => { (resources.worker as Record<string, unknown>).rawOutput = 'secret'; }],
+    ['parser sample raw field', (resources: Record<string, unknown>) => {
+      const sampling = (resources.parser as Record<string, unknown>).sampling as Record<string, unknown>;
+      ((sampling.samples as Record<string, unknown>[])[0]!).raw = 'secret';
+    }],
+  ])('rejects schema-v3 runtime evidence with an unknown %s', (_name, mutate) => {
+    const draft = validDraft();
+    const resources = validResources(draft) as Record<string, unknown>;
+    mutate(resources);
+    expect(() => validateRuntimeEvidence(resources, draft)).toThrow(/unknown|exact|identity|sampling/i);
+  });
+
   it('labels deterministic structured fakes separately and counts every forbidden gateway seam', async () => {
     const seam = createAcceptanceGatewaySeam({ schemaVersion: '0.1.0', fields: {} });
     await expect(seam.gateway.completeStructured()).resolves.toMatchObject({ schemaVersion: '0.1.0' });
@@ -565,11 +591,11 @@ describe('Task 8 acceptance contract', () => {
   });
 
   it.each([
-    ['missing parser resource', (resources: ReturnType<typeof validResources>) => { delete (resources as Partial<typeof resources>).parser; }, /parser resource/i],
+    ['missing parser resource', (resources: ReturnType<typeof validResources>) => { delete (resources as Partial<typeof resources>).parser; }, /parser resource|runtime resource/i],
     ['wrong fresh build identity', (resources: ReturnType<typeof validResources>) => { resources.build.sourceSha = 'f'.repeat(40); }, /build identity/i],
     ['missing complete runtime graph', (resources: ReturnType<typeof validResources>) => {
       delete (resources.build as Partial<typeof resources.build>).runtimeGraph;
-    }, /runtime graph/i],
+    }, /runtime graph|build identity/i],
     ['missing transitive runtime output', (resources: ReturnType<typeof validResources>) => {
       resources.build.runtimeGraph.entries = resources.build.runtimeGraph.entries.filter(({ path }) => (
         path !== 'apps/agent-worker/dist/index.js'
@@ -591,7 +617,7 @@ describe('Task 8 acceptance contract', () => {
     }, /cgroup sampling series/i],
     ['missing host series', (resources: ReturnType<typeof validResources>) => {
       delete (resources.worker as Partial<typeof resources.worker>).sampling;
-    }, /host cgroup|sampling series/i],
+    }, /host cgroup|sampling series|unknown fields/i],
     ['missing monotonic clock identity', (resources: ReturnType<typeof validResources>) => {
       delete (resources.worker.sampling as Partial<typeof resources.worker.sampling>).clock;
     }, /monotonic|sampling series/i],

@@ -15,7 +15,7 @@ const MAX_CANDIDATES = 2_000;
 const GROBID_CONFIDENCE = 0.9;
 const TEI_NAMESPACE = 'http://www.tei-c.org/ns/1.0';
 
-export type GrobidErrorCode = 'malformed_xml' | 'timeout' | 'unavailable';
+type GrobidErrorCode = 'malformed_xml' | 'timeout' | 'unavailable';
 
 export type GrobidEnrichmentResult =
   | { status: 'succeeded'; parser: DocumentParserMetadata; tei: string }

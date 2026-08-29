@@ -1,4 +1,10 @@
-import type { DocumentBlockKind, DocumentParserMetadata } from '@openscience/domain';
+import {
+  VIRTUAL_LINE_HEIGHT,
+  VIRTUAL_PAGE_METADATA,
+  VIRTUAL_PAGE_WIDTH,
+  type DocumentBlockKind,
+  type DocumentParserMetadata,
+} from '@openscience/domain';
 import type { StagePage } from './job-protocol';
 import type { SourceMapBlockDraft, SourceMapPageDraft } from './source-map-merge';
 
@@ -7,13 +13,7 @@ export const TEXT_EXTRACTOR_METADATA: DocumentParserMetadata = {
   version: '1.0.0',
 };
 
-export const VIRTUAL_PAGE_METADATA: DocumentParserMetadata = {
-  name: 'openscience-virtual-page',
-  version: 'openscience-virtual-page-v1',
-};
-
-export const VIRTUAL_PAGE_WIDTH = 1000;
-export const VIRTUAL_LINE_HEIGHT = 24;
+export { VIRTUAL_PAGE_METADATA, VIRTUAL_PAGE_WIDTH, VIRTUAL_LINE_HEIGHT };
 
 export interface VirtualTextCell {
   line: number;

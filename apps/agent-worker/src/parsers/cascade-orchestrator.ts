@@ -28,7 +28,7 @@ export interface ParserCascadeFeatureFlags {
   llmOcr: boolean;
 }
 
-export interface ParserCascadeAdapters {
+interface ParserCascadeAdapters {
   extractText: DocumentParser;
   detectLayout?: DocumentParser;
   grobid?: (input: ParserInput) => Promise<GrobidEnrichmentResult>;

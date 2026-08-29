@@ -8,7 +8,7 @@ import {
 import { mergeSourceMapPages, type SourceMapBlockDraft, type SourceMapPageDraft } from './source-map-merge';
 import type { DocumentParser, ParserInput } from './types';
 
-export const LAYOUT_NORMALIZER_METADATA: DocumentParserMetadata = {
+const LAYOUT_NORMALIZER_METADATA: DocumentParserMetadata = {
   name: 'openscience-layout-normalizer',
   version: '2.0.0',
 };

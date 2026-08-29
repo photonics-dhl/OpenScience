@@ -128,6 +128,20 @@ describe('SourceLocator construction and resolution', () => {
     })).toThrow(/tableCell/);
   });
 
+  it('fails closed when a table block claims an unknown virtual-page normalization version', async () => {
+    const xlsx = structuredTableSourceMap();
+    const valueBlock = xlsx.pages[0]!.blocks.find((block) => block.text === '42')!;
+    valueBlock.transformations[1]!.processor.version = 'openscience-virtual-page-v2';
+    const { createTableCellSourceLocator, resolveSourceLocator } = await sourceLocatorContract();
+    const physicalLocator = {
+      artifactId: xlsx.artifactId, contentHash: xlsx.contentHash, blockId: valueBlock.id, page: 1,
+      boundingBox: valueBlock.boundingBox, tableCell: { sheet: 'Evidence', row: 99, column: 99 },
+    };
+
+    expect(() => createTableCellSourceLocator(xlsx, valueBlock.id, { sheet: 'Evidence', row: 2, column: 2 })).toThrow(/virtual|tableCell/);
+    expect(() => resolveSourceLocator(xlsx, physicalLocator)).toThrow(/virtual|tableCell/);
+  });
+
   it('rejects a virtual XLSX page with conflicting row-zero sheet headings', async () => {
     const canonical = structuredTableSourceMap();
     const valueBlock = canonical.pages[0]!.blocks.find((block) => block.text === '42')!;

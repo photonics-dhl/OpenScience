@@ -292,7 +292,7 @@
           ]
         }
       ],
-      "expectedCurrentStatus": "needs_review",
+      "expectedCurrentStatus": "ready",
       "sha256": "b327e6fece61a3e5bd52842250c51012b7672d81ff3dd4f11107b0e4aee6d2e0"
     },
     {

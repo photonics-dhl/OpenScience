@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto';
 import { describe, expect, it, vi } from 'vitest';
-import { executeDocumentParser } from '../src/ingestion-parser';
+import { executeDocumentParser, parseStructuredXlsxPages } from '../src/ingestion-parser';
 import {
   assertNotebookJsonBudget,
   createTextExtractor,
@@ -553,6 +553,28 @@ describe('deterministic text DocumentParser', () => {
 
     expect(result.status).toBe('needs_review');
     if (result.status === 'needs_review') expect(result.sourceMap.pages).toEqual([]);
+  });
+
+  it.each([
+    ['malformed trailing XML', xlsxFixture('<worksheet><sheetData><row r="1"><c r="A1"><v>1</v></c></row></sheetData></worksheet><trailing>')],
+    ['namespaced unsupported error cell', xlsxFixture('<worksheet xmlns="urn:sheet" xmlns:s="urn:sheet"><sheetData><row r="1"><c r="A1"><v>1</v></c><s:c r="B1" t="e"><s:v>#DIV/0!</s:v></s:c></row></sheetData></worksheet>')],
+    ['duplicate cell reference', xlsxFixture('<worksheet><sheetData><row r="1"><c r="A1"><v>1</v></c><c r="A1"><v>2</v></c></row></sheetData></worksheet>')],
+    ['duplicate relationship ID', xlsxFixture('<worksheet><sheetData><row r="1"><c r="A1"><v>1</v></c></row></sheetData></worksheet>', '<Relationships><Relationship Id="rId1" Target="worksheets/sheet1.xml"/><Relationship Id="rId1" Target="worksheets/sheet1.xml"/></Relationships>')],
+    ['external relationship', xlsxFixture('<worksheet><sheetData><row r="1"><c r="A1"><v>1</v></c></row></sheetData></worksheet>', '<Relationships><Relationship Id="rId1" Target="worksheets/sheet1.xml" TargetMode="External"/></Relationships>')],
+    ['non-strict shared-string index', storedZip({
+      'xl/workbook.xml': '<workbook xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheets><sheet name="Sheet" r:id="rId1"/></sheets></workbook>',
+      'xl/_rels/workbook.xml.rels': '<Relationships><Relationship Id="rId1" Target="worksheets/sheet1.xml"/></Relationships>',
+      'xl/sharedStrings.xml': '<sst><si><t>value</t></si></sst>',
+      'xl/worksheets/sheet1.xml': '<worksheet><sheetData><row r="1"><c r="A1" t="s"><v>0junk</v></c></row></sheetData></worksheet>',
+    })],
+    ['oversized materialized cell', storedZip({
+      'xl/workbook.xml': '<workbook xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheets><sheet name="Sheet" r:id="rId1"/></sheets></workbook>',
+      'xl/_rels/workbook.xml.rels': '<Relationships><Relationship Id="rId1" Target="worksheets/sheet1.xml"/></Relationships>',
+      'xl/sharedStrings.xml': `<sst><si><t>${'x'.repeat(32_769)}</t></si></sst>`,
+      'xl/worksheets/sheet1.xml': '<worksheet><sheetData><row r="1"><c r="A1" t="s"><v>0</v></c></row></sheetData></worksheet>',
+    })],
+  ])('rejects structurally unsafe XLSX %s before materializing a partial page', async (_label, content) => {
+    await expect(parseStructuredXlsxPages(content)).rejects.toThrow();
   });
 
   it('fails closed when the isolated XLSX stage reports a warning', async () => {

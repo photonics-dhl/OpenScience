@@ -9,7 +9,7 @@ export const PAGE_QUALITY_THRESHOLDS_V1 = Object.freeze({
   minimumOcrUnicodeCharacters: 7,
 });
 
-export interface PageQualitySignals {
+interface PageQualitySignals {
   complexTable?: boolean;
   layoutFailure?: boolean;
   localOcrApplied?: boolean;

@@ -46,6 +46,7 @@ export interface ResearchCorpusCase {
   rights: 'self-authored';
   expectedLocators: ResearchExpectedLocator[];
   expectedCurrentStatus: ParsedIngestion['status'];
+  canonicalManifestStatus?: ParsedIngestion['status'];
   expectedText?: string;
 }
 
@@ -378,6 +379,7 @@ export const RESEARCH_INTELLIGENCE_CORPUS: ResearchCorpusCase[] = [
       { kind: 'page-region', page: 1, bbox: [72, 600, 432, 645] },
     ],
     expectedCurrentStatus: 'needs_review',
+    canonicalManifestStatus: 'ready',
   },
   {
     id: 'table-csv-mixed',
@@ -443,7 +445,7 @@ export function buildResearchIntelligenceManifest() {
         features: corpusCase.features,
         rights: corpusCase.rights,
         expectedLocators: corpusCase.expectedLocators,
-        expectedCurrentStatus: corpusCase.expectedCurrentStatus,
+        expectedCurrentStatus: corpusCase.canonicalManifestStatus ?? corpusCase.expectedCurrentStatus,
         sha256: createHash('sha256').update(corpusCase.content).digest('hex'),
       })),
   };

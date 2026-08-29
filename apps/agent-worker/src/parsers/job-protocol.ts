@@ -18,10 +18,10 @@ export interface DocumentParserMetadata {
   modelHash?: string;
 }
 
-export const PARSER_JOB_SCHEMA_VERSION = 2 as const;
+const PARSER_JOB_SCHEMA_VERSION = 2 as const;
 export const PARSER_JOB_RESPONSE_MAX_BYTES = 24 * 1024 * 1024;
 
-export const PARSER_JOB_OPERATIONS = [
+const PARSER_JOB_OPERATIONS = [
   'extract_text',
   'inventory_pages',
   'detect_layout',
@@ -30,7 +30,7 @@ export const PARSER_JOB_OPERATIONS = [
   'extract_references',
 ] as const;
 
-export type ParserJobOperation = (typeof PARSER_JOB_OPERATIONS)[number];
+type ParserJobOperation = (typeof PARSER_JOB_OPERATIONS)[number];
 
 export enum SafeParserErrorCode {
   INVALID_REQUEST = 'invalid_request',
@@ -69,7 +69,7 @@ export class ParserJobProtocolError extends Error {
   }
 }
 
-export interface ParserJobOptions {
+interface ParserJobOptions {
   pageNumbers?: number[];
   renderDpi?: number;
   languageHints?: string[];
@@ -84,7 +84,7 @@ export interface ParserJobRequestV2 {
   options: ParserJobOptions;
 }
 
-export interface StageBoundingBox {
+interface StageBoundingBox {
   x: number;
   y: number;
   width: number;
