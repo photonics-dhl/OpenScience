@@ -15,9 +15,10 @@
 - 接受镜像：Worker `sha256:11f36807956003cf47ca18ad1f4a85a3830af4c24b81b466d566da4b10951a02`；Parser `sha256:4e4819ecd4b45ce473fe5076f09e46410f1f16b601a65b7bb461f046e75c70d8`。Parser 仍为 CPU-only、`network=none`、无 Secret、非 root、只读、512 MiB/64 PID。
 - `.release-id`、public/loopback `/__release`、运行镜像、core/search `29/29`/`2/2`、BGE、startup self-test、7 组备份、failure/journal markers 均全绿；部署本身净增 `817,916 KiB`，未清理服务器对象。
 
-## Fresh post-deploy disk audit and next action
+## 2026-08-29 — Exact cleanup and retention prevention
 
-- 根盘用/可用为 `78,492,704,768` / `72,980,062,208` bytes（52%）。跨根有序物理值：release `23,119,495,168`；eval incremental `12,947,587,072`；acceptance `815,104`；pnpm incremental `3,593,535,488`；旧 Aug 09 workspace backup incremental `522,768,384`。硬链接与 Docker shared layer 不得重复相加。
-- `KEEP`：active `6cabe…`、rollback `28a…`、生产/BGE/监控卷、7 组备份与日志。`DELETE_CANDIDATE`（仍需精确批准）：build cache、dangling/失败 `63eb…`/`9e9…` tags、退出的 `c581…` tags、pnpm/npm/dnf/root caches、旧 Aug 09 workspace backup 非重复部分、可重下载 Playwright cache。其他 40 releases、历史 eval families、旧 accepted image tags 与 dev stack 为 `INVESTIGATE`。
-- 立即候选的保守非重复估计约 `9.50 GB`；不包含 other releases `19,501,924,352` bytes 或 eval incremental `12,947,587,072` bytes，也不把 Docker 总 reclaimable/共享层再次相加。
-- 本轮禁止且未执行任何删除；清理前必须取得用户对精确路径、tag/ID、cache scope 的明示白名单。下一产品任务是 Task 7 身份/兴趣静默路由。
+- 用户批准的 ECS 精确清理在生产 FD9 锁内完成：移除 40 个 inactive release roots、3 个 exact failed eval/acceptance paths、旧 workspace backup、已审计 package/browser caches、16 个旧 Worker/Parser tags、3 个 dangling IDs 与 build cache。保留 active/rollback、有效证据、7 组备份、production/BGE/monitor volumes、logs、DNF 与项目 tool cache。
+- 根盘 used 从 `78,488,031,232` 降至 `48,109,350,912` bytes，释放 `30,378,680,320` bytes；52% → 32%，available `103,363,416,064` bytes。清理后 release roots 恰为 active `6cabe…` + rollback `28a…`，core/search、Parser、BGE、容器、公网/loopback、备份均复验全绿。
+- `/opt/openscience/.rollback-id` 已在 FD9 锁内按 root `0600` 原子 bootstrap 为 `28a3d5c…`。自动 retention 候选已实现：pending v2 冻结清单、tombstone 崩溃续跑、active/rollback 多层保护、全部容器/mount/image/capability 门禁、post-unlink 恢复；禁止 broad prune，自动范围仅旧 release/capability/exact SHA tags。
+- Fresh release-contract `98` tests：91 pass / 7 platform skips / 0 fail；安全复审 0 blocker。仍须用 Ubuntu CI 跑 5 个 Linux/FD9 状态门禁；代码尚未部署，下一次 immutable release 才会启用自动 retention。
+- 下一产品任务是 Task 7 身份/兴趣静默路由；Vision 只在后续真实生产任务中以管理员 canary 验证，不以脱离产品的循环测试替代进度。

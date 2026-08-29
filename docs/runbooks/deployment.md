@@ -1287,3 +1287,41 @@ all seven backups. Never run a broad prune or wildcard release deletion.
 `28a3d5c…`, absent failure/journal markers, healthy production containers,
 core/search `29/29` and `2/2`, `PARSER_ACCEPTANCE_DEPLOY_CONTRACT_OK`,
 `EMBEDDING_RUNTIME_OK`, seven backups and a fresh non-duplicated disk audit.
+
+### 5.41 Exact cleanup result and automatic release retention (2026-08-29)
+
+The separately authorized cleanup ran under
+`/run/lock/openscience-production-deploy/lock` with a frozen literal manifest.
+It removed 40 inactive release roots, three exact failed evaluation/acceptance
+paths, the exact obsolete workspace backup, audited root package/browser cache
+paths, 16 old Worker/Parser tags, three exact dangling image IDs and the audited
+Docker builder cache. It did not remove active/rollback state, accepted evidence,
+seven backups, production/BGE/monitoring volumes, logs, DNF cache or the project
+tool cache.
+
+Root filesystem use changed from `78,488,031,232` bytes to `48,109,350,912`
+bytes: `30,378,680,320` bytes were released, utilization fell from 52% to 32%,
+and `103,363,416,064` bytes remained available. Post-cleanup checks proved only
+the active `6cabe422…` and rollback `28a3d5c…` release roots remained; their
+capabilities and exact images were present, production containers were healthy,
+core/search were `29/29` and `2/2`, parser/BGE runtime contracts passed, public
+and loopback release identities matched, seven backups remained, and build cache
+was zero.
+
+Future confirmed deployments use `production-release-retention.mjs` under the
+same inherited FD 9 lock. The ordering is acceptance and backup refresh → write
+`.rollback-id.pending` → commit deployment journal → publish `.rollback-id` →
+execute the frozen exact retention plan → remove pending intent. Exit `78` means
+the application commit succeeded but retention remains pending; do not roll back
+the application or delete the intent. Re-enter the lock and run the exact
+`resume` command with the recorded candidate/rollback identities after inspecting
+the pending file metadata without printing secrets.
+
+Automatic retention is release-only. It may remove inactive one-level SHA
+release directories, their matching capability files, and exact release-tagged
+Worker/Parser/Embedding tags. It fails closed for unexpected ownership,
+symlinks, nested mounts, stopped or running container references, source-marker
+drift, protected-image drift, or an unbound pending intent. It must never be
+expanded into wildcard deletion, Docker system/image/volume prune, evidence or
+backup retention, cache cleanup, log deletion, or volume cleanup. Those remain
+separate audited operations requiring an exact scope.

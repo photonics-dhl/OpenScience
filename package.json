@@ -23,7 +23,7 @@
     "stack:ps": "docker compose -f infra/compose/docker-compose.dev.yml ps || docker-compose -f infra/compose/docker-compose.dev.yml ps",
     "stack:logs": "docker compose -f infra/compose/docker-compose.dev.yml logs -f || docker-compose -f infra/compose/docker-compose.dev.yml logs -f",
     "test": "pnpm run test:release-contract && pnpm -r --workspace-concurrency=1 --if-present test",
-    "test:release-contract": "node --test scripts/release-input-manifest.test.mjs infra/scripts/accept-document-parser-release.test.mjs infra/scripts/verify-document-parser-acceptance.test.mjs infra/scripts/deploy.test.mjs",
+    "test:release-contract": "node --test scripts/release-input-manifest.test.mjs infra/scripts/accept-document-parser-release.test.mjs infra/scripts/verify-document-parser-acceptance.test.mjs infra/scripts/deploy.test.mjs infra/scripts/production-release-retention.test.mjs",
     "test:research-intelligence": "pnpm --filter @openscience/agent-worker test:research-intelligence",
     "test:integration": "pnpm stack:up && pnpm -r --if-present test:integration",
     "invite": "node scripts/invite.mjs",

@@ -33,19 +33,34 @@ migration, service health, and public checks had completed.
   `.release-id` only after recovery succeeds. Failed recovery removes the
   potentially false identity and atomically writes `.release-failed` evidence.
 - An already-active SHA is verified and treated as a no-op; it is never rebuilt
-  in place. Every existing SHA directory is write-once and is never automatically
-  replaced, even when inactive. A `.release-failed` marker, or versioned mounts
-  without `.release-id`, blocks deployment until an operator explicitly recovers
-  and verifies the runtime. The scheduled backup script is replaced only after
-  public health and exact `/__release` identity pass.
+  in place. Every existing SHA directory is write-once and is never replaced in
+  place. A `.release-failed` marker, or versioned mounts without `.release-id`,
+  blocks deployment until an operator explicitly recovers and verifies the
+  runtime. The scheduled backup script is replaced only after public health and
+  exact `/__release` identity pass.
 - The active backup script resolves and validates `.release-id` before invoking
-  Compose. Retained release directories are rollback assets and are not removed
-  automatically.
+  Compose.
+- Production keeps the active release and one explicit immediate rollback
+  release. After public/runtime/backup acceptance, deployment writes a
+  root-owned `0600` structured `.rollback-id.pending` intent, commits the durable
+  deployment journal, publishes `.rollback-id`, and then removes only the frozen
+  inactive release roots, matching capability records, and exact release-tagged
+  Worker/Parser/Embedding image tags. Release deletion uses same-filesystem
+  tombstones so an interrupted cleanup can resume idempotently under the same
+  inherited FD 9 lock.
+- Retention validates source markers, ownership, realpaths, symlinks, nested
+  mounts, all container mount references, capabilities, and protected image
+  identities before mutation. It never cleans evaluation/acceptance evidence,
+  backups, volumes, logs, package/tool caches, Docker build cache, or arbitrary
+  image IDs, and it never invokes a broad Docker prune. A post-commit retention
+  failure leaves the accepted release active, preserves the pending intent, and
+  requires the exact resume operation instead of application rollback.
 
 ## Consequences
 
 Every tracked build input is reproducible and stale remote source cannot join a
-release. Disk usage grows with retained releases; cleanup requires a separate,
-explicitly approved retention operation. Database migrations still require their
-own rollback/compatibility assessment because application rollback cannot undo
-data changes.
+release. Immediate rollback remains local and exact while older source remains
+recoverable from Git. Automatic cleanup has a deliberately narrow release-only
+scope; evidence and other operational data retain their own lifecycle policies.
+Database migrations still require their own rollback/compatibility assessment
+because application rollback cannot undo data changes.

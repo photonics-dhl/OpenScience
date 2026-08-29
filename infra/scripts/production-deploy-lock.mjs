@@ -15,7 +15,7 @@ const PRODUCTION_ACTIVE_MARKER = '/opt/openscience/.release-id';
 const PRODUCTION_JOURNAL = '/opt/openscience/.deploy-transaction.json';
 const JOURNAL_PHASES = new Set(['prepared', 'migrating', 'switching', 'published']);
 
-async function verifyProductionDeployLockOnHost({
+export async function verifyProductionDeployLockOnHost({
   lockDirectory = PRODUCTION_LOCK_DIRECTORY, requiredUid = 0, lockFd,
 }) {
   if (!Number.isSafeInteger(lockFd) || lockFd < 3) {

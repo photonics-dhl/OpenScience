@@ -94,6 +94,12 @@ journal_clear() {
     --candidate "$RELEASE_SHA" --rollback "$ROLLBACK_SHA" --lock-fd 9
 }
 
+transaction_abort_rollback_intent() {
+  [ ! -e "$REMOTE_ROOT/.rollback-id.pending" ] || \
+    node "$SCRIPT_DIR/production-release-retention.mjs" abort \
+      --expected-active "$RELEASE_SHA" --expected-rollback "$ROLLBACK_SHA" --lock-fd 9
+}
+
 compose_current() {
   run_remote "cd $RELEASE_ROOT && XGS_RELEASE_ROOT=$RELEASE_ROOT XGS_RELEASE_IMAGE_TAG=$RELEASE_SHA docker compose --env-file $PROD_ENV -f $COMPOSE_FILE $1"
 }
@@ -147,6 +153,8 @@ fi
   echo "错误：rollback-ref 必须精确等于当前 active production release" >&2
   exit 66
 }
+node "$SCRIPT_DIR/production-release-retention.mjs" preflight \
+  --expected-active "$ACTIVE_RELEASE_SHA" --lock-fd 9
 BGE_M3_DEPLOY_VALUE="$(read_prod_value BGE_M3_DEPLOY)" || {
   echo "错误：BGE_M3_DEPLOY 必须且只能配置一次" >&2
   exit 66
@@ -390,6 +398,9 @@ transaction_assert_lock() { assert_production_deploy_lock; }
 transaction_journal_start() { journal_start; }
 transaction_journal_update() { journal_update "$1"; }
 transaction_journal_clear() { journal_clear; }
+transaction_journal_clear_after_rollback() {
+  [ ! -e "$DEPLOY_JOURNAL" ] || journal_clear
+}
 transaction_perform_application_rollback() {
   local rollback_ok=1 rollback_active
   rollback_active="$(run_remote "cat '$REMOTE_ROOT/.release-id' 2>/dev/null || true")"
@@ -512,6 +523,14 @@ run_remote "rm -f $REMOTE_ROOT/.release-failed"
 # install/bash -n 任一步失败都不会破坏当前可执行文件。
 run_remote "set -e; install -m 0755 $RELEASE_ROOT/infra/scripts/backup.sh /usr/local/bin/backup.sh.next; bash -n /usr/local/bin/backup.sh.next; mv /usr/local/bin/backup.sh.next /usr/local/bin/backup.sh"
 
+node "$SCRIPT_DIR/production-release-retention.mjs" prepare \
+  --expected-active "$RELEASE_SHA" --expected-rollback "$PREVIOUS_RELEASE_SHA" --lock-fd 9
 transaction_commit
+node "$SCRIPT_DIR/production-release-retention.mjs" complete \
+  --expected-active "$RELEASE_SHA" --expected-rollback "$PREVIOUS_RELEASE_SHA" --lock-fd 9 || {
+    status=$?
+    echo "DEPLOY_COMMITTED_RETENTION_PENDING: release=$RELEASE_SHA rollback=$PREVIOUS_RELEASE_SHA" >&2
+    exit "$status"
+  }
 exec 9>&-
 log "=== 部署完成（release=$RELEASE_SHA rollback=$PREVIOUS_RELEASE_SHA）==="

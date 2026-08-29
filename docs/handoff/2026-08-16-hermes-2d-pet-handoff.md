@@ -22,19 +22,18 @@
 - Schema 3 `hermes-parser-14-2-v1` 为 14/2/0/0；gateway structured fake/external/error 14/0/0；26 locators 与 3 个 `table-cell` 全部复现。
 - Parser 保持 `network=none`、无 Secret、只读、非 root、512 MiB/64 PID；MiniMax Vision disabled，未晋升 GROBID、PaddleOCR、Docling 或 LiteParse。
 - `.release-id`、loopback/public `/__release`、运行镜像、production startup、core/search `29/29`/`2/2`、BGE、7 组备份与 failure/journal markers 全绿；本次无迁移。
-- Fresh post-deploy audit：根盘 used/free `78,492,704,768` / `72,980,062,208` bytes；ordered releases `23,119,495,168`；eval incremental `12,947,587,072`；acceptance `815,104`；pnpm incremental `3,593,535,488`；部署净增 `817,916 KiB`。本轮未清理。
+- Exact ECS cleanup 后根盘 used/available `48,109,350,912` / `103,363,416,064` bytes（32%），释放 `30,378,680,320` bytes；release roots 恰为 active+rollback，生产健康复验全绿。
 
-## Constraints and hygiene decision
+## Constraints and hygiene state
 
-- `KEEP`：active `6cabe…`、rollback `28a…`、production/BGE/monitor volumes、7 backups 与 logs。
-- `DELETE_CANDIDATE`（仍需精确批准）：build cache、dangling/失败 `63eb…`/`9e9…` tags、退出的 `c581…` tags、pnpm/npm/dnf/root caches、旧 Aug 09 workspace backup 非重复部分、Playwright cache。
-- `INVESTIGATE`：其他 40 releases、历史 eval families、旧 accepted image tags 与 dev stack。立即候选保守非重复估计约 `9.50 GB`；不含 other releases `19,501,924,352` 或 eval incremental `12,947,587,072` bytes。
-- 任何删除必须先获得用户对精确路径/tag/ID/cache 白名单的明示批准；禁止 broad prune/wildcard。Windows 只用显式 Git for Windows Bash + canonical scripts。
+- 用户批准的精确清理已移除 40 个 inactive releases、失败证据 exact paths、旧 workspace backup、已审计 caches/old tags/dangling IDs/build cache；保留有效 evidence、7 backups、production/BGE/monitor volumes 与 logs。
+- `.rollback-id` 已在 FD9 锁内原子 bootstrap 为 `28a3d5c…`。自动 retention 候选已通过 release-contract 与最终安全复审：只删旧 release/capability/exact SHA image tags，pending v2+tombstone 可恢复，禁止 broad prune/wildcard。
+- 自动 retention 代码尚未部署；须先通过 Ubuntu CI 的 Linux/FD9 门禁，并随下一次 immutable ECS release 验收。Windows 只用显式 Git for Windows Bash + canonical scripts。
 
 ## Next action
 
-1. 从 Task 7 身份/兴趣静默路由开始；Task 10 仍 dependency-ready。
-2. 如要回收磁盘，先对 `docs/runbooks/deployment.md` §5.40 的精确候选形成用户批准白名单；未批准前不删除。
+1. 完成 retention 候选 commit/push/Ubuntu CI 后，从 Task 7 身份/兴趣静默路由按 TDD 实施；Task 10 仍 dependency-ready。
+2. Vision 留到后续真实生产任务做管理员 canary；不新增 Docling，除非真实用户文档暴露现有 14/2 链的明确版式缺口。
 
 ## Read first
 
@@ -42,6 +41,6 @@
 2. 本 handoff
 3. `docs/specs/2026-08-26-hermes-research-intelligence-platform-design.md`
 4. `docs/progress.md`
-5. `docs/runbooks/deployment.md` §5.40
+5. `docs/runbooks/deployment.md` §5.41
 
 `project_index.md` 只用 `rg` 定向查 CURRENT；不要从较旧 `main` 推断服务器现状。

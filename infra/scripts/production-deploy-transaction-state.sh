@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Shared production-deploy state machine. This file only defines functions.
-# Its caller must provide the five transaction_* adapter functions used below.
+# Its caller must provide the transaction_* adapter functions used below.
 
 transaction_initialize_state() {
   TRANSACTION_PHASE=inactive
@@ -39,7 +39,11 @@ transaction_rollback_application() {
         echo "ROLLBACK_FAILED: application recovery did not complete" >&2
         exit 70
       }
-      transaction_journal_clear || {
+      transaction_abort_rollback_intent || {
+        echo "ROLLBACK_FAILED_PENDING_INTENT_RETAINED: application recovered but rollback identity needs explicit recovery" >&2
+        exit 70
+      }
+      transaction_journal_clear_after_rollback || {
         echo "ROLLBACK_FAILED_JOURNAL_RETAINED: application recovered but transaction needs explicit recovery" >&2
         exit 70
       }

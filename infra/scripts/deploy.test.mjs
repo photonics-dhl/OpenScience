@@ -13,8 +13,24 @@ import { fileURLToPath } from 'node:url';
 const launcherSource = readFileSync(new URL('./deploy.sh', import.meta.url), 'utf8');
 const transactionSource = readFileSync(new URL('./production-deploy-transaction.sh', import.meta.url), 'utf8');
 const transactionStateSource = readFileSync(new URL('./production-deploy-transaction-state.sh', import.meta.url), 'utf8');
+const retentionSource = readFileSync(new URL('./production-release-retention.mjs', import.meta.url), 'utf8');
 const transactionStatePath = fileURLToPath(new URL('./production-deploy-transaction-state.sh', import.meta.url));
 const source = `${launcherSource}\n${transactionSource}\n${transactionStateSource}`;
+
+test('production commit publishes durable rollback identity before exact retention', () => {
+  const preflight = transactionSource.indexOf('production-release-retention.mjs" preflight');
+  const sameSha = transactionSource.indexOf('if [ "$ACTIVE_RELEASE_SHA" = "$RELEASE_SHA" ]');
+  const backupRefresh = transactionSource.indexOf('backup.sh.next');
+  const prepare = transactionSource.indexOf('production-release-retention.mjs" prepare');
+  const commit = transactionSource.lastIndexOf('transaction_commit');
+  const complete = transactionSource.indexOf('production-release-retention.mjs" complete');
+  const unlock = transactionSource.indexOf('exec 9>&-');
+  assert.ok(preflight > 0 && preflight < sameSha, 'rollback identity must be checked before same-SHA exit');
+  assert.ok(prepare > backupRefresh && prepare < commit, 'pending intent must follow acceptance and precede commit');
+  assert.ok(complete > commit && complete < unlock, 'post-commit retention must finish under inherited FD9');
+  assert.match(transactionStateSource, /transaction_abort_rollback_intent[\s\S]*transaction_journal_clear/u);
+  assert.doesNotMatch(retentionSource, /docker\s+(?:system|image|volume|builder)\s+prune/u);
+});
 const workerDockerfile = readFileSync(new URL('../../apps/agent-worker/Dockerfile', import.meta.url), 'utf8');
 const parserDockerfile = readFileSync(new URL('../../apps/agent-worker/Dockerfile.parser', import.meta.url), 'utf8');
 const productionCompose = readFileSync(new URL('../compose/docker-compose.prod.yml', import.meta.url), 'utf8');
@@ -449,8 +465,10 @@ function transactionStateHarness(root, requiredUid, phase, event) {
     'transaction_assert_lock() { assert_production_deploy_lock; }',
     'transaction_journal_start() { [ ! -e "$DEPLOY_JOURNAL" ] || return 75; printf "phase=prepared\\n" > "$DEPLOY_JOURNAL.next"; chmod 0600 "$DEPLOY_JOURNAL.next"; mv "$DEPLOY_JOURNAL.next" "$DEPLOY_JOURNAL"; }',
     'transaction_journal_update() { [ -f "$DEPLOY_JOURNAL" ] || return 75; printf "phase=%s\\n" "$1" > "$DEPLOY_JOURNAL.next"; chmod 0600 "$DEPLOY_JOURNAL.next"; mv "$DEPLOY_JOURNAL.next" "$DEPLOY_JOURNAL"; }',
-    'transaction_journal_clear() { if [ "${XGS_TEST_TERM_DURING_CLEAR:-0}" = 1 ]; then kill -TERM $$; fi; rm -- "$DEPLOY_JOURNAL"; }',
+    'transaction_journal_clear() { if [ "${XGS_TEST_TERM_DURING_CLEAR:-0}" = 1 ]; then kill -TERM $$; fi; rm -- "$DEPLOY_JOURNAL"; [ "${XGS_TEST_CLEAR_AFTER_UNLINK_FAIL:-0}" != 1 ] || return 70; }',
+    'transaction_journal_clear_after_rollback() { [ ! -e "$DEPLOY_JOURNAL" ] || transaction_journal_clear; }',
     'transaction_perform_application_rollback() { active="$(cat "$REMOTE_ROOT/.release-id")"; case "$active" in "$ROLLBACK_SHA"|"$RELEASE_SHA") ;; *) echo ROLLBACK_FAILED_STALE_ACTIVE >&2; return 70 ;; esac; printf "ROLLBACK_IN_LOCK\\n" >&2; if [ "${XGS_TEST_ROLLBACK_DELAY:-0}" != 0 ]; then sleep "$XGS_TEST_ROLLBACK_DELAY"; fi; [ "${XGS_TEST_ROLLBACK_FAIL:-0}" != 1 ] || return 70; printf "%s\\n" "$ROLLBACK_SHA" > "$REMOTE_ROOT/.release-id"; }',
+    'transaction_abort_rollback_intent() { [ ! -e "$REMOTE_ROOT/.rollback-id.pending" ] || { [ "${XGS_TEST_PENDING_ABORT_FAIL:-0}" != 1 ] || return 70; rm -- "$REMOTE_ROOT/.rollback-id.pending"; }; }',
     `source ${quote(transactionStatePath.replaceAll('\\', '/'))}`,
     'mkdir -p "$REMOTE_ROOT" "$RELEASE_ROOT"',
     'acquire_production_deploy_lock',
@@ -474,6 +492,7 @@ function transactionStateHarness(root, requiredUid, phase, event) {
     '[ -e "$REMOTE_ROOT/.release-id" ] || printf "%s\\n" "$ROLLBACK_SHA" > "$REMOTE_ROOT/.release-id"',
     'transaction_begin',
     'case "$TRANSACTION_PHASE_UNDER_TEST" in migrating) transaction_mark_phase migrating ;; switching) transaction_mark_phase switching; printf "%s\\n" "$RELEASE_SHA" > "$REMOTE_ROOT/.release-id" ;; published) transaction_mark_phase switching; printf "%s\\n" "$RELEASE_SHA" > "$REMOTE_ROOT/.release-id"; transaction_mark_phase published ;; esac',
+    'if [ "${XGS_TEST_PENDING_INTENT:-0}" = 1 ]; then printf "pending\\n" > "$REMOTE_ROOT/.rollback-id.pending"; fi',
     'if [ -n "${XGS_TEST_FORCE_ACTIVE_SHA:-}" ]; then printf "%s\\n" "$XGS_TEST_FORCE_ACTIVE_SHA" > "$REMOTE_ROOT/.release-id"; fi',
     'case "$TRANSACTION_EVENT_UNDER_TEST" in stdin) bash -c "cat >/dev/null"; printf "AFTER_STDIN\\n"; transaction_commit ;; err) false ;; term) kill -TERM $$ ;; hup) kill -HUP $$ ;; exit) exit 42 ;; sigkill) printf "READY_FOR_SIGKILL\\n" >&2; sleep 30 ;; commit-term) XGS_TEST_TERM_DURING_CLEAR=1; transaction_commit; printf "COMMIT_SURVIVED_TERM\\n" ;; esac',
   ].join('\n');
@@ -743,6 +762,36 @@ test('shared production state machine traps every durable phase and commits with
     assert.match(result.stderr, /ROLLBACK_FAILED_STALE_ACTIVE/);
     assert.equal(existsSync(fixture.journal), true);
     assert.equal((await readFile(fixture.marker, 'utf8')).trim(), staleSha);
+
+    fixture = await createFixture();
+    fixtures.push(fixture.root);
+    result = run(fixture, 'published', 'term', { XGS_TEST_PENDING_INTENT: '1' });
+    assert.notEqual(result.status, 0, result.stderr);
+    assert.equal(existsSync(fixture.journal), false);
+    assert.equal(existsSync(join(fixture.root, 'remote', '.rollback-id.pending')), false);
+    assert.equal((await readFile(fixture.marker, 'utf8')).trim(), oldSha);
+
+    fixture = await createFixture();
+    fixtures.push(fixture.root);
+    result = run(fixture, 'published', 'term', {
+      XGS_TEST_PENDING_INTENT: '1',
+      XGS_TEST_PENDING_ABORT_FAIL: '1',
+    });
+    assert.equal(result.status, 70, result.stderr);
+    assert.equal(existsSync(fixture.journal), true);
+    assert.equal(existsSync(join(fixture.root, 'remote', '.rollback-id.pending')), true);
+    assert.equal((await readFile(fixture.marker, 'utf8')).trim(), oldSha);
+
+    fixture = await createFixture();
+    fixtures.push(fixture.root);
+    result = run(fixture, 'published', 'stdin', {
+      XGS_TEST_PENDING_INTENT: '1',
+      XGS_TEST_CLEAR_AFTER_UNLINK_FAIL: '1',
+    });
+    assert.equal(result.status, 70, result.stderr);
+    assert.equal(existsSync(fixture.journal), false);
+    assert.equal(existsSync(join(fixture.root, 'remote', '.rollback-id.pending')), false);
+    assert.equal((await readFile(fixture.marker, 'utf8')).trim(), oldSha);
 
     fixture = await createFixture();
     fixtures.push(fixture.root);
