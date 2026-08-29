@@ -117,6 +117,16 @@ function strictXlsxFixture(
   return storedZip(strictXlsxEntries(worksheet, relationships));
 }
 
+function strictXlsxFixtureWithOverrides(overrides: Record<string, string>): Buffer {
+  return storedZip({
+    ...strictXlsxEntries(
+      `<worksheet xmlns="${SPREADSHEETML_NAMESPACE}"><sheetData><row r="1"><c r="A1" t="s"><v>0</v></c></row></sheetData></worksheet>`,
+    ),
+    'xl/sharedStrings.xml': `<sst xmlns="${SPREADSHEETML_NAMESPACE}"><si><t>value</t></si></sst>`,
+    ...overrides,
+  });
+}
+
 function twoSheetXlsxFixture(): Buffer {
   return storedZip({
     'xl/workbook.xml': `<workbook xmlns="${SPREADSHEETML_NAMESPACE}" xmlns:r="${OFFICE_RELATIONSHIPS_NAMESPACE}"><sheets><sheet name="Alpha" sheetId="1" r:id="rId1"/><sheet name="Beta" sheetId="2" r:id="rId2"/></sheets></workbook>`,
@@ -225,6 +235,46 @@ describe('deterministic text DocumentParser', () => {
       { kind: 'table', text: 'beta', boundingBox: { x: 500, y: 0, width: 500, height: 24 } },
       { kind: 'table', text: 'line\nbreak', boundingBox: { x: 0, y: 24, width: 500, height: 24 } },
       { kind: 'table', text: 'gamma', boundingBox: { x: 500, y: 24, width: 500, height: 24 } },
+    ]);
+  });
+
+  it('treats CRLF and bare CR as one CSV row boundary each', async () => {
+    const parserInput = input('alpha,beta\r\ngamma,delta\repsilon,zeta', 'text/csv');
+    const result = await executeDocumentParser(createTextExtractor({}), parserInput);
+
+    expect(result.status).toBe('succeeded');
+    if (result.status !== 'succeeded') return;
+    expect(result.sourceMap.pages[0]).toMatchObject({ height: 72 });
+    expect(result.sourceMap.pages[0]?.blocks.map((block) => ({ text: block.text, y: block.boundingBox.y }))).toEqual([
+      { text: 'alpha', y: 0 },
+      { text: 'beta', y: 0 },
+      { text: 'gamma', y: 24 },
+      { text: 'delta', y: 24 },
+      { text: 'epsilon', y: 48 },
+      { text: 'zeta', y: 48 },
+    ]);
+  });
+
+  it('keeps carriage returns inside quoted CSV fields', async () => {
+    const parserInput = input('"line\rbreak",tail', 'text/csv');
+    const result = await executeDocumentParser(createTextExtractor({}), parserInput);
+
+    expect(result.status).toBe('succeeded');
+    if (result.status !== 'succeeded') return;
+    expect(result.sourceMap.pages[0]?.blocks.map((block) => block.text)).toEqual(['line\rbreak', 'tail']);
+  });
+
+  it('treats a bare CR after a closing CSV quote as a row boundary', async () => {
+    const parserInput = input('"closed"\rnext,value', 'text/csv');
+    const result = await executeDocumentParser(createTextExtractor({}), parserInput);
+
+    expect(result.status).toBe('succeeded');
+    if (result.status !== 'succeeded') return;
+    expect(result.sourceMap.pages[0]).toMatchObject({ height: 48 });
+    expect(result.sourceMap.pages[0]?.blocks.map((block) => ({ text: block.text, y: block.boundingBox.y }))).toEqual([
+      { text: 'closed', y: 0 },
+      { text: 'next', y: 24 },
+      { text: 'value', y: 24 },
     ]);
   });
 
@@ -634,6 +684,32 @@ describe('deterministic text DocumentParser', () => {
     ['worksheet row/cell coordinate mismatch', () => strictXlsxFixture(`<worksheet xmlns="${SPREADSHEETML_NAMESPACE}"><sheetData><row r="2"><c r="A1"><v>1</v></c></row></sheetData></worksheet>`)],
     ['arbitrary untyped OOXML value', () => strictXlsxFixture(`<worksheet xmlns="${SPREADSHEETML_NAMESPACE}"><sheetData><row r="1"><c r="A1"><v>not-a-number</v></c></row></sheetData></worksheet>`)],
   ])('rejects strict-subset XLSX %s', async (_label, createFixture) => {
+    await expect(parseStructuredXlsxPages(createFixture())).rejects.toThrow();
+  });
+
+  it.each([
+    ['raw less-than in a workbook attribute', () => strictXlsxFixtureWithOverrides({
+      'xl/workbook.xml': `<workbook xmlns="${SPREADSHEETML_NAMESPACE}" xmlns:r="${OFFICE_RELATIONSHIPS_NAMESPACE}"><sheets><sheet name="Bad<Name" sheetId="1" r:id="rId1"/></sheets></workbook>`,
+    })],
+    ['raw less-than in a shared-string attribute', () => strictXlsxFixtureWithOverrides({
+      'xl/sharedStrings.xml': `<sst xmlns="${SPREADSHEETML_NAMESPACE}"><si><t xml:space="pre<serve">value</t></si></sst>`,
+    })],
+    ['raw less-than in shared-string text', () => strictXlsxFixtureWithOverrides({
+      'xl/sharedStrings.xml': `<sst xmlns="${SPREADSHEETML_NAMESPACE}"><si><t>value < raw</t></si></sst>`,
+    })],
+    ['a forbidden text terminator in shared strings', () => strictXlsxFixtureWithOverrides({
+      'xl/sharedStrings.xml': `<sst xmlns="${SPREADSHEETML_NAMESPACE}"><si><t>value]]></t></si></sst>`,
+    })],
+    ['an XML 1.0 control character in a workbook attribute', () => strictXlsxFixtureWithOverrides({
+      'xl/workbook.xml': `<workbook xmlns="${SPREADSHEETML_NAMESPACE}" xmlns:r="${OFFICE_RELATIONSHIPS_NAMESPACE}"><sheets><sheet name="Bad\u0001Name" sheetId="1" r:id="rId1"/></sheets></workbook>`,
+    })],
+    ['an XML 1.0 control character in shared-string text', () => strictXlsxFixtureWithOverrides({
+      'xl/sharedStrings.xml': `<sst xmlns="${SPREADSHEETML_NAMESPACE}"><si><t>bad\u0001value</t></si></sst>`,
+    })],
+    ['an XML 1.0-invalid character reference in shared-string text', () => strictXlsxFixtureWithOverrides({
+      'xl/sharedStrings.xml': `<sst xmlns="${SPREADSHEETML_NAMESPACE}"><si><t>bad&#xFFFE;value</t></si></sst>`,
+    })],
+  ])('rejects XML-invalid XLSX content with %s', async (_label, createFixture) => {
     await expect(parseStructuredXlsxPages(createFixture())).rejects.toThrow();
   });
 

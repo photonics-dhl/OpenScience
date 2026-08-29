@@ -9,6 +9,7 @@ import {
   mkdtempSync,
   readFileSync,
   rmSync,
+  writeFileSync,
 } from 'node:fs';
 import { createRequire } from 'node:module';
 import { dirname, extname, join, relative, resolve, sep } from 'node:path';
@@ -46,6 +47,9 @@ const NATIVE_PDF_TEXT_ITEM_METADATA = {
 const agentWorkerRoot = fileURLToPath(new URL('..', import.meta.url));
 const compiledRoot = resolve(agentWorkerRoot, 'dist');
 const workspaceRoot = resolve(agentWorkerRoot, '../..');
+const parserImageDeferredModuleEdges = new Set([
+  'ingestion-parser.js\0dynamic import\0./parsers/base-parser.js',
+]);
 
 function parserImageCopies() {
   const dockerfile = readFileSync(new URL('../Dockerfile.parser', import.meta.url), 'utf8');
@@ -53,6 +57,58 @@ function parserImageCopies() {
   const copyPattern = /^COPY(?:\s+--\S+)*\s+(\S+)\s+(\S+)\s*$/gmu;
   for (const match of dockerfile.matchAll(copyPattern)) {
     copies.set(match[2].replace(/^\.\//u, ''), match[1]);
+  }
+  return copies;
+}
+
+function parserImageDomainCopies(dockerfile) {
+  const copies = [];
+  const logicalDockerfile = dockerfile.replace(/\\\r?\n[ \t]*/gu, ' ');
+  for (const rawLine of logicalDockerfile.split(/\r?\n/u)) {
+    const line = rawLine.trimStart();
+    if (!/^COPY\b/iu.test(line)) continue;
+    let instruction = line.replace(/^COPY\b/iu, '').trimStart();
+    while (/^--\S+\s+/u.test(instruction)) instruction = instruction.replace(/^--\S+\s+/u, '');
+    const jsonSyntax = instruction.startsWith('[');
+    let sources;
+    let target;
+    if (jsonSyntax) {
+      let entries;
+      try {
+        entries = JSON.parse(instruction);
+      } catch {
+        assert.fail('Docker COPY must use static one-source exact COPY syntax');
+      }
+      assert.ok(Array.isArray(entries) && entries.length >= 2 && entries.every((entry) => typeof entry === 'string'),
+        'Docker COPY must use static one-source exact COPY syntax');
+      sources = entries.slice(0, -1);
+      target = entries.at(-1);
+    } else {
+      const entries = instruction.split(/\s+/u);
+      assert.ok(entries.length >= 2, 'Docker COPY must use static one-source exact COPY syntax');
+      sources = entries.slice(0, -1);
+      target = entries.at(-1);
+    }
+    for (const rawSource of sources) {
+      assert.doesNotMatch(rawSource, /[$*?[\]{}]/u, 'Docker COPY must use static one-source exact COPY syntax');
+      assert.ok(
+        !rawSource.split('/').some((segment) => segment === '.' || segment === '..'),
+        'Docker COPY source path aliases are forbidden',
+      );
+    }
+    const domainRoot = 'packages/domain';
+    for (const rawSource of sources) {
+      const source = rawSource.replace(/^\.?\/+|\/+$/gu, '');
+      const includesDomain = source === '' || source === '.' || source === domainRoot
+        || domainRoot.startsWith(`${source}/`) || source.startsWith(`${domainRoot}/`);
+      if (!includesDomain) continue;
+      assert.ok(!jsonSyntax && sources.length === 1, 'packages/domain must use one-source exact COPY syntax');
+      assert.notEqual(source, '', 'broad source includes packages/domain');
+      assert.notEqual(source, '.', 'broad source includes packages/domain');
+      assert.notEqual(source, 'packages', 'broad source includes packages/domain');
+      assert.notEqual(source, domainRoot, 'broad source includes packages/domain');
+      copies.push({ source, target: target.replace(/^\.\//u, '') });
+    }
   }
   return copies;
 }
@@ -70,10 +126,119 @@ function parserImageDistAllowlist() {
   return copied;
 }
 
+function unwrapExpression(expression) {
+  if (ts.isParenthesizedExpression(expression)) return unwrapExpression(expression.expression);
+  if (ts.isBinaryExpression(expression) && expression.operatorToken.kind === ts.SyntaxKind.CommaToken) {
+    return unwrapExpression(expression.right);
+  }
+  return expression;
+}
+
+function isCreateRequireReference(expression, createRequireFactories) {
+  const candidate = unwrapExpression(expression);
+  return (ts.isIdentifier(candidate) && createRequireFactories.has(candidate.text))
+    || (ts.isPropertyAccessExpression(candidate) && candidate.name.text === 'createRequire');
+}
+
+function isNodeModuleRequire(expression) {
+  const candidate = unwrapExpression(expression);
+  return ts.isCallExpression(candidate)
+    && ts.isIdentifier(unwrapExpression(candidate.expression))
+    && unwrapExpression(candidate.expression).text === 'require'
+    && candidate.arguments.length === 1
+    && ts.isStringLiteralLike(candidate.arguments[0])
+    && candidate.arguments[0].text === 'node:module';
+}
+
+function literalModuleRequest(call, current, edgeKind) {
+  assert.equal(call.arguments.length, 1, `${edgeKind} must have exactly one module request in ${relative(agentWorkerRoot, current)}`);
+  const request = call.arguments[0];
+  assert.ok(
+    request && ts.isStringLiteralLike(request),
+    `computed module request is forbidden for ${edgeKind} in ${relative(agentWorkerRoot, current)}`,
+  );
+  return request.text;
+}
+
+function compiledModuleEdges(source, current) {
+  const sourceFile = ts.createSourceFile(current, source, ts.ScriptTarget.ESNext, true, ts.ScriptKind.JS);
+  const createRequireFactories = new Set(['createRequire']);
+  function collectFactories(node) {
+    if (ts.isImportDeclaration(node) && ts.isStringLiteralLike(node.moduleSpecifier)
+      && node.moduleSpecifier.text === 'node:module') {
+      const bindings = node.importClause?.namedBindings;
+      if (bindings && ts.isNamedImports(bindings)) {
+        for (const element of bindings.elements) {
+          if ((element.propertyName?.text ?? element.name.text) === 'createRequire') {
+            createRequireFactories.add(element.name.text);
+          }
+        }
+      }
+    } else if (ts.isVariableDeclaration(node) && node.initializer) {
+      if (ts.isObjectBindingPattern(node.name) && isNodeModuleRequire(node.initializer)) {
+        for (const element of node.name.elements) {
+          if ((element.propertyName?.getText(sourceFile) ?? element.name.getText(sourceFile)) === 'createRequire'
+            && ts.isIdentifier(element.name)) createRequireFactories.add(element.name.text);
+        }
+      } else if (ts.isIdentifier(node.name) && ts.isPropertyAccessExpression(node.initializer)
+        && node.initializer.name.text === 'createRequire'
+        && isNodeModuleRequire(node.initializer.expression)) {
+        createRequireFactories.add(node.name.text);
+      }
+    }
+    ts.forEachChild(node, collectFactories);
+  }
+  collectFactories(sourceFile);
+  const createRequireLoaders = new Set();
+  function collectLoaders(node) {
+    if (ts.isVariableDeclaration(node) && ts.isIdentifier(node.name) && node.initializer
+      && ts.isCallExpression(node.initializer)
+      && isCreateRequireReference(node.initializer.expression, createRequireFactories)) {
+      assert.equal(node.initializer.arguments.length, 1, `createRequire must have one base in ${relative(agentWorkerRoot, current)}`);
+      createRequireLoaders.add(node.name.text);
+    }
+    ts.forEachChild(node, collectLoaders);
+  }
+  collectLoaders(sourceFile);
+
+  const edges = [];
+  function visit(node) {
+    if (ts.isImportDeclaration(node) || (ts.isExportDeclaration(node) && node.moduleSpecifier !== undefined)) {
+      assert.ok(ts.isStringLiteralLike(node.moduleSpecifier), `computed static module request in ${relative(agentWorkerRoot, current)}`);
+      edges.push({ kind: 'static import', request: node.moduleSpecifier.text });
+    } else if (ts.isCallExpression(node)) {
+      const expression = unwrapExpression(node.expression);
+      if (expression.kind === ts.SyntaxKind.ImportKeyword) {
+        edges.push({ kind: 'dynamic import', request: literalModuleRequest(node, current, 'dynamic import') });
+      } else if (ts.isCallExpression(expression)
+        && isCreateRequireReference(expression.expression, createRequireFactories)) {
+        assert.equal(expression.arguments.length, 1, `createRequire must have one base in ${relative(agentWorkerRoot, current)}`);
+        edges.push({ kind: 'createRequire loader', request: literalModuleRequest(node, current, 'createRequire loader') });
+      } else if (ts.isIdentifier(expression)
+        && (expression.text === 'require' || createRequireLoaders.has(expression.text))) {
+        edges.push({
+          kind: createRequireLoaders.has(expression.text) ? 'createRequire loader' : 'require',
+          request: literalModuleRequest(node, current, expression.text),
+        });
+      } else if (ts.isPropertyAccessExpression(expression) && expression.name.text === 'resolve'
+        && ((ts.isIdentifier(expression.expression)
+          && (expression.expression.text === 'require' || createRequireLoaders.has(expression.expression.text)))
+          || (ts.isCallExpression(expression.expression)
+            && isCreateRequireReference(expression.expression.expression, createRequireFactories)))) {
+        edges.push({ kind: 'require.resolve', request: literalModuleRequest(node, current, 'require.resolve') });
+      }
+    }
+    ts.forEachChild(node, visit);
+  }
+  visit(sourceFile);
+  return edges;
+}
+
 function compiledParserRuntimeClosure(entry) {
   const pending = [entry];
   const runtimeFiles = new Set();
   const workspaceImports = new Set();
+  const deferredModuleEdges = new Set();
   let spawnedModuleCount = 0;
   while (pending.length > 0) {
     const current = pending.pop();
@@ -81,12 +246,16 @@ function compiledParserRuntimeClosure(entry) {
     assert.ok(existsSync(current), `compiled parser runtime file is missing: ${relative(agentWorkerRoot, current)}`);
     runtimeFiles.add(current);
     const source = readFileSync(current, 'utf8');
-    for (const match of source.matchAll(/require\((['"])([^'"]+)\1\)/gu)) {
-      if (match[2].startsWith('.')) {
-        const dependency = resolve(dirname(current), extname(match[2]) ? match[2] : `${match[2]}.js`);
+    for (const edge of compiledModuleEdges(source, current)) {
+      const currentRelative = relative(compiledRoot, current).split(sep).join('/');
+      const deferredKey = `${currentRelative}\0${edge.kind}\0${edge.request}`;
+      if (parserImageDeferredModuleEdges.has(deferredKey)) {
+        deferredModuleEdges.add(deferredKey);
+      } else if (edge.request.startsWith('.')) {
+        const dependency = resolve(dirname(current), extname(edge.request) ? edge.request : `${edge.request}.js`);
         pending.push(dependency);
-      } else if (match[2].startsWith('@openscience/')) {
-        workspaceImports.add(match[2]);
+      } else if (edge.request.startsWith('@openscience/')) {
+        workspaceImports.add(edge.request);
       }
     }
     for (const match of source.matchAll(/join\)\(__dirname,\s*['"]([^'"]+)['"],\s*`([^$`]+)\$\{[^`]*extname\)\(__filename\)\}`\)/gu)) {
@@ -95,7 +264,7 @@ function compiledParserRuntimeClosure(entry) {
     }
   }
   assert.ok(spawnedModuleCount > 0, 'compiled parser runtime closure must include its spawned module child');
-  return { runtimeFiles, workspaceImports };
+  return { runtimeFiles, workspaceImports, deferredModuleEdges };
 }
 
 function compiledLeafRuntimeDependencySyntax(source, filename) {
@@ -172,7 +341,8 @@ function assertBoxApproximately(actual, expected) {
 
 test('parser image allowlist contains the compiled entrypoint runtime closure and spawned children', () => {
   const allowlist = parserImageDistAllowlist();
-  const { runtimeFiles } = compiledParserRuntimeClosure(resolve(compiledRoot, 'parser-service.js'));
+  const { runtimeFiles, deferredModuleEdges } = compiledParserRuntimeClosure(resolve(compiledRoot, 'parser-service.js'));
+  assert.deepEqual(deferredModuleEdges, parserImageDeferredModuleEdges);
   const missing = [...runtimeFiles]
     .filter((runtimeFile) => !allowlist.has(runtimeFile))
     .map((runtimeFile) => relative(agentWorkerRoot, runtimeFile).split(sep).join('/'))
@@ -224,6 +394,88 @@ test('parser image explicitly packages every workspace import as an isolated zer
     }
   } finally {
     rmSync(sandbox, { recursive: true, force: true });
+  }
+});
+
+test('compiled closure discovers every supported module edge syntax and rejects computed requests', () => {
+  const sandbox = mkdtempSync(join(tmpdir(), 'openscience-parser-closure-'));
+  try {
+    const child = join(sandbox, 'child.js');
+    const dependency = join(sandbox, 'dependency.js');
+    const entry = join(sandbox, 'entry.js');
+    mkdirSync(join(sandbox, 'parsers'), { recursive: true });
+    writeFileSync(dependency, 'module.exports = {};');
+    writeFileSync(child, 'module.exports = {};');
+    copyFileSync(child, join(sandbox, 'parsers', 'spawned.js'));
+    const spawnedEdge = "(0, node_path_1.join)(__dirname, 'parsers', `spawned${(0, node_path_1.extname)(__filename)}`);";
+    const cases = [
+      { source: `${spawnedEdge}\nimport '@openscience/domain/virtual-page';`, workspace: '@openscience/domain/virtual-page' },
+      { source: `${spawnedEdge}\nimport('./dependency.js');`, runtime: dependency },
+      { source: `${spawnedEdge}\nrequire.resolve('@openscience/domain/virtual-page');`, workspace: '@openscience/domain/virtual-page' },
+      { source: `${spawnedEdge}\nconst load = createRequire(import.meta.url); load('@openscience/domain/virtual-page');`, workspace: '@openscience/domain/virtual-page' },
+      { source: `${spawnedEdge}\ncreateRequire(import.meta.url)('@openscience/domain/virtual-page');`, workspace: '@openscience/domain/virtual-page' },
+      { source: `${spawnedEdge}\nimport { createRequire as makeRequire } from 'node:module'; const load = makeRequire(import.meta.url); load('@openscience/domain/virtual-page');`, workspace: '@openscience/domain/virtual-page' },
+      { source: `${spawnedEdge}\nconst { createRequire: makeRequire } = require('node:module'); const load = makeRequire(__filename); load('@openscience/domain/virtual-page');`, workspace: '@openscience/domain/virtual-page' },
+    ];
+    for (const [index, fixture] of cases.entries()) {
+      const fixtureEntry = `${entry}.${index}.js`;
+      writeFileSync(fixtureEntry, fixture.source);
+      const closure = compiledParserRuntimeClosure(fixtureEntry);
+      if (fixture.workspace) assert.ok(closure.workspaceImports.has(fixture.workspace));
+      if (fixture.runtime) assert.ok(closure.runtimeFiles.has(fixture.runtime));
+    }
+
+    const computedCases = [
+      `const leaf = 'virtual-page'; require('@openscience/domain/' + leaf);`,
+      `const request = '@openscience/domain/virtual-page'; import(request);`,
+      `const request = '@openscience/domain/virtual-page'; require.resolve(request);`,
+      `const request = '@openscience/domain/virtual-page'; createRequire(import.meta.url)(request);`,
+      `const { createRequire: makeRequire } = require('node:module'); const request = '@openscience/domain/virtual-page'; makeRequire(__filename)(request);`,
+    ];
+    for (const computedCase of computedCases) {
+      writeFileSync(entry, `${spawnedEdge}\n${computedCase}`);
+      assert.throws(() => compiledParserRuntimeClosure(entry), /computed module request/);
+    }
+  } finally {
+    rmSync(sandbox, { recursive: true, force: true });
+  }
+});
+
+test('parser image Domain COPY instructions are an exact runtime-leaf allowlist', () => {
+  const dockerfile = readFileSync(new URL('../Dockerfile.parser', import.meta.url), 'utf8');
+  assert.deepEqual(parserImageDomainCopies(dockerfile), [
+    {
+      source: 'packages/domain/package.json',
+      target: 'node_modules/@openscience/domain/package.json',
+    },
+    {
+      source: 'packages/domain/dist/research-intelligence/virtual-page.js',
+      target: 'node_modules/@openscience/domain/dist/research-intelligence/virtual-page.js',
+    },
+  ]);
+  assert.throws(
+    () => parserImageDomainCopies(`${dockerfile}\nCOPY ["packages/domain/package.json", "/tmp/domain.json"]\n`),
+    /one-source exact COPY syntax/,
+  );
+  assert.throws(
+    () => parserImageDomainCopies(`${dockerfile}\n  copy packages/domain /tmp/domain\n`),
+    /broad source includes packages\/domain/,
+  );
+  assert.throws(
+    () => parserImageDomainCopies(`${dockerfile}\nCOPY \\\n  packages/domain /tmp/domain\n`),
+    /broad source includes packages\/domain/,
+  );
+  for (const broadCopy of [
+    'COPY packages /tmp/packages',
+    'COPY . /app',
+    'COPY packages/. /app/packages',
+    'COPY packages/domain/../domain/package.json /tmp/domain.json',
+    'COPY ${SOURCE_PATH} /app',
+  ]) {
+    assert.throws(
+      () => parserImageDomainCopies(`${dockerfile}\n${broadCopy}\n`),
+      /static one-source exact COPY syntax|broad source includes packages\/domain|path aliases are forbidden/,
+    );
   }
 });
 

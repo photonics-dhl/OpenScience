@@ -245,6 +245,19 @@ const OFFICE_RELATIONSHIPS_NAMESPACE = 'http://schemas.openxmlformats.org/office
 const PACKAGE_RELATIONSHIPS_NAMESPACE = 'http://schemas.openxmlformats.org/package/2006/relationships';
 const WORKSHEET_RELATIONSHIP_TYPE = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet';
 
+function isXml10Character(value: number): boolean {
+  return value === 0x9 || value === 0xa || value === 0xd
+    || (value >= 0x20 && value <= 0xd7ff)
+    || (value >= 0xe000 && value <= 0xfffd)
+    || (value >= 0x10000 && value <= 0x10ffff);
+}
+
+function assertXml10Characters(text: string): void {
+  for (const character of text) {
+    if (!isXml10Character(character.codePointAt(0)!)) throw new Error('invalid XML 1.0 character');
+  }
+}
+
 function decodeXmlText(text: string): string {
   let decoded = '';
   for (let cursor = 0; cursor < text.length;) {
@@ -263,8 +276,7 @@ function decodeXmlText(text: string): string {
       const numeric = /^#x([\da-f]+)$/iu.exec(code) ?? /^#(\d+)$/u.exec(code);
       if (!numeric) throw new Error('unsupported XML entity');
       const value = Number.parseInt(numeric[1]!, code[1]!.toLowerCase() === 'x' ? 16 : 10);
-      if (!Number.isInteger(value) || value > 0x10ffff || (value >= 0xd800 && value <= 0xdfff)
-        || (value < 0x20 && value !== 0x9 && value !== 0xa && value !== 0xd)) {
+      if (!Number.isInteger(value) || !isXml10Character(value)) {
         throw new Error('invalid XML entity');
       }
       decoded += String.fromCodePoint(value);
@@ -276,6 +288,7 @@ function decodeXmlText(text: string): string {
 
 function boundedXml(content: Buffer): string {
   const xml = decodeUtf8(content);
+  assertXml10Characters(xml);
   if (/<!DOCTYPE|<!ENTITY|<!\[CDATA\[/iu.test(xml)) throw new XlsxParsingLimitError();
   let entityCount = 0;
   for (let start = xml.indexOf('&'); start !== -1; start = xml.indexOf('&', start + 1)) {
@@ -391,8 +404,10 @@ function parseXmlStartTag(
     if (quote !== '"' && quote !== "'") throw new Error('XML attribute must be quoted');
     const end = content.indexOf(quote, cursor + 1);
     if (end === -1) throw new Error('unterminated XML attribute');
+    const rawValue = content.slice(cursor + 1, end);
+    if (rawValue.includes('<')) throw new Error('raw less-than in XML attribute');
     if (attributes.has(attributeName)) throw new Error('duplicate XML attribute');
-    attributes.set(attributeName, decodeXmlText(content.slice(cursor + 1, end)));
+    attributes.set(attributeName, decodeXmlText(rawValue));
     cursor = end + 1;
   }
   return { name, attributes, selfClosing };
@@ -408,6 +423,7 @@ function parseStrictXml(content: Buffer): XmlNode {
   let declarationCount = 0;
   const appendText = (text: string) => {
     if (!text) return;
+    if (text.includes(']]>')) throw new Error('forbidden XML text terminator');
     if (stack.length === 0) {
       if (text.trim()) throw new Error('XML content outside root element');
       return;

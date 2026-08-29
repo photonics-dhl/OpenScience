@@ -255,19 +255,21 @@ function parseCsv(content: Buffer): SourceMapPageDraft[] {
       if (character === ',') {
         finishField();
         closedQuote = false;
-      } else if (character === '\n') {
+      } else if (character === '\r' || character === '\n') {
         finishRow();
         closedQuote = false;
-      } else if (character !== '\r') {
+        if (character === '\r' && text[index + 1] === '\n') index += 1;
+      } else {
         throw new Error('malformed CSV');
       }
     } else if (character === '"' && cell.length === 0) {
       quoted = true;
     } else if (character === ',') {
       finishField();
-    } else if (character === '\n') {
+    } else if (character === '\r' || character === '\n') {
       finishRow();
-    } else if (character !== '\r') {
+      if (character === '\r' && text[index + 1] === '\n') index += 1;
+    } else {
       append(character);
     }
   }
