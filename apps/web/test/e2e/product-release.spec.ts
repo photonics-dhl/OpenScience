@@ -40,6 +40,8 @@ async function json(route: Route, body: unknown, status = 200) {
 }
 
 async function installClientFixtures(page: Page) {
+  let evidenceDefaultCollapsed = false;
+  let readingPreferenceVersion = 1;
   await page.route('**/api/auth/me', (route) => json(route, {
     userId: 'user-release', email: 'release@example.invalid', displayName: 'Ada Researcher', status: 'email_verified', level: 'free',
   }));
@@ -59,6 +61,14 @@ async function installClientFixtures(page: Page) {
     methods: ['time-resolved spectroscopy'], topics: ['ultrafast dynamics'], languages: ['en'],
     acceptedSignals: [], rejectedSignals: [], profileVersion: 1,
   } }));
+  await page.route('**/api/reading-preferences', (route) => {
+    if (route.request().method() === 'PATCH') {
+      const input = route.request().postDataJSON() as { evidenceDefaultCollapsed?: boolean } | null;
+      evidenceDefaultCollapsed = input?.evidenceDefaultCollapsed === true;
+      readingPreferenceVersion += 1;
+    }
+    return json(route, { evidenceDefaultCollapsed, version: readingPreferenceVersion });
+  });
   await page.route('**/api/explore**', (route) => json(route, { items: [{
     publicId: 'OSR-DEMO-000001', title: 'WrightTools · multidimensional spectroscopy',
     url: '/research/OSR-DEMO-000001', latestVersion: 1, publishedAt: '2026-08-10T00:00:00.000Z',
