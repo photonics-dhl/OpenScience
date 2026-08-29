@@ -44,10 +44,11 @@ test('Task 8 acceptance launcher exposes its exact isolated topology and rejects
   assert.equal(contractRun.status, 0, contractRun.stderr);
   const contract = JSON.parse(contractRun.stdout);
   assert.deepEqual(contract, {
-    schemaVersion: 2,
+    schemaVersion: 3,
+    acceptanceProfile: 'hermes-parser-14-2-v1',
     sourceSha: sha,
     corpusCases: 16,
-    manifestSha256: '34b46c5405c7d2114183cfb8e3b938a392ddf1e43941fed0818f7a3ab3b7fae6',
+    manifestSha256: 'c50309017738e53eb7b06d946ba1388ffe028198250e0cd34096ba9b89f1dc1d',
     actualPath: 'artifact-backed-sdf.extract',
     paths: {
       releaseRoot: `/opt/openscience-releases/${sha}`,
@@ -63,7 +64,7 @@ test('Task 8 acceptance launcher exposes its exact isolated topology and rejects
     },
     parser: { user: '1000:1000', effectiveEnvCount: 0, hostBindMounts: 0, releaseMounts: 0 },
     network: 'none',
-    calls: { structuredFake: 10, externalProvider: 0, forbiddenGateway: 0 },
+    calls: { structuredFake: 14, externalProvider: 0, forbiddenGateway: 0 },
     freshBuildIdentity: {
       required: true,
       runnerSha256: true,

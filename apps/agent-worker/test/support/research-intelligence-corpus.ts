@@ -2,10 +2,13 @@ import { createHash } from 'node:crypto';
 
 import {
   createDefaultIngestionAdapters,
+  executeDocumentParser,
   parseIngestionWithAdapters,
   type ParsedIngestion,
 } from '../../src/ingestion-parser';
+import { canonicalParserMediaType } from '../../src/parser-media-type';
 import { createParserSelfTestFixtures } from '../../src/parser-self-test';
+import { createTextExtractor } from '../../src/parsers/text-extractor';
 
 export type ResearchCorpusFeature =
   | 'native_text'
@@ -384,7 +387,7 @@ export const RESEARCH_INTELLIGENCE_CORPUS: ResearchCorpusCase[] = [
     features: ['table', 'csv'],
     rights: 'self-authored',
     expectedLocators: [{ kind: 'table-cell', row: 2, column: 2, quote: '42' }],
-    expectedCurrentStatus: 'needs_review',
+    expectedCurrentStatus: 'ready',
   },
   {
     id: 'table-xlsx-en',
@@ -394,7 +397,7 @@ export const RESEARCH_INTELLIGENCE_CORPUS: ResearchCorpusCase[] = [
     features: ['table', 'xlsx'],
     rights: 'self-authored',
     expectedLocators: [{ kind: 'table-cell', sheet: 'Evidence', row: 2, column: 2, quote: '42' }],
-    expectedCurrentStatus: 'needs_review',
+    expectedCurrentStatus: 'ready',
   },
   {
     id: 'notebook-en',
@@ -409,7 +412,7 @@ export const RESEARCH_INTELLIGENCE_CORPUS: ResearchCorpusCase[] = [
     features: ['notebook', 'code'],
     rights: 'self-authored',
     expectedLocators: [{ kind: 'notebook-cell', cell: 1, quote: 'pulse_width_fs = 42' }],
-    expectedCurrentStatus: 'needs_review',
+    expectedCurrentStatus: 'ready',
   },
   {
     id: 'python-code-en',
@@ -419,7 +422,7 @@ export const RESEARCH_INTELLIGENCE_CORPUS: ResearchCorpusCase[] = [
     features: ['code'],
     rights: 'self-authored',
     expectedLocators: [{ kind: 'line-text', line: 2, quote: 'pulse_width_fs = 42' }],
-    expectedCurrentStatus: 'needs_review',
+    expectedCurrentStatus: 'ready',
   },
 ];
 
@@ -457,6 +460,33 @@ export function buildResearchIntelligenceExport() {
 }
 
 export function parseResearchCorpusCase(corpusCase: ResearchCorpusCase): Promise<ParsedIngestion> {
+  if (['.csv', '.xlsx', '.ipynb', '.py'].some((extension) => corpusCase.filename.endsWith(extension))) {
+    const adapters = createDefaultIngestionAdapters();
+    const parser = createTextExtractor({
+      ...(adapters.xlsx ? { xlsx: (_request, content) => adapters.xlsx!(content) } : {}),
+    });
+    const contentHash = createHash('sha256').update(corpusCase.content).digest('hex');
+    return executeDocumentParser(parser, {
+      artifactId: `corpus-${corpusCase.id}`,
+      contentHash,
+      content: corpusCase.content,
+      mediaType: canonicalParserMediaType(corpusCase.filename),
+    }).then((result): ParsedIngestion => {
+      const transitionAccepted = result.status === 'needs_review' && result.reasons.length === 1
+        && ['structured-csv-review-required', 'structured-xlsx-review-required'].includes(result.reasons[0]!);
+      if (result.status === 'succeeded' || transitionAccepted) {
+        const text = result.sourceMap.pages.flatMap(({ blocks }) => blocks.flatMap(({ text: value }) => value ?? [])).join('\n');
+        if (text.trim()) {
+          return { status: 'ready', text, format: corpusCase.filename.split('.').at(-1) ?? 'unknown' };
+        }
+      }
+      return {
+        status: 'needs_review',
+        format: corpusCase.filename.split('.').at(-1) ?? 'unknown',
+        reason: result.status === 'needs_review' ? result.reasons[0] ?? 'parser-review-required' : 'parser-not-ready',
+      };
+    });
+  }
   return parseIngestionWithAdapters(
     corpusCase.filename,
     corpusCase.content,

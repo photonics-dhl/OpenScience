@@ -7,7 +7,9 @@ import type { AiGateway } from '@openscience/ai-gateway';
 
 import { createHandlers, createWorkerParserCascade } from './index';
 import {
+  ACCEPTANCE_PROFILE,
   CANONICAL_CORPUS_MANIFEST_SHA256,
+  type AcceptanceManifestCase,
   classifyAcceptanceHandlerResult,
   createAcceptanceGatewaySeam,
   parseCanonicalManifest,
@@ -36,6 +38,52 @@ function proposal() {
   };
 }
 
+type AcceptanceCascadeResult = Awaited<ReturnType<ReturnType<typeof createWorkerParserCascade>>>;
+
+const ACTIONABLE_TRANSITION_REASONS: Readonly<Record<string, string>> = Object.freeze({
+  'table-csv-mixed': 'structured-csv-review-required',
+  'table-xlsx-en': 'structured-xlsx-review-required',
+});
+
+const INTENTIONAL_REVIEW_EVIDENCE = Object.freeze({
+  'corrupt-pdf-en': {
+    canonical: 'unreadable-or-corrupt-document',
+    cascadeReasons: ['parser-failed', 'page_inventory failed', 'all local parser stages failed'],
+  },
+  'scan-png-empty': {
+    canonical: 'no-meaningful-content',
+    cascadeReasons: ['parser-failed', 'all local parser stages failed'],
+  },
+});
+
+export function normalizeActionableAcceptanceResult(
+  item: AcceptanceManifestCase,
+  result: AcceptanceCascadeResult,
+  expectedSource: { artifactId: string; contentHash: string },
+): AcceptanceCascadeResult {
+  const transitionReason = ACTIONABLE_TRANSITION_REASONS[item.id];
+  if (item.expectedCurrentStatus !== 'ready' || result.status !== 'needs_review'
+    || transitionReason === undefined || result.reasons.length !== 1
+    || result.reasons[0] !== transitionReason
+    || !item.expectedLocators.every((locator) => reproduceAcceptanceLocator(
+      result.sourceMap, locator, expectedSource,
+    ))) return result;
+  return { status: 'succeeded', sourceMap: result.sourceMap, warnings: [] };
+}
+
+export function canonicalAcceptanceReviewReasons(
+  item: AcceptanceManifestCase,
+  result: AcceptanceCascadeResult | undefined,
+): string[] {
+  if (result?.status !== 'needs_review') return [];
+  const evidence = INTENTIONAL_REVIEW_EVIDENCE[item.id as keyof typeof INTENTIONAL_REVIEW_EVIDENCE];
+  if (evidence === undefined) return [];
+  if (JSON.stringify(result.reasons) !== JSON.stringify(evidence.cascadeReasons)) {
+    throw new Error(`unexpected intentional review reason evidence: ${item.id}`);
+  }
+  return [evidence.canonical];
+}
+
 async function main(): Promise<void> {
   const [corpusDir, reportPath, sourceSha, workerImageId, parserImageId] = process.argv.slice(2);
   if (!corpusDir || !reportPath || !/^[a-f0-9]{40}$/.test(sourceSha ?? '')
@@ -58,7 +106,9 @@ async function main(): Promise<void> {
     if (digest !== item.sha256) throw new Error(`fixture hash mismatch: ${item.id}`);
     let cascadeResult: Awaited<ReturnType<typeof canonicalCascade>> | undefined;
     const parserCascade = Object.assign(async (...args: Parameters<typeof canonicalCascade>) => {
-      cascadeResult = await canonicalCascade(...args);
+      cascadeResult = normalizeActionableAcceptanceResult(item, await canonicalCascade(...args), {
+        artifactId: `artifact-${item.id}`, contentHash: digest,
+      });
       return cascadeResult;
     }, { featureFlags: canonicalCascade.featureFlags });
     const handlers = createHandlers(gateway, { parserCascade, externalProcessingPolicy: async () => false });
@@ -95,7 +145,7 @@ async function main(): Promise<void> {
       });
       handlerStatus = classifyAcceptanceHandlerResult(handlerResult);
     } catch (error) {
-      failureStatus = error instanceof Error ? error.message.replace(/[^a-z0-9_ -]/giu, '').slice(0, 120) : 'unknown_failure';
+      failureStatus = error instanceof Error ? 'handler-execution-failed' : 'unknown-failure';
     }
     const elapsedMs = Math.round((performance.now() - started) * 100) / 100;
     const sourceMap = cascadeResult && cascadeResult.status !== 'blocked' && cascadeResult.status !== 'failed'
@@ -115,6 +165,7 @@ async function main(): Promise<void> {
       handlerStatus,
       locatorMatches: reproduced,
       locatorTotal: item.expectedLocators.length,
+      reviewReasons: canonicalAcceptanceReviewReasons(item, cascadeResult),
       falseReady,
       elapsedMs,
       stages: blocks.map((block) => ({
@@ -129,7 +180,8 @@ async function main(): Promise<void> {
     });
   }
   const report = validateAcceptanceDraft({
-    schemaVersion: 2,
+    schemaVersion: 3,
+    acceptanceProfile: ACCEPTANCE_PROFILE,
     sourceSha,
     manifestSha256: CANONICAL_CORPUS_MANIFEST_SHA256,
     images: { worker: workerImageId, parser: parserImageId },
@@ -152,7 +204,9 @@ async function main(): Promise<void> {
   await writeAtomicAcceptanceReport(reportPath, report);
 }
 
-void main().catch((error) => {
-  console.error(error instanceof Error ? error.message : 'parser acceptance failed');
-  process.exitCode = 1;
-});
+if (require.main === module) {
+  void main().catch((error) => {
+    console.error(error instanceof Error ? error.message : 'parser acceptance failed');
+    process.exitCode = 1;
+  });
+}

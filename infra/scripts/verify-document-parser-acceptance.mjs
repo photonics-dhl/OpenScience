@@ -14,8 +14,9 @@ import {
 const SHA_PATTERN = /^[a-f0-9]{40}$/u;
 const IMAGE_PATTERN = /^sha256:[a-f0-9]{64}$/u;
 const MAX_REPORT_BYTES = 16 * 1024 * 1024;
+const ACCEPTANCE_PROFILE = 'hermes-parser-14-2-v1';
 const FINAL_REPORT_KEYS = [
-  'schemaVersion', 'sourceSha', 'manifestSha256', 'images', 'runtimeProcess',
+  'schemaVersion', 'acceptanceProfile', 'sourceSha', 'manifestSha256', 'images', 'runtimeProcess',
   'gatewayCalls', 'summary', 'cases', 'resources',
 ].sort();
 
@@ -61,7 +62,8 @@ export async function verifyParserAcceptance({
     throw new Error('parser acceptance final report shape is invalid');
   }
   const { resources, ...draft } = report;
-  if (draft.sourceSha !== sourceSha || draft.images?.worker !== workerImageId
+  if (draft.schemaVersion !== 3 || draft.acceptanceProfile !== ACCEPTANCE_PROFILE
+    || draft.sourceSha !== sourceSha || draft.images?.worker !== workerImageId
     || draft.images?.parser !== parserImageId) {
     throw new Error('parser acceptance report source or image identity mismatch');
   }

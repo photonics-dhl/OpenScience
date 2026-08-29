@@ -175,6 +175,30 @@ test('compiled worker-shared ingestion contract does not load the native PDF pro
   assert.equal(probe.status, 0, probe.stderr);
 });
 
+test('compiled acceptance locator requires the formal structured-table block contract', () => {
+  const contentHash = 'e71f6e5c40db4f3e257ee99961e81b899c817a7b00ed2e03b9c055d537aefa20';
+  const tableCell = (kind) => ({
+    artifactId: 'compiled-table',
+    contentHash,
+    parser: { name: 'openscience-text-extractor', version: '1.0.0' },
+    pages: [{
+      page: 1, width: 1000, height: 48,
+      blocks: [{
+        id: 'csv-r2-c2', kind, text: '42',
+        boundingBox: { x: 500, y: 24, width: 500, height: 24 },
+        parser: { name: 'openscience-text-extractor', version: '1.0.0' },
+        transformations: [{
+          stage: 'normalize',
+          processor: { name: 'openscience-virtual-page', version: 'openscience-virtual-page-v1' },
+        }],
+      }],
+    }],
+  });
+  const locator = { kind: 'table-cell', row: 2, column: 2, quote: '42' };
+  assert.equal(reproduceAcceptanceLocator(tableCell('table'), locator), true);
+  assert.equal(reproduceAcceptanceLocator(tableCell('paragraph'), locator), false);
+});
+
 test('compiled parser child and service composition preserve canonical native-PDF geometry', async () => {
   const { createDefaultIngestionAdapters } = require('../dist/ingestion-parser.js');
   const sidecar = createSidecarParserStageProcessor(createDefaultIngestionAdapters());

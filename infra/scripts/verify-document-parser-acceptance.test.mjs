@@ -52,12 +52,13 @@ exports.verifyAcceptanceRuntimeGraphManifest = async (_root, value) => {
   await writeFile(join(dependencyRoot, 'metadata.json'), '{"accepted":true}\n');
   const runtimeInputs = await createReleaseRuntimeSnapshot({ root: releaseRoot, sourceSha: sha });
   const report = {
-    schemaVersion: 2,
+    schemaVersion: 3,
+    acceptanceProfile: 'hermes-parser-14-2-v1',
     sourceSha: sha,
     manifestSha256: 'fixture',
     images: { worker: workerImageId, parser: parserImageId },
     runtimeProcess: { uid: 1000, gid: 1000, effectiveEnvCount: 0 },
-    gatewayCalls: { structuredFake: 10, externalProvider: 0, forbidden: {} },
+    gatewayCalls: { structuredFake: 14, externalProvider: 0, forbidden: {} },
     summary: {},
     cases: [],
     resources: {
@@ -94,6 +95,14 @@ test('formal deploy verifier rejects missing, tampered, wrong-source and image-m
     ['tampered JSON', async (state) => writeFile(state.reportPath, '{broken')],
     ['wrong source', async (state) => {
       await writeFile(state.reportPath, `${JSON.stringify({ ...state.report, sourceSha: 'f'.repeat(40) })}\n`);
+    }],
+    ['old schema v2', async (state) => {
+      await writeFile(state.reportPath, `${JSON.stringify({ ...state.report, schemaVersion: 2 })}\n`);
+    }],
+    ['wrong acceptance profile', async (state) => {
+      await writeFile(state.reportPath, `${JSON.stringify({
+        ...state.report, acceptanceProfile: 'legacy-10-6',
+      })}\n`);
     }],
     ['worker ID mismatch', async () => {}, { workerImageId: `sha256:${'d'.repeat(64)}` }],
     ['parser ID mismatch', async () => {}, { parserImageId: `sha256:${'e'.repeat(64)}` }],

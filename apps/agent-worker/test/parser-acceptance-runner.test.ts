@@ -12,20 +12,39 @@ import {
   reproduceAcceptanceLocator,
 } from '../src/parser-acceptance-contract';
 import { createSidecarParserStageProcessor } from '../src/parser-job-isolation';
+import {
+  canonicalAcceptanceReviewReasons,
+  normalizeActionableAcceptanceResult,
+} from '../src/parser-acceptance-runner';
 import { RESEARCH_INTELLIGENCE_CORPUS } from './support/research-intelligence-corpus';
 
 describe('Task 8 acceptance runner production composition', () => {
   it.each([
+    ['corrupt-pdf-en', ['parser-failed', 'page_inventory failed', 'all local parser stages failed'], 'unreadable-or-corrupt-document'],
+    ['scan-png-empty', ['parser-failed', 'all local parser stages failed'], 'no-meaningful-content'],
+  ])('canonicalizes only the exact bounded cascade reasons for %s', (id, reasons, canonical) => {
+    const fixture = RESEARCH_INTELLIGENCE_CORPUS.find((candidate) => candidate.id === id)!;
+    expect(canonicalAcceptanceReviewReasons(fixture, { status: 'needs_review', reasons } as never))
+      .toEqual([canonical]);
+    expect(() => canonicalAcceptanceReviewReasons(fixture, {
+      status: 'needs_review', reasons: ['parser-unavailable'],
+    } as never)).toThrow(/review reason evidence/i);
+    expect(() => canonicalAcceptanceReviewReasons(fixture, {
+      status: 'needs_review', reasons: [...reasons, 'provider exception'],
+    } as never)).toThrow(/review reason evidence/i);
+  });
+
+  it.each([
     {
       id: 'table-xlsx-en', mimeType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-      format: 'xlsx', reason: 'structured-xlsx-review-required',
     },
     {
       id: 'table-csv-mixed', mimeType: 'text/csv',
-      format: 'csv', reason: 'structured-csv-review-required',
     },
-  ])('keeps $id at needs_review with locator 1/1 and no eleventh structured fake', async ({
-    id, mimeType, format, reason,
+    { id: 'notebook-en', mimeType: 'application/x-ipynb+json' },
+    { id: 'python-code-en', mimeType: 'text/x-python' },
+  ])('accepts actionable $id with its full locator and exactly one structured fake', async ({
+    id, mimeType,
   }) => {
     const fixture = RESEARCH_INTELLIGENCE_CORPUS.find((candidate) => candidate.id === id);
     expect(fixture).toBeDefined();
@@ -40,7 +59,7 @@ describe('Task 8 acceptance runner production composition', () => {
         summary: '', sourceQuote: '', needsMoreInformation: true,
       }])),
     });
-    for (let index = 0; index < 10; index += 1) {
+    for (let index = 0; index < 13; index += 1) {
       await gatewaySeam.gateway.completeStructured();
     }
     const canonicalCascade = createWorkerParserCascade(
@@ -49,7 +68,9 @@ describe('Task 8 acceptance runner production composition', () => {
     );
     let cascadeResult: Awaited<ReturnType<typeof canonicalCascade>> | undefined;
     const parserCascade = Object.assign(async (...args: Parameters<typeof canonicalCascade>) => {
-      cascadeResult = await canonicalCascade(...args);
+      cascadeResult = normalizeActionableAcceptanceResult(fixture, await canonicalCascade(...args), {
+        artifactId, contentHash: digest,
+      });
       return cascadeResult;
     }, { featureFlags: canonicalCascade.featureFlags });
     const handlers = createHandlers(gatewaySeam.gateway as unknown as AiGateway, {
@@ -83,12 +104,9 @@ describe('Task 8 acceptance runner production composition', () => {
       executionAttempt: 1,
     });
 
-    expect(handlerResult).toEqual({
-      status: 'needs_review', format, reason,
-    });
-    expect(classifyAcceptanceHandlerResult(handlerResult)).toBe('needs_review');
-    expect(cascadeResult?.status).toBe('needs_review');
-    if (cascadeResult?.status !== 'needs_review') return;
+    expect(classifyAcceptanceHandlerResult(handlerResult)).toBe('completed');
+    expect(cascadeResult?.status).toBe('succeeded');
+    if (cascadeResult?.status !== 'succeeded') return;
     const locatorMatches = fixture.expectedLocators.filter((locator) => reproduceAcceptanceLocator(
       cascadeResult!.sourceMap,
       locator,
@@ -98,7 +116,7 @@ describe('Task 8 acceptance runner production composition', () => {
       locatorMatches: 1, locatorTotal: 1,
     });
     expect(gatewaySeam.snapshot()).toEqual({
-      structuredFake: 10,
+      structuredFake: 14,
       externalProvider: 0,
       forbidden: { complete: 0, ocr: 0, stream: 0, unknown: 0 },
     });

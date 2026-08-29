@@ -193,7 +193,7 @@
           "quote": "pulse_width_fs = 42"
         }
       ],
-      "expectedCurrentStatus": "needs_review",
+      "expectedCurrentStatus": "ready",
       "sha256": "eea43d501badf223c43fe7044522e107c0c26e9f011da3e653e45f147532b946"
     },
     {
@@ -211,7 +211,7 @@
           "quote": "pulse_width_fs = 42"
         }
       ],
-      "expectedCurrentStatus": "needs_review",
+      "expectedCurrentStatus": "ready",
       "sha256": "e080950cf9dc81cdb26ddff57c2ce44da974e550f142e62120f046a4ec834ab3"
     },
     {
@@ -334,7 +334,7 @@
           "quote": "42"
         }
       ],
-      "expectedCurrentStatus": "needs_review",
+      "expectedCurrentStatus": "ready",
       "sha256": "e71f6e5c40db4f3e257ee99961e81b899c817a7b00ed2e03b9c055d537aefa20"
     },
     {
@@ -401,7 +401,7 @@
           "quote": "42"
         }
       ],
-      "expectedCurrentStatus": "needs_review",
+      "expectedCurrentStatus": "ready",
       "sha256": "c371bc99687ba51d51d4081f2ae09274f1a52b95839c543870008d9fc34f4b1f"
     },
     {

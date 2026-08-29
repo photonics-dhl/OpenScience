@@ -3,12 +3,17 @@ import { constants } from 'node:fs';
 import { chown, link, lstat, mkdir, open, readdir, realpath, rm, writeFile } from 'node:fs/promises';
 import { basename, dirname, join, relative, resolve } from 'node:path';
 
-import type { DocumentSourceMap } from '@openscience/domain';
+import {
+  createTableCellSourceLocator,
+  resolveSourceLocator,
+  type DocumentSourceMap,
+} from '@openscience/domain';
 import { SDF_CORE_VERSION } from '@openscience/sdf-schema';
 
 import { PDF_TEXT_ITEM_METADATA } from './parsers/native-pdf-contract';
 
-export const CANONICAL_CORPUS_MANIFEST_SHA256 = '34b46c5405c7d2114183cfb8e3b938a392ddf1e43941fed0818f7a3ab3b7fae6';
+export const CANONICAL_CORPUS_MANIFEST_SHA256 = 'c50309017738e53eb7b06d946ba1388ffe028198250e0cd34096ba9b89f1dc1d';
+export const ACCEPTANCE_PROFILE = 'hermes-parser-14-2-v1';
 
 export interface AcceptanceLocator extends Record<string, unknown> { kind: string }
 export interface AcceptanceManifestCase {
@@ -138,13 +143,6 @@ function matchesVirtualLine(
     && sameCoordinate(block.boundingBox.height, VIRTUAL_LINE_HEIGHT);
 }
 
-function virtualColumn(block: DocumentSourceMap['pages'][number]['blocks'][number]): number | undefined {
-  if (!isVirtualBlock(block) || block.boundingBox.width <= 0) return undefined;
-  const raw = block.boundingBox.x / block.boundingBox.width;
-  const index = Math.round(raw);
-  return sameCoordinate(raw, index) ? index + 1 : undefined;
-}
-
 function markdownTableCellMatches(sourceMap: DocumentSourceMap, locator: AcceptanceLocator, quote: string): boolean {
   const row = Number(locator.row);
   const column = Number(locator.column);
@@ -156,6 +154,29 @@ function markdownTableCellMatches(sourceMap: DocumentSourceMap, locator: Accepta
     .filter((line) => !line.split('|').every((cell) => /^\s*:?-{3,}:?\s*$/u.test(cell)))
     .map((line) => line.split('|').map((cell) => cell.trim()));
   return tableRows[row - 1]?.[column - 1]?.includes(quote) ?? false;
+}
+
+function structuredTableCellMatches(
+  sourceMap: DocumentSourceMap,
+  locator: AcceptanceLocator,
+  quote: string,
+): boolean {
+  const row = Number(locator.row);
+  const column = Number(locator.column);
+  const sheet = locator.sheet;
+  if (!Number.isSafeInteger(row) || row < 1 || !Number.isSafeInteger(column) || column < 1
+    || (sheet !== undefined && (typeof sheet !== 'string' || !sheet))) return false;
+  return sourceMap.pages.some(({ blocks }) => blocks.some((block) => {
+    if (block.kind !== 'table' || !quoteMatches(block, quote)) return false;
+    try {
+      const formal = createTableCellSourceLocator(sourceMap, block.id, {
+        ...(typeof sheet === 'string' ? { sheet } : {}), row, column,
+      });
+      return resolveSourceLocator(sourceMap, formal).id === block.id;
+    } catch {
+      return false;
+    }
+  }));
 }
 
 export function reproduceAcceptanceLocator(
@@ -209,20 +230,8 @@ export function reproduceAcceptanceLocator(
   }
   if (quote && locator.kind === 'table-cell') {
     if (sourceMap.contentHash === MARKDOWN_TABLE_HASH) return markdownTableCellMatches(sourceMap, locator, quote);
-    const row = Number(locator.row);
-    const column = Number(locator.column);
-    if (!Number.isSafeInteger(row) || row < 1 || !Number.isSafeInteger(column) || column < 1) return false;
-    if (sourceMap.contentHash === CSV_TABLE_HASH) {
-      return blocks.some((block) => matchesVirtualLine(block, row) && virtualColumn(block) === column
-        && quoteMatches(block, quote));
-    }
-    if (sourceMap.contentHash === XLSX_TABLE_HASH && typeof locator.sheet === 'string' && locator.sheet) {
-      return pages.some(({ blocks: pageBlocks }) => {
-        const sheetMatches = pageBlocks.some((block) => matchesVirtualLine(block, 1)
-          && block.text === locator.sheet);
-        return sheetMatches && pageBlocks.some((block) => matchesVirtualLine(block, row + 1)
-          && virtualColumn(block) === column && quoteMatches(block, quote));
-      });
+    if (sourceMap.contentHash === CSV_TABLE_HASH || sourceMap.contentHash === XLSX_TABLE_HASH) {
+      return structuredTableCellMatches(sourceMap, locator, quote);
     }
     return false;
   }
@@ -243,15 +252,15 @@ export const CANONICAL_CASE_IDENTITIES = Object.freeze([
   ['markdown-mixed', 'claim.md', 'ready', 2],
   ['native-docx-en', 'fixture.docx', 'ready', 1],
   ['native-pdf-en', 'fixture.pdf', 'ready', 1],
-  ['notebook-en', 'analysis.ipynb', 'needs_review', 1],
-  ['python-code-en', 'analysis.py', 'needs_review', 1],
+  ['notebook-en', 'analysis.ipynb', 'ready', 1],
+  ['python-code-en', 'analysis.py', 'ready', 1],
   ['references-markdown-en', 'references.md', 'ready', 1],
   ['references-pdf-en', 'references.pdf', 'ready', 2],
   ['scan-pdf-image-only', 'scan.pdf', 'needs_review', 2],
   ['scan-png-empty', 'scan.png', 'needs_review', 1],
-  ['table-csv-mixed', 'evidence.csv', 'needs_review', 1],
+  ['table-csv-mixed', 'evidence.csv', 'ready', 1],
   ['table-pdf-en', 'table.pdf', 'ready', 3],
-  ['table-xlsx-en', 'evidence.xlsx', 'needs_review', 1],
+  ['table-xlsx-en', 'evidence.xlsx', 'ready', 1],
   ['tex-formula-en', 'method.tex', 'ready', 1],
 ] as const);
 
@@ -275,21 +284,21 @@ const CANONICAL_CASE_CONTENT_HASHES: Readonly<Record<string, string>> = Object.f
 });
 
 const HARD_CASE_EXPECTATIONS = Object.freeze([
-  ['corrupt-pdf-en', 'needs_review', 0],
+  ['corrupt-pdf-en', 'needs_review', 0, 'unreadable-or-corrupt-document'],
   ['dual-column-pdf-en', 'succeeded', 5],
   ['formula-pdf-en', 'succeeded', 2],
   ['markdown-mixed', 'succeeded', 2],
   ['native-docx-en', 'succeeded', 1],
   ['native-pdf-en', 'succeeded', 1],
-  ['notebook-en', 'needs_review', 0],
-  ['python-code-en', 'needs_review', 0],
+  ['notebook-en', 'succeeded', 1],
+  ['python-code-en', 'succeeded', 1],
   ['references-markdown-en', 'succeeded', 1],
   ['references-pdf-en', 'succeeded', 2],
   ['scan-pdf-image-only', 'succeeded', 2],
-  ['scan-png-empty', 'needs_review', 0],
-  ['table-csv-mixed', 'needs_review', 1],
+  ['scan-png-empty', 'needs_review', 0, 'no-meaningful-content'],
+  ['table-csv-mixed', 'succeeded', 1],
   ['table-pdf-en', 'succeeded', 3],
-  ['table-xlsx-en', 'needs_review', 1],
+  ['table-xlsx-en', 'succeeded', 1],
   ['tex-formula-en', 'succeeded', 1],
 ] as const);
 
@@ -312,13 +321,15 @@ interface AcceptanceCaseResult {
   handlerStatus: string;
   locatorMatches: number;
   locatorTotal: number;
+  reviewReasons: string[];
   falseReady: boolean;
   elapsedMs: number;
   stages: AcceptanceStage[];
   failureStatus?: string;
 }
 export interface AcceptanceDraft {
-  schemaVersion: 2;
+  schemaVersion: 3;
+  acceptanceProfile: typeof ACCEPTANCE_PROFILE;
   sourceSha: string;
   manifestSha256: string;
   images: { worker: string; parser: string };
@@ -539,39 +550,53 @@ function percentile(values: readonly number[], fraction: number): number {
 }
 
 function validBox(value: unknown): value is AcceptanceStage['boundingBox'] {
-  if (!isRecord(value)) return false;
+  if (!isRecord(value) || !hasExactKeys(value, ['x', 'y', 'width', 'height'])) return false;
   return ['x', 'y', 'width', 'height'].every((key) => Number.isFinite(value[key]))
     && Number(value.width) > 0 && Number(value.height) > 0;
 }
 
 function validateStage(stage: unknown): asserts stage is AcceptanceStage {
-  if (!isRecord(stage) || typeof stage.parser !== 'string' || !stage.parser
+  if (!isRecord(stage)
+    || !hasExactKeys(stage, ['parser', 'version', 'confidence', 'boundingBox', 'transformations'])
+    || typeof stage.parser !== 'string' || !stage.parser
     || typeof stage.version !== 'string' || !stage.version
     || (stage.confidence !== null && (!Number.isFinite(stage.confidence)
       || Number(stage.confidence) < 0 || Number(stage.confidence) > 1))
     || !validBox(stage.boundingBox) || !Array.isArray(stage.transformations)
     || stage.transformations.length === 0
-    || stage.transformations.some((item) => !isRecord(item) || typeof item.stage !== 'string' || !item.stage
+    || stage.transformations.some((item) => !isRecord(item)
+      || !hasExactKeys(item, ['stage', 'parser', 'version'])
+      || typeof item.stage !== 'string' || !item.stage
       || typeof item.parser !== 'string' || !item.parser || typeof item.version !== 'string' || !item.version)) {
     throw new Error('missing stage provenance');
   }
 }
 
 export function validateAcceptanceDraft(value: unknown): AcceptanceDraft {
-  if (!isRecord(value) || value.schemaVersion !== 2 || !/^[a-f0-9]{40}$/.test(String(value.sourceSha))
+  if (!isRecord(value) || !hasExactKeys(value, [
+    'schemaVersion', 'acceptanceProfile', 'sourceSha', 'manifestSha256', 'images',
+    'runtimeProcess', 'gatewayCalls', 'summary', 'cases',
+  ]) || value.schemaVersion !== 3 || value.acceptanceProfile !== ACCEPTANCE_PROFILE
+    || !/^[a-f0-9]{40}$/.test(String(value.sourceSha))
     || value.manifestSha256 !== CANONICAL_CORPUS_MANIFEST_SHA256 || !isRecord(value.images)
+    || !hasExactKeys(value.images, ['worker', 'parser'])
     || !/^sha256:[a-f0-9]{64}$/.test(String(value.images.worker))
     || !/^sha256:[a-f0-9]{64}$/.test(String(value.images.parser))) {
     throw new Error('invalid acceptance draft identity');
   }
-  if (!isRecord(value.runtimeProcess) || value.runtimeProcess.uid !== 1000
+  if (!isRecord(value.runtimeProcess)
+    || !hasExactKeys(value.runtimeProcess, ['uid', 'gid', 'effectiveEnvCount'])
+    || value.runtimeProcess.uid !== 1000
     || value.runtimeProcess.gid !== 1000 || value.runtimeProcess.effectiveEnvCount !== 0) {
     throw new Error('runtime process identity mismatch');
   }
   const gateway = value.gatewayCalls;
-  if (!isRecord(gateway) || gateway.structuredFake !== 10) throw new Error('structured fake call count mismatch');
+  if (!isRecord(gateway)
+    || !hasExactKeys(gateway, ['structuredFake', 'externalProvider', 'forbidden'])
+    || gateway.structuredFake !== 14) throw new Error('structured fake call count mismatch');
   const forbiddenCalls = gateway.forbidden;
   if (gateway.externalProvider !== 0 || !isRecord(forbiddenCalls)
+    || !hasExactKeys(forbiddenCalls, ['complete', 'ocr', 'stream', 'unknown'])
     || ['complete', 'ocr', 'stream', 'unknown'].some((key) => forbiddenCalls[key] !== 0)) {
     throw new Error('forbidden gateway call observed');
   }
@@ -584,7 +609,10 @@ export function validateAcceptanceDraft(value: unknown): AcceptanceDraft {
   let needsReview = 0;
   const elapsed: number[] = [];
   value.cases.forEach((raw, index) => {
-    if (!isRecord(raw)) throw new Error('invalid acceptance case');
+    if (!isRecord(raw) || !hasExactKeys(raw, [
+      'id', 'contentHash', 'status', 'handlerStatus', 'locatorMatches', 'locatorTotal',
+      'reviewReasons', 'falseReady', 'elapsedMs', 'stages',
+    ])) throw new Error('invalid acceptance case shape');
     const item = raw as unknown as AcceptanceCaseResult;
     const expected = HARD_CASE_EXPECTATIONS[index]!;
     const manifest = manifestCases[index]!;
@@ -594,6 +622,12 @@ export function validateAcceptanceDraft(value: unknown): AcceptanceDraft {
       throw new Error(`content hash mismatch: ${item.id}`);
     }
     if (item.status !== expected[1]) throw new Error(`status mismatch: ${item.id}`);
+    const expectedReviewReasons = expected[3] === undefined ? [] : [expected[3]];
+    if (!Array.isArray(item.reviewReasons) || item.reviewReasons.length > 1
+      || item.reviewReasons.some((reason) => typeof reason !== 'string' || reason.length === 0 || reason.length > 64)
+      || JSON.stringify(item.reviewReasons) !== JSON.stringify(expectedReviewReasons)) {
+      throw new Error(`review reason mismatch: ${item.id}`);
+    }
     const expectedHandlerStatus = item.status === 'succeeded' ? 'completed' : 'needs_review';
     if (item.handlerStatus !== expectedHandlerStatus || item.failureStatus !== undefined) {
       throw new Error(`handler failure: ${item.id}`);
@@ -618,7 +652,10 @@ export function validateAcceptanceDraft(value: unknown): AcceptanceDraft {
     else needsReview += 1;
   });
   const summary = value.summary;
-  if (!isRecord(summary) || summary.falseReadyCount !== 0 || summary.failed !== 0
+  if (!isRecord(summary) || !hasExactKeys(summary, [
+    'falseReadyCount', 'failed', 'succeeded', 'needsReview', 'p50ElapsedMs', 'p95ElapsedMs',
+  ]) || summary.falseReadyCount !== 0 || summary.failed !== 0
+    || summary.succeeded !== 14 || summary.needsReview !== 2
     || summary.succeeded !== succeeded || summary.needsReview !== needsReview
     || summary.p50ElapsedMs !== percentile(elapsed, 0.5)
     || summary.p95ElapsedMs !== percentile(elapsed, 0.95)) {
@@ -1027,7 +1064,8 @@ export async function verifyAndPublishAcceptanceCandidate(
   if (!isRecord(report) || !isRecord(report.resources)) {
     throw new Error('unpublished acceptance report runtime evidence missing');
   }
-  const resources = validateRuntimeEvidence(report.resources, report);
+  const { resources: resourceValue, ...draft } = report;
+  const resources = validateRuntimeEvidence(resourceValue, draft);
   await verifyAcceptanceRuntimeGraphManifest(releaseRoot, resources.build.runtimeGraph);
   await publishAcceptanceCandidate(candidatePath, finalPath, requiredUid);
 }
