@@ -205,6 +205,7 @@ function readBoundedXlsxEntries(content: Buffer): Promise<Map<string, Buffer>> {
             throw new XlsxParsingLimitError();
           }
           if (!entry.fileName.endsWith('/') && isRelevantXlsxEntry(entry.fileName)) {
+            if (entries.has(entry.fileName)) throw new Error('duplicate XLSX ZIP member');
             entries.set(entry.fileName, await readZipEntry(zipFile, entry));
           }
           zipFile.readEntry();
@@ -222,12 +223,20 @@ function readBoundedXlsxEntries(content: Buffer): Promise<Map<string, Buffer>> {
 
 interface XmlNode {
   name: string;
+  localName: string;
+  namespaceUri: string | undefined;
   attributes: ReadonlyMap<string, string>;
+  attributeNamespaces: ReadonlyMap<string, string | undefined>;
+  namespaceBindings: ReadonlyMap<string, string>;
   children: XmlNode[];
   text: string;
 }
 
 const XML_NAME = /^(?:[A-Za-z_][\w.-]*:)?[A-Za-z_][\w.-]*$/u;
+const XML_NAMESPACE = 'http://www.w3.org/XML/1998/namespace';
+const SPREADSHEETML_NAMESPACE = 'http://schemas.openxmlformats.org/spreadsheetml/2006/main';
+const OFFICE_RELATIONSHIPS_NAMESPACE = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships';
+const PACKAGE_RELATIONSHIPS_NAMESPACE = 'http://schemas.openxmlformats.org/package/2006/relationships';
 const WORKSHEET_RELATIONSHIP_TYPE = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet';
 
 function decodeXmlText(text: string): string {
@@ -276,6 +285,40 @@ function boundedXml(content: Buffer): string {
 function xmlLocalName(name: string): string {
   if (!XML_NAME.test(name)) throw new Error('malformed XML name');
   return name.slice(name.lastIndexOf(':') + 1);
+}
+
+function xmlPrefix(name: string): string | undefined {
+  const separator = name.indexOf(':');
+  return separator === -1 ? undefined : name.slice(0, separator);
+}
+
+function namespaceBindingsFor(
+  parent: ReadonlyMap<string, string> | undefined,
+  attributes: ReadonlyMap<string, string>,
+): Map<string, string> {
+  const bindings = new Map(parent ?? [['xml', XML_NAMESPACE]]);
+  for (const [name, value] of attributes) {
+    if (name !== 'xmlns' && !name.startsWith('xmlns:')) continue;
+    const prefix = name === 'xmlns' ? '' : name.slice('xmlns:'.length);
+    if ((name !== 'xmlns' && !prefix) || prefix === 'xmlns'
+      || (prefix === 'xml' && value !== XML_NAMESPACE) || !value) {
+      throw new Error('invalid XML namespace binding');
+    }
+    bindings.set(prefix, value);
+  }
+  return bindings;
+}
+
+function namespaceForName(
+  name: string,
+  bindings: ReadonlyMap<string, string>,
+  attribute = false,
+): string | undefined {
+  const prefix = xmlPrefix(name);
+  if (prefix === undefined) return attribute ? undefined : bindings.get('');
+  const namespaceUri = bindings.get(prefix);
+  if (!namespaceUri) throw new Error('unbound XML namespace prefix');
+  return namespaceUri;
 }
 
 function xmlTagEnd(xml: string, start: number): number {
@@ -356,7 +399,23 @@ function parseStrictXml(content: Buffer): XmlNode {
     } else {
       if (root && stack.length === 0) throw new Error('multiple XML root elements');
       const parsed = parseXmlStartTag(tag);
-      const node: XmlNode = { name: parsed.name, attributes: parsed.attributes, children: [], text: '' };
+      const namespaceBindings = namespaceBindingsFor(stack.at(-1)?.namespaceBindings, parsed.attributes);
+      const attributeNamespaces = new Map<string, string | undefined>();
+      for (const name of parsed.attributes.keys()) {
+        if (name !== 'xmlns' && !name.startsWith('xmlns:')) {
+          attributeNamespaces.set(name, namespaceForName(name, namespaceBindings, true));
+        }
+      }
+      const node: XmlNode = {
+        name: parsed.name,
+        localName: xmlLocalName(parsed.name),
+        namespaceUri: namespaceForName(parsed.name, namespaceBindings),
+        attributes: parsed.attributes,
+        attributeNamespaces,
+        namespaceBindings,
+        children: [],
+        text: '',
+      };
       nodeCount += 1;
       if (nodeCount > 200_000) throw new XlsxParsingLimitError();
       if (stack.length === 0) root = node;
@@ -374,19 +433,32 @@ function assertAttributes(node: XmlNode, allowed: readonly string[]): void {
   for (const name of node.attributes.keys()) {
     if (name === 'xmlns' || name.startsWith('xmlns:')) continue;
     if (!permitted.has(name)) throw new Error(`unsupported XML attribute: ${name}`);
+    const expectedNamespace = name.startsWith('r:') ? OFFICE_RELATIONSHIPS_NAMESPACE
+      : name.startsWith('xml:') ? XML_NAMESPACE : undefined;
+    if (node.attributeNamespaces.get(name) !== expectedNamespace) {
+      throw new Error(`invalid XML attribute namespace: ${name}`);
+    }
   }
 }
 
-function assertOnlyChildren(node: XmlNode, allowed: readonly string[]): void {
+function assertElement(node: XmlNode, localName: string, namespaceUri: string): void {
+  if (node.localName !== localName || node.namespaceUri !== namespaceUri) {
+    throw new Error(`invalid ${localName} XML namespace`);
+  }
+}
+
+function assertOnlyChildren(node: XmlNode, allowed: readonly string[], namespaceUri: string): void {
   const permitted = new Set(allowed);
   for (const child of node.children) {
-    if (!permitted.has(xmlLocalName(child.name))) throw new Error(`unsupported ${xmlLocalName(node.name)} child`);
+    if (child.namespaceUri !== namespaceUri || !permitted.has(child.localName)) {
+      throw new Error(`unsupported ${node.localName} child`);
+    }
   }
-  if (node.text.trim()) throw new Error(`unexpected text in ${xmlLocalName(node.name)}`);
+  if (node.text.trim()) throw new Error(`unexpected text in ${node.localName}`);
 }
 
-function exactlyOneChild(node: XmlNode, localName: string): XmlNode {
-  const matching = node.children.filter((child) => xmlLocalName(child.name) === localName);
+function exactlyOneChild(node: XmlNode, localName: string, namespaceUri: string): XmlNode {
+  const matching = node.children.filter((child) => child.localName === localName && child.namespaceUri === namespaceUri);
   if (matching.length !== 1 || node.children.length !== 1 || node.text.trim()) {
     throw new Error(`expected one ${localName} element`);
   }
@@ -394,27 +466,27 @@ function exactlyOneChild(node: XmlNode, localName: string): XmlNode {
 }
 
 function textOnly(node: XmlNode): string {
-  if (node.children.length) throw new Error(`unsupported nested XML in ${xmlLocalName(node.name)}`);
+  if (node.children.length) throw new Error(`unsupported nested XML in ${node.localName}`);
   return node.text;
 }
 
 function sharedStrings(root: XmlNode | undefined): string[] {
   if (!root) return [];
-  if (xmlLocalName(root.name) !== 'sst') throw new Error('invalid shared strings root');
+  assertElement(root, 'sst', SPREADSHEETML_NAMESPACE);
   assertAttributes(root, ['count', 'uniqueCount']);
-  assertOnlyChildren(root, ['si']);
+  assertOnlyChildren(root, ['si'], SPREADSHEETML_NAMESPACE);
   const strings: string[] = [];
   for (const item of root.children) {
     assertAttributes(item, []);
-    assertOnlyChildren(item, ['t', 'r']);
+    assertOnlyChildren(item, ['t', 'r'], SPREADSHEETML_NAMESPACE);
     let value = '';
     for (const child of item.children) {
-      if (xmlLocalName(child.name) === 't') {
+      if (child.localName === 't') {
         assertAttributes(child, ['xml:space']);
         value += textOnly(child);
       } else {
         assertAttributes(child, []);
-        assertOnlyChildren(child, ['t']);
+        assertOnlyChildren(child, ['t'], SPREADSHEETML_NAMESPACE);
         for (const text of child.children) {
           assertAttributes(text, ['xml:space']);
           value += textOnly(text);
@@ -429,9 +501,9 @@ function sharedStrings(root: XmlNode | undefined): string[] {
 }
 
 function workbookSheets(workbook: XmlNode, relationshipsDocument: XmlNode): Array<{ name: string; path: string }> {
-  if (xmlLocalName(relationshipsDocument.name) !== 'Relationships') throw new Error('invalid relationships root');
+  assertElement(relationshipsDocument, 'Relationships', PACKAGE_RELATIONSHIPS_NAMESPACE);
   assertAttributes(relationshipsDocument, []);
-  assertOnlyChildren(relationshipsDocument, ['Relationship']);
+  assertOnlyChildren(relationshipsDocument, ['Relationship'], PACKAGE_RELATIONSHIPS_NAMESPACE);
   const relationships = new Map<string, string>();
   for (const relationship of relationshipsDocument.children) {
     assertAttributes(relationship, ['Id', 'Target', 'Type', 'TargetMode']);
@@ -439,18 +511,18 @@ function workbookSheets(workbook: XmlNode, relationshipsDocument: XmlNode): Arra
     const id = relationship.attributes.get('Id');
     const target = relationship.attributes.get('Target');
     const type = relationship.attributes.get('Type');
-    if (!id || !target || relationship.attributes.has('TargetMode') || relationships.has(id)) {
+    if (!id || !target || !type || relationship.attributes.has('TargetMode') || relationships.has(id)) {
       throw new Error('malformed workbook relationship');
     }
-    if (type !== undefined && type !== WORKSHEET_RELATIONSHIP_TYPE) throw new Error('unsupported workbook relationship');
+    if (type !== WORKSHEET_RELATIONSHIP_TYPE) throw new Error('unsupported workbook relationship');
     if (!/^worksheets\/[^/\\]+\.xml$/u.test(target)) throw new Error('malformed workbook relationship target');
     relationships.set(id, `xl/${target}`);
   }
-  if (xmlLocalName(workbook.name) !== 'workbook') throw new Error('invalid workbook root');
+  assertElement(workbook, 'workbook', SPREADSHEETML_NAMESPACE);
   assertAttributes(workbook, []);
-  const sheetsElement = exactlyOneChild(workbook, 'sheets');
+  const sheetsElement = exactlyOneChild(workbook, 'sheets', SPREADSHEETML_NAMESPACE);
   assertAttributes(sheetsElement, []);
-  assertOnlyChildren(sheetsElement, ['sheet']);
+  assertOnlyChildren(sheetsElement, ['sheet'], SPREADSHEETML_NAMESPACE);
   const sheets: Array<{ name: string; path: string }> = [];
   const names = new Set<string>();
   for (const sheet of sheetsElement.children) {
@@ -497,35 +569,42 @@ function addMaterializedText(budget: XlsxMaterializationBudget, text: string): v
 }
 
 function worksheetCells(worksheet: XmlNode, strings: readonly string[], budget: XlsxMaterializationBudget): Array<{ row: number; column: number; text: string }> {
-  if (xmlLocalName(worksheet.name) !== 'worksheet') throw new Error('invalid worksheet root');
+  assertElement(worksheet, 'worksheet', SPREADSHEETML_NAMESPACE);
   assertAttributes(worksheet, []);
-  const sheetData = exactlyOneChild(worksheet, 'sheetData');
+  const sheetData = exactlyOneChild(worksheet, 'sheetData', SPREADSHEETML_NAMESPACE);
   assertAttributes(sheetData, []);
-  assertOnlyChildren(sheetData, ['row']);
+  assertOnlyChildren(sheetData, ['row'], SPREADSHEETML_NAMESPACE);
   const cells: Array<{ row: number; column: number; text: string }> = [];
   const references = new Set<string>();
   for (const row of sheetData.children) {
     assertAttributes(row, ['r']);
-    assertOnlyChildren(row, ['c']);
+    assertOnlyChildren(row, ['c'], SPREADSHEETML_NAMESPACE);
+    const rowReference = row.attributes.get('r');
+    if (!/^[1-9]\d{0,6}$/u.test(rowReference ?? '')) throw new Error('missing or malformed worksheet row reference');
+    const rowNumber = Number(rowReference);
+    if (!Number.isSafeInteger(rowNumber) || rowNumber > MAX_XLSX_ROW) {
+      throw new Error('worksheet row reference outside XLSX bounds');
+    }
     for (const cell of row.children) {
       assertAttributes(cell, ['r', 't']);
       const reference = cell.attributes.get('r');
       if (!reference || references.has(reference)) throw new Error('duplicate or missing cell reference');
       references.add(reference);
       const coordinates = parseCellReference(reference);
+      if (coordinates.row !== rowNumber) throw new Error('worksheet row/cell reference mismatch');
       const type = cell.attributes.get('t');
       if (type !== undefined && type !== 'inlineStr' && type !== 's') throw new Error('XLSX cell type is unsupported');
       let text = '';
       if (type === 'inlineStr') {
-        const inline = exactlyOneChild(cell, 'is');
+        const inline = exactlyOneChild(cell, 'is', SPREADSHEETML_NAMESPACE);
         assertAttributes(inline, []);
-        assertOnlyChildren(inline, ['t']);
+        assertOnlyChildren(inline, ['t'], SPREADSHEETML_NAMESPACE);
         for (const textNode of inline.children) {
           assertAttributes(textNode, ['xml:space']);
           text += textOnly(textNode);
         }
       } else if (type === 's') {
-        const value = exactlyOneChild(cell, 'v');
+        const value = exactlyOneChild(cell, 'v', SPREADSHEETML_NAMESPACE);
         assertAttributes(value, []);
         const indexText = textOnly(value);
         if (!/^(?:0|[1-9]\d*)$/u.test(indexText)) throw new Error('shared string index invalid');
@@ -535,9 +614,13 @@ function worksheetCells(worksheet: XmlNode, strings: readonly string[], budget: 
       } else if (cell.children.length === 0) {
         if (cell.text.trim()) throw new Error('unexpected cell text');
       } else {
-        const value = exactlyOneChild(cell, 'v');
+        const value = exactlyOneChild(cell, 'v', SPREADSHEETML_NAMESPACE);
         assertAttributes(value, []);
         text = textOnly(value);
+        if (!/^[+-]?(?:(?:\d+(?:\.\d*)?)|(?:\.\d+))(?:[eE][+-]?\d+)?$/u.test(text)
+          || !Number.isFinite(Number(text))) {
+          throw new Error('untyped XLSX value is not a finite number');
+        }
       }
       budget.totalCells += 1;
       if (budget.totalCells > MAX_XLSX_CELLS) throw new XlsxParsingLimitError();

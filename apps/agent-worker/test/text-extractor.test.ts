@@ -37,11 +37,11 @@ function crc32(content: Buffer): number {
   return (crc ^ 0xffffffff) >>> 0;
 }
 
-function storedZip(entries: Record<string, string>): Buffer {
+function storedZipEntries(entries: readonly (readonly [string, string])[]): Buffer {
   const localParts: Buffer[] = [];
   const centralParts: Buffer[] = [];
   let offset = 0;
-  for (const [name, value] of Object.entries(entries)) {
+  for (const [name, value] of entries) {
     const fileName = Buffer.from(name);
     const content = Buffer.from(value);
     const checksum = crc32(content);
@@ -69,11 +69,15 @@ function storedZip(entries: Record<string, string>): Buffer {
   const centralSize = centralParts.reduce((total, part) => total + part.length, 0);
   const end = Buffer.alloc(22);
   end.writeUInt32LE(0x06054b50, 0);
-  end.writeUInt16LE(Object.keys(entries).length, 8);
-  end.writeUInt16LE(Object.keys(entries).length, 10);
+  end.writeUInt16LE(entries.length, 8);
+  end.writeUInt16LE(entries.length, 10);
   end.writeUInt32LE(centralSize, 12);
   end.writeUInt32LE(offset, 16);
   return Buffer.concat([...localParts, ...centralParts, end]);
+}
+
+function storedZip(entries: Record<string, string>): Buffer {
+  return storedZipEntries(Object.entries(entries));
 }
 
 function xlsxWithCellReference(reference: string): Buffer {
@@ -85,6 +89,39 @@ function xlsxFixture(worksheet: string, relationships = '<Relationships><Relatio
     'xl/workbook.xml': '<workbook xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheets><sheet name="Sheet" r:id="rId1"/></sheets></workbook>',
     'xl/_rels/workbook.xml.rels': relationships,
     'xl/worksheets/sheet1.xml': worksheet,
+  });
+}
+
+const SPREADSHEETML_NAMESPACE = 'http://schemas.openxmlformats.org/spreadsheetml/2006/main';
+const OFFICE_RELATIONSHIPS_NAMESPACE = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships';
+const PACKAGE_RELATIONSHIPS_NAMESPACE = 'http://schemas.openxmlformats.org/package/2006/relationships';
+const WORKSHEET_RELATIONSHIP_TYPE = `${OFFICE_RELATIONSHIPS_NAMESPACE}/worksheet`;
+
+function strictXlsxEntries(
+  worksheet: string,
+  relationships = `<Relationships xmlns="${PACKAGE_RELATIONSHIPS_NAMESPACE}"><Relationship Id="rId1" Target="worksheets/sheet1.xml" Type="${WORKSHEET_RELATIONSHIP_TYPE}"/></Relationships>`,
+): Record<string, string> {
+  return {
+    'xl/workbook.xml': `<workbook xmlns="${SPREADSHEETML_NAMESPACE}" xmlns:r="${OFFICE_RELATIONSHIPS_NAMESPACE}"><sheets><sheet name="Sheet" sheetId="1" r:id="rId1"/></sheets></workbook>`,
+    'xl/_rels/workbook.xml.rels': relationships,
+    'xl/worksheets/sheet1.xml': worksheet,
+  };
+}
+
+function strictXlsxFixture(
+  worksheet = `<worksheet xmlns="${SPREADSHEETML_NAMESPACE}"><sheetData><row r="1"><c r="A1"><v>1</v></c></row></sheetData></worksheet>`,
+  relationships?: string,
+): Buffer {
+  return storedZip(strictXlsxEntries(worksheet, relationships));
+}
+
+function twoSheetXlsxFixture(): Buffer {
+  return storedZip({
+    'xl/workbook.xml': `<workbook xmlns="${SPREADSHEETML_NAMESPACE}" xmlns:r="${OFFICE_RELATIONSHIPS_NAMESPACE}"><sheets><sheet name="Alpha" sheetId="1" r:id="rId1"/><sheet name="Beta" sheetId="2" r:id="rId2"/></sheets></workbook>`,
+    'xl/_rels/workbook.xml.rels': `<Relationships xmlns="${PACKAGE_RELATIONSHIPS_NAMESPACE}"><Relationship Id="rId1" Target="worksheets/sheet1.xml" Type="${WORKSHEET_RELATIONSHIP_TYPE}"/><Relationship Id="rId2" Target="worksheets/sheet2.xml" Type="${WORKSHEET_RELATIONSHIP_TYPE}"/></Relationships>`,
+    'xl/sharedStrings.xml': `<sst xmlns="${SPREADSHEETML_NAMESPACE}"><si><t>Header</t></si><si><t>Quoted, cell</t></si><si><t>second row</t></si><si><t>Beta value</t></si></sst>`,
+    'xl/worksheets/sheet1.xml': `<worksheet xmlns="${SPREADSHEETML_NAMESPACE}"><sheetData><row r="1"><c r="A1" t="s"><v>0</v></c><c r="B1" t="s"><v>1</v></c></row><row r="2"><c r="B2" t="s"><v>2</v></c></row></sheetData></worksheet>`,
+    'xl/worksheets/sheet2.xml': `<worksheet xmlns="${SPREADSHEETML_NAMESPACE}"><sheetData><row r="3"><c r="C3" t="s"><v>3</v></c></row></sheetData></worksheet>`,
   });
 }
 
@@ -201,7 +238,7 @@ describe('deterministic text DocumentParser', () => {
   }, 10_000);
 
   it('extracts bounded XLSX sheets in workbook order with sheet/row/cell coordinates', async () => {
-    const parserInput = input(XLSX_FIXTURE, 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    const parserInput = input(twoSheetXlsxFixture(), 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
     const result = await executeDocumentParser(createTextExtractor({}), parserInput);
 
     expect(result.status).toBe('succeeded');
@@ -575,6 +612,27 @@ describe('deterministic text DocumentParser', () => {
     })],
   ])('rejects structurally unsafe XLSX %s before materializing a partial page', async (_label, content) => {
     await expect(parseStructuredXlsxPages(content)).rejects.toThrow();
+  });
+
+  it.each([
+    ['legacy fixture missing worksheet relationship type', () => XLSX_FIXTURE],
+    ['duplicate relevant ZIP member', () => {
+      const entries = strictXlsxEntries(`<worksheet xmlns="${SPREADSHEETML_NAMESPACE}"><sheetData><row r="1"><c r="A1"><v>1</v></c></row></sheetData></worksheet>`);
+      return storedZipEntries([...Object.entries(entries), ['xl/workbook.xml', entries['xl/workbook.xml']!]]);
+    }],
+    ['foreign namespace impersonating SpreadsheetML', () => strictXlsxFixture(
+      '<x:worksheet xmlns:x="urn:foreign"><x:sheetData><x:row r="1"><x:c r="A1"><x:v>1</x:v></x:c></x:row></x:sheetData></x:worksheet>',
+    )],
+    ['unbound namespace prefix', () => strictXlsxFixture(
+      '<x:worksheet><x:sheetData><x:row r="1"><x:c r="A1"><x:v>1</x:v></x:c></x:row></x:sheetData></x:worksheet>',
+    )],
+    ['missing worksheet relationship type', () => strictXlsxFixture(undefined, `<Relationships xmlns="${PACKAGE_RELATIONSHIPS_NAMESPACE}"><Relationship Id="rId1" Target="worksheets/sheet1.xml"/></Relationships>`)],
+    ['wrong worksheet relationship type', () => strictXlsxFixture(undefined, `<Relationships xmlns="${PACKAGE_RELATIONSHIPS_NAMESPACE}"><Relationship Id="rId1" Target="worksheets/sheet1.xml" Type="urn:wrong"/></Relationships>`)],
+    ['missing worksheet row coordinate', () => strictXlsxFixture(`<worksheet xmlns="${SPREADSHEETML_NAMESPACE}"><sheetData><row><c r="A1"><v>1</v></c></row></sheetData></worksheet>`)],
+    ['worksheet row/cell coordinate mismatch', () => strictXlsxFixture(`<worksheet xmlns="${SPREADSHEETML_NAMESPACE}"><sheetData><row r="2"><c r="A1"><v>1</v></c></row></sheetData></worksheet>`)],
+    ['arbitrary untyped OOXML value', () => strictXlsxFixture(`<worksheet xmlns="${SPREADSHEETML_NAMESPACE}"><sheetData><row r="1"><c r="A1"><v>not-a-number</v></c></row></sheetData></worksheet>`)],
+  ])('rejects strict-subset XLSX %s', async (_label, createFixture) => {
+    await expect(parseStructuredXlsxPages(createFixture())).rejects.toThrow();
   });
 
   it('fails closed when the isolated XLSX stage reports a warning', async () => {
