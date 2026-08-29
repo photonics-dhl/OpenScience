@@ -123,25 +123,40 @@ function isPlainObject(value: unknown): value is Record<string, unknown> {
     && Object.getPrototypeOf(value) === Object.prototype;
 }
 
+function* plainObjectValues(value: Record<string, unknown>): Generator<unknown> {
+  for (const key in value) {
+    if (Object.prototype.hasOwnProperty.call(value, key)) yield value[key];
+  }
+}
+
 function assertNotebookJsonBudget(value: unknown): void {
-  const pending: Array<{ value: unknown; depth: number }> = [{ value, depth: 1 }];
-  let values = 0;
+  const pending: Array<{ values: Iterator<unknown>; depth: number }> = [{
+    values: [value].values(), depth: 1,
+  }];
+  let discoveredValues = 0;
   while (pending.length > 0) {
-    const current = pending.pop()!;
-    values += 1;
-    if (values > MAX_NOTEBOOK_JSON_VALUES) throw new ParsingLimitError();
+    const current = pending[pending.length - 1]!;
+    const entry = current.values.next();
+    if (entry.done) {
+      pending.pop();
+      continue;
+    }
+    discoveredValues += 1;
+    if (discoveredValues > MAX_NOTEBOOK_JSON_VALUES) throw new ParsingLimitError();
     if (current.depth > MAX_NOTEBOOK_JSON_DEPTH) throw new Error('Notebook JSON is too deeply nested');
-    if (Array.isArray(current.value)) {
-      for (const entry of current.value) pending.push({ value: entry, depth: current.depth + 1 });
-    } else if (isPlainObject(current.value)) {
-      for (const entry of Object.values(current.value)) pending.push({ value: entry, depth: current.depth + 1 });
+    if (Array.isArray(entry.value)) {
+      pending.push({ values: entry.value.values(), depth: current.depth + 1 });
+    } else if (isPlainObject(entry.value)) {
+      pending.push({ values: plainObjectValues(entry.value), depth: current.depth + 1 });
     }
   }
 }
 
 function notebookSource(value: unknown): string {
   if (typeof value === 'string') return value;
-  if (!Array.isArray(value) || value.length > MAX_NOTEBOOK_SOURCE_PARTS || value.some((entry) => typeof entry !== 'string')) {
+  if (!Array.isArray(value)) throw new Error('Notebook source is invalid');
+  if (value.length > MAX_NOTEBOOK_SOURCE_PARTS) throw new ParsingLimitError();
+  if (value.some((entry) => typeof entry !== 'string')) {
     throw new Error('Notebook source is invalid');
   }
   return value.join('');

@@ -384,11 +384,28 @@ describe('deterministic text DocumentParser', () => {
     ['Notebook source beyond the per-block budget', input(JSON.stringify({
       cells: [{ cell_type: 'raw', source: 'a'.repeat(50_001) }],
     }), 'application/x-ipynb+json')],
+    ['Notebook source with too many string parts', input(JSON.stringify({
+      cells: [{ cell_type: 'raw', source: Array.from({ length: 10_001 }, () => '') }],
+    }), 'application/x-ipynb+json')],
   ])('blocks %s at a parsing safety limit', async (_label, parserInput) => {
     await expect(executeDocumentParser(createTextExtractor({}), parserInput)).resolves.toMatchObject({
       status: 'blocked',
       code: 'limit_exceeded',
     });
+  });
+
+  it('bounds a high-cardinality Notebook JSON array before allocating its complete traversal stack', async () => {
+    const parserInput = input(JSON.stringify({
+      cells: [],
+      metadata: Array.from({ length: 1_500_000 }, () => 0),
+    }), 'application/x-ipynb+json');
+    const started = performance.now();
+
+    await expect(executeDocumentParser(createTextExtractor({}), parserInput)).resolves.toMatchObject({
+      status: 'blocked',
+      code: 'limit_exceeded',
+    });
+    expect(performance.now() - started).toBeLessThan(100);
   });
 
   it.each([
