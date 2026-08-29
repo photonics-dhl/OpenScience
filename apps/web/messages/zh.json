@@ -332,6 +332,7 @@
       "sourceUnavailable": "原始来源暂时无法读取，请稍后重试。",
       "sourceFile": "来源文件",
       "sourcePage": "页码",
+      "sourceRegion": "原文页内定位",
       "close": "关闭",
       "kind": {
         "core": "核心主张",

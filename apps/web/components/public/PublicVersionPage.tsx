@@ -191,6 +191,7 @@ export function PublicReadingSurface({ research, activeTab = 'overview', onTabCh
   const [sourceLoading, setSourceLoading] = React.useState(false);
   const [sourceError, setSourceError] = React.useState(false);
   const [sheetOpen, setSheetOpen] = React.useState(false);
+  const lastEvidenceTrigger = React.useRef<HTMLElement | null>(null);
   const disclaimer = version.legalDisclaimer || t('legalDisclaimerDefault');
   const objectCitation = research.citation.replace(version.publicVersionId, research.publicId);
   const publishedAt = version.publishedAt?.slice(0, 10) ?? t('unpublished');
@@ -217,7 +218,10 @@ export function PublicReadingSurface({ research, activeTab = 'overview', onTabCh
 
   const inspectEvidence = (evidence: PublicEvidence) => {
     setSelectedEvidence(evidence);
-    if (typeof window !== 'undefined' && window.matchMedia('(max-width: 900px)').matches) setSheetOpen(true);
+    if (typeof window !== 'undefined' && window.matchMedia('(max-width: 900px)').matches) {
+      lastEvidenceTrigger.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+      setSheetOpen(true);
+    }
   };
 
   return (
@@ -290,7 +294,7 @@ export function PublicReadingSurface({ research, activeTab = 'overview', onTabCh
           <CitationRail publicId={research.publicId} versionId={version.publicVersionId} objectCitation={objectCitation} versionCitation={research.citation} />
         </div>
       </div>
-      <EvidenceSheet open={sheetOpen} onOpenChange={setSheetOpen} evidence={selectedEvidence} source={evidenceSource} loading={sourceLoading} error={sourceError} />
+      <EvidenceSheet open={sheetOpen} onOpenChange={setSheetOpen} onReturnFocus={() => lastEvidenceTrigger.current?.focus()} evidence={selectedEvidence} source={evidenceSource} loading={sourceLoading} error={sourceError} />
       <div data-public-deep-navigation="true" className="pub-reading-tabs"><TabNavigation activeTab={activeTab} onTabChange={onTabChange} /></div>
       {activeTab !== 'overview' && <ComingSoonTab tabName={t(`tab.${activeTab}`)} />}
     </div>

@@ -89,6 +89,7 @@ describe('public Evidence source', () => {
 
     expect(result).toEqual({
       text: '43 fs', page: 1,
+      region: { x: 0.1, y: 0.2, width: 0.8, height: 0.1 },
       locator: {
         blockId: 'block-1', page: 1,
         boundingBox: { x: 10, y: 20, width: 80, height: 10 }, charRange: { start: 19, end: 24 },

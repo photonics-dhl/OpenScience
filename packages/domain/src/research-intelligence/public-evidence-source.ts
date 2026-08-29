@@ -53,6 +53,7 @@ export async function getPublicEvidenceSource(
 ): Promise<{
   text: string;
   page: number | null;
+  region: { x: number; y: number; width: number; height: number } | null;
   locator: Record<string, unknown>;
   artifact: { logicalPath: string; mediaType: string };
 }> {
@@ -102,6 +103,7 @@ export async function getPublicEvidenceSource(
     return {
       text: (resolved.text ?? '').slice(0, MAX_PUBLIC_SOURCE_TEXT),
       page: validateSourceLocator(evidence.locator).page ?? null,
+      region: resolved.region ?? null,
       locator: publicLocator(evidence.locator),
       artifact: {
         logicalPath: evidence.artifact.logicalPath,

@@ -6,10 +6,10 @@ import type { PublicEvidence, PublicEvidenceSource } from '../../lib/api';
 import { Dialog, DialogClose, DialogContent, DialogDescription, DialogTitle } from '../ui/dialog';
 import { EvidenceSourceBody } from './EvidenceRail';
 
-export function EvidenceSheet({ open, onOpenChange, evidence, source, loading, error }: { open: boolean; onOpenChange: (open: boolean) => void; evidence: PublicEvidence | null; source: PublicEvidenceSource | null; loading: boolean; error: boolean }) {
+export function EvidenceSheet({ open, onOpenChange, onReturnFocus, evidence, source, loading, error }: { open: boolean; onOpenChange: (open: boolean) => void; onReturnFocus: () => void; evidence: PublicEvidence | null; source: PublicEvidenceSource | null; loading: boolean; error: boolean }) {
   const t = useTranslations('public.claimReader');
   return <Dialog open={open} onOpenChange={onOpenChange}>
-    <DialogContent className="pub-evidence-sheet" data-evidence-sheet="true">
+    <DialogContent className="pub-evidence-sheet" data-evidence-sheet="true" onCloseAutoFocus={(event) => { event.preventDefault(); onReturnFocus(); }}>
       <DialogTitle>{t('sourceInspector')}</DialogTitle>
       <DialogDescription>{t('sourceInspectorDescription')}</DialogDescription>
       <EvidenceSourceBody evidence={evidence} source={source} loading={loading} error={error} />

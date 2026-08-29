@@ -14,6 +14,10 @@ export function EvidenceSourceBody({ evidence, source, loading, error }: { evide
     {error && <p role="alert">{t('sourceUnavailable')}</p>}
     {source && <div className="pub-source-record">
       <blockquote>{source.text}</blockquote>
+      {source.region && <figure className="pub-source-region" data-source-region="normalized" aria-label={t('sourceRegion')}>
+        <span style={{ left: `${source.region.x * 100}%`, top: `${source.region.y * 100}%`, width: `${source.region.width * 100}%`, height: `${source.region.height * 100}%` }} />
+        <figcaption>{t('sourceRegion')}</figcaption>
+      </figure>}
       <dl>
         <div><dt>{t('sourceFile')}</dt><dd>{source.artifact.logicalPath}</dd></div>
         {source.page !== null && <div><dt>{t('sourcePage')}</dt><dd>{source.page}</dd></div>}

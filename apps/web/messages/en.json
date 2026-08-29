@@ -332,6 +332,7 @@
       "sourceUnavailable": "The original source is temporarily unavailable. Please try again.",
       "sourceFile": "Source file",
       "sourcePage": "Page",
+      "sourceRegion": "Location on source page",
       "close": "Close",
       "kind": {
         "core": "Core claim",

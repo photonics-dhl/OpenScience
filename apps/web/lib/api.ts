@@ -922,6 +922,7 @@ export interface PublicVersionHistoryItem {
 export interface PublicEvidenceSource {
   text: string;
   page: number | null;
+  region: { x: number; y: number; width: number; height: number } | null;
   locator: Record<string, unknown>;
   artifact: { logicalPath: string; mediaType: string };
 }
