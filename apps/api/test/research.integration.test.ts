@@ -91,16 +91,29 @@ describe('P1B-6 /research 公开 URL + 标识（云上）', () => {
     const cookie = await registerAndVerify(app, 'i1@example.com');
     const user = await getUser('i1@example.com');
     const ws = await prisma.workspace.findFirst({ where: { type: 'personal', ownerId: user!.id } });
-    // 建 RO + 改 public + commit v1
+    // 建 RO + commit v1
     const createRo = await app.inject({ method: 'POST', url: '/research-objects', cookies: { openscience_session: cookie }, payload: { workspaceId: ws!.id, title: 'Public RO' } });
     const ro = createRo.json().researchObject;
     const commit = await app.inject({ method: 'POST', url: `/research-objects/${ro.id}/commits`, cookies: { openscience_session: cookie }, payload: { message: 'v1', version: 1 } });
     const v1 = commit.json().commit.versionId;
-    // 设为 public
-    await app.inject({ method: 'PATCH', url: `/research-objects/${ro.id}`, cookies: { openscience_session: cookie }, payload: { version: 2, visibility: 'public' } });
-    // 分配公开 ID（模拟发布动作，P1B-7 实装发布时触发）
+    // 分配公开 ID，并构造正式发布记录；匿名路由不得读取只有 public 标记的草稿。
     const idResult = await assignPublicId({ prisma, storage, mailer }, { userId: user!.id, researchObjectId: ro.id, versionNo: 1, prefix: 'OSR' });
     expect(idResult.publicId).toMatch(/^OSR-\d{4}-\d{6}$/);
+    const manifest = await prisma.versionManifest.findUnique({ where: { versionId: v1 }, include: { entries: true } });
+    const contentSha256 = computeContentSha256((manifest?.entries ?? []).map((entry) => ({
+      logicalPath: entry.logicalPath,
+      blobSha256: entry.blobSha256,
+    })));
+    await prisma.$transaction([
+      prisma.researchObject.update({ where: { id: ro.id }, data: { visibility: 'public' } }),
+      prisma.version.update({ where: { id: v1 }, data: { status: 'published' } }),
+      prisma.publication.create({ data: {
+        versionId: v1,
+        publicVersionId: idResult.publicVersionId,
+        contentSha256,
+        publishedAt: new Date(),
+      } }),
+    ]);
 
     // 匿名访问
     const roView = await app.inject({ method: 'GET', url: `/research/${idResult.publicId}` });
@@ -111,7 +124,6 @@ describe('P1B-6 /research 公开 URL + 标识（云上）', () => {
     expect(vView.statusCode).toBe(200);
     // P1D-9（302163d）起响应聚合进 research 包装（§4.3 必显），version 为其子对象
     expect(vView.json().research.version.publicVersionId).toBe(`${idResult.publicId}-v1`);
-    void v1;
     await app.close();
   });
 
