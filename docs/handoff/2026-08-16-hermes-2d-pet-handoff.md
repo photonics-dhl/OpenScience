@@ -11,7 +11,7 @@
 ## Version tuple
 
 - Worktree: `E:/Miscellaneous/XGS/.worktrees/readable-hermes-guidance`
-- Branch / local implementation / repository main: `codex/scansci-default-capability` / `3e829dbd4ab572dfba1c5c37e3609efe8edb34d8` / `463c8e3a2a80138cda2d669c370c0481ed4c0877`；远端仅保留 `main`。
+- Branch / local implementation / repository main: `codex/scansci-default-capability` / `82d47726ef2cdfcf12d158eb08d7734e8bf4e2ce` / `463c8e3a2a80138cda2d669c370c0481ed4c0877`；远端仅保留 `main`。
 - Production application source / immutable release: `689331845574612130f223d08c92e61721c16586`
 - Rollback: `c435c4c8b2800bb20998fd9a9a93f2db96328661`; core/search migrations `32/32` / `2/2`
 - 本地 `main` 与其他 worktree 有用户改动，不得触碰或用它推断生产；上述 tuple 已从 ECS 重新实测。
@@ -47,7 +47,7 @@
 14. ScanSci plan Task 4 已形成本地候选：SHA legal/auth、networkless Secret init、持久 session、pre-Worker runtime gate、精确有/无服务 rollback 与 active+rollback retention；ADR-012 已记录。未部署，不能替代 ECS/CARSI acceptance。
 15. ScanSci plan Task 5 atomic candidate 为 `ff5568f` + `4763228`：Personal RO/SDF、Session、Task/credit/audit 在一笔三次有界 Serializable 事务提交；exact replay 先于余额，P2002 精确绑定 model/constraint，Redis 仅 commit 后投递并保留 pending recovery。Domain/API/Agent 本地门禁 green；两连接 PostgreSQL SSI/mismatch suite 已加入但本地未运行，ECS acceptance pending。
 16. ScanSci plan Task 6 local candidate 为 `60b3740`：durable provider state 的事务回滚/重放/generation 矩阵、disabled rollback Secret、非致命 observation persistence 与真实 PostgreSQL migration/concurrency 合同已闭合；Domain 520、Database 26、Worker 501 与 typecheck green，独立复审 READY。Migration 33/真实 suite/CARSI 仍是 ECS-only pending。
-17. ScanSci plan Task 7 local candidate 为 `22088c0` + `86e037e` + `3e829db`：public `canRetry` 只来自共享 Domain predicate；新任务带 server-owned retry contract marker，历史/畸形/撤权 false；mutation 在 Serializable transaction 内复验 authority/CAS/audit。Client retry ref/state 在 await 前加锁，409 只 GET reconcile；Playwright `7/7`、Domain/API/Web 完整门禁 green。ECS 375px/真实下载和 Task 8 四入口仍 pending。
+17. ScanSci plan Task 7 local candidate 为 `22088c0` + `86e037e` + `3e829db` + `1059072` + `82d4772`：public `canRetry` 只来自共享 predicate；marker 只能由 acquisition durable path 构造，generic/public/internal caller 与历史/畸形/撤权均 false。Retry 用三次 P2034-only Serializable authority/CAS/audit，recovery 单次 ID-only SQL 精确筛选后复验，无循环/top-N/payload 泄露；Domain/API/Worker `534/99/502`，real-PG race/parity/deep-history contract 仅 typecheck。既有 Client/Playwright `7/7` 未改；ECS 375px/真实下载和 Task 8 四入口仍 pending。
 
 ## Constraints
 

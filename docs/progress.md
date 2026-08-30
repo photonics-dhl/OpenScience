@@ -4,15 +4,15 @@
 
 ## Current version tuple
 
-- Branch / local candidate / main: `codex/scansci-default-capability` / `3e829db` / `463c8e3`；远端仅 `main`。
+- Branch / local candidate / main: `codex/scansci-default-capability` / `82d4772` / `463c8e3`；远端仅 `main`。
 - Production application source / immutable release: `689331845574612130f223d08c92e61721c16586`。
 - Production rollback: `c435c4c8b2800bb20998fd9a9a93f2db96328661`；core/search migrations `32/32` / `2/2`。
 - Taskmaster `hermes-research-intelligence` 为 9/12：Tasks 1–9 done；Task 10 已重新打开，Task 11 阻断至 ScanSci 默认下载能力生产验收完成。
 
 ## 2026-08-30 — ScanSci Task 7 local review candidate
 
-- `22088c0` + `86e037e` + `3e829db` 闭合 persisted DTO/hash-only intent、同 task/credit retry、全历史 recovery、精确 poll cleanup；`canRetry` 现由 Domain 单一 marker/payload/session/RO/active workspace/membership predicate 产生，历史/畸形/撤权任务 false，retry authority 与 CAS/audit 同一 Serializable transaction。
-- Component Playwright `7/7` 追加 concurrent click+Enter 单 POST、409→单 GET authoritative reconcile；Domain `526`、API `98`、Web `441 + 5 Node`、三包 typecheck 与 Web 19-page production build green。Worker 本轮未改，上一轮 `501` 保持 green。
+- `22088c0` + `86e037e` + `3e829db` + `1059072` + `82d4772` 闭合 persisted DTO/hash-only intent、同 task/credit retry、精确 poll cleanup 与 server-only retry invariant；generic/public/internal caller 不能注入 marker，Worker 只读精确 durable v1，历史/畸形/撤权任务 false。
+- Retry 的 authority read/CAS/audit 现为三次 P2034-only Serializable 事务，Redis commit 后投递；recovery 用一次参数化 ID-only SQL 精确筛选权限/JSONB/DOI-arXiv 后 hydrate 并复用共享 predicate，无 top-N/循环/payload 泄露。Fresh Domain `534`、API `99`、Worker `502` 与三包/typechecked real-PG contracts green；既有 Web/Playwright `441 + 5 Node` / `7` 未改。
 - 这是本地 review candidate；ECS 375px、真实 CARSI/OA、一次性下载与 Task 8 四入口仍 pending，不能把 Task 10 标 done。生产保持 `6893318` / `c435c4c` / core-search `32/32`-`2/2`。
 
 ## 2026-08-30 — ScanSci Task 6 local recovery candidate
