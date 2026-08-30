@@ -139,7 +139,7 @@ write_state() {
 
 upgrade_legacy_state() {
   [ "$STATE_FORMAT" = "legacy" ] || return 0
-  write_state "$STATE_TOKEN" "$STATE_PID" "$STATE_PORT" "running"
+  write_state "$STATE_TOKEN" "$STATE_PID" "$STATE_PORT" "running" || return
   STATE_FORMAT="current"
 }
 

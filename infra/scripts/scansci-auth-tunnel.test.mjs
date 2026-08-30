@@ -130,6 +130,26 @@ async function writeTunnelState(f, {
   );
 }
 
+async function installOneShotStateMoveFailure(f) {
+  const fakeMv = join(f.root, 'bin', 'mv');
+  await writeFile(fakeMv, [
+    '#!/usr/bin/env bash',
+    'marker="$XDG_STATE_HOME/openscience/.fake-state-mv-failed"',
+    'destination="${!#}"',
+    'case "$destination" in',
+    '  */scansci-auth-tunnel.state)',
+    '    if [ "${FAKE_STATE_MV_FAIL_ONCE:-0}" = 1 ] && [ ! -e "$marker" ]; then',
+    '      : > "$marker"',
+    '      exit 73',
+    '    fi',
+    '    ;;',
+    'esac',
+    'exec /usr/bin/mv "$@"',
+    '',
+  ].join('\n'));
+  await chmod(fakeMv, 0o755);
+}
+
 test('status is read-only and only explicit start launches the helper and loopback tunnel', async (t) => {
   const f = await fixture();
   t.after(async () => {
@@ -347,6 +367,79 @@ test('legacy remote stop failure retains the upgraded old-release tombstone for 
   assert.equal(stopLines.length, 2);
   assert.ok(stopLines.every((line) => line.includes(`/opt/openscience-releases/${releaseA}`)));
   assert.doesNotMatch(log, new RegExp(`/opt/openscience-releases/${releaseB}`));
+});
+
+test('legacy upgrade move failure makes start fail closed and preserves the six-field identity for retry', async (t) => {
+  const f = await fixture();
+  const health = await startHealthServer(t, 16096);
+  t.after(async () => {
+    run(f.script, ['stop'], f.env, f.bashBin);
+    await rm(f.root, { recursive: true, force: true });
+  });
+  assert.equal(run(f.script, ['start', '16096'], f.env, f.bashBin).status, 0);
+  const statePath = join(f.env.XDG_STATE_HOME, 'openscience', 'scansci-auth-tunnel.state');
+  const legacyLines = (await readFile(statePath, 'utf8')).trimEnd().split('\n').slice(0, 6);
+  const legacyState = `${legacyLines.join('\n')}\n`;
+  await writeFile(statePath, legacyState);
+  await installOneShotStateMoveFailure(f);
+  health.kill();
+  await new Promise((resolveWait) => health.once('close', resolveWait));
+
+  const failed = run(
+    f.script,
+    ['start', '16096'],
+    { ...f.env, FAKE_STATE_MV_FAIL_ONCE: '1' },
+    f.bashBin,
+  );
+
+  assert.equal(failed.status, 65, `${failed.stdout}\n${failed.stderr}`);
+  assert.match(failed.stderr, /^tunnel state upgrade failed\s*$/);
+  assert.equal(await readFile(statePath, 'utf8'), legacyState);
+  assert.equal(spawnSync(bash, ['-c', 'kill -0 "$1"', 'check', legacyLines[1]]).status, 0);
+  assert.doesNotMatch(await readFile(f.log, 'utf8'), /--profile scansci-auth stop scansci-auth/);
+
+  await startHealthServer(t, 16096);
+  const retry = run(f.script, ['start', '16096'], f.env, f.bashBin);
+  assert.equal(retry.status, 0, `${retry.stdout}\n${retry.stderr}`);
+  assert.match(retry.stdout, /^already running on http:\/\/127\.0\.0\.1:16096\s*$/);
+  assert.deepEqual((await readFile(statePath, 'utf8')).trimEnd().split('\n'), [...legacyLines, 'running']);
+});
+
+test('legacy upgrade move failure makes stop fail closed without kill or remote stop', async (t) => {
+  const f = await fixture();
+  await startHealthServer(t, 16097);
+  t.after(async () => {
+    run(f.script, ['stop'], f.env, f.bashBin);
+    await rm(f.root, { recursive: true, force: true });
+  });
+  assert.equal(run(f.script, ['start', '16097'], f.env, f.bashBin).status, 0);
+  const statePath = join(f.env.XDG_STATE_HOME, 'openscience', 'scansci-auth-tunnel.state');
+  const legacyLines = (await readFile(statePath, 'utf8')).trimEnd().split('\n').slice(0, 6);
+  const legacyState = `${legacyLines.join('\n')}\n`;
+  await writeFile(statePath, legacyState);
+  await installOneShotStateMoveFailure(f);
+
+  const failed = run(
+    f.script,
+    ['stop'],
+    { ...f.env, FAKE_STATE_MV_FAIL_ONCE: '1' },
+    f.bashBin,
+  );
+
+  assert.equal(failed.status, 65, `${failed.stdout}\n${failed.stderr}`);
+  assert.match(failed.stderr, /^tunnel state upgrade failed\s*$/);
+  assert.equal(await readFile(statePath, 'utf8'), legacyState);
+  assert.equal(spawnSync(bash, ['-c', 'kill -0 "$1"', 'check', legacyLines[1]]).status, 0);
+  assert.doesNotMatch(await readFile(f.log, 'utf8'), /--profile scansci-auth stop scansci-auth/);
+
+  const retry = run(f.script, ['stop'], f.env, f.bashBin);
+  assert.equal(retry.status, 0, retry.stderr);
+  assert.equal(existsSync(statePath), false);
+  const stopLines = (await readFile(f.log, 'utf8'))
+    .split('\n')
+    .filter((line) => line.includes('--profile scansci-auth stop scansci-auth'));
+  assert.equal(stopLines.length, 1);
+  assert.ok(stopLines[0].includes(`/opt/openscience-releases/${legacyLines[3]}`));
 });
 
 test('invalid six-field state fails closed without kill, SSH, or overwrite', async (t) => {
