@@ -69,7 +69,13 @@ export function parseDurableSourceRetrievePayload(value: unknown): DurableSource
   if (input.retryContractVersion !== SOURCE_RETRIEVE_RETRY_CONTRACT_VERSION) {
     throw new Error('durable source.retrieve retry contract version is invalid');
   }
-  const { retryContractVersion: _reserved, ...requestValue } = input;
+  const requestValue = {
+    query: input.query,
+    providers: input.providers,
+    limit: input.limit,
+    includeFullText: input.includeFullText,
+    ...(Object.hasOwn(input, 'identifier') ? { identifier: input.identifier } : {}),
+  };
   const request = parseSourceRetrieveRequestPayload(requestValue);
   if (input.query !== request.query || (input.identifier !== undefined && input.identifier !== request.identifier)) {
     throw new Error('durable source.retrieve payload is not normalized');

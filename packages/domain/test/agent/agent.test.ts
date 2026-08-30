@@ -43,7 +43,7 @@ const DURABLE_SOURCE_RETRIEVE_PAYLOAD = {
 } as const;
 
 function seedSourceRetrieveTask(
-  db: { agentTasks: any[] },
+  db: { agentTasks: Array<Record<string, unknown>> },
   input: { id: string; sessionId: string; payload?: Record<string, unknown>; status?: string; error?: string | null; updatedAt?: Date },
 ) {
   const timestamp = input.updatedAt ?? new Date();

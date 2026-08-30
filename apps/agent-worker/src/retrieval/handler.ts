@@ -53,7 +53,14 @@ export function createSourceRetrieveHandler(options: {
     deps: RetrievalHandlerDeps,
     task: { id: string; payload: Record<string, unknown> },
   ): Promise<Record<string, unknown>> => {
-    const { retryContractVersion: _retryContractVersion, ...payload } = parseDurableSourceRetrievePayload(task.payload);
+    const durablePayload = parseDurableSourceRetrievePayload(task.payload);
+    const payload = {
+      query: durablePayload.query,
+      providers: durablePayload.providers,
+      limit: durablePayload.limit,
+      includeFullText: durablePayload.includeFullText,
+      ...(durablePayload.identifier ? { identifier: durablePayload.identifier } : {}),
+    };
     const ownerTask = await deps.prisma.agentTask.findUnique({
       where: { id: task.id },
       include: { session: { include: { researchObject: { include: { workspace: true } } } } },
