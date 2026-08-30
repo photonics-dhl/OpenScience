@@ -36,12 +36,20 @@ function parseEnvironment(entries) {
   return values;
 }
 
+export function verifyRootOwnedSecretMetadata({ isFile, symbolic, nlink, uid, gid, mode }) {
+  if (!isFile || symbolic || nlink !== 1 || uid !== 0 || gid !== 0 || mode !== 0o600) fail();
+}
+
 async function verifySecret(path, requiredUid) {
   const info = await lstat(path);
   const source = await readFile(path, 'utf8');
+  if (requiredUid === 0 && process.platform !== 'win32') verifyRootOwnedSecretMetadata({
+    isFile: info.isFile(), symbolic: info.isSymbolicLink(), nlink: info.nlink,
+    uid: info.uid, gid: info.gid, mode: info.mode & 0o777,
+  });
   if (!info.isFile() || info.isSymbolicLink() || info.nlink !== 1 || source.trim().length === 0
     || source.trim() !== source.replace(/\r?\n$/u, '') || source.length > 4097
-    || requiredUid !== undefined && info.uid !== requiredUid
+    || requiredUid !== undefined && (info.uid !== requiredUid || process.platform !== 'win32' && info.gid !== 0)
     || process.platform !== 'win32' && (info.mode & 0o777) !== 0o600
     || await realpath(path) !== resolve(path)) fail();
   return sha256(source.replace(/\r?\n$/u, ''));
@@ -63,6 +71,11 @@ export async function verifyScanSciRuntime({
   image,
   authImage,
   authContainerIds,
+  authContainers = [],
+  allowRunningAuth = false,
+  workerContainer,
+  workerSecretMetadata,
+  workerSecretSha256,
   runtimeSecretMetadata,
   runtimeSecretSha256,
   sessionStatus,
@@ -122,6 +135,8 @@ export async function verifyScanSciRuntime({
     || labels['com.docker.compose.project.working_dir'] !== normalize(releaseRoot)
     || labels['com.docker.compose.project.config_files'] !== normalize(composeFile)
     || labels['com.docker.compose.service'] !== 'scansci-legal'
+    || JSON.stringify(container.Config?.Entrypoint) !== JSON.stringify(['python', '-m', 'scansci_legal.main'])
+    || ![null, undefined, '[]'].includes(container.Config?.Cmd == null ? container.Config?.Cmd : JSON.stringify(container.Config.Cmd))
     || container.State?.Running !== true || container.State?.Health?.Status !== 'healthy'
     || container.HostConfig?.ReadonlyRootfs !== true
     || container.HostConfig?.Privileged !== false
@@ -144,8 +159,23 @@ export async function verifyScanSciRuntime({
     || container.Mounts.some((mount) => !['/session', '/run/secrets'].includes(mount.Destination))
     || runtimeSecretMetadata !== '10001:10001:400') fail();
   const hostSecretSha256 = await verifySecret(serviceTokenPath, requiredSecretUid);
+  if (workerContainer) {
+    const workerMount = workerContainer.Mounts?.find((mount) => mount.Destination === '/run/scansci-worker-secrets');
+    if (!workerMount || workerMount.Type !== 'volume' || workerMount.RW !== false
+      || !workerMount.Name?.endsWith('_scansci-worker-secrets')
+      || workerSecretMetadata !== '1000:1000:400' || workerSecretSha256 !== hostSecretSha256) fail();
+  }
+  if (authContainers.length > 0) {
+    if (!allowRunningAuth || authContainers.some((candidate) => (
+      candidate.Image !== authImage.Id || candidate.Config?.User !== '10001:10001'
+      || candidate.Config?.Labels?.['org.openscience.scansci.role'] !== 'auth'
+      || JSON.stringify(candidate.Config?.Entrypoint) !== JSON.stringify(['/usr/bin/tini', '--', '/usr/local/bin/scansci-auth-entrypoint'])
+      || ![null, undefined, '[]'].includes(candidate.Config?.Cmd == null ? candidate.Config?.Cmd : JSON.stringify(candidate.Config.Cmd))
+    ))) fail();
+  }
   if (!/^[a-f0-9]{64}$/u.test(runtimeSecretSha256) || runtimeSecretSha256 !== hostSecretSha256
-    || authContainerIds.length !== 0 || !['ready', 'auth_required', 'refreshing'].includes(sessionStatus)) fail();
+    || authContainerIds.length !== 0 && !allowRunningAuth
+    || !['ready', 'auth_required', 'refreshing'].includes(sessionStatus)) fail();
   return {
     source: true,
     topology: true,
@@ -172,7 +202,7 @@ function parseCli(argv) {
     if (!argv[index]?.startsWith('--') || !argv[index + 1] || values.has(argv[index])) fail();
     values.set(argv[index], argv[index + 1]);
   }
-  const expected = ['--release-root', '--release-sha', '--compose-file', '--service-token-file'];
+  const expected = ['--release-root', '--release-sha', '--compose-file', '--service-token-file', '--require-worker', '--allow-auth'];
   if (values.size !== expected.length || expected.some((key) => !values.has(key))) fail();
   return Object.fromEntries(expected.map((key) => [key, values.get(key)]));
 }
@@ -200,9 +230,12 @@ async function main() {
   const releaseSha = options['--release-sha'];
   const composeFile = options['--compose-file'];
   const serviceTokenPath = options['--service-token-file'];
+  const requireWorker = options['--require-worker'];
+  const allowAuth = options['--allow-auth'];
   if (releaseRoot !== `/opt/openscience-releases/${releaseSha}`
     || composeFile !== `${releaseRoot}/infra/compose/docker-compose.prod.yml`
-    || serviceTokenPath !== '/opt/openscience-secrets/scansci/scansci_service_token') fail();
+    || serviceTokenPath !== '/opt/openscience-secrets/scansci/scansci_service_token'
+    || !['0', '1'].includes(requireWorker) || !['0', '1'].includes(allowAuth)) fail();
   const composeArgs = ['compose', '--env-file', '/opt/openscience/.env.prod', '-f', composeFile];
   const env = { ...process.env, XGS_RELEASE_ROOT: releaseRoot, XGS_RELEASE_IMAGE_TAG: releaseSha };
   const compose = (args) => {
@@ -213,6 +246,7 @@ async function main() {
   const containerId = compose(['ps', '-q', 'scansci-legal']);
   if (!/^[a-f0-9]{12,64}$/u.test(containerId)) fail();
   const authIds = compose(['--profile', 'scansci-auth', 'ps', '-aq', 'scansci-auth']).split(/\r?\n/u).filter(Boolean);
+  const authContainers = authIds.map((id) => inspectJson('docker', ['inspect', id]));
   const container = inspectJson('docker', ['inspect', containerId]);
   const image = inspectJson('docker', ['image', 'inspect', `openscience-scansci-legal:${releaseSha}`]);
   const authImage = inspectJson('docker', ['image', 'inspect', `openscience-scansci-auth:${releaseSha}`]);
@@ -230,9 +264,21 @@ async function main() {
     'exec', containerId, 'python', '-c',
     "import hashlib;print(hashlib.sha256(open('/run/secrets/scansci_service_token','rb').read().strip()).hexdigest())",
   ]);
+  let workerContainer;
+  let workerSecretMetadata;
+  let workerSecretSha256;
+  if (requireWorker === '1') {
+    const workerId = compose(['ps', '-q', 'agent-worker']);
+    if (!/^[a-f0-9]{12,64}$/u.test(workerId)) fail();
+    workerContainer = inspectJson('docker', ['inspect', workerId]);
+    workerSecretMetadata = run('docker', ['exec', workerId, 'stat', '-c', '%u:%g:%a', '/run/scansci-worker-secrets/scansci_service_token']);
+    workerSecretSha256 = run('docker', ['exec', workerId, 'node', '-e', "const fs=require('node:fs'),c=require('node:crypto');process.stdout.write(c.createHash('sha256').update(fs.readFileSync('/run/scansci-worker-secrets/scansci_service_token','utf8').trim()).digest('hex'))"]);
+  }
   const report = await verifyScanSciRuntime({
     releaseRoot, releaseSha, composeFile, serviceTokenPath, container, image, authImage,
     authContainerIds: authIds, sessionStatus, runtimeSecretMetadata, runtimeSecretSha256,
+    workerContainer, workerSecretMetadata, workerSecretSha256,
+    authContainers, allowRunningAuth: allowAuth === '1',
   });
   process.stdout.write(formatRuntimeStatuses(report));
 }

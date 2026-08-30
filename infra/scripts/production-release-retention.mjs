@@ -290,17 +290,27 @@ async function validateCapability(path, { requiredUid = 0, capabilitiesRoot = PA
 async function readReleaseCapability(sha, paths = PATHS) {
   const path = join(paths.capabilities, sha);
   await validateCapability(path, { capabilitiesRoot: paths.capabilities });
+  return parseReleaseCapability(await readFile(path, 'utf8'));
+}
+
+export function parseReleaseCapability(source, expected = {}) {
   const values = new Map();
-  for (const line of (await readFile(path, 'utf8')).trim().split(/\r?\n/u)) {
+  for (const line of source.trim().split(/\r?\n/u)) {
     const separator = line.indexOf('=');
     if (separator <= 0 || values.has(line.slice(0, separator))) {
-      throw new Error(`release capability is invalid: ${sha}`);
+      throw new Error('release capability is invalid');
     }
     values.set(line.slice(0, separator), line.slice(separator + 1));
   }
   const schema = values.get('schema');
+  if (schema === '1') {
+    if ([...values.keys()].sort().join(',') !== 'embedding,schema' || values.get('embedding') !== '0') {
+      throw new Error('release capability is invalid');
+    }
+    return { embeddingDeploy: false, scansciDeploy: false };
+  }
   const schemaTwoKeys = 'bge_m3_enabled,embedding_deploy,model_manifest_sha256,model_revision,model_version_id,package_freeze_sha256,schema,source_sha256';
-  const schemaThreeKeys = 'bge_m3_enabled,embedding_deploy,model_manifest_sha256,model_revision,model_version_id,package_freeze_sha256,scansci_deploy,schema,source_sha256';
+  const schemaThreeKeys = 'bge_m3_enabled,embedding_deploy,model_manifest_sha256,model_revision,model_version_id,package_freeze_sha256,scansci_auth_image_id,scansci_deploy,scansci_legal_image_id,schema,source_sha256';
   const expectedKeys = schema === '2' ? schemaTwoKeys : schemaThreeKeys;
   if ([...values.keys()].sort().join(',') !== expectedKeys
     || !['2', '3'].includes(schema)
@@ -308,11 +318,22 @@ async function readReleaseCapability(sha, paths = PATHS) {
     || !['true', 'false'].includes(values.get('bge_m3_enabled'))
     || schema === '3' && !['true', 'false'].includes(values.get('scansci_deploy'))
     || values.get('bge_m3_enabled') === 'true' && values.get('embedding_deploy') !== 'true') {
-    throw new Error(`release capability is invalid: ${sha}`);
+    throw new Error('release capability is invalid');
+  }
+  const scansciDeploy = schema === '3' && values.get('scansci_deploy') === 'true';
+  const legalImageId = values.get('scansci_legal_image_id');
+  const authImageId = values.get('scansci_auth_image_id');
+  if (scansciDeploy && (!IMAGE_ID_PATTERN.test(legalImageId) || !IMAGE_ID_PATTERN.test(authImageId))) {
+    throw new Error('release capability is invalid');
+  }
+  if (expected.expectedLegalImageId && legalImageId !== expected.expectedLegalImageId
+    || expected.expectedAuthImageId && authImageId !== expected.expectedAuthImageId) {
+    throw new Error('release capability is invalid');
   }
   return {
     embeddingDeploy: values.get('embedding_deploy') === 'true',
-    scansciDeploy: schema === '3' && values.get('scansci_deploy') === 'true',
+    scansciDeploy,
+    ...(scansciDeploy ? { legalImageId, authImageId } : {}),
   };
 }
 
@@ -332,6 +353,11 @@ async function protectedImageState(activeSha, rollbackSha, paths = PATHS) {
         || scansci && capabilities.get(sha).scansciDeploy;
       if (!imageId && required) {
         throw new Error(`protected release image is missing: ${tag}`);
+      }
+      if (scansci && capabilities.get(sha).scansciDeploy) {
+        const expectedId = tag.startsWith('openscience-scansci-legal:')
+          ? capabilities.get(sha).legalImageId : capabilities.get(sha).authImageId;
+        if (imageId !== expectedId) throw new Error(`protected release image identity mismatch: ${tag}`);
       }
       if (imageId) ids.set(tag, imageId);
     }

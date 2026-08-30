@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import test from 'node:test';
 
-import { formatRuntimeStatuses, verifyScanSciRuntime } from './verify-scansci-runtime.mjs';
+import { formatRuntimeStatuses, verifyRootOwnedSecretMetadata, verifyScanSciRuntime } from './verify-scansci-runtime.mjs';
 
 const releaseSha = 'a'.repeat(40);
 const archiveSha = 'b'.repeat(64);
@@ -53,6 +53,8 @@ async function fixture() {
         'com.docker.compose.project.config_files': composeFile,
         'com.docker.compose.service': 'scansci-legal',
       },
+      Entrypoint: ['python', '-m', 'scansci_legal.main'],
+      Cmd: [],
     },
     HostConfig: {
       ReadonlyRootfs: true, CapDrop: ['ALL'], PortBindings: {}, Memory: 1024 ** 3,
@@ -80,7 +82,11 @@ async function fixture() {
       Entrypoint: ['/usr/bin/tini', '--', '/usr/local/bin/scansci-auth-entrypoint'],
     },
   };
-  return { releaseRoot, serviceTokenPath, composeFile, container, image, authImage };
+  const workerContainer = {
+    Config: { User: 'node' },
+    Mounts: [{ Type: 'volume', Name: 'openscience-prod_scansci-worker-secrets', Destination: '/run/scansci-worker-secrets', RW: false }],
+  };
+  return { releaseRoot, serviceTokenPath, composeFile, container, image, authImage, workerContainer };
 }
 
 test('runtime verifier validates immutable source, bounded topology, Secret and persistent session without exposing values', async (t) => {
@@ -94,6 +100,8 @@ test('runtime verifier validates immutable source, bounded topology, Secret and 
     authContainerIds: [],
     runtimeSecretMetadata: '10001:10001:400',
     runtimeSecretSha256: createHash('sha256').update(tokenValue).digest('hex'),
+    workerSecretMetadata: '1000:1000:400',
+    workerSecretSha256: createHash('sha256').update(tokenValue).digest('hex'),
     requiredSecretUid: process.getuid?.(),
   });
   const output = formatRuntimeStatuses(report);
@@ -120,6 +128,9 @@ test('runtime verifier fails closed on forbidden network, grey-source flags, aut
     (input) => { input.runtimeSecretSha256 = 'f'.repeat(64); },
     (input) => { input.authImage.Config.Labels['org.openscience.scansci.role'] = 'legal'; },
     (input) => { input.authImage.Config.Entrypoint = ['python', '-m', 'scansci_legal.main']; },
+    (input) => { input.container.Config.Entrypoint = ['/bin/sh']; },
+    (input) => { input.container.Config.Cmd = ['fake-healthy']; },
+    (input) => { input.workerContainer.Mounts[0].Name = 'wrong-worker-secret'; },
     (input) => { input.sessionStatus = 'disabled'; },
   ]) {
     const fresh = await fixture();
@@ -130,10 +141,34 @@ test('runtime verifier fails closed on forbidden network, grey-source flags, aut
       authContainerIds: [],
       runtimeSecretMetadata: '10001:10001:400',
       runtimeSecretSha256: createHash('sha256').update(tokenValue).digest('hex'),
+      workerSecretMetadata: '1000:1000:400',
+      workerSecretSha256: createHash('sha256').update(tokenValue).digest('hex'),
       requiredSecretUid: process.getuid?.(),
     };
     mutate(input);
     await assert.rejects(verifyScanSciRuntime(input), /ScanSci runtime verification failed/u);
     await rm(fresh.releaseRoot, { recursive: true, force: true });
   }
+});
+
+test('runtime verifier rejects wrong-group host metadata and validates an explicitly running auth role', async (t) => {
+  assert.throws(() => verifyRootOwnedSecretMetadata({ isFile: true, symbolic: false, nlink: 1, uid: 0, gid: 1, mode: 0o600 }), /failed/u);
+  const f = await fixture();
+  t.after(async () => rm(f.releaseRoot, { recursive: true, force: true }));
+  const authContainer = {
+    Image: f.authImage.Id,
+    Config: {
+      User: '10001:10001',
+      Labels: { 'org.openscience.scansci.role': 'auth' },
+      Entrypoint: ['/usr/bin/tini', '--', '/usr/local/bin/scansci-auth-entrypoint'],
+      Cmd: [],
+    },
+  };
+  await verifyScanSciRuntime({
+    ...f, releaseSha, sessionStatus: 'ready', authContainerIds: ['abc123'], authContainers: [authContainer],
+    allowRunningAuth: true, runtimeSecretMetadata: '10001:10001:400',
+    runtimeSecretSha256: createHash('sha256').update(tokenValue).digest('hex'),
+    workerSecretMetadata: '1000:1000:400', workerSecretSha256: createHash('sha256').update(tokenValue).digest('hex'),
+    requiredSecretUid: process.getuid?.(),
+  });
 });

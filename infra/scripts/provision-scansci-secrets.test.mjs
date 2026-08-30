@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import test from 'node:test';
 
-import { parseProvisionCli, provisionScanSciSecrets } from './provision-scansci-secrets.mjs';
+import { parseProvisionCli, provisionScanSciSecrets, verifyRootOwnedSecretMetadata } from './provision-scansci-secrets.mjs';
 
 const firstToken = 'first-token-value-never-print';
 const secondToken = 'second-token-value-never-print';
@@ -81,4 +81,8 @@ test('provisioner rejects a partial optional credential pair', async (t) => {
     input: JSON.stringify({ username: 'fixture-user' }),
     requiredUid: process.getuid?.(),
   }), /input is invalid/u);
+});
+
+test('provisioner rejects a root-owned Secret with a non-root group', () => {
+  assert.throws(() => verifyRootOwnedSecretMetadata({ isFile: true, symbolic: false, nlink: 1, uid: 0, gid: 1, mode: 0o600 }), /unsafe/u);
 });

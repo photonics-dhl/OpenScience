@@ -62,8 +62,14 @@ async function assertDirectoryIdentity(root, requiredUid) {
   const info = await lstat(root);
   const actual = await realpath(root);
   if (!info.isDirectory() || info.isSymbolicLink() || actual !== resolve(root)
-    || requiredUid !== undefined && info.uid !== requiredUid) {
+    || requiredUid !== undefined && (info.uid !== requiredUid || process.platform !== 'win32' && info.gid !== 0)) {
     throw new Error('unsafe ScanSci Secret directory');
+  }
+}
+
+export function verifyRootOwnedSecretMetadata({ isFile, symbolic, nlink, uid, gid, mode }) {
+  if (!isFile || symbolic || nlink !== 1 || uid !== 0 || gid !== 0 || mode !== 0o600) {
+    throw new Error('unsafe ScanSci Secret metadata');
   }
 }
 
@@ -77,8 +83,12 @@ async function assertPrivateDirectory(root, requiredUid) {
 async function assertPrivateFile(path, root, requiredUid) {
   const info = await lstat(path);
   const mode = info.mode & 0o777;
+  if (requiredUid === 0 && process.platform !== 'win32') verifyRootOwnedSecretMetadata({
+    isFile: info.isFile(), symbolic: info.isSymbolicLink(), nlink: info.nlink,
+    uid: info.uid, gid: info.gid, mode,
+  });
   if (!info.isFile() || info.isSymbolicLink() || info.nlink !== 1 || dirname(path) !== root
-    || requiredUid !== undefined && info.uid !== requiredUid
+    || requiredUid !== undefined && (info.uid !== requiredUid || process.platform !== 'win32' && info.gid !== 0)
     || process.platform !== 'win32' && mode !== 0o600
     || await realpath(path) !== path) {
     throw new Error(`unsafe ScanSci Secret file: ${path.slice(path.lastIndexOf('/') + 1)}`);

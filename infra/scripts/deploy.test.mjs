@@ -76,7 +76,8 @@ test('ScanSci production topology exposes only the bounded legal service and sto
   assert.doesNotMatch(legal, /\bports:|data_net|DATABASE|POSTGRES|REDIS|S3_|MINIO|env_file|docker\.sock/iu);
 
   assert.match(worker, /- retrieval_net/u);
-  assert.match(worker, /scansci-service-secrets:\/run\/secrets:ro/u);
+  assert.doesNotMatch(worker, /scansci-service-secrets|scansci-auth-secrets/u);
+  assert.match(worker, /scansci-worker-secrets:\/run\/scansci-worker-secrets:ro/u);
   assert.equal(worker.match(/^    volumes:/gmu)?.length, 1, 'agent-worker must have one unambiguous volumes mapping');
   assert.match(worker, /\$\{XGS_RELEASE_ROOT:\?XGS_RELEASE_ROOT required\}:\/opt\/openscience:ro/u);
   assert.match(worker, /parser-jobs:\/parser-jobs/u);
@@ -91,6 +92,7 @@ test('ScanSci production topology exposes only the bounded legal service and sto
 
   assert.match(secretInit, /\/opt\/openscience-secrets\/scansci:\/host-secrets:ro/u);
   assert.match(secretInit, /install -o 10001 -g 10001 -m 0400 \/host-secrets\/scansci_service_token \/service-secrets\/\.scansci_service_token\.next/u);
+  assert.match(secretInit, /install -o 1000 -g 1000 -m 0400 \/host-secrets\/scansci_service_token \/worker-secrets\/\.scansci_service_token\.next/u);
   assert.match(secretInit, /network_mode: none/u);
   assert.match(secretInit, /read_only: true/u);
   assert.match(productionCompose, /scansci-session:\r?\n/u);

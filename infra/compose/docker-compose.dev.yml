@@ -104,6 +104,8 @@ services:
         test -s /host-secrets/scansci_service_token;
         install -o 10001 -g 10001 -m 0400 /host-secrets/scansci_service_token /service-secrets/.scansci_service_token.next;
         mv -f /service-secrets/.scansci_service_token.next /service-secrets/scansci_service_token;
+        install -o 1000 -g 1000 -m 0400 /host-secrets/scansci_service_token /worker-secrets/.scansci_service_token.next;
+        mv -f /worker-secrets/.scansci_service_token.next /worker-secrets/scansci_service_token;
         if test -e /host-secrets/scansci_username || test -e /host-secrets/scansci_password; then
           test -s /host-secrets/scansci_username; test -s /host-secrets/scansci_password;
           for name in scansci_username scansci_password; do install -o 10001 -g 10001 -m 0400 "/host-secrets/$name" "/auth-secrets/.$name.next"; mv -f "/auth-secrets/.$name.next" "/auth-secrets/$name"; done;
@@ -113,6 +115,7 @@ services:
     volumes:
       - ${SCANSCI_DEV_SECRET_ROOT:-../../.local/scansci-secrets}:/host-secrets:ro
       - scansci-service-secrets:/service-secrets
+      - scansci-worker-secrets:/worker-secrets
       - scansci-auth-secrets:/auth-secrets
     network_mode: none
     read_only: true
@@ -201,4 +204,5 @@ volumes:
   bge-m3-5617a9f61b028005a4858fdac845db406aefb181-08cc5a668e89:
   scansci-session:
   scansci-service-secrets:
+  scansci-worker-secrets:
   scansci-auth-secrets:
