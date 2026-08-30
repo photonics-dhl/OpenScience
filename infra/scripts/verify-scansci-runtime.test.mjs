@@ -61,7 +61,7 @@ async function fixture() {
       ReadonlyRootfs: true, CapDrop: ['ALL'], PortBindings: {}, Memory: 1024 ** 3,
       Privileged: false, CapAdd: [],
       NanoCpus: 1_000_000_000, PidsLimit: 64, SecurityOpt: ['no-new-privileges:true'],
-      Tmpfs: { '/tmp': 'size=64m,noexec,nosuid,nodev,uid=10001,gid=10001,mode=0700' },
+      Tmpfs: { '/tmp': 'size=256m,noexec,nosuid,nodev,uid=10001,gid=10001,mode=0700' },
     },
     Mounts: [
       { Type: 'volume', Name: 'openscience-prod_scansci-session', Source: '/var/lib/docker/volumes/session/_data', Destination: '/session', RW: true },

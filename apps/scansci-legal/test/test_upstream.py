@@ -7,6 +7,10 @@ import socket
 import subprocess
 import sys
 import tempfile
+import threading
+import time
+from concurrent.futures import ThreadPoolExecutor
+from types import SimpleNamespace
 import unittest
 from unittest import mock
 
@@ -18,6 +22,37 @@ from scansci_legal import upstream_worker
 
 
 REQUEST = LegalDownloadRequest("10.1038/nature12373", "legal_only", False, False, True, "a" * 64)
+
+
+def _run_tiers_parallel(
+    tiers, doi, target_dir, output_path, config, use_tor, overall_timeout,
+):
+    all_sources = [source for tier_sources, _tier_label, _tier_timeout in tiers for source in tier_sources]
+    result_lock = threading.Lock()
+    success_event = threading.Event()
+    pool = ThreadPoolExecutor(max_workers=len(all_sources))
+    try:
+        futures = [
+            pool.submit(
+                _try_source,
+                fn,
+                doi,
+                target_dir / f"{safe_filename(doi)}_{label}.pdf",
+                config,
+                label,
+                use_tor,
+            )
+            for fn, label in all_sources
+        ]
+        success_event.wait(timeout=overall_timeout)
+        for future in futures:
+            result = future.result(timeout=overall_timeout)
+            if result and result.get("success"):
+                with result_lock:
+                    return result
+    finally:
+        pool.shutdown(wait=False)
+    return None
 
 
 class ScanSciAcquisitionClientTest(unittest.TestCase):
@@ -168,9 +203,18 @@ class UpstreamNetworkBoundaryTest(unittest.TestCase):
         public = [(socket.AF_INET, socket.SOCK_STREAM, 6, "", ("93.184.216.34", 443))]
         self.assertEqual(self.guarded_resolve(public), public)
 
+        public_nat64 = [(socket.AF_INET6, socket.SOCK_STREAM, 6, "", ("64:ff9b::808:808", 443))]
+        self.assertEqual(self.guarded_resolve(public_nat64), public_nat64)
+
         for address in (
             "127.0.0.1", "10.0.0.1", "169.254.169.254", "192.0.2.1", "224.0.0.1",
             "::1", "fc00::1", "ff02::1",
+            "64:ff9b::a9fe:a9fe",  # RFC 6052 NAT64 -> 169.254.169.254 metadata
+            "64:ff9b::6464:64c8",  # RFC 6052 NAT64 -> Alibaba 100.100.100.200
+            "64:ff9b:1::a9fe:a9fe",  # RFC 8215 local-use NAT64 prefix
+            "::ffff:a9fe:a9fe",  # IPv4-mapped -> 169.254.169.254
+            "2002:a9fe:a9fe::",  # 6to4 -> 169.254.169.254
+            "2001:0000:0808:0808:0000:ffff:f5ff:fffe",  # Teredo client -> 10.0.0.1
         ):
             family = socket.AF_INET6 if ":" in address else socket.AF_INET
             record = [(family, socket.SOCK_STREAM, 6, "", (address, 443))]
@@ -180,7 +224,7 @@ class UpstreamNetworkBoundaryTest(unittest.TestCase):
     def test_rejects_dns_answers_mixed_with_private_addresses_and_non_https_ports(self):
         mixed = [
             (socket.AF_INET, socket.SOCK_STREAM, 6, "", ("93.184.216.34", 443)),
-            (socket.AF_INET, socket.SOCK_STREAM, 6, "", ("169.254.169.254", 443)),
+            (socket.AF_INET6, socket.SOCK_STREAM, 6, "", ("64:ff9b::6464:64c8", 443)),
         ]
         with self.assertRaises(OSError):
             self.guarded_resolve(mixed)
@@ -196,9 +240,100 @@ class UpstreamNetworkBoundaryTest(unittest.TestCase):
             "http://publisher.example:443/paper",
             "https://user:password@publisher.example/paper",
             "https://localhost/paper",
+            "https://[64:ff9b::a9fe:a9fe]/latest/meta-data",
+            "https://[64:ff9b::6464:64c8]/latest/meta-data",
+            "https://[64:ff9b:1::a9fe:a9fe]/latest/meta-data",
         ):
             with self.subTest(value=value), self.assertRaises(OSError):
                 guard(value)
+
+
+class SerialLegalSourceOverrideTest(unittest.TestCase):
+    def module(self):
+        def try_source(source, _doi, output_path, _config, _label, use_tor=False):
+            if use_tor:
+                raise AssertionError("Tor reached an upstream source")
+            return source(output_path)
+
+        return SimpleNamespace(
+            _run_tiers_parallel=_run_tiers_parallel,
+            _try_source=try_source,
+            safe_filename=lambda _doi: "paper",
+        )
+
+    def installer(self):
+        installer = getattr(upstream_worker, "_install_serial_legal_source_override", None)
+        if installer is None:
+            self.fail("serial legal-source override is missing")
+        return installer
+
+    def test_runs_sources_serially_in_tier_order_stops_on_first_success_and_cleans_temps(self):
+        module = self.module()
+        self.installer()(module)
+        active = 0
+        maximum_active = 0
+        calls = []
+        lock = threading.Lock()
+
+        def source(label, succeeds):
+            def run(path):
+                nonlocal active, maximum_active
+                with lock:
+                    active += 1
+                    maximum_active = max(maximum_active, active)
+                    calls.append(label)
+                path.write_bytes(b"%PDF-source-temp")
+                time.sleep(0.02)
+                with lock:
+                    active -= 1
+                return {"success": True, "file": str(path), "source": "Unpaywall"} if succeeds else None
+            return run
+
+        config = {
+            "download_strategy": "legal_only", "scihub_enabled": False,
+            "use_tor": False, "use_tor_for_scihub": False,
+            "network_proxy": "", "proxy_pool": "", "batch_workers": 1,
+            "parallel_sources": False, "parallel_probes": False,
+        }
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            output = root / "paper.pdf"
+            tiers = [
+                ([(source("free-first", False), "Unpaywall"), (source("free-second", True), "DOAJ")], "free", 5),
+                ([(source("institutional-never", True), "CARSI")], "institutional", 5),
+            ]
+            with mock.patch(f"{__name__}.ThreadPoolExecutor", side_effect=AssertionError("parallel fanout")):
+                result = module._run_tiers_parallel(tiers, "10.1000/example", root, output, config, False, 10)
+
+            self.assertEqual(calls, ["free-first", "free-second"])
+            self.assertEqual(maximum_active, 1)
+            self.assertEqual(result["file"], str(output))
+            self.assertEqual(output.read_bytes(), b"%PDF-source-temp")
+            self.assertEqual(list(root.glob("paper_*.pdf")), [])
+
+    def test_rejects_parallel_source_drift_and_non_legal_runtime_flags(self):
+        module = self.module()
+        with self.assertRaises(RuntimeError):
+            self.installer()(module, source_reader=lambda _function: (
+                "def _run_tiers_parallel(tiers, doi, target_dir, output_path, config, use_tor, overall_timeout):\n"
+                "    return None\n"
+            ))
+        self.assertIs(module._run_tiers_parallel, _run_tiers_parallel)
+
+        self.installer()(module)
+        calls = []
+        config = {
+            "download_strategy": "legal_only", "scihub_enabled": True,
+            "use_tor": False, "use_tor_for_scihub": False,
+            "network_proxy": "", "proxy_pool": "", "batch_workers": 1,
+            "parallel_sources": False, "parallel_probes": False,
+        }
+        with tempfile.TemporaryDirectory() as directory, self.assertRaises(RuntimeError):
+            module._run_tiers_parallel(
+                [([(lambda _path: calls.append("called"), "Sci-Hub")], "grey", 1)],
+                "10.1000/example", Path(directory), Path(directory) / "paper.pdf", config, False, 1,
+            )
+        self.assertEqual(calls, [])
 
 
 if __name__ == "__main__":

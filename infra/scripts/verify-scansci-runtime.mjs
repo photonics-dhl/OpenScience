@@ -151,7 +151,7 @@ export async function verifyScanSciRuntime({
     || container.HostConfig?.NanoCpus !== 1_000_000_000
     || container.HostConfig?.PidsLimit !== 64
     || Object.keys(container.HostConfig?.PortBindings ?? {}).length !== 0
-    || !['size=64m', 'noexec', 'nosuid', 'nodev', 'uid=10001', 'gid=10001', 'mode=0700']
+    || !['size=256m', 'noexec', 'nosuid', 'nodev', 'uid=10001', 'gid=10001', 'mode=0700']
       .every((option) => tmpfsOptions.has(option))) fail();
   const networks = Object.keys(container.NetworkSettings?.Networks ?? {});
   if (networks.length !== 1 || !networks[0].endsWith('_retrieval_net')

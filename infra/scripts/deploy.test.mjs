@@ -34,6 +34,7 @@ test('production commit publishes durable rollback identity before exact retenti
 const workerDockerfile = readFileSync(new URL('../../apps/agent-worker/Dockerfile', import.meta.url), 'utf8');
 const parserDockerfile = readFileSync(new URL('../../apps/agent-worker/Dockerfile.parser', import.meta.url), 'utf8');
 const productionCompose = readFileSync(new URL('../compose/docker-compose.prod.yml', import.meta.url), 'utf8');
+const developmentCompose = readFileSync(new URL('../compose/docker-compose.dev.yml', import.meta.url), 'utf8');
 const cloudSync = readFileSync(new URL('../../scripts/cloud-sync.mjs', import.meta.url), 'utf8');
 const releaseSyncCommand = readFileSync(new URL('../../scripts/release-sync-command.mjs', import.meta.url), 'utf8');
 const backup = readFileSync(new URL('./backup.sh', import.meta.url), 'utf8');
@@ -47,12 +48,12 @@ const bash = process.platform === 'win32' && existsSync('C:/Program Files/Git/bi
   ? 'C:/Program Files/Git/bin/bash.exe'
   : '/bin/bash';
 
-function composeService(name, nextName) {
-  const start = productionCompose.indexOf(`\n  ${name}:`);
+function composeService(name, nextName, compose = productionCompose) {
+  const start = compose.indexOf(`\n  ${name}:`);
   assert.ok(start >= 0, `${name} service is missing`);
-  const end = nextName ? productionCompose.indexOf(`\n  ${nextName}:`, start + 1) : productionCompose.indexOf('\nnetworks:', start + 1);
+  const end = nextName ? compose.indexOf(`\n  ${nextName}:`, start + 1) : compose.indexOf('\nnetworks:', start + 1);
   assert.ok(end > start, `${name} service boundary is missing`);
-  return productionCompose.slice(start, end);
+  return compose.slice(start, end);
 }
 
 test('ScanSci production topology exposes only the bounded legal service and stopped loopback auth helper', () => {
@@ -60,6 +61,7 @@ test('ScanSci production topology exposes only the bounded legal service and sto
   const auth = composeService('scansci-auth', 'document-parser');
   const worker = composeService('agent-worker', 'scansci-secret-init');
   const secretInit = composeService('scansci-secret-init', 'scansci-legal');
+  const developmentLegal = composeService('scansci-legal', 'scansci-auth', developmentCompose);
 
   assert.match(legal, /image: openscience-scansci-legal:\$\{XGS_RELEASE_IMAGE_TAG:\?XGS_RELEASE_IMAGE_TAG required\}/u);
   assert.match(legal, /user: "10001:10001"/u);
@@ -69,7 +71,8 @@ test('ScanSci production topology exposes only the bounded legal service and sto
   assert.match(legal, /mem_limit: 1g/u);
   assert.match(legal, /cpus: 1/u);
   assert.match(legal, /pids_limit: 64/u);
-  assert.match(legal, /\/tmp:size=64m,noexec,nosuid,nodev,uid=10001,gid=10001,mode=0700/u);
+  assert.match(legal, /\/tmp:size=256m,noexec,nosuid,nodev,uid=10001,gid=10001,mode=0700/u);
+  assert.match(developmentLegal, /\/tmp:size=256m,noexec,nosuid,nodev,uid=10001,gid=10001,mode=0700/u);
   assert.match(legal, /scansci-session:\/session/u);
   assert.match(legal, /scansci-service-secrets:\/run\/secrets:ro/u);
   assert.match(legal, /networks:\r?\n\s+- retrieval_net/u);
