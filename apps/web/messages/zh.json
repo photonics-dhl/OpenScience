@@ -598,6 +598,28 @@
       "upload": "上传资料",
       "blank": "创建空白 RO"
     },
+    "literature": {
+      "eyebrow": "个人文献",
+      "title": "查找来源",
+      "description": "输入题名、DOI 或 arXiv 编号。检索与访问核验始终留在你的研究空间中。",
+      "queryLabel": "题名、DOI 或 arXiv 编号",
+      "queryPlaceholder": "10.1000/example 或论文题名",
+      "search": "检索元数据",
+      "metadata": "元数据结果",
+      "source": "打开来源记录",
+      "untitled": "未命名来源",
+      "getFullText": "获取全文",
+      "download": "下载来源",
+      "statusPending": "正在队列中等待",
+      "statusRunning": "正在获取来源",
+      "statusAuthRequired": "获取全文前需要处理机构访问权限。",
+      "statusFailed": "检索未能完成。",
+      "statusSucceeded": "来源已就绪",
+      "expires": "可用至 {expiresAt}",
+      "retry": "再次尝试",
+      "noResults": "尚未找到匹配的元数据。",
+      "error": "无法完成这次来源请求，请重试。"
+    },
     "hermes": {
       "title": "Hermes 任务",
       "liveQueue": "Hermes / 实时队列",

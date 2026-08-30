@@ -598,6 +598,28 @@
       "upload": "Upload materials",
       "blank": "Create blank RO"
     },
+    "literature": {
+      "eyebrow": "Personal literature",
+      "title": "Find a source",
+      "description": "Search by title, DOI, or arXiv ID. Retrieval and access checks remain in your research space.",
+      "queryLabel": "Title, DOI, or arXiv ID",
+      "queryPlaceholder": "10.1000/example or a paper title",
+      "search": "Search metadata",
+      "metadata": "Metadata results",
+      "source": "Open source record",
+      "untitled": "Untitled source",
+      "getFullText": "Get full text",
+      "download": "Download source",
+      "statusPending": "Waiting in queue",
+      "statusRunning": "Retrieving source",
+      "statusAuthRequired": "Institutional access needs attention before full text can be retrieved.",
+      "statusFailed": "Retrieval did not complete.",
+      "statusSucceeded": "Source ready",
+      "expires": "Available until {expiresAt}",
+      "retry": "Try again",
+      "noResults": "No matching metadata yet.",
+      "error": "The source request could not be completed. Please try again."
+    },
     "hermes": {
       "title": "Hermes tasks",
       "liveQueue": "Hermes / live queue",

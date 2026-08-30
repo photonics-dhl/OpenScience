@@ -29,6 +29,43 @@ describe('same-origin API routing contract', () => {
 });
 
 describe('apiRequest CSRF contract', () => {
+  it('serializes a personal literature acquisition without provider or mode controls', async () => {
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(new Response(JSON.stringify({ csrfToken: 'csrf-1' }), { status: 200 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ task: { id: 'task-1' } }), { status: 202 }));
+    vi.stubGlobal('fetch', fetchMock);
+    const { submitLiteratureAcquisition } = await import('../lib/api');
+
+    await submitLiteratureAcquisition({ query: 'Ultrafast optical response', identifier: '10.1000/example' }, 'literature-run-1');
+
+    expect(fetchMock).toHaveBeenLastCalledWith('/api/literature/acquisitions', expect.objectContaining({
+      method: 'POST',
+      headers: expect.objectContaining({ 'idempotency-key': 'literature-run-1' }),
+      body: JSON.stringify({
+        query: 'Ultrafast optical response',
+        identifier: '10.1000/example',
+        target: { kind: 'personal' },
+      }),
+    }));
+    const body = JSON.parse(fetchMock.mock.calls.at(-1)?.[1]?.body as string);
+    expect(body).not.toHaveProperty('provider');
+    expect(body).not.toHaveProperty('mode');
+    expect(body).not.toHaveProperty('account');
+  });
+
+  it('requests a one-use temporary-document link through the protected transport', async () => {
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(new Response(JSON.stringify({ csrfToken: 'csrf-1' }), { status: 200 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ downloadUrl: '/api/temporary-documents/document-1/download/access-1', expiresAt: '2026-09-01T00:00:00.000Z' }), { status: 200 }));
+    vi.stubGlobal('fetch', fetchMock);
+    const { createTemporaryDocumentDownloadLink } = await import('../lib/api');
+
+    await expect(createTemporaryDocumentDownloadLink('document-1')).resolves.toMatchObject({
+      downloadUrl: '/api/temporary-documents/document-1/download/access-1',
+    });
+    expect(fetchMock).toHaveBeenLastCalledWith('/api/temporary-documents/document-1/download-link', expect.objectContaining({ method: 'POST' }));
+  });
+
   it('replays extractor session and task creation with stable idempotency keys', async () => {
     const fetchMock = vi.fn()
       .mockResolvedValueOnce(new Response(JSON.stringify({ csrfToken: 'csrf-1' }), { status: 200 }))

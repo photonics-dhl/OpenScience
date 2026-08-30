@@ -8,6 +8,7 @@ import { useEffect, useState } from 'react';
 import LocaleSwitcher from '@/components/LocaleSwitcher';
 import { ContinueResearch } from '@/components/dashboard/ContinueResearch';
 import { ImportStage } from '@/components/dashboard/ImportStage';
+import { LiteratureAcquisition } from '@/components/dashboard/LiteratureAcquisition';
 import { ResearchList } from '@/components/dashboard/ResearchList';
 import { HermesRail, type HermesRailTask } from '@/components/hermes/HermesRail';
 import { HermesAssistantDrawer } from '@/components/hermes/HermesAssistantDrawer';
@@ -136,6 +137,9 @@ export default function DashboardPage() {
         </div>
         <div className="lg:col-span-8">
           <ImportStage />
+        </div>
+        <div className="lg:col-span-8">
+          <LiteratureAcquisition />
         </div>
         <div className="lg:col-span-12">
           <ResearchList researchObjects={researchObjects} />

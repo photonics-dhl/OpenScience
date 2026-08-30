@@ -876,6 +876,37 @@ export async function retryAgentTask(taskId: string): Promise<{ task: AgentTaskV
   return request(`/api/agent/tasks/${taskId}/retry`, { method: 'POST' });
 }
 
+export interface LiteratureAcquisitionResult {
+  researchObject: { id: string; workspaceId: string; title: string; status: string; visibility: string; version: number; createdAt: string };
+  session: { id: string; researchObjectId: string; kind: string; title: string; status: string; createdAt: string };
+  task: AgentTaskView;
+}
+
+/** The retrieval strategy is intentionally server-owned; the browser sends only the research intent. */
+export async function submitLiteratureAcquisition(
+  input: { query: string; identifier?: string },
+  idempotencyKey = crypto.randomUUID(),
+): Promise<LiteratureAcquisitionResult> {
+  return request('/api/literature/acquisitions', {
+    method: 'POST',
+    headers: { 'Idempotency-Key': idempotencyKey },
+    body: JSON.stringify({
+      query: input.query,
+      ...(input.identifier ? { identifier: input.identifier } : {}),
+      target: { kind: 'personal' },
+    }),
+  });
+}
+
+export interface TemporaryDocumentDownloadLink {
+  downloadUrl: string;
+  expiresAt: string;
+}
+
+export function createTemporaryDocumentDownloadLink(documentId: string): Promise<TemporaryDocumentDownloadLink> {
+  return request(`/api/temporary-documents/${documentId}/download-link`, { method: 'POST' });
+}
+
 // ===== P1D-9：公开页数据（§4.3 必显）=====
 
 export interface PublicClaim {
