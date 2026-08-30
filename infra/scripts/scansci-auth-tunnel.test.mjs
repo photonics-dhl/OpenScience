@@ -52,6 +52,12 @@ case " $* " in
     ;;
 esac
 case " $* " in
+  *"verify-scansci-runtime.mjs"*)
+    if [ "\${FAKE_AUTH_RETAG:-0}" = 1 ] && case " $* " in *" --allow-auth 0 "*) true;; *) false;; esac; then exit 8; fi
+    if [ "\${FAKE_RUNTIME_VERIFY_FAIL:-0}" = 1 ] && case " $* " in *" --allow-auth 1 "*) true;; *) false;; esac; then exit 8; fi
+    ;;
+esac
+case " $* " in
   *" -N "*)
     if [ "\${FAKE_SSH_TUNNEL_FAIL:-0}" = 1 ]; then exit 2; fi
     trap 'exit 0' TERM INT
@@ -532,6 +538,20 @@ test('a live tunnel without loopback HTTP readiness is stopped and compensated',
   const log = await readFile(f.log, 'utf8');
   assert.match(log, /--profile scansci-auth rm -f -s scansci-auth/);
   assert.equal(run(f.script, ['status'], f.env, f.bashBin).status, 3);
+});
+
+test('retagged auth image or post-readiness verifier failure is rejected and exactly compensated', async (t) => {
+  for (const [flag, port] of [['FAKE_AUTH_RETAG', 16101], ['FAKE_RUNTIME_VERIFY_FAIL', 16102]]) {
+    const f = await fixture();
+    await startHealthServer(t, port);
+    t.after(async () => rm(f.root, { recursive: true, force: true }));
+    const result = run(f.script, ['start', String(port)], { ...f.env, [flag]: '1' }, f.bashBin);
+    assert.equal(result.status, 1, `${result.stdout}\n${result.stderr}`);
+    const log = await readFile(f.log, 'utf8');
+    assert.match(log, /verify-scansci-runtime\.mjs/);
+    if (flag === 'FAKE_RUNTIME_VERIFY_FAIL') assert.match(log, /--profile scansci-auth rm -f -s scansci-auth/);
+    assert.equal(existsSync(join(f.env.XDG_STATE_HOME, 'openscience', 'scansci-auth-tunnel.state')), false);
+  }
 });
 
 test('failed-start compensation retains old release tombstone when remote stop fails', async (t) => {

@@ -4,6 +4,7 @@ import { spawnSync } from 'node:child_process';
 import { lstat, readFile, realpath } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { parseReleaseCapability } from './production-release-retention.mjs';
 
 const SHA_PATTERN = /^[a-f0-9]{40}$/u;
 const IMAGE_PATTERN = /^sha256:[a-f0-9]{64}$/u;
@@ -79,9 +80,12 @@ export async function verifyScanSciRuntime({
   runtimeSecretMetadata,
   runtimeSecretSha256,
   sessionStatus,
+  expectedLegalImageId,
+  expectedAuthImageId,
   requiredSecretUid = 0,
 }) {
-  if (!SHA_PATTERN.test(releaseSha) || !container || !image || !authImage || !Array.isArray(authContainerIds)) fail();
+  if (!SHA_PATTERN.test(releaseSha) || !container || !image || !authImage || !Array.isArray(authContainerIds)
+    || image.Id !== expectedLegalImageId || authImage.Id !== expectedAuthImageId) fail();
   const app = join(releaseRoot, 'apps', 'scansci-legal');
   const [releaseSource, lockSource, requirementsSource, buildRequirementsSource] = await Promise.all([
     readFile(join(releaseRoot, '.release-source'), 'utf8'),
@@ -165,13 +169,18 @@ export async function verifyScanSciRuntime({
       || !workerMount.Name?.endsWith('_scansci-worker-secrets')
       || workerSecretMetadata !== '1000:1000:400' || workerSecretSha256 !== hostSecretSha256) fail();
   }
-  if (authContainers.length > 0) {
-    if (!allowRunningAuth || authContainers.some((candidate) => (
-      candidate.Image !== authImage.Id || candidate.Config?.User !== '10001:10001'
+  if (allowRunningAuth) {
+    if (authContainerIds.length !== 1 || authContainers.length !== 1 || authContainers.some((candidate) => {
+      const sessionMount = candidate.Mounts?.find((mount) => mount.Destination === '/session');
+      const secretMount = candidate.Mounts?.find((mount) => mount.Destination === '/run/secrets');
+      return candidate.State?.Running !== true || candidate.HostConfig?.NetworkMode !== 'host'
+      || candidate.Image !== expectedAuthImageId || candidate.Config?.User !== '10001:10001'
       || candidate.Config?.Labels?.['org.openscience.scansci.role'] !== 'auth'
       || JSON.stringify(candidate.Config?.Entrypoint) !== JSON.stringify(['/usr/bin/tini', '--', '/usr/local/bin/scansci-auth-entrypoint'])
       || ![null, undefined, '[]'].includes(candidate.Config?.Cmd == null ? candidate.Config?.Cmd : JSON.stringify(candidate.Config.Cmd))
-    ))) fail();
+      || !sessionMount || sessionMount.Type !== 'volume' || sessionMount.RW !== true || !sessionMount.Name?.endsWith('_scansci-session')
+      || !secretMount || secretMount.Type !== 'volume' || secretMount.RW !== false || !secretMount.Name?.endsWith('_scansci-auth-secrets');
+    })) fail();
   }
   if (!/^[a-f0-9]{64}$/u.test(runtimeSecretSha256) || runtimeSecretSha256 !== hostSecretSha256
     || authContainerIds.length !== 0 && !allowRunningAuth
@@ -202,7 +211,7 @@ function parseCli(argv) {
     if (!argv[index]?.startsWith('--') || !argv[index + 1] || values.has(argv[index])) fail();
     values.set(argv[index], argv[index + 1]);
   }
-  const expected = ['--release-root', '--release-sha', '--compose-file', '--service-token-file', '--require-worker', '--allow-auth'];
+  const expected = ['--release-root', '--release-sha', '--compose-file', '--service-token-file', '--capability-file', '--require-worker', '--allow-auth'];
   if (values.size !== expected.length || expected.some((key) => !values.has(key))) fail();
   return Object.fromEntries(expected.map((key) => [key, values.get(key)]));
 }
@@ -232,9 +241,11 @@ async function main() {
   const serviceTokenPath = options['--service-token-file'];
   const requireWorker = options['--require-worker'];
   const allowAuth = options['--allow-auth'];
+  const capabilityFile = options['--capability-file'];
   if (releaseRoot !== `/opt/openscience-releases/${releaseSha}`
     || composeFile !== `${releaseRoot}/infra/compose/docker-compose.prod.yml`
     || serviceTokenPath !== '/opt/openscience-secrets/scansci/scansci_service_token'
+    || capabilityFile !== `/opt/openscience/.release-capabilities/${releaseSha}`
     || !['0', '1'].includes(requireWorker) || !['0', '1'].includes(allowAuth)) fail();
   const composeArgs = ['compose', '--env-file', '/opt/openscience/.env.prod', '-f', composeFile];
   const env = { ...process.env, XGS_RELEASE_ROOT: releaseRoot, XGS_RELEASE_IMAGE_TAG: releaseSha };
@@ -245,7 +256,9 @@ async function main() {
   };
   const containerId = compose(['ps', '-q', 'scansci-legal']);
   if (!/^[a-f0-9]{12,64}$/u.test(containerId)) fail();
-  const authIds = compose(['--profile', 'scansci-auth', 'ps', '-aq', 'scansci-auth']).split(/\r?\n/u).filter(Boolean);
+  const capability = parseReleaseCapability(await readFile(capabilityFile, 'utf8'));
+  if (!capability.scansciDeploy) fail();
+  const authIds = compose(['--profile', 'scansci-auth', 'ps', '-q', 'scansci-auth']).split(/\r?\n/u).filter(Boolean);
   const authContainers = authIds.map((id) => inspectJson('docker', ['inspect', id]));
   const container = inspectJson('docker', ['inspect', containerId]);
   const image = inspectJson('docker', ['image', 'inspect', `openscience-scansci-legal:${releaseSha}`]);
@@ -279,6 +292,7 @@ async function main() {
     authContainerIds: authIds, sessionStatus, runtimeSecretMetadata, runtimeSecretSha256,
     workerContainer, workerSecretMetadata, workerSecretSha256,
     authContainers, allowRunningAuth: allowAuth === '1',
+    expectedLegalImageId: capability.legalImageId, expectedAuthImageId: capability.authImageId,
   });
   process.stdout.write(formatRuntimeStatuses(report));
 }

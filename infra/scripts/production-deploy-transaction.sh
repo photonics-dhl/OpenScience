@@ -115,7 +115,7 @@ compose_scansci_auth_current() {
 
 verify_scansci_current() {
   local require_worker="${1:-1}"
-  run_remote "/usr/bin/node '$RELEASE_ROOT/infra/scripts/verify-scansci-runtime.mjs' --release-root '$RELEASE_ROOT' --release-sha '$RELEASE_SHA' --compose-file '$COMPOSE_FILE' --service-token-file '$SCANSCI_SECRET_ROOT/scansci_service_token' --require-worker '$require_worker' --allow-auth 0"
+  run_remote "/usr/bin/node '$RELEASE_ROOT/infra/scripts/verify-scansci-runtime.mjs' --release-root '$RELEASE_ROOT' --release-sha '$RELEASE_SHA' --compose-file '$COMPOSE_FILE' --service-token-file '$SCANSCI_SECRET_ROOT/scansci_service_token' --capability-file '$RELEASE_CAPABILITIES_DIR/$RELEASE_SHA' --require-worker '$require_worker' --allow-auth 0"
 }
 
 wait_for_healthy() {
@@ -489,7 +489,7 @@ transaction_restore_previous_scansci() {
   [ "$(run_remote "docker image inspect --format='{{.Id}}' openscience-scansci-legal:$exact_previous_sha")" = "$PREVIOUS_SCANSCI_LEGAL_IMAGE_ID" ] || return
   [ "$(run_remote "docker image inspect --format='{{.Id}}' openscience-scansci-auth:$exact_previous_sha")" = "$PREVIOUS_SCANSCI_AUTH_IMAGE_ID" ] || return
   run_remote "cd $PREVIOUS_RELEASE_ROOT && env $PREVIOUS_RUNTIME_ENV XGS_RELEASE_ROOT=$PREVIOUS_RELEASE_ROOT XGS_RELEASE_IMAGE_TAG=$exact_previous_sha docker compose --env-file $PROD_ENV -f $ROLLBACK_COMPOSE_FILE up -d --force-recreate --wait --wait-timeout 300 scansci-legal" || return
-  run_remote "/usr/bin/node '$PREVIOUS_RELEASE_ROOT/infra/scripts/verify-scansci-runtime.mjs' --release-root '$PREVIOUS_RELEASE_ROOT' --release-sha '$exact_previous_sha' --compose-file '$ROLLBACK_COMPOSE_FILE' --service-token-file '$SCANSCI_SECRET_ROOT/scansci_service_token' --require-worker 0 --allow-auth 0"
+  run_remote "/usr/bin/node '$PREVIOUS_RELEASE_ROOT/infra/scripts/verify-scansci-runtime.mjs' --release-root '$PREVIOUS_RELEASE_ROOT' --release-sha '$exact_previous_sha' --compose-file '$ROLLBACK_COMPOSE_FILE' --service-token-file '$SCANSCI_SECRET_ROOT/scansci_service_token' --capability-file '$PREVIOUS_CAPABILITIES_FILE' --require-worker 0 --allow-auth 0"
 }
 transaction_stop_candidate_scansci() {
   local exact_candidate_sha="$1"

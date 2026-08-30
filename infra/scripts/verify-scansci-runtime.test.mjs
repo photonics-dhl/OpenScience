@@ -103,6 +103,8 @@ test('runtime verifier validates immutable source, bounded topology, Secret and 
     workerSecretMetadata: '1000:1000:400',
     workerSecretSha256: createHash('sha256').update(tokenValue).digest('hex'),
     requiredSecretUid: process.getuid?.(),
+    expectedLegalImageId: f.image.Id,
+    expectedAuthImageId: f.authImage.Id,
   });
   const output = formatRuntimeStatuses(report);
 
@@ -157,6 +159,12 @@ test('runtime verifier rejects wrong-group host metadata and validates an explic
   t.after(async () => rm(f.releaseRoot, { recursive: true, force: true }));
   const authContainer = {
     Image: f.authImage.Id,
+    State: { Running: true },
+    HostConfig: { NetworkMode: 'host' },
+    Mounts: [
+      { Type: 'volume', Name: 'openscience-prod_scansci-session', Destination: '/session', RW: true },
+      { Type: 'volume', Name: 'openscience-prod_scansci-auth-secrets', Destination: '/run/secrets', RW: false },
+    ],
     Config: {
       User: '10001:10001',
       Labels: { 'org.openscience.scansci.role': 'auth' },
@@ -169,6 +177,24 @@ test('runtime verifier rejects wrong-group host metadata and validates an explic
     allowRunningAuth: true, runtimeSecretMetadata: '10001:10001:400',
     runtimeSecretSha256: createHash('sha256').update(tokenValue).digest('hex'),
     workerSecretMetadata: '1000:1000:400', workerSecretSha256: createHash('sha256').update(tokenValue).digest('hex'),
-    requiredSecretUid: process.getuid?.(),
+    requiredSecretUid: process.getuid?.(), expectedLegalImageId: f.image.Id, expectedAuthImageId: f.authImage.Id,
   });
+  for (const mutate of [
+    (candidate) => { candidate.State.Running = false; },
+    (candidate) => { candidate.Image = `sha256:${'f'.repeat(64)}`; },
+    (candidate) => { candidate.Config.Entrypoint = ['/bin/sh']; },
+    (candidate) => { candidate.Config.Cmd = ['fake-ready']; },
+    (candidate) => { candidate.HostConfig.NetworkMode = 'bridge'; },
+    (candidate) => { candidate.Mounts[1].Name = 'wrong-auth-secrets'; },
+  ]) {
+    const candidate = structuredClone(authContainer);
+    mutate(candidate);
+    await assert.rejects(verifyScanSciRuntime({
+      ...f, releaseSha, sessionStatus: 'ready', authContainerIds: ['abc123'], authContainers: [candidate],
+      allowRunningAuth: true, runtimeSecretMetadata: '10001:10001:400',
+      runtimeSecretSha256: createHash('sha256').update(tokenValue).digest('hex'),
+      workerSecretMetadata: '1000:1000:400', workerSecretSha256: createHash('sha256').update(tokenValue).digest('hex'),
+      requiredSecretUid: process.getuid?.(), expectedLegalImageId: f.image.Id, expectedAuthImageId: f.authImage.Id,
+    }), /failed/u);
+  }
 });

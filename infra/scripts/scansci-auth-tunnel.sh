@@ -51,7 +51,7 @@ read_state() {
   [ "$RELEASE_ROOT" = "/opt/openscience-releases/$RELEASE_SHA" ] || return 1
   [ "$RELEASE_COMPOSE" = "$RELEASE_ROOT/infra/compose/docker-compose.prod.yml" ] || return 1
   case "$STATE_LIFECYCLE" in
-    running) [ "$STATE_PID" -gt 0 ] || return 1 ;;
+    running|starting) [ "$STATE_PID" -gt 0 ] || return 1 ;;
     pending_stop) [ "$STATE_PID" -eq 0 ] || return 1 ;;
     *) return 1 ;;
   esac
@@ -63,7 +63,7 @@ state_file_exists() {
 
 process_matches_state() {
   read_state || return 1
-  [ "$STATE_LIFECYCLE" = "running" ] || return 1
+  case "$STATE_LIFECYCLE" in running|starting) ;; *) return 1 ;; esac
   kill -0 "$STATE_PID" 2>/dev/null || return 1
   local identity
   identity="$(ps -p "$STATE_PID" -f 2>/dev/null || true)"
@@ -150,7 +150,7 @@ remove_state() {
 stop_identified_tunnel() {
   read_state || return 1
   local identified=0 local_pid="$STATE_PID"
-  if [ "$STATE_LIFECYCLE" = "running" ] && process_matches_state; then
+  if { [ "$STATE_LIFECYCLE" = "running" ] || [ "$STATE_LIFECYCLE" = "starting" ]; } && process_matches_state; then
     identified=1
     local_pid="$STATE_PID"
   fi
@@ -234,6 +234,17 @@ remote_compose_command() {
     "$RELEASE_ROOT" "$RELEASE_ROOT" "$RELEASE_SHA" "$RELEASE_COMPOSE" "$action"
 }
 
+remote_verify_command() {
+  local allow_auth="$1"
+  printf "flock -n -E 73 /run/lock/openscience-production-deploy/lock /usr/bin/node \"%s/infra/scripts/verify-scansci-runtime.mjs\" --release-root \"%s\" --release-sha \"%s\" --compose-file \"%s\" --service-token-file /opt/openscience-secrets/scansci/scansci_service_token --capability-file /opt/openscience/.release-capabilities/%s --require-worker 1 --allow-auth %s" \
+    "$RELEASE_ROOT" "$RELEASE_ROOT" "$RELEASE_SHA" "$RELEASE_COMPOSE" "$RELEASE_SHA" "$allow_auth"
+}
+
+verify_remote_runtime() {
+  local allow_auth="$1"
+  ssh "${SSH_ARGS[@]}" "$SSH_TARGET" "$(remote_verify_command "$allow_auth")" >/dev/null 2>&1
+}
+
 resolve_release_identity() {
   RELEASE_SHA="$(ssh "${SSH_ARGS[@]}" "$SSH_TARGET" 'cat /opt/openscience/.release-id' 2>/dev/null | tr -d '\r\n')" \
     || { echo "release identity unavailable" >&2; return 1; }
@@ -266,7 +277,7 @@ resolve_existing_state_before_start() {
     echo "tunnel state upgrade failed" >&2
     return 65
   fi
-  if [ "$STATE_LIFECYCLE" = "running" ] && process_matches_state; then
+  if { [ "$STATE_LIFECYCLE" = "running" ] || [ "$STATE_LIFECYCLE" = "starting" ]; } && process_matches_state; then
     return 2
   fi
   stop_identified_tunnel
@@ -304,6 +315,10 @@ start_tunnel() {
   fi
   load_connection
   resolve_release_identity
+  if ! verify_remote_runtime 0; then
+    echo "auth helper preflight failed" >&2
+    return 1
+  fi
 
   local token
   token="$(od -An -N16 -tx1 /dev/urandom | tr -d ' \r\n')"
@@ -318,7 +333,7 @@ start_tunnel() {
 
   bash "$RUNNER_FILE" "$token" "$port" ssh "${SSH_ARGS[@]}" -N -L "127.0.0.1:$port:127.0.0.1:6080" "$SSH_TARGET" >/dev/null 2>&1 &
   local tunnel_pid=$!
-  write_state "$token" "$tunnel_pid" "$port" "running"
+  write_state "$token" "$tunnel_pid" "$port" "starting"
   sleep 0.2
   if ! process_matches_state; then
     stop_identified_tunnel
@@ -332,6 +347,16 @@ start_tunnel() {
     echo "loopback tunnel readiness failed" >&2
     return 1
   fi
+  if ! verify_remote_runtime 1; then
+    stop_identified_tunnel
+    if ! commit_remote_stop; then
+      echo "auth helper verification failed; remote stop pending" >&2
+      return 1
+    fi
+    echo "auth helper verification failed" >&2
+    return 1
+  fi
+  write_state "$token" "$tunnel_pid" "$port" "running"
   echo "started on http://127.0.0.1:$port"
 }
 
@@ -359,6 +384,10 @@ show_status() {
   acquire_lock
   if read_state && [ "$STATE_LIFECYCLE" = "pending_stop" ]; then
     echo "pending remote stop"
+    return 4
+  fi
+  if read_state && [ "$STATE_LIFECYCLE" = "starting" ]; then
+    echo "starting"
     return 4
   fi
   if is_running; then
