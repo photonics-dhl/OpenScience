@@ -8,6 +8,10 @@ CARSI acceptance remain separate gates.
 ScanSci `auth_required` state is PostgreSQL-authoritative: a conditional
 serializable transition writes the state, audit, and idempotent current-admin
 notifications atomically. Only raw provider success clears the state.
+Core migration 33 is expand-only and rollback-capable. The Domain primitive
+retries `P2034` at most three times; exhausted observation persistence never
+turns an otherwise useful retrieval into a permanent task failure, and a later
+raw observation can still perform the transition.
 
 ## Context
 
@@ -56,6 +60,11 @@ service. This limitation is documented in the official
   Compose environment, command arguments, logs, and image layers. Optional
   username/password files must appear as a pair; absence keeps manual browser
   login available.
+- Agent Worker rejects the legacy inline token. When ScanSci is enabled it
+  opens the fixed token path once with `O_RDONLY | O_NOFOLLOW`, validates the
+  descriptor as UID/GID 1000, exact mode `0400`, one regular link and bounded
+  non-empty content, reads once from that descriptor, and closes in `finally`.
+  Disabled rollback does not open a stale configured path.
 - `scansci-session` is a stable named volume and is not release-retained or
   application-rollback data. Recreating the legal or auth image preserves the
   profile and cookies. Credential/session revocation remains an explicit,

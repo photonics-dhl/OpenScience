@@ -4,10 +4,15 @@
 
 ## Current version tuple
 
-- Worktree branch / repository main: `codex/scansci-default-capability` / `463c8e3a2a80138cda2d669c370c0481ed4c0877`；远端仅保留 `main`。
+- Branch / local candidate / main: `codex/scansci-default-capability` / `60b3740` / `463c8e3`；远端仅 `main`。
 - Production application source / immutable release: `689331845574612130f223d08c92e61721c16586`。
 - Production rollback: `c435c4c8b2800bb20998fd9a9a93f2db96328661`；core/search migrations `32/32` / `2/2`。
 - Taskmaster `hermes-research-intelligence` 为 9/12：Tasks 1–9 done；Task 10 已重新打开，Task 11 阻断至 ScanSci 默认下载能力生产验收完成。
+
+## 2026-08-30 — ScanSci Task 6 local recovery candidate
+
+- `60b3740` 闭合 provider state 事务/重放/generation、三次 P2034、非致命 observation、descriptor Secret 与 disabled rollback；Domain 520、Database 26、Worker 501、三包 typecheck、独立复审均 green。
+- 真实 PG forward/rollback/redeploy + 双 client 合同仅 typecheck；migration 33、OA/CARSI/session/四入口仍须 ECS。生产保持 `6893318` / `c435c4c` / core-search `32/32`-`2/2`。
 
 ## 2026-08-30 — ScanSci Task 5 atomic acquisition candidate
 
