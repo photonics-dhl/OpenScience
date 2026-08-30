@@ -216,6 +216,7 @@ test('duplicate start is idempotent and stop closes only the recorded tunnel', a
   const afterStop = await readFile(f.log, 'utf8');
   assert.match(afterStop, /flock -n -E 73 \/run\/lock\/openscience-production-deploy\/lock/u);
   assert.match(afterStop, /docker compose .*--profile scansci-auth rm -f -s scansci-auth/);
+  assert.doesNotMatch(afterStop, /rm -f -s (?:agent-worker|scansci-legal|api|web)/u);
 });
 
 test('duplicate start re-probes HTTP readiness and compensates when the listener disappeared', async (t) => {

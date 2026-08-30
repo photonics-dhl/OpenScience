@@ -178,8 +178,9 @@ export async function verifyScanSciRuntime({
       || candidate.Config?.Labels?.['org.openscience.scansci.role'] !== 'auth'
       || JSON.stringify(candidate.Config?.Entrypoint) !== JSON.stringify(['/usr/bin/tini', '--', '/usr/local/bin/scansci-auth-entrypoint'])
       || ![null, undefined, '[]'].includes(candidate.Config?.Cmd == null ? candidate.Config?.Cmd : JSON.stringify(candidate.Config.Cmd))
-      || !sessionMount || sessionMount.Type !== 'volume' || sessionMount.RW !== true || !sessionMount.Name?.endsWith('_scansci-session')
-      || !secretMount || secretMount.Type !== 'volume' || secretMount.RW !== false || !secretMount.Name?.endsWith('_scansci-auth-secrets');
+      || candidate.Mounts?.length !== 2
+      || !sessionMount || sessionMount.Type !== 'volume' || sessionMount.RW !== true || sessionMount.Name !== 'openscience-prod_scansci-session'
+      || !secretMount || secretMount.Type !== 'volume' || secretMount.RW !== false || secretMount.Name !== 'openscience-prod_scansci-auth-secrets';
     })) fail();
   }
   if (!/^[a-f0-9]{64}$/u.test(runtimeSecretSha256) || runtimeSecretSha256 !== hostSecretSha256
@@ -258,7 +259,7 @@ async function main() {
   if (!/^[a-f0-9]{12,64}$/u.test(containerId)) fail();
   const capability = parseReleaseCapability(await readFile(capabilityFile, 'utf8'));
   if (!capability.scansciDeploy) fail();
-  const authIds = compose(['--profile', 'scansci-auth', 'ps', '-q', 'scansci-auth']).split(/\r?\n/u).filter(Boolean);
+  const authIds = compose(['--profile', 'scansci-auth', 'ps', '-aq', 'scansci-auth']).split(/\r?\n/u).filter(Boolean);
   const authContainers = authIds.map((id) => inspectJson('docker', ['inspect', id]));
   const container = inspectJson('docker', ['inspect', containerId]);
   const image = inspectJson('docker', ['image', 'inspect', `openscience-scansci-legal:${releaseSha}`]);

@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
+import { readFileSync } from 'node:fs';
 import { chmod, mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -186,6 +187,8 @@ test('runtime verifier rejects wrong-group host metadata and validates an explic
     (candidate) => { candidate.Config.Cmd = ['fake-ready']; },
     (candidate) => { candidate.HostConfig.NetworkMode = 'bridge'; },
     (candidate) => { candidate.Mounts[1].Name = 'wrong-auth-secrets'; },
+    (candidate) => { candidate.Mounts.push({ Type: 'bind', Source: '/var/run/docker.sock', Destination: '/var/run/docker.sock', RW: true }); },
+    (candidate) => { candidate.Mounts.push({ Type: 'bind', Source: '/srv/host-data', Destination: '/host-data', RW: false }); },
   ]) {
     const candidate = structuredClone(authContainer);
     mutate(candidate);
@@ -197,4 +200,9 @@ test('runtime verifier rejects wrong-group host metadata and validates an explic
       requiredSecretUid: process.getuid?.(), expectedLegalImageId: f.image.Id, expectedAuthImageId: f.authImage.Id,
     }), /failed/u);
   }
+});
+
+test('runtime CLI discovers exited and created auth containers for allow-auth zero', () => {
+  const source = readFileSync(new URL('./verify-scansci-runtime.mjs', import.meta.url), 'utf8');
+  assert.match(source, /ps', '-aq', 'scansci-auth'/u);
 });
