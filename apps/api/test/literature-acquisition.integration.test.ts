@@ -367,7 +367,7 @@ describe('literature acquisition atomic PostgreSQL transaction', () => {
         },
       });
       const recovered = await listAgentTasks(deps as never, {
-        userId: user.id, kind: 'source.retrieve', recoveryPreferred: true,
+        userId: user.id, kind: 'source.retrieve', recoveryPreferred: true, recoveryTarget: { kind: 'personal' },
       });
       const expected = candidate.eligible
         ? { id: acquisition.task.id, canRetry: true }
@@ -394,14 +394,14 @@ describe('literature acquisition atomic PostgreSQL transaction', () => {
         progress: 30,
         retryCount: 0,
         executionAttempt: 1,
-        payload: { query: `malformed-${index}`, retryContractVersion: 1 },
+        payload: { query: `malformed-${index}`, retryContractVersion: 1, target: { kind: 'personal' } },
         error: '[retryable] malformed marker row',
         createdAt: new Date(validUpdatedAt.getTime() + (index + 1) * 1_000),
         updatedAt: new Date(validUpdatedAt.getTime() + (index + 1) * 1_000),
       })),
     });
     await expect(listAgentTasks(deps as never, {
-      userId: user.id, kind: 'source.retrieve', recoveryPreferred: true,
+      userId: user.id, kind: 'source.retrieve', recoveryPreferred: true, recoveryTarget: { kind: 'personal' },
     })).resolves.toEqual([expect.objectContaining({ id: acquisition.task.id, canRetry: true })]);
   });
 

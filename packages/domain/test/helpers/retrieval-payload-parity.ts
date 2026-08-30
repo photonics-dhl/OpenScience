@@ -12,7 +12,7 @@ export const SOURCE_RETRIEVE_RETRY_PAYLOAD_PARITY_CASES = [
     storageApplicability: 'postgresql-jsonb',
     payload: {
       query: 'attosecond dynamics', providers: ['semantic_scholar', 'tavily'],
-      limit: 10, includeFullText: false, retryContractVersion: 1,
+      limit: 10, includeFullText: false, retryContractVersion: 1, target: { kind: 'personal' },
     },
   },
   {
@@ -21,7 +21,7 @@ export const SOURCE_RETRIEVE_RETRY_PAYLOAD_PARITY_CASES = [
     storageApplicability: 'postgresql-jsonb',
     payload: {
       query: 'Paper', providers: ['scansci'], limit: 1, includeFullText: true,
-      identifier: '10.1038/NATURE12373', retryContractVersion: 1,
+      identifier: '10.1038/NATURE12373', retryContractVersion: 1, target: { kind: 'personal' },
     },
   },
   {
@@ -30,7 +30,7 @@ export const SOURCE_RETRIEVE_RETRY_PAYLOAD_PARITY_CASES = [
     storageApplicability: 'postgresql-jsonb',
     payload: {
       query: 'Paper', providers: ['scansci'], limit: 1, includeFullText: true,
-      identifier: 'arXiv:2401.01234v2', retryContractVersion: 1,
+      identifier: 'arXiv:2401.01234v2', retryContractVersion: 1, target: { kind: 'personal' },
     },
   },
   {
@@ -46,7 +46,7 @@ export const SOURCE_RETRIEVE_RETRY_PAYLOAD_PARITY_CASES = [
     name: 'marker-only malformed task',
     eligible: false,
     storageApplicability: 'postgresql-jsonb',
-    payload: { query: 'Paper', retryContractVersion: 1 },
+    payload: { query: 'Paper', retryContractVersion: 1, target: { kind: 'personal' } },
   },
   {
     name: 'unknown durable field',
@@ -54,7 +54,7 @@ export const SOURCE_RETRIEVE_RETRY_PAYLOAD_PARITY_CASES = [
     storageApplicability: 'postgresql-jsonb',
     payload: {
       query: 'Paper', providers: ['scansci'], limit: 1, includeFullText: true,
-      identifier: '10.1038/nature12373', retryContractVersion: 1, injected: true,
+      identifier: '10.1038/nature12373', retryContractVersion: 1, target: { kind: 'personal' }, injected: true,
     },
   },
   {
@@ -63,7 +63,7 @@ export const SOURCE_RETRIEVE_RETRY_PAYLOAD_PARITY_CASES = [
     storageApplicability: 'postgresql-jsonb',
     payload: {
       query: ' Paper ', providers: ['scansci'], limit: 1, includeFullText: true,
-      identifier: '10.1038/nature12373', retryContractVersion: 1,
+      identifier: '10.1038/nature12373', retryContractVersion: 1, target: { kind: 'personal' },
     },
   },
   {
@@ -72,7 +72,7 @@ export const SOURCE_RETRIEVE_RETRY_PAYLOAD_PARITY_CASES = [
     storageApplicability: 'postgresql-jsonb',
     payload: {
       query: '\tPaper\t', providers: ['scansci'], limit: 1, includeFullText: true,
-      identifier: '10.1038/nature12373', retryContractVersion: 1,
+      identifier: '10.1038/nature12373', retryContractVersion: 1, target: { kind: 'personal' },
     },
   },
   {
@@ -81,7 +81,7 @@ export const SOURCE_RETRIEVE_RETRY_PAYLOAD_PARITY_CASES = [
     storageApplicability: 'postgresql-jsonb',
     payload: {
       query: 'Paper', providers: ['tavily', 'semantic_scholar'],
-      limit: 10, includeFullText: false, retryContractVersion: 1,
+      limit: 10, includeFullText: false, retryContractVersion: 1, target: { kind: 'personal' },
     },
   },
   {
@@ -90,7 +90,7 @@ export const SOURCE_RETRIEVE_RETRY_PAYLOAD_PARITY_CASES = [
     storageApplicability: 'postgresql-jsonb',
     payload: {
       query: 'Paper', providers: ['semantic_scholar', 'tavily'], limit: 10,
-      includeFullText: false, identifier: '10.1038/nature12373', retryContractVersion: 1,
+      includeFullText: false, identifier: '10.1038/nature12373', retryContractVersion: 1, target: { kind: 'personal' },
     },
   },
   {
@@ -99,7 +99,7 @@ export const SOURCE_RETRIEVE_RETRY_PAYLOAD_PARITY_CASES = [
     storageApplicability: 'javascript-only',
     payload: {
       query: 'Paper', providers: ['semantic_scholar', 'tavily'], limit: 10,
-      includeFullText: false, identifier: undefined, retryContractVersion: 1,
+      includeFullText: false, identifier: undefined, retryContractVersion: 1, target: { kind: 'personal' },
     },
   },
   {
@@ -108,7 +108,7 @@ export const SOURCE_RETRIEVE_RETRY_PAYLOAD_PARITY_CASES = [
     storageApplicability: 'postgresql-jsonb',
     payload: {
       query: 'Paper', providers: ['scansci'], limit: 1, includeFullText: true,
-      identifier: '10.12/nope', retryContractVersion: 1,
+      identifier: '10.12/nope', retryContractVersion: 1, target: { kind: 'personal' },
     },
   },
   {
@@ -117,7 +117,7 @@ export const SOURCE_RETRIEVE_RETRY_PAYLOAD_PARITY_CASES = [
     storageApplicability: 'postgresql-jsonb',
     payload: {
       query: 'Paper', providers: ['scansci'], limit: 1, includeFullText: true,
-      identifier: ' 10.1038/nature12373 ', retryContractVersion: 1,
+      identifier: ' 10.1038/nature12373 ', retryContractVersion: 1, target: { kind: 'personal' },
     },
   },
   {
@@ -126,7 +126,7 @@ export const SOURCE_RETRIEVE_RETRY_PAYLOAD_PARITY_CASES = [
     storageApplicability: 'postgresql-jsonb',
     payload: {
       query: 'Paper', providers: ['scansci'], limit: '1', includeFullText: true,
-      identifier: '10.1038/nature12373', retryContractVersion: 1,
+      identifier: '10.1038/nature12373', retryContractVersion: 1, target: { kind: 'personal' },
     },
   },
 ] as const satisfies readonly SourceRetrieveRetryPayloadParityCase[];

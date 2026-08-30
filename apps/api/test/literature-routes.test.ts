@@ -53,7 +53,7 @@ describe('POST /literature/acquisitions', () => {
     expect(Object.keys(response.json().task).sort()).toEqual(['canRetry', 'createdAt', 'error', 'executionAttempt', 'id', 'kind', 'progress', 'result', 'retryCount', 'sessionId', 'status', 'updatedAt']);
     expect(response.json().task.canRetry).toBe(false);
     expect(response.json().task.kind).toBe('source.retrieve');
-    expect(db.agentTasks[0]?.payload).toEqual({ query: 'attosecond dynamics', providers: ['scansci'], limit: 1, includeFullText: true, identifier: '10.1038/nature12373', retryContractVersion: 1 });
+    expect(db.agentTasks[0]?.payload).toEqual({ query: 'attosecond dynamics', providers: ['scansci'], limit: 1, includeFullText: true, identifier: '10.1038/nature12373', retryContractVersion: 1, target: { kind: 'personal' } });
     await app.close();
   });
 
@@ -68,6 +68,59 @@ describe('POST /literature/acquisitions', () => {
     expect((await request({ query: 'x', providers: ['scansci'], target: { kind: 'personal' } }, { 'idempotency-key': 'invalid-fields' })).statusCode).toBe(400);
     expect((await request({ query: 'x', retryContractVersion: 1, target: { kind: 'personal' } }, { 'idempotency-key': 'reserved-marker' })).statusCode).toBe(400);
     expect((await request({ query: 'x', target: { kind: 'research_object', researchObjectId: 'not-a-uuid' } }, { 'idempotency-key': 'invalid-target' })).statusCode).toBe(400);
+    await app.close();
+  });
+
+  it('requires one strict recovery target combination', async () => {
+    const { app, token } = await makeApp();
+    const get = (query: string) => app.inject({
+      method: 'GET', url: `/agent/tasks?actionable=false&kind=source.retrieve&recovery=true${query}`,
+      cookies: { openscience_session: token },
+    });
+    expect((await get('')).statusCode).toBe(400);
+    expect((await get('&targetKind=research_object')).statusCode).toBe(400);
+    expect((await get('&targetKind=personal&researchObjectId=00000000-0000-4000-8000-000000000701')).statusCode).toBe(400);
+    expect((await get('&targetKind=personal')).statusCode).toBe(200);
+    expect((await get('&targetKind=research_object&researchObjectId=00000000-0000-4000-8000-000000000701')).statusCode).toBe(200);
+    await app.close();
+  });
+
+  it('scopes recovery before LIMIT across more than 20 newer tasks from another RO', async () => {
+    const { app, db, token, csrfToken, csrfCookie } = await makeApp();
+    const user = db.users[0];
+    const workspaceId = '00000000-0000-4000-8000-000000000011';
+    const roA = '00000000-0000-4000-8000-000000000701';
+    const roB = '00000000-0000-4000-8000-000000000702';
+    db.memberships.push({ id: '00000000-0000-4000-8000-000000000703', workspaceId, userId: user.id, role: 'owner', createdAt: new Date(), updatedAt: new Date() });
+    for (const [id, title] of [[roA, 'A'], [roB, 'B']] as const) {
+      db.researchObjects.push({ id, workspaceId, createdBy: user.id, title, status: 'draft', visibility: 'private', version: 1, idempotencyKey: null, createdAt: new Date(), updatedAt: new Date() });
+    }
+    const acquire = (researchObjectId: string, key: string) => app.inject({
+      method: 'POST', url: '/literature/acquisitions', cookies: { openscience_session: token, _csrf: csrfCookie },
+      headers: { 'x-csrf-token': csrfToken, 'idempotency-key': key },
+      payload: { query: `paper ${key}`, target: { kind: 'research_object', researchObjectId } },
+    });
+    const acquiredA = await acquire(roA, 'target-a');
+    const acquiredB = await acquire(roB, 'target-b');
+    const taskA = db.agentTasks.find((task) => task.id === acquiredA.json().task.id)!;
+    const taskB = db.agentTasks.find((task) => task.id === acquiredB.json().task.id)!;
+    Object.assign(taskA, { status: 'running', updatedAt: new Date('2026-08-30T00:00:00.000Z') });
+    Object.assign(taskB, { status: 'running', updatedAt: new Date('2026-08-30T00:01:00.000Z') });
+    for (let index = 0; index < 25; index += 1) {
+      db.agentTasks.push({ ...taskB, id: `00000000-0000-4000-8000-${String(800 + index).padStart(12, '0')}`, status: 'succeeded', updatedAt: new Date(Date.parse('2026-08-30T00:02:00.000Z') + index * 1_000) });
+    }
+
+    const targetA = await app.inject({
+      method: 'GET', url: `/agent/tasks?actionable=false&kind=source.retrieve&recovery=true&targetKind=research_object&researchObjectId=${roA}`,
+      cookies: { openscience_session: token },
+    });
+    const personal = await app.inject({
+      method: 'GET', url: '/agent/tasks?actionable=false&kind=source.retrieve&recovery=true&targetKind=personal',
+      cookies: { openscience_session: token },
+    });
+    expect(targetA.json().tasks).toEqual([expect.objectContaining({ id: taskA.id, researchObjectId: roA })]);
+    expect(personal.json().tasks).toEqual([]);
+    expect(JSON.stringify(targetA.json())).not.toMatch(/paper target-a|paper target-b|payload|idempotencyKey/i);
     await app.close();
   });
 
@@ -164,24 +217,24 @@ describe('POST /literature/acquisitions', () => {
       db.agentTasks.push({
         ...owned,
         id: `00000000-0000-4000-8000-${String(900 + index).padStart(12, '0')}`,
-        payload: { query: `private history ${index}` }, idempotencyKey: `private-history-key-${index}`,
+        payload: { query: `private history ${index}`, target: { kind: 'personal' } }, idempotencyKey: `private-history-key-${index}`,
         createdAt: new Date(base + index * 1_000), updatedAt: new Date(base + index * 1_000),
       });
     }
     const activeId = '00000000-0000-4000-8000-000000000950';
     db.agentTasks.push({
-      ...owned, id: activeId, status: 'running', progress: 40, payload: { query: 'older private active' },
+      ...owned, id: activeId, status: 'running', progress: 40, payload: { ...owned.payload, query: 'older private active' },
       idempotencyKey: 'older-private-active-key', createdAt: new Date(base - 1_000), updatedAt: new Date(base - 1_000),
     });
     const other = seedUser(db, { id: '00000000-0000-4000-8000-000000000099' });
     db.agentSessions.push({ id: '00000000-0000-4000-8000-000000000951', userId: other.id, researchObjectId: null, kind: 'retrieval', title: '', status: 'active', idempotencyKey: null, createdAt: new Date(), updatedAt: new Date() });
     db.agentTasks.push({
       ...owned, id: '00000000-0000-4000-8000-000000000952', sessionId: '00000000-0000-4000-8000-000000000951',
-      status: 'running', payload: { query: 'other private active' }, idempotencyKey: 'other-private-active-key', updatedAt: new Date(base + 99_000),
+      status: 'running', payload: { ...owned.payload, query: 'other private active' }, idempotencyKey: 'other-private-active-key', updatedAt: new Date(base + 99_000),
     });
 
     const response = await app.inject({
-      method: 'GET', url: '/agent/tasks?actionable=false&kind=source.retrieve&recovery=true', cookies: { openscience_session: token },
+      method: 'GET', url: '/agent/tasks?actionable=false&kind=source.retrieve&recovery=true&targetKind=personal', cookies: { openscience_session: token },
     });
 
     expect(response.statusCode).toBe(200);
@@ -199,7 +252,7 @@ describe('POST /literature/acquisitions', () => {
     });
     db.agentTasks.push({
       ...owned, id: '00000000-0000-4000-8000-000000000961', status: 'failed', progress: 30, retryCount: 0,
-      error: '[retryable] malformed', payload: { query: 'malformed private payload' }, idempotencyKey: 'malformed-private-key',
+      error: '[retryable] malformed', payload: { query: 'malformed private payload', target: { kind: 'personal' } }, idempotencyKey: 'malformed-private-key',
       createdAt: new Date(base + 40_000), updatedAt: new Date(base + 40_000),
     });
     const revokedWorkspaceId = '00000000-0000-4000-8000-000000000962';
@@ -214,7 +267,7 @@ describe('POST /literature/acquisitions', () => {
       createdAt: new Date(base + 39_000), updatedAt: new Date(base + 39_000),
     });
     const eligibleResponse = await app.inject({
-      method: 'GET', url: '/agent/tasks?actionable=false&kind=source.retrieve&recovery=true', cookies: { openscience_session: token },
+      method: 'GET', url: '/agent/tasks?actionable=false&kind=source.retrieve&recovery=true&targetKind=personal', cookies: { openscience_session: token },
     });
     expect(eligibleResponse.json().tasks).toEqual([expect.objectContaining({ id: eligibleId, status: 'failed', canRetry: true })]);
     expect(JSON.stringify(eligibleResponse.json())).not.toMatch(/malformed private payload|revoked-private-key|eligible-private-key|payload|idempotencyKey/);

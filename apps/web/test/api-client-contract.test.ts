@@ -29,15 +29,20 @@ describe('same-origin API routing contract', () => {
 });
 
 describe('apiRequest CSRF contract', () => {
-  it('requests the server-authoritative source recovery task before any client history limit', async () => {
-    const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify({ tasks: [] }), { status: 200 }));
+  it('requests server-authoritative personal and RO recovery before any client history limit', async () => {
+    const fetchMock = vi.fn().mockImplementation(async () => new Response(JSON.stringify({ tasks: [] }), { status: 200 }));
     vi.stubGlobal('fetch', fetchMock);
     const { listSourceRetrieveTasks } = await import('../lib/api');
 
-    await listSourceRetrieveTasks();
+    await listSourceRetrieveTasks({ kind: 'personal' });
+    await listSourceRetrieveTasks({ kind: 'research_object', researchObjectId: '00000000-0000-4000-8000-000000000701' });
 
-    expect(fetchMock).toHaveBeenCalledWith(
-      '/api/agent/tasks?actionable=false&kind=source.retrieve&recovery=true',
+    expect(fetchMock).toHaveBeenNthCalledWith(1,
+      '/api/agent/tasks?actionable=false&kind=source.retrieve&recovery=true&targetKind=personal',
+      expect.objectContaining({ credentials: 'include' }),
+    );
+    expect(fetchMock).toHaveBeenNthCalledWith(2,
+      '/api/agent/tasks?actionable=false&kind=source.retrieve&recovery=true&targetKind=research_object&researchObjectId=00000000-0000-4000-8000-000000000701',
       expect.objectContaining({ credentials: 'include' }),
     );
   });

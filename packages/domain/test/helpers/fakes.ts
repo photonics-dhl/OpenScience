@@ -1,4 +1,5 @@
 import { Prisma, type PrismaClient } from '@prisma/client';
+import { isDeepStrictEqual } from 'node:util';
 import type { Mailer, MailMessage } from '@openscience/auth';
 import { parseDurableSourceRetrievePayload } from '../../src/retrieval/retrieve-payload';
 
@@ -91,6 +92,7 @@ export function createFakePrisma(): { prisma: PrismaClient; db: FakeDb } {
     if (!researchWhere) return true;
     const researchObject = db.researchObjects.find((candidate) => candidate.id === session.researchObjectId);
     if (!researchObject) return false;
+    if (researchWhere.id !== undefined && researchObject.id !== researchWhere.id) return false;
     const workspaceWhere = researchWhere.workspace;
     const workspace = db.workspaces.find((candidate) => candidate.id === researchObject.workspaceId);
     if (!workspace || (workspaceWhere?.status !== undefined && workspace.status !== workspaceWhere.status)) return false;
@@ -100,8 +102,12 @@ export function createFakePrisma(): { prisma: PrismaClient; db: FakeDb } {
   };
 
   const prisma: any = {
-    $queryRaw: async (query: { values?: unknown[] }) => {
+    $queryRaw: async (query: { strings?: readonly string[]; values?: unknown[] }) => {
       const userId = String(query.values?.[0] ?? '');
+      const queryText = query.strings?.join('?') ?? '';
+      const recoveryTarget = queryText.includes('{"kind":"personal"}')
+        ? { kind: 'personal' }
+        : { kind: 'research_object', researchObjectId: String(query.values?.[1] ?? '') };
       const rows = db.agentTasks.filter((task) => {
         if (task.kind !== 'source.retrieve' || task.status !== 'failed' || task.retryCount !== 0
           || task.error?.startsWith('[blocked]')) return false;
@@ -114,8 +120,9 @@ export function createFakePrisma(): { prisma: PrismaClient; db: FakeDb } {
           return false;
         }
         try {
-          parseDurableSourceRetrievePayload(task.payload);
-          return true;
+          const payload = parseDurableSourceRetrievePayload(task.payload);
+          return isDeepStrictEqual(payload.target, recoveryTarget)
+            && (recoveryTarget.kind !== 'research_object' || session.researchObjectId === recoveryTarget.researchObjectId);
         } catch {
           return false;
         }
@@ -820,7 +827,7 @@ export function createFakePrisma(): { prisma: PrismaClient; db: FakeDb } {
             && (where.status?.in === undefined || where.status.in.includes(task.status))
             && (where.retryCount === undefined || task.retryCount === where.retryCount)
             && (where.error?.not?.startsWith === undefined || !task.error?.startsWith(where.error.not.startsWith))
-            && (where.payload?.path?.[0] === undefined || task.payload?.[where.payload.path[0]] === where.payload.equals);
+            && (where.payload?.path?.[0] === undefined || isDeepStrictEqual(task.payload?.[where.payload.path[0]], where.payload.equals));
         });
         const order = Array.isArray(orderBy) ? orderBy : [orderBy];
         if (order[0]?.updatedAt === 'desc') rows = rows.sort((left, right) => {

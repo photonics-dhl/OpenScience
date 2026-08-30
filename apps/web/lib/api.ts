@@ -802,8 +802,10 @@ export async function listAgentTasks(): Promise<{ tasks: AgentTaskView[] }> {
   return request('/api/agent/tasks?actionable=false&kind=workspace.guide');
 }
 
-export async function listSourceRetrieveTasks(): Promise<{ tasks: AgentTaskView[] }> {
-  return request('/api/agent/tasks?actionable=false&kind=source.retrieve&recovery=true');
+export async function listSourceRetrieveTasks(target: LiteratureAcquisitionTarget): Promise<{ tasks: AgentTaskView[] }> {
+  const params = new URLSearchParams({ actionable: 'false', kind: 'source.retrieve', recovery: 'true', targetKind: target.kind });
+  if (target.kind === 'research_object') params.set('researchObjectId', target.researchObjectId);
+  return request(`/api/agent/tasks?${params.toString()}`);
 }
 
 export async function submitWorkspaceGuideTask(input: {

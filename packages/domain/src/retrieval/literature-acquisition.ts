@@ -15,14 +15,13 @@ import {
   parseSourceRetrieveRequestPayload,
   SOURCE_RETRIEVE_RETRY_CONTRACT_VERSION,
   type DurableSourceRetrievePayload,
+  type SourceRetrieveTarget,
 } from './retrieve-payload';
 import { WorkspaceError } from '../workspace/errors';
 import { requireActiveMembership } from '../workspace/helpers';
 import { isOwnedPrismaIdempotencyConflict } from '../prisma-idempotency-conflict';
 
-export type LiteratureAcquisitionTarget =
-  | { kind: 'personal' }
-  | { kind: 'research_object'; researchObjectId: string };
+export type LiteratureAcquisitionTarget = SourceRetrieveTarget;
 
 export interface SubmitLiteratureAcquisitionInput {
   userId: string;
@@ -83,6 +82,7 @@ function normalizeAcquisition(input: SubmitLiteratureAcquisitionInput): Normaliz
     payload = parseDurableSourceRetrievePayload({
       ...request,
       retryContractVersion: SOURCE_RETRIEVE_RETRY_CONTRACT_VERSION,
+      target,
     });
   } catch (error) {
     throw new AgentError('VALIDATION_ERROR', error instanceof Error ? error.message : '文献检索请求无效');

@@ -39,7 +39,7 @@ function fakeRedis() {
 
 const DURABLE_SOURCE_RETRIEVE_PAYLOAD = {
   query: 'paper', providers: ['scansci'], limit: 1, includeFullText: true,
-  identifier: '10.1038/nature12373', retryContractVersion: 1,
+  identifier: '10.1038/nature12373', retryContractVersion: 1, target: { kind: 'personal' },
 } as const;
 
 function seedSourceRetrieveTask(
@@ -327,27 +327,27 @@ describe('AgentSession/AgentTask（§15 + §16 幂等 + §9.1 配额）', () => 
     expect(JSON.stringify(rows)).not.toMatch(/private manuscript|private-key|other user private query|other-private-key/);
   });
 
-  it('recovers globally before limiting: active, then retryable failed, then newest terminal', async () => {
+  it('recovers within one target before limiting: active, then retryable failed, then newest terminal', async () => {
     const { deps, user, ro, db } = await makeDeps(40);
     const session = await createAgentSession(deps, { userId: user.id, researchObjectId: ro.id, kind: 'retrieval' });
     const base = new Date('2026-08-30T00:00:00.000Z').getTime();
     for (let index = 0; index < 25; index += 1) {
       db.agentTasks.push({
         id: `terminal-${index}`, sessionId: session.id, kind: 'source.retrieve', status: 'succeeded', progress: 100,
-        retryCount: 0, executionAttempt: 1, dispatchedAt: new Date(base), payload: { query: `private-${index}` },
+        retryCount: 0, executionAttempt: 1, dispatchedAt: new Date(base), payload: { query: `private-${index}`, target: { kind: 'personal' } },
         interestContext: null, idempotencyKey: `private-key-${index}`, result: { sources: [] }, error: null,
         createdAt: new Date(base + index * 1_000), updatedAt: new Date(base + index * 1_000),
       });
     }
     const retryable = {
       id: 'retryable-older-than-history', sessionId: session.id, kind: 'source.retrieve', status: 'failed', progress: 30,
-      retryCount: 0, executionAttempt: 1, dispatchedAt: new Date(base), payload: { query: 'paper', providers: ['scansci'], limit: 1, includeFullText: true, identifier: '10.1038/nature12373', retryContractVersion: 1 }, interestContext: null,
+      retryCount: 0, executionAttempt: 1, dispatchedAt: new Date(base), payload: { query: 'paper', providers: ['scansci'], limit: 1, includeFullText: true, identifier: '10.1038/nature12373', retryContractVersion: 1, target: { kind: 'personal' } }, interestContext: null,
       idempotencyKey: 'retry-private-key', result: null, error: '[retryable] upstream timeout', createdAt: new Date(base - 2_000), updatedAt: new Date(base - 2_000),
     };
     const malformedFailures = Array.from({ length: 25 }, (_, index) => ({
       ...retryable,
       id: `malformed-newer-failure-${index}`,
-      payload: { query: `malformed-${index}`, retryContractVersion: 1 },
+      payload: { query: `malformed-${index}`, retryContractVersion: 1, target: { kind: 'personal' } },
       idempotencyKey: `malformed-private-key-${index}`,
       createdAt: new Date(base + (40 + index) * 1_000),
       updatedAt: new Date(base + (40 + index) * 1_000),
@@ -355,7 +355,7 @@ describe('AgentSession/AgentTask（§15 + §16 幂等 + §9.1 配额）', () => 
     const newestMalformed = malformedFailures.at(-1)!;
     const active = {
       ...retryable, id: 'active-older-than-history', status: 'running', retryCount: 0, error: null,
-      idempotencyKey: 'active-private-key', payload: { query: 'active private' }, createdAt: new Date(base - 3_000), updatedAt: new Date(base - 3_000),
+      idempotencyKey: 'active-private-key', payload: { ...DURABLE_SOURCE_RETRIEVE_PAYLOAD, query: 'active private' }, createdAt: new Date(base - 3_000), updatedAt: new Date(base - 3_000),
     };
     const revokedWorkspaceId = 'recovery-workspace-revoked';
     const revokedRoId = 'recovery-ro-revoked';
@@ -384,20 +384,21 @@ describe('AgentSession/AgentTask（§15 + §16 幂等 + §9.1 配额）', () => 
     db.agentSessions.push({ id: 'recovery-other-session', userId: other.id, researchObjectId: null, kind: 'retrieval', title: '', status: 'active', idempotencyKey: null, createdAt: new Date(), updatedAt: new Date() });
     db.agentTasks.push({ ...active, id: 'other-user-active', sessionId: 'recovery-other-session', updatedAt: new Date(base + 99_000) });
 
-    const activeRecovery = await listAgentTasks(deps, { userId: user.id, kind: 'source.retrieve', recoveryPreferred: true });
+    const recoveryTarget = { kind: 'personal' as const };
+    const activeRecovery = await listAgentTasks(deps, { userId: user.id, kind: 'source.retrieve', recoveryPreferred: true, recoveryTarget });
     expect(activeRecovery).toEqual([expect.objectContaining({ id: active.id, status: 'running', canRetry: false })]);
     expect(JSON.stringify(activeRecovery)).not.toMatch(/active private|active-private-key|other-user-active/);
 
     active.status = 'succeeded';
-    const failedRecovery = await listAgentTasks(deps, { userId: user.id, kind: 'source.retrieve', recoveryPreferred: true });
+    const failedRecovery = await listAgentTasks(deps, { userId: user.id, kind: 'source.retrieve', recoveryPreferred: true, recoveryTarget });
     expect(failedRecovery).toEqual([expect.objectContaining({ id: retryable.id, status: 'failed', retryCount: 0, canRetry: true })]);
 
     retryable.error = '[blocked] policy denied';
-    const blockedFallback = await listAgentTasks(deps, { userId: user.id, kind: 'source.retrieve', recoveryPreferred: true });
+    const blockedFallback = await listAgentTasks(deps, { userId: user.id, kind: 'source.retrieve', recoveryPreferred: true, recoveryTarget });
     expect(blockedFallback).toEqual([expect.objectContaining({ id: newestMalformed.id, status: 'failed', canRetry: false })]);
     retryable.error = '[retryable] failed twice';
     retryable.retryCount = 1;
-    const exhaustedFallback = await listAgentTasks(deps, { userId: user.id, kind: 'source.retrieve', recoveryPreferred: true });
+    const exhaustedFallback = await listAgentTasks(deps, { userId: user.id, kind: 'source.retrieve', recoveryPreferred: true, recoveryTarget });
     expect(exhaustedFallback).toEqual([expect.objectContaining({ id: newestMalformed.id, status: 'failed', canRetry: false })]);
   });
 
@@ -418,12 +419,61 @@ describe('AgentSession/AgentTask（§15 + §16 幂等 + §9.1 配额）', () => 
 
     await expect(listAgentTasks(deps, {
       userId: user.id, kind: 'source.retrieve', recoveryPreferred: true,
+      recoveryTarget: { kind: 'personal' },
     })).resolves.toEqual([expect.objectContaining({ id: task.id, canRetry: true })]);
     expect(queries).toHaveLength(1);
     const text = (queries[0] as { strings?: readonly string[] }).strings?.join('?') ?? '';
     const selectList = text.slice(0, text.toUpperCase().indexOf('FROM'));
     expect(selectList).toMatch(/SELECT\s+\w+\."id"/i);
     expect(selectList).not.toMatch(/payload|session|workspace|member/i);
+  });
+
+  it('applies target scope before limiting across more than 20 newer cross-target tasks', async () => {
+    const { deps, user, db } = await makeDeps(50);
+    const roA = '00000000-0000-4000-8000-000000000701';
+    const roB = '00000000-0000-4000-8000-000000000702';
+    for (const [id, title] of [[roA, 'A'], [roB, 'B']] as const) {
+      db.researchObjects.push({ id, workspaceId: 'ws-1', createdBy: user.id, title, status: 'draft', visibility: 'private', version: 1, idempotencyKey: null, createdAt: new Date(), updatedAt: new Date() });
+      db.agentSessions.push({ id: `session-${title}`, userId: user.id, researchObjectId: id, kind: 'retrieval', title: '', status: 'active', idempotencyKey: null, createdAt: new Date(), updatedAt: new Date() });
+    }
+    const base = Date.parse('2026-08-30T00:00:00.000Z');
+    const payload = (researchObjectId: string) => ({
+      ...DURABLE_SOURCE_RETRIEVE_PAYLOAD,
+      target: { kind: 'research_object', researchObjectId },
+    });
+    const taskA = seedSourceRetrieveTask(db, {
+      id: 'target-a-running', sessionId: 'session-A', status: 'running', error: null,
+      payload: payload(roA), updatedAt: new Date(base),
+    });
+    for (let index = 0; index < 25; index += 1) {
+      seedSourceRetrieveTask(db, {
+        id: `target-b-${index}`, sessionId: 'session-B', status: index === 24 ? 'running' : 'succeeded', error: null,
+        payload: payload(roB), updatedAt: new Date(base + (index + 1) * 1_000),
+      });
+    }
+    const personal = seedSourceRetrieveTask(db, {
+      id: 'personal-terminal', sessionId: 'session-A', status: 'succeeded', error: null,
+      payload: { ...DURABLE_SOURCE_RETRIEVE_PAYLOAD, target: { kind: 'personal' } }, updatedAt: new Date(base - 1_000),
+    });
+
+    await expect(listAgentTasks(deps, {
+      userId: user.id, kind: 'source.retrieve', recoveryPreferred: true,
+      recoveryTarget: { kind: 'research_object', researchObjectId: roA },
+    })).resolves.toEqual([expect.objectContaining({ id: taskA.id, researchObjectId: roA })]);
+    Object.assign(taskA, { status: 'failed', error: '[retryable] target A', retryCount: 0 });
+    await expect(listAgentTasks(deps, {
+      userId: user.id, kind: 'source.retrieve', recoveryPreferred: true,
+      recoveryTarget: { kind: 'research_object', researchObjectId: roA },
+    })).resolves.toEqual([expect.objectContaining({ id: taskA.id, canRetry: true, researchObjectId: roA })]);
+    Object.assign(taskA, { status: 'succeeded', error: null });
+    await expect(listAgentTasks(deps, {
+      userId: user.id, kind: 'source.retrieve', recoveryPreferred: true,
+      recoveryTarget: { kind: 'research_object', researchObjectId: roA },
+    })).resolves.toEqual([expect.objectContaining({ id: taskA.id, status: 'succeeded', researchObjectId: roA })]);
+    await expect(listAgentTasks(deps, {
+      userId: user.id, kind: 'source.retrieve', recoveryPreferred: true,
+      recoveryTarget: { kind: 'personal' },
+    })).resolves.toEqual([expect.objectContaining({ id: personal.id })]);
   });
 
   it('raises a payload-free invariant error when SQL and the shared predicate disagree', async () => {
@@ -440,7 +490,7 @@ describe('AgentSession/AgentTask（§15 + §16 幂等 + §9.1 配额）', () => 
     prisma.$queryRaw = async () => [{ id: malformed.id }];
     prisma.agentTask.findMany = async () => { throw new Error('recovery must not scan or paginate task rows'); };
 
-    const outcome = listAgentTasks(deps, { userId: user.id, kind: 'source.retrieve', recoveryPreferred: true })
+    const outcome = listAgentTasks(deps, { userId: user.id, kind: 'source.retrieve', recoveryPreferred: true, recoveryTarget: { kind: 'personal' } })
       .then(() => 'resolved', (error: unknown) => error);
     const error = await outcome;
     expect(error).toBeInstanceOf(Error);

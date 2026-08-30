@@ -64,7 +64,7 @@ describe('source.retrieve handler replay safety', () => {
       id: TASK_ID,
       payload: {
         query: 'paper', providers: ['scansci'], limit: 1, includeFullText: true,
-        identifier: '10.1000/test', retryContractVersion: 1,
+        identifier: '10.1000/test', retryContractVersion: 1, target: { kind: 'personal' },
       },
     });
 
@@ -146,7 +146,7 @@ describe('source.retrieve handler replay safety', () => {
       id: TASK_ID,
       payload: {
         query: 'paper', providers: ['scansci'], limit: 1, includeFullText: true,
-        identifier: '10.1000/test', retryContractVersion: 1,
+        identifier: '10.1000/test', retryContractVersion: 1, target: { kind: 'personal' },
       },
     };
 

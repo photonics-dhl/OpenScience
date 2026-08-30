@@ -110,6 +110,7 @@ export default function HermesReviewPage({ params: routeParams }: { params: { id
           onOpenChange={setHermesOpen}
           open={hermesOpen}
           route="research-object-edit"
+          routeResearchObjectId={routeParams.id}
           suggestion={reviewSuggestion}
           target={null}
         />

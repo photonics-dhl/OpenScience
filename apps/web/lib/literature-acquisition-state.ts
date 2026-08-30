@@ -6,14 +6,14 @@ const TRANSIENT_BACKOFF_MS = [1_200, 2_400, 4_800, 9_600, 15_000] as const;
 
 type LiteratureTarget = 'personal' | `research-object:${string}`;
 type IntentNamespace = { userId: string; target: LiteratureTarget };
-type IntentContext = IntentNamespace & { input: { query: string; identifier?: string } };
+type IntentContext = IntentNamespace & { input: { query: string; identifier?: string }; intentFingerprint?: string };
 type PendingIntentOutcome = { kind: 'accepted' | 'recovered' } | { kind: 'failure'; status?: number };
 
 function storageKey({ userId, target }: IntentNamespace): string {
   return `${STORAGE_PREFIX}${encodeURIComponent(userId)}:${target}:pending:v1`;
 }
 
-async function intentFingerprint(input: IntentContext['input']): Promise<string> {
+export async function createLiteratureIntentFingerprint(input: IntentContext['input']): Promise<string> {
   const canonical = JSON.stringify({ query: input.query.trim(), identifier: input.identifier?.trim() ?? null });
   const bytes = await globalThis.crypto.subtle.digest('SHA-256', new TextEncoder().encode(canonical));
   return [...new Uint8Array(bytes)].map((value) => value.toString(16).padStart(2, '0')).join('');
@@ -25,7 +25,7 @@ export async function acquirePendingLiteratureIntent(
   createKey: () => string,
 ): Promise<{ status: 'ready'; key: string } | { status: 'blocked' }> {
   const key = storageKey(context);
-  const fingerprint = await intentFingerprint(context.input);
+  const fingerprint = context.intentFingerprint ?? await createLiteratureIntentFingerprint(context.input);
   const raw = storage.getItem(key);
   if (raw) {
     try {

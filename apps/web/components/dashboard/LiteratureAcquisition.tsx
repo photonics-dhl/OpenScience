@@ -43,15 +43,6 @@ export function isLiteratureTaskRetryEligible(task: LiteratureTask): boolean {
   return task.canRetry === true;
 }
 
-export function selectLiteratureRecoveryTask(
-  tasks: LiteratureTask[],
-  target: LiteratureAcquisitionTarget,
-): LiteratureTask | null {
-  const sourceTasks = tasks.filter((task) => task.kind === 'source.retrieve');
-  if (target.kind === 'personal') return sourceTasks[0] ?? null;
-  return sourceTasks.find((task) => task.researchObjectId === target.researchObjectId) ?? null;
-}
-
 function hasAuthRequiredResult(result: Record<string, unknown> | null): boolean {
   if (!result || !Array.isArray(result.providers)) return false;
   return result.providers.some((entry) => entry && typeof entry === 'object'
@@ -91,6 +82,8 @@ function readableExpiry(value: string): string {
 }
 
 export interface LiteratureAcquisitionProps {
+  callerIdempotencyKey?: string;
+  callerIntentFingerprint?: string;
   initialRequest?: { query: string; identifier?: string };
   initialTask?: LiteratureTask | null;
   instanceId?: string;
@@ -107,6 +100,8 @@ function targetNamespace(target: LiteratureAcquisitionTarget): 'personal' | `res
 }
 
 export function LiteratureAcquisition({
+  callerIdempotencyKey,
+  callerIntentFingerprint,
   initialRequest,
   initialTask = null,
   instanceId = 'literature',
@@ -185,10 +180,10 @@ export function LiteratureAcquisition({
     const recoveryTarget: LiteratureAcquisitionTarget = target.kind === 'personal'
       ? { kind: 'personal' }
       : { kind: 'research_object', researchObjectId: target.researchObjectId };
-    void listSourceRetrieveTasks()
+    void listSourceRetrieveTasks(recoveryTarget)
       .then(({ tasks }) => {
         if (recoveryNamespaceStarted.current !== recoveryKey) return;
-        const recovered = selectLiteratureRecoveryTask(tasks, recoveryTarget);
+        const recovered = tasks[0] ?? null;
         setTask(recovered);
         if (initialRequest && (recovered?.status === 'pending' || recovered?.status === 'running')) {
           initialRequestSubmitted.current = true;
@@ -218,7 +213,7 @@ export function LiteratureAcquisition({
     });
   }, [active, handlePermanentTaskError, task?.id]);
 
-  const submit = React.useCallback(async (input: { query: string; identifier?: string }) => {
+  const submit = React.useCallback(async (input: { query: string; identifier?: string }, useCallerIdentity = false) => {
     if (submitting.current) return;
     if (typeof window === 'undefined' || !resolvedUserId || !recoveryReady) return;
     submitting.current = true;
@@ -227,8 +222,13 @@ export function LiteratureAcquisition({
     try {
       const pendingIntent = await acquirePendingLiteratureIntent(
         window.sessionStorage,
-        { userId: resolvedUserId, target: namespace, input },
-        () => crypto.randomUUID(),
+        {
+          userId: resolvedUserId,
+          target: namespace,
+          input,
+          ...(useCallerIdentity && callerIntentFingerprint ? { intentFingerprint: callerIntentFingerprint } : {}),
+        },
+        () => useCallerIdentity && callerIdempotencyKey ? callerIdempotencyKey : crypto.randomUUID(),
       );
       if (pendingIntent.status === 'blocked') {
         setError(t('pendingIntent'));
@@ -246,12 +246,12 @@ export function LiteratureAcquisition({
       submitting.current = false;
       setSubmissionPending(false);
     }
-  }, [namespace, recoveryReady, resolvedUserId, t, target]);
+  }, [callerIdempotencyKey, callerIntentFingerprint, namespace, recoveryReady, resolvedUserId, t, target]);
 
   React.useEffect(() => {
     if (!initialRequest || initialRequestSubmitted.current || !recoveryReady || !resolvedUserId || active) return;
     initialRequestSubmitted.current = true;
-    void submit(initialRequest);
+    void submit(initialRequest, true);
   }, [active, initialRequest, recoveryReady, resolvedUserId, submit]);
 
   function submitCurrentQuery() {
@@ -266,7 +266,11 @@ export function LiteratureAcquisition({
   }
 
   function onEmbeddedKeyDown(event: React.KeyboardEvent<HTMLDivElement>) {
-    if (event.key !== 'Enter' || !(event.target instanceof HTMLInputElement)) return;
+    if (!(event.target instanceof HTMLInputElement) || !shouldSubmitEmbeddedLiteratureQuery({
+      key: event.key,
+      isComposing: event.nativeEvent.isComposing,
+      keyCode: event.nativeEvent.keyCode,
+    })) return;
     event.preventDefault();
     submitCurrentQuery();
   }
@@ -384,6 +388,10 @@ export function LiteratureAcquisition({
       ) : task && description?.state === 'succeeded' ? <p className={`mt-5 border-t ${rule} pt-5 text-sm ${muted}`}>{t('noResults')}</p> : null}
     </section>
   );
+}
+
+export function shouldSubmitEmbeddedLiteratureQuery(event: { key: string; isComposing: boolean; keyCode: number }): boolean {
+  return event.key === 'Enter' && !event.isComposing && event.keyCode !== 229;
 }
 
 export function LiteratureAcquisitionDisclosure(props: LiteratureAcquisitionProps) {

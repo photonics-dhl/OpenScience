@@ -17,10 +17,39 @@ import {
   type WorkspaceGuideResult,
 } from '@/lib/api';
 import { routeHermesLiteratureIntent, type RoutedHermesIntent } from '@/lib/hermes/literature-intent';
+import { createLiteratureIntentFingerprint } from '@/lib/literature-acquisition-state';
 
 import type { HermesGuideSuggestion } from './hermes-guide';
 
 type LiteratureIntent = Extract<RoutedHermesIntent, { kind: 'literature.acquire' }>;
+type DrawerLiteratureIntent = LiteratureIntent & { callerIdempotencyKey: string; callerIntentFingerprint: string };
+
+export function resolveDrawerLiteratureTarget(routeResearchObjectId: string | null): LiteratureIntent['target'] {
+  return routeResearchObjectId
+    ? { kind: 'research_object', researchObjectId: routeResearchObjectId }
+    : { kind: 'personal' };
+}
+
+export async function createDrawerLiteratureIntent({
+  createIdempotencyKey,
+  createIntentFingerprint = createLiteratureIntentFingerprint,
+  goal,
+  routeResearchObjectId,
+}: {
+  createIdempotencyKey: () => string;
+  createIntentFingerprint?: (input: LiteratureIntent['input']) => Promise<string>;
+  goal: string;
+  routeResearchObjectId: string | null;
+}): Promise<DrawerLiteratureIntent | null> {
+  const routed = routeHermesLiteratureIntent({ activeResearchObjectId: null, goal });
+  if (routed.kind !== 'literature.acquire') return null;
+  return {
+    ...routed,
+    callerIdempotencyKey: createIdempotencyKey(),
+    callerIntentFingerprint: await createIntentFingerprint(routed.input),
+    target: resolveDrawerLiteratureTarget(routeResearchObjectId),
+  };
+}
 
 export interface HermesAssistantDrawerProps {
   open: boolean;
@@ -30,6 +59,7 @@ export interface HermesAssistantDrawerProps {
   dashboardContext: WorkspaceGuidePayload['context'];
   onTaskStateChange?(task: AgentTaskView | null): void;
   route?: WorkspaceGuidePayload['route'];
+  routeResearchObjectId?: string;
   target?: WorkspaceGuidePayload['target'];
 }
 
@@ -48,7 +78,7 @@ function resultFromTask(task: AgentTaskView): WorkspaceGuideResult | null {
 }
 
 export function HermesAssistantDrawer({
-  open, onOpenChange, locale, suggestion, dashboardContext, onTaskStateChange, route = 'dashboard', target = null,
+  open, onOpenChange, locale, suggestion, dashboardContext, onTaskStateChange, route = 'dashboard', routeResearchObjectId, target = null,
 }: HermesAssistantDrawerProps) {
   const t = useTranslations('dashboard.hermes');
   const sessionId = useRef<string | null>(null);
@@ -59,7 +89,7 @@ export function HermesAssistantDrawer({
   const [task, setTask] = useState<AgentTaskView | null>(null);
   const [error, setError] = useState('');
   const [submitting, setSubmitting] = useState(false);
-  const [literatureIntent, setLiteratureIntent] = useState<LiteratureIntent | null>(null);
+  const [literatureIntent, setLiteratureIntent] = useState<DrawerLiteratureIntent | null>(null);
   const activeTask = task?.status === 'pending' || task?.status === 'running';
   const busy = submitting || activeTask;
   const result = task?.status === 'succeeded' ? resultFromTask(task) : null;
@@ -100,21 +130,19 @@ export function HermesAssistantDrawer({
     event.preventDefault();
     const normalized = goal.trim();
     if (!normalized || busy || submittingRef.current) return;
-    const routed = routeHermesLiteratureIntent({
-      activeResearchObjectId: route === 'research-object-edit'
-        ? suggestion.researchObjectId ?? dashboardContext.researchObjects[0]?.id ?? null
-        : null,
-      goal: normalized,
-    });
-    if (routed.kind === 'literature.acquire') {
-      setError('');
-      setLiteratureIntent(routed);
-      return;
-    }
     submittingRef.current = true;
     setError('');
     setSubmitting(true);
     try {
+      const routed = await createDrawerLiteratureIntent({
+        createIdempotencyKey: () => crypto.randomUUID(),
+        goal: normalized,
+        routeResearchObjectId: route === 'research-object-edit' ? routeResearchObjectId ?? null : null,
+      });
+      if (routed) {
+        setLiteratureIntent(routed);
+        return;
+      }
       if (!sessionId.current) {
         sessionKey.current ??= crypto.randomUUID();
         const response = await createWorkspaceGuideSession(normalized, sessionKey.current);
@@ -178,6 +206,8 @@ export function HermesAssistantDrawer({
             <LiteratureAcquisition
               initialRequest={literatureIntent.input}
               instanceId="hermes-drawer-literature"
+              callerIdempotencyKey={literatureIntent.callerIdempotencyKey}
+              callerIntentFingerprint={literatureIntent.callerIntentFingerprint}
               onAuthenticationRequired={() => window.location.assign(`/auth/login?returnTo=${encodeURIComponent(`${window.location.pathname}${window.location.search}`)}`)}
               target={literatureIntent.target}
               tone="dark"

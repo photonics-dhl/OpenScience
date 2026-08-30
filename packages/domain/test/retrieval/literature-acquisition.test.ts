@@ -47,7 +47,7 @@ describe('submitLiteratureAcquisition', () => {
     expect(db.researchObjects[0]).toMatchObject({ idempotencyKey: `system:personal-literature:${user.id}`, title: 'Personal Literature Library', visibility: 'private' });
     expect(db.agentTasks[0]?.payload).toEqual({
       query: 'attosecond dynamics', providers: ['scansci'], limit: 1,
-      includeFullText: true, identifier: '10.1038/nature12373', retryContractVersion: 1,
+      includeFullText: true, identifier: '10.1038/nature12373', retryContractVersion: 1, target: { kind: 'personal' },
     });
     expect(audits).toEqual(expect.arrayContaining([
       expect.objectContaining({ action: 'agent.session.create' }),
@@ -67,7 +67,7 @@ describe('submitLiteratureAcquisition', () => {
     expect(db.agentSessions).toHaveLength(1);
     expect(db.agentTasks).toHaveLength(1);
     expect(db.agentTasks[0]?.payload).toEqual({
-      query: 'attosecond dynamics', providers: ['semantic_scholar', 'tavily'], limit: 10, includeFullText: false, retryContractVersion: 1,
+      query: 'attosecond dynamics', providers: ['semantic_scholar', 'tavily'], limit: 10, includeFullText: false, retryContractVersion: 1, target: { kind: 'personal' },
     });
   });
 

@@ -38,7 +38,7 @@ export default function DashboardPage() {
 
   useEffect(() => {
     let active = true;
-    Promise.all([getCurrentUser(), getDashboardOverview(), listSourceRetrieveTasks()])
+    Promise.all([getCurrentUser(), getDashboardOverview(), listSourceRetrieveTasks({ kind: 'personal' })])
       .then(([currentUser, overview, retrieval]) => {
         if (!active) return;
         setUser(currentUser);

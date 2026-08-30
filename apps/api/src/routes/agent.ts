@@ -100,16 +100,31 @@ export function registerAgentRoutes(app: FastifyInstance, deps: AgentRouteDeps):
   app.get('/agent/tasks', async (req, reply) => {
     const user = await requireCurrentUser(deps, req, reply);
     if (!user) return;
-    const { actionable, kind, recovery } = z.object({
+    const { actionable, kind, recovery, researchObjectId, targetKind } = z.object({
       actionable: z.enum(['true', 'false']).default('true'),
       kind: z.string().min(1).max(64).optional(),
       recovery: z.enum(['true']).optional(),
-    }).parse(req.query);
+      targetKind: z.enum(['personal', 'research_object']).optional(),
+      researchObjectId: z.string().uuid().optional(),
+    }).strict().parse(req.query);
     if (recovery === 'true' && (actionable !== 'false' || kind !== 'source.retrieve')) {
       throw new AgentError('VALIDATION_ERROR', 'Recovery priority requires non-actionable source.retrieve');
     }
+    if (recovery !== 'true' && (targetKind || researchObjectId)) {
+      throw new AgentError('VALIDATION_ERROR', 'Recovery target requires recovery mode');
+    }
+    if (recovery === 'true' && (!targetKind
+      || (targetKind === 'personal' && researchObjectId)
+      || (targetKind === 'research_object' && !researchObjectId))) {
+      throw new AgentError('VALIDATION_ERROR', 'Recovery target is invalid');
+    }
+    const recoveryTarget = recovery === 'true'
+      ? targetKind === 'research_object'
+        ? { kind: 'research_object' as const, researchObjectId: researchObjectId! }
+        : { kind: 'personal' as const }
+      : undefined;
     return reply.send({ tasks: await listAgentTasks(deps, {
-      userId: user.userId, actionableOnly: actionable === 'true', kind, recoveryPreferred: recovery === 'true',
+      userId: user.userId, actionableOnly: actionable === 'true', kind, recoveryPreferred: recovery === 'true', recoveryTarget,
     }) });
   });
 

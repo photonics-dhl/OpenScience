@@ -346,6 +346,7 @@ export {
   type DurableSourceRetrievePayload,
   type SourceRetrievePayload,
   type SourceRetrieveRequestPayload,
+  type SourceRetrieveTarget,
 } from './retrieval/retrieve-payload';
 export { isSourceRetrieveIdentifier, toBrowserSourceRetrieveResult, type BrowserSourceRetrieveResult } from './retrieval/browser-result';
 export {

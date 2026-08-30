@@ -31,12 +31,21 @@ describe('source.retrieve payload', () => {
   it('accepts only an exact complete server-stamped durable payload', () => {
     const durable = {
       query: 'paper', providers: ['scansci'], limit: 1, includeFullText: true,
-      identifier: '10.1000/test', retryContractVersion: 1,
+      identifier: '10.1000/test', retryContractVersion: 1, target: { kind: 'personal' },
     };
     expect(parseDurableSourceRetrievePayload(durable)).toEqual(durable);
     expect(() => parseDurableSourceRetrievePayload({ ...durable, retryContractVersion: undefined })).toThrow();
     expect(() => parseDurableSourceRetrievePayload({ query: 'paper', retryContractVersion: 1 })).toThrow();
     expect(() => parseDurableSourceRetrievePayload({ ...durable, injected: true })).toThrow();
+    expect(() => parseDurableSourceRetrievePayload({ ...durable, target: undefined })).toThrow();
+    expect(parseDurableSourceRetrievePayload({
+      ...durable,
+      target: { kind: 'research_object', researchObjectId: '00000000-0000-4000-8000-000000000701' },
+    })).toMatchObject({ target: { kind: 'research_object', researchObjectId: '00000000-0000-4000-8000-000000000701' } });
+    expect(parseDurableSourceRetrievePayload({
+      ...durable,
+      target: { kind: 'research_object', researchObjectId: '01991f8a-57b7-7cc2-8d1a-4490f4287520' },
+    })).toMatchObject({ target: { kind: 'research_object', researchObjectId: '01991f8a-57b7-7cc2-8d1a-4490f4287520' } });
   });
 
   it('rejects unknown fields, provider duplication and ambiguous full-text requests', () => {

@@ -518,6 +518,7 @@ export default function EditorPage({ params }: { params: { id: string } }) {
               onOpenChange={setHermesOpen}
               open={hermesOpen}
               route="research-object-edit"
+              routeResearchObjectId={params.id}
               suggestion={editorSuggestion}
               target={activeField ? `sdf-${activeField === 'reproducibility' ? 'evidence' : activeField}` as HermesDraftTarget : null}
             />

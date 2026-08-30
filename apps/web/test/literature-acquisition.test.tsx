@@ -17,7 +17,7 @@ vi.mock('next-intl', () => ({
   },
 }));
 
-import { LiteratureAcquisition, LiteratureAcquisitionDisclosure, describeLiteratureTask, isLiteratureIdentifier, isLiteratureTaskRetryEligible, selectLiteratureRecoveryTask, type LiteratureTask } from '@/components/dashboard/LiteratureAcquisition';
+import { LiteratureAcquisition, LiteratureAcquisitionDisclosure, describeLiteratureTask, isLiteratureIdentifier, isLiteratureTaskRetryEligible, shouldSubmitEmbeddedLiteratureQuery, type LiteratureTask } from '@/components/dashboard/LiteratureAcquisition';
 
 const sourceTask: LiteratureTask = {
   id: 'task-1', sessionId: 'session-1', kind: 'source.retrieve', status: 'succeeded', progress: 100, retryCount: 0,
@@ -115,15 +115,10 @@ describe('Personal literature acquisition', () => {
     expect(markup).not.toMatch(/provider|ScanSci|CARSI|account|mode/i);
   });
 
-  it('recovers only the source task belonging to the current RO target', () => {
-    const other = { ...sourceTask, id: 'task-other', researchObjectId: '00000000-0000-4000-8000-000000000702' };
-    const current = { ...sourceTask, id: 'task-current', researchObjectId: '00000000-0000-4000-8000-000000000701', status: 'running' as const };
-    expect(selectLiteratureRecoveryTask([other, current], {
-      kind: 'research_object', researchObjectId: '00000000-0000-4000-8000-000000000701',
-    })).toEqual(current);
-    expect(selectLiteratureRecoveryTask([other], {
-      kind: 'research_object', researchObjectId: '00000000-0000-4000-8000-000000000701',
-    })).toBeNull();
-    expect(selectLiteratureRecoveryTask([other, current], { kind: 'personal' })).toEqual(other);
+  it('does not submit embedded Enter while a Chinese IME composition is active', () => {
+    expect(shouldSubmitEmbeddedLiteratureQuery({ key: 'Enter', isComposing: true, keyCode: 229 })).toBe(false);
+    expect(shouldSubmitEmbeddedLiteratureQuery({ key: 'Enter', isComposing: false, keyCode: 229 })).toBe(false);
+    expect(shouldSubmitEmbeddedLiteratureQuery({ key: 'Enter', isComposing: false, keyCode: 13 })).toBe(true);
+    expect(shouldSubmitEmbeddedLiteratureQuery({ key: 'a', isComposing: false, keyCode: 65 })).toBe(false);
   });
 });

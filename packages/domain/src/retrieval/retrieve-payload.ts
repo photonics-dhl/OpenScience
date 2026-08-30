@@ -11,8 +11,26 @@ export interface SourceRetrieveRequestPayload {
 
 export const SOURCE_RETRIEVE_RETRY_CONTRACT_VERSION = 1 as const;
 
+export type SourceRetrieveTarget =
+  | { kind: 'personal' }
+  | { kind: 'research_object'; researchObjectId: string };
+
 export interface DurableSourceRetrievePayload extends SourceRetrieveRequestPayload {
   retryContractVersion: typeof SOURCE_RETRIEVE_RETRY_CONTRACT_VERSION;
+  target: SourceRetrieveTarget;
+}
+
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/iu;
+
+function parseSourceRetrieveTarget(value: unknown): SourceRetrieveTarget {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error('durable source.retrieve target is invalid');
+  const input = value as Record<string, unknown>;
+  if (input.kind === 'personal' && Object.keys(input).length === 1) return { kind: 'personal' };
+  if (input.kind === 'research_object' && Object.keys(input).length === 2
+    && typeof input.researchObjectId === 'string' && UUID.test(input.researchObjectId)) {
+    return { kind: 'research_object', researchObjectId: input.researchObjectId };
+  }
+  throw new Error('durable source.retrieve target is invalid');
 }
 
 /** Runtime retrieval input. It never accepts the server-owned persistence marker. */
@@ -59,11 +77,11 @@ export function parseSourceRetrieveRequestPayload(value: unknown): SourceRetriev
 export function parseDurableSourceRetrievePayload(value: unknown): DurableSourceRetrievePayload {
   if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error('durable source.retrieve payload is invalid');
   const input = value as Record<string, unknown>;
-  const allowed = new Set(['query', 'providers', 'limit', 'includeFullText', 'identifier', 'retryContractVersion']);
+  const allowed = new Set(['query', 'providers', 'limit', 'includeFullText', 'identifier', 'retryContractVersion', 'target']);
   if (Object.keys(input).some((key) => !allowed.has(key))) throw new Error('durable source.retrieve payload contains unknown fields');
   if (!Object.hasOwn(input, 'query') || !Object.hasOwn(input, 'providers')
     || !Object.hasOwn(input, 'limit') || !Object.hasOwn(input, 'includeFullText')
-    || !Object.hasOwn(input, 'retryContractVersion')) {
+    || !Object.hasOwn(input, 'retryContractVersion') || !Object.hasOwn(input, 'target')) {
     throw new Error('durable source.retrieve payload is incomplete');
   }
   if (input.retryContractVersion !== SOURCE_RETRIEVE_RETRY_CONTRACT_VERSION) {
@@ -77,6 +95,7 @@ export function parseDurableSourceRetrievePayload(value: unknown): DurableSource
     ...(Object.hasOwn(input, 'identifier') ? { identifier: input.identifier } : {}),
   };
   const request = parseSourceRetrieveRequestPayload(requestValue);
+  const target = parseSourceRetrieveTarget(input.target);
   if (input.query !== request.query || (input.identifier !== undefined && input.identifier !== request.identifier)) {
     throw new Error('durable source.retrieve payload is not normalized');
   }
@@ -94,7 +113,7 @@ export function parseDurableSourceRetrievePayload(value: unknown): DurableSource
     && hasIdentifier
     && request.identifier !== undefined;
   if (!metadataShape && !fullTextShape) throw new Error('durable source.retrieve payload is not an acquisition payload');
-  return { ...request, retryContractVersion: SOURCE_RETRIEVE_RETRY_CONTRACT_VERSION };
+  return { ...request, retryContractVersion: SOURCE_RETRIEVE_RETRY_CONTRACT_VERSION, target };
 }
 
 /** Compatibility name for runtime-only callers; never parses persisted task rows. */

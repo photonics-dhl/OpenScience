@@ -5,6 +5,7 @@ import {
   parseDurableSourceRetrievePayload,
   SOURCE_RETRIEVE_RETRY_CONTRACT_VERSION,
   type DurableSourceRetrievePayload,
+  type SourceRetrieveTarget,
 } from '../retrieval/retrieve-payload';
 import type { AuditContext } from '@openscience/observability';
 import { requireActiveMembership, requireMembership } from '../workspace/helpers';
@@ -179,7 +180,12 @@ function evaluateAgentTaskRetryEligibility(
 async function findNewestRetryableSourceTask(
   deps: AgentDeps,
   userId: string,
+  target: SourceRetrieveTarget,
 ): Promise<AgentTaskRetrySnapshot | null> {
+  const targetClause = target.kind === 'personal'
+    ? Prisma.sql`AND task."payload" -> 'target' = '{"kind":"personal"}'::jsonb`
+    : Prisma.sql`AND session."research_object_id" = ${target.researchObjectId}::uuid
+        AND task."payload" -> 'target' = jsonb_build_object('kind', 'research_object', 'researchObjectId', ${target.researchObjectId}::text)`;
   const selected = await deps.prisma.$queryRaw<Array<{ id: string }>>(Prisma.sql`
     SELECT task."id" AS "id"
     FROM "agent_tasks" AS task
@@ -195,12 +201,13 @@ async function findNewestRetryableSourceTask(
           AND membership."user_id" = ${userId}::uuid
       )
       AND task."kind" = 'source.retrieve'
+      ${targetClause}
       AND task."status" = 'failed'
       AND task."retry_count" = 0
       AND (task."error" IS NULL OR task."error" NOT LIKE '[blocked]%')
       AND jsonb_typeof(task."payload") = 'object'
-      AND task."payload" ?& ARRAY['query', 'providers', 'limit', 'includeFullText', 'retryContractVersion']::text[]
-      AND task."payload" - ARRAY['query', 'providers', 'limit', 'includeFullText', 'identifier', 'retryContractVersion']::text[] = '{}'::jsonb
+      AND task."payload" ?& ARRAY['query', 'providers', 'limit', 'includeFullText', 'retryContractVersion', 'target']::text[]
+      AND task."payload" - ARRAY['query', 'providers', 'limit', 'includeFullText', 'identifier', 'retryContractVersion', 'target']::text[] = '{}'::jsonb
       AND jsonb_typeof(task."payload" -> 'query') = 'string'
       AND task."payload" ->> 'query' = regexp_replace(
         task."payload" ->> 'query', '^[[:space:]]+|[[:space:]]+$', '', 'g'
@@ -242,7 +249,9 @@ async function findNewestRetryableSourceTask(
   const task = await deps.prisma.agentTask.findUnique({
     where: { id: selected[0]!.id }, include: retryAuthorityInclude(userId),
   });
-  if (!task || !evaluateAgentTaskRetryEligibility(task, userId).canRetry) {
+  let durableTarget: SourceRetrieveTarget | undefined;
+  try { durableTarget = parseDurableSourceRetrievePayload(task?.payload).target; } catch { durableTarget = undefined; }
+  if (!task || !evaluateAgentTaskRetryEligibility(task, userId).canRetry || !isDeepStrictEqual(durableTarget, target)) {
     throw new Error('Source retrieval recovery invariant violated');
   }
   return task;
@@ -317,17 +326,22 @@ async function resolveInterestContext(
 /** Dashboard task rail: caller-owned tasks with their RO context. */
 export async function listAgentTasks(
   deps: AgentDeps,
-  input: { userId: string; actionableOnly?: boolean; kind?: string; recoveryPreferred?: boolean },
+  input: { userId: string; actionableOnly?: boolean; kind?: string; recoveryPreferred?: boolean; recoveryTarget?: SourceRetrieveTarget },
 ): Promise<AgentTaskListItem[]> {
   if (input.recoveryPreferred) {
-    if (input.kind !== 'source.retrieve') throw new AgentError('VALIDATION_ERROR', 'Recovery priority requires source.retrieve');
+    if (input.kind !== 'source.retrieve' || !input.recoveryTarget) throw new AgentError('VALIDATION_ERROR', 'Recovery priority requires a source.retrieve target');
+    const targetPayload = { path: ['target'], equals: input.recoveryTarget as Prisma.InputJsonValue };
+    const researchObjectScope = input.recoveryTarget.kind === 'research_object'
+      ? { id: input.recoveryTarget.researchObjectId }
+      : {};
     const baseWhere: Prisma.AgentTaskWhereInput = {
       kind: input.kind,
+      payload: targetPayload,
       session: {
         userId: input.userId,
         status: 'active',
         researchObject: {
-          is: { workspace: { status: 'active', members: { some: { userId: input.userId } } } },
+          is: { ...researchObjectScope, workspace: { status: 'active', members: { some: { userId: input.userId } } } },
         },
       },
     };
@@ -337,7 +351,7 @@ export async function listAgentTasks(
       orderBy: [{ updatedAt: 'desc' }, { id: 'desc' }],
     });
     const active = await newest({ status: { in: ['pending', 'running'] } });
-    const eligibleFailed = active ? null : await findNewestRetryableSourceTask(deps, input.userId);
+    const eligibleFailed = active ? null : await findNewestRetryableSourceTask(deps, input.userId, input.recoveryTarget);
     const terminal = active || eligibleFailed ? null : await newest({ status: { in: ['succeeded', 'failed'] } });
     const selected = active ?? eligibleFailed ?? terminal;
     if (!selected) return [];

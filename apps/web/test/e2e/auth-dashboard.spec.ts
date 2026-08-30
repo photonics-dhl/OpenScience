@@ -233,7 +233,7 @@ test('personal literature acquisition recovers a running server task after reloa
   await mockAuthenticatedUser(page);
   await page.route('**/api/csrf-token', (route) => route.fulfill({ contentType: 'application/json', body: JSON.stringify({ csrfToken: 'csrf' }) }));
   const runningTask = { id: 'literature-reload', sessionId: 'session-1', kind: 'source.retrieve', status: 'running', progress: 40, retryCount: 0, canRetry: false, executionAttempt: 1, result: null, error: null, createdAt: '2026-08-30T00:00:00.000Z', updatedAt: '2026-08-30T00:01:00.000Z' };
-  await page.route('**/api/agent/tasks?actionable=false&kind=source.retrieve&recovery=true', (route) => {
+  await page.route('**/api/agent/tasks?actionable=false&kind=source.retrieve&recovery=true&targetKind=personal', (route) => {
     return route.fulfill({ contentType: 'application/json', body: JSON.stringify({ tasks: serverHasTask ? [runningTask] : [] }) });
   });
   await page.route('**/api/literature/acquisitions', async (route) => {
@@ -257,7 +257,7 @@ test('personal literature acquisition recovers a running server task after reloa
 test('a permanent 401 while polling routes the dashboard through established login recovery', async ({ page }) => {
   const runningTask = { id: 'literature-auth-lost', sessionId: 'session-1', kind: 'source.retrieve', status: 'running', progress: 40, retryCount: 0, canRetry: false, executionAttempt: 1, result: null, error: null, createdAt: '2026-08-30T00:00:00.000Z', updatedAt: '2026-08-30T00:01:00.000Z' };
   await mockAuthenticatedUser(page);
-  await page.route('**/api/agent/tasks?actionable=false&kind=source.retrieve&recovery=true', (route) => route.fulfill({ contentType: 'application/json', body: JSON.stringify({ tasks: [runningTask] }) }));
+  await page.route('**/api/agent/tasks?actionable=false&kind=source.retrieve&recovery=true&targetKind=personal', (route) => route.fulfill({ contentType: 'application/json', body: JSON.stringify({ tasks: [runningTask] }) }));
   await page.route('**/api/agent/tasks/literature-auth-lost', (route) => route.fulfill({ status: 401, contentType: 'application/json', body: JSON.stringify({ error: { code: 'SESSION_INVALID', message: 'signed out' } }) }));
 
   await page.goto(`${baseUrl}/dashboard`);
@@ -269,7 +269,7 @@ for (const status of [403, 404]) {
     const runningTask = { id: `literature-gone-${status}`, sessionId: 'session-1', kind: 'source.retrieve', status: 'running', progress: 40, retryCount: 0, canRetry: false, executionAttempt: 1, result: null, error: null, createdAt: '2026-08-30T00:00:00.000Z', updatedAt: '2026-08-30T00:01:00.000Z' };
     let polls = 0;
     await mockAuthenticatedUser(page);
-    await page.route('**/api/agent/tasks?actionable=false&kind=source.retrieve&recovery=true', (route) => route.fulfill({ contentType: 'application/json', body: JSON.stringify({ tasks: [runningTask] }) }));
+    await page.route('**/api/agent/tasks?actionable=false&kind=source.retrieve&recovery=true&targetKind=personal', (route) => route.fulfill({ contentType: 'application/json', body: JSON.stringify({ tasks: [runningTask] }) }));
     await page.route(`**/api/agent/tasks/literature-gone-${status}`, (route) => {
       polls += 1;
       return route.fulfill({ status, contentType: 'application/json', body: JSON.stringify({ error: { code: 'TASK_UNAVAILABLE', message: 'internal detail' } }) });
@@ -291,7 +291,7 @@ test('a failed source retrieval retries the same task without a new acquisition 
   const succeededTask = { ...pendingTask, status: 'succeeded', progress: 100, result: { sources: [] } };
   await mockAuthenticatedUser(page);
   await page.route('**/api/csrf-token', (route) => route.fulfill({ contentType: 'application/json', body: JSON.stringify({ csrfToken: 'csrf' }) }));
-  await page.route('**/api/agent/tasks?actionable=false&kind=source.retrieve&recovery=true', (route) => route.fulfill({ contentType: 'application/json', body: JSON.stringify({ tasks: [failedTask] }) }));
+  await page.route('**/api/agent/tasks?actionable=false&kind=source.retrieve&recovery=true&targetKind=personal', (route) => route.fulfill({ contentType: 'application/json', body: JSON.stringify({ tasks: [failedTask] }) }));
   await page.route('**/api/literature/acquisitions', (route) => {
     submissions += 1;
     return route.fulfill({ status: 500, contentType: 'application/json', body: JSON.stringify({ error: { code: 'UNEXPECTED', message: 'unexpected acquisition' } }) });
@@ -316,7 +316,7 @@ test('concurrent retry activation sends one POST and reconciles a 409 through au
   const pendingTask = { ...failedTask, status: 'pending', progress: 0, retryCount: 1, canRetry: false, result: null, error: null, updatedAt: '2026-08-30T00:02:00.000Z' };
   await mockAuthenticatedUser(page);
   await page.route('**/api/csrf-token', (route) => route.fulfill({ contentType: 'application/json', body: JSON.stringify({ csrfToken: 'csrf' }) }));
-  await page.route('**/api/agent/tasks?actionable=false&kind=source.retrieve&recovery=true', (route) => route.fulfill({ contentType: 'application/json', body: JSON.stringify({ tasks: [failedTask] }) }));
+  await page.route('**/api/agent/tasks?actionable=false&kind=source.retrieve&recovery=true&targetKind=personal', (route) => route.fulfill({ contentType: 'application/json', body: JSON.stringify({ tasks: [failedTask] }) }));
   await page.route('**/api/agent/tasks/literature-concurrent/retry', async (route) => {
     retryRequests += 1;
     await new Promise((resolve) => setTimeout(resolve, 200));
@@ -347,7 +347,7 @@ test('metadata selection starts a second acquisition and finishes with one tempo
   let releaseFullText: (() => void) | undefined;
   await mockAuthenticatedUser(page);
   await page.route('**/api/csrf-token', (route) => route.fulfill({ contentType: 'application/json', body: JSON.stringify({ csrfToken: 'csrf' }) }));
-  await page.route('**/api/agent/tasks?actionable=false&kind=source.retrieve&recovery=true', (route) => route.fulfill({ contentType: 'application/json', body: JSON.stringify({ tasks: [] }) }));
+  await page.route('**/api/agent/tasks?actionable=false&kind=source.retrieve&recovery=true&targetKind=personal', (route) => route.fulfill({ contentType: 'application/json', body: JSON.stringify({ tasks: [] }) }));
   await page.route('**/api/literature/acquisitions', async (route) => {
     submissions += 1;
     callerKeys.push(route.request().headers()['idempotency-key'] ?? '');

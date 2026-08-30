@@ -62,6 +62,7 @@ export function ResearchSurfaceShell({
           onOpenChange={setHermesOpen}
           open={hermesOpen}
           route="research-object-edit"
+          routeResearchObjectId={object.id}
           suggestion={suggestion}
           target={null}
         />
