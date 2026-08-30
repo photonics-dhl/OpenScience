@@ -7,7 +7,6 @@ from datetime import UTC, datetime, timedelta
 import hmac
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import json
-from pathlib import Path
 import threading
 from typing import Any, Mapping, Protocol
 from urllib.parse import urlsplit
@@ -122,9 +121,22 @@ def create_server(config: ServiceConfig | Mapping[str, Any] | object, acquisitio
             if self.headers.get_content_type() != "application/json":
                 self._json(400, {"code": "invalid_request"})
                 return None
-            length = self.headers.get("Content-Length")
-            if length is None or not length.isascii() or not length.isdecimal():
+            if self.headers.get_all("Transfer-Encoding"):
                 self._json(400, {"code": "invalid_request"})
+                return None
+            lengths = self.headers.get_all("Content-Length") or []
+            if not lengths:
+                self._json(411, {"code": "length_required"})
+                return None
+            if len(lengths) != 1:
+                self._json(400, {"code": "invalid_request"})
+                return None
+            length = lengths[0]
+            if not length.isascii() or not length.isdecimal():
+                self._json(400, {"code": "invalid_request"})
+                return None
+            if len(length) > 10:
+                self._json(413, {"code": "request_too_large"})
                 return None
             size = int(length)
             if size > MAX_REQUEST_BYTES:
@@ -200,7 +212,7 @@ def _response_pdf(acquired: AcquiredPdf, request: LegalDownloadRequest, settings
         raise AcquisitionError("policy_blocked") from error
     if not _safe_external_url(acquired.source_url):
         raise AcquisitionError("policy_blocked")
-    content = _read_pdf(acquired.file_path, settings.maximum_pdf_bytes)
+    content = _read_pdf(acquired.content, settings.maximum_pdf_bytes)
     headers = {
         "content-type": "application/pdf",
         "x-scansci-route": acquired.route,
@@ -222,26 +234,9 @@ def _response_pdf(acquired: AcquiredPdf, request: LegalDownloadRequest, settings
     return headers, content
 
 
-def _read_pdf(path: Path, maximum_bytes: int) -> bytes:
-    try:
-        if path.is_symlink() or not path.is_file():
-            raise AcquisitionError("invalid_pdf")
-        with path.open("rb") as file:
-            chunks: list[bytes] = []
-            total = 0
-            while True:
-                chunk = file.read(min(64 * 1024, maximum_bytes + 1 - total))
-                if not chunk:
-                    break
-                total += len(chunk)
-                if total > maximum_bytes:
-                    raise AcquisitionError("invalid_pdf")
-                chunks.append(chunk)
-    except AcquisitionError:
-        raise
-    except OSError as error:
-        raise AcquisitionError("invalid_pdf") from error
-    content = b"".join(chunks)
+def _read_pdf(content: bytes, maximum_bytes: int) -> bytes:
+    if not isinstance(content, bytes) or len(content) > maximum_bytes:
+        raise AcquisitionError("invalid_pdf")
     if len(content) < 5 or not content.startswith(b"%PDF-"):
         raise AcquisitionError("invalid_pdf")
     return content

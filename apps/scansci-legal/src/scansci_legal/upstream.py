@@ -1,21 +1,25 @@
-"""Narrow, legal-only adapter around the pinned ScanSci downloader."""
+"""Isolated, legal-only adapter around the pinned ScanSci downloader."""
 
 from __future__ import annotations
 
-from contextlib import contextmanager
 from dataclasses import dataclass
 import ipaddress
 import json
+import os
 from pathlib import Path
-import threading
+import stat
+import subprocess
+import sys
 import tempfile
-from typing import Any, Callable, Iterator
+from typing import Any, Mapping, Sequence
 from urllib.parse import urlsplit
 
 from .policy import LegalDownloadRequest, PolicyError, validate_source_result
 
 
-DownloadFunction = Callable[..., dict[str, Any]]
+MAX_PDF_BYTES = 100 * 1024 * 1024
+MAX_PROTOCOL_BYTES = 8 * 1024
+WORKER_TIMEOUT_SECONDS = 60
 
 
 class AcquisitionError(RuntimeError):
@@ -28,7 +32,7 @@ class AcquisitionError(RuntimeError):
 
 @dataclass(frozen=True)
 class AcquiredPdf:
-    file_path: Path
+    content: bytes
     route: str
     source: str
     source_url: str
@@ -37,94 +41,65 @@ class AcquiredPdf:
 
 
 class ScanSciAcquisitionClient:
-    """Call only ``scansci_pdf.sources.download`` with an immutable safe policy."""
+    """Execute the pinned library in a fresh, proxy-free worker process."""
 
-    def __init__(self, runtime_dir: Path, *, download_function: DownloadFunction | None = None):
+    def __init__(self, runtime_dir: Path, *, worker_command: Sequence[str] | None = None, maximum_pdf_bytes: int = MAX_PDF_BYTES):
         self._runtime_dir = runtime_dir.resolve()
-        self._download_function = download_function or _pinned_download_function()
-        self._upstream_lock = threading.Lock()
+        self._worker_command = tuple(worker_command or (sys.executable, str(Path(__file__).with_name("upstream_worker.py"))))
+        if not self._worker_command or maximum_pdf_bytes <= 0 or maximum_pdf_bytes > MAX_PDF_BYTES:
+            raise ValueError("ScanSci acquisition configuration is invalid")
+        self._maximum_pdf_bytes = maximum_pdf_bytes
 
     def acquire(self, request: LegalDownloadRequest) -> AcquiredPdf:
         self._runtime_dir.mkdir(parents=True, exist_ok=True)
         with tempfile.TemporaryDirectory(prefix="scansci-legal-", dir=self._runtime_dir) as directory:
             output_dir = Path(directory).resolve()
-            fixed_config = _fixed_config(output_dir, self._runtime_dir)
-            (output_dir / "scansci-legal-config.json").write_text(
-                json.dumps(fixed_config, sort_keys=True, separators=(",", ":")), encoding="utf-8"
-            )
-            try:
-                with self._upstream_lock, _fixed_upstream_globals(self._download_function, fixed_config, output_dir):
-                    result = self._download_function(
-                        request.identifier,
-                        str(output_dir),
-                        scihub_enabled=False,
-                        use_tor=False,
-                        use_vpnsci=True,
-                        bibtex=False,
-                        rename=False,
-                        strategy="legal_only",
-                    )
-            except AcquisitionError:
-                raise
-            except TimeoutError as error:
-                raise AcquisitionError("upstream_timeout") from error
-            except Exception as error:
-                raise AcquisitionError("upstream_unavailable") from error
-            return _validated_result(result, request, output_dir)
+            (output_dir / "config.json").write_text(json.dumps(_fixed_config(output_dir), sort_keys=True, separators=(",", ":")), encoding="utf-8")
+            result = _run_worker(self._worker_command, request, output_dir)
+            return _validated_result(result, request, output_dir, self._maximum_pdf_bytes)
 
 
-def _pinned_download_function() -> DownloadFunction:
+def _run_worker(command: Sequence[str], request: LegalDownloadRequest, output_dir: Path) -> object:
+    protocol_path = output_dir / "worker-response.json"
+    payload = json.dumps({"identifier": request.identifier, "output_dir": str(output_dir)}, separators=(",", ":")).encode("utf-8")
+    with protocol_path.open("xb") as protocol:
+        try:
+            process = subprocess.Popen(list(command), stdin=subprocess.PIPE, stdout=protocol, stderr=subprocess.DEVNULL, cwd=output_dir, env=_sanitized_environment(output_dir))
+            process.communicate(payload, timeout=WORKER_TIMEOUT_SECONDS)
+        except subprocess.TimeoutExpired as error:
+            process.kill()
+            process.wait()
+            raise AcquisitionError("upstream_timeout") from error
+        except OSError as error:
+            raise AcquisitionError("upstream_unavailable") from error
+    if process.returncode != 0:
+        raise AcquisitionError("upstream_unavailable")
     try:
-        from scansci_pdf.sources import download
-    except Exception as error:
+        data = _read_bounded_regular_file(protocol_path, output_dir, MAX_PROTOCOL_BYTES)
+        return json.loads(data.decode("utf-8"), object_pairs_hook=_no_duplicate_keys)
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError, ValueError) as error:
         raise AcquisitionError("upstream_unavailable") from error
-    return download
 
 
-def _fixed_config(output_dir: Path, runtime_dir: Path) -> dict[str, Any]:
+def _sanitized_environment(output_dir: Path) -> dict[str, str]:
+    environment = {"PATH": os.environ.get("PATH", ""), "PYTHONNOUSERSITE": "1", "PYTHONDONTWRITEBYTECODE": "1", "HOME": str(output_dir), "TMPDIR": str(output_dir), "TMP": str(output_dir), "TEMP": str(output_dir), "SCANSCI_PDF_DATA_DIR": str(output_dir)}
+    for key in ("SYSTEMROOT", "WINDIR", "COMSPEC", "PATHEXT", "LANG", "LC_ALL", "TZ"):
+        if value := os.environ.get(key):
+            environment[key] = value
+    return environment
+
+
+def _fixed_config(output_dir: Path) -> dict[str, Any]:
     return {
-        "output_dir": str(output_dir),
-        "cache_dir": str(output_dir / "cache"),
-        "download_strategy": "legal_only",
-        "scihub_enabled": False,
-        "use_tor": False,
-        "tor_proxy": "",
-        "use_tor_for_scihub": False,
-        "network_proxy": "",
-        "proxy_pool": "",
-        "batch_workers": 1,
-        "parallel_sources": False,
-        "parallel_probes": False,
-        "connect_timeout": 15,
-        "read_timeout": 30,
-        "carsi_enabled": True,
-        "carsi_idp_name": "浙江大学",
-        "carsi_cookie_dir": str(runtime_dir),
-        "auto_relogin": False,
+        "output_dir": str(output_dir), "cache_dir": str(output_dir / "cache"), "download_strategy": "legal_only",
+        "scihub_enabled": False, "use_tor": False, "tor_proxy": "", "use_tor_for_scihub": False,
+        "network_proxy": "", "proxy_pool": "", "batch_workers": 1, "parallel_sources": False,
+        "parallel_probes": False, "connect_timeout": 15, "read_timeout": 30, "carsi_enabled": True,
+        "carsi_idp_name": "浙江大学", "carsi_cookie_dir": str(output_dir / "session"), "auto_relogin": False,
     }
 
 
-@contextmanager
-def _fixed_upstream_globals(download_function: DownloadFunction, config: dict[str, Any], output_dir: Path) -> Iterator[None]:
-    """Keep the upstream import in-process while replacing its unsafe defaults."""
-    globals_dict = getattr(download_function, "__globals__", None)
-    if not isinstance(globals_dict, dict) or "load_config" not in globals_dict:
-        yield
-        return
-    previous_loader = globals_dict["load_config"]
-    previous_data_dir = globals_dict.get("DATA_DIR")
-    globals_dict["load_config"] = lambda: dict(config)
-    if previous_data_dir is not None:
-        globals_dict["DATA_DIR"] = output_dir
-    try:
-        yield
-    finally:
-        globals_dict["load_config"] = previous_loader
-        if previous_data_dir is not None:
-            globals_dict["DATA_DIR"] = previous_data_dir
-
-
-def _validated_result(result: object, request: LegalDownloadRequest, output_dir: Path) -> AcquiredPdf:
+def _validated_result(result: object, request: LegalDownloadRequest, output_dir: Path, maximum_pdf_bytes: int) -> AcquiredPdf:
     if not isinstance(result, dict) or result.get("success") is not True:
         raise AcquisitionError(_failure_code(result))
     try:
@@ -134,14 +109,57 @@ def _validated_result(result: object, request: LegalDownloadRequest, output_dir:
         source_url = _source_url(result, request.identifier)
     except PolicyError as error:
         raise AcquisitionError("policy_blocked") from error
-    file_path = _safe_result_path(result.get("file"), output_dir)
+    content = _read_result_pdf(result.get("file"), output_dir, maximum_pdf_bytes)
     license_value = result.get("license")
     if license_value is not None and (not isinstance(license_value, str) or not _safe_header_value(license_value)):
         raise AcquisitionError("policy_blocked")
     entitlement_valid_until = result.get("entitlement_valid_until")
     if entitlement_valid_until is not None and (not isinstance(entitlement_valid_until, str) or not _safe_header_value(entitlement_valid_until)):
         raise AcquisitionError("policy_blocked")
-    return AcquiredPdf(file_path, provenance.route, provenance.source, source_url, license_value, entitlement_valid_until)
+    return AcquiredPdf(content, provenance.route, provenance.source, source_url, license_value, entitlement_valid_until)
+
+
+def _read_result_pdf(value: object, output_dir: Path, maximum_pdf_bytes: int) -> bytes:
+    if not isinstance(value, str) or not value:
+        raise AcquisitionError("invalid_pdf")
+    try:
+        content = _read_bounded_regular_file(Path(value), output_dir, maximum_pdf_bytes)
+    except (OSError, ValueError) as error:
+        raise AcquisitionError("invalid_pdf") from error
+    if len(content) < 5 or not content.startswith(b"%PDF-"):
+        raise AcquisitionError("invalid_pdf")
+    return content
+
+
+def _read_bounded_regular_file(path: Path, root: Path, maximum_bytes: int) -> bytes:
+    if not path.is_absolute():
+        raise ValueError("relative path is forbidden")
+    resolved = path.resolve(strict=True)
+    resolved.relative_to(root)
+    before = os.lstat(path)
+    if stat.S_ISLNK(before.st_mode) or not stat.S_ISREG(before.st_mode):
+        raise ValueError("result is not a regular file")
+    descriptor = os.open(path, os.O_RDONLY | getattr(os, "O_BINARY", 0) | getattr(os, "O_NOFOLLOW", 0))
+    try:
+        after = os.fstat(descriptor)
+        if not stat.S_ISREG(after.st_mode) or (before.st_dev, before.st_ino) != (after.st_dev, after.st_ino):
+            raise ValueError("result changed before open")
+        with os.fdopen(descriptor, "rb", closefd=False) as file:
+            content = file.read(maximum_bytes + 1)
+    finally:
+        os.close(descriptor)
+    if len(content) > maximum_bytes:
+        raise ValueError("result exceeds bound")
+    return content
+
+
+def _no_duplicate_keys(pairs: list[tuple[str, object]]) -> dict[str, object]:
+    result: dict[str, object] = {}
+    for key, value in pairs:
+        if key in result:
+            raise ValueError("duplicate protocol key")
+        result[key] = value
+    return result
 
 
 def _route_for_source(source: str) -> str:
@@ -154,27 +172,13 @@ def _route_for_source(source: str) -> str:
     raise PolicyError("source is not allowlisted")
 
 
-def _source_url(result: dict[str, Any], identifier: str) -> str:
+def _source_url(result: Mapping[str, object], identifier: str) -> str:
     candidate = result.get("url") or result.get("source_url")
     if not isinstance(candidate, str) or not candidate:
         candidate = f"https://arxiv.org/abs/{identifier.removeprefix('arXiv:')}" if identifier.lower().startswith("arxiv:") else f"https://doi.org/{identifier}"
     if not _safe_external_url(candidate):
         raise PolicyError("source URL is unsafe")
     return candidate
-
-
-def _safe_result_path(value: object, output_dir: Path) -> Path:
-    if not isinstance(value, str) or not value:
-        raise AcquisitionError("invalid_pdf")
-    candidate = Path(value)
-    try:
-        resolved = candidate.resolve(strict=True)
-        resolved.relative_to(output_dir)
-    except (OSError, RuntimeError, ValueError) as error:
-        raise AcquisitionError("invalid_pdf") from error
-    if candidate.is_symlink() or not resolved.is_file():
-        raise AcquisitionError("invalid_pdf")
-    return resolved
 
 
 def _safe_external_url(value: str) -> bool:
@@ -196,7 +200,7 @@ def _safe_external_url(value: str) -> bool:
 
 
 def _safe_header_value(value: str) -> bool:
-    return value.isascii() and bool(value.strip()) and len(value) <= 256 and "\r" not in value and "\n" not in value
+    return value.isascii() and bool(value.strip()) and len(value) <= 256 and all(32 <= ord(character) <= 126 for character in value)
 
 
 def _failure_code(result: object) -> str:
@@ -213,6 +217,6 @@ def _failure_code(result: object) -> str:
         return "rate_limited"
     if error_type in {"timeout", "upstream_timeout"}:
         return "upstream_timeout"
-    if error_type in {"not_found", "no_pdf"}:
-        return "not_found"
+    if error_type == "upstream_unavailable":
+        return "upstream_unavailable"
     return "not_found"

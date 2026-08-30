@@ -1,9 +1,11 @@
 from __future__ import annotations
 
-from contextlib import contextmanager
+from contextlib import contextmanager, redirect_stderr
 import http.client
+import io
 import json
 from pathlib import Path
+import socket
 import sys
 import tempfile
 import threading
@@ -13,6 +15,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
 from scansci_legal.http_service import AcquisitionError, AcquiredPdf, create_server
 from scansci_legal.policy import LegalDownloadRequest
+from scansci_legal.upstream import ScanSciAcquisitionClient
 
 
 VALID_REQUEST = {
@@ -50,6 +53,26 @@ def request_json(server, path: str, payload: object, token: str | None = None) -
     return request_bytes(server, path, json.dumps(payload, separators=(",", ":")).encode("utf-8"), token)
 
 
+def raw_request(server, request: bytes) -> Response:
+    host, port = server.server_address[:2]
+    with socket.create_connection((host, port), timeout=2) as connection:
+        connection.sendall(request)
+        connection.shutdown(socket.SHUT_WR)
+        chunks = []
+        while data := connection.recv(4096):
+            chunks.append(data)
+    response = b"".join(chunks)
+    head, body = response.split(b"\r\n\r\n", 1)
+    lines = head.split(b"\r\n")
+    headers = {key.decode("ascii").lower(): value.decode("ascii") for key, value in (line.split(b": ", 1) for line in lines[1:])}
+    return Response(int(lines[0].split()[1]), headers, body)
+
+
+def legal_raw_request(headers: bytes, body: bytes | None = None) -> bytes:
+    body = body or json.dumps(VALID_REQUEST, separators=(",", ":")).encode("utf-8")
+    return b"POST /v1/legal-download HTTP/1.1\r\nHost: localhost\r\nAuthorization: Bearer service-test-token\r\nContent-Type: application/json\r\n" + headers + b"\r\n" + body
+
+
 class FakeClient:
     def __init__(self, pdf: Path, *, result: AcquiredPdf | None = None, failure: Exception | None = None):
         self.pdf = pdf
@@ -62,7 +85,7 @@ class FakeClient:
         if self.failure:
             raise self.failure
         return self.result or AcquiredPdf(
-            file_path=self.pdf,
+            content=self.pdf.read_bytes(),
             route="institutional",
             source="CARSI",
             source_url="https://publisher.example/paper",
@@ -151,6 +174,19 @@ class LegalDownloadHttpServiceTest(unittest.TestCase):
         self.assertEqual(response.body[:5], b"%PDF-")
         self.assertNotIn(b"cookie", response.body.lower())
 
+    def test_real_client_composition_keeps_worker_pdf_bytes_alive_until_the_http_response(self):
+        worker = Path(self.directory.name) / "worker.py"
+        worker.write_text(
+            "import json, pathlib, sys\nrequest=json.load(sys.stdin)\npath=pathlib.Path(request['output_dir'])/'paper.pdf'\npath.write_bytes(b'%PDF-live-through-response')\nprint(json.dumps({'success': True, 'file': str(path), 'source': 'CARSI', 'url': 'https://publisher.example/paper'}))\n",
+            encoding="utf-8",
+        )
+        client = ScanSciAcquisitionClient(Path(self.directory.name), worker_command=[sys.executable, str(worker)])
+        with running_server(client) as server:
+            response = request_json(server, "/v1/legal-download", VALID_REQUEST, "service-test-token")
+
+        self.assertEqual(response.status, 200)
+        self.assertEqual(response.body, b"%PDF-live-through-response")
+
     def test_rejects_invalid_pdf_magic_and_size_overflow_without_leaking_bytes(self):
         invalid_magic = Path(self.directory.name) / "html.pdf"
         invalid_magic.write_bytes(b"<html>cookie=secret</html>")
@@ -168,9 +204,9 @@ class LegalDownloadHttpServiceTest(unittest.TestCase):
 
     def test_rejects_unsafe_source_metadata_and_non_allowlisted_routes(self):
         for name, result in (
-            ("credentials", AcquiredPdf(self.pdf, "open_access", "oa_url", "https://user:secret@publisher.example/paper")),
-            ("grey-source", AcquiredPdf(self.pdf, "institutional", "Sci-Hub", "https://publisher.example/paper")),
-            ("grey-route", AcquiredPdf(self.pdf, "scihub", "CARSI", "https://publisher.example/paper")),
+            ("credentials", AcquiredPdf(self.pdf.read_bytes(), "open_access", "oa_url", "https://user:secret@publisher.example/paper")),
+            ("grey-source", AcquiredPdf(self.pdf.read_bytes(), "institutional", "Sci-Hub", "https://publisher.example/paper")),
+            ("grey-route", AcquiredPdf(self.pdf.read_bytes(), "scihub", "CARSI", "https://publisher.example/paper")),
         ):
             with self.subTest(name=name), running_server(FakeClient(self.pdf, result=result)) as server:
                 response = request_json(server, "/v1/legal-download", VALID_REQUEST, "service-test-token")
@@ -178,12 +214,19 @@ class LegalDownloadHttpServiceTest(unittest.TestCase):
             self.assertNotIn(b"secret", response.body.lower())
 
     def test_rejects_non_ascii_metadata_before_it_can_become_a_response_header(self):
-        result = AcquiredPdf(self.pdf, "open_access", "oa_url", "https://publisher.example/paper", license="许可")
+        result = AcquiredPdf(self.pdf.read_bytes(), "open_access", "oa_url", "https://publisher.example/paper", license="许可")
         with running_server(FakeClient(self.pdf, result=result)) as server:
             response = request_json(server, "/v1/legal-download", VALID_REQUEST, "service-test-token")
 
         self.assertEqual(response.status, 422)
         self.assertNotIn("许可".encode("utf-8"), response.body)
+
+    def test_rejects_c0_and_del_header_controls_before_response_emission(self):
+        for value in ("CC-BY\x1f4.0", "CC-BY\x7f4.0"):
+            with self.subTest(value=repr(value)), running_server(FakeClient(self.pdf, result=AcquiredPdf(self.pdf.read_bytes(), "open_access", "oa_url", "https://publisher.example/paper", license=value))) as server:
+                response = request_json(server, "/v1/legal-download", VALID_REQUEST, "service-test-token")
+            self.assertEqual(response.status, 422)
+            self.assertNotIn(value.encode("ascii"), response.body)
 
     def test_maps_allowlisted_acquisition_errors_and_redacts_raw_exceptions(self):
         cases = (
@@ -201,6 +244,49 @@ class LegalDownloadHttpServiceTest(unittest.TestCase):
             self.assertEqual(response.status, status)
             self.assertNotIn(b"secret", response.body.lower())
             self.assertNotIn(b"private", response.body.lower())
+
+    def test_worker_stderr_never_reaches_the_server_or_response(self):
+        worker = Path(self.directory.name) / "leaking-worker.py"
+        worker.write_text("import sys\nprint('cookie=secret https://user:password@proxy.example/private', file=sys.stderr)\nraise RuntimeError('cookie=secret /private/path')\n", encoding="utf-8")
+        client = ScanSciAcquisitionClient(Path(self.directory.name), worker_command=[sys.executable, str(worker)])
+        captured = io.StringIO()
+        with redirect_stderr(captured), running_server(client) as server:
+            response = request_json(server, "/v1/legal-download", VALID_REQUEST, "service-test-token")
+
+        self.assertEqual(response.status, 502)
+        self.assertNotIn(b"secret", response.body.lower())
+        self.assertNotIn("secret", captured.getvalue().lower())
+
+    def test_rejects_ambiguous_http_framing_before_the_acquisition_client_runs(self):
+        body = json.dumps(VALID_REQUEST, separators=(",", ":")).encode("utf-8")
+        length = str(len(body)).encode("ascii")
+        cases = (
+            legal_raw_request(b"Content-Length: " + length + b"\r\nContent-Length: " + length + b"\r\n", body),
+            legal_raw_request(b"Transfer-Encoding: chunked\r\n", body),
+            legal_raw_request(b"Transfer-Encoding: chunked\r\nContent-Length: " + length + b"\r\n", body),
+            legal_raw_request(b"Content-Length: +" + length + b"\r\n", body),
+            legal_raw_request(b"Content-Length: " + length + b" \r\n", body),
+            legal_raw_request(b"Content-Length: " + (b"9" * 100) + b"\r\n", body),
+        )
+        with running_server(self.client) as server:
+            responses = [raw_request(server, request) for request in cases]
+
+        self.assertEqual([response.status for response in responses], [400, 400, 400, 400, 400, 413])
+        self.assertEqual(self.client.requests, [])
+        for response in responses:
+            self.assertNotIn(b"exception", response.body.lower())
+            self.assertNotIn(b"cookie", response.body.lower())
+
+    def test_rejects_absent_or_non_ascii_content_length_with_stable_framing_errors(self):
+        missing = legal_raw_request(b"")
+        non_ascii = legal_raw_request(b"Content-Length: \xff\r\n")
+        with running_server(self.client) as server:
+            missing_response = raw_request(server, missing)
+            non_ascii_response = raw_request(server, non_ascii)
+
+        self.assertEqual(missing_response.status, 411)
+        self.assertEqual(non_ascii_response.status, 400)
+        self.assertEqual(self.client.requests, [])
 
     def test_fails_closed_for_unallowlisted_routes_without_echoing_the_path(self):
         with running_server(self.client) as server:
