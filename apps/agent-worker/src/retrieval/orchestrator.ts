@@ -28,6 +28,18 @@ export interface RetrievalRuntime {
   observeScanSci?: (observation: 'auth_required' | 'succeeded') => Promise<void>;
 }
 
+async function observeScanSciWithoutFailingRetrieval(
+  observer: RetrievalRuntime['observeScanSci'],
+  observation: 'auth_required' | 'succeeded',
+): Promise<void> {
+  try {
+    await observer?.(observation);
+  } catch {
+    // Provider-state persistence has its own bounded retry. A later task can
+    // replay the raw observation; useful metadata/full-text results remain valid.
+  }
+}
+
 export async function executeSourceRetrieval(
   rawPayload: unknown,
   runtime: RetrievalRuntime,
@@ -58,8 +70,10 @@ export async function executeSourceRetrieval(
     } else {
       if (!context.institutionalSubjectId) throw new Error('[blocked] ScanSci subject binding is unavailable');
       const result = await runtime.scansci.acquire({ identifier: payload.identifier, subjectId: context.institutionalSubjectId });
-      if (result.status === 'succeeded') await runtime.observeScanSci?.('succeeded');
-      else if (result.status === 'unavailable' && result.code === 'auth_required') await runtime.observeScanSci?.('auth_required');
+      if (result.status === 'succeeded') await observeScanSciWithoutFailingRetrieval(runtime.observeScanSci, 'succeeded');
+      else if (result.status === 'unavailable' && result.code === 'auth_required') {
+        await observeScanSciWithoutFailingRetrieval(runtime.observeScanSci, 'auth_required');
+      }
       if (result.status !== 'succeeded') {
         providers.push({ provider: 'scansci', status: result.status, code: result.code });
       } else {

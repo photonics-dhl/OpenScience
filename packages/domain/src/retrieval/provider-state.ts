@@ -1,4 +1,4 @@
-import { Prisma } from '@prisma/client';
+import { Prisma, type PrismaClient } from '@prisma/client';
 
 export type ScanSciProviderObservation =
   | { kind: 'auth_required'; actorId: string; taskId: string; workspaceId?: string }
@@ -6,7 +6,7 @@ export type ScanSciProviderObservation =
   | { kind: 'other_failure'; actorId: string; taskId: string; workspaceId?: string };
 
 export async function observeScanSciProviderState(
-  deps: { prisma: { $transaction<T>(work: (tx: any) => Promise<T>, options?: { isolationLevel: 'Serializable' }): Promise<T> } },
+  deps: { prisma: Pick<PrismaClient, '$transaction'> },
   observation: ScanSciProviderObservation,
 ): Promise<{ transitioned: boolean; generation?: number }> {
   if (observation.kind === 'other_failure') return { transitioned: false };

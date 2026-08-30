@@ -547,7 +547,9 @@ export function buildSourceRetrieveHandlerFromEnv(env: NodeJS.ProcessEnv = proce
     && env.SCANSCI_SERVICE_TOKEN_FILE !== '/run/scansci-worker-secrets/scansci_service_token') {
     throw new Error('SCANSCI_SERVICE_TOKEN_FILE must use the fixed Worker secret path in production');
   }
-  const scansciServiceToken = env.SCANSCI_SERVICE_TOKEN_FILE ? loadScanSciServiceTokenFile(env.SCANSCI_SERVICE_TOKEN_FILE) : undefined;
+  const scansciServiceToken = scansciEnabled
+    ? loadScanSciServiceTokenFile(env.SCANSCI_SERVICE_TOKEN_FILE!)
+    : undefined;
   return createSourceRetrieveHandler({
     queryHmacSecret,
     semanticScholar: createSemanticScholarAdapter({ apiKey: env.SEMANTIC_SCHOLAR_API_KEY }),

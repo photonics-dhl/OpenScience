@@ -10,6 +10,69 @@ const SOURCE_ID = '44444444-4444-4444-8444-444444444444';
 const RIGHTS_ID = '55555555-5555-4555-8555-555555555555';
 
 describe('source.retrieve handler replay safety', () => {
+  it('returns metadata after durable auth observation exhausts its three transaction attempts', async () => {
+    let transactionAttempts = 0;
+    const prisma: any = {
+      agentTask: { findUnique: async () => ({
+        id: TASK_ID,
+        kind: 'source.retrieve',
+        status: 'running',
+        session: {
+          userId: USER_ID,
+          researchObject: { workspaceId: WORKSPACE_ID, workspace: { status: 'active' } },
+        },
+      }) },
+      membership: { findUnique: async () => ({ workspaceId: WORKSPACE_ID, userId: USER_ID }) },
+      externalSource: { upsert: async ({ create }: any) => ({
+        id: SOURCE_ID,
+        provider: create.provider,
+        title: create.title,
+        sourceUrl: create.sourceUrl,
+      }) },
+      sourceRightsDecision: { upsert: async () => ({ id: RIGHTS_ID }) },
+      $transaction: async () => {
+        transactionAttempts += 1;
+        throw Object.assign(new Error('serialization retry exhausted'), { code: 'P2034' });
+      },
+    };
+    const handler = createSourceRetrieveHandler({
+      queryHmacSecret: 'retrieval-query-test-secret-at-least-32-bytes',
+      semanticScholar: { search: async () => ({
+        status: 'succeeded',
+        provider: 'semantic_scholar',
+        sources: [{
+          provider: 'semantic_scholar',
+          providerRecordId: 'metadata-1',
+          title: 'Metadata survives provider observation failure',
+          sourceUrl: 'https://example.org/metadata-1',
+          authors: [],
+          identifiers: {},
+          access: { kind: 'open_access', license: 'CC-BY-4.0' },
+        }],
+      }) },
+      tavily: { search: vi.fn() },
+      scansci: { acquire: async () => ({
+        status: 'unavailable', provider: 'scansci', code: 'auth_required', retryable: false,
+      }) },
+    });
+
+    const result = await handler({ prisma } as any, {
+      id: TASK_ID,
+      payload: {
+        query: 'paper', providers: ['semantic_scholar', 'scansci'], limit: 1, includeFullText: true, identifier: '10.1000/test',
+      },
+    });
+
+    expect(result).toMatchObject({
+      sources: [{ id: SOURCE_ID, provider: 'semantic_scholar' }],
+      providers: [
+        { provider: 'semantic_scholar', status: 'succeeded' },
+        { provider: 'scansci', status: 'unavailable', code: 'auth_required' },
+      ],
+    });
+    expect(transactionAttempts).toBe(3);
+  });
+
   it('reuses the task-scoped rights row and active temporary document', async () => {
     const bytes = Buffer.from('%PDF-replay-safe');
     const hash = 'a'.repeat(64);
