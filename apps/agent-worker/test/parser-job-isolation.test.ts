@@ -273,6 +273,10 @@ describe('document parser sidecar IPC', () => {
     try {
       const submit = createParserStageJobClient(jobDir, parserMetadata, 2_000);
       const badPending = submit(v2Request(badContent, { artifactId: 'artifact-bad' }), badContent);
+      const badFailure = badPending.then(
+        () => undefined,
+        (error: unknown) => error,
+      );
       const goodPending = submit(v2Request(goodContent, { artifactId: 'artifact-good' }), goodContent);
       await expect.poll(async () => (
         (await readdir(jobDir)).filter((name) => name.endsWith('.request.json')).length
@@ -285,12 +289,7 @@ describe('document parser sidecar IPC', () => {
         return v2Stage('later job succeeds');
       })).resolves.toBe(2);
 
-      let failure: unknown;
-      try {
-        await badPending;
-      } catch (error) {
-        failure = error;
-      }
+      const failure = await badFailure;
       expect(failure).toBeInstanceOf(Error);
       expect((failure as Error).message).toContain(SafeParserErrorCode.INVALID_RESPONSE);
       expect((failure as Error).message).not.toMatch(/secret|manuscript/i);
@@ -307,6 +306,10 @@ describe('document parser sidecar IPC', () => {
     try {
       const submit = createParserStageJobClient(jobDir, parserMetadata, 3_000);
       const oversizedPending = submit(v2Request(oversizedContent, { artifactId: 'artifact-oversized' }), oversizedContent);
+      const oversizedFailure = oversizedPending.then(
+        () => undefined,
+        (error: unknown) => error,
+      );
       const goodPending = submit(v2Request(goodContent, { artifactId: 'artifact-later' }), goodContent);
       await expect.poll(async () => (
         (await readdir(jobDir)).filter((name) => name.endsWith('.request.json')).length
@@ -324,7 +327,9 @@ describe('document parser sidecar IPC', () => {
         };
       })).resolves.toBe(2);
 
-      await expect(oversizedPending).rejects.toThrow(SafeParserErrorCode.RESPONSE_TOO_LARGE);
+      const failure = await oversizedFailure;
+      expect(failure).toBeInstanceOf(Error);
+      expect((failure as Error).message).toContain(SafeParserErrorCode.RESPONSE_TOO_LARGE);
       await expect(goodPending).resolves.toEqual(v2Stage('later job succeeds'));
     } finally {
       await rm(jobDir, { recursive: true, force: true });
