@@ -47,6 +47,11 @@ case " $* " in
     ;;
 esac
 case " $* " in
+  *" --profile scansci-auth stop scansci-auth "*)
+    if [ "\${FAKE_SSH_STOP_FAIL:-0}" = 1 ]; then exit 9; fi
+    ;;
+esac
+case " $* " in
   *" -N "*)
     if [ "\${FAKE_SSH_TUNNEL_FAIL:-0}" = 1 ]; then exit 2; fi
     trap 'exit 0' TERM INT
@@ -103,13 +108,15 @@ async function startHealthServer(t, port) {
   return server;
 }
 
-async function writeTunnelState(f, { token = 'c'.repeat(32), pid, port, release = 'a'.repeat(40) }) {
+async function writeTunnelState(f, {
+  token = 'c'.repeat(32), pid, port, release = 'a'.repeat(40), lifecycle = 'running',
+}) {
   const stateRoot = join(f.env.XDG_STATE_HOME, 'openscience');
   await mkdir(stateRoot, { recursive: true });
   const releaseRoot = `/opt/openscience-releases/${release}`;
   await writeFile(
     join(stateRoot, 'scansci-auth-tunnel.state'),
-    `${token}\n${pid}\n${port}\n${release}\n${releaseRoot}\n${releaseRoot}/infra/compose/docker-compose.prod.yml\n`,
+    `${token}\n${pid}\n${port}\n${release}\n${releaseRoot}\n${releaseRoot}/infra/compose/docker-compose.prod.yml\n${lifecycle}\n`,
   );
 }
 
@@ -207,6 +214,48 @@ test('stop uses the release identity stored at start after active release switch
   assert.doesNotMatch(log, new RegExp(`/opt/openscience-releases/${releaseB}`));
 });
 
+test('remote stop failure retains old release tombstone and retry commits only after success', async (t) => {
+  const f = await fixture();
+  await startHealthServer(t, 16090);
+  t.after(async () => {
+    run(f.script, ['stop'], f.env, f.bashBin);
+    await rm(f.root, { recursive: true, force: true });
+  });
+  const releaseA = 'a'.repeat(40);
+  const releaseB = 'b'.repeat(40);
+  assert.equal(run(f.script, ['start', '16090'], { ...f.env, FAKE_RELEASE_SHA: releaseA }, f.bashBin).status, 0);
+
+  const failed = run(
+    f.script,
+    ['stop'],
+    { ...f.env, FAKE_RELEASE_SHA: releaseB, FAKE_SSH_STOP_FAIL: '1' },
+    f.bashBin,
+  );
+  const statePath = join(f.env.XDG_STATE_HOME, 'openscience', 'scansci-auth-tunnel.state');
+
+  assert.equal(failed.status, 1, `${failed.stdout}\n${failed.stderr}`);
+  const failedLog = await readFile(f.log, 'utf8');
+  assert.match(failedLog, /--profile scansci-auth stop scansci-auth/);
+  assert.equal(existsSync(statePath), true, 'failed remote stop lost retry identity');
+  const retained = await readFile(statePath, 'utf8');
+  assert.match(retained, new RegExp(`${releaseA}\\n/opt/openscience-releases/${releaseA}`));
+  assert.match(retained, /pending_stop\s*$/);
+  const pending = run(f.script, ['status'], f.env, f.bashBin);
+  assert.equal(pending.status, 4, pending.stderr);
+  assert.match(pending.stdout, /^pending remote stop\s*$/);
+
+  const retry = run(f.script, ['stop'], { ...f.env, FAKE_RELEASE_SHA: releaseB }, f.bashBin);
+
+  assert.equal(retry.status, 0, retry.stderr);
+  assert.equal(existsSync(statePath), false);
+  const log = await readFile(f.log, 'utf8');
+  assert.equal((log.match(/cat \/opt\/openscience\/\.release-id/g) ?? []).length, 1);
+  const stopLines = log.split('\n').filter((line) => line.includes('--profile scansci-auth stop scansci-auth'));
+  assert.equal(stopLines.length, 2);
+  assert.ok(stopLines.every((line) => line.includes(`/opt/openscience-releases/${releaseA}`)));
+  assert.doesNotMatch(log, new RegExp(`/opt/openscience-releases/${releaseB}`));
+});
+
 test('invalid ports and unknown commands fail before any SSH process starts', async (t) => {
   const f = await fixture();
   t.after(async () => rm(f.root, { recursive: true, force: true }));
@@ -255,6 +304,37 @@ test('a live tunnel without loopback HTTP readiness is stopped and compensated',
   const log = await readFile(f.log, 'utf8');
   assert.match(log, /--profile scansci-auth stop scansci-auth/);
   assert.equal(run(f.script, ['status'], f.env, f.bashBin).status, 3);
+});
+
+test('failed-start compensation retains old release tombstone when remote stop fails', async (t) => {
+  const f = await fixture();
+  t.after(async () => {
+    run(f.script, ['stop'], f.env, f.bashBin);
+    await rm(f.root, { recursive: true, force: true });
+  });
+  const releaseA = 'd'.repeat(40);
+  const failed = run(
+    f.script,
+    ['start', '16091'],
+    { ...f.env, FAKE_RELEASE_SHA: releaseA, FAKE_SSH_STOP_FAIL: '1' },
+    f.bashBin,
+  );
+  const statePath = join(f.env.XDG_STATE_HOME, 'openscience', 'scansci-auth-tunnel.state');
+
+  assert.equal(failed.status, 1, `${failed.stdout}\n${failed.stderr}`);
+  assert.equal(existsSync(statePath), true);
+  const retained = await readFile(statePath, 'utf8');
+  assert.match(retained, new RegExp(`${releaseA}\\n/opt/openscience-releases/${releaseA}`));
+  assert.match(retained, /pending_stop\s*$/);
+
+  await startHealthServer(t, 16091);
+  const releaseB = 'e'.repeat(40);
+  const restarted = run(f.script, ['start', '16091'], { ...f.env, FAKE_RELEASE_SHA: releaseB }, f.bashBin);
+
+  assert.equal(restarted.status, 0, restarted.stderr);
+  const running = await readFile(statePath, 'utf8');
+  assert.match(running, new RegExp(`${releaseB}\\n/opt/openscience-releases/${releaseB}`));
+  assert.match(running, /running\s*$/);
 });
 
 test('concurrent starts serialize to one identified tunnel and one remote helper start', async (t) => {

@@ -23,23 +23,30 @@ read_state() {
   [ -f "$STATE_FILE" ] && [ ! -L "$STATE_FILE" ] || return 1
   local lines
   mapfile -t lines < "$STATE_FILE"
-  [ "${#lines[@]}" -eq 6 ] || return 1
+  [ "${#lines[@]}" -eq 7 ] || return 1
   STATE_TOKEN="${lines[0]}"
   STATE_PID="${lines[1]}"
   STATE_PORT="${lines[2]}"
   RELEASE_SHA="${lines[3]}"
   RELEASE_ROOT="${lines[4]}"
   RELEASE_COMPOSE="${lines[5]}"
+  STATE_LIFECYCLE="${lines[6]}"
   [[ "$STATE_TOKEN" =~ ^[0-9a-f]{32}$ ]] || return 1
-  [[ "$STATE_PID" =~ ^[1-9][0-9]*$ ]] || return 1
+  [[ "$STATE_PID" =~ ^[0-9]+$ ]] || return 1
   [[ "$STATE_PORT" =~ ^[0-9]+$ ]] || return 1
   [[ "$RELEASE_SHA" =~ ^[0-9a-f]{40}$ ]] || return 1
   [ "$RELEASE_ROOT" = "/opt/openscience-releases/$RELEASE_SHA" ] || return 1
   [ "$RELEASE_COMPOSE" = "$RELEASE_ROOT/infra/compose/docker-compose.prod.yml" ] || return 1
+  case "$STATE_LIFECYCLE" in
+    running) [ "$STATE_PID" -gt 0 ] || return 1 ;;
+    pending_stop) [ "$STATE_PID" -eq 0 ] || return 1 ;;
+    *) return 1 ;;
+  esac
 }
 
 process_matches_state() {
   read_state || return 1
+  [ "$STATE_LIFECYCLE" = "running" ] || return 1
   kill -0 "$STATE_PID" 2>/dev/null || return 1
   local identity
   identity="$(ps -p "$STATE_PID" -f 2>/dev/null || true)"
@@ -101,9 +108,14 @@ write_runner() {
 }
 
 write_state() {
-  local token="$1" pid="$2" port="$3" temporary="$STATE_FILE.$$.$token"
-  printf '%s\n%s\n%s\n%s\n%s\n%s\n' \
-    "$token" "$pid" "$port" "$RELEASE_SHA" "$RELEASE_ROOT" "$RELEASE_COMPOSE" > "$temporary"
+  local token pid port lifecycle temporary
+  token="$1"
+  pid="$2"
+  port="$3"
+  lifecycle="$4"
+  temporary="$STATE_FILE.$$.$token"
+  printf '%s\n%s\n%s\n%s\n%s\n%s\n%s\n' \
+    "$token" "$pid" "$port" "$RELEASE_SHA" "$RELEASE_ROOT" "$RELEASE_COMPOSE" "$lifecycle" > "$temporary"
   chmod 600 "$temporary" 2>/dev/null || true
   mv -f "$temporary" "$STATE_FILE"
 }
@@ -113,11 +125,19 @@ remove_state() {
 }
 
 stop_identified_tunnel() {
-  if process_matches_state; then
-    kill "$STATE_PID" 2>/dev/null || true
-    wait "$STATE_PID" 2>/dev/null || true
+  read_state || return 1
+  local identified=0 local_pid="$STATE_PID"
+  if [ "$STATE_LIFECYCLE" = "running" ] && process_matches_state; then
+    identified=1
+    local_pid="$STATE_PID"
   fi
-  remove_state
+  STATE_PID=0
+  STATE_LIFECYCLE="pending_stop"
+  write_state "$STATE_TOKEN" 0 "$STATE_PORT" "pending_stop"
+  if [ "$identified" -eq 1 ]; then
+    kill "$local_pid" 2>/dev/null || true
+    wait "$local_pid" 2>/dev/null || true
+  fi
 }
 
 wait_until_ready() {
@@ -197,11 +217,40 @@ stop_remote_helper() {
   ssh "${SSH_ARGS[@]}" "$SSH_TARGET" "$(remote_compose_command 'stop')" >/dev/null 2>&1
 }
 
+commit_remote_stop() {
+  if stop_remote_helper; then
+    remove_state
+    return 0
+  fi
+  return 1
+}
+
+resolve_existing_state_before_start() {
+  if ! read_state; then
+    return 0
+  fi
+  if [ "$STATE_LIFECYCLE" = "running" ] && process_matches_state; then
+    return 2
+  fi
+  stop_identified_tunnel
+  load_connection
+  if ! commit_remote_stop; then
+    echo "pending remote auth helper stop failed" >&2
+    return 1
+  fi
+  return 0
+}
+
 start_tunnel() {
   local port="${1:-6080}"
   [[ "$port" =~ ^[0-9]+$ ]] && [ "$port" -ge 1024 ] && [ "$port" -le 65535 ] || usage
   acquire_lock
-  if is_running; then
+  local existing_rc=0
+  resolve_existing_state_before_start || existing_rc=$?
+  if [ "$existing_rc" -eq 1 ]; then
+    return 1
+  fi
+  if [ "$existing_rc" -eq 2 ]; then
     if [ "$STATE_PORT" != "$port" ]; then
       echo "tunnel already running on another local port" >&2
       return 65
@@ -212,36 +261,37 @@ start_tunnel() {
     fi
     stop_identified_tunnel
     load_connection
-    stop_remote_helper || true
+    commit_remote_stop || true
     echo "loopback tunnel readiness failed" >&2
     return 1
   fi
-  remove_state
   load_connection
   resolve_release_identity
+
+  local token
+  token="$(od -An -N16 -tx1 /dev/urandom | tr -d ' \r\n')"
+  [[ "$token" =~ ^[0-9a-f]{32}$ ]] || { echo "tunnel identity failed" >&2; return 1; }
+  write_runner
+  write_state "$token" 0 "$port" "pending_stop"
 
   if ! ssh "${SSH_ARGS[@]}" "$SSH_TARGET" "$(remote_compose_command 'up -d')" >/dev/null 2>&1; then
     echo "auth helper start failed" >&2
     return 1
   fi
 
-  local token
-  token="$(od -An -N16 -tx1 /dev/urandom | tr -d ' \r\n')"
-  [[ "$token" =~ ^[0-9a-f]{32}$ ]] || { stop_remote_helper || true; echo "tunnel identity failed" >&2; return 1; }
-  write_runner
   bash "$RUNNER_FILE" "$token" "$port" ssh "${SSH_ARGS[@]}" -N -L "127.0.0.1:$port:127.0.0.1:6080" "$SSH_TARGET" >/dev/null 2>&1 &
   local tunnel_pid=$!
-  write_state "$token" "$tunnel_pid" "$port"
+  write_state "$token" "$tunnel_pid" "$port" "running"
   sleep 0.2
   if ! process_matches_state; then
     stop_identified_tunnel
-    stop_remote_helper || true
+    commit_remote_stop || true
     echo "loopback tunnel start failed" >&2
     return 1
   fi
   if ! wait_until_ready "$port"; then
     stop_identified_tunnel
-    stop_remote_helper || true
+    commit_remote_stop || true
     echo "loopback tunnel readiness failed" >&2
     return 1
   fi
@@ -258,7 +308,7 @@ stop_tunnel() {
   stop_identified_tunnel
 
   load_connection
-  if ! stop_remote_helper; then
+  if ! commit_remote_stop; then
     echo "auth helper stop failed" >&2
     return 1
   fi
@@ -267,6 +317,10 @@ stop_tunnel() {
 
 show_status() {
   acquire_lock
+  if read_state && [ "$STATE_LIFECYCLE" = "pending_stop" ]; then
+    echo "pending remote stop"
+    return 4
+  fi
   if is_running; then
     echo "running on http://127.0.0.1:$STATE_PORT"
     return 0
