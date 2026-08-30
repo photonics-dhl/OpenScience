@@ -796,6 +796,10 @@ export async function listAgentTasks(): Promise<{ tasks: AgentTaskView[] }> {
   return request('/api/agent/tasks?actionable=false&kind=workspace.guide');
 }
 
+export async function listSourceRetrieveTasks(): Promise<{ tasks: AgentTaskView[] }> {
+  return request('/api/agent/tasks?actionable=false&kind=source.retrieve');
+}
+
 export async function submitWorkspaceGuideTask(input: {
   sessionId: string;
   payload: WorkspaceGuidePayload;
@@ -885,7 +889,7 @@ export interface LiteratureAcquisitionResult {
 /** The retrieval strategy is intentionally server-owned; the browser sends only the research intent. */
 export async function submitLiteratureAcquisition(
   input: { query: string; identifier?: string },
-  idempotencyKey = crypto.randomUUID(),
+  idempotencyKey: string,
 ): Promise<LiteratureAcquisitionResult> {
   return request('/api/literature/acquisitions', {
     method: 'POST',

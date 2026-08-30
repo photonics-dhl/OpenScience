@@ -2,6 +2,7 @@
 
 import { useTranslations } from 'next-intl';
 import * as React from 'react';
+import { isSourceRetrieveIdentifier } from '@openscience/domain/browser-result';
 
 import {
   ApiClientError,
@@ -28,9 +29,31 @@ type LiteratureTaskDescription = {
   messageKey: 'statusPending' | 'statusRunning' | 'statusAuthRequired' | 'statusFailed' | 'statusSucceeded';
 };
 
-export function isLiteratureIdentifier(value: string): boolean {
-  const normalized = value.trim();
-  return /^10\.\d{4,9}\/.+/iu.test(normalized) || /^(arxiv:)?\d{4}\.\d{4,5}(v\d+)?$/iu.test(normalized);
+export const isLiteratureIdentifier = isSourceRetrieveIdentifier;
+const PENDING_INTENT_KEY = 'openscience:literature:personal:pending:v1';
+
+function intentFingerprint(input: { query: string; identifier?: string }): string {
+  return JSON.stringify({ query: input.query.trim(), identifier: input.identifier?.trim() ?? null });
+}
+
+function pendingKeyFor(input: { query: string; identifier?: string }): string | null {
+  if (typeof window === 'undefined') return null;
+  const fingerprint = intentFingerprint(input);
+  const raw = window.sessionStorage.getItem(PENDING_INTENT_KEY);
+  if (raw) {
+    try {
+      const pending = JSON.parse(raw) as { version?: number; key?: string; intentFingerprint?: string };
+      if (pending.version === 1 && pending.key && pending.intentFingerprint === fingerprint) return pending.key;
+      if (pending.version === 1 && pending.key) return null;
+    } catch { window.sessionStorage.removeItem(PENDING_INTENT_KEY); }
+  }
+  const key = crypto.randomUUID();
+  window.sessionStorage.setItem(PENDING_INTENT_KEY, JSON.stringify({ version: 1, key, intentFingerprint: fingerprint }));
+  return key;
+}
+
+function clearPendingIntent(): void {
+  if (typeof window !== 'undefined') window.sessionStorage.removeItem(PENDING_INTENT_KEY);
 }
 
 function hasAuthRequiredResult(result: Record<string, unknown> | null): boolean {
@@ -67,7 +90,7 @@ function readableExpiry(value: string): string {
   return Number.isNaN(date.getTime()) ? value : new Intl.DateTimeFormat(undefined, { dateStyle: 'medium', timeStyle: 'short' }).format(date);
 }
 
-export function LiteratureAcquisition({ initialTask = null }: { initialTask?: LiteratureTask | null }) {
+export function LiteratureAcquisition({ initialTask = null, recoveryComplete = true }: { initialTask?: LiteratureTask | null; recoveryComplete?: boolean }) {
   const t = useTranslations('dashboard.literature');
   const [query, setQuery] = React.useState('');
   const [task, setTask] = React.useState<LiteratureTask | null>(initialTask);
@@ -78,6 +101,10 @@ export function LiteratureAcquisition({ initialTask = null }: { initialTask?: Li
   const description = task ? describeLiteratureTask(task) : null;
   const active = description?.state === 'pending' || description?.state === 'running';
   const sources = resultSources(task?.result ?? null);
+
+  React.useEffect(() => {
+    if (recoveryComplete) setTask(initialTask);
+  }, [initialTask, recoveryComplete]);
 
   React.useEffect(() => {
     if (!task || !active) return undefined;
@@ -92,13 +119,20 @@ export function LiteratureAcquisition({ initialTask = null }: { initialTask?: Li
 
   async function submit(input: { query: string; identifier?: string }) {
     if (submitting.current) return;
+    const idempotencyKey = pendingKeyFor(input);
+    if (!idempotencyKey) {
+      setError(t('pendingIntent'));
+      return;
+    }
     submitting.current = true;
     setError('');
     try {
-      const acquisition = await submitLiteratureAcquisition(input);
+      const acquisition = await submitLiteratureAcquisition(input, idempotencyKey);
       setTask(acquisition.task);
+      clearPendingIntent();
     } catch (cause) {
-      setError(cause instanceof ApiClientError || cause instanceof Error ? cause.message : t('error'));
+      if (cause instanceof ApiClientError && cause.status >= 400 && cause.status < 500 && ![408, 429].includes(cause.status)) clearPendingIntent();
+      setError(t('error'));
     } finally {
       submitting.current = false;
     }
@@ -149,14 +183,14 @@ export function LiteratureAcquisition({ initialTask = null }: { initialTask?: Li
           <label className="block text-sm font-semibold text-os-ink" htmlFor="literature-query">{t('queryLabel')}</label>
           <input
             className="mt-2 min-h-11 w-full border border-os-rule-paper bg-transparent px-3 text-base text-os-ink outline-none transition-transform duration-150 focus:border-os-ink focus-visible:ring-2 focus-visible:ring-focus-ring disabled:opacity-60"
-            disabled={active}
+            disabled={active || !recoveryComplete}
             id="literature-query"
             onChange={(event) => setQuery(event.target.value)}
             placeholder={t('queryPlaceholder')}
             value={query}
           />
         </div>
-        <button className="min-h-11 border border-os-ink px-4 text-sm font-semibold text-os-ink transition-transform duration-150 hover:-translate-y-px active:translate-y-px focus-visible:ring-2 focus-visible:ring-focus-ring disabled:opacity-60" disabled={active || !query.trim()} type="submit">
+        <button className="min-h-11 border border-os-ink px-4 text-sm font-semibold text-os-ink transition-transform duration-150 hover:-translate-y-px active:translate-y-px focus-visible:ring-2 focus-visible:ring-focus-ring disabled:opacity-60" disabled={active || !recoveryComplete || !query.trim()} type="submit">
           {t('search')}
         </button>
       </form>
@@ -186,7 +220,7 @@ export function LiteratureAcquisition({ initialTask = null }: { initialTask?: Li
                     {source.expiresAt ? <p className="mt-2 font-mono text-xs text-os-muted-paper">{t('expires', { expiresAt: readableExpiry(source.expiresAt) })}</p> : null}
                   </div>
                   <div className="flex flex-wrap gap-3">
-                    {identifier ? <button className="min-h-11 border-b border-os-vermilion-ink px-1 text-sm font-semibold text-os-ink transition-transform duration-150 hover:-translate-y-px active:translate-y-px focus-visible:ring-2 focus-visible:ring-focus-ring" disabled={active} onClick={() => void submit({ query: source.title ?? query, identifier })} type="button">{t('getFullText')}</button> : null}
+                    {identifier ? <button className="min-h-11 min-w-11 border-b border-os-vermilion-ink px-1 text-sm font-semibold text-os-ink transition-transform duration-150 hover:-translate-y-px active:translate-y-px focus-visible:ring-2 focus-visible:ring-focus-ring" disabled={active || !recoveryComplete} onClick={() => void submit({ query: source.title ?? query, identifier })} type="button">{t('getFullText')}</button> : null}
                     {source.temporaryDocumentId ? <button className="min-h-11 border border-os-ink px-3 text-sm font-semibold text-os-ink transition-transform duration-150 hover:-translate-y-px active:translate-y-px focus-visible:ring-2 focus-visible:ring-focus-ring disabled:opacity-60" disabled={downloading === source.temporaryDocumentId} onClick={() => void download(source.temporaryDocumentId!)} type="button">{t('download')}</button> : null}
                   </div>
                 </li>

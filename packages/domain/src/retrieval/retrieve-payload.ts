@@ -1,3 +1,4 @@
+import { isSourceRetrieveIdentifier } from './browser-result';
 import { EXTERNAL_SOURCE_PROVIDERS, type ExternalSourceProvider } from './types';
 
 export interface SourceRetrievePayload {
@@ -7,8 +8,6 @@ export interface SourceRetrievePayload {
   includeFullText: boolean;
   identifier?: string;
 }
-
-const DOI_OR_ARXIV = /^(?:10\.\d{4,9}\/[-._;()/:a-z0-9]+|(?:arxiv:)?\d{4}\.\d{4,5}(?:v\d+)?)$/i;
 
 export function parseSourceRetrievePayload(value: unknown): SourceRetrievePayload {
   if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error('source.retrieve payload is invalid');
@@ -36,7 +35,7 @@ export function parseSourceRetrievePayload(value: unknown): SourceRetrievePayloa
   const includeFullText = input.includeFullText ?? false;
   if (typeof includeFullText !== 'boolean') throw new Error('source.retrieve includeFullText is invalid');
   const identifier = typeof input.identifier === 'string' ? input.identifier.trim() : undefined;
-  if (input.identifier !== undefined && (!identifier || identifier.length > 300 || !DOI_OR_ARXIV.test(identifier))) {
+  if (input.identifier !== undefined && (!identifier || identifier.length > 300 || !isSourceRetrieveIdentifier(identifier))) {
     throw new Error('source.retrieve identifier is invalid');
   }
   if (includeFullText && (!providers.includes('scansci') || !identifier)) {

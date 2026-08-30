@@ -5,6 +5,7 @@ import {
   observeScanSciProviderState,
   parseSourceRetrievePayload,
   temporaryDocumentExpiresAt,
+  toBrowserSourceRetrieveResult,
   type AgentDeps,
 } from '@openscience/domain';
 import type { StorageAdapter } from '@openscience/storage';
@@ -123,6 +124,7 @@ export function createSourceRetrieveHandler(options: {
           update: rightsData,
         });
         let temporaryDocumentId: string | undefined;
+        let documentExpiresAt: Date | undefined;
         if (fullText) {
           if (!deps.storage || !rights.cacheAllowed) throw new Error('[blocked] temporary document storage is unavailable');
           if (!deps.malwareScanner) throw new Error('[blocked] temporary document malware scanner is unavailable');
@@ -130,6 +132,7 @@ export function createSourceRetrieveHandler(options: {
           await deps.malwareScanner(fullText.bytes);
           const existing = await deps.prisma.temporaryDocument.findUnique({ where: { agentTaskId: task.id } });
           temporaryDocumentId = existing?.id ?? randomUUID();
+          documentExpiresAt = existing?.expiresAt;
           const objectKey = buildTemporaryDocumentObjectKey({
             workspaceId: researchObject.workspaceId,
             documentId: temporaryDocumentId,
@@ -144,6 +147,7 @@ export function createSourceRetrieveHandler(options: {
             throw new Error('[blocked] source retrieval replay metadata mismatch');
           }
           if (!existing) {
+            documentExpiresAt = temporaryDocumentExpiresAt(now);
             await deps.prisma.temporaryDocument.create({
               data: {
               id: temporaryDocumentId,
@@ -157,7 +161,7 @@ export function createSourceRetrieveHandler(options: {
               mimeType: fullText.mimeType,
               sizeBytes: BigInt(fullText.bytes.byteLength),
               state: 'staging',
-              expiresAt: temporaryDocumentExpiresAt(now),
+              expiresAt: documentExpiresAt,
               createdAt: now,
               updatedAt: now,
               parserProvenance: Prisma.JsonNull,
@@ -203,8 +207,12 @@ export function createSourceRetrieveHandler(options: {
           provider: persisted.provider,
           title: persisted.title,
           sourceUrl: persisted.sourceUrl,
+          identifiers: {
+            ...(persisted.doi ? { doi: persisted.doi } : {}),
+            ...(persisted.arxivId ? { arxiv: persisted.arxivId } : {}),
+          },
           rights,
-          ...(temporaryDocumentId ? { temporaryDocumentId } : {}),
+          ...(temporaryDocumentId && documentExpiresAt ? { temporaryDocumentId, expiresAt: documentExpiresAt } : {}),
         };
       },
       observeScanSci: async (kind) => {
@@ -227,6 +235,9 @@ export function createSourceRetrieveHandler(options: {
         providers: result.providers.map(({ provider, status, code }) => ({ provider, status, ...(code ? { code } : {}) })),
       },
     });
-    return result as unknown as Record<string, unknown>;
+    return toBrowserSourceRetrieveResult({
+      ...result,
+      sources: result.sources.map((source) => ({ ...source, rights: source.rights as unknown as Record<string, unknown> })),
+    }) as unknown as Record<string, unknown>;
   };
 }

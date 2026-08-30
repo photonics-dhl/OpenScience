@@ -28,6 +28,8 @@ describe('source.retrieve handler replay safety', () => {
         provider: create.provider,
         title: create.title,
         sourceUrl: create.sourceUrl,
+        doi: create.doi,
+        arxivId: create.arxivId,
       }) },
       sourceRightsDecision: { upsert: async () => ({ id: RIGHTS_ID }) },
       $transaction: async () => {
@@ -99,6 +101,8 @@ describe('source.retrieve handler replay safety', () => {
         provider: create.provider,
         title: create.title,
         sourceUrl: create.sourceUrl,
+        doi: create.doi,
+        arxivId: create.arxivId,
       }) },
       sourceRightsDecision: { upsert: rightsUpsert },
       temporaryDocument: {
@@ -147,6 +151,14 @@ describe('source.retrieve handler replay safety', () => {
     const second = await handler(deps, task);
 
     expect(first).toEqual(second);
+    expect(first).toMatchObject({
+      sources: [{
+        id: SOURCE_ID,
+        identifiers: { doi: '10.1000/test' },
+        temporaryDocumentId: expect.any(String),
+        expiresAt: expect.any(String),
+      }],
+    });
     expect(rightsUpsert).toHaveBeenCalledTimes(2);
     expect(temporaryCreate).toHaveBeenCalledTimes(1);
     expect(putObject).toHaveBeenCalledTimes(1);

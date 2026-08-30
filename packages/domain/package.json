@@ -10,6 +10,10 @@
       "types": "./dist/research-intelligence/virtual-page.d.ts",
       "default": "./dist/research-intelligence/virtual-page.js"
     },
+    "./browser-result": {
+      "types": "./dist/retrieval/browser-result.d.ts",
+      "default": "./dist/retrieval/browser-result.js"
+    },
     "./test-helpers": { "types": "./test/helpers/fakes.ts", "default": "./test/helpers/fakes.ts" }
   },
   "scripts": {

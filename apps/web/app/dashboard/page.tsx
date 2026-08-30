@@ -16,7 +16,7 @@ import { HermesDockAnchor } from '@/components/hermes/HermesDockAnchor';
 import { deriveHermesGuide } from '@/components/hermes/hermes-guide';
 import { deriveHermesCompositeVisualState } from '@/components/hermes/hermes-state';
 import { DashboardShell } from '@/components/shell/DashboardShell';
-import { ApiClientError, getCurrentUser, getDashboardOverview, type AgentTaskView, type CurrentUser } from '@/lib/api';
+import { ApiClientError, getCurrentUser, getDashboardOverview, listSourceRetrieveTasks, type AgentTaskView, type CurrentUser } from '@/lib/api';
 import type { DashboardResearch } from '@/components/dashboard/ResearchList';
 import type { Locale } from '@/i18n/locale';
 
@@ -30,11 +30,13 @@ export default function DashboardPage() {
   const [error, setError] = useState('');
   const [hermesOpen, setHermesOpen] = useState(false);
   const [guideTask, setGuideTask] = useState<AgentTaskView | null>(null);
+  const [literatureTask, setLiteratureTask] = useState<AgentTaskView | null>(null);
+  const [literatureRecovered, setLiteratureRecovered] = useState(false);
 
   useEffect(() => {
     let active = true;
-    Promise.all([getCurrentUser(), getDashboardOverview()])
-      .then(([currentUser, overview]) => {
+    Promise.all([getCurrentUser(), getDashboardOverview(), listSourceRetrieveTasks()])
+      .then(([currentUser, overview, retrieval]) => {
         if (!active) return;
         setUser(currentUser);
         const mappedResearch = overview.researchObjects.map((research) => ({
@@ -47,6 +49,8 @@ export default function DashboardPage() {
         }));
         setResearchObjects(mappedResearch);
         setTasks(overview.tasks);
+        setLiteratureTask(retrieval.tasks[0] ?? null);
+        setLiteratureRecovered(true);
       })
       .catch((cause) => {
         if (!active) return;
@@ -139,7 +143,7 @@ export default function DashboardPage() {
           <ImportStage />
         </div>
         <div className="lg:col-span-8">
-          <LiteratureAcquisition />
+          <LiteratureAcquisition initialTask={literatureTask} recoveryComplete={literatureRecovered} />
         </div>
         <div className="lg:col-span-12">
           <ResearchList researchObjects={researchObjects} />

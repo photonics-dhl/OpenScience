@@ -70,6 +70,24 @@ describe('AgentSession/AgentTask（§15 + §16 幂等 + §9.1 配额）', () => 
     await expect(retryAgentTask(deps, { userId: user.id, taskId: task.id })).rejects.toThrow(/already retried/i);
   });
 
+  it('retries one non-blocked source retrieval on the same task and rejects a second or blocked retry', async () => {
+    const { deps, user, ro, db } = await makeDeps(2);
+    const session = await createAgentSession(deps, { userId: user.id, researchObjectId: ro.id, kind: 'retrieval' });
+    const payload = { query: 'paper', providers: ['scansci'], limit: 1, includeFullText: true, identifier: '10.1038/nature12373' };
+    const task = await submitAgentTask(deps, { sessionId: session.id, userId: user.id, kind: 'source.retrieve', payload });
+    await markTaskProgress(deps, { taskId: task.id, status: 'running' });
+    await markTaskProgress(deps, { taskId: task.id, status: 'failed', error: 'upstream timeout' });
+    await expect(retryAgentTask(deps, { userId: user.id, taskId: task.id })).resolves.toMatchObject({ id: task.id, status: 'pending', retryCount: 1 });
+    expect(db.agentTasks[0]?.payload).toEqual(payload);
+    expect(db.usageLedger.filter((entry) => entry.resource === 'ai_credit' && entry.delta < 0)).toHaveLength(1);
+    await expect(retryAgentTask(deps, { userId: user.id, taskId: task.id })).rejects.toThrow(/failed tasks/i);
+
+    const blocked = await submitAgentTask(deps, { sessionId: session.id, userId: user.id, kind: 'source.retrieve', payload });
+    await markTaskProgress(deps, { taskId: blocked.id, status: 'running' });
+    await markTaskProgress(deps, { taskId: blocked.id, status: 'failed', error: '[blocked] authority revoked' });
+    await expect(retryAgentTask(deps, { userId: user.id, taskId: blocked.id })).rejects.toThrow(/not retryable/i);
+  });
+
   it('persists server-owned interest context outside the client payload', async () => {
     const { deps, user, ro, db } = await makeDeps(1);
     const session = await createAgentSession(deps, { userId: user.id, researchObjectId: ro.id, kind: 'extract' });

@@ -619,6 +619,7 @@
       "retry": "Try again",
       "noResults": "No matching metadata yet.",
       "error": "The source request could not be completed. Please try again."
+      ,"pendingIntent": "Finish or recover the current source request before starting another."
     },
     "hermes": {
       "title": "Hermes tasks",

@@ -1,6 +1,7 @@
 import type { Redis } from 'ioredis';
 import { isDeepStrictEqual } from 'node:util';
 import { Prisma, type AgentSession, type AgentTask } from '@prisma/client';
+import { parseSourceRetrievePayload } from '../retrieval/retrieve-payload';
 import type { AuditContext } from '@openscience/observability';
 import { requireActiveMembership, requireMembership } from '../workspace/helpers';
 import { recordAudit } from '../workspace/audit';
@@ -482,7 +483,16 @@ export async function retryAgentTask(
     && typeof payload.manuscriptText === 'string'
     && !('artifactId' in payload)
     && !task.error?.startsWith('[blocked]');
-  if (!retryableExtractor) throw new AgentError('ILLEGAL_TRANSITION', 'Task is not retryable');
+  let retryableRetrieval = false;
+  if (task.kind === 'source.retrieve' && !task.error?.startsWith('[blocked]')) {
+    try {
+      parseSourceRetrievePayload(payload);
+      retryableRetrieval = true;
+    } catch {
+      retryableRetrieval = false;
+    }
+  }
+  if (!retryableExtractor && !retryableRetrieval) throw new AgentError('ILLEGAL_TRANSITION', 'Task is not retryable');
   if (task.retryCount >= 1) throw new AgentError('ILLEGAL_TRANSITION', 'Task was already retried');
 
   let workspaceId: string | null = null;
@@ -495,7 +505,7 @@ export async function retryAgentTask(
 
   const updated = await deps.prisma.$transaction(async (tx) => {
     const changed = await tx.agentTask.updateMany({
-      where: { id: task.id, status: 'failed', kind: 'sdf.extract', retryCount: 0, error: task.error },
+      where: { id: task.id, status: 'failed', kind: task.kind, retryCount: 0, error: task.error },
       data: {
         status: 'pending', progress: 0, result: Prisma.JsonNull, error: null, dispatchedAt: null,
         retryCount: 1,
