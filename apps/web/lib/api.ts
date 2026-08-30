@@ -756,6 +756,7 @@ export async function markNotificationRead(id: string): Promise<{ notification: 
 
 export interface AgentTaskView {
   id: string;
+  researchObjectId?: string;
   sessionId: string;
   kind: string;
   status: 'pending' | 'running' | 'succeeded' | 'failed';
@@ -891,10 +892,15 @@ export interface LiteratureAcquisitionResult {
   task: AgentTaskView;
 }
 
+export type LiteratureAcquisitionTarget =
+  | { kind: 'personal' }
+  | { kind: 'research_object'; researchObjectId: string };
+
 /** The retrieval strategy is intentionally server-owned; the browser sends only the research intent. */
 export async function submitLiteratureAcquisition(
   input: { query: string; identifier?: string },
   idempotencyKey: string,
+  target: LiteratureAcquisitionTarget = { kind: 'personal' },
 ): Promise<LiteratureAcquisitionResult> {
   return request('/api/literature/acquisitions', {
     method: 'POST',
@@ -902,7 +908,7 @@ export async function submitLiteratureAcquisition(
     body: JSON.stringify({
       query: input.query,
       ...(input.identifier ? { identifier: input.identifier } : {}),
-      target: { kind: 'personal' },
+      target,
     }),
   });
 }

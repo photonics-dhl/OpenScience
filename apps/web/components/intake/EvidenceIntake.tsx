@@ -4,12 +4,15 @@ import * as React from 'react';
 import { useRef, useState } from 'react';
 import { useTranslations } from 'next-intl';
 
+import { LiteratureAcquisitionDisclosure, type LiteratureAcquisitionProps } from '@/components/dashboard/LiteratureAcquisition';
+
 import { MaterialQueue } from './MaterialQueue';
 import { createIntakeMaterials, setPrimaryMaterial, type IntakeMaterial, type MaterialRole } from './intake-model';
 
 const EVIDENCE_ACCEPT = '.pdf,.doc,.docx,.tex,.zip,.md,.markdown,.png,.jpg,.jpeg,.webp,.svg,.csv,.tsv,.json,.yaml,.yml,.ipynb,.py,.r';
 
-export function EvidenceIntake({ materials, onChange, onRetry }: {
+export function EvidenceIntake({ literature, materials, onChange, onRetry }: {
+  literature?: LiteratureAcquisitionProps;
   materials: IntakeMaterial[];
   onChange: (materials: IntakeMaterial[]) => void;
   onRetry: (material: IntakeMaterial) => void;
@@ -51,6 +54,7 @@ export function EvidenceIntake({ materials, onChange, onRetry }: {
           <input ref={input} aria-label={t('browse')} className="sr-only" type="file" multiple accept={EVIDENCE_ACCEPT} onChange={(event) => add(Array.from(event.target.files ?? []))} />
         </div>
       </div>
+      {literature ? <div className="mt-6"><LiteratureAcquisitionDisclosure {...literature} /></div> : null}
       {materials.length > 0 ? (
         <div className="mt-8">
           <MaterialQueue

@@ -78,6 +78,9 @@ describe('Hermes dashboard guidance', () => {
     expect(markup).toContain('guide.eyebrow');
     expect(markup).toContain('<textarea');
     expect(markup).toContain('href="/research-objects/ro-1/hermes?task=task-1"');
+    expect(markup).toContain('data-literature-routing="deterministic"');
+    expect(markup).not.toMatch(/provider|ScanSci|CARSI|account|mode/i);
+    expect(markup).not.toContain('aria-live="assertive"');
   });
 
   it('derives a truthful guide suggestion from real dashboard priority', () => {

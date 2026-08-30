@@ -95,7 +95,9 @@ async function installClientFixtures(page: Page) {
   }));
   await page.route('**/api/csrf-token', (route) => json(route, { csrfToken: 'release-fixture' }));
   await page.route('**/api/agent/sessions', (route) => json(route, { session: { id: 'session-release' } }));
-  await page.route('**/api/agent/tasks', (route) => json(route, { task: { id: 'task-release', status: 'pending', progress: 0 } }));
+  await page.route('**/api/agent/tasks**', (route) => route.request().method() === 'GET'
+    ? json(route, { tasks: [] })
+    : json(route, { task: { id: 'task-release', status: 'pending', progress: 0 } }));
   await page.route('**/api/agent/tasks/task-release', (route) => json(route, { task: {
     id: 'task-release', status: 'succeeded', progress: 100, error: null,
     result: { core: { ...researchObject.sdf.core, results: 'The fitted lifetime is 43 ± 6 fs.' } },

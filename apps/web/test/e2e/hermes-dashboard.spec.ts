@@ -126,6 +126,9 @@ async function mockDashboard(page: Page, taskState?: string) {
     if (url.searchParams.get('actionable') === 'false' && url.searchParams.get('kind') === 'workspace.guide') {
       return json(route, { tasks: [] });
     }
+    if (url.searchParams.get('actionable') === 'false' && url.searchParams.get('kind') === 'source.retrieve') {
+      return json(route, { tasks: [] });
+    }
     return route.fallback();
   });
 }

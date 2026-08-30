@@ -4,7 +4,7 @@ const STORAGE_PREFIX = 'openscience:literature:';
 const NORMAL_POLL_DELAY_MS = 1_200;
 const TRANSIENT_BACKOFF_MS = [1_200, 2_400, 4_800, 9_600, 15_000] as const;
 
-type LiteratureTarget = 'personal';
+type LiteratureTarget = 'personal' | `research-object:${string}`;
 type IntentNamespace = { userId: string; target: LiteratureTarget };
 type IntentContext = IntentNamespace & { input: { query: string; identifier?: string } };
 type PendingIntentOutcome = { kind: 'accepted' | 'recovered' } | { kind: 'failure'; status?: number };

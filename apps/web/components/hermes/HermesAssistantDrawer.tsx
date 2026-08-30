@@ -6,6 +6,7 @@ import * as React from 'react';
 import { FormEvent, useEffect, useRef, useState } from 'react';
 
 import Drawer from '@/components/editor/Drawer';
+import { LiteratureAcquisition } from '@/components/dashboard/LiteratureAcquisition';
 import {
   createWorkspaceGuideSession,
   getAgentTask,
@@ -15,8 +16,11 @@ import {
   type WorkspaceGuidePayload,
   type WorkspaceGuideResult,
 } from '@/lib/api';
+import { routeHermesLiteratureIntent, type RoutedHermesIntent } from '@/lib/hermes/literature-intent';
 
 import type { HermesGuideSuggestion } from './hermes-guide';
+
+type LiteratureIntent = Extract<RoutedHermesIntent, { kind: 'literature.acquire' }>;
 
 export interface HermesAssistantDrawerProps {
   open: boolean;
@@ -55,6 +59,7 @@ export function HermesAssistantDrawer({
   const [task, setTask] = useState<AgentTaskView | null>(null);
   const [error, setError] = useState('');
   const [submitting, setSubmitting] = useState(false);
+  const [literatureIntent, setLiteratureIntent] = useState<LiteratureIntent | null>(null);
   const activeTask = task?.status === 'pending' || task?.status === 'running';
   const busy = submitting || activeTask;
   const result = task?.status === 'succeeded' ? resultFromTask(task) : null;
@@ -95,6 +100,17 @@ export function HermesAssistantDrawer({
     event.preventDefault();
     const normalized = goal.trim();
     if (!normalized || busy || submittingRef.current) return;
+    const routed = routeHermesLiteratureIntent({
+      activeResearchObjectId: route === 'research-object-edit'
+        ? suggestion.researchObjectId ?? dashboardContext.researchObjects[0]?.id ?? null
+        : null,
+      goal: normalized,
+    });
+    if (routed.kind === 'literature.acquire') {
+      setError('');
+      setLiteratureIntent(routed);
+      return;
+    }
     submittingRef.current = true;
     setError('');
     setSubmitting(true);
@@ -143,7 +159,7 @@ export function HermesAssistantDrawer({
       overlayClassName="hermes-assistant-overlay"
       side="right"
     >
-      <section className="hermes-guide-drawer" data-hermes-drawer-state={busy ? 'working' : task?.status ?? 'ready'}>
+      <section className="hermes-guide-drawer" data-hermes-drawer-state={literatureIntent ? 'literature' : busy ? 'working' : task?.status ?? 'ready'} data-literature-routing="deterministic">
         <p className="font-mono text-[0.68rem] uppercase tracking-[0.2em] text-os-vermilion">{t('guide.eyebrow')}</p>
         <h2 className="mt-3 font-editorial text-3xl text-os-paper">{t('guide.title')}</h2>
         <p className="mt-3 text-sm leading-6 text-os-muted-dark">{t(suggestion.bodyKey)}</p>
@@ -154,7 +170,20 @@ export function HermesAssistantDrawer({
           </Link>
         ) : null}
 
-        <form className="mt-8 border-t border-os-rule-dark pt-6" onSubmit={submit}>
+        {literatureIntent ? (
+          <div className="mt-8 border-t border-os-rule-dark pt-5">
+            <button className="mb-3 inline-flex min-h-11 items-center border-b border-os-vermilion text-sm font-semibold text-os-paper focus-visible:ring-2 focus-visible:ring-focus-ring" onClick={() => setLiteratureIntent(null)} type="button">
+              {t('guide.backToGuide')}
+            </button>
+            <LiteratureAcquisition
+              initialRequest={literatureIntent.input}
+              instanceId="hermes-drawer-literature"
+              onAuthenticationRequired={() => window.location.assign(`/auth/login?returnTo=${encodeURIComponent(`${window.location.pathname}${window.location.search}`)}`)}
+              target={literatureIntent.target}
+              tone="dark"
+            />
+          </div>
+        ) : <form className="mt-8 border-t border-os-rule-dark pt-6" onSubmit={submit}>
           <label className="block text-sm font-medium text-os-paper" htmlFor="hermes-guide-goal">{t('guide.goalLabel')}</label>
           <textarea
             className="mt-3 min-h-28 w-full resize-y border border-os-rule-dark bg-transparent p-3 text-sm leading-6 text-os-paper outline-none focus:border-os-vermilion"
@@ -168,19 +197,19 @@ export function HermesAssistantDrawer({
           <button className="mt-3 border-b border-os-vermilion pb-1 text-sm font-semibold text-os-paper disabled:opacity-50" disabled={busy || !goal.trim()} type="submit">
             {busy ? t('guide.working') : t('guide.submit')}
           </button>
-        </form>
+        </form>}
 
-        {activeTask ? (
+        {!literatureIntent && activeTask ? (
           <p className="mt-4 font-mono text-xs text-os-muted-dark" aria-live="polite">{t('guide.progress', { progress: task.progress })}</p>
         ) : null}
 
-        {error || task?.status === 'failed' || invalidResult ? (
+        {!literatureIntent && (error || task?.status === 'failed' || invalidResult) ? (
           <div className="mt-5 text-sm text-os-vermilion" role="alert">
             <p>{error || task?.error || t('guide.error')}</p>
             {error && activeTask ? <button className="mt-3 border-b border-os-vermilion pb-1 text-os-paper" onClick={() => setError('')} type="button">{t('guide.resume')}</button> : null}
           </div>
         ) : null}
-        {result ? (
+        {!literatureIntent && result ? (
           <section className="mt-7 border-t border-os-rule-dark pt-5" aria-live="polite">
             <h3 className="text-sm font-semibold text-os-paper">{t('guide.result')}</h3>
             <p className="mt-3 text-sm leading-6 text-os-muted-dark">{result.summary}</p>

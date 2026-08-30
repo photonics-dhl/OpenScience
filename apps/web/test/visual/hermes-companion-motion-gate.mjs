@@ -20,6 +20,7 @@ const page = await context.newPage();
 await page.route('**/api/auth/me', (route) => route.fulfill({ contentType: 'application/json', body: JSON.stringify({ userId: 'motion-user', email: 'motion@example.invalid', displayName: 'Ada', status: 'email_verified', level: 'free' }) }));
 await page.route('**/api/research-objects?limit=20', (route) => route.fulfill({ contentType: 'application/json', body: JSON.stringify({ researchObjects: [] }) }));
 await page.route('**/api/ingestion?actionable=true', (route) => route.fulfill({ contentType: 'application/json', body: JSON.stringify({ tasks: [] }) }));
+await page.route('**/api/agent/tasks**', (route) => route.fulfill({ contentType: 'application/json', body: JSON.stringify({ tasks: [] }) }));
 
 try {
   await page.goto(`${baseUrl}/dashboard`, { waitUntil: 'networkidle' });

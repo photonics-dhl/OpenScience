@@ -6,8 +6,9 @@ vi.mock('next-intl', () => ({
   useTranslations: () => (key: string, values?: Record<string, string | number>) => {
     const copy: Record<string, string> = {
       eyebrow: 'Personal literature', title: 'Find a source', description: 'Search by title, DOI, or arXiv ID.',
+      roEyebrow: 'Research object literature', roTitle: 'Add a source to this research object', roDescription: 'Search and keep the result with this research object.',
       queryLabel: 'Title, DOI, or arXiv ID', queryPlaceholder: '10.1000/example', search: 'Search metadata',
-      getFullText: 'Get full text', metadata: 'Metadata results', statusPending: 'Waiting in queue', statusRunning: 'Retrieving source',
+      getFullText: 'Get full text', disclosure: 'Get full text', metadata: 'Metadata results', statusPending: 'Waiting in queue', statusRunning: 'Retrieving source',
       statusAuthRequired: 'Institutional access needs attention', statusFailed: 'Retrieval failed', statusSucceeded: 'Source ready',
       statusBlocked: 'Retrieval was blocked and cannot be retried.', statusRetryExhausted: 'The retry has already been used.',
       expires: 'Available until {expiresAt}', download: 'Download source', retry: 'Try again', noResults: 'No matching metadata yet.', source: 'Open source record',
@@ -16,7 +17,7 @@ vi.mock('next-intl', () => ({
   },
 }));
 
-import { LiteratureAcquisition, describeLiteratureTask, isLiteratureIdentifier, isLiteratureTaskRetryEligible, type LiteratureTask } from '@/components/dashboard/LiteratureAcquisition';
+import { LiteratureAcquisition, LiteratureAcquisitionDisclosure, describeLiteratureTask, isLiteratureIdentifier, isLiteratureTaskRetryEligible, selectLiteratureRecoveryTask, type LiteratureTask } from '@/components/dashboard/LiteratureAcquisition';
 
 const sourceTask: LiteratureTask = {
   id: 'task-1', sessionId: 'session-1', kind: 'source.retrieve', status: 'succeeded', progress: 100, retryCount: 0,
@@ -77,5 +78,52 @@ describe('Personal literature acquisition', () => {
     expect(markup).toContain('sm:grid-cols-');
     expect(markup).not.toMatch(/provider|ScanSci|CARSI|account|mode/i);
     expect(markup).not.toContain('rounded-card');
+  });
+
+  it('keeps the shared state machine while adapting its query, target, and semantic tone for an active RO', () => {
+    const markup = renderToStaticMarkup(<LiteratureAcquisition
+      initialRequest={{ query: '10.1000/example', identifier: '10.1000/example' }}
+      instanceId="ro-literature"
+      onAuthenticationRequired={() => undefined}
+      target={{ kind: 'research_object', researchObjectId: '00000000-0000-4000-8000-000000000701' }}
+      tone="dark"
+      userId="user-1"
+    />);
+
+    expect(markup).toContain('data-literature-target="research-object:00000000-0000-4000-8000-000000000701"');
+    expect(markup).toContain('data-literature-tone="dark"');
+    expect(markup).toContain('value="10.1000/example"');
+    expect(markup).toContain('for="ro-literature-query"');
+    expect(markup).toContain('id="ro-literature-query"');
+    expect(markup).toContain('text-os-paper');
+    expect(markup).toContain('Research object literature');
+    expect(markup).not.toMatch(/provider|ScanSci|CARSI|account|mode/i);
+  });
+
+  it('offers one keyboard-sized disclosure action while keeping the shared instrument in the document', () => {
+    const markup = renderToStaticMarkup(<LiteratureAcquisitionDisclosure
+      onAuthenticationRequired={() => undefined}
+      target={{ kind: 'research_object', researchObjectId: '00000000-0000-4000-8000-000000000701' }}
+      tone="dark"
+      userId="user-1"
+    />);
+
+    expect(markup).toMatch(/<details[^>]*data-literature-entry="true"/);
+    expect(markup).toMatch(/<summary[^>]*min-h-11[^>]*>Get full text[\s\S]*<\/summary>/);
+    expect(markup.match(/data-literature-acquisition="true"/g)).toHaveLength(1);
+    expect(markup).toContain('data-literature-target="research-object:00000000-0000-4000-8000-000000000701"');
+    expect(markup).not.toMatch(/provider|ScanSci|CARSI|account|mode/i);
+  });
+
+  it('recovers only the source task belonging to the current RO target', () => {
+    const other = { ...sourceTask, id: 'task-other', researchObjectId: '00000000-0000-4000-8000-000000000702' };
+    const current = { ...sourceTask, id: 'task-current', researchObjectId: '00000000-0000-4000-8000-000000000701', status: 'running' as const };
+    expect(selectLiteratureRecoveryTask([other, current], {
+      kind: 'research_object', researchObjectId: '00000000-0000-4000-8000-000000000701',
+    })).toEqual(current);
+    expect(selectLiteratureRecoveryTask([other], {
+      kind: 'research_object', researchObjectId: '00000000-0000-4000-8000-000000000701',
+    })).toBeNull();
+    expect(selectLiteratureRecoveryTask([other, current], { kind: 'personal' })).toEqual(other);
   });
 });
