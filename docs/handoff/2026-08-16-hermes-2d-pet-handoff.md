@@ -42,7 +42,7 @@
 9. ECS dev 栈、3 个 dev 卷、390.7MB build cache 与两个无引用旧 Node 镜像已精确清理；根盘 35G/148G（25%），保留 production/rollback、BGE、沙箱、解析评测与监控数据。
 10. Task 10 已生产完成：Semantic Scholar/Tavily/ScanSci legal-only adapter、rights、72h cache、10min one-use download、GC/provenance 均接通；ScanSci 默认 disabled，Tavily 四个授权 key 当前均额度耗尽并显式降级。
 11. 真实 Semantic Scholar Hermes 任务返回 3 sources；SeaweedFS checksum metadata 生产兼容经 PR #9 修复。77-byte 自著 PDF 完成 HEAD hash、下载、重放 404、72h 到期和真实 Worker GC；GC 后 provenance/locator 保留，取证后 canary 业务行精确清零、审计保留。
-12. Exact CI `33284956868` / job `99186426490` 全绿；最终 release `6893318…`、rollback `c435c4c…`。远端仅 `main`；磁盘 36G/148G（25%），107G available，active+rollback 两个 release，无 broad prune。
+12. Exact CI `33284956868` / job `99186426490` 全绿；最终 release `6893318…`、rollback `c435c4c…`。远端仅 `main`；精确移除无容器引用的旧 dev MinIO server/mc 镜像后，磁盘 36G/148G（25%）、107G available，active+rollback 两个 release，390.7MB bounded build cache 保留，无 broad prune。
 
 ## Constraints
 
