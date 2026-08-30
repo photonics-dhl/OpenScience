@@ -1,6 +1,6 @@
 # Hermes External Retrieval and Temporary Document Lifecycle Plan
 
-> Status: COMPLETE / PRODUCTION ACCEPTED for Taskmaster `hermes-research-intelligence` Task 10.
+> Status: PARTIAL / TASK 10 REOPENED. Metadata, rights and temporary lifecycle are production-accepted; default ScanSci acquisition follows `docs/specs/2026-08-30-scansci-default-capability-design.md`.
 > Final: main and production application source `689331845574612130f223d08c92e61721c16586`; rollback `c435c4c8b2800bb20998fd9a9a93f2db96328661`.
 
 ## Outcome

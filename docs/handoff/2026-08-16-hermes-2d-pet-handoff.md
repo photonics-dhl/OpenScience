@@ -1,17 +1,17 @@
 # Hermes Research Intelligence CURRENT Handoff
 
-> **CURRENT active-memory，2026-08-30。** Task 10 外部检索与临时文档生命周期已部署、生产验收并合入 main；下一产品任务是 Task 11 确定性 PresentationAssets。Landing/Hermes 视觉仍冻结。
+> **CURRENT active-memory，2026-08-30。** Task 10 因 ScanSci 默认下载能力未真实启用而重新打开；Task 11 阻断。Landing/Hermes 视觉仍冻结。
 
 ## Goal and state
 
 - 产品目标：以 3–7 个 Claim 为公开 RO 中心，提供可定位 Evidence、条件/限制、身份静默路由、CPU 文档解析、混合检索和可版本化富媒体。
-- Taskmaster `hermes-research-intelligence` 为 10/12：Tasks 1–10 done；Task 11 dependency-ready。
-- 证据整理稿位于 `docs/proposals/2026-08-29-project-development-deployment-evidence-pack.md`；当前产品主线转入 Task 11。
+- Taskmaster `hermes-research-intelligence` 为 9/12：Tasks 1–9 done；Task 10 in progress，Task 11 blocked。
+- 当前产品主线是将一次浙江大学 CARSI 认证变成 Hermes 持久默认下载能力，并接通全部产品入口。
 
 ## Version tuple
 
 - Worktree: `E:/Miscellaneous/XGS/.worktrees/readable-hermes-guidance`
-- Branch / repository main: `codex/seaweed-metadata-compat` / `689331845574612130f223d08c92e61721c16586`；远端仅保留 `main`。
+- Branch / repository main: `codex/scansci-default-capability` / `463c8e3a2a80138cda2d669c370c0481ed4c0877`；远端仅保留 `main`。
 - Production application source / immutable release: `689331845574612130f223d08c92e61721c16586`
 - Rollback: `c435c4c8b2800bb20998fd9a9a93f2db96328661`; core/search migrations `32/32` / `2/2`
 - 本地 `main` 与其他 worktree 有用户改动，不得触碰或用它推断生产；上述 tuple 已从 ECS 重新实测。
@@ -43,6 +43,7 @@
 10. Task 10 已生产完成：Semantic Scholar/Tavily/ScanSci legal-only adapter、rights、72h cache、10min one-use download、GC/provenance 均接通；ScanSci 默认 disabled，Tavily 四个授权 key 当前均额度耗尽并显式降级。
 11. 真实 Semantic Scholar Hermes 任务返回 3 sources；SeaweedFS checksum metadata 生产兼容经 PR #9 修复。77-byte 自著 PDF 完成 HEAD hash、下载、重放 404、72h 到期和真实 Worker GC；GC 后 provenance/locator 保留，取证后 canary 业务行精确清零、审计保留。
 12. Exact CI `33284956868` / job `99186426490` 全绿；最终 release `6893318…`、rollback `c435c4c…`。远端仅 `main`；精确移除无容器引用的旧 dev MinIO server/mc 镜像后，磁盘 36G/148G（25%）、107G available，active+rollback 两个 release，390.7MB bounded build cache 保留，无 broad prune。
+13. 用户验收指出 ScanSci 仅有 disabled adapter 不能算产品完成。Task 10 已重新打开：一次浙江大学 CARSI 登录需持久复用，必要时账号凭据放 root-only Secret，Hermes/Personal Space/RO Hermes/Files-Evidence 全部走统一下载入口；设计见 `docs/specs/2026-08-30-scansci-default-capability-design.md`。
 
 ## Constraints
 
@@ -52,15 +53,15 @@
 
 ## Next action
 
-1. 从 Taskmaster Task 11 开始：以真实 Claim/source hash 生成确定性 SVG/Plotly/交互 HTML，并强制 `presentation_not_evidence`。
-2. MiniMax image/video 仍仅管理员代表性成果、显式审批和成本审计；服务器纯 CPU，不部署本地 GPU 栈。
-3. 继续以服务器为最终验收；本地只做代码与浏览器门禁，不运行 Docker。Task 12 再做完整 golden-corpus 和上线总验收。
+1. 先由用户审核 `docs/specs/2026-08-30-scansci-default-capability-design.md`，再写 TDD 实施计划；Task 11 不启动。
+2. 实现 release-scoped `scansci-legal`/auth helper、持久 session/可选账号 Secret、统一 `/literature/acquisitions` 和四类产品入口。
+3. 继续以服务器为最终验收；本地不运行 Docker。必须用真实 OA + 浙江大学 CARSI PDF、容器重建 session、72h/600s 与灰色源调用 0 关闭 Task 10。
 
 ## Read first
 
 1. `AGENTS.md`
 2. 本 handoff
-3. `docs/proposals/2026-08-29-project-development-deployment-evidence-pack.md`
+3. `docs/specs/2026-08-30-scansci-default-capability-design.md`
 4. `docs/plans/2026-08-30-hermes-external-retrieval-lifecycle-plan.md`
 5. `docs/specs/2026-08-26-hermes-research-intelligence-platform-design.md`
 6. `docs/progress.md`

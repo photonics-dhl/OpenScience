@@ -4,10 +4,16 @@
 
 ## Current version tuple
 
-- Worktree branch / repository main: `codex/seaweed-metadata-compat` / `689331845574612130f223d08c92e61721c16586`；远端仅保留 `main`。
+- Worktree branch / repository main: `codex/scansci-default-capability` / `463c8e3a2a80138cda2d669c370c0481ed4c0877`；远端仅保留 `main`。
 - Production application source / immutable release: `689331845574612130f223d08c92e61721c16586`。
 - Production rollback: `c435c4c8b2800bb20998fd9a9a93f2db96328661`；core/search migrations `32/32` / `2/2`。
-- Taskmaster `hermes-research-intelligence` 为 10/12：Tasks 1–10 done；下一产品任务为 Task 11 确定性 PresentationAssets。
+- Taskmaster `hermes-research-intelligence` 为 9/12：Tasks 1–9 done；Task 10 已重新打开，Task 11 阻断至 ScanSci 默认下载能力生产验收完成。
+
+## 2026-08-30 — Task 10 reopened for default ScanSci capability
+
+- 用户明确要求浙江大学 CARSI 认证一次后成为 Hermes 的持久默认能力；账号凭据可在需要时作为服务器 Secret 保存。用户不选择 provider/mode，OA 失败后自动使用持久机构会话。
+- 已批准设计覆盖独立 `scansci-legal`、loopback-only 认证 helper、持久 session volume、统一 `/literature/acquisitions` 异步入口，以及 Dashboard/Personal Space、Hermes、RO Hermes、RO Files/Evidence 四类产品入口。
+- 新设计写入 `docs/specs/2026-08-30-scansci-default-capability-design.md`；Sci-Hub/LibGen/SciBban/Tor 继续硬禁用。当前生产仍是 `6893318…` 且健康，但 ScanSci 仍 disabled，因此 Task 10 不再记 done。
 
 ## 2026-08-30 — Task 10 external retrieval and temporary documents production-accepted
 

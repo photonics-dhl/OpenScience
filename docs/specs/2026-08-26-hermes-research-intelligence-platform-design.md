@@ -476,7 +476,7 @@ export type ExtractionResult =
 
 ### 16.1 Current implementation checkpoint
 
-- Taskmaster `hermes-research-intelligence` Tasks 1–10 均已部署，完成计数 10/12。当前 release `689331845574612130f223d08c92e61721c16586`、rollback `c435c4c8b2800bb20998fd9a9a93f2db96328661`；Task 10 已通过真实 Semantic Scholar、rights、一次性 PDF 下载、72h/GC/provenance 旅程，下一产品任务是 Task 11 确定性 PresentationAssets。
+- Taskmaster `hermes-research-intelligence` Tasks 1–9 已完成，当前计数 9/12。生产仍为 release `689331845574612130f223d08c92e61721c16586`、rollback `c435c4c8b2800bb20998fd9a9a93f2db96328661`；Task 10 的 metadata/rights/temp lifecycle 已上线，但因 ScanSci 默认下载服务、持久浙江大学 CARSI 会话与全部产品入口尚未真实启用而重新打开，Task 11 阻断。
 - Task 1 已交付能力台账机器门禁、13-case 自著权 corpus 与 current-parser baseline；没有安装新 parser、OCR、模型或 MCP。
 - Task 2 已交付 Claim/Evidence/locator 严格合同、发布事务门禁、核心 migration 28、独立 `packages/search`/`infra/search` 与 `SEARCH_DATABASE_URL` 边界，并随 ECS release `e0828a6` 部署。
 - Task 3 已在 application/immutable release `ef043ebb8e51332effe75a5639cb207aec7bfc47` 部署：严格 provider-neutral DocumentSourceMap、跨 artifact/hash/versioned map 的 locator 拒绝与 worker 运行时合同；其实现树父提交 `c47b3f182ba857897c3c33ee21c250f6b4db3f3c` 已审阅，`ef043eb` 是同树的空 CI 标记。回滚为 `e0828a6118c92c87b7869493413441bba0e76a95`。
@@ -484,7 +484,7 @@ export type ExtractionResult =
 - Task 5 已在 application/immutable release `f9659668b237b70b4c018b866e20498689d327c2` 部署：独立 OCR provider pool、最少页与图片结构/尺寸/字节硬边界、严格 external-processing/kill policies、逐页 fallback、candidate-only provenance 和脱敏 cost/latency audit。Vision 默认 disabled，未做付费调用；rollback 为 `ef043ebb8e51332effe75a5639cb207aec7bfc47`。
 - Task 6 已在 application/immutable release `8163f8b4218e529ee4be41bb9fc732ff6497931a` 部署：独立 search migration 2、locator-safe chunks、tenant-safe lexical+dense retrieval、RRF、幂等异步索引、显式 `lexical_only` 降级和 CPU-only BGE-M3。rollback 为 `f9659668b237b70b4c018b866e20498689d327c2`。
 - BGE-M3 锁定 revision `5617a9f61b028005a4858fdac845db406aefb181`、model manifest `08cc5a668e899e216e8ce66e7f3a5e144cefd9600a082997483c5dd0c66478e4`、package freeze `dc2bc38e5ddda73889d15265eac0cdfa8eaaebe311bc2e63a9b2e32e19cd0fc3`；16 chunks/24 queries 的 nDCG@10 `0.996655`、Recall@10 `1`、P95 `240 ms`、peak RSS `2,244,235,264` bytes，GPU package 0。
-- Tasks 7–9 已闭合身份静默路由、可信 Claim/Evidence API 和 Claim-first 公开 RO；Task 10 新增 migration 32、Semantic Scholar/Tavily/ScanSci legal-only adapter、provider-neutral rights、72h private cache、600s one-use capability 与租约 GC。ScanSci 保持 disabled，Tavily 当前额度耗尽并显式降级。
+- Tasks 7–9 已闭合身份静默路由、可信 Claim/Evidence API 和 Claim-first 公开 RO；Task 10 已新增 migration 32、Semantic Scholar/Tavily/ScanSci adapter、provider-neutral rights、72h private cache、600s one-use capability 与租约 GC，但 ScanSci 默认能力仍按 `docs/specs/2026-08-30-scansci-default-capability-design.md` 实施中。Tavily 当前额度耗尽并显式降级。
 - 生产 core 当前仓库迁移 `32/32`、search `2/2`；core active ledger 含需保留的历史兼容记录，failed migration 为 0。core/search 连接、迁移、物理隔离与健康探针独立。
 - 每日 `backup.sh --db` 已原子覆盖 core/search；集合校验和、release 绑定、权限和双临时库恢复演练通过，§8.2 的双库备份边界闭合。当前保留 7 组备份，临时恢复库已按授权精确清理。
 - 最新 ECS 只读容量证据及 `KEEP / INVESTIGATE / DELETE_CANDIDATE` 精确分类在 `docs/runbooks/deployment.md` §5.40。任何清理都必须先获得用户对精确白名单的明示批准；不得把 hardlinked release 或 Docker shared layer 逻辑值相加为可回收空间。
