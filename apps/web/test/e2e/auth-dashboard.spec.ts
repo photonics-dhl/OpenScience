@@ -227,24 +227,94 @@ test('a server-blocked material remains visible without a retry action', async (
   await expect(page.getByRole('button', { name: /^retry$/i })).toHaveCount(0);
 });
 
-test('personal literature acquisition restores and advances one durable task without provider controls', async ({ page }) => {
+test('personal literature acquisition recovers a running server task after reload without a second POST', async ({ page }) => {
+  let serverHasTask = false;
   let submissions = 0;
-  let polls = 0;
+  await mockAuthenticatedUser(page);
+  await page.route('**/api/csrf-token', (route) => route.fulfill({ contentType: 'application/json', body: JSON.stringify({ csrfToken: 'csrf' }) }));
+  const runningTask = { id: 'literature-reload', sessionId: 'session-1', kind: 'source.retrieve', status: 'running', progress: 40, retryCount: 0, executionAttempt: 1, result: null, error: null, createdAt: '2026-08-30T00:00:00.000Z', updatedAt: '2026-08-30T00:01:00.000Z' };
+  await page.route('**/api/agent/tasks?actionable=false&kind=source.retrieve', (route) => {
+    return route.fulfill({ contentType: 'application/json', body: JSON.stringify({ tasks: serverHasTask ? [runningTask] : [] }) });
+  });
+  await page.route('**/api/literature/acquisitions', async (route) => {
+    submissions += 1;
+    serverHasTask = true;
+    expect(await route.request().postDataJSON()).toEqual({ query: 'Reload recovery', target: { kind: 'personal' } });
+    await route.abort('failed');
+  });
+  await page.route('**/api/agent/tasks/literature-reload', (route) => route.fulfill({ contentType: 'application/json', body: JSON.stringify({ task: runningTask }) }));
+
+  await page.goto(`${baseUrl}/dashboard`);
+  await page.getByLabel(/title, doi, or arxiv id/i).fill('Reload recovery');
+  await page.getByRole('button', { name: /search metadata/i }).click();
+  await expect.poll(() => submissions).toBe(1);
+  await page.reload();
+  await expect(page.getByText(/retrieving source/i)).toBeVisible();
+  expect(submissions).toBe(1);
+  expect(await page.evaluate(() => Object.keys(sessionStorage).filter((key) => key.startsWith('openscience:literature:')))).toEqual([]);
+});
+
+test('a failed source retrieval retries the same task without a new acquisition POST', async ({ page }) => {
   let retries = 0;
+  let submissions = 0;
+  const failedTask = { id: 'literature-failed', sessionId: 'session-1', kind: 'source.retrieve', status: 'failed', progress: 30, retryCount: 0, executionAttempt: 1, result: null, error: '[retryable] upstream timeout', createdAt: '2026-08-30T00:00:00.000Z', updatedAt: '2026-08-30T00:01:00.000Z' };
+  const pendingTask = { ...failedTask, status: 'pending', progress: 0, retryCount: 1, result: null, error: null };
+  const succeededTask = { ...pendingTask, status: 'succeeded', progress: 100, result: { sources: [] } };
+  await mockAuthenticatedUser(page);
+  await page.route('**/api/csrf-token', (route) => route.fulfill({ contentType: 'application/json', body: JSON.stringify({ csrfToken: 'csrf' }) }));
+  await page.route('**/api/agent/tasks?actionable=false&kind=source.retrieve', (route) => route.fulfill({ contentType: 'application/json', body: JSON.stringify({ tasks: [failedTask] }) }));
+  await page.route('**/api/literature/acquisitions', (route) => {
+    submissions += 1;
+    return route.fulfill({ status: 500, contentType: 'application/json', body: JSON.stringify({ error: { code: 'UNEXPECTED', message: 'unexpected acquisition' } }) });
+  });
+  await page.route('**/api/agent/tasks/literature-failed/retry', (route) => {
+    retries += 1;
+    return route.fulfill({ contentType: 'application/json', body: JSON.stringify({ task: pendingTask }) });
+  });
+  await page.route('**/api/agent/tasks/literature-failed', (route) => route.fulfill({ contentType: 'application/json', body: JSON.stringify({ task: succeededTask }) }));
+
+  await page.goto(`${baseUrl}/dashboard`);
+  await page.getByRole('button', { name: /try again/i }).press('Enter');
+  await expect(page.getByText(/source ready/i)).toBeVisible({ timeout: 4_000 });
+  expect(retries).toBe(1);
+  expect(submissions).toBe(0);
+});
+
+test('metadata selection starts a second acquisition and finishes with one temporary download', async ({ page }) => {
+  let submissions = 0;
+  let metadataPolls = 0;
+  let downloadLinks = 0;
+  let finalDownloads = 0;
+  const callerKeys: string[] = [];
+  let releaseFullText: (() => void) | undefined;
   await mockAuthenticatedUser(page);
   await page.route('**/api/csrf-token', (route) => route.fulfill({ contentType: 'application/json', body: JSON.stringify({ csrfToken: 'csrf' }) }));
   await page.route('**/api/agent/tasks?actionable=false&kind=source.retrieve', (route) => route.fulfill({ contentType: 'application/json', body: JSON.stringify({ tasks: [] }) }));
   await page.route('**/api/literature/acquisitions', async (route) => {
     submissions += 1;
-    expect(await route.request().postDataJSON()).toEqual({ query: 'Ultrafast response', target: { kind: 'personal' } });
-    await route.fulfill({ status: 202, contentType: 'application/json', body: JSON.stringify({ task: { id: 'literature-1', sessionId: 'session-1', kind: 'source.retrieve', status: 'pending', progress: 0, retryCount: 0, result: null, error: null, createdAt: '2026-08-30T00:00:00.000Z', updatedAt: '2026-08-30T00:00:00.000Z' } }) });
+    callerKeys.push(route.request().headers()['idempotency-key'] ?? '');
+    if (submissions === 1) {
+      expect(await route.request().postDataJSON()).toEqual({ query: 'Ultrafast response', target: { kind: 'personal' } });
+      return route.fulfill({ status: 202, contentType: 'application/json', body: JSON.stringify({ task: { id: 'literature-metadata', sessionId: 'session-1', kind: 'source.retrieve', status: 'pending', progress: 0, retryCount: 0, executionAttempt: 0, result: null, error: null, createdAt: '2026-08-30T00:00:00.000Z', updatedAt: '2026-08-30T00:00:00.000Z' } }) });
+    }
+    expect(await route.request().postDataJSON()).toEqual({ query: 'Ultrafast response', identifier: '10.1038/nature12373', target: { kind: 'personal' } });
+    await new Promise<void>((resolve) => { releaseFullText = resolve; });
+    return route.fulfill({ status: 202, contentType: 'application/json', body: JSON.stringify({ task: { id: 'literature-fulltext', sessionId: 'session-1', kind: 'source.retrieve', status: 'pending', progress: 0, retryCount: 0, executionAttempt: 0, result: null, error: null, createdAt: '2026-08-30T00:02:00.000Z', updatedAt: '2026-08-30T00:02:00.000Z' } }) });
   });
-  await page.route('**/api/agent/tasks/literature-1', async (route) => {
-    polls += 1;
-    if (polls === 1) return route.fulfill({ status: 503, contentType: 'application/json', body: JSON.stringify({ error: { code: 'TEMPORARY', message: 'temporary' } }) });
-    return route.fulfill({ contentType: 'application/json', body: JSON.stringify({ task: { id: 'literature-1', sessionId: 'session-1', kind: 'source.retrieve', status: 'succeeded', progress: 100, retryCount: 0, result: { sources: [{ id: 'source-1', title: 'Ultrafast response', sourceUrl: 'https://example.test/source', identifiers: { doi: '10.1038/nature12373' }, temporaryDocumentId: 'document-1', expiresAt: '2026-09-01T00:00:00.000Z' }] }, error: null, createdAt: '2026-08-30T00:00:00.000Z', updatedAt: '2026-08-30T00:00:00.000Z' } }) });
+  await page.route('**/api/agent/tasks/literature-metadata', (route) => {
+    metadataPolls += 1;
+    if (metadataPolls === 1) return route.fulfill({ status: 503, contentType: 'application/json', body: JSON.stringify({ error: { code: 'TEMPORARY', message: 'temporary' } }) });
+    return route.fulfill({ contentType: 'application/json', body: JSON.stringify({ task: { id: 'literature-metadata', sessionId: 'session-1', kind: 'source.retrieve', status: 'succeeded', progress: 100, retryCount: 0, executionAttempt: 1, result: { sources: [{ id: 'source-1', title: 'Ultrafast response', sourceUrl: 'https://example.test/source', identifiers: { doi: '10.1038/nature12373' }, rights: {} }], providers: [] }, error: null, createdAt: '2026-08-30T00:00:00.000Z', updatedAt: '2026-08-30T00:01:00.000Z' } }) });
   });
-  await page.route('**/api/temporary-documents/document-1/download-link', (route) => route.fulfill({ contentType: 'application/json', body: JSON.stringify({ downloadUrl: '/api/temporary-documents/document-1/download/access-1', expiresAt: '2026-09-01T00:00:00.000Z' }) }));
+  await page.route('**/api/agent/tasks/literature-fulltext', (route) => route.fulfill({ contentType: 'application/json', body: JSON.stringify({ task: { id: 'literature-fulltext', sessionId: 'session-1', kind: 'source.retrieve', status: 'succeeded', progress: 100, retryCount: 0, executionAttempt: 1, result: { sources: [{ id: 'source-1', title: 'Ultrafast response', sourceUrl: 'https://example.test/source', identifiers: { doi: '10.1038/nature12373' }, rights: { cacheAllowed: true }, temporaryDocumentId: 'document-1', expiresAt: '2026-09-01T00:00:00.000Z' }], providers: [] }, error: null, createdAt: '2026-08-30T00:02:00.000Z', updatedAt: '2026-08-30T00:03:00.000Z' } }) }));
+  await page.route('**/api/temporary-documents/document-1/download-link', (route) => {
+    downloadLinks += 1;
+    return route.fulfill({ contentType: 'application/json', body: JSON.stringify({ downloadUrl: '/api/temporary-documents/document-1/download/access-1', expiresAt: '2026-09-01T00:00:00.000Z' }) });
+  });
+  await page.route('**/api/temporary-documents/document-1/download/access-1', (route) => {
+    finalDownloads += 1;
+    return route.fulfill({ contentType: 'application/pdf', body: '%PDF-final' });
+  });
   await page.goto(`${baseUrl}/dashboard`);
   const input = page.getByLabel(/title, doi, or arxiv id/i);
   await input.focus();
@@ -256,8 +326,18 @@ test('personal literature acquisition restores and advances one durable task wit
   const actionBox = await page.getByRole('button', { name: /get full text/i }).boundingBox();
   expect(actionBox?.width).toBeGreaterThanOrEqual(44);
   expect(actionBox?.height).toBeGreaterThanOrEqual(44);
+  const getFullText = page.getByRole('button', { name: /get full text/i });
+  const selecting = getFullText.press('Enter');
+  await expect(getFullText).toBeDisabled();
+  releaseFullText?.();
+  await selecting;
+  await expect(page.getByRole('button', { name: /download source/i })).toBeVisible({ timeout: 4_000 });
   await page.getByRole('button', { name: /download source/i }).press('Enter');
-  await expect(page).toHaveURL(/\/api\/temporary-documents\/document-1\/download\/access-1/);
-  expect(retries).toBe(0);
+  await expect.poll(() => finalDownloads).toBe(1);
+  expect(submissions).toBe(2);
+  expect(callerKeys[0]).toBeTruthy();
+  expect(callerKeys[1]).toBeTruthy();
+  expect(callerKeys[1]).not.toBe(callerKeys[0]);
+  expect(downloadLinks).toBe(1);
   expect(await page.locator('text=/provider|account|CARSI|ScanSci/i').count()).toBe(0);
 });

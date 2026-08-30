@@ -12,6 +12,11 @@ import {
   submitLiteratureAcquisition,
   type AgentTaskView,
 } from '@/lib/api';
+import {
+  acquirePendingLiteratureIntent,
+  settlePendingLiteratureIntent,
+  startLiteratureTaskPolling,
+} from '@/lib/literature-acquisition-state';
 
 export type LiteratureTask = AgentTaskView;
 
@@ -30,31 +35,6 @@ type LiteratureTaskDescription = {
 };
 
 export const isLiteratureIdentifier = isSourceRetrieveIdentifier;
-const PENDING_INTENT_KEY = 'openscience:literature:personal:pending:v1';
-
-function intentFingerprint(input: { query: string; identifier?: string }): string {
-  return JSON.stringify({ query: input.query.trim(), identifier: input.identifier?.trim() ?? null });
-}
-
-function pendingKeyFor(input: { query: string; identifier?: string }): string | null {
-  if (typeof window === 'undefined') return null;
-  const fingerprint = intentFingerprint(input);
-  const raw = window.sessionStorage.getItem(PENDING_INTENT_KEY);
-  if (raw) {
-    try {
-      const pending = JSON.parse(raw) as { version?: number; key?: string; intentFingerprint?: string };
-      if (pending.version === 1 && pending.key && pending.intentFingerprint === fingerprint) return pending.key;
-      if (pending.version === 1 && pending.key) return null;
-    } catch { window.sessionStorage.removeItem(PENDING_INTENT_KEY); }
-  }
-  const key = crypto.randomUUID();
-  window.sessionStorage.setItem(PENDING_INTENT_KEY, JSON.stringify({ version: 1, key, intentFingerprint: fingerprint }));
-  return key;
-}
-
-function clearPendingIntent(): void {
-  if (typeof window !== 'undefined') window.sessionStorage.removeItem(PENDING_INTENT_KEY);
-}
 
 function hasAuthRequiredResult(result: Record<string, unknown> | null): boolean {
   if (!result || !Array.isArray(result.providers)) return false;
@@ -90,13 +70,14 @@ function readableExpiry(value: string): string {
   return Number.isNaN(date.getTime()) ? value : new Intl.DateTimeFormat(undefined, { dateStyle: 'medium', timeStyle: 'short' }).format(date);
 }
 
-export function LiteratureAcquisition({ initialTask = null, recoveryComplete = true }: { initialTask?: LiteratureTask | null; recoveryComplete?: boolean }) {
+export function LiteratureAcquisition({ initialTask = null, recoveryComplete = true, userId }: { initialTask?: LiteratureTask | null; recoveryComplete?: boolean; userId: string }) {
   const t = useTranslations('dashboard.literature');
   const [query, setQuery] = React.useState('');
   const [task, setTask] = React.useState<LiteratureTask | null>(initialTask);
   const [error, setError] = React.useState('');
   const [reconnecting, setReconnecting] = React.useState(false);
   const [downloading, setDownloading] = React.useState<string | null>(null);
+  const [submissionPending, setSubmissionPending] = React.useState(false);
   const submitting = React.useRef(false);
 
   const description = task ? describeLiteratureTask(task) : null;
@@ -104,58 +85,50 @@ export function LiteratureAcquisition({ initialTask = null, recoveryComplete = t
   const sources = resultSources(task?.result ?? null);
 
   React.useEffect(() => {
-    if (recoveryComplete) setTask(initialTask);
-  }, [initialTask, recoveryComplete]);
+    if (!recoveryComplete) return;
+    setTask(initialTask);
+    if (initialTask && typeof window !== 'undefined') {
+      settlePendingLiteratureIntent(window.sessionStorage, { userId, target: 'personal' }, { kind: 'recovered' });
+    }
+  }, [initialTask, recoveryComplete, userId]);
 
   React.useEffect(() => {
     if (!task || !active) return undefined;
-    let disposed = false;
-    let transientFailures = 0;
-    let timer: number | undefined;
-    let controller: AbortController | undefined;
-    const schedule = (delay: number) => {
-      timer = window.setTimeout(() => {
-        controller = new AbortController();
-        void getAgentTask('', task.id, controller.signal)
-          .then(({ task: next }) => {
-            if (disposed) return;
-            transientFailures = 0;
-            setReconnecting(false);
-            setTask(next);
-            if (next.status === 'pending' || next.status === 'running') schedule(1200);
-          })
-          .catch((cause) => {
-            if (disposed || (cause instanceof DOMException && cause.name === 'AbortError')) return;
-            const status = cause instanceof ApiClientError ? cause.status : 0;
-            if ([401, 403, 404].includes(status)) return;
-            transientFailures += 1;
-            setReconnecting(true);
-            schedule([1200, 2400, 4800, 9600, 15000][Math.min(transientFailures - 1, 4)]!);
-          });
-      }, delay);
-    };
-    schedule(1200);
-    return () => { disposed = true; if (timer !== undefined) window.clearTimeout(timer); controller?.abort(); };
-  }, [active, t, task]);
+    return startLiteratureTaskPolling<AgentTaskView>({
+      taskId: task.id,
+      getTask: async (taskId, signal) => (await getAgentTask('', taskId, signal)).task,
+      onTask: setTask,
+      onReconnecting: setReconnecting,
+    });
+  }, [active, task?.id]);
 
   async function submit(input: { query: string; identifier?: string }) {
     if (submitting.current) return;
-    const idempotencyKey = pendingKeyFor(input);
-    if (!idempotencyKey) {
+    if (typeof window === 'undefined') return;
+    const pendingIntent = await acquirePendingLiteratureIntent(
+      window.sessionStorage,
+      { userId, target: 'personal', input },
+      () => crypto.randomUUID(),
+    );
+    if (pendingIntent.status === 'blocked') {
       setError(t('pendingIntent'));
       return;
     }
     submitting.current = true;
+    setSubmissionPending(true);
     setError('');
     try {
-      const acquisition = await submitLiteratureAcquisition(input, idempotencyKey);
+      const acquisition = await submitLiteratureAcquisition(input, pendingIntent.key);
       setTask(acquisition.task);
-      clearPendingIntent();
+      settlePendingLiteratureIntent(window.sessionStorage, { userId, target: 'personal' }, { kind: 'accepted' });
     } catch (cause) {
-      if (cause instanceof ApiClientError && cause.status >= 400 && cause.status < 500 && ![408, 429].includes(cause.status)) clearPendingIntent();
+      settlePendingLiteratureIntent(window.sessionStorage, { userId, target: 'personal' }, {
+        kind: 'failure', ...(cause instanceof ApiClientError ? { status: cause.status } : {}),
+      });
       setError(t('error'));
     } finally {
       submitting.current = false;
+      setSubmissionPending(false);
     }
   }
 
@@ -172,8 +145,8 @@ export function LiteratureAcquisition({ initialTask = null, recoveryComplete = t
     try {
       const next = await retryAgentTask(task.id);
       setTask(next.task);
-    } catch (cause) {
-      setError(cause instanceof Error ? cause.message : t('error'));
+    } catch {
+      setError(t('error'));
     }
   }
 
@@ -183,8 +156,8 @@ export function LiteratureAcquisition({ initialTask = null, recoveryComplete = t
     try {
       const link = await createTemporaryDocumentDownloadLink(documentId);
       window.location.assign(link.downloadUrl);
-    } catch (cause) {
-      setError(cause instanceof Error ? cause.message : t('error'));
+    } catch {
+      setError(t('error'));
     } finally {
       setDownloading(null);
     }
@@ -204,14 +177,14 @@ export function LiteratureAcquisition({ initialTask = null, recoveryComplete = t
           <label className="block text-sm font-semibold text-os-ink" htmlFor="literature-query">{t('queryLabel')}</label>
           <input
             className="mt-2 min-h-11 w-full border border-os-rule-paper bg-transparent px-3 text-base text-os-ink outline-none transition-transform duration-150 focus:border-os-ink focus-visible:ring-2 focus-visible:ring-focus-ring disabled:opacity-60"
-            disabled={active || !recoveryComplete}
+            disabled={active || submissionPending || !recoveryComplete}
             id="literature-query"
             onChange={(event) => setQuery(event.target.value)}
             placeholder={t('queryPlaceholder')}
             value={query}
           />
         </div>
-        <button className="min-h-11 border border-os-ink px-4 text-sm font-semibold text-os-ink transition-transform duration-150 hover:-translate-y-px active:translate-y-px focus-visible:ring-2 focus-visible:ring-focus-ring disabled:opacity-60" disabled={active || !recoveryComplete || !query.trim()} type="submit">
+        <button className="min-h-11 border border-os-ink px-4 text-sm font-semibold text-os-ink transition-transform duration-150 hover:-translate-y-px active:translate-y-px focus-visible:ring-2 focus-visible:ring-focus-ring disabled:opacity-60" disabled={active || submissionPending || !recoveryComplete || !query.trim()} type="submit">
           {t('search')}
         </button>
       </form>
@@ -223,7 +196,7 @@ export function LiteratureAcquisition({ initialTask = null, recoveryComplete = t
       </div>
 
       {description?.state === 'failed' ? (
-        <button className="mt-2 min-h-11 border-b border-os-vermilion-ink text-sm font-semibold text-os-ink transition-transform duration-150 hover:-translate-y-px active:translate-y-px focus-visible:ring-2 focus-visible:ring-focus-ring" onClick={() => void retry()} type="button">
+        <button className="mt-2 min-h-11 border-b border-os-vermilion-ink text-sm font-semibold text-os-ink transition-transform duration-150 hover:-translate-y-px active:translate-y-px focus-visible:ring-2 focus-visible:ring-focus-ring disabled:opacity-60" disabled={submissionPending} onClick={() => void retry()} type="button">
           {t('retry')}
         </button>
       ) : null}
@@ -242,8 +215,8 @@ export function LiteratureAcquisition({ initialTask = null, recoveryComplete = t
                     {source.expiresAt ? <p className="mt-2 font-mono text-xs text-os-muted-paper">{t('expires', { expiresAt: readableExpiry(source.expiresAt) })}</p> : null}
                   </div>
                   <div className="flex flex-wrap gap-3">
-                    {identifier ? <button className="min-h-11 min-w-11 border-b border-os-vermilion-ink px-1 text-sm font-semibold text-os-ink transition-transform duration-150 hover:-translate-y-px active:translate-y-px focus-visible:ring-2 focus-visible:ring-focus-ring" disabled={active || !recoveryComplete} onClick={() => void submit({ query: source.title ?? query, identifier })} type="button">{t('getFullText')}</button> : null}
-                    {source.temporaryDocumentId ? <button className="min-h-11 border border-os-ink px-3 text-sm font-semibold text-os-ink transition-transform duration-150 hover:-translate-y-px active:translate-y-px focus-visible:ring-2 focus-visible:ring-focus-ring disabled:opacity-60" disabled={downloading === source.temporaryDocumentId} onClick={() => void download(source.temporaryDocumentId!)} type="button">{t('download')}</button> : null}
+                    {identifier ? <button className="min-h-11 min-w-11 border-b border-os-vermilion-ink px-1 text-sm font-semibold text-os-ink transition-transform duration-150 hover:-translate-y-px active:translate-y-px focus-visible:ring-2 focus-visible:ring-focus-ring disabled:opacity-60" disabled={active || submissionPending || !recoveryComplete} onClick={() => void submit({ query: source.title ?? query, identifier })} type="button">{t('getFullText')}</button> : null}
+                    {source.temporaryDocumentId ? <button className="min-h-11 border border-os-ink px-3 text-sm font-semibold text-os-ink transition-transform duration-150 hover:-translate-y-px active:translate-y-px focus-visible:ring-2 focus-visible:ring-focus-ring disabled:opacity-60" disabled={submissionPending || downloading === source.temporaryDocumentId} onClick={() => void download(source.temporaryDocumentId!)} type="button">{t('download')}</button> : null}
                   </div>
                 </li>
               );

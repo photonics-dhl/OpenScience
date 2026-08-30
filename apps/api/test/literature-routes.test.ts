@@ -115,4 +115,68 @@ describe('POST /literature/acquisitions', () => {
     expect(db.researchObjects).toHaveLength(1);
     await app.close();
   });
+
+  it('lists only the signed-in user source tasks through the redacted public DTO', async () => {
+    const { app, db, token, csrfToken, csrfCookie } = await makeApp();
+    await app.inject({
+      method: 'POST', url: '/literature/acquisitions', cookies: { openscience_session: token, _csrf: csrfCookie },
+      headers: { 'x-csrf-token': csrfToken, 'idempotency-key': 'owned-list-task' },
+      payload: { query: 'private owned query', target: { kind: 'personal' } },
+    });
+    const other = seedUser(db, { id: '00000000-0000-4000-8000-000000000002' });
+    db.agentSessions.push({
+      id: '00000000-0000-4000-8000-000000000802', userId: other.id, researchObjectId: null,
+      kind: 'retrieval', title: '', status: 'active', idempotencyKey: 'other-session-secret', createdAt: new Date(), updatedAt: new Date(),
+    });
+    db.agentTasks.push({
+      id: '00000000-0000-4000-8000-000000000803', sessionId: '00000000-0000-4000-8000-000000000802',
+      kind: 'source.retrieve', status: 'pending', progress: 0, retryCount: 0, executionAttempt: 0,
+      dispatchedAt: null, payload: { query: 'other user private query', identifier: '10.9999/private' }, interestContext: null,
+      idempotencyKey: 'other-task-secret', result: null, error: null, createdAt: new Date(), updatedAt: new Date(),
+    });
+
+    const response = await app.inject({
+      method: 'GET', url: '/agent/tasks?actionable=false&kind=source.retrieve', cookies: { openscience_session: token },
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json().tasks).toHaveLength(1);
+    expect(Object.keys(response.json().tasks[0]).sort()).toEqual([
+      'createdAt', 'error', 'executionAttempt', 'id', 'kind', 'progress', 'researchObjectId', 'result', 'retryCount', 'sessionId', 'status', 'updatedAt',
+    ]);
+    expect(JSON.stringify(response.json())).not.toMatch(/private owned query|other user private query|10\.9999\/private|other-.*-secret|payload|interestContext|dispatchedAt|idempotencyKey/);
+    await app.close();
+  });
+
+  it('retries one failed source task in place without another task or debit and rejects unsafe retry states', async () => {
+    const { app, db, token, csrfToken, csrfCookie } = await makeApp();
+    const write = (url: string, idempotencyKey?: string, payload?: unknown) => app.inject({
+      method: 'POST', url, cookies: { openscience_session: token, _csrf: csrfCookie },
+      headers: { 'x-csrf-token': csrfToken, ...(idempotencyKey ? { 'idempotency-key': idempotencyKey } : {}) },
+      ...(payload === undefined ? {} : { payload }),
+    });
+    const acquired = await write('/literature/acquisitions', 'retry-owned-task', { query: 'Paper', identifier: '10.1038/nature12373', target: { kind: 'personal' } });
+    const taskId = acquired.json().task.id as string;
+    const task = db.agentTasks.find((row) => row.id === taskId)!;
+    Object.assign(task, { status: 'failed', progress: 35, result: { stale: true }, error: '[retryable] upstream timeout' });
+    const taskCount = db.agentTasks.length;
+    const debitCount = db.usageLedger.filter((entry) => entry.resource === 'ai_credit' && entry.delta < 0).length;
+
+    const retried = await write(`/agent/tasks/${taskId}/retry`);
+    expect(retried.statusCode).toBe(200);
+    expect(retried.json().task).toMatchObject({ id: taskId, status: 'pending', progress: 0, retryCount: 1, result: null, error: null });
+    expect(db.agentTasks).toHaveLength(taskCount);
+    expect(db.usageLedger.filter((entry) => entry.resource === 'ai_credit' && entry.delta < 0)).toHaveLength(debitCount);
+    expect((await write(`/agent/tasks/${taskId}/retry`)).statusCode).toBe(409);
+    Object.assign(task, { status: 'running' });
+    expect((await write(`/agent/tasks/${taskId}/retry`)).statusCode).toBe(409);
+    Object.assign(task, { status: 'failed', error: '[retryable] failed again' });
+    expect((await write(`/agent/tasks/${taskId}/retry`)).statusCode).toBe(409);
+
+    const blockedAcquisition = await write('/literature/acquisitions', 'blocked-owned-task', { query: 'Blocked', identifier: '10.1038/nature12373', target: { kind: 'personal' } });
+    const blockedId = blockedAcquisition.json().task.id as string;
+    Object.assign(db.agentTasks.find((row) => row.id === blockedId)!, { status: 'failed', error: '[blocked] policy denied' });
+    expect((await write(`/agent/tasks/${blockedId}/retry`)).statusCode).toBe(409);
+    await app.close();
+  });
 });

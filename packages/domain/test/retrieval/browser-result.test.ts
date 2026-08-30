@@ -18,4 +18,14 @@ describe('browser-safe source.retrieve result', () => {
       providers: [{ provider: 'scansci', status: 'succeeded' }],
     });
   });
+
+  it('keeps historical source results readable when optional browser fields are absent', () => {
+    expect(toBrowserSourceRetrieveResult({
+      sources: [{ id: 'source-legacy', provider: 'semantic_scholar', title: 'Legacy', sourceUrl: 'https://example.test/legacy', rights: {} }],
+      providers: [{ provider: 'semantic_scholar', status: 'succeeded' }],
+    })).toEqual({
+      sources: [{ id: 'source-legacy', provider: 'semantic_scholar', title: 'Legacy', sourceUrl: 'https://example.test/legacy', identifiers: {}, rights: {} }],
+      providers: [{ provider: 'semantic_scholar', status: 'succeeded' }],
+    });
+  });
 });

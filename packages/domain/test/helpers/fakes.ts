@@ -1,4 +1,4 @@
-import type { PrismaClient } from '@prisma/client';
+import { Prisma, type PrismaClient } from '@prisma/client';
 import type { Mailer, MailMessage } from '@openscience/auth';
 
 /* eslint-disable @typescript-eslint/no-explicit-any -- 测试 fake 刻意脱离 Prisma 完整类型 */
@@ -758,7 +758,7 @@ export function createFakePrisma(): { prisma: PrismaClient; db: FakeDb } {
       ) ?? null,
       update: async ({ where, data }: any) => {
         const row = db.agentTasks.find((t) => t.id === where.id);
-        Object.assign(row, data, { updatedAt: new Date() });
+        Object.assign(row, { ...data, ...(data.result === Prisma.JsonNull ? { result: null } : {}) }, { updatedAt: new Date() });
         return { ...row };
       },
       updateMany: async ({ where, data }: any) => {
@@ -776,7 +776,7 @@ export function createFakePrisma(): { prisma: PrismaClient; db: FakeDb } {
           const executionAttempt = data.executionAttempt?.increment
             ? row.executionAttempt + data.executionAttempt.increment
             : (data.executionAttempt ?? row.executionAttempt);
-          Object.assign(row, { ...data, executionAttempt, updatedAt: new Date() });
+          Object.assign(row, { ...data, ...(data.result === Prisma.JsonNull ? { result: null } : {}), executionAttempt, updatedAt: new Date() });
         });
         return { count: rows.length };
       },

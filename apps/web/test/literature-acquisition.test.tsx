@@ -39,7 +39,7 @@ describe('Personal literature acquisition', () => {
   });
 
   it('renders a labelled, keyboard-complete rule-separated acquisition instrument without provider controls', () => {
-    const markup = renderToStaticMarkup(<LiteratureAcquisition initialTask={sourceTask} />);
+    const markup = renderToStaticMarkup(<LiteratureAcquisition initialTask={sourceTask} userId="user-1" />);
 
     expect(markup).toContain('data-literature-acquisition="true"');
     expect(markup).toContain('for="literature-query"');

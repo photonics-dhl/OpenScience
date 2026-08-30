@@ -17,6 +17,7 @@ import { deriveHermesGuide } from '@/components/hermes/hermes-guide';
 import { deriveHermesCompositeVisualState } from '@/components/hermes/hermes-state';
 import { DashboardShell } from '@/components/shell/DashboardShell';
 import { ApiClientError, getCurrentUser, getDashboardOverview, listSourceRetrieveTasks, type AgentTaskView, type CurrentUser } from '@/lib/api';
+import { selectRecoveredLiteratureTask } from '@/lib/literature-acquisition-state';
 import type { DashboardResearch } from '@/components/dashboard/ResearchList';
 import type { Locale } from '@/i18n/locale';
 
@@ -49,7 +50,7 @@ export default function DashboardPage() {
         }));
         setResearchObjects(mappedResearch);
         setTasks(overview.tasks);
-        setLiteratureTask(retrieval.tasks[0] ?? null);
+        setLiteratureTask(selectRecoveredLiteratureTask(retrieval.tasks));
         setLiteratureRecovered(true);
       })
       .catch((cause) => {
@@ -143,7 +144,7 @@ export default function DashboardPage() {
           <ImportStage />
         </div>
         <div className="lg:col-span-8">
-          <LiteratureAcquisition initialTask={literatureTask} recoveryComplete={literatureRecovered} />
+          <LiteratureAcquisition initialTask={literatureTask} recoveryComplete={literatureRecovered} userId={user!.userId} />
         </div>
         <div className="lg:col-span-12">
           <ResearchList researchObjects={researchObjects} />

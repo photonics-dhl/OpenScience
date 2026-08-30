@@ -238,6 +238,10 @@ export async function getDashboardOverview(): Promise<{
 
 export async function logout(): Promise<void> {
   await request('/api/auth/logout', { method: 'POST' });
+  if (typeof window !== 'undefined') {
+    const { clearAllPendingLiteratureIntents } = await import('./literature-acquisition-state');
+    clearAllPendingLiteratureIntents(window.sessionStorage);
+  }
 }
 
 export interface ResearchIndexItemApi {

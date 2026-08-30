@@ -76,11 +76,15 @@ describe('AgentSession/AgentTask（§15 + §16 幂等 + §9.1 配额）', () => 
     const payload = { query: 'paper', providers: ['scansci'], limit: 1, includeFullText: true, identifier: '10.1038/nature12373' };
     const task = await submitAgentTask(deps, { sessionId: session.id, userId: user.id, kind: 'source.retrieve', payload });
     await markTaskProgress(deps, { taskId: task.id, status: 'running' });
-    await markTaskProgress(deps, { taskId: task.id, status: 'failed', error: 'upstream timeout' });
+    await markTaskProgress(deps, { taskId: task.id, status: 'failed', error: 'upstream timeout', result: { stale: true } });
     await expect(retryAgentTask(deps, { userId: user.id, taskId: task.id })).resolves.toMatchObject({ id: task.id, status: 'pending', retryCount: 1 });
     expect(db.agentTasks[0]?.payload).toEqual(payload);
+    expect(db.agentTasks[0]).toMatchObject({ id: task.id, result: null, error: null, dispatchedAt: expect.any(Date) });
     expect(db.usageLedger.filter((entry) => entry.resource === 'ai_credit' && entry.delta < 0)).toHaveLength(1);
     await expect(retryAgentTask(deps, { userId: user.id, taskId: task.id })).rejects.toThrow(/failed tasks/i);
+    await markTaskProgress(deps, { taskId: task.id, status: 'running' });
+    await markTaskProgress(deps, { taskId: task.id, status: 'failed', error: 'upstream timeout again' });
+    await expect(retryAgentTask(deps, { userId: user.id, taskId: task.id })).rejects.toThrow(/already retried/i);
 
     const blocked = await submitAgentTask(deps, { sessionId: session.id, userId: user.id, kind: 'source.retrieve', payload });
     await markTaskProgress(deps, { taskId: blocked.id, status: 'running' });
@@ -166,14 +170,25 @@ describe('AgentSession/AgentTask（§15 + §16 幂等 + §9.1 配额）', () => 
     expect(view.kind).toBe('demo.echo');
   });
 
-  it('lists only the current user actionable tasks with RO context', async () => {
-    const { deps, user, ro } = await makeDeps();
+  it('lists only the current user actionable tasks with a redacted public DTO and RO context', async () => {
+    const { deps, user, ro, db } = await makeDeps();
     const session = await createAgentSession(deps, { userId: user.id, researchObjectId: ro.id, kind: 'extract' });
-    const task = await submitAgentTask(deps, { sessionId: session.id, userId: user.id, kind: 'sdf.extract', payload: {} });
+    const task = await submitAgentTask(deps, { sessionId: session.id, userId: user.id, kind: 'sdf.extract', payload: { manuscriptText: 'private manuscript' }, idempotencyKey: 'private-key' });
+    const other = seedUser(db, { id: 'other-agent-user' });
+    db.agentSessions.push({ id: 'other-session', userId: other.id, researchObjectId: null, kind: 'retrieval', title: '', status: 'active', idempotencyKey: null, createdAt: new Date(), updatedAt: new Date() });
+    db.agentTasks.push({
+      id: 'other-task', sessionId: 'other-session', kind: 'source.retrieve', status: 'pending', progress: 0,
+      retryCount: 0, executionAttempt: 0, dispatchedAt: null, payload: { query: 'other user private query' },
+      interestContext: null, idempotencyKey: 'other-private-key', result: null, error: null, createdAt: new Date(), updatedAt: new Date(),
+    });
     const rows = await listAgentTasks(deps, { userId: user.id, actionableOnly: true });
     expect(rows).toEqual([
       expect.objectContaining({ id: task.id, researchObjectId: ro.id, status: 'pending' }),
     ]);
+    expect(Object.keys(rows[0]!).sort()).toEqual([
+      'createdAt', 'error', 'executionAttempt', 'id', 'kind', 'progress', 'researchObjectId', 'result', 'retryCount', 'sessionId', 'status', 'updatedAt',
+    ]);
+    expect(JSON.stringify(rows)).not.toMatch(/private manuscript|private-key|other user private query|other-private-key/);
   });
 
   it('幂等键重放 → 返回既有任务（§16 不重复）', async () => {

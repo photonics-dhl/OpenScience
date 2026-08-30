@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { createSourceRetrieveHandler } from '../../src/retrieval/handler';
 
 /* eslint-disable @typescript-eslint/no-explicit-any -- focused Prisma/storage replay fake */
@@ -8,6 +8,8 @@ const USER_ID = '22222222-2222-4222-8222-222222222222';
 const WORKSPACE_ID = '33333333-3333-4333-8333-333333333333';
 const SOURCE_ID = '44444444-4444-4444-8444-444444444444';
 const RIGHTS_ID = '55555555-5555-4555-8555-555555555555';
+
+afterEach(() => vi.useRealTimers());
 
 describe('source.retrieve handler replay safety', () => {
   it('returns metadata after durable auth observation exhausts its three transaction attempts', async () => {
@@ -76,6 +78,8 @@ describe('source.retrieve handler replay safety', () => {
   });
 
   it('reuses the task-scoped rights row and active temporary document', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date('2026-08-30T00:00:00.000Z'));
     const bytes = Buffer.from('%PDF-replay-safe');
     const hash = 'a'.repeat(64);
     let temporaryDocument: Record<string, any> | null = null;
@@ -101,8 +105,8 @@ describe('source.retrieve handler replay safety', () => {
         provider: create.provider,
         title: create.title,
         sourceUrl: create.sourceUrl,
-        doi: create.doi,
-        arxivId: create.arxivId,
+        doi: '10.5555/persisted-row',
+        arxivId: '2401.01234',
       }) },
       sourceRightsDecision: { upsert: rightsUpsert },
       temporaryDocument: {
@@ -148,15 +152,16 @@ describe('source.retrieve handler replay safety', () => {
     };
 
     const first = await handler(deps, task);
+    vi.setSystemTime(new Date('2030-01-01T00:00:00.000Z'));
     const second = await handler(deps, task);
 
     expect(first).toEqual(second);
     expect(first).toMatchObject({
       sources: [{
         id: SOURCE_ID,
-        identifiers: { doi: '10.1000/test' },
+        identifiers: { doi: '10.5555/persisted-row', arxiv: '2401.01234' },
         temporaryDocumentId: expect.any(String),
-        expiresAt: expect.any(String),
+        expiresAt: '2026-09-02T00:00:00.000Z',
       }],
     });
     expect(rightsUpsert).toHaveBeenCalledTimes(2);
