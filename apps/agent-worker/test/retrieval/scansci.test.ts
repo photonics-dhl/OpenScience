@@ -127,4 +127,51 @@ describe('ScanSci legal-only adapter', () => {
       status: 'blocked', provider: 'scansci', code: 'route_not_allowed', retryable: false,
     });
   });
+
+  it.each([
+    ['disabled', 503, { status: 'unavailable', code: 'disabled', retryable: false }],
+    ['auth_required', 409, { status: 'unavailable', code: 'auth_required', retryable: false }],
+    ['not_entitled', 403, { status: 'blocked', code: 'not_entitled', retryable: false }],
+    ['not_found', 404, { status: 'unavailable', code: 'not_found', retryable: false }],
+    ['rate_limited', 429, { status: 'unavailable', code: 'rate_limited', retryable: true }],
+    ['invalid_pdf', 422, { status: 'unavailable', code: 'invalid_response', retryable: false }],
+    ['policy_blocked', 422, { status: 'blocked', code: 'route_not_allowed', retryable: false }],
+    ['upstream_timeout', 504, { status: 'unavailable', code: 'timeout', retryable: true }],
+    ['upstream_unavailable', 502, { status: 'unavailable', code: 'upstream_error', retryable: true }],
+  ] as const)('maps stable service code %s without retaining its response text', async (serviceCode, status, expected) => {
+    const adapter = createScanSciAdapter({
+      enabled: true,
+      baseUrl: 'http://scansci-legal:8080',
+      serviceToken: 'service-token',
+      fetchImpl: async () => new Response(JSON.stringify({ code: serviceCode, detail: 'sensitive upstream detail' }), {
+        status,
+        headers: { 'content-type': 'application/json' },
+      }),
+    });
+
+    await expect(adapter.acquire({ identifier: '10.1000/example', subjectId: 'a'.repeat(64) })).resolves.toEqual({
+      provider: 'scansci',
+      ...expected,
+    });
+  });
+
+  it('rejects an invalid final public URL after receiving an otherwise valid PDF', async () => {
+    const adapter = createScanSciAdapter({
+      enabled: true,
+      baseUrl: 'http://scansci-legal:8080',
+      serviceToken: 'service-token',
+      fetchImpl: async () => new Response(Buffer.from('%PDF-safe'), {
+        status: 200,
+        headers: {
+          'content-type': 'application/pdf',
+          'x-scansci-route': 'open_access',
+          'x-scansci-public-url': 'http://127.0.0.1/internal.pdf',
+        },
+      }),
+    });
+
+    await expect(adapter.acquire({ identifier: '10.1000/example', subjectId: 'a'.repeat(64) })).resolves.toEqual({
+      status: 'unavailable', provider: 'scansci', code: 'invalid_response', retryable: false,
+    });
+  });
 });

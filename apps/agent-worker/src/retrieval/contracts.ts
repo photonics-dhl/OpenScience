@@ -3,6 +3,8 @@ import type { ExternalSourceProvider, SourceAccessEvidence } from '@openscience/
 
 export type RetrievalUnavailableCode =
   | 'disabled'
+  | 'auth_required'
+  | 'not_found'
   | 'not_configured'
   | 'rate_limited'
   | 'timeout'

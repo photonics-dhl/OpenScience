@@ -18,8 +18,8 @@ export type ScanSciAcquireResult =
     access: { kind: 'open_access'; license?: string } | { kind: 'institutional_access'; entitlementVerified: true };
     entitlementValidUntil?: Date;
   }
-  | { status: 'unavailable'; provider: typeof PROVIDER; code: 'disabled' | 'not_configured' | 'timeout' | 'upstream_error' | 'invalid_response'; retryable: boolean }
-  | { status: 'blocked'; provider: typeof PROVIDER; code: 'route_not_allowed' | 'limit_exceeded'; retryable: false };
+  | { status: 'unavailable'; provider: typeof PROVIDER; code: 'disabled' | 'auth_required' | 'not_found' | 'not_configured' | 'rate_limited' | 'timeout' | 'upstream_error' | 'invalid_response'; retryable: boolean }
+  | { status: 'blocked'; provider: typeof PROVIDER; code: 'not_entitled' | 'route_not_allowed' | 'limit_exceeded'; retryable: false };
 
 interface ScanSciConfig {
   enabled?: boolean;
@@ -29,6 +29,29 @@ interface ScanSciConfig {
   timeoutMs?: number;
   maximumBytes?: number;
   now?: () => Date;
+}
+
+async function stableServiceFailure(response: Response): Promise<ScanSciAcquireResult> {
+  let code: unknown;
+  try {
+    const body: unknown = await response.json();
+    code = body && typeof body === 'object' && 'code' in body ? body.code : undefined;
+  } catch {
+    // The legal service promises a small JSON stable-code body. Treat any
+    // malformed body as an upstream failure without retaining its contents.
+  }
+  switch (code) {
+    case 'disabled': return { status: 'unavailable', provider: PROVIDER, code, retryable: false };
+    case 'auth_required': return { status: 'unavailable', provider: PROVIDER, code, retryable: false };
+    case 'not_entitled': return { status: 'blocked', provider: PROVIDER, code, retryable: false };
+    case 'not_found': return { status: 'unavailable', provider: PROVIDER, code, retryable: false };
+    case 'rate_limited': return { status: 'unavailable', provider: PROVIDER, code, retryable: true };
+    case 'invalid_pdf': return { status: 'unavailable', provider: PROVIDER, code: 'invalid_response', retryable: false };
+    case 'policy_blocked': return { status: 'blocked', provider: PROVIDER, code: 'route_not_allowed', retryable: false };
+    case 'upstream_timeout': return { status: 'unavailable', provider: PROVIDER, code: 'timeout', retryable: true };
+    case 'upstream_unavailable': return { status: 'unavailable', provider: PROVIDER, code: 'upstream_error', retryable: true };
+    default: return { status: 'unavailable', provider: PROVIDER, code: 'upstream_error', retryable: response.status >= 500 };
+  }
 }
 
 export function createScanSciAdapter(config: ScanSciConfig = {}) {
@@ -71,7 +94,7 @@ export function createScanSciAdapter(config: ScanSciConfig = {}) {
           retryable: true,
         };
       }
-      if (!response.ok) return { status: 'unavailable', provider: PROVIDER, code: 'upstream_error', retryable: response.status >= 500 };
+      if (!response.ok) return stableServiceFailure(response);
       const route = response.headers.get('x-scansci-route');
       if (!route || !ALLOWED_ROUTES.has(route)) return { status: 'blocked', provider: PROVIDER, code: 'route_not_allowed', retryable: false };
       const maximumBytes = config.maximumBytes ?? MAX_PDF_BYTES;

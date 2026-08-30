@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { buildGateway } from '../src/index';
+import { buildGateway, loadScanSciServiceTokenFile } from '../src/index';
 
 const ocrRequest = () => ({
   authorizationContext: { taskId: 'task-1', workspaceId: 'workspace-1', actorId: 'user-1' },
@@ -15,6 +15,24 @@ const ocrRequest = () => ({
 });
 
 describe('MiniMax worker gateway config', () => {
+  it('accepts only a private regular ScanSci service-token file', () => {
+    const readFileSync = vi.fn(() => 'service-token\n');
+    const lstatSync = vi.fn(() => ({ isFile: () => true, isSymbolicLink: () => false, mode: 0o100400 }));
+    expect(loadScanSciServiceTokenFile('/run/secrets/scansci_service_token', { lstatSync, readFileSync })).toBe('service-token');
+    expect(readFileSync).toHaveBeenCalledWith('/run/secrets/scansci_service_token', 'utf8');
+  });
+
+  it.each([
+    ['symbolic link', { isFile: () => true, isSymbolicLink: () => true, mode: 0o100400 }],
+    ['non-regular file', { isFile: () => false, isSymbolicLink: () => false, mode: 0o100400 }],
+    ['group-readable file', { isFile: () => true, isSymbolicLink: () => false, mode: 0o100440 }],
+  ])('rejects a %s ScanSci service-token path', (_label, stat) => {
+    expect(() => loadScanSciServiceTokenFile('/run/secrets/scansci_service_token', {
+      lstatSync: () => stat,
+      readFileSync: () => 'service-token',
+    })).toThrow(/SCANSCI_SERVICE_TOKEN_FILE/);
+  });
+
   it('Token Plan key1 配额失败后以 Anthropic 协议回退 key2，model ID 保持不变', async () => {
     const fetchMock = vi.fn(async (_url: string, init?: RequestInit) => {
       const key = (init?.headers as Record<string, string>)['x-api-key'];

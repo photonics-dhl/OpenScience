@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { executeSourceRetrieval } from '../../src/retrieval/orchestrator';
+import { createScanSciAuthRequiredStateTracker, executeSourceRetrieval } from '../../src/retrieval/orchestrator';
 
 describe('source retrieval orchestration', () => {
   it('persists normalized sources with provider-neutral rights and no raw provider response', async () => {
@@ -43,5 +43,39 @@ describe('source retrieval orchestration', () => {
     }, { institutionalSubjectId: 'a'.repeat(64) });
     expect(result.providers).toEqual([{ provider: 'scansci', status: 'blocked', code: 'open_license_missing' }]);
     expect(persist).not.toHaveBeenCalled();
+  });
+
+  it('keeps metadata search results when ScanSci full text requires authentication', async () => {
+    const persist = vi.fn(async ({ source, rights }) => ({
+      id: source.providerRecordId, provider: source.provider, title: source.title, sourceUrl: source.sourceUrl, rights,
+    }));
+    const result = await executeSourceRetrieval({
+      query: 'paper', providers: ['semantic_scholar', 'scansci'], includeFullText: true, identifier: '10.1000/test', limit: 1,
+    }, {
+      semanticScholar: { search: async () => ({
+        status: 'succeeded', provider: 'semantic_scholar', sources: [{
+          provider: 'semantic_scholar', providerRecordId: 'metadata-1', title: 'Metadata remains available',
+          sourceUrl: 'https://example.org/metadata', authors: [], identifiers: {}, access: { kind: 'open_access', license: 'CC-BY-4.0' },
+        }],
+      }) },
+      tavily: { search: vi.fn() },
+      scansci: { acquire: async () => ({ status: 'unavailable', provider: 'scansci', code: 'auth_required', retryable: false }) },
+      persist,
+    }, { institutionalSubjectId: 'a'.repeat(64) });
+
+    expect(result.sources).toHaveLength(1);
+    expect(result.providers).toEqual([
+      { provider: 'semantic_scholar', status: 'succeeded' },
+      { provider: 'scansci', status: 'unavailable', code: 'auth_required' },
+    ]);
+  });
+
+  it('notifies only on the first transition into ScanSci authentication required', () => {
+    const tracker = createScanSciAuthRequiredStateTracker();
+
+    expect(tracker.observe([{ provider: 'scansci', status: 'unavailable', code: 'auth_required' }])).toBe(true);
+    expect(tracker.observe([{ provider: 'scansci', status: 'unavailable', code: 'auth_required' }])).toBe(false);
+    expect(tracker.observe([{ provider: 'scansci', status: 'succeeded' }])).toBe(false);
+    expect(tracker.observe([{ provider: 'scansci', status: 'unavailable', code: 'auth_required' }])).toBe(true);
   });
 });

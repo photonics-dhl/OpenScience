@@ -27,6 +27,20 @@ export interface RetrievalRuntime {
   }): Promise<PersistedRetrievalSource>;
 }
 
+export function createScanSciAuthRequiredStateTracker() {
+  let authRequired = false;
+  return {
+    observe(providers: Array<{ provider: string; status: string; code?: string }>): boolean {
+      const scansci = providers.find(({ provider }) => provider === 'scansci');
+      if (!scansci) return false;
+      const nextAuthRequired = scansci.status === 'unavailable' && scansci.code === 'auth_required';
+      const transitioned = nextAuthRequired && !authRequired;
+      authRequired = nextAuthRequired;
+      return transitioned;
+    },
+  };
+}
+
 export async function executeSourceRetrieval(
   rawPayload: unknown,
   runtime: RetrievalRuntime,

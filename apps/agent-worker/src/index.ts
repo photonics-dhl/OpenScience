@@ -23,6 +23,7 @@ import {
 import type { OcrAuthorizationContext } from '@openscience/ai-gateway';
 import type { DocumentSourceMap, ExtractionResult as ParserExtractionResult } from '@openscience/domain';
 import { createHash } from 'node:crypto';
+import { lstatSync, readFileSync } from 'node:fs';
 import type { Readable } from 'node:stream';
 import { extractHandler, sourceMapToManuscriptText } from './extractor';
 import { MAX_PARSER_INPUT, type IngestionAdapters } from './ingestion-parser';
@@ -44,6 +45,7 @@ import { createSemanticScholarAdapter } from './retrieval/semantic-scholar';
 import { createTavilyAdapter } from './retrieval/tavily';
 import { createScanSciAdapter } from './retrieval/scansci';
 import { createSourceRetrieveHandler } from './retrieval/handler';
+import { createScanSciAuthRequiredStateTracker } from './retrieval/orchestrator';
 import { collectExpiredTemporaryDocuments } from './retrieval/garbage-collector';
 
 const BGE_M3_REVISION = '5617a9f61b028005a4858fdac845db406aefb181';
@@ -127,6 +129,29 @@ export type TaskHandler = (
   deps: WorkerDeps,
   task: { id: string; payload: Record<string, unknown>; interestContext?: unknown; executionAttempt: number },
 ) => Promise<Record<string, unknown>>;
+
+interface ScanSciTokenFileSystem {
+  lstatSync(path: string): { isFile(): boolean; isSymbolicLink(): boolean; mode: number };
+  readFileSync(path: string, encoding: 'utf8'): string;
+}
+
+export function loadScanSciServiceTokenFile(
+  path: string,
+  fileSystem: ScanSciTokenFileSystem = { lstatSync, readFileSync },
+): string {
+  let stat: ReturnType<ScanSciTokenFileSystem['lstatSync']>;
+  try {
+    stat = fileSystem.lstatSync(path);
+  } catch {
+    throw new Error('SCANSCI_SERVICE_TOKEN_FILE must be a private regular file');
+  }
+  if (!stat.isFile() || stat.isSymbolicLink() || (stat.mode & 0o077) !== 0) {
+    throw new Error('SCANSCI_SERVICE_TOKEN_FILE must be a private regular file');
+  }
+  const token = fileSystem.readFileSync(path, 'utf8').trim();
+  if (!token) throw new Error('SCANSCI_SERVICE_TOKEN_FILE must contain a token');
+  return token;
+}
 
 /** Production-safe cascade composition: one V2 sidecar stage plus disabled candidate routes. */
 export function createWorkerParserCascade(
@@ -325,6 +350,7 @@ export async function recoverProcessingQueue(deps: WorkerDeps): Promise<number> 
  * 轮询 Redis 队列 → handler 执行 → markTaskProgress（状态机前进，succeeded 后重放 skip）。
  */
 export async function createPollOnce(handlers: Record<string, TaskHandler>): Promise<(deps: WorkerDeps) => Promise<boolean>> {
+  const scansciAuthRequired = createScanSciAuthRequiredStateTracker();
   return async function pollOnce(deps: WorkerDeps): Promise<boolean> {
     await recoverUndispatchedAgentTasks(deps);
     // BRPOPLPUSH：原子弹出 → 处理中队列（崩溃恢复用）
@@ -333,7 +359,10 @@ export async function createPollOnce(handlers: Record<string, TaskHandler>): Pro
 
     let claimed: Awaited<ReturnType<typeof claimAgentTask>> = null;
     try {
-      const task = await deps.prisma.agentTask.findUnique({ where: { id: taskId } });
+      const task = await deps.prisma.agentTask.findUnique({
+        where: { id: taskId },
+        include: { session: { select: { userId: true } } },
+      });
       if (!task) return true;
       claimed = await claimAgentTask(deps, taskId);
       if (!claimed) return true;
@@ -345,6 +374,32 @@ export async function createPollOnce(handlers: Record<string, TaskHandler>): Pro
         interestContext: task.interestContext,
         executionAttempt: claimed.executionAttempt,
       });
+      const providers = Array.isArray(result.providers) ? result.providers.filter((value): value is { provider: string; status: string; code?: string } => (
+        Boolean(value) && typeof value === 'object'
+        && typeof (value as { provider?: unknown }).provider === 'string'
+        && typeof (value as { status?: unknown }).status === 'string'
+        && ((value as { code?: unknown }).code === undefined || typeof (value as { code?: unknown }).code === 'string')
+      )) : [];
+      if (scansciAuthRequired.observe(providers)) {
+        await deps.audit?.record({
+          actorId: task.session.userId,
+          action: 'external_retrieval.auth_required',
+          targetType: 'agent_task',
+          targetId: taskId,
+          metadata: { provider: 'scansci', code: 'auth_required' },
+        });
+        const administrators = await deps.prisma.user.findMany({
+          where: { platformRole: 'platform_admin' },
+          select: { id: true },
+        });
+        await Promise.all(administrators.map(({ id }) => deps.prisma.notification.create({
+          data: {
+            userId: id,
+            type: 'external_retrieval.auth_required',
+            payload: { provider: 'scansci', taskId },
+          },
+        })));
+      }
       await markTaskProgress(deps, {
         taskId,
         status: 'succeeded',
@@ -509,6 +564,9 @@ export function buildSourceRetrieveHandlerFromEnv(env: NodeJS.ProcessEnv = proce
   if (env.NODE_ENV === 'production' && scansciEnabled && scansciBaseUrl !== 'http://scansci-legal:8080') {
     throw new Error('SCANSCI_BASE_URL must use the isolated internal legal-only service in production');
   }
+  const scansciServiceToken = env.SCANSCI_SERVICE_TOKEN_FILE
+    ? loadScanSciServiceTokenFile(env.SCANSCI_SERVICE_TOKEN_FILE)
+    : env.SCANSCI_SERVICE_TOKEN;
   return createSourceRetrieveHandler({
     queryHmacSecret,
     semanticScholar: createSemanticScholarAdapter({ apiKey: env.SEMANTIC_SCHOLAR_API_KEY }),
@@ -516,7 +574,7 @@ export function buildSourceRetrieveHandlerFromEnv(env: NodeJS.ProcessEnv = proce
     scansci: createScanSciAdapter({
       enabled: scansciEnabled,
       baseUrl: scansciBaseUrl,
-      serviceToken: env.SCANSCI_SERVICE_TOKEN,
+      serviceToken: scansciServiceToken,
     }),
   });
 }
