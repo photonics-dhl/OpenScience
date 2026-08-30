@@ -25,7 +25,8 @@ def _require_public_https_url(value: str) -> str:
     if hostname == "localhost" or hostname.endswith(".localhost") or hostname.endswith(".local"):
         raise OSError("upstream URL is forbidden")
     try:
-        if not ipaddress.ip_address(hostname).is_global:
+        address = ipaddress.ip_address(hostname)
+        if not address.is_global or address.is_multicast:
             raise OSError("upstream URL is forbidden")
     except ValueError:
         if "." not in hostname or any(not part or len(part) > 63 for part in hostname.split(".")):
@@ -53,7 +54,7 @@ def _guarded_getaddrinfo(
             address = ipaddress.ip_address(record[4][0].split("%", 1)[0])
         except (IndexError, TypeError, ValueError) as error:
             raise OSError("upstream DNS result is invalid") from error
-        if not address.is_global:
+        if not address.is_global or address.is_multicast:
             raise OSError("upstream DNS result is forbidden")
     return records
 

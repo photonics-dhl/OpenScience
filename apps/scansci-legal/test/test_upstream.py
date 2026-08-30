@@ -168,7 +168,10 @@ class UpstreamNetworkBoundaryTest(unittest.TestCase):
         public = [(socket.AF_INET, socket.SOCK_STREAM, 6, "", ("93.184.216.34", 443))]
         self.assertEqual(self.guarded_resolve(public), public)
 
-        for address in ("127.0.0.1", "10.0.0.1", "169.254.169.254", "192.0.2.1", "::1", "fc00::1"):
+        for address in (
+            "127.0.0.1", "10.0.0.1", "169.254.169.254", "192.0.2.1", "224.0.0.1",
+            "::1", "fc00::1", "ff02::1",
+        ):
             family = socket.AF_INET6 if ":" in address else socket.AF_INET
             record = [(family, socket.SOCK_STREAM, 6, "", (address, 443))]
             with self.subTest(address=address), self.assertRaises(OSError):
