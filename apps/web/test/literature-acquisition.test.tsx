@@ -17,7 +17,7 @@ vi.mock('next-intl', () => ({
   },
 }));
 
-import { LiteratureAcquisition, LiteratureAcquisitionDisclosure, describeLiteratureTask, isLiteratureIdentifier, isLiteratureTaskRetryEligible, shouldSubmitEmbeddedLiteratureQuery, type LiteratureTask } from '@/components/dashboard/LiteratureAcquisition';
+import { LiteratureAcquisition, LiteratureAcquisitionDisclosure, describeLiteratureTask, hasExplicitLiteratureIntentIdentity, isLiteratureIdentifier, isLiteratureTaskRetryEligible, shouldSubmitEmbeddedLiteratureQuery, type LiteratureTask } from '@/components/dashboard/LiteratureAcquisition';
 
 const sourceTask: LiteratureTask = {
   id: 'task-1', sessionId: 'session-1', kind: 'source.retrieve', status: 'succeeded', progress: 100, retryCount: 0,
@@ -120,5 +120,13 @@ describe('Personal literature acquisition', () => {
     expect(shouldSubmitEmbeddedLiteratureQuery({ key: 'Enter', isComposing: false, keyCode: 229 })).toBe(false);
     expect(shouldSubmitEmbeddedLiteratureQuery({ key: 'Enter', isComposing: false, keyCode: 13 })).toBe(true);
     expect(shouldSubmitEmbeddedLiteratureQuery({ key: 'a', isComposing: false, keyCode: 65 })).toBe(false);
+  });
+
+  it('runs generic recovery only when no complete explicit initial intent identity exists', () => {
+    const request = { query: '10.1038/nature12373', identifier: '10.1038/nature12373' };
+    expect(hasExplicitLiteratureIntentIdentity({ initialRequest: request, callerIdempotencyKey: 'key-a', callerIntentFingerprint: 'fingerprint-a' })).toBe(true);
+    expect(hasExplicitLiteratureIntentIdentity({ initialRequest: request, callerIdempotencyKey: 'key-a' })).toBe(false);
+    expect(hasExplicitLiteratureIntentIdentity({ initialRequest: request, callerIntentFingerprint: 'fingerprint-a' })).toBe(false);
+    expect(hasExplicitLiteratureIntentIdentity({ callerIdempotencyKey: 'key-a', callerIntentFingerprint: 'fingerprint-a' })).toBe(false);
   });
 });

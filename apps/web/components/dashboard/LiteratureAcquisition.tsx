@@ -95,6 +95,10 @@ export interface LiteratureAcquisitionProps {
   withinForm?: boolean;
 }
 
+export function hasExplicitLiteratureIntentIdentity(input: Pick<LiteratureAcquisitionProps, 'callerIdempotencyKey' | 'callerIntentFingerprint' | 'initialRequest'>): boolean {
+  return Boolean(input.initialRequest && input.callerIdempotencyKey?.trim() && input.callerIntentFingerprint?.trim());
+}
+
 function targetNamespace(target: LiteratureAcquisitionTarget): 'personal' | `research-object:${string}` {
   return target.kind === 'personal' ? 'personal' : `research-object:${target.researchObjectId}`;
 }
@@ -113,6 +117,7 @@ export function LiteratureAcquisition({
   withinForm = false,
 }: LiteratureAcquisitionProps) {
   const t = useTranslations('dashboard.literature');
+  const explicitInitialIdentity = hasExplicitLiteratureIntentIdentity({ callerIdempotencyKey, callerIntentFingerprint, initialRequest });
   const [query, setQuery] = React.useState(initialRequest?.query ?? '');
   const [task, setTask] = React.useState<LiteratureTask | null>(initialTask);
   const [error, setError] = React.useState('');
@@ -121,7 +126,7 @@ export function LiteratureAcquisition({
   const [submissionPending, setSubmissionPending] = React.useState(false);
   const [retryPending, setRetryPending] = React.useState(false);
   const [resolvedUserId, setResolvedUserId] = React.useState(userId ?? '');
-  const [internalRecoveryComplete, setInternalRecoveryComplete] = React.useState(recoveryComplete !== undefined);
+  const [internalRecoveryComplete, setInternalRecoveryComplete] = React.useState(recoveryComplete !== undefined || explicitInitialIdentity);
   const submitting = React.useRef(false);
   const retrying = React.useRef(false);
   const userResolutionStarted = React.useRef(false);
@@ -171,7 +176,7 @@ export function LiteratureAcquisition({
   }, [initialTask, namespace, recoveryComplete, recoveryReady, resolvedUserId]);
 
   React.useEffect(() => {
-    if (recoveryComplete !== undefined || !resolvedUserId) return;
+    if (recoveryComplete !== undefined || explicitInitialIdentity || !resolvedUserId) return;
     const recoveryKey = `${resolvedUserId}:${namespace}`;
     if (recoveryNamespaceStarted.current === recoveryKey) return;
     recoveryNamespaceStarted.current = recoveryKey;
@@ -185,9 +190,6 @@ export function LiteratureAcquisition({
         if (recoveryNamespaceStarted.current !== recoveryKey) return;
         const recovered = tasks[0] ?? null;
         setTask(recovered);
-        if (initialRequest && (recovered?.status === 'pending' || recovered?.status === 'running')) {
-          initialRequestSubmitted.current = true;
-        }
         if (recovered && typeof window !== 'undefined') {
           settlePendingLiteratureIntent(window.sessionStorage, { userId: resolvedUserId, target: namespace }, { kind: 'recovered' });
         }
@@ -200,7 +202,7 @@ export function LiteratureAcquisition({
       .finally(() => {
         if (recoveryNamespaceStarted.current === recoveryKey) setInternalRecoveryComplete(true);
       });
-  }, [initialRequest, namespace, onAuthenticationRequired, recoveryComplete, resolvedUserId, t, target.kind, target.kind === 'research_object' ? target.researchObjectId : null]);
+  }, [explicitInitialIdentity, namespace, onAuthenticationRequired, recoveryComplete, resolvedUserId, t, target.kind, target.kind === 'research_object' ? target.researchObjectId : null]);
 
   React.useEffect(() => {
     if (!task || !active) return undefined;

@@ -979,7 +979,17 @@ for (const recoveryCase of [
   test(`Drawer close and reopen reconciles the same ${recoveryCase.name} literature task`, async ({ page }) => {
     await mockDashboard(page);
     await page.route('**/api/csrf-token', (route) => json(route, { csrfToken: 'literature-csrf' }));
-    await page.route('**/api/agent/tasks?actionable=false&kind=source.retrieve&recovery=true&targetKind=personal', (route) => json(route, { tasks: [] }));
+    let recoveryGets = 0;
+    const unrelatedTaskB = {
+      id: 'unrelated-active-b', sessionId: 'session-b', kind: 'source.retrieve', status: 'running', progress: 80,
+      retryCount: 0, canRetry: false, executionAttempt: 1, result: null, error: null,
+      createdAt: '2026-08-30T00:00:00.000Z', updatedAt: '2026-08-30T00:02:00.000Z',
+    };
+    await page.route('**/api/agent/tasks?actionable=false&kind=source.retrieve&recovery=true&targetKind=personal', (route) => {
+      recoveryGets += 1;
+      return json(route, { tasks: [unrelatedTaskB] });
+    });
+    await page.route('**/api/agent/tasks/unrelated-active-b', (route) => json(route, { task: unrelatedTaskB }));
     const callerKeys: string[] = [];
     const chargedKeys = new Set<string>();
     let retryWrites = 0;
@@ -1007,17 +1017,21 @@ for (const recoveryCase of [
     await page.route(`**/api/agent/tasks/${task.id}`, (route) => json(route, { task }));
 
     await page.goto(`${baseUrl}/dashboard`, { waitUntil: 'networkidle' });
+    const recoveryBaseline = recoveryGets;
     const visual = page.locator('[data-hermes-renderer="articulated-mesh"]');
     await visual.click();
     await page.getByLabel('What would you like to advance today?').fill('download paper 10.1038/nature12373');
     await page.getByRole('button', { name: 'Ask Hermes to plan' }).click();
     let dialog = page.getByRole('dialog', { name: 'Hermes research guide' });
     await expect.poll(() => callerKeys.length).toBe(1);
+    expect(recoveryGets).toBe(recoveryBaseline);
+    await expect(dialog).not.toContainText('unrelated-active-b');
     await expect(dialog.locator('[data-literature-state]')).toHaveAttribute('data-literature-state', recoveryCase.name === 'auth_required' ? 'auth_required' : recoveryCase.status);
     await page.getByRole('button', { name: 'Close Hermes' }).click();
     await visual.click();
     dialog = page.getByRole('dialog', { name: 'Hermes research guide' });
     await expect.poll(() => callerKeys.length).toBe(2);
+    expect(recoveryGets).toBe(recoveryBaseline);
     expect(new Set(callerKeys).size).toBe(1);
     expect(chargedKeys.size).toBe(1);
     await expect(dialog.locator('[data-literature-state]')).toHaveAttribute('data-literature-state', recoveryCase.name === 'auth_required' ? 'auth_required' : recoveryCase.status);
@@ -1044,7 +1058,18 @@ test('RO Hermes literature target comes from the route rather than a cross-RO ta
     batchId: 'batch-cross', researchObjectId: taskRo, version: 1,
     task: { id: 'task-cross-ro', researchObjectId: taskRo, logicalPath: 'other-ro.pdf', state: 'needs_review', result: { core: { schemaVersion: '0.1.0', problem: 'p', insight: 'i', method: 'm', results: 'r', limitations: 'l', reproducibility: 'x' } } },
   }));
-  await page.route(`**/api/agent/tasks?actionable=false&kind=source.retrieve&recovery=true&targetKind=research_object&researchObjectId=${routeRo}`, (route) => json(route, { tasks: [] }));
+  let recoveryGets = 0;
+  const unrelatedRouteB = {
+    id: 'unrelated-route-b', sessionId: 'route-b-session', kind: 'source.retrieve', status: 'running', progress: 70,
+    retryCount: 0, canRetry: false, executionAttempt: 1, result: null, error: null,
+    createdAt: '2026-08-30T00:00:00.000Z', updatedAt: '2026-08-30T00:02:00.000Z',
+  };
+  await page.route(`**/api/agent/tasks?actionable=false&kind=source.retrieve&recovery=true&targetKind=research_object&researchObjectId=${routeRo}`, (route) => {
+    recoveryGets += 1;
+    return json(route, { tasks: [unrelatedRouteB] });
+  });
+  await page.route('**/api/agent/tasks/unrelated-route-b', (route) => json(route, { task: unrelatedRouteB }));
+  await page.route('**/api/agent/tasks?actionable=false&kind=workspace.guide', (route) => json(route, { tasks: [] }));
   await page.route('**/api/csrf-token', (route) => json(route, { csrfToken: 'cross-ro-csrf' }));
   let submittedTarget: unknown;
   await page.route('**/api/literature/acquisitions', (route) => {
@@ -1053,10 +1078,13 @@ test('RO Hermes literature target comes from the route rather than a cross-RO ta
   });
 
   await page.goto(`${baseUrl}/research-objects/${routeRo}/hermes?task=task-cross-ro`, { waitUntil: 'networkidle' });
+  const recoveryBaseline = recoveryGets;
   await page.locator('[data-hermes-renderer="articulated-mesh"]').click();
   await page.getByLabel('What would you like to advance today?').fill('download paper 10.1038/nature12373');
   await page.getByRole('button', { name: 'Ask Hermes to plan' }).click();
   await expect.poll(() => submittedTarget).toEqual({ kind: 'research_object', researchObjectId: routeRo });
+  expect(recoveryGets).toBe(recoveryBaseline);
+  await expect(page.getByRole('dialog', { name: 'Hermes research guide' })).not.toContainText('unrelated-route-b');
 });
 
 test('Evidence Intake ignores Enter while Chinese IME composition is active', async ({ page }) => {
