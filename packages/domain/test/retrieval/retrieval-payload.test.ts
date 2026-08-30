@@ -46,7 +46,7 @@ describe('source.retrieve payload', () => {
     expect(() => parseSourceRetrieveRequestPayload({ query: 'x', providers: ['scansci'], includeFullText: true })).toThrow();
   });
 
-  it('matches the shared SQL/TypeScript durable payload parity corpus', () => {
+  it('matches every shared durable payload case in the JavaScript parser', () => {
     for (const candidate of SOURCE_RETRIEVE_RETRY_PAYLOAD_PARITY_CASES) {
       const parsed = () => parseDurableSourceRetrievePayload(candidate.payload);
       if (candidate.eligible) expect(parsed, candidate.name).not.toThrow();

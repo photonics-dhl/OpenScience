@@ -334,12 +334,30 @@ describe('literature acquisition atomic PostgreSQL transaction', () => {
     });
   });
 
-  it('keeps the SQL selector in parity with the shared exact durable payload corpus', async () => {
+  it('keeps the SQL selector in parity with PostgreSQL-applicable durable payload cases', async () => {
     const { deps, user } = await createFixture(1);
     const acquisition = await submitLiteratureAcquisition(deps as never, {
       userId: user.id, idempotencyKey: 'retry-payload-parity', query: 'seed', target: { kind: 'personal' },
     });
-    for (const [index, candidate] of SOURCE_RETRIEVE_RETRY_PAYLOAD_PARITY_CASES.entries()) {
+    const terminalUpdatedAt = new Date('2026-08-30T02:00:00.000Z');
+    const terminalSentinel = await prisma.agentTask.create({
+      data: {
+        sessionId: acquisition.session.id,
+        kind: 'source.retrieve',
+        status: 'succeeded',
+        progress: 100,
+        retryCount: 1,
+        executionAttempt: 1,
+        payload: { query: 'terminal fallback sentinel' },
+        result: { sentinel: 'terminal-fallback' },
+        createdAt: terminalUpdatedAt,
+        updatedAt: terminalUpdatedAt,
+      },
+    });
+    const postgresCases = SOURCE_RETRIEVE_RETRY_PAYLOAD_PARITY_CASES.filter(
+      ({ storageApplicability }) => storageApplicability === 'postgresql-jsonb',
+    );
+    for (const [index, candidate] of postgresCases.entries()) {
       await prisma.agentTask.update({
         where: { id: acquisition.task.id },
         data: {
@@ -351,10 +369,10 @@ describe('literature acquisition atomic PostgreSQL transaction', () => {
       const recovered = await listAgentTasks(deps as never, {
         userId: user.id, kind: 'source.retrieve', recoveryPreferred: true,
       });
-      expect(recovered).toEqual([expect.objectContaining({
-        id: acquisition.task.id,
-        canRetry: candidate.eligible,
-      })]);
+      const expected = candidate.eligible
+        ? { id: acquisition.task.id, canRetry: true }
+        : { id: terminalSentinel.id, canRetry: false };
+      expect(recovered, candidate.name).toEqual([expect.objectContaining(expected)]);
     }
   });
 
