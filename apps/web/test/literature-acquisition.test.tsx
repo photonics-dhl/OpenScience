@@ -9,13 +9,14 @@ vi.mock('next-intl', () => ({
       queryLabel: 'Title, DOI, or arXiv ID', queryPlaceholder: '10.1000/example', search: 'Search metadata',
       getFullText: 'Get full text', metadata: 'Metadata results', statusPending: 'Waiting in queue', statusRunning: 'Retrieving source',
       statusAuthRequired: 'Institutional access needs attention', statusFailed: 'Retrieval failed', statusSucceeded: 'Source ready',
-      expires: 'Available until {expiresAt}', download: 'Download source', retry: 'Try again', noResults: 'No matching metadata yet.',
+      statusBlocked: 'Retrieval was blocked and cannot be retried.', statusRetryExhausted: 'The retry has already been used.',
+      expires: 'Available until {expiresAt}', download: 'Download source', retry: 'Try again', noResults: 'No matching metadata yet.', source: 'Open source record',
     };
     return Object.entries(values ?? {}).reduce((result, [name, value]) => result.replace(`{${name}}`, String(value)), copy[key] ?? key);
   },
 }));
 
-import { LiteratureAcquisition, describeLiteratureTask, isLiteratureIdentifier, type LiteratureTask } from '@/components/dashboard/LiteratureAcquisition';
+import { LiteratureAcquisition, describeLiteratureTask, isLiteratureIdentifier, isLiteratureTaskRetryEligible, type LiteratureTask } from '@/components/dashboard/LiteratureAcquisition';
 
 const sourceTask: LiteratureTask = {
   id: 'task-1', sessionId: 'session-1', kind: 'source.retrieve', status: 'succeeded', progress: 100, retryCount: 0,
@@ -38,8 +39,27 @@ describe('Personal literature acquisition', () => {
     expect(describeLiteratureTask(sourceTask)).toEqual({ state: 'succeeded', messageKey: 'statusSucceeded' });
   });
 
+  it('offers retry only for one server-eligible failed source task and explains terminal failures', () => {
+    const eligible = { ...sourceTask, status: 'failed' as const, retryCount: 0, error: '[retryable] timeout' };
+    const blocked = { ...eligible, error: '[blocked] policy denied' };
+    const exhausted = { ...eligible, retryCount: 1, error: '[retryable] failed again' };
+    expect(isLiteratureTaskRetryEligible(eligible)).toBe(true);
+    expect(isLiteratureTaskRetryEligible({ ...eligible, status: 'running' })).toBe(false);
+    expect(isLiteratureTaskRetryEligible(blocked)).toBe(false);
+    expect(isLiteratureTaskRetryEligible(exhausted)).toBe(false);
+    expect(describeLiteratureTask(blocked)).toEqual({ state: 'failed_terminal', messageKey: 'statusBlocked' });
+    expect(describeLiteratureTask(exhausted)).toEqual({ state: 'failed_terminal', messageKey: 'statusRetryExhausted' });
+
+    const blockedMarkup = renderToStaticMarkup(<LiteratureAcquisition initialTask={blocked} onAuthenticationRequired={() => undefined} userId="user-1" />);
+    const exhaustedMarkup = renderToStaticMarkup(<LiteratureAcquisition initialTask={exhausted} onAuthenticationRequired={() => undefined} userId="user-1" />);
+    expect(blockedMarkup).toContain('Retrieval was blocked and cannot be retried.');
+    expect(exhaustedMarkup).toContain('The retry has already been used.');
+    expect(blockedMarkup).not.toContain('Try again');
+    expect(exhaustedMarkup).not.toContain('Try again');
+  });
+
   it('renders a labelled, keyboard-complete rule-separated acquisition instrument without provider controls', () => {
-    const markup = renderToStaticMarkup(<LiteratureAcquisition initialTask={sourceTask} userId="user-1" />);
+    const markup = renderToStaticMarkup(<LiteratureAcquisition initialTask={sourceTask} onAuthenticationRequired={() => undefined} userId="user-1" />);
 
     expect(markup).toContain('data-literature-acquisition="true"');
     expect(markup).toContain('for="literature-query"');
@@ -50,6 +70,7 @@ describe('Personal literature acquisition', () => {
     expect(markup).toContain('data-literature-state="succeeded"');
     expect(markup).toContain('Get full text');
     expect(markup).toContain('Download source');
+    expect(markup).toMatch(/<a[^>]*min-h-11[^>]*min-w-11[^>]*>Open source record<\/a>/);
     expect(markup).toContain('min-h-11');
     expect(markup).toContain('sm:grid-cols-');
     expect(markup).not.toMatch(/provider|ScanSci|CARSI|account|mode/i);

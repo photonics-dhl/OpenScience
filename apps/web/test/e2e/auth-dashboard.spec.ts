@@ -233,7 +233,7 @@ test('personal literature acquisition recovers a running server task after reloa
   await mockAuthenticatedUser(page);
   await page.route('**/api/csrf-token', (route) => route.fulfill({ contentType: 'application/json', body: JSON.stringify({ csrfToken: 'csrf' }) }));
   const runningTask = { id: 'literature-reload', sessionId: 'session-1', kind: 'source.retrieve', status: 'running', progress: 40, retryCount: 0, executionAttempt: 1, result: null, error: null, createdAt: '2026-08-30T00:00:00.000Z', updatedAt: '2026-08-30T00:01:00.000Z' };
-  await page.route('**/api/agent/tasks?actionable=false&kind=source.retrieve', (route) => {
+  await page.route('**/api/agent/tasks?actionable=false&kind=source.retrieve&recovery=true', (route) => {
     return route.fulfill({ contentType: 'application/json', body: JSON.stringify({ tasks: serverHasTask ? [runningTask] : [] }) });
   });
   await page.route('**/api/literature/acquisitions', async (route) => {
@@ -254,6 +254,35 @@ test('personal literature acquisition recovers a running server task after reloa
   expect(await page.evaluate(() => Object.keys(sessionStorage).filter((key) => key.startsWith('openscience:literature:')))).toEqual([]);
 });
 
+test('a permanent 401 while polling routes the dashboard through established login recovery', async ({ page }) => {
+  const runningTask = { id: 'literature-auth-lost', sessionId: 'session-1', kind: 'source.retrieve', status: 'running', progress: 40, retryCount: 0, executionAttempt: 1, result: null, error: null, createdAt: '2026-08-30T00:00:00.000Z', updatedAt: '2026-08-30T00:01:00.000Z' };
+  await mockAuthenticatedUser(page);
+  await page.route('**/api/agent/tasks?actionable=false&kind=source.retrieve&recovery=true', (route) => route.fulfill({ contentType: 'application/json', body: JSON.stringify({ tasks: [runningTask] }) }));
+  await page.route('**/api/agent/tasks/literature-auth-lost', (route) => route.fulfill({ status: 401, contentType: 'application/json', body: JSON.stringify({ error: { code: 'SESSION_INVALID', message: 'signed out' } }) }));
+
+  await page.goto(`${baseUrl}/dashboard`);
+  await expect(page).toHaveURL(`${baseUrl}/auth/login?returnTo=%2Fdashboard`, { timeout: 5_000 });
+});
+
+for (const status of [403, 404]) {
+  test(`a permanent ${status} while polling leaves a visible terminal recovery and an enabled search`, async ({ page }) => {
+    const runningTask = { id: `literature-gone-${status}`, sessionId: 'session-1', kind: 'source.retrieve', status: 'running', progress: 40, retryCount: 0, executionAttempt: 1, result: null, error: null, createdAt: '2026-08-30T00:00:00.000Z', updatedAt: '2026-08-30T00:01:00.000Z' };
+    let polls = 0;
+    await mockAuthenticatedUser(page);
+    await page.route('**/api/agent/tasks?actionable=false&kind=source.retrieve&recovery=true', (route) => route.fulfill({ contentType: 'application/json', body: JSON.stringify({ tasks: [runningTask] }) }));
+    await page.route(`**/api/agent/tasks/literature-gone-${status}`, (route) => {
+      polls += 1;
+      return route.fulfill({ status, contentType: 'application/json', body: JSON.stringify({ error: { code: 'TASK_UNAVAILABLE', message: 'internal detail' } }) });
+    });
+
+    await page.goto(`${baseUrl}/dashboard`);
+    await expect(page.getByText(/task could no longer be recovered/i)).toBeVisible({ timeout: 5_000 });
+    await expect(page.getByLabel(/title, doi, or arxiv id/i)).toBeEnabled();
+    await page.waitForTimeout(1_500);
+    expect(polls).toBe(1);
+  });
+}
+
 test('a failed source retrieval retries the same task without a new acquisition POST', async ({ page }) => {
   let retries = 0;
   let submissions = 0;
@@ -262,7 +291,7 @@ test('a failed source retrieval retries the same task without a new acquisition 
   const succeededTask = { ...pendingTask, status: 'succeeded', progress: 100, result: { sources: [] } };
   await mockAuthenticatedUser(page);
   await page.route('**/api/csrf-token', (route) => route.fulfill({ contentType: 'application/json', body: JSON.stringify({ csrfToken: 'csrf' }) }));
-  await page.route('**/api/agent/tasks?actionable=false&kind=source.retrieve', (route) => route.fulfill({ contentType: 'application/json', body: JSON.stringify({ tasks: [failedTask] }) }));
+  await page.route('**/api/agent/tasks?actionable=false&kind=source.retrieve&recovery=true', (route) => route.fulfill({ contentType: 'application/json', body: JSON.stringify({ tasks: [failedTask] }) }));
   await page.route('**/api/literature/acquisitions', (route) => {
     submissions += 1;
     return route.fulfill({ status: 500, contentType: 'application/json', body: JSON.stringify({ error: { code: 'UNEXPECTED', message: 'unexpected acquisition' } }) });
@@ -289,7 +318,7 @@ test('metadata selection starts a second acquisition and finishes with one tempo
   let releaseFullText: (() => void) | undefined;
   await mockAuthenticatedUser(page);
   await page.route('**/api/csrf-token', (route) => route.fulfill({ contentType: 'application/json', body: JSON.stringify({ csrfToken: 'csrf' }) }));
-  await page.route('**/api/agent/tasks?actionable=false&kind=source.retrieve', (route) => route.fulfill({ contentType: 'application/json', body: JSON.stringify({ tasks: [] }) }));
+  await page.route('**/api/agent/tasks?actionable=false&kind=source.retrieve&recovery=true', (route) => route.fulfill({ contentType: 'application/json', body: JSON.stringify({ tasks: [] }) }));
   await page.route('**/api/literature/acquisitions', async (route) => {
     submissions += 1;
     callerKeys.push(route.request().headers()['idempotency-key'] ?? '');
@@ -323,12 +352,18 @@ test('metadata selection starts a second acquisition and finishes with one tempo
   await expect.poll(() => submissions).toBe(1);
   await expect(page.getByText(/reconnecting to the task/i)).toBeVisible({ timeout: 4000 });
   await expect(page.getByRole('button', { name: /get full text/i })).toBeVisible({ timeout: 6000 });
+  const sourceLink = page.getByRole('link', { name: /open source record/i });
+  const sourceBox = await sourceLink.boundingBox();
+  expect(sourceBox?.width).toBeGreaterThanOrEqual(44);
+  expect(sourceBox?.height).toBeGreaterThanOrEqual(44);
   const actionBox = await page.getByRole('button', { name: /get full text/i }).boundingBox();
   expect(actionBox?.width).toBeGreaterThanOrEqual(44);
   expect(actionBox?.height).toBeGreaterThanOrEqual(44);
   const getFullText = page.getByRole('button', { name: /get full text/i });
   const selecting = getFullText.press('Enter');
   await expect(getFullText).toBeDisabled();
+  await expect(sourceLink).toHaveCount(0);
+  await expect(page.getByText(/open source record/i)).toHaveAttribute('aria-disabled', 'true');
   releaseFullText?.();
   await selecting;
   await expect(page.getByRole('button', { name: /download source/i })).toBeVisible({ timeout: 4_000 });

@@ -187,8 +187,22 @@ async function resolveInterestContext(
 /** Dashboard task rail: caller-owned tasks with their RO context. */
 export async function listAgentTasks(
   deps: AgentDeps,
-  input: { userId: string; actionableOnly?: boolean; kind?: string },
+  input: { userId: string; actionableOnly?: boolean; kind?: string; recoveryPreferred?: boolean },
 ): Promise<AgentTaskListItem[]> {
+  if (input.recoveryPreferred) {
+    if (input.kind !== 'source.retrieve') throw new AgentError('VALIDATION_ERROR', 'Recovery priority requires source.retrieve');
+    const baseWhere = { session: { userId: input.userId }, kind: input.kind };
+    const newest = (where: Prisma.AgentTaskWhereInput) => deps.prisma.agentTask.findFirst({
+      where: { ...baseWhere, ...where }, include: { session: true }, orderBy: { updatedAt: 'desc' },
+    });
+    const active = await newest({ status: { in: ['pending', 'running'] } });
+    const retryableFailed = active ? null : await newest({
+      status: 'failed', retryCount: 0, error: { not: { startsWith: '[blocked]' } },
+    });
+    const terminal = active || retryableFailed ? null : await newest({ status: { in: ['succeeded', 'failed'] } });
+    const selected = active ?? retryableFailed ?? terminal;
+    return selected ? [{ ...taskToView(selected), researchObjectId: selected.session.researchObjectId }] : [];
+  }
   const rows = await deps.prisma.agentTask.findMany({
     where: {
       session: { userId: input.userId },

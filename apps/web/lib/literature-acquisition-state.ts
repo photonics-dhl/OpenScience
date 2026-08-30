@@ -62,12 +62,6 @@ export function clearAllPendingLiteratureIntents(storage: Storage): void {
   }
 }
 
-export function selectRecoveredLiteratureTask(tasks: AgentTaskView[]): AgentTaskView | null {
-  const newestFirst = (left: AgentTaskView, right: AgentTaskView) => Date.parse(right.updatedAt) - Date.parse(left.updatedAt);
-  const actionable = tasks.filter(({ status }) => status === 'pending' || status === 'running' || status === 'failed').sort(newestFirst);
-  return actionable[0] ?? tasks.slice().sort(newestFirst)[0] ?? null;
-}
-
 function errorStatus(error: unknown): number | undefined {
   return error && typeof error === 'object' && 'status' in error && typeof (error as ApiClientError).status === 'number'
     ? (error as ApiClientError).status
@@ -87,6 +81,7 @@ export function startLiteratureTaskPolling<T extends Pick<AgentTaskView, 'status
   getTask: (taskId: string, signal: AbortSignal) => Promise<T>;
   onTask: (task: T) => void;
   onReconnecting: (reconnecting: boolean) => void;
+  onPermanentError?: (status: number) => void;
 }): () => void {
   let stopped = false;
   let transientFailures = 0;
@@ -116,6 +111,7 @@ export function startLiteratureTaskPolling<T extends Pick<AgentTaskView, 'status
       const status = errorStatus(error);
       if (!isTransientPollFailure(status)) {
         if (reconnecting) options.onReconnecting(false);
+        if (status !== undefined) options.onPermanentError?.(status);
         return;
       }
       transientFailures += 1;

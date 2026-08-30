@@ -191,6 +191,49 @@ describe('AgentSession/AgentTask（§15 + §16 幂等 + §9.1 配额）', () => 
     expect(JSON.stringify(rows)).not.toMatch(/private manuscript|private-key|other user private query|other-private-key/);
   });
 
+  it('recovers globally before limiting: active, then retryable failed, then newest terminal', async () => {
+    const { deps, user, ro, db } = await makeDeps(40);
+    const session = await createAgentSession(deps, { userId: user.id, researchObjectId: ro.id, kind: 'retrieval' });
+    const base = new Date('2026-08-30T00:00:00.000Z').getTime();
+    for (let index = 0; index < 25; index += 1) {
+      db.agentTasks.push({
+        id: `terminal-${index}`, sessionId: session.id, kind: 'source.retrieve', status: 'succeeded', progress: 100,
+        retryCount: 0, executionAttempt: 1, dispatchedAt: new Date(base), payload: { query: `private-${index}` },
+        interestContext: null, idempotencyKey: `private-key-${index}`, result: { sources: [] }, error: null,
+        createdAt: new Date(base + index * 1_000), updatedAt: new Date(base + index * 1_000),
+      });
+    }
+    const retryable = {
+      id: 'retryable-older-than-history', sessionId: session.id, kind: 'source.retrieve', status: 'failed', progress: 30,
+      retryCount: 0, executionAttempt: 1, dispatchedAt: new Date(base), payload: { query: 'retry private' }, interestContext: null,
+      idempotencyKey: 'retry-private-key', result: null, error: '[retryable] upstream timeout', createdAt: new Date(base - 2_000), updatedAt: new Date(base - 2_000),
+    };
+    const active = {
+      ...retryable, id: 'active-older-than-history', status: 'running', retryCount: 0, error: null,
+      idempotencyKey: 'active-private-key', payload: { query: 'active private' }, createdAt: new Date(base - 3_000), updatedAt: new Date(base - 3_000),
+    };
+    db.agentTasks.push(retryable, active);
+    const other = seedUser(db, { id: 'recovery-other-user' });
+    db.agentSessions.push({ id: 'recovery-other-session', userId: other.id, researchObjectId: null, kind: 'retrieval', title: '', status: 'active', idempotencyKey: null, createdAt: new Date(), updatedAt: new Date() });
+    db.agentTasks.push({ ...active, id: 'other-user-active', sessionId: 'recovery-other-session', updatedAt: new Date(base + 99_000) });
+
+    const activeRecovery = await listAgentTasks(deps, { userId: user.id, kind: 'source.retrieve', recoveryPreferred: true });
+    expect(activeRecovery).toEqual([expect.objectContaining({ id: active.id, status: 'running' })]);
+    expect(JSON.stringify(activeRecovery)).not.toMatch(/active private|active-private-key|other-user-active/);
+
+    active.status = 'succeeded';
+    const failedRecovery = await listAgentTasks(deps, { userId: user.id, kind: 'source.retrieve', recoveryPreferred: true });
+    expect(failedRecovery).toEqual([expect.objectContaining({ id: retryable.id, status: 'failed', retryCount: 0 })]);
+
+    retryable.error = '[blocked] policy denied';
+    const blockedFallback = await listAgentTasks(deps, { userId: user.id, kind: 'source.retrieve', recoveryPreferred: true });
+    expect(blockedFallback).toEqual([expect.objectContaining({ id: 'terminal-24', status: 'succeeded' })]);
+    retryable.error = '[retryable] failed twice';
+    retryable.retryCount = 1;
+    const exhaustedFallback = await listAgentTasks(deps, { userId: user.id, kind: 'source.retrieve', recoveryPreferred: true });
+    expect(exhaustedFallback).toEqual([expect.objectContaining({ id: 'terminal-24', status: 'succeeded' })]);
+  });
+
   it('幂等键重放 → 返回既有任务（§16 不重复）', async () => {
     const { deps, user, ro, redis } = await makeDeps();
     const session = await createAgentSession(deps, { userId: user.id, researchObjectId: ro.id, kind: 'extract' });

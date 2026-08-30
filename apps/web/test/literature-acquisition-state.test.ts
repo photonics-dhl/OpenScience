@@ -4,7 +4,6 @@ import { ApiClientError, type AgentTaskView } from '../lib/api';
 import {
   acquirePendingLiteratureIntent,
   clearAllPendingLiteratureIntents,
-  selectRecoveredLiteratureTask,
   settlePendingLiteratureIntent,
   startLiteratureTaskPolling,
 } from '../lib/literature-acquisition-state';
@@ -91,16 +90,6 @@ describe('unresolved literature acquisition intent', () => {
   });
 });
 
-describe('literature task recovery selection', () => {
-  it('chooses the newest active or failed task before a newer terminal task', () => {
-    const succeeded = { ...runningTask, id: 'newest-terminal', status: 'succeeded' as const, updatedAt: '2026-08-30T00:05:00.000Z' };
-    const pending = { ...runningTask, id: 'older-active', status: 'pending' as const, updatedAt: '2026-08-30T00:03:00.000Z' };
-    const failed = { ...runningTask, id: 'newer-failed', status: 'failed' as const, updatedAt: '2026-08-30T00:04:00.000Z' };
-    expect(selectRecoveredLiteratureTask([succeeded, pending, failed])?.id).toBe('newer-failed');
-    expect(selectRecoveredLiteratureTask([succeeded])?.id).toBe('newest-terminal');
-  });
-});
-
 describe('literature task polling', () => {
   it('uses exact capped transient backoff, preserves the prior task, clears warning on recovery, and stops terminally', async () => {
     vi.useFakeTimers();
@@ -135,16 +124,18 @@ describe('literature task polling', () => {
     expect(getTask).toHaveBeenCalledTimes(7);
   });
 
-  it('stops permanently without replacing the task after a permanent polling error', async () => {
+  it.each([401, 403, 404])('reports permanent status %s and stops without replacing the task', async (status) => {
     vi.useFakeTimers();
-    const getTask = vi.fn().mockRejectedValue(new ApiClientError('SESSION_INVALID', 'signed out', 401));
+    const getTask = vi.fn().mockRejectedValue(new ApiClientError('PERMANENT', 'permanent', status));
     const onTask = vi.fn();
     const onReconnecting = vi.fn();
-    startLiteratureTaskPolling({ taskId: runningTask.id, getTask, onTask, onReconnecting });
+    const onPermanentError = vi.fn();
+    startLiteratureTaskPolling({ taskId: runningTask.id, getTask, onTask, onReconnecting, onPermanentError });
     await vi.advanceTimersByTimeAsync(60_000);
     expect(getTask).toHaveBeenCalledTimes(1);
     expect(onTask).not.toHaveBeenCalled();
     expect(onReconnecting).not.toHaveBeenCalled();
+    expect(onPermanentError).toHaveBeenCalledWith(status);
   });
 
   it('clears a pending timer and aborts an in-flight request during cleanup', async () => {

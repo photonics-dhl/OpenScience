@@ -97,8 +97,17 @@ export function registerAgentRoutes(app: FastifyInstance, deps: AgentRouteDeps):
   app.get('/agent/tasks', async (req, reply) => {
     const user = await requireCurrentUser(deps, req, reply);
     if (!user) return;
-    const { actionable, kind } = z.object({ actionable: z.enum(['true', 'false']).default('true'), kind: z.string().min(1).max(64).optional() }).parse(req.query);
-    return reply.send({ tasks: await listAgentTasks(deps, { userId: user.userId, actionableOnly: actionable === 'true', kind }) });
+    const { actionable, kind, recovery } = z.object({
+      actionable: z.enum(['true', 'false']).default('true'),
+      kind: z.string().min(1).max(64).optional(),
+      recovery: z.enum(['true']).optional(),
+    }).parse(req.query);
+    if (recovery === 'true' && (actionable !== 'false' || kind !== 'source.retrieve')) {
+      throw new AgentError('VALIDATION_ERROR', 'Recovery priority requires non-actionable source.retrieve');
+    }
+    return reply.send({ tasks: await listAgentTasks(deps, {
+      userId: user.userId, actionableOnly: actionable === 'true', kind, recoveryPreferred: recovery === 'true',
+    }) });
   });
 
   app.post('/agent/tasks', async (req, reply) => {

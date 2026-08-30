@@ -753,9 +753,22 @@ export function createFakePrisma(): { prisma: PrismaClient; db: FakeDb } {
         }
         return { ...row };
       },
-      findFirst: async ({ where }: any) => db.agentTasks.find((task) =>
-        where.sessionId === undefined || task.sessionId === where.sessionId,
-      ) ?? null,
+      findFirst: async ({ where, include, orderBy }: any) => {
+        let rows = db.agentTasks.filter((task) => {
+          const session = db.agentSessions.find((candidate) => candidate.id === task.sessionId);
+          return (where.sessionId === undefined || task.sessionId === where.sessionId)
+            && (where.session?.userId === undefined || session?.userId === where.session.userId)
+            && (where.kind === undefined || task.kind === where.kind)
+            && (typeof where.status !== 'string' || task.status === where.status)
+            && (where.status?.in === undefined || where.status.in.includes(task.status))
+            && (where.retryCount === undefined || task.retryCount === where.retryCount)
+            && (where.error?.not?.startsWith === undefined || !task.error?.startsWith(where.error.not.startsWith));
+        });
+        if (orderBy?.updatedAt === 'desc') rows = rows.sort((left, right) => right.updatedAt.getTime() - left.updatedAt.getTime());
+        const row = rows[0] ?? null;
+        if (!row || !include?.session) return row;
+        return { ...row, session: db.agentSessions.find((session) => session.id === row.sessionId) };
+      },
       update: async ({ where, data }: any) => {
         const row = db.agentTasks.find((t) => t.id === where.id);
         Object.assign(row, { ...data, ...(data.result === Prisma.JsonNull ? { result: null } : {}) }, { updatedAt: new Date() });

@@ -801,7 +801,7 @@ export async function listAgentTasks(): Promise<{ tasks: AgentTaskView[] }> {
 }
 
 export async function listSourceRetrieveTasks(): Promise<{ tasks: AgentTaskView[] }> {
-  return request('/api/agent/tasks?actionable=false&kind=source.retrieve');
+  return request('/api/agent/tasks?actionable=false&kind=source.retrieve&recovery=true');
 }
 
 export async function submitWorkspaceGuideTask(input: {

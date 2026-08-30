@@ -29,6 +29,19 @@ describe('same-origin API routing contract', () => {
 });
 
 describe('apiRequest CSRF contract', () => {
+  it('requests the server-authoritative source recovery task before any client history limit', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify({ tasks: [] }), { status: 200 }));
+    vi.stubGlobal('fetch', fetchMock);
+    const { listSourceRetrieveTasks } = await import('../lib/api');
+
+    await listSourceRetrieveTasks();
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      '/api/agent/tasks?actionable=false&kind=source.retrieve&recovery=true',
+      expect.objectContaining({ credentials: 'include' }),
+    );
+  });
+
   it('serializes a personal literature acquisition without provider or mode controls', async () => {
     const fetchMock = vi.fn()
       .mockResolvedValueOnce(new Response(JSON.stringify({ csrfToken: 'csrf-1' }), { status: 200 }))

@@ -30,11 +30,15 @@ type LiteratureSource = {
 };
 
 type LiteratureTaskDescription = {
-  state: 'pending' | 'running' | 'auth_required' | 'failed' | 'succeeded';
-  messageKey: 'statusPending' | 'statusRunning' | 'statusAuthRequired' | 'statusFailed' | 'statusSucceeded';
+  state: 'pending' | 'running' | 'auth_required' | 'failed' | 'failed_terminal' | 'succeeded';
+  messageKey: 'statusPending' | 'statusRunning' | 'statusAuthRequired' | 'statusFailed' | 'statusBlocked' | 'statusRetryExhausted' | 'statusSucceeded';
 };
 
 export const isLiteratureIdentifier = isSourceRetrieveIdentifier;
+
+export function isLiteratureTaskRetryEligible(task: LiteratureTask): boolean {
+  return task.kind === 'source.retrieve' && task.status === 'failed' && task.retryCount < 1 && !task.error?.startsWith('[blocked]');
+}
 
 function hasAuthRequiredResult(result: Record<string, unknown> | null): boolean {
   if (!result || !Array.isArray(result.providers)) return false;
@@ -45,7 +49,11 @@ function hasAuthRequiredResult(result: Record<string, unknown> | null): boolean 
 export function describeLiteratureTask(task: LiteratureTask): LiteratureTaskDescription {
   if (task.status === 'pending') return { state: 'pending', messageKey: 'statusPending' };
   if (task.status === 'running') return { state: 'running', messageKey: 'statusRunning' };
-  if (task.status === 'failed') return { state: 'failed', messageKey: 'statusFailed' };
+  if (task.status === 'failed') {
+    if (task.error?.startsWith('[blocked]')) return { state: 'failed_terminal', messageKey: 'statusBlocked' };
+    if (task.retryCount >= 1) return { state: 'failed_terminal', messageKey: 'statusRetryExhausted' };
+    return { state: 'failed', messageKey: 'statusFailed' };
+  }
   if (hasAuthRequiredResult(task.result)) return { state: 'auth_required', messageKey: 'statusAuthRequired' };
   return { state: 'succeeded', messageKey: 'statusSucceeded' };
 }
@@ -70,7 +78,7 @@ function readableExpiry(value: string): string {
   return Number.isNaN(date.getTime()) ? value : new Intl.DateTimeFormat(undefined, { dateStyle: 'medium', timeStyle: 'short' }).format(date);
 }
 
-export function LiteratureAcquisition({ initialTask = null, recoveryComplete = true, userId }: { initialTask?: LiteratureTask | null; recoveryComplete?: boolean; userId: string }) {
+export function LiteratureAcquisition({ initialTask = null, onAuthenticationRequired, recoveryComplete = true, userId }: { initialTask?: LiteratureTask | null; onAuthenticationRequired: () => void; recoveryComplete?: boolean; userId: string }) {
   const t = useTranslations('dashboard.literature');
   const [query, setQuery] = React.useState('');
   const [task, setTask] = React.useState<LiteratureTask | null>(initialTask);
@@ -99,25 +107,34 @@ export function LiteratureAcquisition({ initialTask = null, recoveryComplete = t
       getTask: async (taskId, signal) => (await getAgentTask('', taskId, signal)).task,
       onTask: setTask,
       onReconnecting: setReconnecting,
+      onPermanentError: (status) => {
+        if (status === 401) {
+          onAuthenticationRequired();
+          return;
+        }
+        setTask(null);
+        setReconnecting(false);
+        setError(t('recoveryError'));
+      },
     });
-  }, [active, task?.id]);
+  }, [active, onAuthenticationRequired, t, task?.id]);
 
   async function submit(input: { query: string; identifier?: string }) {
     if (submitting.current) return;
     if (typeof window === 'undefined') return;
-    const pendingIntent = await acquirePendingLiteratureIntent(
-      window.sessionStorage,
-      { userId, target: 'personal', input },
-      () => crypto.randomUUID(),
-    );
-    if (pendingIntent.status === 'blocked') {
-      setError(t('pendingIntent'));
-      return;
-    }
     submitting.current = true;
     setSubmissionPending(true);
     setError('');
     try {
+      const pendingIntent = await acquirePendingLiteratureIntent(
+        window.sessionStorage,
+        { userId, target: 'personal', input },
+        () => crypto.randomUUID(),
+      );
+      if (pendingIntent.status === 'blocked') {
+        setError(t('pendingIntent'));
+        return;
+      }
       const acquisition = await submitLiteratureAcquisition(input, pendingIntent.key);
       setTask(acquisition.task);
       settlePendingLiteratureIntent(window.sessionStorage, { userId, target: 'personal' }, { kind: 'accepted' });
@@ -195,7 +212,7 @@ export function LiteratureAcquisition({ initialTask = null, recoveryComplete = t
         {error ? <span className="text-state-danger">{error}</span> : null}
       </div>
 
-      {description?.state === 'failed' ? (
+      {task && isLiteratureTaskRetryEligible(task) ? (
         <button className="mt-2 min-h-11 border-b border-os-vermilion-ink text-sm font-semibold text-os-ink transition-transform duration-150 hover:-translate-y-px active:translate-y-px focus-visible:ring-2 focus-visible:ring-focus-ring disabled:opacity-60" disabled={submissionPending} onClick={() => void retry()} type="button">
           {t('retry')}
         </button>
@@ -211,7 +228,10 @@ export function LiteratureAcquisition({ initialTask = null, recoveryComplete = t
                 <li className="grid gap-3 py-4 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center" key={source.id ?? `${source.title ?? 'source'}-${index}`}>
                   <div>
                     <p className="font-reading text-lg leading-7 text-os-ink">{source.title ?? t('untitled')}</p>
-                    {source.sourceUrl ? <a className="mt-1 inline-block text-sm text-os-muted-paper underline decoration-os-rule-paper underline-offset-4 focus-visible:ring-2 focus-visible:ring-focus-ring" href={source.sourceUrl}>{t('source')}</a> : null}
+                    {source.sourceUrl ? submissionPending
+                      ? <span aria-disabled="true" className="mt-1 inline-flex min-h-11 min-w-11 items-center text-sm text-os-muted-paper opacity-60">{t('source')}</span>
+                      : <a className="mt-1 inline-flex min-h-11 min-w-11 items-center text-sm text-os-muted-paper underline decoration-os-rule-paper underline-offset-4 focus-visible:ring-2 focus-visible:ring-focus-ring" href={source.sourceUrl}>{t('source')}</a>
+                      : null}
                     {source.expiresAt ? <p className="mt-2 font-mono text-xs text-os-muted-paper">{t('expires', { expiresAt: readableExpiry(source.expiresAt) })}</p> : null}
                   </div>
                   <div className="flex flex-wrap gap-3">

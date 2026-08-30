@@ -148,6 +148,49 @@ describe('POST /literature/acquisitions', () => {
     await app.close();
   });
 
+  it('returns the globally authoritative recovery task before the 20-row history limit', async () => {
+    const { app, db, token, csrfToken, csrfCookie } = await makeApp();
+    const acquired = await app.inject({
+      method: 'POST', url: '/literature/acquisitions', cookies: { openscience_session: token, _csrf: csrfCookie },
+      headers: { 'x-csrf-token': csrfToken, 'idempotency-key': 'recovery-history' },
+      payload: { query: 'history seed', target: { kind: 'personal' } },
+    });
+    const owned = db.agentTasks.find((row) => row.id === acquired.json().task.id)!;
+    Object.assign(owned, { status: 'succeeded', progress: 100, updatedAt: new Date('2026-08-30T00:30:00.000Z') });
+    const base = new Date('2026-08-30T00:00:00.000Z').getTime();
+    for (let index = 0; index < 25; index += 1) {
+      db.agentTasks.push({
+        ...owned,
+        id: `00000000-0000-4000-8000-${String(900 + index).padStart(12, '0')}`,
+        payload: { query: `private history ${index}` }, idempotencyKey: `private-history-key-${index}`,
+        createdAt: new Date(base + index * 1_000), updatedAt: new Date(base + index * 1_000),
+      });
+    }
+    const activeId = '00000000-0000-4000-8000-000000000950';
+    db.agentTasks.push({
+      ...owned, id: activeId, status: 'running', progress: 40, payload: { query: 'older private active' },
+      idempotencyKey: 'older-private-active-key', createdAt: new Date(base - 1_000), updatedAt: new Date(base - 1_000),
+    });
+    const other = seedUser(db, { id: '00000000-0000-4000-8000-000000000099' });
+    db.agentSessions.push({ id: '00000000-0000-4000-8000-000000000951', userId: other.id, researchObjectId: null, kind: 'retrieval', title: '', status: 'active', idempotencyKey: null, createdAt: new Date(), updatedAt: new Date() });
+    db.agentTasks.push({
+      ...owned, id: '00000000-0000-4000-8000-000000000952', sessionId: '00000000-0000-4000-8000-000000000951',
+      status: 'running', payload: { query: 'other private active' }, idempotencyKey: 'other-private-active-key', updatedAt: new Date(base + 99_000),
+    });
+
+    const response = await app.inject({
+      method: 'GET', url: '/agent/tasks?actionable=false&kind=source.retrieve&recovery=true', cookies: { openscience_session: token },
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json().tasks).toEqual([expect.objectContaining({ id: activeId, status: 'running' })]);
+    expect(Object.keys(response.json().tasks[0]).sort()).toEqual([
+      'createdAt', 'error', 'executionAttempt', 'id', 'kind', 'progress', 'researchObjectId', 'result', 'retryCount', 'sessionId', 'status', 'updatedAt',
+    ]);
+    expect(JSON.stringify(response.json())).not.toMatch(/older private active|older-private-active-key|other private active|payload|idempotencyKey/);
+    await app.close();
+  });
+
   it('retries one failed source task in place without another task or debit and rejects unsafe retry states', async () => {
     const { app, db, token, csrfToken, csrfCookie } = await makeApp();
     const write = (url: string, idempotencyKey?: string, payload?: unknown) => app.inject({

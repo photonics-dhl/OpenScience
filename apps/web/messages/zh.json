@@ -614,6 +614,8 @@
       "statusRunning": "正在获取来源",
       "statusAuthRequired": "获取全文前需要处理机构访问权限。",
       "statusFailed": "检索未能完成。",
+      "statusBlocked": "这次检索已被阻断，无法重试。",
+      "statusRetryExhausted": "可用的重试次数已经用完。",
       "statusSucceeded": "来源已就绪",
       "expires": "可用至 {expiresAt}",
       "retry": "再次尝试",
@@ -621,6 +623,7 @@
       "error": "无法完成这次来源请求，请重试。"
       ,"pendingIntent": "请先完成或恢复当前来源请求，再开始新的请求。"
       ,"reconnecting": "正在重新连接任务…"
+      ,"recoveryError": "无法继续恢复这项任务，你可以重新发起来源请求。"
     },
     "hermes": {
       "title": "Hermes 任务",

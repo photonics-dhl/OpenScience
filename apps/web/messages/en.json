@@ -614,6 +614,8 @@
       "statusRunning": "Retrieving source",
       "statusAuthRequired": "Institutional access needs attention before full text can be retrieved.",
       "statusFailed": "Retrieval did not complete.",
+      "statusBlocked": "This retrieval was blocked and cannot be retried.",
+      "statusRetryExhausted": "The available retry has already been used.",
       "statusSucceeded": "Source ready",
       "expires": "Available until {expiresAt}",
       "retry": "Try again",
@@ -621,6 +623,7 @@
       "error": "The source request could not be completed. Please try again."
       ,"pendingIntent": "Finish or recover the current source request before starting another."
       ,"reconnecting": "Reconnecting to the task…"
+      ,"recoveryError": "The task could no longer be recovered. You can start a new source request."
     },
     "hermes": {
       "title": "Hermes tasks",
