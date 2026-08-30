@@ -344,6 +344,45 @@ describe('AgentSession/AgentTask（§15 + §16 幂等 + §9.1 配额）', () => 
     })).rejects.toThrow(/幂等键/);
   });
 
+  it('retries only the exact AgentSession idempotency constraint', async () => {
+    const { deps, user, ro, db } = await makeDeps();
+    const prisma = (deps as { prisma: { agentSession: { create(args: unknown): Promise<unknown> } } }).prisma;
+    const originalCreate = prisma.agentSession.create;
+    let attempts = 0;
+    prisma.agentSession.create = async (args) => {
+      attempts += 1;
+      if (attempts === 1) {
+        throw Object.assign(new Error('session idempotency collision'), {
+          code: 'P2002', meta: { modelName: 'AgentSession', target: 'agent_sessions_idempotency_key_key' },
+        });
+      }
+      return originalCreate(args);
+    };
+    const session = await createAgentSession(deps, {
+      userId: user.id, researchObjectId: ro.id, kind: 'ingestion', idempotencyKey: 'owned-session-p2002',
+    });
+    expect(attempts).toBe(2);
+    expect(db.agentSessions).toEqual([expect.objectContaining({ id: session.id })]);
+  });
+
+  it('does not retry an unowned AgentSession P2002', async () => {
+    const { deps, user, ro, db } = await makeDeps();
+    const prisma = (deps as { prisma: { agentSession: { create(args: unknown): Promise<unknown> } } }).prisma;
+    const invariantFailure = Object.assign(new Error('session primary-key collision'), {
+      code: 'P2002', meta: { modelName: 'AgentSession', target: ['id'] },
+    });
+    let attempts = 0;
+    prisma.agentSession.create = async () => {
+      attempts += 1;
+      throw invariantFailure;
+    };
+    await expect(createAgentSession(deps, {
+      userId: user.id, researchObjectId: ro.id, kind: 'ingestion', idempotencyKey: 'unowned-session-p2002',
+    })).rejects.toBe(invariantFailure);
+    expect(attempts).toBe(1);
+    expect(db.agentSessions).toHaveLength(0);
+  });
+
   it('AI Credit 不足 → INSUFFICIENT_CREDIT（§9.1）', async () => {
     const { deps, user, ro } = await makeDeps(0);
     const session = await createAgentSession(deps, { userId: user.id, researchObjectId: ro.id, kind: 'extract' });
@@ -388,6 +427,51 @@ describe('AgentSession/AgentTask（§15 + §16 幂等 + §9.1 配额）', () => 
     expect(attempts).toBe(2);
     expect(db.agentTasks.filter((entry) => entry.id === task.id)).toHaveLength(1);
     expect(db.usageLedger.filter((entry) => entry.idempotencyKey === `agent-task-reserve:${task.id}`)).toHaveLength(1);
+  });
+
+  it('does not retry or remap an unowned AgentTask P2002', async () => {
+    const { deps, user, ro, db } = await makeDeps(1);
+    const session = await createAgentSession(deps, { userId: user.id, researchObjectId: ro.id, kind: 'workspace.guide' });
+    const prisma = (deps as { prisma: { agentTask: { create(args: unknown): Promise<unknown> } } }).prisma;
+    const invariantFailure = Object.assign(new Error('agent task primary-key collision'), {
+      code: 'P2002', meta: { modelName: 'AgentTask', target: ['id'] },
+    });
+    let attempts = 0;
+    prisma.agentTask.create = async () => {
+      attempts += 1;
+      throw invariantFailure;
+    };
+
+    await expect(submitAgentTask(deps, {
+      sessionId: session.id, userId: user.id, kind: 'workspace.guide', payload: {}, idempotencyKey: 'unowned-task-p2002', dispatch: false,
+    })).rejects.toBe(invariantFailure);
+    expect(attempts).toBe(1);
+    expect(db.agentTasks).toHaveLength(0);
+    expect(db.usageLedger.filter((entry) => entry.delta < 0)).toHaveLength(0);
+  });
+
+  it('retries an exact AgentTask idempotency P2002 and converges to one reservation', async () => {
+    const { deps, user, ro, db } = await makeDeps(1);
+    const session = await createAgentSession(deps, { userId: user.id, researchObjectId: ro.id, kind: 'workspace.guide' });
+    const prisma = (deps as { prisma: { agentTask: { create(args: unknown): Promise<unknown> } } }).prisma;
+    const originalCreate = prisma.agentTask.create;
+    let attempts = 0;
+    prisma.agentTask.create = async (args) => {
+      attempts += 1;
+      if (attempts === 1) {
+        throw Object.assign(new Error('concurrent idempotency collision'), {
+          code: 'P2002', meta: { modelName: 'AgentTask', target: ['idempotency_key'] },
+        });
+      }
+      return originalCreate(args);
+    };
+
+    const task = await submitAgentTask(deps, {
+      sessionId: session.id, userId: user.id, kind: 'workspace.guide', payload: {}, idempotencyKey: 'owned-task-p2002', dispatch: false,
+    });
+    expect(attempts).toBe(2);
+    expect(db.agentTasks).toEqual([expect.objectContaining({ id: task.id })]);
+    expect(db.usageLedger.filter((entry) => entry.delta < 0)).toHaveLength(1);
   });
 
   it('creates the task audit and credit reservation before Redis dispatch', async () => {

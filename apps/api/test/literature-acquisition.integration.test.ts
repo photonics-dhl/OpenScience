@@ -5,10 +5,12 @@ import {
   recoverUndispatchedAgentTasks,
   submitLiteratureAcquisition,
   type AgentError,
+  type SubmitLiteratureAcquisitionInput,
 } from '@openscience/domain';
 import type { AuditSink } from '@openscience/observability';
 
 const prisma = createPrismaClient();
+const competitorPrisma = createPrismaClient();
 const cleanupUserIds: string[] = [];
 
 function createRedisStub(failFirst = false) {
@@ -115,7 +117,7 @@ afterEach(async () => {
 });
 
 afterAll(async () => {
-  await prisma.$disconnect();
+  await Promise.all([prisma.$disconnect(), competitorPrisma.$disconnect()]);
 });
 
 describe('literature acquisition atomic PostgreSQL transaction', () => {
@@ -191,19 +193,24 @@ describe('literature acquisition atomic PostgreSQL transaction', () => {
       userId: user.id, idempotencyKey: 'archive-race', query: 'attosecond dynamics', target: { kind: 'personal' },
     });
     await barrier.entered;
-    const archivePromise = prisma.workspace.update({ where: { id: workspace.id }, data: { status: 'archived' } });
-    await new Promise<void>((resolve) => setImmediate(resolve));
-    barrier.release();
-    const [acquisition] = await Promise.allSettled([acquisitionPromise, archivePromise]);
-    expect((await prisma.workspace.findUnique({ where: { id: workspace.id } }))?.status).toBe('archived');
-    if (acquisition.status === 'fulfilled') {
-      await expect(acquisitionCounts(user.id)).resolves.toEqual({
-        researchObjects: 1, sdfDocuments: 1, sdfNodes: 6, sessions: 1, tasks: 1, debits: 1, audits: 3,
-      });
-    } else {
-      expect((acquisition.reason as { code?: string }).code).toMatch(/WORKSPACE_ARCHIVED|DUPLICATE_IDEMPOTENCY_KEY/);
-      await expectNoAcquisitionRows(user.id);
+    try {
+      const competitor = await competitorPrisma.$transaction(async (tx) => {
+        const session = await tx.agentSession.findUnique({
+          where: { idempotencyKey: `literature-acquisition:session:${user.id}:archive-race` },
+        });
+        const task = await tx.agentTask.findUnique({
+          where: { idempotencyKey: `literature-acquisition:task:${user.id}:archive-race` },
+        });
+        const archived = await tx.workspace.update({ where: { id: workspace.id }, data: { status: 'archived' } });
+        return { session, task, status: archived.status };
+      }, { isolationLevel: 'Serializable' });
+      expect(competitor).toEqual({ session: null, task: null, status: 'archived' });
+    } finally {
+      barrier.release();
     }
+    await expect(acquisitionPromise).rejects.toMatchObject({ code: 'WORKSPACE_ARCHIVED' });
+    expect((await prisma.workspace.findUnique({ where: { id: workspace.id } }))?.status).toBe('archived');
+    await expectNoAcquisitionRows(user.id);
   });
 
   it('has only serial outcomes when membership removal races acquisition', async () => {
@@ -213,18 +220,75 @@ describe('literature acquisition atomic PostgreSQL transaction', () => {
       userId: user.id, idempotencyKey: 'membership-race', query: 'attosecond dynamics', target: { kind: 'personal' },
     });
     await barrier.entered;
-    const removalPromise = prisma.membership.delete({ where: { id: membership.id } });
-    await new Promise<void>((resolve) => setImmediate(resolve));
-    barrier.release();
-    const [acquisition] = await Promise.allSettled([acquisitionPromise, removalPromise]);
-    if (acquisition.status === 'fulfilled') {
-      await expect(acquisitionCounts(user.id)).resolves.toEqual({
+    try {
+      const competitor = await competitorPrisma.$transaction(async (tx) => {
+        const session = await tx.agentSession.findUnique({
+          where: { idempotencyKey: `literature-acquisition:session:${user.id}:membership-race` },
+        });
+        const task = await tx.agentTask.findUnique({
+          where: { idempotencyKey: `literature-acquisition:task:${user.id}:membership-race` },
+        });
+        const removed = await tx.membership.delete({ where: { id: membership.id } });
+        return { session, task, removedId: removed.id };
+      }, { isolationLevel: 'Serializable' });
+      expect(competitor).toEqual({ session: null, task: null, removedId: membership.id });
+    } finally {
+      barrier.release();
+    }
+    await expect(acquisitionPromise).rejects.toMatchObject({ code: 'WORKSPACE_NOT_FOUND' });
+    await expectNoAcquisitionRows(user.id);
+  });
+
+  it('rejects same-key query and identifier changes without a second durable mutation', async () => {
+    const cases: Array<{
+      name: string;
+      first: Omit<SubmitLiteratureAcquisitionInput, 'userId'>;
+      changed: Omit<SubmitLiteratureAcquisitionInput, 'userId'>;
+    }> = [
+      {
+        name: 'query',
+        first: { idempotencyKey: 'changed-query', query: 'attosecond dynamics', target: { kind: 'personal' } },
+        changed: { idempotencyKey: 'changed-query', query: 'different query', target: { kind: 'personal' } },
+      },
+      {
+        name: 'identifier',
+        first: { idempotencyKey: 'changed-identifier', query: 'attosecond dynamics', identifier: '10.1038/nature12373', target: { kind: 'personal' } },
+        changed: { idempotencyKey: 'changed-identifier', query: 'attosecond dynamics', identifier: '10.1000/example', target: { kind: 'personal' } },
+      },
+    ];
+    for (const candidate of cases) {
+      const { deps, user } = await createFixture(2);
+      await submitLiteratureAcquisition(deps as never, { userId: user.id, ...candidate.first });
+      const before = await acquisitionCounts(user.id);
+      await expect(submitLiteratureAcquisition(deps as never, {
+        userId: user.id, ...candidate.changed,
+      })).rejects.toMatchObject({ code: 'VALIDATION_ERROR' });
+      expect(await acquisitionCounts(user.id), candidate.name).toEqual(before);
+      expect(before).toEqual({
         researchObjects: 1, sdfDocuments: 1, sdfNodes: 6, sessions: 1, tasks: 1, debits: 1, audits: 3,
       });
-    } else {
-      expect((acquisition.reason as { code?: string }).code).toMatch(/WORKSPACE_NOT_FOUND|RESEARCH_OBJECT_NOT_FOUND|DUPLICATE_IDEMPOTENCY_KEY/);
-      await expectNoAcquisitionRows(user.id);
     }
+  });
+
+  it('rejects a same-key target change without a second durable mutation', async () => {
+    const { deps, user, workspace } = await createFixture(2);
+    const [firstTarget, secondTarget] = await Promise.all([
+      prisma.researchObject.create({ data: { workspaceId: workspace.id, createdBy: user.id, title: 'First target' } }),
+      prisma.researchObject.create({ data: { workspaceId: workspace.id, createdBy: user.id, title: 'Second target' } }),
+    ]);
+    await submitLiteratureAcquisition(deps as never, {
+      userId: user.id, idempotencyKey: 'changed-target', query: 'attosecond dynamics',
+      target: { kind: 'research_object', researchObjectId: firstTarget.id },
+    });
+    const before = await acquisitionCounts(user.id);
+    await expect(submitLiteratureAcquisition(deps as never, {
+      userId: user.id, idempotencyKey: 'changed-target', query: 'attosecond dynamics',
+      target: { kind: 'research_object', researchObjectId: secondTarget.id },
+    })).rejects.toMatchObject({ code: 'VALIDATION_ERROR' });
+    expect(await acquisitionCounts(user.id)).toEqual(before);
+    expect(before).toEqual({
+      researchObjects: 2, sdfDocuments: 0, sdfNodes: 0, sessions: 1, tasks: 1, debits: 1, audits: 2,
+    });
   });
 
   it('keeps one pending task after Redis failure and recovers it without duplicate persistence', async () => {

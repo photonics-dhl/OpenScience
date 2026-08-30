@@ -7,6 +7,7 @@ import { requireRoAccess } from '../visibility/access';
 import type { WorkspaceDeps } from '../workspace/types';
 import { ResearchObjectError } from './errors';
 import { SDF_NODE_TYPES, type RoStatus, type RoVisibility } from './types';
+import { isOwnedPrismaIdempotencyConflict, throwOwnedPrismaIdempotencyConflict } from '../prisma-idempotency-conflict';
 
 export interface CreateResearchObjectInput {
   workspaceId: string;
@@ -74,12 +75,10 @@ function validateTitle(title: string): string {
   return normalized;
 }
 
-function throwIdempotencyConstraintConflict(error: unknown): never {
-  if ((error as { code?: unknown })?.code !== 'P2002') throw error;
-  throw Object.assign(new Error('Idempotency constraint conflict'), {
-    code: 'P2002', openscienceIdempotencyConflict: true, cause: error,
-  });
-}
+const RESEARCH_OBJECT_IDEMPOTENCY_CONSTRAINT = {
+  modelName: 'ResearchObject', field: 'idempotencyKey', column: 'idempotency_key',
+  constraint: 'research_objects_idempotency_key_key',
+} as const;
 
 async function createResearchObjectRecord(
   deps: WorkspaceDeps,
@@ -118,7 +117,7 @@ async function createResearchObjectRecord(
     });
   } catch (error) {
     if (!input.idempotencyKey) throw error;
-    throwIdempotencyConstraintConflict(error);
+    throwOwnedPrismaIdempotencyConflict(error, RESEARCH_OBJECT_IDEMPOTENCY_CONSTRAINT);
   }
   await recordAudit(
     deps, tx,
@@ -200,7 +199,7 @@ export async function createResearchObject(
       core,
     }, ctx));
   } catch (error) {
-    if ((error as { code?: string }).code === 'P2002' && input.idempotencyKey) {
+    if (input.idempotencyKey && isOwnedPrismaIdempotencyConflict(error)) {
       const concurrentReplay = await replayExisting();
       if (concurrentReplay) return concurrentReplay;
     }

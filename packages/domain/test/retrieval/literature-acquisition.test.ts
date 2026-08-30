@@ -286,6 +286,38 @@ describe('submitLiteratureAcquisition', () => {
     expect(attempts).toBe(1);
   });
 
+  it('marks only the exact ResearchObject idempotency constraint across Prisma target shapes', async () => {
+    const cases = [
+      { meta: { modelName: 'ResearchObject', target: ['idempotency_key'] }, owned: true },
+      { meta: { modelName: 'ResearchObject', target: 'research_objects_idempotency_key_key' }, owned: true },
+      { meta: { modelName: 'ResearchObject', target: ['id'] }, owned: false },
+      { meta: { modelName: 'SdfNode', target: 'sdf_nodes_doc_type_key' }, owned: false },
+      { meta: { target: ['idempotency_key'] }, owned: false },
+    ];
+    for (const [index, candidate] of cases.entries()) {
+      const { deps, user } = makeDeps();
+      const prisma = deps.prisma as unknown as { researchObject: { create(args: unknown): Promise<unknown> } };
+      const originalCreate = prisma.researchObject.create;
+      const uniqueFailure = Object.assign(new Error(`unique-${index}`), { code: 'P2002', meta: candidate.meta });
+      let attempts = 0;
+      prisma.researchObject.create = async () => {
+        attempts += 1;
+        throw uniqueFailure;
+      };
+      const request = submitLiteratureAcquisition(deps as never, {
+        userId: user.id, idempotencyKey: `constraint-${index}`, query: 'attosecond dynamics', target: { kind: 'personal' },
+      });
+      if (candidate.owned) {
+        await expect(request).rejects.toMatchObject({ code: 'DUPLICATE_IDEMPOTENCY_KEY' });
+        expect(attempts).toBe(3);
+      } else {
+        await expect(request).rejects.toBe(uniqueFailure);
+        expect(attempts).toBe(1);
+      }
+      prisma.researchObject.create = originalCreate;
+    }
+  });
+
   it('reuses a renamed personal library but blocks public claims of server system keys', async () => {
     const { deps, db, user } = makeDeps();
     db.researchObjects.push({

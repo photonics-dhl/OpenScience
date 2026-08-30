@@ -54,9 +54,10 @@ export function createFakePrisma(): { prisma: PrismaClient; db: FakeDb } {
   const db: FakeDb = { users: [], workspaces: [], memberships: [], workspaceInvitations: [], mailOutbox: [], quotaPolicies: [], usageLedger: [], researchObjects: [], sdfDocuments: [], sdfNodes: [], blobs: [], artifacts: [], branches: [], commits: [], changesets: [], versions: [], versionManifests: [], manifestEntries: [], identifiers: [], publications: [], visibilityGrants: [], visibilityRequests: [], pullRequests: [], issues: [], comments: [], reviews: [], licenseAssignments: [], forkRelations: [], notifications: [], authors: [], contributions: [], agentSessions: [], agentTasks: [], toolApprovals: [], aiReviews: [], appeals: [], ingestionBatches: [], ingestionTasks: [], claimNodes: [], evidenceRecords: [], presentationAssets: [], researchIdentityProfiles: [], auditLogs: [] };
   let seq = 0;
   const nextId = () => `00000000-0000-4000-8000-${String(++seq).padStart(12, '0')}`;
-  const p2002 = () => {
-    const err = new Error('Unique constraint failed') as Error & { code: string };
+  const p2002 = (modelName?: string, target?: string | string[]) => {
+    const err = new Error('Unique constraint failed') as Error & { code: string; meta?: { modelName: string; target: string | string[] } };
     err.code = 'P2002';
+    if (modelName && target) err.meta = { modelName, target };
     return err;
   };
   let transactionQueue: Promise<void> = Promise.resolve();
@@ -346,7 +347,7 @@ export function createFakePrisma(): { prisma: PrismaClient; db: FakeDb } {
         return { ...ro, sdfDocument: doc ? { ...doc, nodes: db.sdfNodes.filter((n) => n.sdfDocumentId === doc.id) } : null };
       },
       create: async ({ data }: any) => {
-        if (data.idempotencyKey && db.researchObjects.some((researchObject) => researchObject.idempotencyKey === data.idempotencyKey)) throw p2002();
+        if (data.idempotencyKey && db.researchObjects.some((researchObject) => researchObject.idempotencyKey === data.idempotencyKey)) throw p2002('ResearchObject', ['idempotency_key']);
         const row = {
           id: nextId(), status: 'draft', visibility: 'private', version: 1,
           createdAt: new Date(), updatedAt: new Date(),
@@ -711,7 +712,7 @@ export function createFakePrisma(): { prisma: PrismaClient; db: FakeDb } {
     },
     agentSession: {
       create: async ({ data }: any) => {
-        if (data.idempotencyKey && db.agentSessions.some((session) => session.idempotencyKey === data.idempotencyKey)) throw p2002();
+        if (data.idempotencyKey && db.agentSessions.some((session) => session.idempotencyKey === data.idempotencyKey)) throw p2002('AgentSession', ['idempotency_key']);
         const row = { id: nextId(), status: 'active', createdAt: new Date(), updatedAt: new Date(), ...data };
         db.agentSessions.push(row);
         return row;
@@ -736,7 +737,7 @@ export function createFakePrisma(): { prisma: PrismaClient; db: FakeDb } {
     },
     agentTask: {
       create: async ({ data }: any) => {
-        if (data.idempotencyKey && db.agentTasks.some((t) => t.idempotencyKey === data.idempotencyKey)) throw p2002();
+        if (data.idempotencyKey && db.agentTasks.some((t) => t.idempotencyKey === data.idempotencyKey)) throw p2002('AgentTask', ['idempotency_key']);
         const row = { id: nextId(), status: 'pending', progress: 0, retryCount: 0, executionAttempt: 0, dispatchedAt: null, result: null, error: null, createdAt: new Date(), updatedAt: new Date(), ...data };
         db.agentTasks.push(row);
         return row;

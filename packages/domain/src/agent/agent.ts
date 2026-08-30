@@ -12,6 +12,7 @@ import { buildInterestContext, validateInterestContext } from '../research-intel
 import { ResearchIdentityProfileError, validateResearchIdentityProfileState } from '../research-intelligence/identity-profile-service';
 import { ResearchIntelligenceValidationError } from '../research-intelligence/validation';
 import { parseWorkspaceGuidePayload } from './workspace-guide-contract';
+import { isOwnedPrismaIdempotencyConflict, throwOwnedPrismaIdempotencyConflict } from '../prisma-idempotency-conflict';
 
 export const AGENT_TASK_QUEUE = 'agent:queue';
 export const AI_CREDIT_RESOURCE = 'ai_credit'; // §2.4-7 配额骨架（P1A-7）
@@ -134,12 +135,15 @@ export interface SubmitAgentTaskInput {
   dispatch?: boolean;
 }
 
-function throwIdempotencyConstraintConflict(error: unknown): never {
-  if ((error as { code?: unknown })?.code !== 'P2002') throw error;
-  throw Object.assign(new Error('Idempotency constraint conflict'), {
-    code: 'P2002', openscienceIdempotencyConflict: true, cause: error,
-  });
-}
+const AGENT_SESSION_IDEMPOTENCY_CONSTRAINT = {
+  modelName: 'AgentSession', field: 'idempotencyKey', column: 'idempotency_key',
+  constraint: 'agent_sessions_idempotency_key_key',
+} as const;
+
+const AGENT_TASK_IDEMPOTENCY_CONSTRAINT = {
+  modelName: 'AgentTask', field: 'idempotencyKey', column: 'idempotency_key',
+  constraint: 'agent_tasks_idempotency_key_key',
+} as const;
 
 async function resolveInterestContext(
   db: Pick<Prisma.TransactionClient, 'researchIdentityProfile'>,
@@ -226,7 +230,7 @@ export async function findOrCreateAgentSessionInTransaction(
     });
   } catch (error) {
     if (!input.idempotencyKey) throw error;
-    throwIdempotencyConstraintConflict(error);
+    throwOwnedPrismaIdempotencyConflict(error, AGENT_SESSION_IDEMPOTENCY_CONSTRAINT);
   }
   await recordAudit(deps, tx, {
     actorId: input.userId, action: 'agent.session.create', targetType: 'agent_session', targetId: session.id,
@@ -244,7 +248,7 @@ export async function createAgentSession(
   try {
     result = await deps.prisma.$transaction((tx) => findOrCreateAgentSessionInTransaction(deps, tx, input, ctx));
   } catch (error: unknown) {
-    if ((error as { code?: string }).code !== 'P2002' || !input.idempotencyKey) throw error;
+    if (!input.idempotencyKey || !isOwnedPrismaIdempotencyConflict(error)) throw error;
     result = await deps.prisma.$transaction((tx) => findOrCreateAgentSessionInTransaction(deps, tx, input, ctx));
   }
   const { session } = result;
@@ -350,7 +354,7 @@ export async function persistAgentTaskInTransaction(
     });
   } catch (error) {
     if (!input.idempotencyKey) throw error;
-    throwIdempotencyConstraintConflict(error);
+    throwOwnedPrismaIdempotencyConflict(error, AGENT_TASK_IDEMPOTENCY_CONSTRAINT);
   }
   await recordEntry(tx, {
     userId: input.userId,
@@ -384,8 +388,9 @@ export async function submitAgentTask(
       break;
     } catch (error: unknown) {
       const code = (error as { code?: unknown })?.code;
-      if ((code === 'P2034' || (code === 'P2002' && input.idempotencyKey)) && attempt < 2) continue;
-      if (code === 'P2002') {
+      const idempotencyConflict = isOwnedPrismaIdempotencyConflict(error);
+      if ((code === 'P2034' || idempotencyConflict) && attempt < 2) continue;
+      if (idempotencyConflict) {
         throw new AgentError('DUPLICATE_IDEMPOTENCY_KEY', '幂等键重复（§16）', error);
       }
       throw error;

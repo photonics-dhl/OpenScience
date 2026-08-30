@@ -13,6 +13,7 @@ import { AgentError } from '../agent/errors';
 import { parseSourceRetrievePayload } from './retrieve-payload';
 import { WorkspaceError } from '../workspace/errors';
 import { requireActiveMembership } from '../workspace/helpers';
+import { isOwnedPrismaIdempotencyConflict } from '../prisma-idempotency-conflict';
 
 export type LiteratureAcquisitionTarget =
   | { kind: 'personal' }
@@ -142,8 +143,7 @@ export async function submitLiteratureAcquisition(
       break;
     } catch (error: unknown) {
       const code = (error as { code?: unknown })?.code;
-      const idempotencyConflict = code === 'P2002'
-        && (error as { openscienceIdempotencyConflict?: unknown }).openscienceIdempotencyConflict === true;
+      const idempotencyConflict = isOwnedPrismaIdempotencyConflict(error);
       if ((code === 'P2034' || idempotencyConflict) && attempt < 2) continue;
       if (code === 'P2034' || idempotencyConflict) {
         throw new AgentError('DUPLICATE_IDEMPOTENCY_KEY', '文献检索并发冲突，请重试', error);
