@@ -10,7 +10,7 @@ import {
   persistAgentTaskInTransaction, type AgentDeps, type AgentSessionView, type AgentTaskView,
 } from '../agent/agent';
 import { AgentError } from '../agent/errors';
-import { parseSourceRetrievePayload } from './retrieve-payload';
+import { parseSourceRetrievePayload, SOURCE_RETRIEVE_RETRY_CONTRACT_VERSION } from './retrieve-payload';
 import { WorkspaceError } from '../workspace/errors';
 import { requireActiveMembership } from '../workspace/helpers';
 import { isOwnedPrismaIdempotencyConflict } from '../prisma-idempotency-conflict';
@@ -73,8 +73,8 @@ function normalizeAcquisition(input: SubmitLiteratureAcquisitionInput): Normaliz
   let payload: Record<string, unknown>;
   try {
     payload = parseSourceRetrievePayload(input.identifier
-      ? { query, providers: ['scansci'], limit: 1, includeFullText: true, identifier: input.identifier }
-      : { query, providers: ['semantic_scholar', 'tavily'], limit: 10, includeFullText: false }) as unknown as Record<string, unknown>;
+      ? { query, providers: ['scansci'], limit: 1, includeFullText: true, identifier: input.identifier, retryContractVersion: SOURCE_RETRIEVE_RETRY_CONTRACT_VERSION }
+      : { query, providers: ['semantic_scholar', 'tavily'], limit: 10, includeFullText: false, retryContractVersion: SOURCE_RETRIEVE_RETRY_CONTRACT_VERSION }) as unknown as Record<string, unknown>;
   } catch (error) {
     throw new AgentError('VALIDATION_ERROR', error instanceof Error ? error.message : '文献检索请求无效');
   }

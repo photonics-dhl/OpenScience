@@ -7,12 +7,15 @@ export interface SourceRetrievePayload {
   limit: number;
   includeFullText: boolean;
   identifier?: string;
+  retryContractVersion?: 1;
 }
+
+export const SOURCE_RETRIEVE_RETRY_CONTRACT_VERSION = 1 as const;
 
 export function parseSourceRetrievePayload(value: unknown): SourceRetrievePayload {
   if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error('source.retrieve payload is invalid');
   const input = value as Record<string, unknown>;
-  const allowed = new Set(['query', 'providers', 'limit', 'includeFullText', 'identifier']);
+  const allowed = new Set(['query', 'providers', 'limit', 'includeFullText', 'identifier', 'retryContractVersion']);
   if (Object.keys(input).some((key) => !allowed.has(key))) throw new Error('source.retrieve payload contains unknown fields');
   if (typeof input.query !== 'string') throw new Error('source.retrieve query is invalid');
   const query = input.query.trim();
@@ -42,5 +45,13 @@ export function parseSourceRetrievePayload(value: unknown): SourceRetrievePayloa
     throw new Error('source.retrieve full text requires ScanSci and a DOI/arXiv identifier');
   }
   if (!includeFullText && identifier) throw new Error('source.retrieve identifier requires full text');
-  return { query, providers, limit: limit as number, includeFullText, ...(identifier ? { identifier } : {}) };
+  const retryContractVersion = input.retryContractVersion;
+  if (retryContractVersion !== undefined && retryContractVersion !== SOURCE_RETRIEVE_RETRY_CONTRACT_VERSION) {
+    throw new Error('source.retrieve retry contract version is invalid');
+  }
+  return {
+    query, providers, limit: limit as number, includeFullText,
+    ...(identifier ? { identifier } : {}),
+    ...(retryContractVersion === SOURCE_RETRIEVE_RETRY_CONTRACT_VERSION ? { retryContractVersion } : {}),
+  };
 }

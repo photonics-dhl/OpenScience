@@ -23,6 +23,7 @@ class MemoryStorage implements Storage {
 const runningTask: AgentTaskView = {
   id: 'task-running', sessionId: 'session-1', kind: 'source.retrieve', status: 'running', progress: 20,
   retryCount: 0, executionAttempt: 1, result: { sources: [{ id: 'old-source' }] }, error: null,
+  canRetry: false,
   createdAt: '2026-08-30T00:00:00.000Z', updatedAt: '2026-08-30T00:01:00.000Z',
 };
 

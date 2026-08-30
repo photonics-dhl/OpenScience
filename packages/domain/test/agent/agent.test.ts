@@ -73,10 +73,11 @@ describe('AgentSession/AgentTask（§15 + §16 幂等 + §9.1 配额）', () => 
   it('retries one non-blocked source retrieval on the same task and rejects a second or blocked retry', async () => {
     const { deps, user, ro, db } = await makeDeps(2);
     const session = await createAgentSession(deps, { userId: user.id, researchObjectId: ro.id, kind: 'retrieval' });
-    const payload = { query: 'paper', providers: ['scansci'], limit: 1, includeFullText: true, identifier: '10.1038/nature12373' };
+    const payload = { query: 'paper', providers: ['scansci'], limit: 1, includeFullText: true, identifier: '10.1038/nature12373', retryContractVersion: 1 };
     const task = await submitAgentTask(deps, { sessionId: session.id, userId: user.id, kind: 'source.retrieve', payload });
     await markTaskProgress(deps, { taskId: task.id, status: 'running' });
     await markTaskProgress(deps, { taskId: task.id, status: 'failed', error: 'upstream timeout', result: { stale: true } });
+    await expect(getAgentTask(deps, { userId: user.id, taskId: task.id })).resolves.toMatchObject({ id: task.id, canRetry: true });
     await expect(retryAgentTask(deps, { userId: user.id, taskId: task.id })).resolves.toMatchObject({ id: task.id, status: 'pending', retryCount: 1 });
     expect(db.agentTasks[0]?.payload).toEqual(payload);
     expect(db.agentTasks[0]).toMatchObject({ id: task.id, result: null, error: null, dispatchedAt: expect.any(Date) });
@@ -89,7 +90,53 @@ describe('AgentSession/AgentTask（§15 + §16 幂等 + §9.1 配额）', () => 
     const blocked = await submitAgentTask(deps, { sessionId: session.id, userId: user.id, kind: 'source.retrieve', payload });
     await markTaskProgress(deps, { taskId: blocked.id, status: 'running' });
     await markTaskProgress(deps, { taskId: blocked.id, status: 'failed', error: '[blocked] authority revoked' });
+    await expect(getAgentTask(deps, { userId: user.id, taskId: blocked.id })).resolves.toMatchObject({ canRetry: false });
     await expect(retryAgentTask(deps, { userId: user.id, taskId: blocked.id })).rejects.toThrow(/not retryable/i);
+  });
+
+  it('uses one authority and payload predicate for public canRetry and the retry mutation', async () => {
+    const { deps, user, ro, db } = await makeDeps(5);
+    const session = await createAgentSession(deps, { userId: user.id, researchObjectId: ro.id, kind: 'retrieval' });
+    const payload = { query: 'paper', providers: ['scansci'], limit: 1, includeFullText: true, identifier: '10.1038/nature12373', retryContractVersion: 1 };
+    const malformed = await submitAgentTask(deps, { sessionId: session.id, userId: user.id, kind: 'source.retrieve', payload });
+    db.agentTasks.find((task) => task.id === malformed.id)!.payload = { query: 'malformed historical payload' };
+    await markTaskProgress(deps, { taskId: malformed.id, status: 'running' });
+    await markTaskProgress(deps, { taskId: malformed.id, status: 'failed', error: '[retryable] timeout' });
+    await expect(getAgentTask(deps, { userId: user.id, taskId: malformed.id })).resolves.toMatchObject({ canRetry: false });
+    await expect(retryAgentTask(deps, { userId: user.id, taskId: malformed.id })).rejects.toThrow(/not retryable/i);
+    db.agentTasks.find((task) => task.id === malformed.id)!.payload = {
+      query: 'historical valid payload', providers: ['scansci'], limit: 1, includeFullText: true, identifier: '10.1038/nature12373',
+    };
+    await expect(getAgentTask(deps, { userId: user.id, taskId: malformed.id })).resolves.toMatchObject({ canRetry: false });
+
+    const revokedWorkspaceId = 'workspace-revoked';
+    const revokedRoId = 'research-object-revoked';
+    const revokedSessionId = 'session-revoked';
+    db.workspaces.push({ id: revokedWorkspaceId, type: 'team', name: 'Revoked', status: 'active', ownerId: user.id, createdAt: new Date(), updatedAt: new Date() });
+    db.researchObjects.push({ id: revokedRoId, workspaceId: revokedWorkspaceId, createdBy: user.id, title: 'Revoked', status: 'draft', visibility: 'private', version: 1, idempotencyKey: null, createdAt: new Date(), updatedAt: new Date() });
+    db.agentSessions.push({ id: revokedSessionId, userId: user.id, researchObjectId: revokedRoId, kind: 'retrieval', title: '', status: 'active', idempotencyKey: null, createdAt: new Date(), updatedAt: new Date() });
+    db.agentTasks.push({
+      id: 'task-revoked', sessionId: revokedSessionId, kind: 'source.retrieve', status: 'failed', progress: 20,
+      retryCount: 0, executionAttempt: 1, dispatchedAt: new Date(), payload: { query: 'historical', providers: ['scansci'], limit: 1, includeFullText: true, identifier: '10.1038/nature12373' }, interestContext: null, idempotencyKey: null,
+      result: null, error: '[retryable] timeout', createdAt: new Date(), updatedAt: new Date(),
+    });
+    await expect(getAgentTask(deps, { userId: user.id, taskId: 'task-revoked' })).resolves.toMatchObject({ canRetry: false });
+    await expect(retryAgentTask(deps, { userId: user.id, taskId: 'task-revoked' })).rejects.toMatchObject({ code: 'RESEARCH_OBJECT_NOT_FOUND' });
+    db.memberships.push({ id: 'membership-restored', workspaceId: revokedWorkspaceId, userId: user.id, role: 'owner', createdAt: new Date(), updatedAt: new Date() });
+    db.workspaces.find((workspace) => workspace.id === revokedWorkspaceId)!.status = 'archived';
+    await expect(getAgentTask(deps, { userId: user.id, taskId: 'task-revoked' })).resolves.toMatchObject({ canRetry: false });
+    db.workspaces.find((workspace) => workspace.id === revokedWorkspaceId)!.status = 'active';
+    db.agentSessions.find((candidate) => candidate.id === revokedSessionId)!.status = 'closed';
+    await expect(getAgentTask(deps, { userId: user.id, taskId: 'task-revoked' })).resolves.toMatchObject({ canRetry: false });
+
+    const historicalSessionId = 'session-historical';
+    db.agentSessions.push({ id: historicalSessionId, userId: user.id, researchObjectId: null, kind: 'retrieval', title: '', status: 'active', idempotencyKey: null, createdAt: new Date(), updatedAt: new Date() });
+    db.agentTasks.push({
+      id: 'task-historical', sessionId: historicalSessionId, kind: 'source.retrieve', status: 'failed', progress: 20,
+      retryCount: 0, executionAttempt: 1, dispatchedAt: new Date(), payload, interestContext: null, idempotencyKey: null,
+      result: null, error: '[retryable] timeout', createdAt: new Date(), updatedAt: new Date(),
+    });
+    await expect(getAgentTask(deps, { userId: user.id, taskId: 'task-historical' })).resolves.toMatchObject({ canRetry: false });
   });
 
   it('persists server-owned interest context outside the client payload', async () => {
@@ -186,7 +233,7 @@ describe('AgentSession/AgentTask（§15 + §16 幂等 + §9.1 配额）', () => 
       expect.objectContaining({ id: task.id, researchObjectId: ro.id, status: 'pending' }),
     ]);
     expect(Object.keys(rows[0]!).sort()).toEqual([
-      'createdAt', 'error', 'executionAttempt', 'id', 'kind', 'progress', 'researchObjectId', 'result', 'retryCount', 'sessionId', 'status', 'updatedAt',
+      'canRetry', 'createdAt', 'error', 'executionAttempt', 'id', 'kind', 'progress', 'researchObjectId', 'result', 'retryCount', 'sessionId', 'status', 'updatedAt',
     ]);
     expect(JSON.stringify(rows)).not.toMatch(/private manuscript|private-key|other user private query|other-private-key/);
   });
@@ -205,33 +252,47 @@ describe('AgentSession/AgentTask（§15 + §16 幂等 + §9.1 配额）', () => 
     }
     const retryable = {
       id: 'retryable-older-than-history', sessionId: session.id, kind: 'source.retrieve', status: 'failed', progress: 30,
-      retryCount: 0, executionAttempt: 1, dispatchedAt: new Date(base), payload: { query: 'retry private' }, interestContext: null,
+      retryCount: 0, executionAttempt: 1, dispatchedAt: new Date(base), payload: { query: 'paper', providers: ['scansci'], limit: 1, includeFullText: true, identifier: '10.1038/nature12373', retryContractVersion: 1 }, interestContext: null,
       idempotencyKey: 'retry-private-key', result: null, error: '[retryable] upstream timeout', createdAt: new Date(base - 2_000), updatedAt: new Date(base - 2_000),
+    };
+    const malformed = {
+      ...retryable, id: 'malformed-newer-failure', payload: { query: 'malformed' }, idempotencyKey: 'malformed-private-key',
+      createdAt: new Date(base + 40_000), updatedAt: new Date(base + 40_000),
     };
     const active = {
       ...retryable, id: 'active-older-than-history', status: 'running', retryCount: 0, error: null,
       idempotencyKey: 'active-private-key', payload: { query: 'active private' }, createdAt: new Date(base - 3_000), updatedAt: new Date(base - 3_000),
     };
-    db.agentTasks.push(retryable, active);
+    const revokedWorkspaceId = 'recovery-workspace-revoked';
+    const revokedRoId = 'recovery-ro-revoked';
+    const revokedSessionId = 'recovery-session-revoked';
+    db.workspaces.push({ id: revokedWorkspaceId, type: 'team', name: 'Revoked', status: 'active', ownerId: user.id, createdAt: new Date(), updatedAt: new Date() });
+    db.researchObjects.push({ id: revokedRoId, workspaceId: revokedWorkspaceId, createdBy: user.id, title: 'Revoked', status: 'draft', visibility: 'private', version: 1, idempotencyKey: null, createdAt: new Date(), updatedAt: new Date() });
+    db.agentSessions.push({ id: revokedSessionId, userId: user.id, researchObjectId: revokedRoId, kind: 'retrieval', title: '', status: 'active', idempotencyKey: null, createdAt: new Date(), updatedAt: new Date() });
+    const authorityRevoked = {
+      ...retryable, id: 'authority-revoked-newer-failure', sessionId: revokedSessionId, idempotencyKey: 'revoked-private-key',
+      createdAt: new Date(base + 39_000), updatedAt: new Date(base + 39_000),
+    };
+    db.agentTasks.push(retryable, malformed, authorityRevoked, active);
     const other = seedUser(db, { id: 'recovery-other-user' });
     db.agentSessions.push({ id: 'recovery-other-session', userId: other.id, researchObjectId: null, kind: 'retrieval', title: '', status: 'active', idempotencyKey: null, createdAt: new Date(), updatedAt: new Date() });
     db.agentTasks.push({ ...active, id: 'other-user-active', sessionId: 'recovery-other-session', updatedAt: new Date(base + 99_000) });
 
     const activeRecovery = await listAgentTasks(deps, { userId: user.id, kind: 'source.retrieve', recoveryPreferred: true });
-    expect(activeRecovery).toEqual([expect.objectContaining({ id: active.id, status: 'running' })]);
+    expect(activeRecovery).toEqual([expect.objectContaining({ id: active.id, status: 'running', canRetry: false })]);
     expect(JSON.stringify(activeRecovery)).not.toMatch(/active private|active-private-key|other-user-active/);
 
     active.status = 'succeeded';
     const failedRecovery = await listAgentTasks(deps, { userId: user.id, kind: 'source.retrieve', recoveryPreferred: true });
-    expect(failedRecovery).toEqual([expect.objectContaining({ id: retryable.id, status: 'failed', retryCount: 0 })]);
+    expect(failedRecovery).toEqual([expect.objectContaining({ id: retryable.id, status: 'failed', retryCount: 0, canRetry: true })]);
 
     retryable.error = '[blocked] policy denied';
     const blockedFallback = await listAgentTasks(deps, { userId: user.id, kind: 'source.retrieve', recoveryPreferred: true });
-    expect(blockedFallback).toEqual([expect.objectContaining({ id: 'terminal-24', status: 'succeeded' })]);
+    expect(blockedFallback).toEqual([expect.objectContaining({ id: malformed.id, status: 'failed', canRetry: false })]);
     retryable.error = '[retryable] failed twice';
     retryable.retryCount = 1;
     const exhaustedFallback = await listAgentTasks(deps, { userId: user.id, kind: 'source.retrieve', recoveryPreferred: true });
-    expect(exhaustedFallback).toEqual([expect.objectContaining({ id: 'terminal-24', status: 'succeeded' })]);
+    expect(exhaustedFallback).toEqual([expect.objectContaining({ id: malformed.id, status: 'failed', canRetry: false })]);
   });
 
   it('幂等键重放 → 返回既有任务（§16 不重复）', async () => {

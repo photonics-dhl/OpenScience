@@ -232,7 +232,7 @@ test('personal literature acquisition recovers a running server task after reloa
   let submissions = 0;
   await mockAuthenticatedUser(page);
   await page.route('**/api/csrf-token', (route) => route.fulfill({ contentType: 'application/json', body: JSON.stringify({ csrfToken: 'csrf' }) }));
-  const runningTask = { id: 'literature-reload', sessionId: 'session-1', kind: 'source.retrieve', status: 'running', progress: 40, retryCount: 0, executionAttempt: 1, result: null, error: null, createdAt: '2026-08-30T00:00:00.000Z', updatedAt: '2026-08-30T00:01:00.000Z' };
+  const runningTask = { id: 'literature-reload', sessionId: 'session-1', kind: 'source.retrieve', status: 'running', progress: 40, retryCount: 0, canRetry: false, executionAttempt: 1, result: null, error: null, createdAt: '2026-08-30T00:00:00.000Z', updatedAt: '2026-08-30T00:01:00.000Z' };
   await page.route('**/api/agent/tasks?actionable=false&kind=source.retrieve&recovery=true', (route) => {
     return route.fulfill({ contentType: 'application/json', body: JSON.stringify({ tasks: serverHasTask ? [runningTask] : [] }) });
   });
@@ -255,7 +255,7 @@ test('personal literature acquisition recovers a running server task after reloa
 });
 
 test('a permanent 401 while polling routes the dashboard through established login recovery', async ({ page }) => {
-  const runningTask = { id: 'literature-auth-lost', sessionId: 'session-1', kind: 'source.retrieve', status: 'running', progress: 40, retryCount: 0, executionAttempt: 1, result: null, error: null, createdAt: '2026-08-30T00:00:00.000Z', updatedAt: '2026-08-30T00:01:00.000Z' };
+  const runningTask = { id: 'literature-auth-lost', sessionId: 'session-1', kind: 'source.retrieve', status: 'running', progress: 40, retryCount: 0, canRetry: false, executionAttempt: 1, result: null, error: null, createdAt: '2026-08-30T00:00:00.000Z', updatedAt: '2026-08-30T00:01:00.000Z' };
   await mockAuthenticatedUser(page);
   await page.route('**/api/agent/tasks?actionable=false&kind=source.retrieve&recovery=true', (route) => route.fulfill({ contentType: 'application/json', body: JSON.stringify({ tasks: [runningTask] }) }));
   await page.route('**/api/agent/tasks/literature-auth-lost', (route) => route.fulfill({ status: 401, contentType: 'application/json', body: JSON.stringify({ error: { code: 'SESSION_INVALID', message: 'signed out' } }) }));
@@ -266,7 +266,7 @@ test('a permanent 401 while polling routes the dashboard through established log
 
 for (const status of [403, 404]) {
   test(`a permanent ${status} while polling leaves a visible terminal recovery and an enabled search`, async ({ page }) => {
-    const runningTask = { id: `literature-gone-${status}`, sessionId: 'session-1', kind: 'source.retrieve', status: 'running', progress: 40, retryCount: 0, executionAttempt: 1, result: null, error: null, createdAt: '2026-08-30T00:00:00.000Z', updatedAt: '2026-08-30T00:01:00.000Z' };
+    const runningTask = { id: `literature-gone-${status}`, sessionId: 'session-1', kind: 'source.retrieve', status: 'running', progress: 40, retryCount: 0, canRetry: false, executionAttempt: 1, result: null, error: null, createdAt: '2026-08-30T00:00:00.000Z', updatedAt: '2026-08-30T00:01:00.000Z' };
     let polls = 0;
     await mockAuthenticatedUser(page);
     await page.route('**/api/agent/tasks?actionable=false&kind=source.retrieve&recovery=true', (route) => route.fulfill({ contentType: 'application/json', body: JSON.stringify({ tasks: [runningTask] }) }));
@@ -286,8 +286,8 @@ for (const status of [403, 404]) {
 test('a failed source retrieval retries the same task without a new acquisition POST', async ({ page }) => {
   let retries = 0;
   let submissions = 0;
-  const failedTask = { id: 'literature-failed', sessionId: 'session-1', kind: 'source.retrieve', status: 'failed', progress: 30, retryCount: 0, executionAttempt: 1, result: null, error: '[retryable] upstream timeout', createdAt: '2026-08-30T00:00:00.000Z', updatedAt: '2026-08-30T00:01:00.000Z' };
-  const pendingTask = { ...failedTask, status: 'pending', progress: 0, retryCount: 1, result: null, error: null };
+  const failedTask = { id: 'literature-failed', sessionId: 'session-1', kind: 'source.retrieve', status: 'failed', progress: 30, retryCount: 0, canRetry: true, executionAttempt: 1, result: null, error: '[retryable] upstream timeout', createdAt: '2026-08-30T00:00:00.000Z', updatedAt: '2026-08-30T00:01:00.000Z' };
+  const pendingTask = { ...failedTask, status: 'pending', progress: 0, retryCount: 1, canRetry: false, result: null, error: null };
   const succeededTask = { ...pendingTask, status: 'succeeded', progress: 100, result: { sources: [] } };
   await mockAuthenticatedUser(page);
   await page.route('**/api/csrf-token', (route) => route.fulfill({ contentType: 'application/json', body: JSON.stringify({ csrfToken: 'csrf' }) }));
@@ -309,6 +309,35 @@ test('a failed source retrieval retries the same task without a new acquisition 
   expect(submissions).toBe(0);
 });
 
+test('concurrent retry activation sends one POST and reconciles a 409 through authoritative GET', async ({ page }) => {
+  let retryRequests = 0;
+  let taskReads = 0;
+  const failedTask = { id: 'literature-concurrent', sessionId: 'session-1', kind: 'source.retrieve', status: 'failed', progress: 30, retryCount: 0, canRetry: true, executionAttempt: 1, result: null, error: '[retryable] upstream timeout', createdAt: '2026-08-30T00:00:00.000Z', updatedAt: '2026-08-30T00:01:00.000Z' };
+  const pendingTask = { ...failedTask, status: 'pending', progress: 0, retryCount: 1, canRetry: false, result: null, error: null, updatedAt: '2026-08-30T00:02:00.000Z' };
+  await mockAuthenticatedUser(page);
+  await page.route('**/api/csrf-token', (route) => route.fulfill({ contentType: 'application/json', body: JSON.stringify({ csrfToken: 'csrf' }) }));
+  await page.route('**/api/agent/tasks?actionable=false&kind=source.retrieve&recovery=true', (route) => route.fulfill({ contentType: 'application/json', body: JSON.stringify({ tasks: [failedTask] }) }));
+  await page.route('**/api/agent/tasks/literature-concurrent/retry', async (route) => {
+    retryRequests += 1;
+    await new Promise((resolve) => setTimeout(resolve, 200));
+    return route.fulfill({ status: 409, contentType: 'application/json', body: JSON.stringify({ error: { code: 'ILLEGAL_TRANSITION', message: 'already retried elsewhere' } }) });
+  });
+  await page.route('**/api/agent/tasks/literature-concurrent', (route) => {
+    taskReads += 1;
+    return route.fulfill({ contentType: 'application/json', body: JSON.stringify({ task: pendingTask }) });
+  });
+
+  await page.goto(`${baseUrl}/dashboard`);
+  const retry = page.getByRole('button', { name: /try again/i });
+  await retry.click();
+  expect(await retry.isDisabled()).toBe(true);
+  await page.keyboard.press('Enter');
+  await expect(page.getByText(/waiting in queue/i)).toBeVisible({ timeout: 4_000 });
+  expect(retryRequests).toBe(1);
+  expect(taskReads).toBe(1);
+  await expect(page.getByText(/source request could not be completed/i)).toHaveCount(0);
+});
+
 test('metadata selection starts a second acquisition and finishes with one temporary download', async ({ page }) => {
   let submissions = 0;
   let metadataPolls = 0;
@@ -324,18 +353,18 @@ test('metadata selection starts a second acquisition and finishes with one tempo
     callerKeys.push(route.request().headers()['idempotency-key'] ?? '');
     if (submissions === 1) {
       expect(await route.request().postDataJSON()).toEqual({ query: 'Ultrafast response', target: { kind: 'personal' } });
-      return route.fulfill({ status: 202, contentType: 'application/json', body: JSON.stringify({ task: { id: 'literature-metadata', sessionId: 'session-1', kind: 'source.retrieve', status: 'pending', progress: 0, retryCount: 0, executionAttempt: 0, result: null, error: null, createdAt: '2026-08-30T00:00:00.000Z', updatedAt: '2026-08-30T00:00:00.000Z' } }) });
+      return route.fulfill({ status: 202, contentType: 'application/json', body: JSON.stringify({ task: { id: 'literature-metadata', sessionId: 'session-1', kind: 'source.retrieve', status: 'pending', progress: 0, retryCount: 0, canRetry: false, executionAttempt: 0, result: null, error: null, createdAt: '2026-08-30T00:00:00.000Z', updatedAt: '2026-08-30T00:00:00.000Z' } }) });
     }
     expect(await route.request().postDataJSON()).toEqual({ query: 'Ultrafast response', identifier: '10.1038/nature12373', target: { kind: 'personal' } });
     await new Promise<void>((resolve) => { releaseFullText = resolve; });
-    return route.fulfill({ status: 202, contentType: 'application/json', body: JSON.stringify({ task: { id: 'literature-fulltext', sessionId: 'session-1', kind: 'source.retrieve', status: 'pending', progress: 0, retryCount: 0, executionAttempt: 0, result: null, error: null, createdAt: '2026-08-30T00:02:00.000Z', updatedAt: '2026-08-30T00:02:00.000Z' } }) });
+    return route.fulfill({ status: 202, contentType: 'application/json', body: JSON.stringify({ task: { id: 'literature-fulltext', sessionId: 'session-1', kind: 'source.retrieve', status: 'pending', progress: 0, retryCount: 0, canRetry: false, executionAttempt: 0, result: null, error: null, createdAt: '2026-08-30T00:02:00.000Z', updatedAt: '2026-08-30T00:02:00.000Z' } }) });
   });
   await page.route('**/api/agent/tasks/literature-metadata', (route) => {
     metadataPolls += 1;
     if (metadataPolls === 1) return route.fulfill({ status: 503, contentType: 'application/json', body: JSON.stringify({ error: { code: 'TEMPORARY', message: 'temporary' } }) });
-    return route.fulfill({ contentType: 'application/json', body: JSON.stringify({ task: { id: 'literature-metadata', sessionId: 'session-1', kind: 'source.retrieve', status: 'succeeded', progress: 100, retryCount: 0, executionAttempt: 1, result: { sources: [{ id: 'source-1', title: 'Ultrafast response', sourceUrl: 'https://example.test/source', identifiers: { doi: '10.1038/nature12373' }, rights: {} }], providers: [] }, error: null, createdAt: '2026-08-30T00:00:00.000Z', updatedAt: '2026-08-30T00:01:00.000Z' } }) });
+    return route.fulfill({ contentType: 'application/json', body: JSON.stringify({ task: { id: 'literature-metadata', sessionId: 'session-1', kind: 'source.retrieve', status: 'succeeded', progress: 100, retryCount: 0, canRetry: false, executionAttempt: 1, result: { sources: [{ id: 'source-1', title: 'Ultrafast response', sourceUrl: 'https://example.test/source', identifiers: { doi: '10.1038/nature12373' }, rights: {} }], providers: [] }, error: null, createdAt: '2026-08-30T00:00:00.000Z', updatedAt: '2026-08-30T00:01:00.000Z' } }) });
   });
-  await page.route('**/api/agent/tasks/literature-fulltext', (route) => route.fulfill({ contentType: 'application/json', body: JSON.stringify({ task: { id: 'literature-fulltext', sessionId: 'session-1', kind: 'source.retrieve', status: 'succeeded', progress: 100, retryCount: 0, executionAttempt: 1, result: { sources: [{ id: 'source-1', title: 'Ultrafast response', sourceUrl: 'https://example.test/source', identifiers: { doi: '10.1038/nature12373' }, rights: { cacheAllowed: true }, temporaryDocumentId: 'document-1', expiresAt: '2026-09-01T00:00:00.000Z' }], providers: [] }, error: null, createdAt: '2026-08-30T00:02:00.000Z', updatedAt: '2026-08-30T00:03:00.000Z' } }) }));
+  await page.route('**/api/agent/tasks/literature-fulltext', (route) => route.fulfill({ contentType: 'application/json', body: JSON.stringify({ task: { id: 'literature-fulltext', sessionId: 'session-1', kind: 'source.retrieve', status: 'succeeded', progress: 100, retryCount: 0, canRetry: false, executionAttempt: 1, result: { sources: [{ id: 'source-1', title: 'Ultrafast response', sourceUrl: 'https://example.test/source', identifiers: { doi: '10.1038/nature12373' }, rights: { cacheAllowed: true }, temporaryDocumentId: 'document-1', expiresAt: '2026-09-01T00:00:00.000Z' }], providers: [] }, error: null, createdAt: '2026-08-30T00:02:00.000Z', updatedAt: '2026-08-30T00:03:00.000Z' } }) }));
   await page.route('**/api/temporary-documents/document-1/download-link', (route) => {
     downloadLinks += 1;
     return route.fulfill({ contentType: 'application/json', body: JSON.stringify({ downloadUrl: '/api/temporary-documents/document-1/download/access-1', expiresAt: '2026-09-01T00:00:00.000Z' }) });

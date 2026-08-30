@@ -50,9 +50,10 @@ describe('POST /literature/acquisitions', () => {
     expect(Object.keys(response.json()).sort()).toEqual(['researchObject', 'session', 'task']);
     expect(Object.keys(response.json().researchObject).sort()).toEqual(['createdAt', 'id', 'status', 'title', 'version', 'visibility', 'workspaceId']);
     expect(Object.keys(response.json().session).sort()).toEqual(['createdAt', 'id', 'kind', 'researchObjectId', 'status', 'title']);
-    expect(Object.keys(response.json().task).sort()).toEqual(['createdAt', 'error', 'executionAttempt', 'id', 'kind', 'progress', 'result', 'retryCount', 'sessionId', 'status', 'updatedAt']);
+    expect(Object.keys(response.json().task).sort()).toEqual(['canRetry', 'createdAt', 'error', 'executionAttempt', 'id', 'kind', 'progress', 'result', 'retryCount', 'sessionId', 'status', 'updatedAt']);
+    expect(response.json().task.canRetry).toBe(false);
     expect(response.json().task.kind).toBe('source.retrieve');
-    expect(db.agentTasks[0]?.payload).toEqual({ query: 'attosecond dynamics', providers: ['scansci'], limit: 1, includeFullText: true, identifier: '10.1038/nature12373' });
+    expect(db.agentTasks[0]?.payload).toEqual({ query: 'attosecond dynamics', providers: ['scansci'], limit: 1, includeFullText: true, identifier: '10.1038/nature12373', retryContractVersion: 1 });
     await app.close();
   });
 
@@ -142,7 +143,7 @@ describe('POST /literature/acquisitions', () => {
     expect(response.statusCode).toBe(200);
     expect(response.json().tasks).toHaveLength(1);
     expect(Object.keys(response.json().tasks[0]).sort()).toEqual([
-      'createdAt', 'error', 'executionAttempt', 'id', 'kind', 'progress', 'researchObjectId', 'result', 'retryCount', 'sessionId', 'status', 'updatedAt',
+      'canRetry', 'createdAt', 'error', 'executionAttempt', 'id', 'kind', 'progress', 'researchObjectId', 'result', 'retryCount', 'sessionId', 'status', 'updatedAt',
     ]);
     expect(JSON.stringify(response.json())).not.toMatch(/private owned query|other user private query|10\.9999\/private|other-.*-secret|payload|interestContext|dispatchedAt|idempotencyKey/);
     await app.close();
@@ -185,9 +186,37 @@ describe('POST /literature/acquisitions', () => {
     expect(response.statusCode).toBe(200);
     expect(response.json().tasks).toEqual([expect.objectContaining({ id: activeId, status: 'running' })]);
     expect(Object.keys(response.json().tasks[0]).sort()).toEqual([
-      'createdAt', 'error', 'executionAttempt', 'id', 'kind', 'progress', 'researchObjectId', 'result', 'retryCount', 'sessionId', 'status', 'updatedAt',
+      'canRetry', 'createdAt', 'error', 'executionAttempt', 'id', 'kind', 'progress', 'researchObjectId', 'result', 'retryCount', 'sessionId', 'status', 'updatedAt',
     ]);
     expect(JSON.stringify(response.json())).not.toMatch(/older private active|older-private-active-key|other private active|payload|idempotencyKey/);
+
+    Object.assign(db.agentTasks.find((row) => row.id === activeId)!, { status: 'succeeded', progress: 100 });
+    const eligibleId = '00000000-0000-4000-8000-000000000960';
+    db.agentTasks.push({
+      ...owned, id: eligibleId, status: 'failed', progress: 30, retryCount: 0, error: '[retryable] timeout',
+      payload: owned.payload, idempotencyKey: 'eligible-private-key', createdAt: new Date(base - 3_000), updatedAt: new Date(base - 3_000),
+    });
+    db.agentTasks.push({
+      ...owned, id: '00000000-0000-4000-8000-000000000961', status: 'failed', progress: 30, retryCount: 0,
+      error: '[retryable] malformed', payload: { query: 'malformed private payload' }, idempotencyKey: 'malformed-private-key',
+      createdAt: new Date(base + 40_000), updatedAt: new Date(base + 40_000),
+    });
+    const revokedWorkspaceId = '00000000-0000-4000-8000-000000000962';
+    const revokedRoId = '00000000-0000-4000-8000-000000000963';
+    const revokedSessionId = '00000000-0000-4000-8000-000000000964';
+    db.workspaces.push({ id: revokedWorkspaceId, type: 'team', ownerId: db.users[0].id, name: 'Revoked', status: 'active', createdAt: new Date(), updatedAt: new Date() });
+    db.researchObjects.push({ id: revokedRoId, workspaceId: revokedWorkspaceId, createdBy: db.users[0].id, title: 'Revoked', status: 'draft', visibility: 'private', version: 1, idempotencyKey: null, createdAt: new Date(), updatedAt: new Date() });
+    db.agentSessions.push({ id: revokedSessionId, userId: db.users[0].id, researchObjectId: revokedRoId, kind: 'retrieval', title: '', status: 'active', idempotencyKey: null, createdAt: new Date(), updatedAt: new Date() });
+    db.agentTasks.push({
+      ...owned, id: '00000000-0000-4000-8000-000000000965', sessionId: revokedSessionId, status: 'failed', progress: 30,
+      retryCount: 0, error: '[retryable] revoked', payload: owned.payload, idempotencyKey: 'revoked-private-key',
+      createdAt: new Date(base + 39_000), updatedAt: new Date(base + 39_000),
+    });
+    const eligibleResponse = await app.inject({
+      method: 'GET', url: '/agent/tasks?actionable=false&kind=source.retrieve&recovery=true', cookies: { openscience_session: token },
+    });
+    expect(eligibleResponse.json().tasks).toEqual([expect.objectContaining({ id: eligibleId, status: 'failed', canRetry: true })]);
+    expect(JSON.stringify(eligibleResponse.json())).not.toMatch(/malformed private payload|revoked-private-key|eligible-private-key|payload|idempotencyKey/);
     await app.close();
   });
 
@@ -202,15 +231,17 @@ describe('POST /literature/acquisitions', () => {
     const taskId = acquired.json().task.id as string;
     const task = db.agentTasks.find((row) => row.id === taskId)!;
     Object.assign(task, { status: 'failed', progress: 35, result: { stale: true }, error: '[retryable] upstream timeout' });
+    const retryView = await app.inject({ method: 'GET', url: `/agent/tasks/${taskId}`, cookies: { openscience_session: token } });
+    expect(retryView.json().task).toMatchObject({ id: taskId, canRetry: true });
     const taskCount = db.agentTasks.length;
     const debitCount = db.usageLedger.filter((entry) => entry.resource === 'ai_credit' && entry.delta < 0).length;
 
-    const retried = await write(`/agent/tasks/${taskId}/retry`);
-    expect(retried.statusCode).toBe(200);
-    expect(retried.json().task).toMatchObject({ id: taskId, status: 'pending', progress: 0, retryCount: 1, result: null, error: null });
+    const concurrent = await Promise.all([write(`/agent/tasks/${taskId}/retry`), write(`/agent/tasks/${taskId}/retry`)]);
+    expect(concurrent.map(({ statusCode }) => statusCode).sort()).toEqual([200, 409]);
+    const retried = concurrent.find(({ statusCode }) => statusCode === 200)!;
+    expect(retried.json().task).toMatchObject({ id: taskId, status: 'pending', progress: 0, retryCount: 1, canRetry: false, result: null, error: null });
     expect(db.agentTasks).toHaveLength(taskCount);
     expect(db.usageLedger.filter((entry) => entry.resource === 'ai_credit' && entry.delta < 0)).toHaveLength(debitCount);
-    expect((await write(`/agent/tasks/${taskId}/retry`)).statusCode).toBe(409);
     Object.assign(task, { status: 'running' });
     expect((await write(`/agent/tasks/${taskId}/retry`)).statusCode).toBe(409);
     Object.assign(task, { status: 'failed', error: '[retryable] failed again' });

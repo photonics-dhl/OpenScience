@@ -761,6 +761,7 @@ export interface AgentTaskView {
   status: 'pending' | 'running' | 'succeeded' | 'failed';
   progress: number;
   retryCount: number;
+  canRetry: boolean;
   result: Record<string, unknown> | null;
   error: string | null;
   createdAt: string;

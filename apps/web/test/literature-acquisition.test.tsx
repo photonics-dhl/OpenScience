@@ -20,6 +20,7 @@ import { LiteratureAcquisition, describeLiteratureTask, isLiteratureIdentifier, 
 
 const sourceTask: LiteratureTask = {
   id: 'task-1', sessionId: 'session-1', kind: 'source.retrieve', status: 'succeeded', progress: 100, retryCount: 0,
+  canRetry: false,
   result: { sources: [{ id: 'source-1', title: 'Ultrafast optical response', sourceUrl: 'https://example.org/source', identifiers: { DOI: '10.1000/example' }, temporaryDocumentId: 'document-1', expiresAt: '2026-09-01T00:00:00.000Z' }] },
   error: null, createdAt: '2026-08-30T00:00:00.000Z', updatedAt: '2026-08-30T00:00:00.000Z',
 };
@@ -40,11 +41,12 @@ describe('Personal literature acquisition', () => {
   });
 
   it('offers retry only for one server-eligible failed source task and explains terminal failures', () => {
-    const eligible = { ...sourceTask, status: 'failed' as const, retryCount: 0, error: '[retryable] timeout' };
-    const blocked = { ...eligible, error: '[blocked] policy denied' };
-    const exhausted = { ...eligible, retryCount: 1, error: '[retryable] failed again' };
+    const eligible = { ...sourceTask, status: 'failed' as const, retryCount: 0, canRetry: true, error: '[retryable] timeout' };
+    const blocked = { ...eligible, canRetry: false, error: '[blocked] policy denied' };
+    const exhausted = { ...eligible, retryCount: 1, canRetry: false, error: '[retryable] failed again' };
     expect(isLiteratureTaskRetryEligible(eligible)).toBe(true);
-    expect(isLiteratureTaskRetryEligible({ ...eligible, status: 'running' })).toBe(false);
+    expect(isLiteratureTaskRetryEligible({ ...eligible, canRetry: false })).toBe(false);
+    expect(isLiteratureTaskRetryEligible({ ...eligible, canRetry: undefined } as unknown as LiteratureTask)).toBe(false);
     expect(isLiteratureTaskRetryEligible(blocked)).toBe(false);
     expect(isLiteratureTaskRetryEligible(exhausted)).toBe(false);
     expect(describeLiteratureTask(blocked)).toEqual({ state: 'failed_terminal', messageKey: 'statusBlocked' });

@@ -1,7 +1,7 @@
 import type { Redis } from 'ioredis';
 import { isDeepStrictEqual } from 'node:util';
 import { Prisma, type AgentSession, type AgentTask } from '@prisma/client';
-import { parseSourceRetrievePayload } from '../retrieval/retrieve-payload';
+import { parseSourceRetrievePayload, SOURCE_RETRIEVE_RETRY_CONTRACT_VERSION } from '../retrieval/retrieve-payload';
 import type { AuditContext } from '@openscience/observability';
 import { requireActiveMembership, requireMembership } from '../workspace/helpers';
 import { recordAudit } from '../workspace/audit';
@@ -50,6 +50,7 @@ export interface AgentTaskView {
   progress: number;
   retryCount: number;
   executionAttempt: number;
+  canRetry: boolean;
   result: Record<string, unknown> | null;
   error: string | null;
   createdAt: Date;
@@ -115,6 +116,59 @@ function assertTaskReplay(
     || snapshot.currentGoal !== requestedContext?.currentGoal
     || snapshot.activeClaimId !== requestedContext?.activeClaimId) {
     throw new AgentError('VALIDATION_ERROR', '幂等键已用于其他 Hermes 任务');
+  }
+}
+
+type AgentTaskRetrySnapshot = Prisma.AgentTaskGetPayload<{
+  include: { session: { include: { researchObject: { include: { workspace: { include: { members: true } } } } } } };
+}>;
+
+function retryAuthorityInclude(userId: string) {
+  return {
+    session: {
+      include: {
+        researchObject: {
+          include: { workspace: { include: { members: { where: { userId }, take: 1 } } } },
+        },
+      },
+    },
+  } as const;
+}
+
+function evaluateAgentTaskRetryEligibility(
+  task: AgentTaskRetrySnapshot,
+  userId: string,
+): { authorityValid: boolean; canRetry: boolean } {
+  const session = task.session;
+  if (session.userId !== userId || session.status !== 'active') return { authorityValid: false, canRetry: false };
+  const researchObject = session.researchObject;
+  if (session.researchObjectId) {
+    if (!researchObject || researchObject.id !== session.researchObjectId
+      || researchObject.workspace.id !== researchObject.workspaceId
+      || researchObject.workspace.status !== 'active'
+      || !researchObject.workspace.members.some((membership) => membership.userId === userId)) {
+      return { authorityValid: false, canRetry: false };
+    }
+  } else if (task.kind === 'source.retrieve') {
+    return { authorityValid: false, canRetry: false };
+  }
+  if (task.status !== 'failed' || task.retryCount !== 0 || task.error?.startsWith('[blocked]')) {
+    return { authorityValid: true, canRetry: false };
+  }
+  const payload = task.payload && typeof task.payload === 'object' && !Array.isArray(task.payload)
+    ? task.payload as Record<string, unknown>
+    : {};
+  if (task.kind === 'sdf.extract') {
+    return { authorityValid: true, canRetry: typeof payload.manuscriptText === 'string' && !('artifactId' in payload) };
+  }
+  if (task.kind !== 'source.retrieve' || payload.retryContractVersion !== SOURCE_RETRIEVE_RETRY_CONTRACT_VERSION) {
+    return { authorityValid: true, canRetry: false };
+  }
+  try {
+    const parsed = parseSourceRetrievePayload(payload);
+    return { authorityValid: true, canRetry: parsed.retryContractVersion === SOURCE_RETRIEVE_RETRY_CONTRACT_VERSION };
+  } catch {
+    return { authorityValid: true, canRetry: false };
   }
 }
 
@@ -191,17 +245,33 @@ export async function listAgentTasks(
 ): Promise<AgentTaskListItem[]> {
   if (input.recoveryPreferred) {
     if (input.kind !== 'source.retrieve') throw new AgentError('VALIDATION_ERROR', 'Recovery priority requires source.retrieve');
-    const baseWhere = { session: { userId: input.userId }, kind: input.kind };
+    const baseWhere: Prisma.AgentTaskWhereInput = {
+      kind: input.kind,
+      session: {
+        userId: input.userId,
+        status: 'active',
+        researchObject: {
+          is: { workspace: { status: 'active', members: { some: { userId: input.userId } } } },
+        },
+      },
+    };
     const newest = (where: Prisma.AgentTaskWhereInput) => deps.prisma.agentTask.findFirst({
-      where: { ...baseWhere, ...where }, include: { session: true }, orderBy: { updatedAt: 'desc' },
+      where: { ...baseWhere, ...where },
+      include: retryAuthorityInclude(input.userId),
+      orderBy: [{ updatedAt: 'desc' }, { id: 'desc' }],
     });
     const active = await newest({ status: { in: ['pending', 'running'] } });
     const retryableFailed = active ? null : await newest({
       status: 'failed', retryCount: 0, error: { not: { startsWith: '[blocked]' } },
+      payload: { path: ['retryContractVersion'], equals: SOURCE_RETRIEVE_RETRY_CONTRACT_VERSION },
     });
-    const terminal = active || retryableFailed ? null : await newest({ status: { in: ['succeeded', 'failed'] } });
-    const selected = active ?? retryableFailed ?? terminal;
-    return selected ? [{ ...taskToView(selected), researchObjectId: selected.session.researchObjectId }] : [];
+    const eligibleFailed = retryableFailed
+      && evaluateAgentTaskRetryEligibility(retryableFailed, input.userId).canRetry ? retryableFailed : null;
+    const terminal = active || eligibleFailed ? null : await newest({ status: { in: ['succeeded', 'failed'] } });
+    const selected = active ?? eligibleFailed ?? terminal;
+    if (!selected) return [];
+    const canRetry = evaluateAgentTaskRetryEligibility(selected, input.userId).canRetry;
+    return [{ ...taskToView(selected, canRetry), researchObjectId: selected.session.researchObjectId }];
   }
   const rows = await deps.prisma.agentTask.findMany({
     where: {
@@ -209,11 +279,14 @@ export async function listAgentTasks(
       ...(input.kind ? { kind: input.kind } : {}),
       ...(input.actionableOnly ? { status: { in: ['pending', 'running', 'failed'] } } : {}),
     },
-    include: { session: true },
+    include: retryAuthorityInclude(input.userId),
     orderBy: { updatedAt: 'desc' },
     take: 20,
   });
-  return rows.map((task) => ({ ...taskToView(task), researchObjectId: task.session.researchObjectId }));
+  return rows.map((task) => ({
+    ...taskToView(task, evaluateAgentTaskRetryEligibility(task, input.userId).canRetry),
+    researchObjectId: task.session.researchObjectId,
+  }));
 }
 
 /**
@@ -474,11 +547,13 @@ export async function getAgentTask(
   deps: AgentDeps,
   input: { userId: string; taskId: string },
 ): Promise<AgentTaskView> {
-  const task = await deps.prisma.agentTask.findUnique({ where: { id: input.taskId }, include: { session: true } });
+  const task = await deps.prisma.agentTask.findUnique({
+    where: { id: input.taskId }, include: retryAuthorityInclude(input.userId),
+  });
   if (!task || task.session.userId !== input.userId) {
     throw new AgentError('RESEARCH_OBJECT_NOT_FOUND', '任务不存在');
   }
-  return taskToView(task);
+  return taskToView(task, evaluateAgentTaskRetryEligibility(task, input.userId).canRetry);
 }
 
 /** One explicit, idempotent-cost retry of a failed task. The original credit reservation is reused. */
@@ -487,39 +562,23 @@ export async function retryAgentTask(
   input: { userId: string; taskId: string },
   ctx: AuditContext = {},
 ): Promise<AgentTaskView> {
-  const task = await deps.prisma.agentTask.findUnique({ where: { id: input.taskId }, include: { session: true } });
-  if (!task || task.session.userId !== input.userId) throw new AgentError('RESEARCH_OBJECT_NOT_FOUND', '任务不存在');
-  if (task.status !== 'failed') throw new AgentError('ILLEGAL_TRANSITION', 'Only failed tasks can be retried');
-  const payload = task.payload && typeof task.payload === 'object' && !Array.isArray(task.payload)
-    ? task.payload as Record<string, unknown>
-    : {};
-  const retryableExtractor = task.kind === 'sdf.extract'
-    && typeof payload.manuscriptText === 'string'
-    && !('artifactId' in payload)
-    && !task.error?.startsWith('[blocked]');
-  let retryableRetrieval = false;
-  if (task.kind === 'source.retrieve' && !task.error?.startsWith('[blocked]')) {
-    try {
-      parseSourceRetrievePayload(payload);
-      retryableRetrieval = true;
-    } catch {
-      retryableRetrieval = false;
-    }
-  }
-  if (!retryableExtractor && !retryableRetrieval) throw new AgentError('ILLEGAL_TRANSITION', 'Task is not retryable');
-  if (task.retryCount >= 1) throw new AgentError('ILLEGAL_TRANSITION', 'Task was already retried');
-
-  let workspaceId: string | null = null;
-  if (task.session.researchObjectId) {
-    const ro = await deps.prisma.researchObject.findUnique({ where: { id: task.session.researchObjectId } });
-    if (!ro) throw new AgentError('RESEARCH_OBJECT_NOT_FOUND', '研究对象不存在');
-    await requireMembership(deps, ro.workspaceId, input.userId);
-    workspaceId = ro.workspaceId;
-  }
-
   const updated = await deps.prisma.$transaction(async (tx) => {
+    const task = await tx.agentTask.findUnique({
+      where: { id: input.taskId }, include: retryAuthorityInclude(input.userId),
+    });
+    if (!task || task.session.userId !== input.userId) throw new AgentError('RESEARCH_OBJECT_NOT_FOUND', '任务不存在');
+    const eligibility = evaluateAgentTaskRetryEligibility(task, input.userId);
+    if (!eligibility.authorityValid) throw new AgentError('RESEARCH_OBJECT_NOT_FOUND', '任务不存在');
+    if (!eligibility.canRetry) {
+      if (task.status !== 'failed') throw new AgentError('ILLEGAL_TRANSITION', 'Only failed tasks can be retried');
+      if (task.retryCount >= 1) throw new AgentError('ILLEGAL_TRANSITION', 'Task was already retried');
+      throw new AgentError('ILLEGAL_TRANSITION', 'Task is not retryable');
+    }
+    const workspaceId = task.session.researchObject?.workspaceId ?? null;
     const changed = await tx.agentTask.updateMany({
-      where: { id: task.id, status: 'failed', kind: task.kind, retryCount: 0, error: task.error },
+      where: {
+        id: task.id, sessionId: task.sessionId, status: 'failed', kind: task.kind, retryCount: 0, error: task.error,
+      },
       data: {
         status: 'pending', progress: 0, result: Prisma.JsonNull, error: null, dispatchedAt: null,
         retryCount: 1,
@@ -533,7 +592,7 @@ export async function retryAgentTask(
     return tx.agentTask.findUnique({ where: { id: task.id } });
   });
   if (!updated) throw new AgentError('RESEARCH_OBJECT_NOT_FOUND', '任务不存在');
-  await dispatchAgentTask(deps, task.id);
+  await dispatchAgentTask(deps, updated.id);
   return taskToView(updated);
 }
 
@@ -650,7 +709,7 @@ function taskToView(task: {
   id: string; sessionId: string; kind: string; status: AgentTaskStatus;
   progress: number; retryCount: number; executionAttempt: number;
   result: unknown; error: string | null; createdAt: Date; updatedAt: Date;
-}): AgentTaskView {
+}, canRetry = false): AgentTaskView {
   let result: Record<string, unknown> | null = null;
   if (task.result && typeof task.result === 'object' && !Array.isArray(task.result)) {
     const { sourceMapRef, ...publicResult } = task.result as Record<string, unknown>;
@@ -662,7 +721,7 @@ function taskToView(task: {
   return {
     id: task.id, sessionId: task.sessionId, kind: task.kind, status: task.status,
     progress: task.progress, retryCount: task.retryCount, executionAttempt: task.executionAttempt,
-    result,
+    canRetry, result,
     error: task.error, createdAt: task.createdAt, updatedAt: task.updatedAt,
   };
 }

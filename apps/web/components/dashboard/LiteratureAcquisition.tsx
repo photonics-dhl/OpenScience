@@ -37,7 +37,7 @@ type LiteratureTaskDescription = {
 export const isLiteratureIdentifier = isSourceRetrieveIdentifier;
 
 export function isLiteratureTaskRetryEligible(task: LiteratureTask): boolean {
-  return task.kind === 'source.retrieve' && task.status === 'failed' && task.retryCount < 1 && !task.error?.startsWith('[blocked]');
+  return task.canRetry === true;
 }
 
 function hasAuthRequiredResult(result: Record<string, unknown> | null): boolean {
@@ -86,11 +86,22 @@ export function LiteratureAcquisition({ initialTask = null, onAuthenticationRequ
   const [reconnecting, setReconnecting] = React.useState(false);
   const [downloading, setDownloading] = React.useState<string | null>(null);
   const [submissionPending, setSubmissionPending] = React.useState(false);
+  const [retryPending, setRetryPending] = React.useState(false);
   const submitting = React.useRef(false);
+  const retrying = React.useRef(false);
 
   const description = task ? describeLiteratureTask(task) : null;
   const active = description?.state === 'pending' || description?.state === 'running';
   const sources = resultSources(task?.result ?? null);
+  const handlePermanentTaskError = React.useCallback((status: number) => {
+    if (status === 401) {
+      onAuthenticationRequired();
+      return;
+    }
+    setTask(null);
+    setReconnecting(false);
+    setError(t('recoveryError'));
+  }, [onAuthenticationRequired, t]);
 
   React.useEffect(() => {
     if (!recoveryComplete) return;
@@ -107,17 +118,9 @@ export function LiteratureAcquisition({ initialTask = null, onAuthenticationRequ
       getTask: async (taskId, signal) => (await getAgentTask('', taskId, signal)).task,
       onTask: setTask,
       onReconnecting: setReconnecting,
-      onPermanentError: (status) => {
-        if (status === 401) {
-          onAuthenticationRequired();
-          return;
-        }
-        setTask(null);
-        setReconnecting(false);
-        setError(t('recoveryError'));
-      },
+      onPermanentError: handlePermanentTaskError,
     });
-  }, [active, onAuthenticationRequired, t, task?.id]);
+  }, [active, handlePermanentTaskError, task?.id]);
 
   async function submit(input: { query: string; identifier?: string }) {
     if (submitting.current) return;
@@ -157,13 +160,32 @@ export function LiteratureAcquisition({ initialTask = null, onAuthenticationRequ
   }
 
   async function retry() {
-    if (!task) return;
+    if (!task || retrying.current || !isLiteratureTaskRetryEligible(task)) return;
+    retrying.current = true;
+    setRetryPending(true);
     setError('');
     try {
       const next = await retryAgentTask(task.id);
       setTask(next.task);
-    } catch {
-      setError(t('error'));
+    } catch (cause) {
+      const status = cause instanceof ApiClientError ? cause.status : undefined;
+      const reconcile = status === undefined || status === 408 || status === 409 || status === 429 || (status !== undefined && status >= 500);
+      if (!reconcile) {
+        if (status === 401 || status === 403 || status === 404) handlePermanentTaskError(status);
+        else setError(t('error'));
+        return;
+      }
+      try {
+        const authoritative = await getAgentTask('', task.id);
+        setTask(authoritative.task);
+      } catch (recoveryCause) {
+        const recoveryStatus = recoveryCause instanceof ApiClientError ? recoveryCause.status : undefined;
+        if (recoveryStatus === 401 || recoveryStatus === 403 || recoveryStatus === 404) handlePermanentTaskError(recoveryStatus);
+        else setError(t('error'));
+      }
+    } finally {
+      retrying.current = false;
+      setRetryPending(false);
     }
   }
 
@@ -213,7 +235,7 @@ export function LiteratureAcquisition({ initialTask = null, onAuthenticationRequ
       </div>
 
       {task && isLiteratureTaskRetryEligible(task) ? (
-        <button className="mt-2 min-h-11 border-b border-os-vermilion-ink text-sm font-semibold text-os-ink transition-transform duration-150 hover:-translate-y-px active:translate-y-px focus-visible:ring-2 focus-visible:ring-focus-ring disabled:opacity-60" disabled={submissionPending} onClick={() => void retry()} type="button">
+        <button aria-busy={retryPending} className="mt-2 min-h-11 border-b border-os-vermilion-ink text-sm font-semibold text-os-ink transition-transform duration-150 hover:-translate-y-px active:translate-y-px focus-visible:ring-2 focus-visible:ring-focus-ring disabled:opacity-60" disabled={submissionPending || retryPending} onClick={() => void retry()} type="button">
           {t('retry')}
         </button>
       ) : null}
