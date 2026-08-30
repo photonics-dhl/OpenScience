@@ -53,7 +53,7 @@
 
 ## Next action
 
-1. 先由用户审核 `docs/specs/2026-08-30-scansci-default-capability-design.md`，再写 TDD 实施计划；Task 11 不启动。
+1. 按 `docs/plans/2026-08-30-scansci-default-capability-plan.md` 执行 Tasks 1–10；Task 11 不启动。
 2. 实现 release-scoped `scansci-legal`/auth helper、持久 session/可选账号 Secret、统一 `/literature/acquisitions` 和四类产品入口。
 3. 继续以服务器为最终验收；本地不运行 Docker。必须用真实 OA + 浙江大学 CARSI PDF、容器重建 session、72h/600s 与灰色源调用 0 关闭 Task 10。
 
@@ -62,8 +62,9 @@
 1. `AGENTS.md`
 2. 本 handoff
 3. `docs/specs/2026-08-30-scansci-default-capability-design.md`
-4. `docs/plans/2026-08-30-hermes-external-retrieval-lifecycle-plan.md`
-5. `docs/specs/2026-08-26-hermes-research-intelligence-platform-design.md`
-6. `docs/progress.md`
+4. `docs/plans/2026-08-30-scansci-default-capability-plan.md`
+5. `docs/plans/2026-08-30-hermes-external-retrieval-lifecycle-plan.md`
+6. `docs/specs/2026-08-26-hermes-research-intelligence-platform-design.md`
+7. `docs/progress.md`
 
 `project_index.md` 只定向检索 CURRENT；不要从较旧 `main` 或历史 release 段落推断现状。

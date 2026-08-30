@@ -1,6 +1,6 @@
 # ScanSci Default Literature Acquisition Capability Design
 
-> Status: APPROVED DESIGN / WRITTEN-SPEC REVIEW PENDING
+> Status: APPROVED / IMPLEMENTATION PLAN READY
 > Date: 2026-08-30
 > Owner: Hermes literature acquisition capability
 > Upstream: `scansci-pdf` 1.11.0, commit `7017814758f826ea21470a609890a7d3ca374b8e`
