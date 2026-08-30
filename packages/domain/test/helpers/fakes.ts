@@ -332,6 +332,7 @@ export function createFakePrisma(): { prisma: PrismaClient; db: FakeDb } {
         return { ...ro, sdfDocument: doc ? { ...doc, nodes: db.sdfNodes.filter((n) => n.sdfDocumentId === doc.id) } : null };
       },
       create: async ({ data }: any) => {
+        if (data.idempotencyKey && db.researchObjects.some((researchObject) => researchObject.idempotencyKey === data.idempotencyKey)) throw p2002();
         const row = {
           id: nextId(), status: 'draft', visibility: 'private', version: 1,
           createdAt: new Date(), updatedAt: new Date(),
@@ -362,6 +363,10 @@ export function createFakePrisma(): { prisma: PrismaClient; db: FakeDb } {
         if (!r) return null;
         Object.assign(r, data);
         return r;
+      },
+      delete: async ({ where }: any) => {
+        const index = db.researchObjects.findIndex((researchObject) => researchObject.id === where.id);
+        return db.researchObjects.splice(index, 1)[0];
       },
     },
     sdfDocument: {
@@ -702,6 +707,13 @@ export function createFakePrisma(): { prisma: PrismaClient; db: FakeDb } {
         if (!row) return null;
         return { ...row };
       },
+      findFirst: async ({ where }: any) => db.agentSessions.find((session) =>
+        where.researchObjectId === undefined || session.researchObjectId === where.researchObjectId,
+      ) ?? null,
+      delete: async ({ where }: any) => {
+        const index = db.agentSessions.findIndex((session) => session.id === where.id);
+        return db.agentSessions.splice(index, 1)[0];
+      },
       findMany: async ({ where, orderBy }: any) => {
         const rows = db.agentSessions.filter((s) => (where.userId === undefined || s.userId === where.userId));
         if (orderBy?.createdAt === 'desc') rows.sort((a, b) => b.createdAt - a.createdAt);
@@ -711,7 +723,7 @@ export function createFakePrisma(): { prisma: PrismaClient; db: FakeDb } {
     agentTask: {
       create: async ({ data }: any) => {
         if (data.idempotencyKey && db.agentTasks.some((t) => t.idempotencyKey === data.idempotencyKey)) throw p2002();
-        const row = { id: nextId(), status: 'pending', progress: 0, retryCount: 0, executionAttempt: 0, dispatchedAt: null, createdAt: new Date(), updatedAt: new Date(), ...data };
+        const row = { id: nextId(), status: 'pending', progress: 0, retryCount: 0, executionAttempt: 0, dispatchedAt: null, result: null, error: null, createdAt: new Date(), updatedAt: new Date(), ...data };
         db.agentTasks.push(row);
         return row;
       },
@@ -726,6 +738,9 @@ export function createFakePrisma(): { prisma: PrismaClient; db: FakeDb } {
         }
         return { ...row };
       },
+      findFirst: async ({ where }: any) => db.agentTasks.find((task) =>
+        where.sessionId === undefined || task.sessionId === where.sessionId,
+      ) ?? null,
       update: async ({ where, data }: any) => {
         const row = db.agentTasks.find((t) => t.id === where.id);
         Object.assign(row, data, { updatedAt: new Date() });
@@ -909,6 +924,9 @@ export function createFakePrisma(): { prisma: PrismaClient; db: FakeDb } {
         Object.assign(row, data);
         return { ...row };
       },
+      findFirst: async ({ where }: any) => db.agentTasks.find((task) =>
+        where.sessionId === undefined || task.sessionId === where.sessionId,
+      ) ?? null,
       updateMany: async ({ where, data }: any) => {
         const rows = db.aiReviews.filter((review) =>
           (where.versionId === undefined || review.versionId === where.versionId) &&

@@ -40,6 +40,10 @@ const sdfBody = z.object({
   version: z.number().int().positive(),
   core: z.record(z.string(), z.string()),
 });
+const publicIdempotencyKey = z.string().min(1).max(200).refine(
+  (key) => !key.startsWith('system:'),
+  '系统保留幂等键不可由公开请求使用',
+).optional();
 
 /** P1B-2：/research-objects + /sdf API 骨架（幂等键 + 乐观锁 + 审计，§16/§17）。 */
 export function registerResearchObjectRoutes(app: FastifyInstance, deps: ResearchObjectRouteDeps): void {
@@ -54,7 +58,7 @@ export function registerResearchObjectRoutes(app: FastifyInstance, deps: Researc
     const user = await requireCurrentUser(deps, req, reply);
     if (!user) return;
     const body = createBody.parse(req.body);
-    const idempotencyKey = z.string().min(1).max(200).optional().parse(req.headers['idempotency-key']);
+    const idempotencyKey = publicIdempotencyKey.parse(req.headers['idempotency-key']);
     const ro = await createResearchObject(
       deps,
       { workspaceId: body.workspaceId, userId: user.userId, title: body.title, sdf: body.sdf, idempotencyKey },

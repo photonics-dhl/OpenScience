@@ -77,6 +77,9 @@ export async function createResearchObject(
   input: CreateResearchObjectInput,
   ctx: AuditContext = {},
 ): Promise<ResearchObjectSummary> {
+  if (input.idempotencyKey?.startsWith('system:')) {
+    throw new ResearchObjectError('VALIDATION_ERROR', '系统保留幂等键不可由公开请求使用');
+  }
   const { workspace } = await requireMembership(deps, input.workspaceId, input.userId);
   void workspace;
   const title = input.title.trim();
