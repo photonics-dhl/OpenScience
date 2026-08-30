@@ -11,7 +11,7 @@
 ## Version tuple
 
 - Worktree: `E:/Miscellaneous/XGS/.worktrees/readable-hermes-guidance`
-- Branch / local implementation / repository main: `codex/scansci-default-capability` / `cfc0ddc24b92040d46f5fa875b1931163aa2c5fa` / `463c8e3a2a80138cda2d669c370c0481ed4c0877`；远端仅保留 `main`。
+- Branch / local implementation / repository main: `codex/scansci-default-capability` / `2560bd84988dd0df7972630a81ac5cb7d80bb62f` / `463c8e3a2a80138cda2d669c370c0481ed4c0877`；远端仅保留 `main`。
 - Production application source / immutable release: `689331845574612130f223d08c92e61721c16586`
 - Rollback: `c435c4c8b2800bb20998fd9a9a93f2db96328661`; core/search migrations `32/32` / `2/2`
 - 本地 `main` 与其他 worktree 有用户改动，不得触碰或用它推断生产；上述 tuple 已从 ECS 重新实测。
@@ -50,7 +50,7 @@
 17. ScanSci plan Task 7 local candidate 为 `22088c0` + `86e037e` + `3e829db` + `1059072` + `82d4772` + `185d5d6`：public `canRetry` 只来自共享 predicate；marker 只能由 acquisition durable path 构造，generic/public/internal caller 与历史/畸形/撤权均 false。Retry 用三次 P2034-only Serializable authority/CAS/audit，recovery 单次 ID-only SQL 精确筛选后复验，无循环/top-N/payload 泄露；14-case corpus 标注 JSONB/JavaScript-only，PG parity 以独立 terminal sentinel 证明 raw selector 分支。Domain/API/Worker `534/99/502`，real-PG race/parity/deep-history contract 仅 typecheck；既有 Client/Playwright `7/7` 未改，ECS 375px/真实下载和 Task 8 四入口仍 pending。
 18. ScanSci plan Task 8 local candidate 为 `8238a9f`：Hermes Drawer、RO Hermes、RO Files/Evidence 与 Personal Space 共用唯一 acquisition/recovery/poll/download；有界双语 + shared DOI/arXiv 确定性分类，Dashboard Personal/RO target、query-only metadata、44px/i18n/dark-paper/within-form 均闭合。Web `462 + 5 Node`、build/typecheck、product `72/72`、Hermes `19/19 + 8/8` green；ECS/CARSI/OA/一次性下载仍 pending。
 19. Task 8 fix round `d75ca1c`：Drawer stable key/fingerprint 跨关闭重开且新 intent 换 key；recovery durable target + API strict query + Domain pre-limit target scope，RO route ID 不受 cross-RO task 影响，IME composition Enter inert。Domain/API/Worker/Web `535/101/502/463 + 5 Node`、browser fix `6/6`、product `72/72`、Hermes `19/19 + 8/8` green。
-20. Task 8 fix round `c0bcf0a`：explicit A key/fingerprint 在 generic target history 前 exact replay，active B 不得 suppress/replace A；browser A-vs-B `5/5`、Web `464 + 5 Node`、product `72/72`、Hermes `19/19 + 8/8` green。Task 9 fixes `4f6361e` + `cfc0ddc` 又关闭 file-Secret TOCTOU/inline token、pre-request HTTPS/DNS/multicast SSRF 与 stream-error redaction；全仓 `2105 pass / 20 platform skips / 0 fail`，open P0/P1 = 0。Task 10 部署前须只读确认 targetless durable ScanSci tasks = 0；非零阻断，不自动 migration。
+20. Task 8 fix round `c0bcf0a` 保持 explicit replay/target authority。Task 9 fixes `4f6361e`/`cfc0ddc`/`2560bd8` 关闭 file-Secret TOCTOU、HTTPS/DNS/NAT64 SSRF、stream redaction，并以精确上游 compatibility gate 串行 legal source、逐源清 temp；prod/dev/verifier 固定 256 MiB tmpfs。全仓 `2107 pass / 20 platform skips / 0 fail`，open P0/P1 = 0。Task 10 部署前须确认 targetless durable ScanSci tasks = 0；非零阻断，不自动 migration。
 
 ## Constraints
 

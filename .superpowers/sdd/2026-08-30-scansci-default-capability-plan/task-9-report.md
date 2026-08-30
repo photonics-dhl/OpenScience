@@ -2,8 +2,8 @@
 
 ## Status
 
-`DONE_WITH_CONCERNS` for the local candidate. Open local P0/P1 findings: **0**.
-Production remains blocked on Task 10 ECS/CARSI acceptance; no Docker, ECS, SSH,
+`DONE` for Task 9 local review. Open local P0/P1 findings: **0**. Production
+remains intentionally blocked on Task 10 ECS/CARSI acceptance; no Docker, ECS, SSH,
 Secret, `.env`, GitHub, merge, or deployment action occurred in Task 9.
 
 ## Version tuple
@@ -12,6 +12,7 @@ Secret, `.env`, GitHub, merge, or deployment action occurred in Task 9.
 - Task 9 base: `7c5b0f562b8c68797ad7f1999a1fd1ce32103b57`.
 - Security fixes: `4f6361ef179771e9a10dd8b21a53b14c4d9a1df9` and
   `cfc0ddc24b92040d46f5fa875b1931163aa2c5fa`.
+- Review fix 1: `2560bd84988dd0df7972630a81ac5cb7d80bb62f`.
 - Documentation gate: `0e98190bc7cd2cd69dfb9cd7bcd4dcf38a0de0ad`.
 - Repository main: `463c8e3a2a80138cda2d669c370c0481ed4c0877`.
 - Production application/release: `689331845574612130f223d08c92e61721c16586`.
@@ -20,7 +21,8 @@ Secret, `.env`, GitHub, merge, or deployment action occurred in Task 9.
 
 ## Static and dependency review
 
-The exact forbidden-path command returned 33 matches. Every match was manually
+The exact forbidden-path command returned 52 matches after the new fixed-false
+compatibility/adversarial coverage. Every match was manually
 classified as one of: fixed `false` production configuration, fail-closed
 rejection logic, source-lock metadata fixed false, or an adversarial/negative
 test. No executable Sci-Hub, LibGen, SciBban, Tor proxy, or `use_tor=true` path
@@ -45,8 +47,8 @@ RED proved inline-only input was accepted and POSIX-unsafe metadata was not
 rejected. Fix `4f6361e` now rejects the inline variable, requires the file,
 opens with `O_NOFOLLOW`, validates regular/single-link/size and POSIX
 euid/egid/`0400`, reads once, then rechecks path inode identity. The focused
-HTTP file finished `20 pass / 1 Windows POSIX skip`; the complete package
-finished `73 pass / 5 Windows POSIX skips`.
+HTTP file finished `20 pass / 1 Windows POSIX skip`; the final complete package
+finished `75 pass / 5 Windows POSIX skips`.
 
 ### P1 — pre-request SSRF, redirects, and DNS rebinding
 
@@ -61,8 +63,8 @@ empty/invalid results, and the whole answer if any IP is non-global. Tests cover
 public, loopback, RFC1918, metadata/link-local, documentation, IPv6 local, mixed
 answers, HTTP-on-443, credentials, and localhost. Final self-review proved
 Python classifies multicast as global; RED reproduced IPv4 `224.0.0.1` and IPv6
-`ff02::1`, then `cfc0ddc` added the explicit multicast rejection. Focused
-upstream tests are `11/11` green. The post-download URL/source/route checks
+`ff02::1`, then `cfc0ddc` added the explicit multicast rejection. The final
+upstream file is `13/13` green. The post-download URL/source/route checks
 remain defense in depth.
 
 ### P1 — stream error redaction
@@ -74,6 +76,46 @@ which could retain raw internal/cookie/path text.
 RED reproduced the raw rejected promise. Fix `4f6361e` cancels the reader and
 returns stable `unavailable/upstream_error/retryable=true`. Focused adapter
 tests are `16/16`; Agent Worker is `503/503`.
+
+## Fix round 1/5 — NAT64, serial legal sources, and tmpfs budget
+
+### Important — IPv4-embedded IPv6 policy bypass
+
+RED produced five failures because well-known NAT64 addresses embedding
+`169.254.169.254` and Alibaba `100.100.100.200` remained outer-global. The
+shared address predicate now extracts IPv4 from `64:ff9b::/96`, IPv4-mapped,
+6to4 and Teredo forms and applies the same non-global/multicast policy. The
+local-use `64:ff9b:1::/48` is rejected entirely. Literal URL, direct DNS and
+mixed-answer tests cover both metadata addresses; public NAT64 to `8.8.8.8`
+remains accepted.
+
+### Important — pinned upstream ignored `parallel_sources`
+
+Exact reviewer evidence for archive `db537914…9208b9` showed `download` calls
+the seven-argument `_run_tiers_parallel` for free and institutional tiers while
+the config flag is never consulted. The wrapper now verifies that exact
+signature and the expected parallel AST contract (`ThreadPoolExecutor`,
+`_try_source`, `safe_filename`, Lock/Event/submit/wait/shutdown and tier loops)
+before replacing it. Drift raises a stable worker failure; it cannot fall back
+to the upstream race.
+
+The replacement accepts at most 64 sources, verifies legal-only/fixed-false
+flags and rejects grey labels, then executes tier/source order serially and
+returns the first success. It removes each source output before and after an
+attempt and performs bounded final cleanup. A behavioral adversarial test—not
+a source assertion—proved call order `free-first → free-second`, max active
+source count one, zero `ThreadPoolExecutor` construction, no institutional call
+after success, exact final bytes and zero `paper_*.pdf` temps. Source-shape and
+grey-config mutations fail before any source executes.
+
+### Resource reconciliation
+
+Prod/dev Compose and the runtime verifier now require a 256 MiB no-exec tmpfs.
+Two admitted acquisitions × one serial 100 MiB source temp yield a 200 MiB
+worst case; bounded config/protocol/session snapshots fit in the remaining
+56 MiB. tmpfs pages remain inside the existing 1 GiB service memory limit.
+Focused results: ScanSci `75 pass / 5 Windows POSIX skips`, Worker `503/503`,
+infra ScanSci/release scripts `71 pass / 5 platform skips`.
 
 ## Architecture, API, data, and release review
 
@@ -105,8 +147,8 @@ tests are `16/16`; Agent Worker is `503/503`.
   identity checks, stopped loopback auth, no database/application Secret, and
   redacted status responses were reviewed.
 - Runtime/release: legal service is non-root/read-only, 1 CPU/1 GiB/64 PID,
-  64 MiB no-exec tmpfs, no host/data/app port/network, fixed two-slot
-  acquisition and one upstream worker per request. Deploy verifies ScanSci
+  256 MiB no-exec tmpfs, no host/data/app port/network, fixed two-slot
+  acquisition and one serial source per request. Deploy verifies ScanSci
   before Worker, binds legal/auth image IDs in capability schema 3, restores
   exact prior ScanSci or removes an absent-prior candidate, and protects active
   plus rollback tags without broad prune.
@@ -136,9 +178,9 @@ tests are `16/16`; Agent Worker is `503/503`.
 - Typecheck: exit 0 across all workspaces.
 - Integration compilation: API and Domain PostgreSQL tsconfigs exit 0. Their
   real PostgreSQL execution is forbidden locally and remains Task 10.
-- Full test: exit 0, `2,105 pass / 20 platform skips / 0 fail`.
+- Full test: exit 0, `2,107 pass / 20 platform skips / 0 fail`.
   - release contract `94 pass / 7 platform skips`;
-  - ScanSci `73 pass / 5 Windows POSIX skips`;
+  - ScanSci `75 pass / 5 Windows POSIX skips`;
   - Web `464` Vitest + `5` Node;
   - Domain `535`, Agent Worker `503`, API `101`.
 - UI/Hermes production-browser gates were not rerun because Task 9 changed no
@@ -155,7 +197,8 @@ tests are `16/16`; Agent Worker is `503/503`.
 Task 10 must still prove exact CI and merged-main immutable deploy; targetless
 durable ScanSci task count zero; migration 33 forward/rollback/redeploy and
 two-client PostgreSQL contracts; Linux Secret/DNS/HTTPS runtime; exact image,
-mount/network/limit and rollback/retention identity; one real CARSI login and
+NAT64/serial-source/temp cleanup/256 MiB mount/network/limit and rollback/
+retention identity; one real CARSI login and
 session recreation; real OA and non-OA institutional PDFs; all four 375 px
 product entries; ClamAV/hash/rights; one-use replay; real 72-hour Worker GC with
 provenance retained; grey/Tor call count zero; and exact cleanup. Until then

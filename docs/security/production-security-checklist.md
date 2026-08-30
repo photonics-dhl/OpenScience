@@ -30,16 +30,17 @@
 - [x] source-lock 固定 ScanSci `1.11.0`、commit `7017814…b8e`、archive SHA-256 `db537914…9208b9`；Sci-Hub/LibGen/SciBban/Tor 仅允许 fixed false、拒绝逻辑和 adversarial test。
 - [x] 唯一浏览器写入口为 `POST /literature/acquisitions`；generic `/agent/tasks` 不可提交 `source.retrieve`。入口具备 session、CSRF、10/min rate、AI Credit、幂等键、active membership、target scope 与事务审计。
 - [x] legal service token 只读 file Secret；拒绝 inline env，使用 `O_NOFOLLOW` descriptor 并复验 regular/owner/group/`0400`/single-link/size/path identity。账号、Cookie、profile、token、object key 与 provider raw response 不进入 DTO、任务、数据库或日志。
-- [x] upstream Requests 每跳发送前要求无凭据 HTTPS；每次实际 DNS 解析必须全部为 public address，拒绝 loopback/private/link-local/multicast/metadata/documentation/mixed answers 与非 HTTPS port。最终 URL/source/route 仍二次校验。
-- [x] 4 KiB JSON、100 MiB PDF、PDF magic、60 秒子进程、2 个 service acquisition slot、1 CPU/1 GiB/64 PID/64 MiB tmpfs、bounded session snapshot 与稳定错误成立；stream read 异常已脱敏。
+- [x] upstream Requests 每跳要求无凭据 HTTPS；实际 DNS 必须全部 public。NAT64、IPv4-mapped、6to4、Teredo 内嵌 IPv4 同样复验；`64:ff9b:1::/48`、private/link-local/multicast/metadata/documentation/mixed answers 与非 HTTPS port 均拒绝。最终 URL/source/route 仍二次校验。
+- [x] 精确上游的并行 runner 经七参数签名+AST compatibility gate 后替换为 tier/source 顺序串行；max concurrency=1、首成功停止、逐源 temp 清理、最多 64 sources，漂移不回落并行。
+- [x] 4 KiB JSON、100 MiB PDF、60 秒子进程、2 个 service slots、1 CPU/1 GiB/64 PID/256 MiB tmpfs 成立：串行保证每 slot 同时最多一个 100 MiB source temp，200 MiB worst-case 加 bounded snapshots 不超过 tmpfs，且 tmpfs 计入 1 GiB。
 - [x] Compose/ADR 证明 legal/auth/Worker Secret 分权、session volume、auth loopback、data/app network 排除、pre-Worker verifier、exact previous/absent rollback 与 active+rollback image retention。
-- [x] 静态门禁：forbidden-path 33 matches（全部 negative/fixed false/test）；Knip 0 unused；dependency-cruiser 831 modules/1936 dependencies、syncpack 无问题。
-- [x] 本地门禁：build/typecheck/integration compilation/lint/test/docs lint/docs-sync/diff；完整 test `2105 pass / 20 platform skips / 0 fail`。Task 9 修复 commits `4f6361e` + `cfc0ddc`。
+- [x] 静态门禁：forbidden-path 52 matches（全部 negative/fixed false/compatibility/test）；Knip 0 unused；dependency-cruiser 831 modules/1936 dependencies、syncpack 无问题。
+- [x] 本地门禁：build/typecheck/integration compilation/lint/test/docs lint/docs-sync/diff；完整 test `2107 pass / 20 platform skips / 0 fail`。Task 9 fixes `4f6361e`/`cfc0ddc`/`2560bd8`。
 
 ### 生产 Task 10：P0 阻断，尚未执行
 
 - [ ] Exact CI、merged-main immutable build/deploy；core migration 33 与 PostgreSQL integration forward/rollback/redeploy/双连接合同。
-- [ ] ECS Linux file-Secret metadata、DNS/HTTPS runtime、legal/auth image identity、non-root/read-only/limits/mount/network/port 与 targetless durable ScanSci task count = 0。
+- [ ] ECS Linux file-Secret、NAT64/HTTPS/DNS、serial override compatibility/max concurrency/temp cleanup、256 MiB tmpfs、image/mount/network/port 与 targetless durable task count = 0。
 - [ ] 一次真实浙江大学 CARSI 登录、helper 移除、legal service recreate 后 session 仍 `ready`；账号/密码/Cookie 不出现在响应或日志。
 - [ ] 真实 OA 与非 OA institutional PDF；四产品入口 375px；ClamAV/hash/rights；600s one-use/replay；真实 72h Worker GC 后 bytes absent、provenance retained；grey/Tor calls = 0。
 - [ ] exact rollback/retention/hygiene；只清 acceptance identity，保留 session、active/rollback images、audit/rights/source provenance。未全部完成不得把 ScanSci 标为 `PRODUCTION` 或关闭 Task 10。

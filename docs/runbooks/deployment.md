@@ -1495,3 +1495,41 @@ and rollback release roots. Two image IDs used only by the removed dev Compose
 removed exactly; they remain reproducible from locked tags. Root disk is
 36G/148G (25%) with 107G available; the bounded 390.7MB build cache was retained
 and no broad filesystem, image or volume prune ran.
+
+### 5.47 ScanSci serial-source and 256 MiB runtime gate (2026-08-31)
+
+#### Preconditions
+
+The candidate must contain fix `2560bd8` or a reviewed descendant while the
+upstream commit/archive remain `7017814…b8e` / `db537914…9208b9`. Before any
+ECS mutation, require exact CI, a clean merged-main SHA, targetless durable
+ScanSci task count zero, and local ScanSci `75/80` plus infra `71/76` evidence.
+The production source remains `6893318…` until the canonical transaction ends.
+
+#### Execution
+
+Use only the Task 10 canonical immutable deploy transaction. It must build the
+legal/auth images, start ScanSci before Worker, and run
+`verify-scansci-runtime.mjs`; do not start Compose manually. The legal service
+must report 1 CPU, 1 GiB, 64 PIDs and `/tmp` exactly 256 MiB. Run one controlled
+instrumented acquisition proving source concurrency one, tier/source order,
+first-success stop and zero leftover source PDFs before real OA/CARSI journeys.
+
+#### Rollback
+
+Do not rewrite the rollback release to the new resource contract. The deploy
+transaction restores the exact previous SHA and invokes that release's own
+Compose file and verifier, so an older 64 MiB identity remains valid for that
+release. If the previous release had no ScanSci, remove only the candidate
+legal/auth/init containers. Preserve `scansci-session`; retention continues to
+protect exact active and rollback image IDs and never performs broad prune.
+
+#### Verification
+
+Require `SCANSCI_RUNTIME_SOURCE_OK`, `TOPOLOGY_OK`, `POLICY_OK`, `TOKEN_OK` and
+the expected session status. Additionally prove NAT64 metadata literals are
+blocked, the runtime upstream signature/AST compatibility gate succeeds,
+ThreadPoolExecutor fanout is zero, each failed source temp is absent before the
+next source, and two simultaneous 100 MiB-limit slots fit the 256 MiB tmpfs
+without violating the 1 GiB memory limit. Continue with Task 10 OA/CARSI,
+recreate-session, four-entry, one-use, 72-hour GC and zero-grey/Tor gates.
