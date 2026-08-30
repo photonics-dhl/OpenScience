@@ -1489,5 +1489,9 @@ were then removed (1 user, 1 workspace, 1 session, 5 tasks, 4 sources, 4 rights,
 Final state: active/public `6893318…`, rollback `c435c4c8…`, core/search
 `32/32` / `2/2`, no deploy journal/failure marker/transient evaluation root,
 and all production containers healthy. Automatic retention kept exactly active
-and rollback release roots. Root disk is 36G/148G (25%) with 107G available; no
-broad filesystem, image or volume prune ran.
+and rollback release roots. Two image IDs used only by the removed dev Compose
+(`minio/minio:RELEASE.2025-09-07T16-13-09Z` and
+`minio/mc:RELEASE.2025-08-13T08-35-41Z`) had zero container references and were
+removed exactly; they remain reproducible from locked tags. Root disk is
+36G/148G (25%) with 107G available; the bounded 390.7MB build cache was retained
+and no broad filesystem, image or volume prune ran.
