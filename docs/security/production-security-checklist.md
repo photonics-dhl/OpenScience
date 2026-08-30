@@ -34,7 +34,7 @@
 - [x] 4 KiB JSON、100 MiB PDF、PDF magic、60 秒子进程、2 个 service acquisition slot、1 CPU/1 GiB/64 PID/64 MiB tmpfs、bounded session snapshot 与稳定错误成立；stream read 异常已脱敏。
 - [x] Compose/ADR 证明 legal/auth/Worker Secret 分权、session volume、auth loopback、data/app network 排除、pre-Worker verifier、exact previous/absent rollback 与 active+rollback image retention。
 - [x] 静态门禁：forbidden-path 33 matches（全部 negative/fixed false/test）；Knip 0 unused；dependency-cruiser 831 modules/1936 dependencies、syncpack 无问题。
-- [x] 本地门禁：build/typecheck/integration compilation/lint/test/docs lint/docs-sync/diff；完整 test `2105 pass / 20 platform skips / 0 fail`。Task 9 修复 commit `4f6361e`。
+- [x] 本地门禁：build/typecheck/integration compilation/lint/test/docs lint/docs-sync/diff；完整 test `2105 pass / 20 platform skips / 0 fail`。Task 9 修复 commits `4f6361e` + `cfc0ddc`。
 
 ### 生产 Task 10：P0 阻断，尚未执行
 

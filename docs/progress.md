@@ -4,14 +4,14 @@
 
 ## Current version tuple
 
-- Branch / local candidate / main: `codex/scansci-default-capability` / `4f6361e` / `463c8e3`；远端仅 `main`。
+- Branch / local candidate / main: `codex/scansci-default-capability` / `cfc0ddc` / `463c8e3`；远端仅 `main`。
 - Production application source / immutable release: `689331845574612130f223d08c92e61721c16586`。
 - Production rollback: `c435c4c8b2800bb20998fd9a9a93f2db96328661`；core/search migrations `32/32` / `2/2`。
 - Taskmaster `hermes-research-intelligence` 为 9/12：Tasks 1–9 done；Task 10 已重新打开，Task 11 阻断至 ScanSci 默认下载能力生产验收完成。
 
 ## 2026-08-30 — ScanSci Task 9 local security/release gate
 
-- Whole-branch API/architecture/security review closed 3 P1 findings in `4f6361e`: legal service token is file-only with descriptor/no-follow/owner-mode-link/identity checks; every upstream Requests hop is HTTPS-only and every actual DNS answer must be wholly public; interrupted PDF streams map to a stable redacted provider failure. Knip 的 2 个无用导出同时收口，open P0/P1 = 0。
+- Whole-branch API/architecture/security review closed 3 P1 findings in `4f6361e` + final multicast hardening `cfc0ddc`: legal service token is file-only with descriptor/no-follow/owner-mode-link/identity checks; every upstream Requests hop is HTTPS-only and every actual DNS answer must be wholly public/non-multicast; interrupted PDF streams map to a stable redacted provider failure. Knip 的 2 个无用导出同时收口，open P0/P1 = 0。
 - 禁用词精确扫描 33 个命中均为 fixed false、拒绝逻辑或 adversarial test；`audit:knip`、`audit:dep`（831 modules / 1936 dependencies）和 `audit:deps` green。全仓 build/typecheck/test green：release `94/101`（7 platform skips）、ScanSci `73/78`（5 POSIX-only skips）、Web `469`、Domain `535`、Worker `503`、API `101`；总计 `2105 pass / 20 skip / 0 fail`。API/Domain PostgreSQL integration configs 仅完成编译。
 - 本地候选不等于生产：ECS 仍为 `6893318` / `c435c4c` / core-search `32/32`-`2/2`，ScanSci disabled。Migration 33 forward/rollback/redeploy、Linux Secret/SSRF runtime、真实 OA/CARSI、session recreate、四入口 375px、one-use/72h GC、zero-grey/Tor 与 rollback/retention 均留给 Task 10。
 

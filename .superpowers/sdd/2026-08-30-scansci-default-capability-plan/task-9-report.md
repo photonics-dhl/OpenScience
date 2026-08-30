@@ -10,7 +10,9 @@ Secret, `.env`, GitHub, merge, or deployment action occurred in Task 9.
 
 - Branch: `codex/scansci-default-capability`.
 - Task 9 base: `7c5b0f562b8c68797ad7f1999a1fd1ce32103b57`.
-- Security fix: `4f6361e3d611d1867ee1762cf15e66b76ef5345d`.
+- Security fixes: `4f6361ef179771e9a10dd8b21a53b14c4d9a1df9` and
+  `cfc0ddc24b92040d46f5fa875b1931163aa2c5fa`.
+- Documentation gate: `0e98190bc7cd2cd69dfb9cd7bcd4dcf38a0de0ad`.
 - Repository main: `463c8e3a2a80138cda2d669c370c0481ed4c0877`.
 - Production application/release: `689331845574612130f223d08c92e61721c16586`.
 - Production rollback: `c435c4c8b2800bb20998fd9a9a93f2db96328661`.
@@ -57,8 +59,11 @@ Requests `Session.send` guard on every hop (HTTPS, no URL credentials, no local
 hostnames) and a `socket.getaddrinfo` guard that rejects non-HTTPS ports,
 empty/invalid results, and the whole answer if any IP is non-global. Tests cover
 public, loopback, RFC1918, metadata/link-local, documentation, IPv6 local, mixed
-answers, HTTP-on-443, credentials, and localhost. Focused upstream tests are
-`11/11` green. The post-download URL/source/route checks remain defense in depth.
+answers, HTTP-on-443, credentials, and localhost. Final self-review proved
+Python classifies multicast as global; RED reproduced IPv4 `224.0.0.1` and IPv6
+`ff02::1`, then `cfc0ddc` added the explicit multicast rejection. Focused
+upstream tests are `11/11` green. The post-download URL/source/route checks
+remain defense in depth.
 
 ### P1 — stream error redaction
 
