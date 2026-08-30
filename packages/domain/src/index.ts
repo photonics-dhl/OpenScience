@@ -339,6 +339,12 @@ export {
 export { decideSourceRights } from './retrieval/rights';
 export { parseSourceRetrievePayload, type SourceRetrievePayload } from './retrieval/retrieve-payload';
 export {
+  submitLiteratureAcquisition,
+  type LiteratureAcquisitionResult,
+  type LiteratureAcquisitionTarget,
+  type SubmitLiteratureAcquisitionInput,
+} from './retrieval/literature-acquisition';
+export {
   issueTemporaryDownloadToken,
   verifyTemporaryDownloadToken,
 } from './retrieval/signed-links';

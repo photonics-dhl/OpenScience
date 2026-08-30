@@ -19,10 +19,10 @@ export const AGENT_TASK_KINDS = [
   'demo.echo', 'sdf.extract', 'review.analyze', 'visualization.plan', 'workspace.guide', 'search.index', 'source.retrieve',
 ] as const;
 export const PUBLIC_AGENT_TASK_KINDS = [
-  'demo.echo', 'sdf.extract', 'review.analyze', 'visualization.plan', 'source.retrieve',
+  'demo.echo', 'sdf.extract', 'review.analyze', 'visualization.plan',
 ] as const;
 export const PUBLIC_AGENT_SESSION_KINDS = [
-  'extract', 'review', 'visualization', 'publish', 'ingestion', 'workspace.guide', 'retrieval',
+  'extract', 'review', 'visualization', 'publish', 'ingestion', 'workspace.guide',
 ] as const;
 
 export type AgentTaskStatus = 'pending' | 'running' | 'succeeded' | 'failed';
