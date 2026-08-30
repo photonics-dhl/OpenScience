@@ -131,6 +131,70 @@ def _fixed_config(output_dir: Path, session_snapshot: Path | None) -> dict[str, 
 
 
 def _snapshot_session(session_root: Path, destination: Path) -> Path | None:
+    if os.name == "posix" and os.open in os.supports_dir_fd and os.stat in os.supports_dir_fd:
+        return _snapshot_session_posix(session_root, destination)
+    return _snapshot_session_path(session_root, destination)
+
+
+def _snapshot_session_posix(session_root: Path, destination: Path) -> Path | None:
+    descriptors: list[int] = []
+    try:
+        directory_flags = os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW
+        root_fd = os.open(session_root, directory_flags)
+        descriptors.append(root_fd)
+        root_stat = os.fstat(root_fd)
+        _validate_session_stat(root_stat, directory=True)
+        parent_fd = root_fd
+        pinned: list[tuple[int, str, os.stat_result]] = []
+        for component in ("scansci", "cache", "carsi_cookies"):
+            child_fd = os.open(component, directory_flags, dir_fd=parent_fd)
+            descriptors.append(child_fd)
+            child_stat = os.fstat(child_fd)
+            _validate_session_stat(child_stat, directory=True)
+            pinned.append((parent_fd, component, child_stat))
+            parent_fd = child_fd
+        cookie_fd = parent_fd
+        names = sorted(
+            name for name in os.listdir(cookie_fd)
+            if isinstance(name, str) and name.endswith(".json") and "/" not in name and "\\" not in name
+        )
+        _validate_pinned_directories(pinned)
+        if not names or len(names) > MAX_SESSION_FILES:
+            return None
+        copied: list[tuple[str, bytes]] = []
+        for name in names:
+            file_fd = os.open(name, os.O_RDONLY | os.O_NOFOLLOW, dir_fd=cookie_fd)
+            try:
+                opened = os.fstat(file_fd)
+                _validate_session_stat(opened, directory=False)
+                with os.fdopen(file_fd, "rb", closefd=False) as source:
+                    content = source.read(MAX_SESSION_FILE_BYTES + 1)
+                current = os.stat(name, dir_fd=cookie_fd, follow_symlinks=False)
+                if (opened.st_dev, opened.st_ino) != (current.st_dev, current.st_ino):
+                    raise ValueError("session file changed during read")
+                if len(content) > MAX_SESSION_FILE_BYTES:
+                    raise ValueError("session file exceeds bound")
+                copied.append((name, content))
+            finally:
+                os.close(file_fd)
+            _validate_pinned_directories(pinned)
+        _validate_pinned_directories(pinned)
+        return _write_session_snapshot(destination, copied)
+    except (OSError, ValueError):
+        return None
+    finally:
+        for descriptor in reversed(descriptors):
+            os.close(descriptor)
+
+
+def _validate_pinned_directories(pinned: list[tuple[int, str, os.stat_result]]) -> None:
+    for parent_fd, name, opened in pinned:
+        current = os.stat(name, dir_fd=parent_fd, follow_symlinks=False)
+        if not stat.S_ISDIR(current.st_mode) or (opened.st_dev, opened.st_ino) != (current.st_dev, current.st_ino):
+            raise ValueError("session directory changed after open")
+
+
+def _snapshot_session_path(session_root: Path, destination: Path) -> Path | None:
     cookie_root = session_root / "scansci" / "cache" / "carsi_cookies"
     try:
         _validate_session_directory(session_root)
@@ -142,6 +206,10 @@ def _snapshot_session(session_root: Path, destination: Path) -> Path | None:
         copied = [(candidate.name, _read_session_file(candidate)) for candidate in candidates]
     except (OSError, ValueError):
         return None
+    return _write_session_snapshot(destination, copied)
+
+
+def _write_session_snapshot(destination: Path, copied: list[tuple[str, bytes]]) -> Path:
     target = destination / "carsi_cookies"
     target.mkdir(parents=True, mode=0o700)
     for name, content in copied:
@@ -154,12 +222,23 @@ def _snapshot_session(session_root: Path, destination: Path) -> Path | None:
 
 def _validate_session_directory(path: Path) -> None:
     details = os.lstat(path)
-    if stat.S_ISLNK(details.st_mode) or not stat.S_ISDIR(details.st_mode):
+    if stat.S_ISLNK(details.st_mode):
         raise ValueError("unsafe session directory")
+    _validate_session_stat(details, directory=True)
+
+
+def _validate_session_stat(details: os.stat_result, *, directory: bool) -> None:
+    expected_type = stat.S_ISDIR if directory else stat.S_ISREG
+    if not expected_type(details.st_mode):
+        raise ValueError("unsafe session entry")
     if os.name != "nt":
-        expected_uid = os.geteuid()
-        if details.st_uid != expected_uid or stat.S_IMODE(details.st_mode) & 0o077:
-            raise ValueError("unsafe session directory")
+        permissions = stat.S_IMODE(details.st_mode)
+        if details.st_uid != os.geteuid() or permissions & 0o077:
+            raise ValueError("unsafe session entry")
+        if directory and permissions & 0o700 != 0o700:
+            raise ValueError("unsafe session entry")
+        if not directory and permissions != 0o600:
+            raise ValueError("unsafe session entry")
 
 
 def _read_session_file(path: Path) -> bytes:

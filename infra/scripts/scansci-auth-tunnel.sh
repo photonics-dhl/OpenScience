@@ -23,13 +23,19 @@ read_state() {
   [ -f "$STATE_FILE" ] && [ ! -L "$STATE_FILE" ] || return 1
   local lines
   mapfile -t lines < "$STATE_FILE"
-  [ "${#lines[@]}" -eq 3 ] || return 1
+  [ "${#lines[@]}" -eq 6 ] || return 1
   STATE_TOKEN="${lines[0]}"
   STATE_PID="${lines[1]}"
   STATE_PORT="${lines[2]}"
+  RELEASE_SHA="${lines[3]}"
+  RELEASE_ROOT="${lines[4]}"
+  RELEASE_COMPOSE="${lines[5]}"
   [[ "$STATE_TOKEN" =~ ^[0-9a-f]{32}$ ]] || return 1
   [[ "$STATE_PID" =~ ^[1-9][0-9]*$ ]] || return 1
   [[ "$STATE_PORT" =~ ^[0-9]+$ ]] || return 1
+  [[ "$RELEASE_SHA" =~ ^[0-9a-f]{40}$ ]] || return 1
+  [ "$RELEASE_ROOT" = "/opt/openscience-releases/$RELEASE_SHA" ] || return 1
+  [ "$RELEASE_COMPOSE" = "$RELEASE_ROOT/infra/compose/docker-compose.prod.yml" ] || return 1
 }
 
 process_matches_state() {
@@ -96,7 +102,8 @@ write_runner() {
 
 write_state() {
   local token="$1" pid="$2" port="$3" temporary="$STATE_FILE.$$.$token"
-  printf '%s\n%s\n%s\n' "$token" "$pid" "$port" > "$temporary"
+  printf '%s\n%s\n%s\n%s\n%s\n%s\n' \
+    "$token" "$pid" "$port" "$RELEASE_SHA" "$RELEASE_ROOT" "$RELEASE_COMPOSE" > "$temporary"
   chmod 600 "$temporary" 2>/dev/null || true
   mv -f "$temporary" "$STATE_FILE"
 }
@@ -174,7 +181,16 @@ load_connection() {
 
 remote_compose_command() {
   local action="$1"
-  printf '%s' 'sha=$(cat /opt/openscience/.release-id); root=/opt/openscience-releases/$sha; cd "$root" && XGS_RELEASE_ROOT="$root" XGS_RELEASE_IMAGE_TAG="$sha" docker compose --env-file /opt/openscience/.env.prod -f infra/compose/docker-compose.prod.yml --profile scansci-auth '"$action"' scansci-auth'
+  printf 'cd "%s" && XGS_RELEASE_ROOT="%s" XGS_RELEASE_IMAGE_TAG="%s" docker compose --env-file /opt/openscience/.env.prod -f "%s" --profile scansci-auth %s scansci-auth' \
+    "$RELEASE_ROOT" "$RELEASE_ROOT" "$RELEASE_SHA" "$RELEASE_COMPOSE" "$action"
+}
+
+resolve_release_identity() {
+  RELEASE_SHA="$(ssh "${SSH_ARGS[@]}" "$SSH_TARGET" 'cat /opt/openscience/.release-id' 2>/dev/null | tr -d '\r\n')" \
+    || { echo "release identity unavailable" >&2; return 1; }
+  [[ "$RELEASE_SHA" =~ ^[0-9a-f]{40}$ ]] || { echo "release identity invalid" >&2; return 1; }
+  RELEASE_ROOT="/opt/openscience-releases/$RELEASE_SHA"
+  RELEASE_COMPOSE="$RELEASE_ROOT/infra/compose/docker-compose.prod.yml"
 }
 
 stop_remote_helper() {
@@ -190,11 +206,19 @@ start_tunnel() {
       echo "tunnel already running on another local port" >&2
       return 65
     fi
-    echo "already running on http://127.0.0.1:$port"
-    return 0
+    if wait_until_ready "$port"; then
+      echo "already running on http://127.0.0.1:$port"
+      return 0
+    fi
+    stop_identified_tunnel
+    load_connection
+    stop_remote_helper || true
+    echo "loopback tunnel readiness failed" >&2
+    return 1
   fi
   remove_state
   load_connection
+  resolve_release_identity
 
   if ! ssh "${SSH_ARGS[@]}" "$SSH_TARGET" "$(remote_compose_command 'up -d')" >/dev/null 2>&1; then
     echo "auth helper start failed" >&2
@@ -226,6 +250,11 @@ start_tunnel() {
 
 stop_tunnel() {
   acquire_lock
+  if ! read_state; then
+    remove_state
+    echo "validated tunnel release state unavailable" >&2
+    return 65
+  fi
   stop_identified_tunnel
 
   load_connection

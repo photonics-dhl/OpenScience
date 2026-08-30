@@ -120,11 +120,11 @@ def _browser_environment(session_root: Path) -> dict[str, str]:
 
 
 def _validate_optional_credentials() -> None:
-    present = [path.exists() or path.is_symlink() for path in (USERNAME_SECRET, PASSWORD_SECRET)]
+    present = [os.path.lexists(path) for path in (USERNAME_SECRET, PASSWORD_SECRET)]
     if any(present) and not all(present):
         raise ValueError("optional credentials must be provisioned as a pair")
     for path in (USERNAME_SECRET, PASSWORD_SECRET):
-        if not path.exists():
+        if not os.path.lexists(path):
             continue
         value = _read_secret(path, expected_uid=_current_uid())
         if not value.strip():

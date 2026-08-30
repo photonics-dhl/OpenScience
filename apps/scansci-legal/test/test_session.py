@@ -193,6 +193,18 @@ class SessionManagerTest(unittest.TestCase):
         self.assertEqual(manager.on_auth_redirect(), "disabled")
         self.assertEqual((refresher.probe_calls, refresher.refresh_calls), (0, 0))
 
+    def test_disabled_manager_ignores_newer_persisted_ready_state(self) -> None:
+        self.create_persisted_profile()
+        store = self.store()
+        refresher = FakeRefresher()
+        refresher.release.set()
+        manager = SessionManager(store, refresher, FakeClock(), enabled=False)
+        store.publish_status("ready")
+
+        self.assertEqual(manager.status(), "disabled")
+        self.assertEqual(manager.on_auth_redirect(), "disabled")
+        self.assertEqual((refresher.probe_calls, refresher.refresh_calls), (0, 0))
+
     def test_reenabling_after_disabled_recovers_the_persisted_profile(self) -> None:
         self.create_persisted_profile()
         refresher = FakeRefresher()
@@ -345,6 +357,31 @@ class AuthLoginTest(unittest.TestCase):
             self.assertNotIn("password-value", persisted)
             self.assertNotIn("u" * 32, persisted)
 
+    def test_dangling_fixed_secret_symlinks_are_rejected_as_present(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            username = root / "scansci_username"
+            password = root / "scansci_password"
+            try:
+                username.symlink_to(root / "missing-username")
+                password.symlink_to(root / "missing-password")
+            except OSError:
+                self.skipTest("symlinks unavailable")
+            calls: list[list[str]] = []
+
+            with (
+                mock.patch.object(auth_login, "USERNAME_SECRET", username),
+                mock.patch.object(auth_login, "PASSWORD_SECRET", password),
+            ):
+                result = auth_main(
+                    ["--operator-start"],
+                    runner=lambda command, **_kwargs: calls.append(command),
+                    session_root=root / "session",
+                )
+
+            self.assertEqual(result, 1)
+            self.assertEqual(calls, [])
+
     def test_operator_action_invokes_the_pinned_carsi_flow_without_secret_arguments(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory) / "session"
@@ -488,6 +525,29 @@ class SessionHttpIntegrationTest(unittest.TestCase):
 
         self.assertEqual(response, (503, {"code": "disabled"}))
         self.assertEqual(calls, [])
+
+    def test_disabled_manager_remains_authoritative_after_helper_ready_and_acquires_nothing(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory) / "session"
+            root.mkdir(mode=0o700)
+            store = SessionStore(root, expected_uid=None, enforce_permissions=os.name != "nt")
+            manager = SessionManager(store, FakeRefresher(), FakeClock(), enabled=False)
+            store.publish_status("ready")
+            calls: list[object] = []
+            client = type("DisabledClient", (), {"acquire": lambda _self, request: calls.append(request)})()
+            server = self.running_server(manager.status, client)
+            body = json.dumps(
+                {
+                    "identifier": "10.1038/nature12373", "strategy": "legal_only",
+                    "scihub": False, "tor": False, "institutional": True, "subject_id": "a" * 64,
+                },
+                separators=(",", ":"),
+            ).encode("utf-8")
+
+            response = self.request(server, "POST", "/v1/legal-download", body)
+
+            self.assertEqual(response, (503, {"code": "disabled"}))
+            self.assertEqual(calls, [])
 
     def test_auth_required_allows_oa_only_without_institutional_request(self) -> None:
         requests = []
@@ -649,6 +709,83 @@ print(json.dumps({'success':True,'file':str(paper),'source':'Unpaywall','url':'h
             acquired = client.acquire(LegalDownloadRequest("10.1038/nature12373", "legal_only", False, False, True, "a" * 64))
 
             self.assertEqual(acquired.route, "open_access")
+
+    def test_symlink_cookie_parent_cannot_enable_institutional_access(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            session = root / "session"
+            cache = session / "scansci" / "cache"
+            cache.mkdir(parents=True)
+            outside = root / "outside-cookies"
+            outside.mkdir()
+            (outside / "sciencedirect.json").write_text('[{"name":"session","value":"outside"}]', encoding="utf-8")
+            try:
+                (cache / "carsi_cookies").symlink_to(outside, target_is_directory=True)
+            except OSError:
+                self.skipTest("symlinks unavailable")
+            if os.name != "nt":
+                for parent in (session, session / "scansci", cache, outside):
+                    parent.chmod(0o700)
+                (outside / "sciencedirect.json").chmod(0o600)
+            worker = root / "worker.py"
+            worker.write_text(
+                """import json, pathlib, sys
+request=json.load(sys.stdin); output=pathlib.Path(request['output_dir'])
+paper=output/'paper.pdf'; paper.write_bytes(b'%PDF-forged')
+print(json.dumps({'success':True,'file':str(paper),'source':'CARSI','url':'https://publisher.example/paper'}))
+""",
+                encoding="utf-8",
+            )
+            client = ScanSciAcquisitionClient(root / "runtime", worker_command=[sys.executable, str(worker)], session_root=session)
+
+            with self.assertRaises(AcquisitionError) as raised:
+                client.acquire(LegalDownloadRequest("10.1038/nature12373", "legal_only", False, False, True, "a" * 64))
+
+            self.assertEqual(raised.exception.code, "auth_required")
+
+    @unittest.skipIf(os.name == "nt", "openat parent replacement contract is POSIX-only")
+    def test_cookie_parent_replacement_after_open_cannot_escape_pinned_directory(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            session = root / "session"
+            cache = session / "scansci" / "cache"
+            cookie_root = cache / "carsi_cookies"
+            cookie_root.mkdir(parents=True)
+            (cookie_root / "sciencedirect.json").write_text('[{"name":"session","value":"original"}]', encoding="utf-8")
+            outside = root / "outside-cookies"
+            outside.mkdir()
+            (outside / "sciencedirect.json").write_text('[{"name":"session","value":"outside"}]', encoding="utf-8")
+            for parent in (session, session / "scansci", cache, cookie_root, outside):
+                parent.chmod(0o700)
+            (cookie_root / "sciencedirect.json").chmod(0o600)
+            (outside / "sciencedirect.json").chmod(0o600)
+            worker = root / "worker.py"
+            worker.write_text(
+                """import json, pathlib, sys
+request=json.load(sys.stdin); output=pathlib.Path(request['output_dir'])
+paper=output/'paper.pdf'; paper.write_bytes(b'%PDF-forged')
+print(json.dumps({'success':True,'file':str(paper),'source':'CARSI','url':'https://publisher.example/paper'}))
+""",
+                encoding="utf-8",
+            )
+            real_listdir = upstream_module.os.listdir
+            replaced = False
+
+            def replacing_listdir(path):
+                nonlocal replaced
+                if isinstance(path, int) and not replaced:
+                    replaced = True
+                    cookie_root.rename(cache / "carsi_cookies-original")
+                    cookie_root.symlink_to(outside, target_is_directory=True)
+                return real_listdir(path)
+
+            client = ScanSciAcquisitionClient(root / "runtime", worker_command=[sys.executable, str(worker)], session_root=session)
+            with mock.patch.object(upstream_module.os, "listdir", side_effect=replacing_listdir):
+                with self.assertRaises(AcquisitionError) as raised:
+                    client.acquire(LegalDownloadRequest("10.1038/nature12373", "legal_only", False, False, True, "a" * 64))
+
+            self.assertTrue(replaced)
+            self.assertEqual(raised.exception.code, "auth_required")
 
     def test_unsafe_profile_cannot_claim_an_institutional_result(self) -> None:
         with tempfile.TemporaryDirectory() as directory:

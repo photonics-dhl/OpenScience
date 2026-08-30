@@ -41,6 +41,12 @@ async function fixture() {
   await writeFile(ssh, `#!/usr/bin/env bash
 printf '%s\\n' '---' "$@" >> "$FAKE_SSH_LOG"
 case " $* " in
+  *" cat /opt/openscience/.release-id "*)
+    printf '%s\\n' "\${FAKE_RELEASE_SHA:-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa}"
+    exit 0
+    ;;
+esac
+case " $* " in
   *" -N "*)
     if [ "\${FAKE_SSH_TUNNEL_FAIL:-0}" = 1 ]; then exit 2; fi
     trap 'exit 0' TERM INT
@@ -61,6 +67,7 @@ esac
     USERPROFILE: home,
     XDG_STATE_HOME: state,
     FAKE_SSH_LOG: log,
+    FAKE_RELEASE_SHA: 'a'.repeat(40),
   };
   return { root, script, log, env, bashBin, bashKey };
 }
@@ -94,6 +101,16 @@ async function startHealthServer(t, port) {
   t.after(() => { if (server.exitCode === null) server.kill(); });
   await new Promise((resolveWait) => setTimeout(resolveWait, 250));
   return server;
+}
+
+async function writeTunnelState(f, { token = 'c'.repeat(32), pid, port, release = 'a'.repeat(40) }) {
+  const stateRoot = join(f.env.XDG_STATE_HOME, 'openscience');
+  await mkdir(stateRoot, { recursive: true });
+  const releaseRoot = `/opt/openscience-releases/${release}`;
+  await writeFile(
+    join(stateRoot, 'scansci-auth-tunnel.state'),
+    `${token}\n${pid}\n${port}\n${release}\n${releaseRoot}\n${releaseRoot}/infra/compose/docker-compose.prod.yml\n`,
+  );
 }
 
 test('status is read-only and only explicit start launches the helper and loopback tunnel', async (t) => {
@@ -151,6 +168,43 @@ test('duplicate start is idempotent and stop closes only the recorded tunnel', a
   assert.equal(run(f.script, ['status'], f.env, f.bashBin).status, 3);
   const afterStop = await readFile(f.log, 'utf8');
   assert.match(afterStop, /docker compose .*--profile scansci-auth stop scansci-auth/);
+});
+
+test('duplicate start re-probes HTTP readiness and compensates when the listener disappeared', async (t) => {
+  const f = await fixture();
+  const health = await startHealthServer(t, 16088);
+  t.after(async () => {
+    run(f.script, ['stop'], f.env, f.bashBin);
+    await rm(f.root, { recursive: true, force: true });
+  });
+  assert.equal(run(f.script, ['start', '16088'], f.env, f.bashBin).status, 0);
+  health.kill();
+  await new Promise((resolveWait) => health.once('close', resolveWait));
+
+  const duplicate = run(f.script, ['start', '16088'], f.env, f.bashBin);
+
+  assert.equal(duplicate.status, 1, `${duplicate.stdout}\n${duplicate.stderr}`);
+  assert.match(duplicate.stderr, /^loopback tunnel readiness failed\s*$/);
+  const log = await readFile(f.log, 'utf8');
+  assert.match(log, /--profile scansci-auth stop scansci-auth/);
+});
+
+test('stop uses the release identity stored at start after active release switches', async (t) => {
+  const f = await fixture();
+  await startHealthServer(t, 16089);
+  t.after(async () => rm(f.root, { recursive: true, force: true }));
+  const releaseA = 'a'.repeat(40);
+  const releaseB = 'b'.repeat(40);
+  assert.equal(run(f.script, ['start', '16089'], { ...f.env, FAKE_RELEASE_SHA: releaseA }, f.bashBin).status, 0);
+
+  const stopped = run(f.script, ['stop'], { ...f.env, FAKE_RELEASE_SHA: releaseB }, f.bashBin);
+
+  assert.equal(stopped.status, 0, stopped.stderr);
+  const log = await readFile(f.log, 'utf8');
+  assert.equal((log.match(/cat \/opt\/openscience\/\.release-id/g) ?? []).length, 1);
+  assert.match(log, new RegExp(`/opt/openscience-releases/${releaseA}.*--profile scansci-auth up -d scansci-auth`));
+  assert.match(log, new RegExp(`/opt/openscience-releases/${releaseA}.*--profile scansci-auth stop scansci-auth`));
+  assert.doesNotMatch(log, new RegExp(`/opt/openscience-releases/${releaseB}`));
 });
 
 test('invalid ports and unknown commands fail before any SSH process starts', async (t) => {
@@ -235,10 +289,7 @@ test('stop never kills an unrelated live PID from stale state', async (t) => {
     if (unrelated.exitCode === null) unrelated.kill();
     await rm(f.root, { recursive: true, force: true });
   });
-  const stateRoot = join(f.env.XDG_STATE_HOME, 'openscience');
-  await mkdir(stateRoot, { recursive: true });
-  await writeFile(join(stateRoot, 'scansci-auth-tunnel.pid'), `${unrelatedPid}\n`);
-  await writeFile(join(stateRoot, 'scansci-auth-tunnel.port'), '16087\n');
+  await writeTunnelState(f, { pid: unrelatedPid, port: 16087 });
 
   const result = run(f.script, ['stop'], f.env, f.bashBin);
 
@@ -250,10 +301,7 @@ test('stop never kills an unrelated live PID from stale state', async (t) => {
 test('explicit stop closes the remote helper even when the recorded tunnel is stale', async (t) => {
   const f = await fixture();
   t.after(async () => rm(f.root, { recursive: true, force: true }));
-  const stateRoot = join(f.env.XDG_STATE_HOME, 'openscience');
-  await mkdir(stateRoot, { recursive: true });
-  await writeFile(join(stateRoot, 'scansci-auth-tunnel.pid'), '999999\n');
-  await writeFile(join(stateRoot, 'scansci-auth-tunnel.port'), '16083\n');
+  await writeTunnelState(f, { pid: 999999, port: 16083 });
 
   const result = run(f.script, ['stop'], f.env, f.bashBin);
 

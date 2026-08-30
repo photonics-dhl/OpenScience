@@ -297,6 +297,7 @@ class SessionManager:
         self._store = store
         self._refresher = refresher
         self._clock = clock
+        self._enabled = enabled
         self._lock = threading.RLock()
         self._probe_in_progress = False
         self._store.ensure_root()
@@ -319,6 +320,8 @@ class SessionManager:
 
     def status(self) -> str:
         with self._lock:
+            if not self._enabled:
+                return "disabled"
             self._reload()
             if self._snapshot.status == "refreshing":
                 if self._clock() < self._snapshot.lease_until:
@@ -356,6 +359,8 @@ class SessionManager:
 
     def on_auth_redirect(self) -> str:
         with self._lock:
+            if not self._enabled:
+                return "disabled"
             self._reload()
             if self._snapshot.status == "disabled":
                 return "disabled"
