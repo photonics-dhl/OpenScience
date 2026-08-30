@@ -47,9 +47,13 @@ service. This limitation is documented in the official
   source temp is removed before the next source. Signature, helper, source shape,
   legal flags, grey labels, output path or cleanup drift fails closed; the
   archive/hash remains unchanged.
-- Before importing or calling upstream sources, each per-acquisition POSIX
-  subprocess installs `RLIMIT_FSIZE` soft and hard limits at the shared exact
-  `MAX_PDF_BYTES = 104857600`. The current hard limit must permit that value;
+- Every worker mode, including the no-network/no-Secret runtime probe, traverses
+  one common entry that installs and reads back `RLIMIT_FSIZE` before inspecting
+  the mode or importing upstream. The probe only reports the already-installed
+  stable soft:hard metadata; the verifier invokes the real entry and never calls
+  the installer directly. Each per-acquisition POSIX subprocess therefore has
+  soft and hard limits at the shared exact `MAX_PDF_BYTES = 104857600`. The
+  current hard limit must permit that value;
   SIGXFSZ/EFBIG is converted to a redacted source failure, partial expected
   output is removed, and a surviving process may try the next serial source.
   External child writers inherit the kernel limit. Success must reference the

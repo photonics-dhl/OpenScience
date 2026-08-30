@@ -1500,10 +1500,10 @@ and no broad filesystem, image or volume prune ran.
 
 #### Preconditions
 
-The candidate must contain fix `36f985c` or a reviewed descendant while the
+The candidate must contain fix `63a0b56` or a reviewed descendant while the
 upstream commit/archive remain `7017814…b8e` / `db537914…9208b9`. Before any
 ECS mutation, require exact CI, a clean merged-main SHA, targetless durable
-ScanSci task count zero, and local ScanSci `80/86` plus infra `71/76` evidence.
+ScanSci task count zero, and local ScanSci `81/88` plus infra `72/77` evidence.
 The production source remains `6893318…` until the canonical transaction ends.
 
 #### Execution
@@ -1514,8 +1514,10 @@ legal/auth images, start ScanSci before Worker, and run
 must report 1 CPU, 1 GiB, 64 PIDs and `/tmp` exactly 256 MiB. Run one controlled
 instrumented acquisition proving source concurrency one, tier/source order,
 first-success stop, pinned negative-cache behavior and zero leftover source
-PDFs before real OA/CARSI journeys. The no-Secret file-limit probe must report
-soft and hard `104857600:104857600` before any real download.
+PDFs before real OA/CARSI journeys. The verifier must send its no-Secret probe
+through the real worker entry. That common entry installs and reads back the
+limit before any mode branch or upstream import; the probe only reports the
+already-installed `104857600:104857600` metadata before any real download.
 
 #### Rollback
 

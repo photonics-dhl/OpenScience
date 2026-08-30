@@ -14,7 +14,9 @@ Secret, `.env`, GitHub, merge, or deployment action occurred in Task 9.
   `cfc0ddc24b92040d46f5fa875b1931163aa2c5fa`.
 - Review fix 1: `2560bd84988dd0df7972630a81ac5cb7d80bb62f`.
 - Review fix 2: `36f985c59c44c85c84ed242ca890ad6a5b7ce01e`.
-- Documentation gate: `0e98190bc7cd2cd69dfb9cd7bcd4dcf38a0de0ad`.
+- Review fix 3: `63a0b562b50bd2fd72400a18f74c5a0d89b18a8d`.
+- Initial documentation gate: `0e98190bc7cd2cd69dfb9cd7bcd4dcf38a0de0ad`;
+  review-fix-3 evidence is recorded by the final documentation commit.
 - Repository main: `463c8e3a2a80138cda2d669c370c0481ed4c0877`.
 - Production application/release: `689331845574612130f223d08c92e61721c16586`.
 - Production rollback: `c435c4c8b2800bb20998fd9a9a93f2db96328661`.
@@ -162,6 +164,23 @@ tests its intended invariant rather than failing early for missing identity.
 Focused results: ScanSci `80 pass / 6 Windows/POSIX skips`, Worker `503/503`,
 infra `71 pass / 5 platform skips`.
 
+### Important — runtime probe bypassed the production file-limit entry
+
+RED proved the runtime verifier imported and called the limit installer through
+a separate `python -c` path, so a future acquisition-path regression could leave
+the probe green. Review fix 3 introduces one worker request executor that installs
+and re-reads the exact soft:hard limit before inspecting the mode or importing
+upstream. Both acquisition and the no-network/no-Secret probe traverse it.
+
+The probe only reports the already-installed stable metadata object
+`{"file_limit":"104857600:104857600"}`. The verifier now sends the bounded
+probe request to the real worker entry; it does not import upstream or call the
+installer directly. Behavioral tests prove the shared install/read ordering,
+exactly one install before acquisition imports, no upstream access from the
+probe, and fail-closed behavior for a missing/skipped install or malformed
+metadata. Focused results: ScanSci `81 pass / 7 Windows/POSIX skips`, infra
+`72 pass / 5 platform skips`.
+
 ## Architecture, API, data, and release review
 
 - Direction: apps depend on packages; no app-to-app implementation import or
@@ -224,9 +243,9 @@ infra `71 pass / 5 platform skips`.
 - Typecheck: exit 0 across all workspaces.
 - Integration compilation: API and Domain PostgreSQL tsconfigs exit 0. Their
   real PostgreSQL execution is forbidden locally and remains Task 10.
-- Full test: exit 0, `2,112 pass / 21 platform skips / 0 fail`.
+- Full test: exit 0, `2,113 pass / 22 platform skips / 0 fail`.
   - release contract `94 pass / 7 platform skips`;
-  - ScanSci `80 pass / 6 Windows/POSIX skips`;
+  - ScanSci `81 pass / 7 Windows/POSIX skips`;
   - Web `464` Vitest + `5` Node;
   - Domain `535`, Agent Worker `503`, API `101`.
 - UI/Hermes production-browser gates were not rerun because Task 9 changed no
