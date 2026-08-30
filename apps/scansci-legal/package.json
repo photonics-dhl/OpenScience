@@ -1,0 +1,8 @@
+{
+  "name": "@openscience/scansci-legal",
+  "private": true,
+  "version": "0.0.0",
+  "scripts": {
+    "test": "python -m unittest discover -s test -v"
+  }
+}

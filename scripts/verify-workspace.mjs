@@ -4,6 +4,7 @@ const required = [
   'apps/web/package.json',
   'apps/api/package.json',
   'apps/agent-worker/package.json',
+  'apps/scansci-legal/package.json',
   'apps/science-worker/package.json',
   'apps/sandbox-controller/package.json',
   'packages/domain/package.json',

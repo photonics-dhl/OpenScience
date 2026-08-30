@@ -160,6 +160,8 @@ importers:
 
   apps/sandbox-controller: {}
 
+  apps/scansci-legal: {}
+
   apps/science-worker:
     dependencies:
       '@openscience/database':
