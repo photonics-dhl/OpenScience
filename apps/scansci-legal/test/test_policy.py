@@ -97,20 +97,20 @@ class LegalPolicyTest(unittest.TestCase):
 
         self.assertEqual(source_lock.commit, "7017814758f826ea21470a609890a7d3ca374b8e")
         self.assertEqual(source_lock.archive_sha256, "db537914b9c149f2ef6ba148f47e316fddcfe350e4afe8f9fa88a2a1af9208b9")
-        self.assertEqual(source_lock.install_command, "python -m pip install --require-hashes --no-build-isolation -r requirements.lock")
+        self.assertEqual(source_lock.install_command, "python -m pip install --require-hashes -r build-requirements.lock && python -m pip install --require-hashes --no-build-isolation -r requirements.lock")
 
     def test_rejects_source_lock_drift_in_commit_hash_install_mode_and_build_requirements(self):
         app_root = Path(__file__).resolve().parents[1]
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
-            for name in ("package.json", "requirements.in", "requirements.lock", "upstream.lock.json"):
+            for name in ("package.json", "requirements.in", "requirements.lock", "build-requirements.in", "build-requirements.lock", "upstream.lock.json"):
                 shutil.copy2(app_root / name, root / name)
             for name, old, new in (
                 ("upstream.lock.json", "7017814758f826ea21470a609890a7d3ca374b8e", "0" * 40),
                 ("upstream.lock.json", "db537914b9c149f2ef6ba148f47e316fddcfe350e4afe8f9fa88a2a1af9208b9", "0" * 64),
                 ("package.json", "--no-build-isolation ", ""),
-                ("requirements.in", "setuptools==", "setuptools>=68=="),
-                ("requirements.in", "pycryptodome==", "pycryptodome>=3.20=="),
+                ("build-requirements.in", "setuptools==", "setuptools>=68=="),
+                ("build-requirements.in", "pycryptodome==", "pycryptodome>=3.20=="),
             ):
                 with self.subTest(name=name, old=old):
                     path = root / name
@@ -119,6 +119,10 @@ class LegalPolicyTest(unittest.TestCase):
                     with self.assertRaises(PolicyError):
                         load_source_lock(root)
                     path.write_text(original, encoding="utf-8")
+
+    def test_requires_a_two_stage_hashed_install_contract(self):
+        source_lock = load_source_lock()
+        self.assertEqual(source_lock.install_command, "python -m pip install --require-hashes -r build-requirements.lock && python -m pip install --require-hashes --no-build-isolation -r requirements.lock")
 
 
 if __name__ == "__main__":

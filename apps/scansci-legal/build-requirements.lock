@@ -1,0 +1,3 @@
+# generated with pip-compile --generate-hashes build-requirements.in
+pycryptodome==3.23.0 --hash=sha256:0b2cbe2d5e38c8ad780b33ef69d3ef6a4e60f31c1a7d0ad51e4a9108bc79999b
+setuptools==80.9.0 --hash=sha256:062d34222ad13e0cc312a4c02d73f059e86a4acbfbdea8f8f76b28c99f306922

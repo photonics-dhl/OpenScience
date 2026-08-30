@@ -30,8 +30,9 @@ SOURCE_LOCK = {
     "archiveUrl": "https://github.com/Rimagination/scansci-pdf/archive/7017814758f826ea21470a609890a7d3ca374b8e.tar.gz",
     "archiveSha256": "db537914b9c149f2ef6ba148f47e316fddcfe350e4afe8f9fa88a2a1af9208b9",
     "strategy": "legal_only", "scihub": False, "tor": False,
+    "install": "python -m pip install --require-hashes -r build-requirements.lock && python -m pip install --require-hashes --no-build-isolation -r requirements.lock",
 }
-INSTALL_COMMAND = "python -m pip install --require-hashes --no-build-isolation -r requirements.lock"
+INSTALL_COMMAND = SOURCE_LOCK["install"]
 BUILD_REQUIREMENTS = ("setuptools==80.9.0", "pycryptodome==3.23.0")
 
 
@@ -103,6 +104,8 @@ def load_source_lock(root: Path | None = None) -> SourceLock:
         metadata = json.loads((app_root / "upstream.lock.json").read_text(encoding="utf-8"))
         package = json.loads((app_root / "package.json").read_text(encoding="utf-8"))
         requirements_in = (app_root / "requirements.in").read_text(encoding="utf-8")
+        build_requirements = (app_root / "build-requirements.in").read_text(encoding="utf-8")
+        build_lock = (app_root / "build-requirements.lock").read_text(encoding="utf-8")
         requirements_lock = (app_root / "requirements.lock").read_text(encoding="utf-8")
     except (OSError, json.JSONDecodeError) as error:
         raise PolicyError("source lock cannot be read") from error
@@ -110,10 +113,12 @@ def load_source_lock(root: Path | None = None) -> SourceLock:
         raise PolicyError("source lock metadata drifted")
     if package.get("scripts", {}).get("install:locked") != INSTALL_COMMAND:
         raise PolicyError("locked install contract drifted")
-    required_lines = (f"scansci-pdf @ {SOURCE_LOCK['archiveUrl']}#sha256={SOURCE_LOCK['archiveSha256']}", *BUILD_REQUIREMENTS)
-    if set(line.strip() for line in requirements_in.splitlines() if line.strip()) != set(required_lines):
+    required_lines = (f"scansci-pdf @ {SOURCE_LOCK['archiveUrl']}#sha256={SOURCE_LOCK['archiveSha256']}",)
+    if set(line.strip() for line in requirements_in.splitlines() if line.strip()) != set(required_lines) or set(line.strip() for line in build_requirements.splitlines() if line.strip()) != set(BUILD_REQUIREMENTS):
         raise PolicyError("source build requirements drifted")
-    for requirement in (*BUILD_REQUIREMENTS, required_lines[0]):
+    for requirement in BUILD_REQUIREMENTS:
+        if requirement not in build_lock or "--hash=sha256:" not in build_lock: raise PolicyError("source build lock drifted")
+    for requirement in required_lines:
         name = requirement.split(" @ ", 1)[0].split("==", 1)[0]
         locked_name = f"{name} @" if " @ " in requirement else f"{name}=="
         if requirement not in requirements_lock or locked_name not in requirements_lock or "--hash=sha256:" not in requirements_lock:
