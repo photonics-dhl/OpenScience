@@ -144,7 +144,7 @@ export function loadScanSciServiceTokenFile(
   try {
     descriptor = fileSystem.openSync(path, constants.O_RDONLY | constants.O_NOFOLLOW);
     const stat = fileSystem.fstatSync(descriptor);
-    if (!stat.isFile() || stat.uid !== 1000 || stat.gid !== 1000 || (stat.mode & 0o777) !== 0o400 || stat.nlink !== 1 || stat.size < 1 || stat.size > 4096) {
+    if (!stat.isFile() || stat.uid !== 1000 || stat.gid !== 1000 || (stat.mode & 0o7777) !== 0o400 || stat.nlink !== 1 || stat.size < 1 || stat.size > 4096) {
       throw new Error('invalid');
     }
     const bytes = Buffer.alloc(stat.size);
