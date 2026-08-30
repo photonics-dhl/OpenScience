@@ -11,7 +11,7 @@
 ## Version tuple
 
 - Worktree: `E:/Miscellaneous/XGS/.worktrees/readable-hermes-guidance`
-- Branch / local implementation / repository main: `codex/scansci-default-capability` / `185d5d686e1fae4d07f281dc1f28382679afe76a` / `463c8e3a2a80138cda2d669c370c0481ed4c0877`；远端仅保留 `main`。
+- Branch / local implementation / repository main: `codex/scansci-default-capability` / `8238a9f863bf937ba9ecc8df34b7049ef56893cf` / `463c8e3a2a80138cda2d669c370c0481ed4c0877`；远端仅保留 `main`。
 - Production application source / immutable release: `689331845574612130f223d08c92e61721c16586`
 - Rollback: `c435c4c8b2800bb20998fd9a9a93f2db96328661`; core/search migrations `32/32` / `2/2`
 - 本地 `main` 与其他 worktree 有用户改动，不得触碰或用它推断生产；上述 tuple 已从 ECS 重新实测。
@@ -48,6 +48,7 @@
 15. ScanSci plan Task 5 atomic candidate 为 `ff5568f` + `4763228`：Personal RO/SDF、Session、Task/credit/audit 在一笔三次有界 Serializable 事务提交；exact replay 先于余额，P2002 精确绑定 model/constraint，Redis 仅 commit 后投递并保留 pending recovery。Domain/API/Agent 本地门禁 green；两连接 PostgreSQL SSI/mismatch suite 已加入但本地未运行，ECS acceptance pending。
 16. ScanSci plan Task 6 local candidate 为 `60b3740`：durable provider state 的事务回滚/重放/generation 矩阵、disabled rollback Secret、非致命 observation persistence 与真实 PostgreSQL migration/concurrency 合同已闭合；Domain 520、Database 26、Worker 501 与 typecheck green，独立复审 READY。Migration 33/真实 suite/CARSI 仍是 ECS-only pending。
 17. ScanSci plan Task 7 local candidate 为 `22088c0` + `86e037e` + `3e829db` + `1059072` + `82d4772` + `185d5d6`：public `canRetry` 只来自共享 predicate；marker 只能由 acquisition durable path 构造，generic/public/internal caller 与历史/畸形/撤权均 false。Retry 用三次 P2034-only Serializable authority/CAS/audit，recovery 单次 ID-only SQL 精确筛选后复验，无循环/top-N/payload 泄露；14-case corpus 标注 JSONB/JavaScript-only，PG parity 以独立 terminal sentinel 证明 raw selector 分支。Domain/API/Worker `534/99/502`，real-PG race/parity/deep-history contract 仅 typecheck；既有 Client/Playwright `7/7` 未改，ECS 375px/真实下载和 Task 8 四入口仍 pending。
+18. ScanSci plan Task 8 local candidate 为 `8238a9f`：Hermes Drawer、RO Hermes、RO Files/Evidence 与 Personal Space 共用唯一 acquisition/recovery/poll/download；有界双语 + shared DOI/arXiv 确定性分类，Dashboard Personal/RO target、query-only metadata、44px/i18n/dark-paper/within-form 均闭合。Web `462 + 5 Node`、build/typecheck、product `72/72`、Hermes `19/19 + 8/8` green；ECS/CARSI/OA/一次性下载仍 pending。
 
 ## Constraints
 
@@ -58,7 +59,7 @@
 ## Next action
 
 1. 按 `docs/plans/2026-08-30-scansci-default-capability-plan.md` 执行 Tasks 1–10；Task 11 不启动。
-2. 从 Task 8 继续接通 Hermes drawer、RO Hermes 与 RO Files/Evidence；Task 7 Personal Space 不再重做。
+2. Task 8 四入口本地候选已完成；继续 Task 9 安全/UX 复审与 Task 10 ECS 真实 OA/CARSI、375px、一次性下载验收，不重做 Task 7/8 状态机。
 3. 继续以服务器为最终验收；本地不运行 Docker。必须用真实 OA + 浙江大学 CARSI PDF、容器重建 session、72h/600s 与灰色源调用 0 关闭 Task 10。
 
 ## Read first

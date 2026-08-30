@@ -4,10 +4,16 @@
 
 ## Current version tuple
 
-- Branch / local candidate / main: `codex/scansci-default-capability` / `185d5d6` / `463c8e3`；远端仅 `main`。
+- Branch / local candidate / main: `codex/scansci-default-capability` / `8238a9f` / `463c8e3`；远端仅 `main`。
 - Production application source / immutable release: `689331845574612130f223d08c92e61721c16586`。
 - Production rollback: `c435c4c8b2800bb20998fd9a9a93f2db96328661`；core/search migrations `32/32` / `2/2`。
 - Taskmaster `hermes-research-intelligence` 为 9/12：Tasks 1–9 done；Task 10 已重新打开，Task 11 阻断至 ScanSci 默认下载能力生产验收完成。
+
+## 2026-08-30 — ScanSci Task 8 local review candidate
+
+- `8238a9f` 接通 Hermes Drawer、RO Hermes、RO Files/Evidence：DOI/arXiv + 有界双语动词/名词本地分类，Dashboard 固定 Personal、RO 路由精确 target，题名只查 metadata；歧义 source-control/bug-source 与无关目标保持 `workspace.guide`。
+- 四入口复用 Task 7 单一 acquisition/recovery/poll/retry/download 状态机；44px disclosure、唯一 label ID、paper/dark tokens、双语 copy、within-form 键盘路径与 Drawer 条件 live region 均已闭合，无 provider/CARSI/account/mode 控件。Web `462 + 5 Node`、19-route build/typecheck、product `72/72`、Hermes `19/19 + 8/8` 及性能门 green。
+- 这是本地 review candidate；生产仍为 `6893318` / `c435c4c` / core-search `32/32`-`2/2`。ECS 375px、真实 OA/CARSI、一次性下载与部署仍属 Task 10，不能标 done。
 
 ## 2026-08-30 — ScanSci Task 7 local review candidate
 
