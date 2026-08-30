@@ -23,16 +23,29 @@ read_state() {
   [ -f "$STATE_FILE" ] && [ ! -L "$STATE_FILE" ] || return 1
   local lines
   mapfile -t lines < "$STATE_FILE"
-  [ "${#lines[@]}" -eq 7 ] || return 1
+  case "${#lines[@]}" in
+    6)
+      STATE_FORMAT="legacy"
+      STATE_LIFECYCLE="running"
+      ;;
+    7)
+      STATE_FORMAT="current"
+      STATE_LIFECYCLE="${lines[6]}"
+      ;;
+    *) return 1 ;;
+  esac
   STATE_TOKEN="${lines[0]}"
   STATE_PID="${lines[1]}"
   STATE_PORT="${lines[2]}"
   RELEASE_SHA="${lines[3]}"
   RELEASE_ROOT="${lines[4]}"
   RELEASE_COMPOSE="${lines[5]}"
-  STATE_LIFECYCLE="${lines[6]}"
   [[ "$STATE_TOKEN" =~ ^[0-9a-f]{32}$ ]] || return 1
-  [[ "$STATE_PID" =~ ^[0-9]+$ ]] || return 1
+  if [ "$STATE_FORMAT" = "legacy" ]; then
+    [[ "$STATE_PID" =~ ^[1-9][0-9]*$ ]] || return 1
+  else
+    [[ "$STATE_PID" =~ ^[0-9]+$ ]] || return 1
+  fi
   [[ "$STATE_PORT" =~ ^[0-9]+$ ]] || return 1
   [[ "$RELEASE_SHA" =~ ^[0-9a-f]{40}$ ]] || return 1
   [ "$RELEASE_ROOT" = "/opt/openscience-releases/$RELEASE_SHA" ] || return 1
@@ -42,6 +55,10 @@ read_state() {
     pending_stop) [ "$STATE_PID" -eq 0 ] || return 1 ;;
     *) return 1 ;;
   esac
+}
+
+state_file_exists() {
+  [ -e "$STATE_FILE" ] || [ -L "$STATE_FILE" ]
 }
 
 process_matches_state() {
@@ -118,6 +135,12 @@ write_state() {
     "$token" "$pid" "$port" "$RELEASE_SHA" "$RELEASE_ROOT" "$RELEASE_COMPOSE" "$lifecycle" > "$temporary"
   chmod 600 "$temporary" 2>/dev/null || true
   mv -f "$temporary" "$STATE_FILE"
+}
+
+upgrade_legacy_state() {
+  [ "$STATE_FORMAT" = "legacy" ] || return 0
+  write_state "$STATE_TOKEN" "$STATE_PID" "$STATE_PORT" "running"
+  STATE_FORMAT="current"
 }
 
 remove_state() {
@@ -226,8 +249,16 @@ commit_remote_stop() {
 }
 
 resolve_existing_state_before_start() {
-  if ! read_state; then
+  if ! state_file_exists; then
     return 0
+  fi
+  if ! read_state; then
+    echo "validated tunnel release state unavailable" >&2
+    return 65
+  fi
+  if ! upgrade_legacy_state; then
+    echo "tunnel state upgrade failed" >&2
+    return 65
   fi
   if [ "$STATE_LIFECYCLE" = "running" ] && process_matches_state; then
     return 2
@@ -247,9 +278,6 @@ start_tunnel() {
   acquire_lock
   local existing_rc=0
   resolve_existing_state_before_start || existing_rc=$?
-  if [ "$existing_rc" -eq 1 ]; then
-    return 1
-  fi
   if [ "$existing_rc" -eq 2 ]; then
     if [ "$STATE_PORT" != "$port" ]; then
       echo "tunnel already running on another local port" >&2
@@ -264,6 +292,9 @@ start_tunnel() {
     commit_remote_stop || true
     echo "loopback tunnel readiness failed" >&2
     return 1
+  fi
+  if [ "$existing_rc" -ne 0 ]; then
+    return "$existing_rc"
   fi
   load_connection
   resolve_release_identity
@@ -301,8 +332,11 @@ start_tunnel() {
 stop_tunnel() {
   acquire_lock
   if ! read_state; then
-    remove_state
     echo "validated tunnel release state unavailable" >&2
+    return 65
+  fi
+  if ! upgrade_legacy_state; then
+    echo "tunnel state upgrade failed" >&2
     return 65
   fi
   stop_identified_tunnel

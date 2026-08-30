@@ -109,14 +109,24 @@ async function startHealthServer(t, port) {
 }
 
 async function writeTunnelState(f, {
-  token = 'c'.repeat(32), pid, port, release = 'a'.repeat(40), lifecycle = 'running',
+  token = 'c'.repeat(32), pid, port, release = 'a'.repeat(40), lifecycle = 'running', format = 'current',
 }) {
   const stateRoot = join(f.env.XDG_STATE_HOME, 'openscience');
   await mkdir(stateRoot, { recursive: true });
   const releaseRoot = `/opt/openscience-releases/${release}`;
+  const lines = [
+    token,
+    String(pid),
+    String(port),
+    release,
+    releaseRoot,
+    `${releaseRoot}/infra/compose/docker-compose.prod.yml`,
+  ];
+  if (format === 'current') lines.push(lifecycle);
+  else if (format !== 'legacy') throw new Error(`unknown tunnel state format: ${format}`);
   await writeFile(
     join(stateRoot, 'scansci-auth-tunnel.state'),
-    `${token}\n${pid}\n${port}\n${release}\n${releaseRoot}\n${releaseRoot}/infra/compose/docker-compose.prod.yml\n${lifecycle}\n`,
+    `${lines.join('\n')}\n`,
   );
 }
 
@@ -254,6 +264,126 @@ test('remote stop failure retains old release tombstone and retry commits only a
   assert.equal(stopLines.length, 2);
   assert.ok(stopLines.every((line) => line.includes(`/opt/openscience-releases/${releaseA}`)));
   assert.doesNotMatch(log, new RegExp(`/opt/openscience-releases/${releaseB}`));
+});
+
+test('legacy stop upgrades six-field state and uses its stored release after active release switches', async (t) => {
+  const f = await fixture();
+  await startHealthServer(t, 16092);
+  t.after(async () => rm(f.root, { recursive: true, force: true }));
+  const releaseA = 'a'.repeat(40);
+  const releaseB = 'b'.repeat(40);
+  assert.equal(run(f.script, ['start', '16092'], { ...f.env, FAKE_RELEASE_SHA: releaseA }, f.bashBin).status, 0);
+  const statePath = join(f.env.XDG_STATE_HOME, 'openscience', 'scansci-auth-tunnel.state');
+  const currentLines = (await readFile(statePath, 'utf8')).trimEnd().split('\n');
+  await writeFile(statePath, `${currentLines.slice(0, 6).join('\n')}\n`);
+
+  const stopped = run(f.script, ['stop'], { ...f.env, FAKE_RELEASE_SHA: releaseB }, f.bashBin);
+
+  assert.equal(stopped.status, 0, `${stopped.stdout}\n${stopped.stderr}`);
+  assert.equal(existsSync(statePath), false);
+  const log = await readFile(f.log, 'utf8');
+  assert.equal((log.match(/cat \/opt\/openscience\/\.release-id/g) ?? []).length, 1);
+  assert.match(log, new RegExp(`/opt/openscience-releases/${releaseA}.*--profile scansci-auth stop scansci-auth`));
+  assert.doesNotMatch(log, new RegExp(`/opt/openscience-releases/${releaseB}`));
+});
+
+test('legacy duplicate start upgrades state without launching another helper or resolving a new release', async (t) => {
+  const f = await fixture();
+  await startHealthServer(t, 16093);
+  t.after(async () => {
+    run(f.script, ['stop'], f.env, f.bashBin);
+    await rm(f.root, { recursive: true, force: true });
+  });
+  const releaseA = 'a'.repeat(40);
+  const releaseB = 'b'.repeat(40);
+  assert.equal(run(f.script, ['start', '16093'], { ...f.env, FAKE_RELEASE_SHA: releaseA }, f.bashBin).status, 0);
+  const statePath = join(f.env.XDG_STATE_HOME, 'openscience', 'scansci-auth-tunnel.state');
+  const legacyLines = (await readFile(statePath, 'utf8')).trimEnd().split('\n').slice(0, 6);
+  await writeFile(statePath, `${legacyLines.join('\n')}\n`);
+
+  const duplicate = run(f.script, ['start', '16093'], { ...f.env, FAKE_RELEASE_SHA: releaseB }, f.bashBin);
+
+  assert.equal(duplicate.status, 0, `${duplicate.stdout}\n${duplicate.stderr}`);
+  assert.match(duplicate.stdout, /^already running on http:\/\/127\.0\.0\.1:16093\s*$/);
+  assert.deepEqual((await readFile(statePath, 'utf8')).trimEnd().split('\n'), [...legacyLines, 'running']);
+  const log = await readFile(f.log, 'utf8');
+  assert.equal((log.match(/cat \/opt\/openscience\/\.release-id/g) ?? []).length, 1);
+  assert.equal((log.match(/--profile scansci-auth up -d scansci-auth/g) ?? []).length, 1);
+  assert.doesNotMatch(log, new RegExp(`/opt/openscience-releases/${releaseB}`));
+});
+
+test('legacy remote stop failure retains the upgraded old-release tombstone for retry', async (t) => {
+  const f = await fixture();
+  await startHealthServer(t, 16094);
+  t.after(async () => {
+    run(f.script, ['stop'], f.env, f.bashBin);
+    await rm(f.root, { recursive: true, force: true });
+  });
+  const releaseA = 'a'.repeat(40);
+  const releaseB = 'b'.repeat(40);
+  assert.equal(run(f.script, ['start', '16094'], { ...f.env, FAKE_RELEASE_SHA: releaseA }, f.bashBin).status, 0);
+  const statePath = join(f.env.XDG_STATE_HOME, 'openscience', 'scansci-auth-tunnel.state');
+  const legacyLines = (await readFile(statePath, 'utf8')).trimEnd().split('\n').slice(0, 6);
+  await writeFile(statePath, `${legacyLines.join('\n')}\n`);
+
+  const failed = run(
+    f.script,
+    ['stop'],
+    { ...f.env, FAKE_RELEASE_SHA: releaseB, FAKE_SSH_STOP_FAIL: '1' },
+    f.bashBin,
+  );
+
+  assert.equal(failed.status, 1, `${failed.stdout}\n${failed.stderr}`);
+  assert.deepEqual(
+    (await readFile(statePath, 'utf8')).trimEnd().split('\n'),
+    [legacyLines[0], '0', ...legacyLines.slice(2), 'pending_stop'],
+  );
+  const retry = run(f.script, ['stop'], { ...f.env, FAKE_RELEASE_SHA: releaseB }, f.bashBin);
+  assert.equal(retry.status, 0, retry.stderr);
+  assert.equal(existsSync(statePath), false);
+  const log = await readFile(f.log, 'utf8');
+  assert.equal((log.match(/cat \/opt\/openscience\/\.release-id/g) ?? []).length, 1);
+  const stopLines = log.split('\n').filter((line) => line.includes('--profile scansci-auth stop scansci-auth'));
+  assert.equal(stopLines.length, 2);
+  assert.ok(stopLines.every((line) => line.includes(`/opt/openscience-releases/${releaseA}`)));
+  assert.doesNotMatch(log, new RegExp(`/opt/openscience-releases/${releaseB}`));
+});
+
+test('invalid six-field state fails closed without kill, SSH, or overwrite', async (t) => {
+  const [startFixture, stopFixture] = await Promise.all([fixture(), fixture()]);
+  const unrelatedPidFile = join(startFixture.root, 'unrelated.pid');
+  const unrelated = spawn(bash, ['-c', 'printf "%s\\n" "$$" > "$1"; sleep 30', 'unrelated', unrelatedPidFile], { stdio: 'ignore' });
+  for (let attempt = 0; attempt < 20 && !existsSync(unrelatedPidFile); attempt += 1) {
+    await new Promise((resolveWait) => setTimeout(resolveWait, 25));
+  }
+  const unrelatedPid = Number((await readFile(unrelatedPidFile, 'utf8')).trim());
+  t.after(async () => {
+    spawnSync(bash, ['-c', 'kill "$1" 2>/dev/null || true', 'cleanup', String(unrelatedPid)]);
+    if (unrelated.exitCode === null) unrelated.kill();
+    await Promise.all([
+      rm(startFixture.root, { recursive: true, force: true }),
+      rm(stopFixture.root, { recursive: true, force: true }),
+    ]);
+  });
+  const invalidToken = 'g'.repeat(32);
+  await Promise.all([
+    writeTunnelState(startFixture, { token: invalidToken, pid: unrelatedPid, port: 16095, format: 'legacy' }),
+    writeTunnelState(stopFixture, { token: invalidToken, pid: unrelatedPid, port: 16095, format: 'legacy' }),
+  ]);
+  const startStatePath = join(startFixture.env.XDG_STATE_HOME, 'openscience', 'scansci-auth-tunnel.state');
+  const stopStatePath = join(stopFixture.env.XDG_STATE_HOME, 'openscience', 'scansci-auth-tunnel.state');
+  const [startBefore, stopBefore] = await Promise.all([readFile(startStatePath, 'utf8'), readFile(stopStatePath, 'utf8')]);
+
+  const started = run(startFixture.script, ['start', '16095'], startFixture.env, startFixture.bashBin);
+  const stopped = run(stopFixture.script, ['stop'], stopFixture.env, stopFixture.bashBin);
+
+  assert.equal(started.status, 65, `${started.stdout}\n${started.stderr}`);
+  assert.equal(stopped.status, 65, `${stopped.stdout}\n${stopped.stderr}`);
+  assert.equal(await readFile(startStatePath, 'utf8'), startBefore);
+  assert.equal(await readFile(stopStatePath, 'utf8'), stopBefore);
+  assert.equal(existsSync(startFixture.log), false);
+  assert.equal(existsSync(stopFixture.log), false);
+  assert.equal(spawnSync(bash, ['-c', 'kill -0 "$1"', 'check', String(unrelatedPid)]).status, 0);
 });
 
 test('invalid ports and unknown commands fail before any SSH process starts', async (t) => {
