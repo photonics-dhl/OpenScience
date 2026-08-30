@@ -32,6 +32,8 @@ test('retention derives only exact release-scoped image tags', () => {
     `openscience-agent-worker:${inactive}`,
     `openscience-document-parser:${inactive}`,
     `openscience-embedding-worker:${inactive}`,
+    `openscience-scansci-auth:${inactive}`,
+    `openscience-scansci-legal:${inactive}`,
   ]);
 });
 

@@ -15,8 +15,27 @@ import unittest
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
 from scansci_legal.http_service import AcquisitionError, AcquiredPdf, create_server
+from scansci_legal.main import load_service_token
 from scansci_legal.policy import LegalDownloadRequest
 from scansci_legal.upstream import ScanSciAcquisitionClient
+
+
+class ServiceTokenFileTests(unittest.TestCase):
+    def test_loads_service_token_from_fixed_secret_file_without_environment_value(self):
+        with tempfile.TemporaryDirectory() as directory:
+            secret = Path(directory) / "scansci_service_token"
+            secret.write_text("file-token-never-log\n", encoding="utf-8")
+            self.assertEqual(load_service_token({"SCANSCI_SERVICE_TOKEN_FILE": str(secret)}), "file-token-never-log")
+
+    def test_rejects_empty_or_ambiguous_service_token_configuration(self):
+        with tempfile.TemporaryDirectory() as directory:
+            secret = Path(directory) / "scansci_service_token"
+            secret.write_text("\n", encoding="utf-8")
+            with self.assertRaisesRegex(ValueError, "service token"):
+                load_service_token({"SCANSCI_SERVICE_TOKEN_FILE": str(secret)})
+            secret.write_text("file-token\n", encoding="utf-8")
+            with self.assertRaisesRegex(ValueError, "service token"):
+                load_service_token({"SCANSCI_SERVICE_TOKEN_FILE": str(secret), "SCANSCI_SERVICE_TOKEN": "env-token"})
 
 
 VALID_REQUEST = {

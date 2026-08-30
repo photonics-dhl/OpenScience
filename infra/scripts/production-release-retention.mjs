@@ -15,6 +15,8 @@ const RELEASE_IMAGE_REPOSITORIES = [
   'openscience-agent-worker',
   'openscience-document-parser',
   'openscience-embedding-worker',
+  'openscience-scansci-auth',
+  'openscience-scansci-legal',
 ];
 const PATHS = {
   root: '/opt/openscience',
@@ -76,7 +78,7 @@ export function parsePendingIntent(source) {
     && new Set(candidate).size === candidate.length
     && candidate.every((entry, index) => index === 0 || candidate[index - 1] < entry);
   if (!shaList(value.releaseShas) || !shaList(value.capabilityShas)
-    || !Array.isArray(value.imageTags) || value.imageTags.length > 768
+    || !Array.isArray(value.imageTags) || value.imageTags.length > 256 * RELEASE_IMAGE_REPOSITORIES.length
     || new Set(value.imageTags).size !== value.imageTags.length
     || value.imageTags.some((tag, index) => typeof tag !== 'string'
       || index > 0 && value.imageTags[index - 1] >= tag
@@ -296,15 +298,22 @@ async function readReleaseCapability(sha, paths = PATHS) {
     }
     values.set(line.slice(0, separator), line.slice(separator + 1));
   }
-  const expectedKeys = 'bge_m3_enabled,embedding_deploy,model_manifest_sha256,model_revision,model_version_id,package_freeze_sha256,schema,source_sha256';
+  const schema = values.get('schema');
+  const schemaTwoKeys = 'bge_m3_enabled,embedding_deploy,model_manifest_sha256,model_revision,model_version_id,package_freeze_sha256,schema,source_sha256';
+  const schemaThreeKeys = 'bge_m3_enabled,embedding_deploy,model_manifest_sha256,model_revision,model_version_id,package_freeze_sha256,scansci_deploy,schema,source_sha256';
+  const expectedKeys = schema === '2' ? schemaTwoKeys : schemaThreeKeys;
   if ([...values.keys()].sort().join(',') !== expectedKeys
-    || values.get('schema') !== '2'
+    || !['2', '3'].includes(schema)
     || !['true', 'false'].includes(values.get('embedding_deploy'))
     || !['true', 'false'].includes(values.get('bge_m3_enabled'))
+    || schema === '3' && !['true', 'false'].includes(values.get('scansci_deploy'))
     || values.get('bge_m3_enabled') === 'true' && values.get('embedding_deploy') !== 'true') {
     throw new Error(`release capability is invalid: ${sha}`);
   }
-  return { embeddingDeploy: values.get('embedding_deploy') === 'true' };
+  return {
+    embeddingDeploy: values.get('embedding_deploy') === 'true',
+    scansciDeploy: schema === '3' && values.get('scansci_deploy') === 'true',
+  };
 }
 
 async function protectedImageState(activeSha, rollbackSha, paths = PATHS) {
@@ -317,7 +326,11 @@ async function protectedImageState(activeSha, rollbackSha, paths = PATHS) {
     for (const tag of deriveReleaseImageTags(sha)) {
       const imageId = inspectImage(tag);
       const embedding = tag.startsWith('openscience-embedding-worker:');
-      if (!imageId && (!embedding || capabilities.get(sha).embeddingDeploy)) {
+      const scansci = tag.startsWith('openscience-scansci-');
+      const required = !embedding && !scansci
+        || embedding && capabilities.get(sha).embeddingDeploy
+        || scansci && capabilities.get(sha).scansciDeploy;
+      if (!imageId && required) {
         throw new Error(`protected release image is missing: ${tag}`);
       }
       if (imageId) ids.set(tag, imageId);
@@ -538,6 +551,7 @@ async function bootstrap(options, paths = PATHS) {
   const protectedState = await protectedImageState(options.expectedActive, options.expectedRollback, paths);
   const requiredServices = ['agent-worker', 'document-parser'];
   if (protectedState.capabilities.get(options.expectedActive).embeddingDeploy) requiredServices.push('embedding-worker');
+  if (protectedState.capabilities.get(options.expectedActive).scansciDeploy) requiredServices.push('scansci-legal');
   const containers = inspectContainers({ all: false });
   for (const service of requiredServices) {
     const container = containers.find((candidate) => candidate.Name === `/openscience-prod-${service}-1`);

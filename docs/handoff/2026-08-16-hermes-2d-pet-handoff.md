@@ -44,6 +44,7 @@
 11. 真实 Semantic Scholar Hermes 任务返回 3 sources；SeaweedFS checksum metadata 生产兼容经 PR #9 修复。77-byte 自著 PDF 完成 HEAD hash、下载、重放 404、72h 到期和真实 Worker GC；GC 后 provenance/locator 保留，取证后 canary 业务行精确清零、审计保留。
 12. Exact CI `33284956868` / job `99186426490` 全绿；最终 release `6893318…`、rollback `c435c4c…`。远端仅 `main`；精确移除无容器引用的旧 dev MinIO server/mc 镜像后，磁盘 36G/148G（25%）、107G available，active+rollback 两个 release，390.7MB bounded build cache 保留，无 broad prune。
 13. 用户验收指出 ScanSci 仅有 disabled adapter 不能算产品完成。Task 10 已重新打开：一次浙江大学 CARSI 登录需持久复用，必要时账号凭据放 root-only Secret，Hermes/Personal Space/RO Hermes/Files-Evidence 全部走统一下载入口；设计见 `docs/specs/2026-08-30-scansci-default-capability-design.md`。
+14. ScanSci plan Task 4 已形成本地候选：SHA legal/auth、networkless Secret init、持久 session、pre-Worker runtime gate、精确有/无服务 rollback 与 active+rollback retention；ADR-012 已记录。未部署，不能替代 ECS/CARSI acceptance。
 
 ## Constraints
 

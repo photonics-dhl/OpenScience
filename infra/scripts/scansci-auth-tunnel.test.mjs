@@ -47,7 +47,7 @@ case " $* " in
     ;;
 esac
 case " $* " in
-  *" --profile scansci-auth stop scansci-auth "*)
+  *" --profile scansci-auth rm -f -s scansci-auth"*)
     if [ "\${FAKE_SSH_STOP_FAIL:-0}" = 1 ]; then exit 9; fi
     ;;
 esac
@@ -172,6 +172,10 @@ test('status is read-only and only explicit start launches the helper and loopba
   assert.match(status.stdout, /^running on http:\/\/127\.0\.0\.1:16080\s*$/);
 
   const log = await readFile(f.log, 'utf8');
+  assert.match(log, /flock -n -E 73 \/run\/lock\/openscience-production-deploy\/lock/u);
+  const secretRefresh = log.indexOf('up -d --force-recreate scansci-secret-init');
+  const helperStart = log.indexOf('--profile scansci-auth up -d scansci-auth');
+  assert.ok(secretRefresh >= 0 && secretRefresh < helperStart, 'runtime Secret material must refresh before auth starts');
   assert.match(log, /docker compose .*--profile scansci-auth up -d scansci-auth/);
   assert.match(log, /-L\n127\.0\.0\.1:16080:127\.0\.0\.1:6080/);
   assert.match(log, new RegExp(`-i\\n${f.bashKey.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}`));
@@ -204,7 +208,8 @@ test('duplicate start is idempotent and stop closes only the recorded tunnel', a
   assert.match(stopped.stdout, /^stopped\s*$/);
   assert.equal(run(f.script, ['status'], f.env, f.bashBin).status, 3);
   const afterStop = await readFile(f.log, 'utf8');
-  assert.match(afterStop, /docker compose .*--profile scansci-auth stop scansci-auth/);
+  assert.match(afterStop, /flock -n -E 73 \/run\/lock\/openscience-production-deploy\/lock/u);
+  assert.match(afterStop, /docker compose .*--profile scansci-auth rm -f -s scansci-auth/);
 });
 
 test('duplicate start re-probes HTTP readiness and compensates when the listener disappeared', async (t) => {
@@ -223,7 +228,7 @@ test('duplicate start re-probes HTTP readiness and compensates when the listener
   assert.equal(duplicate.status, 1, `${duplicate.stdout}\n${duplicate.stderr}`);
   assert.match(duplicate.stderr, /^loopback tunnel readiness failed\s*$/);
   const log = await readFile(f.log, 'utf8');
-  assert.match(log, /--profile scansci-auth stop scansci-auth/);
+  assert.match(log, /--profile scansci-auth rm -f -s scansci-auth/);
 });
 
 test('stop uses the release identity stored at start after active release switches', async (t) => {
@@ -240,7 +245,7 @@ test('stop uses the release identity stored at start after active release switch
   const log = await readFile(f.log, 'utf8');
   assert.equal((log.match(/cat \/opt\/openscience\/\.release-id/g) ?? []).length, 1);
   assert.match(log, new RegExp(`/opt/openscience-releases/${releaseA}.*--profile scansci-auth up -d scansci-auth`));
-  assert.match(log, new RegExp(`/opt/openscience-releases/${releaseA}.*--profile scansci-auth stop scansci-auth`));
+  assert.match(log, new RegExp(`/opt/openscience-releases/${releaseA}.*--profile scansci-auth rm -f -s scansci-auth`));
   assert.doesNotMatch(log, new RegExp(`/opt/openscience-releases/${releaseB}`));
 });
 
@@ -265,7 +270,7 @@ test('remote stop failure retains old release tombstone and retry commits only a
 
   assert.equal(failed.status, 1, `${failed.stdout}\n${failed.stderr}`);
   const failedLog = await readFile(f.log, 'utf8');
-  assert.match(failedLog, /--profile scansci-auth stop scansci-auth/);
+  assert.match(failedLog, /--profile scansci-auth rm -f -s scansci-auth/);
   assert.equal(existsSync(statePath), true, 'failed remote stop lost retry identity');
   const retained = await readFile(statePath, 'utf8');
   assert.match(retained, new RegExp(`${releaseA}\\n/opt/openscience-releases/${releaseA}`));
@@ -280,7 +285,7 @@ test('remote stop failure retains old release tombstone and retry commits only a
   assert.equal(existsSync(statePath), false);
   const log = await readFile(f.log, 'utf8');
   assert.equal((log.match(/cat \/opt\/openscience\/\.release-id/g) ?? []).length, 1);
-  const stopLines = log.split('\n').filter((line) => line.includes('--profile scansci-auth stop scansci-auth'));
+  const stopLines = log.split('\n').filter((line) => line.includes('--profile scansci-auth rm -f -s scansci-auth'));
   assert.equal(stopLines.length, 2);
   assert.ok(stopLines.every((line) => line.includes(`/opt/openscience-releases/${releaseA}`)));
   assert.doesNotMatch(log, new RegExp(`/opt/openscience-releases/${releaseB}`));
@@ -303,7 +308,7 @@ test('legacy stop upgrades six-field state and uses its stored release after act
   assert.equal(existsSync(statePath), false);
   const log = await readFile(f.log, 'utf8');
   assert.equal((log.match(/cat \/opt\/openscience\/\.release-id/g) ?? []).length, 1);
-  assert.match(log, new RegExp(`/opt/openscience-releases/${releaseA}.*--profile scansci-auth stop scansci-auth`));
+  assert.match(log, new RegExp(`/opt/openscience-releases/${releaseA}.*--profile scansci-auth rm -f -s scansci-auth`));
   assert.doesNotMatch(log, new RegExp(`/opt/openscience-releases/${releaseB}`));
 });
 
@@ -363,7 +368,7 @@ test('legacy remote stop failure retains the upgraded old-release tombstone for 
   assert.equal(existsSync(statePath), false);
   const log = await readFile(f.log, 'utf8');
   assert.equal((log.match(/cat \/opt\/openscience\/\.release-id/g) ?? []).length, 1);
-  const stopLines = log.split('\n').filter((line) => line.includes('--profile scansci-auth stop scansci-auth'));
+  const stopLines = log.split('\n').filter((line) => line.includes('--profile scansci-auth rm -f -s scansci-auth'));
   assert.equal(stopLines.length, 2);
   assert.ok(stopLines.every((line) => line.includes(`/opt/openscience-releases/${releaseA}`)));
   assert.doesNotMatch(log, new RegExp(`/opt/openscience-releases/${releaseB}`));
@@ -396,7 +401,7 @@ test('legacy upgrade move failure makes start fail closed and preserves the six-
   assert.match(failed.stderr, /^tunnel state upgrade failed\s*$/);
   assert.equal(await readFile(statePath, 'utf8'), legacyState);
   assert.equal(spawnSync(bash, ['-c', 'kill -0 "$1"', 'check', legacyLines[1]]).status, 0);
-  assert.doesNotMatch(await readFile(f.log, 'utf8'), /--profile scansci-auth stop scansci-auth/);
+  assert.doesNotMatch(await readFile(f.log, 'utf8'), /--profile scansci-auth rm -f -s scansci-auth/);
 
   await startHealthServer(t, 16096);
   const retry = run(f.script, ['start', '16096'], f.env, f.bashBin);
@@ -430,14 +435,14 @@ test('legacy upgrade move failure makes stop fail closed without kill or remote 
   assert.match(failed.stderr, /^tunnel state upgrade failed\s*$/);
   assert.equal(await readFile(statePath, 'utf8'), legacyState);
   assert.equal(spawnSync(bash, ['-c', 'kill -0 "$1"', 'check', legacyLines[1]]).status, 0);
-  assert.doesNotMatch(await readFile(f.log, 'utf8'), /--profile scansci-auth stop scansci-auth/);
+  assert.doesNotMatch(await readFile(f.log, 'utf8'), /--profile scansci-auth rm -f -s scansci-auth/);
 
   const retry = run(f.script, ['stop'], f.env, f.bashBin);
   assert.equal(retry.status, 0, retry.stderr);
   assert.equal(existsSync(statePath), false);
   const stopLines = (await readFile(f.log, 'utf8'))
     .split('\n')
-    .filter((line) => line.includes('--profile scansci-auth stop scansci-auth'));
+    .filter((line) => line.includes('--profile scansci-auth rm -f -s scansci-auth'));
   assert.equal(stopLines.length, 1);
   assert.ok(stopLines[0].includes(`/opt/openscience-releases/${legacyLines[3]}`));
 });
@@ -513,7 +518,7 @@ test('a failed local tunnel compensates by stopping the exact remote auth helper
   assert.match(result.stderr, /^loopback tunnel start failed\s*$/);
   const log = await readFile(f.log, 'utf8');
   assert.match(log, /--profile scansci-auth up -d scansci-auth/);
-  assert.match(log, /--profile scansci-auth stop scansci-auth/);
+  assert.match(log, /--profile scansci-auth rm -f -s scansci-auth/);
 });
 
 test('a live tunnel without loopback HTTP readiness is stopped and compensated', async (t) => {
@@ -525,7 +530,7 @@ test('a live tunnel without loopback HTTP readiness is stopped and compensated',
   assert.equal(result.status, 1, `${result.stdout}\n${result.stderr}`);
   assert.match(result.stderr, /^loopback tunnel readiness failed\s*$/);
   const log = await readFile(f.log, 'utf8');
-  assert.match(log, /--profile scansci-auth stop scansci-auth/);
+  assert.match(log, /--profile scansci-auth rm -f -s scansci-auth/);
   assert.equal(run(f.script, ['status'], f.env, f.bashBin).status, 3);
 });
 
@@ -610,7 +615,7 @@ test('explicit stop closes the remote helper even when the recorded tunnel is st
 
   assert.equal(result.status, 0, result.stderr);
   const log = await readFile(f.log, 'utf8');
-  assert.match(log, /--profile scansci-auth stop scansci-auth/);
+  assert.match(log, /--profile scansci-auth rm -f -s scansci-auth/);
 });
 
 test('auth entrypoint starts the loopback browser stack and stops it after operator login', async (t) => {

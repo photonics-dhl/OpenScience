@@ -93,6 +93,16 @@ transaction_complete_migration() {
   TRANSACTION_PHASE=prepared
 }
 
+transaction_restore_scansci_rollback() {
+  local previous_has_scansci="$1" previous_sha="$2" candidate_sha="$3"
+  [[ "$previous_sha" =~ ^[0-9a-f]{40}$ && "$candidate_sha" =~ ^[0-9a-f]{40}$ ]] || return 64
+  case "$previous_has_scansci" in
+    1) transaction_restore_previous_scansci "$previous_sha" ;;
+    0) transaction_stop_candidate_scansci "$candidate_sha" ;;
+    *) return 64 ;;
+  esac
+}
+
 transaction_commit() {
   # Successful journal removal is the commit point. Catchable signals are
   # deferred across it so an accepted release cannot be flipped back afterward.
@@ -123,6 +133,7 @@ transaction_verify_already_active_release() {
   running_parser_image="$(run_remote "docker inspect --format='{{.Image}}' '$parser_container'")"
   run_remote "/usr/bin/node '$RELEASE_ROOT/infra/scripts/production-deploy-lock.mjs' verify-state --active-sha '$ACTIVE_RELEASE_SHA' --rollback-sha '$RELEASE_SHA' --accepted-worker-image-id '$worker_image' --accepted-parser-image-id '$parser_image' --current-worker-image-id '$worker_image' --current-parser-image-id '$parser_image' --running-worker-image-id '$running_worker_image' --running-parser-image-id '$running_parser_image'"
   verify_release_capability "$REMOTE_ROOT/.release-capabilities/$RELEASE_SHA"
+  verify_scansci_current
   if [ "$EMBEDDING_DEPLOY" -eq 1 ]; then
     compose_embedding_current "ps --status running --services | grep -qx embedding-worker"
     compose_embedding_current "run --rm --no-deps -T -w /opt/openscience agent-worker node scripts/verify-embedding-runtime.mjs"

@@ -47,6 +47,89 @@ const bash = process.platform === 'win32' && existsSync('C:/Program Files/Git/bi
   ? 'C:/Program Files/Git/bin/bash.exe'
   : '/bin/bash';
 
+function composeService(name, nextName) {
+  const start = productionCompose.indexOf(`\n  ${name}:`);
+  assert.ok(start >= 0, `${name} service is missing`);
+  const end = nextName ? productionCompose.indexOf(`\n  ${nextName}:`, start + 1) : productionCompose.indexOf('\nnetworks:', start + 1);
+  assert.ok(end > start, `${name} service boundary is missing`);
+  return productionCompose.slice(start, end);
+}
+
+test('ScanSci production topology exposes only the bounded legal service and stopped loopback auth helper', () => {
+  const legal = composeService('scansci-legal', 'scansci-auth');
+  const auth = composeService('scansci-auth', 'document-parser');
+  const worker = composeService('agent-worker', 'scansci-secret-init');
+  const secretInit = composeService('scansci-secret-init', 'scansci-legal');
+
+  assert.match(legal, /image: openscience-scansci-legal:\$\{XGS_RELEASE_IMAGE_TAG:\?XGS_RELEASE_IMAGE_TAG required\}/u);
+  assert.match(legal, /user: "10001:10001"/u);
+  assert.match(legal, /read_only: true/u);
+  assert.match(legal, /cap_drop:\r?\n\s+- ALL/u);
+  assert.match(legal, /security_opt:\r?\n\s+- no-new-privileges:true/u);
+  assert.match(legal, /mem_limit: 1g/u);
+  assert.match(legal, /cpus: 1/u);
+  assert.match(legal, /pids_limit: 64/u);
+  assert.match(legal, /\/tmp:size=64m,noexec,nosuid,nodev,uid=10001,gid=10001,mode=0700/u);
+  assert.match(legal, /scansci-session:\/session/u);
+  assert.match(legal, /scansci-service-secrets:\/run\/secrets:ro/u);
+  assert.match(legal, /networks:\r?\n\s+- retrieval_net/u);
+  assert.doesNotMatch(legal, /\bports:|data_net|DATABASE|POSTGRES|REDIS|S3_|MINIO|env_file|docker\.sock/iu);
+
+  assert.match(worker, /- retrieval_net/u);
+  assert.match(worker, /scansci-service-secrets:\/run\/secrets:ro/u);
+  assert.equal(worker.match(/^    volumes:/gmu)?.length, 1, 'agent-worker must have one unambiguous volumes mapping');
+  assert.match(worker, /\$\{XGS_RELEASE_ROOT:\?XGS_RELEASE_ROOT required\}:\/opt\/openscience:ro/u);
+  assert.match(worker, /parser-jobs:\/parser-jobs/u);
+  assert.match(auth, /profiles: \["scansci-auth"\]/u);
+  assert.match(auth, /network_mode: host/u);
+  assert.match(auth, /scansci-session:\/session/u);
+  assert.match(auth, /scansci-auth-secrets:\/run\/secrets:ro/u);
+  assert.doesNotMatch(auth, /scansci-service-secrets/u);
+  assert.match(auth, /restart: "no"/u);
+  assert.doesNotMatch(auth, /\bnetworks:|data_net|env_file|docker\.sock/iu);
+  assert.match(readFileSync(new URL('../../apps/scansci-legal/auth-entrypoint.sh', import.meta.url), 'utf8'), /127\.0\.0\.1:6080 127\.0\.0\.1:5900/u);
+
+  assert.match(secretInit, /\/opt\/openscience-secrets\/scansci:\/host-secrets:ro/u);
+  assert.match(secretInit, /install -o 10001 -g 10001 -m 0400 \/host-secrets\/scansci_service_token \/service-secrets\/\.scansci_service_token\.next/u);
+  assert.match(secretInit, /network_mode: none/u);
+  assert.match(secretInit, /read_only: true/u);
+  assert.match(productionCompose, /scansci-session:\r?\n/u);
+  const volumeSection = productionCompose.split('\nvolumes:')[1] ?? '';
+  assert.match(volumeSection, /scansci-service-secrets:\r?\n/u);
+  assert.match(volumeSection, /scansci-auth-secrets:\r?\n/u);
+  assert.doesNotMatch(volumeSection, /scansci-(?:service|auth)-secrets:[\s\S]*type: tmpfs/u);
+});
+
+test('ScanSci deploy dispatches exact rollback identity when the previous release has or lacks the service', () => {
+  const previous = 'a'.repeat(40);
+  const candidate = 'b'.repeat(40);
+  const harness = (hasPrevious) => [
+    'set -euo pipefail',
+    `source '${transactionStatePath.replaceAll('\\', '/')}'`,
+    'transaction_restore_previous_scansci(){ printf "restore:%s\\n" "$1"; }',
+    'transaction_stop_candidate_scansci(){ printf "stop:%s\\n" "$1"; }',
+    `transaction_restore_scansci_rollback '${hasPrevious}' '${previous}' '${candidate}'`,
+  ].join('; ');
+  const restored = spawnSync(bash, ['-c', harness(1)], { encoding: 'utf8' });
+  const stopped = spawnSync(bash, ['-c', harness(0)], { encoding: 'utf8' });
+  assert.equal(restored.status, 0, restored.stderr);
+  assert.equal(stopped.status, 0, stopped.stderr);
+  assert.equal(restored.stdout, `restore:${previous}\n`);
+  assert.equal(stopped.stdout, `stop:${candidate}\n`);
+
+  const scansciBuild = transactionSource.indexOf('build scansci-legal scansci-auth');
+  const workerBuild = transactionSource.indexOf('agent-worker document-parser');
+  const scansciStart = transactionSource.indexOf('up -d --force-recreate --wait --wait-timeout 300 scansci-legal');
+  const workerStart = transactionSource.indexOf('up -d --force-recreate --wait --wait-timeout 300 api web agent-worker');
+  const runtimeVerify = transactionSource.indexOf('verify_scansci_current', scansciStart);
+  const postWorkerVerify = transactionSource.indexOf('verify_scansci_current', workerStart);
+  assert.ok(scansciBuild > 0 && scansciBuild < workerBuild, 'ScanSci images must build before Worker/Parser');
+  assert.ok(scansciStart > 0 && scansciStart < workerStart, 'ScanSci must start before Agent Worker');
+  assert.ok(runtimeVerify > scansciStart && runtimeVerify < workerStart, 'ScanSci runtime must verify before Agent Worker');
+  assert.ok(postWorkerVerify > workerStart, 'ScanSci runtime must be reverified after Agent Worker convergence');
+  assert.match(transactionSource, /docker ps -aq --filter 'label=com\.docker\.compose\.project=openscience-prod' --filter 'label=com\.docker\.compose\.service=scansci-auth'/u);
+});
+
 test('SSH runner does not misclassify a remote permission error as key authentication failure', () => {
   assert.match(sshRun, /\[ \$rc -eq 255 \]/u);
   assert.match(sshRun, /permission denied \\?\([^)]*(?:publickey|password|keyboard-interactive)[^)]*\\?\)/iu);
@@ -86,8 +169,8 @@ test('Tesseract is packaged only in the isolated document parser image', () => {
   assert.match(parserDockerfile, /USER node/);
   assert.match(workerDockerfile, /LABEL org\.openscience\.source=\$XGS_RELEASE_IMAGE_TAG/);
   assert.match(parserDockerfile, /LABEL org\.openscience\.source=\$XGS_RELEASE_IMAGE_TAG/);
-  const parserServices = productionCompose.split('\n  agent-worker:')[1]?.split('\n  embedding-model-init:')[0] ?? '';
-  assert.equal(parserServices.match(/XGS_RELEASE_IMAGE_TAG: \$\{XGS_RELEASE_IMAGE_TAG:\?XGS_RELEASE_IMAGE_TAG required\}/g)?.length, 2);
+  const releaseImages = `${composeService('agent-worker', 'scansci-legal')}\n${composeService('document-parser', 'embedding-model-init')}`;
+  assert.equal(releaseImages.match(/XGS_RELEASE_IMAGE_TAG: \$\{XGS_RELEASE_IMAGE_TAG:\?XGS_RELEASE_IMAGE_TAG required\}/g)?.length, 2);
 });
 
 test('production search runtime is isolated, bounded and source locked', () => {
@@ -203,7 +286,7 @@ test('embedding capability is strict, release-versioned and rollback-safe', () =
   assert.match(source, /read_prod_value BGE_M3_DEPLOY/);
   assert.match(source, /case "\$BGE_M3_DEPLOY_VALUE" in[\s\S]*true\)[\s\S]*false\)[\s\S]*\*\)/);
   assert.doesNotMatch(source, /BGE_M3_DEPLOY=\(true\|1\)/);
-  assert.match(source, /schema=2/);
+  assert.match(source, /schema=3/);
   for (const key of [
     'embedding_deploy',
     'bge_m3_enabled',

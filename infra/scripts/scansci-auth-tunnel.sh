@@ -224,7 +224,13 @@ load_connection() {
 
 remote_compose_command() {
   local action="$1"
-  printf 'cd "%s" && XGS_RELEASE_ROOT="%s" XGS_RELEASE_IMAGE_TAG="%s" docker compose --env-file /opt/openscience/.env.prod -f "%s" --profile scansci-auth %s scansci-auth' \
+  if [ "$action" = "up -d" ]; then
+    printf "flock -n -E 73 /run/lock/openscience-production-deploy/lock /bin/bash -c 'cd \"%s\" && XGS_RELEASE_ROOT=\"%s\" XGS_RELEASE_IMAGE_TAG=\"%s\" docker compose --env-file /opt/openscience/.env.prod -f \"%s\" up -d --force-recreate scansci-secret-init && XGS_RELEASE_ROOT=\"%s\" XGS_RELEASE_IMAGE_TAG=\"%s\" docker compose --env-file /opt/openscience/.env.prod -f \"%s\" --profile scansci-auth up -d scansci-auth'" \
+      "$RELEASE_ROOT" "$RELEASE_ROOT" "$RELEASE_SHA" "$RELEASE_COMPOSE" \
+      "$RELEASE_ROOT" "$RELEASE_SHA" "$RELEASE_COMPOSE"
+    return
+  fi
+  printf "flock -n -E 73 /run/lock/openscience-production-deploy/lock /bin/bash -c 'cd \"%s\" && XGS_RELEASE_ROOT=\"%s\" XGS_RELEASE_IMAGE_TAG=\"%s\" docker compose --env-file /opt/openscience/.env.prod -f \"%s\" --profile scansci-auth %s scansci-auth'" \
     "$RELEASE_ROOT" "$RELEASE_ROOT" "$RELEASE_SHA" "$RELEASE_COMPOSE" "$action"
 }
 
@@ -237,7 +243,7 @@ resolve_release_identity() {
 }
 
 stop_remote_helper() {
-  ssh "${SSH_ARGS[@]}" "$SSH_TARGET" "$(remote_compose_command 'stop')" >/dev/null 2>&1
+  ssh "${SSH_ARGS[@]}" "$SSH_TARGET" "$(remote_compose_command 'rm -f -s')" >/dev/null 2>&1
 }
 
 commit_remote_stop() {

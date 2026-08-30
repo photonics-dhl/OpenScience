@@ -10,6 +10,16 @@ RUN /opt/scansci-venv/bin/python -m pip install --require-hashes -r build-requir
 
 FROM python:3.12-slim@sha256:7a8b475003c4fe15a2cd4e55e5cfc2f3560bdc9333d624f24cdd6d4340fd7a17
 
+ARG XGS_RELEASE_IMAGE_TAG
+ARG SCANSCI_ARCHIVE_SHA256
+ARG SCANSCI_REQUIREMENTS_SHA256
+ARG SCANSCI_BUILD_REQUIREMENTS_SHA256
+LABEL org.openscience.source=$XGS_RELEASE_IMAGE_TAG \
+    org.openscience.scansci.role=legal \
+    org.openscience.scansci.archive-sha256=$SCANSCI_ARCHIVE_SHA256 \
+    org.openscience.scansci.requirements-sha256=$SCANSCI_REQUIREMENTS_SHA256 \
+    org.openscience.scansci.build-requirements-sha256=$SCANSCI_BUILD_REQUIREMENTS_SHA256
+
 ENV PATH=/opt/scansci-venv/bin:$PATH \
     PYTHONPATH=/opt/scansci/src \
     PYTHONNOUSERSITE=1 \
