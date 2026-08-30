@@ -828,9 +828,9 @@ export async function submitExtractTask(roId: string, manuscriptText: string, id
 }
 
 /** 轮询任务进度（§18.3 可恢复）。 */
-export async function getAgentTask(roId: string, taskId: string): Promise<{ task: AgentTaskView }> {
+export async function getAgentTask(roId: string, taskId: string, signal?: AbortSignal): Promise<{ task: AgentTaskView }> {
   void roId;
-  return request(`/api/agent/tasks/${taskId}`);
+  return request(`/api/agent/tasks/${taskId}`, { signal });
 }
 
 export async function getResearchIdentity(): Promise<ResearchIdentityProfile> {

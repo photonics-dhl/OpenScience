@@ -95,6 +95,7 @@ export function LiteratureAcquisition({ initialTask = null, recoveryComplete = t
   const [query, setQuery] = React.useState('');
   const [task, setTask] = React.useState<LiteratureTask | null>(initialTask);
   const [error, setError] = React.useState('');
+  const [reconnecting, setReconnecting] = React.useState(false);
   const [downloading, setDownloading] = React.useState<string | null>(null);
   const submitting = React.useRef(false);
 
@@ -109,12 +110,32 @@ export function LiteratureAcquisition({ initialTask = null, recoveryComplete = t
   React.useEffect(() => {
     if (!task || !active) return undefined;
     let disposed = false;
-    const timer = window.setTimeout(() => {
-      void getAgentTask('', task.id)
-        .then(({ task: next }) => { if (!disposed) setTask(next); })
-        .catch((cause) => { if (!disposed) setError(cause instanceof Error ? cause.message : t('error')); });
-    }, 1200);
-    return () => { disposed = true; window.clearTimeout(timer); };
+    let transientFailures = 0;
+    let timer: number | undefined;
+    let controller: AbortController | undefined;
+    const schedule = (delay: number) => {
+      timer = window.setTimeout(() => {
+        controller = new AbortController();
+        void getAgentTask('', task.id, controller.signal)
+          .then(({ task: next }) => {
+            if (disposed) return;
+            transientFailures = 0;
+            setReconnecting(false);
+            setTask(next);
+            if (next.status === 'pending' || next.status === 'running') schedule(1200);
+          })
+          .catch((cause) => {
+            if (disposed || (cause instanceof DOMException && cause.name === 'AbortError')) return;
+            const status = cause instanceof ApiClientError ? cause.status : 0;
+            if ([401, 403, 404].includes(status)) return;
+            transientFailures += 1;
+            setReconnecting(true);
+            schedule([1200, 2400, 4800, 9600, 15000][Math.min(transientFailures - 1, 4)]!);
+          });
+      }, delay);
+    };
+    schedule(1200);
+    return () => { disposed = true; if (timer !== undefined) window.clearTimeout(timer); controller?.abort(); };
   }, [active, t, task]);
 
   async function submit(input: { query: string; identifier?: string }) {
@@ -197,6 +218,7 @@ export function LiteratureAcquisition({ initialTask = null, recoveryComplete = t
 
       <div aria-atomic="true" aria-live="polite" className="mt-4 min-h-6 text-sm text-os-muted-paper" data-literature-state={description?.state ?? 'idle'}>
         {description ? t(description.messageKey) : null}
+        {reconnecting ? <span className="ml-2">{t('reconnecting')}</span> : null}
         {error ? <span className="text-state-danger">{error}</span> : null}
       </div>
 

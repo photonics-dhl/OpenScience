@@ -226,3 +226,38 @@ test('a server-blocked material remains visible without a retry action', async (
   await expect(page.getByText(/KB · Blocked/)).toBeVisible();
   await expect(page.getByRole('button', { name: /^retry$/i })).toHaveCount(0);
 });
+
+test('personal literature acquisition restores and advances one durable task without provider controls', async ({ page }) => {
+  let submissions = 0;
+  let polls = 0;
+  let retries = 0;
+  await mockAuthenticatedUser(page);
+  await page.route('**/api/csrf-token', (route) => route.fulfill({ contentType: 'application/json', body: JSON.stringify({ csrfToken: 'csrf' }) }));
+  await page.route('**/api/agent/tasks?actionable=false&kind=source.retrieve', (route) => route.fulfill({ contentType: 'application/json', body: JSON.stringify({ tasks: [] }) }));
+  await page.route('**/api/literature/acquisitions', async (route) => {
+    submissions += 1;
+    expect(await route.request().postDataJSON()).toEqual({ query: 'Ultrafast response', target: { kind: 'personal' } });
+    await route.fulfill({ status: 202, contentType: 'application/json', body: JSON.stringify({ task: { id: 'literature-1', sessionId: 'session-1', kind: 'source.retrieve', status: 'pending', progress: 0, retryCount: 0, result: null, error: null, createdAt: '2026-08-30T00:00:00.000Z', updatedAt: '2026-08-30T00:00:00.000Z' } }) });
+  });
+  await page.route('**/api/agent/tasks/literature-1', async (route) => {
+    polls += 1;
+    if (polls === 1) return route.fulfill({ status: 503, contentType: 'application/json', body: JSON.stringify({ error: { code: 'TEMPORARY', message: 'temporary' } }) });
+    return route.fulfill({ contentType: 'application/json', body: JSON.stringify({ task: { id: 'literature-1', sessionId: 'session-1', kind: 'source.retrieve', status: 'succeeded', progress: 100, retryCount: 0, result: { sources: [{ id: 'source-1', title: 'Ultrafast response', sourceUrl: 'https://example.test/source', identifiers: { doi: '10.1038/nature12373' }, temporaryDocumentId: 'document-1', expiresAt: '2026-09-01T00:00:00.000Z' }] }, error: null, createdAt: '2026-08-30T00:00:00.000Z', updatedAt: '2026-08-30T00:00:00.000Z' } }) });
+  });
+  await page.route('**/api/temporary-documents/document-1/download-link', (route) => route.fulfill({ contentType: 'application/json', body: JSON.stringify({ downloadUrl: '/api/temporary-documents/document-1/download/access-1', expiresAt: '2026-09-01T00:00:00.000Z' }) }));
+  await page.goto(`${baseUrl}/dashboard`);
+  const input = page.getByLabel(/title, doi, or arxiv id/i);
+  await input.focus();
+  await page.keyboard.type('Ultrafast response');
+  await page.keyboard.press('Enter');
+  await expect.poll(() => submissions).toBe(1);
+  await expect(page.getByText(/reconnecting to the task/i)).toBeVisible({ timeout: 4000 });
+  await expect(page.getByRole('button', { name: /get full text/i })).toBeVisible({ timeout: 6000 });
+  const actionBox = await page.getByRole('button', { name: /get full text/i }).boundingBox();
+  expect(actionBox?.width).toBeGreaterThanOrEqual(44);
+  expect(actionBox?.height).toBeGreaterThanOrEqual(44);
+  await page.getByRole('button', { name: /download source/i }).press('Enter');
+  await expect(page).toHaveURL(/\/api\/temporary-documents\/document-1\/download\/access-1/);
+  expect(retries).toBe(0);
+  expect(await page.locator('text=/provider|account|CARSI|ScanSci/i').count()).toBe(0);
+});

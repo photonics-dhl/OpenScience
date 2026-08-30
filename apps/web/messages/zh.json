@@ -620,6 +620,7 @@
       "noResults": "尚未找到匹配的元数据。",
       "error": "无法完成这次来源请求，请重试。"
       ,"pendingIntent": "请先完成或恢复当前来源请求，再开始新的请求。"
+      ,"reconnecting": "正在重新连接任务…"
     },
     "hermes": {
       "title": "Hermes 任务",
