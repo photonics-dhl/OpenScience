@@ -16,7 +16,7 @@ const researchObjectTarget = z.object({
 }).strict();
 
 /** The only browser contract for source retrieval: strategy and credentials are server-owned. */
-export const literatureAcquisitionBodySchema = z.object({
+const literatureAcquisitionBodySchema = z.object({
   query: z.string().trim().min(1).max(500),
   identifier: z.string().trim().min(1).max(300).optional(),
   target: z.discriminatedUnion('kind', [personalTarget, researchObjectTarget]),

@@ -109,6 +109,32 @@ describe('ScanSci legal-only adapter', () => {
     expect(cancelled).toBe(true);
   });
 
+  it('maps a failed PDF stream to a stable redacted provider error', async () => {
+    const stream = new ReadableStream<Uint8Array>({
+      start(controller) {
+        controller.enqueue(new TextEncoder().encode('%PDF-safe'));
+        controller.error(new Error('cookie=secret http://scansci-legal/private'));
+      },
+    });
+    const adapter = createScanSciAdapter({
+      enabled: true,
+      baseUrl: 'http://scansci-legal:8080',
+      serviceToken: 'service-token',
+      fetchImpl: async () => new Response(stream, {
+        status: 200,
+        headers: {
+          'content-type': 'application/pdf',
+          'x-scansci-route': 'open_access',
+          'x-scansci-public-url': 'https://publisher.example/paper',
+        },
+      }),
+    });
+
+    await expect(adapter.acquire({ identifier: '10.1000/example', subjectId: 'a'.repeat(64) })).resolves.toEqual({
+      status: 'unavailable', provider: 'scansci', code: 'upstream_error', retryable: true,
+    });
+  });
+
   it('blocks a grey-source route even if the service returns a PDF', async () => {
     const adapter = createScanSciAdapter({
       enabled: true,

@@ -1,7 +1,7 @@
 import { isIP } from 'node:net';
 import type { ExternalSourceProvider, SourceAccessEvidence } from '@openscience/domain';
 
-export type RetrievalUnavailableCode =
+type RetrievalUnavailableCode =
   | 'disabled'
   | 'auth_required'
   | 'not_found'

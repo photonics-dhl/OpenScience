@@ -25,15 +25,39 @@ class ServiceTokenFileTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             secret = Path(directory) / "scansci_service_token"
             secret.write_text("file-token-never-log\n", encoding="utf-8")
+            if os.name != "nt":
+                secret.chmod(0o400)
             self.assertEqual(load_service_token({"SCANSCI_SERVICE_TOKEN_FILE": str(secret)}), "file-token-never-log")
+
+    def test_rejects_inline_service_token_even_without_a_file(self):
+        with self.assertRaisesRegex(ValueError, "service token"):
+            load_service_token({"SCANSCI_SERVICE_TOKEN": "inline-token"})
+
+    @unittest.skipIf(os.name == "nt", "POSIX owner/mode contract")
+    def test_rejects_service_token_with_unsafe_metadata(self):
+        with tempfile.TemporaryDirectory() as directory:
+            secret = Path(directory) / "scansci_service_token"
+            secret.write_text("file-token\n", encoding="utf-8")
+            secret.chmod(0o600)
+            with self.assertRaisesRegex(ValueError, "service token"):
+                load_service_token({"SCANSCI_SERVICE_TOKEN_FILE": str(secret)})
+
+            secret.chmod(0o400)
+            os.link(secret, Path(directory) / "second-link")
+            with self.assertRaisesRegex(ValueError, "service token"):
+                load_service_token({"SCANSCI_SERVICE_TOKEN_FILE": str(secret)})
 
     def test_rejects_empty_or_ambiguous_service_token_configuration(self):
         with tempfile.TemporaryDirectory() as directory:
             secret = Path(directory) / "scansci_service_token"
             secret.write_text("\n", encoding="utf-8")
+            if os.name != "nt":
+                secret.chmod(0o400)
             with self.assertRaisesRegex(ValueError, "service token"):
                 load_service_token({"SCANSCI_SERVICE_TOKEN_FILE": str(secret)})
             secret.write_text("file-token\n", encoding="utf-8")
+            if os.name != "nt":
+                secret.chmod(0o400)
             with self.assertRaisesRegex(ValueError, "service token"):
                 load_service_token({"SCANSCI_SERVICE_TOKEN_FILE": str(secret), "SCANSCI_SERVICE_TOKEN": "env-token"})
 

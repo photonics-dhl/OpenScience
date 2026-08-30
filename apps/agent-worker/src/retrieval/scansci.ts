@@ -109,15 +109,20 @@ export function createScanSciAdapter(config: ScanSciConfig = {}) {
       const reader = response.body.getReader();
       const chunks: Buffer[] = [];
       let total = 0;
-      while (true) {
-        const chunk = await reader.read();
-        if (chunk.done) break;
-        total += chunk.value.byteLength;
-        if (total > maximumBytes) {
-          await reader.cancel().catch(() => undefined);
-          return { status: 'blocked', provider: PROVIDER, code: 'limit_exceeded', retryable: false };
+      try {
+        while (true) {
+          const chunk = await reader.read();
+          if (chunk.done) break;
+          total += chunk.value.byteLength;
+          if (total > maximumBytes) {
+            await reader.cancel().catch(() => undefined);
+            return { status: 'blocked', provider: PROVIDER, code: 'limit_exceeded', retryable: false };
+          }
+          chunks.push(Buffer.from(chunk.value));
         }
-        chunks.push(Buffer.from(chunk.value));
+      } catch {
+        await reader.cancel().catch(() => undefined);
+        return { status: 'unavailable', provider: PROVIDER, code: 'upstream_error', retryable: true };
       }
       const bytes = Buffer.concat(chunks, total);
       if (!bytes.length || !bytes.subarray(0, 5).equals(Buffer.from('%PDF-'))) {

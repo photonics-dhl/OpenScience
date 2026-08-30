@@ -3,6 +3,7 @@ from __future__ import annotations
 import os
 from pathlib import Path
 import json
+import socket
 import subprocess
 import sys
 import tempfile
@@ -13,6 +14,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
 from scansci_legal.policy import LegalDownloadRequest
 from scansci_legal.upstream import AcquisitionError, ScanSciAcquisitionClient, _sanitized_environment
+from scansci_legal import upstream_worker
 
 
 REQUEST = LegalDownloadRequest("10.1038/nature12373", "legal_only", False, False, True, "a" * 64)
@@ -145,6 +147,55 @@ print(json.dumps({'success': True, 'file': str(paper), 'source': 'CARSI', 'url':
         with self.assertRaises(AcquisitionError) as raised:
             self.client([sys.executable, str(script)]).acquire(REQUEST)
         self.assertEqual(raised.exception.code, "invalid_pdf")
+
+
+class UpstreamNetworkBoundaryTest(unittest.TestCase):
+    def guarded_resolve(self, records, port=443):
+        guard = getattr(upstream_worker, "_guarded_getaddrinfo", None)
+        if guard is None:
+            self.fail("upstream DNS/redirect guard is missing")
+        return guard(
+            "publisher.example",
+            port,
+            0,
+            socket.SOCK_STREAM,
+            0,
+            0,
+            resolver=lambda *_args, **_kwargs: records,
+        )
+
+    def test_allows_only_public_addresses_for_https_connections(self):
+        public = [(socket.AF_INET, socket.SOCK_STREAM, 6, "", ("93.184.216.34", 443))]
+        self.assertEqual(self.guarded_resolve(public), public)
+
+        for address in ("127.0.0.1", "10.0.0.1", "169.254.169.254", "192.0.2.1", "::1", "fc00::1"):
+            family = socket.AF_INET6 if ":" in address else socket.AF_INET
+            record = [(family, socket.SOCK_STREAM, 6, "", (address, 443))]
+            with self.subTest(address=address), self.assertRaises(OSError):
+                self.guarded_resolve(record)
+
+    def test_rejects_dns_answers_mixed_with_private_addresses_and_non_https_ports(self):
+        mixed = [
+            (socket.AF_INET, socket.SOCK_STREAM, 6, "", ("93.184.216.34", 443)),
+            (socket.AF_INET, socket.SOCK_STREAM, 6, "", ("169.254.169.254", 443)),
+        ]
+        with self.assertRaises(OSError):
+            self.guarded_resolve(mixed)
+        with self.assertRaises(OSError):
+            self.guarded_resolve(mixed[:1], port=80)
+
+    def test_rejects_non_https_and_credentialed_redirect_urls_before_send(self):
+        guard = getattr(upstream_worker, "_require_public_https_url", None)
+        if guard is None:
+            self.fail("upstream redirect guard is missing")
+        self.assertEqual(guard("https://publisher.example/paper"), "https://publisher.example/paper")
+        for value in (
+            "http://publisher.example:443/paper",
+            "https://user:password@publisher.example/paper",
+            "https://localhost/paper",
+        ):
+            with self.subTest(value=value), self.assertRaises(OSError):
+                guard(value)
 
 
 if __name__ == "__main__":

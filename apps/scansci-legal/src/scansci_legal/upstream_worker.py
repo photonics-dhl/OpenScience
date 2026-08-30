@@ -4,11 +4,87 @@ from __future__ import annotations
 
 from contextlib import redirect_stderr, redirect_stdout
 import io
+import ipaddress
 import json
 import os
 from pathlib import Path
+import socket
 import sys
 from typing import Any
+from urllib.parse import urlsplit
+
+
+def _require_public_https_url(value: str) -> str:
+    try:
+        parsed = urlsplit(value)
+    except ValueError as error:
+        raise OSError("upstream URL is forbidden") from error
+    if parsed.scheme != "https" or not parsed.hostname or parsed.username is not None or parsed.password is not None:
+        raise OSError("upstream URL is forbidden")
+    hostname = parsed.hostname.rstrip(".").lower()
+    if hostname == "localhost" or hostname.endswith(".localhost") or hostname.endswith(".local"):
+        raise OSError("upstream URL is forbidden")
+    try:
+        if not ipaddress.ip_address(hostname).is_global:
+            raise OSError("upstream URL is forbidden")
+    except ValueError:
+        if "." not in hostname or any(not part or len(part) > 63 for part in hostname.split(".")):
+            raise OSError("upstream URL is forbidden")
+    return value
+
+
+def _guarded_getaddrinfo(
+    host: object,
+    port: object,
+    family: int = 0,
+    type: int = 0,
+    proto: int = 0,
+    flags: int = 0,
+    *,
+    resolver=socket.getaddrinfo,
+):
+    if port not in (None, 0, 443, "https"):
+        raise OSError("upstream port is forbidden")
+    records = resolver(host, port, family, type, proto, flags)
+    if not records:
+        raise OSError("upstream DNS result is empty")
+    for record in records:
+        try:
+            address = ipaddress.ip_address(record[4][0].split("%", 1)[0])
+        except (IndexError, TypeError, ValueError) as error:
+            raise OSError("upstream DNS result is invalid") from error
+        if not address.is_global:
+            raise OSError("upstream DNS result is forbidden")
+    return records
+
+
+def _install_network_guard() -> None:
+    original_getaddrinfo = socket.getaddrinfo
+    if getattr(original_getaddrinfo, "_scansci_legal_guard", False):
+        return
+
+    def guarded_getaddrinfo(host, port, family=0, type=0, proto=0, flags=0):
+        return _guarded_getaddrinfo(
+            host, port, family, type, proto, flags, resolver=original_getaddrinfo,
+        )
+
+    guarded_getaddrinfo._scansci_legal_guard = True  # type: ignore[attr-defined]
+    socket.getaddrinfo = guarded_getaddrinfo
+
+    try:
+        import requests
+    except ImportError as error:
+        raise RuntimeError("requests runtime is unavailable") from error
+    original_send = requests.sessions.Session.send
+    if getattr(original_send, "_scansci_legal_guard", False):
+        return
+
+    def guarded_send(session, request, **kwargs):
+        _require_public_https_url(request.url)
+        return original_send(session, request, **kwargs)
+
+    guarded_send._scansci_legal_guard = True  # type: ignore[attr-defined]
+    requests.sessions.Session.send = guarded_send
 
 
 class _BoundedDiscard(io.TextIOBase):
@@ -22,6 +98,7 @@ class _BoundedDiscard(io.TextIOBase):
 
 def main() -> None:
     try:
+        _install_network_guard()
         request = json.load(sys.stdin)
         output_dir = Path(request["output_dir"]).resolve()
         if not output_dir.is_dir():

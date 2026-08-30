@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import os
 from pathlib import Path
+import stat
 import time
 from typing import Mapping
 
@@ -13,13 +14,40 @@ from .upstream import ScanSciAcquisitionClient
 
 
 def load_service_token(environment: Mapping[str, str] = os.environ) -> str:
-    """Load the internal token from exactly one configured source."""
-    inline = environment.get("SCANSCI_SERVICE_TOKEN", "")
+    """Load the internal token once from a private, pinned file descriptor."""
+    if "SCANSCI_SERVICE_TOKEN" in environment:
+        raise ValueError("inline service token is forbidden")
     token_file = environment.get("SCANSCI_SERVICE_TOKEN_FILE", "")
-    if bool(inline) == bool(token_file):
-        raise ValueError("exactly one service token source is required")
-    token = inline if inline else Path(token_file).read_text(encoding="utf-8").strip()
-    if not token or "\n" in token or "\r" in token:
+    if not token_file:
+        raise ValueError("service token file is required")
+    descriptor: int | None = None
+    try:
+        descriptor = os.open(token_file, os.O_RDONLY | getattr(os, "O_BINARY", 0) | getattr(os, "O_NOFOLLOW", 0))
+        opened = os.fstat(descriptor)
+        if not stat.S_ISREG(opened.st_mode) or opened.st_nlink != 1 or opened.st_size < 1 or opened.st_size > 4097:
+            raise ValueError("service token file is unsafe")
+        if os.name != "nt" and (
+            opened.st_uid != os.geteuid()
+            or opened.st_gid != os.getegid()
+            or stat.S_IMODE(opened.st_mode) != 0o400
+        ):
+            raise ValueError("service token file is unsafe")
+        with os.fdopen(descriptor, "rb", closefd=False) as source:
+            raw = source.read(opened.st_size + 1)
+        current = os.stat(token_file, follow_symlinks=False)
+        if (opened.st_dev, opened.st_ino) != (current.st_dev, current.st_ino):
+            raise ValueError("service token file changed during read")
+    except (OSError, ValueError) as error:
+        raise ValueError("service token file is unsafe") from error
+    finally:
+        if descriptor is not None:
+            os.close(descriptor)
+    try:
+        decoded = raw.decode("utf-8")
+    except UnicodeDecodeError as error:
+        raise ValueError("service token is invalid") from error
+    token = decoded.removesuffix("\r\n") if decoded.endswith("\r\n") else decoded.removesuffix("\n")
+    if not token or token.strip() != token or any(character in token for character in "\0\r\n"):
         raise ValueError("service token is invalid")
     return token
 
