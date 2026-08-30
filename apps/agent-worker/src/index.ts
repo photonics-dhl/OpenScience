@@ -40,6 +40,11 @@ import {
 import { createTextExtractor, type TextStageAdapter } from './parsers/text-extractor';
 import type { ParserInput } from './parsers/types';
 import { canonicalParserMediaType } from './parser-media-type';
+import { createSemanticScholarAdapter } from './retrieval/semantic-scholar';
+import { createTavilyAdapter } from './retrieval/tavily';
+import { createScanSciAdapter } from './retrieval/scansci';
+import { createSourceRetrieveHandler } from './retrieval/handler';
+import { collectExpiredTemporaryDocuments } from './retrieval/garbage-collector';
 
 const BGE_M3_REVISION = '5617a9f61b028005a4858fdac845db406aefb181';
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
@@ -194,6 +199,7 @@ export function createHandlers(
     searchIndexer?: SearchIndexer;
     parserCascade?: ParserCascadeRunner;
     externalProcessingPolicy?: ExternalProcessingPolicy;
+    sourceRetrieveHandler?: TaskHandler;
   } = {},
 ): Record<string, TaskHandler> {
   return {
@@ -285,6 +291,9 @@ export function createHandlers(
     ...(options.searchIndexer === undefined ? {} : {
       'search.index': async (_deps: WorkerDeps, task) =>
         options.searchIndexer!.index(await authorizeSearchIndexJob(_deps, task)),
+    }),
+    ...(options.sourceRetrieveHandler === undefined ? {} : {
+      'source.retrieve': options.sourceRetrieveHandler,
     }),
   };
 }
@@ -394,9 +403,23 @@ async function main(): Promise<void> {
     parserCascade,
     externalProcessingPolicy,
     searchIndexer: buildSearchIndexerFromEnv(process.env),
+    sourceRetrieveHandler: buildSourceRetrieveHandlerFromEnv(process.env),
   });
   const pollOnce = await createPollOnce(handlers);
   await recoverProcessingQueue(deps);
+  let cleanupRunning = false;
+  const cleanupTimer = setInterval(() => {
+    if (cleanupRunning) return;
+    cleanupRunning = true;
+    void collectExpiredTemporaryDocuments({ prisma, storage }, { workerId: `agent-worker-${process.pid}` })
+      .then((result) => {
+        if (result.claimed || result.failed) console.log('temporary document cleanup', result);
+      })
+      .catch((error) => console.error('temporary document cleanup error', error))
+      .finally(() => { cleanupRunning = false; });
+  }, 60_000);
+  cleanupTimer.unref();
+  await collectExpiredTemporaryDocuments({ prisma, storage }, { workerId: `agent-worker-${process.pid}` });
   console.log('agent-worker 启动（P1D-2/3）');
   while (true) {
     try {
@@ -467,6 +490,34 @@ export function buildGateway(
     killSwitch,
     externalProcessingPolicy,
     ocrLimits,
+  });
+}
+
+export function buildSourceRetrieveHandlerFromEnv(env: NodeJS.ProcessEnv = process.env): TaskHandler {
+  const queryHmacSecret = env.RETRIEVAL_QUERY_HMAC_SECRET ?? '';
+  if (Buffer.byteLength(queryHmacSecret, 'utf8') < 32) {
+    throw new Error('RETRIEVAL_QUERY_HMAC_SECRET must be at least 32 bytes');
+  }
+  const scansciEnabled = env.SCANSCI_ENABLED === 'true';
+  if (env.SCANSCI_ENABLED && env.SCANSCI_ENABLED !== 'true' && env.SCANSCI_ENABLED !== 'false') {
+    throw new Error('SCANSCI_ENABLED must be true or false');
+  }
+  if (env.TAVILY_ENABLED && env.TAVILY_ENABLED !== 'true' && env.TAVILY_ENABLED !== 'false') {
+    throw new Error('TAVILY_ENABLED must be true or false');
+  }
+  const scansciBaseUrl = env.SCANSCI_BASE_URL ?? 'http://scansci-legal:8080';
+  if (env.NODE_ENV === 'production' && scansciEnabled && scansciBaseUrl !== 'http://scansci-legal:8080') {
+    throw new Error('SCANSCI_BASE_URL must use the isolated internal legal-only service in production');
+  }
+  return createSourceRetrieveHandler({
+    queryHmacSecret,
+    semanticScholar: createSemanticScholarAdapter({ apiKey: env.SEMANTIC_SCHOLAR_API_KEY }),
+    tavily: createTavilyAdapter({ apiKey: env.TAVILY_API_KEY, enabled: env.TAVILY_ENABLED !== 'false' }),
+    scansci: createScanSciAdapter({
+      enabled: scansciEnabled,
+      baseUrl: scansciBaseUrl,
+      serviceToken: env.SCANSCI_SERVICE_TOKEN,
+    }),
   });
 }
 

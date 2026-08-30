@@ -30,6 +30,7 @@ import { registerReadingPreferenceRoutes } from './routes/reading-preferences';
 import { registerClaimEvidenceRoutes } from './routes/claim-evidence';
 import { registerAdminEditorialRoutes } from './routes/admin-editorial';
 import { registerSandboxJobsRoutes } from './routes/sandbox-jobs';
+import { registerTemporaryDocumentRoutes } from './routes/temporary-documents';
 import { registerRateLimit } from './security/rate-limit';
 import { registerSecurity, type SecurityOptions } from './security/security';
 
@@ -49,6 +50,8 @@ export interface BuildAppOptions extends AuthRouteDeps {
   storage?: StorageAdapter;
   /** P1B-6：公开 ID 前缀（PUBLIC_ID_PREFIX env，§24）。缺省 'OSR'。 */
   publicIdPrefix?: string;
+  downloadSigningSecret?: string;
+  downloadSigningKeyId?: string;
 }
 
 export async function buildApp(opts: BuildAppOptions): Promise<FastifyInstance> {
@@ -119,6 +122,14 @@ export async function buildApp(opts: BuildAppOptions): Promise<FastifyInstance> 
     await app.register(async (instance) => registerReviewRoutes(instance, { ...opts, storage }), {});
     await app.register(async (instance) => registerPublicationRoutes(instance, { ...opts, storage }), {});
     await app.register(async (instance) => registerClaimEvidenceRoutes(instance, { ...opts, storage }), {});
+    if (opts.downloadSigningSecret && opts.downloadSigningKeyId) {
+      await app.register(async (instance) => registerTemporaryDocumentRoutes(instance, {
+        ...opts,
+        storage,
+        downloadSigningSecret: opts.downloadSigningSecret!,
+        downloadSigningKeyId: opts.downloadSigningKeyId!,
+      }), {});
+    }
   }
   return app;
 }

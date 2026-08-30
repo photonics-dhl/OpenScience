@@ -31,6 +31,8 @@ export interface ApiEnv {
   };
   /** P1B-6：公开 ID 前缀（§6.1 OSR-YYYY-NNNNNN；§24 待确认项，配置而非常量）。 */
   publicIdPrefix: string;
+  downloadSigningSecret: string;
+  downloadSigningKeyId: string;
   /** P1D-1：AI Gateway（§9.3 + §24 待确认：MiniMax-M3 及回退模型配置，先占位不写死）。 */
   ai: {
     enabled: boolean;
@@ -56,6 +58,15 @@ export function loadApiEnv(env: NodeJS.ProcessEnv = process.env): ApiEnv {
 
   const cookieSecret = env.COOKIE_SECRET ?? (nodeEnv === 'production' ? '' : 'openscience-dev-cookie-secret');
   if (!cookieSecret) throw new Error('COOKIE_SECRET is required when NODE_ENV=production');
+  const downloadSigningSecret = env.TEMP_DOCUMENT_SIGNING_SECRET
+    ?? (nodeEnv === 'production' ? '' : 'openscience-dev-temporary-document-signing-secret');
+  if (Buffer.byteLength(downloadSigningSecret, 'utf8') < 32) {
+    throw new Error('TEMP_DOCUMENT_SIGNING_SECRET must be at least 32 bytes');
+  }
+  const downloadSigningKeyId = env.TEMP_DOCUMENT_SIGNING_KEY_ID ?? 'download-v1';
+  if (!/^[a-zA-Z0-9_-]{1,40}$/.test(downloadSigningKeyId)) {
+    throw new Error('TEMP_DOCUMENT_SIGNING_KEY_ID is invalid');
+  }
 
   const port = Number(env.PORT ?? '3001');
   if (Number.isNaN(port)) throw new Error(`PORT must be a number, got "${env.PORT}"`);
@@ -137,6 +148,8 @@ export function loadApiEnv(env: NodeJS.ProcessEnv = process.env): ApiEnv {
     smtpPass,
     storage,
     publicIdPrefix,
+    downloadSigningSecret,
+    downloadSigningKeyId,
     ai,
   };
 }

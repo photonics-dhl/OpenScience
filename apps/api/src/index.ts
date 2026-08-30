@@ -41,6 +41,8 @@ async function main(): Promise<void> {
       helmet: true,
     },
     publicIdPrefix: env.publicIdPrefix,
+    downloadSigningSecret: env.downloadSigningSecret,
+    downloadSigningKeyId: env.downloadSigningKeyId,
   });
   // 生产容器绑 0.0.0.0（docker 发布端口连容器 eth0；compose 已限制宿主 127.0.0.1:3001，外部不可达）；
   // dev 绑 127.0.0.1（本机直连）。

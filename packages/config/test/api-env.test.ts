@@ -3,6 +3,7 @@ import { loadApiEnv } from '../src/api-env';
 
 describe('loadApiEnv', () => {
   const PROD_SMTP = { SMTP_HOST: 'smtp.qq.com', SMTP_PORT: '465', SMTP_USER: 'a@qq.com', SMTP_PASS: 'code' };
+  const TEMP_DOCUMENT_SIGNING_SECRET = 'production-temporary-document-signing-secret';
 
   it('throws in production when DATABASE_URL is missing', () => {
     expect(() => loadApiEnv({ NODE_ENV: 'production' })).toThrow(/DATABASE_URL/);
@@ -20,6 +21,7 @@ describe('loadApiEnv', () => {
       DATABASE_URL: 'postgresql://x',
       REDIS_URL: 'redis://x',
       COOKIE_SECRET: 's3cret',
+      TEMP_DOCUMENT_SIGNING_SECRET,
       ...PROD_SMTP,
     });
     expect(env.secureCookies).toBe(true);
@@ -86,7 +88,10 @@ describe('loadApiEnv', () => {
   });
 
   it('生产缺省 mailerDriver=smtp；smtp 缺 SMTP env → 快速失败', () => {
-    const base = { NODE_ENV: 'production', DATABASE_URL: 'postgresql://x', REDIS_URL: 'redis://x', COOKIE_SECRET: 's3cret' };
+    const base = {
+      NODE_ENV: 'production', DATABASE_URL: 'postgresql://x', REDIS_URL: 'redis://x', COOKIE_SECRET: 's3cret',
+      TEMP_DOCUMENT_SIGNING_SECRET,
+    };
     expect(loadApiEnv({ ...base, ...PROD_SMTP }).mailerDriver).toBe('smtp');
     expect(() => loadApiEnv({ ...base, MAILER_DRIVER: 'smtp' })).toThrow(/SMTP_HOST/);
     // smtpPort 有默认 465，给 host 后下一个缺失是 SMTP_USER

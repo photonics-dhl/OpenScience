@@ -39,32 +39,36 @@ model User {
   emailVerifications EmailVerification[]
   usedInvitations    Invitation[]        @relation("InvitationUsedBy")
 
-  ownedWorkspaces          Workspace[]              @relation("WorkspaceOwner")
+  ownedWorkspaces          Workspace[]               @relation("WorkspaceOwner")
   memberships              Membership[]
-  sentWorkspaceInvitations WorkspaceInvitation[]    @relation("WorkspaceInvitationInviter")
-  createdResearchObjects   ResearchObject[]         @relation("ResearchObjectCreator")
+  sentWorkspaceInvitations WorkspaceInvitation[]     @relation("WorkspaceInvitationInviter")
+  createdResearchObjects   ResearchObject[]          @relation("ResearchObjectCreator")
   ingestionBatches         IngestionBatch[]
-  uploadedArtifacts        Artifact[]               @relation("ArtifactUploader")
+  uploadedArtifacts        Artifact[]                @relation("ArtifactUploader")
   authoredCommits          Commit[]
-  grantedVisibilityGrants  VisibilityGrant[]        @relation("VisibilityGranter")
-  receivedVisibilityGrants VisibilityGrant[]        @relation("VisibilityGrantee")
-  visibilityRequests       VisibilityRequest[]      @relation("VisibilityRequester")
-  authoredIssues           Issue[]                  @relation("IssueAuthor")
-  authoredPullRequests     PullRequest[]            @relation("PRAuthor")
-  authoredComments         Comment[]                @relation("CommentAuthor")
-  authoredReviews          Review[]                 @relation("Reviewer")
-  authorEntries            Author[]                 @relation("AuthorEntry")
-  contributions            Contribution[]           @relation("ContributionUser")
+  grantedVisibilityGrants  VisibilityGrant[]         @relation("VisibilityGranter")
+  receivedVisibilityGrants VisibilityGrant[]         @relation("VisibilityGrantee")
+  visibilityRequests       VisibilityRequest[]       @relation("VisibilityRequester")
+  authoredIssues           Issue[]                   @relation("IssueAuthor")
+  authoredPullRequests     PullRequest[]             @relation("PRAuthor")
+  authoredComments         Comment[]                 @relation("CommentAuthor")
+  authoredReviews          Review[]                  @relation("Reviewer")
+  authorEntries            Author[]                  @relation("AuthorEntry")
+  contributions            Contribution[]            @relation("ContributionUser")
   notifications            Notification[]
   sandboxJobs              SandboxJob[]
   agentSessions            AgentSession[]
-  agentApprovals           ToolApproval[]           @relation("ToolApprover")
-  appealsFiled             Appeal[]                 @relation("Appellant")
-  appealsModerated         Appeal[]                 @relation("Moderator")
-  selectedEditorialEntries EditorialSelection[]     @relation("EditorialSelector")
+  agentApprovals           ToolApproval[]            @relation("ToolApprover")
+  appealsFiled             Appeal[]                  @relation("Appellant")
+  appealsModerated         Appeal[]                  @relation("Moderator")
+  selectedEditorialEntries EditorialSelection[]      @relation("EditorialSelector")
   researchIdentityProfile  ResearchIdentityProfile?
   readingPreference        ReadingPreference?
-  verifiedEvidenceRecords  EvidenceRecord[]         @relation("EvidenceVerifier")
+  verifiedEvidenceRecords  EvidenceRecord[]          @relation("EvidenceVerifier")
+  requestedExternalSources ExternalSource[]          @relation("ExternalSourceRequester")
+  requestedTemporaryDocs   TemporaryDocument[]       @relation("TemporaryDocumentRequester")
+  temporaryDocAccesses     TemporaryDocumentAccess[]
+  subjectRightsDecisions   SourceRightsDecision[]    @relation("RightsDecisionSubject")
 
   @@map("users")
 }
@@ -173,20 +177,23 @@ enum WorkspaceInvitationStatus {
 }
 
 model Workspace {
-  id              String                @id @default(uuid()) @db.Uuid
-  type            WorkspaceType
-  name            String
-  ownerId         String                @map("owner_id") @db.Uuid
-  status          WorkspaceStatus       @default(active)
-  createdAt       DateTime              @default(now()) @map("created_at")
-  updatedAt       DateTime              @updatedAt @map("updated_at")
-  owner           User                  @relation("WorkspaceOwner", fields: [ownerId], references: [id], onDelete: Restrict)
-  members         Membership[]
-  invitations     WorkspaceInvitation[]
-  researchObjects ResearchObject[]
-  artifacts       Artifact[]
-  evidenceRecords EvidenceRecord[]
-  sandboxJobs     SandboxJob[]
+  id                    String                 @id @default(uuid()) @db.Uuid
+  type                  WorkspaceType
+  name                  String
+  ownerId               String                 @map("owner_id") @db.Uuid
+  status                WorkspaceStatus        @default(active)
+  createdAt             DateTime               @default(now()) @map("created_at")
+  updatedAt             DateTime               @updatedAt @map("updated_at")
+  owner                 User                   @relation("WorkspaceOwner", fields: [ownerId], references: [id], onDelete: Restrict)
+  members               Membership[]
+  invitations           WorkspaceInvitation[]
+  researchObjects       ResearchObject[]
+  artifacts             Artifact[]
+  evidenceRecords       EvidenceRecord[]
+  sandboxJobs           SandboxJob[]
+  externalSources       ExternalSource[]
+  sourceRightsDecisions SourceRightsDecision[]
+  temporaryDocuments    TemporaryDocument[]
 
   @@map("workspaces")
 }
@@ -398,6 +405,158 @@ model ResearchObject {
   @@unique([id, workspaceId], map: "research_objects_id_workspace_id_key")
   @@index([workspaceId])
   @@map("research_objects")
+}
+
+// --- Hermes Research Intelligence Task 10：外部检索、权利判定与临时文档生命周期 ---
+
+enum ExternalSourceProvider {
+  semantic_scholar
+  tavily
+  scansci
+}
+
+enum SourceRightsBasis {
+  open_access
+  institutional_access
+  public_domain
+  self_authored
+  unknown
+  prohibited
+}
+
+enum SourceDownloadPolicy {
+  downloadable
+  authorized_user_only
+  source_link_only
+  blocked
+}
+
+enum TemporaryDocumentState {
+  staging
+  active
+  deleting
+  deleted
+  cleanup_failed
+}
+
+model ExternalSource {
+  id                String                 @id @default(uuid()) @db.Uuid
+  workspaceId       String                 @map("workspace_id") @db.Uuid
+  requestedBy       String                 @map("requested_by") @db.Uuid
+  provider          ExternalSourceProvider
+  providerRecordId  String                 @map("provider_record_id")
+  title             String
+  sourceUrl         String                 @map("source_url")
+  abstract          String?                @db.Text
+  authors           String[]               @default([])
+  year              Int?
+  venue             String?
+  citationCount     Int?                   @map("citation_count")
+  doi               String?
+  arxivId           String?                @map("arxiv_id")
+  openAccessUrl     String?                @map("open_access_url")
+  openAccessStatus  String?                @map("open_access_status")
+  openAccessLicense String?                @map("open_access_license")
+  queryFingerprint  String                 @map("query_fingerprint") @db.Char(64)
+  retrievedAt       DateTime               @map("retrieved_at")
+  createdAt         DateTime               @default(now()) @map("created_at")
+  updatedAt         DateTime               @updatedAt @map("updated_at")
+
+  workspace       Workspace              @relation(fields: [workspaceId], references: [id], onDelete: Restrict)
+  requester       User                   @relation("ExternalSourceRequester", fields: [requestedBy], references: [id], onDelete: Restrict)
+  rightsDecisions SourceRightsDecision[]
+  temporaryDocs   TemporaryDocument[]
+
+  @@unique([id, workspaceId], map: "external_sources_id_workspace_id_key")
+  @@unique([workspaceId, provider, providerRecordId], map: "external_sources_provider_record_key")
+  @@index([workspaceId, retrievedAt])
+  @@map("external_sources")
+}
+
+model SourceRightsDecision {
+  id               String               @id @default(uuid()) @db.Uuid
+  agentTaskId      String               @map("agent_task_id") @db.Uuid
+  workspaceId      String               @map("workspace_id") @db.Uuid
+  externalSourceId String               @map("external_source_id") @db.Uuid
+  basis            SourceRightsBasis
+  cacheAllowed     Boolean              @map("cache_allowed")
+  downloadPolicy   SourceDownloadPolicy @map("download_policy")
+  reasonCode       String               @map("reason_code")
+  evidence         Json
+  contentHash      String?              @map("content_hash") @db.Char(64)
+  subjectUserId    String?              @map("subject_user_id") @db.Uuid
+  validUntil       DateTime?            @map("valid_until")
+  checkerVersion   String               @map("checker_version")
+  decidedAt        DateTime             @map("decided_at")
+  createdAt        DateTime             @default(now()) @map("created_at")
+
+  workspace      Workspace           @relation(fields: [workspaceId], references: [id], onDelete: Restrict)
+  subjectUser    User?               @relation("RightsDecisionSubject", fields: [subjectUserId], references: [id], onDelete: Restrict)
+  externalSource ExternalSource      @relation(fields: [externalSourceId, workspaceId], references: [id, workspaceId], onDelete: Restrict, map: "source_rights_decisions_source_workspace_fkey")
+  agentTask      AgentTask           @relation(fields: [agentTaskId], references: [id], onDelete: Restrict)
+  temporaryDocs  TemporaryDocument[]
+
+  @@unique([id, externalSourceId, workspaceId], map: "source_rights_decisions_scope_key")
+  @@unique([agentTaskId, externalSourceId], map: "source_rights_decisions_task_source_key")
+  @@index([externalSourceId, decidedAt])
+  @@map("source_rights_decisions")
+}
+
+model TemporaryDocument {
+  id                String                 @id @default(uuid()) @db.Uuid
+  agentTaskId       String                 @unique @map("agent_task_id") @db.Uuid
+  workspaceId       String                 @map("workspace_id") @db.Uuid
+  externalSourceId  String                 @map("external_source_id") @db.Uuid
+  rightsDecisionId  String                 @map("rights_decision_id") @db.Uuid
+  requestedBy       String                 @map("requested_by") @db.Uuid
+  objectKey         String                 @unique @map("object_key")
+  contentHash       String                 @map("content_hash") @db.Char(64)
+  mimeType          String                 @map("mime_type")
+  sizeBytes         BigInt                 @map("size_bytes")
+  state             TemporaryDocumentState @default(active)
+  expiresAt         DateTime               @map("expires_at")
+  deletedAt         DateTime?              @map("deleted_at")
+  cleanupOwner      String?                @map("cleanup_owner")
+  cleanupLeaseUntil DateTime?              @map("cleanup_lease_until")
+  cleanupFenceToken String?                @map("cleanup_fence_token") @db.Uuid
+  cleanupAttempts   Int                    @default(0) @map("cleanup_attempts")
+  cleanupRetryAt    DateTime?              @map("cleanup_retry_at")
+  lastErrorCode     String?                @map("last_error_code")
+  parserProvenance  Json?                  @map("parser_provenance")
+  locator           Json?
+  createdAt         DateTime               @default(now()) @map("created_at")
+  updatedAt         DateTime               @updatedAt @map("updated_at")
+
+  workspace      Workspace                 @relation(fields: [workspaceId], references: [id], onDelete: Restrict)
+  externalSource ExternalSource            @relation(fields: [externalSourceId, workspaceId], references: [id, workspaceId], onDelete: Restrict, map: "temporary_documents_source_workspace_fkey")
+  rightsDecision SourceRightsDecision      @relation(fields: [rightsDecisionId, externalSourceId, workspaceId], references: [id, externalSourceId, workspaceId], onDelete: Restrict, map: "temporary_documents_rights_scope_fkey")
+  requester      User                      @relation("TemporaryDocumentRequester", fields: [requestedBy], references: [id], onDelete: Restrict)
+  agentTask      AgentTask                 @relation(fields: [agentTaskId], references: [id], onDelete: Restrict)
+  accesses       TemporaryDocumentAccess[]
+
+  @@unique([id, workspaceId], map: "temporary_documents_id_workspace_id_key")
+  @@index([workspaceId, state, expiresAt], map: "temporary_documents_expiry_idx")
+  @@index([state, cleanupRetryAt], map: "temporary_documents_cleanup_retry_idx")
+  @@map("temporary_documents")
+}
+
+model TemporaryDocumentAccess {
+  id                  String    @id @default(uuid()) @db.Uuid
+  workspaceId         String    @map("workspace_id") @db.Uuid
+  temporaryDocumentId String    @map("temporary_document_id") @db.Uuid
+  userId              String    @map("user_id") @db.Uuid
+  tokenHash           String    @unique @map("token_hash") @db.Char(64)
+  signingKeyId        String    @map("signing_key_id")
+  expiresAt           DateTime  @map("expires_at")
+  consumedAt          DateTime? @map("consumed_at")
+  revokedAt           DateTime? @map("revoked_at")
+  createdAt           DateTime  @default(now()) @map("created_at")
+
+  temporaryDocument TemporaryDocument @relation(fields: [temporaryDocumentId, workspaceId], references: [id, workspaceId], onDelete: Restrict, map: "temporary_document_accesses_document_workspace_fkey")
+  user              User              @relation(fields: [userId], references: [id], onDelete: Restrict)
+
+  @@index([temporaryDocumentId, userId, expiresAt])
+  @@map("temporary_document_accesses")
 }
 
 model SdfDocument {
@@ -951,9 +1110,11 @@ model AgentTask {
   createdAt        DateTime        @default(now()) @map("created_at")
   updatedAt        DateTime        @updatedAt @map("updated_at")
 
-  session       AgentSession   @relation(fields: [sessionId], references: [id], onDelete: Cascade)
-  approvals     ToolApproval[]
-  ingestionTask IngestionTask?
+  session           AgentSession           @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  approvals         ToolApproval[]
+  ingestionTask     IngestionTask?
+  retrievalRights   SourceRightsDecision[]
+  temporaryDocument TemporaryDocument?
 
   @@index([sessionId])
   @@map("agent_tasks")

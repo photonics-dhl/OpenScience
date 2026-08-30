@@ -1,7 +1,7 @@
 import type { FastifyInstance, FastifyRequest } from 'fastify';
 import { z } from 'zod';
 import type { AuthDeps } from '@openscience/auth';
-import { AgentError, buildInterestContext, createAgentSession, getAgentTask, retryAgentTask, listAgentSessions, listAgentTasks, parseWorkspaceGuidePayload, PUBLIC_AGENT_SESSION_KINDS, PUBLIC_AGENT_TASK_KINDS, submitAgentTask, approveApproval, listPendingApprovals, rejectApproval, revokeApproval, validateResearchIdentityProfileState } from '@openscience/domain';
+import { AgentError, buildInterestContext, createAgentSession, getAgentTask, retryAgentTask, listAgentSessions, listAgentTasks, parseSourceRetrievePayload, parseWorkspaceGuidePayload, PUBLIC_AGENT_SESSION_KINDS, PUBLIC_AGENT_TASK_KINDS, submitAgentTask, approveApproval, listPendingApprovals, rejectApproval, revokeApproval, validateResearchIdentityProfileState } from '@openscience/domain';
 import type { AuditContext } from '@openscience/observability';
 import { requireCurrentUser } from './session-guard';
 
@@ -43,6 +43,12 @@ const genericTaskBody = z.object({
       coreText: z.string().trim().min(1).max(8_000),
     }).strict().safeParse(value.payload);
     if (!parsed.success) ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'review.analyze payload is invalid' });
+  }
+  if (value.kind === 'source.retrieve') {
+    try { parseSourceRetrievePayload(value.payload); }
+    catch (error) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, message: error instanceof Error ? error.message : 'source.retrieve payload is invalid' });
+    }
   }
 });
 export const agentTaskBodySchema = z.union([workspaceGuideTaskBody, genericTaskBody]);
@@ -108,6 +114,9 @@ export function registerAgentRoutes(app: FastifyInstance, deps: AgentRouteDeps):
     const idempotencyKey = req.headers['idempotency-key'];
     const session = await deps.prisma.agentSession.findUnique({ where: { id: body.sessionId } });
     if (!session || session.userId !== user.userId) throw new AgentError('RESEARCH_OBJECT_NOT_FOUND', '会话不存在');
+    if (body.kind === 'source.retrieve' && !session.researchObjectId) {
+      throw new AgentError('VALIDATION_ERROR', 'source.retrieve requires a Research Object workspace');
+    }
     if (body.activeClaimId) {
       const claim = await deps.prisma.claimNode.findUnique({ where: { id: body.activeClaimId } });
       if (!claim || !session.researchObjectId || claim.researchObjectId !== session.researchObjectId) {
