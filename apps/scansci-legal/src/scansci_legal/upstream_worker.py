@@ -5,6 +5,7 @@ from __future__ import annotations
 from contextlib import redirect_stderr, redirect_stdout
 import io
 import json
+import os
 from pathlib import Path
 import sys
 from typing import Any
@@ -22,14 +23,21 @@ class _BoundedDiscard(io.TextIOBase):
 def main() -> None:
     try:
         request = json.load(sys.stdin)
-        identifier = request["identifier"]
         output_dir = Path(request["output_dir"]).resolve()
-        if not isinstance(identifier, str) or not output_dir.is_dir() or not (output_dir / "config.json").is_file():
+        if not output_dir.is_dir():
             raise ValueError("invalid worker request")
-        with redirect_stdout(_BoundedDiscard()), redirect_stderr(_BoundedDiscard()):
-            from scansci_pdf.sources import download
-            result = download(identifier, str(output_dir), scihub_enabled=False, use_tor=False, use_vpnsci=True, bibtex=False, rename=False, strategy="legal_only")
-        response = _minimal_response(result)
+        if request.get("probe") == "environment":
+            from scansci_pdf import config
+            keys = ("HOME", "USERPROFILE", "HOMEDRIVE", "HOMEPATH", "SCANSCI_PDF_DATA_DIR", "HTTP_PROXY", "HTTPS_PROXY", "ALL_PROXY", "SCANSCI_PDF_PROXY")
+            response = {"home": str(Path.home()), "data_dir": str(config.DATA_DIR), "environment": {key: os.environ[key] for key in keys if key in os.environ}}
+        else:
+            identifier = request["identifier"]
+            if not isinstance(identifier, str) or not (output_dir / "config.json").is_file():
+                raise ValueError("invalid worker request")
+            with redirect_stdout(_BoundedDiscard()), redirect_stderr(_BoundedDiscard()):
+                from scansci_pdf.sources import download
+                result = download(identifier, str(output_dir), scihub_enabled=False, use_tor=False, use_vpnsci=True, bibtex=False, rename=False, strategy="legal_only")
+            response = _minimal_response(result)
     except Exception:
         response = {"success": False, "error_type": "upstream_unavailable"}
     sys.__stdout__.write(json.dumps(response, separators=(",", ":")))

@@ -228,6 +228,20 @@ class LegalDownloadHttpServiceTest(unittest.TestCase):
             self.assertEqual(response.status, 422)
             self.assertNotIn(value.encode("ascii"), response.body)
 
+    def test_rejects_controls_in_every_upstream_controlled_emitted_header(self):
+        for field in ("source_url", "license", "entitlement_valid_until"):
+            for control in ("\x00", "\x7f", "\r", "\n"):
+                with self.subTest(field=field, control=repr(control)):
+                    kwargs = {"source_url": "https://publisher.example/paper", "license": None, "entitlement_valid_until": "2026-09-30T00:00:00Z"}
+                    if field == "source_url":
+                        kwargs[field] = f"https://publisher.example/a{control}b"
+                    else:
+                        kwargs[field] = f"safe{control}value"
+                    result = AcquiredPdf(self.pdf.read_bytes(), "institutional", "CARSI", **kwargs)
+                    with running_server(FakeClient(self.pdf, result=result)) as server:
+                        response = request_json(server, "/v1/legal-download", VALID_REQUEST, "service-test-token")
+                    self.assertEqual(response.status, 422)
+
     def test_maps_allowlisted_acquisition_errors_and_redacts_raw_exceptions(self):
         cases = (
             (AcquisitionError("auth_required"), 409),

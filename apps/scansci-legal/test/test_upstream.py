@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import os
 from pathlib import Path
+import json
+import subprocess
 import sys
 import tempfile
 import unittest
@@ -10,7 +12,7 @@ from unittest import mock
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
 from scansci_legal.policy import LegalDownloadRequest
-from scansci_legal.upstream import AcquisitionError, ScanSciAcquisitionClient
+from scansci_legal.upstream import AcquisitionError, ScanSciAcquisitionClient, _sanitized_environment
 
 
 REQUEST = LegalDownloadRequest("10.1038/nature12373", "legal_only", False, False, True, "a" * 64)
@@ -81,6 +83,25 @@ print(json.dumps({'success': True, 'file': str(paper), 'source': 'CARSI', 'url':
             result = ScanSciAcquisitionClient(self.root, worker_command=self.worker("hostile-env")).acquire(REQUEST)
 
         self.assertEqual(result.content, b"%PDF-safe-from-worker")
+
+    def test_default_worker_resolves_home_and_scansci_config_inside_the_request_root(self):
+        worker = Path(__file__).resolve().parents[1] / "src" / "scansci_legal" / "upstream_worker.py"
+        environment = _sanitized_environment(self.root)
+        completed = subprocess.run(
+            [sys.executable, str(worker)], input=json.dumps({"probe": "environment", "output_dir": str(self.root)}).encode("utf-8"),
+            cwd=self.root, env=environment, capture_output=True, check=False,
+        )
+
+        self.assertEqual(completed.returncode, 0)
+        response = json.loads(completed.stdout.decode("utf-8"))
+        self.assertEqual(response["home"], str(self.root))
+        self.assertEqual(response["data_dir"], str(self.root))
+        self.assertFalse(any(name.lower().endswith("proxy") for name in response["environment"]))
+        if os.name == "nt":
+            self.assertEqual(response["environment"]["USERPROFILE"], str(self.root))
+            self.assertEqual(response["environment"]["HOMEDRIVE"] + response["environment"]["HOMEPATH"], str(self.root))
+        else:
+            self.assertNotIn("USERPROFILE", response["environment"])
 
     def test_discards_worker_stderr_and_returns_only_a_stable_error_code(self):
         with self.assertRaises(AcquisitionError) as raised:

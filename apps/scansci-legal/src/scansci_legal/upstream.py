@@ -83,6 +83,10 @@ def _run_worker(command: Sequence[str], request: LegalDownloadRequest, output_di
 
 def _sanitized_environment(output_dir: Path) -> dict[str, str]:
     environment = {"PATH": os.environ.get("PATH", ""), "PYTHONNOUSERSITE": "1", "PYTHONDONTWRITEBYTECODE": "1", "HOME": str(output_dir), "TMPDIR": str(output_dir), "TMP": str(output_dir), "TEMP": str(output_dir), "SCANSCI_PDF_DATA_DIR": str(output_dir)}
+    if os.name == "nt":
+        root = str(output_dir)
+        drive = output_dir.drive
+        environment.update({"USERPROFILE": root, "HOMEDRIVE": drive, "HOMEPATH": root[len(drive):] or "\\"})
     for key in ("SYSTEMROOT", "WINDIR", "COMSPEC", "PATHEXT", "LANG", "LC_ALL", "TZ"):
         if value := os.environ.get(key):
             environment[key] = value
@@ -182,7 +186,7 @@ def _source_url(result: Mapping[str, object], identifier: str) -> str:
 
 
 def _safe_external_url(value: str) -> bool:
-    if not value.isascii() or len(value) > 2048 or any(character.isspace() or ord(character) < 32 for character in value):
+    if not value.isascii() or len(value) > 2048 or any(not 32 <= ord(character) <= 126 for character in value):
         return False
     try:
         parsed = urlsplit(value)
