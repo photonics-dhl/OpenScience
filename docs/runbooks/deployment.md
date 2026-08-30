@@ -1500,10 +1500,10 @@ and no broad filesystem, image or volume prune ran.
 
 #### Preconditions
 
-The candidate must contain fix `2560bd8` or a reviewed descendant while the
+The candidate must contain fix `36f985c` or a reviewed descendant while the
 upstream commit/archive remain `7017814…b8e` / `db537914…9208b9`. Before any
 ECS mutation, require exact CI, a clean merged-main SHA, targetless durable
-ScanSci task count zero, and local ScanSci `75/80` plus infra `71/76` evidence.
+ScanSci task count zero, and local ScanSci `80/86` plus infra `71/76` evidence.
 The production source remains `6893318…` until the canonical transaction ends.
 
 #### Execution
@@ -1513,7 +1513,9 @@ legal/auth images, start ScanSci before Worker, and run
 `verify-scansci-runtime.mjs`; do not start Compose manually. The legal service
 must report 1 CPU, 1 GiB, 64 PIDs and `/tmp` exactly 256 MiB. Run one controlled
 instrumented acquisition proving source concurrency one, tier/source order,
-first-success stop and zero leftover source PDFs before real OA/CARSI journeys.
+first-success stop, pinned negative-cache behavior and zero leftover source
+PDFs before real OA/CARSI journeys. The no-Secret file-limit probe must report
+soft and hard `104857600:104857600` before any real download.
 
 #### Rollback
 
@@ -1526,10 +1528,11 @@ protect exact active and rollback image IDs and never performs broad prune.
 
 #### Verification
 
-Require `SCANSCI_RUNTIME_SOURCE_OK`, `TOPOLOGY_OK`, `POLICY_OK`, `TOKEN_OK` and
-the expected session status. Additionally prove NAT64 metadata literals are
+Require `SCANSCI_RUNTIME_SOURCE_OK`, `TOPOLOGY_OK`, `POLICY_OK`,
+`FILE_LIMIT_OK`, `TOKEN_OK` and the expected session status. Additionally prove NAT64 metadata literals are
 blocked, the runtime upstream signature/AST compatibility gate succeeds,
-ThreadPoolExecutor fanout is zero, each failed source temp is absent before the
-next source, and two simultaneous 100 MiB-limit slots fit the 256 MiB tmpfs
-without violating the 1 GiB memory limit. Continue with Task 10 OA/CARSI,
+ThreadPoolExecutor fanout is zero, blocked/failed negative-cache behavior is
+preserved, EFBIG partials are absent before the next source, successful files
+use exact-temp same-directory rename, and two simultaneous hard-capped 100 MiB
+slots fit the 256 MiB tmpfs without violating 1 GiB. Continue with Task 10 OA/CARSI,
 recreate-session, four-entry, one-use, 72-hour GC and zero-grey/Tor gates.

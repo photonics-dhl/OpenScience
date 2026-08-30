@@ -32,7 +32,7 @@ service. This limitation is documented in the official
 - `scansci-legal` is a normal SHA-tagged production service. It runs as
   `10001:10001`, with a read-only root filesystem, all capabilities dropped,
   `no-new-privileges`, 1 CPU, 1 GiB RAM, 64 PIDs, and a 256 MiB no-exec tmpfs.
-  Two admitted acquisitions each have at most one serial 100 MiB source PDF on
+  Two admitted acquisitions each have at most one serial, kernel-capped 100 MiB source PDF on
   tmpfs; bounded config/protocol/session snapshots fit in the remaining 56 MiB,
   while tmpfs pages still count against the 1 GiB container memory ceiling.
   It has no host port, database, Redis, object-storage, Docker-socket, or broad
@@ -41,9 +41,21 @@ service. This limitation is documented in the official
   `_run_tiers_parallel`. Before `download`, the wrapper validates its exact
   seven-parameter signature and known parallel AST shape, then replaces it with
   a maximum-64-source serial runner preserving tier/source order and first
-  success. Every failed source temp is removed before the next source. Signature,
-  source shape, legal flags, grey labels, output path or cleanup drift fails
-  closed; the archive/hash remains unchanged.
+  success. Compatibility also requires callable `_neg_blocked/_neg_record`;
+  blocked sources skip before path construction, and every truthy non-success
+  result is passed unchanged to the pinned recorder. Every attempted failed
+  source temp is removed before the next source. Signature, helper, source shape,
+  legal flags, grey labels, output path or cleanup drift fails closed; the
+  archive/hash remains unchanged.
+- Before importing or calling upstream sources, each per-acquisition POSIX
+  subprocess installs `RLIMIT_FSIZE` soft and hard limits at the shared exact
+  `MAX_PDF_BYTES = 104857600`. The current hard limit must permit that value;
+  SIGXFSZ/EFBIG is converted to a redacted source failure, partial expected
+  output is removed, and a surviving process may try the next serial source.
+  External child writers inherit the kernel limit. Success must reference the
+  exact regular non-symlink source temp and finalizes by same-directory rename,
+  never a second 100 MiB copy. The parent size/magic check remains defense in
+  depth, not the primary source-file bound.
 - HTTPS/DNS validation extracts IPv4 from well-known NAT64, IPv4-mapped, 6to4
   and Teredo destinations and applies the same public-address policy. Local-use
   `64:ff9b:1::/48` is rejected entirely; mixed answers fail as a unit.
@@ -110,7 +122,8 @@ operator actions. The one-shot Secret staging container is intentionally root
 and receives only the minimum file-read/chown capabilities; it has no network,
 writable root, or long-running lifecycle. Production acceptance must still prove
 the real CARSI/OA journeys, container recreation, compatibility-checked serial
-execution with max concurrency one, 256 MiB runtime identity, zero grey-source/
+execution with max concurrency one, negative-cache parity, exact 100 MiB
+soft+hard file limits, 256 MiB runtime identity, zero grey-source/
 Tor calls, and exact active/rollback recovery on the ECS. Rollback always uses
 the previous release's own Compose/verifier contract, so a pre-change release
 retains its original tmpfs identity instead of being reinterpreted as 256 MiB.

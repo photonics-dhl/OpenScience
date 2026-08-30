@@ -13,6 +13,7 @@ Secret, `.env`, GitHub, merge, or deployment action occurred in Task 9.
 - Security fixes: `4f6361ef179771e9a10dd8b21a53b14c4d9a1df9` and
   `cfc0ddc24b92040d46f5fa875b1931163aa2c5fa`.
 - Review fix 1: `2560bd84988dd0df7972630a81ac5cb7d80bb62f`.
+- Review fix 2: `36f985c59c44c85c84ed242ca890ad6a5b7ce01e`.
 - Documentation gate: `0e98190bc7cd2cd69dfb9cd7bcd4dcf38a0de0ad`.
 - Repository main: `463c8e3a2a80138cda2d669c370c0481ed4c0877`.
 - Production application/release: `689331845574612130f223d08c92e61721c16586`.
@@ -21,7 +22,7 @@ Secret, `.env`, GitHub, merge, or deployment action occurred in Task 9.
 
 ## Static and dependency review
 
-The exact forbidden-path command returned 52 matches after the new fixed-false
+The exact forbidden-path command returned 58 matches after the new fixed-false
 compatibility/adversarial coverage. Every match was manually
 classified as one of: fixed `false` production configuration, fail-closed
 rejection logic, source-lock metadata fixed false, or an adversarial/negative
@@ -48,7 +49,7 @@ rejected. Fix `4f6361e` now rejects the inline variable, requires the file,
 opens with `O_NOFOLLOW`, validates regular/single-link/size and POSIX
 euid/egid/`0400`, reads once, then rechecks path inode identity. The focused
 HTTP file finished `20 pass / 1 Windows POSIX skip`; the final complete package
-finished `75 pass / 5 Windows POSIX skips`.
+finished `80 pass / 6 Windows/POSIX skips`.
 
 ### P1 — pre-request SSRF, redirects, and DNS rebinding
 
@@ -117,6 +118,50 @@ worst case; bounded config/protocol/session snapshots fit in the remaining
 Focused results: ScanSci `75 pass / 5 Windows POSIX skips`, Worker `503/503`,
 infra ScanSci/release scripts `71 pass / 5 platform skips`.
 
+## Fix round 2/5 — pinned negative cache and kernel file-size limit
+
+### Important — serial runner bypassed negative-cache semantics
+
+RED showed no failed result entered the fake cache and missing cache helpers did
+not block installation. The compatibility gate now requires callable
+`_neg_blocked(label, doi)` and `_neg_record(label, doi, result)`. Each source is
+checked before its path is constructed; blocked entries perform no path or
+source call. Every truthy non-success result, including a truthy cancelled
+shape, is passed by identity to the pinned recorder; falsy `None`, success and
+blocked entries are not recorded by the runner.
+
+The cross-invocation behavioral test runs a free cancelled+failed tier followed
+by an institutional tier. It proves the failed key is cached, the second call
+skips it while leaving a sentinel path untouched, the next institutional source
+succeeds, order and first-success remain intact, and only the two exact attempted
+non-success results reached `_neg_record`. Missing either helper fails before a
+source call.
+
+### Important — 100 MiB was only a post-completion check
+
+RED showed no source-limit installer and an EFBIG exception escaped before the
+next serial source. A new shared `limits.py` owns exact `MAX_PDF_BYTES =
+104857600` for HTTP, parent adapter and subprocess. Before importing/calling
+upstream, every production POSIX subprocess validates the current hard-limit
+feasibility, installs a SIGXFSZ handler, sets soft+hard `RLIMIT_FSIZE` to the
+exact shared value and re-reads it. Failure is stable and redacted. External
+exec children inherit the hard limit.
+
+EFBIG removes the partial expected source path and permits the next serial
+source where the process survives. Successful results must reference that exact
+regular non-symlink source temp and finalize via same-directory rename; an
+alternate path fails closed, so there is no second 100 MiB copy. The POSIX
+kernel test uses a controlled 4096-byte limit: exactly 4096 bytes persist, the
+next byte fails with EFBIG, and an external child also cannot exceed 4096. It is
+an intentional Windows skip and runs on Linux CI.
+
+The ECS runtime verifier now runs a no-Secret probe, requires soft:hard metadata
+`104857600:104857600`, and emits `SCANSCI_RUNTIME_FILE_LIMIT_OK`. Its mutation
+fixture was corrected to include accepted image IDs, so every mutation now
+tests its intended invariant rather than failing early for missing identity.
+Focused results: ScanSci `80 pass / 6 Windows/POSIX skips`, Worker `503/503`,
+infra `71 pass / 5 platform skips`.
+
 ## Architecture, API, data, and release review
 
 - Direction: apps depend on packages; no app-to-app implementation import or
@@ -148,7 +193,8 @@ infra ScanSci/release scripts `71 pass / 5 platform skips`.
   redacted status responses were reviewed.
 - Runtime/release: legal service is non-root/read-only, 1 CPU/1 GiB/64 PID,
   256 MiB no-exec tmpfs, no host/data/app port/network, fixed two-slot
-  acquisition and one serial source per request. Deploy verifies ScanSci
+  acquisition, one serial source per request, pinned negative-cache behavior
+  and a kernel hard 100 MiB per-file limit. Deploy verifies ScanSci
   before Worker, binds legal/auth image IDs in capability schema 3, restores
   exact prior ScanSci or removes an absent-prior candidate, and protects active
   plus rollback tags without broad prune.
@@ -178,9 +224,9 @@ infra ScanSci/release scripts `71 pass / 5 platform skips`.
 - Typecheck: exit 0 across all workspaces.
 - Integration compilation: API and Domain PostgreSQL tsconfigs exit 0. Their
   real PostgreSQL execution is forbidden locally and remains Task 10.
-- Full test: exit 0, `2,107 pass / 20 platform skips / 0 fail`.
+- Full test: exit 0, `2,112 pass / 21 platform skips / 0 fail`.
   - release contract `94 pass / 7 platform skips`;
-  - ScanSci `75 pass / 5 Windows POSIX skips`;
+  - ScanSci `80 pass / 6 Windows/POSIX skips`;
   - Web `464` Vitest + `5` Node;
   - Domain `535`, Agent Worker `503`, API `101`.
 - UI/Hermes production-browser gates were not rerun because Task 9 changed no
@@ -197,7 +243,8 @@ infra ScanSci/release scripts `71 pass / 5 platform skips`.
 Task 10 must still prove exact CI and merged-main immutable deploy; targetless
 durable ScanSci task count zero; migration 33 forward/rollback/redeploy and
 two-client PostgreSQL contracts; Linux Secret/DNS/HTTPS runtime; exact image,
-NAT64/serial-source/temp cleanup/256 MiB mount/network/limit and rollback/
+NAT64/serial-source/negative-cache parity, Linux soft+hard RLIMIT/child
+inheritance, EFBIG cleanup/exact rename, 256 MiB mount/network and rollback/
 retention identity; one real CARSI login and
 session recreation; real OA and non-OA institutional PDFs; all four 375 px
 product entries; ClamAV/hash/rights; one-use replay; real 72-hour Worker GC with

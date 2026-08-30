@@ -4,16 +4,16 @@
 
 ## Current version tuple
 
-- Branch / local candidate / main: `codex/scansci-default-capability` / `2560bd8` / `463c8e3`；远端仅 `main`。
+- Branch / local candidate / main: `codex/scansci-default-capability` / `36f985c` / `463c8e3`；远端仅 `main`。
 - Production application source / immutable release: `689331845574612130f223d08c92e61721c16586`。
 - Production rollback: `c435c4c8b2800bb20998fd9a9a93f2db96328661`；core/search migrations `32/32` / `2/2`。
 - Taskmaster `hermes-research-intelligence` 为 9/12：Tasks 1–9 done；Task 10 已重新打开，Task 11 阻断至 ScanSci 默认下载能力生产验收完成。
 
 ## 2026-08-30 — ScanSci Task 9 local security/release gate
 
-- Whole-branch fixes `4f6361e`/`cfc0ddc` 后，fix round `2560bd8` 又拒绝 NAT64/IPv4-mapped/6to4/Teredo 私网与元数据目标，并以签名+AST gate 将精确 701781 `_run_tiers_parallel` 覆盖为 max-64、tier/source 顺序串行、首成功停止且逐源清 temp；漂移/灰源/非 legal flag 均 fail closed。两个 acquisition slots × 100 MiB 单源临时 PDF 采用 256 MiB tmpfs，仍受 1 GiB 容器内存约束；open P0/P1 = 0。
-- 禁用词精确扫描 52 个命中均为 fixed false、拒绝/compatibility 逻辑或 adversarial test；`audit:knip`、`audit:dep`（831 modules / 1936 dependencies）和 `audit:deps` green。全仓 build/typecheck/test green：release `94/101`（7 platform skips）、ScanSci `75/80`（5 POSIX-only skips）、Web `469`、Domain `535`、Worker `503`、API `101`；总计 `2107 pass / 20 skip / 0 fail`。API/Domain PostgreSQL integration configs 仅完成编译。
-- 本地候选不等于生产：ECS 仍为 `6893318` / `c435c4c` / core-search `32/32`-`2/2`，ScanSci disabled。Migration 33、Linux Secret/NAT64/serial-source/256 MiB runtime、真实 OA/CARSI、session recreate、四入口、one-use/72h GC、zero-grey/Tor 与 exact rollback/retention 均留给 Task 10。
+- Fix 1 `2560bd8` 闭合 NAT64 与串行 source 后，fix 2 `36f985c` 恢复精确 `_neg_blocked/_neg_record`：blocked 在 path/call 前跳过，truthy non-success 原样交给 helper，falsy/success/blocked 不误记，cache 跨 free/institutional 调用生效。每个 POSIX acquisition subprocess 在 import/call upstream 前把 soft+hard `RLIMIT_FSIZE` 精确设为共享 100 MiB；EFBIG partial 清理后可继续，成功只接受 exact regular source temp 并同目录 rename。runtime verifier 新增 `FILE_LIMIT_OK` 实探针；open P0/P1 = 0。
+- 禁用词精确扫描 58 个命中均为 fixed false、拒绝/compatibility 逻辑或 adversarial test；`audit:knip`、`audit:dep`（831 modules / 1936 dependencies）和 `audit:deps` green。全仓 build/typecheck/test green：release `94/101`（7 skips）、ScanSci `80/86`（6 Windows/POSIX skips）、Web `469`、Domain `535`、Worker `503`、API `101`；本机总计 `2112 pass / 21 skip / 0 fail`。Linux CI 将执行真实 RLIMIT/child 继承用例。
+- 本地候选不等于生产：ECS 仍为 `6893318` / `c435c4c` / core-search `32/32`-`2/2`，ScanSci disabled。Migration 33、Linux negative-cache/硬 file limit/NAT64/serial/256 MiB runtime、真实 OA/CARSI、四入口、72h GC、zero-grey/Tor 与 exact rollback/retention 均留给 Task 10。
 
 ## 2026-08-30 — ScanSci Task 8 local review candidate
 
