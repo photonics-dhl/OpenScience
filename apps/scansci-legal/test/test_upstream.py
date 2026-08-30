@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import os
 from pathlib import Path
+import errno
 import json
 import socket
 import subprocess
@@ -250,15 +251,31 @@ class UpstreamNetworkBoundaryTest(unittest.TestCase):
 
 class SerialLegalSourceOverrideTest(unittest.TestCase):
     def module(self):
+        negative_cache = set()
+        negative_events = []
+
         def try_source(source, _doi, output_path, _config, _label, use_tor=False):
             if use_tor:
                 raise AssertionError("Tor reached an upstream source")
             return source(output_path)
 
+        def neg_blocked(label, doi):
+            negative_events.append(("blocked", label, doi))
+            return (label, doi) in negative_cache
+
+        def neg_record(label, doi, result):
+            negative_events.append(("record", label, doi, result))
+            if result and not result.get("cancelled"):
+                negative_cache.add((label, doi))
+
         return SimpleNamespace(
             _run_tiers_parallel=_run_tiers_parallel,
             _try_source=try_source,
             safe_filename=lambda _doi: "paper",
+            _neg_blocked=neg_blocked,
+            _neg_record=neg_record,
+            negative_cache=negative_cache,
+            negative_events=negative_events,
         )
 
     def installer(self):
@@ -334,6 +351,211 @@ class SerialLegalSourceOverrideTest(unittest.TestCase):
                 "10.1000/example", Path(directory), Path(directory) / "paper.pdf", config, False, 1,
             )
         self.assertEqual(calls, [])
+
+    def test_preserves_negative_cache_across_free_and_institutional_invocations(self):
+        module = self.module()
+        self.installer()(module)
+        calls = []
+        cancelled = {"success": False, "cancelled": True, "error_type": "cancelled"}
+        failed = {"success": False, "error_type": "not_found"}
+        config = {
+            "download_strategy": "legal_only", "scihub_enabled": False,
+            "use_tor": False, "use_tor_for_scihub": False,
+            "network_proxy": "", "proxy_pool": "", "batch_workers": 1,
+            "parallel_sources": False, "parallel_probes": False,
+        }
+
+        def source(label, result):
+            def run(path):
+                calls.append(label)
+                path.write_bytes(b"%PDF-partial")
+                return {**result, "file": str(path)} if result.get("success") else result
+            return run
+
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            output = root / "paper.pdf"
+            free = [([
+                (source("cancelled", cancelled), "Cancelled"),
+                (source("failed", failed), "Failed"),
+            ], "free", 5)]
+            self.assertIsNone(module._run_tiers_parallel(free, "10.1000/example", root, output, config, False, 10))
+            self.assertEqual(list(root.glob("paper_*.pdf")), [])
+            self.assertEqual(module.negative_cache, {("Failed", "10.1000/example")})
+
+            blocked_sentinel = root / "paper_Failed.pdf"
+            blocked_sentinel.write_bytes(b"do-not-touch-blocked")
+            institutional = [([
+                (source("blocked-should-not-run", failed), "Failed"),
+                (source("institutional-success", {"success": True, "source": "CARSI"}), "CARSI"),
+            ], "institutional", 5)]
+            result = module._run_tiers_parallel(
+                institutional, "10.1000/example", root, output, config, False, 10,
+            )
+
+            self.assertEqual(calls, ["cancelled", "failed", "institutional-success"])
+            self.assertEqual(blocked_sentinel.read_bytes(), b"do-not-touch-blocked")
+            self.assertEqual(result["source"], "CARSI")
+            self.assertEqual(result["file"], str(output))
+            records = [event for event in module.negative_events if event[0] == "record"]
+            self.assertEqual([(event[1], event[2]) for event in records], [
+                ("Cancelled", "10.1000/example"),
+                ("Failed", "10.1000/example"),
+            ])
+            self.assertIs(records[0][3], cancelled)
+            self.assertIs(records[1][3], failed)
+
+    def test_rejects_missing_negative_cache_helpers_before_any_source_call(self):
+        for helper in ("_neg_blocked", "_neg_record"):
+            module = self.module()
+            delattr(module, helper)
+            with self.subTest(helper=helper), self.assertRaises(RuntimeError):
+                self.installer()(module)
+
+    def test_cleans_an_efbig_partial_and_continues_with_the_next_serial_source(self):
+        module = self.module()
+        self.installer()(module)
+        calls = []
+        config = {
+            "download_strategy": "legal_only", "scihub_enabled": False,
+            "use_tor": False, "use_tor_for_scihub": False,
+            "network_proxy": "", "proxy_pool": "", "batch_workers": 1,
+            "parallel_sources": False, "parallel_probes": False,
+        }
+
+        def too_large(path):
+            calls.append("too-large")
+            path.write_bytes(b"partial")
+            raise OSError(errno.EFBIG, "sensitive upstream path")
+
+        def success(path):
+            calls.append("success")
+            path.write_bytes(b"%PDF-success")
+            return {"success": True, "file": str(path), "source": "Unpaywall"}
+
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            output = root / "paper.pdf"
+            result = module._run_tiers_parallel(
+                [([(too_large, "TooLarge"), (success, "Unpaywall")], "free", 5)],
+                "10.1000/example", root, output, config, False, 10,
+            )
+            self.assertEqual(calls, ["too-large", "success"])
+            self.assertEqual(output.read_bytes(), b"%PDF-success")
+            self.assertEqual(result["file"], str(output))
+            self.assertFalse((root / "paper_TooLarge.pdf").exists())
+
+    def test_rejects_success_that_does_not_reference_the_exact_source_temp(self):
+        module = self.module()
+        self.installer()(module)
+        config = {
+            "download_strategy": "legal_only", "scihub_enabled": False,
+            "use_tor": False, "use_tor_for_scihub": False,
+            "network_proxy": "", "proxy_pool": "", "batch_workers": 1,
+            "parallel_sources": False, "parallel_probes": False,
+        }
+
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            other = root / "other.pdf"
+
+            def wrong_path(_source_path):
+                other.write_bytes(b"%PDF-wrong-path")
+                return {"success": True, "file": str(other), "source": "Unpaywall"}
+
+            with self.assertRaises(RuntimeError):
+                module._run_tiers_parallel(
+                    [([(wrong_path, "Unpaywall")], "free", 5)],
+                    "10.1000/example", root, root / "paper.pdf", config, False, 10,
+                )
+            self.assertFalse((root / "paper.pdf").exists())
+
+
+class SourceFileLimitTest(unittest.TestCase):
+    def installer(self):
+        installer = getattr(upstream_worker, "_install_source_file_limit", None)
+        if installer is None:
+            self.fail("source file limit installer is missing")
+        return installer
+
+    def test_installs_exact_soft_and_hard_limit_after_the_signal_handler(self):
+        events = []
+
+        class FakeResource:
+            RLIMIT_FSIZE = 1
+            RLIM_INFINITY = -1
+            current = None
+
+            @classmethod
+            def getrlimit(cls, kind):
+                events.append(("getrlimit", kind))
+                return cls.current
+
+            @classmethod
+            def setrlimit(cls, kind, limits):
+                events.append(("setrlimit", kind, limits))
+                cls.current = limits
+
+        FakeResource.current = (FakeResource.RLIM_INFINITY, FakeResource.RLIM_INFINITY)
+
+        class FakeSignal:
+            SIGXFSZ = 25
+
+            @staticmethod
+            def signal(number, handler):
+                events.append(("signal", number, callable(handler)))
+
+        self.installer()(100 * 1024 * 1024, resource_module=FakeResource, signal_module=FakeSignal)
+        self.assertEqual(events, [
+            ("getrlimit", FakeResource.RLIMIT_FSIZE),
+            ("signal", FakeSignal.SIGXFSZ, True),
+            ("setrlimit", FakeResource.RLIMIT_FSIZE, (100 * 1024 * 1024, 100 * 1024 * 1024)),
+            ("getrlimit", FakeResource.RLIMIT_FSIZE),
+        ])
+
+        FakeResource.current = (4096, 4096)
+        events.clear()
+        with self.assertRaises(RuntimeError):
+            self.installer()(4097, resource_module=FakeResource, signal_module=FakeSignal)
+        self.assertEqual(events, [("getrlimit", FakeResource.RLIMIT_FSIZE)])
+
+    @unittest.skipUnless(os.name == "posix", "RLIMIT_FSIZE is a Linux production boundary")
+    def test_posix_kernel_blocks_the_first_byte_over_limit_and_external_children_inherit(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            script = """
+import errno, json, subprocess, sys
+from pathlib import Path
+from scansci_legal.upstream_worker import _install_source_file_limit
+limit = 4096
+_install_source_file_limit(limit)
+root = Path(sys.argv[1])
+parent = root / 'parent.bin'
+parent_errno = None
+try:
+    with parent.open('wb') as handle:
+        handle.write(b'x' * limit)
+        handle.flush()
+        handle.write(b'y')
+        handle.flush()
+except OSError as error:
+    parent_errno = error.errno
+child = root / 'child.bin'
+child_code = "from pathlib import Path; import sys; p=Path(sys.argv[1]); f=p.open('wb'); f.write(b'x'*4096); f.flush(); f.write(b'y'); f.flush()"
+completed = subprocess.run([sys.executable, '-c', child_code, str(child)], check=False)
+print(json.dumps({'parentSize': parent.stat().st_size, 'parentErrno': parent_errno, 'childSize': child.stat().st_size, 'childCode': completed.returncode}))
+"""
+            environment = {**os.environ, "PYTHONPATH": str(Path(__file__).resolve().parents[1] / "src")}
+            completed = subprocess.run(
+                [sys.executable, "-c", script, str(root)],
+                cwd=root, env=environment, capture_output=True, text=True, check=False,
+            )
+            self.assertEqual(completed.returncode, 0, completed.stderr)
+            result = json.loads(completed.stdout)
+            self.assertEqual(result["parentSize"], 4096)
+            self.assertEqual(result["parentErrno"], errno.EFBIG)
+            self.assertLessEqual(result["childSize"], 4096)
+            self.assertNotEqual(result["childCode"], 0)
 
 
 if __name__ == "__main__":

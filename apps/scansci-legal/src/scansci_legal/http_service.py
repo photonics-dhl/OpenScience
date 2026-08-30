@@ -12,10 +12,9 @@ from typing import Any, Callable, Mapping, Protocol
 from urllib.parse import urlsplit
 
 from .policy import MAX_REQUEST_BYTES, LegalDownloadRequest, PolicyError, validate_request, validate_source_result
+from .limits import MAX_PDF_BYTES
 from .upstream import AcquiredPdf, AcquisitionError, _safe_external_url, _safe_header_value
 
-
-MAX_PDF_BYTES = 100 * 1024 * 1024
 ERROR_STATUS = {
     "disabled": 503,
     "auth_required": 409,

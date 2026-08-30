@@ -14,10 +14,9 @@ import tempfile
 from typing import Any, Mapping, Sequence
 from urllib.parse import urlsplit
 
+from .limits import MAX_PDF_BYTES
 from .policy import LegalDownloadRequest, PolicyError, validate_source_result
 
-
-MAX_PDF_BYTES = 100 * 1024 * 1024
 MAX_PROTOCOL_BYTES = 8 * 1024
 WORKER_TIMEOUT_SECONDS = 60
 MAX_SESSION_FILES = 16

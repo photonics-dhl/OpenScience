@@ -77,6 +77,7 @@ export async function verifyScanSciRuntime({
   workerContainer,
   workerSecretMetadata,
   workerSecretSha256,
+  sourceFileLimitMetadata,
   runtimeSecretMetadata,
   runtimeSecretSha256,
   sessionStatus,
@@ -183,13 +184,15 @@ export async function verifyScanSciRuntime({
       || !secretMount || secretMount.Type !== 'volume' || secretMount.RW !== false || secretMount.Name !== 'openscience-prod_scansci-auth-secrets';
     })) fail();
   }
-  if (!/^[a-f0-9]{64}$/u.test(runtimeSecretSha256) || runtimeSecretSha256 !== hostSecretSha256
+  if (sourceFileLimitMetadata !== '104857600:104857600'
+    || !/^[a-f0-9]{64}$/u.test(runtimeSecretSha256) || runtimeSecretSha256 !== hostSecretSha256
     || authContainerIds.length !== 0 && !allowRunningAuth
     || !['ready', 'auth_required', 'refreshing'].includes(sessionStatus)) fail();
   return {
     source: true,
     topology: true,
     policy: true,
+    fileLimit: true,
     token: true,
     session: sessionStatus,
   };
@@ -201,6 +204,7 @@ export function formatRuntimeStatuses(report) {
     'SCANSCI_RUNTIME_SOURCE_OK',
     'SCANSCI_RUNTIME_TOPOLOGY_OK',
     'SCANSCI_RUNTIME_POLICY_OK',
+    'SCANSCI_RUNTIME_FILE_LIMIT_OK',
     'SCANSCI_RUNTIME_TOKEN_OK',
     `SCANSCI_RUNTIME_SESSION_${session}`,
   ].join('\n') + '\n';
@@ -271,6 +275,14 @@ async function main() {
     "print(json.load(urllib.request.urlopen(request,timeout=5))['status'])",
   ].join(';');
   const sessionStatus = run('docker', ['exec', containerId, 'python', '-c', probe]);
+  const fileLimitProbe = [
+    'import resource',
+    'from scansci_legal.upstream_worker import _install_source_file_limit',
+    '_install_source_file_limit()',
+    'soft,hard=resource.getrlimit(resource.RLIMIT_FSIZE)',
+    "print(f'{soft}:{hard}')",
+  ].join(';');
+  const sourceFileLimitMetadata = run('docker', ['exec', containerId, 'python', '-c', fileLimitProbe]);
   const runtimeSecretMetadata = run('docker', [
     'exec', containerId, 'stat', '-c', '%u:%g:%a', '/run/secrets/scansci_service_token',
   ]);
@@ -290,7 +302,7 @@ async function main() {
   }
   const report = await verifyScanSciRuntime({
     releaseRoot, releaseSha, composeFile, serviceTokenPath, container, image, authImage,
-    authContainerIds: authIds, sessionStatus, runtimeSecretMetadata, runtimeSecretSha256,
+    authContainerIds: authIds, sessionStatus, sourceFileLimitMetadata, runtimeSecretMetadata, runtimeSecretSha256,
     workerContainer, workerSecretMetadata, workerSecretSha256,
     authContainers, allowRunningAuth: allowAuth === '1',
     expectedLegalImageId: capability.legalImageId, expectedAuthImageId: capability.authImageId,

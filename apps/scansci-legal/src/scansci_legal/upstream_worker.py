@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from contextlib import redirect_stderr, redirect_stdout
 import ast
+import errno
 import io
 import ipaddress
 import inspect
@@ -11,12 +12,18 @@ import json
 import os
 from pathlib import Path
 import re
+import signal
 import socket
 import sys
 import textwrap
 import time
 from typing import Any
 from urllib.parse import urlsplit
+
+try:
+    from .limits import MAX_PDF_BYTES
+except ImportError:  # Direct script entry uses this package directory on sys.path.
+    from limits import MAX_PDF_BYTES
 
 
 _NAT64_WELL_KNOWN = ipaddress.IPv6Network("64:ff9b::/96")
@@ -120,6 +127,42 @@ def _install_network_guard() -> None:
     requests.sessions.Session.send = guarded_send
 
 
+def _install_source_file_limit(
+    maximum_bytes: int = MAX_PDF_BYTES,
+    *,
+    resource_module=None,
+    signal_module=signal,
+) -> None:
+    if isinstance(maximum_bytes, bool) or not isinstance(maximum_bytes, int) or maximum_bytes <= 0:
+        raise RuntimeError("ScanSci source file limit is invalid")
+    if resource_module is None:
+        if os.name != "posix":
+            raise RuntimeError("ScanSci source file limit requires POSIX")
+        try:
+            import resource as resource_module
+        except ImportError as error:
+            raise RuntimeError("ScanSci source file limit is unavailable") from error
+    try:
+        current_soft, current_hard = resource_module.getrlimit(resource_module.RLIMIT_FSIZE)
+        if current_hard != resource_module.RLIM_INFINITY and current_hard < maximum_bytes:
+            raise RuntimeError("ScanSci source file hard limit is too small")
+
+        def file_size_exceeded(_number, _frame):
+            raise OSError(errno.EFBIG, "ScanSci source file limit exceeded")
+
+        signal_module.signal(signal_module.SIGXFSZ, file_size_exceeded)
+        resource_module.setrlimit(
+            resource_module.RLIMIT_FSIZE,
+            (maximum_bytes, maximum_bytes),
+        )
+        if resource_module.getrlimit(resource_module.RLIMIT_FSIZE) != (maximum_bytes, maximum_bytes):
+            raise RuntimeError("ScanSci source file limit did not stick")
+    except RuntimeError:
+        raise
+    except (AttributeError, OSError, ValueError) as error:
+        raise RuntimeError("ScanSci source file limit installation failed") from error
+
+
 def _parallel_runner_is_compatible(function: object, source_reader=inspect.getsource) -> bool:
     if not callable(function):
         return False
@@ -167,13 +210,13 @@ def _validate_legal_source_config(config: object, use_tor: object) -> dict[str, 
     return config
 
 
-def _serial_source_tiers(module: object, tiers: object, doi: object, target_dir: object) -> list[tuple[object, str, str, int, Path]]:
+def _serial_source_tiers(module: object, tiers: object, doi: object, target_dir: object) -> list[tuple[object, str, str, int, str]]:
     if not isinstance(tiers, list) or not isinstance(doi, str) or not doi or not isinstance(target_dir, Path):
         raise RuntimeError("ScanSci legal source contract drifted")
     safe_name = module.safe_filename(doi)
     if not isinstance(safe_name, str) or not safe_name or Path(safe_name).name != safe_name:
         raise RuntimeError("ScanSci legal source contract drifted")
-    flattened: list[tuple[object, str, str, int, Path]] = []
+    flattened: list[tuple[object, str, str, int, str]] = []
     for tier in tiers:
         if not isinstance(tier, tuple) or len(tier) != 3:
             raise RuntimeError("ScanSci legal source contract drifted")
@@ -190,7 +233,7 @@ def _serial_source_tiers(module: object, tiers: object, doi: object, target_dir:
                 raise RuntimeError("ScanSci legal source contract drifted")
             if Path(label).name != label or _GREY_SOURCE_LABEL.search(label):
                 raise RuntimeError("ScanSci legal source policy drifted")
-            flattened.append((function, label, tier_label, tier_timeout, target_dir / f"{safe_name}_{label}.pdf"))
+            flattened.append((function, label, tier_label, tier_timeout, safe_name))
             if len(flattened) > _SERIAL_SOURCE_LIMIT:
                 raise RuntimeError("ScanSci legal source contract drifted")
     return flattened
@@ -210,7 +253,9 @@ def _install_serial_legal_source_override(module: object, *, source_reader=inspe
         return
     if not _parallel_runner_is_compatible(original, source_reader):
         raise RuntimeError("ScanSci parallel source contract drifted")
-    if not callable(getattr(module, "_try_source", None)) or not callable(getattr(module, "safe_filename", None)):
+    if any(not callable(getattr(module, helper, None)) for helper in (
+        "_try_source", "safe_filename", "_neg_blocked", "_neg_record",
+    )):
         raise RuntimeError("ScanSci legal source helpers drifted")
 
     def serial_legal_sources(tiers, doi, target_dir, output_path, config, use_tor, overall_timeout):
@@ -223,34 +268,50 @@ def _install_serial_legal_source_override(module: object, *, source_reader=inspe
             raise RuntimeError("ScanSci legal source output drifted")
         sources = _serial_source_tiers(module, tiers, doi, target)
         deadline = time.monotonic() + overall_timeout
+        attempted_paths: list[Path] = []
         try:
             current_tier = None
             tier_deadline = deadline
-            for function, label, tier_label, tier_timeout, source_output in sources:
+            for function, label, tier_label, tier_timeout, safe_name in sources:
                 if tier_label != current_tier:
                     current_tier = tier_label
                     tier_deadline = min(deadline, time.monotonic() + tier_timeout)
                 if time.monotonic() >= deadline or time.monotonic() >= tier_deadline:
                     continue
+                if module._neg_blocked(label, doi):
+                    continue
+                source_output = target / f"{safe_name}_{label}.pdf"
+                attempted_paths.append(source_output)
                 _remove_source_temp(source_output, output)
                 try:
                     result = module._try_source(
                         function, doi, source_output, fixed_config, label, use_tor=False,
                     )
-                except Exception:
-                    result = None
+                except OSError as error:
+                    if error.errno != errno.EFBIG:
+                        raise
+                    _remove_source_temp(source_output, output)
+                    continue
                 if result and isinstance(result, dict) and result.get("success") is True:
-                    final_path = Path(result.get("file", ""))
-                    if final_path != output and final_path.exists():
-                        output.parent.mkdir(parents=True, exist_ok=True)
-                        output.unlink(missing_ok=True)
-                        final_path.rename(output)
-                        result["file"] = str(output)
+                    file_value = result.get("file")
+                    if not isinstance(file_value, str) or not file_value:
+                        raise RuntimeError("ScanSci legal source success path drifted")
+                    final_path = Path(file_value)
+                    if final_path != source_output or final_path.is_symlink() or not final_path.is_file():
+                        raise RuntimeError("ScanSci legal source success path drifted")
+                    output.parent.mkdir(parents=True, exist_ok=True)
+                    output.unlink(missing_ok=True)
+                    source_output.rename(output)
+                    result["file"] = str(output)
                     return result
+                if result:
+                    if not isinstance(result, dict):
+                        raise RuntimeError("ScanSci legal source result drifted")
+                    module._neg_record(label, doi, result)
                 _remove_source_temp(source_output, output)
             return None
         finally:
-            for *_details, source_output in sources:
+            for source_output in attempted_paths:
                 _remove_source_temp(source_output, output)
 
     serial_legal_sources._scansci_serial_legal = True  # type: ignore[attr-defined]
@@ -282,6 +343,7 @@ def main() -> None:
             if not isinstance(identifier, str) or not (output_dir / "config.json").is_file():
                 raise ValueError("invalid worker request")
             with redirect_stdout(_BoundedDiscard()), redirect_stderr(_BoundedDiscard()):
+                _install_source_file_limit()
                 from scansci_pdf import sources
                 _install_serial_legal_source_override(sources)
                 result = sources.download(identifier, str(output_dir), scihub_enabled=False, use_tor=False, use_vpnsci=True, bibtex=False, rename=False, strategy="legal_only")

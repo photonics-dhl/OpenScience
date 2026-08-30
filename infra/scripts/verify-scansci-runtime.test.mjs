@@ -99,6 +99,7 @@ test('runtime verifier validates immutable source, bounded topology, Secret and 
     releaseSha,
     sessionStatus: 'ready',
     authContainerIds: [],
+    sourceFileLimitMetadata: '104857600:104857600',
     runtimeSecretMetadata: '10001:10001:400',
     runtimeSecretSha256: createHash('sha256').update(tokenValue).digest('hex'),
     workerSecretMetadata: '1000:1000:400',
@@ -112,6 +113,7 @@ test('runtime verifier validates immutable source, bounded topology, Secret and 
   assert.match(output, /SCANSCI_RUNTIME_SOURCE_OK/u);
   assert.match(output, /SCANSCI_RUNTIME_TOPOLOGY_OK/u);
   assert.match(output, /SCANSCI_RUNTIME_POLICY_OK/u);
+  assert.match(output, /SCANSCI_RUNTIME_FILE_LIMIT_OK/u);
   assert.match(output, /SCANSCI_RUNTIME_TOKEN_OK/u);
   assert.match(output, /SCANSCI_RUNTIME_SESSION_READY/u);
   assert.doesNotMatch(output, new RegExp(tokenValue, 'u'));
@@ -127,6 +129,7 @@ test('runtime verifier fails closed on forbidden network, grey-source flags, aut
     (input) => { input.container.HostConfig.Privileged = true; },
     (input) => { input.container.HostConfig.CapAdd = ['SYS_ADMIN']; },
     (input) => { input.container.HostConfig.Tmpfs['/tmp'] = 'size=64m'; },
+    (input) => { input.sourceFileLimitMetadata = '104857600:-1'; },
     (input) => { input.authContainerIds = ['abc123']; },
     (input) => { input.runtimeSecretSha256 = 'f'.repeat(64); },
     (input) => { input.authImage.Config.Labels['org.openscience.scansci.role'] = 'legal'; },
@@ -142,11 +145,14 @@ test('runtime verifier fails closed on forbidden network, grey-source flags, aut
       releaseSha,
       sessionStatus: 'ready',
       authContainerIds: [],
+      sourceFileLimitMetadata: '104857600:104857600',
       runtimeSecretMetadata: '10001:10001:400',
       runtimeSecretSha256: createHash('sha256').update(tokenValue).digest('hex'),
       workerSecretMetadata: '1000:1000:400',
       workerSecretSha256: createHash('sha256').update(tokenValue).digest('hex'),
       requiredSecretUid: process.getuid?.(),
+      expectedLegalImageId: fresh.image.Id,
+      expectedAuthImageId: fresh.authImage.Id,
     };
     mutate(input);
     await assert.rejects(verifyScanSciRuntime(input), /ScanSci runtime verification failed/u);
@@ -175,7 +181,7 @@ test('runtime verifier rejects wrong-group host metadata and validates an explic
   };
   await verifyScanSciRuntime({
     ...f, releaseSha, sessionStatus: 'ready', authContainerIds: ['abc123'], authContainers: [authContainer],
-    allowRunningAuth: true, runtimeSecretMetadata: '10001:10001:400',
+    allowRunningAuth: true, sourceFileLimitMetadata: '104857600:104857600', runtimeSecretMetadata: '10001:10001:400',
     runtimeSecretSha256: createHash('sha256').update(tokenValue).digest('hex'),
     workerSecretMetadata: '1000:1000:400', workerSecretSha256: createHash('sha256').update(tokenValue).digest('hex'),
     requiredSecretUid: process.getuid?.(), expectedLegalImageId: f.image.Id, expectedAuthImageId: f.authImage.Id,
@@ -194,7 +200,7 @@ test('runtime verifier rejects wrong-group host metadata and validates an explic
     mutate(candidate);
     await assert.rejects(verifyScanSciRuntime({
       ...f, releaseSha, sessionStatus: 'ready', authContainerIds: ['abc123'], authContainers: [candidate],
-      allowRunningAuth: true, runtimeSecretMetadata: '10001:10001:400',
+      allowRunningAuth: true, sourceFileLimitMetadata: '104857600:104857600', runtimeSecretMetadata: '10001:10001:400',
       runtimeSecretSha256: createHash('sha256').update(tokenValue).digest('hex'),
       workerSecretMetadata: '1000:1000:400', workerSecretSha256: createHash('sha256').update(tokenValue).digest('hex'),
       requiredSecretUid: process.getuid?.(), expectedLegalImageId: f.image.Id, expectedAuthImageId: f.authImage.Id,
