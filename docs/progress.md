@@ -4,15 +4,15 @@
 
 ## Current version tuple
 
-- Branch / local candidate / main: `codex/scansci-default-capability` / `22088c0` / `463c8e3`；远端仅 `main`。
+- Branch / local candidate / main: `codex/scansci-default-capability` / `86e037e` / `463c8e3`；远端仅 `main`。
 - Production application source / immutable release: `689331845574612130f223d08c92e61721c16586`。
 - Production rollback: `c435c4c8b2800bb20998fd9a9a93f2db96328661`；core/search migrations `32/32` / `2/2`。
 - Taskmaster `hermes-research-intelligence` 为 9/12：Tasks 1–9 done；Task 10 已重新打开，Task 11 阻断至 ScanSci 默认下载能力生产验收完成。
 
 ## 2026-08-30 — ScanSci Task 7 local review candidate
 
-- `22088c0` 闭合 browser-safe source DTO/identifier grammar、持久 identifier/原始 expiry、同 task/同 credit retry、user+target unresolved key、active-first reload recovery、1.2–15s polling/Abort cleanup 与临时下载；raw query/identifier/credential 不入 browser storage。
-- Component Playwright `3/3` 覆盖 running reload 零二次 POST、failed `/retry` 零新 acquisition、metadata→第二 acquisition→临时下载；Domain `524`、API `97`、Worker `501`、Web `438 + 5 Node`、四包 typecheck 与 Web 19-page production build green。
+- `22088c0` + `86e037e` 闭合 browser-safe persisted DTO、hash-only unresolved intent、同 task/credit retry、服务端跨 20+ history active→retryable failed→terminal recovery、1.2–15s poll/Abort 与 401/403/404 显式恢复；blocked/exhausted 无失效 Retry，旧 source link 在 unresolved submit 中 inert。
+- Component Playwright `6/6` 覆盖 reload 零二次 POST、401 login、403/404 safe terminal、failed `/retry` 零 acquisition、metadata→第二 acquisition、44px/inert source link 与临时下载；Domain `525`、API `98`、Web `441 + 5 Node`、三包 typecheck 与 Web 19-page production build green。Worker 本轮未改，上一轮 `501` 保持 green。
 - 这是本地 review candidate；ECS 375px、真实 CARSI/OA、一次性下载与 Task 8 四入口仍 pending，不能把 Task 10 标 done。生产保持 `6893318` / `c435c4c` / core-search `32/32`-`2/2`。
 
 ## 2026-08-30 — ScanSci Task 6 local recovery candidate
