@@ -48,6 +48,9 @@ describe('source.retrieve handler replay safety', () => {
         },
       },
     };
+    prisma.$transaction = async (work: (tx: typeof prisma) => Promise<unknown>) => work(prisma);
+    prisma.$executeRaw = async () => 1;
+    prisma.$queryRaw = async () => [];
     const storage: any = {
       headObject: async () => null,
       putObject,

@@ -339,6 +339,7 @@ export {
   type SourceRightsDecision,
 } from './retrieval/types';
 export { decideSourceRights } from './retrieval/rights';
+export { observeScanSciProviderState, type ScanSciProviderObservation } from './retrieval/provider-state';
 export { parseSourceRetrievePayload, type SourceRetrievePayload } from './retrieval/retrieve-payload';
 export {
   submitLiteratureAcquisition,

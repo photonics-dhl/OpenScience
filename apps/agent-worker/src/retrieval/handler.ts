@@ -2,6 +2,7 @@ import { createHmac, randomUUID } from 'node:crypto';
 import { Prisma } from '@prisma/client';
 import {
   buildTemporaryDocumentObjectKey,
+  observeScanSciProviderState,
   parseSourceRetrievePayload,
   temporaryDocumentExpiresAt,
   type AgentDeps,
@@ -205,6 +206,14 @@ export function createSourceRetrieveHandler(options: {
           rights,
           ...(temporaryDocumentId ? { temporaryDocumentId } : {}),
         };
+      },
+      observeScanSci: async (kind) => {
+        await observeScanSciProviderState({ prisma: deps.prisma }, {
+          kind,
+          actorId: ownerTask.session.userId,
+          taskId: task.id,
+          workspaceId: researchObject.workspaceId,
+        });
       },
     }, { institutionalSubjectId: institutionalSubjectFingerprint(options.queryHmacSecret, ownerTask.session.userId) });
     await deps.audit?.record({

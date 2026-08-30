@@ -5,6 +5,10 @@
 Accepted — 2026-08-30. Local implementation complete; production deployment and
 CARSI acceptance remain separate gates.
 
+ScanSci `auth_required` state is PostgreSQL-authoritative: a conditional
+serializable transition writes the state, audit, and idempotent current-admin
+notifications atomically. Only raw provider success clears the state.
+
 ## Context
 
 The existing Worker adapter left ScanSci disabled and had no release-scoped

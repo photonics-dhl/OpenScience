@@ -23,7 +23,7 @@ import {
 import type { OcrAuthorizationContext } from '@openscience/ai-gateway';
 import type { DocumentSourceMap, ExtractionResult as ParserExtractionResult } from '@openscience/domain';
 import { createHash } from 'node:crypto';
-import { lstatSync, readFileSync } from 'node:fs';
+import { closeSync, constants, fstatSync, openSync, readSync } from 'node:fs';
 import type { Readable } from 'node:stream';
 import { extractHandler, sourceMapToManuscriptText } from './extractor';
 import { MAX_PARSER_INPUT, type IngestionAdapters } from './ingestion-parser';
@@ -45,7 +45,6 @@ import { createSemanticScholarAdapter } from './retrieval/semantic-scholar';
 import { createTavilyAdapter } from './retrieval/tavily';
 import { createScanSciAdapter } from './retrieval/scansci';
 import { createSourceRetrieveHandler } from './retrieval/handler';
-import { createScanSciAuthRequiredStateTracker } from './retrieval/orchestrator';
 import { collectExpiredTemporaryDocuments } from './retrieval/garbage-collector';
 
 const BGE_M3_REVISION = '5617a9f61b028005a4858fdac845db406aefb181';
@@ -131,26 +130,31 @@ export type TaskHandler = (
 ) => Promise<Record<string, unknown>>;
 
 interface ScanSciTokenFileSystem {
-  lstatSync(path: string): { isFile(): boolean; isSymbolicLink(): boolean; mode: number };
-  readFileSync(path: string, encoding: 'utf8'): string;
+  openSync(path: string, flags: number): number;
+  fstatSync(fd: number): { isFile(): boolean; uid: number; gid: number; mode: number; nlink: number; size: number };
+  readSync(fd: number, buffer: Buffer, offset: number, length: number, position: number | null): number;
+  closeSync(fd: number): void;
 }
 
 export function loadScanSciServiceTokenFile(
   path: string,
-  fileSystem: ScanSciTokenFileSystem = { lstatSync, readFileSync },
+  fileSystem: ScanSciTokenFileSystem = { openSync, fstatSync, readSync, closeSync },
 ): string {
-  let stat: ReturnType<ScanSciTokenFileSystem['lstatSync']>;
+  let descriptor: number | undefined;
   try {
-    stat = fileSystem.lstatSync(path);
+    descriptor = fileSystem.openSync(path, constants.O_RDONLY | constants.O_NOFOLLOW);
+    const stat = fileSystem.fstatSync(descriptor);
+    if (!stat.isFile() || stat.uid !== 1000 || stat.gid !== 1000 || (stat.mode & 0o777) !== 0o400 || stat.nlink !== 1 || stat.size < 1 || stat.size > 4096) {
+      throw new Error('invalid');
+    }
+    const bytes = Buffer.alloc(stat.size);
+    if (fileSystem.readSync(descriptor, bytes, 0, bytes.length, null) !== bytes.length) throw new Error('short');
+    const token = bytes.toString('utf8').trim();
+    if (!token) throw new Error('empty');
+    return token;
   } catch {
     throw new Error('SCANSCI_SERVICE_TOKEN_FILE must be a private regular file');
-  }
-  if (!stat.isFile() || stat.isSymbolicLink() || (stat.mode & 0o077) !== 0) {
-    throw new Error('SCANSCI_SERVICE_TOKEN_FILE must be a private regular file');
-  }
-  const token = fileSystem.readFileSync(path, 'utf8').trim();
-  if (!token) throw new Error('SCANSCI_SERVICE_TOKEN_FILE must contain a token');
-  return token;
+  } finally { if (descriptor !== undefined) fileSystem.closeSync(descriptor); }
 }
 
 /** Production-safe cascade composition: one V2 sidecar stage plus disabled candidate routes. */
@@ -350,7 +354,6 @@ export async function recoverProcessingQueue(deps: WorkerDeps): Promise<number> 
  * 轮询 Redis 队列 → handler 执行 → markTaskProgress（状态机前进，succeeded 后重放 skip）。
  */
 export async function createPollOnce(handlers: Record<string, TaskHandler>): Promise<(deps: WorkerDeps) => Promise<boolean>> {
-  const scansciAuthRequired = createScanSciAuthRequiredStateTracker();
   return async function pollOnce(deps: WorkerDeps): Promise<boolean> {
     await recoverUndispatchedAgentTasks(deps);
     // BRPOPLPUSH：原子弹出 → 处理中队列（崩溃恢复用）
@@ -374,32 +377,6 @@ export async function createPollOnce(handlers: Record<string, TaskHandler>): Pro
         interestContext: task.interestContext,
         executionAttempt: claimed.executionAttempt,
       });
-      const providers = Array.isArray(result.providers) ? result.providers.filter((value): value is { provider: string; status: string; code?: string } => (
-        Boolean(value) && typeof value === 'object'
-        && typeof (value as { provider?: unknown }).provider === 'string'
-        && typeof (value as { status?: unknown }).status === 'string'
-        && ((value as { code?: unknown }).code === undefined || typeof (value as { code?: unknown }).code === 'string')
-      )) : [];
-      if (scansciAuthRequired.observe(providers)) {
-        await deps.audit?.record({
-          actorId: task.session.userId,
-          action: 'external_retrieval.auth_required',
-          targetType: 'agent_task',
-          targetId: taskId,
-          metadata: { provider: 'scansci', code: 'auth_required' },
-        });
-        const administrators = await deps.prisma.user.findMany({
-          where: { platformRole: 'platform_admin' },
-          select: { id: true },
-        });
-        await Promise.all(administrators.map(({ id }) => deps.prisma.notification.create({
-          data: {
-            userId: id,
-            type: 'external_retrieval.auth_required',
-            payload: { provider: 'scansci', taskId },
-          },
-        })));
-      }
       await markTaskProgress(deps, {
         taskId,
         status: 'succeeded',
@@ -564,9 +541,13 @@ export function buildSourceRetrieveHandlerFromEnv(env: NodeJS.ProcessEnv = proce
   if (env.NODE_ENV === 'production' && scansciEnabled && scansciBaseUrl !== 'http://scansci-legal:8080') {
     throw new Error('SCANSCI_BASE_URL must use the isolated internal legal-only service in production');
   }
-  const scansciServiceToken = env.SCANSCI_SERVICE_TOKEN_FILE
-    ? loadScanSciServiceTokenFile(env.SCANSCI_SERVICE_TOKEN_FILE)
-    : env.SCANSCI_SERVICE_TOKEN;
+  if (env.SCANSCI_SERVICE_TOKEN !== undefined) throw new Error('SCANSCI_SERVICE_TOKEN is forbidden; use SCANSCI_SERVICE_TOKEN_FILE');
+  if (scansciEnabled && !env.SCANSCI_SERVICE_TOKEN_FILE) throw new Error('SCANSCI_SERVICE_TOKEN_FILE is required when ScanSci is enabled');
+  if (env.NODE_ENV === 'production' && scansciEnabled
+    && env.SCANSCI_SERVICE_TOKEN_FILE !== '/run/scansci-worker-secrets/scansci_service_token') {
+    throw new Error('SCANSCI_SERVICE_TOKEN_FILE must use the fixed Worker secret path in production');
+  }
+  const scansciServiceToken = env.SCANSCI_SERVICE_TOKEN_FILE ? loadScanSciServiceTokenFile(env.SCANSCI_SERVICE_TOKEN_FILE) : undefined;
   return createSourceRetrieveHandler({
     queryHmacSecret,
     semanticScholar: createSemanticScholarAdapter({ apiKey: env.SEMANTIC_SCHOLAR_API_KEY }),

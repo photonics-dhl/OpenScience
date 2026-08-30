@@ -15,21 +15,32 @@ const ocrRequest = () => ({
 });
 
 describe('MiniMax worker gateway config', () => {
-  it('accepts only a private regular ScanSci service-token file', () => {
-    const readFileSync = vi.fn(() => 'service-token\n');
-    const lstatSync = vi.fn(() => ({ isFile: () => true, isSymbolicLink: () => false, mode: 0o100400 }));
-    expect(loadScanSciServiceTokenFile('/run/secrets/scansci_service_token', { lstatSync, readFileSync })).toBe('service-token');
-    expect(readFileSync).toHaveBeenCalledWith('/run/secrets/scansci_service_token', 'utf8');
+  it('reads a ScanSci service token once from a validated nofollow descriptor', () => {
+    const openSync = vi.fn(() => 42);
+    const readSync = vi.fn((_fd, buffer: Buffer) => { buffer.write('service-token'); return 13; });
+    const closeSync = vi.fn();
+    const fstatSync = vi.fn(() => ({ isFile: () => true, uid: 1000, gid: 1000, mode: 0o100400, nlink: 1, size: 13 }));
+    expect(loadScanSciServiceTokenFile('/run/scansci-worker-secrets/scansci_service_token', { openSync, readSync, closeSync, fstatSync })).toBe('service-token');
+    expect(openSync).toHaveBeenCalledTimes(1);
+    expect(readSync).toHaveBeenCalledTimes(1);
+    expect(closeSync).toHaveBeenCalledWith(42);
   });
 
   it.each([
-    ['symbolic link', { isFile: () => true, isSymbolicLink: () => true, mode: 0o100400 }],
-    ['non-regular file', { isFile: () => false, isSymbolicLink: () => false, mode: 0o100400 }],
-    ['group-readable file', { isFile: () => true, isSymbolicLink: () => false, mode: 0o100440 }],
-  ])('rejects a %s ScanSci service-token path', (_label, stat) => {
+    ['symlink', { isFile: () => false, uid: 1000, gid: 1000, mode: 0o120400, nlink: 1, size: 1 }],
+    ['directory', { isFile: () => false, uid: 1000, gid: 1000, mode: 0o0400, nlink: 1, size: 1 }],
+    ['wrong owner', { isFile: () => true, uid: 0, gid: 1000, mode: 0o100400, nlink: 1, size: 1 }],
+    ['wrong group', { isFile: () => true, uid: 1000, gid: 0, mode: 0o100400, nlink: 1, size: 1 }],
+    ['wrong mode', { isFile: () => true, uid: 1000, gid: 1000, mode: 0o100440, nlink: 1, size: 1 }],
+    ['hardlink', { isFile: () => true, uid: 1000, gid: 1000, mode: 0o100400, nlink: 2, size: 1 }],
+    ['empty file', { isFile: () => true, uid: 1000, gid: 1000, mode: 0o100400, nlink: 1, size: 0 }],
+    ['oversized file', { isFile: () => true, uid: 1000, gid: 1000, mode: 0o100400, nlink: 1, size: 4097 }],
+  ])('rejects a %s ScanSci service-token descriptor', (_label, stat) => {
     expect(() => loadScanSciServiceTokenFile('/run/secrets/scansci_service_token', {
-      lstatSync: () => stat,
-      readFileSync: () => 'service-token',
+      openSync: () => 42,
+      readSync: () => 1,
+      closeSync: () => undefined,
+      fstatSync: () => stat,
     })).toThrow(/SCANSCI_SERVICE_TOKEN_FILE/);
   });
 

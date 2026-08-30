@@ -25,6 +25,7 @@ export interface RetrievalRuntime {
     rights: SourceRightsDecision;
     fullText?: Extract<ScanSciAcquireResult, { status: 'succeeded' }>;
   }): Promise<PersistedRetrievalSource>;
+  observeScanSci?: (observation: 'auth_required' | 'succeeded') => Promise<void>;
 }
 
 export function createScanSciAuthRequiredStateTracker() {
@@ -71,6 +72,8 @@ export async function executeSourceRetrieval(
     } else {
       if (!context.institutionalSubjectId) throw new Error('[blocked] ScanSci subject binding is unavailable');
       const result = await runtime.scansci.acquire({ identifier: payload.identifier, subjectId: context.institutionalSubjectId });
+      if (result.status === 'succeeded') await runtime.observeScanSci?.('succeeded');
+      else if (result.status === 'unavailable' && result.code === 'auth_required') await runtime.observeScanSci?.('auth_required');
       if (result.status !== 'succeeded') {
         providers.push({ provider: 'scansci', status: result.status, code: result.code });
       } else {
