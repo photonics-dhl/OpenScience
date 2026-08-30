@@ -11,7 +11,7 @@
 ## Version tuple
 
 - Worktree: `E:/Miscellaneous/XGS/.worktrees/readable-hermes-guidance`
-- Branch / local implementation / repository main: `codex/scansci-default-capability` / `60b374090600adcf6684c61142acc9e86f40feed` / `463c8e3a2a80138cda2d669c370c0481ed4c0877`；远端仅保留 `main`。
+- Branch / local implementation / repository main: `codex/scansci-default-capability` / `22088c0980b6b1ab5e395734f6313b4e15b218d8` / `463c8e3a2a80138cda2d669c370c0481ed4c0877`；远端仅保留 `main`。
 - Production application source / immutable release: `689331845574612130f223d08c92e61721c16586`
 - Rollback: `c435c4c8b2800bb20998fd9a9a93f2db96328661`; core/search migrations `32/32` / `2/2`
 - 本地 `main` 与其他 worktree 有用户改动，不得触碰或用它推断生产；上述 tuple 已从 ECS 重新实测。
@@ -47,6 +47,7 @@
 14. ScanSci plan Task 4 已形成本地候选：SHA legal/auth、networkless Secret init、持久 session、pre-Worker runtime gate、精确有/无服务 rollback 与 active+rollback retention；ADR-012 已记录。未部署，不能替代 ECS/CARSI acceptance。
 15. ScanSci plan Task 5 atomic candidate 为 `ff5568f` + `4763228`：Personal RO/SDF、Session、Task/credit/audit 在一笔三次有界 Serializable 事务提交；exact replay 先于余额，P2002 精确绑定 model/constraint，Redis 仅 commit 后投递并保留 pending recovery。Domain/API/Agent 本地门禁 green；两连接 PostgreSQL SSI/mismatch suite 已加入但本地未运行，ECS acceptance pending。
 16. ScanSci plan Task 6 local candidate 为 `60b3740`：durable provider state 的事务回滚/重放/generation 矩阵、disabled rollback Secret、非致命 observation persistence 与真实 PostgreSQL migration/concurrency 合同已闭合；Domain 520、Database 26、Worker 501 与 typecheck green，独立复审 READY。Migration 33/真实 suite/CARSI 仍是 ECS-only pending。
+17. ScanSci plan Task 7 local candidate 为 `22088c0`：Personal Space 使用 browser-safe persisted DTO、user+target hash-only unresolved intent、同 task retry、active-first recovery、精确 poll backoff/cleanup 与 one-use link 入口；Playwright `3/3`、Domain/API/Worker/Web 完整门禁 green。ECS 375px/真实下载和 Task 8 四入口仍 pending。
 
 ## Constraints
 
@@ -57,7 +58,7 @@
 ## Next action
 
 1. 按 `docs/plans/2026-08-30-scansci-default-capability-plan.md` 执行 Tasks 1–10；Task 11 不启动。
-2. 实现 release-scoped `scansci-legal`/auth helper、持久 session/可选账号 Secret、统一 `/literature/acquisitions` 和四类产品入口。
+2. 从 Task 8 继续接通 Hermes drawer、RO Hermes 与 RO Files/Evidence；Task 7 Personal Space 不再重做。
 3. 继续以服务器为最终验收；本地不运行 Docker。必须用真实 OA + 浙江大学 CARSI PDF、容器重建 session、72h/600s 与灰色源调用 0 关闭 Task 10。
 
 ## Read first
