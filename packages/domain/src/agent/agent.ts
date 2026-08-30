@@ -1,7 +1,11 @@
 import type { Redis } from 'ioredis';
 import { isDeepStrictEqual } from 'node:util';
 import { Prisma, type AgentSession, type AgentTask } from '@prisma/client';
-import { parseSourceRetrievePayload, SOURCE_RETRIEVE_RETRY_CONTRACT_VERSION } from '../retrieval/retrieve-payload';
+import {
+  parseDurableSourceRetrievePayload,
+  SOURCE_RETRIEVE_RETRY_CONTRACT_VERSION,
+  type DurableSourceRetrievePayload,
+} from '../retrieval/retrieve-payload';
 import type { AuditContext } from '@openscience/observability';
 import { requireActiveMembership, requireMembership } from '../workspace/helpers';
 import { recordAudit } from '../workspace/audit';
@@ -165,11 +169,83 @@ function evaluateAgentTaskRetryEligibility(
     return { authorityValid: true, canRetry: false };
   }
   try {
-    const parsed = parseSourceRetrievePayload(payload);
-    return { authorityValid: true, canRetry: parsed.retryContractVersion === SOURCE_RETRIEVE_RETRY_CONTRACT_VERSION };
+    parseDurableSourceRetrievePayload(payload);
+    return { authorityValid: true, canRetry: true };
   } catch {
     return { authorityValid: true, canRetry: false };
   }
+}
+
+async function findNewestRetryableSourceTask(
+  deps: AgentDeps,
+  userId: string,
+): Promise<AgentTaskRetrySnapshot | null> {
+  const selected = await deps.prisma.$queryRaw<Array<{ id: string }>>(Prisma.sql`
+    SELECT task."id" AS "id"
+    FROM "agent_tasks" AS task
+    INNER JOIN "agent_sessions" AS session ON session."id" = task."session_id"
+    INNER JOIN "research_objects" AS research_object ON research_object."id" = session."research_object_id"
+    INNER JOIN "workspaces" AS workspace ON workspace."id" = research_object."workspace_id"
+    WHERE session."user_id" = ${userId}::uuid
+      AND session."status" = 'active'
+      AND workspace."status" = 'active'
+      AND EXISTS (
+        SELECT 1 FROM "memberships" AS membership
+        WHERE membership."workspace_id" = workspace."id"
+          AND membership."user_id" = ${userId}::uuid
+      )
+      AND task."kind" = 'source.retrieve'
+      AND task."status" = 'failed'
+      AND task."retry_count" = 0
+      AND (task."error" IS NULL OR task."error" NOT LIKE '[blocked]%')
+      AND jsonb_typeof(task."payload") = 'object'
+      AND task."payload" ?& ARRAY['query', 'providers', 'limit', 'includeFullText', 'retryContractVersion']::text[]
+      AND task."payload" - ARRAY['query', 'providers', 'limit', 'includeFullText', 'identifier', 'retryContractVersion']::text[] = '{}'::jsonb
+      AND jsonb_typeof(task."payload" -> 'query') = 'string'
+      AND task."payload" ->> 'query' = regexp_replace(
+        task."payload" ->> 'query', '^[[:space:]]+|[[:space:]]+$', '', 'g'
+      )
+      AND char_length(task."payload" ->> 'query') BETWEEN 1 AND 500
+      AND jsonb_typeof(task."payload" -> 'providers') = 'array'
+      AND jsonb_typeof(task."payload" -> 'limit') = 'number'
+      AND jsonb_typeof(task."payload" -> 'includeFullText') = 'boolean'
+      AND task."payload" -> 'retryContractVersion' = '1'::jsonb
+      AND (
+        (
+          task."payload" -> 'providers' = '["semantic_scholar", "tavily"]'::jsonb
+          AND task."payload" -> 'limit' = '10'::jsonb
+          AND task."payload" -> 'includeFullText' = 'false'::jsonb
+          AND NOT task."payload" ? 'identifier'
+        )
+        OR
+        (
+          task."payload" -> 'providers' = '["scansci"]'::jsonb
+          AND task."payload" -> 'limit' = '1'::jsonb
+          AND task."payload" -> 'includeFullText' = 'true'::jsonb
+          AND task."payload" ? 'identifier'
+          AND jsonb_typeof(task."payload" -> 'identifier') = 'string'
+          AND task."payload" ->> 'identifier' = regexp_replace(
+            task."payload" ->> 'identifier', '^[[:space:]]+|[[:space:]]+$', '', 'g'
+          )
+          AND char_length(task."payload" ->> 'identifier') BETWEEN 1 AND 300
+          AND (
+            task."payload" ->> 'identifier' ~* '^10[.][0-9]{4,9}/[-._;()/:a-z0-9]+$'
+            OR task."payload" ->> 'identifier' ~* '^(arxiv:)?[0-9]{4}[.][0-9]{4,5}(v[0-9]+)?$'
+          )
+        )
+      )
+    ORDER BY task."updated_at" DESC, task."id" DESC
+    LIMIT 1
+  `);
+  if (selected.length === 0) return null;
+  if (selected.length !== 1) throw new Error('Source retrieval recovery invariant violated');
+  const task = await deps.prisma.agentTask.findUnique({
+    where: { id: selected[0]!.id }, include: retryAuthorityInclude(userId),
+  });
+  if (!task || !evaluateAgentTaskRetryEligibility(task, userId).canRetry) {
+    throw new Error('Source retrieval recovery invariant violated');
+  }
+  return task;
 }
 
 export interface CreateAgentSessionInput {
@@ -261,12 +337,7 @@ export async function listAgentTasks(
       orderBy: [{ updatedAt: 'desc' }, { id: 'desc' }],
     });
     const active = await newest({ status: { in: ['pending', 'running'] } });
-    const retryableFailed = active ? null : await newest({
-      status: 'failed', retryCount: 0, error: { not: { startsWith: '[blocked]' } },
-      payload: { path: ['retryContractVersion'], equals: SOURCE_RETRIEVE_RETRY_CONTRACT_VERSION },
-    });
-    const eligibleFailed = retryableFailed
-      && evaluateAgentTaskRetryEligibility(retryableFailed, input.userId).canRetry ? retryableFailed : null;
+    const eligibleFailed = active ? null : await findNewestRetryableSourceTask(deps, input.userId);
     const terminal = active || eligibleFailed ? null : await newest({ status: { in: ['succeeded', 'failed'] } });
     const selected = active ?? eligibleFailed ?? terminal;
     if (!selected) return [];
@@ -353,7 +424,7 @@ export async function createAgentSession(
  * 3. 幂等键查重（同 key → 返回既有任务）
  * 4. create pending in PostgreSQL; the public wrapper dispatches after commit
  */
-export async function persistAgentTaskInTransaction(
+async function persistAgentTaskCoreInTransaction(
   deps: AgentDeps,
   tx: Prisma.TransactionClient,
   input: Omit<SubmitAgentTaskInput, 'dispatch'>,
@@ -460,6 +531,35 @@ export async function persistAgentTaskInTransaction(
   return { task, replayed: false };
 }
 
+/** Generic task persistence cannot mint or carry the server-owned retrieval retry marker. */
+export async function persistAgentTaskInTransaction(
+  deps: AgentDeps,
+  tx: Prisma.TransactionClient,
+  input: Omit<SubmitAgentTaskInput, 'dispatch'>,
+  ctx: AuditContext = {},
+): Promise<{ task: AgentTask; replayed: boolean }> {
+  if (input.kind === 'source.retrieve') {
+    throw new AgentError('VALIDATION_ERROR', 'Source retrieval is reserved for literature acquisition');
+  }
+  if (Object.hasOwn(input.payload, 'retryContractVersion')) {
+    throw new AgentError('VALIDATION_ERROR', 'The retry contract marker is server-reserved');
+  }
+  return persistAgentTaskCoreInTransaction(deps, tx, input, ctx);
+}
+
+/** Package-internal durable path; callers cannot omit or partially stamp the acquisition contract. */
+export async function persistSourceRetrieveTaskInTransaction(
+  deps: AgentDeps,
+  tx: Prisma.TransactionClient,
+  input: Omit<SubmitAgentTaskInput, 'dispatch' | 'kind' | 'payload'> & { payload: DurableSourceRetrievePayload },
+  ctx: AuditContext = {},
+): Promise<{ task: AgentTask; replayed: boolean }> {
+  const payload = parseDurableSourceRetrievePayload(input.payload);
+  return persistAgentTaskCoreInTransaction(deps, tx, {
+    ...input, kind: 'source.retrieve', payload: payload as unknown as Record<string, unknown>,
+  }, ctx);
+}
+
 export async function submitAgentTask(
   deps: AgentDeps,
   input: SubmitAgentTaskInput,
@@ -562,35 +662,44 @@ export async function retryAgentTask(
   input: { userId: string; taskId: string },
   ctx: AuditContext = {},
 ): Promise<AgentTaskView> {
-  const updated = await deps.prisma.$transaction(async (tx) => {
-    const task = await tx.agentTask.findUnique({
-      where: { id: input.taskId }, include: retryAuthorityInclude(input.userId),
-    });
-    if (!task || task.session.userId !== input.userId) throw new AgentError('RESEARCH_OBJECT_NOT_FOUND', '任务不存在');
-    const eligibility = evaluateAgentTaskRetryEligibility(task, input.userId);
-    if (!eligibility.authorityValid) throw new AgentError('RESEARCH_OBJECT_NOT_FOUND', '任务不存在');
-    if (!eligibility.canRetry) {
-      if (task.status !== 'failed') throw new AgentError('ILLEGAL_TRANSITION', 'Only failed tasks can be retried');
-      if (task.retryCount >= 1) throw new AgentError('ILLEGAL_TRANSITION', 'Task was already retried');
-      throw new AgentError('ILLEGAL_TRANSITION', 'Task is not retryable');
+  let updated: AgentTask | null | undefined;
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    try {
+      updated = await deps.prisma.$transaction(async (tx) => {
+        const task = await tx.agentTask.findUnique({
+          where: { id: input.taskId }, include: retryAuthorityInclude(input.userId),
+        });
+        if (!task || task.session.userId !== input.userId) throw new AgentError('RESEARCH_OBJECT_NOT_FOUND', '任务不存在');
+        const eligibility = evaluateAgentTaskRetryEligibility(task, input.userId);
+        if (!eligibility.authorityValid) throw new AgentError('RESEARCH_OBJECT_NOT_FOUND', '任务不存在');
+        if (!eligibility.canRetry) {
+          if (task.status !== 'failed') throw new AgentError('ILLEGAL_TRANSITION', 'Only failed tasks can be retried');
+          if (task.retryCount >= 1) throw new AgentError('ILLEGAL_TRANSITION', 'Task was already retried');
+          throw new AgentError('ILLEGAL_TRANSITION', 'Task is not retryable');
+        }
+        const workspaceId = task.session.researchObject?.workspaceId ?? null;
+        const changed = await tx.agentTask.updateMany({
+          where: {
+            id: task.id, sessionId: task.sessionId, status: 'failed', kind: task.kind, retryCount: 0, error: task.error,
+          },
+          data: {
+            status: 'pending', progress: 0, result: Prisma.JsonNull, error: null, dispatchedAt: null,
+            retryCount: 1,
+          },
+        });
+        if (changed.count !== 1) throw new AgentError('ILLEGAL_TRANSITION', 'Task retry is no longer available');
+        await recordAudit(deps, tx, {
+          actorId: input.userId, action: 'agent.task.retry', workspaceId,
+          targetType: 'agent_task', targetId: task.id, metadata: { retryAttempt: 1, creditPolicy: 'reuse-original-reservation' },
+        }, ctx);
+        return tx.agentTask.findUnique({ where: { id: task.id } });
+      }, { isolationLevel: 'Serializable' });
+      break;
+    } catch (error: unknown) {
+      if ((error as { code?: unknown })?.code === 'P2034' && attempt < 2) continue;
+      throw error;
     }
-    const workspaceId = task.session.researchObject?.workspaceId ?? null;
-    const changed = await tx.agentTask.updateMany({
-      where: {
-        id: task.id, sessionId: task.sessionId, status: 'failed', kind: task.kind, retryCount: 0, error: task.error,
-      },
-      data: {
-        status: 'pending', progress: 0, result: Prisma.JsonNull, error: null, dispatchedAt: null,
-        retryCount: 1,
-      },
-    });
-    if (changed.count !== 1) throw new AgentError('ILLEGAL_TRANSITION', 'Task retry is no longer available');
-    await recordAudit(deps, tx, {
-      actorId: input.userId, action: 'agent.task.retry', workspaceId,
-      targetType: 'agent_task', targetId: task.id, metadata: { retryAttempt: 1, creditPolicy: 'reuse-original-reservation' },
-    }, ctx);
-    return tx.agentTask.findUnique({ where: { id: task.id } });
-  });
+  }
   if (!updated) throw new AgentError('RESEARCH_OBJECT_NOT_FOUND', '任务不存在');
   await dispatchAgentTask(deps, updated.id);
   return taskToView(updated);

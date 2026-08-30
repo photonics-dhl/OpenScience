@@ -3,7 +3,7 @@ import { Prisma } from '@prisma/client';
 import {
   buildTemporaryDocumentObjectKey,
   observeScanSciProviderState,
-  parseSourceRetrievePayload,
+  parseDurableSourceRetrievePayload,
   temporaryDocumentExpiresAt,
   toBrowserSourceRetrieveResult,
   type AgentDeps,
@@ -53,7 +53,7 @@ export function createSourceRetrieveHandler(options: {
     deps: RetrievalHandlerDeps,
     task: { id: string; payload: Record<string, unknown> },
   ): Promise<Record<string, unknown>> => {
-    const payload = parseSourceRetrievePayload(task.payload);
+    const { retryContractVersion: _retryContractVersion, ...payload } = parseDurableSourceRetrievePayload(task.payload);
     const ownerTask = await deps.prisma.agentTask.findUnique({
       where: { id: task.id },
       include: { session: { include: { researchObject: { include: { workspace: true } } } } },

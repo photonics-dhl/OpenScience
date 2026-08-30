@@ -7,10 +7,15 @@ import {
 } from '../research-object/research-objects';
 import {
   dispatchAgentTask, findOrCreateAgentSessionInTransaction, getAgentTask,
-  persistAgentTaskInTransaction, type AgentDeps, type AgentSessionView, type AgentTaskView,
+  persistSourceRetrieveTaskInTransaction, type AgentDeps, type AgentSessionView, type AgentTaskView,
 } from '../agent/agent';
 import { AgentError } from '../agent/errors';
-import { parseSourceRetrievePayload, SOURCE_RETRIEVE_RETRY_CONTRACT_VERSION } from './retrieve-payload';
+import {
+  parseDurableSourceRetrievePayload,
+  parseSourceRetrieveRequestPayload,
+  SOURCE_RETRIEVE_RETRY_CONTRACT_VERSION,
+  type DurableSourceRetrievePayload,
+} from './retrieve-payload';
 import { WorkspaceError } from '../workspace/errors';
 import { requireActiveMembership } from '../workspace/helpers';
 import { isOwnedPrismaIdempotencyConflict } from '../prisma-idempotency-conflict';
@@ -36,7 +41,7 @@ export interface LiteratureAcquisitionResult {
 interface NormalizedAcquisition {
   callerKey: string;
   target: LiteratureAcquisitionTarget;
-  payload: Record<string, unknown>;
+  payload: DurableSourceRetrievePayload;
   digest: string;
 }
 
@@ -70,11 +75,15 @@ function normalizeAcquisition(input: SubmitLiteratureAcquisitionInput): Normaliz
   } else {
     throw new AgentError('VALIDATION_ERROR', '文献检索目标无效');
   }
-  let payload: Record<string, unknown>;
+  let payload: DurableSourceRetrievePayload;
   try {
-    payload = parseSourceRetrievePayload(input.identifier
-      ? { query, providers: ['scansci'], limit: 1, includeFullText: true, identifier: input.identifier, retryContractVersion: SOURCE_RETRIEVE_RETRY_CONTRACT_VERSION }
-      : { query, providers: ['semantic_scholar', 'tavily'], limit: 10, includeFullText: false, retryContractVersion: SOURCE_RETRIEVE_RETRY_CONTRACT_VERSION }) as unknown as Record<string, unknown>;
+    const request = parseSourceRetrieveRequestPayload(input.identifier
+      ? { query, providers: ['scansci'], limit: 1, includeFullText: true, identifier: input.identifier }
+      : { query, providers: ['semantic_scholar', 'tavily'], limit: 10, includeFullText: false });
+    payload = parseDurableSourceRetrievePayload({
+      ...request,
+      retryContractVersion: SOURCE_RETRIEVE_RETRY_CONTRACT_VERSION,
+    });
   } catch (error) {
     throw new AgentError('VALIDATION_ERROR', error instanceof Error ? error.message : '文献检索请求无效');
   }
@@ -134,8 +143,8 @@ export async function submitLiteratureAcquisition(
           userId: input.userId, researchObjectId: researchObject.id, kind: 'retrieval', title,
           idempotencyKey: sessionKey,
         }, ctx);
-        const { task } = await persistAgentTaskInTransaction(deps, tx, {
-          userId: input.userId, sessionId: session.id, kind: 'source.retrieve',
+        const { task } = await persistSourceRetrieveTaskInTransaction(deps, tx, {
+          userId: input.userId, sessionId: session.id,
           payload: normalized.payload, idempotencyKey: taskKey,
         }, ctx);
         return { researchObject, session, task };

@@ -340,7 +340,13 @@ export {
 } from './retrieval/types';
 export { decideSourceRights } from './retrieval/rights';
 export { observeScanSciProviderState, type ScanSciProviderObservation } from './retrieval/provider-state';
-export { parseSourceRetrievePayload, type SourceRetrievePayload } from './retrieval/retrieve-payload';
+export {
+  parseDurableSourceRetrievePayload,
+  parseSourceRetrieveRequestPayload,
+  type DurableSourceRetrievePayload,
+  type SourceRetrievePayload,
+  type SourceRetrieveRequestPayload,
+} from './retrieval/retrieve-payload';
 export { isSourceRetrieveIdentifier, toBrowserSourceRetrieveResult, type BrowserSourceRetrieveResult } from './retrieval/browser-result';
 export {
   submitLiteratureAcquisition,

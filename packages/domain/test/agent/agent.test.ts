@@ -37,6 +37,26 @@ function fakeRedis() {
   };
 }
 
+const DURABLE_SOURCE_RETRIEVE_PAYLOAD = {
+  query: 'paper', providers: ['scansci'], limit: 1, includeFullText: true,
+  identifier: '10.1038/nature12373', retryContractVersion: 1,
+} as const;
+
+function seedSourceRetrieveTask(
+  db: { agentTasks: any[] },
+  input: { id: string; sessionId: string; payload?: Record<string, unknown>; status?: string; error?: string | null; updatedAt?: Date },
+) {
+  const timestamp = input.updatedAt ?? new Date();
+  const task = {
+    id: input.id, sessionId: input.sessionId, kind: 'source.retrieve', status: input.status ?? 'failed', progress: 30,
+    retryCount: 0, executionAttempt: 1, dispatchedAt: timestamp, payload: input.payload ?? DURABLE_SOURCE_RETRIEVE_PAYLOAD,
+    interestContext: null, idempotencyKey: null, result: { stale: true }, error: input.error ?? '[retryable] upstream timeout',
+    createdAt: timestamp, updatedAt: timestamp,
+  };
+  db.agentTasks.push(task);
+  return task;
+}
+
 async function makeDeps(credit = 100) {
   const { prisma, db } = createFakePrisma();
   const user = seedUser(db, { id: 'agent-user' });
@@ -71,37 +91,52 @@ describe('AgentSession/AgentTask（§15 + §16 幂等 + §9.1 配额）', () => 
   });
 
   it('retries one non-blocked source retrieval on the same task and rejects a second or blocked retry', async () => {
-    const { deps, user, ro, db } = await makeDeps(2);
+    const { deps, user, ro, db, redis } = await makeDeps(2);
     const session = await createAgentSession(deps, { userId: user.id, researchObjectId: ro.id, kind: 'retrieval' });
-    const payload = { query: 'paper', providers: ['scansci'], limit: 1, includeFullText: true, identifier: '10.1038/nature12373', retryContractVersion: 1 };
-    const task = await submitAgentTask(deps, { sessionId: session.id, userId: user.id, kind: 'source.retrieve', payload });
-    await markTaskProgress(deps, { taskId: task.id, status: 'running' });
-    await markTaskProgress(deps, { taskId: task.id, status: 'failed', error: 'upstream timeout', result: { stale: true } });
+    db.usageLedger.push({ id: 'source-reservation', userId: user.id, resource: 'ai_credit', delta: -1, kind: 'consume', createdAt: new Date() });
+    const task = seedSourceRetrieveTask(db, { id: 'source-retryable', sessionId: session.id });
     await expect(getAgentTask(deps, { userId: user.id, taskId: task.id })).resolves.toMatchObject({ id: task.id, canRetry: true });
     await expect(retryAgentTask(deps, { userId: user.id, taskId: task.id })).resolves.toMatchObject({ id: task.id, status: 'pending', retryCount: 1 });
-    expect(db.agentTasks[0]?.payload).toEqual(payload);
-    expect(db.agentTasks[0]).toMatchObject({ id: task.id, result: null, error: null, dispatchedAt: expect.any(Date) });
+    expect(task.payload).toEqual(DURABLE_SOURCE_RETRIEVE_PAYLOAD);
+    expect(task).toMatchObject({ id: task.id, result: null, error: null, dispatchedAt: expect.any(Date) });
     expect(db.usageLedger.filter((entry) => entry.resource === 'ai_credit' && entry.delta < 0)).toHaveLength(1);
+    expect(redis.lists.get('agent:queue')).toEqual([task.id]);
     await expect(retryAgentTask(deps, { userId: user.id, taskId: task.id })).rejects.toThrow(/failed tasks/i);
     await markTaskProgress(deps, { taskId: task.id, status: 'running' });
     await markTaskProgress(deps, { taskId: task.id, status: 'failed', error: 'upstream timeout again' });
     await expect(retryAgentTask(deps, { userId: user.id, taskId: task.id })).rejects.toThrow(/already retried/i);
 
-    const blocked = await submitAgentTask(deps, { sessionId: session.id, userId: user.id, kind: 'source.retrieve', payload });
-    await markTaskProgress(deps, { taskId: blocked.id, status: 'running' });
-    await markTaskProgress(deps, { taskId: blocked.id, status: 'failed', error: '[blocked] authority revoked' });
+    const blocked = seedSourceRetrieveTask(db, {
+      id: 'source-blocked', sessionId: session.id, error: '[blocked] authority revoked',
+    });
     await expect(getAgentTask(deps, { userId: user.id, taskId: blocked.id })).resolves.toMatchObject({ canRetry: false });
     await expect(retryAgentTask(deps, { userId: user.id, taskId: blocked.id })).rejects.toThrow(/not retryable/i);
+  });
+
+  it('rejects generic source retrieval and reserved marker injection before persistence or debit', async () => {
+    const { deps, user, ro, db } = await makeDeps(3);
+    const retrieval = await createAgentSession(deps, { userId: user.id, researchObjectId: ro.id, kind: 'retrieval' });
+    for (const payload of [DURABLE_SOURCE_RETRIEVE_PAYLOAD, { query: 'historical unmarked request' }]) {
+      await expect(submitAgentTask(deps, {
+        sessionId: retrieval.id, userId: user.id, kind: 'source.retrieve', payload: { ...payload }, dispatch: false,
+      })).rejects.toThrow(/literature acquisition|reserved|source retrieval/i);
+    }
+    const ordinary = await createAgentSession(deps, { userId: user.id, researchObjectId: ro.id, kind: 'extract' });
+    await expect(submitAgentTask(deps, {
+      sessionId: ordinary.id, userId: user.id, kind: 'demo.echo', payload: { message: 'x', retryContractVersion: 1 }, dispatch: false,
+    })).rejects.toThrow(/reserved|retry contract/i);
+    expect(db.agentTasks).toHaveLength(0);
+    expect(db.usageLedger.filter((entry) => entry.delta < 0)).toHaveLength(0);
   });
 
   it('uses one authority and payload predicate for public canRetry and the retry mutation', async () => {
     const { deps, user, ro, db } = await makeDeps(5);
     const session = await createAgentSession(deps, { userId: user.id, researchObjectId: ro.id, kind: 'retrieval' });
-    const payload = { query: 'paper', providers: ['scansci'], limit: 1, includeFullText: true, identifier: '10.1038/nature12373', retryContractVersion: 1 };
-    const malformed = await submitAgentTask(deps, { sessionId: session.id, userId: user.id, kind: 'source.retrieve', payload });
-    db.agentTasks.find((task) => task.id === malformed.id)!.payload = { query: 'malformed historical payload' };
-    await markTaskProgress(deps, { taskId: malformed.id, status: 'running' });
-    await markTaskProgress(deps, { taskId: malformed.id, status: 'failed', error: '[retryable] timeout' });
+    const payload = { ...DURABLE_SOURCE_RETRIEVE_PAYLOAD };
+    const malformed = seedSourceRetrieveTask(db, {
+      id: 'task-malformed-marker', sessionId: session.id,
+      payload: { query: 'malformed historical payload', retryContractVersion: 1 },
+    });
     await expect(getAgentTask(deps, { userId: user.id, taskId: malformed.id })).resolves.toMatchObject({ canRetry: false });
     await expect(retryAgentTask(deps, { userId: user.id, taskId: malformed.id })).rejects.toThrow(/not retryable/i);
     db.agentTasks.find((task) => task.id === malformed.id)!.payload = {
@@ -117,7 +152,7 @@ describe('AgentSession/AgentTask（§15 + §16 幂等 + §9.1 配额）', () => 
     db.agentSessions.push({ id: revokedSessionId, userId: user.id, researchObjectId: revokedRoId, kind: 'retrieval', title: '', status: 'active', idempotencyKey: null, createdAt: new Date(), updatedAt: new Date() });
     db.agentTasks.push({
       id: 'task-revoked', sessionId: revokedSessionId, kind: 'source.retrieve', status: 'failed', progress: 20,
-      retryCount: 0, executionAttempt: 1, dispatchedAt: new Date(), payload: { query: 'historical', providers: ['scansci'], limit: 1, includeFullText: true, identifier: '10.1038/nature12373' }, interestContext: null, idempotencyKey: null,
+      retryCount: 0, executionAttempt: 1, dispatchedAt: new Date(), payload, interestContext: null, idempotencyKey: null,
       result: null, error: '[retryable] timeout', createdAt: new Date(), updatedAt: new Date(),
     });
     await expect(getAgentTask(deps, { userId: user.id, taskId: 'task-revoked' })).resolves.toMatchObject({ canRetry: false });
@@ -137,6 +172,60 @@ describe('AgentSession/AgentTask（§15 + §16 幂等 + §9.1 配额）', () => 
       result: null, error: '[retryable] timeout', createdAt: new Date(), updatedAt: new Date(),
     });
     await expect(getAgentTask(deps, { userId: user.id, taskId: 'task-historical' })).resolves.toMatchObject({ canRetry: false });
+  });
+
+  it('runs retry eligibility, CAS, and audit in a max-three Serializable P2034-only loop', async () => {
+    const { deps, user, ro, db, redis } = await makeDeps(1);
+    const session = await createAgentSession(deps, { userId: user.id, researchObjectId: ro.id, kind: 'extract' });
+    const task = await submitAgentTask(deps, {
+      sessionId: session.id, userId: user.id, kind: 'sdf.extract', payload: { manuscriptText: 'bounded' },
+    });
+    await markTaskProgress(deps, { taskId: task.id, status: 'running' });
+    await markTaskProgress(deps, { taskId: task.id, status: 'failed', error: '[retryable] timeout' });
+    const prisma = (deps as { prisma: { $transaction: (fn: (tx: unknown) => Promise<unknown>, options?: unknown) => Promise<unknown> } }).prisma;
+    const originalTransaction = prisma.$transaction;
+    const optionsSeen: unknown[] = [];
+    prisma.$transaction = async (fn, options) => {
+      optionsSeen.push(options);
+      if (optionsSeen.length < 3) throw Object.assign(new Error('serialization conflict'), { code: 'P2034' });
+      return originalTransaction(fn, options);
+    };
+
+    await expect(retryAgentTask(deps, { userId: user.id, taskId: task.id })).resolves.toMatchObject({
+      id: task.id, status: 'pending', retryCount: 1,
+    });
+    expect(optionsSeen).toEqual([
+      { isolationLevel: 'Serializable' }, { isolationLevel: 'Serializable' }, { isolationLevel: 'Serializable' },
+    ]);
+    expect(db.usageLedger.filter((entry) => entry.delta < 0)).toHaveLength(1);
+    expect(redis.lists.get('agent:queue')?.filter((id) => id === task.id)).toHaveLength(2);
+  });
+
+  it('propagates the third P2034 and a first non-P2034 without mutation or dispatch', async () => {
+    for (const candidate of [
+      { error: Object.assign(new Error('serialization exhausted'), { code: 'P2034' }), attempts: 3 },
+      { error: new Error('audit unavailable'), attempts: 1 },
+    ]) {
+      const { deps, user, ro, db, redis } = await makeDeps(1);
+      const session = await createAgentSession(deps, { userId: user.id, researchObjectId: ro.id, kind: 'extract' });
+      const task = await submitAgentTask(deps, {
+        sessionId: session.id, userId: user.id, kind: 'sdf.extract', payload: { manuscriptText: 'bounded' },
+      });
+      await markTaskProgress(deps, { taskId: task.id, status: 'running' });
+      await markTaskProgress(deps, { taskId: task.id, status: 'failed', error: '[retryable] timeout' });
+      const prisma = (deps as { prisma: { $transaction: (fn: (tx: unknown) => Promise<unknown>, options?: unknown) => Promise<unknown> } }).prisma;
+      const optionsSeen: unknown[] = [];
+      prisma.$transaction = async (_fn, options) => {
+        optionsSeen.push(options);
+        throw candidate.error;
+      };
+
+      await expect(retryAgentTask(deps, { userId: user.id, taskId: task.id })).rejects.toBe(candidate.error);
+      expect(optionsSeen).toHaveLength(candidate.attempts);
+      expect(optionsSeen).toEqual(Array.from({ length: candidate.attempts }, () => ({ isolationLevel: 'Serializable' })));
+      expect(db.agentTasks.find((row) => row.id === task.id)).toMatchObject({ status: 'failed', retryCount: 0 });
+      expect(redis.lists.get('agent:queue')?.filter((id) => id === task.id)).toHaveLength(1);
+    }
   });
 
   it('persists server-owned interest context outside the client payload', async () => {
@@ -255,10 +344,15 @@ describe('AgentSession/AgentTask（§15 + §16 幂等 + §9.1 配额）', () => 
       retryCount: 0, executionAttempt: 1, dispatchedAt: new Date(base), payload: { query: 'paper', providers: ['scansci'], limit: 1, includeFullText: true, identifier: '10.1038/nature12373', retryContractVersion: 1 }, interestContext: null,
       idempotencyKey: 'retry-private-key', result: null, error: '[retryable] upstream timeout', createdAt: new Date(base - 2_000), updatedAt: new Date(base - 2_000),
     };
-    const malformed = {
-      ...retryable, id: 'malformed-newer-failure', payload: { query: 'malformed' }, idempotencyKey: 'malformed-private-key',
-      createdAt: new Date(base + 40_000), updatedAt: new Date(base + 40_000),
-    };
+    const malformedFailures = Array.from({ length: 25 }, (_, index) => ({
+      ...retryable,
+      id: `malformed-newer-failure-${index}`,
+      payload: { query: `malformed-${index}`, retryContractVersion: 1 },
+      idempotencyKey: `malformed-private-key-${index}`,
+      createdAt: new Date(base + (40 + index) * 1_000),
+      updatedAt: new Date(base + (40 + index) * 1_000),
+    }));
+    const newestMalformed = malformedFailures.at(-1)!;
     const active = {
       ...retryable, id: 'active-older-than-history', status: 'running', retryCount: 0, error: null,
       idempotencyKey: 'active-private-key', payload: { query: 'active private' }, createdAt: new Date(base - 3_000), updatedAt: new Date(base - 3_000),
@@ -273,7 +367,19 @@ describe('AgentSession/AgentTask（§15 + §16 幂等 + §9.1 配额）', () => 
       ...retryable, id: 'authority-revoked-newer-failure', sessionId: revokedSessionId, idempotencyKey: 'revoked-private-key',
       createdAt: new Date(base + 39_000), updatedAt: new Date(base + 39_000),
     };
-    db.agentTasks.push(retryable, malformed, authorityRevoked, active);
+    const archivedWorkspaceId = 'recovery-workspace-archived';
+    const archivedRoId = 'recovery-ro-archived';
+    const archivedSessionId = 'recovery-session-archived';
+    db.workspaces.push({ id: archivedWorkspaceId, type: 'team', name: 'Archived', status: 'archived', ownerId: user.id, createdAt: new Date(), updatedAt: new Date() });
+    db.memberships.push({ id: 'recovery-archived-membership', workspaceId: archivedWorkspaceId, userId: user.id, role: 'owner', createdAt: new Date(), updatedAt: new Date() });
+    db.researchObjects.push({ id: archivedRoId, workspaceId: archivedWorkspaceId, createdBy: user.id, title: 'Archived', status: 'draft', visibility: 'private', version: 1, idempotencyKey: null, createdAt: new Date(), updatedAt: new Date() });
+    db.agentSessions.push({ id: archivedSessionId, userId: user.id, researchObjectId: archivedRoId, kind: 'retrieval', title: '', status: 'active', idempotencyKey: null, createdAt: new Date(), updatedAt: new Date() });
+    const archived = { ...retryable, id: 'archived-newer-failure', sessionId: archivedSessionId, updatedAt: new Date(base + 98_000) };
+    const inactive = { ...retryable, id: 'inactive-newer-failure', updatedAt: new Date(base + 97_000) };
+    const inactiveSession = { ...db.agentSessions.find((candidate) => candidate.id === session.id)!, id: 'recovery-session-inactive', status: 'closed' };
+    db.agentSessions.push(inactiveSession);
+    inactive.sessionId = inactiveSession.id;
+    db.agentTasks.push(retryable, ...malformedFailures, authorityRevoked, archived, inactive, active);
     const other = seedUser(db, { id: 'recovery-other-user' });
     db.agentSessions.push({ id: 'recovery-other-session', userId: other.id, researchObjectId: null, kind: 'retrieval', title: '', status: 'active', idempotencyKey: null, createdAt: new Date(), updatedAt: new Date() });
     db.agentTasks.push({ ...active, id: 'other-user-active', sessionId: 'recovery-other-session', updatedAt: new Date(base + 99_000) });
@@ -288,11 +394,58 @@ describe('AgentSession/AgentTask（§15 + §16 幂等 + §9.1 配额）', () => 
 
     retryable.error = '[blocked] policy denied';
     const blockedFallback = await listAgentTasks(deps, { userId: user.id, kind: 'source.retrieve', recoveryPreferred: true });
-    expect(blockedFallback).toEqual([expect.objectContaining({ id: malformed.id, status: 'failed', canRetry: false })]);
+    expect(blockedFallback).toEqual([expect.objectContaining({ id: newestMalformed.id, status: 'failed', canRetry: false })]);
     retryable.error = '[retryable] failed twice';
     retryable.retryCount = 1;
     const exhaustedFallback = await listAgentTasks(deps, { userId: user.id, kind: 'source.retrieve', recoveryPreferred: true });
-    expect(exhaustedFallback).toEqual([expect.objectContaining({ id: malformed.id, status: 'failed', canRetry: false })]);
+    expect(exhaustedFallback).toEqual([expect.objectContaining({ id: newestMalformed.id, status: 'failed', canRetry: false })]);
+  });
+
+  it('uses one bounded payload-free ID query with no recovery scan loop', async () => {
+    const { deps, user, ro, db } = await makeDeps(2);
+    const session = await createAgentSession(deps, { userId: user.id, researchObjectId: ro.id, kind: 'retrieval' });
+    const task = seedSourceRetrieveTask(db, { id: 'bounded-query-retryable', sessionId: session.id });
+    const prisma = (deps as { prisma: {
+      $queryRaw(query: unknown): Promise<Array<{ id: string }>>;
+      agentTask: { findMany(args: unknown): Promise<unknown> };
+    } }).prisma;
+    const queries: unknown[] = [];
+    prisma.$queryRaw = async (query) => {
+      queries.push(query);
+      return [{ id: task.id }];
+    };
+    prisma.agentTask.findMany = async () => { throw new Error('recovery must not scan or paginate task rows'); };
+
+    await expect(listAgentTasks(deps, {
+      userId: user.id, kind: 'source.retrieve', recoveryPreferred: true,
+    })).resolves.toEqual([expect.objectContaining({ id: task.id, canRetry: true })]);
+    expect(queries).toHaveLength(1);
+    const text = (queries[0] as { strings?: readonly string[] }).strings?.join('?') ?? '';
+    const selectList = text.slice(0, text.toUpperCase().indexOf('FROM'));
+    expect(selectList).toMatch(/SELECT\s+\w+\."id"/i);
+    expect(selectList).not.toMatch(/payload|session|workspace|member/i);
+  });
+
+  it('raises a payload-free invariant error when SQL and the shared predicate disagree', async () => {
+    const { deps, user, ro, db } = await makeDeps(2);
+    const session = await createAgentSession(deps, { userId: user.id, researchObjectId: ro.id, kind: 'retrieval' });
+    const malformed = seedSourceRetrieveTask(db, {
+      id: 'sql-ts-parity-mismatch', sessionId: session.id,
+      payload: { query: 'private malformed query', retryContractVersion: 1 },
+    });
+    const prisma = (deps as { prisma: {
+      $queryRaw(query: unknown): Promise<Array<{ id: string }>>;
+      agentTask: { findMany(args: unknown): Promise<unknown> };
+    } }).prisma;
+    prisma.$queryRaw = async () => [{ id: malformed.id }];
+    prisma.agentTask.findMany = async () => { throw new Error('recovery must not scan or paginate task rows'); };
+
+    const outcome = listAgentTasks(deps, { userId: user.id, kind: 'source.retrieve', recoveryPreferred: true })
+      .then(() => 'resolved', (error: unknown) => error);
+    const error = await outcome;
+    expect(error).toBeInstanceOf(Error);
+    expect((error as Error).message).toBe('Source retrieval recovery invariant violated');
+    expect((error as Error).message).not.toMatch(/private|payload|authority|membership/i);
   });
 
   it('幂等键重放 → 返回既有任务（§16 不重复）', async () => {

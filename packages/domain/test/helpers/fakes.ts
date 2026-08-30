@@ -1,5 +1,6 @@
 import { Prisma, type PrismaClient } from '@prisma/client';
 import type { Mailer, MailMessage } from '@openscience/auth';
+import { parseDurableSourceRetrievePayload } from '../../src/retrieval/retrieve-payload';
 
 /* eslint-disable @typescript-eslint/no-explicit-any -- 测试 fake 刻意脱离 Prisma 完整类型 */
 
@@ -99,6 +100,31 @@ export function createFakePrisma(): { prisma: PrismaClient; db: FakeDb } {
   };
 
   const prisma: any = {
+    $queryRaw: async (query: { values?: unknown[] }) => {
+      const userId = String(query.values?.[0] ?? '');
+      const rows = db.agentTasks.filter((task) => {
+        if (task.kind !== 'source.retrieve' || task.status !== 'failed' || task.retryCount !== 0
+          || task.error?.startsWith('[blocked]')) return false;
+        const session = db.agentSessions.find((candidate) => candidate.id === task.sessionId);
+        const researchObject = db.researchObjects.find((candidate) => candidate.id === session?.researchObjectId);
+        const workspace = db.workspaces.find((candidate) => candidate.id === researchObject?.workspaceId);
+        if (!session || session.userId !== userId || session.status !== 'active'
+          || !researchObject || !workspace || workspace.status !== 'active'
+          || !db.memberships.some((membership) => membership.workspaceId === workspace.id && membership.userId === userId)) {
+          return false;
+        }
+        try {
+          parseDurableSourceRetrievePayload(task.payload);
+          return true;
+        } catch {
+          return false;
+        }
+      }).toSorted((left, right) => {
+        const byUpdated = right.updatedAt.getTime() - left.updatedAt.getTime();
+        return byUpdated || right.id.localeCompare(left.id);
+      });
+      return rows.length > 0 ? [{ id: rows[0].id }] : [];
+    },
     auditLog: {
       create: async ({ data }: any) => {
         const row = { id: nextId(), createdAt: new Date(), ...data };

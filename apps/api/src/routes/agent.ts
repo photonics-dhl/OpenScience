@@ -37,6 +37,9 @@ const genericTaskBody = z.object({
   activeClaimId: z.string().uuid().optional(),
 }).strict().superRefine((value, ctx) => {
   if (JSON.stringify(value.payload).length > 65_536) ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'payload exceeds 64KB' });
+  if (Object.hasOwn(value.payload, 'retryContractVersion')) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'retryContractVersion is server-reserved' });
+  }
   if (value.kind === 'review.analyze') {
     const parsed = z.object({
       versionId: z.string().uuid(),

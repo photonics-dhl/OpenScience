@@ -66,6 +66,7 @@ describe('POST /literature/acquisitions', () => {
 
     expect((await request({ query: 'x', target: { kind: 'personal' } })).statusCode).toBe(400);
     expect((await request({ query: 'x', providers: ['scansci'], target: { kind: 'personal' } }, { 'idempotency-key': 'invalid-fields' })).statusCode).toBe(400);
+    expect((await request({ query: 'x', retryContractVersion: 1, target: { kind: 'personal' } }, { 'idempotency-key': 'reserved-marker' })).statusCode).toBe(400);
     expect((await request({ query: 'x', target: { kind: 'research_object', researchObjectId: 'not-a-uuid' } }, { 'idempotency-key': 'invalid-target' })).statusCode).toBe(400);
     await app.close();
   });

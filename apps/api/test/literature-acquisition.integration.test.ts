@@ -1,8 +1,11 @@
 import { randomUUID } from 'node:crypto';
 import { afterAll, afterEach, describe, expect, it } from 'vitest';
 import { createPrismaAuditSink, createPrismaClient } from '@openscience/database';
+import { SOURCE_RETRIEVE_RETRY_PAYLOAD_PARITY_CASES } from '@openscience/domain/test-fixtures';
 import {
+  listAgentTasks,
   recoverUndispatchedAgentTasks,
+  retryAgentTask,
   submitLiteratureAcquisition,
   type AgentError,
   type SubmitLiteratureAcquisitionInput,
@@ -39,6 +42,26 @@ function createAuditBarrier() {
   const audit: AuditSink = {
     record: async (event, tx) => {
       if (!blocked && event.action === 'research_object.create') {
+        blocked = true;
+        enter();
+        await released;
+      }
+      await persisted.record(event, tx);
+    },
+  };
+  return { audit, entered, release };
+}
+
+function createRetryAuditBarrier() {
+  const persisted = createPrismaAuditSink(prisma);
+  let enter!: () => void;
+  let release!: () => void;
+  let blocked = false;
+  const entered = new Promise<void>((resolve) => { enter = resolve; });
+  const released = new Promise<void>((resolve) => { release = resolve; });
+  const audit: AuditSink = {
+    record: async (event, tx) => {
+      if (!blocked && event.action === 'agent.task.retry') {
         blocked = true;
         enter();
         await released;
@@ -309,5 +332,137 @@ describe('literature acquisition atomic PostgreSQL transaction', () => {
     await expect(acquisitionCounts(user.id)).resolves.toMatchObject({
       researchObjects: 1, sdfDocuments: 1, sdfNodes: 6, sessions: 1, tasks: 1, debits: 1, audits: 3,
     });
+  });
+
+  it('keeps the SQL selector in parity with the shared exact durable payload corpus', async () => {
+    const { deps, user } = await createFixture(1);
+    const acquisition = await submitLiteratureAcquisition(deps as never, {
+      userId: user.id, idempotencyKey: 'retry-payload-parity', query: 'seed', target: { kind: 'personal' },
+    });
+    for (const [index, candidate] of SOURCE_RETRIEVE_RETRY_PAYLOAD_PARITY_CASES.entries()) {
+      await prisma.agentTask.update({
+        where: { id: acquisition.task.id },
+        data: {
+          status: 'failed', retryCount: 0, error: '[retryable] parity',
+          payload: candidate.payload as never,
+          updatedAt: new Date(Date.UTC(2026, 7, 30, 1, 0, index)),
+        },
+      });
+      const recovered = await listAgentTasks(deps as never, {
+        userId: user.id, kind: 'source.retrieve', recoveryPreferred: true,
+      });
+      expect(recovered).toEqual([expect.objectContaining({
+        id: acquisition.task.id,
+        canRetry: candidate.eligible,
+      })]);
+    }
+  });
+
+  it('selects an older valid retry after more than twenty newer marker-qualified malformed rows', async () => {
+    const { deps, user } = await createFixture(1);
+    const acquisition = await submitLiteratureAcquisition(deps as never, {
+      userId: user.id, idempotencyKey: 'deep-malformed-history', query: 'seed', target: { kind: 'personal' },
+    });
+    const validUpdatedAt = new Date('2026-08-30T01:00:00.000Z');
+    await prisma.agentTask.update({
+      where: { id: acquisition.task.id },
+      data: { status: 'failed', retryCount: 0, error: '[retryable] valid older failure', updatedAt: validUpdatedAt },
+    });
+    await prisma.agentTask.createMany({
+      data: Array.from({ length: 25 }, (_, index) => ({
+        sessionId: acquisition.session.id,
+        kind: 'source.retrieve',
+        status: 'failed' as const,
+        progress: 30,
+        retryCount: 0,
+        executionAttempt: 1,
+        payload: { query: `malformed-${index}`, retryContractVersion: 1 },
+        error: '[retryable] malformed marker row',
+        createdAt: new Date(validUpdatedAt.getTime() + (index + 1) * 1_000),
+        updatedAt: new Date(validUpdatedAt.getTime() + (index + 1) * 1_000),
+      })),
+    });
+    await expect(listAgentTasks(deps as never, {
+      userId: user.id, kind: 'source.retrieve', recoveryPreferred: true,
+    })).resolves.toEqual([expect.objectContaining({ id: acquisition.task.id, canRetry: true })]);
+  });
+
+  it('has only serial authority outcomes when membership revocation races a same-task retry', async () => {
+    const barrier = createRetryAuditBarrier();
+    const { deps, user, membership, redis } = await createFixture(1, barrier.audit);
+    const acquisition = await submitLiteratureAcquisition(deps as never, {
+      userId: user.id,
+      idempotencyKey: 'retry-authority-race',
+      query: 'attosecond dynamics',
+      identifier: '10.1038/nature12373',
+      target: { kind: 'personal' },
+    });
+    await prisma.agentTask.update({
+      where: { id: acquisition.task.id },
+      data: { status: 'failed', progress: 30, result: { stale: true }, error: '[retryable] upstream timeout' },
+    });
+
+    const retryPromise = retryAgentTask(deps as never, { userId: user.id, taskId: acquisition.task.id });
+    await barrier.entered;
+    let revocationReady!: () => void;
+    let releaseRevocation!: () => void;
+    const revocationEntered = new Promise<void>((resolve) => { revocationReady = resolve; });
+    const revocationReleased = new Promise<void>((resolve) => { releaseRevocation = resolve; });
+    const revocationPromise = competitorPrisma.$transaction(async (tx) => {
+      const observed = await tx.agentTask.findUnique({
+        where: { id: acquisition.task.id },
+        select: { status: true, retryCount: true },
+      });
+      const removed = await tx.membership.delete({ where: { id: membership.id } });
+      revocationReady();
+      await revocationReleased;
+      return { observed, removedId: removed.id };
+    }, { isolationLevel: 'Serializable' }).then(
+      (value) => ({ status: 'fulfilled' as const, value }),
+      (reason: unknown) => ({ status: 'rejected' as const, reason }),
+    );
+    await revocationEntered;
+    barrier.release();
+    releaseRevocation();
+    const [revocationAttempt, retryOutcome] = await Promise.all([
+      revocationPromise,
+      retryPromise.then(
+        (value) => ({ status: 'fulfilled' as const, value }),
+        (reason: unknown) => ({ status: 'rejected' as const, reason }),
+      ),
+    ]);
+
+    if (revocationAttempt.status === 'fulfilled') {
+      expect(revocationAttempt.value).toEqual({
+        observed: { status: 'failed', retryCount: 0 }, removedId: membership.id,
+      });
+      expect(retryOutcome).toMatchObject({
+        status: 'rejected', reason: { code: 'RESEARCH_OBJECT_NOT_FOUND' },
+      });
+    } else {
+      expect(revocationAttempt.reason).toMatchObject({ code: 'P2034' });
+      expect(retryOutcome).toMatchObject({
+        status: 'fulfilled', value: { id: acquisition.task.id, status: 'pending', retryCount: 1 },
+      });
+      await competitorPrisma.membership.delete({ where: { id: membership.id } });
+    }
+
+    const [task, membershipAfter, retryAudits, debits] = await Promise.all([
+      prisma.agentTask.findUnique({ where: { id: acquisition.task.id } }),
+      prisma.membership.findUnique({ where: { id: membership.id } }),
+      prisma.auditLog.count({ where: { actorId: user.id, action: 'agent.task.retry' } }),
+      prisma.usageLedger.count({ where: { userId: user.id, resource: 'ai_credit', delta: { lt: 0 } } }),
+    ]);
+    expect(membershipAfter).toBeNull();
+    expect(debits).toBe(1);
+    if (retryOutcome.status === 'fulfilled') {
+      expect(task).toMatchObject({ status: 'pending', retryCount: 1, result: null, error: null });
+      expect(retryAudits).toBe(1);
+      expect(redis.pushed).toEqual([acquisition.task.id, acquisition.task.id]);
+    } else {
+      expect(task).toMatchObject({ status: 'failed', retryCount: 0, result: { stale: true }, error: '[retryable] upstream timeout' });
+      expect(retryAudits).toBe(0);
+      expect(redis.pushed).toEqual([acquisition.task.id]);
+    }
   });
 });

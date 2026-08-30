@@ -1,6 +1,6 @@
 import {
   decideSourceRights,
-  parseSourceRetrievePayload,
+  parseSourceRetrieveRequestPayload,
   type SourceRetrievePayload,
   type SourceRightsDecision,
 } from '@openscience/domain';
@@ -45,7 +45,7 @@ export async function executeSourceRetrieval(
   runtime: RetrievalRuntime,
   context: { institutionalSubjectId?: string } = {},
 ): Promise<{ sources: PersistedRetrievalSource[]; providers: Array<{ provider: string; status: string; code?: string }> }> {
-  const payload: SourceRetrievePayload = parseSourceRetrievePayload(rawPayload);
+  const payload: SourceRetrievePayload = parseSourceRetrieveRequestPayload(rawPayload);
   const sources: PersistedRetrievalSource[] = [];
   const providers: Array<{ provider: string; status: string; code?: string }> = [];
   for (const provider of payload.providers) {

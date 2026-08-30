@@ -89,4 +89,12 @@ describe('agent task payload boundary', () => {
       payload: { query: 'ultrafast science', providers: ['semantic_scholar', 'tavily'], limit: 5 },
     })).toThrow();
   });
+
+  it('reserves the durable retrieval marker from every public generic task payload', () => {
+    expect(() => agentTaskBodySchema.parse({
+      sessionId: validGuide.sessionId,
+      kind: 'demo.echo',
+      payload: { message: 'ordinary task', retryContractVersion: 1 },
+    })).toThrow();
+  });
 });

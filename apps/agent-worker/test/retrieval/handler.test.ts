@@ -12,7 +12,7 @@ const RIGHTS_ID = '55555555-5555-4555-8555-555555555555';
 afterEach(() => vi.useRealTimers());
 
 describe('source.retrieve handler replay safety', () => {
-  it('returns metadata after durable auth observation exhausts its three transaction attempts', async () => {
+  it('returns auth-required after durable observation exhausts its three transaction attempts', async () => {
     let transactionAttempts = 0;
     const prisma: any = {
       agentTask: { findUnique: async () => ({
@@ -63,16 +63,14 @@ describe('source.retrieve handler replay safety', () => {
     const result = await handler({ prisma } as any, {
       id: TASK_ID,
       payload: {
-        query: 'paper', providers: ['semantic_scholar', 'scansci'], limit: 1, includeFullText: true, identifier: '10.1000/test',
+        query: 'paper', providers: ['scansci'], limit: 1, includeFullText: true,
+        identifier: '10.1000/test', retryContractVersion: 1,
       },
     });
 
     expect(result).toMatchObject({
-      sources: [{ id: SOURCE_ID, provider: 'semantic_scholar' }],
-      providers: [
-        { provider: 'semantic_scholar', status: 'succeeded' },
-        { provider: 'scansci', status: 'unavailable', code: 'auth_required' },
-      ],
+      sources: [],
+      providers: [{ provider: 'scansci', status: 'unavailable', code: 'auth_required' }],
     });
     expect(transactionAttempts).toBe(3);
   });
@@ -147,7 +145,8 @@ describe('source.retrieve handler replay safety', () => {
     const task = {
       id: TASK_ID,
       payload: {
-        query: 'paper', providers: ['scansci'], limit: 1, includeFullText: true, identifier: '10.1000/test',
+        query: 'paper', providers: ['scansci'], limit: 1, includeFullText: true,
+        identifier: '10.1000/test', retryContractVersion: 1,
       },
     };
 
@@ -168,5 +167,22 @@ describe('source.retrieve handler replay safety', () => {
     expect(temporaryCreate).toHaveBeenCalledTimes(1);
     expect(putObject).toHaveBeenCalledTimes(1);
     expect(temporaryDocument).toMatchObject({ agentTaskId: TASK_ID, state: 'active' });
+  });
+
+  it('rejects an unmarked persisted task before reading authority or invoking providers', async () => {
+    const findUnique = vi.fn();
+    const acquire = vi.fn();
+    const handler = createSourceRetrieveHandler({
+      queryHmacSecret: 'retrieval-query-test-secret-at-least-32-bytes',
+      semanticScholar: { search: vi.fn() },
+      tavily: { search: vi.fn() },
+      scansci: { acquire },
+    });
+    await expect(handler({ prisma: { agentTask: { findUnique } } } as any, {
+      id: TASK_ID,
+      payload: { query: 'paper', providers: ['scansci'], limit: 1, includeFullText: true, identifier: '10.1000/test' },
+    })).rejects.toThrow(/durable.*incomplete/i);
+    expect(findUnique).not.toHaveBeenCalled();
+    expect(acquire).not.toHaveBeenCalled();
   });
 });

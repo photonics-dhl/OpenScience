@@ -14,7 +14,8 @@
       "types": "./dist/retrieval/browser-result.d.ts",
       "default": "./dist/retrieval/browser-result.js"
     },
-    "./test-helpers": { "types": "./test/helpers/fakes.ts", "default": "./test/helpers/fakes.ts" }
+    "./test-helpers": { "types": "./test/helpers/fakes.ts", "default": "./test/helpers/fakes.ts" },
+    "./test-fixtures": { "types": "./test/helpers/retrieval-payload-parity.ts", "default": "./test/helpers/retrieval-payload-parity.ts" }
   },
   "scripts": {
     "build": "tsc -p tsconfig.json",
