@@ -2,7 +2,7 @@ import type { Redis } from 'ioredis';
 import { isDeepStrictEqual } from 'node:util';
 import { Prisma } from '@prisma/client';
 import type { AuditContext } from '@openscience/observability';
-import { requireMembership } from '../workspace/helpers';
+import { requireActive, requireMembership } from '../workspace/helpers';
 import { recordAudit } from '../workspace/audit';
 import { recordEntry } from '../usage/ledger';
 import type { WorkspaceDeps } from '../workspace/types';
@@ -299,6 +299,11 @@ export async function submitAgentTask(
   for (let attempt = 0; ; attempt += 1) {
     try {
       task = await deps.prisma.$transaction(async (tx) => {
+        if (workspaceId) {
+          const workspace = await tx.workspace.findUnique({ where: { id: workspaceId } });
+          if (!workspace) throw new AgentError('RESEARCH_OBJECT_NOT_FOUND', '空间不存在');
+          requireActive(workspace);
+        }
         const balance = await tx.usageLedger.aggregate({
           where: { userId: input.userId, resource: AI_CREDIT_RESOURCE },
           _sum: { delta: true },

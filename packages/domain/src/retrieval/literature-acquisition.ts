@@ -3,7 +3,7 @@ import { SDF_CORE_FIELDS } from '@openscience/sdf-schema';
 import type { AuditContext } from '@openscience/observability';
 import type { ResearchObjectSummary } from '../research-object/research-objects';
 import { SDF_NODE_TYPES } from '../research-object/types';
-import { AI_CREDIT_RESOURCE, createAgentSession, submitAgentTask, type AgentDeps, type AgentSessionView, type AgentTaskView } from '../agent/agent';
+import { AI_CREDIT_RESOURCE, createAgentSession, getAgentTask, submitAgentTask, type AgentDeps, type AgentSessionView, type AgentTaskView } from '../agent/agent';
 import { AgentError } from '../agent/errors';
 import { parseSourceRetrievePayload } from './retrieve-payload';
 import { requireRoAccess } from '../visibility/access';
@@ -77,6 +77,12 @@ function emptyCore(): Record<string, string> {
   return Object.fromEntries(SDF_CORE_FIELDS.map((field) => [field, '']));
 }
 
+function sessionToView(session: {
+  id: string; researchObjectId: string | null; kind: string; title: string; status: string; createdAt: Date;
+}): AgentSessionView {
+  return { id: session.id, researchObjectId: session.researchObjectId, kind: session.kind, title: session.title, status: session.status, createdAt: session.createdAt };
+}
+
 async function ensurePersonalLiteratureResearchObject(
   deps: AgentDeps, input: SubmitLiteratureAcquisitionInput, workspaceId: string, ctx: AuditContext,
 ): Promise<{ researchObject: ResearchObjectSummary; created: boolean }> {
@@ -115,20 +121,42 @@ export async function submitLiteratureAcquisition(
 ): Promise<LiteratureAcquisitionResult> {
   const { payload, digest } = validateAndBuildPayload(input);
   const target = await resolveTarget(deps, input);
+  const personalKey = `system:personal-literature:${input.userId}`;
+  const existingPersonal = input.target.kind === 'personal'
+    ? await deps.prisma.researchObject.findUnique({ where: { idempotencyKey: personalKey } })
+    : null;
+  if (existingPersonal && (existingPersonal.workspaceId !== target.workspaceId || existingPersonal.createdBy !== input.userId)) {
+    throw new AgentError('FORBIDDEN', '个人文献库归属不一致');
+  }
+  const existingResearchObject = input.target.kind === 'personal'
+    ? (existingPersonal ? toSummary(existingPersonal) : undefined)
+    : target.researchObject!;
+  const sessionKey = `literature-acquisition:session:${input.userId}:${input.idempotencyKey}`;
+  const taskKey = `literature-acquisition:task:${input.userId}:${input.idempotencyKey}`;
+  const expectedTitle = `Literature acquisition:${digest}`;
+  const priorSession = await deps.prisma.agentSession.findUnique({ where: { idempotencyKey: sessionKey } });
+  if (priorSession) {
+    if (!existingResearchObject || priorSession.userId !== input.userId || priorSession.researchObjectId !== existingResearchObject.id
+      || priorSession.kind !== 'retrieval' || priorSession.title !== expectedTitle) {
+      throw new AgentError('VALIDATION_ERROR', '幂等键已用于其他文献检索请求');
+    }
+    const existingTask = await deps.prisma.agentTask.findUnique({ where: { idempotencyKey: taskKey } });
+    if (existingTask) {
+      return { researchObject: existingResearchObject, session: sessionToView(priorSession), task: await getAgentTask(deps, { userId: input.userId, taskId: existingTask.id }) };
+    }
+  }
   if (await getBalance(deps, { userId: input.userId, resource: AI_CREDIT_RESOURCE }) <= 0) {
     throw new AgentError('INSUFFICIENT_CREDIT', 'AI Credit 不足（§2.4-7），请补充后再试');
   }
   const personal = input.target.kind === 'personal'
-    ? await ensurePersonalLiteratureResearchObject(deps, input, target.workspaceId, ctx)
+    ? existingResearchObject
+      ? { researchObject: existingResearchObject, created: false }
+      : await ensurePersonalLiteratureResearchObject(deps, input, target.workspaceId, ctx)
     : { researchObject: target.researchObject!, created: false };
   const researchObject = personal.researchObject;
-  const requestKey = `${input.userId}:${input.target.kind}:${researchObject.id}:${input.idempotencyKey}`;
-  const sessionKey = `literature-acquisition:session:${requestKey}`;
-  const taskKey = `literature-acquisition:task:${requestKey}`;
-  const priorSession = await deps.prisma.agentSession.findUnique({ where: { idempotencyKey: sessionKey } });
   const session = await createAgentSession(deps, {
     userId: input.userId, researchObjectId: researchObject.id, kind: 'retrieval',
-    title: `Literature acquisition:${digest}`, idempotencyKey: sessionKey,
+    title: expectedTitle, idempotencyKey: sessionKey,
   }, ctx);
   try {
     const task = await submitAgentTask(deps, {

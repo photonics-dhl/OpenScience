@@ -66,6 +66,29 @@ describe('submitLiteratureAcquisition', () => {
     });
   });
 
+  it('returns an existing acquisition on exact replay after it consumed the last credit', async () => {
+    const { deps, db, user } = makeDeps();
+    db.usageLedger[0].delta = 1;
+    const input = { userId: user.id, idempotencyKey: 'last-credit', query: 'attosecond dynamics', target: { kind: 'personal' as const } };
+    const first = await submitLiteratureAcquisition(deps as never, input);
+    const replay = await submitLiteratureAcquisition(deps as never, input);
+    expect(replay.task.id).toBe(first.task.id);
+    expect(db.agentTasks).toHaveLength(1);
+  });
+
+  it('rejects a caller idempotency key replayed against a different target', async () => {
+    const { deps, db, user } = makeDeps();
+    db.workspaces.push({ id: 'workspace-team-a', type: 'team', ownerId: user.id, name: 'A', status: 'active', createdAt: new Date(), updatedAt: new Date() });
+    db.workspaces.push({ id: 'workspace-team-b', type: 'team', ownerId: user.id, name: 'B', status: 'active', createdAt: new Date(), updatedAt: new Date() });
+    db.memberships.push({ id: 'membership-team-a', workspaceId: 'workspace-team-a', userId: user.id, role: 'owner', createdAt: new Date(), updatedAt: new Date() });
+    db.memberships.push({ id: 'membership-team-b', workspaceId: 'workspace-team-b', userId: user.id, role: 'owner', createdAt: new Date(), updatedAt: new Date() });
+    db.researchObjects.push({ id: '00000000-0000-4000-8000-000000000401', workspaceId: 'workspace-team-a', createdBy: user.id, title: 'A', status: 'draft', visibility: 'private', version: 1, createdAt: new Date(), updatedAt: new Date() });
+    db.researchObjects.push({ id: '00000000-0000-4000-8000-000000000402', workspaceId: 'workspace-team-b', createdBy: user.id, title: 'B', status: 'draft', visibility: 'private', version: 1, createdAt: new Date(), updatedAt: new Date() });
+    await submitLiteratureAcquisition(deps as never, { userId: user.id, idempotencyKey: 'cross-target', query: 'attosecond dynamics', target: { kind: 'research_object', researchObjectId: '00000000-0000-4000-8000-000000000401' } });
+    await expect(submitLiteratureAcquisition(deps as never, { userId: user.id, idempotencyKey: 'cross-target', query: 'attosecond dynamics', target: { kind: 'research_object', researchObjectId: '00000000-0000-4000-8000-000000000402' } })).rejects.toMatchObject({ code: 'VALIDATION_ERROR' });
+    expect(db.agentTasks).toHaveLength(1);
+  });
+
   it('accepts a member research-object target and rejects a cross-workspace target before task creation', async () => {
     const { deps, db, user } = makeDeps();
     db.workspaces.push({ id: 'workspace-team', type: 'team', ownerId: user.id, name: 'Team', status: 'active', createdAt: new Date(), updatedAt: new Date() });
