@@ -7,6 +7,7 @@ import { join } from 'node:path';
 import test from 'node:test';
 
 import { formatRuntimeStatuses, verifyRootOwnedSecretMetadata, verifyScanSciRuntime } from './verify-scansci-runtime.mjs';
+import * as runtimeVerifier from './verify-scansci-runtime.mjs';
 
 const releaseSha = 'a'.repeat(40);
 const archiveSha = 'b'.repeat(64);
@@ -211,4 +212,32 @@ test('runtime verifier rejects wrong-group host metadata and validates an explic
 test('runtime CLI discovers exited and created auth containers for allow-auth zero', () => {
   const source = readFileSync(new URL('./verify-scansci-runtime.mjs', import.meta.url), 'utf8');
   assert.match(source, /ps', '-aq', 'scansci-auth'/u);
+});
+
+test('file-limit probe invokes the real worker entry with stable no-Secret stdin', () => {
+  assert.equal(typeof runtimeVerifier.probeSourceFileLimit, 'function');
+  const calls = [];
+  const runner = (command, args, options) => {
+    calls.push({ command, args, options });
+    return '{"file_limit":"104857600:104857600"}';
+  };
+
+  assert.equal(runtimeVerifier.probeSourceFileLimit('abc123', runner), '104857600:104857600');
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0].command, 'docker');
+  assert.deepEqual(calls[0].args, [
+    'exec', '-i', 'abc123', 'python', '/opt/scansci/src/scansci_legal/upstream_worker.py',
+  ]);
+  assert.deepEqual(JSON.parse(calls[0].options.input), {
+    probe: 'file-limit', output_dir: '/tmp/scansci-legal',
+  });
+  assert.doesNotMatch(`${calls[0].args.join(' ')} ${calls[0].options.input}`, /secret|token|cookie|scansci_pdf|_install_source_file_limit/iu);
+
+  for (const output of [
+    '{"file_limit":"-1:-1"}',
+    '{"success":false,"error_type":"upstream_unavailable"}',
+    'not-json',
+  ]) {
+    assert.throws(() => runtimeVerifier.probeSourceFileLimit('abc123', () => output), /failed/u);
+  }
 });

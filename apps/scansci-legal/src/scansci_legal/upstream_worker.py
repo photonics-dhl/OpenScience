@@ -163,6 +163,21 @@ def _install_source_file_limit(
         raise RuntimeError("ScanSci source file limit installation failed") from error
 
 
+def _source_file_limit_metadata(resource_module=None) -> str:
+    if resource_module is None:
+        if os.name != "posix":
+            raise RuntimeError("ScanSci source file limit requires POSIX")
+        try:
+            import resource as resource_module
+        except ImportError as error:
+            raise RuntimeError("ScanSci source file limit is unavailable") from error
+    try:
+        soft, hard = resource_module.getrlimit(resource_module.RLIMIT_FSIZE)
+    except (AttributeError, OSError, ValueError) as error:
+        raise RuntimeError("ScanSci source file limit verification failed") from error
+    return f"{soft}:{hard}"
+
+
 def _parallel_runner_is_compatible(function: object, source_reader=inspect.getsource) -> bool:
     if not callable(function):
         return False
@@ -327,6 +342,49 @@ class _BoundedDiscard(io.TextIOBase):
         return len(value)
 
 
+def _load_pinned_sources():
+    from scansci_pdf import sources
+    return sources
+
+
+def _execute_worker_request(
+    request: object,
+    output_dir: Path,
+    *,
+    file_limit_installer=_install_source_file_limit,
+    file_limit_reader=_source_file_limit_metadata,
+    sources_loader=_load_pinned_sources,
+    override_installer=_install_serial_legal_source_override,
+) -> dict[str, Any]:
+    file_limit_installer()
+    file_limit = file_limit_reader()
+    if file_limit != f"{MAX_PDF_BYTES}:{MAX_PDF_BYTES}":
+        raise RuntimeError("ScanSci source file limit verification failed")
+    if not isinstance(request, dict):
+        raise ValueError("invalid worker request")
+    probe = request.get("probe")
+    if probe == "file-limit":
+        if set(request) != {"probe", "output_dir"}:
+            raise ValueError("invalid worker request")
+        return {"file_limit": file_limit}
+    if probe == "environment":
+        if set(request) != {"probe", "output_dir"}:
+            raise ValueError("invalid worker request")
+        from scansci_pdf import config
+        keys = ("HOME", "USERPROFILE", "HOMEDRIVE", "HOMEPATH", "SCANSCI_PDF_DATA_DIR", "HTTP_PROXY", "HTTPS_PROXY", "ALL_PROXY", "SCANSCI_PDF_PROXY")
+        return {"home": str(Path.home()), "data_dir": str(config.DATA_DIR), "environment": {key: os.environ[key] for key in keys if key in os.environ}}
+    if probe is not None or set(request) != {"identifier", "output_dir"}:
+        raise ValueError("invalid worker request")
+    identifier = request.get("identifier")
+    if not isinstance(identifier, str) or not (output_dir / "config.json").is_file():
+        raise ValueError("invalid worker request")
+    with redirect_stdout(_BoundedDiscard()), redirect_stderr(_BoundedDiscard()):
+        sources = sources_loader()
+        override_installer(sources)
+        result = sources.download(identifier, str(output_dir), scihub_enabled=False, use_tor=False, use_vpnsci=True, bibtex=False, rename=False, strategy="legal_only")
+    return _minimal_response(result)
+
+
 def main() -> None:
     try:
         _install_network_guard()
@@ -334,20 +392,7 @@ def main() -> None:
         output_dir = Path(request["output_dir"]).resolve()
         if not output_dir.is_dir():
             raise ValueError("invalid worker request")
-        if request.get("probe") == "environment":
-            from scansci_pdf import config
-            keys = ("HOME", "USERPROFILE", "HOMEDRIVE", "HOMEPATH", "SCANSCI_PDF_DATA_DIR", "HTTP_PROXY", "HTTPS_PROXY", "ALL_PROXY", "SCANSCI_PDF_PROXY")
-            response = {"home": str(Path.home()), "data_dir": str(config.DATA_DIR), "environment": {key: os.environ[key] for key in keys if key in os.environ}}
-        else:
-            identifier = request["identifier"]
-            if not isinstance(identifier, str) or not (output_dir / "config.json").is_file():
-                raise ValueError("invalid worker request")
-            with redirect_stdout(_BoundedDiscard()), redirect_stderr(_BoundedDiscard()):
-                _install_source_file_limit()
-                from scansci_pdf import sources
-                _install_serial_legal_source_override(sources)
-                result = sources.download(identifier, str(output_dir), scihub_enabled=False, use_tor=False, use_vpnsci=True, bibtex=False, rename=False, strategy="legal_only")
-            response = _minimal_response(result)
+        response = _execute_worker_request(request, output_dir)
     except Exception:
         response = {"success": False, "error_type": "upstream_unavailable"}
     sys.__stdout__.write(json.dumps(response, separators=(",", ":")))

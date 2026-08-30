@@ -221,10 +221,28 @@ function parseCli(argv) {
   return Object.fromEntries(expected.map((key) => [key, values.get(key)]));
 }
 
-function run(command, args) {
-  const result = spawnSync(command, args, { encoding: 'utf8', maxBuffer: 1024 * 1024 });
+function run(command, args, { input, maxBuffer = 1024 * 1024 } = {}) {
+  const result = spawnSync(command, args, { encoding: 'utf8', maxBuffer, input });
   if (result.status !== 0) fail();
   return result.stdout.trim();
+}
+
+export function probeSourceFileLimit(containerId, runner = run) {
+  if (!/^[a-f0-9]{6,64}$/u.test(containerId)) fail();
+  const input = JSON.stringify({ probe: 'file-limit', output_dir: '/tmp/scansci-legal' });
+  const output = runner('docker', [
+    'exec', '-i', containerId, 'python', '/opt/scansci/src/scansci_legal/upstream_worker.py',
+  ], { input, maxBuffer: 4096 });
+  let result;
+  try {
+    result = JSON.parse(output);
+  } catch {
+    fail();
+  }
+  if (!result || typeof result !== 'object' || Array.isArray(result)
+    || Object.keys(result).join(',') !== 'file_limit'
+    || result.file_limit !== '104857600:104857600') fail();
+  return result.file_limit;
 }
 
 function inspectJson(command, args) {
@@ -275,14 +293,7 @@ async function main() {
     "print(json.load(urllib.request.urlopen(request,timeout=5))['status'])",
   ].join(';');
   const sessionStatus = run('docker', ['exec', containerId, 'python', '-c', probe]);
-  const fileLimitProbe = [
-    'import resource',
-    'from scansci_legal.upstream_worker import _install_source_file_limit',
-    '_install_source_file_limit()',
-    'soft,hard=resource.getrlimit(resource.RLIMIT_FSIZE)',
-    "print(f'{soft}:{hard}')",
-  ].join(';');
-  const sourceFileLimitMetadata = run('docker', ['exec', containerId, 'python', '-c', fileLimitProbe]);
+  const sourceFileLimitMetadata = probeSourceFileLimit(containerId);
   const runtimeSecretMetadata = run('docker', [
     'exec', containerId, 'stat', '-c', '%u:%g:%a', '/run/secrets/scansci_service_token',
   ]);

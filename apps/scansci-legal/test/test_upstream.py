@@ -133,6 +133,7 @@ print(json.dumps({'success': True, 'file': str(paper), 'source': 'CARSI', 'url':
 
         self.assertEqual(result.content, b"%PDF-safe-from-worker")
 
+    @unittest.skipIf(os.name == "nt", "production worker entry requires POSIX RLIMIT_FSIZE")
     def test_default_worker_resolves_home_and_scansci_config_inside_the_request_root(self):
         worker = Path(__file__).resolve().parents[1] / "src" / "scansci_legal" / "upstream_worker.py"
         environment = _sanitized_environment(self.root)
@@ -477,6 +478,70 @@ class SourceFileLimitTest(unittest.TestCase):
         if installer is None:
             self.fail("source file limit installer is missing")
         return installer
+
+    def executor(self):
+        executor = getattr(upstream_worker, "_execute_worker_request", None)
+        if executor is None:
+            self.fail("common worker request executor is missing")
+        return executor
+
+    def test_probe_and_acquisition_share_one_verified_limit_prelude(self):
+        exact = "104857600:104857600"
+
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / "config.json").write_text("{}", encoding="utf-8")
+
+            probe_events = []
+            probe = self.executor()(
+                {"probe": "file-limit", "output_dir": str(root)},
+                root,
+                file_limit_installer=lambda: probe_events.append("install"),
+                file_limit_reader=lambda: probe_events.append("read") or exact,
+                sources_loader=lambda: self.fail("probe imported upstream"),
+                override_installer=lambda _module: self.fail("probe installed upstream override"),
+            )
+            self.assertEqual(probe, {"file_limit": exact})
+            self.assertEqual(probe_events, ["install", "read"])
+
+            acquisition_events = []
+
+            class Sources:
+                @staticmethod
+                def download(*_args, **_kwargs):
+                    acquisition_events.append("download")
+                    return {"success": False, "error_type": "not_found"}
+
+            response = self.executor()(
+                {"identifier": "10.1000/example", "output_dir": str(root)},
+                root,
+                file_limit_installer=lambda: acquisition_events.append("install"),
+                file_limit_reader=lambda: acquisition_events.append("read") or exact,
+                sources_loader=lambda: acquisition_events.append("load") or Sources,
+                override_installer=lambda _module: acquisition_events.append("override"),
+            )
+            self.assertEqual(response, {"success": False, "error_type": "not_found"})
+            self.assertEqual(acquisition_events, ["install", "read", "load", "override", "download"])
+
+    def test_missing_common_entry_install_breaks_probe_and_acquisition_before_upstream(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / "config.json").write_text("{}", encoding="utf-8")
+            loaded = []
+            for request in (
+                {"probe": "file-limit", "output_dir": str(root)},
+                {"identifier": "10.1000/example", "output_dir": str(root)},
+            ):
+                with self.subTest(request=request), self.assertRaises(RuntimeError):
+                    self.executor()(
+                        request,
+                        root,
+                        file_limit_installer=lambda: None,
+                        file_limit_reader=lambda: "-1:-1",
+                        sources_loader=lambda: loaded.append("upstream"),
+                        override_installer=lambda _module: None,
+                    )
+            self.assertEqual(loaded, [])
 
     def test_installs_exact_soft_and_hard_limit_after_the_signal_handler(self):
         events = []
