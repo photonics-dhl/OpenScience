@@ -67,3 +67,24 @@
 - Hermes Companion final successful rerun: first-ready `890ms`, idle/pointer p95 `16.7/16.8ms`, zero drops, compatible runtime `19/19`, product Hermes `8/8`.
 - One immediately prior unchanged Hermes run hit the stochastic motion gate on consecutive `blink-single` actions after its performance phase passed; no motion file changed. The complete fresh rerun above exited `0`; the transient failure is retained here rather than hidden.
 - No ECS, Docker, production, Secret, `.env`, migration execution or dependency installation occurred. The ledgered intent-grammar Minor was intentionally not expanded in this fix round.
+
+## Fix round 2/5 — explicit intent precedes generic recovery
+
+- Fix commit: `c0bcf0a0af4cf4f58d62303b9fa5ceeb947eeddf`.
+- A complete caller-owned `initialRequest` + key + fingerprint starts exact POST replay immediately after user resolution. It never runs or waits for generic target history recovery.
+- Generic target-scoped recovery remains available only to Dashboard/standalone entries without explicit intent identity. An unrelated same-target active/retryable/terminal task cannot mark explicit A submitted, suppress it or replace its reconciled task.
+- Close/reopen still reuses A's key/fingerprint and Task 5 replay-before-debit path; a new intent and metadata→full-text action still receive fresh identity.
+
+### Fix-round RED and GREEN evidence
+
+- RED unit: `hasExplicitLiteratureIntentIdentity` was absent.
+- RED browser: generic recovery returned active B before explicit A; the old component performed recovery and could suppress A.
+- Focused GREEN: intent/acquisition/state `38/38`; actual browser A-vs-B `5/5` covers running, succeeded, auth-required, failed, cross-RO, close/reopen, same-key one-debit simulation and zero Drawer-added recovery GETs.
+- Full Web `464/464` Vitest plus `5/5` Node, typecheck, and `19/19` route build pass.
+- Product release `72/72` in `3.1m`; Hermes Companion first-ready `930ms`, zero drops, compatible runtime `19/19`, product Hermes `8/8`.
+- Root lint/workspace/docs-sync and diff check pass. Domain `535`, API `101` and Worker `502` remain the unchanged green contract baseline from fix round 1.
+
+### Task 10 deployment assumption check
+
+- Before Task 10 rollout, run a read-only production preflight and require zero durable `source.retrieve` ScanSci tasks whose payload lacks `target`.
+- This local no-ECS round cannot assert the production count. A nonzero count blocks deployment and requires an explicit compatibility decision; do not auto-stamp, rewrite or broaden a migration.
