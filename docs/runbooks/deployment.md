@@ -1453,3 +1453,41 @@ whose Node tags were no longer referenced by repository Dockerfiles/Compose
 were removed. No broad system/image/volume prune ran. Root usage changed from
 36G/148G (26%) to 35G/148G (25%); production, rollback, BGE model, sandbox,
 parser-evaluation, monitoring, backup, and acceptance assets were retained.
+
+### 5.46 Task 10 external retrieval, temporary PDF and checksum compatibility (2026-08-30)
+
+Task 10 first shipped through PR #8 / main `c435c4c8b2800bb20998fd9a9a93f2db96328661`.
+An interrupted `switching` transaction was restored under FD9 to the exact
+previous release before the trusted journal was cleared; no partially switched
+application was published. The canonical retry then applied core migration 32,
+kept search 2/2, and passed Parser/BGE/database/container/public gates.
+
+The real provider journey proved a rotated Semantic Scholar Secret from an
+existing local Secret source: Hermes returned three normalized scholarly
+sources and persisted provider-neutral rights. Later requests correctly exposed
+provider 429 as `unavailable/rate_limited`. Tavily was injected without its
+value entering commands or logs, but all four authorized keys returned Tavily
+plan/key quota exhaustion. ScanSci remained legal-only and disabled; Sci-Hub
+and Tor routes were not installed or called.
+
+The first real PDF download exposed a SeaweedFS/minio-js compatibility defect:
+S3 user metadata was returned as `sha256`, while the adapter only read
+`x-amz-meta-sha256`. PR #9 added strict 64-hex support for both representations
+and removed a parser-isolation test rejection race. Exact CI `33284956868` / job
+`99186426490` passed in 11m09s. Final release
+`689331845574612130f223d08c92e61721c16586` deployed with rollback `c435c4c8…`.
+
+Production acceptance used a 77-byte self-authored PDF: storage `HEAD` matched
+its SHA-256, the authenticated 600-second HttpOnly capability downloaded exact
+bytes, replay returned 404, and the document was moved to the exact
+`created_at + 72 hours` expiry boundary. The real Worker GC deleted the object
+on its next 60-second cycle (observed after about 45 seconds) while source,
+rights, parser provenance and locator remained readable. The exact canary rows
+were then removed (1 user, 1 workspace, 1 session, 5 tasks, 4 sources, 4 rights,
+1 document, 2 accesses and 5 ledger entries); audit logs remained.
+
+Final state: active/public `6893318…`, rollback `c435c4c8…`, core/search
+`32/32` / `2/2`, no deploy journal/failure marker/transient evaluation root,
+and all production containers healthy. Automatic retention kept exactly active
+and rollback release roots. Root disk is 36G/148G (25%) with 107G available; no
+broad filesystem, image or volume prune ran.

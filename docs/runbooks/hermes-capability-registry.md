@@ -1,7 +1,7 @@
 # Hermes Capability Registry
 
 > 状态：**CURRENT**
-> 最后核验：2026-08-29
+> 最后核验：2026-08-30
 > 设计真源：`docs/specs/2026-08-26-hermes-research-intelligence-platform-design.md`
 > 安全原则：只记录变量名与注入状态，禁止记录、读取或输出真实 key/token/cookie。
 
@@ -22,14 +22,15 @@
 
 | Capability | Purpose | Current state | Auth/cost policy | Runtime/install boundary | Retention gate |
 |---|---|---|---|---|---|
-| Existing `document-parser` sidecar | PDF/DOCX/OCR isolation | `PRODUCTION` | 无外部 API | release `6cabe422…` / image `sha256:4e4819ec…c70d8`；无网络/Secret、只读、非 root、512 MiB/64 PID、bounded IPC | schema 3 / `hermes-parser-14-2-v1` 14/2/0/0；gateway 14/0/0；26 locators/3 `table-cell`、startup/runtime 全通过 |
-| Tesseract `eng+chi_sim` | 扫描页 OCR fallback | `PRODUCTION` | 免费、本地 CPU | release `6cabe422…`；仅 parser 镜像；禁止宿主全局安装 | canonical scan 的 text、跨 block locator、Tesseract 5.3.0、confidence、bbox 全通过 |
+| Existing `document-parser` sidecar | PDF/DOCX/OCR isolation | `PRODUCTION` | 无外部 API | release `6893318…`；无网络/Secret、只读、非 root、512 MiB/64 PID、bounded IPC | schema 3 / `hermes-parser-14-2-v1` 14/2/0/0；16-case exact acceptance、startup/runtime 全通过 |
+| Tesseract `eng+chi_sim` | 扫描页 OCR fallback | `PRODUCTION` | 免费、本地 CPU | release `6893318…`；仅 parser 镜像；禁止宿主全局安装 | canonical scan 的 text、跨 block locator、Tesseract 5.3.0、confidence、bbox 全通过 |
 | ClamAV | 上传文件恶意内容扫描 | `PRODUCTION` | 免费、本地 CPU | agent-worker/隔离边界；fail-closed | signature freshness、blocked path、资源峰值 |
 | MiniMax text/vision | LLM OCR、复杂表格/公式补救 | `APPROVED_PILOT / BLOCKED` | 自动平台处理；最少页；凭据已在聊天暴露，轮换前不得调用 vision | 仅 AI Gateway；`openscience-ocr-v1` route 已实现但默认 disabled + external-policy deny；生产 worker 当前有变量注入，文档不记录值 | locator 复验、页成本、数据外发、错误率、审计 |
 | MiniMax image/video | 代表性 RO 展示资产 | `APPROVED_PILOT / BLOCKED` | 仅管理员；逐项批准公开；凭据轮换前阻断 | 外部 API，经 AI Gateway；不在 CPU 服务器部署模型 | 科学真实性、成本、prompt/source provenance、可撤回 |
-| Tavily MCP/API | 通用网页发现 | `AVAILABLE_LOCAL / BLOCKED` | 本机变量已注入但当前额度耗尽；生产未注入 | 项目 MCP 或 AI Gateway adapter；不得成为唯一来源 | source precision、quota/cost、降级、隐私 |
-| Semantic Scholar MCP/API | 论文、作者、引用关系 | `AVAILABLE_LOCAL / BLOCKED` | MCP 已挂载但请求限流；常用变量未进入本机进程或生产 worker；凭据已暴露需轮换 | 项目 MCP/adapter；不把 provider schema 泄漏到 Domain | metadata accuracy、rate limit、OA URL、cache policy |
-| ScanSci PDF | 合法全文发现/下载 | `APPROVED_PILOT` | 学校认证作为平台 Secret；必须遵守来源权限 | 独立受控 adapter/container；文件进临时对象存储，不进源码/rootfs | rights decision、72h TTL、10min signed URL、成功率 |
+| Tavily MCP/API | 通用网页发现 | `PRODUCTION ADAPTER / BLOCKED` | 生产 Secret 已注入；四个授权 key 的最小探测均返回供应商套餐/单 key 额度耗尽 | `source.retrieve` discovery-only adapter；不得成为唯一来源 | quota 恢复前稳定 `unavailable/rate_limited`；source precision、成本、隐私 |
+| Semantic Scholar MCP/API | 论文、作者、引用关系 | `PRODUCTION` | 有效 Secret 由既有本地 Secret 安全注入；真实 Hermes 任务返回 3 sources，连续请求仍可能 429 | `source.retrieve` native-fetch adapter；provider schema 不越过 Domain | metadata/OA/rights accuracy、1 req/s、429 显式降级 |
+| ScanSci PDF | 合法全文发现/下载 | `PRODUCTION CONTRACT / APPROVED_PILOT` | 学校认证作为平台 Secret；当前未配置 legal-only service，默认 disabled | 仅接受隔离 `legal_only` adapter；Sci-Hub/Tor 禁止；文件进临时对象存储 | disabled 状态已验；启用仍需授权、digest、真实来源 canary |
+| Temporary document lifecycle | 受控全文缓存与下载 | `PRODUCTION` | 无用户模式切换；逐来源 rights 决定 | SeaweedFS `hermes-cache/<workspace>/<document>/<hash>`；72h、600s HttpOnly one-use capability、Worker lease/fence GC | 真实 77-byte PDF：HEAD hash、download、replay 404、约 45s GC、object absent/provenance retained |
 | BGE-M3 | 多语 dense embedding | `PRODUCTION` | MIT；无 API 费，运营成本为 CPU/内存/磁盘 | 独立 internal-only `embedding-worker`；exact revision/hash、只读 versioned volume、2 CPU/6 GiB/128 PID | nDCG@10 `0.996655`、Recall@10 `1`、P95 `240 ms`、peak RSS `2,244,235,264` bytes |
 | PostgreSQL lexical search | 无模型词法基线与降级 | `PRODUCTION` | PostgreSQL 内置 FTS；无新增 extension/API 费 | `packages/search` + 独立 `SEARCH_DATABASE_URL`/迁移/连接池 | tenant-safe BM25、migration/restore、embedding outage 降级通过 |
 | Docling | layout/table/OCR parser 候选 | `APPROVED_PILOT` | MIT；官方 wheel `2.123.0`/SHA-256 `95c0a4d…fde9c` 已锁定 | 独立 parser candidate image；官方 CPU wheels `torch 2.13.0+cpu`/`torchvision 0.28.0+cpu`；OCR/remote/plugin disabled；exact ECS build 在模型下载失败，未产出 image | 双栏/表格/公式、P95、内存；无 corpus/RSS 结果，禁止质量推断或与 LiteParse 定案 |
@@ -62,17 +63,17 @@
 
 ## 3. Current credential and runtime truth
 
-2026-08-26 只做了变量存在性与最小只读探测，未读取 `.env`，未输出任何值：
+2026-08-30 只记录目标进程注入状态与最小健康探测，未输出任何值：
 
 | Layer | MiniMax | Tavily | Semantic Scholar |
 |---|---|---|---|
-| Current local process | 未注入 | 已注入；额度耗尽 | 常用变量未注入；MCP 请求限流 |
-| Current user environment | 未注入 | 已注入 | 常用变量未注入 |
-| Production `agent-worker` | 已注入 | 未注入 | 常用变量未注入 |
+| Current local process | 未注入 | 未注入；本地 Secret 文件有四个授权 key，均额度耗尽 | 未注入；既有项目 Secret 有一份有效 key |
+| Current user environment | 未注入 | 未注入 | 未注入 |
+| Production `agent-worker` | 已注入 | 已注入；供应商额度耗尽 | 已注入；真实任务成功，连续请求可被 429 节流 |
 
 “仓库或服务器 `.env` 中存在”不等于“目标进程已注入”。以后排障按四层分别记录：配置文件变量存在性、Compose 映射、容器环境存在性、provider 最小健康探测。任一层失败都不得笼统写成“API key 失败”。
 
-用户在聊天中提供的 MiniMax 与 Semantic Scholar 凭据视为已暴露。后续配置顺序固定为：轮换 → 只写本地/生产 Secret → 只检查存在性 → 最小健康探测 → 记录日期和状态；旧值不得用于测试。2026-08-27 presence-only 复核确认生产仅有 MiniMax key，Vision route disabled；Tavily/Semantic Scholar 尚未注入生产，须等 Task 10 consumer 与权限边界完成后再配置。
+用户在聊天中提供的 MiniMax 与 Semantic Scholar 明文仍视为已暴露，未作为部署来源。Task 10 使用既有本地 Secret 文件中的有效 Semantic Scholar key，并通过 stdin 原子写入生产 Secret；Tavily 同样从本地 Secret 注入。后续固定按“只检查存在性 → 最小健康探测 → 记录日期/状态”操作，不把值写入仓库、命令或日志。
 
 ## 4. Installation and directory policy
 

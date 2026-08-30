@@ -1,7 +1,7 @@
 # Hermes External Retrieval and Temporary Document Lifecycle Plan
 
-> Status: CURRENT implementation plan for Taskmaster `hermes-research-intelligence` Task 10.
-> Baseline: main `7417fae5bd838dea7861247f6bad41dafb75a167`; production application source `2fa10aa8ac3a541e794bdb40456b4f8dee826e4c`; rollback `4c73469fe24abe685054f1d917d452adc5371d35`.
+> Status: COMPLETE / PRODUCTION ACCEPTED for Taskmaster `hermes-research-intelligence` Task 10.
+> Final: main and production application source `689331845574612130f223d08c92e61721c16586`; rollback `c435c4c8b2800bb20998fd9a9a93f2db96328661`.
 
 ## Outcome
 
@@ -134,6 +134,28 @@ Provider result status is a discriminated union:
 - Record provider latency/status without query text or credentials. Finish with
   release/rollback identity, disk delta, exact retained assets, and zero test
   residue.
+
+## Completion evidence (2026-08-30)
+
+- Task implementation merged in PR #8; the SeaweedFS/minio-js checksum metadata
+  compatibility fix merged in PR #9. Exact fix CI `33284956868` / job
+  `99186426490` passed in 11m09s. Final local build/typecheck/lint/test passed;
+  Storage 22/22, Agent Worker 468/468 and API 89/89 were green.
+- Canonical ECS deploy applied core migration 32 and retained search 2/2. Parser
+  16-case acceptance, BGE-M3 CPU inference, database isolation, all target
+  containers, Nginx and public release identity passed for `6893318…`.
+- A real Semantic Scholar Hermes task returned three normalized sources and
+  persisted rights decisions. Subsequent calls correctly degraded on provider
+  429. Tavily was injected without exposing its value, but all four authorized
+  keys returned plan/key quota exhaustion; ScanSci remained legal-only and
+  disabled.
+- A controlled self-authored PDF proved checksum-verified one-time download,
+  404 replay rejection and the real 60-second Worker GC. The object was deleted
+  after the exact 72-hour boundary while source, rights, provenance and locator
+  remained queryable. After recording evidence, the exact canary rows were
+  removed and the audit trail retained.
+- Final disk remained 36G/148G (25%, 107G available). Automatic retention kept
+  only active `6893318…` and rollback `c435c4c…`; no broad prune ran.
 
 ## Current primary references
 
