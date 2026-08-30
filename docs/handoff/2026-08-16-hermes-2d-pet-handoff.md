@@ -1,19 +1,19 @@
 # Hermes Research Intelligence CURRENT Handoff
 
-> **CURRENT active-memory，2026-08-30。** Task 9 Claim-first 公开 RO 已部署、生产验收并合入 main；下一产品任务是 Task 10 外部检索与临时文档生命周期。Landing/Hermes 视觉仍冻结。
+> **CURRENT active-memory，2026-08-30。** Task 10 外部检索与临时文档生命周期已部署、生产验收并合入 main；下一产品任务是 Task 11 确定性 PresentationAssets。Landing/Hermes 视觉仍冻结。
 
 ## Goal and state
 
 - 产品目标：以 3–7 个 Claim 为公开 RO 中心，提供可定位 Evidence、条件/限制、身份静默路由、CPU 文档解析、混合检索和可版本化富媒体。
-- Taskmaster `hermes-research-intelligence` 为 9/12：Tasks 1–9 done；Task 10 dependency-ready。
-- 证据整理稿位于 `docs/proposals/2026-08-29-project-development-deployment-evidence-pack.md`；当前产品主线转入 Task 10。
+- Taskmaster `hermes-research-intelligence` 为 10/12：Tasks 1–10 done；Task 11 dependency-ready。
+- 证据整理稿位于 `docs/proposals/2026-08-29-project-development-deployment-evidence-pack.md`；当前产品主线转入 Task 11。
 
 ## Version tuple
 
 - Worktree: `E:/Miscellaneous/XGS/.worktrees/readable-hermes-guidance`
-- Branch / repository main: `codex/task9-closeout` / `cf63392a617d117773a350a90ec7e59b439919d4`；该短分支只做文档收口。
-- Production application source / immutable release: `2fa10aa8ac3a541e794bdb40456b4f8dee826e4c`
-- Rollback: `4c73469fe24abe685054f1d917d452adc5371d35`; core/search migrations `31/31` / `2/2`
+- Branch / repository main: `codex/seaweed-metadata-compat` / `689331845574612130f223d08c92e61721c16586`；远端仅保留 `main`。
+- Production application source / immutable release: `689331845574612130f223d08c92e61721c16586`
+- Rollback: `c435c4c8b2800bb20998fd9a9a93f2db96328661`; core/search migrations `32/32` / `2/2`
 - 本地 `main` 与其他 worktree 有用户改动，不得触碰或用它推断生产；上述 tuple 已从 ECS 重新实测。
 
 ## Production truth
@@ -40,6 +40,9 @@
 7. PR #6 已合并为 main `cf63392a…`；远端分支删除后仅保留 `main`，独立旧 Live2D 历史仍由 `archive/hermes-2d-pet-20260829` tag 保存。
 8. Task 9 已生产完成：candidate CI `33263991191` 全绿；R3 publish→public、账号偏好、3 Claims/3 Evidence/source、桌面/移动/打印真实旅程通过；一次性数据库行与对象存储清至 0。
 9. ECS dev 栈、3 个 dev 卷、390.7MB build cache 与两个无引用旧 Node 镜像已精确清理；根盘 35G/148G（25%），保留 production/rollback、BGE、沙箱、解析评测与监控数据。
+10. Task 10 已生产完成：Semantic Scholar/Tavily/ScanSci legal-only adapter、rights、72h cache、10min one-use download、GC/provenance 均接通；ScanSci 默认 disabled，Tavily 四个授权 key 当前均额度耗尽并显式降级。
+11. 真实 Semantic Scholar Hermes 任务返回 3 sources；SeaweedFS checksum metadata 生产兼容经 PR #9 修复。77-byte 自著 PDF 完成 HEAD hash、下载、重放 404、72h 到期和真实 Worker GC；GC 后 provenance/locator 保留，取证后 canary 业务行精确清零、审计保留。
+12. Exact CI `33284956868` / job `99186426490` 全绿；最终 release `6893318…`、rollback `c435c4c…`。远端仅 `main`；磁盘 36G/148G（25%），107G available，active+rollback 两个 release，无 broad prune。
 
 ## Constraints
 
@@ -49,16 +52,16 @@
 
 ## Next action
 
-1. 从 Taskmaster Task 10 开始：接通 Semantic Scholar/Tavily/ScanSci 的受控检索、权利判定、72 小时 TTL、10 分钟签名下载链接和全链 provenance。
-2. 继续以服务器为最终验收；本地只做代码与浏览器门禁，不运行 Docker。外部凭据只检查存在性与真实调用结果，不打印值。
-3. Task 10 完成后进入 Task 11 确定性图表/HTML 与管理员 MiniMax 代表性媒体；Task 12 再做完整 golden-corpus 和上线总验收。
+1. 从 Taskmaster Task 11 开始：以真实 Claim/source hash 生成确定性 SVG/Plotly/交互 HTML，并强制 `presentation_not_evidence`。
+2. MiniMax image/video 仍仅管理员代表性成果、显式审批和成本审计；服务器纯 CPU，不部署本地 GPU 栈。
+3. 继续以服务器为最终验收；本地只做代码与浏览器门禁，不运行 Docker。Task 12 再做完整 golden-corpus 和上线总验收。
 
 ## Read first
 
 1. `AGENTS.md`
 2. 本 handoff
 3. `docs/proposals/2026-08-29-project-development-deployment-evidence-pack.md`
-4. `docs/plans/2026-08-29-hermes-claim-first-public-ro-plan.md`
+4. `docs/plans/2026-08-30-hermes-external-retrieval-lifecycle-plan.md`
 5. `docs/specs/2026-08-26-hermes-research-intelligence-platform-design.md`
 6. `docs/progress.md`
 
