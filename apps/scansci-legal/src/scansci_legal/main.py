@@ -4,22 +4,32 @@ from __future__ import annotations
 
 import os
 from pathlib import Path
+import time
 
 from .http_service import ServiceConfig, create_server
+from .session import PersistedProfileRefresher, SessionManager, SessionStore
 from .upstream import ScanSciAcquisitionClient
 
 
 def main() -> None:
     token = os.environ.get("SCANSCI_SERVICE_TOKEN", "")
     runtime_dir = Path(os.environ.get("SCANSCI_RUNTIME_DIR", "/tmp/scansci-legal"))
+    session_store = SessionStore()
+    session_manager = SessionManager(
+        session_store,
+        PersistedProfileRefresher(session_store),
+        time.time,
+        enabled=os.environ.get("SCANSCI_ENABLED", "true").lower() in {"1", "true", "yes"},
+    )
     server = create_server(
         ServiceConfig(
             host=os.environ.get("SCANSCI_HOST", "0.0.0.0"),
             port=int(os.environ.get("SCANSCI_PORT", "8080")),
             service_token=token,
-            session_status=os.environ.get("SCANSCI_SESSION_STATUS", "unavailable"),
+            session_status=session_manager.status,
+            session_auth_redirect=session_manager.on_auth_redirect,
         ),
-        ScanSciAcquisitionClient(runtime_dir),
+        ScanSciAcquisitionClient(runtime_dir, session_root=session_store.root),
     )
     try:
         server.serve_forever()

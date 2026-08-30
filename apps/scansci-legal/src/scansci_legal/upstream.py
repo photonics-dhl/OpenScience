@@ -43,8 +43,18 @@ class AcquiredPdf:
 class ScanSciAcquisitionClient:
     """Execute the pinned library in a fresh, proxy-free worker process."""
 
-    def __init__(self, runtime_dir: Path, *, worker_command: Sequence[str] | None = None, maximum_pdf_bytes: int = MAX_PDF_BYTES):
+    def __init__(
+        self,
+        runtime_dir: Path,
+        *,
+        worker_command: Sequence[str] | None = None,
+        maximum_pdf_bytes: int = MAX_PDF_BYTES,
+        session_root: Path = Path("/session"),
+    ):
         self._runtime_dir = runtime_dir.resolve()
+        if session_root.exists() and session_root.is_symlink():
+            raise ValueError("ScanSci session configuration is invalid")
+        self._session_root = session_root.resolve()
         self._worker_command = tuple(worker_command or (sys.executable, str(Path(__file__).with_name("upstream_worker.py"))))
         if not self._worker_command or maximum_pdf_bytes <= 0 or maximum_pdf_bytes > MAX_PDF_BYTES:
             raise ValueError("ScanSci acquisition configuration is invalid")
@@ -54,7 +64,10 @@ class ScanSciAcquisitionClient:
         self._runtime_dir.mkdir(parents=True, exist_ok=True)
         with tempfile.TemporaryDirectory(prefix="scansci-legal-", dir=self._runtime_dir) as directory:
             output_dir = Path(directory).resolve()
-            (output_dir / "config.json").write_text(json.dumps(_fixed_config(output_dir), sort_keys=True, separators=(",", ":")), encoding="utf-8")
+            (output_dir / "config.json").write_text(
+                json.dumps(_fixed_config(output_dir, self._session_root), sort_keys=True, separators=(",", ":")),
+                encoding="utf-8",
+            )
             result = _run_worker(self._worker_command, request, output_dir)
             return _validated_result(result, request, output_dir, self._maximum_pdf_bytes)
 
@@ -93,13 +106,16 @@ def _sanitized_environment(output_dir: Path) -> dict[str, str]:
     return environment
 
 
-def _fixed_config(output_dir: Path) -> dict[str, Any]:
+def _fixed_config(output_dir: Path, session_root: Path) -> dict[str, Any]:
     return {
         "output_dir": str(output_dir), "cache_dir": str(output_dir / "cache"), "download_strategy": "legal_only",
         "scihub_enabled": False, "use_tor": False, "tor_proxy": "", "use_tor_for_scihub": False,
         "network_proxy": "", "proxy_pool": "", "batch_workers": 1, "parallel_sources": False,
         "parallel_probes": False, "connect_timeout": 15, "read_timeout": 30, "carsi_enabled": True,
-        "carsi_idp_name": "浙江大学", "carsi_cookie_dir": str(output_dir / "session"), "auto_relogin": False,
+        "carsi_idp_name": "浙江大学",
+        "carsi_cookie_dir": str(session_root / "scansci" / "cache" / "carsi_cookies"),
+        "chrome_profile_dir": str(session_root / "chromium"),
+        "auto_relogin": False,
     }
 
 

@@ -8,7 +8,7 @@ import hmac
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import json
 import threading
-from typing import Any, Mapping, Protocol
+from typing import Any, Callable, Mapping, Protocol
 from urllib.parse import urlsplit
 
 from .policy import MAX_REQUEST_BYTES, LegalDownloadRequest, PolicyError, validate_request, validate_source_result
@@ -37,7 +37,8 @@ class ServiceConfig:
     host: str = "127.0.0.1"
     port: int = 8080
     service_token: str = ""
-    session_status: str = "unavailable"
+    session_status: str | Callable[[], str] = "disabled"
+    session_auth_redirect: Callable[[], object] | None = None
     maximum_pdf_bytes: int = MAX_PDF_BYTES
     entitlement_valid_until: str | None = None
 
@@ -67,7 +68,7 @@ def create_server(config: ServiceConfig | Mapping[str, Any] | object, acquisitio
             if self.path == "/v1/session/status":
                 if not self._authorized():
                     return
-                self._json(200, {"status": settings.session_status})
+                self._json(200, {"status": _live_session_status(settings.session_status)})
                 return
             self._json(404, {"code": "not_found"})
 
@@ -78,7 +79,7 @@ def create_server(config: ServiceConfig | Mapping[str, Any] | object, acquisitio
             if self.path == "/v1/session/status":
                 if not self._authorized():
                     return
-                self._json(200, {"status": settings.session_status})
+                self._json(200, {"status": _live_session_status(settings.session_status)})
                 return
             if self.path != "/v1/legal-download":
                 self._json(404, {"code": "not_found"})
@@ -110,6 +111,11 @@ def create_server(config: ServiceConfig | Mapping[str, Any] | object, acquisitio
                     acquired = acquisition_client.acquire(request)
                     headers, content = _response_pdf(acquired, request, settings)
                 except AcquisitionError as error:
+                    if error.code == "auth_required" and settings.session_auth_redirect is not None:
+                        try:
+                            settings.session_auth_redirect()
+                        except Exception:
+                            pass
                     self._stable_error(error.code)
                     return
                 except Exception:
@@ -188,12 +194,27 @@ def _service_config(config: ServiceConfig | Mapping[str, Any] | object) -> Servi
     port = getter("port", 8080)
     token = getter("service_token", "")
     session_status = getter("session_status", "unavailable")
+    session_auth_redirect = getter("session_auth_redirect", None)
     entitlement = getter("entitlement_valid_until", None)
-    if not isinstance(host, str) or not isinstance(port, int) or not isinstance(token, str) or not isinstance(session_status, str):
+    if (
+        not isinstance(host, str)
+        or not isinstance(port, int)
+        or not isinstance(token, str)
+        or not (isinstance(session_status, str) or callable(session_status))
+        or not (session_auth_redirect is None or callable(session_auth_redirect))
+    ):
         raise ValueError("service configuration is invalid")
     if entitlement is not None and (not isinstance(entitlement, str) or not _safe_header_value(entitlement)):
         raise ValueError("entitlement_valid_until is invalid")
-    return ServiceConfig(host, port, token, session_status, maximum, entitlement)
+    return ServiceConfig(host, port, token, session_status, session_auth_redirect, maximum, entitlement)
+
+
+def _live_session_status(provider: str | Callable[[], str]) -> str:
+    try:
+        value = provider() if callable(provider) else provider
+    except Exception:
+        return "auth_required"
+    return value if value in {"ready", "refreshing", "auth_required", "disabled"} else "auth_required"
 
 
 def _no_duplicate_json_keys(pairs: list[tuple[str, object]]) -> dict[str, object]:
