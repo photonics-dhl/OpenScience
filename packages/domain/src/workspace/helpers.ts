@@ -1,20 +1,40 @@
-import type { Workspace, Membership } from '@prisma/client';
+import type { Membership, Prisma, Workspace } from '@prisma/client';
 import { WorkspaceError } from './errors';
-import type { WorkspaceDeps } from './types';
 
-/** 成员身份前置：空间不存在或当前用户非成员，统一 404（不泄露空间存在性）。 */
-export async function requireMembership(
-  deps: WorkspaceDeps,
+type MembershipDb = Pick<Prisma.TransactionClient, 'workspace' | 'membership'>;
+
+async function findMembership(
+  db: MembershipDb,
   workspaceId: string,
   userId: string,
 ): Promise<{ workspace: Workspace; membership: Membership }> {
-  const workspace = await deps.prisma.workspace.findUnique({ where: { id: workspaceId } });
+  const workspace = await db.workspace.findUnique({ where: { id: workspaceId } });
   if (!workspace) throw new WorkspaceError('WORKSPACE_NOT_FOUND', '空间不存在');
-  const membership = await deps.prisma.membership.findUnique({
+  const membership = await db.membership.findUnique({
     where: { workspaceId_userId: { workspaceId, userId } },
   });
   if (!membership) throw new WorkspaceError('WORKSPACE_NOT_FOUND', '空间不存在');
   return { workspace, membership };
+}
+
+/** 成员身份前置：空间不存在或当前用户非成员，统一 404（不泄露空间存在性）。 */
+export async function requireMembership(
+  deps: { prisma: MembershipDb },
+  workspaceId: string,
+  userId: string,
+): Promise<{ workspace: Workspace; membership: Membership }> {
+  return findMembership(deps.prisma, workspaceId, userId);
+}
+
+/** Transaction-aware write guard: membership and archived state are read from one snapshot. */
+export async function requireActiveMembership(
+  db: MembershipDb,
+  workspaceId: string,
+  userId: string,
+): Promise<{ workspace: Workspace; membership: Membership }> {
+  const result = await findMembership(db, workspaceId, userId);
+  requireActive(result.workspace);
+  return result;
 }
 
 export function requireActive(workspace: Workspace): void {

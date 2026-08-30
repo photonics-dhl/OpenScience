@@ -1,8 +1,8 @@
 import type { Redis } from 'ioredis';
 import { isDeepStrictEqual } from 'node:util';
-import { Prisma } from '@prisma/client';
+import { Prisma, type AgentSession, type AgentTask } from '@prisma/client';
 import type { AuditContext } from '@openscience/observability';
-import { requireActive, requireMembership } from '../workspace/helpers';
+import { requireActiveMembership, requireMembership } from '../workspace/helpers';
 import { recordAudit } from '../workspace/audit';
 import { recordEntry } from '../usage/ledger';
 import type { WorkspaceDeps } from '../workspace/types';
@@ -116,13 +116,38 @@ function assertTaskReplay(
   }
 }
 
+export interface CreateAgentSessionInput {
+  userId: string;
+  researchObjectId?: string;
+  kind: string;
+  title?: string;
+  idempotencyKey?: string;
+}
+
+export interface SubmitAgentTaskInput {
+  sessionId: string;
+  userId: string;
+  kind: string;
+  payload: Record<string, unknown>;
+  interestContext?: InterestContext;
+  idempotencyKey?: string;
+  dispatch?: boolean;
+}
+
+function throwIdempotencyConstraintConflict(error: unknown): never {
+  if ((error as { code?: unknown })?.code !== 'P2002') throw error;
+  throw Object.assign(new Error('Idempotency constraint conflict'), {
+    code: 'P2002', openscienceIdempotencyConflict: true, cause: error,
+  });
+}
+
 async function resolveInterestContext(
-  deps: AgentDeps,
+  db: Pick<Prisma.TransactionClient, 'researchIdentityProfile'>,
   userId: string,
   researchObjectId: string | null,
   requested: InterestContext | undefined,
 ): Promise<InterestContext> {
-  const row = await deps.prisma.researchIdentityProfile.findUnique({ where: { userId } });
+  const row = await db.researchIdentityProfile.findUnique({ where: { userId } });
   try {
     const profile = row ? validateResearchIdentityProfileState({
       identities: row.identities,
@@ -176,42 +201,53 @@ export async function listAgentTasks(
  * 建 Hermes 会话（§15 AgentSession）：
  * - researchObject 归属 workspace 成员校验（§17 越权）
  */
-export async function createAgentSession(
+export async function findOrCreateAgentSessionInTransaction(
   deps: AgentDeps,
-  input: { userId: string; researchObjectId?: string; kind: string; title?: string; idempotencyKey?: string },
+  tx: Prisma.TransactionClient,
+  input: CreateAgentSessionInput,
   ctx: AuditContext = {},
-): Promise<AgentSessionView> {
+): Promise<{ session: AgentSession; replayed: boolean }> {
   if (input.researchObjectId) {
-    const ro = await deps.prisma.researchObject.findUnique({ where: { id: input.researchObjectId } });
+    const ro = await tx.researchObject.findUnique({ where: { id: input.researchObjectId } });
     if (!ro) throw new AgentError('RESEARCH_OBJECT_NOT_FOUND', '研究对象不存在');
-    await requireMembership(deps, ro.workspaceId, input.userId);
+    await requireMembership({ prisma: tx }, ro.workspaceId, input.userId);
   }
   if (input.idempotencyKey) {
-    const existing = await deps.prisma.agentSession.findUnique({ where: { idempotencyKey: input.idempotencyKey } });
+    const existing = await tx.agentSession.findUnique({ where: { idempotencyKey: input.idempotencyKey } });
     if (existing) {
       assertSessionReplay(existing, input);
-      return { id: existing.id, researchObjectId: existing.researchObjectId, kind: existing.kind, title: existing.title, status: existing.status, createdAt: existing.createdAt };
+      return { session: existing, replayed: true };
     }
   }
-  const session = await deps.prisma.$transaction(async (tx) => {
-    const created = await tx.agentSession.create({
+  let session: AgentSession;
+  try {
+    session = await tx.agentSession.create({
       data: { userId: input.userId, researchObjectId: input.researchObjectId ?? null, kind: input.kind, title: input.title ?? '', idempotencyKey: input.idempotencyKey },
     });
-    await recordAudit(deps, tx, {
-      actorId: input.userId, action: 'agent.session.create', targetType: 'agent_session', targetId: created.id,
-      metadata: { kind: input.kind },
-    }, ctx);
-    return created;
-  }).catch(async (error: unknown) => {
-    if ((error as { code?: string }).code === 'P2002' && input.idempotencyKey) {
-      const existing = await deps.prisma.agentSession.findUnique({ where: { idempotencyKey: input.idempotencyKey } });
-      if (existing) {
-        assertSessionReplay(existing, input);
-        return existing;
-      }
-    }
-    throw error;
-  });
+  } catch (error) {
+    if (!input.idempotencyKey) throw error;
+    throwIdempotencyConstraintConflict(error);
+  }
+  await recordAudit(deps, tx, {
+    actorId: input.userId, action: 'agent.session.create', targetType: 'agent_session', targetId: session.id,
+    metadata: { kind: input.kind },
+  }, ctx);
+  return { session, replayed: false };
+}
+
+export async function createAgentSession(
+  deps: AgentDeps,
+  input: CreateAgentSessionInput,
+  ctx: AuditContext = {},
+): Promise<AgentSessionView> {
+  let result: { session: AgentSession; replayed: boolean };
+  try {
+    result = await deps.prisma.$transaction((tx) => findOrCreateAgentSessionInTransaction(deps, tx, input, ctx));
+  } catch (error: unknown) {
+    if ((error as { code?: string }).code !== 'P2002' || !input.idempotencyKey) throw error;
+    result = await deps.prisma.$transaction((tx) => findOrCreateAgentSessionInTransaction(deps, tx, input, ctx));
+  }
+  const { session } = result;
   return {
     id: session.id, researchObjectId: session.researchObjectId, kind: session.kind,
     title: session.title, status: session.status, createdAt: session.createdAt,
@@ -223,14 +259,15 @@ export async function createAgentSession(
  * 1. session 归属 + workspace 成员校验
  * 2. AI Credit 配额校验（getBalance ai_credit ≤ 0 → 拒绝）
  * 3. 幂等键查重（同 key → 返回既有任务）
- * 4. create pending + 入 Redis 队列
+ * 4. create pending in PostgreSQL; the public wrapper dispatches after commit
  */
-export async function submitAgentTask(
+export async function persistAgentTaskInTransaction(
   deps: AgentDeps,
-  input: { sessionId: string; userId: string; kind: string; payload: Record<string, unknown>; interestContext?: InterestContext; idempotencyKey?: string; dispatch?: boolean },
+  tx: Prisma.TransactionClient,
+  input: Omit<SubmitAgentTaskInput, 'dispatch'>,
   ctx: AuditContext = {},
-): Promise<AgentTaskView> {
-  const session = await deps.prisma.agentSession.findUnique({ where: { id: input.sessionId } });
+): Promise<{ task: AgentTask; replayed: boolean }> {
+  const session = await tx.agentSession.findUnique({ where: { id: input.sessionId } });
   if (!session || session.userId !== input.userId) {
     throw new AgentError('RESEARCH_OBJECT_NOT_FOUND', '会话不存在');
   }
@@ -242,9 +279,9 @@ export async function submitAgentTask(
   }
   let workspaceId: string | null = null;
   if (session.researchObjectId) {
-    const ro = await deps.prisma.researchObject.findUnique({ where: { id: session.researchObjectId } });
+    const ro = await tx.researchObject.findUnique({ where: { id: session.researchObjectId } });
     if (!ro) throw new AgentError('RESEARCH_OBJECT_NOT_FOUND', '研究对象不存在');
-    await requireMembership(deps, ro.workspaceId, input.userId);
+    await requireActiveMembership(tx, ro.workspaceId, input.userId);
     workspaceId = ro.workspaceId;
   }
   const artifactId = input.kind === 'sdf.extract' && typeof input.payload.artifactId === 'string'
@@ -254,7 +291,7 @@ export async function submitAgentTask(
     if (!session.researchObjectId || !workspaceId || input.payload.researchObjectId !== session.researchObjectId) {
       throw new AgentError('VALIDATION_ERROR', 'Artifact 提取任务未绑定当前研究对象');
     }
-    const artifact = await deps.prisma.artifact.findUnique({ where: { id: artifactId } });
+    const artifact = await tx.artifact.findUnique({ where: { id: artifactId } });
     if (!artifact || artifact.workspaceId !== workspaceId) {
       throw new AgentError('RESEARCH_OBJECT_NOT_FOUND', 'Artifact 不存在或不可访问');
     }
@@ -267,7 +304,7 @@ export async function submitAgentTask(
       || !coreText.trim() || coreText.length > 8_000) {
       throw new AgentError('VALIDATION_ERROR', 'review.analyze 任务缺少有效的会话、Version 或 coreText');
     }
-    const version = await deps.prisma.version.findUnique({ where: { id: versionId } });
+    const version = await tx.version.findUnique({ where: { id: versionId } });
     if (!version || version.researchObjectId !== session.researchObjectId) {
       throw new AgentError('VALIDATION_ERROR', 'Version 不属于当前研究对象');
     }
@@ -279,80 +316,83 @@ export async function submitAgentTask(
     throw new AgentError('VALIDATION_ERROR', 'Hermes interest context is invalid');
   }
 
-  // §16 幂等键：同 key 已存在 → 返回既有任务
+  // §16 exact replay precedes balance/debit so the last-credit replay remains valid.
   if (input.idempotencyKey) {
-    const existing = await deps.prisma.agentTask.findUnique({ where: { idempotencyKey: input.idempotencyKey } });
+    const existing = await tx.agentTask.findUnique({ where: { idempotencyKey: input.idempotencyKey } });
     if (existing) {
       assertTaskReplay(existing, input, session.researchObjectId, requestedContext);
-      if (input.dispatch !== false && existing.dispatchedAt == null) await dispatchAgentTask(deps, existing.id);
-      return taskToView(existing);
+      return { task: existing, replayed: true };
     }
   }
   const interestContext = await resolveInterestContext(
-    deps,
+    tx,
     input.userId,
     session.researchObjectId,
     requestedContext,
   );
+  const balance = await tx.usageLedger.aggregate({
+    where: { userId: input.userId, resource: AI_CREDIT_RESOURCE },
+    _sum: { delta: true },
+  });
+  if (Number(balance._sum.delta ?? 0) <= 0) {
+    throw new AgentError('INSUFFICIENT_CREDIT', 'AI Credit 不足（§2.4-7），请补充后再试');
+  }
+  let task: AgentTask;
+  try {
+    task = await tx.agentTask.create({
+      data: {
+        sessionId: session.id,
+        kind: input.kind,
+        payload: input.payload as never,
+        interestContext: interestContext as never,
+        idempotencyKey: input.idempotencyKey,
+      },
+    });
+  } catch (error) {
+    if (!input.idempotencyKey) throw error;
+    throwIdempotencyConstraintConflict(error);
+  }
+  await recordEntry(tx, {
+    userId: input.userId,
+    resource: AI_CREDIT_RESOURCE,
+    delta: -1,
+    kind: 'consume',
+    reason: `Agent task reservation ${input.kind}`,
+    idempotencyKey: `agent-task-reserve:${task.id}`,
+    metadata: { taskId: task.id, kind: input.kind, policy: 'charged-on-submit' },
+  });
+  await recordAudit(deps, tx, {
+    actorId: input.userId, action: 'agent.task.submit', workspaceId, targetType: 'agent_task', targetId: task.id,
+    metadata: { kind: input.kind, sessionId: session.id, creditPolicy: 'charged-on-submit' },
+  }, ctx);
+  return { task, replayed: false };
+}
 
-  let task;
-  for (let attempt = 0; ; attempt += 1) {
+export async function submitAgentTask(
+  deps: AgentDeps,
+  input: SubmitAgentTaskInput,
+  ctx: AuditContext = {},
+): Promise<AgentTaskView> {
+  const { dispatch, ...persistenceInput } = input;
+  let task: AgentTask | undefined;
+  for (let attempt = 0; attempt < 3; attempt += 1) {
     try {
-      task = await deps.prisma.$transaction(async (tx) => {
-        if (workspaceId) {
-          const workspace = await tx.workspace.findUnique({ where: { id: workspaceId } });
-          if (!workspace) throw new AgentError('RESEARCH_OBJECT_NOT_FOUND', '空间不存在');
-          requireActive(workspace);
-        }
-        const balance = await tx.usageLedger.aggregate({
-          where: { userId: input.userId, resource: AI_CREDIT_RESOURCE },
-          _sum: { delta: true },
-        });
-        if (Number(balance._sum.delta ?? 0) <= 0) {
-          throw new AgentError('INSUFFICIENT_CREDIT', 'AI Credit 不足（§2.4-7），请补充后再试');
-        }
-        const created = await tx.agentTask.create({
-          data: {
-            sessionId: session.id,
-            kind: input.kind,
-            payload: input.payload as never,
-            interestContext: interestContext as never,
-            idempotencyKey: input.idempotencyKey,
-          },
-        });
-        await recordEntry(tx, {
-          userId: input.userId,
-          resource: AI_CREDIT_RESOURCE,
-          delta: -1,
-          kind: 'consume',
-          reason: `Agent task reservation ${input.kind}`,
-          idempotencyKey: `agent-task-reserve:${created.id}`,
-          metadata: { taskId: created.id, kind: input.kind, policy: 'charged-on-submit' },
-        });
-        await recordAudit(deps, tx, {
-          actorId: input.userId, action: 'agent.task.submit', workspaceId, targetType: 'agent_task', targetId: created.id,
-          metadata: { kind: input.kind, sessionId: session.id, creditPolicy: 'charged-on-submit' },
-        }, ctx);
-        return created;
-      }, { isolationLevel: 'Serializable' });
+      ({ task } = await deps.prisma.$transaction(
+        (tx) => persistAgentTaskInTransaction(deps, tx, persistenceInput, ctx),
+        { isolationLevel: 'Serializable' },
+      ));
       break;
     } catch (error: unknown) {
       const code = (error as { code?: unknown })?.code;
-      if (code === 'P2034' && attempt < 2) continue;
+      if ((code === 'P2034' || (code === 'P2002' && input.idempotencyKey)) && attempt < 2) continue;
       if (code === 'P2002') {
-        const duplicate = await deps.prisma.agentTask.findUnique({ where: { idempotencyKey: input.idempotencyKey ?? '' } });
-        if (duplicate) {
-          assertTaskReplay(duplicate, input, session.researchObjectId, requestedContext);
-          task = duplicate;
-          break;
-        }
         throw new AgentError('DUPLICATE_IDEMPOTENCY_KEY', '幂等键重复（§16）', error);
       }
       throw error;
     }
   }
-
-  if (input.dispatch !== false) await dispatchAgentTask(deps, task.id);
+  if (!task) throw new AgentError('DUPLICATE_IDEMPOTENCY_KEY', '幂等任务并发冲突，请重试');
+  if (dispatch !== false) await dispatchAgentTask(deps, task.id);
   return taskToView(task);
 }
 

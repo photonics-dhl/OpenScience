@@ -11,7 +11,12 @@ function makeDeps() {
   db.workspaces.push(workspace);
   db.memberships.push({ id: 'membership-personal', workspaceId: workspace.id, userId: user.id, role: 'owner', createdAt: new Date(), updatedAt: new Date() });
   db.usageLedger.push({ id: 'credit', userId: user.id, resource: 'ai_credit', delta: 2, kind: 'grant', createdAt: new Date() });
-  const audits: unknown[] = [];
+  const audits = db.auditLogs;
+  const audit = {
+    record: async (event: Record<string, unknown>, tx: { auditLog: { create(args: unknown): Promise<unknown> } }) => {
+      await tx.auditLog.create({ data: event });
+    },
+  };
   return {
     db,
     user,
@@ -20,7 +25,7 @@ function makeDeps() {
       prisma,
       mailer: createFakeMailer(),
       redis: { lpush: async (_queue: string, taskId: string) => (pushed.push(taskId), pushed.length) },
-      audit: { record: async (event: unknown) => void audits.push(event) },
+      audit,
     },
   };
 }
@@ -74,6 +79,47 @@ describe('submitLiteratureAcquisition', () => {
     const replay = await submitLiteratureAcquisition(deps as never, input);
     expect(replay.task.id).toBe(first.task.id);
     expect(db.agentTasks).toHaveLength(1);
+    expect(db.usageLedger.filter((entry) => entry.delta < 0)).toHaveLength(1);
+    expect(db.auditLogs).toHaveLength(3);
+  });
+
+  it('serializes concurrent identical personal acquisitions into one aggregate and debit', async () => {
+    const { deps, db, user } = makeDeps();
+    db.usageLedger[0].delta = 1;
+    const input = { userId: user.id, idempotencyKey: 'concurrent-same', query: 'attosecond dynamics', target: { kind: 'personal' as const } };
+
+    const [first, second] = await Promise.all([
+      submitLiteratureAcquisition(deps as never, input),
+      submitLiteratureAcquisition(deps as never, input),
+    ]);
+
+    expect(second).toMatchObject({
+      researchObject: { id: first.researchObject.id }, session: { id: first.session.id }, task: { id: first.task.id },
+    });
+    expect(db.researchObjects).toHaveLength(1);
+    expect(db.agentSessions).toHaveLength(1);
+    expect(db.agentTasks).toHaveLength(1);
+    expect(db.usageLedger.filter((entry) => entry.delta < 0)).toHaveLength(1);
+    expect(db.auditLogs).toHaveLength(3);
+  });
+
+  it('allows only one of two different personal keys to commit against one credit', async () => {
+    const { deps, db, user } = makeDeps();
+    db.usageLedger[0].delta = 1;
+    const outcomes = await Promise.allSettled([
+      submitLiteratureAcquisition(deps as never, { userId: user.id, idempotencyKey: 'credit-a', query: 'first', target: { kind: 'personal' } }),
+      submitLiteratureAcquisition(deps as never, { userId: user.id, idempotencyKey: 'credit-b', query: 'second', target: { kind: 'personal' } }),
+    ]);
+
+    expect(outcomes.filter((outcome) => outcome.status === 'fulfilled')).toHaveLength(1);
+    expect(outcomes.filter((outcome) => outcome.status === 'rejected')).toEqual([
+      expect.objectContaining({ reason: expect.objectContaining({ code: 'INSUFFICIENT_CREDIT' }) }),
+    ]);
+    expect(db.researchObjects).toHaveLength(1);
+    expect(db.agentSessions).toHaveLength(1);
+    expect(db.agentTasks).toHaveLength(1);
+    expect(db.usageLedger.filter((entry) => entry.delta < 0)).toHaveLength(1);
+    expect(db.auditLogs).toHaveLength(3);
   });
 
   it('rejects a caller idempotency key replayed against a different target', async () => {
@@ -87,6 +133,8 @@ describe('submitLiteratureAcquisition', () => {
     await submitLiteratureAcquisition(deps as never, { userId: user.id, idempotencyKey: 'cross-target', query: 'attosecond dynamics', target: { kind: 'research_object', researchObjectId: '00000000-0000-4000-8000-000000000401' } });
     await expect(submitLiteratureAcquisition(deps as never, { userId: user.id, idempotencyKey: 'cross-target', query: 'attosecond dynamics', target: { kind: 'research_object', researchObjectId: '00000000-0000-4000-8000-000000000402' } })).rejects.toMatchObject({ code: 'VALIDATION_ERROR' });
     expect(db.agentTasks).toHaveLength(1);
+    expect(db.usageLedger.filter((entry) => entry.delta < 0)).toHaveLength(1);
+    expect(db.auditLogs).toHaveLength(2);
   });
 
   it('accepts a member research-object target and rejects a cross-workspace target before task creation', async () => {
@@ -149,28 +197,93 @@ describe('submitLiteratureAcquisition', () => {
     const accepted = await submitLiteratureAcquisition(deps as never, { ...first, query: 'second query' });
     db.usageLedger.push({ id: 'credit-replay', userId: user.id, resource: 'ai_credit', delta: 1, kind: 'grant', createdAt: new Date() });
     await expect(submitLiteratureAcquisition(deps as never, first)).rejects.toMatchObject({ code: 'VALIDATION_ERROR' });
+    await expect(submitLiteratureAcquisition(deps as never, {
+      ...first, query: 'second query', identifier: '10.1038/nature12373',
+    })).rejects.toMatchObject({ code: 'VALIDATION_ERROR' });
     expect(accepted.task.id).toBe(db.agentTasks[0]?.id);
     expect(db.agentSessions).toHaveLength(1);
     expect(db.agentTasks).toHaveLength(1);
+    expect(db.usageLedger.filter((entry) => entry.delta < 0)).toHaveLength(1);
   });
 
-  it('compensates resources created before the transactional credit recheck fails', async () => {
-    const { deps, db, user, audits } = makeDeps();
-    const aggregate = deps.prisma.usageLedger.aggregate;
-    let checks = 0;
-    deps.prisma.usageLedger.aggregate = async (args: never) => {
-      checks += 1;
-      return checks === 1 ? aggregate(args) : { _sum: { delta: 0 } };
+  it('rolls back the entire acquisition when transactional audit persistence fails', async () => {
+    const { deps, db, user } = makeDeps();
+    const record = deps.audit.record;
+    deps.audit.record = async (event: Record<string, unknown>, tx: never) => {
+      await record(event, tx);
+      if (event.action === 'agent.task.submit') throw new Error('audit unavailable');
     };
 
     await expect(submitLiteratureAcquisition(deps as never, {
-      userId: user.id, idempotencyKey: 'credit-race', query: 'attosecond dynamics', target: { kind: 'personal' },
-    })).rejects.toMatchObject({ code: 'INSUFFICIENT_CREDIT' });
+      userId: user.id, idempotencyKey: 'audit-failure', query: 'attosecond dynamics', target: { kind: 'personal' },
+    })).rejects.toThrow(/audit unavailable/);
 
+    expect(db.researchObjects).toHaveLength(0);
+    expect(db.sdfDocuments).toHaveLength(0);
+    expect(db.sdfNodes).toHaveLength(0);
+    expect(db.agentSessions).toHaveLength(0);
+    expect(db.agentTasks).toHaveLength(0);
+    expect(db.usageLedger.filter((entry) => entry.delta < 0)).toHaveLength(0);
+    expect(db.auditLogs).toHaveLength(0);
+  });
+
+  it('keeps one pending task after Redis failure and dispatches it on exact replay without another debit', async () => {
+    const { deps, db, user } = makeDeps();
+    const redis = deps.redis as { lpush(queue: string, taskId: string): Promise<number> };
+    const lpush = redis.lpush;
+    let attempts = 0;
+    redis.lpush = async (queue, taskId) => {
+      attempts += 1;
+      if (attempts === 1) throw new Error('redis unavailable');
+      return lpush(queue, taskId);
+    };
+    const input = { userId: user.id, idempotencyKey: 'redis-recovery', query: 'attosecond dynamics', target: { kind: 'personal' as const } };
+
+    await expect(submitLiteratureAcquisition(deps as never, input)).rejects.toThrow(/redis unavailable/);
+    expect(db.agentTasks).toHaveLength(1);
+    expect(db.agentTasks[0].dispatchedAt).toBeNull();
+    const replay = await submitLiteratureAcquisition(deps as never, input);
+
+    expect(replay.task.id).toBe(db.agentTasks[0].id);
+    expect(db.agentTasks[0].dispatchedAt).toBeInstanceOf(Date);
+    expect(db.researchObjects).toHaveLength(1);
+    expect(db.agentSessions).toHaveLength(1);
+    expect(db.usageLedger.filter((entry) => entry.delta < 0)).toHaveLength(1);
+    expect(db.auditLogs).toHaveLength(3);
+  });
+
+  it('bounds Serializable conflict retries and returns a stable conflict without mutations', async () => {
+    const { deps, db, user } = makeDeps();
+    let attempts = 0;
+    deps.prisma.$transaction = async () => {
+      attempts += 1;
+      throw Object.assign(new Error('serialization conflict'), { code: 'P2034' });
+    };
+
+    await expect(submitLiteratureAcquisition(deps as never, {
+      userId: user.id, idempotencyKey: 'retry-exhausted', query: 'attosecond dynamics', target: { kind: 'personal' },
+    })).rejects.toMatchObject({ code: 'DUPLICATE_IDEMPOTENCY_KEY' });
+    expect(attempts).toBe(3);
     expect(db.researchObjects).toHaveLength(0);
     expect(db.agentSessions).toHaveLength(0);
     expect(db.agentTasks).toHaveLength(0);
-    expect(audits.some((audit) => (audit as { action?: string }).action === 'agent.task.submit')).toBe(false);
+    expect(db.usageLedger.filter((entry) => entry.delta < 0)).toHaveLength(0);
+    expect(db.auditLogs).toHaveLength(0);
+  });
+
+  it('does not retry or remap a non-idempotency P2002 from a nested write', async () => {
+    const { deps, user } = makeDeps();
+    const invariantFailure = Object.assign(new Error('unrelated unique invariant'), { code: 'P2002' });
+    let attempts = 0;
+    deps.prisma.$transaction = async () => {
+      attempts += 1;
+      throw invariantFailure;
+    };
+
+    await expect(submitLiteratureAcquisition(deps as never, {
+      userId: user.id, idempotencyKey: 'unrelated-unique', query: 'attosecond dynamics', target: { kind: 'personal' },
+    })).rejects.toBe(invariantFailure);
+    expect(attempts).toBe(1);
   });
 
   it('reuses a renamed personal library but blocks public claims of server system keys', async () => {

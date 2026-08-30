@@ -46,11 +46,12 @@ interface FakeDb {
   evidenceRecords: any[];
   presentationAssets: any[];
   researchIdentityProfiles: any[];
+  auditLogs: any[];
 }
 
 /** 内存版 Prisma 子集：覆盖 workspace 领域用到的调用面。 */
 export function createFakePrisma(): { prisma: PrismaClient; db: FakeDb } {
-  const db: FakeDb = { users: [], workspaces: [], memberships: [], workspaceInvitations: [], mailOutbox: [], quotaPolicies: [], usageLedger: [], researchObjects: [], sdfDocuments: [], sdfNodes: [], blobs: [], artifacts: [], branches: [], commits: [], changesets: [], versions: [], versionManifests: [], manifestEntries: [], identifiers: [], publications: [], visibilityGrants: [], visibilityRequests: [], pullRequests: [], issues: [], comments: [], reviews: [], licenseAssignments: [], forkRelations: [], notifications: [], authors: [], contributions: [], agentSessions: [], agentTasks: [], toolApprovals: [], aiReviews: [], appeals: [], ingestionBatches: [], ingestionTasks: [], claimNodes: [], evidenceRecords: [], presentationAssets: [], researchIdentityProfiles: [] };
+  const db: FakeDb = { users: [], workspaces: [], memberships: [], workspaceInvitations: [], mailOutbox: [], quotaPolicies: [], usageLedger: [], researchObjects: [], sdfDocuments: [], sdfNodes: [], blobs: [], artifacts: [], branches: [], commits: [], changesets: [], versions: [], versionManifests: [], manifestEntries: [], identifiers: [], publications: [], visibilityGrants: [], visibilityRequests: [], pullRequests: [], issues: [], comments: [], reviews: [], licenseAssignments: [], forkRelations: [], notifications: [], authors: [], contributions: [], agentSessions: [], agentTasks: [], toolApprovals: [], aiReviews: [], appeals: [], ingestionBatches: [], ingestionTasks: [], claimNodes: [], evidenceRecords: [], presentationAssets: [], researchIdentityProfiles: [], auditLogs: [] };
   let seq = 0;
   const nextId = () => `00000000-0000-4000-8000-${String(++seq).padStart(12, '0')}`;
   const p2002 = () => {
@@ -58,8 +59,16 @@ export function createFakePrisma(): { prisma: PrismaClient; db: FakeDb } {
     err.code = 'P2002';
     return err;
   };
+  let transactionQueue: Promise<void> = Promise.resolve();
 
   const prisma: any = {
+    auditLog: {
+      create: async ({ data }: any) => {
+        const row = { id: nextId(), createdAt: new Date(), ...data };
+        db.auditLogs.push(row);
+        return row;
+      },
+    },
     researchIdentityProfile: {
       findUnique: async ({ where }: any) => db.researchIdentityProfiles.find((row) => row.userId === where.userId) ?? null,
     },
@@ -79,6 +88,11 @@ export function createFakePrisma(): { prisma: PrismaClient; db: FakeDb } {
     },
     workspace: {
       findUnique: async ({ where }: any) => db.workspaces.find((w) => w.id === where.id) ?? null,
+      findMany: async ({ where, take }: any) => db.workspaces.filter((w) =>
+        (where.type === undefined || w.type === where.type) &&
+        (where.ownerId === undefined || w.ownerId === where.ownerId) &&
+        (where.status === undefined || w.status === where.status),
+      ).slice(0, take ?? db.workspaces.length),
       findFirst: async ({ where }: any) =>
         db.workspaces.find(
           (w) =>
@@ -1143,7 +1157,27 @@ export function createFakePrisma(): { prisma: PrismaClient; db: FakeDb } {
         return row;
       },
     },
-    $transaction: async (fn: (tx: unknown) => Promise<unknown>) => fn(prisma),
+    $transaction: async (fn: (tx: unknown) => Promise<unknown>) => {
+      let release!: () => void;
+      const previous = transactionQueue;
+      transactionQueue = new Promise<void>((resolve) => { release = resolve; });
+      await previous;
+      const refs = Object.fromEntries(Object.entries(db)) as Record<string, any[]>;
+      const snapshot = structuredClone(db) as Record<string, any[]>;
+      const tx = { ...prisma };
+      delete tx.$transaction;
+      try {
+        return await fn(tx);
+      } catch (error) {
+        for (const [key, rows] of Object.entries(snapshot)) {
+          refs[key].splice(0, refs[key].length, ...rows);
+          (db as unknown as Record<string, any[]>)[key] = refs[key];
+        }
+        throw error;
+      } finally {
+        release();
+      }
+    },
   };
   return { prisma: prisma as PrismaClient, db };
 }

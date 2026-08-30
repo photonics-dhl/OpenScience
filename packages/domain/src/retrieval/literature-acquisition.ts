@@ -1,15 +1,18 @@
 import { createHash } from 'node:crypto';
-import { SDF_CORE_FIELDS } from '@openscience/sdf-schema';
+import type { AgentSession, AgentTask, Prisma, ResearchObject } from '@prisma/client';
 import type { AuditContext } from '@openscience/observability';
-import type { ResearchObjectSummary } from '../research-object/research-objects';
-import { SDF_NODE_TYPES } from '../research-object/types';
-import { AI_CREDIT_RESOURCE, createAgentSession, getAgentTask, submitAgentTask, type AgentDeps, type AgentSessionView, type AgentTaskView } from '../agent/agent';
+import {
+  createSystemResearchObjectInTransaction,
+  type ResearchObjectSummary,
+} from '../research-object/research-objects';
+import {
+  dispatchAgentTask, findOrCreateAgentSessionInTransaction, getAgentTask,
+  persistAgentTaskInTransaction, type AgentDeps, type AgentSessionView, type AgentTaskView,
+} from '../agent/agent';
 import { AgentError } from '../agent/errors';
 import { parseSourceRetrievePayload } from './retrieve-payload';
-import { requireRoAccess } from '../visibility/access';
-import { requireActive, requireMembership } from '../workspace/helpers';
-import { recordAudit } from '../workspace/audit';
-import { getBalance } from '../usage/ledger';
+import { WorkspaceError } from '../workspace/errors';
+import { requireActiveMembership } from '../workspace/helpers';
 
 export type LiteratureAcquisitionTarget =
   | { kind: 'personal' }
@@ -29,17 +32,43 @@ export interface LiteratureAcquisitionResult {
   task: AgentTaskView;
 }
 
-function toSummary(researchObject: {
-  id: string; workspaceId: string; title: string; status: ResearchObjectSummary['status'];
-  visibility: ResearchObjectSummary['visibility']; version: number; createdAt: Date;
-}): ResearchObjectSummary {
-  return { id: researchObject.id, workspaceId: researchObject.workspaceId, title: researchObject.title, status: researchObject.status, visibility: researchObject.visibility, version: researchObject.version, createdAt: researchObject.createdAt };
+interface NormalizedAcquisition {
+  callerKey: string;
+  target: LiteratureAcquisitionTarget;
+  payload: Record<string, unknown>;
+  digest: string;
 }
 
-function validateAndBuildPayload(input: SubmitLiteratureAcquisitionInput): { payload: Record<string, unknown>; digest: string } {
+function toSummary(researchObject: ResearchObject): ResearchObjectSummary {
+  return {
+    id: researchObject.id, workspaceId: researchObject.workspaceId, title: researchObject.title,
+    status: researchObject.status, visibility: researchObject.visibility, version: researchObject.version,
+    createdAt: researchObject.createdAt,
+  };
+}
+
+function toSessionView(session: AgentSession): AgentSessionView {
+  return {
+    id: session.id, researchObjectId: session.researchObjectId, kind: session.kind,
+    title: session.title, status: session.status, createdAt: session.createdAt,
+  };
+}
+
+function normalizeAcquisition(input: SubmitLiteratureAcquisitionInput): NormalizedAcquisition {
+  const callerKey = input.idempotencyKey.trim();
+  if (!callerKey || callerKey.length > 200) throw new AgentError('VALIDATION_ERROR', '幂等键长度需为 1-200 字符');
   const query = input.query.trim();
   if (!query || query.length > 500) throw new AgentError('VALIDATION_ERROR', '文献检索关键词长度需为 1-500 字符');
-  if (!input.idempotencyKey.trim() || input.idempotencyKey.length > 200) throw new AgentError('VALIDATION_ERROR', '幂等键长度需为 1-200 字符');
+  let target: LiteratureAcquisitionTarget;
+  if (input.target?.kind === 'personal') {
+    target = { kind: 'personal' };
+  } else if (input.target?.kind === 'research_object'
+    && typeof input.target.researchObjectId === 'string'
+    && input.target.researchObjectId.trim()) {
+    target = { kind: 'research_object', researchObjectId: input.target.researchObjectId.trim() };
+  } else {
+    throw new AgentError('VALIDATION_ERROR', '文献检索目标无效');
+  }
   let payload: Record<string, unknown>;
   try {
     payload = parseSourceRetrievePayload(input.identifier
@@ -48,129 +77,85 @@ function validateAndBuildPayload(input: SubmitLiteratureAcquisitionInput): { pay
   } catch (error) {
     throw new AgentError('VALIDATION_ERROR', error instanceof Error ? error.message : '文献检索请求无效');
   }
-  const digest = createHash('sha256').update(JSON.stringify({ target: input.target, query, identifier: input.identifier?.trim() ?? null, payload })).digest('hex');
-  return { payload, digest };
+  const digest = createHash('sha256').update(JSON.stringify({
+    target, query: payload.query, identifier: payload.identifier ?? null, payload,
+  })).digest('hex');
+  return { callerKey, target, payload, digest };
 }
 
-interface ResolvedTarget {
-  workspaceId: string;
-  researchObject?: ResearchObjectSummary;
-}
-
-async function resolveTarget(deps: AgentDeps, input: SubmitLiteratureAcquisitionInput): Promise<ResolvedTarget> {
-  if (input.target.kind === 'research_object') {
-    const researchObject = await deps.prisma.researchObject.findUnique({ where: { id: input.target.researchObjectId } });
+async function resolveResearchObjectInTransaction(
+  deps: AgentDeps,
+  tx: Prisma.TransactionClient,
+  input: SubmitLiteratureAcquisitionInput,
+  normalized: NormalizedAcquisition,
+  ctx: AuditContext,
+): Promise<ResearchObject> {
+  if (normalized.target.kind === 'research_object') {
+    const researchObject = await tx.researchObject.findUnique({ where: { id: normalized.target.researchObjectId } });
     if (!researchObject) throw new AgentError('RESEARCH_OBJECT_NOT_FOUND', '研究对象不存在');
-    await requireRoAccess(deps, { researchObjectId: researchObject.id, userId: input.userId });
-    const { workspace } = await requireMembership(deps, researchObject.workspaceId, input.userId);
-    requireActive(workspace);
-    return { workspaceId: workspace.id, researchObject: toSummary(researchObject) };
+    try {
+      await requireActiveMembership(tx, researchObject.workspaceId, input.userId);
+    } catch (error) {
+      if (error instanceof WorkspaceError && error.code === 'WORKSPACE_NOT_FOUND') {
+        throw new AgentError('RESEARCH_OBJECT_NOT_FOUND', '研究对象不存在');
+      }
+      throw error;
+    }
+    return researchObject;
   }
-  const workspace = await deps.prisma.workspace.findFirst({ where: { type: 'personal', ownerId: input.userId } });
-  if (!workspace) throw new AgentError('RESEARCH_OBJECT_NOT_FOUND', '个人空间不存在');
-  const membership = await requireMembership(deps, workspace.id, input.userId);
-  requireActive(membership.workspace);
-  return { workspaceId: workspace.id };
+  const workspaces = await tx.workspace.findMany({ where: { type: 'personal', ownerId: input.userId }, take: 2 });
+  if (workspaces.length === 0) throw new AgentError('RESEARCH_OBJECT_NOT_FOUND', '个人空间不存在');
+  if (workspaces.length !== 1) throw new AgentError('DUPLICATE_IDEMPOTENCY_KEY', '个人空间状态冲突，请重试');
+  return createSystemResearchObjectInTransaction(deps, tx, {
+    workspaceId: workspaces[0].id,
+    userId: input.userId,
+    title: 'Personal Literature Library',
+    idempotencyKey: `system:personal-literature:${input.userId}`,
+  }, ctx);
 }
 
-function emptyCore(): Record<string, string> {
-  return Object.fromEntries(SDF_CORE_FIELDS.map((field) => [field, '']));
-}
-
-function sessionToView(session: {
-  id: string; researchObjectId: string | null; kind: string; title: string; status: string; createdAt: Date;
-}): AgentSessionView {
-  return { id: session.id, researchObjectId: session.researchObjectId, kind: session.kind, title: session.title, status: session.status, createdAt: session.createdAt };
-}
-
-async function ensurePersonalLiteratureResearchObject(
-  deps: AgentDeps, input: SubmitLiteratureAcquisitionInput, workspaceId: string, ctx: AuditContext,
-): Promise<{ researchObject: ResearchObjectSummary; created: boolean }> {
-  const key = `system:personal-literature:${input.userId}`;
-  const existing = await deps.prisma.researchObject.findUnique({ where: { idempotencyKey: key } });
-  if (existing) {
-    if (existing.workspaceId !== workspaceId || existing.createdBy !== input.userId) throw new AgentError('FORBIDDEN', '个人文献库归属不一致');
-    return { researchObject: toSummary(existing), created: false };
-  }
-  try {
-    const core = emptyCore();
-    const created = await deps.prisma.$transaction(async (tx) => {
-      const researchObject = await tx.researchObject.create({
-        data: { workspaceId, createdBy: input.userId, title: 'Personal Literature Library', idempotencyKey: key, sdfDocument: { create: { coreJson: core, nodes: { create: SDF_NODE_TYPES.map((nodeType, sortOrder) => ({ nodeType, content: '', sortOrder })) } } } },
-      });
-      await recordAudit(deps, tx, { actorId: input.userId, action: 'research_object.create', workspaceId, targetType: 'research_object', targetId: researchObject.id, metadata: { title: researchObject.title, system: 'personal-literature' } }, ctx);
-      return researchObject;
-    });
-    return { researchObject: toSummary(created), created: true };
-  } catch (error) {
-    if ((error as { code?: string }).code !== 'P2002') throw error;
-    const concurrent = await deps.prisma.researchObject.findUnique({ where: { idempotencyKey: key } });
-    if (!concurrent || concurrent.workspaceId !== workspaceId || concurrent.createdBy !== input.userId) throw new AgentError('FORBIDDEN', '个人文献库归属不一致');
-    return { researchObject: toSummary(concurrent), created: false };
-  }
-}
-
-/**
- * Browser-facing literature retrieval orchestration. Provider selection and full-text
- * permission are owned here so untrusted clients can never select a retrieval strategy.
- */
+/** Browser acquisition persistence is one Serializable unit; Redis is post-commit. */
 export async function submitLiteratureAcquisition(
   deps: AgentDeps,
   input: SubmitLiteratureAcquisitionInput,
   ctx: AuditContext = {},
 ): Promise<LiteratureAcquisitionResult> {
-  const { payload, digest } = validateAndBuildPayload(input);
-  const target = await resolveTarget(deps, input);
-  const personalKey = `system:personal-literature:${input.userId}`;
-  const existingPersonal = input.target.kind === 'personal'
-    ? await deps.prisma.researchObject.findUnique({ where: { idempotencyKey: personalKey } })
-    : null;
-  if (existingPersonal && (existingPersonal.workspaceId !== target.workspaceId || existingPersonal.createdBy !== input.userId)) {
-    throw new AgentError('FORBIDDEN', '个人文献库归属不一致');
-  }
-  const existingResearchObject = input.target.kind === 'personal'
-    ? (existingPersonal ? toSummary(existingPersonal) : undefined)
-    : target.researchObject!;
-  const sessionKey = `literature-acquisition:session:${input.userId}:${input.idempotencyKey}`;
-  const taskKey = `literature-acquisition:task:${input.userId}:${input.idempotencyKey}`;
-  const expectedTitle = `Literature acquisition:${digest}`;
-  const priorSession = await deps.prisma.agentSession.findUnique({ where: { idempotencyKey: sessionKey } });
-  if (priorSession) {
-    if (!existingResearchObject || priorSession.userId !== input.userId || priorSession.researchObjectId !== existingResearchObject.id
-      || priorSession.kind !== 'retrieval' || priorSession.title !== expectedTitle) {
-      throw new AgentError('VALIDATION_ERROR', '幂等键已用于其他文献检索请求');
-    }
-    const existingTask = await deps.prisma.agentTask.findUnique({ where: { idempotencyKey: taskKey } });
-    if (existingTask) {
-      return { researchObject: existingResearchObject, session: sessionToView(priorSession), task: await getAgentTask(deps, { userId: input.userId, taskId: existingTask.id }) };
-    }
-  }
-  if (await getBalance(deps, { userId: input.userId, resource: AI_CREDIT_RESOURCE }) <= 0) {
-    throw new AgentError('INSUFFICIENT_CREDIT', 'AI Credit 不足（§2.4-7），请补充后再试');
-  }
-  const personal = input.target.kind === 'personal'
-    ? existingResearchObject
-      ? { researchObject: existingResearchObject, created: false }
-      : await ensurePersonalLiteratureResearchObject(deps, input, target.workspaceId, ctx)
-    : { researchObject: target.researchObject!, created: false };
-  const researchObject = personal.researchObject;
-  const session = await createAgentSession(deps, {
-    userId: input.userId, researchObjectId: researchObject.id, kind: 'retrieval',
-    title: expectedTitle, idempotencyKey: sessionKey,
-  }, ctx);
-  try {
-    const task = await submitAgentTask(deps, {
-      userId: input.userId, sessionId: session.id, kind: 'source.retrieve', payload, idempotencyKey: taskKey,
-    }, ctx);
-    return { researchObject, session, task };
-  } catch (error) {
-    if (!await deps.prisma.agentTask.findUnique({ where: { idempotencyKey: taskKey } })) {
-      const sessionHasTask = await deps.prisma.agentTask.findFirst({ where: { sessionId: session.id } });
-      if (!priorSession && !sessionHasTask) await deps.prisma.agentSession.delete({ where: { id: session.id } }).catch(() => undefined);
-      if (personal.created && !await deps.prisma.agentSession.findFirst({ where: { researchObjectId: researchObject.id } })) {
-        await deps.prisma.researchObject.delete({ where: { id: researchObject.id } }).catch(() => undefined);
+  const normalized = normalizeAcquisition(input);
+  const sessionKey = `literature-acquisition:session:${input.userId}:${normalized.callerKey}`;
+  const taskKey = `literature-acquisition:task:${input.userId}:${normalized.callerKey}`;
+  const title = `Literature acquisition:${normalized.digest}`;
+  let persisted: { researchObject: ResearchObject; session: AgentSession; task: AgentTask } | undefined;
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    try {
+      persisted = await deps.prisma.$transaction(async (tx) => {
+        const researchObject = await resolveResearchObjectInTransaction(deps, tx, input, normalized, ctx);
+        const { session } = await findOrCreateAgentSessionInTransaction(deps, tx, {
+          userId: input.userId, researchObjectId: researchObject.id, kind: 'retrieval', title,
+          idempotencyKey: sessionKey,
+        }, ctx);
+        const { task } = await persistAgentTaskInTransaction(deps, tx, {
+          userId: input.userId, sessionId: session.id, kind: 'source.retrieve',
+          payload: normalized.payload, idempotencyKey: taskKey,
+        }, ctx);
+        return { researchObject, session, task };
+      }, { isolationLevel: 'Serializable' });
+      break;
+    } catch (error: unknown) {
+      const code = (error as { code?: unknown })?.code;
+      const idempotencyConflict = code === 'P2002'
+        && (error as { openscienceIdempotencyConflict?: unknown }).openscienceIdempotencyConflict === true;
+      if ((code === 'P2034' || idempotencyConflict) && attempt < 2) continue;
+      if (code === 'P2034' || idempotencyConflict) {
+        throw new AgentError('DUPLICATE_IDEMPOTENCY_KEY', '文献检索并发冲突，请重试', error);
       }
+      throw error;
     }
-    throw error;
   }
+  if (!persisted) throw new AgentError('DUPLICATE_IDEMPOTENCY_KEY', '文献检索并发冲突，请重试');
+  await dispatchAgentTask(deps, persisted.task.id);
+  return {
+    researchObject: toSummary(persisted.researchObject),
+    session: toSessionView(persisted.session),
+    task: await getAgentTask(deps, { userId: input.userId, taskId: persisted.task.id }),
+  };
 }
