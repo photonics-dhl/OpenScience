@@ -2,23 +2,27 @@ from __future__ import annotations
 
 import json
 import os
+import stat as stat_module
 from concurrent.futures import ThreadPoolExecutor
+from dataclasses import replace
 import http.client
 from pathlib import Path
 import sys
 import tempfile
 import threading
+import time
 import unittest
 from unittest import mock
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
 import scansci_legal.auth_login as auth_login
+import scansci_legal.upstream as upstream_module
 from scansci_legal.auth_login import main as auth_main
 from scansci_legal.http_service import create_server
 from scansci_legal.session import PersistedProfileRefresher, SessionManager, SessionSnapshot, SessionStore
 from scansci_legal.policy import LegalDownloadRequest
-from scansci_legal.upstream import AcquisitionError, ScanSciAcquisitionClient
+from scansci_legal.upstream import AcquiredPdf, AcquisitionError, ScanSciAcquisitionClient
 
 
 class FakeClock:
@@ -138,7 +142,8 @@ class SessionManagerTest(unittest.TestCase):
             states = [future.result(timeout=2) for future in futures]
 
         self.assertEqual(refresher.refresh_calls, 1)
-        self.assertEqual(states, ["ready"] * 5)
+        self.assertEqual(states.count("ready"), 1)
+        self.assertEqual(states.count("refreshing"), 4)
         self.assertEqual(SessionManager(self.store(), refresher, clock).status(), "ready")
 
     def test_repeated_failures_back_off_exponentially_and_cap_at_six_hours(self) -> None:
@@ -211,6 +216,81 @@ class SessionManagerTest(unittest.TestCase):
         self.assertEqual(restored.status(), "auth_required")
         self.assertEqual(refresher.refresh_calls, 1)
 
+    def test_running_manager_observes_helper_ready_without_restart(self) -> None:
+        clock = FakeClock()
+        manager = SessionManager(self.store(), FakeRefresher(), clock)
+        self.assertEqual(manager.status(), "auth_required")
+
+        result = auth_main(
+            ["--operator-start"],
+            runner=lambda *_args, **_kwargs: type("Completed", (), {"returncode": 0})(),
+            session_root=self.root,
+        )
+
+        self.assertEqual(result, 0)
+        self.assertEqual(manager.status(), "ready")
+
+    def test_stale_state_writer_cannot_clobber_newer_helper_generation(self) -> None:
+        store = self.store()
+        store.ensure_root()
+        stale = store.load("auth_required")
+        auth_main(
+            ["--operator-start"],
+            runner=lambda *_args, **_kwargs: type("Completed", (), {"returncode": 0})(),
+            session_root=self.root,
+        )
+
+        written = store.save(
+            replace(stale, status="auth_required", reason="operator_auth_required"),
+            expected_generation=stale.generation,
+        )
+
+        self.assertIs(written, False)
+        self.assertEqual(store.load("auth_required").status, "ready")
+
+    def test_status_observes_refreshing_without_waiting_for_network_refresh(self) -> None:
+        self.create_persisted_profile()
+        refresher = FakeRefresher(refresh_results=[True])
+        manager = SessionManager(self.store(), refresher, FakeClock())
+        thread = threading.Thread(target=manager.on_auth_redirect)
+        thread.start()
+        self.assertTrue(refresher.entered.wait(timeout=1))
+
+        started = time.monotonic()
+        state = manager.status()
+        elapsed = time.monotonic() - started
+
+        refresher.release.set()
+        thread.join(timeout=2)
+        self.assertEqual(state, "refreshing")
+        self.assertLess(elapsed, 0.2)
+
+    def test_expired_lease_takeover_is_owner_safe_when_first_refresh_finishes_late(self) -> None:
+        self.create_persisted_profile()
+        clock = FakeClock()
+        first = FakeRefresher(refresh_results=[False])
+        second = FakeRefresher(refresh_results=[True])
+        third = FakeRefresher(refresh_results=[True])
+        manager_one = SessionManager(self.store(), first, clock)
+        manager_two = SessionManager(self.store(), second, clock)
+        manager_three = SessionManager(self.store(), third, clock)
+        thread_one = threading.Thread(target=manager_one.on_auth_redirect)
+        thread_one.start()
+        self.assertTrue(first.entered.wait(timeout=1))
+        clock.advance(301)
+        thread_two = threading.Thread(target=manager_two.on_auth_redirect)
+        thread_two.start()
+        self.assertTrue(second.entered.wait(timeout=1))
+
+        first.release.set()
+        thread_one.join(timeout=2)
+        self.assertEqual(manager_three.on_auth_redirect(), "refreshing")
+        self.assertEqual(third.refresh_calls, 0)
+
+        second.release.set()
+        thread_two.join(timeout=2)
+        self.assertEqual(self.store().load("auth_required").status, "ready")
+
     @unittest.skipIf(os.name == "nt", "POSIX owner/mode enforcement is a container boundary")
     def test_rejects_a_group_readable_cookie_profile(self) -> None:
         self.create_persisted_profile()
@@ -223,6 +303,12 @@ class SessionManagerTest(unittest.TestCase):
 
 
 class AuthLoginTest(unittest.TestCase):
+    def test_secret_metadata_accepts_only_runtime_uid_regular_0400(self) -> None:
+        self.assertIs(auth_login._secret_metadata_is_safe(stat_module.S_IFREG | 0o400, 10001, 10001), True)
+        self.assertIs(auth_login._secret_metadata_is_safe(stat_module.S_IFREG | 0o440, 10001, 10001), False)
+        self.assertIs(auth_login._secret_metadata_is_safe(stat_module.S_IFREG | 0o400, 0, 10001), False)
+        self.assertIs(auth_login._secret_metadata_is_safe(stat_module.S_IFLNK | 0o400, 10001, 10001), False)
+
     def test_requires_an_explicit_operator_action_before_starting_upstream_login(self) -> None:
         calls: list[list[str]] = []
 
@@ -290,6 +376,26 @@ class AuthLoginTest(unittest.TestCase):
             self.assertNotIn("username", config)
             self.assertNotIn("password", config)
 
+    @unittest.skipIf(os.name == "nt", "POSIX Secret ownership is a container boundary")
+    def test_fixed_secrets_require_runtime_uid_and_owner_only_read_mode(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            secret = root / "secret"
+            secret.write_text("credential", encoding="utf-8")
+            secret.chmod(0o400)
+            uid = secret.stat().st_uid
+
+            auth_login._validate_secret(secret, expected_uid=uid)
+            with self.assertRaises(ValueError):
+                auth_login._validate_secret(secret, expected_uid=uid + 1)
+            secret.chmod(0o440)
+            with self.assertRaises(ValueError):
+                auth_login._validate_secret(secret, expected_uid=uid)
+            link = root / "secret-link"
+            link.symlink_to(secret)
+            with self.assertRaises(ValueError):
+                auth_login._validate_secret(link, expected_uid=uid)
+
 
 class SessionHttpIntegrationTest(unittest.TestCase):
     def request(self, server, method: str, path: str, body: bytes = b"") -> tuple[int, dict[str, str]]:
@@ -303,7 +409,12 @@ class SessionHttpIntegrationTest(unittest.TestCase):
         try:
             connection.request(method, path, body=body, headers=headers)
             response = connection.getresponse()
-            return response.status, json.loads(response.read())
+            content = response.read()
+            try:
+                decoded = json.loads(content)
+            except json.JSONDecodeError:
+                decoded = content
+            return response.status, decoded
         finally:
             connection.close()
 
@@ -361,6 +472,48 @@ class SessionHttpIntegrationTest(unittest.TestCase):
         self.assertEqual(response, (409, {"code": "auth_required"}))
         self.assertEqual(notifications, ["redirect"])
 
+    def test_disabled_session_rejects_download_without_acquisition(self) -> None:
+        calls: list[object] = []
+        client = type("DisabledClient", (), {"acquire": lambda _self, request: calls.append(request)})()
+        server = self.running_server(lambda: "disabled", client)
+        body = json.dumps(
+            {
+                "identifier": "10.1038/nature12373", "strategy": "legal_only",
+                "scihub": False, "tor": False, "institutional": True, "subject_id": "a" * 64,
+            },
+            separators=(",", ":"),
+        ).encode("utf-8")
+
+        response = self.request(server, "POST", "/v1/legal-download", body)
+
+        self.assertEqual(response, (503, {"code": "disabled"}))
+        self.assertEqual(calls, [])
+
+    def test_auth_required_allows_oa_only_without_institutional_request(self) -> None:
+        requests = []
+
+        class OpenAccessClient:
+            def acquire(self, request):
+                requests.append(request)
+                return AcquiredPdf(
+                    b"%PDF-open-access", "open_access", "Unpaywall", "https://publisher.example/oa.pdf",
+                )
+
+        server = self.running_server(lambda: "auth_required", OpenAccessClient())
+        body = json.dumps(
+            {
+                "identifier": "10.1038/nature12373", "strategy": "legal_only",
+                "scihub": False, "tor": False, "institutional": True, "subject_id": "a" * 64,
+            },
+            separators=(",", ":"),
+        ).encode("utf-8")
+
+        status, _body = self.request(server, "POST", "/v1/legal-download", body)
+
+        self.assertEqual(status, 200)
+        self.assertEqual(len(requests), 1)
+        self.assertIs(requests[0].institutional, False)
+
 
 class PersistentProfileAcquisitionTest(unittest.TestCase):
     def test_worker_receives_the_fixed_persistent_carsi_profile_without_moving_cookie_bytes(self) -> None:
@@ -370,6 +523,10 @@ class PersistentProfileAcquisitionTest(unittest.TestCase):
             cookie = session / "scansci" / "cache" / "carsi_cookies" / "sciencedirect.json"
             cookie.parent.mkdir(parents=True)
             cookie.write_text('[{"name":"session","value":"persistent-cookie"}]', encoding="utf-8")
+            if os.name != "nt":
+                for parent in (session, session / "scansci", session / "scansci" / "cache", cookie.parent):
+                    parent.chmod(0o700)
+                cookie.chmod(0o600)
             worker = root / "worker.py"
             worker.write_text(
                 """import json, pathlib, sys
@@ -397,6 +554,164 @@ print(json.dumps({'success': True, 'file': str(paper), 'source': 'CARSI', 'url':
 
             self.assertEqual(acquired.content, b"%PDF-persistent-session")
             self.assertEqual(cookie.read_text(encoding="utf-8"), '[{"name":"session","value":"persistent-cookie"}]')
+
+    def test_worker_receives_only_a_request_local_cookie_snapshot(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            session = root / "session"
+            cookie = session / "scansci" / "cache" / "carsi_cookies" / "sciencedirect.json"
+            cookie.parent.mkdir(parents=True)
+            cookie.write_text('[{"name":"session","value":"snapshot-cookie"}]', encoding="utf-8")
+            if os.name != "nt":
+                for parent in (session, session / "scansci", session / "scansci" / "cache", cookie.parent):
+                    parent.chmod(0o700)
+                cookie.chmod(0o600)
+            observed = root / "observed.json"
+            worker = root / "worker.py"
+            worker.write_text(
+                f"""import json, pathlib, sys
+request = json.load(sys.stdin)
+output = pathlib.Path(request['output_dir'])
+config = json.loads((output / 'config.json').read_text(encoding='utf-8'))
+pathlib.Path({str(observed)!r}).write_text(json.dumps(config), encoding='utf-8')
+cookie = pathlib.Path(config['carsi_cookie_dir']) / 'sciencedirect.json'
+assert cookie.read_text(encoding='utf-8') == '[{{\"name\":\"session\",\"value\":\"snapshot-cookie\"}}]'
+paper = output / 'paper.pdf'; paper.write_bytes(b'%PDF-snapshot')
+print(json.dumps({{'success': True, 'file': str(paper), 'source': 'CARSI', 'url': 'https://publisher.example/paper'}}))
+""",
+                encoding="utf-8",
+            )
+            client = ScanSciAcquisitionClient(root / "runtime", worker_command=[sys.executable, str(worker)], session_root=session)
+
+            acquired = client.acquire(LegalDownloadRequest("10.1038/nature12373", "legal_only", False, False, True, "a" * 64))
+            config = json.loads(observed.read_text(encoding="utf-8"))
+
+            self.assertEqual(acquired.route, "institutional")
+            self.assertNotIn(str(session), json.dumps(config))
+            self.assertTrue(Path(config["carsi_cookie_dir"]).is_relative_to(root / "runtime"))
+
+    @unittest.skipIf(os.name == "nt", "POSIX profile mode is a container boundary")
+    def test_unsafe_cookie_mode_forces_oa_only_and_never_reaches_worker(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            session = root / "session"
+            cookie = session / "scansci" / "cache" / "carsi_cookies" / "sciencedirect.json"
+            cookie.parent.mkdir(parents=True)
+            cookie.write_text('[{"name":"session","value":"unsafe"}]', encoding="utf-8")
+            for parent in (session, session / "scansci", session / "scansci" / "cache", cookie.parent):
+                parent.chmod(0o700)
+            cookie.chmod(0o640)
+            worker = root / "worker.py"
+            worker.write_text(
+                """import json, pathlib, sys
+request=json.load(sys.stdin); output=pathlib.Path(request['output_dir'])
+config=json.loads((output/'config.json').read_text(encoding='utf-8'))
+assert config['carsi_enabled'] is False
+paper=output/'paper.pdf'; paper.write_bytes(b'%PDF-oa')
+print(json.dumps({'success':True,'file':str(paper),'source':'Unpaywall','url':'https://publisher.example/oa'}))
+""",
+                encoding="utf-8",
+            )
+            client = ScanSciAcquisitionClient(root / "runtime", worker_command=[sys.executable, str(worker)], session_root=session)
+
+            acquired = client.acquire(LegalDownloadRequest("10.1038/nature12373", "legal_only", False, False, True, "a" * 64))
+
+            self.assertEqual(acquired.route, "open_access")
+
+    def test_symlink_cookie_forces_oa_only(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            session = root / "session"
+            cookie_root = session / "scansci" / "cache" / "carsi_cookies"
+            cookie_root.mkdir(parents=True)
+            outside = root / "outside.json"
+            outside.write_text('[{"name":"session","value":"outside"}]', encoding="utf-8")
+            cookie = cookie_root / "sciencedirect.json"
+            try:
+                cookie.symlink_to(outside)
+            except OSError:
+                self.skipTest("symlinks unavailable")
+            if os.name != "nt":
+                for parent in (session, session / "scansci", session / "scansci" / "cache", cookie_root):
+                    parent.chmod(0o700)
+            worker = root / "worker.py"
+            worker.write_text(
+                """import json, pathlib, sys
+request=json.load(sys.stdin); output=pathlib.Path(request['output_dir'])
+config=json.loads((output/'config.json').read_text(encoding='utf-8')); assert config['carsi_enabled'] is False
+paper=output/'paper.pdf'; paper.write_bytes(b'%PDF-oa')
+print(json.dumps({'success':True,'file':str(paper),'source':'Unpaywall','url':'https://publisher.example/oa'}))
+""",
+                encoding="utf-8",
+            )
+            client = ScanSciAcquisitionClient(root / "runtime", worker_command=[sys.executable, str(worker)], session_root=session)
+
+            acquired = client.acquire(LegalDownloadRequest("10.1038/nature12373", "legal_only", False, False, True, "a" * 64))
+
+            self.assertEqual(acquired.route, "open_access")
+
+    def test_unsafe_profile_cannot_claim_an_institutional_result(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            session = root / "session"
+            session.mkdir()
+            worker = root / "worker.py"
+            worker.write_text(
+                """import json, pathlib, sys
+request=json.load(sys.stdin); output=pathlib.Path(request['output_dir'])
+paper=output/'paper.pdf'; paper.write_bytes(b'%PDF-forged-institutional')
+print(json.dumps({'success':True,'file':str(paper),'source':'CARSI','url':'https://publisher.example/paper'}))
+""",
+                encoding="utf-8",
+            )
+            client = ScanSciAcquisitionClient(root / "runtime", worker_command=[sys.executable, str(worker)], session_root=session)
+
+            with self.assertRaises(AcquisitionError) as raised:
+                client.acquire(LegalDownloadRequest("10.1038/nature12373", "legal_only", False, False, True, "a" * 64))
+
+            self.assertEqual(raised.exception.code, "auth_required")
+
+    def test_cookie_replacement_between_check_and_open_forces_oa_only(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            session = root / "session"
+            cookie = session / "scansci" / "cache" / "carsi_cookies" / "sciencedirect.json"
+            cookie.parent.mkdir(parents=True)
+            cookie.write_text('[{"name":"session","value":"original"}]', encoding="utf-8")
+            replacement = root / "replacement.json"
+            replacement.write_text('[{"name":"session","value":"replacement"}]', encoding="utf-8")
+            if os.name != "nt":
+                for parent in (session, session / "scansci", session / "scansci" / "cache", cookie.parent):
+                    parent.chmod(0o700)
+                cookie.chmod(0o600)
+                replacement.chmod(0o600)
+            worker = root / "worker.py"
+            worker.write_text(
+                """import json, pathlib, sys
+request=json.load(sys.stdin); output=pathlib.Path(request['output_dir'])
+config=json.loads((output/'config.json').read_text(encoding='utf-8')); assert config['carsi_enabled'] is False
+paper=output/'paper.pdf'; paper.write_bytes(b'%PDF-oa')
+print(json.dumps({'success':True,'file':str(paper),'source':'Unpaywall','url':'https://publisher.example/oa'}))
+""",
+                encoding="utf-8",
+            )
+            real_open = upstream_module.os.open
+            replaced = False
+
+            def racing_open(path, flags, *args, **kwargs):
+                nonlocal replaced
+                if Path(path) == cookie and not replaced and flags & os.O_RDONLY == os.O_RDONLY:
+                    replaced = True
+                    cookie.unlink()
+                    replacement.replace(cookie)
+                return real_open(path, flags, *args, **kwargs)
+
+            client = ScanSciAcquisitionClient(root / "runtime", worker_command=[sys.executable, str(worker)], session_root=session)
+            with mock.patch.object(upstream_module.os, "open", side_effect=racing_open):
+                acquired = client.acquire(LegalDownloadRequest("10.1038/nature12373", "legal_only", False, False, True, "a" * 64))
+
+            self.assertTrue(replaced)
+            self.assertEqual(acquired.route, "open_access")
 
 
 if __name__ == "__main__":

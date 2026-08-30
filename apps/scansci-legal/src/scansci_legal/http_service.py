@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import UTC, datetime, timedelta
 import hmac
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -17,6 +17,7 @@ from .upstream import AcquiredPdf, AcquisitionError, _safe_external_url, _safe_h
 
 MAX_PDF_BYTES = 100 * 1024 * 1024
 ERROR_STATUS = {
+    "disabled": 503,
     "auth_required": 409,
     "not_entitled": 403,
     "not_found": 404,
@@ -106,6 +107,12 @@ def create_server(config: ServiceConfig | Mapping[str, Any] | object, acquisitio
             except PolicyError:
                 self._json(400, {"code": "invalid_request"})
                 return
+            session_state = _live_session_status(settings.session_status)
+            if session_state == "disabled":
+                self._stable_error("disabled")
+                return
+            if session_state != "ready":
+                request = replace(request, institutional=False)
             with acquisition_semaphore:
                 try:
                     acquired = acquisition_client.acquire(request)

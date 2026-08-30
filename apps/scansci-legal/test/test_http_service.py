@@ -4,6 +4,7 @@ from contextlib import contextmanager, redirect_stderr
 import http.client
 import io
 import json
+import os
 from pathlib import Path
 import socket
 import sys
@@ -180,7 +181,17 @@ class LegalDownloadHttpServiceTest(unittest.TestCase):
             "import json, pathlib, sys\nrequest=json.load(sys.stdin)\npath=pathlib.Path(request['output_dir'])/'paper.pdf'\npath.write_bytes(b'%PDF-live-through-response')\nprint(json.dumps({'success': True, 'file': str(path), 'source': 'CARSI', 'url': 'https://publisher.example/paper'}))\n",
             encoding="utf-8",
         )
-        client = ScanSciAcquisitionClient(Path(self.directory.name), worker_command=[sys.executable, str(worker)])
+        session_root = Path(self.directory.name) / "session"
+        cookie = session_root / "scansci" / "cache" / "carsi_cookies" / "sciencedirect.json"
+        cookie.parent.mkdir(parents=True)
+        cookie.write_text('[{"name":"session","value":"fixture"}]', encoding="utf-8")
+        if os.name != "nt":
+            for parent in (session_root, session_root / "scansci", session_root / "scansci" / "cache", cookie.parent):
+                parent.chmod(0o700)
+            cookie.chmod(0o600)
+        client = ScanSciAcquisitionClient(
+            Path(self.directory.name), worker_command=[sys.executable, str(worker)], session_root=session_root,
+        )
         with running_server(client) as server:
             response = request_json(server, "/v1/legal-download", VALID_REQUEST, "service-test-token")
 

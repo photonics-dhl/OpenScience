@@ -20,6 +20,8 @@ from .policy import LegalDownloadRequest, PolicyError, validate_source_result
 MAX_PDF_BYTES = 100 * 1024 * 1024
 MAX_PROTOCOL_BYTES = 8 * 1024
 WORKER_TIMEOUT_SECONDS = 60
+MAX_SESSION_FILES = 16
+MAX_SESSION_FILE_BYTES = 64 * 1024
 
 
 class AcquisitionError(RuntimeError):
@@ -64,12 +66,19 @@ class ScanSciAcquisitionClient:
         self._runtime_dir.mkdir(parents=True, exist_ok=True)
         with tempfile.TemporaryDirectory(prefix="scansci-legal-", dir=self._runtime_dir) as directory:
             output_dir = Path(directory).resolve()
+            session_snapshot = _snapshot_session(self._session_root, output_dir / "session-snapshot") if request.institutional else None
             (output_dir / "config.json").write_text(
-                json.dumps(_fixed_config(output_dir, self._session_root), sort_keys=True, separators=(",", ":")),
+                json.dumps(_fixed_config(output_dir, session_snapshot), sort_keys=True, separators=(",", ":")),
                 encoding="utf-8",
             )
             result = _run_worker(self._worker_command, request, output_dir)
-            return _validated_result(result, request, output_dir, self._maximum_pdf_bytes)
+            return _validated_result(
+                result,
+                request,
+                output_dir,
+                self._maximum_pdf_bytes,
+                institutional_allowed=session_snapshot is not None and request.institutional,
+            )
 
 
 def _run_worker(command: Sequence[str], request: LegalDownloadRequest, output_dir: Path) -> object:
@@ -106,20 +115,85 @@ def _sanitized_environment(output_dir: Path) -> dict[str, str]:
     return environment
 
 
-def _fixed_config(output_dir: Path, session_root: Path) -> dict[str, Any]:
+def _fixed_config(output_dir: Path, session_snapshot: Path | None) -> dict[str, Any]:
+    snapshot_root = session_snapshot or output_dir / "empty-session"
     return {
         "output_dir": str(output_dir), "cache_dir": str(output_dir / "cache"), "download_strategy": "legal_only",
         "scihub_enabled": False, "use_tor": False, "tor_proxy": "", "use_tor_for_scihub": False,
         "network_proxy": "", "proxy_pool": "", "batch_workers": 1, "parallel_sources": False,
-        "parallel_probes": False, "connect_timeout": 15, "read_timeout": 30, "carsi_enabled": True,
+        "parallel_probes": False, "connect_timeout": 15, "read_timeout": 30,
+        "carsi_enabled": session_snapshot is not None,
         "carsi_idp_name": "浙江大学",
-        "carsi_cookie_dir": str(session_root / "scansci" / "cache" / "carsi_cookies"),
-        "chrome_profile_dir": str(session_root / "chromium"),
+        "carsi_cookie_dir": str(snapshot_root / "carsi_cookies"),
+        "chrome_profile_dir": str(snapshot_root / "chromium"),
         "auto_relogin": False,
     }
 
 
-def _validated_result(result: object, request: LegalDownloadRequest, output_dir: Path, maximum_pdf_bytes: int) -> AcquiredPdf:
+def _snapshot_session(session_root: Path, destination: Path) -> Path | None:
+    cookie_root = session_root / "scansci" / "cache" / "carsi_cookies"
+    try:
+        _validate_session_directory(session_root)
+        for parent in (session_root / "scansci", session_root / "scansci" / "cache", cookie_root):
+            _validate_session_directory(parent)
+        candidates = sorted(cookie_root.glob("*.json"))
+        if not candidates or len(candidates) > MAX_SESSION_FILES:
+            return None
+        copied = [(candidate.name, _read_session_file(candidate)) for candidate in candidates]
+    except (OSError, ValueError):
+        return None
+    target = destination / "carsi_cookies"
+    target.mkdir(parents=True, mode=0o700)
+    for name, content in copied:
+        path = target / name
+        descriptor = os.open(path, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o600)
+        with os.fdopen(descriptor, "wb") as output:
+            output.write(content)
+    return destination
+
+
+def _validate_session_directory(path: Path) -> None:
+    details = os.lstat(path)
+    if stat.S_ISLNK(details.st_mode) or not stat.S_ISDIR(details.st_mode):
+        raise ValueError("unsafe session directory")
+    if os.name != "nt":
+        expected_uid = os.geteuid()
+        if details.st_uid != expected_uid or stat.S_IMODE(details.st_mode) & 0o077:
+            raise ValueError("unsafe session directory")
+
+
+def _read_session_file(path: Path) -> bytes:
+    before = os.lstat(path)
+    if stat.S_ISLNK(before.st_mode) or not stat.S_ISREG(before.st_mode):
+        raise ValueError("unsafe session file")
+    if os.name != "nt":
+        if before.st_uid != os.geteuid() or stat.S_IMODE(before.st_mode) != 0o600:
+            raise ValueError("unsafe session file")
+    descriptor = os.open(path, os.O_RDONLY | getattr(os, "O_BINARY", 0) | getattr(os, "O_NOFOLLOW", 0))
+    try:
+        opened = os.fstat(descriptor)
+        if not stat.S_ISREG(opened.st_mode) or (before.st_dev, before.st_ino) != (opened.st_dev, opened.st_ino):
+            raise ValueError("session file changed before open")
+        with os.fdopen(descriptor, "rb", closefd=False) as source:
+            content = source.read(MAX_SESSION_FILE_BYTES + 1)
+        after = os.lstat(path)
+        if (opened.st_dev, opened.st_ino) != (after.st_dev, after.st_ino):
+            raise ValueError("session file changed during read")
+    finally:
+        os.close(descriptor)
+    if len(content) > MAX_SESSION_FILE_BYTES:
+        raise ValueError("session file exceeds bound")
+    return content
+
+
+def _validated_result(
+    result: object,
+    request: LegalDownloadRequest,
+    output_dir: Path,
+    maximum_pdf_bytes: int,
+    *,
+    institutional_allowed: bool,
+) -> AcquiredPdf:
     if not isinstance(result, dict) or result.get("success") is not True:
         raise AcquisitionError(_failure_code(result))
     try:
@@ -129,6 +203,8 @@ def _validated_result(result: object, request: LegalDownloadRequest, output_dir:
         source_url = _source_url(result, request.identifier)
     except PolicyError as error:
         raise AcquisitionError("policy_blocked") from error
+    if provenance.route == "institutional" and not institutional_allowed:
+        raise AcquisitionError("auth_required")
     content = _read_result_pdf(result.get("file"), output_dir, maximum_pdf_bytes)
     license_value = result.get("license")
     if license_value is not None and (not isinstance(license_value, str) or not _safe_header_value(license_value)):

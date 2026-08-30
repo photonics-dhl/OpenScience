@@ -7,27 +7,122 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 ENV_FILE="$PROJECT_ROOT/.env"
 STATE_ROOT="${XDG_STATE_HOME:-${LOCALAPPDATA:-$HOME/.local/state}}/openscience"
-PID_FILE="$STATE_ROOT/scansci-auth-tunnel.pid"
-PORT_FILE="$STATE_ROOT/scansci-auth-tunnel.port"
+STATE_FILE="$STATE_ROOT/scansci-auth-tunnel.state"
+LOCK_DIR="$STATE_ROOT/scansci-auth-tunnel.lock"
+RUNNER_FILE="$STATE_ROOT/scansci-auth-tunnel-runner.sh"
 SSH_KEY="$HOME/.ssh/id_ed25519_xgs"
 KNOWN_HOSTS="$HOME/.ssh/known_hosts"
+LOCK_HELD=0
 
 usage() {
   echo "usage: scansci-auth-tunnel.sh <start|stop|status> [local-port]" >&2
   exit 64
 }
 
-is_running() {
-  [ -f "$PID_FILE" ] || return 1
-  local pid
-  pid="$(tr -d '\r\n' < "$PID_FILE")"
-  [[ "$pid" =~ ^[1-9][0-9]*$ ]] || return 1
-  kill -0 "$pid" 2>/dev/null
+read_state() {
+  [ -f "$STATE_FILE" ] && [ ! -L "$STATE_FILE" ] || return 1
+  local lines
+  mapfile -t lines < "$STATE_FILE"
+  [ "${#lines[@]}" -eq 3 ] || return 1
+  STATE_TOKEN="${lines[0]}"
+  STATE_PID="${lines[1]}"
+  STATE_PORT="${lines[2]}"
+  [[ "$STATE_TOKEN" =~ ^[0-9a-f]{32}$ ]] || return 1
+  [[ "$STATE_PID" =~ ^[1-9][0-9]*$ ]] || return 1
+  [[ "$STATE_PORT" =~ ^[0-9]+$ ]] || return 1
 }
 
-current_port() {
-  [ -f "$PORT_FILE" ] || return 1
-  tr -d '\r\n' < "$PORT_FILE"
+process_matches_state() {
+  read_state || return 1
+  kill -0 "$STATE_PID" 2>/dev/null || return 1
+  local identity
+  identity="$(ps -p "$STATE_PID" -f 2>/dev/null || true)"
+  case "$identity" in
+    *"scansci-auth-tunnel-runner.sh $STATE_TOKEN $STATE_PORT"*"127.0.0.1:$STATE_PORT:127.0.0.1:6080"*) return 0 ;;
+    *) return 1 ;;
+  esac
+}
+
+is_running() {
+  process_matches_state
+}
+
+release_lock() {
+  if [ "$LOCK_HELD" -eq 1 ]; then
+    rm -f "$LOCK_DIR/pid"
+    rmdir "$LOCK_DIR" 2>/dev/null || true
+    LOCK_HELD=0
+  fi
+}
+
+acquire_lock() {
+  mkdir -p "$STATE_ROOT"
+  chmod 700 "$STATE_ROOT" 2>/dev/null || true
+  local attempt owner
+  for attempt in $(seq 1 100); do
+    if mkdir "$LOCK_DIR" 2>/dev/null; then
+      printf '%s\n' "$$" > "$LOCK_DIR/pid"
+      LOCK_HELD=1
+      trap release_lock EXIT INT TERM
+      return 0
+    fi
+    owner="$(tr -d '\r\n' < "$LOCK_DIR/pid" 2>/dev/null || true)"
+    if ! [[ "$owner" =~ ^[1-9][0-9]*$ ]] || ! kill -0 "$owner" 2>/dev/null; then
+      rm -f "$LOCK_DIR/pid" 2>/dev/null || true
+      rmdir "$LOCK_DIR" 2>/dev/null || true
+      continue
+    fi
+    sleep 0.05
+  done
+  echo "tunnel state busy" >&2
+  return 75
+}
+
+write_runner() {
+  local temporary="$RUNNER_FILE.$$"
+  printf '%s\n' \
+    '#!/usr/bin/env bash' \
+    'set -uo pipefail' \
+    'token="$1"; port="$2"; shift 2' \
+    'child=0' \
+    'cleanup(){ if [ "$child" -gt 0 ]; then kill "$child" 2>/dev/null || true; wait "$child" 2>/dev/null || true; fi; }' \
+    'trap cleanup EXIT INT TERM' \
+    '"$@" &' \
+    'child=$!' \
+    'wait "$child"' > "$temporary"
+  chmod 700 "$temporary"
+  mv -f "$temporary" "$RUNNER_FILE"
+}
+
+write_state() {
+  local token="$1" pid="$2" port="$3" temporary="$STATE_FILE.$$.$token"
+  printf '%s\n%s\n%s\n' "$token" "$pid" "$port" > "$temporary"
+  chmod 600 "$temporary" 2>/dev/null || true
+  mv -f "$temporary" "$STATE_FILE"
+}
+
+remove_state() {
+  rm -f "$STATE_FILE" "$STATE_ROOT/scansci-auth-tunnel.pid" "$STATE_ROOT/scansci-auth-tunnel.port"
+}
+
+stop_identified_tunnel() {
+  if process_matches_state; then
+    kill "$STATE_PID" 2>/dev/null || true
+    wait "$STATE_PID" 2>/dev/null || true
+  fi
+  remove_state
+}
+
+wait_until_ready() {
+  local port="$1" attempt
+  for attempt in $(seq 1 8); do
+    if curl --noproxy '*' --fail --silent --show-error --connect-timeout 0.2 --max-time 0.5 "http://127.0.0.1:$port/" >/dev/null 2>&1; then
+      return 0
+    fi
+    process_matches_state || return 1
+    sleep 0.1
+  done
+  return 1
 }
 
 read_env() {
@@ -89,49 +184,49 @@ stop_remote_helper() {
 start_tunnel() {
   local port="${1:-6080}"
   [[ "$port" =~ ^[0-9]+$ ]] && [ "$port" -ge 1024 ] && [ "$port" -le 65535 ] || usage
+  acquire_lock
   if is_running; then
-    local active_port
-    active_port="$(current_port || true)"
-    if [ "$active_port" != "$port" ]; then
+    if [ "$STATE_PORT" != "$port" ]; then
       echo "tunnel already running on another local port" >&2
       return 65
     fi
     echo "already running on http://127.0.0.1:$port"
     return 0
   fi
-  rm -f "$PID_FILE" "$PORT_FILE"
+  remove_state
   load_connection
-  mkdir -p "$STATE_ROOT"
-  chmod 700 "$STATE_ROOT" 2>/dev/null || true
 
   if ! ssh "${SSH_ARGS[@]}" "$SSH_TARGET" "$(remote_compose_command 'up -d')" >/dev/null 2>&1; then
     echo "auth helper start failed" >&2
     return 1
   fi
 
-  ssh "${SSH_ARGS[@]}" -N -L "127.0.0.1:$port:127.0.0.1:6080" "$SSH_TARGET" >/dev/null 2>&1 &
+  local token
+  token="$(od -An -N16 -tx1 /dev/urandom | tr -d ' \r\n')"
+  [[ "$token" =~ ^[0-9a-f]{32}$ ]] || { stop_remote_helper || true; echo "tunnel identity failed" >&2; return 1; }
+  write_runner
+  bash "$RUNNER_FILE" "$token" "$port" ssh "${SSH_ARGS[@]}" -N -L "127.0.0.1:$port:127.0.0.1:6080" "$SSH_TARGET" >/dev/null 2>&1 &
   local tunnel_pid=$!
-  printf '%s\n' "$tunnel_pid" > "$PID_FILE"
-  printf '%s\n' "$port" > "$PORT_FILE"
-  chmod 600 "$PID_FILE" "$PORT_FILE" 2>/dev/null || true
+  write_state "$token" "$tunnel_pid" "$port"
   sleep 0.2
-  if ! kill -0 "$tunnel_pid" 2>/dev/null; then
-    rm -f "$PID_FILE" "$PORT_FILE"
+  if ! process_matches_state; then
+    stop_identified_tunnel
     stop_remote_helper || true
     echo "loopback tunnel start failed" >&2
+    return 1
+  fi
+  if ! wait_until_ready "$port"; then
+    stop_identified_tunnel
+    stop_remote_helper || true
+    echo "loopback tunnel readiness failed" >&2
     return 1
   fi
   echo "started on http://127.0.0.1:$port"
 }
 
 stop_tunnel() {
-  if is_running; then
-    local pid
-    pid="$(tr -d '\r\n' < "$PID_FILE")"
-    kill "$pid" 2>/dev/null || true
-    wait "$pid" 2>/dev/null || true
-  fi
-  rm -f "$PID_FILE" "$PORT_FILE"
+  acquire_lock
+  stop_identified_tunnel
 
   load_connection
   if ! stop_remote_helper; then
@@ -142,11 +237,9 @@ stop_tunnel() {
 }
 
 show_status() {
+  acquire_lock
   if is_running; then
-    local port
-    port="$(current_port || true)"
-    [[ "$port" =~ ^[0-9]+$ ]] || { echo "tunnel state invalid" >&2; return 65; }
-    echo "running on http://127.0.0.1:$port"
+    echo "running on http://127.0.0.1:$STATE_PORT"
     return 0
   fi
   echo "stopped"

@@ -22,9 +22,20 @@ class ScanSciAcquisitionClientTest(unittest.TestCase):
     def setUp(self):
         self.directory = tempfile.TemporaryDirectory()
         self.root = Path(self.directory.name)
+        self.session_root = self.root / "session"
+        cookie = self.session_root / "scansci" / "cache" / "carsi_cookies" / "sciencedirect.json"
+        cookie.parent.mkdir(parents=True)
+        cookie.write_text('[{"name":"session","value":"fixture"}]', encoding="utf-8")
+        if os.name != "nt":
+            for parent in (self.session_root, self.session_root / "scansci", self.session_root / "scansci" / "cache", cookie.parent):
+                parent.chmod(0o700)
+            cookie.chmod(0o600)
 
     def tearDown(self):
         self.directory.cleanup()
+
+    def client(self, command: list[str]) -> ScanSciAcquisitionClient:
+        return ScanSciAcquisitionClient(self.root, worker_command=command, session_root=self.session_root)
 
     def worker(self, behavior: str = "success") -> list[str]:
         script = self.root / "fake-upstream-worker.py"
@@ -65,7 +76,7 @@ print(json.dumps({'success': True, 'file': str(paper), 'source': 'CARSI', 'url':
         return [sys.executable, str(script)]
 
     def test_runs_the_worker_with_a_fixed_legal_config_and_returns_parent_owned_bytes(self):
-        result = ScanSciAcquisitionClient(self.root, worker_command=self.worker()).acquire(REQUEST)
+        result = self.client(self.worker()).acquire(REQUEST)
 
         self.assertEqual(result.route, "institutional")
         self.assertEqual(result.source, "CARSI")
@@ -73,14 +84,14 @@ print(json.dumps({'success': True, 'file': str(paper), 'source': 'CARSI', 'url':
         self.assertEqual(result.content, b"%PDF-safe-from-worker")
 
     def test_rejects_an_unsafe_fixed_config_before_the_worker_can_report_a_grey_source(self):
-        result = ScanSciAcquisitionClient(self.root, worker_command=self.worker("unsafe-config")).acquire(REQUEST)
+        result = self.client(self.worker("unsafe-config")).acquire(REQUEST)
 
         self.assertEqual(result.content, b"%PDF-safe-from-worker")
 
     def test_sanitizes_hostile_inherited_proxy_environment_before_starting_the_worker(self):
         hostile = {"SCANSCI_PDF_PROXY": "http://user:secret@proxy.example", "HTTP_PROXY": "http://proxy.example", "HTTPS_PROXY": "http://proxy.example", "ALL_PROXY": "socks5://proxy.example"}
         with mock.patch.dict(os.environ, hostile, clear=False):
-            result = ScanSciAcquisitionClient(self.root, worker_command=self.worker("hostile-env")).acquire(REQUEST)
+            result = self.client(self.worker("hostile-env")).acquire(REQUEST)
 
         self.assertEqual(result.content, b"%PDF-safe-from-worker")
 
@@ -105,7 +116,7 @@ print(json.dumps({'success': True, 'file': str(paper), 'source': 'CARSI', 'url':
 
     def test_discards_worker_stderr_and_returns_only_a_stable_error_code(self):
         with self.assertRaises(AcquisitionError) as raised:
-            ScanSciAcquisitionClient(self.root, worker_command=self.worker("leak")).acquire(REQUEST)
+            self.client(self.worker("leak")).acquire(REQUEST)
 
         self.assertEqual(raised.exception.code, "upstream_unavailable")
         self.assertNotIn("secret", str(raised.exception))
@@ -113,7 +124,7 @@ print(json.dumps({'success': True, 'file': str(paper), 'source': 'CARSI', 'url':
 
     def test_preserves_the_worker_unavailable_code_without_turning_it_into_not_found(self):
         with self.assertRaises(AcquisitionError) as raised:
-            ScanSciAcquisitionClient(self.root, worker_command=self.worker("unavailable")).acquire(REQUEST)
+            self.client(self.worker("unavailable")).acquire(REQUEST)
 
         self.assertEqual(raised.exception.code, "upstream_unavailable")
 
@@ -121,7 +132,7 @@ print(json.dumps({'success': True, 'file': str(paper), 'source': 'CARSI', 'url':
         for behavior in ("failure", "grey-source", "unsafe-url"):
             with self.subTest(behavior=behavior):
                 with self.assertRaises(AcquisitionError) as raised:
-                    ScanSciAcquisitionClient(self.root, worker_command=self.worker(behavior)).acquire(REQUEST)
+                    self.client(self.worker(behavior)).acquire(REQUEST)
                 self.assertNotIn("secret", str(raised.exception))
                 self.assertNotIn("private", str(raised.exception))
 
@@ -132,7 +143,7 @@ print(json.dumps({'success': True, 'file': str(paper), 'source': 'CARSI', 'url':
             encoding="utf-8",
         )
         with self.assertRaises(AcquisitionError) as raised:
-            ScanSciAcquisitionClient(self.root, worker_command=[sys.executable, str(script)]).acquire(REQUEST)
+            self.client([sys.executable, str(script)]).acquire(REQUEST)
         self.assertEqual(raised.exception.code, "invalid_pdf")
 
 

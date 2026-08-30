@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { existsSync } from 'node:fs';
 import { chmod, copyFile, mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
-import { spawnSync } from 'node:child_process';
+import { spawn, spawnSync } from 'node:child_process';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -73,12 +73,36 @@ function run(script, args, env, bashBin = '') {
   );
 }
 
+function runAsync(script, args, env, bashBin = '') {
+  return new Promise((resolveRun) => {
+    const child = spawn(
+      bash,
+      ['-c', 'PATH="$1:$PATH"; export PATH; shift; exec "$@"', 'run-script', bashBin, script, ...args],
+      { encoding: 'utf8', env, stdio: ['ignore', 'pipe', 'pipe'] },
+    );
+    let stdout = '';
+    let stderr = '';
+    child.stdout.setEncoding('utf8'); child.stdout.on('data', (chunk) => { stdout += chunk; });
+    child.stderr.setEncoding('utf8'); child.stderr.on('data', (chunk) => { stderr += chunk; });
+    child.on('close', (status, signal) => resolveRun({ status, signal, stdout, stderr }));
+  });
+}
+
+async function startHealthServer(t, port) {
+  const source = `require('http').createServer((_request,response)=>{response.writeHead(200);response.end('ok')}).listen(${port},'127.0.0.1')`;
+  const server = spawn(process.execPath, ['-e', source], { stdio: 'ignore' });
+  t.after(() => { if (server.exitCode === null) server.kill(); });
+  await new Promise((resolveWait) => setTimeout(resolveWait, 250));
+  return server;
+}
+
 test('status is read-only and only explicit start launches the helper and loopback tunnel', async (t) => {
   const f = await fixture();
   t.after(async () => {
     run(f.script, ['stop'], f.env, f.bashBin);
     await rm(f.root, { recursive: true, force: true });
   });
+  await startHealthServer(t, 16080);
 
   const before = run(f.script, ['status'], f.env, f.bashBin);
   assert.equal(before.status, 3, before.stderr);
@@ -111,6 +135,7 @@ test('duplicate start is idempotent and stop closes only the recorded tunnel', a
     run(f.script, ['stop'], f.env, f.bashBin);
     await rm(f.root, { recursive: true, force: true });
   });
+  await startHealthServer(t, 16081);
 
   assert.equal(run(f.script, ['start', '16081'], f.env, f.bashBin).status, 0);
   const duplicate = run(f.script, ['start', '16081'], f.env, f.bashBin);
@@ -165,6 +190,63 @@ test('a failed local tunnel compensates by stopping the exact remote auth helper
   assert.match(log, /--profile scansci-auth stop scansci-auth/);
 });
 
+test('a live tunnel without loopback HTTP readiness is stopped and compensated', async (t) => {
+  const f = await fixture();
+  t.after(async () => rm(f.root, { recursive: true, force: true }));
+
+  const result = run(f.script, ['start', '16086'], f.env, f.bashBin);
+
+  assert.equal(result.status, 1, `${result.stdout}\n${result.stderr}`);
+  assert.match(result.stderr, /^loopback tunnel readiness failed\s*$/);
+  const log = await readFile(f.log, 'utf8');
+  assert.match(log, /--profile scansci-auth stop scansci-auth/);
+  assert.equal(run(f.script, ['status'], f.env, f.bashBin).status, 3);
+});
+
+test('concurrent starts serialize to one identified tunnel and one remote helper start', async (t) => {
+  const f = await fixture();
+  await startHealthServer(t, 16085);
+  t.after(async () => {
+    run(f.script, ['stop'], f.env, f.bashBin);
+    await rm(f.root, { recursive: true, force: true });
+  });
+
+  const results = await Promise.all([
+    runAsync(f.script, ['start', '16085'], f.env, f.bashBin),
+    runAsync(f.script, ['start', '16085'], f.env, f.bashBin),
+  ]);
+
+  assert.deepEqual(results.map((result) => result.status), [0, 0]);
+  const log = await readFile(f.log, 'utf8');
+  assert.equal((log.match(/--profile scansci-auth up -d scansci-auth/g) ?? []).length, 1);
+  assert.equal((log.match(/127\.0\.0\.1:16085:127\.0\.0\.1:6080/g) ?? []).length, 1);
+});
+
+test('stop never kills an unrelated live PID from stale state', async (t) => {
+  const f = await fixture();
+  const unrelatedPidFile = join(f.root, 'unrelated.pid');
+  const unrelated = spawn(bash, ['-c', 'printf "%s\\n" "$$" > "$1"; sleep 30', 'unrelated', unrelatedPidFile], { stdio: 'ignore' });
+  for (let attempt = 0; attempt < 20 && !existsSync(unrelatedPidFile); attempt += 1) {
+    await new Promise((resolveWait) => setTimeout(resolveWait, 25));
+  }
+  const unrelatedPid = Number((await readFile(unrelatedPidFile, 'utf8')).trim());
+  t.after(async () => {
+    spawnSync(bash, ['-c', 'kill "$1" 2>/dev/null || true', 'cleanup', String(unrelatedPid)]);
+    if (unrelated.exitCode === null) unrelated.kill();
+    await rm(f.root, { recursive: true, force: true });
+  });
+  const stateRoot = join(f.env.XDG_STATE_HOME, 'openscience');
+  await mkdir(stateRoot, { recursive: true });
+  await writeFile(join(stateRoot, 'scansci-auth-tunnel.pid'), `${unrelatedPid}\n`);
+  await writeFile(join(stateRoot, 'scansci-auth-tunnel.port'), '16087\n');
+
+  const result = run(f.script, ['stop'], f.env, f.bashBin);
+
+  assert.equal(result.status, 0, result.stderr);
+  const alive = spawnSync(bash, ['-c', 'kill -0 "$1"', 'check', String(unrelatedPid)]);
+  assert.equal(alive.status, 0, 'unrelated Git Bash process was killed');
+});
+
 test('explicit stop closes the remote helper even when the recorded tunnel is stale', async (t) => {
   const f = await fixture();
   t.after(async () => rm(f.root, { recursive: true, force: true }));
@@ -209,7 +291,7 @@ while true; do sleep 1; done
   const processes = await readFile(log, 'utf8');
   assert.match(processes, /^Xvfb :99 /m);
   assert.match(processes, /^chromium .*--user-data-dir=\/session\/chromium/m);
-  assert.match(processes, /^x11vnc .* -localhost /m);
-  assert.match(processes, /^websockify .*6080 127\.0\.0\.1:5900/m);
+  assert.match(processes, /^x11vnc .* -listen 127\.0\.0\.1 /m);
+  assert.match(processes, /^websockify .*127\.0\.0\.1:6080 127\.0\.0\.1:5900/m);
   assert.match(processes, /^python -m scansci_legal\.auth_login --operator-start$/m);
 });
