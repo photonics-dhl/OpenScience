@@ -42,3 +42,28 @@
 - Independent review's recovery and ambiguous-source findings were fixed and reverified. Its Dashboard-to-RO suggestion was rejected because the locked Task 8 direction explicitly requires Dashboard to target Personal.
 - No Docker, ECS, production, Secret, `.env` or installation action was performed.
 - Real 375px OA/CARSI, one-use download and production deployment remain Task 10 acceptance work; this report does not mark Task 10 done.
+
+## Fix round 1/5 — Important review findings
+
+- Fix commit: `d75ca1c7b7a37af9ab7ff0efbdd16f8c95800081`.
+- Drawer parsed intent now owns one caller key plus SHA-256 fingerprint across child unmount/reopen. Exact replay reconciles the same task; later metadata→full-text and genuinely new user intents receive fresh identity.
+- Recovery requires strict `targetKind`/`researchObjectId` combinations. Durable payloads carry a server-stamped Personal/RO target, and active, retryable SQL, and terminal selectors apply user/authority/target filters before ordering and `LIMIT 1`; Web removed global post-filtering.
+- RO Drawer target authority is the route RO ID, not suggestion/task context. Embedded Evidence Intake Enter ignores both `isComposing` and legacy key code `229`.
+
+### Fix-round RED evidence
+
+1. Durable payload test rejected the new target field; API accepted missing recovery target; Web still requested the global recovery URL.
+2. Drawer tests had no parent-owned key/fingerprint or route target helper; IME decision helper was absent.
+3. Domain target matrix initially failed to recover RO A across 25 newer RO B tasks until filtering moved into all selectors.
+4. UUIDv7 target contract initially failed because the first validator admitted only UUID versions 1–5.
+5. Browser close/reopen matrix initially exposed two unscoped status locators and one summary selector mismatch; scoped dialog assertions then exercised the real production components without weakening behavior checks.
+
+### Fix-round final GREEN evidence
+
+- Domain `535/535`, API `101/101`, Agent Worker `502/502`, Web `463/463` Vitest plus `5/5` Node; relevant package and integration-contract typechecks exit `0`.
+- Web build generated `19/19` routes. Root lint/workspace/docs-sync and final diff check exit `0`.
+- Browser fix matrix `6/6`: running/succeeded/auth-required/failed close→reopen use one key/one simulated debit; failed uses same-task retry; a new intent gets a new key; cross-RO URL uses route RO; Chinese IME Enter is inert until composition ends.
+- Product release gate `72/72` in `3.2m`.
+- Hermes Companion final successful rerun: first-ready `890ms`, idle/pointer p95 `16.7/16.8ms`, zero drops, compatible runtime `19/19`, product Hermes `8/8`.
+- One immediately prior unchanged Hermes run hit the stochastic motion gate on consecutive `blink-single` actions after its performance phase passed; no motion file changed. The complete fresh rerun above exited `0`; the transient failure is retained here rather than hidden.
+- No ECS, Docker, production, Secret, `.env`, migration execution or dependency installation occurred. The ledgered intent-grammar Minor was intentionally not expanded in this fix round.
