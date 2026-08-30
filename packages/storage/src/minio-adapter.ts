@@ -7,6 +7,15 @@ import type { HeadObjectResult, PutObjectOptions, PutObjectResult, GetObjectResu
 import type { StorageConfig } from './factory';
 
 const NETWORK_CODES = new Set(['ECONNREFUSED', 'ENOTFOUND', 'ETIMEDOUT', 'ECONNRESET', 'EAI_AGAIN']);
+const SHA256_PATTERN = /^[a-f0-9]{64}$/u;
+
+/** minio-js strips the x-amz-meta- prefix for some S3 implementations (including SeaweedFS). */
+export function readMinioSha256Metadata(meta: Record<string, string | undefined>): string | undefined {
+  const value = meta.sha256 ?? meta['x-amz-meta-sha256'];
+  if (!value) return undefined;
+  const normalized = value.trim().toLowerCase();
+  return SHA256_PATTERN.test(normalized) ? normalized : undefined;
+}
 
 /** 把 minio/网络错误映射为 StorageError 子类（可单测的纯函数）。 */
 export function mapMinioError(err: unknown): StorageError {
@@ -72,7 +81,7 @@ export class MinioStorageAdapter implements StorageAdapter {
         size: stat.size,
         etag: stat.etag,
         contentType: meta['content-type'],
-        sha256: meta['x-amz-meta-sha256'],
+        sha256: readMinioSha256Metadata(meta),
       };
     } catch (err) {
       const code = (err as { code?: string })?.code;
