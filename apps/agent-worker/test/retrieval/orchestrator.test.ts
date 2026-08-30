@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { createScanSciAuthRequiredStateTracker, executeSourceRetrieval } from '../../src/retrieval/orchestrator';
+import { executeSourceRetrieval } from '../../src/retrieval/orchestrator';
 
 describe('source retrieval orchestration', () => {
   it('persists normalized sources with provider-neutral rights and no raw provider response', async () => {
@@ -70,12 +70,4 @@ describe('source retrieval orchestration', () => {
     ]);
   });
 
-  it('notifies only on the first transition into ScanSci authentication required', () => {
-    const tracker = createScanSciAuthRequiredStateTracker();
-
-    expect(tracker.observe([{ provider: 'scansci', status: 'unavailable', code: 'auth_required' }])).toBe(true);
-    expect(tracker.observe([{ provider: 'scansci', status: 'unavailable', code: 'auth_required' }])).toBe(false);
-    expect(tracker.observe([{ provider: 'scansci', status: 'succeeded' }])).toBe(false);
-    expect(tracker.observe([{ provider: 'scansci', status: 'unavailable', code: 'auth_required' }])).toBe(true);
-  });
 });

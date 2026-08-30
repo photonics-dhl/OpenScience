@@ -10,7 +10,8 @@ export async function observeScanSciProviderState(
   observation: ScanSciProviderObservation,
 ): Promise<{ transitioned: boolean; generation?: number }> {
   if (observation.kind === 'other_failure') return { transitioned: false };
-  return deps.prisma.$transaction(async (tx) => {
+  for (let attempt = 0; attempt < 3; attempt += 1) try {
+    return await deps.prisma.$transaction(async (tx) => {
     if (observation.kind === 'succeeded') {
       await tx.$executeRaw(Prisma.sql`INSERT INTO "external_provider_states" ("provider", "status", "auth_required_generation", "created_at", "updated_at") VALUES ('scansci', 'healthy', 0, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP) ON CONFLICT ("provider") DO UPDATE SET "status" = 'healthy', "updated_at" = CURRENT_TIMESTAMP`);
       return { transitioned: false };
@@ -23,5 +24,10 @@ export async function observeScanSciProviderState(
     const administrators = await tx.user.findMany({ where: { platformRole: 'platform_admin' }, select: { id: true } });
     await Promise.all(administrators.map(({ id }: { id: string }) => tx.notification.create({ data: { userId: id, type: 'external_retrieval.auth_required', idempotencyKey: `external_retrieval.auth_required:scansci:${generation}:${id}`, payload: { provider: 'scansci', generation, taskId: observation.taskId } } })));
     return { transitioned: true, generation };
-  }, { isolationLevel: 'Serializable' });
+    }, { isolationLevel: 'Serializable' });
+  } catch (error) {
+    if ((error as { code?: unknown })?.code === 'P2034' && attempt < 2) continue;
+    throw error;
+  }
+  throw new Error('unreachable');
 }

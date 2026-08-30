@@ -32,4 +32,15 @@ describe('durable ScanSci provider state', () => {
     // A new client intentionally proves restart/replay uses durable state rather than memory.
     expect(observeScanSciProviderState).toBeTypeOf('function');
   });
+
+  it('retries only bounded serialization failures', async () => {
+    let attempts = 0;
+    const prisma: any = { $transaction: async (work: any) => {
+      attempts += 1;
+      if (attempts < 3) throw Object.assign(new Error('serialization'), { code: 'P2034' });
+      return work({ $executeRaw: async () => 1, $queryRaw: async () => [], user: { findMany: async () => [] } });
+    } };
+    await expect(observeScanSciProviderState({ prisma }, { kind: 'succeeded', actorId: 'user', taskId: 'task' })).resolves.toEqual({ transitioned: false });
+    expect(attempts).toBe(3);
+  });
 });
