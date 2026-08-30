@@ -4,10 +4,16 @@
 
 ## Current version tuple
 
-- Branch / local candidate / main: `codex/scansci-default-capability` / `c0bcf0a` / `463c8e3`；远端仅 `main`。
+- Branch / local candidate / main: `codex/scansci-default-capability` / `4f6361e` / `463c8e3`；远端仅 `main`。
 - Production application source / immutable release: `689331845574612130f223d08c92e61721c16586`。
 - Production rollback: `c435c4c8b2800bb20998fd9a9a93f2db96328661`；core/search migrations `32/32` / `2/2`。
 - Taskmaster `hermes-research-intelligence` 为 9/12：Tasks 1–9 done；Task 10 已重新打开，Task 11 阻断至 ScanSci 默认下载能力生产验收完成。
+
+## 2026-08-30 — ScanSci Task 9 local security/release gate
+
+- Whole-branch API/architecture/security review closed 3 P1 findings in `4f6361e`: legal service token is file-only with descriptor/no-follow/owner-mode-link/identity checks; every upstream Requests hop is HTTPS-only and every actual DNS answer must be wholly public; interrupted PDF streams map to a stable redacted provider failure. Knip 的 2 个无用导出同时收口，open P0/P1 = 0。
+- 禁用词精确扫描 33 个命中均为 fixed false、拒绝逻辑或 adversarial test；`audit:knip`、`audit:dep`（831 modules / 1936 dependencies）和 `audit:deps` green。全仓 build/typecheck/test green：release `94/101`（7 platform skips）、ScanSci `73/78`（5 POSIX-only skips）、Web `469`、Domain `535`、Worker `503`、API `101`；总计 `2105 pass / 20 skip / 0 fail`。API/Domain PostgreSQL integration configs 仅完成编译。
+- 本地候选不等于生产：ECS 仍为 `6893318` / `c435c4c` / core-search `32/32`-`2/2`，ScanSci disabled。Migration 33 forward/rollback/redeploy、Linux Secret/SSRF runtime、真实 OA/CARSI、session recreate、四入口 375px、one-use/72h GC、zero-grey/Tor 与 rollback/retention 均留给 Task 10。
 
 ## 2026-08-30 — ScanSci Task 8 local review candidate
 
@@ -88,12 +94,3 @@
 - 按用户要求暂停 Task 8 继续开发，先整理 `docs/proposals/2026-08-29-project-development-deployment-evidence-pack.md`：包含分支/时间线 Git 记录、网站四层上线口径、当前 release/rollback/TLS/container 证据，以及 suggested / confirmed 的数据库字段、生产聚合与完整展示 API 样例；样例为自编演示数据，不是生产用户记录。
 - ECS 只读复核：public/loopback `/__release` 均为 `5e5ae36…`，rollback `6cabe422…`，生产服务健康；`agent_tasks.result` 为 JSONB，`IngestionTaskState` 含 `needs_review`/`confirmed`。聚合为 14 条待确认建议、7 条 confirmed、21 条总计，无业务正文或用户信息输出。
 - Task 8 本地已形成 Claim/Evidence CRUD、可信 SourceMap ref、发布阻断与快照等实现及测试；该时点仍有复审阻断项，现状以上一节为准。
-
-## 2026-08-29 — Task 7 identity routing deployed and accepted
-
-- 注册确认现要求用户选择研究身份（默认中性 reader），与 User、默认 Workspace、身份 profile 和审计在同一数据库事务内创建；产品不暴露模式切换。
-- 新增认证后的身份/兴趣读取、版本化更新和 accept/reject 纠正接口。Agent API 只接受当前目标/Claim，服务端从本人 profile、当前 RO/Claim 构建并持久化确定性 `InterestContext`；拒绝客户端伪造上下文、敏感字段与站外历史。
-- Settings 已接入同一身份表单及兴趣纠正；Worker 把受控上下文注入 Hermes，并把 rejected signals 当作明确排除项。Migration 30 为旧用户补 neutral reader，新增 signals 与 AgentTask context；search 数据库保持独立 2/2。
-- Exact CI `33246701963` / job `99085303687` 全绿。ECS 完成 parser acceptance、migration 30、BGE CPU runtime、内外健康、active/rollback retention 与 immutable release；Taskmaster Task 7 已置 done。
-- 真实生产旅程从公网完成注册、身份读取、两次 MiniMax `workspace.guide`、信号 accept、第二次快照与登出。两次任务均一次成功；持久化 context 从 profileVersion 1/空 history 变为 version 2/`accepted_history`，随后精确清理用户、challenge、task、session、usage 与用户审计至 0。
-- Vision 仍关闭，留到后续管理员代表性生产任务调用；不为追求测试数量提前付费。CPU parser 16-case 仍为 14 succeeded / 2 intentional needs_review / 0 failed / 0 false-ready，暂不安装 Docling。
