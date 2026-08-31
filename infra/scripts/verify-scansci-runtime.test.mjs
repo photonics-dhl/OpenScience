@@ -435,6 +435,7 @@ test('runtime verifier rejects wrong-group host metadata and validates an explic
       NetworkMode: 'openscience-prod_auth_net', ReadonlyRootfs: true, Privileged: false,
       CapDrop: ['ALL'], CapAdd: [], SecurityOpt: ['no-new-privileges:true'],
       Memory: 1024 ** 3, NanoCpus: 1_000_000_000, PidsLimit: 256,
+      Ulimits: [{ Name: 'nofile', Soft: 4096, Hard: 4096 }],
       ExtraHosts: ['openscience-egress:172.25.0.1'],
       PortBindings: {},
       Tmpfs: {
@@ -497,6 +498,9 @@ test('runtime verifier rejects wrong-group host metadata and validates an explic
     (candidate) => { candidate.HostConfig.PortBindings = { '6080/tcp': [{ HostIp: '127.0.0.1', HostPort: '6080' }] }; },
     (candidate) => { candidate.Config.Env = ['SCANSCI_BROWSER_PROXY=http://hostile.invalid:3128']; },
     (candidate) => { candidate.HostConfig.SecurityOpt = []; },
+    (candidate) => { candidate.HostConfig.Ulimits = []; },
+    (candidate) => { candidate.HostConfig.Ulimits[0].Soft = 1_073_741_816; },
+    (candidate) => { candidate.HostConfig.Ulimits[0].Hard = 8192; },
     (candidate) => { candidate.NetworkSettings.Networks = { bridge: {} }; },
     (candidate) => { candidate.NetworkSettings.Networks['openscience-prod_auth_net'].IPAddress = '172.25.0.3'; },
     (candidate) => { candidate.Mounts.push({ Type: 'volume', Name: 'auth-secrets', Destination: '/run/secrets', RW: false }); },
