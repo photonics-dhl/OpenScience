@@ -74,15 +74,17 @@ It has no host port.
 ### 3.2 Authentication helper
 
 Add a release-scoped `scansci-auth` Compose profile. It is stopped by default
-and starts only for initial login or explicit repair. Its browser UI binds to
-host `127.0.0.1:6080` and is reached through the canonical SSH path plus a local
-port forward. The container is the sole peer on a dedicated internal
-`172.25.0.0/29` authentication network, uses only the fixed Squid HTTPS gateway,
-and shares only the ScanSci session volume with
+and starts only for initial login or explicit repair. Its browser UI listens
+only inside the container at fixed `172.25.0.2:6080`; Compose publishes no host
+port. The canonical local SSH forward targets that container address directly.
+The container is the sole peer on a dedicated internal `172.25.0.0/29`
+authentication network, uses only the fixed Squid HTTPS gateway, and shares only
+the ScanSci session volume with
 `scansci-legal`; it mounts no account or service Secret. x11vnc is IPv4-only.
-The fixed `xgs-auth0` bridge is allowed to reach only `172.25.0.1:7891` and is
-rejected from every other host address and port; ordinary application containers share no network
-with the passwordless noVNC endpoint.
+The fixed `xgs-auth0` bridge allows only the exact established return flow from
+`.2:6080` to `.1` plus auth traffic to Squid `.1:7891`, and rejects every other
+host address and port; ordinary application containers share no network with
+the passwordless noVNC endpoint.
 
 The pinned upstream selects `channel=chrome` without its config, so the image's
 Chrome channel alias must resolve to the fixed container wrapper. The wrapper

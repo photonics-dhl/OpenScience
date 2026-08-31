@@ -88,13 +88,15 @@ service. This limitation is documented in the official
 - `scansci-auth` is a release-tagged, stopped-by-default Compose profile. It is
   the sole peer on the fixed internal `172.25.0.0/29` `auth_net`, reaches HTTPS
   destinations through the dedicated Squid listener at `172.25.0.1:7891`, and
-  publishes only container port 6080 to host
-  `127.0.0.1:6080`. x11vnc remains IPv4-loopback-only inside the container and
-  disables IPv6. The browser mounts only the persistent `scansci-session`
+  listens at fixed container address `172.25.0.2:6080` without any host port
+  publication. The canonical local SSH forward targets that address directly.
+  x11vnc remains IPv4-loopback-only inside the container and disables IPv6. The
+  browser mounts only the persistent `scansci-session`
   volume; it receives no username, password, service-token or bootstrap Secret.
-  The `xgs-auth0` host-input policy allows this subnet only to
-  `172.25.0.1:7891` and rejects every other host address and port. No application container shares
-  `auth_net`, so it cannot reach the passwordless noVNC listener directly.
+  The `xgs-auth0` host-input policy allows only the established TCP return flow
+  from `.2:6080` to `.1`, then auth-subnet traffic to `.1:7891`, and rejects
+  every other host address and port. No application container shares `auth_net`,
+  so it cannot reach the passwordless noVNC listener directly.
   Squid configuration publication uses a parsed same-directory temporary,
   fsync plus atomic rename, one durable rollback file and one transactional
   pending marker spanning reload; failure injection proves pre-commit
@@ -111,8 +113,9 @@ service. This limitation is documented in the official
   session volume; no second blank browser or shared Chromium profile is used.
 - Tunnel readiness requires the exact noVNC page, a WebSocket upgrade with an
   RFB 3.x banner, and remote runtime proof of Xvfb/x11vnc/websockify/Chromium,
-  fixed proxy arguments, PID headroom, loopback publication and all container
-  hardening controls. Static HTML alone is never a successful start.
+  fixed proxy arguments, PID headroom, absent host publication, exact fixed-IP
+  return path and all container hardening controls. Static HTML alone is never
+  a successful start.
 - Host inputs remain exact files below `/opt/openscience-secrets/scansci`, with
   the directory owned by `root:root` at `0700` and files at `0600`.
   `provision-scansci-secrets.mjs` accepts only the service token as bounded JSON
