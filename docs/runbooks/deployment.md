@@ -1,6 +1,6 @@
 # Runbook: 部署（Deployment）
 
-> 状态：**CURRENT**。active immutable release / application source 为 `9042ed3f2b2df8b7704d0d59b5fec1beb62f0acc`，rollback tree 为 `e2463c5029fd28e6335d13e0731f9eebd03e985c`。post-deploy merge/docs-only HEAD 不得冒充 application source。
+> 状态：**CURRENT**。active immutable release / application source 为 `cca590823b646c45a3c47f34678ec1ea3eea2fa3`，rollback tree 为 `9042ed3f2b2df8b7704d0d59b5fec1beb62f0acc`。post-deploy merge/docs-only HEAD 不得冒充 application source。
 > 格式遵循 `.agents/skills/infra-runbook/SKILL.md` 四节强制要求。
 > 部署属 Spec §20.5"询问"级操作：执行前需用户确认，必须走 `infra/scripts/deploy.sh` + CI/CD，禁止手工改服务器代码。
 
@@ -1775,9 +1775,45 @@ cgroup PIDs while the verifier retained the old 96 ceiling from the former 128
 hard limit. The exact diagnostic auth container was removed; session, firewall
 and production services were retained.
 
-Candidate `de673701947aa5b80ef6c82922ea49fead9fd2fb` replaces `docker top` with a
+Candidate `de673701947aa5b80ef6c82922ea49fead9fd2fb` replaced `docker top` with a
 read-only Python enumeration of the exact auth container's own
 `/proc/[0-9]*/cmdline`. Its PID contract is the Compose hard limit 256 minus 32
-reserved slots: 168 passes and 225 fails closed. Do not bypass the runtime gate
-or expose process arguments during diagnosis; merge, deploy the exact candidate,
-then require the complete `allow-auth=1` verifier before displaying the link.
+reserved slots: 168 passes and 225 fails closed. PR #24 passed exact CI run
+`33443570873` / job `99657272644`, merged as `cca590823b646c45a3c47f34678ec1ea3eea2fa3`,
+and passed the complete canonical deployment transaction. Active/rollback are
+`cca5908` / `9042ed3`. The next canonical tunnel start passed SSH and static
+noVNC reachability but failed the RFB banner gate; §5.54 records that separate
+runtime root cause. Do not bypass `allow-auth=1` or display the link before the
+RFB probe is green.
+
+### 5.54 ScanSci auth RFB delay from inherited nofile limit (2026-09-01)
+
+**Preflight.** Require the exact active/rollback tuple, absent deployment
+journal, zero auth containers and no host listener on 5900/6080. The observed
+failure had a valid SSH local forward and HTTP 200 noVNC page, but no RFB 3.x
+banner. The auth container inherited `RLIMIT_NOFILE=1073741816`; x11vnc logs
+showed the backend connection waiting about 81 seconds before accept. This
+matches the LibVNCServer upstream defect that scans every descriptor up to an
+extreme soft limit ([issue #600](https://github.com/LibVNC/libvncserver/issues/600)).
+
+**Execution.** Do not extend tunnel sleeps to conceal the defect. Production
+and development `scansci-auth` Compose must set the only nofile ulimit to soft
+and hard `4096`. `verify-scansci-runtime.mjs --allow-auth 1` must inspect the
+real container and reject an absent, duplicate, high or asymmetric nofile
+entry. Deploy only an exact merged SHA through the canonical two-phase release
+transaction, then start only `infra/scripts/scansci-auth-tunnel.sh start 6080`
+from the fixed Windows Git Bash entry point.
+
+**Rollback.** A failed release transaction restores the prior immutable SHA.
+A failed tunnel readiness or runtime gate stops its identified SSH process and
+removes only the exact release auth helper; retain the session volume,
+production services and ordered auth firewall rules. Never use broad Docker
+prune as compensation.
+
+**Verification.** Require Docker inspect to report exactly one
+`nofile/4096/4096` entry, container PID usage within `6..224`, no host listener
+or PortBinding, fixed auth `.2`, the three ordered firewall rules and all
+controlled-egress denials. From the operator machine require both HTTP 200 for
+`/vnc.html?autoconnect=true&resize=remote` and `RFB_OK` from
+`probe-novnc-rfb.mjs ws://127.0.0.1:6080/websockify`. Finally require the full
+canonical `allow-auth=1` verifier before presenting the loopback login link.

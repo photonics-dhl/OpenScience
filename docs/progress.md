@@ -4,17 +4,17 @@
 
 ## Current version tuple
 
-- Candidate branch / HEAD / origin main: `codex/scansci-auth-runtime-probe` / `de67370` / `9042ed3`；runtime-probe PR 待创建。
-- Production application source / immutable release: `9042ed3f2b2df8b7704d0d59b5fec1beb62f0acc`。
-- Production rollback: `e2463c5029fd28e6335d13e0731f9eebd03e985c`；core/search migrations `33/33` / `2/2`。
+- Candidate branch / HEAD / origin main: `codex/scansci-auth-nofile-runtime` / `396b301` / `cca5908`；nofile runtime PR 待创建。
+- Production application source / immutable release: `cca590823b646c45a3c47f34678ec1ea3eea2fa3`。
+- Production rollback: `9042ed3f2b2df8b7704d0d59b5fec1beb62f0acc`；core/search migrations `33/33` / `2/2`。
 - Taskmaster `hermes-research-intelligence` 仍为 9/12；独立 ScanSci plan Tasks 1–9 done、Task 10 in progress，Task 11 继续阻断。
 
-## 2026-09-01 — ScanSci internal tunnel deployed; ECS process probe candidate
+## 2026-09-01 — ScanSci auth RFB nofile candidate
 
-- PR #23 / exact CI `33438168058`、job `99639591064` 合并为 main `9042ed3`。schema-v3 16-case Parser acceptance、BGE CPU、ScanSci source/policy/OA、API/Web/Worker、Nginx、公网 CAS 与 retention 全绿；一次瞬态 ScanSci prepublication failure 完整回滚后定向复验与 canonical retry 成功，active/rollback 为 `9042ed3` / `e2463c5`。
-- 真实 auth start 证明 host→固定 `.2:6080` noVNC 在 1 秒内 200、无 host listener/PortBinding，三条 INPUT 规则顺序正确，Squid 204 且 host/raw/metadata 全 blocked；失败点是 ECS Docker daemon 的 `docker top` API 固定返回 `page not found`，同时真实 Chromium cgroup PIDs `168` 超过遗留 verifier 上限 `96`。诊断 auth container 已精确清理，session/生产服务保留。
-- `de67370` 改为容器内只读 Python 枚举自身 `/proc/*/cmdline`，不依赖 Docker top；PID 合同同步为硬上限 256 减 32 headroom，即 `6..224`，真实 168 通过、225 仍 fail closed。
-- Fresh gates：runtime `11/11`、相关 infra `74 pass/5 Windows Linux-only skip/0 fail`、全仓 test/build/typecheck/lint/docs-sync 全绿；候选尚未 PR/部署，CARSI 登录仍 pending。
+- PR #24 / exact CI `33443570873`、job `99657272644` 合并为 main `cca5908`；schema-v3 Parser、BGE CPU、ScanSci OA/runtime、API/Web/Worker、Nginx/public CAS/retention 全绿，active/rollback 为 `cca5908` / `9042ed3`。
+- Canonical tunnel 仍在 RFB readiness fail-closed。拆分实测证明 SSH forward 与 noVNC HTML 200 正常，但 x11vnc 接受 backend TCP 延迟约 81 秒且不发 RFB banner；auth container 实际继承 `RLIMIT_NOFILE=1073741816`，精确命中 LibVNCServer 遍历巨大 fd limit 的上游缺陷。诊断 tunnel/auth 已精确清理，session/生产服务保留。
+- `396b301` 在 prod/dev auth Compose 固定 `nofile=4096/4096`；canonical runtime 同时要求唯一 exact nofile，缺失、超大或软硬漂移均 fail closed。原 process-probe 修复继续使用容器内只读 `/proc/*/cmdline`，PID 允许 `6..224`。
+- Red→green runtime `10/11→11/11`；相关 infra `77 pass/5 Windows Linux-only skip/0 fail`，全仓 test/build/typecheck/lint/docs-sync 全绿；nofile 候选尚未 PR/部署，CARSI 登录仍 pending。
 
 ## 2026-08-31 — ScanSci Task 10 controlled-egress production retry
 
