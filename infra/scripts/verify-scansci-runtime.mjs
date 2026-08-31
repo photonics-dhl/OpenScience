@@ -8,6 +8,8 @@ import { parseReleaseCapability } from './production-release-retention.mjs';
 
 const SHA_PATTERN = /^[a-f0-9]{40}$/u;
 const IMAGE_PATTERN = /^sha256:[a-f0-9]{64}$/u;
+const AUTH_PID_LIMIT = 256;
+const AUTH_PID_HEADROOM = 32;
 const LABELS = {
   source: 'org.openscience.source',
   archive: 'org.openscience.scansci.archive-sha256',
@@ -272,7 +274,8 @@ export async function verifyScanSciRuntime({
       || !sessionMount || sessionMount.Type !== 'volume' || sessionMount.RW !== true || sessionMount.Name !== 'openscience-prod_scansci-session'
       || candidate.Mounts.some((mount) => mount.Destination === '/run/secrets');
     })
-      || !Number.isSafeInteger(authPids) || authPids < 6 || authPids > 96
+      || !Number.isSafeInteger(authPids) || authPids < 6
+      || authPids > AUTH_PID_LIMIT - AUTH_PID_HEADROOM
       || !/Xvfb :99 .* -nolisten tcp/u.test(authProcessList)
       || !/x11vnc .* -listen 127\.0\.0\.1 .* -no6(?: |$)/mu.test(authProcessList)
       || !/websockify .*0\.0\.0\.0:6080 127\.0\.0\.1:5900/u.test(authProcessList)
@@ -387,6 +390,30 @@ function run(command, args, { input, maxBuffer = 1024 * 1024, timeout } = {}) {
   return result.stdout.trim();
 }
 
+const AUTH_PROCESS_LIST_SOURCE = [
+  'import glob',
+  "for path in sorted(glob.glob('/proc/[0-9]*/cmdline')):",
+  ' try:',
+  "  with open(path,'rb') as stream:",
+  '   raw=stream.read()',
+  ' except (FileNotFoundError,PermissionError,ProcessLookupError):',
+  '  continue',
+  " args=[part.decode('utf-8','replace').replace('\\n',' ').replace('\\r',' ') for part in raw.split(b'\\0') if part]",
+  " if args: print(' '.join(args))",
+].join('\n');
+
+export function probeAuthRuntimeProcesses(containerId, runner = run) {
+  if (!/^[a-f0-9]{6,64}$/u.test(containerId)) fail();
+  const authProcessList = runner('docker', [
+    'exec', containerId, 'python', '-c', AUTH_PROCESS_LIST_SOURCE,
+  ], { maxBuffer: 64 * 1024 });
+  const authPids = Number(runner('docker', [
+    'stats', '--no-stream', '--format', '{{.PIDs}}', containerId,
+  ], { timeout: 5_000 }));
+  if (!Number.isSafeInteger(authPids)) fail();
+  return { authProcessList, authPids };
+}
+
 export function probeSourceFileLimit(containerId, runner = run) {
   if (!/^[a-f0-9]{6,64}$/u.test(containerId)) fail();
   const input = JSON.stringify({ probe: 'file-limit', output_dir: '/tmp' });
@@ -452,8 +479,7 @@ async function main() {
   let authNetwork;
   let authIsolationProbe;
   if (allowAuth === '1' && authIds.length === 1) {
-    authProcessList = run('docker', ['top', authIds[0], '-eo', 'args'], { maxBuffer: 64 * 1024 });
-    authPids = Number(run('docker', ['stats', '--no-stream', '--format', '{{.PIDs}}', authIds[0]], { timeout: 5_000 }));
+    ({ authProcessList, authPids } = probeAuthRuntimeProcesses(authIds[0]));
     const authNetworkNames = Object.keys(authContainers[0].NetworkSettings?.Networks ?? {})
       .filter((name) => name.endsWith('_auth_net'));
     if (authNetworkNames.length !== 1) fail();

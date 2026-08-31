@@ -1,6 +1,6 @@
 # Runbook: 部署（Deployment）
 
-> 状态：**CURRENT**。active immutable release / application source 为 `e2463c5029fd28e6335d13e0731f9eebd03e985c`，rollback tree 为 `0f86cc3fe191b8dbd7ee4183a40e535a3693e145`。post-deploy merge/docs-only HEAD 不得冒充 application source。
+> 状态：**CURRENT**。active immutable release / application source 为 `9042ed3f2b2df8b7704d0d59b5fec1beb62f0acc`，rollback tree 为 `e2463c5029fd28e6335d13e0731f9eebd03e985c`。post-deploy merge/docs-only HEAD 不得冒充 application source。
 > 格式遵循 `.agents/skills/infra-runbook/SKILL.md` 四节强制要求。
 > 部署属 Spec §20.5"询问"级操作：执行前需用户确认，必须走 `infra/scripts/deploy.sh` + CI/CD，禁止手工改服务器代码。
 
@@ -1755,3 +1755,29 @@ fixed wrapper with proxy, QUIC/WebRTC restrictions and bounded PIDs; and no
 account/service Secret is mounted. Local readiness additionally requires the
 exact noVNC HTML through the SSH forward, WebSocket binary subprotocol, RFB 3.x
 banner, and visible CARSI target page.
+
+### 5.53 ScanSci ECS auth process probe mismatch (2026-09-01)
+
+PR #23 passed exact CI run `33438168058` / job `99639591064` and merged as
+`9042ed3f2b2df8b7704d0d59b5fec1beb62f0acc`. Its first canonical transaction
+failed the unchanged prepublication ScanSci probe and fully restored `e2463c5`;
+an in-lock targeted replay passed, and the complete retry then passed schema-v3
+Parser acceptance, BGE CPU inference, ScanSci OA, container/Nginx/public CAS and
+retention. Active/rollback are `9042ed3` / `e2463c5`.
+
+The first real auth-helper start proved the new network path itself: ECS host
+noVNC became HTTP 200 in one second at fixed `172.25.0.2:6080`, with no host
+listener or PortBinding; the three INPUT rules were unique and ordered; Squid
+returned 204; host, raw internet and both cloud metadata probes were blocked.
+The runtime gate still failed because this ECS Docker daemon returns `page not
+found` for every `docker top` form, and `docker stats` reported 168 Chromium
+cgroup PIDs while the verifier retained the old 96 ceiling from the former 128
+hard limit. The exact diagnostic auth container was removed; session, firewall
+and production services were retained.
+
+Candidate `de673701947aa5b80ef6c82922ea49fead9fd2fb` replaces `docker top` with a
+read-only Python enumeration of the exact auth container's own
+`/proc/[0-9]*/cmdline`. Its PID contract is the Compose hard limit 256 minus 32
+reserved slots: 168 passes and 225 fails closed. Do not bypass the runtime gate
+or expose process arguments during diagnosis; merge, deploy the exact candidate,
+then require the complete `allow-auth=1` verifier before displaying the link.

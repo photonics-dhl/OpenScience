@@ -392,6 +392,37 @@ test('runtime identity modes keep prepublication explicit and canonical sidecar-
   assert.equal(canonicalReads, 1);
 });
 
+test('auth process probe reads the container procfs and retains 32 cgroup PID slots', () => {
+  assert.equal(typeof runtimeVerifier.probeAuthRuntimeProcesses, 'function');
+  const calls = [];
+  const runner = (command, args, options) => {
+    calls.push({ command, args, options });
+    if (args[0] === 'exec') {
+      return [
+        'Xvfb :99 -screen 0 1280x800x24 -nolisten tcp',
+        'x11vnc -display :99 -rfbport 5900 -listen 127.0.0.1 -forever -shared -nopw -no6',
+      ].join('\n');
+    }
+    if (args[0] === 'stats') return '168';
+    assert.fail(`unexpected process probe: ${command} ${args.join(' ')}`);
+  };
+
+  assert.deepEqual(runtimeVerifier.probeAuthRuntimeProcesses('abc123def456', runner), {
+    authProcessList: [
+      'Xvfb :99 -screen 0 1280x800x24 -nolisten tcp',
+      'x11vnc -display :99 -rfbport 5900 -listen 127.0.0.1 -forever -shared -nopw -no6',
+    ].join('\n'),
+    authPids: 168,
+  });
+  assert.equal(calls.length, 2);
+  assert.deepEqual(calls[0].args.slice(0, 4), ['exec', 'abc123def456', 'python', '-c']);
+  assert.match(calls[0].args[4], /\/proc\/\[0-9\]\*\/cmdline/u);
+  assert.doesNotMatch(calls[0].args.join(' '), /\btop\b/u);
+  assert.deepEqual(calls[1].args, [
+    'stats', '--no-stream', '--format', '{{.PIDs}}', 'abc123def456',
+  ]);
+});
+
 test('runtime verifier rejects wrong-group host metadata and validates an explicitly running auth role', async (t) => {
   assert.throws(() => verifyRootOwnedSecretMetadata({ isFile: true, symbolic: false, nlink: 1, uid: 0, gid: 1, mode: 0o600 }), /failed/u);
   const f = await fixture();
@@ -451,7 +482,7 @@ test('runtime verifier rejects wrong-group host metadata and validates an explic
   await verifyScanSciRuntime({
     ...f, releaseSha, sessionStatus: 'ready', authContainerIds: ['abc123def456'], authContainers: [authContainer],
     authNetwork, authIsolationProbe,
-    authProcessList, authPids: 24,
+    authProcessList, authPids: 168,
     allowRunningAuth: true, sourceFileLimitMetadata: '104857600:104857600', runtimeSecretMetadata: '10001:10001:400',
     runtimeSecretSha256: createHash('sha256').update(tokenValue).digest('hex'),
     workerSecretMetadata: '1000:1000:400', workerSecretSha256: createHash('sha256').update(tokenValue).digest('hex'),
@@ -487,7 +518,7 @@ test('runtime verifier rejects wrong-group host metadata and validates an explic
   for (const invalid of [
     { authProcessList: authProcessList.replace(' --no-sandbox', ''), authPids: 24 },
     { authProcessList: authProcessList.replace(' --proxy-server=http://openscience-egress:7891', ''), authPids: 24 },
-    { authProcessList, authPids: 97 },
+    { authProcessList, authPids: 225 },
   ]) {
     await assert.rejects(verifyScanSciRuntime({
       ...f, releaseSha, sessionStatus: 'ready', authContainerIds: ['abc123def456'], authContainers: [authContainer],

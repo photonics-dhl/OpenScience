@@ -4,17 +4,17 @@
 
 ## Current version tuple
 
-- Candidate branch / HEAD / origin main: `codex/scansci-auth-internal-tunnel` / `dbba904` / `e2463c5`；internal-tunnel PR 待创建。
-- Production application source / immutable release: `e2463c5029fd28e6335d13e0731f9eebd03e985c`。
-- Production rollback: `0f86cc3fe191b8dbd7ee4183a40e535a3693e145`；core/search migrations `33/33` / `2/2`。
+- Candidate branch / HEAD / origin main: `codex/scansci-auth-runtime-probe` / `de67370` / `9042ed3`；runtime-probe PR 待创建。
+- Production application source / immutable release: `9042ed3f2b2df8b7704d0d59b5fec1beb62f0acc`。
+- Production rollback: `e2463c5029fd28e6335d13e0731f9eebd03e985c`；core/search migrations `33/33` / `2/2`。
 - Taskmaster `hermes-research-intelligence` 仍为 9/12；独立 ScanSci plan Tasks 1–9 done、Task 10 in progress，Task 11 继续阻断。
 
-## 2026-09-01 — ScanSci auth browser production base and internal-tunnel fix
+## 2026-09-01 — ScanSci internal tunnel deployed; ECS process probe candidate
 
-- PR #20/#21/#22 依次合并 auth browser isolation、`/usr/sbin/ss` 生产探测与 PID 上限修复；exact CI 均 green。`e2463c5` 经 schema-v3 16-case Parser acceptance 与 canonical transaction 部署为 active，rollback `0f86cc3`；API/Web/Worker/Parser/BGE/ScanSci 与公网 release 全绿。
-- 真实启动发现 Docker 对 `internal:true` auth network 不建立可用宿主 publish，且既有 INPUT catch-all reject 丢弃宿主到容器的返回流量；SSH runner 存活但本机 `6080` readiness 必然失败并补偿移除 helper。手工最小诊断证明容器内 noVNC/Chromium/RFB 正常，根因属于宿主—internal bridge 路径而非 SSH key、浏览器或 PID。
-- `dbba904` 移除 Docker host port，固定 auth 为 `172.25.0.2`；仅允许 `.2:6080` 到 `.1` 的 `ESTABLISHED` TCP 返回流，再放行 auth→Squid `.1:7891`，其余 auth→host 全拒绝。本机 SSH 直接转发 `.2:6080`；runtime 同时要求无宿主 6080 listener、无 PortBindings、host→noVNC 200、RFB 真 banner、业务 peer/raw/metadata/SSH 均 blocked。
-- Fresh local gates：全仓 test/build/typecheck/lint、docs-sync、Bash syntax 与 diff check 全绿；tunnel `23/23`，相关 infra `77` cases 为 `72 pass/5 Linux skip/0 fail`。architecture/security/code review 无剩余 Critical/Important/Minor；候选尚未部署，CARSI 登录仍 pending。
+- PR #23 / exact CI `33438168058`、job `99639591064` 合并为 main `9042ed3`。schema-v3 16-case Parser acceptance、BGE CPU、ScanSci source/policy/OA、API/Web/Worker、Nginx、公网 CAS 与 retention 全绿；一次瞬态 ScanSci prepublication failure 完整回滚后定向复验与 canonical retry 成功，active/rollback 为 `9042ed3` / `e2463c5`。
+- 真实 auth start 证明 host→固定 `.2:6080` noVNC 在 1 秒内 200、无 host listener/PortBinding，三条 INPUT 规则顺序正确，Squid 204 且 host/raw/metadata 全 blocked；失败点是 ECS Docker daemon 的 `docker top` API 固定返回 `page not found`，同时真实 Chromium cgroup PIDs `168` 超过遗留 verifier 上限 `96`。诊断 auth container 已精确清理，session/生产服务保留。
+- `de67370` 改为容器内只读 Python 枚举自身 `/proc/*/cmdline`，不依赖 Docker top；PID 合同同步为硬上限 256 减 32 headroom，即 `6..224`，真实 168 通过、225 仍 fail closed。
+- Fresh gates：runtime `11/11`、相关 infra `74 pass/5 Windows Linux-only skip/0 fail`、全仓 test/build/typecheck/lint/docs-sync 全绿；候选尚未 PR/部署，CARSI 登录仍 pending。
 
 ## 2026-08-31 — ScanSci Task 10 controlled-egress production retry
 
