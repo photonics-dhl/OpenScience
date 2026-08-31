@@ -11,7 +11,7 @@
 ## Version tuple
 
 - Worktree: `E:/Miscellaneous/XGS/.worktrees/readable-hermes-guidance`
-- Local branch（upstream 已删除）/ repository main: `codex/scansci-controlled-proxy-client` / `abd38d3b8d1800f73550efb9c70adea76cf82908`；远端当前仅保留 `main`。
+- Local docs branch / repository main: `codex/scansci-postdeploy-docs` / `a08237ab2401dc610834894e3322633159e58f5e`；远端当前仅保留 `main`。
 - Production application source / immutable release: `abd38d3b8d1800f73550efb9c70adea76cf82908`
 - Rollback: `689331845574612130f223d08c92e61721c16586`; core/search migrations `33/33` / `2/2`
 - 本地 `main` 与其他 worktree 有用户改动，不得触碰或用它推断生产；上述 tuple 已从 ECS 重新实测。
@@ -55,7 +55,7 @@
 22. 根因是 Compose v2.26 默认 `project.working_dir=<release>/infra/compose` 与 strict `<release>` 合同不符。reviewed implementation `453ae4c` 对 current/rollback/state/verifier、凭据轮换、备份和认证隧道全部固定 `--project-directory <release-root>`；独立复审 0 Critical/Important/Minor、READY，本地 build/typecheck/lint/docs/full test 0 fail；PR/CI 与 merged-SHA ECS 重试 pending。
 23. PR #16 / CI `33388359242` 已合并为 main `bdf7eb7`。ECS exact Parser acceptance、Compose identity、BGE CPU、legal source/topology/policy/session 与新 API/Web/Worker health 均通过；第二阶段 OA canary 在 local legal endpoint 返回 stable 404 后事务再次完整回滚，active/public 仍 `6893318`，sidecar/journal 清零。
 24. 真实诊断证明 pinned ScanSci `Session.trust_env=False` 且只认 `SCANSCI_PDF_PROXY`/`network_proxy`；reviewed `05111e7` 仅把已严格校验的固定 Squid URL 同步到专用变量。PR #17 / exact CI `33397550370` 合并为 main `abd38d3`；ECS schema-v3 16-case Parser acceptance、core/search `33/33`/`2/2`、BGE CPU、ScanSci source/topology/policy/token/session、Worker 与真实 24,671,920-byte arXiv OA PDF canary 全绿，active/public 已 CAS 到 `abd38d3`，rollback `6893318`。
-25. 发布后 exact hygiene 删除历史 parser-eval/悬空镜像与 54 个 `>24h` BuildKit 对象，释放约 586MB；磁盘 `44G/148G`（31%，98G available），仅 active+rollback release root，auth helper 为 0。认证镜像 Dockerfile 层顺序仍需修复以避免新 SHA 重下 316MB Chromium 层。
+25. 发布后 exact hygiene 删除历史 parser-eval/悬空镜像与 54 个 `>24h` BuildKit 对象，释放约 586MB；磁盘 `44G/148G`（31%，98G available），仅 active+rollback release root，auth helper 为 0。PR #18 / CI `33404431776` 已把 release-varying auth metadata 移到稳定 Chromium 层之后并以合同测试锁定，merged main `a08237a`；纯构建优化未单独部署。
 
 ## Constraints
 
@@ -65,9 +65,9 @@
 
 ## Next action
 
-1. 修正 ScanSci auth Dockerfile 稳定依赖层顺序并过 review/CI，防止每个 release SHA 重建 316MB Chromium/CJK 层；不为该纯构建优化单独切生产。
-2. 通过 canonical auth tunnel 完成一次浙江大学 CARSI 认证并验证容器重建后 session 持久；不输出账号、Cookie 或 OAuth URL。
-3. 用真实 OA + CARSI PDF 完成四入口/375px、one-use、72h/600s、灰色源调用 0 与精确磁盘卫生，关闭 Task 10。
+1. 通过 canonical auth tunnel 完成一次浙江大学 CARSI 认证并验证容器重建后 session 持久；不输出账号、Cookie 或 OAuth URL。
+2. 用真实 OA + CARSI PDF 完成 Hermes Drawer、RO Hermes、Files/Evidence、Personal Space 四入口与 375px 生产旅程。
+3. 验证 one-use、72h/600s、灰色源调用 0 与最终精确磁盘卫生，关闭 Task 10。
 
 ## Read first
 

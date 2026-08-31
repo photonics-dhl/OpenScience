@@ -4,7 +4,7 @@
 
 ## Current version tuple
 
-- Local branch（upstream gone）/ repository main: `codex/scansci-controlled-proxy-client` / `abd38d3`；远端当前仅 `main`。
+- Local docs branch / repository main: `codex/scansci-postdeploy-docs` / `a08237a`；远端当前仅 `main`。
 - Production application source / immutable release: `abd38d3b8d1800f73550efb9c70adea76cf82908`。
 - Production rollback: `689331845574612130f223d08c92e61721c16586`；core/search migrations `33/33` / `2/2`。
 - Taskmaster `hermes-research-intelligence` 仍为 9/12；独立 ScanSci plan Tasks 1–9 done、Task 10 in progress，Task 11 继续阻断。
@@ -14,7 +14,7 @@
 - PR #15/#16 两次 canonical retry 分别在 Compose working-dir identity 与 pinned client 忽略通用 proxy 处 fail-closed，均完整恢复 `6893318`、清除 sidecar/journal；`453ae4c` 固定所有 Compose `--project-directory`，`05111e7` 仅把严格校验的 Squid URL 映射为 `SCANSCI_PDF_PROXY`。
 - PR #17 / exact CI run `33397550370`、job `99505612016` 合并为 main `abd38d3`。ECS 新 SHA schema-v3 16-case Parser acceptance、core/search `33/33`/`2/2`、BGE-M3 CPU、ScanSci source/topology/policy/file-limit/token/session 与 API/Web/Worker health 全绿。
 - canonical post-switch Worker+ScanSci OA 门禁真实下载 `arXiv:2009.06045v1`，route `open_access`、PDF magic `%PDF-`、24,671,920 bytes；Squid 记录 `172.24.0.2 -> arxiv.org:443 -> FIRSTUP_PARENT/127.0.0.1`。active/public CAS 到 `abd38d3`，rollback `6893318`，journal/failed/pending 均 absent；CARSI 仍 `auth_required`。
-- 发布后独立 checkup 与 exact working-dir 复核全绿。删除历史 parser-eval/悬空镜像并按 `>24h + keep 4GB` 清 54 个 BuildKit 对象，释放约 586MB；磁盘 `44G/148G`（31%，98G available），active/rollback、数据卷、验收报告均保留。下一步修 auth Dockerfile 层顺序，再做 CARSI、四入口/375px、one-use 与 72h/600s 生产旅程。
+- 发布后独立 checkup 与 exact working-dir 复核全绿。删除历史 parser-eval/悬空镜像并按 `>24h + keep 4GB` 清 54 个 BuildKit 对象，释放约 586MB；磁盘 `44G/148G`（31%，98G available），保护对象均保留。PR #18 / CI `33404431776`（13m10s）以 red→green 合同把 release metadata 移到稳定 Chromium 层之后，merged main `a08237a`，不单独部署。下一步只剩 CARSI、四入口/375px、one-use 与 72h/600s 生产旅程。
 
 ## 2026-08-31 — ScanSci Task 9 local security/release gate
 
