@@ -51,7 +51,10 @@ service. This limitation is documented in the official
   one common entry that installs and reads back `RLIMIT_FSIZE` before inspecting
   the mode or importing upstream. The probe only reports the already-installed
   stable soft:hard metadata; the verifier invokes the real entry and never calls
-  the installer directly. Each per-acquisition POSIX subprocess therefore has
+  the installer directly. Its no-file request uses the guaranteed mounted `/tmp`
+  root, not an acquisition subdirectory that a fresh tmpfs can hide; acquisition
+  continues to require its separately created controlled directory. Each
+  per-acquisition POSIX subprocess therefore has
   soft and hard limits at the shared exact `MAX_PDF_BYTES = 104857600`. The
   current hard limit must permit that value;
   SIGXFSZ/EFBIG is converted to a redacted source failure, partial expected

@@ -32,11 +32,11 @@
 - [x] legal service token 只读 file Secret；拒绝 inline env，使用 `O_NOFOLLOW` descriptor 并复验 regular/owner/group/`0400`/single-link/size/path identity。账号、Cookie、profile、token、object key 与 provider raw response 不进入 DTO、任务、数据库或日志。
 - [x] upstream Requests 每跳要求无凭据 HTTPS；实际 DNS 必须全部 public。NAT64、IPv4-mapped、6to4、Teredo 内嵌 IPv4 同样复验；`64:ff9b:1::/48`、private/link-local/multicast/metadata/documentation/mixed answers 与非 HTTPS port 均拒绝。最终 URL/source/route 仍二次校验。
 - [x] 精确上游的并行 runner 经七参数签名+AST gate 后替换为顺序串行；compatibility 还要求 `_neg_blocked/_neg_record`。blocked 在 path/call 前跳过，truthy non-success 原样 record，falsy/success/blocked 不误记；max concurrency=1、首成功停止、逐源 temp 清理、最多 64 sources。
-- [x] 共享 100 MiB 不再只是 post-check：acquisition 与 no-network/no-Secret probe 经同一 worker entry，在 mode 分支/upstream import 前设置并复验 soft+hard `RLIMIT_FSIZE=104857600`；probe 只报告已安装 metadata，verifier 不直接调用 installer。SIGXFSZ/EFBIG 稳定失败并清 partial，external child 继承；成功只接受 exact regular source temp 并同目录 rename，无第二份 100 MiB copy。
+- [x] 共享 100 MiB 不再只是 post-check：acquisition 与 no-network/no-Secret probe 经同一 worker entry，在 mode 分支/upstream import 前设置并复验 soft+hard `RLIMIT_FSIZE=104857600`；probe 只报告已安装 metadata，verifier 不直接调用 installer，并使用 fresh tmpfs 必存且无需文件 I/O 的 `/tmp`，不依赖隐藏 acquisition 子目录。SIGXFSZ/EFBIG 稳定失败并清 partial，external child 继承；成功只接受 exact regular source temp 并同目录 rename，无第二份 100 MiB copy。
 - [x] 4 KiB JSON、60 秒子进程、2 个 service slots、1 CPU/1 GiB/64 PID/256 MiB tmpfs 成立：串行+kernel cap 保证 200 MiB source-file worst-case 加 bounded small files 不超过 tmpfs，且 tmpfs 计入 1 GiB。
 - [x] Compose/ADR 证明 legal/auth/Worker Secret 分权、session volume、auth loopback、data/app network 排除、pre-Worker verifier、exact previous/absent rollback 与 active+rollback image retention。
 - [x] 静态门禁：forbidden-path 58 matches（全部 negative/fixed false/compatibility/test）；Knip 0 unused；dependency-cruiser 831 modules/1936 dependencies、syncpack 无问题。
-- [x] 本地门禁：build/typecheck/integration compilation/lint/test/docs lint/docs-sync/diff；完整 test `2113 pass / 22 platform skips / 0 fail`。Task 9 latest fix `63a0b56`；Linux CI 执行实际 RLIMIT/child 继承用例。
+- [x] 本地门禁：build/typecheck/integration compilation/lint/test/docs lint/docs-sync/diff；完整 test `2114 pass / 22 platform skips / 0 fail`。Task 9 latest fix `755b7b5`；Linux CI 执行实际 RLIMIT/child 继承用例。
 
 ### 生产 Task 10：P0 阻断，尚未执行
 

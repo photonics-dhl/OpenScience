@@ -4,15 +4,15 @@
 
 ## Current version tuple
 
-- Branch / local candidate / main: `codex/scansci-default-capability` / `63a0b56` / `463c8e3`；远端仅 `main`。
+- Branch / local candidate / main: `codex/scansci-default-capability` / `755b7b5` / `463c8e3`；远端仅 `main`。
 - Production application source / immutable release: `689331845574612130f223d08c92e61721c16586`。
 - Production rollback: `c435c4c8b2800bb20998fd9a9a93f2db96328661`；core/search migrations `32/32` / `2/2`。
 - Taskmaster `hermes-research-intelligence` 为 9/12：Tasks 1–9 done；Task 10 已重新打开，Task 11 阻断至 ScanSci 默认下载能力生产验收完成。
 
 ## 2026-08-30 — ScanSci Task 9 local security/release gate
 
-- Fix 1 `2560bd8` 闭合 NAT64/串行 source，fix 2 `36f985c` 恢复精确 negative-cache 与 soft+hard 100 MiB `RLIMIT_FSIZE`/EFBIG cleanup/exact rename；fix 3 `63a0b56` 让 acquisition 和 no-network/no-Secret file-limit probe 经过同一 worker entry：任何 mode/upstream import 前无条件 install+read-back，probe 只回报已安装的稳定 soft:hard metadata，verifier 不再直接 import/call installer。行为 mutation 证明跳过 shared install 时 probe/acquisition 均 fail closed；open P0/P1 = 0。
-- 禁用词精确扫描 58 个命中均为 fixed false、拒绝/compatibility 逻辑或 adversarial test；`audit:knip`、`audit:dep`（831 modules / 1936 dependencies）和 `audit:deps` green。全仓 build/typecheck/test green：release `94/101`（7 skips）、ScanSci `81/88`（7 Windows/POSIX skips）、Web `469`、Domain `535`、Worker `503`、API `101`；本机总计 `2113 pass / 22 skip / 0 fail`。Linux CI 将执行真实 RLIMIT/child 继承用例。
+- Fix 1–3 至 `63a0b56` 已闭合 NAT64/串行/negative-cache/硬 100 MiB file limit，并让 acquisition 与 no-Secret probe 经过同一 install+read-back worker entry。Fix 4 `755b7b5` 把 verifier probe 从 fresh tmpfs 不保证存在的 `/tmp/scansci-legal` 改为精确 `/tmp`；可执行模型证明旧子目录缺失时 probe 不读写文件、不加载 upstream/Secret，acquisition 仍因缺 controlled config 而拒绝。open P0/P1 = 0。
+- 禁用词精确扫描 58 个命中均为 fixed false、拒绝/compatibility 逻辑或 adversarial test；`audit:knip`、`audit:dep`（831 modules / 1936 dependencies）和 `audit:deps` green。全仓 build/typecheck/test green：release `94/101`（7 skips）、ScanSci `82/89`（7 Windows/POSIX skips）、Web `469`、Domain `535`、Worker `503`、API `101`；本机总计 `2114 pass / 22 skip / 0 fail`。Linux CI 将执行真实 RLIMIT/child 继承用例。
 - 本地候选不等于生产：ECS 仍为 `6893318` / `c435c4c` / core-search `32/32`-`2/2`，ScanSci disabled。Migration 33、Linux negative-cache/硬 file limit/NAT64/serial/256 MiB runtime、真实 OA/CARSI、四入口、72h GC、zero-grey/Tor 与 exact rollback/retention 均留给 Task 10。
 
 ## 2026-08-30 — ScanSci Task 8 local review candidate

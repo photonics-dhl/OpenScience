@@ -15,6 +15,7 @@ Secret, `.env`, GitHub, merge, or deployment action occurred in Task 9.
 - Review fix 1: `2560bd84988dd0df7972630a81ac5cb7d80bb62f`.
 - Review fix 2: `36f985c59c44c85c84ed242ca890ad6a5b7ce01e`.
 - Review fix 3: `63a0b562b50bd2fd72400a18f74c5a0d89b18a8d`.
+- Review fix 4: `755b7b5db0afb202134d4893958856846426bfbd`.
 - Initial documentation gate: `0e98190bc7cd2cd69dfb9cd7bcd4dcf38a0de0ad`;
   review-fix-3 evidence is recorded by the final documentation commit.
 - Repository main: `463c8e3a2a80138cda2d669c370c0481ed4c0877`.
@@ -181,6 +182,18 @@ probe, and fail-closed behavior for a missing/skipped install or malformed
 metadata. Focused results: ScanSci `81 pass / 7 Windows/POSIX skips`, infra
 `72 pass / 5 platform skips`.
 
+### Important — fresh tmpfs hid the verifier probe directory
+
+RED showed the verifier sent `/tmp/scansci-legal`, which is not created by the
+fresh 256 MiB `/tmp` tmpfs mount. Review fix 4 sends the exact existing `/tmp`
+root while leaving acquisition output directories unchanged. An executable
+common-entry test models a fresh mount with `/tmp` present and the old subdir
+absent: the probe performs only install/read, loads no upstream or Secret,
+creates/reads/writes no file, and leaves the mount empty. An acquisition using
+the same root still fails before upstream because its controlled `config.json`
+is absent. Focused results: ScanSci `82 pass / 7 Windows/POSIX skips`, infra
+`72 pass / 5 platform skips`.
+
 ## Architecture, API, data, and release review
 
 - Direction: apps depend on packages; no app-to-app implementation import or
@@ -226,8 +239,10 @@ metadata. Focused results: ScanSci `81 pass / 7 Windows/POSIX skips`, infra
   `pip --require-hashes`, which fails any un-hashed requirement. The resolver
   host header is provenance-only; Linux 3.12 locked installation remains the
   authoritative evidence.
-- Task 2 intermittent Windows bearer/raw-socket reset did not recur across the
-  repeated focused and full HTTP suites in this task. Keep CI observation.
+- Task 2 intermittent Windows bearer/raw-socket reset recurred once while the
+  first root suite ran concurrently with build/typecheck. The exact test and a
+  serial full-root rerun were green; no production code in that path changed.
+  Keep CI observation.
 - Task 4 exited/created auth discovery still has one source assertion rather
   than a complete fake-Docker CLI. The all-container runtime implementation and
   Task 10 real ECS acceptance remain authoritative.
@@ -243,9 +258,9 @@ metadata. Focused results: ScanSci `81 pass / 7 Windows/POSIX skips`, infra
 - Typecheck: exit 0 across all workspaces.
 - Integration compilation: API and Domain PostgreSQL tsconfigs exit 0. Their
   real PostgreSQL execution is forbidden locally and remains Task 10.
-- Full test: exit 0, `2,113 pass / 22 platform skips / 0 fail`.
+- Full test: exit 0, `2,114 pass / 22 platform skips / 0 fail`.
   - release contract `94 pass / 7 platform skips`;
-  - ScanSci `81 pass / 7 Windows/POSIX skips`;
+  - ScanSci `82 pass / 7 Windows/POSIX skips`;
   - Web `464` Vitest + `5` Node;
   - Domain `535`, Agent Worker `503`, API `101`.
 - UI/Hermes production-browser gates were not rerun because Task 9 changed no
