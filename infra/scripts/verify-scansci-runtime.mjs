@@ -165,8 +165,28 @@ export async function verifyScanSciRuntime({
     || runtimeSecretMetadata !== '10001:10001:400') fail();
   const hostSecretSha256 = await verifySecret(serviceTokenPath, requiredSecretUid);
   if (workerContainer) {
+    const workerEnvironment = parseEnvironment(workerContainer.Config?.Env);
+    const workerLabels = workerContainer.Config?.Labels ?? {};
+    const workerReleaseMount = workerContainer.Mounts?.find((mount) => mount.Destination === '/opt/openscience');
     const workerMount = workerContainer.Mounts?.find((mount) => mount.Destination === '/run/scansci-worker-secrets');
-    if (!workerMount || workerMount.Type !== 'volume' || workerMount.RW !== false
+    const workerNetworks = Object.keys(workerContainer.NetworkSettings?.Networks ?? {});
+    if (!IMAGE_PATTERN.test(workerContainer.Image)
+      || workerContainer.Config?.User !== 'node'
+      || workerContainer.Config?.WorkingDir !== '/opt/openscience/apps/agent-worker'
+      || JSON.stringify(workerContainer.Config?.Cmd) !== JSON.stringify(['node', 'dist/index.js'])
+      || workerLabels['com.docker.compose.project.working_dir'] !== normalize(releaseRoot)
+      || workerLabels['com.docker.compose.project.config_files'] !== normalize(composeFile)
+      || workerLabels['com.docker.compose.service'] !== 'agent-worker'
+      || workerContainer.State?.Running !== true || workerContainer.State?.Health?.Status !== 'healthy'
+      || workerEnvironment.get('SCANSCI_ENABLED') !== 'true'
+      || workerEnvironment.get('SCANSCI_BASE_URL') !== 'http://scansci-legal:8080'
+      || workerEnvironment.get('SCANSCI_SERVICE_TOKEN_FILE') !== '/run/scansci-worker-secrets/scansci_service_token'
+      || workerNetworks.length !== 4
+      || !['_app_net', '_data_net', '_embedding_net', '_retrieval_net']
+        .every((suffix) => workerNetworks.some((network) => network.endsWith(suffix)))
+      || !workerReleaseMount || workerReleaseMount.Type !== 'bind' || workerReleaseMount.RW !== false
+      || normalize(workerReleaseMount.Source) !== normalize(releaseRoot)
+      || !workerMount || workerMount.Type !== 'volume' || workerMount.RW !== false
       || !workerMount.Name?.endsWith('_scansci-worker-secrets')
       || workerSecretMetadata !== '1000:1000:400' || workerSecretSha256 !== hostSecretSha256) fail();
   }
@@ -210,15 +230,58 @@ export function formatRuntimeStatuses(report) {
   ].join('\n') + '\n';
 }
 
-function parseCli(argv) {
+export function parseRuntimeCli(argv) {
   const values = new Map();
   for (let index = 0; index < argv.length; index += 2) {
     if (!argv[index]?.startsWith('--') || !argv[index + 1] || values.has(argv[index])) fail();
     values.set(argv[index], argv[index + 1]);
   }
-  const expected = ['--release-root', '--release-sha', '--compose-file', '--service-token-file', '--capability-file', '--require-worker', '--allow-auth'];
+  const common = ['--release-root', '--release-sha', '--compose-file', '--service-token-file', '--require-worker', '--allow-auth'];
+  const mode = values.get('--mode');
+  const expected = mode === undefined
+    ? [...common, '--capability-file']
+    : mode === 'prepublication'
+      ? [...common, '--mode', '--expected-legal-image-id', '--expected-auth-image-id']
+      : [];
   if (values.size !== expected.length || expected.some((key) => !values.has(key))) fail();
   return Object.fromEntries(expected.map((key) => [key, values.get(key)]));
+}
+
+async function canonicalCapabilityExists(path) {
+  try {
+    await lstat(path);
+    return true;
+  } catch (error) {
+    if (error && typeof error === 'object' && error.code === 'ENOENT') return false;
+    fail();
+  }
+}
+
+export async function resolveRuntimeImageIdentity(options, {
+  readCapability = (path) => readFile(path, 'utf8'),
+  capabilityExists = canonicalCapabilityExists,
+} = {}) {
+  const releaseSha = options['--release-sha'];
+  if (!SHA_PATTERN.test(releaseSha)) fail();
+  const canonicalFile = `/opt/openscience/.release-capabilities/${releaseSha}`;
+  let legalImageId;
+  let authImageId;
+  if (options['--mode'] === undefined) {
+    if (options['--capability-file'] !== canonicalFile
+      || options['--expected-legal-image-id'] !== undefined
+      || options['--expected-auth-image-id'] !== undefined) fail();
+    const capability = parseReleaseCapability(await readCapability(canonicalFile));
+    if (!capability.scansciDeploy) fail();
+    ({ legalImageId, authImageId } = capability);
+  } else if (options['--mode'] === 'prepublication') {
+    if (options['--capability-file'] !== undefined || await capabilityExists(canonicalFile)) fail();
+    legalImageId = options['--expected-legal-image-id'];
+    authImageId = options['--expected-auth-image-id'];
+  } else {
+    fail();
+  }
+  if (!IMAGE_PATTERN.test(legalImageId) || !IMAGE_PATTERN.test(authImageId)) fail();
+  return { legalImageId, authImageId };
 }
 
 function run(command, args, { input, maxBuffer = 1024 * 1024 } = {}) {
@@ -257,18 +320,16 @@ function inspectJson(command, args) {
 }
 
 async function main() {
-  const options = parseCli(process.argv.slice(2));
+  const options = parseRuntimeCli(process.argv.slice(2));
   const releaseRoot = options['--release-root'];
   const releaseSha = options['--release-sha'];
   const composeFile = options['--compose-file'];
   const serviceTokenPath = options['--service-token-file'];
   const requireWorker = options['--require-worker'];
   const allowAuth = options['--allow-auth'];
-  const capabilityFile = options['--capability-file'];
   if (releaseRoot !== `/opt/openscience-releases/${releaseSha}`
     || composeFile !== `${releaseRoot}/infra/compose/docker-compose.prod.yml`
     || serviceTokenPath !== '/opt/openscience-secrets/scansci/scansci_service_token'
-    || capabilityFile !== `/opt/openscience/.release-capabilities/${releaseSha}`
     || !['0', '1'].includes(requireWorker) || !['0', '1'].includes(allowAuth)) fail();
   const composeArgs = ['compose', '--env-file', '/opt/openscience/.env.prod', '-f', composeFile];
   const env = { ...process.env, XGS_RELEASE_ROOT: releaseRoot, XGS_RELEASE_IMAGE_TAG: releaseSha };
@@ -279,8 +340,7 @@ async function main() {
   };
   const containerId = compose(['ps', '-q', 'scansci-legal']);
   if (!/^[a-f0-9]{12,64}$/u.test(containerId)) fail();
-  const capability = parseReleaseCapability(await readFile(capabilityFile, 'utf8'));
-  if (!capability.scansciDeploy) fail();
+  const expectedIdentity = await resolveRuntimeImageIdentity(options);
   const authIds = compose(['--profile', 'scansci-auth', 'ps', '-aq', 'scansci-auth']).split(/\r?\n/u).filter(Boolean);
   const authContainers = authIds.map((id) => inspectJson('docker', ['inspect', id]));
   const container = inspectJson('docker', ['inspect', containerId]);
@@ -316,7 +376,7 @@ async function main() {
     authContainerIds: authIds, sessionStatus, sourceFileLimitMetadata, runtimeSecretMetadata, runtimeSecretSha256,
     workerContainer, workerSecretMetadata, workerSecretSha256,
     authContainers, allowRunningAuth: allowAuth === '1',
-    expectedLegalImageId: capability.legalImageId, expectedAuthImageId: capability.authImageId,
+    expectedLegalImageId: expectedIdentity.legalImageId, expectedAuthImageId: expectedIdentity.authImageId,
   });
   process.stdout.write(formatRuntimeStatuses(report));
 }

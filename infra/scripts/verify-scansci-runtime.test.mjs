@@ -85,8 +85,29 @@ async function fixture() {
     },
   };
   const workerContainer = {
-    Config: { User: 'node' },
-    Mounts: [{ Type: 'volume', Name: 'openscience-prod_scansci-worker-secrets', Destination: '/run/scansci-worker-secrets', RW: false }],
+    Image: `sha256:${'c'.repeat(64)}`,
+    Config: {
+      User: 'node', WorkingDir: '/opt/openscience/apps/agent-worker', Cmd: ['node', 'dist/index.js'],
+      Env: [
+        'SCANSCI_ENABLED=true', 'SCANSCI_BASE_URL=http://scansci-legal:8080',
+        'SCANSCI_SERVICE_TOKEN_FILE=/run/scansci-worker-secrets/scansci_service_token',
+      ],
+      Labels: {
+        'com.docker.compose.project.working_dir': releaseRoot.replaceAll('\\', '/'),
+        'com.docker.compose.project.config_files': composeFile,
+        'com.docker.compose.service': 'agent-worker',
+      },
+    },
+    Mounts: [
+      { Type: 'bind', Source: releaseRoot, Destination: '/opt/openscience', RW: false },
+      { Type: 'volume', Name: 'openscience-prod_parser-jobs', Destination: '/parser-jobs', RW: true },
+      { Type: 'volume', Name: 'openscience-prod_scansci-worker-secrets', Destination: '/run/scansci-worker-secrets', RW: false },
+    ],
+    NetworkSettings: { Networks: {
+      'openscience-prod_app_net': {}, 'openscience-prod_data_net': {},
+      'openscience-prod_embedding_net': {}, 'openscience-prod_retrieval_net': {},
+    } },
+    State: { Running: true, Health: { Status: 'healthy' } },
   };
   return { releaseRoot, serviceTokenPath, composeFile, container, image, authImage, workerContainer };
 }
@@ -135,9 +156,19 @@ test('runtime verifier fails closed on forbidden network, grey-source flags, aut
     (input) => { input.runtimeSecretSha256 = 'f'.repeat(64); },
     (input) => { input.authImage.Config.Labels['org.openscience.scansci.role'] = 'legal'; },
     (input) => { input.authImage.Config.Entrypoint = ['python', '-m', 'scansci_legal.main']; },
+    (input) => { input.expectedLegalImageId = `sha256:${'f'.repeat(64)}`; },
+    (input) => { input.expectedAuthImageId = `sha256:${'f'.repeat(64)}`; },
     (input) => { input.container.Config.Entrypoint = ['/bin/sh']; },
     (input) => { input.container.Config.Cmd = ['fake-healthy']; },
-    (input) => { input.workerContainer.Mounts[0].Name = 'wrong-worker-secret'; },
+    (input) => { input.workerContainer.Mounts[2].Name = 'wrong-worker-secret'; },
+    (input) => { input.workerContainer.Mounts[0].RW = true; },
+    (input) => { input.workerContainer.Config.Labels['com.docker.compose.service'] = 'api'; },
+    (input) => { input.workerContainer.NetworkSettings.Networks = { 'openscience-prod_app_net': {} }; },
+    (input) => { input.workerContainer.State.Running = false; },
+    (input) => { input.workerContainer.Config.Env = input.workerContainer.Config.Env.filter((entry) => !entry.startsWith('SCANSCI_ENABLED=')); },
+    (input) => { input.workerContainer.Config.Env = input.workerContainer.Config.Env.filter((entry) => !entry.startsWith('SCANSCI_BASE_URL=')); },
+    (input) => { input.workerContainer.Config.Env = input.workerContainer.Config.Env.map((entry) => entry === 'SCANSCI_ENABLED=true' ? 'SCANSCI_ENABLED=false' : entry); },
+    (input) => { input.workerContainer.Config.Env = input.workerContainer.Config.Env.map((entry) => entry.startsWith('SCANSCI_BASE_URL=') ? 'SCANSCI_BASE_URL=http://wrong:8080' : entry); },
     (input) => { input.sessionStatus = 'disabled'; },
   ]) {
     const fresh = await fixture();
@@ -159,6 +190,58 @@ test('runtime verifier fails closed on forbidden network, grey-source flags, aut
     await assert.rejects(verifyScanSciRuntime(input), /ScanSci runtime verification failed/u);
     await rm(fresh.releaseRoot, { recursive: true, force: true });
   }
+});
+
+test('runtime identity modes keep prepublication explicit and canonical sidecar-only', async () => {
+  assert.equal(typeof runtimeVerifier.parseRuntimeCli, 'function');
+  assert.equal(typeof runtimeVerifier.resolveRuntimeImageIdentity, 'function');
+  const legalImageId = `sha256:${'d'.repeat(64)}`;
+  const authImageId = `sha256:${'e'.repeat(64)}`;
+  const releaseRoot = `/opt/openscience-releases/${releaseSha}`;
+  const base = [
+    '--release-root', releaseRoot, '--release-sha', releaseSha,
+    '--compose-file', `${releaseRoot}/infra/compose/docker-compose.prod.yml`,
+    '--service-token-file', '/opt/openscience-secrets/scansci/scansci_service_token',
+    '--require-worker', '1', '--allow-auth', '0',
+  ];
+  const prepublication = runtimeVerifier.parseRuntimeCli([
+    ...base, '--mode', 'prepublication',
+    '--expected-legal-image-id', legalImageId, '--expected-auth-image-id', authImageId,
+  ]);
+  assert.equal(prepublication['--mode'], 'prepublication');
+  const prepublicationIdentity = await runtimeVerifier.resolveRuntimeImageIdentity(prepublication, {
+    readCapability: async () => assert.fail('prepublication read a canonical capability sidecar'),
+    capabilityExists: async () => false,
+  });
+  assert.deepEqual(prepublicationIdentity, { legalImageId, authImageId });
+
+  for (const args of [
+    [...base, '--mode', 'prepublication', '--expected-legal-image-id', legalImageId],
+    [...base, '--mode', 'prepublication', '--expected-legal-image-id', legalImageId, '--expected-auth-image-id', authImageId,
+      '--capability-file', `/opt/openscience/.release-capabilities/${releaseSha}`],
+    [...base, '--expected-legal-image-id', legalImageId, '--expected-auth-image-id', authImageId],
+    [...base, '--mode', 'canonical', '--capability-file', `/opt/openscience/.release-capabilities/${releaseSha}`],
+  ]) assert.throws(() => runtimeVerifier.parseRuntimeCli(args), /failed/u);
+  await assert.rejects(runtimeVerifier.resolveRuntimeImageIdentity(prepublication, {
+    readCapability: async () => assert.fail('prepublication read a canonical capability sidecar'),
+    capabilityExists: async () => true,
+  }), /failed/u);
+
+  const capabilityFile = `/opt/openscience/.release-capabilities/${releaseSha}`;
+  const canonical = runtimeVerifier.parseRuntimeCli([
+    ...base, '--capability-file', capabilityFile,
+  ]);
+  const capabilitySource = [
+    'schema=3', 'embedding_deploy=false', 'bge_m3_enabled=false', 'model_version_id=',
+    'model_revision=', 'source_sha256=', 'package_freeze_sha256=', 'model_manifest_sha256=',
+    'scansci_deploy=true', `scansci_legal_image_id=${legalImageId}`, `scansci_auth_image_id=${authImageId}`,
+  ].join('\n');
+  let canonicalReads = 0;
+  assert.deepEqual(await runtimeVerifier.resolveRuntimeImageIdentity(canonical, {
+    readCapability: async (path) => { canonicalReads += 1; assert.equal(path, capabilityFile); return capabilitySource; },
+    capabilityExists: async () => assert.fail('canonical mode used the prepublication absence probe'),
+  }), { legalImageId, authImageId });
+  assert.equal(canonicalReads, 1);
 });
 
 test('runtime verifier rejects wrong-group host metadata and validates an explicitly running auth role', async (t) => {

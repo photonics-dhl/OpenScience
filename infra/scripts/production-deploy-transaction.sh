@@ -24,6 +24,7 @@ DEPLOY_LOCK_DIRECTORY="/run/lock/openscience-production-deploy"
 DEPLOY_LOCK_PATH="$DEPLOY_LOCK_DIRECTORY/lock"
 DEPLOY_JOURNAL="$REMOTE_ROOT/.deploy-transaction.json"
 SCANSCI_SECRET_ROOT="/opt/openscience-secrets/scansci"
+RELEASE_CAPABILITIES_DIR="$REMOTE_ROOT/.release-capabilities"
 
 run_remote() {
   bash -c "$1"
@@ -116,6 +117,13 @@ compose_scansci_auth_current() {
 verify_scansci_current() {
   local require_worker="${1:-1}"
   run_remote "/usr/bin/node '$RELEASE_ROOT/infra/scripts/verify-scansci-runtime.mjs' --release-root '$RELEASE_ROOT' --release-sha '$RELEASE_SHA' --compose-file '$COMPOSE_FILE' --service-token-file '$SCANSCI_SECRET_ROOT/scansci_service_token' --capability-file '$RELEASE_CAPABILITIES_DIR/$RELEASE_SHA' --require-worker '$require_worker' --allow-auth 0"
+}
+
+verify_scansci_candidate() {
+  local require_worker="${1:-1}"
+  require_match final_scansci_image_id "$FINAL_SCANSCI_IMAGE_ID" '^sha256:[0-9a-f]{64}$'
+  require_match final_scansci_auth_image_id "$FINAL_SCANSCI_AUTH_IMAGE_ID" '^sha256:[0-9a-f]{64}$'
+  run_remote "/usr/bin/node '$RELEASE_ROOT/infra/scripts/verify-scansci-runtime.mjs' --release-root '$RELEASE_ROOT' --release-sha '$RELEASE_SHA' --compose-file '$COMPOSE_FILE' --service-token-file '$SCANSCI_SECRET_ROOT/scansci_service_token' --require-worker '$require_worker' --allow-auth 0 --mode prepublication --expected-legal-image-id '$FINAL_SCANSCI_IMAGE_ID' --expected-auth-image-id '$FINAL_SCANSCI_AUTH_IMAGE_ID'"
 }
 
 wait_for_healthy() {
@@ -256,7 +264,6 @@ PREVIOUS_RELEASE_SHA="$ACTIVE_RELEASE_SHA"
 PREVIOUS_RELEASE_ROOT="/opt/openscience-releases/$PREVIOUS_RELEASE_SHA"
 ROLLBACK_COMPOSE_FILE="$PREVIOUS_RELEASE_ROOT/infra/compose/docker-compose.prod.yml"
 ROLLBACK_COMPOSE_MODE="previous-release"
-RELEASE_CAPABILITIES_DIR="$REMOTE_ROOT/.release-capabilities"
 PREVIOUS_CAPABILITIES_FILE="$RELEASE_CAPABILITIES_DIR/$PREVIOUS_RELEASE_SHA"
 PREVIOUS_HAS_EMBEDDING=0
 PREVIOUS_HAS_SCANSCI=0
@@ -498,6 +505,16 @@ transaction_stop_candidate_scansci() {
   compose_current "rm -f -s scansci-legal scansci-secret-init"
   run_remote "set -euo pipefail; cd '$RELEASE_ROOT'; services=\$(XGS_RELEASE_ROOT='$RELEASE_ROOT' XGS_RELEASE_IMAGE_TAG='$RELEASE_SHA' docker compose --profile scansci-auth --env-file '$PROD_ENV' -f '$COMPOSE_FILE' ps --status running --services); for service in scansci-legal scansci-auth; do if printf '%s\n' \"\$services\" | grep -qx \"\$service\"; then exit 1; fi; done"
 }
+transaction_cleanup_candidate_capability() {
+  local active_after_rollback
+  active_after_rollback="$(run_remote "cat '$REMOTE_ROOT/.release-id'")" || return
+  [ "$active_after_rollback" = "$PREVIOUS_RELEASE_SHA" ] || return 70
+  [ "$RELEASE_SHA" != "$PREVIOUS_RELEASE_SHA" ] || return 70
+  run_remote "rm -f -- '$RELEASE_CAPABILITIES_DIR/$RELEASE_SHA' '$RELEASE_CAPABILITIES_DIR/$RELEASE_SHA.next'"
+}
+transaction_publish_capability_and_cas() {
+  run_remote "set -e; install -d -m 0755 '$RELEASE_CAPABILITIES_DIR'; test ! -e '$RELEASE_CAPABILITIES_DIR/$RELEASE_SHA'; test ! -e '$RELEASE_CAPABILITIES_DIR/$RELEASE_SHA.next'; printf 'schema=3\nembedding_deploy=%s\nbge_m3_enabled=%s\nmodel_version_id=%s\nmodel_revision=%s\nsource_sha256=%s\npackage_freeze_sha256=%s\nmodel_manifest_sha256=%s\nscansci_deploy=true\nscansci_legal_image_id=%s\nscansci_auth_image_id=%s\n' '$BGE_M3_DEPLOY_VALUE' '$BGE_M3_ENABLED_VALUE' '$BGE_M3_MODEL_VERSION_ID' '$BGE_M3_MODEL_REVISION' '$BGE_M3_SOURCE_SHA256' '$BGE_M3_PACKAGE_FREEZE_SHA256' '$BGE_M3_MODEL_MANIFEST_SHA256' '$FINAL_SCANSCI_IMAGE_ID' '$FINAL_SCANSCI_AUTH_IMAGE_ID' > '$RELEASE_CAPABILITIES_DIR/$RELEASE_SHA.next'; chmod 0644 '$RELEASE_CAPABILITIES_DIR/$RELEASE_SHA.next'; mv '$RELEASE_CAPABILITIES_DIR/$RELEASE_SHA.next' '$RELEASE_CAPABILITIES_DIR/$RELEASE_SHA'; /usr/bin/node '$RELEASE_ROOT/infra/scripts/production-deploy-lock.mjs' cas-active --marker '$REMOTE_ROOT/.release-id' --expected '$ROLLBACK_SHA' --next '$RELEASE_SHA' --lock-fd 9"
+}
 transaction_perform_application_rollback() {
   local rollback_ok=1 rollback_active
   rollback_active="$(run_remote "cat '$REMOTE_ROOT/.release-id' 2>/dev/null || true")"
@@ -594,7 +611,7 @@ log "[5c] ScanSci 先行并验证 source/policy/session/runtime..."
 verify_candidate_switch_contract pre-scansci-switch
 compose_current "up -d --force-recreate --wait --wait-timeout 300 scansci-legal"
 verify_running_container_image scansci-legal "$FINAL_SCANSCI_IMAGE_ID"
-verify_scansci_current 0
+verify_scansci_candidate 0
 
 log "[5d] 切换 API/Web/Worker 并等待 healthy..."
 verify_candidate_switch_contract pre-worker-switch
@@ -602,7 +619,7 @@ compose_current "up -d --force-recreate --wait --wait-timeout 300 api web agent-
 verify_running_container_image agent-worker "$FINAL_WORKER_IMAGE_ID"
 verify_running_container_image document-parser "$FINAL_PARSER_IMAGE_ID"
 wait_for_healthy api web agent-worker
-verify_scansci_current
+verify_scansci_candidate
 if [ "$EMBEDDING_DEPLOY" -eq 1 ]; then
   log "[5d] 切换后再次验证 embedding 健康、身份与真实向量..."
   compose_embedding_current "ps --status running --services | grep -qx embedding-worker"
@@ -612,8 +629,8 @@ verify_running_release_images
 
 log "[6] 切换 nginx 与 release identity..."
 run_remote "set -e; backup=${NGINX_CONF}.pre-deploy-\$(date +%Y%m%d%H%M%S); cp -p $NGINX_CONF \$backup; install -m 0644 $RELEASE_ROOT/infra/nginx/openscience.conf $NGINX_CONF; if ! nginx -t; then cp -p \$backup $NGINX_CONF; nginx -t; exit 1; fi; systemctl reload nginx"
-run_remote "set -e; install -d -m 0755 '$RELEASE_CAPABILITIES_DIR'; printf 'schema=3\nembedding_deploy=%s\nbge_m3_enabled=%s\nmodel_version_id=%s\nmodel_revision=%s\nsource_sha256=%s\npackage_freeze_sha256=%s\nmodel_manifest_sha256=%s\nscansci_deploy=true\nscansci_legal_image_id=%s\nscansci_auth_image_id=%s\n' '$BGE_M3_DEPLOY_VALUE' '$BGE_M3_ENABLED_VALUE' '$BGE_M3_MODEL_VERSION_ID' '$BGE_M3_MODEL_REVISION' '$BGE_M3_SOURCE_SHA256' '$BGE_M3_PACKAGE_FREEZE_SHA256' '$BGE_M3_MODEL_MANIFEST_SHA256' '$FINAL_SCANSCI_IMAGE_ID' '$FINAL_SCANSCI_AUTH_IMAGE_ID' > '$RELEASE_CAPABILITIES_DIR/$RELEASE_SHA.next'; chmod 0644 '$RELEASE_CAPABILITIES_DIR/$RELEASE_SHA.next'; mv '$RELEASE_CAPABILITIES_DIR/$RELEASE_SHA.next' '$RELEASE_CAPABILITIES_DIR/$RELEASE_SHA'; /usr/bin/node '$RELEASE_ROOT/infra/scripts/production-deploy-lock.mjs' cas-active --marker '$REMOTE_ROOT/.release-id' --expected '$ROLLBACK_SHA' --next '$RELEASE_SHA' --lock-fd 9"
-transaction_mark_phase published
+transaction_publish_candidate
+verify_scansci_current
 run_remote "test -f $HTPASSWD || echo 'WARN: $HTPASSWD 不存在——首次需手动生成（见 runbook）'"
 
 log "[7] 公网与精确 release 验收..."

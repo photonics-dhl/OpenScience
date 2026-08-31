@@ -39,6 +39,10 @@ transaction_rollback_application() {
         echo "ROLLBACK_FAILED: application recovery did not complete" >&2
         exit 70
       }
+      transaction_cleanup_candidate_capability || {
+        echo "ROLLBACK_FAILED_CAPABILITY_CLEANUP: application recovered but candidate capability remains" >&2
+        exit 70
+      }
       transaction_abort_rollback_intent || {
         echo "ROLLBACK_FAILED_PENDING_INTENT_RETAINED: application recovered but rollback identity needs explicit recovery" >&2
         exit 70
@@ -91,6 +95,12 @@ transaction_mark_phase() {
 transaction_complete_migration() {
   [ "$TRANSACTION_PHASE" = migrating ] || return 64
   TRANSACTION_PHASE=prepared
+}
+
+transaction_publish_candidate() {
+  [ "$TRANSACTION_PHASE" = switching ] || return 64
+  transaction_publish_capability_and_cas
+  transaction_mark_phase published
 }
 
 transaction_restore_scansci_rollback() {

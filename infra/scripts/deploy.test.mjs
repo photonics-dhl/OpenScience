@@ -79,6 +79,8 @@ test('ScanSci production topology exposes only the bounded legal service and sto
   assert.doesNotMatch(legal, /\bports:|data_net|DATABASE|POSTGRES|REDIS|S3_|MINIO|env_file|docker\.sock/iu);
 
   assert.match(worker, /- retrieval_net/u);
+  assert.match(worker, /SCANSCI_ENABLED: "true"/u);
+  assert.match(worker, /SCANSCI_BASE_URL: http:\/\/scansci-legal:8080/u);
   assert.doesNotMatch(worker, /scansci-service-secrets|scansci-auth-secrets/u);
   assert.match(worker, /scansci-worker-secrets:\/run\/scansci-worker-secrets:ro/u);
   assert.equal(worker.match(/^    volumes:/gmu)?.length, 1, 'agent-worker must have one unambiguous volumes mapping');
@@ -126,13 +128,67 @@ test('ScanSci deploy dispatches exact rollback identity when the previous releas
   const workerBuild = transactionSource.indexOf('agent-worker document-parser');
   const scansciStart = transactionSource.indexOf('up -d --force-recreate --wait --wait-timeout 300 scansci-legal');
   const workerStart = transactionSource.indexOf('up -d --force-recreate --wait --wait-timeout 300 api web agent-worker');
-  const runtimeVerify = transactionSource.indexOf('verify_scansci_current', scansciStart);
-  const postWorkerVerify = transactionSource.indexOf('verify_scansci_current', workerStart);
+  const runtimeVerify = transactionSource.indexOf('verify_scansci_candidate', scansciStart);
+  const postWorkerVerify = transactionSource.indexOf('verify_scansci_candidate', workerStart);
   assert.ok(scansciBuild > 0 && scansciBuild < workerBuild, 'ScanSci images must build before Worker/Parser');
   assert.ok(scansciStart > 0 && scansciStart < workerStart, 'ScanSci must start before Agent Worker');
   assert.ok(runtimeVerify > scansciStart && runtimeVerify < workerStart, 'ScanSci runtime must verify before Agent Worker');
   assert.ok(postWorkerVerify > workerStart, 'ScanSci runtime must be reverified after Agent Worker convergence');
   assert.match(transactionSource, /docker ps -aq --filter 'label=com\.docker\.compose\.project=openscience-prod' --filter 'label=com\.docker\.compose\.service=scansci-auth'/u);
+});
+
+test('candidate capability stays absent through prepublication and is exact-cleaned on either publish failure boundary', async (t) => {
+  const root = await mkdtemp(join(tmpdir(), 'xgs-candidate-capability-'));
+  t.after(async () => rm(root, { recursive: true, force: true }));
+  const oldSha = 'a'.repeat(40);
+  const candidateSha = 'b'.repeat(40);
+  const statePath = transactionStatePath.replaceAll('\\', '/');
+  const run = async (name, mode) => {
+    const fixture = join(root, name);
+    const remote = join(fixture, 'remote');
+    const capabilities = join(remote, '.release-capabilities');
+    await mkdir(capabilities, { recursive: true });
+    await writeFile(join(remote, '.release-id'), `${oldSha}\n`);
+    const shell = [
+      'set -eEuo pipefail',
+      `source '${statePath}'`,
+      `REMOTE_ROOT='${remote.replaceAll('\\', '/')}'`,
+      `RELEASE_CAPABILITIES_DIR='${capabilities.replaceAll('\\', '/')}'`,
+      `RELEASE_SHA='${candidateSha}'`, `PREVIOUS_RELEASE_SHA='${oldSha}'`,
+      `DEPLOY_JOURNAL='${join(remote, '.deploy-transaction').replaceAll('\\', '/')}'`,
+      `XGS_TEST_PUBLISH_MODE='${mode}'`,
+      'CANDIDATE_CAPABILITY="$RELEASE_CAPABILITIES_DIR/$RELEASE_SHA"',
+      'transaction_assert_lock(){ :; }',
+      'transaction_journal_start(){ : > "$DEPLOY_JOURNAL"; }',
+      'transaction_journal_update(){ printf "%s\\n" "$1" > "$DEPLOY_JOURNAL"; }',
+      'transaction_journal_clear(){ rm -- "$DEPLOY_JOURNAL"; }',
+      'transaction_journal_clear_after_rollback(){ [ ! -e "$DEPLOY_JOURNAL" ] || rm -- "$DEPLOY_JOURNAL"; }',
+      'transaction_abort_rollback_intent(){ :; }',
+      'transaction_perform_application_rollback(){ printf "%s\\n" "$PREVIOUS_RELEASE_SHA" > "$REMOTE_ROOT/.release-id"; }',
+      'transaction_cleanup_candidate_capability(){ [ "$(cat "$REMOTE_ROOT/.release-id")" = "$PREVIOUS_RELEASE_SHA" ]; rm -f -- "$CANDIDATE_CAPABILITY" "$CANDIDATE_CAPABILITY.next"; }',
+      'transaction_publish_capability_and_cas(){ [ ! -e "$CANDIDATE_CAPABILITY" ]; printf "schema=3\\n" > "$CANDIDATE_CAPABILITY.next"; mv "$CANDIDATE_CAPABILITY.next" "$CANDIDATE_CAPABILITY"; [ "$XGS_TEST_PUBLISH_MODE" != before-cas ] || return 65; [ "$(cat "$REMOTE_ROOT/.release-id")" = "$PREVIOUS_RELEASE_SHA" ]; printf "%s\\n" "$RELEASE_SHA" > "$REMOTE_ROOT/.release-id"; }',
+      'transaction_initialize_state', 'transaction_install_traps', 'transaction_begin',
+      'transaction_mark_phase switching', '[ ! -e "$CANDIDATE_CAPABILITY" ]',
+      'transaction_publish_candidate',
+      '[ "$XGS_TEST_PUBLISH_MODE" != after-publish ] || false',
+      'transaction_commit',
+    ].join('\n');
+    const result = spawnSync(bash, ['-c', shell], { encoding: 'utf8' });
+    return { result, remote, capability: join(capabilities, candidateSha) };
+  };
+
+  const success = await run('success', 'success');
+  assert.equal(success.result.status, 0, success.result.stderr);
+  assert.equal((await readFile(join(success.remote, '.release-id'), 'utf8')).trim(), candidateSha);
+  assert.equal(await readFile(success.capability, 'utf8'), 'schema=3\n');
+
+  for (const mode of ['before-cas', 'after-publish']) {
+    const failed = await run(mode, mode);
+    assert.notEqual(failed.result.status, 0, `${mode} unexpectedly succeeded`);
+    assert.equal((await readFile(join(failed.remote, '.release-id'), 'utf8')).trim(), oldSha);
+    assert.equal(existsSync(failed.capability), false, `${mode} left a candidate capability sidecar`);
+    assert.equal(existsSync(`${failed.capability}.next`), false, `${mode} left a candidate capability staging file`);
+  }
 });
 
 test('SSH runner does not misclassify a remote permission error as key authentication failure', () => {
@@ -556,6 +612,7 @@ function transactionStateHarness(root, requiredUid, phase, event) {
     'transaction_journal_clear() { if [ "${XGS_TEST_TERM_DURING_CLEAR:-0}" = 1 ]; then kill -TERM $$; fi; rm -- "$DEPLOY_JOURNAL"; [ "${XGS_TEST_CLEAR_AFTER_UNLINK_FAIL:-0}" != 1 ] || return 70; }',
     'transaction_journal_clear_after_rollback() { [ ! -e "$DEPLOY_JOURNAL" ] || transaction_journal_clear; }',
     'transaction_perform_application_rollback() { active="$(cat "$REMOTE_ROOT/.release-id")"; case "$active" in "$ROLLBACK_SHA"|"$RELEASE_SHA") ;; *) echo ROLLBACK_FAILED_STALE_ACTIVE >&2; return 70 ;; esac; printf "ROLLBACK_IN_LOCK\\n" >&2; if [ "${XGS_TEST_ROLLBACK_DELAY:-0}" != 0 ]; then sleep "$XGS_TEST_ROLLBACK_DELAY"; fi; [ "${XGS_TEST_ROLLBACK_FAIL:-0}" != 1 ] || return 70; printf "%s\\n" "$ROLLBACK_SHA" > "$REMOTE_ROOT/.release-id"; }',
+    'transaction_cleanup_candidate_capability() { :; }',
     'transaction_abort_rollback_intent() { [ ! -e "$REMOTE_ROOT/.rollback-id.pending" ] || { [ "${XGS_TEST_PENDING_ABORT_FAIL:-0}" != 1 ] || return 70; rm -- "$REMOTE_ROOT/.rollback-id.pending"; }; }',
     `source ${quote(transactionStatePath.replaceAll('\\', '/'))}`,
     'mkdir -p "$REMOTE_ROOT" "$RELEASE_ROOT"',
@@ -1029,7 +1086,7 @@ test('deployment revalidates active source, report and mutable image tags after 
   const parserImage = transactionSource.indexOf('verify_running_container_image document-parser', parserUp);
   const workerUp = transactionSource.indexOf('api web agent-worker"', parserImage);
   const workerImage = transactionSource.indexOf('verify_running_container_image agent-worker', workerUp);
-  const publication = transactionSource.indexOf('cas-active', workerImage);
+  const publication = transactionSource.indexOf('transaction_publish_candidate', workerImage);
   assert.ok(migration >= 0 && preSwitch > migration && switchBoundary > preSwitch);
   assert.ok(parserUp > switchBoundary && parserImage > parserUp);
   assert.ok(workerUp > parserImage && workerImage > workerUp && publication > workerImage);

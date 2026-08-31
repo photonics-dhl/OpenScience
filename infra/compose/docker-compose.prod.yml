@@ -158,6 +158,8 @@ services:
       BGE_M3_PACKAGE_FREEZE_SHA256: ${BGE_M3_PACKAGE_FREEZE_SHA256:-}
       BGE_M3_MODEL_MANIFEST_SHA256: ${BGE_M3_MODEL_MANIFEST_SHA256:-}
       EMBEDDING_WORKER_URL: http://embedding-worker:8080
+      SCANSCI_ENABLED: "true"
+      SCANSCI_BASE_URL: http://scansci-legal:8080
       SCANSCI_SERVICE_TOKEN_FILE: /run/scansci-worker-secrets/scansci_service_token
     depends_on:
       postgres:
