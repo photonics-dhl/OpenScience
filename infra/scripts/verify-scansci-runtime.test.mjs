@@ -397,22 +397,57 @@ test('runtime verifier rejects wrong-group host metadata and validates an explic
   const f = await fixture();
   t.after(async () => rm(f.releaseRoot, { recursive: true, force: true }));
   const authContainer = {
+    Id: 'abc123def456',
     Image: f.authImage.Id,
     State: { Running: true },
-    HostConfig: { NetworkMode: 'host' },
+    HostConfig: {
+      NetworkMode: 'openscience-prod_auth_net', ReadonlyRootfs: true, Privileged: false,
+      CapDrop: ['ALL'], CapAdd: [], SecurityOpt: ['no-new-privileges:true'],
+      Memory: 1024 ** 3, NanoCpus: 1_000_000_000, PidsLimit: 128,
+      ExtraHosts: ['openscience-egress:172.25.0.1'],
+      PortBindings: { '6080/tcp': [{ HostIp: '127.0.0.1', HostPort: '6080' }] },
+      Tmpfs: {
+        '/tmp': 'size=256m,noexec,nosuid,nodev,uid=10001,gid=10001,mode=0700',
+        '/dev/shm': 'size=256m,nosuid,nodev,uid=10001,gid=10001,mode=0700',
+      },
+    },
     Mounts: [
       { Type: 'volume', Name: 'openscience-prod_scansci-session', Destination: '/session', RW: true },
-      { Type: 'volume', Name: 'openscience-prod_scansci-auth-secrets', Destination: '/run/secrets', RW: false },
     ],
     Config: {
       User: '10001:10001',
+      Env: ['SCANSCI_BROWSER_PROXY=http://openscience-egress:7891'],
       Labels: { 'org.openscience.scansci.role': 'auth' },
       Entrypoint: ['/usr/bin/tini', '--', '/usr/local/bin/scansci-auth-entrypoint'],
       Cmd: [],
     },
+    NetworkSettings: {
+      Networks: { 'openscience-prod_auth_net': { IPAddress: '172.25.0.2', Gateway: '172.25.0.1' } },
+      Ports: { '6080/tcp': [{ HostIp: '127.0.0.1', HostPort: '6080' }] },
+    },
   };
+  const authNetwork = {
+    Name: 'openscience-prod_auth_net', Internal: true,
+    Options: { 'com.docker.network.bridge.name': 'xgs-auth0' },
+    IPAM: { Config: [{ Subnet: '172.25.0.0/29', Gateway: '172.25.0.1' }] },
+    Containers: { abc123def456: { Name: 'openscience-prod-scansci-auth-1' } },
+  };
+  const authIsolationProbe = {
+    proxyAddress: '172.25.0.1', proxyPeer: '172.25.0.1:7891', allowStatus: 204,
+    hostSsh: 'blocked', hostPrimary: 'blocked', rawDirect: 'blocked', legalPeer: 'blocked', firewall: 'isolated',
+  };
+  const authProcessList = [
+    'COMMAND',
+    'Xvfb :99 -screen 0 1280x800x24 -nolisten tcp',
+    'x11vnc -display :99 -rfbport 5900 -listen 127.0.0.1 -forever -shared -nopw -no6',
+    'websockify --web=/usr/share/novnc 0.0.0.0:6080 127.0.0.1:5900',
+    'python -m scansci_legal.auth_login --operator-start',
+    '/usr/lib/chromium/chromium --no-sandbox --proxy-server=http://openscience-egress:7891 --disable-quic --force-webrtc-ip-handling-policy=disable_non_proxied_udp',
+  ].join('\n');
   await verifyScanSciRuntime({
-    ...f, releaseSha, sessionStatus: 'ready', authContainerIds: ['abc123'], authContainers: [authContainer],
+    ...f, releaseSha, sessionStatus: 'ready', authContainerIds: ['abc123def456'], authContainers: [authContainer],
+    authNetwork, authIsolationProbe,
+    authProcessList, authPids: 24,
     allowRunningAuth: true, sourceFileLimitMetadata: '104857600:104857600', runtimeSecretMetadata: '10001:10001:400',
     runtimeSecretSha256: createHash('sha256').update(tokenValue).digest('hex'),
     workerSecretMetadata: '1000:1000:400', workerSecretSha256: createHash('sha256').update(tokenValue).digest('hex'),
@@ -423,15 +458,58 @@ test('runtime verifier rejects wrong-group host metadata and validates an explic
     (candidate) => { candidate.Image = `sha256:${'f'.repeat(64)}`; },
     (candidate) => { candidate.Config.Entrypoint = ['/bin/sh']; },
     (candidate) => { candidate.Config.Cmd = ['fake-ready']; },
-    (candidate) => { candidate.HostConfig.NetworkMode = 'bridge'; },
-    (candidate) => { candidate.Mounts[1].Name = 'wrong-auth-secrets'; },
+    (candidate) => { candidate.HostConfig.NetworkMode = 'host'; },
+    (candidate) => { candidate.HostConfig.PortBindings['6080/tcp'][0].HostIp = '0.0.0.0'; },
+    (candidate) => { candidate.Config.Env = ['SCANSCI_BROWSER_PROXY=http://hostile.invalid:3128']; },
+    (candidate) => { candidate.HostConfig.SecurityOpt = []; },
+    (candidate) => { candidate.NetworkSettings.Networks = { bridge: {} }; },
+    (candidate) => { candidate.Mounts.push({ Type: 'volume', Name: 'auth-secrets', Destination: '/run/secrets', RW: false }); },
     (candidate) => { candidate.Mounts.push({ Type: 'bind', Source: '/var/run/docker.sock', Destination: '/var/run/docker.sock', RW: true }); },
     (candidate) => { candidate.Mounts.push({ Type: 'bind', Source: '/srv/host-data', Destination: '/host-data', RW: false }); },
   ]) {
     const candidate = structuredClone(authContainer);
     mutate(candidate);
     await assert.rejects(verifyScanSciRuntime({
-      ...f, releaseSha, sessionStatus: 'ready', authContainerIds: ['abc123'], authContainers: [candidate],
+      ...f, releaseSha, sessionStatus: 'ready', authContainerIds: ['abc123def456'], authContainers: [candidate],
+      authNetwork, authIsolationProbe,
+      authProcessList, authPids: 24,
+      allowRunningAuth: true, sourceFileLimitMetadata: '104857600:104857600', runtimeSecretMetadata: '10001:10001:400',
+      runtimeSecretSha256: createHash('sha256').update(tokenValue).digest('hex'),
+      workerSecretMetadata: '1000:1000:400', workerSecretSha256: createHash('sha256').update(tokenValue).digest('hex'),
+      requiredSecretUid: process.getuid?.(), expectedLegalImageId: f.image.Id, expectedAuthImageId: f.authImage.Id,
+    }), /failed/u);
+  }
+  for (const invalid of [
+    { authProcessList: authProcessList.replace(' --no-sandbox', ''), authPids: 24 },
+    { authProcessList: authProcessList.replace(' --proxy-server=http://openscience-egress:7891', ''), authPids: 24 },
+    { authProcessList, authPids: 97 },
+  ]) {
+    await assert.rejects(verifyScanSciRuntime({
+      ...f, releaseSha, sessionStatus: 'ready', authContainerIds: ['abc123def456'], authContainers: [authContainer],
+      authNetwork, authIsolationProbe,
+      ...invalid,
+      allowRunningAuth: true, sourceFileLimitMetadata: '104857600:104857600', runtimeSecretMetadata: '10001:10001:400',
+      runtimeSecretSha256: createHash('sha256').update(tokenValue).digest('hex'),
+      workerSecretMetadata: '1000:1000:400', workerSecretSha256: createHash('sha256').update(tokenValue).digest('hex'),
+      requiredSecretUid: process.getuid?.(), expectedLegalImageId: f.image.Id, expectedAuthImageId: f.authImage.Id,
+    }), /failed/u);
+  }
+  for (const mutate of [
+    (network, isolation) => { network.Internal = false; },
+    (network, isolation) => { network.Containers.extra = { Name: 'openscience-prod-agent-worker-1' }; },
+    (network, isolation) => { network.Options['com.docker.network.bridge.name'] = 'bridge0'; },
+    (network, isolation) => { isolation.hostSsh = 'connected'; },
+    (network, isolation) => { isolation.hostPrimary = 'connected'; },
+    (network, isolation) => { isolation.legalPeer = 'connected'; },
+    (network, isolation) => { isolation.firewall = 'missing'; },
+  ]) {
+    const candidateNetwork = structuredClone(authNetwork);
+    const candidateIsolation = structuredClone(authIsolationProbe);
+    mutate(candidateNetwork, candidateIsolation);
+    await assert.rejects(verifyScanSciRuntime({
+      ...f, releaseSha, sessionStatus: 'ready', authContainerIds: ['abc123def456'], authContainers: [authContainer],
+      authNetwork: candidateNetwork, authIsolationProbe: candidateIsolation,
+      authProcessList, authPids: 24,
       allowRunningAuth: true, sourceFileLimitMetadata: '104857600:104857600', runtimeSecretMetadata: '10001:10001:400',
       runtimeSecretSha256: createHash('sha256').update(tokenValue).digest('hex'),
       workerSecretMetadata: '1000:1000:400', workerSecretSha256: createHash('sha256').update(tokenValue).digest('hex'),

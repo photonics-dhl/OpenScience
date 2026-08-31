@@ -13,6 +13,8 @@ RUNNER_FILE="$STATE_ROOT/scansci-auth-tunnel-runner.sh"
 SSH_KEY="$HOME/.ssh/id_ed25519_xgs"
 KNOWN_HOSTS="$HOME/.ssh/known_hosts"
 LOCK_HELD=0
+NOVNC_PATH='/vnc.html?autoconnect=true&resize=remote'
+RFB_PROBE="$SCRIPT_DIR/probe-novnc-rfb.mjs"
 
 usage() {
   echo "usage: scansci-auth-tunnel.sh <start|stop|status> [local-port]" >&2
@@ -165,12 +167,13 @@ stop_identified_tunnel() {
 
 wait_until_ready() {
   local port="$1" attempt
-  for attempt in $(seq 1 8); do
-    if curl --noproxy '*' --fail --silent --show-error --connect-timeout 0.2 --max-time 0.5 "http://127.0.0.1:$port/" >/dev/null 2>&1; then
+  for attempt in $(seq 1 12); do
+    if curl --noproxy '*' --fail --silent --show-error --connect-timeout 0.2 --max-time 0.5 "http://127.0.0.1:$port$NOVNC_PATH" >/dev/null 2>&1 \
+      && node "$RFB_PROBE" "ws://127.0.0.1:$port/websockify" >/dev/null 2>&1; then
       return 0
     fi
     process_matches_state || return 1
-    sleep 0.1
+    sleep 0.2
   done
   return 1
 }
@@ -225,8 +228,9 @@ load_connection() {
 remote_compose_command() {
   local action="$1"
   if [ "$action" = "up -d" ]; then
-    printf "flock -n -E 73 /run/lock/openscience-production-deploy/lock /bin/bash -c 'cd \"%s\" && XGS_RELEASE_ROOT=\"%s\" XGS_RELEASE_IMAGE_TAG=\"%s\" docker compose --project-directory \"%s\" --env-file /opt/openscience/.env.prod -f \"%s\" up -d --force-recreate scansci-secret-init && XGS_RELEASE_ROOT=\"%s\" XGS_RELEASE_IMAGE_TAG=\"%s\" docker compose --project-directory \"%s\" --env-file /opt/openscience/.env.prod -f \"%s\" --profile scansci-auth up -d scansci-auth'" \
+    printf "flock -n -E 73 /run/lock/openscience-production-deploy/lock /bin/bash -c 'cd \"%s\" && XGS_RELEASE_ROOT=\"%s\" XGS_RELEASE_IMAGE_TAG=\"%s\" docker compose --project-directory \"%s\" --env-file /opt/openscience/.env.prod -f \"%s\" --profile scansci-auth up --no-start --no-build --force-recreate scansci-auth && /bin/bash \"%s/infra/scripts/prepare-scansci-auth-network.sh\" \"%s\" \"%s\" && XGS_RELEASE_ROOT=\"%s\" XGS_RELEASE_IMAGE_TAG=\"%s\" docker compose --project-directory \"%s\" --env-file /opt/openscience/.env.prod -f \"%s\" --profile scansci-auth start scansci-auth'" \
       "$RELEASE_ROOT" "$RELEASE_ROOT" "$RELEASE_SHA" "$RELEASE_ROOT" "$RELEASE_COMPOSE" \
+      "$RELEASE_ROOT" "$RELEASE_ROOT" "$RELEASE_SHA" \
       "$RELEASE_ROOT" "$RELEASE_SHA" "$RELEASE_ROOT" "$RELEASE_COMPOSE"
     return
   fi
@@ -243,6 +247,17 @@ remote_verify_command() {
 verify_remote_runtime() {
   local allow_auth="$1"
   ssh "${SSH_ARGS[@]}" "$SSH_TARGET" "$(remote_verify_command "$allow_auth")" >/dev/null 2>&1
+}
+
+wait_until_remote_runtime() {
+  local allow_auth="$1" attempt
+  for attempt in $(seq 1 8); do
+    if verify_remote_runtime "$allow_auth"; then
+      return 0
+    fi
+    sleep 0.5
+  done
+  return 1
 }
 
 resolve_release_identity() {
@@ -301,7 +316,7 @@ start_tunnel() {
       return 65
     fi
     if wait_until_ready "$port"; then
-      echo "already running on http://127.0.0.1:$port"
+      echo "already running on http://127.0.0.1:$port$NOVNC_PATH"
       return 0
     fi
     stop_identified_tunnel
@@ -327,6 +342,7 @@ start_tunnel() {
   write_state "$token" 0 "$port" "pending_stop"
 
   if ! ssh "${SSH_ARGS[@]}" "$SSH_TARGET" "$(remote_compose_command 'up -d')" >/dev/null 2>&1; then
+    commit_remote_stop || true
     echo "auth helper start failed" >&2
     return 1
   fi
@@ -347,7 +363,7 @@ start_tunnel() {
     echo "loopback tunnel readiness failed" >&2
     return 1
   fi
-  if ! verify_remote_runtime 1; then
+  if ! wait_until_remote_runtime 1; then
     stop_identified_tunnel
     if ! commit_remote_stop; then
       echo "auth helper verification failed; remote stop pending" >&2
@@ -357,7 +373,7 @@ start_tunnel() {
     return 1
   fi
   write_state "$token" "$tunnel_pid" "$port" "running"
-  echo "started on http://127.0.0.1:$port"
+  echo "started on http://127.0.0.1:$port$NOVNC_PATH"
 }
 
 stop_tunnel() {
@@ -391,7 +407,7 @@ show_status() {
     return 4
   fi
   if is_running; then
-    echo "running on http://127.0.0.1:$STATE_PORT"
+    echo "running on http://127.0.0.1:$STATE_PORT$NOVNC_PATH"
     return 0
   fi
   echo "stopped"

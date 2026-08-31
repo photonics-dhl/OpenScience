@@ -207,7 +207,94 @@
         "apps/web/test/e2e/hermes-dashboard.spec.ts"
       ],
       "prevention": "Do not encode perceptual velocity through host-scheduled 2px browser events, block each input step on a transient peak, use screenshot completion as a product clock, assert portal geometry before fonts and animations settle, guess a component's attribute owner from its visual hierarchy, or assert a preference-dependent label without fixing the preference. Put exact time-domain thresholds in deterministic tests; browser gates should record observable RAF, API and DOM event order while preserving independent pixel-motion and physical-overlap checks. Budget software-rendered pixel evidence separately from behavior-level waits."
+    },
+    {
+      "id": "issue-011",
+      "title": "ScanSci auth tunnel exposed the noVNC directory root instead of the client",
+      "date": "2026-08-31",
+      "status": "resolved",
+      "tags": [
+        "troubleshooting/auth",
+        "troubleshooting/browser",
+        "troubleshooting/product-flow"
+      ],
+      "description": "The canonical ScanSci auth tunnel reported the loopback root URL. Opening it showed a websockify directory listing with no CARSI login surface.",
+      "root_cause": "websockify serves the noVNC static directory at `/`; the interactive remote desktop client is `/vnc.html`. The tunnel script used the directory root both for readiness and operator-facing start/status output.",
+      "solution": "Use `/vnc.html?autoconnect=true&resize=remote` as the single canonical operator path for readiness, start, duplicate-start and status output. Keep the tunnel bound to 127.0.0.1 and do not expose a public authentication route.",
+      "verification": "The exact client URL returned HTTP 200 and contained the noVNC client while the auth container was running. The regression test first failed because the old root probe received 404, then the complete auth-tunnel suite passed 21/21 after the path correction.",
+      "files": [
+        "infra/scripts/scansci-auth-tunnel.sh",
+        "infra/scripts/scansci-auth-tunnel.test.mjs"
+      ],
+      "prevention": "Readiness must probe the same complete operator URL that the command prints. A static-directory HTTP 200 is not evidence that an interactive client is reachable."
+    },
+    {
+      "id": "issue-012",
+      "title": "ScanSci Chromium could not start inside the hardened auth container",
+      "date": "2026-08-31",
+      "status": "resolved",
+      "tags": [
+        "troubleshooting/auth",
+        "troubleshooting/chromium",
+        "troubleshooting/container"
+      ],
+      "description": "The noVNC and RFB paths connected, but the remote desktop never presented the CARSI login browser.",
+      "root_cause": "Debian Chromium could not create its inner namespace or setuid sandbox under the deliberately hardened auth container. The entrypoint also started a redundant blank browser, while pinned ScanSci invoked Patchright through channel=chrome without forwarding its configured browser path; the first wrapper attempt was therefore unreachable.",
+      "solution": "Bind the image's channel=chrome alias to the fixed wrapper, let pinned ScanSci be the sole browser lifecycle owner, and persist its publisher Cookie files rather than claiming a persistent Chromium profile. The wrapper adds --no-sandbox only inside the hardened container, removes conflicting proxy switches, fixes the controlled Squid path, and disables QUIC/non-proxied WebRTC. The auth helper mounts no account Secret, publishes noVNC only on host loopback, and requires HTML plus WebSocket/RFB plus remote process/PID/topology verification.",
+      "verification": "Regression tests first failed for the unreachable channel alias, old host-network/Secret topology, static-only readiness and missing runtime process contract. Targeted Dockerfile, session, Compose, RFB and runtime suites pass after the change. Production Chromium, CARSI and cookie-state verification is recorded separately in the CURRENT handoff after deployment.",
+      "files": [
+        "apps/scansci-legal/chromium-container-wrapper.sh",
+        "apps/scansci-legal/Dockerfile.auth",
+        "apps/scansci-legal/auth-entrypoint.sh",
+        "apps/scansci-legal/src/scansci_legal/auth_login.py",
+        "apps/scansci-legal/test/test_dockerfile.py",
+        "apps/scansci-legal/test/test_session.py"
+      ],
+      "prevention": "Trace the exact pinned upstream browser selection path, including channel aliases; do not infer it from config keys. Browser acceptance must prove RFB, the real Chromium argv, PID headroom, network/Secret isolation and the target page. Describe only the publisher Cookie persistence the pinned implementation actually provides."
+    },
+    {
+      "id": "issue-013",
+      "title": "ScanSci auth diagnostics left a Chromium process tree and an IPv6 VNC listener",
+      "date": "2026-08-31",
+      "status": "resolved",
+      "tags": [
+        "troubleshooting/auth",
+        "troubleshooting/hygiene",
+        "troubleshooting/network"
+      ],
+      "description": "A one-off headless Chromium probe remained inside the old auth helper until it reached 125 of 128 PIDs. Independent review also found x11vnc listening passwordless on IPv6 port 5900 despite the IPv4 loopback listen argument.",
+      "root_cause": "The diagnostic command had no process-level timeout and its output pipeline did not guarantee Chromium termination. x11vnc enables an IPv6 listener separately unless explicitly disabled.",
+      "solution": "Use the canonical auth-tunnel stop operation to remove the exact helper and local tunnel, verify that the container and ports 5900/6080 are absent, and add x11vnc -no6 with a regression contract.",
+      "verification": "Canonical stop reported stopped, a second status read reported stopped, and the remote container plus both listener ports were absent. The focused entrypoint test failed before -no6 and passed after it was added.",
+      "files": [
+        "apps/scansci-legal/auth-entrypoint.sh",
+        "infra/scripts/scansci-auth-tunnel.test.mjs"
+      ],
+      "prevention": "Every server diagnostic subprocess must have an explicit timeout and cleanup path. Auth acceptance must inspect PID usage and both IPv4 and IPv6 listeners before credentials are entered."
+    },
+    {
+      "id": "issue-014",
+      "title": "Passwordless noVNC was reachable from the shared retrieval network",
+      "date": "2026-09-01",
+      "status": "resolved",
+      "tags": [
+        "troubleshooting/auth",
+        "troubleshooting/network",
+        "troubleshooting/security"
+      ],
+      "description": "Host loopback publication prevented public access, but the auth helper shared retrieval_net with application containers, so a compromised peer could connect directly to passwordless websockify inside Docker.",
+      "root_cause": "A 127.0.0.1 host port binding constrains only host publication; it does not isolate container peers on the same bridge. Runtime tests had asserted the shared topology instead of proving peer denial.",
+      "solution": "Make scansci-auth the sole peer on a fixed internal auth_net. Create the network before browser start, atomically install and reload the dedicated Squid listener with one durable rollback and one pending marker, and apply an exact host-input policy that allows xgs-auth0 only to 172.25.0.1:7891 and rejects every other host address and port. Make the Chromium wrapper fail closed when the fixed proxy is absent.",
+      "verification": "Compose and Squid contracts require the dedicated subnet; runtime verification rejects extra peers and probes proxy success, gateway and ECS-primary SSH denial, raw-direct denial, and legal-service denial of scansci-auth:6080. Failure injection proves the old live config survives before commit, post-commit failure automatically restores and reloads it, and a failed candidate reload follows the same recovery. Production evidence remains required before credentials are entered.",
+      "files": [
+        "infra/compose/docker-compose.prod.yml",
+        "infra/squid/openscience-egress.conf",
+        "infra/scripts/atomic-squid-config.mjs",
+        "infra/scripts/prepare-scansci-auth-network.sh",
+        "infra/scripts/verify-scansci-runtime.mjs"
+      ],
+      "prevention": "Treat host port binding and container network isolation as separate controls. A passwordless operator surface must have no untrusted bridge peers, and server acceptance must prove the negative path from a real application container."
     }
   ],
-  "last_updated": "2026-08-26"
+  "last_updated": "2026-09-01"
 }

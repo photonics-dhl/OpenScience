@@ -16,7 +16,7 @@ first route; the institutional session is the automatic fallback.
 The capability must work from Dashboard/Personal Space, Hermes, the RO Hermes
 surface, and RO Files/Evidence. Every entry point uses one backend acquisition
 contract and the existing temporary-document/download lifecycle. The account,
-password, browser profile, cookies, service token, object key, and provider raw
+password, publisher Cookie files, service token, object key, and provider raw
 response never enter a public DTO, user browser, Hermes prompt, database row, or
 production log.
 
@@ -28,9 +28,8 @@ production log.
 2. Authentication is operator-owned and platform-wide. The user performs the
    first Zhejiang University CARSI login once; the resulting session becomes a
    default Hermes capability.
-3. Session/profile persistence is primary. Username/password storage is
-   optional and used only when an upstream-supported non-interactive refresh is
-   necessary. MFA/CAPTCHA still requires operator intervention.
+3. Publisher Cookie persistence is primary. Username/password storage is
+   disabled; MFA/CAPTCHA and expired sessions require operator intervention.
 4. `legal_only` is mandatory. `scihub_enabled=false`, `use_tor=false`, and no
    LibGen/SciBban/Sci-Hub route may execute. The upstream Docker Compose is not
    reused because it starts Tor and exposes the upstream MCP surface.
@@ -76,30 +75,48 @@ It has no host port.
 
 Add a release-scoped `scansci-auth` Compose profile. It is stopped by default
 and starts only for initial login or explicit repair. Its browser UI binds to
-`127.0.0.1` and is reached through the canonical SSH path plus a local port
-forward. It shares only the ScanSci session volume with `scansci-legal`.
+host `127.0.0.1:6080` and is reached through the canonical SSH path plus a local
+port forward. The container is the sole peer on a dedicated internal
+`172.25.0.0/29` authentication network, uses only the fixed Squid HTTPS gateway,
+and shares only the ScanSci session volume with
+`scansci-legal`; it mounts no account or service Secret. x11vnc is IPv4-only.
+The fixed `xgs-auth0` bridge is allowed to reach only `172.25.0.1:7891` and is
+rejected from every other host address and port; ordinary application containers share no network
+with the passwordless noVNC endpoint.
+
+The pinned upstream selects `channel=chrome` without its config, so the image's
+Chrome channel alias must resolve to the fixed container wrapper. The wrapper
+removes conflicting proxy switches, disables Chromium's unavailable inner
+sandbox only inside the hardened outer container, and blocks QUIC/non-proxied
+WebRTC. Startup succeeds only after noVNC HTML, WebSocket/RFB, Chromium argv,
+PID headroom and the complete container/network contract all pass.
 
 The helper is removed after login. The session volume remains. Restarting or
-recreating `scansci-legal` must not invalidate the profile. No public Nginx or
+recreating `scansci-legal` must not invalidate the publisher Cookie files. No public Nginx or
 Cloudflare route is created for the login browser.
 
 ### 3.3 Secret and session storage
 
 - Stable secret root: `/opt/openscience-secrets/scansci/`, owner `root:root`,
   directory mode `0700`, files mode `0600`.
-- Allowed files: service token, optional username, optional password, and a
-  session-bootstrap key if required by the wrapper.
-- Runtime mount: read-only Secret mounts; values are never interpolated into a
-  shell command, Compose output, health response, task error, or audit metadata.
-- Browser profile/cookies: a dedicated named volume mounted only by
-  `scansci-legal` and the stopped-by-default auth helper.
+- Allowed provisioner input: internal service token only. Username, password
+  and session-bootstrap fields are rejected because this flow does not consume
+  them.
+- Runtime mount: the legal service and Worker receive distinct read-only token
+  mounts; the authentication browser receives none. Values are never
+  interpolated into a shell command, Compose output, health response, task
+  error, or audit metadata.
+- Publisher cookies: a dedicated named volume mounted only by
+  `scansci-legal` and the stopped-by-default auth helper. Pinned ScanSci saves
+  publisher Cookie JSON/Netscape files; the design does not claim a persistent
+  Chromium profile, localStorage, or generic browser-state snapshot.
 - Database: stores no account, password, Cookie, SAML assertion, CARSI token, or
   browser-profile path.
 
-Password storage is not enabled merely because it is permitted. The first
-implementation attempts persistent profile reuse. Password Secret support is
-enabled only if the real Zhejiang University session cannot meet the restart
-and expiry acceptance without it.
+Password storage is disabled. The operator enters credentials only into the
+remote CARSI page. If cookie-state reuse later proves insufficient, any
+credential automation requires a separate reviewed design rather than silently
+mounting account material into an unsandboxed browser.
 
 ## 4. Internal service contract
 
@@ -151,8 +168,7 @@ When a download encounters a real authentication redirect:
 
 1. one single-flight refresh attempt runs;
 2. a persisted session is reloaded;
-3. optional Secret credentials may be used only by the isolated auth component
-   when the configured flow supports it;
+3. the operator is notified when interactive CARSI repair is required;
 4. MFA/CAPTCHA or failed refresh changes state to `auth_required`;
 5. queued tasks fail with the bounded recoverable code and an administrator
    notification is created;

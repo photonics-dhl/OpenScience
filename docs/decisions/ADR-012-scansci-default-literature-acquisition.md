@@ -85,29 +85,48 @@ service. This limitation is documented in the official
   the same resolver. It never binds `0.0.0.0`, IPv6 wildcard or a public
   interface. Runtime verification pins the custom environment, exact gateway
   mapping, internal IPAM, proxy TCP peer, allow/deny results and raw-direct failure.
-- `scansci-auth` is a release-tagged, stopped-by-default Compose profile. It
-  uses host networking only, while X11/VNC/noVNC listen on `127.0.0.1`. It joins
-  no Docker network and shares only the persistent `scansci-session` volume and
-  runtime Secret mount with the legal service. No Nginx or Cloudflare route is
-  added. Start/remove operations serialize on the same production deployment
-  lock so an operator tunnel cannot race an immutable switch or rollback.
+- `scansci-auth` is a release-tagged, stopped-by-default Compose profile. It is
+  the sole peer on the fixed internal `172.25.0.0/29` `auth_net`, reaches HTTPS
+  destinations through the dedicated Squid listener at `172.25.0.1:7891`, and
+  publishes only container port 6080 to host
+  `127.0.0.1:6080`. x11vnc remains IPv4-loopback-only inside the container and
+  disables IPv6. The browser mounts only the persistent `scansci-session`
+  volume; it receives no username, password, service-token or bootstrap Secret.
+  The `xgs-auth0` host-input policy allows this subnet only to
+  `172.25.0.1:7891` and rejects every other host address and port. No application container shares
+  `auth_net`, so it cannot reach the passwordless noVNC listener directly.
+  Squid configuration publication uses a parsed same-directory temporary,
+  fsync plus atomic rename, one durable rollback file and one transactional
+  pending marker spanning reload; failure injection proves pre-commit
+  preservation, post-commit automatic restoration and failed-reload recovery.
+  No Nginx or Cloudflare route is added. Start/remove operations serialize on
+  the production deployment lock so a tunnel cannot race switch or rollback.
+- Pinned ScanSci invokes Patchright through `channel=chrome` without forwarding
+  its config. The image therefore binds `/opt/google/chrome/chrome` to the fixed
+  wrapper rather than relying on `browser_executable`. The wrapper removes
+  conflicting proxy switches, adds `--no-sandbox` only inside the hardened
+  container, fixes the Squid proxy, disables QUIC and non-proxied WebRTC UDP,
+  and preserves the remaining upstream arguments. ScanSci alone owns the
+  browser lifecycle and persists only its publisher Cookie JSON/Netscape files in the
+  session volume; no second blank browser or shared Chromium profile is used.
+- Tunnel readiness requires the exact noVNC page, a WebSocket upgrade with an
+  RFB 3.x banner, and remote runtime proof of Xvfb/x11vnc/websockify/Chromium,
+  fixed proxy arguments, PID headroom, loopback publication and all container
+  hardening controls. Static HTML alone is never a successful start.
 - Host inputs remain exact files below `/opt/openscience-secrets/scansci`, with
   the directory owned by `root:root` at `0700` and files at `0600`.
-  `provision-scansci-secrets.mjs` accepts values only as bounded JSON on stdin,
-  publishes each file atomically, preserves existing values by default, and
-  prints key names and statuses only. Replacement requires
+  `provision-scansci-secrets.mjs` accepts only the service token as bounded JSON
+  on stdin, publishes it atomically, preserves it by default, and prints the
+  key name and status only. Replacement requires
   `--replace-existing`.
 - A networkless, read-only, bounded `scansci-secret-init` one-shot reads the
-  root-only host directory and copies only the fixed allowlisted filenames into
-  separate service-token and auth-credential named volumes. Runtime files are
-  atomically published as UID/GID 10001 and mode `0400`; each long-running
-  container mounts only the volume it needs, read-only. Stable named volumes
-  keep the target readable across daemon restarts, while the fixed root-only
-  host files remain the provisioning source of truth. This avoids the
+  root-only host directory and copies only the internal service token into
+  separate legal-service and Worker named volumes. Runtime files are atomically
+  published at the consuming UID and mode `0400`; the browser mounts neither
+  volume. The provisioner rejects username, password and session-bootstrap
+  fields because the pinned interactive flow does not consume them. This avoids
   unsupported file-Secret ownership remap and keeps Secret values out of the
-  Compose environment, command arguments, logs, and image layers. Optional
-  username/password files must appear as a pair; absence keeps manual browser
-  login available.
+  Compose environment, command arguments, logs, and image layers.
 - Agent Worker rejects the legacy inline token. When ScanSci is enabled it
   opens the fixed token path once with `O_RDONLY | O_NOFOLLOW`, validates the
   descriptor as UID/GID 1000, exact mode `0400`, one regular link and bounded
@@ -121,7 +140,7 @@ service. This limitation is documented in the official
   directory, Compose labels, networks and release/Secret mounts.
 - `scansci-session` is a stable named volume and is not release-retained or
   application-rollback data. Recreating the legal or auth image preserves the
-  profile and cookies. Credential/session revocation remains an explicit,
+  publisher Cookie files. Credential/session revocation remains an explicit,
   independent operation.
 - Both ScanSci images carry the application source SHA, upstream archive hash,
   locked dependency-file hashes, and a distinct legal/auth role as image labels.

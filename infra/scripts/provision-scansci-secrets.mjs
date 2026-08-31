@@ -10,9 +10,6 @@ import { fileURLToPath } from 'node:url';
 const SECRET_ROOT = '/opt/openscience-secrets/scansci';
 const SECRET_FILES = new Map([
   ['serviceToken', 'scansci_service_token'],
-  ['username', 'scansci_username'],
-  ['password', 'scansci_password'],
-  ['sessionBootstrapKey', 'scansci_session_bootstrap_key'],
 ]);
 
 export function parseProvisionCli(argv) {
@@ -34,9 +31,6 @@ function parseInput(source) {
   }
   const keys = Object.keys(value);
   if (keys.length === 0 || keys.some((key) => !SECRET_FILES.has(key))) {
-    throw new Error('ScanSci Secret input is invalid');
-  }
-  if (Object.hasOwn(value, 'username') !== Object.hasOwn(value, 'password')) {
     throw new Error('ScanSci Secret input is invalid');
   }
   for (const key of keys) {

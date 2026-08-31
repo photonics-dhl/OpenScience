@@ -1694,3 +1694,59 @@ Chromium/CJK dependency installation and pinned the ordering with a red→green
 Dockerfile contract test; merged main is `a08237a`. This build-only optimization
 does not change the production application release and must not trigger a
 standalone deployment.
+
+### 5.52 ScanSci operator-auth network isolation (2026-09-01)
+
+#### Preconditions
+
+Do not enter CARSI credentials until the candidate is merged, deployed by the
+canonical immutable transaction, and the active release's auth image has the
+exact source label. Require the auth helper and local tunnel to be stopped,
+ports 5900/6080 absent, Squid active, and no unrelated container attached to
+`openscience-prod_auth_net`. The production host uses iptables; firewalld is
+not an accepted substitute for this operation.
+
+#### Execution
+
+Use only `infra/scripts/scansci-auth-tunnel.sh start`. It first creates the
+release-tagged auth container without starting it, which materializes the fixed
+internal `172.25.0.0/29` network and `xgs-auth0` bridge. While holding the
+production lock, `prepare-scansci-auth-network.sh` then validates that the auth
+container is the sole peer, parses and atomically installs the release Squid
+configuration through same-directory fsync plus rename, retains exactly one
+`/etc/squid/squid.conf.openscience-rollback`, reloads the dedicated
+`172.25.0.1:7891` listener, and replaces
+only the two exact `openscience-scansci-auth` host-input rules. Those rules
+allow only `172.25.0.1:7891` and reject every other host address and port from the auth subnet. Only then
+may Compose start the browser and the SSH loopback tunnel.
+
+#### Rollback
+
+If network, Squid, firewall, browser, RFB, or runtime verification fails, the
+tunnel entry point removes the exact release auth container and retains a
+retryable tombstone if remote cleanup fails. The atomic helper atomically
+restores and reloads the single previous Squid file if config activation fails;
+a later firewall/browser failure may retain the already parsed, successfully
+reloaded listener and its restrictive ACL. The helper retains one fsynced
+`squid.conf.openscience-pending` marker from rollback publication through Squid
+reload. Any catchable failure restores and reloads the prior config inside the
+same helper; SIGKILL or host loss leaves the marker for mandatory recovery and
+reload at the beginning of the next activation. A host loss before target
+rename leaves the old target intact; one after rename leaves a complete target,
+rollback, and recovery marker rather than a torn global configuration.
+The restrictive firewall rules may remain; they affect only the dedicated
+auth subnet and are replaced idempotently on the next start. Do not prune the
+session volume or use a broad Docker/network/firewall cleanup command.
+
+#### Verification
+
+Before displaying the login link, require all of the following from the real
+ECS: only host `127.0.0.1:6080` is published; 5900 has no host or IPv6 listener;
+the auth network is internal with exact IPAM and one peer; the browser reaches
+HTTPS through `172.25.0.1:7891`; port 22 is blocked through both the bridge
+gateway and the ECS primary address, and raw internet is blocked;
+`scansci-legal` cannot resolve/connect `scansci-auth:6080`; the two exact
+iptables rules exist; Chromium runs through the fixed wrapper with proxy,
+QUIC/WebRTC restrictions and bounded PIDs; and no account/service Secret is
+mounted. Readiness additionally requires the exact noVNC HTML, WebSocket binary
+subprotocol, RFB 3.x banner, and visible CARSI target page.

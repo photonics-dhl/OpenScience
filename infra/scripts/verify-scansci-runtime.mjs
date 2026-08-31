@@ -74,6 +74,10 @@ export async function verifyScanSciRuntime({
   authContainerIds,
   authContainers = [],
   allowRunningAuth = false,
+  authProcessList = '',
+  authPids = 0,
+  authNetwork,
+  authIsolationProbe,
   workerContainer,
   workerImage,
   workerSecretMetadata,
@@ -217,18 +221,63 @@ export async function verifyScanSciRuntime({
       || workerSecretMetadata !== '1000:1000:400' || workerSecretSha256 !== hostSecretSha256) fail();
   }
   if (allowRunningAuth) {
+    const authContainerId = authContainerIds[0];
+    const authNetworkContainers = Object.keys(authNetwork?.Containers ?? {});
+    if (authNetwork?.Name == null || !authNetwork.Name.endsWith('_auth_net')
+      || authNetwork.Internal !== true
+      || authNetwork.Options?.['com.docker.network.bridge.name'] !== 'xgs-auth0'
+      || JSON.stringify(authNetwork.IPAM?.Config) !== JSON.stringify([{
+        Subnet: '172.25.0.0/29', Gateway: '172.25.0.1',
+      }])
+      || authNetworkContainers.length !== 1
+      || !authNetworkContainers[0].startsWith(authContainerId)
+      || JSON.stringify(authIsolationProbe) !== JSON.stringify({
+        proxyAddress: '172.25.0.1', proxyPeer: '172.25.0.1:7891', allowStatus: 204,
+        hostSsh: 'blocked', hostPrimary: 'blocked', rawDirect: 'blocked', legalPeer: 'blocked', firewall: 'isolated',
+      })) fail();
     if (authContainerIds.length !== 1 || authContainers.length !== 1 || authContainers.some((candidate) => {
       const sessionMount = candidate.Mounts?.find((mount) => mount.Destination === '/session');
-      const secretMount = candidate.Mounts?.find((mount) => mount.Destination === '/run/secrets');
-      return candidate.State?.Running !== true || candidate.HostConfig?.NetworkMode !== 'host'
+      const authEnvironment = parseEnvironment(candidate.Config?.Env);
+      const authNetworks = Object.keys(candidate.NetworkSettings?.Networks ?? {});
+      const tmpOptions = new Set((candidate.HostConfig?.Tmpfs?.['/tmp'] ?? '').split(','));
+      const shmOptions = new Set((candidate.HostConfig?.Tmpfs?.['/dev/shm'] ?? '').split(','));
+      const expectedPort = { '6080/tcp': [{ HostIp: '127.0.0.1', HostPort: '6080' }] };
+      return candidate.State?.Running !== true
       || candidate.Image !== expectedAuthImageId || candidate.Config?.User !== '10001:10001'
       || candidate.Config?.Labels?.['org.openscience.scansci.role'] !== 'auth'
       || JSON.stringify(candidate.Config?.Entrypoint) !== JSON.stringify(['/usr/bin/tini', '--', '/usr/local/bin/scansci-auth-entrypoint'])
       || ![null, undefined, '[]'].includes(candidate.Config?.Cmd == null ? candidate.Config?.Cmd : JSON.stringify(candidate.Config.Cmd))
-      || candidate.Mounts?.length !== 2
+      || authEnvironment.get('SCANSCI_BROWSER_PROXY') !== 'http://openscience-egress:7891'
+      || candidate.HostConfig?.ReadonlyRootfs !== true || candidate.HostConfig?.Privileged !== false
+      || !candidate.HostConfig?.CapDrop?.includes('ALL') || (candidate.HostConfig?.CapAdd?.length ?? 0) !== 0
+      || !candidate.HostConfig?.SecurityOpt?.includes('no-new-privileges:true')
+      || candidate.HostConfig?.Memory !== 1024 ** 3 || candidate.HostConfig?.NanoCpus !== 1_000_000_000
+      || candidate.HostConfig?.PidsLimit !== 128
+      || JSON.stringify(candidate.HostConfig?.ExtraHosts) !== JSON.stringify(['openscience-egress:172.25.0.1'])
+      || JSON.stringify(candidate.HostConfig?.PortBindings) !== JSON.stringify(expectedPort)
+      || !candidate.HostConfig?.NetworkMode?.endsWith('_auth_net')
+      || !['size=256m', 'noexec', 'nosuid', 'nodev', 'uid=10001', 'gid=10001', 'mode=0700']
+        .every((option) => tmpOptions.has(option))
+      || !['size=256m', 'nosuid', 'nodev', 'uid=10001', 'gid=10001', 'mode=0700']
+        .every((option) => shmOptions.has(option))
+      || authNetworks.length !== 1 || !authNetworks[0].endsWith('_auth_net')
+      || candidate.NetworkSettings?.Networks?.[authNetworks[0]]?.Gateway !== '172.25.0.1'
+      || !/^172\.25\.0\.[2-6]$/u.test(candidate.NetworkSettings?.Networks?.[authNetworks[0]]?.IPAddress)
+      || JSON.stringify(candidate.NetworkSettings?.Ports) !== JSON.stringify(expectedPort)
+      || candidate.Mounts?.length !== 1
       || !sessionMount || sessionMount.Type !== 'volume' || sessionMount.RW !== true || sessionMount.Name !== 'openscience-prod_scansci-session'
-      || !secretMount || secretMount.Type !== 'volume' || secretMount.RW !== false || secretMount.Name !== 'openscience-prod_scansci-auth-secrets';
-    })) fail();
+      || candidate.Mounts.some((mount) => mount.Destination === '/run/secrets');
+    })
+      || !Number.isSafeInteger(authPids) || authPids < 6 || authPids > 96
+      || !/Xvfb :99 .* -nolisten tcp/u.test(authProcessList)
+      || !/x11vnc .* -listen 127\.0\.0\.1 .* -no6(?: |$)/mu.test(authProcessList)
+      || !/websockify .*0\.0\.0\.0:6080 127\.0\.0\.1:5900/u.test(authProcessList)
+      || !/python -m scansci_legal\.auth_login --operator-start/u.test(authProcessList)
+      || !/chromium .*--no-sandbox/u.test(authProcessList)
+      || !/chromium .*--proxy-server=http:\/\/openscience-egress:7891/u.test(authProcessList)
+      || !/chromium .*--disable-quic/u.test(authProcessList)
+      || !/chromium .*--force-webrtc-ip-handling-policy=disable_non_proxied_udp/u.test(authProcessList)
+      || /chromium .*--no-proxy-server/u.test(authProcessList)) fail();
   }
   if (sourceFileLimitMetadata !== '104857600:104857600'
     || !/^[a-f0-9]{64}$/u.test(runtimeSecretSha256) || runtimeSecretSha256 !== hostSecretSha256
@@ -392,6 +441,45 @@ async function main() {
   const expectedIdentity = await resolveRuntimeImageIdentity(options);
   const authIds = compose(['--profile', 'scansci-auth', 'ps', '-aq', 'scansci-auth']).split(/\r?\n/u).filter(Boolean);
   const authContainers = authIds.map((id) => inspectJson('docker', ['inspect', id]));
+  let authProcessList = '';
+  let authPids = 0;
+  let authNetwork;
+  let authIsolationProbe;
+  if (allowAuth === '1' && authIds.length === 1) {
+    authProcessList = run('docker', ['top', authIds[0], '-eo', 'args'], { maxBuffer: 64 * 1024 });
+    authPids = Number(run('docker', ['stats', '--no-stream', '--format', '{{.PIDs}}', authIds[0]], { timeout: 5_000 }));
+    const authNetworkNames = Object.keys(authContainers[0].NetworkSettings?.Networks ?? {})
+      .filter((name) => name.endsWith('_auth_net'));
+    if (authNetworkNames.length !== 1) fail();
+    authNetwork = inspectJson('docker', ['network', 'inspect', authNetworkNames[0]]);
+    const primaryRoute = run('ip', ['-4', 'route', 'get', '1.1.1.1']);
+    const primaryHost = /\bsrc (\d{1,3}(?:\.\d{1,3}){3})\b/u.exec(primaryRoute)?.[1];
+    if (!primaryHost || primaryHost === '172.25.0.1') fail();
+    const authIsolationProbeSource = [
+      'import json,socket,urllib.request',
+      "proxy='http://openscience-egress:7891'",
+      "addresses=sorted({item[4][0] for item in socket.getaddrinfo('openscience-egress',7891,type=socket.SOCK_STREAM)})",
+      "connection=socket.create_connection(('openscience-egress',7891),timeout=3)",
+      "peer='%s:%s'%connection.getpeername()",
+      'connection.close()',
+      "opener=urllib.request.build_opener(urllib.request.ProxyHandler({'http':proxy,'https':proxy}))",
+      "allow=opener.open('https://www.gstatic.com/generate_204',timeout=8).status",
+      "def blocked(host,port):\n try:\n  probe=socket.create_connection((host,port),timeout=2)\n  probe.close()\n  return 'connected'\n except OSError:\n  return 'blocked'",
+      `print(json.dumps({'proxyAddress':','.join(addresses),'proxyPeer':peer,'allowStatus':allow,'hostSsh':blocked('172.25.0.1',22),'hostPrimary':blocked('${primaryHost}',22),'rawDirect':blocked('1.1.1.1',443)},separators=(',',':')))`,
+    ].join('\n');
+    const authProbe = JSON.parse(run('docker', [
+      'exec', authIds[0], 'python', '-c', authIsolationProbeSource,
+    ], { maxBuffer: 4096 }));
+    const legalPeerProbe = run('docker', [
+      'exec', containerId, 'python', '-c',
+      "import socket;\ntry:\n socket.create_connection(('scansci-auth',6080),timeout=2);print('connected')\nexcept OSError:\n print('blocked')",
+    ]);
+    run('iptables', ['-w', '-C', 'INPUT', '-i', 'xgs-auth0', '-s', '172.25.0.0/29', '-d', '172.25.0.1',
+      '-p', 'tcp', '--dport', '7891', '-m', 'comment', '--comment', 'openscience-scansci-auth', '-j', 'ACCEPT']);
+    run('iptables', ['-w', '-C', 'INPUT', '-i', 'xgs-auth0', '-s', '172.25.0.0/29',
+      '-m', 'comment', '--comment', 'openscience-scansci-auth', '-j', 'REJECT', '--reject-with', 'icmp-port-unreachable']);
+    authIsolationProbe = { ...authProbe, legalPeer: legalPeerProbe, firewall: 'isolated' };
+  }
   const container = inspectJson('docker', ['inspect', containerId]);
   const retrievalNetworkNames = Object.keys(container.NetworkSettings?.Networks ?? {})
     .filter((name) => name.endsWith('_retrieval_net'));
@@ -467,7 +555,8 @@ async function main() {
     requireOaCanary: requireOaCanary === '1', oaCanaryResult,
     runtimeSecretMetadata, runtimeSecretSha256,
     workerContainer, workerImage, workerSecretMetadata, workerSecretSha256,
-    authContainers, allowRunningAuth: allowAuth === '1',
+    authContainers, allowRunningAuth: allowAuth === '1', authProcessList, authPids,
+    authNetwork, authIsolationProbe,
     expectedLegalImageId: expectedIdentity.legalImageId, expectedAuthImageId: expectedIdentity.authImageId,
   });
   process.stdout.write(formatRuntimeStatuses(report));
