@@ -126,6 +126,14 @@ verify_scansci_candidate() {
   run_remote "/usr/bin/node '$RELEASE_ROOT/infra/scripts/verify-scansci-runtime.mjs' --release-root '$RELEASE_ROOT' --release-sha '$RELEASE_SHA' --compose-file '$COMPOSE_FILE' --service-token-file '$SCANSCI_SECRET_ROOT/scansci_service_token' --require-worker '$require_worker' --allow-auth 0 --mode prepublication --expected-legal-image-id '$FINAL_SCANSCI_IMAGE_ID' --expected-auth-image-id '$FINAL_SCANSCI_AUTH_IMAGE_ID'"
 }
 
+transaction_prepare_candidate_capability() {
+  CANDIDATE_CAPABILITY="$RELEASE_CAPABILITIES_DIR/$RELEASE_SHA"
+  CANDIDATE_CAPABILITY_STAGING="$RELEASE_CAPABILITIES_DIR/.$RELEASE_SHA.next.$BASHPID"
+  CANDIDATE_CAPABILITY_CREATED=0
+  CANDIDATE_CAPABILITY_STAGING_CREATED=0
+  run_remote "set -e; test ! -e '$CANDIDATE_CAPABILITY'; test ! -e '$RELEASE_CAPABILITIES_DIR/$RELEASE_SHA.next'; test ! -e '$CANDIDATE_CAPABILITY_STAGING'"
+}
+
 wait_for_healthy() {
   local services=("$@")
   [ "${#services[@]}" -gt 0 ] || { echo "错误：wait_for_healthy 需要明确 service" >&2; return 64; }
@@ -259,6 +267,14 @@ if [ "$ACTIVE_RELEASE_SHA" = "$RELEASE_SHA" ]; then
   log "already active: release=$RELEASE_SHA"
   exit 0
 fi
+
+# A candidate may still be the protected rollback release. Reject any existing
+# canonical/staging sidecar before install, build, journal creation, or service
+# mutation; cleanup later is permitted only for paths this process created.
+transaction_prepare_candidate_capability || {
+  echo "错误：candidate capability sidecar 已存在或 staging 身份不安全" >&2
+  exit 66
+}
 
 PREVIOUS_RELEASE_SHA="$ACTIVE_RELEASE_SHA"
 PREVIOUS_RELEASE_ROOT="/opt/openscience-releases/$PREVIOUS_RELEASE_SHA"
@@ -507,13 +523,31 @@ transaction_stop_candidate_scansci() {
 }
 transaction_cleanup_candidate_capability() {
   local active_after_rollback
+  [ "${CANDIDATE_CAPABILITY_CREATED:-0}" -eq 1 ] \
+    || [ "${CANDIDATE_CAPABILITY_STAGING_CREATED:-0}" -eq 1 ] \
+    || return 0
   active_after_rollback="$(run_remote "cat '$REMOTE_ROOT/.release-id'")" || return
   [ "$active_after_rollback" = "$PREVIOUS_RELEASE_SHA" ] || return 70
   [ "$RELEASE_SHA" != "$PREVIOUS_RELEASE_SHA" ] || return 70
-  run_remote "rm -f -- '$RELEASE_CAPABILITIES_DIR/$RELEASE_SHA' '$RELEASE_CAPABILITIES_DIR/$RELEASE_SHA.next'"
+  if [ "${CANDIDATE_CAPABILITY_CREATED:-0}" -eq 1 ]; then
+    run_remote "rm -f -- '$CANDIDATE_CAPABILITY'" || return
+    CANDIDATE_CAPABILITY_CREATED=0
+  fi
+  if [ "${CANDIDATE_CAPABILITY_STAGING_CREATED:-0}" -eq 1 ]; then
+    run_remote "rm -f -- '$CANDIDATE_CAPABILITY_STAGING'" || return
+    CANDIDATE_CAPABILITY_STAGING_CREATED=0
+  fi
 }
 transaction_publish_capability_and_cas() {
-  run_remote "set -e; install -d -m 0755 '$RELEASE_CAPABILITIES_DIR'; test ! -e '$RELEASE_CAPABILITIES_DIR/$RELEASE_SHA'; test ! -e '$RELEASE_CAPABILITIES_DIR/$RELEASE_SHA.next'; printf 'schema=3\nembedding_deploy=%s\nbge_m3_enabled=%s\nmodel_version_id=%s\nmodel_revision=%s\nsource_sha256=%s\npackage_freeze_sha256=%s\nmodel_manifest_sha256=%s\nscansci_deploy=true\nscansci_legal_image_id=%s\nscansci_auth_image_id=%s\n' '$BGE_M3_DEPLOY_VALUE' '$BGE_M3_ENABLED_VALUE' '$BGE_M3_MODEL_VERSION_ID' '$BGE_M3_MODEL_REVISION' '$BGE_M3_SOURCE_SHA256' '$BGE_M3_PACKAGE_FREEZE_SHA256' '$BGE_M3_MODEL_MANIFEST_SHA256' '$FINAL_SCANSCI_IMAGE_ID' '$FINAL_SCANSCI_AUTH_IMAGE_ID' > '$RELEASE_CAPABILITIES_DIR/$RELEASE_SHA.next'; chmod 0644 '$RELEASE_CAPABILITIES_DIR/$RELEASE_SHA.next'; mv '$RELEASE_CAPABILITIES_DIR/$RELEASE_SHA.next' '$RELEASE_CAPABILITIES_DIR/$RELEASE_SHA'; /usr/bin/node '$RELEASE_ROOT/infra/scripts/production-deploy-lock.mjs' cas-active --marker '$REMOTE_ROOT/.release-id' --expected '$ROLLBACK_SHA' --next '$RELEASE_SHA' --lock-fd 9"
+  [ "$CANDIDATE_CAPABILITY_CREATED" -eq 0 ] \
+    && [ "$CANDIDATE_CAPABILITY_STAGING_CREATED" -eq 0 ] || return 70
+  run_remote "set -e; install -d -m 0755 '$RELEASE_CAPABILITIES_DIR'; test ! -e '$CANDIDATE_CAPABILITY'; test ! -e '$CANDIDATE_CAPABILITY_STAGING'; (umask 022; set -C; printf 'schema=3\nembedding_deploy=%s\nbge_m3_enabled=%s\nmodel_version_id=%s\nmodel_revision=%s\nsource_sha256=%s\npackage_freeze_sha256=%s\nmodel_manifest_sha256=%s\nscansci_deploy=true\nscansci_legal_image_id=%s\nscansci_auth_image_id=%s\n' '$BGE_M3_DEPLOY_VALUE' '$BGE_M3_ENABLED_VALUE' '$BGE_M3_MODEL_VERSION_ID' '$BGE_M3_MODEL_REVISION' '$BGE_M3_SOURCE_SHA256' '$BGE_M3_PACKAGE_FREEZE_SHA256' '$BGE_M3_MODEL_MANIFEST_SHA256' '$FINAL_SCANSCI_IMAGE_ID' '$FINAL_SCANSCI_AUTH_IMAGE_ID' > '$CANDIDATE_CAPABILITY_STAGING')"
+  CANDIDATE_CAPABILITY_STAGING_CREATED=1
+  run_remote "set -e; test ! -e '$CANDIDATE_CAPABILITY'; ln -- '$CANDIDATE_CAPABILITY_STAGING' '$CANDIDATE_CAPABILITY'"
+  CANDIDATE_CAPABILITY_CREATED=1
+  run_remote "rm -- '$CANDIDATE_CAPABILITY_STAGING'"
+  CANDIDATE_CAPABILITY_STAGING_CREATED=0
+  run_remote "/usr/bin/node '$RELEASE_ROOT/infra/scripts/production-deploy-lock.mjs' cas-active --marker '$REMOTE_ROOT/.release-id' --expected '$ROLLBACK_SHA' --next '$RELEASE_SHA' --lock-fd 9"
 }
 transaction_perform_application_rollback() {
   local rollback_ok=1 rollback_active

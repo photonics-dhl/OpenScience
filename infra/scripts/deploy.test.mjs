@@ -17,6 +17,12 @@ const retentionSource = readFileSync(new URL('./production-release-retention.mjs
 const transactionStatePath = fileURLToPath(new URL('./production-deploy-transaction-state.sh', import.meta.url));
 const source = `${launcherSource}\n${transactionSource}\n${transactionStateSource}`;
 
+function deploymentFunction(name) {
+  const body = transactionSource.match(new RegExp(`${name}\\(\\) \\{[\\s\\S]*?\\n\\}`, 'u'))?.[0];
+  assert.ok(body, `${name} production function is missing`);
+  return body;
+}
+
 test('production commit publishes durable rollback identity before exact retention', () => {
   const preflight = transactionSource.indexOf('production-release-retention.mjs" preflight');
   const sameSha = transactionSource.indexOf('if [ "$ACTIVE_RELEASE_SHA" = "$RELEASE_SHA" ]');
@@ -189,6 +195,83 @@ test('candidate capability stays absent through prepublication and is exact-clea
     assert.equal(existsSync(failed.capability), false, `${mode} left a candidate capability sidecar`);
     assert.equal(existsSync(`${failed.capability}.next`), false, `${mode} left a candidate capability staging file`);
   }
+});
+
+test('protected rollback sidecar survives candidate rejection and cleanup byte-for-byte', async (t) => {
+  const root = await mkdtemp(join(tmpdir(), 'xgs-protected-capability-'));
+  t.after(async () => rm(root, { recursive: true, force: true }));
+  const activeSha = 'a'.repeat(40);
+  const protectedSha = 'b'.repeat(40);
+  const remote = join(root, 'remote');
+  const capabilities = join(remote, '.release-capabilities');
+  const activeMarker = join(remote, '.release-id');
+  const rollbackMarker = join(remote, '.rollback-id');
+  const protectedSidecar = join(capabilities, protectedSha);
+  await mkdir(capabilities, { recursive: true });
+  await writeFile(activeMarker, `${activeSha}\n`);
+  await writeFile(rollbackMarker, `${protectedSha}\n`);
+  await writeFile(protectedSidecar, 'schema=3\nprotected=rollback\n');
+
+  const shell = [
+    'set -eEuo pipefail',
+    `REMOTE_ROOT='${remote.replaceAll('\\', '/')}'`,
+    `RELEASE_CAPABILITIES_DIR='${capabilities.replaceAll('\\', '/')}'`,
+    `RELEASE_SHA='${protectedSha}'`,
+    `PREVIOUS_RELEASE_SHA='${activeSha}'`,
+    'run_remote(){ bash -c "$1"; }',
+    deploymentFunction('transaction_prepare_candidate_capability'),
+    deploymentFunction('transaction_cleanup_candidate_capability'),
+    'if transaction_prepare_candidate_capability; then exit 99; fi',
+    'transaction_cleanup_candidate_capability',
+  ].join('\n');
+  const result = spawnSync(bash, ['-c', shell], { encoding: 'utf8' });
+  assert.equal(result.status, 0, result.stderr);
+  assert.equal(await readFile(activeMarker, 'utf8'), `${activeSha}\n`);
+  assert.equal(await readFile(rollbackMarker, 'utf8'), `${protectedSha}\n`);
+  assert.equal(await readFile(protectedSidecar, 'utf8'), 'schema=3\nprotected=rollback\n');
+});
+
+test('failed candidate CAS cleans only the sidecar created by the real publish path', async (t) => {
+  const root = await mkdtemp(join(tmpdir(), 'xgs-owned-capability-'));
+  t.after(async () => rm(root, { recursive: true, force: true }));
+  const activeSha = 'a'.repeat(40);
+  const candidateSha = 'b'.repeat(40);
+  const remote = join(root, 'remote');
+  const releaseRoot = join(root, 'release');
+  const capabilities = join(remote, '.release-capabilities');
+  const helper = join(releaseRoot, 'infra', 'scripts', 'production-deploy-lock.mjs');
+  await mkdir(capabilities, { recursive: true });
+  await mkdir(join(releaseRoot, 'infra', 'scripts'), { recursive: true });
+  await writeFile(join(remote, '.release-id'), `${activeSha}\n`);
+  await writeFile(helper, 'process.exitCode = 65;\n');
+
+  const publish = deploymentFunction('transaction_publish_capability_and_cas')
+    .replaceAll('/usr/bin/node', 'node');
+  const shell = [
+    'set -eEuo pipefail',
+    `REMOTE_ROOT='${remote.replaceAll('\\', '/')}'`,
+    `RELEASE_ROOT='${releaseRoot.replaceAll('\\', '/')}'`,
+    `RELEASE_CAPABILITIES_DIR='${capabilities.replaceAll('\\', '/')}'`,
+    `RELEASE_SHA='${candidateSha}'`, `ROLLBACK_SHA='${activeSha}'`,
+    `PREVIOUS_RELEASE_SHA='${activeSha}'`,
+    `BGE_M3_DEPLOY_VALUE='false'`, `BGE_M3_ENABLED_VALUE='false'`,
+    `BGE_M3_MODEL_VERSION_ID=''`, `BGE_M3_MODEL_REVISION=''`,
+    `BGE_M3_SOURCE_SHA256=''`, `BGE_M3_PACKAGE_FREEZE_SHA256=''`, `BGE_M3_MODEL_MANIFEST_SHA256=''`,
+    `FINAL_SCANSCI_IMAGE_ID='sha256:${'c'.repeat(64)}'`,
+    `FINAL_SCANSCI_AUTH_IMAGE_ID='sha256:${'d'.repeat(64)}'`,
+    'run_remote(){ bash -c "$1"; }',
+    deploymentFunction('transaction_prepare_candidate_capability'),
+    publish,
+    deploymentFunction('transaction_cleanup_candidate_capability'),
+    'transaction_prepare_candidate_capability',
+    'if transaction_publish_capability_and_cas; then exit 99; fi',
+    '[ "$CANDIDATE_CAPABILITY_CREATED" -eq 1 ]',
+    'transaction_cleanup_candidate_capability',
+    '[ ! -e "$RELEASE_CAPABILITIES_DIR/$RELEASE_SHA" ]',
+    '[ ! -e "$CANDIDATE_CAPABILITY_STAGING" ]',
+  ].join('\n');
+  const result = spawnSync(bash, ['-c', shell], { encoding: 'utf8' });
+  assert.equal(result.status, 0, result.stderr);
 });
 
 test('SSH runner does not misclassify a remote permission error as key authentication failure', () => {

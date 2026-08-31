@@ -99,6 +99,7 @@ transaction_complete_migration() {
 
 transaction_publish_candidate() {
   [ "$TRANSACTION_PHASE" = switching ] || return 64
+  trap '' HUP INT TERM
   transaction_publish_capability_and_cas
   transaction_mark_phase published
 }

@@ -109,7 +109,13 @@ async function fixture() {
     } },
     State: { Running: true, Health: { Status: 'healthy' } },
   };
-  return { releaseRoot, serviceTokenPath, composeFile, container, image, authImage, workerContainer };
+  const workerImage = {
+    Id: workerContainer.Image,
+    Config: { Labels: { 'org.openscience.source': releaseSha } },
+  };
+  return {
+    releaseRoot, serviceTokenPath, composeFile, container, image, authImage, workerContainer, workerImage,
+  };
 }
 
 test('runtime verifier validates immutable source, bounded topology, Secret and persistent session without exposing values', async (t) => {
@@ -190,6 +196,71 @@ test('runtime verifier fails closed on forbidden network, grey-source flags, aut
     await assert.rejects(verifyScanSciRuntime(input), /ScanSci runtime verification failed/u);
     await rm(fresh.releaseRoot, { recursive: true, force: true });
   }
+});
+
+test('canonical Worker verification rejects a running container from a different image', async (t) => {
+  const f = await fixture();
+  t.after(async () => rm(f.releaseRoot, { recursive: true, force: true }));
+  f.workerContainer.Image = `sha256:${'9'.repeat(64)}`;
+
+  await assert.rejects(verifyScanSciRuntime({
+    ...f,
+    releaseSha,
+    sessionStatus: 'ready',
+    authContainerIds: [],
+    sourceFileLimitMetadata: '104857600:104857600',
+    runtimeSecretMetadata: '10001:10001:400',
+    runtimeSecretSha256: createHash('sha256').update(tokenValue).digest('hex'),
+    workerSecretMetadata: '1000:1000:400',
+    workerSecretSha256: createHash('sha256').update(tokenValue).digest('hex'),
+    requiredSecretUid: process.getuid?.(),
+    expectedLegalImageId: f.image.Id,
+    expectedAuthImageId: f.authImage.Id,
+  }), /ScanSci runtime verification failed/u);
+});
+
+test('canonical Worker verification rejects an image with the wrong source label', async (t) => {
+  const f = await fixture();
+  t.after(async () => rm(f.releaseRoot, { recursive: true, force: true }));
+  f.workerImage.Config.Labels['org.openscience.source'] = '9'.repeat(40);
+
+  await assert.rejects(verifyScanSciRuntime({
+    ...f,
+    releaseSha,
+    sessionStatus: 'ready',
+    authContainerIds: [],
+    sourceFileLimitMetadata: '104857600:104857600',
+    runtimeSecretMetadata: '10001:10001:400',
+    runtimeSecretSha256: createHash('sha256').update(tokenValue).digest('hex'),
+    workerSecretMetadata: '1000:1000:400',
+    workerSecretSha256: createHash('sha256').update(tokenValue).digest('hex'),
+    requiredSecretUid: process.getuid?.(),
+    expectedLegalImageId: f.image.Id,
+    expectedAuthImageId: f.authImage.Id,
+  }), /ScanSci runtime verification failed/u);
+});
+
+test('Worker verification rejects an arbitrary extra mount', async (t) => {
+  const f = await fixture();
+  t.after(async () => rm(f.releaseRoot, { recursive: true, force: true }));
+  f.workerContainer.Mounts.push({
+    Type: 'bind', Source: '/var/run/docker.sock', Destination: '/var/run/docker.sock', RW: true,
+  });
+
+  await assert.rejects(verifyScanSciRuntime({
+    ...f,
+    releaseSha,
+    sessionStatus: 'ready',
+    authContainerIds: [],
+    sourceFileLimitMetadata: '104857600:104857600',
+    runtimeSecretMetadata: '10001:10001:400',
+    runtimeSecretSha256: createHash('sha256').update(tokenValue).digest('hex'),
+    workerSecretMetadata: '1000:1000:400',
+    workerSecretSha256: createHash('sha256').update(tokenValue).digest('hex'),
+    requiredSecretUid: process.getuid?.(),
+    expectedLegalImageId: f.image.Id,
+    expectedAuthImageId: f.authImage.Id,
+  }), /ScanSci runtime verification failed/u);
 });
 
 test('runtime identity modes keep prepublication explicit and canonical sidecar-only', async () => {
