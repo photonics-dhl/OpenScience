@@ -1849,5 +1849,9 @@ Candidate `aff435a` adds the bounded process-table retry and job-table ownership
 guard. Its adversarial suite covers delayed visibility, a live runner whose SSH
 child must be reaped, and an exited runner that must not receive a numeric-PID
 signal; tunnel tests are `26/26`, with independent code and security reviews
-READY. It must be merged before becoming the canonical operator script, but
-merging must not interrupt an active login attempt.
+READY. `860b2b0` adds setup-once plus at most ten consecutive upstream windows.
+Final candidate `b1d6662` also tracks the long-running auth Python child so TERM
+clears the owned process set in 1.8 seconds instead of reaching Docker SIGKILL;
+the trap clears ownership before signaling and is idempotent across TERM/EXIT.
+Tunnel tests are `27/27`; ScanSci legal tests are 89 pass / 6 Windows-only skips
+/ 0 fail. Merge and deploy the final HEAD before starting the next login.

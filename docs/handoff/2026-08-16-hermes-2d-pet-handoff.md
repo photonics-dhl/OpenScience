@@ -1,6 +1,6 @@
 # Hermes Research Intelligence CURRENT Handoff
 
-> **CURRENT active-memory，2026-09-01。** ScanSci OA/Worker/Parser/BGE 与公网 release `36033ae` 全绿；auth helper 的 exact nofile、HTTP 与 RFB 已通过生产验收，当前仍需完成浙江大学 CARSI 交互并证明 session 持久。local tunnel race fix `aff435a` 待 PR/CI。Task 11 阻断，Landing/Hermes 视觉仍冻结。
+> **CURRENT active-memory，2026-09-01。** ScanSci OA/Worker/Parser/BGE 与公网 release `36033ae` 全绿；auth helper 的 exact nofile、HTTP 与 RFB 已通过生产验收，当前仍需完成浙江大学 CARSI 交互并证明 session 持久。operator auth reliability HEAD `b1d6662` 待 PR/CI。Task 11 阻断，Landing/Hermes 视觉仍冻结。
 
 ## Goal and state
 
@@ -11,7 +11,7 @@
 ## Version tuple
 
 - Worktree: `E:/Miscellaneous/XGS/.worktrees/readable-hermes-guidance`
-- Candidate branch / HEAD / origin main: `codex/scansci-auth-tunnel-start-race` / `aff435a` / `36033aee0c8712a31c699c800b1c81cd6ffe044d`；local tunnel race fix 待 PR/CI。
+- Candidate branch / HEAD / origin main: `codex/scansci-auth-tunnel-start-race` / `b1d6662` / `36033aee0c8712a31c699c800b1c81cd6ffe044d`；operator auth reliability 待 PR/CI。
 - Production application source / immutable release: `36033aee0c8712a31c699c800b1c81cd6ffe044d`
 - Rollback: `cca590823b646c45a3c47f34678ec1ea3eea2fa3`; core/search migrations `33/33` / `2/2`
 - 本地 `main` 与其他 worktree 有用户改动，不得触碰或用它推断生产；上述 tuple 已从 ECS 重新实测。
@@ -55,7 +55,7 @@
 23. PR #16 / CI `33388359242` 已合并为 main `bdf7eb7`。ECS exact Parser acceptance、Compose identity、BGE CPU、legal source/topology/policy/session 与新 API/Web/Worker health 均通过；第二阶段 OA canary 在 local legal endpoint 返回 stable 404 后事务再次完整回滚，active/public 仍 `6893318`，sidecar/journal 清零。
 24. 真实诊断证明 pinned ScanSci `Session.trust_env=False` 且只认 `SCANSCI_PDF_PROXY`/`network_proxy`；reviewed `05111e7` 仅把已严格校验的固定 Squid URL 同步到专用变量。PR #17 / exact CI `33397550370` 合并为 main `abd38d3`；ECS schema-v3 16-case Parser acceptance、core/search `33/33`/`2/2`、BGE CPU、ScanSci source/topology/policy/token/session、Worker 与真实 24,671,920-byte arXiv OA PDF canary 全绿，active/public 已 CAS 到 `abd38d3`，rollback `6893318`。
 25. `cca5908` tunnel 的 RFB 失败根因是 auth 容器继承 `RLIMIT_NOFILE=1073741816`，触发 LibVNCServer 巨大 fd-limit 扫描。`396b301` 固定 nofile `4096/4096` 并纳入 verifier；PR #25 / exact CI `33447387815`、job `99669426363` 合并为 `36033ae`，ECS exact Parser/BGE/ScanSci/OA/application/public/retention 与真实 auth nofile/HTTP/RFB/network/PID gates 全绿，active/rollback `36033ae` / `cca5908`。
-26. 两个 operator window 均约 185 秒后由 pinned upstream 固定超时退出，状态安全恢复 `auth_required` 且 helper/tunnel 已 canonical stopped。现按既有授权增加 setup-once + 最多十次连续窗口。`aff435a` 同时关闭 Windows process-table visibility 竞态：只向 shell-owned active job spec 发 TERM，退出 runner 不按数字 PID 发信号；tunnel `26/26`、双复审 READY，待 PR/CI。
+26. 两个 operator window 均约 185 秒后由 pinned upstream 固定超时退出，状态安全恢复 `auth_required` 且 helper/tunnel 已 canonical stopped。`860b2b0` 增加 setup-once + 最多十次窗口；`aff435a` 只向 shell-owned active job spec 发 TERM；`b1d6662` 跟踪 auth Python 并使 TERM 1.8 秒完整退出。Tunnel `27/27`、ScanSci legal `89/95`，最终复审/PR/CI pending。
 
 ## Constraints
 
@@ -65,7 +65,7 @@
 
 ## Next action
 
-1. 在当前 canonical auth tunnel 完成一次浙江大学 CARSI 认证并验证容器重建后 session 持久；不输出账号、Cookie 或 OAuth URL。同时合并 `aff435a`，但不得为此中断正在进行的登录。
+1. 合并并部署 `b1d6662` 后，在新的 bounded canonical auth tunnel 完成一次浙江大学 CARSI 认证并验证容器重建后 session 持久；不输出账号、Cookie 或 OAuth URL。
 2. 用真实 OA + CARSI PDF 完成 Hermes Drawer、RO Hermes、Files/Evidence、Personal Space 四入口与 375px 生产旅程。
 3. 验证 one-use、72h/600s、灰色源调用 0 与最终精确磁盘卫生，关闭 Task 10。
 

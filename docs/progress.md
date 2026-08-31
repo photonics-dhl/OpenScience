@@ -4,7 +4,7 @@
 
 ## Current version tuple
 
-- Candidate branch / HEAD / origin main: `codex/scansci-auth-tunnel-start-race` / `aff435a` / `36033ae`；local tunnel race fix 待 PR/CI。
+- Candidate branch / HEAD / origin main: `codex/scansci-auth-tunnel-start-race` / `b1d6662` / `36033ae`；operator auth reliability 待 PR/CI。
 - Production application source / immutable release: `36033aee0c8712a31c699c800b1c81cd6ffe044d`。
 - Production rollback: `cca590823b646c45a3c47f34678ec1ea3eea2fa3`；core/search migrations `33/33` / `2/2`。
 - Taskmaster `hermes-research-intelligence` 仍为 9/12；独立 ScanSci plan Tasks 1–9 done、Task 10 in progress，Task 11 继续阻断。
@@ -15,7 +15,7 @@
 - 拆分实测证明原 RFB readiness 失败来自 auth container 的 `RLIMIT_NOFILE=1073741816`：x11vnc 首次 accept 延迟约 81 秒，精确命中 LibVNCServer 遍历巨大 fd limit 的上游缺陷。`396b301` 将 prod/dev nofile 固定 `4096/4096`，canonical runtime 对缺失、重复、超大或软硬漂移 fail closed；red→green runtime `10/11→11/11`，相关 infra `77 pass/5 Windows Linux-only skip/0 fail`，全仓门禁 green。
 - PR #25 / exact CI run `33447387815`、job `99669426363` 将 nofile 修复合并为 `36033aee0c8712a31c699c800b1c81cd6ffe044d`。ECS 两阶段 canonical transaction 重建 exact schema-v3 16-case Parser 报告，Parser/BGE/ScanSci/OA/API/Web/Worker/Nginx/public CAS/retention 全绿；active/rollback 为 `36033ae` / `cca5908`。
 - 真实 auth helper 为 `nofile=4096/4096`、168 PIDs、无 host PortBinding/listener、fixed `.2`；本机 noVNC HTTP 200 与 `RFB_OK` 均通过。两个 operator window 均约 185 秒后由上游固定超时 exit 1，持久状态正确回到 `auth_required`；失效 forward/helper 已 canonical stopped，session 卷保留。Pinned upstream 没有 timeout CLI，当前按已批准设计增加 setup-once + 最多十次连续窗口，CARSI 尚未宣称 ready。
-- 第一次成功启动前曾出现 Windows process-table 短暂不可见且补偿后遗留 owned SSH child。`aff435a` 增加 2 秒有界身份等待，并仅在当前 Bash job table 仍把 job spec 绑定本次 `$!` 时发 TERM；已退出 runner 只 wait/reap，不按旧数字 PID 发信号。对抗 red→green 后 tunnel suite `26/26`，两次独立代码/安全复审均 READY；PR/CI pending。
+- `aff435a` 对 Windows process-table 短暂不可见做 2 秒有界等待；仅当 Bash job table 仍绑定本次 `$!` 时向 job spec 发 TERM，退出 runner 不按数字 PID发信号。`860b2b0` 将 upstream 固定 180 秒窗口包装为 setup-once + 最多十次尝试，成功即 `ready`、穷尽才 `auth_required`；`b1d6662` 将 auth Python 纳入 entrypoint tracked children，TERM 在 1.8 秒内完整退出，避免 Docker SIGKILL profile。Tunnel `27/27`、ScanSci legal `89 pass/6 Windows skip/0 fail`；最终复审/PR/CI pending。
 
 ## 2026-08-31 — ScanSci Task 10 controlled-egress production retry
 
@@ -83,9 +83,3 @@
 
 - PR #4 已在精确 CI `33259207780` 全绿后合并为 main `5105b1e…`；旧 PR #3 已关闭，其 9 个独立提交由 annotated tag `archive/hermes-2d-pet-20260829` 保留。GitHub 远端 6 个已合并/被取代分支已删除，收口后一度仅保留 `main`。
 - 固定 worktree 已从合并后的 main 创建短分支 `codex/claim-first-public-ro`。Task 9 实施计划登记为 `docs/plans/2026-08-29-hermes-claim-first-public-ro-plan.md`，覆盖 publication-only DTO、R3 publish→public、阅读偏好、Evidence source/asset 安全交付、760/280 页面、移动 sheet、打印/WCAG 与 ECS journey。
-
-## 2026-08-29 — Task 9 backend contracts 1–3 implemented locally
-
-- `82fb874` 将匿名公开读取限制为 `published + Publication`，显式映射 Claims/Evidence/approved PresentationAssets/history，并从 locator/DTO 排除 workspace、验证者、object key、prompt 与私有 provenance；API 81/81、API/Web typecheck 通过。
-- `f26d895` 关闭 generic RO PATCH 的 visibility 字段；R3 发布在同一 Serializable 事务内写 Version、Publication、RO public 与 `visibilityFrom/To` 审计，单一确认框明确永久公开 URL/所有人可见；Domain 471/471、API 81/81、Web 417/417。
-- `2abf0d6` 增加 core migration 31 `reading_preferences` 与认证 GET/PATCH CAS API：缺省 expanded=`false/version 0`，首次写版本 1，同值幂等，变更递增，用户 ID 只取 session；数据库 21/21、Domain 475/475、API 83/83。生产仍为 core/search `30/30`/`2/2`，migration 31 待最终 ECS 候选部署。
