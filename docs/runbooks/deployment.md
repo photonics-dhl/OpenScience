@@ -1560,3 +1560,19 @@ preserved, EFBIG partials are absent before the next source, successful files
 use exact-temp same-directory rename, and two simultaneous hard-capped 100 MiB
 slots fit the 256 MiB tmpfs without violating 1 GiB. Continue with Task 10 OA/CARSI,
 recreate-session, four-entry, one-use, 72-hour GC and zero-grey/Tor gates.
+
+### 5.48 Clean Linux build rejects undeclared workspace imports (2026-08-31)
+
+**Status:** resolved. **Tag:** `#troubleshooting/env`.
+
+PR #12 CI run `33358629504` failed during the clean Ubuntu Web build with
+`Can't resolve '@openscience/domain/browser-result'`. The Web sources imported
+that runtime subpath, but `apps/web/package.json` did not declare
+`@openscience/domain`; a pre-existing local Domain `dist` let Windows build out
+of dependency order and masked the missing edge.
+
+Declare every runtime workspace import in the consumer's `dependencies` and
+regenerate `pnpm-lock.yaml`. Verify with a dependency-filtered build: Domain and
+its prerequisites must finish before Web starts. A local root build is not clean
+Linux evidence when generated `dist` already exists; exact PR CI remains the
+authoritative clean-build gate.

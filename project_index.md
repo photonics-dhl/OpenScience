@@ -359,7 +359,7 @@
 | `docs/decisions/ADR-006-cloudflare-tunnel-public-ingress.md` | 未备案域名公网入口改由 ECS 常驻 Cloudflare Tunnel 承载；Nginx 继续作为统一回源与安全边界 | Accepted |
 | `docs/handoff/2026-08-15-cloudflare-tunnel-egress-incident-handoff.md` | Cloudflare Tunnel 502/530 事故根因、生产修复、回滚证据与后续观察项 | 当前基础设施交接 |
 | `docs/specs/2026-08-16-edge-cache-asset-versioning-design.md` / `docs/plans/2026-08-16-edge-cache-asset-versioning-plan.md` / `docs/handoff/2026-08-16-edge-cache-asset-versioning-handoff.md` | Landing 大型光学资产内容寻址缓存的设计、实施与部署证据 | 已完成历史主题；release `b93fa9d`，不作为当前 Hermes 入口 |
-| `docs/runbooks/deployment.md` | 部署 runbook（cloud-sync/迁移/seed/nginx/验证、Parser/BGE 隔离、Windows Git Bash）；§5.46 provider/PDF/GC，§5.47 ScanSci serial/negative-cache/fresh-`/tmp` 100 MiB RLIMIT/256 MiB/rollback gate | **CURRENT**；production `6893318` / `c435c4c`，ScanSci Task 9 review READY `3d23b87`，ECS pending |
+| `docs/runbooks/deployment.md` | 部署 runbook（cloud-sync/迁移/seed/nginx/验证、Parser/BGE 隔离、Windows Git Bash）；§5.47 ScanSci serial/negative-cache/RLIMIT/rollback，§5.48 clean Linux workspace dependency 排障 | **CURRENT**；production `6893318` / `c435c4c`，ScanSci Task 9 review READY `3d23b87`，ECS pending |
 | `docs/runbooks/hermes-capability-registry.md` | Hermes Skill/MCP/model/parser/provider 能力台账：注入状态、授权/成本、项目级安装目录、72h PDF TTL、10min signed URL、评测/回滚/退役规则 | **CURRENT / MACHINE-GATED**；CPU parser/Tesseract、BGE-M3、lexical search、Semantic Scholar 与 temporary-document lifecycle 为 `PRODUCTION` |
 | `docs/runbooks/backup-restore.md` | core/search 原子备份集合、权限/release 校验、双临时库恢复与 schema/data 指纹比对；含 remote stdin guard | **CURRENT / ECS RESTORE GREEN**；验证后临时库按用户授权精确清理 |
 | `docs/runbooks/incident.md` | 故障响应 runbook（四节骨架，Phase 1A 填充） | 骨架 |
