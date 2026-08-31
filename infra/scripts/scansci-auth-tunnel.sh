@@ -13,6 +13,7 @@ RUNNER_FILE="$STATE_ROOT/scansci-auth-tunnel-runner.sh"
 SSH_KEY="$HOME/.ssh/id_ed25519_xgs"
 KNOWN_HOSTS="$HOME/.ssh/known_hosts"
 LOCK_HELD=0
+NOVNC_PATH='/vnc.html?autoconnect=true&resize=remote'
 
 usage() {
   echo "usage: scansci-auth-tunnel.sh <start|stop|status> [local-port]" >&2
@@ -166,7 +167,7 @@ stop_identified_tunnel() {
 wait_until_ready() {
   local port="$1" attempt
   for attempt in $(seq 1 8); do
-    if curl --noproxy '*' --fail --silent --show-error --connect-timeout 0.2 --max-time 0.5 "http://127.0.0.1:$port/" >/dev/null 2>&1; then
+    if curl --noproxy '*' --fail --silent --show-error --connect-timeout 0.2 --max-time 0.5 "http://127.0.0.1:$port$NOVNC_PATH" >/dev/null 2>&1; then
       return 0
     fi
     process_matches_state || return 1
@@ -301,7 +302,7 @@ start_tunnel() {
       return 65
     fi
     if wait_until_ready "$port"; then
-      echo "already running on http://127.0.0.1:$port"
+      echo "already running on http://127.0.0.1:$port$NOVNC_PATH"
       return 0
     fi
     stop_identified_tunnel
@@ -357,7 +358,7 @@ start_tunnel() {
     return 1
   fi
   write_state "$token" "$tunnel_pid" "$port" "running"
-  echo "started on http://127.0.0.1:$port"
+  echo "started on http://127.0.0.1:$port$NOVNC_PATH"
 }
 
 stop_tunnel() {
@@ -391,7 +392,7 @@ show_status() {
     return 4
   fi
   if is_running; then
-    echo "running on http://127.0.0.1:$STATE_PORT"
+    echo "running on http://127.0.0.1:$STATE_PORT$NOVNC_PATH"
     return 0
   fi
   echo "stopped"

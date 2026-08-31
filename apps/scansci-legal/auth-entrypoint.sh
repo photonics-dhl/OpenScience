@@ -21,15 +21,6 @@ Xvfb "$DISPLAY" -screen 0 1280x800x24 -nolisten tcp &
 children+=("$!")
 sleep 0.2
 
-chromium \
-  --user-data-dir=/session/chromium \
-  --no-first-run \
-  --no-default-browser-check \
-  --disable-dev-shm-usage \
-  --disable-background-networking \
-  about:blank &
-children+=("$!")
-
 x11vnc -display "$DISPLAY" -rfbport 5900 -listen 127.0.0.1 -forever -shared -nopw &
 children+=("$!")
 

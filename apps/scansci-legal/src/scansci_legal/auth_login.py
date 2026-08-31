@@ -93,7 +93,7 @@ def _write_legal_config(session_root: Path) -> None:
         "carsi_cookie_dir": str(cache_root / "carsi_cookies"),
         "chrome_profile_dir": str(profile_root),
         "browser_backend": "patchright",
-        "browser_executable": "/usr/bin/chromium",
+        "browser_executable": "/usr/local/bin/scansci-chromium",
         "browser_auto_upgrade": False,
         "remote_assist_port": 0,
         "auto_relogin": False,

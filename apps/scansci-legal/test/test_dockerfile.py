@@ -20,6 +20,15 @@ class AuthDockerfileContractTests(unittest.TestCase):
         self.assertTrue(all(browser_layer < argument for argument in release_arguments))
         self.assertTrue(all(argument < source_label for argument in release_arguments))
 
+    def test_auth_browser_uses_the_outer_container_as_its_sandbox_boundary(self) -> None:
+        dockerfile = (APP_ROOT / "Dockerfile.auth").read_text(encoding="utf-8")
+        entrypoint = (APP_ROOT / "auth-entrypoint.sh").read_text(encoding="utf-8")
+        wrapper = (APP_ROOT / "chromium-container-wrapper.sh").read_text(encoding="utf-8")
+
+        self.assertIn("COPY --chmod=0555 chromium-container-wrapper.sh", dockerfile)
+        self.assertIn('exec /usr/bin/chromium --no-sandbox "$@"', wrapper)
+        self.assertNotIn("chromium \\\n  --user-data-dir", entrypoint)
+
 
 if __name__ == "__main__":
     unittest.main()

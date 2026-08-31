@@ -107,7 +107,7 @@ function runAsync(script, args, env, bashBin = '') {
 }
 
 async function startHealthServer(t, port) {
-  const source = `require('http').createServer((_request,response)=>{response.writeHead(200);response.end('ok')}).listen(${port},'127.0.0.1')`;
+  const source = `require('http').createServer((request,response)=>{const ok=request.url==='/vnc.html?autoconnect=true&resize=remote';response.writeHead(ok?200:404);response.end(ok?'ok':'not found')}).listen(${port},'127.0.0.1')`;
   const server = spawn(process.execPath, ['-e', source], { stdio: 'ignore' });
   t.after(() => { if (server.exitCode === null) server.kill(); });
   await new Promise((resolveWait) => setTimeout(resolveWait, 250));
@@ -171,11 +171,11 @@ test('status is read-only and only explicit start launches the helper and loopba
 
   const started = run(f.script, ['start', '16080'], f.env, f.bashBin);
   assert.equal(started.status, 0, `${started.stdout}\n${started.stderr}`);
-  assert.match(started.stdout, /^started on http:\/\/127\.0\.0\.1:16080\s*$/);
+  assert.match(started.stdout, /^started on http:\/\/127\.0\.0\.1:16080\/vnc\.html\?autoconnect=true&resize=remote\s*$/);
 
   const status = run(f.script, ['status'], f.env, f.bashBin);
   assert.equal(status.status, 0, status.stderr);
-  assert.match(status.stdout, /^running on http:\/\/127\.0\.0\.1:16080\s*$/);
+  assert.match(status.stdout, /^running on http:\/\/127\.0\.0\.1:16080\/vnc\.html\?autoconnect=true&resize=remote\s*$/);
 
   const log = await readFile(f.log, 'utf8');
   assert.match(log, /flock -n -E 73 \/run\/lock\/openscience-production-deploy\/lock/u);
@@ -209,7 +209,7 @@ test('duplicate start is idempotent and stop closes only the recorded tunnel', a
   assert.equal(run(f.script, ['start', '16081'], f.env, f.bashBin).status, 0);
   const duplicate = run(f.script, ['start', '16081'], f.env, f.bashBin);
   assert.equal(duplicate.status, 0, duplicate.stderr);
-  assert.match(duplicate.stdout, /^already running on http:\/\/127\.0\.0\.1:16081\s*$/);
+  assert.match(duplicate.stdout, /^already running on http:\/\/127\.0\.0\.1:16081\/vnc\.html\?autoconnect=true&resize=remote\s*$/);
 
   const beforeStop = await readFile(f.log, 'utf8');
   assert.equal((beforeStop.match(/--profile scansci-auth up -d scansci-auth/g) ?? []).length, 1);
@@ -345,7 +345,7 @@ test('legacy duplicate start upgrades state without launching another helper or 
   const duplicate = run(f.script, ['start', '16093'], { ...f.env, FAKE_RELEASE_SHA: releaseB }, f.bashBin);
 
   assert.equal(duplicate.status, 0, `${duplicate.stdout}\n${duplicate.stderr}`);
-  assert.match(duplicate.stdout, /^already running on http:\/\/127\.0\.0\.1:16093\s*$/);
+  assert.match(duplicate.stdout, /^already running on http:\/\/127\.0\.0\.1:16093\/vnc\.html\?autoconnect=true&resize=remote\s*$/);
   assert.deepEqual((await readFile(statePath, 'utf8')).trimEnd().split('\n'), [...legacyLines, 'running']);
   const log = await readFile(f.log, 'utf8');
   assert.equal((log.match(/cat \/opt\/openscience\/\.release-id/g) ?? []).length, 1);
@@ -422,7 +422,7 @@ test('legacy upgrade move failure makes start fail closed and preserves the six-
   await startHealthServer(t, 16096);
   const retry = run(f.script, ['start', '16096'], f.env, f.bashBin);
   assert.equal(retry.status, 0, `${retry.stdout}\n${retry.stderr}`);
-  assert.match(retry.stdout, /^already running on http:\/\/127\.0\.0\.1:16096\s*$/);
+  assert.match(retry.stdout, /^already running on http:\/\/127\.0\.0\.1:16096\/vnc\.html\?autoconnect=true&resize=remote\s*$/);
   assert.deepEqual((await readFile(statePath, 'utf8')).trimEnd().split('\n'), [...legacyLines, 'running']);
 });
 
@@ -648,7 +648,7 @@ test('explicit stop closes the remote helper even when the recorded tunnel is st
   assert.match(log, /--profile scansci-auth rm -f -s scansci-auth/);
 });
 
-test('auth entrypoint starts the loopback browser stack and stops it after operator login', async (t) => {
+test('auth entrypoint starts only the loopback display stack and leaves the browser profile to ScanSci', async (t) => {
   const root = await mkdtemp(join(tmpdir(), 'scansci-auth-entrypoint-'));
   const bin = join(root, 'bin');
   const log = join(root, 'process.log');
@@ -662,7 +662,7 @@ if [ "$name" = python ]; then exit 0; fi
 trap 'exit 0' TERM INT
 while true; do sleep 1; done
 `;
-  for (const command of ['Xvfb', 'chromium', 'x11vnc', 'websockify', 'python']) {
+  for (const command of ['Xvfb', 'x11vnc', 'websockify', 'python']) {
     const target = join(bin, command);
     await writeFile(target, fake);
     await chmod(target, 0o755);
@@ -676,7 +676,7 @@ while true; do sleep 1; done
   assert.equal(result.status, 0, `${result.stdout}\n${result.stderr}`);
   const processes = await readFile(log, 'utf8');
   assert.match(processes, /^Xvfb :99 /m);
-  assert.match(processes, /^chromium .*--user-data-dir=\/session\/chromium/m);
+  assert.doesNotMatch(processes, /^chromium /m);
   assert.match(processes, /^x11vnc .* -listen 127\.0\.0\.1 /m);
   assert.match(processes, /^websockify .*127\.0\.0\.1:6080 127\.0\.0\.1:5900/m);
   assert.match(processes, /^python -m scansci_legal\.auth_login --operator-start$/m);

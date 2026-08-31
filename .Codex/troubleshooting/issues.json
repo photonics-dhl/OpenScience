@@ -207,7 +207,51 @@
         "apps/web/test/e2e/hermes-dashboard.spec.ts"
       ],
       "prevention": "Do not encode perceptual velocity through host-scheduled 2px browser events, block each input step on a transient peak, use screenshot completion as a product clock, assert portal geometry before fonts and animations settle, guess a component's attribute owner from its visual hierarchy, or assert a preference-dependent label without fixing the preference. Put exact time-domain thresholds in deterministic tests; browser gates should record observable RAF, API and DOM event order while preserving independent pixel-motion and physical-overlap checks. Budget software-rendered pixel evidence separately from behavior-level waits."
+    },
+    {
+      "id": "issue-011",
+      "title": "ScanSci auth tunnel exposed the noVNC directory root instead of the client",
+      "date": "2026-08-31",
+      "status": "resolved",
+      "tags": [
+        "troubleshooting/auth",
+        "troubleshooting/browser",
+        "troubleshooting/product-flow"
+      ],
+      "description": "The canonical ScanSci auth tunnel reported the loopback root URL. Opening it showed a websockify directory listing with no CARSI login surface.",
+      "root_cause": "websockify serves the noVNC static directory at `/`; the interactive remote desktop client is `/vnc.html`. The tunnel script used the directory root both for readiness and operator-facing start/status output.",
+      "solution": "Use `/vnc.html?autoconnect=true&resize=remote` as the single canonical operator path for readiness, start, duplicate-start and status output. Keep the tunnel bound to 127.0.0.1 and do not expose a public authentication route.",
+      "verification": "The exact client URL returned HTTP 200 and contained the noVNC client while the auth container was running. The regression test first failed because the old root probe received 404, then the complete auth-tunnel suite passed 21/21 after the path correction.",
+      "files": [
+        "infra/scripts/scansci-auth-tunnel.sh",
+        "infra/scripts/scansci-auth-tunnel.test.mjs"
+      ],
+      "prevention": "Readiness must probe the same complete operator URL that the command prints. A static-directory HTTP 200 is not evidence that an interactive client is reachable."
+    },
+    {
+      "id": "issue-012",
+      "title": "ScanSci Chromium could not start inside the hardened auth container",
+      "date": "2026-08-31",
+      "status": "resolved",
+      "tags": [
+        "troubleshooting/auth",
+        "troubleshooting/chromium",
+        "troubleshooting/container"
+      ],
+      "description": "The noVNC and RFB paths connected, but the remote desktop never presented the CARSI login browser.",
+      "root_cause": "Debian Chromium could not create its inner namespace or setuid sandbox under the deliberately hardened auth container (UID 10001, read-only root, cap-drop ALL and no-new-privileges). The entrypoint also started a redundant blank Chromium against the same persistent profile that ScanSci owns.",
+      "solution": "Route ScanSci's explicit browser executable through a fixed wrapper that adds only --no-sandbox, retain every outer container control, and let the pinned ScanSci flow be the sole owner of the persistent Chromium profile.",
+      "verification": "The regression tests failed on the missing wrapper and old executable path, then passed 2/2 Dockerfile contracts and 34/34 session tests after the change. Production Chromium, RFB and CARSI verification is recorded separately in the CURRENT handoff after deployment.",
+      "files": [
+        "apps/scansci-legal/chromium-container-wrapper.sh",
+        "apps/scansci-legal/Dockerfile.auth",
+        "apps/scansci-legal/auth-entrypoint.sh",
+        "apps/scansci-legal/src/scansci_legal/auth_login.py",
+        "apps/scansci-legal/test/test_dockerfile.py",
+        "apps/scansci-legal/test/test_session.py"
+      ],
+      "prevention": "A browser-in-container acceptance must prove the browser process and target page, not only Xvfb, x11vnc, websockify or an HTTP 200. A persistent profile must have exactly one browser owner."
     }
   ],
-  "last_updated": "2026-08-26"
+  "last_updated": "2026-08-31"
 }

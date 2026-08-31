@@ -408,6 +408,7 @@ class AuthLoginTest(unittest.TestCase):
             config = json.loads((root / "scansci" / "config.json").read_text(encoding="utf-8"))
             self.assertEqual(config["carsi_idp_name"], "浙江大学")
             self.assertEqual(config["download_strategy"], "legal_only")
+            self.assertEqual(config["browser_executable"], "/usr/local/bin/scansci-chromium")
             self.assertIs(config["scihub_enabled"], False)
             self.assertIs(config["use_tor_for_scihub"], False)
             self.assertNotIn("username", config)
