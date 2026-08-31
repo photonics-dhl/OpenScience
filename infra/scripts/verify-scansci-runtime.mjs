@@ -229,7 +229,7 @@ function run(command, args, { input, maxBuffer = 1024 * 1024 } = {}) {
 
 export function probeSourceFileLimit(containerId, runner = run) {
   if (!/^[a-f0-9]{6,64}$/u.test(containerId)) fail();
-  const input = JSON.stringify({ probe: 'file-limit', output_dir: '/tmp/scansci-legal' });
+  const input = JSON.stringify({ probe: 'file-limit', output_dir: '/tmp' });
   const output = runner('docker', [
     'exec', '-i', containerId, 'python', '/opt/scansci/src/scansci_legal/upstream_worker.py',
   ], { input, maxBuffer: 4096 });

@@ -229,7 +229,7 @@ test('file-limit probe invokes the real worker entry with stable no-Secret stdin
     'exec', '-i', 'abc123', 'python', '/opt/scansci/src/scansci_legal/upstream_worker.py',
   ]);
   assert.deepEqual(JSON.parse(calls[0].options.input), {
-    probe: 'file-limit', output_dir: '/tmp/scansci-legal',
+    probe: 'file-limit', output_dir: '/tmp',
   });
   assert.doesNotMatch(`${calls[0].args.join(' ')} ${calls[0].options.input}`, /secret|token|cookie|scansci_pdf|_install_source_file_limit/iu);
 

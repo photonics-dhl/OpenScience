@@ -523,6 +523,39 @@ class SourceFileLimitTest(unittest.TestCase):
             self.assertEqual(response, {"success": False, "error_type": "not_found"})
             self.assertEqual(acquisition_events, ["install", "read", "load", "override", "download"])
 
+    def test_fresh_tmp_probe_uses_no_files_or_upstream_while_acquisition_requires_config(self):
+        exact = "104857600:104857600"
+        events = []
+        with tempfile.TemporaryDirectory() as directory:
+            tmp = Path(directory) / "tmp"
+            tmp.mkdir()
+            self.assertFalse((tmp / "scansci-legal").exists())
+            with mock.patch.object(Path, "is_file", side_effect=AssertionError("probe read a file")), \
+                    mock.patch("builtins.open", side_effect=AssertionError("probe opened a file")):
+                response = self.executor()(
+                    {"probe": "file-limit", "output_dir": "/tmp"},
+                    tmp,
+                    file_limit_installer=lambda: events.append("install"),
+                    file_limit_reader=lambda: events.append("read") or exact,
+                    sources_loader=lambda: self.fail("probe imported upstream"),
+                    override_installer=lambda _module: self.fail("probe installed upstream override"),
+                )
+            self.assertEqual(response, {"file_limit": exact})
+            self.assertEqual(events, ["install", "read"])
+            self.assertEqual(list(tmp.iterdir()), [])
+
+            loaded = []
+            with self.assertRaises(ValueError):
+                self.executor()(
+                    {"identifier": "10.1000/example", "output_dir": "/tmp"},
+                    tmp,
+                    file_limit_installer=lambda: None,
+                    file_limit_reader=lambda: exact,
+                    sources_loader=lambda: loaded.append("upstream"),
+                    override_installer=lambda _module: None,
+                )
+            self.assertEqual(loaded, [])
+
     def test_missing_common_entry_install_breaks_probe_and_acquisition_before_upstream(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
