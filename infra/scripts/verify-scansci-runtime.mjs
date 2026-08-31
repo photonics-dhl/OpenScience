@@ -252,7 +252,7 @@ export async function verifyScanSciRuntime({
       || !candidate.HostConfig?.CapDrop?.includes('ALL') || (candidate.HostConfig?.CapAdd?.length ?? 0) !== 0
       || !candidate.HostConfig?.SecurityOpt?.includes('no-new-privileges:true')
       || candidate.HostConfig?.Memory !== 1024 ** 3 || candidate.HostConfig?.NanoCpus !== 1_000_000_000
-      || candidate.HostConfig?.PidsLimit !== 128
+      || candidate.HostConfig?.PidsLimit !== 256
       || JSON.stringify(candidate.HostConfig?.ExtraHosts) !== JSON.stringify(['openscience-egress:172.25.0.1'])
       || JSON.stringify(candidate.HostConfig?.PortBindings) !== JSON.stringify(expectedPort)
       || !candidate.HostConfig?.NetworkMode?.endsWith('_auth_net')
