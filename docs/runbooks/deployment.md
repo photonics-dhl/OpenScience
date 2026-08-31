@@ -1582,3 +1582,10 @@ test-fixture gap: the `flock` state-machine harness did not provide the newly
 required `verify_scansci_current` adapter. Add the adapter plus an explicit
 `scansci` failure case; this proves same-SHA canonical ScanSci verification is
 called and fails closed instead of weakening the production path.
+
+A later Linux run exposed two POSIX-only test issues: a 0400 Secret fixture was
+rewritten without first restoring owner-write permission, and the dependency-
+free environment probe imported `scansci_pdf` only to rediscover the already
+pinned `SCANSCI_PDF_DATA_DIR`. Restore 0600 only around fixture mutation, then
+return the fixed environment value directly; the real acquisition path remains
+the only path allowed to import the pinned upstream package.

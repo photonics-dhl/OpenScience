@@ -55,6 +55,8 @@ class ServiceTokenFileTests(unittest.TestCase):
                 secret.chmod(0o400)
             with self.assertRaisesRegex(ValueError, "service token"):
                 load_service_token({"SCANSCI_SERVICE_TOKEN_FILE": str(secret)})
+            if os.name != "nt":
+                secret.chmod(0o600)
             secret.write_text("file-token\n", encoding="utf-8")
             if os.name != "nt":
                 secret.chmod(0o400)

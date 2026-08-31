@@ -370,9 +370,8 @@ def _execute_worker_request(
     if probe == "environment":
         if set(request) != {"probe", "output_dir"}:
             raise ValueError("invalid worker request")
-        from scansci_pdf import config
         keys = ("HOME", "USERPROFILE", "HOMEDRIVE", "HOMEPATH", "SCANSCI_PDF_DATA_DIR", "HTTP_PROXY", "HTTPS_PROXY", "ALL_PROXY", "SCANSCI_PDF_PROXY")
-        return {"home": str(Path.home()), "data_dir": str(config.DATA_DIR), "environment": {key: os.environ[key] for key in keys if key in os.environ}}
+        return {"home": str(Path.home()), "data_dir": os.environ.get("SCANSCI_PDF_DATA_DIR"), "environment": {key: os.environ[key] for key in keys if key in os.environ}}
     if probe is not None or set(request) != {"identifier", "output_dir"}:
         raise ValueError("invalid worker request")
     identifier = request.get("identifier")
