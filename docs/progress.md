@@ -4,17 +4,18 @@
 
 ## Current version tuple
 
-- Candidate branch / HEAD / origin main: `codex/scansci-auth-nofile-runtime` / `396b301` / `cca5908`；nofile runtime PR 待创建。
-- Production application source / immutable release: `cca590823b646c45a3c47f34678ec1ea3eea2fa3`。
-- Production rollback: `9042ed3f2b2df8b7704d0d59b5fec1beb62f0acc`；core/search migrations `33/33` / `2/2`。
+- Candidate branch / HEAD / origin main: `codex/scansci-auth-tunnel-start-race` / `aff435a` / `36033ae`；local tunnel race fix 待 PR/CI。
+- Production application source / immutable release: `36033aee0c8712a31c699c800b1c81cd6ffe044d`。
+- Production rollback: `cca590823b646c45a3c47f34678ec1ea3eea2fa3`；core/search migrations `33/33` / `2/2`。
 - Taskmaster `hermes-research-intelligence` 仍为 9/12；独立 ScanSci plan Tasks 1–9 done、Task 10 in progress，Task 11 继续阻断。
 
-## 2026-09-01 — ScanSci auth RFB nofile candidate
+## 2026-09-01 — ScanSci auth RFB production recovery and tunnel race candidate
 
 - PR #24 / exact CI `33443570873`、job `99657272644` 合并为 main `cca5908`；schema-v3 Parser、BGE CPU、ScanSci OA/runtime、API/Web/Worker、Nginx/public CAS/retention 全绿，active/rollback 为 `cca5908` / `9042ed3`。
-- Canonical tunnel 仍在 RFB readiness fail-closed。拆分实测证明 SSH forward 与 noVNC HTML 200 正常，但 x11vnc 接受 backend TCP 延迟约 81 秒且不发 RFB banner；auth container 实际继承 `RLIMIT_NOFILE=1073741816`，精确命中 LibVNCServer 遍历巨大 fd limit 的上游缺陷。诊断 tunnel/auth 已精确清理，session/生产服务保留。
-- `396b301` 在 prod/dev auth Compose 固定 `nofile=4096/4096`；canonical runtime 同时要求唯一 exact nofile，缺失、超大或软硬漂移均 fail closed。原 process-probe 修复继续使用容器内只读 `/proc/*/cmdline`，PID 允许 `6..224`。
-- Red→green runtime `10/11→11/11`；相关 infra `77 pass/5 Windows Linux-only skip/0 fail`，全仓 test/build/typecheck/lint/docs-sync 全绿；nofile 候选尚未 PR/部署，CARSI 登录仍 pending。
+- 拆分实测证明原 RFB readiness 失败来自 auth container 的 `RLIMIT_NOFILE=1073741816`：x11vnc 首次 accept 延迟约 81 秒，精确命中 LibVNCServer 遍历巨大 fd limit 的上游缺陷。`396b301` 将 prod/dev nofile 固定 `4096/4096`，canonical runtime 对缺失、重复、超大或软硬漂移 fail closed；red→green runtime `10/11→11/11`，相关 infra `77 pass/5 Windows Linux-only skip/0 fail`，全仓门禁 green。
+- PR #25 / exact CI run `33447387815`、job `99669426363` 将 nofile 修复合并为 `36033aee0c8712a31c699c800b1c81cd6ffe044d`。ECS 两阶段 canonical transaction 重建 exact schema-v3 16-case Parser 报告，Parser/BGE/ScanSci/OA/API/Web/Worker/Nginx/public CAS/retention 全绿；active/rollback 为 `36033ae` / `cca5908`。
+- 真实 auth helper 为 `nofile=4096/4096`、168 PIDs、无 host PortBinding/listener、fixed `.2`；本机 noVNC HTTP 200 与 `RFB_OK` 均通过。两个 operator window 均约 185 秒后由上游固定超时 exit 1，持久状态正确回到 `auth_required`；失效 forward/helper 已 canonical stopped，session 卷保留。Pinned upstream 没有 timeout CLI，当前按已批准设计增加 setup-once + 最多十次连续窗口，CARSI 尚未宣称 ready。
+- 第一次成功启动前曾出现 Windows process-table 短暂不可见且补偿后遗留 owned SSH child。`aff435a` 增加 2 秒有界身份等待，并仅在当前 Bash job table 仍把 job spec 绑定本次 `$!` 时发 TERM；已退出 runner 只 wait/reap，不按旧数字 PID 发信号。对抗 red→green 后 tunnel suite `26/26`，两次独立代码/安全复审均 READY；PR/CI pending。
 
 ## 2026-08-31 — ScanSci Task 10 controlled-egress production retry
 

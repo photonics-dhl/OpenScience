@@ -237,6 +237,13 @@ the pinned ScanSci CARSI login for institution `浙江大学`. Bind port 6080 on
 `127.0.0.1`; share `/session`; stop after successful login. No public ingress or
 upstream remote-assist HTTP server is enabled.
 
+Production correction after the first real operator attempt: pinned ScanSci
+hard-codes each federated-login wait to 180 seconds and exposes no CLI timeout.
+Run setup once, retry federated-login at most ten times, publish `ready` on the
+first success and `auth_required` only after bounded exhaustion or a launcher
+failure. Tests must prove transient retry, one setup call, bounded exhaustion,
+no secret-bearing arguments and unchanged explicit-admin gating.
+
 - [ ] **Step 4: Build-test the Dockerfiles without local Docker**
 
 Local verification is source/static only:
@@ -629,7 +636,11 @@ Start only the auth profile, start the checked-in loopback SSH tunnel, set the
 validated local port as `SCANSCI_LOCAL_PORT`, and open
 `http://127.0.0.1:$SCANSCI_LOCAL_PORT` for the operator. The operator types credentials
 inside the isolated browser. Stop the tunnel/helper after session status becomes
-`ready`; verify profile volume survives helper and service recreation.
+`ready`; verify profile volume survives helper and service recreation. Before
+showing the link, prove HTTP and RFB readiness. Leave one 180-second upstream
+attempt unattended and require the bounded wrapper to reopen the next attempt
+without rerunning setup; the operator must have up to ten attempts and canonical
+stop must still end the helper immediately.
 
 - [ ] **Step 6: Run real OA and institutional acquisitions**
 
