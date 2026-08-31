@@ -246,6 +246,8 @@ export async function verifyScanSciRuntime({
       const sessionMount = candidate.Mounts?.find((mount) => mount.Destination === '/session');
       const authEnvironment = parseEnvironment(candidate.Config?.Env);
       const authNetworks = Object.keys(candidate.NetworkSettings?.Networks ?? {});
+      const authUlimits = candidate.HostConfig?.Ulimits ?? [];
+      const authNofileUlimits = authUlimits.filter((limit) => limit.Name === 'nofile');
       const tmpOptions = new Set((candidate.HostConfig?.Tmpfs?.['/tmp'] ?? '').split(','));
       const shmOptions = new Set((candidate.HostConfig?.Tmpfs?.['/dev/shm'] ?? '').split(','));
       return candidate.State?.Running !== true
@@ -259,6 +261,8 @@ export async function verifyScanSciRuntime({
       || !candidate.HostConfig?.SecurityOpt?.includes('no-new-privileges:true')
       || candidate.HostConfig?.Memory !== 1024 ** 3 || candidate.HostConfig?.NanoCpus !== 1_000_000_000
       || candidate.HostConfig?.PidsLimit !== 256
+      || authUlimits.length !== 1 || authNofileUlimits.length !== 1
+      || authNofileUlimits[0].Soft !== 4096 || authNofileUlimits[0].Hard !== 4096
       || JSON.stringify(candidate.HostConfig?.ExtraHosts) !== JSON.stringify(['openscience-egress:172.25.0.1'])
       || Object.keys(candidate.HostConfig?.PortBindings ?? {}).length !== 0
       || !candidate.HostConfig?.NetworkMode?.endsWith('_auth_net')
