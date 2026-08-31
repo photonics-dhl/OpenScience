@@ -21,10 +21,12 @@ gateway='172.25.0.1'
 source_config="$release_root/infra/squid/openscience-egress.conf"
 target_config="${OPENSCIENCE_SQUID_CONFIG:-/etc/squid/squid.conf}"
 atomic_config="$release_root/infra/scripts/atomic-squid-config.mjs"
+ss_bin='/usr/sbin/ss'
 
 [ -f "$source_config" ] && [ ! -L "$source_config" ] || { echo "source config unavailable" >&2; exit 66; }
 [ -f "$target_config" ] && [ ! -L "$target_config" ] || { echo "target config unavailable" >&2; exit 66; }
 [ -f "$atomic_config" ] && [ ! -L "$atomic_config" ] || { echo "atomic config helper unavailable" >&2; exit 66; }
+[ -x "$ss_bin" ] && [ ! -L "$ss_bin" ] || { echo "socket inspection unavailable" >&2; exit 66; }
 [ "$(docker network inspect --format '{{.Internal}}' "$network_name")" = true ] \
   || { echo "auth network is not internal" >&2; exit 65; }
 [ "$(docker network inspect --format '{{(index .IPAM.Config 0).Subnet}}:{{(index .IPAM.Config 0).Gateway}}' "$network_name")" = "$subnet:$gateway" ] \
@@ -64,7 +66,7 @@ done
 /usr/sbin/iptables -w -C "${reject[@]}"
 
 for _attempt in $(seq 1 20); do
-  if /usr/bin/ss -lntH | awk '$4 == "172.25.0.1:7891" { found=1 } END { exit found ? 0 : 1 }'; then
+  if "$ss_bin" -lntH | awk '$4 == "172.25.0.1:7891" { found=1 } END { exit found ? 0 : 1 }'; then
     exit 0
   fi
   sleep 0.1

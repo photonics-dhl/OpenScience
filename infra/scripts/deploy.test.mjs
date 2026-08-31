@@ -180,6 +180,9 @@ test('ScanSci auth preparation installs an isolated host policy before browser s
   assert.match(authNetworkPreparation, /--dport 7891 .* -j ACCEPT/u);
   assert.match(authNetworkPreparation, /reject=\(INPUT -i "\$bridge_name" -s "\$subnet" .* -j REJECT/u);
   assert.doesNotMatch(authNetworkPreparation, /reject=.*-d "\$gateway"/u);
+  assert.match(authNetworkPreparation, /ss_bin='\/usr\/sbin\/ss'/u);
+  assert.doesNotMatch(authNetworkPreparation, /\/usr\/bin\/ss -lntH/u);
+  assert.match(authNetworkPreparation, /"\$ss_bin" -lntH/u);
   assert.match(authNetworkPreparation, /172\.25\.0\.1:7891/u);
 });
 
