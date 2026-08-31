@@ -4,7 +4,7 @@
 
 ## Current version tuple
 
-- Branch / reviewed controlled-egress candidate / main: `codex/scansci-controlled-egress` / working tree based on `25983c1` / `25983c1`；远端仅 `main`。
+- Branch / reviewed controlled-egress candidate / main: `codex/scansci-controlled-egress` / `c933a60` / `25983c1`；远端仅 `main`。
 - Production application source / immutable release: `689331845574612130f223d08c92e61721c16586`。
 - Production rollback: `c435c4c8b2800bb20998fd9a9a93f2db96328661`；core/search migrations `32/32` / `2/2`。
 - Taskmaster `hermes-research-intelligence` 仍为 9/12；独立 ScanSci plan Tasks 1–9 done、Task 10 in progress，Task 11 继续阻断。

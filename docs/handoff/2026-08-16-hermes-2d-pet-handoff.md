@@ -11,7 +11,7 @@
 ## Version tuple
 
 - Worktree: `E:/Miscellaneous/XGS/.worktrees/readable-hermes-guidance`
-- Branch / reviewed candidate / repository main: `codex/scansci-controlled-egress` / working tree based on `25983c101e40b66fc7b1423d208129ff4ad54306` / `25983c101e40b66fc7b1423d208129ff4ad54306`；远端仅保留 `main`。
+- Branch / reviewed candidate / repository main: `codex/scansci-controlled-egress` / `c933a60cf7695bcf9457d05477fdce13ec501287` / `25983c101e40b66fc7b1423d208129ff4ad54306`；远端仅保留 `main`。
 - Production application source / immutable release: `689331845574612130f223d08c92e61721c16586`
 - Rollback: `c435c4c8b2800bb20998fd9a9a93f2db96328661`; core/search migrations `32/32` / `2/2`
 - 本地 `main` 与其他 worktree 有用户改动，不得触碰或用它推断生产；上述 tuple 已从 ECS 重新实测。

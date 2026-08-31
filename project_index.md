@@ -1,7 +1,7 @@
 # OpenScience (XGS) 项目文件索引
 
 > 维护规则：创建/修改/移动文件后必须更新本索引。创建新文件前先查本表防重复。
-> **CURRENT source/deployment anchor（2026-08-31）：** ScanSci controlled-egress branch/reviewed working candidate `codex/scansci-controlled-egress` / base `25983c101e40b66fc7b1423d208129ff4ad54306`；repository main `25983c101e40b66fc7b1423d208129ff4ad54306`；application source/production release `689331845574612130f223d08c92e61721c16586`；rollback `c435c4c8b2800bb20998fd9a9a93f2db96328661`；production core/search `32/32` / `2/2`。ScanSci plan Task 10 in progress；final security review READY，merged-image ECS canary/CARSI pending；Taskmaster 9/12，Task 11 blocked。local/docs HEAD 与 ECS application source 不得混写。
+> **CURRENT source/deployment anchor（2026-08-31）：** ScanSci controlled-egress branch/reviewed candidate `codex/scansci-controlled-egress` / `c933a60cf7695bcf9457d05477fdce13ec501287`；repository main `25983c101e40b66fc7b1423d208129ff4ad54306`；application source/production release `689331845574612130f223d08c92e61721c16586`；rollback `c435c4c8b2800bb20998fd9a9a93f2db96328661`；production core/search `32/32` / `2/2`。ScanSci plan Task 10 in progress；final security review READY，merged-image ECS canary/CARSI pending；Taskmaster 9/12，Task 11 blocked。local/docs HEAD 与 ECS application source 不得混写。
 
 ## 根目录
 | 路径 | 用途 | 状态 |
