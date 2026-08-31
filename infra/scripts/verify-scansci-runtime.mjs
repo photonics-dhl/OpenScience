@@ -377,7 +377,10 @@ async function main() {
     || serviceTokenPath !== '/opt/openscience-secrets/scansci/scansci_service_token'
     || !['0', '1'].includes(requireWorker) || !['0', '1'].includes(requireOaCanary)
     || !['0', '1'].includes(allowAuth) || requireOaCanary === '1' && requireWorker !== '1') fail();
-  const composeArgs = ['compose', '--env-file', '/opt/openscience/.env.prod', '-f', composeFile];
+  const composeArgs = [
+    'compose', '--project-directory', releaseRoot,
+    '--env-file', '/opt/openscience/.env.prod', '-f', composeFile,
+  ];
   const env = { ...process.env, XGS_RELEASE_ROOT: releaseRoot, XGS_RELEASE_IMAGE_TAG: releaseSha };
   const compose = (args) => {
     const result = spawnSync('docker', [...composeArgs, ...args], { encoding: 'utf8', env, maxBuffer: 1024 * 1024 });

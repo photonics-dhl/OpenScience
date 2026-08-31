@@ -13,6 +13,7 @@ import { fileURLToPath } from 'node:url';
 const launcherSource = readFileSync(new URL('./deploy.sh', import.meta.url), 'utf8');
 const transactionSource = readFileSync(new URL('./production-deploy-transaction.sh', import.meta.url), 'utf8');
 const transactionStateSource = readFileSync(new URL('./production-deploy-transaction-state.sh', import.meta.url), 'utf8');
+const scansciRuntimeVerifierSource = readFileSync(new URL('./verify-scansci-runtime.mjs', import.meta.url), 'utf8');
 const retentionSource = readFileSync(new URL('./production-release-retention.mjs', import.meta.url), 'utf8');
 const transactionStatePath = fileURLToPath(new URL('./production-deploy-transaction-state.sh', import.meta.url));
 const source = `${launcherSource}\n${transactionSource}\n${transactionStateSource}`;
@@ -513,7 +514,7 @@ test('embedding capability is strict, release-versioned and rollback-safe', () =
 test('production compose up receives the same env file used by migrate and validation', () => {
   assert.match(
     source,
-    /XGS_RELEASE_IMAGE_TAG=\$RELEASE_SHA docker compose --env-file \$PROD_ENV -f \$COMPOSE_FILE \$1/,
+    /XGS_RELEASE_IMAGE_TAG=\$RELEASE_SHA docker compose --project-directory \$RELEASE_ROOT --env-file \$PROD_ENV -f \$COMPOSE_FILE \$1/,
   );
   assert.match(source, /compose_current "up -d --wait --wait-timeout 300 \$\{services\[\*\]\}"/);
   assert.match(source, /compose_current "run --rm --no-deps[^"]+verify-database-isolation\.mjs"/);
@@ -1171,6 +1172,22 @@ test('confirmed deployment acquires the remote flock before reading active state
   assert.match(transactionStateSource, /trap - ERR EXIT HUP INT TERM/);
 });
 
+test('production Compose operations pin the immutable release as project directory', () => {
+  const transactionComposeCalls = transactionSource.match(/docker compose[^\n]*/gu) ?? [];
+  assert.ok(transactionComposeCalls.length > 0, 'production transaction must contain Compose operations');
+  for (const call of transactionComposeCalls) {
+    assert.match(call, /--project-directory (?:\$RELEASE_ROOT|'\$RELEASE_ROOT'|\$PREVIOUS_RELEASE_ROOT)/u);
+  }
+  assert.match(
+    transactionStateSource,
+    /docker compose --project-directory '\$RELEASE_ROOT' --profile embedding/u,
+  );
+  assert.match(
+    scansciRuntimeVerifierSource,
+    /const composeArgs = \[\s*'compose', '--project-directory', releaseRoot,\s*'--env-file'/u,
+  );
+});
+
 test('final parser acceptance report and exact image IDs are verified after build and before switch', () => {
   const imageBuild = source.indexOf('compose_current "build agent-worker document-parser"');
   const workerImage = source.indexOf('openscience-agent-worker:$RELEASE_SHA', imageBuild);
@@ -1285,7 +1302,7 @@ test('an already-active SHA exits before install or build', () => {
 test('scheduled backup resolves the active immutable release and is refreshed by deployment', () => {
   assert.match(backup, /RELEASE_SHA=.*\.release-id/);
   assert.match(backup, /export XGS_RELEASE_ROOT="\$RELEASE_ROOT" XGS_RELEASE_IMAGE_TAG="\$RELEASE_SHA"/);
-  assert.match(backup, /COMPOSE=\(docker compose --env-file/);
+  assert.match(backup, /COMPOSE=\(docker compose --project-directory "\$RELEASE_ROOT" --env-file/);
   assert.match(backup, /"\$\{COMPOSE\[@\]\}" exec -T postgres/);
   assert.match(source, /backup\.sh\.next/);
   assert.match(source, /bash -n .*backup\.sh\.next/);

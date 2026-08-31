@@ -156,6 +156,6 @@ transaction_verify_already_active_release() {
   if [ "$EMBEDDING_DEPLOY" -eq 0 ]; then
     log "same-SHA disabled：收敛残留 embedding-worker..."
     compose_embedding_current "stop embedding-worker"
-    run_remote "set -euo pipefail; cd '$RELEASE_ROOT'; services=\$(XGS_RELEASE_ROOT='$RELEASE_ROOT' XGS_RELEASE_IMAGE_TAG='$RELEASE_SHA' docker compose --profile embedding --env-file '$PROD_ENV' -f '$COMPOSE_FILE' ps --status running --services); if printf '%s\n' \"\$services\" | grep -qx embedding-worker; then exit 1; fi"
+    run_remote "set -euo pipefail; cd '$RELEASE_ROOT'; services=\$(XGS_RELEASE_ROOT='$RELEASE_ROOT' XGS_RELEASE_IMAGE_TAG='$RELEASE_SHA' docker compose --project-directory '$RELEASE_ROOT' --profile embedding --env-file '$PROD_ENV' -f '$COMPOSE_FILE' ps --status running --services); if printf '%s\n' \"\$services\" | grep -qx embedding-worker; then exit 1; fi"
   fi
 }

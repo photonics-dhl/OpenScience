@@ -13,6 +13,10 @@ test('database credential rotation keeps secrets out of command arguments and su
   assert.match(script, /fs\.renameSync\(temporary, path\)/);
   assert.match(script, /rollback_on_exit/);
   assert.match(script, /COMPOSE_FILE="\$RELEASE_ROOT\/infra\/compose\/docker-compose\.prod\.yml"/);
+  assert.match(
+    script,
+    /COMPOSE=\(docker compose --project-directory "\$RELEASE_ROOT" --env-file "\$ENV_FILE" -f "\$COMPOSE_FILE"\)/,
+  );
   assert.match(script, /flock -n 9/);
   assert.match(script, /DB_CREDENTIAL_ROTATION_ALREADY_RUNNING/);
   assert.match(script, /DB_CREDENTIAL_ROTATION_ROLLBACK_FAILED/);
