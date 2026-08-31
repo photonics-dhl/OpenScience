@@ -291,8 +291,6 @@ services:
       SCANSCI_BROWSER_PROXY: http://openscience-egress:7891
     extra_hosts:
       - "openscience-egress:172.25.0.1"
-    ports:
-      - "127.0.0.1:6080:6080"
     volumes:
       - scansci-session:/session
     read_only: true
@@ -307,7 +305,8 @@ services:
     security_opt:
       - no-new-privileges:true
     networks:
-      - auth_net
+      auth_net:
+        ipv4_address: 172.25.0.2
     restart: "no"
 
   document-parser:

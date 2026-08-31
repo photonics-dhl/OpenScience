@@ -1,6 +1,6 @@
 # Runbook: 部署（Deployment）
 
-> 状态：**CURRENT**。active immutable release / application source 为 `abd38d3b8d1800f73550efb9c70adea76cf82908`，rollback tree 为 `689331845574612130f223d08c92e61721c16586`。post-deploy merge/docs-only HEAD 不得冒充 application source。
+> 状态：**CURRENT**。active immutable release / application source 为 `e2463c5029fd28e6335d13e0731f9eebd03e985c`，rollback tree 为 `0f86cc3fe191b8dbd7ee4183a40e535a3693e145`。post-deploy merge/docs-only HEAD 不得冒充 application source。
 > 格式遵循 `.agents/skills/infra-runbook/SKILL.md` 四节强制要求。
 > 部署属 Spec §20.5"询问"级操作：执行前需用户确认，必须走 `infra/scripts/deploy.sh` + CI/CD，禁止手工改服务器代码。
 
@@ -1715,10 +1715,13 @@ production lock, `prepare-scansci-auth-network.sh` then validates that the auth
 container is the sole peer, parses and atomically installs the release Squid
 configuration through same-directory fsync plus rename, retains exactly one
 `/etc/squid/squid.conf.openscience-rollback`, reloads the dedicated
-`172.25.0.1:7891` listener, and replaces
-only the two exact `openscience-scansci-auth` host-input rules. Those rules
-allow only `172.25.0.1:7891` and reject every other host address and port from the auth subnet. Only then
-may Compose start the browser and the SSH loopback tunnel.
+`172.25.0.1:7891` listener, and replaces three ordered, exact
+`openscience-scansci-auth` host-input rules. They allow only the established TCP
+return path from fixed browser `172.25.0.2:6080` to bridge gateway
+`172.25.0.1`, then auth-subnet traffic to Squid `172.25.0.1:7891`, and reject
+every other host address and port from the auth subnet. Compose publishes no
+browser host port. Only then may it start the browser and a local SSH forward
+whose remote target is `172.25.0.2:6080`.
 
 #### Rollback
 
@@ -1741,12 +1744,14 @@ session volume or use a broad Docker/network/firewall cleanup command.
 #### Verification
 
 Before displaying the login link, require all of the following from the real
-ECS: only host `127.0.0.1:6080` is published; 5900 has no host or IPv6 listener;
-the auth network is internal with exact IPAM and one peer; the browser reaches
-HTTPS through `172.25.0.1:7891`; port 22 is blocked through both the bridge
-gateway and the ECS primary address, and raw internet is blocked;
-`scansci-legal` cannot resolve/connect `scansci-auth:6080`; the two exact
-iptables rules exist; Chromium runs through the fixed wrapper with proxy,
-QUIC/WebRTC restrictions and bounded PIDs; and no account/service Secret is
-mounted. Readiness additionally requires the exact noVNC HTML, WebSocket binary
-subprotocol, RFB 3.x banner, and visible CARSI target page.
+ECS: neither 5900 nor 6080 has a host listener or Docker PortBinding; the auth
+network is internal with exact IPAM, sole peer and fixed `172.25.0.2`; host
+direct HTTP to `.2:6080` succeeds only through the established return rule; the
+browser reaches HTTPS through `172.25.0.1:7891`; port 22 is blocked through both
+the bridge gateway and the ECS primary address, while raw internet and cloud
+metadata are blocked; `scansci-legal` and Worker cannot connect `.2:6080`; the
+three exact iptables rules exist once and in order; Chromium runs through the
+fixed wrapper with proxy, QUIC/WebRTC restrictions and bounded PIDs; and no
+account/service Secret is mounted. Local readiness additionally requires the
+exact noVNC HTML through the SSH forward, WebSocket binary subprotocol, RFB 3.x
+banner, and visible CARSI target page.

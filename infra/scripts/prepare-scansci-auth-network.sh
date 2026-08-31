@@ -18,6 +18,7 @@ network_name='openscience-prod_auth_net'
 bridge_name='xgs-auth0'
 subnet='172.25.0.0/29'
 gateway='172.25.0.1'
+auth_ip='172.25.0.2'
 source_config="$release_root/infra/squid/openscience-egress.conf"
 target_config="${OPENSCIENCE_SQUID_CONFIG:-/etc/squid/squid.conf}"
 atomic_config="$release_root/infra/scripts/atomic-squid-config.mjs"
@@ -52,8 +53,12 @@ install -o root -g root -m 0644 "$source_config" "$next_config"
 /usr/sbin/squid -k parse -f "$next_config" >/dev/null 2>&1
 /usr/bin/node "$atomic_config" activate "$next_config" "$target_config"
 
+return_rule=(INPUT -i "$bridge_name" -s "$auth_ip/32" -d "$gateway/32" -p tcp --sport 6080 -m conntrack --ctstate ESTABLISHED -m comment --comment openscience-scansci-auth-return -j ACCEPT)
 accept=(INPUT -i "$bridge_name" -s "$subnet" -d "$gateway" -p tcp --dport 7891 -m comment --comment openscience-scansci-auth -j ACCEPT)
 reject=(INPUT -i "$bridge_name" -s "$subnet" -m comment --comment openscience-scansci-auth -j REJECT --reject-with icmp-port-unreachable)
+while /usr/sbin/iptables -w -C "${return_rule[@]}" >/dev/null 2>&1; do
+  /usr/sbin/iptables -w -D "${return_rule[@]}"
+done
 while /usr/sbin/iptables -w -C "${accept[@]}" >/dev/null 2>&1; do
   /usr/sbin/iptables -w -D "${accept[@]}"
 done
@@ -62,6 +67,8 @@ while /usr/sbin/iptables -w -C "${reject[@]}" >/dev/null 2>&1; do
 done
 /usr/sbin/iptables -w -I "${reject[@]}"
 /usr/sbin/iptables -w -I "${accept[@]}"
+/usr/sbin/iptables -w -I "${return_rule[@]}"
+/usr/sbin/iptables -w -C "${return_rule[@]}"
 /usr/sbin/iptables -w -C "${accept[@]}"
 /usr/sbin/iptables -w -C "${reject[@]}"
 

@@ -1,6 +1,6 @@
 # Hermes Research Intelligence CURRENT Handoff
 
-> **CURRENT active-memory，2026-09-01。** ScanSci OA/Worker/Parser/BGE 与公网 release 全绿；认证浏览器隔离候选 `55e2035` 已完成本地门禁和双复审，待 PR CI/合并/ECS Chromium-CARSI 验收。Task 11 阻断，Landing/Hermes 视觉仍冻结。
+> **CURRENT active-memory，2026-09-01。** ScanSci OA/Worker/Parser/BGE 与公网 release `e2463c5` 全绿；internal auth-tunnel 修复 `dbba904` 已完成本地门禁和三路复审，待 PR CI/合并/ECS Chromium-CARSI 验收。Task 11 阻断，Landing/Hermes 视觉仍冻结。
 
 ## Goal and state
 
@@ -11,14 +11,14 @@
 ## Version tuple
 
 - Worktree: `E:/Miscellaneous/XGS/.worktrees/readable-hermes-guidance`
-- Candidate branch / HEAD / origin main: `codex/scansci-auth-browser-sandbox` / `55e203550ba874a4259dcbda27f5e627a24567eb` / `aea3b31e9621a54f6406404ac46a918c27afa5bd`；PR #20 更新待推送。
-- Production application source / immutable release: `abd38d3b8d1800f73550efb9c70adea76cf82908`
-- Rollback: `689331845574612130f223d08c92e61721c16586`; core/search migrations `33/33` / `2/2`
+- Candidate branch / HEAD / origin main: `codex/scansci-auth-internal-tunnel` / `dbba9041c95cf7623d109e20a7e74800e20a6912` / `e2463c5029fd28e6335d13e0731f9eebd03e985c`；internal-tunnel PR 待创建。
+- Production application source / immutable release: `e2463c5029fd28e6335d13e0731f9eebd03e985c`
+- Rollback: `0f86cc3fe191b8dbd7ee4183a40e535a3693e145`; core/search migrations `33/33` / `2/2`
 - 本地 `main` 与其他 worktree 有用户改动，不得触碰或用它推断生产；上述 tuple 已从 ECS 重新实测。
 
 ## Production truth
 
-- Public `/__release` 与 active marker 均返回 `abd38d3…`；API/Web/Worker/Parser/BGE/ScanSci 均绑定 exact release root，目标容器和数据服务 healthy。
+- Public `/__release` 与 active marker 均返回 `e2463c5…`；API/Web/Worker/Parser/BGE/ScanSci 均绑定 exact release root，目标容器和数据服务 healthy；auth helper 当前停止。
 - TLS certificate subject 为 `openscience.428312321.xyz`，有效期自 2026-08-03 20:10:34 +08:00；ECS、域名反代、Landing、Cloudflare Tunnel 的上线日期必须按证据包分开表述。
 - `agent_tasks.result` 为 JSONB，`IngestionTaskState` 含 `needs_review` 与 `confirmed`。生产聚合为 14 条待确认建议、7 条 confirmed、21 条总计；未输出业务正文或用户信息。
 - 数据库不存在字面 `suggested` 枚举：产品语义映射为 `result != null + state=needs_review`，确认后 `state=confirmed`。
@@ -44,7 +44,7 @@
 11. 真实 Semantic Scholar Hermes 任务返回 3 sources；SeaweedFS checksum metadata 生产兼容经 PR #9 修复。77-byte 自著 PDF 完成 HEAD hash、下载、重放 404、72h 到期和真实 Worker GC；GC 后 provenance/locator 保留，取证后 canary 业务行精确清零、审计保留。
 12. Exact CI `33284956868` / job `99186426490` 全绿；最终 release `6893318…`、rollback `c435c4c…`。远端仅 `main`；精确移除无容器引用的旧 dev MinIO server/mc 镜像后，磁盘 36G/148G（25%）、107G available，active+rollback 两个 release，390.7MB bounded build cache 保留，无 broad prune。
 13. 用户验收指出 disabled adapter 不能算产品完成。Task 10 已重开：浙江大学 CARSI 登录只在 loopback noVNC 输入，不保存账号密码；Pinned ScanSci 仅持久 publisher Cookie JSON/Netscape 文件，Hermes/Personal Space/RO Hermes/Files-Evidence 走统一下载入口。
-14. Auth 候选 `55e2035`：pinned `channel=chrome` 必经 fail-closed wrapper；RFB 真探针；无 account/service Secret；独占 `172.25.0.0/29 auth_net`，宿主只放行 `.1:7891`；Squid 以 fsync/rename + 单 rollback/pending marker 原子激活。Python `93/93`、release `107/114`、auth/runtime `43/43`，失败 0；security/architecture 双复审 READY。尚未部署，不能替代 ECS/CARSI acceptance。
+14. PR #20/#21/#22 已完成 auth browser isolation、生产 `/usr/sbin/ss` 探测与 PID `128→256` 修复；main/production `e2463c5` 经 exact Parser acceptance、canonical deploy、runtime/OA gates 全绿，rollback `0f86cc3`。CARSI 尚未认证，不能把 Task 10 标 done。
 15. ScanSci plan Task 5 atomic candidate 为 `ff5568f` + `4763228`：Personal RO/SDF、Session、Task/credit/audit 在一笔三次有界 Serializable 事务提交；exact replay 先于余额，P2002 精确绑定 model/constraint，Redis 仅 commit 后投递并保留 pending recovery。Domain/API/Agent 本地门禁 green；两连接 PostgreSQL SSI/mismatch suite 已加入但本地未运行，ECS acceptance pending。
 16. ScanSci plan Task 6 local candidate 为 `60b3740`：durable provider state 的事务回滚/重放/generation 矩阵、disabled rollback Secret、非致命 observation persistence 与真实 PostgreSQL migration/concurrency 合同已闭合；Domain 520、Database 26、Worker 501 与 typecheck green，独立复审 READY。Migration 33/真实 suite/CARSI 仍是 ECS-only pending。
 17. ScanSci plan Task 7 local candidate 为 `22088c0` + `86e037e` + `3e829db` + `1059072` + `82d4772` + `185d5d6`：public `canRetry` 只来自共享 predicate；marker 只能由 acquisition durable path 构造，generic/public/internal caller 与历史/畸形/撤权均 false。Retry 用三次 P2034-only Serializable authority/CAS/audit，recovery 单次 ID-only SQL 精确筛选后复验，无循环/top-N/payload 泄露；14-case corpus 标注 JSONB/JavaScript-only，PG parity 以独立 terminal sentinel 证明 raw selector 分支。Domain/API/Worker `534/99/502`，real-PG race/parity/deep-history contract 仅 typecheck；既有 Client/Playwright `7/7` 未改，ECS 375px/真实下载和 Task 8 四入口仍 pending。
@@ -55,7 +55,7 @@
 22. 根因是 Compose v2.26 默认 `project.working_dir=<release>/infra/compose` 与 strict `<release>` 合同不符。reviewed implementation `453ae4c` 对 current/rollback/state/verifier、凭据轮换、备份和认证隧道全部固定 `--project-directory <release-root>`；独立复审 0 Critical/Important/Minor、READY，本地 build/typecheck/lint/docs/full test 0 fail；PR/CI 与 merged-SHA ECS 重试 pending。
 23. PR #16 / CI `33388359242` 已合并为 main `bdf7eb7`。ECS exact Parser acceptance、Compose identity、BGE CPU、legal source/topology/policy/session 与新 API/Web/Worker health 均通过；第二阶段 OA canary 在 local legal endpoint 返回 stable 404 后事务再次完整回滚，active/public 仍 `6893318`，sidecar/journal 清零。
 24. 真实诊断证明 pinned ScanSci `Session.trust_env=False` 且只认 `SCANSCI_PDF_PROXY`/`network_proxy`；reviewed `05111e7` 仅把已严格校验的固定 Squid URL 同步到专用变量。PR #17 / exact CI `33397550370` 合并为 main `abd38d3`；ECS schema-v3 16-case Parser acceptance、core/search `33/33`/`2/2`、BGE CPU、ScanSci source/topology/policy/token/session、Worker 与真实 24,671,920-byte arXiv OA PDF canary 全绿，active/public 已 CAS 到 `abd38d3`，rollback `6893318`。
-25. 发布后 exact hygiene 删除历史 parser-eval/悬空镜像与 54 个 `>24h` BuildKit 对象，释放约 586MB；磁盘 `44G/148G`（31%，98G available），仅 active+rollback release root，auth helper 为 0。PR #18 / CI `33404431776` 已把 release-varying auth metadata 移到稳定 Chromium 层之后并以合同测试锁定，merged main `a08237a`；纯构建优化未单独部署。
+25. `e2463c5` 首次 auth start 的 SSH runner 正常但 readiness 失败：`internal:true` network 无可用 Docker host publish，既有 catch-all reject 又丢弃宿主→容器返回流。`dbba904` 改为固定 `.2:6080`、无 PortBindings/宿主 listener、仅 `.2:6080→.1` ESTABLISHED 返回规则并由 SSH 直连容器；旧 runner 精确迁移与 60s lock wait 已闭合。全仓及 tunnel `23/23` green，三路复审 READY，待 PR/merged-SHA ECS deploy。
 
 ## Constraints
 

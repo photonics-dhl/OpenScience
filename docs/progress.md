@@ -4,16 +4,17 @@
 
 ## Current version tuple
 
-- Candidate branch / HEAD / origin main: `codex/scansci-auth-browser-sandbox` / `55e2035` / `aea3b31`；PR #20 更新待推送。
-- Production application source / immutable release: `abd38d3b8d1800f73550efb9c70adea76cf82908`。
-- Production rollback: `689331845574612130f223d08c92e61721c16586`；core/search migrations `33/33` / `2/2`。
+- Candidate branch / HEAD / origin main: `codex/scansci-auth-internal-tunnel` / `dbba904` / `e2463c5`；internal-tunnel PR 待创建。
+- Production application source / immutable release: `e2463c5029fd28e6335d13e0731f9eebd03e985c`。
+- Production rollback: `0f86cc3fe191b8dbd7ee4183a40e535a3693e145`；core/search migrations `33/33` / `2/2`。
 - Taskmaster `hermes-research-intelligence` 仍为 9/12；独立 ScanSci plan Tasks 1–9 done、Task 10 in progress，Task 11 继续阻断。
 
-## 2026-09-01 — ScanSci auth browser isolated candidate
+## 2026-09-01 — ScanSci auth browser production base and internal-tunnel fix
 
-- `55e2035` 修复无登录按钮/Chromium sandbox 根因：operator URL 固定到 noVNC client，WebSocket 必须返回真实 RFB banner；pinned Patchright `channel=chrome` 绑定 fail-closed wrapper，固定 Squid、禁 QUIC/非代理 WebRTC，x11vnc 禁 IPv6。账号/password/bootstrap Secret 已从 provision/Compose/runtime 移除，只持久 publisher Cookie 文件。
-- Auth 独占 internal `172.25.0.0/29`；普通容器不能连接 passwordless noVNC。`xgs-auth0` INPUT 仅允许 `.1:7891`，其余全部宿主地址/端口 REJECT；runtime 实测 gateway+ECS-primary SSH、raw direct、legal peer 均 blocked。Squid 发布用同目录 fsync/rename、单 rollback 与 durable pending marker，post-commit/reload 失败自动 restore+reload。
-- Fresh gates：ScanSci Python `93 pass/6 skip`，release-contract `107 pass/7 skip`，auth/runtime/provision/RFB `43/43`，typecheck/lint/docs `0 fail`；security 与 architecture 最终复审均 READY。生产仍 `abd38d3` / rollback `6893318`，未启动 auth helper、未改生产；下一步 PR CI→merge→canonical ECS deploy→真实 Chromium/CARSI/Cookie 重建验收。
+- PR #20/#21/#22 依次合并 auth browser isolation、`/usr/sbin/ss` 生产探测与 PID 上限修复；exact CI 均 green。`e2463c5` 经 schema-v3 16-case Parser acceptance 与 canonical transaction 部署为 active，rollback `0f86cc3`；API/Web/Worker/Parser/BGE/ScanSci 与公网 release 全绿。
+- 真实启动发现 Docker 对 `internal:true` auth network 不建立可用宿主 publish，且既有 INPUT catch-all reject 丢弃宿主到容器的返回流量；SSH runner 存活但本机 `6080` readiness 必然失败并补偿移除 helper。手工最小诊断证明容器内 noVNC/Chromium/RFB 正常，根因属于宿主—internal bridge 路径而非 SSH key、浏览器或 PID。
+- `dbba904` 移除 Docker host port，固定 auth 为 `172.25.0.2`；仅允许 `.2:6080` 到 `.1` 的 `ESTABLISHED` TCP 返回流，再放行 auth→Squid `.1:7891`，其余 auth→host 全拒绝。本机 SSH 直接转发 `.2:6080`；runtime 同时要求无宿主 6080 listener、无 PortBindings、host→noVNC 200、RFB 真 banner、业务 peer/raw/metadata/SSH 均 blocked。
+- Fresh local gates：全仓 test/build/typecheck/lint、docs-sync、Bash syntax 与 diff check 全绿；tunnel `23/23`，相关 infra `77` cases 为 `72 pass/5 Linux skip/0 fail`。architecture/security/code review 无剩余 Critical/Important/Minor；候选尚未部署，CARSI 登录仍 pending。
 
 ## 2026-08-31 — ScanSci Task 10 controlled-egress production retry
 
