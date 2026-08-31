@@ -81,17 +81,20 @@ describe('agent task payload boundary', () => {
     })).toThrow();
   });
 
-  it('accepts only the bounded public source retrieval contract', () => {
-    expect(agentSessionBodySchema.parse({ kind: 'retrieval' })).toEqual({ kind: 'retrieval' });
-    expect(agentTaskBodySchema.parse({
-      sessionId: validGuide.sessionId,
-      kind: 'source.retrieve',
-      payload: { query: 'ultrafast science', providers: ['semantic_scholar', 'tavily'], limit: 5 },
-    })).toMatchObject({ kind: 'source.retrieve' });
+  it('reserves source retrieval for the unified literature acquisition endpoint', () => {
+    expect(() => agentSessionBodySchema.parse({ kind: 'retrieval' })).toThrow();
     expect(() => agentTaskBodySchema.parse({
       sessionId: validGuide.sessionId,
       kind: 'source.retrieve',
-      payload: { query: 'x', includeFullText: true },
+      payload: { query: 'ultrafast science', providers: ['semantic_scholar', 'tavily'], limit: 5 },
+    })).toThrow();
+  });
+
+  it('reserves the durable retrieval marker from every public generic task payload', () => {
+    expect(() => agentTaskBodySchema.parse({
+      sessionId: validGuide.sessionId,
+      kind: 'demo.echo',
+      payload: { message: 'ordinary task', retryContractVersion: 1 },
     })).toThrow();
   });
 });

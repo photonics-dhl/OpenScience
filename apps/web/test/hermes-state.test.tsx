@@ -6,7 +6,7 @@ vi.mock('next-intl', () => ({ useLocale: () => 'en', useTranslations: () => (key
 vi.mock('next/navigation', () => ({ usePathname: () => '/dashboard', useRouter: () => ({ push: vi.fn() }) }));
 
 import { HermesRail } from '../components/hermes/HermesRail';
-import { HermesAssistantDrawer } from '../components/hermes/HermesAssistantDrawer';
+import { HermesAssistantDrawer, createDrawerLiteratureIntent, resolveDrawerLiteratureTarget } from '../components/hermes/HermesAssistantDrawer';
 import { HermesVisualAdapter } from '../components/hermes/HermesVisualAdapter';
 import { HermesPresenceControl } from '../components/hermes/HermesPresenceControl';
 import { deriveHermesGuide } from '../components/hermes/hermes-guide';
@@ -78,6 +78,28 @@ describe('Hermes dashboard guidance', () => {
     expect(markup).toContain('guide.eyebrow');
     expect(markup).toContain('<textarea');
     expect(markup).toContain('href="/research-objects/ro-1/hermes?task=task-1"');
+    expect(markup).toContain('data-literature-routing="deterministic"');
+    expect(markup).not.toMatch(/provider|ScanSci|CARSI|account|mode/i);
+    expect(markup).not.toContain('aria-live="assertive"');
+  });
+
+  it('owns a stable caller key and fingerprint per parsed Drawer intent and uses only the route RO as target authority', async () => {
+    const first = await createDrawerLiteratureIntent({
+      goal: 'download paper 10.1038/nature12373',
+      routeResearchObjectId: '00000000-0000-4000-8000-000000000701',
+      createIdempotencyKey: () => 'stable-intent-key',
+      createIntentFingerprint: async () => 'stable-intent-fingerprint',
+    });
+    const next = await createDrawerLiteratureIntent({
+      goal: 'download paper 10.1000/next',
+      routeResearchObjectId: '00000000-0000-4000-8000-000000000701',
+      createIdempotencyKey: () => 'new-intent-key',
+      createIntentFingerprint: async () => 'new-intent-fingerprint',
+    });
+    expect(first).toMatchObject({ callerIdempotencyKey: 'stable-intent-key', callerIntentFingerprint: 'stable-intent-fingerprint', target: { kind: 'research_object', researchObjectId: '00000000-0000-4000-8000-000000000701' } });
+    expect(next).toMatchObject({ callerIdempotencyKey: 'new-intent-key', callerIntentFingerprint: 'new-intent-fingerprint' });
+    expect(resolveDrawerLiteratureTarget(null)).toEqual({ kind: 'personal' });
+    expect(resolveDrawerLiteratureTarget('00000000-0000-4000-8000-000000000701')).toEqual({ kind: 'research_object', researchObjectId: '00000000-0000-4000-8000-000000000701' });
   });
 
   it('derives a truthful guide suggestion from real dashboard priority', () => {

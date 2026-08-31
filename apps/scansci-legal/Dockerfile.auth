@@ -1,0 +1,55 @@
+FROM python:3.12-slim@sha256:7a8b475003c4fe15a2cd4e55e5cfc2f3560bdc9333d624f24cdd6d4340fd7a17 AS python-dependencies
+
+ENV PIP_DISABLE_PIP_VERSION_CHECK=1 \
+    PIP_NO_CACHE_DIR=1
+WORKDIR /requirements
+RUN python -m venv /opt/scansci-venv
+COPY build-requirements.lock requirements.lock ./
+RUN /opt/scansci-venv/bin/python -m pip install --require-hashes -r build-requirements.lock \
+    && /opt/scansci-venv/bin/python -m pip install --require-hashes --no-build-isolation -r requirements.lock \
+    && printf '%s\n' \
+      'greenlet==3.5.5 --hash=sha256:147b25a42e5ca5be3d42356e8f608b37af715a1c196e9bf9d1627f3341adfe1d' \
+      'pyee==13.0.0 --hash=sha256:48195a3cddb3b1515ce0695ed76036b5ccc2ef3a9f963ff9f77aec0139845498' \
+      'patchright==1.62.2 --hash=sha256:1b90b6c31c16ce8ed9ce932c168fffd0c7b452cedd833fef4271e6989b56b7bd' \
+      'typing-extensions==4.16.0 --hash=sha256:481caa481374e813c1b176ada14e97f1f67a4539ce9cfeb3f350d78d6370c2e8 --hash=sha256:dc983d19a509c94bda722ee6abd33940f7c05a89e243c47e907eb4db6f1a43e5' \
+      > /tmp/auth-requirements.lock \
+    && /opt/scansci-venv/bin/python -m pip install --require-hashes -r /tmp/auth-requirements.lock
+
+FROM python:3.12-slim@sha256:7a8b475003c4fe15a2cd4e55e5cfc2f3560bdc9333d624f24cdd6d4340fd7a17
+
+ARG XGS_RELEASE_IMAGE_TAG
+ARG SCANSCI_ARCHIVE_SHA256
+ARG SCANSCI_REQUIREMENTS_SHA256
+ARG SCANSCI_BUILD_REQUIREMENTS_SHA256
+LABEL org.openscience.source=$XGS_RELEASE_IMAGE_TAG \
+    org.openscience.scansci.role=auth \
+    org.openscience.scansci.archive-sha256=$SCANSCI_ARCHIVE_SHA256 \
+    org.openscience.scansci.requirements-sha256=$SCANSCI_REQUIREMENTS_SHA256 \
+    org.openscience.scansci.build-requirements-sha256=$SCANSCI_BUILD_REQUIREMENTS_SHA256
+
+ENV PATH=/opt/scansci-venv/bin:$PATH \
+    PYTHONPATH=/opt/scansci/src \
+    PYTHONNOUSERSITE=1 \
+    PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    HOME=/session/home \
+    SCANSCI_PDF_DATA_DIR=/session/scansci \
+    DISPLAY=:99
+
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends ca-certificates chromium fonts-noto-cjk novnc tini websockify x11vnc xvfb \
+    && dpkg-query -W -f='${Package}=${Version}\n' ca-certificates chromium fonts-noto-cjk novnc tini websockify x11vnc xvfb \
+      | sort > /opt/scansci-auth-packages.txt \
+    && rm -rf /var/lib/apt/lists/* \
+    && groupadd --gid 10001 scansci \
+    && useradd --uid 10001 --gid 10001 --home-dir /session/home --no-create-home --shell /usr/sbin/nologin scansci \
+    && install -d -o 10001 -g 10001 -m 0700 /session /session/home /session/scansci /session/chromium /tmp/scansci-auth \
+    && install -d -m 0755 /opt/google/chrome \
+    && ln -s /usr/bin/chromium /opt/google/chrome/chrome
+COPY --from=python-dependencies /opt/scansci-venv /opt/scansci-venv
+COPY --chown=10001:10001 src /opt/scansci/src
+COPY --chmod=0555 auth-entrypoint.sh /usr/local/bin/scansci-auth-entrypoint
+
+VOLUME ["/session"]
+USER 10001:10001
+ENTRYPOINT ["/usr/bin/tini", "--", "/usr/local/bin/scansci-auth-entrypoint"]

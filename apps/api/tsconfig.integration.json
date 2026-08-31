@@ -1,0 +1,14 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "rootDir": ".",
+    "outDir": "dist-integration",
+    "declaration": false,
+    "noEmit": true
+  },
+  "include": [
+    "src/**/*.ts",
+    "test/literature-acquisition.integration.test.ts"
+  ],
+  "exclude": ["node_modules", "dist", "dist-integration"]
+}

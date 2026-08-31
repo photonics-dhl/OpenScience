@@ -1,0 +1,11 @@
+{
+  "name": "scansci-pdf",
+  "version": "1.11.0",
+  "commit": "7017814758f826ea21470a609890a7d3ca374b8e",
+  "archiveUrl": "https://github.com/Rimagination/scansci-pdf/archive/7017814758f826ea21470a609890a7d3ca374b8e.tar.gz",
+  "archiveSha256": "db537914b9c149f2ef6ba148f47e316fddcfe350e4afe8f9fa88a2a1af9208b9",
+  "strategy": "legal_only",
+  "scihub": false,
+  "tor": false,
+  "install": "python -m pip install --require-hashes -r build-requirements.lock && python -m pip install --require-hashes --no-build-isolation -r requirements.lock"
+}

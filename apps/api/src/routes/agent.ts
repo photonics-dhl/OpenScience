@@ -1,7 +1,7 @@
 import type { FastifyInstance, FastifyRequest } from 'fastify';
 import { z } from 'zod';
 import type { AuthDeps } from '@openscience/auth';
-import { AgentError, buildInterestContext, createAgentSession, getAgentTask, retryAgentTask, listAgentSessions, listAgentTasks, parseSourceRetrievePayload, parseWorkspaceGuidePayload, PUBLIC_AGENT_SESSION_KINDS, PUBLIC_AGENT_TASK_KINDS, submitAgentTask, approveApproval, listPendingApprovals, rejectApproval, revokeApproval, validateResearchIdentityProfileState } from '@openscience/domain';
+import { AgentError, buildInterestContext, createAgentSession, getAgentTask, retryAgentTask, listAgentSessions, listAgentTasks, parseWorkspaceGuidePayload, PUBLIC_AGENT_SESSION_KINDS, PUBLIC_AGENT_TASK_KINDS, submitAgentTask, approveApproval, listPendingApprovals, rejectApproval, revokeApproval, validateResearchIdentityProfileState } from '@openscience/domain';
 import type { AuditContext } from '@openscience/observability';
 import { requireCurrentUser } from './session-guard';
 
@@ -37,18 +37,15 @@ const genericTaskBody = z.object({
   activeClaimId: z.string().uuid().optional(),
 }).strict().superRefine((value, ctx) => {
   if (JSON.stringify(value.payload).length > 65_536) ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'payload exceeds 64KB' });
+  if (Object.hasOwn(value.payload, 'retryContractVersion')) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'retryContractVersion is server-reserved' });
+  }
   if (value.kind === 'review.analyze') {
     const parsed = z.object({
       versionId: z.string().uuid(),
       coreText: z.string().trim().min(1).max(8_000),
     }).strict().safeParse(value.payload);
     if (!parsed.success) ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'review.analyze payload is invalid' });
-  }
-  if (value.kind === 'source.retrieve') {
-    try { parseSourceRetrievePayload(value.payload); }
-    catch (error) {
-      ctx.addIssue({ code: z.ZodIssueCode.custom, message: error instanceof Error ? error.message : 'source.retrieve payload is invalid' });
-    }
   }
 });
 export const agentTaskBodySchema = z.union([workspaceGuideTaskBody, genericTaskBody]);
@@ -103,8 +100,32 @@ export function registerAgentRoutes(app: FastifyInstance, deps: AgentRouteDeps):
   app.get('/agent/tasks', async (req, reply) => {
     const user = await requireCurrentUser(deps, req, reply);
     if (!user) return;
-    const { actionable, kind } = z.object({ actionable: z.enum(['true', 'false']).default('true'), kind: z.string().min(1).max(64).optional() }).parse(req.query);
-    return reply.send({ tasks: await listAgentTasks(deps, { userId: user.userId, actionableOnly: actionable === 'true', kind }) });
+    const { actionable, kind, recovery, researchObjectId, targetKind } = z.object({
+      actionable: z.enum(['true', 'false']).default('true'),
+      kind: z.string().min(1).max(64).optional(),
+      recovery: z.enum(['true']).optional(),
+      targetKind: z.enum(['personal', 'research_object']).optional(),
+      researchObjectId: z.string().uuid().optional(),
+    }).strict().parse(req.query);
+    if (recovery === 'true' && (actionable !== 'false' || kind !== 'source.retrieve')) {
+      throw new AgentError('VALIDATION_ERROR', 'Recovery priority requires non-actionable source.retrieve');
+    }
+    if (recovery !== 'true' && (targetKind || researchObjectId)) {
+      throw new AgentError('VALIDATION_ERROR', 'Recovery target requires recovery mode');
+    }
+    if (recovery === 'true' && (!targetKind
+      || (targetKind === 'personal' && researchObjectId)
+      || (targetKind === 'research_object' && !researchObjectId))) {
+      throw new AgentError('VALIDATION_ERROR', 'Recovery target is invalid');
+    }
+    const recoveryTarget = recovery === 'true'
+      ? targetKind === 'research_object'
+        ? { kind: 'research_object' as const, researchObjectId: researchObjectId! }
+        : { kind: 'personal' as const }
+      : undefined;
+    return reply.send({ tasks: await listAgentTasks(deps, {
+      userId: user.userId, actionableOnly: actionable === 'true', kind, recoveryPreferred: recovery === 'true', recoveryTarget,
+    }) });
   });
 
   app.post('/agent/tasks', async (req, reply) => {
@@ -114,9 +135,6 @@ export function registerAgentRoutes(app: FastifyInstance, deps: AgentRouteDeps):
     const idempotencyKey = req.headers['idempotency-key'];
     const session = await deps.prisma.agentSession.findUnique({ where: { id: body.sessionId } });
     if (!session || session.userId !== user.userId) throw new AgentError('RESEARCH_OBJECT_NOT_FOUND', '会话不存在');
-    if (body.kind === 'source.retrieve' && !session.researchObjectId) {
-      throw new AgentError('VALIDATION_ERROR', 'source.retrieve requires a Research Object workspace');
-    }
     if (body.activeClaimId) {
       const claim = await deps.prisma.claimNode.findUnique({ where: { id: body.activeClaimId } });
       if (!claim || !session.researchObjectId || claim.researchObjectId !== session.researchObjectId) {

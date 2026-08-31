@@ -5,12 +5,21 @@ import { readFileSync } from 'node:fs';
 import path from 'node:path';
 
 import { OpenScienceWordmark } from '../components/brand/OpenScienceWordmark';
+import { EvidenceIntake } from '../components/intake/EvidenceIntake';
 import { DashboardShell } from '../components/shell/DashboardShell';
 import { IdentityShell } from '../components/shell/IdentityShell';
 import { PublicShell } from '../components/shell/PublicShell';
 import { WorkspaceShell } from '../components/shell/WorkspaceShell';
+import HermesReviewPage from '../app/research-objects/[id]/hermes/page';
 
-vi.mock('next-intl', () => ({ useTranslations: () => (key: string) => key }));
+vi.mock('next-intl', () => ({
+  useLocale: () => 'en',
+  useTranslations: () => (key: string) => key,
+}));
+vi.mock('next/navigation', () => ({
+  useRouter: () => ({ replace: () => undefined }),
+  useSearchParams: () => new URLSearchParams(),
+}));
 
 const shellDirectory = path.join(__dirname, '../components/shell');
 
@@ -141,6 +150,54 @@ describe('Optical Editorial brand and surface shells', () => {
     expect(en.shell).toMatchObject({ skipToContent: expect.any(String), primaryNavigation: expect.any(String) });
     expect(zh.shell).toMatchObject({ skipToContent: expect.any(String), primaryNavigation: expect.any(String) });
     expect(Object.keys(en.shell).sort()).toEqual(Object.keys(zh.shell).sort());
+    expect(Object.keys(en.dashboard.literature).sort()).toEqual(Object.keys(zh.dashboard.literature).sort());
+    expect(en.dashboard.literature.disclosure).toBeTruthy();
+    expect(zh.dashboard.literature.disclosure).toBeTruthy();
+  });
+
+  it('keeps one full-text acquisition action beside Evidence Intake without provider controls', () => {
+    const markup = renderToStaticMarkup(createElement('form', null, createElement(EvidenceIntake, {
+      literature: {
+        onAuthenticationRequired: () => undefined,
+        target: { kind: 'personal' },
+        userId: 'user-1',
+        withinForm: true,
+      },
+      materials: [],
+      onChange: () => undefined,
+      onRetry: () => undefined,
+    })));
+
+    expect(markup.match(/data-literature-entry="true"/g)).toHaveLength(1);
+    expect(markup.match(/<form\b/g)).toHaveLength(1);
+    expect(markup).toContain('data-literature-target="personal"');
+    expect(markup).toMatch(/<summary[^>]*min-h-11/);
+    expect(markup).not.toMatch(/provider|ScanSci|CARSI|account|mode/i);
+  });
+
+  it('renders one current-RO full-text action on the actual RO Hermes surface', () => {
+    vi.stubGlobal('React', { createElement });
+    const markup = renderToStaticMarkup(createElement(HermesReviewPage, {
+      params: { id: '00000000-0000-4000-8000-000000000701' },
+    }));
+
+    expect(markup.match(/data-literature-entry="true"/g)).toHaveLength(1);
+    expect(markup).toContain('data-literature-target="research-object:00000000-0000-4000-8000-000000000701"');
+    const entry = markup.match(/<details[^>]*data-literature-entry="true"[\s\S]*?<\/details>/)?.[0] ?? '';
+    expect(entry).not.toMatch(/provider|ScanSci|CARSI|account|mode/i);
+  });
+
+  it('renders one current-RO full-text action in the ready RO Files workspace', async () => {
+    const filesModule = await import('../app/research-objects/[id]/files/page');
+    expect(filesModule.ResearchObjectFilesLiteratureEntry).toBeTypeOf('function');
+    const markup = renderToStaticMarkup(createElement(filesModule.ResearchObjectFilesLiteratureEntry, {
+      researchObjectId: '00000000-0000-4000-8000-000000000701',
+    }));
+
+    expect(markup.match(/data-literature-entry="true"/g)).toHaveLength(1);
+    expect(markup).toContain('data-literature-target="research-object:00000000-0000-4000-8000-000000000701"');
+    expect(markup).toContain('data-literature-tone="dark"');
+    expect(markup).not.toMatch(/provider|ScanSci|CARSI|account|mode/i);
   });
 
   it('replaces the legacy cyan waveform favicon with the O. mark', () => {

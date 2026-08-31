@@ -1063,11 +1063,23 @@ model Notification {
   payload   Json
   read      Boolean  @default(false)
   createdAt DateTime @default(now()) @map("created_at")
+  idempotencyKey String? @map("idempotency_key")
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId, read])
+  @@unique([idempotencyKey])
   @@map("notifications")
+}
+
+model ExternalProviderState {
+  provider String @id
+  status String
+  authRequiredGeneration Int @default(0) @map("auth_required_generation")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("external_provider_states")
 }
 
 // --- P1D-2：Hermes 会话与异步任务（§15 AgentSession/AgentTask/ToolApproval + §9.3 长任务异步）---

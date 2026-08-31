@@ -1495,3 +1495,97 @@ and rollback release roots. Two image IDs used only by the removed dev Compose
 removed exactly; they remain reproducible from locked tags. Root disk is
 36G/148G (25%) with 107G available; the bounded 390.7MB build cache was retained
 and no broad filesystem, image or volume prune ran.
+
+### 5.47 ScanSci serial-source and 256 MiB runtime gate (2026-08-31)
+
+#### Preconditions
+
+The candidate must contain fix `672ec14` or a reviewed descendant while the
+upstream commit/archive remain `7017814…b8e` / `db537914…9208b9`. Before any
+ECS mutation, require exact CI, a clean merged-main SHA, targetless durable
+ScanSci task count zero, and local ScanSci `82/89` plus infra `74/79` evidence.
+The production source remains `6893318…` until the canonical transaction ends.
+
+#### Execution
+
+Use only the Task 10 canonical immutable deploy transaction. It must build the
+legal/auth images, start ScanSci before Worker, and run
+`verify-scansci-runtime.mjs`; do not start Compose manually. The legal service
+must report 1 CPU, 1 GiB, 64 PIDs and `/tmp` exactly 256 MiB. Run one controlled
+instrumented acquisition proving source concurrency one, tier/source order,
+first-success stop, pinned negative-cache behavior and zero leftover source
+PDFs before real OA/CARSI journeys. The verifier must send its no-Secret probe
+through the real worker entry. That common entry installs and reads back the
+limit before any mode branch or upstream import; the probe only reports the
+already-installed `104857600:104857600` metadata before any real download. Its
+request must use exact `/tmp`, which exists after the fresh tmpfs mount; do not
+require `/tmp/scansci-legal` or create/read/write probe files.
+
+For the first candidate, require the capability sidecar to be absent. Invoke
+the verifier only in explicit `prepublication` mode with the exact candidate
+release SHA and the final built legal/auth image IDs; all three arguments are
+mandatory and non-secret. This mode must reject an existing sidecar and attest
+the actual images, containers, labels, Compose provenance, mounts, networks,
+limits, entrypoints and Worker before publication. Candidate Worker environment
+must be exactly `SCANSCI_ENABLED=true` and
+`SCANSCI_BASE_URL=http://scansci-legal:8080`; missing, disabled or alternate URL
+is a deployment failure. Never substitute `.env.prod` values or a pending
+sidecar for these checks.
+
+Only after legal and Worker prepublication checks pass may the existing locked
+active-release CAS publish the canonical sidecar. Immediately run the normal
+legacy canonical-sidecar verifier. A failure before or after publication must
+restore the exact previous marker first, then remove only the candidate sidecar
+and staging file; previous/rollback sidecars remain unchanged. Record fake-
+remote and real-ECS evidence for the absent-sidecar first deploy and both
+failure positions.
+
+#### Rollback
+
+Do not rewrite the rollback release to the new resource contract. The deploy
+transaction restores the exact previous SHA and invokes that release's own
+Compose file and verifier, so an older 64 MiB identity remains valid for that
+release. If the previous release had no ScanSci, remove only the candidate
+legal/auth/init containers and candidate sidecar/staging. Preserve
+`scansci-session`; retention continues to
+protect exact active and rollback image IDs and never performs broad prune.
+
+#### Verification
+
+Require `SCANSCI_RUNTIME_SOURCE_OK`, `TOPOLOGY_OK`, `POLICY_OK`,
+`FILE_LIMIT_OK`, `TOKEN_OK` and the expected session status. Additionally prove NAT64 metadata literals are
+blocked, the runtime upstream signature/AST compatibility gate succeeds,
+ThreadPoolExecutor fanout is zero, blocked/failed negative-cache behavior is
+preserved, EFBIG partials are absent before the next source, successful files
+use exact-temp same-directory rename, and two simultaneous hard-capped 100 MiB
+slots fit the 256 MiB tmpfs without violating 1 GiB. Continue with Task 10 OA/CARSI,
+recreate-session, four-entry, one-use, 72-hour GC and zero-grey/Tor gates.
+
+### 5.48 Clean Linux build rejects undeclared workspace imports (2026-08-31)
+
+**Status:** resolved. **Tag:** `#troubleshooting/env`.
+
+PR #12 CI run `33358629504` failed during the clean Ubuntu Web build with
+`Can't resolve '@openscience/domain/browser-result'`. The Web sources imported
+that runtime subpath, but `apps/web/package.json` did not declare
+`@openscience/domain`; a pre-existing local Domain `dist` let Windows build out
+of dependency order and masked the missing edge.
+
+Declare every runtime workspace import in the consumer's `dependencies` and
+regenerate `pnpm-lock.yaml`. Verify with a dependency-filtered build: Domain and
+its prerequisites must finish before Web starts. A local root build is not clean
+Linux evidence when generated `dist` already exists; exact PR CI remains the
+authoritative clean-build gate.
+
+The next CI run passed build/typecheck/lint and then exposed a second Linux-only
+test-fixture gap: the `flock` state-machine harness did not provide the newly
+required `verify_scansci_current` adapter. Add the adapter plus an explicit
+`scansci` failure case; this proves same-SHA canonical ScanSci verification is
+called and fails closed instead of weakening the production path.
+
+A later Linux run exposed two POSIX-only test issues: a 0400 Secret fixture was
+rewritten without first restoring owner-write permission, and the dependency-
+free environment probe imported `scansci_pdf` only to rediscover the already
+pinned `SCANSCI_PDF_DATA_DIR`. Restore 0600 only around fixture mutation, then
+return the fixed environment value directly; the real acquisition path remains
+the only path allowed to import the pinned upstream package.

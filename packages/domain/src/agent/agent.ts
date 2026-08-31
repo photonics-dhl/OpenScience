@@ -1,8 +1,14 @@
 import type { Redis } from 'ioredis';
 import { isDeepStrictEqual } from 'node:util';
-import { Prisma } from '@prisma/client';
+import { Prisma, type AgentSession, type AgentTask } from '@prisma/client';
+import {
+  parseDurableSourceRetrievePayload,
+  SOURCE_RETRIEVE_RETRY_CONTRACT_VERSION,
+  type DurableSourceRetrievePayload,
+  type SourceRetrieveTarget,
+} from '../retrieval/retrieve-payload';
 import type { AuditContext } from '@openscience/observability';
-import { requireMembership } from '../workspace/helpers';
+import { requireActiveMembership, requireMembership } from '../workspace/helpers';
 import { recordAudit } from '../workspace/audit';
 import { recordEntry } from '../usage/ledger';
 import type { WorkspaceDeps } from '../workspace/types';
@@ -12,6 +18,7 @@ import { buildInterestContext, validateInterestContext } from '../research-intel
 import { ResearchIdentityProfileError, validateResearchIdentityProfileState } from '../research-intelligence/identity-profile-service';
 import { ResearchIntelligenceValidationError } from '../research-intelligence/validation';
 import { parseWorkspaceGuidePayload } from './workspace-guide-contract';
+import { isOwnedPrismaIdempotencyConflict, throwOwnedPrismaIdempotencyConflict } from '../prisma-idempotency-conflict';
 
 export const AGENT_TASK_QUEUE = 'agent:queue';
 export const AI_CREDIT_RESOURCE = 'ai_credit'; // §2.4-7 配额骨架（P1A-7）
@@ -19,10 +26,10 @@ export const AGENT_TASK_KINDS = [
   'demo.echo', 'sdf.extract', 'review.analyze', 'visualization.plan', 'workspace.guide', 'search.index', 'source.retrieve',
 ] as const;
 export const PUBLIC_AGENT_TASK_KINDS = [
-  'demo.echo', 'sdf.extract', 'review.analyze', 'visualization.plan', 'source.retrieve',
+  'demo.echo', 'sdf.extract', 'review.analyze', 'visualization.plan',
 ] as const;
 export const PUBLIC_AGENT_SESSION_KINDS = [
-  'extract', 'review', 'visualization', 'publish', 'ingestion', 'workspace.guide', 'retrieval',
+  'extract', 'review', 'visualization', 'publish', 'ingestion', 'workspace.guide',
 ] as const;
 
 export type AgentTaskStatus = 'pending' | 'running' | 'succeeded' | 'failed';
@@ -48,6 +55,7 @@ export interface AgentTaskView {
   progress: number;
   retryCount: number;
   executionAttempt: number;
+  canRetry: boolean;
   result: Record<string, unknown> | null;
   error: string | null;
   createdAt: Date;
@@ -116,13 +124,174 @@ function assertTaskReplay(
   }
 }
 
-async function resolveInterestContext(
+type AgentTaskRetrySnapshot = Prisma.AgentTaskGetPayload<{
+  include: { session: { include: { researchObject: { include: { workspace: { include: { members: true } } } } } } };
+}>;
+
+function retryAuthorityInclude(userId: string) {
+  return {
+    session: {
+      include: {
+        researchObject: {
+          include: { workspace: { include: { members: { where: { userId }, take: 1 } } } },
+        },
+      },
+    },
+  } as const;
+}
+
+function evaluateAgentTaskRetryEligibility(
+  task: AgentTaskRetrySnapshot,
+  userId: string,
+): { authorityValid: boolean; canRetry: boolean } {
+  const session = task.session;
+  if (session.userId !== userId || session.status !== 'active') return { authorityValid: false, canRetry: false };
+  const researchObject = session.researchObject;
+  if (session.researchObjectId) {
+    if (!researchObject || researchObject.id !== session.researchObjectId
+      || researchObject.workspace.id !== researchObject.workspaceId
+      || researchObject.workspace.status !== 'active'
+      || !researchObject.workspace.members.some((membership) => membership.userId === userId)) {
+      return { authorityValid: false, canRetry: false };
+    }
+  } else if (task.kind === 'source.retrieve') {
+    return { authorityValid: false, canRetry: false };
+  }
+  if (task.status !== 'failed' || task.retryCount !== 0 || task.error?.startsWith('[blocked]')) {
+    return { authorityValid: true, canRetry: false };
+  }
+  const payload = task.payload && typeof task.payload === 'object' && !Array.isArray(task.payload)
+    ? task.payload as Record<string, unknown>
+    : {};
+  if (task.kind === 'sdf.extract') {
+    return { authorityValid: true, canRetry: typeof payload.manuscriptText === 'string' && !('artifactId' in payload) };
+  }
+  if (task.kind !== 'source.retrieve' || payload.retryContractVersion !== SOURCE_RETRIEVE_RETRY_CONTRACT_VERSION) {
+    return { authorityValid: true, canRetry: false };
+  }
+  try {
+    parseDurableSourceRetrievePayload(payload);
+    return { authorityValid: true, canRetry: true };
+  } catch {
+    return { authorityValid: true, canRetry: false };
+  }
+}
+
+async function findNewestRetryableSourceTask(
   deps: AgentDeps,
+  userId: string,
+  target: SourceRetrieveTarget,
+): Promise<AgentTaskRetrySnapshot | null> {
+  const targetClause = target.kind === 'personal'
+    ? Prisma.sql`AND task."payload" -> 'target' = '{"kind":"personal"}'::jsonb`
+    : Prisma.sql`AND session."research_object_id" = ${target.researchObjectId}::uuid
+        AND task."payload" -> 'target' = jsonb_build_object('kind', 'research_object', 'researchObjectId', ${target.researchObjectId}::text)`;
+  const selected = await deps.prisma.$queryRaw<Array<{ id: string }>>(Prisma.sql`
+    SELECT task."id" AS "id"
+    FROM "agent_tasks" AS task
+    INNER JOIN "agent_sessions" AS session ON session."id" = task."session_id"
+    INNER JOIN "research_objects" AS research_object ON research_object."id" = session."research_object_id"
+    INNER JOIN "workspaces" AS workspace ON workspace."id" = research_object."workspace_id"
+    WHERE session."user_id" = ${userId}::uuid
+      AND session."status" = 'active'
+      AND workspace."status" = 'active'
+      AND EXISTS (
+        SELECT 1 FROM "memberships" AS membership
+        WHERE membership."workspace_id" = workspace."id"
+          AND membership."user_id" = ${userId}::uuid
+      )
+      AND task."kind" = 'source.retrieve'
+      ${targetClause}
+      AND task."status" = 'failed'
+      AND task."retry_count" = 0
+      AND (task."error" IS NULL OR task."error" NOT LIKE '[blocked]%')
+      AND jsonb_typeof(task."payload") = 'object'
+      AND task."payload" ?& ARRAY['query', 'providers', 'limit', 'includeFullText', 'retryContractVersion', 'target']::text[]
+      AND task."payload" - ARRAY['query', 'providers', 'limit', 'includeFullText', 'identifier', 'retryContractVersion', 'target']::text[] = '{}'::jsonb
+      AND jsonb_typeof(task."payload" -> 'query') = 'string'
+      AND task."payload" ->> 'query' = regexp_replace(
+        task."payload" ->> 'query', '^[[:space:]]+|[[:space:]]+$', '', 'g'
+      )
+      AND char_length(task."payload" ->> 'query') BETWEEN 1 AND 500
+      AND jsonb_typeof(task."payload" -> 'providers') = 'array'
+      AND jsonb_typeof(task."payload" -> 'limit') = 'number'
+      AND jsonb_typeof(task."payload" -> 'includeFullText') = 'boolean'
+      AND task."payload" -> 'retryContractVersion' = '1'::jsonb
+      AND (
+        (
+          task."payload" -> 'providers' = '["semantic_scholar", "tavily"]'::jsonb
+          AND task."payload" -> 'limit' = '10'::jsonb
+          AND task."payload" -> 'includeFullText' = 'false'::jsonb
+          AND NOT task."payload" ? 'identifier'
+        )
+        OR
+        (
+          task."payload" -> 'providers' = '["scansci"]'::jsonb
+          AND task."payload" -> 'limit' = '1'::jsonb
+          AND task."payload" -> 'includeFullText' = 'true'::jsonb
+          AND task."payload" ? 'identifier'
+          AND jsonb_typeof(task."payload" -> 'identifier') = 'string'
+          AND task."payload" ->> 'identifier' = regexp_replace(
+            task."payload" ->> 'identifier', '^[[:space:]]+|[[:space:]]+$', '', 'g'
+          )
+          AND char_length(task."payload" ->> 'identifier') BETWEEN 1 AND 300
+          AND (
+            task."payload" ->> 'identifier' ~* '^10[.][0-9]{4,9}/[-._;()/:a-z0-9]+$'
+            OR task."payload" ->> 'identifier' ~* '^(arxiv:)?[0-9]{4}[.][0-9]{4,5}(v[0-9]+)?$'
+          )
+        )
+      )
+    ORDER BY task."updated_at" DESC, task."id" DESC
+    LIMIT 1
+  `);
+  if (selected.length === 0) return null;
+  if (selected.length !== 1) throw new Error('Source retrieval recovery invariant violated');
+  const task = await deps.prisma.agentTask.findUnique({
+    where: { id: selected[0]!.id }, include: retryAuthorityInclude(userId),
+  });
+  let durableTarget: SourceRetrieveTarget | undefined;
+  try { durableTarget = parseDurableSourceRetrievePayload(task?.payload).target; } catch { durableTarget = undefined; }
+  if (!task || !evaluateAgentTaskRetryEligibility(task, userId).canRetry || !isDeepStrictEqual(durableTarget, target)) {
+    throw new Error('Source retrieval recovery invariant violated');
+  }
+  return task;
+}
+
+export interface CreateAgentSessionInput {
+  userId: string;
+  researchObjectId?: string;
+  kind: string;
+  title?: string;
+  idempotencyKey?: string;
+}
+
+export interface SubmitAgentTaskInput {
+  sessionId: string;
+  userId: string;
+  kind: string;
+  payload: Record<string, unknown>;
+  interestContext?: InterestContext;
+  idempotencyKey?: string;
+  dispatch?: boolean;
+}
+
+const AGENT_SESSION_IDEMPOTENCY_CONSTRAINT = {
+  modelName: 'AgentSession', field: 'idempotencyKey', column: 'idempotency_key',
+  constraint: 'agent_sessions_idempotency_key_key',
+} as const;
+
+const AGENT_TASK_IDEMPOTENCY_CONSTRAINT = {
+  modelName: 'AgentTask', field: 'idempotencyKey', column: 'idempotency_key',
+  constraint: 'agent_tasks_idempotency_key_key',
+} as const;
+
+async function resolveInterestContext(
+  db: Pick<Prisma.TransactionClient, 'researchIdentityProfile'>,
   userId: string,
   researchObjectId: string | null,
   requested: InterestContext | undefined,
 ): Promise<InterestContext> {
-  const row = await deps.prisma.researchIdentityProfile.findUnique({ where: { userId } });
+  const row = await db.researchIdentityProfile.findUnique({ where: { userId } });
   try {
     const profile = row ? validateResearchIdentityProfileState({
       identities: row.identities,
@@ -157,61 +326,105 @@ async function resolveInterestContext(
 /** Dashboard task rail: caller-owned tasks with their RO context. */
 export async function listAgentTasks(
   deps: AgentDeps,
-  input: { userId: string; actionableOnly?: boolean; kind?: string },
+  input: { userId: string; actionableOnly?: boolean; kind?: string; recoveryPreferred?: boolean; recoveryTarget?: SourceRetrieveTarget },
 ): Promise<AgentTaskListItem[]> {
+  if (input.recoveryPreferred) {
+    if (input.kind !== 'source.retrieve' || !input.recoveryTarget) throw new AgentError('VALIDATION_ERROR', 'Recovery priority requires a source.retrieve target');
+    const targetPayload = { path: ['target'], equals: input.recoveryTarget as Prisma.InputJsonValue };
+    const researchObjectScope = input.recoveryTarget.kind === 'research_object'
+      ? { id: input.recoveryTarget.researchObjectId }
+      : {};
+    const baseWhere: Prisma.AgentTaskWhereInput = {
+      kind: input.kind,
+      payload: targetPayload,
+      session: {
+        userId: input.userId,
+        status: 'active',
+        researchObject: {
+          is: { ...researchObjectScope, workspace: { status: 'active', members: { some: { userId: input.userId } } } },
+        },
+      },
+    };
+    const newest = (where: Prisma.AgentTaskWhereInput) => deps.prisma.agentTask.findFirst({
+      where: { ...baseWhere, ...where },
+      include: retryAuthorityInclude(input.userId),
+      orderBy: [{ updatedAt: 'desc' }, { id: 'desc' }],
+    });
+    const active = await newest({ status: { in: ['pending', 'running'] } });
+    const eligibleFailed = active ? null : await findNewestRetryableSourceTask(deps, input.userId, input.recoveryTarget);
+    const terminal = active || eligibleFailed ? null : await newest({ status: { in: ['succeeded', 'failed'] } });
+    const selected = active ?? eligibleFailed ?? terminal;
+    if (!selected) return [];
+    const canRetry = evaluateAgentTaskRetryEligibility(selected, input.userId).canRetry;
+    return [{ ...taskToView(selected, canRetry), researchObjectId: selected.session.researchObjectId }];
+  }
   const rows = await deps.prisma.agentTask.findMany({
     where: {
       session: { userId: input.userId },
       ...(input.kind ? { kind: input.kind } : {}),
       ...(input.actionableOnly ? { status: { in: ['pending', 'running', 'failed'] } } : {}),
     },
-    include: { session: true },
+    include: retryAuthorityInclude(input.userId),
     orderBy: { updatedAt: 'desc' },
     take: 20,
   });
-  return rows.map((task) => ({ ...taskToView(task), researchObjectId: task.session.researchObjectId }));
+  return rows.map((task) => ({
+    ...taskToView(task, evaluateAgentTaskRetryEligibility(task, input.userId).canRetry),
+    researchObjectId: task.session.researchObjectId,
+  }));
 }
 
 /**
  * 建 Hermes 会话（§15 AgentSession）：
  * - researchObject 归属 workspace 成员校验（§17 越权）
  */
-export async function createAgentSession(
+export async function findOrCreateAgentSessionInTransaction(
   deps: AgentDeps,
-  input: { userId: string; researchObjectId?: string; kind: string; title?: string; idempotencyKey?: string },
+  tx: Prisma.TransactionClient,
+  input: CreateAgentSessionInput,
   ctx: AuditContext = {},
-): Promise<AgentSessionView> {
+): Promise<{ session: AgentSession; replayed: boolean }> {
   if (input.researchObjectId) {
-    const ro = await deps.prisma.researchObject.findUnique({ where: { id: input.researchObjectId } });
+    const ro = await tx.researchObject.findUnique({ where: { id: input.researchObjectId } });
     if (!ro) throw new AgentError('RESEARCH_OBJECT_NOT_FOUND', '研究对象不存在');
-    await requireMembership(deps, ro.workspaceId, input.userId);
+    await requireMembership({ prisma: tx }, ro.workspaceId, input.userId);
   }
   if (input.idempotencyKey) {
-    const existing = await deps.prisma.agentSession.findUnique({ where: { idempotencyKey: input.idempotencyKey } });
+    const existing = await tx.agentSession.findUnique({ where: { idempotencyKey: input.idempotencyKey } });
     if (existing) {
       assertSessionReplay(existing, input);
-      return { id: existing.id, researchObjectId: existing.researchObjectId, kind: existing.kind, title: existing.title, status: existing.status, createdAt: existing.createdAt };
+      return { session: existing, replayed: true };
     }
   }
-  const session = await deps.prisma.$transaction(async (tx) => {
-    const created = await tx.agentSession.create({
+  let session: AgentSession;
+  try {
+    session = await tx.agentSession.create({
       data: { userId: input.userId, researchObjectId: input.researchObjectId ?? null, kind: input.kind, title: input.title ?? '', idempotencyKey: input.idempotencyKey },
     });
-    await recordAudit(deps, tx, {
-      actorId: input.userId, action: 'agent.session.create', targetType: 'agent_session', targetId: created.id,
-      metadata: { kind: input.kind },
-    }, ctx);
-    return created;
-  }).catch(async (error: unknown) => {
-    if ((error as { code?: string }).code === 'P2002' && input.idempotencyKey) {
-      const existing = await deps.prisma.agentSession.findUnique({ where: { idempotencyKey: input.idempotencyKey } });
-      if (existing) {
-        assertSessionReplay(existing, input);
-        return existing;
-      }
-    }
-    throw error;
-  });
+  } catch (error) {
+    if (!input.idempotencyKey) throw error;
+    throwOwnedPrismaIdempotencyConflict(error, AGENT_SESSION_IDEMPOTENCY_CONSTRAINT);
+  }
+  await recordAudit(deps, tx, {
+    actorId: input.userId, action: 'agent.session.create', targetType: 'agent_session', targetId: session.id,
+    metadata: { kind: input.kind },
+  }, ctx);
+  return { session, replayed: false };
+}
+
+export async function createAgentSession(
+  deps: AgentDeps,
+  input: CreateAgentSessionInput,
+  ctx: AuditContext = {},
+): Promise<AgentSessionView> {
+  let result: { session: AgentSession; replayed: boolean };
+  try {
+    result = await deps.prisma.$transaction((tx) => findOrCreateAgentSessionInTransaction(deps, tx, input, ctx));
+  } catch (error: unknown) {
+    if (!input.idempotencyKey || !isOwnedPrismaIdempotencyConflict(error)) throw error;
+    result = await deps.prisma.$transaction((tx) => findOrCreateAgentSessionInTransaction(deps, tx, input, ctx));
+  }
+  const { session } = result;
   return {
     id: session.id, researchObjectId: session.researchObjectId, kind: session.kind,
     title: session.title, status: session.status, createdAt: session.createdAt,
@@ -223,14 +436,15 @@ export async function createAgentSession(
  * 1. session 归属 + workspace 成员校验
  * 2. AI Credit 配额校验（getBalance ai_credit ≤ 0 → 拒绝）
  * 3. 幂等键查重（同 key → 返回既有任务）
- * 4. create pending + 入 Redis 队列
+ * 4. create pending in PostgreSQL; the public wrapper dispatches after commit
  */
-export async function submitAgentTask(
+async function persistAgentTaskCoreInTransaction(
   deps: AgentDeps,
-  input: { sessionId: string; userId: string; kind: string; payload: Record<string, unknown>; interestContext?: InterestContext; idempotencyKey?: string; dispatch?: boolean },
+  tx: Prisma.TransactionClient,
+  input: Omit<SubmitAgentTaskInput, 'dispatch'>,
   ctx: AuditContext = {},
-): Promise<AgentTaskView> {
-  const session = await deps.prisma.agentSession.findUnique({ where: { id: input.sessionId } });
+): Promise<{ task: AgentTask; replayed: boolean }> {
+  const session = await tx.agentSession.findUnique({ where: { id: input.sessionId } });
   if (!session || session.userId !== input.userId) {
     throw new AgentError('RESEARCH_OBJECT_NOT_FOUND', '会话不存在');
   }
@@ -242,9 +456,9 @@ export async function submitAgentTask(
   }
   let workspaceId: string | null = null;
   if (session.researchObjectId) {
-    const ro = await deps.prisma.researchObject.findUnique({ where: { id: session.researchObjectId } });
+    const ro = await tx.researchObject.findUnique({ where: { id: session.researchObjectId } });
     if (!ro) throw new AgentError('RESEARCH_OBJECT_NOT_FOUND', '研究对象不存在');
-    await requireMembership(deps, ro.workspaceId, input.userId);
+    await requireActiveMembership(tx, ro.workspaceId, input.userId);
     workspaceId = ro.workspaceId;
   }
   const artifactId = input.kind === 'sdf.extract' && typeof input.payload.artifactId === 'string'
@@ -254,7 +468,7 @@ export async function submitAgentTask(
     if (!session.researchObjectId || !workspaceId || input.payload.researchObjectId !== session.researchObjectId) {
       throw new AgentError('VALIDATION_ERROR', 'Artifact 提取任务未绑定当前研究对象');
     }
-    const artifact = await deps.prisma.artifact.findUnique({ where: { id: artifactId } });
+    const artifact = await tx.artifact.findUnique({ where: { id: artifactId } });
     if (!artifact || artifact.workspaceId !== workspaceId) {
       throw new AgentError('RESEARCH_OBJECT_NOT_FOUND', 'Artifact 不存在或不可访问');
     }
@@ -267,7 +481,7 @@ export async function submitAgentTask(
       || !coreText.trim() || coreText.length > 8_000) {
       throw new AgentError('VALIDATION_ERROR', 'review.analyze 任务缺少有效的会话、Version 或 coreText');
     }
-    const version = await deps.prisma.version.findUnique({ where: { id: versionId } });
+    const version = await tx.version.findUnique({ where: { id: versionId } });
     if (!version || version.researchObjectId !== session.researchObjectId) {
       throw new AgentError('VALIDATION_ERROR', 'Version 不属于当前研究对象');
     }
@@ -279,75 +493,113 @@ export async function submitAgentTask(
     throw new AgentError('VALIDATION_ERROR', 'Hermes interest context is invalid');
   }
 
-  // §16 幂等键：同 key 已存在 → 返回既有任务
+  // §16 exact replay precedes balance/debit so the last-credit replay remains valid.
   if (input.idempotencyKey) {
-    const existing = await deps.prisma.agentTask.findUnique({ where: { idempotencyKey: input.idempotencyKey } });
+    const existing = await tx.agentTask.findUnique({ where: { idempotencyKey: input.idempotencyKey } });
     if (existing) {
       assertTaskReplay(existing, input, session.researchObjectId, requestedContext);
-      if (input.dispatch !== false && existing.dispatchedAt == null) await dispatchAgentTask(deps, existing.id);
-      return taskToView(existing);
+      return { task: existing, replayed: true };
     }
   }
   const interestContext = await resolveInterestContext(
-    deps,
+    tx,
     input.userId,
     session.researchObjectId,
     requestedContext,
   );
+  const balance = await tx.usageLedger.aggregate({
+    where: { userId: input.userId, resource: AI_CREDIT_RESOURCE },
+    _sum: { delta: true },
+  });
+  if (Number(balance._sum.delta ?? 0) <= 0) {
+    throw new AgentError('INSUFFICIENT_CREDIT', 'AI Credit 不足（§2.4-7），请补充后再试');
+  }
+  let task: AgentTask;
+  try {
+    task = await tx.agentTask.create({
+      data: {
+        sessionId: session.id,
+        kind: input.kind,
+        payload: input.payload as never,
+        interestContext: interestContext as never,
+        idempotencyKey: input.idempotencyKey,
+      },
+    });
+  } catch (error) {
+    if (!input.idempotencyKey) throw error;
+    throwOwnedPrismaIdempotencyConflict(error, AGENT_TASK_IDEMPOTENCY_CONSTRAINT);
+  }
+  await recordEntry(tx, {
+    userId: input.userId,
+    resource: AI_CREDIT_RESOURCE,
+    delta: -1,
+    kind: 'consume',
+    reason: `Agent task reservation ${input.kind}`,
+    idempotencyKey: `agent-task-reserve:${task.id}`,
+    metadata: { taskId: task.id, kind: input.kind, policy: 'charged-on-submit' },
+  });
+  await recordAudit(deps, tx, {
+    actorId: input.userId, action: 'agent.task.submit', workspaceId, targetType: 'agent_task', targetId: task.id,
+    metadata: { kind: input.kind, sessionId: session.id, creditPolicy: 'charged-on-submit' },
+  }, ctx);
+  return { task, replayed: false };
+}
 
-  let task;
-  for (let attempt = 0; ; attempt += 1) {
+/** Generic task persistence cannot mint or carry the server-owned retrieval retry marker. */
+export async function persistAgentTaskInTransaction(
+  deps: AgentDeps,
+  tx: Prisma.TransactionClient,
+  input: Omit<SubmitAgentTaskInput, 'dispatch'>,
+  ctx: AuditContext = {},
+): Promise<{ task: AgentTask; replayed: boolean }> {
+  if (input.kind === 'source.retrieve') {
+    throw new AgentError('VALIDATION_ERROR', 'Source retrieval is reserved for literature acquisition');
+  }
+  if (Object.hasOwn(input.payload, 'retryContractVersion')) {
+    throw new AgentError('VALIDATION_ERROR', 'The retry contract marker is server-reserved');
+  }
+  return persistAgentTaskCoreInTransaction(deps, tx, input, ctx);
+}
+
+/** Package-internal durable path; callers cannot omit or partially stamp the acquisition contract. */
+export async function persistSourceRetrieveTaskInTransaction(
+  deps: AgentDeps,
+  tx: Prisma.TransactionClient,
+  input: Omit<SubmitAgentTaskInput, 'dispatch' | 'kind' | 'payload'> & { payload: DurableSourceRetrievePayload },
+  ctx: AuditContext = {},
+): Promise<{ task: AgentTask; replayed: boolean }> {
+  const payload = parseDurableSourceRetrievePayload(input.payload);
+  return persistAgentTaskCoreInTransaction(deps, tx, {
+    ...input, kind: 'source.retrieve', payload: payload as unknown as Record<string, unknown>,
+  }, ctx);
+}
+
+export async function submitAgentTask(
+  deps: AgentDeps,
+  input: SubmitAgentTaskInput,
+  ctx: AuditContext = {},
+): Promise<AgentTaskView> {
+  const { dispatch, ...persistenceInput } = input;
+  let task: AgentTask | undefined;
+  for (let attempt = 0; attempt < 3; attempt += 1) {
     try {
-      task = await deps.prisma.$transaction(async (tx) => {
-        const balance = await tx.usageLedger.aggregate({
-          where: { userId: input.userId, resource: AI_CREDIT_RESOURCE },
-          _sum: { delta: true },
-        });
-        if (Number(balance._sum.delta ?? 0) <= 0) {
-          throw new AgentError('INSUFFICIENT_CREDIT', 'AI Credit 不足（§2.4-7），请补充后再试');
-        }
-        const created = await tx.agentTask.create({
-          data: {
-            sessionId: session.id,
-            kind: input.kind,
-            payload: input.payload as never,
-            interestContext: interestContext as never,
-            idempotencyKey: input.idempotencyKey,
-          },
-        });
-        await recordEntry(tx, {
-          userId: input.userId,
-          resource: AI_CREDIT_RESOURCE,
-          delta: -1,
-          kind: 'consume',
-          reason: `Agent task reservation ${input.kind}`,
-          idempotencyKey: `agent-task-reserve:${created.id}`,
-          metadata: { taskId: created.id, kind: input.kind, policy: 'charged-on-submit' },
-        });
-        await recordAudit(deps, tx, {
-          actorId: input.userId, action: 'agent.task.submit', workspaceId, targetType: 'agent_task', targetId: created.id,
-          metadata: { kind: input.kind, sessionId: session.id, creditPolicy: 'charged-on-submit' },
-        }, ctx);
-        return created;
-      }, { isolationLevel: 'Serializable' });
+      ({ task } = await deps.prisma.$transaction(
+        (tx) => persistAgentTaskInTransaction(deps, tx, persistenceInput, ctx),
+        { isolationLevel: 'Serializable' },
+      ));
       break;
     } catch (error: unknown) {
       const code = (error as { code?: unknown })?.code;
-      if (code === 'P2034' && attempt < 2) continue;
-      if (code === 'P2002') {
-        const duplicate = await deps.prisma.agentTask.findUnique({ where: { idempotencyKey: input.idempotencyKey ?? '' } });
-        if (duplicate) {
-          assertTaskReplay(duplicate, input, session.researchObjectId, requestedContext);
-          task = duplicate;
-          break;
-        }
+      const idempotencyConflict = isOwnedPrismaIdempotencyConflict(error);
+      if ((code === 'P2034' || idempotencyConflict) && attempt < 2) continue;
+      if (idempotencyConflict) {
         throw new AgentError('DUPLICATE_IDEMPOTENCY_KEY', '幂等键重复（§16）', error);
       }
       throw error;
     }
   }
-
-  if (input.dispatch !== false) await dispatchAgentTask(deps, task.id);
+  if (!task) throw new AgentError('DUPLICATE_IDEMPOTENCY_KEY', '幂等任务并发冲突，请重试');
+  if (dispatch !== false) await dispatchAgentTask(deps, task.id);
   return taskToView(task);
 }
 
@@ -409,11 +661,13 @@ export async function getAgentTask(
   deps: AgentDeps,
   input: { userId: string; taskId: string },
 ): Promise<AgentTaskView> {
-  const task = await deps.prisma.agentTask.findUnique({ where: { id: input.taskId }, include: { session: true } });
+  const task = await deps.prisma.agentTask.findUnique({
+    where: { id: input.taskId }, include: retryAuthorityInclude(input.userId),
+  });
   if (!task || task.session.userId !== input.userId) {
     throw new AgentError('RESEARCH_OBJECT_NOT_FOUND', '任务不存在');
   }
-  return taskToView(task);
+  return taskToView(task, evaluateAgentTaskRetryEligibility(task, input.userId).canRetry);
 }
 
 /** One explicit, idempotent-cost retry of a failed task. The original credit reservation is reused. */
@@ -422,44 +676,46 @@ export async function retryAgentTask(
   input: { userId: string; taskId: string },
   ctx: AuditContext = {},
 ): Promise<AgentTaskView> {
-  const task = await deps.prisma.agentTask.findUnique({ where: { id: input.taskId }, include: { session: true } });
-  if (!task || task.session.userId !== input.userId) throw new AgentError('RESEARCH_OBJECT_NOT_FOUND', '任务不存在');
-  if (task.status !== 'failed') throw new AgentError('ILLEGAL_TRANSITION', 'Only failed tasks can be retried');
-  const payload = task.payload && typeof task.payload === 'object' && !Array.isArray(task.payload)
-    ? task.payload as Record<string, unknown>
-    : {};
-  const retryableExtractor = task.kind === 'sdf.extract'
-    && typeof payload.manuscriptText === 'string'
-    && !('artifactId' in payload)
-    && !task.error?.startsWith('[blocked]');
-  if (!retryableExtractor) throw new AgentError('ILLEGAL_TRANSITION', 'Task is not retryable');
-  if (task.retryCount >= 1) throw new AgentError('ILLEGAL_TRANSITION', 'Task was already retried');
-
-  let workspaceId: string | null = null;
-  if (task.session.researchObjectId) {
-    const ro = await deps.prisma.researchObject.findUnique({ where: { id: task.session.researchObjectId } });
-    if (!ro) throw new AgentError('RESEARCH_OBJECT_NOT_FOUND', '研究对象不存在');
-    await requireMembership(deps, ro.workspaceId, input.userId);
-    workspaceId = ro.workspaceId;
+  let updated: AgentTask | null | undefined;
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    try {
+      updated = await deps.prisma.$transaction(async (tx) => {
+        const task = await tx.agentTask.findUnique({
+          where: { id: input.taskId }, include: retryAuthorityInclude(input.userId),
+        });
+        if (!task || task.session.userId !== input.userId) throw new AgentError('RESEARCH_OBJECT_NOT_FOUND', '任务不存在');
+        const eligibility = evaluateAgentTaskRetryEligibility(task, input.userId);
+        if (!eligibility.authorityValid) throw new AgentError('RESEARCH_OBJECT_NOT_FOUND', '任务不存在');
+        if (!eligibility.canRetry) {
+          if (task.status !== 'failed') throw new AgentError('ILLEGAL_TRANSITION', 'Only failed tasks can be retried');
+          if (task.retryCount >= 1) throw new AgentError('ILLEGAL_TRANSITION', 'Task was already retried');
+          throw new AgentError('ILLEGAL_TRANSITION', 'Task is not retryable');
+        }
+        const workspaceId = task.session.researchObject?.workspaceId ?? null;
+        const changed = await tx.agentTask.updateMany({
+          where: {
+            id: task.id, sessionId: task.sessionId, status: 'failed', kind: task.kind, retryCount: 0, error: task.error,
+          },
+          data: {
+            status: 'pending', progress: 0, result: Prisma.JsonNull, error: null, dispatchedAt: null,
+            retryCount: 1,
+          },
+        });
+        if (changed.count !== 1) throw new AgentError('ILLEGAL_TRANSITION', 'Task retry is no longer available');
+        await recordAudit(deps, tx, {
+          actorId: input.userId, action: 'agent.task.retry', workspaceId,
+          targetType: 'agent_task', targetId: task.id, metadata: { retryAttempt: 1, creditPolicy: 'reuse-original-reservation' },
+        }, ctx);
+        return tx.agentTask.findUnique({ where: { id: task.id } });
+      }, { isolationLevel: 'Serializable' });
+      break;
+    } catch (error: unknown) {
+      if ((error as { code?: unknown })?.code === 'P2034' && attempt < 2) continue;
+      throw error;
+    }
   }
-
-  const updated = await deps.prisma.$transaction(async (tx) => {
-    const changed = await tx.agentTask.updateMany({
-      where: { id: task.id, status: 'failed', kind: 'sdf.extract', retryCount: 0, error: task.error },
-      data: {
-        status: 'pending', progress: 0, result: Prisma.JsonNull, error: null, dispatchedAt: null,
-        retryCount: 1,
-      },
-    });
-    if (changed.count !== 1) throw new AgentError('ILLEGAL_TRANSITION', 'Task retry is no longer available');
-    await recordAudit(deps, tx, {
-      actorId: input.userId, action: 'agent.task.retry', workspaceId,
-      targetType: 'agent_task', targetId: task.id, metadata: { retryAttempt: 1, creditPolicy: 'reuse-original-reservation' },
-    }, ctx);
-    return tx.agentTask.findUnique({ where: { id: task.id } });
-  });
   if (!updated) throw new AgentError('RESEARCH_OBJECT_NOT_FOUND', '任务不存在');
-  await dispatchAgentTask(deps, task.id);
+  await dispatchAgentTask(deps, updated.id);
   return taskToView(updated);
 }
 
@@ -576,7 +832,7 @@ function taskToView(task: {
   id: string; sessionId: string; kind: string; status: AgentTaskStatus;
   progress: number; retryCount: number; executionAttempt: number;
   result: unknown; error: string | null; createdAt: Date; updatedAt: Date;
-}): AgentTaskView {
+}, canRetry = false): AgentTaskView {
   let result: Record<string, unknown> | null = null;
   if (task.result && typeof task.result === 'object' && !Array.isArray(task.result)) {
     const { sourceMapRef, ...publicResult } = task.result as Record<string, unknown>;
@@ -588,7 +844,7 @@ function taskToView(task: {
   return {
     id: task.id, sessionId: task.sessionId, kind: task.kind, status: task.status,
     progress: task.progress, retryCount: task.retryCount, executionAttempt: task.executionAttempt,
-    result,
+    canRetry, result,
     error: task.error, createdAt: task.createdAt, updatedAt: task.updatedAt,
   };
 }

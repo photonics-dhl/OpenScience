@@ -1,5 +1,7 @@
-import type { PrismaClient } from '@prisma/client';
+import { Prisma, type PrismaClient } from '@prisma/client';
+import { isDeepStrictEqual } from 'node:util';
 import type { Mailer, MailMessage } from '@openscience/auth';
+import { parseDurableSourceRetrievePayload } from '../../src/retrieval/retrieve-payload';
 
 /* eslint-disable @typescript-eslint/no-explicit-any -- 测试 fake 刻意脱离 Prisma 完整类型 */
 
@@ -46,20 +48,97 @@ interface FakeDb {
   evidenceRecords: any[];
   presentationAssets: any[];
   researchIdentityProfiles: any[];
+  auditLogs: any[];
 }
 
 /** 内存版 Prisma 子集：覆盖 workspace 领域用到的调用面。 */
 export function createFakePrisma(): { prisma: PrismaClient; db: FakeDb } {
-  const db: FakeDb = { users: [], workspaces: [], memberships: [], workspaceInvitations: [], mailOutbox: [], quotaPolicies: [], usageLedger: [], researchObjects: [], sdfDocuments: [], sdfNodes: [], blobs: [], artifacts: [], branches: [], commits: [], changesets: [], versions: [], versionManifests: [], manifestEntries: [], identifiers: [], publications: [], visibilityGrants: [], visibilityRequests: [], pullRequests: [], issues: [], comments: [], reviews: [], licenseAssignments: [], forkRelations: [], notifications: [], authors: [], contributions: [], agentSessions: [], agentTasks: [], toolApprovals: [], aiReviews: [], appeals: [], ingestionBatches: [], ingestionTasks: [], claimNodes: [], evidenceRecords: [], presentationAssets: [], researchIdentityProfiles: [] };
+  const db: FakeDb = { users: [], workspaces: [], memberships: [], workspaceInvitations: [], mailOutbox: [], quotaPolicies: [], usageLedger: [], researchObjects: [], sdfDocuments: [], sdfNodes: [], blobs: [], artifacts: [], branches: [], commits: [], changesets: [], versions: [], versionManifests: [], manifestEntries: [], identifiers: [], publications: [], visibilityGrants: [], visibilityRequests: [], pullRequests: [], issues: [], comments: [], reviews: [], licenseAssignments: [], forkRelations: [], notifications: [], authors: [], contributions: [], agentSessions: [], agentTasks: [], toolApprovals: [], aiReviews: [], appeals: [], ingestionBatches: [], ingestionTasks: [], claimNodes: [], evidenceRecords: [], presentationAssets: [], researchIdentityProfiles: [], auditLogs: [] };
   let seq = 0;
   const nextId = () => `00000000-0000-4000-8000-${String(++seq).padStart(12, '0')}`;
-  const p2002 = () => {
-    const err = new Error('Unique constraint failed') as Error & { code: string };
+  const p2002 = (modelName?: string, target?: string | string[]) => {
+    const err = new Error('Unique constraint failed') as Error & { code: string; meta?: { modelName: string; target: string | string[] } };
     err.code = 'P2002';
+    if (modelName && target) err.meta = { modelName, target };
     return err;
+  };
+  let transactionQueue: Promise<void> = Promise.resolve();
+
+  const agentTaskWithInclude = (row: any, include: any) => {
+    if (!include?.session) return { ...row };
+    const session = db.agentSessions.find((candidate) => candidate.id === row.sessionId) ?? null;
+    if (!session || !include.session.include?.researchObject) return { ...row, session };
+    const researchObject = db.researchObjects.find((candidate) => candidate.id === session.researchObjectId) ?? null;
+    if (!researchObject || !include.session.include.researchObject.include?.workspace) {
+      return { ...row, session: { ...session, researchObject } };
+    }
+    const workspace = db.workspaces.find((candidate) => candidate.id === researchObject.workspaceId) ?? null;
+    if (!workspace) return { ...row, session: { ...session, researchObject: { ...researchObject, workspace } } };
+    const membersWhere = include.session.include.researchObject.include.workspace.include?.members?.where;
+    const members = db.memberships.filter((membership) => membership.workspaceId === workspace.id
+      && (membersWhere?.userId === undefined || membership.userId === membersWhere.userId));
+    return {
+      ...row,
+      session: { ...session, researchObject: { ...researchObject, workspace: { ...workspace, members } } },
+    };
+  };
+
+  const agentTaskMatchesSession = (task: any, whereSession: any) => {
+    if (!whereSession) return true;
+    const session = db.agentSessions.find((candidate) => candidate.id === task.sessionId);
+    if (!session || (whereSession.userId !== undefined && session.userId !== whereSession.userId)
+      || (whereSession.status !== undefined && session.status !== whereSession.status)) return false;
+    const researchWhere = whereSession.researchObject?.is;
+    if (!researchWhere) return true;
+    const researchObject = db.researchObjects.find((candidate) => candidate.id === session.researchObjectId);
+    if (!researchObject) return false;
+    if (researchWhere.id !== undefined && researchObject.id !== researchWhere.id) return false;
+    const workspaceWhere = researchWhere.workspace;
+    const workspace = db.workspaces.find((candidate) => candidate.id === researchObject.workspaceId);
+    if (!workspace || (workspaceWhere?.status !== undefined && workspace.status !== workspaceWhere.status)) return false;
+    const memberWhere = workspaceWhere?.members?.some;
+    return !memberWhere || db.memberships.some((membership) => membership.workspaceId === workspace.id
+      && (memberWhere.userId === undefined || membership.userId === memberWhere.userId));
   };
 
   const prisma: any = {
+    $queryRaw: async (query: { strings?: readonly string[]; values?: unknown[] }) => {
+      const userId = String(query.values?.[0] ?? '');
+      const queryText = query.strings?.join('?') ?? '';
+      const recoveryTarget = queryText.includes('{"kind":"personal"}')
+        ? { kind: 'personal' }
+        : { kind: 'research_object', researchObjectId: String(query.values?.[1] ?? '') };
+      const rows = db.agentTasks.filter((task) => {
+        if (task.kind !== 'source.retrieve' || task.status !== 'failed' || task.retryCount !== 0
+          || task.error?.startsWith('[blocked]')) return false;
+        const session = db.agentSessions.find((candidate) => candidate.id === task.sessionId);
+        const researchObject = db.researchObjects.find((candidate) => candidate.id === session?.researchObjectId);
+        const workspace = db.workspaces.find((candidate) => candidate.id === researchObject?.workspaceId);
+        if (!session || session.userId !== userId || session.status !== 'active'
+          || !researchObject || !workspace || workspace.status !== 'active'
+          || !db.memberships.some((membership) => membership.workspaceId === workspace.id && membership.userId === userId)) {
+          return false;
+        }
+        try {
+          const payload = parseDurableSourceRetrievePayload(task.payload);
+          return isDeepStrictEqual(payload.target, recoveryTarget)
+            && (recoveryTarget.kind !== 'research_object' || session.researchObjectId === recoveryTarget.researchObjectId);
+        } catch {
+          return false;
+        }
+      }).toSorted((left, right) => {
+        const byUpdated = right.updatedAt.getTime() - left.updatedAt.getTime();
+        return byUpdated || right.id.localeCompare(left.id);
+      });
+      return rows.length > 0 ? [{ id: rows[0].id }] : [];
+    },
+    auditLog: {
+      create: async ({ data }: any) => {
+        const row = { id: nextId(), createdAt: new Date(), ...data };
+        db.auditLogs.push(row);
+        return row;
+      },
+    },
     researchIdentityProfile: {
       findUnique: async ({ where }: any) => db.researchIdentityProfiles.find((row) => row.userId === where.userId) ?? null,
     },
@@ -79,6 +158,11 @@ export function createFakePrisma(): { prisma: PrismaClient; db: FakeDb } {
     },
     workspace: {
       findUnique: async ({ where }: any) => db.workspaces.find((w) => w.id === where.id) ?? null,
+      findMany: async ({ where, take }: any) => db.workspaces.filter((w) =>
+        (where.type === undefined || w.type === where.type) &&
+        (where.ownerId === undefined || w.ownerId === where.ownerId) &&
+        (where.status === undefined || w.status === where.status),
+      ).slice(0, take ?? db.workspaces.length),
       findFirst: async ({ where }: any) =>
         db.workspaces.find(
           (w) =>
@@ -332,6 +416,7 @@ export function createFakePrisma(): { prisma: PrismaClient; db: FakeDb } {
         return { ...ro, sdfDocument: doc ? { ...doc, nodes: db.sdfNodes.filter((n) => n.sdfDocumentId === doc.id) } : null };
       },
       create: async ({ data }: any) => {
+        if (data.idempotencyKey && db.researchObjects.some((researchObject) => researchObject.idempotencyKey === data.idempotencyKey)) throw p2002('ResearchObject', ['idempotency_key']);
         const row = {
           id: nextId(), status: 'draft', visibility: 'private', version: 1,
           createdAt: new Date(), updatedAt: new Date(),
@@ -362,6 +447,10 @@ export function createFakePrisma(): { prisma: PrismaClient; db: FakeDb } {
         if (!r) return null;
         Object.assign(r, data);
         return r;
+      },
+      delete: async ({ where }: any) => {
+        const index = db.researchObjects.findIndex((researchObject) => researchObject.id === where.id);
+        return db.researchObjects.splice(index, 1)[0];
       },
     },
     sdfDocument: {
@@ -692,7 +781,7 @@ export function createFakePrisma(): { prisma: PrismaClient; db: FakeDb } {
     },
     agentSession: {
       create: async ({ data }: any) => {
-        if (data.idempotencyKey && db.agentSessions.some((session) => session.idempotencyKey === data.idempotencyKey)) throw p2002();
+        if (data.idempotencyKey && db.agentSessions.some((session) => session.idempotencyKey === data.idempotencyKey)) throw p2002('AgentSession', ['idempotency_key']);
         const row = { id: nextId(), status: 'active', createdAt: new Date(), updatedAt: new Date(), ...data };
         db.agentSessions.push(row);
         return row;
@@ -702,6 +791,13 @@ export function createFakePrisma(): { prisma: PrismaClient; db: FakeDb } {
         if (!row) return null;
         return { ...row };
       },
+      findFirst: async ({ where }: any) => db.agentSessions.find((session) =>
+        where.researchObjectId === undefined || session.researchObjectId === where.researchObjectId,
+      ) ?? null,
+      delete: async ({ where }: any) => {
+        const index = db.agentSessions.findIndex((session) => session.id === where.id);
+        return db.agentSessions.splice(index, 1)[0];
+      },
       findMany: async ({ where, orderBy }: any) => {
         const rows = db.agentSessions.filter((s) => (where.userId === undefined || s.userId === where.userId));
         if (orderBy?.createdAt === 'desc') rows.sort((a, b) => b.createdAt - a.createdAt);
@@ -710,8 +806,8 @@ export function createFakePrisma(): { prisma: PrismaClient; db: FakeDb } {
     },
     agentTask: {
       create: async ({ data }: any) => {
-        if (data.idempotencyKey && db.agentTasks.some((t) => t.idempotencyKey === data.idempotencyKey)) throw p2002();
-        const row = { id: nextId(), status: 'pending', progress: 0, retryCount: 0, executionAttempt: 0, dispatchedAt: null, createdAt: new Date(), updatedAt: new Date(), ...data };
+        if (data.idempotencyKey && db.agentTasks.some((t) => t.idempotencyKey === data.idempotencyKey)) throw p2002('AgentTask', ['idempotency_key']);
+        const row = { id: nextId(), status: 'pending', progress: 0, retryCount: 0, executionAttempt: 0, dispatchedAt: null, result: null, error: null, createdAt: new Date(), updatedAt: new Date(), ...data };
         db.agentTasks.push(row);
         return row;
       },
@@ -720,15 +816,30 @@ export function createFakePrisma(): { prisma: PrismaClient; db: FakeDb } {
           (where.id ? t.id === where.id : t.idempotencyKey === where.idempotencyKey),
         ) ?? null;
         if (!row) return null;
-        if (include?.session) {
-          const session = db.agentSessions.find((s) => s.id === row.sessionId) ?? null;
-          return { ...row, session };
-        }
-        return { ...row };
+        return agentTaskWithInclude(row, include);
+      },
+      findFirst: async ({ where, include, orderBy }: any) => {
+        let rows = db.agentTasks.filter((task) => {
+          return (where.sessionId === undefined || task.sessionId === where.sessionId)
+            && agentTaskMatchesSession(task, where.session)
+            && (where.kind === undefined || task.kind === where.kind)
+            && (typeof where.status !== 'string' || task.status === where.status)
+            && (where.status?.in === undefined || where.status.in.includes(task.status))
+            && (where.retryCount === undefined || task.retryCount === where.retryCount)
+            && (where.error?.not?.startsWith === undefined || !task.error?.startsWith(where.error.not.startsWith))
+            && (where.payload?.path?.[0] === undefined || isDeepStrictEqual(task.payload?.[where.payload.path[0]], where.payload.equals));
+        });
+        const order = Array.isArray(orderBy) ? orderBy : [orderBy];
+        if (order[0]?.updatedAt === 'desc') rows = rows.sort((left, right) => {
+          const byUpdated = right.updatedAt.getTime() - left.updatedAt.getTime();
+          return byUpdated || (order[1]?.id === 'desc' ? right.id.localeCompare(left.id) : 0);
+        });
+        const row = rows[0] ?? null;
+        return row ? agentTaskWithInclude(row, include) : null;
       },
       update: async ({ where, data }: any) => {
         const row = db.agentTasks.find((t) => t.id === where.id);
-        Object.assign(row, data, { updatedAt: new Date() });
+        Object.assign(row, { ...data, ...(data.result === Prisma.JsonNull ? { result: null } : {}) }, { updatedAt: new Date() });
         return { ...row };
       },
       updateMany: async ({ where, data }: any) => {
@@ -746,13 +857,13 @@ export function createFakePrisma(): { prisma: PrismaClient; db: FakeDb } {
           const executionAttempt = data.executionAttempt?.increment
             ? row.executionAttempt + data.executionAttempt.increment
             : (data.executionAttempt ?? row.executionAttempt);
-          Object.assign(row, { ...data, executionAttempt, updatedAt: new Date() });
+          Object.assign(row, { ...data, ...(data.result === Prisma.JsonNull ? { result: null } : {}), executionAttempt, updatedAt: new Date() });
         });
         return { count: rows.length };
       },
       findMany: async ({ where, include, orderBy, take }: any) => {
         let rows = db.agentTasks.filter((t) =>
-          (where.session === undefined || (where.session.userId === undefined || db.agentSessions.find((s) => s.id === t.sessionId)?.userId === where.session.userId)) &&
+          agentTaskMatchesSession(t, where.session) &&
           (where.kind === undefined || (typeof where.kind === 'string' ? t.kind === where.kind : where.kind.in.includes(t.kind))) &&
           (where.dispatchedAt === undefined || t.dispatchedAt === where.dispatchedAt) &&
           (typeof where.status !== 'string' || t.status === where.status),
@@ -760,9 +871,7 @@ export function createFakePrisma(): { prisma: PrismaClient; db: FakeDb } {
         if (where.status?.in) rows = rows.filter((task) => where.status.in.includes(task.status));
         if (orderBy?.createdAt === 'asc') rows.sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime());
         if (typeof take === 'number') rows = rows.slice(0, take);
-        if (include?.session) {
-          rows = rows.map((task) => ({ ...task, session: db.agentSessions.find((session) => session.id === task.sessionId) }));
-        }
+        if (include?.session) rows = rows.map((task) => agentTaskWithInclude(task, include));
         if (include?.approvals) {
           rows = rows.filter((t) => db.toolApprovals.some((a) => a.taskId === t.id && a.status === (include.approvals.where?.status ?? a.status)));
           rows = rows.map((t) => ({
@@ -909,6 +1018,9 @@ export function createFakePrisma(): { prisma: PrismaClient; db: FakeDb } {
         Object.assign(row, data);
         return { ...row };
       },
+      findFirst: async ({ where }: any) => db.agentTasks.find((task) =>
+        where.sessionId === undefined || task.sessionId === where.sessionId,
+      ) ?? null,
       updateMany: async ({ where, data }: any) => {
         const rows = db.aiReviews.filter((review) =>
           (where.versionId === undefined || review.versionId === where.versionId) &&
@@ -1125,7 +1237,27 @@ export function createFakePrisma(): { prisma: PrismaClient; db: FakeDb } {
         return row;
       },
     },
-    $transaction: async (fn: (tx: unknown) => Promise<unknown>) => fn(prisma),
+    $transaction: async (fn: (tx: unknown) => Promise<unknown>) => {
+      let release!: () => void;
+      const previous = transactionQueue;
+      transactionQueue = new Promise<void>((resolve) => { release = resolve; });
+      await previous;
+      const refs = Object.fromEntries(Object.entries(db)) as Record<string, any[]>;
+      const snapshot = structuredClone(db) as Record<string, any[]>;
+      const tx = { ...prisma };
+      delete tx.$transaction;
+      try {
+        return await fn(tx);
+      } catch (error) {
+        for (const [key, rows] of Object.entries(snapshot)) {
+          refs[key].splice(0, refs[key].length, ...rows);
+          (db as unknown as Record<string, any[]>)[key] = refs[key];
+        }
+        throw error;
+      } finally {
+        release();
+      }
+    },
   };
   return { prisma: prisma as PrismaClient, db };
 }

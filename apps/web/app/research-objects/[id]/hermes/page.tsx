@@ -2,9 +2,10 @@
 
 import Link from 'next/link';
 import { useLocale, useTranslations } from 'next-intl';
-import { useSearchParams } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { useEffect, useMemo, useState } from 'react';
 import { HermesAssistantDrawer } from '@/components/hermes/HermesAssistantDrawer';
+import { LiteratureAcquisitionDisclosure } from '@/components/dashboard/LiteratureAcquisition';
 import { HermesDockAnchor } from '@/components/hermes/HermesDockAnchor';
 import { ResearchWorkspaceNav } from '@/components/research/ResearchWorkspaceNav';
 import { DashboardShell } from '@/components/shell/DashboardShell';
@@ -14,6 +15,7 @@ const fields: Array<keyof SdfCore> = ['problem', 'insight', 'method', 'results',
 const emptyCore = (): SdfCore => ({ schemaVersion: '0.1.0', problem: '', insight: '', method: '', results: '', limitations: '', reproducibility: '' });
 export default function HermesReviewPage({ params: routeParams }: { params: { id: string } }) {
   const searchParams = useSearchParams();
+  const router = useRouter();
   const locale = useLocale() as 'zh' | 'en';
   const t = useTranslations('hermesReview');
   const shell = useTranslations('shell');
@@ -59,11 +61,16 @@ export default function HermesReviewPage({ params: routeParams }: { params: { id
       <ResearchWorkspaceNav active="sdf" objectId={routeParams.id} />
     </div>
   );
+  const literatureEntry = (
+    <div className="mt-7 max-w-3xl">
+      <LiteratureAcquisitionDisclosure instanceId="ro-hermes-literature" onAuthenticationRequired={() => router.replace(`/auth/login?returnTo=${encodeURIComponent(`/research-objects/${routeParams.id}/hermes${taskId ? `?task=${taskId}` : ''}`)}`)} target={{ kind: 'research_object', researchObjectId: routeParams.id }} />
+    </div>
+  );
 
   if (!taskId) return (
     <DashboardShell mainClassName="p-0" navigationLabel={shell('primaryNavigation')} skipLabel={shell('skipToContent')}>
       {workspaceNavigation}
-      <div className="min-h-[calc(100dvh-7rem)] p-8 text-os-ink"><p role="alert">{t('missingTask')}</p></div>
+      <div className="min-h-[calc(100dvh-7rem)] p-8 text-os-ink"><p role="alert">{t('missingTask')}</p>{literatureEntry}</div>
     </DashboardShell>
   );
   return <DashboardShell mainClassName="p-0" navigationLabel={shell('primaryNavigation')} skipLabel={shell('skipToContent')}>
@@ -76,6 +83,7 @@ export default function HermesReviewPage({ params: routeParams }: { params: { id
         <h1 className="mt-2 font-reading text-4xl font-normal text-os-ink">{t('title')}</h1>
         <p data-reading-role="body" className="mt-3 max-w-[66ch] text-os-muted-paper">{t('description')}</p>
       </header>
+      {literatureEntry}
       {error && <p className="mt-6 max-w-3xl border-l-2 border-red-700 bg-red-50 px-4 py-3 text-sm text-red-900" role="alert">{error}</p>}
       {!detail ? <p className="mt-10 text-base text-os-muted-paper" role="status">{t('loading')}</p> : <div className="mt-8 grid items-start gap-8 lg:grid-cols-[minmax(0,1fr)_360px]">
         <div>
@@ -102,6 +110,7 @@ export default function HermesReviewPage({ params: routeParams }: { params: { id
           onOpenChange={setHermesOpen}
           open={hermesOpen}
           route="research-object-edit"
+          routeResearchObjectId={routeParams.id}
           suggestion={reviewSuggestion}
           target={null}
         />

@@ -1,0 +1,175 @@
+"""Explicit operator-only launcher for the pinned ScanSci CARSI flow."""
+
+from __future__ import annotations
+
+import argparse
+import json
+import os
+from pathlib import Path
+import stat
+import subprocess
+import sys
+from typing import Callable, Sequence
+
+from .session import SessionStore
+
+
+INSTITUTION = "浙江大学"
+SESSION_ROOT = Path("/session")
+USERNAME_SECRET = Path("/run/secrets/scansci_username")
+PASSWORD_SECRET = Path("/run/secrets/scansci_password")
+
+
+def main(
+    argv: Sequence[str] | None = None,
+    *,
+    runner: Callable[..., object] = subprocess.run,
+    session_root: Path = SESSION_ROOT,
+) -> int:
+    parser = argparse.ArgumentParser(add_help=False)
+    parser.add_argument("--operator-start", action="store_true")
+    try:
+        arguments = parser.parse_args(list(argv) if argv is not None else None)
+    except SystemExit:
+        return 64
+    if not arguments.operator_start:
+        return 64
+
+    store = SessionStore(session_root, expected_uid=None, enforce_permissions=os.name != "nt")
+    store.ensure_root()
+    try:
+        _validate_optional_credentials()
+        _write_legal_config(session_root)
+    except (OSError, UnicodeError, ValueError):
+        store.publish_status("auth_required", reason="operator_auth_required")
+        return 1
+    environment = _browser_environment(session_root)
+    commands = (
+        ["scansci-pdf", "setup", INSTITUTION],
+        ["scansci-pdf", "federated-login", "sciencedirect", "--force"],
+    )
+    for command in commands:
+        try:
+            completed = runner(
+                command,
+                check=False,
+                env=environment,
+                stdin=subprocess.DEVNULL,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+            )
+        except Exception:
+            store.publish_status("auth_required", reason="operator_auth_required")
+            return 1
+        if getattr(completed, "returncode", 1) != 0:
+            store.publish_status("auth_required", reason="operator_auth_required")
+            return 1
+    store.publish_status("ready")
+    return 0
+
+
+def _write_legal_config(session_root: Path) -> None:
+    data_root = session_root / "scansci"
+    cache_root = data_root / "cache"
+    profile_root = session_root / "chromium"
+    for directory in (data_root, cache_root, profile_root):
+        directory.mkdir(parents=True, exist_ok=True, mode=0o700)
+        if os.name != "nt":
+            directory.chmod(0o700)
+    config = {
+        "output_dir": str(session_root / "downloads"),
+        "cache_dir": str(cache_root),
+        "download_strategy": "legal_only",
+        "scihub_enabled": False,
+        "use_tor": False,
+        "tor_proxy": "",
+        "use_tor_for_scihub": False,
+        "network_proxy": "",
+        "proxy_pool": "",
+        "parallel_sources": False,
+        "parallel_probes": False,
+        "carsi_enabled": True,
+        "carsi_idp_name": INSTITUTION,
+        "carsi_cookie_dir": str(cache_root / "carsi_cookies"),
+        "chrome_profile_dir": str(profile_root),
+        "browser_backend": "patchright",
+        "browser_executable": "/usr/bin/chromium",
+        "browser_auto_upgrade": False,
+        "remote_assist_port": 0,
+        "auto_relogin": False,
+    }
+    target = data_root / "config.json"
+    target.write_text(json.dumps(config, sort_keys=True, separators=(",", ":")), encoding="utf-8")
+    if os.name != "nt":
+        target.chmod(0o600)
+
+
+def _browser_environment(session_root: Path) -> dict[str, str]:
+    environment = {
+        "PATH": os.environ.get("PATH", ""),
+        "HOME": str(session_root / "home"),
+        "SCANSCI_PDF_DATA_DIR": str(session_root / "scansci"),
+        "PYTHONNOUSERSITE": "1",
+        "PYTHONDONTWRITEBYTECODE": "1",
+        "DISPLAY": os.environ.get("DISPLAY", ":99"),
+    }
+    for key in ("LANG", "LC_ALL", "TZ"):
+        if value := os.environ.get(key):
+            environment[key] = value
+    return environment
+
+
+def _validate_optional_credentials() -> None:
+    present = [os.path.lexists(path) for path in (USERNAME_SECRET, PASSWORD_SECRET)]
+    if any(present) and not all(present):
+        raise ValueError("optional credentials must be provisioned as a pair")
+    for path in (USERNAME_SECRET, PASSWORD_SECRET):
+        if not os.path.lexists(path):
+            continue
+        value = _read_secret(path, expected_uid=_current_uid())
+        if not value.strip():
+            raise ValueError("optional credential secret is invalid")
+
+
+def _validate_secret(path: Path, *, expected_uid: int | None) -> None:
+    details = path.lstat()
+    if path.is_symlink() or not _secret_metadata_is_safe(details.st_mode, details.st_uid, expected_uid):
+        raise ValueError("optional credential secret is unsafe")
+
+
+def _read_secret(path: Path, *, expected_uid: int | None) -> str:
+    before = path.lstat()
+    if path.is_symlink() or not _secret_metadata_is_safe(before.st_mode, before.st_uid, expected_uid):
+        raise ValueError("optional credential secret is unsafe")
+    descriptor = os.open(path, os.O_RDONLY | getattr(os, "O_BINARY", 0) | getattr(os, "O_NOFOLLOW", 0))
+    try:
+        opened = os.fstat(descriptor)
+        if (before.st_dev, before.st_ino) != (opened.st_dev, opened.st_ino):
+            raise ValueError("optional credential secret is unsafe")
+        with os.fdopen(descriptor, "rb", closefd=False) as secret:
+            raw = secret.read(4097)
+        after = path.lstat()
+        if (opened.st_dev, opened.st_ino) != (after.st_dev, after.st_ino):
+            raise ValueError("optional credential secret is unsafe")
+    finally:
+        os.close(descriptor)
+    if len(raw) > 4096:
+        raise ValueError("optional credential secret is invalid")
+    return raw.decode("utf-8")
+
+
+def _secret_metadata_is_safe(mode: int, owner_uid: int, expected_uid: int | None) -> bool:
+    if not stat.S_ISREG(mode):
+        return False
+    if expected_uid is not None and owner_uid != expected_uid:
+        return False
+    return stat.S_IMODE(mode) == 0o400
+
+
+def _current_uid() -> int | None:
+    getter = getattr(os, "geteuid", None)
+    return getter() if getter is not None else None
+
+
+if __name__ == "__main__":
+    raise SystemExit(main(sys.argv[1:]))

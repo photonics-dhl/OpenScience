@@ -1,17 +1,17 @@
 # Hermes Research Intelligence CURRENT Handoff
 
-> **CURRENT active-memory，2026-08-30。** Task 10 外部检索与临时文档生命周期已部署、生产验收并合入 main；下一产品任务是 Task 11 确定性 PresentationAssets。Landing/Hermes 视觉仍冻结。
+> **CURRENT active-memory，2026-08-31。** ScanSci plan Task 9 已通过最终复审；Task 10 进入 GitHub/CI/ECS 真实验收，Task 11 阻断。Landing/Hermes 视觉仍冻结。
 
 ## Goal and state
 
 - 产品目标：以 3–7 个 Claim 为公开 RO 中心，提供可定位 Evidence、条件/限制、身份静默路由、CPU 文档解析、混合检索和可版本化富媒体。
-- Taskmaster `hermes-research-intelligence` 为 10/12：Tasks 1–10 done；Task 11 dependency-ready。
-- 证据整理稿位于 `docs/proposals/2026-08-29-project-development-deployment-evidence-pack.md`；当前产品主线转入 Task 11。
+- Taskmaster `hermes-research-intelligence` 仍为 9/12；独立 ScanSci plan Tasks 1–9 done、Task 10 in progress，Task 11 blocked。
+- 当前产品主线是将一次浙江大学 CARSI 认证变成 Hermes 持久默认下载能力，并接通全部产品入口。
 
 ## Version tuple
 
 - Worktree: `E:/Miscellaneous/XGS/.worktrees/readable-hermes-guidance`
-- Branch / repository main: `codex/seaweed-metadata-compat` / `689331845574612130f223d08c92e61721c16586`；远端仅保留 `main`。
+- Branch / reviewed local candidate / repository main: `codex/scansci-default-capability` / `3d23b877265d084b200b54bcd4d1d2eb8cbf593f` / `463c8e3a2a80138cda2d669c370c0481ed4c0877`；远端仅保留 `main`。
 - Production application source / immutable release: `689331845574612130f223d08c92e61721c16586`
 - Rollback: `c435c4c8b2800bb20998fd9a9a93f2db96328661`; core/search migrations `32/32` / `2/2`
 - 本地 `main` 与其他 worktree 有用户改动，不得触碰或用它推断生产；上述 tuple 已从 ECS 重新实测。
@@ -43,6 +43,15 @@
 10. Task 10 已生产完成：Semantic Scholar/Tavily/ScanSci legal-only adapter、rights、72h cache、10min one-use download、GC/provenance 均接通；ScanSci 默认 disabled，Tavily 四个授权 key 当前均额度耗尽并显式降级。
 11. 真实 Semantic Scholar Hermes 任务返回 3 sources；SeaweedFS checksum metadata 生产兼容经 PR #9 修复。77-byte 自著 PDF 完成 HEAD hash、下载、重放 404、72h 到期和真实 Worker GC；GC 后 provenance/locator 保留，取证后 canary 业务行精确清零、审计保留。
 12. Exact CI `33284956868` / job `99186426490` 全绿；最终 release `6893318…`、rollback `c435c4c…`。远端仅 `main`；精确移除无容器引用的旧 dev MinIO server/mc 镜像后，磁盘 36G/148G（25%）、107G available，active+rollback 两个 release，390.7MB bounded build cache 保留，无 broad prune。
+13. 用户验收指出 ScanSci 仅有 disabled adapter 不能算产品完成。Task 10 已重新打开：一次浙江大学 CARSI 登录需持久复用，必要时账号凭据放 root-only Secret，Hermes/Personal Space/RO Hermes/Files-Evidence 全部走统一下载入口；设计见 `docs/specs/2026-08-30-scansci-default-capability-design.md`。
+14. ScanSci plan Task 4 已形成本地候选：SHA legal/auth、networkless Secret init、持久 session、pre-Worker runtime gate、精确有/无服务 rollback 与 active+rollback retention；ADR-012 已记录。未部署，不能替代 ECS/CARSI acceptance。
+15. ScanSci plan Task 5 atomic candidate 为 `ff5568f` + `4763228`：Personal RO/SDF、Session、Task/credit/audit 在一笔三次有界 Serializable 事务提交；exact replay 先于余额，P2002 精确绑定 model/constraint，Redis 仅 commit 后投递并保留 pending recovery。Domain/API/Agent 本地门禁 green；两连接 PostgreSQL SSI/mismatch suite 已加入但本地未运行，ECS acceptance pending。
+16. ScanSci plan Task 6 local candidate 为 `60b3740`：durable provider state 的事务回滚/重放/generation 矩阵、disabled rollback Secret、非致命 observation persistence 与真实 PostgreSQL migration/concurrency 合同已闭合；Domain 520、Database 26、Worker 501 与 typecheck green，独立复审 READY。Migration 33/真实 suite/CARSI 仍是 ECS-only pending。
+17. ScanSci plan Task 7 local candidate 为 `22088c0` + `86e037e` + `3e829db` + `1059072` + `82d4772` + `185d5d6`：public `canRetry` 只来自共享 predicate；marker 只能由 acquisition durable path 构造，generic/public/internal caller 与历史/畸形/撤权均 false。Retry 用三次 P2034-only Serializable authority/CAS/audit，recovery 单次 ID-only SQL 精确筛选后复验，无循环/top-N/payload 泄露；14-case corpus 标注 JSONB/JavaScript-only，PG parity 以独立 terminal sentinel 证明 raw selector 分支。Domain/API/Worker `534/99/502`，real-PG race/parity/deep-history contract 仅 typecheck；既有 Client/Playwright `7/7` 未改，ECS 375px/真实下载和 Task 8 四入口仍 pending。
+18. ScanSci plan Task 8 local candidate 为 `8238a9f`：Hermes Drawer、RO Hermes、RO Files/Evidence 与 Personal Space 共用唯一 acquisition/recovery/poll/download；有界双语 + shared DOI/arXiv 确定性分类，Dashboard Personal/RO target、query-only metadata、44px/i18n/dark-paper/within-form 均闭合。Web `462 + 5 Node`、build/typecheck、product `72/72`、Hermes `19/19 + 8/8` green；ECS/CARSI/OA/一次性下载仍 pending。
+19. Task 8 fix round `d75ca1c`：Drawer stable key/fingerprint 跨关闭重开且新 intent 换 key；recovery durable target + API strict query + Domain pre-limit target scope，RO route ID 不受 cross-RO task 影响，IME composition Enter inert。Domain/API/Worker/Web `535/101/502/463 + 5 Node`、browser fix `6/6`、product `72/72`、Hermes `19/19 + 8/8` green。
+20. 用户授权的例外修复波 `3d23b87` 已关闭 protected-sidecar cleanup ownership 与 canonical Worker image binding：mutation 前拒绝既有 candidate sidecar，unique no-clobber staging/hard-link publication 与 ownership-gated cleanup 经真实函数行为测试；Worker release image ID/source label/运行容器和精确三挂载 fail closed。独立 scoped review 无 Critical/Important，READY。
+21. 新鲜全仓 build/typecheck/lint/test green：release `97/104`、ScanSci `82/89`、Web `469`、Domain `535`、Worker `503`、API `101`，失败 0。两项 bounded staging/symlink hygiene Minor 在 Task 10 ECS preflight/精确清理中核验；生产仍未写、ScanSci disabled。部署前还须确认 targetless durable ScanSci tasks = 0；非零阻断，不自动 migration。
 
 ## Constraints
 
@@ -52,17 +61,18 @@
 
 ## Next action
 
-1. 从 Taskmaster Task 11 开始：以真实 Claim/source hash 生成确定性 SVG/Plotly/交互 HTML，并强制 `presentation_not_evidence`。
-2. MiniMax image/video 仍仅管理员代表性成果、显式审批和成本审计；服务器纯 CPU，不部署本地 GPU 栈。
-3. 继续以服务器为最终验收；本地只做代码与浏览器门禁，不运行 Docker。Task 12 再做完整 golden-corpus 和上线总验收。
+1. 执行 Task 10 Step 1：推送 PR、等待 exact GitHub CI、合并为 main；只部署 merged main commit。
+2. 之后经显式 Git Bash/canonical SSH 完成 Secret provision、ECS no-switch preflight、canonical deploy 与 rollback/retention；不重做 Task 7/8 状态机，也不把本地证据冒充生产。
+3. 用真实 OA + 浙江大学 CARSI PDF、四入口/375px、容器重建 session、one-use、72h/600s、灰色源调用 0 与精确磁盘卫生关闭 Task 10。
 
 ## Read first
 
 1. `AGENTS.md`
 2. 本 handoff
-3. `docs/proposals/2026-08-29-project-development-deployment-evidence-pack.md`
-4. `docs/plans/2026-08-30-hermes-external-retrieval-lifecycle-plan.md`
-5. `docs/specs/2026-08-26-hermes-research-intelligence-platform-design.md`
-6. `docs/progress.md`
+3. `docs/specs/2026-08-30-scansci-default-capability-design.md`
+4. `docs/plans/2026-08-30-scansci-default-capability-plan.md`
+5. `docs/plans/2026-08-30-hermes-external-retrieval-lifecycle-plan.md`
+6. `docs/specs/2026-08-26-hermes-research-intelligence-platform-design.md`
+7. `docs/progress.md`
 
 `project_index.md` 只定向检索 CURRENT；不要从较旧 `main` 或历史 release 段落推断现状。

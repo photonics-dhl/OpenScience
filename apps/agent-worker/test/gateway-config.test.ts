@@ -1,5 +1,6 @@
+import { constants } from 'node:fs';
 import { describe, expect, it, vi } from 'vitest';
-import { buildGateway } from '../src/index';
+import { buildGateway, buildSourceRetrieveHandlerFromEnv, loadScanSciServiceTokenFile } from '../src/index';
 
 const ocrRequest = () => ({
   authorizationContext: { taskId: 'task-1', workspaceId: 'workspace-1', actorId: 'user-1' },
@@ -15,6 +16,104 @@ const ocrRequest = () => ({
 });
 
 describe('MiniMax worker gateway config', () => {
+  it('reads a ScanSci service token once from a validated nofollow descriptor', () => {
+    const openSync = vi.fn(() => 42);
+    const readSync = vi.fn((_fd, buffer: Buffer) => { buffer.write('service-token'); return 13; });
+    const closeSync = vi.fn();
+    const fstatSync = vi.fn(() => ({ isFile: () => true, uid: 1000, gid: 1000, mode: 0o100400, nlink: 1, size: 13 }));
+    expect(loadScanSciServiceTokenFile('/run/scansci-worker-secrets/scansci_service_token', { openSync, readSync, closeSync, fstatSync })).toBe('service-token');
+    expect(openSync).toHaveBeenCalledWith(
+      '/run/scansci-worker-secrets/scansci_service_token',
+      constants.O_RDONLY | constants.O_NOFOLLOW,
+    );
+    expect(fstatSync).toHaveBeenCalledWith(42);
+    expect(readSync).toHaveBeenCalledWith(42, expect.any(Buffer), 0, 13, null);
+    expect(fstatSync.mock.invocationCallOrder[0]).toBeLessThan(readSync.mock.invocationCallOrder[0]!);
+    expect(closeSync).toHaveBeenCalledWith(42);
+  });
+
+  it('closes the validated descriptor when its single read fails', () => {
+    const closeSync = vi.fn();
+    expect(() => loadScanSciServiceTokenFile('/run/scansci-worker-secrets/scansci_service_token', {
+      openSync: () => 81,
+      fstatSync: () => ({ isFile: () => true, uid: 1000, gid: 1000, mode: 0o100400, nlink: 1, size: 13 }),
+      readSync: () => { throw new Error('descriptor read failed'); },
+      closeSync,
+    })).toThrow(/SCANSCI_SERVICE_TOKEN_FILE/);
+    expect(closeSync).toHaveBeenCalledWith(81);
+  });
+
+  it('rejects a configured missing token file without closing an unopened descriptor', () => {
+    const closeSync = vi.fn();
+    expect(() => loadScanSciServiceTokenFile('/run/scansci-worker-secrets/missing', {
+      openSync: () => { throw new Error('ENOENT'); },
+      fstatSync: vi.fn(),
+      readSync: vi.fn(),
+      closeSync,
+    })).toThrow(/SCANSCI_SERVICE_TOKEN_FILE/);
+    expect(closeSync).not.toHaveBeenCalled();
+  });
+
+  it('rejects a whitespace-only token read from an otherwise valid descriptor', () => {
+    const closeSync = vi.fn();
+    expect(() => loadScanSciServiceTokenFile('/run/scansci-worker-secrets/scansci_service_token', {
+      openSync: () => 82,
+      fstatSync: () => ({ isFile: () => true, uid: 1000, gid: 1000, mode: 0o100400, nlink: 1, size: 3 }),
+      readSync: (_fd, buffer: Buffer) => { buffer.write(' \n '); return 3; },
+      closeSync,
+    })).toThrow(/SCANSCI_SERVICE_TOKEN_FILE/);
+    expect(closeSync).toHaveBeenCalledWith(82);
+  });
+
+  it.each([
+    ['symlink', { isFile: () => false, uid: 1000, gid: 1000, mode: 0o120400, nlink: 1, size: 1 }],
+    ['directory', { isFile: () => false, uid: 1000, gid: 1000, mode: 0o0400, nlink: 1, size: 1 }],
+    ['wrong owner', { isFile: () => true, uid: 0, gid: 1000, mode: 0o100400, nlink: 1, size: 1 }],
+    ['wrong group', { isFile: () => true, uid: 1000, gid: 0, mode: 0o100400, nlink: 1, size: 1 }],
+    ['wrong mode', { isFile: () => true, uid: 1000, gid: 1000, mode: 0o100440, nlink: 1, size: 1 }],
+    ['setuid file', { isFile: () => true, uid: 1000, gid: 1000, mode: 0o104400, nlink: 1, size: 1 }],
+    ['setgid file', { isFile: () => true, uid: 1000, gid: 1000, mode: 0o102400, nlink: 1, size: 1 }],
+    ['sticky file', { isFile: () => true, uid: 1000, gid: 1000, mode: 0o101400, nlink: 1, size: 1 }],
+    ['hardlink', { isFile: () => true, uid: 1000, gid: 1000, mode: 0o100400, nlink: 2, size: 1 }],
+    ['empty file', { isFile: () => true, uid: 1000, gid: 1000, mode: 0o100400, nlink: 1, size: 0 }],
+    ['oversized file', { isFile: () => true, uid: 1000, gid: 1000, mode: 0o100400, nlink: 1, size: 4097 }],
+  ])('rejects a %s ScanSci service-token descriptor', (_label, stat) => {
+    expect(() => loadScanSciServiceTokenFile('/run/secrets/scansci_service_token', {
+      openSync: () => 42,
+      readSync: () => 1,
+      closeSync: () => undefined,
+      fstatSync: () => stat,
+    })).toThrow(/SCANSCI_SERVICE_TOKEN_FILE/);
+  });
+
+  it.each([
+    ['inline source', { SCANSCI_ENABLED: 'true', SCANSCI_SERVICE_TOKEN: 'inline-token' }, /forbidden/],
+    ['mixed sources', {
+      SCANSCI_ENABLED: 'true',
+      SCANSCI_SERVICE_TOKEN: 'inline-token',
+      SCANSCI_SERVICE_TOKEN_FILE: '/run/scansci-worker-secrets/scansci_service_token',
+    }, /forbidden/],
+    ['missing file source', { SCANSCI_ENABLED: 'true' }, /required/],
+    ['non-canonical production path', {
+      NODE_ENV: 'production',
+      SCANSCI_ENABLED: 'true',
+      SCANSCI_SERVICE_TOKEN_FILE: '/run/secrets/scansci_service_token',
+    }, /fixed Worker secret path/],
+  ])('rejects $s', (_label, env, expected) => {
+    expect(() => buildSourceRetrieveHandlerFromEnv({
+      RETRIEVAL_QUERY_HMAC_SECRET: 'retrieval-query-test-secret-at-least-32-bytes',
+      ...env,
+    })).toThrow(expected);
+  });
+
+  it('does not open a stale configured token path while ScanSci is disabled for rollback', () => {
+    expect(() => buildSourceRetrieveHandlerFromEnv({
+      RETRIEVAL_QUERY_HMAC_SECRET: 'retrieval-query-test-secret-at-least-32-bytes',
+      SCANSCI_ENABLED: 'false',
+      SCANSCI_SERVICE_TOKEN_FILE: '/run/scansci-worker-secrets/does-not-exist',
+    })).not.toThrow();
+  });
+
   it('Token Plan key1 配额失败后以 Anthropic 协议回退 key2，model ID 保持不变', async () => {
     const fetchMock = vi.fn(async (_url: string, init?: RequestInit) => {
       const key = (init?.headers as Record<string, string>)['x-api-key'];

@@ -1,6 +1,6 @@
 import {
   decideSourceRights,
-  parseSourceRetrievePayload,
+  parseSourceRetrieveRequestPayload,
   type SourceRetrievePayload,
   type SourceRightsDecision,
 } from '@openscience/domain';
@@ -25,6 +25,19 @@ export interface RetrievalRuntime {
     rights: SourceRightsDecision;
     fullText?: Extract<ScanSciAcquireResult, { status: 'succeeded' }>;
   }): Promise<PersistedRetrievalSource>;
+  observeScanSci?: (observation: 'auth_required' | 'succeeded') => Promise<void>;
+}
+
+async function observeScanSciWithoutFailingRetrieval(
+  observer: RetrievalRuntime['observeScanSci'],
+  observation: 'auth_required' | 'succeeded',
+): Promise<void> {
+  try {
+    await observer?.(observation);
+  } catch {
+    // Provider-state persistence has its own bounded retry. A later task can
+    // replay the raw observation; useful metadata/full-text results remain valid.
+  }
 }
 
 export async function executeSourceRetrieval(
@@ -32,7 +45,7 @@ export async function executeSourceRetrieval(
   runtime: RetrievalRuntime,
   context: { institutionalSubjectId?: string } = {},
 ): Promise<{ sources: PersistedRetrievalSource[]; providers: Array<{ provider: string; status: string; code?: string }> }> {
-  const payload: SourceRetrievePayload = parseSourceRetrievePayload(rawPayload);
+  const payload: SourceRetrievePayload = parseSourceRetrieveRequestPayload(rawPayload);
   const sources: PersistedRetrievalSource[] = [];
   const providers: Array<{ provider: string; status: string; code?: string }> = [];
   for (const provider of payload.providers) {
@@ -57,6 +70,10 @@ export async function executeSourceRetrieval(
     } else {
       if (!context.institutionalSubjectId) throw new Error('[blocked] ScanSci subject binding is unavailable');
       const result = await runtime.scansci.acquire({ identifier: payload.identifier, subjectId: context.institutionalSubjectId });
+      if (result.status === 'succeeded') await observeScanSciWithoutFailingRetrieval(runtime.observeScanSci, 'succeeded');
+      else if (result.status === 'unavailable' && result.code === 'auth_required') {
+        await observeScanSciWithoutFailingRetrieval(runtime.observeScanSci, 'auth_required');
+      }
       if (result.status !== 'succeeded') {
         providers.push({ provider: 'scansci', status: result.status, code: result.code });
       } else {

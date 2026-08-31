@@ -598,6 +598,37 @@
       "upload": "Upload materials",
       "blank": "Create blank RO"
     },
+    "literature": {
+      "eyebrow": "Personal literature",
+      "title": "Find a source",
+      "description": "Search by title, DOI, or arXiv ID. Retrieval and access checks remain in your research space.",
+      "roEyebrow": "Research object literature",
+      "roTitle": "Add a source to this research object",
+      "roDescription": "Search by title, DOI, or arXiv ID and keep the result with the active research object.",
+      "queryLabel": "Title, DOI, or arXiv ID",
+      "queryPlaceholder": "10.1000/example or a paper title",
+      "search": "Search metadata",
+      "metadata": "Metadata results",
+      "source": "Open source record",
+      "untitled": "Untitled source",
+      "getFullText": "Get full text",
+      "disclosure": "Get full text",
+      "download": "Download source",
+      "statusPending": "Waiting in queue",
+      "statusRunning": "Retrieving source",
+      "statusAuthRequired": "Institutional access needs attention before full text can be retrieved.",
+      "statusFailed": "Retrieval did not complete.",
+      "statusBlocked": "This retrieval was blocked and cannot be retried.",
+      "statusRetryExhausted": "The available retry has already been used.",
+      "statusSucceeded": "Source ready",
+      "expires": "Available until {expiresAt}",
+      "retry": "Try again",
+      "noResults": "No matching metadata yet.",
+      "error": "The source request could not be completed. Please try again."
+      ,"pendingIntent": "Finish or recover the current source request before starting another."
+      ,"reconnecting": "Reconnecting to the task…"
+      ,"recoveryError": "The task could no longer be recovered. You can start a new source request."
+    },
     "hermes": {
       "title": "Hermes tasks",
       "liveQueue": "Hermes / live queue",
@@ -607,6 +638,7 @@
       "view": "View progress",
       "progress": "{current} of {total} fields",
       "guide": {
+        "backToGuide": "Back to research guidance",
         "actionable": { "title": "A research task can move forward", "body": "I can start with the highest-priority task and help determine the next step." },
         "review": { "title": "Evidence needs your review", "body": "The current task is explicitly marked for review. We can begin by checking the evidence." },
         "failed": { "title": "A task needs investigation", "body": "The current task did not complete. I can explain the failure and suggest a safe recovery path." },

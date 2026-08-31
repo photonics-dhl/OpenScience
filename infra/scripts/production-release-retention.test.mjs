@@ -4,6 +4,7 @@ import { readFileSync } from 'node:fs';
 
 import {
   deriveReleaseImageTags,
+  parseReleaseCapability,
   parseMountInfo,
   parsePendingIntent,
   parseRetentionCli,
@@ -32,7 +33,22 @@ test('retention derives only exact release-scoped image tags', () => {
     `openscience-agent-worker:${inactive}`,
     `openscience-document-parser:${inactive}`,
     `openscience-embedding-worker:${inactive}`,
+    `openscience-scansci-auth:${inactive}`,
+    `openscience-scansci-legal:${inactive}`,
   ]);
+});
+
+test('schema 3 capability binds exact ScanSci image IDs and rejects tampering', () => {
+  const legalId = `sha256:${'d'.repeat(64)}`;
+  const authId = `sha256:${'e'.repeat(64)}`;
+  const source = [
+    'schema=3', 'embedding_deploy=false', 'bge_m3_enabled=false', 'model_version_id=',
+    'model_revision=', 'source_sha256=', 'package_freeze_sha256=', 'model_manifest_sha256=',
+    'scansci_deploy=true', `scansci_legal_image_id=${legalId}`, `scansci_auth_image_id=${authId}`,
+  ].join('\n');
+  assert.deepEqual(parseReleaseCapability(source), { embeddingDeploy: false, scansciDeploy: true, legalImageId: legalId, authImageId: authId });
+  assert.throws(() => parseReleaseCapability(source.replace(legalId, `sha256:${'f'.repeat(64)}`), { expectedLegalImageId: legalId }), /invalid/u);
+  assert.deepEqual(parseReleaseCapability(source.replace('schema=3', 'schema=2').split('\n').filter((line) => !line.startsWith('scansci_')).join('\n')), { embeddingDeploy: false, scansciDeploy: false });
 });
 
 test('mountinfo parser exposes nested cleanup boundaries with escaped paths decoded', () => {

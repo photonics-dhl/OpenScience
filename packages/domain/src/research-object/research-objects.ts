@@ -1,11 +1,13 @@
 import type { AuditContext } from '@openscience/observability';
 import { SDF_CORE_FIELDS } from '@openscience/sdf-schema';
 import { recordAudit } from '../workspace/audit';
-import { requireMembership } from '../workspace/helpers';
+import type { Prisma, ResearchObject } from '@prisma/client';
+import { requireActiveMembership, requireMembership } from '../workspace/helpers';
 import { requireRoAccess } from '../visibility/access';
 import type { WorkspaceDeps } from '../workspace/types';
 import { ResearchObjectError } from './errors';
 import { SDF_NODE_TYPES, type RoStatus, type RoVisibility } from './types';
+import { isOwnedPrismaIdempotencyConflict, throwOwnedPrismaIdempotencyConflict } from '../prisma-idempotency-conflict';
 
 export interface CreateResearchObjectInput {
   workspaceId: string;
@@ -67,6 +69,94 @@ function emptyCore(): Record<string, string> {
   return core;
 }
 
+function validateTitle(title: string): string {
+  const normalized = title.trim();
+  if (!normalized || normalized.length > 200) throw new ResearchObjectError('VALIDATION_ERROR', '标题长度需为 1-200 字符');
+  return normalized;
+}
+
+const RESEARCH_OBJECT_IDEMPOTENCY_CONSTRAINT = {
+  modelName: 'ResearchObject', field: 'idempotencyKey', column: 'idempotency_key',
+  constraint: 'research_objects_idempotency_key_key',
+} as const;
+
+async function createResearchObjectRecord(
+  deps: WorkspaceDeps,
+  tx: Prisma.TransactionClient,
+  input: {
+    workspaceId: string;
+    userId: string;
+    title: string;
+    idempotencyKey?: string;
+    core: Record<string, string>;
+    auditMetadata?: Record<string, unknown>;
+  },
+  ctx: AuditContext,
+): Promise<ResearchObject> {
+  let created: ResearchObject;
+  try {
+    created = await tx.researchObject.create({
+      data: {
+        workspaceId: input.workspaceId,
+        title: input.title,
+        createdBy: input.userId,
+        idempotencyKey: input.idempotencyKey,
+        sdfDocument: {
+          create: {
+            coreJson: input.core as object,
+            nodes: {
+              create: SDF_NODE_TYPES.map((nodeType, i) => ({
+                nodeType,
+                content: (input.core[nodeType] as string | undefined) ?? '',
+                sortOrder: i,
+              })),
+            },
+          },
+        },
+      },
+    });
+  } catch (error) {
+    if (!input.idempotencyKey) throw error;
+    throwOwnedPrismaIdempotencyConflict(error, RESEARCH_OBJECT_IDEMPOTENCY_CONSTRAINT);
+  }
+  await recordAudit(
+    deps, tx,
+    {
+      actorId: input.userId, action: 'research_object.create', workspaceId: input.workspaceId,
+      targetType: 'research_object', targetId: created.id,
+      metadata: { title: input.title, ...input.auditMetadata },
+    },
+    ctx,
+  );
+  return created;
+}
+
+/** Server-only RO creation primitive for callers that already own the outer transaction. */
+export async function createSystemResearchObjectInTransaction(
+  deps: WorkspaceDeps,
+  tx: Prisma.TransactionClient,
+  input: { workspaceId: string; userId: string; title: string; idempotencyKey: `system:${string}` },
+  ctx: AuditContext = {},
+): Promise<ResearchObject> {
+  if (!input.idempotencyKey.startsWith('system:')) {
+    throw new ResearchObjectError('VALIDATION_ERROR', '系统研究对象必须使用保留幂等键');
+  }
+  await requireActiveMembership(tx, input.workspaceId, input.userId);
+  const existing = await tx.researchObject.findUnique({ where: { idempotencyKey: input.idempotencyKey } });
+  if (existing) {
+    if (existing.workspaceId !== input.workspaceId || existing.createdBy !== input.userId) {
+      throw new ResearchObjectError('FORBIDDEN', '系统研究对象归属不一致');
+    }
+    return existing;
+  }
+  return createResearchObjectRecord(deps, tx, {
+    ...input,
+    title: validateTitle(input.title),
+    core: emptyCore(),
+    auditMetadata: { system: 'personal-literature' },
+  }, ctx);
+}
+
 /**
  * 在个人 Workspace 创建私有 RO（验收步骤 2）：
  * 同事务建 RO + SDFDocument（core_json）+ 六 SDFNode + 审计（§17）。
@@ -77,10 +167,12 @@ export async function createResearchObject(
   input: CreateResearchObjectInput,
   ctx: AuditContext = {},
 ): Promise<ResearchObjectSummary> {
+  if (input.idempotencyKey?.startsWith('system:')) {
+    throw new ResearchObjectError('VALIDATION_ERROR', '系统保留幂等键不可由公开请求使用');
+  }
   const { workspace } = await requireMembership(deps, input.workspaceId, input.userId);
   void workspace;
-  const title = input.title.trim();
-  if (!title || title.length > 200) throw new ResearchObjectError('VALIDATION_ERROR', '标题长度需为 1-200 字符');
+  const title = validateTitle(input.title);
   const core = input.sdf?.core ?? emptyCore();
 
   const replayExisting = async () => {
@@ -99,39 +191,15 @@ export async function createResearchObject(
 
   let ro;
   try {
-    ro = await deps.prisma.$transaction(async (tx) => {
-    const created = await tx.researchObject.create({
-      data: {
-        workspaceId: input.workspaceId,
-        title,
-        createdBy: input.userId,
-        idempotencyKey: input.idempotencyKey,
-        sdfDocument: {
-          create: {
-            coreJson: core as object,
-            nodes: {
-              create: SDF_NODE_TYPES.map((nodeType, i) => ({
-                nodeType,
-                content: (core[nodeType] as string | undefined) ?? '',
-                sortOrder: i,
-              })),
-            },
-          },
-        },
-      },
-    });
-    await recordAudit(
-      deps, tx,
-      {
-        actorId: input.userId, action: 'research_object.create', workspaceId: input.workspaceId,
-        targetType: 'research_object', targetId: created.id, metadata: { title },
-      },
-      ctx,
-    );
-    return created;
-    });
+    ro = await deps.prisma.$transaction((tx) => createResearchObjectRecord(deps, tx, {
+      workspaceId: input.workspaceId,
+      userId: input.userId,
+      title,
+      idempotencyKey: input.idempotencyKey,
+      core,
+    }, ctx));
   } catch (error) {
-    if ((error as { code?: string }).code === 'P2002' && input.idempotencyKey) {
+    if (input.idempotencyKey && isOwnedPrismaIdempotencyConflict(error)) {
       const concurrentReplay = await replayExisting();
       if (concurrentReplay) return concurrentReplay;
     }

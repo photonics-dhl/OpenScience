@@ -21,6 +21,7 @@ import { registerPublicationRoutes } from './routes/publications';
 import { registerAuthorRoutes } from './routes/authors';
 import { registerNotificationRoutes } from './routes/notifications';
 import { registerAgentRoutes } from './routes/agent';
+import { registerLiteratureRoutes } from './routes/literature';
 import { registerAppealRoutes } from './routes/appeals';
 import { registerResearchRoutes } from './routes/research';
 import { registerExploreRoutes } from './routes/explore';
@@ -105,6 +106,7 @@ export async function buildApp(opts: BuildAppOptions): Promise<FastifyInstance> 
   await app.register(async (instance) => registerAuthorRoutes(instance, opts), {});
   await app.register(async (instance) => registerNotificationRoutes(instance, opts), {});
   await app.register(async (instance) => registerAgentRoutes(instance, opts), {});
+  await app.register(async (instance) => registerLiteratureRoutes(instance, opts), {});
   await app.register(async (instance) => registerAppealRoutes(instance, opts), {});
   await app.register(async (instance) => registerResearchRoutes(instance, opts), {});
   await app.register(async (instance) => registerExploreRoutes(instance, opts), {});

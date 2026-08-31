@@ -223,7 +223,7 @@ export default function NewResearchObjectPage() {
               </label>
             </section>
 
-            {mode === 'import' ? <div className="pt-10"><HermesAnchor actions={EXPLAIN_ONLY} id="source-import"><EvidenceIntake materials={materials} onChange={setMaterials} onRetry={retry} /></HermesAnchor></div> : (
+            {mode === 'import' ? <div className="pt-10"><HermesAnchor actions={EXPLAIN_ONLY} id="source-import"><EvidenceIntake literature={{ instanceId: 'evidence-intake-literature', onAuthenticationRequired: () => router.replace('/auth/login?returnTo=%2Fresearch-objects%2Fnew%3Fmode%3Dimport'), target: researchObjectId ? { kind: 'research_object', researchObjectId } : { kind: 'personal' }, withinForm: true }} materials={materials} onChange={setMaterials} onRetry={retry} /></HermesAnchor></div> : (
               <section className="border-b border-os-rule-paper py-10">
                 <h2 className="text-3xl font-normal text-os-ink">{intakeT('blankTitle')}</h2>
                 <p data-reading-role="body" className="mt-3 max-w-xl text-os-muted-paper">{intakeT('blankBody')}</p>

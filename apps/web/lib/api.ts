@@ -238,6 +238,10 @@ export async function getDashboardOverview(): Promise<{
 
 export async function logout(): Promise<void> {
   await request('/api/auth/logout', { method: 'POST' });
+  if (typeof window !== 'undefined') {
+    const { clearAllPendingLiteratureIntents } = await import('./literature-acquisition-state');
+    clearAllPendingLiteratureIntents(window.sessionStorage);
+  }
 }
 
 export interface ResearchIndexItemApi {
@@ -752,11 +756,13 @@ export async function markNotificationRead(id: string): Promise<{ notification: 
 
 export interface AgentTaskView {
   id: string;
+  researchObjectId?: string;
   sessionId: string;
   kind: string;
   status: 'pending' | 'running' | 'succeeded' | 'failed';
   progress: number;
   retryCount: number;
+  canRetry: boolean;
   result: Record<string, unknown> | null;
   error: string | null;
   createdAt: string;
@@ -796,6 +802,12 @@ export async function listAgentTasks(): Promise<{ tasks: AgentTaskView[] }> {
   return request('/api/agent/tasks?actionable=false&kind=workspace.guide');
 }
 
+export async function listSourceRetrieveTasks(target: LiteratureAcquisitionTarget): Promise<{ tasks: AgentTaskView[] }> {
+  const params = new URLSearchParams({ actionable: 'false', kind: 'source.retrieve', recovery: 'true', targetKind: target.kind });
+  if (target.kind === 'research_object') params.set('researchObjectId', target.researchObjectId);
+  return request(`/api/agent/tasks?${params.toString()}`);
+}
+
 export async function submitWorkspaceGuideTask(input: {
   sessionId: string;
   payload: WorkspaceGuidePayload;
@@ -824,9 +836,9 @@ export async function submitExtractTask(roId: string, manuscriptText: string, id
 }
 
 /** 轮询任务进度（§18.3 可恢复）。 */
-export async function getAgentTask(roId: string, taskId: string): Promise<{ task: AgentTaskView }> {
+export async function getAgentTask(roId: string, taskId: string, signal?: AbortSignal): Promise<{ task: AgentTaskView }> {
   void roId;
-  return request(`/api/agent/tasks/${taskId}`);
+  return request(`/api/agent/tasks/${taskId}`, { signal });
 }
 
 export async function getResearchIdentity(): Promise<ResearchIdentityProfile> {
@@ -874,6 +886,42 @@ export function updateReadingPreference(input: {
 
 export async function retryAgentTask(taskId: string): Promise<{ task: AgentTaskView }> {
   return request(`/api/agent/tasks/${taskId}/retry`, { method: 'POST' });
+}
+
+export interface LiteratureAcquisitionResult {
+  researchObject: { id: string; workspaceId: string; title: string; status: string; visibility: string; version: number; createdAt: string };
+  session: { id: string; researchObjectId: string; kind: string; title: string; status: string; createdAt: string };
+  task: AgentTaskView;
+}
+
+export type LiteratureAcquisitionTarget =
+  | { kind: 'personal' }
+  | { kind: 'research_object'; researchObjectId: string };
+
+/** The retrieval strategy is intentionally server-owned; the browser sends only the research intent. */
+export async function submitLiteratureAcquisition(
+  input: { query: string; identifier?: string },
+  idempotencyKey: string,
+  target: LiteratureAcquisitionTarget = { kind: 'personal' },
+): Promise<LiteratureAcquisitionResult> {
+  return request('/api/literature/acquisitions', {
+    method: 'POST',
+    headers: { 'Idempotency-Key': idempotencyKey },
+    body: JSON.stringify({
+      query: input.query,
+      ...(input.identifier ? { identifier: input.identifier } : {}),
+      target,
+    }),
+  });
+}
+
+export interface TemporaryDocumentDownloadLink {
+  downloadUrl: string;
+  expiresAt: string;
+}
+
+export function createTemporaryDocumentDownloadLink(documentId: string): Promise<TemporaryDocumentDownloadLink> {
+  return request(`/api/temporary-documents/${documentId}/download-link`, { method: 'POST' });
 }
 
 // ===== P1D-9：公开页数据（§4.3 必显）=====

@@ -138,6 +138,7 @@ services:
     volumes:
       - ${XGS_RELEASE_ROOT:?XGS_RELEASE_ROOT required}:/opt/openscience:ro
       - parser-jobs:/parser-jobs
+      - scansci-worker-secrets:/run/scansci-worker-secrets:ro
     command: ["node", "dist/index.js"]
     env_file:
       - /opt/openscience/.env.prod
@@ -157,6 +158,9 @@ services:
       BGE_M3_PACKAGE_FREEZE_SHA256: ${BGE_M3_PACKAGE_FREEZE_SHA256:-}
       BGE_M3_MODEL_MANIFEST_SHA256: ${BGE_M3_MODEL_MANIFEST_SHA256:-}
       EMBEDDING_WORKER_URL: http://embedding-worker:8080
+      SCANSCI_ENABLED: "true"
+      SCANSCI_BASE_URL: http://scansci-legal:8080
+      SCANSCI_SERVICE_TOKEN_FILE: /run/scansci-worker-secrets/scansci_service_token
     depends_on:
       postgres:
         condition: service_healthy
@@ -168,6 +172,8 @@ services:
         condition: service_healthy
       document-parser:
         condition: service_healthy
+      scansci-legal:
+        condition: service_healthy
     healthcheck:
       test: ["CMD-SHELL", "kill -0 1"]
       interval: 10s
@@ -178,7 +184,132 @@ services:
       - app_net
       - data_net
       - embedding_net
+      - retrieval_net
     restart: unless-stopped
+
+  scansci-secret-init:
+    image: openscience-scansci-legal:${XGS_RELEASE_IMAGE_TAG:?XGS_RELEASE_IMAGE_TAG required}
+    user: "0:0"
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - >-
+        set -eu; umask 077;
+        test -s /host-secrets/scansci_service_token;
+        install -o 10001 -g 10001 -m 0400 /host-secrets/scansci_service_token /service-secrets/.scansci_service_token.next;
+        mv -f /service-secrets/.scansci_service_token.next /service-secrets/scansci_service_token;
+        install -o 1000 -g 1000 -m 0400 /host-secrets/scansci_service_token /worker-secrets/.scansci_service_token.next;
+        mv -f /worker-secrets/.scansci_service_token.next /worker-secrets/scansci_service_token;
+        if test -e /host-secrets/scansci_username || test -e /host-secrets/scansci_password; then
+          test -s /host-secrets/scansci_username; test -s /host-secrets/scansci_password;
+          for name in scansci_username scansci_password; do install -o 10001 -g 10001 -m 0400 "/host-secrets/$name" "/auth-secrets/.$name.next"; mv -f "/auth-secrets/.$name.next" "/auth-secrets/$name"; done;
+        else rm -f /auth-secrets/scansci_username /auth-secrets/scansci_password; fi;
+        if test -s /host-secrets/scansci_session_bootstrap_key; then install -o 10001 -g 10001 -m 0400 /host-secrets/scansci_session_bootstrap_key /auth-secrets/.scansci_session_bootstrap_key.next; mv -f /auth-secrets/.scansci_session_bootstrap_key.next /auth-secrets/scansci_session_bootstrap_key;
+        else rm -f /auth-secrets/scansci_session_bootstrap_key; fi
+    volumes:
+      - /opt/openscience-secrets/scansci:/host-secrets:ro
+      - scansci-service-secrets:/service-secrets
+      - scansci-worker-secrets:/worker-secrets
+      - scansci-auth-secrets:/auth-secrets
+    network_mode: none
+    read_only: true
+    tmpfs:
+      - /tmp:size=1m,noexec,nosuid,nodev
+    mem_limit: 32m
+    cpus: 0.25
+    pids_limit: 16
+    cap_drop:
+      - ALL
+    cap_add:
+      - CHOWN
+      - FOWNER
+    security_opt:
+      - no-new-privileges:true
+    restart: "no"
+
+  scansci-legal:
+    build:
+      context: ${XGS_RELEASE_ROOT:?XGS_RELEASE_ROOT required}
+      dockerfile: apps/scansci-legal/Dockerfile
+      network: host
+      args:
+        XGS_RELEASE_IMAGE_TAG: ${XGS_RELEASE_IMAGE_TAG:?XGS_RELEASE_IMAGE_TAG required}
+        SCANSCI_ARCHIVE_SHA256: ${SCANSCI_ARCHIVE_SHA256:?SCANSCI_ARCHIVE_SHA256 required}
+        SCANSCI_REQUIREMENTS_SHA256: ${SCANSCI_REQUIREMENTS_SHA256:?SCANSCI_REQUIREMENTS_SHA256 required}
+        SCANSCI_BUILD_REQUIREMENTS_SHA256: ${SCANSCI_BUILD_REQUIREMENTS_SHA256:?SCANSCI_BUILD_REQUIREMENTS_SHA256 required}
+        HTTP_PROXY: http://127.0.0.1:7891
+        HTTPS_PROXY: http://127.0.0.1:7891
+        NO_PROXY: localhost,127.0.0.1
+    image: openscience-scansci-legal:${XGS_RELEASE_IMAGE_TAG:?XGS_RELEASE_IMAGE_TAG required}
+    user: "10001:10001"
+    environment:
+      SCANSCI_ENABLED: "true"
+      SCANSCI_HOST: 0.0.0.0
+      SCANSCI_PORT: "8080"
+      SCANSCI_SERVICE_TOKEN_FILE: /run/secrets/scansci_service_token
+      SCANSCI_STRATEGY: legal_only
+      SCANSCI_SCIHUB_ENABLED: "false"
+      SCANSCI_TOR_ENABLED: "false"
+    volumes:
+      - scansci-session:/session
+      - scansci-service-secrets:/run/secrets:ro
+    depends_on:
+      scansci-secret-init:
+        condition: service_completed_successfully
+    read_only: true
+    tmpfs:
+      - /tmp:size=256m,noexec,nosuid,nodev,uid=10001,gid=10001,mode=0700
+    mem_limit: 1g
+    cpus: 1
+    pids_limit: 64
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    healthcheck:
+      test: ["CMD", "python", "-c", "import sys,urllib.request; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8080/healthz',timeout=3).status == 200 else 1)"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 20s
+    networks:
+      - retrieval_net
+    restart: unless-stopped
+
+  scansci-auth:
+    profiles: ["scansci-auth"]
+    build:
+      context: ${XGS_RELEASE_ROOT:?XGS_RELEASE_ROOT required}
+      dockerfile: apps/scansci-legal/Dockerfile.auth
+      network: host
+      args:
+        XGS_RELEASE_IMAGE_TAG: ${XGS_RELEASE_IMAGE_TAG:?XGS_RELEASE_IMAGE_TAG required}
+        SCANSCI_ARCHIVE_SHA256: ${SCANSCI_ARCHIVE_SHA256:?SCANSCI_ARCHIVE_SHA256 required}
+        SCANSCI_REQUIREMENTS_SHA256: ${SCANSCI_REQUIREMENTS_SHA256:?SCANSCI_REQUIREMENTS_SHA256 required}
+        SCANSCI_BUILD_REQUIREMENTS_SHA256: ${SCANSCI_BUILD_REQUIREMENTS_SHA256:?SCANSCI_BUILD_REQUIREMENTS_SHA256 required}
+        HTTP_PROXY: http://127.0.0.1:7891
+        HTTPS_PROXY: http://127.0.0.1:7891
+        NO_PROXY: localhost,127.0.0.1
+    image: openscience-scansci-auth:${XGS_RELEASE_IMAGE_TAG:?XGS_RELEASE_IMAGE_TAG required}
+    user: "10001:10001"
+    network_mode: host
+    volumes:
+      - scansci-session:/session
+      - scansci-auth-secrets:/run/secrets:ro
+    depends_on:
+      scansci-secret-init:
+        condition: service_completed_successfully
+    read_only: true
+    tmpfs:
+      - /tmp:size=256m,noexec,nosuid,nodev,uid=10001,gid=10001,mode=0700
+      - /dev/shm:size=256m,nosuid,nodev,uid=10001,gid=10001,mode=0700
+    mem_limit: 1g
+    cpus: 1
+    pids_limit: 128
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    restart: "no"
 
   document-parser:
     # Hostile binary parsing is isolated from production secrets and all networks.
@@ -316,6 +447,8 @@ networks:
   embedding_net:
     driver: bridge
     internal: true
+  retrieval_net:
+    driver: bridge
 
 volumes:
   postgres-data:
@@ -328,4 +461,8 @@ volumes:
       device: tmpfs
       o: size=128m,uid=1000,gid=1000,mode=0770
   clamav-data:
+  scansci-session:
+  scansci-service-secrets:
+  scansci-worker-secrets:
+  scansci-auth-secrets:
   bge-m3-5617a9f61b028005a4858fdac845db406aefb181-08cc5a668e89:

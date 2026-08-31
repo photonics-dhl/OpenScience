@@ -292,7 +292,7 @@ export function httpStatusForError(err: unknown, requestId?: string): { status: 
   if (typeof (err as { code?: unknown }).code === 'string' && (err as { code: string }).code.startsWith('FST_CSRF')) {
     return { status: 403, body: buildErrorBody('CSRF_INVALID', 'CSRF token 校验失败', requestId) };
   }
-  if (['FST_REQ_FILE_TOO_LARGE', 'FST_REQ_PARTS_LIMIT', 'FST_REQ_FIELDS_LIMIT'].includes(String((err as { code?: unknown }).code))) {
+  if (['FST_REQ_FILE_TOO_LARGE', 'FST_REQ_PARTS_LIMIT', 'FST_REQ_FIELDS_LIMIT', 'FST_ERR_CTP_BODY_TOO_LARGE'].includes(String((err as { code?: unknown }).code))) {
     return { status: 413, body: buildErrorBody('FILE_TOO_LARGE', '上传内容超过限制', requestId) };
   }
   if ((err as { name?: string })?.name === 'ZodError') {

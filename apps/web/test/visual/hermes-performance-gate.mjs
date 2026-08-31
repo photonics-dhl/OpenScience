@@ -49,6 +49,7 @@ await page.addInitScript(() => {
 await page.route('**/api/auth/me', (route) => route.fulfill({ contentType: 'application/json', body: JSON.stringify({ userId: 'perf-user', email: 'perf@example.invalid', displayName: 'Performance Researcher', status: 'email_verified', level: 'free' }) }));
 await page.route('**/api/research-objects?limit=20', (route) => route.fulfill({ contentType: 'application/json', body: JSON.stringify({ researchObjects: [] }) }));
 await page.route('**/api/ingestion?actionable=true', (route) => route.fulfill({ contentType: 'application/json', body: JSON.stringify({ tasks: [] }) }));
+await page.route('**/api/agent/tasks**', (route) => route.fulfill({ contentType: 'application/json', body: JSON.stringify({ tasks: [] }) }));
 
 try {
   const navigationStartedAt = Date.now();

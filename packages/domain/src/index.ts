@@ -65,7 +65,7 @@ export {
 } from './research-object/types';
 export { ResearchObjectError, type ResearchObjectErrorCode } from './research-object/errors';
 export {
-  createResearchObject, getResearchObject, listResearchObjects, updateResearchObject,
+  createResearchObject, createSystemResearchObjectInTransaction, getResearchObject, listResearchObjects, updateResearchObject,
   type CreateResearchObjectInput, type ResearchObjectSummary, type ResearchObjectDetail, type UpdateResearchObjectInput,
 } from './research-object/research-objects';
 export {
@@ -154,10 +154,12 @@ export {
 export { InAppChannel, EmailChannel } from './notification/channels';
 export { AgentError, type AgentErrorCode } from './agent/errors';
 export {
-  claimAgentTask, createAgentSession, dispatchAgentTask, submitAgentTask, getAgentTask, retryAgentTask, listAgentSessions, listAgentTasks, markTaskProgress,
+  claimAgentTask, createAgentSession, dispatchAgentTask, findOrCreateAgentSessionInTransaction,
+  submitAgentTask, persistAgentTaskInTransaction, getAgentTask, retryAgentTask, listAgentSessions, listAgentTasks, markTaskProgress,
   prepareAgentTaskForCrashRecovery, recoverUndispatchedAgentTasks,
   AGENT_TASK_QUEUE, AI_CREDIT_RESOURCE, AGENT_TASK_KINDS, PUBLIC_AGENT_SESSION_KINDS, PUBLIC_AGENT_TASK_KINDS,
   type AgentDeps, type AgentTaskView, type AgentSessionView, type AgentTaskStatus,
+  type CreateAgentSessionInput, type SubmitAgentTaskInput,
 } from './agent/agent';
 export { ApprovalError, type ApprovalErrorCode } from './approval/errors';
 export {
@@ -337,7 +339,22 @@ export {
   type SourceRightsDecision,
 } from './retrieval/types';
 export { decideSourceRights } from './retrieval/rights';
-export { parseSourceRetrievePayload, type SourceRetrievePayload } from './retrieval/retrieve-payload';
+export { observeScanSciProviderState, type ScanSciProviderObservation } from './retrieval/provider-state';
+export {
+  parseDurableSourceRetrievePayload,
+  parseSourceRetrieveRequestPayload,
+  type DurableSourceRetrievePayload,
+  type SourceRetrievePayload,
+  type SourceRetrieveRequestPayload,
+  type SourceRetrieveTarget,
+} from './retrieval/retrieve-payload';
+export { isSourceRetrieveIdentifier, toBrowserSourceRetrieveResult, type BrowserSourceRetrieveResult } from './retrieval/browser-result';
+export {
+  submitLiteratureAcquisition,
+  type LiteratureAcquisitionResult,
+  type LiteratureAcquisitionTarget,
+  type SubmitLiteratureAcquisitionInput,
+} from './retrieval/literature-acquisition';
 export {
   issueTemporaryDownloadToken,
   verifyTemporaryDownloadToken,
