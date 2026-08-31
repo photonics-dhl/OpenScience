@@ -1,7 +1,7 @@
 # Hermes Capability Registry
 
 > 状态：**CURRENT**
-> 最后核验：2026-08-30
+> 最后核验：2026-08-31
 > 设计真源：`docs/specs/2026-08-26-hermes-research-intelligence-platform-design.md`
 > 安全原则：只记录变量名与注入状态，禁止记录、读取或输出真实 key/token/cookie。
 
@@ -22,14 +22,14 @@
 
 | Capability | Purpose | Current state | Auth/cost policy | Runtime/install boundary | Retention gate |
 |---|---|---|---|---|---|
-| Existing `document-parser` sidecar | PDF/DOCX/OCR isolation | `PRODUCTION` | 无外部 API | release `6893318…`；无网络/Secret、只读、非 root、512 MiB/64 PID、bounded IPC | schema 3 / `hermes-parser-14-2-v1` 14/2/0/0；16-case exact acceptance、startup/runtime 全通过 |
-| Tesseract `eng+chi_sim` | 扫描页 OCR fallback | `PRODUCTION` | 免费、本地 CPU | release `6893318…`；仅 parser 镜像；禁止宿主全局安装 | canonical scan 的 text、跨 block locator、Tesseract 5.3.0、confidence、bbox 全通过 |
+| Existing `document-parser` sidecar | PDF/DOCX/OCR isolation | `PRODUCTION` | 无外部 API | release `abd38d3…`；无网络/Secret、只读、非 root、512 MiB/64 PID、bounded IPC | schema 3 / `hermes-parser-14-2-v1` 14/2/0/0；16-case exact acceptance、startup/runtime 全通过 |
+| Tesseract `eng+chi_sim` | 扫描页 OCR fallback | `PRODUCTION` | 免费、本地 CPU | release `abd38d3…`；仅 parser 镜像；禁止宿主全局安装 | canonical scan 的 text、跨 block locator、Tesseract 5.3.0、confidence、bbox 全通过 |
 | ClamAV | 上传文件恶意内容扫描 | `PRODUCTION` | 免费、本地 CPU | agent-worker/隔离边界；fail-closed | signature freshness、blocked path、资源峰值 |
 | MiniMax text/vision | LLM OCR、复杂表格/公式补救 | `APPROVED_PILOT / BLOCKED` | 自动平台处理；最少页；凭据已在聊天暴露，轮换前不得调用 vision | 仅 AI Gateway；`openscience-ocr-v1` route 已实现但默认 disabled + external-policy deny；生产 worker 当前有变量注入，文档不记录值 | locator 复验、页成本、数据外发、错误率、审计 |
 | MiniMax image/video | 代表性 RO 展示资产 | `APPROVED_PILOT / BLOCKED` | 仅管理员；逐项批准公开；凭据轮换前阻断 | 外部 API，经 AI Gateway；不在 CPU 服务器部署模型 | 科学真实性、成本、prompt/source provenance、可撤回 |
 | Tavily MCP/API | 通用网页发现 | `PRODUCTION / BLOCKED` | 生产 Secret 已注入；四个授权 key 的最小探测均返回供应商套餐/单 key 额度耗尽 | `source.retrieve` discovery-only adapter；不得成为唯一来源 | quota 恢复前稳定 `unavailable/rate_limited`；source precision、成本、隐私 |
 | Semantic Scholar MCP/API | 论文、作者、引用关系 | `PRODUCTION` | 有效 Secret 由既有本地 Secret 安全注入；真实 Hermes 任务返回 3 sources，连续请求仍可能 429 | `source.retrieve` native-fetch adapter；provider schema 不越过 Domain | metadata/OA/rights accuracy、1 req/s、429 显式降级 |
-| ScanSci PDF | 合法全文发现/下载 | `APPROVED_PILOT / BLOCKED` | 一次浙江大学 CARSI 认证作为 Hermes 持久默认能力；必要时账号凭据进入 root-only server Secret | `672ec14` 本地 gated：descriptor Secret；NAT64；serial/cache；hard 100 MiB RLIMIT；fresh-`/tmp` probe；256 MiB tmpfs；sidecar-independent prepublication + locked canonical publish；exact enabled Worker env；灰源/Tor 禁用 | 本地 P0/P1=0；Linux RLIMIT、first-deploy/rollback、OA/机构 PDF、recreate session、四入口、72h/600s、migration 33、灰源 0 未完成前不得 production |
+| ScanSci PDF | 合法全文发现/下载 | `PRODUCTION OA / APPROVED_PILOT CARSI` | 一次浙江大学 CARSI 认证作为 Hermes 持久默认能力；必要时账号凭据进入 root-only server Secret | release `abd38d3…`；descriptor Secret、NAT64、serial/cache、100 MiB RLIMIT、256 MiB tmpfs、internal controlled egress、exact enabled Worker env；灰源/Tor 禁用 | Linux/runtime/rollback/migration 33 与真实 24,671,920-byte arXiv OA 全绿；机构 PDF、recreate session、四入口、72h/600s 仍待生产旅程 |
 | Temporary document lifecycle | 受控全文缓存与下载 | `PRODUCTION` | 无用户模式切换；逐来源 rights 决定 | SeaweedFS `hermes-cache/<workspace>/<document>/<hash>`；72h、600s HttpOnly one-use capability、Worker lease/fence GC | 真实 77-byte PDF：HEAD hash、download、replay 404、约 45s GC、object absent/provenance retained |
 | BGE-M3 | 多语 dense embedding | `PRODUCTION` | MIT；无 API 费，运营成本为 CPU/内存/磁盘 | 独立 internal-only `embedding-worker`；exact revision/hash、只读 versioned volume、2 CPU/6 GiB/128 PID | nDCG@10 `0.996655`、Recall@10 `1`、P95 `240 ms`、peak RSS `2,244,235,264` bytes |
 | PostgreSQL lexical search | 无模型词法基线与降级 | `PRODUCTION` | PostgreSQL 内置 FTS；无新增 extension/API 费 | `packages/search` + 独立 `SEARCH_DATABASE_URL`/迁移/连接池 | tenant-safe BM25、migration/restore、embedding outage 降级通过 |
@@ -53,7 +53,7 @@
 |---|---|---|---|---|---|---|---|---|---|---|
 | MiniMax text/vision | Hermes AI Gateway owner | Official Coding Plan VLM HTTP transport reviewed；provider terms/data policy must be rechecked before enable | Gateway contract `openscience-ocr-v1`；underlying provider model `UNLOCKED`，credential rotation blocks canary | External compute；adapter stays inside existing worker budget；internal cap 4 pages/4 MiB each/8 MiB aggregate | One page per attempt；attempt/total latency and error code audited | Versioned integer micro-USD estimate；unknown billing is explicit null；no unbounded retry | Authorized selected raster page bytes → AI Gateway → `/v1/coding_plan/vlm`；candidate text returns；no URL/full document | OCR/table/formula fidelity、page cost、audit completeness、locator revalidation | `MINIMAX_VISION_ENABLED=false` default；async provider policy；`AI_DISABLED_PROVIDERS=minimax-vision` | Disable route/policy；local parser and explicit review remain available；revert adapter release |
 | MiniMax image/video | RO presentation owner | Provider terms plus generated-media disclosure required | `UNLOCKED`; credential rotation and model ID pin required | External compute；no GPU or model on ECS | Async admin job；queue and generation P95 recorded before use | Administrator-only capped showcase budget | Approved representative RO summary → provider；asset → object storage | Scientific fidelity、provenance、cost、removal drill | Media-generation admin flag | Disable generation；unpublish generated asset while RO evidence remains |
-| ScanSci PDF | Source acquisition owner | School/source access terms and redistribution rights checked per source | upstream `1.11.0` / commit `7017814…b8e` / archive `db537914…9208b9`；legal/auth image IDs `ECS_PENDING` | 1 CPU/1 GiB/64 PID/256 MiB tmpfs；2 slots × serial kernel-capped 100 MiB temp | Download success/P95 and publisher throttling measured on ECS | No per-user charge assumed until terms review；egress/storage metered | Authorized source → exact temp rename → storage/parser；negative cache preserved；Secret/session never enter DTO | Local serial/cache/NAT64/Secret/RLIMIT/prepublish contracts green；Linux kernel + first deploy + real OA/CARSI/72h pending | Candidate exact enabled env；previous release keeps own Compose/verifier/tmpfs identity | Disable adapter；expire links/cache；retain hashes/rights audit only |
+| ScanSci CARSI | Source acquisition owner | School/source access terms and redistribution rights checked per source | upstream `1.11.0` / commit `7017814…b8e` / archive `db537914…9208b9`；release `abd38d3…` legal `sha256:c3466317…5aaa` / auth `sha256:248fd663…a579` | 1 CPU/1 GiB/64 PID/256 MiB tmpfs；2 slots × serial kernel-capped 100 MiB temp | OA download success proven；CARSI success/P95 and publisher throttling pending | No per-user charge assumed until terms review；egress/storage metered | Authorized source → exact temp rename → storage/parser；negative cache preserved；Secret/session never enter DTO | Linux/runtime/rollback/OA green；CARSI/recreate/four-entry/72h pending | Exact enabled env；previous release keeps own Compose/verifier/tmpfs identity | Disable adapter；expire links/cache；retain hashes/rights audit only |
 | Docling | Document intelligence owner | MIT upstream release；bundled model terms/hash manifest required before retention | wheel `2.123.0`/SHA-256 `95c0a4d…fde9c`；official CPU `torch 2.13.0+cpu`/`torchvision 0.28.0+cpu`；exact `e50a560…` build stopped at model download (`Errno 99`)，image digest pending | Isolated 2 CPU/2 GiB/64 PID image；non-root/read-only/network none；OCR/remote/plugin disabled；build/preflight reject GPU packages | No corpus latency result；network/model download failure is not a quality result | No API fee；failed build resources removed | Read-only self-authored corpus intended → isolated candidate → 64 KiB content-free attached outcome；execution not reached | Package install passed；model acquisition failed before aggregate lock/preflight/cases；no fidelity/RSS inference | Parser route weight zero；exact failed container/staging/image count 0 | Keep `APPROVED_PILOT`；production unchanged；repeat only with a bounded, source/model-equivalent download path |
 | LiteParse | Document intelligence owner | Apache-2.0 upstream npm package；transitive lock retained for review | npm `2.14.0`，integrity `sha512-lIFB…ThWA==`；exact-SHA ECS image `sha256:352cf5d985c7fbf11e936c12e8878fc83bee6e08bb3a0fb4fe53c5e1d34c5601` | 2 CPU、2 GiB/64 PID、non-root/read-only/network none；observed peak RSS `61,300,736` bytes | 7-PDF P50 `8 ms`、P95 `163 ms`；5 succeeded/1 needs review/1 failed | No API fee；candidate image/eval storage only；exact resources removed after evidence | Read-only self-authored corpus → isolated candidate → 64 KiB content-free attached outcome；OCR disabled | 13/16 locators versus measured current 7/16；native/dual/table/formula/references exact，scan correctly needs review，corrupt fails；P95/RSS within gate | No production route；ephemeral containers；120s timeout；overflow fail-closed | Remains `APPROVED_PILOT` pending Docling result；not in active release `c581712…` |
 | GROBID | Scholarly metadata owner | Exact upstream release license and bundled model terms required | adapter `85ba051…`；requested tag `0.9.1-crf`，180s ECS pull cutoff 前 digest unresolved | Intended internal-only 2 CPU/4 GiB/256 PID/read-only/no-port gate；container 未启动，故 topology/RSS 均未宣称 | No latency/throughput result；request stage not reached | No API fee；exact eval root/container/network/new image cleaned to 0 | Self-authored references + bounded scholarly PDFs staged；provider request not reached | No heading/reference fidelity or resource inference；Domain adapter/fallback `20/20` GREEN | No production route or Compose service；fixed stage returns layout map | Keep `APPROVED_PILOT`；production unchanged；repeat only as a new bounded exact-digest evaluation |
@@ -63,13 +63,13 @@
 
 ## 3. Current credential and runtime truth
 
-2026-08-30 只记录目标进程注入状态与最小健康探测，未输出任何值：
+2026-08-31 只记录目标进程注入状态与最小健康探测，未输出任何值：
 
 | Layer | MiniMax | Tavily | Semantic Scholar | ScanSci |
 |---|---|---|---|---|
 | Current local process | 未注入 | 未注入；本地 Secret 文件有四个授权 key，均额度耗尽 | 未注入；既有项目 Secret 有一份有效 key | 未读取/未注入；仅完成 code/contract gate |
 | Current user environment | 未注入 | 未注入 | 未注入 | 未注入 |
-| Production `agent-worker` | 已注入 | 已注入；供应商额度耗尽 | 已注入；真实任务成功，连续请求可被 429 节流 | 现行 `6893318…` 仍 disabled；migration 33/service/session 均未部署 |
+| Production `agent-worker` | 已注入 | 已注入；供应商额度耗尽 | 已注入；真实任务成功，连续请求可被 429 节流 | `abd38d3…` enabled；migration 33、legal/session/Worker 已部署；真实 OA green，CARSI `auth_required` |
 
 “仓库或服务器 `.env` 中存在”不等于“目标进程已注入”。以后排障按四层分别记录：配置文件变量存在性、Compose 映射、容器环境存在性、provider 最小健康探测。任一层失败都不得笼统写成“API key 失败”。
 
@@ -125,7 +125,7 @@
 
 保留条件：质量在关键轴优于现有基线，或以显著更低资源达到同等质量；且无未缓解的安全/许可问题。否则停用并记录原因，不因已经安装而保留。
 
-2026-08-26 Foundation 当时仅建立 `BASELINE_ONLY`。截至 2026-08-29，CPU parser cascade/Tesseract、BGE-M3 与 PostgreSQL lexical search 已通过 exact-SHA ECS 评测、隔离部署、降级/恢复或 source-map 门禁升为 `PRODUCTION`；Docling、LiteParse、GROBID、PaddleOCR 仍为 `APPROVED_PILOT`，MiniMax OCR 继续 `BLOCKED`。现行 16-case parser 为 14 succeeded / 2 intentional needs_review / 0 failed / 0 false-ready，因此不再为“软件齐全”重试 Docling；只有真实用户文档暴露可归因的双栏、公式或表格缺口时，才以同一 ECS CPU/model/RSS/quality gate 重开评估。
+2026-08-26 Foundation 当时仅建立 `BASELINE_ONLY`。截至 2026-08-31，CPU parser cascade/Tesseract、BGE-M3、PostgreSQL lexical search 与 ScanSci OA 已通过 exact-SHA ECS 评测、隔离部署、降级/恢复或真实下载门禁升为 `PRODUCTION`；ScanSci CARSI、Docling、LiteParse、GROBID、PaddleOCR 仍为 `APPROVED_PILOT`，MiniMax OCR 继续 `BLOCKED`。现行 16-case parser 为 14 succeeded / 2 intentional needs_review / 0 failed / 0 false-ready，因此不再为“软件齐全”重试 Docling；只有真实用户文档暴露可归因的双栏、公式或表格缺口时，才以同一 ECS CPU/model/RSS/quality gate 重开评估。
 
 ## 6. Change record template
 
@@ -133,6 +133,7 @@
 
 | Date | Capability | From → To | Version/digest | Evidence | Rollback | Operator |
 |---|---|---|---|---|---|---|
+| 2026-08-31 | ScanSci controlled-proxy production | Task 10 ECS pending → `PRODUCTION OA / CARSI PILOT` | release `abd38d3…`；legal `sha256:c3466317…5aaa`；auth `sha256:248fd663…a579` | CI `33397550370`；Parser 16-case；core/search 33/2；BGE CPU；source/topology/policy/token/session；Worker OA `%PDF-` 24,671,920 bytes | immutable rollback `6893318…`；disable adapter/CARSI；retain provenance | Codex |
 | 2026-08-31 | ScanSci Task 9 final whole-branch review | fresh-tmpfs gated → first-deploy review-ready | `672ec14`；upstream archive unchanged | prepublication exact SHA/image IDs without sidecar；actual Worker env attestation；locked publish + canonical verify；behavioral before/after rollback；infra `74/79`；release `95/102`；full local `2115/22/0` | no deployment；candidate sidecar exact-cleaned；previous release uses own Compose/verifier | Codex |
 | 2026-08-31 | ScanSci Task 9 review fix 4 | common-entry gated → fresh-tmpfs gated | `755b7b5`；upstream archive unchanged | verifier exact `/tmp`；absent hidden-subdir/no-file/no-upstream probe；acquisition config still required；ScanSci `82/89`；infra `72/77`；full local `2114/22/0` | no deployment；acquisition/resource/image identity unchanged | Codex |
 | 2026-08-31 | ScanSci Task 9 review fix 3 | cache/file-limit gated → common-entry gated | `63a0b56`；upstream archive unchanged | acquisition/probe share unconditional install+read-back prelude；probe has no upstream/Secret/direct-installer path；ScanSci `81/88`；infra `72/77`；full local `2113/22/0` | no deployment；runtime/resource/image identity unchanged | Codex |

@@ -4,18 +4,17 @@
 
 ## Current version tuple
 
-- Branch / reviewed proxy-client implementation / main: `codex/scansci-controlled-proxy-client` / `05111e7` / `bdf7eb7`；远端当前仅 `main`。
-- Production application source / immutable release: `689331845574612130f223d08c92e61721c16586`。
-- Production rollback: `c435c4c8b2800bb20998fd9a9a93f2db96328661`；core/search migrations `33/33` / `2/2`（migration 33 已前向应用，application 已自动回滚）。
+- Local branch（upstream gone）/ repository main: `codex/scansci-controlled-proxy-client` / `abd38d3`；远端当前仅 `main`。
+- Production application source / immutable release: `abd38d3b8d1800f73550efb9c70adea76cf82908`。
+- Production rollback: `689331845574612130f223d08c92e61721c16586`；core/search migrations `33/33` / `2/2`。
 - Taskmaster `hermes-research-intelligence` 仍为 9/12；独立 ScanSci plan Tasks 1–9 done、Task 10 in progress，Task 11 继续阻断。
 
 ## 2026-08-31 — ScanSci Task 10 controlled-egress production retry
 
-- PR #15 已把 controlled-egress 合并为 main `ac086fa`，CI `33375614367` 全绿；ECS exact image、schema-v3 16-case parser acceptance、targetless `0|0`、真实 internal `172.24.0.0/24` network 与 Squid allow/deny/raw-direct 门禁通过。生产切换前保持 `6893318`。
-- canonical transaction 已应用 core migration 33、验证 BGE CPU 与 Parser；首个 legal sidecar runtime gate 因 Compose v2.26 把 `project.working_dir` 标为 `<release>/infra/compose` 而 strict verifier 要求 `<release>` fail-closed。事务完整回滚旧 API/Web/Worker/Parser/BGE、清除 sidecar/journal，active/public 仍 `6893318`；ScanSci 未发布。
-- reviewed implementation `453ae4c` 对 current/embedding/auth/rollback/state/verifier、凭据轮换、备份和认证隧道全部显式传 `--project-directory <release-root>`，不放宽身份合同。独立复审 0 Critical/Important/Minor、READY；相关 deployment/runtime `71 pass + 5 Linux skip`、fresh full build/typecheck/lint/docs/test 0 fail。PR/CI、merged-SHA ECS 重试与 CARSI/四入口仍 pending。
-- PR #16 / exact CI `33388359242` 已合并为 main `bdf7eb7`；ECS schema-v3 acceptance、Compose exact working-dir、BGE CPU、legal source/topology/policy/token/session、API/Web/Worker health 均通过。第二阶段 OA canary 在本容器 `/v1/legal-download` 返回 stable 404 后自动恢复旧 BGE/Parser/API/Web/Worker、清除 sidecar/journal；active/public 仍 `6893318`，磁盘 45G/148G（32%）。
-- 根因不是路由缺失或 Squid：pinned ScanSci 显式 `trust_env=False` 且只读取 `SCANSCI_PDF_PROXY`/`network_proxy`，wrapper 原仅注入通用 `HTTP(S)_PROXY`，故 raw direct 被 internal network 阻断后折叠为 `not_found`，Squid 无 arXiv 记录。reviewed `05111e7` 只把已严格等于固定 Squid URL 的值同步到专用变量；安全复审 READY，ScanSci `94 pass / 7 platform skip`、fresh full build/typecheck/lint/test 0 fail。PR/CI、new-SHA acceptance、ECS OA/CARSI/四入口仍 pending。
+- PR #15/#16 两次 canonical retry 分别在 Compose working-dir identity 与 pinned client 忽略通用 proxy 处 fail-closed，均完整恢复 `6893318`、清除 sidecar/journal；`453ae4c` 固定所有 Compose `--project-directory`，`05111e7` 仅把严格校验的 Squid URL 映射为 `SCANSCI_PDF_PROXY`。
+- PR #17 / exact CI run `33397550370`、job `99505612016` 合并为 main `abd38d3`。ECS 新 SHA schema-v3 16-case Parser acceptance、core/search `33/33`/`2/2`、BGE-M3 CPU、ScanSci source/topology/policy/file-limit/token/session 与 API/Web/Worker health 全绿。
+- canonical post-switch Worker+ScanSci OA 门禁真实下载 `arXiv:2009.06045v1`，route `open_access`、PDF magic `%PDF-`、24,671,920 bytes；Squid 记录 `172.24.0.2 -> arxiv.org:443 -> FIRSTUP_PARENT/127.0.0.1`。active/public CAS 到 `abd38d3`，rollback `6893318`，journal/failed/pending 均 absent；CARSI 仍 `auth_required`。
+- 发布后独立 checkup 与 exact working-dir 复核全绿。删除历史 parser-eval/悬空镜像并按 `>24h + keep 4GB` 清 54 个 BuildKit 对象，释放约 586MB；磁盘 `44G/148G`（31%，98G available），active/rollback、数据卷、验收报告均保留。下一步修 auth Dockerfile 层顺序，再做 CARSI、四入口/375px、one-use 与 72h/600s 生产旅程。
 
 ## 2026-08-31 — ScanSci Task 9 local security/release gate
 
