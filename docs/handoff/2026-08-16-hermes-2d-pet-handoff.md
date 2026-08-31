@@ -1,6 +1,6 @@
 # Hermes Research Intelligence CURRENT Handoff
 
-> **CURRENT active-memory，2026-08-31。** ScanSci 受控代理修复已随 merged main 在 ECS canonical deploy 成功，真实 arXiv OA PDF、Worker/Parser/BGE 与公网 release 全绿；浙江大学 CARSI 和四入口产品旅程仍待关闭。Task 11 阻断，Landing/Hermes 视觉仍冻结。
+> **CURRENT active-memory，2026-09-01。** ScanSci OA/Worker/Parser/BGE 与公网 release 全绿；认证浏览器隔离候选 `55e2035` 已完成本地门禁和双复审，待 PR CI/合并/ECS Chromium-CARSI 验收。Task 11 阻断，Landing/Hermes 视觉仍冻结。
 
 ## Goal and state
 
@@ -11,7 +11,7 @@
 ## Version tuple
 
 - Worktree: `E:/Miscellaneous/XGS/.worktrees/readable-hermes-guidance`
-- Local docs branch / repository main: `codex/scansci-postdeploy-docs` / `a08237ab2401dc610834894e3322633159e58f5e`；远端当前仅保留 `main`。
+- Candidate branch / HEAD / origin main: `codex/scansci-auth-browser-sandbox` / `55e203550ba874a4259dcbda27f5e627a24567eb` / `aea3b31e9621a54f6406404ac46a918c27afa5bd`；PR #20 更新待推送。
 - Production application source / immutable release: `abd38d3b8d1800f73550efb9c70adea76cf82908`
 - Rollback: `689331845574612130f223d08c92e61721c16586`; core/search migrations `33/33` / `2/2`
 - 本地 `main` 与其他 worktree 有用户改动，不得触碰或用它推断生产；上述 tuple 已从 ECS 重新实测。
@@ -43,8 +43,8 @@
 10. Task 10 已生产完成：Semantic Scholar/Tavily/ScanSci legal-only adapter、rights、72h cache、10min one-use download、GC/provenance 均接通；ScanSci 默认 disabled，Tavily 四个授权 key 当前均额度耗尽并显式降级。
 11. 真实 Semantic Scholar Hermes 任务返回 3 sources；SeaweedFS checksum metadata 生产兼容经 PR #9 修复。77-byte 自著 PDF 完成 HEAD hash、下载、重放 404、72h 到期和真实 Worker GC；GC 后 provenance/locator 保留，取证后 canary 业务行精确清零、审计保留。
 12. Exact CI `33284956868` / job `99186426490` 全绿；最终 release `6893318…`、rollback `c435c4c…`。远端仅 `main`；精确移除无容器引用的旧 dev MinIO server/mc 镜像后，磁盘 36G/148G（25%）、107G available，active+rollback 两个 release，390.7MB bounded build cache 保留，无 broad prune。
-13. 用户验收指出 ScanSci 仅有 disabled adapter 不能算产品完成。Task 10 已重新打开：一次浙江大学 CARSI 登录需持久复用，必要时账号凭据放 root-only Secret，Hermes/Personal Space/RO Hermes/Files-Evidence 全部走统一下载入口；设计见 `docs/specs/2026-08-30-scansci-default-capability-design.md`。
-14. ScanSci plan Task 4 已形成本地候选：SHA legal/auth、networkless Secret init、持久 session、pre-Worker runtime gate、精确有/无服务 rollback 与 active+rollback retention；ADR-012 已记录。未部署，不能替代 ECS/CARSI acceptance。
+13. 用户验收指出 disabled adapter 不能算产品完成。Task 10 已重开：浙江大学 CARSI 登录只在 loopback noVNC 输入，不保存账号密码；Pinned ScanSci 仅持久 publisher Cookie JSON/Netscape 文件，Hermes/Personal Space/RO Hermes/Files-Evidence 走统一下载入口。
+14. Auth 候选 `55e2035`：pinned `channel=chrome` 必经 fail-closed wrapper；RFB 真探针；无 account/service Secret；独占 `172.25.0.0/29 auth_net`，宿主只放行 `.1:7891`；Squid 以 fsync/rename + 单 rollback/pending marker 原子激活。Python `93/93`、release `107/114`、auth/runtime `43/43`，失败 0；security/architecture 双复审 READY。尚未部署，不能替代 ECS/CARSI acceptance。
 15. ScanSci plan Task 5 atomic candidate 为 `ff5568f` + `4763228`：Personal RO/SDF、Session、Task/credit/audit 在一笔三次有界 Serializable 事务提交；exact replay 先于余额，P2002 精确绑定 model/constraint，Redis 仅 commit 后投递并保留 pending recovery。Domain/API/Agent 本地门禁 green；两连接 PostgreSQL SSI/mismatch suite 已加入但本地未运行，ECS acceptance pending。
 16. ScanSci plan Task 6 local candidate 为 `60b3740`：durable provider state 的事务回滚/重放/generation 矩阵、disabled rollback Secret、非致命 observation persistence 与真实 PostgreSQL migration/concurrency 合同已闭合；Domain 520、Database 26、Worker 501 与 typecheck green，独立复审 READY。Migration 33/真实 suite/CARSI 仍是 ECS-only pending。
 17. ScanSci plan Task 7 local candidate 为 `22088c0` + `86e037e` + `3e829db` + `1059072` + `82d4772` + `185d5d6`：public `canRetry` 只来自共享 predicate；marker 只能由 acquisition durable path 构造，generic/public/internal caller 与历史/畸形/撤权均 false。Retry 用三次 P2034-only Serializable authority/CAS/audit，recovery 单次 ID-only SQL 精确筛选后复验，无循环/top-N/payload 泄露；14-case corpus 标注 JSONB/JavaScript-only，PG parity 以独立 terminal sentinel 证明 raw selector 分支。Domain/API/Worker `534/99/502`，real-PG race/parity/deep-history contract 仅 typecheck；既有 Client/Playwright `7/7` 未改，ECS 375px/真实下载和 Task 8 四入口仍 pending。

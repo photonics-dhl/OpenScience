@@ -1,13 +1,19 @@
 # OpenScience 进度（CURRENT window）
 
-> 最新同步：2026-08-31。历史由 Git 保存；旧计划和 archive 不作为默认输入。
+> 最新同步：2026-09-01。历史由 Git 保存；旧计划和 archive 不作为默认输入。
 
 ## Current version tuple
 
-- Local docs branch / repository main: `codex/scansci-postdeploy-docs` / `a08237a`；远端当前仅 `main`。
+- Candidate branch / HEAD / origin main: `codex/scansci-auth-browser-sandbox` / `55e2035` / `aea3b31`；PR #20 更新待推送。
 - Production application source / immutable release: `abd38d3b8d1800f73550efb9c70adea76cf82908`。
 - Production rollback: `689331845574612130f223d08c92e61721c16586`；core/search migrations `33/33` / `2/2`。
 - Taskmaster `hermes-research-intelligence` 仍为 9/12；独立 ScanSci plan Tasks 1–9 done、Task 10 in progress，Task 11 继续阻断。
+
+## 2026-09-01 — ScanSci auth browser isolated candidate
+
+- `55e2035` 修复无登录按钮/Chromium sandbox 根因：operator URL 固定到 noVNC client，WebSocket 必须返回真实 RFB banner；pinned Patchright `channel=chrome` 绑定 fail-closed wrapper，固定 Squid、禁 QUIC/非代理 WebRTC，x11vnc 禁 IPv6。账号/password/bootstrap Secret 已从 provision/Compose/runtime 移除，只持久 publisher Cookie 文件。
+- Auth 独占 internal `172.25.0.0/29`；普通容器不能连接 passwordless noVNC。`xgs-auth0` INPUT 仅允许 `.1:7891`，其余全部宿主地址/端口 REJECT；runtime 实测 gateway+ECS-primary SSH、raw direct、legal peer 均 blocked。Squid 发布用同目录 fsync/rename、单 rollback 与 durable pending marker，post-commit/reload 失败自动 restore+reload。
+- Fresh gates：ScanSci Python `93 pass/6 skip`，release-contract `107 pass/7 skip`，auth/runtime/provision/RFB `43/43`，typecheck/lint/docs `0 fail`；security 与 architecture 最终复审均 READY。生产仍 `abd38d3` / rollback `6893318`，未启动 auth helper、未改生产；下一步 PR CI→merge→canonical ECS deploy→真实 Chromium/CARSI/Cookie 重建验收。
 
 ## 2026-08-31 — ScanSci Task 10 controlled-egress production retry
 
