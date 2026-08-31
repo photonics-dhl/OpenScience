@@ -1651,3 +1651,24 @@ backup and operator auth-tunnel entry point, must pass `--project-directory
 exercise the ancillary entry points. After CI/merge, materialize a new SHA and
 rerun the complete canonical transaction; never mutate the already
 materialized `ac086fa` tree.
+
+### 5.50 Pinned ScanSci proxy selector failure and rollback (2026-08-31)
+
+PR #16 merged as `bdf7eb7bdd0d306807ee8eed1aecffb5a6ef519f` after CI
+run `33388359242`. Its ECS retry passed exact parser acceptance, Compose
+working-directory identity, BGE CPU inference, legal-service topology/policy/
+token/session checks and new application-container health. The post-switch OA
+canary then received the service's stable HTTP 404 and the transaction restored
+release `689331845574612130f223d08c92e61721c16586`, removed the candidate
+sidecar, restored active CAS and cleared the durable journal.
+
+A lock-held sidecar-only reproduction proved the Compose label was the exact
+release root, while the OA request produced no arXiv Squid entry. Inspection of
+the SHA-locked upstream showed its Requests session sets `trust_env=False` and
+selects only `SCANSCI_PDF_PROXY` or `network_proxy`; the wrapper had supplied
+only generic `HTTP_PROXY`/`HTTPS_PROXY`. Raw direct egress was therefore blocked
+by the internal retrieval network and upstream collapsed the result to
+`not_found`. Keep the fixed config proxy empty, but after validating
+`SCANSCI_EGRESS_PROXY` is exactly `http://openscience-egress:7891`, map that same
+credential-free value into `SCANSCI_PDF_PROXY` for the isolated worker. Do not
+inherit arbitrary host proxy variables or relax the network/URL/Squid guards.

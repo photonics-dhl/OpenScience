@@ -137,6 +137,7 @@ print(json.dumps({'success': True, 'file': str(paper), 'source': 'CARSI', 'url':
         with mock.patch.dict(os.environ, {"SCANSCI_EGRESS_PROXY": "http://openscience-egress:7891"}, clear=False):
             environment = _sanitized_environment(self.root)
 
+        self.assertEqual(environment["SCANSCI_PDF_PROXY"], "http://openscience-egress:7891")
         self.assertEqual(environment["HTTP_PROXY"], "http://openscience-egress:7891")
         self.assertEqual(environment["HTTPS_PROXY"], "http://openscience-egress:7891")
         self.assertEqual(environment["NO_PROXY"], "localhost,127.0.0.1")

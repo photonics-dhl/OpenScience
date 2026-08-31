@@ -4,7 +4,7 @@
 
 ## Current version tuple
 
-- Branch / reviewed deployment-fix implementation / main: `codex/scansci-compose-project-directory` / `453ae4c` / `ac086fa`；远端当前仅 `main`。
+- Branch / reviewed proxy-client implementation / main: `codex/scansci-controlled-proxy-client` / `05111e7` / `bdf7eb7`；远端当前仅 `main`。
 - Production application source / immutable release: `689331845574612130f223d08c92e61721c16586`。
 - Production rollback: `c435c4c8b2800bb20998fd9a9a93f2db96328661`；core/search migrations `33/33` / `2/2`（migration 33 已前向应用，application 已自动回滚）。
 - Taskmaster `hermes-research-intelligence` 仍为 9/12；独立 ScanSci plan Tasks 1–9 done、Task 10 in progress，Task 11 继续阻断。
@@ -14,6 +14,8 @@
 - PR #15 已把 controlled-egress 合并为 main `ac086fa`，CI `33375614367` 全绿；ECS exact image、schema-v3 16-case parser acceptance、targetless `0|0`、真实 internal `172.24.0.0/24` network 与 Squid allow/deny/raw-direct 门禁通过。生产切换前保持 `6893318`。
 - canonical transaction 已应用 core migration 33、验证 BGE CPU 与 Parser；首个 legal sidecar runtime gate 因 Compose v2.26 把 `project.working_dir` 标为 `<release>/infra/compose` 而 strict verifier 要求 `<release>` fail-closed。事务完整回滚旧 API/Web/Worker/Parser/BGE、清除 sidecar/journal，active/public 仍 `6893318`；ScanSci 未发布。
 - reviewed implementation `453ae4c` 对 current/embedding/auth/rollback/state/verifier、凭据轮换、备份和认证隧道全部显式传 `--project-directory <release-root>`，不放宽身份合同。独立复审 0 Critical/Important/Minor、READY；相关 deployment/runtime `71 pass + 5 Linux skip`、fresh full build/typecheck/lint/docs/test 0 fail。PR/CI、merged-SHA ECS 重试与 CARSI/四入口仍 pending。
+- PR #16 / exact CI `33388359242` 已合并为 main `bdf7eb7`；ECS schema-v3 acceptance、Compose exact working-dir、BGE CPU、legal source/topology/policy/token/session、API/Web/Worker health 均通过。第二阶段 OA canary 在本容器 `/v1/legal-download` 返回 stable 404 后自动恢复旧 BGE/Parser/API/Web/Worker、清除 sidecar/journal；active/public 仍 `6893318`，磁盘 45G/148G（32%）。
+- 根因不是路由缺失或 Squid：pinned ScanSci 显式 `trust_env=False` 且只读取 `SCANSCI_PDF_PROXY`/`network_proxy`，wrapper 原仅注入通用 `HTTP(S)_PROXY`，故 raw direct 被 internal network 阻断后折叠为 `not_found`，Squid 无 arXiv 记录。reviewed `05111e7` 只把已严格等于固定 Squid URL 的值同步到专用变量；安全复审 READY，ScanSci `94 pass / 7 platform skip`、fresh full build/typecheck/lint/test 0 fail。PR/CI、new-SHA acceptance、ECS OA/CARSI/四入口仍 pending。
 
 ## 2026-08-31 — ScanSci Task 9 local security/release gate
 
