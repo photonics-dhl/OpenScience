@@ -26,7 +26,14 @@ class AuthDockerfileContractTests(unittest.TestCase):
         wrapper = (APP_ROOT / "chromium-container-wrapper.sh").read_text(encoding="utf-8")
 
         self.assertIn("COPY --chmod=0555 chromium-container-wrapper.sh", dockerfile)
-        self.assertIn('exec /usr/bin/chromium --no-sandbox "$@"', wrapper)
+        self.assertIn("ln -s /usr/local/bin/scansci-chromium /opt/google/chrome/chrome", dockerfile)
+        self.assertNotIn("ln -s /usr/bin/chromium /opt/google/chrome/chrome", dockerfile)
+        self.assertIn("SCANSCI_BROWSER_PROXY", wrapper)
+        self.assertNotIn('if [ -z "$proxy" ]', wrapper)
+        self.assertIn('"--proxy-server=$proxy"', wrapper)
+        self.assertIn("--disable-quic", wrapper)
+        self.assertIn("--force-webrtc-ip-handling-policy=disable_non_proxied_udp", wrapper)
+        self.assertIn('"$argument" != "--no-proxy-server"', wrapper)
         self.assertNotIn("chromium \\\n  --user-data-dir", entrypoint)
 
 

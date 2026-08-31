@@ -94,7 +94,7 @@ services:
       - embedding_net
 
   scansci-secret-init:
-    profiles: ["scansci", "scansci-auth"]
+    profiles: ["scansci"]
     image: openscience-scansci-legal:dev
     user: "0:0"
     entrypoint: ["/bin/sh", "-c"]
@@ -106,17 +106,10 @@ services:
         mv -f /service-secrets/.scansci_service_token.next /service-secrets/scansci_service_token;
         install -o 1000 -g 1000 -m 0400 /host-secrets/scansci_service_token /worker-secrets/.scansci_service_token.next;
         mv -f /worker-secrets/.scansci_service_token.next /worker-secrets/scansci_service_token;
-        if test -e /host-secrets/scansci_username || test -e /host-secrets/scansci_password; then
-          test -s /host-secrets/scansci_username; test -s /host-secrets/scansci_password;
-          for name in scansci_username scansci_password; do install -o 10001 -g 10001 -m 0400 "/host-secrets/$name" "/auth-secrets/.$name.next"; mv -f "/auth-secrets/.$name.next" "/auth-secrets/$name"; done;
-        else rm -f /auth-secrets/scansci_username /auth-secrets/scansci_password; fi;
-        if test -s /host-secrets/scansci_session_bootstrap_key; then install -o 10001 -g 10001 -m 0400 /host-secrets/scansci_session_bootstrap_key /auth-secrets/.scansci_session_bootstrap_key.next; mv -f /auth-secrets/.scansci_session_bootstrap_key.next /auth-secrets/scansci_session_bootstrap_key;
-        else rm -f /auth-secrets/scansci_session_bootstrap_key; fi
     volumes:
       - ${SCANSCI_DEV_SECRET_ROOT:-../../.local/scansci-secrets}:/host-secrets:ro
       - scansci-service-secrets:/service-secrets
       - scansci-worker-secrets:/worker-secrets
-      - scansci-auth-secrets:/auth-secrets
     network_mode: none
     read_only: true
     tmpfs: [/tmp:size=1m,noexec,nosuid,nodev]
@@ -174,13 +167,14 @@ services:
         SCANSCI_BUILD_REQUIREMENTS_SHA256: ${SCANSCI_BUILD_REQUIREMENTS_SHA256:?SCANSCI_BUILD_REQUIREMENTS_SHA256 required}
     image: openscience-scansci-auth:dev
     user: "10001:10001"
-    network_mode: host
+    environment:
+      SCANSCI_BROWSER_PROXY: http://openscience-egress:7891
+    extra_hosts:
+      - "openscience-egress:172.25.0.1"
+    ports:
+      - "127.0.0.1:6080:6080"
     volumes:
       - scansci-session:/session
-      - scansci-auth-secrets:/run/secrets:ro
-    depends_on:
-      scansci-secret-init:
-        condition: service_completed_successfully
     read_only: true
     tmpfs:
       - /tmp:size=256m,noexec,nosuid,nodev,uid=10001,gid=10001,mode=0700
@@ -190,12 +184,22 @@ services:
     pids_limit: 128
     cap_drop: [ALL]
     security_opt: [no-new-privileges:true]
+    networks: [auth_net]
     restart: "no"
 
 networks:
   embedding_net:
     internal: true
   retrieval_net:
+  auth_net:
+    driver: bridge
+    internal: true
+    driver_opts:
+      com.docker.network.bridge.name: xgs-auth0
+    ipam:
+      config:
+        - subnet: 172.25.0.0/29
+          gateway: 172.25.0.1
 
 volumes:
   postgres-data:
@@ -205,4 +209,3 @@ volumes:
   scansci-session:
   scansci-service-secrets:
   scansci-worker-secrets:
-  scansci-auth-secrets:

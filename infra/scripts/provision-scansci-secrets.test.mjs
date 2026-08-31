@@ -19,16 +19,12 @@ test('provisioner atomically creates private fixed files and reports names/statu
 
   const statuses = await provisionScanSciSecrets({
     root,
-    input: `${JSON.stringify({ serviceToken: firstToken, username: 'fixture-user', password: 'fixture-password' })}\n`,
+    input: `${JSON.stringify({ serviceToken: firstToken })}\n`,
     replaceExisting: false,
     requiredUid,
   });
 
-  assert.deepEqual(statuses, [
-    { key: 'serviceToken', status: 'created' },
-    { key: 'username', status: 'created' },
-    { key: 'password', status: 'created' },
-  ]);
+  assert.deepEqual(statuses, [{ key: 'serviceToken', status: 'created' }]);
   assert.equal(await readFile(join(root, 'scansci_service_token'), 'utf8'), `${firstToken}\n`);
   const directory = await lstat(root);
   const secret = await lstat(join(root, 'scansci_service_token'));
@@ -37,14 +33,14 @@ test('provisioner atomically creates private fixed files and reports names/statu
     assert.equal(secret.mode & 0o777, 0o600);
   }
   assert.equal(secret.nlink, 1);
-  assert.deepEqual((await readdir(root)).sort(), ['scansci_password', 'scansci_service_token', 'scansci_username']);
+  assert.deepEqual((await readdir(root)).sort(), ['scansci_service_token']);
   const output = statuses.map(({ key, status }) => `${key}:${status}`).join('\n');
   assert.doesNotMatch(output, new RegExp(firstToken, 'u'));
   assert.doesNotMatch(output, /fixture-user/u);
   assert.doesNotMatch(output, /fixture-password/u);
 });
 
-test('provisioner preserves existing credentials until explicit replacement and rejects unsafe targets', async (t) => {
+test('provisioner preserves the service token until explicit replacement and rejects unsafe targets', async (t) => {
   const parent = await mkdtemp(join(tmpdir(), 'scansci-secrets-'));
   const root = join(parent, 'scansci');
   t.after(async () => rm(parent, { recursive: true, force: true }));
@@ -63,7 +59,7 @@ test('provisioner preserves existing credentials until explicit replacement and 
   await symlink(root, hostileRoot, 'junction');
   await assert.rejects(provisionScanSciSecrets({
     root: hostileRoot,
-    input: JSON.stringify({ username: 'never-write-user', password: 'never-write-password' }),
+    input: JSON.stringify({ serviceToken: 'never-write-token' }),
     replaceExisting: true,
     requiredUid,
   }), /unsafe ScanSci Secret/u);
@@ -85,14 +81,20 @@ test('provisioner CLI reads its JSON exclusively from stdin', () => {
   assert.doesNotMatch(result.stderr, /path.*must be of type/iu);
 });
 
-test('provisioner rejects a partial optional credential pair', async (t) => {
+test('provisioner rejects unsupported browser credentials and bootstrap material', async (t) => {
   const parent = await mkdtemp(join(tmpdir(), 'scansci-secrets-'));
   t.after(async () => rm(parent, { recursive: true, force: true }));
-  await assert.rejects(provisionScanSciSecrets({
-    root: join(parent, 'scansci'),
-    input: JSON.stringify({ username: 'fixture-user' }),
-    requiredUid: process.getuid?.(),
-  }), /input is invalid/u);
+  for (const input of [
+    { username: 'fixture-user' },
+    { username: 'fixture-user', password: 'fixture-password' },
+    { sessionBootstrapKey: 'fixture-bootstrap' },
+  ]) {
+    await assert.rejects(provisionScanSciSecrets({
+      root: join(parent, 'scansci'),
+      input: JSON.stringify(input),
+      requiredUid: process.getuid?.(),
+    }), /input is invalid/u);
+  }
 });
 
 test('provisioner rejects a root-owned Secret with a non-root group', () => {

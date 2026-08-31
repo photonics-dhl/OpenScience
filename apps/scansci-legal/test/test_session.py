@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import json
 import os
-import stat as stat_module
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import replace
 import http.client
@@ -315,11 +314,18 @@ class SessionManagerTest(unittest.TestCase):
 
 
 class AuthLoginTest(unittest.TestCase):
-    def test_secret_metadata_accepts_only_runtime_uid_regular_0400(self) -> None:
-        self.assertIs(auth_login._secret_metadata_is_safe(stat_module.S_IFREG | 0o400, 10001, 10001), True)
-        self.assertIs(auth_login._secret_metadata_is_safe(stat_module.S_IFREG | 0o440, 10001, 10001), False)
-        self.assertIs(auth_login._secret_metadata_is_safe(stat_module.S_IFREG | 0o400, 0, 10001), False)
-        self.assertIs(auth_login._secret_metadata_is_safe(stat_module.S_IFLNK | 0o400, 10001, 10001), False)
+    def test_browser_environment_forwards_only_the_fixed_controlled_proxy(self) -> None:
+        with mock.patch.dict(os.environ, {
+            "SCANSCI_BROWSER_PROXY": "http://openscience-egress:7891",
+            "HTTP_PROXY": "http://hostile.invalid:3128",
+        }, clear=False):
+            environment = auth_login._browser_environment(Path("/session"))
+
+        self.assertEqual(environment["SCANSCI_BROWSER_PROXY"], "http://openscience-egress:7891")
+        self.assertNotIn("HTTP_PROXY", environment)
+        with mock.patch.dict(os.environ, {"SCANSCI_BROWSER_PROXY": "http://hostile.invalid:3128"}, clear=False):
+            with self.assertRaises(ValueError):
+                auth_login._browser_environment(Path("/session"))
 
     def test_requires_an_explicit_operator_action_before_starting_upstream_login(self) -> None:
         calls: list[list[str]] = []
@@ -328,59 +334,6 @@ class AuthLoginTest(unittest.TestCase):
 
         self.assertEqual(result, 64)
         self.assertEqual(calls, [])
-
-    def test_rejects_an_oversized_fixed_secret_before_starting_login(self) -> None:
-        with tempfile.TemporaryDirectory() as directory:
-            root = Path(directory)
-            username = root / "scansci_username"
-            password = root / "scansci_password"
-            username.write_text("u" * 4097, encoding="utf-8")
-            password.write_text("password-value", encoding="utf-8")
-            if os.name != "nt":
-                username.chmod(0o600)
-                password.chmod(0o600)
-            calls: list[list[str]] = []
-
-            with (
-                mock.patch.object(auth_login, "USERNAME_SECRET", username),
-                mock.patch.object(auth_login, "PASSWORD_SECRET", password),
-            ):
-                result = auth_main(
-                    ["--operator-start"],
-                    runner=lambda command, **_kwargs: calls.append(command),
-                    session_root=root / "session",
-                )
-
-            self.assertEqual(result, 1)
-            self.assertEqual(calls, [])
-            persisted = (root / "session" / "session-state.json").read_text(encoding="utf-8")
-            self.assertNotIn("password-value", persisted)
-            self.assertNotIn("u" * 32, persisted)
-
-    def test_dangling_fixed_secret_symlinks_are_rejected_as_present(self) -> None:
-        with tempfile.TemporaryDirectory() as directory:
-            root = Path(directory)
-            username = root / "scansci_username"
-            password = root / "scansci_password"
-            try:
-                username.symlink_to(root / "missing-username")
-                password.symlink_to(root / "missing-password")
-            except OSError:
-                self.skipTest("symlinks unavailable")
-            calls: list[list[str]] = []
-
-            with (
-                mock.patch.object(auth_login, "USERNAME_SECRET", username),
-                mock.patch.object(auth_login, "PASSWORD_SECRET", password),
-            ):
-                result = auth_main(
-                    ["--operator-start"],
-                    runner=lambda command, **_kwargs: calls.append(command),
-                    session_root=root / "session",
-                )
-
-            self.assertEqual(result, 1)
-            self.assertEqual(calls, [])
 
     def test_operator_action_invokes_the_pinned_carsi_flow_without_secret_arguments(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -413,27 +366,6 @@ class AuthLoginTest(unittest.TestCase):
             self.assertIs(config["use_tor_for_scihub"], False)
             self.assertNotIn("username", config)
             self.assertNotIn("password", config)
-
-    @unittest.skipIf(os.name == "nt", "POSIX Secret ownership is a container boundary")
-    def test_fixed_secrets_require_runtime_uid_and_owner_only_read_mode(self) -> None:
-        with tempfile.TemporaryDirectory() as directory:
-            root = Path(directory)
-            secret = root / "secret"
-            secret.write_text("credential", encoding="utf-8")
-            secret.chmod(0o400)
-            uid = secret.stat().st_uid
-
-            auth_login._validate_secret(secret, expected_uid=uid)
-            with self.assertRaises(ValueError):
-                auth_login._validate_secret(secret, expected_uid=uid + 1)
-            secret.chmod(0o440)
-            with self.assertRaises(ValueError):
-                auth_login._validate_secret(secret, expected_uid=uid)
-            link = root / "secret-link"
-            link.symlink_to(secret)
-            with self.assertRaises(ValueError):
-                auth_login._validate_secret(link, expected_uid=uid)
-
 
 class SessionHttpIntegrationTest(unittest.TestCase):
     def request(self, server, method: str, path: str, body: bytes = b"") -> tuple[int, dict[str, str]]:
@@ -576,8 +508,8 @@ class SessionHttpIntegrationTest(unittest.TestCase):
         self.assertIs(requests[0].institutional, False)
 
 
-class PersistentProfileAcquisitionTest(unittest.TestCase):
-    def test_worker_receives_the_fixed_persistent_carsi_profile_without_moving_cookie_bytes(self) -> None:
+class PersistentCookieAcquisitionTest(unittest.TestCase):
+    def test_worker_receives_the_fixed_persistent_carsi_cookie_without_moving_cookie_bytes(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             session = root / "session"

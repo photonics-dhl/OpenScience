@@ -51,6 +51,8 @@ const embeddingDockerfile = readFileSync(new URL('../../apps/embedding-worker/Do
 const embeddingRequirements = readFileSync(new URL('../../apps/embedding-worker/requirements.lock', import.meta.url), 'utf8');
 const embeddingEvaluatorDockerfile = readFileSync(new URL('../embedding-candidates/bge-m3/Dockerfile', import.meta.url), 'utf8');
 const squidConfig = readFileSync(new URL('../squid/openscience-egress.conf', import.meta.url), 'utf8');
+const authNetworkPreparation = readFileSync(new URL('./prepare-scansci-auth-network.sh', import.meta.url), 'utf8');
+const atomicSquidConfig = readFileSync(new URL('./atomic-squid-config.mjs', import.meta.url), 'utf8');
 const rootPackage = JSON.parse(readFileSync(new URL('../../package.json', import.meta.url), 'utf8'));
 const bash = process.platform === 'win32' && existsSync('C:/Program Files/Git/bin/bash.exe')
   ? 'C:/Program Files/Git/bin/bash.exe'
@@ -100,51 +102,85 @@ test('ScanSci production topology exposes only the bounded legal service and sto
   assert.match(worker, /\$\{XGS_RELEASE_ROOT:\?XGS_RELEASE_ROOT required\}:\/opt\/openscience:ro/u);
   assert.match(worker, /parser-jobs:\/parser-jobs/u);
   assert.match(auth, /profiles: \["scansci-auth"\]/u);
-  assert.match(auth, /network_mode: host/u);
+  assert.match(auth, /SCANSCI_BROWSER_PROXY: http:\/\/openscience-egress:7891/u);
+  assert.match(auth, /extra_hosts:\r?\n\s+- "openscience-egress:172\.25\.0\.1"/u);
+  assert.match(auth, /ports:\r?\n\s+- "127\.0\.0\.1:6080:6080"/u);
+  assert.match(auth, /networks:\r?\n\s+- auth_net/u);
   assert.match(auth, /scansci-session:\/session/u);
-  assert.match(auth, /scansci-auth-secrets:\/run\/secrets:ro/u);
-  assert.doesNotMatch(auth, /scansci-service-secrets/u);
+  assert.doesNotMatch(auth, /scansci-(?:service|auth)-secrets|\/run\/secrets/u);
   assert.match(auth, /restart: "no"/u);
-  assert.doesNotMatch(auth, /\bnetworks:|data_net|env_file|docker\.sock/iu);
+  assert.doesNotMatch(auth, /network_mode: host|data_net|env_file|docker\.sock/iu);
   assert.match(auth, /context: \$\{XGS_RELEASE_ROOT:\?XGS_RELEASE_ROOT required\}\/apps\/scansci-legal/u);
   assert.match(auth, /dockerfile: Dockerfile\.auth/u);
   assert.match(developmentLegal, /context: \.\.\/\.\.\/apps\/scansci-legal/u);
   assert.match(developmentLegal, /dockerfile: Dockerfile/u);
   assert.match(developmentAuth, /context: \.\.\/\.\.\/apps\/scansci-legal/u);
   assert.match(developmentAuth, /dockerfile: Dockerfile\.auth/u);
-  assert.match(readFileSync(new URL('../../apps/scansci-legal/auth-entrypoint.sh', import.meta.url), 'utf8'), /127\.0\.0\.1:6080 127\.0\.0\.1:5900/u);
+  assert.match(developmentAuth, /ports:\r?\n\s+- "127\.0\.0\.1:6080:6080"/u);
+  assert.match(developmentAuth, /SCANSCI_BROWSER_PROXY: http:\/\/openscience-egress:7891/u);
+  assert.match(developmentAuth, /extra_hosts:\r?\n\s+- "openscience-egress:172\.25\.0\.1"/u);
+  assert.match(developmentAuth, /networks: \[auth_net\]/u);
+  assert.doesNotMatch(developmentAuth, /network_mode: host|scansci-auth-secrets|\/run\/secrets/u);
+  assert.match(readFileSync(new URL('../../apps/scansci-legal/auth-entrypoint.sh', import.meta.url), 'utf8'), /0\.0\.0\.0:6080 127\.0\.0\.1:5900/u);
 
   assert.match(secretInit, /\/opt\/openscience-secrets\/scansci:\/host-secrets:ro/u);
   assert.match(secretInit, /install -o 10001 -g 10001 -m 0400 \/host-secrets\/scansci_service_token \/service-secrets\/\.scansci_service_token\.next/u);
   assert.match(secretInit, /install -o 1000 -g 1000 -m 0400 \/host-secrets\/scansci_service_token \/worker-secrets\/\.scansci_service_token\.next/u);
+  assert.doesNotMatch(secretInit, /scansci_(?:username|password)|auth-secrets/u);
   assert.match(secretInit, /network_mode: none/u);
   assert.match(secretInit, /read_only: true/u);
   assert.match(productionCompose, /scansci-session:\r?\n/u);
   const volumeSection = productionCompose.split('\nvolumes:')[1] ?? '';
   assert.match(volumeSection, /scansci-service-secrets:\r?\n/u);
-  assert.match(volumeSection, /scansci-auth-secrets:\r?\n/u);
-  assert.doesNotMatch(volumeSection, /scansci-(?:service|auth)-secrets:[\s\S]*type: tmpfs/u);
+  assert.doesNotMatch(volumeSection, /scansci-auth-secrets:\r?\n/u);
+  assert.doesNotMatch(volumeSection, /scansci-service-secrets:[\s\S]*type: tmpfs/u);
   assert.match(productionCompose, /^  retrieval_net:\r?\n    driver: bridge\r?\n    internal: true\r?\n    ipam:\r?\n      config:\r?\n        - subnet: 172\.24\.0\.0\/24\r?\n          gateway: 172\.24\.0\.1$/mu);
+  assert.match(productionCompose, /^  auth_net:\r?\n    driver: bridge\r?\n    internal: true\r?\n    driver_opts:\r?\n      com\.docker\.network\.bridge\.name: xgs-auth0\r?\n    ipam:\r?\n      config:\r?\n        - subnet: 172\.25\.0\.0\/29\r?\n          gateway: 172\.25\.0\.1$/mu);
+  assert.equal((productionCompose.match(/\n\s+- auth_net\s*$/gmu) ?? []).length, 1,
+    'only the auth helper may join the passwordless noVNC network');
 });
 
 test('ScanSci controlled egress is private to the fixed retrieval subnet', () => {
   assert.match(squidConfig, /^http_port 127\.0\.0\.1:7891 name=loopback_listener$/mu);
   assert.match(squidConfig, /^http_port 172\.24\.0\.1:7891 name=scansci_listener$/mu);
+  assert.match(squidConfig, /^http_port 172\.25\.0\.1:7891 name=scansci_auth_listener$/mu);
   assert.match(squidConfig, /^acl scansci_retrieval src 172\.24\.0\.0\/24$/mu);
+  assert.match(squidConfig, /^acl scansci_auth src 172\.25\.0\.0\/29$/mu);
   assert.match(squidConfig, /^acl scansci_parent_domains dstdomain \.arxiv\.org$/mu);
   assert.match(squidConfig, /^http_access deny scansci_retrieval !CONNECT$/mu);
   assert.match(squidConfig, /^http_access deny scansci_retrieval !SSL_ports$/mu);
   assert.match(squidConfig, /^http_access deny scansci_retrieval blocked_ipv4$/mu);
   assert.match(squidConfig, /^http_access deny scansci_retrieval blocked_ipv6$/mu);
   assert.match(squidConfig, /^http_access allow scansci_retrieval scansci_listener CONNECT SSL_ports$/mu);
+  assert.match(squidConfig, /^http_access allow scansci_auth scansci_auth_listener CONNECT SSL_ports$/mu);
   assert.match(squidConfig, /^cache_peer_access home_tunnel allow loopback$/mu);
   assert.match(squidConfig, /^cache_peer_access home_tunnel allow scansci_retrieval scansci_parent_domains$/mu);
   assert.match(squidConfig, /^cache_peer_access home_tunnel deny scansci_retrieval$/mu);
+  assert.match(squidConfig, /^cache_peer_access home_tunnel deny scansci_auth$/mu);
   assert.match(squidConfig, /^cache_peer_access home_tunnel deny all$/mu);
   assert.match(squidConfig, /^always_direct allow scansci_retrieval !scansci_parent_domains$/mu);
+  assert.match(squidConfig, /^always_direct allow scansci_auth$/mu);
   assert.doesNotMatch(squidConfig, /^cache_peer_access home_tunnel allow all$/mu);
   assert.doesNotMatch(squidConfig, /^http_port (?:0\.0\.0\.0|\[::\]):7891$/mu);
   assert.ok(squidConfig.indexOf('http_access allow scansci_retrieval scansci_listener CONNECT SSL_ports') < squidConfig.indexOf('http_access deny all'));
+});
+
+test('ScanSci auth preparation installs an isolated host policy before browser start', () => {
+  assert.match(authNetworkPreparation, /network_name='openscience-prod_auth_net'/u);
+  assert.match(authNetworkPreparation, /bridge_name='xgs-auth0'/u);
+  assert.match(authNetworkPreparation, /subnet='172\.25\.0\.0\/29'/u);
+  assert.match(authNetworkPreparation, /gateway='172\.25\.0\.1'/u);
+  assert.match(authNetworkPreparation, /unauthorized peer/u);
+  assert.match(authNetworkPreparation, /squid -k parse/u);
+  assert.match(authNetworkPreparation, /"\$atomic_config" activate/u);
+  assert.doesNotMatch(authNetworkPreparation, /install .*"\$target_config"/u);
+  assert.match(atomicSquidConfig, /spawnSync\('\/usr\/sbin\/squid', \['-k', 'reconfigure', '-f', target\]/u);
+  assert.match(atomicSquidConfig, /await recoverConfig\(\{ target, rollback \}\)/u);
+  assert.match(atomicSquidConfig, /await clearPendingMarker\(target\)/u);
+  assert.match(authNetworkPreparation, /--dport 7891 .* -j ACCEPT/u);
+  assert.match(authNetworkPreparation, /reject=\(INPUT -i "\$bridge_name" -s "\$subnet" .* -j REJECT/u);
+  assert.doesNotMatch(authNetworkPreparation, /reject=.*-d "\$gateway"/u);
+  assert.match(authNetworkPreparation, /172\.25\.0\.1:7891/u);
 });
 
 test('ScanSci deploy dispatches exact rollback identity when the previous release has or lacks the service', () => {

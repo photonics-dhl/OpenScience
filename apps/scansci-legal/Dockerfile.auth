@@ -35,7 +35,7 @@ RUN apt-get update \
     && useradd --uid 10001 --gid 10001 --home-dir /session/home --no-create-home --shell /usr/sbin/nologin scansci \
     && install -d -o 10001 -g 10001 -m 0700 /session /session/home /session/scansci /session/chromium /tmp/scansci-auth \
     && install -d -m 0755 /opt/google/chrome \
-    && ln -s /usr/bin/chromium /opt/google/chrome/chrome
+    && ln -s /usr/local/bin/scansci-chromium /opt/google/chrome/chrome
 COPY --from=python-dependencies /opt/scansci-venv /opt/scansci-venv
 COPY --chown=10001:10001 src /opt/scansci/src
 COPY --chmod=0555 chromium-container-wrapper.sh /usr/local/bin/scansci-chromium

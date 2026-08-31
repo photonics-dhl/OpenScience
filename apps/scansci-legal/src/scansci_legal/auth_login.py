@@ -6,7 +6,6 @@ import argparse
 import json
 import os
 from pathlib import Path
-import stat
 import subprocess
 import sys
 from typing import Callable, Sequence
@@ -16,8 +15,7 @@ from .session import SessionStore
 
 INSTITUTION = "浙江大学"
 SESSION_ROOT = Path("/session")
-USERNAME_SECRET = Path("/run/secrets/scansci_username")
-PASSWORD_SECRET = Path("/run/secrets/scansci_password")
+CONTROLLED_BROWSER_PROXY = "http://openscience-egress:7891"
 
 
 def main(
@@ -38,12 +36,11 @@ def main(
     store = SessionStore(session_root, expected_uid=None, enforce_permissions=os.name != "nt")
     store.ensure_root()
     try:
-        _validate_optional_credentials()
         _write_legal_config(session_root)
+        environment = _browser_environment(session_root)
     except (OSError, UnicodeError, ValueError):
         store.publish_status("auth_required", reason="operator_auth_required")
         return 1
-    environment = _browser_environment(session_root)
     commands = (
         ["scansci-pdf", "setup", INSTITUTION],
         ["scansci-pdf", "federated-login", "sciencedirect", "--force"],
@@ -116,60 +113,11 @@ def _browser_environment(session_root: Path) -> dict[str, str]:
     for key in ("LANG", "LC_ALL", "TZ"):
         if value := os.environ.get(key):
             environment[key] = value
+    if proxy := os.environ.get("SCANSCI_BROWSER_PROXY", "").strip():
+        if proxy != CONTROLLED_BROWSER_PROXY:
+            raise ValueError("browser proxy is invalid")
+        environment["SCANSCI_BROWSER_PROXY"] = proxy
     return environment
-
-
-def _validate_optional_credentials() -> None:
-    present = [os.path.lexists(path) for path in (USERNAME_SECRET, PASSWORD_SECRET)]
-    if any(present) and not all(present):
-        raise ValueError("optional credentials must be provisioned as a pair")
-    for path in (USERNAME_SECRET, PASSWORD_SECRET):
-        if not os.path.lexists(path):
-            continue
-        value = _read_secret(path, expected_uid=_current_uid())
-        if not value.strip():
-            raise ValueError("optional credential secret is invalid")
-
-
-def _validate_secret(path: Path, *, expected_uid: int | None) -> None:
-    details = path.lstat()
-    if path.is_symlink() or not _secret_metadata_is_safe(details.st_mode, details.st_uid, expected_uid):
-        raise ValueError("optional credential secret is unsafe")
-
-
-def _read_secret(path: Path, *, expected_uid: int | None) -> str:
-    before = path.lstat()
-    if path.is_symlink() or not _secret_metadata_is_safe(before.st_mode, before.st_uid, expected_uid):
-        raise ValueError("optional credential secret is unsafe")
-    descriptor = os.open(path, os.O_RDONLY | getattr(os, "O_BINARY", 0) | getattr(os, "O_NOFOLLOW", 0))
-    try:
-        opened = os.fstat(descriptor)
-        if (before.st_dev, before.st_ino) != (opened.st_dev, opened.st_ino):
-            raise ValueError("optional credential secret is unsafe")
-        with os.fdopen(descriptor, "rb", closefd=False) as secret:
-            raw = secret.read(4097)
-        after = path.lstat()
-        if (opened.st_dev, opened.st_ino) != (after.st_dev, after.st_ino):
-            raise ValueError("optional credential secret is unsafe")
-    finally:
-        os.close(descriptor)
-    if len(raw) > 4096:
-        raise ValueError("optional credential secret is invalid")
-    return raw.decode("utf-8")
-
-
-def _secret_metadata_is_safe(mode: int, owner_uid: int, expected_uid: int | None) -> bool:
-    if not stat.S_ISREG(mode):
-        return False
-    if expected_uid is not None and owner_uid != expected_uid:
-        return False
-    return stat.S_IMODE(mode) == 0o400
-
-
-def _current_uid() -> int | None:
-    getter = getattr(os, "geteuid", None)
-    return getter() if getter is not None else None
-
 
 if __name__ == "__main__":
     raise SystemExit(main(sys.argv[1:]))

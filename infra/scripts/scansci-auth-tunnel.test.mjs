@@ -8,6 +8,7 @@ import { fileURLToPath } from 'node:url';
 import test from 'node:test';
 
 const sourceScript = resolve(dirname(fileURLToPath(import.meta.url)), 'scansci-auth-tunnel.sh');
+const sourceRfbProbe = resolve(dirname(fileURLToPath(import.meta.url)), 'probe-novnc-rfb.mjs');
 const authEntrypoint = resolve(dirname(fileURLToPath(import.meta.url)), '../../apps/scansci-legal/auth-entrypoint.sh');
 const bash = process.platform === 'win32' && existsSync('C:/Program Files/Git/bin/bash.exe')
   ? 'C:/Program Files/Git/bin/bash.exe'
@@ -26,9 +27,11 @@ async function fixture() {
     mkdir(state, { recursive: true }),
   ]);
   const script = join(scripts, 'scansci-auth-tunnel.sh');
+  const rfbProbe = join(scripts, 'probe-novnc-rfb.mjs');
   const ssh = join(bin, 'ssh');
   const log = join(root, 'ssh-argv.log');
   await copyFile(sourceScript, script);
+  await copyFile(sourceRfbProbe, rfbProbe);
   await writeFile(join(root, '.env'), [
     'SERVER_HOST=198.51.100.24',
     'SERVER_USER=operator-fixture',
@@ -87,7 +90,7 @@ function run(script, args, env, bashBin = '') {
   return spawnSync(
     bash,
     ['-c', 'PATH="$1:$PATH"; export PATH; shift; exec "$@"', 'run-script', bashBin, script, ...args],
-    { encoding: 'utf8', env, timeout: 10_000 },
+    { encoding: 'utf8', env, timeout: 20_000 },
   );
 }
 
@@ -106,8 +109,8 @@ function runAsync(script, args, env, bashBin = '') {
   });
 }
 
-async function startHealthServer(t, port) {
-  const source = `require('http').createServer((request,response)=>{const ok=request.url==='/vnc.html?autoconnect=true&resize=remote';response.writeHead(ok?200:404);response.end(ok?'ok':'not found')}).listen(${port},'127.0.0.1')`;
+async function startHealthServer(t, port, { websocket = true } = {}) {
+  const source = `const {createHash}=require('crypto');const websocket=${JSON.stringify(websocket)};const server=require('http').createServer((request,response)=>{const ok=request.url==='/vnc.html?autoconnect=true&resize=remote';response.writeHead(ok?200:404);response.end(ok?'ok':'not found')});server.on('upgrade',(request,socket)=>{if(!websocket||request.url!=='/websockify'||!request.headers['sec-websocket-key']){socket.end('HTTP/1.1 404 Not Found\\r\\nConnection: close\\r\\n\\r\\n');return}const accept=createHash('sha1').update(request.headers['sec-websocket-key']+'258EAFA5-E914-47DA-95CA-C5AB0DC85B11').digest('base64');socket.write(['HTTP/1.1 101 Switching Protocols','Upgrade: websocket','Connection: Upgrade','Sec-WebSocket-Accept: '+accept,'Sec-WebSocket-Protocol: binary','',''].join('\\r\\n'));const payload=Buffer.from('RFB 003.008\\n','ascii');socket.end(Buffer.concat([Buffer.from([0x82,payload.length]),payload]))});server.listen(${port},'127.0.0.1')`;
   const server = spawn(process.execPath, ['-e', source], { stdio: 'ignore' });
   t.after(() => { if (server.exitCode === null) server.kill(); });
   await new Promise((resolveWait) => setTimeout(resolveWait, 250));
@@ -179,15 +182,17 @@ test('status is read-only and only explicit start launches the helper and loopba
 
   const log = await readFile(f.log, 'utf8');
   assert.match(log, /flock -n -E 73 \/run\/lock\/openscience-production-deploy\/lock/u);
-  const secretRefresh = log.indexOf('up -d --force-recreate scansci-secret-init');
-  const helperStart = log.indexOf('--profile scansci-auth up -d scansci-auth');
-  assert.ok(secretRefresh >= 0 && secretRefresh < helperStart, 'runtime Secret material must refresh before auth starts');
+  const helperStart = log.indexOf('--profile scansci-auth up --no-start --no-build --force-recreate scansci-auth');
+  assert.ok(helperStart >= 0, 'auth helper must start');
+  assert.doesNotMatch(log, /scansci-secret-init/u, 'interactive auth must not refresh or mount unrelated Secret material');
   assert.equal(
     (log.match(/docker compose --project-directory "\/opt\/openscience-releases\/[0-9a-f]{40}"/g) ?? []).length,
     2,
-    'both auth startup Compose calls must retain the immutable release project identity',
+    'auth startup must retain the immutable release project identity',
   );
-  assert.match(log, /docker compose .*--profile scansci-auth up -d scansci-auth/);
+  assert.match(log, /docker compose .*--profile scansci-auth up --no-start --no-build --force-recreate scansci-auth/u);
+  assert.match(log, /prepare-scansci-auth-network\.sh/u);
+  assert.match(log, /docker compose .*--profile scansci-auth start scansci-auth/u);
   assert.match(log, /-L\n127\.0\.0\.1:16080:127\.0\.0\.1:6080/);
   assert.match(log, new RegExp(`-i\\n${f.bashKey.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}`));
   assert.match(log, /operator-fixture@198\.51\.100\.24/);
@@ -212,7 +217,7 @@ test('duplicate start is idempotent and stop closes only the recorded tunnel', a
   assert.match(duplicate.stdout, /^already running on http:\/\/127\.0\.0\.1:16081\/vnc\.html\?autoconnect=true&resize=remote\s*$/);
 
   const beforeStop = await readFile(f.log, 'utf8');
-  assert.equal((beforeStop.match(/--profile scansci-auth up -d scansci-auth/g) ?? []).length, 1);
+  assert.equal((beforeStop.match(/--profile scansci-auth up --no-start --no-build --force-recreate scansci-auth/g) ?? []).length, 1);
 
   const stopped = run(f.script, ['stop'], f.env, f.bashBin);
   assert.equal(stopped.status, 0, stopped.stderr);
@@ -260,7 +265,7 @@ test('stop uses the release identity stored at start after active release switch
   assert.equal(stopped.status, 0, stopped.stderr);
   const log = await readFile(f.log, 'utf8');
   assert.equal((log.match(/cat \/opt\/openscience\/\.release-id/g) ?? []).length, 1);
-  assert.match(log, new RegExp(`/opt/openscience-releases/${releaseA}.*--profile scansci-auth up -d scansci-auth`));
+  assert.match(log, new RegExp(`/opt/openscience-releases/${releaseA}.*--profile scansci-auth up --no-start --no-build --force-recreate scansci-auth`));
   assert.match(log, new RegExp(`/opt/openscience-releases/${releaseA}.*--profile scansci-auth rm -f -s scansci-auth`));
   assert.doesNotMatch(log, new RegExp(`/opt/openscience-releases/${releaseB}`));
 });
@@ -349,7 +354,7 @@ test('legacy duplicate start upgrades state without launching another helper or 
   assert.deepEqual((await readFile(statePath, 'utf8')).trimEnd().split('\n'), [...legacyLines, 'running']);
   const log = await readFile(f.log, 'utf8');
   assert.equal((log.match(/cat \/opt\/openscience\/\.release-id/g) ?? []).length, 1);
-  assert.equal((log.match(/--profile scansci-auth up -d scansci-auth/g) ?? []).length, 1);
+  assert.equal((log.match(/--profile scansci-auth up --no-start --no-build --force-recreate scansci-auth/g) ?? []).length, 1);
   assert.doesNotMatch(log, new RegExp(`/opt/openscience-releases/${releaseB}`));
 });
 
@@ -533,7 +538,7 @@ test('a failed local tunnel compensates by stopping the exact remote auth helper
   assert.equal(result.status, 1, `${result.stdout}\n${result.stderr}`);
   assert.match(result.stderr, /^loopback tunnel start failed\s*$/);
   const log = await readFile(f.log, 'utf8');
-  assert.match(log, /--profile scansci-auth up -d scansci-auth/);
+  assert.match(log, /--profile scansci-auth up --no-start --no-build --force-recreate scansci-auth/);
   assert.match(log, /--profile scansci-auth rm -f -s scansci-auth/);
 });
 
@@ -542,6 +547,20 @@ test('a live tunnel without loopback HTTP readiness is stopped and compensated',
   t.after(async () => rm(f.root, { recursive: true, force: true }));
 
   const result = run(f.script, ['start', '16086'], f.env, f.bashBin);
+
+  assert.equal(result.status, 1, `${result.stdout}\n${result.stderr}`);
+  assert.match(result.stderr, /^loopback tunnel readiness failed\s*$/);
+  const log = await readFile(f.log, 'utf8');
+  assert.match(log, /--profile scansci-auth rm -f -s scansci-auth/);
+  assert.equal(run(f.script, ['status'], f.env, f.bashBin).status, 3);
+});
+
+test('a static noVNC page without a WebSocket RFB backend is stopped and compensated', async (t) => {
+  const f = await fixture();
+  await startHealthServer(t, 16089, { websocket: false });
+  t.after(async () => rm(f.root, { recursive: true, force: true }));
+
+  const result = run(f.script, ['start', '16089'], f.env, f.bashBin);
 
   assert.equal(result.status, 1, `${result.stdout}\n${result.stderr}`);
   assert.match(result.stderr, /^loopback tunnel readiness failed\s*$/);
@@ -610,7 +629,7 @@ test('concurrent starts serialize to one identified tunnel and one remote helper
 
   assert.deepEqual(results.map((result) => result.status), [0, 0]);
   const log = await readFile(f.log, 'utf8');
-  assert.equal((log.match(/--profile scansci-auth up -d scansci-auth/g) ?? []).length, 1);
+  assert.equal((log.match(/--profile scansci-auth up --no-start --no-build --force-recreate scansci-auth/g) ?? []).length, 1);
   assert.equal((log.match(/127\.0\.0\.1:16085:127\.0\.0\.1:6080/g) ?? []).length, 1);
 });
 
@@ -648,7 +667,7 @@ test('explicit stop closes the remote helper even when the recorded tunnel is st
   assert.match(log, /--profile scansci-auth rm -f -s scansci-auth/);
 });
 
-test('auth entrypoint starts only the loopback display stack and leaves the browser profile to ScanSci', async (t) => {
+test('auth entrypoint starts only the loopback display stack and leaves the browser lifecycle to ScanSci', async (t) => {
   const root = await mkdtemp(join(tmpdir(), 'scansci-auth-entrypoint-'));
   const bin = join(root, 'bin');
   const log = join(root, 'process.log');
@@ -672,12 +691,12 @@ while true; do sleep 1; done
     : bin;
   t.after(async () => rm(root, { recursive: true, force: true }));
 
-  const result = run(authEntrypoint, [], { ...process.env, AUTH_PROCESS_LOG: log }, bashBin);
+  const result = run(authEntrypoint, [], { ...process.env, DISPLAY: '', AUTH_PROCESS_LOG: log }, bashBin);
   assert.equal(result.status, 0, `${result.stdout}\n${result.stderr}`);
   const processes = await readFile(log, 'utf8');
   assert.match(processes, /^Xvfb :99 /m);
   assert.doesNotMatch(processes, /^chromium /m);
-  assert.match(processes, /^x11vnc .* -listen 127\.0\.0\.1 /m);
-  assert.match(processes, /^websockify .*127\.0\.0\.1:6080 127\.0\.0\.1:5900/m);
+  assert.match(processes, /^x11vnc .* -listen 127\.0\.0\.1 .* -no6(?: |$)/m);
+  assert.match(processes, /^websockify .*0\.0\.0\.0:6080 127\.0\.0\.1:5900/m);
   assert.match(processes, /^python -m scansci_legal\.auth_login --operator-start$/m);
 });
