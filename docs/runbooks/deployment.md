@@ -1589,3 +1589,9 @@ free environment probe imported `scansci_pdf` only to rediscover the already
 pinned `SCANSCI_PDF_DATA_DIR`. Restore 0600 only around fixture mutation, then
 return the fixed environment value directly; the real acquisition path remains
 the only path allowed to import the pinned upstream package.
+
+The first real Secret provision attempt then showed that
+`node:fs/promises.readFile` does not accept numeric stdin descriptor `0`.
+Use `readFileSync(0, 'utf8')` for this short bounded CLI input and retain the
+existing 32 KiB parser limit. A subprocess regression must distinguish valid
+stdin parsing from the former path-type exception before any `/opt` write.
