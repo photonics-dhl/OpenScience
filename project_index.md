@@ -1,7 +1,7 @@
 # OpenScience (XGS) 项目文件索引
 
 > 维护规则：创建/修改/移动文件后必须更新本索引。创建新文件前先查本表防重复。
-> **CURRENT source/deployment anchor（2026-08-31）：** local branch（upstream gone）/ repository main `codex/scansci-controlled-proxy-client` / `abd38d3b8d1800f73550efb9c70adea76cf82908`；application source/production release `abd38d3b8d1800f73550efb9c70adea76cf82908`；rollback `689331845574612130f223d08c92e61721c16586`；production core/search `33/33` / `2/2`。Exact Parser acceptance、BGE CPU、ScanSci source/topology/policy/token/session 与真实 24,671,920-byte arXiv OA canary 全绿；CARSI/四入口仍 pending。Taskmaster 9/12，Task 11 blocked。local/docs HEAD 与 ECS application source 不得混写。
+> **CURRENT source/deployment anchor（2026-08-31）：** local docs branch / repository main `codex/scansci-postdeploy-docs` / `a08237ab2401dc610834894e3322633159e58f5e`；application source/production release `abd38d3b8d1800f73550efb9c70adea76cf82908`；rollback `689331845574612130f223d08c92e61721c16586`；production core/search `33/33` / `2/2`。Exact Parser acceptance、BGE CPU、ScanSci source/topology/policy/token/session 与真实 24,671,920-byte arXiv OA canary 全绿；auth cache hygiene 已 merged、未单独部署；CARSI/四入口仍 pending。Taskmaster 9/12，Task 11 blocked。local/docs HEAD 与 ECS application source 不得混写。
 
 ## 根目录
 | 路径 | 用途 | 状态 |

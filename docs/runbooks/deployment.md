@@ -1688,7 +1688,9 @@ and the post-switch Worker OA canary. The fixed arXiv canary returned
 Post-deploy cleanup removed only unreferenced historical parser-evaluation
 images and dangling BuildKit objects older than 24 hours while retaining at
 least 4GB of build cache. Disk is `44G/148G` used (31%, 98G available), with
-only active and rollback release roots. Keep acceptance reports. The auth image
-currently invalidates its large Chromium/CJK apt layer on every release SHA;
-move release-varying metadata after stable dependency installation and pin that
-ordering with a contract test before the next functional deployment.
+only active and rollback release roots. Keep acceptance reports. PR #18 / CI
+run `33404431776` moved release-varying auth metadata after the stable
+Chromium/CJK dependency installation and pinned the ordering with a red→green
+Dockerfile contract test; merged main is `a08237a`. This build-only optimization
+does not change the production application release and must not trigger a
+standalone deployment.
