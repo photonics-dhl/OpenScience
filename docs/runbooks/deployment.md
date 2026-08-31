@@ -1,6 +1,6 @@
 # Runbook: 部署（Deployment）
 
-> 状态：**CURRENT**。active immutable release / application source 为 `2fa10aa8ac3a541e794bdb40456b4f8dee826e4c`，rollback tree 为 `4c73469fe24abe685054f1d917d452adc5371d35`。post-deploy merge/docs-only HEAD 不得冒充 application source。
+> 状态：**CURRENT**。active immutable release / application source 为 `abd38d3b8d1800f73550efb9c70adea76cf82908`，rollback tree 为 `689331845574612130f223d08c92e61721c16586`。post-deploy merge/docs-only HEAD 不得冒充 application source。
 > 格式遵循 `.agents/skills/infra-runbook/SKILL.md` 四节强制要求。
 > 部署属 Spec §20.5"询问"级操作：执行前需用户确认，必须走 `infra/scripts/deploy.sh` + CI/CD，禁止手工改服务器代码。
 
@@ -1672,3 +1672,23 @@ by the internal retrieval network and upstream collapsed the result to
 `SCANSCI_EGRESS_PROXY` is exactly `http://openscience-egress:7891`, map that same
 credential-free value into `SCANSCI_PDF_PROXY` for the isolated worker. Do not
 inherit arbitrary host proxy variables or relax the network/URL/Squid guards.
+
+### 5.51 Controlled-proxy production success and bounded hygiene (2026-08-31)
+
+PR #17 merged as `abd38d3b8d1800f73550efb9c70adea76cf82908` after exact
+CI run `33397550370` / job `99505612016`. The ECS acceptance regenerated the
+schema-v3 16-case parser report for that SHA. The canonical transaction passed
+core/search `33/33` / `2/2`, BGE-M3 CPU inference, Parser, exact Compose
+working-directory identity, ScanSci source/topology/policy/file-limit/token,
+and the post-switch Worker OA canary. The fixed arXiv canary returned
+`open_access`, `%PDF-`, and 24,671,920 bytes through Squid
+`FIRSTUP_PARENT/127.0.0.1`. Active/public CAS is `abd38d3`; rollback is
+`6893318`; journal, failed marker, pending intent, and auth helper are absent.
+
+Post-deploy cleanup removed only unreferenced historical parser-evaluation
+images and dangling BuildKit objects older than 24 hours while retaining at
+least 4GB of build cache. Disk is `44G/148G` used (31%, 98G available), with
+only active and rollback release roots. Keep acceptance reports. The auth image
+currently invalidates its large Chromium/CJK apt layer on every release SHA;
+move release-varying metadata after stable dependency installation and pin that
+ordering with a contract test before the next functional deployment.
