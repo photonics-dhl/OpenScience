@@ -228,8 +228,8 @@ services:
 
   scansci-legal:
     build:
-      context: ${XGS_RELEASE_ROOT:?XGS_RELEASE_ROOT required}
-      dockerfile: apps/scansci-legal/Dockerfile
+      context: ${XGS_RELEASE_ROOT:?XGS_RELEASE_ROOT required}/apps/scansci-legal
+      dockerfile: Dockerfile
       network: host
       args:
         XGS_RELEASE_IMAGE_TAG: ${XGS_RELEASE_IMAGE_TAG:?XGS_RELEASE_IMAGE_TAG required}
@@ -278,8 +278,8 @@ services:
   scansci-auth:
     profiles: ["scansci-auth"]
     build:
-      context: ${XGS_RELEASE_ROOT:?XGS_RELEASE_ROOT required}
-      dockerfile: apps/scansci-legal/Dockerfile.auth
+      context: ${XGS_RELEASE_ROOT:?XGS_RELEASE_ROOT required}/apps/scansci-legal
+      dockerfile: Dockerfile.auth
       network: host
       args:
         XGS_RELEASE_IMAGE_TAG: ${XGS_RELEASE_IMAGE_TAG:?XGS_RELEASE_IMAGE_TAG required}

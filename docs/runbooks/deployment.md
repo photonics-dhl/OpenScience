@@ -1595,3 +1595,18 @@ The first real Secret provision attempt then showed that
 Use `readFileSync(0, 'utf8')` for this short bounded CLI input and retain the
 existing 32 KiB parser limit. A subprocess regression must distinguish valid
 stdin parsing from the former path-type exception before any `/opt` write.
+
+The first merged-main ECS image preflight stopped before Docker build because
+the older production environment lacked the three non-secret ScanSci source-
+lock hashes already present in `.env.example`. Add only those exact public hash
+keys under the production deploy lock, without printing the environment file,
+and require an exact three-key metadata check before retrying interpolation.
+
+That retry exposed a separate Compose build-context defect: both ScanSci
+Dockerfiles copy `requirements.lock`, `src`, and the auth entrypoint relative to
+`apps/scansci-legal`, while dev and production Compose passed the repository
+root as context. Use the application directory as the context and make the
+Dockerfile paths relative to it in both Compose files. The release-contract test
+must pin all four context/Dockerfile pairs so a clean ECS build cannot regress.
+This failure occurred before any candidate container, migration, release marker,
+or public traffic change.

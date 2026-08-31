@@ -131,8 +131,8 @@ services:
   scansci-legal:
     profiles: ["scansci"]
     build:
-      context: ../..
-      dockerfile: apps/scansci-legal/Dockerfile
+      context: ../../apps/scansci-legal
+      dockerfile: Dockerfile
       args:
         XGS_RELEASE_IMAGE_TAG: dev
         SCANSCI_ARCHIVE_SHA256: ${SCANSCI_ARCHIVE_SHA256:?SCANSCI_ARCHIVE_SHA256 required}
@@ -165,8 +165,8 @@ services:
   scansci-auth:
     profiles: ["scansci-auth"]
     build:
-      context: ../..
-      dockerfile: apps/scansci-legal/Dockerfile.auth
+      context: ../../apps/scansci-legal
+      dockerfile: Dockerfile.auth
       args:
         XGS_RELEASE_IMAGE_TAG: dev
         SCANSCI_ARCHIVE_SHA256: ${SCANSCI_ARCHIVE_SHA256:?SCANSCI_ARCHIVE_SHA256 required}

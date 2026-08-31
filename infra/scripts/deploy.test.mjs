@@ -68,7 +68,10 @@ test('ScanSci production topology exposes only the bounded legal service and sto
   const worker = composeService('agent-worker', 'scansci-secret-init');
   const secretInit = composeService('scansci-secret-init', 'scansci-legal');
   const developmentLegal = composeService('scansci-legal', 'scansci-auth', developmentCompose);
+  const developmentAuth = composeService('scansci-auth', undefined, developmentCompose);
 
+  assert.match(legal, /context: \$\{XGS_RELEASE_ROOT:\?XGS_RELEASE_ROOT required\}\/apps\/scansci-legal/u);
+  assert.match(legal, /dockerfile: Dockerfile/u);
   assert.match(legal, /image: openscience-scansci-legal:\$\{XGS_RELEASE_IMAGE_TAG:\?XGS_RELEASE_IMAGE_TAG required\}/u);
   assert.match(legal, /user: "10001:10001"/u);
   assert.match(legal, /read_only: true/u);
@@ -99,6 +102,12 @@ test('ScanSci production topology exposes only the bounded legal service and sto
   assert.doesNotMatch(auth, /scansci-service-secrets/u);
   assert.match(auth, /restart: "no"/u);
   assert.doesNotMatch(auth, /\bnetworks:|data_net|env_file|docker\.sock/iu);
+  assert.match(auth, /context: \$\{XGS_RELEASE_ROOT:\?XGS_RELEASE_ROOT required\}\/apps\/scansci-legal/u);
+  assert.match(auth, /dockerfile: Dockerfile\.auth/u);
+  assert.match(developmentLegal, /context: \.\.\/\.\.\/apps\/scansci-legal/u);
+  assert.match(developmentLegal, /dockerfile: Dockerfile/u);
+  assert.match(developmentAuth, /context: \.\.\/\.\.\/apps\/scansci-legal/u);
+  assert.match(developmentAuth, /dockerfile: Dockerfile\.auth/u);
   assert.match(readFileSync(new URL('../../apps/scansci-legal/auth-entrypoint.sh', import.meta.url), 'utf8'), /127\.0\.0\.1:6080 127\.0\.0\.1:5900/u);
 
   assert.match(secretInit, /\/opt\/openscience-secrets\/scansci:\/host-secrets:ro/u);
