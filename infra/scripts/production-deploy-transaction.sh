@@ -103,15 +103,15 @@ transaction_abort_rollback_intent() {
 }
 
 compose_current() {
-  run_remote "cd $RELEASE_ROOT && XGS_RELEASE_ROOT=$RELEASE_ROOT XGS_RELEASE_IMAGE_TAG=$RELEASE_SHA docker compose --env-file $PROD_ENV -f $COMPOSE_FILE $1"
+  run_remote "cd $RELEASE_ROOT && XGS_RELEASE_ROOT=$RELEASE_ROOT XGS_RELEASE_IMAGE_TAG=$RELEASE_SHA docker compose --project-directory $RELEASE_ROOT --env-file $PROD_ENV -f $COMPOSE_FILE $1"
 }
 
 compose_embedding_current() {
-  run_remote "cd $RELEASE_ROOT && XGS_RELEASE_ROOT=$RELEASE_ROOT XGS_RELEASE_IMAGE_TAG=$RELEASE_SHA docker compose --profile embedding --env-file $PROD_ENV -f $COMPOSE_FILE $1"
+  run_remote "cd $RELEASE_ROOT && XGS_RELEASE_ROOT=$RELEASE_ROOT XGS_RELEASE_IMAGE_TAG=$RELEASE_SHA docker compose --project-directory $RELEASE_ROOT --profile embedding --env-file $PROD_ENV -f $COMPOSE_FILE $1"
 }
 
 compose_scansci_auth_current() {
-  run_remote "cd $RELEASE_ROOT && XGS_RELEASE_ROOT=$RELEASE_ROOT XGS_RELEASE_IMAGE_TAG=$RELEASE_SHA docker compose --profile scansci-auth --env-file $PROD_ENV -f $COMPOSE_FILE $1"
+  run_remote "cd $RELEASE_ROOT && XGS_RELEASE_ROOT=$RELEASE_ROOT XGS_RELEASE_IMAGE_TAG=$RELEASE_SHA docker compose --project-directory $RELEASE_ROOT --profile scansci-auth --env-file $PROD_ENV -f $COMPOSE_FILE $1"
 }
 
 verify_scansci_current() {
@@ -515,7 +515,7 @@ transaction_restore_previous_scansci() {
   [ "$exact_previous_sha" = "$PREVIOUS_RELEASE_SHA" ] || return 64
   [ "$(run_remote "docker image inspect --format='{{.Id}}' openscience-scansci-legal:$exact_previous_sha")" = "$PREVIOUS_SCANSCI_LEGAL_IMAGE_ID" ] || return
   [ "$(run_remote "docker image inspect --format='{{.Id}}' openscience-scansci-auth:$exact_previous_sha")" = "$PREVIOUS_SCANSCI_AUTH_IMAGE_ID" ] || return
-  run_remote "cd $PREVIOUS_RELEASE_ROOT && env $PREVIOUS_RUNTIME_ENV XGS_RELEASE_ROOT=$PREVIOUS_RELEASE_ROOT XGS_RELEASE_IMAGE_TAG=$exact_previous_sha docker compose --env-file $PROD_ENV -f $ROLLBACK_COMPOSE_FILE up -d --force-recreate --wait --wait-timeout 300 scansci-legal" || return
+  run_remote "cd $PREVIOUS_RELEASE_ROOT && env $PREVIOUS_RUNTIME_ENV XGS_RELEASE_ROOT=$PREVIOUS_RELEASE_ROOT XGS_RELEASE_IMAGE_TAG=$exact_previous_sha docker compose --project-directory $PREVIOUS_RELEASE_ROOT --env-file $PROD_ENV -f $ROLLBACK_COMPOSE_FILE up -d --force-recreate --wait --wait-timeout 300 scansci-legal" || return
   run_remote "/usr/bin/node '$PREVIOUS_RELEASE_ROOT/infra/scripts/verify-scansci-runtime.mjs' --release-root '$PREVIOUS_RELEASE_ROOT' --release-sha '$exact_previous_sha' --compose-file '$ROLLBACK_COMPOSE_FILE' --service-token-file '$SCANSCI_SECRET_ROOT/scansci_service_token' --capability-file '$PREVIOUS_CAPABILITIES_FILE' --require-worker 0 --allow-auth 0"
 }
 transaction_stop_candidate_scansci() {
@@ -523,7 +523,7 @@ transaction_stop_candidate_scansci() {
   [ "$exact_candidate_sha" = "$RELEASE_SHA" ] || return 64
   compose_scansci_auth_current "rm -f -s scansci-auth"
   compose_current "rm -f -s scansci-legal scansci-secret-init"
-  run_remote "set -euo pipefail; cd '$RELEASE_ROOT'; services=\$(XGS_RELEASE_ROOT='$RELEASE_ROOT' XGS_RELEASE_IMAGE_TAG='$RELEASE_SHA' docker compose --profile scansci-auth --env-file '$PROD_ENV' -f '$COMPOSE_FILE' ps --status running --services); for service in scansci-legal scansci-auth; do if printf '%s\n' \"\$services\" | grep -qx \"\$service\"; then exit 1; fi; done"
+  run_remote "set -euo pipefail; cd '$RELEASE_ROOT'; services=\$(XGS_RELEASE_ROOT='$RELEASE_ROOT' XGS_RELEASE_IMAGE_TAG='$RELEASE_SHA' docker compose --project-directory '$RELEASE_ROOT' --profile scansci-auth --env-file '$PROD_ENV' -f '$COMPOSE_FILE' ps --status running --services); for service in scansci-legal scansci-auth; do if printf '%s\n' \"\$services\" | grep -qx \"\$service\"; then exit 1; fi; done"
 }
 transaction_cleanup_candidate_capability() {
   local active_after_rollback
@@ -571,9 +571,9 @@ transaction_perform_application_rollback() {
   if [ "$rollback_ok" -eq 1 ]; then
     if [ "$EMBEDDING_DEPLOY" -eq 1 ]; then compose_embedding_current "stop embedding-worker" || true; fi
     if [ "$PREVIOUS_HAS_EMBEDDING" -eq 1 ]; then
-      run_remote "cd $PREVIOUS_RELEASE_ROOT && env $PREVIOUS_RUNTIME_ENV XGS_RELEASE_ROOT=$PREVIOUS_RELEASE_ROOT XGS_RELEASE_IMAGE_TAG=$PREVIOUS_RELEASE_SHA docker compose --profile embedding --env-file $PROD_ENV -f $ROLLBACK_COMPOSE_FILE up -d --force-recreate --wait --wait-timeout 900 embedding-worker" || rollback_ok=0
+      run_remote "cd $PREVIOUS_RELEASE_ROOT && env $PREVIOUS_RUNTIME_ENV XGS_RELEASE_ROOT=$PREVIOUS_RELEASE_ROOT XGS_RELEASE_IMAGE_TAG=$PREVIOUS_RELEASE_SHA docker compose --project-directory $PREVIOUS_RELEASE_ROOT --profile embedding --env-file $PROD_ENV -f $ROLLBACK_COMPOSE_FILE up -d --force-recreate --wait --wait-timeout 900 embedding-worker" || rollback_ok=0
       if [ "$rollback_ok" -eq 1 ]; then
-        run_remote "cd $PREVIOUS_RELEASE_ROOT && env $PREVIOUS_RUNTIME_ENV XGS_RELEASE_ROOT=$PREVIOUS_RELEASE_ROOT XGS_RELEASE_IMAGE_TAG=$PREVIOUS_RELEASE_SHA docker compose --profile embedding --env-file $PROD_ENV -f $ROLLBACK_COMPOSE_FILE run --rm --no-deps -T -w /opt/openscience agent-worker node scripts/verify-embedding-runtime.mjs" || rollback_ok=0
+        run_remote "cd $PREVIOUS_RELEASE_ROOT && env $PREVIOUS_RUNTIME_ENV XGS_RELEASE_ROOT=$PREVIOUS_RELEASE_ROOT XGS_RELEASE_IMAGE_TAG=$PREVIOUS_RELEASE_SHA docker compose --project-directory $PREVIOUS_RELEASE_ROOT --profile embedding --env-file $PROD_ENV -f $ROLLBACK_COMPOSE_FILE run --rm --no-deps -T -w /opt/openscience agent-worker node scripts/verify-embedding-runtime.mjs" || rollback_ok=0
       fi
     fi
   fi
@@ -581,7 +581,7 @@ transaction_perform_application_rollback() {
     transaction_restore_scansci_rollback "$PREVIOUS_HAS_SCANSCI" "$PREVIOUS_RELEASE_SHA" "$RELEASE_SHA" || rollback_ok=0
   fi
   if [ "$rollback_ok" -eq 1 ]; then
-    run_remote "cd $PREVIOUS_RELEASE_ROOT && env $PREVIOUS_RUNTIME_ENV XGS_RELEASE_ROOT=$PREVIOUS_RELEASE_ROOT XGS_RELEASE_IMAGE_TAG=$PREVIOUS_RELEASE_SHA docker compose --env-file $PROD_ENV -f $ROLLBACK_COMPOSE_FILE up -d --force-recreate --wait --wait-timeout 300 document-parser api web agent-worker" || rollback_ok=0
+    run_remote "cd $PREVIOUS_RELEASE_ROOT && env $PREVIOUS_RUNTIME_ENV XGS_RELEASE_ROOT=$PREVIOUS_RELEASE_ROOT XGS_RELEASE_IMAGE_TAG=$PREVIOUS_RELEASE_SHA docker compose --project-directory $PREVIOUS_RELEASE_ROOT --env-file $PROD_ENV -f $ROLLBACK_COMPOSE_FILE up -d --force-recreate --wait --wait-timeout 300 document-parser api web agent-worker" || rollback_ok=0
   fi
   if [ "$rollback_ok" -eq 1 ]; then
     run_remote "install -m 0644 $PREVIOUS_RELEASE_ROOT/infra/nginx/openscience.conf $NGINX_CONF && nginx -t && systemctl reload nginx" || rollback_ok=0
@@ -678,7 +678,7 @@ expect_http_status https://OpenScience.428312321.xyz/admin/ 401
 expect_http_body https://OpenScience.428312321.xyz/__release "$RELEASE_SHA"
 if [ "$EMBEDDING_DEPLOY" -eq 0 ] && [ "$PREVIOUS_HAS_EMBEDDING" -eq 1 ]; then
   log "[7a] 公网验收后停止上一 release 的 embedding-worker..."
-  run_remote "cd $PREVIOUS_RELEASE_ROOT && env $PREVIOUS_RUNTIME_ENV XGS_RELEASE_ROOT=$PREVIOUS_RELEASE_ROOT XGS_RELEASE_IMAGE_TAG=$PREVIOUS_RELEASE_SHA docker compose --profile embedding --env-file $PROD_ENV -f $ROLLBACK_COMPOSE_FILE stop embedding-worker"
+  run_remote "cd $PREVIOUS_RELEASE_ROOT && env $PREVIOUS_RUNTIME_ENV XGS_RELEASE_ROOT=$PREVIOUS_RELEASE_ROOT XGS_RELEASE_IMAGE_TAG=$PREVIOUS_RELEASE_SHA docker compose --project-directory $PREVIOUS_RELEASE_ROOT --profile embedding --env-file $PROD_ENV -f $ROLLBACK_COMPOSE_FILE stop embedding-worker"
 fi
 run_remote "rm -f $REMOTE_ROOT/.release-failed"
 

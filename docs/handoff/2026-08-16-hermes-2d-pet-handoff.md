@@ -1,6 +1,6 @@
 # Hermes Research Intelligence CURRENT Handoff
 
-> **CURRENT active-memory，2026-08-31。** ScanSci Task 10 controlled-egress candidate 已通过最终安全复审，正进入 GitHub/CI/ECS 真实验收；Task 11 阻断。Landing/Hermes 视觉仍冻结。
+> **CURRENT active-memory，2026-08-31。** ScanSci Task 10 首次 canonical deploy 已 fail-closed 并完整回滚，Compose project-directory 修复正进入 review/CI/ECS 重试；Task 11 阻断。Landing/Hermes 视觉仍冻结。
 
 ## Goal and state
 
@@ -11,9 +11,9 @@
 ## Version tuple
 
 - Worktree: `E:/Miscellaneous/XGS/.worktrees/readable-hermes-guidance`
-- Branch / reviewed candidate / repository main: `codex/scansci-controlled-egress` / `c933a60cf7695bcf9457d05477fdce13ec501287` / `25983c101e40b66fc7b1423d208129ff4ad54306`；远端仅保留 `main`。
+- Branch / reviewed deployment-fix implementation / repository main: `codex/scansci-compose-project-directory` / `453ae4ce7023d7079a9a7b5d1d143c352d0238ae` / `ac086fa625857db9a9ec80e6344b4a799777aac5`；远端当前仅保留 `main`。
 - Production application source / immutable release: `689331845574612130f223d08c92e61721c16586`
-- Rollback: `c435c4c8b2800bb20998fd9a9a93f2db96328661`; core/search migrations `32/32` / `2/2`
+- Rollback: `c435c4c8b2800bb20998fd9a9a93f2db96328661`; core/search migrations `33/33` / `2/2`（application rollback 后 migration 33 保持前向兼容）
 - 本地 `main` 与其他 worktree 有用户改动，不得触碰或用它推断生产；上述 tuple 已从 ECS 重新实测。
 
 ## Production truth
@@ -51,7 +51,8 @@
 18. ScanSci plan Task 8 local candidate 为 `8238a9f`：Hermes Drawer、RO Hermes、RO Files/Evidence 与 Personal Space 共用唯一 acquisition/recovery/poll/download；有界双语 + shared DOI/arXiv 确定性分类，Dashboard Personal/RO target、query-only metadata、44px/i18n/dark-paper/within-form 均闭合。Web `462 + 5 Node`、build/typecheck、product `72/72`、Hermes `19/19 + 8/8` green；ECS/CARSI/OA/一次性下载仍 pending。
 19. Task 8 fix round `d75ca1c`：Drawer stable key/fingerprint 跨关闭重开且新 intent 换 key；recovery durable target + API strict query + Domain pre-limit target scope，RO route ID 不受 cross-RO task 影响，IME composition Enter inert。Domain/API/Worker/Web `535/101/502/463 + 5 Node`、browser fix `6/6`、product `72/72`、Hermes `19/19 + 8/8` green。
 20. 用户授权的例外修复波 `3d23b87` 已关闭 protected-sidecar cleanup ownership 与 canonical Worker image binding：mutation 前拒绝既有 candidate sidecar，unique no-clobber staging/hard-link publication 与 ownership-gated cleanup 经真实函数行为测试；Worker release image ID/source label/运行容器和精确三挂载 fail closed。独立 scoped review 无 Critical/Important，READY。
-21. PR #13/#14 已合并至 main `25983c1`；ECS Secret/source-lock/images/parser acceptance 与 controlled-egress no-switch 实验通过。当前 candidate 将 legal service 约束到 internal retrieval gateway + minimal parent allowlist，并把真实 arXiv HTTP→worker `open_access` PDF canary设为 publish/CAS 前硬门禁；最终 review READY，fresh build/typecheck/lint/docs/full test 0 fail。生产仍为 `6893318`，合并后真实 image canary/CARSI/四入口 pending。
+21. PR #15 已合并为 main `ac086fa`，CI `33375614367` 全绿；ECS exact images、parser acceptance、targetless `0|0` 与真实 retrieval/Squid 门禁通过。首次 canonical deploy 应用 migration 33 后在 ScanSci runtime identity fail-closed，自动恢复旧 release/容器并清除 sidecar/journal；active/public 仍 `6893318`。
+22. 根因是 Compose v2.26 默认 `project.working_dir=<release>/infra/compose` 与 strict `<release>` 合同不符。reviewed implementation `453ae4c` 对 current/rollback/state/verifier、凭据轮换、备份和认证隧道全部固定 `--project-directory <release-root>`；独立复审 0 Critical/Important/Minor、READY，本地 build/typecheck/lint/docs/full test 0 fail；PR/CI 与 merged-SHA ECS 重试 pending。
 
 ## Constraints
 
@@ -61,8 +62,8 @@
 
 ## Next action
 
-1. 执行 Task 10 Step 1：推送 PR、等待 exact GitHub CI、合并为 main；只部署 merged main commit。
-2. 之后经显式 Git Bash/canonical SSH 完成 Secret provision、ECS no-switch preflight、canonical deploy 与 rollback/retention；不重做 Task 7/8 状态机，也不把本地证据冒充生产。
+1. 推送 reviewed `453ae4c` + CURRENT docs，完成 PR、exact GitHub CI 与 main 合并；只部署 merged main commit。
+2. 复用已通过的 Secret/network/Squid/parser evidence，经显式 Git Bash/canonical transaction 重试并验证 runtime/OA canary、CAS、rollback/retention；不把本地证据冒充生产。
 3. 用真实 OA + 浙江大学 CARSI PDF、四入口/375px、容器重建 session、one-use、72h/600s、灰色源调用 0 与精确磁盘卫生关闭 Task 10。
 
 ## Read first

@@ -225,13 +225,13 @@ load_connection() {
 remote_compose_command() {
   local action="$1"
   if [ "$action" = "up -d" ]; then
-    printf "flock -n -E 73 /run/lock/openscience-production-deploy/lock /bin/bash -c 'cd \"%s\" && XGS_RELEASE_ROOT=\"%s\" XGS_RELEASE_IMAGE_TAG=\"%s\" docker compose --env-file /opt/openscience/.env.prod -f \"%s\" up -d --force-recreate scansci-secret-init && XGS_RELEASE_ROOT=\"%s\" XGS_RELEASE_IMAGE_TAG=\"%s\" docker compose --env-file /opt/openscience/.env.prod -f \"%s\" --profile scansci-auth up -d scansci-auth'" \
-      "$RELEASE_ROOT" "$RELEASE_ROOT" "$RELEASE_SHA" "$RELEASE_COMPOSE" \
-      "$RELEASE_ROOT" "$RELEASE_SHA" "$RELEASE_COMPOSE"
+    printf "flock -n -E 73 /run/lock/openscience-production-deploy/lock /bin/bash -c 'cd \"%s\" && XGS_RELEASE_ROOT=\"%s\" XGS_RELEASE_IMAGE_TAG=\"%s\" docker compose --project-directory \"%s\" --env-file /opt/openscience/.env.prod -f \"%s\" up -d --force-recreate scansci-secret-init && XGS_RELEASE_ROOT=\"%s\" XGS_RELEASE_IMAGE_TAG=\"%s\" docker compose --project-directory \"%s\" --env-file /opt/openscience/.env.prod -f \"%s\" --profile scansci-auth up -d scansci-auth'" \
+      "$RELEASE_ROOT" "$RELEASE_ROOT" "$RELEASE_SHA" "$RELEASE_ROOT" "$RELEASE_COMPOSE" \
+      "$RELEASE_ROOT" "$RELEASE_SHA" "$RELEASE_ROOT" "$RELEASE_COMPOSE"
     return
   fi
-  printf "flock -n -E 73 /run/lock/openscience-production-deploy/lock /bin/bash -c 'cd \"%s\" && XGS_RELEASE_ROOT=\"%s\" XGS_RELEASE_IMAGE_TAG=\"%s\" docker compose --env-file /opt/openscience/.env.prod -f \"%s\" --profile scansci-auth %s scansci-auth'" \
-    "$RELEASE_ROOT" "$RELEASE_ROOT" "$RELEASE_SHA" "$RELEASE_COMPOSE" "$action"
+  printf "flock -n -E 73 /run/lock/openscience-production-deploy/lock /bin/bash -c 'cd \"%s\" && XGS_RELEASE_ROOT=\"%s\" XGS_RELEASE_IMAGE_TAG=\"%s\" docker compose --project-directory \"%s\" --env-file /opt/openscience/.env.prod -f \"%s\" --profile scansci-auth %s scansci-auth'" \
+    "$RELEASE_ROOT" "$RELEASE_ROOT" "$RELEASE_SHA" "$RELEASE_ROOT" "$RELEASE_COMPOSE" "$action"
 }
 
 remote_verify_command() {

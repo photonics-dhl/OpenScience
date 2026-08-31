@@ -23,7 +23,7 @@ COMPOSE_FILE="$RELEASE_ROOT/infra/compose/docker-compose.prod.yml"
 
 export XGS_RELEASE_ROOT="$RELEASE_ROOT"
 export XGS_RELEASE_IMAGE_TAG="$RELEASE"
-COMPOSE=(docker compose --env-file "$ENV_FILE" -f "$COMPOSE_FILE")
+COMPOSE=(docker compose --project-directory "$RELEASE_ROOT" --env-file "$ENV_FILE" -f "$COMPOSE_FILE")
 
 current_postgres_id() {
   local container_id

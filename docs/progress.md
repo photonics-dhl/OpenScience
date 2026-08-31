@@ -4,16 +4,16 @@
 
 ## Current version tuple
 
-- Branch / reviewed controlled-egress candidate / main: `codex/scansci-controlled-egress` / `c933a60` / `25983c1`；远端仅 `main`。
+- Branch / reviewed deployment-fix implementation / main: `codex/scansci-compose-project-directory` / `453ae4c` / `ac086fa`；远端当前仅 `main`。
 - Production application source / immutable release: `689331845574612130f223d08c92e61721c16586`。
-- Production rollback: `c435c4c8b2800bb20998fd9a9a93f2db96328661`；core/search migrations `32/32` / `2/2`。
+- Production rollback: `c435c4c8b2800bb20998fd9a9a93f2db96328661`；core/search migrations `33/33` / `2/2`（migration 33 已前向应用，application 已自动回滚）。
 - Taskmaster `hermes-research-intelligence` 仍为 9/12；独立 ScanSci plan Tasks 1–9 done、Task 10 in progress，Task 11 继续阻断。
 
-## 2026-08-31 — ScanSci Task 10 controlled-egress preflight candidate
+## 2026-08-31 — ScanSci Task 10 controlled-egress production retry
 
-- PR #13/#14 已分别把 stdin Secret provision 与 ScanSci Compose build context 修复合并至 main `25983c1`；ECS root-only token/bootstrap Secret、三个 public source-lock hash、五个 SHA-tagged candidate image 和 schema-v3 16-case parser acceptance 已通过，production 保持 `6893318`。
-- direct bridge arXiv TLS reset 的根因已收敛为 fail-closed 受控出网：legal service 仅在 `internal: true` 的 `172.24.0.0/24` retrieval network，经固定 gateway `172.24.0.1:7891` 使用 Squid；仅 `.arxiv.org` 可进入 SSH parent，其他域同 resolver DIRECT。ECS no-switch 临时网络证明 proxy TCP、DIRECT、FIRSTUP_PARENT、private/HTTP/non-443 deny 与 raw-direct deny，随后 exact cleanup；active/public release 未变。
-- publish/CAS 前 runtime gate 现强制真实 `arXiv:2009.06045v1` HTTP→worker PDF canary；payload 经真实 policy 验证 `institutional:true`，响应经真实 `open_access` route、PDF magic 与 100 MiB streaming cap 校验。最终独立 security review 为 READY（0 Critical/Important）；fresh ScanSci `87/94`、Infra `48/53`、auth tunnel `21/21`、full build/typecheck/lint/docs/full workspace test 均 0 fail。合并后 ECS 真正 candidate image/canary 与 CARSI 仍 pending。
+- PR #15 已把 controlled-egress 合并为 main `ac086fa`，CI `33375614367` 全绿；ECS exact image、schema-v3 16-case parser acceptance、targetless `0|0`、真实 internal `172.24.0.0/24` network 与 Squid allow/deny/raw-direct 门禁通过。生产切换前保持 `6893318`。
+- canonical transaction 已应用 core migration 33、验证 BGE CPU 与 Parser；首个 legal sidecar runtime gate 因 Compose v2.26 把 `project.working_dir` 标为 `<release>/infra/compose` 而 strict verifier 要求 `<release>` fail-closed。事务完整回滚旧 API/Web/Worker/Parser/BGE、清除 sidecar/journal，active/public 仍 `6893318`；ScanSci 未发布。
+- reviewed implementation `453ae4c` 对 current/embedding/auth/rollback/state/verifier、凭据轮换、备份和认证隧道全部显式传 `--project-directory <release-root>`，不放宽身份合同。独立复审 0 Critical/Important/Minor、READY；相关 deployment/runtime `71 pass + 5 Linux skip`、fresh full build/typecheck/lint/docs/test 0 fail。PR/CI、merged-SHA ECS 重试与 CARSI/四入口仍 pending。
 
 ## 2026-08-31 — ScanSci Task 9 local security/release gate
 

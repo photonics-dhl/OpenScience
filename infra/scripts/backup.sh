@@ -47,7 +47,7 @@ DATE="$(date -u +%Y%m%dT%H%M%SZ)-$$"
 
 if [ "$BACKUP_DB" -eq 1 ]; then
 export XGS_RELEASE_ROOT="$RELEASE_ROOT" XGS_RELEASE_IMAGE_TAG="$RELEASE_SHA"
-COMPOSE=(docker compose --env-file "$REMOTE_ROOT/.env.prod" -f "$COMPOSE_FILE")
+COMPOSE=(docker compose --project-directory "$RELEASE_ROOT" --env-file "$REMOTE_ROOT/.env.prod" -f "$COMPOSE_FILE")
 "${COMPOSE[@]}" exec -T -w /opt/openscience api node scripts/verify-database-isolation.mjs >/dev/null
 mapfile -t DB_IDENTITIES < <("${COMPOSE[@]}" exec -T api node -e '
   const core = new URL(process.env.DATABASE_URL);

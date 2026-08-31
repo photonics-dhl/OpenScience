@@ -182,6 +182,11 @@ test('status is read-only and only explicit start launches the helper and loopba
   const secretRefresh = log.indexOf('up -d --force-recreate scansci-secret-init');
   const helperStart = log.indexOf('--profile scansci-auth up -d scansci-auth');
   assert.ok(secretRefresh >= 0 && secretRefresh < helperStart, 'runtime Secret material must refresh before auth starts');
+  assert.equal(
+    (log.match(/docker compose --project-directory "\/opt\/openscience-releases\/[0-9a-f]{40}"/g) ?? []).length,
+    2,
+    'both auth startup Compose calls must retain the immutable release project identity',
+  );
   assert.match(log, /docker compose .*--profile scansci-auth up -d scansci-auth/);
   assert.match(log, /-L\n127\.0\.0\.1:16080:127\.0\.0\.1:6080/);
   assert.match(log, new RegExp(`-i\\n${f.bashKey.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}`));
@@ -215,6 +220,10 @@ test('duplicate start is idempotent and stop closes only the recorded tunnel', a
   assert.equal(run(f.script, ['status'], f.env, f.bashBin).status, 3);
   const afterStop = await readFile(f.log, 'utf8');
   assert.match(afterStop, /flock -n -E 73 \/run\/lock\/openscience-production-deploy\/lock/u);
+  assert.match(
+    afterStop,
+    /docker compose --project-directory "\/opt\/openscience-releases\/[0-9a-f]{40}" .*--profile scansci-auth rm -f -s scansci-auth/u,
+  );
   assert.match(afterStop, /docker compose .*--profile scansci-auth rm -f -s scansci-auth/);
   assert.doesNotMatch(afterStop, /rm -f -s (?:agent-worker|scansci-legal|api|web)/u);
 });
