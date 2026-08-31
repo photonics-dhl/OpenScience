@@ -711,6 +711,7 @@ function transactionStateHarness(root, requiredUid, phase, event) {
     '  compose_current() { case "$1" in "ps -q agent-worker") printf "111111111111\\n" ;; "ps -q document-parser") printf "222222222222\\n" ;; *) return 0 ;; esac; }',
     '  compose_embedding_current() { return 0; }',
     '  verify_release_capability() { [ "${XGS_TEST_SAME_SHA_FAILURE:-}" != capability ]; }',
+    '  verify_scansci_current() { [ "${XGS_TEST_SAME_SHA_FAILURE:-}" != scansci ]; }',
     '  expect_http_status() { [ "${XGS_TEST_SAME_SHA_FAILURE:-}" != public ]; }',
     '  expect_http_body() { [ "${XGS_TEST_SAME_SHA_FAILURE:-}" != public ]; }',
     '  transaction_verify_already_active_release',
@@ -1036,7 +1037,7 @@ test('shared production state machine traps every durable phase and commits with
     assert.match(result.stdout, /AFTER_STDIN/);
     assert.equal(existsSync(fixture.journal), false);
 
-    for (const failure of ['', 'source', 'report', 'runtime', 'tag', 'running', 'capability', 'public']) {
+    for (const failure of ['', 'source', 'report', 'runtime', 'tag', 'running', 'capability', 'scansci', 'public']) {
       fixture = await createFixture();
       fixtures.push(fixture.root);
       result = run(fixture, 'prepared', 'already-active', failure ? { XGS_TEST_SAME_SHA_FAILURE: failure } : {});

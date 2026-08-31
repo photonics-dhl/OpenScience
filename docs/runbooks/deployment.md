@@ -1576,3 +1576,9 @@ regenerate `pnpm-lock.yaml`. Verify with a dependency-filtered build: Domain and
 its prerequisites must finish before Web starts. A local root build is not clean
 Linux evidence when generated `dist` already exists; exact PR CI remains the
 authoritative clean-build gate.
+
+The next CI run passed build/typecheck/lint and then exposed a second Linux-only
+test-fixture gap: the `flock` state-machine harness did not provide the newly
+required `verify_scansci_current` adapter. Add the adapter plus an explicit
+`scansci` failure case; this proves same-SHA canonical ScanSci verification is
+called and fails closed instead of weakening the production path.
