@@ -367,6 +367,60 @@ class AuthLoginTest(unittest.TestCase):
             self.assertNotIn("username", config)
             self.assertNotIn("password", config)
 
+    def test_operator_login_retries_an_expired_upstream_window_without_rerunning_setup(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory) / "session"
+            calls: list[list[str]] = []
+            returncodes = iter((0, 1, 0))
+
+            def runner(command: list[str], **_kwargs: object) -> object:
+                calls.append(command)
+                return type("Completed", (), {"returncode": next(returncodes)})()
+
+            result = auth_main(
+                ["--operator-start"],
+                runner=runner,
+                session_root=root,
+            )
+
+            self.assertEqual(result, 0)
+            self.assertEqual(
+                calls,
+                [
+                    ["scansci-pdf", "setup", "浙江大学"],
+                    ["scansci-pdf", "federated-login", "sciencedirect", "--force"],
+                    ["scansci-pdf", "federated-login", "sciencedirect", "--force"],
+                ],
+            )
+            state = json.loads((root / "session-state.json").read_text(encoding="utf-8"))
+            self.assertEqual(state["status"], "ready")
+
+    def test_operator_login_exhaustion_is_bounded_and_publishes_auth_required(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory) / "session"
+            calls: list[list[str]] = []
+
+            def runner(command: list[str], **_kwargs: object) -> object:
+                calls.append(command)
+                return type("Completed", (), {"returncode": 0 if len(calls) == 1 else 1})()
+
+            with mock.patch.object(auth_login, "MAX_OPERATOR_LOGIN_ATTEMPTS", 2):
+                result = auth_main(
+                    ["--operator-start"],
+                    runner=runner,
+                    session_root=root,
+                )
+
+            self.assertEqual(result, 1)
+            self.assertEqual(calls[0], ["scansci-pdf", "setup", "浙江大学"])
+            self.assertEqual(
+                calls[1:],
+                [["scansci-pdf", "federated-login", "sciencedirect", "--force"]] * 2,
+            )
+            state = json.loads((root / "session-state.json").read_text(encoding="utf-8"))
+            self.assertEqual(state["status"], "auth_required")
+            self.assertEqual(state["reason"], "operator_auth_required")
+
 class SessionHttpIntegrationTest(unittest.TestCase):
     def request(self, server, method: str, path: str, body: bytes = b"") -> tuple[int, dict[str, str]]:
         host, port = server.server_address[:2]
