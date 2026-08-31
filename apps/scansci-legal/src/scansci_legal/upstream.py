@@ -117,6 +117,7 @@ def _sanitized_environment(output_dir: Path) -> dict[str, str]:
         if controlled_proxy != CONTROLLED_EGRESS_PROXY:
             raise AcquisitionError("policy_blocked")
         environment.update({
+            "SCANSCI_PDF_PROXY": CONTROLLED_EGRESS_PROXY,
             "HTTP_PROXY": CONTROLLED_EGRESS_PROXY,
             "HTTPS_PROXY": CONTROLLED_EGRESS_PROXY,
             "NO_PROXY": "localhost,127.0.0.1",
