@@ -403,7 +403,7 @@ test('runtime verifier rejects wrong-group host metadata and validates an explic
     HostConfig: {
       NetworkMode: 'openscience-prod_auth_net', ReadonlyRootfs: true, Privileged: false,
       CapDrop: ['ALL'], CapAdd: [], SecurityOpt: ['no-new-privileges:true'],
-      Memory: 1024 ** 3, NanoCpus: 1_000_000_000, PidsLimit: 128,
+      Memory: 1024 ** 3, NanoCpus: 1_000_000_000, PidsLimit: 256,
       ExtraHosts: ['openscience-egress:172.25.0.1'],
       PortBindings: { '6080/tcp': [{ HostIp: '127.0.0.1', HostPort: '6080' }] },
       Tmpfs: {

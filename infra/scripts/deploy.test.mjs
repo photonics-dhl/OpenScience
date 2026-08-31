@@ -107,6 +107,7 @@ test('ScanSci production topology exposes only the bounded legal service and sto
   assert.match(auth, /ports:\r?\n\s+- "127\.0\.0\.1:6080:6080"/u);
   assert.match(auth, /networks:\r?\n\s+- auth_net/u);
   assert.match(auth, /scansci-session:\/session/u);
+  assert.match(auth, /pids_limit: 256/u);
   assert.doesNotMatch(auth, /scansci-(?:service|auth)-secrets|\/run\/secrets/u);
   assert.match(auth, /restart: "no"/u);
   assert.doesNotMatch(auth, /network_mode: host|data_net|env_file|docker\.sock/iu);
@@ -120,6 +121,7 @@ test('ScanSci production topology exposes only the bounded legal service and sto
   assert.match(developmentAuth, /SCANSCI_BROWSER_PROXY: http:\/\/openscience-egress:7891/u);
   assert.match(developmentAuth, /extra_hosts:\r?\n\s+- "openscience-egress:172\.25\.0\.1"/u);
   assert.match(developmentAuth, /networks: \[auth_net\]/u);
+  assert.match(developmentAuth, /pids_limit: 256/u);
   assert.doesNotMatch(developmentAuth, /network_mode: host|scansci-auth-secrets|\/run\/secrets/u);
   assert.match(readFileSync(new URL('../../apps/scansci-legal/auth-entrypoint.sh', import.meta.url), 'utf8'), /0\.0\.0\.0:6080 127\.0\.0\.1:5900/u);
 

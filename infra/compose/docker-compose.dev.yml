@@ -181,7 +181,7 @@ services:
       - /dev/shm:size=256m,nosuid,nodev,uid=10001,gid=10001,mode=0700
     mem_limit: 1g
     cpus: 1
-    pids_limit: 128
+    pids_limit: 256
     cap_drop: [ALL]
     security_opt: [no-new-privileges:true]
     networks: [auth_net]
