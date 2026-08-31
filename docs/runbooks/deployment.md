@@ -1627,3 +1627,27 @@ same-resolver DIRECT to close parent-side DNS rebinding. Deploy the reviewed
 Squid file and prove all allow/deny behavior. The prepublication verifier then
 must complete the fixed `arXiv:2009.06045v1` HTTP-to-worker `open_access` PDF
 canary before publish/CAS or any production identity switch.
+
+### 5.49 Compose project-directory identity failure and rollback (2026-08-31)
+
+The first merged `ac086fa625857db9a9ec80e6344b4a799777aac5` canonical
+transaction passed immutable build, parser acceptance, core migration 33,
+search 2/2 and BGE CPU validation, then failed closed at the first ScanSci
+runtime identity check. The transaction restored application release
+`689331845574612130f223d08c92e61721c16586`, recreated healthy
+Parser/API/Web/Worker/BGE containers, removed candidate ScanSci containers and
+capability staging, restored active CAS, and cleared the durable journal.
+Migration 33 remains applied and is forward-compatible with the restored app.
+
+ECS Docker Compose 2.26 labels a project started with only `-f
+<release>/infra/compose/docker-compose.prod.yml` as
+`com.docker.compose.project.working_dir=<release>/infra/compose`, even when the
+caller first `cd`s to `<release>`. The strict ScanSci verifier correctly
+requires the immutable release root. Do not accept both label values. Every
+current, embedding, auth, rollback and state-recovery Compose operation, plus
+the runtime verifier's own `ps`, database credential rotation, scheduled
+backup and operator auth-tunnel entry point, must pass `--project-directory
+<exact release root>`. Regression tests inventory transaction calls and
+exercise the ancillary entry points. After CI/merge, materialize a new SHA and
+rerun the complete canonical transaction; never mutate the already
+materialized `ac086fa` tree.
