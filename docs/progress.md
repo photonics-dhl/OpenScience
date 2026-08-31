@@ -4,14 +4,14 @@
 
 ## Current version tuple
 
-- Branch / reviewed local anchor / implementation / main: `codex/scansci-default-capability` / `4e34898` / `672ec14` / `463c8e3`；远端仅 `main`。
+- Branch / reviewed local candidate / main: `codex/scansci-default-capability` / `3d23b87` / `463c8e3`；远端仅 `main`。
 - Production application source / immutable release: `689331845574612130f223d08c92e61721c16586`。
 - Production rollback: `c435c4c8b2800bb20998fd9a9a93f2db96328661`；core/search migrations `32/32` / `2/2`。
-- Taskmaster `hermes-research-intelligence` 仍为 9/12；独立 ScanSci plan Tasks 1–8 done、Task 9 blocked、Task 10 未启动，Task 11 继续阻断。
+- Taskmaster `hermes-research-intelligence` 仍为 9/12；独立 ScanSci plan Tasks 1–9 done、Task 10 in progress，Task 11 继续阻断。
 
 ## 2026-08-31 — ScanSci Task 9 local security/release gate
 
-- Fix 1–4 至 `755b7b5` 与最终 fix `672ec14` 已闭合 NAT64、串行/negative-cache、硬 100 MiB limit、common-entry/fresh-`/tmp` probe、sidecar-independent prepublication gate，以及 candidate Worker 的 enabled/base URL 实际 env 核验。全分支复审后的 scoped re-review 仍有两项 Important：失败清理可能删除 candidate SHA 恰为受保护 rollback 时的既有 sidecar；canonical verifier 未把运行 Worker image ID 绑定到 release-tagged/accepted Worker image。Task 9 因 SDD 单次 final-fix-wave 断路器标记 blocked，未经用户明确授权不追加第二波修复，也不进入 Task 10。
+- 用户明确授权的例外修复波 `3d23b87` 已关闭最终两项 Important：任何既有 candidate/protected rollback sidecar 均在 mutation 前拒绝，真实 publish/CAS-failure cleanup 只删除本事务唯一 staging/owned sidecar；canonical verifier 内部派生 release-tagged Worker image，核验 source label、运行 image ID 与精确三个挂载。独立 scoped review 无 Critical/Important，结论 READY。新鲜全仓 build/typecheck/lint/test green：release `97/104`、ScanSci `82/89`、Web `469`、Domain `535`、Worker `503`、API `101`，失败 0；22 skips 均为 Linux/ECS gate。两项 bounded hygiene Minor（部分 unique staging 写失败残留、早期 dangling symlink 检查）记录到 Task 10 ECS preflight/清理，不影响 canonical/protected state。
 - 禁用词精确扫描 58 个命中均为 fixed false、拒绝/compatibility 逻辑或 adversarial test；`audit:knip`、`audit:dep`（831 modules / 1936 dependencies）和 `audit:deps` green。全仓 build/typecheck/test green：release `95/102`（7 skips）、ScanSci `82/89`（7 Windows/POSIX skips）、Web `469`、Domain `535`、Worker `503`、API `101`；本机总计 `2115 pass / 22 skip / 0 fail`。Linux CI 将执行真实 RLIMIT/child 继承用例。
 - 本地候选不等于生产：ECS 仍为 `6893318` / `c435c4c` / core-search `32/32`-`2/2`，ScanSci disabled。Migration 33、Linux negative-cache/硬 file limit/NAT64/serial/256 MiB runtime、真实 OA/CARSI、四入口、72h GC、zero-grey/Tor 与 exact rollback/retention 均留给 Task 10。
 

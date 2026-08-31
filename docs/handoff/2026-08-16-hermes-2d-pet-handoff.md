@@ -1,17 +1,17 @@
 # Hermes Research Intelligence CURRENT Handoff
 
-> **CURRENT active-memory，2026-08-31。** ScanSci plan Task 9 最终复审仍有两项发布完整性阻断；Task 10 未启动，Task 11 阻断。Landing/Hermes 视觉仍冻结。
+> **CURRENT active-memory，2026-08-31。** ScanSci plan Task 9 已通过最终复审；Task 10 进入 GitHub/CI/ECS 真实验收，Task 11 阻断。Landing/Hermes 视觉仍冻结。
 
 ## Goal and state
 
 - 产品目标：以 3–7 个 Claim 为公开 RO 中心，提供可定位 Evidence、条件/限制、身份静默路由、CPU 文档解析、混合检索和可版本化富媒体。
-- Taskmaster `hermes-research-intelligence` 仍为 9/12；独立 ScanSci plan Tasks 1–8 done、Task 9 blocked、Task 10 not started，Task 11 blocked。
+- Taskmaster `hermes-research-intelligence` 仍为 9/12；独立 ScanSci plan Tasks 1–9 done、Task 10 in progress，Task 11 blocked。
 - 当前产品主线是将一次浙江大学 CARSI 认证变成 Hermes 持久默认下载能力，并接通全部产品入口。
 
 ## Version tuple
 
 - Worktree: `E:/Miscellaneous/XGS/.worktrees/readable-hermes-guidance`
-- Branch / reviewed local anchor / implementation / repository main: `codex/scansci-default-capability` / `4e34898a996520c53effdcb335c816d6dadc6016` / `672ec141d7366890716b8cf298274acc840c0ba7` / `463c8e3a2a80138cda2d669c370c0481ed4c0877`；远端仅保留 `main`。
+- Branch / reviewed local candidate / repository main: `codex/scansci-default-capability` / `3d23b877265d084b200b54bcd4d1d2eb8cbf593f` / `463c8e3a2a80138cda2d669c370c0481ed4c0877`；远端仅保留 `main`。
 - Production application source / immutable release: `689331845574612130f223d08c92e61721c16586`
 - Rollback: `c435c4c8b2800bb20998fd9a9a93f2db96328661`; core/search migrations `32/32` / `2/2`
 - 本地 `main` 与其他 worktree 有用户改动，不得触碰或用它推断生产；上述 tuple 已从 ECS 重新实测。
@@ -50,8 +50,8 @@
 17. ScanSci plan Task 7 local candidate 为 `22088c0` + `86e037e` + `3e829db` + `1059072` + `82d4772` + `185d5d6`：public `canRetry` 只来自共享 predicate；marker 只能由 acquisition durable path 构造，generic/public/internal caller 与历史/畸形/撤权均 false。Retry 用三次 P2034-only Serializable authority/CAS/audit，recovery 单次 ID-only SQL 精确筛选后复验，无循环/top-N/payload 泄露；14-case corpus 标注 JSONB/JavaScript-only，PG parity 以独立 terminal sentinel 证明 raw selector 分支。Domain/API/Worker `534/99/502`，real-PG race/parity/deep-history contract 仅 typecheck；既有 Client/Playwright `7/7` 未改，ECS 375px/真实下载和 Task 8 四入口仍 pending。
 18. ScanSci plan Task 8 local candidate 为 `8238a9f`：Hermes Drawer、RO Hermes、RO Files/Evidence 与 Personal Space 共用唯一 acquisition/recovery/poll/download；有界双语 + shared DOI/arXiv 确定性分类，Dashboard Personal/RO target、query-only metadata、44px/i18n/dark-paper/within-form 均闭合。Web `462 + 5 Node`、build/typecheck、product `72/72`、Hermes `19/19 + 8/8` green；ECS/CARSI/OA/一次性下载仍 pending。
 19. Task 8 fix round `d75ca1c`：Drawer stable key/fingerprint 跨关闭重开且新 intent 换 key；recovery durable target + API strict query + Domain pre-limit target scope，RO route ID 不受 cross-RO task 影响，IME composition Enter inert。Domain/API/Worker/Web `535/101/502/463 + 5 Node`、browser fix `6/6`、product `72/72`、Hermes `19/19 + 8/8` green。
-20. Task 9 final fix `672ec14` 增加 sidecar-independent prepublication gate、candidate exact SHA/image/env 核验和 previous-release verifier；全仓本机 `2115 pass / 22 platform skips / 0 fail`。最终 scoped re-review 仍有两项 Important：失败清理没有区分本事务创建与既有受保护 rollback sidecar；canonical verifier 只验 Worker image 为 SHA 形状，未绑定 release-tagged/accepted Worker image ID。
-21. Task 9 因 SDD 只允许一次 final fix wave 的断路规则标记 blocked；生产未写、ScanSci 仍 disabled。Task 10 部署前还须确认 targetless durable ScanSci tasks = 0；非零阻断，不自动 migration。
+20. 用户授权的例外修复波 `3d23b87` 已关闭 protected-sidecar cleanup ownership 与 canonical Worker image binding：mutation 前拒绝既有 candidate sidecar，unique no-clobber staging/hard-link publication 与 ownership-gated cleanup 经真实函数行为测试；Worker release image ID/source label/运行容器和精确三挂载 fail closed。独立 scoped review 无 Critical/Important，READY。
+21. 新鲜全仓 build/typecheck/lint/test green：release `97/104`、ScanSci `82/89`、Web `469`、Domain `535`、Worker `503`、API `101`，失败 0。两项 bounded staging/symlink hygiene Minor 在 Task 10 ECS preflight/精确清理中核验；生产仍未写、ScanSci disabled。部署前还须确认 targetless durable ScanSci tasks = 0；非零阻断，不自动 migration。
 
 ## Constraints
 
@@ -61,9 +61,9 @@
 
 ## Next action
 
-1. 等待用户明确授权一次例外的第二个 final fix wave；只修受保护 sidecar cleanup ownership/reuse 与 canonical Worker image identity 两项，并执行一次 scoped re-review。
-2. scoped review 通过后才进入 Task 10；不重做 Task 7/8 状态机，也不把本地证据冒充生产。
-3. Task 10 继续以服务器为最终验收，本地不运行 Docker；用真实 OA + 浙江大学 CARSI PDF、容器重建 session、375px、one-use、72h/600s 与灰色源调用 0 关闭。
+1. 执行 Task 10 Step 1：推送 PR、等待 exact GitHub CI、合并为 main；只部署 merged main commit。
+2. 之后经显式 Git Bash/canonical SSH 完成 Secret provision、ECS no-switch preflight、canonical deploy 与 rollback/retention；不重做 Task 7/8 状态机，也不把本地证据冒充生产。
+3. 用真实 OA + 浙江大学 CARSI PDF、四入口/375px、容器重建 session、one-use、72h/600s、灰色源调用 0 与精确磁盘卫生关闭 Task 10。
 
 ## Read first
 
