@@ -82,6 +82,28 @@ is_running() {
   process_matches_state
 }
 
+wait_until_process_matches() {
+  local attempt
+  for attempt in $(seq 1 20); do
+    if process_matches_state; then
+      return 0
+    fi
+    sleep 0.1
+  done
+  return 1
+}
+
+stop_owned_tunnel_process() {
+  local pid="$1"
+  local job_spec="$2"
+  local active_pid
+  active_pid="$(jobs -pr "$job_spec" 2>/dev/null || true)"
+  if [ "$active_pid" = "$pid" ]; then
+    kill "$job_spec" 2>/dev/null || true
+  fi
+  wait "$pid" 2>/dev/null || true
+}
+
 release_lock() {
   if [ "$LOCK_HELD" -eq 1 ]; then
     rm -f "$LOCK_DIR/pid"
@@ -352,9 +374,10 @@ start_tunnel() {
 
   bash "$RUNNER_FILE" "$token" "$port" ssh "${SSH_ARGS[@]}" -N -L "127.0.0.1:$port:$AUTH_TARGET" "$SSH_TARGET" >/dev/null 2>&1 &
   local tunnel_pid=$!
+  local tunnel_job='%+'
   write_state "$token" "$tunnel_pid" "$port" "starting"
-  sleep 0.2
-  if ! process_matches_state; then
+  if ! wait_until_process_matches; then
+    stop_owned_tunnel_process "$tunnel_pid" "$tunnel_job"
     stop_identified_tunnel
     commit_remote_stop || true
     echo "loopback tunnel start failed" >&2

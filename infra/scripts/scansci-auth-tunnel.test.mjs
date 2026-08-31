@@ -63,7 +63,9 @@ case " $* " in
 esac
 case " $* " in
   *" -N "*)
-    if [ "\${FAKE_SSH_TUNNEL_FAIL:-0}" = 1 ]; then exit 2; fi
+    if [ "\${FAKE_SSH_TUNNEL_FAIL:-0}" = 1 ] && [ -z "\${FAKE_TUNNEL_PID_FILE:-}" ]; then exit 2; fi
+    if [ -n "\${FAKE_TUNNEL_PID_FILE:-}" ]; then printf '%s\\n' "$$" > "$FAKE_TUNNEL_PID_FILE"; fi
+    if [ "\${FAKE_SSH_TUNNEL_FAIL:-0}" = 1 ]; then sleep "\${FAKE_SSH_TUNNEL_FAIL_DELAY:-0}"; exit 2; fi
     trap 'exit 0' TERM INT
     while true; do sleep 1; done
     ;;
@@ -158,6 +160,44 @@ async function installOneShotStateMoveFailure(f) {
     '',
   ].join('\n'));
   await chmod(fakeMv, 0o755);
+}
+
+async function installDelayedProcessTable(f, failures) {
+  const fakePs = join(f.root, 'bin', 'ps');
+  const countFile = join(f.root, 'ps-count');
+  await writeFile(fakePs, [
+    '#!/usr/bin/env bash',
+    `count_file=${JSON.stringify(countFile)}`,
+    'count="$(cat "$count_file" 2>/dev/null || printf 0)"',
+    'count=$((count + 1))',
+    'printf "%s\\n" "$count" > "$count_file"',
+    `if [ "$count" -le ${failures} ]; then exit 1; fi`,
+    'exec /usr/bin/ps "$@"',
+    '',
+  ].join('\n'));
+  await chmod(fakePs, 0o755);
+}
+
+async function installKillAudit(f) {
+  const bashEnv = join(f.root, 'disable-builtin-kill.sh');
+  const killLog = join(f.root, 'kill-argv.log');
+  const fakeKill = join(f.root, 'bin', 'kill');
+  await writeFile(bashEnv, 'enable -n kill\n');
+  await writeFile(fakeKill, [
+    '#!/usr/bin/env bash',
+    'printf "%s\\n" "$*" >> "$FAKE_KILL_LOG"',
+    'exec /usr/bin/kill "$@"',
+    '',
+  ].join('\n'));
+  await chmod(fakeKill, 0o755);
+  const toBashPath = (path) => process.platform === 'win32'
+    ? spawnSync(bash, ['-c', 'cygpath -u "$1"', 'convert-path', path], { encoding: 'utf8' }).stdout.trim()
+    : path;
+  return {
+    bashEnv: toBashPath(bashEnv),
+    killLog,
+    killLogForBash: toBashPath(killLog),
+  };
 }
 
 test('status is read-only and only explicit start launches the helper and loopback tunnel', async (t) => {
@@ -541,6 +581,93 @@ test('a failed local tunnel compensates by stopping the exact remote auth helper
   const log = await readFile(f.log, 'utf8');
   assert.match(log, /--profile scansci-auth up --no-start --no-build --force-recreate scansci-auth/);
   assert.match(log, /--profile scansci-auth rm -f -s scansci-auth/);
+});
+
+test('start tolerates bounded Windows process-table visibility delay', async (t) => {
+  const f = await fixture();
+  await installDelayedProcessTable(f, 3);
+  await startHealthServer(t, 16105);
+  t.after(async () => {
+    run(f.script, ['stop'], f.env, f.bashBin);
+    await rm(f.root, { recursive: true, force: true });
+  });
+
+  const result = run(f.script, ['start', '16105'], f.env, f.bashBin);
+
+  assert.equal(result.status, 0, `${result.stdout}\n${result.stderr}`);
+  assert.equal(run(f.script, ['status'], f.env, f.bashBin).status, 0);
+});
+
+test('failed process identity check reaps the tunnel process owned by this start', async (t) => {
+  const f = await fixture();
+  await installDelayedProcessTable(f, 100);
+  const tunnelPidFile = join(f.root, 'tunnel-child.pid');
+  t.after(async () => {
+    if (existsSync(tunnelPidFile)) {
+      const pid = (await readFile(tunnelPidFile, 'utf8')).trim();
+      spawnSync(bash, ['-c', 'kill "$1" 2>/dev/null || true', 'cleanup', pid]);
+    }
+    await rm(f.root, { recursive: true, force: true });
+  });
+
+  const result = run(
+    f.script,
+    ['start', '16106'],
+    { ...f.env, FAKE_TUNNEL_PID_FILE: tunnelPidFile },
+    f.bashBin,
+  );
+
+  assert.equal(result.status, 1, `${result.stdout}\n${result.stderr}`);
+  assert.match(result.stderr, /^loopback tunnel start failed\s*$/);
+  const tunnelPid = (await readFile(tunnelPidFile, 'utf8')).trim();
+  assert.notEqual(
+    spawnSync(bash, ['-c', 'kill -0 "$1"', 'check', tunnelPid]).status,
+    0,
+    'owned SSH tunnel survived failed start cleanup',
+  );
+});
+
+test('an exited tunnel runner is reaped without signaling its stale numeric pid', async (t) => {
+  const f = await fixture();
+  await installDelayedProcessTable(f, 100);
+  const killAudit = await installKillAudit(f);
+  const tunnelPidFile = join(f.root, 'tunnel-child.pid');
+  const stateFile = join(f.env.XDG_STATE_HOME, 'openscience', 'scansci-auth-tunnel.state');
+  t.after(async () => rm(f.root, { recursive: true, force: true }));
+
+  const started = runAsync(
+    f.script,
+    ['start', '16107'],
+    {
+      ...f.env,
+      BASH_ENV: killAudit.bashEnv,
+      FAKE_KILL_LOG: killAudit.killLogForBash,
+      FAKE_SSH_TUNNEL_FAIL: '1',
+      FAKE_SSH_TUNNEL_FAIL_DELAY: '0.2',
+      FAKE_TUNNEL_PID_FILE: tunnelPidFile,
+    },
+    f.bashBin,
+  );
+  let runnerPid = '';
+  for (let attempt = 0; attempt < 100 && !runnerPid; attempt += 1) {
+    if (existsSync(stateFile)) {
+      const state = await readFile(stateFile, 'utf8');
+      const observedPid = state.split(/\r?\n/)[1] ?? '';
+      if (/^[1-9][0-9]*$/.test(observedPid)) runnerPid = observedPid;
+    }
+    if (!runnerPid) await new Promise((resolveWait) => setTimeout(resolveWait, 20));
+  }
+  const result = await started;
+
+  assert.match(runnerPid, /^[1-9][0-9]*$/);
+  assert.equal(result.status, 1, `${result.stdout}\n${result.stderr}`);
+  assert.match(result.stderr, /^loopback tunnel start failed\s*$/);
+  const killCalls = (await readFile(killAudit.killLog, 'utf8')).trim().split(/\r?\n/);
+  assert.equal(
+    killCalls.includes(runnerPid),
+    false,
+    `stale runner pid was signaled: ${killCalls.join(', ')}`,
+  );
 });
 
 test('a live tunnel without loopback HTTP readiness is stopped and compensated', async (t) => {
