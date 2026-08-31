@@ -97,6 +97,12 @@ service. This limitation is documented in the official
   descriptor as UID/GID 1000, exact mode `0400`, one regular link and bounded
   non-empty content, reads once from that descriptor, and closes in `finally`.
   Disabled rollback does not open a stale configured path.
+- Candidate production Compose pins the Worker to exact
+  `SCANSCI_ENABLED=true` and
+  `SCANSCI_BASE_URL=http://scansci-legal:8080`; it does not mutate `.env.prod`
+  or a persistent global environment. Runtime verification inspects these
+  actual container values together with Worker image, command, working
+  directory, Compose labels, networks and release/Secret mounts.
 - `scansci-session` is a stable named volume and is not release-retained or
   application-rollback data. Recreating the legal or auth image preserves the
   profile and cookies. Credential/session revocation remains an explicit,
@@ -108,10 +114,18 @@ service. This limitation is documented in the official
   identity, UID, mounts, networks, ports, limits, policy flags, grey-source/Tor
   absence, runtime Secret ownership/mode, a non-printing host/runtime token hash,
   and bounded session status; and emits statuses without values.
-- The production transaction builds legal/auth images before Worker/Parser,
-  starts and verifies `scansci-legal` before switching Agent Worker, and records
-  `scansci_deploy` in capability schema 3. Catchable failure restores and
-  verifies the exact previous SHA when that release contains ScanSci. When the
+- The production transaction builds legal/auth images before Worker/Parser and
+  starts `scansci-legal` before switching Agent Worker. A distinct
+  prepublication verifier requires the exact candidate SHA plus built
+  legal/auth image IDs, rejects any pre-existing candidate capability sidecar,
+  and verifies actual ScanSci/Worker runtime without reading a sidecar. Only
+  after those checks pass does the existing locked active-release CAS publish
+  `scansci_deploy` capability schema 3, followed immediately by canonical
+  sidecar verification. Normal active/rollback verification remains
+  canonical-sidecar-only and keeps its legacy CLI. Catchable failure restores
+  the previous marker before deleting only the exact candidate sidecar and
+  staging file, then verifies the exact previous SHA when that release contains
+  ScanSci. A previous release always uses its own Compose and verifier. When the
   previous release predates ScanSci, rollback stops only the candidate service
   and restores the previous application release.
 - Exact retention inventories SHA-tagged legal and auth images together with

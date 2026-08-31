@@ -1500,10 +1500,10 @@ and no broad filesystem, image or volume prune ran.
 
 #### Preconditions
 
-The candidate must contain fix `755b7b5` or a reviewed descendant while the
+The candidate must contain fix `672ec14` or a reviewed descendant while the
 upstream commit/archive remain `7017814…b8e` / `db537914…9208b9`. Before any
 ECS mutation, require exact CI, a clean merged-main SHA, targetless durable
-ScanSci task count zero, and local ScanSci `82/89` plus infra `72/77` evidence.
+ScanSci task count zero, and local ScanSci `82/89` plus infra `74/79` evidence.
 The production source remains `6893318…` until the canonical transaction ends.
 
 #### Execution
@@ -1521,13 +1521,33 @@ already-installed `104857600:104857600` metadata before any real download. Its
 request must use exact `/tmp`, which exists after the fresh tmpfs mount; do not
 require `/tmp/scansci-legal` or create/read/write probe files.
 
+For the first candidate, require the capability sidecar to be absent. Invoke
+the verifier only in explicit `prepublication` mode with the exact candidate
+release SHA and the final built legal/auth image IDs; all three arguments are
+mandatory and non-secret. This mode must reject an existing sidecar and attest
+the actual images, containers, labels, Compose provenance, mounts, networks,
+limits, entrypoints and Worker before publication. Candidate Worker environment
+must be exactly `SCANSCI_ENABLED=true` and
+`SCANSCI_BASE_URL=http://scansci-legal:8080`; missing, disabled or alternate URL
+is a deployment failure. Never substitute `.env.prod` values or a pending
+sidecar for these checks.
+
+Only after legal and Worker prepublication checks pass may the existing locked
+active-release CAS publish the canonical sidecar. Immediately run the normal
+legacy canonical-sidecar verifier. A failure before or after publication must
+restore the exact previous marker first, then remove only the candidate sidecar
+and staging file; previous/rollback sidecars remain unchanged. Record fake-
+remote and real-ECS evidence for the absent-sidecar first deploy and both
+failure positions.
+
 #### Rollback
 
 Do not rewrite the rollback release to the new resource contract. The deploy
 transaction restores the exact previous SHA and invokes that release's own
 Compose file and verifier, so an older 64 MiB identity remains valid for that
 release. If the previous release had no ScanSci, remove only the candidate
-legal/auth/init containers. Preserve `scansci-session`; retention continues to
+legal/auth/init containers and candidate sidecar/staging. Preserve
+`scansci-session`; retention continues to
 protect exact active and rollback image IDs and never performs broad prune.
 
 #### Verification

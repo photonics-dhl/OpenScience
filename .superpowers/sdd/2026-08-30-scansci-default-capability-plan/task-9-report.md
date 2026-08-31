@@ -16,6 +16,7 @@ Secret, `.env`, GitHub, merge, or deployment action occurred in Task 9.
 - Review fix 2: `36f985c59c44c85c84ed242ca890ad6a5b7ce01e`.
 - Review fix 3: `63a0b562b50bd2fd72400a18f74c5a0d89b18a8d`.
 - Review fix 4: `755b7b5db0afb202134d4893958856846426bfbd`.
+- Final whole-branch review fix: `672ec141d7366890716b8cf298274acc840c0ba7`.
 - Initial documentation gate: `0e98190bc7cd2cd69dfb9cd7bcd4dcf38a0de0ad`;
   review-fix-3 evidence is recorded by the final documentation commit.
 - Repository main: `463c8e3a2a80138cda2d669c370c0481ed4c0877`.
@@ -194,6 +195,43 @@ the same root still fails before upstream because its controlled `config.json`
 is absent. Focused results: ScanSci `82 pass / 7 Windows/POSIX skips`, infra
 `72 pass / 5 platform skips`.
 
+## Final whole-branch review — publication and Worker enablement
+
+### Important — candidate verification depended on an unpublished sidecar
+
+RED proved a fresh candidate could not pass the ScanSci verifier because its
+canonical `.release-capabilities/$RELEASE_SHA` did not exist until the later
+active-release CAS. Fix `672ec14` adds an explicit `prepublication` mode that
+requires the exact candidate SHA plus built legal/auth image IDs, rejects
+missing/malformed IDs and rejects any pre-existing candidate sidecar. It checks
+actual image/container labels, Compose provenance, entrypoints, mounts,
+networks, resources, runtime policy and Worker state without reading or
+accepting a pending sidecar.
+
+Normal current/rollback verification preserves the legacy canonical CLI and
+reads only the exact canonical sidecar. The deploy publishes the candidate
+sidecar only inside the existing locked active-release CAS, immediately reruns
+canonical verification, and on any pre/post-publication failure restores the
+previous marker before removing only the exact candidate sidecar and staging
+file. A behavioral fake-remote transaction starts without a candidate sidecar
+and proves success plus before-CAS and after-publication rollback. Previous
+release rollback still uses that release's own Compose and verifier contract.
+
+### Important — candidate Worker did not explicitly enable ScanSci
+
+RED proved production Compose lacked the exact Worker values and the verifier
+accepted disabled, missing, or wrong service URLs. Candidate Compose now sets
+`SCANSCI_ENABLED=true` and `SCANSCI_BASE_URL=http://scansci-legal:8080`.
+Prepublication and canonical verification inspect the actual Worker environment
+and bind its image, command, working directory, Compose labels, networks,
+release mount and Secret mount. No `.env.prod` or persistent global environment
+is changed, so rollback retains the prior release's configuration.
+
+Focused GREEN: verifier `6/6`; release contract `95 pass / 7 platform skips`;
+combined ScanSci infra `74 pass / 5 platform skips`; Agent Worker `503/503`.
+Aggressive compatibility review additionally preserved the legacy canonical CLI
+for current and prior releases; explicit mode is prepublication-only.
+
 ## Architecture, API, data, and release review
 
 - Direction: apps depend on packages; no app-to-app implementation import or
@@ -226,8 +264,9 @@ is absent. Focused results: ScanSci `82 pass / 7 Windows/POSIX skips`, infra
 - Runtime/release: legal service is non-root/read-only, 1 CPU/1 GiB/64 PID,
   256 MiB no-exec tmpfs, no host/data/app port/network, fixed two-slot
   acquisition, one serial source per request, pinned negative-cache behavior
-  and a kernel hard 100 MiB per-file limit. Deploy verifies ScanSci
-  before Worker, binds legal/auth image IDs in capability schema 3, restores
+  and a kernel hard 100 MiB per-file limit. Deploy prepublication-verifies
+  ScanSci and the exact enabled Worker before publishing capability schema 3,
+  then canonical-verifies the published legal/auth image IDs and restores
   exact prior ScanSci or removes an absent-prior candidate, and protects active
   plus rollback tags without broad prune.
 - Public DTO: account, password, Cookie/profile, token, raw provider response,
@@ -258,8 +297,8 @@ is absent. Focused results: ScanSci `82 pass / 7 Windows/POSIX skips`, infra
 - Typecheck: exit 0 across all workspaces.
 - Integration compilation: API and Domain PostgreSQL tsconfigs exit 0. Their
   real PostgreSQL execution is forbidden locally and remains Task 10.
-- Full test: exit 0, `2,114 pass / 22 platform skips / 0 fail`.
-  - release contract `94 pass / 7 platform skips`;
+- Full test: exit 0, `2,115 pass / 22 platform skips / 0 fail`.
+  - release contract `95 pass / 7 platform skips`;
   - ScanSci `82 pass / 7 Windows/POSIX skips`;
   - Web `464` Vitest + `5` Node;
   - Domain `535`, Agent Worker `503`, API `101`.

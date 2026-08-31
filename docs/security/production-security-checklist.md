@@ -34,14 +34,15 @@
 - [x] 精确上游的并行 runner 经七参数签名+AST gate 后替换为顺序串行；compatibility 还要求 `_neg_blocked/_neg_record`。blocked 在 path/call 前跳过，truthy non-success 原样 record，falsy/success/blocked 不误记；max concurrency=1、首成功停止、逐源 temp 清理、最多 64 sources。
 - [x] 共享 100 MiB 不再只是 post-check：acquisition 与 no-network/no-Secret probe 经同一 worker entry，在 mode 分支/upstream import 前设置并复验 soft+hard `RLIMIT_FSIZE=104857600`；probe 只报告已安装 metadata，verifier 不直接调用 installer，并使用 fresh tmpfs 必存且无需文件 I/O 的 `/tmp`，不依赖隐藏 acquisition 子目录。SIGXFSZ/EFBIG 稳定失败并清 partial，external child 继承；成功只接受 exact regular source temp 并同目录 rename，无第二份 100 MiB copy。
 - [x] 4 KiB JSON、60 秒子进程、2 个 service slots、1 CPU/1 GiB/64 PID/256 MiB tmpfs 成立：串行+kernel cap 保证 200 MiB source-file worst-case 加 bounded small files 不超过 tmpfs，且 tmpfs 计入 1 GiB。
-- [x] Compose/ADR 证明 legal/auth/Worker Secret 分权、session volume、auth loopback、data/app network 排除、pre-Worker verifier、exact previous/absent rollback 与 active+rollback image retention。
+- [x] Compose/ADR 证明 legal/auth/Worker Secret 分权、session volume、auth loopback、data/app network 排除。candidate prepublication verifier 不读 sidecar，要求精确 SHA + built legal/auth IDs 并核验真实容器和 Worker；sidecar 只在 locked active CAS 发布后 canonical 复验。失败恢复 previous marker 后只清 candidate sidecar/staging；previous/absent rollback 与 active+rollback retention 保持精确。
+- [x] candidate Worker 精确固定 `SCANSCI_ENABLED=true`、`SCANSCI_BASE_URL=http://scansci-legal:8080`；prepublication/canonical 两种 verifier 均核验实际 env、image、command、working dir、Compose labels、networks、release/Secret mounts；不修改 `.env.prod`。
 - [x] 静态门禁：forbidden-path 58 matches（全部 negative/fixed false/compatibility/test）；Knip 0 unused；dependency-cruiser 831 modules/1936 dependencies、syncpack 无问题。
-- [x] 本地门禁：build/typecheck/integration compilation/lint/test/docs lint/docs-sync/diff；完整 test `2114 pass / 22 platform skips / 0 fail`。Task 9 latest fix `755b7b5`；Linux CI 执行实际 RLIMIT/child 继承用例。
+- [x] 本地门禁：build/typecheck/integration compilation/lint/test/docs lint/docs-sync/diff；完整 test `2115 pass / 22 platform skips / 0 fail`。Task 9 latest fix `672ec14`；Linux CI 执行实际 RLIMIT/child 继承用例。
 
 ### 生产 Task 10：P0 阻断，尚未执行
 
 - [ ] Exact CI、merged-main immutable build/deploy；core migration 33 与 PostgreSQL integration forward/rollback/redeploy/双连接合同。
-- [ ] ECS Linux file-Secret、NAT64、serial/negative-cache parity、`FILE_LIMIT_OK` soft+hard 100 MiB、EFBIG cleanup、256 MiB tmpfs、image/mount/network/port 与 targetless durable task count = 0。
+- [ ] ECS Linux file-Secret、NAT64、serial/negative-cache parity、`FILE_LIMIT_OK` soft+hard 100 MiB、EFBIG cleanup、256 MiB tmpfs、image/mount/network/port 与 targetless durable task count = 0。首次候选必须从 sidecar absent 开始，以 exact built IDs prepublication 验证真实 ScanSci/Worker env，CAS 后 canonical 复验；任一失败证明 previous marker/sidecars 原样且 candidate sidecar/staging 缺席。
 - [ ] 一次真实浙江大学 CARSI 登录、helper 移除、legal service recreate 后 session 仍 `ready`；账号/密码/Cookie 不出现在响应或日志。
 - [ ] 真实 OA 与非 OA institutional PDF；四产品入口 375px；ClamAV/hash/rights；600s one-use/replay；真实 72h Worker GC 后 bytes absent、provenance retained；grey/Tor calls = 0。
 - [ ] exact rollback/retention/hygiene；只清 acceptance identity，保留 session、active/rollback images、audit/rights/source provenance。未全部完成不得把 ScanSci 标为 `PRODUCTION` 或关闭 Task 10。
