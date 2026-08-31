@@ -1,7 +1,8 @@
 #!/usr/bin/env node
 import { randomUUID } from 'node:crypto';
+import { readFileSync } from 'node:fs';
 import {
-  chmod, lstat, link, mkdir, open, readFile, realpath, rename, rm,
+  chmod, lstat, link, mkdir, open, realpath, rename, rm,
 } from 'node:fs/promises';
 import { basename, dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -173,7 +174,7 @@ function formatStatuses(statuses) {
 
 async function main() {
   const options = parseProvisionCli(process.argv.slice(2));
-  const input = await readFile(0, 'utf8');
+  const input = readFileSync(0, 'utf8');
   const statuses = await provisionScanSciSecrets({ input, ...options });
   process.stdout.write(formatStatuses(statuses));
 }

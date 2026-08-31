@@ -2,7 +2,9 @@ import assert from 'node:assert/strict';
 import { lstat, mkdtemp, readFile, readdir, rm, symlink } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { spawnSync } from 'node:child_process';
 import test from 'node:test';
+import { fileURLToPath } from 'node:url';
 
 import { parseProvisionCli, provisionScanSciSecrets, verifyRootOwnedSecretMetadata } from './provision-scansci-secrets.mjs';
 
@@ -71,6 +73,16 @@ test('provisioner CLI accepts no value arguments and requires an explicit replac
   assert.deepEqual(parseProvisionCli([]), { replaceExisting: false });
   assert.deepEqual(parseProvisionCli(['--replace-existing']), { replaceExisting: true });
   assert.throws(() => parseProvisionCli(['--service-token', firstToken]), /arguments are invalid/u);
+});
+
+test('provisioner CLI reads its JSON exclusively from stdin', () => {
+  const result = spawnSync(process.execPath, [fileURLToPath(new URL('./provision-scansci-secrets.mjs', import.meta.url))], {
+    encoding: 'utf8',
+    input: '{}',
+  });
+  assert.equal(result.status, 65);
+  assert.match(result.stderr, /ScanSci Secret input is invalid/u);
+  assert.doesNotMatch(result.stderr, /path.*must be of type/iu);
 });
 
 test('provisioner rejects a partial optional credential pair', async (t) => {
