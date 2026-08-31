@@ -876,3 +876,49 @@ while true; do sleep 1; done
   assert.match(processes, /^websockify .*0\.0\.0\.0:6080 127\.0\.0\.1:5900/m);
   assert.match(processes, /^python -m scansci_legal\.auth_login --operator-start$/m);
 });
+
+test('auth entrypoint TERM promptly stops its owned long-running login child', async (t) => {
+  const root = await mkdtemp(join(tmpdir(), 'scansci-auth-entrypoint-term-'));
+  const bin = join(root, 'bin');
+  const pidFile = join(root, 'auth-login.pid');
+  await mkdir(bin, { recursive: true });
+  const fake = `#!/usr/bin/env bash
+name="$(basename "$0")"
+if [ "$name" = python ]; then
+  printf '%s\\n' "$$" > "$AUTH_LOGIN_PID_FILE"
+fi
+trap 'exit 0' TERM INT
+while true; do sleep 1; done
+`;
+  for (const command of ['Xvfb', 'x11vnc', 'websockify', 'python']) {
+    const target = join(bin, command);
+    await writeFile(target, fake);
+    await chmod(target, 0o755);
+  }
+  const toBashPath = (path) => process.platform === 'win32'
+    ? spawnSync(bash, ['-c', 'cygpath -u "$1"', 'convert-path', path], { encoding: 'utf8' }).stdout.trim()
+    : path;
+  t.after(async () => rm(root, { recursive: true, force: true }));
+  const harness = [
+    'PATH="$1:$PATH"; export PATH',
+    'entrypoint="$2"; pid_file="$3"',
+    'AUTH_LOGIN_PID_FILE="$pid_file" bash "$entrypoint" >/dev/null 2>&1 & entrypoint_pid=$!',
+    'cleanup(){ kill -TERM "$entrypoint_pid" 2>/dev/null || true; if [ -f "$pid_file" ]; then auth_pid="$(cat "$pid_file")"; kill -TERM "$auth_pid" 2>/dev/null || true; fi; wait "$entrypoint_pid" 2>/dev/null || true; }',
+    'trap cleanup EXIT',
+    'for attempt in $(seq 1 100); do [ -s "$pid_file" ] && break; sleep 0.02; done',
+    '[ -s "$pid_file" ] || { echo "auth child did not start" >&2; exit 1; }',
+    'auth_pid="$(cat "$pid_file")"',
+    'kill -TERM "$entrypoint_pid"',
+    'for attempt in $(seq 1 20); do if ! kill -0 "$auth_pid" 2>/dev/null; then wait "$entrypoint_pid" 2>/dev/null || true; trap - EXIT; exit 0; fi; sleep 0.1; done',
+    'echo "auth child survived entrypoint TERM" >&2',
+    'exit 1',
+  ].join('; ');
+
+  const result = spawnSync(
+    bash,
+    ['-c', harness, 'entrypoint-term', toBashPath(bin), toBashPath(authEntrypoint), toBashPath(pidFile)],
+    { encoding: 'utf8', timeout: 10_000 },
+  );
+
+  assert.equal(result.status, 0, `${result.stdout}\n${result.stderr}`);
+});
