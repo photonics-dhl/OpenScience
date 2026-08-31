@@ -28,6 +28,9 @@ except ImportError:  # Direct script entry uses this package directory on sys.pa
 
 _NAT64_WELL_KNOWN = ipaddress.IPv6Network("64:ff9b::/96")
 _NAT64_LOCAL_USE = ipaddress.IPv6Network("64:ff9b:1::/48")
+_CONTROLLED_PROXY_HOST = "openscience-egress"
+_CONTROLLED_PROXY_PORT = 7891
+_CONTROLLED_PROXY_ADDRESS = ipaddress.IPv4Address("172.24.0.1")
 _SERIAL_SOURCE_LIMIT = 64
 _PARALLEL_RUNNER_PARAMETERS = (
     "tiers", "doi", "target_dir", "output_path", "config", "use_tor", "overall_timeout",
@@ -58,7 +61,12 @@ def _require_public_https_url(value: str) -> str:
         parsed = urlsplit(value)
     except ValueError as error:
         raise OSError("upstream URL is forbidden") from error
-    if parsed.scheme != "https" or not parsed.hostname or parsed.username is not None or parsed.password is not None:
+    try:
+        port = parsed.port
+    except ValueError as error:
+        raise OSError("upstream URL is forbidden") from error
+    if (parsed.scheme != "https" or not parsed.hostname or port not in (None, 443)
+            or parsed.username is not None or parsed.password is not None):
         raise OSError("upstream URL is forbidden")
     hostname = parsed.hostname.rstrip(".").lower()
     if hostname == "localhost" or hostname.endswith(".localhost") or hostname.endswith(".local"):
@@ -83,7 +91,8 @@ def _guarded_getaddrinfo(
     *,
     resolver=socket.getaddrinfo,
 ):
-    if port not in (None, 0, 443, "https"):
+    controlled_proxy = host == _CONTROLLED_PROXY_HOST and port == _CONTROLLED_PROXY_PORT
+    if not controlled_proxy and port not in (None, 0, 443, "https"):
         raise OSError("upstream port is forbidden")
     records = resolver(host, port, family, type, proto, flags)
     if not records:
@@ -93,7 +102,10 @@ def _guarded_getaddrinfo(
             address = ipaddress.ip_address(record[4][0].split("%", 1)[0])
         except (IndexError, TypeError, ValueError) as error:
             raise OSError("upstream DNS result is invalid") from error
-        if not _is_public_network_address(address):
+        if controlled_proxy:
+            if address != _CONTROLLED_PROXY_ADDRESS:
+                raise OSError("controlled proxy DNS result is forbidden")
+        elif not _is_public_network_address(address):
             raise OSError("upstream DNS result is forbidden")
     return records
 

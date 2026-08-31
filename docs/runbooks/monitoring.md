@@ -13,7 +13,7 @@
 | 账单页渲染 | 宿主机 cron 每 5 分钟跑 `/usr/local/bin/traffic-report.sh` | `/var/www/traffic/index.html` |
 | 反代 | nginx `/nav/`、`/monitor/`、`/traffic/` 三个 location | `/etc/nginx/conf.d/portainer.conf` |
 | 认证 | nginx basic_auth | `/etc/nginx/.htpasswd-monitor`（不入库） |
-| 稳定出网代理 | Squid（配置源 `infra/squid/openscience-egress.conf`） | 127.0.0.1:7891；优先 parent 7890，失效时 DIRECT |
+| 稳定出网代理 | Squid（配置源 `infra/squid/openscience-egress.conf`） | host `127.0.0.1:7891` + ScanSci-only internal retrieval gateway `172.24.0.1:7891`；ScanSci 仅 `.arxiv.org` 可进 parent，其他目标 DIRECT |
 | 代理探测 | `/usr/local/bin/check-egress-path` | 输出 HTTP 状态与 Squid hierarchy |
 | 公网入口 | ECS systemd `cloudflared` | Cloudflare Edge → Tunnel → loopback Nginx；独立于本机 7890 |
 
@@ -42,10 +42,11 @@
 1. 安装发行版 Squid 7：`dnf install -y squid`。
 2. 备份 `/etc/squid/squid.conf`，部署 `infra/squid/openscience-egress.conf`。
 3. `squid -k parse` 通过后 `systemctl enable --now squid`。
-4. 确认 `ss -ltnp` 仅显示 `127.0.0.1:7891`，不得出现 `0.0.0.0:7891` 或 `[::]:7891`。
+4. 确认 `ss -ltnp` 只显示 `127.0.0.1:7891` 与 `172.24.0.1:7891`，不得出现 `0.0.0.0:7891`、`[::]:7891` 或其他接口。
 5. 运行 `/usr/local/bin/check-egress-path`；在线隧道应报告 parent hierarchy。
-6. 用独立测试实例把 parent 指向不可用端口，确认同一 probe 报 DIRECT；不得为演练停止真实隧道。
-7. 两条路径均通过后，方可把 dockerd代理改为 `127.0.0.1:7891`。若需要重启 Docker，另开维护窗口确认，不能在本步骤顺带执行。
+6. 先由 `docker network inspect` 证明 retrieval network 为 `Internal=true`、subnet `172.24.0.0/24`、gateway `172.24.0.1`；再从该网络证明代理 TCP peer 为 `172.24.0.1:7891`、CONNECT 443 成功，并证明 HTTP、非 443、`127/8`、`10/8`、`100.64/10`、`169.254/16`、`100.100.100.200` 和 IPv6 私网/metadata 等目标全部被 Squid 拒绝，且 raw `1.1.1.1:443` 直连失败。容器必须仍无 host port。
+7. 用独立测试实例把 parent 指向不可用端口，确认同一 probe 报 DIRECT；不得为演练停止真实隧道。
+8. 三条路径均通过后，方可把 dockerd代理改为 `127.0.0.1:7891`。若需要重启 Docker，另开维护窗口确认，不能在本步骤顺带执行。
 
 ### 回滚步骤
 
@@ -55,7 +56,7 @@
 
 ### 验证命令
 
-- `check-egress-path` → `egress_http=204`，并输出 parent 或 DIRECT hierarchy。
+- `check-egress-path` → `egress_http=204`，并输出 parent 或 DIRECT hierarchy；ScanSci 容器路径另需记录 internal IPAM、proxy TCP/CONNECT allow、受限目标 deny 与 raw direct deny 证据。
 - `infra/scripts/checkup.sh` → Nginx/Docker active，生产容器无新增 restart。
 - Chromium 连续 20 次访问 `https://openscience.428312321.xyz/` → 全部 HTTP 200。
 - Nginx 最近请求无新增 499/5xx。

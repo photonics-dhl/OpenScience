@@ -66,9 +66,25 @@ service. This limitation is documented in the official
 - HTTPS/DNS validation extracts IPv4 from well-known NAT64, IPv4-mapped, 6to4
   and Teredo destinations and applies the same public-address policy. Local-use
   `64:ff9b:1::/48` is rejected entirely; mixed answers fail as a unit.
-- The legal service and Agent Worker share only `retrieval_net`. This bridge is
-  the legal service's controlled egress path; the service never joins
-  `data_net` or `app_net`.
+- The legal service and Agent Worker share only the fixed `internal: true`
+  `172.24.0.0/24` `retrieval_net`; the legal service never joins `data_net` or
+  `app_net` and keeps no host port. Its only proxy setting is the exact,
+  credential-free `SCANSCI_EGRESS_PROXY=http://openscience-egress:7891`.
+  The wrapper rejects every alternate value and derives generic proxy variables
+  only for the per-acquisition child. The DNS guard permits port 7891 and a
+  private answer only for hostname `openscience-egress` resolving exactly to
+  the retrieval bridge gateway `172.24.0.1`; all research targets remain credential-free HTTPS on
+  port 443 and retain the public-address checks.
+- Squid keeps its host-client listener on loopback and adds only the retrieval
+  gateway `172.24.0.1:7891`. That listener accepts only the fixed retrieval subnet,
+  only CONNECT to port 443, and denies private, loopback, link-local, CGNAT,
+  metadata, documentation, multicast, reserved, NAT64-local, 6to4 and Teredo
+  destination ranges before either parent or DIRECT routing. Only the verified
+  minimal `dstdomain` inventory may use the SSH parent (initially `.arxiv.org`);
+  all other ScanSci destinations are forced DIRECT so the ACL and connection use
+  the same resolver. It never binds `0.0.0.0`, IPv6 wildcard or a public
+  interface. Runtime verification pins the custom environment, exact gateway
+  mapping, internal IPAM, proxy TCP peer, allow/deny results and raw-direct failure.
 - `scansci-auth` is a release-tagged, stopped-by-default Compose profile. It
   uses host networking only, while X11/VNC/noVNC listen on `127.0.0.1`. It joins
   no Docker network and shares only the persistent `scansci-session` volume and

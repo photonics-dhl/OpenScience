@@ -49,6 +49,7 @@ const backupRunbook = readFileSync(new URL('../../docs/runbooks/backup-restore.m
 const embeddingDockerfile = readFileSync(new URL('../../apps/embedding-worker/Dockerfile', import.meta.url), 'utf8');
 const embeddingRequirements = readFileSync(new URL('../../apps/embedding-worker/requirements.lock', import.meta.url), 'utf8');
 const embeddingEvaluatorDockerfile = readFileSync(new URL('../embedding-candidates/bge-m3/Dockerfile', import.meta.url), 'utf8');
+const squidConfig = readFileSync(new URL('../squid/openscience-egress.conf', import.meta.url), 'utf8');
 const rootPackage = JSON.parse(readFileSync(new URL('../../package.json', import.meta.url), 'utf8'));
 const bash = process.platform === 'win32' && existsSync('C:/Program Files/Git/bin/bash.exe')
   ? 'C:/Program Files/Git/bin/bash.exe'
@@ -85,6 +86,8 @@ test('ScanSci production topology exposes only the bounded legal service and sto
   assert.match(legal, /scansci-session:\/session/u);
   assert.match(legal, /scansci-service-secrets:\/run\/secrets:ro/u);
   assert.match(legal, /networks:\r?\n\s+- retrieval_net/u);
+  assert.match(legal, /SCANSCI_EGRESS_PROXY: http:\/\/openscience-egress:7891/u);
+  assert.match(legal, /extra_hosts:\r?\n\s+- "openscience-egress:172\.24\.0\.1"/u);
   assert.doesNotMatch(legal, /\bports:|data_net|DATABASE|POSTGRES|REDIS|S3_|MINIO|env_file|docker\.sock/iu);
 
   assert.match(worker, /- retrieval_net/u);
@@ -120,6 +123,27 @@ test('ScanSci production topology exposes only the bounded legal service and sto
   assert.match(volumeSection, /scansci-service-secrets:\r?\n/u);
   assert.match(volumeSection, /scansci-auth-secrets:\r?\n/u);
   assert.doesNotMatch(volumeSection, /scansci-(?:service|auth)-secrets:[\s\S]*type: tmpfs/u);
+  assert.match(productionCompose, /^  retrieval_net:\r?\n    driver: bridge\r?\n    internal: true\r?\n    ipam:\r?\n      config:\r?\n        - subnet: 172\.24\.0\.0\/24\r?\n          gateway: 172\.24\.0\.1$/mu);
+});
+
+test('ScanSci controlled egress is private to the fixed retrieval subnet', () => {
+  assert.match(squidConfig, /^http_port 127\.0\.0\.1:7891 name=loopback_listener$/mu);
+  assert.match(squidConfig, /^http_port 172\.24\.0\.1:7891 name=scansci_listener$/mu);
+  assert.match(squidConfig, /^acl scansci_retrieval src 172\.24\.0\.0\/24$/mu);
+  assert.match(squidConfig, /^acl scansci_parent_domains dstdomain \.arxiv\.org$/mu);
+  assert.match(squidConfig, /^http_access deny scansci_retrieval !CONNECT$/mu);
+  assert.match(squidConfig, /^http_access deny scansci_retrieval !SSL_ports$/mu);
+  assert.match(squidConfig, /^http_access deny scansci_retrieval blocked_ipv4$/mu);
+  assert.match(squidConfig, /^http_access deny scansci_retrieval blocked_ipv6$/mu);
+  assert.match(squidConfig, /^http_access allow scansci_retrieval scansci_listener CONNECT SSL_ports$/mu);
+  assert.match(squidConfig, /^cache_peer_access home_tunnel allow loopback$/mu);
+  assert.match(squidConfig, /^cache_peer_access home_tunnel allow scansci_retrieval scansci_parent_domains$/mu);
+  assert.match(squidConfig, /^cache_peer_access home_tunnel deny scansci_retrieval$/mu);
+  assert.match(squidConfig, /^cache_peer_access home_tunnel deny all$/mu);
+  assert.match(squidConfig, /^always_direct allow scansci_retrieval !scansci_parent_domains$/mu);
+  assert.doesNotMatch(squidConfig, /^cache_peer_access home_tunnel allow all$/mu);
+  assert.doesNotMatch(squidConfig, /^http_port (?:0\.0\.0\.0|\[::\]):7891$/mu);
+  assert.ok(squidConfig.indexOf('http_access allow scansci_retrieval scansci_listener CONNECT SSL_ports') < squidConfig.indexOf('http_access deny all'));
 });
 
 test('ScanSci deploy dispatches exact rollback identity when the previous release has or lacks the service', () => {
@@ -149,6 +173,9 @@ test('ScanSci deploy dispatches exact rollback identity when the previous releas
   assert.ok(scansciStart > 0 && scansciStart < workerStart, 'ScanSci must start before Agent Worker');
   assert.ok(runtimeVerify > scansciStart && runtimeVerify < workerStart, 'ScanSci runtime must verify before Agent Worker');
   assert.ok(postWorkerVerify > workerStart, 'ScanSci runtime must be reverified after Agent Worker convergence');
+  assert.match(transactionSource, /verify_scansci_candidate 0 0/u);
+  assert.match(transactionSource, /verify_scansci_candidate 1 1/u);
+  assert.match(deploymentFunction('verify_scansci_candidate'), /--require-oa-canary '\$require_oa_canary'/u);
   assert.match(transactionSource, /docker ps -aq --filter 'label=com\.docker\.compose\.project=openscience-prod' --filter 'label=com\.docker\.compose\.service=scansci-auth'/u);
 });
 

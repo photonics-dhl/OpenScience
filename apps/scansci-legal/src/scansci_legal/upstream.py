@@ -21,6 +21,7 @@ MAX_PROTOCOL_BYTES = 8 * 1024
 WORKER_TIMEOUT_SECONDS = 60
 MAX_SESSION_FILES = 16
 MAX_SESSION_FILE_BYTES = 64 * 1024
+CONTROLLED_EGRESS_PROXY = "http://openscience-egress:7891"
 
 
 class AcquisitionError(RuntimeError):
@@ -111,6 +112,15 @@ def _sanitized_environment(output_dir: Path) -> dict[str, str]:
     for key in ("SYSTEMROOT", "WINDIR", "COMSPEC", "PATHEXT", "LANG", "LC_ALL", "TZ"):
         if value := os.environ.get(key):
             environment[key] = value
+    controlled_proxy = os.environ.get("SCANSCI_EGRESS_PROXY")
+    if controlled_proxy is not None:
+        if controlled_proxy != CONTROLLED_EGRESS_PROXY:
+            raise AcquisitionError("policy_blocked")
+        environment.update({
+            "HTTP_PROXY": CONTROLLED_EGRESS_PROXY,
+            "HTTPS_PROXY": CONTROLLED_EGRESS_PROXY,
+            "NO_PROXY": "localhost,127.0.0.1",
+        })
     return environment
 
 

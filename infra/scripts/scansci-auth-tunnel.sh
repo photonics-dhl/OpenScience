@@ -236,7 +236,7 @@ remote_compose_command() {
 
 remote_verify_command() {
   local allow_auth="$1"
-  printf "flock -n -E 73 /run/lock/openscience-production-deploy/lock /usr/bin/node \"%s/infra/scripts/verify-scansci-runtime.mjs\" --release-root \"%s\" --release-sha \"%s\" --compose-file \"%s\" --service-token-file /opt/openscience-secrets/scansci/scansci_service_token --capability-file /opt/openscience/.release-capabilities/%s --require-worker 1 --allow-auth %s" \
+  printf "flock -n -E 73 /run/lock/openscience-production-deploy/lock /usr/bin/node \"%s/infra/scripts/verify-scansci-runtime.mjs\" --release-root \"%s\" --release-sha \"%s\" --compose-file \"%s\" --service-token-file /opt/openscience-secrets/scansci/scansci_service_token --capability-file /opt/openscience/.release-capabilities/%s --require-worker 1 --require-oa-canary 0 --allow-auth %s" \
     "$RELEASE_ROOT" "$RELEASE_ROOT" "$RELEASE_SHA" "$RELEASE_COMPOSE" "$RELEASE_SHA" "$allow_auth"
 }
 

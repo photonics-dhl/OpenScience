@@ -116,14 +116,18 @@ compose_scansci_auth_current() {
 
 verify_scansci_current() {
   local require_worker="${1:-1}"
-  run_remote "/usr/bin/node '$RELEASE_ROOT/infra/scripts/verify-scansci-runtime.mjs' --release-root '$RELEASE_ROOT' --release-sha '$RELEASE_SHA' --compose-file '$COMPOSE_FILE' --service-token-file '$SCANSCI_SECRET_ROOT/scansci_service_token' --capability-file '$RELEASE_CAPABILITIES_DIR/$RELEASE_SHA' --require-worker '$require_worker' --allow-auth 0"
+  local require_oa_canary="${2:-0}"
+  [[ "$require_worker" =~ ^[01]$ && "$require_oa_canary" =~ ^[01]$ ]] || return 64
+  run_remote "/usr/bin/node '$RELEASE_ROOT/infra/scripts/verify-scansci-runtime.mjs' --release-root '$RELEASE_ROOT' --release-sha '$RELEASE_SHA' --compose-file '$COMPOSE_FILE' --service-token-file '$SCANSCI_SECRET_ROOT/scansci_service_token' --capability-file '$RELEASE_CAPABILITIES_DIR/$RELEASE_SHA' --require-worker '$require_worker' --require-oa-canary '$require_oa_canary' --allow-auth 0"
 }
 
 verify_scansci_candidate() {
   local require_worker="${1:-1}"
+  local require_oa_canary="${2:-0}"
+  [[ "$require_worker" =~ ^[01]$ && "$require_oa_canary" =~ ^[01]$ ]] || return 64
   require_match final_scansci_image_id "$FINAL_SCANSCI_IMAGE_ID" '^sha256:[0-9a-f]{64}$'
   require_match final_scansci_auth_image_id "$FINAL_SCANSCI_AUTH_IMAGE_ID" '^sha256:[0-9a-f]{64}$'
-  run_remote "/usr/bin/node '$RELEASE_ROOT/infra/scripts/verify-scansci-runtime.mjs' --release-root '$RELEASE_ROOT' --release-sha '$RELEASE_SHA' --compose-file '$COMPOSE_FILE' --service-token-file '$SCANSCI_SECRET_ROOT/scansci_service_token' --require-worker '$require_worker' --allow-auth 0 --mode prepublication --expected-legal-image-id '$FINAL_SCANSCI_IMAGE_ID' --expected-auth-image-id '$FINAL_SCANSCI_AUTH_IMAGE_ID'"
+  run_remote "/usr/bin/node '$RELEASE_ROOT/infra/scripts/verify-scansci-runtime.mjs' --release-root '$RELEASE_ROOT' --release-sha '$RELEASE_SHA' --compose-file '$COMPOSE_FILE' --service-token-file '$SCANSCI_SECRET_ROOT/scansci_service_token' --require-worker '$require_worker' --require-oa-canary '$require_oa_canary' --allow-auth 0 --mode prepublication --expected-legal-image-id '$FINAL_SCANSCI_IMAGE_ID' --expected-auth-image-id '$FINAL_SCANSCI_AUTH_IMAGE_ID'"
 }
 
 transaction_prepare_candidate_capability() {
@@ -645,7 +649,7 @@ log "[5c] ScanSci 先行并验证 source/policy/session/runtime..."
 verify_candidate_switch_contract pre-scansci-switch
 compose_current "up -d --force-recreate --wait --wait-timeout 300 scansci-legal"
 verify_running_container_image scansci-legal "$FINAL_SCANSCI_IMAGE_ID"
-verify_scansci_candidate 0
+verify_scansci_candidate 0 0
 
 log "[5d] 切换 API/Web/Worker 并等待 healthy..."
 verify_candidate_switch_contract pre-worker-switch
@@ -653,7 +657,7 @@ compose_current "up -d --force-recreate --wait --wait-timeout 300 api web agent-
 verify_running_container_image agent-worker "$FINAL_WORKER_IMAGE_ID"
 verify_running_container_image document-parser "$FINAL_PARSER_IMAGE_ID"
 wait_for_healthy api web agent-worker
-verify_scansci_candidate
+verify_scansci_candidate 1 1
 if [ "$EMBEDDING_DEPLOY" -eq 1 ]; then
   log "[5d] 切换后再次验证 embedding 健康、身份与真实向量..."
   compose_embedding_current "ps --status running --services | grep -qx embedding-worker"
@@ -664,7 +668,7 @@ verify_running_release_images
 log "[6] 切换 nginx 与 release identity..."
 run_remote "set -e; backup=${NGINX_CONF}.pre-deploy-\$(date +%Y%m%d%H%M%S); cp -p $NGINX_CONF \$backup; install -m 0644 $RELEASE_ROOT/infra/nginx/openscience.conf $NGINX_CONF; if ! nginx -t; then cp -p \$backup $NGINX_CONF; nginx -t; exit 1; fi; systemctl reload nginx"
 transaction_publish_candidate
-verify_scansci_current
+verify_scansci_current 1 0
 run_remote "test -f $HTPASSWD || echo 'WARN: $HTPASSWD 不存在——首次需手动生成（见 runbook）'"
 
 log "[7] 公网与精确 release 验收..."

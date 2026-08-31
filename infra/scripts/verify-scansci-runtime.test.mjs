@@ -48,6 +48,7 @@ async function fixture() {
       Env: [
         'SCANSCI_ENABLED=true', 'SCANSCI_SERVICE_TOKEN_FILE=/run/secrets/scansci_service_token',
         'SCANSCI_STRATEGY=legal_only', 'SCANSCI_SCIHUB_ENABLED=false', 'SCANSCI_TOR_ENABLED=false',
+        'SCANSCI_EGRESS_PROXY=http://openscience-egress:7891',
       ],
       Labels: {
         ...labels,
@@ -62,13 +63,18 @@ async function fixture() {
       ReadonlyRootfs: true, CapDrop: ['ALL'], PortBindings: {}, Memory: 1024 ** 3,
       Privileged: false, CapAdd: [],
       NanoCpus: 1_000_000_000, PidsLimit: 64, SecurityOpt: ['no-new-privileges:true'],
+      ExtraHosts: ['openscience-egress:172.24.0.1'],
       Tmpfs: { '/tmp': 'size=256m,noexec,nosuid,nodev,uid=10001,gid=10001,mode=0700' },
     },
     Mounts: [
       { Type: 'volume', Name: 'openscience-prod_scansci-session', Source: '/var/lib/docker/volumes/session/_data', Destination: '/session', RW: true },
       { Type: 'volume', Name: 'openscience-prod_scansci-service-secrets', Source: '/var/lib/docker/volumes/secrets/_data', Destination: '/run/secrets', RW: false },
     ],
-    NetworkSettings: { Networks: { 'openscience-prod_retrieval_net': {} }, Ports: { '8080/tcp': null } },
+    NetworkSettings: { Networks: {
+      'openscience-prod_retrieval_net': {
+        IPAddress: '172.24.0.2', Gateway: '172.24.0.1',
+      },
+    }, Ports: { '8080/tcp': null } },
     State: { Running: true, Health: { Status: 'healthy' } },
     Image: `sha256:${'d'.repeat(64)}`,
   };
@@ -115,6 +121,15 @@ async function fixture() {
   };
   return {
     releaseRoot, serviceTokenPath, composeFile, container, image, authImage, workerContainer, workerImage,
+    retrievalNetwork: {
+      Name: 'openscience-prod_retrieval_net', Internal: true,
+      IPAM: { Config: [{ Subnet: '172.24.0.0/24', Gateway: '172.24.0.1' }] },
+    },
+    controlledEgressProbe: {
+      proxyAddress: '172.24.0.1', proxyPeer: '172.24.0.1:7891',
+      allowStatus: 204, privateStatus: 403, httpStatus: 403, non443Status: 403,
+      rawDirect: 'blocked',
+    },
   };
 }
 
@@ -148,12 +163,67 @@ test('runtime verifier validates immutable source, bounded topology, Secret and 
   assert.doesNotMatch(output, /sciencedirect\.json|cookie|password/iu);
 });
 
+test('runtime verifier requires a bounded real worker-entry arXiv OA PDF canary when requested', async (t) => {
+  const f = await fixture();
+  t.after(async () => rm(f.releaseRoot, { recursive: true, force: true }));
+  const base = {
+    ...f,
+    releaseSha,
+    sessionStatus: 'ready',
+    authContainerIds: [],
+    sourceFileLimitMetadata: '104857600:104857600',
+    runtimeSecretMetadata: '10001:10001:400',
+    runtimeSecretSha256: createHash('sha256').update(tokenValue).digest('hex'),
+    workerSecretMetadata: '1000:1000:400',
+    workerSecretSha256: createHash('sha256').update(tokenValue).digest('hex'),
+    requiredSecretUid: process.getuid?.(),
+    expectedLegalImageId: f.image.Id,
+    expectedAuthImageId: f.authImage.Id,
+    requireOaCanary: true,
+    oaCanaryResult: {
+      identifier: 'arXiv:2009.06045v1', route: 'open_access', contentType: 'application/pdf',
+      magic: '%PDF-', bytes: 4096,
+    },
+  };
+  const report = await verifyScanSciRuntime(base);
+  assert.match(formatRuntimeStatuses(report), /SCANSCI_RUNTIME_OA_CANARY_OK/u);
+
+  for (const mutate of [
+    (input) => { input.oaCanaryResult = undefined; },
+    (input) => { input.oaCanaryResult.identifier = 'arXiv:1706.03762'; },
+    (input) => { input.oaCanaryResult.route = 'institutional'; },
+    (input) => { input.oaCanaryResult.contentType = 'text/html'; },
+    (input) => { input.oaCanaryResult.magic = '<html'; },
+    (input) => { input.oaCanaryResult.bytes = 0; },
+    (input) => { input.oaCanaryResult.bytes = 104857601; },
+  ]) {
+    const input = structuredClone(base);
+    mutate(input);
+    await assert.rejects(verifyScanSciRuntime(input), /ScanSci runtime verification failed/u);
+  }
+});
+
 test('runtime verifier fails closed on forbidden network, grey-source flags, auth helper, or disabled session', async (t) => {
   const f = await fixture();
   t.after(async () => rm(f.releaseRoot, { recursive: true, force: true }));
   for (const mutate of [
     (input) => { input.container.NetworkSettings.Networks['openscience-prod_data_net'] = {}; },
     (input) => { input.container.Config.Env.push('TOR_PROXY='); },
+    (input) => { input.container.Config.Env = input.container.Config.Env.filter((entry) => !entry.startsWith('SCANSCI_EGRESS_PROXY=')); },
+    (input) => { input.container.Config.Env = input.container.Config.Env.map((entry) => entry.startsWith('SCANSCI_EGRESS_PROXY=') ? 'SCANSCI_EGRESS_PROXY=http://wrong.invalid:7891' : entry); },
+    (input) => { input.container.HostConfig.ExtraHosts = ['openscience-egress:203.0.113.1']; },
+    (input) => { input.retrievalNetwork.Internal = false; },
+    (input) => { input.retrievalNetwork.IPAM.Config[0].Subnet = '172.25.0.0/24'; },
+    (input) => { input.retrievalNetwork.IPAM.Config[0].Gateway = '172.24.0.254'; },
+    (input) => { input.container.NetworkSettings.Networks['openscience-prod_retrieval_net'].Gateway = '172.24.0.254'; },
+    (input) => { input.container.NetworkSettings.Networks['openscience-prod_retrieval_net'].IPAddress = '172.25.0.2'; },
+    (input) => { input.controlledEgressProbe.proxyAddress = '172.24.0.2'; },
+    (input) => { input.controlledEgressProbe.proxyPeer = '172.24.0.1:7890'; },
+    (input) => { input.controlledEgressProbe.allowStatus = 200; },
+    (input) => { input.controlledEgressProbe.privateStatus = 200; },
+    (input) => { input.controlledEgressProbe.httpStatus = 200; },
+    (input) => { input.controlledEgressProbe.non443Status = 200; },
+    (input) => { input.controlledEgressProbe.rawDirect = 'connected'; },
     (input) => { input.container.HostConfig.Privileged = true; },
     (input) => { input.container.HostConfig.CapAdd = ['SYS_ADMIN']; },
     (input) => { input.container.HostConfig.Tmpfs['/tmp'] = 'size=64m'; },
@@ -273,13 +343,20 @@ test('runtime identity modes keep prepublication explicit and canonical sidecar-
     '--release-root', releaseRoot, '--release-sha', releaseSha,
     '--compose-file', `${releaseRoot}/infra/compose/docker-compose.prod.yml`,
     '--service-token-file', '/opt/openscience-secrets/scansci/scansci_service_token',
-    '--require-worker', '1', '--allow-auth', '0',
+    '--require-worker', '1', '--require-oa-canary', '0', '--allow-auth', '0',
   ];
   const prepublication = runtimeVerifier.parseRuntimeCli([
     ...base, '--mode', 'prepublication',
     '--expected-legal-image-id', legalImageId, '--expected-auth-image-id', authImageId,
   ]);
   assert.equal(prepublication['--mode'], 'prepublication');
+  const legacyBase = base.filter((value, index) => !['--require-oa-canary', '0'].includes(value)
+    || base[index - 1] !== '--require-oa-canary' && value !== '--require-oa-canary');
+  const legacyPrepublication = runtimeVerifier.parseRuntimeCli([
+    ...legacyBase, '--mode', 'prepublication',
+    '--expected-legal-image-id', legalImageId, '--expected-auth-image-id', authImageId,
+  ]);
+  assert.equal(legacyPrepublication['--require-oa-canary'], undefined);
   const prepublicationIdentity = await runtimeVerifier.resolveRuntimeImageIdentity(prepublication, {
     readCapability: async () => assert.fail('prepublication read a canonical capability sidecar'),
     capabilityExists: async () => false,

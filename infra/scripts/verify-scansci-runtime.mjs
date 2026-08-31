@@ -81,6 +81,10 @@ export async function verifyScanSciRuntime({
   sourceFileLimitMetadata,
   runtimeSecretMetadata,
   runtimeSecretSha256,
+  retrievalNetwork,
+  controlledEgressProbe,
+  requireOaCanary = false,
+  oaCanaryResult,
   sessionStatus,
   expectedLegalImageId,
   expectedAuthImageId,
@@ -127,7 +131,8 @@ export async function verifyScanSciRuntime({
     || environment.get('SCANSCI_SERVICE_TOKEN_FILE') !== '/run/secrets/scansci_service_token'
     || environment.get('SCANSCI_STRATEGY') !== 'legal_only'
     || environment.get('SCANSCI_SCIHUB_ENABLED') !== 'false'
-    || environment.get('SCANSCI_TOR_ENABLED') !== 'false') fail();
+    || environment.get('SCANSCI_TOR_ENABLED') !== 'false'
+    || environment.get('SCANSCI_EGRESS_PROXY') !== 'http://openscience-egress:7891') fail();
   for (const [key, value] of environment) {
     const forbiddenFlagName = !['SCANSCI_SCIHUB_ENABLED', 'SCANSCI_TOR_ENABLED'].includes(key)
       && /(?:TOR|SCI.?HUB|LIBGEN|SCIBBAN)/iu.test(key);
@@ -152,12 +157,26 @@ export async function verifyScanSciRuntime({
     || container.HostConfig?.Memory !== 1024 ** 3
     || container.HostConfig?.NanoCpus !== 1_000_000_000
     || container.HostConfig?.PidsLimit !== 64
+    || JSON.stringify(container.HostConfig?.ExtraHosts) !== JSON.stringify(['openscience-egress:172.24.0.1'])
     || Object.keys(container.HostConfig?.PortBindings ?? {}).length !== 0
     || !['size=256m', 'noexec', 'nosuid', 'nodev', 'uid=10001', 'gid=10001', 'mode=0700']
       .every((option) => tmpfsOptions.has(option))) fail();
   const networks = Object.keys(container.NetworkSettings?.Networks ?? {});
   if (networks.length !== 1 || !networks[0].endsWith('_retrieval_net')
     || Object.values(container.NetworkSettings?.Ports ?? {}).some((bindings) => bindings !== null)) fail();
+  const retrievalEndpoint = container.NetworkSettings.Networks[networks[0]];
+  const retrievalIp = retrievalEndpoint?.IPAddress;
+  if (retrievalNetwork?.Name !== networks[0] || retrievalNetwork?.Internal !== true
+    || JSON.stringify(retrievalNetwork?.IPAM?.Config) !== JSON.stringify([{
+      Subnet: '172.24.0.0/24', Gateway: '172.24.0.1',
+    }])
+    || retrievalEndpoint?.Gateway !== '172.24.0.1'
+    || !/^172\.24\.0\.(?:[2-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-4])$/u.test(retrievalIp)
+    || JSON.stringify(controlledEgressProbe) !== JSON.stringify({
+      proxyAddress: '172.24.0.1', proxyPeer: '172.24.0.1:7891',
+      allowStatus: 204, privateStatus: 403, httpStatus: 403, non443Status: 403,
+      rawDirect: 'blocked',
+    })) fail();
   const session = container.Mounts?.find((mount) => mount.Destination === '/session');
   const token = container.Mounts?.find((mount) => mount.Destination === '/run/secrets');
   if (!session || session.Type !== 'volume' || session.RW !== true || !session.Name?.endsWith('_scansci-session')
@@ -215,6 +234,18 @@ export async function verifyScanSciRuntime({
     || !/^[a-f0-9]{64}$/u.test(runtimeSecretSha256) || runtimeSecretSha256 !== hostSecretSha256
     || authContainerIds.length !== 0 && !allowRunningAuth
     || !['ready', 'auth_required', 'refreshing'].includes(sessionStatus)) fail();
+  if (typeof requireOaCanary !== 'boolean'
+    || requireOaCanary && (!oaCanaryResult || Array.isArray(oaCanaryResult)
+      || JSON.stringify(Object.keys(oaCanaryResult)) !== JSON.stringify([
+        'identifier', 'route', 'contentType', 'magic', 'bytes',
+      ])
+      || oaCanaryResult.identifier !== 'arXiv:2009.06045v1'
+      || oaCanaryResult.route !== 'open_access'
+      || oaCanaryResult.contentType !== 'application/pdf'
+      || oaCanaryResult.magic !== '%PDF-'
+      || !Number.isSafeInteger(oaCanaryResult.bytes)
+      || oaCanaryResult.bytes < 6 || oaCanaryResult.bytes > 100 * 1024 * 1024)
+    || !requireOaCanary && oaCanaryResult !== undefined) fail();
   return {
     source: true,
     topology: true,
@@ -222,6 +253,7 @@ export async function verifyScanSciRuntime({
     fileLimit: true,
     token: true,
     session: sessionStatus,
+    oaCanary: requireOaCanary,
   };
 }
 
@@ -234,6 +266,7 @@ export function formatRuntimeStatuses(report) {
     'SCANSCI_RUNTIME_FILE_LIMIT_OK',
     'SCANSCI_RUNTIME_TOKEN_OK',
     `SCANSCI_RUNTIME_SESSION_${session}`,
+    ...(report.oaCanary ? ['SCANSCI_RUNTIME_OA_CANARY_OK'] : []),
   ].join('\n') + '\n';
 }
 
@@ -243,12 +276,16 @@ export function parseRuntimeCli(argv) {
     if (!argv[index]?.startsWith('--') || !argv[index + 1] || values.has(argv[index])) fail();
     values.set(argv[index], argv[index + 1]);
   }
-  const common = ['--release-root', '--release-sha', '--compose-file', '--service-token-file', '--require-worker', '--allow-auth'];
+  const common = [
+    '--release-root', '--release-sha', '--compose-file', '--service-token-file',
+    '--require-worker', '--allow-auth',
+  ];
+  const optional = values.has('--require-oa-canary') ? ['--require-oa-canary'] : [];
   const mode = values.get('--mode');
   const expected = mode === undefined
-    ? [...common, '--capability-file']
+    ? [...common, ...optional, '--capability-file']
     : mode === 'prepublication'
-      ? [...common, '--mode', '--expected-legal-image-id', '--expected-auth-image-id']
+      ? [...common, ...optional, '--mode', '--expected-legal-image-id', '--expected-auth-image-id']
       : [];
   if (values.size !== expected.length || expected.some((key) => !values.has(key))) fail();
   return Object.fromEntries(expected.map((key) => [key, values.get(key)]));
@@ -291,8 +328,8 @@ export async function resolveRuntimeImageIdentity(options, {
   return { legalImageId, authImageId };
 }
 
-function run(command, args, { input, maxBuffer = 1024 * 1024 } = {}) {
-  const result = spawnSync(command, args, { encoding: 'utf8', maxBuffer, input });
+function run(command, args, { input, maxBuffer = 1024 * 1024, timeout } = {}) {
+  const result = spawnSync(command, args, { encoding: 'utf8', maxBuffer, input, timeout });
   if (result.status !== 0) fail();
   return result.stdout.trim();
 }
@@ -333,11 +370,13 @@ async function main() {
   const composeFile = options['--compose-file'];
   const serviceTokenPath = options['--service-token-file'];
   const requireWorker = options['--require-worker'];
+  const requireOaCanary = options['--require-oa-canary'] ?? '0';
   const allowAuth = options['--allow-auth'];
   if (releaseRoot !== `/opt/openscience-releases/${releaseSha}`
     || composeFile !== `${releaseRoot}/infra/compose/docker-compose.prod.yml`
     || serviceTokenPath !== '/opt/openscience-secrets/scansci/scansci_service_token'
-    || !['0', '1'].includes(requireWorker) || !['0', '1'].includes(allowAuth)) fail();
+    || !['0', '1'].includes(requireWorker) || !['0', '1'].includes(requireOaCanary)
+    || !['0', '1'].includes(allowAuth) || requireOaCanary === '1' && requireWorker !== '1') fail();
   const composeArgs = ['compose', '--env-file', '/opt/openscience/.env.prod', '-f', composeFile];
   const env = { ...process.env, XGS_RELEASE_ROOT: releaseRoot, XGS_RELEASE_IMAGE_TAG: releaseSha };
   const compose = (args) => {
@@ -351,6 +390,10 @@ async function main() {
   const authIds = compose(['--profile', 'scansci-auth', 'ps', '-aq', 'scansci-auth']).split(/\r?\n/u).filter(Boolean);
   const authContainers = authIds.map((id) => inspectJson('docker', ['inspect', id]));
   const container = inspectJson('docker', ['inspect', containerId]);
+  const retrievalNetworkNames = Object.keys(container.NetworkSettings?.Networks ?? {})
+    .filter((name) => name.endsWith('_retrieval_net'));
+  if (retrievalNetworkNames.length !== 1) fail();
+  const retrievalNetwork = inspectJson('docker', ['network', 'inspect', retrievalNetworkNames[0]]);
   const image = inspectJson('docker', ['image', 'inspect', `openscience-scansci-legal:${releaseSha}`]);
   const authImage = inspectJson('docker', ['image', 'inspect', `openscience-scansci-auth:${releaseSha}`]);
   const probe = [
@@ -361,6 +404,41 @@ async function main() {
   ].join(';');
   const sessionStatus = run('docker', ['exec', containerId, 'python', '-c', probe]);
   const sourceFileLimitMetadata = probeSourceFileLimit(containerId);
+  const controlledEgressProbeSource = [
+    'import json,socket,urllib.error,urllib.request',
+    "proxy='http://openscience-egress:7891'",
+    "addresses=sorted({item[4][0] for item in socket.getaddrinfo('openscience-egress',7891,type=socket.SOCK_STREAM)})",
+    "connection=socket.create_connection(('openscience-egress',7891),timeout=3)",
+    "peer='%s:%s'%connection.getpeername()",
+    'connection.close()',
+    "opener=urllib.request.build_opener(urllib.request.ProxyHandler({'http':proxy,'https':proxy}))",
+    "allow=opener.open('https://www.gstatic.com/generate_204',timeout=8).status",
+    "def proxy_status(request):\n probe=socket.create_connection(('openscience-egress',7891),timeout=3)\n probe.sendall(request.encode('ascii'))\n line=probe.makefile('rb').readline(256).decode('ascii','strict')\n probe.close()\n return int(line.split(' ',2)[1])",
+    "private=proxy_status('CONNECT 169.254.169.254:443 HTTP/1.1\\r\\nHost: 169.254.169.254:443\\r\\n\\r\\n')",
+    "http=proxy_status('GET http://example.com/ HTTP/1.1\\r\\nHost: example.com\\r\\nConnection: close\\r\\n\\r\\n')",
+    "non443=proxy_status('CONNECT example.com:444 HTTP/1.1\\r\\nHost: example.com:444\\r\\n\\r\\n')",
+    "raw='connected'",
+    "try:\n direct=socket.create_connection(('1.1.1.1',443),timeout=2)\n direct.close()\nexcept OSError:\n raw='blocked'",
+    "print(json.dumps({'proxyAddress':','.join(addresses),'proxyPeer':peer,'allowStatus':allow,'privateStatus':private,'httpStatus':http,'non443Status':non443,'rawDirect':raw},separators=(',',':')))",
+  ].join('\n');
+  let controlledEgressProbe;
+  try {
+    controlledEgressProbe = JSON.parse(run('docker', [
+      'exec', containerId, 'python', '-c', controlledEgressProbeSource,
+    ], { maxBuffer: 4096 }));
+  } catch {
+    fail();
+  }
+  let oaCanaryResult;
+  if (requireOaCanary === '1') {
+    try {
+      oaCanaryResult = JSON.parse(run('docker', [
+        'exec', containerId, 'python', '-m', 'scansci_legal.oa_canary',
+      ], { maxBuffer: 4096, timeout: 90_000 }));
+    } catch {
+      fail();
+    }
+  }
   const runtimeSecretMetadata = run('docker', [
     'exec', containerId, 'stat', '-c', '%u:%g:%a', '/run/secrets/scansci_service_token',
   ]);
@@ -382,7 +460,9 @@ async function main() {
   }
   const report = await verifyScanSciRuntime({
     releaseRoot, releaseSha, composeFile, serviceTokenPath, container, image, authImage,
-    authContainerIds: authIds, sessionStatus, sourceFileLimitMetadata, runtimeSecretMetadata, runtimeSecretSha256,
+    authContainerIds: authIds, sessionStatus, sourceFileLimitMetadata, retrievalNetwork, controlledEgressProbe,
+    requireOaCanary: requireOaCanary === '1', oaCanaryResult,
+    runtimeSecretMetadata, runtimeSecretSha256,
     workerContainer, workerImage, workerSecretMetadata, workerSecretSha256,
     authContainers, allowRunningAuth: allowAuth === '1',
     expectedLegalImageId: expectedIdentity.legalImageId, expectedAuthImageId: expectedIdentity.authImageId,

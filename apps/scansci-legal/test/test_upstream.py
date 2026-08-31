@@ -133,6 +133,20 @@ print(json.dumps({'success': True, 'file': str(paper), 'source': 'CARSI', 'url':
 
         self.assertEqual(result.content, b"%PDF-safe-from-worker")
 
+    def test_maps_only_the_fixed_controlled_egress_proxy_into_the_worker(self):
+        with mock.patch.dict(os.environ, {"SCANSCI_EGRESS_PROXY": "http://openscience-egress:7891"}, clear=False):
+            environment = _sanitized_environment(self.root)
+
+        self.assertEqual(environment["HTTP_PROXY"], "http://openscience-egress:7891")
+        self.assertEqual(environment["HTTPS_PROXY"], "http://openscience-egress:7891")
+        self.assertEqual(environment["NO_PROXY"], "localhost,127.0.0.1")
+        self.assertNotIn("SCANSCI_EGRESS_PROXY", environment)
+
+    def test_rejects_an_alternate_controlled_egress_proxy(self):
+        with mock.patch.dict(os.environ, {"SCANSCI_EGRESS_PROXY": "http://attacker.invalid:7891"}, clear=False):
+            with self.assertRaisesRegex(AcquisitionError, "policy_blocked"):
+                _sanitized_environment(self.root)
+
     @unittest.skipIf(os.name == "nt", "production worker entry requires POSIX RLIMIT_FSIZE")
     def test_default_worker_resolves_home_and_scansci_config_inside_the_request_root(self):
         worker = Path(__file__).resolve().parents[1] / "src" / "scansci_legal" / "upstream_worker.py"
@@ -233,6 +247,22 @@ class UpstreamNetworkBoundaryTest(unittest.TestCase):
         with self.assertRaises(OSError):
             self.guarded_resolve(mixed[:1], port=80)
 
+    def test_allows_only_the_exact_controlled_proxy_socket_exception(self):
+        guard = getattr(upstream_worker, "_guarded_getaddrinfo", None)
+        if guard is None:
+            self.fail("upstream DNS/redirect guard is missing")
+        proxy = [(socket.AF_INET, socket.SOCK_STREAM, 6, "", ("172.24.0.1", 7891))]
+        self.assertEqual(guard(
+            "openscience-egress", 7891, 0, socket.SOCK_STREAM, 0, 0,
+            resolver=lambda *_args, **_kwargs: proxy,
+        ), proxy)
+        for host, records in (
+            ("wrong-egress", proxy),
+            ("openscience-egress", [(socket.AF_INET, socket.SOCK_STREAM, 6, "", ("172.24.0.2", 7891))]),
+        ):
+            with self.subTest(host=host), self.assertRaises(OSError):
+                guard(host, 7891, 0, socket.SOCK_STREAM, 0, 0, resolver=lambda *_args, _records=records, **_kwargs: _records)
+
     def test_rejects_non_https_and_credentialed_redirect_urls_before_send(self):
         guard = getattr(upstream_worker, "_require_public_https_url", None)
         if guard is None:
@@ -240,6 +270,7 @@ class UpstreamNetworkBoundaryTest(unittest.TestCase):
         self.assertEqual(guard("https://publisher.example/paper"), "https://publisher.example/paper")
         for value in (
             "http://publisher.example:443/paper",
+            "https://publisher.example:444/paper",
             "https://user:password@publisher.example/paper",
             "https://localhost/paper",
             "https://[64:ff9b::a9fe:a9fe]/latest/meta-data",
