@@ -1,6 +1,6 @@
 # Hermes Research Intelligence CURRENT Handoff
 
-> **CURRENT active-memory，2026-08-31。** ScanSci plan Task 9 已通过最终复审；Task 10 进入 GitHub/CI/ECS 真实验收，Task 11 阻断。Landing/Hermes 视觉仍冻结。
+> **CURRENT active-memory，2026-08-31。** ScanSci Task 10 controlled-egress candidate 已通过最终安全复审，正进入 GitHub/CI/ECS 真实验收；Task 11 阻断。Landing/Hermes 视觉仍冻结。
 
 ## Goal and state
 
@@ -11,14 +11,14 @@
 ## Version tuple
 
 - Worktree: `E:/Miscellaneous/XGS/.worktrees/readable-hermes-guidance`
-- Branch / reviewed local candidate / repository main: `codex/scansci-default-capability` / `3d23b877265d084b200b54bcd4d1d2eb8cbf593f` / `463c8e3a2a80138cda2d669c370c0481ed4c0877`；远端仅保留 `main`。
+- Branch / reviewed candidate / repository main: `codex/scansci-controlled-egress` / `c933a60cf7695bcf9457d05477fdce13ec501287` / `25983c101e40b66fc7b1423d208129ff4ad54306`；远端仅保留 `main`。
 - Production application source / immutable release: `689331845574612130f223d08c92e61721c16586`
 - Rollback: `c435c4c8b2800bb20998fd9a9a93f2db96328661`; core/search migrations `32/32` / `2/2`
 - 本地 `main` 与其他 worktree 有用户改动，不得触碰或用它推断生产；上述 tuple 已从 ECS 重新实测。
 
 ## Production truth
 
-- Public/loopback `/__release` 均返回 `2fa10aa…`；目标容器和数据服务 healthy，BGE CPU runtime、Parser 与公网入口全绿。
+- Public `/__release` 与 active marker 均返回 `6893318…`；目标容器和数据服务 healthy，BGE CPU runtime、Parser 与公网入口全绿。
 - TLS certificate subject 为 `openscience.428312321.xyz`，有效期自 2026-08-03 20:10:34 +08:00；ECS、域名反代、Landing、Cloudflare Tunnel 的上线日期必须按证据包分开表述。
 - `agent_tasks.result` 为 JSONB，`IngestionTaskState` 含 `needs_review` 与 `confirmed`。生产聚合为 14 条待确认建议、7 条 confirmed、21 条总计；未输出业务正文或用户信息。
 - 数据库不存在字面 `suggested` 枚举：产品语义映射为 `result != null + state=needs_review`，确认后 `state=confirmed`。
@@ -51,7 +51,7 @@
 18. ScanSci plan Task 8 local candidate 为 `8238a9f`：Hermes Drawer、RO Hermes、RO Files/Evidence 与 Personal Space 共用唯一 acquisition/recovery/poll/download；有界双语 + shared DOI/arXiv 确定性分类，Dashboard Personal/RO target、query-only metadata、44px/i18n/dark-paper/within-form 均闭合。Web `462 + 5 Node`、build/typecheck、product `72/72`、Hermes `19/19 + 8/8` green；ECS/CARSI/OA/一次性下载仍 pending。
 19. Task 8 fix round `d75ca1c`：Drawer stable key/fingerprint 跨关闭重开且新 intent 换 key；recovery durable target + API strict query + Domain pre-limit target scope，RO route ID 不受 cross-RO task 影响，IME composition Enter inert。Domain/API/Worker/Web `535/101/502/463 + 5 Node`、browser fix `6/6`、product `72/72`、Hermes `19/19 + 8/8` green。
 20. 用户授权的例外修复波 `3d23b87` 已关闭 protected-sidecar cleanup ownership 与 canonical Worker image binding：mutation 前拒绝既有 candidate sidecar，unique no-clobber staging/hard-link publication 与 ownership-gated cleanup 经真实函数行为测试；Worker release image ID/source label/运行容器和精确三挂载 fail closed。独立 scoped review 无 Critical/Important，READY。
-21. 新鲜全仓 build/typecheck/lint/test green：release `97/104`、ScanSci `82/89`、Web `469`、Domain `535`、Worker `503`、API `101`，失败 0。两项 bounded staging/symlink hygiene Minor 在 Task 10 ECS preflight/精确清理中核验；生产仍未写、ScanSci disabled。部署前还须确认 targetless durable ScanSci tasks = 0；非零阻断，不自动 migration。
+21. PR #13/#14 已合并至 main `25983c1`；ECS Secret/source-lock/images/parser acceptance 与 controlled-egress no-switch 实验通过。当前 candidate 将 legal service 约束到 internal retrieval gateway + minimal parent allowlist，并把真实 arXiv HTTP→worker `open_access` PDF canary设为 publish/CAS 前硬门禁；最终 review READY，fresh build/typecheck/lint/docs/full test 0 fail。生产仍为 `6893318`，合并后真实 image canary/CARSI/四入口 pending。
 
 ## Constraints
 

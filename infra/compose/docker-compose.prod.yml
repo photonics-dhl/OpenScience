@@ -249,6 +249,9 @@ services:
       SCANSCI_STRATEGY: legal_only
       SCANSCI_SCIHUB_ENABLED: "false"
       SCANSCI_TOR_ENABLED: "false"
+      SCANSCI_EGRESS_PROXY: http://openscience-egress:7891
+    extra_hosts:
+      - "openscience-egress:172.24.0.1"
     volumes:
       - scansci-session:/session
       - scansci-service-secrets:/run/secrets:ro
@@ -449,6 +452,11 @@ networks:
     internal: true
   retrieval_net:
     driver: bridge
+    internal: true
+    ipam:
+      config:
+        - subnet: 172.24.0.0/24
+          gateway: 172.24.0.1
 
 volumes:
   postgres-data:

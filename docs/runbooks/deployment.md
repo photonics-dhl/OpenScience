@@ -1610,3 +1610,20 @@ Dockerfile paths relative to it in both Compose files. The release-contract test
 must pin all four context/Dockerfile pairs so a clean ECS build cannot regress.
 This failure occurred before any candidate container, migration, release marker,
 or public traffic change.
+
+The first isolated OA canary then proved an ECS network-path distinction:
+container bridge TCP reached arXiv, but direct TLS was reset and the pinned
+60-second acquisition returned `upstream_timeout`; the same candidate image via
+host-network test only and Squid `127.0.0.1:7891` returned arXiv HTTP 200 in
+870 ms. Do not move the legal service to host networking. ADR-012 instead fixes
+`retrieval_net` to internal `172.24.0.0/24`, exposes Squid only on the fixed
+retrieval gateway `172.24.0.1:7891` with source/CONNECT-443/private-destination
+ACLs, and gives the legal service one exact credential-free custom proxy plus gateway
+mapping. The wrapper derives child proxy variables only from that exact value;
+the runtime verifier checks the custom value, internal IPAM, mapping, real TCP
+peer, CONNECT allow, HTTP/non-443/private deny and raw-direct failure. Only the
+verified `.arxiv.org` inventory may use the SSH parent; unknown domains use
+same-resolver DIRECT to close parent-side DNS rebinding. Deploy the reviewed
+Squid file and prove all allow/deny behavior. The prepublication verifier then
+must complete the fixed `arXiv:2009.06045v1` HTTP-to-worker `open_access` PDF
+canary before publish/CAS or any production identity switch.

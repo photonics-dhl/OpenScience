@@ -31,6 +31,7 @@
 - [x] 唯一浏览器写入口为 `POST /literature/acquisitions`；generic `/agent/tasks` 不可提交 `source.retrieve`。入口具备 session、CSRF、10/min rate、AI Credit、幂等键、active membership、target scope 与事务审计。
 - [x] legal service token 只读 file Secret；拒绝 inline env，使用 `O_NOFOLLOW` descriptor 并复验 regular/owner/group/`0400`/single-link/size/path identity。账号、Cookie、profile、token、object key 与 provider raw response 不进入 DTO、任务、数据库或日志。
 - [x] upstream Requests 每跳要求无凭据 HTTPS；实际 DNS 必须全部 public。NAT64、IPv4-mapped、6to4、Teredo 内嵌 IPv4 同样复验；`64:ff9b:1::/48`、private/link-local/multicast/metadata/documentation/mixed answers 与非 HTTPS port 均拒绝。最终 URL/source/route 仍二次校验。
+- [x] 受控出网仅接受 fixed `SCANSCI_EGRESS_PROXY=http://openscience-egress:7891`，仅在 acquisition child 派生 generic proxy；DNS guard 仅为该 hostname:7891→retrieval gateway `172.24.0.1` 开例外。`retrieval_net` 必须 `internal: true`，Squid 第二 listener 仅绑该 gateway，source 固定 `172.24.0.0/24`，只允许 CONNECT 443，并在 parent/DIRECT 前拒绝 private/link-local/CGNAT/metadata/documentation/reserved/NAT64-local/6to4/Teredo 目标；仅验证过的 `.arxiv.org` 可进入 parent，其他目标同解析 DIRECT；无 wildcard、host network 或额外 sidecar。runtime gate 还须证明 exact IPAM、proxy TCP/CONNECT allow、HTTP/non-443/private deny 与 raw public direct deny。
 - [x] 精确上游的并行 runner 经七参数签名+AST gate 后替换为顺序串行；compatibility 还要求 `_neg_blocked/_neg_record`。blocked 在 path/call 前跳过，truthy non-success 原样 record，falsy/success/blocked 不误记；max concurrency=1、首成功停止、逐源 temp 清理、最多 64 sources。
 - [x] 共享 100 MiB 不再只是 post-check：acquisition 与 no-network/no-Secret probe 经同一 worker entry，在 mode 分支/upstream import 前设置并复验 soft+hard `RLIMIT_FSIZE=104857600`；probe 只报告已安装 metadata，verifier 不直接调用 installer，并使用 fresh tmpfs 必存且无需文件 I/O 的 `/tmp`，不依赖隐藏 acquisition 子目录。SIGXFSZ/EFBIG 稳定失败并清 partial，external child 继承；成功只接受 exact regular source temp 并同目录 rename，无第二份 100 MiB copy。
 - [x] 4 KiB JSON、60 秒子进程、2 个 service slots、1 CPU/1 GiB/64 PID/256 MiB tmpfs 成立：串行+kernel cap 保证 200 MiB source-file worst-case 加 bounded small files 不超过 tmpfs，且 tmpfs 计入 1 GiB。
@@ -42,7 +43,7 @@
 ### 生产 Task 10：P0 阻断，尚未执行
 
 - [ ] Exact CI、merged-main immutable build/deploy；core migration 33 与 PostgreSQL integration forward/rollback/redeploy/双连接合同。
-- [ ] ECS Linux file-Secret、NAT64、serial/negative-cache parity、`FILE_LIMIT_OK` soft+hard 100 MiB、EFBIG cleanup、256 MiB tmpfs、image/mount/network/port 与 targetless durable task count = 0。首次候选必须从 sidecar absent 开始，以 exact built IDs prepublication 验证真实 ScanSci/Worker env，CAS 后 canonical 复验；任一失败证明 previous marker/sidecars 原样且 candidate sidecar/staging 缺席。
+- [ ] ECS Linux file-Secret、受控 Squid container CONNECT 与私网/metadata/HTTP/非 443 拒绝、NAT64、serial/negative-cache parity、`FILE_LIMIT_OK` soft+hard 100 MiB、EFBIG cleanup、256 MiB tmpfs、image/mount/network/port 与 targetless durable task count = 0。首次候选必须从 sidecar absent 开始，以 exact built IDs prepublication 验证真实 ScanSci/Worker env，CAS 后 canonical 复验；任一失败证明 previous marker/sidecars 原样且 candidate sidecar/staging 缺席。
 - [ ] 一次真实浙江大学 CARSI 登录、helper 移除、legal service recreate 后 session 仍 `ready`；账号/密码/Cookie 不出现在响应或日志。
 - [ ] 真实 OA 与非 OA institutional PDF；四产品入口 375px；ClamAV/hash/rights；600s one-use/replay；真实 72h Worker GC 后 bytes absent、provenance retained；grey/Tor calls = 0。
 - [ ] exact rollback/retention/hygiene；只清 acceptance identity，保留 session、active/rollback images、audit/rights/source provenance。未全部完成不得把 ScanSci 标为 `PRODUCTION` 或关闭 Task 10。

@@ -4,10 +4,16 @@
 
 ## Current version tuple
 
-- Branch / reviewed local candidate / main: `codex/scansci-default-capability` / `3d23b87` / `463c8e3`；远端仅 `main`。
+- Branch / reviewed controlled-egress candidate / main: `codex/scansci-controlled-egress` / `c933a60` / `25983c1`；远端仅 `main`。
 - Production application source / immutable release: `689331845574612130f223d08c92e61721c16586`。
 - Production rollback: `c435c4c8b2800bb20998fd9a9a93f2db96328661`；core/search migrations `32/32` / `2/2`。
 - Taskmaster `hermes-research-intelligence` 仍为 9/12；独立 ScanSci plan Tasks 1–9 done、Task 10 in progress，Task 11 继续阻断。
+
+## 2026-08-31 — ScanSci Task 10 controlled-egress preflight candidate
+
+- PR #13/#14 已分别把 stdin Secret provision 与 ScanSci Compose build context 修复合并至 main `25983c1`；ECS root-only token/bootstrap Secret、三个 public source-lock hash、五个 SHA-tagged candidate image 和 schema-v3 16-case parser acceptance 已通过，production 保持 `6893318`。
+- direct bridge arXiv TLS reset 的根因已收敛为 fail-closed 受控出网：legal service 仅在 `internal: true` 的 `172.24.0.0/24` retrieval network，经固定 gateway `172.24.0.1:7891` 使用 Squid；仅 `.arxiv.org` 可进入 SSH parent，其他域同 resolver DIRECT。ECS no-switch 临时网络证明 proxy TCP、DIRECT、FIRSTUP_PARENT、private/HTTP/non-443 deny 与 raw-direct deny，随后 exact cleanup；active/public release 未变。
+- publish/CAS 前 runtime gate 现强制真实 `arXiv:2009.06045v1` HTTP→worker PDF canary；payload 经真实 policy 验证 `institutional:true`，响应经真实 `open_access` route、PDF magic 与 100 MiB streaming cap 校验。最终独立 security review 为 READY（0 Critical/Important）；fresh ScanSci `87/94`、Infra `48/53`、auth tunnel `21/21`、full build/typecheck/lint/docs/full workspace test 均 0 fail。合并后 ECS 真正 candidate image/canary 与 CARSI 仍 pending。
 
 ## 2026-08-31 — ScanSci Task 9 local security/release gate
 
@@ -74,23 +80,3 @@
 - `82fb874` 将匿名公开读取限制为 `published + Publication`，显式映射 Claims/Evidence/approved PresentationAssets/history，并从 locator/DTO 排除 workspace、验证者、object key、prompt 与私有 provenance；API 81/81、API/Web typecheck 通过。
 - `f26d895` 关闭 generic RO PATCH 的 visibility 字段；R3 发布在同一 Serializable 事务内写 Version、Publication、RO public 与 `visibilityFrom/To` 审计，单一确认框明确永久公开 URL/所有人可见；Domain 471/471、API 81/81、Web 417/417。
 - `2abf0d6` 增加 core migration 31 `reading_preferences` 与认证 GET/PATCH CAS API：缺省 expanded=`false/version 0`，首次写版本 1，同值幂等，变更递增，用户 ID 只取 session；数据库 21/21、Domain 475/475、API 83/83。生产仍为 core/search `30/30`/`2/2`，migration 31 待最终 ECS 候选部署。
-
-## 2026-08-29 — Task 8 production accepted and evaluation debt removed
-
-- Task 8 Claim/Evidence API、可信 SourceMap、复验/审计、发布双重阻断与 narrative snapshot 已随 `4c73469…` 部署；SeaweedFS HEAD 缺少自定义 SHA metadata 时改为流式重算原件 SHA-256，并按对象去重读取。Exact CI `33257516418` / job `99113706374` 全绿。
-- ECS 正式 parser acceptance 通过。一次性真实 RO 旅程得到 5 个 source blocks、3 Claims、3 Evidence；未核验发布正确阻断，篡改 locator 返回冲突，核验后 review passed、publish 成功、公开页 200，测试用户/对象/存储引用精确清零。公开性由一次性 fixture 预置，不冒充可见性扩大审批验收。
-- Canonical deploy 全量 build、core/search `30/30`/`2/2`、BGE-M3 CPU 实向量、Parser/API/Web/Worker、Nginx、public/loopback release identity 与 retention 全绿；active `4c73469…`，rollback `cf68bfa7…`。
-- 用户批准的精确卫生操作归档 3 份 LiteParse 与 3 份 BGE 报告到 `/opt/openscience-acceptance/capability-evaluations`，7/7 SHA-256 通过；随后在部署锁内删除 40 个无挂载、无容器引用的历史评测工作目录。评测区 `15,405,977,600 → 28,672` bytes，根盘 `48G/34% → 36G/26%`，可用 `106G`；未执行 broad prune。
-
-## 2026-08-29 — Task 8 review blockers closed locally
-
-- Claim/Evidence 的 SourceMap/object-storage 预检已移到 Serializable 事务外；事务内重新校验 version/manifest/artifact/hash/ref 与 CAS。Evidence 幂等重放不依赖对象存储在线。
-- `codeRange` 在没有权威 source revision 前由 API/Domain 失败关闭；`review.analyze` 在 API、Domain、Worker 三层绑定同一 RO，Worker 只消费持久化 payload。
-- 发布展示资产复用检查改为按全部受审 Evidence hash 精确查询，关闭截断前缀绕过。共享 content-addressed SourceMap 不盲删，引用安全 GC/retention 明确归 Task 10。
-- 新鲜本地证据：全仓 build/typecheck/lint/test 通过；Domain 52/470、API 14/78、Worker 26/452 全绿，release contract 91 pass / 7 platform skips / 0 fail；CI 与 ECS 真实 RO journey 尚未完成。
-
-## 2026-08-29 — Task 8 evidence package and handoff prepared
-
-- 按用户要求暂停 Task 8 继续开发，先整理 `docs/proposals/2026-08-29-project-development-deployment-evidence-pack.md`：包含分支/时间线 Git 记录、网站四层上线口径、当前 release/rollback/TLS/container 证据，以及 suggested / confirmed 的数据库字段、生产聚合与完整展示 API 样例；样例为自编演示数据，不是生产用户记录。
-- ECS 只读复核：public/loopback `/__release` 均为 `5e5ae36…`，rollback `6cabe422…`，生产服务健康；`agent_tasks.result` 为 JSONB，`IngestionTaskState` 含 `needs_review`/`confirmed`。聚合为 14 条待确认建议、7 条 confirmed、21 条总计，无业务正文或用户信息输出。
-- Task 8 本地已形成 Claim/Evidence CRUD、可信 SourceMap ref、发布阻断与快照等实现及测试；该时点仍有复审阻断项，现状以上一节为准。
