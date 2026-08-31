@@ -58,6 +58,7 @@ case " $* " in
   *"verify-scansci-runtime.mjs"*)
     if [ "\${FAKE_AUTH_RETAG:-0}" = 1 ] && case " $* " in *" --allow-auth 0 "*) true;; *) false;; esac; then exit 8; fi
     if [ "\${FAKE_RUNTIME_VERIFY_FAIL:-0}" = 1 ] && case " $* " in *" --allow-auth 1 "*) true;; *) false;; esac; then exit 8; fi
+    if [ -n "\${FAKE_RUNTIME_VERIFY_DELAY:-}" ] && case " $* " in *" --allow-auth 1 "*) true;; *) false;; esac; then sleep "$FAKE_RUNTIME_VERIFY_DELAY"; fi
     ;;
 esac
 case " $* " in
@@ -193,7 +194,7 @@ test('status is read-only and only explicit start launches the helper and loopba
   assert.match(log, /docker compose .*--profile scansci-auth up --no-start --no-build --force-recreate scansci-auth/u);
   assert.match(log, /prepare-scansci-auth-network\.sh/u);
   assert.match(log, /docker compose .*--profile scansci-auth start scansci-auth/u);
-  assert.match(log, /-L\n127\.0\.0\.1:16080:127\.0\.0\.1:6080/);
+  assert.match(log, /-L\n127\.0\.0\.1:16080:172\.25\.0\.2:6080/);
   assert.match(log, new RegExp(`-i\\n${f.bashKey.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}`));
   assert.match(log, /operator-fixture@198\.51\.100\.24/);
 
@@ -622,15 +623,63 @@ test('concurrent starts serialize to one identified tunnel and one remote helper
     await rm(f.root, { recursive: true, force: true });
   });
 
+  const delayedEnv = { ...f.env, FAKE_RUNTIME_VERIFY_DELAY: '12' };
+  const first = runAsync(f.script, ['start', '16085'], delayedEnv, f.bashBin);
+  const lockDir = join(f.env.XDG_STATE_HOME, 'openscience', 'scansci-auth-tunnel.lock');
+  for (let attempt = 0; attempt < 80 && !existsSync(lockDir); attempt += 1) {
+    await new Promise((resolveWait) => setTimeout(resolveWait, 25));
+  }
+  assert.equal(existsSync(lockDir), true, 'first start never acquired the local lifecycle lock');
   const results = await Promise.all([
-    runAsync(f.script, ['start', '16085'], f.env, f.bashBin),
-    runAsync(f.script, ['start', '16085'], f.env, f.bashBin),
+    first,
+    runAsync(f.script, ['start', '16085'], delayedEnv, f.bashBin),
   ]);
 
   assert.deepEqual(results.map((result) => result.status), [0, 0]);
   const log = await readFile(f.log, 'utf8');
   assert.equal((log.match(/--profile scansci-auth up --no-start --no-build --force-recreate scansci-auth/g) ?? []).length, 1);
-  assert.equal((log.match(/127\.0\.0\.1:16085:127\.0\.0\.1:6080/g) ?? []).length, 1);
+  assert.equal((log.match(/127\.0\.0\.1:16085:172\.25\.0\.2:6080/g) ?? []).length, 1);
+});
+
+test('stop recognizes and kills the immediately previous loopback-target runner identity', async (t) => {
+  for (const [format, port] of [['current', 16103], ['legacy', 16104]]) {
+    const f = await fixture();
+    const stateRoot = join(f.env.XDG_STATE_HOME, 'openscience');
+    const runner = join(stateRoot, 'scansci-auth-tunnel-runner.sh');
+    const pidFile = join(f.root, `old-runner-${format}.pid`);
+    const token = format === 'current' ? 'd'.repeat(32) : 'e'.repeat(32);
+    await mkdir(stateRoot, { recursive: true });
+    await writeFile(runner, [
+      '#!/usr/bin/env bash',
+      'printf "%s\\n" "$$" > "$OLD_RUNNER_PID_FILE"',
+      'trap "exit 0" TERM INT',
+      'while true; do sleep 1; done',
+      '',
+    ].join('\n'));
+    await chmod(runner, 0o700);
+    const oldRunner = spawn(bash, [
+      runner, token, String(port), 'ssh', '-N', '-L', `127.0.0.1:${port}:127.0.0.1:6080`,
+    ], { env: { ...f.env, OLD_RUNNER_PID_FILE: pidFile }, stdio: 'ignore' });
+    for (let attempt = 0; attempt < 40 && !existsSync(pidFile); attempt += 1) {
+      await new Promise((resolveWait) => setTimeout(resolveWait, 25));
+    }
+    const pid = Number((await readFile(pidFile, 'utf8')).trim());
+    await writeTunnelState(f, { token, pid, port, format });
+    t.after(async () => {
+      spawnSync(bash, ['-c', 'kill "$1" 2>/dev/null || true', 'cleanup', String(pid)]);
+      if (oldRunner.exitCode === null) oldRunner.kill();
+      await rm(f.root, { recursive: true, force: true });
+    });
+
+    const stopped = run(f.script, ['stop'], f.env, f.bashBin);
+
+    assert.equal(stopped.status, 0, `${format}: ${stopped.stdout}\n${stopped.stderr}`);
+    assert.notEqual(
+      spawnSync(bash, ['-c', 'kill -0 "$1"', 'check', String(pid)]).status,
+      0,
+      `${format}: old topology runner survived stop`,
+    );
+  }
 });
 
 test('stop never kills an unrelated live PID from stale state', async (t) => {
@@ -674,9 +723,9 @@ test('auth entrypoint starts only the loopback display stack and leaves the brow
   await mkdir(bin, { recursive: true });
   const fake = `#!/usr/bin/env bash
 name="$(basename "$0")"
-printf '%s' "$name" >> "$AUTH_PROCESS_LOG"
-printf ' %s' "$@" >> "$AUTH_PROCESS_LOG"
-printf '\\n' >> "$AUTH_PROCESS_LOG"
+line="$name"
+for argument in "$@"; do line="$line $argument"; done
+printf '%s\\n' "$line" >> "$AUTH_PROCESS_LOG"
 if [ "$name" = python ]; then exit 0; fi
 trap 'exit 0' TERM INT
 while true; do sleep 1; done

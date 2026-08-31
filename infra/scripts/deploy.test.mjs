@@ -104,8 +104,8 @@ test('ScanSci production topology exposes only the bounded legal service and sto
   assert.match(auth, /profiles: \["scansci-auth"\]/u);
   assert.match(auth, /SCANSCI_BROWSER_PROXY: http:\/\/openscience-egress:7891/u);
   assert.match(auth, /extra_hosts:\r?\n\s+- "openscience-egress:172\.25\.0\.1"/u);
-  assert.match(auth, /ports:\r?\n\s+- "127\.0\.0\.1:6080:6080"/u);
-  assert.match(auth, /networks:\r?\n\s+- auth_net/u);
+  assert.doesNotMatch(auth, /\bports:/u);
+  assert.match(auth, /networks:\r?\n\s+auth_net:\r?\n\s+ipv4_address: 172\.25\.0\.2/u);
   assert.match(auth, /scansci-session:\/session/u);
   assert.match(auth, /pids_limit: 256/u);
   assert.doesNotMatch(auth, /scansci-(?:service|auth)-secrets|\/run\/secrets/u);
@@ -117,10 +117,10 @@ test('ScanSci production topology exposes only the bounded legal service and sto
   assert.match(developmentLegal, /dockerfile: Dockerfile/u);
   assert.match(developmentAuth, /context: \.\.\/\.\.\/apps\/scansci-legal/u);
   assert.match(developmentAuth, /dockerfile: Dockerfile\.auth/u);
-  assert.match(developmentAuth, /ports:\r?\n\s+- "127\.0\.0\.1:6080:6080"/u);
+  assert.doesNotMatch(developmentAuth, /\bports:/u);
   assert.match(developmentAuth, /SCANSCI_BROWSER_PROXY: http:\/\/openscience-egress:7891/u);
   assert.match(developmentAuth, /extra_hosts:\r?\n\s+- "openscience-egress:172\.25\.0\.1"/u);
-  assert.match(developmentAuth, /networks: \[auth_net\]/u);
+  assert.match(developmentAuth, /networks:\r?\n\s+auth_net:\r?\n\s+ipv4_address: 172\.25\.0\.2/u);
   assert.match(developmentAuth, /pids_limit: 256/u);
   assert.doesNotMatch(developmentAuth, /network_mode: host|scansci-auth-secrets|\/run\/secrets/u);
   assert.match(readFileSync(new URL('../../apps/scansci-legal/auth-entrypoint.sh', import.meta.url), 'utf8'), /0\.0\.0\.0:6080 127\.0\.0\.1:5900/u);
@@ -138,7 +138,7 @@ test('ScanSci production topology exposes only the bounded legal service and sto
   assert.doesNotMatch(volumeSection, /scansci-service-secrets:[\s\S]*type: tmpfs/u);
   assert.match(productionCompose, /^  retrieval_net:\r?\n    driver: bridge\r?\n    internal: true\r?\n    ipam:\r?\n      config:\r?\n        - subnet: 172\.24\.0\.0\/24\r?\n          gateway: 172\.24\.0\.1$/mu);
   assert.match(productionCompose, /^  auth_net:\r?\n    driver: bridge\r?\n    internal: true\r?\n    driver_opts:\r?\n      com\.docker\.network\.bridge\.name: xgs-auth0\r?\n    ipam:\r?\n      config:\r?\n        - subnet: 172\.25\.0\.0\/29\r?\n          gateway: 172\.25\.0\.1$/mu);
-  assert.equal((productionCompose.match(/\n\s+- auth_net\s*$/gmu) ?? []).length, 1,
+  assert.equal((productionCompose.match(/\n\s+ipv4_address: 172\.25\.0\.2\s*$/gmu) ?? []).length, 1,
     'only the auth helper may join the passwordless noVNC network');
 });
 
@@ -180,7 +180,10 @@ test('ScanSci auth preparation installs an isolated host policy before browser s
   assert.match(atomicSquidConfig, /await recoverConfig\(\{ target, rollback \}\)/u);
   assert.match(atomicSquidConfig, /await clearPendingMarker\(target\)/u);
   assert.match(authNetworkPreparation, /--dport 7891 .* -j ACCEPT/u);
+  assert.match(authNetworkPreparation, /return_rule=\(INPUT -i "\$bridge_name" -s "\$auth_ip\/32" -d "\$gateway\/32" -p tcp --sport 6080 -m conntrack --ctstate ESTABLISHED .* -j ACCEPT\)/u);
   assert.match(authNetworkPreparation, /reject=\(INPUT -i "\$bridge_name" -s "\$subnet" .* -j REJECT/u);
+  assert.ok(authNetworkPreparation.indexOf('return_rule=(INPUT') < authNetworkPreparation.indexOf('accept=(INPUT'));
+  assert.ok(authNetworkPreparation.indexOf('accept=(INPUT') < authNetworkPreparation.indexOf('reject=(INPUT'));
   assert.doesNotMatch(authNetworkPreparation, /reject=.*-d "\$gateway"/u);
   assert.match(authNetworkPreparation, /ss_bin='\/usr\/sbin\/ss'/u);
   assert.doesNotMatch(authNetworkPreparation, /\/usr\/bin\/ss -lntH/u);

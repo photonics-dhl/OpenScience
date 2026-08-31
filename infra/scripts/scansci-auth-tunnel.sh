@@ -15,6 +15,8 @@ KNOWN_HOSTS="$HOME/.ssh/known_hosts"
 LOCK_HELD=0
 NOVNC_PATH='/vnc.html?autoconnect=true&resize=remote'
 RFB_PROBE="$SCRIPT_DIR/probe-novnc-rfb.mjs"
+AUTH_TARGET='172.25.0.2:6080'
+PREVIOUS_AUTH_TARGET='127.0.0.1:6080'
 
 usage() {
   echo "usage: scansci-auth-tunnel.sh <start|stop|status> [local-port]" >&2
@@ -70,7 +72,8 @@ process_matches_state() {
   local identity
   identity="$(ps -p "$STATE_PID" -f 2>/dev/null || true)"
   case "$identity" in
-    *"scansci-auth-tunnel-runner.sh $STATE_TOKEN $STATE_PORT"*"127.0.0.1:$STATE_PORT:127.0.0.1:6080"*) return 0 ;;
+    *"scansci-auth-tunnel-runner.sh $STATE_TOKEN $STATE_PORT"*"127.0.0.1:$STATE_PORT:$AUTH_TARGET"*) return 0 ;;
+    *"scansci-auth-tunnel-runner.sh $STATE_TOKEN $STATE_PORT"*"127.0.0.1:$STATE_PORT:$PREVIOUS_AUTH_TARGET"*) return 0 ;;
     *) return 1 ;;
   esac
 }
@@ -91,7 +94,7 @@ acquire_lock() {
   mkdir -p "$STATE_ROOT"
   chmod 700 "$STATE_ROOT" 2>/dev/null || true
   local attempt owner
-  for attempt in $(seq 1 100); do
+  for attempt in $(seq 1 1200); do
     if mkdir "$LOCK_DIR" 2>/dev/null; then
       printf '%s\n' "$$" > "$LOCK_DIR/pid"
       LOCK_HELD=1
@@ -347,7 +350,7 @@ start_tunnel() {
     return 1
   fi
 
-  bash "$RUNNER_FILE" "$token" "$port" ssh "${SSH_ARGS[@]}" -N -L "127.0.0.1:$port:127.0.0.1:6080" "$SSH_TARGET" >/dev/null 2>&1 &
+  bash "$RUNNER_FILE" "$token" "$port" ssh "${SSH_ARGS[@]}" -N -L "127.0.0.1:$port:$AUTH_TARGET" "$SSH_TARGET" >/dev/null 2>&1 &
   local tunnel_pid=$!
   write_state "$token" "$tunnel_pid" "$port" "starting"
   sleep 0.2

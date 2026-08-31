@@ -225,6 +225,7 @@ export async function verifyScanSciRuntime({
     const authNetworkContainers = Object.keys(authNetwork?.Containers ?? {});
     if (authNetwork?.Name == null || !authNetwork.Name.endsWith('_auth_net')
       || authNetwork.Internal !== true
+      || authNetwork.EnableIPv6 !== false
       || authNetwork.Options?.['com.docker.network.bridge.name'] !== 'xgs-auth0'
       || JSON.stringify(authNetwork.IPAM?.Config) !== JSON.stringify([{
         Subnet: '172.25.0.0/29', Gateway: '172.25.0.1',
@@ -233,7 +234,11 @@ export async function verifyScanSciRuntime({
       || !authNetworkContainers[0].startsWith(authContainerId)
       || JSON.stringify(authIsolationProbe) !== JSON.stringify({
         proxyAddress: '172.25.0.1', proxyPeer: '172.25.0.1:7891', allowStatus: 204,
-        hostSsh: 'blocked', hostPrimary: 'blocked', rawDirect: 'blocked', legalPeer: 'blocked', firewall: 'isolated',
+        hostSsh: 'blocked', hostHttp: 'blocked', hostHttps: 'blocked', hostApi: 'blocked',
+        hostDocker: 'blocked', hostDockerTls: 'blocked', hostPrimary: 'blocked',
+        rawDirect: 'blocked', awsMetadata: 'blocked', aliyunMetadata: 'blocked',
+        legalPeer: 'blocked', workerPeer: 'blocked', hostNoVncHttp: 200,
+        hostListener6080: 'absent', firewall: 'isolated',
       })) fail();
     if (authContainerIds.length !== 1 || authContainers.length !== 1 || authContainers.some((candidate) => {
       const sessionMount = candidate.Mounts?.find((mount) => mount.Destination === '/session');
@@ -241,7 +246,6 @@ export async function verifyScanSciRuntime({
       const authNetworks = Object.keys(candidate.NetworkSettings?.Networks ?? {});
       const tmpOptions = new Set((candidate.HostConfig?.Tmpfs?.['/tmp'] ?? '').split(','));
       const shmOptions = new Set((candidate.HostConfig?.Tmpfs?.['/dev/shm'] ?? '').split(','));
-      const expectedPort = { '6080/tcp': [{ HostIp: '127.0.0.1', HostPort: '6080' }] };
       return candidate.State?.Running !== true
       || candidate.Image !== expectedAuthImageId || candidate.Config?.User !== '10001:10001'
       || candidate.Config?.Labels?.['org.openscience.scansci.role'] !== 'auth'
@@ -254,7 +258,7 @@ export async function verifyScanSciRuntime({
       || candidate.HostConfig?.Memory !== 1024 ** 3 || candidate.HostConfig?.NanoCpus !== 1_000_000_000
       || candidate.HostConfig?.PidsLimit !== 256
       || JSON.stringify(candidate.HostConfig?.ExtraHosts) !== JSON.stringify(['openscience-egress:172.25.0.1'])
-      || JSON.stringify(candidate.HostConfig?.PortBindings) !== JSON.stringify(expectedPort)
+      || Object.keys(candidate.HostConfig?.PortBindings ?? {}).length !== 0
       || !candidate.HostConfig?.NetworkMode?.endsWith('_auth_net')
       || !['size=256m', 'noexec', 'nosuid', 'nodev', 'uid=10001', 'gid=10001', 'mode=0700']
         .every((option) => tmpOptions.has(option))
@@ -262,8 +266,8 @@ export async function verifyScanSciRuntime({
         .every((option) => shmOptions.has(option))
       || authNetworks.length !== 1 || !authNetworks[0].endsWith('_auth_net')
       || candidate.NetworkSettings?.Networks?.[authNetworks[0]]?.Gateway !== '172.25.0.1'
-      || !/^172\.25\.0\.[2-6]$/u.test(candidate.NetworkSettings?.Networks?.[authNetworks[0]]?.IPAddress)
-      || JSON.stringify(candidate.NetworkSettings?.Ports) !== JSON.stringify(expectedPort)
+      || candidate.NetworkSettings?.Networks?.[authNetworks[0]]?.IPAddress !== '172.25.0.2'
+      || Object.keys(candidate.NetworkSettings?.Ports ?? {}).length !== 0
       || candidate.Mounts?.length !== 1
       || !sessionMount || sessionMount.Type !== 'volume' || sessionMount.RW !== true || sessionMount.Name !== 'openscience-prod_scansci-session'
       || candidate.Mounts.some((mount) => mount.Destination === '/run/secrets');
@@ -440,6 +444,8 @@ async function main() {
   if (!/^[a-f0-9]{12,64}$/u.test(containerId)) fail();
   const expectedIdentity = await resolveRuntimeImageIdentity(options);
   const authIds = compose(['--profile', 'scansci-auth', 'ps', '-aq', 'scansci-auth']).split(/\r?\n/u).filter(Boolean);
+  const workerId = requireWorker === '1' ? compose(['ps', '-q', 'agent-worker']) : '';
+  if (requireWorker === '1' && !/^[a-f0-9]{12,64}$/u.test(workerId)) fail();
   const authContainers = authIds.map((id) => inspectJson('docker', ['inspect', id]));
   let authProcessList = '';
   let authPids = 0;
@@ -465,20 +471,45 @@ async function main() {
       "opener=urllib.request.build_opener(urllib.request.ProxyHandler({'http':proxy,'https':proxy}))",
       "allow=opener.open('https://www.gstatic.com/generate_204',timeout=8).status",
       "def blocked(host,port):\n try:\n  probe=socket.create_connection((host,port),timeout=2)\n  probe.close()\n  return 'connected'\n except OSError:\n  return 'blocked'",
-      `print(json.dumps({'proxyAddress':','.join(addresses),'proxyPeer':peer,'allowStatus':allow,'hostSsh':blocked('172.25.0.1',22),'hostPrimary':blocked('${primaryHost}',22),'rawDirect':blocked('1.1.1.1',443)},separators=(',',':')))`,
+      `print(json.dumps({'proxyAddress':','.join(addresses),'proxyPeer':peer,'allowStatus':allow,'hostSsh':blocked('172.25.0.1',22),'hostHttp':blocked('172.25.0.1',80),'hostHttps':blocked('172.25.0.1',443),'hostApi':blocked('172.25.0.1',3001),'hostDocker':blocked('172.25.0.1',2375),'hostDockerTls':blocked('172.25.0.1',2376),'hostPrimary':blocked('${primaryHost}',22),'rawDirect':blocked('1.1.1.1',443),'awsMetadata':blocked('169.254.169.254',80),'aliyunMetadata':blocked('100.100.100.200',80)},separators=(',',':')))`,
     ].join('\n');
     const authProbe = JSON.parse(run('docker', [
       'exec', authIds[0], 'python', '-c', authIsolationProbeSource,
     ], { maxBuffer: 4096 }));
     const legalPeerProbe = run('docker', [
       'exec', containerId, 'python', '-c',
-      "import socket;\ntry:\n socket.create_connection(('scansci-auth',6080),timeout=2);print('connected')\nexcept OSError:\n print('blocked')",
+      "import socket;\ntry:\n socket.create_connection(('172.25.0.2',6080),timeout=2);print('connected')\nexcept OSError:\n print('blocked')",
     ]);
+    const workerPeerProbe = run('docker', [
+      'exec', workerId, 'node', '-e',
+      "const net=require('node:net');let done=false;const finish=(value)=>{if(done)return;done=true;console.log(value);socket.destroy()};const socket=net.createConnection({host:'172.25.0.2',port:6080});socket.setTimeout(2000,()=>finish('blocked'));socket.on('connect',()=>finish('connected'));socket.on('error',()=>finish('blocked'));",
+    ]);
+    const returnRule = ['INPUT', '-i', 'xgs-auth0', '-s', '172.25.0.2/32', '-d', '172.25.0.1/32',
+      '-p', 'tcp', '--sport', '6080', '-m', 'conntrack', '--ctstate', 'ESTABLISHED',
+      '-m', 'comment', '--comment', 'openscience-scansci-auth-return', '-j', 'ACCEPT'];
+    run('iptables', ['-w', '-C', ...returnRule]);
     run('iptables', ['-w', '-C', 'INPUT', '-i', 'xgs-auth0', '-s', '172.25.0.0/29', '-d', '172.25.0.1',
       '-p', 'tcp', '--dport', '7891', '-m', 'comment', '--comment', 'openscience-scansci-auth', '-j', 'ACCEPT']);
     run('iptables', ['-w', '-C', 'INPUT', '-i', 'xgs-auth0', '-s', '172.25.0.0/29',
       '-m', 'comment', '--comment', 'openscience-scansci-auth', '-j', 'REJECT', '--reject-with', 'icmp-port-unreachable']);
-    authIsolationProbe = { ...authProbe, legalPeer: legalPeerProbe, firewall: 'isolated' };
+    const inputRules = run('iptables', ['-w', '-S', 'INPUT']).split(/\r?\n/u);
+    const returnRules = inputRules.filter((line) => /--comment "?openscience-scansci-auth-return"?(?: |$)/u.test(line));
+    const authRules = inputRules.filter((line) => /--comment "?openscience-scansci-auth"?(?: |$)/u.test(line));
+    const returnIndex = inputRules.indexOf(returnRules[0]);
+    const acceptIndex = inputRules.findIndex((line) => authRules.includes(line) && /--dport 7891 .* -j ACCEPT$/u.test(line));
+    const rejectIndex = inputRules.findIndex((line) => authRules.includes(line) && /-j REJECT /u.test(line));
+    if (returnRules.length !== 1 || authRules.length !== 2
+      || returnIndex < 0 || acceptIndex <= returnIndex || rejectIndex <= acceptIndex) fail();
+    const hostNoVncHttp = Number(run('curl', [
+      '--noproxy', '*', '--fail', '--silent', '--show-error', '--output', '/dev/null',
+      '--write-out', '%{http_code}', '--connect-timeout', '2', '--max-time', '3',
+      'http://172.25.0.2:6080/vnc.html?autoconnect=true',
+    ]));
+    const hostListener6080 = run('/usr/sbin/ss', ['-H', '-ltn', 'sport = :6080']) === '' ? 'absent' : 'present';
+    authIsolationProbe = {
+      ...authProbe, legalPeer: legalPeerProbe, workerPeer: workerPeerProbe,
+      hostNoVncHttp, hostListener6080, firewall: 'isolated',
+    };
   }
   const container = inspectJson('docker', ['inspect', containerId]);
   const retrievalNetworkNames = Object.keys(container.NetworkSettings?.Networks ?? {})
@@ -542,8 +573,6 @@ async function main() {
   let workerSecretMetadata;
   let workerSecretSha256;
   if (requireWorker === '1') {
-    const workerId = compose(['ps', '-q', 'agent-worker']);
-    if (!/^[a-f0-9]{12,64}$/u.test(workerId)) fail();
     workerContainer = inspectJson('docker', ['inspect', workerId]);
     workerImage = inspectJson('docker', ['image', 'inspect', `openscience-agent-worker:${releaseSha}`]);
     workerSecretMetadata = run('docker', ['exec', workerId, 'stat', '-c', '%u:%g:%a', '/run/scansci-worker-secrets/scansci_service_token']);
