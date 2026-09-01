@@ -294,6 +294,48 @@
         "infra/scripts/verify-scansci-runtime.mjs"
       ],
       "prevention": "Treat host port binding and container network isolation as separate controls. A passwordless operator surface must have no untrusted bridge peers, and server acceptance must prove the negative path from a real application container."
+    },
+    {
+      "id": "issue-015",
+      "title": "Expired ScanSci auth helper left a locally live but unreachable SSH forward",
+      "date": "2026-09-01",
+      "status": "in_progress",
+      "tags": [
+        "troubleshooting/auth",
+        "troubleshooting/network",
+        "troubleshooting/product-flow"
+      ],
+      "description": "After the bounded ten-window operator login expired, the browser reported that it could not connect even though the canonical tunnel status still printed running.",
+      "root_cause": "The remote scansci-auth container correctly exited after the bounded login attempts, but the SSH -N process remained locally identifiable because its control connection was still alive. show_status checked only the recorded process identity, and duplicate start compensated the stale tunnel but returned failure instead of continuing with a fresh helper. An interrupted start could also leave a healthy-looking starting state that a retry accepted without the post-start runtime verifier.",
+      "solution": "Require status to pass the same HTTP plus WebSocket/RFB readiness gate as start. When an exact owned runner is alive but unreachable, report an explicit non-running state. A subsequent canonical start must stop the recorded runner, remove only the stored-release auth helper, preserve a pending tombstone if that stop fails, and continue to a fresh start after successful cleanup. Only committed running state is idempotent; any observable starting state is precisely removed and recreated through the full verifier.",
+      "verification": "Production evidence showed a local 6080 listener with failed HTTP/RFB while the remote helper had exited 1 without OOM. A canonical stop/start restored HTTP 200 and RFB_OK. Same-port, cross-port, unreachable-starting and healthy-starting verifier-bypass regressions failed against the old behavior and pass with the candidate; the full tunnel suite passes 32/32 and both code/security reviews are READY.",
+      "files": [
+        "infra/scripts/scansci-auth-tunnel.sh",
+        "infra/scripts/scansci-auth-tunnel.test.mjs",
+        "docs/runbooks/deployment.md"
+      ],
+      "prevention": "Never equate a live SSH control process with a live forwarded application. Status and operator-facing links must use the complete protocol readiness gate, and restart must recover an exact stale lifecycle in one command without broad process cleanup."
+    },
+    {
+      "id": "issue-016",
+      "title": "CARSI request snapshots were written outside the cookie directory used by pinned ScanSci",
+      "date": "2026-09-01",
+      "status": "in_progress",
+      "tags": [
+        "troubleshooting/auth",
+        "troubleshooting/production",
+        "troubleshooting/integration"
+      ],
+      "description": "The Zhejiang University session reached ready and survived scansci-legal recreation, but three bounded institutional DOI canaries all returned stable not_found.",
+      "root_cause": "OpenScience copied the 0600 publisher Cookie into a request-local session-snapshot/carsi_cookies directory and exposed that path through carsi_cookie_dir. Pinned ScanSci PDF 1.11.0 ignores that key and constructs its Cookie path exclusively as cache_dir/carsi_cookies, while the generated cache_dir pointed to an empty output/cache directory. The persistent validator read the original Cookie successfully, but every acquisition worker missed its safe snapshot.",
+      "solution": "For requests with an accepted session snapshot, point the generated cache_dir at that request-local snapshot root so pinned ScanSci reads snapshot/carsi_cookies. Preserve the separate output cache for OA-only requests, the original source Cookie, the bounded copy, and all ownership, mode, symlink and containment checks.",
+      "verification": "A production diagnostic proved one safe snapshot Cookie, institutional sources enabled, original session ready, but snapshot COOKIE_LOAD=0 and COOKIE_SESSION_VALID=0; a constructor proof showed pinned ScanSci uses cache_dir and ignores carsi_cookie_dir. The regression test then failed with upstream_unavailable on the old config and passes after the two-line path correction; all 95 ScanSci legal tests pass with six Windows/POSIX boundary skips. Merge, deployment and a real institutional PDF canary remain pending.",
+      "files": [
+        "apps/scansci-legal/src/scansci_legal/upstream.py",
+        "apps/scansci-legal/test/test_session.py",
+        "docs/runbooks/deployment.md"
+      ],
+      "prevention": "Validate third-party configuration keys against the exact pinned implementation rather than a plausible mock contract. A persistent-session gate is incomplete until the request-local worker proves it can load the copied Cookie from the path the pinned client actually reads."
     }
   ],
   "last_updated": "2026-09-01"

@@ -4,18 +4,18 @@
 
 ## Current version tuple
 
-- Closeout branch / application HEAD / origin main: `codex/scansci-auth-production-closeout` / `9eeb8d5` / `9eeb8d5`。
+- Candidate branch / HEAD / origin main: `codex/scansci-auth-stale-forward-recovery` / `a3b073b` / `ed0c787`。
 - Production application source / immutable release: `9eeb8d51baf16b212a7a4f5dd7db25131aa725a6`。
 - Production rollback: `36033aee0c8712a31c699c800b1c81cd6ffe044d`；core/search migrations `33/33` / `2/2`。
 - Taskmaster `hermes-research-intelligence` 仍为 9/12；独立 ScanSci plan Tasks 1–9 done、Task 10 in progress，Task 11 继续阻断。
 
-## 2026-09-01 — ScanSci operator auth reliability production closeout
+## 2026-09-01 — CARSI ready and pinned snapshot-path recovery candidate
 
-- `aff435a` 关闭 Windows process-table visibility/PID-reuse；`860b2b0` 将 upstream 固定 180 秒窗口包装为 setup-once + 最多十次；`b1d6662` 跟踪 auth Python，TERM 1.8 秒完整退出。Tunnel `27/27`、ScanSci legal `89 pass/6 Windows skip/0 fail`，双复审 READY。
-- PR #26 exact CI run `33452984344` / job `99686782627` 13m16s 全绿，合并为 `9eeb8d51baf16b212a7a4f5dd7db25131aa725a6`；已合并远端分支经 ancestry 验证后删除，GitHub 仅保留 main。
-- ECS 第一阶段 exact build 后停在缺 Parser report。首次 corpus staging 把目录误设 `0700 root`，真实 Worker 以 `EACCES manifest.json` fail-closed；修为 root-owned `0555` 目录 / `0444` 文件后 schema-v3 16-case acceptance 通过，临时 eval/诊断根和 acceptance 容器/卷精确清零。
-- 正式事务的 Parser/BGE CPU/ScanSci OA+runtime/API/Web/Worker/Nginx/public CAS/retention 全绿；active/rollback 为 `9eeb8d5` / `36033ae`，journal/failed marker absent，磁盘 49G/148G、93G available。
-- 新 auth helper 已实测 `nofile=4096/4096`、167 PIDs、0 PortBinding、宿主 5900/6080 监听 0、本机 HTTP 200 + `RFB_OK`；bounded operator window 运行中，session 仍 `auth_required`，CARSI 尚未宣称 ready。
+- PR #26 exact CI `33452984344` / job `99686782627` 合并并部署为 `9eeb8d5`；Parser/BGE CPU/ScanSci OA+runtime/API/Web/Worker/Nginx/public CAS/retention 全绿，active/rollback `9eeb8d5` / `36033ae`，磁盘 49G/148G、93G available。PR #27 docs-only CI `33455948132` 合并为 repository main `ed0c787`，未冒充或重部署 application release。
+- 浙江大学 CARSI 已真实完成，session `ready` generation 14；Cookie artifact 1 个、`0600`、UID 10001。`scansci-legal` 强制重建后仍 `ready`/healthy，auth helper 与 host 5900/6080 均清零，公网 release 保持 `9eeb8d5`。
+- 首个 helper 按十次窗口约 30 分钟退出后，本机 SSH runner 仍存活并使旧 status 误报 running。`a3b073b` 让 status 复用 HTTP+RFB gate，并让一次 start 精确替换 stale/跨端口/孤立 starting，starting 不能绕过 remote verifier；TDD 后 Tunnel `32/32`、双复审 READY。
+- 三个真实 DOI 均稳定返回 `404/not_found`；诊断证明持久 Cookie 可加载，但请求快照虽含 1 个文件，pinned ScanSci PDF 1.11.0 因只读 `cache_dir/carsi_cookies` 而 `COOKIE_LOAD=0`，忽略我们模拟的 `carsi_cookie_dir`。`a3b073b` 仅把有 session 的 request-local `cache_dir` 指向安全快照；ScanSci legal `89 pass/6 Windows skip/0 fail`，全仓 build/typecheck/lint green。
+- issue-015/016 已记录；候选仍需 PR/CI、ECS exact deployment 与真实 institutional PDF canary。通过后再做四入口、375px、one-use、72h/600s、zero-grey/Tor 与精确卫生，Task 10 仍 in progress。
 
 ## 2026-08-31 — ScanSci Task 10 controlled-egress production retry
 

@@ -563,7 +563,7 @@ class SessionHttpIntegrationTest(unittest.TestCase):
 
 
 class PersistentCookieAcquisitionTest(unittest.TestCase):
-    def test_worker_receives_the_fixed_persistent_carsi_cookie_without_moving_cookie_bytes(self) -> None:
+    def test_pinned_cache_dir_receives_the_persistent_carsi_cookie_without_moving_cookie_bytes(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             session = root / "session"
@@ -580,7 +580,7 @@ class PersistentCookieAcquisitionTest(unittest.TestCase):
 request = json.load(sys.stdin)
 output = pathlib.Path(request['output_dir'])
 config = json.loads((output / 'config.json').read_text(encoding='utf-8'))
-cookie = pathlib.Path(config['carsi_cookie_dir']) / 'sciencedirect.json'
+cookie = pathlib.Path(config['cache_dir']) / 'carsi_cookies' / 'sciencedirect.json'
 if cookie.read_text(encoding='utf-8') != '[{\"name\":\"session\",\"value\":\"persistent-cookie\"}]':
     raise SystemExit(2)
 paper = output / 'paper.pdf'

@@ -50,6 +50,11 @@ case " $* " in
     ;;
 esac
 case " $* " in
+  *" --profile scansci-auth up --no-start --no-build --force-recreate scansci-auth"*)
+    if [ -n "\${FAKE_HEALTH_READY_FILE:-}" ]; then : > "$FAKE_HEALTH_READY_FILE"; fi
+    ;;
+esac
+case " $* " in
   *" --profile scansci-auth rm -f -s scansci-auth"*)
     if [ "\${FAKE_SSH_STOP_FAIL:-0}" = 1 ]; then exit 9; fi
     ;;
@@ -112,8 +117,8 @@ function runAsync(script, args, env, bashBin = '') {
   });
 }
 
-async function startHealthServer(t, port, { websocket = true } = {}) {
-  const source = `const {createHash}=require('crypto');const websocket=${JSON.stringify(websocket)};const server=require('http').createServer((request,response)=>{const ok=request.url==='/vnc.html?autoconnect=true&resize=remote';response.writeHead(ok?200:404);response.end(ok?'ok':'not found')});server.on('upgrade',(request,socket)=>{if(!websocket||request.url!=='/websockify'||!request.headers['sec-websocket-key']){socket.end('HTTP/1.1 404 Not Found\\r\\nConnection: close\\r\\n\\r\\n');return}const accept=createHash('sha1').update(request.headers['sec-websocket-key']+'258EAFA5-E914-47DA-95CA-C5AB0DC85B11').digest('base64');socket.write(['HTTP/1.1 101 Switching Protocols','Upgrade: websocket','Connection: Upgrade','Sec-WebSocket-Accept: '+accept,'Sec-WebSocket-Protocol: binary','',''].join('\\r\\n'));const payload=Buffer.from('RFB 003.008\\n','ascii');socket.end(Buffer.concat([Buffer.from([0x82,payload.length]),payload]))});server.listen(${port},'127.0.0.1')`;
+async function startHealthServer(t, port, { websocket = true, readyFile = '' } = {}) {
+  const source = `const {createHash}=require('crypto');const {existsSync}=require('fs');const websocket=${JSON.stringify(websocket)};const readyFile=${JSON.stringify(readyFile)};const ready=()=>!readyFile||existsSync(readyFile);const server=require('http').createServer((request,response)=>{const ok=ready()&&request.url==='/vnc.html?autoconnect=true&resize=remote';response.writeHead(ok?200:404);response.end(ok?'ok':'not found')});server.on('upgrade',(request,socket)=>{if(!ready()||!websocket||request.url!=='/websockify'||!request.headers['sec-websocket-key']){socket.end('HTTP/1.1 404 Not Found\\r\\nConnection: close\\r\\n\\r\\n');return}const accept=createHash('sha1').update(request.headers['sec-websocket-key']+'258EAFA5-E914-47DA-95CA-C5AB0DC85B11').digest('base64');socket.write(['HTTP/1.1 101 Switching Protocols','Upgrade: websocket','Connection: Upgrade','Sec-WebSocket-Accept: '+accept,'Sec-WebSocket-Protocol: binary','',''].join('\\r\\n'));const payload=Buffer.from('RFB 003.008\\n','ascii');socket.end(Buffer.concat([Buffer.from([0x82,payload.length]),payload]))});server.listen(${port},'127.0.0.1')`;
   const server = spawn(process.execPath, ['-e', source], { stdio: 'ignore' });
   t.after(() => { if (server.exitCode === null) server.kill(); });
   await new Promise((resolveWait) => setTimeout(resolveWait, 250));
@@ -244,6 +249,71 @@ test('status is read-only and only explicit start launches the helper and loopba
   }
 });
 
+test('status does not report a recorded tunnel as running after its RFB backend disappears', async (t) => {
+  const f = await fixture();
+  const health = await startHealthServer(t, 16108);
+  t.after(async () => {
+    run(f.script, ['stop'], f.env, f.bashBin);
+    await rm(f.root, { recursive: true, force: true });
+  });
+  assert.equal(run(f.script, ['start', '16108'], f.env, f.bashBin).status, 0);
+  health.kill();
+  await new Promise((resolveWait) => health.once('close', resolveWait));
+  const logBeforeStatus = await readFile(f.log, 'utf8');
+
+  const status = run(f.script, ['status'], f.env, f.bashBin);
+
+  assert.equal(status.status, 4, `${status.stdout}\n${status.stderr}`);
+  assert.match(status.stdout, /^unreachable\s*$/);
+  assert.equal(await readFile(f.log, 'utf8'), logBeforeStatus, 'status performed a remote mutation');
+});
+
+test('status reports an orphaned starting lifecycle as unreachable when its RFB backend disappeared', async (t) => {
+  const f = await fixture();
+  const health = await startHealthServer(t, 16110);
+  t.after(async () => {
+    run(f.script, ['stop'], f.env, f.bashBin);
+    await rm(f.root, { recursive: true, force: true });
+  });
+  assert.equal(run(f.script, ['start', '16110'], f.env, f.bashBin).status, 0);
+  const statePath = join(f.env.XDG_STATE_HOME, 'openscience', 'scansci-auth-tunnel.state');
+  const state = (await readFile(statePath, 'utf8')).trimEnd().split('\n');
+  state[6] = 'starting';
+  await writeFile(statePath, `${state.join('\n')}\n`);
+  health.kill();
+  await new Promise((resolveWait) => health.once('close', resolveWait));
+  const logBeforeStatus = await readFile(f.log, 'utf8');
+
+  const status = run(f.script, ['status'], f.env, f.bashBin);
+
+  assert.equal(status.status, 4, `${status.stdout}\n${status.stderr}`);
+  assert.match(status.stdout, /^unreachable\s*$/);
+  assert.equal(await readFile(f.log, 'utf8'), logBeforeStatus, 'status performed a remote mutation');
+});
+
+test('start replaces a healthy orphaned starting lifecycle instead of bypassing remote verification', async (t) => {
+  const f = await fixture();
+  await startHealthServer(t, 16113);
+  t.after(async () => {
+    run(f.script, ['stop'], f.env, f.bashBin);
+    await rm(f.root, { recursive: true, force: true });
+  });
+  assert.equal(run(f.script, ['start', '16113'], f.env, f.bashBin).status, 0);
+  const statePath = join(f.env.XDG_STATE_HOME, 'openscience', 'scansci-auth-tunnel.state');
+  const state = (await readFile(statePath, 'utf8')).trimEnd().split('\n');
+  state[6] = 'starting';
+  await writeFile(statePath, `${state.join('\n')}\n`);
+
+  const restarted = run(f.script, ['start', '16113'], f.env, f.bashBin);
+
+  assert.equal(restarted.status, 0, `${restarted.stdout}\n${restarted.stderr}`);
+  assert.match(restarted.stdout, /^started on http:\/\/127\.0\.0\.1:16113\/vnc\.html\?autoconnect=true&resize=remote\s*$/);
+  const log = await readFile(f.log, 'utf8');
+  assert.equal((log.match(/--profile scansci-auth up --no-start --no-build --force-recreate scansci-auth/g) ?? []).length, 2);
+  assert.equal((log.match(/--profile scansci-auth rm -f -s scansci-auth/g) ?? []).length, 1);
+  assert.match(await readFile(statePath, 'utf8'), /\nrunning\s*$/);
+});
+
 test('duplicate start is idempotent and stop closes only the recorded tunnel', async (t) => {
   const f = await fixture();
   t.after(async () => {
@@ -291,6 +361,67 @@ test('duplicate start re-probes HTTP readiness and compensates when the listener
   assert.match(duplicate.stderr, /^loopback tunnel readiness failed\s*$/);
   const log = await readFile(f.log, 'utf8');
   assert.match(log, /--profile scansci-auth rm -f -s scansci-auth/);
+});
+
+test('start replaces an identified tunnel whose RFB backend disappeared in one command', async (t) => {
+  const f = await fixture();
+  const readyFile = join(f.root, 'health-ready');
+  await writeFile(readyFile, 'ready\n');
+  await startHealthServer(t, 16109, { readyFile });
+  t.after(async () => {
+    run(f.script, ['stop'], f.env, f.bashBin);
+    await rm(f.root, { recursive: true, force: true });
+  });
+  assert.equal(run(f.script, ['start', '16109'], f.env, f.bashBin).status, 0);
+  await rm(readyFile);
+  const readyFileForBash = process.platform === 'win32'
+    ? spawnSync(bash, ['-c', 'cygpath -u "$1"', 'convert-path', readyFile], { encoding: 'utf8' }).stdout.trim()
+    : readyFile;
+
+  const restarted = run(
+    f.script,
+    ['start', '16109'],
+    { ...f.env, FAKE_HEALTH_READY_FILE: readyFileForBash },
+    f.bashBin,
+  );
+
+  assert.equal(restarted.status, 0, `${restarted.stdout}\n${restarted.stderr}`);
+  assert.match(restarted.stdout, /^started on http:\/\/127\.0\.0\.1:16109\/vnc\.html\?autoconnect=true&resize=remote\s*$/);
+  const log = await readFile(f.log, 'utf8');
+  assert.equal((log.match(/--profile scansci-auth up --no-start --no-build --force-recreate scansci-auth/g) ?? []).length, 2);
+  assert.equal((log.match(/--profile scansci-auth rm -f -s scansci-auth/g) ?? []).length, 1);
+});
+
+test('start can replace an unreachable recorded tunnel on a different requested port', async (t) => {
+  const f = await fixture();
+  const readyFile = join(f.root, 'switch-health-ready');
+  await writeFile(readyFile, 'ready\n');
+  await Promise.all([
+    startHealthServer(t, 16111, { readyFile }),
+    startHealthServer(t, 16112, { readyFile }),
+  ]);
+  t.after(async () => {
+    run(f.script, ['stop'], f.env, f.bashBin);
+    await rm(f.root, { recursive: true, force: true });
+  });
+  assert.equal(run(f.script, ['start', '16111'], f.env, f.bashBin).status, 0);
+  await rm(readyFile);
+  const readyFileForBash = process.platform === 'win32'
+    ? spawnSync(bash, ['-c', 'cygpath -u "$1"', 'convert-path', readyFile], { encoding: 'utf8' }).stdout.trim()
+    : readyFile;
+
+  const restarted = run(
+    f.script,
+    ['start', '16112'],
+    { ...f.env, FAKE_HEALTH_READY_FILE: readyFileForBash },
+    f.bashBin,
+  );
+
+  assert.equal(restarted.status, 0, `${restarted.stdout}\n${restarted.stderr}`);
+  assert.match(restarted.stdout, /^started on http:\/\/127\.0\.0\.1:16112\/vnc\.html\?autoconnect=true&resize=remote\s*$/);
+  const log = await readFile(f.log, 'utf8');
+  assert.equal((log.match(/--profile scansci-auth up --no-start --no-build --force-recreate scansci-auth/g) ?? []).length, 2);
+  assert.match(log, /-L\n127\.0\.0\.1:16112:172\.25\.0\.2:6080/);
 });
 
 test('stop uses the release identity stored at start after active release switches', async (t) => {

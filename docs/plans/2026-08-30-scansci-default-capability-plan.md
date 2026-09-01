@@ -630,11 +630,11 @@ then run `deploy.sh --confirm --require-parser-acceptance --rollback-ref
 migration status, ScanSci/Parser/BGE/runtime identity, all containers, Nginx,
 public release, journal clear and active/rollback retention.
 
-- [ ] **Step 5: Complete the one-time Zhejiang University CARSI login**
+- [x] **Step 5: Complete the one-time Zhejiang University CARSI login**
 
 Start only the auth profile, start the checked-in loopback SSH tunnel, set the
 validated local port as `SCANSCI_LOCAL_PORT`, and open
-`http://127.0.0.1:$SCANSCI_LOCAL_PORT` for the operator. The operator types credentials
+`http://127.0.0.1:$SCANSCI_LOCAL_PORT/vnc.html?autoconnect=true&resize=remote` for the operator. The operator types credentials
 inside the isolated browser. Stop the tunnel/helper after session status becomes
 `ready`; verify profile volume survives helper and service recreation. Before
 showing the link, prove HTTP and RFB readiness. Leave one 180-second upstream
@@ -643,6 +643,10 @@ without rerunning setup; the operator must have up to ten attempts and canonical
 stop must still end the helper immediately.
 
 - [ ] **Step 6: Run real OA and institutional acquisitions**
+
+2026-09-01 checkpoint: login and `scansci-legal` recreation persistence passed.
+Candidate `a3b073b` corrects the pinned client's request-local Cookie snapshot path;
+merge/deploy and the real institutional PDF gate remain required for this step.
 
 Use arXiv `2009.06045v1` for OA and DOI `10.1038/nature12373` for the institutional
 route. Verify route/header/source, PDF magic/size/hash, ClamAV, temporary object,
