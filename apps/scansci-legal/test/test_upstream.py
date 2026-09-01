@@ -3,6 +3,7 @@ from __future__ import annotations
 import os
 from pathlib import Path
 import errno
+import hashlib
 import json
 import socket
 import subprocess
@@ -18,11 +19,15 @@ from unittest import mock
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
 from scansci_legal.policy import LegalDownloadRequest
+from scansci_legal.browser_protocol import BrowserProof, BrowserProtocolError, BrowserResult
 from scansci_legal.upstream import AcquisitionError, ScanSciAcquisitionClient, _sanitized_environment
 from scansci_legal import upstream_worker
 
 
-REQUEST = LegalDownloadRequest("10.1038/nature12373", "legal_only", False, False, True, "a" * 64)
+REQUEST = LegalDownloadRequest("10.1038/nature12373", "legal_only", False, False, False, "a" * 64)
+INSTITUTIONAL_REQUEST = LegalDownloadRequest(
+    "10.1016/j.physleta.2023.129241", "legal_only", False, False, True, "a" * 64,
+)
 
 
 def _run_tiers_parallel(
@@ -63,7 +68,7 @@ class ScanSciAcquisitionClientTest(unittest.TestCase):
         self.session_root = self.root / "session"
         cookie = self.session_root / "scansci" / "cache" / "carsi_cookies" / "sciencedirect.json"
         cookie.parent.mkdir(parents=True)
-        cookie.write_text('[{"name":"session","value":"fixture"}]', encoding="utf-8")
+        cookie.write_text('[{"name":"session","value":"fixture","domain":".sciencedirect.com"}]', encoding="utf-8")
         if os.name != "nt":
             for parent in (self.session_root, self.session_root / "scansci", self.session_root / "scansci" / "cache", cookie.parent):
                 parent.chmod(0o700)
@@ -107,7 +112,7 @@ if behavior == 'grey-source':
 if behavior == 'unsafe-url':
     print(json.dumps({'success': True, 'file': str(paper), 'source': 'CARSI', 'url': 'http://127.0.0.1/private'}))
     raise SystemExit(0)
-print(json.dumps({'success': True, 'file': str(paper), 'source': 'CARSI', 'url': 'https://publisher.example/paper'}))
+print(json.dumps({'success': True, 'file': str(paper), 'source': 'Unpaywall', 'url': 'https://publisher.example/paper'}))
 """ % behavior,
             encoding="utf-8",
         )
@@ -116,8 +121,8 @@ print(json.dumps({'success': True, 'file': str(paper), 'source': 'CARSI', 'url':
     def test_runs_the_worker_with_a_fixed_legal_config_and_returns_parent_owned_bytes(self):
         result = self.client(self.worker()).acquire(REQUEST)
 
-        self.assertEqual(result.route, "institutional")
-        self.assertEqual(result.source, "CARSI")
+        self.assertEqual(result.route, "open_access")
+        self.assertEqual(result.source, "Unpaywall")
         self.assertEqual(result.source_url, "https://publisher.example/paper")
         self.assertEqual(result.content, b"%PDF-safe-from-worker")
 
@@ -147,6 +152,150 @@ print(json.dumps({'success': True, 'file': str(paper), 'source': 'CARSI', 'url':
         with mock.patch.dict(os.environ, {"SCANSCI_EGRESS_PROXY": "http://attacker.invalid:7891"}, clear=False):
             with self.assertRaisesRegex(AcquisitionError, "policy_blocked"):
                 _sanitized_environment(self.root)
+
+    def test_institutional_request_uses_only_one_cookie_and_verified_browser_result(self):
+        calls = []
+        ignored_cookie = self.session_root / "scansci" / "cache" / "carsi_cookies" / "other.json"
+        ignored_cookie.write_text('[{"name":"other","value":"must-not-copy","domain":".sciencedirect.com"}]', encoding="utf-8")
+        if os.name != "nt":
+            ignored_cookie.chmod(0o600)
+
+        class BrowserClient:
+            def submit(self, identifier, cookie_json):
+                calls.append((identifier, cookie_json))
+                content = b"%PDF-browser-proof"
+                return BrowserResult(content, BrowserProof(
+                    200,
+                    "application/pdf",
+                    "https://www.sciencedirect.com/science/article/pii/S0375960123007779/pdfft",
+                    "CARSI-Browser",
+                    len(content),
+                    hashlib.sha256(content).hexdigest(),
+                ))
+
+        client = ScanSciAcquisitionClient(
+            self.root / "runtime-browser",
+            worker_command=["must-not-run"],
+            session_root=self.session_root,
+            browser_job_client=BrowserClient(),
+        )
+
+        result = client.acquire(INSTITUTIONAL_REQUEST)
+
+        self.assertEqual(calls, [(
+            INSTITUTIONAL_REQUEST.identifier,
+            b'[{"name":"session","value":"fixture","domain":".sciencedirect.com"}]',
+        )])
+        self.assertEqual(result.route, "institutional")
+        self.assertEqual(result.source, "CARSI-Browser")
+        self.assertEqual(result.content, b"%PDF-browser-proof")
+        self.assertEqual(
+            result.session_cookie_sha256,
+            hashlib.sha256(b'[{"name":"session","value":"fixture","domain":".sciencedirect.com"}]').hexdigest(),
+        )
+        self.assertEqual(
+            result.source_url,
+            "https://www.sciencedirect.com/science/article/pii/S0375960123007779/pdfft",
+        )
+
+    def test_snapshot_destination_io_failure_is_infrastructure_not_auth(self):
+        class BrowserClient:
+            def submit(self, _identifier, _cookie_json):
+                raise AssertionError("browser client must not run")
+
+        client = ScanSciAcquisitionClient(
+            self.root / "runtime-browser-io-failure",
+            worker_command=["must-not-run"],
+            session_root=self.session_root,
+            browser_job_client=BrowserClient(),
+        )
+        with mock.patch(
+            "scansci_legal.upstream._write_session_snapshot",
+            side_effect=OSError("disk unavailable"),
+        ):
+            with self.assertRaises(AcquisitionError) as raised:
+                client.acquire(INSTITUTIONAL_REQUEST)
+        self.assertEqual(raised.exception.code, "upstream_unavailable")
+
+    def test_malformed_persistent_cookie_is_auth_required_before_browser(self):
+        cookie = (
+            self.session_root
+            / "scansci" / "cache" / "carsi_cookies" / "sciencedirect.json"
+        )
+        cookie.write_text(
+            '[{"name":"CASTGC","value":"secret","domain":"zjuam.zju.edu.cn"}]',
+            encoding="utf-8",
+        )
+
+        class BrowserClient:
+            def submit(self, _identifier, _cookie_json):
+                raise AssertionError("browser client must not run")
+
+        client = ScanSciAcquisitionClient(
+            self.root / "runtime-browser-malformed-cookie",
+            worker_command=["must-not-run"],
+            session_root=self.session_root,
+            browser_job_client=BrowserClient(),
+        )
+        with self.assertRaises(AcquisitionError) as raised:
+            client.acquire(INSTITUTIONAL_REQUEST)
+        self.assertEqual(raised.exception.code, "auth_required")
+
+    def test_browser_failure_taxonomy_revokes_only_real_auth_failures(self):
+        cases = (
+            ("browser_auth_required", "auth_required"),
+            ("browser_timeout", "upstream_timeout"),
+            ("browser_worker_crash", "upstream_unavailable"),
+            ("browser_policy_blocked", "policy_blocked"),
+            ("invalid_browser_result", "policy_blocked"),
+        )
+        for index, (browser_code, acquisition_code) in enumerate(cases):
+            class BrowserClient:
+                def submit(self, _identifier, _cookie_json):
+                    raise BrowserProtocolError(browser_code)
+
+            client = ScanSciAcquisitionClient(
+                self.root / f"runtime-browser-failure-{index}",
+                worker_command=["must-not-run"],
+                session_root=self.session_root,
+                browser_job_client=BrowserClient(),
+            )
+            with self.subTest(browser_code=browser_code), self.assertRaises(AcquisitionError) as raised:
+                client.acquire(INSTITUTIONAL_REQUEST)
+            self.assertEqual(raised.exception.code, acquisition_code)
+
+    def test_institutional_403_html_and_sso_redirect_are_auth_required(self):
+        content = b"%PDF-browser-proof"
+        cases = (
+            BrowserProof(
+                403, "application/pdf",
+                "https://www.sciencedirect.com/science/article/pii/S0375960123007779/pdfft",
+                "CARSI-Browser", len(content), hashlib.sha256(content).hexdigest(),
+            ),
+            BrowserProof(
+                200, "text/html",
+                "https://www.sciencedirect.com/science/article/pii/S0375960123007779/pdfft",
+                "CARSI-Browser", len(content), hashlib.sha256(content).hexdigest(),
+            ),
+            BrowserProof(
+                200, "application/pdf", "https://zjuam.zju.edu.cn/cas/login",
+                "CARSI-Browser", len(content), hashlib.sha256(content).hexdigest(),
+            ),
+        )
+        for index, proof in enumerate(cases):
+            class BrowserClient:
+                def submit(self, _identifier, _cookie_json):
+                    return BrowserResult(content, proof)
+
+            client = ScanSciAcquisitionClient(
+                self.root / f"runtime-browser-auth-{index}",
+                worker_command=["must-not-run"],
+                session_root=self.session_root,
+                browser_job_client=BrowserClient(),
+            )
+            with self.subTest(index=index), self.assertRaises(AcquisitionError) as raised:
+                client.acquire(INSTITUTIONAL_REQUEST)
+            self.assertEqual(raised.exception.code, "auth_required")
 
     @unittest.skipIf(os.name == "nt", "production worker entry requires POSIX RLIMIT_FSIZE")
     def test_default_worker_resolves_home_and_scansci_config_inside_the_request_root(self):
@@ -193,7 +342,7 @@ print(json.dumps({'success': True, 'file': str(paper), 'source': 'CARSI', 'url':
     def test_rejects_a_worker_result_that_points_outside_its_isolated_directory(self):
         script = self.root / "outside-worker.py"
         script.write_text(
-            "import json, pathlib, sys\nrequest=json.load(sys.stdin)\npath=pathlib.Path(request['output_dir']).parent/'outside.pdf'\npath.write_bytes(b'%PDF-safe')\nprint(json.dumps({'success': True, 'file': str(path), 'source': 'CARSI', 'url': 'https://publisher.example/paper'}))\n",
+            "import json, pathlib, sys\nrequest=json.load(sys.stdin)\npath=pathlib.Path(request['output_dir']).parent/'outside.pdf'\npath.write_bytes(b'%PDF-safe')\nprint(json.dumps({'success': True, 'file': str(path), 'source': 'Unpaywall', 'url': 'https://publisher.example/paper'}))\n",
             encoding="utf-8",
         )
         with self.assertRaises(AcquisitionError) as raised:

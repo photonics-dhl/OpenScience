@@ -14,6 +14,7 @@ from urllib.parse import urlsplit
 from .policy import MAX_REQUEST_BYTES, LegalDownloadRequest, PolicyError, validate_request, validate_source_result
 from .limits import MAX_PDF_BYTES
 from .upstream import AcquiredPdf, AcquisitionError, _safe_external_url, _safe_header_value
+from .browser_protocol import _allowed_institutional_url
 
 ERROR_STATUS = {
     "disabled": 503,
@@ -26,6 +27,7 @@ ERROR_STATUS = {
     "upstream_timeout": 504,
     "upstream_unavailable": 502,
 }
+MAX_REJECT_DRAIN_BYTES = 8 * 1024
 
 
 class AcquisitionClient(Protocol):
@@ -39,6 +41,7 @@ class ServiceConfig:
     service_token: str = ""
     session_status: str | Callable[[], str] = "disabled"
     session_auth_redirect: Callable[[], object] | None = None
+    session_verified: Callable[[str], object] | None = None
     maximum_pdf_bytes: int = MAX_PDF_BYTES
     entitlement_valid_until: str | None = None
 
@@ -93,6 +96,7 @@ def create_server(config: ServiceConfig | Mapping[str, Any] | object, acquisitio
             expected = b"Bearer " + token
             received = authorization.encode("utf-8", errors="ignore")
             if not hmac.compare_digest(received, expected):
+                self._drain_rejected_body()
                 self._json(401, {"code": "unauthorized"})
                 return False
             return True
@@ -116,6 +120,19 @@ def create_server(config: ServiceConfig | Mapping[str, Any] | object, acquisitio
                 try:
                     acquired = acquisition_client.acquire(request)
                     headers, content = _response_pdf(acquired, request, settings)
+                    if acquired.route == "institutional":
+                        cookie_sha256 = acquired.session_cookie_sha256
+                        if (
+                            acquired.source != "CARSI-Browser"
+                            or not _allowed_institutional_url(acquired.source_url)
+                            or not isinstance(cookie_sha256, str)
+                            or len(cookie_sha256) != 64
+                            or any(character not in "0123456789abcdef" for character in cookie_sha256)
+                        ):
+                            raise AcquisitionError("policy_blocked")
+                        if settings.session_verified is None:
+                            raise AcquisitionError("upstream_unavailable")
+                        settings.session_verified(cookie_sha256)
                 except AcquisitionError as error:
                     if error.code == "auth_required" and settings.session_auth_redirect is not None:
                         try:
@@ -131,6 +148,7 @@ def create_server(config: ServiceConfig | Mapping[str, Any] | object, acquisitio
 
         def _request_payload(self) -> object | None:
             if self.headers.get_content_type() != "application/json":
+                self._drain_rejected_body()
                 self._json(400, {"code": "invalid_request"})
                 return None
             if self.headers.get_all("Transfer-Encoding"):
@@ -152,6 +170,7 @@ def create_server(config: ServiceConfig | Mapping[str, Any] | object, acquisitio
                 return None
             size = int(length)
             if size > MAX_REQUEST_BYTES:
+                self._drain_rejected_body()
                 self._json(413, {"code": "request_too_large"})
                 return None
             body = self.rfile.read(size)
@@ -163,6 +182,19 @@ def create_server(config: ServiceConfig | Mapping[str, Any] | object, acquisitio
             except (UnicodeDecodeError, json.JSONDecodeError, _DuplicateJsonKey):
                 self._json(400, {"code": "invalid_request"})
                 return None
+
+        def _drain_rejected_body(self) -> None:
+            if self.headers.get_all("Transfer-Encoding"):
+                return
+            lengths = self.headers.get_all("Content-Length") or []
+            if len(lengths) != 1:
+                return
+            value = lengths[0]
+            if not value.isascii() or not value.isdecimal() or len(value) > 10:
+                return
+            size = int(value)
+            if 0 < size <= MAX_REJECT_DRAIN_BYTES:
+                self.rfile.read(size)
 
         def _stable_error(self, code: str) -> None:
             safe_code = code if code in ERROR_STATUS else "upstream_unavailable"
@@ -201,6 +233,7 @@ def _service_config(config: ServiceConfig | Mapping[str, Any] | object) -> Servi
     token = getter("service_token", "")
     session_status = getter("session_status", "unavailable")
     session_auth_redirect = getter("session_auth_redirect", None)
+    session_verified = getter("session_verified", None)
     entitlement = getter("entitlement_valid_until", None)
     if (
         not isinstance(host, str)
@@ -208,11 +241,21 @@ def _service_config(config: ServiceConfig | Mapping[str, Any] | object) -> Servi
         or not isinstance(token, str)
         or not (isinstance(session_status, str) or callable(session_status))
         or not (session_auth_redirect is None or callable(session_auth_redirect))
+        or not (session_verified is None or callable(session_verified))
     ):
         raise ValueError("service configuration is invalid")
     if entitlement is not None and (not isinstance(entitlement, str) or not _safe_header_value(entitlement)):
         raise ValueError("entitlement_valid_until is invalid")
-    return ServiceConfig(host, port, token, session_status, session_auth_redirect, maximum, entitlement)
+    return ServiceConfig(
+        host=host,
+        port=port,
+        service_token=token,
+        session_status=session_status,
+        session_auth_redirect=session_auth_redirect,
+        session_verified=session_verified,
+        maximum_pdf_bytes=maximum,
+        entitlement_valid_until=entitlement,
+    )
 
 
 def _live_session_status(provider: str | Callable[[], str]) -> str:

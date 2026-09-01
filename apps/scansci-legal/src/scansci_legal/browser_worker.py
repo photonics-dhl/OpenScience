@@ -341,7 +341,18 @@ def _run_one_job(job_id: str, input_root: Path, output_root: Path, workspace: Pa
             manifest["identifier"], input_job, outputs / job_id, workspace=workspace,
         )
         return 0
-    except (BrowserPolicyError, BrowserWorkerError, OSError, ValueError):
+    except BrowserPolicyError as error:
+        failure_code = (
+            "browser_auth_required"
+            if error.code == "browser_auth_required"
+            else "browser_policy_blocked"
+        )
+        try:
+            _require_failure_published(outputs / job_id, job_id, manifest["identifier"], failure_code)
+        except BrowserWorkerError:
+            return 1
+        return 0
+    except (BrowserWorkerError, OSError, ValueError):
         return 1
 
 

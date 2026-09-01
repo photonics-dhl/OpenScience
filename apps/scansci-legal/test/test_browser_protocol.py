@@ -298,7 +298,7 @@ class BrowserJobClientTest(unittest.TestCase):
 
         thread = threading.Thread(target=browser)
         thread.start()
-        cookie = b'[{"name":"session","value":"private-cookie"}]'
+        cookie = b'[{"name":"session","value":"private-cookie","domain":".sciencedirect.com"}]'
 
         result = self.client().submit(DOI, cookie)
         thread.join(timeout=1)
@@ -317,7 +317,7 @@ class BrowserJobClientTest(unittest.TestCase):
 
         with self.assertRaises(BrowserProtocolError) as raised:
             self.client(timeout=0.02).submit(
-                DOI, b'[{"name":"session","value":"private-cookie"}]',
+                DOI, b'[{"name":"session","value":"private-cookie","domain":".sciencedirect.com"}]',
             )
 
         self.assertEqual(raised.exception.code, "browser_timeout")
@@ -362,7 +362,7 @@ class BrowserJobClientTest(unittest.TestCase):
         started = time.monotonic()
         with self.assertRaises(BrowserProtocolError) as raised:
             self.client(timeout=0.8).submit(
-                DOI, b'[{"name":"session","value":"private-cookie"}]',
+                DOI, b'[{"name":"session","value":"private-cookie","domain":".sciencedirect.com"}]',
             )
         thread.join(timeout=1)
 
@@ -403,7 +403,7 @@ class BrowserJobClientTest(unittest.TestCase):
         thread = threading.Thread(target=browser)
         thread.start()
         result = self.client(timeout=0.3, cleanup_timeout=0.3).submit(
-            DOI, b'[{"name":"session","value":"private-cookie"}]',
+            DOI, b'[{"name":"session","value":"private-cookie","domain":".sciencedirect.com"}]',
         )
         thread.join(timeout=1)
 
@@ -416,7 +416,7 @@ class BrowserJobClientTest(unittest.TestCase):
                 with mock.patch(patch_target, side_effect=OSError("private-cookie")):
                     with self.assertRaises(BrowserProtocolError) as raised:
                         self.client(timeout=0.01).submit(
-                            DOI, b'[{"name":"session","value":"private-cookie"}]',
+                            DOI, b'[{"name":"session","value":"private-cookie","domain":".sciencedirect.com"}]',
                         )
                 self.assertEqual(raised.exception.code, "invalid_browser_job")
                 self.assertNotIn("private-cookie", str(raised.exception))
@@ -425,6 +425,9 @@ class BrowserJobClientTest(unittest.TestCase):
     def test_rejects_invalid_identifier_and_cookie_before_publishing_a_job(self):
         for identifier, cookie in (
             ("https://www.sciencedirect.com/private", b'[{"name":"a","value":"b"}]'),
+            (DOI, b'[{"name":"a","value":"b"}]'),
+            (DOI, b'[{"name":"CASTGC","value":"secret","domain":"zjuam.zju.edu.cn"}]'),
+            (DOI, b'[{"name":"a","value":"b","url":"https://www.sciencedirect.com:444/private"}]'),
             (DOI, b"not-json"),
             (DOI, b'[{"name":"a","value":"b"},{"name":"a","value":"b"}]'),
             (DOI, b'[{"name":"a","value":"b","name":"duplicate"}]'),

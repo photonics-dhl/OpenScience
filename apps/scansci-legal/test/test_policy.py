@@ -62,6 +62,7 @@ class LegalPolicyTest(unittest.TestCase):
             ("publisher_api", "CrossrefPage"),
             ("publisher_api", "elsevier_api"),
             ("institutional", "CARSI"),
+            ("institutional", "CARSI-Browser"),
             ("institutional", "InstSci"),
             ("institutional", "institutional:broker:Elsevier"),
         ):

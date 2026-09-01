@@ -37,7 +37,12 @@ PROOF_KEYS = frozenset({
 PROOF_ENVELOPE_KEYS = frozenset({"schema", "job_id", "identifier", "proof"})
 MANIFEST_KEYS = frozenset({"schema", "job_id", "identifier"})
 FAILURE_KEYS = frozenset({"schema", "job_id", "identifier", "error"})
-ALLOWED_BROWSER_FAILURES = frozenset({"browser_timeout", "browser_worker_crash"})
+ALLOWED_BROWSER_FAILURES = frozenset({
+    "browser_auth_required",
+    "browser_policy_blocked",
+    "browser_timeout",
+    "browser_worker_crash",
+})
 COOKIE_KEYS = frozenset({
     "name", "value", "url", "domain", "path", "expires", "httpOnly",
     "secure", "sameSite", "rest", "port", "port_specified",
@@ -383,7 +388,38 @@ def _validate_cookie_snapshot(cookie_json: bytes) -> None:
         identity = (name, domain.lower(), path)
         if identity in identities:
             raise BrowserProtocolError("invalid_browser_job")
+        if not _cookie_is_publisher_scoped(cookie):
+            raise BrowserProtocolError("invalid_browser_job")
         identities.add(identity)
+
+
+def _cookie_is_publisher_scoped(cookie: object) -> bool:
+    if not isinstance(cookie, dict):
+        return False
+    hosts: list[str] = []
+    domain = cookie.get("domain", "")
+    if isinstance(domain, str) and domain:
+        hosts.append(domain.lstrip(".").lower())
+    url = cookie.get("url", "")
+    if isinstance(url, str) and url:
+        try:
+            parsed = urlsplit(url)
+            port = parsed.port
+        except ValueError:
+            return False
+        if (
+            parsed.scheme != "https"
+            or not parsed.hostname
+            or parsed.username is not None
+            or parsed.password is not None
+            or port not in (None, 443)
+        ):
+            return False
+        hosts.append(parsed.hostname.lower())
+    return bool(hosts) and all(
+        any(host == suffix or host.endswith(f".{suffix}") for suffix in ALLOWED_INSTITUTIONAL_HOST_SUFFIXES)
+        for host in hosts
+    )
 
 
 def _validated_root(root: Path) -> Path:

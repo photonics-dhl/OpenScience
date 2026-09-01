@@ -17,12 +17,15 @@ import stat
 import tempfile
 import textwrap
 from typing import Any, Callable, Iterator
+from urllib.parse import urlsplit
 
 from .browser_protocol import (
     BrowserProof,
+    BrowserProtocolError,
     JOB_ID,
     SHARED_GID,
     _allowed_institutional_url,
+    _validate_cookie_snapshot,
 )
 from .limits import MAX_BROWSER_COOKIE_BYTES, MAX_BROWSER_MANIFEST_BYTES, MAX_PDF_BYTES
 from .policy import DOI_OR_ARXIV
@@ -34,6 +37,7 @@ REQUIRED_DISPLAY = ":99"
 INSTITUTION = "浙江大学"
 MAX_CAPTURE_CANDIDATES = 8
 MAX_CAPTURE_TOTAL_BYTES = 150 * 1024 * 1024
+AUTH_CHALLENGE_HOSTS = frozenset({"zjuam.zju.edu.cn", "idp.carsi.edu.cn"})
 PINNED_VISIBLE_BROWSER_AST_SHA256 = "50fbfbebcfbc28d72eb6b00d9ac1d6e2016eb94dde64d79bd434acf36fc03012"
 PINNED_CARSI_DOWNLOAD_AST_SHA256 = "23562196f7e44a0e3cd76e4783d683834e87787772258d6e38c3ee4508a2c734"
 
@@ -66,6 +70,7 @@ class _BrowserPdfCapture:
         self._candidates: list[BrowserProof] = []
         self._overflowed = False
         self._observed_pdf_bytes = 0
+        self._auth_failure_observed = False
 
     def attach(self, context: object, page: object) -> None:
         try:
@@ -81,6 +86,7 @@ class _BrowserPdfCapture:
                         "sciencedirect.com",
                         "elsevier.com",
                         "elsevierusercontent.com",
+                        *AUTH_CHALLENGE_HOSTS,
                     )
                 ],
             })
@@ -98,22 +104,27 @@ class _BrowserPdfCapture:
             status_value = event.get("responseStatusCode")
             if not isinstance(request_id, str) or not isinstance(request, dict):
                 raise ValueError("invalid Fetch event")
+            final_url = request.get("url")
             if isinstance(status_value, bool) or not isinstance(status_value, int):
-                self._continue_response(session, request_id)
-                return
-            if not 200 <= status_value <= 299:
                 self._continue_response(session, request_id)
                 return
             headers = _cdp_headers(headers_list)
             content_type = headers.get("content-type", "")
-            if not isinstance(content_type, str):
+            mime = (
+                content_type.split(";", 1)[0].strip().lower()
+                if isinstance(content_type, str)
+                else ""
+            )
+            if isinstance(final_url, str) and _is_auth_challenge_response(
+                status_value, mime, final_url,
+            ):
+                self._auth_failure_observed = True
+            if not 200 <= status_value <= 299:
                 self._continue_response(session, request_id)
                 return
-            mime = content_type.split(";", 1)[0].strip().lower()
             if mime != "application/pdf":
                 self._continue_response(session, request_id)
                 return
-            final_url = request.get("url")
             if not isinstance(final_url, str) or not _allowed_institutional_url(final_url):
                 self._continue_response(session, request_id)
                 return
@@ -143,6 +154,10 @@ class _BrowserPdfCapture:
 
     def _continue_response(self, session: object, request_id: str) -> None:
         session.send("Fetch.continueRequest", {"requestId": request_id})  # type: ignore[attr-defined]
+
+    @property
+    def auth_failure_observed(self) -> bool:
+        return self._auth_failure_observed
 
     def _record_streamed(
         self,
@@ -311,9 +326,55 @@ def capture_institutional_pdf(
     job_id, cookie_bytes = _read_job_input(identifier, input_job)
     if output_job.name != job_id or output_job.exists():
         raise BrowserPolicyError("browser_output_path_invalid")
+    proof, content = _capture_with_cookie(
+        identifier,
+        cookie_bytes,
+        runner=runner,
+        profile_parent=profile_parent,
+        workspace=workspace,
+        workspace_name=job_id,
+    )
+    _publish_browser_result(output_job, job_id, identifier, proof, content)
+    return proof
+
+
+def verify_institutional_canary(
+    identifier: str,
+    cookie_json: bytes,
+    *,
+    runner: Callable[[str, Path, dict[str, Any]], object] | None = None,
+    profile_parent: Path = Path("/tmp/scansci-auth-canary"),
+) -> BrowserProof:
+    """Exercise the fixed canary through the same strict browser adapter."""
+
+    try:
+        if not DOI_OR_ARXIV.fullmatch(identifier):
+            raise ValueError("invalid identifier")
+        _validate_cookie_snapshot(cookie_json)
+    except (BrowserProtocolError, TypeError, ValueError) as error:
+        raise BrowserPolicyError("browser_input_invalid") from error
+    return _capture_with_cookie(
+        identifier,
+        cookie_json,
+        runner=runner,
+        profile_parent=profile_parent,
+        workspace=None,
+        workspace_name="canary",
+    )[0]
+
+
+def _capture_with_cookie(
+    identifier: str,
+    cookie_bytes: bytes,
+    *,
+    runner: Callable[[str, Path, dict[str, Any]], object] | None,
+    profile_parent: Path,
+    workspace: Path | None,
+    workspace_name: str,
+) -> tuple[BrowserProof, bytes]:
     runner = runner or _run_pinned_carsi
 
-    with _job_workspace(job_id, Path(profile_parent), workspace) as work_root:
+    with _job_workspace(workspace_name, Path(profile_parent), workspace) as work_root:
         profile = work_root / "profile"
         profile.mkdir(mode=0o700)
         cache_dir = work_root / "cache"
@@ -332,14 +393,19 @@ def capture_institutional_pdf(
                 "carsi_idp_name": INSTITUTION,
                 "browser_backend": "patchright",
             })
+            if not isinstance(result, dict) or result.get("success") is not True:
+                code = (
+                    "browser_auth_required"
+                    if capture.auth_failure_observed
+                    else "browser_policy_blocked"
+                )
+                raise BrowserPolicyError(code)
             selected_content = _validate_runner_result(result, identifier, upstream_output)
             proof, content = capture.result(selected_content)
         finally:
             _ACTIVE_CAPTURE.reset(capture_token)
             _ACTIVE_PROFILE.reset(profile_token)
-
-    _publish_browser_result(output_job, job_id, identifier, proof, content)
-    return proof
+    return proof, content
 
 
 @contextmanager
@@ -463,6 +529,37 @@ def _cdp_headers(value: object) -> dict[str, str]:
                 return {}
             result[normalized] = item_value
     return result
+
+
+def _is_auth_challenge_response(status_value: int, mime: str, final_url: str) -> bool:
+    try:
+        parsed = urlsplit(final_url)
+        port = parsed.port
+    except ValueError:
+        return False
+    if (
+        parsed.scheme != "https"
+        or not parsed.hostname
+        or parsed.username is not None
+        or parsed.password is not None
+        or port not in (None, 443)
+    ):
+        return False
+    hostname = parsed.hostname.rstrip(".").lower()
+    if hostname in AUTH_CHALLENGE_HOSTS:
+        return status_value in (401, 403) or mime == "text/html"
+    if not _allowed_institutional_url(final_url):
+        return False
+    if status_value in (401, 403):
+        return True
+    path = parsed.path.lower()
+    is_pdf_endpoint = (
+        path.endswith(".pdf")
+        or "/pdfft" in path
+        or "/pdfdirect/" in path
+        or "/doi/pdf/" in path
+    )
+    return 200 <= status_value <= 299 and mime == "text/html" and is_pdf_endpoint
 
 
 def _read_cdp_stream(session: object, handle: str) -> bytes:

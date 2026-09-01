@@ -24,6 +24,7 @@ from scansci_legal.strict_browser import (
     install_strict_scansci_browser,
     launch_strict_patchright,
     strict_visible_browser,
+    verify_institutional_canary,
 )
 
 
@@ -264,6 +265,19 @@ class BrowserResponseProofTest(unittest.TestCase):
                 with self.assertRaises(BrowserPolicyError):
                     capture.result(PDF)
 
+    def test_marks_only_explicit_auth_challenges_as_auth_failures(self):
+        for response in (
+            _Response(status=403),
+            _Response(mime="text/html"),
+            _Response(mime="text/html", url="https://zjuam.zju.edu.cn/cas/login"),
+        ):
+            with self.subTest(status=response.status, url=response.url):
+                capture, _session = _capture_response(response)
+                self.assertTrue(capture.auth_failure_observed)
+
+        capture, _session = _capture_response(_Response(mime="application/octet-stream"))
+        self.assertFalse(capture.auth_failure_observed)
+
     def test_capture_publishes_only_the_strict_response_with_no_temp_residue(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
@@ -311,6 +325,36 @@ class BrowserResponseProofTest(unittest.TestCase):
             self.assertEqual(list(output_job.glob(".*.tmp")), [])
             self.assertEqual(list(profiles.iterdir()), [])
 
+    def test_canary_uses_the_same_strict_capture_without_publishing_pdf_bytes(self):
+        with tempfile.TemporaryDirectory() as directory:
+            profiles = Path(directory) / "profiles"
+
+            def runner(_identifier, _output, _config):
+                _ACTIVE_CAPTURE.get()._record_streamed(
+                    200,
+                    "application/pdf",
+                    "https://www.sciencedirect.com/science/article/pii/x/pdfft",
+                    PDF,
+                )
+                _output.write_bytes(PDF)
+                return {
+                    "success": True,
+                    "identifier": _identifier,
+                    "doi": _identifier,
+                    "file": str(_output),
+                    "source": "CARSI-Browser",
+                }
+
+            proof = verify_institutional_canary(
+                "10.1016/j.physleta.2023.129241",
+                b'[{"name":"session","value":"verified","domain":".sciencedirect.com"}]',
+                runner=runner,
+                profile_parent=profiles,
+            )
+
+            self.assertEqual(proof.sha256, hashlib.sha256(PDF).hexdigest())
+            self.assertEqual(list(profiles.iterdir()), [])
+
     def test_capture_rejects_callback_pdf_when_runner_did_not_select_it(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
@@ -336,11 +380,12 @@ class BrowserResponseProofTest(unittest.TestCase):
                 )
                 return None
 
-            with self.assertRaises(BrowserPolicyError):
+            with self.assertRaises(BrowserPolicyError) as raised:
                 capture_institutional_pdf(
                     identifier, input_job, output_job,
                     runner=failed_runner, profile_parent=profiles,
                 )
+            self.assertEqual(raised.exception.code, "browser_policy_blocked")
             self.assertFalse(output_job.exists())
 
     def test_capture_metadata_is_bounded_across_many_pdf_responses(self):
