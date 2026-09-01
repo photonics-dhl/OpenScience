@@ -508,7 +508,7 @@ git commit -m "feat(scansci): isolate institutional browser execution"
 - Consumes: `BrowserJobClient.submit` and strict browser proof.
 - Produces: real institutional `AcquiredPdf` and proof-backed session lifecycle.
 
-- [ ] **Step 1: Write failing integration/session tests**
+- [x] **Step 1: Write failing integration/session tests**
 
 Tests must prove OA still uses the existing browserless upstream worker; an
 institutional request copies exactly one safe Cookie JSON and uses only
@@ -521,7 +521,7 @@ while proof freshness is within 24 hours; a genuine institutional auth failure
 returns to `auth_required`. Responses expose status/generation/reason only and
 never proof URL, Cookie, account or password.
 
-- [ ] **Step 2: Verify RED**
+- [x] **Step 2: Verify RED**
 
 ```bash
 npx pnpm@9.15.0 --filter @openscience/scansci-legal test -- \
@@ -530,7 +530,7 @@ npx pnpm@9.15.0 --filter @openscience/scansci-legal test -- \
 
 Expected: old Cookie-count/publisher-return behavior fails the new assertions.
 
-- [ ] **Step 3: Implement the route and passive session state**
+- [x] **Step 3: Implement the route and passive session state**
 
 Add these session operations:
 
@@ -552,7 +552,7 @@ Cookie in a private temporary directory, exercises the fixed canary through the
 same strict adapter, and atomically publishes Cookie plus `ready` state only
 after proof validation. Exhaustion and first-launch failure fail closed.
 
-- [ ] **Step 4: Verify GREEN and commit**
+- [x] **Step 4: Verify GREEN and commit**
 
 ```bash
 npx pnpm@9.15.0 --filter @openscience/scansci-legal test -- \

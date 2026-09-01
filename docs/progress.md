@@ -4,10 +4,17 @@
 
 ## Current version tuple
 
-- Candidate branch / Task 3B commit / origin main: `codex/scansci-browser-institutional-gate` / `781e830` / `2019f8a`。
+- Candidate branch / Task 3C commit / origin main: `codex/scansci-browser-institutional-gate` / `d41bec4` / `2019f8a`。
 - Production application source / immutable release: `2019f8a2d9dcd7d5241de231ae95e2aedf238f47`。
 - Production rollback: `9eeb8d51baf16b212a7a4f5dd7db25131aa725a6`；core/search migrations `33/33` / `2/2`。
-- Taskmaster `hermes-research-intelligence` 仍为 9/12；strict browser Tasks 3A/3B 已完成，现进入 proof-backed session Task 3C；ScanSci ECS acceptance Step 5/6 与 Task 11 继续阻断到真实机构 PDF 通过。
+- Taskmaster `hermes-research-intelligence` 仍为 9/12；strict browser Tasks 3A–3C 已完成，现进入独立 CPU browser image Task 3D；ScanSci ECS acceptance Step 5/6 与 Task 11 继续阻断到真实机构 PDF 通过。
+
+## 2026-09-01 — ScanSci Task 3C proof-backed session complete
+
+- Commit `d41bec4` 将机构获取唯一接到 `BrowserJobClient`，OA 仍走 browserless worker；只有 `CARSI-Browser` 的 2xx、精确 PDF MIME、允许的 publisher URL、PDF magic/长度/SHA-256 全部一致才能构造 institutional `AcquiredPdf`。
+- `ready` 现在同时绑定 24 小时内的真实 canary proof 与精确 publisher Cookie SHA-256；Cookie 替换立即失效。仅出版社 401/403、PDF endpoint 的 HTML 或明确浙大/CARSI 登录挑战撤销认证，超时、崩溃、策略和运行时 I/O 不再误伤会话。
+- Operator 登录每次只启一个 fresh profile；只收集 Elsevier/ScienceDirect 域 Cookie，浙大/CARSI IdP Cookie 被统一入口拒绝。固定 DOI canary 通过同一严格 adapter 后才原子发布持久 Cookie 与 ready，账号密码不持久化。
+- ScanSci 全量与官方包门禁均为 `157 pass / 11 platform skip / 0 fail`，`compileall`、`git diff --check` 通过；独立安全/架构复审 READY。生产仍为 `2019f8a`，本步没有部署或服务器写入，下一步 Task 3D。
 
 ## 2026-09-01 — Snapshot fix deployed; CARSI false-positive isolated
 
