@@ -310,18 +310,26 @@ class BrowserResponseProofTest(unittest.TestCase):
                     "source": "CARSI-Browser",
                 }
 
-            with mock.patch("scansci_legal.strict_browser._set_group"):
-                proof = capture_institutional_pdf(
-                    "10.1016/j.physleta.2023.129241",
-                    input_job,
-                    output_job,
-                    runner=runner,
-                    profile_parent=profiles,
-                )
+            previous_umask = os.umask(0o077)
+            try:
+                with mock.patch("scansci_legal.strict_browser._set_group"):
+                    proof = capture_institutional_pdf(
+                        "10.1016/j.physleta.2023.129241",
+                        input_job,
+                        output_job,
+                        runner=runner,
+                        profile_parent=profiles,
+                    )
+            finally:
+                os.umask(previous_umask)
 
             envelope = json.loads((output_job / "proof.json").read_text("ascii"))
             self.assertEqual((output_job / "document.pdf").read_bytes(), PDF)
             self.assertEqual(envelope["proof"]["sha256"], proof.sha256)
+            if os.name == "posix":
+                self.assertEqual(output_job.stat().st_mode & 0o777, 0o750)
+                self.assertEqual((output_job / "document.pdf").stat().st_mode & 0o777, 0o640)
+                self.assertEqual((output_job / "proof.json").stat().st_mode & 0o777, 0o640)
             self.assertEqual(list(output_job.glob(".*.tmp")), [])
             self.assertEqual(list(profiles.iterdir()), [])
 
