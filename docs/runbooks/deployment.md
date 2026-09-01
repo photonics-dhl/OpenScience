@@ -1878,3 +1878,38 @@ failed markers are absent. The new helper passed `nofile=4096/4096`, 167 PIDs,
 zero host PortBinding/listener, local HTTP 200 and `RFB_OK`. Keep the helper
 running only while the bounded operator login is active; CARSI remains
 `auth_required` until the persistent-session and institutional-PDF gates pass.
+
+### 5.57 CARSI ready, stale-forward diagnosis and snapshot-path gate (2026-09-01)
+
+**Pre-check.** The first bounded helper correctly exited after ten upstream
+windows, but its local SSH control process remained alive. A recorded PID and a
+loopback listener are not readiness evidence: require the canonical noVNC HTTP
+path plus WebSocket/RFB. The subsequent Zhejiang University login reached
+session `ready` generation 14. One publisher Cookie was present with mode `0600`
+and UID 10001; forced `scansci-legal` recreation retained `ready`, while the auth
+helper and host listeners 5900/6080 were absent.
+
+**Execution.** Candidate `a3b073b5ffaf767502e4cecedf1840d022348526`
+makes status report `unreachable` when a recorded runner has no RFB backend and
+lets one start replace same-port, cross-port and orphaned-starting lifecycles.
+Only committed `running` state is idempotent; observable `starting` must perform
+the exact stored-release stop and a fresh remote verifier before a new running
+commit. For institutional acquisition, bind `cache_dir` to the request-local
+session snapshot because pinned ScanSci PDF 1.11.0 derives its Cookie directory
+as `cache_dir/carsi_cookies` and ignores the separate `carsi_cookie_dir` key.
+
+**Rollback.** Do not mutate the persistent session volume. If merged deployment
+or institutional canary fails, let the canonical deployment transaction restore
+the previous application release and retain the Cookie volume. Stop only the
+exact auth helper/tunnel; do not broad-prune containers, volumes, images or
+request diagnostics.
+
+**Validation.** Production diagnosis before the fix showed one safe snapshot
+Cookie but `COOKIE_LOAD=0`/`COOKIE_SESSION_VALID=0`; three bounded DOI probes
+returned stable `404/not_found` without persistent PDF output. Local TDD is
+tunnel `32/32`, ScanSci legal 89 pass / 6 Windows-only skips / 0 fail, full
+build/typecheck/lint green and code/security reviews READY. After merge and
+canonical ECS deployment, require snapshot `COOKIE_LOAD=1`, a real non-OA
+Elsevier response with route `institutional`, `%PDF-`, bounded size and SHA-256,
+then ClamAV/storage/rights/one-use/expiry/zero-grey-Tor product evidence. Until
+that exact gate passes, session `ready` must not be reported as download success.

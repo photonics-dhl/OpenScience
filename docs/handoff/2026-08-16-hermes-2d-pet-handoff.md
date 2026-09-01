@@ -1,6 +1,6 @@
 # Hermes Research Intelligence CURRENT Handoff
 
-> **CURRENT active-memory，2026-09-01。** ScanSci OA/Worker/Parser/BGE 与公网 release `9eeb8d5` 全绿；稳定 operator auth helper 已生产运行，当前仍需完成浙江大学 CARSI 交互并证明 session 持久。Task 11 阻断，Landing/Hermes 视觉仍冻结。
+> **CURRENT active-memory，2026-09-01。** 浙江大学 CARSI session 已 `ready` 并通过 `scansci-legal` 重建持久门禁；公网 release `9eeb8d5` 全绿。请求快照路径修复 candidate `a3b073b` 待 PR/CI/ECS institutional PDF canary；Task 11 阻断，Landing/Hermes 视觉仍冻结。
 
 ## Goal and state
 
@@ -11,14 +11,14 @@
 ## Version tuple
 
 - Worktree: `E:/Miscellaneous/XGS/.worktrees/readable-hermes-guidance`
-- Closeout branch / application HEAD / origin main: `codex/scansci-auth-production-closeout` / `9eeb8d51baf16b212a7a4f5dd7db25131aa725a6` / `9eeb8d51baf16b212a7a4f5dd7db25131aa725a6`
+- Candidate branch / HEAD / origin main: `codex/scansci-auth-stale-forward-recovery` / `a3b073b5ffaf767502e4cecedf1840d022348526` / `ed0c787239430095e241a3552c7d79d718ef31f8`
 - Production application source / immutable release: `9eeb8d51baf16b212a7a4f5dd7db25131aa725a6`
 - Rollback: `36033aee0c8712a31c699c800b1c81cd6ffe044d`; core/search migrations `33/33` / `2/2`
 - 本地 `main` 与其他 worktree 有用户改动，不得触碰或用它推断生产；上述 tuple 已从 ECS 重新实测。
 
 ## Production truth
 
-- Public `/__release` 与 active marker 均返回 `9eeb8d5…`；API/Web/Worker/Parser/BGE/ScanSci 均绑定 exact release root 并 healthy。Auth helper 为 `nofile=4096/4096`、167 PIDs、无 host publish/listener，本机 HTTP 200 + RFB handshake；bounded window 运行中，session 仍 `auth_required`，不得提前宣称 CARSI ready。
+- Public `/__release` 与 active marker 均返回 `9eeb8d5…`；API/Web/Worker/Parser/BGE/ScanSci healthy。CARSI session `ready` generation 14，Cookie 1 个且 `0600`/UID 10001；`scansci-legal` 重建后仍 ready，auth helper 与 5900/6080 已清零。真实 institutional PDF 尚未通过，不得把 ready Cookie 冒充下载能力完成。
 - TLS certificate subject 为 `openscience.428312321.xyz`，有效期自 2026-08-03 20:10:34 +08:00；ECS、域名反代、Landing、Cloudflare Tunnel 的上线日期必须按证据包分开表述。
 - `agent_tasks.result` 为 JSONB，`IngestionTaskState` 含 `needs_review` 与 `confirmed`。生产聚合为 14 条待确认建议、7 条 confirmed、21 条总计；未输出业务正文或用户信息。
 - 数据库不存在字面 `suggested` 枚举：产品语义映射为 `result != null + state=needs_review`，确认后 `state=confirmed`。
@@ -56,6 +56,7 @@
 24. 真实诊断证明 pinned ScanSci `Session.trust_env=False` 且只认 `SCANSCI_PDF_PROXY`/`network_proxy`；reviewed `05111e7` 仅把已严格校验的固定 Squid URL 同步到专用变量。PR #17 / exact CI `33397550370` 合并为 main `abd38d3`；ECS schema-v3 16-case Parser acceptance、core/search `33/33`/`2/2`、BGE CPU、ScanSci source/topology/policy/token/session、Worker 与真实 24,671,920-byte arXiv OA PDF canary 全绿，active/public 已 CAS 到 `abd38d3`，rollback `6893318`。
 25. `cca5908` tunnel 的 RFB 失败根因是 auth 容器继承 `RLIMIT_NOFILE=1073741816`，触发 LibVNCServer 巨大 fd-limit 扫描。`396b301` 固定 nofile `4096/4096` 并纳入 verifier；PR #25 / exact CI `33447387815`、job `99669426363` 合并为 `36033ae`，ECS exact Parser/BGE/ScanSci/OA/application/public/retention 与真实 auth nofile/HTTP/RFB/network/PID gates 全绿，active/rollback `36033ae` / `cca5908`。
 26. `aff435a`/`860b2b0`/`b1d6662` 关闭 tunnel PID-reuse、十次 bounded window 与 auth child TERM 生命周期；PR #26 exact CI `33452984344` / job `99686782627` 合并为 `9eeb8d5`。ECS corpus 目录误设 `0700` 曾使 Worker `EACCES` fail-closed；root-owned `0555/0444` staging 后 Parser acceptance 和完整部署全绿，active/rollback `9eeb8d5` / `36033ae`，临时 eval/诊断对象清零。
+27. CARSI 登录成功并通过 legal-service 重建持久门禁；三次 DOI `not_found` 根因是 pinned ScanSci 只读 `cache_dir/carsi_cookies`、忽略 mock 所用 `carsi_cookie_dir`。`a3b073b` 修正 request-local 快照路径，并关闭 stale/cross-port/orphan-starting tunnel 与 verifier bypass；Tunnel `32/32`、ScanSci `89/95`、全仓门禁和双复审 READY，待 PR/CI/ECS。
 
 ## Constraints
 
@@ -65,8 +66,8 @@
 
 ## Next action
 
-1. 在当前 bounded canonical auth tunnel 完成浙江大学 CARSI 认证，并验证 helper/`scansci-legal` 重建后 session 持久；不输出账号、Cookie 或 OAuth URL。
-2. 用真实 OA + CARSI PDF 完成 Hermes Drawer、RO Hermes、Files/Evidence、Personal Space 四入口与 375px 生产旅程。
+1. 将 `a3b073b` 经 PR/exact CI 合并并 canonical 部署，验证请求快照 `COOKIE_LOAD=1` 后用真实非 OA Elsevier DOI取得 `institutional` PDF；不输出账号、Cookie 或 OAuth URL。
+2. 用真实 OA + institutional PDF 完成 Hermes Drawer、RO Hermes、Files/Evidence、Personal Space 四入口与 375px 生产旅程。
 3. 验证 one-use、72h/600s、灰色源调用 0 与最终精确磁盘卫生，关闭 Task 10。
 
 ## Read first
@@ -74,6 +75,5 @@
 1. `AGENTS.md`
 2. 本 handoff
 3. `docs/specs/2026-08-30-scansci-default-capability-design.md`
-4. `docs/plans/2026-08-30-scansci-default-capability-plan.md`
-5. `docs/plans/2026-08-30-hermes-external-retrieval-lifecycle-plan.md`
-6. `docs/specs/2026-08-26-hermes-research-intelligence-platform-design.md`，再读 `docs/progress.md`；`project_index.md` 只定向检索 CURRENT，不要从较旧 `main` 或历史 release 段落推断现状。
+4. `docs/plans/2026-08-30-scansci-default-capability-plan.md` 与 `docs/plans/2026-08-30-hermes-external-retrieval-lifecycle-plan.md`
+5. `docs/specs/2026-08-26-hermes-research-intelligence-platform-design.md`，再读 `docs/progress.md`；`project_index.md` 只定向检索 CURRENT，不要从较旧 `main` 或历史 release 段落推断现状。
