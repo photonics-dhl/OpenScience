@@ -212,9 +212,11 @@ an institutional request:
 4. pinned DOI resolution and `try_carsi` run only after the adapter's exact
    source-compatibility guard passes; raw network egress remains impossible;
 5. the browser response callback alone may construct browser-owned/shared-group
-   mode `0640` output with exact
-   `http_status`, normalized `mime`, final URL, source label, byte count and
-   SHA-256 while atomically writing the captured PDF;
+   mode `0640` output. `proof.json` is an exact
+   `schema/job_id/identifier/proof` envelope that binds the result to the
+   manifest; its nested browser proof contains exact `http_status`, normalized
+   `mime`, final URL, source label, byte count and SHA-256 while atomically
+   writing the captured PDF;
 6. `scansci-legal`, which cannot write the output volume, independently checks
    the proof schema, 2xx status, exact PDF MIME, institutional source and public
    HTTPS allowlist, then streams and rechecks magic, bounded size and SHA-256;

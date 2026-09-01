@@ -275,10 +275,10 @@ git commit -m "feat(scansci): persist CARSI session securely"
 - Consumes: one validated DOI and one request-local Cookie JSON snapshot.
 - Produces: `BrowserProof`, `BrowserResult`,
   `validate_browser_result(job_id: str, proof_path: Path, pdf_path: Path,
-  *, output_root: Path) -> BrowserResult`, and
+  *, output_root: Path, identifier: str) -> BrowserResult`, and
   `BrowserJobClient.submit(identifier: str, cookie_json: bytes) -> BrowserResult`.
 
-- [ ] **Step 1: Write the failing protocol tests**
+- [x] **Step 1: Write the failing protocol tests**
 
 Cover the exact schema and filesystem invariants:
 
@@ -292,7 +292,7 @@ proof = BrowserProof(
     sha256=hashlib.sha256(PDF).hexdigest(),
 )
 result = validate_browser_result(
-    job_id, proof_path, pdf_path, output_root=output_root,
+    job_id, proof_path, pdf_path, output_root=output_root, identifier=identifier,
 )
 assert result == BrowserResult(content=PDF, proof=proof)
 ```
@@ -310,7 +310,7 @@ an input-side acknowledgement, waits boundedly for the browser owner to remove
 the output, then removes only its own exact input directory. A missing browser
 cleanup is surfaced and left for the browser owner's bounded stale-job recovery.
 
-- [ ] **Step 2: Verify RED**
+- [x] **Step 2: Verify RED**
 
 ```bash
 npx pnpm@9.15.0 --filter @openscience/scansci-legal test -- test_browser_protocol
@@ -318,14 +318,15 @@ npx pnpm@9.15.0 --filter @openscience/scansci-legal test -- test_browser_protoco
 
 Expected: FAIL because `scansci_legal.browser_protocol` does not exist.
 
-- [ ] **Step 3: Implement the protocol and validator**
+- [x] **Step 3: Implement the protocol and validator**
 
 Use these exact public types and constants:
 
 ```python
-MAX_JOB_MANIFEST_BYTES = 4 * 1024
+MAX_BROWSER_MANIFEST_BYTES = 4 * 1024
 MAX_BROWSER_PROOF_BYTES = 8 * 1024
 BROWSER_JOB_TIMEOUT_SECONDS = 180
+ACK_CLEANUP_TIMEOUT_SECONDS = 5
 ALLOWED_INSTITUTIONAL_HOST_SUFFIXES = (
     "elsevier.com", "sciencedirect.com", "elsevierusercontent.com",
 )
@@ -347,24 +348,29 @@ class BrowserResult:
 class BrowserJobClient:
     def __init__(self, input_root: Path = Path("/browser-inputs"),
                  output_root: Path = Path("/browser-outputs"),
-                 *, timeout_seconds: float = BROWSER_JOB_TIMEOUT_SECONDS): ...
+                 *, timeout_seconds: float = BROWSER_JOB_TIMEOUT_SECONDS,
+                 cleanup_timeout_seconds: float = ACK_CLEANUP_TIMEOUT_SECONDS): ...
     def submit(self, identifier: str, cookie_json: bytes) -> BrowserResult: ...
 
 def validate_browser_result(job_id: str, proof_path: Path, pdf_path: Path,
-                            *, output_root: Path) -> BrowserResult: ...
+                            *, output_root: Path,
+                            identifier: str) -> BrowserResult: ...
 ```
 
 Create the input job directory with `uuid4().hex`, mode `0750` and shared GID
 11000; write Cookie as `0640` and manifest as `0640`, then `fsync` and publish
 each through same-directory `os.replace`; poll only the matching output
 directory; use `lstat`/`O_NOFOLLOW`, one-link regular-file checks and bounded
-reads; decode proof with the existing no-duplicate-key hook; independently
-verify every proof field and PDF byte; write `ack.json` into the input job after
+reads; decode an exact `schema/job_id/identifier/proof` envelope with the
+existing no-duplicate-key hook; independently bind the result to the request and
+verify every proof field and PDF byte. Open the output root and exact job
+directory with `O_DIRECTORY|O_NOFOLLOW`, then read both leaves from the same
+pinned dirfd. Write `ack.json` into the input job after
 consuming or rejecting output; wait boundedly for matching output removal; then
 remove only the input directory beneath its resolved root. Never call unlink,
 rmdir or replace against the read-only output root.
 
-- [ ] **Step 4: Verify GREEN and commit**
+- [x] **Step 4: Verify GREEN and commit**
 
 ```bash
 npx pnpm@9.15.0 --filter @openscience/scansci-legal test -- test_browser_protocol
