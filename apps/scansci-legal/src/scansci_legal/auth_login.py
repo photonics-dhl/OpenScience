@@ -34,6 +34,7 @@ CONTROLLED_BROWSER_PROXY = "http://openscience-egress:7891"
 # Pinned ScanSci 1.11.0 hard-codes each CARSI window to 180 seconds.
 MAX_OPERATOR_LOGIN_ATTEMPTS = 10
 FIXED_CANARY_DOI = "10.1016/j.physleta.2023.129241"
+INSTITUTIONAL_IDP_HOST_SUFFIXES = ("zju.edu.cn", "carsi.edu.cn")
 SAFE_CANARY_FAILURE_CODES = frozenset({
     "browser_auth_required",
     "browser_display_unavailable",
@@ -214,6 +215,26 @@ def _strict_operator_login(
         profile = Path(temporary) / "profile"
         profile.mkdir(mode=0o700)
         with browser_session(profile) as (context, page):
+            saw_institutional_idp = False
+
+            def observe_navigation(value: object) -> None:
+                nonlocal saw_institutional_idp
+                if isinstance(value, str) and _institutional_idp_url(value):
+                    saw_institutional_idp = True
+
+            def observe_frame(frame: object) -> None:
+                try:
+                    main_frame = getattr(page, "main_frame", None)
+                    if main_frame is not None and frame is not main_frame:
+                        return
+                    observe_navigation(getattr(frame, "url"))
+                except Exception:
+                    return
+
+            page_on = getattr(page, "on", None)
+            if callable(page_on):
+                page_on("framenavigated", observe_frame)
+
             def publisher_cookie_json() -> bytes:
                 cookies = [
                     {key: value for key, value in cookie.items() if key in COOKIE_KEYS}
@@ -236,6 +257,7 @@ def _strict_operator_login(
                     raise BrowserPolicyError("strict_login_browser_closed") from error
                 if not isinstance(current_url, str):
                     raise BrowserPolicyError("strict_login_browser_closed")
+                observe_navigation(current_url)
                 lowered = current_url.lower()
                 on_publisher = _publisher_return_url(current_url, return_domains)
                 on_login = any(keyword in lowered for keyword in (
@@ -244,12 +266,16 @@ def _strict_operator_login(
                 if not on_publisher or on_login:
                     continue
                 cookie_json = publisher_cookie_json()
+                if not saw_institutional_idp:
+                    continue
                 _write_staged_cookie(staging_root, cookie_json)
                 return True
             if on_publisher:
                 try:
                     cookie_json = publisher_cookie_json()
                 except BrowserProtocolError:
+                    return False
+                if not saw_institutional_idp:
                     return False
                 _write_staged_cookie(staging_root, cookie_json)
                 return True
@@ -267,6 +293,29 @@ def _publisher_return_url(value: str, domains: tuple[str, ...]) -> bool:
         return False
     hostname = hostname.rstrip(".").lower()
     return any(hostname == domain or hostname.endswith("." + domain) for domain in domains)
+
+
+def _institutional_idp_url(value: str) -> bool:
+    if not value.isascii() or len(value) > 2048 or any(not 32 <= ord(character) <= 126 for character in value):
+        return False
+    try:
+        parsed = urlsplit(value)
+        port = parsed.port
+    except ValueError:
+        return False
+    if (
+        parsed.scheme != "https"
+        or not parsed.hostname
+        or parsed.username is not None
+        or parsed.password is not None
+        or port not in (None, 443)
+    ):
+        return False
+    hostname = parsed.hostname.rstrip(".").lower()
+    return any(
+        hostname == suffix or hostname.endswith("." + suffix)
+        for suffix in INSTITUTIONAL_IDP_HOST_SUFFIXES
+    )
 
 
 def _write_staged_cookie(staging_root: Path, cookie_json: bytes) -> None:
