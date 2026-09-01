@@ -4,18 +4,18 @@
 
 ## Current version tuple
 
-- Candidate branch / HEAD / origin main: `codex/scansci-auth-tunnel-start-race` / `b1d6662` / `36033ae`；operator auth reliability 待 PR/CI。
-- Production application source / immutable release: `36033aee0c8712a31c699c800b1c81cd6ffe044d`。
-- Production rollback: `cca590823b646c45a3c47f34678ec1ea3eea2fa3`；core/search migrations `33/33` / `2/2`。
+- Closeout branch / application HEAD / origin main: `codex/scansci-auth-production-closeout` / `9eeb8d5` / `9eeb8d5`。
+- Production application source / immutable release: `9eeb8d51baf16b212a7a4f5dd7db25131aa725a6`。
+- Production rollback: `36033aee0c8712a31c699c800b1c81cd6ffe044d`；core/search migrations `33/33` / `2/2`。
 - Taskmaster `hermes-research-intelligence` 仍为 9/12；独立 ScanSci plan Tasks 1–9 done、Task 10 in progress，Task 11 继续阻断。
 
-## 2026-09-01 — ScanSci auth RFB production recovery and tunnel race candidate
+## 2026-09-01 — ScanSci operator auth reliability production closeout
 
-- PR #24 / exact CI `33443570873`、job `99657272644` 合并为 main `cca5908`；schema-v3 Parser、BGE CPU、ScanSci OA/runtime、API/Web/Worker、Nginx/public CAS/retention 全绿，active/rollback 为 `cca5908` / `9042ed3`。
-- 拆分实测证明原 RFB readiness 失败来自 auth container 的 `RLIMIT_NOFILE=1073741816`：x11vnc 首次 accept 延迟约 81 秒，精确命中 LibVNCServer 遍历巨大 fd limit 的上游缺陷。`396b301` 将 prod/dev nofile 固定 `4096/4096`，canonical runtime 对缺失、重复、超大或软硬漂移 fail closed；red→green runtime `10/11→11/11`，相关 infra `77 pass/5 Windows Linux-only skip/0 fail`，全仓门禁 green。
-- PR #25 / exact CI run `33447387815`、job `99669426363` 将 nofile 修复合并为 `36033aee0c8712a31c699c800b1c81cd6ffe044d`。ECS 两阶段 canonical transaction 重建 exact schema-v3 16-case Parser 报告，Parser/BGE/ScanSci/OA/API/Web/Worker/Nginx/public CAS/retention 全绿；active/rollback 为 `36033ae` / `cca5908`。
-- 真实 auth helper 为 `nofile=4096/4096`、168 PIDs、无 host PortBinding/listener、fixed `.2`；本机 noVNC HTTP 200 与 `RFB_OK` 均通过。两个 operator window 均约 185 秒后由上游固定超时 exit 1，持久状态正确回到 `auth_required`；失效 forward/helper 已 canonical stopped，session 卷保留。Pinned upstream 没有 timeout CLI，当前按已批准设计增加 setup-once + 最多十次连续窗口，CARSI 尚未宣称 ready。
-- `aff435a` 对 Windows process-table 短暂不可见做 2 秒有界等待；仅当 Bash job table 仍绑定本次 `$!` 时向 job spec 发 TERM，退出 runner 不按数字 PID发信号。`860b2b0` 将 upstream 固定 180 秒窗口包装为 setup-once + 最多十次尝试，成功即 `ready`、穷尽才 `auth_required`；`b1d6662` 将 auth Python 纳入 entrypoint tracked children，TERM 在 1.8 秒内完整退出，避免 Docker SIGKILL profile。Tunnel `27/27`、ScanSci legal `89 pass/6 Windows skip/0 fail`；最终复审/PR/CI pending。
+- `aff435a` 关闭 Windows process-table visibility/PID-reuse；`860b2b0` 将 upstream 固定 180 秒窗口包装为 setup-once + 最多十次；`b1d6662` 跟踪 auth Python，TERM 1.8 秒完整退出。Tunnel `27/27`、ScanSci legal `89 pass/6 Windows skip/0 fail`，双复审 READY。
+- PR #26 exact CI run `33452984344` / job `99686782627` 13m16s 全绿，合并为 `9eeb8d51baf16b212a7a4f5dd7db25131aa725a6`；已合并远端分支经 ancestry 验证后删除，GitHub 仅保留 main。
+- ECS 第一阶段 exact build 后停在缺 Parser report。首次 corpus staging 把目录误设 `0700 root`，真实 Worker 以 `EACCES manifest.json` fail-closed；修为 root-owned `0555` 目录 / `0444` 文件后 schema-v3 16-case acceptance 通过，临时 eval/诊断根和 acceptance 容器/卷精确清零。
+- 正式事务的 Parser/BGE CPU/ScanSci OA+runtime/API/Web/Worker/Nginx/public CAS/retention 全绿；active/rollback 为 `9eeb8d5` / `36033ae`，journal/failed marker absent，磁盘 49G/148G、93G available。
+- 新 auth helper 已实测 `nofile=4096/4096`、167 PIDs、0 PortBinding、宿主 5900/6080 监听 0、本机 HTTP 200 + `RFB_OK`；bounded operator window 运行中，session 仍 `auth_required`，CARSI 尚未宣称 ready。
 
 ## 2026-08-31 — ScanSci Task 10 controlled-egress production retry
 
