@@ -24,7 +24,7 @@ from .limits import (
 from .policy import DOI_OR_ARXIV
 
 
-BROWSER_JOB_TIMEOUT_SECONDS = 180
+BROWSER_JOB_TIMEOUT_SECONDS = 210
 ACK_CLEANUP_TIMEOUT_SECONDS = 5
 BROWSER_UID = 10002
 SHARED_GID = 11000
@@ -36,6 +36,8 @@ PROOF_KEYS = frozenset({
 })
 PROOF_ENVELOPE_KEYS = frozenset({"schema", "job_id", "identifier", "proof"})
 MANIFEST_KEYS = frozenset({"schema", "job_id", "identifier"})
+FAILURE_KEYS = frozenset({"schema", "job_id", "identifier", "error"})
+ALLOWED_BROWSER_FAILURES = frozenset({"browser_timeout", "browser_worker_crash"})
 COOKIE_KEYS = frozenset({
     "name", "value", "url", "domain", "path", "expires", "httpOnly",
     "secure", "sameSite", "rest", "port", "port_specified",
@@ -127,6 +129,22 @@ class BrowserJobClient:
             while time.monotonic() < deadline:
                 proof_path = output_job / "proof.json"
                 pdf_path = output_job / "document.pdf"
+                failure_path = output_job / "failure.json"
+                if failure_path.exists():
+                    try:
+                        error_code = validate_browser_failure(
+                            job_id,
+                            failure_path,
+                            output_root=self._output_root,
+                            identifier=identifier,
+                            expected_browser_uid=self._expected_browser_uid,
+                            expected_shared_gid=self._expected_shared_gid,
+                        )
+                    except BrowserProtocolError:
+                        self._acknowledge(input_job, "rejected")
+                        raise
+                    self._acknowledge(input_job, "rejected")
+                    raise BrowserProtocolError(error_code)
                 if proof_path.exists() and pdf_path.exists():
                     try:
                         result = validate_browser_result(
@@ -213,6 +231,55 @@ def validate_browser_result(
         proof_payload = _validate_proof_envelope(raw, job_id, identifier)
         proof = _validate_proof(proof_payload, content)
         return BrowserResult(content, proof)
+    except BrowserProtocolError:
+        raise
+    except (OSError, UnicodeError, json.JSONDecodeError, ValueError, TypeError, RecursionError) as error:
+        raise BrowserProtocolError("invalid_browser_result") from error
+
+
+def validate_browser_failure(
+    job_id: str,
+    failure_path: Path,
+    *,
+    output_root: Path,
+    identifier: str,
+    expected_browser_uid: int | None = BROWSER_UID,
+    expected_shared_gid: int | None = SHARED_GID,
+) -> str:
+    """Validate a browser-owned terminal failure with the same owner boundary."""
+
+    try:
+        if not isinstance(job_id, str) or not JOB_ID.fullmatch(job_id):
+            raise ValueError("invalid job id")
+        _validate_identifier(identifier)
+        root = _validated_root(output_root)
+        job_root = root / job_id
+        candidate = Path(failure_path)
+        if not candidate.is_absolute() or candidate != job_root / "failure.json":
+            raise ValueError("unexpected browser failure path")
+        if _supports_directory_fds():
+            failure_bytes = _read_failure_posix(
+                root, job_id, expected_browser_uid, expected_shared_gid,
+            )
+        else:
+            _validate_output_job_path(job_root, root, expected_browser_uid, expected_shared_gid)
+            failure_bytes = _read_owned_regular(
+                candidate,
+                job_root / "failure.json",
+                root,
+                MAX_BROWSER_PROOF_BYTES,
+                expected_browser_uid,
+                expected_shared_gid,
+            )
+        value = json.loads(failure_bytes.decode("ascii"), object_pairs_hook=_no_duplicate_keys)
+        if not isinstance(value, dict) or set(value) != FAILURE_KEYS:
+            raise ValueError("invalid failure envelope")
+        if value["schema"] != 1 or value["job_id"] != job_id or value["identifier"] != identifier:
+            raise ValueError("failure envelope mismatch")
+        error_code = value["error"]
+        if not isinstance(error_code, str) or error_code not in ALLOWED_BROWSER_FAILURES:
+            raise ValueError("invalid failure code")
+        return error_code
     except BrowserProtocolError:
         raise
     except (OSError, UnicodeError, json.JSONDecodeError, ValueError, TypeError, RecursionError) as error:
@@ -369,6 +436,31 @@ def _read_result_pair_posix(
         )
         _require_same_directory(root_fd, job_id, opened_job)
         return proof, pdf
+    finally:
+        if job_fd >= 0:
+            os.close(job_fd)
+        os.close(root_fd)
+
+
+def _read_failure_posix(
+    output_root: Path,
+    job_id: str,
+    expected_uid: int | None,
+    expected_gid: int | None,
+) -> bytes:
+    root_flags = os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW
+    root_fd = os.open(output_root, root_flags)
+    job_fd = -1
+    try:
+        job_fd = os.open(job_id, root_flags, dir_fd=root_fd)
+        opened_job = os.fstat(job_fd)
+        _validate_output_job_stat(opened_job, expected_uid, expected_gid)
+        _require_same_directory(root_fd, job_id, opened_job)
+        failure = _read_owned_regular_at(
+            job_fd, "failure.json", MAX_BROWSER_PROOF_BYTES, expected_uid, expected_gid,
+        )
+        _require_same_directory(root_fd, job_id, opened_job)
+        return failure
     finally:
         if job_fd >= 0:
             os.close(job_fd)

@@ -324,6 +324,52 @@ class BrowserJobClientTest(unittest.TestCase):
         self.assertEqual(list(self.input_root.iterdir()), [])
         self.assertEqual((sentinel / "proof.json").read_text(encoding="ascii"), "browser-owned")
 
+    def test_browser_failure_is_validated_acknowledged_and_returned_immediately(self):
+        observed = {}
+
+        def browser() -> None:
+            deadline = time.monotonic() + 1
+            while time.monotonic() < deadline:
+                jobs = list(self.input_root.iterdir())
+                if jobs and (jobs[0] / "job.json").exists():
+                    break
+                time.sleep(0.001)
+            input_job = jobs[0]
+            manifest = json.loads((input_job / "job.json").read_text("ascii"))
+            output_job = self.output_root / manifest["job_id"]
+            output_job.mkdir()
+            failure = {
+                "schema": 1,
+                "job_id": manifest["job_id"],
+                "identifier": manifest["identifier"],
+                "error": "browser_worker_crash",
+            }
+            (output_job / "failure.json").write_text(
+                json.dumps(failure, sort_keys=True, separators=(",", ":")),
+                encoding="ascii",
+            )
+            if os.name != "nt":
+                output_job.chmod(0o750)
+                (output_job / "failure.json").chmod(0o640)
+            while time.monotonic() < deadline and not (input_job / "ack.json").exists():
+                time.sleep(0.001)
+            observed["ack"] = json.loads((input_job / "ack.json").read_text("ascii"))
+            (output_job / "failure.json").unlink()
+            output_job.rmdir()
+
+        thread = threading.Thread(target=browser)
+        thread.start()
+        started = time.monotonic()
+        with self.assertRaises(BrowserProtocolError) as raised:
+            self.client(timeout=0.8).submit(
+                DOI, b'[{"name":"session","value":"private-cookie"}]',
+            )
+        thread.join(timeout=1)
+
+        self.assertEqual(raised.exception.code, "browser_worker_crash")
+        self.assertLess(time.monotonic() - started, 0.5)
+        self.assertEqual(observed["ack"], {"status": "rejected"})
+
     def test_result_at_acquisition_deadline_gets_a_separate_cleanup_window(self):
         def browser() -> None:
             deadline = time.monotonic() + 1
