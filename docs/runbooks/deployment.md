@@ -1,6 +1,6 @@
 # Runbook: 部署（Deployment）
 
-> 状态：**CURRENT**。active immutable release / application source 为 `36033aee0c8712a31c699c800b1c81cd6ffe044d`，rollback tree 为 `cca590823b646c45a3c47f34678ec1ea3eea2fa3`。post-deploy merge/docs-only HEAD 不得冒充 application source。
+> 状态：**CURRENT**。active immutable release / application source 为 `9eeb8d51baf16b212a7a4f5dd7db25131aa725a6`，rollback tree 为 `36033aee0c8712a31c699c800b1c81cd6ffe044d`。post-deploy merge/docs-only HEAD 不得冒充 application source。
 > 格式遵循 `.agents/skills/infra-runbook/SKILL.md` 四节强制要求。
 > 部署属 Spec §20.5"询问"级操作：执行前需用户确认，必须走 `infra/scripts/deploy.sh` + CI/CD，禁止手工改服务器代码。
 
@@ -1855,3 +1855,26 @@ clears the owned process set in 1.8 seconds instead of reaching Docker SIGKILL;
 the trap clears ownership before signaling and is idempotent across TERM/EXIT.
 Tunnel tests are `27/27`; ScanSci legal tests are 89 pass / 6 Windows-only skips
 / 0 fail. Merge and deploy the final HEAD before starting the next login.
+
+### 5.56 ScanSci bounded auth release and parser staging correction (2026-09-01)
+
+PR #26 passed exact CI run `33452984344` / job `99686782627` in 13m16s and
+merged as `9eeb8d51baf16b212a7a4f5dd7db25131aa725a6`. The first canonical phase built
+the exact release and SHA-tagged images without switching production, then
+stopped at the missing Parser report as required.
+
+The initial corpus copy incorrectly changed every acceptance directory to
+`0700 root`; the real UID 1000 Worker failed closed with `EACCES` opening
+`/acceptance-corpus/manifest.json`. Keep the trusted corpus root and descendants
+root-owned and non-writable, but make directories `0555` so the read-only Worker
+can traverse them; corpus files remain `0444`. After this exact correction the
+schema-v3 16-case acceptance published `TASK8_PARSER_ACCEPTANCE_OK`. The exact
+eval/diagnostic root and labeled acceptance containers/volumes were removed.
+
+The second canonical transaction passed Parser, BGE CPU, ScanSci source/
+topology/policy/file-limit/token/session plus real OA, API/Web/Worker, Nginx,
+public CAS and retention. Active/rollback are `9eeb8d5` / `36033ae`; journal and
+failed markers are absent. The new helper passed `nofile=4096/4096`, 167 PIDs,
+zero host PortBinding/listener, local HTTP 200 and `RFB_OK`. Keep the helper
+running only while the bounded operator login is active; CARSI remains
+`auth_required` until the persistent-session and institutional-PDF gates pass.
