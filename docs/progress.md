@@ -1,20 +1,25 @@
 # OpenScience 进度（CURRENT window）
 
-> 最新同步：2026-09-01。历史由 Git 保存；旧计划和 archive 不作为默认输入。
+> 最新同步：2026-09-01。历史由 Git 保存；旧计划不作为默认输入。
 
 ## Current version tuple
 
-- Candidate branch / Task 3D commit / origin main: `codex/scansci-browser-institutional-gate` / `0b84273` / `2019f8a`。
+- Candidate branch / HEAD / origin main: `codex/scansci-browser-institutional-gate` / `8c35179`（Task 4 code）/ `2019f8a`。
 - Production application source / immutable release: `2019f8a2d9dcd7d5241de231ae95e2aedf238f47`。
 - Production rollback: `9eeb8d51baf16b212a7a4f5dd7db25131aa725a6`；core/search migrations `33/33` / `2/2`。
-- Taskmaster `hermes-research-intelligence` 仍为 9/12；strict browser Tasks 3A–3D 已完成，现进入 production Compose/release Task 4；ScanSci ECS acceptance Step 5/6 与 Task 11 继续阻断到真实机构 PDF 通过。
+- Taskmaster `hermes-research-intelligence` 仍为 9/12；strict browser Tasks 3A–3D 与 Task 4 本地实现/复审已完成；下一步是 ECS release/浙江大学认证，Step 5/6 与 Task 11 继续阻断到真实机构 PDF 通过。
+
+## 2026-09-01 — ScanSci strict browser Task 4 local complete (`8c35179`)
+
+- Compose 新增独立 `browser_net`、反向所有权 tmpfs 与 SHA-tagged 三角色；CPU browser `10002:11000`，无端口、Secret、session 或其他网络。
+- 宿主只允许 browser → Squid `172.26.0.1:7891`；boot policy 在 browser 创建前发布，schema 3/4 精确回滚且 Docker 保持 active。
+- Squid rollback 使用 release-SHA 专属 root `0600` 前镜像；atomic helper 独占创建并 fsync 文件/父目录，任何 helper/signal 失败都保留 outer dirty 并从 exact preimage atomic activate+cmp，不再猜共享历史 rollback。
+- fresh Task 4 gates `74 total / 69 pass / 5 platform skip / 0 fail`；release-contract `118 / 111 / 7 / 0`，Bash syntax 与 diff-check green；三路 security/architecture review 均 READY。生产仍为 `2019f8a`，未部署、未认证、未声称机构 PDF 可用。
 
 ## 2026-09-01 — ScanSci strict browser Tasks 3C/3D complete
 
-- `d41bec4`：机构路由只走 `BrowserJobClient`，OA 保持 browserless；2xx/PDF/publisher URL/magic/长度/SHA 全证才构造 institutional `AcquiredPdf`。
-- `ready` 绑定 24h canary proof 与精确 publisher Cookie SHA；替换立即失效，只有真实 auth challenge 撤销。登录使用 fresh profile，只持久 Elsevier/ScienceDirect Cookie，固定 DOI 经同一 adapter 证明后才原子发布。
-- `0b84273`：新增 fixed `10002:11000` 的 CPU Chromium/Patchright/private-Xvfb browser image；无 noVNC、端口、Secret、session mount，auth/browser 共用四项 exact-hash lock，Tini group 收口 worker/Xvfb。
-- 全量与官方包门禁 `161 pass / 11 platform skip / 0 fail`，Git Bash 语法、`git diff --check` 通过；安全/架构复审 READY。生产未变，下一步 Task 4 ECS release integration。
+- `d41bec4`/`0b84273`：机构只走 proof-backed `BrowserJobClient`，OA browserless；`ready` 绑定 24h fixed-DOI proof 与 publisher Cookie SHA。CPU browser 固定 `10002:11000`、无 noVNC/端口/Secret/session mount。
+- ScanSci `161 pass / 11 platform skip / 0 fail`，安全/架构复审 READY；生产未变。
 
 ## 2026-09-01 — Snapshot fix deployed; CARSI false-positive isolated
 

@@ -626,10 +626,17 @@ Local Docker remains forbidden; the first image build occurs on ECS in Task 10.
 - Modify: `infra/scripts/production-release-retention.mjs`
 - Modify: `infra/scripts/deploy.test.mjs`
 - Modify: `infra/scripts/production-release-retention.test.mjs`
+- Modify: `infra/scripts/atomic-squid-config.mjs`
+- Modify: `infra/scripts/atomic-squid-config.test.mjs`
 - Create: `infra/scripts/verify-scansci-runtime.mjs`
 - Create: `infra/scripts/verify-scansci-runtime.test.mjs`
 - Create: `infra/scripts/provision-scansci-secrets.mjs`
 - Create: `infra/scripts/provision-scansci-secrets.test.mjs`
+- Create: `infra/scripts/prepare-scansci-browser-network.sh`
+- Create: `infra/scripts/scansci-browser-firewall.sh`
+- Create: `infra/systemd/openscience-scansci-browser-firewall.service`
+- Create: `infra/systemd/docker.service.d/openscience-scansci-browser-firewall.conf`
+- Create: `infra/systemd/squid.service.d/openscience-scansci-browser-network.conf`
 - Create: `docs/decisions/ADR-012-scansci-default-literature-acquisition.md`
 
 **Interfaces:**
@@ -638,7 +645,7 @@ Local Docker remains forbidden; the first image build occurs on ECS in Task 10.
   Secret/session resources, opposite-direction tmpfs jobs, deploy/rollback/
   retention support and runtime verifier.
 
-- [ ] **Step 1: Write failing topology, Secret and rollback tests**
+- [x] **Step 1: Write failing topology, Secret and rollback tests**
 
 Assert: legal has no host port/data network/database/storage env; browser has no
 host port/service token/session/data/app/auth network/Docker socket/host mount;
@@ -654,7 +661,7 @@ failure restores the exact prior legal/browser images or stops them when the
 previous release lacks them; retention keeps active+rollback legal/browser/auth
 tags; no broad prune appears.
 
-- [ ] **Step 2: Verify RED**
+- [x] **Step 2: Verify RED**
 
 Run:
 
@@ -667,10 +674,18 @@ node --test infra/scripts/deploy.test.mjs \
 
 Expected: FAIL for missing service/topology/recovery contracts.
 
-- [ ] **Step 3: Implement the minimum Compose and transaction changes**
+- [x] **Step 3: Implement the minimum Compose and transaction changes**
 
-Keep `scansci-legal` on `retrieval_net` and add `scansci-browser` on that network
-only. Create volumes with these exact ownership/direction contracts:
+Keep `scansci-legal` on `retrieval_net`. Put `scansci-browser` alone on fixed
+internal `browser_net` (`172.26.0.0/24`, bridge `xgs-browser0`); host INPUT
+allows only its Squid listener at `172.26.0.1:7891` and rejects all other host
+ports. Persist the firewall before browser container creation through a Docker
+`Requires`/`After` drop-in. The first atomic boot-policy mutation must be that
+fail-closed Docker dependency. Before any Squid/browser mutation, create a
+release-SHA-scoped root-only exact Squid preimage using exclusive create, file
+fsync and parent-directory fsync; rollback restores it through atomic activate
+and byte comparison. Create volumes with these exact ownership/direction
+contracts:
 
 ```yaml
 volumes:
@@ -713,13 +728,13 @@ values.
 the fixed root-owned directory/files, preserves existing credentials unless
 explicitly replaced, and prints key names/status only.
 
-- [ ] **Step 4: Verify GREEN**
+- [x] **Step 4: Verify GREEN**
 
 Run the four Node test files plus `npx pnpm@9.15.0 lint`.
 
 Expected: all transaction/topology/Secret contracts pass.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add .env.example infra/compose infra/scripts docs/decisions/ADR-012-scansci-default-literature-acquisition.md

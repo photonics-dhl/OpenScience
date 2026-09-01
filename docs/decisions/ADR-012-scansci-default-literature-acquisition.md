@@ -75,6 +75,23 @@ service. This limitation is documented in the official
   private answer only for hostname `openscience-egress` resolving exactly to
   the retrieval bridge gateway `172.24.0.1`; all research targets remain credential-free HTTPS on
   port 443 and retain the public-address checks.
+- `scansci-browser` is the sole peer on fixed internal `172.26.0.0/24`
+  `browser_net` with bridge `xgs-browser0`; it does not share `retrieval_net`,
+  `app_net`, `data_net`, `auth_net`, a host port, Secret, or session mount. Its
+  host alias reaches only Squid at `172.26.0.1:7891`. Ordered INPUT rules allow
+  that exact TCP destination and reject every other host port from the subnet;
+  raw internet remains unavailable because the network is internal.
+- The browser firewall is boot-persistent and release-transactional. Docker
+  has `Requires`/`After` on a root-owned oneshot firewall service, while Squid
+  starts after Docker so its listener can bind the restored bridge. Before a
+  candidate browser is created, deployment atomically publishes the Docker
+  fail-closed drop-in first, then the firewall unit/script and Squid drop-in.
+  Before any Squid/browser mutation it creates a release-SHA-scoped, root-only
+  `0600` exact Squid preimage by exclusive write, file fsync and parent-directory
+  fsync. Any rollback restores that exact preimage through atomic activation and
+  byte comparison; schema-3 rollback removes the Docker dependency before
+  stopping the firewall so Docker remains active. Same-SHA and committed
+  success remove only the verified transaction-owned preimage.
 - Squid keeps its host-client listener on loopback and adds only the retrieval
   gateway `172.24.0.1:7891`. That listener accepts only the fixed retrieval subnet,
   only CONNECT to port 443, and denies private, loopback, link-local, CGNAT,
@@ -145,20 +162,23 @@ service. This limitation is documented in the official
   application-rollback data. Recreating the legal or auth image preserves the
   publisher Cookie files. Credential/session revocation remains an explicit,
   independent operation.
-- Both ScanSci images carry the application source SHA, upstream archive hash,
-  locked dependency-file hashes, and a distinct legal/auth role as image labels.
+- All three ScanSci images carry the application source SHA, upstream archive
+  hash, locked dependency-file hashes, and distinct legal/browser/auth role
+  labels.
   The verifier also pins the expected entrypoint for each role and binds
   the running container to the exact release root and Compose file; checks image
   identity, UID, mounts, networks, ports, limits, policy flags, grey-source/Tor
   absence, runtime Secret ownership/mode, a non-printing host/runtime token hash,
   and bounded session status; and emits statuses without values.
-- The production transaction builds legal/auth images before Worker/Parser and
-  starts `scansci-legal` before switching Agent Worker. A distinct
+- The production transaction builds browser/legal/auth images before
+  Worker/Parser, publishes the fail-closed host boot policy, then starts
+  `scansci-browser` and `scansci-legal` before switching Agent Worker. A distinct
   prepublication verifier requires the exact candidate SHA plus built
   legal/auth image IDs, rejects any pre-existing candidate capability sidecar,
   and verifies actual ScanSci/Worker runtime without reading a sidecar. Only
   after those checks pass does the existing locked active-release CAS publish
-  `scansci_deploy` capability schema 3, followed immediately by canonical
+  `scansci_deploy` capability schema 4 with exact legal/browser/auth image IDs,
+  followed immediately by canonical
   sidecar verification. Normal active/rollback verification remains
   canonical-sidecar-only and keeps its legacy CLI. Catchable failure restores
   the previous marker before deleting only the exact candidate sidecar and
@@ -166,7 +186,7 @@ service. This limitation is documented in the official
   ScanSci. A previous release always uses its own Compose and verifier. When the
   previous release predates ScanSci, rollback stops only the candidate service
   and restores the previous application release.
-- Exact retention inventories SHA-tagged legal and auth images together with
+- Exact retention inventories SHA-tagged legal, browser and auth images together with
   Worker, Parser, and optional Embedding images. Active and rollback images are
   protected according to their capability records; inactive tags are removed
   only by exact identity. No broad image, volume, builder, or filesystem prune

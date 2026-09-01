@@ -98,6 +98,16 @@ service token, persistent Cookie/session mount, database/Redis/object-storage
 Secret, Docker socket, host mount, app/data/auth network or persistent browser
 profile.
 
+The worker is the sole peer on fixed internal `browser_net`
+`172.26.0.0/24` (`xgs-browser0`). Its only host-reachable destination is the
+dedicated Squid listener `172.26.0.1:7891`; ordered INPUT rules reject every
+other host port. Docker requires the boot-persistent firewall service, and the
+fail-closed dependency is published before a browser container can become
+restart-eligible. Before any Squid/browser mutation, deployment saves a
+release-SHA-scoped root-only exact Squid preimage with exclusive create, file
+fsync and parent-directory fsync. Rollback restores that preimage atomically
+and verifies its bytes; it never guesses from a shared historical rollback.
+
 The controller creates `/browser-profile-jobs/<job-id>` before spawning the
 job, pins its owner/device/inode, and passes that exact empty workspace to the
 child. Only after the complete process group is confirmed absent may it restore
@@ -494,7 +504,10 @@ release, stops/removes only the exact `scansci-legal`, `scansci-browser` and
 auth-helper containers, and preserves the session volume unless the operator
 explicitly revokes it. The two bounded browser-job tmpfs volumes contain no
 durable state and may be removed only by exact release identity after containers
-stop. Credential/session revocation is independent of application rollback.
+stop. Schema-4 rollback republishes the exact previous browser boot policy;
+schema-3 rollback removes the Docker firewall dependency before stopping that
+unit and proves Docker remains active. Credential/session revocation is
+independent of application rollback.
 
 Production retention keeps current and rollback application images plus current
 legal/browser/auth images and one persistent session volume. Failed candidate
