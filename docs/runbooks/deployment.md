@@ -1913,3 +1913,87 @@ canonical ECS deployment, require snapshot `COOKIE_LOAD=1`, a real non-OA
 Elsevier response with route `institutional`, `%PDF-`, bounded size and SHA-256,
 then ClamAV/storage/rights/one-use/expiry/zero-grey-Tor product evidence. Until
 that exact gate passes, session `ready` must not be reported as download success.
+
+### 5.58 CARSI 403 false-positive and CPU browser correction (2026-09-01)
+
+PR #28 passed exact CI run `33461988607` / job `99713876656`, merged as
+`2019f8a2d9dcd7d5241de231ae95e2aedf238f47`, and passed the two-phase canonical
+ECS transaction after an exact schema-v3 Parser report. Active/public and
+rollback are `2019f8a` / `9eeb8d5`; core/search remain `33/33` / `2/2`, all
+target containers are healthy, the BGE CPU and OA canaries passed, and the
+journal/failed markers are absent. The request `cache_dir` now equals its safe
+Cookie snapshot as intended.
+
+Do not infer institutional readiness from that release. Post-deploy evidence
+showed one safe Cookie JSON with five valid-shaped records, but session state
+`auth_required` generation 16 and both persistent/snapshot loads false. The
+same ScienceDirect article and PDF returned 403 without an SSO redirect through
+Requests, CPU Chromium, ECS direct egress and the optional home tunnel; no PDF
+magic was received. The pinned federated-login detector accepts a publisher URL
+outside login keywords or more than three Cookies, so the earlier `ready` was a
+403 false-positive. Pinned `try_carsi` is browser-backed, while the legal image
+contains no Chromium/Patchright/Xvfb runtime.
+
+Step 5 is reopened and Step 6 remains blocked. The user-approved correction is
+design commit `950ec40`: add an isolated CPU-only `scansci-browser` with no
+token/session mounts and promote staged Cookies only after fixed DOI
+`10.1016/j.physleta.2023.129241` returns allowlisted institutional `%PDF-`
+evidence. Opposite-direction tmpfs mounts prevent legal from forging output and
+browser from changing input; direct Patchright has no executable fallback, and
+browser status/MIME/URL/hash proof is independently checked. Neither service
+has a host browser port or arbitrary URL input. Do not restart operator login
+until the written design is reviewed, its TDD plan is implemented, exact CI is
+merged and the merged SHA is canonically deployed.
+
+### 5.59 ScanSci strict-browser release topology and crash-safe rollback (2026-09-01)
+
+#### Preconditions
+
+Use only the canonical immutable deployment transaction and the explicit Git
+Bash SSH wrapper. The active release must still equal the supplied rollback
+SHA; auth helper/tunnel, durable journal, failed marker and pending retention
+intent must be absent. Verify `/etc/squid/squid.conf` is a root-owned `0644`
+single-link regular file no larger than 1 MiB, Docker and Squid are active, and
+`/usr/sbin/iptables` resolves to a root-owned executable not writable by group
+or others. Do not run local Docker or a broad prune.
+
+#### Execution
+
+The transaction builds SHA-tagged browser/legal/auth images, publishes the
+Docker fail-closed systemd dependency before creating the browser container,
+and creates a release-SHA-scoped root-only Squid preimage using exclusive write,
+file fsync and parent-directory fsync. It then creates the internal
+`browser_net` (`172.26.0.0/24`, `xgs-browser0`), installs ordered INPUT rules
+allowing only `172.26.0.1:7891`, atomically activates the Squid listener, and
+starts browser/legal before Worker. Prepublication verification requires exact
+image IDs, process/mount/network/limit contracts and the real Worker OA canary.
+Only after public release identity is accepted does the transaction commit and
+discard the verified preimage.
+
+#### Rollback
+
+Any catchable failure before commit restores application and ScanSci containers
+to the exact prior SHA. Every browser-network failure, including helper status
+70/78/79 or signal-derived unknown status, retains outer rollback ownership and
+restores the exact release-scoped Squid preimage through atomic activation plus
+byte comparison. Schema 4 rollback republishes the prior boot policy and keeps
+the browser firewall; schema 3/no-browser rollback first removes the candidate
+browser, removes the Docker dependency and reloads systemd, verifies Docker is
+still active, then stops/removes the firewall unit. A power loss before the
+Docker drop-in rename has no restart-eligible browser; after rename Docker is
+fail-closed. A durable journal or transaction preimage left after host loss
+requires explicit recovery—never delete it speculatively.
+
+#### Verification
+
+Require `systemctl is-active docker squid
+openscience-scansci-browser-firewall`, and verify Docker `Requires`/`After` the
+firewall while Squid `Requires`/`After` Docker. The browser network must have
+exact bridge/IPAM and one browser peer. From that container, host 22/80/443/
+3001/2375/2376, raw `1.1.1.1` and every non-Squid gateway port must fail; only
+gateway TCP 7891 may connect. Verify no host browser port, auth container,
+Docker socket, Secret/session mount, grey-source/Tor flag, transaction journal,
+failed marker, retention pending file or release-scoped Squid preimage remains.
+Finally require Parser acceptance, core/search migration status, BGE CPU,
+Worker OA PDF, API/Web/Worker/Nginx/public `__release`, exact active/rollback
+capability image IDs, and bounded disk inventory.

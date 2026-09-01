@@ -9,6 +9,7 @@ import time
 from typing import Mapping
 
 from .http_service import ServiceConfig, create_server
+from .browser_protocol import BrowserJobClient
 from .session import PersistedProfileRefresher, SessionManager, SessionStore
 from .upstream import ScanSciAcquisitionClient
 
@@ -62,15 +63,26 @@ def main() -> None:
         time.time,
         enabled=os.environ.get("SCANSCI_ENABLED", "true").lower() in {"1", "true", "yes"},
     )
+
+    def mark_session_verified(cookie_sha256: str) -> None:
+        snapshot = session_manager.mark_verified_ready(time.time(), cookie_sha256)
+        if snapshot.status != "ready":
+            raise RuntimeError("verified session state was not committed")
+
     server = create_server(
         ServiceConfig(
             host=os.environ.get("SCANSCI_HOST", "0.0.0.0"),
             port=int(os.environ.get("SCANSCI_PORT", "8080")),
             service_token=token,
             session_status=session_manager.status,
-            session_auth_redirect=session_manager.on_auth_redirect,
+            session_auth_redirect=session_manager.mark_auth_required,
+            session_verified=mark_session_verified,
         ),
-        ScanSciAcquisitionClient(runtime_dir, session_root=session_store.root),
+        ScanSciAcquisitionClient(
+            runtime_dir,
+            session_root=session_store.root,
+            browser_job_client=BrowserJobClient(),
+        ),
     )
     try:
         server.serve_forever()

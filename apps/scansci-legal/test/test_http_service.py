@@ -133,15 +133,23 @@ class FakeClient:
         return self.result or AcquiredPdf(
             content=self.pdf.read_bytes(),
             route="institutional",
-            source="CARSI",
-            source_url="https://publisher.example/paper",
+            source="CARSI-Browser",
+            source_url="https://www.sciencedirect.com/science/article/pii/x/pdfft",
             entitlement_valid_until="2026-09-30T00:00:00Z",
+            session_cookie_sha256="b" * 64,
         )
 
 
 @contextmanager
 def running_server(client: FakeClient, **config):
-    server = create_server({"host": "127.0.0.1", "port": 0, "service_token": "service-test-token", "session_status": "ready", **config}, client)
+    server = create_server({
+        "host": "127.0.0.1",
+        "port": 0,
+        "service_token": "service-test-token",
+        "session_status": "ready",
+        "session_verified": lambda _cookie_sha256: None,
+        **config,
+    }, client)
     thread = threading.Thread(target=server.serve_forever, daemon=True)
     thread.start()
     try:
@@ -213,7 +221,10 @@ class LegalDownloadHttpServiceTest(unittest.TestCase):
         self.assertEqual(response.status, 200)
         self.assertEqual(response.headers["content-type"], "application/pdf")
         self.assertEqual(response.headers["x-scansci-route"], "institutional")
-        self.assertEqual(response.headers["x-scansci-public-url"], "https://publisher.example/paper")
+        self.assertEqual(
+            response.headers["x-scansci-public-url"],
+            "https://www.sciencedirect.com/science/article/pii/x/pdfft",
+        )
         self.assertEqual(response.headers["x-scansci-entitlement"], "verified")
         self.assertEqual(response.headers["x-scansci-entitlement-subject"], "a" * 64)
         self.assertEqual(response.headers["x-scansci-entitlement-valid-until"], "2026-09-30T00:00:00Z")
@@ -223,13 +234,13 @@ class LegalDownloadHttpServiceTest(unittest.TestCase):
     def test_real_client_composition_keeps_worker_pdf_bytes_alive_until_the_http_response(self):
         worker = Path(self.directory.name) / "worker.py"
         worker.write_text(
-            "import json, pathlib, sys\nrequest=json.load(sys.stdin)\npath=pathlib.Path(request['output_dir'])/'paper.pdf'\npath.write_bytes(b'%PDF-live-through-response')\nprint(json.dumps({'success': True, 'file': str(path), 'source': 'CARSI', 'url': 'https://publisher.example/paper'}))\n",
+            "import json, pathlib, sys\nrequest=json.load(sys.stdin)\npath=pathlib.Path(request['output_dir'])/'paper.pdf'\npath.write_bytes(b'%PDF-live-through-response')\nprint(json.dumps({'success': True, 'file': str(path), 'source': 'Unpaywall', 'url': 'https://publisher.example/paper'}))\n",
             encoding="utf-8",
         )
         session_root = Path(self.directory.name) / "session"
         cookie = session_root / "scansci" / "cache" / "carsi_cookies" / "sciencedirect.json"
         cookie.parent.mkdir(parents=True)
-        cookie.write_text('[{"name":"session","value":"fixture"}]', encoding="utf-8")
+        cookie.write_text('[{"name":"session","value":"fixture","domain":".sciencedirect.com"}]', encoding="utf-8")
         if os.name != "nt":
             for parent in (session_root, session_root / "scansci", session_root / "scansci" / "cache", cookie.parent):
                 parent.chmod(0o700)
@@ -237,7 +248,7 @@ class LegalDownloadHttpServiceTest(unittest.TestCase):
         client = ScanSciAcquisitionClient(
             Path(self.directory.name), worker_command=[sys.executable, str(worker)], session_root=session_root,
         )
-        with running_server(client) as server:
+        with running_server(client, session_status="auth_required") as server:
             response = request_json(server, "/v1/legal-download", VALID_REQUEST, "service-test-token")
 
         self.assertEqual(response.status, 200)
@@ -261,6 +272,10 @@ class LegalDownloadHttpServiceTest(unittest.TestCase):
     def test_rejects_unsafe_source_metadata_and_non_allowlisted_routes(self):
         for name, result in (
             ("credentials", AcquiredPdf(self.pdf.read_bytes(), "open_access", "oa_url", "https://user:secret@publisher.example/paper")),
+            ("legacy-institutional", AcquiredPdf(
+                self.pdf.read_bytes(), "institutional", "CARSI",
+                "https://www.sciencedirect.com/paper.pdf",
+            )),
             ("grey-source", AcquiredPdf(self.pdf.read_bytes(), "institutional", "Sci-Hub", "https://publisher.example/paper")),
             ("grey-route", AcquiredPdf(self.pdf.read_bytes(), "scihub", "CARSI", "https://publisher.example/paper")),
         ):
@@ -320,7 +335,7 @@ class LegalDownloadHttpServiceTest(unittest.TestCase):
         worker.write_text("import sys\nprint('cookie=secret https://user:password@proxy.example/private', file=sys.stderr)\nraise RuntimeError('cookie=secret /private/path')\n", encoding="utf-8")
         client = ScanSciAcquisitionClient(Path(self.directory.name), worker_command=[sys.executable, str(worker)])
         captured = io.StringIO()
-        with redirect_stderr(captured), running_server(client) as server:
+        with redirect_stderr(captured), running_server(client, session_status="auth_required") as server:
             response = request_json(server, "/v1/legal-download", VALID_REQUEST, "service-test-token")
 
         self.assertEqual(response.status, 502)

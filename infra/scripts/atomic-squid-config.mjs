@@ -75,6 +75,42 @@ async function atomicWrite(destination, content) {
   }
 }
 
+export async function snapshotConfig({
+  source,
+  snapshot,
+  afterFileSync = async () => {},
+  expectedUid,
+}) {
+  if (!isAbsolute(source) || !isAbsolute(snapshot) || source === snapshot) fail();
+  await validateRegularFile(source);
+  const content = await readFile(source);
+  let handle;
+  let created = false;
+  let published = false;
+  try {
+    handle = await open(snapshot, 'wx', 0o600);
+    created = true;
+    await handle.writeFile(content);
+    await handle.chmod(0o600);
+    await handle.sync();
+    await afterFileSync();
+    const metadata = await handle.stat();
+    if (!metadata.isFile() || metadata.size !== content.length || metadata.nlink !== 1
+      || (process.platform !== 'win32' && (metadata.mode & 0o777) !== 0o600)
+      || (expectedUid !== undefined && metadata.uid !== expectedUid)) fail();
+    await handle.close();
+    handle = undefined;
+    await syncDirectory(dirname(snapshot));
+    published = true;
+  } finally {
+    await handle?.close().catch(() => {});
+    if (created && !published) {
+      await unlink(snapshot);
+      await syncDirectory(dirname(snapshot));
+    }
+  }
+}
+
 function validatePaths(target, rollback) {
   if (!isAbsolute(target) || !isAbsolute(rollback)
     || dirname(target) !== dirname(rollback)
@@ -173,6 +209,11 @@ async function main(argv) {
   }
   if (action === 'publish' && first && second) {
     await publishConfig({ source: resolve(first), target: resolve(second) });
+    return;
+  }
+  if (action === 'snapshot' && first && second) {
+    if (typeof process.getuid !== 'function' || process.getuid() !== 0) fail();
+    await snapshotConfig({ source: resolve(first), snapshot: resolve(second), expectedUid: 0 });
     return;
   }
   if (action === 'restore' && first && !second) {

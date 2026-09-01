@@ -52,6 +52,11 @@ const embeddingRequirements = readFileSync(new URL('../../apps/embedding-worker/
 const embeddingEvaluatorDockerfile = readFileSync(new URL('../embedding-candidates/bge-m3/Dockerfile', import.meta.url), 'utf8');
 const squidConfig = readFileSync(new URL('../squid/openscience-egress.conf', import.meta.url), 'utf8');
 const authNetworkPreparation = readFileSync(new URL('./prepare-scansci-auth-network.sh', import.meta.url), 'utf8');
+const browserNetworkPreparation = readFileSync(new URL('./prepare-scansci-browser-network.sh', import.meta.url), 'utf8');
+const browserFirewall = readFileSync(new URL('./scansci-browser-firewall.sh', import.meta.url), 'utf8');
+const browserFirewallService = readFileSync(new URL('../systemd/openscience-scansci-browser-firewall.service', import.meta.url), 'utf8');
+const browserFirewallDockerDropIn = readFileSync(new URL('../systemd/docker.service.d/openscience-scansci-browser-firewall.conf', import.meta.url), 'utf8');
+const browserNetworkSquidDropIn = readFileSync(new URL('../systemd/squid.service.d/openscience-scansci-browser-network.conf', import.meta.url), 'utf8');
 const atomicSquidConfig = readFileSync(new URL('./atomic-squid-config.mjs', import.meta.url), 'utf8');
 const rootPackage = JSON.parse(readFileSync(new URL('../../package.json', import.meta.url), 'utf8'));
 const bash = process.platform === 'win32' && existsSync('C:/Program Files/Git/bin/bash.exe')
@@ -66,18 +71,21 @@ function composeService(name, nextName, compose = productionCompose) {
   return compose.slice(start, end);
 }
 
-test('ScanSci production topology exposes only the bounded legal service and stopped loopback auth helper', () => {
-  const legal = composeService('scansci-legal', 'scansci-auth');
+test('ScanSci production topology separates legal, browser and stopped loopback auth roles', () => {
+  const legal = composeService('scansci-legal', 'scansci-browser');
+  const browser = composeService('scansci-browser', 'scansci-auth');
   const auth = composeService('scansci-auth', 'document-parser');
   const worker = composeService('agent-worker', 'scansci-secret-init');
   const secretInit = composeService('scansci-secret-init', 'scansci-legal');
-  const developmentLegal = composeService('scansci-legal', 'scansci-auth', developmentCompose);
+  const developmentLegal = composeService('scansci-legal', 'scansci-browser', developmentCompose);
+  const developmentBrowser = composeService('scansci-browser', 'scansci-auth', developmentCompose);
   const developmentAuth = composeService('scansci-auth', undefined, developmentCompose);
 
   assert.match(legal, /context: \$\{XGS_RELEASE_ROOT:\?XGS_RELEASE_ROOT required\}\/apps\/scansci-legal/u);
   assert.match(legal, /dockerfile: Dockerfile/u);
   assert.match(legal, /image: openscience-scansci-legal:\$\{XGS_RELEASE_IMAGE_TAG:\?XGS_RELEASE_IMAGE_TAG required\}/u);
   assert.match(legal, /user: "10001:10001"/u);
+  assert.match(legal, /group_add:\r?\n\s+- "11000"/u);
   assert.match(legal, /read_only: true/u);
   assert.match(legal, /cap_drop:\r?\n\s+- ALL/u);
   assert.match(legal, /security_opt:\r?\n\s+- no-new-privileges:true/u);
@@ -88,10 +96,35 @@ test('ScanSci production topology exposes only the bounded legal service and sto
   assert.match(developmentLegal, /\/tmp:size=256m,noexec,nosuid,nodev,uid=10001,gid=10001,mode=0700/u);
   assert.match(legal, /scansci-session:\/session/u);
   assert.match(legal, /scansci-service-secrets:\/run\/secrets:ro/u);
+  assert.match(legal, /scansci-browser-inputs:\/browser-inputs(?:\r?\n|\s*$)/u);
+  assert.match(legal, /scansci-browser-outputs:\/browser-outputs:ro/u);
+  assert.doesNotMatch(legal, /scansci-browser:\r?\n\s+condition: service_healthy/u);
   assert.match(legal, /networks:\r?\n\s+- retrieval_net/u);
   assert.match(legal, /SCANSCI_EGRESS_PROXY: http:\/\/openscience-egress:7891/u);
   assert.match(legal, /extra_hosts:\r?\n\s+- "openscience-egress:172\.24\.0\.1"/u);
   assert.doesNotMatch(legal, /\bports:|data_net|DATABASE|POSTGRES|REDIS|S3_|MINIO|env_file|docker\.sock/iu);
+
+  assert.match(browser, /dockerfile: Dockerfile\.browser/u);
+  assert.match(browser, /image: openscience-scansci-browser:\$\{XGS_RELEASE_IMAGE_TAG:\?XGS_RELEASE_IMAGE_TAG required\}/u);
+  assert.match(browser, /SCANSCI_BROWSER_REQUIREMENTS_SHA256: \$\{SCANSCI_BROWSER_REQUIREMENTS_SHA256:\?SCANSCI_BROWSER_REQUIREMENTS_SHA256 required\}/u);
+  assert.match(browser, /user: "10002:11000"/u);
+  assert.match(browser, /group_add:\r?\n\s+- "11000"/u);
+  assert.match(browser, /read_only: true/u);
+  assert.match(browser, /cap_drop:\r?\n\s+- ALL/u);
+  assert.match(browser, /security_opt:\r?\n\s+- no-new-privileges:true/u);
+  assert.match(browser, /mem_limit: 1g/u);
+  assert.match(browser, /cpus: 1/u);
+  assert.match(browser, /pids_limit: 256/u);
+  assert.match(browser, /SCANSCI_BROWSER_PROXY: http:\/\/openscience-egress:7891/u);
+  assert.match(browser, /extra_hosts:\r?\n\s+- "openscience-egress:172\.26\.0\.1"/u);
+  assert.match(browser, /scansci-browser-inputs:\/browser-inputs:ro/u);
+  assert.match(browser, /scansci-browser-outputs:\/browser-outputs(?:\r?\n|\s*$)/u);
+  assert.match(browser, /scansci-browser-profiles:\/browser-profile-jobs/u);
+  assert.match(browser, /\/tmp:size=256m,noexec,nosuid,nodev,uid=10002,gid=11000,mode=0700/u);
+  assert.match(browser, /\/dev\/shm:size=256m,nosuid,nodev,uid=10002,gid=11000,mode=0700/u);
+  assert.match(browser, /test: \["CMD", "python", "-m", "scansci_legal\.browser_worker", "--healthcheck"\]/u);
+  assert.match(browser, /networks:\r?\n\s+- browser_net/u);
+  assert.doesNotMatch(browser, /\bports:|service.token|\/run\/secrets|\/session|data_net|app_net|auth_net|env_file|docker\.sock/iu);
 
   assert.match(worker, /- retrieval_net/u);
   assert.match(worker, /SCANSCI_ENABLED: "true"/u);
@@ -115,6 +148,14 @@ test('ScanSci production topology exposes only the bounded legal service and sto
   assert.match(auth, /dockerfile: Dockerfile\.auth/u);
   assert.match(developmentLegal, /context: \.\.\/\.\.\/apps\/scansci-legal/u);
   assert.match(developmentLegal, /dockerfile: Dockerfile/u);
+  assert.doesNotMatch(developmentLegal, /scansci-browser:\r?\n\s+condition: service_healthy/u);
+  assert.match(developmentBrowser, /dockerfile: Dockerfile\.browser/u);
+  assert.match(developmentBrowser, /user: "10002:11000"/u);
+  assert.match(developmentBrowser, /scansci-browser-inputs:\/browser-inputs:ro/u);
+  assert.match(developmentBrowser, /scansci-browser-outputs:\/browser-outputs(?:\r?\n|\s*$)/u);
+  assert.match(developmentBrowser, /scansci-browser-profiles:\/browser-profile-jobs/u);
+  assert.match(developmentBrowser, /networks: \[browser_net\]/u);
+  assert.doesNotMatch(developmentBrowser, /\bports:|\/run\/secrets|\/session|data_net|app_net|auth_net|docker\.sock/iu);
   assert.match(developmentAuth, /context: \.\.\/\.\.\/apps\/scansci-legal/u);
   assert.match(developmentAuth, /dockerfile: Dockerfile\.auth/u);
   assert.doesNotMatch(developmentAuth, /\bports:/u);
@@ -134,12 +175,204 @@ test('ScanSci production topology exposes only the bounded legal service and sto
   assert.match(productionCompose, /scansci-session:\r?\n/u);
   const volumeSection = productionCompose.split('\nvolumes:')[1] ?? '';
   assert.match(volumeSection, /scansci-service-secrets:\r?\n/u);
+  for (const [name, options] of [
+    ['scansci-browser-inputs', 'size=128m,uid=10001,gid=11000,mode=0750'],
+    ['scansci-browser-outputs', 'size=128m,uid=10002,gid=11000,mode=0750'],
+    ['scansci-browser-profiles', 'size=256m,uid=10002,gid=11000,mode=0700'],
+  ]) {
+    assert.match(volumeSection, new RegExp(`${name}:\\r?\\n    driver: local\\r?\\n    driver_opts:\\r?\\n      type: tmpfs\\r?\\n      device: tmpfs\\r?\\n      o: ${options}`, 'u'));
+  }
   assert.doesNotMatch(volumeSection, /scansci-auth-secrets:\r?\n/u);
-  assert.doesNotMatch(volumeSection, /scansci-service-secrets:[\s\S]*type: tmpfs/u);
+  assert.match(volumeSection, /scansci-service-secrets:\r?\n  scansci-worker-secrets:\r?\n/u);
   assert.match(productionCompose, /^  retrieval_net:\r?\n    driver: bridge\r?\n    internal: true\r?\n    ipam:\r?\n      config:\r?\n        - subnet: 172\.24\.0\.0\/24\r?\n          gateway: 172\.24\.0\.1$/mu);
   assert.match(productionCompose, /^  auth_net:\r?\n    driver: bridge\r?\n    internal: true\r?\n    driver_opts:\r?\n      com\.docker\.network\.bridge\.name: xgs-auth0\r?\n    ipam:\r?\n      config:\r?\n        - subnet: 172\.25\.0\.0\/29\r?\n          gateway: 172\.25\.0\.1$/mu);
   assert.equal((productionCompose.match(/\n\s+ipv4_address: 172\.25\.0\.2\s*$/gmu) ?? []).length, 1,
     'only the auth helper may join the passwordless noVNC network');
+});
+
+test('ScanSci browser has a boot-persistent proxy-only bridge before it can start', () => {
+  for (const compose of [productionCompose, developmentCompose]) {
+    assert.match(compose, /browser_net:\r?\n\s+driver: bridge\r?\n\s+internal: true\r?\n\s+driver_opts:\r?\n\s+com\.docker\.network\.bridge\.name: xgs-browser0\r?\n\s+ipam:\r?\n\s+config:\r?\n\s+- subnet: 172\.26\.0\.0\/24\r?\n\s+gateway: 172\.26\.0\.1/u);
+  }
+  assert.match(squidConfig, /^http_port 172\.26\.0\.1:7891 name=scansci_browser_listener$/mu);
+  assert.match(squidConfig, /^acl scansci_browser src 172\.26\.0\.0\/24$/mu);
+  assert.match(squidConfig, /^http_access allow scansci_browser scansci_browser_listener CONNECT SSL_ports$/mu);
+  assert.match(squidConfig, /^always_direct allow scansci_browser$/mu);
+  assert.match(browserFirewall, /INPUT -i "\$bridge_name" -s "\$subnet" -d "\$gateway" -p tcp --dport 7891/u);
+  assert.match(browserFirewall, /INPUT -i "\$bridge_name" -s "\$subnet" -m comment --comment "\$comment" -j REJECT/u);
+  assert.match(browserFirewall, /iptables_real="\$\(readlink -f -- "\$iptables_bin"\)"/u);
+  assert.doesNotMatch(browserFirewall, /\[ ! -L "\$iptables_bin" \]/u);
+  assert.match(browserFirewall, /if \[ "\$action" = remove \]/u);
+  assert.match(browserNetworkPreparation, /openscience-prod_browser_net/u);
+  assert.match(browserNetworkPreparation, /unauthorized peer/u);
+  assert.match(browserNetworkPreparation, /"\$atomic_config" activate/u);
+  assert.match(browserNetworkPreparation, /172\.26\.0\.1:7891/u);
+  assert.match(browserNetworkPreparation, /if \[ "\$activated" -eq 1 \][\s\S]*"\$atomic_config" restore/u);
+  assert.match(browserFirewallService, /^Before=docker\.service$/mu);
+  assert.match(browserFirewallService, /^ExecStart=\/usr\/local\/bin\/openscience-scansci-browser-firewall$/mu);
+  assert.match(browserFirewallService, /^ExecStop=\/usr\/local\/bin\/openscience-scansci-browser-firewall remove$/mu);
+  assert.match(browserFirewallDockerDropIn, /^Requires=openscience-scansci-browser-firewall\.service$/mu);
+  assert.match(browserFirewallDockerDropIn, /^After=openscience-scansci-browser-firewall\.service$/mu);
+  assert.match(browserNetworkSquidDropIn, /^Requires=docker\.service$/mu);
+  assert.match(browserNetworkSquidDropIn, /^After=docker\.service$/mu);
+  assert.match(composeService('scansci-browser', 'scansci-auth'), /restart: unless-stopped/u);
+  assert.match(transactionSource, /\/etc\/systemd\/system\/docker\.service\.d\/openscience-scansci-browser-firewall\.conf/u);
+  const switchAnchor = transactionSource.indexOf('log "[5c] ScanSci 先行');
+  const precreate = transactionSource.indexOf('up --no-start --force-recreate scansci-browser scansci-legal', switchAnchor);
+  const bootPolicyPublish = transactionSource.lastIndexOf('\npublish_scansci_boot_policy\n');
+  const bootPolicyDirty = transactionSource.lastIndexOf('SCANSCI_BROWSER_BOOT_POLICY_DIRTY=1', bootPolicyPublish);
+  const squidPreimage = transactionSource.indexOf('transaction_prepare_scansci_squid_preimage', bootPolicyPublish);
+  assert.ok(
+    bootPolicyPublish > transactionSource.indexOf('transaction_mark_phase switching')
+      && bootPolicyPublish < precreate,
+    'boot policy must be durable before the browser gains restart eligibility',
+  );
+  assert.ok(
+    bootPolicyDirty > transactionSource.indexOf('transaction_mark_phase switching')
+      && bootPolicyDirty < bootPolicyPublish,
+    'rollback ownership must be recorded before boot-policy publication starts',
+  );
+  assert.ok(
+    squidPreimage > bootPolicyPublish && squidPreimage < precreate,
+    'an exact Squid preimage must exist before browser or host-policy mutation',
+  );
+  const prepareSquidPreimage = deploymentFunction('transaction_prepare_scansci_squid_preimage');
+  assert.match(
+    prepareSquidPreimage,
+    /atomic-squid-config\.mjs' snapshot \/etc\/squid\/squid\.conf '\$SCANSCI_BROWSER_SQUID_PREIMAGE'/u,
+  );
+  assert.doesNotMatch(prepareSquidPreimage, /install [^\n]+SCANSCI_BROWSER_SQUID_PREIMAGE\.next/u);
+  const publishBootPolicy = deploymentFunction('publish_scansci_boot_policy');
+  const dockerFailClosedGuard = publishBootPolicy.indexOf('openscience-scansci-browser-firewall.conf.next');
+  const firewallBinary = publishBootPolicy.indexOf('openscience-scansci-browser-firewall.next');
+  const firewallUnit = publishBootPolicy.indexOf('openscience-scansci-browser-firewall.service.next');
+  assert.ok(
+    dockerFailClosedGuard >= 0
+      && dockerFailClosedGuard < firewallBinary
+      && dockerFailClosedGuard < firewallUnit,
+    'the Docker fail-closed dependency must be the first persistent boot-policy mutation',
+  );
+  assert.match(deploymentFunction('publish_scansci_boot_policy'), /systemctl show squid\.service[\s\S]*grep -qx docker\.service/u);
+  assert.match(
+    deploymentFunction('transaction_perform_application_rollback'),
+    /transaction_restore_pre_browser_boot_policy/u,
+  );
+  const restoreHostPolicy = deploymentFunction('transaction_restore_pre_browser_host_policy');
+  assert.match(restoreHostPolicy, /transaction_restore_exact_scansci_squid_preimage/u);
+  assert.doesNotMatch(restoreHostPolicy, /atomic-squid-config\.mjs' restore/u);
+  const restoreSquidPreimage = deploymentFunction('transaction_restore_exact_scansci_squid_preimage');
+  assert.match(restoreSquidPreimage, /SCANSCI_BROWSER_SQUID_PREIMAGE/u);
+  assert.match(restoreSquidPreimage, /atomic-squid-config\.mjs' activate/u);
+  assert.match(restoreSquidPreimage, /cmp -- '\$SCANSCI_BROWSER_SQUID_PREIMAGE' \/etc\/squid\/squid\.conf/u);
+  const restoreBootPolicy = deploymentFunction('transaction_restore_pre_browser_boot_policy');
+  assert.match(restoreBootPolicy, /PREVIOUS_HAS_SCANSCI_BROWSER/u);
+  assert.match(restoreBootPolicy, /publish_scansci_boot_policy "\$PREVIOUS_RELEASE_ROOT"/u);
+  assert.match(restoreBootPolicy, /rm -f -- \/etc\/systemd\/system\/docker\.service\.d\/openscience-scansci-browser-firewall\.conf/u);
+  assert.doesNotMatch(restoreBootPolicy, /disable --now openscience-scansci-browser-firewall\.service/u);
+  assert.match(
+    restoreBootPolicy,
+    /systemctl disable openscience-scansci-browser-firewall\.service[\s\S]*rm -f -- \/etc\/systemd\/system\/docker\.service\.d\/openscience-scansci-browser-firewall\.conf[\s\S]*systemctl stop openscience-scansci-browser-firewall\.service[\s\S]*systemctl is-active --quiet docker\.service/u,
+  );
+  assert.match(transactionSource, /if \[ "\$ACTIVE_RELEASE_SHA" = "\$RELEASE_SHA" \]; then[\s\S]*transaction_verify_already_active_release\r?\n\s+publish_scansci_boot_policy/u);
+  const prepare = transactionSource.indexOf('prepare-scansci-browser-network.sh', precreate);
+  const start = transactionSource.indexOf('up -d --force-recreate --wait --wait-timeout 300 scansci-browser scansci-legal', prepare);
+  assert.ok(precreate > 0 && prepare > precreate && start > prepare, 'browser network firewall must exist before start');
+  assert.ok(
+    transactionSource.indexOf('SCANSCI_BROWSER_HOST_POLICY_DIRTY=1', precreate) < prepare,
+    'the outer transaction must record dirty host policy before preparation can mutate it',
+  );
+  assert.doesNotMatch(
+    transactionSource,
+    /if ! run_remote "\/bin\/bash '\$RELEASE_ROOT\/infra\/scripts\/prepare-scansci-browser-network\.sh'/u,
+    'the transaction must retain the real preparation exit status for compensation routing',
+  );
+  assert.doesNotMatch(
+    transactionSource.slice(precreate, start),
+    /SCANSCI_BROWSER_HOST_POLICY_DIRTY=0/u,
+    'no helper exit status may discard exact outer rollback ownership',
+  );
+  const preparationCleanupTrap = browserNetworkPreparation.indexOf('trap cleanup EXIT');
+  const preparationFirewall = browserNetworkPreparation.lastIndexOf('/bin/bash "$firewall"');
+  const preparationTempFile = browserNetworkPreparation.indexOf('mktemp /etc/squid/.openscience-next.XXXXXX');
+  assert.ok(
+    preparationCleanupTrap >= 0
+      && preparationCleanupTrap < preparationFirewall
+      && preparationCleanupTrap < preparationTempFile,
+    'network preparation must register compensation before firewall or temporary-file mutations',
+  );
+  assert.match(browserNetworkPreparation, /no_mutation_exit=78/u);
+  assert.match(browserNetworkPreparation, /clean_compensated_exit=79/u);
+  assert.match(browserNetworkPreparation, /cleanup_failed=1[\s\S]*exit 70/u);
+  assert.match(
+    browserNetworkPreparation,
+    /if \[ "\$mutation_started" -eq 0 \]; then[\s\S]*exit "\$no_mutation_exit"/u,
+  );
+  assert.match(browserNetworkPreparation, /exit "\$clean_compensated_exit"/u);
+});
+
+test('ScanSci browser supply-chain hash is release-derived for deploy and rollback Compose', () => {
+  assert.match(
+    transactionSource,
+    /SCANSCI_BROWSER_REQUIREMENTS_SHA256_VALUE="\$\(sha256sum "\$RELEASE_ROOT\/apps\/scansci-legal\/browser-requirements\.lock" \| awk '\{print \$1\}'\)"/u,
+  );
+  for (const functionName of ['compose_current', 'compose_embedding_current', 'compose_scansci_auth_current']) {
+    assert.match(
+      deploymentFunction(functionName),
+      /SCANSCI_BROWSER_REQUIREMENTS_SHA256=\$SCANSCI_BROWSER_REQUIREMENTS_SHA256_VALUE docker compose/u,
+    );
+  }
+  assert.match(
+    transactionSource,
+    /PREVIOUS_SCANSCI_BROWSER_REQUIREMENTS_SHA256="\$\(run_remote "sha256sum '\$PREVIOUS_RELEASE_ROOT\/apps\/scansci-legal\/browser-requirements\.lock' \| awk '\{print \\\$1\}'"\)"/u,
+  );
+  assert.match(
+    transactionSource,
+    /PREVIOUS_RUNTIME_ENV="\$PREVIOUS_RUNTIME_ENV SCANSCI_BROWSER_REQUIREMENTS_SHA256=\$PREVIOUS_SCANSCI_BROWSER_REQUIREMENTS_SHA256"/u,
+  );
+  assert.match(
+    transactionStateSource,
+    /SCANSCI_BROWSER_REQUIREMENTS_SHA256='\$SCANSCI_BROWSER_REQUIREMENTS_SHA256_VALUE' docker compose/u,
+  );
+});
+
+function runBootPolicyFailureHarness(publishFunction, failAt) {
+  const script = [
+    'set -euo pipefail',
+    `RELEASE_ROOT='/opt/openscience-releases/${'a'.repeat(40)}'`,
+    `FAIL_AT=${failAt}`,
+    'calls=0',
+    'guard_installed=0',
+    'run_remote() {',
+    '  calls=$((calls + 1))',
+    '  printf "attempt=%s\\n" "$calls"',
+    '  if [ "$calls" -eq "$FAIL_AT" ]; then return 90; fi',
+    '  if [[ "$1" == *"docker.service.d/openscience-scansci-browser-firewall.conf.next"* ]]; then guard_installed=1; fi',
+    '}',
+    'report() { status=$?; trap - EXIT; printf "status=%s guard=%s calls=%s\\n" "$status" "$guard_installed" "$calls"; exit "$status"; }',
+    'trap report EXIT',
+    publishFunction,
+    'publish_scansci_boot_policy',
+  ].join('\n');
+  return spawnSync(bash, ['-c', script], { encoding: 'utf8' });
+}
+
+test('every boot-policy publication failure is either mutation-free or Docker fail-closed', () => {
+  const publish = deploymentFunction('publish_scansci_boot_policy');
+  for (let failAt = 1; failAt <= 5; failAt += 1) {
+    const result = runBootPolicyFailureHarness(publish, failAt);
+    assert.equal(result.status, 90, result.stderr);
+    assert.match(result.stdout, new RegExp(`status=90 guard=${failAt === 1 ? 0 : 1} calls=${failAt}`, 'u'));
+  }
+
+  const commandLines = publish.match(/^  run_remote .*$/gmu) ?? [];
+  assert.ok(commandLines.length >= 2, 'boot-policy publisher needs independently injectable steps');
+  const unsafeMutation = publish
+    .replace(commandLines[0], '__SECOND__')
+    .replace(commandLines[1], commandLines[0])
+    .replace('__SECOND__', commandLines[1]);
+  const mutationResult = runBootPolicyFailureHarness(unsafeMutation, 2);
+  assert.equal(mutationResult.status, 90, mutationResult.stderr);
+  assert.match(mutationResult.stdout, /status=90 guard=0 calls=2/u);
 });
 
 test('ScanSci controlled egress is private to the fixed retrieval subnet', () => {
@@ -208,9 +441,10 @@ test('ScanSci deploy dispatches exact rollback identity when the previous releas
   assert.equal(restored.stdout, `restore:${previous}\n`);
   assert.equal(stopped.stdout, `stop:${candidate}\n`);
 
-  const scansciBuild = transactionSource.indexOf('build scansci-legal scansci-auth');
+  const scansciBuild = transactionSource.indexOf('build scansci-browser scansci-legal scansci-auth');
   const workerBuild = transactionSource.indexOf('agent-worker document-parser');
-  const scansciStart = transactionSource.indexOf('up -d --force-recreate --wait --wait-timeout 300 scansci-legal');
+  const switchAnchor = transactionSource.indexOf('log "[5c] ScanSci 先行');
+  const scansciStart = transactionSource.indexOf('up -d --force-recreate --wait --wait-timeout 300 scansci-browser scansci-legal', switchAnchor);
   const workerStart = transactionSource.indexOf('up -d --force-recreate --wait --wait-timeout 300 api web agent-worker');
   const runtimeVerify = transactionSource.indexOf('verify_scansci_candidate', scansciStart);
   const postWorkerVerify = transactionSource.indexOf('verify_scansci_candidate', workerStart);
@@ -222,6 +456,22 @@ test('ScanSci deploy dispatches exact rollback identity when the previous releas
   assert.match(transactionSource, /verify_scansci_candidate 1 1/u);
   assert.match(deploymentFunction('verify_scansci_candidate'), /--require-oa-canary '\$require_oa_canary'/u);
   assert.match(transactionSource, /docker ps -aq --filter 'label=com\.docker\.compose\.project=openscience-prod' --filter 'label=com\.docker\.compose\.service=scansci-auth'/u);
+
+  const restore = deploymentFunction('transaction_restore_previous_scansci');
+  assert.match(restore, /PREVIOUS_HAS_SCANSCI_BROWSER" -eq 1/u);
+  assert.match(restore, /openscience-scansci-browser:\$exact_previous_sha[\s\S]*PREVIOUS_SCANSCI_BROWSER_IMAGE_ID/u);
+  assert.match(restore, /up -d --force-recreate --wait --wait-timeout 300 scansci-browser scansci-legal/u);
+  assert.match(restore, /compose_current "rm -f -s scansci-browser"/u);
+  assert.match(restore, /compose_current 'ps -a -q scansci-browser'/u);
+  assert.match(restore, /transaction_restore_pre_browser_host_policy/u);
+  assert.match(
+    deploymentFunction('transaction_restore_pre_browser_host_policy'),
+    /scansci-browser-firewall\.sh' remove[\s\S]*transaction_restore_exact_scansci_squid_preimage/u,
+  );
+  assert.ok(
+    restore.indexOf('rm -f -s scansci-browser') < restore.indexOf('up -d --force-recreate --wait --wait-timeout 300 scansci-legal'),
+    'schema 4 to schema 3 rollback must remove the candidate browser before restoring legal',
+  );
 });
 
 test('candidate capability stays absent through prepublication and is exact-cleaned on either publish failure boundary', async (t) => {
@@ -339,7 +589,8 @@ test('failed candidate CAS cleans only the sidecar created by the real publish p
     `BGE_M3_MODEL_VERSION_ID=''`, `BGE_M3_MODEL_REVISION=''`,
     `BGE_M3_SOURCE_SHA256=''`, `BGE_M3_PACKAGE_FREEZE_SHA256=''`, `BGE_M3_MODEL_MANIFEST_SHA256=''`,
     `FINAL_SCANSCI_IMAGE_ID='sha256:${'c'.repeat(64)}'`,
-    `FINAL_SCANSCI_AUTH_IMAGE_ID='sha256:${'d'.repeat(64)}'`,
+    `FINAL_SCANSCI_BROWSER_IMAGE_ID='sha256:${'d'.repeat(64)}'`,
+    `FINAL_SCANSCI_AUTH_IMAGE_ID='sha256:${'e'.repeat(64)}'`,
     'run_remote(){ bash -c "$1"; }',
     deploymentFunction('transaction_prepare_candidate_capability'),
     publish,
@@ -511,7 +762,7 @@ test('embedding capability is strict, release-versioned and rollback-safe', () =
   assert.match(source, /read_prod_value BGE_M3_DEPLOY/);
   assert.match(source, /case "\$BGE_M3_DEPLOY_VALUE" in[\s\S]*true\)[\s\S]*false\)[\s\S]*\*\)/);
   assert.doesNotMatch(source, /BGE_M3_DEPLOY=\(true\|1\)/);
-  assert.match(source, /schema=3/);
+  assert.match(source, /schema=4/);
   for (const key of [
     'embedding_deploy',
     'bge_m3_enabled',
@@ -558,7 +809,7 @@ test('embedding capability is strict, release-versioned and rollback-safe', () =
 test('production compose up receives the same env file used by migrate and validation', () => {
   assert.match(
     source,
-    /XGS_RELEASE_IMAGE_TAG=\$RELEASE_SHA docker compose --project-directory \$RELEASE_ROOT --env-file \$PROD_ENV -f \$COMPOSE_FILE \$1/,
+    /XGS_RELEASE_IMAGE_TAG=\$RELEASE_SHA SCANSCI_BROWSER_REQUIREMENTS_SHA256=\$SCANSCI_BROWSER_REQUIREMENTS_SHA256_VALUE docker compose --project-directory \$RELEASE_ROOT --env-file \$PROD_ENV -f \$COMPOSE_FILE \$1/,
   );
   assert.match(source, /compose_current "up -d --wait --wait-timeout 300 \$\{services\[\*\]\}"/);
   assert.match(source, /compose_current "run --rm --no-deps[^"]+verify-database-isolation\.mjs"/);
@@ -769,6 +1020,7 @@ function transactionStateHarness(root, requiredUid, phase, event) {
     'PREVIOUS_RELEASE_SHA="$ROLLBACK_SHA"',
     'ACTIVE_RELEASE_SHA="$RELEASE_SHA"',
     'EMBEDDING_DEPLOY=0',
+    `SCANSCI_BROWSER_REQUIREMENTS_SHA256_VALUE=${quote('0'.repeat(64))}`,
     lockFunctions,
     'transaction_assert_lock() { assert_production_deploy_lock; }',
     'transaction_journal_start() { [ ! -e "$DEPLOY_JOURNAL" ] || return 75; printf "phase=prepared\\n" > "$DEPLOY_JOURNAL.next"; chmod 0600 "$DEPLOY_JOURNAL.next"; mv "$DEPLOY_JOURNAL.next" "$DEPLOY_JOURNAL"; }',
@@ -1346,6 +1598,8 @@ test('an already-active SHA exits before install or build', () => {
 test('scheduled backup resolves the active immutable release and is refreshed by deployment', () => {
   assert.match(backup, /RELEASE_SHA=.*\.release-id/);
   assert.match(backup, /export XGS_RELEASE_ROOT="\$RELEASE_ROOT" XGS_RELEASE_IMAGE_TAG="\$RELEASE_SHA"/);
+  assert.match(backup, /read -r SCANSCI_BROWSER_REQUIREMENTS_SHA256 _ < <\(sha256sum "\$RELEASE_ROOT\/apps\/scansci-legal\/browser-requirements\.lock"\)/u);
+  assert.match(backup, /export SCANSCI_BROWSER_REQUIREMENTS_SHA256/u);
   assert.match(backup, /COMPOSE=\(docker compose --project-directory "\$RELEASE_ROOT" --env-file/);
   assert.match(backup, /"\$\{COMPOSE\[@\]\}" exec -T postgres/);
   assert.match(source, /backup\.sh\.next/);

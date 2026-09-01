@@ -329,13 +329,38 @@
       "description": "The Zhejiang University session reached ready and survived scansci-legal recreation, but three bounded institutional DOI canaries all returned stable not_found.",
       "root_cause": "OpenScience copied the 0600 publisher Cookie into a request-local session-snapshot/carsi_cookies directory and exposed that path through carsi_cookie_dir. Pinned ScanSci PDF 1.11.0 ignores that key and constructs its Cookie path exclusively as cache_dir/carsi_cookies, while the generated cache_dir pointed to an empty output/cache directory. The persistent validator read the original Cookie successfully, but every acquisition worker missed its safe snapshot.",
       "solution": "For requests with an accepted session snapshot, point the generated cache_dir at that request-local snapshot root so pinned ScanSci reads snapshot/carsi_cookies. Preserve the separate output cache for OA-only requests, the original source Cookie, the bounded copy, and all ownership, mode, symlink and containment checks.",
-      "verification": "A production diagnostic proved one safe snapshot Cookie, institutional sources enabled, original session ready, but snapshot COOKIE_LOAD=0 and COOKIE_SESSION_VALID=0; a constructor proof showed pinned ScanSci uses cache_dir and ignores carsi_cookie_dir. The regression test then failed with upstream_unavailable on the old config and passes after the two-line path correction; all 95 ScanSci legal tests pass with six Windows/POSIX boundary skips. Merge, deployment and a real institutional PDF canary remain pending.",
+      "verification": "A production diagnostic proved one safe snapshot Cookie, institutional sources enabled, original session ready, but snapshot COOKIE_LOAD=0 and COOKIE_SESSION_VALID=0; a constructor proof showed pinned ScanSci uses cache_dir and ignores carsi_cookie_dir. The regression test then failed with upstream_unavailable on the old config and passes after the two-line path correction; all 95 ScanSci legal tests pass with six Windows/POSIX boundary skips. PR #28 merged and canonical release 2019f8a proves cache_dir now equals the request snapshot, but the strict institutional PDF canary exposed the separate browser-runtime issue recorded as issue-017.",
       "files": [
         "apps/scansci-legal/src/scansci_legal/upstream.py",
         "apps/scansci-legal/test/test_session.py",
         "docs/runbooks/deployment.md"
       ],
       "prevention": "Validate third-party configuration keys against the exact pinned implementation rather than a plausible mock contract. A persistent-session gate is incomplete until the request-local worker proves it can load the copied Cookie from the path the pinned client actually reads."
+    },
+    {
+      "id": "issue-017",
+      "title": "ScanSci treated a publisher 403 page as CARSI success while the legal image had no browser runtime",
+      "date": "2026-09-01",
+      "status": "in_progress",
+      "tags": [
+        "troubleshooting/auth",
+        "troubleshooting/production",
+        "troubleshooting/browser",
+        "troubleshooting/integration"
+      ],
+      "description": "The auth helper published ready and saved a safe Cookie artifact, but after exact deployment the session became auth_required and both persistent and request-local Cookie validation returned false. Real ScienceDirect article and PDF probes returned 403 through requests, CPU Chromium, ECS direct egress and the optional home tunnel.",
+      "root_cause": "Pinned scansci-pdf 1.11.0 declares federated login successful when the browser reaches any publisher URL outside login keywords or has more than three Cookies, so a ScienceDirect 403 page is a false positive. Its institutional try_carsi source is browser-backed, while the production scansci-legal image contains neither Chromium, Patchright nor Xvfb; the fixed requests homepage validator also requires HTTP 200 and cannot establish browser entitlement.",
+      "solution": "Use a product-owned strict login gate that promotes staged Cookies only after a fixed non-OA Zhejiang University canary returns allowlisted institutional PDF evidence. Put CPU Chromium, Patchright and private Xvfb in a separate no-Secret browser worker with opposite-direction input/output tmpfs mounts; directly fix the wrapper/proxy launch with no bundled fallback, return browser-originated status/MIME/URL/hash proof, and kill the complete process group on timeout or failure.",
+      "verification": "Production evidence: active/public release 2019f8a, one safe JSON Cookie file with five valid-shaped records, state auth_required generation 16, request cache_dir equal to its snapshot, persistent and snapshot loads false, ScienceDirect article/PDF HTTP 403 with no SSO redirect, and zero PDF magic through requests and Chromium. The user approved the strict browser design; architecture review closed three Important boundary issues, and the reviewed inline TDD plan is commit cf114e7. Implementation, CI, redeploy, one new operator login and a real institutional PDF journey remain pending.",
+      "files": [
+        "apps/scansci-legal/Dockerfile",
+        "apps/scansci-legal/src/scansci_legal/auth_login.py",
+        "apps/scansci-legal/src/scansci_legal/upstream.py",
+        "apps/scansci-legal/src/scansci_legal/upstream_worker.py",
+        "infra/compose/docker-compose.prod.yml",
+        "docs/specs/2026-08-30-scansci-default-capability-design.md"
+      ],
+      "prevention": "Never use URL shape, Cookie count or redirect absence as proof of institutional entitlement. Acceptance must execute the same browser-backed source as production and require bounded PDF evidence before ready is persisted."
     }
   ],
   "last_updated": "2026-09-01"

@@ -1,21 +1,32 @@
 # OpenScience 进度（CURRENT window）
 
-> 最新同步：2026-09-01。历史由 Git 保存；旧计划和 archive 不作为默认输入。
+> 最新同步：2026-09-01。历史由 Git 保存；旧计划不作为默认输入。
 
 ## Current version tuple
 
-- Candidate branch / HEAD / origin main: `codex/scansci-auth-stale-forward-recovery` / `a3b073b` / `ed0c787`。
-- Production application source / immutable release: `9eeb8d51baf16b212a7a4f5dd7db25131aa725a6`。
-- Production rollback: `36033aee0c8712a31c699c800b1c81cd6ffe044d`；core/search migrations `33/33` / `2/2`。
-- Taskmaster `hermes-research-intelligence` 仍为 9/12；独立 ScanSci plan Tasks 1–9 done、Task 10 in progress，Task 11 继续阻断。
+- Candidate branch / HEAD / origin main: `codex/scansci-browser-institutional-gate` / `8c35179`（Task 4 code）/ `2019f8a`。
+- Production application source / immutable release: `2019f8a2d9dcd7d5241de231ae95e2aedf238f47`。
+- Production rollback: `9eeb8d51baf16b212a7a4f5dd7db25131aa725a6`；core/search migrations `33/33` / `2/2`。
+- Taskmaster `hermes-research-intelligence` 仍为 9/12；strict browser Tasks 3A–3D 与 Task 4 本地实现/复审已完成；下一步是 ECS release/浙江大学认证，Step 5/6 与 Task 11 继续阻断到真实机构 PDF 通过。
 
-## 2026-09-01 — CARSI ready and pinned snapshot-path recovery candidate
+## 2026-09-01 — ScanSci strict browser Task 4 local complete (`8c35179`)
 
-- PR #26 exact CI `33452984344` / job `99686782627` 合并并部署为 `9eeb8d5`；Parser/BGE CPU/ScanSci OA+runtime/API/Web/Worker/Nginx/public CAS/retention 全绿，active/rollback `9eeb8d5` / `36033ae`，磁盘 49G/148G、93G available。PR #27 docs-only CI `33455948132` 合并为 repository main `ed0c787`，未冒充或重部署 application release。
-- 浙江大学 CARSI 已真实完成，session `ready` generation 14；Cookie artifact 1 个、`0600`、UID 10001。`scansci-legal` 强制重建后仍 `ready`/healthy，auth helper 与 host 5900/6080 均清零，公网 release 保持 `9eeb8d5`。
-- 首个 helper 按十次窗口约 30 分钟退出后，本机 SSH runner 仍存活并使旧 status 误报 running。`a3b073b` 让 status 复用 HTTP+RFB gate，并让一次 start 精确替换 stale/跨端口/孤立 starting，starting 不能绕过 remote verifier；TDD 后 Tunnel `32/32`、双复审 READY。
-- 三个真实 DOI 均稳定返回 `404/not_found`；诊断证明持久 Cookie 可加载，但请求快照虽含 1 个文件，pinned ScanSci PDF 1.11.0 因只读 `cache_dir/carsi_cookies` 而 `COOKIE_LOAD=0`，忽略我们模拟的 `carsi_cookie_dir`。`a3b073b` 仅把有 session 的 request-local `cache_dir` 指向安全快照；ScanSci legal `89 pass/6 Windows skip/0 fail`，全仓 build/typecheck/lint green。
-- issue-015/016 已记录；候选仍需 PR/CI、ECS exact deployment 与真实 institutional PDF canary。通过后再做四入口、375px、one-use、72h/600s、zero-grey/Tor 与精确卫生，Task 10 仍 in progress。
+- Compose 新增独立 `browser_net`、反向所有权 tmpfs 与 SHA-tagged 三角色；CPU browser `10002:11000`，无端口、Secret、session 或其他网络。
+- 宿主只允许 browser → Squid `172.26.0.1:7891`；boot policy 在 browser 创建前发布，schema 3/4 精确回滚且 Docker 保持 active。
+- Squid rollback 使用 release-SHA 专属 root `0600` 前镜像；atomic helper 独占创建并 fsync 文件/父目录，任何 helper/signal 失败都保留 outer dirty 并从 exact preimage atomic activate+cmp，不再猜共享历史 rollback。
+- fresh Task 4 gates `74 total / 69 pass / 5 platform skip / 0 fail`；release-contract `118 / 111 / 7 / 0`，Bash syntax 与 diff-check green；三路 security/architecture review 均 READY。生产仍为 `2019f8a`，未部署、未认证、未声称机构 PDF 可用。
+
+## 2026-09-01 — ScanSci strict browser Tasks 3C/3D complete
+
+- `d41bec4`/`0b84273`：机构只走 proof-backed `BrowserJobClient`，OA browserless；`ready` 绑定 24h fixed-DOI proof 与 publisher Cookie SHA。CPU browser 固定 `10002:11000`、无 noVNC/端口/Secret/session mount。
+- ScanSci `161 pass / 11 platform skip / 0 fail`，安全/架构复审 READY；生产未变。
+
+## 2026-09-01 — Snapshot fix deployed; CARSI false-positive isolated
+
+- PR #28 exact CI `33461988607` / job `99713876656` 合并为 `2019f8a`。ECS schema-v3 Parser、BGE CPU、core/search `33/33`/`2/2`、ScanSci OA、API/Web/Worker/Nginx/public CAS/retention 全绿；active/rollback `2019f8a` / `9eeb8d5`，journal/failed absent，磁盘 50G/148G、92G available。
+- 请求快照现真实满足 `cache_dir == snapshot`，但安全诊断仍为 Cookie 1 个/JSON 5 records、state `auth_required` generation 16、persistent/snapshot load 均 0。Requests、CPU Chromium、ECS direct 与本机 7890 tunnel 对同一 ScienceDirect article/PDF 均为 403、无 SSO redirect、无 PDF magic。
+- Pinned 1.11.0 只凭 publisher URL 或 Cookie 数量即可把 403 误报登录成功；其 `try_carsi` 实际是浏览器源，而生产 legal image 无 Chromium/Patchright/Xvfb。故此前 `ready` 与 helper 自动退出不是机构下载完成证据，Step 5 已诚实重开。
+- Strict browser Tasks 3A/3B `2756952` / `781e830` 已完成：job/DOI-bound proof 与 browser failure 终态、pinned dirfd、严格单次 Patchright、上游 AST/signature guard、CDP 1 MiB 流式捕获（100 MiB/响应、8 候选/150 MiB/job）、ScanSci exact-output 唯一绑定、180s worker/210s client、进程组回收、心跳、运行中 stale cleanup 与 pinned profile workspace。RED→GREEN 后 ScanSci `135 pass / 11 platform skip / 0 fail`；安全/架构多轮 Important 全闭合并 READY。Task 3C 及 ECS Linux/runtime 验收 pending。
 
 ## 2026-08-31 — ScanSci Task 10 controlled-egress production retry
 

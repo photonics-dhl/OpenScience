@@ -22,7 +22,7 @@ SOURCE_ROUTES = {
     "oa_url": "open_access", "DOAJ": "open_access", "Unpaywall": "open_access",
     "EuropePMC": "open_access", "CORE": "open_access", "PMC": "open_access", "arXiv": "open_access",
     "CrossrefPage": "publisher_api", "elsevier_api": "publisher_api",
-    "CARSI": "institutional", "InstSci": "institutional",
+    "CARSI": "institutional", "CARSI-Browser": "institutional", "InstSci": "institutional",
 }
 INSTITUTIONAL_PREFIX = "institutional:"
 SOURCE_LOCK = {

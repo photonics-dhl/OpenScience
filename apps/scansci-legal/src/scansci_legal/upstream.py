@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+import hashlib
 import ipaddress
 import json
 import os
@@ -11,15 +12,21 @@ import stat
 import subprocess
 import sys
 import tempfile
-from typing import Any, Mapping, Sequence
+from typing import Any, Mapping, Protocol, Sequence
 from urllib.parse import urlsplit
 
 from .limits import MAX_PDF_BYTES
+from .browser_protocol import (
+    BrowserProof,
+    BrowserProtocolError,
+    BrowserResult,
+    _allowed_institutional_url,
+    _validate_cookie_snapshot,
+)
 from .policy import LegalDownloadRequest, PolicyError, validate_source_result
 
 MAX_PROTOCOL_BYTES = 8 * 1024
 WORKER_TIMEOUT_SECONDS = 60
-MAX_SESSION_FILES = 16
 MAX_SESSION_FILE_BYTES = 64 * 1024
 CONTROLLED_EGRESS_PROXY = "http://openscience-egress:7891"
 
@@ -40,6 +47,11 @@ class AcquiredPdf:
     source_url: str
     license: str | None = None
     entitlement_valid_until: str | None = None
+    session_cookie_sha256: str | None = None
+
+
+class InstitutionalBrowserClient(Protocol):
+    def submit(self, identifier: str, cookie_json: bytes) -> BrowserResult: ...
 
 
 class ScanSciAcquisitionClient:
@@ -52,6 +64,7 @@ class ScanSciAcquisitionClient:
         worker_command: Sequence[str] | None = None,
         maximum_pdf_bytes: int = MAX_PDF_BYTES,
         session_root: Path = Path("/session"),
+        browser_job_client: InstitutionalBrowserClient | None = None,
     ):
         self._runtime_dir = runtime_dir.resolve()
         if session_root.exists() and session_root.is_symlink():
@@ -61,14 +74,19 @@ class ScanSciAcquisitionClient:
         if not self._worker_command or maximum_pdf_bytes <= 0 or maximum_pdf_bytes > MAX_PDF_BYTES:
             raise ValueError("ScanSci acquisition configuration is invalid")
         self._maximum_pdf_bytes = maximum_pdf_bytes
+        self._browser_job_client = browser_job_client
 
     def acquire(self, request: LegalDownloadRequest) -> AcquiredPdf:
+        if request.institutional:
+            return self._acquire_institutional(request)
+        return self._acquire_browserless(request)
+
+    def _acquire_browserless(self, request: LegalDownloadRequest) -> AcquiredPdf:
         self._runtime_dir.mkdir(parents=True, exist_ok=True)
         with tempfile.TemporaryDirectory(prefix="scansci-legal-", dir=self._runtime_dir) as directory:
             output_dir = Path(directory).resolve()
-            session_snapshot = _snapshot_session(self._session_root, output_dir / "session-snapshot") if request.institutional else None
             (output_dir / "config.json").write_text(
-                json.dumps(_fixed_config(output_dir, session_snapshot), sort_keys=True, separators=(",", ":")),
+                json.dumps(_fixed_config(output_dir, None), sort_keys=True, separators=(",", ":")),
                 encoding="utf-8",
             )
             result = _run_worker(self._worker_command, request, output_dir)
@@ -77,8 +95,85 @@ class ScanSciAcquisitionClient:
                 request,
                 output_dir,
                 self._maximum_pdf_bytes,
-                institutional_allowed=session_snapshot is not None and request.institutional,
+                institutional_allowed=False,
             )
+
+    def _acquire_institutional(self, request: LegalDownloadRequest) -> AcquiredPdf:
+        if self._browser_job_client is None:
+            raise AcquisitionError("auth_required")
+        try:
+            self._runtime_dir.mkdir(parents=True, exist_ok=True)
+            with tempfile.TemporaryDirectory(
+                prefix="scansci-session-", dir=self._runtime_dir,
+            ) as directory:
+                snapshot = _snapshot_session(
+                    self._session_root, Path(directory) / "session-snapshot",
+                )
+                if snapshot is None:
+                    raise AcquisitionError("auth_required")
+                cookie_path = snapshot / "carsi_cookies" / "sciencedirect.json"
+                cookie_json = _read_bounded_regular_file(
+                    cookie_path, snapshot, MAX_SESSION_FILE_BYTES,
+                )
+                result = self._browser_job_client.submit(request.identifier, cookie_json)
+            return _validated_browser_result(
+                result,
+                self._maximum_pdf_bytes,
+                hashlib.sha256(cookie_json).hexdigest(),
+            )
+        except AcquisitionError:
+            raise
+        except BrowserProtocolError as error:
+            if error.code == "browser_auth_required":
+                raise AcquisitionError("auth_required") from error
+            if error.code == "browser_timeout":
+                raise AcquisitionError("upstream_timeout") from error
+            if error.code == "browser_worker_crash":
+                raise AcquisitionError("upstream_unavailable") from error
+            raise AcquisitionError("policy_blocked") from error
+        except (OSError, ValueError) as error:
+            raise AcquisitionError("upstream_unavailable") from error
+
+
+def _validated_browser_result(
+    result: object,
+    maximum_pdf_bytes: int,
+    cookie_sha256: str,
+) -> AcquiredPdf:
+    if not isinstance(result, BrowserResult):
+        raise AcquisitionError("policy_blocked")
+    content, proof = result.content, result.proof
+    if (
+        not isinstance(content, bytes)
+        or not isinstance(proof, BrowserProof)
+        or not 5 <= len(content) <= maximum_pdf_bytes
+        or not content.startswith(b"%PDF-")
+        or isinstance(proof.http_status, bool)
+        or not isinstance(proof.http_status, int)
+        or not isinstance(proof.mime, str)
+        or not isinstance(proof.source, str)
+        or proof.source != "CARSI-Browser"
+        or isinstance(proof.byte_count, bool)
+        or not isinstance(proof.byte_count, int)
+        or proof.byte_count != len(content)
+        or not isinstance(proof.final_url, str)
+        or not isinstance(proof.sha256, str)
+        or proof.sha256 != hashlib.sha256(content).hexdigest()
+    ):
+        raise AcquisitionError("policy_blocked")
+    if (
+        not 200 <= proof.http_status <= 299
+        or proof.mime != "application/pdf"
+        or not _allowed_institutional_url(proof.final_url)
+    ):
+        raise AcquisitionError("auth_required")
+    return AcquiredPdf(
+        content,
+        "institutional",
+        "CARSI-Browser",
+        proof.final_url,
+        session_cookie_sha256=cookie_sha256,
+    )
 
 
 def _run_worker(command: Sequence[str], request: LegalDownloadRequest, output_dir: Path) -> object:
@@ -149,6 +244,7 @@ def _snapshot_session(session_root: Path, destination: Path) -> Path | None:
 
 def _snapshot_session_posix(session_root: Path, destination: Path) -> Path | None:
     descriptors: list[int] = []
+    copied: list[tuple[str, bytes]]
     try:
         directory_flags = os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW
         root_fd = os.open(session_root, directory_flags)
@@ -165,14 +261,9 @@ def _snapshot_session_posix(session_root: Path, destination: Path) -> Path | Non
             pinned.append((parent_fd, component, child_stat))
             parent_fd = child_fd
         cookie_fd = parent_fd
-        names = sorted(
-            name for name in os.listdir(cookie_fd)
-            if isinstance(name, str) and name.endswith(".json") and "/" not in name and "\\" not in name
-        )
+        names = ["sciencedirect.json"]
         _validate_pinned_directories(pinned)
-        if not names or len(names) > MAX_SESSION_FILES:
-            return None
-        copied: list[tuple[str, bytes]] = []
+        copied = []
         for name in names:
             file_fd = os.open(name, os.O_RDONLY | os.O_NOFOLLOW, dir_fd=cookie_fd)
             try:
@@ -185,17 +276,18 @@ def _snapshot_session_posix(session_root: Path, destination: Path) -> Path | Non
                     raise ValueError("session file changed during read")
                 if len(content) > MAX_SESSION_FILE_BYTES:
                     raise ValueError("session file exceeds bound")
+                _validate_persistent_cookie(content)
                 copied.append((name, content))
             finally:
                 os.close(file_fd)
             _validate_pinned_directories(pinned)
         _validate_pinned_directories(pinned)
-        return _write_session_snapshot(destination, copied)
     except (OSError, ValueError):
         return None
     finally:
         for descriptor in reversed(descriptors):
             os.close(descriptor)
+    return _write_session_snapshot(destination, copied)
 
 
 def _validate_pinned_directories(pinned: list[tuple[int, str, os.stat_result]]) -> None:
@@ -211,10 +303,10 @@ def _snapshot_session_path(session_root: Path, destination: Path) -> Path | None
         _validate_session_directory(session_root)
         for parent in (session_root / "scansci", session_root / "scansci" / "cache", cookie_root):
             _validate_session_directory(parent)
-        candidates = sorted(cookie_root.glob("*.json"))
-        if not candidates or len(candidates) > MAX_SESSION_FILES:
-            return None
-        copied = [(candidate.name, _read_session_file(candidate)) for candidate in candidates]
+        candidate = cookie_root / "sciencedirect.json"
+        content = _read_session_file(candidate)
+        _validate_persistent_cookie(content)
+        copied = [(candidate.name, content)]
     except (OSError, ValueError):
         return None
     return _write_session_snapshot(destination, copied)
@@ -229,6 +321,13 @@ def _write_session_snapshot(destination: Path, copied: list[tuple[str, bytes]]) 
         with os.fdopen(descriptor, "wb") as output:
             output.write(content)
     return destination
+
+
+def _validate_persistent_cookie(content: bytes) -> None:
+    try:
+        _validate_cookie_snapshot(content)
+    except BrowserProtocolError as error:
+        raise ValueError("persistent publisher cookie is invalid") from error
 
 
 def _validate_session_directory(path: Path) -> None:

@@ -1,10 +1,12 @@
 import assert from 'node:assert/strict';
-import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { lstat, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import test from 'node:test';
 
-import { activateConfig, publishConfig, recoverConfig, restoreConfig } from './atomic-squid-config.mjs';
+import {
+  activateConfig, publishConfig, recoverConfig, restoreConfig, snapshotConfig,
+} from './atomic-squid-config.mjs';
 
 async function fixture() {
   const root = await mkdtemp(join(tmpdir(), 'atomic-squid-config-'));
@@ -79,4 +81,31 @@ test('failed candidate reload automatically restores and reloads the previous co
 
   assert.deepEqual(activated, ['new-valid-config\n', 'old-valid-config\n']);
   assert.equal(await readFile(f.target, 'utf8'), 'old-valid-config\n');
+});
+
+test('durable snapshot is private, exclusive and self-cleans before publication completes', async (t) => {
+  const f = await fixture();
+  t.after(() => rm(f.root, { recursive: true, force: true }));
+  const snapshot = join(f.root, 'release.preimage');
+
+  await assert.rejects(
+    snapshotConfig({
+      source: f.target,
+      snapshot,
+      afterFileSync: () => { throw new Error('injected snapshot interruption'); },
+    }),
+    /injected snapshot interruption/u,
+  );
+  await assert.rejects(lstat(snapshot), { code: 'ENOENT' });
+
+  await snapshotConfig({ source: f.target, snapshot });
+  const metadata = await lstat(snapshot);
+  assert.equal(metadata.isFile(), true);
+  if (process.platform !== 'win32') assert.equal(metadata.mode & 0o777, 0o600);
+  assert.equal(metadata.nlink, 1);
+  assert.equal(await readFile(snapshot, 'utf8'), 'old-valid-config\n');
+
+  await writeFile(f.target, 'changed-after-snapshot\n');
+  await assert.rejects(snapshotConfig({ source: f.target, snapshot }));
+  assert.equal(await readFile(snapshot, 'utf8'), 'old-valid-config\n');
 });
