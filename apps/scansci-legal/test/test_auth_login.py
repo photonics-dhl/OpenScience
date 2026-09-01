@@ -328,6 +328,36 @@ class AuthLoginCanaryContractTest(unittest.TestCase):
             self.assertIs(result, False)
             self.assertFalse((root / "scansci" / "cache" / "carsi_cookies" / "sciencedirect.json").exists())
 
+    def test_strict_login_rejects_elsevier_identity_page_as_publisher_return(self) -> None:
+        context = SimpleNamespace(cookies=lambda _urls=None: [{
+            "name": "session", "value": "premature", "domain": ".sciencedirect.com",
+        }])
+        page = SimpleNamespace(
+            goto=lambda *_args, **_kwargs: None,
+            url="https://id.elsevier.com/as/flow/resume/as/authorization.ping?state=retryCounter",
+        )
+
+        @contextmanager
+        def browser(_profile: Path):
+            yield context, page
+
+        with mock.patch(
+            "scansci_legal.auth_login._load_carsi_publisher_configs",
+            return_value={
+                "sciencedirect": SimpleNamespace(
+                    login_url="https://www.sciencedirect.com/user/institution/login",
+                    domains=["sciencedirect.com", "elsevier.com"],
+                ),
+            },
+        ), tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            result = auth_login._strict_operator_login(
+                root, browser_session=browser, sleeper=lambda _seconds: None,
+            )
+
+            self.assertIs(result, False)
+            self.assertFalse((root / "scansci" / "cache" / "carsi_cookies" / "sciencedirect.json").exists())
+
     def test_fixed_canary_uses_exact_doi_and_cookie_snapshot(self) -> None:
         cookie_json = b'[{"name":"session","value":"verified","domain":".sciencedirect.com"}]'
         proof = BrowserProof(
