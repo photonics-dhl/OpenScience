@@ -576,7 +576,7 @@ git commit -m "fix(scansci): require real institutional PDF proof"
 - Produces: source-labelled `openscience-scansci-browser:<release-sha>` running
   as fixed `10002:11000`; auth remains `10001:10001` and stopped by default.
 
-- [ ] **Step 1: Write failing static image-contract tests**
+- [x] **Step 1: Write failing static image-contract tests**
 
 Assert the browser image has pinned Python/base packages; only Chromium,
 fonts, tini and Xvfb (no noVNC/x11vnc/websockify); fixed UID/GID; browser role
@@ -586,7 +586,7 @@ the auth image alone retains noVNC and imports the shared exact-hash Patchright
 lock. Assert wrapper has proxy/QUIC/WebRTC controls and no `latest`, downloaded
 browser, channel fallback or direct egress option.
 
-- [ ] **Step 2: Verify RED**
+- [x] **Step 2: Verify RED**
 
 ```bash
 npx pnpm@9.15.0 --filter @openscience/scansci-legal test -- test_dockerfile
@@ -594,7 +594,7 @@ npx pnpm@9.15.0 --filter @openscience/scansci-legal test -- test_dockerfile
 
 Expected: FAIL because `Dockerfile.browser` and the shared lock do not exist.
 
-- [ ] **Step 3: Implement the image and entrypoint**
+- [x] **Step 3: Implement the image and entrypoint**
 
 Move the existing exact hashes for `greenlet==3.5.5`, `pyee==13.0.0`,
 `patchright==1.62.2`, and `typing-extensions==4.16.0` into
@@ -604,7 +604,7 @@ TERM/INT/EXIT, waits for the display, then execs
 `python -m scansci_legal.browser_worker`. It never starts noVNC or exposes a
 port. Keep the wrapper fixed to `/usr/bin/chromium` and the internal Squid proxy.
 
-- [ ] **Step 4: Verify GREEN and commit**
+- [x] **Step 4: Verify GREEN and commit**
 
 ```bash
 npx pnpm@9.15.0 --filter @openscience/scansci-legal test -- test_dockerfile

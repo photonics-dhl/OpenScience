@@ -4,17 +4,17 @@
 
 ## Current version tuple
 
-- Candidate branch / Task 3C commit / origin main: `codex/scansci-browser-institutional-gate` / `d41bec4` / `2019f8a`。
+- Candidate branch / Task 3D commit / origin main: `codex/scansci-browser-institutional-gate` / `0b84273` / `2019f8a`。
 - Production application source / immutable release: `2019f8a2d9dcd7d5241de231ae95e2aedf238f47`。
 - Production rollback: `9eeb8d51baf16b212a7a4f5dd7db25131aa725a6`；core/search migrations `33/33` / `2/2`。
-- Taskmaster `hermes-research-intelligence` 仍为 9/12；strict browser Tasks 3A–3C 已完成，现进入独立 CPU browser image Task 3D；ScanSci ECS acceptance Step 5/6 与 Task 11 继续阻断到真实机构 PDF 通过。
+- Taskmaster `hermes-research-intelligence` 仍为 9/12；strict browser Tasks 3A–3D 已完成，现进入 production Compose/release Task 4；ScanSci ECS acceptance Step 5/6 与 Task 11 继续阻断到真实机构 PDF 通过。
 
-## 2026-09-01 — ScanSci Task 3C proof-backed session complete
+## 2026-09-01 — ScanSci strict browser Tasks 3C/3D complete
 
-- Commit `d41bec4` 将机构获取唯一接到 `BrowserJobClient`，OA 仍走 browserless worker；只有 `CARSI-Browser` 的 2xx、精确 PDF MIME、允许的 publisher URL、PDF magic/长度/SHA-256 全部一致才能构造 institutional `AcquiredPdf`。
-- `ready` 现在同时绑定 24 小时内的真实 canary proof 与精确 publisher Cookie SHA-256；Cookie 替换立即失效。仅出版社 401/403、PDF endpoint 的 HTML 或明确浙大/CARSI 登录挑战撤销认证，超时、崩溃、策略和运行时 I/O 不再误伤会话。
-- Operator 登录每次只启一个 fresh profile；只收集 Elsevier/ScienceDirect 域 Cookie，浙大/CARSI IdP Cookie 被统一入口拒绝。固定 DOI canary 通过同一严格 adapter 后才原子发布持久 Cookie 与 ready，账号密码不持久化。
-- ScanSci 全量与官方包门禁均为 `157 pass / 11 platform skip / 0 fail`，`compileall`、`git diff --check` 通过；独立安全/架构复审 READY。生产仍为 `2019f8a`，本步没有部署或服务器写入，下一步 Task 3D。
+- `d41bec4`：机构路由只走 `BrowserJobClient`，OA 保持 browserless；2xx/PDF/publisher URL/magic/长度/SHA 全证才构造 institutional `AcquiredPdf`。
+- `ready` 绑定 24h canary proof 与精确 publisher Cookie SHA；替换立即失效，只有真实 auth challenge 撤销。登录使用 fresh profile，只持久 Elsevier/ScienceDirect Cookie，固定 DOI 经同一 adapter 证明后才原子发布。
+- `0b84273`：新增 fixed `10002:11000` 的 CPU Chromium/Patchright/private-Xvfb browser image；无 noVNC、端口、Secret、session mount，auth/browser 共用四项 exact-hash lock，Tini group 收口 worker/Xvfb。
+- 全量与官方包门禁 `161 pass / 11 platform skip / 0 fail`，Git Bash 语法、`git diff --check` 通过；安全/架构复审 READY。生产未变，下一步 Task 4 ECS release integration。
 
 ## 2026-09-01 — Snapshot fix deployed; CARSI false-positive isolated
 
