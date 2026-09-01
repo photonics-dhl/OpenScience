@@ -32,6 +32,7 @@ class AuthDockerfileContractTests(unittest.TestCase):
         self.assertNotIn("ln -s /usr/bin/chromium /opt/google/chrome/chrome", dockerfile)
         self.assertIn("SCANSCI_BROWSER_PROXY", wrapper)
         self.assertNotIn('if [ -z "$proxy" ]', wrapper)
+        self.assertLess(entrypoint.index("scansci_legal.source_guard"), entrypoint.index('Xvfb "$DISPLAY"'))
         self.assertIn('"--proxy-server=$proxy"', wrapper)
         self.assertIn("--disable-quic", wrapper)
         self.assertIn("--force-webrtc-ip-handling-policy=disable_non_proxied_udp", wrapper)
@@ -85,6 +86,16 @@ class BrowserDockerfileContractTests(unittest.TestCase):
             )
             self.assertNotIn("/tmp/auth-requirements.lock", dockerfile)
 
+    def test_browser_and_auth_builds_verify_the_pinned_source_adapter(self) -> None:
+        for name in ("Dockerfile.browser", "Dockerfile.auth"):
+            source = (APP_ROOT / name).read_text(encoding="utf-8")
+            copy_source = source.index("src /opt/scansci/src")
+            guard = source.index("RUN python -m scansci_legal.source_guard")
+            release_metadata = source.index("ARG XGS_RELEASE_IMAGE_TAG")
+
+            self.assertLess(copy_source, guard)
+            self.assertLess(guard, release_metadata)
+
     def test_browser_runtime_is_cpu_only_secretless_and_fixed_identity(self) -> None:
         source = (APP_ROOT / "Dockerfile.browser").read_text(encoding="utf-8")
 
@@ -122,6 +133,7 @@ class BrowserDockerfileContractTests(unittest.TestCase):
         self.assertIn("umask 077", source)
         self.assertIn('DISPLAY=":99"', source)
         self.assertIn('Xvfb "$DISPLAY" -screen 0 1280x800x24 -nolisten tcp', source)
+        self.assertLess(source.index("scansci_legal.source_guard"), source.index('Xvfb "$DISPLAY"'))
         self.assertIn('/tmp/.X11-unix/X99', source)
         self.assertIn('install -d -m 0700 "$HOME" /tmp/scansci-browser', source)
         self.assertIn('kill -0 "$xvfb_pid"', source)
