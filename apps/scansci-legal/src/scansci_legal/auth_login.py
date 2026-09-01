@@ -135,6 +135,16 @@ def _strict_operator_login(
         profile = Path(temporary) / "profile"
         profile.mkdir(mode=0o700)
         with browser_session(profile) as (context, page):
+            def publisher_cookie_json() -> bytes:
+                cookies = [
+                    {key: value for key, value in cookie.items() if key in COOKIE_KEYS}
+                    for cookie in context.cookies([f"https://{domain}/" for domain in domains])
+                    if isinstance(cookie, dict) and _cookie_is_publisher_scoped(cookie)
+                ]
+                cookie_json = json.dumps(cookies, sort_keys=True, separators=(",", ":")).encode("utf-8")
+                _validate_cookie_snapshot(cookie_json)
+                return cookie_json
+
             try:
                 page.goto(config.login_url, wait_until="domcontentloaded", timeout=60_000)
             except Exception:
@@ -154,13 +164,14 @@ def _strict_operator_login(
                 ))
                 if not on_publisher or on_login:
                     continue
-                cookies = [
-                    {key: value for key, value in cookie.items() if key in COOKIE_KEYS}
-                    for cookie in context.cookies([f"https://{domain}/" for domain in domains])
-                    if isinstance(cookie, dict) and _cookie_is_publisher_scoped(cookie)
-                ]
-                cookie_json = json.dumps(cookies, sort_keys=True, separators=(",", ":")).encode("utf-8")
-                _validate_cookie_snapshot(cookie_json)
+                cookie_json = publisher_cookie_json()
+                _write_staged_cookie(staging_root, cookie_json)
+                return True
+            if on_publisher:
+                try:
+                    cookie_json = publisher_cookie_json()
+                except BrowserProtocolError:
+                    return False
                 _write_staged_cookie(staging_root, cookie_json)
                 return True
     return False

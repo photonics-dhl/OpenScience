@@ -94,6 +94,51 @@ class AuthLoginCanaryContractTest(unittest.TestCase):
             self.assertEqual(len(persisted), 1)
             self.assertEqual(persisted[0]["value"], "verified")
 
+    def test_strict_login_submits_publisher_cookie_after_login_url_window(self) -> None:
+        context = SimpleNamespace(cookies=lambda _urls=None: [{
+            "name": "session",
+            "value": "verified",
+            "domain": ".sciencedirect.com",
+            "path": "/",
+            "secure": True,
+        }, {
+            "name": "CASTGC",
+            "value": "must-not-persist",
+            "domain": "zjuam.zju.edu.cn",
+            "path": "/",
+            "secure": True,
+        }])
+        page = SimpleNamespace(
+            goto=lambda *_args, **_kwargs: None,
+            url="https://www.sciencedirect.com/user/institution/login",
+        )
+
+        @contextmanager
+        def browser(_profile: Path):
+            yield context, page
+
+        with mock.patch(
+            "scansci_legal.auth_login._load_carsi_publisher_configs",
+            return_value={
+                "sciencedirect": SimpleNamespace(
+                    login_url="https://www.sciencedirect.com/user/institution/login",
+                    domains=["sciencedirect.com"],
+                ),
+            },
+        ), tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            result = auth_login._strict_operator_login(
+                root,
+                browser_session=browser,
+                sleeper=lambda _seconds: None,
+            )
+            cookie = root / "scansci" / "cache" / "carsi_cookies" / "sciencedirect.json"
+
+            self.assertIs(result, True)
+            persisted = json.loads(cookie.read_text(encoding="utf-8"))
+            self.assertEqual(len(persisted), 1)
+            self.assertEqual(persisted[0]["value"], "verified")
+
     def test_strict_login_retry_uses_a_fresh_profile_after_timeout(self) -> None:
         launches: list[Path] = []
         pages = iter((
@@ -113,7 +158,11 @@ class AuthLoginCanaryContractTest(unittest.TestCase):
         @contextmanager
         def browser(profile: Path):
             launches.append(profile)
-            yield context, next(pages)
+            page = next(pages)
+            current_context = context if not page.url.endswith("/login") else SimpleNamespace(
+                cookies=lambda _urls=None: [],
+            )
+            yield current_context, page
 
         with mock.patch(
             "scansci_legal.auth_login._load_carsi_publisher_configs",
