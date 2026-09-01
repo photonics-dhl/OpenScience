@@ -1,7 +1,6 @@
 # ScanSci Default Literature Acquisition Capability Design
 
-> Status: APPROVED FOUNDATION / STRICT BROWSER ARCHITECTURE REVIEW READY /
-> WRITTEN REVIEW PENDING
+> Status: APPROVED / STRICT BROWSER IMPLEMENTATION PLAN READY
 > Date: 2026-08-30
 > Strict browser extension approved: 2026-09-01
 > Owner: Hermes literature acquisition capability
@@ -203,14 +202,17 @@ the only institutional entry; no public API or database contract is added. For
 an institutional request:
 
 1. `scansci-legal` copies only bounded, regular, non-symlink publisher Cookie
-   JSON into a random exact job directory and atomically publishes a strict
-   `legal_only` manifest containing the validated DOI, never an arbitrary URL;
+   JSON into a random exact job directory owned by UID 10001/shared GID 11000;
+   the request-local copy and manifest are group-readable mode `0640` on the
+   read-only browser mount. It atomically publishes a strict `legal_only`
+   manifest containing the validated DOI, never an arbitrary URL;
 2. `scansci-browser` reads that immutable input and creates a fresh profile;
 3. the project adapter gives direct Patchright only the fixed wrapper,
    `openscience-egress:7891` proxy, `DISPLAY`, job home and non-secret locale;
 4. pinned DOI resolution and `try_carsi` run only after the adapter's exact
    source-compatibility guard passes; raw network egress remains impossible;
-5. the browser response callback alone may construct a proof with exact
+5. the browser response callback alone may construct browser-owned/shared-group
+   mode `0640` output with exact
    `http_status`, normalized `mime`, final URL, source label, byte count and
    SHA-256 while atomically writing the captured PDF;
 6. `scansci-legal`, which cannot write the output volume, independently checks
