@@ -1019,6 +1019,7 @@ function transactionStateHarness(root, requiredUid, phase, event) {
     'PREVIOUS_RELEASE_SHA="$ROLLBACK_SHA"',
     'ACTIVE_RELEASE_SHA="$RELEASE_SHA"',
     'EMBEDDING_DEPLOY=0',
+    `SCANSCI_BROWSER_REQUIREMENTS_SHA256_VALUE=${quote('0'.repeat(64))}`,
     lockFunctions,
     'transaction_assert_lock() { assert_production_deploy_lock; }',
     'transaction_journal_start() { [ ! -e "$DEPLOY_JOURNAL" ] || return 75; printf "phase=prepared\\n" > "$DEPLOY_JOURNAL.next"; chmod 0600 "$DEPLOY_JOURNAL.next"; mv "$DEPLOY_JOURNAL.next" "$DEPLOY_JOURNAL"; }',
