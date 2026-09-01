@@ -650,6 +650,7 @@ def _publish_browser_result(
     try:
         output_job.mkdir(mode=0o750)
         _set_group(output_job)
+        output_job.chmod(0o750)
         envelope = json.dumps({
             "schema": 1,
             "job_id": job_id,
@@ -668,6 +669,7 @@ def _write_atomic(path: Path, data: bytes, mode: int) -> None:
     try:
         descriptor = os.open(temporary, os.O_WRONLY | os.O_CREAT | os.O_EXCL, mode)
         _set_group(temporary)
+        temporary.chmod(mode)
         with os.fdopen(descriptor, "wb", closefd=True) as stream:
             descriptor = None
             stream.write(data)

@@ -235,17 +235,26 @@ class BrowserWorkerControllerTest(unittest.TestCase):
             def wait(self, timeout=None):
                 return 2
 
-        self.assertFalse(_launch_job(
-            self.job_id,
-            self.inputs,
-            self.outputs,
-            popen_factory=lambda *_args, **_kwargs: Process(),
-            heartbeat=None,
-            profile_root=self.profiles,
-        ))
-        failure = json.loads((self.outputs / self.job_id / "failure.json").read_text("ascii"))
+        previous_umask = os.umask(0o077)
+        try:
+            self.assertFalse(_launch_job(
+                self.job_id,
+                self.inputs,
+                self.outputs,
+                popen_factory=lambda *_args, **_kwargs: Process(),
+                heartbeat=None,
+                profile_root=self.profiles,
+            ))
+        finally:
+            os.umask(previous_umask)
+        output_job = self.outputs / self.job_id
+        failure_path = output_job / "failure.json"
+        failure = json.loads(failure_path.read_text("ascii"))
         self.assertEqual(failure["error"], "browser_worker_crash")
         self.assertEqual(failure["job_id"], self.job_id)
+        if os.name == "posix":
+            self.assertEqual(output_job.stat().st_mode & 0o777, 0o750)
+            self.assertEqual(failure_path.stat().st_mode & 0o777, 0o640)
         self.assertTrue(self.input_job.exists())
 
     def test_removes_only_the_exact_killed_jobs_fresh_profile(self):
