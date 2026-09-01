@@ -15,6 +15,7 @@ release_sha="$2"
 [ "$(id -u)" -eq 0 ] || { echo "root required" >&2; exit 77; }
 
 network_name='openscience-prod_browser_net'
+browser_container='openscience-prod-scansci-browser-1'
 bridge_name='xgs-browser0'
 subnet='172.26.0.0/24'
 gateway='172.26.0.1'
@@ -70,11 +71,24 @@ done
 [ "$(docker network inspect --format '{{index .Options "com.docker.network.bridge.name"}}' "$network_name")" = "$bridge_name" ] \
   || { echo "browser network bridge mismatch" >&2; exit 65; }
 
+[ "$(docker inspect --format '{{.State.Status}}' "$browser_container")" = 'created' ] \
+  || { echo "browser container is not in the created state" >&2; exit 65; }
+[ "$(docker inspect --format '{{index .Config.Labels "com.docker.compose.project"}}' "$browser_container")" = 'openscience-prod' ] \
+  || { echo "browser container project mismatch" >&2; exit 65; }
+[ "$(docker inspect --format '{{index .Config.Labels "com.docker.compose.service"}}' "$browser_container")" = 'scansci-browser' ] \
+  || { echo "browser container service mismatch" >&2; exit 65; }
+[ "$(docker inspect --format '{{.HostConfig.NetworkMode}}' "$browser_container")" = "$network_name" ] \
+  || { echo "browser container NetworkMode mismatch" >&2; exit 65; }
+[ "$(docker inspect --format '{{len .NetworkSettings.Networks}}' "$browser_container")" = '1' ] \
+  || { echo "browser container network count mismatch" >&2; exit 65; }
+[ "$(docker inspect --format '{{(index .NetworkSettings.Networks "openscience-prod_browser_net").IPAMConfig.IPv4Address}}' "$browser_container")" = '172.26.0.2' ] \
+  || { echo "browser container requested IP mismatch" >&2; exit 65; }
+[ "$(docker inspect --format '{{.Image}}' "$browser_container")" = "$(docker image inspect --format '{{.Id}}' "openscience-scansci-browser:$release_sha")" ] \
+  || { echo "browser container image mismatch" >&2; exit 65; }
+
 mapfile -t peers < <(docker network inspect --format '{{range .Containers}}{{.Name}}{{"\n"}}{{end}}' "$network_name" | sed '/^$/d')
-if [ "${#peers[@]}" -ne 1 ] || [[ "${peers[0]}" != *-scansci-browser-1 ]]; then
-  echo "browser network has an unauthorized peer" >&2
-  exit 65
-fi
+[ "${#peers[@]}" -eq 0 ] \
+  || { echo "browser network has an unauthorized peer" >&2; exit 65; }
 
 mutation_started=1
 /bin/bash "$firewall"

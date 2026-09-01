@@ -6,7 +6,9 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import test from 'node:test';
 
-import { formatRuntimeStatuses, verifyRootOwnedSecretMetadata, verifyScanSciRuntime } from './verify-scansci-runtime.mjs';
+import {
+  formatRuntimeStatuses, verifyBrowserFirewallRules, verifyRootOwnedSecretMetadata, verifyScanSciRuntime,
+} from './verify-scansci-runtime.mjs';
 import * as runtimeVerifier from './verify-scansci-runtime.mjs';
 
 const releaseSha = 'a'.repeat(40);
@@ -212,6 +214,21 @@ async function fixture() {
   };
 }
 
+test('browser firewall verifier accepts only the exact /32 allow before the /24 reject', () => {
+  const accept = '-A INPUT -s 172.26.0.2/32 -d 172.26.0.1/32 -i xgs-browser0 -p tcp -m tcp --dport 7891 -m comment --comment "openscience-scansci-browser" -j ACCEPT';
+  const reject = '-A INPUT -s 172.26.0.0/24 -i xgs-browser0 -m comment --comment "openscience-scansci-browser" -j REJECT --reject-with icmp-port-unreachable';
+  assert.equal(verifyBrowserFirewallRules([accept, reject]), true);
+  for (const rules of [
+    [accept.replace('172.26.0.2/32', '172.26.0.0/24'), reject],
+    [accept, reject, accept],
+    [reject, accept],
+    [accept.replace('-d 172.26.0.1/32 ', ''), reject],
+    [accept, reject.replace('172.26.0.0/24', '172.26.0.2/32')],
+  ]) {
+    assert.throws(() => verifyBrowserFirewallRules(rules), /failed/u);
+  }
+});
+
 test('runtime verifier validates immutable source, bounded topology, Secret and persistent session without exposing values', async (t) => {
   const f = await fixture();
   t.after(async () => rm(f.releaseRoot, { recursive: true, force: true }));
@@ -267,6 +284,10 @@ test('runtime verifier rejects browser identity, isolation, mount and process dr
     (input) => { input.browserContainer.NetworkSettings.Networks = { 'openscience-prod_auth_net': {} }; },
     (input) => { input.browserNetwork.Internal = false; },
     (input) => { input.browserNetwork.Options['com.docker.network.bridge.name'] = 'br-unsafe'; },
+    (input) => {
+      input.browserContainer.NetworkSettings.Networks['openscience-prod_browser_net'].IPAddress = '172.26.0.3';
+      input.browserNetwork.Containers.browser.IPv4Address = '172.26.0.3/24';
+    },
     (input) => { input.browserNetwork.Containers.rogue = { Name: 'rogue-peer', IPv4Address: '172.26.0.3/24' }; },
     (input) => { input.browserEgressProbe.hostSsh = 'connected'; },
     (input) => { input.browserEgressProbe.legalPeer = 'connected'; },
