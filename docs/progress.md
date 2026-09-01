@@ -4,17 +4,17 @@
 
 ## Current version tuple
 
-- Candidate branch / design commit / origin main: `codex/scansci-browser-institutional-gate` / `950ec40` / `2019f8a`。
+- Candidate branch / implementation-plan commit / origin main: `codex/scansci-browser-institutional-gate` / `cf114e7` / `2019f8a`。
 - Production application source / immutable release: `2019f8a2d9dcd7d5241de231ae95e2aedf238f47`。
 - Production rollback: `9eeb8d51baf16b212a7a4f5dd7db25131aa725a6`；core/search migrations `33/33` / `2/2`。
-- Taskmaster `hermes-research-intelligence` 仍为 9/12；ScanSci ECS acceptance Step 5 reopened、Step 6 blocked，Task 10 in progress，Task 11 继续阻断。
+- Taskmaster `hermes-research-intelligence` 仍为 9/12；strict browser spec 已批准、TDD 实施启动，ScanSci ECS acceptance Step 5/6 与 Task 11 继续阻断到真实机构 PDF 通过。
 
 ## 2026-09-01 — Snapshot fix deployed; CARSI false-positive isolated
 
 - PR #28 exact CI `33461988607` / job `99713876656` 合并为 `2019f8a`。ECS schema-v3 Parser、BGE CPU、core/search `33/33`/`2/2`、ScanSci OA、API/Web/Worker/Nginx/public CAS/retention 全绿；active/rollback `2019f8a` / `9eeb8d5`，journal/failed absent，磁盘 50G/148G、92G available。
 - 请求快照现真实满足 `cache_dir == snapshot`，但安全诊断仍为 Cookie 1 个/JSON 5 records、state `auth_required` generation 16、persistent/snapshot load 均 0。Requests、CPU Chromium、ECS direct 与本机 7890 tunnel 对同一 ScienceDirect article/PDF 均为 403、无 SSO redirect、无 PDF magic。
 - Pinned 1.11.0 只凭 publisher URL 或 Cookie 数量即可把 403 误报登录成功；其 `try_carsi` 实际是浏览器源，而生产 legal image 无 Chromium/Patchright/Xvfb。故此前 `ready` 与 helper 自动退出不是机构下载完成证据，Step 5 已诚实重开。
-- 用户批准 CPU browser 方向；架构复审以 3 个 Important 将其收紧为独立无 Secret `scansci-browser`、相反只读 job volumes、无 fallback Patchright 与浏览器原生 status/MIME/URL/hash proof，复审 READY；设计 commit `950ec40`。书面 spec review、实施计划、TDD/CI/ECS 登录与真实 institutional PDF 仍 pending。
+- 用户已批准 strict CPU browser 书面 spec；唯一计划原地扩展为 job protocol、无 fallback Patchright、proof-backed ready、独立 browser image/topology 与 merged-SHA ECS 旅程，plan commit `cf114e7`。账号密码只在 loopback noVNC 输入且不存储；TDD/CI/ECS 登录与真实 institutional PDF 仍 pending。
 
 ## 2026-08-31 — ScanSci Task 10 controlled-egress production retry
 
