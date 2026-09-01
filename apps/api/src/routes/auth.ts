@@ -9,7 +9,14 @@ import {
   confirmSignup,
   resendCode,
   verifyEmail,
+  beginOrcidConnection,
+  completeOrcidConnection,
+  getAcademicIdentityStatus,
+  requestInstitutionEmailCode,
+  verifyInstitutionEmail,
+  AuthError,
   type AuthDeps,
+  type OrcidConfig,
 } from '@openscience/auth';
 import type { AuditContext } from '@openscience/observability';
 import { RESEARCH_IDENTITIES, validateResearchIdentityProfile } from '@openscience/domain';
@@ -18,6 +25,8 @@ import { buildErrorBody } from '@openscience/observability';
 
 export interface AuthRouteDeps extends AuthDeps {
   secureCookies: boolean;
+  orcid?: OrcidConfig;
+  institutionEmailDomains?: string[];
 }
 
 /** P1A-6：请求级审计上下文（requestId/ip），随写操作尾参传入 domain/auth。 */
@@ -42,6 +51,10 @@ const registerBody = z.object({
 const verifyBody = z.object({ email: z.string().email(), code: z.string().regex(/^\d{6}$/) });
 const emailBody = z.object({ email: z.string().email() });
 const loginBody = z.object({ email: z.string().email(), password: z.string().min(1) });
+const orcidStartBody = z.object({ returnTo: z.string().max(500).optional() }).strict();
+const orcidCallbackQuery = z.object({ code: z.string().min(1), state: z.string().min(20) });
+const institutionEmailBody = z.object({ email: z.string().email() }).strict();
+const institutionEmailVerifyBody = institutionEmailBody.extend({ code: z.string().regex(/^\d{6}$/) });
 const signupRequestBody = z.object({ email: z.string().email() });
 const signupConfirmBody = signupRequestBody.extend({
   code: z.string().regex(/^\d{6}$/),
@@ -74,6 +87,23 @@ function setSessionCookie(reply: FastifyReply, token: string, secure: boolean): 
     path: '/',
     maxAge: SESSION_MAX_AGE_SECONDS,
   });
+}
+
+function academicIdentityDeps(deps: AuthRouteDeps) {
+  return {
+    ...deps,
+    orcid: deps.orcid ?? { clientId: '', clientSecret: '', redirectUri: '', baseUrl: '' },
+    institutionEmailDomains: deps.institutionEmailDomains ?? [],
+  };
+}
+
+async function currentUserId(req: FastifyRequest, reply: FastifyReply, deps: AuthRouteDeps): Promise<string | null> {
+  const token = sessionTokenFrom(req);
+  if (!token) {
+    await reply.status(401).send(buildErrorBody('SESSION_INVALID', '未登录', String(req.id)));
+    return null;
+  }
+  return (await getCurrentUser(deps, token)).userId;
 }
 
 export function registerAuthRoutes(app: FastifyInstance, deps: AuthRouteDeps): void {
@@ -147,5 +177,50 @@ export function registerAuthRoutes(app: FastifyInstance, deps: AuthRouteDeps): v
     if (!token) return reply.status(401).send(buildErrorBody('SESSION_INVALID', '未登录', String(req.id)));
     const me = await getCurrentUser(deps, token);
     return reply.send(me);
+  });
+
+  app.get('/academic-identity', async (req, reply) => {
+    const userId = await currentUserId(req, reply, deps);
+    if (!userId) return;
+    return reply.send(await getAcademicIdentityStatus(academicIdentityDeps(deps), userId));
+  });
+
+  app.post('/orcid/start', async (req, reply) => {
+    const userId = await currentUserId(req, reply, deps);
+    if (!userId) return;
+    const body = orcidStartBody.parse(req.body ?? {});
+    return reply.send(await beginOrcidConnection(academicIdentityDeps(deps), userId, body.returnTo));
+  });
+
+  app.get('/orcid/callback', async (req, reply) => {
+    const token = sessionTokenFrom(req);
+    if (!token) return reply.redirect('/auth/login?returnTo=%2Fsettings');
+    let userId: string;
+    try { userId = (await getCurrentUser(deps, token)).userId; } catch {
+      return reply.redirect('/auth/login?returnTo=%2Fsettings');
+    }
+    try {
+      const query = orcidCallbackQuery.parse(req.query);
+      const result = await completeOrcidConnection(academicIdentityDeps(deps), userId, query, auditCtx(req));
+      const separator = result.returnTo.includes('?') ? '&' : '?';
+      return reply.redirect(`${result.returnTo}${separator}identity=orcid-connected`);
+    } catch (cause) {
+      const code = cause instanceof AuthError ? cause.code : 'ORCID_AUTHORIZATION_FAILED';
+      return reply.redirect(`/settings?identityError=${encodeURIComponent(code)}`);
+    }
+  });
+
+  app.post('/institution-email/request', async (req, reply) => {
+    const userId = await currentUserId(req, reply, deps);
+    if (!userId) return;
+    await requestInstitutionEmailCode(academicIdentityDeps(deps), userId, institutionEmailBody.parse(req.body), auditCtx(req));
+    return reply.status(202).send({ ok: true });
+  });
+
+  app.post('/institution-email/verify', async (req, reply) => {
+    const userId = await currentUserId(req, reply, deps);
+    if (!userId) return;
+    await verifyInstitutionEmail(academicIdentityDeps(deps), userId, institutionEmailVerifyBody.parse(req.body), auditCtx(req));
+    return reply.send({ ok: true });
   });
 }

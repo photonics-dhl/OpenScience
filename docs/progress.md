@@ -7,6 +7,12 @@
 - Candidate branch / code HEAD / origin main: `codex/scansci-upstream-mcp` / `263fc23ea722637c77fa120f0f67ab66ec3af03c` / `7daff3f57c0714239802ad4085daf8e131a34bc8`。
 - Production application source / immutable release: `7daff3f57c0714239802ad4085daf8e131a34bc8`。
 - Production rollback: `ab290579ed81f4a30d011dea2a52e8b9b20c50f3`；core/search migrations `34/34` / `2/2`。
+
+## 2026-09-02 — Academic identity progression release candidate
+
+- 在最新 `main` 之上增加注册用户→主邮箱验证→ORCID OAuth→机构邮箱验证的四阶段进度；当前尚未改变生产 tuple。
+- credential 与 scoped-role assignment 分离；同一用户可同时持有 RO author、assignment reviewer、journal editor、organization member 等作用域角色，凭证本身不自动授权。
+- core migration 35 为身份凭证、机构邮箱挑战与多作用域角色；真实 PostgreSQL、ORCID、SMTP 与 ECS 是发布门禁。
 - Taskmaster `hermes-research-intelligence` 仍为 9/12；官方 MCP/auth bridge/parser 构建稳定补丁已生产，ZJU Cookie、subscription-only PDF、四入口与旧实现精确清理 pending；Task 11 继续阻断。
 
 ## 2026-09-02 — Official ScanSci auth bridge and parser retry deployed

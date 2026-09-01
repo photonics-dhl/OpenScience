@@ -26,6 +26,16 @@ export {
 } from './session';
 export { DevOutboxMailer, SmtpMailer, type Mailer, type MailMessage, type SmtpConfig } from './mailer';
 export {
+  beginOrcidConnection,
+  completeOrcidConnection,
+  getAcademicIdentityStatus,
+  requestInstitutionEmailCode,
+  verifyInstitutionEmail,
+  type AcademicIdentityDeps,
+  type AcademicIdentityStatus,
+  type OrcidConfig,
+} from './academic-identity';
+export {
   getCurrentUser,
   login,
   logout,
