@@ -317,7 +317,7 @@ resolve_existing_state_before_start() {
     echo "tunnel state upgrade failed" >&2
     return 65
   fi
-  if { [ "$STATE_LIFECYCLE" = "running" ] || [ "$STATE_LIFECYCLE" = "starting" ]; } && process_matches_state; then
+  if [ "$STATE_LIFECYCLE" = "running" ] && process_matches_state; then
     return 2
   fi
   stop_identified_tunnel
@@ -336,19 +336,21 @@ start_tunnel() {
   local existing_rc=0
   resolve_existing_state_before_start || existing_rc=$?
   if [ "$existing_rc" -eq 2 ]; then
-    if [ "$STATE_PORT" != "$port" ]; then
-      echo "tunnel already running on another local port" >&2
-      return 65
-    fi
-    if wait_until_ready "$port"; then
+    if wait_until_ready "$STATE_PORT"; then
+      if [ "$STATE_PORT" != "$port" ]; then
+        echo "tunnel already running on another local port" >&2
+        return 65
+      fi
       echo "already running on http://127.0.0.1:$port$NOVNC_PATH"
       return 0
     fi
     stop_identified_tunnel
     load_connection
-    commit_remote_stop || true
-    echo "loopback tunnel readiness failed" >&2
-    return 1
+    if ! commit_remote_stop; then
+      echo "stale auth helper stop failed" >&2
+      return 1
+    fi
+    existing_rc=0
   fi
   if [ "$existing_rc" -ne 0 ]; then
     return "$existing_rc"
@@ -429,12 +431,20 @@ show_status() {
     return 4
   fi
   if read_state && [ "$STATE_LIFECYCLE" = "starting" ]; then
-    echo "starting"
+    if is_running && wait_until_ready "$STATE_PORT"; then
+      echo "starting"
+    else
+      echo "unreachable"
+    fi
     return 4
   fi
   if is_running; then
-    echo "running on http://127.0.0.1:$STATE_PORT$NOVNC_PATH"
-    return 0
+    if wait_until_ready "$STATE_PORT"; then
+      echo "running on http://127.0.0.1:$STATE_PORT$NOVNC_PATH"
+      return 0
+    fi
+    echo "unreachable"
+    return 4
   fi
   echo "stopped"
   return 3

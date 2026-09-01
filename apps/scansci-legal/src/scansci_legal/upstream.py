@@ -127,8 +127,9 @@ def _sanitized_environment(output_dir: Path) -> dict[str, str]:
 
 def _fixed_config(output_dir: Path, session_snapshot: Path | None) -> dict[str, Any]:
     snapshot_root = session_snapshot or output_dir / "empty-session"
+    cache_root = session_snapshot or output_dir / "cache"
     return {
-        "output_dir": str(output_dir), "cache_dir": str(output_dir / "cache"), "download_strategy": "legal_only",
+        "output_dir": str(output_dir), "cache_dir": str(cache_root), "download_strategy": "legal_only",
         "scihub_enabled": False, "use_tor": False, "tor_proxy": "", "use_tor_for_scihub": False,
         "network_proxy": "", "proxy_pool": "", "batch_workers": 1, "parallel_sources": False,
         "parallel_probes": False, "connect_timeout": 15, "read_timeout": 30,
