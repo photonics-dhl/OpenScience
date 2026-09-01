@@ -34,21 +34,44 @@ test('retention derives only exact release-scoped image tags', () => {
     `openscience-document-parser:${inactive}`,
     `openscience-embedding-worker:${inactive}`,
     `openscience-scansci-auth:${inactive}`,
+    `openscience-scansci-browser:${inactive}`,
     `openscience-scansci-legal:${inactive}`,
   ]);
 });
 
-test('schema 3 capability binds exact ScanSci image IDs and rejects tampering', () => {
+test('schema 4 capability binds all ScanSci image IDs and retains schema 3 rollback compatibility', () => {
   const legalId = `sha256:${'d'.repeat(64)}`;
+  const browserId = `sha256:${'f'.repeat(64)}`;
   const authId = `sha256:${'e'.repeat(64)}`;
   const source = [
-    'schema=3', 'embedding_deploy=false', 'bge_m3_enabled=false', 'model_version_id=',
+    'schema=4', 'embedding_deploy=false', 'bge_m3_enabled=false', 'model_version_id=',
     'model_revision=', 'source_sha256=', 'package_freeze_sha256=', 'model_manifest_sha256=',
-    'scansci_deploy=true', `scansci_legal_image_id=${legalId}`, `scansci_auth_image_id=${authId}`,
+    'scansci_deploy=true', `scansci_legal_image_id=${legalId}`,
+    `scansci_browser_image_id=${browserId}`, `scansci_auth_image_id=${authId}`,
   ].join('\n');
-  assert.deepEqual(parseReleaseCapability(source), { embeddingDeploy: false, scansciDeploy: true, legalImageId: legalId, authImageId: authId });
+  assert.deepEqual(parseReleaseCapability(source), {
+    embeddingDeploy: false, scansciDeploy: true,
+    legalImageId: legalId, browserImageId: browserId, authImageId: authId,
+  });
   assert.throws(() => parseReleaseCapability(source.replace(legalId, `sha256:${'f'.repeat(64)}`), { expectedLegalImageId: legalId }), /invalid/u);
-  assert.deepEqual(parseReleaseCapability(source.replace('schema=3', 'schema=2').split('\n').filter((line) => !line.startsWith('scansci_')).join('\n')), { embeddingDeploy: false, scansciDeploy: false });
+  const legacy = source.replace('schema=4', 'schema=3')
+    .split('\n').filter((line) => !line.startsWith('scansci_browser_image_id=')).join('\n');
+  assert.deepEqual(parseReleaseCapability(legacy), {
+    embeddingDeploy: false, scansciDeploy: true, legalImageId: legalId, authImageId: authId,
+  });
+  assert.throws(() => parseReleaseCapability(
+    legacy.replace('scansci_deploy=true', 'scansci_deploy=false'),
+  ), /invalid/u);
+  const disabled = source.replace('scansci_deploy=true', 'scansci_deploy=false')
+    .replace(legalId, '').replace(browserId, '').replace(authId, '');
+  assert.deepEqual(parseReleaseCapability(disabled), {
+    embeddingDeploy: false, scansciDeploy: false,
+  });
+  assert.throws(() => parseReleaseCapability(
+    source.replace('scansci_deploy=true', 'scansci_deploy=false'),
+  ), /invalid/u);
+  assert.throws(() => parseReleaseCapability(`${legacy}\nscansci_browser_image_id=${browserId}`), /invalid/u);
+  assert.deepEqual(parseReleaseCapability(source.replace('schema=4', 'schema=2').split('\n').filter((line) => !line.startsWith('scansci_')).join('\n')), { embeddingDeploy: false, scansciDeploy: false });
 });
 
 test('mountinfo parser exposes nested cleanup boundaries with escaped paths decoded', () => {

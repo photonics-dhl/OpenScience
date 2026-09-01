@@ -19,10 +19,12 @@ async function fixture() {
   await mkdir(app, { recursive: true });
   const requirements = `scansci-pdf @ https://example.invalid/archive.tar.gz#sha256=${archiveSha}\n`;
   const buildRequirements = 'setuptools==75.0.0 --hash=sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\n';
+  const browserRequirements = 'patchright==1.62.2 --hash=sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd\n';
   await Promise.all([
     writeFile(join(releaseRoot, '.release-source'), `${releaseSha}\n`),
     writeFile(join(app, 'requirements.lock'), requirements),
     writeFile(join(app, 'build-requirements.lock'), buildRequirements),
+    writeFile(join(app, 'browser-requirements.lock'), browserRequirements),
     writeFile(join(app, 'upstream.lock.json'), `${JSON.stringify({
       name: 'scansci-pdf', version: '1.11.0', commit: '7017814758f826ea21470a609890a7d3ca374b8e',
       archiveUrl: 'https://example.invalid/archive.tar.gz', archiveSha256: archiveSha,
@@ -40,6 +42,10 @@ async function fixture() {
     'org.openscience.scansci.requirements-sha256': digest(requirements),
     'org.openscience.scansci.build-requirements-sha256': digest(buildRequirements),
     'org.openscience.scansci.role': 'legal',
+  };
+  const browserLabels = {
+    ...labels,
+    'org.openscience.scansci.browser-requirements-sha256': digest(browserRequirements),
   };
   const composeFile = join(releaseRoot, 'infra', 'compose', 'docker-compose.prod.yml').replaceAll('\\', '/');
   const container = {
@@ -64,11 +70,14 @@ async function fixture() {
       Privileged: false, CapAdd: [],
       NanoCpus: 1_000_000_000, PidsLimit: 64, SecurityOpt: ['no-new-privileges:true'],
       ExtraHosts: ['openscience-egress:172.24.0.1'],
+      GroupAdd: ['11000'],
       Tmpfs: { '/tmp': 'size=256m,noexec,nosuid,nodev,uid=10001,gid=10001,mode=0700' },
     },
     Mounts: [
       { Type: 'volume', Name: 'openscience-prod_scansci-session', Source: '/var/lib/docker/volumes/session/_data', Destination: '/session', RW: true },
       { Type: 'volume', Name: 'openscience-prod_scansci-service-secrets', Source: '/var/lib/docker/volumes/secrets/_data', Destination: '/run/secrets', RW: false },
+      { Type: 'volume', Name: 'openscience-prod_scansci-browser-inputs', Destination: '/browser-inputs', RW: true },
+      { Type: 'volume', Name: 'openscience-prod_scansci-browser-outputs', Destination: '/browser-outputs', RW: false },
     ],
     NetworkSettings: { Networks: {
       'openscience-prod_retrieval_net': {
@@ -86,9 +95,51 @@ async function fixture() {
     Id: `sha256:${'e'.repeat(64)}`,
     Config: {
       User: '10001:10001',
-      Labels: { ...labels, 'org.openscience.scansci.role': 'auth' },
+      Labels: { ...browserLabels, 'org.openscience.scansci.role': 'auth' },
       Entrypoint: ['/usr/bin/tini', '--', '/usr/local/bin/scansci-auth-entrypoint'],
     },
+  };
+  const browserImage = {
+    Id: `sha256:${'f'.repeat(64)}`,
+    Config: {
+      User: '10002:11000',
+      Labels: { ...browserLabels, 'org.openscience.scansci.role': 'browser' },
+      Entrypoint: ['/usr/bin/tini', '-g', '--', '/usr/local/bin/scansci-browser-entrypoint'],
+    },
+  };
+  const browserContainer = {
+    Image: browserImage.Id,
+    Config: {
+      User: '10002:11000',
+      Env: ['SCANSCI_BROWSER_PROXY=http://openscience-egress:7891', 'DISPLAY=:99'],
+      Labels: {
+        ...browserImage.Config.Labels,
+        'com.docker.compose.project.working_dir': releaseRoot.replaceAll('\\', '/'),
+        'com.docker.compose.project.config_files': composeFile,
+        'com.docker.compose.service': 'scansci-browser',
+      },
+      Entrypoint: ['/usr/bin/tini', '-g', '--', '/usr/local/bin/scansci-browser-entrypoint'],
+      Cmd: [],
+    },
+    HostConfig: {
+      ReadonlyRootfs: true, CapDrop: ['ALL'], CapAdd: [], PortBindings: {},
+      Privileged: false, Memory: 1024 ** 3, NanoCpus: 1_000_000_000,
+      PidsLimit: 256, SecurityOpt: ['no-new-privileges:true'], GroupAdd: ['11000'],
+      ExtraHosts: ['openscience-egress:172.26.0.1'],
+      Tmpfs: {
+        '/tmp': 'size=256m,noexec,nosuid,nodev,uid=10002,gid=11000,mode=0700',
+        '/dev/shm': 'size=256m,nosuid,nodev,uid=10002,gid=11000,mode=0700',
+      },
+    },
+    Mounts: [
+      { Type: 'volume', Name: 'openscience-prod_scansci-browser-inputs', Destination: '/browser-inputs', RW: false },
+      { Type: 'volume', Name: 'openscience-prod_scansci-browser-outputs', Destination: '/browser-outputs', RW: true },
+      { Type: 'volume', Name: 'openscience-prod_scansci-browser-profiles', Destination: '/browser-profile-jobs', RW: true },
+    ],
+    NetworkSettings: { Networks: {
+      'openscience-prod_browser_net': { IPAddress: '172.26.0.2', Gateway: '172.26.0.1' },
+    }, Ports: {} },
+    State: { Running: true, Health: { Status: 'healthy' } },
   };
   const workerContainer = {
     Image: `sha256:${'c'.repeat(64)}`,
@@ -120,15 +171,43 @@ async function fixture() {
     Config: { Labels: { 'org.openscience.source': releaseSha } },
   };
   return {
-    releaseRoot, serviceTokenPath, composeFile, container, image, authImage, workerContainer, workerImage,
+    releaseRoot, serviceTokenPath, composeFile, container, image, browserContainer,
+    browserImage, authImage, workerContainer, workerImage,
+    browserVolumes: [
+      { Name: 'openscience-prod_scansci-browser-inputs', Driver: 'local', Options: { type: 'tmpfs', device: 'tmpfs', o: 'size=128m,uid=10001,gid=11000,mode=0750' } },
+      { Name: 'openscience-prod_scansci-browser-outputs', Driver: 'local', Options: { type: 'tmpfs', device: 'tmpfs', o: 'size=128m,uid=10002,gid=11000,mode=0750' } },
+      { Name: 'openscience-prod_scansci-browser-profiles', Driver: 'local', Options: { type: 'tmpfs', device: 'tmpfs', o: 'size=256m,uid=10002,gid=11000,mode=0700' } },
+    ],
+    browserProcessList: [
+      '/usr/bin/tini -g -- /usr/local/bin/scansci-browser-entrypoint',
+      'Xvfb :99 -screen 0 1280x800x24 -nolisten tcp',
+      'python -m scansci_legal.browser_worker',
+    ].join('\n'),
+    browserPids: 4,
+    expectedLegalImageId: container.Image,
+    expectedBrowserImageId: browserImage.Id,
+    expectedAuthImageId: authImage.Id,
     retrievalNetwork: {
       Name: 'openscience-prod_retrieval_net', Internal: true,
       IPAM: { Config: [{ Subnet: '172.24.0.0/24', Gateway: '172.24.0.1' }] },
+    },
+    browserNetwork: {
+      Name: 'openscience-prod_browser_net', Driver: 'bridge', Internal: true,
+      Options: { 'com.docker.network.bridge.name': 'xgs-browser0' },
+      IPAM: { Config: [{ Subnet: '172.26.0.0/24', Gateway: '172.26.0.1' }] },
+      Containers: { browser: { Name: 'openscience-prod-scansci-browser-1', IPv4Address: '172.26.0.2/24' } },
     },
     controlledEgressProbe: {
       proxyAddress: '172.24.0.1', proxyPeer: '172.24.0.1:7891',
       allowStatus: 204, privateStatus: 403, httpStatus: 403, non443Status: 403,
       rawDirect: 'blocked',
+    },
+    browserEgressProbe: {
+      proxyAddress: '172.26.0.1', proxyPeer: '172.26.0.1:7891',
+      allowStatus: 204, privateStatus: 403, httpStatus: 403, non443Status: 403,
+      hostSsh: 'blocked', hostHttp: 'blocked', hostHttps: 'blocked', hostApi: 'blocked',
+      hostDocker: 'blocked', hostDockerTls: 'blocked', legalPeer: 'blocked',
+      rawDirect: 'blocked', firewall: 'isolated',
     },
   };
 }
@@ -161,6 +240,47 @@ test('runtime verifier validates immutable source, bounded topology, Secret and 
   assert.match(output, /SCANSCI_RUNTIME_SESSION_READY/u);
   assert.doesNotMatch(output, new RegExp(tokenValue, 'u'));
   assert.doesNotMatch(output, /sciencedirect\.json|cookie|password/iu);
+});
+
+test('runtime verifier rejects browser identity, isolation, mount and process drift', async (t) => {
+  const f = await fixture();
+  t.after(async () => rm(f.releaseRoot, { recursive: true, force: true }));
+  const base = {
+    ...f, releaseSha, sessionStatus: 'ready', authContainerIds: [],
+    sourceFileLimitMetadata: '104857600:104857600',
+    runtimeSecretMetadata: '10001:10001:400',
+    runtimeSecretSha256: createHash('sha256').update(tokenValue).digest('hex'),
+    workerSecretMetadata: '1000:1000:400',
+    workerSecretSha256: createHash('sha256').update(tokenValue).digest('hex'),
+    requiredSecretUid: process.getuid?.(),
+  };
+  for (const mutate of [
+    (input) => { input.browserContainer.Image = `sha256:${'9'.repeat(64)}`; },
+    (input) => { input.browserContainer.Config.User = '10001:10001'; },
+    (input) => { input.browserContainer.Config.Env.push('SCANSCI_SERVICE_TOKEN=forbidden'); },
+    (input) => { input.browserContainer.HostConfig.GroupAdd = []; },
+    (input) => { input.browserContainer.HostConfig.ReadonlyRootfs = false; },
+    (input) => { input.browserContainer.HostConfig.PortBindings = { '6080/tcp': [] }; },
+    (input) => { input.browserContainer.Mounts[0].RW = true; },
+    (input) => { input.browserContainer.Mounts[1].RW = false; },
+    (input) => { input.browserContainer.Mounts.push({ Type: 'volume', Name: 'session', Destination: '/session', RW: true }); },
+    (input) => { input.browserContainer.NetworkSettings.Networks = { 'openscience-prod_auth_net': {} }; },
+    (input) => { input.browserNetwork.Internal = false; },
+    (input) => { input.browserNetwork.Options['com.docker.network.bridge.name'] = 'br-unsafe'; },
+    (input) => { input.browserNetwork.Containers.rogue = { Name: 'rogue-peer', IPv4Address: '172.26.0.3/24' }; },
+    (input) => { input.browserEgressProbe.hostSsh = 'connected'; },
+    (input) => { input.browserEgressProbe.legalPeer = 'connected'; },
+    (input) => { input.browserEgressProbe.firewall = 'missing'; },
+    (input) => { input.browserVolumes[0].Options.o = 'size=512m,uid=10001,gid=11000,mode=0750'; },
+    (input) => { input.browserProcessList = input.browserProcessList.replace('Xvfb :99', 'Xvfb :100'); },
+    (input) => { input.browserProcessList += '\nwebsockify 0.0.0.0:6080'; },
+    (input) => { input.browserPids = 225; },
+    (input) => { input.browserEgressProbe.rawDirect = 'connected'; },
+  ]) {
+    const input = structuredClone(base);
+    mutate(input);
+    await assert.rejects(verifyScanSciRuntime(input), /failed/u);
+  }
 });
 
 test('runtime verifier requires a bounded real worker-entry arXiv OA PDF canary when requested', async (t) => {
@@ -233,6 +353,7 @@ test('runtime verifier fails closed on forbidden network, grey-source flags, aut
     (input) => { input.authImage.Config.Labels['org.openscience.scansci.role'] = 'legal'; },
     (input) => { input.authImage.Config.Entrypoint = ['python', '-m', 'scansci_legal.main']; },
     (input) => { input.expectedLegalImageId = `sha256:${'f'.repeat(64)}`; },
+    (input) => { input.expectedBrowserImageId = `sha256:${'e'.repeat(64)}`; },
     (input) => { input.expectedAuthImageId = `sha256:${'f'.repeat(64)}`; },
     (input) => { input.container.Config.Entrypoint = ['/bin/sh']; },
     (input) => { input.container.Config.Cmd = ['fake-healthy']; },
@@ -337,6 +458,7 @@ test('runtime identity modes keep prepublication explicit and canonical sidecar-
   assert.equal(typeof runtimeVerifier.parseRuntimeCli, 'function');
   assert.equal(typeof runtimeVerifier.resolveRuntimeImageIdentity, 'function');
   const legalImageId = `sha256:${'d'.repeat(64)}`;
+  const browserImageId = `sha256:${'f'.repeat(64)}`;
   const authImageId = `sha256:${'e'.repeat(64)}`;
   const releaseRoot = `/opt/openscience-releases/${releaseSha}`;
   const base = [
@@ -347,27 +469,30 @@ test('runtime identity modes keep prepublication explicit and canonical sidecar-
   ];
   const prepublication = runtimeVerifier.parseRuntimeCli([
     ...base, '--mode', 'prepublication',
-    '--expected-legal-image-id', legalImageId, '--expected-auth-image-id', authImageId,
+    '--expected-legal-image-id', legalImageId, '--expected-browser-image-id', browserImageId,
+    '--expected-auth-image-id', authImageId,
   ]);
   assert.equal(prepublication['--mode'], 'prepublication');
   const legacyBase = base.filter((value, index) => !['--require-oa-canary', '0'].includes(value)
     || base[index - 1] !== '--require-oa-canary' && value !== '--require-oa-canary');
   const legacyPrepublication = runtimeVerifier.parseRuntimeCli([
     ...legacyBase, '--mode', 'prepublication',
-    '--expected-legal-image-id', legalImageId, '--expected-auth-image-id', authImageId,
+    '--expected-legal-image-id', legalImageId, '--expected-browser-image-id', browserImageId,
+    '--expected-auth-image-id', authImageId,
   ]);
   assert.equal(legacyPrepublication['--require-oa-canary'], undefined);
   const prepublicationIdentity = await runtimeVerifier.resolveRuntimeImageIdentity(prepublication, {
     readCapability: async () => assert.fail('prepublication read a canonical capability sidecar'),
     capabilityExists: async () => false,
   });
-  assert.deepEqual(prepublicationIdentity, { legalImageId, authImageId });
+  assert.deepEqual(prepublicationIdentity, { legalImageId, browserImageId, authImageId });
 
   for (const args of [
     [...base, '--mode', 'prepublication', '--expected-legal-image-id', legalImageId],
-    [...base, '--mode', 'prepublication', '--expected-legal-image-id', legalImageId, '--expected-auth-image-id', authImageId,
+    [...base, '--mode', 'prepublication', '--expected-legal-image-id', legalImageId, '--expected-browser-image-id', browserImageId,
+      '--expected-auth-image-id', authImageId,
       '--capability-file', `/opt/openscience/.release-capabilities/${releaseSha}`],
-    [...base, '--expected-legal-image-id', legalImageId, '--expected-auth-image-id', authImageId],
+    [...base, '--expected-legal-image-id', legalImageId, '--expected-browser-image-id', browserImageId, '--expected-auth-image-id', authImageId],
     [...base, '--mode', 'canonical', '--capability-file', `/opt/openscience/.release-capabilities/${releaseSha}`],
   ]) assert.throws(() => runtimeVerifier.parseRuntimeCli(args), /failed/u);
   await assert.rejects(runtimeVerifier.resolveRuntimeImageIdentity(prepublication, {
@@ -380,15 +505,16 @@ test('runtime identity modes keep prepublication explicit and canonical sidecar-
     ...base, '--capability-file', capabilityFile,
   ]);
   const capabilitySource = [
-    'schema=3', 'embedding_deploy=false', 'bge_m3_enabled=false', 'model_version_id=',
+    'schema=4', 'embedding_deploy=false', 'bge_m3_enabled=false', 'model_version_id=',
     'model_revision=', 'source_sha256=', 'package_freeze_sha256=', 'model_manifest_sha256=',
-    'scansci_deploy=true', `scansci_legal_image_id=${legalImageId}`, `scansci_auth_image_id=${authImageId}`,
+    'scansci_deploy=true', `scansci_legal_image_id=${legalImageId}`,
+    `scansci_browser_image_id=${browserImageId}`, `scansci_auth_image_id=${authImageId}`,
   ].join('\n');
   let canonicalReads = 0;
   assert.deepEqual(await runtimeVerifier.resolveRuntimeImageIdentity(canonical, {
     readCapability: async (path) => { canonicalReads += 1; assert.equal(path, capabilityFile); return capabilitySource; },
     capabilityExists: async () => assert.fail('canonical mode used the prepublication absence probe'),
-  }), { legalImageId, authImageId });
+  }), { legalImageId, browserImageId, authImageId });
   assert.equal(canonicalReads, 1);
 });
 
@@ -565,6 +691,8 @@ test('runtime verifier rejects wrong-group host metadata and validates an explic
 test('runtime CLI discovers exited and created auth containers for allow-auth zero', () => {
   const source = readFileSync(new URL('./verify-scansci-runtime.mjs', import.meta.url), 'utf8');
   assert.match(source, /ps', '-aq', 'scansci-auth'/u);
+  assert.match(source, /browserRequirementsSha256 = sha256\(await readFile\(join\([\s\S]*releaseRoot, 'apps', 'scansci-legal', 'browser-requirements\.lock',[\s\S]*\)\)\)/u);
+  assert.match(source, /SCANSCI_BROWSER_REQUIREMENTS_SHA256: browserRequirementsSha256/u);
 });
 
 test('file-limit probe invokes the real worker entry with stable no-Secret stdin', () => {

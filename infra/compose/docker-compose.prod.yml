@@ -234,6 +234,8 @@ services:
         NO_PROXY: localhost,127.0.0.1
     image: openscience-scansci-legal:${XGS_RELEASE_IMAGE_TAG:?XGS_RELEASE_IMAGE_TAG required}
     user: "10001:10001"
+    group_add:
+      - "11000"
     environment:
       SCANSCI_ENABLED: "true"
       SCANSCI_HOST: 0.0.0.0
@@ -248,9 +250,13 @@ services:
     volumes:
       - scansci-session:/session
       - scansci-service-secrets:/run/secrets:ro
+      - scansci-browser-inputs:/browser-inputs
+      - scansci-browser-outputs:/browser-outputs:ro
     depends_on:
       scansci-secret-init:
         condition: service_completed_successfully
+      scansci-browser:
+        condition: service_healthy
     read_only: true
     tmpfs:
       - /tmp:size=256m,noexec,nosuid,nodev,uid=10001,gid=10001,mode=0700
@@ -271,6 +277,53 @@ services:
       - retrieval_net
     restart: unless-stopped
 
+  scansci-browser:
+    build:
+      context: ${XGS_RELEASE_ROOT:?XGS_RELEASE_ROOT required}/apps/scansci-legal
+      dockerfile: Dockerfile.browser
+      network: host
+      args:
+        XGS_RELEASE_IMAGE_TAG: ${XGS_RELEASE_IMAGE_TAG:?XGS_RELEASE_IMAGE_TAG required}
+        SCANSCI_ARCHIVE_SHA256: ${SCANSCI_ARCHIVE_SHA256:?SCANSCI_ARCHIVE_SHA256 required}
+        SCANSCI_REQUIREMENTS_SHA256: ${SCANSCI_REQUIREMENTS_SHA256:?SCANSCI_REQUIREMENTS_SHA256 required}
+        SCANSCI_BUILD_REQUIREMENTS_SHA256: ${SCANSCI_BUILD_REQUIREMENTS_SHA256:?SCANSCI_BUILD_REQUIREMENTS_SHA256 required}
+        SCANSCI_BROWSER_REQUIREMENTS_SHA256: ${SCANSCI_BROWSER_REQUIREMENTS_SHA256:?SCANSCI_BROWSER_REQUIREMENTS_SHA256 required}
+        HTTP_PROXY: http://127.0.0.1:7891
+        HTTPS_PROXY: http://127.0.0.1:7891
+        NO_PROXY: localhost,127.0.0.1
+    image: openscience-scansci-browser:${XGS_RELEASE_IMAGE_TAG:?XGS_RELEASE_IMAGE_TAG required}
+    user: "10002:11000"
+    group_add:
+      - "11000"
+    environment:
+      SCANSCI_BROWSER_PROXY: http://openscience-egress:7891
+    extra_hosts:
+      - "openscience-egress:172.26.0.1"
+    volumes:
+      - scansci-browser-inputs:/browser-inputs:ro
+      - scansci-browser-outputs:/browser-outputs
+      - scansci-browser-profiles:/browser-profile-jobs
+    read_only: true
+    tmpfs:
+      - /tmp:size=256m,noexec,nosuid,nodev,uid=10002,gid=11000,mode=0700
+      - /dev/shm:size=256m,nosuid,nodev,uid=10002,gid=11000,mode=0700
+    mem_limit: 1g
+    cpus: 1
+    pids_limit: 256
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    healthcheck:
+      test: ["CMD", "python", "-m", "scansci_legal.browser_worker", "--healthcheck"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 20s
+    networks:
+      - browser_net
+    restart: unless-stopped
+
   scansci-auth:
     profiles: ["scansci-auth"]
     build:
@@ -282,6 +335,7 @@ services:
         SCANSCI_ARCHIVE_SHA256: ${SCANSCI_ARCHIVE_SHA256:?SCANSCI_ARCHIVE_SHA256 required}
         SCANSCI_REQUIREMENTS_SHA256: ${SCANSCI_REQUIREMENTS_SHA256:?SCANSCI_REQUIREMENTS_SHA256 required}
         SCANSCI_BUILD_REQUIREMENTS_SHA256: ${SCANSCI_BUILD_REQUIREMENTS_SHA256:?SCANSCI_BUILD_REQUIREMENTS_SHA256 required}
+        SCANSCI_BROWSER_REQUIREMENTS_SHA256: ${SCANSCI_BROWSER_REQUIREMENTS_SHA256:?SCANSCI_BROWSER_REQUIREMENTS_SHA256 required}
         HTTP_PROXY: http://127.0.0.1:7891
         HTTPS_PROXY: http://127.0.0.1:7891
         NO_PROXY: localhost,127.0.0.1
@@ -456,6 +510,15 @@ networks:
       config:
         - subnet: 172.24.0.0/24
           gateway: 172.24.0.1
+  browser_net:
+    driver: bridge
+    internal: true
+    driver_opts:
+      com.docker.network.bridge.name: xgs-browser0
+    ipam:
+      config:
+        - subnet: 172.26.0.0/24
+          gateway: 172.26.0.1
   auth_net:
     driver: bridge
     internal: true
@@ -480,4 +543,22 @@ volumes:
   scansci-session:
   scansci-service-secrets:
   scansci-worker-secrets:
+  scansci-browser-inputs:
+    driver: local
+    driver_opts:
+      type: tmpfs
+      device: tmpfs
+      o: size=128m,uid=10001,gid=11000,mode=0750
+  scansci-browser-outputs:
+    driver: local
+    driver_opts:
+      type: tmpfs
+      device: tmpfs
+      o: size=128m,uid=10002,gid=11000,mode=0750
+  scansci-browser-profiles:
+    driver: local
+    driver_opts:
+      type: tmpfs
+      device: tmpfs
+      o: size=256m,uid=10002,gid=11000,mode=0700
   bge-m3-5617a9f61b028005a4858fdac845db406aefb181-08cc5a668e89:

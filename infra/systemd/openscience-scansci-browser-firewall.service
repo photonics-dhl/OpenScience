@@ -1,0 +1,13 @@
+[Unit]
+Description=OpenScience ScanSci browser proxy-only firewall
+After=local-fs.target systemd-modules-load.service
+Before=docker.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/openscience-scansci-browser-firewall
+ExecStop=/usr/local/bin/openscience-scansci-browser-firewall remove
+RemainAfterExit=yes
+
+[Install]
+WantedBy=multi-user.target

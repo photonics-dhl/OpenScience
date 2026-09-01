@@ -239,6 +239,8 @@ test('status is read-only and only explicit start launches the helper and loopba
   assert.match(log, /docker compose .*--profile scansci-auth up --no-start --no-build --force-recreate scansci-auth/u);
   assert.match(log, /prepare-scansci-auth-network\.sh/u);
   assert.match(log, /docker compose .*--profile scansci-auth start scansci-auth/u);
+  assert.match(log, /read -r SCANSCI_BROWSER_REQUIREMENTS_SHA256 _ < <\(sha256sum "\/opt\/openscience-releases\/[0-9a-f]{40}\/apps\/scansci-legal\/browser-requirements\.lock"\)/u);
+  assert.match(log, /SCANSCI_BROWSER_REQUIREMENTS_SHA256="\$SCANSCI_BROWSER_REQUIREMENTS_SHA256" docker compose/u);
   assert.match(log, /-L\n127\.0\.0\.1:16080:172\.25\.0\.2:6080/);
   assert.match(log, new RegExp(`-i\\n${f.bashKey.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}`));
   assert.match(log, /operator-fixture@198\.51\.100\.24/);
