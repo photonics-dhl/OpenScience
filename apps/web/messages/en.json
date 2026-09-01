@@ -1103,6 +1103,29 @@
       "hint": "Long-press Hermes below for the compact action menu. Ordinary tap still opens the assistant."
     }
   },
+  "academicIdentity": {
+    "title": "Academic identity verification",
+    "description": "Account, ORCID, and institutional email are independent credentials. Author, reviewer, and editor permissions remain scoped to their research object or organization.",
+    "registered": "Registered account",
+    "emailVerified": "Email verified",
+    "orcidConnected": "ORCID connected",
+    "institutionEmailVerified": "Institutional email verified",
+    "orcidHint": "Connect through the official ORCID authorization flow. ORCID iDs cannot be entered manually.",
+    "connectOrcid": "Connect ORCID",
+    "connected": "Connected",
+    "notConfigured": "ORCID is not configured",
+    "institutionTitle": "Institutional email",
+    "institutionEmail": "Institutional email address",
+    "verificationCode": "Six-digit verification code",
+    "sendCode": "Send verification code",
+    "verify": "Verify email",
+    "domainsNotConfigured": "Institution domains are not configured",
+    "codeSent": "A verification code was sent to the institutional email.",
+    "institutionVerified": "Institutional email verified.",
+    "loadError": "Identity status could not be loaded.",
+    "orcidError": "The ORCID connection could not be started.",
+    "institutionError": "Institutional email verification is temporarily unavailable."
+  },
   "opticalLab": {
     "eyebrow": "Optical Lab / non-production comparison",
     "introduction": "Reference, production baseline, and browser-GPU candidate under one visual gate.",

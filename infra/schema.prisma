@@ -39,36 +39,40 @@ model User {
   emailVerifications EmailVerification[]
   usedInvitations    Invitation[]        @relation("InvitationUsedBy")
 
-  ownedWorkspaces          Workspace[]               @relation("WorkspaceOwner")
+  ownedWorkspaces          Workspace[]                 @relation("WorkspaceOwner")
   memberships              Membership[]
-  sentWorkspaceInvitations WorkspaceInvitation[]     @relation("WorkspaceInvitationInviter")
-  createdResearchObjects   ResearchObject[]          @relation("ResearchObjectCreator")
+  sentWorkspaceInvitations WorkspaceInvitation[]       @relation("WorkspaceInvitationInviter")
+  createdResearchObjects   ResearchObject[]            @relation("ResearchObjectCreator")
   ingestionBatches         IngestionBatch[]
-  uploadedArtifacts        Artifact[]                @relation("ArtifactUploader")
+  uploadedArtifacts        Artifact[]                  @relation("ArtifactUploader")
   authoredCommits          Commit[]
-  grantedVisibilityGrants  VisibilityGrant[]         @relation("VisibilityGranter")
-  receivedVisibilityGrants VisibilityGrant[]         @relation("VisibilityGrantee")
-  visibilityRequests       VisibilityRequest[]       @relation("VisibilityRequester")
-  authoredIssues           Issue[]                   @relation("IssueAuthor")
-  authoredPullRequests     PullRequest[]             @relation("PRAuthor")
-  authoredComments         Comment[]                 @relation("CommentAuthor")
-  authoredReviews          Review[]                  @relation("Reviewer")
-  authorEntries            Author[]                  @relation("AuthorEntry")
-  contributions            Contribution[]            @relation("ContributionUser")
+  grantedVisibilityGrants  VisibilityGrant[]           @relation("VisibilityGranter")
+  receivedVisibilityGrants VisibilityGrant[]           @relation("VisibilityGrantee")
+  visibilityRequests       VisibilityRequest[]         @relation("VisibilityRequester")
+  authoredIssues           Issue[]                     @relation("IssueAuthor")
+  authoredPullRequests     PullRequest[]               @relation("PRAuthor")
+  authoredComments         Comment[]                   @relation("CommentAuthor")
+  authoredReviews          Review[]                    @relation("Reviewer")
+  authorEntries            Author[]                    @relation("AuthorEntry")
+  contributions            Contribution[]              @relation("ContributionUser")
   notifications            Notification[]
   sandboxJobs              SandboxJob[]
   agentSessions            AgentSession[]
-  agentApprovals           ToolApproval[]            @relation("ToolApprover")
-  appealsFiled             Appeal[]                  @relation("Appellant")
-  appealsModerated         Appeal[]                  @relation("Moderator")
-  selectedEditorialEntries EditorialSelection[]      @relation("EditorialSelector")
+  agentApprovals           ToolApproval[]              @relation("ToolApprover")
+  appealsFiled             Appeal[]                    @relation("Appellant")
+  appealsModerated         Appeal[]                    @relation("Moderator")
+  selectedEditorialEntries EditorialSelection[]        @relation("EditorialSelector")
   researchIdentityProfile  ResearchIdentityProfile?
   readingPreference        ReadingPreference?
-  verifiedEvidenceRecords  EvidenceRecord[]          @relation("EvidenceVerifier")
-  requestedExternalSources ExternalSource[]          @relation("ExternalSourceRequester")
-  requestedTemporaryDocs   TemporaryDocument[]       @relation("TemporaryDocumentRequester")
+  verifiedEvidenceRecords  EvidenceRecord[]            @relation("EvidenceVerifier")
+  requestedExternalSources ExternalSource[]            @relation("ExternalSourceRequester")
+  requestedTemporaryDocs   TemporaryDocument[]         @relation("TemporaryDocumentRequester")
   temporaryDocAccesses     TemporaryDocumentAccess[]
-  subjectRightsDecisions   SourceRightsDecision[]    @relation("RightsDecisionSubject")
+  subjectRightsDecisions   SourceRightsDecision[]      @relation("RightsDecisionSubject")
+  identityCredentials      IdentityCredential[]
+  institutionChallenges    InstitutionEmailChallenge[]
+  scopedRoleAssignments    ScopedRoleAssignment[]      @relation("ScopedRoleSubject")
+  grantedScopedRoles       ScopedRoleAssignment[]      @relation("ScopedRoleGranter")
 
   @@map("users")
 }
@@ -114,6 +118,94 @@ model EmailVerification {
 
   @@index([userId])
   @@map("email_verifications")
+}
+
+enum IdentityCredentialType {
+  orcid
+  institution_email
+}
+
+enum IdentityCredentialStatus {
+  verified
+  revoked
+}
+
+model IdentityCredential {
+  id           String                   @id @default(uuid()) @db.Uuid
+  userId       String                   @map("user_id") @db.Uuid
+  type         IdentityCredentialType
+  status       IdentityCredentialStatus @default(verified)
+  externalId   String                   @map("external_id")
+  displayLabel String                   @map("display_label")
+  source       String
+  metadata     Json                     @default("{}")
+  verifiedAt   DateTime                 @default(now()) @map("verified_at")
+  revokedAt    DateTime?                @map("revoked_at")
+  createdAt    DateTime                 @default(now()) @map("created_at")
+  updatedAt    DateTime                 @updatedAt @map("updated_at")
+  user         User                     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([type, externalId])
+  @@unique([userId, type])
+  @@index([userId, status])
+  @@map("identity_credentials")
+}
+
+model InstitutionEmailChallenge {
+  id          String    @id @default(uuid()) @db.Uuid
+  userId      String    @map("user_id") @db.Uuid
+  email       String    @db.Citext
+  domain      String
+  codeHash    String    @map("code_hash")
+  attempts    Int       @default(0)
+  lockedUntil DateTime? @map("locked_until")
+  expiresAt   DateTime  @map("expires_at")
+  lastSentAt  DateTime  @map("last_sent_at")
+  consumedAt  DateTime? @map("consumed_at")
+  createdAt   DateTime  @default(now()) @map("created_at")
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt])
+  @@index([email, consumedAt])
+  @@map("institution_email_challenges")
+}
+
+enum AuthorizationScopeType {
+  platform
+  workspace
+  research_object
+  journal
+  organization
+  review_assignment
+}
+
+enum ScopedRoleStatus {
+  active
+  revoked
+  expired
+}
+
+model ScopedRoleAssignment {
+  id              String                 @id @default(uuid()) @db.Uuid
+  userId          String                 @map("user_id") @db.Uuid
+  scopeType       AuthorizationScopeType @map("scope_type")
+  scopeId         String                 @map("scope_id")
+  role            String
+  status          ScopedRoleStatus       @default(active)
+  grantedByUserId String?                @map("granted_by_user_id") @db.Uuid
+  startsAt        DateTime               @default(now()) @map("starts_at")
+  expiresAt       DateTime?              @map("expires_at")
+  revokedAt       DateTime?              @map("revoked_at")
+  metadata        Json                   @default("{}")
+  createdAt       DateTime               @default(now()) @map("created_at")
+  updatedAt       DateTime               @updatedAt @map("updated_at")
+  user            User                   @relation("ScopedRoleSubject", fields: [userId], references: [id], onDelete: Cascade)
+  grantedBy       User?                  @relation("ScopedRoleGranter", fields: [grantedByUserId], references: [id], onDelete: SetNull)
+
+  @@unique([userId, scopeType, scopeId, role])
+  @@index([scopeType, scopeId, status])
+  @@index([userId, status])
+  @@map("scoped_role_assignments")
 }
 
 model SignupChallenge {
@@ -1058,27 +1150,27 @@ model LicenseAssignment {
 }
 
 model Notification {
-  id        String   @id @default(uuid()) @db.Uuid
-  userId    String   @map("user_id") @db.Uuid
-  type      String // pull_request.opened / merged / review.requested / issue.updated
-  payload   Json
-  read      Boolean  @default(false)
-  createdAt DateTime @default(now()) @map("created_at")
-  idempotencyKey String? @map("idempotency_key")
+  id             String   @id @default(uuid()) @db.Uuid
+  userId         String   @map("user_id") @db.Uuid
+  type           String // pull_request.opened / merged / review.requested / issue.updated
+  payload        Json
+  read           Boolean  @default(false)
+  createdAt      DateTime @default(now()) @map("created_at")
+  idempotencyKey String?  @map("idempotency_key")
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  @@index([userId, read])
   @@unique([idempotencyKey])
+  @@index([userId, read])
   @@map("notifications")
 }
 
 model ExternalProviderState {
-  provider String @id
-  status String
-  authRequiredGeneration Int @default(0) @map("auth_required_generation")
-  createdAt DateTime @default(now()) @map("created_at")
-  updatedAt DateTime @updatedAt @map("updated_at")
+  provider               String   @id
+  status                 String
+  authRequiredGeneration Int      @default(0) @map("auth_required_generation")
+  createdAt              DateTime @default(now()) @map("created_at")
+  updatedAt              DateTime @updatedAt @map("updated_at")
 
   @@map("external_provider_states")
 }

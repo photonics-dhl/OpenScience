@@ -97,4 +97,20 @@ describe('loadApiEnv', () => {
     // smtpPort 有默认 465，给 host 后下一个缺失是 SMTP_USER
     expect(() => loadApiEnv({ ...base, MAILER_DRIVER: 'smtp', SMTP_HOST: 'smtp.qq.com' })).toThrow(/SMTP_USER/);
   });
+
+  it('keeps academic identity providers disabled until complete credentials are configured', () => {
+    const env = loadApiEnv({ INSTITUTION_EMAIL_DOMAINS: 'zju.edu.cn, @mit.edu' });
+    expect(env.orcid.clientId).toBe('');
+    expect(env.institutionEmailDomains).toEqual(['zju.edu.cn', 'mit.edu']);
+    expect(() => loadApiEnv({ ORCID_CLIENT_ID: 'APP-ONLY' })).toThrow(/configured together/);
+  });
+
+  it('accepts a complete ORCID Sandbox configuration', () => {
+    const env = loadApiEnv({
+      ORCID_CLIENT_ID: 'APP-TEST', ORCID_CLIENT_SECRET: 'secret',
+      ORCID_REDIRECT_URI: 'http://127.0.0.1:3000/api/auth/orcid/callback',
+    });
+    expect(env.orcid.baseUrl).toBe('https://sandbox.orcid.org');
+    expect(env.orcid.redirectUri).toContain('/api/auth/orcid/callback');
+  });
 });

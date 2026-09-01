@@ -21,6 +21,9 @@ export const RATE_LIMIT_ROUTES: Record<string, RouteRule> = {
   '/auth/register': { limit: 5, windowSec: 600 },
   '/auth/resend-code': { limit: 3, windowSec: 300 },
   '/auth/verify-email': { limit: 10, windowSec: 300 },
+  '/auth/orcid/start': { limit: 5, windowSec: 300 },
+  '/auth/institution-email/request': { limit: 3, windowSec: 300 },
+  '/auth/institution-email/verify': { limit: 10, windowSec: 300 },
   // P1C-3：协作写入限流（§17 + task 4.3 要求；key=完整路径）
   '/research-objects/:id/issues': { limit: 20, windowSec: 60 },
   '/research-objects/:id/issues/:issueId/comments': { limit: 30, windowSec: 60 },

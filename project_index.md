@@ -26,6 +26,9 @@
 | `apps/web/app/dashboard/page.tsx` / `apps/web/components/dashboard/` / `apps/web/components/hermes/HermesAssistantDrawer.tsx` | 研究驾驶舱：最近 RO、导入/创建、可行动 Hermes 任务、研究列表与原地 Hermes guide drawer | 活实现 |
 | `apps/web/app/research-objects/new/page.tsx` / `apps/web/components/intake/*.tsx` | Optical Editorial Evidence Intake：blank 直接进入 SDF；import 在明确提交前仅本地编排 manuscript/figure/data/code/supplement 与可选主稿，提交后连接真实 ingest batch、逐任务轮询、blocked/retry 与 needs_review→Hermes deep link | 活文档 |
 | `GET /research-objects` / `GET /ingestion?actionable=true` | Dashboard 真实数据合同：仅成员 Workspace 的 RO 与当前用户创建的 IngestionTask；Hermes deep link 使用真实 ingestion task ID | 活接口 |
+| `packages/auth/src/academic-identity.ts` / `apps/api/src/routes/auth.ts` / `apps/web/components/settings/AcademicIdentityControl.tsx` | 注册与主邮箱验证之后的 ORCID OAuth、机构域名二次邮箱验证、设置页四阶段进度；OAuth state 与验证码均一次性、用户绑定、限时 | **RELEASE CANDIDATE**；真实 ORCID/SMTP/ECS pending |
+| `infra/migrations/20260901010000_identity_credentials_scoped_roles/` / `packages/database/test/academic-identity-migration.test.ts` | core migration 35：身份凭证、机构邮箱挑战与通用多作用域角色；同一用户可同时拥有多种 scoped role | **RELEASE CANDIDATE / NOT DEPLOYED**；forward/rollback 均显式 |
+| `docs/specs/2026-09-01-academic-identity-and-scoped-roles-design.md` | 注册→主邮箱验证→ORCID OAuth→机构邮箱验证，以及 credential 与 authorization 分离的多作用域角色设计 | **RELEASE CANDIDATE** |
 | `apps/web/test/auth-dashboard.test.tsx` / `apps/web/test/e2e/auth-dashboard.spec.ts` | Auth/Dashboard 单元合同与 clean-browser 桌面/移动 E2E；实际选择多文件并断言 Artifact→Commit 引用 | 活文档 |
 | `apps/web/playwright{,.signup}.config.ts` / `apps/web/test/e2e/signup-live.spec.ts` / `apps/api/test/support/signup-smoke-server.mjs` | 可重复浏览器门禁；signup smoke 启动编译 Fastify auth 路由和真实 Next rewrite，验证验证码、Cookie 与 `/auth/me`，不使用 API route mock | 测试工具 |
 | `packages/domain/src/ingestion/` / `apps/api/src/routes/ingestion.ts` | 多格式 ingestion 格式策略、批次/任务状态机、Artifact + AgentTask 异步边界，以及 consent/status/retry API；已补写权限、bounded multipart、模板限流和 dispatch/CAS 基础 | 执行中 |
@@ -391,8 +394,8 @@
 | `infra/nginx/openscience.test.mjs` | 生产 Nginx 合同：`/api` rewrite、Auth 页面/API 分流、Curator/Admin API 保护、Basic credential 不转发、Tunnel 真实 IP 与部署同步 | 8/8 GREEN |
 | `infra/www/` | `nav/index.html` 服务器面板导航静态页（/var/www/nav，2026-08-01） | 已部署云上 |
 | `infra/sandbox/` | 沙箱配置占位（P1A-1） | 骨架 |
-| `infra/migrations/` | Prisma 迁移 1–34（34 = ScanSci `source_retrieval` provenance；33 = provider state + Notification 幂等；32 = 外部来源/权利/临时文档），各附 rollback.sql | **PRODUCTION 34/34**；migration 34 isolated forward/rollback/redeploy 与 canonical deploy green，search 2/2 |
-| `infra/schema.prisma` | core Prisma schema：既有平台模型 + Research Intelligence/Identity/Reading/External Retrieval/ScanSci provider state scoped relations + `source_retrieval` rights basis | **PRODUCTION migration 34** |
+| `infra/migrations/` | Prisma 迁移 1–35（35 = 学术身份凭证/机构邮箱挑战/多作用域角色；34 = ScanSci `source_retrieval` provenance；33 = provider state + Notification 幂等；32 = 外部来源/权利/临时文档），各附 rollback.sql | **RELEASE CANDIDATE 35；PRODUCTION 34/34**；search 2/2 |
+| `infra/schema.prisma` | core Prisma schema：既有平台模型 + Research Intelligence/Identity/Reading/External Retrieval/ScanSci provider state scoped relations + `source_retrieval` rights basis + academic credentials/scoped roles | **RELEASE CANDIDATE migration 35；PRODUCTION migration 34** |
 | `infra/search/schema.prisma` / `infra/search/migrations/` / `packages/search/test/migration.test.ts` | search 独立 Prisma schema、generator 与迁移账本；baseline `search_meta` 不与 core ledger 混用；Task 6 migration 2 增加 tenant-scoped chunk/embedding/index/model/telemetry、GIN 与机械 rollback | **CURRENT PRODUCTION 2/2 `c581712`**；forward/rollback/redeploy、tenant-safe PostgreSQL integration 与双库恢复 GREEN |
 | `scripts/verify-database-isolation.mjs` / `scripts/verify-database-isolation.test.mjs` | 拒绝 core/search 指向同一物理数据库，并以脱敏元数据给出部署门禁 | **CURRENT**；focused contract 与 ECS `DATABASE_ISOLATION_OK` GREEN |
 
