@@ -8,10 +8,12 @@ children=()
 
 cleanup() {
   local pid
-  for pid in "${children[@]:-}"; do
+  local owned_children=("${children[@]}")
+  children=()
+  for pid in "${owned_children[@]}"; do
     kill "$pid" 2>/dev/null || true
   done
-  for pid in "${children[@]:-}"; do
+  for pid in "${owned_children[@]}"; do
     wait "$pid" 2>/dev/null || true
   done
 }
@@ -27,4 +29,14 @@ children+=("$!")
 websockify --web=/usr/share/novnc 0.0.0.0:6080 127.0.0.1:5900 &
 children+=("$!")
 
-python -m scansci_legal.auth_login --operator-start
+python -m scansci_legal.auth_login --operator-start &
+auth_pid="$!"
+children+=("$auth_pid")
+set +e
+wait "$auth_pid"
+auth_status="$?"
+set -e
+if [ "${#children[@]}" -eq 4 ] && [ "${children[3]}" = "$auth_pid" ]; then
+  unset 'children[3]'
+fi
+exit "$auth_status"

@@ -1,6 +1,6 @@
 # Runbook: 部署（Deployment）
 
-> 状态：**CURRENT**。active immutable release / application source 为 `cca590823b646c45a3c47f34678ec1ea3eea2fa3`，rollback tree 为 `9042ed3f2b2df8b7704d0d59b5fec1beb62f0acc`。post-deploy merge/docs-only HEAD 不得冒充 application source。
+> 状态：**CURRENT**。active immutable release / application source 为 `36033aee0c8712a31c699c800b1c81cd6ffe044d`，rollback tree 为 `cca590823b646c45a3c47f34678ec1ea3eea2fa3`。post-deploy merge/docs-only HEAD 不得冒充 application source。
 > 格式遵循 `.agents/skills/infra-runbook/SKILL.md` 四节强制要求。
 > 部署属 Spec §20.5"询问"级操作：执行前需用户确认，必须走 `infra/scripts/deploy.sh` + CI/CD，禁止手工改服务器代码。
 
@@ -1817,3 +1817,41 @@ controlled-egress denials. From the operator machine require both HTTP 200 for
 `/vnc.html?autoconnect=true&resize=remote` and `RFB_OK` from
 `probe-novnc-rfb.mjs ws://127.0.0.1:6080/websockify`. Finally require the full
 canonical `allow-auth=1` verifier before presenting the loopback login link.
+
+PR #25 passed exact CI run `33447387815` / job `99669426363`, merged as
+`36033aee0c8712a31c699c800b1c81cd6ffe044d`, and passed the complete two-phase
+canonical transaction after regenerating the exact schema-v3 Parser report.
+Active/rollback are `36033ae` / `cca5908`. The real auth helper then reported
+the only `nofile/4096/4096` entry, 168 PIDs, no host PortBinding/listener and
+fixed `.2`; local noVNC returned HTTP 200 and the RFB probe returned `RFB_OK`.
+
+### 5.55 ScanSci local tunnel start ownership and operator-window expiry (2026-09-01)
+
+Windows Git Bash may briefly omit a newly spawned SSH runner from `ps` even
+though the child is alive. Retry the nonce/port/cmdline identity probe for at
+most two seconds. If identity still cannot be proven, send TERM only through a
+Bash job spec after `jobs -pr` confirms that the active job PID equals the
+current start's `$!`. If the runner already exited, only `wait` it; never signal
+the stale numeric PID. The runner trap remains the owner of SSH-child cleanup,
+and the normal exact remote-helper compensation remains mandatory.
+
+The upstream federated-login command may exit nonzero after an unattended
+operator window. In the observed production attempt it exited after about 185
+seconds, stopped its X11 children and published `auth_required`; the SSH runner
+remained locally identifiable but its noVNC endpoint reset connections. Treat
+this as an expired attempt, not a ready session: use the canonical `stop`, then
+canonical `start 6080`, and re-require status, HTTP 200 and `RFB_OK` before
+showing the link. Preserve the named session volume, and never infer successful
+CARSI authentication until the safe session metadata reports `ready` and a
+container-recreation probe plus a real institutional acquisition both pass.
+
+Candidate `aff435a` adds the bounded process-table retry and job-table ownership
+guard. Its adversarial suite covers delayed visibility, a live runner whose SSH
+child must be reaped, and an exited runner that must not receive a numeric-PID
+signal; tunnel tests are `26/26`, with independent code and security reviews
+READY. `860b2b0` adds setup-once plus at most ten consecutive upstream windows.
+Final candidate `b1d6662` also tracks the long-running auth Python child so TERM
+clears the owned process set in 1.8 seconds instead of reaching Docker SIGKILL;
+the trap clears ownership before signaling and is idempotent across TERM/EXIT.
+Tunnel tests are `27/27`; ScanSci legal tests are 89 pass / 6 Windows-only skips
+/ 0 fail. Merge and deploy the final HEAD before starting the next login.

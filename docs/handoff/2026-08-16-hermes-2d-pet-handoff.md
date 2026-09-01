@@ -1,6 +1,6 @@
 # Hermes Research Intelligence CURRENT Handoff
 
-> **CURRENT active-memory，2026-09-01。** ScanSci OA/Worker/Parser/BGE 与公网 release `cca5908` 全绿；ECS auth RFB 的巨大 nofile 根因已由候选 `396b301` 收紧并完成本地门禁，待 PR/CI/部署/CARSI 验收。Task 11 阻断，Landing/Hermes 视觉仍冻结。
+> **CURRENT active-memory，2026-09-01。** ScanSci OA/Worker/Parser/BGE 与公网 release `36033ae` 全绿；auth helper 的 exact nofile、HTTP 与 RFB 已通过生产验收，当前仍需完成浙江大学 CARSI 交互并证明 session 持久。operator auth reliability HEAD `b1d6662` 待 PR/CI。Task 11 阻断，Landing/Hermes 视觉仍冻结。
 
 ## Goal and state
 
@@ -11,14 +11,14 @@
 ## Version tuple
 
 - Worktree: `E:/Miscellaneous/XGS/.worktrees/readable-hermes-guidance`
-- Candidate branch / HEAD / origin main: `codex/scansci-auth-nofile-runtime` / `396b30112ca6717110e2df1c34f15ce89de5bc1a` / `cca590823b646c45a3c47f34678ec1ea3eea2fa3`；nofile runtime PR 待创建。
-- Production application source / immutable release: `cca590823b646c45a3c47f34678ec1ea3eea2fa3`
-- Rollback: `9042ed3f2b2df8b7704d0d59b5fec1beb62f0acc`; core/search migrations `33/33` / `2/2`
+- Candidate branch / HEAD / origin main: `codex/scansci-auth-tunnel-start-race` / `b1d6662` / `36033aee0c8712a31c699c800b1c81cd6ffe044d`；operator auth reliability 待 PR/CI。
+- Production application source / immutable release: `36033aee0c8712a31c699c800b1c81cd6ffe044d`
+- Rollback: `cca590823b646c45a3c47f34678ec1ea3eea2fa3`; core/search migrations `33/33` / `2/2`
 - 本地 `main` 与其他 worktree 有用户改动，不得触碰或用它推断生产；上述 tuple 已从 ECS 重新实测。
 
 ## Production truth
 
-- Public `/__release` 与 active marker 均返回 `cca5908…`；API/Web/Worker/Parser/BGE/ScanSci 均绑定 exact release root，目标容器和数据服务 healthy；诊断 auth helper/tunnel 已精确移除。
+- Public `/__release` 与 active marker 均返回 `36033ae…`；API/Web/Worker/Parser/BGE/ScanSci 均绑定 exact release root，目标容器和数据服务 healthy。Auth helper 已实测 exact `nofile=4096/4096`、168 PIDs、无 host publish/listener、HTTP 200 与 RFB handshake；两个 185 秒 upstream window 到期后 helper/tunnel 已 canonical stopped，session 尚为 `auth_required`，不得提前宣称 CARSI ready。
 - TLS certificate subject 为 `openscience.428312321.xyz`，有效期自 2026-08-03 20:10:34 +08:00；ECS、域名反代、Landing、Cloudflare Tunnel 的上线日期必须按证据包分开表述。
 - `agent_tasks.result` 为 JSONB，`IngestionTaskState` 含 `needs_review` 与 `confirmed`。生产聚合为 14 条待确认建议、7 条 confirmed、21 条总计；未输出业务正文或用户信息。
 - 数据库不存在字面 `suggested` 枚举：产品语义映射为 `result != null + state=needs_review`，确认后 `state=confirmed`。
@@ -35,8 +35,7 @@
 2. SourceMap/object-storage 解析已移出 Claim/Evidence Serializable 事务；短事务重新校验 version/manifest/artifact/hash、SourceMap ref 与 CAS 时间戳。
 3. `review.analyze` 已在 API payload、Domain submit 和 Worker save 前强绑定 session/payload/version 同一 RO；Worker 只使用持久化任务 payload。
 4. Presentation reuse 改为按全部受审 Evidence hash 精确查找，不再依赖可截断的资产前缀。SourceMap 为可共享的内容寻址对象，Task 8 不盲删；GC/retention 在 Task 10 建立全引用扫描后实施。
-5. Task 8 已完成。公开页 journey 的 RO 由一次性 fixture 预置为 public；正式“扩大可见性审批”不得借 generic PATCH 绕过，应与 Task 9 的发布/公开衔接一起关闭。
-6. `/opt/openscience-evals` 的 40 个历史工作目录已在生产锁内精确清理；有效 acceptance 报告保留。Task 9 再清 dev 栈/卷与可重建缓存后，根盘当前约 35G used / 107G available。
+5. Task 8 已完成。公开页 journey 的 RO 由一次性 fixture 预置为 public；正式“扩大可见性审批”不得借 generic PATCH 绕过。`/opt/openscience-evals` 的 40 个历史工作目录已在生产锁内精确清理，有效 acceptance 报告保留。
 7. PR #6 已合并为 main `cf63392a…`；远端分支删除后仅保留 `main`，独立旧 Live2D 历史仍由 `archive/hermes-2d-pet-20260829` tag 保存。
 8. Task 9 已生产完成：candidate CI `33263991191` 全绿；R3 publish→public、账号偏好、3 Claims/3 Evidence/source、桌面/移动/打印真实旅程通过；一次性数据库行与对象存储清至 0。
 9. ECS dev 栈、3 个 dev 卷、390.7MB build cache 与两个无引用旧 Node 镜像已精确清理；根盘 35G/148G（25%），保留 production/rollback、BGE、沙箱、解析评测与监控数据。
@@ -55,7 +54,8 @@
 22. 根因是 Compose v2.26 默认 `project.working_dir=<release>/infra/compose` 与 strict `<release>` 合同不符。reviewed implementation `453ae4c` 对 current/rollback/state/verifier、凭据轮换、备份和认证隧道全部固定 `--project-directory <release-root>`；独立复审 0 Critical/Important/Minor、READY，本地 build/typecheck/lint/docs/full test 0 fail；PR/CI 与 merged-SHA ECS 重试 pending。
 23. PR #16 / CI `33388359242` 已合并为 main `bdf7eb7`。ECS exact Parser acceptance、Compose identity、BGE CPU、legal source/topology/policy/session 与新 API/Web/Worker health 均通过；第二阶段 OA canary 在 local legal endpoint 返回 stable 404 后事务再次完整回滚，active/public 仍 `6893318`，sidecar/journal 清零。
 24. 真实诊断证明 pinned ScanSci `Session.trust_env=False` 且只认 `SCANSCI_PDF_PROXY`/`network_proxy`；reviewed `05111e7` 仅把已严格校验的固定 Squid URL 同步到专用变量。PR #17 / exact CI `33397550370` 合并为 main `abd38d3`；ECS schema-v3 16-case Parser acceptance、core/search `33/33`/`2/2`、BGE CPU、ScanSci source/topology/policy/token/session、Worker 与真实 24,671,920-byte arXiv OA PDF canary 全绿，active/public 已 CAS 到 `abd38d3`，rollback `6893318`。
-25. `cca5908` tunnel 拆分实测已证明 SSH/noVNC HTTP 正常；RFB 不发 banner 的根因是 auth 容器继承 `RLIMIT_NOFILE=1073741816`，触发 LibVNCServer 巨大 fd-limit 扫描，日志首次 accept 延迟约 81 秒。`396b301` 将 prod/dev nofile 固定 `4096/4096` 并纳入 canonical fail-closed verifier；red→green、infra `77/82` 与全仓门禁 green，诊断对象已精确清理，待 PR/ECS。
+25. `cca5908` tunnel 的 RFB 失败根因是 auth 容器继承 `RLIMIT_NOFILE=1073741816`，触发 LibVNCServer 巨大 fd-limit 扫描。`396b301` 固定 nofile `4096/4096` 并纳入 verifier；PR #25 / exact CI `33447387815`、job `99669426363` 合并为 `36033ae`，ECS exact Parser/BGE/ScanSci/OA/application/public/retention 与真实 auth nofile/HTTP/RFB/network/PID gates 全绿，active/rollback `36033ae` / `cca5908`。
+26. 两个 operator window 均约 185 秒后由 pinned upstream 固定超时退出，状态安全恢复 `auth_required` 且 helper/tunnel 已 canonical stopped。`860b2b0` 增加 setup-once + 最多十次窗口；`aff435a` 只向 shell-owned active job spec 发 TERM；`b1d6662` 跟踪 auth Python 并使 TERM 1.8 秒完整退出。Tunnel `27/27`、ScanSci legal `89/95`，最终复审/PR/CI pending。
 
 ## Constraints
 
@@ -65,7 +65,7 @@
 
 ## Next action
 
-1. 合并并部署 `396b301` 后，通过 canonical auth tunnel 完成一次浙江大学 CARSI 认证并验证容器重建后 session 持久；不输出账号、Cookie 或 OAuth URL。
+1. 合并并部署 `b1d6662` 后，在新的 bounded canonical auth tunnel 完成一次浙江大学 CARSI 认证并验证容器重建后 session 持久；不输出账号、Cookie 或 OAuth URL。
 2. 用真实 OA + CARSI PDF 完成 Hermes Drawer、RO Hermes、Files/Evidence、Personal Space 四入口与 375px 生产旅程。
 3. 验证 one-use、72h/600s、灰色源调用 0 与最终精确磁盘卫生，关闭 Task 10。
 

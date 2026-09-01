@@ -16,6 +16,8 @@ from .session import SessionStore
 INSTITUTION = "浙江大学"
 SESSION_ROOT = Path("/session")
 CONTROLLED_BROWSER_PROXY = "http://openscience-egress:7891"
+# Pinned ScanSci 1.11.0 hard-codes each CARSI window to 180 seconds.
+MAX_OPERATOR_LOGIN_ATTEMPTS = 10
 
 
 def main(
@@ -41,14 +43,28 @@ def main(
     except (OSError, UnicodeError, ValueError):
         store.publish_status("auth_required", reason="operator_auth_required")
         return 1
-    commands = (
-        ["scansci-pdf", "setup", INSTITUTION],
-        ["scansci-pdf", "federated-login", "sciencedirect", "--force"],
-    )
-    for command in commands:
+    setup_command = ["scansci-pdf", "setup", INSTITUTION]
+    login_command = ["scansci-pdf", "federated-login", "sciencedirect", "--force"]
+    try:
+        completed = runner(
+            setup_command,
+            check=False,
+            env=environment,
+            stdin=subprocess.DEVNULL,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+    except Exception:
+        store.publish_status("auth_required", reason="operator_auth_required")
+        return 1
+    if getattr(completed, "returncode", 1) != 0:
+        store.publish_status("auth_required", reason="operator_auth_required")
+        return 1
+
+    for _attempt in range(MAX_OPERATOR_LOGIN_ATTEMPTS):
         try:
             completed = runner(
-                command,
+                login_command,
                 check=False,
                 env=environment,
                 stdin=subprocess.DEVNULL,
@@ -58,11 +74,11 @@ def main(
         except Exception:
             store.publish_status("auth_required", reason="operator_auth_required")
             return 1
-        if getattr(completed, "returncode", 1) != 0:
-            store.publish_status("auth_required", reason="operator_auth_required")
-            return 1
-    store.publish_status("ready")
-    return 0
+        if getattr(completed, "returncode", 1) == 0:
+            store.publish_status("ready")
+            return 0
+    store.publish_status("auth_required", reason="operator_auth_required")
+    return 1
 
 
 def _write_legal_config(session_root: Path) -> None:

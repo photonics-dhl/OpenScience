@@ -97,6 +97,15 @@ The helper is removed after login. The session volume remains. Restarting or
 recreating `scansci-legal` must not invalidate the publisher Cookie files. No public Nginx or
 Cloudflare route is created for the login browser.
 
+The pinned upstream CARSI flow owns a fixed 180-second interactive window and
+does not expose a timeout option. The operator wrapper runs setup once, then
+reopens at most ten federated-login attempts inside the same isolated helper.
+Any successful attempt publishes `ready` and exits immediately; only exhaustion
+or a setup/launcher error publishes `auth_required`. Canonical stop may terminate
+the helper at any time. The retry loop does not log browser output, credentials,
+Cookie material or URLs, and it is bounded rather than a permanent background
+browser.
+
 ### 3.3 Secret and session storage
 
 - Stable secret root: `/opt/openscience-secrets/scansci/`, owner `root:root`,
@@ -287,6 +296,8 @@ used everywhere.
    verify non-root/read-only/resource/network/Secret topology.
 3. Complete one Zhejiang University CARSI login through the loopback SSH tunnel;
    verify account/password/Cookie values never appear in logs or responses.
+   Leave one attempt unattended to prove the wrapper reopens the upstream
+   180-second window without rerunning setup or dropping the helper.
 4. Recreate `scansci-legal`; session status must remain `ready` without another
    login.
 5. Download one real OA PDF and one real Zhejiang University institutional PDF.
