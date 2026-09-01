@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+from contextlib import contextmanager, redirect_stderr, redirect_stdout
 import json
 import os
 from pathlib import Path
@@ -11,7 +12,7 @@ import subprocess
 import sys
 import tempfile
 import time
-from typing import Any, Callable, Sequence
+from typing import Any, Callable, Iterator, Sequence
 
 from .browser_protocol import (
     BrowserProof,
@@ -32,6 +33,29 @@ CONTROLLED_BROWSER_PROXY = "http://openscience-egress:7891"
 # Pinned ScanSci 1.11.0 hard-codes each CARSI window to 180 seconds.
 MAX_OPERATOR_LOGIN_ATTEMPTS = 10
 FIXED_CANARY_DOI = "10.1016/j.physleta.2023.129241"
+SAFE_CANARY_FAILURE_CODES = frozenset({
+    "browser_auth_required",
+    "browser_display_unavailable",
+    "browser_input_invalid",
+    "browser_job_context_missing",
+    "browser_launch_failed",
+    "browser_output_path_invalid",
+    "browser_pdf_not_proven",
+    "browser_policy_blocked",
+    "browser_profile_not_fresh",
+    "browser_result_publish_failed",
+    "browser_runner_result_invalid",
+    "browser_stream_capture_unavailable",
+    "browser_workspace_invalid",
+    "scansci_browser_guard_failed",
+    "scansci_browser_proxy_invalid",
+    "scansci_carsi_call_shape_drift",
+    "scansci_carsi_signature_drift",
+    "scansci_doi_resolver_drift",
+    "scansci_resolved_url_invalid",
+    "scansci_visible_browser_drift",
+    "scansci_visible_browser_signature_drift",
+})
 
 
 def main(
@@ -79,7 +103,7 @@ def main(
         if getattr(completed, "returncode", 1) != 0:
             return 1
 
-        for _attempt in range(MAX_OPERATOR_LOGIN_ATTEMPTS):
+        for attempt in range(1, MAX_OPERATOR_LOGIN_ATTEMPTS + 1):
             try:
                 logged_in = login(staging_root)
             except (BrowserPolicyError, OSError, RuntimeError, ValueError):
@@ -87,13 +111,19 @@ def main(
             if logged_in is not True:
                 continue
             try:
-                cookie_json = _read_staged_cookie(staging_root)
-                proof = validator(staging_root, cookie_json)
-                _validate_canary_proof(proof)
-                if store.publish_verified_cookie(cookie_json, clock()).status != "ready":
-                    return 1
-                return 0
-            except (BrowserPolicyError, BrowserProtocolError, OSError, UnicodeError, ValueError):
+                with _suppress_canary_output():
+                    cookie_json = _read_staged_cookie(staging_root)
+                    proof = validator(staging_root, cookie_json)
+                    _validate_canary_proof(proof)
+                    if store.publish_verified_cookie(cookie_json, clock()).status != "ready":
+                        return 1
+                    return 0
+            except Exception as error:
+                print(
+                    f"SCANSCI_AUTH_CANARY_FAILED attempt={attempt} code={_canary_failure_code(error)}",
+                    file=sys.stderr,
+                    flush=True,
+                )
                 continue
     return 1
 
@@ -102,6 +132,41 @@ def _load_carsi_publisher_configs() -> dict[str, Any]:
     from scansci_pdf.sources.carsi import _load_publisher_configs
 
     return _load_publisher_configs()
+
+
+@contextmanager
+def _suppress_canary_output() -> Iterator[None]:
+    sys.stdout.flush()
+    sys.stderr.flush()
+    saved_stdout = os.dup(1)
+    saved_stderr = os.dup(2)
+    sink = os.open(os.devnull, os.O_WRONLY | getattr(os, "O_BINARY", 0))
+    try:
+        os.dup2(sink, 1)
+        os.dup2(sink, 2)
+        with open(os.devnull, "w", encoding="utf-8") as text_sink, \
+                redirect_stdout(text_sink), redirect_stderr(text_sink):
+            yield
+    finally:
+        os.dup2(saved_stdout, 1)
+        os.dup2(saved_stderr, 2)
+        os.close(sink)
+        os.close(saved_stdout)
+        os.close(saved_stderr)
+
+
+def _canary_failure_code(error: BaseException) -> str:
+    if isinstance(error, BrowserPolicyError):
+        return error.code if error.code in SAFE_CANARY_FAILURE_CODES else "browser_policy_failed"
+    if isinstance(error, BrowserProtocolError):
+        return "browser_protocol_failed"
+    if isinstance(error, UnicodeError):
+        return "encoding_failed"
+    if isinstance(error, OSError):
+        return "io_failed"
+    if isinstance(error, ValueError):
+        return "proof_invalid"
+    return "canary_runtime_failed"
 
 
 def _strict_operator_login(

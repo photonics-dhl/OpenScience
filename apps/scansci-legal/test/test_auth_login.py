@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 import hashlib
-from contextlib import contextmanager
+import io
+from contextlib import contextmanager, redirect_stderr
 import json
+import os
 from pathlib import Path
 import sys
 import tempfile
@@ -18,6 +20,115 @@ from scansci_legal.strict_browser import BrowserPolicyError
 
 
 class AuthLoginCanaryContractTest(unittest.TestCase):
+    def test_main_reports_only_stable_canary_failure_diagnostics(self) -> None:
+        cookie_value = "must-never-appear-in-diagnostics"
+
+        def login(staging_root: Path) -> bool:
+            auth_login._write_staged_cookie(
+                staging_root,
+                json.dumps([{
+                    "name": "session",
+                    "value": cookie_value,
+                    "domain": ".sciencedirect.com",
+                    "path": "/",
+                    "secure": True,
+                }]).encode("utf-8"),
+            )
+            return True
+
+        def reject_canary(_staging_root: Path, _cookie_json: bytes) -> object:
+            raise BrowserPolicyError("browser_auth_required")
+
+        diagnostics = io.StringIO()
+        with tempfile.TemporaryDirectory() as directory, redirect_stderr(diagnostics):
+            result = auth_login.main(
+                ["--operator-start"],
+                runner=lambda *_args, **_kwargs: SimpleNamespace(returncode=0),
+                session_root=Path(directory) / "session",
+                proof_validator=reject_canary,
+                login_runner=login,
+            )
+
+        self.assertEqual(result, 1)
+        self.assertEqual(
+            diagnostics.getvalue().splitlines(),
+            [
+                f"SCANSCI_AUTH_CANARY_FAILED attempt={attempt} code=browser_auth_required"
+                for attempt in range(1, auth_login.MAX_OPERATOR_LOGIN_ATTEMPTS + 1)
+            ],
+        )
+        self.assertNotIn(cookie_value, diagnostics.getvalue())
+
+    def test_main_suppresses_hostile_canary_output_and_keeps_auth_required(self) -> None:
+        cookie_value = "cookie-must-never-reach-output"
+        hostile_url = "https://www.sciencedirect.com/private?ticket=must-not-leak"
+
+        def login(staging_root: Path) -> bool:
+            auth_login._write_staged_cookie(
+                staging_root,
+                json.dumps([{
+                    "name": "session",
+                    "value": cookie_value,
+                    "domain": ".sciencedirect.com",
+                    "path": "/",
+                    "secure": True,
+                }]).encode("utf-8"),
+            )
+            return True
+
+        def hostile_canary(_staging_root: Path, _cookie_json: bytes) -> object:
+            os.write(1, f"stdout {cookie_value}\n".encode("utf-8"))
+            os.write(2, f"stderr {hostile_url}\n".encode("utf-8"))
+            print(f"python-stdout {cookie_value}", flush=True)
+            print(f"python-stderr {hostile_url}", file=sys.stderr, flush=True)
+            raise RuntimeError(f"unknown canary failure {cookie_value} {hostile_url}")
+
+        with tempfile.TemporaryDirectory() as directory, \
+                tempfile.TemporaryFile() as stdout_capture, \
+                tempfile.TemporaryFile() as stderr_capture, \
+                mock.patch.object(auth_login, "MAX_OPERATOR_LOGIN_ATTEMPTS", 1):
+            session_root = Path(directory) / "session"
+            saved_stdout = os.dup(1)
+            saved_stderr = os.dup(2)
+            try:
+                sys.stdout.flush()
+                sys.stderr.flush()
+                os.dup2(stdout_capture.fileno(), 1)
+                os.dup2(stderr_capture.fileno(), 2)
+                result = auth_login.main(
+                    ["--operator-start"],
+                    runner=lambda *_args, **_kwargs: SimpleNamespace(returncode=0),
+                    session_root=session_root,
+                    proof_validator=hostile_canary,
+                    login_runner=login,
+                )
+                sys.stdout.flush()
+                sys.stderr.flush()
+            finally:
+                os.dup2(saved_stdout, 1)
+                os.dup2(saved_stderr, 2)
+                os.close(saved_stdout)
+                os.close(saved_stderr)
+
+            stdout_capture.seek(0)
+            stderr_capture.seek(0)
+            stdout_text = stdout_capture.read().decode("utf-8")
+            stderr_text = stderr_capture.read().decode("utf-8")
+            state = json.loads((session_root / "session-state.json").read_text(encoding="utf-8"))
+            cookie_persisted = (
+                session_root / "scansci" / "cache" / "carsi_cookies" / "sciencedirect.json"
+            ).exists()
+
+        self.assertEqual(result, 1)
+        self.assertEqual(stdout_text, "")
+        self.assertEqual(
+            stderr_text,
+            f"SCANSCI_AUTH_CANARY_FAILED attempt=1 code=canary_runtime_failed{os.linesep}",
+        )
+        self.assertEqual(state["status"], "auth_required")
+        self.assertEqual(state["reason"], "operator_auth_required")
+        self.assertFalse(cookie_persisted)
+
     def test_strict_login_first_launch_failure_is_final_without_fallback(self) -> None:
         launches: list[Path] = []
 
