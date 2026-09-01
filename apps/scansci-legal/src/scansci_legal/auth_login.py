@@ -13,6 +13,7 @@ import sys
 import tempfile
 import time
 from typing import Any, Callable, Iterator, Sequence
+from urllib.parse import urlsplit
 
 from .browser_protocol import (
     BrowserProof,
@@ -194,6 +195,19 @@ def _strict_operator_login(
         for domain in domains
     ):
         raise BrowserPolicyError("scansci_login_config_invalid")
+    try:
+        login_host = urlsplit(config.login_url).hostname
+    except ValueError as error:
+        raise BrowserPolicyError("scansci_login_config_invalid") from error
+    if not login_host:
+        raise BrowserPolicyError("scansci_login_config_invalid")
+    login_host = login_host.rstrip(".").lower()
+    return_domains = tuple(
+        domain for domain in domains
+        if login_host == domain or login_host.endswith("." + domain)
+    )
+    if not return_domains:
+        raise BrowserPolicyError("scansci_login_config_invalid")
     profile_parent = staging_root / "chromium-attempts"
     profile_parent.mkdir(mode=0o700, parents=True, exist_ok=True)
     with tempfile.TemporaryDirectory(prefix="login-", dir=profile_parent) as temporary:
@@ -223,7 +237,7 @@ def _strict_operator_login(
                 if not isinstance(current_url, str):
                     raise BrowserPolicyError("strict_login_browser_closed")
                 lowered = current_url.lower()
-                on_publisher = _allowed_institutional_url(current_url)
+                on_publisher = _publisher_return_url(current_url, return_domains)
                 on_login = any(keyword in lowered for keyword in (
                     "login", "institutional", "wayf", "saml", "cas", "idp",
                 ))
@@ -240,6 +254,19 @@ def _strict_operator_login(
                 _write_staged_cookie(staging_root, cookie_json)
                 return True
     return False
+
+
+def _publisher_return_url(value: str, domains: tuple[str, ...]) -> bool:
+    if not _allowed_institutional_url(value):
+        return False
+    try:
+        hostname = urlsplit(value).hostname
+    except ValueError:
+        return False
+    if not hostname:
+        return False
+    hostname = hostname.rstrip(".").lower()
+    return any(hostname == domain or hostname.endswith("." + domain) for domain in domains)
 
 
 def _write_staged_cookie(staging_root: Path, cookie_json: bytes) -> None:
