@@ -123,7 +123,7 @@ test('ScanSci production topology separates legal, browser and stopped loopback 
   assert.match(browser, /\/tmp:size=256m,noexec,nosuid,nodev,uid=10002,gid=11000,mode=0700/u);
   assert.match(browser, /\/dev\/shm:size=256m,nosuid,nodev,uid=10002,gid=11000,mode=0700/u);
   assert.match(browser, /test: \["CMD", "python", "-m", "scansci_legal\.browser_worker", "--healthcheck"\]/u);
-  assert.match(browser, /networks:\r?\n\s+- browser_net/u);
+  assert.match(browser, /networks:\r?\n\s+browser_net:\r?\n\s+ipv4_address: 172\.26\.0\.2/u);
   assert.doesNotMatch(browser, /\bports:|service.token|\/run\/secrets|\/session|data_net|app_net|auth_net|env_file|docker\.sock/iu);
 
   assert.match(worker, /- retrieval_net/u);
@@ -154,7 +154,7 @@ test('ScanSci production topology separates legal, browser and stopped loopback 
   assert.match(developmentBrowser, /scansci-browser-inputs:\/browser-inputs:ro/u);
   assert.match(developmentBrowser, /scansci-browser-outputs:\/browser-outputs(?:\r?\n|\s*$)/u);
   assert.match(developmentBrowser, /scansci-browser-profiles:\/browser-profile-jobs/u);
-  assert.match(developmentBrowser, /networks: \[browser_net\]/u);
+  assert.match(developmentBrowser, /networks:\r?\n\s+browser_net:\r?\n\s+ipv4_address: 172\.26\.0\.2/u);
   assert.doesNotMatch(developmentBrowser, /\bports:|\/run\/secrets|\/session|data_net|app_net|auth_net|docker\.sock/iu);
   assert.match(developmentAuth, /context: \.\.\/\.\.\/apps\/scansci-legal/u);
   assert.match(developmentAuth, /dockerfile: Dockerfile\.auth/u);
@@ -193,18 +193,29 @@ test('ScanSci production topology separates legal, browser and stopped loopback 
 test('ScanSci browser has a boot-persistent proxy-only bridge before it can start', () => {
   for (const compose of [productionCompose, developmentCompose]) {
     assert.match(compose, /browser_net:\r?\n\s+driver: bridge\r?\n\s+internal: true\r?\n\s+driver_opts:\r?\n\s+com\.docker\.network\.bridge\.name: xgs-browser0\r?\n\s+ipam:\r?\n\s+config:\r?\n\s+- subnet: 172\.26\.0\.0\/24\r?\n\s+gateway: 172\.26\.0\.1/u);
+    assert.match(
+      composeService('scansci-browser', 'scansci-auth', compose),
+      /networks:\r?\n\s+browser_net:\r?\n\s+ipv4_address: 172\.26\.0\.2/u,
+    );
   }
   assert.match(squidConfig, /^http_port 172\.26\.0\.1:7891 name=scansci_browser_listener$/mu);
-  assert.match(squidConfig, /^acl scansci_browser src 172\.26\.0\.0\/24$/mu);
+  assert.match(squidConfig, /^acl scansci_browser src 172\.26\.0\.2\/32$/mu);
   assert.match(squidConfig, /^http_access allow scansci_browser scansci_browser_listener CONNECT SSL_ports$/mu);
   assert.match(squidConfig, /^always_direct allow scansci_browser$/mu);
-  assert.match(browserFirewall, /INPUT -i "\$bridge_name" -s "\$subnet" -d "\$gateway" -p tcp --dport 7891/u);
+  assert.match(browserFirewall, /browser_ip='172\.26\.0\.2'/u);
+  assert.match(browserFirewall, /INPUT -i "\$bridge_name" -s "\$browser_ip\/32" -d "\$gateway" -p tcp --dport 7891/u);
+  assert.match(browserFirewall, /legacy_accept=\(INPUT -i "\$bridge_name" -s "\$subnet" -d "\$gateway" -p tcp --dport 7891/u);
   assert.match(browserFirewall, /INPUT -i "\$bridge_name" -s "\$subnet" -m comment --comment "\$comment" -j REJECT/u);
   assert.match(browserFirewall, /iptables_real="\$\(readlink -f -- "\$iptables_bin"\)"/u);
   assert.doesNotMatch(browserFirewall, /\[ ! -L "\$iptables_bin" \]/u);
   assert.match(browserFirewall, /if \[ "\$action" = remove \]/u);
   assert.match(browserNetworkPreparation, /openscience-prod_browser_net/u);
   assert.match(browserNetworkPreparation, /unauthorized peer/u);
+  assert.match(browserNetworkPreparation, /\[ "\$\{#peers\[@\]\}" -eq 0 \]/u);
+  assert.match(browserNetworkPreparation, /com\.docker\.compose\.service.*scansci-browser/u);
+  assert.match(browserNetworkPreparation, /NetworkMode.*\$network_name/u);
+  assert.match(browserNetworkPreparation, /len \.NetworkSettings\.Networks/u);
+  assert.match(browserNetworkPreparation, /IPAMConfig\.IPv4Address.*172\.26\.0\.2/u);
   assert.match(browserNetworkPreparation, /"\$atomic_config" activate/u);
   assert.match(browserNetworkPreparation, /172\.26\.0\.1:7891/u);
   assert.match(browserNetworkPreparation, /if \[ "\$activated" -eq 1 \][\s\S]*"\$atomic_config" restore/u);
@@ -275,8 +286,10 @@ test('ScanSci browser has a boot-persistent proxy-only bridge before it can star
   );
   assert.match(transactionSource, /if \[ "\$ACTIVE_RELEASE_SHA" = "\$RELEASE_SHA" \]; then[\s\S]*transaction_verify_already_active_release\r?\n\s+publish_scansci_boot_policy/u);
   const prepare = transactionSource.indexOf('prepare-scansci-browser-network.sh', precreate);
-  const start = transactionSource.indexOf('up -d --force-recreate --wait --wait-timeout 300 scansci-browser scansci-legal', prepare);
+  const start = transactionSource.indexOf('up -d --no-recreate --wait --wait-timeout 300 scansci-browser scansci-legal', prepare);
   assert.ok(precreate > 0 && prepare > precreate && start > prepare, 'browser network firewall must exist before start');
+  assert.match(transactionSource.slice(precreate, start), /SCANSCI_PREPARED_BROWSER_ID=.*ps -a -q scansci-browser/u);
+  assert.match(transactionSource.slice(start), /verify_prepared_browser_container_id "\$SCANSCI_PREPARED_BROWSER_ID"/u);
   assert.ok(
     transactionSource.indexOf('SCANSCI_BROWSER_HOST_POLICY_DIRTY=1', precreate) < prepare,
     'the outer transaction must record dirty host policy before preparation can mutate it',
@@ -444,7 +457,7 @@ test('ScanSci deploy dispatches exact rollback identity when the previous releas
   const scansciBuild = transactionSource.indexOf('build scansci-browser scansci-legal scansci-auth');
   const workerBuild = transactionSource.indexOf('agent-worker document-parser');
   const switchAnchor = transactionSource.indexOf('log "[5c] ScanSci 先行');
-  const scansciStart = transactionSource.indexOf('up -d --force-recreate --wait --wait-timeout 300 scansci-browser scansci-legal', switchAnchor);
+  const scansciStart = transactionSource.indexOf('up -d --no-recreate --wait --wait-timeout 300 scansci-browser scansci-legal', switchAnchor);
   const workerStart = transactionSource.indexOf('up -d --force-recreate --wait --wait-timeout 300 api web agent-worker');
   const runtimeVerify = transactionSource.indexOf('verify_scansci_candidate', scansciStart);
   const postWorkerVerify = transactionSource.indexOf('verify_scansci_candidate', workerStart);
@@ -460,7 +473,19 @@ test('ScanSci deploy dispatches exact rollback identity when the previous releas
   const restore = deploymentFunction('transaction_restore_previous_scansci');
   assert.match(restore, /PREVIOUS_HAS_SCANSCI_BROWSER" -eq 1/u);
   assert.match(restore, /openscience-scansci-browser:\$exact_previous_sha[\s\S]*PREVIOUS_SCANSCI_BROWSER_IMAGE_ID/u);
-  assert.match(restore, /up -d --force-recreate --wait --wait-timeout 300 scansci-browser scansci-legal/u);
+  assert.match(restore, /transaction_restore_pre_browser_host_policy[\s\S]*scansci-browser-firewall\.sh[\s\S]*up -d --no-recreate --wait --wait-timeout 300 scansci-browser scansci-legal/u);
+  assert.doesNotMatch(restore, /PREVIOUS_RELEASE_ROOT\/infra\/scripts\/prepare-scansci-browser-network\.sh/u);
+  assert.match(restore, /previous_browser_id=.*ps -a -q scansci-browser[\s\S]*verify_prepared_browser_container_id "\$previous_browser_id"/u);
+  assert.ok(
+    restore.indexOf('up --no-start --force-recreate scansci-browser scansci-legal')
+      < restore.indexOf('transaction_restore_pre_browser_host_policy'),
+    'rollback must stop the candidate browser before removing its host firewall',
+  );
+  assert.ok(
+    restore.indexOf('verify_browser_network_has_no_peers')
+      < restore.indexOf('transaction_restore_pre_browser_host_policy'),
+    'rollback must prove zero network peers before restoring the previous host policy',
+  );
   assert.match(restore, /compose_current "rm -f -s scansci-browser"/u);
   assert.match(restore, /compose_current 'ps -a -q scansci-browser'/u);
   assert.match(restore, /transaction_restore_pre_browser_host_policy/u);

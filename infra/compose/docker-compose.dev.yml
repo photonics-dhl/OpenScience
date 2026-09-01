@@ -195,7 +195,9 @@ services:
       timeout: 5s
       retries: 12
       start_period: 20s
-    networks: [browser_net]
+    networks:
+      browser_net:
+        ipv4_address: 172.26.0.2
     restart: unless-stopped
 
   scansci-auth:

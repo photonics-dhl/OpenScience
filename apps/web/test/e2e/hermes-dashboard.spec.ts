@@ -518,6 +518,15 @@ test('Hermes loading and error surfaces are explicit', async ({ page }) => {
     await loadingGate;
     await json(route, { tasks: [] });
   });
+  await page.route('**/api/agent/tasks**', async (route) => {
+    const url = new URL(route.request().url());
+    if (url.searchParams.get('actionable') !== 'false' || url.searchParams.get('kind') !== 'source.retrieve') {
+      await route.fallback();
+      return;
+    }
+    await loadingGate;
+    await json(route, { tasks: [] });
+  });
   await page.goto(`${baseUrl}/dashboard`, { waitUntil: 'domcontentloaded' });
   const loadingSurface = page.locator('[data-os-surface="dashboard"][aria-busy="true"]');
   await expect(loadingSurface).toBeVisible();
@@ -531,6 +540,13 @@ test('Hermes loading and error surfaces are explicit', async ({ page }) => {
   }));
   await page.route('**/api/research-objects?limit=20', (route) => json(route, { error: { message: 'Research index unavailable' } }, 503));
   await page.route('**/api/ingestion?actionable=true', (route) => json(route, { tasks: [] }));
+  await page.route('**/api/agent/tasks**', (route) => {
+    const url = new URL(route.request().url());
+    if (url.searchParams.get('actionable') === 'false' && url.searchParams.get('kind') === 'source.retrieve') {
+      return json(route, { tasks: [] });
+    }
+    return route.fallback();
+  });
   const researchErrorResponse = page.waitForResponse((response) => {
     const url = new URL(response.url());
     return url.pathname === '/api/research-objects'

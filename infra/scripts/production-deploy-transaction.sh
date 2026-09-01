@@ -579,17 +579,30 @@ transaction_journal_clear() { journal_clear; }
 transaction_journal_clear_after_rollback() {
   [ ! -e "$DEPLOY_JOURNAL" ] || journal_clear
 }
+verify_prepared_browser_container_id() {
+  local expected_id="$1" running_id="$2"
+  [[ "$expected_id" =~ ^[0-9a-f]{12,64}$ && "$running_id" =~ ^[0-9a-f]{12,64}$ ]] \
+    && [ "$running_id" = "$expected_id" ]
+}
+verify_browser_network_has_no_peers() {
+  [ "$(run_remote "docker network inspect --format='{{len .Containers}}' openscience-prod_browser_net")" = '0' ]
+}
 transaction_restore_previous_scansci() {
-  local exact_previous_sha="$1"
+  local exact_previous_sha="$1" previous_browser_id running_browser_id
   [ "$exact_previous_sha" = "$PREVIOUS_RELEASE_SHA" ] || return 64
   [ "$(run_remote "docker image inspect --format='{{.Id}}' openscience-scansci-legal:$exact_previous_sha")" = "$PREVIOUS_SCANSCI_LEGAL_IMAGE_ID" ] || return
   [ "$(run_remote "docker image inspect --format='{{.Id}}' openscience-scansci-auth:$exact_previous_sha")" = "$PREVIOUS_SCANSCI_AUTH_IMAGE_ID" ] || return
   if [ "$PREVIOUS_HAS_SCANSCI_BROWSER" -eq 1 ]; then
     [ "$(run_remote "docker image inspect --format='{{.Id}}' openscience-scansci-browser:$exact_previous_sha")" = "$PREVIOUS_SCANSCI_BROWSER_IMAGE_ID" ] || return
     run_remote "cd $PREVIOUS_RELEASE_ROOT && env $PREVIOUS_RUNTIME_ENV XGS_RELEASE_ROOT=$PREVIOUS_RELEASE_ROOT XGS_RELEASE_IMAGE_TAG=$exact_previous_sha docker compose --project-directory $PREVIOUS_RELEASE_ROOT --env-file $PROD_ENV -f $ROLLBACK_COMPOSE_FILE up --no-start --force-recreate scansci-browser scansci-legal" || return
-    run_remote "/bin/bash '$PREVIOUS_RELEASE_ROOT/infra/scripts/prepare-scansci-browser-network.sh' '$PREVIOUS_RELEASE_ROOT' '$exact_previous_sha'" || return
-    run_remote "cd $PREVIOUS_RELEASE_ROOT && env $PREVIOUS_RUNTIME_ENV XGS_RELEASE_ROOT=$PREVIOUS_RELEASE_ROOT XGS_RELEASE_IMAGE_TAG=$exact_previous_sha docker compose --project-directory $PREVIOUS_RELEASE_ROOT --env-file $PROD_ENV -f $ROLLBACK_COMPOSE_FILE up -d --force-recreate --wait --wait-timeout 300 scansci-browser scansci-legal" || return
-    transaction_restore_exact_scansci_squid_preimage || return
+    previous_browser_id="$(run_remote "cd $PREVIOUS_RELEASE_ROOT && env $PREVIOUS_RUNTIME_ENV XGS_RELEASE_ROOT=$PREVIOUS_RELEASE_ROOT XGS_RELEASE_IMAGE_TAG=$exact_previous_sha docker compose --project-directory $PREVIOUS_RELEASE_ROOT --env-file $PROD_ENV -f $ROLLBACK_COMPOSE_FILE ps -a -q scansci-browser")"
+    [[ "$previous_browser_id" =~ ^[0-9a-f]{12,64}$ ]] || return
+    verify_browser_network_has_no_peers || return
+    transaction_restore_pre_browser_host_policy || return
+    run_remote "/bin/bash '$PREVIOUS_RELEASE_ROOT/infra/scripts/scansci-browser-firewall.sh'" || return
+    run_remote "cd $PREVIOUS_RELEASE_ROOT && env $PREVIOUS_RUNTIME_ENV XGS_RELEASE_ROOT=$PREVIOUS_RELEASE_ROOT XGS_RELEASE_IMAGE_TAG=$exact_previous_sha docker compose --project-directory $PREVIOUS_RELEASE_ROOT --env-file $PROD_ENV -f $ROLLBACK_COMPOSE_FILE up -d --no-recreate --wait --wait-timeout 300 scansci-browser scansci-legal" || return
+    running_browser_id="$(run_remote "cd $PREVIOUS_RELEASE_ROOT && env $PREVIOUS_RUNTIME_ENV XGS_RELEASE_ROOT=$PREVIOUS_RELEASE_ROOT XGS_RELEASE_IMAGE_TAG=$exact_previous_sha docker compose --project-directory $PREVIOUS_RELEASE_ROOT --env-file $PROD_ENV -f $ROLLBACK_COMPOSE_FILE ps -q scansci-browser")"
+    verify_prepared_browser_container_id "$previous_browser_id" "$running_browser_id" || return
     SCANSCI_BROWSER_HOST_POLICY_DIRTY=0
   else
     compose_current "rm -f -s scansci-browser" || return
@@ -752,13 +765,16 @@ publish_scansci_boot_policy
 transaction_prepare_scansci_squid_preimage
 SCANSCI_BROWSER_HOST_POLICY_DIRTY=1
 compose_current "up --no-start --force-recreate scansci-browser scansci-legal"
+SCANSCI_PREPARED_BROWSER_ID="$(compose_current 'ps -a -q scansci-browser')"
+[[ "$SCANSCI_PREPARED_BROWSER_ID" =~ ^[0-9a-f]{12,64}$ ]]
 if run_remote "/bin/bash '$RELEASE_ROOT/infra/scripts/prepare-scansci-browser-network.sh' '$RELEASE_ROOT' '$RELEASE_SHA'"; then
   :
 else
   status=$?
   exit "$status"
 fi
-compose_current "up -d --force-recreate --wait --wait-timeout 300 scansci-browser scansci-legal"
+compose_current "up -d --no-recreate --wait --wait-timeout 300 scansci-browser scansci-legal"
+verify_prepared_browser_container_id "$SCANSCI_PREPARED_BROWSER_ID" "$(compose_current 'ps -q scansci-browser')"
 verify_running_container_image scansci-browser "$FINAL_SCANSCI_BROWSER_IMAGE_ID"
 verify_running_container_image scansci-legal "$FINAL_SCANSCI_IMAGE_ID"
 verify_scansci_candidate 0 0

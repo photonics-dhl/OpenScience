@@ -24,6 +24,41 @@ function fail() {
   throw new Error('ScanSci runtime verification failed');
 }
 
+export function verifyBrowserFirewallRules(inputRules) {
+  if (!Array.isArray(inputRules) || inputRules.some((line) => typeof line !== 'string')) fail();
+  const parsed = inputRules.map((line) => ({
+    line,
+    tokens: line.replaceAll('"', '').trim().split(/\s+/u),
+  }));
+  const browserRules = parsed.filter(({ tokens }) => {
+    const index = tokens.indexOf('--comment');
+    return index >= 0 && tokens[index + 1] === 'openscience-scansci-browser';
+  });
+  const value = (tokens, flag) => {
+    const indexes = tokens.flatMap((token, index) => token === flag ? [index] : []);
+    return indexes.length === 1 ? tokens[indexes[0] + 1] : undefined;
+  };
+  const acceptIndex = parsed.findIndex(({ tokens }) => (
+    value(tokens, '--comment') === 'openscience-scansci-browser'
+      && value(tokens, '-i') === 'xgs-browser0'
+      && value(tokens, '-s') === '172.26.0.2/32'
+      && value(tokens, '-d') === '172.26.0.1/32'
+      && value(tokens, '-p') === 'tcp'
+      && value(tokens, '--dport') === '7891'
+      && value(tokens, '-j') === 'ACCEPT'
+  ));
+  const rejectIndex = parsed.findIndex(({ tokens }) => (
+    value(tokens, '--comment') === 'openscience-scansci-browser'
+      && value(tokens, '-i') === 'xgs-browser0'
+      && value(tokens, '-s') === '172.26.0.0/24'
+      && !tokens.includes('-d')
+      && value(tokens, '-j') === 'REJECT'
+      && value(tokens, '--reject-with') === 'icmp-port-unreachable'
+  ));
+  if (browserRules.length !== 2 || acceptIndex < 0 || rejectIndex <= acceptIndex) fail();
+  return true;
+}
+
 function sha256(source) {
   return createHash('sha256').update(source).digest('hex');
 }
@@ -260,8 +295,7 @@ export async function verifyScanSciRuntime({
       Subnet: '172.26.0.0/24', Gateway: '172.26.0.1',
     }])
     || browserContainer.NetworkSettings?.Networks?.[browserNetworks[0]]?.Gateway !== '172.26.0.1'
-    || !/^172\.26\.0\.(?:[2-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-4])$/u
-      .test(browserContainer.NetworkSettings?.Networks?.[browserNetworks[0]]?.IPAddress)
+    || browserContainer.NetworkSettings?.Networks?.[browserNetworks[0]]?.IPAddress !== '172.26.0.2'
     || browserNetworkPeers.length !== 1
     || !browserNetworkPeers[0]?.Name?.endsWith('-scansci-browser-1')
     || browserNetworkPeers[0]?.IPv4Address
@@ -751,16 +785,13 @@ async function main() {
     fail();
   }
   const browserInputRules = run('iptables', ['-w', '-S', 'INPUT']).split(/\r?\n/u);
-  const browserRules = browserInputRules.filter((line) => (
-    /--comment "?openscience-scansci-browser"?(?: |$)/u.test(line)
-  ));
-  const browserAcceptIndex = browserInputRules.findIndex((line) => (
-    browserRules.includes(line) && /-i xgs-browser0 .*--dport 7891 .* -j ACCEPT$/u.test(line)
-  ));
-  const browserRejectIndex = browserInputRules.findIndex((line) => (
-    browserRules.includes(line) && /-i xgs-browser0 .* -j REJECT /u.test(line)
-  ));
-  if (browserRules.length !== 2 || browserAcceptIndex < 0 || browserRejectIndex <= browserAcceptIndex) fail();
+  run('iptables', ['-w', '-C', 'INPUT', '-i', 'xgs-browser0', '-s', '172.26.0.2/32',
+    '-d', '172.26.0.1/32', '-p', 'tcp', '--dport', '7891', '-m', 'comment',
+    '--comment', 'openscience-scansci-browser', '-j', 'ACCEPT']);
+  run('iptables', ['-w', '-C', 'INPUT', '-i', 'xgs-browser0', '-s', '172.26.0.0/24',
+    '-m', 'comment', '--comment', 'openscience-scansci-browser', '-j', 'REJECT',
+    '--reject-with', 'icmp-port-unreachable']);
+  verifyBrowserFirewallRules(browserInputRules);
   browserEgressProbe.firewall = 'isolated';
   let oaCanaryResult;
   if (requireOaCanary === '1') {
