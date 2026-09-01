@@ -74,23 +74,51 @@ Docker socket, application signing key, or host mount. It receives the ScanSci
 service token plus CARSI session material only.
 
 The container runs as a fixed non-root UID, read-only root filesystem, dropped
-capabilities, `no-new-privileges`, bounded PID/CPU/RAM, and bounded `/tmp` and
-`/dev/shm` tmpfs mounts for one acquisition. It joins a dedicated retrieval
-network shared only with Agent Worker and the fixed Squid gateway needed for
-DOI, OA, CARSI, and publisher traffic. It has no host port.
+capabilities, `no-new-privileges`, bounded PID/CPU/RAM, and a bounded `/tmp`
+tmpfs. It contains no Chromium, Patchright, Xvfb or browser driver. It receives
+the service token and persistent publisher Cookie volume, so it must never
+execute publisher-controlled browser code.
 
-The legal image includes release-scoped CPU Chromium, Patchright, Xvfb and the
-same fail-closed Chromium proxy wrapper as the auth image. It does not include
-noVNC, x11vnc, Websockify, a public browser endpoint, or a persistent Chromium
-profile. Xvfb is a private display owned by the service entrypoint. A browser
-child is started only by an institutional request and is configured exclusively
-with a request-local Cookie snapshot. Source-lock and runtime tests must prove
-that no normal browser path points at or rewrites the persistent Cookie file.
-The legal service remains limited to one browser-backed acquisition at a time,
-one CPU, 1 GiB RAM unless ECS evidence requires a reviewed bounded adjustment,
-and 256 PIDs including reserved cleanup headroom.
+For an institutional request the legal service copies the bounded Cookie JSON
+and fixed DOI job manifest into a dedicated input tmpfs mounted read-write here
+and read-only by `scansci-browser`. It reads browser output through a different
+output tmpfs mounted read-only here and read-write only by the browser worker.
+The service cannot create or modify a browser proof/PDF output. It joins the
+existing retrieval network for OA access and the fixed internal browser job
+boundary, but exposes no browser endpoint or host port.
 
-### 3.2 Authentication helper
+### 3.2 `scansci-browser` worker
+
+Add one release-scoped internal worker image containing CPU Chromium,
+Patchright, private Xvfb and the fail-closed Chromium proxy wrapper. It runs as
+a different fixed non-root UID from `scansci-legal`, with a read-only root,
+dropped capabilities, `no-new-privileges`, one CPU, 1 GiB RAM, 256 PIDs and
+bounded `/tmp`/`/dev/shm`. It has no noVNC, x11vnc, Websockify, host port,
+service token, persistent Cookie/session mount, database/Redis/object-storage
+Secret, Docker socket, host mount, app/data/auth network or persistent browser
+profile.
+
+The worker mounts only browser-job inputs read-only and browser-job outputs
+read-write. Both are size-bounded named tmpfs volumes; separate fixed UIDs and
+read-only shared groups give legal-owned input files to the browser as read-only
+and browser-owned output files to legal as read-only. Their opposite mount
+directions prevent the outer legal service from forging an output and prevent
+the browser worker from changing the supplied Cookie snapshot. One long-running
+controller polls atomic job manifests, serializes all work, launches one fresh
+browser profile per request and removes output only after an input-side
+acknowledgement. Crash recovery marks an incomplete pair failed; the browser
+deletes only its output half and the legal service deletes only its input half,
+both by exact job ID and bounded age.
+
+The project adapter must not call pinned ScanSci's fallback-capable
+`browser_backend.launch*` path. It first verifies the exact pinned signatures and
+launch call shape, then replaces the `_visible_browser` launch point used by
+`try_carsi` with direct Patchright startup using the fixed executable wrapper,
+proxy, display and ephemeral profile. No channel or bundled-browser fallback is
+allowed. Wrapper failure, missing executable, source drift or first-launch
+failure is final and leaves `auth_required`; a second browser path must not run.
+
+### 3.3 Authentication helper
 
 Add a release-scoped `scansci-auth` Compose profile. It is stopped by default
 and starts only for initial login or explicit repair. Its browser UI listens
@@ -105,12 +133,13 @@ The fixed `xgs-auth0` bridge allows only the exact established return flow from
 host address and port; ordinary application containers share no network with
 the passwordless noVNC endpoint.
 
-The pinned upstream selects `channel=chrome` without its config, so the image's
-Chrome channel alias must resolve to the fixed container wrapper. The wrapper
-removes conflicting proxy switches, disables Chromium's unavailable inner
-sandbox only inside the hardened outer container, and blocks QUIC/non-proxied
-WebRTC. Startup succeeds only after noVNC HTML, WebSocket/RFB, Chromium argv,
-PID headroom and the complete container/network contract all pass.
+The product-owned strict adapter starts Patchright directly with the fixed
+container wrapper; it does not trust pinned ScanSci's config propagation or
+bundled/channel fallback. The wrapper removes conflicting proxy switches,
+disables Chromium's unavailable inner sandbox only inside the hardened outer
+container, and blocks QUIC/non-proxied WebRTC. Startup succeeds only after
+noVNC HTML, WebSocket/RFB, Chromium argv, PID headroom and the complete
+container/network contract all pass.
 
 The helper is removed after login. The session volume remains. Restarting or
 recreating `scansci-legal` must not invalidate the publisher Cookie files. No public Nginx or
@@ -126,8 +155,10 @@ profile and may carry its staged publisher Cookies into the next bounded attempt
 
 An attempt is successful only when the fixed non-OA subscription canary
 `10.1016/j.physleta.2023.129241` resolves through Zhejiang University CARSI and
-returns an allowlisted institutional source, HTTP success, PDF content type,
-`%PDF-` magic and bounded non-trivial bytes. Only then may the wrapper atomically
+returns browser-originated proof containing a 2xx publisher response,
+normalized `application/pdf` MIME, allowlisted final HTTPS URL and institutional
+source label, byte count and SHA-256. The auth parent independently verifies
+`%PDF-`, size and hash. Only then may the wrapper atomically
 publish the staged publisher Cookie JSON as UID 10001 mode `0600`, publish
 `ready` with the proof timestamp, and exit. A 403 page, publisher hostname,
 Cookie count, browser title or redirect absence never passes. Exhaustion,
@@ -137,7 +168,7 @@ the helper at any time. The retry loop does not log browser output, credentials,
 Cookie values, SAML/OAuth URLs or publisher response bodies, and it is bounded
 rather than a permanent background browser.
 
-### 3.3 Secret and session storage
+### 3.4 Secret and session storage
 
 - Stable secret root: `/opt/openscience-secrets/scansci/`, owner `root:root`,
   directory mode `0700`, files mode `0600`.
@@ -155,48 +186,58 @@ rather than a permanent background browser.
   persistent Chromium profile, localStorage, or generic browser-state snapshot.
 - Database: stores no account, password, Cookie, SAML assertion, CARSI token, or
   browser-profile path.
+- Browser jobs: the input/output tmpfs volumes are not session storage. The
+  browser worker receives one copied Cookie JSON through its read-only input and
+  has no mount path to the persistent Cookie or service token. Outputs contain
+  one PDF and one bounded proof, never credentials or raw response bodies.
 
 Password storage is disabled. The operator enters credentials only into the
 remote CARSI page. If cookie-state reuse later proves insufficient, any
 credential automation requires a separate reviewed design rather than silently
 mounting account material into an unsandboxed browser.
 
-### 3.4 Institutional browser data path
+### 3.5 Institutional browser data path
 
 The existing `POST /v1/legal-download` contract and `try_carsi` source remain
-the only institutional entry; no new API or service is introduced. For an
-institutional request the service:
+the only institutional entry; no public API or database contract is added. For
+an institutional request:
 
-1. copies only bounded, regular, non-symlink publisher Cookie JSON files into
-   the request's private tmpfs directory;
-2. writes a fixed `legal_only` ScanSci config whose `cache_dir` is that snapshot,
-   whose backend is Patchright, and whose executable is the release wrapper;
-3. gives the child only the fixed `openscience-egress:7891` browser/PDF proxy,
-   `DISPLAY`, the request tmpfs home and non-secret locale variables;
-4. lets pinned `try_carsi` resolve the DOI and launch CPU Chromium, while raw
-   network egress remains impossible on the internal retrieval network;
-5. accepts only the existing institutional allowlist, verified entitlement,
-   public HTTPS source, `%PDF-` magic and size bounds; and
-6. terminates the complete request process group and deletes the private
-   snapshot/profile/output whether the request succeeds, times out or fails.
+1. `scansci-legal` copies only bounded, regular, non-symlink publisher Cookie
+   JSON into a random exact job directory and atomically publishes a strict
+   `legal_only` manifest containing the validated DOI, never an arbitrary URL;
+2. `scansci-browser` reads that immutable input and creates a fresh profile;
+3. the project adapter gives direct Patchright only the fixed wrapper,
+   `openscience-egress:7891` proxy, `DISPLAY`, job home and non-secret locale;
+4. pinned DOI resolution and `try_carsi` run only after the adapter's exact
+   source-compatibility guard passes; raw network egress remains impossible;
+5. the browser response callback alone may construct a proof with exact
+   `http_status`, normalized `mime`, final URL, source label, byte count and
+   SHA-256 while atomically writing the captured PDF;
+6. `scansci-legal`, which cannot write the output volume, independently checks
+   the proof schema, 2xx status, exact PDF MIME, institutional source and public
+   HTTPS allowlist, then streams and rechecks magic, bounded size and SHA-256;
+7. the legal service acknowledges the exact job only after consuming or
+   rejecting it; each owner deletes only its writable half; and
+8. timeout or failure terminates the complete browser process group and removes
+   the private profile/output without changing the persistent Cookie.
 
-The browser child environment and fixed config omit the service token and every
-database/Redis/object-storage credential; the container has no Docker socket or
-host filesystem mount. The child receives no user-supplied URL. Chromium may
-follow only the publisher flow derived from the validated DOI; the final source
-is still checked by the existing URL and source-label policy before bytes leave
-the sidecar.
+The `application/pdf` header created by `scansci-legal` is delivery metadata,
+not institutional evidence. It cannot substitute for the browser-originated
+publisher status/MIME proof. A 403, 200 HTML, missing/wrong MIME, hash mismatch,
+forged/unknown source, only outer MIME or absent proof always fails closed.
 
-### 3.5 Rejected alternatives
+### 3.6 Rejected alternatives
 
 - Requests-only CARSI is rejected: both ECS direct egress and the optional home
   tunnel returned publisher HTTP 403, and pinned `try_carsi` is browser-backed.
 - Reusing the noVNC auth helper for production downloads is rejected because it
   is operator-visible, stopped by default and has no internal acquisition API.
-- A second persistent browser microservice is deferred. It adds another token,
-  protocol, health surface and release boundary without improving the first
-  production success criterion; the source-locked legal sidecar already owns
-  acquisition policy and PDF validation.
+- Embedding Chromium in `scansci-legal` is rejected. The same UID/container
+  would expose the service token and persistent Cookie mount to a `--no-sandbox`
+  browser; environment cleanup is not an isolation boundary.
+- A browser HTTP microservice with another bearer token is rejected. The
+  opposite-direction job volumes provide a smaller internal contract without a
+  network endpoint or another persistent credential.
 
 ## 4. Internal service contract
 
@@ -340,16 +381,24 @@ used everywhere.
   multicast, metadata, and documentation-only networks.
 - The service token and session credentials are separate. Compromise of the
   Agent Worker service token does not reveal the CARSI session or password.
+- `scansci-browser` is a separate UID/container with no service-token or
+  persistent-session mount. Legal input is read-only there; browser proof/PDF
+  output is read-only in `scansci-legal`.
 - Logs contain identifier hash, bounded route/status/latency/size and request
   ID only. They exclude query text, PDF bytes/text, credentials, cookies, URLs
   containing credentials, and upstream response bodies.
 - Per-user, per-Workspace, per-publisher, and global concurrency/rate caps apply.
   One request cannot start unbounded upstream races or browser processes.
+- The project adapter directly starts the fixed Patchright executable wrapper.
+  Pinned channel, bundled executable, second-launch and proxy fallback paths are
+  disabled and regression-gated.
 - The auth browser is stopped outside login/repair and is loopback-only while
   running. No credential UI is reachable through public Nginx/Cloudflare.
 - Build and runtime contracts fail if Tor proxy variables, grey-source enable
   flags, host ports, data-network membership, writable rootfs, Docker socket,
-  or production database/object-storage Secrets appear in the service.
+  or production database/object-storage Secrets appear in either service; they
+  also fail if the browser worker gains the token/session mounts or the job
+  volume directions drift.
 
 ## 10. Testing and production acceptance
 
@@ -364,9 +413,16 @@ used everywhere.
 - Red-to-green auth tests proving publisher-host return, five valid-shaped
   Cookies, HTTP 403 and absent SSO redirect all remain `auth_required`, while
   only the fixed institutional canary's PDF evidence publishes `ready`.
-- Browser-runtime tests for fixed executable/proxy/DISPLAY, request-local Cookie
-  snapshot, one-at-a-time launch, timeout process-group cleanup, no orphaned
-  Chromium/Xvfb children, and absence of noVNC/host ports on the legal service.
+- Browser-runtime tests for separate UID/mount/network topology, immutable
+  request-local Cookie input, output-only browser proof, one-at-a-time launch,
+  timeout process-group cleanup, no orphaned Chromium/Xvfb children, and no
+  noVNC/host port on either production service.
+- Launch-failure tests force the fixed wrapper's first start to fail and prove
+  no bundled/channel/second browser, direct connection or `ready` transition.
+- Proof-contract tests require browser-captured 2xx status, exact normalized PDF
+  MIME, allowlisted final URL/source, byte count and SHA-256. They reject 403,
+  200 HTML, wrong MIME, magic/hash/size mismatch, forged source and outer-only
+  `application/pdf`.
 - Domain/API tests for personal target creation/reuse, RO authorization,
   idempotency, provider invisibility, query-only results, identifier download,
   and cross-Workspace denial.
@@ -378,8 +434,9 @@ used everywhere.
 ### ECS acceptance
 
 1. Exact CI and canonical immutable deploy with active/rollback identities.
-2. Build the source-locked `scansci-legal` and auth-helper images on the CPU ECS;
-   verify non-root/read-only/resource/network/Secret topology.
+2. Build the source-locked `scansci-legal`, `scansci-browser` and auth-helper
+   images on the CPU ECS; verify separate UID, non-root/read-only/resource/
+   network/Secret topology and opposite-direction job mounts.
 3. Complete one Zhejiang University CARSI login through the loopback SSH tunnel;
    verify the helper remains open on publisher 403 and only exits after the fixed
    subscription canary returns an institutional `%PDF-`; verify account/password/
@@ -391,7 +448,7 @@ used everywhere.
 5. Download one real OA PDF and one real Zhejiang University institutional PDF
    through the production service. The institutional result must be a browser
    source rather than OA fallback and must match route, entitlement subject,
-   content type, magic, bounded size and SHA-256 evidence.
+   browser-originated status/MIME/final URL, magic, bounded size and SHA-256.
 6. Prove Dashboard/Personal Space, Hermes drawer, RO Hermes, and RO Files/Evidence
    all reach the unified API and yield a usable product download.
 7. Prove exact bytes/hash, one-use replay rejection, authorization boundaries,
@@ -409,13 +466,15 @@ source link and a recoverable acquisition state rather than failing the whole
 research task.
 
 Rollback disables `SCANSCI_ENABLED`, restores the previous Agent Worker/API/Web
-release, stops/removes only the exact `scansci-legal` and auth-helper containers,
-and preserves the session volume unless the operator explicitly revokes it.
-Credential/session revocation is independent of application rollback.
+release, stops/removes only the exact `scansci-legal`, `scansci-browser` and
+auth-helper containers, and preserves the session volume unless the operator
+explicitly revokes it. The two bounded browser-job tmpfs volumes contain no
+durable state and may be removed only by exact release identity after containers
+stop. Credential/session revocation is independent of application rollback.
 
-Production retention keeps current and rollback application images plus the
-current ScanSci service/auth images and one persistent session volume. Failed
-candidate images, login containers, browser downloads, temp profiles, evaluation
+Production retention keeps current and rollback application images plus current
+legal/browser/auth images and one persistent session volume. Failed candidate
+images, login containers, browser jobs/downloads, temp profiles, evaluation
 roots, and BuildKit residue are inventoried and removed by exact identity only;
 no broad Docker or filesystem prune is allowed.
 
