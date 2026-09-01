@@ -23,6 +23,7 @@ from scansci_legal.strict_browser import (
     capture_institutional_pdf,
     install_strict_scansci_browser,
     launch_strict_patchright,
+    _run_pinned_carsi,
     strict_visible_browser,
     verify_institutional_canary,
 )
@@ -105,6 +106,68 @@ def _capture_response(response: _Response, *, maximum_bytes: int | None = None):
 
 
 class StrictBrowserLauncherTest(unittest.TestCase):
+    def test_pinned_carsi_resolves_doi_through_only_the_controlled_proxy(self):
+        observed = {}
+
+        def try_carsi(identifier, output_path, config):
+            observed.update({key: os.environ.get(key) for key in (
+                "HTTP_PROXY", "HTTPS_PROXY", "http_proxy", "https_proxy",
+                "NO_PROXY", "no_proxy",
+            )})
+            return {"identifier": identifier, "file": str(output_path), "config": config}
+
+        publisher = types.SimpleNamespace()
+        carsi = types.SimpleNamespace()
+        carsi_source = types.SimpleNamespace(try_carsi=try_carsi)
+        package = types.ModuleType("scansci_pdf")
+        package.publisher_strategies = publisher
+        sources = types.ModuleType("scansci_pdf.sources")
+        sources.carsi = carsi
+        sources.carsi_source = carsi_source
+        package.sources = sources
+        caller_environment = {
+            "SCANSCI_BROWSER_PROXY": "http://openscience-egress:7891",
+            "HTTP_PROXY": "http://caller-http.invalid",
+            "HTTPS_PROXY": "http://caller-https.invalid",
+            "http_proxy": "http://caller-http-lower.invalid",
+            "https_proxy": "http://caller-https-lower.invalid",
+            "NO_PROXY": "caller-no-proxy",
+            "no_proxy": "caller-no-proxy-lower",
+        }
+        with mock.patch.dict(os.environ, caller_environment, clear=False), mock.patch.dict(
+            sys.modules,
+            {"scansci_pdf": package, "scansci_pdf.sources": sources},
+        ), mock.patch("scansci_legal.strict_browser.install_strict_scansci_browser"):
+            before = {key: os.environ.get(key) for key in caller_environment}
+            result = _run_pinned_carsi(
+                "10.1016/j.physleta.2023.129241", Path("paper.pdf"), {"carsi_enabled": True},
+            )
+            self.assertEqual(result["identifier"], "10.1016/j.physleta.2023.129241")
+            self.assertEqual(
+                observed,
+                {
+                    "HTTP_PROXY": "http://openscience-egress:7891",
+                    "HTTPS_PROXY": "http://openscience-egress:7891",
+                    "http_proxy": "http://openscience-egress:7891",
+                    "https_proxy": "http://openscience-egress:7891",
+                    "NO_PROXY": "localhost,127.0.0.1",
+                    "no_proxy": "localhost,127.0.0.1",
+                },
+            )
+            self.assertEqual(
+                {key: os.environ.get(key) for key in caller_environment},
+                before,
+            )
+
+    def test_pinned_carsi_rejects_an_uncontrolled_resolution_proxy(self):
+        with mock.patch.dict(
+            os.environ, {"SCANSCI_BROWSER_PROXY": "http://hostile.invalid:3128"}, clear=False,
+        ), self.assertRaises(BrowserPolicyError) as raised:
+            _run_pinned_carsi(
+                "10.1016/j.physleta.2023.129241", Path("paper.pdf"), {"carsi_enabled": True},
+            )
+        self.assertEqual(raised.exception.code, "scansci_browser_proxy_invalid")
+
     def test_strict_context_calls_launcher_once_and_never_falls_back(self):
         page = types.SimpleNamespace(on=lambda *_: None)
         context = _Context(page)

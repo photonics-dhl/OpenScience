@@ -452,11 +452,37 @@ def _strict_scansci_visible_browser(
 
 
 def _run_pinned_carsi(identifier: str, output_path: Path, config: dict[str, Any]) -> object:
-    from scansci_pdf import publisher_strategies
-    from scansci_pdf.sources import carsi, carsi_source
+    with _controlled_request_proxy():
+        from scansci_pdf import publisher_strategies
+        from scansci_pdf.sources import carsi, carsi_source
 
-    install_strict_scansci_browser(publisher_strategies, carsi)
-    return carsi_source.try_carsi(identifier, output_path, config)
+        install_strict_scansci_browser(publisher_strategies, carsi)
+        return carsi_source.try_carsi(identifier, output_path, config)
+
+
+@contextmanager
+def _controlled_request_proxy() -> Iterator[None]:
+    proxy = os.environ.get("SCANSCI_BROWSER_PROXY", "").strip()
+    if proxy != EGRESS_PROXY:
+        raise BrowserPolicyError("scansci_browser_proxy_invalid")
+    overrides = {
+        "HTTP_PROXY": proxy,
+        "HTTPS_PROXY": proxy,
+        "http_proxy": proxy,
+        "https_proxy": proxy,
+        "NO_PROXY": "localhost,127.0.0.1",
+        "no_proxy": "localhost,127.0.0.1",
+    }
+    previous = {key: os.environ.get(key) for key in overrides}
+    try:
+        os.environ.update(overrides)
+        yield
+    finally:
+        for key, value in previous.items():
+            if value is None:
+                os.environ.pop(key, None)
+            else:
+                os.environ[key] = value
 
 
 def _source_digest(source: str) -> str:
