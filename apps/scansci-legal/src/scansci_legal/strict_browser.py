@@ -13,6 +13,7 @@ import inspect
 import json
 import os
 from pathlib import Path
+import re
 import stat
 import tempfile
 import textwrap
@@ -38,6 +39,7 @@ INSTITUTION = "浙江大学"
 MAX_CAPTURE_CANDIDATES = 8
 MAX_CAPTURE_TOTAL_BYTES = 150 * 1024 * 1024
 AUTH_CHALLENGE_HOSTS = frozenset({"zjuam.zju.edu.cn", "idp.carsi.edu.cn"})
+LINKINGHUB_PII_PATH = re.compile(r"^/retrieve/pii/([A-Z0-9]{8,64})$")
 PINNED_VISIBLE_BROWSER_AST_SHA256 = "55b0be288828dc9f737626665ccccb8a688720888db255251c6f146279e42cbe"
 PINNED_CARSI_DOWNLOAD_AST_SHA256 = "94ca4b7d31c0f6def78c611dcaae445610dfd94423c82cc78f8ed5818f193fc0"
 
@@ -454,10 +456,56 @@ def _strict_scansci_visible_browser(
 def _run_pinned_carsi(identifier: str, output_path: Path, config: dict[str, Any]) -> object:
     with _controlled_request_proxy():
         from scansci_pdf import publisher_strategies
-        from scansci_pdf.sources import carsi, carsi_source
+        from scansci_pdf.sources import carsi, carsi_source, instsci
 
         install_strict_scansci_browser(publisher_strategies, carsi)
-        return carsi_source.try_carsi(identifier, output_path, config)
+        with _canonical_resolver(instsci):
+            return carsi_source.try_carsi(identifier, output_path, config)
+
+
+@contextmanager
+def _canonical_resolver(instsci_module: object) -> Iterator[None]:
+    try:
+        original = getattr(instsci_module, "_resolve_doi_url")
+        if not callable(original):
+            raise ValueError("invalid DOI resolver")
+    except (AttributeError, ValueError) as error:
+        raise BrowserPolicyError("scansci_doi_resolver_drift") from error
+
+    def resolve(identifier: str) -> str | None:
+        return _canonicalize_resolved_institutional_url(original(identifier))
+
+    setattr(instsci_module, "_resolve_doi_url", resolve)
+    try:
+        yield
+    finally:
+        setattr(instsci_module, "_resolve_doi_url", original)
+
+
+def _canonicalize_resolved_institutional_url(value: str | None) -> str | None:
+    if value is None:
+        return None
+    if not isinstance(value, str):
+        raise BrowserPolicyError("scansci_resolved_url_invalid")
+    try:
+        parsed = urlsplit(value)
+        port = parsed.port
+    except ValueError:
+        return value
+    match = LINKINGHUB_PII_PATH.fullmatch(parsed.path)
+    if (
+        parsed.scheme == "https"
+        and parsed.hostname is not None
+        and parsed.hostname.rstrip(".").lower() == "linkinghub.elsevier.com"
+        and parsed.username is None
+        and parsed.password is None
+        and port in (None, 443)
+        and not parsed.query
+        and not parsed.fragment
+        and match is not None
+    ):
+        return f"https://www.sciencedirect.com/science/article/pii/{match.group(1)}"
+    return value
 
 
 @contextmanager

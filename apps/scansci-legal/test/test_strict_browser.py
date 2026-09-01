@@ -21,6 +21,8 @@ from scansci_legal.strict_browser import (
     _ACTIVE_CAPTURE,
     BrowserPolicyError,
     _BrowserPdfCapture,
+    _canonicalize_resolved_institutional_url,
+    _canonical_resolver,
     PINNED_CARSI_DOWNLOAD_AST_SHA256,
     PINNED_VISIBLE_BROWSER_AST_SHA256,
     capture_institutional_pdf,
@@ -112,21 +114,28 @@ class StrictBrowserLauncherTest(unittest.TestCase):
     def test_pinned_carsi_resolves_doi_through_only_the_controlled_proxy(self):
         observed = {}
 
+        def resolve_doi(identifier):
+            observed["resolver_input"] = identifier
+            return "https://linkinghub.elsevier.com/retrieve/pii/S0375960123006217"
+
         def try_carsi(identifier, output_path, config):
-            observed.update({key: os.environ.get(key) for key in (
+            observed["environment"] = {key: os.environ.get(key) for key in (
                 "HTTP_PROXY", "HTTPS_PROXY", "http_proxy", "https_proxy",
                 "NO_PROXY", "no_proxy",
-            )})
+            )}
+            observed["resolved_url"] = instsci._resolve_doi_url(identifier)
             return {"identifier": identifier, "file": str(output_path), "config": config}
 
         publisher = types.SimpleNamespace()
         carsi = types.SimpleNamespace()
         carsi_source = types.SimpleNamespace(try_carsi=try_carsi)
+        instsci = types.SimpleNamespace(_resolve_doi_url=resolve_doi)
         package = types.ModuleType("scansci_pdf")
         package.publisher_strategies = publisher
         sources = types.ModuleType("scansci_pdf.sources")
         sources.carsi = carsi
         sources.carsi_source = carsi_source
+        sources.instsci = instsci
         package.sources = sources
         caller_environment = {
             "SCANSCI_BROWSER_PROXY": "http://openscience-egress:7891",
@@ -146,8 +155,13 @@ class StrictBrowserLauncherTest(unittest.TestCase):
                 "10.1016/j.physleta.2023.129241", Path("paper.pdf"), {"carsi_enabled": True},
             )
             self.assertEqual(result["identifier"], "10.1016/j.physleta.2023.129241")
+            self.assertEqual(observed["resolver_input"], "10.1016/j.physleta.2023.129241")
             self.assertEqual(
-                observed,
+                observed["resolved_url"],
+                "https://www.sciencedirect.com/science/article/pii/S0375960123006217",
+            )
+            self.assertEqual(
+                observed["environment"],
                 {
                     "HTTP_PROXY": "http://openscience-egress:7891",
                     "HTTPS_PROXY": "http://openscience-egress:7891",
@@ -161,6 +175,42 @@ class StrictBrowserLauncherTest(unittest.TestCase):
                 {key: os.environ.get(key) for key in caller_environment},
                 before,
             )
+            self.assertIs(instsci._resolve_doi_url, resolve_doi)
+
+    def test_only_exact_linkinghub_pii_routes_are_canonicalized(self):
+        self.assertEqual(
+            _canonicalize_resolved_institutional_url(
+                "https://linkinghub.elsevier.com/retrieve/pii/S0375960123006217",
+            ),
+            "https://www.sciencedirect.com/science/article/pii/S0375960123006217",
+        )
+        for value in (
+            None,
+            "http://linkinghub.elsevier.com/retrieve/pii/S0375960123006217",
+            "https://linkinghub.elsevier.com/retrieve/pii/S0375960123006217?x=1",
+            "https://linkinghub.elsevier.com/retrieve/pii/S0375960123006217#fragment",
+            "https://linkinghub.elsevier.com/other/pii/S0375960123006217",
+            "https://linkinghub.elsevier.com/retrieve/pii/not-valid-lowercase",
+            "https://example.com/retrieve/pii/S0375960123006217",
+            "https://www.sciencedirect.com/science/article/pii/S0375960123006217",
+        ):
+            with self.subTest(value=value):
+                self.assertEqual(_canonicalize_resolved_institutional_url(value), value)
+
+        with self.assertRaises(BrowserPolicyError) as raised:
+            _canonicalize_resolved_institutional_url(123)  # type: ignore[arg-type]
+        self.assertEqual(raised.exception.code, "scansci_resolved_url_invalid")
+
+    def test_canonical_resolver_restores_upstream_after_failure(self):
+        original = lambda _identifier: None
+        instsci = types.SimpleNamespace(_resolve_doi_url=original)
+
+        with self.assertRaisesRegex(RuntimeError, "simulated failure"):
+            with _canonical_resolver(instsci):
+                self.assertIsNot(instsci._resolve_doi_url, original)
+                raise RuntimeError("simulated failure")
+
+        self.assertIs(instsci._resolve_doi_url, original)
 
     def test_pinned_carsi_rejects_an_uncontrolled_resolution_proxy(self):
         with mock.patch.dict(
