@@ -1,6 +1,6 @@
 # ScanSci Default Literature Acquisition Capability Design
 
-> Status: APPROVED FOUNDATION / STRICT BROWSER EXTENSION USER-APPROVED,
+> Status: APPROVED FOUNDATION / STRICT BROWSER ARCHITECTURE REVIEW READY /
 > WRITTEN REVIEW PENDING
 > Date: 2026-08-30
 > Strict browser extension approved: 2026-09-01

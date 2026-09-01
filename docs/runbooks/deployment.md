@@ -1913,3 +1913,34 @@ canonical ECS deployment, require snapshot `COOKIE_LOAD=1`, a real non-OA
 Elsevier response with route `institutional`, `%PDF-`, bounded size and SHA-256,
 then ClamAV/storage/rights/one-use/expiry/zero-grey-Tor product evidence. Until
 that exact gate passes, session `ready` must not be reported as download success.
+
+### 5.58 CARSI 403 false-positive and CPU browser correction (2026-09-01)
+
+PR #28 passed exact CI run `33461988607` / job `99713876656`, merged as
+`2019f8a2d9dcd7d5241de231ae95e2aedf238f47`, and passed the two-phase canonical
+ECS transaction after an exact schema-v3 Parser report. Active/public and
+rollback are `2019f8a` / `9eeb8d5`; core/search remain `33/33` / `2/2`, all
+target containers are healthy, the BGE CPU and OA canaries passed, and the
+journal/failed markers are absent. The request `cache_dir` now equals its safe
+Cookie snapshot as intended.
+
+Do not infer institutional readiness from that release. Post-deploy evidence
+showed one safe Cookie JSON with five valid-shaped records, but session state
+`auth_required` generation 16 and both persistent/snapshot loads false. The
+same ScienceDirect article and PDF returned 403 without an SSO redirect through
+Requests, CPU Chromium, ECS direct egress and the optional home tunnel; no PDF
+magic was received. The pinned federated-login detector accepts a publisher URL
+outside login keywords or more than three Cookies, so the earlier `ready` was a
+403 false-positive. Pinned `try_carsi` is browser-backed, while the legal image
+contains no Chromium/Patchright/Xvfb runtime.
+
+Step 5 is reopened and Step 6 remains blocked. The user-approved correction is
+design commit `950ec40`: add an isolated CPU-only `scansci-browser` with no
+token/session mounts and promote staged Cookies only after fixed DOI
+`10.1016/j.physleta.2023.129241` returns allowlisted institutional `%PDF-`
+evidence. Opposite-direction tmpfs mounts prevent legal from forging output and
+browser from changing input; direct Patchright has no executable fallback, and
+browser status/MIME/URL/hash proof is independently checked. Neither service
+has a host browser port or arbitrary URL input. Do not restart operator login
+until the written design is reviewed, its TDD plan is implemented, exact CI is
+merged and the merged SHA is canonically deployed.

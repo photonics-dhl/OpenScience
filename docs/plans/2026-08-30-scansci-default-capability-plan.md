@@ -630,7 +630,14 @@ then run `deploy.sh --confirm --require-parser-acceptance --rollback-ref
 migration status, ScanSci/Parser/BGE/runtime identity, all containers, Nginx,
 public release, journal clear and active/rollback retention.
 
-- [x] **Step 5: Complete the one-time Zhejiang University CARSI login**
+- [ ] **Step 5: Complete the one-time Zhejiang University CARSI login**
+
+2026-09-01 correction: the first attempt is not accepted. Pinned ScanSci treated
+a ScienceDirect 403 publisher page and five Cookies as login success; real
+article/PDF probes returned 403 and production state reverted to
+`auth_required`. Design commit `950ec40` requires the fixed non-OA canary to
+return institutional `%PDF-` before `ready`; implementation planning awaits the
+written-spec review.
 
 Start only the auth profile, start the checked-in loopback SSH tunnel, set the
 validated local port as `SCANSCI_LOCAL_PORT`, and open
@@ -644,9 +651,9 @@ stop must still end the helper immediately.
 
 - [ ] **Step 6: Run real OA and institutional acquisitions**
 
-2026-09-01 checkpoint: login and `scansci-legal` recreation persistence passed.
-Candidate `a3b073b` corrects the pinned client's request-local Cookie snapshot path;
-merge/deploy and the real institutional PDF gate remain required for this step.
+2026-09-01 checkpoint: release `2019f8a` deployed the pinned client's
+request-local Cookie snapshot path, but the strict auth/browser gate above is
+still required. Step 6 remains blocked until Step 5 returns real PDF evidence.
 
 Use arXiv `2009.06045v1` for OA and DOI `10.1038/nature12373` for the institutional
 route. Verify route/header/source, PDF magic/size/hash, ClamAV, temporary object,
