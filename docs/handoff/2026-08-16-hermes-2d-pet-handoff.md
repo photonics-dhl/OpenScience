@@ -1,6 +1,6 @@
 # Hermes Research Intelligence CURRENT Handoff
 
-> **CURRENT active-memory，2026-09-02。** 公网 release `49297f4` 全绿、rollback `5cd6e5e`；浙大账号已真实登录 CARSI，但 `id.elsevier.com/authorization.ping` 被误判为 publisher return。修复候选 `ba74c1d` 已全仓测试与独立安全复审 READY，待 CI/ECS；机构 PDF 未完成，Task 11 阻断，Landing/Hermes 视觉冻结。
+> **CURRENT active-memory，2026-09-02。** 公网 release `405b85a` 全绿、rollback `09093e7`；匿名 Elsevier return 已 fail-closed，浙大/CARSI IdP main-frame gate 已部署。浙大 CAS 对已核对输入明确返回“用户名或密码错误”，故未发布 Cookie/ready；机构 PDF、Task 11 继续阻断，Landing/Hermes 视觉冻结。
 
 ## Goal and state
 
@@ -11,14 +11,14 @@
 ## Version tuple
 
 - Worktree: `E:/Miscellaneous/XGS/.worktrees/readable-hermes-guidance`
-- Candidate branch / HEAD / origin main: `codex/scansci-publisher-return-gate` / `ba74c1d7071ba5fc4f7f7df228a933d145cf42e6` / `49297f4ef851ef71e13665cbb887b665db978b95`
-- Production application source / immutable release: `49297f4ef851ef71e13665cbb887b665db978b95`
-- Rollback: `5cd6e5ed0a5a6c39cb79643faa22cc4e3b33bf93`; core/search migrations `33/33` / `2/2`
+- Docs branch / code base / origin main: `codex/scansci-auth-credential-blocker-docs` / `405b85a8e1d6b3aec51d2de20ec6ce5b93ab73e4` / `405b85a8e1d6b3aec51d2de20ec6ce5b93ab73e4`
+- Production application source / immutable release: `405b85a8e1d6b3aec51d2de20ec6ce5b93ab73e4`
+- Rollback: `09093e7e879dbc7e9175e957f217afe5c6eb2e67`; core/search migrations `33/33` / `2/2`
 - 本地 `main` 与其他 worktree 有用户改动，不得触碰或用它推断生产；上述 tuple 已从 ECS 重新实测。
 
 ## Production truth
 
-- Public `/__release` 与 active marker 均返回 `49297f4…`；API/Web/Worker/Parser/BGE/ScanSci healthy，journal/failed absent，磁盘 57G/148G（40%，85G available），只保留 active+rollback release。Session 为 `auth_required`；不得把 CARSI 登录成功、publisher Cookie 或 identity 页面冒充机构 PDF 下载完成。
+- Public `/__release` 与 active marker 均返回 `405b85a…`；API/Web/Worker/Parser/BGE/ScanSci healthy，journal/failed absent，磁盘 58G/148G（41%，84G available），只保留 active+rollback release。Parser 报告 `root:root 0600`、临时 eval/auth 容器为 0。Session 为 `auth_required`；不得把 IdP 访问或 CAS 表单提交冒充机构 PDF 下载完成。
 - TLS certificate subject 为 `openscience.428312321.xyz`，有效期自 2026-08-03 20:10:34 +08:00；ECS、域名反代、Landing、Cloudflare Tunnel 的上线日期必须按证据包分开表述。
 - `agent_tasks.result` 为 JSONB，`IngestionTaskState` 含 `needs_review` 与 `confirmed`。生产聚合为 14 条待确认建议、7 条 confirmed、21 条总计；未输出业务正文或用户信息。
 - 数据库不存在字面 `suggested` 枚举：产品语义映射为 `result != null + state=needs_review`，确认后 `state=confirmed`。
@@ -56,18 +56,16 @@
 24. 真实诊断证明 pinned ScanSci `Session.trust_env=False` 且只认 `SCANSCI_PDF_PROXY`/`network_proxy`；reviewed `05111e7` 仅把已严格校验的固定 Squid URL 同步到专用变量。PR #17 / exact CI `33397550370` 合并为 main `abd38d3`；ECS schema-v3 16-case Parser acceptance、core/search `33/33`/`2/2`、BGE CPU、ScanSci source/topology/policy/token/session、Worker 与真实 24,671,920-byte arXiv OA PDF canary 全绿，active/public 已 CAS 到 `abd38d3`，rollback `6893318`。
 25. `cca5908` tunnel 的 RFB 失败根因是 auth 容器继承 `RLIMIT_NOFILE=1073741816`，触发 LibVNCServer 巨大 fd-limit 扫描。`396b301` 固定 nofile `4096/4096` 并纳入 verifier；PR #25 / exact CI `33447387815`、job `99669426363` 合并为 `36033ae`，ECS exact Parser/BGE/ScanSci/OA/application/public/retention 与真实 auth nofile/HTTP/RFB/network/PID gates 全绿，active/rollback `36033ae` / `cca5908`。
 26. `aff435a`/`860b2b0`/`b1d6662` 关闭 tunnel PID-reuse、十次 bounded window 与 auth child TERM 生命周期；PR #26 exact CI `33452984344` / job `99686782627` 合并为 `9eeb8d5`。ECS corpus 目录误设 `0700` 曾使 Worker `EACCES` fail-closed；root-owned `0555/0444` staging 后 Parser acceptance 和完整部署全绿，active/rollback `9eeb8d5` / `36033ae`，临时 eval/诊断对象清零。
-27. Strict browser、独立 CPU browser、proxy-only `browser_net`、proof-backed session、Task 4 release/rollback boundary 与稳定 canary 诊断已合并；PR #36 / CI `33535318911` canonical 部署为 `49297f4`，rollback `5cd6e5e`。ECS Parser/BGE/ScanSci OA/application/public/retention 全绿，auth helper/tunnel 事后清零。
-28. 真实浙大统一认证已通过并进入 CARSI 本校资源列表；官方固定 `conversation=e3s1` 已过期，动态 CARSI 会话可用。Elsevier 机构目录未返回主校区条目；运行时取证确认 helper 在 `id.elsevier.com/.../authorization.ping` 时提前切到 canary，session 保持 `auth_required`，未发布 Cookie/ready。
-29. `ba74c1d` 将成功回跳限制到 `login_url` 所属配置域：ScienceDirect 固定配置只接受 `sciencedirect.com`，不再接受同属 Cookie 域的 `id.elsevier.com`。回归测试 RED→GREEN；ScanSci `172 pass / 11 platform skip`、全仓 test/lint/docs-sync/diff-check 与独立安全复审 READY，生产尚未包含该修复。
-
-## Constraints
-
-- 服务器验收为准，本地不运行 Docker；Windows 只用显式 Git Bash 调 canonical wrapper；不读取/打印 `.env`，不 broad prune，不删除未经批准的文件/服务器对象。
+27. Strict browser、CPU browser、proxy-only `browser_net`、proof-backed session 与稳定 canary 诊断已合并；PR #36→#37 部署到 `09093e7`，ECS Parser/BGE/ScanSci OA/application/public/retention 全绿。
+28. PR #38 / CI `33550018143` 将匿名 publisher bounce 收紧为本次 main-frame 必须经过 `*.zju.edu.cn`/`*.carsi.edu.cn` 后才可取 Cookie；`evilzju.edu.cn` 回归拒绝，ScanSci `174/11/0`、全仓 lint/test 与独立复审 READY。
+29. Merge `405b85a` 经 schema-v3 16-case Parser 两阶段 canonical 部署；core/search `33/33`/`2/2`、quota `8/8`、BGE CPU、ScanSci OA、容器/公网/retention 全绿，rollback `09093e7`，验收临时目录与 auth helper 已清零。
+30. 生产登录在同一 180 秒窗口内到达 `zjuam.zju.edu.cn`；学号与学校邮箱两种用户名、同一隐藏密码均被 CAS 明确判为“用户名或密码错误”。为避免锁号已停止重试；未保存账号密码，未产生 ZJU/publisher Cookie 或 ready。
+31. Constraints：服务器验收为准，本地不运行 Docker；Windows 只用显式 Git Bash 调 canonical wrapper；不读取/打印 `.env`，不 broad prune，不删除未经批准的文件/服务器对象。
 
 ## Next action
 
-1. 推送 `ba74c1d` 文档同步候选，跑 exact CI、合并并以 merged SHA canonical 部署；不得用本地 Docker 代替 ECS。
-2. 用动态 CARSI→浙江大学→Elsevier 流程完成一次受控登录；固定非 OA canary 必须返回 institutional `%PDF-` 才发布 ready，并在 exact service 重启后仍为 ready。
+1. 用户先提供或重置一份可在 `zjuam.zju.edu.cn` 成功登录的当前密码；不要继续重试现有失败凭据。
+2. 用 loopback helper 在单一 180 秒窗口内完成 ZJU→Elsevier；固定非 OA canary 必须返回 institutional `%PDF-` 才发布 ready，并在 exact service 重启后仍为 ready。
 3. 用真实 institutional PDF 完成四入口/375px/one-use/72h/600s/zero-grey-Tor 与精确磁盘卫生，再关闭 Task 10。
 
 ## Read first

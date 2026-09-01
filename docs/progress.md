@@ -4,17 +4,17 @@
 
 ## Current version tuple
 
-- Candidate branch / HEAD / origin main: `codex/scansci-publisher-return-gate` / `ba74c1d7071ba5fc4f7f7df228a933d145cf42e6` / `49297f4ef851ef71e13665cbb887b665db978b95`。
-- Production application source / immutable release: `49297f4ef851ef71e13665cbb887b665db978b95`。
-- Production rollback: `5cd6e5ed0a5a6c39cb79643faa22cc4e3b33bf93`；core/search migrations `33/33` / `2/2`。
-- Taskmaster `hermes-research-intelligence` 仍为 9/12；下一步是 CI/部署 publisher-return gate 后重新认证、固定 DOI canary、真实机构 PDF 与持久性验收。Step 5/6 与 Task 11 继续阻断到真实机构 PDF 通过。
+- Docs branch / code base / origin main: `codex/scansci-auth-credential-blocker-docs` / `405b85a8e1d6b3aec51d2de20ec6ce5b93ab73e4` / `405b85a8e1d6b3aec51d2de20ec6ce5b93ab73e4`。
+- Production application source / immutable release: `405b85a8e1d6b3aec51d2de20ec6ce5b93ab73e4`。
+- Production rollback: `09093e7e879dbc7e9175e957f217afe5c6eb2e67`；core/search migrations `33/33` / `2/2`。
+- Taskmaster `hermes-research-intelligence` 仍为 9/12；代码/部署已完成，下一步只先更正 ZJU CAS 凭据，再做固定 DOI、持久机构 PDF 与四入口验收。Step 5/6 与 Task 11 继续阻断。
 
-## 2026-09-02 — ScanSci publisher-return gate local complete (`ba74c1d`)
+## 2026-09-02 — ScanSci IdP gate deployed; ZJU credential blocked (`405b85a`)
 
-- 生产 `49297f4` 的浙大统一认证真实成功并进入 CARSI 本校资源列表，但 helper 在 `id.elsevier.com/.../authorization.ping` 提前切换到 canary；该 identity 页属于 Cookie 域，不是 ScienceDirect publisher return，session 正确保留 `auth_required`。
-- 修复从固定 `login_url` 与上游 domains 派生完成回跳域；当前配置只允许 `sciencedirect.com`，排除 `id.elsevier.com`，既有 lookalike/正向/超时门禁保留。
-- 回归测试 RED→GREEN；ScanSci `172 pass / 11 platform skip`，全仓 test exit 0、lint/docs-sync/diff-check green，独立安全复审无 Critical/Important/Minor。生产尚未包含该修复，机构 PDF 尚未声称可用。
-- 当前生产 active/rollback `49297f4` / `5cd6e5e`，容器/公网/Parser/BGE/ScanSci OA 全绿；磁盘 57G/148G（40%，85G available），只保留 active+rollback release，auth helper/tunnel 已清零。
+- PR #38 / CI `33550018143` 将 Cookie 捕获绑定本次 main-frame ZJU/CARSI IdP 访问；匿名 bounce 与 `evilzju.edu.cn` 均 fail-closed。ScanSci `174 pass / 11 skip`、全仓 lint/test、独立复审全绿。
+- Merge `405b85a` 完成 schema-v3 16-case Parser 两阶段 ECS 发布；core/search `33/33`/`2/2`、quota `8/8`、BGE CPU、ScanSci OA、API/Web/Worker/Nginx/public CAS/retention 全绿。
+- 生产 helper 在单一 180 秒窗口到达 ZJU CAS；学号与学校邮箱两种用户名均被 `zjuam.zju.edu.cn` 明确判为“用户名或密码错误”。已停止重试，未保存凭据、未发布 Cookie/ready。
+- active/rollback `405b85a` / `09093e7`；磁盘 58G/148G（41%，84G available），仅两个 release，Parser report `0:0:600:1`，eval/auth/journal/failed 均清零。
 
 ## 2026-09-01 — Snapshot fix deployed; CARSI false-positive isolated
 

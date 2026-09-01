@@ -1997,3 +1997,37 @@ failed marker, retention pending file or release-scoped Squid preimage remains.
 Finally require Parser acceptance, core/search migration status, BGE CPU,
 Worker OA PDF, API/Web/Worker/Nginx/public `__release`, exact active/rollback
 capability image IDs, and bounded disk inventory.
+
+### 5.60 ScanSci ZJU/CARSI IdP return gate and credential blocker (2026-09-02)
+
+PR #38 passed exact CI run `33550018143` / job `99996871638`, merged as
+`405b85a8e1d6b3aec51d2de20ec6ce5b93ab73e4`, and passed the canonical
+two-phase ECS transaction after a fresh schema-v3 16-case Parser report.
+Active/public and rollback are `405b85a` / `09093e7`; core/search are
+`33/33` / `2/2`, quota is `8/8`, BGE CPU, ScanSci OA, target containers,
+Nginx, public health and retention passed. The accepted report is root-owned
+`0600` with one link; the exact evaluation root, auth helper/tunnel, journal
+and failed marker are absent. Disk is 58/148 GiB used with 84 GiB available.
+
+The operator browser must not export Cookies merely because Elsevier briefly
+returns to the publisher host. One browser attempt now records only main-frame
+navigation through exact HTTPS suffixes `zju.edu.cn` or `carsi.edu.cn`; a
+publisher return without that evidence stays in the same profile. Subframes,
+non-443/userinfo URLs and lookalikes such as `evilzju.edu.cn` do not qualify.
+The fixed DOI institutional PDF canary remains the final proof before `ready`.
+
+For the current Elsevier picker, search `Zhejiang University Hangzhou China`
+and select `浙江大学 (Zhejiang University) (Zhejiang University Library)`.
+This reaches `zjuam.zju.edu.cn` through the official entity ID. Complete the
+form inside one upstream 180-second attempt; repeated screenshots can consume
+the window and cause a fresh profile, which must not be misdiagnosed as SSH or
+Cookie persistence failure.
+
+The 2026-09-02 production attempt verified the visible username and password
+field length, then tried the supplied student-number and school-email username
+forms. ZJU CAS explicitly returned `用户名或密码错误` for both. Retrying stopped
+to avoid account lockout; no account password was persisted, no ZJU/publisher
+Cookie was published, and session correctly remains `auth_required`. Resume
+only with a current credential independently proven at `zjuam.zju.edu.cn`,
+then require fixed DOI `%PDF-`, service recreation persistence and the four
+product-entry journey before closing Task 10.
