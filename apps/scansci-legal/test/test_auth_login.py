@@ -26,7 +26,7 @@ class AuthLoginCanaryContractTest(unittest.TestCase):
             raise BrowserPolicyError("browser_launch_failed")
 
         with mock.patch(
-            "scansci_pdf.sources.carsi._load_publisher_configs",
+            "scansci_legal.auth_login._load_carsi_publisher_configs",
             return_value={
                 "sciencedirect": SimpleNamespace(
                     login_url="https://www.sciencedirect.com/user/login",
@@ -72,7 +72,7 @@ class AuthLoginCanaryContractTest(unittest.TestCase):
             yield context, page
 
         with mock.patch(
-            "scansci_pdf.sources.carsi._load_publisher_configs",
+            "scansci_legal.auth_login._load_carsi_publisher_configs",
             return_value={
                 "sciencedirect": SimpleNamespace(
                     login_url="https://www.sciencedirect.com/user/login",
@@ -116,7 +116,7 @@ class AuthLoginCanaryContractTest(unittest.TestCase):
             yield context, next(pages)
 
         with mock.patch(
-            "scansci_pdf.sources.carsi._load_publisher_configs",
+            "scansci_legal.auth_login._load_carsi_publisher_configs",
             return_value={
                 "sciencedirect": SimpleNamespace(
                     login_url="https://www.sciencedirect.com/user/login",
@@ -153,7 +153,7 @@ class AuthLoginCanaryContractTest(unittest.TestCase):
             yield context, page
 
         with mock.patch(
-            "scansci_pdf.sources.carsi._load_publisher_configs",
+            "scansci_legal.auth_login._load_carsi_publisher_configs",
             return_value={
                 "sciencedirect": SimpleNamespace(
                     login_url="https://www.sciencedirect.com/user/login",

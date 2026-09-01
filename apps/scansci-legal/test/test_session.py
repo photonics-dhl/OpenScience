@@ -1042,22 +1042,25 @@ print(json.dumps({'success':True,'file':str(paper),'source':'CARSI','url':'https
 """,
                 encoding="utf-8",
             )
-            real_listdir = upstream_module.os.listdir
+            real_fstat = upstream_module.os.fstat
             replaced = False
+            fstat_calls = 0
 
-            def replacing_listdir(path):
-                nonlocal replaced
-                if isinstance(path, int) and not replaced:
+            def replacing_fstat(descriptor):
+                nonlocal replaced, fstat_calls
+                details = real_fstat(descriptor)
+                fstat_calls += 1
+                if fstat_calls == 4 and not replaced:
                     replaced = True
                     cookie_root.rename(cache / "carsi_cookies-original")
                     cookie_root.symlink_to(outside, target_is_directory=True)
-                return real_listdir(path)
+                return details
 
             client = ScanSciAcquisitionClient(
                 root / "runtime", worker_command=[sys.executable, str(worker)], session_root=session,
                 browser_job_client=_FailIfCalledBrowserClient(),
             )
-            with mock.patch.object(upstream_module.os, "listdir", side_effect=replacing_listdir):
+            with mock.patch.object(upstream_module.os, "fstat", side_effect=replacing_fstat):
                 with self.assertRaises(AcquisitionError) as raised:
                     client.acquire(LegalDownloadRequest("10.1038/nature12373", "legal_only", False, False, True, "a" * 64))
 

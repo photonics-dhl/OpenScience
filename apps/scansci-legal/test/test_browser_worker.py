@@ -15,6 +15,7 @@ import sys
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
+import scansci_legal.browser_worker as browser_worker_module
 from scansci_legal.browser_worker import (
     BROWSER_PROCESS_TIMEOUT_SECONDS,
     BROWSER_TERMINAL_RESERVE_SECONDS,
@@ -74,6 +75,10 @@ class BrowserWorkerControllerTest(unittest.TestCase):
         self.outputs.mkdir()
         self.profiles = self.root / "profiles"
         self.profiles.mkdir()
+        self.profiles.chmod(0o700)
+        expected_group = os.getegid() if hasattr(os, "getegid") else browser_worker_module.SHARED_GID
+        self.group_patch = mock.patch.object(browser_worker_module, "SHARED_GID", expected_group)
+        self.group_patch.start()
         self.job_id = "a" * 32
         self.input_job = self.inputs / self.job_id
         self.input_job.mkdir()
@@ -83,6 +88,7 @@ class BrowserWorkerControllerTest(unittest.TestCase):
         (self.input_job / "cookies.json").write_text("[]", encoding="ascii")
 
     def tearDown(self):
+        self.group_patch.stop()
         self.directory.cleanup()
 
     def test_launches_one_fresh_process_group_and_returns_success(self):
@@ -270,7 +276,8 @@ class BrowserWorkerControllerTest(unittest.TestCase):
 
     def test_removes_only_browser_output_after_matching_input_ack(self):
         output_job = self.outputs / self.job_id
-        output_job.mkdir()
+        output_job.mkdir(mode=0o750)
+        output_job.chmod(0o750)
         (output_job / "document.pdf").write_bytes(b"%PDF-x")
 
         self.assertEqual(_cleanup_acknowledged_outputs(self.inputs, self.outputs), 0)
@@ -285,6 +292,8 @@ class BrowserWorkerControllerTest(unittest.TestCase):
         unrelated = self.outputs / "not-a-job"
         for path in (stale, fresh, unrelated):
             path.mkdir()
+        for path in (stale, fresh):
+            path.chmod(0o750)
         old = time.time() - 601
         os.utime(stale, (old, old))
 

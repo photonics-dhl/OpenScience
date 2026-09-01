@@ -11,7 +11,7 @@ import subprocess
 import sys
 import tempfile
 import time
-from typing import Callable, Sequence
+from typing import Any, Callable, Sequence
 
 from .browser_protocol import (
     BrowserProof,
@@ -98,16 +98,20 @@ def main(
     return 1
 
 
+def _load_carsi_publisher_configs() -> dict[str, Any]:
+    from scansci_pdf.sources.carsi import _load_publisher_configs
+
+    return _load_publisher_configs()
+
+
 def _strict_operator_login(
     staging_root: Path,
     *,
     browser_session: Callable[..., object] = strict_visible_browser,
     sleeper: Callable[[float], None] = time.sleep,
 ) -> bool:
-    from scansci_pdf.sources.carsi import _load_publisher_configs
-
     publisher = "sciencedirect"
-    configs = _load_publisher_configs()
+    configs = _load_carsi_publisher_configs()
     config = configs.get(publisher)
     if (
         config is None
