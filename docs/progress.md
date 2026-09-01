@@ -1,25 +1,20 @@
 # OpenScience 进度（CURRENT window）
 
-> 最新同步：2026-09-01。历史由 Git 保存；旧计划不作为默认输入。
+> 最新同步：2026-09-02。历史由 Git 保存；旧计划不作为默认输入。
 
 ## Current version tuple
 
-- Candidate branch / HEAD / origin main: `codex/scansci-browser-institutional-gate` / `8c35179`（Task 4 code）/ `2019f8a`。
-- Production application source / immutable release: `2019f8a2d9dcd7d5241de231ae95e2aedf238f47`。
-- Production rollback: `9eeb8d51baf16b212a7a4f5dd7db25131aa725a6`；core/search migrations `33/33` / `2/2`。
-- Taskmaster `hermes-research-intelligence` 仍为 9/12；strict browser Tasks 3A–3D 与 Task 4 本地实现/复审已完成；下一步是 ECS release/浙江大学认证，Step 5/6 与 Task 11 继续阻断到真实机构 PDF 通过。
+- Candidate branch / HEAD / origin main: `codex/scansci-publisher-return-gate` / `ba74c1d7071ba5fc4f7f7df228a933d145cf42e6` / `49297f4ef851ef71e13665cbb887b665db978b95`。
+- Production application source / immutable release: `49297f4ef851ef71e13665cbb887b665db978b95`。
+- Production rollback: `5cd6e5ed0a5a6c39cb79643faa22cc4e3b33bf93`；core/search migrations `33/33` / `2/2`。
+- Taskmaster `hermes-research-intelligence` 仍为 9/12；下一步是 CI/部署 publisher-return gate 后重新认证、固定 DOI canary、真实机构 PDF 与持久性验收。Step 5/6 与 Task 11 继续阻断到真实机构 PDF 通过。
 
-## 2026-09-01 — ScanSci strict browser Task 4 local complete (`8c35179`)
+## 2026-09-02 — ScanSci publisher-return gate local complete (`ba74c1d`)
 
-- Compose 新增独立 `browser_net`、反向所有权 tmpfs 与 SHA-tagged 三角色；CPU browser `10002:11000`，无端口、Secret、session 或其他网络。
-- 宿主只允许 browser → Squid `172.26.0.1:7891`；boot policy 在 browser 创建前发布，schema 3/4 精确回滚且 Docker 保持 active。
-- Squid rollback 使用 release-SHA 专属 root `0600` 前镜像；atomic helper 独占创建并 fsync 文件/父目录，任何 helper/signal 失败都保留 outer dirty 并从 exact preimage atomic activate+cmp，不再猜共享历史 rollback。
-- fresh Task 4 gates `74 total / 69 pass / 5 platform skip / 0 fail`；release-contract `118 / 111 / 7 / 0`，Bash syntax 与 diff-check green；三路 security/architecture review 均 READY。生产仍为 `2019f8a`，未部署、未认证、未声称机构 PDF 可用。
-
-## 2026-09-01 — ScanSci strict browser Tasks 3C/3D complete
-
-- `d41bec4`/`0b84273`：机构只走 proof-backed `BrowserJobClient`，OA browserless；`ready` 绑定 24h fixed-DOI proof 与 publisher Cookie SHA。CPU browser 固定 `10002:11000`、无 noVNC/端口/Secret/session mount。
-- ScanSci `161 pass / 11 platform skip / 0 fail`，安全/架构复审 READY；生产未变。
+- 生产 `49297f4` 的浙大统一认证真实成功并进入 CARSI 本校资源列表，但 helper 在 `id.elsevier.com/.../authorization.ping` 提前切换到 canary；该 identity 页属于 Cookie 域，不是 ScienceDirect publisher return，session 正确保留 `auth_required`。
+- 修复从固定 `login_url` 与上游 domains 派生完成回跳域；当前配置只允许 `sciencedirect.com`，排除 `id.elsevier.com`，既有 lookalike/正向/超时门禁保留。
+- 回归测试 RED→GREEN；ScanSci `172 pass / 11 platform skip`，全仓 test exit 0、lint/docs-sync/diff-check green，独立安全复审无 Critical/Important/Minor。生产尚未包含该修复，机构 PDF 尚未声称可用。
+- 当前生产 active/rollback `49297f4` / `5cd6e5e`，容器/公网/Parser/BGE/ScanSci OA 全绿；磁盘 57G/148G（40%，85G available），只保留 active+rollback release，auth helper/tunnel 已清零。
 
 ## 2026-09-01 — Snapshot fix deployed; CARSI false-positive isolated
 
