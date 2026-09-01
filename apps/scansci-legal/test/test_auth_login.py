@@ -174,6 +174,9 @@ class AuthLoginCanaryContractTest(unittest.TestCase):
         }])
         page = SimpleNamespace(
             goto=lambda *_args, **_kwargs: None,
+            on=lambda _event, callback: callback(SimpleNamespace(
+                url="https://idp.zju.edu.cn/idp/profile/SAML2/Redirect/SSO",
+            )),
             url="https://www.sciencedirect.com/science/article/pii/x",
         )
 
@@ -221,6 +224,9 @@ class AuthLoginCanaryContractTest(unittest.TestCase):
         }])
         page = SimpleNamespace(
             goto=lambda *_args, **_kwargs: None,
+            on=lambda _event, callback: callback(SimpleNamespace(
+                url="https://idp.zju.edu.cn/idp/profile/SAML2/Redirect/SSO",
+            )),
             url="https://www.sciencedirect.com/user/institution/login",
         )
 
@@ -255,10 +261,16 @@ class AuthLoginCanaryContractTest(unittest.TestCase):
         pages = iter((
             SimpleNamespace(
                 goto=lambda *_args, **_kwargs: None,
+                on=lambda _event, callback: callback(SimpleNamespace(
+                    url="https://idp.zju.edu.cn/idp/profile/SAML2/Redirect/SSO",
+                )),
                 url="https://www.sciencedirect.com/user/login",
             ),
             SimpleNamespace(
                 goto=lambda *_args, **_kwargs: None,
+                on=lambda _event, callback: callback(SimpleNamespace(
+                    url="https://idp.zju.edu.cn/idp/profile/SAML2/Redirect/SSO",
+                )),
                 url="https://www.sciencedirect.com/science/article/pii/x",
             ),
         ))
@@ -357,6 +369,112 @@ class AuthLoginCanaryContractTest(unittest.TestCase):
 
             self.assertIs(result, False)
             self.assertFalse((root / "scansci" / "cache" / "carsi_cookies" / "sciencedirect.json").exists())
+
+    def test_strict_login_keeps_operator_profile_for_anonymous_publisher_bounce(self) -> None:
+        class RotatingPage:
+            def __init__(self) -> None:
+                self._urls = iter((
+                    "https://id.elsevier.com/as/authorization.oauth2",
+                    "https://evilzju.edu.cn/idp/login",
+                    "https://www.sciencedirect.com/",
+                ))
+                self._current = "https://www.sciencedirect.com/"
+
+            def goto(self, *_args: object, **_kwargs: object) -> None:
+                return None
+
+            @property
+            def url(self) -> str:
+                self._current = next(self._urls, self._current)
+                return self._current
+
+        context = SimpleNamespace(cookies=lambda _urls=None: [
+            {
+                "name": "OptanonConsent", "value": "anonymous-consent",
+                "domain": ".id.elsevier.com", "path": "/",
+            },
+            {
+                "name": "__cf_bm", "value": "anonymous-edge",
+                "domain": ".sciencedirect.com", "path": "/",
+            },
+            {
+                "name": "csrf_token", "value": "anonymous-csrf",
+                "domain": ".sciencedirect.com", "path": "/",
+            },
+            {
+                "name": "PF", "value": "anonymous-flow",
+                "domain": "id.elsevier.com", "path": "/",
+            },
+            {
+                "name": "analytics_marker", "value": "not-authentication",
+                "domain": ".sciencedirect.com", "path": "/",
+            },
+        ])
+
+        @contextmanager
+        def browser(_profile: Path):
+            yield context, RotatingPage()
+
+        with mock.patch(
+            "scansci_legal.auth_login._load_carsi_publisher_configs",
+            return_value={
+                "sciencedirect": SimpleNamespace(
+                    login_url="https://www.sciencedirect.com/user/institution/login",
+                    domains=["sciencedirect.com", "elsevier.com"],
+                ),
+            },
+        ), tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            result = auth_login._strict_operator_login(
+                root, browser_session=browser, sleeper=lambda _seconds: None,
+            )
+
+            self.assertIs(result, False)
+            self.assertFalse((root / "scansci" / "cache" / "carsi_cookies" / "sciencedirect.json").exists())
+
+    def test_strict_login_accepts_return_after_zju_identity_provider(self) -> None:
+        class RotatingPage:
+            def __init__(self) -> None:
+                self._urls = iter((
+                    "https://id.elsevier.com/as/authorization.oauth2",
+                    "https://idp.zju.edu.cn/idp/profile/SAML2/Redirect/SSO",
+                    "https://www.sciencedirect.com/",
+                ))
+                self._current = "https://www.sciencedirect.com/"
+
+            def goto(self, *_args: object, **_kwargs: object) -> None:
+                return None
+
+            @property
+            def url(self) -> str:
+                self._current = next(self._urls, self._current)
+                return self._current
+
+        context = SimpleNamespace(cookies=lambda _urls=None: [{
+            "name": "PF", "value": "federated-session", "domain": "id.elsevier.com", "path": "/",
+        }])
+
+        @contextmanager
+        def browser(_profile: Path):
+            yield context, RotatingPage()
+
+        with mock.patch(
+            "scansci_legal.auth_login._load_carsi_publisher_configs",
+            return_value={
+                "sciencedirect": SimpleNamespace(
+                    login_url="https://www.sciencedirect.com/user/institution/login",
+                    domains=["sciencedirect.com", "elsevier.com"],
+                ),
+            },
+        ), tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            result = auth_login._strict_operator_login(
+                root, browser_session=browser, sleeper=lambda _seconds: None,
+            )
+
+            self.assertIs(result, True)
+            cookie = root / "scansci" / "cache" / "carsi_cookies" / "sciencedirect.json"
+            self.assertEqual(json.loads(cookie.read_text(encoding="utf-8"))[0]["value"], "federated-session")
 
     def test_fixed_canary_uses_exact_doi_and_cookie_snapshot(self) -> None:
         cookie_json = b'[{"name":"session","value":"verified","domain":".sciencedirect.com"}]'
