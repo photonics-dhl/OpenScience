@@ -98,7 +98,7 @@ test('ScanSci production topology separates legal, browser and stopped loopback 
   assert.match(legal, /scansci-service-secrets:\/run\/secrets:ro/u);
   assert.match(legal, /scansci-browser-inputs:\/browser-inputs(?:\r?\n|\s*$)/u);
   assert.match(legal, /scansci-browser-outputs:\/browser-outputs:ro/u);
-  assert.match(legal, /scansci-browser:\r?\n\s+condition: service_healthy/u);
+  assert.doesNotMatch(legal, /scansci-browser:\r?\n\s+condition: service_healthy/u);
   assert.match(legal, /networks:\r?\n\s+- retrieval_net/u);
   assert.match(legal, /SCANSCI_EGRESS_PROXY: http:\/\/openscience-egress:7891/u);
   assert.match(legal, /extra_hosts:\r?\n\s+- "openscience-egress:172\.24\.0\.1"/u);
@@ -148,6 +148,7 @@ test('ScanSci production topology separates legal, browser and stopped loopback 
   assert.match(auth, /dockerfile: Dockerfile\.auth/u);
   assert.match(developmentLegal, /context: \.\.\/\.\.\/apps\/scansci-legal/u);
   assert.match(developmentLegal, /dockerfile: Dockerfile/u);
+  assert.doesNotMatch(developmentLegal, /scansci-browser:\r?\n\s+condition: service_healthy/u);
   assert.match(developmentBrowser, /dockerfile: Dockerfile\.browser/u);
   assert.match(developmentBrowser, /user: "10002:11000"/u);
   assert.match(developmentBrowser, /scansci-browser-inputs:\/browser-inputs:ro/u);
