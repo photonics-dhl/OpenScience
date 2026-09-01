@@ -325,7 +325,7 @@ Use these exact public types and constants:
 ```python
 MAX_BROWSER_MANIFEST_BYTES = 4 * 1024
 MAX_BROWSER_PROOF_BYTES = 8 * 1024
-BROWSER_JOB_TIMEOUT_SECONDS = 180
+BROWSER_JOB_TIMEOUT_SECONDS = 210  # includes a 30-second terminal/ACK reserve
 ACK_CLEANUP_TIMEOUT_SECONDS = 5
 ALLOWED_INSTITUTIONAL_HOST_SUFFIXES = (
     "elsevier.com", "sciencedirect.com", "elsevierusercontent.com",
@@ -396,7 +396,7 @@ Expected: protocol tests pass without starting Docker or a browser.
   `capture_institutional_pdf`, one serial long-running worker and a passive
   `python -m scansci_legal.browser_worker --healthcheck` command.
 
-- [ ] **Step 1: Write failing adapter and worker tests**
+- [x] **Step 1: Write failing adapter and worker tests**
 
 Use fakes for Patchright/page/response and assert these calls:
 
@@ -420,7 +420,7 @@ cleanup, and no orphaned Chromium/Xvfb child. Health tests accept only a regular
 worker-owned `/tmp/scansci-browser-heartbeat` no older than 20 seconds and never
 launch a browser or touch either job volume.
 
-- [ ] **Step 2: Verify RED**
+- [x] **Step 2: Verify RED**
 
 ```bash
 npx pnpm@9.15.0 --filter @openscience/scansci-legal test -- \
@@ -429,7 +429,7 @@ npx pnpm@9.15.0 --filter @openscience/scansci-legal test -- \
 
 Expected: FAIL because both modules are absent.
 
-- [ ] **Step 3: Implement the fixed launcher and proof capture**
+- [x] **Step 3: Implement the fixed launcher and proof capture**
 
 Expose these signatures:
 
@@ -460,21 +460,26 @@ used by `try_carsi`, `install_strict_scansci_browser` compares
 checked-in constants; drift raises `BrowserPolicyError`. Never invoke the pinned
 fallback-capable `browser_backend.launch*` function.
 
-Register a page response callback before navigation. Copy response bytes only
-when status is 200–299 and `Content-Type` normalized before `;` is
-`application/pdf`; validate final URL before writing. Create browser-owned,
+Register a Chromium CDP response-stage interceptor before navigation and read
+eligible bodies sequentially in 1 MiB chunks. Copy response bytes only when
+status is 200–299 and `Content-Type` normalized before `;` is
+`application/pdf`; validate final URL before writing. Cap each response at
+100 MiB, each job at eight candidates/150 MiB total, and retain only proof
+metadata after a response is fulfilled. Require the unique candidate length and
+SHA-256 to match pinned ScanSci's exact successful output. Create browser-owned,
 shared-GID 11000 mode `0640` PDF/proof from that response's status/MIME/final
 URL, `CARSI-Browser`, byte count and SHA-256. The single controller observes the
 legal-owned atomic manifest without renaming or writing the read-only input,
 records one active job in memory, launches a fresh job subprocess with a new
-process group, kills the full group at 180 seconds, and removes only its exact
+process group, preserves the full 180-second CARSI execution window inside the
+client's 210-second total window, and removes only its exact
 output after a matching input-side acknowledgement. On startup it removes only
 browser-owned incomplete/stale outputs older than the fixed 10-minute bound.
 The controller atomically refreshes its owned mode-`0600` heartbeat every five
 seconds; `--healthcheck` performs only owner/type/mode/timestamp validation and
 returns 0/1 without reading jobs or starting Patchright.
 
-- [ ] **Step 4: Verify GREEN and commit**
+- [x] **Step 4: Verify GREEN and commit**
 
 ```bash
 npx pnpm@9.15.0 --filter @openscience/scansci-legal test -- \
@@ -575,7 +580,8 @@ git commit -m "fix(scansci): require real institutional PDF proof"
 
 Assert the browser image has pinned Python/base packages; only Chromium,
 fonts, tini and Xvfb (no noVNC/x11vnc/websockify); fixed UID/GID; browser role
-label; read-only-compatible paths; no service/session Secret or volume. Assert
+label; read-only-compatible paths including `/browser-profile-jobs`; no
+service/session Secret or volume. Assert
 the auth image alone retains noVNC and imports the shared exact-hash Patchright
 lock. Assert wrapper has proxy/QUIC/WebRTC controls and no `latest`, downloaded
 browser, channel fallback or direct egress option.
@@ -641,7 +647,9 @@ both are non-root, read-only, cap-drop and PID/CPU/RAM bounded. Require legal UI
 browser-RO and output volume browser-RW/legal-RO. Require both volumes to be
 named local-driver tmpfs with `size=128m` and no durable host path. Auth is
 profile-only and loopback; session volume is named; credential files use fixed
-paths. Deploy builds and starts browser before legal and Agent Worker; catchable
+paths. Require a third browser-only non-persistent profile tmpfs at
+`/browser-profile-jobs`, `size=256m`, UID 10002/GID 11000/mode 0700. Deploy
+builds and starts browser before legal and Agent Worker; catchable
 failure restores the exact prior legal/browser images or stops them when the
 previous release lacks them; retention keeps active+rollback legal/browser/auth
 tags; no broad prune appears.
@@ -672,12 +680,16 @@ volumes:
   scansci-browser-outputs:
     driver: local
     driver_opts: {type: tmpfs, device: tmpfs, o: "size=128m,uid=10002,gid=11000,mode=0750"}
+  scansci-browser-profiles:
+    driver: local
+    driver_opts: {type: tmpfs, device: tmpfs, o: "size=256m,uid=10002,gid=11000,mode=0700"}
 ```
 
 Legal mounts inputs RW and outputs RO; browser mounts inputs RO and outputs RW.
 Both add GID 11000. Browser runs `10002:11000`, read-only, `cap_drop: [ALL]`,
 `security_opt: [no-new-privileges:true]`, `pids_limit: 256`, `mem_limit: 1g`,
-`cpus: 1.0`, and private `/tmp` plus `/dev/shm` tmpfs. It receives only fixed
+`cpus: 1.0`, private `/tmp` plus `/dev/shm` tmpfs, and the browser-only profile
+tmpfs mounted at `/browser-profile-jobs`. It receives only fixed
 proxy/display/job-root environment. Its healthcheck is exactly
 `python -m scansci_legal.browser_worker --healthcheck`; legal depends on that
 health. Keep the

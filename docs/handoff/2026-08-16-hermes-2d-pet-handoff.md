@@ -1,6 +1,6 @@
 # Hermes Research Intelligence CURRENT Handoff
 
-> **CURRENT active-memory，2026-09-01。** 公网 release `2019f8a` 全绿、rollback `9eeb8d5`；Cookie 快照路径已部署，但此前 CARSI `ready` 是 publisher 403 false-positive。Strict browser Task 3A `2756952` 已完成并进入 Task 3B；机构 PDF 未完成，Task 11 阻断，Landing/Hermes 视觉冻结。
+> **CURRENT active-memory，2026-09-01。** 公网 release `2019f8a` 全绿、rollback `9eeb8d5`；Cookie 快照路径已部署，但此前 CARSI `ready` 是 publisher 403 false-positive。Strict browser Tasks 3A/3B `2756952`/`781e830` 已完成并进入 Task 3C；机构 PDF 未完成，Task 11 阻断，Landing/Hermes 视觉冻结。
 
 ## Goal and state
 
@@ -11,7 +11,7 @@
 ## Version tuple
 
 - Worktree: `E:/Miscellaneous/XGS/.worktrees/readable-hermes-guidance`
-- Candidate branch / Task 3A commit / origin main: `codex/scansci-browser-institutional-gate` / `2756952` / `2019f8a2d9dcd7d5241de231ae95e2aedf238f47`
+- Candidate branch / Task 3B commit / origin main: `codex/scansci-browser-institutional-gate` / `781e830` / `2019f8a2d9dcd7d5241de231ae95e2aedf238f47`
 - Production application source / immutable release: `2019f8a2d9dcd7d5241de231ae95e2aedf238f47`
 - Rollback: `9eeb8d51baf16b212a7a4f5dd7db25131aa725a6`; core/search migrations `33/33` / `2/2`
 - 本地 `main` 与其他 worktree 有用户改动，不得触碰或用它推断生产；上述 tuple 已从 ECS 重新实测。
@@ -56,7 +56,7 @@
 24. 真实诊断证明 pinned ScanSci `Session.trust_env=False` 且只认 `SCANSCI_PDF_PROXY`/`network_proxy`；reviewed `05111e7` 仅把已严格校验的固定 Squid URL 同步到专用变量。PR #17 / exact CI `33397550370` 合并为 main `abd38d3`；ECS schema-v3 16-case Parser acceptance、core/search `33/33`/`2/2`、BGE CPU、ScanSci source/topology/policy/token/session、Worker 与真实 24,671,920-byte arXiv OA PDF canary 全绿，active/public 已 CAS 到 `abd38d3`，rollback `6893318`。
 25. `cca5908` tunnel 的 RFB 失败根因是 auth 容器继承 `RLIMIT_NOFILE=1073741816`，触发 LibVNCServer 巨大 fd-limit 扫描。`396b301` 固定 nofile `4096/4096` 并纳入 verifier；PR #25 / exact CI `33447387815`、job `99669426363` 合并为 `36033ae`，ECS exact Parser/BGE/ScanSci/OA/application/public/retention 与真实 auth nofile/HTTP/RFB/network/PID gates 全绿，active/rollback `36033ae` / `cca5908`。
 26. `aff435a`/`860b2b0`/`b1d6662` 关闭 tunnel PID-reuse、十次 bounded window 与 auth child TERM 生命周期；PR #26 exact CI `33452984344` / job `99686782627` 合并为 `9eeb8d5`。ECS corpus 目录误设 `0700` 曾使 Worker `EACCES` fail-closed；root-owned `0555/0444` staging 后 Parser acceptance 和完整部署全绿，active/rollback `9eeb8d5` / `36033ae`，临时 eval/诊断对象清零。
-27. PR #28 / CI `33461988607` 合并并 canonical 部署 `2019f8a`，快照 `cache_dir` 已正确；生产取证证明 pinned 登录把 publisher 403 当成功且 `try_carsi` 要求缺失 browser runtime。Task 3A `2756952` 已闭合 job/DOI proof binding、pinned dirfd、所有权 cleanup 与 Cookie 原子故障，ScanSci 109/109 green（7 Linux/ECS skips），安全/架构复审 READY。
+27. PR #28 / CI `33461988607` 合并并 canonical 部署 `2019f8a`，快照 `cache_dir` 已正确；生产取证证明 pinned 登录把 publisher 403 当成功且 `try_carsi` 要求缺失 browser runtime。Tasks 3A/3B `2756952`/`781e830` 已闭合 owner-separated job/failure protocol、无 fallback Patchright、上游指纹、CDP 有界流、exact output proof、180/210s 预算、进程组/心跳/stale/profile 卫生；ScanSci 135 pass（11 platform skips），安全/架构复审 READY。
 
 ## Constraints
 
@@ -66,7 +66,7 @@
 
 ## Next action
 
-1. 按 `cf114e7` 计划从 Task 3B 继续 TDD 实现严格 Patchright adapter/browser worker，再做 proof-backed session、独立 browser image/topology 与 release gates。
+1. 按 `cf114e7` 计划从 Task 3C 继续 TDD 接通 `BrowserJobClient`、proof-backed session/ready，再做独立 browser image/topology 与 release gates。
 2. PR/exact CI/merged-SHA canonical 部署后，只有 HTTP+RFB gate 通过才给 operator 登录入口；固定非 OA canary 必须返回 institutional `%PDF-` 才发布 ready。
 3. 用真实 OA + institutional PDF 完成四入口/375px/one-use/72h/600s/zero-grey-Tor 与精确磁盘卫生，再关闭 Task 10。
 

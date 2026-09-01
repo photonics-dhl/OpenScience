@@ -4,17 +4,17 @@
 
 ## Current version tuple
 
-- Candidate branch / Task 3A commit / origin main: `codex/scansci-browser-institutional-gate` / `2756952` / `2019f8a`。
+- Candidate branch / Task 3B commit / origin main: `codex/scansci-browser-institutional-gate` / `781e830` / `2019f8a`。
 - Production application source / immutable release: `2019f8a2d9dcd7d5241de231ae95e2aedf238f47`。
 - Production rollback: `9eeb8d51baf16b212a7a4f5dd7db25131aa725a6`；core/search migrations `33/33` / `2/2`。
-- Taskmaster `hermes-research-intelligence` 仍为 9/12；strict browser spec 已批准、TDD 实施启动，ScanSci ECS acceptance Step 5/6 与 Task 11 继续阻断到真实机构 PDF 通过。
+- Taskmaster `hermes-research-intelligence` 仍为 9/12；strict browser Tasks 3A/3B 已完成，现进入 proof-backed session Task 3C；ScanSci ECS acceptance Step 5/6 与 Task 11 继续阻断到真实机构 PDF 通过。
 
 ## 2026-09-01 — Snapshot fix deployed; CARSI false-positive isolated
 
 - PR #28 exact CI `33461988607` / job `99713876656` 合并为 `2019f8a`。ECS schema-v3 Parser、BGE CPU、core/search `33/33`/`2/2`、ScanSci OA、API/Web/Worker/Nginx/public CAS/retention 全绿；active/rollback `2019f8a` / `9eeb8d5`，journal/failed absent，磁盘 50G/148G、92G available。
 - 请求快照现真实满足 `cache_dir == snapshot`，但安全诊断仍为 Cookie 1 个/JSON 5 records、state `auth_required` generation 16、persistent/snapshot load 均 0。Requests、CPU Chromium、ECS direct 与本机 7890 tunnel 对同一 ScienceDirect article/PDF 均为 403、无 SSO redirect、无 PDF magic。
 - Pinned 1.11.0 只凭 publisher URL 或 Cookie 数量即可把 403 误报登录成功；其 `try_carsi` 实际是浏览器源，而生产 legal image 无 Chromium/Patchright/Xvfb。故此前 `ready` 与 helper 自动退出不是机构下载完成证据，Step 5 已诚实重开。
-- Strict browser Task 3A `2756952` 已完成：job/DOI-bound proof envelope、POSIX pinned dirfd/O_NOFOLLOW、相反所有权 ack、独立 cleanup deadline、Cookie 原子故障零残留与 stable recursion failure。RED→GREEN 后 ScanSci `109 pass / 7 skip / 0 fail`；安全/架构两轮复审关闭 4 个 Important 并 READY。Linux-only parent-symlink 用例留 CI/ECS，Task 3B 及后续仍 pending。
+- Strict browser Tasks 3A/3B `2756952` / `781e830` 已完成：job/DOI-bound proof 与 browser failure 终态、pinned dirfd、严格单次 Patchright、上游 AST/signature guard、CDP 1 MiB 流式捕获（100 MiB/响应、8 候选/150 MiB/job）、ScanSci exact-output 唯一绑定、180s worker/210s client、进程组回收、心跳、运行中 stale cleanup 与 pinned profile workspace。RED→GREEN 后 ScanSci `135 pass / 11 platform skip / 0 fail`；安全/架构多轮 Important 全闭合并 READY。Task 3C 及 ECS Linux/runtime 验收 pending。
 
 ## 2026-08-31 — ScanSci Task 10 controlled-egress production retry
 

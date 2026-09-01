@@ -92,10 +92,18 @@ Add one release-scoped internal worker image containing CPU Chromium,
 Patchright, private Xvfb and the fail-closed Chromium proxy wrapper. It runs as
 a different fixed non-root UID from `scansci-legal`, with a read-only root,
 dropped capabilities, `no-new-privileges`, one CPU, 1 GiB RAM, 256 PIDs and
-bounded `/tmp`/`/dev/shm`. It has no noVNC, x11vnc, Websockify, host port,
+bounded `/tmp`/`/dev/shm` plus a 256 MiB non-persistent profile-workspace
+tmpfs mounted at `/browser-profile-jobs`. It has no noVNC, x11vnc, Websockify, host port,
 service token, persistent Cookie/session mount, database/Redis/object-storage
 Secret, Docker socket, host mount, app/data/auth network or persistent browser
 profile.
+
+The controller creates `/browser-profile-jobs/<job-id>` before spawning the
+job, pins its owner/device/inode, and passes that exact empty workspace to the
+child. Only after the complete process group is confirmed absent may it restore
+safe modes and remove the pinned workspace. Identity drift or cleanup failure
+withdraws worker health and stops scheduling; the workspace tmpfs is never a
+persistent browser profile.
 
 The worker mounts only browser-job inputs read-only and browser-job outputs
 read-write. Both are size-bounded named tmpfs volumes; separate fixed UIDs and
@@ -116,6 +124,11 @@ launch call shape, then replaces the `_visible_browser` launch point used by
 proxy, display and ephemeral profile. No channel or bundled-browser fallback is
 allowed. Wrapper failure, missing executable, source drift or first-launch
 failure is final and leaves `auth_required`; a second browser path must not run.
+Eligible publisher PDF responses are intercepted through Chromium CDP and read
+sequentially in bounded chunks. A response is capped at 100 MiB; one job may
+observe at most eight candidates and 150 MiB of candidate PDF bytes in total.
+Only metadata is retained after each response, and the single candidate whose
+length/SHA-256 matches pinned ScanSci's exact successful output may become proof.
 
 ### 3.3 Authentication helper
 
@@ -166,6 +179,13 @@ Cloudflare challenge failure, setup/launcher error or invalid PDF publishes
 the helper at any time. The retry loop does not log browser output, credentials,
 Cookie values, SAML/OAuth URLs or publisher response bodies, and it is bounded
 rather than a permanent background browser.
+
+The browser process keeps that full 180-second execution window. The legal-side
+job client waits 210 seconds overall, reserving 30 seconds for process-group
+termination, terminal publication, polling and acknowledgement cleanup. The
+controller snapshots job ID and identifier before spawn, so terminal failure
+publication never depends on an input directory that a timed-out client may
+already have removed.
 
 ### 3.4 Secret and session storage
 
