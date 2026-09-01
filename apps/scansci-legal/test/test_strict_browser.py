@@ -16,10 +16,13 @@ import sys
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
 from scansci_legal.browser_protocol import BrowserProof
+from scansci_legal import source_guard
 from scansci_legal.strict_browser import (
     _ACTIVE_CAPTURE,
     BrowserPolicyError,
     _BrowserPdfCapture,
+    PINNED_CARSI_DOWNLOAD_AST_SHA256,
+    PINNED_VISIBLE_BROWSER_AST_SHA256,
     capture_institutional_pdf,
     install_strict_scansci_browser,
     launch_strict_patchright,
@@ -274,6 +277,16 @@ def _download_via_cloakbrowser(self, doi: str, article_url: str, output_path: ob
         )
         self.assertIsNot(publisher._visible_browser, next(iter(sources)))
 
+    def test_default_pins_match_the_immutable_scansci_1_11_0_archive(self):
+        self.assertEqual(
+            PINNED_VISIBLE_BROWSER_AST_SHA256,
+            "55b0be288828dc9f737626665ccccb8a688720888db255251c6f146279e42cbe",
+        )
+        self.assertEqual(
+            PINNED_CARSI_DOWNLOAD_AST_SHA256,
+            "94ca4b7d31c0f6def78c611dcaae445610dfd94423c82cc78f8ed5818f193fc0",
+        )
+
     def test_source_or_call_shape_drift_fails_before_install(self):
         publisher, carsi, sources = self._modules()
         old_visible = publisher._visible_browser
@@ -289,6 +302,28 @@ def _download_via_cloakbrowser(self, doi: str, article_url: str, output_path: ob
                 expected_carsi_digest=self._digest(self.CARSI_SOURCE),
             )
         self.assertIs(publisher._visible_browser, old_visible)
+
+    def test_one_shot_guard_restores_the_upstream_module_after_verification(self):
+        upstream = types.ModuleType("scansci_pdf")
+        sources = types.ModuleType("scansci_pdf.sources")
+        original = object()
+        publisher = types.SimpleNamespace(_visible_browser=original)
+        carsi = object()
+        upstream.publisher_strategies = publisher
+        sources.carsi = carsi
+
+        def install(target, candidate):
+            self.assertIs(target, publisher)
+            self.assertIs(candidate, carsi)
+            target._visible_browser = source_guard._strict_scansci_visible_browser
+
+        with mock.patch.dict(sys.modules, {
+            "scansci_pdf": upstream,
+            "scansci_pdf.sources": sources,
+        }), mock.patch.object(source_guard, "install_strict_scansci_browser", install):
+            source_guard.verify_pinned_source_adapter()
+
+        self.assertIs(publisher._visible_browser, original)
 
 
 class BrowserResponseProofTest(unittest.TestCase):

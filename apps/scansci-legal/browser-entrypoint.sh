@@ -3,6 +3,8 @@
 set -euo pipefail
 umask 077
 
+python -m scansci_legal.source_guard >/dev/null
+
 export DISPLAY=":99"
 xvfb_pid=""
 

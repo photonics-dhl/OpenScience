@@ -7,7 +7,9 @@ import { join } from 'node:path';
 import test from 'node:test';
 
 import {
-  formatRuntimeStatuses, verifyBrowserFirewallRules, verifyRootOwnedSecretMetadata, verifyScanSciRuntime,
+  cleanupAuthSourceAdapterResidues, formatRuntimeStatuses, probeAuthImageSourceAdapter,
+  probeBrowserSourceAdapter, verifyBrowserFirewallRules,
+  verifyRootOwnedSecretMetadata, verifyScanSciRuntime,
 } from './verify-scansci-runtime.mjs';
 import * as runtimeVerifier from './verify-scansci-runtime.mjs';
 
@@ -186,6 +188,8 @@ async function fixture() {
       'python -m scansci_legal.browser_worker',
     ].join('\n'),
     browserPids: 4,
+    browserAdapterStatus: 'STRICT_BROWSER_ADAPTER_OK',
+    authAdapterStatus: 'STRICT_BROWSER_ADAPTER_OK',
     expectedLegalImageId: container.Image,
     expectedBrowserImageId: browserImage.Id,
     expectedAuthImageId: authImage.Id,
@@ -229,6 +233,122 @@ test('browser firewall verifier accepts only the exact /32 allow before the /24 
   }
 });
 
+test('source-adapter probes require exact browser and networkless auth contracts', () => {
+  const calls = [];
+  let authName;
+  const runner = (command, args, options) => {
+    calls.push({ command, args, options });
+    if (args[0] === 'ps' && args.includes('label=org.openscience.scansci.guard=auth-source-adapter')) return '';
+    if (args[0] === 'ps') return 'c'.repeat(64);
+    if (args[0] === 'create') {
+      authName = args[2];
+      return 'c'.repeat(64);
+    }
+    if (args[0] === 'start' || args[0] === 'exec') return 'STRICT_BROWSER_ADAPTER_OK';
+    if (args[0] === 'inspect') return JSON.stringify([{
+      Id: 'c'.repeat(64), Image: `sha256:${'b'.repeat(64)}`, Name: `/${authName}`,
+      Created: new Date(0).toISOString(),
+      Config: { Labels: {
+        'org.openscience.scansci.guard': 'auth-source-adapter',
+        'org.openscience.scansci.guard-image': `sha256:${'b'.repeat(64)}`,
+      } },
+    }]);
+    if (args[0] === 'rm') return '';
+    throw new Error('unexpected command');
+  };
+  const browserId = 'a'.repeat(12);
+  const authImageId = `sha256:${'b'.repeat(64)}`;
+
+  assert.equal(probeBrowserSourceAdapter(browserId, runner), 'STRICT_BROWSER_ADAPTER_OK');
+  assert.equal(probeAuthImageSourceAdapter(authImageId, runner), 'STRICT_BROWSER_ADAPTER_OK');
+  assert.deepEqual(calls[0].args, [
+    'exec', browserId, 'python', '-m', 'scansci_legal.source_guard',
+  ]);
+  const createCall = calls.find((call) => call.args[0] === 'create');
+  const startCall = calls.find((call) => call.args[0] === 'start');
+  const removeCall = calls.find((call) => call.args[0] === 'rm');
+  assert.ok(createCall);
+  assert.ok(startCall);
+  assert.ok(removeCall);
+  authName = createCall.args[2];
+  assert.match(authName, /^openscience-scansci-auth-guard-\d+-\d+$/u);
+  assert.deepEqual(createCall.args, [
+    'create', '--name', authName,
+    '--label', 'org.openscience.scansci.guard=auth-source-adapter',
+    '--label', `org.openscience.scansci.guard-image=${authImageId}`,
+    '--network', 'none', '--read-only',
+    '--cap-drop', 'ALL', '--security-opt', 'no-new-privileges:true',
+    '--pids-limit', '32', '--memory', '128m', '--cpus', '0.25',
+    '--tmpfs', '/tmp:size=16m,noexec,nosuid,nodev,uid=10001,gid=10001,mode=0700',
+    '--tmpfs', '/session:size=16m,noexec,nosuid,nodev,uid=10001,gid=10001,mode=0700',
+    '--user', '10001:10001', '--entrypoint', 'python', authImageId,
+    '-m', 'scansci_legal.source_guard',
+  ]);
+  assert.deepEqual(startCall.args, ['start', '--attach', authName]);
+  assert.deepEqual(removeCall.args, ['rm', '--force', '--volumes', 'c'.repeat(64)]);
+  assert.throws(
+    () => probeBrowserSourceAdapter(browserId, () => 'STRICT_BROWSER_ADAPTER_SKIPPED'),
+    /failed/u,
+  );
+});
+
+test('auth source-adapter probe recovers a daemon-created container after create timeout', () => {
+  const calls = [];
+  const imageId = `sha256:${'e'.repeat(64)}`;
+  const containerId = 'd'.repeat(64);
+  let authName;
+  const runner = (command, args) => {
+    calls.push({ command, args });
+    if (args[0] === 'ps' && args.includes('label=org.openscience.scansci.guard=auth-source-adapter')) return '';
+    if (args[0] === 'create') {
+      authName = args[2];
+      throw new Error('simulated create timeout');
+    }
+    if (args[0] === 'ps') return containerId;
+    if (args[0] === 'inspect') return JSON.stringify([{
+      Id: containerId, Image: imageId, Name: `/${authName}`,
+      Created: new Date(0).toISOString(),
+      Config: { Labels: {
+        'org.openscience.scansci.guard': 'auth-source-adapter',
+        'org.openscience.scansci.guard-image': imageId,
+      } },
+    }]);
+    if (args[0] === 'rm') return '';
+    throw new Error('unexpected command');
+  };
+
+  assert.throws(
+    () => probeAuthImageSourceAdapter(imageId, runner),
+    /simulated create timeout/u,
+  );
+  assert.deepEqual(calls.at(-1).args, ['rm', '--force', '--volumes', containerId]);
+});
+
+test('auth source-adapter preflight removes stale exact labelled residues across candidate images', () => {
+  const imageId = `sha256:${'f'.repeat(64)}`;
+  const containerId = 'a'.repeat(64);
+  const created = Date.UTC(2026, 0, 1);
+  const calls = [];
+  const runner = (command, args) => {
+    calls.push({ command, args });
+    if (args[0] === 'ps') return containerId;
+    if (args[0] === 'inspect') return JSON.stringify([{
+      Id: containerId, Image: imageId,
+      Name: '/openscience-scansci-auth-guard-123-456',
+      Created: new Date(created).toISOString(),
+      Config: { Labels: {
+        'org.openscience.scansci.guard': 'auth-source-adapter',
+        'org.openscience.scansci.guard-image': imageId,
+      } },
+    }]);
+    if (args[0] === 'rm') return '';
+    throw new Error('unexpected command');
+  };
+
+  cleanupAuthSourceAdapterResidues(runner, created + 60_000);
+  assert.deepEqual(calls.at(-1).args, ['rm', '--force', '--volumes', containerId]);
+});
+
 test('runtime verifier validates immutable source, bounded topology, Secret and persistent session without exposing values', async (t) => {
   const f = await fixture();
   t.after(async () => rm(f.releaseRoot, { recursive: true, force: true }));
@@ -252,6 +372,7 @@ test('runtime verifier validates immutable source, bounded topology, Secret and 
   assert.match(output, /SCANSCI_RUNTIME_SOURCE_OK/u);
   assert.match(output, /SCANSCI_RUNTIME_TOPOLOGY_OK/u);
   assert.match(output, /SCANSCI_RUNTIME_POLICY_OK/u);
+  assert.match(output, /SCANSCI_RUNTIME_ADAPTER_OK/u);
   assert.match(output, /SCANSCI_RUNTIME_FILE_LIMIT_OK/u);
   assert.match(output, /SCANSCI_RUNTIME_TOKEN_OK/u);
   assert.match(output, /SCANSCI_RUNTIME_SESSION_READY/u);
@@ -292,6 +413,8 @@ test('runtime verifier rejects browser identity, isolation, mount and process dr
     (input) => { input.browserEgressProbe.hostSsh = 'connected'; },
     (input) => { input.browserEgressProbe.legalPeer = 'connected'; },
     (input) => { input.browserEgressProbe.firewall = 'missing'; },
+    (input) => { input.browserAdapterStatus = 'strict_adapter_skipped'; },
+    (input) => { input.authAdapterStatus = 'strict_adapter_skipped'; },
     (input) => { input.browserVolumes[0].Options.o = 'size=512m,uid=10001,gid=11000,mode=0750'; },
     (input) => { input.browserProcessList = input.browserProcessList.replace('Xvfb :99', 'Xvfb :100'); },
     (input) => { input.browserProcessList += '\nwebsockify 0.0.0.0:6080'; },

@@ -32,6 +32,7 @@ RUN apt-get update \
     && ln -s /usr/local/bin/scansci-chromium /opt/google/chrome/chrome
 COPY --from=python-dependencies /opt/scansci-venv /opt/scansci-venv
 COPY --chown=10001:10001 src /opt/scansci/src
+RUN python -m scansci_legal.source_guard
 COPY --chmod=0555 chromium-container-wrapper.sh /usr/local/bin/scansci-chromium
 COPY --chmod=0555 auth-entrypoint.sh /usr/local/bin/scansci-auth-entrypoint
 

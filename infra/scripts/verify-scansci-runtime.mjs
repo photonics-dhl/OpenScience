@@ -12,6 +12,10 @@ const AUTH_PID_LIMIT = 256;
 const AUTH_PID_HEADROOM = 32;
 const BROWSER_PID_LIMIT = 256;
 const BROWSER_PID_HEADROOM = 32;
+const AUTH_GUARD_LABEL = 'org.openscience.scansci.guard';
+const AUTH_GUARD_LABEL_VALUE = 'auth-source-adapter';
+const AUTH_GUARD_IMAGE_LABEL = 'org.openscience.scansci.guard-image';
+const AUTH_GUARD_STALE_MS = 60_000;
 const LABELS = {
   source: 'org.openscience.source',
   archive: 'org.openscience.scansci.archive-sha256',
@@ -118,6 +122,8 @@ export async function verifyScanSciRuntime({
   browserProcessList,
   browserPids,
   browserEgressProbe,
+  browserAdapterStatus,
+  authAdapterStatus,
   authImage,
   authContainerIds,
   authContainers = [],
@@ -329,6 +335,8 @@ export async function verifyScanSciRuntime({
     || !/Xvfb :99 .* -nolisten tcp/u.test(browserProcessList)
     || !/python -m scansci_legal\.browser_worker/u.test(browserProcessList)
     || /(?:novnc|x11vnc|websockify|auth_login|:6080|:5900)/iu.test(browserProcessList)
+    || browserAdapterStatus !== 'STRICT_BROWSER_ADAPTER_OK'
+    || authAdapterStatus !== 'STRICT_BROWSER_ADAPTER_OK'
     || JSON.stringify(browserEgressProbe) !== JSON.stringify({
       proxyAddress: '172.26.0.1', proxyPeer: '172.26.0.1:7891',
       allowStatus: 204, privateStatus: 403, httpStatus: 403, non443Status: 403,
@@ -457,6 +465,7 @@ export async function verifyScanSciRuntime({
     source: true,
     topology: true,
     policy: true,
+    adapter: true,
     fileLimit: true,
     token: true,
     session: sessionStatus,
@@ -470,6 +479,7 @@ export function formatRuntimeStatuses(report) {
     'SCANSCI_RUNTIME_SOURCE_OK',
     'SCANSCI_RUNTIME_TOPOLOGY_OK',
     'SCANSCI_RUNTIME_POLICY_OK',
+    'SCANSCI_RUNTIME_ADAPTER_OK',
     'SCANSCI_RUNTIME_FILE_LIMIT_OK',
     'SCANSCI_RUNTIME_TOKEN_OK',
     `SCANSCI_RUNTIME_SESSION_${session}`,
@@ -580,6 +590,98 @@ export function probeBrowserRuntimeProcesses(containerId, runner = run) {
   return { browserProcessList, browserPids };
 }
 
+export function probeBrowserSourceAdapter(containerId, runner = run) {
+  if (!/^[a-f0-9]{6,64}$/u.test(containerId)) fail();
+  const status = runner('docker', [
+    'exec', containerId, 'python', '-m', 'scansci_legal.source_guard',
+  ], { maxBuffer: 4096, timeout: 10_000 });
+  if (status !== 'STRICT_BROWSER_ADAPTER_OK') fail();
+  return status;
+}
+
+function guardContainerIds(output) {
+  const ids = output.split(/\r?\n/u).filter(Boolean);
+  if (new Set(ids).size !== ids.length || ids.some((id) => !/^[a-f0-9]{12,64}$/u.test(id))) fail();
+  return ids;
+}
+
+function inspectAuthGuard(containerId, expectedImageId, runner) {
+  let values;
+  try {
+    values = JSON.parse(runner('docker', ['inspect', containerId], { maxBuffer: 64 * 1024 }));
+  } catch {
+    fail();
+  }
+  if (!Array.isArray(values) || values.length !== 1) fail();
+  const value = values[0];
+  const labels = value?.Config?.Labels ?? {};
+  if (typeof value?.Id !== 'string' || !value.Id.startsWith(containerId)
+    || !IMAGE_PATTERN.test(value.Image)
+    || expectedImageId !== undefined && value.Image !== expectedImageId
+    || !/^\/openscience-scansci-auth-guard-\d+-\d+$/u.test(value.Name)
+    || labels[AUTH_GUARD_LABEL] !== AUTH_GUARD_LABEL_VALUE
+    || labels[AUTH_GUARD_IMAGE_LABEL] !== value.Image) fail();
+  return value;
+}
+
+function removeAuthGuard(containerId, imageId, runner, expectedName) {
+  const value = inspectAuthGuard(containerId, imageId, runner);
+  if (expectedName !== undefined && value.Name !== `/${expectedName}`) fail();
+  runner('docker', [
+    'rm', '--force', '--volumes', value.Id,
+  ], { maxBuffer: 4096, timeout: 10_000 });
+}
+
+export function cleanupAuthSourceAdapterResidues(runner = run, now = Date.now()) {
+  if (!Number.isSafeInteger(now) || now <= 0) fail();
+  const ids = guardContainerIds(runner('docker', [
+    'ps', '--all', '--quiet',
+    '--filter', `label=${AUTH_GUARD_LABEL}=${AUTH_GUARD_LABEL_VALUE}`,
+  ], { maxBuffer: 4096, timeout: 10_000 }));
+  for (const containerId of ids) {
+    const value = inspectAuthGuard(containerId, undefined, runner);
+    const createdAt = Date.parse(value.Created);
+    if (!Number.isFinite(createdAt) || createdAt > now || now - createdAt < AUTH_GUARD_STALE_MS) fail();
+    removeAuthGuard(containerId, value.Image, runner);
+  }
+}
+
+function cleanupExactAuthGuard(name, imageId, runner) {
+  const ids = guardContainerIds(runner('docker', [
+    'ps', '--all', '--quiet', '--filter', `name=^/${name}$`,
+  ], { maxBuffer: 4096, timeout: 10_000 }));
+  if (ids.length > 1) fail();
+  if (ids.length === 1) removeAuthGuard(ids[0], imageId, runner, name);
+}
+
+export function probeAuthImageSourceAdapter(imageId, runner = run) {
+  if (!IMAGE_PATTERN.test(imageId)) fail();
+  cleanupAuthSourceAdapterResidues(runner);
+  const name = `openscience-scansci-auth-guard-${process.pid}-${Date.now()}`;
+  try {
+    const containerId = runner('docker', [
+      'create', '--name', name,
+      '--label', `${AUTH_GUARD_LABEL}=${AUTH_GUARD_LABEL_VALUE}`,
+      '--label', `${AUTH_GUARD_IMAGE_LABEL}=${imageId}`,
+      '--network', 'none', '--read-only',
+      '--cap-drop', 'ALL', '--security-opt', 'no-new-privileges:true',
+      '--pids-limit', '32', '--memory', '128m', '--cpus', '0.25',
+      '--tmpfs', '/tmp:size=16m,noexec,nosuid,nodev,uid=10001,gid=10001,mode=0700',
+      '--tmpfs', '/session:size=16m,noexec,nosuid,nodev,uid=10001,gid=10001,mode=0700',
+      '--user', '10001:10001', '--entrypoint', 'python', imageId,
+      '-m', 'scansci_legal.source_guard',
+    ], { maxBuffer: 4096, timeout: 30_000 });
+    if (!/^[a-f0-9]{12,64}$/u.test(containerId)) fail();
+    const status = runner('docker', [
+      'start', '--attach', name,
+    ], { maxBuffer: 4096, timeout: 30_000 });
+    if (status !== 'STRICT_BROWSER_ADAPTER_OK') fail();
+    return status;
+  } finally {
+    cleanupExactAuthGuard(name, imageId, runner);
+  }
+}
+
 export function probeSourceFileLimit(containerId, runner = run) {
   if (!/^[a-f0-9]{6,64}$/u.test(containerId)) fail();
   const input = JSON.stringify({ probe: 'file-limit', output_dir: '/tmp' });
@@ -646,6 +748,8 @@ async function main() {
   if (!/^[a-f0-9]{12,64}$/u.test(containerId) || !/^[a-f0-9]{12,64}$/u.test(browserId)) fail();
   const expectedIdentity = await resolveRuntimeImageIdentity(options);
   const { browserProcessList, browserPids } = probeBrowserRuntimeProcesses(browserId);
+  const browserAdapterStatus = probeBrowserSourceAdapter(browserId);
+  const authAdapterStatus = probeAuthImageSourceAdapter(expectedIdentity.authImageId);
   const authIds = compose(['--profile', 'scansci-auth', 'ps', '-aq', 'scansci-auth']).split(/\r?\n/u).filter(Boolean);
   const workerId = requireWorker === '1' ? compose(['ps', '-q', 'agent-worker']) : '';
   if (requireWorker === '1' && !/^[a-f0-9]{12,64}$/u.test(workerId)) fail();
@@ -823,7 +927,7 @@ async function main() {
   const report = await verifyScanSciRuntime({
     releaseRoot, releaseSha, composeFile, serviceTokenPath, container, image,
     browserContainer, browserImage, browserVolumes, browserNetwork, browserProcessList, browserPids,
-    browserEgressProbe, authImage,
+    browserEgressProbe, browserAdapterStatus, authAdapterStatus, authImage,
     authContainerIds: authIds, sessionStatus, sourceFileLimitMetadata, retrievalNetwork, controlledEgressProbe,
     requireOaCanary: requireOaCanary === '1', oaCanaryResult,
     runtimeSecretMetadata, runtimeSecretSha256,
