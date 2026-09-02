@@ -213,8 +213,8 @@ export function registerAuthRoutes(app: FastifyInstance, deps: AuthRouteDeps): v
   app.post('/institution-email/request', async (req, reply) => {
     const userId = await currentUserId(req, reply, deps);
     if (!userId) return;
-    await requestInstitutionEmailCode(academicIdentityDeps(deps), userId, institutionEmailBody.parse(req.body), auditCtx(req));
-    return reply.status(202).send({ ok: true });
+    const result = await requestInstitutionEmailCode(academicIdentityDeps(deps), userId, institutionEmailBody.parse(req.body), auditCtx(req));
+    return reply.status(202).send({ ok: true, ...result });
   });
 
   app.post('/institution-email/verify', async (req, reply) => {

@@ -18,6 +18,7 @@ function makeDeps() {
   const credentials: Array<Record<string, any>> = [];
   const challenges: Array<Record<string, any>> = [];
   const roles: Array<Record<string, any>> = [];
+  const organizations: Array<Record<string, any>> = [];
   const prisma: any = {
     user: { findUnique: async () => ({ status: 'email_verified' }) },
     identityCredential: {
@@ -35,6 +36,12 @@ function makeDeps() {
     },
     scopedRoleAssignment: {
       findMany: async ({ where }: any) => roles.filter((row) => row.userId === where.userId && row.status === 'active'),
+    },
+    researchOrganization: {
+      findMany: async ({ where, take }: any) => organizations
+        .filter((row) => row.status === where.status && row.domains.includes(where.domains.has))
+        .sort((left, right) => left.name.localeCompare(right.name)).slice(0, take),
+      findUnique: async ({ where }: any) => organizations.find((row) => row.id === where.id) ?? null,
     },
     institutionEmailChallenge: {
       findFirst: async ({ where }: any) => challenges.filter((row) => row.userId === where.userId && row.consumedAt === null && (!where.email || row.email === where.email)).at(-1) ?? null,
@@ -64,7 +71,7 @@ function makeDeps() {
     institutionEmailDomains: ['zju.edu.cn'],
     now: () => NOW,
   } as unknown as AcademicIdentityDeps;
-  return { deps, redisStore, sent, credentials, challenges, roles };
+  return { deps, redisStore, sent, credentials, challenges, roles, organizations };
 }
 
 describe('academic identity credentials', () => {
@@ -93,6 +100,32 @@ describe('academic identity credentials', () => {
     const code = sent[0].text.match(/(\d{6})/)![1];
     await verifyInstitutionEmail(deps, 'user-1', { email: 'researcher@zju.edu.cn', code });
     expect(credentials).toContainEqual(expect.objectContaining({ userId: 'user-1', type: 'institution_email', externalId: 'researcher@zju.edu.cn' }));
+  });
+
+  it('matches a departmental email to an active ROR organization and preserves its identifier', async () => {
+    const { deps, sent, credentials, organizations } = makeDeps();
+    organizations.push({
+      id: 'org-1', rorId: 'https://ror.org/00a2j5x94', name: 'Example University',
+      status: 'active', domains: ['example.edu'],
+    });
+    const requested = await requestInstitutionEmailCode(deps, 'user-1', { email: 'researcher@physics.example.edu' });
+    expect(requested.organization).toMatchObject({ rorId: 'https://ror.org/00a2j5x94', name: 'Example University', domain: 'example.edu', source: 'ror' });
+    const code = sent[0].text.match(/(\d{6})/)![1];
+    await verifyInstitutionEmail(deps, 'user-1', { email: 'researcher@physics.example.edu', code });
+    expect(credentials).toContainEqual(expect.objectContaining({
+      researchOrganizationId: 'org-1', source: 'ror_institution_email',
+      metadata: expect.objectContaining({ rorId: 'https://ror.org/00a2j5x94' }),
+    }));
+  });
+
+  it('fails closed when one domain maps to multiple active ROR records', async () => {
+    const { deps, organizations } = makeDeps();
+    organizations.push(
+      { id: 'org-1', rorId: 'https://ror.org/00a2j5x94', name: 'Institute A', status: 'active', domains: ['shared.edu'] },
+      { id: 'org-2', rorId: 'https://ror.org/00tjv0s33', name: 'Institute B', status: 'active', domains: ['shared.edu'] },
+    );
+    await expect(requestInstitutionEmailCode(deps, 'user-1', { email: 'person@shared.edu' }))
+      .rejects.toMatchObject({ code: 'INSTITUTION_DOMAIN_NOT_ALLOWED' });
   });
 
   it('returns multiple independent scope assignments for one user', async () => {

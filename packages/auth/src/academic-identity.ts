@@ -64,8 +64,38 @@ function emailDomain(email: string): string {
   return email.trim().toLowerCase().split('@')[1] ?? '';
 }
 
-function isAllowedInstitutionDomain(domain: string, allowed: string[]): boolean {
-  return normalizedDomains(allowed).some((candidate) => domain === candidate || domain.endsWith(`.${candidate}`));
+function domainCandidates(domain: string): string[] {
+  if (!/^(?=.{1,253}$)(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/.test(domain)) return [];
+  const labels = domain.split('.');
+  return labels.slice(0, -1).map((_, index) => labels.slice(index).join('.'));
+}
+
+export interface InstitutionMatch {
+  id: string | null;
+  rorId: string | null;
+  name: string;
+  domain: string;
+  source: 'ror' | 'configured_override';
+}
+
+export async function resolveInstitutionDomain(
+  deps: Pick<AcademicIdentityDeps, 'prisma' | 'institutionEmailDomains'>,
+  domain: string,
+): Promise<InstitutionMatch | null> {
+  const candidates = domainCandidates(domain);
+  for (const candidate of candidates) {
+    const organizations = await deps.prisma.researchOrganization.findMany({
+      where: { status: 'active', domains: { has: candidate } },
+      orderBy: { name: 'asc' },
+      take: 2,
+      select: { id: true, rorId: true, name: true },
+    });
+    if (organizations.length === 1) return { ...organizations[0], domain: candidate, source: 'ror' };
+    if (organizations.length > 1) return null;
+  }
+  const override = normalizedDomains(deps.institutionEmailDomains)
+    .find((candidate) => domain === candidate || domain.endsWith(`.${candidate}`));
+  return override ? { id: null, rorId: null, name: override, domain: override, source: 'configured_override' } : null;
 }
 
 function orcidConfigured(config: OrcidConfig): boolean {
@@ -124,7 +154,7 @@ export async function getAcademicIdentityStatus(
     scopedRoles: roles.map((role) => ({ ...role, expiresAt: role.expiresAt?.toISOString() ?? null })),
     capabilities: {
       orcid: orcidConfigured(deps.orcid),
-      institutionEmail: normalizedDomains(deps.institutionEmailDomains).length > 0,
+      institutionEmail: true,
     },
   };
 }
@@ -211,17 +241,20 @@ export async function requestInstitutionEmailCode(
   userId: string,
   input: { email: string },
   ctx: AuditContext = {},
-): Promise<void> {
+): Promise<{ organization: Omit<InstitutionMatch, 'id'> }> {
   const email = input.email.trim().toLowerCase();
   const domain = emailDomain(email);
-  if (!domain || !isAllowedInstitutionDomain(domain, deps.institutionEmailDomains)) {
+  const institution = domain ? await resolveInstitutionDomain(deps, domain) : null;
+  if (!institution) {
     throw new AuthError('INSTITUTION_DOMAIN_NOT_ALLOWED', '该邮箱域名尚未登记为受信任学术机构');
   }
   const at = currentTime(deps);
   const previous = await deps.prisma.institutionEmailChallenge.findFirst({
     where: { userId, consumedAt: null }, orderBy: { createdAt: 'desc' },
   });
-  if (previous && inCooldown(previous.lastSentAt, at)) return;
+  if (previous && inCooldown(previous.lastSentAt, at)) {
+    return { organization: { rorId: institution.rorId, name: institution.name, domain: institution.domain, source: institution.source } };
+  }
   if (previous) {
     await deps.prisma.institutionEmailChallenge.updateMany({
       where: { id: previous.id, consumedAt: null }, data: { consumedAt: at, expiresAt: at },
@@ -230,10 +263,15 @@ export async function requestInstitutionEmailCode(
   const code = generateVerificationCode();
   try {
     await deps.prisma.institutionEmailChallenge.create({
-      data: { userId, email, domain, codeHash: hashVerificationCode(code), expiresAt: new Date(at.getTime() + CODE_TTL_MS), lastSentAt: at },
+      data: {
+        userId, email, domain: institution.domain, researchOrganizationId: institution.id,
+        codeHash: hashVerificationCode(code), expiresAt: new Date(at.getTime() + CODE_TTL_MS), lastSentAt: at,
+      },
     });
   } catch (cause) {
-    if ((cause as { code?: string })?.code === 'P2002') return;
+    if ((cause as { code?: string })?.code === 'P2002') {
+      return { organization: { rorId: institution.rorId, name: institution.name, domain: institution.domain, source: institution.source } };
+    }
     throw cause;
   }
   try {
@@ -242,7 +280,11 @@ export async function requestInstitutionEmailCode(
     await deps.prisma.institutionEmailChallenge.updateMany({ where: { userId, consumedAt: null }, data: { consumedAt: at, expiresAt: at } });
     throw new AuthError('VERIFICATION_DELIVERY_FAILED', '机构邮箱验证码发送失败', cause);
   }
-  await audit(deps, { actorId: userId, action: 'identity.institution_email.request', metadata: { domain } }, ctx);
+  await audit(deps, {
+    actorId: userId, action: 'identity.institution_email.request', targetType: 'research_organization',
+    targetId: institution.rorId ?? institution.domain, metadata: { domain: institution.domain, source: institution.source },
+  }, ctx);
+  return { organization: { rorId: institution.rorId, name: institution.name, domain: institution.domain, source: institution.source } };
 }
 
 export async function verifyInstitutionEmail(
@@ -276,6 +318,11 @@ export async function verifyInstitutionEmail(
     }
     throw new AuthError('CODE_INVALID', '验证码错误或已失效');
   }
+  const organization = challenge.researchOrganizationId
+    ? await deps.prisma.researchOrganization.findUnique({
+      where: { id: challenge.researchOrganizationId }, select: { rorId: true, name: true },
+    })
+    : null;
   try {
     await deps.prisma.$transaction(async (tx) => {
       const consumed = await tx.institutionEmailChallenge.updateMany({
@@ -286,11 +333,15 @@ export async function verifyInstitutionEmail(
         where: { userId_type: { userId, type: 'institution_email' } },
         create: {
           userId, type: 'institution_email', externalId: email, displayLabel: email,
-          source: 'institution_email_code', metadata: { domain: challenge.domain }, verifiedAt: at,
+          source: organization ? 'ror_institution_email' : 'institution_email_override',
+          researchOrganizationId: challenge.researchOrganizationId,
+          metadata: { domain: challenge.domain, rorId: organization?.rorId ?? null, organizationName: organization?.name ?? null },
+          verifiedAt: at,
         },
         update: {
-          externalId: email, displayLabel: email, source: 'institution_email_code', status: 'verified',
-          verifiedAt: at, revokedAt: null, metadata: { domain: challenge.domain },
+          externalId: email, displayLabel: email, source: organization ? 'ror_institution_email' : 'institution_email_override',
+          researchOrganizationId: challenge.researchOrganizationId, status: 'verified', verifiedAt: at, revokedAt: null,
+          metadata: { domain: challenge.domain, rorId: organization?.rorId ?? null, organizationName: organization?.name ?? null },
         },
       });
     });

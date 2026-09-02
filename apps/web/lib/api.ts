@@ -237,7 +237,10 @@ export function beginOrcidConnection(): Promise<{ authorizationUrl: string }> {
   return request('/api/auth/orcid/start', { method: 'POST', body: JSON.stringify({ returnTo: '/settings' }) });
 }
 
-export function requestInstitutionEmailCode(email: string): Promise<{ ok: true }> {
+export function requestInstitutionEmailCode(email: string): Promise<{
+  ok: true;
+  organization: { rorId: string | null; name: string; domain: string; source: 'ror' | 'configured_override' };
+}> {
   return request('/api/auth/institution-email/request', { method: 'POST', body: JSON.stringify({ email }) });
 }
 
@@ -1241,4 +1244,3 @@ export async function getIngestionTask(taskId: string): Promise<IngestionTaskDet
 export async function confirmIngestionTask(taskId: string, input: { version: number; core: SdfCore }): Promise<{ task: IngestionTaskDetail['task']; sdf: { core: SdfCore } }> {
   return apiRequest(`/api/ingestion/${taskId}/confirm`, { method: 'POST', body: JSON.stringify(input) });
 }
-

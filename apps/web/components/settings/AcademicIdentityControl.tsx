@@ -44,9 +44,9 @@ export function AcademicIdentityControl() {
   async function sendInstitutionCode() {
     setBusy(true); setError(''); setMessage('');
     try {
-      await requestInstitutionEmailCode(email);
+      const result = await requestInstitutionEmailCode(email);
       setCodeRequested(true);
-      setMessage(t('codeSent'));
+      setMessage(t('codeSentFor', { organization: result.organization.name }));
     } catch (cause) {
       setError(cause instanceof ApiClientError ? cause.message : t('institutionError'));
     } finally { setBusy(false); }
@@ -101,8 +101,8 @@ export function AcademicIdentityControl() {
             <div className="mt-3 grid gap-3">
               <label className="grid gap-1 text-sm text-os-muted-paper">{t('institutionEmail')}<input className="min-h-11 rounded-control border border-os-rule-paper bg-transparent px-3 text-os-ink" type="email" value={email} onChange={(event) => setEmail(event.target.value)} /></label>
               {codeRequested ? <label className="grid gap-1 text-sm text-os-muted-paper">{t('verificationCode')}<input className="min-h-11 rounded-control border border-os-rule-paper bg-transparent px-3 text-os-ink" inputMode="numeric" maxLength={6} value={code} onChange={(event) => setCode(event.target.value.replace(/\D/g, ''))} /></label> : null}
-              <Button disabled={busy || status?.capabilities.institutionEmail === false || !email || (codeRequested && code.length !== 6)} onClick={() => void (codeRequested ? confirmInstitutionEmail() : sendInstitutionCode())}>
-                {status?.capabilities.institutionEmail === false ? t('domainsNotConfigured') : codeRequested ? t('verify') : t('sendCode')}
+              <Button disabled={busy || !email || (codeRequested && code.length !== 6)} onClick={() => void (codeRequested ? confirmInstitutionEmail() : sendInstitutionCode())}>
+                {codeRequested ? t('verify') : t('sendCode')}
               </Button>
             </div>
           )}

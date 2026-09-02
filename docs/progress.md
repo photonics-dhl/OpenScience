@@ -13,6 +13,8 @@
 - 在最新 `main` 之上增加注册用户→主邮箱验证→ORCID OAuth→机构邮箱验证的四阶段进度；当前尚未改变生产 tuple。
 - credential 与 scoped-role assignment 分离；同一用户可同时持有 RO author、assignment reviewer、journal editor、organization member 等作用域角色，凭证本身不自动授权。
 - core migration 35 为身份凭证、机构邮箱挑战与多作用域角色；真实 PostgreSQL、ORCID、SMTP 与 ECS 是发布门禁。
+- core migration 36 增加 ROR 全球机构目录；机构凭证绑定 ROR ID，部门子域名可归属母机构，但不会自动产生作者、审稿或编辑权限。
+- 本地 ROR v2.12 已导入 137,398 家机构（0 rejected，34,466 家含域名）；发布时须在生产迁移后执行同版本导入并核对计数。
 - Taskmaster `hermes-research-intelligence` 仍为 9/12；官方 MCP/auth bridge/parser 构建稳定补丁已生产，ZJU Cookie、subscription-only PDF、四入口与旧实现精确清理 pending；Task 11 继续阻断。
 
 ## 2026-09-02 — Official ScanSci auth bridge and parser retry deployed
