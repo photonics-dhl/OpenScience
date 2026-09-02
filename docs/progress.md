@@ -4,7 +4,7 @@
 
 ## Current version tuple
 
-- Candidate branch / code base / origin main: `codex/scansci-upstream-mcp` / `c6b93c5b1e34b4a1871e8f24d2845406e4a7795b` / `c6b93c5b1e34b4a1871e8f24d2845406e4a7795b`。
+- Candidate branch / code HEAD / origin main: `codex/scansci-upstream-mcp` / `ff760f9` / `c6b93c5b1e34b4a1871e8f24d2845406e4a7795b`。
 - Production application source / immutable release: `405b85a8e1d6b3aec51d2de20ec6ce5b93ab73e4`。
 - Production rollback: `09093e7e879dbc7e9175e957f217afe5c6eb2e67`；core/search migrations `33/33` / `2/2`。
 - Taskmaster `hermes-research-intelligence` 仍为 9/12；Task 10 改为上游官方 MCP 替换，ECS 正向试点、产品切换、机构下载与旧实现清理 pending；Task 11 继续阻断。
@@ -16,6 +16,7 @@
 - ECS 只读实测 production/rollback `405b85a` / `09093e7`，容器/公网/出网健康，磁盘 58G/148G（41%，84G available）。本地正向基线 ScanSci `174 pass / 11 skip`、Worker ScanSci `16/16`。
 - 新方向暴露上游完整 MCP，不再强制 `legal_only`；Agent Worker 直连 MCP、读取 read-only shared output，沿用 72h/600s 生命周期。替代生产验收后删除旧私有代码、测试、容器/网络脚本与精确服务器资源。
 - Task 1 ECS 正向试点通过：官方 `v1.13.1` 发现 17/17 tools，`arXiv:2009.06045v1` 返回 `%PDF-` 24,671,920 bytes / SHA-256 `d57dc94c…f484a`；evaluation 容器/卷 `0/0`，active/public 与磁盘仍为 `405b85a` / 58G。
+- Task 2 `ff760f9` 完成 `source_retrieval` provenance + migration 34；Domain `6/6`、Database `2/2`、Prisma build green，隔离 ECS PostgreSQL forward/rollback/redeploy 为 `source_retrieval/0/source_retrieval`，临时库已 drop。生产账本仍为 33/33。
 
 ## 2026-09-02 — ScanSci IdP gate deployed; ZJU credential blocked (`405b85a`)
 

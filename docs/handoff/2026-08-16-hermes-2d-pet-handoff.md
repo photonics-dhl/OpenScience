@@ -11,7 +11,7 @@
 ## Version tuple
 
 - Worktree: `E:/Miscellaneous/XGS/.worktrees/readable-hermes-guidance`
-- Candidate branch / code base / origin main: `codex/scansci-upstream-mcp` / `c6b93c5b1e34b4a1871e8f24d2845406e4a7795b` / `c6b93c5b1e34b4a1871e8f24d2845406e4a7795b`
+- Candidate branch / code HEAD / origin main: `codex/scansci-upstream-mcp` / `ff760f9` / `c6b93c5b1e34b4a1871e8f24d2845406e4a7795b`
 - Production application source / immutable release: `405b85a8e1d6b3aec51d2de20ec6ce5b93ab73e4`
 - Rollback: `09093e7e879dbc7e9175e957f217afe5c6eb2e67`; core/search migrations `33/33` / `2/2`
 - 本地 `main` 与其他 worktree 有用户改动，不得触碰或用它推断生产；上述 tuple 已从 ECS 重新实测。
@@ -64,8 +64,8 @@
 
 ## Next action
 
-1. 完成 migration 34 `source_retrieval` 的 TDD 与 ECS forward/rollback/redeploy；官方 MCP Task 1 已以 17/17 tools、真实 24,671,920-byte OA PDF 通过。
-2. TDD 将 Agent Worker 切到官方 MCP，按 immutable transaction 部署 merged SHA。
+1. TDD 将 Agent Worker 切到官方 MCP，并增加 official runtime image/Compose；Tasks 1–2 已完成。
+2. 接入官方登录与 immutable transaction，再部署 merged SHA。
 3. 完成一次 ZJU 登录、持久机构下载与四入口/72h/600s，再删除旧私有实现和精确服务器资源并关闭 Task 10。
 
 ## Read first

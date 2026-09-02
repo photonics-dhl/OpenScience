@@ -111,17 +111,17 @@ evaluation containers/volumes `0/0`; active/public remained `405b85a…`.
 
 - Produces: `SourceAccessEvidence { kind: 'source_retrieval'; source: string }` and a decision `{ basis: 'source_retrieval', cacheAllowed: true, downloadPolicy: 'downloadable', reasonCode: 'source_retrieval_succeeded', checkerVersion: 'openscience-rights-v2' }`.
 
-- [ ] **Step 1: Write the failing domain test**
+- [x] **Step 1: Write the failing domain test**
 
 Use a literal ScanSci source such as `sci-hub.vg` and assert the exact decision above. The test must fail because `source_retrieval` is not in the type/decision switch.
 
-- [ ] **Step 2: Run and verify RED**
+- [x] **Step 2: Run and verify RED**
 
 ```bash
 npx pnpm@9.15.0 --filter @openscience/domain test -- rights.test.ts
 ```
 
-- [ ] **Step 3: Implement the minimal type and migration**
+- [x] **Step 3: Implement the minimal type and migration**
 
 Forward migration:
 
@@ -131,7 +131,7 @@ ALTER TYPE "SourceRightsBasis" ADD VALUE IF NOT EXISTS 'source_retrieval';
 
 Rollback first refuses while any row uses `source_retrieval`, then recreates the prior enum and casts the column through text. Update Prisma/types/decision logic and parity fixtures; do not change public endpoints.
 
-- [ ] **Step 4: Verify domain and real PostgreSQL forward/rollback/redeploy**
+- [x] **Step 4: Verify domain and real PostgreSQL forward/rollback/redeploy**
 
 ```bash
 npx pnpm@9.15.0 --filter @openscience/domain test -- rights.test.ts
@@ -140,12 +140,17 @@ npx pnpm@9.15.0 --filter @openscience/domain typecheck
 
 ECS acceptance must apply migration 34, run the literal decision contract, roll back with zero rows, and deploy forward again before product switch.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add infra/migrations/20260902010000_scansci_source_retrieval infra/schema.prisma packages/domain
 git commit -m "feat(retrieval): preserve ScanSci source provenance"
 ```
+
+Actual evidence: Domain `6/6`, Database migration contract `2/2`, Prisma/Database
+build green. An isolated ECS PostgreSQL database completed
+`FORWARD=source_retrieval`, `ROLLBACK_COUNT=0`, and
+`REDEPLOY=source_retrieval`; the temporary database was dropped.
 
 ### Task 3: Replace the Worker HTTP adapter with the official MCP client
 
