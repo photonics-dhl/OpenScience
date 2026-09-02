@@ -64,9 +64,9 @@ test('official ScanSci image is pinned and runs only the public MCP entrypoint',
   assert.match(authService, /context: \$\{XGS_RELEASE_ROOT:\?XGS_RELEASE_ROOT required\}\/apps\/scansci-mcp/);
   assert.match(authService, /target: auth/);
   assert.match(authService, /- scansci-data:\/data\/scansci/);
-  assert.match(authService, /- "127\.0\.0\.1:6080:6080"/);
+  assert.doesNotMatch(authService, /\bports:/);
   assert.match(authService, /openscience-egress:172\.25\.0\.1/);
-  assert.match(authService, /networks:\n\s+- auth_net/);
+  assert.match(authService, /networks:\n\s+auth_net:\n\s+ipv4_address: 172\.25\.0\.2/);
   assert.doesNotMatch(authService, /- retrieval_net/);
   assert.doesNotMatch(authService, /env_file|scansci-session|scansci_legal|legal_only/i);
   const mcpStart = compose.indexOf('  scansci-mcp:');

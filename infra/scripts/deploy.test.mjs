@@ -71,7 +71,7 @@ function composeService(name, nextName, compose = productionCompose) {
   return compose.slice(start, end);
 }
 
-test('ScanSci production topology separates legal, browser and stopped loopback auth roles', () => {
+test('ScanSci production topology separates legal, browser and stopped bridge-only auth roles', () => {
   const mcp = composeService('scansci-mcp', 'scansci-secret-init');
   const legal = composeService('scansci-legal', 'scansci-browser');
   const browser = composeService('scansci-browser', 'scansci-auth');
@@ -147,8 +147,8 @@ test('ScanSci production topology separates legal, browser and stopped loopback 
   assert.match(auth, /profiles: \["scansci-auth"\]/u);
   assert.match(auth, /SCANSCI_PDF_PROXY: http:\/\/openscience-egress:7891/u);
   assert.match(auth, /extra_hosts:\r?\n\s+- "openscience-egress:172\.25\.0\.1"/u);
-  assert.match(auth, /ports:\r?\n\s+- "127\.0\.0\.1:6080:6080"/u);
-  assert.match(auth, /networks:\r?\n\s+- auth_net/u);
+  assert.doesNotMatch(auth, /\bports:/u);
+  assert.match(auth, /networks:\r?\n\s+auth_net:\r?\n\s+ipv4_address: 172\.25\.0\.2/u);
   assert.match(auth, /scansci-data:\/data\/scansci/u);
   assert.match(auth, /pids_limit: 256/u);
   assert.doesNotMatch(auth, /scansci-(?:service|auth)-secrets|\/run\/secrets/u);
@@ -197,8 +197,8 @@ test('ScanSci production topology separates legal, browser and stopped loopback 
   assert.match(volumeSection, /scansci-service-secrets:\r?\n  scansci-worker-secrets:\r?\n/u);
   assert.match(productionCompose, /^  retrieval_net:\r?\n    driver: bridge\r?\n    internal: true\r?\n    ipam:\r?\n      config:\r?\n        - subnet: 172\.24\.0\.0\/24\r?\n          gateway: 172\.24\.0\.1$/mu);
   assert.match(productionCompose, /^  auth_net:\r?\n    driver: bridge\r?\n    internal: true\r?\n    driver_opts:\r?\n      com\.docker\.network\.bridge\.name: xgs-auth0\r?\n    ipam:\r?\n      config:\r?\n        - subnet: 172\.25\.0\.0\/29\r?\n          gateway: 172\.25\.0\.1$/mu);
-  assert.equal((productionCompose.match(/\n\s+ipv4_address: 172\.25\.0\.2\s*$/gmu) ?? []).length, 0,
-    'official auth must use only a loopback-published noVNC port');
+  assert.equal((productionCompose.match(/\n\s+ipv4_address: 172\.25\.0\.2\s*$/gmu) ?? []).length, 1,
+    'official auth must be the sole fixed peer on the host-reachable internal bridge');
 });
 
 test('ScanSci browser has a boot-persistent proxy-only bridge before it can start', () => {

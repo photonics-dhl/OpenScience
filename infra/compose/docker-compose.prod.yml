@@ -396,8 +396,6 @@ services:
       - "openscience-egress:172.25.0.1"
     volumes:
       - scansci-data:/data/scansci
-    ports:
-      - "127.0.0.1:6080:6080"
     read_only: true
     tmpfs:
       - /tmp:size=256m,noexec,nosuid,nodev,uid=10001,gid=10001,mode=0700
@@ -414,7 +412,8 @@ services:
     security_opt:
       - no-new-privileges:true
     networks:
-      - auth_net
+      auth_net:
+        ipv4_address: 172.25.0.2
     restart: "no"
 
   document-parser:
