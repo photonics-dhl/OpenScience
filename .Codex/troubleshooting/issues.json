@@ -366,7 +366,7 @@
       "id": "issue-018",
       "title": "Official ScanSci cleanup stopped Squid and a cacheless rebuild exposed truncated proxy downloads",
       "date": "2026-09-02",
-      "status": "in_progress",
+      "status": "resolved",
       "tags": [
         "troubleshooting/network",
         "troubleshooting/production",
@@ -375,16 +375,19 @@
       ],
       "description": "After removing the rejected browser firewall unit and its systemd drop-ins, Squid became inactive. The active release kept serving but a later cacheless ScanSci image build failed first with proxy connection refused and then with hash mismatches on different partially downloaded PyPI wheels.",
       "root_cause": "The removed firewall unit had been a systemd requirement of Squid; stopping it propagated a stop before the stale drop-in was removed, and cleanup did not reassert Squid active/listener state. Clearing 29.21 GB of inactive BuildKit cache then forced the next immutable release to reacquire the full official Python closure through an intermittently truncating home-tunnel parent. Pip's --require-hashes correctly rejected every incomplete object.",
-      "solution": "After deleting the obsolete dependency, daemon-reload and restart Squid, then require active plus exact 127.0.0.1:7891 and 172.24.0.1:7891 listeners and a real proxied request. Keep hash enforcement. Split the generated lock into one hash-complete requirement block per pinned package, install each block with --no-deps --require-hashes and a fixed five-attempt loop, then run pip check across the complete environment. A transport failure therefore retries only the current package without accepting an unlisted hash.",
-      "verification": "Squid returned active and a proxied PyPI request returned HTTP 200 with no 172.26 listener. Official PyPI metadata and server-side streaming agreed on the locked MCP wheel hash. Whole-lock retries were shown to redownload earlier packages, so that implementation was rejected. The per-package splitter and Docker contract pass 3/3 after RED; exact ECS image build, deployment and post-cleanup disk/runtime verification remain pending.",
+      "solution": "After deleting the obsolete dependency, daemon-reload and restart Squid, then require active plus exact 127.0.0.1:7891 and 172.24.0.1:7891 listeners and a real proxied request. Keep hash enforcement. Split both generated ScanSci and BGE locks into one hash-complete requirement block per pinned package, install each block with --no-deps --require-hashes and a fixed five-attempt loop, then verify the complete environment. A transport failure therefore retries only the current package without accepting an unlisted hash.",
+      "verification": "Squid returned active and a proxied request returned HTTP 200 with no 172.26 listener. PR #50 CI 33653209566 passed. Exact ECS build recovered the formerly truncated hf-xet wheel, installed all pinned ScanSci/BGE packages and built the fixed BGE revision. Canonical release 80db41e passed Parser, BGE CPU, core/search 34/34 and 2/2, 17 tools, Worker MCP, real OA, public CAS and retention. Post-cleanup active/public matched, Squid/listeners and containers were healthy, old runtime/eval/dangling counters and build cache were zero, and disk was 50G/148G with 92G available.",
       "files": [
         "apps/scansci-mcp/Dockerfile",
         "apps/scansci-mcp/test/runtime-contract.test.mjs",
+        "apps/embedding-worker/Dockerfile",
+        "apps/embedding-worker/install-lock.py",
+        "apps/embedding-worker/app_test.py",
         "infra/squid/openscience-egress.conf",
         "docs/runbooks/deployment.md"
       ],
       "prevention": "Any systemd dependency cleanup must verify the dependent service after daemon-reload, not only its configuration file. Do not delete all inactive build cache without ensuring pinned dependency layers can be deterministically rebuilt; immutable downloads must retain --require-hashes and use bounded per-package retries rather than accepting new hashes after a transport failure."
     }
   ],
-  "last_updated": "2026-09-02"
+  "last_updated": "2026-09-03"
 }

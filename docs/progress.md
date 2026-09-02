@@ -1,19 +1,20 @@
 # OpenScience 进度（CURRENT window）
 
-> 最新同步：2026-09-02。历史由 Git 保存；旧计划不作为默认输入。
+> 最新同步：2026-09-03。历史由 Git 保存；旧计划不作为默认输入。
 
 ## Current version tuple
 
-- Candidate branch / code HEAD / origin main: `codex/scansci-upstream-mcp` / `761b93d4bbce77e70d676be78de0bba128974fe6` / `761b93d4bbce77e70d676be78de0bba128974fe6`。
-- Production application source / immutable release: `761b93d4bbce77e70d676be78de0bba128974fe6`。
-- Production rollback: `e9e2058b3ea7e8f4c2a488d7aa18ff0cd6944b4c`；core/search migrations `34/34` / `2/2`。
+- Candidate branch / code release / repository main: `codex/scansci-upstream-mcp` / `80db41e7ee0a1c8158d3f335dc1b2fbf6f2bb2bf` / `80db41e7ee0a1c8158d3f335dc1b2fbf6f2bb2bf`；本次文档收口可在不重新部署产品的情况下继续推进 main。
+- Production application source / immutable release: `80db41e7ee0a1c8158d3f335dc1b2fbf6f2bb2bf`。
+- Production rollback: `761b93d4bbce77e70d676be78de0bba128974fe6`；两者均为 upstream-only；core/search migrations `34/34` / `2/2`。
 - Taskmaster `hermes-research-intelligence` 仍为 9/12：官方 MCP 单服务替换和旧运行链路清理完成；官方 `cookie_import`、subscription-only PDF、四入口/72h/600s 正向旅程 pending，Task 11 继续阻断。
 
-## 2026-09-02 — Official-only ScanSci deployed and rejected stack removed
+## 2026-09-03 — Official-only ScanSci final release and hygiene closeout
 
-- PR #47 / exact CI `33637694396` 合并为 `761b93d…`。生产只运行 upstream `scansci-pdf==1.13.1` 的单一 streamable-HTTP MCP；Agent Worker 通过正式 SDK 调用完整 17 tools。旧 `scansci-legal`、自制 auth/browser/noVNC、服务 token、专用网络/防火墙代码均已从候选仓库删除。
-- ECS canonical transaction 通过 exact Parser report、BGE CPU、core/search `34/34`/`2/2`、MCP image/tools/storage、Worker-origin `tools/list`、真实 OA PDF、API/Web/Worker/Nginx/public CAS/retention；active/public `761b93d…`，rollback `e9e2058…`，journal/failed absent。
-- 服务器精确移除 2 个空 auth/browser 网络、7 个无人引用旧卷、2 个旧 auth image tag、旧 systemd/Docker/Squid drop-in、iptables 规则、宿主旧 Secret 目录和 transient eval；保留 `scansci-data`、`scansci-papers`、数据库、对象存储、BGE、监控和备份。非活动 builder cache `29.21GB → 0`，根盘 `66G/148G（47%）→ 37G/148G（27%）`，可用 `76G → 105G`，未运行 broad prune。
+- PR #47 首次上线 `761b93d…`；PR #50 / CI `33653209566` 合并为最终 `80db41e…`。生产只运行 upstream `scansci-pdf==1.13.1` 的单一 streamable-HTTP MCP；Agent Worker 通过正式 SDK 调用完整 17 tools。旧 `scansci-legal`、自制 auth/browser/noVNC、服务 token、专用网络/防火墙代码均已从仓库和服务器 release retention 中移除。
+- ECS canonical transaction 通过 exact Parser report、BGE CPU、core/search `34/34`/`2/2`、MCP image/tools/storage、Worker-origin `tools/list`、真实 OA PDF、API/Web/Worker/Nginx/public CAS/retention；active/public `80db41e…`，rollback `761b93d…`，journal/failed absent。
+- 首轮精确移除 2 个旧网络、7 个旧卷、2 个旧 auth image tag、旧 systemd/drop-in/iptables/Squid browser 规则、宿主旧 Secret 和 29.21GB inactive cache。最终再清 38 个旧 Parser acceptance、5 个 eval、1 个匿名失败容器、所有 dangling image 与 154.3MB builder cache；现仅保留 active/rollback 两个 release/report，旧 runtime counters 均为 0。
+- 根盘最终 `50G/148G（35%）`、可用 `92G`；Docker images `22.71GB`、产品卷 `6.893GB`、build cache `0`。两套正式 BGE/ScanSci 镜像是 active/rollback，不冒充冗余；保留 `scansci-data`、`scansci-papers`、数据库、对象存储、BGE、监控和备份，未运行 system/volume prune。
 - 官方机构认证改为管理员从普通浏览器导出 Netscape Cookie，再由 active release 的 `import-scansci-cookies.sh` 调用上游 `scansci_pdf_login(kind=cookie_import)` 导入持久 `scansci-data`；不再部署第二浏览器。机构 PDF 与四入口正向验收仍 pending，不能冒充已完成。
 
 ## 2026-09-02 — ScanSci IdP gate deployed; ZJU credential blocked (`405b85a`)
