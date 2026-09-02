@@ -4,19 +4,18 @@
 
 ## Current version tuple
 
-- Candidate branch / code HEAD / origin main: `codex/scansci-upstream-mcp` / `ff760f9` / `c6b93c5b1e34b4a1871e8f24d2845406e4a7795b`。
+- Candidate branch / code HEAD / origin main: `codex/scansci-upstream-mcp` / `7ca79760f925df857504167622e9d89902c04603` / `c6b93c5b1e34b4a1871e8f24d2845406e4a7795b`。
 - Production application source / immutable release: `405b85a8e1d6b3aec51d2de20ec6ce5b93ab73e4`。
 - Production rollback: `09093e7e879dbc7e9175e957f217afe5c6eb2e67`；core/search migrations `33/33` / `2/2`。
-- Taskmaster `hermes-research-intelligence` 仍为 9/12；Task 10 改为上游官方 MCP 替换，ECS 正向试点、产品切换、机构下载与旧实现清理 pending；Task 11 继续阻断。
+- Taskmaster `hermes-research-intelligence` 仍为 9/12；官方 MCP Tasks 1–4 code/runtime complete，生产合并、机构下载、四入口与旧实现精确清理 pending；Task 11 继续阻断。
 
-## 2026-09-02 — ScanSci official MCP replacement started
+## 2026-09-02 — Official ScanSci MCP candidate ready for release
 
-- 仓库审计确认上游已有 Codex plugin、Skill、17-tool MCP、统一登录与 Cookie 持久化；旧实现错误依赖私有函数、AST/signature guard 与自建 browser protocol。PR #40 保持不合并/不部署。
-- 新分支从 `origin/main@c6b93c5` 建立；CURRENT spec/plan 改为 `docs/specs/2026-09-02-scansci-upstream-mcp-design.md` / `docs/plans/2026-09-02-scansci-upstream-mcp-plan.md`，锁定最新 tag `v1.13.1` 及 archive SHA-256 `c5bdec13…b2507e`。
-- ECS 只读实测 production/rollback `405b85a` / `09093e7`，容器/公网/出网健康，磁盘 58G/148G（41%，84G available）。本地正向基线 ScanSci `174 pass / 11 skip`、Worker ScanSci `16/16`。
-- 新方向暴露上游完整 MCP，不再强制 `legal_only`；Agent Worker 直连 MCP、读取 read-only shared output，沿用 72h/600s 生命周期。替代生产验收后删除旧私有代码、测试、容器/网络脚本与精确服务器资源。
-- Task 1 ECS 正向试点通过：官方 `v1.13.1` 发现 17/17 tools，`arXiv:2009.06045v1` 返回 `%PDF-` 24,671,920 bytes / SHA-256 `d57dc94c…f484a`；evaluation 容器/卷 `0/0`，active/public 与磁盘仍为 `405b85a` / 58G。
-- Task 2 `ff760f9` 完成 `source_retrieval` provenance + migration 34；Domain `6/6`、Database `2/2`、Prisma build green，隔离 ECS PostgreSQL forward/rollback/redeploy 为 `source_retrieval/0/source_retrieval`，临时库已 drop。生产账本仍为 33/33。
+- 上游 `v1.13.1` 官方 Skill/MCP 已锁定并暴露完整 17-tool surface；不强制 `legal_only`，默认下载不传来源策略覆盖。旧私有实现继续冻结，须等替代版本生产验收后精确删除。
+- Task 1/2：ECS 官方试点下载 `arXiv:2009.06045v1` 为 `%PDF-`、24,671,920 bytes、SHA-256 `d57dc94c…f484a`，临时资源 `0/0`；migration 34 `source_retrieval` 已在隔离 ECS PostgreSQL 完成 forward/rollback/redeploy，生产仍 33/33。
+- Task 3：Worker 通过官方 streamable-HTTP MCP 调用 `scansci_pdf_download`；真实 ECS candidate 返回 `route=source_retrieval`、`source=arXiv`、相同 PDF/hash，读取并入库后 staging PDF 为 `0`。共享卷只赋予专用 GID 11000 的必要写权限。
+- Task 4：官方 MCP/auth 镜像、loopback noVNC、schema-5 release identity、MCP-first positive canary、retention 和 schema-5 rollback 已实现；MCP candidate image `sha256:551684a7…e4570e8`，focused Worker/MCP/deploy/tunnel 与 Bash syntax green。
+- 下一步只做一次发布级正向门禁，合并后由 canonical ECS transaction 应用 migration 34、切换官方 MCP，再完成官方登录/机构 PDF/四入口/72h+600s；随后提交第二个清理 release，移除旧代码与精确 ECS 冗余。生产/回退在此之前保持 `405b85a` / `09093e7`。
 
 ## 2026-09-02 — ScanSci IdP gate deployed; ZJU credential blocked (`405b85a`)
 

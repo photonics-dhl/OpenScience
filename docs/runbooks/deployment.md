@@ -1,6 +1,6 @@
 # Runbook: 部署（Deployment）
 
-> 状态：**CURRENT**。active immutable release / application source 为 `9eeb8d51baf16b212a7a4f5dd7db25131aa725a6`，rollback tree 为 `36033aee0c8712a31c699c800b1c81cd6ffe044d`。post-deploy merge/docs-only HEAD 不得冒充 application source。
+> 状态：**CURRENT**。active immutable release / application source 为 `405b85a8e1d6b3aec51d2de20ec6ce5b93ab73e4`，rollback tree 为 `09093e7e879dbc7e9175e957f217afe5c6eb2e67`。官方 ScanSci MCP 仍是 candidate；post-deploy merge/docs-only HEAD 不得冒充 application source。
 > 格式遵循 `.agents/skills/infra-runbook/SKILL.md` 四节强制要求。
 > 部署属 Spec §20.5"询问"级操作：执行前需用户确认，必须走 `infra/scripts/deploy.sh` + CI/CD，禁止手工改服务器代码。
 
@@ -2083,3 +2083,49 @@ docker volume ls --filter name=openscience-eval-scansci-mcp-
 
 Re-run public `__release`, target container health and `df -h` checks to prove
 the evaluation did not alter the active release.
+
+### 5.62 Official ScanSci MCP release candidate and production sequence (2026-09-02)
+
+The official runtime is now implemented in `apps/scansci-mcp` with pinned
+`scansci-pdf==1.13.1`, Patchright Chromium, CloakBrowser, Tor and Xvfb. The
+service exposes all 17 upstream MCP tools internally and does not add a default
+source-strategy override. Its root filesystem is read-only; `scansci-data` is
+persistent, while `scansci-papers` is transient. Agent Worker shares only GID
+11000 on the paper volume so it can ingest and unlink the exact acknowledged
+PDF. The auth image is stopped by default and publishes noVNC only to
+`127.0.0.1:6080` when explicitly started.
+
+Positive ECS candidate evidence used the real Worker adapter against the
+official MCP. `arXiv:2009.06045v1` returned `source_retrieval`, source `arXiv`,
+`%PDF-`, 24,671,920 bytes and SHA-256
+`d57dc94c05ca99ccb33f8186e9317353c663a638cde1c0c8a90c7c2d029f484a`.
+After bounded ingestion the shared volume contained zero staged PDFs. The
+candidate MCP image was
+`sha256:551684a72164c753aeaa4431d068bb7db2673e9e131b06302d24b5410e4570e8`;
+this is candidate evidence, not the production release identity.
+
+Production must use the canonical immutable transaction, not manual Compose:
+
+```text
+infra/scripts/deploy.sh --confirm --require-parser-acceptance \
+  --rollback-ref 405b85a8e1d6b3aec51d2de20ec6ce5b93ab73e4 <merged-main-sha>
+```
+
+The transaction builds MCP/auth before application images, starts MCP first,
+runs the positive OA canary, applies core migration 34, switches Worker, and
+publishes capability schema 5 containing exact MCP/auth image IDs. Acceptance
+requires core/search `34/34` and `2/2`, the 17-tool runtime verifier, Parser and
+BGE gates, target containers, Nginx/public release CAS, absent journal/failed
+markers, and retention. Schema-5 previous releases are parsed and restored via
+their exact official MCP/auth image IDs, so the later cleanup release can roll
+back to this accepted official version.
+
+Only after that release is public and healthy may the official auth profile be
+started through `infra/scripts/scansci-auth-tunnel.sh start 6080`. Complete one
+institutional PDF, recreate MCP, repeat the download, and exercise the four
+existing product entries plus one-use/72-hour metadata. Then remove the old
+private implementation in a separate cleanup commit/release and exact-clean
+only unreferenced candidate roots/images, old containers/networks/systemd
+units, and empty staging data. Keep active/rollback releases, `scansci-data`,
+accepted object storage, models, monitoring data and backups; never broad
+prune.

@@ -1,6 +1,6 @@
 # Hermes Research Intelligence CURRENT Handoff
 
-> **CURRENT active-memory，2026-09-02。** 公网 release `405b85a` 全绿、rollback `09093e7`；旧私有 ScanSci 候选冻结且不部署。CURRENT 改为上游 `v1.13.1` 官方 Skill/MCP，ECS 正向试点、产品切换、机构 PDF 与旧实现清理 pending；Task 11 继续阻断，Landing/Hermes 视觉冻结。
+> **CURRENT active-memory，2026-09-02。** 公网 release `405b85a` 全绿、rollback `09093e7`；上游 `v1.13.1` 官方 Skill/MCP candidate 的 ECS 真实 OA/Worker 路径与部署代码已通过，合并、生产切换、机构 PDF/四入口和旧实现清理 pending；Task 11 继续阻断，Landing/Hermes 视觉冻结。
 
 ## Goal and state
 
@@ -11,14 +11,14 @@
 ## Version tuple
 
 - Worktree: `E:/Miscellaneous/XGS/.worktrees/readable-hermes-guidance`
-- Candidate branch / code HEAD / origin main: `codex/scansci-upstream-mcp` / `ff760f9` / `c6b93c5b1e34b4a1871e8f24d2845406e4a7795b`
+- Candidate branch / code HEAD / origin main: `codex/scansci-upstream-mcp` / `7ca79760f925df857504167622e9d89902c04603` / `c6b93c5b1e34b4a1871e8f24d2845406e4a7795b`
 - Production application source / immutable release: `405b85a8e1d6b3aec51d2de20ec6ce5b93ab73e4`
 - Rollback: `09093e7e879dbc7e9175e957f217afe5c6eb2e67`; core/search migrations `33/33` / `2/2`
 - 本地 `main` 与其他 worktree 有用户改动，不得触碰或用它推断生产；上述 tuple 已从 ECS 重新实测。
 
 ## Production truth
 
-- Public `/__release` 与 active marker 均返回 `405b85a…`；API/Web/Worker/Parser/BGE/ScanSci healthy，journal/failed absent，磁盘 58G/148G（41%，84G available），只保留 active+rollback release。Parser 报告 `root:root 0600`、临时 eval/auth 容器为 0。Session 为 `auth_required`；不得把 IdP 访问或 CAS 表单提交冒充机构 PDF 下载完成。
+- Public `/__release` 与 active marker 均返回 `405b85a…`；API/Web/Worker/Parser/BGE/旧 ScanSci healthy，journal/failed absent，磁盘上次核验 58G/148G（41%，84G available）。官方 MCP candidate 已在 ECS 通过 17 tools 与 Worker→24,671,920-byte PDF→hash/provenance→staging delete；这仍不是生产切换或机构 PDF 完成。
 - TLS certificate subject 为 `openscience.428312321.xyz`，有效期自 2026-08-03 20:10:34 +08:00；ECS、域名反代、Landing、Cloudflare Tunnel 的上线日期必须按证据包分开表述。
 - `agent_tasks.result` 为 JSONB，`IngestionTaskState` 含 `needs_review` 与 `confirmed`。生产聚合为 14 条待确认建议、7 条 confirmed、21 条总计；未输出业务正文或用户信息。
 - 数据库不存在字面 `suggested` 枚举：产品语义映射为 `result != null + state=needs_review`，确认后 `state=confirmed`。
@@ -59,14 +59,14 @@
 27. Strict browser、CPU browser、proxy-only `browser_net`、proof-backed session 与稳定 canary 诊断已合并；PR #36→#37 部署到 `09093e7`，ECS Parser/BGE/ScanSci OA/application/public/retention 全绿。
 28. PR #38 / CI `33550018143` 将匿名 publisher bounce 收紧为本次 main-frame 必须经过 `*.zju.edu.cn`/`*.carsi.edu.cn` 后才可取 Cookie；`evilzju.edu.cn` 回归拒绝，ScanSci `174/11/0`、全仓 lint/test 与独立复审 READY。
 29. Merge `405b85a` 经 schema-v3 16-case Parser 两阶段 canonical 部署；core/search `33/33`/`2/2`、quota `8/8`、BGE CPU、ScanSci OA、容器/公网/retention 全绿，rollback `09093e7`，验收临时目录与 auth helper 已清零。
-30. 上游审计确认官方 Skill/MCP 已覆盖 17 工具、统一登录与 Cookie 持久化；旧实现依赖私有函数/monkey-patch/自建 browser protocol，PR #40 冻结。新 CURRENT spec 为 `docs/specs/2026-09-02-scansci-upstream-mcp-design.md`，tag `v1.13.1`。
-31. Constraints：服务器验收为准，本地不运行 Docker；Windows 只用显式 Git Bash 调 canonical wrapper；不读取/打印 `.env`，不 broad prune。用户已授权在官方替代生产验收后删除错误方向代码、测试、容器/网络脚本和精确服务器资源。
+30. 官方 MCP Tasks 1–4 code/runtime 已完成：17-tool `v1.13.1`、migration 34 `source_retrieval`、Worker direct MCP、MCP/auth images、loopback noVNC、schema-5 identity/retention/rollback。ECS candidate real Worker 返回 `source=arXiv` 与相同 PDF hash，staging PDF `0`；生产仍 33/33，尚未切换。
+31. Constraints：服务器验收为准，本地不运行 Docker；Windows 只用 PowerShell 显式调用 Git for Windows Bash 与 canonical wrapper；不读取/打印 `.env`，不 broad prune。替代生产验收后才按用户授权删除旧代码、测试、容器/网络/systemd 和精确无引用 release/image；保留 active/rollback、`scansci-data`、对象存储、模型、监控与备份。
 
 ## Next action
 
-1. TDD 将 Agent Worker 切到官方 MCP，并增加 official runtime image/Compose；Tasks 1–2 已完成。
-2. 接入官方登录与 immutable transaction，再部署 merged SHA。
-3. 完成一次 ZJU 登录、持久机构下载与四入口/72h/600s，再删除旧私有实现和精确服务器资源并关闭 Task 10。
+1. 运行一次发布级正向门禁，合并 `codex/scansci-upstream-mcp`，只部署 merged main SHA。
+2. Canonical ECS transaction 应用 migration 34、构建/验收官方 MCP+auth、切换 Worker 并验证 public CAS、Parser/BGE、34/34 与磁盘。
+3. 官方 noVNC 完成一次 ZJU 登录、机构 PDF/recreate 与四入口/72h/600s；通过后做第二个 cleanup release，精确删除旧实现和服务器冗余，再将 Task 10 置 10/12。
 
 ## Read first
 

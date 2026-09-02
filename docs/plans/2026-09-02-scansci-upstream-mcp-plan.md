@@ -4,7 +4,7 @@
 
 **Goal:** Replace the private ScanSci integration with upstream `v1.13.1`'s official 17-tool MCP, prove real ECS downloads, preserve the product lifecycle, and delete the obsolete implementation.
 
-**Architecture:** A release-scoped `scansci-mcp` container owns the upstream package, browser runtime, persistent data, and transient paper output. Agent Worker calls its streamable-HTTP MCP endpoint and reads only the returned PDF from a read-only shared volume before copying it into the existing SeaweedFS lifecycle. The existing public asynchronous product API remains unchanged.
+**Architecture:** A release-scoped `scansci-mcp` container owns the upstream package, browser runtime, persistent data, and transient paper output. Agent Worker calls its streamable-HTTP MCP endpoint and has write access only to the shared paper volume so it can read, ingest, and immediately delete the acknowledged staging PDF. The existing public asynchronous product API remains unchanged.
 
 **Tech Stack:** ScanSci PDF `v1.13.1`, Python 3.12, MCP streamable HTTP, Patchright/Chromium/Xvfb, Node 22, `@modelcontextprotocol/sdk`, TypeScript, PostgreSQL 16, Docker Compose, SeaweedFS, immutable ECS release scripts.
 
@@ -175,7 +175,7 @@ build green. An isolated ECS PostgreSQL database completed
 - Consumes: MCP endpoint `SCANSCI_MCP_URL`, output root `SCANSCI_PAPERS_DIR`.
 - Produces: existing `ScanSciAcquireResult`, extended with route `source_retrieval` and exact `source` provenance.
 
-- [ ] **Step 1: Write failing Worker behavior tests**
+- [x] **Step 1: Write failing Worker behavior tests**
 
 Use a protocol-level fake streamable-HTTP MCP server, not a mocked adapter. Cover only:
 
@@ -185,7 +185,7 @@ Use a protocol-level fake streamable-HTTP MCP server, not a mocked adapter. Cove
 4. `login_required`, timeout, and unavailable map to existing stable codes;
 5. no default call argument contains strategy/source overrides.
 
-- [ ] **Step 2: Verify RED**
+- [x] **Step 2: Verify RED**
 
 ```bash
 npx pnpm@9.15.0 --filter @openscience/agent-worker test -- scansci.test.ts
@@ -193,13 +193,13 @@ npx pnpm@9.15.0 --filter @openscience/agent-worker test -- scansci.test.ts
 
 Expected: FAIL because the Worker still calls `/v1/legal-download`.
 
-- [ ] **Step 3: Implement the minimal client and runtime image**
+- [x] **Step 3: Implement the minimal client and runtime image**
 
 Add direct dependency `@modelcontextprotocol/sdk@1.30.0`. `scansci-mcp.ts` owns one reusable client connection, tool discovery, bounded JSON parsing, stable error mapping, and descriptor-based file reading. `scansci.ts` normalizes upstream results and preserves the existing 100 MiB/hash/object-storage contract.
 
-The image installs exact `scansci-pdf==1.13.1`, Patchright/Chromium/Xvfb and runs only the official server. Compose adds `scansci-data` and `scansci-papers`; Agent Worker mounts papers read-only. Remove no old service yet.
+The image installs exact `scansci-pdf==1.13.1`, Patchright/Chromium/Xvfb and runs only the official server. Compose adds `scansci-data` and `scansci-papers`; Agent Worker shares GID 11000 with the MCP and receives write access only to `scansci-papers` so successful staging files can be removed immediately after bounded ingestion. Remove no old service yet.
 
-- [ ] **Step 4: Verify GREEN**
+- [x] **Step 4: Verify GREEN**
 
 ```bash
 npx pnpm@9.15.0 --filter @openscience/agent-worker test -- scansci.test.ts
@@ -207,12 +207,19 @@ npx pnpm@9.15.0 --filter @openscience/agent-worker typecheck
 npx pnpm@9.15.0 --filter @openscience/scansci-mcp test
 ```
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add apps/agent-worker apps/scansci-mcp infra/compose pnpm-workspace.yaml pnpm-lock.yaml
 git commit -m "feat(scansci): route Hermes through upstream MCP"
 ```
+
+Actual evidence: Worker retrieval `20/20`, focused ScanSci `5/5`, Worker
+typecheck/build and MCP runtime contract green. On the ECS candidate, the real
+Worker called the official MCP for `arXiv:2009.06045v1`, obtained source
+`arXiv`, `%PDF-`, 24,671,920 bytes and SHA-256
+`d57dc94c05ca99ccb33f8186e9317353c663a638cde1c0c8a90c7c2d029f484a`;
+the shared staging volume contained zero PDFs after acknowledgement.
 
 ### Task 4: Integrate official login and immutable deployment
 
@@ -234,21 +241,21 @@ git commit -m "feat(scansci): route Hermes through upstream MCP"
 
 - Produces: stopped-by-default official `scansci-auth` profile sharing `scansci-data`, exact MCP image/runtime verifier, active+rollback retention, and loopback-only operator login.
 
-- [ ] **Step 1: Write the failing runtime/deploy contract tests**
+- [x] **Step 1: Write the failing runtime/deploy contract tests**
 
 Assert exact image labels/version, MCP tool discovery, data/paper mounts, no database/application secrets, loopback-only auth tunnel, official login command, active+rollback retention, and rollback preservation of `scansci-data`.
 
-- [ ] **Step 2: Verify RED**
+- [x] **Step 2: Verify RED**
 
 ```bash
 node --test infra/scripts/verify-scansci-mcp-runtime.test.mjs infra/scripts/production-deploy-transaction.test.mjs infra/scripts/production-release-retention.test.mjs
 ```
 
-- [ ] **Step 3: Implement the minimal deployment integration**
+- [x] **Step 3: Implement the minimal deployment integration**
 
 The auth profile launches the official publisher login for the fixed acceptance DOI under the same X display and data directory. Existing SSH/noVNC plumbing is reused only as transport; custom `scansci_legal.auth_login` and cookie-proof code are not called.
 
-- [ ] **Step 4: Run focused local gates**
+- [x] **Step 4: Run focused local gates**
 
 ```bash
 node --test infra/scripts/verify-scansci-mcp-runtime.test.mjs infra/scripts/production-deploy-transaction.test.mjs infra/scripts/production-release-retention.test.mjs
@@ -256,12 +263,18 @@ npx pnpm@9.15.0 build
 npx pnpm@9.15.0 typecheck
 ```
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add apps/scansci-mcp infra/compose infra/scripts docs/runbooks
 git commit -m "feat(infra): deploy official ScanSci MCP"
 ```
+
+Actual evidence: official runtime/auth images, loopback noVNC transport,
+schema-5 capability identity, MCP-first positive canary, active/rollback
+retention, and previous-schema-5 restoration are implemented. Focused runtime,
+retention, deploy and auth-tunnel gates plus Bash syntax are green. Production
+merge/deploy and the institutional login journey remain Task 5.
 
 ### Task 5: Deploy, accept, and remove the rejected implementation
 

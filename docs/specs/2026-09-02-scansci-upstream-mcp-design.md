@@ -32,7 +32,7 @@ The upstream package already owns source racing, login, cookie reuse, browser se
 
 ### 3.1 Chosen: official MCP service plus direct Worker client
 
-Run `scansci-pdf run --mode streamable_http` as the sole long-lived ScanSci engine. Agent Worker uses the official MCP client protocol, calls `scansci_pdf_download`, parses its structured JSON result, and reads the returned file from a read-only shared paper volume.
+Run `scansci-pdf run --mode streamable_http` as the sole long-lived ScanSci engine. Agent Worker uses the official MCP client protocol, calls `scansci_pdf_download`, parses its structured JSON result, and uses a shared paper volume whose group permissions allow only bounded ingestion and exact post-acknowledgement deletion.
 
 This preserves all 17 tools, removes the custom HTTP downloader and private function patches, and keeps the established application lifecycle above the provider boundary.
 
@@ -69,7 +69,7 @@ scansci_pdf_download(identifier=<DOI-or-arXiv>)
 
 It does not send `strategy`, `scihub_enabled`, or `use_tor` overrides for the default product request. Upstream configuration and source health choose the route. An explicit future user source request may provide a public tool argument without changing UI mode.
 
-The Worker mounts `scansci-papers` read-only and accepts only a regular, non-symlink file resolved beneath the mount, bounded to 100 MiB, beginning with `%PDF-`. It records the exact upstream `source`, source URL, content hash, byte count, and ScanSci version before copying bytes to object storage.
+The Worker mounts `scansci-papers` read-write under the dedicated shared GID 11000 and accepts only a regular, non-symlink file resolved beneath the mount, bounded to 100 MiB, beginning with `%PDF-`. It records the exact upstream `source`, source URL, content hash, byte count, and ScanSci version before copying bytes to object storage, then unlinks that exact staging file. No other MCP data path is writable by Worker.
 
 ### 4.3 Interactive login
 
