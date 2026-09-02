@@ -2247,3 +2247,17 @@ Upstream session state persists in `scansci-data`; credentials, cookie values,
 and import files never enter Git, images, application tables, logs, or browser
 responses. Recreate `scansci-mcp` and verify a subscription-only DOI while the
 upstream session remains valid.
+
+Accepted production evidence: PR #47 exact CI `33637694396` merged as
+`761b93d4bbce77e70d676be78de0bba128974fe6`. The canonical ECS transaction
+accepted Parser schema-v3, core/search `34/34` and `2/2`, BGE CPU, exact MCP
+image, all 17 tools, Worker-origin MCP discovery, real OA PDF, application
+health, public CAS and retention with rollback `e9e2058…`. Exact cleanup then
+removed the two peer-free legacy networks, seven unreferenced volumes, two old
+auth image tags, browser systemd/drop-ins/iptables/Squid rules, stale host
+Secrets and the transient eval root. Inactive builder cache changed from
+29.21GB to 0; root disk changed from 66G/148G used (47%, 76G available) to
+37G/148G used (27%, 105G available). `scansci-data`, `scansci-papers`, product
+databases/object storage, BGE, monitoring and backups were retained. No broad
+system or volume prune was run. Institutional cookie import and subscription
+PDF/four-entry acceptance remain explicit pending work.

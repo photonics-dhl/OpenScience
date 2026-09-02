@@ -324,14 +324,14 @@ with an administrator-exported Netscape file; subscription-only and post-recreat
 proof remain pending. The fixed DOI's Semantic Scholar PDF is only an OA proof,
 not the required subscription-only evidence.
 
-- [ ] **Step 4: Delete rejected repository artifacts**
+- [x] **Step 4: Delete rejected repository artifacts**
 
 Resolve the exact file list from tracked dependencies, remove it in one cleanup commit, and run `rg`/Knip/dependency-cruiser to prove no active imports or config remain. Git history is the only retained copy.
 
-- [ ] **Step 5: Clean exact ECS artifacts**
+- [x] **Step 5: Clean exact ECS artifacts**
 
 After the new release is healthy, stop/remove only rejected ScanSci containers, images, empty job volumes, obsolete networks/systemd units, exact evaluation directories, and inactive Docker builder cache. Keep active/rollback application images, `scansci-data`, accepted object-storage data, models, monitoring data, and backups. Record before/after `docker system df -v` and `df -h`; do not run `docker system prune` or volume prune.
 
-- [ ] **Step 6: Close documentation and commit**
+- [x] **Step 6: Close documentation and commit**
 
 Update Taskmaster to 10/12 only after all production gates pass. Sync CURRENT docs/index/registry/runbook, run docs gates, commit, push, and remove obsolete remote branches only after ancestry checks.
