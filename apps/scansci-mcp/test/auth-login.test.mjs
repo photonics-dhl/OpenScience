@@ -15,14 +15,20 @@ import types
 wrapper_path = sys.argv[1]
 expected_proxy = "http://openscience-egress:7891"
 calls = []
+browser_calls = []
 control = {"config": {}, "outcome": True}
 
 def official_launch(*args, **kwargs):
     calls.append((args, kwargs))
     return "official-browser"
 
+def official_open_login_browser(*args, **kwargs):
+    browser_calls.append((args, kwargs))
+    return True
+
 browser_login = types.ModuleType("scansci_pdf.browser_login")
 browser_login.launch = official_launch
+browser_login.open_login_browser = official_open_login_browser
 config_module = types.ModuleType("scansci_pdf.config")
 config_module.load_config = lambda: dict(control["config"])
 
@@ -80,6 +86,17 @@ assert calls == [
         "args": ["--keep-this", f"--proxy-server={expected_proxy}"],
     })
 ]
+assert browser_login.open_login_browser is not official_open_login_browser
+assert browser_login.open_login_browser(
+    "https://publisher.example/login",
+    {},
+    max_wait=180,
+    keep_alive=True,
+) is True
+assert browser_calls == [(
+    ("https://publisher.example/login", {}),
+    {"max_wait": 900, "keep_alive": True},
+)]
 
 for configured, environment in [({}, ""), ({"network_proxy": expected_proxy}, "http://wrong")]:
     if environment:
@@ -87,6 +104,7 @@ for configured, environment in [({}, ""), ({"network_proxy": expected_proxy}, "h
     else:
         os.environ.pop("SCANSCI_PDF_PROXY", None)
     browser_login.launch = official_launch
+    browser_login.open_login_browser = official_open_login_browser
     try:
         module.install_proxy_override(configured)
     except RuntimeError:
@@ -96,14 +114,17 @@ for configured, environment in [({}, ""), ({"network_proxy": expected_proxy}, "h
 
 os.environ.pop("SCANSCI_PDF_PROXY", None)
 browser_login.launch = official_launch
+browser_login.open_login_browser = official_open_login_browser
 module.install_proxy_override({"network_proxy": expected_proxy})
 assert browser_login.launch is not official_launch
+assert browser_login.open_login_browser is not official_open_login_browser
 
 def run_main(outcome):
     control["config"] = {"network_proxy": expected_proxy}
     control["outcome"] = outcome
     FakeClient.instances.clear()
     browser_login.launch = official_launch
+    browser_login.open_login_browser = official_open_login_browser
     os.environ["SCANSCI_PDF_PROXY"] = expected_proxy
     try:
         result = module.main(["auth-login.py", "sciencedirect"])
