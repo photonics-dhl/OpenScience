@@ -214,26 +214,88 @@ def _strict_operator_login(
     with tempfile.TemporaryDirectory(prefix="login-", dir=profile_parent) as temporary:
         profile = Path(temporary) / "profile"
         profile.mkdir(mode=0o700)
-        with browser_session(profile) as (context, page):
-            saw_institutional_idp = False
+        with browser_session(profile) as (context, initial_page):
+            tracked_pages: dict[int, object] = {id(initial_page): initial_page}
+            idp_pages: set[int] = set()
 
-            def observe_navigation(value: object) -> None:
-                nonlocal saw_institutional_idp
+            def observe_navigation(owner: object, value: object) -> None:
                 if isinstance(value, str) and _institutional_idp_url(value):
-                    saw_institutional_idp = True
+                    idp_pages.add(id(owner))
 
-            def observe_frame(frame: object) -> None:
+            def observe_frame(owner: object, frame: object) -> None:
                 try:
-                    main_frame = getattr(page, "main_frame", None)
+                    main_frame = getattr(owner, "main_frame", None)
                     if main_frame is not None and frame is not main_frame:
                         return
-                    observe_navigation(getattr(frame, "url"))
+                    observe_navigation(owner, getattr(frame, "url"))
                 except Exception:
                     return
 
-            page_on = getattr(page, "on", None)
-            if callable(page_on):
-                page_on("framenavigated", observe_frame)
+            def page_opener(candidate: object) -> object | None:
+                opener = getattr(candidate, "opener", None)
+                if not callable(opener):
+                    return None
+                try:
+                    return opener()
+                except Exception:
+                    return None
+
+            def register_page(candidate: object) -> None:
+                identity = id(candidate)
+                if identity in tracked_pages:
+                    return
+                opener = page_opener(candidate)
+                if opener is None or id(opener) not in tracked_pages:
+                    return
+                tracked_pages[identity] = candidate
+                candidate_on = getattr(candidate, "on", None)
+                if callable(candidate_on):
+                    candidate_on(
+                        "framenavigated",
+                        lambda frame, owner=candidate: observe_frame(owner, frame),
+                    )
+
+            initial_on = getattr(initial_page, "on", None)
+            if callable(initial_on):
+                initial_on(
+                    "framenavigated",
+                    lambda frame: observe_frame(initial_page, frame),
+                )
+            context_on = getattr(context, "on", None)
+            if callable(context_on):
+                context_on("page", register_page)
+
+            def discover_pages() -> None:
+                candidates = getattr(context, "pages", ())
+                if callable(candidates):
+                    try:
+                        candidates = candidates()
+                    except Exception:
+                        return
+                if not isinstance(candidates, (list, tuple)):
+                    return
+                for candidate in candidates:
+                    register_page(candidate)
+
+            def is_open(candidate: object) -> bool:
+                closed = getattr(candidate, "is_closed", None)
+                if not callable(closed):
+                    return True
+                try:
+                    return closed() is not True
+                except Exception:
+                    return False
+
+            def has_idp_lineage(candidate: object) -> bool:
+                current: object | None = candidate
+                visited: set[int] = set()
+                while current is not None and id(current) not in visited:
+                    identity = id(current)
+                    visited.add(identity)
+                    if identity in idp_pages:
+                        return True
+                    current = page_opener(current)
+                return False
 
             def publisher_cookie_json() -> bytes:
                 cookies = [
@@ -246,36 +308,57 @@ def _strict_operator_login(
                 return cookie_json
 
             try:
-                page.goto(config.login_url, wait_until="domcontentloaded", timeout=60_000)
+                initial_page.goto(config.login_url, wait_until="domcontentloaded", timeout=60_000)
             except Exception:
                 pass
             for _attempt in range(60):
                 sleeper(3)
-                try:
-                    current_url = page.url
-                except Exception as error:
-                    raise BrowserPolicyError("strict_login_browser_closed") from error
-                if not isinstance(current_url, str):
+                discover_pages()
+                open_pages = [candidate for candidate in tracked_pages.values() if is_open(candidate)]
+                if not open_pages:
                     raise BrowserPolicyError("strict_login_browser_closed")
-                observe_navigation(current_url)
-                lowered = current_url.lower()
-                on_publisher = _publisher_return_url(current_url, return_domains)
-                on_login = any(keyword in lowered for keyword in (
-                    "login", "institutional", "wayf", "saml", "cas", "idp",
-                ))
-                if not on_publisher or on_login:
+                readable_page = False
+                for candidate in reversed(open_pages):
+                    try:
+                        current_url = candidate.url
+                    except Exception:
+                        continue
+                    if not isinstance(current_url, str):
+                        continue
+                    readable_page = True
+                    observe_navigation(candidate, current_url)
+                    lowered = current_url.lower()
+                    on_publisher = _publisher_return_url(current_url, return_domains)
+                    on_login = any(keyword in lowered for keyword in (
+                        "login", "institutional", "wayf", "saml", "cas", "idp",
+                    ))
+                    if not on_publisher or on_login or not has_idp_lineage(candidate):
+                        continue
+                    try:
+                        cookie_json = publisher_cookie_json()
+                    except BrowserProtocolError:
+                        return False
+                    _write_staged_cookie(staging_root, cookie_json)
+                    return True
+                if not readable_page:
+                    raise BrowserPolicyError("strict_login_browser_closed")
+            discover_pages()
+            for candidate in reversed([
+                tracked for tracked in tracked_pages.values() if is_open(tracked)
+            ]):
+                try:
+                    current_url = candidate.url
+                except Exception:
                     continue
-                cookie_json = publisher_cookie_json()
-                if not saw_institutional_idp:
+                if (
+                    not isinstance(current_url, str)
+                    or not _publisher_return_url(current_url, return_domains)
+                    or not has_idp_lineage(candidate)
+                ):
                     continue
-                _write_staged_cookie(staging_root, cookie_json)
-                return True
-            if on_publisher:
                 try:
                     cookie_json = publisher_cookie_json()
                 except BrowserProtocolError:
-                    return False
-                if not saw_institutional_idp:
                     return False
                 _write_staged_cookie(staging_root, cookie_json)
                 return True

@@ -476,6 +476,149 @@ class AuthLoginCanaryContractTest(unittest.TestCase):
             cookie = root / "scansci" / "cache" / "carsi_cookies" / "sciencedirect.json"
             self.assertEqual(json.loads(cookie.read_text(encoding="utf-8"))[0]["value"], "federated-session")
 
+    def test_strict_login_follows_trusted_carsi_popup_after_idp_return(self) -> None:
+        class Page:
+            def __init__(self, url: str, opener: object | None = None) -> None:
+                self.url = url
+                self.main_frame = SimpleNamespace(url=url)
+                self._opener = opener
+                self._closed = False
+                self._frame_callback = None
+
+            def goto(self, *_args: object, **_kwargs: object) -> None:
+                self.url = "https://zjuam.zju.edu.cn/cas/login"
+                self.main_frame.url = self.url
+                if self._frame_callback is not None:
+                    self._frame_callback(self.main_frame)
+
+            def on(self, event: str, callback: object) -> None:
+                if event == "framenavigated":
+                    self._frame_callback = callback
+
+            def opener(self) -> object | None:
+                return self._opener
+
+            def is_closed(self) -> bool:
+                return self._closed
+
+        initial = Page("https://www.sciencedirect.com/user/institution/login")
+        publisher = Page("https://www.sciencedirect.com/", opener=initial)
+
+        class Context:
+            def __init__(self) -> None:
+                self.pages = [initial]
+                self._page_callback = None
+
+            def on(self, event: str, callback: object) -> None:
+                if event == "page":
+                    self._page_callback = callback
+
+            def cookies(self, _urls: object = None) -> list[dict[str, object]]:
+                return [{
+                    "name": "PF", "value": "carsi-popup-session",
+                    "domain": "id.elsevier.com", "path": "/",
+                }]
+
+            def open_carsi_return(self) -> None:
+                initial._closed = True
+                self.pages.append(publisher)
+                assert self._page_callback is not None
+                self._page_callback(publisher)
+
+        context = Context()
+
+        @contextmanager
+        def browser(_profile: Path):
+            yield context, initial
+
+        def sleeper(_seconds: float) -> None:
+            context.open_carsi_return()
+
+        with mock.patch(
+            "scansci_legal.auth_login._load_carsi_publisher_configs",
+            return_value={
+                "sciencedirect": SimpleNamespace(
+                    login_url="https://www.sciencedirect.com/user/institution/login",
+                    domains=["sciencedirect.com", "elsevier.com"],
+                ),
+            },
+        ), tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            result = auth_login._strict_operator_login(
+                root, browser_session=browser, sleeper=sleeper,
+            )
+
+            self.assertIs(result, True)
+            cookie = root / "scansci" / "cache" / "carsi_cookies" / "sciencedirect.json"
+            self.assertEqual(
+                json.loads(cookie.read_text(encoding="utf-8"))[0]["value"],
+                "carsi-popup-session",
+            )
+
+    def test_strict_login_rejects_unrelated_publisher_popup_after_idp(self) -> None:
+        class Page:
+            def __init__(self, url: str, opener: object | None = None) -> None:
+                self.url = url
+                self.main_frame = SimpleNamespace(url=url)
+                self._opener = opener
+                self._frame_callback = None
+
+            def goto(self, *_args: object, **_kwargs: object) -> None:
+                self.url = "https://zjuam.zju.edu.cn/cas/login"
+                self.main_frame.url = self.url
+                if self._frame_callback is not None:
+                    self._frame_callback(self.main_frame)
+
+            def on(self, event: str, callback: object) -> None:
+                if event == "framenavigated":
+                    self._frame_callback = callback
+
+            def opener(self) -> object | None:
+                return self._opener
+
+            def is_closed(self) -> bool:
+                return False
+
+        initial = Page("https://www.sciencedirect.com/user/institution/login")
+        unrelated = Page("https://www.sciencedirect.com/")
+
+        class Context:
+            pages = [initial, unrelated]
+
+            @staticmethod
+            def on(_event: str, _callback: object) -> None:
+                return None
+
+            @staticmethod
+            def cookies(_urls: object = None) -> list[dict[str, object]]:
+                return [{
+                    "name": "PF", "value": "unrelated-popup",
+                    "domain": "id.elsevier.com", "path": "/",
+                }]
+
+        @contextmanager
+        def browser(_profile: Path):
+            yield Context(), initial
+
+        with mock.patch(
+            "scansci_legal.auth_login._load_carsi_publisher_configs",
+            return_value={
+                "sciencedirect": SimpleNamespace(
+                    login_url="https://www.sciencedirect.com/user/institution/login",
+                    domains=["sciencedirect.com", "elsevier.com"],
+                ),
+            },
+        ), tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            result = auth_login._strict_operator_login(
+                root, browser_session=browser, sleeper=lambda _seconds: None,
+            )
+
+            self.assertIs(result, False)
+            self.assertFalse(
+                (root / "scansci" / "cache" / "carsi_cookies" / "sciencedirect.json").exists(),
+            )
+
     def test_fixed_canary_uses_exact_doi_and_cookie_snapshot(self) -> None:
         cookie_json = b'[{"name":"session","value":"verified","domain":".sciencedirect.com"}]'
         proof = BrowserProof(
