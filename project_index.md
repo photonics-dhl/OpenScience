@@ -1,7 +1,7 @@
 # OpenScience (XGS) 项目文件索引
 
 > 维护规则：创建/修改/移动文件后必须更新本索引。创建新文件前先查本表防重复。
-> **CURRENT source/deployment anchor（2026-09-02）：** candidate branch / code HEAD / repository main `codex/scansci-publisher-return-gate` / `ba74c1d7071ba5fc4f7f7df228a933d145cf42e6` / `49297f4ef851ef71e13665cbb887b665db978b95`；application source/production release `49297f4ef851ef71e13665cbb887b665db978b95`；rollback `5cd6e5ed0a5a6c39cb79643faa22cc4e3b33bf93`；production core/search `33/33` / `2/2`。Publisher-return gate 本地 READY，待 CI/ECS；浙江大学登录已证明、固定 DOI canary/持久机构 PDF/四入口 pending。Taskmaster 9/12，Task 11 blocked。candidate/docs HEAD 与 ECS application source 不得混写。
+> **CURRENT source/deployment anchor（2026-09-02）：** candidate branch / code base / repository main `codex/scansci-upstream-mcp` / `c6b93c5b1e34b4a1871e8f24d2845406e4a7795b` / `c6b93c5b1e34b4a1871e8f24d2845406e4a7795b`；application source/production release `405b85a8e1d6b3aec51d2de20ec6ce5b93ab73e4`；rollback `09093e7e879dbc7e9175e957f217afe5c6eb2e67`；production core/search `33/33` / `2/2`。旧私有 ScanSci 候选冻结，CURRENT 改为上游 `v1.13.1` 官方 MCP；ECS 正向试点、产品切换与旧文件清理 pending。Taskmaster 9/12，Task 11 blocked。candidate/docs HEAD 与 ECS release 不得混写。
 
 ## 根目录
 | 路径 | 用途 | 状态 |
@@ -136,7 +136,8 @@
 | `docs/specs/2026-08-19-hermes-wanko-live2d-design.md` | Wanko renderer、`360/200px`、Research Folio；§13.3–13.7 carried sheet、speech、skill reject、action-first 与联合稳定器；§13.8 detached/protected physical fallback | **CURRENT Hermes visual/guide design / §13.8 deployed**；application/release/rollback `9aef5c4` / `8395b4d` / `bf54eaa`，public no-write `10/10`，user review pending |
 | `docs/specs/2026-08-24-research-folio-product-system-design.md` | 登录到公开验证的全部真实非 Landing 产品视觉与信息架构；暖纸阅读、graphite 证据工具、18 表面、预留 Hermes 研究页边与无覆盖合同 | **CURRENT non-Landing product UI spec / IMPLEMENTED**；Landing unchanged |
 | `docs/specs/2026-08-26-hermes-research-intelligence-platform-design.md` | Claim-first RO、可定位 Evidence、身份静默路由、CPU parser/OCR、BGE-M3 hybrid retrieval、数据库分离、富媒体与 Hermes 受控权限的统一产品/技术合同；§7.2.1 固定 parser debt closeout 为 14/2/0/0、正式 table locator 与 v3 原因码报告 | **CURRENT / TASKS 1–9 DONE / TASK 10 REOPENED**；production `405b85a`，rollback `09093e7`，Taskmaster 9/12；CARSI credential blocked |
-| `docs/specs/2026-08-30-scansci-default-capability-design.md` | 一次浙江大学 CARSI 认证→publisher Cookie 持久 Hermes 默认文献下载；不保存账号密码、统一 acquisition API；§3.1–3.6 增补独立无 Secret browser worker、相反只读 job tmpfs、无 fallback Patchright、CDP bounded browser proof、180/210s 窗口与 strict non-OA ready gate | **CURRENT APPROVED / TASKS 3A–3B COMPLETE `781e830`**；Task 10 in progress，Task 11 blocked |
+| `docs/specs/2026-08-30-scansci-default-capability-design.md` | 旧版私有 Python/三容器 ScanSci 设计 | **DEPRECATED 2026-09-02 → `docs/specs/2026-09-02-scansci-upstream-mcp-design.md`**；替代生产验收后按用户授权删除 |
+| `docs/specs/2026-09-02-scansci-upstream-mcp-design.md` | 上游 `v1.13.1` 官方 17-tool MCP、Worker 直连、持久数据/论文卷、`source_retrieval` provenance、ECS 正向验收与旧实现清理 | **CURRENT APPROVED / IMPLEMENTATION IN PROGRESS**；production 仍 `405b85a`，rollback `09093e7` |
 | `docs/plans/2026-08-26-hermes-research-intelligence-foundation-plan.md` | Taskmaster Task 1 的可执行 TDD 计划：能力台账门禁、自有 corpus、现状 parser 基准、零污染输出与全仓验收；后续三计划按实测结果展开 | **COMPLETED / TASKMASTER TASK 1 DONE**；能力候选尚未安装 |
 | `docs/plans/2026-08-26-hermes-research-intelligence-core-model-plan.md` | Taskmaster Task 2 的可执行 TDD/迁移/部署计划：Claim/Evidence/locator 合同、核心迁移 28、独立搜索数据库与 ECS-only 验收 | **COMPLETED / TASKMASTER TASK 2 DONE / ECS DEPLOYED `e0828a6`** |
 | `docs/plans/2026-08-26-hermes-document-source-map-contract-plan.md` | Taskmaster Task 3 的可执行 TDD 计划：严格 DocumentSourceMap、locator 构造/复验、Worker parser boundary、image-only false-ready 与 ECS-only 验收 | **COMPLETED / ECS DEPLOYED `ef043eb`**；final docs CI `32997554922` GREEN |

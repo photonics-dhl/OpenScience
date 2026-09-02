@@ -1,10 +1,12 @@
-# ScanSci Default Literature Acquisition Capability Design
+# DEPRECATED — ScanSci Default Literature Acquisition Capability Design
 
-> Status: APPROVED / STRICT BROWSER IMPLEMENTATION PLAN READY
-> Date: 2026-08-30
-> Strict browser extension approved: 2026-09-01
-> Owner: Hermes literature acquisition capability
-> Upstream: `scansci-pdf` 1.11.0, commit `7017814758f826ea21470a609890a7d3ca374b8e`
+> **DEPRECATED 2026-09-02 → `docs/specs/2026-09-02-scansci-upstream-mcp-design.md`.** This document describes the rejected private-library/three-container integration. It is not an implementation source. Git history retains it only until the replacement reaches production and the approved cleanup removes obsolete artifacts.
+
+- Historical status: APPROVED / STRICT BROWSER IMPLEMENTATION PLAN READY
+- Date: 2026-08-30
+- Strict browser extension approved: 2026-09-01
+- Owner: Hermes literature acquisition capability
+- Upstream: `scansci-pdf` 1.11.0, commit `7017814758f826ea21470a609890a7d3ca374b8e`
 
 The 2026-09-01 extension supersedes any claim that returning to a publisher
 hostname, saving several Cookies, or receiving HTTP 403 establishes a usable

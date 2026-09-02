@@ -1,17 +1,17 @@
 # Hermes Research Intelligence CURRENT Handoff
 
-> **CURRENT active-memory，2026-09-02。** 公网 release `405b85a` 全绿、rollback `09093e7`；匿名 Elsevier return 已 fail-closed，浙大/CARSI IdP main-frame gate 已部署。浙大 CAS 对已核对输入明确返回“用户名或密码错误”，故未发布 Cookie/ready；机构 PDF、Task 11 继续阻断，Landing/Hermes 视觉冻结。
+> **CURRENT active-memory，2026-09-02。** 公网 release `405b85a` 全绿、rollback `09093e7`；旧私有 ScanSci 候选冻结且不部署。CURRENT 改为上游 `v1.13.1` 官方 Skill/MCP，ECS 正向试点、产品切换、机构 PDF 与旧实现清理 pending；Task 11 继续阻断，Landing/Hermes 视觉冻结。
 
 ## Goal and state
 
 - 产品目标：以 3–7 个 Claim 为公开 RO 中心，提供可定位 Evidence、条件/限制、身份静默路由、CPU 文档解析、混合检索和可版本化富媒体。
 - Taskmaster `hermes-research-intelligence` 仍为 9/12；独立 ScanSci plan Tasks 1–9 done、Task 10 in progress，Task 11 blocked。
-- 当前产品主线是将一次浙江大学 CARSI 认证变成 Hermes 持久默认下载能力，并接通全部产品入口。
+- 当前产品主线是以官方 17-tool MCP 替换私有 ScanSci 引擎，保留完整来源能力，将一次浙江大学认证变成持久下载能力并接通全部产品入口。
 
 ## Version tuple
 
 - Worktree: `E:/Miscellaneous/XGS/.worktrees/readable-hermes-guidance`
-- Docs branch / code base / origin main: `codex/scansci-auth-credential-blocker-docs` / `405b85a8e1d6b3aec51d2de20ec6ce5b93ab73e4` / `405b85a8e1d6b3aec51d2de20ec6ce5b93ab73e4`
+- Candidate branch / code base / origin main: `codex/scansci-upstream-mcp` / `c6b93c5b1e34b4a1871e8f24d2845406e4a7795b` / `c6b93c5b1e34b4a1871e8f24d2845406e4a7795b`
 - Production application source / immutable release: `405b85a8e1d6b3aec51d2de20ec6ce5b93ab73e4`
 - Rollback: `09093e7e879dbc7e9175e957f217afe5c6eb2e67`; core/search migrations `33/33` / `2/2`
 - 本地 `main` 与其他 worktree 有用户改动，不得触碰或用它推断生产；上述 tuple 已从 ECS 重新实测。
@@ -59,19 +59,19 @@
 27. Strict browser、CPU browser、proxy-only `browser_net`、proof-backed session 与稳定 canary 诊断已合并；PR #36→#37 部署到 `09093e7`，ECS Parser/BGE/ScanSci OA/application/public/retention 全绿。
 28. PR #38 / CI `33550018143` 将匿名 publisher bounce 收紧为本次 main-frame 必须经过 `*.zju.edu.cn`/`*.carsi.edu.cn` 后才可取 Cookie；`evilzju.edu.cn` 回归拒绝，ScanSci `174/11/0`、全仓 lint/test 与独立复审 READY。
 29. Merge `405b85a` 经 schema-v3 16-case Parser 两阶段 canonical 部署；core/search `33/33`/`2/2`、quota `8/8`、BGE CPU、ScanSci OA、容器/公网/retention 全绿，rollback `09093e7`，验收临时目录与 auth helper 已清零。
-30. 生产登录在同一 180 秒窗口内到达 `zjuam.zju.edu.cn`；学号与学校邮箱两种用户名、同一隐藏密码均被 CAS 明确判为“用户名或密码错误”。为避免锁号已停止重试；未保存账号密码，未产生 ZJU/publisher Cookie 或 ready。
-31. Constraints：服务器验收为准，本地不运行 Docker；Windows 只用显式 Git Bash 调 canonical wrapper；不读取/打印 `.env`，不 broad prune，不删除未经批准的文件/服务器对象。
+30. 上游审计确认官方 Skill/MCP 已覆盖 17 工具、统一登录与 Cookie 持久化；旧实现依赖私有函数/monkey-patch/自建 browser protocol，PR #40 冻结。新 CURRENT spec 为 `docs/specs/2026-09-02-scansci-upstream-mcp-design.md`，tag `v1.13.1`。
+31. Constraints：服务器验收为准，本地不运行 Docker；Windows 只用显式 Git Bash 调 canonical wrapper；不读取/打印 `.env`，不 broad prune。用户已授权在官方替代生产验收后删除错误方向代码、测试、容器/网络脚本和精确服务器资源。
 
 ## Next action
 
-1. 用户先提供或重置一份可在 `zjuam.zju.edu.cn` 成功登录的当前密码；不要继续重试现有失败凭据。
-2. 用 loopback helper 在单一 180 秒窗口内完成 ZJU→Elsevier；固定非 OA canary 必须返回 institutional `%PDF-` 才发布 ready，并在 exact service 重启后仍为 ready。
-3. 用真实 institutional PDF 完成四入口/375px/one-use/72h/600s/zero-grey-Tor 与精确磁盘卫生，再关闭 Task 10。
+1. 在 ECS 启动上游 `v1.13.1` 官方 streamable-HTTP MCP，完成 list-tools 与一篇真实 OA PDF 正向试点。
+2. TDD 将 Agent Worker 切到官方 MCP，增加 `source_retrieval` provenance，按 immutable transaction 部署 merged SHA。
+3. 完成一次 ZJU 登录、持久机构下载与四入口/72h/600s，再删除旧私有实现和精确服务器资源并关闭 Task 10。
 
 ## Read first
 
 1. `AGENTS.md`
 2. 本 handoff
-3. `docs/specs/2026-08-30-scansci-default-capability-design.md`
-4. `docs/plans/2026-08-30-scansci-default-capability-plan.md` 与 `docs/plans/2026-08-30-hermes-external-retrieval-lifecycle-plan.md`
+3. `docs/specs/2026-09-02-scansci-upstream-mcp-design.md`
+4. `docs/plans/2026-09-02-scansci-upstream-mcp-plan.md`（创建后）与 `docs/plans/2026-08-30-hermes-external-retrieval-lifecycle-plan.md`
 5. `docs/specs/2026-08-26-hermes-research-intelligence-platform-design.md`，再读 `docs/progress.md`；`project_index.md` 只定向检索 CURRENT，不要从较旧 `main` 或历史 release 段落推断现状。
