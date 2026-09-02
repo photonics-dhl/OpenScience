@@ -309,26 +309,29 @@ Critical, Important or Minor findings; local build/typecheck/lint/test are green
 Use `security-review`, `requesting-code-review`, `test-gate`, and `verification-before-completion`. Required local gates are build, typecheck, lint, focused Domain/Worker/MCP/release tests, docs sync, Markdown lint, and `git diff --check`.
 
 PR #41 exact GitHub CI `33594996489` passed and merged as
-`ab290579ed81f4a30d011dea2a52e8b9b20c50f3`. The later auth bridge hotfix is
-tracked under Step 3 and must independently pass CI before deployment.
+`ab290579ed81f4a30d011dea2a52e8b9b20c50f3`. The auth bridge/parser build
+follow-up passed PR #43 exact CI `33606675500` and merged as `7daff3f…`.
 
 - [x] **Step 2: Merge and execute the canonical ECS deployment**
 
 Deploy only the merged SHA through `deploy.sh --confirm --require-parser-acceptance` with production `405b85a…` as rollback. Verify migration 34, exact images, MCP tools, containers, Parser/BGE, API/Web/Worker, Nginx, public release, journal, and retention.
 
-Actual: canonical deployment accepted `ab290579…` with rollback `405b85a…`;
-core/search are `34/34` and `2/2`, and official image/tools/storage/OA/Worker,
-Parser/BGE, application, public CAS, journal and retention gates passed.
+Actual: canonical deployment accepted `7daff3f…` with rollback `ab290579…`;
+core/search are `34/34` and `2/2`. Exact 16-case Parser acceptance, official
+image/tools/storage/OA/Worker, Parser/BGE, application, public CAS, journal and
+retention gates passed; transient eval output was removed after report publish.
 
 - [ ] **Step 3: Complete the positive production journey**
 
 Run OA download, one official ZJU institutional login, one subscription-only download, MCP container recreation and repeat download, then one request from each of the four existing product entries. Verify one-use link and 72-hour metadata without waiting 72 hours by checking the exact stored timestamps and existing GC contract once.
 
-Current blocker correction: `6bed92f` removes the ineffective host port publish
-from the internal auth network and forwards SSH to the sole fixed
-`172.25.0.2:6080` peer. Canonical start now recreates and verifies the proxy-only
-firewall before launching auth; ECS HTTP/RFB passed and helper resources returned
-to zero. Exact CI/merged deployment precede the institutional journey.
+Current state: official MCP has `carsi_enabled=true` and Zhejiang University
+selected, but the pinned upstream visible login browser ignored
+`network_proxy`, failed ScienceDirect with `ERR_NAME_NOT_RESOLVED`, then timed
+out. Candidate `263fc23` injects only the fixed Squid browser flag without
+changing the wheel or internal network; behavior/runtime/lifecycle tests and
+independent review are green, CI/deploy pending. The fixed DOI's Semantic
+Scholar PDF is only an OA proof, not the required subscription-only evidence.
 
 - [ ] **Step 4: Delete rejected repository artifacts**
 

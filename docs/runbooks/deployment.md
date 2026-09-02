@@ -1,6 +1,6 @@
 # Runbook: 部署（Deployment）
 
-> 状态：**CURRENT**。active immutable release / application source 为 `ab290579ed81f4a30d011dea2a52e8b9b20c50f3`，rollback tree 为 `405b85a8e1d6b3aec51d2de20ec6ce5b93ab73e4`。官方 ScanSci MCP 已生产；auth bridge 已合并为 main `2e458f2`，parser 构建稳定补丁 `fb6afcd` 待 CI/部署，candidate/docs HEAD 不得冒充 application source。
+> 状态：**CURRENT**。active immutable release / application source 为 `7daff3f57c0714239802ad4085daf8e131a34bc8`，rollback tree 为 `ab290579ed81f4a30d011dea2a52e8b9b20c50f3`。官方 MCP/auth bridge/parser fix 已生产；auth browser proxy candidate `263fc23` 待 CI/部署，ZJU Cookie/机构 PDF/four-entry pending。
 > 格式遵循 `.agents/skills/infra-runbook/SKILL.md` 四节强制要求。
 > 部署属 Spec §20.5"询问"级操作：执行前需用户确认，必须走 `infra/scripts/deploy.sh` + CI/CD，禁止手工改服务器代码。
 
@@ -2174,3 +2174,16 @@ rules, proxy HTTP 204, blocked MCP/Worker peers and host sensitive ports, direct
 host noVNC HTTP 200, absent host `:6080` listener, local HTTP and RFB readiness,
 and exact helper cleanup after stop. Recheck public release, migrations,
 Parser/BGE, all target containers, journal/failed/retention and `df -h`.
+
+Accepted production evidence: PR #43 / CI `33606675500` merged to `7daff3f…`;
+the server built the parser with bounded npm settings, published the exact
+16-case report, removed only its transient eval root, and completed canonical
+CAS with rollback `ab290579…`. Post-deploy checkup showed all target containers
+healthy, public/local 200 and 65G/148G used. ZJU configuration alone is not
+acceptance: require `sciencedirect.has_cookies=true` and a subscription-only PDF.
+
+The first ZJU attempt on this release exposed an upstream 1.13.1 gap:
+`browser_login.open_login_browser()` ignored the configured proxy and Chromium
+returned `ERR_NAME_NOT_RESOLVED` inside `auth_net`. Candidate `263fc23` keeps the
+network unchanged and injects only the fixed `openscience-egress:7891` browser
+flag; do not retry operator login until that candidate is merged and deployed.
