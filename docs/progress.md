@@ -4,18 +4,18 @@
 
 ## Current version tuple
 
-- Candidate branch / code HEAD / origin main: `codex/scansci-upstream-mcp` / `6bed92f5864f2f3b10d6fcb5457f57d6481651aa` / `ab290579ed81f4a30d011dea2a52e8b9b20c50f3`。
+- Candidate branch / code HEAD / origin main: `codex/scansci-upstream-mcp` / `fb6afcde561da1be097056facd56ab557079e60f` / `2e458f2a99095e4514a7abf91eddd6651d20a08f`。
 - Production application source / immutable release: `ab290579ed81f4a30d011dea2a52e8b9b20c50f3`。
 - Production rollback: `405b85a8e1d6b3aec51d2de20ec6ce5b93ab73e4`；core/search migrations `34/34` / `2/2`。
-- Taskmaster `hermes-research-intelligence` 仍为 9/12；官方 MCP 已生产，认证隧道 bridge hotfix、机构下载、四入口与旧实现精确清理 pending；Task 11 继续阻断。
+- Taskmaster `hermes-research-intelligence` 仍为 9/12；官方 MCP 已生产，认证 bridge 已合并、parser 构建稳定补丁待 CI/部署，机构下载、四入口与旧实现精确清理 pending；Task 11 继续阻断。
 
-## 2026-09-02 — Official ScanSci MCP deployed; auth bridge hotfix ready
+## 2026-09-02 — Official ScanSci auth bridge merged; parser build retry ready
 
 - 上游 `v1.13.1` 官方 Skill/MCP 已锁定并暴露完整 17-tool surface；不强制 `legal_only`，默认下载不传来源策略覆盖。旧私有实现继续冻结，须等替代版本生产验收后精确删除。
 - PR #41 / exact CI `33594996489` 合并为 `ab290579…`；canonical ECS transaction 已应用 migration 34，official MCP/auth、17 tools、Worker OA、Parser/BGE、API/Web/Worker/Nginx/public CAS/retention 全绿。active/rollback 为 `ab290579…` / `405b85a…`，旧 legal/browser/auth 容器已由 Compose 收敛移除。
 - Task 1–4 与 Task 5 Steps 1–2 完成：官方 `scansci_pdf_download` 返回 `source=arXiv`、`%PDF-`、24,671,920 bytes、SHA-256 `d57dc94c…f484a`；durable activation 后 acknowledge、policy discard、providerVersion、schema-5 rollback 与 staging `0` 均在生产接受。
-- 首次 official auth 诊断确认 Docker `internal` 网络不产生可用 host port publish。`6bed92f` 改为无 publish 的唯一 `172.25.0.2` peer，SSH tunnel 直达该地址；每次启动在同一生产锁内执行 network create→firewall/Squid prepare→start，runtime verifier 验证真实 network/peer/iptables/受控出网。ECS HTTP+RFB 正向通过，helper/peer 清零；独立复审 `0/0/0`，相关门禁 `32/32 + 5/5 + 1/1 + 44/49`、失败 0，5 项由 Linux CI 执行。
-- 下一步只合并并部署 auth bridge hotfix；随后完成一次官方 ZJU 登录、固定机构 DOI、MCP recreate、四入口、600s one-use 与 72h metadata。全部通过后再提交旧实现/服务器资源精确清理 release。
+- 首次 official auth 诊断确认 Docker `internal` 网络不产生可用 host port publish。`6bed92f` 改为无 publish 的唯一 `172.25.0.2` peer，SSH tunnel 直达该地址；每次启动在同一生产锁内执行 network create→firewall/Squid prepare→start，runtime verifier 验证真实 network/peer/iptables/受控出网。ECS HTTP+RFB 正向通过，helper/peer 清零；独立复审 `0/0/0`，相关门禁 `32/32 + 5/5 + 1/1 + 44/49`、失败 0。PR #42 / exact CI `33603561268` 合并为 main `2e458f2…`。
+- 两次 canonical 构建均在切换前因 parser `npm ci` 瞬时 `ECONNRESET` 退出；active/rollback、容器、marker 与 journal 未变化。ECS 同代理用五次有界 registry 重试和每 origin 三连接已正向构建；`fb6afcd` 将相同参数固化，定向门禁 `10/10`、全仓 lint/docs-sync 与独立复审 `0/0/0` 全绿。下一步经 CI 合并并部署新 main SHA，再做官方 ZJU、机构 DOI、MCP recreate、四入口、600s/72h 验收。
 
 ## 2026-09-02 — ScanSci IdP gate deployed; ZJU credential blocked (`405b85a`)
 

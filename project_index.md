@@ -1,7 +1,7 @@
 # OpenScience (XGS) 项目文件索引
 
 > 维护规则：创建/修改/移动文件后必须更新本索引。创建新文件前先查本表防重复。
-> **CURRENT source/deployment anchor（2026-09-02）：** candidate branch / code HEAD / repository main `codex/scansci-upstream-mcp` / `6bed92f5864f2f3b10d6fcb5457f57d6481651aa` / `ab290579ed81f4a30d011dea2a52e8b9b20c50f3`；application source/production release `ab290579ed81f4a30d011dea2a52e8b9b20c50f3`；rollback `405b85a8e1d6b3aec51d2de20ec6ce5b93ab73e4`；production core/search `34/34` / `2/2`。官方 MCP 已生产；auth bridge hotfix、机构 PDF、四入口与旧文件精确清理 pending。Taskmaster 9/12，Task 11 blocked。candidate/docs HEAD 与 ECS release 不得混写。
+> **CURRENT source/deployment anchor（2026-09-02）：** candidate branch / code HEAD / repository main `codex/scansci-upstream-mcp` / `fb6afcde561da1be097056facd56ab557079e60f` / `2e458f2a99095e4514a7abf91eddd6651d20a08f`；application source/production release `ab290579ed81f4a30d011dea2a52e8b9b20c50f3`；rollback `405b85a8e1d6b3aec51d2de20ec6ce5b93ab73e4`；production core/search `34/34` / `2/2`。官方 MCP 已生产，auth bridge 已合并；parser 构建稳定补丁、机构 PDF、四入口与旧文件精确清理 pending。Taskmaster 9/12，Task 11 blocked。candidate/docs HEAD 与 ECS release 不得混写。
 
 ## 根目录
 | 路径 | 用途 | 状态 |

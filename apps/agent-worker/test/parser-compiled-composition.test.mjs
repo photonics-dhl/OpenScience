@@ -61,6 +61,18 @@ function parserImageCopies() {
   return copies;
 }
 
+test('parser image bounds npm concurrency and retries transient registry resets', () => {
+  const dockerfile = readFileSync(new URL('../Dockerfile.parser', import.meta.url), 'utf8');
+  const install = dockerfile.replace(/\\\r?\n[ \t]*/gu, ' ')
+    .split(/\r?\n/u)
+    .find((line) => line.startsWith('RUN npm ci '));
+  assert.match(install ?? '', /--fetch-retries=5\b/u);
+  assert.match(install ?? '', /--fetch-retry-factor=2\b/u);
+  assert.match(install ?? '', /--fetch-retry-mintimeout=1000\b/u);
+  assert.match(install ?? '', /--fetch-retry-maxtimeout=5000\b/u);
+  assert.match(install ?? '', /--maxsockets=3\b/u);
+});
+
 function parserImageDomainCopies(dockerfile) {
   const copies = [];
   const logicalDockerfile = dockerfile.replace(/\\\r?\n[ \t]*/gu, ' ');

@@ -1,6 +1,6 @@
 # Runbook: 部署（Deployment）
 
-> 状态：**CURRENT**。active immutable release / application source 为 `ab290579ed81f4a30d011dea2a52e8b9b20c50f3`，rollback tree 为 `405b85a8e1d6b3aec51d2de20ec6ce5b93ab73e4`。官方 ScanSci MCP 已生产；auth bridge hotfix `6bed92f` 尚未合并/部署，candidate/docs HEAD 不得冒充 application source。
+> 状态：**CURRENT**。active immutable release / application source 为 `ab290579ed81f4a30d011dea2a52e8b9b20c50f3`，rollback tree 为 `405b85a8e1d6b3aec51d2de20ec6ce5b93ab73e4`。官方 ScanSci MCP 已生产；auth bridge 已合并为 main `2e458f2`，parser 构建稳定补丁 `fb6afcd` 待 CI/部署，candidate/docs HEAD 不得冒充 application source。
 > 格式遵循 `.agents/skills/infra-runbook/SKILL.md` 四节强制要求。
 > 部署属 Spec §20.5"询问"级操作：执行前需用户确认，必须走 `infra/scripts/deploy.sh` + CI/CD，禁止手工改服务器代码。
 
@@ -2154,7 +2154,9 @@ official auth profile has no `ports` entry and owns the sole static
 `172.25.0.2` peer on internal `auth_net`. `scansci-auth-tunnel.sh start 6080`
 must acquire the production lock, create the stopped helper, run
 `prepare-scansci-auth-network.sh`, start it, then open local SSH forwarding to
-`172.25.0.2:6080`.
+`172.25.0.2:6080`. Parser image installation keeps `npm ci` lockfile/integrity
+semantics but uses five bounded fetch retries, 1–5 second backoff and three
+registry sockets; a terminal failure must still abort before production CAS.
 
 #### Rollback
 
