@@ -11,7 +11,7 @@
 ## Version tuple
 
 - Worktree: `E:/Miscellaneous/XGS/.worktrees/readable-hermes-guidance`
-- Candidate branch / code release / repository main: `codex/scansci-upstream-mcp` / `80db41e7ee0a1c8158d3f335dc1b2fbf6f2bb2bf` / `80db41e7ee0a1c8158d3f335dc1b2fbf6f2bb2bf`；后续 docs-only main 可领先生产。
+- Candidate branch / production code release: `codex/scansci-upstream-mcp` / `80db41e7ee0a1c8158d3f335dc1b2fbf6f2bb2bf`；repository main 可由 docs-only commit 领先生产。
 - Production application source / immutable release: `80db41e7ee0a1c8158d3f335dc1b2fbf6f2bb2bf`
 - Rollback: `761b93d4bbce77e70d676be78de0bba128974fe6`；两者均 official-only；core/search migrations `34/34` / `2/2`。本地 `main` 与其他 worktree 不得用于推断生产；tuple 已从 ECS 实测。
 
