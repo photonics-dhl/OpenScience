@@ -1,7 +1,7 @@
 import asyncio
 
 from mcp import ClientSession
-from mcp.client.streamable_http import streamablehttp_client
+from mcp.client.streamable_http import streamable_http_client
 
 
 EXPECTED_TOOLS = {
@@ -26,7 +26,7 @@ EXPECTED_TOOLS = {
 
 
 async def probe() -> None:
-    async with streamablehttp_client("http://127.0.0.1:8000/mcp") as streams:
+    async with streamable_http_client("http://127.0.0.1:8000/mcp") as streams:
         async with ClientSession(*streams) as session:
             await session.initialize()
             tools = await session.list_tools()

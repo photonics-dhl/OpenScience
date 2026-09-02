@@ -22,6 +22,7 @@ export type ScanSciAcquireResult =
     mimeType: 'application/pdf';
     access: { kind: 'open_access'; license: string } | { kind: 'source_retrieval'; source: string };
     acknowledge: () => Promise<void>;
+    discard: () => Promise<void>;
     entitlementValidUntil?: Date;
   }
   | { status: 'unavailable'; provider: typeof PROVIDER; code: 'disabled' | 'auth_required' | 'not_found' | 'not_configured' | 'rate_limited' | 'timeout' | 'upstream_error' | 'invalid_response'; retryable: boolean }
@@ -89,7 +90,7 @@ function sourceUrl(result: ScanSciMcpDownload, identifier: string): string {
 
 async function readBoundedPdf(root: string, candidate: string, maximumBytes: number): Promise<{
   bytes: Buffer;
-  acknowledge: () => Promise<void>;
+  cleanup: () => Promise<void>;
 }> {
   const rootPath = await realpath(root);
   const targetPath = resolve(isAbsolute(candidate) ? candidate : resolve(rootPath, candidate));
@@ -128,11 +129,11 @@ async function readBoundedPdf(root: string, candidate: string, maximumBytes: num
   } finally {
     await handle.close();
   }
-  let acknowledged = false;
+  let cleanedUp = false;
   return {
     bytes,
-    acknowledge: async () => {
-      if (acknowledged) return;
+    cleanup: async () => {
+      if (cleanedUp) return;
       const beforeDelete = await lstat(targetPath);
       if (beforeDelete.dev !== before.dev || beforeDelete.ino !== before.ino
         || !beforeDelete.isFile() || beforeDelete.isSymbolicLink()
@@ -140,7 +141,7 @@ async function readBoundedPdf(root: string, candidate: string, maximumBytes: num
         throw new Error('ScanSci PDF changed before cleanup');
       }
       await unlink(targetPath);
-      acknowledged = true;
+      cleanedUp = true;
     },
   };
 }
@@ -206,7 +207,8 @@ export function createScanSciAdapter(config: ScanSciConfig = {}) {
         access: license
           ? { kind: 'open_access', license }
           : { kind: 'source_retrieval', source },
-        acknowledge: staged.acknowledge,
+        acknowledge: staged.cleanup,
+        discard: staged.cleanup,
       };
     },
   };

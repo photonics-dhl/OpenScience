@@ -33,6 +33,8 @@ test('official ScanSci image is pinned and runs only the public MCP entrypoint',
   assert.match(entrypoint, /nginx -c \/opt\/scansci\/nginx-mcp\.conf -g 'daemon off;'/);
   assert.match(entrypoint, /wait -n/);
   assert.match(entrypoint, /kill "\$pid"/);
+  assert.match(healthcheck, /from mcp\.client\.streamable_http import streamable_http_client/);
+  assert.doesNotMatch(healthcheck, /streamablehttp_client/);
   assert.match(healthcheck, /session\.initialize\(\)/);
   assert.match(healthcheck, /session\.list_tools\(\)/);
   assert.match(healthcheck, /scansci_pdf_download/);

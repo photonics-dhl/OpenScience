@@ -143,6 +143,7 @@ describe('source.retrieve handler replay safety', () => {
         mimeType: 'application/pdf',
         access: { kind: 'open_access', license: 'CC-BY-4.0' },
         acknowledge,
+        discard: vi.fn(async () => undefined),
       }) },
     });
     const deps: any = { prisma, storage, malwareScanner: async () => undefined };
@@ -202,6 +203,7 @@ describe('source.retrieve handler replay safety', () => {
         sourceUrl: 'https://doi.org/10.1000/test', providerVersion: '1.13.1', bytes,
         contentHash: 'b'.repeat(64), mimeType: 'application/pdf',
         access: { kind: 'source_retrieval', source: 'publisher' }, acknowledge,
+        discard: vi.fn(async () => undefined),
       }) },
     });
     await expect(handler({

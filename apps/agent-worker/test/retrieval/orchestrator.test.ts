@@ -31,6 +31,8 @@ describe('source retrieval orchestration', () => {
   it('does not persist full text when the rights checker declines caching', async () => {
     const persist = vi.fn();
     const observeScanSci = vi.fn(async () => undefined);
+    const acknowledge = vi.fn(async () => undefined);
+    const discard = vi.fn(async () => undefined);
     const result = await executeSourceRetrieval({
       query: 'paper', providers: ['scansci'], includeFullText: true, identifier: '10.1000/test', limit: 1,
     }, {
@@ -40,7 +42,7 @@ describe('source retrieval orchestration', () => {
         status: 'succeeded', provider: 'scansci', route: 'open_access', source: 'Unpaywall',
         sourceUrl: 'https://example.org/paper.pdf', providerVersion: '1.13.1',
         bytes: Buffer.from('%PDF'), contentHash: 'a'.repeat(64), mimeType: 'application/pdf',
-        access: { kind: 'open_access', license: '' }, acknowledge: async () => undefined,
+        access: { kind: 'open_access', license: '' }, acknowledge, discard,
       }) },
       persist,
       observeScanSci,
@@ -48,6 +50,8 @@ describe('source retrieval orchestration', () => {
     expect(result.providers).toEqual([{ provider: 'scansci', status: 'blocked', code: 'open_license_missing' }]);
     expect(persist).not.toHaveBeenCalled();
     expect(observeScanSci).toHaveBeenCalledWith('succeeded');
+    expect(discard).toHaveBeenCalledTimes(1);
+    expect(acknowledge).not.toHaveBeenCalled();
   });
 
   it('keeps metadata search results when ScanSci full text requires authentication', async () => {
