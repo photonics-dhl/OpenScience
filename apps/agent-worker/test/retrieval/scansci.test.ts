@@ -114,6 +114,9 @@ describe('official ScanSci MCP adapter', () => {
     if (result.status !== 'succeeded') throw new Error('expected success');
     expect(result.bytes.equals(fixture.bytes)).toBe(true);
     expect(result.contentHash).toMatch(/^[0-9a-f]{64}$/);
+    expect(result.providerVersion).toBe('1.13.1');
+    await expect(access(fixture.file)).resolves.toBeUndefined();
+    await result.acknowledge();
     await expect(access(fixture.file)).rejects.toMatchObject({ code: 'ENOENT' });
     expect(calls).toEqual([{
       name: 'scansci_pdf_download',

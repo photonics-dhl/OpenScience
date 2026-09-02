@@ -61,9 +61,9 @@ case " $* " in
 esac
 case " $* " in
   *"verify-scansci-mcp-runtime.mjs"*)
-    if [ "\${FAKE_AUTH_RETAG:-0}" = 1 ] && case " $* " in *"if [ 0 = 1 ]"*) true;; *) false;; esac; then exit 8; fi
-    if [ "\${FAKE_RUNTIME_VERIFY_FAIL:-0}" = 1 ] && case " $* " in *"if [ 1 = 1 ]"*) true;; *) false;; esac; then exit 8; fi
-    if [ -n "\${FAKE_RUNTIME_VERIFY_DELAY:-}" ] && case " $* " in *"if [ 1 = 1 ]"*) true;; *) false;; esac; then sleep "$FAKE_RUNTIME_VERIFY_DELAY"; fi
+    if [ "\${FAKE_AUTH_RETAG:-0}" = 1 ] && case " $* " in *"--require-auth 0"*) true;; *) false;; esac; then exit 8; fi
+    if [ "\${FAKE_RUNTIME_VERIFY_FAIL:-0}" = 1 ] && case " $* " in *"--require-auth 1"*) true;; *) false;; esac; then exit 8; fi
+    if [ -n "\${FAKE_RUNTIME_VERIFY_DELAY:-}" ] && case " $* " in *"--require-auth 1"*) true;; *) false;; esac; then sleep "$FAKE_RUNTIME_VERIFY_DELAY"; fi
     ;;
 esac
 case " $* " in

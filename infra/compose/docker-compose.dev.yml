@@ -118,7 +118,7 @@ services:
     cap_drop: [ALL]
     security_opt: [no-new-privileges:true]
     healthcheck:
-      test: ["CMD", "python", "-c", "import socket; s=socket.create_connection(('127.0.0.1',8000),3); s.close()"]
+      test: ["CMD", "python", "/opt/scansci/healthcheck.py"]
       interval: 10s
       timeout: 5s
       retries: 18

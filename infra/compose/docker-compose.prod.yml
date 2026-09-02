@@ -228,7 +228,7 @@ services:
     security_opt:
       - no-new-privileges:true
     healthcheck:
-      test: ["CMD", "python", "-c", "import socket; s=socket.create_connection(('127.0.0.1',8000),3); s.close()"]
+      test: ["CMD", "python", "/opt/scansci/healthcheck.py"]
       interval: 10s
       timeout: 5s
       retries: 18
@@ -393,7 +393,7 @@ services:
       NO_PROXY: localhost,127.0.0.1
       SCANSCI_PDF_PROXY: http://openscience-egress:7891
     extra_hosts:
-      - "openscience-egress:172.24.0.1"
+      - "openscience-egress:172.25.0.1"
     volumes:
       - scansci-data:/data/scansci
     ports:
@@ -414,7 +414,7 @@ services:
     security_opt:
       - no-new-privileges:true
     networks:
-      - retrieval_net
+      - auth_net
     restart: "no"
 
   document-parser:

@@ -35,6 +35,18 @@ function fixture() {
       ],
       State: { Running: true, Health: { Status: 'healthy' } },
     },
+    authContainer: {
+      Image: authId,
+      Config: {
+        User: '10001:10001',
+        Labels: { 'com.docker.compose.service': 'scansci-auth' },
+        Env: ['SCANSCI_PDF_PROXY=http://openscience-egress:7891', 'HOME=/data/scansci/home'],
+      },
+      HostConfig: { PortBindings: { '6080/tcp': [{ HostIp: '127.0.0.1', HostPort: '6080' }] } },
+      NetworkSettings: { Networks: { 'openscience-prod_auth_net': {} } },
+      Mounts: [{ Type: 'volume', Name: 'openscience-prod_scansci-data', Destination: '/data/scansci', RW: true }],
+      State: { Running: true },
+    },
     workerContainer: {
       Config: {
         User: 'node',
@@ -48,6 +60,7 @@ function fixture() {
     oaCanary: { source: 'arXiv', bytes: 24_671_920, sha256: 'd'.repeat(64), cleanupCount: 0 },
     requireWorker: true,
     requireOa: true,
+    requireAuth: false,
   };
 }
 
@@ -59,6 +72,17 @@ test('official runtime snapshot binds images, mounts, tools, worker and transien
     'SCANSCI_MCP_WORKER_OK',
     'SCANSCI_MCP_OA_OK',
   ]);
+});
+
+test('runtime snapshot accepts auth only on its isolated network and loopback port', () => {
+  const isolated = fixture();
+  isolated.requireAuth = true;
+  assert.match(verifyRuntimeSnapshot(isolated).join('\n'), /SCANSCI_MCP_AUTH_OK/u);
+
+  const peerReachable = fixture();
+  peerReachable.requireAuth = true;
+  peerReachable.authContainer.NetworkSettings.Networks = { 'openscience-prod_retrieval_net': {} };
+  assert.throws(() => verifyRuntimeSnapshot(peerReachable), /auth container topology/u);
 });
 
 test('runtime snapshot rejects an application secret and a read-only worker paper mount', () => {

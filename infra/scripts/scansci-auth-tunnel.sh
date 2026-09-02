@@ -263,7 +263,7 @@ remote_compose_command() {
 
 remote_verify_command() {
   local allow_auth="$1"
-  printf "flock -n -E 73 /run/lock/openscience-production-deploy/lock /bin/bash -c 'set -euo pipefail; capability=/opt/openscience/.release-capabilities/%s; mcp_id=\$(sed -n \"s/^scansci_mcp_image_id=//p\" \"\$capability\"); auth_id=\$(sed -n \"s/^scansci_auth_image_id=//p\" \"\$capability\"); [[ \"\$mcp_id\" =~ ^sha256:[0-9a-f]{64}\$ && \"\$auth_id\" =~ ^sha256:[0-9a-f]{64}\$ ]]; /usr/bin/node \"%s/infra/scripts/verify-scansci-mcp-runtime.mjs\" --release-root \"%s\" --release-sha \"%s\" --compose-file \"%s\" --expected-mcp-image-id \"\$mcp_id\" --expected-auth-image-id \"\$auth_id\" --require-worker 1 --require-oa 0; if [ %s = 1 ]; then test \"\$(docker inspect --format=\"{{.State.Running}}\" openscience-prod-scansci-auth-1)\" = true; test \"\$(docker inspect --format=\"{{.Image}}\" openscience-prod-scansci-auth-1)\" = \"\$auth_id\"; fi'" \
+  printf "flock -n -E 73 /run/lock/openscience-production-deploy/lock /bin/bash -c 'set -euo pipefail; capability=/opt/openscience/.release-capabilities/%s; mcp_id=\$(sed -n \"s/^scansci_mcp_image_id=//p\" \"\$capability\"); auth_id=\$(sed -n \"s/^scansci_auth_image_id=//p\" \"\$capability\"); [[ \"\$mcp_id\" =~ ^sha256:[0-9a-f]{64}\$ && \"\$auth_id\" =~ ^sha256:[0-9a-f]{64}\$ ]]; /usr/bin/node \"%s/infra/scripts/verify-scansci-mcp-runtime.mjs\" --release-root \"%s\" --release-sha \"%s\" --compose-file \"%s\" --expected-mcp-image-id \"\$mcp_id\" --expected-auth-image-id \"\$auth_id\" --require-worker 1 --require-oa 0 --require-auth %s'" \
     "$RELEASE_SHA" "$RELEASE_ROOT" "$RELEASE_ROOT" "$RELEASE_SHA" "$RELEASE_COMPOSE" "$allow_auth"
 }
 

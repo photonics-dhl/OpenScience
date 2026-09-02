@@ -37,8 +37,10 @@ describe('source retrieval orchestration', () => {
       semanticScholar: { search: vi.fn() },
       tavily: { search: vi.fn() },
       scansci: { acquire: async () => ({
-        status: 'succeeded', provider: 'scansci', route: 'open_access', sourceUrl: 'https://example.org/paper.pdf',
-        bytes: Buffer.from('%PDF'), contentHash: 'a'.repeat(64), mimeType: 'application/pdf', access: { kind: 'open_access' },
+        status: 'succeeded', provider: 'scansci', route: 'open_access', source: 'Unpaywall',
+        sourceUrl: 'https://example.org/paper.pdf', providerVersion: '1.13.1',
+        bytes: Buffer.from('%PDF'), contentHash: 'a'.repeat(64), mimeType: 'application/pdf',
+        access: { kind: 'open_access', license: '' }, acknowledge: async () => undefined,
       }) },
       persist,
       observeScanSci,

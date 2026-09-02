@@ -146,9 +146,9 @@ test('ScanSci production topology separates legal, browser and stopped loopback 
   assert.doesNotMatch(mcp, /env_file|DATABASE|POSTGRES|REDIS|S3_|MINIO|docker\.sock/iu);
   assert.match(auth, /profiles: \["scansci-auth"\]/u);
   assert.match(auth, /SCANSCI_PDF_PROXY: http:\/\/openscience-egress:7891/u);
-  assert.match(auth, /extra_hosts:\r?\n\s+- "openscience-egress:172\.24\.0\.1"/u);
+  assert.match(auth, /extra_hosts:\r?\n\s+- "openscience-egress:172\.25\.0\.1"/u);
   assert.match(auth, /ports:\r?\n\s+- "127\.0\.0\.1:6080:6080"/u);
-  assert.match(auth, /networks:\r?\n\s+- retrieval_net/u);
+  assert.match(auth, /networks:\r?\n\s+- auth_net/u);
   assert.match(auth, /scansci-data:\/data\/scansci/u);
   assert.match(auth, /pids_limit: 256/u);
   assert.doesNotMatch(auth, /scansci-(?:service|auth)-secrets|\/run\/secrets/u);
@@ -526,6 +526,10 @@ test('ScanSci rollback restores a previous schema 5 official MCP release', () =>
   assert.match(
     restore,
     /verify-scansci-mcp-runtime\.mjs[\s\S]*--require-worker 0[\s\S]*--require-oa 0/u,
+  );
+  assert.match(
+    transactionSource,
+    /if \[ "\$PREVIOUS_CAPABILITY_SCHEMA" = 4 \]; then[\s\S]*elif \[ "\$PREVIOUS_CAPABILITY_SCHEMA" = 3 \] && run_remote "grep -q '\^  scansci-browser:'/u,
   );
 });
 

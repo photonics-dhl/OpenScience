@@ -16,10 +16,12 @@ export type ScanSciAcquireResult =
     route: 'open_access' | 'source_retrieval';
     source: string;
     sourceUrl: string;
+    providerVersion: string;
     bytes: Buffer;
     contentHash: string;
     mimeType: 'application/pdf';
     access: { kind: 'open_access'; license: string } | { kind: 'source_retrieval'; source: string };
+    acknowledge: () => Promise<void>;
     entitlementValidUntil?: Date;
   }
   | { status: 'unavailable'; provider: typeof PROVIDER; code: 'disabled' | 'auth_required' | 'not_found' | 'not_configured' | 'rate_limited' | 'timeout' | 'upstream_error' | 'invalid_response'; retryable: boolean }
@@ -36,7 +38,11 @@ interface ScanSciConfig {
 function boundedString(value: unknown, maximum: number): string | undefined {
   if (typeof value !== 'string') return undefined;
   const normalized = value.trim();
-  return normalized && normalized.length <= maximum && !/[\u0000-\u001f\u007f]/.test(normalized)
+  const hasControlCharacter = [...normalized].some((character) => {
+    const codePoint = character.codePointAt(0) ?? 0;
+    return codePoint <= 0x1f || codePoint === 0x7f;
+  });
+  return normalized && normalized.length <= maximum && !hasControlCharacter
     ? normalized
     : undefined;
 }
@@ -81,7 +87,10 @@ function sourceUrl(result: ScanSciMcpDownload, identifier: string): string {
   return identifierLandingUrl(identifier);
 }
 
-async function readBoundedPdf(root: string, candidate: string, maximumBytes: number): Promise<Buffer> {
+async function readBoundedPdf(root: string, candidate: string, maximumBytes: number): Promise<{
+  bytes: Buffer;
+  acknowledge: () => Promise<void>;
+}> {
   const rootPath = await realpath(root);
   const targetPath = resolve(isAbsolute(candidate) ? candidate : resolve(rootPath, candidate));
   const fromRoot = relative(rootPath, targetPath);
@@ -119,12 +128,21 @@ async function readBoundedPdf(root: string, candidate: string, maximumBytes: num
   } finally {
     await handle.close();
   }
-  const beforeDelete = await lstat(targetPath);
-  if (beforeDelete.dev !== before.dev || beforeDelete.ino !== before.ino || !beforeDelete.isFile() || beforeDelete.isSymbolicLink()) {
-    throw new Error('ScanSci PDF changed before cleanup');
-  }
-  await unlink(targetPath);
-  return bytes;
+  let acknowledged = false;
+  return {
+    bytes,
+    acknowledge: async () => {
+      if (acknowledged) return;
+      const beforeDelete = await lstat(targetPath);
+      if (beforeDelete.dev !== before.dev || beforeDelete.ino !== before.ino
+        || !beforeDelete.isFile() || beforeDelete.isSymbolicLink()
+        || resolve(await realpath(targetPath)) !== targetPath) {
+        throw new Error('ScanSci PDF changed before cleanup');
+      }
+      await unlink(targetPath);
+      acknowledged = true;
+    },
+  };
 }
 
 export function createScanSciAdapter(config: ScanSciConfig = {}) {
@@ -140,13 +158,16 @@ export function createScanSciAdapter(config: ScanSciConfig = {}) {
       if (!IDENTIFIER.test(identifier) || identifier.length > 300) throw new Error('ScanSci identifier is invalid');
       if (!/^[0-9a-f]{64}$/.test(input.subjectId)) throw new Error('ScanSci subject is invalid');
       let result: ScanSciMcpDownload;
+      let providerVersion: string;
       try {
-        result = await downloadThroughScanSciMcp({
+        const response = await downloadThroughScanSciMcp({
           mcpUrl: config.mcpUrl,
           identifier,
           outputDir: config.papersDir,
           timeoutMs: config.timeoutMs ?? 360_000,
         });
+        result = response.download;
+        providerVersion = response.providerVersion;
       } catch (error) {
         const detail = error instanceof Error ? `${error.name} ${error.message}`.toLowerCase() : '';
         return {
@@ -162,9 +183,9 @@ export function createScanSciAdapter(config: ScanSciConfig = {}) {
       if (!file || !source) {
         return { status: 'unavailable', provider: PROVIDER, code: 'invalid_response', retryable: false };
       }
-      let bytes: Buffer;
+      let staged: Awaited<ReturnType<typeof readBoundedPdf>>;
       try {
-        bytes = await readBoundedPdf(config.papersDir, file, config.maximumBytes ?? MAX_PDF_BYTES);
+        staged = await readBoundedPdf(config.papersDir, file, config.maximumBytes ?? MAX_PDF_BYTES);
       } catch (error) {
         if (error instanceof Error && error.name === 'ScanSciLimitError') {
           return { status: 'blocked', provider: PROVIDER, code: 'limit_exceeded', retryable: false };
@@ -178,12 +199,14 @@ export function createScanSciAdapter(config: ScanSciConfig = {}) {
         route: license ? 'open_access' : 'source_retrieval',
         source,
         sourceUrl: sourceUrl(result, identifier),
-        bytes,
-        contentHash: createHash('sha256').update(bytes).digest('hex'),
+        providerVersion,
+        bytes: staged.bytes,
+        contentHash: createHash('sha256').update(staged.bytes).digest('hex'),
         mimeType: 'application/pdf',
         access: license
           ? { kind: 'open_access', license }
           : { kind: 'source_retrieval', source },
+        acknowledge: staged.acknowledge,
       };
     },
   };

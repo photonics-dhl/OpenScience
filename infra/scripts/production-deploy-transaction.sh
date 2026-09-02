@@ -126,7 +126,7 @@ verify_scansci_current() {
     local mcp_image_id auth_image_id
     mcp_image_id="$(read_capability_value "$RELEASE_CAPABILITIES_DIR/$RELEASE_SHA" scansci_mcp_image_id)"
     auth_image_id="$(read_capability_value "$RELEASE_CAPABILITIES_DIR/$RELEASE_SHA" scansci_auth_image_id)"
-    run_remote "/usr/bin/node '$RELEASE_ROOT/infra/scripts/verify-scansci-mcp-runtime.mjs' --release-root '$RELEASE_ROOT' --release-sha '$RELEASE_SHA' --compose-file '$COMPOSE_FILE' --expected-mcp-image-id '$mcp_image_id' --expected-auth-image-id '$auth_image_id' --require-worker '$require_worker' --require-oa '$require_oa_canary'"
+    run_remote "/usr/bin/node '$RELEASE_ROOT/infra/scripts/verify-scansci-mcp-runtime.mjs' --release-root '$RELEASE_ROOT' --release-sha '$RELEASE_SHA' --compose-file '$COMPOSE_FILE' --expected-mcp-image-id '$mcp_image_id' --expected-auth-image-id '$auth_image_id' --require-worker '$require_worker' --require-oa '$require_oa_canary' --require-auth 0"
     return
   fi
   run_remote "/usr/bin/node '$RELEASE_ROOT/infra/scripts/verify-scansci-runtime.mjs' --release-root '$RELEASE_ROOT' --release-sha '$RELEASE_SHA' --compose-file '$COMPOSE_FILE' --service-token-file '$SCANSCI_SECRET_ROOT/scansci_service_token' --capability-file '$RELEASE_CAPABILITIES_DIR/$RELEASE_SHA' --require-worker '$require_worker' --require-oa-canary '$require_oa_canary' --allow-auth 0"
@@ -138,7 +138,7 @@ verify_scansci_mcp_candidate() {
   [[ "$require_worker" =~ ^[01]$ && "$require_oa" =~ ^[01]$ ]] || return 64
   require_match final_scansci_mcp_image_id "$FINAL_SCANSCI_MCP_IMAGE_ID" '^sha256:[0-9a-f]{64}$'
   require_match final_scansci_auth_image_id "$FINAL_SCANSCI_AUTH_IMAGE_ID" '^sha256:[0-9a-f]{64}$'
-  run_remote "/usr/bin/node '$RELEASE_ROOT/infra/scripts/verify-scansci-mcp-runtime.mjs' --release-root '$RELEASE_ROOT' --release-sha '$RELEASE_SHA' --compose-file '$COMPOSE_FILE' --expected-mcp-image-id '$FINAL_SCANSCI_MCP_IMAGE_ID' --expected-auth-image-id '$FINAL_SCANSCI_AUTH_IMAGE_ID' --require-worker '$require_worker' --require-oa '$require_oa'"
+  run_remote "/usr/bin/node '$RELEASE_ROOT/infra/scripts/verify-scansci-mcp-runtime.mjs' --release-root '$RELEASE_ROOT' --release-sha '$RELEASE_SHA' --compose-file '$COMPOSE_FILE' --expected-mcp-image-id '$FINAL_SCANSCI_MCP_IMAGE_ID' --expected-auth-image-id '$FINAL_SCANSCI_AUTH_IMAGE_ID' --require-worker '$require_worker' --require-oa '$require_oa' --require-auth 0"
 }
 
 verify_scansci_candidate() {
@@ -425,7 +425,10 @@ case "$PREVIOUS_CAPABILITY_STATE" in
           PREVIOUS_SCANSCI_BROWSER_IMAGE_ID="$(read_capability_value "$PREVIOUS_CAPABILITIES_FILE" scansci_browser_image_id)"
         fi
         PREVIOUS_SCANSCI_AUTH_IMAGE_ID="$(read_capability_value "$PREVIOUS_CAPABILITIES_FILE" scansci_auth_image_id)"
-        if [ "$PREVIOUS_CAPABILITY_SCHEMA" = 4 ] || [ "$PREVIOUS_CAPABILITY_SCHEMA" = 5 ]; then
+        if [ "$PREVIOUS_CAPABILITY_SCHEMA" = 4 ]; then
+          PREVIOUS_SCANSCI_BROWSER_REQUIREMENTS_SHA256="$(run_remote "sha256sum '$PREVIOUS_RELEASE_ROOT/apps/scansci-legal/browser-requirements.lock' | awk '{print \$1}'")"
+          require_match previous_scansci_browser_requirements_sha256 "$PREVIOUS_SCANSCI_BROWSER_REQUIREMENTS_SHA256" '^[0-9a-f]{64}$'
+        elif [ "$PREVIOUS_CAPABILITY_SCHEMA" = 5 ] && run_remote "test -f '$PREVIOUS_RELEASE_ROOT/apps/scansci-legal/browser-requirements.lock'"; then
           PREVIOUS_SCANSCI_BROWSER_REQUIREMENTS_SHA256="$(run_remote "sha256sum '$PREVIOUS_RELEASE_ROOT/apps/scansci-legal/browser-requirements.lock' | awk '{print \$1}'")"
           require_match previous_scansci_browser_requirements_sha256 "$PREVIOUS_SCANSCI_BROWSER_REQUIREMENTS_SHA256" '^[0-9a-f]{64}$'
         fi
@@ -466,7 +469,7 @@ case "$PREVIOUS_CAPABILITY_STATE" in
             require_match previous_scansci_browser_image_id "$PREVIOUS_SCANSCI_BROWSER_IMAGE_ID" '^sha256:[0-9a-f]{64}$'
             run_remote "grep -q '^  scansci-browser:' '$ROLLBACK_COMPOSE_FILE'"
             [ "$(run_remote "docker image inspect --format='{{.Id}}' openscience-scansci-browser:$PREVIOUS_RELEASE_SHA")" = "$PREVIOUS_SCANSCI_BROWSER_IMAGE_ID" ]
-          elif run_remote "grep -q '^  scansci-browser:' '$ROLLBACK_COMPOSE_FILE'"; then
+          elif [ "$PREVIOUS_CAPABILITY_SCHEMA" = 3 ] && run_remote "grep -q '^  scansci-browser:' '$ROLLBACK_COMPOSE_FILE'"; then
             echo "错误：旧 schema 3 release 不得包含无身份的 ScanSci browser" >&2
             exit 66
           fi
@@ -654,7 +657,7 @@ transaction_restore_previous_scansci() {
     [ "$(run_remote "docker image inspect --format='{{.Id}}' openscience-scansci-mcp:$exact_previous_sha")" = "$PREVIOUS_SCANSCI_MCP_IMAGE_ID" ] || return
     [ "$(run_remote "docker image inspect --format='{{.Id}}' openscience-scansci-auth:$exact_previous_sha")" = "$PREVIOUS_SCANSCI_AUTH_IMAGE_ID" ] || return
     run_remote "cd $PREVIOUS_RELEASE_ROOT && env $PREVIOUS_RUNTIME_ENV XGS_RELEASE_ROOT=$PREVIOUS_RELEASE_ROOT XGS_RELEASE_IMAGE_TAG=$exact_previous_sha docker compose --project-directory $PREVIOUS_RELEASE_ROOT --env-file $PROD_ENV -f $ROLLBACK_COMPOSE_FILE up -d --force-recreate --wait --wait-timeout 300 scansci-mcp" || return
-    run_remote "/usr/bin/node '$PREVIOUS_RELEASE_ROOT/infra/scripts/verify-scansci-mcp-runtime.mjs' --release-root '$PREVIOUS_RELEASE_ROOT' --release-sha '$exact_previous_sha' --compose-file '$ROLLBACK_COMPOSE_FILE' --expected-mcp-image-id '$PREVIOUS_SCANSCI_MCP_IMAGE_ID' --expected-auth-image-id '$PREVIOUS_SCANSCI_AUTH_IMAGE_ID' --require-worker 0 --require-oa 0"
+    run_remote "/usr/bin/node '$PREVIOUS_RELEASE_ROOT/infra/scripts/verify-scansci-mcp-runtime.mjs' --release-root '$PREVIOUS_RELEASE_ROOT' --release-sha '$exact_previous_sha' --compose-file '$ROLLBACK_COMPOSE_FILE' --expected-mcp-image-id '$PREVIOUS_SCANSCI_MCP_IMAGE_ID' --expected-auth-image-id '$PREVIOUS_SCANSCI_AUTH_IMAGE_ID' --require-worker 0 --require-oa 0 --require-auth 0"
     return
   fi
   [ "$(run_remote "docker image inspect --format='{{.Id}}' openscience-scansci-legal:$exact_previous_sha")" = "$PREVIOUS_SCANSCI_LEGAL_IMAGE_ID" ] || return

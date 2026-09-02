@@ -58,6 +58,7 @@ RUN apt-get update \
     && apt-get install -y --no-install-recommends nginx-light \
     && rm -rf /var/lib/apt/lists/*
 COPY --chown=10001:10001 entrypoint.sh /opt/scansci/entrypoint.sh
+COPY --chown=10001:10001 healthcheck.py /opt/scansci/healthcheck.py
 COPY --chown=10001:10001 nginx-mcp.conf /opt/scansci/nginx-mcp.conf
 RUN chmod 0555 /opt/scansci/entrypoint.sh
 

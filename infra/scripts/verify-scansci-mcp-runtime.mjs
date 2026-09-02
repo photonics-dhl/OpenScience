@@ -85,7 +85,7 @@ export function verifyRuntimeSnapshot(input) {
       fail('container environment includes an application secret');
     }
   }
-  exactVolume(mcp, '/data/scansci', '_scansci-data', true);
+  const dataVolume = exactVolume(mcp, '/data/scansci', '_scansci-data', true);
   const paperVolume = exactVolume(mcp, '/data/papers', '_scansci-papers', true);
 
   const tools = [...new Set(input.toolNames)].sort();
@@ -94,6 +94,27 @@ export function verifyRuntimeSnapshot(input) {
   }
 
   const markers = ['SCANSCI_MCP_IMAGE_OK', 'SCANSCI_MCP_TOOLS_OK', 'SCANSCI_MCP_STORAGE_OK'];
+  if (input.requireAuth) {
+    const auth = input.authContainer;
+    const authEnvironment = environment(auth?.Config?.Env);
+    const authNetworks = Object.keys(auth?.NetworkSettings?.Networks ?? {});
+    const portBindings = auth?.HostConfig?.PortBindings?.['6080/tcp'];
+    if (auth?.Image !== input.expectedAuthImageId || auth?.Config?.User !== '10001:10001'
+      || auth?.Config?.Labels?.['com.docker.compose.service'] !== 'scansci-auth'
+      || auth?.State?.Running !== true
+      || authNetworks.length !== 1 || !authNetworks[0]?.endsWith('_auth_net')
+      || JSON.stringify(portBindings) !== JSON.stringify([{ HostIp: '127.0.0.1', HostPort: '6080' }])
+      || authEnvironment.get('SCANSCI_PDF_PROXY') !== 'http://openscience-egress:7891'
+      || exactVolume(auth, '/data/scansci', '_scansci-data', true) !== dataVolume) {
+      fail('auth container topology is invalid');
+    }
+    for (const key of authEnvironment.keys()) {
+      if (/^(?:DATABASE|POSTGRES|REDIS|S3_|MINIO|AWS_|MINIMAX|TAVILY|SEMANTIC|.*(?:API_KEY|SECRET|TOKEN|COOKIE))/iu.test(key)) {
+        fail('auth container environment includes an application secret');
+      }
+    }
+    markers.push('SCANSCI_MCP_AUTH_OK');
+  }
   if (input.requireWorker) {
     const worker = input.workerContainer;
     const workerEnvironment = environment(worker?.Config?.Env);
@@ -148,9 +169,10 @@ export function parseCli(argv) {
     if (!argv[index]?.startsWith('--') || !argv[index + 1] || values.has(argv[index])) fail('CLI arguments are invalid');
     values.set(argv[index], argv[index + 1]);
   }
-  const expected = ['--release-root', '--release-sha', '--compose-file', '--expected-mcp-image-id', '--expected-auth-image-id', '--require-worker', '--require-oa'];
+  const expected = ['--release-root', '--release-sha', '--compose-file', '--expected-mcp-image-id', '--expected-auth-image-id', '--require-worker', '--require-oa', '--require-auth'];
   if (values.size !== expected.length || expected.some((key) => !values.has(key))
-    || !['0', '1'].includes(values.get('--require-worker')) || !['0', '1'].includes(values.get('--require-oa'))) {
+    || !['0', '1'].includes(values.get('--require-worker')) || !['0', '1'].includes(values.get('--require-oa'))
+    || !['0', '1'].includes(values.get('--require-auth'))) {
     fail('CLI arguments are invalid');
   }
   const releaseSha = values.get('--release-sha');
@@ -166,6 +188,7 @@ export function parseCli(argv) {
     expectedAuthImageId: values.get('--expected-auth-image-id'),
     requireWorker: values.get('--require-worker') === '1',
     requireOa: values.get('--require-oa') === '1',
+    requireAuth: values.get('--require-auth') === '1',
   };
 }
 
@@ -178,6 +201,7 @@ async function main() {
     mcpImage: inspect('image', `openscience-scansci-mcp:${options.releaseSha}`),
     authImage: inspect('image', `openscience-scansci-auth:${options.releaseSha}`),
     mcpContainer: inspect('container', mcpContainerName),
+    authContainer: options.requireAuth ? inspect('container', 'openscience-prod-scansci-auth-1') : undefined,
     workerContainer: options.requireWorker ? inspect('container', workerContainerName) : undefined,
     toolNames: JSON.parse(containerPython(mcpContainerName, toolProbe)),
     oaCanary: options.requireOa ? JSON.parse(containerPython(mcpContainerName, oaProbe)) : undefined,

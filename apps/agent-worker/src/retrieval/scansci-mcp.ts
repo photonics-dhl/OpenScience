@@ -19,6 +19,11 @@ export interface ScanSciMcpDownload {
   status_code?: unknown;
 }
 
+export interface ScanSciMcpResult {
+  download: ScanSciMcpDownload;
+  providerVersion: string;
+}
+
 function mcpEndpoint(value: string): URL {
   const url = new URL(value);
   if (!['http:', 'https:'].includes(url.protocol) || url.username || url.password || url.hash) {
@@ -51,7 +56,7 @@ export async function downloadThroughScanSciMcp(input: {
   identifier: string;
   outputDir: string;
   timeoutMs: number;
-}): Promise<ScanSciMcpDownload> {
+}): Promise<ScanSciMcpResult> {
   const client = new Client(
     { name: 'openscience-agent-worker', version: '1.0.0' },
     { capabilities: {} },
@@ -59,6 +64,10 @@ export async function downloadThroughScanSciMcp(input: {
   const transport = new StreamableHTTPClientTransport(mcpEndpoint(input.mcpUrl));
   try {
     await client.connect(transport, { timeout: Math.min(input.timeoutMs, 30_000) });
+    const providerVersion = client.getServerVersion()?.version;
+    if (providerVersion !== '1.13.1') {
+      throw new Error('ScanSci MCP server version is invalid');
+    }
     const tools = await client.listTools(undefined, { timeout: Math.min(input.timeoutMs, 30_000) });
     if (!tools.tools.some((tool) => tool.name === DOWNLOAD_TOOL)) {
       throw new Error('ScanSci MCP download tool is unavailable');
@@ -67,7 +76,7 @@ export async function downloadThroughScanSciMcp(input: {
       name: DOWNLOAD_TOOL,
       arguments: { identifier: input.identifier, output_dir: input.outputDir },
     }, undefined, { timeout: input.timeoutMs, maxTotalTimeout: input.timeoutMs });
-    return parseToolResult(result);
+    return { download: parseToolResult(result), providerVersion };
   } finally {
     await client.close().catch(() => undefined);
   }
