@@ -15,9 +15,6 @@ const RELEASE_IMAGE_REPOSITORIES = [
   'openscience-agent-worker',
   'openscience-document-parser',
   'openscience-embedding-worker',
-  'openscience-scansci-auth',
-  'openscience-scansci-browser',
-  'openscience-scansci-legal',
   'openscience-scansci-mcp',
 ];
 const PATHS = {
@@ -36,7 +33,6 @@ function requireSha(name, value) {
   if (!SHA_PATTERN.test(value)) throw new Error(`${name} is invalid`);
   return value;
 }
-
 export function selectInactiveReleaseShas({ activeSha, rollbackSha, entries }) {
   requireSha('active release', activeSha);
   requireSha('rollback release', rollbackSha);
@@ -45,7 +41,6 @@ export function selectInactiveReleaseShas({ activeSha, rollbackSha, entries }) {
     .filter((entry) => entry !== activeSha && entry !== rollbackSha)
     .sort();
 }
-
 export function deriveReleaseImageTags(sha) {
   requireSha('release image SHA', sha);
   return RELEASE_IMAGE_REPOSITORIES.map((repository) => `${repository}:${sha}`);
@@ -312,49 +307,30 @@ export function parseReleaseCapability(source, expected = {}) {
     return { embeddingDeploy: false, scansciDeploy: false };
   }
   const schemaTwoKeys = 'bge_m3_enabled,embedding_deploy,model_manifest_sha256,model_revision,model_version_id,package_freeze_sha256,schema,source_sha256';
-  const schemaThreeKeys = 'bge_m3_enabled,embedding_deploy,model_manifest_sha256,model_revision,model_version_id,package_freeze_sha256,scansci_auth_image_id,scansci_deploy,scansci_legal_image_id,schema,source_sha256';
-  const schemaFourKeys = 'bge_m3_enabled,embedding_deploy,model_manifest_sha256,model_revision,model_version_id,package_freeze_sha256,scansci_auth_image_id,scansci_browser_image_id,scansci_deploy,scansci_legal_image_id,schema,source_sha256';
   const schemaFiveKeys = 'bge_m3_enabled,embedding_deploy,model_manifest_sha256,model_revision,model_version_id,package_freeze_sha256,scansci_auth_image_id,scansci_deploy,scansci_mcp_image_id,schema,source_sha256';
-  const expectedKeys = schema === '2' ? schemaTwoKeys : schema === '3' ? schemaThreeKeys : schema === '4' ? schemaFourKeys : schemaFiveKeys;
+  const schemaSixKeys = 'bge_m3_enabled,embedding_deploy,model_manifest_sha256,model_revision,model_version_id,package_freeze_sha256,scansci_deploy,scansci_mcp_image_id,schema,source_sha256';
+  const expectedKeys = schema === '2' ? schemaTwoKeys : schema === '5' ? schemaFiveKeys : schemaSixKeys;
   if ([...values.keys()].sort().join(',') !== expectedKeys
-    || !['2', '3', '4', '5'].includes(schema)
+    || !['2', '5', '6'].includes(schema)
     || !['true', 'false'].includes(values.get('embedding_deploy'))
     || !['true', 'false'].includes(values.get('bge_m3_enabled'))
-    || ['3', '4', '5'].includes(schema) && !['true', 'false'].includes(values.get('scansci_deploy'))
+    || ['5', '6'].includes(schema) && !['true', 'false'].includes(values.get('scansci_deploy'))
     || values.get('bge_m3_enabled') === 'true' && values.get('embedding_deploy') !== 'true') {
     throw new Error('release capability is invalid');
   }
-  const scansciDeploy = ['3', '4', '5'].includes(schema) && values.get('scansci_deploy') === 'true';
-  const legalImageId = values.get('scansci_legal_image_id');
-  const browserImageId = values.get('scansci_browser_image_id');
+  const scansciDeploy = ['5', '6'].includes(schema) && values.get('scansci_deploy') === 'true';
   const mcpImageId = values.get('scansci_mcp_image_id');
-  const authImageId = values.get('scansci_auth_image_id');
-  if (scansciDeploy && (schema === '5'
-    ? !IMAGE_ID_PATTERN.test(mcpImageId) || !IMAGE_ID_PATTERN.test(authImageId)
-    : !IMAGE_ID_PATTERN.test(legalImageId) || !IMAGE_ID_PATTERN.test(authImageId)
-      || schema === '4' && !IMAGE_ID_PATTERN.test(browserImageId))) {
+  if (scansciDeploy && !IMAGE_ID_PATTERN.test(mcpImageId)
+    || ['5', '6'].includes(schema) && !scansciDeploy && mcpImageId !== '') {
     throw new Error('release capability is invalid');
   }
-  const scansciImageIds = schema === '5' ? [mcpImageId, authImageId]
-    : schema === '4' ? [legalImageId, browserImageId, authImageId] : [legalImageId, authImageId];
-  if (['3', '4', '5'].includes(schema) && !scansciDeploy
-    && scansciImageIds.some((value) => value !== '')) {
-    throw new Error('release capability is invalid');
-  }
-  if (expected.expectedMcpImageId && mcpImageId !== expected.expectedMcpImageId
-    || expected.expectedLegalImageId && legalImageId !== expected.expectedLegalImageId
-    || expected.expectedBrowserImageId && browserImageId !== expected.expectedBrowserImageId
-    || expected.expectedAuthImageId && authImageId !== expected.expectedAuthImageId) {
+  if (expected.expectedMcpImageId && mcpImageId !== expected.expectedMcpImageId) {
     throw new Error('release capability is invalid');
   }
   return {
     embeddingDeploy: values.get('embedding_deploy') === 'true',
     scansciDeploy,
-    ...(scansciDeploy ? {
-      ...(schema === '5' ? { mcpImageId } : { legalImageId }),
-      ...(schema === '4' ? { browserImageId } : {}),
-      authImageId,
-    } : {}),
+    ...(scansciDeploy ? { mcpImageId } : {}),
   };
 }
 
@@ -368,26 +344,16 @@ async function protectedImageState(activeSha, rollbackSha, paths = PATHS) {
     for (const tag of deriveReleaseImageTags(sha)) {
       const imageId = inspectImage(tag);
       const embedding = tag.startsWith('openscience-embedding-worker:');
-      const scansci = tag.startsWith('openscience-scansci-');
-      const scansciBrowser = tag.startsWith('openscience-scansci-browser:');
       const scansciMcp = tag.startsWith('openscience-scansci-mcp:');
-      const scansciLegacy = tag.startsWith('openscience-scansci-legal:');
-      const scansciAuth = tag.startsWith('openscience-scansci-auth:');
-      const required = !embedding && !scansci
+      const required = !embedding && !scansciMcp
         || embedding && capabilities.get(sha).embeddingDeploy
-        || scansciMcp && capabilities.get(sha).mcpImageId !== undefined
-        || scansciLegacy && capabilities.get(sha).legalImageId !== undefined
-        || scansciBrowser && capabilities.get(sha).browserImageId !== undefined
-        || scansciAuth && capabilities.get(sha).scansciDeploy;
+        || scansciMcp && capabilities.get(sha).mcpImageId !== undefined;
       if (!imageId && required) {
         throw new Error(`protected release image is missing: ${tag}`);
       }
-      if (scansci && capabilities.get(sha).scansciDeploy) {
-        const expectedId = scansciMcp ? capabilities.get(sha).mcpImageId
-          : scansciLegacy ? capabilities.get(sha).legalImageId
-            : scansciBrowser ? capabilities.get(sha).browserImageId : capabilities.get(sha).authImageId;
-        if (expectedId === undefined) continue;
-        if (imageId !== expectedId) throw new Error(`protected release image identity mismatch: ${tag}`);
+      if (scansciMcp && capabilities.get(sha).scansciDeploy
+        && imageId !== capabilities.get(sha).mcpImageId) {
+        throw new Error(`protected release image identity mismatch: ${tag}`);
       }
       if (imageId) ids.set(tag, imageId);
     }
@@ -607,11 +573,7 @@ async function bootstrap(options, paths = PATHS) {
   const protectedState = await protectedImageState(options.expectedActive, options.expectedRollback, paths);
   const requiredServices = ['agent-worker', 'document-parser'];
   if (protectedState.capabilities.get(options.expectedActive).embeddingDeploy) requiredServices.push('embedding-worker');
-  if (protectedState.capabilities.get(options.expectedActive).scansciDeploy) requiredServices.push('scansci-legal');
-  if (protectedState.capabilities.get(options.expectedActive).mcpImageId) {
-    requiredServices.splice(requiredServices.indexOf('scansci-legal'), 1, 'scansci-mcp');
-  }
-  if (protectedState.capabilities.get(options.expectedActive).browserImageId) requiredServices.push('scansci-browser');
+  if (protectedState.capabilities.get(options.expectedActive).scansciDeploy) requiredServices.push('scansci-mcp');
   const containers = inspectContainers({ all: false });
   for (const service of requiredServices) {
     const container = containers.find((candidate) => candidate.Name === `/openscience-prod-${service}-1`);

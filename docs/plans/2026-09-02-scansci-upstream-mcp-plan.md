@@ -225,7 +225,6 @@ the shared staging volume contained zero PDFs after acknowledgement.
 
 **Files:**
 
-- Create: `apps/scansci-mcp/auth-entrypoint.sh`
 - Modify: `infra/compose/docker-compose.prod.yml`
 - Modify: `infra/scripts/production-deploy-transaction.mjs`
 - Modify: `infra/scripts/production-deploy-transaction.test.mjs`
@@ -233,17 +232,16 @@ the shared staging volume contained zero PDFs after acknowledgement.
 - Modify: `infra/scripts/production-release-retention.test.mjs`
 - Create: `infra/scripts/verify-scansci-mcp-runtime.mjs`
 - Create: `infra/scripts/verify-scansci-mcp-runtime.test.mjs`
-- Modify: `infra/scripts/scansci-auth-tunnel.sh`
 - Modify: `docs/runbooks/deployment.md`
 - Modify: `docs/runbooks/hermes-capability-registry.md`
 
 **Interfaces:**
 
-- Produces: stopped-by-default official `scansci-auth` profile sharing `scansci-data`, exact MCP image/runtime verifier, active+rollback retention, and loopback-only operator login.
+- Produces: one official `scansci-mcp` service with persistent `scansci-data`, exact runtime verifier, active+rollback retention, and official `cookie_import` institutional bootstrap without a second browser/auth service.
 
 - [x] **Step 1: Write the failing runtime/deploy contract tests**
 
-Assert exact image labels/version, MCP tool discovery, data/paper mounts, no database/application secrets, loopback-only auth tunnel, official login command, active+rollback retention, and rollback preservation of `scansci-data`.
+Assert exact image labels/version, MCP tool discovery, data/paper mounts, no database/application secrets, no browser/auth sidecar, active+rollback retention, and rollback preservation of `scansci-data`.
 
 - [x] **Step 2: Verify RED**
 
@@ -253,7 +251,7 @@ node --test infra/scripts/verify-scansci-mcp-runtime.test.mjs infra/scripts/prod
 
 - [x] **Step 3: Implement the minimal deployment integration**
 
-The auth profile launches the official publisher login for the fixed acceptance DOI under the same X display and data directory. Existing SSH/noVNC plumbing is reused only as transport; custom `scansci_legal.auth_login` and cookie-proof code are not called.
+The sole MCP image exposes upstream login and `cookie_import` tools. Administrator cookies are imported through the official tool into `scansci-data`; no custom login code, X11/noVNC transport, or second image is deployed.
 
 - [x] **Step 4: Run focused local gates**
 
@@ -270,22 +268,16 @@ git add apps/scansci-mcp infra/compose infra/scripts docs/runbooks
 git commit -m "feat(infra): deploy official ScanSci MCP"
 ```
 
-Actual evidence: official runtime/auth images, loopback noVNC transport,
-schema-5 capability identity, MCP-first positive canary, active/rollback
-retention, and previous-schema-5 restoration are implemented. Focused runtime,
-retention, deploy and auth-tunnel gates plus Bash syntax are green. Production
-merge/deploy and the institutional login journey remain Task 5.
+Historical schema-5 runtime/auth work was rejected. The replacement candidate
+uses only the official MCP image, schema-6 MCP identity, MCP-first positive
+canary, active/rollback retention, and persistent data/paper volumes. Focused
+runtime, retention, deploy and Bash syntax gates are green. Production
+merge/deploy and the institutional cookie-import journey remain Task 5.
 
-Release review fix `336955e` isolates noVNC on `auth_net`, supervises MCP/NGINX/
-Tor children, uses an initialize/list-tools health probe, allows schema 5 to be
-the next release's rollback source, defers staging acknowledgement until durable
-activation, and stores the exact MCP provider version in rights evidence.
-
-Final review fix `9730529` uses the pinned MCP 2.1.1
-`streamable_http_client` in the real health probe and adds an identity-safe
-terminal `discard` for policy-blocked staging while keeping `acknowledge` only
-after durable activation. Independent follow-up review returned READY with no
-Critical, Important or Minor findings; local build/typecheck/lint/test are green.
+The retained implementation uses the pinned MCP 2.1.1
+`streamable_http_client` in the real health probe and keeps identity-safe
+terminal `discard` for policy-blocked staging while `acknowledge` occurs only
+after durable activation.
 
 ### Task 5: Deploy, accept, and remove the rejected implementation
 
@@ -325,13 +317,12 @@ retention gates passed; transient eval output was removed after report publish.
 
 Run OA download, one official ZJU institutional login, one subscription-only download, MCP container recreation and repeat download, then one request from each of the four existing product entries. Verify one-use link and 72-hour metadata without waiting 72 hours by checking the exact stored timestamps and existing GC contract once.
 
-Current state: official MCP has `carsi_enabled=true` and Zhejiang University
-selected, but the pinned upstream visible login browser ignored
-`network_proxy`, failed ScienceDirect with `ERR_NAME_NOT_RESOLVED`, then timed
-out. Candidate `263fc23` injects only the fixed Squid browser flag without
-changing the wheel or internal network; behavior/runtime/lifecycle tests and
-independent review are green, CI/deploy pending. The fixed DOI's Semantic
-Scholar PDF is only an OA proof, not the required subscription-only evidence.
+Current state: the official MCP, persistent volumes, Worker lifecycle, and OA
+proof already exist in production. The rejected visible-browser bridge is being
+removed. Institutional bootstrap will use the official `cookie_import` tool
+with an administrator-exported Netscape file; subscription-only and post-recreate
+proof remain pending. The fixed DOI's Semantic Scholar PDF is only an OA proof,
+not the required subscription-only evidence.
 
 - [ ] **Step 4: Delete rejected repository artifacts**
 
@@ -339,7 +330,7 @@ Resolve the exact file list from tracked dependencies, remove it in one cleanup 
 
 - [ ] **Step 5: Clean exact ECS artifacts**
 
-After the new release is healthy, stop/remove only rejected ScanSci containers, images, empty job volumes, obsolete networks/systemd units, exact evaluation directories, and bounded build cache. Keep active/rollback application images, `scansci-data`, accepted object-storage data, models, monitoring data, and backups. Record before/after `docker system df -v` and `df -h`; do not broad prune.
+After the new release is healthy, stop/remove only rejected ScanSci containers, images, empty job volumes, obsolete networks/systemd units, exact evaluation directories, and inactive Docker builder cache. Keep active/rollback application images, `scansci-data`, accepted object-storage data, models, monitoring data, and backups. Record before/after `docker system df -v` and `df -h`; do not run `docker system prune` or volume prune.
 
 - [ ] **Step 6: Close documentation and commit**
 

@@ -166,8 +166,6 @@ importers:
 
   apps/sandbox-controller: {}
 
-  apps/scansci-legal: {}
-
   apps/scansci-mcp: {}
 
   apps/science-worker:

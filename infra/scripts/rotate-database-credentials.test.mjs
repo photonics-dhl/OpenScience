@@ -13,8 +13,7 @@ test('database credential rotation keeps secrets out of command arguments and su
   assert.match(script, /fs\.renameSync\(temporary, path\)/);
   assert.match(script, /rollback_on_exit/);
   assert.match(script, /COMPOSE_FILE="\$RELEASE_ROOT\/infra\/compose\/docker-compose\.prod\.yml"/);
-  assert.match(script, /read -r SCANSCI_BROWSER_REQUIREMENTS_SHA256 _ < <\(sha256sum "\$RELEASE_ROOT\/apps\/scansci-legal\/browser-requirements\.lock"\)/u);
-  assert.match(script, /export SCANSCI_BROWSER_REQUIREMENTS_SHA256/u);
+  assert.doesNotMatch(script, /SCANSCI_BROWSER|scansci-legal/u);
   assert.match(
     script,
     /COMPOSE=\(docker compose --project-directory "\$RELEASE_ROOT" --env-file "\$ENV_FILE" -f "\$COMPOSE_FILE"\)/,

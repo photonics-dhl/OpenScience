@@ -23,7 +23,6 @@ import {
 import type { OcrAuthorizationContext } from '@openscience/ai-gateway';
 import type { DocumentSourceMap, ExtractionResult as ParserExtractionResult } from '@openscience/domain';
 import { createHash } from 'node:crypto';
-import { closeSync, constants, fstatSync, openSync, readSync } from 'node:fs';
 import type { Readable } from 'node:stream';
 import { extractHandler, sourceMapToManuscriptText } from './extractor';
 import { MAX_PARSER_INPUT, type IngestionAdapters } from './ingestion-parser';
@@ -128,34 +127,6 @@ export type TaskHandler = (
   deps: WorkerDeps,
   task: { id: string; payload: Record<string, unknown>; interestContext?: unknown; executionAttempt: number },
 ) => Promise<Record<string, unknown>>;
-
-interface ScanSciTokenFileSystem {
-  openSync(path: string, flags: number): number;
-  fstatSync(fd: number): { isFile(): boolean; uid: number; gid: number; mode: number; nlink: number; size: number };
-  readSync(fd: number, buffer: Buffer, offset: number, length: number, position: number | null): number;
-  closeSync(fd: number): void;
-}
-
-export function loadScanSciServiceTokenFile(
-  path: string,
-  fileSystem: ScanSciTokenFileSystem = { openSync, fstatSync, readSync, closeSync },
-): string {
-  let descriptor: number | undefined;
-  try {
-    descriptor = fileSystem.openSync(path, constants.O_RDONLY | constants.O_NOFOLLOW);
-    const stat = fileSystem.fstatSync(descriptor);
-    if (!stat.isFile() || stat.uid !== 1000 || stat.gid !== 1000 || (stat.mode & 0o7777) !== 0o400 || stat.nlink !== 1 || stat.size < 1 || stat.size > 4096) {
-      throw new Error('invalid');
-    }
-    const bytes = Buffer.alloc(stat.size);
-    if (fileSystem.readSync(descriptor, bytes, 0, bytes.length, null) !== bytes.length) throw new Error('short');
-    const token = bytes.toString('utf8').trim();
-    if (!token) throw new Error('empty');
-    return token;
-  } catch {
-    throw new Error('SCANSCI_SERVICE_TOKEN_FILE must be a private regular file');
-  } finally { if (descriptor !== undefined) fileSystem.closeSync(descriptor); }
-}
 
 /** Production-safe cascade composition: one V2 sidecar stage plus disabled candidate routes. */
 export function createWorkerParserCascade(
