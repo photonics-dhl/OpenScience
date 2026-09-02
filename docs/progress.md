@@ -4,17 +4,18 @@
 
 ## Current version tuple
 
-- Docs branch / code base / origin main: `codex/scansci-auth-credential-blocker-docs` / `405b85a8e1d6b3aec51d2de20ec6ce5b93ab73e4` / `405b85a8e1d6b3aec51d2de20ec6ce5b93ab73e4`。
+- Candidate branch / code commit / origin main: `codex/scansci-carsi-page-replacement` / `71020ebcdd35a1bb19860713522aa492c2ec30c4` / `c6b93c5b1e34b4a1871e8f24d2845406e4a7795b`。
 - Production application source / immutable release: `405b85a8e1d6b3aec51d2de20ec6ce5b93ab73e4`。
 - Production rollback: `09093e7e879dbc7e9175e957f217afe5c6eb2e67`；core/search migrations `33/33` / `2/2`。
-- Taskmaster `hermes-research-intelligence` 仍为 9/12；代码/部署已完成，下一步只先更正 ZJU CAS 凭据，再做固定 DOI、持久机构 PDF 与四入口验收。Step 5/6 与 Task 11 继续阻断。
+- Taskmaster `hermes-research-intelligence` 仍为 9/12；统一认证已通过，下一步部署 CARSI trusted-page replacement 候选，再做固定 DOI、持久机构 PDF 与四入口验收。Step 5/6 与 Task 11 继续阻断。
 
-## 2026-09-02 — ScanSci IdP gate deployed; ZJU credential blocked (`405b85a`)
+## 2026-09-02 — ScanSci CARSI page-replacement candidate (`71020eb`)
 
 - PR #38 / CI `33550018143` 将 Cookie 捕获绑定本次 main-frame ZJU/CARSI IdP 访问；匿名 bounce 与 `evilzju.edu.cn` 均 fail-closed。ScanSci `174 pass / 11 skip`、全仓 lint/test、独立复审全绿。
 - Merge `405b85a` 完成 schema-v3 16-case Parser 两阶段 ECS 发布；core/search `33/33`/`2/2`、quota `8/8`、BGE CPU、ScanSci OA、API/Web/Worker/Nginx/public CAS/retention 全绿。
-- 生产 helper 在单一 180 秒窗口到达 ZJU CAS；学号与学校邮箱两种用户名均被 `zjuam.zju.edu.cn` 明确判为“用户名或密码错误”。已停止重试，未保存凭据、未发布 Cookie/ready。
-- active/rollback `405b85a` / `09093e7`；磁盘 58G/148G（41%，84G available），仅两个 release，Parser report `0:0:600:1`，eval/auth/journal/failed 均清零。
+- 真实 Elsevier picker 与 `ds.carsi.edu.cn` 动态入口均到达 ZJU CAS；只用统一认证账号提交后无错误并成功回跳。阻塞不是邮箱/凭据，而是 CARSI 回跳关闭初始 Page，旧 helper 只轮询该 Page 后 fail-closed。
+- `71020eb` 仅跟踪同 context 且 opener 已受信的 popup/replacement，并把 IdP 证据绑定具体 Page；无 opener popup 不能借用。新增正/反 TDD，ScanSci `176 pass / 11 skip`、全仓 lint/test、独立复审全绿。
+- active/rollback 仍为 `405b85a` / `09093e7`；磁盘 58G/148G（41%，84G available），仅两个 release，Parser report `0:0:600:1`，eval/auth/journal/failed 均清零。候选未部署，未声称机构 PDF 可用。
 
 ## 2026-09-01 — Snapshot fix deployed; CARSI false-positive isolated
 

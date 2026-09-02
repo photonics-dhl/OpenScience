@@ -1,6 +1,6 @@
 # Hermes Research Intelligence CURRENT Handoff
 
-> **CURRENT active-memory，2026-09-02。** 公网 release `405b85a` 全绿、rollback `09093e7`；匿名 Elsevier return 已 fail-closed，浙大/CARSI IdP main-frame gate 已部署。浙大 CAS 对已核对输入明确返回“用户名或密码错误”，故未发布 Cookie/ready；机构 PDF、Task 11 继续阻断，Landing/Hermes 视觉冻结。
+> **CURRENT active-memory，2026-09-02。** 公网 release `405b85a` 全绿、rollback `09093e7`；浙大统一认证现已真实成功，阻塞收敛为 CARSI 回跳关闭初始页而 helper 未跟踪可信 replacement。安全候选 `71020eb` 本地全绿/独立复审 READY，待 CI/ECS；机构 PDF、Task 11 继续阻断，Landing/Hermes 视觉冻结。
 
 ## Goal and state
 
@@ -11,7 +11,7 @@
 ## Version tuple
 
 - Worktree: `E:/Miscellaneous/XGS/.worktrees/readable-hermes-guidance`
-- Docs branch / code base / origin main: `codex/scansci-auth-credential-blocker-docs` / `405b85a8e1d6b3aec51d2de20ec6ce5b93ab73e4` / `405b85a8e1d6b3aec51d2de20ec6ce5b93ab73e4`
+- Candidate branch / code commit / origin main: `codex/scansci-carsi-page-replacement` / `71020ebcdd35a1bb19860713522aa492c2ec30c4` / `c6b93c5b1e34b4a1871e8f24d2845406e4a7795b`
 - Production application source / immutable release: `405b85a8e1d6b3aec51d2de20ec6ce5b93ab73e4`
 - Rollback: `09093e7e879dbc7e9175e957f217afe5c6eb2e67`; core/search migrations `33/33` / `2/2`
 - 本地 `main` 与其他 worktree 有用户改动，不得触碰或用它推断生产；上述 tuple 已从 ECS 重新实测。
@@ -59,13 +59,14 @@
 27. Strict browser、CPU browser、proxy-only `browser_net`、proof-backed session 与稳定 canary 诊断已合并；PR #36→#37 部署到 `09093e7`，ECS Parser/BGE/ScanSci OA/application/public/retention 全绿。
 28. PR #38 / CI `33550018143` 将匿名 publisher bounce 收紧为本次 main-frame 必须经过 `*.zju.edu.cn`/`*.carsi.edu.cn` 后才可取 Cookie；`evilzju.edu.cn` 回归拒绝，ScanSci `174/11/0`、全仓 lint/test 与独立复审 READY。
 29. Merge `405b85a` 经 schema-v3 16-case Parser 两阶段 canonical 部署；core/search `33/33`/`2/2`、quota `8/8`、BGE CPU、ScanSci OA、容器/公网/retention 全绿，rollback `09093e7`，验收临时目录与 auth helper 已清零。
-30. 生产登录在同一 180 秒窗口内到达 `zjuam.zju.edu.cn`；学号与学校邮箱两种用户名、同一隐藏密码均被 CAS 明确判为“用户名或密码错误”。为避免锁号已停止重试；未保存账号密码，未产生 ZJU/publisher Cookie 或 ready。
-31. Constraints：服务器验收为准，本地不运行 Docker；Windows 只用显式 Git Bash 调 canonical wrapper；不读取/打印 `.env`，不 broad prune，不删除未经批准的文件/服务器对象。
+30. 重新走真实 Elsevier 与 `ds.carsi.edu.cn` 两条路径后，统一认证账号均成功离开 ZJU CAS；真实阻塞是 CARSI/Elsevier 回跳替换或关闭初始 Page，既有 helper 因只轮询初始 Page fail-closed，未产生 publisher Cookie/ready。
+31. `71020eb` 将 IdP 证据绑定具体 Page，只跟踪同 browser context 且 opener 已可信的 replacement；无 opener popup 不继承。ScanSci `176/11/0`、全仓 lint/test 与独立安全复审 READY，生产仍为 `405b85a`。
+32. Constraints：服务器验收为准，本地不运行 Docker；Windows 只用显式 Git Bash 调 canonical wrapper；不读取/打印 `.env`，不 broad prune，不删除未经批准的文件/服务器对象。
 
 ## Next action
 
-1. 用户先提供或重置一份可在 `zjuam.zju.edu.cn` 成功登录的当前密码；不要继续重试现有失败凭据。
-2. 用 loopback helper 在单一 180 秒窗口内完成 ZJU→Elsevier；固定非 OA canary 必须返回 institutional `%PDF-` 才发布 ready，并在 exact service 重启后仍为 ready。
+1. 推送 `71020eb`，等待 exact CI，合并后按 schema-v3 Parser 两阶段 canonical transaction 部署 merged SHA。
+2. 用动态 CARSI→浙江大学→Elsevier 在单一 180 秒窗口完成登录；固定非 OA canary 必须返回 institutional `%PDF-` 才发布 ready，并在 exact service 重启后仍为 ready。
 3. 用真实 institutional PDF 完成四入口/375px/one-use/72h/600s/zero-grey-Tor 与精确磁盘卫生，再关闭 Task 10。
 
 ## Read first

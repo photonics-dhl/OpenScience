@@ -2031,3 +2031,26 @@ Cookie was published, and session correctly remains `auth_required`. Resume
 only with a current credential independently proven at `zjuam.zju.edu.cn`,
 then require fixed DOI `%PDF-`, service recreation persistence and the four
 product-entry journey before closing Task 10.
+
+### 5.61 CARSI trusted page replacement (2026-09-02)
+
+The official `ds.carsi.edu.cn` route and the Elsevier institution picker both
+reached ZJU CAS. Submitting only the unified-identity account returned without
+a CAS error, proving that email login was never required. The remaining
+failure was browser ownership: CARSI can close the initial Page and continue in
+a popup/replacement Page, while the production helper polls only its initial
+Page and therefore exits fail-closed without a publisher Cookie.
+
+Candidate `71020ebcdd35a1bb19860713522aa492c2ec30c4` binds IdP evidence to a
+specific Page identity. A new Page is tracked only when its opener is already
+tracked in the same browser context; the final publisher Page must have ZJU or
+CARSI main-frame evidence in its opener lineage. An unrelated no-opener popup,
+subframe navigation, non-publisher return or invalid Cookie cannot qualify.
+The fixed DOI PDF canary remains unchanged and is still the only path to
+`ready`.
+
+Local gates are ScanSci `176 pass / 11 platform skip / 0 fail`, whole-repo
+lint/test green, and independent security review READY. This is not production
+evidence. Merge exact CI, deploy the merged SHA with the schema-v3 Parser
+two-phase transaction, then repeat dynamic CARSI → ZJU → Elsevier and require
+institutional `%PDF-`, recreation persistence and four product entries.
