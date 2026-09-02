@@ -1,6 +1,6 @@
 # Hermes Research Intelligence CURRENT Handoff
 
-> **CURRENT active-memory，2026-09-02。** 公网 release `ab290579` 为官方 `v1.13.1` MCP、rollback `405b85a`；migration 34、17 tools、OA/Worker/Parser/BGE/public 全绿。认证 bridge 已合并为 main `2e458f2`，parser 构建稳定补丁 `fb6afcd` 待 CI/部署；机构 PDF/四入口和旧实现清理 pending，Task 11 继续阻断。
+> **CURRENT active-memory，2026-09-02。** 公网 release `7daff3f` 为官方 `v1.13.1` MCP/auth bridge/parser build fix、rollback `ab290579`；全部基础门禁全绿。ZJU 已配置但 upstream visible browser 忽略 proxy，修复 `263fc23` 待 CI/部署；机构 PDF/四入口和旧实现清理 pending，Task 11 继续阻断。
 
 ## Goal and state
 
@@ -11,14 +11,14 @@
 ## Version tuple
 
 - Worktree: `E:/Miscellaneous/XGS/.worktrees/readable-hermes-guidance`
-- Candidate branch / code HEAD / origin main: `codex/scansci-upstream-mcp` / `fb6afcde561da1be097056facd56ab557079e60f` / `2e458f2a99095e4514a7abf91eddd6651d20a08f`
-- Production application source / immutable release: `ab290579ed81f4a30d011dea2a52e8b9b20c50f3`
-- Rollback: `405b85a8e1d6b3aec51d2de20ec6ce5b93ab73e4`; core/search migrations `34/34` / `2/2`
+- Candidate branch / code HEAD / origin main: `codex/scansci-upstream-mcp` / `263fc23ea722637c77fa120f0f67ab66ec3af03c` / `7daff3f57c0714239802ad4085daf8e131a34bc8`
+- Production application source / immutable release: `7daff3f57c0714239802ad4085daf8e131a34bc8`
+- Rollback: `ab290579ed81f4a30d011dea2a52e8b9b20c50f3`; core/search migrations `34/34` / `2/2`
 - 本地 `main` 与其他 worktree 有用户改动，不得触碰或用它推断生产；上述 tuple 已从 ECS 重新实测。
 
 ## Production truth
 
-- Public `/__release` 与 active marker 均返回 `ab290579…`；API/Web/Worker/Parser/official MCP/BGE healthy，journal/failed absent，磁盘上次核验 65G/148G（46%，77G available）。17 tools 与 Worker→24,671,920-byte OA PDF→hash/provenance→staging delete 已生产接受；两次新候选 build 均在切换前因 parser registry `ECONNRESET` 退出且生产未变，机构 PDF 尚未完成。
+- Public `/__release` 与 active marker 均返回 `7daff3f…`；API/Web/Worker/Parser/official MCP/BGE healthy，journal/failed absent，磁盘 65G/148G（47%，77G available）。17 tools、Worker OA、exact Parser report 已生产接受；ZJU 配置存在但 upstream login browser 报 `ERR_NAME_NOT_RESOLVED` 后超时，Cookie 仍 false。
 - TLS certificate subject 为 `openscience.428312321.xyz`，有效期自 2026-08-03 20:10:34 +08:00；ECS、域名反代、Landing、Cloudflare Tunnel 的上线日期必须按证据包分开表述。
 - `agent_tasks.result` 为 JSONB，`IngestionTaskState` 含 `needs_review` 与 `confirmed`。生产聚合为 14 条待确认建议、7 条 confirmed、21 条总计；未输出业务正文或用户信息。
 - 数据库不存在字面 `suggested` 枚举：产品语义映射为 `result != null + state=needs_review`，确认后 `state=confirmed`。
@@ -61,13 +61,13 @@
 29. Merge `405b85a` 经 schema-v3 16-case Parser 两阶段 canonical 部署；core/search `33/33`/`2/2`、quota `8/8`、BGE CPU、ScanSci OA、容器/公网/retention 全绿，rollback `09093e7`，验收临时目录与 auth helper 已清零。
 30. PR #41 / CI `33594996489` 合并为 `ab290579` 并 canonical 部署：core/search `34/34`/`2/2`、official images/tools/storage/OA/Worker、Parser/BGE/API/Web/Nginx/public/retention 全绿；rollback `405b85a`，旧运行容器已收敛移除，旧源码待机构 journey 后删除。
 31. `6bed92f` 修复 internal auth network 的无效 host publish：无端口发布、唯一静态 `.2` peer，SSH tunnel 直达；每次 start 先在生产锁内重建/验证 proxy-only firewall，verifier 复验 network/peer/iptables/代理/peer block。ECS HTTP+RFB 与精确 cleanup 通过；PR #42 / CI `33603561268` 合并为 `2e458f2`。
-32. `2e458f2` 两次 canonical build 均在 mutation 前因 parser `npm ci` 瞬时 `ECONNRESET` 失败，active/rollback/journal/containers 未变。ECS bounded-retry 正向通过；`fb6afcd` 固化 5 次有界重试、1–5 秒退避和每 origin 3 sockets，定向 `10/10`、lint/docs-sync、独立复审 `0/0/0` 全绿。
+32. `2e458f2` 两次 build 在 mutation 前因 parser `npm ci` 瞬时 `ECONNRESET` 失败且生产未变；`fb6afcd` 固化有界重试/低并发。PR #43 / CI `33606675500` 合并为 `7daff3f`，ECS exact Parser report、official MCP/OA/Worker、Parser/BGE、API/Web/Nginx/public/retention 全绿并 canonical 部署，rollback `ab290579`。
 33. Constraints：服务器验收为准，本地不运行 Docker；Windows 只用 PowerShell 显式调用 Git for Windows Bash 与 canonical wrapper；不读取/打印 `.env`，不 broad prune。机构 journey 通过后才删除旧代码、测试、容器/网络/systemd 和精确无引用 release/image；保留 active/rollback、`scansci-data`、对象存储、模型、监控与备份。
 
 ## Next action
 
-1. 推送 `fb6afcd` docs candidate，等待 exact Linux CI，合并后只部署 merged main SHA，以 `ab290579` 为 rollback。
-2. 用 canonical tunnel 完成一次 ZJU 登录，固定机构 DOI 下载、MCP recreate/repeat 与四入口/72h/600s 正向验收。
+1. 推送 `263fc23` docs candidate，等待 exact CI，合并后以 `7daff3f` 为 rollback canonical 部署，再启动新 tunnel；Cookie 必须从 false 变为 true。
+2. 选择 subscription-only DOI 完成官方 MCP 下载、MCP recreate/repeat 与四入口/72h/600s 正向验收；Semantic Scholar 免费副本不得冒充机构证明。
 3. 通过后做 cleanup release，精确删除旧实现和服务器冗余，再将 Task 10 置 10/12。
 
 ## Read first
