@@ -2031,3 +2031,55 @@ Cookie was published, and session correctly remains `auth_required`. Resume
 only with a current credential independently proven at `zjuam.zju.edu.cn`,
 then require fixed DOI `%PDF-`, service recreation persistence and the four
 product-entry journey before closing Task 10.
+
+### 5.61 Official ScanSci MCP bounded ECS evaluation (2026-09-02)
+
+#### Preconditions
+
+Run only from the fixed worktree with explicit Git Bash and the project
+`ssh-run.sh` wrapper. Confirm Docker and Squid are active, public production is
+healthy, and no container or volume has label/name prefix
+`openscience-eval-scansci-mcp-`. Do not run local Docker, read `.env`, or stop
+production services. The evaluator is a temporary host-network probe and does
+not change production Compose.
+
+#### Execution
+
+The local script is streamed to remote `bash -s`; it is not copied into the
+active release directory:
+
+```powershell
+Get-Content -Raw -LiteralPath `
+  'infra/scripts/evaluate-scansci-upstream-mcp.sh' |
+  & 'C:\Program Files\Git\bin\bash.exe' `
+    infra/scripts/ssh-run.sh --confirm 'bash -s -- --confirm'
+```
+
+The script creates one exact-name Docker volume and one `python:3.12-slim`
+container, verifies the `scansci-pdf==1.13.1` wheel SHA-256, starts the official
+streamable-HTTP MCP on loopback port 18081, requires the 17 documented tool
+names, and calls `scansci_pdf_download` for `arXiv:2009.06045v1` without a
+strategy override.
+
+#### Rollback
+
+An EXIT/INT/TERM trap removes only the generated evaluation container and
+volume. If the local connection dies before the trap completes, list resources
+by the exact evaluation label, resolve their full names, confirm they are not
+referenced by production, and pass those literal names to `docker rm -f` and
+`docker volume rm` through `ssh-run.sh --confirm`. Never run a broad prune.
+
+#### Verification
+
+Success prints only `SCANSCI_VERSION`, sorted `SCANSCI_TOOLS`, `SCANSCI_SOURCE`,
+`SCANSCI_PDF_MAGIC`, `SCANSCI_PDF_BYTES`, and `SCANSCI_PDF_SHA256`. Require
+version `1.13.1`, all 17 tools, `%PDF-`, size `1..104857600`, and a 64-hex hash.
+Afterward, both commands must return no rows:
+
+```text
+docker ps -a --filter label=org.openscience.role=scansci-mcp-evaluation
+docker volume ls --filter name=openscience-eval-scansci-mcp-
+```
+
+Re-run public `__release`, target container health and `df -h` checks to prove
+the evaluation did not alter the active release.

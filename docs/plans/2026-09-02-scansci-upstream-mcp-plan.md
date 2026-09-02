@@ -36,7 +36,7 @@
 - Consumes: ECS Squid at `127.0.0.1:7891`, upstream wheel `scansci-pdf==1.13.1`.
 - Produces: one bounded evaluation command that reports only version, tool names, source label, PDF magic/size/hash, and exact cleanup status.
 
-- [ ] **Step 1: Write the failing script contract test**
+- [x] **Step 1: Write the failing script contract test**
 
 The test executes the script with stubbed `docker`, `curl`, and cleanup commands and asserts that it:
 
@@ -47,7 +47,7 @@ The test executes the script with stubbed `docker`, `curl`, and cleanup commands
 - verifies `%PDF-`, `1..104857600` bytes, and SHA-256;
 - removes only the exact evaluation container/volume on success or failure.
 
-- [ ] **Step 2: Run the test and verify RED**
+- [x] **Step 2: Run the test and verify RED**
 
 Run:
 
@@ -57,7 +57,7 @@ node --test infra/scripts/evaluate-scansci-upstream-mcp.test.mjs
 
 Expected: FAIL because the evaluator does not exist.
 
-- [ ] **Step 3: Implement the minimal evaluator**
+- [x] **Step 3: Implement the minimal evaluator**
 
 The ECS command starts `python:3.12-slim` with `--network host`, installs the exact PyPI wheel using hash checking, configures `SCANSCI_PDF_DATA_DIR` beneath an exact evaluation volume, and runs:
 
@@ -67,7 +67,7 @@ scansci-pdf run --mode streamable_http --host 127.0.0.1 --port 18081
 
 An in-container Python MCP client uses `mcp.client.streamable_http.streamablehttp_client` and `ClientSession` to initialize, list tools, and call the download tool. It prints only the bounded acceptance fields. A trap cleans the exact container and volume.
 
-- [ ] **Step 4: Verify GREEN locally, then run once on ECS**
+- [x] **Step 4: Verify GREEN locally, then run once on ECS**
 
 Run locally:
 
@@ -83,12 +83,17 @@ C:\Program Files\Git\bin\bash.exe infra/scripts/ssh-run.sh -- bash /opt/openscie
 
 Expected: 17 expected tools present; OA PDF has valid magic/size/hash; exact evaluation resources absent afterward.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add infra/scripts/evaluate-scansci-upstream-mcp.* docs/runbooks/deployment.md
 git commit -m "test(scansci): prove upstream MCP on ECS"
 ```
+
+Actual ECS evidence: `v1.13.1`, all 17 expected tools, source `arXiv`, `%PDF-`,
+24,671,920 bytes, SHA-256
+`d57dc94c05ca99ccb33f8186e9317353c663a638cde1c0c8a90c7c2d029f484a`;
+evaluation containers/volumes `0/0`; active/public remained `405b85a…`.
 
 ### Task 2: Add source-retrieval provenance without blocking storage
 

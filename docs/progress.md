@@ -15,6 +15,7 @@
 - 新分支从 `origin/main@c6b93c5` 建立；CURRENT spec/plan 改为 `docs/specs/2026-09-02-scansci-upstream-mcp-design.md` / `docs/plans/2026-09-02-scansci-upstream-mcp-plan.md`，锁定最新 tag `v1.13.1` 及 archive SHA-256 `c5bdec13…b2507e`。
 - ECS 只读实测 production/rollback `405b85a` / `09093e7`，容器/公网/出网健康，磁盘 58G/148G（41%，84G available）。本地正向基线 ScanSci `174 pass / 11 skip`、Worker ScanSci `16/16`。
 - 新方向暴露上游完整 MCP，不再强制 `legal_only`；Agent Worker 直连 MCP、读取 read-only shared output，沿用 72h/600s 生命周期。替代生产验收后删除旧私有代码、测试、容器/网络脚本与精确服务器资源。
+- Task 1 ECS 正向试点通过：官方 `v1.13.1` 发现 17/17 tools，`arXiv:2009.06045v1` 返回 `%PDF-` 24,671,920 bytes / SHA-256 `d57dc94c…f484a`；evaluation 容器/卷 `0/0`，active/public 与磁盘仍为 `405b85a` / 58G。
 
 ## 2026-09-02 — ScanSci IdP gate deployed; ZJU credential blocked (`405b85a`)
 

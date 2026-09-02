@@ -64,8 +64,8 @@
 
 ## Next action
 
-1. 在 ECS 启动上游 `v1.13.1` 官方 streamable-HTTP MCP，完成 list-tools 与一篇真实 OA PDF 正向试点。
-2. TDD 将 Agent Worker 切到官方 MCP，增加 `source_retrieval` provenance，按 immutable transaction 部署 merged SHA。
+1. 完成 migration 34 `source_retrieval` 的 TDD 与 ECS forward/rollback/redeploy；官方 MCP Task 1 已以 17/17 tools、真实 24,671,920-byte OA PDF 通过。
+2. TDD 将 Agent Worker 切到官方 MCP，按 immutable transaction 部署 merged SHA。
 3. 完成一次 ZJU 登录、持久机构下载与四入口/72h/600s，再删除旧私有实现和精确服务器资源并关闭 Task 10。
 
 ## Read first
