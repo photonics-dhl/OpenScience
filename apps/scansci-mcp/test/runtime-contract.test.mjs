@@ -24,6 +24,10 @@ test('official ScanSci image is pinned and runs only the public MCP entrypoint',
   assert.match(requirements, /--python-platform x86_64-unknown-linux-gnu/);
   assert.doesNotMatch(requirements, /^pywin32==/m);
   assert.match(entrypoint, /scansci-pdf run --mode streamable_http --host 127\.0\.0\.1 --port 18080/);
+  assert.ok(
+    entrypoint.lastIndexOf('chmod 0770 /data/papers') > entrypoint.indexOf('install -d -m 0700'),
+    'shared paper permissions must be applied after private directory initialization',
+  );
   assert.match(entrypoint, /nginx -c \/opt\/scansci\/nginx-mcp\.conf -g 'daemon off;'/);
   assert.match(proxyConfig, /listen 8000;/);
   assert.match(proxyConfig, /proxy_pass http:\/\/127\.0\.0\.1:18080;/);
