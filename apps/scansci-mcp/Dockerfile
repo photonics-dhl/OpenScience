@@ -18,18 +18,22 @@ ENV DEBIAN_FRONTEND=noninteractive \
 
 WORKDIR /opt/scansci
 COPY requirements.lock /opt/scansci/requirements.lock
-RUN --mount=type=cache,target=/root/.cache/pip \
-    python -m venv /opt/scansci-venv \
-    && installed=0 \
-    && for attempt in 1 2 3 4 5; do \
-         if PIP_NO_CACHE_DIR=0 /opt/scansci-venv/bin/python -m pip install --require-hashes --only-binary=scansci-pdf -r /opt/scansci/requirements.lock; then installed=1; break; fi; \
-         sleep "$attempt"; \
+COPY install-lock.py /opt/scansci/install-lock.py
+RUN python -m venv /opt/scansci-venv \
+    && python /opt/scansci/install-lock.py --lock /opt/scansci/requirements.lock --output /tmp/scansci-lock-blocks \
+    && for requirement in /tmp/scansci-lock-blocks/*.txt; do \
+         installed=0; \
+         for attempt in 1 2 3 4 5; do \
+           if /opt/scansci-venv/bin/python -m pip install --no-deps --require-hashes --only-binary=scansci-pdf -r "$requirement"; then installed=1; break; fi; \
+           sleep "$attempt"; \
+         done; \
+         test "$installed" = 1; \
        done \
-    && test "$installed" = 1 \
+    && /opt/scansci-venv/bin/python -m pip check \
     && /opt/scansci-venv/bin/python -m patchright install --with-deps chromium \
     && apt-get update \
     && apt-get install -y --no-install-recommends dumb-init tor xvfb xauth \
-    && rm -rf /var/lib/apt/lists/* /root/.cache/pip \
+    && rm -rf /var/lib/apt/lists/* /root/.cache/pip /tmp/scansci-lock-blocks \
     && /opt/scansci-venv/bin/python -c "import importlib.metadata; assert importlib.metadata.version('scansci-pdf') == '${SCANSCI_VERSION}'; assert '${SCANSCI_WHEEL_SHA256}' == 'f68c30503834fc093eb192bd556090d210241eed48445017fdb3d32f6e1355e5'"
 
 ENV PATH=/opt/scansci-venv/bin:$PATH
