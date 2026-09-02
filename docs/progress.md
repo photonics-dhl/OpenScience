@@ -4,7 +4,7 @@
 
 ## Current version tuple
 
-- Candidate branch / code release / repository main: `codex/scansci-upstream-mcp` / `80db41e7ee0a1c8158d3f335dc1b2fbf6f2bb2bf` / `80db41e7ee0a1c8158d3f335dc1b2fbf6f2bb2bf`；本次文档收口可在不重新部署产品的情况下继续推进 main。
+- Candidate branch / production code release: `codex/scansci-upstream-mcp` / `80db41e7ee0a1c8158d3f335dc1b2fbf6f2bb2bf`；repository main 可由不重新部署产品的 docs-only commit 继续推进。
 - Production application source / immutable release: `80db41e7ee0a1c8158d3f335dc1b2fbf6f2bb2bf`。
 - Production rollback: `761b93d4bbce77e70d676be78de0bba128974fe6`；两者均为 upstream-only；core/search migrations `34/34` / `2/2`。
 - Taskmaster `hermes-research-intelligence` 仍为 9/12：官方 MCP 单服务替换和旧运行链路清理完成；官方 `cookie_import`、subscription-only PDF、四入口/72h/600s 正向旅程 pending，Task 11 继续阻断。
