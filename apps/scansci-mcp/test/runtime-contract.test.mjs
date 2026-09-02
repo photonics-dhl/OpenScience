@@ -5,10 +5,11 @@ import test from 'node:test';
 const root = new URL('../', import.meta.url);
 
 test('official ScanSci image is pinned and runs only the public MCP entrypoint', async () => {
-  const [dockerfile, entrypoint, requirements] = await Promise.all([
+  const [dockerfile, entrypoint, requirements, compose] = await Promise.all([
     readFile(new URL('Dockerfile', root), 'utf8'),
     readFile(new URL('entrypoint.sh', root), 'utf8'),
     readFile(new URL('requirements.lock', root), 'utf8'),
+    readFile(new URL('../../infra/compose/docker-compose.prod.yml', root), 'utf8'),
   ]);
 
   assert.match(dockerfile, /python:3\.12-slim@sha256:7a8b475003c4fe15a2cd4e55e5cfc2f3560bdc9333d624f24cdd6d4340fd7a17/);
@@ -21,5 +22,6 @@ test('official ScanSci image is pinned and runs only the public MCP entrypoint',
   assert.match(requirements, /--python-platform x86_64-unknown-linux-gnu/);
   assert.doesNotMatch(requirements, /^pywin32==/m);
   assert.match(entrypoint, /scansci-pdf run --mode streamable_http --host 0\.0\.0\.0 --port 8000/);
+  assert.match(compose, /SCANSCI_PDF_PROXY: http:\/\/openscience-egress:7891/);
   assert.doesNotMatch(`${dockerfile}\n${entrypoint}`, /legal_only|SCI(?:HUB)?_ENABLED=false|TOR_ENABLED=false/i);
 });

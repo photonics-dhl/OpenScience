@@ -203,6 +203,7 @@ services:
       HTTP_PROXY: http://openscience-egress:7891
       HTTPS_PROXY: http://openscience-egress:7891
       NO_PROXY: localhost,127.0.0.1,scansci-mcp
+      SCANSCI_PDF_PROXY: http://openscience-egress:7891
       TOR_PROXY: socks5h://127.0.0.1:1080
       SCANSCI_TOR_AUTOSTART: "true"
     extra_hosts:
