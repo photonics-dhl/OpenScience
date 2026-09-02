@@ -1,3 +1,5 @@
+# syntax=docker/dockerfile:1.7
+
 FROM python:3.12-slim@sha256:7a8b475003c4fe15a2cd4e55e5cfc2f3560bdc9333d624f24cdd6d4340fd7a17 AS runtime
 
 ARG SCANSCI_VERSION=1.13.1
@@ -16,8 +18,14 @@ ENV DEBIAN_FRONTEND=noninteractive \
 
 WORKDIR /opt/scansci
 COPY requirements.lock /opt/scansci/requirements.lock
-RUN python -m venv /opt/scansci-venv \
-    && /opt/scansci-venv/bin/python -m pip install --require-hashes --only-binary=scansci-pdf -r /opt/scansci/requirements.lock \
+RUN --mount=type=cache,target=/root/.cache/pip \
+    python -m venv /opt/scansci-venv \
+    && installed=0 \
+    && for attempt in 1 2 3 4 5; do \
+         if PIP_NO_CACHE_DIR=0 /opt/scansci-venv/bin/python -m pip install --require-hashes --only-binary=scansci-pdf -r /opt/scansci/requirements.lock; then installed=1; break; fi; \
+         sleep "$attempt"; \
+       done \
+    && test "$installed" = 1 \
     && /opt/scansci-venv/bin/python -m patchright install --with-deps chromium \
     && apt-get update \
     && apt-get install -y --no-install-recommends dumb-init tor xvfb xauth \
