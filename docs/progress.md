@@ -12,7 +12,7 @@
 ## 2026-09-02 — ScanSci official MCP replacement started
 
 - 仓库审计确认上游已有 Codex plugin、Skill、17-tool MCP、统一登录与 Cookie 持久化；旧实现错误依赖私有函数、AST/signature guard 与自建 browser protocol。PR #40 保持不合并/不部署。
-- 新分支从 `origin/main@c6b93c5` 建立；CURRENT spec 改为 `docs/specs/2026-09-02-scansci-upstream-mcp-design.md`，锁定最新 tag `v1.13.1` 及 archive SHA-256 `c5bdec13…b2507e`。
+- 新分支从 `origin/main@c6b93c5` 建立；CURRENT spec/plan 改为 `docs/specs/2026-09-02-scansci-upstream-mcp-design.md` / `docs/plans/2026-09-02-scansci-upstream-mcp-plan.md`，锁定最新 tag `v1.13.1` 及 archive SHA-256 `c5bdec13…b2507e`。
 - ECS 只读实测 production/rollback `405b85a` / `09093e7`，容器/公网/出网健康，磁盘 58G/148G（41%，84G available）。本地正向基线 ScanSci `174 pass / 11 skip`、Worker ScanSci `16/16`。
 - 新方向暴露上游完整 MCP，不再强制 `legal_only`；Agent Worker 直连 MCP、读取 read-only shared output，沿用 72h/600s 生命周期。替代生产验收后删除旧私有代码、测试、容器/网络脚本与精确服务器资源。
 

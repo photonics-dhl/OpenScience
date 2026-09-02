@@ -73,5 +73,5 @@
 1. `AGENTS.md`
 2. 本 handoff
 3. `docs/specs/2026-09-02-scansci-upstream-mcp-design.md`
-4. `docs/plans/2026-09-02-scansci-upstream-mcp-plan.md`（创建后）与 `docs/plans/2026-08-30-hermes-external-retrieval-lifecycle-plan.md`
+4. `docs/plans/2026-09-02-scansci-upstream-mcp-plan.md` 与 `docs/plans/2026-08-30-hermes-external-retrieval-lifecycle-plan.md`
 5. `docs/specs/2026-08-26-hermes-research-intelligence-platform-design.md`，再读 `docs/progress.md`；`project_index.md` 只定向检索 CURRENT，不要从较旧 `main` 或历史 release 段落推断现状。
