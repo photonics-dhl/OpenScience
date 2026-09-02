@@ -6,10 +6,11 @@ import { URL } from 'node:url';
 const root = new URL('../', import.meta.url);
 
 test('official ScanSci image is pinned and runs only the public MCP entrypoint', async () => {
-  const [dockerfile, entrypoint, authEntrypoint, healthcheck, proxyConfig, requirements, compose] = await Promise.all([
+  const [dockerfile, entrypoint, authEntrypoint, authLogin, healthcheck, proxyConfig, requirements, compose] = await Promise.all([
     readFile(new URL('Dockerfile', root), 'utf8'),
     readFile(new URL('entrypoint.sh', root), 'utf8'),
     readFile(new URL('auth-entrypoint.sh', root), 'utf8'),
+    readFile(new URL('auth-login.py', root), 'utf8'),
     readFile(new URL('healthcheck.py', root), 'utf8'),
     readFile(new URL('nginx-mcp.conf', root), 'utf8'),
     readFile(new URL('requirements.lock', root), 'utf8'),
@@ -48,7 +49,14 @@ test('official ScanSci image is pinned and runs only the public MCP entrypoint',
   assert.match(authEntrypoint, /Xvfb "\$DISPLAY" -screen 0 1280x800x24 -nolisten tcp/);
   assert.match(authEntrypoint, /x11vnc .* -listen 127\.0\.0\.1 .* -nopw/);
   assert.match(authEntrypoint, /websockify --web=\/usr\/share\/novnc 0\.0\.0\.0:6080 127\.0\.0\.1:5900/);
-  assert.match(authEntrypoint, /scansci-pdf federated-login sciencedirect --force/);
+  assert.match(authEntrypoint, /python \/opt\/scansci\/auth-login\.py sciencedirect/);
+  assert.doesNotMatch(authEntrypoint, /scansci-pdf federated-login/);
+  assert.match(dockerfile, /COPY --chown=10001:10001 auth-login\.py \/opt\/scansci\/auth-login\.py/);
+  assert.match(authLogin, /SCANSCI_PDF_PROXY/);
+  assert.match(authLogin, /--proxy-server=\{proxy\}/);
+  assert.match(authLogin, /browser_login\.launch = proxied_launch/);
+  assert.match(authLogin, /CARSIClient\(config\)/);
+  assert.match(authLogin, /client\.login\(publisher, force=True\)/);
   assert.doesNotMatch(authEntrypoint, /scansci_legal|legal_only/i);
   assert.ok(
     dockerfile.indexOf('LABEL org.openscience.source=') > dockerfile.indexOf('patchright install --with-deps chromium'),

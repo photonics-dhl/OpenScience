@@ -990,11 +990,11 @@ name="$(basename "$0")"
 line="$name"
 for argument in "$@"; do line="$line $argument"; done
 printf '%s\\n' "$line" >> "$AUTH_PROCESS_LOG"
-if [ "$name" = scansci-pdf ]; then exit 0; fi
+if [ "$name" = python ]; then exit 0; fi
 trap 'exit 0' TERM INT
 while true; do sleep 1; done
 `;
-  for (const command of ['Xvfb', 'x11vnc', 'websockify', 'scansci-pdf']) {
+  for (const command of ['Xvfb', 'x11vnc', 'websockify', 'python']) {
     const target = join(bin, command);
     await writeFile(target, fake);
     await chmod(target, 0o755);
@@ -1011,7 +1011,7 @@ while true; do sleep 1; done
   assert.doesNotMatch(processes, /^chromium /m);
   assert.match(processes, /^x11vnc .* -listen 127\.0\.0\.1 .* -no6(?: |$)/m);
   assert.match(processes, /^websockify .*0\.0\.0\.0:6080 127\.0\.0\.1:5900/m);
-  assert.match(processes, /^scansci-pdf federated-login sciencedirect --force$/m);
+  assert.match(processes, /^python \/opt\/scansci\/auth-login\.py sciencedirect$/m);
 });
 
 test('auth entrypoint TERM promptly stops its owned long-running login child', async (t) => {
@@ -1021,13 +1021,13 @@ test('auth entrypoint TERM promptly stops its owned long-running login child', a
   await mkdir(bin, { recursive: true });
   const fake = `#!/usr/bin/env bash
 name="$(basename "$0")"
-if [ "$name" = scansci-pdf ]; then
+if [ "$name" = python ]; then
   printf '%s\\n' "$$" > "$AUTH_LOGIN_PID_FILE"
 fi
 trap 'exit 0' TERM INT
 while true; do sleep 1; done
 `;
-  for (const command of ['Xvfb', 'x11vnc', 'websockify', 'scansci-pdf']) {
+  for (const command of ['Xvfb', 'x11vnc', 'websockify', 'python']) {
     const target = join(bin, command);
     await writeFile(target, fake);
     await chmod(target, 0o755);

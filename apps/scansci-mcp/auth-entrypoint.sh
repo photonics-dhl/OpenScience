@@ -27,7 +27,7 @@ children+=("$!")
 websockify --web=/usr/share/novnc 0.0.0.0:6080 127.0.0.1:5900 &
 children+=("$!")
 
-scansci-pdf federated-login sciencedirect --force &
+python /opt/scansci/auth-login.py sciencedirect &
 login_pid="$!"
 children+=("$login_pid")
 set +e

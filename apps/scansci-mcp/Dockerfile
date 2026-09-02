@@ -39,7 +39,8 @@ RUN apt-get update \
     && apt-get install -y --no-install-recommends fonts-noto-cjk novnc websockify x11vnc \
     && rm -rf /var/lib/apt/lists/*
 COPY --chown=10001:10001 auth-entrypoint.sh /opt/scansci/auth-entrypoint.sh
-RUN chmod 0555 /opt/scansci/auth-entrypoint.sh
+COPY --chown=10001:10001 auth-login.py /opt/scansci/auth-login.py
+RUN chmod 0555 /opt/scansci/auth-entrypoint.sh /opt/scansci/auth-login.py
 
 ARG XGS_RELEASE_IMAGE_TAG
 LABEL org.openscience.source=$XGS_RELEASE_IMAGE_TAG \
