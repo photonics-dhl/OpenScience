@@ -14,6 +14,7 @@ from scansci_pdf.sources.carsi import CARSIClient
 
 
 PRODUCTION_PROXY = "http://openscience-egress:7891"
+CARSI_LOGIN_MAX_WAIT_SECONDS = 15 * 60
 
 
 def install_proxy_override(config: dict[str, Any]) -> None:
@@ -27,6 +28,9 @@ def install_proxy_override(config: dict[str, Any]) -> None:
     official_launch = browser_login.launch
     if not isinstance(official_launch, Callable):
         raise RuntimeError("official ScanSci browser backend is unavailable")
+    official_open_login_browser = browser_login.open_login_browser
+    if not isinstance(official_open_login_browser, Callable):
+        raise RuntimeError("official ScanSci login browser is unavailable")
 
     def proxied_launch(*args: Any, **kwargs: Any) -> Any:
         launch_args = [
@@ -38,7 +42,12 @@ def install_proxy_override(config: dict[str, Any]) -> None:
         launch_args.append(f"--proxy-server={proxy}")
         return official_launch(*args, args=launch_args, **kwargs)
 
+    def extended_login_window(*args: Any, **kwargs: Any) -> Any:
+        kwargs["max_wait"] = CARSI_LOGIN_MAX_WAIT_SECONDS
+        return official_open_login_browser(*args, **kwargs)
+
     browser_login.launch = proxied_launch
+    browser_login.open_login_browser = extended_login_window
 
 
 def main(argv: list[str]) -> int:
