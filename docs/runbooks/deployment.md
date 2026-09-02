@@ -1,6 +1,6 @@
 # Runbook: 部署（Deployment）
 
-> 状态：**CURRENT**。active immutable release / application source 为 `405b85a8e1d6b3aec51d2de20ec6ce5b93ab73e4`，rollback tree 为 `09093e7e879dbc7e9175e957f217afe5c6eb2e67`。官方 ScanSci MCP 仍是 candidate；post-deploy merge/docs-only HEAD 不得冒充 application source。
+> 状态：**CURRENT**。active immutable release / application source 为 `ab290579ed81f4a30d011dea2a52e8b9b20c50f3`，rollback tree 为 `405b85a8e1d6b3aec51d2de20ec6ce5b93ab73e4`。官方 ScanSci MCP 已生产；auth bridge hotfix `6bed92f` 尚未合并/部署，candidate/docs HEAD 不得冒充 application source。
 > 格式遵循 `.agents/skills/infra-runbook/SKILL.md` 四节强制要求。
 > 部署属 Spec §20.5"询问"级操作：执行前需用户确认，必须走 `infra/scripts/deploy.sh` + CI/CD，禁止手工改服务器代码。
 
@@ -2093,28 +2093,28 @@ source-strategy override. Its root filesystem is read-only; `scansci-data` is
 persistent, while `scansci-papers` is transient. Agent Worker shares only GID
 11000 on the paper volume so it can ingest the exact PDF; unlink happens only
 after malware scan, object upload and database activation. The auth image is
-stopped by default, attaches only to peer-free `auth_net`, and publishes noVNC
-only to `127.0.0.1:6080` when explicitly started. Runtime acceptance inspects
-that network/port identity. The MCP container exits when MCP, Nginx or Tor exits,
+stopped by default, attaches only to peer-free `auth_net`, and publishes no host
+port. The operator-only SSH tunnel reaches fixed peer `172.25.0.2:6080` and
+binds only local `127.0.0.1:6080`. Runtime acceptance inspects the network,
+sole peer, firewall, controlled proxy and absent host listener. The MCP container exits when MCP, Nginx or Tor exits,
 and health performs real MCP initialize/list-tools rather than a proxy TCP probe.
-Candidate `9730529` pins that probe to MCP 2.1.1's
+Production `ab290579` pins that probe to MCP 2.1.1's
 `streamable_http_client`. A policy-blocked result uses the separate terminal
 `discard` operation; the durable success path alone invokes `acknowledge`.
 
-Positive ECS candidate evidence used the real Worker adapter against the
+Positive ECS production evidence used the real Worker adapter against the
 official MCP. `arXiv:2009.06045v1` returned `source_retrieval`, source `arXiv`,
 `%PDF-`, 24,671,920 bytes and SHA-256
 `d57dc94c05ca99ccb33f8186e9317353c663a638cde1c0c8a90c7c2d029f484a`.
-After bounded ingestion the shared volume contained zero staged PDFs. The
-candidate MCP image was
-`sha256:551684a72164c753aeaa4431d068bb7db2673e9e131b06302d24b5410e4570e8`;
-this is candidate evidence, not the production release identity.
+After bounded ingestion the shared volume contained zero staged PDFs. Exact
+production MCP/auth image IDs are bound in capability schema 5 and verified
+without copying them into this runbook.
 
 Production must use the canonical immutable transaction, not manual Compose:
 
 ```text
 infra/scripts/deploy.sh --confirm --require-parser-acceptance \
-  --rollback-ref 405b85a8e1d6b3aec51d2de20ec6ce5b93ab73e4 <merged-main-sha>
+  --rollback-ref ab290579ed81f4a30d011dea2a52e8b9b20c50f3 <merged-hotfix-sha>
 ```
 
 The transaction builds MCP/auth before application images, starts MCP first,
@@ -2137,3 +2137,38 @@ only unreferenced candidate roots/images, old containers/networks/systemd
 units, and empty staging data. Keep active/rollback releases, `scansci-data`,
 accepted object storage, models, monitoring data and backups; never broad
 prune.
+
+### 5.63 Official ScanSci auth bridge hotfix (2026-09-02)
+
+#### Preflight
+
+Confirm active/public release `ab290579…`, rollback `405b85a…`, core/search
+`34/34` and `2/2`, no auth helper/tunnel, no failed/journal/pending marker, and
+enough disk. The candidate must be merged `main`, clean, exact-CI green and have
+its own accepted Parser report. Never run local Docker or read/print `.env`.
+
+#### Execution
+
+Deploy only the merged hotfix SHA through the canonical command above. The
+official auth profile has no `ports` entry and owns the sole static
+`172.25.0.2` peer on internal `auth_net`. `scansci-auth-tunnel.sh start 6080`
+must acquire the production lock, create the stopped helper, run
+`prepare-scansci-auth-network.sh`, start it, then open local SSH forwarding to
+`172.25.0.2:6080`.
+
+#### Rollback
+
+Before public CAS, the transaction restores `ab290579…` automatically. After an
+accepted switch, run `scansci-auth-tunnel.sh stop` first; if the new release is
+unhealthy, execute a new canonical transaction with the active hotfix SHA as
+expected rollback source and immutable `ab290579…` as target. Do not manually
+retag images, edit active markers or prune Docker resources.
+
+#### Verification
+
+Require official MCP image/tools/storage/Worker/OA markers plus auth runtime
+verification of exact network/IPAM/bridge/sole container, unique ordered INPUT
+rules, proxy HTTP 204, blocked MCP/Worker peers and host sensitive ports, direct
+host noVNC HTTP 200, absent host `:6080` listener, local HTTP and RFB readiness,
+and exact helper cleanup after stop. Recheck public release, migrations,
+Parser/BGE, all target containers, journal/failed/retention and `df -h`.

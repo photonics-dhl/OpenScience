@@ -4,18 +4,18 @@
 
 ## Current version tuple
 
-- Candidate branch / code HEAD / origin main: `codex/scansci-upstream-mcp` / `973052972b73b83caf7504a8b6fc599e098a6ce7` / `c6b93c5b1e34b4a1871e8f24d2845406e4a7795b`。
-- Production application source / immutable release: `405b85a8e1d6b3aec51d2de20ec6ce5b93ab73e4`。
-- Production rollback: `09093e7e879dbc7e9175e957f217afe5c6eb2e67`；core/search migrations `33/33` / `2/2`。
-- Taskmaster `hermes-research-intelligence` 仍为 9/12；官方 MCP Tasks 1–4 code/runtime complete，生产合并、机构下载、四入口与旧实现精确清理 pending；Task 11 继续阻断。
+- Candidate branch / code HEAD / origin main: `codex/scansci-upstream-mcp` / `6bed92f5864f2f3b10d6fcb5457f57d6481651aa` / `ab290579ed81f4a30d011dea2a52e8b9b20c50f3`。
+- Production application source / immutable release: `ab290579ed81f4a30d011dea2a52e8b9b20c50f3`。
+- Production rollback: `405b85a8e1d6b3aec51d2de20ec6ce5b93ab73e4`；core/search migrations `34/34` / `2/2`。
+- Taskmaster `hermes-research-intelligence` 仍为 9/12；官方 MCP 已生产，认证隧道 bridge hotfix、机构下载、四入口与旧实现精确清理 pending；Task 11 继续阻断。
 
-## 2026-09-02 — Official ScanSci MCP candidate ready for release
+## 2026-09-02 — Official ScanSci MCP deployed; auth bridge hotfix ready
 
 - 上游 `v1.13.1` 官方 Skill/MCP 已锁定并暴露完整 17-tool surface；不强制 `legal_only`，默认下载不传来源策略覆盖。旧私有实现继续冻结，须等替代版本生产验收后精确删除。
-- Task 1/2：ECS 官方试点下载 `arXiv:2009.06045v1` 为 `%PDF-`、24,671,920 bytes、SHA-256 `d57dc94c…f484a`，临时资源 `0/0`；migration 34 `source_retrieval` 已在隔离 ECS PostgreSQL 完成 forward/rollback/redeploy，生产仍 33/33。
-- Task 3：Worker 通过官方 streamable-HTTP MCP 调用 `scansci_pdf_download`；早期 ECS candidate 返回 `route=source_retrieval`、`source=arXiv`、相同 PDF/hash，staging PDF 为 `0`。`9730529` 保留 per-document `providerVersion=1.13.1`、symlink-safe 读取与 durable activation 后 acknowledge；策略拒绝则走独立 `discard`，上传失败仍保留 staging。
-- Task 4：官方 MCP/auth 镜像、schema-5 identity/retention/rollback 已实现；`9730529` 使用 pinned MCP 2.1.1 的真实 initialize/list-tools health，并保留 `auth_net`、child supervision 与 schema-5 previous-release 支持。独立复核 `0/0/0`、全仓 build/typecheck/lint/test 失败 `0`；旧 `sha256:551684a7…e4570e8` 仅为此前 ECS runtime evidence，新镜像仍待 merged SHA 生产构建。
-- 下一步推送并等待 exact GitHub CI，再由 canonical ECS transaction 应用 migration 34、切换官方 MCP，完成官方登录/机构 PDF/四入口/72h+600s；随后提交第二个清理 release。生产/回退在此之前保持 `405b85a` / `09093e7`。
+- PR #41 / exact CI `33594996489` 合并为 `ab290579…`；canonical ECS transaction 已应用 migration 34，official MCP/auth、17 tools、Worker OA、Parser/BGE、API/Web/Worker/Nginx/public CAS/retention 全绿。active/rollback 为 `ab290579…` / `405b85a…`，旧 legal/browser/auth 容器已由 Compose 收敛移除。
+- Task 1–4 与 Task 5 Steps 1–2 完成：官方 `scansci_pdf_download` 返回 `source=arXiv`、`%PDF-`、24,671,920 bytes、SHA-256 `d57dc94c…f484a`；durable activation 后 acknowledge、policy discard、providerVersion、schema-5 rollback 与 staging `0` 均在生产接受。
+- 首次 official auth 诊断确认 Docker `internal` 网络不产生可用 host port publish。`6bed92f` 改为无 publish 的唯一 `172.25.0.2` peer，SSH tunnel 直达该地址；每次启动在同一生产锁内执行 network create→firewall/Squid prepare→start，runtime verifier 验证真实 network/peer/iptables/受控出网。ECS HTTP+RFB 正向通过，helper/peer 清零；独立复审 `0/0/0`，相关门禁 `32/32 + 5/5 + 1/1 + 44/49`、失败 0，5 项由 Linux CI 执行。
+- 下一步只合并并部署 auth bridge hotfix；随后完成一次官方 ZJU 登录、固定机构 DOI、MCP recreate、四入口、600s one-use 与 72h metadata。全部通过后再提交旧实现/服务器资源精确清理 release。
 
 ## 2026-09-02 — ScanSci IdP gate deployed; ZJU credential blocked (`405b85a`)
 
