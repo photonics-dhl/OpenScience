@@ -2097,6 +2097,9 @@ stopped by default, attaches only to peer-free `auth_net`, and publishes noVNC
 only to `127.0.0.1:6080` when explicitly started. Runtime acceptance inspects
 that network/port identity. The MCP container exits when MCP, Nginx or Tor exits,
 and health performs real MCP initialize/list-tools rather than a proxy TCP probe.
+Candidate `9730529` pins that probe to MCP 2.1.1's
+`streamable_http_client`. A policy-blocked result uses the separate terminal
+`discard` operation; the durable success path alone invokes `acknowledge`.
 
 Positive ECS candidate evidence used the real Worker adapter against the
 official MCP. `arXiv:2009.06045v1` returned `source_retrieval`, source `arXiv`,

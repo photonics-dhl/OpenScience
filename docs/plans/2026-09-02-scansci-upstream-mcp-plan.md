@@ -281,6 +281,12 @@ Tor children, uses an initialize/list-tools health probe, allows schema 5 to be
 the next release's rollback source, defers staging acknowledgement until durable
 activation, and stores the exact MCP provider version in rights evidence.
 
+Final review fix `9730529` uses the pinned MCP 2.1.1
+`streamable_http_client` in the real health probe and adds an identity-safe
+terminal `discard` for policy-blocked staging while keeping `acknowledge` only
+after durable activation. Independent follow-up review returned READY with no
+Critical, Important or Minor findings; local build/typecheck/lint/test are green.
+
 ### Task 5: Deploy, accept, and remove the rejected implementation
 
 **Files:**
@@ -301,6 +307,9 @@ activation, and stores the exact MCP provider version in rights evidence.
 - [ ] **Step 1: Run focused release review and CI**
 
 Use `security-review`, `requesting-code-review`, `test-gate`, and `verification-before-completion`. Required local gates are build, typecheck, lint, focused Domain/Worker/MCP/release tests, docs sync, Markdown lint, and `git diff --check`.
+
+Local review and gates are complete at `9730529`; exact GitHub CI remains before
+this checkbox can close.
 
 - [ ] **Step 2: Merge and execute the canonical ECS deployment**
 
