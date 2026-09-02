@@ -83,7 +83,7 @@ function sourceUrl(result: ScanSciMcpDownload, identifier: string): string {
 
 async function readBoundedPdf(root: string, candidate: string, maximumBytes: number): Promise<Buffer> {
   const rootPath = await realpath(root);
-  const targetPath = await realpath(isAbsolute(candidate) ? candidate : resolve(rootPath, candidate));
+  const targetPath = resolve(isAbsolute(candidate) ? candidate : resolve(rootPath, candidate));
   const fromRoot = relative(rootPath, targetPath);
   if (fromRoot === '..' || fromRoot.startsWith('../') || fromRoot.startsWith('..\\') || isAbsolute(fromRoot)) {
     throw new Error('ScanSci PDF path is outside its volume');
@@ -91,6 +91,9 @@ async function readBoundedPdf(root: string, candidate: string, maximumBytes: num
   const before = await lstat(targetPath);
   if (!before.isFile() || before.isSymbolicLink() || before.nlink !== 1) {
     throw new Error('ScanSci PDF is not a regular file');
+  }
+  if (resolve(await realpath(targetPath)) !== targetPath) {
+    throw new Error('ScanSci PDF path traverses a symlink');
   }
   if (before.size < 5 || before.size > maximumBytes) {
     const error = new Error('ScanSci PDF size is invalid');

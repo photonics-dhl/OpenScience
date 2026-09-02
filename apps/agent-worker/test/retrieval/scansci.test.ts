@@ -1,6 +1,6 @@
 import { createServer, type Server } from 'node:http';
 import type { AddressInfo } from 'node:net';
-import { access, mkdtemp, writeFile } from 'node:fs/promises';
+import { access, mkdir, mkdtemp, symlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
@@ -168,5 +168,26 @@ describe('official ScanSci MCP adapter', () => {
     await expect(adapter.acquire({ identifier: '10.1000/example', subjectId: 'a'.repeat(64) })).resolves.toEqual({
       status: 'unavailable', provider: 'scansci', code: 'invalid_response', retryable: false,
     });
+  });
+
+  it('does not ingest a path that traverses a symlink inside the paper volume', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'openscience-scansci-symlink-'));
+    const realDirectory = join(root, 'real');
+    const aliasDirectory = join(root, 'alias');
+    const bytes = Buffer.from('%PDF-symlink-fixture');
+    await mkdir(realDirectory);
+    await writeFile(join(realDirectory, 'paper.pdf'), bytes);
+    await symlink(realDirectory, aliasDirectory, 'junction');
+    const mcpUrl = await fakeMcp({ result: {
+      success: true,
+      file: join(aliasDirectory, 'paper.pdf'),
+      source: 'Unpaywall',
+    } });
+    const adapter = createScanSciAdapter({ enabled: true, mcpUrl, papersDir: root } as never);
+
+    await expect(adapter.acquire({ identifier: '10.1000/example', subjectId: 'a'.repeat(64) })).resolves.toEqual({
+      status: 'unavailable', provider: 'scansci', code: 'invalid_response', retryable: false,
+    });
+    await expect(access(join(realDirectory, 'paper.pdf'))).resolves.toBeUndefined();
   });
 });
