@@ -82,6 +82,7 @@ describe('source.retrieve handler replay safety', () => {
     const hash = 'a'.repeat(64);
     let temporaryDocument: Record<string, any> | null = null;
     const putObject = vi.fn(async (key: string) => ({ key, size: bytes.length, etag: 'etag' }));
+    const acknowledge = vi.fn(async () => undefined);
     const rightsUpsert = vi.fn(async () => ({ id: RIGHTS_ID }));
     const temporaryCreate = vi.fn(async ({ data }: any) => {
       temporaryDocument = { ...data };
@@ -134,11 +135,15 @@ describe('source.retrieve handler replay safety', () => {
         status: 'succeeded',
         provider: 'scansci',
         route: 'open_access',
+        source: 'Unpaywall',
         sourceUrl: 'https://publisher.example/paper',
+        providerVersion: '1.13.1',
         bytes,
         contentHash: hash,
         mimeType: 'application/pdf',
         access: { kind: 'open_access', license: 'CC-BY-4.0' },
+        acknowledge,
+        discard: vi.fn(async () => undefined),
       }) },
     });
     const deps: any = { prisma, storage, malwareScanner: async () => undefined };
@@ -166,7 +171,54 @@ describe('source.retrieve handler replay safety', () => {
     expect(rightsUpsert).toHaveBeenCalledTimes(2);
     expect(temporaryCreate).toHaveBeenCalledTimes(1);
     expect(putObject).toHaveBeenCalledTimes(1);
+    expect(acknowledge).toHaveBeenCalledTimes(2);
+    expect(rightsUpsert.mock.calls[0]?.[0].create.evidence).toMatchObject({ providerVersion: '1.13.1' });
     expect(temporaryDocument).toMatchObject({ agentTaskId: TASK_ID, state: 'active' });
+  });
+
+  it('keeps the staged PDF when durable object upload fails before acknowledgement', async () => {
+    const bytes = Buffer.from('%PDF-upload-failure');
+    const acknowledge = vi.fn(async () => undefined);
+    let temporaryDocument: Record<string, any> | null = null;
+    const prisma: any = {
+      agentTask: { findUnique: async () => ({
+        id: TASK_ID, kind: 'source.retrieve', status: 'running',
+        session: { userId: USER_ID, researchObject: { workspaceId: WORKSPACE_ID, workspace: { status: 'active' } } },
+      }) },
+      membership: { findUnique: async () => ({ workspaceId: WORKSPACE_ID, userId: USER_ID }) },
+      externalSource: { upsert: async ({ create }: any) => ({ id: SOURCE_ID, ...create }) },
+      sourceRightsDecision: { upsert: async () => ({ id: RIGHTS_ID }) },
+      temporaryDocument: {
+        findUnique: async () => null,
+        create: async ({ data }: any) => { temporaryDocument = { ...data }; return temporaryDocument; },
+        updateMany: async ({ data }: any) => { if (temporaryDocument) Object.assign(temporaryDocument, data); return { count: 1 }; },
+      },
+    };
+    const handler = createSourceRetrieveHandler({
+      queryHmacSecret: 'retrieval-query-test-secret-at-least-32-bytes',
+      semanticScholar: { search: vi.fn() },
+      tavily: { search: vi.fn() },
+      scansci: { acquire: async () => ({
+        status: 'succeeded', provider: 'scansci', route: 'source_retrieval', source: 'publisher',
+        sourceUrl: 'https://doi.org/10.1000/test', providerVersion: '1.13.1', bytes,
+        contentHash: 'b'.repeat(64), mimeType: 'application/pdf',
+        access: { kind: 'source_retrieval', source: 'publisher' }, acknowledge,
+        discard: vi.fn(async () => undefined),
+      }) },
+    });
+    await expect(handler({
+      prisma,
+      malwareScanner: async () => undefined,
+      storage: { headObject: async () => null, putObject: async () => { throw new Error('storage unavailable'); } },
+    } as any, {
+      id: TASK_ID,
+      payload: {
+        query: 'paper', providers: ['scansci'], limit: 1, includeFullText: true,
+        identifier: '10.1000/test', retryContractVersion: 1, target: { kind: 'personal' },
+      },
+    })).rejects.toThrow(/storage unavailable/u);
+    expect(acknowledge).not.toHaveBeenCalled();
+    expect(temporaryDocument).toMatchObject({ state: 'cleanup_failed', lastErrorCode: 'object_upload_failed' });
   });
 
   it('rejects an unmarked persisted task before reading authority or invoking providers', async () => {

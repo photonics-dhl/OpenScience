@@ -4,10 +4,18 @@
 
 ## Current version tuple
 
-- Docs branch / code base / origin main: `codex/scansci-auth-credential-blocker-docs` / `405b85a8e1d6b3aec51d2de20ec6ce5b93ab73e4` / `405b85a8e1d6b3aec51d2de20ec6ce5b93ab73e4`。
+- Candidate branch / code HEAD / origin main: `codex/scansci-upstream-mcp` / `973052972b73b83caf7504a8b6fc599e098a6ce7` / `c6b93c5b1e34b4a1871e8f24d2845406e4a7795b`。
 - Production application source / immutable release: `405b85a8e1d6b3aec51d2de20ec6ce5b93ab73e4`。
 - Production rollback: `09093e7e879dbc7e9175e957f217afe5c6eb2e67`；core/search migrations `33/33` / `2/2`。
-- Taskmaster `hermes-research-intelligence` 仍为 9/12；代码/部署已完成，下一步只先更正 ZJU CAS 凭据，再做固定 DOI、持久机构 PDF 与四入口验收。Step 5/6 与 Task 11 继续阻断。
+- Taskmaster `hermes-research-intelligence` 仍为 9/12；官方 MCP Tasks 1–4 code/runtime complete，生产合并、机构下载、四入口与旧实现精确清理 pending；Task 11 继续阻断。
+
+## 2026-09-02 — Official ScanSci MCP candidate ready for release
+
+- 上游 `v1.13.1` 官方 Skill/MCP 已锁定并暴露完整 17-tool surface；不强制 `legal_only`，默认下载不传来源策略覆盖。旧私有实现继续冻结，须等替代版本生产验收后精确删除。
+- Task 1/2：ECS 官方试点下载 `arXiv:2009.06045v1` 为 `%PDF-`、24,671,920 bytes、SHA-256 `d57dc94c…f484a`，临时资源 `0/0`；migration 34 `source_retrieval` 已在隔离 ECS PostgreSQL 完成 forward/rollback/redeploy，生产仍 33/33。
+- Task 3：Worker 通过官方 streamable-HTTP MCP 调用 `scansci_pdf_download`；早期 ECS candidate 返回 `route=source_retrieval`、`source=arXiv`、相同 PDF/hash，staging PDF 为 `0`。`9730529` 保留 per-document `providerVersion=1.13.1`、symlink-safe 读取与 durable activation 后 acknowledge；策略拒绝则走独立 `discard`，上传失败仍保留 staging。
+- Task 4：官方 MCP/auth 镜像、schema-5 identity/retention/rollback 已实现；`9730529` 使用 pinned MCP 2.1.1 的真实 initialize/list-tools health，并保留 `auth_net`、child supervision 与 schema-5 previous-release 支持。独立复核 `0/0/0`、全仓 build/typecheck/lint/test 失败 `0`；旧 `sha256:551684a7…e4570e8` 仅为此前 ECS runtime evidence，新镜像仍待 merged SHA 生产构建。
+- 下一步推送并等待 exact GitHub CI，再由 canonical ECS transaction 应用 migration 34、切换官方 MCP，完成官方登录/机构 PDF/四入口/72h+600s；随后提交第二个清理 release。生产/回退在此之前保持 `405b85a` / `09093e7`。
 
 ## 2026-09-02 — ScanSci IdP gate deployed; ZJU credential blocked (`405b85a`)
 
@@ -76,16 +84,3 @@
 - Final ECS release `6893318…`：migration 32、search 2/2、Parser 16-case、BGE CPU 实向量、数据库隔离、容器/Nginx/public identity 全绿。真实 Semantic Scholar 任务返回 3 sources；连续请求的 provider 429 被正确记录为 unavailable，不影响任务完成。
 - 受控自著 PDF 完成 checksum HEAD、一次性下载、77-byte SHA-256、重放 404、精确 72h 边界与真实 60s Worker GC；GC 后对象不存在而 source/rights/provenance/locator 仍在。取证后精确清除 1 user/1 workspace/1 session/5 tasks/4 sources/4 rights/1 document/2 accesses/5 ledger，审计日志保留。
 - 远端旧 Task 10 分支经祖先校验后删除，仅 `main`；retention 仅保留 active `6893318…` + rollback `c435c4c…`。精确删除无容器引用、仅属已下线 dev Compose 的 MinIO server/mc 两个镜像后，磁盘 36G/148G（25%）、107G available；保留 390.7MB bounded build cache，无 broad prune。
-
-## 2026-08-30 — Task 9 deployed, production-accepted and merged
-
-- Tasks 1–7 已完成：匿名 DTO 仅暴露 `published + Publication`；R3 发布原子扩大 RO 为 public；generic PATCH 不再接受 visibility；migration 31 保存账号 Evidence 默认折叠偏好；公开 source/approved asset 端点在返回前复验原件、SourceMap、大小与 SHA-256，并隐藏 object key、workspace、验证者和私有 provenance。
-- Claim-first Research Folio 已实现 760px 正文 + 280px graphite Evidence rail、3–7 core/child/counter Claim、conditions/limitations、关系型 Evidence、按需原文/页码/归一化区域定位、移动 Radix bottom sheet、焦点返回、账号/匿名偏好与 approved PresentationAsset 的“展示而非证据”分标。Evidence 折叠不使用 `hidden`/`display:none`/`aria-hidden`，SSR、辅助技术与打印保留全文。
-- Exact candidate CI `33263991191` / job `99130646214` 全绿；本地全仓 build/typecheck/lint/test、产品视觉 `72/72`、Claim-first Chromium `4/4` 与 Hermes `10/10` 通过。Canonical ECS deploy 应用 migration 31，Parser 16-case、BGE-M3 CPU 实向量、数据库隔离、目标容器、Nginx 与公网/loopback release identity 全绿。
-- 真实生产旅程以一次性账号完成 preference CAS、draft→under_review→approved→published、匿名 3 Claims/3 Evidence、3 个可信原文定位；真实 Chromium 再证 Settings、1440px 760/280、375px sheet/focus、print 3/3。夹具数据库行、Blob 与 SourceMap 对象均精确清至 0。
-- PR #6 合并为 main `cf63392a…`，远端产品分支删除后仅 `main`。ECS dev 栈/3 卷、390.7MB build cache 与两个未引用旧 Node 镜像精确清理；根盘 `36G/26% → 35G/25%`，生产与回退/模型/沙箱/评测资产保留且健康。
-
-## 2026-08-29 — Main/branch consolidation and Task 9 started
-
-- PR #4 已在精确 CI `33259207780` 全绿后合并为 main `5105b1e…`；旧 PR #3 已关闭，其 9 个独立提交由 annotated tag `archive/hermes-2d-pet-20260829` 保留。GitHub 远端 6 个已合并/被取代分支已删除，收口后一度仅保留 `main`。
-- 固定 worktree 已从合并后的 main 创建短分支 `codex/claim-first-public-ro`。Task 9 实施计划登记为 `docs/plans/2026-08-29-hermes-claim-first-public-ro-plan.md`，覆盖 publication-only DTO、R3 publish→public、阅读偏好、Evidence source/asset 安全交付、760/280 页面、移动 sheet、打印/WCAG 与 ECS journey。

@@ -1,6 +1,8 @@
-# ScanSci Default Literature Acquisition Implementation Plan
+# DEPRECATED — ScanSci Default Literature Acquisition Implementation Plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+> **DEPRECATED 2026-09-02 → `docs/plans/2026-09-02-scansci-upstream-mcp-plan.md`.** This plan implements the rejected private-library/three-container design. Do not execute its remaining steps. Remove it after the official MCP replacement reaches production.
+
+**Historical execution note:** This plan previously required subagent-driven-development or executing-plans. It is no longer executable.
 
 **Goal:** Deploy a persistent Zhejiang University CARSI-backed `scansci-legal` service as Hermes's default PDF acquisition capability and connect Dashboard/Personal Space, Hermes, RO Hermes, and RO Files/Evidence to one safe asynchronous product contract.
 

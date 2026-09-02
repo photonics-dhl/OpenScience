@@ -1,203 +1,196 @@
-import { describe, expect, it, vi } from 'vitest';
+import { createServer, type Server } from 'node:http';
+import type { AddressInfo } from 'node:net';
+import { access, mkdir, mkdtemp, symlink, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { afterEach, describe, expect, it } from 'vitest';
 import { createScanSciAdapter } from '../../src/retrieval/scansci';
 
-describe('ScanSci legal-only adapter', () => {
-  it('is explicitly unavailable until the isolated service is enabled', async () => {
-    const fetchImpl = vi.fn();
-    const adapter = createScanSciAdapter({ fetchImpl, enabled: false });
+const servers: Server[] = [];
+
+afterEach(async () => {
+  await Promise.all(servers.splice(0).map((server) => new Promise<void>((resolve, reject) => {
+    server.close((error) => error ? reject(error) : resolve());
+  })));
+});
+
+interface FakeMcpOptions {
+  result: Record<string, unknown>;
+  calls?: Array<Record<string, unknown>>;
+}
+
+async function fakeMcp(options: FakeMcpOptions): Promise<string> {
+  const server = createServer(async (request, response) => {
+    if (request.method !== 'POST') {
+      response.writeHead(405).end();
+      return;
+    }
+    const chunks: Buffer[] = [];
+    for await (const chunk of request) chunks.push(Buffer.from(chunk));
+    const message = JSON.parse(Buffer.concat(chunks).toString('utf8')) as {
+      id?: string | number;
+      method: string;
+      params?: Record<string, unknown>;
+    };
+    if (message.method === 'notifications/initialized') {
+      response.writeHead(200, { 'content-type': 'application/json' }).end('{}');
+      return;
+    }
+    let result: Record<string, unknown>;
+    if (message.method === 'initialize') {
+      result = {
+        protocolVersion: '2025-03-26',
+        capabilities: { tools: {} },
+        serverInfo: { name: 'scansci-pdf', version: '1.13.1' },
+      };
+    } else if (message.method === 'tools/list') {
+      result = {
+        tools: [{
+          name: 'scansci_pdf_download',
+          description: 'Download one paper',
+          inputSchema: { type: 'object', properties: { identifier: { type: 'string' } } },
+        }],
+      };
+    } else if (message.method === 'tools/call') {
+      options.calls?.push(message.params ?? {});
+      result = { content: [{ type: 'text', text: JSON.stringify(options.result) }] };
+    } else {
+      response.writeHead(404).end();
+      return;
+    }
+    response.writeHead(200, {
+      'content-type': 'application/json',
+      ...(message.method === 'initialize' ? { 'mcp-session-id': 'scansci-test-session' } : {}),
+    }).end(JSON.stringify({ jsonrpc: '2.0', id: message.id, result }));
+  });
+  servers.push(server);
+  await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
+  const address = server.address() as AddressInfo;
+  return `http://127.0.0.1:${address.port}/mcp`;
+}
+
+async function paperFixture(): Promise<{ root: string; file: string; bytes: Buffer }> {
+  const root = await mkdtemp(join(tmpdir(), 'openscience-scansci-mcp-'));
+  const file = join(root, 'paper.pdf');
+  const bytes = Buffer.from('%PDF-official-mcp-fixture');
+  await writeFile(file, bytes);
+  return { root, file, bytes };
+}
+
+describe('official ScanSci MCP adapter', () => {
+  it('is explicitly unavailable until the capability is enabled', async () => {
+    const adapter = createScanSciAdapter({ enabled: false });
     await expect(adapter.acquire({ identifier: '10.1000/example', subjectId: 'a'.repeat(64) })).resolves.toEqual({
       status: 'unavailable', provider: 'scansci', code: 'disabled', retryable: false,
     });
-    expect(fetchImpl).not.toHaveBeenCalled();
   });
 
-  it('hard-codes legal-only with Sci-Hub and Tor disabled', async () => {
-    const bytes = Buffer.from('%PDF-safe-fixture');
-    const fetchImpl = vi.fn(async () => new Response(bytes, {
-      status: 200,
-      headers: {
-        'content-type': 'application/pdf',
-        'x-scansci-route': 'institutional',
-        'x-scansci-public-url': 'https://publisher.example/paper',
-        'x-scansci-entitlement': 'verified',
-        'x-scansci-entitlement-subject': 'a'.repeat(64),
-        'x-scansci-entitlement-valid-until': '2026-09-30T00:00:00.000Z',
+  it('uses the upstream default source strategy and preserves its exact provenance', async () => {
+    const fixture = await paperFixture();
+    const calls: Array<Record<string, unknown>> = [];
+    const mcpUrl = await fakeMcp({
+      calls,
+      result: {
+        success: true,
+        identifier: '10.1000/example',
+        file: fixture.file,
+        source: 'sci-hub.vg',
+        url: 'https://doi.org/10.1000/example',
       },
-    }));
-    const adapter = createScanSciAdapter({
-      enabled: true,
-      baseUrl: 'http://scansci-legal:8080',
-      serviceToken: 'service-token',
-      fetchImpl,
-      now: () => new Date('2026-08-30T00:00:00.000Z'),
     });
+    const adapter = createScanSciAdapter({ enabled: true, mcpUrl, papersDir: fixture.root } as never);
 
     const result = await adapter.acquire({ identifier: '10.1000/example', subjectId: 'a'.repeat(64) });
 
-    expect(result.status).toBe('succeeded');
-    if (result.status !== 'succeeded') throw new Error('expected success');
     expect(result).toMatchObject({
+      status: 'succeeded',
       provider: 'scansci',
-      route: 'institutional',
-      sourceUrl: 'https://publisher.example/paper',
-      access: { kind: 'institutional_access', entitlementVerified: true },
-      entitlementValidUntil: new Date('2026-09-30T00:00:00.000Z'),
+      route: 'source_retrieval',
+      source: 'sci-hub.vg',
+      sourceUrl: 'https://doi.org/10.1000/example',
+      access: { kind: 'source_retrieval', source: 'sci-hub.vg' },
+      mimeType: 'application/pdf',
     });
-    expect(result.bytes.equals(bytes)).toBe(true);
-    const [url, init] = fetchImpl.mock.calls[0];
-    expect(url).toBe('http://scansci-legal:8080/v1/legal-download');
-    expect(JSON.parse(String(init?.body))).toEqual({
-      identifier: '10.1000/example',
-      strategy: 'legal_only',
-      scihub: false,
-      tor: false,
-      institutional: true,
-      subject_id: 'a'.repeat(64),
+    if (result.status !== 'succeeded') throw new Error('expected success');
+    expect(result.bytes.equals(fixture.bytes)).toBe(true);
+    expect(result.contentHash).toMatch(/^[0-9a-f]{64}$/);
+    expect(result.providerVersion).toBe('1.13.1');
+    await expect(access(fixture.file)).resolves.toBeUndefined();
+    await result.acknowledge();
+    await expect(access(fixture.file)).rejects.toMatchObject({ code: 'ENOENT' });
+    expect(calls).toEqual([{
+      name: 'scansci_pdf_download',
+      arguments: { identifier: '10.1000/example', output_dir: fixture.root },
+    }]);
+  });
+
+  it('retains a declared open-access license as open-access evidence', async () => {
+    const fixture = await paperFixture();
+    const mcpUrl = await fakeMcp({ result: {
+      success: true,
+      file: fixture.file,
+      source: 'Unpaywall',
+      url: 'https://repository.example/paper.pdf',
+      license: 'CC-BY-4.0',
+    } });
+    const adapter = createScanSciAdapter({ enabled: true, mcpUrl, papersDir: fixture.root } as never);
+
+    await expect(adapter.acquire({ identifier: '10.1000/example', subjectId: 'a'.repeat(64) })).resolves.toMatchObject({
+      status: 'succeeded',
+      route: 'open_access',
+      source: 'Unpaywall',
+      access: { kind: 'open_access', license: 'CC-BY-4.0' },
     });
   });
 
-  it('rejects an institutional entitlement issued for another subject', async () => {
-    const adapter = createScanSciAdapter({
-      enabled: true,
-      baseUrl: 'http://scansci-legal:8080',
-      serviceToken: 'service-token',
-      fetchImpl: async () => new Response(Buffer.from('%PDF-safe'), {
-        status: 200,
-        headers: {
-          'content-type': 'application/pdf',
-          'x-scansci-route': 'institutional',
-          'x-scansci-public-url': 'https://publisher.example/paper',
-          'x-scansci-entitlement': 'verified',
-          'x-scansci-entitlement-subject': 'b'.repeat(64),
-          'x-scansci-entitlement-valid-until': '2026-09-30T00:00:00.000Z',
-        },
-      }),
-      now: () => new Date('2026-08-30T00:00:00.000Z'),
-    });
-    await expect(adapter.acquire({ identifier: '10.1000/example', subjectId: 'a'.repeat(64) })).resolves.toEqual({
-      status: 'blocked', provider: 'scansci', code: 'route_not_allowed', retryable: false,
-    });
-  });
-
-  it('cancels a response stream as soon as the byte limit is exceeded', async () => {
-    let cancelled = false;
-    const stream = new ReadableStream<Uint8Array>({
-      start(controller) {
-        controller.enqueue(new TextEncoder().encode('%PDF-12345'));
-        controller.enqueue(new TextEncoder().encode('overflow'));
-      },
-      cancel() { cancelled = true; },
-    });
-    const adapter = createScanSciAdapter({
-      enabled: true,
-      baseUrl: 'http://scansci-legal:8080',
-      serviceToken: 'service-token',
-      maximumBytes: 10,
-      fetchImpl: async () => new Response(stream, {
-        status: 200,
-        headers: {
-          'content-type': 'application/pdf',
-          'x-scansci-route': 'open_access',
-          'x-scansci-public-url': 'https://publisher.example/paper',
-          'x-scansci-license': 'CC-BY-4.0',
-        },
-      }),
-    });
-    await expect(adapter.acquire({ identifier: '10.1000/example', subjectId: 'a'.repeat(64) })).resolves.toEqual({
-      status: 'blocked', provider: 'scansci', code: 'limit_exceeded', retryable: false,
-    });
-    expect(cancelled).toBe(true);
-  });
-
-  it('maps a failed PDF stream to a stable redacted provider error', async () => {
-    const stream = new ReadableStream<Uint8Array>({
-      start(controller) {
-        controller.enqueue(new TextEncoder().encode('%PDF-safe'));
-        controller.error(new Error('cookie=secret http://scansci-legal/private'));
-      },
-    });
-    const adapter = createScanSciAdapter({
-      enabled: true,
-      baseUrl: 'http://scansci-legal:8080',
-      serviceToken: 'service-token',
-      fetchImpl: async () => new Response(stream, {
-        status: 200,
-        headers: {
-          'content-type': 'application/pdf',
-          'x-scansci-route': 'open_access',
-          'x-scansci-public-url': 'https://publisher.example/paper',
-        },
-      }),
-    });
+  it('turns the upstream login instruction into the existing auth-required product state', async () => {
+    const fixture = await paperFixture();
+    const mcpUrl = await fakeMcp({ result: {
+      success: false,
+      error_type: 'paywall',
+      action: 'login_required',
+    } });
+    const adapter = createScanSciAdapter({ enabled: true, mcpUrl, papersDir: fixture.root } as never);
 
     await expect(adapter.acquire({ identifier: '10.1000/example', subjectId: 'a'.repeat(64) })).resolves.toEqual({
-      status: 'unavailable', provider: 'scansci', code: 'upstream_error', retryable: true,
+      status: 'unavailable', provider: 'scansci', code: 'auth_required', retryable: false,
     });
   });
 
-  it('blocks a grey-source route even if the service returns a PDF', async () => {
-    const adapter = createScanSciAdapter({
-      enabled: true,
-      baseUrl: 'http://scansci-legal:8080',
-      serviceToken: 'service-token',
-      fetchImpl: async () => new Response(Buffer.from('%PDF'), {
-        status: 200,
-        headers: {
-          'content-type': 'application/pdf',
-          'x-scansci-route': 'scihub',
-          'x-scansci-public-url': 'https://example.org/paper',
-        },
-      }),
-    });
-    await expect(adapter.acquire({ identifier: '10.1000/example', subjectId: 'a'.repeat(64) })).resolves.toEqual({
-      status: 'blocked', provider: 'scansci', code: 'route_not_allowed', retryable: false,
-    });
-  });
-
-  it.each([
-    ['disabled', 503, { status: 'unavailable', code: 'disabled', retryable: false }],
-    ['auth_required', 409, { status: 'unavailable', code: 'auth_required', retryable: false }],
-    ['not_entitled', 403, { status: 'blocked', code: 'not_entitled', retryable: false }],
-    ['not_found', 404, { status: 'unavailable', code: 'not_found', retryable: false }],
-    ['rate_limited', 429, { status: 'unavailable', code: 'rate_limited', retryable: true }],
-    ['invalid_pdf', 422, { status: 'unavailable', code: 'invalid_response', retryable: false }],
-    ['policy_blocked', 422, { status: 'blocked', code: 'route_not_allowed', retryable: false }],
-    ['upstream_timeout', 504, { status: 'unavailable', code: 'timeout', retryable: true }],
-    ['upstream_unavailable', 502, { status: 'unavailable', code: 'upstream_error', retryable: true }],
-  ] as const)('maps stable service code %s without retaining its response text', async (serviceCode, status, expected) => {
-    const adapter = createScanSciAdapter({
-      enabled: true,
-      baseUrl: 'http://scansci-legal:8080',
-      serviceToken: 'service-token',
-      fetchImpl: async () => new Response(JSON.stringify({ code: serviceCode, detail: 'sensitive upstream detail' }), {
-        status,
-        headers: { 'content-type': 'application/json' },
-      }),
-    });
-
-    await expect(adapter.acquire({ identifier: '10.1000/example', subjectId: 'a'.repeat(64) })).resolves.toEqual({
-      provider: 'scansci',
-      ...expected,
-    });
-  });
-
-  it('rejects an invalid final public URL after receiving an otherwise valid PDF', async () => {
-    const adapter = createScanSciAdapter({
-      enabled: true,
-      baseUrl: 'http://scansci-legal:8080',
-      serviceToken: 'service-token',
-      fetchImpl: async () => new Response(Buffer.from('%PDF-safe'), {
-        status: 200,
-        headers: {
-          'content-type': 'application/pdf',
-          'x-scansci-route': 'open_access',
-          'x-scansci-public-url': 'http://127.0.0.1/internal.pdf',
-        },
-      }),
-    });
+  it('does not ingest a path returned outside the shared paper volume', async () => {
+    const fixture = await paperFixture();
+    const outside = join(await mkdtemp(join(tmpdir(), 'openscience-scansci-outside-')), 'paper.pdf');
+    await writeFile(outside, fixture.bytes);
+    const mcpUrl = await fakeMcp({ result: {
+      success: true,
+      file: outside,
+      source: 'Unpaywall',
+    } });
+    const adapter = createScanSciAdapter({ enabled: true, mcpUrl, papersDir: fixture.root } as never);
 
     await expect(adapter.acquire({ identifier: '10.1000/example', subjectId: 'a'.repeat(64) })).resolves.toEqual({
       status: 'unavailable', provider: 'scansci', code: 'invalid_response', retryable: false,
     });
+  });
+
+  it('does not ingest a path that traverses a symlink inside the paper volume', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'openscience-scansci-symlink-'));
+    const realDirectory = join(root, 'real');
+    const aliasDirectory = join(root, 'alias');
+    const bytes = Buffer.from('%PDF-symlink-fixture');
+    await mkdir(realDirectory);
+    await writeFile(join(realDirectory, 'paper.pdf'), bytes);
+    await symlink(realDirectory, aliasDirectory, 'junction');
+    const mcpUrl = await fakeMcp({ result: {
+      success: true,
+      file: join(aliasDirectory, 'paper.pdf'),
+      source: 'Unpaywall',
+    } });
+    const adapter = createScanSciAdapter({ enabled: true, mcpUrl, papersDir: root } as never);
+
+    await expect(adapter.acquire({ identifier: '10.1000/example', subjectId: 'a'.repeat(64) })).resolves.toEqual({
+      status: 'unavailable', provider: 'scansci', code: 'invalid_response', retryable: false,
+    });
+    await expect(access(join(realDirectory, 'paper.pdf'))).resolves.toBeUndefined();
   });
 });

@@ -15,7 +15,7 @@ KNOWN_HOSTS="$HOME/.ssh/known_hosts"
 LOCK_HELD=0
 NOVNC_PATH='/vnc.html?autoconnect=true&resize=remote'
 RFB_PROBE="$SCRIPT_DIR/probe-novnc-rfb.mjs"
-AUTH_TARGET='172.25.0.2:6080'
+AUTH_TARGET='127.0.0.1:6080'
 PREVIOUS_AUTH_TARGET='127.0.0.1:6080'
 
 usage() {
@@ -253,10 +253,8 @@ load_connection() {
 remote_compose_command() {
   local action="$1"
   if [ "$action" = "up -d" ]; then
-    printf "flock -n -E 73 /run/lock/openscience-production-deploy/lock /bin/bash -c 'cd \"%s\" && read -r SCANSCI_BROWSER_REQUIREMENTS_SHA256 _ < <(sha256sum \"%s/apps/scansci-legal/browser-requirements.lock\") && [[ \"\$SCANSCI_BROWSER_REQUIREMENTS_SHA256\" =~ ^[0-9a-f]{64}\$ ]] && XGS_RELEASE_ROOT=\"%s\" XGS_RELEASE_IMAGE_TAG=\"%s\" SCANSCI_BROWSER_REQUIREMENTS_SHA256=\"\$SCANSCI_BROWSER_REQUIREMENTS_SHA256\" docker compose --project-directory \"%s\" --env-file /opt/openscience/.env.prod -f \"%s\" --profile scansci-auth up --no-start --no-build --force-recreate scansci-auth && /bin/bash \"%s/infra/scripts/prepare-scansci-auth-network.sh\" \"%s\" \"%s\" && XGS_RELEASE_ROOT=\"%s\" XGS_RELEASE_IMAGE_TAG=\"%s\" SCANSCI_BROWSER_REQUIREMENTS_SHA256=\"\$SCANSCI_BROWSER_REQUIREMENTS_SHA256\" docker compose --project-directory \"%s\" --env-file /opt/openscience/.env.prod -f \"%s\" --profile scansci-auth start scansci-auth'" \
-      "$RELEASE_ROOT" "$RELEASE_ROOT" "$RELEASE_ROOT" "$RELEASE_SHA" "$RELEASE_ROOT" "$RELEASE_COMPOSE" \
-      "$RELEASE_ROOT" "$RELEASE_ROOT" "$RELEASE_SHA" \
-      "$RELEASE_ROOT" "$RELEASE_SHA" "$RELEASE_ROOT" "$RELEASE_COMPOSE"
+    printf "flock -n -E 73 /run/lock/openscience-production-deploy/lock /bin/bash -c 'cd \"%s\" && read -r SCANSCI_BROWSER_REQUIREMENTS_SHA256 _ < <(sha256sum \"%s/apps/scansci-legal/browser-requirements.lock\") && [[ \"\$SCANSCI_BROWSER_REQUIREMENTS_SHA256\" =~ ^[0-9a-f]{64}\$ ]] && XGS_RELEASE_ROOT=\"%s\" XGS_RELEASE_IMAGE_TAG=\"%s\" SCANSCI_BROWSER_REQUIREMENTS_SHA256=\"\$SCANSCI_BROWSER_REQUIREMENTS_SHA256\" docker compose --project-directory \"%s\" --env-file /opt/openscience/.env.prod -f \"%s\" --profile scansci-auth up -d --no-build --force-recreate scansci-auth'" \
+      "$RELEASE_ROOT" "$RELEASE_ROOT" "$RELEASE_ROOT" "$RELEASE_SHA" "$RELEASE_ROOT" "$RELEASE_COMPOSE"
     return
   fi
   printf "flock -n -E 73 /run/lock/openscience-production-deploy/lock /bin/bash -c 'cd \"%s\" && read -r SCANSCI_BROWSER_REQUIREMENTS_SHA256 _ < <(sha256sum \"%s/apps/scansci-legal/browser-requirements.lock\") && [[ \"\$SCANSCI_BROWSER_REQUIREMENTS_SHA256\" =~ ^[0-9a-f]{64}\$ ]] && XGS_RELEASE_ROOT=\"%s\" XGS_RELEASE_IMAGE_TAG=\"%s\" SCANSCI_BROWSER_REQUIREMENTS_SHA256=\"\$SCANSCI_BROWSER_REQUIREMENTS_SHA256\" docker compose --project-directory \"%s\" --env-file /opt/openscience/.env.prod -f \"%s\" --profile scansci-auth %s scansci-auth'" \
@@ -265,8 +263,8 @@ remote_compose_command() {
 
 remote_verify_command() {
   local allow_auth="$1"
-  printf "flock -n -E 73 /run/lock/openscience-production-deploy/lock /usr/bin/node \"%s/infra/scripts/verify-scansci-runtime.mjs\" --release-root \"%s\" --release-sha \"%s\" --compose-file \"%s\" --service-token-file /opt/openscience-secrets/scansci/scansci_service_token --capability-file /opt/openscience/.release-capabilities/%s --require-worker 1 --require-oa-canary 0 --allow-auth %s" \
-    "$RELEASE_ROOT" "$RELEASE_ROOT" "$RELEASE_SHA" "$RELEASE_COMPOSE" "$RELEASE_SHA" "$allow_auth"
+  printf "flock -n -E 73 /run/lock/openscience-production-deploy/lock /bin/bash -c 'set -euo pipefail; capability=/opt/openscience/.release-capabilities/%s; mcp_id=\$(sed -n \"s/^scansci_mcp_image_id=//p\" \"\$capability\"); auth_id=\$(sed -n \"s/^scansci_auth_image_id=//p\" \"\$capability\"); [[ \"\$mcp_id\" =~ ^sha256:[0-9a-f]{64}\$ && \"\$auth_id\" =~ ^sha256:[0-9a-f]{64}\$ ]]; /usr/bin/node \"%s/infra/scripts/verify-scansci-mcp-runtime.mjs\" --release-root \"%s\" --release-sha \"%s\" --compose-file \"%s\" --expected-mcp-image-id \"\$mcp_id\" --expected-auth-image-id \"\$auth_id\" --require-worker 1 --require-oa 0 --require-auth %s'" \
+    "$RELEASE_SHA" "$RELEASE_ROOT" "$RELEASE_ROOT" "$RELEASE_SHA" "$RELEASE_COMPOSE" "$allow_auth"
 }
 
 verify_remote_runtime() {

@@ -36,7 +36,22 @@ test('retention derives only exact release-scoped image tags', () => {
     `openscience-scansci-auth:${inactive}`,
     `openscience-scansci-browser:${inactive}`,
     `openscience-scansci-legal:${inactive}`,
+    `openscience-scansci-mcp:${inactive}`,
   ]);
+});
+
+test('schema 5 capability binds the official MCP and auth image IDs', () => {
+  const mcpId = `sha256:${'a'.repeat(64)}`;
+  const authId = `sha256:${'b'.repeat(64)}`;
+  const source = [
+    'schema=5', 'embedding_deploy=false', 'bge_m3_enabled=false', 'model_version_id=',
+    'model_revision=', 'source_sha256=', 'package_freeze_sha256=', 'model_manifest_sha256=',
+    'scansci_deploy=true', `scansci_mcp_image_id=${mcpId}`, `scansci_auth_image_id=${authId}`,
+  ].join('\n');
+  assert.deepEqual(parseReleaseCapability(source), {
+    embeddingDeploy: false, scansciDeploy: true, mcpImageId: mcpId, authImageId: authId,
+  });
+  assert.throws(() => parseReleaseCapability(source, { expectedMcpImageId: `sha256:${'c'.repeat(64)}` }), /invalid/u);
 });
 
 test('schema 4 capability binds all ScanSci image IDs and retains schema 3 rollback compatibility', () => {

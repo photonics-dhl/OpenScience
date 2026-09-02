@@ -72,10 +72,11 @@ function composeService(name, nextName, compose = productionCompose) {
 }
 
 test('ScanSci production topology separates legal, browser and stopped loopback auth roles', () => {
+  const mcp = composeService('scansci-mcp', 'scansci-secret-init');
   const legal = composeService('scansci-legal', 'scansci-browser');
   const browser = composeService('scansci-browser', 'scansci-auth');
   const auth = composeService('scansci-auth', 'document-parser');
-  const worker = composeService('agent-worker', 'scansci-secret-init');
+  const worker = composeService('agent-worker', 'scansci-mcp');
   const secretInit = composeService('scansci-secret-init', 'scansci-legal');
   const developmentLegal = composeService('scansci-legal', 'scansci-browser', developmentCompose);
   const developmentBrowser = composeService('scansci-browser', 'scansci-auth', developmentCompose);
@@ -128,24 +129,34 @@ test('ScanSci production topology separates legal, browser and stopped loopback 
 
   assert.match(worker, /- retrieval_net/u);
   assert.match(worker, /SCANSCI_ENABLED: "true"/u);
-  assert.match(worker, /SCANSCI_BASE_URL: http:\/\/scansci-legal:8080/u);
-  assert.doesNotMatch(worker, /scansci-service-secrets|scansci-auth-secrets/u);
-  assert.match(worker, /scansci-worker-secrets:\/run\/scansci-worker-secrets:ro/u);
+  assert.match(worker, /SCANSCI_MCP_URL: http:\/\/scansci-mcp:8000\/mcp/u);
+  assert.match(worker, /SCANSCI_PAPERS_DIR: \/data\/papers/u);
+  assert.match(worker, /scansci-papers:\/data\/papers(?:\r?\n|\s*$)/u);
+  assert.match(worker, /group_add:\r?\n\s+- "11000"/u);
+  assert.doesNotMatch(worker, /scansci-(?:service|worker|auth)-secrets/u);
   assert.equal(worker.match(/^    volumes:/gmu)?.length, 1, 'agent-worker must have one unambiguous volumes mapping');
   assert.match(worker, /\$\{XGS_RELEASE_ROOT:\?XGS_RELEASE_ROOT required\}:\/opt\/openscience:ro/u);
   assert.match(worker, /parser-jobs:\/parser-jobs/u);
+  assert.match(mcp, /context: \$\{XGS_RELEASE_ROOT:\?XGS_RELEASE_ROOT required\}\/apps\/scansci-mcp/u);
+  assert.match(mcp, /target: mcp/u);
+  assert.match(mcp, /image: openscience-scansci-mcp:/u);
+  assert.match(mcp, /SCANSCI_PDF_PROXY: http:\/\/openscience-egress:7891/u);
+  assert.match(mcp, /scansci-data:\/data\/scansci/u);
+  assert.match(mcp, /scansci-papers:\/data\/papers/u);
+  assert.doesNotMatch(mcp, /env_file|DATABASE|POSTGRES|REDIS|S3_|MINIO|docker\.sock/iu);
   assert.match(auth, /profiles: \["scansci-auth"\]/u);
-  assert.match(auth, /SCANSCI_BROWSER_PROXY: http:\/\/openscience-egress:7891/u);
+  assert.match(auth, /SCANSCI_PDF_PROXY: http:\/\/openscience-egress:7891/u);
   assert.match(auth, /extra_hosts:\r?\n\s+- "openscience-egress:172\.25\.0\.1"/u);
-  assert.doesNotMatch(auth, /\bports:/u);
-  assert.match(auth, /networks:\r?\n\s+auth_net:\r?\n\s+ipv4_address: 172\.25\.0\.2/u);
-  assert.match(auth, /scansci-session:\/session/u);
+  assert.match(auth, /ports:\r?\n\s+- "127\.0\.0\.1:6080:6080"/u);
+  assert.match(auth, /networks:\r?\n\s+- auth_net/u);
+  assert.match(auth, /scansci-data:\/data\/scansci/u);
   assert.match(auth, /pids_limit: 256/u);
   assert.doesNotMatch(auth, /scansci-(?:service|auth)-secrets|\/run\/secrets/u);
   assert.match(auth, /restart: "no"/u);
   assert.doesNotMatch(auth, /network_mode: host|data_net|env_file|docker\.sock/iu);
-  assert.match(auth, /context: \$\{XGS_RELEASE_ROOT:\?XGS_RELEASE_ROOT required\}\/apps\/scansci-legal/u);
-  assert.match(auth, /dockerfile: Dockerfile\.auth/u);
+  assert.match(auth, /context: \$\{XGS_RELEASE_ROOT:\?XGS_RELEASE_ROOT required\}\/apps\/scansci-mcp/u);
+  assert.match(auth, /dockerfile: Dockerfile/u);
+  assert.match(auth, /target: auth/u);
   assert.match(developmentLegal, /context: \.\.\/\.\.\/apps\/scansci-legal/u);
   assert.match(developmentLegal, /dockerfile: Dockerfile/u);
   assert.doesNotMatch(developmentLegal, /scansci-browser:\r?\n\s+condition: service_healthy/u);
@@ -186,8 +197,8 @@ test('ScanSci production topology separates legal, browser and stopped loopback 
   assert.match(volumeSection, /scansci-service-secrets:\r?\n  scansci-worker-secrets:\r?\n/u);
   assert.match(productionCompose, /^  retrieval_net:\r?\n    driver: bridge\r?\n    internal: true\r?\n    ipam:\r?\n      config:\r?\n        - subnet: 172\.24\.0\.0\/24\r?\n          gateway: 172\.24\.0\.1$/mu);
   assert.match(productionCompose, /^  auth_net:\r?\n    driver: bridge\r?\n    internal: true\r?\n    driver_opts:\r?\n      com\.docker\.network\.bridge\.name: xgs-auth0\r?\n    ipam:\r?\n      config:\r?\n        - subnet: 172\.25\.0\.0\/29\r?\n          gateway: 172\.25\.0\.1$/mu);
-  assert.equal((productionCompose.match(/\n\s+ipv4_address: 172\.25\.0\.2\s*$/gmu) ?? []).length, 1,
-    'only the auth helper may join the passwordless noVNC network');
+  assert.equal((productionCompose.match(/\n\s+ipv4_address: 172\.25\.0\.2\s*$/gmu) ?? []).length, 0,
+    'official auth must use only a loopback-published noVNC port');
 });
 
 test('ScanSci browser has a boot-persistent proxy-only bridge before it can start', () => {
@@ -230,7 +241,8 @@ test('ScanSci browser has a boot-persistent proxy-only bridge before it can star
   assert.match(transactionSource, /\/etc\/systemd\/system\/docker\.service\.d\/openscience-scansci-browser-firewall\.conf/u);
   const switchAnchor = transactionSource.indexOf('log "[5c] ScanSci 先行');
   const precreate = transactionSource.indexOf('up --no-start --force-recreate scansci-browser scansci-legal', switchAnchor);
-  const bootPolicyPublish = transactionSource.lastIndexOf('\npublish_scansci_boot_policy\n');
+  const legacySwitch = transactionSource.indexOf('else\n  SCANSCI_BROWSER_BOOT_POLICY_DIRTY=1', switchAnchor);
+  const bootPolicyPublish = transactionSource.indexOf('\n  publish_scansci_boot_policy\n', legacySwitch);
   const bootPolicyDirty = transactionSource.lastIndexOf('SCANSCI_BROWSER_BOOT_POLICY_DIRTY=1', bootPolicyPublish);
   const squidPreimage = transactionSource.indexOf('transaction_prepare_scansci_squid_preimage', bootPolicyPublish);
   assert.ok(
@@ -284,7 +296,7 @@ test('ScanSci browser has a boot-persistent proxy-only bridge before it can star
     restoreBootPolicy,
     /systemctl disable openscience-scansci-browser-firewall\.service[\s\S]*rm -f -- \/etc\/systemd\/system\/docker\.service\.d\/openscience-scansci-browser-firewall\.conf[\s\S]*systemctl stop openscience-scansci-browser-firewall\.service[\s\S]*systemctl is-active --quiet docker\.service/u,
   );
-  assert.match(transactionSource, /if \[ "\$ACTIVE_RELEASE_SHA" = "\$RELEASE_SHA" \]; then[\s\S]*transaction_verify_already_active_release\r?\n\s+publish_scansci_boot_policy/u);
+  assert.match(transactionSource, /if \[ "\$ACTIVE_RELEASE_SHA" = "\$RELEASE_SHA" \]; then[\s\S]*transaction_verify_already_active_release[\s\S]*if \[ "\$UPSTREAM_SCANSCI" -ne 1 \]; then\r?\n\s+publish_scansci_boot_policy/u);
   const prepare = transactionSource.indexOf('prepare-scansci-browser-network.sh', precreate);
   const start = transactionSource.indexOf('up -d --no-recreate --wait --wait-timeout 300 scansci-browser scansci-legal', prepare);
   assert.ok(precreate > 0 && prepare > precreate && start > prepare, 'browser network firewall must exist before start');
@@ -499,6 +511,28 @@ test('ScanSci deploy dispatches exact rollback identity when the previous releas
   );
 });
 
+test('ScanSci rollback restores a previous schema 5 official MCP release', () => {
+  assert.match(transactionSource, /PREVIOUS_SCANSCI_MCP_IMAGE_ID=""/u);
+  assert.match(transactionSource, /3\|4\|5\)/u);
+  assert.match(
+    transactionSource,
+    /PREVIOUS_CAPABILITY_SCHEMA" = 5[\s\S]*read_capability_value "\$PREVIOUS_CAPABILITIES_FILE" scansci_mcp_image_id/u,
+  );
+  const restore = deploymentFunction('transaction_restore_previous_scansci');
+  assert.match(
+    restore,
+    /PREVIOUS_CAPABILITY_SCHEMA" = 5[\s\S]*openscience-scansci-mcp:\$exact_previous_sha[\s\S]*up -d --force-recreate --wait --wait-timeout 300 scansci-mcp/u,
+  );
+  assert.match(
+    restore,
+    /verify-scansci-mcp-runtime\.mjs[\s\S]*--require-worker 0[\s\S]*--require-oa 0/u,
+  );
+  assert.match(
+    transactionSource,
+    /if \[ "\$PREVIOUS_CAPABILITY_SCHEMA" = 4 \]; then[\s\S]*elif \[ "\$PREVIOUS_CAPABILITY_SCHEMA" = 3 \] && run_remote "grep -q '\^  scansci-browser:'/u,
+  );
+});
+
 test('candidate capability stays absent through prepublication and is exact-cleaned on either publish failure boundary', async (t) => {
   const root = await mkdtemp(join(tmpdir(), 'xgs-candidate-capability-'));
   t.after(async () => rm(root, { recursive: true, force: true }));
@@ -615,7 +649,9 @@ test('failed candidate CAS cleans only the sidecar created by the real publish p
     `BGE_M3_SOURCE_SHA256=''`, `BGE_M3_PACKAGE_FREEZE_SHA256=''`, `BGE_M3_MODEL_MANIFEST_SHA256=''`,
     `FINAL_SCANSCI_IMAGE_ID='sha256:${'c'.repeat(64)}'`,
     `FINAL_SCANSCI_BROWSER_IMAGE_ID='sha256:${'d'.repeat(64)}'`,
+    `FINAL_SCANSCI_MCP_IMAGE_ID='sha256:${'f'.repeat(64)}'`,
     `FINAL_SCANSCI_AUTH_IMAGE_ID='sha256:${'e'.repeat(64)}'`,
+    'UPSTREAM_SCANSCI=1',
     'run_remote(){ bash -c "$1"; }',
     deploymentFunction('transaction_prepare_candidate_capability'),
     publish,
@@ -670,7 +706,7 @@ test('Tesseract is packaged only in the isolated document parser image', () => {
   assert.match(parserDockerfile, /USER node/);
   assert.match(workerDockerfile, /LABEL org\.openscience\.source=\$XGS_RELEASE_IMAGE_TAG/);
   assert.match(parserDockerfile, /LABEL org\.openscience\.source=\$XGS_RELEASE_IMAGE_TAG/);
-  const releaseImages = `${composeService('agent-worker', 'scansci-legal')}\n${composeService('document-parser', 'embedding-model-init')}`;
+  const releaseImages = `${composeService('agent-worker', 'scansci-mcp')}\n${composeService('document-parser', 'embedding-model-init')}`;
   assert.equal(releaseImages.match(/XGS_RELEASE_IMAGE_TAG: \$\{XGS_RELEASE_IMAGE_TAG:\?XGS_RELEASE_IMAGE_TAG required\}/g)?.length, 2);
 });
 

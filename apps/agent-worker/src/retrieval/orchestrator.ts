@@ -90,6 +90,7 @@ export async function executeSourceRetrieval(
         };
         const rights = decideSourceRights({ provider: 'scansci', sourceUrl: source.sourceUrl, access: source.access });
         if (!rights.cacheAllowed) {
+          await result.discard();
           providers.push({ provider: 'scansci', status: 'blocked', code: rights.reasonCode });
         } else {
           sources.push(await runtime.persist({ source, rights, fullText: result }));

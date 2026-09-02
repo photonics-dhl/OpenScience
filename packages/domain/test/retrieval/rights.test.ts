@@ -40,6 +40,20 @@ describe('source rights decision', () => {
     });
   });
 
+  it('stores a successful ScanSci source retrieval without relabelling its provenance', () => {
+    expect(decideSourceRights({
+      provider: 'scansci',
+      sourceUrl: 'https://sci-hub.vg/10.1000/example',
+      access: { kind: 'source_retrieval', source: 'sci-hub.vg' } as never,
+    })).toEqual({
+      basis: 'source_retrieval',
+      cacheAllowed: true,
+      downloadPolicy: 'downloadable',
+      reasonCode: 'source_retrieval_succeeded',
+      checkerVersion: 'openscience-rights-v2',
+    });
+  });
+
   it('never treats Tavily discovery as document authority', () => {
     expect(decideSourceRights({
       provider: 'tavily',

@@ -113,7 +113,9 @@ export function createSourceRetrieveHandler(options: {
             evidence: {
               kind: source.access.kind,
               ...(source.access.kind === 'open_access' && source.access.license ? { license: source.access.license } : {}),
+              ...(source.access.kind === 'source_retrieval' ? { source: source.access.source } : {}),
               ...(fullText ? { acquisitionRoute: fullText.route } : {}),
+              ...(fullText ? { providerVersion: fullText.providerVersion } : {}),
             },
             contentHash: fullText?.contentHash,
             ...(institutional ? {
@@ -208,6 +210,7 @@ export function createSourceRetrieveHandler(options: {
             });
             if (activated.count !== 1) throw new Error('[retryable] temporary document activation lost');
           }
+          await fullText.acknowledge();
         }
         return {
           id: persisted.id,

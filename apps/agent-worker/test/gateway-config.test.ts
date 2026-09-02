@@ -87,18 +87,22 @@ describe('MiniMax worker gateway config', () => {
   });
 
   it.each([
-    ['inline source', { SCANSCI_ENABLED: 'true', SCANSCI_SERVICE_TOKEN: 'inline-token' }, /forbidden/],
+    ['legacy inline token', { SCANSCI_ENABLED: 'true', SCANSCI_SERVICE_TOKEN: 'inline-token' }, /legacy ScanSci HTTP adapter/],
     ['mixed sources', {
       SCANSCI_ENABLED: 'true',
       SCANSCI_SERVICE_TOKEN: 'inline-token',
       SCANSCI_SERVICE_TOKEN_FILE: '/run/scansci-worker-secrets/scansci_service_token',
-    }, /forbidden/],
-    ['missing file source', { SCANSCI_ENABLED: 'true' }, /required/],
-    ['non-canonical production path', {
+    }, /legacy ScanSci HTTP adapter/],
+    ['non-canonical production MCP endpoint', {
       NODE_ENV: 'production',
       SCANSCI_ENABLED: 'true',
-      SCANSCI_SERVICE_TOKEN_FILE: '/run/secrets/scansci_service_token',
-    }, /fixed Worker secret path/],
+      SCANSCI_MCP_URL: 'http://other-service:8000/mcp',
+    }, /isolated internal official MCP service/],
+    ['non-canonical production paper path', {
+      NODE_ENV: 'production',
+      SCANSCI_ENABLED: 'true',
+      SCANSCI_PAPERS_DIR: '/other/papers',
+    }, /fixed shared-volume path/],
   ])('rejects $s', (_label, env, expected) => {
     expect(() => buildSourceRetrieveHandlerFromEnv({
       RETRIEVAL_QUERY_HMAC_SECRET: 'retrieval-query-test-secret-at-least-32-bytes',

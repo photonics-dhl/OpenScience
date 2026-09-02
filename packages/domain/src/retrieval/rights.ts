@@ -58,6 +58,15 @@ export function decideSourceRights(input: {
       return input.access.entitlementVerified
         ? decision('institutional_access', true, 'authorized_user_only', 'institutional_entitlement_verified')
         : decision('institutional_access', false, 'source_link_only', 'institutional_entitlement_missing');
+    case 'source_retrieval':
+      if (!input.access.source.trim()) throw new Error('source retrieval provenance is invalid');
+      return {
+        basis: 'source_retrieval',
+        cacheAllowed: true,
+        downloadPolicy: 'downloadable',
+        reasonCode: 'source_retrieval_succeeded',
+        checkerVersion: 'openscience-rights-v2',
+      };
     case 'public_domain':
       return decision('public_domain', true, 'downloadable', 'public_domain_verified');
     case 'self_authored':

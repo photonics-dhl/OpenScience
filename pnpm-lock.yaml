@@ -56,6 +56,9 @@ importers:
 
   apps/agent-worker:
     dependencies:
+      '@modelcontextprotocol/sdk':
+        specifier: 1.30.0
+        version: 1.30.0(zod@3.25.76)
       '@openscience/ai-gateway':
         specifier: workspace:^
         version: link:../../packages/ai-gateway
@@ -83,6 +86,9 @@ importers:
       yauzl:
         specifier: 2.10.0
         version: 2.10.0
+      zod:
+        specifier: 3.25.76
+        version: 3.25.76
     devDependencies:
       '@types/node':
         specifier: 20.14.10
@@ -161,6 +167,8 @@ importers:
   apps/sandbox-controller: {}
 
   apps/scansci-legal: {}
+
+  apps/scansci-mcp: {}
 
   apps/science-worker:
     dependencies:
