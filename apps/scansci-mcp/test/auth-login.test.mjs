@@ -23,7 +23,13 @@ def official_launch(*args, **kwargs):
     return "official-browser"
 
 def official_open_login_browser(*args, **kwargs):
-    browser_calls.append((args, kwargs))
+    recorded = {key: value for key, value in kwargs.items() if key != "detect_login"}
+    if "detect_login" in kwargs:
+        watched_page = types.SimpleNamespace(marker="institution-login")
+        returned_page = types.SimpleNamespace(marker="publisher-return")
+        context = types.SimpleNamespace(pages=[watched_page, returned_page])
+        recorded["detect_login_result"] = kwargs["detect_login"](context, watched_page)
+    browser_calls.append((args, recorded))
     return True
 
 browser_login = types.ModuleType("scansci_pdf.browser_login")
@@ -92,10 +98,11 @@ assert browser_login.open_login_browser(
     {},
     max_wait=180,
     keep_alive=True,
+    detect_login=lambda _context, page: page.marker == "publisher-return",
 ) is True
 assert browser_calls == [(
     ("https://publisher.example/login", {}),
-    {"max_wait": 900, "keep_alive": True},
+    {"max_wait": 3600, "keep_alive": True, "detect_login_result": True},
 )]
 
 for configured, environment in [({}, ""), ({"network_proxy": expected_proxy}, "http://wrong")]:
