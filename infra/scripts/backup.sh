@@ -47,9 +47,6 @@ DATE="$(date -u +%Y%m%dT%H%M%SZ)-$$"
 
 if [ "$BACKUP_DB" -eq 1 ]; then
 export XGS_RELEASE_ROOT="$RELEASE_ROOT" XGS_RELEASE_IMAGE_TAG="$RELEASE_SHA"
-read -r SCANSCI_BROWSER_REQUIREMENTS_SHA256 _ < <(sha256sum "$RELEASE_ROOT/apps/scansci-legal/browser-requirements.lock")
-[[ "$SCANSCI_BROWSER_REQUIREMENTS_SHA256" =~ ^[0-9a-f]{64}$ ]] || { echo "BACKUP_FAIL: invalid browser requirements identity" >&2; exit 1; }
-export SCANSCI_BROWSER_REQUIREMENTS_SHA256
 COMPOSE=(docker compose --project-directory "$RELEASE_ROOT" --env-file "$REMOTE_ROOT/.env.prod" -f "$COMPOSE_FILE")
 "${COMPOSE[@]}" exec -T -w /opt/openscience api node scripts/verify-database-isolation.mjs >/dev/null
 mapfile -t DB_IDENTITIES < <("${COMPOSE[@]}" exec -T api node -e '

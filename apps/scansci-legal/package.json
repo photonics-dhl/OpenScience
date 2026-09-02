@@ -1,9 +1,0 @@
-{
-  "name": "@openscience/scansci-legal",
-  "private": true,
-  "version": "0.0.0",
-  "scripts": {
-    "test": "python -m unittest discover -s test -v",
-    "install:locked": "python -m pip install --require-hashes -r build-requirements.lock && python -m pip install --require-hashes --no-build-isolation -r requirements.lock"
-  }
-}

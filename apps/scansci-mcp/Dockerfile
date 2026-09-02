@@ -32,27 +32,6 @@ RUN groupadd --gid 10001 scansci \
     && install -d -o 10001 -g 11000 -m 0770 /data/papers \
     && chown -R 10001:10001 /opt/scansci-browsers
 
-FROM runtime AS auth
-
-USER 0:0
-RUN apt-get update \
-    && apt-get install -y --no-install-recommends fonts-noto-cjk novnc websockify x11vnc \
-    && rm -rf /var/lib/apt/lists/*
-COPY --chown=10001:10001 auth-entrypoint.sh /opt/scansci/auth-entrypoint.sh
-COPY --chown=10001:10001 auth-login.py /opt/scansci/auth-login.py
-RUN chmod 0555 /opt/scansci/auth-entrypoint.sh /opt/scansci/auth-login.py
-
-ARG XGS_RELEASE_IMAGE_TAG
-LABEL org.openscience.source=$XGS_RELEASE_IMAGE_TAG \
-      org.openscience.scansci.role=official-auth \
-      org.openscience.scansci.version=$SCANSCI_VERSION \
-      org.openscience.scansci.wheel-sha256=$SCANSCI_WHEEL_SHA256
-
-VOLUME ["/data/scansci"]
-EXPOSE 6080
-USER 10001:10001
-ENTRYPOINT ["/usr/bin/dumb-init", "--", "/opt/scansci/auth-entrypoint.sh"]
-
 FROM runtime AS mcp
 
 RUN apt-get update \

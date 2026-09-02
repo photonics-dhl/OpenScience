@@ -1,20 +1,19 @@
 import assert from 'node:assert/strict';
-import { readFile } from 'node:fs/promises';
+import { access, readFile } from 'node:fs/promises';
 import test from 'node:test';
 import { URL } from 'node:url';
 
 const root = new URL('../', import.meta.url);
 
 test('official ScanSci image is pinned and runs only the public MCP entrypoint', async () => {
-  const [dockerfile, entrypoint, authEntrypoint, authLogin, healthcheck, proxyConfig, requirements, compose] = await Promise.all([
+  const [dockerfile, entrypoint, healthcheck, proxyConfig, requirements, compose, developmentCompose] = await Promise.all([
     readFile(new URL('Dockerfile', root), 'utf8'),
     readFile(new URL('entrypoint.sh', root), 'utf8'),
-    readFile(new URL('auth-entrypoint.sh', root), 'utf8'),
-    readFile(new URL('auth-login.py', root), 'utf8'),
     readFile(new URL('healthcheck.py', root), 'utf8'),
     readFile(new URL('nginx-mcp.conf', root), 'utf8'),
     readFile(new URL('requirements.lock', root), 'utf8'),
     readFile(new URL('../../infra/compose/docker-compose.prod.yml', root), 'utf8'),
+    readFile(new URL('../../infra/compose/docker-compose.dev.yml', root), 'utf8'),
   ]);
 
   assert.match(dockerfile, /python:3\.12-slim@sha256:7a8b475003c4fe15a2cd4e55e5cfc2f3560bdc9333d624f24cdd6d4340fd7a17/);
@@ -46,18 +45,7 @@ test('official ScanSci image is pinned and runs only the public MCP entrypoint',
   for (const directory of ['client-body', 'proxy', 'fastcgi', 'uwsgi', 'scgi']) {
     assert.match(proxyConfig, new RegExp(`/tmp/scansci-runtime/${directory}`));
   }
-  assert.match(authEntrypoint, /Xvfb "\$DISPLAY" -screen 0 1280x800x24 -nolisten tcp/);
-  assert.match(authEntrypoint, /x11vnc .* -listen 127\.0\.0\.1 .* -nopw/);
-  assert.match(authEntrypoint, /websockify --web=\/usr\/share\/novnc 0\.0\.0\.0:6080 127\.0\.0\.1:5900/);
-  assert.match(authEntrypoint, /python \/opt\/scansci\/auth-login\.py sciencedirect/);
-  assert.doesNotMatch(authEntrypoint, /scansci-pdf federated-login/);
-  assert.match(dockerfile, /COPY --chown=10001:10001 auth-login\.py \/opt\/scansci\/auth-login\.py/);
-  assert.match(authLogin, /SCANSCI_PDF_PROXY/);
-  assert.match(authLogin, /--proxy-server=\{proxy\}/);
-  assert.match(authLogin, /browser_login\.launch = proxied_launch/);
-  assert.match(authLogin, /CARSIClient\(config\)/);
-  assert.match(authLogin, /client\.login\(publisher, force=True\)/);
-  assert.doesNotMatch(authEntrypoint, /scansci_legal|legal_only/i);
+  assert.doesNotMatch(dockerfile, / AS auth\b|auth-entrypoint|auth-login|novnc|websockify|x11vnc/i);
   assert.ok(
     dockerfile.indexOf('LABEL org.openscience.source=') > dockerfile.indexOf('patchright install --with-deps chromium'),
     'release-dependent labels must not invalidate the browser dependency layer',
@@ -65,21 +53,17 @@ test('official ScanSci image is pinned and runs only the public MCP entrypoint',
   assert.match(compose, /SCANSCI_PDF_PROXY: http:\/\/openscience-egress:7891/);
   assert.match(compose, /agent-worker:[\s\S]*?scansci-papers:\/data\/papers\n[\s\S]*?group_add:\n\s+- "11000"/);
   assert.match(compose, /scansci-mcp:[\s\S]*?group_add:\n\s+- "11000"/);
-  const authStart = compose.indexOf('  scansci-auth:');
-  const parserStart = compose.indexOf('  document-parser:', authStart);
-  assert.ok(authStart >= 0 && parserStart > authStart);
-  const authService = compose.slice(authStart, parserStart);
-  assert.match(authService, /context: \$\{XGS_RELEASE_ROOT:\?XGS_RELEASE_ROOT required\}\/apps\/scansci-mcp/);
-  assert.match(authService, /target: auth/);
-  assert.match(authService, /- scansci-data:\/data\/scansci/);
-  assert.doesNotMatch(authService, /\bports:/);
-  assert.match(authService, /openscience-egress:172\.25\.0\.1/);
-  assert.match(authService, /networks:\n\s+auth_net:\n\s+ipv4_address: 172\.25\.0\.2/);
-  assert.doesNotMatch(authService, /- retrieval_net/);
-  assert.doesNotMatch(authService, /env_file|scansci-session|scansci_legal|legal_only/i);
   const mcpStart = compose.indexOf('  scansci-mcp:');
-  const legacyStart = compose.indexOf('  scansci-secret-init:', mcpStart);
-  const mcpService = compose.slice(mcpStart, legacyStart);
+  const parserStart = compose.indexOf('  document-parser:', mcpStart);
+  const mcpService = compose.slice(mcpStart, parserStart);
   assert.match(mcpService, /test: \["CMD", "python", "\/opt\/scansci\/healthcheck\.py"\]/);
   assert.doesNotMatch(`${dockerfile}\n${entrypoint}`, /legal_only|SCI(?:HUB)?_ENABLED=false|TOR_ENABLED=false/i);
+
+  const rejected = /scansci-(?:auth|legal|browser|secret-init)|auth_net|browser_net|scansci-session|scansci-service-secrets|scansci-worker-secrets|scansci-browser-(?:inputs|outputs|profiles)/i;
+  assert.doesNotMatch(compose, rejected);
+  assert.doesNotMatch(developmentCompose, rejected);
+
+  await assert.rejects(access(new URL('../scansci-legal/package.json', root)));
+  await assert.rejects(access(new URL('auth-entrypoint.sh', root)));
+  await assert.rejects(access(new URL('auth-login.py', root)));
 });

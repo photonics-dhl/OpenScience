@@ -2187,3 +2187,63 @@ The first ZJU attempt on this release exposed an upstream 1.13.1 gap:
 returned `ERR_NAME_NOT_RESOLVED` inside `auth_net`. Candidate `263fc23` keeps the
 network unchanged and injects only the fixed `openscience-egress:7891` browser
 flag; do not retry operator login until that candidate is merged and deployed.
+
+### 5.64 Official-only ScanSci production topology and cleanup (2026-09-02)
+
+This section supersedes the operational steps in §5.49–5.63. Those sections are
+incident history only. The current product runs one upstream `scansci-pdf==1.13.1`
+streamable-HTTP MCP service. It has only `retrieval_net`, `scansci-data`, and
+`scansci-papers`; Agent Worker is the only product client. There is no
+`scansci-legal`, `scansci-browser`, `scansci-auth`, VNC/noVNC, auth bridge,
+browser network, browser firewall unit, service-token file, or second image.
+
+#### Deployment sequence
+
+1. Verify production active/rollback identities, Docker/Squid health, disk, and
+   core/search migration counts. Remove stale `SCANSCI_BASE_URL`,
+   `SCANSCI_SERVICE_TOKEN`, and `SCANSCI_SERVICE_TOKEN_FILE` keys from
+   `.env.prod` by exact key name without printing values.
+2. Validate the candidate Squid file with `squid -k parse -f <candidate>`, then
+   atomically install it and reconfigure Squid. It must bind only loopback and
+   `172.24.0.1`; `172.26`, browser ACLs, and browser direct-egress rules must be
+   absent before the old bridge is removed.
+3. Run the canonical immutable release transaction. Acceptance requires exact
+   MCP image labels, 17 tools, read-only/no-port/exact-retrieval topology, a real
+   Worker-originated MCP `tools/list`, and one OA download in a newly created
+   release-specific canary directory that is removed afterward.
+4. After public CAS, disable and remove the exact old browser firewall unit and
+   Docker/Squid drop-ins, remove their rules, then remove only unreferenced old
+   auth/browser networks, volumes, containers, and images. Preserve
+   `scansci-data`, `scansci-papers`, databases, object storage, BGE model,
+   monitoring data, backups, and the single immutable rollback release.
+5. Recheck Squid/Docker/Nginx, public `/__release`, target container health,
+   MCP/Worker markers, migration counts, `docker system df`, and `df`. Inactive
+   builder cache may be reclaimed explicitly after inventory; never run
+   `docker system prune` or volume prune.
+
+Schema 5 is supported for the current one-time rollback as an MCP-only runtime:
+the candidate verifier validates the previous official MCP image and persistent
+volumes without starting or retaining the rejected auth helper. After the next
+official-only release, normal retention removes that legacy release.
+
+#### Institutional bootstrap
+
+Complete publisher/CARSI authentication in an administrator-controlled normal
+browser and export a Netscape cookie file. On the host, create
+`/run/openscience-scansci-import` as root mode `0700`, copy exactly one file into
+that directory as root mode `0600`, and run the active immutable release's
+`infra/scripts/import-scansci-cookies.sh --confirm <absolute-file>`. The helper
+uses the production deploy lock, binds the import to the active schema-6
+capability and exact verified MCP container, accepts only a regular root-owned
+single-link file up to 4 MiB, and streams it as UID/GID 10001 to the exclusive
+tmpfs path `/tmp/scansci-cookie-import/netscape.txt`. It then calls the official MCP
+`scansci_pdf_login(kind="cookie_import", cookie_file=...)`. Its trap deletes both
+copies on success, failure, or signal and emits only a fixed success/error code;
+never print the tool response or cookie contents. A cleanup failure writes only
+`.cleanup-required` and blocks later imports; restart/clean the exact MCP
+container before removing that marker. Do not add a host bind.
+
+Upstream session state persists in `scansci-data`; credentials, cookie values,
+and import files never enter Git, images, application tables, logs, or browser
+responses. Recreate `scansci-mcp` and verify a subscription-only DOI while the
+upstream session remains valid.

@@ -71,11 +71,11 @@ It does not send `strategy`, `scihub_enabled`, or `use_tor` overrides for the de
 
 The Worker mounts `scansci-papers` read-write under the dedicated shared GID 11000 and accepts only a regular, non-symlink file resolved beneath the mount, bounded to 100 MiB, beginning with `%PDF-`. It records the exact upstream `source`, source URL, content hash, byte count, and ScanSci version before copying bytes to object storage. Only after malware scan, object upload and `TemporaryDocument.state=active` succeed does it identity-check and unlink that exact staging file; a failed durable ingest leaves the file unacknowledged. No other MCP data path is writable by Worker.
 
-### 4.3 Interactive login
+### 4.3 Institutional session bootstrap
 
-An on-demand `scansci-auth` profile uses the same upstream image and `scansci-data` volume. It runs the official `scansci_pdf_login`/CLI login flow, never `scansci_legal.auth_login`. X11/noVNC is exposed only through the existing loopback SSH tunnel during operator login and is stopped immediately afterward.
+OpenScience does not operate a second auth/browser service. The administrator completes publisher or CARSI login in a normal browser, exports a Netscape cookie file, and invokes the official MCP `scansci_pdf_login(kind="cookie_import", cookie_file=...)` tool against the sole `scansci-mcp` service. The one-time import file is staged outside the application and removed immediately after import.
 
-The user authenticates once. Cookies/profile state persist in `scansci-data`; container recreation must not require another login while upstream considers the session valid.
+The imported cookie/profile state persists only in `scansci-data`; neither account credentials nor the import file enter the repository, image, application database, logs, or browser DTOs. Container recreation must retain the session while upstream considers its cookies valid. When upstream reports expiry, the administrator repeats the same official import flow—there is no noVNC, VNC, custom login wrapper, auth bridge, or second ScanSci image.
 
 ## 5. Capability and source semantics
 
@@ -126,8 +126,8 @@ The shortest sufficient positive gate is:
 
 1. MCP initialize/list-tools returns the expected upstream surface including download, login, status, search, citation, diagnostics, and Tor tools.
 2. One OA/arXiv DOI downloads through MCP and enters the existing temporary-document lifecycle.
-3. One subscription-only DOI completes the official Zhejiang University login/download route.
-4. Recreate `scansci-mcp`; the same institutional route works without another login.
+3. Import an administrator-authenticated Netscape cookie file through the official login tool and complete one subscription-only DOI through Zhejiang University access.
+4. Recreate `scansci-mcp`; the same institutional route works while the imported upstream session remains valid.
 5. One real product request is submitted from each of the four existing entries; all converge on the same task and one-use link contract.
 6. Public health/release, migrations, Parser, BGE, Worker, storage, and retention remain healthy.
 
