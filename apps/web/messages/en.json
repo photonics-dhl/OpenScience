@@ -1121,6 +1121,7 @@
     "verify": "Verify email",
     "domainsNotConfigured": "Institution domains are not configured",
     "codeSent": "A verification code was sent to the institutional email.",
+    "codeSentFor": "Recognized as {organization}. A verification code was sent.",
     "institutionVerified": "Institutional email verified.",
     "loadError": "Identity status could not be loaded.",
     "orcidError": "The ORCID connection could not be started.",

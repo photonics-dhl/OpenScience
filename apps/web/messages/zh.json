@@ -1157,6 +1157,7 @@
     "verify": "确认验证",
     "domainsNotConfigured": "机构域名尚未配置",
     "codeSent": "验证码已发送到机构邮箱。",
+    "codeSentFor": "已识别为 {organization}，验证码已发送。",
     "institutionVerified": "机构邮箱验证完成。",
     "loadError": "无法读取身份状态。",
     "orcidError": "无法开始 ORCID 连接。",

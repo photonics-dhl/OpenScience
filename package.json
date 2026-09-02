@@ -28,6 +28,7 @@
     "test:integration": "pnpm stack:up && pnpm -r --if-present test:integration",
     "invite": "node scripts/invite.mjs",
     "seed:demo-research": "node scripts/seed-demo-research.mjs",
+    "sync:ror": "pnpm --filter @openscience/database build && pnpm --filter @openscience/database sync:ror --",
     "api": "pnpm --filter @openscience/api start"
   },
   "devDependencies": {

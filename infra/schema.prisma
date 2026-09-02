@@ -131,43 +131,69 @@ enum IdentityCredentialStatus {
 }
 
 model IdentityCredential {
-  id           String                   @id @default(uuid()) @db.Uuid
-  userId       String                   @map("user_id") @db.Uuid
-  type         IdentityCredentialType
-  status       IdentityCredentialStatus @default(verified)
-  externalId   String                   @map("external_id")
-  displayLabel String                   @map("display_label")
-  source       String
-  metadata     Json                     @default("{}")
-  verifiedAt   DateTime                 @default(now()) @map("verified_at")
-  revokedAt    DateTime?                @map("revoked_at")
-  createdAt    DateTime                 @default(now()) @map("created_at")
-  updatedAt    DateTime                 @updatedAt @map("updated_at")
-  user         User                     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id                     String                   @id @default(uuid()) @db.Uuid
+  userId                 String                   @map("user_id") @db.Uuid
+  type                   IdentityCredentialType
+  status                 IdentityCredentialStatus @default(verified)
+  externalId             String                   @map("external_id")
+  displayLabel           String                   @map("display_label")
+  source                 String
+  metadata               Json                     @default("{}")
+  verifiedAt             DateTime                 @default(now()) @map("verified_at")
+  revokedAt              DateTime?                @map("revoked_at")
+  createdAt              DateTime                 @default(now()) @map("created_at")
+  updatedAt              DateTime                 @updatedAt @map("updated_at")
+  user                   User                     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  researchOrganizationId String?                  @map("research_organization_id") @db.Uuid
+  researchOrganization   ResearchOrganization?    @relation(fields: [researchOrganizationId], references: [id], onDelete: SetNull)
 
   @@unique([type, externalId])
   @@unique([userId, type])
   @@index([userId, status])
+  @@index([researchOrganizationId])
   @@map("identity_credentials")
 }
 
 model InstitutionEmailChallenge {
-  id          String    @id @default(uuid()) @db.Uuid
-  userId      String    @map("user_id") @db.Uuid
-  email       String    @db.Citext
-  domain      String
-  codeHash    String    @map("code_hash")
-  attempts    Int       @default(0)
-  lockedUntil DateTime? @map("locked_until")
-  expiresAt   DateTime  @map("expires_at")
-  lastSentAt  DateTime  @map("last_sent_at")
-  consumedAt  DateTime? @map("consumed_at")
-  createdAt   DateTime  @default(now()) @map("created_at")
-  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id                     String                @id @default(uuid()) @db.Uuid
+  userId                 String                @map("user_id") @db.Uuid
+  email                  String                @db.Citext
+  domain                 String
+  codeHash               String                @map("code_hash")
+  attempts               Int                   @default(0)
+  lockedUntil            DateTime?             @map("locked_until")
+  expiresAt              DateTime              @map("expires_at")
+  lastSentAt             DateTime              @map("last_sent_at")
+  consumedAt             DateTime?             @map("consumed_at")
+  createdAt              DateTime              @default(now()) @map("created_at")
+  user                   User                  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  researchOrganizationId String?               @map("research_organization_id") @db.Uuid
+  researchOrganization   ResearchOrganization? @relation(fields: [researchOrganizationId], references: [id], onDelete: SetNull)
 
   @@index([userId, createdAt])
   @@index([email, consumedAt])
+  @@index([researchOrganizationId])
   @@map("institution_email_challenges")
+}
+
+model ResearchOrganization {
+  id                    String                      @id @default(uuid()) @db.Uuid
+  rorId                 String                      @unique @map("ror_id")
+  name                  String
+  countryCode           String?                     @map("country_code") @db.Char(2)
+  types                 String[]                    @default([])
+  domains               String[]                    @default([])
+  status                String
+  datasetVersion        String                      @map("dataset_version")
+  sourceUpdatedAt       DateTime?                   @map("source_updated_at")
+  syncedAt              DateTime                    @default(now()) @map("synced_at")
+  metadata              Json                        @default("{}")
+  identityCredentials   IdentityCredential[]
+  institutionChallenges InstitutionEmailChallenge[]
+
+  @@index([status])
+  @@index([countryCode])
+  @@map("research_organizations")
 }
 
 enum AuthorizationScopeType {

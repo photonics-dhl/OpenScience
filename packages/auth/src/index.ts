@@ -29,10 +29,12 @@ export {
   beginOrcidConnection,
   completeOrcidConnection,
   getAcademicIdentityStatus,
+  resolveInstitutionDomain,
   requestInstitutionEmailCode,
   verifyInstitutionEmail,
   type AcademicIdentityDeps,
   type AcademicIdentityStatus,
+  type InstitutionMatch,
   type OrcidConfig,
 } from './academic-identity';
 export {
