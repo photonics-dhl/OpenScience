@@ -2188,7 +2188,7 @@ returned `ERR_NAME_NOT_RESOLVED` inside `auth_net`. Candidate `263fc23` keeps th
 network unchanged and injects only the fixed `openscience-egress:7891` browser
 flag; do not retry operator login until that candidate is merged and deployed.
 
-### 5.64 Official-only ScanSci production topology and cleanup (2026-09-02)
+### 5.64 Official-only ScanSci production topology and cleanup (2026-09-02–03)
 
 This section supersedes the operational steps in §5.49–5.63. Those sections are
 incident history only. The current product runs one upstream `scansci-pdf==1.13.1`
@@ -2261,3 +2261,17 @@ Secrets and the transient eval root. Inactive builder cache changed from
 databases/object storage, BGE, monitoring and backups were retained. No broad
 system or volume prune was run. Institutional cookie import and subscription
 PDF/four-entry acceptance remain explicit pending work.
+
+Final official-only closeout: PR #50 exact CI `33653209566` merged as
+`80db41e7ee0a1c8158d3f335dc1b2fbf6f2bb2bf`. The ECS transaction rebuilt the
+full pinned closure, published the exact 16-case Parser report, and passed BGE
+CPU, core/search `34/34` and `2/2`, all 17 tools, Worker-origin MCP, real OA,
+container/Nginx/public CAS and retention. Active/public are `80db41e…`; rollback
+is the earlier official-only `761b93d…`, so the rejected implementation is no
+longer present in either retained release. Final exact hygiene removed 38 old
+Parser acceptance roots, five eval roots, one anonymous failed container, all
+dangling images and 154.3MB inactive build cache. Only active/rollback release
+and acceptance roots remain; old network/volume/image/systemd/firewall/Squid
+browser counters and eval count are zero. Root disk is 50G/148G used (35%, 92G
+available), Docker images 22.71GB, product volumes 6.893GB and build cache 0.
+No system or volume prune was run.

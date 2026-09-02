@@ -29,7 +29,7 @@
 | MiniMax image/video | 代表性 RO 展示资产 | `APPROVED_PILOT / BLOCKED` | 仅管理员；逐项批准公开；凭据轮换前阻断 | 外部 API，经 AI Gateway；不在 CPU 服务器部署模型 | 科学真实性、成本、prompt/source provenance、可撤回 |
 | Tavily MCP/API | 通用网页发现 | `PRODUCTION / BLOCKED` | 生产 Secret 已注入；四个授权 key 的最小探测均返回供应商套餐/单 key 额度耗尽 | `source.retrieve` discovery-only adapter；不得成为唯一来源 | quota 恢复前稳定 `unavailable/rate_limited`；source precision、成本、隐私 |
 | Semantic Scholar MCP/API | 论文、作者、引用关系 | `PRODUCTION` | 有效 Secret 由既有本地 Secret 安全注入；真实 Hermes 任务返回 3 sources，连续请求仍可能 429 | `source.retrieve` native-fetch adapter；provider schema 不越过 Domain | metadata/OA/rights accuracy、1 req/s、429 显式降级 |
-| ScanSci PDF | 全文发现/下载 | `PRODUCTION official MCP` | 浙江大学认证作为平台持久 session；管理员在普通浏览器认证后以官方 `cookie_import` 导入，不部署第二 browser/auth 服务。官方来源策略默认不覆盖，17 tools 均保留 | release `761b93d…`；`scansci-pdf==1.13.1`，CPU-only、固定 Squid、持久 `scansci-data`、瞬态 `scansci-papers`；旧 runtime 已清零 | 17/17、Worker-origin MCP 与真实 OA 已生产；ZJU Cookie/机构 PDF/four-entry/72h/600s pending |
+| ScanSci PDF | 全文发现/下载 | `PRODUCTION official MCP` | 浙江大学认证作为平台持久 session；管理员在普通浏览器认证后以官方 `cookie_import` 导入，不部署第二 browser/auth 服务。官方来源策略默认不覆盖，17 tools 均保留 | release `80db41e…` / rollback `761b93d…`；`scansci-pdf==1.13.1`，CPU-only、固定 Squid、持久 `scansci-data`、瞬态 `scansci-papers`；旧 runtime 已清零 | 17/17、Worker-origin MCP 与真实 OA 已生产；ZJU Cookie/机构 PDF/four-entry/72h/600s pending |
 | Temporary document lifecycle | 受控全文缓存与下载 | `PRODUCTION` | 无用户模式切换；逐来源 rights 决定 | SeaweedFS `hermes-cache/<workspace>/<document>/<hash>`；72h、600s HttpOnly one-use capability、Worker lease/fence GC | 真实 77-byte PDF：HEAD hash、download、replay 404、约 45s GC、object absent/provenance retained |
 | BGE-M3 | 多语 dense embedding | `PRODUCTION` | MIT；无 API 费，运营成本为 CPU/内存/磁盘 | 独立 internal-only `embedding-worker`；exact revision/hash、只读 versioned volume、2 CPU/6 GiB/128 PID | nDCG@10 `0.996655`、Recall@10 `1`、P95 `240 ms`、peak RSS `2,244,235,264` bytes |
 | PostgreSQL lexical search | 无模型词法基线与降级 | `PRODUCTION` | PostgreSQL 内置 FTS；无新增 extension/API 费 | `packages/search` + 独立 `SEARCH_DATABASE_URL`/迁移/连接池 | tenant-safe BM25、migration/restore、embedding outage 降级通过 |
@@ -69,7 +69,7 @@
 |---|---|---|---|---|
 | Current local process | 未注入 | 未注入；本地 Secret 文件有四个授权 key，均额度耗尽 | 未注入；既有项目 Secret 有一份有效 key | 未读取/未注入；仅完成 code/contract gate |
 | Current user environment | 未注入 | 未注入 | 未注入 | 未注入 |
-| Production `agent-worker` | 已注入 | 已注入；供应商额度耗尽 | 已注入；真实任务成功，连续请求可被 429 节流 | `761b93d…` 运行 official MCP client；migration 34、17 tools/真实 Worker OA 已生产，官方 cookie import/机构 PDF pending |
+| Production `agent-worker` | 已注入 | 已注入；供应商额度耗尽 | 已注入；真实任务成功，连续请求可被 429 节流 | `80db41e…` 运行 official MCP client；migration 34、17 tools/真实 Worker OA 已生产，官方 cookie import/机构 PDF pending |
 
 “仓库或服务器 `.env` 中存在”不等于“目标进程已注入”。以后排障按四层分别记录：配置文件变量存在性、Compose 映射、容器环境存在性、provider 最小健康探测。任一层失败都不得笼统写成“API key 失败”。
 
@@ -133,7 +133,7 @@
 
 | Date | Capability | From → To | Version/digest | Evidence | Rollback | Operator |
 |---|---|---|---|---|---|---|
-| 2026-09-02 | ScanSci official-only production cleanup | private bridge retained → upstream-only runtime | release `761b93d…`；upstream `1.13.1`；PR #47 | CI `33637694396`；core/search 34/2；Parser/BGE；17 tools、Worker MCP、real OA、public CAS；old runtime counters 0；disk 66G→37G | rollback `e9e2058…`；保留 `scansci-data`/`scansci-papers` 和产品数据 | Codex |
+| 2026-09-03 | ScanSci official-only final release and hygiene | upstream-only active / legacy rollback → upstream-only active+rollback | release `80db41e…`；upstream `1.13.1`；PR #50 | CI `33653209566`；core/search 34/2；Parser/BGE；17 tools、Worker MCP、real OA、public CAS；38 acceptance/5 eval/anonymous container/dangling/cache cleaned；old runtime counters 0 | rollback `761b93d…`；disk 50G/148G，保留 `scansci-data`/`scansci-papers` 和产品数据 | Codex |
 | 2026-09-02 | ScanSci official MCP production + auth bridge | OA production / institutional pending | release `7daff3f…`；upstream `1.13.1` | CI `33606675500`；core/search 34/2；17 tools、Worker OA、exact Parser report/BGE/public/bridge green | rollback `ab290579…`；保留 `scansci-data`；ZJU Cookie pending | Codex |
 | 2026-09-02 | ScanSci official MCP candidate review closeout | review with 5 Important → local fixed candidate | code `336955e…`；prior ECS MCP image `sha256:551684a7…e4570e8`；upstream `1.13.1` | auth-only network、schema-5 next deploy、durable ack/upload-failure retention、real MCP health/child supervision、providerVersion evidence focused gates green；prior real ECS OA evidence retained，new image pending | production unchanged `405b85a…` / `09093e7…`；old implementation retained until acceptance | Codex |
 | 2026-09-02 | ScanSci ZJU/CARSI return gate | false publisher return → deployed fail-closed gate / credential blocked | PR #38 merge/release `405b85a…`；upstream unchanged | CI `33550018143`；ScanSci `174/11/0`；schema-v3 Parser、core/search、BGE CPU、OA/public green；ZJU CAS rejects supplied credential | immutable `09093e7…`；auth helper/eval exact-cleaned；session stays `auth_required` | Codex |

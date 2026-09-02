@@ -1,6 +1,6 @@
 # Hermes Research Intelligence CURRENT Handoff
 
-> **CURRENT active-memory，2026-09-02。** 公网 release `761b93d` 已按 upstream `v1.13.1` 部署单一官方 MCP，旧 legal/auth/browser/noVNC 运行链路与服务器冗余已精确清理；rollback `e9e2058`。真实 OA、17 tools、Worker MCP、Parser/BGE/公网全绿；官方 Cookie 导入、机构 PDF 与四入口仍 pending，Task 11 继续阻断。
+> **CURRENT active-memory，2026-09-03。** 公网 release `80db41e` 已按 upstream `v1.13.1` 部署单一官方 MCP，旧 legal/auth/browser/noVNC 运行链路、旧 release 与服务器冗余已精确清理；rollback `761b93d` 同为 official-only。真实 OA、17 tools、Worker MCP、Parser/BGE/公网全绿；官方 Cookie 导入、机构 PDF 与四入口仍 pending，Task 11 继续阻断。
 
 ## Goal and state
 
@@ -11,14 +11,14 @@
 ## Version tuple
 
 - Worktree: `E:/Miscellaneous/XGS/.worktrees/readable-hermes-guidance`
-- Candidate branch / code HEAD / origin main: `codex/scansci-upstream-mcp` / `761b93d4bbce77e70d676be78de0bba128974fe6` / `761b93d4bbce77e70d676be78de0bba128974fe6`
-- Production application source / immutable release: `761b93d4bbce77e70d676be78de0bba128974fe6`
-- Rollback: `e9e2058b3ea7e8f4c2a488d7aa18ff0cd6944b4c`; core/search migrations `34/34` / `2/2`。本地 `main` 与其他 worktree 不得用于推断生产；tuple 已从 ECS 实测。
+- Candidate branch / code release / repository main: `codex/scansci-upstream-mcp` / `80db41e7ee0a1c8158d3f335dc1b2fbf6f2bb2bf` / `80db41e7ee0a1c8158d3f335dc1b2fbf6f2bb2bf`；后续 docs-only main 可领先生产。
+- Production application source / immutable release: `80db41e7ee0a1c8158d3f335dc1b2fbf6f2bb2bf`
+- Rollback: `761b93d4bbce77e70d676be78de0bba128974fe6`；两者均 official-only；core/search migrations `34/34` / `2/2`。本地 `main` 与其他 worktree 不得用于推断生产；tuple 已从 ECS 实测。
 
 ## Production truth
 
-- Public `/__release` 与 active marker 均返回 `761b93d…`；API/Web/Worker/Parser/official MCP/BGE healthy，journal/failed absent。17 tools、Worker-origin MCP、真实 OA、exact Parser report 已生产接受；机构 Cookie 尚未导入。
-- 服务器只保留 `retrieval_net`、`scansci-data`、`scansci-papers`。旧网络/卷/image/systemd/drop-in/iptables/Squid browser 规则/Secret/eval 均为 0；根盘从 66G/148G 降到 37G/148G，可用 105G，build cache 0。
+- Public `/__release` 与 active marker 均返回 `80db41e…`；API/Web/Worker/Parser/official MCP/BGE healthy，journal/failed absent。17 tools、Worker-origin MCP、真实 OA、exact Parser report 已生产接受；机构 Cookie 尚未导入。
+- 服务器只保留 active/rollback 两个 release/report、`retrieval_net`、`scansci-data`、`scansci-papers` 与产品数据。旧网络/卷/image/systemd/drop-in/iptables/Squid browser 规则/Secret/eval/dangling image 均为 0；38 个旧 acceptance、5 个 eval 和匿名失败容器已清，根盘 50G/148G、可用 92G，build cache 0。
 - TLS certificate subject 为 `openscience.428312321.xyz`，有效期自 2026-08-03 20:10:34 +08:00；ECS、域名反代、Landing、Cloudflare Tunnel 的上线日期必须按证据包分开表述。
 - `agent_tasks.result` 为 JSONB，`IngestionTaskState` 含 `needs_review` 与 `confirmed`。生产聚合为 14 条待确认建议、7 条 confirmed、21 条总计；未输出业务正文或用户信息。
 - 数据库不存在字面 `suggested` 枚举：产品语义映射为 `result != null + state=needs_review`，确认后 `state=confirmed`。
@@ -59,8 +59,8 @@
 27. Strict browser、CPU browser、proxy-only `browser_net`、proof-backed session 与稳定 canary 诊断已合并；PR #36→#37 部署到 `09093e7`，ECS Parser/BGE/ScanSci OA/application/public/retention 全绿。
 28. PR #38 / CI `33550018143` 将匿名 publisher bounce 收紧为本次 main-frame 必须经过 `*.zju.edu.cn`/`*.carsi.edu.cn` 后才可取 Cookie；`evilzju.edu.cn` 回归拒绝，ScanSci `174/11/0`、全仓 lint/test 与独立复审 READY。
 29. Merge `405b85a` 经 schema-v3 16-case Parser 两阶段 canonical 部署；core/search `33/33`/`2/2`、quota `8/8`、BGE CPU、ScanSci OA、容器/公网/retention 全绿，rollback `09093e7`，验收临时目录与 auth helper 已清零。
-30. PR #47 / CI `33637694396` 合并为 `761b93d`：上游 `1.13.1` 单一 MCP 替换全部私有实现；Parser/BGE、core/search 34/2、17 tools、Worker MCP、真实 OA、API/Web/Nginx/public/retention 全绿。
-31. 服务器精确清理旧 auth/browser 两网络、七卷、两 image tag、systemd/drop-in/iptables/Squid browser 规则、Secret/eval，并清空 29.21GB inactive builder cache；保留官方数据/论文卷及所有产品数据，无 broad prune。
+30. PR #47 / CI `33637694396` 首次上线 `761b93d`；PR #50 / CI `33653209566` 最终上线 `80db41e`：上游 `1.13.1` 单一 MCP 替换全部私有实现；Parser/BGE、core/search 34/2、17 tools、Worker MCP、真实 OA、API/Web/Nginx/public/retention 全绿。
+31. 服务器精确清理旧 auth/browser 网络/卷/image/systemd/drop-in/iptables/Squid browser 规则/Secret、38 个旧 acceptance、5 个 eval、匿名失败容器和 inactive cache；只保留 official-only active/rollback、官方数据/论文卷及产品数据，无 broad prune。
 32. 官方认证入口是 active release 的 `import-scansci-cookies.sh`：只接收 root 0600 Netscape 文件，流入 MCP tmpfs 后调用 upstream `scansci_pdf_login(kind=cookie_import)`，会删除两份输入且不输出 Cookie/tool response；持久状态仅在 `scansci-data`。
 33. Constraints：服务器验收为准，本地不运行 Docker；Windows 只用 PowerShell显式调用 Git for Windows Bash 与 canonical wrapper；不读取/打印 `.env`，不 broad prune。保留 active/rollback、`scansci-data`、`scansci-papers`、对象存储、模型、监控与备份。
 
