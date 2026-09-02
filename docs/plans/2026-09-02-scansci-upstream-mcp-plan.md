@@ -304,20 +304,31 @@ Critical, Important or Minor findings; local build/typecheck/lint/test are green
 
 - Produces: merged immutable release, persistent official ScanSci session, four-entry product evidence, clean repository/server, and Taskmaster Task 10 complete.
 
-- [ ] **Step 1: Run focused release review and CI**
+- [x] **Step 1: Run focused release review and CI**
 
 Use `security-review`, `requesting-code-review`, `test-gate`, and `verification-before-completion`. Required local gates are build, typecheck, lint, focused Domain/Worker/MCP/release tests, docs sync, Markdown lint, and `git diff --check`.
 
-Local review and gates are complete at `9730529`; exact GitHub CI remains before
-this checkbox can close.
+PR #41 exact GitHub CI `33594996489` passed and merged as
+`ab290579ed81f4a30d011dea2a52e8b9b20c50f3`. The later auth bridge hotfix is
+tracked under Step 3 and must independently pass CI before deployment.
 
-- [ ] **Step 2: Merge and execute the canonical ECS deployment**
+- [x] **Step 2: Merge and execute the canonical ECS deployment**
 
 Deploy only the merged SHA through `deploy.sh --confirm --require-parser-acceptance` with production `405b85a…` as rollback. Verify migration 34, exact images, MCP tools, containers, Parser/BGE, API/Web/Worker, Nginx, public release, journal, and retention.
+
+Actual: canonical deployment accepted `ab290579…` with rollback `405b85a…`;
+core/search are `34/34` and `2/2`, and official image/tools/storage/OA/Worker,
+Parser/BGE, application, public CAS, journal and retention gates passed.
 
 - [ ] **Step 3: Complete the positive production journey**
 
 Run OA download, one official ZJU institutional login, one subscription-only download, MCP container recreation and repeat download, then one request from each of the four existing product entries. Verify one-use link and 72-hour metadata without waiting 72 hours by checking the exact stored timestamps and existing GC contract once.
+
+Current blocker correction: `6bed92f` removes the ineffective host port publish
+from the internal auth network and forwards SSH to the sole fixed
+`172.25.0.2:6080` peer. Canonical start now recreates and verifies the proxy-only
+firewall before launching auth; ECS HTTP/RFB passed and helper resources returned
+to zero. Exact CI/merged deployment precede the institutional journey.
 
 - [ ] **Step 4: Delete rejected repository artifacts**
 

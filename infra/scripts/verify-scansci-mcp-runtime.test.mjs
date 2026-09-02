@@ -7,6 +7,7 @@ import { EXPECTED_SCANSCI_TOOLS, verifyRuntimeSnapshot } from './verify-scansci-
 const sha = 'a'.repeat(40);
 const mcpId = `sha256:${'b'.repeat(64)}`;
 const authId = `sha256:${'c'.repeat(64)}`;
+const authContainerId = 'e'.repeat(64);
 const labels = {
   'org.openscience.source': sha,
   'org.openscience.scansci.version': '1.13.1',
@@ -36,16 +37,41 @@ function fixture() {
       State: { Running: true, Health: { Status: 'healthy' } },
     },
     authContainer: {
+      Id: authContainerId,
       Image: authId,
       Config: {
         User: '10001:10001',
         Labels: { 'com.docker.compose.service': 'scansci-auth' },
         Env: ['SCANSCI_PDF_PROXY=http://openscience-egress:7891', 'HOME=/data/scansci/home'],
       },
-      HostConfig: { PortBindings: { '6080/tcp': [{ HostIp: '127.0.0.1', HostPort: '6080' }] } },
-      NetworkSettings: { Networks: { 'openscience-prod_auth_net': {} } },
+      HostConfig: { PortBindings: {} },
+      NetworkSettings: {
+        Ports: {},
+        Networks: { 'openscience-prod_auth_net': { IPAddress: '172.25.0.2' } },
+      },
       Mounts: [{ Type: 'volume', Name: 'openscience-prod_scansci-data', Destination: '/data/scansci', RW: true }],
       State: { Running: true },
+    },
+    authNetwork: {
+      Name: 'openscience-prod_auth_net',
+      Internal: true,
+      EnableIPv6: false,
+      Options: { 'com.docker.network.bridge.name': 'xgs-auth0' },
+      IPAM: { Config: [{ Subnet: '172.25.0.0/29', Gateway: '172.25.0.1' }] },
+      Containers: { [authContainerId]: { Name: 'openscience-prod-scansci-auth-1' } },
+    },
+    authIsolation: {
+      proxyStatus: 204,
+      hostSsh: 'blocked',
+      hostApi: 'blocked',
+      hostDocker: 'blocked',
+      rawDirect: 'blocked',
+      aliyunMetadata: 'blocked',
+      mcpPeer: 'blocked',
+      workerPeer: 'blocked',
+      hostNoVncHttp: 200,
+      hostListener6080: 'absent',
+      firewall: 'isolated',
     },
     workerContainer: {
       Config: {
@@ -74,7 +100,7 @@ test('official runtime snapshot binds images, mounts, tools, worker and transien
   ]);
 });
 
-test('runtime snapshot accepts auth only on its isolated network and loopback port', () => {
+test('runtime snapshot accepts auth only at its fixed peer-free bridge address with no host publish', () => {
   const isolated = fixture();
   isolated.requireAuth = true;
   assert.match(verifyRuntimeSnapshot(isolated).join('\n'), /SCANSCI_MCP_AUTH_OK/u);
@@ -83,6 +109,23 @@ test('runtime snapshot accepts auth only on its isolated network and loopback po
   peerReachable.requireAuth = true;
   peerReachable.authContainer.NetworkSettings.Networks = { 'openscience-prod_retrieval_net': {} };
   assert.throws(() => verifyRuntimeSnapshot(peerReachable), /auth container topology/u);
+
+  const published = fixture();
+  published.requireAuth = true;
+  published.authContainer.HostConfig.PortBindings = {
+    '6080/tcp': [{ HostIp: '127.0.0.1', HostPort: '6080' }],
+  };
+  assert.throws(() => verifyRuntimeSnapshot(published), /auth container topology/u);
+
+  const peer = fixture();
+  peer.requireAuth = true;
+  peer.authNetwork.Containers['f'.repeat(64)] = { Name: 'unauthorized-peer' };
+  assert.throws(() => verifyRuntimeSnapshot(peer), /auth network|isolation/u);
+
+  const exposed = fixture();
+  exposed.requireAuth = true;
+  exposed.authIsolation.hostApi = 'connected';
+  assert.throws(() => verifyRuntimeSnapshot(exposed), /auth network|isolation/u);
 });
 
 test('runtime snapshot rejects an application secret and a read-only worker paper mount', () => {

@@ -98,15 +98,41 @@ export function verifyRuntimeSnapshot(input) {
     const auth = input.authContainer;
     const authEnvironment = environment(auth?.Config?.Env);
     const authNetworks = Object.keys(auth?.NetworkSettings?.Networks ?? {});
-    const portBindings = auth?.HostConfig?.PortBindings?.['6080/tcp'];
+    const authNetwork = auth?.NetworkSettings?.Networks?.[authNetworks[0]];
+    const authNetworkContainers = Object.keys(input.authNetwork?.Containers ?? {});
+    const portBindings = Object.keys(auth?.HostConfig?.PortBindings ?? {});
+    const publishedPorts = Object.keys(auth?.NetworkSettings?.Ports ?? {});
     if (auth?.Image !== input.expectedAuthImageId || auth?.Config?.User !== '10001:10001'
       || auth?.Config?.Labels?.['com.docker.compose.service'] !== 'scansci-auth'
       || auth?.State?.Running !== true
       || authNetworks.length !== 1 || !authNetworks[0]?.endsWith('_auth_net')
-      || JSON.stringify(portBindings) !== JSON.stringify([{ HostIp: '127.0.0.1', HostPort: '6080' }])
+      || authNetwork?.IPAddress !== '172.25.0.2'
+      || portBindings.length !== 0 || publishedPorts.length !== 0
       || authEnvironment.get('SCANSCI_PDF_PROXY') !== 'http://openscience-egress:7891'
       || exactVolume(auth, '/data/scansci', '_scansci-data', true) !== dataVolume) {
       fail('auth container topology is invalid');
+    }
+    if (input.authNetwork?.Name !== authNetworks[0]
+      || input.authNetwork?.Internal !== true || input.authNetwork?.EnableIPv6 !== false
+      || input.authNetwork?.Options?.['com.docker.network.bridge.name'] !== 'xgs-auth0'
+      || JSON.stringify(input.authNetwork?.IPAM?.Config) !== JSON.stringify([{
+        Subnet: '172.25.0.0/29', Gateway: '172.25.0.1',
+      }])
+      || authNetworkContainers.length !== 1 || authNetworkContainers[0] !== auth?.Id
+      || JSON.stringify(input.authIsolation) !== JSON.stringify({
+        proxyStatus: 204,
+        hostSsh: 'blocked',
+        hostApi: 'blocked',
+        hostDocker: 'blocked',
+        rawDirect: 'blocked',
+        aliyunMetadata: 'blocked',
+        mcpPeer: 'blocked',
+        workerPeer: 'blocked',
+        hostNoVncHttp: 200,
+        hostListener6080: 'absent',
+        firewall: 'isolated',
+      })) {
+      fail('auth network isolation is invalid');
     }
     for (const key of authEnvironment.keys()) {
       if (/^(?:DATABASE|POSTGRES|REDIS|S3_|MINIO|AWS_|MINIMAX|TAVILY|SEMANTIC|.*(?:API_KEY|SECRET|TOKEN|COOKIE))/iu.test(key)) {
@@ -163,6 +189,60 @@ function containerPython(container, source) {
     'import base64,sys;exec(base64.b64decode(sys.argv[1]))', Buffer.from(source).toString('base64')]);
 }
 
+function blockedPeer(container, runtime, source) {
+  return runtime === 'python'
+    ? containerPython(container, source)
+    : run('docker', ['exec', container, 'node', '-e', source]);
+}
+
+function probeAuthIsolation(authContainer, mcpContainer, workerContainer) {
+  const authProbe = JSON.parse(containerPython(authContainer, [
+    'import json,socket,urllib.request',
+    "proxy='http://openscience-egress:7891'",
+    "opener=urllib.request.build_opener(urllib.request.ProxyHandler({'http':proxy,'https':proxy}))",
+    "proxy_status=opener.open('https://www.gstatic.com/generate_204',timeout=8).status",
+    "def blocked(host,port):\n try:\n  probe=socket.create_connection((host,port),timeout=.5)\n  probe.close()\n  return 'connected'\n except OSError:\n  return 'blocked'",
+    "print(json.dumps({'proxyStatus':proxy_status,'hostSsh':blocked('172.25.0.1',22),'hostApi':blocked('172.25.0.1',3001),'hostDocker':blocked('172.25.0.1',2375),'rawDirect':blocked('1.1.1.1',443),'aliyunMetadata':blocked('100.100.100.200',80)},separators=(',',':')))",
+  ].join('\n')));
+  const mcpPeer = blockedPeer(mcpContainer, 'python', [
+    'import socket',
+    "try:\n probe=socket.create_connection(('172.25.0.2',6080),timeout=1)\n probe.close()\n print('connected')\nexcept OSError:\n print('blocked')",
+  ].join('\n'));
+  const workerPeer = blockedPeer(workerContainer, 'node', "const net=require('node:net');let done=false;const finish=(value)=>{if(done)return;done=true;console.log(value);socket.destroy()};const socket=net.createConnection({host:'172.25.0.2',port:6080});socket.setTimeout(1000,()=>finish('blocked'));socket.on('connect',()=>finish('connected'));socket.on('error',()=>finish('blocked'));" );
+  const returnRule = ['INPUT', '-i', 'xgs-auth0', '-s', '172.25.0.2/32', '-d', '172.25.0.1/32',
+    '-p', 'tcp', '--sport', '6080', '-m', 'conntrack', '--ctstate', 'ESTABLISHED',
+    '-m', 'comment', '--comment', 'openscience-scansci-auth-return', '-j', 'ACCEPT'];
+  const acceptRule = ['INPUT', '-i', 'xgs-auth0', '-s', '172.25.0.0/29', '-d', '172.25.0.1',
+    '-p', 'tcp', '--dport', '7891', '-m', 'comment', '--comment', 'openscience-scansci-auth', '-j', 'ACCEPT'];
+  const rejectRule = ['INPUT', '-i', 'xgs-auth0', '-s', '172.25.0.0/29',
+    '-m', 'comment', '--comment', 'openscience-scansci-auth', '-j', 'REJECT', '--reject-with', 'icmp-port-unreachable'];
+  for (const rule of [returnRule, acceptRule, rejectRule]) run('/usr/sbin/iptables', ['-w', '-C', ...rule]);
+  const inputRules = run('/usr/sbin/iptables', ['-w', '-S', 'INPUT']).split(/\r?\n/u);
+  const returnRules = inputRules.filter((line) => /--comment "?openscience-scansci-auth-return"?(?: |$)/u.test(line));
+  const authRules = inputRules.filter((line) => /--comment "?openscience-scansci-auth"?(?: |$)/u.test(line));
+  const returnIndex = inputRules.indexOf(returnRules[0]);
+  const acceptIndex = inputRules.findIndex((line) => authRules.includes(line) && /--dport 7891 .* -j ACCEPT$/u.test(line));
+  const rejectIndex = inputRules.findIndex((line) => authRules.includes(line) && /-j REJECT /u.test(line));
+  if (returnRules.length !== 1 || authRules.length !== 2
+    || returnIndex < 0 || acceptIndex <= returnIndex || rejectIndex <= acceptIndex) {
+    fail('auth network firewall is invalid');
+  }
+  const hostNoVncHttp = Number(run('curl', [
+    '--noproxy', '*', '--fail', '--silent', '--show-error', '--output', '/dev/null',
+    '--write-out', '%{http_code}', '--connect-timeout', '2', '--max-time', '3',
+    'http://172.25.0.2:6080/vnc.html?autoconnect=true',
+  ]));
+  const hostListener6080 = run('/usr/sbin/ss', ['-H', '-ltn', 'sport = :6080']) === '' ? 'absent' : 'present';
+  return {
+    ...authProbe,
+    mcpPeer,
+    workerPeer,
+    hostNoVncHttp,
+    hostListener6080,
+    firewall: 'isolated',
+  };
+}
+
 export function parseCli(argv) {
   const values = new Map();
   for (let index = 0; index < argv.length; index += 2) {
@@ -196,12 +276,22 @@ async function main() {
   const options = parseCli(process.argv.slice(2));
   const mcpContainerName = 'openscience-prod-scansci-mcp-1';
   const workerContainerName = 'openscience-prod-agent-worker-1';
+  const authContainer = options.requireAuth ? inspect('container', 'openscience-prod-scansci-auth-1') : undefined;
+  const authNetworkNames = Object.keys(authContainer?.NetworkSettings?.Networks ?? {})
+    .filter((name) => name.endsWith('_auth_net'));
+  const authNetwork = options.requireAuth && authNetworkNames.length === 1
+    ? inspect('network', authNetworkNames[0])
+    : undefined;
   const snapshot = {
     ...options,
     mcpImage: inspect('image', `openscience-scansci-mcp:${options.releaseSha}`),
     authImage: inspect('image', `openscience-scansci-auth:${options.releaseSha}`),
     mcpContainer: inspect('container', mcpContainerName),
-    authContainer: options.requireAuth ? inspect('container', 'openscience-prod-scansci-auth-1') : undefined,
+    authContainer,
+    authNetwork,
+    authIsolation: options.requireAuth
+      ? probeAuthIsolation('openscience-prod-scansci-auth-1', mcpContainerName, workerContainerName)
+      : undefined,
     workerContainer: options.requireWorker ? inspect('container', workerContainerName) : undefined,
     toolNames: JSON.parse(containerPython(mcpContainerName, toolProbe)),
     oaCanary: options.requireOa ? JSON.parse(containerPython(mcpContainerName, oaProbe)) : undefined,
