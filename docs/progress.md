@@ -4,7 +4,7 @@
 
 ## Current version tuple
 
-- Candidate branch / code HEAD / origin main: `codex/scansci-upstream-mcp` / `7ca79760f925df857504167622e9d89902c04603` / `c6b93c5b1e34b4a1871e8f24d2845406e4a7795b`。
+- Candidate branch / code HEAD / origin main: `codex/scansci-upstream-mcp` / `336955e7d1173cb8678afc97ba869e10c973e291` / `c6b93c5b1e34b4a1871e8f24d2845406e4a7795b`。
 - Production application source / immutable release: `405b85a8e1d6b3aec51d2de20ec6ce5b93ab73e4`。
 - Production rollback: `09093e7e879dbc7e9175e957f217afe5c6eb2e67`；core/search migrations `33/33` / `2/2`。
 - Taskmaster `hermes-research-intelligence` 仍为 9/12；官方 MCP Tasks 1–4 code/runtime complete，生产合并、机构下载、四入口与旧实现精确清理 pending；Task 11 继续阻断。
@@ -13,8 +13,8 @@
 
 - 上游 `v1.13.1` 官方 Skill/MCP 已锁定并暴露完整 17-tool surface；不强制 `legal_only`，默认下载不传来源策略覆盖。旧私有实现继续冻结，须等替代版本生产验收后精确删除。
 - Task 1/2：ECS 官方试点下载 `arXiv:2009.06045v1` 为 `%PDF-`、24,671,920 bytes、SHA-256 `d57dc94c…f484a`，临时资源 `0/0`；migration 34 `source_retrieval` 已在隔离 ECS PostgreSQL 完成 forward/rollback/redeploy，生产仍 33/33。
-- Task 3：Worker 通过官方 streamable-HTTP MCP 调用 `scansci_pdf_download`；真实 ECS candidate 返回 `route=source_retrieval`、`source=arXiv`、相同 PDF/hash，读取并入库后 staging PDF 为 `0`。共享卷只赋予专用 GID 11000 的必要写权限。
-- Task 4：官方 MCP/auth 镜像、loopback noVNC、schema-5 release identity、MCP-first positive canary、retention 和 schema-5 rollback 已实现；MCP candidate image `sha256:551684a7…e4570e8`，focused Worker/MCP/deploy/tunnel 与 Bash syntax green。
+- Task 3：Worker 通过官方 streamable-HTTP MCP 调用 `scansci_pdf_download`；早期 ECS candidate 返回 `route=source_retrieval`、`source=arXiv`、相同 PDF/hash，staging PDF 为 `0`。`336955e` 记录 per-document `providerVersion=1.13.1`，拒绝卷内 symlink traversal，并仅在 malware scan、SeaweedFS upload 与 DB active 后 acknowledge/unlink；upload failure 保留 staging。
+- Task 4：官方 MCP/auth 镜像、schema-5 identity/retention/rollback 已实现；`336955e` 把 noVNC 隔离到无 application peer 的 `auth_net`，真实 initialize/list-tools health 替代 TCP probe，PID 1 在 MCP/NGINX/Tor 任一退出时结束容器，schema 5 可作为下一次 cleanup/hotfix 的 previous release。旧 `sha256:551684a7…e4570e8` 只证明此前 ECS runtime，review-fix image 待 merged SHA 生产构建。
 - 下一步只做一次发布级正向门禁，合并后由 canonical ECS transaction 应用 migration 34、切换官方 MCP，再完成官方登录/机构 PDF/四入口/72h+600s；随后提交第二个清理 release，移除旧代码与精确 ECS 冗余。生产/回退在此之前保持 `405b85a` / `09093e7`。
 
 ## 2026-09-02 — ScanSci IdP gate deployed; ZJU credential blocked (`405b85a`)

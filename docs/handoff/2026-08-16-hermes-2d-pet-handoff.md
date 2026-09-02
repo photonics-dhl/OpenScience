@@ -11,7 +11,7 @@
 ## Version tuple
 
 - Worktree: `E:/Miscellaneous/XGS/.worktrees/readable-hermes-guidance`
-- Candidate branch / code HEAD / origin main: `codex/scansci-upstream-mcp` / `7ca79760f925df857504167622e9d89902c04603` / `c6b93c5b1e34b4a1871e8f24d2845406e4a7795b`
+- Candidate branch / code HEAD / origin main: `codex/scansci-upstream-mcp` / `336955e7d1173cb8678afc97ba869e10c973e291` / `c6b93c5b1e34b4a1871e8f24d2845406e4a7795b`
 - Production application source / immutable release: `405b85a8e1d6b3aec51d2de20ec6ce5b93ab73e4`
 - Rollback: `09093e7e879dbc7e9175e957f217afe5c6eb2e67`; core/search migrations `33/33` / `2/2`
 - 本地 `main` 与其他 worktree 有用户改动，不得触碰或用它推断生产；上述 tuple 已从 ECS 重新实测。
@@ -59,7 +59,7 @@
 27. Strict browser、CPU browser、proxy-only `browser_net`、proof-backed session 与稳定 canary 诊断已合并；PR #36→#37 部署到 `09093e7`，ECS Parser/BGE/ScanSci OA/application/public/retention 全绿。
 28. PR #38 / CI `33550018143` 将匿名 publisher bounce 收紧为本次 main-frame 必须经过 `*.zju.edu.cn`/`*.carsi.edu.cn` 后才可取 Cookie；`evilzju.edu.cn` 回归拒绝，ScanSci `174/11/0`、全仓 lint/test 与独立复审 READY。
 29. Merge `405b85a` 经 schema-v3 16-case Parser 两阶段 canonical 部署；core/search `33/33`/`2/2`、quota `8/8`、BGE CPU、ScanSci OA、容器/公网/retention 全绿，rollback `09093e7`，验收临时目录与 auth helper 已清零。
-30. 官方 MCP Tasks 1–4 code/runtime 已完成：17-tool `v1.13.1`、migration 34 `source_retrieval`、Worker direct MCP、MCP/auth images、loopback noVNC、schema-5 identity/retention/rollback。ECS candidate real Worker 返回 `source=arXiv` 与相同 PDF hash，staging PDF `0`；生产仍 33/33，尚未切换。
+30. 官方 MCP Tasks 1–4 code/runtime 已完成：17-tool `v1.13.1`、migration 34 `source_retrieval`、Worker direct MCP、MCP/auth images、schema-5 identity/retention/rollback。ECS 早期 candidate real Worker 返回 `source=arXiv` 与相同 PDF hash；`336955e` 关闭审阅的 5 个 Important：auth-only network、schema-5 next deploy、durable activation 后 staging ack、child-aware MCP health、per-document provider version。review-fix image/生产 34 尚待 merged deploy。
 31. Constraints：服务器验收为准，本地不运行 Docker；Windows 只用 PowerShell 显式调用 Git for Windows Bash 与 canonical wrapper；不读取/打印 `.env`，不 broad prune。替代生产验收后才按用户授权删除旧代码、测试、容器/网络/systemd 和精确无引用 release/image；保留 active/rollback、`scansci-data`、对象存储、模型、监控与备份。
 
 ## Next action

@@ -2091,9 +2091,12 @@ The official runtime is now implemented in `apps/scansci-mcp` with pinned
 service exposes all 17 upstream MCP tools internally and does not add a default
 source-strategy override. Its root filesystem is read-only; `scansci-data` is
 persistent, while `scansci-papers` is transient. Agent Worker shares only GID
-11000 on the paper volume so it can ingest and unlink the exact acknowledged
-PDF. The auth image is stopped by default and publishes noVNC only to
-`127.0.0.1:6080` when explicitly started.
+11000 on the paper volume so it can ingest the exact PDF; unlink happens only
+after malware scan, object upload and database activation. The auth image is
+stopped by default, attaches only to peer-free `auth_net`, and publishes noVNC
+only to `127.0.0.1:6080` when explicitly started. Runtime acceptance inspects
+that network/port identity. The MCP container exits when MCP, Nginx or Tor exits,
+and health performs real MCP initialize/list-tools rather than a proxy TCP probe.
 
 Positive ECS candidate evidence used the real Worker adapter against the
 official MCP. `arXiv:2009.06045v1` returned `source_retrieval`, source `arXiv`,
@@ -2117,8 +2120,10 @@ publishes capability schema 5 containing exact MCP/auth image IDs. Acceptance
 requires core/search `34/34` and `2/2`, the 17-tool runtime verifier, Parser and
 BGE gates, target containers, Nginx/public release CAS, absent journal/failed
 markers, and retention. Schema-5 previous releases are parsed and restored via
-their exact official MCP/auth image IDs, so the later cleanup release can roll
-back to this accepted official version.
+their exact official MCP/auth image IDs; retained legacy service definitions
+are not treated as an active schema-5 browser, and an old browser lock is read
+only when the retained file exists. This lets the later cleanup release roll
+back to the accepted official version.
 
 Only after that release is public and healthy may the official auth profile be
 started through `infra/scripts/scansci-auth-tunnel.sh start 6080`. Complete one

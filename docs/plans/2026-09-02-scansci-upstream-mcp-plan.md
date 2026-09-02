@@ -197,7 +197,7 @@ Expected: FAIL because the Worker still calls `/v1/legal-download`.
 
 Add direct dependency `@modelcontextprotocol/sdk@1.30.0`. `scansci-mcp.ts` owns one reusable client connection, tool discovery, bounded JSON parsing, stable error mapping, and descriptor-based file reading. `scansci.ts` normalizes upstream results and preserves the existing 100 MiB/hash/object-storage contract.
 
-The image installs exact `scansci-pdf==1.13.1`, Patchright/Chromium/Xvfb and runs only the official server. Compose adds `scansci-data` and `scansci-papers`; Agent Worker shares GID 11000 with the MCP and receives write access only to `scansci-papers` so successful staging files can be removed immediately after bounded ingestion. Remove no old service yet.
+The image installs exact `scansci-pdf==1.13.1`, Patchright/Chromium/Xvfb and runs only the official server. Compose adds `scansci-data` and `scansci-papers`; Agent Worker shares GID 11000 with the MCP and receives write access only to `scansci-papers` so successful staging files can be removed after malware scan, object upload and durable document activation. Remove no old service yet.
 
 - [x] **Step 4: Verify GREEN**
 
@@ -275,6 +275,11 @@ schema-5 capability identity, MCP-first positive canary, active/rollback
 retention, and previous-schema-5 restoration are implemented. Focused runtime,
 retention, deploy and auth-tunnel gates plus Bash syntax are green. Production
 merge/deploy and the institutional login journey remain Task 5.
+
+Release review fix `336955e` isolates noVNC on `auth_net`, supervises MCP/NGINX/
+Tor children, uses an initialize/list-tools health probe, allows schema 5 to be
+the next release's rollback source, defers staging acknowledgement until durable
+activation, and stores the exact MCP provider version in rights evidence.
 
 ### Task 5: Deploy, accept, and remove the rejected implementation
 

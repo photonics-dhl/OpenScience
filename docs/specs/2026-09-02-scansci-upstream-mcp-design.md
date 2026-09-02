@@ -69,7 +69,7 @@ scansci_pdf_download(identifier=<DOI-or-arXiv>)
 
 It does not send `strategy`, `scihub_enabled`, or `use_tor` overrides for the default product request. Upstream configuration and source health choose the route. An explicit future user source request may provide a public tool argument without changing UI mode.
 
-The Worker mounts `scansci-papers` read-write under the dedicated shared GID 11000 and accepts only a regular, non-symlink file resolved beneath the mount, bounded to 100 MiB, beginning with `%PDF-`. It records the exact upstream `source`, source URL, content hash, byte count, and ScanSci version before copying bytes to object storage, then unlinks that exact staging file. No other MCP data path is writable by Worker.
+The Worker mounts `scansci-papers` read-write under the dedicated shared GID 11000 and accepts only a regular, non-symlink file resolved beneath the mount, bounded to 100 MiB, beginning with `%PDF-`. It records the exact upstream `source`, source URL, content hash, byte count, and ScanSci version before copying bytes to object storage. Only after malware scan, object upload and `TemporaryDocument.state=active` succeed does it identity-check and unlink that exact staging file; a failed durable ingest leaves the file unacknowledged. No other MCP data path is writable by Worker.
 
 ### 4.3 Interactive login
 
