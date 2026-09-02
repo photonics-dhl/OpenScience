@@ -29,6 +29,9 @@ test('official ScanSci image is pinned and runs only the public MCP entrypoint',
   assert.match(proxyConfig, /proxy_pass http:\/\/127\.0\.0\.1:18080;/);
   assert.match(proxyConfig, /proxy_set_header Host 127\.0\.0\.1:18080;/);
   assert.match(proxyConfig, /proxy_buffering off;/);
+  for (const directory of ['client-body', 'proxy', 'fastcgi', 'uwsgi', 'scgi']) {
+    assert.match(proxyConfig, new RegExp(`/tmp/scansci-runtime/${directory}`));
+  }
   assert.match(authEntrypoint, /Xvfb "\$DISPLAY" -screen 0 1280x800x24 -nolisten tcp/);
   assert.match(authEntrypoint, /x11vnc .* -listen 127\.0\.0\.1 .* -nopw/);
   assert.match(authEntrypoint, /websockify --web=\/usr\/share\/novnc 0\.0\.0\.0:6080 127\.0\.0\.1:5900/);
