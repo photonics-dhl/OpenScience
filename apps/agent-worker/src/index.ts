@@ -537,27 +537,25 @@ export function buildSourceRetrieveHandlerFromEnv(env: NodeJS.ProcessEnv = proce
   if (env.TAVILY_ENABLED && env.TAVILY_ENABLED !== 'true' && env.TAVILY_ENABLED !== 'false') {
     throw new Error('TAVILY_ENABLED must be true or false');
   }
-  const scansciBaseUrl = env.SCANSCI_BASE_URL ?? 'http://scansci-legal:8080';
-  if (env.NODE_ENV === 'production' && scansciEnabled && scansciBaseUrl !== 'http://scansci-legal:8080') {
-    throw new Error('SCANSCI_BASE_URL must use the isolated internal legal-only service in production');
+  const scansciMcpUrl = env.SCANSCI_MCP_URL ?? 'http://scansci-mcp:8000/mcp';
+  const scansciPapersDir = env.SCANSCI_PAPERS_DIR ?? '/data/papers';
+  if (env.NODE_ENV === 'production' && scansciEnabled && scansciMcpUrl !== 'http://scansci-mcp:8000/mcp') {
+    throw new Error('SCANSCI_MCP_URL must use the isolated internal official MCP service in production');
   }
-  if (env.SCANSCI_SERVICE_TOKEN !== undefined) throw new Error('SCANSCI_SERVICE_TOKEN is forbidden; use SCANSCI_SERVICE_TOKEN_FILE');
-  if (scansciEnabled && !env.SCANSCI_SERVICE_TOKEN_FILE) throw new Error('SCANSCI_SERVICE_TOKEN_FILE is required when ScanSci is enabled');
-  if (env.NODE_ENV === 'production' && scansciEnabled
-    && env.SCANSCI_SERVICE_TOKEN_FILE !== '/run/scansci-worker-secrets/scansci_service_token') {
-    throw new Error('SCANSCI_SERVICE_TOKEN_FILE must use the fixed Worker secret path in production');
+  if (env.NODE_ENV === 'production' && scansciEnabled && scansciPapersDir !== '/data/papers') {
+    throw new Error('SCANSCI_PAPERS_DIR must use the fixed shared-volume path in production');
   }
-  const scansciServiceToken = scansciEnabled
-    ? loadScanSciServiceTokenFile(env.SCANSCI_SERVICE_TOKEN_FILE!)
-    : undefined;
+  if (scansciEnabled && (env.SCANSCI_BASE_URL || env.SCANSCI_SERVICE_TOKEN || env.SCANSCI_SERVICE_TOKEN_FILE)) {
+    throw new Error('legacy ScanSci HTTP adapter configuration is forbidden');
+  }
   return createSourceRetrieveHandler({
     queryHmacSecret,
     semanticScholar: createSemanticScholarAdapter({ apiKey: env.SEMANTIC_SCHOLAR_API_KEY }),
     tavily: createTavilyAdapter({ apiKey: env.TAVILY_API_KEY, enabled: env.TAVILY_ENABLED !== 'false' }),
     scansci: createScanSciAdapter({
       enabled: scansciEnabled,
-      baseUrl: scansciBaseUrl,
-      serviceToken: scansciServiceToken,
+      mcpUrl: scansciMcpUrl,
+      papersDir: scansciPapersDir,
     }),
   });
 }

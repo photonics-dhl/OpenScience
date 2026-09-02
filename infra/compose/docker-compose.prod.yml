@@ -138,7 +138,7 @@ services:
     volumes:
       - ${XGS_RELEASE_ROOT:?XGS_RELEASE_ROOT required}:/opt/openscience:ro
       - parser-jobs:/parser-jobs
-      - scansci-worker-secrets:/run/scansci-worker-secrets:ro
+      - scansci-papers:/data/papers:ro
     command: ["node", "dist/index.js"]
     env_file:
       - /opt/openscience/.env.prod
@@ -159,8 +159,8 @@ services:
       BGE_M3_MODEL_MANIFEST_SHA256: ${BGE_M3_MODEL_MANIFEST_SHA256:-}
       EMBEDDING_WORKER_URL: http://embedding-worker:8080
       SCANSCI_ENABLED: "true"
-      SCANSCI_BASE_URL: http://scansci-legal:8080
-      SCANSCI_SERVICE_TOKEN_FILE: /run/scansci-worker-secrets/scansci_service_token
+      SCANSCI_MCP_URL: http://scansci-mcp:8000/mcp
+      SCANSCI_PAPERS_DIR: /data/papers
     depends_on:
       postgres:
         condition: service_healthy
@@ -172,7 +172,7 @@ services:
         condition: service_healthy
       document-parser:
         condition: service_healthy
-      scansci-legal:
+      scansci-mcp:
         condition: service_healthy
     healthcheck:
       test: ["CMD-SHELL", "kill -0 1"]
@@ -184,6 +184,50 @@ services:
       - app_net
       - data_net
       - embedding_net
+      - retrieval_net
+    restart: unless-stopped
+
+  scansci-mcp:
+    build:
+      context: ${XGS_RELEASE_ROOT:?XGS_RELEASE_ROOT required}/apps/scansci-mcp
+      dockerfile: Dockerfile
+      network: host
+      args:
+        XGS_RELEASE_IMAGE_TAG: ${XGS_RELEASE_IMAGE_TAG:?XGS_RELEASE_IMAGE_TAG required}
+        HTTP_PROXY: http://127.0.0.1:7891
+        HTTPS_PROXY: http://127.0.0.1:7891
+        NO_PROXY: localhost,127.0.0.1
+    image: openscience-scansci-mcp:${XGS_RELEASE_IMAGE_TAG:?XGS_RELEASE_IMAGE_TAG required}
+    user: "10001:10001"
+    environment:
+      HTTP_PROXY: http://openscience-egress:7891
+      HTTPS_PROXY: http://openscience-egress:7891
+      NO_PROXY: localhost,127.0.0.1,scansci-mcp
+      TOR_PROXY: socks5h://127.0.0.1:1080
+      SCANSCI_TOR_AUTOSTART: "true"
+    extra_hosts:
+      - "openscience-egress:172.24.0.1"
+    volumes:
+      - scansci-data:/data/scansci
+      - scansci-papers:/data/papers
+    read_only: true
+    tmpfs:
+      - /tmp:size=512m,nosuid,nodev,uid=10001,gid=10001,mode=0700
+      - /dev/shm:size=512m,nosuid,nodev,uid=10001,gid=10001,mode=0700
+    mem_limit: 2g
+    cpus: 2
+    pids_limit: 512
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    healthcheck:
+      test: ["CMD", "python", "-c", "import socket; s=socket.create_connection(('127.0.0.1',8000),3); s.close()"]
+      interval: 10s
+      timeout: 5s
+      retries: 18
+      start_period: 90s
+    networks:
       - retrieval_net
     restart: unless-stopped
 
@@ -560,4 +604,6 @@ volumes:
       type: tmpfs
       device: tmpfs
       o: size=256m,uid=10002,gid=11000,mode=0700
+  scansci-data:
+  scansci-papers:
   bge-m3-5617a9f61b028005a4858fdac845db406aefb181-08cc5a668e89:

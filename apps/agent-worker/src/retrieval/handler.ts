@@ -113,6 +113,7 @@ export function createSourceRetrieveHandler(options: {
             evidence: {
               kind: source.access.kind,
               ...(source.access.kind === 'open_access' && source.access.license ? { license: source.access.license } : {}),
+              ...(source.access.kind === 'source_retrieval' ? { source: source.access.source } : {}),
               ...(fullText ? { acquisitionRoute: fullText.route } : {}),
             },
             contentHash: fullText?.contentHash,

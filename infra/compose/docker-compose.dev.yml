@@ -93,6 +93,38 @@ services:
     networks:
       - embedding_net
 
+  scansci-mcp:
+    profiles: ["scansci"]
+    build:
+      context: ../../apps/scansci-mcp
+      dockerfile: Dockerfile
+      args:
+        XGS_RELEASE_IMAGE_TAG: dev
+    image: openscience-scansci-mcp:dev
+    user: "10001:10001"
+    environment:
+      TOR_PROXY: socks5h://127.0.0.1:1080
+      SCANSCI_TOR_AUTOSTART: "true"
+    volumes:
+      - scansci-data:/data/scansci
+      - scansci-papers:/data/papers
+    read_only: true
+    tmpfs:
+      - /tmp:size=512m,nosuid,nodev,uid=10001,gid=10001,mode=0700
+      - /dev/shm:size=512m,nosuid,nodev,uid=10001,gid=10001,mode=0700
+    mem_limit: 2g
+    cpus: 2
+    pids_limit: 512
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    healthcheck:
+      test: ["CMD", "python", "-c", "import socket; s=socket.create_connection(('127.0.0.1',8000),3); s.close()"]
+      interval: 10s
+      timeout: 5s
+      retries: 18
+      start_period: 90s
+    networks: [retrieval_net]
+
   scansci-secret-init:
     profiles: ["scansci"]
     image: openscience-scansci-legal:dev
@@ -292,3 +324,5 @@ volumes:
       type: tmpfs
       device: tmpfs
       o: size=256m,uid=10002,gid=11000,mode=0700
+  scansci-data:
+  scansci-papers:
