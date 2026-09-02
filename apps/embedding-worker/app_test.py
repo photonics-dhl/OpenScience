@@ -198,7 +198,9 @@ class ModelInitializationTests(unittest.TestCase):
         self.assertNotRegex(dockerfile, r"(?m)^ADD --checksum=")
         self.assertIn("35e33a08e8ed5e299eabbe3bc23518eb66a424dd29ee08fb3802bf9aef9e9bf2  /tmp/flagembedding-1.4.2-py3-none-any.whl", dockerfile)
         self.assertIn("sha256sum --check", dockerfile)
-        self.assertIn("--requirement /tmp/requirements.lock", dockerfile)
+        self.assertIn("install-lock.py --lock /tmp/requirements.lock", dockerfile)
+        self.assertIn("--requirement \"$requirement\"", dockerfile)
+        self.assertIn("for attempt in 1 2 3 4 5", dockerfile)
         self.assertIn("--print-source-sha256", dockerfile)
         self.assertLess(dockerfile.index("snapshot_download"), dockerfile.index("COPY apps/embedding-worker/app.py"))
         self.assertIn("rm -rf -- /opt/bge-m3-seed/.cache", dockerfile)
@@ -206,6 +208,22 @@ class ModelInitializationTests(unittest.TestCase):
         self.assertIn("chmod -R a+rX,a-w /opt/bge-m3-seed", dockerfile)
         self.assertIn("USER 10001:10001", dockerfile)
         self.assertNotIn("COPY --chmod", dockerfile)
+
+    def test_hash_lock_splitter_preserves_indexes_and_isolates_packages(self) -> None:
+        splitter = load_module("install-lock.py", "embedding_install_lock")
+        blocks = splitter.split_lock("\n".join([
+            "# lock",
+            "--index-url https://download.pytorch.org/whl/cpu",
+            "--extra-index-url https://pypi.org/simple",
+            "Example==1.0 --hash=sha256:" + "a" * 64,
+            "Local @ file:///tmp/local.whl#sha256=" + "b" * 64,
+        ]))
+        self.assertEqual(len(blocks), 2)
+        self.assertIn("Example==1.0", blocks[0])
+        self.assertNotIn("Local @", blocks[0])
+        self.assertIn("--extra-index-url https://pypi.org/simple", blocks[1])
+        with self.assertRaisesRegex(ValueError, "invalid hash-locked requirement"):
+            splitter.split_lock("--index-url https://pypi.org/simple\nExample==1.0")
 
 
 if __name__ == "__main__":

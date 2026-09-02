@@ -18,13 +18,21 @@ RUN python -c "from pathlib import Path; from urllib.request import urlopen; Pat
       | sha256sum --check --strict
 
 COPY apps/embedding-worker/requirements.lock /tmp/requirements.lock
+COPY apps/embedding-worker/install-lock.py /tmp/install-lock.py
 
-RUN python -m pip install --no-cache-dir --timeout 600 --retries 5 \
-      --require-hashes --no-deps --only-binary=:all: \
-      --requirement /tmp/requirements.lock \
+RUN python /tmp/install-lock.py --lock /tmp/requirements.lock --output /tmp/embedding-lock-blocks \
+    && for requirement in /tmp/embedding-lock-blocks/*.txt; do \
+         installed=0; \
+         for attempt in 1 2 3 4 5; do \
+           if python -m pip install --no-cache-dir --timeout 600 --retries 1 \
+             --require-hashes --no-deps --only-binary=:all: --requirement "$requirement"; then installed=1; break; fi; \
+           sleep "$attempt"; \
+         done; \
+         test "$installed" = 1; \
+       done \
     && python -c "from importlib.metadata import version; assert version('FlagEmbedding') == '1.4.2'" \
     && python -c "import importlib.metadata as m, torch; names=[d.metadata['Name'].lower() for d in m.distributions() if d.metadata.get('Name')]; assert torch.version.cuda is None; assert not any(n.startswith(('cuda-', 'nvidia-', 'rocm', 'triton')) for n in names)" \
-    && rm -f /tmp/flagembedding-1.4.2-py3-none-any.whl /tmp/requirements.lock
+    && rm -rf /tmp/embedding-lock-blocks /tmp/flagembedding-1.4.2-py3-none-any.whl /tmp/install-lock.py /tmp/requirements.lock
 
 RUN install -d -m 0755 /app /opt/bge-m3-seed /opt/bge-m3-lock /models/bge-m3
 
