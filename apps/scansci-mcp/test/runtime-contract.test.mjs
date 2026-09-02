@@ -18,6 +18,8 @@ test('official ScanSci image is pinned and runs only the public MCP entrypoint',
   assert.doesNotMatch(dockerfile, /COPY\s+.*scansci_pdf|PYTHONPATH/);
   assert.match(requirements, /scansci-pdf\[cloakbrowser,\s*patchright,\s*vpnsci\]==1\.13\.1/);
   assert.match(requirements, /--hash=sha256:f68c30503834fc093eb192bd556090d210241eed48445017fdb3d32f6e1355e5/);
+  assert.match(requirements, /--python-platform x86_64-unknown-linux-gnu/);
+  assert.doesNotMatch(requirements, /^pywin32==/m);
   assert.match(entrypoint, /scansci-pdf run --mode streamable_http --host 0\.0\.0\.0 --port 8000/);
   assert.doesNotMatch(`${dockerfile}\n${entrypoint}`, /legal_only|SCI(?:HUB)?_ENABLED=false|TOR_ENABLED=false/i);
 });
