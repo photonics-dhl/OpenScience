@@ -352,6 +352,7 @@ PREVIOUS_HAS_SCANSCI=0
 PREVIOUS_HAS_SCANSCI_BROWSER=0
 PREVIOUS_SCANSCI_LEGAL_IMAGE_ID=""
 PREVIOUS_SCANSCI_BROWSER_IMAGE_ID=""
+PREVIOUS_SCANSCI_MCP_IMAGE_ID=""
 PREVIOUS_SCANSCI_AUTH_IMAGE_ID=""
 PREVIOUS_SCANSCI_BROWSER_REQUIREMENTS_SHA256=""
 PREVIOUS_BGE_M3_ENABLED_VALUE=false
@@ -406,7 +407,7 @@ case "$PREVIOUS_CAPABILITY_STATE" in
           exit 66
         fi
         ;;
-      3|4)
+      3|4|5)
         PREVIOUS_EMBEDDING_DEPLOY_VALUE="$(read_capability_value "$PREVIOUS_CAPABILITIES_FILE" embedding_deploy)"
         PREVIOUS_BGE_M3_ENABLED_VALUE="$(read_capability_value "$PREVIOUS_CAPABILITIES_FILE" bge_m3_enabled)"
         PREVIOUS_BGE_M3_MODEL_VERSION_ID="$(read_capability_value "$PREVIOUS_CAPABILITIES_FILE" model_version_id)"
@@ -415,12 +416,16 @@ case "$PREVIOUS_CAPABILITY_STATE" in
         PREVIOUS_BGE_M3_PACKAGE_FREEZE_SHA256="$(read_capability_value "$PREVIOUS_CAPABILITIES_FILE" package_freeze_sha256)"
         PREVIOUS_BGE_M3_MODEL_MANIFEST_SHA256="$(read_capability_value "$PREVIOUS_CAPABILITIES_FILE" model_manifest_sha256)"
         PREVIOUS_SCANSCI_DEPLOY_VALUE="$(read_capability_value "$PREVIOUS_CAPABILITIES_FILE" scansci_deploy)"
-        PREVIOUS_SCANSCI_LEGAL_IMAGE_ID="$(read_capability_value "$PREVIOUS_CAPABILITIES_FILE" scansci_legal_image_id)"
+        if [ "$PREVIOUS_CAPABILITY_SCHEMA" = 5 ]; then
+          PREVIOUS_SCANSCI_MCP_IMAGE_ID="$(read_capability_value "$PREVIOUS_CAPABILITIES_FILE" scansci_mcp_image_id)"
+        else
+          PREVIOUS_SCANSCI_LEGAL_IMAGE_ID="$(read_capability_value "$PREVIOUS_CAPABILITIES_FILE" scansci_legal_image_id)"
+        fi
         if [ "$PREVIOUS_CAPABILITY_SCHEMA" = 4 ]; then
           PREVIOUS_SCANSCI_BROWSER_IMAGE_ID="$(read_capability_value "$PREVIOUS_CAPABILITIES_FILE" scansci_browser_image_id)"
         fi
         PREVIOUS_SCANSCI_AUTH_IMAGE_ID="$(read_capability_value "$PREVIOUS_CAPABILITIES_FILE" scansci_auth_image_id)"
-        if [ "$PREVIOUS_CAPABILITY_SCHEMA" = 4 ]; then
+        if [ "$PREVIOUS_CAPABILITY_SCHEMA" = 4 ] || [ "$PREVIOUS_CAPABILITY_SCHEMA" = 5 ]; then
           PREVIOUS_SCANSCI_BROWSER_REQUIREMENTS_SHA256="$(run_remote "sha256sum '$PREVIOUS_RELEASE_ROOT/apps/scansci-legal/browser-requirements.lock' | awk '{print \$1}'")"
           require_match previous_scansci_browser_requirements_sha256 "$PREVIOUS_SCANSCI_BROWSER_REQUIREMENTS_SHA256" '^[0-9a-f]{64}$'
         fi
@@ -445,11 +450,17 @@ case "$PREVIOUS_CAPABILITY_STATE" in
         fi
         if [ "$PREVIOUS_SCANSCI_DEPLOY_VALUE" = true ]; then
           PREVIOUS_HAS_SCANSCI=1
-          require_match previous_scansci_legal_image_id "$PREVIOUS_SCANSCI_LEGAL_IMAGE_ID" '^sha256:[0-9a-f]{64}$'
           require_match previous_scansci_auth_image_id "$PREVIOUS_SCANSCI_AUTH_IMAGE_ID" '^sha256:[0-9a-f]{64}$'
-          run_remote "grep -q '^  scansci-legal:' '$ROLLBACK_COMPOSE_FILE'"
-          [ "$(run_remote "docker image inspect --format='{{.Id}}' openscience-scansci-legal:$PREVIOUS_RELEASE_SHA")" = "$PREVIOUS_SCANSCI_LEGAL_IMAGE_ID" ]
           [ "$(run_remote "docker image inspect --format='{{.Id}}' openscience-scansci-auth:$PREVIOUS_RELEASE_SHA")" = "$PREVIOUS_SCANSCI_AUTH_IMAGE_ID" ]
+          if [ "$PREVIOUS_CAPABILITY_SCHEMA" = 5 ]; then
+            require_match previous_scansci_mcp_image_id "$PREVIOUS_SCANSCI_MCP_IMAGE_ID" '^sha256:[0-9a-f]{64}$'
+            run_remote "grep -q '^  scansci-mcp:' '$ROLLBACK_COMPOSE_FILE'"
+            [ "$(run_remote "docker image inspect --format='{{.Id}}' openscience-scansci-mcp:$PREVIOUS_RELEASE_SHA")" = "$PREVIOUS_SCANSCI_MCP_IMAGE_ID" ]
+          else
+            require_match previous_scansci_legal_image_id "$PREVIOUS_SCANSCI_LEGAL_IMAGE_ID" '^sha256:[0-9a-f]{64}$'
+            run_remote "grep -q '^  scansci-legal:' '$ROLLBACK_COMPOSE_FILE'"
+            [ "$(run_remote "docker image inspect --format='{{.Id}}' openscience-scansci-legal:$PREVIOUS_RELEASE_SHA")" = "$PREVIOUS_SCANSCI_LEGAL_IMAGE_ID" ]
+          fi
           if [ "$PREVIOUS_CAPABILITY_SCHEMA" = 4 ]; then
             PREVIOUS_HAS_SCANSCI_BROWSER=1
             require_match previous_scansci_browser_image_id "$PREVIOUS_SCANSCI_BROWSER_IMAGE_ID" '^sha256:[0-9a-f]{64}$'
@@ -459,10 +470,10 @@ case "$PREVIOUS_CAPABILITY_STATE" in
             echo "错误：旧 schema 3 release 不得包含无身份的 ScanSci browser" >&2
             exit 66
           fi
-        elif run_remote "grep -q '^  scansci-legal:' '$ROLLBACK_COMPOSE_FILE'"; then
+        elif run_remote "grep -q '^  scansci-legal:\|^  scansci-mcp:' '$ROLLBACK_COMPOSE_FILE'"; then
           echo "错误：旧 release scansci_deploy=false 但 Compose 含 ScanSci 服务" >&2
           exit 66
-        elif [ -n "$PREVIOUS_SCANSCI_LEGAL_IMAGE_ID$PREVIOUS_SCANSCI_BROWSER_IMAGE_ID$PREVIOUS_SCANSCI_AUTH_IMAGE_ID" ]; then
+        elif [ -n "$PREVIOUS_SCANSCI_LEGAL_IMAGE_ID$PREVIOUS_SCANSCI_BROWSER_IMAGE_ID$PREVIOUS_SCANSCI_MCP_IMAGE_ID$PREVIOUS_SCANSCI_AUTH_IMAGE_ID" ]; then
           echo "错误：旧 release scansci_deploy=false 不得携带镜像身份" >&2
           exit 66
         fi
@@ -638,6 +649,13 @@ transaction_restore_previous_scansci() {
   if [ "$UPSTREAM_SCANSCI" -eq 1 ]; then
     compose_scansci_auth_current "rm -f -s scansci-auth" || return
     compose_current "rm -f -s scansci-mcp" || return
+  fi
+  if [ "$PREVIOUS_CAPABILITY_SCHEMA" = 5 ]; then
+    [ "$(run_remote "docker image inspect --format='{{.Id}}' openscience-scansci-mcp:$exact_previous_sha")" = "$PREVIOUS_SCANSCI_MCP_IMAGE_ID" ] || return
+    [ "$(run_remote "docker image inspect --format='{{.Id}}' openscience-scansci-auth:$exact_previous_sha")" = "$PREVIOUS_SCANSCI_AUTH_IMAGE_ID" ] || return
+    run_remote "cd $PREVIOUS_RELEASE_ROOT && env $PREVIOUS_RUNTIME_ENV XGS_RELEASE_ROOT=$PREVIOUS_RELEASE_ROOT XGS_RELEASE_IMAGE_TAG=$exact_previous_sha docker compose --project-directory $PREVIOUS_RELEASE_ROOT --env-file $PROD_ENV -f $ROLLBACK_COMPOSE_FILE up -d --force-recreate --wait --wait-timeout 300 scansci-mcp" || return
+    run_remote "/usr/bin/node '$PREVIOUS_RELEASE_ROOT/infra/scripts/verify-scansci-mcp-runtime.mjs' --release-root '$PREVIOUS_RELEASE_ROOT' --release-sha '$exact_previous_sha' --compose-file '$ROLLBACK_COMPOSE_FILE' --expected-mcp-image-id '$PREVIOUS_SCANSCI_MCP_IMAGE_ID' --expected-auth-image-id '$PREVIOUS_SCANSCI_AUTH_IMAGE_ID' --require-worker 0 --require-oa 0"
+    return
   fi
   [ "$(run_remote "docker image inspect --format='{{.Id}}' openscience-scansci-legal:$exact_previous_sha")" = "$PREVIOUS_SCANSCI_LEGAL_IMAGE_ID" ] || return
   [ "$(run_remote "docker image inspect --format='{{.Id}}' openscience-scansci-auth:$exact_previous_sha")" = "$PREVIOUS_SCANSCI_AUTH_IMAGE_ID" ] || return

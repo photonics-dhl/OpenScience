@@ -511,6 +511,24 @@ test('ScanSci deploy dispatches exact rollback identity when the previous releas
   );
 });
 
+test('ScanSci rollback restores a previous schema 5 official MCP release', () => {
+  assert.match(transactionSource, /PREVIOUS_SCANSCI_MCP_IMAGE_ID=""/u);
+  assert.match(transactionSource, /3\|4\|5\)/u);
+  assert.match(
+    transactionSource,
+    /PREVIOUS_CAPABILITY_SCHEMA" = 5[\s\S]*read_capability_value "\$PREVIOUS_CAPABILITIES_FILE" scansci_mcp_image_id/u,
+  );
+  const restore = deploymentFunction('transaction_restore_previous_scansci');
+  assert.match(
+    restore,
+    /PREVIOUS_CAPABILITY_SCHEMA" = 5[\s\S]*openscience-scansci-mcp:\$exact_previous_sha[\s\S]*up -d --force-recreate --wait --wait-timeout 300 scansci-mcp/u,
+  );
+  assert.match(
+    restore,
+    /verify-scansci-mcp-runtime\.mjs[\s\S]*--require-worker 0[\s\S]*--require-oa 0/u,
+  );
+});
+
 test('candidate capability stays absent through prepublication and is exact-cleaned on either publish failure boundary', async (t) => {
   const root = await mkdtemp(join(tmpdir(), 'xgs-candidate-capability-'));
   t.after(async () => rm(root, { recursive: true, force: true }));
