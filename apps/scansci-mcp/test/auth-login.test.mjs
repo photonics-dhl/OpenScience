@@ -1,7 +1,8 @@
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
 import test from 'node:test';
-import { fileURLToPath } from 'node:url';
+import process from 'node:process';
+import { fileURLToPath, URL } from 'node:url';
 
 const wrapperPath = fileURLToPath(new URL('../auth-login.py', import.meta.url));
 
