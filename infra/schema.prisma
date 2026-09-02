@@ -418,6 +418,7 @@ enum ExternalSourceProvider {
 enum SourceRightsBasis {
   open_access
   institutional_access
+  source_retrieval
   public_domain
   self_authored
   unknown
