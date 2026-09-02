@@ -1,24 +1,24 @@
 # Hermes Research Intelligence CURRENT Handoff
 
-> **CURRENT active-memory，2026-09-02。** 公网 release `7daff3f` 为官方 `v1.13.1` MCP/auth bridge/parser build fix、rollback `ab290579`；全部基础门禁全绿。ZJU 已配置但 upstream visible browser 忽略 proxy，修复 `263fc23` 待 CI/部署；机构 PDF/四入口和旧实现清理 pending，Task 11 继续阻断。
+> **CURRENT active-memory，2026-09-02。** 公网 release `761b93d` 已按 upstream `v1.13.1` 部署单一官方 MCP，旧 legal/auth/browser/noVNC 运行链路与服务器冗余已精确清理；rollback `e9e2058`。真实 OA、17 tools、Worker MCP、Parser/BGE/公网全绿；官方 Cookie 导入、机构 PDF 与四入口仍 pending，Task 11 继续阻断。
 
 ## Goal and state
 
 - 产品目标：以 3–7 个 Claim 为公开 RO 中心，提供可定位 Evidence、条件/限制、身份静默路由、CPU 文档解析、混合检索和可版本化富媒体。
-- Taskmaster `hermes-research-intelligence` 仍为 9/12；独立 ScanSci plan Tasks 1–9 done、Task 10 in progress，Task 11 blocked。
-- 当前产品主线是以官方 17-tool MCP 替换私有 ScanSci 引擎，保留完整来源能力，将一次浙江大学认证变成持久下载能力并接通全部产品入口。
+- Taskmaster `hermes-research-intelligence` 仍为 9/12；ScanSci upstream plan 的替换、部署、仓库/服务器清理完成，正向机构 journey 未完成，Task 11 blocked。
+- 当前产品主线是通过官方 `cookie_import` 将一次浙江大学认证持久化到 `scansci-data`，再验证订阅论文、四入口与 72h/600s 生命周期。
 
 ## Version tuple
 
 - Worktree: `E:/Miscellaneous/XGS/.worktrees/readable-hermes-guidance`
-- Candidate branch / code HEAD / origin main: `codex/scansci-upstream-mcp` / `263fc23ea722637c77fa120f0f67ab66ec3af03c` / `7daff3f57c0714239802ad4085daf8e131a34bc8`
-- Production application source / immutable release: `7daff3f57c0714239802ad4085daf8e131a34bc8`
-- Rollback: `ab290579ed81f4a30d011dea2a52e8b9b20c50f3`; core/search migrations `34/34` / `2/2`
-- 本地 `main` 与其他 worktree 有用户改动，不得触碰或用它推断生产；上述 tuple 已从 ECS 重新实测。
+- Candidate branch / code HEAD / origin main: `codex/scansci-upstream-mcp` / `761b93d4bbce77e70d676be78de0bba128974fe6` / `761b93d4bbce77e70d676be78de0bba128974fe6`
+- Production application source / immutable release: `761b93d4bbce77e70d676be78de0bba128974fe6`
+- Rollback: `e9e2058b3ea7e8f4c2a488d7aa18ff0cd6944b4c`; core/search migrations `34/34` / `2/2`。本地 `main` 与其他 worktree 不得用于推断生产；tuple 已从 ECS 实测。
 
 ## Production truth
 
-- Public `/__release` 与 active marker 均返回 `7daff3f…`；API/Web/Worker/Parser/official MCP/BGE healthy，journal/failed absent，磁盘 65G/148G（47%，77G available）。17 tools、Worker OA、exact Parser report 已生产接受；ZJU 配置存在但 upstream login browser 报 `ERR_NAME_NOT_RESOLVED` 后超时，Cookie 仍 false。
+- Public `/__release` 与 active marker 均返回 `761b93d…`；API/Web/Worker/Parser/official MCP/BGE healthy，journal/failed absent。17 tools、Worker-origin MCP、真实 OA、exact Parser report 已生产接受；机构 Cookie 尚未导入。
+- 服务器只保留 `retrieval_net`、`scansci-data`、`scansci-papers`。旧网络/卷/image/systemd/drop-in/iptables/Squid browser 规则/Secret/eval 均为 0；根盘从 66G/148G 降到 37G/148G，可用 105G，build cache 0。
 - TLS certificate subject 为 `openscience.428312321.xyz`，有效期自 2026-08-03 20:10:34 +08:00；ECS、域名反代、Landing、Cloudflare Tunnel 的上线日期必须按证据包分开表述。
 - `agent_tasks.result` 为 JSONB，`IngestionTaskState` 含 `needs_review` 与 `confirmed`。生产聚合为 14 条待确认建议、7 条 confirmed、21 条总计；未输出业务正文或用户信息。
 - 数据库不存在字面 `suggested` 枚举：产品语义映射为 `result != null + state=needs_review`，确认后 `state=confirmed`。
@@ -59,16 +59,16 @@
 27. Strict browser、CPU browser、proxy-only `browser_net`、proof-backed session 与稳定 canary 诊断已合并；PR #36→#37 部署到 `09093e7`，ECS Parser/BGE/ScanSci OA/application/public/retention 全绿。
 28. PR #38 / CI `33550018143` 将匿名 publisher bounce 收紧为本次 main-frame 必须经过 `*.zju.edu.cn`/`*.carsi.edu.cn` 后才可取 Cookie；`evilzju.edu.cn` 回归拒绝，ScanSci `174/11/0`、全仓 lint/test 与独立复审 READY。
 29. Merge `405b85a` 经 schema-v3 16-case Parser 两阶段 canonical 部署；core/search `33/33`/`2/2`、quota `8/8`、BGE CPU、ScanSci OA、容器/公网/retention 全绿，rollback `09093e7`，验收临时目录与 auth helper 已清零。
-30. PR #41 / CI `33594996489` 合并为 `ab290579` 并 canonical 部署：core/search `34/34`/`2/2`、official images/tools/storage/OA/Worker、Parser/BGE/API/Web/Nginx/public/retention 全绿；rollback `405b85a`，旧运行容器已收敛移除，旧源码待机构 journey 后删除。
-31. `6bed92f` 修复 internal auth network 的无效 host publish：无端口发布、唯一静态 `.2` peer，SSH tunnel 直达；每次 start 先在生产锁内重建/验证 proxy-only firewall，verifier 复验 network/peer/iptables/代理/peer block。ECS HTTP+RFB 与精确 cleanup 通过；PR #42 / CI `33603561268` 合并为 `2e458f2`。
-32. `2e458f2` 两次 build 在 mutation 前因 parser `npm ci` 瞬时 `ECONNRESET` 失败且生产未变；`fb6afcd` 固化有界重试/低并发。PR #43 / CI `33606675500` 合并为 `7daff3f`，ECS exact Parser report、official MCP/OA/Worker、Parser/BGE、API/Web/Nginx/public/retention 全绿并 canonical 部署，rollback `ab290579`。
-33. Constraints：服务器验收为准，本地不运行 Docker；Windows 只用 PowerShell 显式调用 Git for Windows Bash 与 canonical wrapper；不读取/打印 `.env`，不 broad prune。机构 journey 通过后才删除旧代码、测试、容器/网络/systemd 和精确无引用 release/image；保留 active/rollback、`scansci-data`、对象存储、模型、监控与备份。
+30. PR #47 / CI `33637694396` 合并为 `761b93d`：上游 `1.13.1` 单一 MCP 替换全部私有实现；Parser/BGE、core/search 34/2、17 tools、Worker MCP、真实 OA、API/Web/Nginx/public/retention 全绿。
+31. 服务器精确清理旧 auth/browser 两网络、七卷、两 image tag、systemd/drop-in/iptables/Squid browser 规则、Secret/eval，并清空 29.21GB inactive builder cache；保留官方数据/论文卷及所有产品数据，无 broad prune。
+32. 官方认证入口是 active release 的 `import-scansci-cookies.sh`：只接收 root 0600 Netscape 文件，流入 MCP tmpfs 后调用 upstream `scansci_pdf_login(kind=cookie_import)`，会删除两份输入且不输出 Cookie/tool response；持久状态仅在 `scansci-data`。
+33. Constraints：服务器验收为准，本地不运行 Docker；Windows 只用 PowerShell显式调用 Git for Windows Bash 与 canonical wrapper；不读取/打印 `.env`，不 broad prune。保留 active/rollback、`scansci-data`、`scansci-papers`、对象存储、模型、监控与备份。
 
 ## Next action
 
-1. 推送 `263fc23` docs candidate，等待 exact CI，合并后以 `7daff3f` 为 rollback canonical 部署，再启动新 tunnel；Cookie 必须从 false 变为 true。
+1. 由管理员普通浏览器导出浙江大学/出版社 Netscape Cookie，使用 active release helper 做一次官方 `cookie_import`；不恢复 noVNC/auth sidecar。
 2. 选择 subscription-only DOI 完成官方 MCP 下载、MCP recreate/repeat 与四入口/72h/600s 正向验收；Semantic Scholar 免费副本不得冒充机构证明。
-3. 通过后做 cleanup release，精确删除旧实现和服务器冗余，再将 Task 10 置 10/12。
+3. 正向 journey 全绿后将 Taskmaster Task 10 置 10/12，再进入 Task 11 富媒体资产。
 
 ## Read first
 

@@ -4,18 +4,17 @@
 
 ## Current version tuple
 
-- Candidate branch / code HEAD / origin main: `codex/scansci-upstream-mcp` / `263fc23ea722637c77fa120f0f67ab66ec3af03c` / `7daff3f57c0714239802ad4085daf8e131a34bc8`。
-- Production application source / immutable release: `7daff3f57c0714239802ad4085daf8e131a34bc8`。
-- Production rollback: `ab290579ed81f4a30d011dea2a52e8b9b20c50f3`；core/search migrations `34/34` / `2/2`。
-- Taskmaster `hermes-research-intelligence` 仍为 9/12；官方 MCP/auth bridge/parser 构建稳定补丁已生产，ZJU Cookie、subscription-only PDF、四入口与旧实现精确清理 pending；Task 11 继续阻断。
+- Candidate branch / code HEAD / origin main: `codex/scansci-upstream-mcp` / `761b93d4bbce77e70d676be78de0bba128974fe6` / `761b93d4bbce77e70d676be78de0bba128974fe6`。
+- Production application source / immutable release: `761b93d4bbce77e70d676be78de0bba128974fe6`。
+- Production rollback: `e9e2058b3ea7e8f4c2a488d7aa18ff0cd6944b4c`；core/search migrations `34/34` / `2/2`。
+- Taskmaster `hermes-research-intelligence` 仍为 9/12：官方 MCP 单服务替换和旧运行链路清理完成；官方 `cookie_import`、subscription-only PDF、四入口/72h/600s 正向旅程 pending，Task 11 继续阻断。
 
-## 2026-09-02 — Official ScanSci auth bridge and parser retry deployed
+## 2026-09-02 — Official-only ScanSci deployed and rejected stack removed
 
-- 上游 `v1.13.1` 官方 Skill/MCP 已锁定并暴露完整 17-tool surface；不强制 `legal_only`，默认下载不传来源策略覆盖。旧私有实现继续冻结，须等替代版本生产验收后精确删除。
-- PR #41 / exact CI `33594996489` 合并为 `ab290579…`；canonical ECS transaction 已应用 migration 34，official MCP/auth、17 tools、Worker OA、Parser/BGE、API/Web/Worker/Nginx/public CAS/retention 全绿。active/rollback 为 `ab290579…` / `405b85a…`，旧 legal/browser/auth 容器已由 Compose 收敛移除。
-- Task 1–4 与 Task 5 Steps 1–2 完成：官方 `scansci_pdf_download` 返回 `source=arXiv`、`%PDF-`、24,671,920 bytes、SHA-256 `d57dc94c…f484a`；durable activation 后 acknowledge、policy discard、providerVersion、schema-5 rollback 与 staging `0` 均在生产接受。
-- 首次 official auth 诊断确认 Docker `internal` 网络不产生可用 host port publish。`6bed92f` 改为无 publish 的唯一 `172.25.0.2` peer，SSH tunnel 直达该地址；每次启动在同一生产锁内执行 network create→firewall/Squid prepare→start，runtime verifier 验证真实 network/peer/iptables/受控出网。ECS HTTP+RFB 正向通过，helper/peer 清零；独立复审 `0/0/0`，相关门禁 `32/32 + 5/5 + 1/1 + 44/49`、失败 0。PR #42 / exact CI `33603561268` 合并为 main `2e458f2…`。
-- 两次 canonical 构建均在切换前因 parser `npm ci` 瞬时 `ECONNRESET` 退出且生产未变；`fb6afcd` 固化有界重试/低并发，PR #43 / CI `33606675500` 合并并 canonical 部署为 `7daff3f…`。Exact Parser report、official MCP/OA/Worker、Parser/BGE、core/search `34/34`/`2/2`、API/Web/Nginx/public/retention 全绿；rollback `ab290579…`，磁盘 65G/148G（47%，77G available）。ZJU 已配置但首次 auth 超时：pinned upstream browser login 忽略 `network_proxy` 并报 `ERR_NAME_NOT_RESOLVED`。`263fc23` 以固定 Squid browser flag wrapper 修复，不改 wheel/网络；行为/runtime/entrypoint `2/2 + 2/2 + 2/2`、lint/docs、复审 `0/0/0` 全绿，待 CI/部署。固定 DOI 的 Semantic Scholar 免费副本不作机构证明。
+- PR #47 / exact CI `33637694396` 合并为 `761b93d…`。生产只运行 upstream `scansci-pdf==1.13.1` 的单一 streamable-HTTP MCP；Agent Worker 通过正式 SDK 调用完整 17 tools。旧 `scansci-legal`、自制 auth/browser/noVNC、服务 token、专用网络/防火墙代码均已从候选仓库删除。
+- ECS canonical transaction 通过 exact Parser report、BGE CPU、core/search `34/34`/`2/2`、MCP image/tools/storage、Worker-origin `tools/list`、真实 OA PDF、API/Web/Worker/Nginx/public CAS/retention；active/public `761b93d…`，rollback `e9e2058…`，journal/failed absent。
+- 服务器精确移除 2 个空 auth/browser 网络、7 个无人引用旧卷、2 个旧 auth image tag、旧 systemd/Docker/Squid drop-in、iptables 规则、宿主旧 Secret 目录和 transient eval；保留 `scansci-data`、`scansci-papers`、数据库、对象存储、BGE、监控和备份。非活动 builder cache `29.21GB → 0`，根盘 `66G/148G（47%）→ 37G/148G（27%）`，可用 `76G → 105G`，未运行 broad prune。
+- 官方机构认证改为管理员从普通浏览器导出 Netscape Cookie，再由 active release 的 `import-scansci-cookies.sh` 调用上游 `scansci_pdf_login(kind=cookie_import)` 导入持久 `scansci-data`；不再部署第二浏览器。机构 PDF 与四入口正向验收仍 pending，不能冒充已完成。
 
 ## 2026-09-02 — ScanSci IdP gate deployed; ZJU credential blocked (`405b85a`)
 
