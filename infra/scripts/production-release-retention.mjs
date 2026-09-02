@@ -18,6 +18,7 @@ const RELEASE_IMAGE_REPOSITORIES = [
   'openscience-scansci-auth',
   'openscience-scansci-browser',
   'openscience-scansci-legal',
+  'openscience-scansci-mcp',
 ];
 const PATHS = {
   root: '/opt/openscience',
@@ -313,31 +314,35 @@ export function parseReleaseCapability(source, expected = {}) {
   const schemaTwoKeys = 'bge_m3_enabled,embedding_deploy,model_manifest_sha256,model_revision,model_version_id,package_freeze_sha256,schema,source_sha256';
   const schemaThreeKeys = 'bge_m3_enabled,embedding_deploy,model_manifest_sha256,model_revision,model_version_id,package_freeze_sha256,scansci_auth_image_id,scansci_deploy,scansci_legal_image_id,schema,source_sha256';
   const schemaFourKeys = 'bge_m3_enabled,embedding_deploy,model_manifest_sha256,model_revision,model_version_id,package_freeze_sha256,scansci_auth_image_id,scansci_browser_image_id,scansci_deploy,scansci_legal_image_id,schema,source_sha256';
-  const expectedKeys = schema === '2' ? schemaTwoKeys : schema === '3' ? schemaThreeKeys : schemaFourKeys;
+  const schemaFiveKeys = 'bge_m3_enabled,embedding_deploy,model_manifest_sha256,model_revision,model_version_id,package_freeze_sha256,scansci_auth_image_id,scansci_deploy,scansci_mcp_image_id,schema,source_sha256';
+  const expectedKeys = schema === '2' ? schemaTwoKeys : schema === '3' ? schemaThreeKeys : schema === '4' ? schemaFourKeys : schemaFiveKeys;
   if ([...values.keys()].sort().join(',') !== expectedKeys
-    || !['2', '3', '4'].includes(schema)
+    || !['2', '3', '4', '5'].includes(schema)
     || !['true', 'false'].includes(values.get('embedding_deploy'))
     || !['true', 'false'].includes(values.get('bge_m3_enabled'))
-    || ['3', '4'].includes(schema) && !['true', 'false'].includes(values.get('scansci_deploy'))
+    || ['3', '4', '5'].includes(schema) && !['true', 'false'].includes(values.get('scansci_deploy'))
     || values.get('bge_m3_enabled') === 'true' && values.get('embedding_deploy') !== 'true') {
     throw new Error('release capability is invalid');
   }
-  const scansciDeploy = ['3', '4'].includes(schema) && values.get('scansci_deploy') === 'true';
+  const scansciDeploy = ['3', '4', '5'].includes(schema) && values.get('scansci_deploy') === 'true';
   const legalImageId = values.get('scansci_legal_image_id');
   const browserImageId = values.get('scansci_browser_image_id');
+  const mcpImageId = values.get('scansci_mcp_image_id');
   const authImageId = values.get('scansci_auth_image_id');
-  if (scansciDeploy && (!IMAGE_ID_PATTERN.test(legalImageId) || !IMAGE_ID_PATTERN.test(authImageId)
-    || schema === '4' && !IMAGE_ID_PATTERN.test(browserImageId))) {
+  if (scansciDeploy && (schema === '5'
+    ? !IMAGE_ID_PATTERN.test(mcpImageId) || !IMAGE_ID_PATTERN.test(authImageId)
+    : !IMAGE_ID_PATTERN.test(legalImageId) || !IMAGE_ID_PATTERN.test(authImageId)
+      || schema === '4' && !IMAGE_ID_PATTERN.test(browserImageId))) {
     throw new Error('release capability is invalid');
   }
-  const scansciImageIds = schema === '4'
-    ? [legalImageId, browserImageId, authImageId]
-    : [legalImageId, authImageId];
-  if (['3', '4'].includes(schema) && !scansciDeploy
+  const scansciImageIds = schema === '5' ? [mcpImageId, authImageId]
+    : schema === '4' ? [legalImageId, browserImageId, authImageId] : [legalImageId, authImageId];
+  if (['3', '4', '5'].includes(schema) && !scansciDeploy
     && scansciImageIds.some((value) => value !== '')) {
     throw new Error('release capability is invalid');
   }
-  if (expected.expectedLegalImageId && legalImageId !== expected.expectedLegalImageId
+  if (expected.expectedMcpImageId && mcpImageId !== expected.expectedMcpImageId
+    || expected.expectedLegalImageId && legalImageId !== expected.expectedLegalImageId
     || expected.expectedBrowserImageId && browserImageId !== expected.expectedBrowserImageId
     || expected.expectedAuthImageId && authImageId !== expected.expectedAuthImageId) {
     throw new Error('release capability is invalid');
@@ -346,7 +351,7 @@ export function parseReleaseCapability(source, expected = {}) {
     embeddingDeploy: values.get('embedding_deploy') === 'true',
     scansciDeploy,
     ...(scansciDeploy ? {
-      legalImageId,
+      ...(schema === '5' ? { mcpImageId } : { legalImageId }),
       ...(schema === '4' ? { browserImageId } : {}),
       authImageId,
     } : {}),
@@ -365,17 +370,22 @@ async function protectedImageState(activeSha, rollbackSha, paths = PATHS) {
       const embedding = tag.startsWith('openscience-embedding-worker:');
       const scansci = tag.startsWith('openscience-scansci-');
       const scansciBrowser = tag.startsWith('openscience-scansci-browser:');
+      const scansciMcp = tag.startsWith('openscience-scansci-mcp:');
+      const scansciLegacy = tag.startsWith('openscience-scansci-legal:');
+      const scansciAuth = tag.startsWith('openscience-scansci-auth:');
       const required = !embedding && !scansci
         || embedding && capabilities.get(sha).embeddingDeploy
-        || scansci && !scansciBrowser && capabilities.get(sha).scansciDeploy
-        || scansciBrowser && capabilities.get(sha).browserImageId !== undefined;
+        || scansciMcp && capabilities.get(sha).mcpImageId !== undefined
+        || scansciLegacy && capabilities.get(sha).legalImageId !== undefined
+        || scansciBrowser && capabilities.get(sha).browserImageId !== undefined
+        || scansciAuth && capabilities.get(sha).scansciDeploy;
       if (!imageId && required) {
         throw new Error(`protected release image is missing: ${tag}`);
       }
       if (scansci && capabilities.get(sha).scansciDeploy) {
-        const expectedId = tag.startsWith('openscience-scansci-legal:')
-          ? capabilities.get(sha).legalImageId
-          : scansciBrowser ? capabilities.get(sha).browserImageId : capabilities.get(sha).authImageId;
+        const expectedId = scansciMcp ? capabilities.get(sha).mcpImageId
+          : scansciLegacy ? capabilities.get(sha).legalImageId
+            : scansciBrowser ? capabilities.get(sha).browserImageId : capabilities.get(sha).authImageId;
         if (expectedId === undefined) continue;
         if (imageId !== expectedId) throw new Error(`protected release image identity mismatch: ${tag}`);
       }
@@ -598,6 +608,9 @@ async function bootstrap(options, paths = PATHS) {
   const requiredServices = ['agent-worker', 'document-parser'];
   if (protectedState.capabilities.get(options.expectedActive).embeddingDeploy) requiredServices.push('embedding-worker');
   if (protectedState.capabilities.get(options.expectedActive).scansciDeploy) requiredServices.push('scansci-legal');
+  if (protectedState.capabilities.get(options.expectedActive).mcpImageId) {
+    requiredServices.splice(requiredServices.indexOf('scansci-legal'), 1, 'scansci-mcp');
+  }
   if (protectedState.capabilities.get(options.expectedActive).browserImageId) requiredServices.push('scansci-browser');
   const containers = inspectContainers({ all: false });
   for (const service of requiredServices) {

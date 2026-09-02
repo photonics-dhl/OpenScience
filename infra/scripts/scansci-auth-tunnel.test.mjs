@@ -9,7 +9,7 @@ import test from 'node:test';
 
 const sourceScript = resolve(dirname(fileURLToPath(import.meta.url)), 'scansci-auth-tunnel.sh');
 const sourceRfbProbe = resolve(dirname(fileURLToPath(import.meta.url)), 'probe-novnc-rfb.mjs');
-const authEntrypoint = resolve(dirname(fileURLToPath(import.meta.url)), '../../apps/scansci-legal/auth-entrypoint.sh');
+const authEntrypoint = resolve(dirname(fileURLToPath(import.meta.url)), '../../apps/scansci-mcp/auth-entrypoint.sh');
 const bash = process.platform === 'win32' && existsSync('C:/Program Files/Git/bin/bash.exe')
   ? 'C:/Program Files/Git/bin/bash.exe'
   : 'bash';
@@ -50,7 +50,7 @@ case " $* " in
     ;;
 esac
 case " $* " in
-  *" --profile scansci-auth up --no-start --no-build --force-recreate scansci-auth"*)
+  *" --profile scansci-auth up -d --no-build --force-recreate scansci-auth"*)
     if [ -n "\${FAKE_HEALTH_READY_FILE:-}" ]; then : > "$FAKE_HEALTH_READY_FILE"; fi
     ;;
 esac
@@ -60,10 +60,10 @@ case " $* " in
     ;;
 esac
 case " $* " in
-  *"verify-scansci-runtime.mjs"*)
-    if [ "\${FAKE_AUTH_RETAG:-0}" = 1 ] && case " $* " in *" --allow-auth 0 "*) true;; *) false;; esac; then exit 8; fi
-    if [ "\${FAKE_RUNTIME_VERIFY_FAIL:-0}" = 1 ] && case " $* " in *" --allow-auth 1 "*) true;; *) false;; esac; then exit 8; fi
-    if [ -n "\${FAKE_RUNTIME_VERIFY_DELAY:-}" ] && case " $* " in *" --allow-auth 1 "*) true;; *) false;; esac; then sleep "$FAKE_RUNTIME_VERIFY_DELAY"; fi
+  *"verify-scansci-mcp-runtime.mjs"*)
+    if [ "\${FAKE_AUTH_RETAG:-0}" = 1 ] && case " $* " in *"if [ 0 = 1 ]"*) true;; *) false;; esac; then exit 8; fi
+    if [ "\${FAKE_RUNTIME_VERIFY_FAIL:-0}" = 1 ] && case " $* " in *"if [ 1 = 1 ]"*) true;; *) false;; esac; then exit 8; fi
+    if [ -n "\${FAKE_RUNTIME_VERIFY_DELAY:-}" ] && case " $* " in *"if [ 1 = 1 ]"*) true;; *) false;; esac; then sleep "$FAKE_RUNTIME_VERIFY_DELAY"; fi
     ;;
 esac
 case " $* " in
@@ -228,20 +228,20 @@ test('status is read-only and only explicit start launches the helper and loopba
 
   const log = await readFile(f.log, 'utf8');
   assert.match(log, /flock -n -E 73 \/run\/lock\/openscience-production-deploy\/lock/u);
-  const helperStart = log.indexOf('--profile scansci-auth up --no-start --no-build --force-recreate scansci-auth');
+  const helperStart = log.indexOf('--profile scansci-auth up -d --no-build --force-recreate scansci-auth');
   assert.ok(helperStart >= 0, 'auth helper must start');
   assert.doesNotMatch(log, /scansci-secret-init/u, 'interactive auth must not refresh or mount unrelated Secret material');
   assert.equal(
     (log.match(/docker compose --project-directory "\/opt\/openscience-releases\/[0-9a-f]{40}"/g) ?? []).length,
-    2,
+    1,
     'auth startup must retain the immutable release project identity',
   );
-  assert.match(log, /docker compose .*--profile scansci-auth up --no-start --no-build --force-recreate scansci-auth/u);
-  assert.match(log, /prepare-scansci-auth-network\.sh/u);
-  assert.match(log, /docker compose .*--profile scansci-auth start scansci-auth/u);
+  assert.match(log, /docker compose .*--profile scansci-auth up -d --no-build --force-recreate scansci-auth/u);
+  assert.doesNotMatch(log, /prepare-scansci-auth-network\.sh/u);
+  assert.doesNotMatch(log, /docker compose .*--profile scansci-auth start scansci-auth/u);
   assert.match(log, /read -r SCANSCI_BROWSER_REQUIREMENTS_SHA256 _ < <\(sha256sum "\/opt\/openscience-releases\/[0-9a-f]{40}\/apps\/scansci-legal\/browser-requirements\.lock"\)/u);
   assert.match(log, /SCANSCI_BROWSER_REQUIREMENTS_SHA256="\$SCANSCI_BROWSER_REQUIREMENTS_SHA256" docker compose/u);
-  assert.match(log, /-L\n127\.0\.0\.1:16080:172\.25\.0\.2:6080/);
+  assert.match(log, /-L\n127\.0\.0\.1:16080:127\.0\.0\.1:6080/);
   assert.match(log, new RegExp(`-i\\n${f.bashKey.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}`));
   assert.match(log, /operator-fixture@198\.51\.100\.24/);
 
@@ -311,7 +311,7 @@ test('start replaces a healthy orphaned starting lifecycle instead of bypassing 
   assert.equal(restarted.status, 0, `${restarted.stdout}\n${restarted.stderr}`);
   assert.match(restarted.stdout, /^started on http:\/\/127\.0\.0\.1:16113\/vnc\.html\?autoconnect=true&resize=remote\s*$/);
   const log = await readFile(f.log, 'utf8');
-  assert.equal((log.match(/--profile scansci-auth up --no-start --no-build --force-recreate scansci-auth/g) ?? []).length, 2);
+  assert.equal((log.match(/--profile scansci-auth up -d --no-build --force-recreate scansci-auth/g) ?? []).length, 2);
   assert.equal((log.match(/--profile scansci-auth rm -f -s scansci-auth/g) ?? []).length, 1);
   assert.match(await readFile(statePath, 'utf8'), /\nrunning\s*$/);
 });
@@ -330,7 +330,7 @@ test('duplicate start is idempotent and stop closes only the recorded tunnel', a
   assert.match(duplicate.stdout, /^already running on http:\/\/127\.0\.0\.1:16081\/vnc\.html\?autoconnect=true&resize=remote\s*$/);
 
   const beforeStop = await readFile(f.log, 'utf8');
-  assert.equal((beforeStop.match(/--profile scansci-auth up --no-start --no-build --force-recreate scansci-auth/g) ?? []).length, 1);
+  assert.equal((beforeStop.match(/--profile scansci-auth up -d --no-build --force-recreate scansci-auth/g) ?? []).length, 1);
 
   const stopped = run(f.script, ['stop'], f.env, f.bashBin);
   assert.equal(stopped.status, 0, stopped.stderr);
@@ -390,7 +390,7 @@ test('start replaces an identified tunnel whose RFB backend disappeared in one c
   assert.equal(restarted.status, 0, `${restarted.stdout}\n${restarted.stderr}`);
   assert.match(restarted.stdout, /^started on http:\/\/127\.0\.0\.1:16109\/vnc\.html\?autoconnect=true&resize=remote\s*$/);
   const log = await readFile(f.log, 'utf8');
-  assert.equal((log.match(/--profile scansci-auth up --no-start --no-build --force-recreate scansci-auth/g) ?? []).length, 2);
+  assert.equal((log.match(/--profile scansci-auth up -d --no-build --force-recreate scansci-auth/g) ?? []).length, 2);
   assert.equal((log.match(/--profile scansci-auth rm -f -s scansci-auth/g) ?? []).length, 1);
 });
 
@@ -422,8 +422,8 @@ test('start can replace an unreachable recorded tunnel on a different requested 
   assert.equal(restarted.status, 0, `${restarted.stdout}\n${restarted.stderr}`);
   assert.match(restarted.stdout, /^started on http:\/\/127\.0\.0\.1:16112\/vnc\.html\?autoconnect=true&resize=remote\s*$/);
   const log = await readFile(f.log, 'utf8');
-  assert.equal((log.match(/--profile scansci-auth up --no-start --no-build --force-recreate scansci-auth/g) ?? []).length, 2);
-  assert.match(log, /-L\n127\.0\.0\.1:16112:172\.25\.0\.2:6080/);
+  assert.equal((log.match(/--profile scansci-auth up -d --no-build --force-recreate scansci-auth/g) ?? []).length, 2);
+  assert.match(log, /-L\n127\.0\.0\.1:16112:127\.0\.0\.1:6080/);
 });
 
 test('stop uses the release identity stored at start after active release switches', async (t) => {
@@ -439,7 +439,7 @@ test('stop uses the release identity stored at start after active release switch
   assert.equal(stopped.status, 0, stopped.stderr);
   const log = await readFile(f.log, 'utf8');
   assert.equal((log.match(/cat \/opt\/openscience\/\.release-id/g) ?? []).length, 1);
-  assert.match(log, new RegExp(`/opt/openscience-releases/${releaseA}.*--profile scansci-auth up --no-start --no-build --force-recreate scansci-auth`));
+  assert.match(log, new RegExp(`/opt/openscience-releases/${releaseA}.*--profile scansci-auth up -d --no-build --force-recreate scansci-auth`));
   assert.match(log, new RegExp(`/opt/openscience-releases/${releaseA}.*--profile scansci-auth rm -f -s scansci-auth`));
   assert.doesNotMatch(log, new RegExp(`/opt/openscience-releases/${releaseB}`));
 });
@@ -528,7 +528,7 @@ test('legacy duplicate start upgrades state without launching another helper or 
   assert.deepEqual((await readFile(statePath, 'utf8')).trimEnd().split('\n'), [...legacyLines, 'running']);
   const log = await readFile(f.log, 'utf8');
   assert.equal((log.match(/cat \/opt\/openscience\/\.release-id/g) ?? []).length, 1);
-  assert.equal((log.match(/--profile scansci-auth up --no-start --no-build --force-recreate scansci-auth/g) ?? []).length, 1);
+  assert.equal((log.match(/--profile scansci-auth up -d --no-build --force-recreate scansci-auth/g) ?? []).length, 1);
   assert.doesNotMatch(log, new RegExp(`/opt/openscience-releases/${releaseB}`));
 });
 
@@ -712,7 +712,7 @@ test('a failed local tunnel compensates by stopping the exact remote auth helper
   assert.equal(result.status, 1, `${result.stdout}\n${result.stderr}`);
   assert.match(result.stderr, /^loopback tunnel start failed\s*$/);
   const log = await readFile(f.log, 'utf8');
-  assert.match(log, /--profile scansci-auth up --no-start --no-build --force-recreate scansci-auth/);
+  assert.match(log, /--profile scansci-auth up -d --no-build --force-recreate scansci-auth/);
   assert.match(log, /--profile scansci-auth rm -f -s scansci-auth/);
 });
 
@@ -838,7 +838,7 @@ test('retagged auth image or post-readiness verifier failure is rejected and exa
     const result = run(f.script, ['start', String(port)], { ...f.env, [flag]: '1' }, f.bashBin);
     assert.equal(result.status, 1, `${result.stdout}\n${result.stderr}`);
     const log = await readFile(f.log, 'utf8');
-    assert.match(log, /verify-scansci-runtime\.mjs/);
+    assert.match(log, /verify-scansci-mcp-runtime\.mjs/);
     if (flag === 'FAKE_RUNTIME_VERIFY_FAIL') assert.match(log, /--profile scansci-auth rm -f -s scansci-auth/);
     assert.equal(existsSync(join(f.env.XDG_STATE_HOME, 'openscience', 'scansci-auth-tunnel.state')), false);
   }
@@ -897,8 +897,8 @@ test('concurrent starts serialize to one identified tunnel and one remote helper
 
   assert.deepEqual(results.map((result) => result.status), [0, 0]);
   const log = await readFile(f.log, 'utf8');
-  assert.equal((log.match(/--profile scansci-auth up --no-start --no-build --force-recreate scansci-auth/g) ?? []).length, 1);
-  assert.equal((log.match(/127\.0\.0\.1:16085:172\.25\.0\.2:6080/g) ?? []).length, 1);
+  assert.equal((log.match(/--profile scansci-auth up -d --no-build --force-recreate scansci-auth/g) ?? []).length, 1);
+  assert.equal((log.match(/127\.0\.0\.1:16085:127\.0\.0\.1:6080/g) ?? []).length, 1);
 });
 
 test('stop recognizes and kills the immediately previous loopback-target runner identity', async (t) => {
@@ -986,11 +986,11 @@ name="$(basename "$0")"
 line="$name"
 for argument in "$@"; do line="$line $argument"; done
 printf '%s\\n' "$line" >> "$AUTH_PROCESS_LOG"
-if [ "$name" = python ]; then exit 0; fi
+if [ "$name" = scansci-pdf ]; then exit 0; fi
 trap 'exit 0' TERM INT
 while true; do sleep 1; done
 `;
-  for (const command of ['Xvfb', 'x11vnc', 'websockify', 'python']) {
+  for (const command of ['Xvfb', 'x11vnc', 'websockify', 'scansci-pdf']) {
     const target = join(bin, command);
     await writeFile(target, fake);
     await chmod(target, 0o755);
@@ -1007,7 +1007,7 @@ while true; do sleep 1; done
   assert.doesNotMatch(processes, /^chromium /m);
   assert.match(processes, /^x11vnc .* -listen 127\.0\.0\.1 .* -no6(?: |$)/m);
   assert.match(processes, /^websockify .*0\.0\.0\.0:6080 127\.0\.0\.1:5900/m);
-  assert.match(processes, /^python -m scansci_legal\.auth_login --operator-start$/m);
+  assert.match(processes, /^scansci-pdf federated-login sciencedirect --force$/m);
 });
 
 test('auth entrypoint TERM promptly stops its owned long-running login child', async (t) => {
@@ -1017,13 +1017,13 @@ test('auth entrypoint TERM promptly stops its owned long-running login child', a
   await mkdir(bin, { recursive: true });
   const fake = `#!/usr/bin/env bash
 name="$(basename "$0")"
-if [ "$name" = python ]; then
+if [ "$name" = scansci-pdf ]; then
   printf '%s\\n' "$$" > "$AUTH_LOGIN_PID_FILE"
 fi
 trap 'exit 0' TERM INT
 while true; do sleep 1; done
 `;
-  for (const command of ['Xvfb', 'x11vnc', 'websockify', 'python']) {
+  for (const command of ['Xvfb', 'x11vnc', 'websockify', 'scansci-pdf']) {
     const target = join(bin, command);
     await writeFile(target, fake);
     await chmod(target, 0o755);

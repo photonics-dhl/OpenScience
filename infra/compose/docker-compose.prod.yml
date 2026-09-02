@@ -75,8 +75,6 @@ services:
     # debian-openssl-3.0.x 匹配；slim/alpine 缺 openssl 运行时致 engine 加载失败（P1A-9 实证）
     image: node:22
     user: node
-    group_add:
-      - "11000"
     # 暴露 127.0.0.1:3001 到 host（nginx 反代）；不绑 0.0.0.0
     ports:
       - "127.0.0.1:3001:3001"
@@ -136,6 +134,8 @@ services:
         NO_PROXY: localhost,127.0.0.1
     image: openscience-agent-worker:${XGS_RELEASE_IMAGE_TAG:?XGS_RELEASE_IMAGE_TAG required}
     user: node
+    group_add:
+      - "11000"
     working_dir: /opt/openscience/apps/agent-worker
     volumes:
       - ${XGS_RELEASE_ROOT:?XGS_RELEASE_ROOT required}:/opt/openscience:ro
@@ -193,6 +193,7 @@ services:
     build:
       context: ${XGS_RELEASE_ROOT:?XGS_RELEASE_ROOT required}/apps/scansci-mcp
       dockerfile: Dockerfile
+      target: mcp
       network: host
       args:
         XGS_RELEASE_IMAGE_TAG: ${XGS_RELEASE_IMAGE_TAG:?XGS_RELEASE_IMAGE_TAG required}
@@ -375,26 +376,28 @@ services:
   scansci-auth:
     profiles: ["scansci-auth"]
     build:
-      context: ${XGS_RELEASE_ROOT:?XGS_RELEASE_ROOT required}/apps/scansci-legal
-      dockerfile: Dockerfile.auth
+      context: ${XGS_RELEASE_ROOT:?XGS_RELEASE_ROOT required}/apps/scansci-mcp
+      dockerfile: Dockerfile
+      target: auth
       network: host
       args:
         XGS_RELEASE_IMAGE_TAG: ${XGS_RELEASE_IMAGE_TAG:?XGS_RELEASE_IMAGE_TAG required}
-        SCANSCI_ARCHIVE_SHA256: ${SCANSCI_ARCHIVE_SHA256:?SCANSCI_ARCHIVE_SHA256 required}
-        SCANSCI_REQUIREMENTS_SHA256: ${SCANSCI_REQUIREMENTS_SHA256:?SCANSCI_REQUIREMENTS_SHA256 required}
-        SCANSCI_BUILD_REQUIREMENTS_SHA256: ${SCANSCI_BUILD_REQUIREMENTS_SHA256:?SCANSCI_BUILD_REQUIREMENTS_SHA256 required}
-        SCANSCI_BROWSER_REQUIREMENTS_SHA256: ${SCANSCI_BROWSER_REQUIREMENTS_SHA256:?SCANSCI_BROWSER_REQUIREMENTS_SHA256 required}
         HTTP_PROXY: http://127.0.0.1:7891
         HTTPS_PROXY: http://127.0.0.1:7891
         NO_PROXY: localhost,127.0.0.1
     image: openscience-scansci-auth:${XGS_RELEASE_IMAGE_TAG:?XGS_RELEASE_IMAGE_TAG required}
     user: "10001:10001"
     environment:
-      SCANSCI_BROWSER_PROXY: http://openscience-egress:7891
+      HTTP_PROXY: http://openscience-egress:7891
+      HTTPS_PROXY: http://openscience-egress:7891
+      NO_PROXY: localhost,127.0.0.1
+      SCANSCI_PDF_PROXY: http://openscience-egress:7891
     extra_hosts:
-      - "openscience-egress:172.25.0.1"
+      - "openscience-egress:172.24.0.1"
     volumes:
-      - scansci-session:/session
+      - scansci-data:/data/scansci
+    ports:
+      - "127.0.0.1:6080:6080"
     read_only: true
     tmpfs:
       - /tmp:size=256m,noexec,nosuid,nodev,uid=10001,gid=10001,mode=0700
@@ -411,8 +414,7 @@ services:
     security_opt:
       - no-new-privileges:true
     networks:
-      auth_net:
-        ipv4_address: 172.25.0.2
+      - retrieval_net
     restart: "no"
 
   document-parser:

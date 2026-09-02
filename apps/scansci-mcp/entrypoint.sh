@@ -15,5 +15,14 @@ if [ "${SCANSCI_TOR_AUTOSTART:-true}" = "true" ]; then
     --Log "notice file /tmp/scansci-runtime/tor.log" &
 fi
 
-exec xvfb-run -a -s "-screen 0 1440x1000x24 -nolisten tcp" \
-  scansci-pdf run --mode streamable_http --host 0.0.0.0 --port 8000
+xvfb-run -a -s "-screen 0 1440x1000x24 -nolisten tcp" \
+  scansci-pdf run --mode streamable_http --host 127.0.0.1 --port 18080 &
+
+attempt=0
+until python -c "import socket; s=socket.create_connection(('127.0.0.1',18080),1); s.close()" 2>/dev/null; do
+  attempt=$((attempt + 1))
+  [ "$attempt" -lt 90 ] || exit 1
+  sleep 1
+done
+
+exec nginx -c /opt/scansci/nginx-mcp.conf -g 'daemon off;'
