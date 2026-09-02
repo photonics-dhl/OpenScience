@@ -1,6 +1,6 @@
 import { createServer, type Server } from 'node:http';
 import type { AddressInfo } from 'node:net';
-import { mkdtemp, writeFile } from 'node:fs/promises';
+import { access, mkdtemp, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
@@ -114,6 +114,7 @@ describe('official ScanSci MCP adapter', () => {
     if (result.status !== 'succeeded') throw new Error('expected success');
     expect(result.bytes.equals(fixture.bytes)).toBe(true);
     expect(result.contentHash).toMatch(/^[0-9a-f]{64}$/);
+    await expect(access(fixture.file)).rejects.toMatchObject({ code: 'ENOENT' });
     expect(calls).toEqual([{
       name: 'scansci_pdf_download',
       arguments: { identifier: '10.1000/example', output_dir: fixture.root },

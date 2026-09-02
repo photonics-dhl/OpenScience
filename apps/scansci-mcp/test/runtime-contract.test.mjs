@@ -22,6 +22,12 @@ test('official ScanSci image is pinned and runs only the public MCP entrypoint',
   assert.match(requirements, /--python-platform x86_64-unknown-linux-gnu/);
   assert.doesNotMatch(requirements, /^pywin32==/m);
   assert.match(entrypoint, /scansci-pdf run --mode streamable_http --host 0\.0\.0\.0 --port 8000/);
+  assert.ok(
+    dockerfile.indexOf('LABEL org.openscience.source=') > dockerfile.indexOf('patchright install --with-deps chromium'),
+    'release-dependent labels must not invalidate the browser dependency layer',
+  );
   assert.match(compose, /SCANSCI_PDF_PROXY: http:\/\/openscience-egress:7891/);
+  assert.match(compose, /agent-worker:[\s\S]*?scansci-papers:\/data\/papers\n[\s\S]*?group_add:\n\s+- "11000"/);
+  assert.match(compose, /scansci-mcp:[\s\S]*?group_add:\n\s+- "11000"/);
   assert.doesNotMatch(`${dockerfile}\n${entrypoint}`, /legal_only|SCI(?:HUB)?_ENABLED=false|TOR_ENABLED=false/i);
 });

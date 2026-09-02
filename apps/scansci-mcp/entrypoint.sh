@@ -1,6 +1,9 @@
 #!/bin/sh
 set -eu
 
+chgrp 11000 /data/papers
+chmod 0770 /data/papers
+
 install -d -m 0700 "$SCANSCI_PDF_DATA_DIR" "$HOME" "$SCANSCI_PDF_DATA_DIR/tor" /data/papers /tmp/scansci-runtime
 
 if [ "${SCANSCI_TOR_AUTOSTART:-true}" = "true" ]; then

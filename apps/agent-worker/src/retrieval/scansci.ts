@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto';
 import { constants } from 'node:fs';
-import { lstat, open, realpath } from 'node:fs/promises';
+import { lstat, open, realpath, unlink } from 'node:fs/promises';
 import { isAbsolute, relative, resolve } from 'node:path';
 import { externalHttpUrl } from './contracts';
 import { downloadThroughScanSciMcp, type ScanSciMcpDownload } from './scansci-mcp';
@@ -99,12 +99,13 @@ async function readBoundedPdf(root: string, candidate: string, maximumBytes: num
   }
   const noFollow = (constants as unknown as Record<string, number>).O_NOFOLLOW ?? 0;
   const handle = await open(targetPath, constants.O_RDONLY | noFollow);
+  let bytes: Buffer;
   try {
     const opened = await handle.stat();
     if (!opened.isFile() || opened.dev !== before.dev || opened.ino !== before.ino || opened.size !== before.size) {
       throw new Error('ScanSci PDF changed before open');
     }
-    const bytes = await handle.readFile();
+    bytes = await handle.readFile();
     const after = await handle.stat();
     if (after.size !== opened.size || bytes.byteLength !== opened.size || bytes.byteLength > maximumBytes) {
       throw new Error('ScanSci PDF changed while reading');
@@ -112,10 +113,15 @@ async function readBoundedPdf(root: string, candidate: string, maximumBytes: num
     if (!bytes.subarray(0, 5).equals(Buffer.from('%PDF-'))) {
       throw new Error('ScanSci result is not a PDF');
     }
-    return bytes;
   } finally {
     await handle.close();
   }
+  const beforeDelete = await lstat(targetPath);
+  if (beforeDelete.dev !== before.dev || beforeDelete.ino !== before.ino || !beforeDelete.isFile() || beforeDelete.isSymbolicLink()) {
+    throw new Error('ScanSci PDF changed before cleanup');
+  }
+  await unlink(targetPath);
+  return bytes;
 }
 
 export function createScanSciAdapter(config: ScanSciConfig = {}) {

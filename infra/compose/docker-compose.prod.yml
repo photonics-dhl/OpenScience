@@ -75,6 +75,8 @@ services:
     # debian-openssl-3.0.x 匹配；slim/alpine 缺 openssl 运行时致 engine 加载失败（P1A-9 实证）
     image: node:22
     user: node
+    group_add:
+      - "11000"
     # 暴露 127.0.0.1:3001 到 host（nginx 反代）；不绑 0.0.0.0
     ports:
       - "127.0.0.1:3001:3001"
@@ -138,7 +140,7 @@ services:
     volumes:
       - ${XGS_RELEASE_ROOT:?XGS_RELEASE_ROOT required}:/opt/openscience:ro
       - parser-jobs:/parser-jobs
-      - scansci-papers:/data/papers:ro
+      - scansci-papers:/data/papers
     command: ["node", "dist/index.js"]
     env_file:
       - /opt/openscience/.env.prod
@@ -199,6 +201,8 @@ services:
         NO_PROXY: localhost,127.0.0.1
     image: openscience-scansci-mcp:${XGS_RELEASE_IMAGE_TAG:?XGS_RELEASE_IMAGE_TAG required}
     user: "10001:10001"
+    group_add:
+      - "11000"
     environment:
       HTTP_PROXY: http://openscience-egress:7891
       HTTPS_PROXY: http://openscience-egress:7891
