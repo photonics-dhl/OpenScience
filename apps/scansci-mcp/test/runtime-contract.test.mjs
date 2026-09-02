@@ -18,6 +18,11 @@ test('official ScanSci image is pinned and runs only the public MCP entrypoint',
 
   assert.match(dockerfile, /python:3\.12-slim@sha256:7a8b475003c4fe15a2cd4e55e5cfc2f3560bdc9333d624f24cdd6d4340fd7a17/);
   assert.match(dockerfile, /pip install --require-hashes/);
+  assert.match(dockerfile, /^# syntax=docker\/dockerfile:1\.7$/m);
+  assert.match(dockerfile, /--mount=type=cache,target=\/root\/\.cache\/pip/);
+  assert.match(dockerfile, /for attempt in 1 2 3 4 5/);
+  assert.match(dockerfile, /PIP_NO_CACHE_DIR=0 \/opt\/scansci-venv\/bin\/python -m pip install --require-hashes/);
+  assert.match(dockerfile, /test "\$installed" = 1/);
   assert.match(dockerfile, /ARG SCANSCI_VERSION=1\.13\.1/);
   assert.match(dockerfile, /f68c30503834fc093eb192bd556090d210241eed48445017fdb3d32f6e1355e5/);
   assert.doesNotMatch(dockerfile, /COPY\s+.*scansci_pdf|PYTHONPATH/);
