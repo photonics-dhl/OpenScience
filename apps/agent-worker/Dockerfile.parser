@@ -10,6 +10,9 @@ RUN apt-get update \
 WORKDIR /app
 COPY apps/agent-worker/parser-image/package.json apps/agent-worker/parser-image/package-lock.json ./
 RUN npm ci --omit=dev --no-audit --no-fund \
+    --fetch-retries=5 --fetch-retry-factor=2 \
+    --fetch-retry-mintimeout=1000 --fetch-retry-maxtimeout=5000 \
+    --maxsockets=3 \
   && mkdir -p /parser-jobs \
   && chown node:node /parser-jobs
 
