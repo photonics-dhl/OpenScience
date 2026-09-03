@@ -72,6 +72,7 @@ test('ScanSci controlled egress is private to the fixed retrieval subnet', () =>
     squidConfig,
     /^acl scansci_parent_domains dstdomain \.arxiv\.org \.elsevier\.com \.sciencedirect\.com \.sciencedirectassets\.com \.carsi\.edu\.cn \.zju\.edu\.cn$/mu,
   );
+  assert.equal([...squidConfig.matchAll(/^acl scansci_parent_domains\b.*$/gmu)].length, 1);
   assert.match(squidConfig, /^http_access deny scansci_retrieval !CONNECT$/mu);
   assert.match(squidConfig, /^http_access deny scansci_retrieval !SSL_ports$/mu);
   assert.match(squidConfig, /^http_access deny scansci_retrieval blocked_ipv4$/mu);
