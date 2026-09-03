@@ -26,6 +26,31 @@ test('upstream patch connects the controlled institutional context and reaps bro
       '',
     ].join('\n'));
     await writeFile(join(packageRoot, '_publisher_strategies_core.py'), [
+      'from __future__ import annotations',
+      'import contextlib',
+      'import json',
+      'import re',
+      'import threading',
+      'import time',
+      'from pathlib import Path',
+      'from typing import Any',
+      'def _restore_cookies_to_context(context: Any, config: dict[str, Any]) -> None:',
+      '    try:',
+      '        from .browser_cookies import load_saved_cookies',
+      '        saved = load_saved_cookies(config)',
+      '        if saved:',
+      '            pw_cookies = []',
+      '            for c in saved:',
+      '                pw_c = {"name": c.get("name", ""), "value": c.get("value", ""),',
+      '                         "domain": c.get("domain", ""), "path": c.get("path", "/")}',
+      '                if pw_c["domain"]:',
+      '                    pw_cookies.append(pw_c)',
+      '            if pw_cookies:',
+      '                context.add_cookies(pw_cookies)',
+      '    except Exception:',
+      '        pass',
+      'def create_tab(url, config, timeout): return "tab"',
+      'config = {}',
       'tab_id = create_tab("https://www.google.com/", config, timeout=15.0)',
       '',
     ].join('\n'));
@@ -141,6 +166,11 @@ test('upstream patch connects the controlled institutional context and reaps bro
     await writeFile(join(packageRoot, 'browser_engine.py'), browserEngineFixture);
     const sessionFile = join(root, 'session.netscape');
     await writeFile(sessionFile, 'fixture-session');
+    const legacyCache = join(root, 'legacy-cache');
+    await mkdir(legacyCache);
+    await writeFile(join(legacyCache, 'publisher_cookies.json'), JSON.stringify([
+      { name: 'institution', value: 'stale', domain: '.example', path: '/', expires: 0 },
+    ]));
 
     const proxyProbe = [
       'import os, runpy, sys',
@@ -166,19 +196,22 @@ test('upstream patch connects the controlled institutional context and reaps bro
 
     const institutionProbe = [
       'import os, sys',
-      'from pathlib import Path',
       'sys.path.insert(0, sys.argv[1])',
-      'from scansci_pdf import browser_backend, browser_cookies',
+      'from scansci_pdf import browser_backend, _publisher_strategies_core',
       'controlled = {"server": "http://controlled-proxy:7891"}',
       'assert browser_backend.launch() == controlled',
       'assert browser_backend.launch_persistent_context("/profile") == controlled',
       'assert browser_backend.launch(proxy={}) == controlled',
       'explicit = {"server": "http://explicit-proxy:8000"}',
       'assert browser_backend.launch(proxy=explicit) == explicit',
-      'cookies = browser_cookies.load_saved_cookies({"cache_dir": str(Path(sys.argv[2]) / "missing-cache")})',
-      'assert cookies == [{"name": "institution", "value": "ok", "domain": ".example", "path": "/", "expires": 0}]',
+      'class Context:',
+      '    cookies = None',
+      '    def add_cookies(self, cookies): self.cookies = cookies',
+      'context = Context()',
+      '_publisher_strategies_core._restore_cookies_to_context(context, {"cache_dir": sys.argv[2]})',
+      'assert context.cookies == [{"name": "institution", "value": "ok", "domain": ".example", "path": "/"}]',
     ].join('\n');
-    const institution = runPython(['-c', institutionProbe, root, sessionFile], {
+    const institution = runPython(['-c', institutionProbe, root, legacyCache], {
       ...process.env,
       SCANSCI_PDF_PROXY: 'http://controlled-proxy:7891',
       SCANSCI_PDF_SESSION_FILE: sessionFile,

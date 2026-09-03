@@ -18,6 +18,65 @@ _os.environ["no_proxy"] = "*""",
         ),
         (
             package / "_publisher_strategies_core.py",
+            """import json
+import re""",
+            """import json
+import os
+import re""",
+            "institutional session environment",
+        ),
+        (
+            package / "_publisher_strategies_core.py",
+            """def _restore_cookies_to_context(context: Any, config: dict[str, Any]) -> None:
+    try:
+        from .browser_cookies import load_saved_cookies
+        saved = load_saved_cookies(config)
+        if saved:
+            pw_cookies = []
+            for c in saved:
+                pw_c = {"name": c.get("name", ""), "value": c.get("value", ""),
+                         "domain": c.get("domain", ""), "path": c.get("path", "/")}
+                if pw_c["domain"]:
+                    pw_cookies.append(pw_c)
+            if pw_cookies:
+                context.add_cookies(pw_cookies)
+    except Exception:
+        pass""",
+            """def _restore_cookies_to_context(context: Any, config: dict[str, Any]) -> None:
+    try:
+        from .browser_cookies import load_saved_cookies
+        saved = load_saved_cookies(config)
+        session_file = os.environ.get("SCANSCI_PDF_SESSION_FILE", "").strip()
+        session_path = Path(session_file) if session_file else None
+        if session_path and session_path.is_file():
+            try:
+                from .browser_engine import _parse_netscape_cookies
+                official = _parse_netscape_cookies(session_path.read_text(encoding="utf-8"))
+                merged = {
+                    (c.get("name", ""), c.get("domain", ""), c.get("path", "/")): c
+                    for c in saved
+                }
+                for cookie in official:
+                    key = (cookie.get("name", ""), cookie.get("domain", ""), cookie.get("path", "/"))
+                    merged[key] = cookie
+                saved = list(merged.values())
+            except Exception:
+                pass
+        if saved:
+            pw_cookies = []
+            for c in saved:
+                pw_c = {"name": c.get("name", ""), "value": c.get("value", ""),
+                         "domain": c.get("domain", ""), "path": c.get("path", "/")}
+                if pw_c["domain"]:
+                    pw_cookies.append(pw_c)
+            if pw_cookies:
+                context.add_cookies(pw_cookies)
+    except Exception:
+        pass""",
+            "institutional browser session restore",
+        ),
+        (
+            package / "_publisher_strategies_core.py",
             'tab_id = create_tab("https://www.google.com/", config, timeout=15.0)',
             'tab_id = create_tab("about:blank", config, timeout=15.0)',
             "browser bootstrap",
@@ -81,53 +140,6 @@ def launch(""",
     proxy = _controlled_proxy(proxy)
     backend = resolve_backend(config)""",
             "institutional persistent browser proxy",
-        ),
-        (
-            package / "browser_cookies.py",
-            """import json
-import time""",
-            """import json
-import os
-import time""",
-            "institutional cookie environment",
-        ),
-        (
-            package / "browser_cookies.py",
-            """def load_saved_cookies(config: dict[str, Any]) -> list[dict[str, Any]]:
-    \"\"\"Load previously saved publisher cookies, filtering out expired ones.\"\"\"
-    from .config import DATA_DIR
-    cookie_file = Path(config.get("cache_dir", str(DATA_DIR / "cache"))) / "publisher_cookies.json"
-    if not cookie_file.exists():
-        return []
-    try:
-        cookies = json.loads(cookie_file.read_text(encoding="utf-8"))
-    except Exception:
-        return []
-    now = time.time()
-    return [c for c in cookies if _is_cookie_valid(c, now)]""",
-            """def load_saved_cookies(config: dict[str, Any]) -> list[dict[str, Any]]:
-    \"\"\"Load previously saved publisher cookies, filtering out expired ones.\"\"\"
-    from .config import DATA_DIR
-    cookie_file = Path(config.get("cache_dir", str(DATA_DIR / "cache"))) / "publisher_cookies.json"
-    if cookie_file.exists():
-        try:
-            cookies = json.loads(cookie_file.read_text(encoding="utf-8"))
-        except Exception:
-            return []
-    else:
-        session_file = os.environ.get("SCANSCI_PDF_SESSION_FILE", "").strip()
-        session_path = Path(session_file) if session_file else None
-        if not session_path or not session_path.is_file():
-            return []
-        try:
-            from .browser_engine import _parse_netscape_cookies
-
-            cookies = _parse_netscape_cookies(session_path.read_text(encoding="utf-8"))
-        except Exception:
-            return []
-    now = time.time()
-    return [c for c in cookies if _is_cookie_valid(c, now)]""",
-            "institutional session restore",
         ),
         (
             package / "sources" / "__init__.py",
