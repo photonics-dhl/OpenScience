@@ -1139,6 +1139,30 @@
       "hint": "长按下方 Hermes，查看紧凑动作菜单。普通点按仍打开助手。"
     }
   },
+  "academicIdentity": {
+    "title": "学术身份验证",
+    "description": "账号、ORCID 与机构邮箱是可并存的凭证；论文作者、审稿人与编辑权限将绑定到各自作用域。",
+    "registered": "注册用户",
+    "emailVerified": "邮箱已验证",
+    "orcidConnected": "ORCID 已连接",
+    "institutionEmailVerified": "机构邮箱已验证",
+    "orcidHint": "通过 ORCID 官方授权连接，不能手工填写研究者编号。",
+    "connectOrcid": "连接 ORCID",
+    "connected": "已连接",
+    "notConfigured": "ORCID 尚未配置",
+    "institutionTitle": "机构邮箱",
+    "institutionEmail": "机构邮箱地址",
+    "verificationCode": "六位验证码",
+    "sendCode": "发送验证码",
+    "verify": "确认验证",
+    "domainsNotConfigured": "机构域名尚未配置",
+    "codeSent": "验证码已发送到机构邮箱。",
+    "codeSentFor": "已识别为 {organization}，验证码已发送。",
+    "institutionVerified": "机构邮箱验证完成。",
+    "loadError": "无法读取身份状态。",
+    "orcidError": "无法开始 ORCID 连接。",
+    "institutionError": "机构邮箱验证暂时失败。"
+  },
   "opticalLab": {
     "eyebrow": "光学实验室 / 非生产对照",
     "introduction": "在同一道视觉门禁中对照用户参考、生产基线与浏览器 GPU 候选。",

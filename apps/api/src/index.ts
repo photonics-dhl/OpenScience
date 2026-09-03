@@ -28,6 +28,8 @@ async function main(): Promise<void> {
     onEmailVerified: (tx, user) => createPersonalWorkspace(tx, user),
     cookieSecret: env.cookieSecret,
     secureCookies: env.secureCookies,
+    orcid: env.orcid,
+    institutionEmailDomains: env.institutionEmailDomains,
     logger,
     // P1A-8：生产启用安全基线——限流（登录 5/min）+ helmet 安全头 + CSRF + CORS 白名单；
     // dev 不传则 buildApp 缺省关闭（测试现状）。CORS 白名单空 = 同源策略。

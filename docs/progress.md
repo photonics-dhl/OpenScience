@@ -9,6 +9,14 @@
 - Production rollback: `761b93d4bbce77e70d676be78de0bba128974fe6`；两者均为 upstream-only；core/search migrations `34/34` / `2/2`。
 - Taskmaster `hermes-research-intelligence` 仍为 9/12：官方 MCP 单服务替换和旧运行链路清理完成；官方 `cookie_import`、subscription-only PDF、四入口/72h/600s 正向旅程 pending，Task 11 继续阻断。
 
+## 2026-09-02 — Academic identity progression release candidate
+
+- 在当前主线之上整合注册用户→主邮箱验证→ORCID OAuth→机构邮箱验证的四阶段进度；部署前不改变上述生产 tuple。
+- credential 与 scoped-role assignment 分离；同一用户可同时持有 RO author、assignment reviewer、journal editor、organization member 等作用域角色，凭证本身不自动授权。
+- core migration 35 为身份凭证、机构邮箱挑战与多作用域角色；真实 PostgreSQL、ORCID、SMTP 与 ECS 是发布门禁。
+- core migration 36 增加 ROR 全球机构目录；机构凭证绑定 ROR ID，部门子域名可归属母机构，但不会自动产生作者、审稿或编辑权限。
+- 本地 ROR v2.12 已导入 137,398 家机构（0 rejected，34,466 家含域名）；发布时须在生产迁移后执行同版本导入并核对计数。
+
 ## 2026-09-03 — ScanSci institutional acceptance fix candidate
 
 - 候选 `a722099…` 在 Cookie 写入容器前即登记退出清理责任，避免中断后遗留部分敏感文件；helper contract 已覆盖 source-order 和 cleanup。

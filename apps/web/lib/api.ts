@@ -207,6 +207,47 @@ export async function getCurrentUser(): Promise<CurrentUser> {
   return request('/api/auth/me');
 }
 
+export interface AcademicIdentityStatus {
+  steps: {
+    registered: true;
+    emailVerified: boolean;
+    orcidConnected: boolean;
+    institutionEmailVerified: boolean;
+  };
+  credentials: Array<{
+    type: 'orcid' | 'institution_email';
+    externalId: string;
+    displayLabel: string;
+    verifiedAt: string;
+  }>;
+  scopedRoles: Array<{
+    scopeType: string;
+    scopeId: string;
+    role: string;
+    expiresAt: string | null;
+  }>;
+  capabilities: { orcid: boolean; institutionEmail: boolean };
+}
+
+export function getAcademicIdentityStatus(): Promise<AcademicIdentityStatus> {
+  return request('/api/auth/academic-identity');
+}
+
+export function beginOrcidConnection(): Promise<{ authorizationUrl: string }> {
+  return request('/api/auth/orcid/start', { method: 'POST', body: JSON.stringify({ returnTo: '/settings' }) });
+}
+
+export function requestInstitutionEmailCode(email: string): Promise<{
+  ok: true;
+  organization: { rorId: string | null; name: string; domain: string; source: 'ror' | 'configured_override' };
+}> {
+  return request('/api/auth/institution-email/request', { method: 'POST', body: JSON.stringify({ email }) });
+}
+
+export function verifyInstitutionEmail(email: string, code: string): Promise<{ ok: true }> {
+  return request('/api/auth/institution-email/verify', { method: 'POST', body: JSON.stringify({ email, code }) });
+}
+
 export interface DashboardResearchApi {
   id: string;
   publicId: string | null;
@@ -1203,5 +1244,3 @@ export async function getIngestionTask(taskId: string): Promise<IngestionTaskDet
 export async function confirmIngestionTask(taskId: string, input: { version: number; core: SdfCore }): Promise<{ task: IngestionTaskDetail['task']; sdf: { core: SdfCore } }> {
   return apiRequest(`/api/ingestion/${taskId}/confirm`, { method: 'POST', body: JSON.stringify(input) });
 }
-
-

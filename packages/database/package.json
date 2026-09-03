@@ -9,6 +9,7 @@
     "build": "pnpm run generate && tsc -p tsconfig.json",
     "typecheck": "pnpm run generate && tsc -p tsconfig.json --noEmit",
     "migrate": "node dist/migrate-cli.js",
+    "sync:ror": "node dist/ror-sync-cli.js",
     "test": "vitest run",
     "test:integration": "vitest run --config vitest.integration.config.ts"
   },

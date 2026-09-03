@@ -19,6 +19,13 @@ export interface ApiEnv {
   smtpPort: number;
   smtpUser: string;
   smtpPass: string;
+  orcid: {
+    clientId: string;
+    clientSecret: string;
+    redirectUri: string;
+    baseUrl: string;
+  };
+  institutionEmailDomains: string[];
   /** P1B-3：对象存储（StorageAdapter）S3_* env（缺省 dev MinIO，127.0.0.1:9000）。 */
   storage: {
     driver: 'minio' | 'oss';
@@ -96,6 +103,24 @@ export function loadApiEnv(env: NodeJS.ProcessEnv = process.env): ApiEnv {
     if (!smtpPass) throw new Error('SMTP_PASS is required when MAILER_DRIVER=smtp');
   }
 
+  const orcid = {
+    clientId: env.ORCID_CLIENT_ID ?? '',
+    clientSecret: env.ORCID_CLIENT_SECRET ?? '',
+    redirectUri: env.ORCID_REDIRECT_URI ?? '',
+    baseUrl: (env.ORCID_BASE_URL ?? (nodeEnv === 'production' ? 'https://orcid.org' : 'https://sandbox.orcid.org')).replace(/\/$/, ''),
+  };
+  const orcidPartiallyConfigured = [orcid.clientId, orcid.clientSecret, orcid.redirectUri].some(Boolean)
+    && ![orcid.clientId, orcid.clientSecret, orcid.redirectUri].every(Boolean);
+  if (orcidPartiallyConfigured) throw new Error('ORCID_CLIENT_ID, ORCID_CLIENT_SECRET and ORCID_REDIRECT_URI must be configured together');
+  if (orcid.redirectUri) {
+    const redirect = new URL(orcid.redirectUri);
+    if (nodeEnv === 'production' && redirect.protocol !== 'https:') throw new Error('ORCID_REDIRECT_URI must use HTTPS in production');
+  }
+  const institutionEmailDomains = (env.INSTITUTION_EMAIL_DOMAINS ?? '')
+    .split(',')
+    .map((domain) => domain.trim().toLowerCase().replace(/^@/, ''))
+    .filter(Boolean);
+
   // P1B-3：对象存储（P1A-2 storageConfigFromEnv 同源，S3_* env）
   const rawDriver = env.S3_DRIVER ?? 'minio';
   if (rawDriver !== 'minio' && rawDriver !== 'oss') {
@@ -146,6 +171,8 @@ export function loadApiEnv(env: NodeJS.ProcessEnv = process.env): ApiEnv {
     smtpPort,
     smtpUser,
     smtpPass,
+    orcid,
+    institutionEmailDomains,
     storage,
     publicIdPrefix,
     downloadSigningSecret,

@@ -9,6 +9,7 @@ import LocaleSwitcher from '@/components/LocaleSwitcher';
 import { ResearchProfileFields } from '@/components/auth/ResearchProfileFields';
 import { DashboardShell } from '@/components/shell/DashboardShell';
 import { EvidenceReadingPreferenceControl } from '@/components/settings/EvidenceReadingPreferenceControl';
+import { AcademicIdentityControl } from '@/components/settings/AcademicIdentityControl';
 import { Button } from '@/components/ui/button';
 import {
   ApiClientError,
@@ -138,6 +139,7 @@ export default function SettingsPage() {
           <EvidenceReadingPreferenceControl busy={preferenceBusy} checked={readingPreference.evidenceDefaultCollapsed} onChange={(checked) => void saveReadingPreference(checked)} status={preferenceStatus} />
           <button data-reading-role="control" className="mt-6 inline-flex min-h-11 items-center gap-2 rounded-control border border-os-rule-paper px-4 text-sm text-os-ink disabled:opacity-40" disabled={busy} onClick={signOut}><LogOut className="h-4 w-4" />{t('settings.signOut')}</button>
         </section>
+        <AcademicIdentityControl />
         <section className="surface-folio-sheet px-5 py-6 md:col-span-2" data-settings-research-identity="true">
           <ResearchProfileFields value={profile} onChange={(next) => setProfile({ ...profile, ...next })} />
           <div className="mt-6 grid gap-4 md:grid-cols-2">
