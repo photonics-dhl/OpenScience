@@ -52,13 +52,16 @@ import re""",
             try:
                 from .browser_engine import _parse_netscape_cookies
                 official = _parse_netscape_cookies(session_path.read_text(encoding="utf-8"))
+                def cookie_key(cookie: dict[str, Any]) -> tuple[str, str, str]:
+                    domain = str(cookie.get("domain", "")).lstrip(".").lower()
+                    path = str(cookie.get("path", "/")) or "/"
+                    return str(cookie.get("name", "")), domain, path
                 merged = {
-                    (c.get("name", ""), c.get("domain", ""), c.get("path", "/")): c
+                    cookie_key(c): c
                     for c in saved
                 }
                 for cookie in official:
-                    key = (cookie.get("name", ""), cookie.get("domain", ""), cookie.get("path", "/"))
-                    merged[key] = cookie
+                    merged[cookie_key(cookie)] = cookie
                 saved = list(merged.values())
             except Exception:
                 pass
