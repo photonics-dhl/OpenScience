@@ -1,7 +1,7 @@
 # OpenScience (XGS) 项目文件索引
 
 > 维护规则：创建/修改/移动文件后必须更新本索引。创建新文件前先查本表防重复。
-> **CURRENT source/deployment anchor（2026-09-03）：** branch / code release / production release `codex/scansci-upstream-mcp` / `80db41e7ee0a1c8158d3f335dc1b2fbf6f2bb2bf`；rollback `761b93d4bbce77e70d676be78de0bba128974fe6`；core/search `34/34` / `2/2`。两者均为官方 `v1.13.1` MCP 单服务；旧 browser/auth/server runtime、旧 release/验收/eval/dangling image 与 inactive cache 已清理；官方 cookie import、机构 PDF 与四入口 pending。Taskmaster 9/12。
+> **CURRENT source/deployment anchor（2026-09-03 09:17 +08）：** branch / HEAD `codex/scansci-upstream-mcp` / `f6f0c0e8cbc99a5c644095462a205b31b6f4a635`；production release / rollback `80db41e7ee0a1c8158d3f335dc1b2fbf6f2bb2bf` / `761b93d4bbce77e70d676be78de0bba128974fe6`；core/search `34/34` / `2/2`。生产为官方 `v1.13.1` MCP 单服务；旧 browser/auth/server runtime 与服务器冗余已清理。官方 cookie import、机构 PDF、四入口和 72h/600s 正向旅程 pending；Taskmaster 9/12，Task 10 in-progress。
 
 ## 根目录
 | 路径 | 用途 | 状态 |
@@ -187,7 +187,7 @@
 | `apps/web/lib/extract-review-state.ts` / `apps/web/test/e2e/hermes-blank-ro-flow.spec.ts` / `apps/web/test/visual/hermes-blank-ro-production-gate.mjs` | blank RO 字段级 evidence diff、accept/edit-accept/reject/missing/save/reload/commit；checkpoint 只存 task/决策元数据，storage/transport/Redis 失败复用同一付费 task；公网 gate 要求真实账号/MiniMax、零拦截、credit/audit/immutable snapshot、完整 footprint、真实 Wanko idle/work/review/celebration pixels 与 zh/en/mobile/reduced | **IMPLEMENTED FOUNDATION / CARRIED FORWARD**；真实账号纵向证据来自 `06072c1`，现行 `5f4e73c` 仅重跑无写入 Dashboard UI gate |
 | `apps/web/test/visual/hermes-real-ro-production-gate.mjs` / `packages/domain/test/artifact/scan.test.ts` | ECS-only 真实论文纵向门禁：固定 arXiv 2009.06045v1 SHA-256、浏览器创建/上传、MiniMax 六字段决策与原文证据、确认前 SDF 不变、显式缺失披露、bulk confirm/version commit、Hermes runtime；上传响应与状态轮询均允许 300 秒生产边缘延迟，同时锁定合法 PDF `../` 不误判而真实 ZIP traversal 继续拒绝 | **ECS-ONLY SMOKE TOOL**；最近完整真实证据来自 `06072c1`，`5f4e73c` 未重跑；不使用本机 Docker、不拦截 API，输出仅写 ignored visual evidence |
 | `docs/handoff/2026-08-15-hermes-constellation-dragon-prototype-handoff.md` | 少年星图龙静态 Blender 原型、结构门禁与用户 NO-GO 结论 | 历史交接；不得按其 next action 恢复 3D |
-| `docs/handoff/2026-08-16-hermes-2d-pet-handoff.md` | 唯一 compact CURRENT 交接：Research Intelligence 生产基线、官方 ScanSci MCP、磁盘卫生、固定约束与下一动作 | **CURRENT active-memory**；production `80db41e`、rollback `761b93d`；official-only deploy/cleanup done |
+| `docs/handoff/2026-08-16-hermes-2d-pet-handoff.md` | 唯一 compact CURRENT 交接：ScanSci 官方 MCP 生产基线、Task 10 状态、风险、约束与下一动作 | **CURRENT active-memory**；branch/HEAD `codex/scansci-upstream-mcp@f6f0c0e`，production/rollback `80db41e` / `761b93d`；Taskmaster 9/12 |
 | `docs/plans/2026-08-26-landing-motion-navigation-continuity-plan.md` | 冻结 Hermes、补全 Landing final-composite gate 与真实产品页一级/RO 二级入口 | **COMPLETED / DEPLOYED**；application/release/rollback `c80f739` / `263c783` / `8395b4d` |
 | `docs/design/optical-editorial-figma-map.md` | 长期账号 Figma canonical 的 V3 variables/styles/components/八表面节点映射、代码对应关系与 Code Connect 边界 | Task 13 canonical 映射 |
 | `docs/superpowers/specs/2026-08-09-researcher-ingestion-product-slice-design.md` | 研究者第一条产品级前端闭环设计：注册、Dashboard、资料导入、Hermes 证据确认、RO Workspace；待用户审阅 | 设计 spec |

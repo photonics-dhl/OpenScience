@@ -1,16 +1,17 @@
 # OpenScience 进度（CURRENT window）
 
-> 最新同步：2026-09-03。历史由 Git 保存；旧计划不作为默认输入。
+> 最新同步：2026-09-03 09:17 +08。历史由 Git 保存；旧计划不作为默认输入。
 
 ## Current version tuple
 
-- Candidate branch / production code release: `codex/scansci-upstream-mcp` / `80db41e7ee0a1c8158d3f335dc1b2fbf6f2bb2bf`；repository main 可由不重新部署产品的 docs-only commit 继续推进。
+- Branch / HEAD: `codex/scansci-upstream-mcp` / `f6f0c0e8cbc99a5c644095462a205b31b6f4a635`，与 `origin/main`、`origin/codex/scansci-upstream-mcp` 一致；HEAD 在生产 release 之后只有 CURRENT 文档同步。
 - Production application source / immutable release: `80db41e7ee0a1c8158d3f335dc1b2fbf6f2bb2bf`。
 - Production rollback: `761b93d4bbce77e70d676be78de0bba128974fe6`；两者均为 upstream-only；core/search migrations `34/34` / `2/2`。
 - Taskmaster `hermes-research-intelligence` 仍为 9/12：官方 MCP 单服务替换和旧运行链路清理完成；官方 `cookie_import`、subscription-only PDF、四入口/72h/600s 正向旅程 pending，Task 11 继续阻断。
 
 ## 2026-09-03 — Official-only ScanSci final release and hygiene closeout
 
+- 09:17 +08 只读复核：公网与 loopback HTTPS 200，目标容器健康，active/public `80db41e…`、rollback `761b93d…`，failed/journal absent，core/search migrations `34/34` / `2/2` current；根盘 `50G/148G`，可用 `92G`。
 - PR #47 首次上线 `761b93d…`；PR #50 / CI `33653209566` 合并为最终 `80db41e…`。生产只运行 upstream `scansci-pdf==1.13.1` 的单一 streamable-HTTP MCP；Agent Worker 通过正式 SDK 调用完整 17 tools。旧 `scansci-legal`、自制 auth/browser/noVNC、服务 token、专用网络/防火墙代码均已从仓库和服务器 release retention 中移除。
 - ECS canonical transaction 通过 exact Parser report、BGE CPU、core/search `34/34`/`2/2`、MCP image/tools/storage、Worker-origin `tools/list`、真实 OA PDF、API/Web/Worker/Nginx/public CAS/retention；active/public `80db41e…`，rollback `761b93d…`，journal/failed absent。
 - 首轮精确移除 2 个旧网络、7 个旧卷、2 个旧 auth image tag、旧 systemd/drop-in/iptables/Squid browser 规则、宿主旧 Secret 和 29.21GB inactive cache。最终再清 38 个旧 Parser acceptance、5 个 eval、1 个匿名失败容器、所有 dangling image 与 154.3MB builder cache；现仅保留 active/rollback 两个 release/report，旧 runtime counters 均为 0。
