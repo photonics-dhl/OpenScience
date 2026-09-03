@@ -6,12 +6,13 @@ import { URL } from 'node:url';
 const root = new URL('../', import.meta.url);
 
 test('official ScanSci image is pinned and runs only the public MCP entrypoint', async () => {
-  const [dockerfile, entrypoint, healthcheck, proxyConfig, requirements, compose, developmentCompose] = await Promise.all([
+  const [dockerfile, entrypoint, healthcheck, proxyConfig, requirements, upstreamPatch, compose, developmentCompose] = await Promise.all([
     readFile(new URL('Dockerfile', root), 'utf8'),
     readFile(new URL('entrypoint.sh', root), 'utf8'),
     readFile(new URL('healthcheck.py', root), 'utf8'),
     readFile(new URL('nginx-mcp.conf', root), 'utf8'),
     readFile(new URL('requirements.lock', root), 'utf8'),
+    readFile(new URL('patch-upstream.py', root), 'utf8'),
     readFile(new URL('../../infra/compose/docker-compose.prod.yml', root), 'utf8'),
     readFile(new URL('../../infra/compose/docker-compose.dev.yml', root), 'utf8'),
   ]);
@@ -21,6 +22,8 @@ test('official ScanSci image is pinned and runs only the public MCP entrypoint',
   assert.match(dockerfile, /^# syntax=docker\/dockerfile:1\.7$/m);
   assert.match(dockerfile, /COPY install-lock\.py \/opt\/scansci\/install-lock\.py/);
   assert.match(dockerfile, /python \/opt\/scansci\/install-lock\.py --lock \/opt\/scansci\/requirements\.lock --output \/tmp\/scansci-lock-blocks/);
+  assert.match(dockerfile, /COPY patch-upstream\.py \/opt\/scansci\/patch-upstream\.py/);
+  assert.match(dockerfile, /python \/opt\/scansci\/patch-upstream\.py/);
   assert.match(dockerfile, /for requirement in \/tmp\/scansci-lock-blocks\/\*\.txt/);
   assert.match(dockerfile, /for attempt in 1 2 3 4 5/);
   assert.match(dockerfile, /pip install --no-deps --require-hashes/);
@@ -32,6 +35,8 @@ test('official ScanSci image is pinned and runs only the public MCP entrypoint',
   assert.match(requirements, /scansci-pdf\[cloakbrowser,\s*patchright,\s*vpnsci\]==1\.13\.1/);
   assert.match(requirements, /--hash=sha256:f68c30503834fc093eb192bd556090d210241eed48445017fdb3d32f6e1355e5/);
   assert.match(requirements, /--python-platform x86_64-unknown-linux-gnu/);
+  assert.match(upstreamPatch, /create_tab\("https:\/\/www\.google\.com\/", config, timeout=15\.0\)/);
+  assert.match(upstreamPatch, /create_tab\("about:blank", config, timeout=15\.0\)/);
   assert.doesNotMatch(requirements, /^pywin32==/m);
   assert.match(entrypoint, /scansci-pdf run --mode streamable_http --host 127\.0\.0\.1 --port 18080/);
   assert.ok(

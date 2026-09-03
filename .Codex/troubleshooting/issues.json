@@ -402,7 +402,7 @@
       "description": "Before the first official Cookie import, review found that an interrupted container staging command could leave a sensitive temporary file, while a successful institutional MCP result would be persisted as generic source_retrieval/downloadable rather than user-bound institutional access.",
       "root_cause": "The import helper set STAGED only after docker exec completed, so its EXIT trap did not own partial container writes. The ScanSci adapter recognized only licensed open access and generic source retrieval even though upstream 1.13.1 emits explicit institutional source labels and the downstream rights/API path already supports institutional_access with a subject and validity bound.",
       "solution": "Establish cleanup ownership before container staging starts. Map only explicit upstream institutional labels to the existing institutional_access evidence, set a 72-hour maximum entitlement window matching temporary-document retention, and keep all unknown labels on the existing generic path.",
-      "verification": "Both regression tests failed against the old code for the expected reasons. The helper contract is now 1/1 green; ScanSci adapter, orchestrator and handler tests are 18/18 green; domain rights tests are 6/6 green; Agent Worker typecheck passes. Review, CI, immutable deployment, Cookie import and production subscription/four-entry acceptance remain pending.",
+      "verification": "Both regression tests failed against the old code for the expected reasons. The helper contract is 1/1 green; ScanSci adapter, orchestrator and handler tests are 18/18 green; domain rights tests are 6/6 green; full build/typecheck/lint and exact CI 33712614976 passed. PR 54 is included in production e72291f. A real Zhejiang University CARSI login succeeded, the active helper imported 13 then 29 cookies, and host/container staging cleanup passed. Subscription PDF acceptance remains pending on issue-020.",
       "files": [
         "infra/scripts/import-scansci-cookies.sh",
         "infra/scripts/import-scansci-cookies.test.mjs",
@@ -410,6 +410,28 @@
         "apps/agent-worker/test/retrieval/scansci.test.ts"
       ],
       "prevention": "Any sensitive staging path must assign cleanup responsibility before the first write. Provider adapters must preserve explicit institutional provenance and bind downloads to the requesting user through the existing authorized-user-only rights path."
+    },
+    {
+      "id": "issue-020",
+      "title": "Official ScanSci browser bootstrap was blocked by controlled egress",
+      "date": "2026-09-03",
+      "status": "in_progress",
+      "tags": [
+        "troubleshooting/network",
+        "troubleshooting/production",
+        "troubleshooting/browser",
+        "troubleshooting/integration"
+      ],
+      "description": "After successful Zhejiang University CARSI federation and import of publisher cookies, the subscription-only DOI still returned not_found before the browser reached ScienceDirect.",
+      "root_cause": "scansci-pdf 1.13.1 hard-codes https://www.google.com/ as a disposable browser tab before injecting saved publisher cookies and navigating to the article. Production controlled egress does not allow Google, so create_tab timed out after 15 seconds and the Elsevier browser strategy never reached the requested DOI. The separate MCP CARSI login wrapper also invokes a Playwright Sync API inside the asyncio loop and fails immediately, but it is not required once publisher cookies are imported.",
+      "solution": "Apply one exact-preimage image-build compatibility patch that changes only the disposable bootstrap URL to about:blank. Preserve upstream 1.13.1, the pinned wheel hash, cookie injection order, target navigation and all source policy. Do not broaden egress merely to satisfy an unrelated bootstrap page.",
+      "verification": "A production DOI attempt logged browser_engine create_tab timeout while navigating to Google, followed by not_found. The runtime contract first failed because the patch asset was absent and passes after adding the exact patch. Focused/full gates, PR/CI, immutable deployment, persistent-cookie recreate and real subscription PDF acceptance remain pending.",
+      "files": [
+        "apps/scansci-mcp/Dockerfile",
+        "apps/scansci-mcp/patch-upstream.py",
+        "apps/scansci-mcp/test/runtime-contract.test.mjs"
+      ],
+      "prevention": "A publisher browser strategy must initialize from a networkless page before injecting cookies; controlled egress must not be broadened for unrelated bootstrap traffic. Keep the upstream preimage assertion exact so a package upgrade fails closed for review."
     }
   ],
   "last_updated": "2026-09-03"
