@@ -1,6 +1,6 @@
 # Runbook: 部署（Deployment）
 
-> 状态：**CURRENT**。active immutable release / application source 为 `e72291f341a888df3a58c3e086211ad7c7d55ee3`，rollback tree 为 `80db41e7ee0a1c8158d3f335dc1b2fbf6f2bb2bf`；两者均为官方 `scansci-pdf==1.13.1` MCP 单服务。CARSI/publisher Cookie 已导入；未部署候选 `6d9ed0e…` 以 exact-preimage 补丁将上游下载前的受阻 Google 临时页改为 networkless `about:blank`。机构 PDF、四入口和 72h/600s 正向旅程 pending。
+> 状态：**CURRENT**。active immutable release / application source 为 `63a064197e288b42abb9b44ef1ddbdedf99ed735`，rollback tree 为 `e72291f341a888df3a58c3e086211ad7c7d55ee3`；两者均为官方 `scansci-pdf==1.13.1` MCP 单服务。CARSI/publisher Cookie 已导入，networkless bootstrap 已上线；未部署候选 `e3c5f2d…` 让上游 browser_engine 消费生产既有 `SCANSCI_PDF_PROXY` 后保留原配置 fallback。机构 PDF、四入口和 72h/600s 正向旅程 pending。
 > 格式遵循 `.agents/skills/infra-runbook/SKILL.md` 四节强制要求。
 > 部署属 Spec §20.5"询问"级操作：执行前需用户确认，必须走 `infra/scripts/deploy.sh` + CI/CD，禁止手工改服务器代码。
 

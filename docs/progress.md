@@ -1,19 +1,19 @@
 # OpenScience 进度（CURRENT window）
 
-> 最新同步：2026-09-03 13:43 +08。历史由 Git 保存；旧计划不作为默认输入。
+> 最新同步：2026-09-03 14:28 +08。历史由 Git 保存；旧计划不作为默认输入。
 
 ## Current version tuple
 
-- Branch / application candidate: `codex/scansci-upstream-mcp` / `6d9ed0e057e1b34fcfb3c5c663d4e9ed7140072b`；分支 HEAD 可仅因本次 CURRENT 文档同步继续前移。候选尚未合并或部署。
-- Production application source / immutable release: `e72291f341a888df3a58c3e086211ad7c7d55ee3`。
-- Production rollback: `80db41e7ee0a1c8158d3f335dc1b2fbf6f2bb2bf`；两者均为 upstream-only；core/search migrations `36/36` / `2/2`。
+- Branch / application candidate: `codex/scansci-upstream-mcp` / `e3c5f2d4383e65006d5e8681c48ae376ea545bd2`；分支 HEAD 可仅因本次 CURRENT 文档同步继续前移。候选尚未合并或部署。
+- Production application source / immutable release: `63a064197e288b42abb9b44ef1ddbdedf99ed735`。
+- Production rollback: `e72291f341a888df3a58c3e086211ad7c7d55ee3`；两者均为 upstream-only；core/search migrations `36/36` / `2/2`。
 - Taskmaster `hermes-research-intelligence` 仍为 9/12：官方 MCP 单服务替换、旧运行链路清理和 `cookie_import` 已完成；subscription-only PDF、四入口/72h/600s 正向旅程 pending，Task 11 继续阻断。
 
-## 2026-09-03 — ScanSci CARSI import and browser-bootstrap fix candidate
+## 2026-09-03 — ScanSci CARSI import and browser-proxy fix candidate
 
 - PR #54 / CI `33712614976` 的 Cookie 中断清理与机构权利绑定已随 main `e72291f…` canonical deployment 上线；public/active 一致、目标容器 healthy、journal/failed absent、core/search `36/36` / `2/2`。
 - 浙江大学统一身份 CARSI 成功进入 ScienceDirect；active helper 先后导入 CARSI 与 publisher cookies，均返回 `SCANSCI_COOKIE_IMPORT_OK`，主机/容器 staging 与本机敏感临时文件已清理。
-- 固定 subscription DOI 仍返回 `not_found`。生产日志证明上游 1.13.1 在注入 Cookie 前硬编码访问 Google，受控出网令 `create_tab` 超时，未到达目标论文。候选 `6d9ed0e…` 以 exact-preimage 构建补丁改为 `about:blank`；RED→GREEN 后 ScanSci `3/3`、retrieval `18/18`、rights `6/6`、全仓 build/typecheck/lint green。下一步 PR/CI、部署、recreate/repeat 与四入口验收。
+- PR #55 / CI `33720511565` 的 `about:blank` exact-preimage 补丁已随 `63a0641…` canonical deployment 上线；parser acceptance、官方 MCP/OA、容器健康与 journal-clear 均通过。固定 subscription DOI 已进入 Elsevier browser strategy，但因上游 browser_engine 不读取现有 `SCANSCI_PDF_PROXY` 而直接导航，隔离网络内返回 `ERR_NAME_NOT_RESOLVED`。候选 `e3c5f2d…` 让浏览器复用同一受控代理；RED→GREEN 后 ScanSci `1/1`、retrieval `18/18`、rights `6/6`、全仓 build/typecheck/lint green。下一步 PR/CI、部署、recreate/repeat 与四入口验收。
 
 ## 2026-09-03 — Academic identity progression deployed
 
