@@ -1,6 +1,6 @@
 # Hermes Research Intelligence CURRENT Handoff
 
-> **CURRENT active-memory，2026-09-03 15:08 +08。** ScanSci browser proxy 兼容修复已随 `30c4029…` 部署并成功到达 Elsevier；订阅挑战未通过的根因是官方 `cookie_import` 仅保存进程内上下文，旧 Cookie 未跨容器重建。持久会话候选 `436eb32…` 已通过本地门禁，尚未合并/部署。Taskmaster 为 9/12，Task 10 仍在进行。
+> **CURRENT active-memory，2026-09-03 15:34 +08。** ScanSci 持久会话能力已随 `2313038…` 部署；真实导入发现嵌入持久化程序把 base64 参数误计为路径，helper 安全退出且清理完毕。参数修复候选 `9729005…` 已通过本地门禁，尚未合并/部署。Taskmaster 为 9/12，Task 10 仍在进行。
 
 ## Goal and state
 
@@ -11,14 +11,14 @@
 ## Version tuple
 
 - Worktree: `E:/Miscellaneous/XGS/.worktrees/readable-hermes-guidance`
-- Branch / application candidate: `codex/scansci-upstream-mcp` / `436eb325d6a831f6db3304a356d54fdc911eeee9`；分支 HEAD 可仅因本次 CURRENT 文档同步继续前移。
-- Production application source / immutable release: `30c40298dc75d30bb4584fbd588d63c2fd0a2bcc`
-- Rollback: `63a064197e288b42abb9b44ef1ddbdedf99ed735`
-- 生产已包含 PR #56 的 browser proxy 修复。新候选在官方 MCP 成功导入后以原子替换、`0600` 将 Netscape session 保存到 `scansci-data`，每个新浏览器上下文自动恢复；runtime/helper `7/7`、retrieval `18/18`、rights `6/6`、全仓 build/typecheck/lint 均通过。Core/search migrations 为 `36/36` / `2/2`。
+- Branch / application candidate: `codex/scansci-upstream-mcp` / `97290056de19263668a37148e6f06fec01d7b0e1`；分支 HEAD 可仅因本次 CURRENT 文档同步继续前移。
+- Production application source / immutable release: `2313038bef4fabce5cdc90517d25cb177ab1e8dd`
+- Rollback: `30c40298dc75d30bb4584fbd588d63c2fd0a2bcc`
+- 生产已包含 PR #57 的原子 `0600` session 持久化与新 context 恢复。新候选只把嵌入程序的三个路径参数起点从 `sys.argv[1]` 修正为 `sys.argv[2]`；runtime/helper `7/7`、`bash -n`、lint 均通过。Core/search migrations 为 `36/36` / `2/2`。
 
 ## Production truth
 
-- 2026-09-03 14:58 +08 canonical deployment：Public `/__release` 与 active marker 均返回 `30c4029…`；API/Web/Worker/Parser/official MCP/BGE healthy，parser acceptance 与 journal-clear 通过；core/search migrations `36/36` / `2/2` current。
+- 2026-09-03 15:31 +08 canonical deployment：Public `/__release` 与 active marker 均返回 `2313038…`；API/Web/Worker/Parser/official MCP/BGE healthy，parser acceptance 与 journal-clear 通过；core/search migrations `36/36` / `2/2` current。
 - 服务器只保留 active/rollback 两个 release/report、`retrieval_net`、`scansci-data`、`scansci-papers` 与产品数据。旧网络/卷/image/systemd/drop-in/iptables/Squid browser 规则/Secret/eval/dangling image 均为 0；38 个旧 acceptance、5 个 eval 和匿名失败容器已清，根盘 50G/148G、可用 92G，build cache 0。
 - TLS certificate subject 为 `openscience.428312321.xyz`，有效期自 2026-08-03 20:10:34 +08:00；ECS、域名反代、Landing、Cloudflare Tunnel 的上线日期必须按证据包分开表述。
 - `agent_tasks.result` 为 JSONB，`IngestionTaskState` 含 `needs_review` 与 `confirmed`。生产聚合为 14 条待确认建议、7 条 confirmed、21 条总计；未输出业务正文或用户信息。
@@ -34,7 +34,7 @@
 
 ## Open risks and constraints
 
-- subscription-only PDF 尚无正向证据；`30c4029…` 已通过受控代理到达 Elsevier，当前 `not_found` 根因是官方 `cookie_import` 仅更新 live browser context，之前的 Cookie 未跨 immutable container recreate。
+- subscription-only PDF 尚无正向证据；最新真实导入的 live Cookie 已进入 MCP，但持久文件因路径参数偏移未发布。helper 已删除主机/容器 staging、`.next` 与 cleanup marker，生产容器保持健康。
 - 四入口尚未在生产完成统一旅程：Personal Space、Hermes、RO Hermes、RO Files/Evidence。
 - Task 10 在机构下载、MCP recreate/repeat、一次性下载和 72h/600s 生命周期全部通过前保持 `in-progress`，不得把 Taskmaster 改为 10/12。
 - 不恢复 noVNC/auth sidecar，不保存账号密码，不读取或打印 `.env`、Cookie、MCP 原始响应或生产文档正文。
@@ -42,7 +42,7 @@
 
 ## Next action
 
-1. 将持久会话候选 `436eb32…` 经 PR/CI 合并，并按 canonical transaction 部署合并后的 immutable SHA。
+1. 将参数修复候选 `9729005…` 经 PR/CI 合并，并按 canonical transaction 部署合并后的 immutable SHA。
 2. 重新导入 CARSI/publisher Cookie，对 subscription-only DOI 验证官方 MCP 下载以及 MCP recreate/repeat 后的持久会话复用。
 3. 完成四入口、10 分钟一次性下载和 72 小时缓存/GC 的生产正向旅程；全部通过后将 Taskmaster Task 10 置为 done，进度改为 10/12。
 

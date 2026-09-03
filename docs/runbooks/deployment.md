@@ -1,6 +1,6 @@
 # Runbook: 部署（Deployment）
 
-> 状态：**CURRENT**。active immutable release / application source 为 `30c40298dc75d30bb4584fbd588d63c2fd0a2bcc`，rollback tree 为 `63a064197e288b42abb9b44ef1ddbdedf99ed735`；两者均为官方 `scansci-pdf==1.13.1` MCP 单服务。Networkless bootstrap 与 browser proxy 已上线；未部署候选 `436eb32…` 仅在官方 Cookie 导入成功后以 `0600` 原子保存 `/data/scansci/publisher-session.netscape`，并在新 browser context 自动恢复。机构 Cookie 需重新导入，机构 PDF、四入口和 72h/600s 正向旅程 pending。
+> 状态：**CURRENT**。active immutable release / application source 为 `2313038bef4fabce5cdc90517d25cb177ab1e8dd`，rollback tree 为 `30c40298dc75d30bb4584fbd588d63c2fd0a2bcc`；两者均为官方 `scansci-pdf==1.13.1` MCP 单服务。Networkless bootstrap、browser proxy 与 session 持久化/恢复已上线；未部署候选 `9729005…` 修复嵌入持久化程序的路径参数偏移。机构 Cookie 需重新导入，机构 PDF、四入口和 72h/600s 正向旅程 pending。
 > 格式遵循 `.agents/skills/infra-runbook/SKILL.md` 四节强制要求。
 > 部署属 Spec §20.5"询问"级操作：执行前需用户确认，必须走 `infra/scripts/deploy.sh` + CI/CD，禁止手工改服务器代码。
 

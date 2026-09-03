@@ -1,19 +1,19 @@
 # OpenScience 进度（CURRENT window）
 
-> 最新同步：2026-09-03 15:08 +08。历史由 Git 保存；旧计划不作为默认输入。
+> 最新同步：2026-09-03 15:34 +08。历史由 Git 保存；旧计划不作为默认输入。
 
 ## Current version tuple
 
-- Branch / application candidate: `codex/scansci-upstream-mcp` / `436eb325d6a831f6db3304a356d54fdc911eeee9`；分支 HEAD 可仅因本次 CURRENT 文档同步继续前移。候选尚未合并或部署。
-- Production application source / immutable release: `30c40298dc75d30bb4584fbd588d63c2fd0a2bcc`。
-- Production rollback: `63a064197e288b42abb9b44ef1ddbdedf99ed735`；两者均为 upstream-only；core/search migrations `36/36` / `2/2`。
+- Branch / application candidate: `codex/scansci-upstream-mcp` / `97290056de19263668a37148e6f06fec01d7b0e1`；分支 HEAD 可仅因本次 CURRENT 文档同步继续前移。候选尚未合并或部署。
+- Production application source / immutable release: `2313038bef4fabce5cdc90517d25cb177ab1e8dd`。
+- Production rollback: `30c40298dc75d30bb4584fbd588d63c2fd0a2bcc`；两者均为 upstream-only；core/search migrations `36/36` / `2/2`。
 - Taskmaster `hermes-research-intelligence` 仍为 9/12：官方 MCP 单服务替换、旧运行链路清理和 `cookie_import` 已完成；subscription-only PDF、四入口/72h/600s 正向旅程 pending，Task 11 继续阻断。
 
 ## 2026-09-03 — ScanSci CARSI import and browser-proxy fix candidate
 
 - PR #54 / CI `33712614976` 的 Cookie 中断清理与机构权利绑定已随 main `e72291f…` canonical deployment 上线；public/active 一致、目标容器 healthy、journal/failed absent、core/search `36/36` / `2/2`。
 - 浙江大学统一身份 CARSI 成功进入 ScienceDirect；active helper 先后导入 CARSI 与 publisher cookies，均返回 `SCANSCI_COOKIE_IMPORT_OK`，主机/容器 staging 与本机敏感临时文件已清理。
-- PR #56 / CI `33723494880` 的受控 browser proxy 补丁已随 `30c4029…` canonical deployment 上线；固定 subscription DOI 成功到达 Elsevier，但挑战未通过。源码实证官方 `cookie_import` 仅调用 live `context.add_cookies`，此前导入未跨容器重建。候选 `436eb32…` 仅在官方导入成功后以 `0600` 原子持久化 session，并在新 browser context 恢复；RED→GREEN 后 runtime/helper `7/7`、retrieval `18/18`、rights `6/6`、全仓 build/typecheck/lint green。下一步 PR/CI、部署、重新导入、download/recreate/repeat 与四入口验收。
+- PR #57 / CI `33726541805` 的 `0600` 原子持久化与新 context 恢复已随 `2313038…` canonical deployment 上线。真实导入发现嵌入程序把 base64 payload `argv[1]` 误计为三个路径之一；helper 安全退出并证明主机/容器 staging、`.next`、cleanup marker 均 absent。候选 `9729005…` 将路径起点改为 `argv[2]`；RED→GREEN 后 runtime/helper `7/7`、`bash -n`、lint green。下一步 PR/CI、部署、重新导入、download/recreate/repeat 与四入口验收。
 
 ## 2026-09-03 — Academic identity progression deployed
 
