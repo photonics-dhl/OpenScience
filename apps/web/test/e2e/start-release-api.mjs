@@ -83,6 +83,17 @@ const server = createServer((request, response) => {
     return;
   }
   else if (path === '/editorial/collections/ultrafast-science') body = { collection };
+  else if (path === '/auth/academic-identity') body = {
+    steps: {
+      registered: true,
+      emailVerified: true,
+      orcidConnected: false,
+      institutionEmailVerified: false,
+    },
+    credentials: [],
+    scopedRoles: [],
+    capabilities: { orcid: false, institutionEmail: true },
+  };
   else {
     response.writeHead(404, { 'content-type': 'application/json' });
     response.end(JSON.stringify({ error: { code: 'NOT_FOUND' } }));
