@@ -5,6 +5,8 @@ HOST_IMPORT_ROOT="/run/openscience-scansci-import"
 CONTAINER="openscience-prod-scansci-mcp-1"
 CONTAINER_IMPORT_DIR="/tmp/scansci-cookie-import"
 CONTAINER_IMPORT_FILE="$CONTAINER_IMPORT_DIR/netscape.txt"
+PERSISTENT_SESSION_FILE="/data/scansci/publisher-session.netscape"
+PERSISTENT_SESSION_NEXT="/data/scansci/.publisher-session.netscape.next"
 DEPLOY_LOCK_DIRECTORY="/run/lock/openscience-production-deploy"
 DEPLOY_LOCK_PATH="$DEPLOY_LOCK_DIRECTORY/lock"
 ACTIVE_MARKER="/opt/openscience/.release-id"
@@ -76,6 +78,7 @@ node "$ACTIVE_ROOT/infra/scripts/verify-scansci-mcp-runtime.mjs" \
   >/dev/null
 
 STAGED=0
+PERSIST_STAGED=0
 cleanup_sensitive() {
   local cleanup_ok=1 running=""
   set +e
@@ -87,6 +90,14 @@ cleanup_sensitive() {
     else
       running="$(docker inspect --format='{{.State.Running}}' "$CONTAINER_ID" 2>/dev/null)"
       [ "$running" = false ] && STAGED=0 || cleanup_ok=0
+    fi
+  fi
+  if [ "$PERSIST_STAGED" -eq 1 ]; then
+    if docker exec --user 10001:10001 "$CONTAINER_ID" rm -f -- "$PERSISTENT_SESSION_NEXT" \
+      >/dev/null 2>&1; then
+      PERSIST_STAGED=0
+    else
+      cleanup_ok=0
     fi
   fi
   rm -f -- "$SOURCE_FILE" || cleanup_ok=0
@@ -149,6 +160,46 @@ if ! docker exec --user 10001:10001 "$CONTAINER_ID" python -c \
   echo "official ScanSci cookie import failed" >&2
   exit 65
 fi
+
+read -r -d '' PERSIST_PROGRAM <<'PY' || true
+import os
+import stat
+import sys
+from pathlib import Path
+
+source, staged, target = map(Path, sys.argv[1:])
+data = source.read_bytes()
+if not data:
+    raise SystemExit(1)
+fd = os.open(staged, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600)
+try:
+    with os.fdopen(fd, "wb") as handle:
+        handle.write(data)
+        handle.flush()
+        os.fsync(handle.fileno())
+    os.replace(staged, target)
+    os.chmod(target, 0o600)
+    directory = os.open(target.parent, os.O_RDONLY | os.O_DIRECTORY)
+    try:
+        os.fsync(directory)
+    finally:
+        os.close(directory)
+finally:
+    if staged.exists():
+        staged.unlink()
+if target.is_symlink() or not target.is_file() or stat.S_IMODE(target.stat().st_mode) != 0o600:
+    raise SystemExit(1)
+PY
+PERSIST_PROGRAM_B64="$(printf '%s' "$PERSIST_PROGRAM" | base64 -w0)"
+PERSIST_STAGED=1
+if ! docker exec --user 10001:10001 "$CONTAINER_ID" python -c \
+  'import base64,sys;exec(base64.b64decode(sys.argv[1]))' "$PERSIST_PROGRAM_B64" \
+  "$CONTAINER_IMPORT_FILE" "$PERSISTENT_SESSION_NEXT" "$PERSISTENT_SESSION_FILE" \
+  >/dev/null 2>&1; then
+  echo "official ScanSci cookie persistence failed" >&2
+  exit 65
+fi
+PERSIST_STAGED=0
 
 test "$(cat "$ACTIVE_MARKER")" = "$ACTIVE_SHA"
 test "$(docker inspect --format='{{.Id}}' "$CONTAINER")" = "$CONTAINER_ID"
