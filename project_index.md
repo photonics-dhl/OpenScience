@@ -1,7 +1,7 @@
 # OpenScience (XGS) 项目文件索引
 
 > 维护规则：创建/修改/移动文件后必须更新本索引。创建新文件前先查本表防重复。
-> **CURRENT source/deployment anchor（2026-09-03 09:17 +08）：** branch / HEAD `codex/scansci-upstream-mcp` / `f6f0c0e8cbc99a5c644095462a205b31b6f4a635`；production release / rollback `80db41e7ee0a1c8158d3f335dc1b2fbf6f2bb2bf` / `761b93d4bbce77e70d676be78de0bba128974fe6`；core/search `34/34` / `2/2`。生产为官方 `v1.13.1` MCP 单服务；旧 browser/auth/server runtime 与服务器冗余已清理。官方 cookie import、机构 PDF、四入口和 72h/600s 正向旅程 pending；Taskmaster 9/12，Task 10 in-progress。
+> **CURRENT source/deployment anchor（2026-09-03 11:43 +08）：** branch / application candidate `codex/scansci-upstream-mcp` / `a722099a51ed734be993885be45f03ffd74077ee`（分支 HEAD 可仅因 CURRENT 文档同步继续前移，尚未部署）；production release / rollback `80db41e7ee0a1c8158d3f335dc1b2fbf6f2bb2bf` / `761b93d4bbce77e70d676be78de0bba128974fe6`；core/search `34/34` / `2/2`。生产为官方 `v1.13.1` MCP 单服务；候选修复 Cookie 中断清理与机构权利绑定。官方 cookie import、机构 PDF、四入口和 72h/600s 正向旅程 pending；Taskmaster 9/12，Task 10 in-progress。
 
 ## 根目录
 | 路径 | 用途 | 状态 |

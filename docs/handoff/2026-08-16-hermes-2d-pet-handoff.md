@@ -1,6 +1,6 @@
 # Hermes Research Intelligence CURRENT Handoff
 
-> **CURRENT active-memory，2026-09-03 09:17 +08。** ScanSci 官方 MCP 替换、生产部署和旧运行链路清理已完成。Taskmaster 为 9/12；Task 10 仍在进行，机构订阅 PDF 与四入口正向验收未完成，Task 11 继续阻断。
+> **CURRENT active-memory，2026-09-03 11:43 +08。** ScanSci 官方 MCP 替换、生产部署和旧运行链路清理已完成；机构权利绑定与 Cookie 导入中断清理修复候选已通过本地门禁，尚未部署。Taskmaster 为 9/12；Task 10 仍在进行，机构订阅 PDF 与四入口正向验收未完成，Task 11 继续阻断。
 
 ## Goal and state
 
@@ -11,10 +11,10 @@
 ## Version tuple
 
 - Worktree: `E:/Miscellaneous/XGS/.worktrees/readable-hermes-guidance`
-- Branch / HEAD: `codex/scansci-upstream-mcp` / `f6f0c0e8cbc99a5c644095462a205b31b6f4a635`，与 `origin/main`、`origin/codex/scansci-upstream-mcp` 一致。
+- Branch / application candidate: `codex/scansci-upstream-mcp` / `a722099a51ed734be993885be45f03ffd74077ee`；分支 HEAD 可仅因本次 CURRENT 文档同步继续前移。
 - Production application source / immutable release: `80db41e7ee0a1c8158d3f335dc1b2fbf6f2bb2bf`
 - Rollback: `761b93d4bbce77e70d676be78de0bba128974fe6`
-- HEAD 在生产 release 之后只有 CURRENT 文档同步，没有未部署产品代码。Core/search migrations 为 `34/34` / `2/2`；本地旧 `main@b9616cb` 与其他 worktree 不得用于推断当前状态。
+- 候选修复确保 Cookie 在开始写入容器前即纳入退出清理，并将上游明确机构来源映射为用户绑定、72 小时有效的 `institutional_access`；独立复审无 Critical/Important，本地 focused tests `18/18`、helper contract、Domain rights、全仓 build/typecheck/lint 均通过。该候选尚未合并或部署。Core/search migrations 为 `34/34` / `2/2`；本地旧 `main@b9616cb` 与其他 worktree不得用于推断当前状态。
 
 ## Production truth
 
@@ -30,6 +30,7 @@
 - Task 10 的 provider-neutral rights、provenance、72h 私有缓存、10 分钟一次性下载、GC、Semantic Scholar 与官方 ScanSci OA 路径已接通；机构路径仍待正向验收。
 - PR #50 / CI `33653209566` 将官方 MCP 最终发布为 `80db41e…`。旧私有 ScanSci 与浏览器认证链路已退出 active/rollback，服务器冗余已按白名单清理。
 - 官方认证入口为 active release 的 `infra/scripts/import-scansci-cookies.sh`，导入状态只持久化在 `scansci-data`。
+- 本地候选 `a722099…` 修复导入中断时的容器临时文件清理，并按官方来源标签绑定机构访问权；必须经 PR/CI 和 canonical deployment 后再导入 Cookie。
 
 ## Open risks and constraints
 
@@ -41,10 +42,10 @@
 
 ## Next action
 
-1. 管理员在普通浏览器完成浙江大学或出版社认证，导出 Netscape Cookie，并用 active release helper 执行一次官方 `cookie_import`。
-2. 选择 subscription-only DOI，验证官方 MCP 下载以及 MCP recreate/repeat 后的会话复用。
-3. 完成四入口、10 分钟一次性下载和 72 小时缓存/GC 的生产正向旅程。
-4. 全部通过后将 Taskmaster Task 10 置为 done，进度改为 10/12，再启动 Task 11 确定性富媒体资产。
+1. 将候选 `a722099…` 经 PR/CI 合并，并按 canonical transaction 部署合并后的 immutable SHA。
+2. 在普通浏览器完成浙江大学或出版社认证，导出 Netscape Cookie，并用新 active release helper 执行一次官方 `cookie_import`。
+3. 选择 subscription-only DOI，验证官方 MCP 下载以及 MCP recreate/repeat 后的会话复用。
+4. 完成四入口、10 分钟一次性下载和 72 小时缓存/GC 的生产正向旅程；全部通过后将 Taskmaster Task 10 置为 done，进度改为 10/12。
 
 ## Read first
 
