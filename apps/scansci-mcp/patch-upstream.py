@@ -44,21 +44,198 @@ import re""",
     "  const needle = normalize(name);"
     "  const visible = [...items].filter(el => el.offsetParent !== null);"
     "  const exact = visible.find(el => normalize(el.textContent) === needle);"
-    "  const startsWith = visible.find(el => normalize(el.textContent).startsWith(`${needle} `));"
-    "  const contains = visible.find(el => normalize(el.textContent).includes(needle));"
-    "  const match = exact || startsWith || contains;"
-    "  if (match) {"
-    "    const text = match.textContent || '';"
-    "    match.click();"
+    "  if (exact) {"
+    "    const text = exact.textContent || '';"
+    "    exact.click();"
     "    return text.trim().substring(0, 60);"
     "  }"''',
             "exact institutional identity selection",
+        ),
+        (
+            package / "_publisher_strategies_core.py",
+            '''                const items = document.querySelectorAll('[class*="result"], [class*="suggestion"], [class*="federation"], li, a, button');
+                for (const el of items) {{
+                    const text = el.textContent || '';
+                    if (text.includes(name) && el.offsetParent !== null) {{
+                        el.click();
+                        return text.trim().substring(0, 60);
+                    }}
+                }}''',
+            '''                const normalize = value => (value || '').replace(/\\\\s+/g, ' ').trim().toLowerCase();
+                const needle = normalize(name);
+                const items = document.querySelectorAll('[class*="result"], [class*="suggestion"], [class*="federation"], li, a, button');
+                const exact = [...items].find(el => el.offsetParent !== null && normalize(el.textContent) === needle);
+                if (exact) {{
+                    const text = exact.textContent || '';
+                    exact.click();
+                    return text.trim().substring(0, 60);
+                }}''',
+            "headless exact institution selection",
+        ),
+        (
+            package / "_publisher_strategies_core.py",
+            '''                page.evaluate(f"""
+                    (name) => {{
+                        const items = document.querySelectorAll('[class*="result"], [class*="suggestion"], li, a, button');
+                        for (const el of items) {{
+                            if (el.textContent.includes(name) && el.offsetParent !== null) {{
+                                el.click();
+                                return true;
+                            }}
+                        }}
+                        return false;
+                    }}
+                """, idp_en)
+                time.sleep(5)''',
+            '''                clicked = page.evaluate(_INSTITUTION_CLICK_JS, idp_en)
+                if not clicked:
+                    log.info(f"   [{publisher}] exact institution not found: {idp_en}")
+                    return False
+                time.sleep(5)''',
+            "visible institutional exact selection",
+        ),
+        (
+            package / "_publisher_strategies_core.py",
+            """for i in range(100):
+            time.sleep(3)
+            try:
+                title = page.title()""",
+            """for i in range(100):
+            cancel_event = config.get("_scansci_cancel_event")
+            if cancel_event is not None and cancel_event.is_set():
+                return False
+            time.sleep(3)
+            try:
+                title = page.title()""",
+            "visible institutional login cancellation",
+        ),
+        (
+            package / "_publisher_strategies_core.py",
+            '''                    clicked = sso_page.evaluate(f"""
+                        (name) => {{
+                            const items = document.querySelectorAll('[class*="result"], [class*="suggestion"], [class*="federation"], li, a, button');
+                            for (const el of items) {{
+                                if (el.textContent.includes(name) && el.offsetParent !== null) {{
+                                    el.click();
+                                    return true;
+                                }}
+                            }}
+                            return false;
+                        }}
+                    """, idp_en)
+                    if clicked:
+                        log.info(f"   [{publisher}] selected institution '{idp_en}'")
+                        time.sleep(5)
+                        break''',
+            '''                    clicked = sso_page.evaluate(_INSTITUTION_CLICK_JS, idp_en)
+                    if not clicked:
+                        log.info(f"   [{publisher}] exact institution not found: {idp_en}")
+                        return None
+                    log.info(f"   [{publisher}] selected institution '{idp_en}'")
+                    time.sleep(5)
+                    break''',
+            "visible browser exact institution selection",
+        ),
+        (
+            package / "_publisher_strategies_core.py",
+            """login_ok = False
+        for i in range(100):
+            time.sleep(3)
+            # Check ALL pages in context — SSO may happen in any tab""",
+            """login_ok = False
+        for i in range(100):
+            cancel_event = config.get("_scansci_cancel_event")
+            if cancel_event is not None and cancel_event.is_set():
+                return None
+            time.sleep(3)
+            # Check ALL pages in context — SSO may happen in any tab""",
+            "visible browser login cancellation",
+        ),
+        (
+            package / "_publisher_strategies_core.py",
+            """                    if si:
+                        si.fill(idp_en)
+                        time.sleep(3)
+                        # Use keyboard to select first result (more reliable than click)
+                        si.press('ArrowDown')
+                        time.sleep(1)
+                        si.press('Enter')
+                        time.sleep(5)""",
+            """                    if si:
+                        si.fill(idp_en)
+                        time.sleep(3)
+                        matched = page.evaluate(_INSTITUTION_CLICK_JS, idp_en)
+                        if not matched:
+                            log.info(f"   [{publisher}] exact institution not found: {idp_en}")
+                            return False
+                        time.sleep(5)""",
+            "fail-closed exact institution selection",
+        ),
+        (
+            package / "_publisher_strategies_core.py",
+            """logged_in = False
+            for _ in range(100):
+                time.sleep(3)
+                try:""",
+            """logged_in = False
+            cancel_event = config.get("_scansci_cancel_event")
+            for _ in range(100):
+                if cancel_event is not None and cancel_event.is_set():
+                    return False
+                time.sleep(3)
+                try:""",
+            "publisher login cancellation",
         ),
         (
             package / "sources" / "__init__.py",
             "from concurrent.futures import ThreadPoolExecutor, as_completed",
             "from concurrent.futures import ThreadPoolExecutor, as_completed, wait as wait_futures",
             "bounded browser future drain import",
+        ),
+        (
+            package / "sources" / "__init__.py",
+            """import json
+import threading
+import time""",
+            """import json
+import threading
+import time
+import uuid""",
+            "request output nonce import",
+        ),
+        (
+            package / "sources" / "__init__.py",
+            """    if not all_sources:
+        return None
+
+    # If only one source, run directly""",
+            """    if not all_sources:
+        return None
+
+    request_token = uuid.uuid4().hex
+
+    # If only one source, run directly""",
+            "request output nonce",
+        ),
+        (
+            package / "sources" / "__init__.py",
+            '''        fn, label, tier_label, timeout = all_sources[0]
+        src_output = target_dir / f"{safe_filename(doi)}_{label}.pdf"''',
+            '''        fn, label, tier_label, timeout = all_sources[0]
+        src_output = target_dir / f"{safe_filename(doi)}_{request_token}_{label}.pdf"''',
+            "single-source request output ownership",
+        ),
+        (
+            package / "sources" / "__init__.py",
+            '''            if _neg_blocked(label, doi):
+                log.info(f"   SKIP {label} (negative cache: recently failed for this publisher)")
+                continue
+            src_output = target_dir / f"{safe_filename(doi)}_{label}.pdf"''',
+            '''            if _neg_blocked(label, doi):
+                log.info(f"   SKIP {label} (negative cache: recently failed for this publisher)")
+                continue
+            src_output = target_dir / f"{safe_filename(doi)}_{request_token}_{label}.pdf"''',
+            "parallel request output ownership",
         ),
         (
             package / "sources" / "__init__.py",
@@ -149,6 +326,21 @@ import re""",
                                     return None
                                 time.sleep(3)""",
             "CARSI login cancellation",
+        ),
+        (
+            package / "sources" / "carsi.py",
+            """                            else:
+                                search_input.press("Enter")
+                                time.sleep(3)
+                        else:
+                            log.info("   [CARSI-Browser] No institution search box found")""",
+            """                            else:
+                                log.info(f"   [CARSI-Browser] Exact institution not found: {idp_en}")
+                                return None
+                        else:
+                            log.info("   [CARSI-Browser] No institution search box found")
+                            return None""",
+            "CARSI fail-closed institution selection",
         ),
         (
             package / "_publisher_strategies_core.py",
