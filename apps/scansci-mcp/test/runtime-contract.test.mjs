@@ -68,6 +68,11 @@ test('official ScanSci image is pinned and runs only the public MCP entrypoint',
     dockerfile.indexOf('LABEL org.openscience.source=') > dockerfile.indexOf('patchright install --with-deps chromium'),
     'release-dependent labels must not invalidate the browser dependency layer',
   );
+  assert.equal(
+    dockerfile.match(/patchright install --with-deps chromium/g)?.length,
+    1,
+    'the image must install exactly one Patchright Chromium runtime',
+  );
   assert.match(compose, /SCANSCI_PDF_PROXY: http:\/\/openscience-egress:7891/);
   assert.match(compose, /SCANSCI_PDF_SESSION_FILE: \/data\/scansci\/publisher-session\.netscape/);
   assert.match(compose, /agent-worker:[\s\S]*?scansci-papers:\/data\/papers\n[\s\S]*?group_add:\n\s+- "11000"/);
