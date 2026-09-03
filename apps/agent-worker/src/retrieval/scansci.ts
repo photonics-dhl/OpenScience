@@ -7,20 +7,34 @@ import { downloadThroughScanSciMcp, type ScanSciMcpDownload } from './scansci-mc
 
 const PROVIDER = 'scansci' as const;
 const MAX_PDF_BYTES = 100 * 1024 * 1024;
+const INSTITUTIONAL_ENTITLEMENT_MS = 72 * 60 * 60 * 1_000;
+const INSTITUTIONAL_SOURCES = new Set([
+  'institutional',
+  'carsi',
+  'carsi-browser',
+  'instsci',
+  'webvpn',
+  'webvpn(browser)',
+  'ezproxy',
+  'campusconnector',
+]);
 const IDENTIFIER = /^(?:10\.\d{4,9}\/[-._;()/:a-z0-9]+|(?:arxiv:)?\d{4}\.\d{4,5}(?:v\d+)?)$/i;
 
 export type ScanSciAcquireResult =
   | {
     status: 'succeeded';
     provider: typeof PROVIDER;
-    route: 'open_access' | 'source_retrieval';
+    route: 'open_access' | 'institutional_access' | 'source_retrieval';
     source: string;
     sourceUrl: string;
     providerVersion: string;
     bytes: Buffer;
     contentHash: string;
     mimeType: 'application/pdf';
-    access: { kind: 'open_access'; license: string } | { kind: 'source_retrieval'; source: string };
+    access:
+      | { kind: 'open_access'; license: string }
+      | { kind: 'institutional_access'; entitlementVerified: true }
+      | { kind: 'source_retrieval'; source: string };
     acknowledge: () => Promise<void>;
     discard: () => Promise<void>;
     entitlementValidUntil?: Date;
@@ -86,6 +100,11 @@ function sourceUrl(result: ScanSciMcpDownload, identifier: string): string {
     }
   }
   return identifierLandingUrl(identifier);
+}
+
+function isInstitutionalSource(source: string): boolean {
+  const normalized = source.toLowerCase();
+  return INSTITUTIONAL_SOURCES.has(normalized) || normalized.startsWith('institutional:');
 }
 
 async function readBoundedPdf(root: string, candidate: string, maximumBytes: number): Promise<{
@@ -194,21 +213,25 @@ export function createScanSciAdapter(config: ScanSciConfig = {}) {
         return { status: 'unavailable', provider: PROVIDER, code: 'invalid_response', retryable: false };
       }
       const license = boundedString(result.license, 200);
+      const institutional = isInstitutionalSource(source);
       return {
         status: 'succeeded',
         provider: PROVIDER,
-        route: license ? 'open_access' : 'source_retrieval',
+        route: institutional ? 'institutional_access' : license ? 'open_access' : 'source_retrieval',
         source,
         sourceUrl: sourceUrl(result, identifier),
         providerVersion,
         bytes: staged.bytes,
         contentHash: createHash('sha256').update(staged.bytes).digest('hex'),
         mimeType: 'application/pdf',
-        access: license
-          ? { kind: 'open_access', license }
-          : { kind: 'source_retrieval', source },
+        access: institutional
+          ? { kind: 'institutional_access', entitlementVerified: true }
+          : license
+            ? { kind: 'open_access', license }
+            : { kind: 'source_retrieval', source },
         acknowledge: staged.cleanup,
         discard: staged.cleanup,
+        ...(institutional ? { entitlementValidUntil: new Date(Date.now() + INSTITUTIONAL_ENTITLEMENT_MS) } : {}),
       };
     },
   };
