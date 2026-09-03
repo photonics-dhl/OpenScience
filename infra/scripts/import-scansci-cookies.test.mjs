@@ -21,6 +21,7 @@ test('operator cookie import removes staging copies and atomically persists the 
   assert.match(source, /PERSISTENT_SESSION_NEXT="\/data\/scansci\/\.publisher-session\.netscape\.next"/u);
   assert.match(source, /os\.replace\(staged, target\)/u);
   assert.match(source, /stat\.S_IMODE\(target\.stat\(\)\.st_mode\) != 0o600/u);
+  assert.match(source, /map\(Path, sys\.argv\[2:\]\)/u);
   assert.match(source, /PERSIST_STAGED=1/u);
   assert.doesNotMatch(source, /mkdir -p/u);
   assert.match(source, /scansci_pdf_login/u);

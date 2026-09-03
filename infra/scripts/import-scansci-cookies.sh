@@ -167,7 +167,7 @@ import stat
 import sys
 from pathlib import Path
 
-source, staged, target = map(Path, sys.argv[1:])
+source, staged, target = map(Path, sys.argv[2:])
 data = source.read_bytes()
 if not data:
     raise SystemExit(1)
