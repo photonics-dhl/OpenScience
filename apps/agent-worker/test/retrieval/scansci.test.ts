@@ -143,6 +143,37 @@ describe('official ScanSci MCP adapter', () => {
     });
   });
 
+  it.each([
+    'institutional:browser:elsevier',
+    'CARSI-Browser',
+    'WebVPN(Browser)',
+    'CampusConnector',
+  ])('binds explicit upstream institutional source %s to the requesting subject', async (source) => {
+    const fixture = await paperFixture();
+    const mcpUrl = await fakeMcp({ result: {
+      success: true,
+      file: fixture.file,
+      source,
+      url: 'https://doi.org/10.1000/example',
+      license: 'publisher-subscription',
+    } });
+    const adapter = createScanSciAdapter({ enabled: true, mcpUrl, papersDir: fixture.root } as never);
+    const startedAt = Date.now();
+
+    const result = await adapter.acquire({ identifier: '10.1000/example', subjectId: 'a'.repeat(64) });
+
+    expect(result).toMatchObject({
+      status: 'succeeded',
+      route: 'institutional_access',
+      source,
+      access: { kind: 'institutional_access', entitlementVerified: true },
+    });
+    if (result.status !== 'succeeded') throw new Error('expected success');
+    expect(result.entitlementValidUntil?.getTime()).toBeGreaterThanOrEqual(startedAt + 72 * 60 * 60 * 1_000);
+    expect(result.entitlementValidUntil?.getTime()).toBeLessThanOrEqual(Date.now() + 72 * 60 * 60 * 1_000);
+    await result.discard();
+  });
+
   it('turns the upstream login instruction into the existing auth-required product state', async () => {
     const fixture = await paperFixture();
     const mcpUrl = await fakeMcp({ result: {

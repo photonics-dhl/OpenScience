@@ -28,4 +28,12 @@ test('operator cookie import stages once, calls the official MCP tool and always
   assert.match(source, /rm -f -- "\$SOURCE_FILE"/u);
   assert.match(source, /SCANSCI_COOKIE_IMPORT_OK/u);
   assert.doesNotMatch(source, /cat "\$SOURCE_FILE"|result\.content.*print/u);
+  const cleanupOwnershipIndex = source.indexOf('STAGED=1');
+  const containerStagingIndex = source.indexOf('docker exec -i --user 10001:10001');
+  assert.notEqual(cleanupOwnershipIndex, -1, 'cleanup ownership assignment must exist');
+  assert.notEqual(containerStagingIndex, -1, 'container staging command must exist');
+  assert.ok(
+    cleanupOwnershipIndex < containerStagingIndex,
+    'cleanup ownership must be established before container staging begins',
+  );
 });

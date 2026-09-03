@@ -387,6 +387,29 @@
         "docs/runbooks/deployment.md"
       ],
       "prevention": "Any systemd dependency cleanup must verify the dependent service after daemon-reload, not only its configuration file. Do not delete all inactive build cache without ensuring pinned dependency layers can be deterministically rebuilt; immutable downloads must retain --require-hashes and use bounded per-package retries rather than accepting new hashes after a transport failure."
+    },
+    {
+      "id": "issue-019",
+      "title": "Official ScanSci import cleanup and institutional rights mapping blocked positive acceptance",
+      "date": "2026-09-03",
+      "status": "in_progress",
+      "tags": [
+        "troubleshooting/auth",
+        "troubleshooting/production",
+        "troubleshooting/security",
+        "troubleshooting/integration"
+      ],
+      "description": "Before the first official Cookie import, review found that an interrupted container staging command could leave a sensitive temporary file, while a successful institutional MCP result would be persisted as generic source_retrieval/downloadable rather than user-bound institutional access.",
+      "root_cause": "The import helper set STAGED only after docker exec completed, so its EXIT trap did not own partial container writes. The ScanSci adapter recognized only licensed open access and generic source retrieval even though upstream 1.13.1 emits explicit institutional source labels and the downstream rights/API path already supports institutional_access with a subject and validity bound.",
+      "solution": "Establish cleanup ownership before container staging starts. Map only explicit upstream institutional labels to the existing institutional_access evidence, set a 72-hour maximum entitlement window matching temporary-document retention, and keep all unknown labels on the existing generic path.",
+      "verification": "Both regression tests failed against the old code for the expected reasons. The helper contract is now 1/1 green; ScanSci adapter, orchestrator and handler tests are 18/18 green; domain rights tests are 6/6 green; Agent Worker typecheck passes. Review, CI, immutable deployment, Cookie import and production subscription/four-entry acceptance remain pending.",
+      "files": [
+        "infra/scripts/import-scansci-cookies.sh",
+        "infra/scripts/import-scansci-cookies.test.mjs",
+        "apps/agent-worker/src/retrieval/scansci.ts",
+        "apps/agent-worker/test/retrieval/scansci.test.ts"
+      ],
+      "prevention": "Any sensitive staging path must assign cleanup responsibility before the first write. Provider adapters must preserve explicit institutional provenance and bind downloads to the requesting user through the existing authorized-user-only rights path."
     }
   ],
   "last_updated": "2026-09-03"

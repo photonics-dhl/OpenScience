@@ -109,10 +109,10 @@ trap cleanup_on_exit EXIT
 trap 'exit 130' INT
 trap 'exit 143' TERM
 
+STAGED=1
 docker exec -i --user 10001:10001 "$CONTAINER_ID" sh -c \
   "set -eu; umask 077; test ! -e '$CONTAINER_IMPORT_DIR'; mkdir -- '$CONTAINER_IMPORT_DIR'; cat > '$CONTAINER_IMPORT_FILE'; chmod 0600 '$CONTAINER_IMPORT_FILE'; test -s '$CONTAINER_IMPORT_FILE'" \
   < "$SOURCE_FILE"
-STAGED=1
 
 read -r -d '' IMPORT_PROGRAM <<'PY' || true
 import asyncio
