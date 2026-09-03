@@ -1,6 +1,6 @@
 # Hermes Research Intelligence CURRENT Handoff
 
-> **CURRENT active-memory，2026-09-03 11:43 +08。** ScanSci 官方 MCP 替换、生产部署和旧运行链路清理已完成；机构权利绑定与 Cookie 导入中断清理修复候选已通过本地门禁，尚未部署。Taskmaster 为 9/12；Task 10 仍在进行，机构订阅 PDF 与四入口正向验收未完成，Task 11 继续阻断。
+> **CURRENT active-memory，2026-09-03 13:43 +08。** ScanSci 机构权利绑定与 Cookie 中断清理已随 `e72291f…` 部署，浙江大学 CARSI 与 publisher Cookie 已成功导入。订阅 DOI 暴露上游 Google 启动页与受控出网冲突；最小兼容候选 `6d9ed0e…` 已通过本地门禁，尚未合并/部署。Taskmaster 为 9/12，Task 10 仍在进行。
 
 ## Goal and state
 
@@ -11,14 +11,14 @@
 ## Version tuple
 
 - Worktree: `E:/Miscellaneous/XGS/.worktrees/readable-hermes-guidance`
-- Branch / application candidate: `codex/scansci-upstream-mcp` / `a722099a51ed734be993885be45f03ffd74077ee`；分支 HEAD 可仅因本次 CURRENT 文档同步继续前移。
-- Production application source / immutable release: `80db41e7ee0a1c8158d3f335dc1b2fbf6f2bb2bf`
-- Rollback: `761b93d4bbce77e70d676be78de0bba128974fe6`
-- 候选修复确保 Cookie 在开始写入容器前即纳入退出清理，并将上游明确机构来源映射为用户绑定、72 小时有效的 `institutional_access`；独立复审无 Critical/Important，本地 focused tests `18/18`、helper contract、Domain rights、全仓 build/typecheck/lint 均通过。该候选尚未合并或部署。Core/search migrations 为 `34/34` / `2/2`；本地旧 `main@b9616cb` 与其他 worktree不得用于推断当前状态。
+- Branch / application candidate: `codex/scansci-upstream-mcp` / `6d9ed0e057e1b34fcfb3c5c663d4e9ed7140072b`；分支 HEAD 可仅因本次 CURRENT 文档同步继续前移。
+- Production application source / immutable release: `e72291f341a888df3a58c3e086211ad7c7d55ee3`
+- Rollback: `80db41e7ee0a1c8158d3f335dc1b2fbf6f2bb2bf`
+- 生产已包含 PR #54 的 Cookie 清理与 `institutional_access` 绑定。新候选只把上游下载前硬编码的 `https://www.google.com/` 临时页改为 networkless `about:blank`，不改变 Cookie 注入、目标导航或来源策略；ScanSci `3/3`、retrieval `18/18`、rights `6/6`、全仓 build/typecheck/lint 均通过。Core/search migrations 为 `36/36` / `2/2`。
 
 ## Production truth
 
-- 2026-09-03 09:17 +08 只读复核：Public `/__release` 与 active marker 均返回 `80db41e…`；API/Web/Worker/Parser/official MCP/BGE healthy，journal/failed absent；core/search migrations `34/34` / `2/2` current。
+- 2026-09-03 13:43 +08 只读复核：Public `/__release` 与 active marker 均返回 `e72291f…`；API/Web/Worker/Parser/official MCP/BGE healthy，journal/failed absent；core/search migrations `36/36` / `2/2` current。
 - 服务器只保留 active/rollback 两个 release/report、`retrieval_net`、`scansci-data`、`scansci-papers` 与产品数据。旧网络/卷/image/systemd/drop-in/iptables/Squid browser 规则/Secret/eval/dangling image 均为 0；38 个旧 acceptance、5 个 eval 和匿名失败容器已清，根盘 50G/148G、可用 92G，build cache 0。
 - TLS certificate subject 为 `openscience.428312321.xyz`，有效期自 2026-08-03 20:10:34 +08:00；ECS、域名反代、Landing、Cloudflare Tunnel 的上线日期必须按证据包分开表述。
 - `agent_tasks.result` 为 JSONB，`IngestionTaskState` 含 `needs_review` 与 `confirmed`。生产聚合为 14 条待确认建议、7 条 confirmed、21 条总计；未输出业务正文或用户信息。
@@ -30,11 +30,11 @@
 - Task 10 的 provider-neutral rights、provenance、72h 私有缓存、10 分钟一次性下载、GC、Semantic Scholar 与官方 ScanSci OA 路径已接通；机构路径仍待正向验收。
 - PR #50 / CI `33653209566` 将官方 MCP 最终发布为 `80db41e…`。旧私有 ScanSci 与浏览器认证链路已退出 active/rollback，服务器冗余已按白名单清理。
 - 官方认证入口为 active release 的 `infra/scripts/import-scansci-cookies.sh`，导入状态只持久化在 `scansci-data`。
-- 本地候选 `a722099…` 修复导入中断时的容器临时文件清理，并按官方来源标签绑定机构访问权；必须经 PR/CI 和 canonical deployment 后再导入 Cookie。
+- PR #54 / CI `33712614976` 的导入清理与机构权利绑定已包含在生产 `e72291f…`；真实 CARSI 登录成功，active helper 两次导入均返回 `SCANSCI_COOKIE_IMPORT_OK`，主机/容器 staging 清理通过。
 
 ## Open risks and constraints
 
-- 官方 Cookie 尚未导入，subscription-only PDF 尚无正向证据；Semantic Scholar 免费副本和 OA PDF 不能替代机构订阅验收。
+- 官方 Cookie 已导入，但 subscription-only PDF 尚无正向证据；当前 `not_found` 根因是上游浏览器在目标导航前访问被受控出网阻断的 Google 临时页，不是凭据或 Cookie 导入失败。
 - 四入口尚未在生产完成统一旅程：Personal Space、Hermes、RO Hermes、RO Files/Evidence。
 - Task 10 在机构下载、MCP recreate/repeat、一次性下载和 72h/600s 生命周期全部通过前保持 `in-progress`，不得把 Taskmaster 改为 10/12。
 - 不恢复 noVNC/auth sidecar，不保存账号密码，不读取或打印 `.env`、Cookie、MCP 原始响应或生产文档正文。
@@ -42,10 +42,9 @@
 
 ## Next action
 
-1. 将候选 `a722099…` 经 PR/CI 合并，并按 canonical transaction 部署合并后的 immutable SHA。
-2. 在普通浏览器完成浙江大学或出版社认证，导出 Netscape Cookie，并用新 active release helper 执行一次官方 `cookie_import`。
-3. 选择 subscription-only DOI，验证官方 MCP 下载以及 MCP recreate/repeat 后的会话复用。
-4. 完成四入口、10 分钟一次性下载和 72 小时缓存/GC 的生产正向旅程；全部通过后将 Taskmaster Task 10 置为 done，进度改为 10/12。
+1. 将兼容候选 `6d9ed0e…` 经 PR/CI 合并，并按 canonical transaction 部署合并后的 immutable SHA。
+2. 对 subscription-only DOI 验证官方 MCP 下载以及 MCP recreate/repeat 后的持久会话复用。
+3. 完成四入口、10 分钟一次性下载和 72 小时缓存/GC 的生产正向旅程；全部通过后将 Taskmaster Task 10 置为 done，进度改为 10/12。
 
 ## Read first
 
