@@ -85,6 +85,97 @@ import re""",
             "browser bootstrap",
         ),
         (
+            package / "_publisher_strategies_core.py",
+            """def _visible_browser(config: dict[str, Any], publisher: str, *, viewport: dict | None = None):
+    \"\"\"Open visible CloakBrowser with persistent profile. Falls back to ephemeral.\"\"\"
+    if not _HAS_CLOAKBROWSER:
+        raise RuntimeError(\"cloakbrowser not installed. Run: pip install cloakbrowser\")
+    profile_dir = _get_profile_dir(config, publisher)
+    browser = None
+
+    try:
+        ctx = launch_persistent_context(
+            str(profile_dir),
+            headless=False, humanize=True,
+            args=[\"--disable-features=CrossOriginOpenerPolicy\"],
+        )
+        page = ctx.new_page()
+        log.info(f\"   [{publisher}] persistent browser profile: {profile_dir}\")
+        # Ensure cookies are loaded from saved file
+        _restore_cookies_to_context(ctx, config)
+    except Exception as _e:
+        log.info(f\"   [{publisher}] persistent context unavailable ({_e}), using ephemeral\")
+        _vp = viewport or {\"width\": 1440, \"height\": 900}
+        browser = launch(headless=False, humanize=True,
+                         args=[\"--disable-features=CrossOriginOpenerPolicy\"])
+        ctx = browser.new_context(viewport=_vp)
+        _restore_cookies_to_context(ctx, config)
+        page = ctx.new_page()
+
+    try:
+        yield ctx, page
+    finally:
+        try:
+            if browser:
+                browser.close()
+            else:
+                ctx.close()
+        except Exception:
+            pass""",
+            """def _visible_browser(config: dict[str, Any], publisher: str, *, viewport: dict | None = None):
+    \"\"\"Open visible CloakBrowser with persistent profile. Falls back to ephemeral.\"\"\"
+    if not _HAS_CLOAKBROWSER:
+        raise RuntimeError(\"cloakbrowser not installed. Run: pip install cloakbrowser\")
+    profile_dir = _get_profile_dir(config, publisher)
+    browser = None
+    ctx = None
+
+    def close_owned(owner: Any) -> None:
+        if owner is None:
+            return
+        proc = None
+        try:
+            proc = owner._impl_obj._connection._transport._proc
+        except Exception:
+            pass
+        try:
+            owner.close()
+        except Exception:
+            pass
+        try:
+            from .browser_engine import _tree_kill
+            _tree_kill(proc)
+        except Exception:
+            pass
+
+    try:
+        try:
+            ctx = launch_persistent_context(
+                str(profile_dir),
+                headless=False, humanize=True,
+                args=[\"--disable-features=CrossOriginOpenerPolicy\"],
+            )
+            page = ctx.new_page()
+            log.info(f\"   [{publisher}] persistent browser profile: {profile_dir}\")
+            # Ensure cookies are loaded from saved file
+            _restore_cookies_to_context(ctx, config)
+        except Exception as _e:
+            close_owned(ctx)
+            ctx = None
+            log.info(f\"   [{publisher}] persistent context unavailable ({_e}), using ephemeral\")
+            _vp = viewport or {\"width\": 1440, \"height\": 900}
+            browser = launch(headless=False, humanize=True,
+                             args=[\"--disable-features=CrossOriginOpenerPolicy\"])
+            ctx = browser.new_context(viewport=_vp)
+            _restore_cookies_to_context(ctx, config)
+            page = ctx.new_page()
+
+        yield ctx, page
+    finally:
+        close_owned(browser or ctx)""",
+            "institutional browser process cleanup",
+        ),
+        (
             package / "browser_engine.py",
             'proxy = config.get("browser_static_proxy", "")',
             'proxy = os.environ.get("SCANSCI_PDF_PROXY") or config.get("browser_static_proxy", "")',
@@ -102,6 +193,76 @@ import re""",
 
     # Launching the sync API leaves its dispatcher event loop \"running\" in""",
             "browser session restore",
+        ),
+        (
+            package / "browser_engine.py",
+            """def _tree_kill(proc: Any) -> None:
+    \"\"\"Force-kill a driver process and its whole child tree (Windows-safe).\"\"\"
+    if proc is None or proc.poll() is not None:
+        return
+    if os.name == \"nt\":
+        subprocess.run(
+            [\"taskkill\", \"/F\", \"/T\", \"/PID\", str(proc.pid)],
+            capture_output=True, timeout=15,
+        )
+    else:
+        proc.kill()""",
+            """def _tree_kill(proc: Any) -> None:
+    \"\"\"Force-kill a driver process and its whole child tree (Windows-safe).\"\"\"
+    if proc is None:
+        return
+    poll = getattr(proc, \"poll\", None)
+    if callable(poll):
+        if poll() is not None:
+            return
+    elif getattr(proc, \"returncode\", None) is not None:
+        return
+    if os.name == \"nt\":
+        subprocess.run(
+            [\"taskkill\", \"/F\", \"/T\", \"/PID\", str(proc.pid)],
+            capture_output=True, timeout=15,
+        )
+    else:
+        proc.kill()""",
+            "async browser process cleanup",
+        ),
+        (
+            package / "browser_engine.py",
+            """def shutdown_shared_browser():
+    \"\"\"Shut down the current thread's browser. Call on thread exit or process exit.\"\"\"
+    browser = getattr(_tls, \"browser\", None)
+    if browser is not None:
+        try:
+            browser.close()
+        except Exception:
+            pass
+        _unregister_browser(browser)
+        _tls.browser = None
+        _tls.context = None
+        logger.info(\"browser_engine: browser shut down\")""",
+            """def shutdown_shared_browser():
+    \"\"\"Shut down the current thread's browser. Call on thread exit or process exit.\"\"\"
+    browser = getattr(_tls, \"browser\", None)
+    if browser is not None:
+        proc = None
+        try:
+            proc = browser._impl_obj._connection._transport._proc
+        except Exception:
+            pass
+        try:
+            browser.close()
+        except Exception:
+            pass
+        try:
+            _tree_kill(proc)
+        except Exception:
+            pass
+        _unregister_browser(browser)
+        _tls.browser = None
+        _tls.context = None
+        _tls.owned_loop = None
+        logger.info(\"browser_engine: browser shut down\")""",
+            "shared browser process cleanup",
         ),
         (
             package / "browser_backend.py",
@@ -143,6 +304,19 @@ def launch(""",
     proxy = _controlled_proxy(proxy)
     backend = resolve_backend(config)""",
             "institutional persistent browser proxy",
+        ),
+        (
+            package / "sources" / "carsi_source.py",
+            """                parsed = urlparse(resolved_url)
+                resolved_url = urlunparse(parsed._replace(
+                    scheme="https", netloc=primary_domain))""",
+            """                parsed = urlparse(resolved_url)
+                primary_path = parsed.path
+                if publisher == "sciencedirect" and primary_path.startswith("/retrieve/pii/"):
+                    primary_path = primary_path.replace("/retrieve/pii/", "/science/article/pii/", 1)
+                resolved_url = urlunparse(parsed._replace(
+                    scheme="https", netloc=primary_domain, path=primary_path))""",
+            "ScienceDirect primary article URL",
         ),
         (
             package / "sources" / "__init__.py",
