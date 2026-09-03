@@ -194,6 +194,18 @@ import re""",
         ),
         (
             package / "sources" / "__init__.py",
+            '    "GenericBrowser", "WebVPN", "CARSI", "EZProxy",',
+            '    "GenericBrowser", "InstSci", "WebVPN", "CARSI", "EZProxy",',
+            "institutional bridge browser lifecycle",
+        ),
+        (
+            package / "sources" / "__init__.py",
+            'has_browser = any("Browser" in lbl for _, lbl, _, _ in all_sources)',
+            "has_browser = any(lbl in _BROWSER_SOURCE_LABELS for _, lbl, _, _ in all_sources)",
+            "browser grace classification",
+        ),
+        (
+            package / "sources" / "__init__.py",
             """import json
 import threading
 import time""",
