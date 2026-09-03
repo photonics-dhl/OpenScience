@@ -1,10 +1,10 @@
 # OpenScience 进度（CURRENT window）
 
-> 最新同步：2026-09-03。历史由 Git 保存；旧计划不作为默认输入。
+> 最新同步：2026-09-03 11:43 +08。历史由 Git 保存；旧计划不作为默认输入。
 
 ## Current version tuple
 
-- Candidate branch / production code release: `codex/scansci-upstream-mcp` / `80db41e7ee0a1c8158d3f335dc1b2fbf6f2bb2bf`；repository main 可由不重新部署产品的 docs-only commit 继续推进。
+- Branch / application candidate: `codex/scansci-upstream-mcp` / `a722099a51ed734be993885be45f03ffd74077ee`；分支 HEAD 可仅因本次 CURRENT 文档同步继续前移。候选尚未合并或部署。
 - Production application source / immutable release: `80db41e7ee0a1c8158d3f335dc1b2fbf6f2bb2bf`。
 - Production rollback: `761b93d4bbce77e70d676be78de0bba128974fe6`；两者均为 upstream-only；core/search migrations `34/34` / `2/2`。
 - Taskmaster `hermes-research-intelligence` 仍为 9/12：官方 MCP 单服务替换和旧运行链路清理完成；官方 `cookie_import`、subscription-only PDF、四入口/72h/600s 正向旅程 pending，Task 11 继续阻断。
@@ -17,8 +17,15 @@
 - core migration 36 增加 ROR 全球机构目录；机构凭证绑定 ROR ID，部门子域名可归属母机构，但不会自动产生作者、审稿或编辑权限。
 - 本地 ROR v2.12 已导入 137,398 家机构（0 rejected，34,466 家含域名）；发布时须在生产迁移后执行同版本导入并核对计数。
 
+## 2026-09-03 — ScanSci institutional acceptance fix candidate
+
+- 候选 `a722099…` 在 Cookie 写入容器前即登记退出清理责任，避免中断后遗留部分敏感文件；helper contract 已覆盖 source-order 和 cleanup。
+- Agent Worker 现优先识别官方 MCP 的明确机构来源标签（含 `institutional:*`、CARSI/WebVPN/EZProxy/CampusConnector），映射为用户绑定、72 小时有效的 `institutional_access`，不再降级为泛化 `source_retrieval`。
+- RED→GREEN 后 focused retrieval `18/18`、Domain rights `6/6`、helper contract、Agent Worker typecheck、全仓 build/typecheck/lint 均通过；独立复审无 Critical/Important、结论 READY。下一步是 PR/CI、canonical ECS 部署，再执行一次机构登录、Cookie 导入和正向下载旅程。
+
 ## 2026-09-03 — Official-only ScanSci final release and hygiene closeout
 
+- 09:17 +08 只读复核：公网与 loopback HTTPS 200，目标容器健康，active/public `80db41e…`、rollback `761b93d…`，failed/journal absent，core/search migrations `34/34` / `2/2` current；根盘 `50G/148G`，可用 `92G`。
 - PR #47 首次上线 `761b93d…`；PR #50 / CI `33653209566` 合并为最终 `80db41e…`。生产只运行 upstream `scansci-pdf==1.13.1` 的单一 streamable-HTTP MCP；Agent Worker 通过正式 SDK 调用完整 17 tools。旧 `scansci-legal`、自制 auth/browser/noVNC、服务 token、专用网络/防火墙代码均已从仓库和服务器 release retention 中移除。
 - ECS canonical transaction 通过 exact Parser report、BGE CPU、core/search `34/34`/`2/2`、MCP image/tools/storage、Worker-origin `tools/list`、真实 OA PDF、API/Web/Worker/Nginx/public CAS/retention；active/public `80db41e…`，rollback `761b93d…`，journal/failed absent。
 - 首轮精确移除 2 个旧网络、7 个旧卷、2 个旧 auth image tag、旧 systemd/drop-in/iptables/Squid browser 规则、宿主旧 Secret 和 29.21GB inactive cache。最终再清 38 个旧 Parser acceptance、5 个 eval、1 个匿名失败容器、所有 dangling image 与 154.3MB builder cache；现仅保留 active/rollback 两个 release/report，旧 runtime counters 均为 0。
@@ -84,11 +91,3 @@
 - 已批准设计覆盖独立 `scansci-legal`、loopback-only 认证 helper、持久 session volume、统一 `/literature/acquisitions` 异步入口，以及 Dashboard/Personal Space、Hermes、RO Hermes、RO Files/Evidence 四类产品入口。
 - 新设计写入 `docs/specs/2026-08-30-scansci-default-capability-design.md`；Sci-Hub/LibGen/SciBban/Tor 继续硬禁用。当前生产仍是 `6893318…` 且健康，但 ScanSci 仍 disabled，因此 Task 10 不再记 done。
 - 用户已审核批准书面 spec；TDD/Compose/多入口/ECS 计划写入 `docs/plans/2026-08-30-scansci-default-capability-plan.md`，Task 11 继续阻断。
-
-## 2026-08-30 — Task 10 external retrieval and temporary documents production-accepted
-
-- Semantic Scholar/Tavily/ScanSci legal-only adapters、provider-neutral rights、`source.retrieve`、migration 32、72h private cache、10min HttpOnly one-use download、GC lease/fence/backoff 与永久 provenance 已完成。ScanSci 保持默认 disabled；Tavily 四个授权 key 均被供应商判定额度耗尽并优雅降级。
-- PR #8 实现合入 `c435c4c…`；真实调用发现 SeaweedFS/minio-js 把 `x-amz-meta-sha256` 规范化为 `sha256`，PR #9 以严格 64-hex 双键兼容修复并清除 parser isolation 测试拒绝竞态。Exact CI `33284956868` / job `99186426490` 11m09s 全绿；本地 Storage 22/22、Worker 468/468、API 89/89。
-- Final ECS release `6893318…`：migration 32、search 2/2、Parser 16-case、BGE CPU 实向量、数据库隔离、容器/Nginx/public identity 全绿。真实 Semantic Scholar 任务返回 3 sources；连续请求的 provider 429 被正确记录为 unavailable，不影响任务完成。
-- 受控自著 PDF 完成 checksum HEAD、一次性下载、77-byte SHA-256、重放 404、精确 72h 边界与真实 60s Worker GC；GC 后对象不存在而 source/rights/provenance/locator 仍在。取证后精确清除 1 user/1 workspace/1 session/5 tasks/4 sources/4 rights/1 document/2 accesses/5 ledger，审计日志保留。
-- 远端旧 Task 10 分支经祖先校验后删除，仅 `main`；retention 仅保留 active `6893318…` + rollback `c435c4c…`。精确删除无容器引用、仅属已下线 dev Compose 的 MinIO server/mc 两个镜像后，磁盘 36G/148G（25%）、107G available；保留 390.7MB bounded build cache，无 broad prune。
