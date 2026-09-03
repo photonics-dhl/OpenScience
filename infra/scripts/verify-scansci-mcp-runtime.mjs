@@ -90,7 +90,8 @@ export function verifyRuntimeSnapshot(input) {
     || Object.keys(portBindings).length !== 0
     || JSON.stringify(mountDestinations) !== JSON.stringify(['/data/papers', '/data/scansci'])
     || JSON.stringify(networkNames(mcp)) !== JSON.stringify(['openscience-prod_retrieval_net'])
-    || mcpEnvironment.get('SCANSCI_PDF_PROXY') !== 'http://openscience-egress:7891') {
+    || mcpEnvironment.get('SCANSCI_PDF_PROXY') !== 'http://openscience-egress:7891'
+    || mcpEnvironment.get('SCANSCI_PDF_SESSION_FILE') !== '/data/scansci/publisher-session.netscape') {
     fail('container topology is invalid');
   }
   for (const key of mcpEnvironment.keys()) {

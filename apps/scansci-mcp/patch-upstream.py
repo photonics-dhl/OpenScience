@@ -15,6 +15,19 @@ PATCHES = (
         'proxy = os.environ.get("SCANSCI_PDF_PROXY") or config.get("browser_static_proxy", "")',
         "browser proxy",
     ),
+    (
+        PACKAGE / "browser_engine.py",
+        """    context = browser.new_context()
+
+    # Launching the sync API leaves its dispatcher event loop \"running\" in""",
+        """    context = browser.new_context()
+    session_file = os.environ.get("SCANSCI_PDF_SESSION_FILE", "")
+    if session_file and Path(session_file).is_file():
+        context.add_cookies(_parse_netscape_cookies(Path(session_file).read_text(encoding="utf-8")))
+
+    # Launching the sync API leaves its dispatcher event loop \"running\" in""",
+        "browser session restore",
+    ),
 )
 
 

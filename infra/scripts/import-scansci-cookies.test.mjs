@@ -4,7 +4,7 @@ import test from 'node:test';
 
 const source = readFileSync(new URL('./import-scansci-cookies.sh', import.meta.url), 'utf8');
 
-test('operator cookie import stages once, calls the official MCP tool and always removes both copies', () => {
+test('operator cookie import removes staging copies and atomically persists the accepted session', () => {
   assert.match(source, /HOST_IMPORT_ROOT="\/run\/openscience-scansci-import"/u);
   assert.match(source, /CONTAINER="openscience-prod-scansci-mcp-1"/u);
   assert.match(source, /DEPLOY_LOCK_PATH="\$DEPLOY_LOCK_DIRECTORY\/lock"/u);
@@ -17,6 +17,11 @@ test('operator cookie import stages once, calls the official MCP tool and always
   assert.match(source, /stat -c '%u:%a:%h:%s'/u);
   assert.match(source, /--user 10001:10001/u);
   assert.match(source, /\/tmp\/scansci-cookie-import\/netscape\.txt/u);
+  assert.match(source, /PERSISTENT_SESSION_FILE="\/data\/scansci\/publisher-session\.netscape"/u);
+  assert.match(source, /PERSISTENT_SESSION_NEXT="\/data\/scansci\/\.publisher-session\.netscape\.next"/u);
+  assert.match(source, /os\.replace\(staged, target\)/u);
+  assert.match(source, /stat\.S_IMODE\(target\.stat\(\)\.st_mode\) != 0o600/u);
+  assert.match(source, /PERSIST_STAGED=1/u);
   assert.doesNotMatch(source, /mkdir -p/u);
   assert.match(source, /scansci_pdf_login/u);
   assert.match(source, /"kind":"cookie_import"/u);

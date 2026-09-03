@@ -40,6 +40,8 @@ test('official ScanSci image is pinned and runs only the public MCP entrypoint',
   assert.match(upstreamPatch, /browser_engine\.py/);
   assert.match(upstreamPatch, /proxy = config\.get\("browser_static_proxy", ""\)/);
   assert.match(upstreamPatch, /proxy = os\.environ\.get\("SCANSCI_PDF_PROXY"\) or config\.get\("browser_static_proxy", ""\)/);
+  assert.match(upstreamPatch, /SCANSCI_PDF_SESSION_FILE/);
+  assert.match(upstreamPatch, /context\.add_cookies\(_parse_netscape_cookies/);
   assert.doesNotMatch(requirements, /^pywin32==/m);
   assert.match(entrypoint, /scansci-pdf run --mode streamable_http --host 127\.0\.0\.1 --port 18080/);
   assert.ok(
@@ -67,6 +69,7 @@ test('official ScanSci image is pinned and runs only the public MCP entrypoint',
     'release-dependent labels must not invalidate the browser dependency layer',
   );
   assert.match(compose, /SCANSCI_PDF_PROXY: http:\/\/openscience-egress:7891/);
+  assert.match(compose, /SCANSCI_PDF_SESSION_FILE: \/data\/scansci\/publisher-session\.netscape/);
   assert.match(compose, /agent-worker:[\s\S]*?scansci-papers:\/data\/papers\n[\s\S]*?group_add:\n\s+- "11000"/);
   assert.match(compose, /scansci-mcp:[\s\S]*?group_add:\n\s+- "11000"/);
   const mcpStart = compose.indexOf('  scansci-mcp:');

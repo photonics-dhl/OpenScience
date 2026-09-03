@@ -29,7 +29,11 @@ function fixture() {
       Config: {
         User: '10001:10001',
         Labels: { 'com.docker.compose.service': 'scansci-mcp' },
-        Env: ['SCANSCI_PDF_PROXY=http://openscience-egress:7891', 'HOME=/data/scansci/home'],
+        Env: [
+          'SCANSCI_PDF_PROXY=http://openscience-egress:7891',
+          'SCANSCI_PDF_SESSION_FILE=/data/scansci/publisher-session.netscape',
+          'HOME=/data/scansci/home',
+        ],
       },
       HostConfig: {
         GroupAdd: ['11000'],
@@ -102,6 +106,12 @@ test('runtime snapshot rejects extra MCP exposure and a Worker without retrieval
   const published = fixture();
   published.mcpContainer.HostConfig.PortBindings = { '8000/tcp': [{ HostIp: '0.0.0.0', HostPort: '8000' }] };
   assert.throws(() => verifyRuntimeSnapshot(published), /topology/u);
+
+  const wrongSessionPath = fixture();
+  wrongSessionPath.mcpContainer.Config.Env = wrongSessionPath.mcpContainer.Config.Env
+    .map((value) => value.startsWith('SCANSCI_PDF_SESSION_FILE=')
+      ? 'SCANSCI_PDF_SESSION_FILE=/tmp/session.netscape' : value);
+  assert.throws(() => verifyRuntimeSnapshot(wrongSessionPath), /topology/u);
 
   const disconnected = fixture();
   disconnected.workerContainer.NetworkSettings.Networks = {};
