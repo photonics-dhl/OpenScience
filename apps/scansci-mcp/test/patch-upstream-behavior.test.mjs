@@ -169,7 +169,7 @@ test('upstream patch connects the controlled institutional context and reaps bro
     const legacyCache = join(root, 'legacy-cache');
     await mkdir(legacyCache);
     await writeFile(join(legacyCache, 'publisher_cookies.json'), JSON.stringify([
-      { name: 'institution', value: 'stale', domain: 'EXAMPLE', path: '/', expires: 0 },
+      { name: 'institution', value: 'stale', domain: 'EXAMPLE', path: '', expires: 0 },
     ]));
 
     const proxyProbe = [
