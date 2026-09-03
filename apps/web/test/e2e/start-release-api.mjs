@@ -103,5 +103,5 @@ const server = createServer((request, response) => {
   response.end(JSON.stringify(body));
 });
 
-server.listen(3102, '127.0.0.1');
+server.listen(3001, '127.0.0.1');
 for (const signal of ['SIGINT', 'SIGTERM']) process.on(signal, () => server.close(() => process.exit(0)));
