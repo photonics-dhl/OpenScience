@@ -42,6 +42,94 @@ _os.environ["no_proxy"] = "*""",
             "browser session restore",
         ),
         (
+            package / "browser_backend.py",
+            """# Public entry points
+# ---------------------------------------------------------------------------
+
+def launch(""",
+            """# Public entry points
+# ---------------------------------------------------------------------------
+
+def _controlled_proxy(explicit_proxy):
+    if explicit_proxy:
+        return explicit_proxy
+    configured_proxy = os.environ.get("SCANSCI_PDF_PROXY", "").strip()
+    return {"server": configured_proxy} if configured_proxy else None
+
+
+def launch(""",
+            "institutional browser proxy helper",
+        ),
+        (
+            package / "browser_backend.py",
+            """    ``playwright.chromium.launch()`` / ``cloakbrowser.launch()``.
+    \"\"\"
+    backend = resolve_backend(config)""",
+            """    ``playwright.chromium.launch()`` / ``cloakbrowser.launch()``.
+    \"\"\"
+    proxy = _controlled_proxy(proxy)
+    backend = resolve_backend(config)""",
+            "institutional browser launch proxy",
+        ),
+        (
+            package / "browser_backend.py",
+            """    Same contract as ``playwright.chromium.launch_persistent_context()``.
+    \"\"\"
+    backend = resolve_backend(config)""",
+            """    Same contract as ``playwright.chromium.launch_persistent_context()``.
+    \"\"\"
+    proxy = _controlled_proxy(proxy)
+    backend = resolve_backend(config)""",
+            "institutional persistent browser proxy",
+        ),
+        (
+            package / "browser_cookies.py",
+            """import json
+import time""",
+            """import json
+import os
+import time""",
+            "institutional cookie environment",
+        ),
+        (
+            package / "browser_cookies.py",
+            """def load_saved_cookies(config: dict[str, Any]) -> list[dict[str, Any]]:
+    \"\"\"Load previously saved publisher cookies, filtering out expired ones.\"\"\"
+    from .config import DATA_DIR
+    cookie_file = Path(config.get("cache_dir", str(DATA_DIR / "cache"))) / "publisher_cookies.json"
+    if not cookie_file.exists():
+        return []
+    try:
+        cookies = json.loads(cookie_file.read_text(encoding="utf-8"))
+    except Exception:
+        return []
+    now = time.time()
+    return [c for c in cookies if _is_cookie_valid(c, now)]""",
+            """def load_saved_cookies(config: dict[str, Any]) -> list[dict[str, Any]]:
+    \"\"\"Load previously saved publisher cookies, filtering out expired ones.\"\"\"
+    from .config import DATA_DIR
+    cookie_file = Path(config.get("cache_dir", str(DATA_DIR / "cache"))) / "publisher_cookies.json"
+    if cookie_file.exists():
+        try:
+            cookies = json.loads(cookie_file.read_text(encoding="utf-8"))
+        except Exception:
+            return []
+    else:
+        session_file = os.environ.get("SCANSCI_PDF_SESSION_FILE", "").strip()
+        session_path = Path(session_file) if session_file else None
+        if not session_path or not session_path.is_file():
+            return []
+        try:
+            from .browser_engine import _parse_netscape_cookies
+
+            cookies = _parse_netscape_cookies(session_path.read_text(encoding="utf-8"))
+        except Exception:
+            return []
+    now = time.time()
+    return [c for c in cookies if _is_cookie_valid(c, now)]""",
+            "institutional session restore",
+        ),
+        (
             package / "sources" / "__init__.py",
             """    finally:
         if sem:
