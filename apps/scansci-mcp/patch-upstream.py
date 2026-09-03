@@ -27,6 +27,131 @@ import re""",
         ),
         (
             package / "_publisher_strategies_core.py",
+            '"浙江大学": "Zhejiang",',
+            '"浙江大学": "Zhejiang University",',
+            "unambiguous Zhejiang University identity",
+        ),
+        (
+            package / "_publisher_strategies_core.py",
+            '''    "  for (const el of items) {"
+    "    const text = el.textContent || '';"
+    "    if (text.includes(name) && el.offsetParent !== null) {"
+    "      el.click();"
+    "      return text.trim().substring(0, 60);"
+    "    }"
+    "  }"''',
+            '''    "  const normalize = value => (value || '').replace(/\\\\s+/g, ' ').trim().toLowerCase();"
+    "  const needle = normalize(name);"
+    "  const visible = [...items].filter(el => el.offsetParent !== null);"
+    "  const exact = visible.find(el => normalize(el.textContent) === needle);"
+    "  const startsWith = visible.find(el => normalize(el.textContent).startsWith(`${needle} `));"
+    "  const contains = visible.find(el => normalize(el.textContent).includes(needle));"
+    "  const match = exact || startsWith || contains;"
+    "  if (match) {"
+    "    const text = match.textContent || '';"
+    "    match.click();"
+    "    return text.trim().substring(0, 60);"
+    "  }"''',
+            "exact institutional identity selection",
+        ),
+        (
+            package / "sources" / "__init__.py",
+            "from concurrent.futures import ThreadPoolExecutor, as_completed",
+            "from concurrent.futures import ThreadPoolExecutor, as_completed, wait as wait_futures",
+            "bounded browser future drain import",
+        ),
+        (
+            package / "sources" / "__init__.py",
+            """    if sem:
+        sem.acquire()
+    try:""",
+            """    cancel_event = config.get("_scansci_cancel_event")
+    if sem:
+        while not sem.acquire(timeout=0.1):
+            if cancel_event is not None and cancel_event.is_set():
+                return None
+        if cancel_event is not None and cancel_event.is_set():
+            sem.release()
+            return None
+    try:""",
+            "cancellable browser semaphore wait",
+        ),
+        (
+            package / "sources" / "__init__.py",
+            """    def _try_and_publish(fn, label, src_output):
+        # Skip if another source already succeeded
+        if cancel_event.is_set():
+            return None
+        result = _try_source(fn, doi, src_output, config, label, use_tor=use_tor)
+        if result and not result.get("success"):""",
+            """    def _try_and_publish(fn, label, src_output):
+        # Skip if another source already succeeded
+        if cancel_event.is_set():
+            return None
+        source_config = dict(config)
+        source_config["_scansci_cancel_event"] = cancel_event
+        result = _try_source(fn, doi, src_output, source_config, label, use_tor=use_tor)
+        if cancel_event.is_set():
+            try:
+                src_output.unlink(missing_ok=True)
+            except OSError:
+                pass
+            return None
+        if result and not result.get("success"):""",
+            "request-scoped source cancellation",
+        ),
+        (
+            package / "sources" / "__init__.py",
+            """    finally:
+        # Never block termination on sources that refuse to return: cancel
+        # pending futures and waive stragglers. Their own I/O deadlines
+        # (connect/read timeouts, stream deadline in pdf_utils) bound how long
+        # an abandoned worker thread can outlive the race.
+        alive = [f for f in futures if not f.done()]""",
+            """    finally:
+        # Stop queued browser sources before they can acquire the singleton
+        # browser slot after this request has already returned.
+        cancel_event.set()
+        # One active browser source may be inside a 60-second navigation.
+        # Drain only this request's browser futures within a fixed bound;
+        # unrelated HTTP sources must not delay an otherwise complete result.
+        browser_alive = [
+            future for future, (label, _) in futures.items()
+            if not future.done() and label in _BROWSER_SOURCE_LABELS
+        ]
+        if browser_alive:
+            wait_futures(browser_alive, timeout=70)
+        # Never block termination on sources that refuse to return: cancel
+        # pending futures and waive stragglers. Their own I/O deadlines
+        # (connect/read timeouts, stream deadline in pdf_utils) bound how long
+        # an abandoned worker thread can outlive the race.
+        alive = [f for f in futures if not f.done()]""",
+            "race cancellation signal",
+        ),
+        (
+            package / "sources" / "carsi.py",
+            """                    for _cf_wait in range(12):
+                        if is_cloudflare_challenge(page.title() or ""):""",
+            """                    for _cf_wait in range(12):
+                        cancel_event = self.config.get("_scansci_cancel_event")
+                        if cancel_event is not None and cancel_event.is_set():
+                            return None
+                        if is_cloudflare_challenge(page.title() or ""):""",
+            "CARSI Cloudflare cancellation",
+        ),
+        (
+            package / "sources" / "carsi.py",
+            """                            for i in range(100):
+                                time.sleep(3)""",
+            """                            for i in range(100):
+                                cancel_event = self.config.get("_scansci_cancel_event")
+                                if cancel_event is not None and cancel_event.is_set():
+                                    return None
+                                time.sleep(3)""",
+            "CARSI login cancellation",
+        ),
+        (
+            package / "_publisher_strategies_core.py",
             """def _restore_cookies_to_context(context: Any, config: dict[str, Any]) -> None:
     try:
         from .browser_cookies import load_saved_cookies
