@@ -37,6 +37,9 @@ test('official ScanSci image is pinned and runs only the public MCP entrypoint',
   assert.match(requirements, /--python-platform x86_64-unknown-linux-gnu/);
   assert.match(upstreamPatch, /create_tab\("https:\/\/www\.google\.com\/", config, timeout=15\.0\)/);
   assert.match(upstreamPatch, /create_tab\("about:blank", config, timeout=15\.0\)/);
+  assert.match(upstreamPatch, /browser_engine\.py/);
+  assert.match(upstreamPatch, /proxy = config\.get\("browser_static_proxy", ""\)/);
+  assert.match(upstreamPatch, /proxy = os\.environ\.get\("SCANSCI_PDF_PROXY"\) or config\.get\("browser_static_proxy", ""\)/);
   assert.doesNotMatch(requirements, /^pywin32==/m);
   assert.match(entrypoint, /scansci-pdf run --mode streamable_http --host 127\.0\.0\.1 --port 18080/);
   assert.ok(

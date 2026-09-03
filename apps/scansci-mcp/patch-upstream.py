@@ -1,19 +1,29 @@
 from pathlib import Path
 
 
-TARGET = Path(
-    "/opt/scansci-venv/lib/python3.12/site-packages/"
-    "scansci_pdf/_publisher_strategies_core.py"
+PACKAGE = Path("/opt/scansci-venv/lib/python3.12/site-packages/scansci_pdf")
+PATCHES = (
+    (
+        PACKAGE / "_publisher_strategies_core.py",
+        'tab_id = create_tab("https://www.google.com/", config, timeout=15.0)',
+        'tab_id = create_tab("about:blank", config, timeout=15.0)',
+        "browser bootstrap",
+    ),
+    (
+        PACKAGE / "browser_engine.py",
+        'proxy = config.get("browser_static_proxy", "")',
+        'proxy = os.environ.get("SCANSCI_PDF_PROXY") or config.get("browser_static_proxy", "")',
+        "browser proxy",
+    ),
 )
-OLD = 'tab_id = create_tab("https://www.google.com/", config, timeout=15.0)'
-NEW = 'tab_id = create_tab("about:blank", config, timeout=15.0)'
 
 
 def main() -> None:
-    source = TARGET.read_text(encoding="utf-8")
-    if source.count(OLD) != 1 or NEW in source:
-        raise SystemExit("unexpected scansci-pdf browser bootstrap preimage")
-    TARGET.write_text(source.replace(OLD, NEW), encoding="utf-8")
+    for target, old, new, label in PATCHES:
+        source = target.read_text(encoding="utf-8")
+        if source.count(old) != 1 or new in source:
+            raise SystemExit(f"unexpected scansci-pdf {label} preimage")
+        target.write_text(source.replace(old, new), encoding="utf-8")
 
 
 if __name__ == "__main__":
