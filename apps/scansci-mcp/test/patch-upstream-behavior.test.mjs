@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { mkdtemp, mkdir, readFile, rm, writeFile } from 'node:fs/promises';
+import { mkdtemp, mkdir, rm, writeFile } from 'node:fs/promises';
 import { spawnSync } from 'node:child_process';
 import { join, resolve } from 'node:path';
 import { tmpdir } from 'node:os';
@@ -55,6 +55,30 @@ test('upstream patch connects the controlled institutional context and reaps bro
       '                context.add_cookies(pw_cookies)',
       '    except Exception:',
       '        pass',
+      'class FixtureProc: pass',
+      'class FixtureTransport: _proc = FixtureProc()',
+      'class FixtureConnection: _transport = FixtureTransport()',
+      'class FixtureImpl: _connection = FixtureConnection()',
+      'class FixtureContext:',
+      '    _impl_obj = FixtureImpl()',
+      '    def close(self): raise RuntimeError("fixture close failure")',
+      '    def new_page(self): return None',
+      '@contextlib.contextmanager',
+      'def _visible_browser(config: dict[str, Any], publisher: str, *, viewport: dict | None = None):',
+      '    """Open visible CloakBrowser with persistent profile. Falls back to ephemeral."""',
+      '    browser = None',
+      '    ctx = FixtureContext()',
+      '    page = None',
+      '    try:',
+      '        yield ctx, page',
+      '    finally:',
+      '        try:',
+      '            if browser:',
+      '                browser.close()',
+      '            else:',
+      '                ctx.close()',
+      '        except Exception:',
+      '            pass',
       'def create_tab(url, config, timeout): return "tab"',
       'config = {}',
       'tab_id = create_tab("https://www.google.com/", config, timeout=15.0)',
@@ -63,20 +87,35 @@ test('upstream patch connects the controlled institutional context and reaps bro
     await writeFile(join(packageRoot, 'browser_engine.py'), [
       'import os',
       'from pathlib import Path',
-      'proxy = config.get("browser_static_proxy", "")',
+      'tree_kills = []',
+      'class TLS: pass',
+      '_tls = TLS()',
+      'def _unregister_browser(browser): pass',
+      'def _tree_kill(proc): tree_kills.append(proc)',
+      'def configure_context(browser, config):',
+      '    proxy = config.get("browser_static_proxy", "")',
       '    context = browser.new_context()',
       '',
       '    # Launching the sync API leaves its dispatcher event loop "running" in',
-      '',
-    ].join('\n'));
-    await writeFile(join(packageRoot, 'browser_engine.py.tmp'), [
-      'shutdown_calls = 0',
-      'def shutdown_shared_browser():',
-      '    global shutdown_calls',
-      '    shutdown_calls += 1',
+      '    return context',
       'def _parse_netscape_cookies(text):',
       '    assert text == "fixture-session"',
       '    return [{"name": "institution", "value": "ok", "domain": ".example", "path": "/", "expires": 0}]',
+      'def shutdown_shared_browser():',
+      '    """Shut down the current thread\'s browser. Call on thread exit or process exit."""',
+      '    browser = getattr(_tls, "browser", None)',
+      '    if browser is not None:',
+      '        try:',
+      '            browser.close()',
+      '        except Exception:',
+      '            pass',
+      '        _unregister_browser(browser)',
+      '        _tls.browser = None',
+      '        _tls.context = None',
+      '        logger.info("browser_engine: browser shut down")',
+      'class Logger:',
+      '    def info(self, message): pass',
+      'logger = Logger()',
       '',
     ].join('\n'));
     await writeFile(join(packageRoot, 'browser_backend.py'), [
@@ -174,7 +213,10 @@ test('upstream patch connects the controlled institutional context and reaps bro
       '',
     ].join('\n'));
     await writeFile(join(sources, 'instsci.py'), [
-      'def _resolve_doi_url(doi): return "https://linkinghub.elsevier.com/retrieve/pii/S0375960125006267"',
+      'def _resolve_doi_url(doi):',
+      '    if doi == "query": return "https://linkinghub.elsevier.com/retrieve/pii/QUERY?via=resolver#article"',
+      '    if doi == "other": return "https://linkinghub.elsevier.com/other/path?via=resolver#article"',
+      '    return "https://linkinghub.elsevier.com/retrieve/pii/S0375960125006267"',
       '',
     ].join('\n'));
     await writeFile(join(sources, 'carsi_source.py'), [
@@ -208,8 +250,6 @@ test('upstream patch connects the controlled institutional context and reaps bro
     const patched = runPython([patcher, packageRoot]);
     assert.equal(patched.status, 0, patched.stderr || patched.stdout);
 
-    const browserEngineFixture = await readFile(join(packageRoot, 'browser_engine.py.tmp'), 'utf8');
-    await writeFile(join(packageRoot, 'browser_engine.py'), browserEngineFixture);
     const sessionFile = join(root, 'session.netscape');
     await writeFile(sessionFile, 'fixture-session');
     const legacyCache = join(root, 'legacy-cache');
@@ -256,9 +296,18 @@ test('upstream patch connects the controlled institutional context and reaps bro
       'context = Context()',
       '_publisher_strategies_core._restore_cookies_to_context(context, {"cache_dir": sys.argv[2]})',
       'assert context.cookies == [{"name": "institution", "value": "ok", "domain": ".example", "path": "/"}]',
+      'with _publisher_strategies_core._visible_browser({}, "sciencedirect"):',
+      '    pass',
+      'assert len(browser_backend.os.environ.get("SCANSCI_PDF_PROXY", "")) > 0',
+      'from scansci_pdf import browser_engine',
+      'assert browser_engine.tree_kills == [_publisher_strategies_core.FixtureContext._impl_obj._connection._transport._proc]',
       'from scansci_pdf.sources.carsi_source import try_carsi',
       'result = try_carsi("10.1016/j.physleta.2025.130846", None, {})',
       'assert result["url"] == "https://sciencedirect.com/science/article/pii/S0375960125006267"',
+      'query_result = try_carsi("query", None, {})',
+      'assert query_result["url"] == "https://sciencedirect.com/science/article/pii/QUERY?via=resolver#article"',
+      'other_result = try_carsi("other", None, {})',
+      'assert other_result["url"] == "https://sciencedirect.com/other/path?via=resolver#article"',
     ].join('\n');
     const institution = runPython(['-c', institutionProbe, root, legacyCache], {
       ...process.env,
@@ -272,15 +321,23 @@ test('upstream patch connects the controlled institutional context and reaps bro
       'sys.path.insert(0, sys.argv[1])',
       'from scansci_pdf import browser_engine',
       'from scansci_pdf import sources',
+      'class Proc: pass',
+      'class Transport: _proc = Proc()',
+      'class Connection: _transport = Transport()',
+      'class Impl: _connection = Connection()',
+      'class Browser:',
+      '    _impl_obj = Impl()',
+      '    def close(self): raise RuntimeError("fixture close failure")',
       'class Sem:',
       '    released = 0',
       '    def release(self): self.released += 1',
       'sem = Sem()',
+      'browser_engine._tls.browser = Browser()',
       'assert sources.exercise(True, sem) == "ok"',
-      'assert browser_engine.shutdown_calls == 1',
+      'assert len(browser_engine.tree_kills) == 1',
       'assert sem.released == 1',
       'assert sources.exercise(False, sem) == "ok"',
-      'assert browser_engine.shutdown_calls == 1',
+      'assert len(browser_engine.tree_kills) == 1',
       'assert sem.released == 2',
     ].join('\n');
     const lifecycle = runPython(['-c', lifecycleProbe, root]);

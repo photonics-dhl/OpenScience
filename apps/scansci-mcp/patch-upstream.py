@@ -85,6 +85,37 @@ import re""",
             "browser bootstrap",
         ),
         (
+            package / "_publisher_strategies_core.py",
+            """    finally:
+        try:
+            if browser:
+                browser.close()
+            else:
+                ctx.close()
+        except Exception:
+            pass""",
+            """    finally:
+        owner = browser or ctx
+        proc = None
+        try:
+            proc = owner._impl_obj._connection._transport._proc
+        except Exception:
+            pass
+        try:
+            if browser:
+                browser.close()
+            else:
+                ctx.close()
+        except Exception:
+            pass
+        try:
+            from .browser_engine import _tree_kill
+            _tree_kill(proc)
+        except Exception:
+            pass""",
+            "institutional browser process cleanup",
+        ),
+        (
             package / "browser_engine.py",
             'proxy = config.get("browser_static_proxy", "")',
             'proxy = os.environ.get("SCANSCI_PDF_PROXY") or config.get("browser_static_proxy", "")',
@@ -102,6 +133,44 @@ import re""",
 
     # Launching the sync API leaves its dispatcher event loop \"running\" in""",
             "browser session restore",
+        ),
+        (
+            package / "browser_engine.py",
+            """def shutdown_shared_browser():
+    \"\"\"Shut down the current thread's browser. Call on thread exit or process exit.\"\"\"
+    browser = getattr(_tls, \"browser\", None)
+    if browser is not None:
+        try:
+            browser.close()
+        except Exception:
+            pass
+        _unregister_browser(browser)
+        _tls.browser = None
+        _tls.context = None
+        logger.info(\"browser_engine: browser shut down\")""",
+            """def shutdown_shared_browser():
+    \"\"\"Shut down the current thread's browser. Call on thread exit or process exit.\"\"\"
+    browser = getattr(_tls, \"browser\", None)
+    if browser is not None:
+        proc = None
+        try:
+            proc = browser._impl_obj._connection._transport._proc
+        except Exception:
+            pass
+        try:
+            browser.close()
+        except Exception:
+            pass
+        try:
+            _tree_kill(proc)
+        except Exception:
+            pass
+        _unregister_browser(browser)
+        _tls.browser = None
+        _tls.context = None
+        _tls.owned_loop = None
+        logger.info(\"browser_engine: browser shut down\")""",
+            "shared browser process cleanup",
         ),
         (
             package / "browser_backend.py",
