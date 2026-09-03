@@ -1,13 +1,20 @@
 # OpenScience 进度（CURRENT window）
 
-> 最新同步：2026-09-03 15:34 +08。历史由 Git 保存；旧计划不作为默认输入。
+> 最新同步：2026-09-03 16:30 +08。历史由 Git 保存；旧计划不作为默认输入。
 
 ## Current version tuple
 
-- Branch / application candidate: `codex/scansci-upstream-mcp` / `97290056de19263668a37148e6f06fec01d7b0e1`；分支 HEAD 可仅因本次 CURRENT 文档同步继续前移。候选尚未合并或部署。
-- Production application source / immutable release: `2313038bef4fabce5cdc90517d25cb177ab1e8dd`。
-- Production rollback: `30c40298dc75d30bb4584fbd588d63c2fd0a2bcc`；两者均为 upstream-only；core/search migrations `36/36` / `2/2`。
-- Taskmaster `hermes-research-intelligence` 仍为 9/12：官方 MCP 单服务替换、旧运行链路清理和 `cookie_import` 已完成；subscription-only PDF、四入口/72h/600s 正向旅程 pending，Task 11 继续阻断。
+- Branch / deployed application source: `codex/scansci-upstream-mcp` / `f9dbd59dc05288814f6a0bfa04c37a602faefa0d`；分支 HEAD 可仅因本次 CURRENT 文档同步继续前移。
+- Production application source / immutable release: `f9dbd59dc05288814f6a0bfa04c37a602faefa0d`。
+- Production rollback: `2313038bef4fabce5cdc90517d25cb177ab1e8dd`；两者均为 upstream-only；core/search migrations `36/36` / `2/2`。
+- Taskmaster `hermes-research-intelligence` 仍为 9/12：官方 MCP、持久 Cookie、容器重建恢复和普通 DOI 下载已验收；明确 institutional/publisher provenance、四入口/72h/600s 正向旅程 pending，Task 11 继续阻断。
+
+## 2026-09-03 — ScanSci persistent session and PDF download accepted
+
+- PR #58 / exact CI `33730045672` 合并为 `f9dbd59…`；canonical ECS transaction 通过 exact Parser report、core/search `36/36` / `2/2`、BGE、ScanSci image/tools/storage/Worker、API/Web/Worker health、Nginx/public CAS、retention 与 journal-clear，rollback 为 `2313038…`。
+- 浙江大学 CARSI/publisher Cookie 由 active helper 导入并返回 `SCANSCI_COOKIE_IMPORT_OK`。持久文件 UID 10001、mode `0600`、单链接且非空；host/container staging、`.next`、cleanup marker 和本机认证临时目录均已清理。
+- 单独重建 `scansci-mcp` 后，runtime verifier 与持久 session 复核通过。DOI `10.1016/j.physleta.2023.129241` 下载为有效 PDF（1,382,940 bytes，SHA-256 `fe441330f962ab8c178071ea8b864cbfc1baf953b27ade5d4cf5c80a2ba70aa1`），重复调用命中相同文件/哈希。
+- 该下载的实际 source 为 `SemanticScholar`，所以本轮满足用户指定的“ScanSci 可正常使用与下载文献”，但不冒充 subscription-only institution provenance。首次浏览器路径后 ScanSci 为 healthy，但约 402/512 PIDs；后续需用真正无 OA fallback 的 DOI 验证 publisher source，并在必要时单独修复 Chromium 生命周期/PID 预算。
 
 ## 2026-09-03 — ScanSci CARSI import and browser-proxy fix candidate
 
