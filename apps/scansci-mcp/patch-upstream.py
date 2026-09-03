@@ -177,6 +177,15 @@ import re""",
         ),
         (
             package / "browser_engine.py",
+            """import shutil
+import subprocess""",
+            """import shutil
+import signal
+import subprocess""",
+            "Linux browser process cleanup import",
+        ),
+        (
+            package / "browser_engine.py",
             'proxy = config.get("browser_static_proxy", "")',
             'proxy = os.environ.get("SCANSCI_PDF_PROXY") or config.get("browser_static_proxy", "")',
             "browser proxy",
@@ -207,10 +216,41 @@ import re""",
         )
     else:
         proc.kill()""",
-            """def _tree_kill(proc: Any) -> None:
+            """def _linux_descendant_pids(root_pid: int, proc_root: Path = Path(\"/proc\")) -> list[int]:
+    \"\"\"Return the live Linux descendants of a browser driver.\"\"\"
+    descendants: list[int] = []
+    pending = [root_pid]
+    seen = {root_pid}
+    while pending:
+        parent_pid = pending.pop()
+        children_path = proc_root / str(parent_pid) / \"task\" / str(parent_pid) / \"children\"
+        try:
+            child_tokens = children_path.read_text(encoding=\"utf-8\").split()
+        except OSError:
+            continue
+        for token in child_tokens:
+            try:
+                child_pid = int(token)
+            except ValueError:
+                continue
+            if child_pid <= 0 or child_pid in seen:
+                continue
+            seen.add(child_pid)
+            descendants.append(child_pid)
+            pending.append(child_pid)
+    return descendants
+
+
+def _tree_kill(proc: Any) -> None:
     \"\"\"Force-kill a driver process and its whole child tree (Windows-safe).\"\"\"
     if proc is None:
         return
+    if os.name != \"nt\":
+        for child_pid in reversed(_linux_descendant_pids(int(proc.pid))):
+            try:
+                os.kill(child_pid, signal.SIGKILL)
+            except OSError:
+                pass
     poll = getattr(proc, \"poll\", None)
     if callable(poll):
         if poll() is not None:
