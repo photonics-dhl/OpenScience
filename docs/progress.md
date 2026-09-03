@@ -1,20 +1,25 @@
 # OpenScience 进度（CURRENT window）
 
-> 最新同步：2026-09-03 11:43 +08。历史由 Git 保存；旧计划不作为默认输入。
+> 最新同步：2026-09-03 13:43 +08。历史由 Git 保存；旧计划不作为默认输入。
 
 ## Current version tuple
 
-- Branch / application candidate: `codex/scansci-upstream-mcp` / `a722099a51ed734be993885be45f03ffd74077ee`；分支 HEAD 可仅因本次 CURRENT 文档同步继续前移。候选尚未合并或部署。
-- Production application source / immutable release: `80db41e7ee0a1c8158d3f335dc1b2fbf6f2bb2bf`。
-- Production rollback: `761b93d4bbce77e70d676be78de0bba128974fe6`；两者均为 upstream-only；core/search migrations `34/34` / `2/2`。
-- Taskmaster `hermes-research-intelligence` 仍为 9/12：官方 MCP 单服务替换和旧运行链路清理完成；官方 `cookie_import`、subscription-only PDF、四入口/72h/600s 正向旅程 pending，Task 11 继续阻断。
+- Branch / application candidate: `codex/scansci-upstream-mcp` / `6d9ed0e057e1b34fcfb3c5c663d4e9ed7140072b`；分支 HEAD 可仅因本次 CURRENT 文档同步继续前移。候选尚未合并或部署。
+- Production application source / immutable release: `e72291f341a888df3a58c3e086211ad7c7d55ee3`。
+- Production rollback: `80db41e7ee0a1c8158d3f335dc1b2fbf6f2bb2bf`；两者均为 upstream-only；core/search migrations `36/36` / `2/2`。
+- Taskmaster `hermes-research-intelligence` 仍为 9/12：官方 MCP 单服务替换、旧运行链路清理和 `cookie_import` 已完成；subscription-only PDF、四入口/72h/600s 正向旅程 pending，Task 11 继续阻断。
 
-## 2026-09-02 — Academic identity progression release candidate
+## 2026-09-03 — ScanSci CARSI import and browser-bootstrap fix candidate
 
-- 在当前主线之上整合注册用户→主邮箱验证→ORCID OAuth→机构邮箱验证的四阶段进度；部署前不改变上述生产 tuple。
+- PR #54 / CI `33712614976` 的 Cookie 中断清理与机构权利绑定已随 main `e72291f…` canonical deployment 上线；public/active 一致、目标容器 healthy、journal/failed absent、core/search `36/36` / `2/2`。
+- 浙江大学统一身份 CARSI 成功进入 ScienceDirect；active helper 先后导入 CARSI 与 publisher cookies，均返回 `SCANSCI_COOKIE_IMPORT_OK`，主机/容器 staging 与本机敏感临时文件已清理。
+- 固定 subscription DOI 仍返回 `not_found`。生产日志证明上游 1.13.1 在注入 Cookie 前硬编码访问 Google，受控出网令 `create_tab` 超时，未到达目标论文。候选 `6d9ed0e…` 以 exact-preimage 构建补丁改为 `about:blank`；RED→GREEN 后 ScanSci `3/3`、retrieval `18/18`、rights `6/6`、全仓 build/typecheck/lint green。下一步 PR/CI、部署、recreate/repeat 与四入口验收。
+
+## 2026-09-03 — Academic identity progression deployed
+
+- `e72291f…` 已整合注册用户→主邮箱验证→ORCID OAuth→机构邮箱验证的四阶段进度，并完成 canonical deployment。
 - credential 与 scoped-role assignment 分离；同一用户可同时持有 RO author、assignment reviewer、journal editor、organization member 等作用域角色，凭证本身不自动授权。
-- core migration 35 为身份凭证、机构邮箱挑战与多作用域角色；真实 PostgreSQL、ORCID、SMTP 与 ECS 是发布门禁。
-- core migration 36 增加 ROR 全球机构目录；机构凭证绑定 ROR ID，部门子域名可归属母机构，但不会自动产生作者、审稿或编辑权限。
+- core migration 35 为身份凭证、机构邮箱挑战与多作用域角色；migration 36 增加 ROR 全球机构目录。生产 migration ledger 为 `36/36`。
 - 本地 ROR v2.12 已导入 137,398 家机构（0 rejected，34,466 家含域名）；发布时须在生产迁移后执行同版本导入并核对计数。
 
 ## 2026-09-03 — ScanSci institutional acceptance fix candidate
@@ -82,12 +87,3 @@
 - 本地 `ff5568f` + `4763228` 将 Personal RO/SDF、AgentSession、AgentTask、AI Credit debit 与三类 audit 收口到一笔三次有界 Serializable acquisition 事务；同键用完整 target/query/identifier/server payload digest 绑定，exact replay 在余额前返回，不再使用补偿删除。P2002 仅在 Prisma modelName 与该操作 idempotency field/column/constraint 同时精确匹配时重试，其他唯一冲突原样传播。
 - `createResearchObject`、`createAgentSession`、`submitAgentTask` 共用 transaction primitives；公开 RO 仍拒绝 `system:`，公开 generic Agent API 仍拒绝 `source.retrieve`，严格 4 KiB/字段/CSRF/auth/rate-limit 合同未变。Redis 仅在 commit 后投递；失败留下一个 `dispatchedAt=null` pending task，可由 replay 或 recovery 重派且不重复扣费。
 - 本地 Domain `59/514`、API `18/95`、Agent Worker `33/468`、全仓 typecheck/lint green。真实 PostgreSQL 集成 suite 已覆盖 rollback、credit、audit、并发、两连接确定性 archive/membership SSI cycle、同键 target/query/identifier mismatch 与 recovery；依本地 no-Docker 规则只完成编译，须在后续服务器验收执行。
-
-## 2026-08-30 — Task 10 reopened for default ScanSci capability
-
-- Task 4 本地实现已完成：生产 Compose 新增 SHA-tagged legal/auth、networkless Secret init、UID10001/0400 分权 named Secret volumes 与持久 session；部署先验 ScanSci 再切 Worker，回滚精确恢复旧 SHA 或在旧版无服务时停止 candidate，retention 保护 active+rollback ScanSci tags。ECS/真实 CARSI 尚未执行。
-- `provision-scansci-secrets.mjs` 仅从 stdin 原子写 root-only 固定文件且默认保留既有值；`verify-scansci-runtime.mjs` 仅输出状态并校验 source/archive/dependency、UID/mount/network/port/limit/policy/token/session。决策见 ADR-012。
-- 用户明确要求浙江大学 CARSI 认证一次后成为 Hermes 的持久默认能力；账号凭据可在需要时作为服务器 Secret 保存。用户不选择 provider/mode，OA 失败后自动使用持久机构会话。
-- 已批准设计覆盖独立 `scansci-legal`、loopback-only 认证 helper、持久 session volume、统一 `/literature/acquisitions` 异步入口，以及 Dashboard/Personal Space、Hermes、RO Hermes、RO Files/Evidence 四类产品入口。
-- 新设计写入 `docs/specs/2026-08-30-scansci-default-capability-design.md`；Sci-Hub/LibGen/SciBban/Tor 继续硬禁用。当前生产仍是 `6893318…` 且健康，但 ScanSci 仍 disabled，因此 Task 10 不再记 done。
-- 用户已审核批准书面 spec；TDD/Compose/多入口/ECS 计划写入 `docs/plans/2026-08-30-scansci-default-capability-plan.md`，Task 11 继续阻断。

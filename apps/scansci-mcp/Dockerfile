@@ -36,6 +36,10 @@ RUN python -m venv /opt/scansci-venv \
     && rm -rf /var/lib/apt/lists/* /root/.cache/pip /tmp/scansci-lock-blocks \
     && /opt/scansci-venv/bin/python -c "import importlib.metadata; assert importlib.metadata.version('scansci-pdf') == '${SCANSCI_VERSION}'; assert '${SCANSCI_WHEEL_SHA256}' == 'f68c30503834fc093eb192bd556090d210241eed48445017fdb3d32f6e1355e5'"
 
+COPY patch-upstream.py /opt/scansci/patch-upstream.py
+RUN python /opt/scansci/patch-upstream.py \
+    && rm -f /opt/scansci/patch-upstream.py
+
 ENV PATH=/opt/scansci-venv/bin:$PATH
 RUN groupadd --gid 10001 scansci \
     && groupadd --gid 11000 scansci-share \
