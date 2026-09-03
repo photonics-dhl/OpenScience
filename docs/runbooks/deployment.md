@@ -1,6 +1,6 @@
 # Runbook: 部署（Deployment）
 
-> 状态：**CURRENT**。active immutable release / application source 为 `2313038bef4fabce5cdc90517d25cb177ab1e8dd`，rollback tree 为 `30c40298dc75d30bb4584fbd588d63c2fd0a2bcc`；两者均为官方 `scansci-pdf==1.13.1` MCP 单服务。Networkless bootstrap、browser proxy 与 session 持久化/恢复已上线；未部署候选 `9729005…` 修复嵌入持久化程序的路径参数偏移。机构 Cookie 需重新导入，机构 PDF、四入口和 72h/600s 正向旅程 pending。
+> 状态：**CURRENT**。active immutable release / application source 为 `f9dbd59dc05288814f6a0bfa04c37a602faefa0d`，rollback tree 为 `2313038bef4fabce5cdc90517d25cb177ab1e8dd`；两者均为官方 `scansci-pdf==1.13.1` MCP 单服务。Networkless bootstrap、browser proxy、session 原子持久化/恢复与参数修复已上线；浙江大学 CARSI/publisher Cookie 已导入，MCP recreate 后普通 DOI PDF 下载 green。明确 institutional/publisher provenance、四入口和 72h/600s 正向旅程 pending。
 > 格式遵循 `.agents/skills/infra-runbook/SKILL.md` 四节强制要求。
 > 部署属 Spec §20.5"询问"级操作：执行前需用户确认，必须走 `infra/scripts/deploy.sh` + CI/CD，禁止手工改服务器代码。
 
@@ -2275,3 +2275,35 @@ and acceptance roots remain; old network/volume/image/systemd/firewall/Squid
 browser counters and eval count are zero. Root disk is 50G/148G used (35%, 92G
 available), Docker images 22.71GB, product volumes 6.893GB and build cache 0.
 No system or volume prune was run.
+
+### 5.65 Persistent ScanSci session and download acceptance (2026-09-03)
+
+PR #55–#58 passed exact CI runs `33720511565`, `33723494880`,
+`33726541805`, and `33730045672`. The final immutable release
+`f9dbd59dc05288814f6a0bfa04c37a602faefa0d` was deployed by the canonical
+transaction with rollback `2313038bef4fabce5cdc90517d25cb177ab1e8dd`.
+Acceptance passed the exact Parser report, core/search migrations `36/36` and
+`2/2`, BGE, ScanSci image/tools/storage/Worker, all application health checks,
+Nginx/public CAS, retention, and journal cleanup.
+
+The active helper imported the administrator-provided Zhejiang University
+CARSI/publisher Netscape Cookie and returned `SCANSCI_COOKIE_IMPORT_OK`. Verify
+only metadata: the persistent session must be UID 10001, mode `0600`, a regular
+single-link non-empty file; host/container staging, `.next`, and
+`.cleanup-required` must be absent. Never print the Cookie. Recreating only the
+`scansci-mcp` service preserved the session and passed the exact runtime
+verifier.
+
+DOI `10.1016/j.physleta.2023.129241` produced a valid `%PDF-` file of 1,382,940
+bytes with SHA-256
+`fe441330f962ab8c178071ea8b864cbfc1baf953b27ade5d4cf5c80a2ba70aa1`; a
+repeat call returned the same controlled path and hash. The reported source was
+`SemanticScholar`, so this is positive ScanSci usability/download evidence, not
+subscription-only publisher-provenance evidence. Keep Task 10 open until a DOI
+without an OA/aggregator fallback reports an explicit institutional/publisher
+source and the four-entry plus 72h/600s product journey passes.
+
+The first browser attempt left one Chromium tree at roughly 402/512 container
+PIDs while remaining healthy. If a new uncached DOI reports `pthread_create:
+Resource temporarily unavailable`, treat Chromium lifecycle/PID budget as a
+separate runtime defect; do not re-import credentials or broaden egress.
