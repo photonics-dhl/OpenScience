@@ -145,6 +145,19 @@ def launch(""",
             "institutional persistent browser proxy",
         ),
         (
+            package / "sources" / "carsi_source.py",
+            """                parsed = urlparse(resolved_url)
+                resolved_url = urlunparse(parsed._replace(
+                    scheme="https", netloc=primary_domain))""",
+            """                parsed = urlparse(resolved_url)
+                primary_path = parsed.path
+                if publisher == "sciencedirect" and primary_path.startswith("/retrieve/pii/"):
+                    primary_path = primary_path.replace("/retrieve/pii/", "/science/article/pii/", 1)
+                resolved_url = urlunparse(parsed._replace(
+                    scheme="https", netloc=primary_domain, path=primary_path))""",
+            "ScienceDirect primary article URL",
+        ),
+        (
             package / "sources" / "__init__.py",
             """    finally:
         if sem:

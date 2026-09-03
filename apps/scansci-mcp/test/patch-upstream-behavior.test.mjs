@@ -19,6 +19,12 @@ test('upstream patch connects the controlled institutional context and reaps bro
   const sources = join(packageRoot, 'sources');
   try {
     await mkdir(sources, { recursive: true });
+    await writeFile(join(packageRoot, 'log.py'), [
+      'class Log:',
+      '    def info(self, message): pass',
+      'def get_logger(): return Log()',
+      '',
+    ].join('\n'));
     await writeFile(join(packageRoot, '__init__.py'), [
       'import os as _os',
       '_os.environ["NO_PROXY"] = "*"',
@@ -158,6 +164,46 @@ test('upstream patch connects the controlled institutional context and reaps bro
       '            sem.release()',
       '',
     ].join('\n'));
+    await writeFile(join(sources, 'carsi.py'), [
+      'class PublisherConfig:',
+      '    domains = ["sciencedirect.com"]',
+      'def detect_publisher(url): return "sciencedirect"',
+      'class CARSIClient:',
+      '    def __init__(self, config): self._publisher_configs = {"sciencedirect": PublisherConfig()}',
+      '    def download_via_browser(self, doi, article_url, output_path): return {"url": article_url}',
+      '',
+    ].join('\n'));
+    await writeFile(join(sources, 'instsci.py'), [
+      'def _resolve_doi_url(doi): return "https://linkinghub.elsevier.com/retrieve/pii/S0375960125006267"',
+      '',
+    ].join('\n'));
+    await writeFile(join(sources, 'carsi_source.py'), [
+      'from pathlib import Path',
+      'from typing import Any',
+      'from ..log import get_logger',
+      'log = get_logger()',
+      'def try_carsi(doi: str, output_path: Path, config: dict[str, Any]) -> dict[str, Any] | None:',
+      '    if True:',
+      '        from .carsi import CARSIClient, detect_publisher',
+      '        from .instsci import _resolve_doi_url',
+      '        resolved_url = _resolve_doi_url(doi)',
+      '        publisher = detect_publisher(resolved_url)',
+      '        client = CARSIClient(config)',
+      '        from urllib.parse import urlparse',
+      '        cfg = client._publisher_configs.get(publisher)',
+      '        if cfg:',
+      '            resolved_host = urlparse(resolved_url).hostname or ""',
+      '            primary_domain = cfg.domains[0]',
+      '            if resolved_host and primary_domain not in resolved_host:',
+      '                # Reconstruct URL using primary domain + same path',
+      '                from urllib.parse import urlunparse',
+      '                parsed = urlparse(resolved_url)',
+      '                resolved_url = urlunparse(parsed._replace(',
+      '                    scheme="https", netloc=primary_domain))',
+      '                log.info(f"   [CARSI] Redirected to primary domain: {resolved_url[:80]}")',
+      '        return client.download_via_browser(doi, resolved_url, output_path)',
+      '',
+    ].join('\n'));
 
     const patched = runPython([patcher, packageRoot]);
     assert.equal(patched.status, 0, patched.stderr || patched.stdout);
@@ -210,6 +256,9 @@ test('upstream patch connects the controlled institutional context and reaps bro
       'context = Context()',
       '_publisher_strategies_core._restore_cookies_to_context(context, {"cache_dir": sys.argv[2]})',
       'assert context.cookies == [{"name": "institution", "value": "ok", "domain": ".example", "path": "/"}]',
+      'from scansci_pdf.sources.carsi_source import try_carsi',
+      'result = try_carsi("10.1016/j.physleta.2025.130846", None, {})',
+      'assert result["url"] == "https://sciencedirect.com/science/article/pii/S0375960125006267"',
     ].join('\n');
     const institution = runPython(['-c', institutionProbe, root, legacyCache], {
       ...process.env,
