@@ -134,8 +134,13 @@ import re""",
         if owner is None:
             return
         proc = None
+        snapshot = None
+        tree_kill = None
         try:
             proc = owner._impl_obj._connection._transport._proc
+            from .browser_engine import _snapshot_process_tree, _tree_kill
+            snapshot = _snapshot_process_tree(proc)
+            tree_kill = _tree_kill
         except Exception:
             pass
         try:
@@ -143,8 +148,8 @@ import re""",
         except Exception:
             pass
         try:
-            from .browser_engine import _tree_kill
-            _tree_kill(proc)
+            if tree_kill is not None:
+                tree_kill(proc, snapshot)
         except Exception:
             pass
 
@@ -216,9 +221,21 @@ import subprocess""",
         )
     else:
         proc.kill()""",
-            """def _linux_descendant_pids(root_pid: int, proc_root: Path = Path(\"/proc\")) -> list[int]:
-    \"\"\"Return the live Linux descendants of a browser driver.\"\"\"
-    descendants: list[int] = []
+            """def _linux_process_starttime(pid: int, proc_root: Path = Path(\"/proc\")) -> str | None:
+    try:
+        raw = (proc_root / str(pid) / \"stat\").read_text(encoding=\"utf-8\")
+    except OSError:
+        return None
+    closing_parenthesis = raw.rfind(\")\")
+    if closing_parenthesis < 0:
+        return None
+    fields = raw[closing_parenthesis + 2:].split()
+    return fields[19] if len(fields) > 19 else None
+
+
+def _linux_descendant_processes(root_pid: int, proc_root: Path = Path(\"/proc\")) -> list[tuple[int, str]]:
+    \"\"\"Return Linux descendants with PID-reuse-resistant identities.\"\"\"
+    descendants: list[tuple[int, str]] = []
     pending = [root_pid]
     seen = {root_pid}
     while pending:
@@ -236,33 +253,55 @@ import subprocess""",
             if child_pid <= 0 or child_pid in seen:
                 continue
             seen.add(child_pid)
-            descendants.append(child_pid)
             pending.append(child_pid)
+            starttime = _linux_process_starttime(child_pid, proc_root)
+            if starttime is not None:
+                descendants.append((child_pid, starttime))
     return descendants
 
 
-def _tree_kill(proc: Any) -> None:
+def _snapshot_process_tree(proc: Any) -> tuple[str, list[tuple[int, str]]] | None:
+    if proc is None or os.name == \"nt\":
+        return None
+    root_pid = int(proc.pid)
+    root_starttime = _linux_process_starttime(root_pid)
+    if root_starttime is None:
+        return None
+    return root_starttime, _linux_descendant_processes(root_pid)
+
+
+def _tree_kill(proc: Any, snapshot: tuple[str, list[tuple[int, str]]] | None = None) -> None:
     \"\"\"Force-kill a driver process and its whole child tree (Windows-safe).\"\"\"
     if proc is None:
         return
-    if os.name != \"nt\":
-        for child_pid in reversed(_linux_descendant_pids(int(proc.pid))):
+    poll = getattr(proc, \"poll\", None)
+    if callable(poll):
+        root_alive = poll() is None
+    else:
+        root_alive = getattr(proc, \"returncode\", None) is None
+    if os.name == \"nt\":
+        if root_alive:
+            subprocess.run(
+                [\"taskkill\", \"/F\", \"/T\", \"/PID\", str(proc.pid)],
+                capture_output=True, timeout=15,
+            )
+        return
+    if snapshot is None:
+        if not root_alive:
+            return
+        snapshot = _snapshot_process_tree(proc)
+    if snapshot is not None:
+        root_starttime, descendants = snapshot
+        for child_pid, child_starttime in reversed(descendants):
+            if _linux_process_starttime(child_pid) != child_starttime:
+                continue
             try:
                 os.kill(child_pid, signal.SIGKILL)
             except OSError:
                 pass
-    poll = getattr(proc, \"poll\", None)
-    if callable(poll):
-        if poll() is not None:
+        if _linux_process_starttime(int(proc.pid)) != root_starttime:
             return
-    elif getattr(proc, \"returncode\", None) is not None:
-        return
-    if os.name == \"nt\":
-        subprocess.run(
-            [\"taskkill\", \"/F\", \"/T\", \"/PID\", str(proc.pid)],
-            capture_output=True, timeout=15,
-        )
-    else:
+    if root_alive:
         proc.kill()""",
             "async browser process cleanup",
         ),
@@ -285,8 +324,10 @@ def _tree_kill(proc: Any) -> None:
     browser = getattr(_tls, \"browser\", None)
     if browser is not None:
         proc = None
+        snapshot = None
         try:
             proc = browser._impl_obj._connection._transport._proc
+            snapshot = _snapshot_process_tree(proc)
         except Exception:
             pass
         try:
@@ -294,7 +335,7 @@ def _tree_kill(proc: Any) -> None:
         except Exception:
             pass
         try:
-            _tree_kill(proc)
+            _tree_kill(proc, snapshot)
         except Exception:
             pass
         _unregister_browser(browser)
