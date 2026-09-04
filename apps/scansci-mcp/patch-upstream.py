@@ -8,6 +8,21 @@ DEFAULT_PACKAGE = Path("/opt/scansci-venv/lib/python3.12/site-packages/scansci_p
 def patches(package: Path) -> tuple[tuple[Path, str, str, str], ...]:
     return (
         (
+            package / "server.py",
+            '''mcp_app = FastMCP(
+    name="scansci-pdf",''',
+            '''mcp_app = FastMCP(
+    name="scansci-pdf",
+    version="1.13.1",''',
+            "HTTP MCP package version identity",
+        ),
+        (
+            package / "mcp_server.py",
+            'mcp = FastMCP("scansci-pdf")',
+            'mcp = FastMCP("scansci-pdf", version="1.13.1")',
+            "stdio MCP package version identity",
+        ),
+        (
             package / "__init__.py",
             """_os.environ["NO_PROXY"] = "*"
 _os.environ["no_proxy"] = "*""",

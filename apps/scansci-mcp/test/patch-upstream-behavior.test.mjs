@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { mkdtemp, mkdir, rm, writeFile } from 'node:fs/promises';
+import { mkdtemp, mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { spawnSync } from 'node:child_process';
 import { join, resolve } from 'node:path';
 import { tmpdir } from 'node:os';
@@ -731,9 +731,22 @@ test('upstream patch connects the controlled institutional context and reaps bro
       '        return client.download_via_browser(doi, resolved_url, output_path)',
       '',
     ].join('\n'));
+    await writeFile(join(packageRoot, 'server.py'), [
+      'mcp_app = FastMCP(',
+      '    name="scansci-pdf",',
+      '    instructions=("fixture"),',
+      ')',
+      '',
+    ].join('\n'));
+    await writeFile(join(packageRoot, 'mcp_server.py'), [
+      'mcp = FastMCP("scansci-pdf")',
+      '',
+    ].join('\n'));
 
     const patched = runPython([patcher, packageRoot]);
     assert.equal(patched.status, 0, patched.stderr || patched.stdout);
+    assert.match(await readFile(join(packageRoot, 'server.py'), 'utf8'), /name="scansci-pdf",\r?\n {4}version="1\.13\.1",/);
+    assert.match(await readFile(join(packageRoot, 'mcp_server.py'), 'utf8'), /FastMCP\("scansci-pdf", version="1\.13\.1"\)/);
 
     const sessionFile = join(root, 'session.netscape');
     await writeFile(sessionFile, 'fixture-session');
