@@ -1,7 +1,7 @@
 # OpenScience (XGS) 项目文件索引
 
 > 维护规则：创建/修改/移动文件后必须更新本索引。创建新文件前先查本表防重复。
-> **CURRENT source/deployment anchor（2026-09-04）：** frontend candidate `frontend/nanqing` / `f0ff424`，后续连接与文档提交以 PR #71 为准；SSH 实测 production release / rollback `e23a94f6622bb65e33ddbfe290970a9e6366567a` / `4bba4e5f634d51febe8e0aa08b306b3aadd7305e`，active/public 一致。前端发布入口见 `docs/handoff/2026-09-04-profile-settings-deployment-handoff.md`；ScanSci 专题 handoff 保留独立任务，不能将旧生产记录覆盖本次实测。
+> **CURRENT source/deployment anchor（2026-09-04）：** 已推送独立 `release/profile-settings-20260904`，功能 candidate `e5db5aea422e258d5086bd563f81c28b2b089c9a` / CI `33863229583` 全绿；用户禁止合并 main。production release / rollback 仍为 `e23a94f6622bb65e33ddbfe290970a9e6366567a` / `4bba4e5f634d51febe8e0aa08b306b3aadd7305e`；ScanSci runtime 出现另一路新镜像，协调前不切换。前端发布入口见 `docs/handoff/2026-09-04-profile-settings-deployment-handoff.md`，旧记录不能覆盖实测。
 
 ## 根目录
 | 路径 | 用途 | 状态 |
@@ -23,7 +23,7 @@
 | `apps/web/components/ui/{button,card,badge,skeleton,input,dialog,status-badge,progress-rail,dropzone,evidence-card}.tsx` | UI 基础组件；后四项为研究者导入 Task 1 稳定原语（双语、WCAG、reduced-motion、固定任务状态占位） | 活文档 |
 | `apps/web/components/ui/context-menu.tsx` / `apps/web/components/hermes/{HermesVisualAdapter,HermesWorkspaceStage,HermesPresenceControl}.tsx` / `apps/web/lib/hermes/context-menu-actions.ts` | 无主题 Radix context-menu 行为原语；联合 portal/crown/actor/viewport/protected geometry 的可重复稳定器；12 项 action 各有真实 performance 与中英各三句不连重复；桌面右键、Shift+F10/Menu、移动长按，普通点击保留 drawer | **§13.7 DEPLOYED application `5323ba8` / release `bf54eaa`**；不继承 shadcn 默认视觉 |
 | `apps/web/app/auth/{register,login}/page.tsx` / `apps/web/components/auth/{ResearchIdentityPanel,SignupCodeForm,LoginForm}.tsx` | Optical Editorial Research Identity 双平面；邮箱验证码注册与独立登录共用真实 session 契约，无邀请码字段；受信 origin `returnTo`、OTP 自动聚焦、可重试错误与中英 i18n | 活文档 |
-| `apps/web/app/me/` / `apps/web/components/profile/` / `docs/handoff/2026-09-04-profile-settings-deployment-handoff.md` | 本人主页、账号入口与设置分离，科研身份状态与验证恢复；本轮前端发布唯一 CURRENT handoff | **CANDIDATE PR #71**；本地浏览器 7/7 纳入 CI、移动 header/long-press 3/3，CI/生产验收待完成 |
+| `apps/web/app/me/` / `apps/web/components/profile/` / `docs/handoff/2026-09-04-profile-settings-deployment-handoff.md` | 本人主页、账号入口与设置分离，科研身份状态与验证恢复；本轮前端发布唯一 CURRENT handoff | **独立发布分支，禁止合并 main**；CI 79 项页面通过，服务器 build 完成；验收与并行 runtime 协调见 handoff |
 | `apps/web/app/dashboard/page.tsx` / `apps/web/components/dashboard/` / `apps/web/components/hermes/HermesAssistantDrawer.tsx` | 研究驾驶舱：最近 RO、导入/创建、可行动 Hermes 任务、研究列表与原地 Hermes guide drawer | 活实现 |
 | `apps/web/app/research-objects/new/page.tsx` / `apps/web/components/intake/*.tsx` | Optical Editorial Evidence Intake：blank 直接进入 SDF；import 在明确提交前仅本地编排 manuscript/figure/data/code/supplement 与可选主稿，提交后连接真实 ingest batch、逐任务轮询、blocked/retry 与 needs_review→Hermes deep link | 活文档 |
 | `GET /research-objects` / `GET /ingestion?actionable=true` | Dashboard 真实数据合同：仅成员 Workspace 的 RO 与当前用户创建的 IngestionTask；Hermes deep link 使用真实 ingestion task ID | 活接口 |

@@ -4,7 +4,7 @@
 
 ## Current version tuple
 
-- Frontend candidate: `frontend/nanqing` / `f0ff424`，连接与文档提交随后，以 PR #71 head 为准；CI/部署 pending。
+- Frontend candidate: 已推送 `release/profile-settings-20260904` / `e5db5aea422e258d5086bd563f81c28b2b089c9a`，CI `33863229583` 全绿；用户禁止合并 main，PR #71 未合并。
 - 实测 production application source / immutable release: `e23a94f6622bb65e33ddbfe290970a9e6366567a`，active/public 一致。
 - Production rollback: `4bba4e5f634d51febe8e0aa08b306b3aadd7305e`；本次部署仍应以最新 active 为回退目标。
 - Taskmaster `hermes-research-intelligence` 仍为 9/12：官方 MCP、持久 Cookie、容器重建恢复和普通 DOI 下载已验收；明确 institutional/publisher provenance、四入口/72h/600s 正向旅程 pending，Task 11 继续阻断。
@@ -14,6 +14,7 @@
 - PR #71：账号/头像→本人主页，设置→个人偏好；科研资料/ORCID/机构邮箱集中本人管理，不默认公开。完整证据见本轮 frontend handoff。
 - 首次 CI build/typecheck/lint/unit green，页面 71/72。手机额外换行修复为既有 compact brand，长按先滚动再验 ready；本地连续 3/3，新增身份 7 案纳入 CI。发布仍 pending，不将局部绿冒充完成。
 - 双库新备份 `db-set-20260904T095211Z-580403` 绑定 active `e23a94f…`，SHA 与权限通过，旧备份全保留；journal/failed/pending absent。
+- CI build/typecheck/lint/unit、79 项页面与 Hermes 专项全绿；ECS 全量 build、Worker/Parser image、16-case Parser acceptance 通过，正式服务未切换。19:11 发现线上 ScanSci 刚换 `display-7593e82…` 镜像，与 active image 不同；已询问并行任务，协调前不切换服务。
 
 ## 2026-09-03 — ScanSci persistent session and PDF download accepted
 
