@@ -972,6 +972,14 @@ test('upstream patch connects the controlled institutional context and reaps bro
     assert.equal(selectInstitution(exactDocument)('Zhejiang University'), 'Zhejiang University');
     assert.equal(hospital.clicked, false);
     assert.equal(university.clicked, true);
+    const bilingualUniversity = candidate('浙江大学(Zhejiang University)');
+    const bilingualDocument = { querySelectorAll: () => [hospital, bilingualUniversity] };
+    assert.equal(
+      selectInstitution(bilingualDocument)('Zhejiang University'),
+      '浙江大学(Zhejiang University)',
+    );
+    assert.equal(hospital.clicked, false);
+    assert.equal(bilingualUniversity.clicked, true);
     const ambiguousHospital = candidate('Zhejiang University School of Medicine Sir Run Run Shaw Hospital');
     const ambiguousDocument = { querySelectorAll: () => [ambiguousHospital] };
     assert.equal(selectInstitution(ambiguousDocument)('Zhejiang University'), null);
